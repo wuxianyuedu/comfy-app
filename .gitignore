@@ -49,6 +49,7 @@ next-env.d.ts
 
 # local caches & logs
 /.cache/
+/data/app-settings.json
 .dev-server.log
 dev-launcher.log
 

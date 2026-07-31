@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
 type ModelOpt = { id: string; fileName: string; name: string };
 type TrainLogEntry = { t: number; level: string; msg: string };
@@ -178,7 +179,7 @@ export function TrainingStudio() {
           {!backendConfigured && (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200">
               <p className="mb-1 font-semibold">未配置训练后端</p>
-              设置环境变量 <code className="rounded bg-black/30 px-1">LORA_TRAINER_URL</code> 指向你的训练服务（Kohya / OneTrainer / ComfyUI 训练节点）后重启，即可开始真实训练。当前提交的任务会保持「等待中」。
+              在「<Link href="/settings" className="underline">设置 → 偏好</Link>」中填写训练后端 URL（如 Kohya / OneTrainer / ComfyUI 训练节点的 HTTP 地址）后，即可开始真实训练。当前提交的任务会保持「等待中」。
             </div>
           )}
 

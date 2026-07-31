@@ -181,6 +181,18 @@ export const WORKFLOWS: Record<string, WorkflowMeta> = {
     },
     experimental: true,
   },
+  ltxt2video: {
+    name: "ltxt2video",
+    label: "LTX 文生视频",
+    taskType: "VIDEO",
+    supports: ["prompt", "negative", "ltxModel", "duration", "resolution", "fps"],
+    defaultParams: {
+      ltxModel: "LTX-2 (Fast)",
+      duration: 8,
+      resolution: "1920x1080",
+      fps: 25,
+    },
+  },
 };
 
 export function getWorkflow(name: string): WorkflowMeta | undefined {

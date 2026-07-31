@@ -7,6 +7,7 @@ import upscale from "./workflows/upscale.json";
 import txt2video from "./workflows/txt2video.json";
 import img2video from "./workflows/img2video.json";
 import flfvideo from "./workflows/flfvideo.json";
+import ltxt2video from "./workflows/ltxt2video.json";
 
 const TEMPLATES: Record<string, unknown> = {
   txt2img,
@@ -16,6 +17,7 @@ const TEMPLATES: Record<string, unknown> = {
   txt2video,
   img2video,
   flfvideo,
+  ltxt2video,
 };
 
 export type LoraSpec = { name: string; weight: number };
@@ -44,6 +46,10 @@ export type GenerateParams = {
   wanModel?: string;
   wanVae?: string;
   t5Model?: string;
+  // LTX video
+  ltxModel?: string;
+  duration?: number;
+  resolution?: string;
   firstFrame?: string; // filename already in ComfyUI input dir (首尾帧首图)
   lastFrame?: string; // filename already in ComfyUI input dir (首尾帧尾图)
 };
@@ -192,9 +198,26 @@ export async function buildAndValidate(
     __FPS__: String(params.fps ?? (def.fps as number) ?? 16),
     __FIRST_FRAME__: params.firstFrame ?? "",
     __LAST_FRAME__: params.lastFrame ?? "",
+    __LTX_MODEL__: params.ltxModel ?? (def.ltxModel as string) ?? "LTX-2 (Fast)",
+    __DURATION__: String(params.duration ?? (def.duration as number) ?? 8),
+    __RESOLUTION__: params.resolution ?? (def.resolution as string) ?? "1920x1080",
   };
 
   const graph = replaceTokens(template, values) as Record<string, any>;
+
+  // LTX-2.3 uses COMBO number fields (duration / fps) — token substitution
+  // yields strings, so coerce them back to numbers; also set strings directly
+  // to avoid relying solely on the token pass.
+  if (templateName === "ltxt2video") {
+    const node = graph["1"];
+    if (node?.inputs) {
+      node.inputs.model = values.__LTX_MODEL__;
+      node.inputs.prompt = values.__PROMPT__;
+      node.inputs.duration = Number(values.__DURATION__);
+      node.inputs.resolution = values.__RESOLUTION__;
+      node.inputs.fps = Number(values.__FPS__);
+    }
+  }
 
   // Re-wire model/clip if LoRAs are present.
   if (params.loras && params.loras.length) {

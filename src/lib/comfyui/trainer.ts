@@ -26,10 +26,17 @@
 import { prisma } from "../db";
 import { promises as fs } from "fs";
 import path from "path";
+import { getSettingsSync } from "../app-settings";
 
-const TRAINER_URL = (process.env.LORA_TRAINER_URL ?? "").replace(/\/$/, "");
-const COMFY_LORAS_DIR =
-  process.env.COMFY_LORAS_DIR || path.join(process.cwd(), "models", "loras");
+function trainerUrl(): string {
+  const s = getSettingsSync();
+  return (s.trainerUrl || process.env.LORA_TRAINER_URL || "").replace(/\/$/, "");
+}
+
+function comfyLorasDir(): string {
+  const s = getSettingsSync();
+  return s.comfyLorasDir || process.env.COMFY_LORAS_DIR || path.join(process.cwd(), "models", "loras");
+}
 
 export type TrainLogEntry = {
   t: number;
@@ -56,7 +63,7 @@ export type TrainJobSpec = {
 };
 
 export function isTrainerConfigured(): boolean {
-  return TRAINER_URL.length > 0;
+  return trainerUrl().length > 0;
 }
 
 async function appendLog(jobId: string, level: TrainLogEntry["level"], msg: string) {
@@ -77,23 +84,24 @@ export async function enqueueTraining(jobId: string): Promise<void> {
   const job = await prisma.loraTrainingJob.findUnique({ where: { id: jobId } });
   if (!job) return;
 
-  if (!TRAINER_URL) {
+  if (!trainerUrl()) {
     await appendLog(
       jobId,
       "warn",
-      "训练后端未配置：设置环境变量 LORA_TRAINER_URL 指向你的训练服务（Kohya / OneTrainer / ComfyUI 训练节点）后重启，即可开始真实训练。任务已暂存。"
+      "训练后端未配置：在「设置 → 偏好」中填写训练后端 URL（如 Kohya / OneTrainer / ComfyUI 训练节点的 HTTP 地址）后即开始真实训练。任务已暂存。"
     );
     return; // stays QUEUED
   }
 
-  await appendLog(jobId, "info", `已提交至训练后端 ${TRAINER_URL}`);
+  await appendLog(jobId, "info", `已提交至训练后端 ${trainerUrl()}`);
   void runRemote(job as unknown as TrainJobSpec).catch((e: any) => {
     void failJob(jobId, e?.message ?? "训练后端通信失败");
   });
 }
 
 async function runRemote(spec: TrainJobSpec): Promise<void> {
-  const res = await fetch(`${TRAINER_URL}/train`, {
+  const base = trainerUrl();
+  const res = await fetch(`${base}/train`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(spec),
@@ -111,7 +119,7 @@ async function runRemote(spec: TrainJobSpec): Promise<void> {
   const POLL_MS = 4000;
   for (;;) {
     await new Promise((r) => setTimeout(r, POLL_MS));
-    const st = await fetch(`${TRAINER_URL}/train/${encodeURIComponent(backendId)}`);
+    const st = await fetch(`${base}/train/${encodeURIComponent(backendId)}`);
     if (!st.ok) throw new Error(`训练状态查询失败 ${st.status}`);
     const info = (await st.json()) as {
       status: "running" | "done" | "failed";
@@ -147,7 +155,7 @@ async function finishJob(spec: TrainJobSpec, outputName?: string): Promise<void>
     `${spec.name.replace(/[^\w一-龥-]+/g, "_")}_r${spec.rankDim}.safetensors`;
 
   // Register a Model row so the LoRA appears in the selector / library.
-  // (Assumes the backend already wrote finalName into COMFY_LORAS_DIR.)
+  // (Assumes the backend already wrote finalName into the ComfyUI loras dir.)
   await prisma.model.upsert({
     where: { fileName: finalName },
     update: { isAvailable: true, name: spec.name, baseModel: spec.baseModel },
@@ -183,9 +191,9 @@ export async function cancelTraining(jobId: string): Promise<void> {
   if (!job) return;
   if (job.status === "DONE" || job.status === "FAILED" || job.status === "CANCELLED") return;
 
-  if (TRAINER_URL) {
+  if (trainerUrl()) {
     try {
-      await fetch(`${TRAINER_URL}/train/${encodeURIComponent(jobId)}`, { method: "DELETE" });
+      await fetch(`${trainerUrl()}/train/${encodeURIComponent(jobId)}`, { method: "DELETE" });
     } catch {
       /* best-effort */
     }
@@ -200,4 +208,4 @@ export async function cancelTraining(jobId: string): Promise<void> {
 // Keep `fs` referenced (used by future local-backend file copy) to satisfy
 // lint and avoid unused-import errors if a local path is added later.
 void fs;
-void COMFY_LORAS_DIR;
+void comfyLorasDir;

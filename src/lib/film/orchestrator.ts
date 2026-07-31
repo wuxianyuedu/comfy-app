@@ -15,6 +15,8 @@ import { getServerUser } from "@/lib/auth-server";
 import { buildAndValidate } from "@/lib/comfyui/workflow";
 import { getWorkflow } from "@/lib/comfyui/_meta";
 import { enqueue, cancelTask } from "@/lib/comfyui/runner";
+import { listModels } from "@/lib/comfyui/client";
+import { getSettingsSync } from "@/lib/app-settings";
 import { parseIdeaToScenes } from "@/lib/workshop/script-parser";
 import { getLLMConfig, completeLLM } from "@/lib/llm/server";
 
@@ -164,6 +166,8 @@ export async function createFilm(input: CreateFilmInput) {
     styleNegative
   );
 
+  const wf = await pickVideoWorkflow();
+
   const film = await prisma.filmProject.create({
     data: {
       userId: input.userId,
@@ -181,49 +185,98 @@ export async function createFilm(input: CreateFilmInput) {
   });
 
   await prisma.filmShot.createMany({
-    data: shots.map((s) => ({
-      filmId: film.id,
-      order: s.order,
-      heading: s.heading ?? null,
-      prompt: s.prompt,
-      negative: s.negative ?? null,
-      status: "IDLE",
-      params: { frames: framesPerShot, fps, size, workflow: "txt2video" } as any,
-    })),
+    data: shots.map((s) => {
+      const params: Record<string, any> = { frames: framesPerShot, fps, size, workflow: wf };
+      if (wf === "ltxt2video") {
+        params.duration = Math.min(20, Math.max(6, Math.round((framesPerShot || 49) / 8)));
+        params.resolution = ltxResolutionFor(size);
+      }
+      return {
+        filmId: film.id,
+        order: s.order,
+        heading: s.heading ?? null,
+        prompt: s.prompt,
+        negative: s.negative ?? null,
+        status: "IDLE",
+        params: params as any,
+      };
+    }),
   });
 
   await appendFilmLog(film.id, "success", `已生成分镜，共 ${shots.length} 个镜头`);
   return { id: film.id, shots: shots.length };
 }
 
+// ── pick the video workflow ───────────────────────────────
+// "auto" prefers WAN when its model files are present, otherwise falls back to
+// LTX-2.3 (which is what this machine ships with). An explicit choice in app
+// settings always wins.
+async function pickVideoWorkflow(): Promise<"txt2video" | "ltxt2video"> {
+  const pref = getSettingsSync().defaultVideoWorkflow;
+  if (pref === "txt2video" || pref === "ltxt2video") return pref;
+  try {
+    const unet = await listModels("unet");
+    if (unet.some((f) => /wan2?\.1/i.test(f))) return "txt2video";
+  } catch {
+    /* unreachable — ignore */
+  }
+  return "ltxt2video";
+}
+
+// Map an arbitrary WxH to the nearest valid LTX-2.3 resolution (1080p/1440p/4k).
+function ltxResolutionFor(size: string): string {
+  const w = Number((size.split("x")[0] ?? "1280")) || 1280;
+  const opts = ["1920x1080", "2560x1440", "3840x2160"];
+  for (const o of opts) {
+    if (Number(o.split("x")[0]) >= w) return o;
+  }
+  return opts[opts.length - 1];
+}
+
 // ── generate one video shot via the existing pipeline ──────
 async function generateVideoShot(
   userId: string,
-  shot: { prompt: string; negative?: string | null; frames: number; fps: number; size: string }
+  shot: { prompt: string; negative?: string | null; params?: any }
 ): Promise<string> {
-  const builtin = getWorkflow("txt2video");
-  const built = await buildAndValidate("txt2video", {
-    prompt: shot.prompt,
-    negative: shot.negative ?? undefined,
-    frames: shot.frames,
-    fps: shot.fps,
-    size: shot.size,
-    steps: 25,
-    cfg: 6,
-    sampler: "euler",
-    scheduler: "normal",
-    count: 1,
-  });
+  const p = (shot.params ?? {}) as Record<string, any>;
+  const wf: "txt2video" | "ltxt2video" =
+    p.workflow === "ltxt2video" ? "ltxt2video" : "txt2video";
+  const meta = getWorkflow(wf)!;
+
+  let built;
+  if (wf === "ltxt2video") {
+    built = await buildAndValidate("ltxt2video", {
+      prompt: shot.prompt,
+      negative: shot.negative ?? undefined,
+      ltxModel: (p.ltxModel as string) ?? (meta.defaultParams.ltxModel as string),
+      duration: (p.duration as number) ?? (meta.defaultParams.duration as number),
+      resolution: (p.resolution as string) ?? (meta.defaultParams.resolution as string),
+      fps: (p.fps as number) ?? 25,
+    });
+  } else {
+    built = await buildAndValidate("txt2video", {
+      prompt: shot.prompt,
+      negative: shot.negative ?? undefined,
+      frames: (p.frames as number) ?? 49,
+      fps: (p.fps as number) ?? 16,
+      size: (p.size as string) ?? "1280x720",
+      steps: 25,
+      cfg: 6,
+      sampler: "euler",
+      scheduler: "normal",
+      count: 1,
+    });
+  }
   if (!built.ok || !built.prompt) throw new Error(built.error ?? "工作流构建失败");
 
   const task = await prisma.task.create({
     data: {
       userId,
-      type: builtin!.taskType,
+      type: meta.taskType,
       prompt: shot.prompt,
       negativePrompt: shot.negative ?? null,
-      params: { workflow: "txt2video", frames: shot.frames, fps: shot.fps, size: shot.size } as object,
-      workflowName: "txt2video",
+      params: { workflow: wf, ...p } as object,
+      workflowName: wf,
       status: "QUEUED",
     },
   });
@@ -240,10 +293,6 @@ export async function startFilm(id: string) {
   const shots = await prisma.filmShot.findMany({ where: { filmId: id, status: "IDLE" }, orderBy: { order: "asc" } });
   if (!shots.length) throw new Error("没有可生成的镜头，请重新创建");
 
-  const frames = film.framesPerShot;
-  const fps = film.fps;
-  const size = film.size;
-
   await prisma.filmProject.update({ where: { id }, data: { status: "GENERATING", progress: 0, error: null } });
   await appendFilmLog(id, "info", `开始逐镜生成（共 ${shots.length} 镜）`);
 
@@ -252,9 +301,7 @@ export async function startFilm(id: string) {
       const taskId = await generateVideoShot(film.userId, {
         prompt: shot.prompt,
         negative: shot.negative,
-        frames,
-        fps,
-        size,
+        params: shot.params,
       });
       await prisma.filmShot.update({
         where: { id: shot.id },
@@ -317,7 +364,7 @@ async function watchFilm(id: string) {
         const vid = imgs.find((v) => v.mediaType === "video") ?? imgs[0];
         videoPath = vid?.localPath;
         const p = (shot.params as any) ?? {};
-        duration = ((p.frames ?? 49) as number) / ((p.fps ?? 16) as number);
+        duration = typeof p.duration === "number" ? p.duration : ((p.frames ?? 49) as number) / ((p.fps ?? 16) as number);
       }
       await prisma.filmShot.update({
         where: { id: shot.id },

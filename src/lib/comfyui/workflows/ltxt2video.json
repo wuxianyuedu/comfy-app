@@ -1,0 +1,22 @@
+{
+  "1": {
+    "class_type": "LtxvApiTextToVideo",
+    "inputs": {
+      "model": "__LTX_MODEL__",
+      "prompt": "__PROMPT__",
+      "duration": "__DURATION__",
+      "resolution": "__RESOLUTION__",
+      "fps": "__FPS__",
+      "generate_audio": false
+    }
+  },
+  "2": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": ["1", 0],
+      "filename_prefix": "__PREFIX__",
+      "format": "mp4",
+      "codec": "h264"
+    }
+  }
+}

@@ -263,6 +263,17 @@ async function complete(taskId: string, promptId: string) {
   processQueue();
 }
 
+// Map raw ComfyUI/node errors to user-actionable hints. The LTX-2.3 video
+// node (LtxvApiTextToVideo) runs locally but requires a one-time free LTX
+// (Lightricks) login inside ComfyUI; surface that instead of a cryptic error.
+function friendlyError(raw: unknown): string {
+  const m = (raw ?? "").toString();
+  if (/unauthorized|please login|login first|not logged in/i.test(m)) {
+    return `${m} ｜ 若使用了 LTX 视频节点，请先在 ComfyUI 界面登录 LTX 账号（Lightricks 免费授权），再重新生成。`;
+  }
+  return m;
+}
+
 async function fail(taskId: string, promptId: string, error: string) {
   const s = state();
   if (s.settled.has(taskId)) return;
@@ -271,11 +282,12 @@ async function fail(taskId: string, promptId: string, error: string) {
   if (t) clearTimeout(t);
   s.timers.delete(taskId);
 
-  log(taskId, "error", `✗ 生成失败：${error}`);
+  const friendly = friendlyError(error);
+  log(taskId, "error", `✗ 生成失败：${friendly}`);
 
   await prisma.task.update({
     where: { id: taskId },
-    data: { status: "FAILED", error, finishedAt: new Date() },
+    data: { status: "FAILED", error: friendly, finishedAt: new Date() },
   });
 
   await persistLogs(taskId);

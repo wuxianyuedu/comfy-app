@@ -9,6 +9,7 @@ const NAV = [
   { href: "/workshop", label: "创作工坊" },
   { href: "/models", label: "模型库" },
   { href: "/me/works", label: "我的作品" },
+  { href: "/settings", label: "设置" },
 ];
 
 function SunIcon() {
@@ -137,6 +138,12 @@ export function Navbar() {
                 </Link>
               );
             })}
+            <Link
+              href="/settings"
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-subtle hover:text-ink"
+            >
+              设置
+            </Link>
             <Link
               href="/login"
               className="mt-1 rounded-lg bg-primary px-3 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-primary-hover"

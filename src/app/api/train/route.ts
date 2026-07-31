@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getServerUser } from "@/lib/auth-server";
 import { enqueueTraining, isTrainerConfigured } from "@/lib/comfyui/trainer";
+import { getSettingsSync } from "@/lib/app-settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export async function GET() {
   return NextResponse.json({
     jobs,
     backendConfigured: isTrainerConfigured(),
-    trainerUrl: process.env.LORA_TRAINER_URL ?? null,
+    trainerUrl: getSettingsSync().trainerUrl || process.env.LORA_TRAINER_URL || null,
   });
 }
 
