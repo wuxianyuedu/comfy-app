@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import {
   CanvasNodeData,
@@ -139,8 +139,61 @@ export function CanvasNode({ id, data }: NodeProps<CanvasNodeType>) {
     }
   };
 
+  /* ── uploaded workflows list (for the workflow node) ── */
+  const [wfList, setWfList] = useState<{ id: string; name: string; taskType?: string }[]>([]);
+  useEffect(() => {
+    if (d.kind !== "workflow") return;
+    let alive = true;
+    fetch("/api/workflows")
+      .then((r) => r.json())
+      .then((dd) => {
+        if (alive) setWfList(dd.workflows ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [d.kind]);
+
   /* ── image / video generation ── */
   const runGenerate = async () => {
+    // ── user-uploaded workflow node: run the chosen WorkflowTemplate ──
+    if (d.kind === "workflow") {
+      if (!d.workflowId) {
+        patch({ error: "请先选择上传的工作流", status: "error" });
+        return;
+      }
+      patch({ status: "running", error: undefined });
+      try {
+        const payload: Record<string, unknown> = {
+          workflow: d.workflowId,
+          prompt: d.prompt,
+          negative: d.negative || undefined,
+          steps: d.steps,
+          cfg: d.cfg,
+        };
+        if (d.seed.trim()) payload.seed = Number(d.seed);
+        const taskId = await startGenerate(payload);
+        patch({ taskId });
+        const result = await pollTask(taskId);
+        if (result) {
+          patch({
+            status: "done",
+            resultPath: result.localPath,
+            resultMediaType: result.mediaType,
+          });
+          window.dispatchEvent(
+            new CustomEvent("canvas:produce", {
+              detail: { id, resultPath: result.localPath, resultMediaType: result.mediaType },
+            })
+          );
+        } else patch({ status: "error", error: "生成失败或无结果" });
+      } catch (e: any) {
+        patch({ status: "error", error: e?.message ?? "生成失败" });
+      }
+      return;
+    }
+
     const isVideo = d.kind === "video";
     if (!d.prompt.trim()) {
       patch({ error: "请输入提示词", status: "error" });
@@ -481,6 +534,101 @@ export function CanvasNode({ id, data }: NodeProps<CanvasNodeType>) {
             </div>
           </>
         )}
+      </div>
+    );
+  } else if (d.kind === "workflow") {
+    body = (
+      <div className="space-y-2">
+        <Field label="选择上传的工作流">
+          <select
+            className={inputCls}
+            value={d.workflowId ?? ""}
+            onChange={(e) => {
+              const wf = wfList.find((w) => w.id === e.target.value);
+              patch({
+                workflowId: e.target.value || undefined,
+                workflowName: wf?.name,
+                workflowTaskType: wf?.taskType,
+              });
+            }}
+          >
+            <option value="">— 请选择工作流 —</option>
+            {wfList.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+                {w.taskType ? `（${w.taskType}）` : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {wfList.length === 0 && (
+          <p className="text-[11px] text-gray-500">
+            暂无上传工作流。请先在「创作台 / 工作区」粘贴 ComfyUI「导出(API 格式)」JSON 导入。
+          </p>
+        )}
+        {d.workflowTaskType && (
+          <span className="inline-block rounded bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-300">
+            类型：{d.workflowTaskType}
+          </span>
+        )}
+        {d.workflowName && (
+          <p className="truncate text-[11px] text-gray-400">已选：{d.workflowName}</p>
+        )}
+
+        <Field label="提示词">
+          <textarea
+            className={inputCls}
+            rows={3}
+            value={d.prompt}
+            placeholder="描述画面（部分工作流可留空）"
+            onChange={(e) => patch({ prompt: e.target.value })}
+          />
+        </Field>
+        <Field label="反向提示词">
+          <input
+            className={inputCls}
+            value={d.negative}
+            placeholder="可选"
+            onChange={(e) => patch({ negative: e.target.value })}
+          />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="步数">
+            <input
+              type="number"
+              className={inputCls}
+              value={d.steps}
+              min={1}
+              max={100}
+              onChange={(e) => patch({ steps: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="CFG">
+            <input
+              type="number"
+              step="0.5"
+              className={inputCls}
+              value={d.cfg}
+              min={0}
+              max={30}
+              onChange={(e) => patch({ cfg: Number(e.target.value) })}
+            />
+          </Field>
+        </div>
+        <Field label="种子（留空随机）">
+          <input
+            className={inputCls}
+            value={d.seed}
+            placeholder="random"
+            onChange={(e) => patch({ seed: e.target.value })}
+          />
+        </Field>
+
+        <button type="button" className={btnCls + " w-full"} disabled={d.status === "running"} onClick={runGenerate}>
+          {d.status === "running" ? "生成中…" : "▶ 用此工作流生成"}
+        </button>
+        <ResultThumb path={d.resultPath} mediaType={d.resultMediaType} />
       </div>
     );
   } else if (d.kind === "agent") {

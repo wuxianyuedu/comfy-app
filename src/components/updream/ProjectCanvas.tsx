@@ -528,7 +528,8 @@ function CanvasInner({ seedNew, onConsumeSeed }: ProjectCanvasProps) {
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
           <div className="text-5xl opacity-20">🎨</div>
           <p className="mt-3 text-sm text-gray-500">右键画布任意位置，创建节点开始创作</p>
-          <p className="mt-1 text-[12px] text-gray-600">支持：生图 · 生视频 · 生成剧本 · Agent 模式</p>
+          <p className="mt-1 text-[12px] text-gray-600">支持：生图 · 生视频 · 生成剧本 · Agent 模式 · 自定义工作流</p>
+          <p className="mt-1 text-[12px] text-gray-600">自定义工作流可下拉选用你上传的 ComfyUI 工作流</p>
           <p className="mt-1 text-[12px] text-gray-600">连线节点可把上游输出自动喂给下游</p>
         </div>
       )}

@@ -2,7 +2,7 @@ import type { Node } from "@xyflow/react";
 
 /* ── Canvas node model ── */
 
-export type NodeKind = "image" | "video" | "script" | "agent";
+export type NodeKind = "image" | "video" | "script" | "agent" | "workflow";
 
 export interface CanvasNodeData {
   kind: NodeKind;
@@ -48,6 +48,11 @@ export interface CanvasNodeData {
     params?: { steps?: number; cfg?: number; sampler?: string; scheduler?: string; size?: string };
   };
 
+  // workflow node (user-uploaded ComfyUI workflow)
+  workflowId?: string;
+  workflowName?: string;
+  workflowTaskType?: string;
+
   // ReactFlow node data must be a plain record
   [key: string]: unknown;
 }
@@ -67,6 +72,7 @@ export const NODE_META: Record<
   video: { label: "生视频", icon: "🎬", color: "#22D3EE", desc: "文生视频 / 图生视频 / 首尾帧" },
   script: { label: "生成剧本", icon: "📝", color: "#F59E0B", desc: "一句话扩写为分镜剧本" },
   agent: { label: "Agent 模式", icon: "🤖", color: "#34D399", desc: "多轮对话引导创作" },
+  workflow: { label: "自定义工作流", icon: "🧩", color: "#A78BFA", desc: "运行你上传的 ComfyUI 工作流" },
 };
 
 export const CANVAS_STORAGE_KEY = "comfyapp.canvas.v1";
