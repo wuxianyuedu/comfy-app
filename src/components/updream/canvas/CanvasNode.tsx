@@ -173,6 +173,8 @@ export function CanvasNode({ id, data }: NodeProps<CanvasNodeType>) {
           cfg: d.cfg,
         };
         if (d.seed.trim()) payload.seed = Number(d.seed);
+        // Feed an upstream-generated image into this workflow (auto-chained).
+        if (d.inputImage) payload.inputImage = d.inputImage;
         const taskId = await startGenerate(payload);
         patch({ taskId });
         const result = await pollTask(taskId);
@@ -573,6 +575,29 @@ export function CanvasNode({ id, data }: NodeProps<CanvasNodeType>) {
         )}
         {d.workflowName && (
           <p className="truncate text-[11px] text-gray-400">已选：{d.workflowName}</p>
+        )}
+
+        {d.upstreamId && (
+          <div className="space-y-1">
+            <div className="flex items-center gap-1">
+              <span className="rounded bg-emerald-400/10 px-1.5 py-0.5 text-[10px] text-emerald-300">
+                ⇠ 已接收上游图
+              </span>
+              <button
+                type="button"
+                className={ghostBtnCls}
+                onClick={() => patch({ inputImage: undefined, upstreamId: undefined })}
+              >
+                断开
+              </button>
+            </div>
+            {d.inputImage && (
+              <p className="truncate text-[10px] text-gray-500">参考图：{d.inputImage}</p>
+            )}
+            <p className="text-[10px] text-gray-600">
+              若工作流含图像输入节点（LoadImage），将自动作为参考图
+            </p>
+          </div>
         )}
 
         <Field label="提示词">

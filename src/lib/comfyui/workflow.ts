@@ -64,6 +64,9 @@ export type ParamMap = {
   negativeNode?: string;
   checkpointNode?: string;
   samplerNode?: string;
+  // LoadImage node whose `image` input should receive a fed upstream image
+  // (set automatically when detected, or manually in the UI).
+  inputImageNode?: string;
 };
 
 /**
@@ -85,6 +88,9 @@ export function detectParamMap(graph: Record<string, any>): ParamMap {
 
   const ks = Object.entries(graph).find(([, n]) => n?.class_type === "KSampler");
   if (ks) map.samplerNode = ks[0];
+
+  const li = Object.entries(graph).find(([, n]) => n?.class_type === "LoadImage");
+  if (li) map.inputImageNode = li[0];
 
   return map;
 }
@@ -244,6 +250,7 @@ export function buildCustomWorkflow(
       __DENOISE__: String(params.denoise ?? 0.65),
       __FIRST_FRAME__: params.firstFrame ?? "",
       __LAST_FRAME__: params.lastFrame ?? "",
+      __INPUT__: params.inputImage ?? "",
     };
     return replaceTokens(out, values) as Record<string, any>;
   }
@@ -271,6 +278,12 @@ export function buildCustomWorkflow(
     if (typeof seedNum === "number" && seedNum > 0) n.inputs.seed = seedNum;
     if (params.sampler) n.inputs.sampler_name = params.sampler;
     if (params.scheduler) n.inputs.scheduler = params.scheduler;
+  }
+
+  // Feed an upstream-generated (or manually uploaded) image into the
+  // workflow's LoadImage node so chains like 图生图 work out of the box.
+  if (params.inputImage && map.inputImageNode && out[map.inputImageNode]?.inputs) {
+    out[map.inputImageNode].inputs.image = params.inputImage;
   }
 
   // Re-wire model/clip if LoRAs are present (custom workflows too).
