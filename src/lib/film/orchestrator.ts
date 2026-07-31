@@ -11,7 +11,7 @@ import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import { prisma } from "@/lib/db";
-import { getServerUser } from "@/lib/auth";
+import { getServerUser } from "@/lib/auth-server";
 import { buildAndValidate } from "@/lib/comfyui/workflow";
 import { getWorkflow } from "@/lib/comfyui/_meta";
 import { enqueue, cancelTask } from "@/lib/comfyui/runner";

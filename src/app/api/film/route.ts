@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { getServerUser } from "@/lib/auth";
+import { getServerUser } from "@/lib/auth-server";
 import { createFilm, isFFmpegAvailable } from "@/lib/film/orchestrator";
 
 export const runtime = "nodejs";

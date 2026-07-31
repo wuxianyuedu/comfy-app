@@ -34,13 +34,27 @@ function BoltIcon() {
   );
 }
 
+function MenuIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M3 6h18M3 12h18M3 18h18" />
+    </svg>
+  );
+}
+
 export function Navbar() {
   const pathname = usePathname();
   const [dark, setDark] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     setDark(document.documentElement.classList.contains("dark"));
   }, []);
+
+  // Close the mobile menu on route change.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   function toggleTheme() {
     const next = !dark;
@@ -87,14 +101,51 @@ export function Navbar() {
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>
 
+          {/* Mobile menu trigger */}
+          <button
+            onClick={() => setMobileOpen((v) => !v)}
+            aria-label="打开菜单"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted transition-colors hover:text-ink md:hidden"
+          >
+            <MenuIcon />
+          </button>
+
           <Link
             href="/login"
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-hover"
+            className="hidden rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-hover md:inline-block"
           >
             登录
           </Link>
         </div>
       </div>
+
+      {/* Mobile dropdown */}
+      {mobileOpen && (
+        <div className="border-t border-border md:hidden">
+          <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-1 px-4 py-3 sm:px-6 lg:px-8">
+            {NAV.map((item) => {
+              const active = pathname === item.href || pathname.startsWith(item.href + "/");
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    active ? "bg-primary-soft text-primary" : "text-muted hover:bg-subtle hover:text-ink"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+            <Link
+              href="/login"
+              className="mt-1 rounded-lg bg-primary px-3 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-primary-hover"
+            >
+              登录 / 注册
+            </Link>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

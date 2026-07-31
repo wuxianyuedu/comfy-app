@@ -1,25 +1,32 @@
-import { prisma } from "./db";
+import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import { authConfig } from "./auth.config";
 
-// MVP/dev helper: returns a stable demo user so the generate flow works before
-// the real Auth.js login (M4) is wired. Replaced by getServerSession() in M4.
-const DEMO_EMAIL = process.env.DEMO_USER_EMAIL ?? "demo@comfy.app";
-
-export type ServerUser = {
-  id: string;
-  email: string;
-  name: string | null;
-};
-
-export async function getServerUser(): Promise<ServerUser> {
-  let user = await prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
-  if (!user) {
-    user = await prisma.user.create({
-      data: {
-        email: DEMO_EMAIL,
-        name: "体验用户",
-        passwordHash: "demo-not-used",
+// Full config (Node runtime only): adds the Credentials provider whose
+// `authorize` touches the DB. Imported by route handlers / server components,
+// NOT by middleware (which uses auth.config.ts to stay edge-safe).
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
+  providers: [
+    Credentials({
+      name: "邮箱密码",
+      credentials: {
+        email: { label: "邮箱", type: "email" },
+        password: { label: "密码", type: "password" },
       },
-    });
-  }
-  return { id: user.id, email: user.email, name: user.name };
-}
+      async authorize(credentials) {
+        const email = String(credentials?.email ?? "").trim().toLowerCase();
+        const password = String(credentials?.password ?? "");
+        if (!email || !password) return null;
+        // Lazy imports keep these out of any edge/middleware bundle.
+        const { prisma } = await import("@/lib/db");
+        const bcrypt = (await import("bcryptjs")).default;
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user) return null;
+        const ok = await bcrypt.compare(password, user.passwordHash);
+        if (!ok) return null;
+        return { id: user.id, email: user.email, name: user.name ?? null };
+      },
+    }),
+  ],
+});

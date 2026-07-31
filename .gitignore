@@ -60,3 +60,6 @@ dev-launcher.log
 /$null
 Comfy-APP
 *.bat
+
+# Ardot design screenshots (local export artifacts)
+/.ardot-screenshots/
