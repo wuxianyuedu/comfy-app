@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/* Class-based dark mode toggle (.dark on <html>) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Brand — refined violet/magenta (liblib-style), kept desaturated, no neon glow */
+  --color-primary: #7C5CFC;
+  --color-primary-hover: #6A47E8;
+  --color-primary-soft: #F1ECFF;
+  --color-accent: #FF5CA8;
+
+  /* Surfaces & text (light default) */
+  --color-bg: #FFFFFF;
+  --color-surface: #FFFFFF;
+  --color-subtle: #F7F8FA;
+  --color-border: #ECECF1;
+  --color-ink: #1A1A1F;
+  --color-muted: #6B6B76;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+}
+
+/* Dark mode overrides — utilities reference these CSS vars, so they respond to .dark */
+.dark {
+  --color-bg: #0E0E12;
+  --color-surface: #16161C;
+  --color-subtle: #141419;
+  --color-border: #26262E;
+  --color-ink: #EDEDF2;
+  --color-muted: #9A9AAD;
+  --color-primary-soft: #221C3A;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+html,
+body {
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Thin, modern scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 999px;
+}

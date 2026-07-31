@@ -1,0 +1,140 @@
+import "server-only";
+import { prisma } from "@/lib/db";
+import type { LLMConfig, LLMMessage, LLMRequestOptions, LLMProviderType } from "./types";
+
+const ENV_DEFAULTS: LLMConfig = {
+  provider: (process.env.LLM_PROVIDER as LLMProviderType) || "local",
+  baseUrl: process.env.LLM_BASE_URL || "http://localhost:11434/v1",
+  model: process.env.LLM_MODEL || "llama3.1",
+  apiKey: process.env.LLM_API_KEY || null,
+  temperature: Number(process.env.LLM_TEMPERATURE || 0.7),
+  maxTokens: Number(process.env.LLM_MAX_TOKENS || 2048),
+};
+
+/**
+ * Resolve the effective LLM config by layering:
+ *   1. process.env (defaults)
+ *   2. DB singleton row (user overrides via the settings UI)
+ *   3. per-request override (rarely used; the browser never sends apiKey)
+ */
+export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMConfig> {
+  const cfg: LLMConfig = { ...ENV_DEFAULTS };
+
+  try {
+    const row = await prisma.llmConfig.findUnique({ where: { id: "singleton" } });
+    if (row) {
+      if (row.provider) cfg.provider = row.provider as LLMProviderType;
+      if (row.baseUrl) cfg.baseUrl = row.baseUrl;
+      if (row.model) cfg.model = row.model;
+      if (row.apiKey) cfg.apiKey = row.apiKey;
+      if (row.temperature != null) cfg.temperature = row.temperature;
+      if (row.maxTokens != null) cfg.maxTokens = row.maxTokens;
+    }
+  } catch {
+    // DB unavailable — fall back to env defaults
+  }
+
+  if (override) {
+    if (override.provider) cfg.provider = override.provider;
+    if (override.baseUrl) cfg.baseUrl = override.baseUrl;
+    if (override.model) cfg.model = override.model;
+    if (override.temperature != null) cfg.temperature = override.temperature;
+    if (override.maxTokens != null) cfg.maxTokens = override.maxTokens;
+  }
+
+  return cfg;
+}
+
+function headersFor(cfg: LLMConfig): Record<string, string> {
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  if (cfg.provider === "remote" && cfg.apiKey) {
+    h["Authorization"] = `Bearer ${cfg.apiKey}`;
+  }
+  return h;
+}
+
+/** One-shot (non-streaming) completion. */
+export async function completeLLM(cfg: LLMConfig, messages: LLMMessage[]): Promise<string> {
+  const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: headersFor(cfg),
+    body: JSON.stringify({
+      model: cfg.model,
+      messages,
+      temperature: cfg.temperature,
+      max_tokens: cfg.maxTokens,
+      stream: false,
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`LLM 请求失败 (${res.status}): ${detail.slice(0, 200)}`);
+  }
+
+  const json = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  return json.choices?.[0]?.message?.content ?? "";
+}
+
+/**
+ * Streaming completion. Calls `onToken` with each delta and resolves with the
+ * full concatenated text. Works with Ollama, LM Studio, vLLM, and OpenAI —
+ * all emit SSE chunks shaped like `{ choices: [{ delta: { content } }] }`.
+ */
+export async function streamLLM(
+  cfg: LLMConfig,
+  messages: LLMMessage[],
+  onToken: (token: string) => void
+): Promise<string> {
+  const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: headersFor(cfg),
+    body: JSON.stringify({
+      model: cfg.model,
+      messages,
+      temperature: cfg.temperature,
+      max_tokens: cfg.maxTokens,
+      stream: true,
+    }),
+  });
+
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`LLM 请求失败 (${res.status}): ${detail.slice(0, 200)}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let full = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const data = trimmed.slice(5).trim();
+      if (data === "[DONE]") continue;
+      try {
+        const json = JSON.parse(data);
+        const token: string = json.choices?.[0]?.delta?.content ?? "";
+        if (token) {
+          full += token;
+          onToken(token);
+        }
+      } catch {
+        // ignore malformed keep-alive chunks
+      }
+    }
+  }
+
+  return full;
+}

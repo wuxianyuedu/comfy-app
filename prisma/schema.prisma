@@ -1,0 +1,218 @@
+// Comfy-APP data model (MVP). SQLite for local; enums are represented as
+// String fields because SQLite does not support Prisma enums. Allowed values
+// are centralized in src/lib/*.ts (membership, credits, comfyui meta).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  tasks        Task[]
+  favorites    Favorite[]
+  workflowTemplates WorkflowTemplate[]
+  loraTrainingJobs LoraTrainingJob[]
+  filmProjects     FilmProject[]
+}
+
+model Model {
+  id           String      @id @default(cuid())
+  name         String
+  type         String // CHECKPOINT | LORA | CONTROLNET | VAE | EMBEDDING | UPSCALE
+  fileName     String      @unique // contract: must match ComfyUI /api/models exactly
+  subfolder    String?
+  baseModel    String?
+  coverUrl     String?
+  description  String?
+  category     String?
+  isAvailable  Boolean     @default(false)
+  source       String      @default("LOCAL")
+  createdAt    DateTime    @default(now())
+  favorites    Favorite[]
+  @@index([type])
+  @@index([isAvailable])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  modelId   String
+  model     Model    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@unique([userId, modelId])
+}
+
+model Task {
+  id             String      @id @default(cuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           String // TXT2IMG | IMG2IMG | INPAINT | HIRERES | VIDEO
+  prompt         String
+  negativePrompt String?
+  params         Json
+  workflowName   String
+  status         String      @default("QUEUED") // QUEUED | RUNNING | SUCCEEDED | FAILED | CANCELLED
+  promptId       String?
+  progress       Int         @default(0)
+  resultImages   Json?
+  logs           Json? // execution log entries (time, level, message)
+  error          String?
+  createdAt      DateTime    @default(now())
+  finishedAt     DateTime?
+  images         TaskImage[]
+  @@index([userId, createdAt])
+}
+
+model TaskImage {
+  id         String @id @default(cuid())
+  taskId     String
+  task       Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  localPath  String
+  mediaType  String @default("image") // image | video
+  seed       String?
+  width      Int?
+  height     Int?
+  isCover    Boolean @default(false)
+  sortIndex  Int     @default(0)
+}
+
+// User-imported ComfyUI workflows (exported in "API format").
+// `graph` is the raw ComfyUI API-format node graph (object of nodeId -> node).
+model WorkflowTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  taskType  String   @default("TXT2IMG") // TXT2IMG | IMG2IMG | INPAINT | VIDEO
+  graph     Json
+  paramMap  Json? // { positiveNode, negativeNode, checkpointNode, samplerNode } — node ids
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+
+// ── Skill system ──────────────────────────────────────────────
+// Pre-built & user-created style/prompt templates (OpenClaw-inspired).
+// Selecting a skill pre-fills prompt, params, and recommended models in CreateStudio.
+// ── LLM provider config (singleton) ──────────────────────────
+// Stores the user-selected text-generation backend (local Ollama / remote
+// OpenAI-compatible API). A single row with id="singleton" is used because the
+// app is single-user local. API key is only ever read server-side.
+model LlmConfig {
+  id          String   @id @default("singleton")
+  provider    String   @default("local") // "local" | "remote"
+  baseUrl     String   @default("http://localhost:11434/v1")
+  model       String   @default("llama3.1")
+  apiKey      String? // only needed for remote providers
+  temperature Float
+  maxTokens   Int      @default(2048)
+  updatedAt   DateTime @updatedAt
+}
+
+model Skill {
+  id              String   @id @default(cuid())
+  name            String                          // display name e.g. "皮克斯动画风格"
+  slug            String   @unique                 // url-safe id e.g. "pixar-animation"
+  description     String                          // one-line description for card subtitle
+  icon            String   @default("✨")          // emoji icon
+  category        String   @default("style")       // style | video | edit | comic | photo | ...
+  promptTemplate  String                          // prompt template (may contain {subject} placeholder)
+  negativePrompt  String?                         // default negative prompt
+  defaultParams   Json?                           // { steps, cfg, sampler, scheduler, width, height, ... }
+  recommendedModel String?                      // preferred checkpoint file name
+  tags            String?  @default("[]")         // JSON array of tag strings for search
+  coverUrl        String?                         // cover image URL or base64
+  isBuiltIn       Boolean  @default(false)        // true = seeded, non-deletable
+  sortOrder       Int      @default(0)            // display order within category
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  @@index([category])
+  @@index([isActive])
+  @@index([isBuiltIn])
+}
+
+// ── LoRA 训练（炼丹）任务 ─────────────────────────────
+// 本地训练管线：底模 + 触发词 + 数据集图 → 产出 .safetensors LoRA。
+// 训练后端可插拔（LORA_TRAINER_URL 指向 Kohya/OneTrainer/ComfyUI 训练节点）。
+model LoraTrainingJob {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  baseModel     String // Checkpoint 文件名（必须匹配本机 ComfyUI）
+  triggerWord   String // 触发词，如 "somecjkstyle"
+  classWord     String? // 类别词，如 "person" / "style" / "concept"
+  datasetImages Json // [{ name: string }] 已上传至 ComfyUI input 目录的文件名
+  resolution    Int      @default(512)
+  steps         Int      @default(1500)
+  batchSize     Int      @default(4)
+  learningRate  Float    @default(0.0001)
+  rankDim       Int      @default(32) // network_dim
+  networkAlpha  Int      @default(16) // network_alpha
+  optimizer     String   @default("AdamW8bit")
+  scheduler     String   @default("cosine")
+  seed          Int      @default(0)
+  status        String   @default("QUEUED") // QUEUED | RUNNING | DONE | FAILED | CANCELLED
+  progress      Int      @default(0)
+  outputName    String? // 训练完成后的 LoRA 文件名
+  logs          Json? // [{ t, level, msg }]
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([userId, createdAt])
+}
+
+// ── 一键成片（Film Studio）──────────────────────────────
+// 脚本 / 创意 → 自动分镜 → 逐镜生成视频 → 合成完整影片。
+model FilmProject {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String
+  script        String // 原始输入（剧本 / 创意 / 一句话）
+  type          String   @default("short_video") // short_video | micro_film | ad | other
+  styleSlug     String? // 关联 Skill 风格 slug
+  size          String   @default("1280x720") // WxH
+  fps           Int      @default(16)
+  framesPerShot Int      @default(49)
+  subtitleOn    Boolean  @default(true)
+  bgmName       String? // 上传到 films/bgm/ 的文件名
+  status        String   @default("PARSING") // PARSING | GENERATING | COMPOSING | DONE | FAILED | CANCELLED
+  progress      Int      @default(0)
+  finalVideo    String? // /generated/films/{id}.mp4
+  logs          Json? // [{ t, level, msg }]
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  shots         FilmShot[]
+  @@index([userId, createdAt])
+}
+
+model FilmShot {
+  id        String  @id @default(cuid())
+  filmId    String
+  film      FilmProject @relation(fields: [filmId], references: [id], onDelete: Cascade)
+  order     Int
+  heading   String? // 场景标题
+  prompt    String
+  negative  String?
+  params    Json? // { frames, fps, size, workflow, steps, cfg, sampler, scheduler }
+  taskId    String? // 对应的 ComfyUI 生成任务 id
+  status    String  @default("IDLE") // IDLE | QUEUED | RUNNING | SUCCEEDED | FAILED
+  progress  Int     @default(0)
+  videoPath String? // /generated/{taskId}/vid_0.mp4
+  duration  Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([filmId, order])
+}

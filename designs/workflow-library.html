@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Comfy-APP · 工作流库设计稿</title>
+<style>
+  :root{
+    --bg:#0B0712; --surface:#1A1030; --surface2:#221442; --border:rgba(168,85,247,.18);
+    --ink:#F4EEFF; --muted:#A99BC7; --primary:#A855F7; --primary-soft:rgba(168,85,247,.14);
+    --emerald:#34D399; --amber:#FBBF24; --red:#FB7185;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:radial-gradient(1200px 600px at 12% -12%, rgba(124,58,237,.28), transparent 60%),
+      radial-gradient(900px 520px at 100% 0%, rgba(168,85,247,.18), transparent 55%),
+      linear-gradient(180deg,#0B0712,#0B0712);
+    color:var(--ink); min-height:100vh; padding:0 0 72px;}
+  a{color:inherit;text-decoration:none}
+  .nav{display:flex;align-items:center;justify-content:space-between;max-width:1100px;margin:0 auto;padding:18px 24px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px}
+  .brand .dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--primary),#7C3AED);box-shadow:0 6px 18px rgba(168,85,247,.45);display:grid;place-items:center;font-size:14px}
+  .nav-links{display:flex;gap:22px;color:var(--muted);font-size:14px}
+  .nav-links a:hover{color:var(--ink)}
+  .login{rounded:8px;background:var(--primary);color:#fff;padding:8px 16px;border-radius:10px;font-size:14px;font-weight:600}
+  .wrap{max-width:1100px;margin:8px auto 0;padding:0 24px}
+  .head{display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px}
+  .head h1{font-size:26px;font-weight:800;letter-spacing:-.02em}
+  .head p{color:var(--muted);font-size:13px;margin-top:4px}
+  .btn{border:1px solid var(--border);background:var(--surface);color:var(--ink);padding:9px 16px;border-radius:12px;font-size:14px;cursor:pointer;transition:.15s}
+  .btn:hover{background:var(--surface2)}
+  .btn.primary{background:linear-gradient(135deg,var(--primary),#7C3AED);border:none;box-shadow:0 8px 22px rgba(168,85,247,.4)}
+  .btn.primary:hover{filter:brightness(1.06)}
+  .section-title{display:flex;align-items:center;gap:10px;margin:26px 0 14px;font-size:15px;font-weight:700;color:var(--ink)}
+  .section-title .bar{width:4px;height:18px;border-radius:4px;background:var(--primary)}
+  .section-title .sub{font-weight:400;color:var(--muted);font-size:12px}
+  .grid{display:grid;gap:16px;grid-template-columns:repeat(3,1fr)}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{border:1px solid var(--border);background:linear-gradient(180deg,var(--surface),rgba(26,16,48,.6));border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:12px}
+  .card .top{display:flex;align-items:center;gap:12px}
+  .ico{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:20px;background:var(--primary-soft);border:1px solid var(--border)}
+  .card .name{font-size:15px;font-weight:600}
+  .badge{display:inline-flex;align-items:center;font-size:11px;padding:2px 9px;border-radius:999px;background:var(--primary-soft);color:var(--ink);border:1px solid var(--border);width:fit-content}
+  .badge.custom{background:rgba(52,211,153,.12);color:var(--emerald);border-color:rgba(52,211,153,.3)}
+  .card .desc{font-size:12px;color:var(--muted);line-height:1.6}
+  .card .actions{display:flex;gap:8px;margin-top:4px}
+  .mini{padding:7px 12px;border-radius:10px;font-size:13px;border:1px solid var(--border);background:var(--surface2);color:var(--ink);cursor:pointer}
+  .mini.use{background:linear-gradient(135deg,var(--primary),#7C3AED);border:none;color:#fff;font-weight:600}
+  .mini.danger{color:var(--red);border-color:rgba(251,113,133,.3)}
+  .empty{border:1px dashed var(--border);border-radius:18px;padding:28px;text-align:center;color:var(--muted);font-size:13px}
+  /* modal */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;place-items:center;padding:20px;z-index:50}
+  .overlay.show{display:grid}
+  .modal{width:min(560px,100%);border:1px solid var(--border);background:var(--surface);border-radius:20px;padding:22px}
+  .modal h3{font-size:17px;font-weight:700;margin-bottom:14px}
+  .modal label{display:block;font-size:13px;font-weight:600;margin:12px 0 6px}
+  .modal input[type=text],.modal textarea{width:100%;border:1px solid var(--border);background:var(--bg);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:13px;outline:none}
+  .modal input[type=text]:focus,.modal textarea:focus{border-color:var(--primary)}
+  .modal textarea{height:120px;resize:vertical;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px}
+  .filebtn{font-size:12px;color:var(--primary);border:1px dashed var(--border);padding:7px 12px;border-radius:10px;cursor:pointer}
+  .hint{margin-top:12px;background:rgba(124,58,237,.1);border:1px solid var(--border);border-radius:12px;padding:11px;font-size:12px;color:var(--muted);line-height:1.6}
+  .hint b{color:var(--ink)}
+  .modal .foot{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+</style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><span class="dot">✦</span> Comfy-APP</div>
+    <div class="nav-links"><a href="#">创作台</a><a href="#">工作流库</a><a href="#">模型库</a></div>
+    <a class="login" href="#">登录</a>
+  </nav>
+
+  <div class="wrap">
+    <div class="head">
+      <div>
+        <h1>工作流库</h1>
+        <p>内置工作流开箱即用，也可导入你在 ComfyUI 中导出的 API 工作流直接复用。</p>
+      </div>
+      <button class="btn primary" onclick="document.getElementById('imp').classList.add('show')">+ 导入工作流</button>
+    </div>
+
+    <div class="section-title"><span class="bar"></span>内置工作流 <span class="sub">系统自带 · 无需配置即可生成</span></div>
+    <div class="grid">
+      <div class="card">
+        <div class="top"><div class="ico">🖼️</div><div><div class="name">文生图</div><div class="badge">TXT2IMG</div></div></div>
+        <div class="desc">输入提示词生成图像。支持 Checkpoint / LoRA、采样器、步数、尺寸、种子等参数调节。</div>
+        <div class="actions"><button class="mini use">使用</button></div>
+      </div>
+      <div class="card">
+        <div class="top"><div class="ico">🔁</div><div><div class="name">图生图</div><div class="badge">IMG2IMG</div></div></div>
+        <div class="desc">以一张参考图为基础重绘，可调重绘幅度（denoise）控制保留/变化程度。</div>
+        <div class="actions"><button class="mini use">使用</button></div>
+      </div>
+      <div class="card">
+        <div class="top"><div class="ico">🎞️</div><div><div class="name">视频（即将到来）</div><div class="badge">VIDEO</div></div></div>
+        <div class="desc">基于 Wan / LTX 的本地视频生成，规划中。</div>
+        <div class="actions"><button class="mini" disabled style="opacity:.5">敬请期待</button></div>
+      </div>
+    </div>
+
+    <div class="section-title"><span class="bar"></span>我的工作流 <span class="sub">已导入的 ComfyUI API 工作流</span></div>
+    <div class="grid">
+      <div class="card">
+        <div class="top"><div class="ico">🎨</div><div><div class="name">我的二次元工作流</div><div class="badge custom">自定义 · TXT2IMG</div></div></div>
+        <div class="desc">导出自 ComfyUI，含自定义采样链与高清放大节点。导入后可直接换提示词复用。</div>
+        <div class="actions"><button class="mini use">使用</button><button class="mini danger">删除</button></div>
+      </div>
+      <div class="card">
+        <div class="top"><div class="ico">📷</div><div><div class="name">胶片人像 v2</div><div class="badge custom">自定义 · IMG2IMG</div></div></div>
+        <div class="desc">图生图工作流，内置胶片色调 Lora 与面部修复。</div>
+        <div class="actions"><button class="mini use">使用</button><button class="mini danger">删除</button></div>
+      </div>
+      <div class="card" style="border-style:dashed;align-items:center;justify-content:center;text-align:center;color:var(--muted)">
+        <div style="font-size:28px">＋</div>
+        <div style="font-size:13px;margin-top:6px">导入新的工作流</div>
+        <button class="btn primary" style="margin-top:10px" onclick="document.getElementById('imp').classList.add('show')">导入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import modal -->
+  <div class="overlay" id="imp">
+    <div class="modal">
+      <h3>导入 ComfyUI 工作流</h3>
+      <label>工作流名称</label>
+      <input type="text" placeholder="例如：我的二次元工作流" />
+      <label>API JSON</label>
+      <textarea placeholder='在 ComfyUI 中：菜单 → 工作流 → 导出（API 格式），粘贴生成的 JSON…'></textarea>
+      <div class="row">
+        <label class="filebtn" for="up">📁 上传 .json 文件</label>
+        <input id="up" type="file" accept=".json,application/json" style="display:none" />
+        <span style="font-size:12px;color:var(--muted)">或粘贴上方文本框</span>
+      </div>
+      <div class="hint">
+        <b>怎么用：</b> 在 ComfyUI 编辑器里点「菜单 → 工作流 → 导出（API 格式）」，把得到的 JSON 粘贴或上传到这里。
+        保存后即可在创作台「自定义」标签下选用，并只改提示词 / 种子即可复用你整套节点图。
+      </div>
+      <div class="foot">
+        <button class="btn" onclick="document.getElementById('imp').classList.remove('show')">取消</button>
+        <button class="btn primary" onclick="document.getElementById('imp').classList.remove('show')">保存工作流</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ov = document.getElementById('imp');
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('show'); });
+    document.getElementById('up').addEventListener('change', (e) => {
+      const f = e.target.files[0]; if (f) f.text().then(t => {
+        document.querySelector('.modal textarea').value = t;
+      });
+    });
+  </script>
+</body>
+</html>

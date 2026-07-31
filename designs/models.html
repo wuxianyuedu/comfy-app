@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Comfy-APP · 模型库设计稿</title>
+<style>
+  :root{
+    --bg:#0B0712; --surface:#1A1030; --surface2:#221442; --border:rgba(168,85,247,.18);
+    --ink:#F4EEFF; --muted:#A99BC7; --primary:#A855F7; --primary-soft:rgba(168,85,247,.14);
+    --emerald:#34D399; --amber:#FBBF24; --red:#FB7185; --cyan:#22D3EE;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:radial-gradient(1200px 600px at 12% -12%, rgba(124,58,237,.28), transparent 60%),
+      radial-gradient(900px 520px at 100% 0%, rgba(168,85,247,.18), transparent 55%),
+      linear-gradient(180deg,#0B0712,#0B0712);
+    color:var(--ink); min-height:100vh; padding:0 0 72px;}
+  a{color:inherit;text-decoration:none}
+  .nav{display:flex;align-items:center;justify-content:space-between;max-width:1180px;margin:0 auto;padding:18px 24px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px}
+  .brand .dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--primary),#7C3AED);box-shadow:0 6px 18px rgba(168,85,247,.45);display:grid;place-items:center;font-size:14px}
+  .nav-links{display:flex;gap:22px;color:var(--muted);font-size:14px}
+  .nav-links a:hover{color:var(--ink)}
+  .nav-links a.active{color:var(--primary);font-weight:600}
+  .login{background:var(--primary);color:#fff;padding:8px 16px;border-radius:10px;font-size:14px;font-weight:600}
+  .wrap{max-width:1180px;margin:8px auto 0;padding:0 24px}
+  .head h1{font-size:26px;font-weight:800;letter-spacing:-.02em}
+  .head p{color:var(--muted);font-size:13px;margin-top:4px}
+  .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 16px;flex-wrap:wrap}
+  .search{flex:1;min-width:220px;border:1px solid var(--border);background:var(--bg);color:var(--ink);border-radius:12px;padding:10px 14px;font-size:13px;outline:none}
+  .search:focus{border-color:var(--primary)}
+  .tabs{display:flex;gap:8px}
+  .tab{border:1px solid var(--border);background:var(--surface);color:var(--muted);padding:9px 16px;border-radius:12px;font-size:14px;cursor:pointer}
+  .tab.active{background:linear-gradient(135deg,var(--primary),#7C3AED);border:none;color:#fff;font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  @media(max-width:920px){.grid{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:680px){.grid{grid-template-columns:repeat(2,1fr)}}
+  .card{border:1px solid var(--border);background:linear-gradient(180deg,var(--surface),rgba(26,16,48,.6));border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px;transition:.15s}
+  .card:hover{transform:translateY(-3px);border-color:var(--primary)}
+  .thumb{aspect-ratio:1/1;border-radius:12px;background:linear-gradient(135deg,#3B1D6E,#1A1030);display:grid;place-items:center;font-size:26px}
+  .card .name{font-size:13.5px;font-weight:600;line-height:1.4}
+  .card .sub{font-size:11px;color:var(--muted)}
+  .tags{display:flex;flex-wrap:wrap;gap:6px}
+  .tag{font-size:10.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:var(--primary-soft);color:var(--ink)}
+  .tag.ckpt{color:var(--amber);border-color:rgba(251,191,36,.3)}
+  .tag.lora{color:var(--cyan);border-color:rgba(34,211,238,.3)}
+  .card .use{margin-top:2px;border:1px solid var(--primary);background:var(--primary-soft);color:var(--ink);padding:7px;border-radius:10px;font-size:12.5px;cursor:pointer;text-align:center}
+  .card .use:hover{background:var(--primary);color:#fff}
+  .empty{grid-column:1/-1;border:1px dashed var(--border);border-radius:18px;padding:48px;text-align:center;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><span class="dot">✦</span> Comfy-APP</div>
+    <div class="nav-links"><a href="create-studio.html">创作台</a><a href="workflow-library.html">工作流库</a><a href="models.html" class="active">模型库</a><a href="works.html">我的作品</a></div>
+    <a class="login" href="#">登录</a>
+  </nav>
+
+  <div class="wrap">
+    <div class="head">
+      <h1>模型库</h1>
+      <p>本地 ComfyUI 已加载的 Checkpoint 与 LoRA，按名称检索并一键应用到生成。</p>
+    </div>
+
+    <div class="toolbar">
+      <input class="search" placeholder="搜索模型名称，如 waiIllustrious、film_lora …" />
+      <div class="tabs">
+        <div class="tab active" onclick="sw(this)">全部</div>
+        <div class="tab" onclick="sw(this)">Checkpoint</div>
+        <div class="tab" onclick="sw(this)">LoRA</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card"><div class="thumb">🧠</div><div class="name">waiIllustriousSDXL_v170</div><div class="sub">6.4 GB · safetensors</div><div class="tags"><span class="tag ckpt">CHECKPOINT</span><span class="tag">SDXL</span></div><div class="use">应用</div></div>
+      <div class="card"><div class="thumb">🧠</div><div class="name">majicMIX realistic v7</div><div class="sub">4.1 GB · safetensors</div><div class="tags"><span class="tag ckpt">CHECKPOINT</span><span class="tag">写实</span></div><div class="use">应用</div></div>
+      <div class="card"><div class="thumb">🧠</div><div class="name">CounterfeitXL v1.0</div><div class="sub">5.8 GB · safetensors</div><div class="tags"><span class="tag ckpt">CHECKPOINT</span><span class="tag">二次元</span></div><div class="use">应用</div></div>
+      <div class="card"><div class="thumb">🎨</div><div class="name">film_portrait_lora</div><div class="sub">144 MB · safetensors</div><div class="tags"><span class="tag lora">LORA</span><span class="tag">胶片</span></div><div class="use">应用</div></div>
+      <div class="card"><div class="thumb">🎨</div><div class="name">detail_tweaker_xl</div><div class="sub">221 MB · safetensors</div><div class="tags"><span class="tag lora">LORA</span><span class="tag">细节</span></div><div class="use">应用</div></div>
+      <div class="card"><div class="thumb">🎨</div><div class="name">anime_lineart_color</div><div class="sub">98 MB · safetensors</div><div class="tags"><span class="tag lora">LORA</span><span class="tag">上色</span></div><div class="use">应用</div></div>
+      <div class="card"><div class="thumb">🎨</div><div class="name">soft_light_leak</div><div class="sub">112 MB · safetensors</div><div class="tags"><span class="tag lora">LORA</span><span class="tag">光效</span></div><div class="use">应用</div></div>
+      <div class="card"><div class="thumb">🧠</div><div class="name">dreamshaperXL_v2</div><div class="sub">5.2 GB · safetensors</div><div class="tags"><span class="tag ckpt">CHECKPOINT</span><span class="tag">通用</span></div><div class="use">应用</div></div>
+    </div>
+  </div>
+
+  <script>
+    function sw(el){ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); el.classList.add('active'); }
+  </script>
+</body>
+</html>

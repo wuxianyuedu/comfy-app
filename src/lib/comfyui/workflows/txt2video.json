@@ -1,0 +1,59 @@
+{
+  "10": {
+    "class_type": "WanVideoModelLoader",
+    "inputs": {
+      "model": "__WAN_MODEL__",
+      "base_precision": "fp16",
+      "quantization": "disabled",
+      "precision": "bf16",
+      "num_gpus": 1
+    }
+  },
+  "11": {
+    "class_type": "WanVideoVAELoader",
+    "inputs": { "vae": "__WAN_VAE__" }
+  },
+  "20": {
+    "class_type": "CLIPLoader",
+    "inputs": { "clip_name": "__T5_MODEL__", "type": "wan_t5" }
+  },
+  "30": {
+    "class_type": "WanVideoTextEncoder",
+    "inputs": { "clip": ["20", 0], "text": "__PROMPT__", "force_offload": true }
+  },
+  "40": {
+    "class_type": "WanVideoEncode",
+    "inputs": {
+      "clip_embeds": ["30", 0],
+      "model": ["10", 0],
+      "height": "__H__",
+      "width": "__W__",
+      "num_frames": "__FRAMES__",
+      "fps": "__FPS__"
+    }
+  },
+  "50": {
+    "class_type": "WanVideoSampler",
+    "inputs": {
+      "model": ["10", 0],
+      "clip_embeds": ["30", 0],
+      "samples": ["40", 0],
+      "guidance_scale": "__CFG__",
+      "seed": "__SEED__",
+      "steps": "__STEPS__"
+    }
+  },
+  "60": {
+    "class_type": "WanVideoDecode",
+    "inputs": { "samples": ["50", 0], "model": ["10", 0], "vae": ["11", 0] }
+  },
+  "70": {
+    "class_type": "WanVideoCombine",
+    "inputs": {
+      "images": ["60", 0],
+      "frame_rate": "__FPS__",
+      "loop": false,
+      "filename_prefix": "__PREFIX__"
+    }
+  }
+}

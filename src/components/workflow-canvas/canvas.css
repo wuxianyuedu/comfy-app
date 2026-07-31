@@ -1,0 +1,452 @@
+/* ── Workflow Canvas — Dark theme matching Comfy-APP design system ── */
+
+/* Container: split viewport (canvas) + editor (bottom panel) */
+.workflow-canvas {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 520px;
+  background: #050010;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(139,92,246,0.15);
+}
+
+.workflow-canvas__viewport {
+  flex: 1;
+  min-height: 360px;
+  position: relative;
+}
+
+.workflow-canvas__editor {
+  height: 260px;
+  min-height: 200px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+/* Override ReactFlow defaults for dark theme */
+.workflow-canvas .react-flow__background {
+  background-color: #080514 !important;
+}
+
+.workflow-canvas .react-flow__minimap {
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.workflow-canvas .react-flow__minimap:hover {
+  opacity: 1;
+}
+
+.workflow-canvas .react-flow__controls {
+  display: flex;
+  gap: 2px;
+}
+.workflow-canvas .react-flow__controls-button {
+  width: 28px !important;
+  height: 28px !important;
+  background: #1A1030 !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 6px !important;
+  fill: #A99BC7 !important;
+}
+.workflow-canvas .react-flow__controls-button:hover {
+  background: #221442 !important;
+  fill: #F4EEFF !important;
+}
+
+/* Connection line style */
+.workflow-canvas .react-flow__connection-line {
+  stroke: #8B5CF6;
+  stroke-width: 2;
+}
+
+/* Selection box */
+.workflow-canvas .react-flow__selection {
+  background: rgba(139,92,246,0.08);
+  border: 1px solid rgba(139,92,246,0.3);
+}
+
+/* ── Floating Toolbar (bottom-center of canvas area) ── */
+.wf-toolbar {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: rgba(13, 8, 24, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.wf-toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #A99BC7;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.wf-toolbar__btn:hover:not(:disabled) {
+  background: rgba(139,92,246,0.12);
+  color: #F4EEFF;
+  border-color: rgba(139,92,246,0.3);
+}
+.wf-toolbar__btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.wf-toolbar__btn--primary {
+  background: linear-gradient(135deg, #9333EA, #7C3AED);
+  border: none;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(147,51,234,0.35);
+}
+.wf-toolbar__btn--primary:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 6px 20px rgba(147,51,234,0.45);
+}
+
+.wf-toolbar__sep {
+  width: 1px;
+  height: 20px;
+  background: rgba(255,255,255,0.08);
+  margin: 0 4px;
+}
+
+/* ── Add Node Menu ── */
+.wf-add-menu {
+  position: absolute;
+  top: 52px;
+  left: 12px;
+  width: 280px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: rgba(13, 8, 24, 0.97);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  z-index: 200;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+  animation: wf-fade-in 0.15s ease-out;
+}
+
+@keyframes wf-fade-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.wf-add-menu__header {
+  padding: 10px 14px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #555;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.wf-add-menu__group-label {
+  padding: 8px 14px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #8B5CF6;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.wf-add-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 14px;
+  font-size: 12px;
+  color: #D4CFF9;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background 0.1s;
+  text-align: left;
+}
+.wf-add-menu__item:hover {
+  background: rgba(139,92,246,0.1);
+}
+.wf-add-menu__item-type {
+  margin-left: auto;
+  font-size: 9px;
+  color: #555;
+  font-family: "SF Mono", ui-monospace, monospace;
+}
+
+/* ── Export Modal ── */
+.wf-export-modal {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0,0,0,0.6);
+  z-index: 300;
+  backdrop-filter: blur(4px);
+}
+.wf-export-modal__card {
+  width: min(560px, 90vw);
+  background: #0D0818;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+.wf-export-modal__card h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #F4EEFF;
+  margin-bottom: 4px;
+}
+
+/* ── Node Editor Panel (bottom) ── */
+.wf-editor {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #0E091A, #0B0712);
+  overflow-y: auto;
+}
+.wf-editor--empty {
+  justify-content: center;
+}
+
+.wf-editor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.wf-editor__tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 18px 0;
+  flex-shrink: 0;
+}
+.wf-editor__tab {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6B7280;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.wf-editor__tab:hover,
+.wf-editor__tab.active {
+  color: #D4CFF9;
+  border-bottom-color: #8B5CF6;
+}
+
+.wf-editor__fields {
+  flex: 1;
+  padding: 10px 18px;
+  overflow-y: auto;
+}
+
+.wf-editor__group-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8B5CF6;
+  margin: 10px 0 6px;
+}
+.wf-editor__group:first-child .wf-editor__group-label {
+  margin-top: 0;
+}
+
+.wf-editor__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 18px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  flex-shrink: 0;
+}
+
+/* ── Field Rows ── */
+.wf-field {
+  margin-bottom: 10px;
+}
+.wf-field__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+}
+
+.wf-field input[type="text"],
+.wf-field input[type="number"],
+.wf-field select,
+.wf-field textarea {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #F4EEFF;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+}
+.wf-field input:focus,
+.wf-field select:focus,
+.wf-field textarea:focus {
+  border-color: rgba(139,92,246,0.4);
+  box-shadow: 0 0 0 2px rgba(139,92,246,0.1);
+}
+.wf-field input::placeholder,
+.wf-field textarea::placeholder {
+  color: #444;
+}
+
+.wf-field textarea {
+  resize: vertical;
+  min-height: 56px;
+  line-height: 1.6;
+}
+
+.wf-field select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+.wf-field select option {
+  background: #1A1030;
+  color: #F4EEFF;
+}
+
+.wf-field--text textarea {
+  font-family: "SF Mono", ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+
+/* Toggle switch */
+.wf-field--toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.wf-toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+.wf-toggle input { opacity: 0; width: 0; height: 0; }
+.wf-toggle__slider {
+  position: absolute;
+  inset: 0;
+  background: #333;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.wf-toggle__slider::before {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  top: 2px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.wf-toggle input:checked + .wf-toggle__slider {
+  background: #8B5CF6;
+}
+.wf-toggle input:checked + .wf-toggle__slider::before {
+  transform: translateX(16px);
+}
+
+/* Image upload field */
+.wf-image-upload {}
+.wf-image-btn {
+  width: 100%;
+  padding: 16px;
+  font-size: 12px;
+  color: #8B5CF6;
+  background: rgba(139,92,246,0.06);
+  border: 1px dashed rgba(139,92,246,0.25);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.wf-image-btn:hover {
+  background: rgba(139,92,246,0.12);
+  border-style: solid;
+}
+.wf-image-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  font-size: 11px;
+  color: #A99BC7;
+}
+.wf-image-preview button {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 10px;
+  color: #FB7185;
+  background: rgba(251,113,133,0.1);
+  border: 1px solid rgba(251,113,133,0.2);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* ── Scrollbar styling ── */
+.wf-editor::-webkit-scrollbar,
+.wf-add-menu::-webkit-scrollbar {
+  width: 5px;
+}
+.wf-editor::-webkit-scrollbar-track,
+.wf-add-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.wf-editor::-webkit-scrollbar-thumb,
+.wf-add-menu::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+}
+.wf-editor::-webkit-scrollbar-thumb:hover,
+.wf-add-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.15);
+}

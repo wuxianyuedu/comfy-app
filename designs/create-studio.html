@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Comfy-APP · 创作台设计稿</title>
+<style>
+  :root{
+    --bg:#0B0712; --surface:#1A1030; --surface2:#221442; --border:rgba(168,85,247,.18);
+    --ink:#F4EEFF; --muted:#A99BC7; --primary:#A855F7; --primary-soft:rgba(168,85,247,.14);
+    --emerald:#34D399; --amber:#FBBF24; --red:#FB7185; --cyan:#22D3EE;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:radial-gradient(1200px 600px at 12% -12%, rgba(124,58,237,.28), transparent 60%),
+      radial-gradient(900px 520px at 100% 0%, rgba(168,85,247,.18), transparent 55%),
+      linear-gradient(180deg,#0B0712,#0B0712);
+    color:var(--ink); min-height:100vh; padding:0 0 72px;}
+  a{color:inherit;text-decoration:none}
+  .nav{display:flex;align-items:center;justify-content:space-between;max-width:1180px;margin:0 auto;padding:18px 24px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px}
+  .brand .dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--primary),#7C3AED);box-shadow:0 6px 18px rgba(168,85,247,.45);display:grid;place-items:center;font-size:14px}
+  .nav-links{display:flex;gap:22px;color:var(--muted);font-size:14px}
+  .nav-links a:hover{color:var(--ink)}
+  .nav-links a.active{color:var(--primary);font-weight:600}
+  .login{background:var(--primary);color:#fff;padding:8px 16px;border-radius:10px;font-size:14px;font-weight:600}
+  .wrap{max-width:1180px;margin:8px auto 0;padding:0 24px}
+  .head h1{font-size:26px;font-weight:800;letter-spacing:-.02em}
+  .head p{color:var(--muted);font-size:13px;margin-top:4px}
+  .tabs{display:flex;gap:8px;margin:20px 0 18px}
+  .tab{border:1px solid var(--border);background:var(--surface);color:var(--muted);padding:9px 18px;border-radius:12px;font-size:14px;cursor:pointer;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab.active{background:linear-gradient(135deg,var(--primary),#7C3AED);border:none;color:#fff;font-weight:600}
+  .layout{display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start}
+  @media(max-width:920px){.layout{grid-template-columns:1fr}}
+  .panel{border:1px solid var(--border);background:linear-gradient(180deg,var(--surface),rgba(26,16,48,.6));border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:14px}
+  .panel h3{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .panel h3 .ic{color:var(--primary)}
+  label{font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px}
+  textarea,input[type=text]{width:100%;border:1px solid var(--border);background:var(--bg);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:13px;outline:none;resize:vertical}
+  textarea:focus,input:focus{border-color:var(--primary)}
+  textarea{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:78px}
+  .row{display:flex;gap:12px}
+  .row>div{flex:1}
+  .stepper{display:flex;align-items:center;gap:8px}
+  .stepper input{text-align:center}
+  .stepper button{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--ink);cursor:pointer;font-size:16px}
+  select{width:100%;border:1px solid var(--border);background:var(--bg);color:var(--ink);border-radius:10px;padding:9px 12px;font-size:13px;outline:none}
+  .model-pick{border:1px solid var(--border);background:var(--bg);border-radius:10px;padding:9px 12px;font-size:13px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+  .gen-btn{margin-top:4px;background:linear-gradient(135deg,var(--primary),#7C3AED);border:none;color:#fff;padding:12px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 10px 26px rgba(168,85,247,.45)}
+  .gen-btn:hover{filter:brightness(1.06)}
+  /* result / canvas area */
+  .stage{border:1px solid var(--border);background:linear-gradient(180deg,rgba(26,16,48,.55),rgba(11,7,18,.55));border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:14px;min-height:520px}
+  .stage-top{display:flex;align-items:center;justify-content:space-between}
+  .canvas{position:relative;flex:1;border:1px dashed var(--border);border-radius:14px;background:
+      radial-gradient(circle at 20px 20px, rgba(168,85,247,.10) 1px, transparent 1px) 0 0/22px 22px, var(--bg);
+    min-height:300px;overflow:hidden;padding:0}
+  .node{position:absolute;border:1px solid var(--primary);background:rgba(168,85,247,.12);border-radius:10px;padding:8px 10px;width:140px;font-size:11px}
+  .node .t{font-weight:700;color:#D8B4FE}
+  .node .s{color:var(--muted);font-size:10px;margin-top:2px}
+  .node.cyan{border-color:var(--cyan);background:rgba(34,211,238,.12)}
+  .node.cyan .t{color:#67E8F9}
+  .node.emerald{border-color:var(--emerald);background:rgba(52,211,153,.12)}
+  .node.emerald .t{color:#6EE7B7}
+  .node.red{border-color:var(--red);background:rgba(251,113,133,.12)}
+  .node.red .t{color:#FCA5A5}
+  .node.amber{border-color:var(--amber);background:rgba(251,191,36,.12)}
+  .node.amber .t{color:#FCD34D}
+  .edge{position:absolute;height:2px;background:linear-gradient(90deg,rgba(168,85,247,.5),rgba(34,211,238,.5));transform-origin:left center}
+  .role-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--primary-soft);color:var(--ink)}
+  .pill .d{width:7px;height:7px;border-radius:999px;background:var(--primary)}
+  .pill.neg .d{background:var(--red)} .pill.ckpt .d{background:var(--amber)} .pill.smp .d{background:var(--cyan)}
+  .results{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px}
+  .thumb{border:1px solid var(--border);border-radius:12px;aspect-ratio:1/1;background:linear-gradient(135deg,#3B1D6E,#1A1030);display:grid;place-items:center;color:var(--muted);font-size:12px;overflow:hidden}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .log{border:1px solid var(--border);border-radius:12px;background:var(--bg);padding:10px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--muted);line-height:1.7;max-height:140px;overflow:auto}
+  .log .ok{color:var(--emerald)} .log .warn{color:var(--amber)}
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:40px 0}
+</style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><span class="dot">✦</span> Comfy-APP</div>
+    <div class="nav-links"><a href="create-studio.html" class="active">创作台</a><a href="workflow-library.html">工作流库</a><a href="models.html">模型库</a><a href="works.html">我的作品</a></div>
+    <a class="login" href="#">登录</a>
+  </nav>
+
+  <div class="wrap">
+    <div class="head">
+      <h1>创作台</h1>
+      <p>选择工作流、调整参数，一键生成图像。自定义工作流支持可视化节点编辑与角色映射。</p>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab(this)">文生图</div>
+      <div class="tab" onclick="switchTab(this)">图生图</div>
+      <div class="tab" onclick="switchTab(this)">自定义</div>
+    </div>
+
+    <div class="layout">
+      <!-- left params -->
+      <div class="panel">
+        <h3><span class="ic">⚙</span> 参数</h3>
+        <div>
+          <label>正向提示词</label>
+          <textarea placeholder="masterpiece, best quality, 1girl, silver hair, studio light...">masterpiece, best quality, 1girl, silver hair, studio light, soft smile</textarea>
+        </div>
+        <div>
+          <label>负向提示词</label>
+          <textarea placeholder="lowres, bad anatomy, worst quality...">lowres, bad anatomy, worst quality, jpeg artifacts</textarea>
+        </div>
+        <div class="row">
+          <div>
+            <label>步数 (Steps)</label>
+            <div class="stepper"><button onclick="step(this,-1)">−</button><input type="text" value="20" /><button onclick="step(this,1)">+</button></div>
+          </div>
+          <div>
+            <label>CFG</label>
+            <div class="stepper"><button onclick="step(this,-0.5)">−</button><input type="text" value="7.0" /><button onclick="step(this,0.5)">+</button></div>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>采样器</label>
+            <select><option>DPM++ 2M Karras</option><option>Euler a</option><option>DPM++ SDE</option><option>UniPC</option></select>
+          </div>
+          <div>
+            <label>种子</label>
+            <input type="text" value="-1" />
+          </div>
+        </div>
+        <div>
+          <label>模型</label>
+          <div class="model-pick" onclick="location.href='models.html'"><span>waiIllustriousSDXL_v170.safetensors</span><span style="color:var(--primary)">更换 ›</span></div>
+        </div>
+        <div>
+          <label>LoRA（可选，可叠加）</label>
+          <div class="model-pick" onclick="location.href='models.html'"><span>未选择 LoRA</span><span style="color:var(--primary)">＋ 添加</span></div>
+        </div>
+        <button class="gen-btn" onclick="runGen()">⚡ 生成</button>
+      </div>
+
+      <!-- right stage -->
+      <div class="stage">
+        <div class="stage-top">
+          <h3 style="font-size:15px;font-weight:700">节点图预览 · 自定义工作流</h3>
+          <button class="tab" style="padding:6px 12px" onclick="alert('全屏查看（原型示意）')">⤢ 全屏</button>
+        </div>
+
+        <div class="canvas" id="canvas">
+          <div class="node" style="left:24px;top:40px"><div class="t">CLIP 编码</div><div class="s">正向提示词</div></div>
+          <div class="node amber" style="left:24px;top:150px"><div class="t">Checkpoint</div><div class="s">waiIllustrious</div></div>
+          <div class="node cyan" style="left:230px;top:95px"><div class="t">KSampler</div><div class="s">采样 20 步</div></div>
+          <div class="node emerald" style="left:436px;top:95px"><div class="t">VAE 解码</div><div class="s">潜空间转图</div></div>
+          <div class="node red" style="left:436px;top:200px"><div class="t">保存图像</div><div class="s">输出</div></div>
+          <div class="edge" style="left:164px;top:64px;width:66px;transform:rotate(12deg)"></div>
+          <div class="edge" style="left:164px;top:174px;width:66px;transform:rotate(-12deg)"></div>
+          <div class="edge" style="left:370px;top:120px;width:66px"></div>
+          <div class="edge" style="left:506px;top:140px;width:0px;height:60px;background:linear-gradient(180deg,rgba(52,211,153,.5),rgba(251,113,133,.5));transform:none"></div>
+        </div>
+
+        <div class="role-pills">
+          <span class="pill"><span class="d"></span>正向提示词 · 3</span>
+          <span class="pill neg"><span class="d"></span>负向提示词 · 4</span>
+          <span class="pill ckpt"><span class="d"></span>模型 · 7</span>
+          <span class="pill smp"><span class="d"></span>采样器 · 9</span>
+        </div>
+
+        <div>
+          <label style="margin-bottom:8px">生成结果</label>
+          <div class="results" id="results">
+            <div class="thumb empty" id="emptyTip">点击「生成」查看结果</div>
+          </div>
+        </div>
+
+        <div>
+          <label style="margin-bottom:8px">执行日志</label>
+          <div class="log" id="log"><span style="color:var(--muted)">› 等待生成任务…</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function switchTab(el){ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); el.classList.add('active'); }
+    function step(btn, d){ const i = btn.parentElement.querySelector('input'); let v = parseFloat(i.value)||0; v = +(v + d).toFixed(1); i.value = v; }
+    function runGen(){
+      const tips = ['🔄 提交到 ComfyUI …','› 加载模型 waiIllustriousSDXL','› KSampler 采样 20 步','<span class="ok">[OK] 解码完成，保存 4 张图</span>'];
+      const log = document.getElementById('log'); log.innerHTML='';
+      const res = document.getElementById('results'); res.innerHTML='';
+      document.getElementById('emptyTip')?.remove();
+      tips.forEach((t,i)=> setTimeout(()=>{ const p=document.createElement('div'); p.innerHTML=t; log.appendChild(p); }, i*700));
+      for(let i=1;i<=4;i++){ const d=document.createElement('div'); d.className='thumb'; d.textContent='图 '+i; res.appendChild(d); }
+    }
+  </script>
+</body>
+</html>

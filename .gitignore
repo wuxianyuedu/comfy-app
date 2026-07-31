@@ -1,0 +1,59 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env*.local
+.env
+
+# prisma / db
+/prisma/dev.db
+/prisma/dev.db-journal
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# local generated assets
+/public/generated/*
+!/public/generated/.gitkeep
+/data/uploads/*
+!/data/uploads/.gitkeep
+
+# npm local cache (used to avoid writing outside workspace)
+/.npm-cache
+
+# sandbox APPDATA/TEMP redirect dirs (created at runtime)
+/.local-app-data/
+/.local-tmp/
+
+# local caches & logs
+/.cache/
+.dev-server.log
+dev-launcher.log
+
+# workbuddy local project data (memory, not source)
+/.workbuddy/
+
+# stray junk / env-specific launchers
+/nul
+/$null
+Comfy-APP
+*.bat
