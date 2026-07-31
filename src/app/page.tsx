@@ -14,31 +14,37 @@ const FEATURES = [
     title: "文生图 / 图生图",
     desc: "对接本机 ComfyUI，输入提示词即可生成高质量图像，支持局部重绘与高清放大。",
     icon: "🎨",
+    href: "/workspace?tab=create",
   },
   {
     title: "一键成片",
     desc: "从剧本到成片：自动分镜、逐镜生视频、烧录字幕与 BGM 合成，一条龙产出。",
     icon: "🎬",
+    href: "/workspace?tab=film",
   },
   {
     title: "工作流编辑器",
     desc: "可视化拖拽编排 ComfyUI 节点，导入你自己的 API 工作流，串联多节点创作。",
     icon: "🧩",
+    href: "/workspace?tab=canvas",
   },
   {
     title: "LoRA 训练",
     desc: "上传数据集与触发词，本地训练专属风格 LoRA，训练产物可直接用于生图。",
     icon: "🔥",
+    href: "/workspace?tab=train",
   },
   {
     title: "创作工坊",
     desc: "剧本 → 角色 → 分镜 三步走，配合本地 LLM 智能扩写与拆镜，灵感即刻落地。",
     icon: "✍️",
+    href: "/workshop",
   },
   {
     title: "本地模型自由",
     desc: "统一管理 Checkpoint / LoRA / ControlNet，一键切换底模，发挥本机算力。",
     icon: "🗂️",
+    href: "/workspace?tab=models",
   },
 ];
 
@@ -148,16 +154,20 @@ export default function LandingPage() {
         </div>
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f) => (
-            <div
+            <Link
               key={f.title}
-              className="rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary/40"
+              href={f.href}
+              className="group block rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary/40"
             >
               <div className="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-xl">
                 {f.icon}
               </div>
               <h3 className="text-lg font-semibold">{f.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-muted">{f.desc}</p>
-            </div>
+              <span className="mt-3 inline-block text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
+                打开 →
+              </span>
+            </Link>
           ))}
         </div>
       </section>
