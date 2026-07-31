@@ -78,6 +78,7 @@ function ContextMenu({
             <button
               key={k}
               type="button"
+              data-canvas-node-kind={k}
               onClick={() => onPick(k)}
               className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:bg-white/[0.06]"
             >
