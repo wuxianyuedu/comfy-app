@@ -13,7 +13,7 @@ const CreateSchema = z.object({
   baseModel: z.string().min(1),
   triggerWord: z.string().min(1).max(120),
   classWord: z.string().max(120).optional(),
-  datasetImages: z.array(z.object({ name: z.string() })).min(1, "至少需要一张数据集图片"),
+  datasetImages: z.array(z.object({ name: z.string(), caption: z.string().optional() })).min(1, "至少需要一张数据集图片"),
   resolution: z.number().int().min(256).max(2048).optional(),
   steps: z.number().int().min(1).max(20000).optional(),
   batchSize: z.number().int().min(1).max(32).optional(),

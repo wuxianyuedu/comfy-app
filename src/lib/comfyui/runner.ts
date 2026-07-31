@@ -194,6 +194,8 @@ async function complete(taskId: string, promptId: string) {
   for (const nodeOut of Object.values(outputs) as any[]) {
     if (Array.isArray(nodeOut?.images)) images.push(...nodeOut.images);
     if (Array.isArray(nodeOut?.videos)) videos.push(...nodeOut.videos);
+    // VHS_VideoCombine emits its files under `gifs` (mp4/gif/webm).
+    if (Array.isArray(nodeOut?.gifs)) videos.push(...nodeOut.gifs);
   }
   if (!images.length && !videos.length) {
     await fail(taskId, promptId, "无输出内容");
@@ -263,15 +265,9 @@ async function complete(taskId: string, promptId: string) {
   processQueue();
 }
 
-// Map raw ComfyUI/node errors to user-actionable hints. The LTX-2.3 video
-// node (LtxvApiTextToVideo) runs locally but requires a one-time free LTX
-// (Lightricks) login inside ComfyUI; surface that instead of a cryptic error.
+// Map raw ComfyUI/node errors to user-actionable hints.
 function friendlyError(raw: unknown): string {
-  const m = (raw ?? "").toString();
-  if (/unauthorized|please login|login first|not logged in/i.test(m)) {
-    return `${m} ｜ 若使用了 LTX 视频节点，请先在 ComfyUI 界面登录 LTX 账号（Lightricks 免费授权），再重新生成。`;
-  }
-  return m;
+  return (raw ?? "").toString();
 }
 
 async function fail(taskId: string, promptId: string, error: string) {

@@ -11,7 +11,7 @@ type TrainJob = {
   baseModel: string;
   triggerWord: string;
   classWord: string | null;
-  datasetImages: { name: string }[];
+  datasetImages: { name: string; caption?: string }[];
   resolution: number;
   steps: number;
   batchSize: number;
@@ -52,7 +52,7 @@ export function TrainingStudio() {
   const [baseModel, setBaseModel] = useState("");
   const [triggerWord, setTriggerWord] = useState("");
   const [classWord, setClassWord] = useState("");
-  const [dataset, setDataset] = useState<{ name: string }[]>([]);
+  const [dataset, setDataset] = useState<{ name: string; caption: string }[]>([]);
   const [resolution, setResolution] = useState(512);
   const [steps, setSteps] = useState(1500);
   const [batchSize, setBatchSize] = useState(4);
@@ -101,12 +101,20 @@ export function TrainingStudio() {
         fd.append("image", f);
         const res = await fetch("/api/upload", { method: "POST", body: fd });
         const d = await res.json();
-        if (d.name) setDataset((prev) => [...prev, { name: d.name }]);
+        if (d.name) setDataset((prev) => [...prev, { name: d.name, caption: "" }]);
       }
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
     }
+  }
+
+  // Fill any blank per-image captions with the trigger word (a common
+  // shortcut for single-concept LoRA training).
+  function fillBlankCaptions() {
+    const tw = triggerWord.trim();
+    if (!tw) return;
+    setDataset((prev) => prev.map((d) => ({ ...d, caption: d.caption.trim() ? d.caption : tw })));
   }
 
   async function submit() {
@@ -126,7 +134,7 @@ export function TrainingStudio() {
           baseModel,
           triggerWord: triggerWord.trim(),
           classWord: classWord.trim() || undefined,
-          datasetImages: dataset,
+          datasetImages: dataset.map((d) => ({ name: d.name, caption: d.caption.trim() })),
           resolution,
           steps,
           batchSize,
@@ -214,21 +222,46 @@ export function TrainingStudio() {
             <input ref={fileRef} type="file" accept="image/*" multiple onChange={onUpload} className="block w-full text-xs text-gray-400 file:mr-3 file:rounded-lg file:border-0 file:bg-violet-500/15 file:px-3 file:py-1.5 file:text-violet-200" />
             {uploading && <p className="mt-1 text-[11px] text-violet-300">上传中…</p>}
             {dataset.length > 0 && (
-              <div className="mt-2 grid grid-cols-4 gap-1.5">
-                {dataset.map((d, i) => (
-                  <div key={i} className="group relative aspect-square overflow-hidden rounded-md border border-white/10">
-                    <img src={`/api/file/${encodeURIComponent(d.name)}`} alt={d.name} className="h-full w-full object-cover" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
-                    <button
-                      onClick={() => setDataset(dataset.filter((_, j) => j !== i))}
-                      className="absolute right-0.5 top-0.5 hidden rounded bg-black/60 px-1 text-[10px] text-white group-hover:block"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <span className="text-[10px] text-gray-500">逐图 caption 标注（留空则用触发词填充）</span>
+                  <button
+                    type="button"
+                    onClick={fillBlankCaptions}
+                    disabled={!triggerWord.trim()}
+                    className="text-[10px] text-violet-300 hover:underline disabled:opacity-40"
+                  >
+                    用触发词填充空白
+                  </button>
+                </div>
+                <div className="mt-1.5 space-y-1.5">
+                  {dataset.map((d, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.02] p-1.5">
+                      <img
+                        src={`/api/file/${encodeURIComponent(d.name)}`}
+                        alt={d.name}
+                        className="h-9 w-9 shrink-0 rounded object-cover"
+                        onError={(e) => ((e.target as HTMLImageElement).style.visibility = "hidden")}
+                      />
+                      <input
+                        value={d.caption}
+                        onChange={(e) => setDataset((prev) => prev.map((x, j) => (j === i ? { ...x, caption: e.target.value } : x)))}
+                        placeholder="图片描述，如：a photo of somecjkstyle person"
+                        className="min-w-0 flex-1 rounded border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-gray-200 outline-none focus:border-violet-500/40"
+                      />
+                      <button
+                        onClick={() => setDataset(dataset.filter((_, j) => j !== i))}
+                        className="shrink-0 rounded px-1.5 text-[11px] text-gray-400 hover:text-red-300"
+                        aria-label="移除"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
-            <p className="mt-1 text-[10px] leading-relaxed text-gray-600">建议 10–30 张同主题图片；上传至本机后文件名会随任务一起提交给训练后端。</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-gray-600">建议 10–30 张同主题图片；上传至本机后文件名与 caption 会随任务一起提交给训练后端。</p>
           </div>
 
           <div className="grid grid-cols-2 gap-2.5">

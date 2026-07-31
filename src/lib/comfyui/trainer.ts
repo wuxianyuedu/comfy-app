@@ -50,7 +50,8 @@ export type TrainJobSpec = {
   baseModel: string;
   triggerWord: string;
   classWord?: string;
-  datasetImages: { name: string }[];
+  datasetImages: { name: string; caption?: string }[];
+  captions?: Record<string, string>;
   resolution: number;
   steps: number;
   batchSize: number;
@@ -84,6 +85,15 @@ export async function enqueueTraining(jobId: string): Promise<void> {
   const job = await prisma.loraTrainingJob.findUnique({ where: { id: jobId } });
   if (!job) return;
 
+  const spec = job as unknown as TrainJobSpec;
+  // Flatten per-image captions into a filename→caption map for backends that
+  // expect it (the caption also rides along inside datasetImages).
+  spec.captions = Object.fromEntries(
+    (spec.datasetImages ?? [])
+      .filter((d) => d?.caption && d.caption.trim())
+      .map((d) => [d.name, d.caption!.trim()])
+  );
+
   if (!trainerUrl()) {
     await appendLog(
       jobId,
@@ -94,7 +104,7 @@ export async function enqueueTraining(jobId: string): Promise<void> {
   }
 
   await appendLog(jobId, "info", `已提交至训练后端 ${trainerUrl()}`);
-  void runRemote(job as unknown as TrainJobSpec).catch((e: any) => {
+  void runRemote(spec).catch((e: any) => {
     void failJob(jobId, e?.message ?? "训练后端通信失败");
   });
 }

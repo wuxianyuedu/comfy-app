@@ -7,7 +7,6 @@ import upscale from "./workflows/upscale.json";
 import txt2video from "./workflows/txt2video.json";
 import img2video from "./workflows/img2video.json";
 import flfvideo from "./workflows/flfvideo.json";
-import ltxt2video from "./workflows/ltxt2video.json";
 
 const TEMPLATES: Record<string, unknown> = {
   txt2img,
@@ -17,7 +16,6 @@ const TEMPLATES: Record<string, unknown> = {
   txt2video,
   img2video,
   flfvideo,
-  ltxt2video,
 };
 
 export type LoraSpec = { name: string; weight: number };
@@ -173,8 +171,8 @@ export async function buildAndValidate(
     // ComfyUI unreachable — let submission surface the error later.
   }
 
-  const [w, h] = (params.size ?? "1024x1024").split("x").map((n) => parseInt(n, 10));
   const def = meta.defaultParams ?? {};
+  const [w, h] = (params.size ?? (def.size as string) ?? "1024x1024").split("x").map((n) => parseInt(n, 10));
   const values: Record<string, string> = {
     __CKPT__: params.checkpoint ?? "",
     __PROMPT__: params.prompt ?? "",
@@ -198,24 +196,26 @@ export async function buildAndValidate(
     __FPS__: String(params.fps ?? (def.fps as number) ?? 16),
     __FIRST_FRAME__: params.firstFrame ?? "",
     __LAST_FRAME__: params.lastFrame ?? "",
-    __LTX_MODEL__: params.ltxModel ?? (def.ltxModel as string) ?? "LTX-2 (Fast)",
-    __DURATION__: String(params.duration ?? (def.duration as number) ?? 8),
-    __RESOLUTION__: params.resolution ?? (def.resolution as string) ?? "1920x1080",
   };
 
   const graph = replaceTokens(template, values) as Record<string, any>;
 
-  // LTX-2.3 uses COMBO number fields (duration / fps) — token substitution
-  // yields strings, so coerce them back to numbers; also set strings directly
-  // to avoid relying solely on the token pass.
-  if (templateName === "ltxt2video") {
-    const node = graph["1"];
-    if (node?.inputs) {
-      node.inputs.model = values.__LTX_MODEL__;
-      node.inputs.prompt = values.__PROMPT__;
-      node.inputs.duration = Number(values.__DURATION__);
-      node.inputs.resolution = values.__RESOLUTION__;
-      node.inputs.fps = Number(values.__FPS__);
+  // ComfyUI rejects string values for numeric inputs, but token substitution
+  // produces strings. Coerce the known numeric fields of the WAN video nodes
+  // back to numbers after the token pass.
+  const NUMERIC_FIELDS: Record<string, string[]> = {
+    WanVideoImageToVideoEncode: ["width", "height", "num_frames"],
+    WanVideoSampler: ["steps", "cfg", "shift", "seed", "riflex_freq_index"],
+    VHS_VideoCombine: ["frame_rate", "loop_count"],
+  };
+  for (const node of Object.values(graph) as any[]) {
+    const fields = NUMERIC_FIELDS[node?.class_type];
+    if (!fields || !node.inputs) continue;
+    for (const f of fields) {
+      const v = node.inputs[f];
+      if (typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v))) {
+        node.inputs[f] = Number(v);
+      }
     }
   }
 

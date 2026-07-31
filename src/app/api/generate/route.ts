@@ -5,6 +5,7 @@ import { getServerUser } from "@/lib/auth-server";
 import { buildAndValidate, buildCustomWorkflow } from "@/lib/comfyui/workflow";
 import { getWorkflow } from "@/lib/comfyui/_meta";
 import { enqueue } from "@/lib/comfyui/runner";
+import { synthesizeFirstFrame } from "@/lib/comfyui/firstframe";
 
 export const runtime = "nodejs";
 
@@ -53,6 +54,27 @@ export async function POST(req: NextRequest) {
 
   const builtin = getWorkflow(data.workflow);
   if (builtin) {
+    // Local video: text-to-video / first-last-frame with no supplied image
+    // auto-synthesizes a first frame via a local txt2img pass (no cloud/auth).
+    if (
+      builtin.taskType === "VIDEO" &&
+      !data.inputImage &&
+      !data.firstFrame
+    ) {
+      try {
+        data.inputImage = await synthesizeFirstFrame({
+          userId: user.id,
+          prompt: data.prompt ?? "",
+          negative: data.negative,
+          size: data.size,
+        });
+      } catch (e: any) {
+        return NextResponse.json(
+          { error: `首帧合成失败：${e?.message ?? e}` },
+          { status: 500 }
+        );
+      }
+    }
     // Built-in workflow template (token-based).
     built = await buildAndValidate(data.workflow, { ...data, count });
     workflowName = data.workflow;

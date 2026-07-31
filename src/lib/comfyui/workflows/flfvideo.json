@@ -1,69 +1,85 @@
 {
-  "10": {
+  "1": {
     "class_type": "WanVideoModelLoader",
     "inputs": {
       "model": "__WAN_MODEL__",
-      "base_precision": "fp16",
+      "base_precision": "bf16",
       "quantization": "disabled",
-      "precision": "bf16",
-      "num_gpus": 1
+      "load_device": "main_device"
     }
   },
-  "11": {
+  "2": {
     "class_type": "WanVideoVAELoader",
-    "inputs": { "vae": "__WAN_VAE__" }
+    "inputs": { "model_name": "__WAN_VAE__", "precision": "bf16" }
   },
-  "20": {
-    "class_type": "CLIPLoader",
-    "inputs": { "clip_name": "__T5_MODEL__", "type": "wan_t5" }
-  },
-  "30": {
-    "class_type": "WanVideoTextEncoder",
-    "inputs": { "clip": ["20", 0], "text": "__PROMPT__", "force_offload": true }
+  "3": {
+    "class_type": "LoadWanVideoT5TextEncoder",
+    "inputs": { "model_name": "__T5_MODEL__", "precision": "bf16" }
   },
   "4": {
-    "class_type": "LoadImage",
-    "inputs": { "image": "__FIRST_FRAME__" }
+    "class_type": "WanVideoTextEncode",
+    "inputs": {
+      "positive_prompt": "__PROMPT__",
+      "negative_prompt": "__NEG__",
+      "t5": ["3", 0],
+      "force_offload": true
+    }
   },
   "5": {
     "class_type": "LoadImage",
-    "inputs": { "image": "__LAST_FRAME__" }
+    "inputs": { "image": "__INPUT__" }
   },
-  "40": {
-    "class_type": "WanVideoEncode",
+  "6": {
+    "class_type": "WanVideoImageToVideoEncode",
     "inputs": {
-      "clip_embeds": ["30", 0],
-      "model": ["10", 0],
-      "height": "__H__",
+      "vae": ["2", 0],
+      "start_image": ["5", 0],
       "width": "__W__",
+      "height": "__H__",
       "num_frames": "__FRAMES__",
-      "fps": "__FPS__",
-      "start_image": ["4", 0],
-      "end_image": ["5", 0]
+      "noise_aug_strength": 0.0,
+      "start_latent_strength": 1.0,
+      "end_latent_strength": 1.0,
+      "force_offload": true
     }
   },
-  "50": {
+  "7": {
     "class_type": "WanVideoSampler",
     "inputs": {
-      "model": ["10", 0],
-      "clip_embeds": ["30", 0],
-      "samples": ["40", 0],
-      "guidance_scale": "__CFG__",
+      "model": ["1", 0],
+      "image_embeds": ["6", 0],
+      "text_embeds": ["4", 0],
+      "steps": "__STEPS__",
+      "cfg": "__CFG__",
+      "shift": 8,
       "seed": "__SEED__",
-      "steps": "__STEPS__"
+      "scheduler": "unipc",
+      "riflex_freq_index": 0,
+      "force_offload": true
     }
   },
-  "60": {
+  "8": {
     "class_type": "WanVideoDecode",
-    "inputs": { "samples": ["50", 0], "model": ["10", 0], "vae": ["11", 0] }
-  },
-  "70": {
-    "class_type": "WanVideoCombine",
     "inputs": {
-      "images": ["60", 0],
+      "vae": ["2", 0],
+      "samples": ["7", 0],
+      "enable_vae_tiling": true,
+      "tile_x": 256,
+      "tile_y": 256,
+      "tile_stride_x": 64,
+      "tile_stride_y": 64
+    }
+  },
+  "9": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "images": ["8", 0],
       "frame_rate": "__FPS__",
-      "loop": false,
-      "filename_prefix": "__PREFIX__"
+      "loop_count": 0,
+      "filename_prefix": "__PREFIX__",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true
     }
   }
 }

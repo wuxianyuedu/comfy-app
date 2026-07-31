@@ -15,7 +15,7 @@ import { getServerUser } from "@/lib/auth-server";
 import { buildAndValidate } from "@/lib/comfyui/workflow";
 import { getWorkflow } from "@/lib/comfyui/_meta";
 import { enqueue, cancelTask } from "@/lib/comfyui/runner";
-import { listModels } from "@/lib/comfyui/client";
+import { synthesizeFirstFrame } from "@/lib/comfyui/firstframe";
 import { getSettingsSync } from "@/lib/app-settings";
 import { parseIdeaToScenes } from "@/lib/workshop/script-parser";
 import { getLLMConfig, completeLLM } from "@/lib/llm/server";
@@ -187,10 +187,6 @@ export async function createFilm(input: CreateFilmInput) {
   await prisma.filmShot.createMany({
     data: shots.map((s) => {
       const params: Record<string, any> = { frames: framesPerShot, fps, size, workflow: wf };
-      if (wf === "ltxt2video") {
-        params.duration = Math.min(20, Math.max(6, Math.round((framesPerShot || 49) / 8)));
-        params.resolution = ltxResolutionFor(size);
-      }
       return {
         filmId: film.id,
         order: s.order,
@@ -208,65 +204,52 @@ export async function createFilm(input: CreateFilmInput) {
 }
 
 // ── pick the video workflow ───────────────────────────────
-// "auto" prefers WAN when its model files are present, otherwise falls back to
-// LTX-2.3 (which is what this machine ships with). An explicit choice in app
-// settings always wins.
-async function pickVideoWorkflow(): Promise<"txt2video" | "ltxt2video"> {
+// Local-only: the machine ships with a WAN image-to-video checkpoint but no
+// text-to-video checkpoint, so text-to-video auto-synthesizes a first frame
+// and feeds it to the same I2V graph. An explicit choice in app settings wins.
+async function pickVideoWorkflow(): Promise<"txt2video" | "img2video"> {
   const pref = getSettingsSync().defaultVideoWorkflow;
-  if (pref === "txt2video" || pref === "ltxt2video") return pref;
-  try {
-    const unet = await listModels("unet");
-    if (unet.some((f) => /wan2?\.1/i.test(f))) return "txt2video";
-  } catch {
-    /* unreachable — ignore */
-  }
-  return "ltxt2video";
-}
-
-// Map an arbitrary WxH to the nearest valid LTX-2.3 resolution (1080p/1440p/4k).
-function ltxResolutionFor(size: string): string {
-  const w = Number((size.split("x")[0] ?? "1280")) || 1280;
-  const opts = ["1920x1080", "2560x1440", "3840x2160"];
-  for (const o of opts) {
-    if (Number(o.split("x")[0]) >= w) return o;
-  }
-  return opts[opts.length - 1];
+  if (pref === "txt2video" || pref === "img2video") return pref;
+  // default "auto" → text-to-video (first frame is synthesized locally)
+  return "txt2video";
 }
 
 // ── generate one video shot via the existing pipeline ──────
+// Both text-to-video and image-to-video run through the local WAN I2V graph.
+// Text-to-video shots without a supplied first frame get one synthesized from
+// the prompt via a local txt2img pass (no cloud, no authorization).
 async function generateVideoShot(
   userId: string,
   shot: { prompt: string; negative?: string | null; params?: any }
 ): Promise<string> {
   const p = (shot.params ?? {}) as Record<string, any>;
-  const wf: "txt2video" | "ltxt2video" =
-    p.workflow === "ltxt2video" ? "ltxt2video" : "txt2video";
-  const meta = getWorkflow(wf)!;
+  const wf: "txt2video" | "img2video" =
+    p.workflow === "img2video" ? "img2video" : "txt2video";
+  const meta = getWorkflow("img2video")!;
 
-  let built;
-  if (wf === "ltxt2video") {
-    built = await buildAndValidate("ltxt2video", {
+  let inputImage = (p.inputImage as string) ?? (p.firstFrame as string) ?? null;
+  if (!inputImage) {
+    inputImage = await synthesizeFirstFrame({
+      userId,
       prompt: shot.prompt,
       negative: shot.negative ?? undefined,
-      ltxModel: (p.ltxModel as string) ?? (meta.defaultParams.ltxModel as string),
-      duration: (p.duration as number) ?? (meta.defaultParams.duration as number),
-      resolution: (p.resolution as string) ?? (meta.defaultParams.resolution as string),
-      fps: (p.fps as number) ?? 25,
-    });
-  } else {
-    built = await buildAndValidate("txt2video", {
-      prompt: shot.prompt,
-      negative: shot.negative ?? undefined,
-      frames: (p.frames as number) ?? 49,
-      fps: (p.fps as number) ?? 16,
-      size: (p.size as string) ?? "1280x720",
-      steps: 25,
-      cfg: 6,
-      sampler: "euler",
-      scheduler: "normal",
-      count: 1,
+      size: (p.size as string) ?? "832x480",
     });
   }
+
+  const built = await buildAndValidate("img2video", {
+    prompt: shot.prompt,
+    negative: shot.negative ?? undefined,
+    inputImage,
+    frames: (p.frames as number) ?? 81,
+    fps: (p.fps as number) ?? 16,
+    size: (p.size as string) ?? "832x480",
+    steps: 25,
+    cfg: 6,
+    sampler: "euler",
+    scheduler: "unipc",
+    count: 1,
+  });
   if (!built.ok || !built.prompt) throw new Error(built.error ?? "工作流构建失败");
 
   const task = await prisma.task.create({

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 type Settings = {
   comfyuiUrl: string;
   trainerUrl: string;
-  defaultVideoWorkflow: "auto" | "txt2video" | "ltxt2video";
+  defaultVideoWorkflow: "auto" | "txt2video" | "img2video";
   comfyLorasDir: string;
 };
 
@@ -237,11 +237,11 @@ export default function SettingsPage() {
                 onChange={(e) => setSettings({ ...settings, defaultVideoWorkflow: e.target.value as Settings["defaultVideoWorkflow"] })}
                 className="w-full rounded-lg border border-border bg-white/5 px-3 py-2 text-sm text-ink"
               >
-                <option value="auto">自动（有 Wan 用 Wan，否则 LTX）</option>
-                <option value="ltxt2video">LTX-2.3（本机已装）</option>
-                <option value="txt2video">Wan（需自行安装模型）</option>
+                <option value="auto">自动（文生视频，本地合成首帧）</option>
+                <option value="txt2video">文生视频（本地合成首帧）</option>
+                <option value="img2video">图生视频（上传首帧）</option>
               </select>
-              <p className="mt-1.5 text-xs text-muted">本机已安装 LTX-2.3，选「自动」会默认走 LTX。</p>
+              <p className="mt-1.5 text-xs text-muted">本地 Wan 图生视频模型，无需联网或授权。</p>
             </div>
             <Field
               label="LoRA 输出目录"

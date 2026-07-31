@@ -11,7 +11,7 @@ import path from "path";
 
 const FILE = path.join(process.cwd(), "data", "app-settings.json");
 
-export type VideoWorkflowPref = "auto" | "txt2video" | "ltxt2video";
+export type VideoWorkflowPref = "auto" | "txt2video" | "img2video";
 
 export type AppSettings = {
   comfyuiUrl: string;

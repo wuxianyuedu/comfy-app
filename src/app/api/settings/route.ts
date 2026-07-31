@@ -11,7 +11,7 @@ const UpdateSchema = z.object({
     .string()
     .refine((s) => s === "" || /^https?:\/\//.test(s), "训练后端需为 http(s) 地址")
     .optional(),
-  defaultVideoWorkflow: z.enum(["auto", "txt2video", "ltxt2video"]).optional(),
+  defaultVideoWorkflow: z.enum(["auto", "txt2video", "img2video"]).optional(),
   comfyLorasDir: z.string().optional(),
 });
 
