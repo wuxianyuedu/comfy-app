@@ -220,7 +220,7 @@ async function complete(taskId: string, promptId: string) {
     const ext = path.extname(im.filename) || ".png";
     const fname = `img_${i}${ext}`;
     await fs.writeFile(path.join(dir, fname), buf);
-    saved.push({ localPath: `/generated/${taskId}/${fname}`, mediaType: "image" });
+    saved.push({ localPath: `/api/generated/${taskId}/${fname}`, mediaType: "image" });
     log(taskId, "info", `下载第 ${i + 1} 张图像`);
   }
 
@@ -231,7 +231,7 @@ async function complete(taskId: string, promptId: string) {
     const ext = path.extname(v.filename) || ".mp4";
     const fname = `vid_${i}${ext}`;
     await fs.writeFile(path.join(dir, fname), buf);
-    saved.push({ localPath: `/generated/${taskId}/${fname}`, mediaType: "video" });
+    saved.push({ localPath: `/api/generated/${taskId}/${fname}`, mediaType: "video" });
     log(taskId, "info", `下载第 ${i + 1} 个视频`);
   }
 

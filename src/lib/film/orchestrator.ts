@@ -495,7 +495,7 @@ export async function composeFilm(id: string) {
     if (cres.code !== 0) throw new Error(`拼接失败：${cres.stderr.slice(0, 200)}`);
 
     const finalPath = path.join(cwd, "public", "generated", "films", `${id}.mp4`);
-    const localPath = `/generated/films/${id}.mp4`;
+    const localPath = `/api/generated/films/${id}.mp4`;
 
     if (film.bgmName) {
       const bgm = path.join(cwd, "public", "generated", "films", "bgm", film.bgmName);

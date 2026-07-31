@@ -44,6 +44,9 @@ next-env.d.ts
 /.local-app-data/
 /.local-tmp/
 
+# Playwright browsers (downloaded at runtime, redirected out of AppData)
+/.local-pw-browsers/
+
 # local caches & logs
 /.cache/
 .dev-server.log

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "db:push": "npx prisma db push --accept-data-loss",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "smoke:canvas": "node scripts/canvas-smoke.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -33,6 +34,7 @@
     "@types/ws": "^8.5.13",
     "eslint": "^9.18.0",
     "eslint-config-next": "15.1.6",
+    "playwright": "^1.62.1",
     "prisma": "^6.2.1",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.19.2",
