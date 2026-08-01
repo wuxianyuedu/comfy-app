@@ -23,9 +23,9 @@ const CLIENT_ID = "wan-video-smoke";
 const PREF = {
   wanModel: "DaSiWa WAN 2.2 I2V 14B SnatchKiss v11.0 HIGH FP8 - Wan2.2.safetensors",
   wanVae: "wan_2.1_vae.safetensors",
-  // T5: bf16 required (LoadWanVideoT5TextEncoder rejects fp8 scaled models).
-  // fp8 kept only as a last-resort fallback if bf16 is missing.
-  t5Model: ["umt5-xxl-enc-bf16.safetensors", "umt5_xxl_fp8_e4m3fn_scaled.safetensors"],
+  // T5: bf16 only — LoadWanVideoT5TextEncoder rejects fp8 scaled models
+  // (ValueError: 'fp8 scaled is not supported by this node'). No fp8 fallback.
+  t5Model: ["umt5-xxl-enc-bf16.safetensors"],
 };
 
 const PROMPT =
