@@ -46,7 +46,7 @@ export function AgentPanel({
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-[10px] font-bold text-white">
           {name[0]}
         </span>
-        <h3 className="text-sm font-semibold text-gray-100">{name}</h3>
+        <h3 className="u-title">{name}</h3>
       </div>
 
       {/* Task list */}

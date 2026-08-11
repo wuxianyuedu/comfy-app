@@ -280,6 +280,14 @@ export function FilmStudio() {
     setIsPlaying((v) => !v);
   }, []);
 
+  const handleUndo = useCallback(() => {
+    info("撤销", "时间轴编辑历史功能即将上线");
+  }, [info]);
+
+  const handleRedo = useCallback(() => {
+    info("重做", "时间轴编辑历史功能即将上线");
+  }, [info]);
+
   /* ── Render ── */
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-[#0a0a0f]" style={{ fontFamily: 'Inter, "Noto Sans SC", system-ui, -apple-system, sans-serif' }}>
@@ -299,19 +307,19 @@ export function FilmStudio() {
       <header className="relative z-10 flex shrink-0 items-center gap-3 border-b border-white/[0.05] bg-[#14141a]/88 px-4 py-0 backdrop-blur-md">
         {/* Project name */}
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-100">{title}</span>
+          <span className="u-title">{title}</span>
           <span className="text-xs text-[#6b7088]">· 视频成片工作室</span>
         </div>
 
         <div className="h-5 w-px bg-white/[0.06]" />
 
         {/* Undo / Redo */}
-        <button type="button" className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300" title="撤销">
+        <button type="button" onClick={handleUndo} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300" title="撤销">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 10h11a5 5 0 010 10H3M3 10l4-4M3 10l4 4" />
           </svg>
         </button>
-        <button type="button" className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300" title="重做">
+        <button type="button" onClick={handleRedo} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300" title="重做">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 10H10a5 5 0 00-5 10h11M21 10l-4-4m4 4l-4 4" />
           </svg>
@@ -475,7 +483,7 @@ export function FilmStudio() {
           </div>
 
           {/* Timeline */}
-          <div className="mt-auto rounded-xl border border-white/[0.04] bg-[#0d0d13]/90 p-3 backdrop-blur-sm">
+          <div className="mt-auto rounded-xl border border-white/[0.04] bg-[#0f0f16]/90 p-3 backdrop-blur-sm">
             {/* Time ruler */}
             <div className="mb-2 flex items-center justify-between px-1">
               <span className="text-[10px] font-mono text-[#5a5f73]">00:00</span>
@@ -546,7 +554,7 @@ export function FilmStudio() {
               <input
                 value={selectedShot.name}
                 onChange={(e) => setShots((prev) => prev.map((s) => s.id === selectedShotId ? { ...s, name: e.target.value } : s))}
-                className="h-9 w-full rounded-lg border border-white/[0.08] bg-[#0a0a0f]/80 px-3 text-[13px] text-[#e5e7eb] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="h-9 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-[#e5e7eb] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
             </label>
 
@@ -560,14 +568,14 @@ export function FilmStudio() {
                 max="30"
                 value={parseFloat(selectedShot.duration)}
                 onChange={(e) => setShots((prev) => prev.map((s) => s.id === selectedShotId ? { ...s, duration: `${Number(e.target.value).toFixed(1)}`.padStart(5, "0") } : s))}
-                className="h-9 w-full rounded-lg border border-white/[0.08] bg-[#0a0a0f]/80 px-3 text-[13px] text-[#e5e7eb] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="h-9 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-[#e5e7eb] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
             </label>
 
             {/* Mode select */}
             <label className="block">
               <span className="mb-1.5 block text-[11px] text-[#8b90a8]">生成模式</span>
-              <div className="flex h-9 items-center rounded-lg border border-white/[0.08] bg-[#0a0a0f]/80 px-3 text-[13px] text-[#e5e7eb]">
+              <div className="flex h-9 items-center rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-[#e5e7eb]">
                 图生视频 (Wan I2V)
               </div>
             </label>
@@ -575,7 +583,7 @@ export function FilmStudio() {
             {/* Transition */}
             <label className="block">
               <span className="mb-1.5 block text-[11px] text-[#8b90a8]">转场效果</span>
-              <div className="flex h-9 items-center rounded-lg border border-white/[0.08] bg-[#0a0a0f]/80 px-3 text-[13px] text-[#b6bccf]">
+              <div className="flex h-9 items-center rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-[#b6bccf]">
                 溶解过渡 (Cross Dissolve)
               </div>
             </label>
@@ -586,7 +594,7 @@ export function FilmStudio() {
               <textarea
                 rows={3}
                 defaultValue="城市在晨光中苏醒，镜头缓缓推进，展现繁忙街道与远处天际线…"
-                className="w-full resize-none rounded-lg border border-white/[0.08] bg-[#0a0a0f]/80 px-3 py-2 text-[12px] leading-relaxed text-[#9aa0b5] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="w-full resize-none rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[12px] leading-relaxed text-[#9aa0b5] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
             </label>
 
@@ -601,7 +609,7 @@ export function FilmStudio() {
                 onChange={(e) => setScript(e.target.value)}
                 rows={3}
                 placeholder="支持一句话自动分镜…"
-                className="w-full resize-none rounded-lg border border-white/[0.08] bg-[#0a0a0f]/80 px-3 py-2 text-[12px] leading-relaxed text-[#9aa0b5] outline-none placeholder:text-[#5a5f73] focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="w-full resize-none rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[12px] leading-relaxed text-[#9aa0b5] outline-none placeholder:text-[#5a5f73] focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
             </label>
 

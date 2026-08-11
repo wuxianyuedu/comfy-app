@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { MediaThumb, isVideo } from "./MediaThumb";
+import { Icon } from "@/components/ui/Icon";
 
 /* ── Video Queue Modal — wired to real VIDEO tasks ──
   Fetches the user's VIDEO-type tasks from /api/tasks (filtered), shows live
@@ -19,11 +20,11 @@ interface VideoTask {
 }
 
 const STATUS_META: Record<string, { icon: string; label: string; cls: string }> = {
-  QUEUED: { icon: "⏳", label: "排队中", cls: "text-gray-500" },
-  RUNNING: { icon: "⚡", label: "生成中", cls: "text-amber-400" },
-  SUCCEEDED: { icon: "✅", label: "已完成", cls: "text-emerald-400" },
-  FAILED: { icon: "❌", label: "失败", cls: "text-red-400" },
-  CANCELLED: { icon: "⊘", label: "已取消", cls: "text-gray-600" },
+  QUEUED: { icon: "hourglass", label: "排队中", cls: "text-gray-500" },
+  RUNNING: { icon: "zap", label: "生成中", cls: "text-amber-400" },
+  SUCCEEDED: { icon: "check", label: "已完成", cls: "text-emerald-400" },
+  FAILED: { icon: "x", label: "失败", cls: "text-red-400" },
+  CANCELLED: { icon: "ban", label: "已取消", cls: "text-gray-600" },
 };
 
 export interface VideoQueueModalProps {
@@ -128,7 +129,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/6 px-5 py-3.5">
           <div className="flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-gray-200">视频生成队列</h3>
+            <h3 className="u-title">视频生成队列</h3>
             {runningCount > 0 && (
               <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-400">
                 {runningCount} 个进行中
@@ -198,14 +199,14 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                             className="h-full w-full object-cover"
                           />
                         ) : (
-                          <span className="text-lg">🎬</span>
+                          <Icon name="film" size={18} className="text-gray-500" />
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="mb-0.5 flex items-center gap-2">
                           <span className="font-mono text-xs text-violet-300">V{String(i + 1).padStart(2, "0")}</span>
                           <span className={`inline-flex items-center gap-1 text-xs ${meta.cls}`}>
-                            <span>{meta.icon}</span>
+                            <Icon name={meta.icon} size={13} />
                             {meta.label}
                           </span>
                         </div>

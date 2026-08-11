@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback } from "react";
+import { DarkSelect } from "@/components/updream/ui/DarkSelect";
 
 /* ── Updream-style Bottom Bar ────────────────────────────
   Fixed bottom bar with:
@@ -201,17 +202,13 @@ function DropdownSelect({
 
   return (
     <div className="relative">
-      <select
+      <DarkSelect
+        className="appearance-none py-1.5 pr-5 text-xs"
         value={value}
-        onChange={(e) => onChange?.(e.target.value)}
-        className="appearance-none rounded-lg border border-white/8 bg-white/[0.03] px-2 py-1.5 pr-5 text-xs text-gray-400 outline-none transition-colors hover:border-white/15 focus:border-violet-500/40"
-      >
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
+        onChange={(v) => onChange?.(v)}
+        options={options}
+        placeholder="选择…"
+      />
       <span className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-500">
         {icon}
       </span>

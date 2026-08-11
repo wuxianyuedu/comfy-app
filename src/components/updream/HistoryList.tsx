@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/updream/Toast";
 import { MediaThumb, isVideo } from "@/components/updream/MediaThumb";
+import { AuroraBackground } from "@/components/updream/AuroraBackground";
 
 interface TaskItem {
   id: string;
@@ -102,10 +103,11 @@ export function HistoryList({ onOpenTask }: { onOpenTask?: (id: string) => void 
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[1200px] px-8 py-10">
-        <div className="mb-8 flex items-center justify-between">
+      <AuroraBackground />
+      <div className="mx-auto max-w-[1200px] px-4 sm:px-8 py-8 sm:py-10">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold text-gray-100">历史记录</h1>
+            <h1 className="font-title text-xl font-bold text-gray-100">历史记录</h1>
             <p className="mt-1 text-sm text-gray-500">所有生成任务与执行日志，按时间倒序排列。</p>
           </div>
           <button
@@ -120,7 +122,10 @@ export function HistoryList({ onOpenTask }: { onOpenTask?: (id: string) => void 
           <p className="text-sm text-gray-500">加载中…</p>
         ) : tasks.length === 0 ? (
           <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-white/[0.08] text-gray-500">
-            <p className="text-sm">暂无任务记录</p>
+            <div className="text-center">
+              <p className="text-lg font-medium text-gray-300">暂无任务记录</p>
+              <p className="mt-1 text-sm">在创作台生成内容后，历史记录会显示在这里。</p>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
@@ -177,18 +182,28 @@ export function HistoryList({ onOpenTask }: { onOpenTask?: (id: string) => void 
 
       {/* Detail modal */}
       {detailId && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-6" onClick={() => setDetailId(null)}>
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4 sm:p-6" onClick={() => setDetailId(null)}>
           <div
-            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#101018]"
+            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#16161e]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
-              <h3 className="text-sm font-semibold text-gray-100">任务详情</h3>
-              <button onClick={() => setDetailId(null)} className="text-gray-500 hover:text-gray-200">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              </button>
+              <h3 className="u-title">任务详情</h3>
+              <div className="flex items-center gap-2">
+                {onOpenTask && detail && (
+                  <button
+                    onClick={() => onOpenTask(detail.id)}
+                    className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
+                  >
+                    打开完整详情 ↗
+                  </button>
+                )}
+                <button onClick={() => setDetailId(null)} className="text-gray-500 hover:text-gray-200">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
               {detailLoading ? (

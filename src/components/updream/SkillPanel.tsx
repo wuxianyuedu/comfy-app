@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
+import { Icon } from "@/components/ui/Icon";
 
 /* Inline Skill type — avoids importing from API route */
 export interface SkillItem {
@@ -45,7 +46,7 @@ export function SkillPanel({
     <div className="flex flex-col">
       {/* Header row */}
       <div className="flex items-center justify-between border-b border-white/6 px-4 py-3">
-        <h3 className="text-sm font-semibold text-gray-100">我的技能</h3>
+        <h3 className="u-title">我的技能</h3>
         {onManage && (
           <button
             type="button"
@@ -93,8 +94,8 @@ export function SkillPanel({
               }`}
             >
               {/* Icon */}
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-base">
-                {skill.icon ?? "🎨"}
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-violet-300">
+                <Icon name={skill.icon ?? "palette"} size={18} />
               </span>
 
               <div className="min-w-0 flex-1">
@@ -137,17 +138,17 @@ export function SkillPanel({
         {addOpen && (
           <div className="grid grid-cols-4 gap-2 rounded-lg bg-white/[0.02] p-2">
             {[
-              { icon: "📄", label: "文档" },
-              { icon: "🖼️", label: "图片" },
-              { icon: "🎬", label: "视频" },
-              { icon: "🎵", label: "音乐" },
+              { icon: "filetext", label: "文档" },
+              { icon: "image", label: "图片" },
+              { icon: "film", label: "视频" },
+              { icon: "music", label: "音乐" },
             ].map((t) => (
               <button
                 key={t.label}
                 type="button"
                 className="flex flex-col items-center gap-1 rounded-lg border border-white/6 py-3 text-xs text-gray-500 transition-colors hover:border-violet-500/20 hover:text-violet-300"
               >
-                <span className="text-lg">{t.icon}</span>
+                <Icon name={t.icon} size={18} />
                 {t.label}
               </button>
             ))}

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/updream/Toast";
 import { MediaThumb, isVideo } from "@/components/updream/MediaThumb";
+import { AuroraBackground } from "@/components/updream/AuroraBackground";
 
 interface TaskItem {
   id: string;
@@ -81,10 +82,11 @@ export function WorksGallery({ onOpenTask }: { onOpenTask?: (id: string) => void
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[1200px] px-8 py-10">
-        <div className="mb-8 flex items-center justify-between">
+      <AuroraBackground />
+      <div className="mx-auto max-w-[1200px] px-4 sm:px-8 py-8 sm:py-10">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold text-gray-100">我的作品</h1>
+            <h1 className="font-title text-xl font-bold text-gray-100">我的作品</h1>
             <p className="mt-1 text-sm text-gray-500">本机 ComfyUI 生成的所有结果，按时间倒序排列。</p>
           </div>
           <div className="flex gap-2">
@@ -166,20 +168,30 @@ export function WorksGallery({ onOpenTask }: { onOpenTask?: (id: string) => void
       {/* Detail modal */}
       {detailId && (
         <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-6"
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4 sm:p-6"
           onClick={() => setDetailId(null)}
         >
           <div
-            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#101018]"
+            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#16161e]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
-              <h3 className="text-sm font-semibold text-gray-100">作品详情</h3>
-              <button onClick={() => setDetailId(null)} className="text-gray-500 hover:text-gray-200">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              </button>
+              <h3 className="u-title">作品详情</h3>
+              <div className="flex items-center gap-2">
+                {onOpenTask && detail && (
+                  <button
+                    onClick={() => onOpenTask(detail.id)}
+                    className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
+                  >
+                    打开完整详情 ↗
+                  </button>
+                )}
+                <button onClick={() => setDetailId(null)} className="text-gray-500 hover:text-gray-200">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
               {detailLoading ? (

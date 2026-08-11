@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { Icon } from "@/components/ui/Icon";
 
 /* ── Updream-style Top Bar ───────────────────────────────
   [<]  ProjectName          ⚡360  👤User  🔍  💬
@@ -61,7 +62,7 @@ export function TopBar({
       <div className="flex items-center gap-2">
         {/* Credits badge (decorative) */}
         <span className="flex items-center gap-1 rounded-full bg-white/5 px-2.5 py-1 text-xs text-gray-400">
-          <span className="text-amber-400">⚡</span>
+          <Icon name="zap" size={13} className="text-amber-400" />
           {credits}
         </span>
 

@@ -1,0 +1,128 @@
+import {
+  Palette,
+  Clapperboard,
+  Puzzle,
+  Flame,
+  FolderOpen,
+  Lock,
+  Sparkles,
+  Image as ImageIcon,
+  Music,
+  Bot,
+  FileText,
+  Users,
+  Ban,
+  Brain,
+  Link2,
+  Zap,
+  CircleCheck,
+  CircleX,
+  TriangleAlert,
+  Trash2,
+  Camera,
+  Search,
+  MessageCircle,
+  User as UserIcon,
+  Bell,
+  Plus,
+  FolderTree,
+  Pen,
+  Coins,
+  Infinity as InfinityIcon,
+  Settings,
+  Droplet,
+  Building2,
+  Files,
+  Lightbulb,
+  Drama,
+  Swords,
+  Flower2,
+  Dice5,
+  Sprout,
+  Wand2,
+  Hourglass,
+  Info,
+  Shuffle,
+  Package,
+  X,
+  Loader2,
+  type LucideIcon,
+  type LucideProps,
+} from "lucide-react";
+import type { ComponentType } from "react";
+
+/**
+ * String-key → lucide icon map.
+ * UI data (skills, canvas node types, create-panel categories, workshop tabs,
+ * API responses) only ever carries a string key, so the resolver keeps the
+ * data model serializable while we render flat SVG icons on the frontend.
+ */
+const ICON_MAP: Record<string, LucideIcon> = {
+  palette: Palette,
+  film: Clapperboard,
+  clapperboard: Clapperboard,
+  puzzle: Puzzle,
+  flame: Flame,
+  folder: FolderOpen,
+  folderopen: FolderOpen,
+  foldertree: FolderTree,
+  lock: Lock,
+  sparkles: Sparkles,
+  image: ImageIcon,
+  music: Music,
+  bot: Bot,
+  filetext: FileText,
+  users: Users,
+  ban: Ban,
+  brain: Brain,
+  link: Link2,
+  zap: Zap,
+  check: CircleCheck,
+  checkcircle: CircleCheck,
+  x: CircleX,
+  xcircle: CircleX,
+  alert: TriangleAlert,
+  alerttriangle: TriangleAlert,
+  trash: Trash2,
+  camera: Camera,
+  search: Search,
+  message: MessageCircle,
+  user: UserIcon,
+  bell: Bell,
+  plus: Plus,
+  pen: Pen,
+  coins: Coins,
+  infinity: InfinityIcon,
+  settings: Settings,
+  droplet: Droplet,
+  building: Building2,
+  files: Files,
+  lantern: Lightbulb,
+  drama: Drama,
+  swords: Swords,
+  flower: Flower2,
+  dice: Dice5,
+  sprout: Sprout,
+  wand: Wand2,
+  hourglass: Hourglass,
+  info: Info,
+  shuffle: Shuffle,
+  package: Package,
+  close: X,
+  loader: Loader2,
+};
+
+export interface IconProps extends Omit<LucideProps, "name"> {
+  /** Icon key, e.g. "film", "sparkles", "trash". Case-insensitive. */
+  name?: string | null;
+  size?: number;
+}
+
+/** Renders a flat lucide icon from a string key. Returns null if key unknown. */
+export function Icon({ name, size = 16, className, ...rest }: IconProps) {
+  const Cmp: LucideIcon | undefined = name ? ICON_MAP[name.toLowerCase()] : undefined;
+  if (!Cmp) return null;
+  return <Cmp size={size} className={className} aria-hidden {...rest} />;
+}
+
+export type { LucideIcon, ComponentType };

@@ -1,19 +1,14 @@
 "use client";
 
 import React, { useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
   VideoQueueModal,
   HomePage,
   WorkspaceNav,
-  WorksGallery,
-  SkillsGrid,
-  CreatePanel,
-  ModelLibrary,
-  HistoryList,
-  TrainingStudio,
   ToastProvider,
-  AgentChat,
+  AuroraBackground,
 } from "@/components/updream";
 import type {
   QuickStartItem,
@@ -22,6 +17,45 @@ import type {
   SkillShort,
 } from "@/components/updream";
 import type { AgentSpec } from "@/lib/agent/agentic";
+
+/* ── Lazy-load view components so the initial bundle stays small ── */
+/* Only HomePage / WorkspaceNav / ToastProvider / VideoQueueModal are loaded eagerly. */
+const WorksGallery = dynamic(
+  () => import("@/components/updream").then((m) => m.WorksGallery),
+  { ssr: false }
+);
+const SkillsGrid = dynamic(
+  () => import("@/components/updream").then((m) => m.SkillsGrid),
+  { ssr: false }
+);
+const CreatePanel = dynamic(
+  () => import("@/components/updream").then((m) => m.CreatePanel),
+  { ssr: false }
+);
+const ModelLibrary = dynamic(
+  () => import("@/components/updream").then((m) => m.ModelLibrary),
+  { ssr: false }
+);
+const HistoryList = dynamic(
+  () => import("@/components/updream").then((m) => m.HistoryList),
+  { ssr: false }
+);
+const TrainingStudio = dynamic(
+  () => import("@/components/updream").then((m) => m.TrainingStudio),
+  { ssr: false }
+);
+const WorkflowLibrary = dynamic(
+  () => import("@/components/updream").then((m) => m.WorkflowLibrary),
+  { ssr: false }
+);
+const WorkshopStudio = dynamic(
+  () => import("@/components/updream").then((m) => m.WorkshopStudio),
+  { ssr: false }
+);
+const AgentChat = dynamic(
+  () => import("@/components/updream").then((m) => m.AgentChat),
+  { ssr: false }
+);
 
 /* Lazy-load the heavier canvas/film editors (ReactFlow etc.) on the client. */
 const FilmStudio = dynamic(
@@ -35,9 +69,43 @@ const ProjectCanvas = dynamic(
 
 /* ── Workspace Page — Updream-style full-screen editor ── */
 
+function ago(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "刚刚修改";
+  if (m < 60) return `${m} 分钟前修改`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} 小时前修改`;
+  return `${Math.floor(h / 24)} 天前修改`;
+}
+
 export default function WorkspacePage() {
+  const router = useRouter();
+
   // ── Layout state ──
   const [viewMode, setViewMode] = useState<WorkspaceView>("home");
+  // View history stack for smart back-navigation (avoids jumping straight to home)
+  const [viewHistory, setViewHistory] = useState<WorkspaceView[]>(["home"]);
+
+  /** Navigate to a new view while recording history for back-button support. */
+  const navigateTo = useCallback((view: WorkspaceView) => {
+    setViewHistory((prev) => {
+      const last = prev[prev.length - 1];
+      if (last === view) return prev; // dedup
+      return [...prev, view];
+    });
+    setViewMode(view);
+  }, []);
+
+  /** Go back to the previous view (or home if no history). */
+  const goBack = useCallback(() => {
+    setViewHistory((prev) => {
+      if (prev.length <= 1) return prev; // already at root
+      const sliced = prev.slice(0, -1);
+      setViewMode(sliced[sliced.length - 1]);
+      return sliced;
+    });
+  }, []);
   const [projectTitle, setProjectTitle] = useState("未命名项目");
   const [pendingSkill, setPendingSkill] = useState<SkillShort | null>(null);
   const [pendingAgent, setPendingAgent] = useState<{
@@ -59,6 +127,22 @@ export default function WorkspacePage() {
   // ── Canvas: when true, the canvas opens a brand-new named project
   const [canvasSeedNew, setCanvasSeedNew] = useState(false);
 
+  // ── When set, the create panel opens directly in "custom" mode with this
+  //    imported workflow pre-selected (from the Workflow Library "使用" action).
+  const [pendingWorkflowId, setPendingWorkflowId] = useState<string | null>(null);
+
+  // ── When set, the infinite canvas receives this workflow and drops a
+  //    `kind="workflow"` node for it (from the Workflow Library "使用" action).
+  const [pendingCanvasWorkflow, setPendingCanvasWorkflow] = useState<{
+    id: string;
+    name: string;
+    taskType: string;
+  } | null>(null);
+
+  // ── When set, the create panel opens in "edit" mode with this uploaded
+  //    image pre-filled as the reference image (from HomePage "上传素材").
+  const [pendingImage, setPendingImage] = useState<string | null>(null);
+
   // ── Recent projects mock data ──
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
 
@@ -66,23 +150,53 @@ export default function WorkspacePage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
-    if (tab === "works" || tab === "skills" || tab === "create" || tab === "canvas" || tab === "models" || tab === "workshop" || tab === "history" || tab === "train" || tab === "film") {
+    if (tab === "works" || tab === "skills" || tab === "create" || tab === "canvas" || tab === "models" || tab === "workshop" || tab === "history" || tab === "train" || tab === "film" || tab === "workflows") {
       setViewMode(tab);
     }
   }, []);
 
-  // ── Load recent projects on mount ──
+  // ── Load real recent tasks as "recent projects" on mount ──
   useEffect(() => {
-    setRecentProjects([
-      { id: "proj-1", name: "超速相关提案", updatedAt: "更新于 · 3分钟前修改" },
-    ]);
+    fetch("/api/tasks")
+      .then((r) => r.json())
+      .then((d) => {
+        const tasks = (d.tasks ?? []) as Array<{
+          id: string;
+          prompt?: string;
+          workflowName?: string;
+          type?: string;
+          status?: string;
+          cover?: string | null;
+          images?: string[];
+          createdAt?: string;
+        }>;
+        // 只显示画布项目，不混入生成作品
+        const canvasProjects: RecentProject[] = tasks
+          .filter((t) => t.type === "canvas")
+          .slice(0, 3)
+          .map((t) => {
+            const imgs = t.images ?? (t.cover ? [t.cover] : []);
+            return {
+              id: t.id,
+              name: (t.prompt || t.workflowName || "未命名画布").slice(0, 28),
+              updatedAt: t.createdAt ? ago(t.createdAt) : "刚刚",
+              kind: "canvas" as const,
+              subtitle: `${imgs.length > 0 ? imgs.length + " 张图" : "画布项目"}`,
+              thumbnails: imgs.slice(0, 3),
+            };
+          });
+        setRecentProjects(canvasProjects);
+      })
+      .catch(() => {
+        /* keep empty list — HomePage renders placeholders */
+      });
   }, []);
 
   // ── Handlers ──
   const handleNavSelect = useCallback((id: WorkspaceView) => {
     if (id !== "create") setPendingSkill(null);
-    setViewMode(id);
-  }, []);
+    navigateTo(id);
+  }, [navigateTo]);
 
   // Apply a spec produced by the multi-turn Agent conversation: prefill the
   // creation panel (image → txt2img, video → video) and let the user review
@@ -97,17 +211,17 @@ export default function WorkspacePage() {
       autoStart: false,
     });
     setAgentSeq((s) => s + 1);
-    setViewMode("create");
+    navigateTo("create");
   }, []);
 
   // ── Home page handlers ──
   const handleHomeSearch = useCallback((query: string) => {
-    setViewMode("create");
+    navigateTo("create");
     setPendingSkill(null);
   }, []);
 
   const handleQuickStart = useCallback((item: QuickStartItem) => {
-    setViewMode("create");
+    navigateTo("create");
     setProjectTitle(item.title);
     setPendingSkill(null);
   }, []);
@@ -116,25 +230,80 @@ export default function WorkspacePage() {
     // Opening "新建项目" drops the user into a fresh, named canvas project
     // (the previous project is preserved in the project store).
     setCanvasSeedNew(true);
-    setViewMode("canvas");
+    navigateTo("canvas");
     setPendingSkill(null);
   }, []);
 
-  const handleOpenProject = useCallback((id: string) => {
-    if (id === "new") {
-      setViewMode("create");
-      setProjectTitle("新项目");
-      setPendingSkill(null);
-    } else {
-      setViewMode("create");
-      setPendingSkill(null);
+  const handleHomeNavigate = useCallback((view: string) => {
+    // Navigate to workspace views
+    if (view === "skills" || view === "models" || view === "workflows" || view === "create") {
+      navigateTo(view as WorkspaceView);
+    }
+  }, [navigateTo]);
+
+  // Upload a material from HomePage "上传素材" → open the Create panel in
+  // "edit" mode with the uploaded image pre-filled as the reference image.
+  const handleUploadImage = useCallback(async (file: File) => {
+    const fd = new FormData();
+    fd.append("image", file);
+    try {
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const d = await res.json().catch(() => ({}));
+      if (d.name) {
+        setPendingSkill(null);
+        setPendingAgent(null);
+        setPendingWorkflowId(null);
+        setPendingImage(d.name);
+        navigateTo("create");
+      } else {
+        const hint = d.hint === "comfyui-unreachable"
+          ? "\n\n请先启动 ComfyUI（默认 localhost:8188），再重新上传素材。"
+          : "";
+        alert("素材上传失败：" + (d.error ?? "未知错误") + hint);
+      }
+    } catch {
+      alert("素材上传失败：网络错误或 ComfyUI 未启动。\n\n请确认 ComfyUI 已在运行（默认 localhost:8188）。");
     }
   }, []);
 
+  const handleOpenProject = useCallback(
+    (id: string) => {
+      if (id === "new") {
+        navigateTo("create");
+        setProjectTitle("新项目");
+        setPendingSkill(null);
+      } else {
+        // 真实作品：跳转作品详情页（溯源 + 执行日志），而非落到空白创作台
+        router.push(`/create/${id}`);
+      }
+    },
+    [router]
+  );
+
   const handleUseSkill = useCallback((skill: SkillShort) => {
     setPendingSkill(skill);
-    setViewMode("create");
+    navigateTo("create");
   }, []);
+
+  // "使用" a workflow from the Workflow Library → jump to the infinite canvas
+  // and drop the workflow as a node on the currently-open project.  (Legacy
+  // behaviour opened the Create panel in "custom" mode; that path is no longer
+  // used for the library's "使用" — we keep `pendingWorkflowId` only so a
+  // pre-selected custom workflow can still be reached if needed.)
+  const handleUseWorkflow = useCallback(
+    (id: string, meta?: { name: string; taskType: string }) => {
+      setPendingSkill(null);
+      setPendingAgent(null);
+      setPendingWorkflowId(null);
+      setPendingCanvasWorkflow({
+        id,
+        name: meta?.name ?? "",
+        taskType: meta?.taskType ?? "",
+      });
+      navigateTo("canvas");
+    },
+    [navigateTo]
+  );
 
   // ── Home mode = full-page standalone ──
   if (viewMode === "home") {
@@ -147,6 +316,8 @@ export default function WorkspacePage() {
           recentProjects={recentProjects}
           onOpenProject={handleOpenProject}
           activeNav="home"
+          onNavigate={handleHomeNavigate}
+          onUploadImage={handleUploadImage}
         />
         <VideoQueueModal open={videoQueueOpen} onClose={() => setVideoQueueOpen(false)} />
       </ToastProvider>
@@ -159,14 +330,16 @@ export default function WorkspacePage() {
       case "create":
         return (
           <CreatePanel
-            key={(pendingSkill?.id ?? "blank") + (pendingAgent ? `-agent-${agentSeq}` : "")}
+            key={(pendingSkill?.id ?? "blank") + (pendingAgent ? `-agent-${agentSeq}` : "") + (pendingWorkflowId ? `-wf-${pendingWorkflowId}` : "") + (pendingImage ? `-img-${pendingImage}` : "")}
             initialSkill={pendingSkill}
-            initialMode={pendingAgent?.kind === "video" ? "video" : "txt2img"}
+            initialMode={pendingImage ? "edit" : pendingWorkflowId ? "custom" : pendingAgent?.kind === "video" ? "video" : "txt2img"}
+            initialWorkflowId={pendingWorkflowId ?? undefined}
             initialPrompt={pendingAgent?.prompt}
             initialNegative={pendingAgent?.negative}
             initialParams={pendingAgent?.params}
+            initialImage={pendingImage ?? undefined}
             autoStart={pendingAgent?.autoStart ?? false}
-            onBack={() => setViewMode("home")}
+            onBack={goBack}
             onNavigate={handleNavSelect}
           />
         );
@@ -191,28 +364,21 @@ export default function WorkspacePage() {
           <ProjectCanvas
             seedNew={canvasSeedNew}
             onConsumeSeed={() => setCanvasSeedNew(false)}
+            pendingWorkflow={pendingCanvasWorkflow}
+            onConsumePending={() => setPendingCanvasWorkflow(null)}
           />
         );
 
       case "film":
         return <FilmStudio />;
 
+      case "workflows":
+        return <WorkflowLibrary onUse={handleUseWorkflow} />;
+
       case "workshop":
         return (
-          <div className="flex h-full items-center justify-center bg-[#0a0a0f]">
-            <div className="max-w-md text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10 text-2xl">
-                🎬
-              </div>
-              <p className="mb-2 text-lg font-medium text-gray-200">创作工坊</p>
-              <p className="mb-4 text-sm text-gray-500">剧本 / 角色 / 分镜 全链路管线工具</p>
-              <a
-                href="/workshop"
-                className="inline-block rounded-lg bg-violet-500/90 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-500"
-              >
-                打开创作工坊 →
-              </a>
-            </div>
+          <div className="h-full overflow-y-auto">
+            <WorkshopStudio />
           </div>
         );
 
@@ -224,6 +390,9 @@ export default function WorkspacePage() {
   return (
     <ToastProvider>
       <div className="flex h-screen w-screen overflow-hidden bg-[#0a0a0f] text-gray-200" style={{ fontFamily: 'Inter, "Noto Sans SC", system-ui, -apple-system, sans-serif' }}>
+        {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
+        <AuroraBackground />
+
         <WorkspaceNav active={viewMode} onSelect={handleNavSelect} />
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -235,10 +404,8 @@ export default function WorkspacePage() {
           onClose={() => setVideoQueueOpen(false)}
           onOpenTask={(id) => {
             setVideoQueueOpen(false);
-            setViewMode("history");
-            // HistoryList opens the task detail via its own state; route through a
-            // custom event so the user lands on the right task.
-            window.dispatchEvent(new CustomEvent("open-task", { detail: id }));
+            // 直接跳转到作品详情页（溯源 + 执行日志）
+            router.push(`/create/${id}`);
           }}
         />
 

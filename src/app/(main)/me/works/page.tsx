@@ -38,7 +38,7 @@ export default function MyWorks() {
     <div className="py-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">我的作品</h1>
+          <h1 className="u-title-page">我的作品</h1>
           <p className="mt-1 text-sm text-muted">本机 ComfyUI 生成的所有结果，按时间倒序排列。</p>
         </div>
         <Link

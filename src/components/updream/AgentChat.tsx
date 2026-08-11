@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { chatAgent, type ChatMessage, type AgentSpec } from "@/lib/agent/agentic";
+import { Icon } from "@/components/ui/Icon";
 
 /* ── AgentChat — multi-turn creation guidance overlay ──
   A floating chat panel where the user refines an idea with the AI assistant
@@ -60,13 +61,13 @@ export function AgentChat({ open, onClose, onApply }: AgentChatProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 flex h-[540px] w-[380px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0c0c14]/95 shadow-2xl backdrop-blur-xl">
+    <div className="fixed bottom-4 right-4 z-40 flex h-[540px] w-[380px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0f0f16]/95 shadow-2xl backdrop-blur-xl">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-white/8 px-4 py-3">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white">
-          ✦
+          <Icon name="sparkles" size={13} className="text-white" />
         </span>
-        <h3 className="flex-1 text-sm font-semibold text-gray-100">AI 创作引导</h3>
+        <h3 className="u-title flex-1">AI 创作引导</h3>
         <button
           type="button"
           onClick={onClose}

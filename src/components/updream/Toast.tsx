@@ -8,6 +8,7 @@ import React, {
   useRef,
   useMemo,
 } from "react";
+import { Icon } from "@/components/ui/Icon";
 
 type ToastKind = "success" | "error" | "info" | "loading";
 
@@ -39,10 +40,10 @@ export function useToast(): ToastContextValue {
 }
 
 const KIND_STYLE: Record<ToastKind, { ring: string; icon: string; iconColor: string }> = {
-  success: { ring: "border-emerald-500/30", icon: "✓", iconColor: "text-emerald-400" },
-  error: { ring: "border-red-500/30", icon: "✕", iconColor: "text-red-400" },
-  info: { ring: "border-violet-500/30", icon: "ℹ", iconColor: "text-violet-400" },
-  loading: { ring: "border-white/15", icon: "◌", iconColor: "text-gray-300 animate-spin" },
+  success: { ring: "border-emerald-500/30", icon: "check", iconColor: "text-emerald-400" },
+  error: { ring: "border-red-500/30", icon: "close", iconColor: "text-red-400" },
+  info: { ring: "border-violet-500/30", icon: "info", iconColor: "text-violet-400" },
+  loading: { ring: "border-white/15", icon: "loader", iconColor: "text-gray-300 animate-spin" },
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -114,7 +115,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               key={t.id}
               className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-[#14141a]/95 p-3.5 shadow-xl shadow-black/40 backdrop-blur-md transition-all`}
             >
-              <div className={`mt-0.5 text-base font-bold ${st.iconColor}`}>{st.icon}</div>
+              <div className={`mt-0.5 ${st.iconColor}`}>
+                <Icon name={st.icon} size={16} />
+              </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-gray-100">{t.title}</p>
                 {t.description && (

@@ -70,7 +70,7 @@ export function AppShell({
         <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="relative flex-1 overflow-hidden">{children}</div>
           {bottomBar && (
-            <div className="shrink-0 border-t border-white/6 bg-[#12121a]/95 backdrop-blur-md">
+            <div className="shrink-0 border-t border-white/6 bg-[#14141a]/95 backdrop-blur-md">
               {bottomBar}
             </div>
           )}
@@ -79,7 +79,7 @@ export function AppShell({
         {/* Right Panel */}
         {rightPanelOpen && rightPanel && (
           <aside
-            className="shrink-0 overflow-y-auto border-l border-white/6 bg-[#12121a]/98 backdrop-blur-md"
+            className="shrink-0 overflow-y-auto border-l border-white/6 bg-[#14141a]/98 backdrop-blur-md"
             style={{ width: 360, maxWidth: "45vw" }}
           >
             {rightPanel}

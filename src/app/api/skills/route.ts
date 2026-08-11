@@ -18,7 +18,7 @@ const CreateSkillSchema = z.object({
   name: z.string().min(1).max(60),
   slug: z.string().min(1).max(80).regex(/^[a-z0-9-]+$/),
   description: z.string().min(1).max(200),
-  icon: z.string().default("✨"),
+  icon: z.string().default("sparkles"),
   category: z.string().default("style"),
   promptTemplate: z.string().min(1),
   negativePrompt: z.string().optional(),
@@ -51,7 +51,7 @@ const BUILTIN_SKILLS: SkillSeedData[] = [
     name: "皮克斯动画风格",
     slug: "pixar-animation",
     description: "3D卡通渲染，温暖光影，大眼睛角色，迪士尼/皮克斯质感",
-    icon: "🎬",
+    icon: "film",
     category: "style",
     promptTemplate:
       "Pixar-style 3D animation, cute big-eyed character, warm cinematic lighting, subsurface scattering, Octane render, vibrant colors, Disney Pixar aesthetic, high detail 8K",
@@ -72,7 +72,7 @@ const BUILTIN_SKILLS: SkillSeedData[] = [
     name: "爆款拉片复刻",
     slug: "viral-video-recreate",
     description: "分析爆款视觉元素，复刻构图/色调/氛围，适合短视频创作",
-    icon: "🔥",
+    icon: "flame",
     category: "video",
     promptTemplate:
       "{subject}, viral video aesthetic, trending visual style, high contrast color grading, cinematic composition, social media viral quality, eye-catching thumbnail composition",
@@ -93,7 +93,7 @@ const BUILTIN_SKILLS: SkillSeedData[] = [
     name: "新中式美学",
     slug: "neo-chinese-aesthetic",
     description: "东方意境，水墨留白，青绿山水，现代与古典融合",
-    icon: "🏮",
+    icon: "lantern",
     category: "style",
     promptTemplate:
       "Neo-Chinese aesthetic, traditional ink painting fusion, cyan-green landscape, elegant minimalism, Eastern artistic conception, contemporary Chinese design, poetic atmosphere, muted earth tones with accent colors",
@@ -114,7 +114,7 @@ const BUILTIN_SKILLS: SkillSeedData[] = [
     name: "古典武侠电幻",
     slug: "wuxian-cyberpunk",
     description: "武侠江湖 x 赛博朋克，霓虹刀光，古建全息投影，硬核混搭",
-    icon: "⚔️",
+    icon: "swords",
     category: "style",
     promptTemplate:
       "Classical Wuxian Cyberpunk fusion, ancient Chinese martial arts meets neon dystopia, holographic projections on traditional architecture, glowing katana, rain-soaked streets with pagodas, neon calligraphy, blade runner meets Jin Yong",
@@ -135,7 +135,7 @@ const BUILTIN_SKILLS: SkillSeedData[] = [
     name: "日系动漫插画",
     slug: "anime-illustration",
     description: "Make风格，清新线条，柔和色彩，新海诚/京阿尼质感",
-    icon: "🌸",
+    icon: "flower",
     category: "style",
     promptTemplate:
       "Japanese anime illustration, Makoto Shinkai style, clean line art, soft pastel colors, detailed background, Kyoto Animation quality, beautiful sky with clouds, emotional atmosphere, light rays",
@@ -156,7 +156,7 @@ const BUILTIN_SKILLS: SkillSeedData[] = [
     name: "油画厚涂写实",
     slug: "oil-painting-impasto",
     description: "古典油画笔触，厚涂肌理，伦勃朗光影，博物馆级质感",
-    icon: "🎨",
+    icon: "palette",
     category: "style",
     promptTemplate:
       "Oil painting impasto technique, thick visible brushstrokes, Rembrandt chiaroscuro lighting, museum-quality fine art, classical portrait texture, rich color palette, canvas texture visible, Baroque composition",
@@ -177,7 +177,7 @@ const BUILTIN_SKILLS: SkillSeedData[] = [
     name: "水彩梦幻童话",
     slug: "watercolor-fairytale",
     description: "水彩晕染，梦幻柔光，童话氛围，儿童绘本质感",
-    icon: "💧",
+    icon: "droplet",
     category: "style",
     promptTemplate:
       "Watercolor fairytale illustration, wet-on-wet technique, dreamy soft glow, children book aesthetic, pastel rainbow hues, whimsical details, paper texture, gentle color bleeding, magical atmosphere",
@@ -198,7 +198,7 @@ const BUILTIN_SKILLS: SkillSeedData[] = [
     name: "赛博朋克都市",
     slug: "cyberpunk-city",
     description: "霓虹灯雨夜，高楼全息广告，高科技低生活，银翼杀手氛围",
-    icon: "🌃",
+    icon: "building",
     category: "style",
     promptTemplate:
       "Cyberpunk cityscape, neon-lit rain night, towering skyscrapers with holographic advertisements, high-tech low-life, Blade Runner atmosphere, wet streets reflecting neon signs, flying vehicles, dystopian future, volumetric lighting",
@@ -221,7 +221,7 @@ const BUILTIN_SKILLS: SkillSeedData[] = [
     name: "电影级人像摄影",
     slug: "cinematic-portrait",
     description: "哈苏色调，浅景深虚化，自然光人像，杂志封面质感",
-    icon: "📷",
+    icon: "camera",
     category: "photo",
     promptTemplate:
       "Cinematic Hasselblad portrait photography, shallow depth of field bokeh, natural window lighting, skin texture detail, magazine cover quality, professional color grading, 85mm lens look, film grain subtle",
@@ -242,7 +242,7 @@ const BUILTIN_SKILLS: SkillSeedData[] = [
     name: "胶片复古颗粒",
     slug: "film-grain-vintage",
     description: "柯达Portra色调，漏光效果，怀旧氛围，90年代胶片感",
-    icon: "🎞️",
+    icon: "film",
     category: "photo",
     promptTemplate:
       "Vintage Kodak Portra film aesthetic, natural film grain, light leak effects, nostalgic 90s atmosphere, warm faded tones, analog photography look, slight vignette, authentic color science",
@@ -265,7 +265,7 @@ const BUILTIN_SKILLS: SkillSeedData[] = [
     name: "漫剧分镜生成",
     slug: "comic-storyboard",
     description: "漫画分镜格，动态线速度感，日漫/美漫多风格可选",
-    icon: "📑",
+    icon: "files",
     category: "comic",
     promptTemplate:
       "Comic storyboard panel, manga-style dynamic action lines, speed effect, dramatic perspective, black-and-white ink with screentone, professional comic layout, expressive character poses, narrative flow",
@@ -286,7 +286,7 @@ const BUILTIN_SKILLS: SkillSeedData[] = [
     name: "概念设计原画",
     slug: "concept-art",
     description: "游戏/影视概念图，环境设计，角色设定，工业设计草图",
-    icon: "🖊️",
+    icon: "pen",
     category: "design",
     promptTemplate:
       "Professional concept art, game/film key art, environment design, character sheet, industrial design sketch, detailed annotation, multiple views, neutral background, artstation trending, matte painting quality",

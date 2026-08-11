@@ -53,8 +53,13 @@ export default async function TaskDetail({
 
   return (
     <div className="py-6">
+      <div className="mb-3">
+        <Link href="/workspace" className="text-sm text-primary hover:underline">
+          ← 返回工作台
+        </Link>
+      </div>
       <div className="mb-5 flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">作品详情</h1>
+        <h1 className="u-title-page">作品详情</h1>
         <ButtonLink href="/create" size="sm" variant="outline">
           再生成
         </ButtonLink>

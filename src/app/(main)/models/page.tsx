@@ -8,7 +8,7 @@ export default function ModelsPage() {
     <div className="py-6">
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">模型库</h1>
+          <h1 className="u-title-page">模型库</h1>
           <p className="mt-1 text-sm text-muted">
             直接调用本机 ComfyUI 已安装的模型，文件名即契约，所见即所得。
           </p>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Navbar } from "@/components/layout/navbar";
+import { Icon } from "@/components/ui/Icon";
 
 function BoltIcon() {
   return (
@@ -13,45 +14,45 @@ const FEATURES = [
   {
     title: "文生图 / 图生图",
     desc: "对接本机 ComfyUI，输入提示词即可生成高质量图像，支持局部重绘与高清放大。",
-    icon: "🎨",
+    icon: "palette",
     href: "/workspace?tab=create",
   },
   {
     title: "一键成片",
     desc: "从剧本到成片：自动分镜、逐镜生视频、烧录字幕与 BGM 合成，一条龙产出。",
-    icon: "🎬",
+    icon: "film",
     href: "/workspace?tab=film",
   },
   {
     title: "工作流编辑器",
     desc: "可视化拖拽编排 ComfyUI 节点，导入你自己的 API 工作流，串联多节点创作。",
-    icon: "🧩",
+    icon: "puzzle",
     href: "/workspace?tab=canvas",
   },
   {
     title: "LoRA 训练",
     desc: "上传数据集与触发词，本地训练专属风格 LoRA，训练产物可直接用于生图。",
-    icon: "🔥",
+    icon: "flame",
     href: "/workspace?tab=train",
   },
   {
     title: "创作工坊",
     desc: "剧本 → 角色 → 分镜 三步走，配合本地 LLM 智能扩写与拆镜，灵感即刻落地。",
-    icon: "✍️",
+    icon: "pen",
     href: "/workshop",
   },
   {
     title: "本地模型自由",
     desc: "统一管理 Checkpoint / LoRA / ControlNet，一键切换底模，发挥本机算力。",
-    icon: "🗂️",
+    icon: "folder",
     href: "/workspace?tab=models",
   },
 ];
 
 const WHY = [
-  { title: "隐私安全", desc: "所有生成与训练都在本机完成，数据不出门。", icon: "🔒" },
-  { title: "完全免费", desc: "无积分、无订阅，用你自己的显卡随意创作。", icon: "💸" },
-  { title: "无限创作", desc: "不受云端额度限制，想生成多少就生成多少。", icon: "♾️" },
+  { title: "隐私安全", desc: "所有生成与训练都在本机完成，数据不出门。", icon: "lock" },
+  { title: "完全免费", desc: "无积分、无订阅，用你自己的显卡随意创作。", icon: "coins" },
+  { title: "无限创作", desc: "不受云端额度限制，想生成多少就生成多少。", icon: "infinity" },
 ];
 
 export default function LandingPage() {
@@ -140,7 +141,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="absolute -bottom-6 -left-6 hidden rounded-xl border border-border bg-surface px-4 py-3 text-sm shadow-lg sm:block">
-              ⚡ GPU 采样 · 实时进度
+              <Icon name="zap" size={14} className="mr-1 inline align-[-2px]" /> GPU 采样 · 实时进度
             </div>
           </div>
         </div>
@@ -159,8 +160,8 @@ export default function LandingPage() {
               href={f.href}
               className="group block rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary/40"
             >
-              <div className="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-xl">
-                {f.icon}
+              <div className="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary">
+                <Icon name={f.icon} size={22} />
               </div>
               <h3 className="text-lg font-semibold">{f.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-muted">{f.desc}</p>
@@ -181,8 +182,8 @@ export default function LandingPage() {
           <div className="mt-12 grid gap-6 sm:grid-cols-3">
             {WHY.map((w) => (
               <div key={w.title} className="text-center">
-                <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-2xl">
-                  {w.icon}
+                <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
+                  <Icon name={w.icon} size={26} />
                 </div>
                 <h3 className="text-lg font-semibold">{w.title}</h3>
                 <p className="mt-2 text-sm text-muted">{w.desc}</p>

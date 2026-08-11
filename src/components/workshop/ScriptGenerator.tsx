@@ -1,6 +1,9 @@
 "use client";
 
 import React from "react";
+import { DarkSelect } from "@/components/updream/ui/DarkSelect";
+import { NumberField } from "@/components/updream/ui/NumberField";
+import { Icon } from "@/components/ui/Icon";
 import type { Scene, ProjectMeta, ProjectType } from "@/lib/workshop/types";
 import { PROJECT_TYPE_LABELS } from "@/lib/workshop/types";
 import { parseIdeaToScenes, newScene, workshopUid } from "@/lib/workshop/script-parser";
@@ -91,7 +94,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
     <div className="space-y-5">
       {/* ── Project meta ── */}
       <section className="rounded-xl border border-border bg-surface p-4">
-        <h3 className="mb-3 text-sm font-semibold text-ink">项目信息</h3>
+        <h3 className="u-title mb-3">项目信息</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-muted">标题</span>
@@ -104,17 +107,14 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-muted">类型</span>
-            <select
+            <DarkSelect
+              className="!bg-white/[0.03] !border-white/[0.08] text-sm"
               value={meta.type}
-              onChange={(e) => onMetaChange({ ...meta, type: e.target.value as ProjectType })}
-              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
-            >
-              {PROJECT_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {PROJECT_TYPE_LABELS[t]}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => onMetaChange({ ...meta, type: v as ProjectType })}
+              options={PROJECT_TYPES}
+              labels={PROJECT_TYPE_LABELS as Record<string, string>}
+              placeholder="选择类型"
+            />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-muted">基调 / 情绪</span>
@@ -140,7 +140,9 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
       {/* ── Smart assist ── */}
       <section className="rounded-xl border border-primary-soft bg-primary-soft/30 p-4">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-primary">✨ 智能辅助结构化</h3>
+          <h3 className="flex items-center text-sm font-semibold text-primary">
+            <Icon name="sparkles" size={14} className="mr-1.5 inline align-[-2px]" />智能辅助结构化
+          </h3>
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
@@ -173,7 +175,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
                 disabled={!idea.trim() || aiBusy}
                 className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
               >
-                {aiBusy ? "AI 扩写中…" : "✨ AI 智能扩写"}
+                {aiBusy ? "AI 扩写中…" : (<><Icon name="sparkles" size={13} className="mr-1 inline align-[-2px]" />AI 智能扩写</>)}
               </button>
             </div>
             {aiBusy && aiDraft && (
@@ -203,7 +205,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
       {/* ── Scene list ── */}
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-ink">
+          <h3 className="u-title">
             场景列表 <span className="text-muted">({scenes.length})</span>
           </h3>
           <button
@@ -275,15 +277,13 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
 
                 <div className="mt-2 flex items-center gap-2">
                   <span className="text-xs text-muted">建议镜头数</span>
-                  <input
-                    type="number"
+                  <NumberField
+                    value={scene.shotCount}
+                    onChange={(v) => updateScene(scene.id, { shotCount: v })}
                     min={1}
                     max={10}
-                    value={scene.shotCount}
-                    onChange={(e) =>
-                      updateScene(scene.id, { shotCount: Math.max(1, Number(e.target.value) || 1) })
-                    }
-                    className="w-16 rounded-md border border-border bg-bg px-2 py-1 text-xs outline-none focus:border-primary"
+                    step={1}
+                    className="w-16"
                   />
                 </div>
               </div>

@@ -7,6 +7,8 @@ import { getWorkflow } from "@/lib/comfyui/_meta";
 import { SkillSelector } from "@/components/skill";
 import type { SkillData } from "@/components/skill";
 import dynamic from "next/dynamic";
+import { DarkSelect } from "@/components/updream/ui/DarkSelect";
+import { NumberField } from "@/components/updream/ui/NumberField";
 
 // Lazy-load the heavy ReactFlow canvas (only needed for custom workflows)
 const WorkflowCanvas = dynamic(
@@ -440,18 +442,14 @@ export function CreateStudio() {
           <div className="mb-3">
             <label className="mb-1 block text-sm font-medium">自定义工作流</label>
             <div className="flex gap-2">
-              <select
+              <DarkSelect
+                className="flex-1 !bg-white/[0.03] !border-white/[0.08] text-sm py-2.5"
                 value={customId}
-                onChange={(e) => setCustomId(e.target.value)}
-                className="flex-1 rounded-lg border border-border bg-bg p-2.5 text-sm outline-none focus:border-primary"
-              >
-                <option value="">选择已导入工作流…</option>
-                {customWorkflows.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setCustomId(v)}
+                options={customWorkflows.map((w) => w.id)}
+                labels={Object.fromEntries(customWorkflows.map((w) => [w.id, w.name]))}
+                placeholder="选择已导入工作流…"
+              />
               <button
                 onClick={() => setShowImport(true)}
                 className="rounded-lg border border-border px-3 text-sm text-primary hover:bg-subtle"
@@ -481,6 +479,10 @@ export function CreateStudio() {
                 initialGraph={wfDetail.graph}
                 initialParamMap={wfDetail.paramMap ?? paramMap}
                 checkpoints={checkpoints.map((c) => c.fileName)}
+                modelLists={{
+                  checkpoints: checkpoints.map((c) => c.fileName),
+                  loras: loraOpts.map((l) => l.fileName),
+                }}
                 onGraphChange={(graph, pm) => {
                   setCanvasGraph(graph);
                   setParamMap(pm);
@@ -679,45 +681,37 @@ export function CreateStudio() {
             <label className="mb-1 block text-sm font-medium">
               大模型（Checkpoint）{tab === "custom" && <span className="text-muted">· 可选</span>}
             </label>
-            <select
+            <DarkSelect
+              className="mb-3 w-full !bg-white/[0.03] !border-white/[0.08] text-sm py-2.5"
               value={checkpoint}
-              onChange={(e) => setCheckpoint(e.target.value)}
-              className="mb-3 w-full rounded-lg border border-border bg-bg p-2.5 text-sm outline-none focus:border-primary"
-            >
-              <option value="">{tab === "custom" ? "使用工作流自带模型" : "请选择…"}</option>
-              {checkpoints.map((m) => (
-                <option key={m.id} value={m.fileName}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setCheckpoint(v)}
+              options={checkpoints.map((m) => m.fileName)}
+              labels={Object.fromEntries(checkpoints.map((m) => [m.fileName, m.name]))}
+              placeholder={tab === "custom" ? "使用工作流自带模型" : "请选择…"}
+            />
           </div>
         )}
 
         <div className="mb-3 grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-sm font-medium">采样器</label>
-            <select
+            <DarkSelect
+              className="w-full !bg-white/[0.03] !border-white/[0.08] text-sm py-2"
               value={sampler}
-              onChange={(e) => setSampler(e.target.value)}
-              className="w-full rounded-lg border border-border bg-bg p-2 text-sm outline-none focus:border-primary"
-            >
-              {SAMPLERS.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
+              onChange={(v) => setSampler(v)}
+              options={SAMPLERS}
+              placeholder="选择采样器"
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">调度器</label>
-            <select
+            <DarkSelect
+              className="w-full !bg-white/[0.03] !border-white/[0.08] text-sm py-2"
               value={scheduler}
-              onChange={(e) => setScheduler(e.target.value)}
-              className="w-full rounded-lg border border-border bg-bg p-2 text-sm outline-none focus:border-primary"
-            >
-              {SCHEDULERS.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
+              onChange={(v) => setScheduler(v)}
+              options={SCHEDULERS}
+              placeholder="选择调度器"
+            />
           </div>
         </div>
 
@@ -761,15 +755,13 @@ export function CreateStudio() {
         <div className="mb-3 grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-sm font-medium">尺寸</label>
-            <select
+            <DarkSelect
+              className="w-full !bg-white/[0.03] !border-white/[0.08] text-sm py-2"
               value={size}
-              onChange={(e) => setSize(e.target.value)}
-              className="w-full rounded-lg border border-border bg-bg p-2 text-sm outline-none focus:border-primary"
-            >
-              {SIZES.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
+              onChange={(v) => setSize(v)}
+              options={SIZES}
+              placeholder="选择尺寸"
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">种子</label>
@@ -811,32 +803,30 @@ export function CreateStudio() {
             <div className="space-y-2">
               {loras.map((l, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <select
+                  <DarkSelect
+                    className="flex-1 !bg-white/[0.03] !border-white/[0.08] text-sm py-1.5"
                     value={l.name}
-                    onChange={(e) => {
+                    onChange={(v) => {
                       const next = [...loras];
-                      next[i].name = e.target.value;
+                      next[i].name = v;
                       setLoras(next);
                     }}
-                    className="flex-1 rounded-lg border border-border bg-bg p-1.5 text-sm outline-none focus:border-primary"
-                  >
-                    <option value="">选择 LoRA…</option>
-                    {loraOpts.map((m) => (
-                      <option key={m.id} value={m.fileName}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    step={0.05}
+                    options={loraOpts.map((m) => m.fileName)}
+                    labels={Object.fromEntries(loraOpts.map((m) => [m.fileName, m.name]))}
+                    placeholder="选择 LoRA…"
+                  />
+                  <NumberField
                     value={l.weight}
-                    onChange={(e) => {
+                    onChange={(v) => {
                       const next = [...loras];
-                      next[i].weight = Number(e.target.value);
+                      next[i].weight = v;
                       setLoras(next);
                     }}
-                    className="w-16 rounded-lg border border-border bg-bg p-1.5 text-sm outline-none focus:border-primary"
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    decimalPlaces={2}
+                    className="w-16"
                   />
                   <button
                     onClick={() => setLoras(loras.filter((_, j) => j !== i))}
@@ -1063,7 +1053,7 @@ export function CreateStudio() {
             className="w-full max-w-lg rounded-2xl border border-border bg-surface p-5"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="mb-3 text-base font-semibold">导入 ComfyUI 工作流</h3>
+            <h3 className="u-title mb-3">导入 ComfyUI 工作流</h3>
             <label className="mb-1 block text-sm font-medium">工作流名称</label>
             <input
               value={importName}
@@ -1120,18 +1110,14 @@ function RoleSelect({
   return (
     <div className="flex items-center gap-2">
       <span className="w-24 shrink-0 text-xs text-muted">{label}</span>
-      <select
+      <DarkSelect
+        className="flex-1 !bg-white/[0.03] !border-white/[0.08] text-xs py-1.5"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="flex-1 rounded-lg border border-border bg-bg p-1.5 text-xs outline-none focus:border-primary"
-      >
-        <option value="">自动</option>
-        {options.map((n) => (
-          <option key={n.id} value={n.id}>
-            #{n.id} · {n.class_type}
-          </option>
-        ))}
-      </select>
+        onChange={(v) => onChange(v)}
+        options={options.map((n) => n.id)}
+        labels={Object.fromEntries(options.map((n) => [n.id, `#${n.id} · ${n.class_type}`]))}
+        placeholder="自动"
+      />
     </div>
   );
 }

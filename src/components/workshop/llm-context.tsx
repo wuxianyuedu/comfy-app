@@ -2,6 +2,7 @@
 
 import React from "react";
 import { completeChat } from "@/lib/llm/browser";
+import { Icon } from "@/components/ui/Icon";
 import type { LLMConfigView, LLMProviderType } from "@/lib/llm/types";
 
 interface LLMContextValue {
@@ -103,7 +104,7 @@ export function LLMSettingsButton() {
       title="LLM 文本生成设置"
       className="rounded-lg border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-subtle"
     >
-      ⚙️ LLM 设置
+      <Icon name="settings" size={14} className="mr-1.5 inline align-[-2px]" />LLM 设置
     </button>
   );
 }
@@ -195,7 +196,7 @@ function LLMSettingsModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-ink">LLM 文本生成设置</h3>
+          <h3 className="u-title">LLM 文本生成设置</h3>
           <button
             type="button"
             onClick={onClose}

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { Icon } from "@/components/ui/Icon";
 
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
@@ -10,7 +11,9 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-bg px-6 text-center">
-      <div className="grid h-16 w-16 place-items-center rounded-2xl bg-primary/10 text-3xl">⚠️</div>
+      <div className="grid h-16 w-16 place-items-center rounded-2xl bg-primary/10 text-primary">
+        <Icon name="alert" size={28} />
+      </div>
       <div>
         <h1 className="text-2xl font-bold tracking-tight">页面出错了</h1>
         <p className="mt-2 max-w-md text-muted">

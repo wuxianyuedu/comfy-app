@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { AuroraBackground } from "@/components/updream/AuroraBackground";
+import { Icon } from "@/components/ui/Icon";
 
 interface ModelRow {
   id: string;
@@ -57,17 +59,18 @@ export function ModelLibrary() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[1200px] px-8 py-10">
+      <AuroraBackground />
+      <div className="mx-auto max-w-[1200px] px-4 sm:px-8 py-8 sm:py-10">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold text-gray-100">模型库</h1>
+            <h1 className="font-title text-xl font-bold text-gray-100">模型库</h1>
             <p className="mt-1 text-sm text-gray-500">本机 ComfyUI 可用模型（Checkpoint / LoRA / VAE 等）。</p>
           </div>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="搜索模型名称…"
-            className="w-64 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40"
+            className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40 sm:w-64"
           />
         </div>
 
@@ -101,14 +104,14 @@ export function ModelLibrary() {
                   key={m.id}
                   className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 transition-all hover:border-white/[0.14] hover:bg-white/[0.04]"
                 >
-                  <div className="mb-3 flex h-20 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/10 to-sky-500/10 text-3xl">
-                    📦
+                  <div className="mb-3 flex h-20 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/10 to-sky-500/10 text-violet-300">
+                    <Icon name="package" size={28} />
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${tl.color}`}>{tl.label}</span>
                     {!m.isAvailable && <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-gray-400">不可用</span>}
                   </div>
-                  <h3 className="mt-2 line-clamp-1 text-sm font-semibold text-gray-100" title={m.name}>
+                  <h3 className="u-title mt-2 line-clamp-1" title={m.name}>
                     {m.name}
                   </h3>
                   <p className="mt-0.5 line-clamp-1 text-xs text-gray-500" title={m.fileName}>

@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { DarkSelect } from "@/components/updream/ui/DarkSelect";
+import { Icon } from "@/components/ui/Icon";
 import type { Shot, Scene, Character, StyleRef, ShotType } from "@/lib/workshop/types";
 import { SHOT_TYPE_LABELS } from "@/lib/workshop/types";
 import { buildShotPrompt, buildShotNegative, mergeParams } from "@/lib/workshop/prompt-builder";
@@ -170,7 +172,7 @@ export function StoryboardPlanner({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-ink">
+        <h3 className="u-title">
           分镜规划 <span className="text-muted">({shots.length})</span>
         </h3>
         <div className="flex gap-2">
@@ -188,7 +190,7 @@ export function StoryboardPlanner({
             disabled={scenes.length === 0 || aiBusy}
             className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
           >
-            {aiBusy ? "AI 拆镜中…" : "✨ AI 智能拆镜"}
+            {aiBusy ? "AI 拆镜中…" : (<><Icon name="sparkles" size={13} className="mr-1 inline align-[-2px]" />AI 智能拆镜</>)}
           </button>
           {shots.length > 0 && (
             <button
@@ -265,34 +267,27 @@ export function StoryboardPlanner({
                   {/* Shot type */}
                   <label className="block">
                     <span className="mb-1 block text-xs text-muted">景别</span>
-                    <select
+                    <DarkSelect
+                      className="!bg-white/[0.03] !border-white/[0.08] text-xs"
                       value={shot.shotType}
-                      onChange={(e) => updateShot(shot.id, { shotType: e.target.value as ShotType })}
-                      className="w-full rounded-md border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-primary"
-                    >
-                      {SHOT_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {SHOT_TYPE_LABELS[t]}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => updateShot(shot.id, { shotType: v as ShotType })}
+                      options={SHOT_TYPES}
+                      labels={SHOT_TYPE_LABELS as Record<string, string>}
+                      placeholder="选择景别"
+                    />
                   </label>
 
                   {/* Style */}
                   <label className="block">
                     <span className="mb-1 block text-xs text-muted">风格 Skill</span>
-                    <select
+                    <DarkSelect
+                      className="!bg-white/[0.03] !border-white/[0.08] text-xs"
                       value={shot.skillSlug ?? ""}
-                      onChange={(e) => updateShot(shot.id, { skillSlug: e.target.value || undefined })}
-                      className="w-full rounded-md border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-primary"
-                    >
-                      <option value="">跟随角色/默认</option>
-                      {styles.map((s) => (
-                        <option key={s.slug} value={s.slug}>
-                          {s.icon} {s.name}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => updateShot(shot.id, { skillSlug: v || undefined })}
+                      options={styles.map((s) => s.slug)}
+                      labels={Object.fromEntries(styles.map((s) => [s.slug, `${s.icon} ${s.name}`]))}
+                      placeholder="跟随角色/默认"
+                    />
                   </label>
                 </div>
 

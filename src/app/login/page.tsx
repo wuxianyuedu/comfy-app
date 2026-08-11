@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { Icon } from "@/components/ui/Icon";
 
 type Mode = "signin" | "register";
 
@@ -22,6 +23,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -70,6 +72,7 @@ export default function LoginPage() {
   function switchMode(next: Mode) {
     setMode(next);
     setError(null);
+    setNotice(null);
   }
 
   return (
@@ -127,6 +130,23 @@ export default function LoginPage() {
             : "创建一个本地账号，开启你的 AI 创作"}
         </p>
 
+        {notice && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2.5 text-sm text-violet-200">
+            <Icon name="info" size={15} className="mt-0.5 shrink-0 text-violet-300" />
+            <span className="flex-1 leading-relaxed">{notice}</span>
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              className="text-violet-300/70 transition-colors hover:text-white"
+              aria-label="关闭提示"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === "register" && (
             <Field
@@ -163,7 +183,13 @@ export default function LoginPage() {
 
           {mode === "signin" && (
             <div className="text-right">
-              <span className="text-sm text-primary/90">忘记密码？</span>
+              <button
+                type="button"
+                onClick={() => setNotice("本地账号密码重置功能即将上线，如需帮助请联系管理员")}
+                className="text-sm text-primary/90 transition-colors hover:text-primary"
+              >
+                忘记密码？
+              </button>
             </div>
           )}
 
@@ -185,12 +211,14 @@ export default function LoginPage() {
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
+            onClick={() => setNotice("GitHub 第三方登录即将上线，当前请使用邮箱账号登录")}
             className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-medium text-white/70 transition-colors hover:text-white"
           >
             GitHub
           </button>
           <button
             type="button"
+            onClick={() => setNotice("Google 第三方登录即将上线，当前请使用邮箱账号登录")}
             className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-medium text-white/70 transition-colors hover:text-white"
           >
             Google

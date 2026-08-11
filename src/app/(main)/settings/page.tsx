@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DarkSelect } from "@/components/updream/ui/DarkSelect";
 
 type Settings = {
   comfyuiUrl: string;
@@ -134,15 +135,20 @@ export default function SettingsPage() {
   }
 
   if (loading || !settings || !llm) {
-    return <div className="py-20 text-center text-muted">加载中…</div>;
+    return (
+      <div className="dark grid min-h-screen place-items-center bg-[#0a0a0f] text-muted">
+        加载中…
+      </div>
+    );
   }
 
   return (
-    <div className="py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">设置</h1>
-        <p className="mt-1 text-sm text-muted">管理你的账户安全与创作偏好。</p>
-      </div>
+    <div className="dark min-h-screen bg-[#0a0a0f] px-4 py-8 sm:px-8">
+      <div className="mx-auto max-w-[1200px]">
+        <div className="mb-6">
+          <h1 className="u-title-page">设置</h1>
+          <p className="mt-1 text-sm text-muted">管理你的账户安全与创作偏好。</p>
+        </div>
 
       <div className="mb-6 flex gap-2">
         <TabBtn active={tab === "account"} onClick={() => setTab("account")}>
@@ -190,14 +196,14 @@ export default function SettingsPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           <Card title="语言模型（LLM）">
             <div className="mb-3 flex gap-2">
-              <select
+              <DarkSelect
+                className="!bg-white/5 text-sm text-ink"
                 value={llm.provider}
-                onChange={(e) => setLlm({ ...llm, provider: e.target.value as LlmConfig["provider"] })}
-                className="rounded-lg border border-border bg-white/5 px-3 py-2 text-sm text-ink"
-              >
-                <option value="local">本地（Ollama）</option>
-                <option value="remote">远程（OpenAI 兼容）</option>
-              </select>
+                onChange={(v) => setLlm({ ...llm, provider: v as LlmConfig["provider"] })}
+                options={["local", "remote"]}
+                labels={{ local: "本地（Ollama）", remote: "远程（OpenAI 兼容）" }}
+                placeholder="选择提供商"
+              />
             </div>
             <Field label="Base URL" value={llm.baseUrl} onChange={(v) => setLlm({ ...llm, baseUrl: v })} placeholder="http://localhost:11434/v1" />
             <Field label="模型" value={llm.model} onChange={(v) => setLlm({ ...llm, model: v })} placeholder="llama3.1" />
@@ -232,15 +238,14 @@ export default function SettingsPage() {
             />
             <div className="mb-4">
               <label className="mb-1.5 block text-sm font-medium text-ink/80">默认视频工作流</label>
-              <select
+              <DarkSelect
+                className="w-full !bg-white/5 text-sm text-ink"
                 value={settings.defaultVideoWorkflow}
-                onChange={(e) => setSettings({ ...settings, defaultVideoWorkflow: e.target.value as Settings["defaultVideoWorkflow"] })}
-                className="w-full rounded-lg border border-border bg-white/5 px-3 py-2 text-sm text-ink"
-              >
-                <option value="auto">自动（文生视频，本地合成首帧）</option>
-                <option value="txt2video">文生视频（本地合成首帧）</option>
-                <option value="img2video">图生视频（上传首帧）</option>
-              </select>
+                onChange={(v) => setSettings({ ...settings, defaultVideoWorkflow: v as Settings["defaultVideoWorkflow"] })}
+                options={["auto", "txt2video", "img2video"]}
+                labels={{ auto: "自动（文生视频，本地合成首帧）", txt2video: "文生视频（本地合成首帧）", img2video: "图生视频（上传首帧）" }}
+                placeholder="选择默认视频工作流"
+              />
               <p className="mt-1.5 text-xs text-muted">本地 Wan 图生视频模型，无需联网或授权。</p>
             </div>
             <Field
@@ -255,6 +260,7 @@ export default function SettingsPage() {
           </Card>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { DarkSelect } from "@/components/updream/ui/DarkSelect";
+import { Icon } from "@/components/ui/Icon";
 import type { Character, StyleRef } from "@/lib/workshop/types";
 import { buildCharacterPrompt, buildCharacterNegative } from "@/lib/workshop/prompt-builder";
 import { workshopUid } from "@/lib/workshop/script-parser";
@@ -153,7 +155,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange }: Pr
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-ink">
+        <h3 className="u-title">
           角色设计 <span className="text-muted">({characters.length})</span>
         </h3>
         <div className="flex gap-2">
@@ -169,7 +171,9 @@ export function CharacterDesigner({ characters, styles, onCharactersChange }: Pr
 
       {/* AI: generate a full character from a one-line brief */}
       <div className="rounded-xl border border-primary-soft bg-primary-soft/30 p-3">
-        <p className="mb-2 text-xs font-medium text-primary">✨ 用一句话生成角色</p>
+        <p className="mb-2 flex items-center text-xs font-medium text-primary">
+          <Icon name="sparkles" size={13} className="mr-1 inline align-[-2px]" />用一句话生成角色
+        </p>
         <div className="flex gap-2">
           <input
             value={brief}
@@ -225,7 +229,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange }: Pr
                   className="rounded-md border border-primary-soft px-2 py-1 text-xs text-primary transition-colors hover:bg-primary-soft disabled:opacity-40"
                   title="用 LLM 补全外貌/服装/性格"
                 >
-                  {aiBusyId === c.id ? "…" : "✨ AI 润色"}
+                  {aiBusyId === c.id ? "…" : (<><Icon name="sparkles" size={12} className="mr-1 inline align-[-2px]" />AI 润色</>)}
                 </button>
                 <button
                   type="button"
@@ -280,18 +284,14 @@ export function CharacterDesigner({ characters, styles, onCharactersChange }: Pr
               {/* Linked style skill */}
               <div className="mt-2">
                 <span className="mb-1 block text-xs text-muted">艺术风格（Skill）</span>
-                <select
+                <DarkSelect
+                  className="!bg-white/[0.03] !border-white/[0.08] text-sm"
                   value={c.skillSlug ?? ""}
-                  onChange={(e) => update(c.id, { skillSlug: e.target.value || undefined })}
-                  className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
-                >
-                  <option value="">不指定（使用风格标签）</option>
-                  {styles.map((s) => (
-                    <option key={s.slug} value={s.slug}>
-                      {s.icon} {s.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => update(c.id, { skillSlug: v || undefined })}
+                  options={styles.map((s) => s.slug)}
+                  labels={Object.fromEntries(styles.map((s) => [s.slug, `${s.icon} ${s.name}`]))}
+                  placeholder="不指定（使用风格标签）"
+                />
               </div>
 
               {/* Generated prompt preview */}

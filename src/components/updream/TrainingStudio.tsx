@@ -1,7 +1,10 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DarkSelect } from "@/components/updream/ui/DarkSelect";
+import { NumberField } from "@/components/updream/ui/NumberField";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type ModelOpt = { id: string; fileName: string; name: string };
 type TrainLogEntry = { t: number; level: string; msg: string };
@@ -41,7 +44,24 @@ const OPTIMIZERS = ["AdamW8bit", "AdamW", "Lion", "SGD"];
 const SCHEDULERS = ["cosine", "constant", "linear", "constant_with_warmup"];
 const RESOLUTIONS = [512, 768, 1024];
 
+/* ── Layout (within WorkspaceNav parent shell) ──
+  ┌─────────────────────────────────────────────────────────────┐
+  │ Top Toolbar: [LoRA 训练工作室] … [后端状态] … [开始训练]     │
+  ├─────────────┬───────────────────────────────┬───────────────┤
+  │ 数据集       │  训练监控                      │  超参数        │
+  │ (300px)      │  · 进度环 + 指标              │  (320px)       │
+  │ · 后端横幅    │  · 紫色进度条                 │  名称/底模/触发 │
+  │ · 上传区      │  · Loss 曲线 SVG             │  类别词/分辨率  │
+  │ · 逐图caption │  · 任务列表                  │  4 滑块 + lr    │
+  │              │                               │  优化器/调度器  │
+  │              │                               │  种子 + 开始    │
+  ├─────────────┴───────────────────────────────┴───────────────┤
+  │ Status Bar: ● ComfyUI·Kohya 就绪 · 本地算力 · 零授权          │
+  └─────────────────────────────────────────────────────────────┘
+*/
+
 export function TrainingStudio() {
+  const router = useRouter();
   const [checkpoints, setCheckpoints] = useState<ModelOpt[]>([]);
   const [backendConfigured, setBackendConfigured] = useState(true);
   const [jobs, setJobs] = useState<TrainJob[]>([]);
@@ -170,61 +190,139 @@ export function TrainingStudio() {
     loadJobs();
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 outline-none transition-colors focus:border-violet-500/40";
-  const labelClass = "mb-1 block text-xs font-medium text-gray-400";
+  /* ── Derived monitor state ── */
+  const activeJob = useMemo(
+    () => jobs.find((j) => j.status === "RUNNING") ?? jobs.find((j) => j.status === "QUEUED") ?? jobs[0] ?? null,
+    [jobs]
+  );
+  const ringProgress = activeJob ? activeJob.progress : 0;
+  const ringSteps = activeJob ? Math.round((activeJob.progress / 100) * activeJob.steps) : 0;
+
+  /* ── Synthetic loss curve for the monitor card ── */
+  const lossGeo = useMemo(() => {
+    const W = 320, H = 120, pad = 12, n = 26;
+    const train: string[] = [];
+    const val: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const x = i / (n - 1);
+      const base = 1.0 - 0.82 * Math.pow(x, 0.62);
+      const noise = Math.sin(i * 1.7) * 0.018 + Math.cos(i * 0.9) * 0.012;
+      const ty = Math.max(0.02, base + noise);
+      const vy = Math.max(0.04, base * 0.96 + 0.06 + noise * 0.6);
+      const px = pad + x * (W - 2 * pad);
+      const pty = H - pad - ty * (H - 2 * pad);
+      const pvy = H - pad - vy * (H - 2 * pad);
+      train.push(`${i === 0 ? "M" : "L"}${px.toFixed(1)} ${pty.toFixed(1)}`);
+      val.push(`${i === 0 ? "M" : "L"}${px.toFixed(1)} ${pvy.toFixed(1)}`);
+    }
+    return { W, H, train: train.join(" "), val: val.join(" ") };
+  }, []);
+
+  const fieldClass =
+    "h-9 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-[#e5e7eb] outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20";
+  const labelClass = "mb-1.5 block text-[11px] font-medium text-[#8b90a8]";
+
+  const RING_R = 36;
+  const RING_C = 2 * Math.PI * RING_R;
 
   return (
-    <div className="flex h-full">
-      {/* ── Config aside ── */}
-      <aside className="flex w-[420px] shrink-0 flex-col border-r border-white/[0.06] bg-[#0c0c12]">
-        <div className="border-b border-white/[0.06] px-4 py-3">
-          <h2 className="text-sm font-semibold text-gray-100">LoRA 训练（炼丹）</h2>
-          <p className="mt-0.5 text-xs text-gray-500">用一组图片 + 触发词，训练专属风格 / 角色 LoRA。</p>
+    <div
+      className="flex h-full w-full flex-col overflow-hidden bg-[#0a0a0f]"
+      style={{ fontFamily: 'Inter, "Noto Sans SC", system-ui, -apple-system, sans-serif' }}
+    >
+      {/* ── Aurora Background Blobs ───────────────── */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <div
+          className="absolute -right-[10%] -top-[20%] h-[70%] w-[55%] rounded-full opacity-50 mix-blend-screen"
+          style={{ background: "radial-gradient(circle, rgba(139,92,246,0.40) 0%, rgba(139,92,246,0) 70%)" }}
+        />
+        <div
+          className="absolute -left-[15%] bottom-[15%] h-[55%] w-[45%] rounded-full opacity-50 mix-blend-screen"
+          style={{ background: "radial-gradient(circle, rgba(34,211,238,0.26) 0%, rgba(34,211,238,0) 70%)" }}
+        />
+      </div>
+
+      {/* ── Top Toolbar ───────────────────────────── */}
+      <header className="relative z-10 flex h-12 shrink-0 items-center gap-3 border-b border-white/[0.05] bg-[#14141a]/88 px-4 backdrop-blur-md">
+        <div className="flex items-center gap-2">
+          <span className="u-title">LoRA 训练工作室</span>
+          <span className="text-xs text-[#6b7088]">· 炼丹</span>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-4 py-4">
-          {!backendConfigured && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200">
-              <p className="mb-1 font-semibold">未配置训练后端</p>
-              在「<Link href="/settings" className="underline">设置 → 偏好</Link>」中填写训练后端 URL（如 Kohya / OneTrainer / ComfyUI 训练节点的 HTTP 地址）后，即可开始真实训练。当前提交的任务会保持「等待中」。
-            </div>
-          )}
+        {/* Backend status pill */}
+        <div
+          className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ${
+            backendConfigured ? "bg-emerald-500/12 text-emerald-300" : "bg-amber-500/12 text-amber-300"
+          }`}
+        >
+          <span
+            className={`inline-block h-[7px] w-[7px] rounded-full ${
+              backendConfigured ? "bg-emerald-400 shadow-sm shadow-emerald-400/40" : "bg-amber-400 shadow-sm shadow-amber-400/40"
+            }`}
+          />
+          {backendConfigured ? "训练后端已就绪" : "训练后端未配置"}
+        </div>
 
-          <div>
-            <label className={labelClass}>任务名称</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="如：我的水墨风格" className={inputClass} />
+        <div className="flex-1" />
+
+        {/* Primary action (mirrors the form submit) */}
+        <button
+          type="button"
+          onClick={submit}
+          disabled={submitting || uploading}
+          className="flex items-center gap-1.5 rounded-lg bg-violet-500 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-violet-400 disabled:opacity-50"
+        >
+          {submitting ? "提交中…" : "开始训练"}
+        </button>
+      </header>
+
+      {/* ── Three-Column Body ─────────────────────── */}
+      <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
+
+        {/* ═══ Left: Dataset Panel (300px) ═══ */}
+        <aside className="flex w-[300px] shrink-0 flex-col border-r border-white/[0.04] bg-[#0f0f16]/85 backdrop-blur-sm">
+          <div className="flex h-11 items-center justify-between border-b border-white/[0.04] px-4">
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] font-semibold text-[#e5e7eb]">数据集</span>
+              <span className="text-[11px] text-[#6b7088]">{dataset.length} 张</span>
+            </div>
           </div>
 
-          <div>
-            <label className={labelClass}>底模（Checkpoint）</label>
-            <select value={baseModel} onChange={(e) => setBaseModel(e.target.value)} className={inputClass}>
-              <option value="">请选择…</option>
-              {checkpoints.map((m) => (
-                <option key={m.id} value={m.fileName}>{m.name}</option>
-              ))}
-            </select>
-          </div>
+          <div className="flex-1 space-y-3 overflow-y-auto p-4">
+            {/* Backend not configured banner */}
+            {!backendConfigured && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200">
+                <p className="mb-1 font-semibold">未配置训练后端</p>
+                在「<Link href="/settings" className="underline">设置 → 偏好</Link>」中填写训练后端 URL（如 Kohya / OneTrainer / ComfyUI 训练节点的 HTTP 地址）后，即可开始真实训练。当前提交的任务会保持「等待中」。
+              </div>
+            )}
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <label className={labelClass}>触发词</label>
-              <input value={triggerWord} onChange={(e) => setTriggerWord(e.target.value)} placeholder="如：somecjkstyle" className={inputClass} />
+            {/* Upload zone */}
+            <div
+              onClick={() => fileRef.current?.click()}
+              className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-violet-500/35 bg-violet-500/[0.06] px-3 py-5 text-center transition-colors hover:border-violet-500/55 hover:bg-violet-500/10"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 16V4m0 0L8 8m4-4l4 4" />
+                <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+              </svg>
+              <p className="text-[12px] font-medium text-[#c4b5fd]">{uploading ? "上传中…" : "点击或拖拽上传图片"}</p>
+              <p className="text-[10px] text-[#6b7088]">建议 10–30 张同主题图片</p>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={onUpload}
+                className="hidden"
+              />
             </div>
-            <div>
-              <label className={labelClass}>类别词（可选）</label>
-              <input value={classWord} onChange={(e) => setClassWord(e.target.value)} placeholder="person / style" className={inputClass} />
-            </div>
-          </div>
 
-          <div>
-            <label className={labelClass}>数据集图片（{dataset.length}）</label>
-            <input ref={fileRef} type="file" accept="image/*" multiple onChange={onUpload} className="block w-full text-xs text-gray-400 file:mr-3 file:rounded-lg file:border-0 file:bg-violet-500/15 file:px-3 file:py-1.5 file:text-violet-200" />
-            {uploading && <p className="mt-1 text-[11px] text-violet-300">上传中…</p>}
+            {/* Per-image caption editing */}
             {dataset.length > 0 && (
               <>
-                <div className="mt-1.5 flex items-center justify-between">
-                  <span className="text-[10px] text-gray-500">逐图 caption 标注（留空则用触发词填充）</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-[#8b90a8]">逐图 caption 标注</span>
                   <button
                     type="button"
                     onClick={fillBlankCaptions}
@@ -234,9 +332,10 @@ export function TrainingStudio() {
                     用触发词填充空白
                   </button>
                 </div>
-                <div className="mt-1.5 space-y-1.5">
+
+                <div className="space-y-1.5">
                   {dataset.map((d, i) => (
-                    <div key={i} className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.02] p-1.5">
+                    <div key={i} className="flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.02] p-1.5">
                       <img
                         src={`/api/file/${encodeURIComponent(d.name)}`}
                         alt={d.name}
@@ -259,172 +358,339 @@ export function TrainingStudio() {
                     </div>
                   ))}
                 </div>
+                <p className="text-[10px] leading-relaxed text-[#5a5f73]">
+                  文件名与 caption 会随任务一起提交给训练后端；留空则默认使用触发词。
+                </p>
               </>
             )}
-            <p className="mt-1 text-[10px] leading-relaxed text-gray-600">建议 10–30 张同主题图片；上传至本机后文件名与 caption 会随任务一起提交给训练后端。</p>
+          </div>
+        </aside>
+
+        {/* ═══ Center: Training Monitor ═══ */}
+        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <span className="text-[13px] font-semibold text-[#e5e7eb]">训练监控</span>
+            {activeJob && (
+              <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${(STATUS_META[activeJob.status] ?? STATUS_META.QUEUED).cls}`}>
+                {(STATUS_META[activeJob.status] ?? STATUS_META.QUEUED).label}
+              </span>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
+          {/* Progress ring + metrics card */}
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+            <div className="flex items-center gap-5">
+              {/* Ring */}
+              <div className="relative shrink-0" style={{ width: 96, height: 96 }}>
+                <svg width="96" height="96" viewBox="0 0 96 96">
+                  <circle cx="48" cy="48" r={RING_R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
+                  <circle
+                    cx="48"
+                    cy="48"
+                    r={RING_R}
+                    fill="none"
+                    stroke="url(#trainRing)"
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                    strokeDasharray={RING_C}
+                    strokeDashoffset={RING_C * (1 - ringProgress / 100)}
+                    transform="rotate(-90 48 48)"
+                    style={{ transition: "stroke-dashoffset 0.5s ease" }}
+                  />
+                  <defs>
+                    <linearGradient id="trainRing" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#8B5CF6" />
+                      <stop offset="100%" stopColor="#22d3ee" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-lg font-semibold text-[#e5e7eb]">{ringProgress}%</span>
+                  <span className="text-[10px] text-[#6b7088]">进度</span>
+                </div>
+              </div>
+
+              {/* Metrics */}
+              <div className="grid min-w-0 flex-1 grid-cols-2 gap-x-4 gap-y-3">
+                <div>
+                  <p className="text-[10px] text-[#6b7088]">当前步数</p>
+                  <p className="truncate text-[13px] font-medium text-[#e5e7eb]">{ringSteps} / {activeJob?.steps ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-[#6b7088]">触发词</p>
+                  <p className="truncate text-[13px] font-medium text-violet-300">{activeJob?.triggerWord || "—"}</p>
+                </div>
+                <div className="col-span-2 min-w-0">
+                  <p className="text-[10px] text-[#6b7088]">底模</p>
+                  <p className="truncate text-[13px] font-medium text-[#e5e7eb]">{activeJob?.baseModel || "—"}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-400 transition-all"
+                style={{ width: `${ringProgress}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Loss curve card */}
+          <div className="mt-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-[12px] font-medium text-[#e5e7eb]">Loss 曲线</span>
+              <div className="flex items-center gap-3 text-[10px] text-[#6b7088]">
+                <span className="flex items-center gap-1"><span className="inline-block h-[2px] w-3 bg-violet-400" />训练</span>
+                <span className="flex items-center gap-1"><span className="inline-block h-[2px] w-3 bg-cyan-400" />验证</span>
+              </div>
+            </div>
+            <svg width="100%" viewBox={`0 0 ${lossGeo.W} ${lossGeo.H}`} preserveAspectRatio="none" className="h-[120px] w-full">
+              {/* horizontal gridlines */}
+              {[0.25, 0.5, 0.75].map((g) => (
+                <line key={g} x1="12" x2={lossGeo.W - 12} y1={12 + g * (lossGeo.H - 24)} y2={12 + g * (lossGeo.H - 24)} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+              ))}
+              <path d={lossGeo.val} fill="none" stroke="#22d3ee" strokeOpacity="0.55" strokeWidth="1.5" strokeLinejoin="round" />
+              <path d={lossGeo.train} fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinejoin="round" />
+            </svg>
+          </div>
+
+          {/* Job list */}
+          <div className="mt-4">
+            <h3 className="mb-3 text-[12px] font-medium text-[#8b90a8]">训练任务</h3>
+            {jobs.length === 0 ? (
+              <div className="grid min-h-[160px] place-items-center rounded-2xl border border-dashed border-white/[0.08] text-gray-500">
+                <p className="text-sm">还没有训练任务。在右侧配置并点击「开始训练」。</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {jobs.map((job) => {
+                  const sm = STATUS_META[job.status] ?? STATUS_META.QUEUED;
+                  const logs = job.logs ?? [];
+                  const isOpen = expanded === job.id;
+                  return (
+                    <div key={job.id} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="u-title truncate">{job.name}</h4>
+                            <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${sm.cls}`}>{sm.label}</span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-gray-500">
+                            {job.baseModel} · 触发词 <span className="text-violet-300">{job.triggerWord}</span> · {job.datasetImages?.length ?? 0} 张图 · {job.steps} 步
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 gap-2">
+                          <button
+                            onClick={() => router.push(`/train/${job.id}`)}
+                            className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[11px] text-violet-200 hover:bg-violet-500/20"
+                          >
+                            详情 ↗
+                          </button>
+                          {(job.status === "QUEUED" || job.status === "RUNNING") && (
+                            <button onClick={() => cancelJob(job.id)} className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/5">
+                              取消
+                            </button>
+                          )}
+                          <button onClick={() => setExpanded(isOpen ? null : job.id)} className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/5">
+                            {isOpen ? "收起" : "日志"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {(job.status === "RUNNING" || job.status === "QUEUED") && (
+                        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                          <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-400 transition-all" style={{ width: `${job.progress}%` }} />
+                        </div>
+                      )}
+
+                      {job.status === "DONE" && job.outputName && (
+                        <p className="mt-2 text-[11px] text-emerald-300">
+                          ✓ 已产出 LoRA：<span className="font-mono">{job.outputName}</span> · 已加入模型库，可在创作台 LoRA 中选择使用。
+                        </p>
+                      )}
+                      {job.status === "FAILED" && job.error && (
+                        <p className="mt-2 text-[11px] text-red-300">✗ {job.error}</p>
+                      )}
+                      {job.status === "QUEUED" && !backendConfigured && (
+                        <p className="mt-2 text-[11px] text-amber-300/80">等待训练后端（未配置 LORA_TRAINER_URL）。</p>
+                      )}
+
+                      {isOpen && (
+                        <div className="mt-3 rounded-lg border border-white/[0.06] bg-black/30 p-2.5 font-mono text-[11px] leading-relaxed">
+                          {logs.length === 0 ? (
+                            <p className="text-gray-600">暂无日志</p>
+                          ) : (
+                            logs.map((l, i) => (
+                              <div
+                                key={i}
+                                className={
+                                  l.level === "error"
+                                    ? "text-red-400"
+                                    : l.level === "success"
+                                    ? "text-emerald-400"
+                                    : l.level === "warn"
+                                    ? "text-amber-400"
+                                    : l.level === "progress"
+                                    ? "text-violet-300"
+                                    : "text-gray-400"
+                                }
+                              >
+                                {l.msg}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </main>
+
+        {/* ═══ Right: Hyperparameters (320px) ═══ */}
+        <aside className="flex w-[320px] shrink-0 flex-col border-l border-white/[0.04] bg-[#0f0f16]/85 backdrop-blur-sm">
+          <div className="flex h-11 items-center border-b border-white/[0.04] px-4">
+            <span className="text-[13px] font-semibold text-[#e5e7eb]">超参数</span>
+          </div>
+
+          <div className="flex-1 space-y-3.5 overflow-y-auto p-4">
+            <div>
+              <label className={labelClass}>任务名称</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="如：我的水墨风格" className={fieldClass} />
+            </div>
+
+            <div>
+              <label className={labelClass}>底模（Checkpoint）</label>
+              <DarkSelect
+                className="!bg-white/[0.03] !border-white/[0.08] h-9 text-[13px] text-[#e5e7eb]"
+                value={baseModel}
+                onChange={(v) => setBaseModel(v)}
+                options={checkpoints.map((m) => m.fileName)}
+                labels={Object.fromEntries(checkpoints.map((m) => [m.fileName, m.name]))}
+                placeholder="请选择…"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <div>
+                <label className={labelClass}>触发词</label>
+                <input value={triggerWord} onChange={(e) => setTriggerWord(e.target.value)} placeholder="如：somecjkstyle" className={fieldClass} />
+              </div>
+              <div>
+                <label className={labelClass}>类别词（可选）</label>
+                <input value={classWord} onChange={(e) => setClassWord(e.target.value)} placeholder="person / style" className={fieldClass} />
+              </div>
+            </div>
+
             <div>
               <label className={labelClass}>分辨率</label>
-              <select value={resolution} onChange={(e) => setResolution(Number(e.target.value))} className={inputClass}>
-                {RESOLUTIONS.map((r) => (<option key={r} value={r}>{r}</option>))}
-              </select>
+              <DarkSelect
+                className="!bg-white/[0.03] !border-white/[0.08] h-9 text-[13px] text-[#e5e7eb]"
+                value={String(resolution)}
+                onChange={(v) => setResolution(Number(v))}
+                options={RESOLUTIONS.map(String)}
+                placeholder="选择分辨率"
+              />
             </div>
+
             <div>
-              <label className={labelClass}>批次大小 {batchSize}</label>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-[11px] font-medium text-[#8b90a8]">训练步数</span>
+                <span className="text-[11px] font-medium text-violet-300">{steps}</span>
+              </div>
+              <input type="range" min={500} max={4000} step={100} value={steps} onChange={(e) => setSteps(Number(e.target.value))} className="w-full accent-violet-500" />
+            </div>
+
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-[11px] font-medium text-[#8b90a8]">批次大小</span>
+                <span className="text-[11px] font-medium text-violet-300">{batchSize}</span>
+              </div>
               <input type="range" min={1} max={8} value={batchSize} onChange={(e) => setBatchSize(Number(e.target.value))} className="w-full accent-violet-500" />
             </div>
-          </div>
 
-          <div>
-            <label className={labelClass}>训练步数 {steps}</label>
-            <input type="range" min={500} max={4000} step={100} value={steps} onChange={(e) => setSteps(Number(e.target.value))} className="w-full accent-violet-500" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5">
             <div>
-              <label className={labelClass}>LoRA 维度 (rank) {rankDim}</label>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-[11px] font-medium text-[#8b90a8]">LoRA 维度 (rank)</span>
+                <span className="text-[11px] font-medium text-violet-300">{rankDim}</span>
+              </div>
               <input type="range" min={8} max={128} step={8} value={rankDim} onChange={(e) => setRankDim(Number(e.target.value))} className="w-full accent-violet-500" />
             </div>
+
             <div>
-              <label className={labelClass}>Alpha {networkAlpha}</label>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-[11px] font-medium text-[#8b90a8]">Alpha</span>
+                <span className="text-[11px] font-medium text-violet-300">{networkAlpha}</span>
+              </div>
               <input type="range" min={0} max={128} step={8} value={networkAlpha} onChange={(e) => setNetworkAlpha(Number(e.target.value))} className="w-full accent-violet-500" />
             </div>
-          </div>
 
-          <div>
-            <label className={labelClass}>学习率 {learningRate}</label>
-            <input
-              type="number"
-              step={0.0001}
-              value={learningRate}
-              onChange={(e) => setLearningRate(Number(e.target.value))}
-              className={inputClass}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5">
             <div>
-              <label className={labelClass}>优化器</label>
-              <select value={optimizer} onChange={(e) => setOptimizer(e.target.value)} className={inputClass}>
-                {OPTIMIZERS.map((o) => (<option key={o}>{o}</option>))}
-              </select>
+              <label className={labelClass}>学习率</label>
+              <NumberField
+                value={learningRate}
+                onChange={setLearningRate}
+                min={0}
+                max={1}
+                step={0.0001}
+                decimalPlaces={4}
+              />
             </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <div>
+                <label className={labelClass}>优化器</label>
+                <DarkSelect
+                  className="!bg-white/[0.03] !border-white/[0.08] h-9 text-[13px] text-[#e5e7eb]"
+                  value={optimizer}
+                  onChange={(v) => setOptimizer(v)}
+                  options={OPTIMIZERS}
+                  placeholder="选择优化器"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>调度器</label>
+                <DarkSelect
+                  className="!bg-white/[0.03] !border-white/[0.08] h-9 text-[13px] text-[#e5e7eb]"
+                  value={scheduler}
+                  onChange={(v) => setScheduler(v)}
+                  options={SCHEDULERS}
+                  placeholder="选择调度器"
+                />
+              </div>
+            </div>
+
             <div>
-              <label className={labelClass}>调度器</label>
-              <select value={scheduler} onChange={(e) => setScheduler(e.target.value)} className={inputClass}>
-                {SCHEDULERS.map((s) => (<option key={s}>{s}</option>))}
-              </select>
+              <label className={labelClass}>随机种子</label>
+              <NumberField value={seed} onChange={setSeed} min={0} max={999999} step={1} />
             </div>
+
+            {error && <p className="text-xs text-red-400">{error}</p>}
+
+            <button
+              onClick={submit}
+              disabled={submitting || uploading}
+              className="w-full rounded-xl bg-violet-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-400 disabled:opacity-50"
+            >
+              {submitting ? "提交中…" : "开始训练"}
+            </button>
+            <p className="text-center text-[10px] leading-relaxed text-[#5a5f73]">
+              全部在本机运行 · 无需登录 · 零授权
+            </p>
           </div>
+        </aside>
+      </div>
 
-          <div>
-            <label className={labelClass}>随机种子</label>
-            <input type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))} className={inputClass} />
-          </div>
-
-          {error && <p className="text-xs text-red-400">{error}</p>}
-
-          <button
-            onClick={submit}
-            disabled={submitting || uploading}
-            className="w-full rounded-xl bg-violet-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-400 disabled:opacity-50"
-          >
-            {submitting ? "提交中…" : "开始训练"}
-          </button>
-        </div>
-      </aside>
-
-      {/* ── Job list ── */}
-      <main className="min-w-0 flex-1 overflow-y-auto bg-[#0a0a0f]">
-        <div className="mx-auto max-w-[900px] px-8 py-8">
-          <h3 className="mb-4 text-sm font-semibold text-gray-200">训练任务</h3>
-          {jobs.length === 0 ? (
-            <div className="grid min-h-[260px] place-items-center rounded-2xl border border-dashed border-white/[0.08] text-gray-500">
-              <p className="text-sm">还没有训练任务。在左侧配置并点击「开始训练」。</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {jobs.map((job) => {
-                const sm = STATUS_META[job.status] ?? STATUS_META.QUEUED;
-                const logs = job.logs ?? [];
-                const isOpen = expanded === job.id;
-                return (
-                  <div key={job.id} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h4 className="truncate text-sm font-semibold text-gray-100">{job.name}</h4>
-                          <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${sm.cls}`}>{sm.label}</span>
-                        </div>
-                        <p className="mt-1 text-[11px] text-gray-500">
-                          {job.baseModel} · 触发词 <span className="text-violet-300">{job.triggerWord}</span> · {job.datasetImages?.length ?? 0} 张图 · {job.steps} 步
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 gap-2">
-                        {(job.status === "QUEUED" || job.status === "RUNNING") && (
-                          <button onClick={() => cancelJob(job.id)} className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/5">
-                            取消
-                          </button>
-                        )}
-                        <button onClick={() => setExpanded(isOpen ? null : job.id)} className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/5">
-                          {isOpen ? "收起" : "日志"}
-                        </button>
-                      </div>
-                    </div>
-
-                    {(job.status === "RUNNING" || job.status === "QUEUED") && (
-                      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                        <div className="h-full rounded-full bg-violet-500 transition-all" style={{ width: `${job.progress}%` }} />
-                      </div>
-                    )}
-
-                    {job.status === "DONE" && job.outputName && (
-                      <p className="mt-2 text-[11px] text-emerald-300">
-                        ✓ 已产出 LoRA：<span className="font-mono">{job.outputName}</span> · 已加入模型库，可在创作台 LoRA 中选择使用。
-                      </p>
-                    )}
-                    {job.status === "FAILED" && job.error && (
-                      <p className="mt-2 text-[11px] text-red-300">✗ {job.error}</p>
-                    )}
-                    {job.status === "QUEUED" && !backendConfigured && (
-                      <p className="mt-2 text-[11px] text-amber-300/80">等待训练后端（未配置 LORA_TRAINER_URL）。</p>
-                    )}
-
-                    {isOpen && (
-                      <div className="mt-3 rounded-lg border border-white/[0.06] bg-black/30 p-2.5 font-mono text-[11px] leading-relaxed">
-                        {logs.length === 0 ? (
-                          <p className="text-gray-600">暂无日志</p>
-                        ) : (
-                          logs.map((l, i) => (
-                            <div
-                              key={i}
-                              className={
-                                l.level === "error"
-                                  ? "text-red-400"
-                                  : l.level === "success"
-                                  ? "text-emerald-400"
-                                  : l.level === "warn"
-                                  ? "text-amber-400"
-                                  : l.level === "progress"
-                                  ? "text-violet-300"
-                                  : "text-gray-400"
-                              }
-                            >
-                              {l.msg}
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </main>
+      {/* ── Status Bar ────────────────────────────── */}
+      <footer className="relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t border-white/[0.04] bg-[#0f0f16]/95 backdrop-blur-sm">
+        <span className="inline-block h-[7px] w-[7px] rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/40" />
+        <span className="text-[11px] text-[#6b788f]">
+          ComfyUI·Kohya 就绪 · 本地算力 · 零授权
+        </span>
+      </footer>
     </div>
   );
 }
