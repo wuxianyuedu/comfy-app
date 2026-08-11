@@ -10,6 +10,11 @@ import { synthesizeFirstFrame } from "@/lib/comfyui/firstframe";
 export const runtime = "nodejs";
 
 const LoraSchema = z.object({ name: z.string(), weight: z.number() });
+const WorkflowInputSchema = z.object({
+  nodeId: z.string(),
+  name: z.string(),
+  value: z.unknown(),
+});
 const GenerateSchema = z.object({
   workflow: z.string(),
   prompt: z.string().max(2000).optional(),
@@ -35,6 +40,7 @@ const GenerateSchema = z.object({
   firstFrame: z.string().optional(),
   lastFrame: z.string().optional(),
   paramMap: z.record(z.string()).optional(),
+  workflowInputs: z.array(WorkflowInputSchema).optional(),
   canvasGraph: z.record(z.any()).optional(), // Direct graph from canvas (overrides template)
 });
 

@@ -3,12 +3,114 @@
 //
 // The base URL is resolved per-call from app settings (so it can be changed
 // from the Settings page), falling back to COMFYUI_BASE env then localhost.
+//
+// Port auto-detection: if the configured port is unreachable (ECONNREFUSED),
+// the resolver will probe nearby ports (+1, +2, … up to PROBE_RANGE) and use
+// the first one that responds. The discovered port is cached in-memory for the
+// session lifetime.
 
 import { getSettingsSync } from "../app-settings";
 
+/** How many extra ports to probe when the configured one is unreachable */
+const PROBE_RANGE = 5;
+
+/** Cached resolved base URL (set once after successful probe) */
+let _resolvedBase: string | null = null;
+
+/**
+ * Node's undici `fetch` resolves the hostname `localhost` to IPv6 `::1` first.
+ * ComfyUI's default IPv4 listener (0.0.0.0) never answers on `::1`, so every
+ * server-side call to `http://localhost:8188` fails with ECONNREFUSED — but a
+ * plain `curl localhost:8188` works fine, which makes the failure confusing.
+ * Force the loopback to 127.0.0.1 to keep traffic on IPv4. Apps that genuinely
+ * run ComfyUI on a LAN IP or a custom hostname are left untouched.
+ */
+function forceIpv4Host(raw: string): string {
+  try {
+    const u = new URL(raw);
+    if (u.hostname === "localhost") u.hostname = "127.0.0.1";
+    return u.toString().replace(/\/$/, "");
+  } catch {
+    return raw;
+  }
+}
+
+/** Probe a single port — returns true if ComfyUI responds */
+async function probePort(host: string, port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://${host}:${port}/system_stats`, {
+      signal: AbortSignal.timeout(800),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve the actual ComfyUI base URL with auto-port-detection.
+ * Tries: configured → +1 … +PROBE_RANGE. Caches result for session lifetime.
+ */
+export async function resolveComfyBase(): Promise<string> {
+  if (_resolvedBase) return _resolvedBase;
+
+  const raw = getSettingsSync().comfyuiUrl || process.env.COMFYUI_BASE || "http://localhost:8188";
+  let url: URL;
+  try { url = new URL(raw); } catch { url = new URL("http://localhost:8188"); }
+  const host = url.hostname === "localhost" ? "127.0.0.1" : url.hostname;
+  const configuredPort = parseInt(url.port) || 8188;
+
+  // Try configured port first
+  if (await probePort(host, configuredPort)) {
+    _resolvedBase = `http://${host}:${configuredPort}`;
+    console.log(`[comfyui] Connected on configured port :${configuredPort}`);
+    return _resolvedBase;
+  }
+
+  // Probe nearby ports (ComfyUI often auto-increments when port is occupied)
+  for (let offset = 1; offset <= PROBE_RANGE; offset++) {
+    const p = configuredPort + offset;
+    if (await probePort(host, p)) {
+      _resolvedBase = `http://${host}:${p}`;
+      console.warn(
+        `[comfyui] Configured port :${configuredPort} unreachable, auto-discovered ComfyUI on :${p}`
+      );
+      return _resolvedBase;
+    }
+  }
+
+  // All probes failed — fall back to configured value (callers will get 503)
+  console.error(
+    `[comfyui] Cannot reach ComfyUI on :${configuredPort} or any of [${Array.from({length: PROBE_RANGE}, (_, i) => configuredPort + i + 1).join(", ")}]`
+  );
+  return raw;
+}
+
+/**
+ * Synchronous version — returns cached value or raw config (no probing).
+ * Use this for non-critical reads where latency matters more than accuracy.
+ * For mutations (upload/prompt), prefer resolveComfyBase().
+ */
 export function comfyBase(): string {
-  const s = getSettingsSync();
-  return s.comfyuiUrl || process.env.COMFYUI_BASE || "http://localhost:8188";
+  const raw = _resolvedBase ?? getSettingsSync().comfyuiUrl ?? process.env.COMFYUI_BASE ?? "http://localhost:8188";
+  return forceIpv4Host(raw);
+}
+
+/**
+ * Drop the cached probe result so the next resolveComfyBase() re-probes.
+ *
+ * Needed because ComfyUI may restart on a *different* port (it auto-increments
+ * when the configured one is busy). Without this the cache pins us to a dead
+ * port for the whole process lifetime. The runner calls this whenever the
+ * WebSocket drops, so a reconnect always re-discovers the live port.
+ */
+export function resetComfyBase(): void {
+  _resolvedBase = null;
+}
+
+/** `http(s)://host:port` → `ws(s)://host:port` (ComfyUI serves /api/ws there). */
+export function toWsBase(httpBase: string): string {
+  return httpBase.replace(/^http(s?):\/\//i, (_m, s) => `ws${s}://`);
 }
 
 export type PromptResult = {
@@ -22,7 +124,8 @@ export async function postPrompt(
   prompt: unknown,
   clientId: string
 ): Promise<PromptResult> {
-  const res = await fetch(`${comfyBase()}/api/prompt`, {
+  const base = await resolveComfyBase();
+  const res = await fetch(`${base}/api/prompt`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt, client_id: clientId }),
@@ -66,18 +169,21 @@ export async function uploadImage(
   filename: string,
   type = "input"
 ): Promise<{ name?: string }> {
+  const base = await resolveComfyBase();
   const form = new FormData();
   form.append("image", new Blob([new Uint8Array(buffer)]), filename);
   form.append("type", type);
-  const res = await fetch(`${comfyBase()}/api/upload/image`, {
+  const res = await fetch(`${base}/api/upload/image`, {
     method: "POST",
     body: form,
   });
+  if (!res.ok) {
+    throw new Error(`ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`);
+  }
   return (await res.json()) as { name?: string };
 }
 
 export async function interrupt(): Promise<void> {
-  await fetch(`${comfyBase()}/api/interrupt`, { method: "POST" });
+  const base = await resolveComfyBase();
+  await fetch(`${base}/api/interrupt`, { method: "POST" });
 }
-
-export const COMFYUI_BASE = comfyBase();
