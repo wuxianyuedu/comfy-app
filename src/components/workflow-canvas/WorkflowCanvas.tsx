@@ -14,7 +14,7 @@
  * bezier animated edges, role badges on nodes.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -28,6 +28,7 @@ import {
   type OnConnect,
   type OnNodesChange,
   type OnEdgesChange,
+  type OnEdgesDelete,
   type NodeChange,
   type EdgeChange,
   type Node,
@@ -39,7 +40,8 @@ import { ComfyNode } from "./nodes/ComfyNode";
 import { BezierEdge, EdgeGradientDefs } from "./nodes/BezierEdge";
 import NodeEditor from "./NodeEditor";
 import { comfyGraphToFlow, flowToComfyGraph } from "./graph-utils";
-import { getNodeConfig, ALL_NODE_TYPES, CATEGORY_LABELS } from "./node-registry";
+import { getNodeConfig, getAllNodeTypes, CATEGORY_LABELS } from "./node-registry";
+import { refreshCustomNodes, CUSTOM_NODES_UPDATED_EVENT } from "@/config/customNodes";
 import type {
   ComfyGraph,
   WfNode,
@@ -56,6 +58,8 @@ interface WorkflowCanvasProps {
   initialParamMap?: ParamMap | null;
   /** Available checkpoints for dropdowns */
   checkpoints?: string[];
+  /** Model file lists keyed by folder (checkpoints/loras/...) for editor dropdowns */
+  modelLists?: Record<string, string[]>;
   /** Called when graph changes (for save/persist) */
   onGraphChange?: (graph: ComfyGraph, paramMap: ParamMap) => void;
   /** Called when user clicks "Generate" */
@@ -70,6 +74,7 @@ export default function WorkflowCanvas({
   initialGraph = {},
   initialParamMap = null,
   checkpoints = [],
+  modelLists,
   onGraphChange,
   onGenerate,
 }: WorkflowCanvasProps) {
@@ -82,6 +87,28 @@ export default function WorkflowCanvas({
   );
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  // Bumped whenever the custom-node registry is replaced by `refreshCustomNodes`.
+  // The "+" menu calls `getAllNodeTypes()` directly during render, so any state
+  // change here re-runs the menu and picks up newly-parsed packages. Without
+  // this version, opening the menu after a parse would still show the stale
+  // registry — the mount-only fetch in the useEffect below isn't enough once a
+  // user re-parses from CustomNodesSettings (the registry is a module-level
+  // mutable const, so React has no other reason to re-render).
+  const [customNodesVersion, setCustomNodesVersion] = useState(0);
+
+  // Live-refresh the custom-node registry from the on-disk manifest so newly
+  // parsed packages show up in the add-node menu without a server restart.
+  // Also subscribe to `custom-nodes:updated` so re-parses that happen *after*
+  // mount (e.g. from CustomNodesSettings) re-render this view too.
+  useEffect(() => {
+    refreshCustomNodes().catch(() => {});
+    const onUpdate = (ev: Event) => {
+      const count = (ev as CustomEvent<{ count: number }>).detail?.count ?? 0;
+      if (count > 0) setCustomNodesVersion((v) => v + 1);
+    };
+    window.addEventListener(CUSTOM_NODES_UPDATED_EVENT, onUpdate);
+    return () => window.removeEventListener(CUSTOM_NODES_UPDATED_EVENT, onUpdate);
+  }, []);
 
   /* ── Initialize from graph ── */
   const initFlow = useMemo(
@@ -117,6 +144,34 @@ export default function WorkflowCanvas({
       );
     },
     [setEdges]
+  );
+
+  /** 删除边时同步清理目标节点 data.inputs 里残留的连线引用（与 edges 保持一致）。 */
+  const handleEdgesDelete: OnEdgesDelete = useCallback(
+    (deleted: Edge[]) => {
+      if (!deleted.length) return;
+      const targets = new Set(deleted.map((e) => e.target));
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (!targets.has(n.id)) return n;
+          const d = n.data as unknown as NodeData;
+          let changed = false;
+          const inputs = { ...d.inputs };
+          for (const e of deleted) {
+            if (e.target !== n.id || !e.targetHandle) continue;
+            const m = e.targetHandle.match(/^in-(.+)$/);
+            const key = m?.[1];
+            // 跳过兜底通用端口，避免写出 `generic` 伪输入 / 重复 Handle。
+            if (key && key !== "generic" && key in inputs && Array.isArray(inputs[key])) {
+              delete inputs[key];
+              changed = true;
+            }
+          }
+          return changed ? { ...n, data: { ...d, inputs } } : n;
+        })
+      );
+    },
+    [setNodes]
   );
 
   const handleNodesChange: OnNodesChange = useCallback(
@@ -209,12 +264,38 @@ export default function WorkflowCanvas({
   /* ── Delete selected node ── */
   const deleteSelected = useCallback(() => {
     if (!selectedNodeId) return;
-    setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
+    // 收集将被移除的边，清理下游节点 data.inputs 中指向被删节点的连线引用。
+    const removed = edges.filter(
+      (e) => e.source === selectedNodeId || e.target === selectedNodeId
+    );
+    const downstream = new Set(
+      removed.filter((e) => e.source === selectedNodeId).map((e) => e.target)
+    );
+    setNodes((nds) =>
+      nds
+        .filter((n) => n.id !== selectedNodeId)
+        .map((n) => {
+          if (!downstream.has(n.id)) return n;
+          const d = n.data as unknown as NodeData;
+          let changed = false;
+          const inputs = { ...d.inputs };
+          for (const e of removed) {
+            if (e.target !== n.id || !e.targetHandle) continue;
+            const m = e.targetHandle.match(/^in-(.+)$/);
+            const key = m?.[1];
+            if (key && key !== "generic" && key in inputs && Array.isArray(inputs[key])) {
+              delete inputs[key];
+              changed = true;
+            }
+          }
+          return changed ? { ...n, data: { ...d, inputs } } : n;
+        })
+    );
     setEdges((eds) =>
       eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId)
     );
     setSelectedNodeId(null);
-  }, [selectedNodeId, setNodes, setEdges]);
+  }, [selectedNodeId, setNodes, setEdges, edges]);
 
   /* ── Keyboard shortcuts ── */
   // (handled in useEffect below)
@@ -229,6 +310,7 @@ export default function WorkflowCanvas({
           onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={handleConnect}
+          onEdgesDelete={handleEdgesDelete}
           onPaneClick={handlePaneClick}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
@@ -315,7 +397,7 @@ export default function WorkflowCanvas({
             {Object.entries(CATEGORY_LABELS).map(([cat, label]) => (
               <div key={cat} className="wf-add-menu__group">
                 <div className="wf-add-menu__group-label">{label}</div>
-                {ALL_NODE_TYPES.filter((ct) => getNodeConfig(ct).category === cat)
+                {getAllNodeTypes().filter((ct) => getNodeConfig(ct).category === cat)
                   .map((ct) => {
                     const cfg = getNodeConfig(ct);
                     return (
@@ -388,6 +470,7 @@ export default function WorkflowCanvas({
           paramMap={paramMap}
           onRoleChange={handleRoleChange}
           checkpoints={checkpoints}
+          modelLists={modelLists}
         />
       </div>
     </div>

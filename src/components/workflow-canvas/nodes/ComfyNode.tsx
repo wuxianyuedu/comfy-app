@@ -3,25 +3,35 @@
 /**
  * ComfyNode — Custom ReactFlow node for every ComfyUI class_type
  *
- * Renders a themed card with:
- *  - Colored accent bar (by node category/color)
- *  - Icon + label
- *  - Role badge (positive/negative/checkpoint/sampler)
- *  - Input handles (left) and output handles (right)
- *  - Compact field preview (first 2 fields)
+ * Two visual modes:
+ *  - Default: themed card with accent bar + icon + label + role badge.
+ *  - Custom (config.custom === true): the "extension package" style shown in
+ *    the product screenshot — solid rounded header, uppercase port-type labels,
+ *    dark value chips for defaults, and a "前端专属" pill for OUTPUT_NODE nodes.
+ *    Driven entirely by the read-only AST manifest (customNodes.manifest.json).
  */
 
 import { memo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
-import type { NodeData } from "../types";
+import type { NodeData, NodeTypeConfig } from "../types";
 import { getNodeConfig } from "../node-registry";
+import { PackageFooter } from "./PackageFooter";
+
+/* ── Layout constants for the custom card (keep handles aligned to rows) ── */
+const HEADER_H = 38;
+const PAD_TOP = 6;
+const ROW_H = 26;
 
 function ComfyNodeInner({ data, selected }: NodeProps) {
   const d = data as unknown as NodeData;
   const config = getNodeConfig(d.classType);
 
-  // Determine role display
+  if (config.custom) {
+    return <ComfyNodeCustom d={d} config={config} selected={!!selected} />;
+  }
+
+  // ── Default (built-in) rendering ──
   const roleLabel: Record<string, string> = {
     positive: "正向",
     negative: "负向",
@@ -32,7 +42,6 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
     input: "输入",
   };
 
-  // Show first few non-hidden fields as preview text
   const previewFields = d.fields?.filter((f) => !f.hidden).slice(0, 2) ?? [];
   const getPreviewValue = (key: string) => {
     const v = d.inputs?.[key];
@@ -56,20 +65,18 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
           : "0 2px 8px rgba(0,0,0,0.3)",
         transition: "box-shadow 0.2s, border-color 0.2s",
         overflow: "hidden",
+        position: "relative",
         fontFamily: 'system-ui, -apple-system, "PingFang SC", sans-serif',
       }}
     >
-      {/* Accent bar top */}
       <div style={{ height: 3, background: config.color }} />
 
-      {/* Header */}
       <div style={{
         padding: "8px 12px 4px",
         display: "flex",
         alignItems: "center",
         gap: 8,
       }}>
-        {/* Icon */}
         <span style={{
           fontSize: 16,
           width: 24,
@@ -83,7 +90,6 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
           {config.icon || "\u2699"}
         </span>
 
-        {/* Label */}
         <span style={{
           fontSize: 13,
           fontWeight: 600,
@@ -96,7 +102,6 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
           {d.label}
         </span>
 
-        {/* Role badge */}
         {d.role && (
           <span style={{
             fontSize: 10,
@@ -113,7 +118,6 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
         )}
       </div>
 
-      {/* Field previews */}
       {previewFields.length > 0 && (
         <div style={{
           padding: "0 12px 8px",
@@ -138,33 +142,210 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
         </div>
       )}
 
-      {/* Class type hint */}
-      <div style={{
-        padding: "2px 12px 6px",
-        fontSize: 9,
-        color: "#555",
-        borderTop: "1px solid rgba(255,255,255,0.04)",
-      }}>
-        {d.classType}
-      </div>
-
-      {/* Input handles (left side) — one per input that accepts connections */}
+      {/* ComfyUI-native bottom-left package source footer
+          (replaces the older debug-only classType footer line). */}
       {renderHandles(d, "target")}
-      {/* Output handles (right side) */}
       {renderHandles(d, "source")}
+      <PackageFooter config={config} classType={d.classType} />
     </div>
   );
 }
 
-/** Render connection handles for inputs/outputs */
-function renderHandles(
-  d: NodeData,
-  type: "target" | "source"
-) {
+/* ── Custom node card (extension-package style) ── */
+function ComfyNodeCustom({
+  d,
+  config,
+  selected,
+}: {
+  d: NodeData;
+  config: NodeTypeConfig;
+  selected: boolean;
+}) {
+  const inputs = config.inputsSpec ?? [];
+  const outputs = config.outputsSpec ?? [];
+
+  const rows = [
+    ...inputs.map((s) => ({ kind: "in" as const, spec: s, idx: 0 })),
+    ...outputs.map((s, j) => ({ kind: "out" as const, spec: s, idx: j })),
+  ];
+
+  return (
+    <div
+      className={`comfy-node comfy-node--custom ${selected ? "comfy-node--selected" : ""}`}
+      data-node-id={d.comfyId}
+      data-class-type={d.classType}
+      style={{
+        minWidth: config.width,
+        background: "rgba(15, 10, 30, 0.95)",
+        border: `1px solid ${selected ? config.color : "rgba(255,255,255,0.55)"}`,
+        borderRadius: 12,
+        boxShadow: selected
+          ? `0 0 22px ${config.color}55, 0 4px 16px rgba(0,0,0,0.5)`
+          : "0 2px 10px rgba(0,0,0,0.35)",
+        overflow: "hidden",
+        position: "relative",
+        fontFamily: 'system-ui, -apple-system, "PingFang SC", sans-serif',
+      }}
+    >
+      {/* Solid rounded header */}
+      <div style={{
+        height: HEADER_H,
+        boxSizing: "border-box",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "0 12px",
+        background: config.color,
+        color: "#fff",
+        borderTopLeftRadius: 11,
+        borderTopRightRadius: 11,
+        fontWeight: 700,
+        fontSize: 13,
+      }}>
+        <span style={{ fontSize: 14 }}>{config.icon || "\u{1F4E6}"}</span>
+        <span style={{
+          flex: 1,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}>
+          {d.label}
+        </span>
+        {config.outputNode && (
+          <span style={{
+            fontSize: 9,
+            background: "rgba(0,0,0,0.28)",
+            padding: "1px 6px",
+            borderRadius: 999,
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+          }}>
+            终端节点
+          </span>
+        )}
+        {config.frontendOnly && (
+          <span style={{
+            fontSize: 9,
+            background: "rgba(0,0,0,0.28)",
+            padding: "1px 6px",
+            borderRadius: 999,
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+          }}>
+            前端专属
+          </span>
+        )}
+      </div>
+
+      {/* I/O rows */}
+      <div style={{ paddingTop: PAD_TOP }}>
+        {rows.map((r, ri) => {
+          const top = HEADER_H + PAD_TOP + ri * ROW_H + ROW_H / 2;
+          if (r.kind === "in") {
+            return (
+              <div
+                key={`in-${r.spec.name}`}
+                style={{
+                  position: "relative",
+                  height: ROW_H,
+                  boxSizing: "border-box",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "0 12px",
+                  fontSize: 11,
+                }}
+              >
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={`in-${r.spec.name}`}
+                  style={{ background: "#8B5CF6", width: 8, height: 8, left: -4, top }}
+                />
+                <span style={{
+                  fontSize: 8.5,
+                  fontWeight: 700,
+                  letterSpacing: 0.4,
+                  color: config.color,
+                  border: `1px solid ${config.color}66`,
+                  borderRadius: 4,
+                  padding: "0 4px",
+                  textTransform: "uppercase",
+                  whiteSpace: "nowrap",
+                }}>
+                  {r.spec.type}
+                </span>
+                <span style={{ color: "#E7E2FB", fontWeight: 600 }}>{r.spec.name}</span>
+                {r.spec.default !== undefined && r.spec.default !== null && (
+                  <span style={{
+                    marginLeft: "auto",
+                    fontSize: 10,
+                    fontFamily: '"SF Mono", ui-monospace, monospace',
+                    background: "rgba(0,0,0,0.4)",
+                    color: "#C9C2E8",
+                    borderRadius: 5,
+                    padding: "1px 6px",
+                    maxWidth: 90,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>
+                    {String(r.spec.default)}
+                  </span>
+                )}
+              </div>
+            );
+          }
+          return (
+            <div
+              key={`out-${ri}`}
+              style={{
+                position: "relative",
+                height: ROW_H,
+                boxSizing: "border-box",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: 6,
+                padding: "0 12px",
+                fontSize: 11,
+              }}
+            >
+              <span style={{ color: "#CFE9FF", fontWeight: 600 }}>{r.spec.name}</span>
+              <span style={{
+                fontSize: 8.5,
+                fontWeight: 700,
+                letterSpacing: 0.4,
+                color: config.color,
+                border: `1px solid ${config.color}66`,
+                borderRadius: 4,
+                padding: "0 4px",
+                textTransform: "uppercase",
+                whiteSpace: "nowrap",
+              }}>
+                {r.spec.type}
+              </span>
+              <Handle
+                type="source"
+                position={Position.Right}
+                id={`out-${r.idx}`}
+                style={{ background: "#06B6D4", width: 8, height: 8, right: -4, top }}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ComfyUI-native bottom-left package source footer (custom card). */}
+      <PackageFooter config={config} classType={d.classType} />
+    </div>
+  );
+}
+
+/** Render connection handles for inputs/outputs (default node path) */
+function renderHandles(d: NodeData, type: "target" | "source") {
   if (type === "target") {
-    // Target handles for each wired input
-    const wiredInputs = Object.entries(d.inputs ?? {})
-      .filter(([, v]) => Array.isArray(v));
+    const wiredInputs = Object.entries(d.inputs ?? {}).filter(([, v]) => Array.isArray(v));
     if (!wiredInputs.length) return null;
 
     return (
@@ -184,7 +365,6 @@ function renderHandles(
             }}
           />
         ))}
-        {/* Generic fallback handle */}
         <Handle
           type="target"
           position={Position.Left}
@@ -201,7 +381,6 @@ function renderHandles(
     );
   }
 
-  // Source handles (outputs)
   const outputCount = countOutputs(d.classType);
   return (
     <>
@@ -229,21 +408,21 @@ function countOutputs(classType: string): number {
   switch (classType) {
     case "CheckpointLoaderSimple":
     case "LoraLoader":
-      return 2; // model(0), clip(1)
+      return 2;
     case "CLIPTextEncode":
     case "CLIPTextEncodeSDXL":
-      return 1; // conditioning
+      return 1;
     case "KSampler":
     case "KSamplerAdvanced":
-      return 1; // latent
+      return 1;
     case "VAEDecode":
-      return 1; // image
+      return 1;
     case "SaveImage":
       return 0;
     case "EmptyLatentImage":
-      return 1; // latent
+      return 1;
     case "LoadImage":
-      return 2; // image, mask
+      return 2;
     default:
       return 1;
   }

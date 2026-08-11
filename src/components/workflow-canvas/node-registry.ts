@@ -7,6 +7,7 @@
  */
 
 import type { NodeTypeConfig, FieldDef } from "./types";
+import { CUSTOM_NODE_TYPES } from "@/config/customNodes";
 
 /* ── Shared field definitions (reused across node types) ── */
 const F = {
@@ -30,15 +31,22 @@ const F = {
   }),
 };
 
+// Mirrors ComfyUI's built-in KSampler sampler/scheduler names (comfy/samplers.py).
 const SAMPLERS = [
   "euler", "euler_ancestral", "heun", "heunpp2",
-  "dpm_2", "dpm_2_ancestral", "dpmpp_2m", "dpmpp_sde",
-  "dpmpp_2m_sde", "ddim", "uni_pc", "lcm",
+  "dpm_2", "dpm_2_ancestral", "dpmpp_2s_ancestral",
+  "dpmpp_2m", "dpmpp_2m_sde", "dpmpp_2m_sde_gpu",
+  "dpmpp_3m_sde", "dpmpp_3m_sde_gpu",
+  "ddim", "ddim_variance", "uni_pc", "uni_pc_bh2",
+  "plms", "ipndm", "ipndm_v", "deis", "gradalign",
+  "res_multistep", "res_multistep_sde", "res_multistep_sde_gpu",
+  "lcm",
 ];
 
 const SCHEDULERS = [
   "normal", "karras", "exponential", "sgm_uniform",
-  "simple", "ddim_uniform",
+  "simple", "ddim_uniform", "beta",
+  "linear_quadratic", "kl_optimal",
 ];
 
 /** Registry: class_type → NodeTypeConfig */
@@ -52,7 +60,11 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeConfig> = {
     width: 220,
     height: 80,
     defaultFields: [
-      F.str("ckpt_name", "模型文件", { placeholder: "选择 checkpoint..." }),
+      F.sel("ckpt_name", "模型文件", [], {
+        group: "模型",
+        placeholder: "选择 checkpoint...",
+        modelFolder: "checkpoints",
+      }),
     ],
   },
   LoraLoader: {
@@ -63,9 +75,13 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeConfig> = {
     width: 240,
     height: 100,
     defaultFields: [
-      F.str("lora_name", "LoRA 文件"),
-      F.num("strength_model", "模型强度", { placeholder: "0.0 ~ 1.0" }),
-      F.num("strength_clip", "CLIP 强度", { placeholder: "0.0 ~ 1.0" }),
+      F.sel("lora_name", "LoRA 文件", [], {
+        group: "模型",
+        placeholder: "选择 LoRA...",
+        modelFolder: "loras",
+      }),
+      F.num("strength_model", "模型强度", { min: 0, max: 2, step: 0.01, placeholder: "0.0 ~ 1.0" }),
+      F.num("strength_clip", "CLIP 强度", { min: 0, max: 2, step: 0.01, placeholder: "0.0 ~ 1.0" }),
     ],
   },
 
@@ -103,12 +119,12 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeConfig> = {
     width: 260,
     height: 200,
     defaultFields: [
-      F.num("steps", "步数", { placeholder: "20" }),
+      F.num("steps", "步数", { min: 1, max: 150, step: 1, placeholder: "20" }),
       F.sel("sampler_name", "采样器", SAMPLERS),
       F.sel("scheduler", "调度器", SCHEDULERS),
-      F.num("cfg", "CFG", { placeholder: "7.0" }),
-      F.num("seed", "种子", { placeholder: "-1 = 随机" }),
-      F.num("denoise", "去噪强度", { placeholder: "1.0" }),
+      F.num("cfg", "CFG", { min: 0, max: 30, step: 0.5, placeholder: "7.0" }),
+      F.num("seed", "种子", { min: 0, max: 4294967295, step: 1, placeholder: "-1 = 随机" }),
+      F.num("denoise", "去噪强度", { min: 0, max: 1, step: 0.01, placeholder: "1.0" }),
     ],
   },
   KSamplerAdvanced: {
@@ -119,14 +135,14 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeConfig> = {
     width: 260,
     height: 220,
     defaultFields: [
-      F.num("steps", "步数", { placeholder: "20" }),
+      F.num("steps", "步数", { min: 1, max: 150, step: 1, placeholder: "20" }),
       F.sel("sampler_name", "采样器", SAMPLERS),
       F.sel("scheduler", "调度器", SCHEDULERS),
-      F.num("cfg", "CFG", { placeholder: "7.0" }),
-      F.num("seed", "种子", { placeholder: "-1 = 随机" }),
-      F.num("denoise", "去噪强度", { placeholder: "1.0" }),
-      F.num("start_at_step", "起始步"),
-      F.num("end_at_step", "结束步"),
+      F.num("cfg", "CFG", { min: 0, max: 30, step: 0.5, placeholder: "7.0" }),
+      F.num("seed", "种子", { min: 0, max: 4294967295, step: 1, placeholder: "-1 = 随机" }),
+      F.num("denoise", "去噪强度", { min: 0, max: 1, step: 0.01, placeholder: "1.0" }),
+      F.num("start_at_step", "起始步", { min: 0, max: 150, step: 1 }),
+      F.num("end_at_step", "结束步", { min: 0, max: 150, step: 1 }),
       F.toggle("return_with_leftover_noise", "保留噪声"),
     ],
   },
@@ -140,9 +156,9 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeConfig> = {
     width: 200,
     height: 90,
     defaultFields: [
-      F.num("width", "宽度", { placeholder: "1024" }),
-      F.num("height", "高度", { placeholder: "1024" }),
-      F.num("batch_size", "批次", { placeholder: "1" }),
+      F.num("width", "宽度", { min: 64, max: 4096, step: 8, group: "潜空间", placeholder: "1024" }),
+      F.num("height", "高度", { min: 64, max: 4096, step: 8, group: "潜空间", placeholder: "1024" }),
+      F.num("batch_size", "批次", { min: 1, max: 64, step: 1, group: "潜空间", placeholder: "1" }),
     ],
   },
   VAEDecode: {
@@ -234,6 +250,7 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeConfig> = {
  */
 export function getNodeConfig(classType: string): NodeTypeConfig {
   return (
+    CUSTOM_NODE_TYPES[classType] ??
     NODE_TYPE_REGISTRY[classType] ?? {
       label: classType,
       color: "#6B7280",
@@ -246,8 +263,14 @@ export function getNodeConfig(classType: string): NodeTypeConfig {
   );
 }
 
-/** All known class_type names (for the "add node" menu) */
-export const ALL_NODE_TYPES = Object.keys(NODE_TYPE_REGISTRY);
+/** All known class_type names (for the "add node" menu). Recomputed on call so
+ *  newly-parsed custom nodes appear without a restart. */
+export function getAllNodeTypes(): string[] {
+  return Object.keys({
+    ...NODE_TYPE_REGISTRY,
+    ...CUSTOM_NODE_TYPES,
+  });
+}
 
 /** Category labels for grouping in add-node menu */
 export const CATEGORY_LABELS: Record<string, string> = {
@@ -258,4 +281,5 @@ export const CATEGORY_LABELS: Record<string, string> = {
   conditioning: "条件编码",
   latent: "潜空间",
   image: "图像处理",
+  custom: "自定义节点",
 };

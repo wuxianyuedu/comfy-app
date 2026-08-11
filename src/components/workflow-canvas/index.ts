@@ -17,7 +17,7 @@ export type { FlowData } from "./graph-utils";
 export {
   getNodeConfig,
   NODE_TYPE_REGISTRY,
-  ALL_NODE_TYPES,
+  getAllNodeTypes,
   CATEGORY_LABELS,
 } from "./node-registry";
 

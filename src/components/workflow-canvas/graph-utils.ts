@@ -18,6 +18,7 @@ import type {
   ParamMap,
 } from "./types";
 import { getNodeConfig } from "./node-registry";
+import { specToField } from "@/config/customNodes";
 import type { Node, Edge } from "@xyflow/react";
 
 /* ── Constants ── */
@@ -197,13 +198,20 @@ export function flowToComfyGraph(
 
   for (const node of nodes) {
     const d = node.data as unknown as NodeData;
+    const inputs: Record<string, any> = {};
+    // 先剥离所有连线引用（数组型 [nodeId, slot]），只保留字面量值。
+    // 否则删除边后，data.inputs 里残留的旧连线引用会让导出图仍带着已删除的连接。
+    for (const [k, v] of Object.entries(d.inputs ?? {})) {
+      if (Array.isArray(v) && typeof v[0] === "string") continue;
+      inputs[k] = v;
+    }
     graph[d.comfyId] = {
       class_type: d.classType,
-      inputs: { ...d.inputs },
+      inputs,
     };
   }
 
-  // Re-wire edges into input references
+  // Re-wire edges into input references（连线以 edges 为唯一真相源重建）
   for (const edge of _edges) {
     const targetNode = graph[edge.target];
     if (!targetNode) continue;
@@ -227,6 +235,20 @@ export function flowToComfyGraph(
 
 function buildFields(classType: string, inputs: Record<string, any>) {
   const config = getNodeConfig(classType);
+
+  // Custom nodes: drive field list from the manifest spec (names + types +
+  // defaults), then include any graph inputs not described by the spec.
+  if (config.custom && config.inputsSpec) {
+    const fields = config.inputsSpec.map(specToField);
+    for (const key of Object.keys(inputs)) {
+      if (Array.isArray(inputs[key])) continue; // wired connection
+      if (!config.inputsSpec.find((s) => s.name === key)) {
+        fields.push(inferField(key, inputs[key]));
+      }
+    }
+    return fields;
+  }
+
   // Start with registry defaults, then overlay actual input keys
   const fieldMap = new Map(config.defaultFields.map((f) => [f.key, f]));
 

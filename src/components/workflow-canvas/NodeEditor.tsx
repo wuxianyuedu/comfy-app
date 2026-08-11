@@ -16,6 +16,7 @@
 import { useCallback, useEffect } from "react";
 import type { NodeData, FieldDef, ParamMap } from "./types";
 import { getNodeConfig } from "./node-registry";
+import { DarkSelect } from "@/components/updream/ui/DarkSelect";
 
 interface NodeEditorProps {
   /** Currently selected node data */
@@ -28,6 +29,9 @@ interface NodeEditorProps {
   onRoleChange: (nodeId: string, role: string) => void;
   /** Available checkpoints for dropdown */
   checkpoints?: string[];
+  /** Model file lists keyed by folder (checkpoints/loras/vae/...). Used by
+   *  select fields whose FieldDef carries `modelFolder`. */
+  modelLists?: Record<string, string[]>;
 }
 
 const ROLE_OPTIONS = [
@@ -46,6 +50,7 @@ export default function NodeEditor({
   paramMap,
   onRoleChange,
   checkpoints = [],
+  modelLists,
 }: NodeEditorProps) {
   // Auto-scroll to editor when node changes
   useEffect(() => {
@@ -117,23 +122,14 @@ export default function NodeEditor({
         {/* Role selector */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 11, color: "#6B7280" }}>角色:</span>
-          <select
+          <DarkSelect
+            className="text-[12px]"
             value={currentRole}
-            onChange={(e) => onRoleChange(node.comfyId, e.target.value)}
-            style={{
-              background: "rgba(139,92,246,0.12)",
-              border: "1px solid rgba(139,92,246,0.25)",
-              borderRadius: 8,
-              color: "#D4CFF9",
-              padding: "4px 10px",
-              fontSize: 12,
-              cursor: "pointer",
-            }}
-          >
-            {ROLE_OPTIONS.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
+            onChange={(v) => onRoleChange(node.comfyId, v)}
+            options={ROLE_OPTIONS.map((r) => r.value)}
+            labels={Object.fromEntries(ROLE_OPTIONS.map((r) => [r.value, r.label]))}
+            placeholder="选择角色"
+          />
         </div>
       </div>
 
@@ -161,6 +157,7 @@ export default function NodeEditor({
                 field={field}
                 value={node.inputs?.[field.key]}
                 checkpoints={checkpoints}
+                modelLists={modelLists}
                 onChange={(val) =>
                   onFieldChange(node.comfyId, field.key, val)
                 }
@@ -172,9 +169,19 @@ export default function NodeEditor({
 
       {/* Quick actions bar */}
       <div className="wf-editor__bar">
-        <span style={{ fontSize: 11, color: "#555" }}>
-          模型: {config.label} &nbsp;|&nbsp; 节点类型: {config.category}
-        </span>
+        {config.custom ? (
+          <span style={{ fontSize: 11, color: "#555" }}>
+            自定义节点
+            {config.rawCategory ? ` · 类别: ${config.rawCategory}` : ""}
+            {config.outputNode ? " · 终端节点" : ""}
+            {config.frontendOnly ? " · 前端专属" : ""}
+            {config.description ? ` · ${config.description}` : ""}
+          </span>
+        ) : (
+          <span style={{ fontSize: 11, color: "#555" }}>
+            模型: {config.label} &nbsp;|&nbsp; 节点类型: {config.category}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -186,10 +193,11 @@ interface FieldRowProps {
   field: FieldDef;
   value: any;
   checkpoints?: string[];
+  modelLists?: Record<string, string[]>;
   onChange: (value: any) => void;
 }
 
-function FieldRow({ field, value, checkpoints, onChange }: FieldRowProps) {
+function FieldRow({ field, value, checkpoints, modelLists, onChange }: FieldRowProps) {
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
       const raw = e.target.value;
@@ -223,19 +231,23 @@ function FieldRow({ field, value, checkpoints, onChange }: FieldRowProps) {
       );
 
     case "select":
-      const options = field.options ??
-        (field.key.includes("ckpt") || field.key.includes("model")
-          ? checkpoints
-          : undefined) ?? [];
+      // 模型文件字段：优先用对应 folder 的真实文件列表（来自 modelLists），
+      // 否则回退到旧逻辑（key 含 ckpt/model 时用 checkpoints），再否则用静态 options。
+      let options = field.options ?? [];
+      if (field.modelFolder && modelLists) {
+        options = modelLists[field.modelFolder] ?? field.options ?? [];
+      } else if (field.key.includes("ckpt") || field.key.includes("model")) {
+        options = checkpoints ?? field.options ?? [];
+      }
       return (
         <div className="wf-field">
           <label className="wf-field__label">{field.label}</label>
-          <select value={(value as string) ?? ""} onChange={handleChange}>
-            <option value="">-- 选择 --</option>
-            {options.map((o: string) => (
-              <option key={o} value={o}>{o}</option>
-            ))}
-          </select>
+          <DarkSelect
+            value={(value as string) ?? ""}
+            onChange={(v) => onChange(v)}
+            options={options}
+            placeholder="-- 选择 --"
+          />
         </div>
       );
 
@@ -248,10 +260,13 @@ function FieldRow({ field, value, checkpoints, onChange }: FieldRowProps) {
             value={(value as number) ?? ""}
             onChange={handleChange}
             placeholder={field.placeholder}
+            min={field.min}
+            max={field.max}
             step={
-              ["seed", "steps"].includes(field.key) ? 1 :
+              field.step ??
+              (["seed", "steps"].includes(field.key) ? 1 :
               ["cfg", "denoise", "strength_model", "strength_clip"].includes(field.key) ? 0.05 :
-              0.01
+              0.01)
             }
           />
         </div>

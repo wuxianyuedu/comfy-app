@@ -76,6 +76,23 @@ export interface FieldDef {
   multiline?: boolean;   // for text type
   hidden?: boolean;     // don't show in editor (e.g. internal wiring)
   group?: string;       // section grouping
+  /** Numeric bounds (mirrors ComfyUI INPUT_TYPES min/max/step). */
+  min?: number;
+  max?: number;
+  step?: number;
+  /** Model folder for file dropdowns (checkpoints/loras/vae/...). When set and
+   *  a matching list is supplied, the editor renders a real file <select>. */
+  modelFolder?: string;
+}
+
+/* ── Port spec (from custom-node manifest) ── */
+export interface PortSpec {
+  name: string;             // input/output name
+  type: string;             // e.g. "FLOAT" | "IMAGE" | "COMBO" ...
+  widget?: FieldType;       // editor widget (absent for pure connection ports)
+  options?: string[];       // for COMBO
+  default?: any;            // default value (for value chip / placeholder)
+  required: boolean;
 }
 
 /* ── Node type registry — maps class_type → display info + field specs ── */
@@ -83,10 +100,20 @@ export interface NodeTypeConfig {
   label: string;            // default Chinese label
   color: string;            // accent color (CSS var or hex)
   icon?: string;            // emoji or unicode symbol (for non-emoji env)
-  category: "input" | "process" | "output" | "model" | "conditioning" | "latent" | "image";
+  category: "input" | "process" | "output" | "model" | "conditioning" | "latent" | "image" | "custom";
   defaultFields: FieldDef[];
   width: number;            // node card width in px
   height: number;           // min height
+  /* custom-node support (populated from customNodes manifest) */
+  custom?: boolean;
+  rawCategory?: string;     // original ComfyUI category string
+  inputsSpec?: PortSpec[];
+  outputsSpec?: PortSpec[];
+  /** OUTPUT_NODE === true：终端节点（后端仍执行，只是不向下游传值）。 */
+  outputNode?: boolean;
+  /** properties.frontend_only === true：纯前端节点（后端不执行）。与 outputNode 是两回事。 */
+  frontendOnly?: boolean;
+  description?: string;
 }
 
 /* ── Canvas state ── */
