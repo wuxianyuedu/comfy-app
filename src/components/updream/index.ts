@@ -43,6 +43,10 @@ export type { SkillShort } from "./CreatePanel";
 
 export { ModelLibrary } from "./ModelLibrary";
 
+export { WorkflowLibrary } from "./WorkflowLibrary";
+
+export { WorkflowCanvasEditor } from "./WorkflowCanvasEditor";
+
 export { TrainingStudio } from "./TrainingStudio";
 
 export { FilmStudio } from "./FilmStudio";
@@ -50,8 +54,15 @@ export { ProjectCanvas } from "./ProjectCanvas";
 
 export { HistoryList } from "./HistoryList";
 
+export { WorkshopStudio } from "./WorkshopStudio";
+
 export { ToastProvider, useToast } from "./Toast";
 export type { ToastItem } from "./Toast";
+
+export { AuroraBackground } from "./AuroraBackground";
+
+export { NumberField } from "./ui/NumberField";
+export { DarkSelect } from "./ui/DarkSelect";
 
 export { AgentChat } from "./AgentChat";
 export type { AgentChatProps } from "./AgentChat";
