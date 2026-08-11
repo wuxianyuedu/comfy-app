@@ -3,13 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --turbo",
+    "dev:warm": "node scripts/dev-launcher.js warm",
+    "build": "node scripts/prebuild-clean.mjs && next build",
     "start": "next start",
     "lint": "next lint",
     "db:push": "npx prisma db push --accept-data-loss",
     "db:seed": "tsx prisma/seed.ts",
-    "smoke:canvas": "node scripts/canvas-smoke.mjs"
+    "smoke:canvas": "node scripts/canvas-smoke.mjs",
+    "parse:custom-nodes": "node scripts/run-parse-custom-nodes.mjs",
+    "test:comfy": "tsx scripts/regression.mts",
+    "test:comfy:live": "tsx scripts/regression.mts --live",
+    "test:comfy:http": "tsx scripts/regression.mts --http"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -18,10 +23,12 @@
     "@prisma/client": "^6.2.1",
     "@xyflow/react": "^12.11.2",
     "bcryptjs": "^2.4.3",
+    "lucide-react": "^1.28.0",
     "next": "15.1.6",
     "next-auth": "^5.0.0-beta.25",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "react18-json-view": "^0.2.10",
     "ws": "^8.18.0",
     "zod": "^3.24.1"
   },

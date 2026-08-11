@@ -64,3 +64,51 @@ Comfy-APP
 
 # Ardot design screenshots (local export artifacts)
 /.ardot-screenshots/
+
+# ── runtime / diagnostic junk (never source) ──
+*.log
+.devlog.txt
+.local-tmp-*.log
+.next-start-*.log
+.next.bak/
+.next.bak2/
+/_present/
+/all_wfs.json
+/wf_dasi.json
+/tmp_clear.json
+/10000
+/120000
+shot-*.png
+shot_*.png
+ardot-delivery-report.md
+
+# throwaway probe / smoke / diag scripts
+# (kept on purpose: regression.mts, regression-harness.mts,
+#  parse_custom_nodes.py, run-parse-custom-nodes.mjs, fixtures/)
+scripts/probe-*.mjs
+scripts/probe-*.mts
+scripts/verify-*.mjs
+scripts/audit-layout.mjs
+scripts/*-smoke.mjs
+scripts/diag-*.mjs
+scripts/diag-*.mts
+scripts/bg-*.mjs
+scripts/canvas-*.mjs
+scripts/train-*.mjs
+scripts/nav-smoke.mjs
+scripts/responsive-smoke.mjs
+scripts/warm-routes.mjs
+scripts/homepage-shot.mjs
+scripts/zimage-*.mjs
+scripts/measure-wf-load.mjs
+scripts/accept-shot.mjs
+scripts/append-v3-memory.cjs
+scripts/prebuild-clean.mjs
+scripts/snap-wire-start.mjs
+scripts/inspect-handle-bg.mjs
+scripts/create-panel-audit.mjs
+scripts/e2e-runner.mts
+scripts/poll-task.mts
+scripts/smoke-*.mts
+scripts/*-screenshot.mjs
+scripts/*-shot.mjs

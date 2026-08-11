@@ -87,16 +87,32 @@ model TaskImage {
   sortIndex  Int     @default(0)
 }
 
-// User-imported ComfyUI workflows (exported in "API format").
-// `graph` is the raw ComfyUI API-format node graph (object of nodeId -> node).
+// User-imported ComfyUI workflows (API format and/or raw UI format).
+// `graph` is always API format (object of nodeId -> { class_type, inputs })
+// so ComfyUI's /prompt endpoint can execute it directly.
+// `rawJson` is the original UI/raw format if the user imported from the
+// disk-saved format — we keep it around so users can re-export round-trip.
+// `positions` is `{ nodeId: [x, y] }` extracted from rawJson or auto-laid out;
+// the editor uses it as the initial ReactFlow layout so workflows look like
+// the user arranged them in ComfyUI.
 model WorkflowTemplate {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
-  taskType  String   @default("TXT2IMG") // TXT2IMG | IMG2IMG | INPAINT | VIDEO
-  graph     Json
-  paramMap  Json? // { positiveNode, negativeNode, checkpointNode, samplerNode } — node ids
+  taskType  String   @default("TXT2IMG") // T2I | I2I | INPAINT | T2V | I2V | ...
+  graph     Json // API format (executable)
+  paramMap  Json? // { positiveNode, negativeNode, checkpointNode, samplerNode, inputImageNode } — node ids
+  workflowIO Json? // { ioKey: { direction:"input"|"output", kind:"param"|"widget"|"output", nodeId, name } } — exposure selection for subgraph IO editing
+  rawJson   Json? // original raw UI format (when imported from disk)
+  positions Json? // { nodeId: [x, y] } — for editor initial layout
+  // ── Local-file-backed workflow (server reads the file by path) ──
+  // When set, the server tracks the on-disk file and re-imports it whenever
+  // the file's mtime/checksum changes, so editing the workflow in ComfyUI and
+  // saving the same file is reflected on next refresh — no manual re-import.
+  sourcePath      String? // absolute local path the workflow was imported from
+  sourceChecksum  String? // fast hash of file content at last import (sha1 slice)
+  sourceMtime     Int?    // file mtime in SECONDS (epoch) at last import (change detector; seconds fit SQLite 32-bit INT)
   createdAt DateTime @default(now())
   @@index([userId])
 }
