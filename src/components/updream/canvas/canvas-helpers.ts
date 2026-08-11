@@ -45,17 +45,37 @@ export async function startGenerate(payload: Record<string, unknown>): Promise<s
 export interface TaskResult {
   localPath: string;
   mediaType: string;
+  taskId?: string;
 }
 
-/** Poll a task until it has a result (image or video) or fails/times out. */
+/** Returned by `pollTask` when the server task ended without producing an
+ *  output (FAILED / CANCELLED / ERROR / TIMEOUT).  Carries the underlying
+ *  backend error message from `prisma.task.error` so the UI can show a
+ *  meaningful explanation instead of a generic "生成失败或无结果" stub. */
+export interface TaskFailure {
+  taskId: string;
+  status: "FAILED" | "CANCELLED" | "ERROR" | "TIMEOUT";
+  /** Raw backend / ComfyUI error message, already decoded to plain text. */
+  error: string;
+}
+
+/** Polls a task until it has a result, fails, or times out.  On success
+ *  returns a `TaskResult` (truthy); on terminal failure returns the
+ *  structured `TaskFailure` so callers can surface the real error. */
 export async function pollTask(
   taskId: string,
   timeoutMs = 25 * 60 * 1000
-): Promise<TaskResult | null> {
+): Promise<TaskResult | TaskFailure> {
   const start = Date.now();
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    if (Date.now() - start > timeoutMs) return null;
+    if (Date.now() - start > timeoutMs) {
+      return {
+        taskId,
+        status: "TIMEOUT",
+        error: `轮询超时（${Math.round(timeoutMs / 60000)} 分钟无响应）`,
+      };
+    }
     try {
       const res = await fetch(`/api/tasks/${taskId}`);
       if (res.ok) {
@@ -63,16 +83,31 @@ export async function pollTask(
         const imgs: TaskResult[] = task?.images ?? [];
         if (imgs.length) {
           const v = imgs.find((x) => x.mediaType === "video") ?? imgs[0];
-          return { localPath: v.localPath, mediaType: v.mediaType };
+          return { taskId, localPath: v.localPath, mediaType: v.mediaType };
         }
-        const st = task?.status;
-        if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") return null;
+        const st = task?.status as string | undefined;
+        if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
+          return {
+            taskId,
+            status: st,
+            error: task?.error || `任务 ${st}`,
+          };
+        }
       }
     } catch {
       /* transient — keep polling */
     }
     await new Promise((r) => setTimeout(r, 2000));
   }
+}
+
+/** Type guard for the success branch — keeps existing `if (result)` call
+ *  sites semantic-compatible (a populated TaskResult is still truthy) while
+ *  making the failure branch type-safe. */
+export function isTaskSuccess(
+  r: TaskResult | TaskFailure
+): r is TaskResult {
+  return typeof (r as TaskResult).localPath === "string";
 }
 
 /** Expand a theme/梗概 into a structured script via the LLM, with offline fallback. */

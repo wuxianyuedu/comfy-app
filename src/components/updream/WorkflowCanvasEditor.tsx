@@ -174,6 +174,10 @@ interface WorkflowIOParam {
   nodeTitle?: string;
   /** STRING inputs that should render as a textarea rather than one-liner. */
   multiline?: boolean;
+  /** 2026-08-11 (R57): mirror field of `WorkflowIOEntry.required`.  Only
+   *  meaningful for `kind === "widget"` — toggled in IO-edit mode and
+   *  persisted on the next PATCH. */
+  required?: boolean;
 }
 
 /** A single parameter reference used to toggle IO exposure. */
@@ -199,8 +203,45 @@ interface IOEditContextValue {
    *  `workflowIO` map).  No-op when the key isn't currently in the map —
    *  labels only exist for checked pins. */
   setIOLabel: (key: string, label: string) => void;
+  /** 2026-08-11 (R57): flip the `required` flag on a checked widget input.
+   *  The flip is local-only (no IOEdit-mode state is added); it lives on
+   *  the same `workflowIO[key]` record that toggleIO + setIOLabel mutate,
+   *  so it shares the persistence path (next PATCH ships the full map).
+   *  No-op when the key isn't currently in the map — required only makes
+   *  sense for checked pins. */
+  toggleIORequired: (key: string) => void;
 }
 const IOEditContext = React.createContext<IOEditContextValue | null>(null);
+
+/* 2026-08-11 (R57): footer chip used in the IO preview panel.  Shows a
+ *  running tally of how many widget inputs are currently marked required
+ *  vs. how many are still optional, so authors can see the contract at a
+ *  glance without counting buttons.  Mirrors `splitWorkflowIO` rules:
+ *  outputs are excluded. */
+function RequiredSummary({ io }: { io: WorkflowIOMap | null }) {
+  const counts = useMemo(() => {
+    let required = 0;
+    let optional = 0;
+    if (!io) return { required, optional };
+    for (const e of Object.values(io)) {
+      if (!e || e.direction !== "input") continue;
+      if (e.kind !== "widget") continue;
+      if (e.required) required++;
+      else optional++;
+    }
+    return { required, optional };
+  }, [io]);
+  return (
+    <span className="ml-2 inline-flex items-center gap-1.5">
+      <span className="rounded border border-red-400/40 bg-red-500/15 px-1.5 py-px font-mono text-[10px] text-red-300">
+        必填 {counts.required}
+      </span>
+      <span className="rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-px font-mono text-[10px] text-gray-400">
+        可选 {counts.optional}
+      </span>
+    </span>
+  );
+}
 
 /* ── rgthree Fast Groups Bypasser integration (2026-08-09) ──
  * rgthree's `Fast Groups Bypasser` is a utility node whose LiteGraph
@@ -5144,6 +5185,18 @@ function WorkflowEditorInner({
       return { ...prev, [key]: { ...cur, label: next } };
     });
   }, []);
+  /* 2026-08-11 (R57): flip `required` on a checked widget input.  Symmetric
+   *  with setIOLabel — touches `workflowIO[key].required` on the same
+   *  record, ships on next PATCH.  No-op when the key isn't currently
+   *  checked (required only exists for checked pins). */
+  const toggleIORequired = useCallback((key: string) => {
+    setWorkflowIO((prev) => {
+      const cur = prev[key];
+      if (!cur) return prev;
+      if (cur.kind !== "widget") return prev; /* only widget inputs are tunable */
+      return { ...prev, [key]: { ...cur, required: !cur.required } };
+    });
+  }, []);
   const [error, setError] = useState("");
   /* Sync the on-disk custom-node manifest into the in-memory registry once
    *  on mount so <PackageFooter> can resolve every node's `classType` →
@@ -6973,6 +7026,11 @@ function WorkflowEditorInner({
                     compact
                     showOutputs
                     onLabelChange={setIOLabel}
+                    /* R57: 必填 / 可选 toggle.  Preview only — purely
+                     *  visual; the toggle writes into the same
+                     *  workflowIO map that setIOLabel uses, which gets
+                     *  shipped to the server on next PATCH. */
+                    onRequiredChange={toggleIORequired}
                     emptyHint={null}
                   />
                 )}
@@ -6980,7 +7038,8 @@ function WorkflowEditorInner({
               <div className="shrink-0 border-t border-white/[0.06] px-3 py-1.5 text-[10px] text-gray-500">
                 <span className="opacity-80">点击任意名称旁的</span>
                 <span className="mx-1 inline-block rounded bg-white/[0.08] px-1 font-mono text-[10px] text-gray-300">✎</span>
-                <span className="opacity-80">可重命名，回车或失焦保存；点「保存端口映射」后写入服务。</span>
+                <span className="opacity-80">可重命名；「必填 / 可选」切换是否在运行时强校验。</span>
+                <RequiredSummary io={previewIO} />
               </div>
             </div>
           </div>
@@ -6988,7 +7047,7 @@ function WorkflowEditorInner({
         <NodeJsonViewerProvider detail={detail} rawMetaById={rawMetaById} positions={detail?.positions ?? null} subgraphRawContext={subgraphRawContext} subgraphStackLength={subgraphStack.length}>
         <RgthreeGroupsProvider workflowId={workflowId} detail={detail}>
         <IOEditContext.Provider
-          value={{ ioEditMode, workflowIO, toggleIO, setIOLabel }}
+          value={{ ioEditMode, workflowIO, toggleIO, setIOLabel, toggleIORequired }}
         >
         <ReactFlow
           nodes={nodes}

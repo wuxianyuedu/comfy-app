@@ -133,6 +133,10 @@ export interface CanvasNodeData {
   taskId?: string;
   resultPath?: string;
   resultMediaType?: string;
+  /** Backend task status that triggered the last `error` state; null when
+   *  the error came from a client-side exception (no task ever started) or
+   *  from `requestFailure` upstream (network/CORS/etc.). */
+  errorStatus?: "FAILED" | "CANCELLED" | "ERROR" | "TIMEOUT" | null;
 
   // script node
   theme: string;

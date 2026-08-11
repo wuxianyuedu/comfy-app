@@ -7,6 +7,7 @@ import {
   splitWorkflowIO,
   numericBounds,
   ioLabel,
+  isInputFilled,
   type WorkflowIOMap,
   type ControlKind,
 } from "./workflow-io";
@@ -157,6 +158,12 @@ export interface DynamicWorkflowFormProps {
    *  is the UX for IO-edit mode's preview panel: the author sees exactly
    *  what the form will look like and can rename each pin in-place. */
   onLabelChange?: (ioKey: string, label: string) => void;
+  /** 2026-08-11 (R57): when set, every widget row gets a "必填 / 可选"
+   *  toggle button next to the label.  Clicking it flips
+   *  `workflowIO[ioKey].required`.  Required rows that are still empty
+   *  render the input with a red border to keep the author honest.  This
+   *  is the IO-edit-mode counterpart of `onLabelChange`. */
+  onRequiredChange?: (ioKey: string, required: boolean) => void;
 }
 
 export function DynamicWorkflowForm({
@@ -169,6 +176,7 @@ export function DynamicWorkflowForm({
   showOutputs = true,
   emptyHint,
   onLabelChange,
+  onRequiredChange,
 }: DynamicWorkflowFormProps) {
   const { wireInputs, widgetInputs, inputs, outputs } = useMemo(() => splitWorkflowIO(io), [io]);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -276,6 +284,32 @@ export function DynamicWorkflowForm({
             title={`${e.nodeTitle ?? ""} · ${e.name}`}
             onChange={onLabelChange ? (next) => onLabelChange(e.ioKey, next) : undefined}
           />
+          {/* R57: 必填 / 可选 toggle.  Only rendered when the form has an
+           *  owner for the callback (i.e. IO-edit-mode preview panel) —
+           *  pure run-time forms (CreatePanel / CanvasNode) hide it so the
+           *  user can't change workflow contracts from a consumer view. */}
+          {onRequiredChange && (
+            <button
+              type="button"
+              title={
+                e.required
+                  ? "已标记为必填，点击切换为可选"
+                  : "点击将其标记为必填"
+              }
+              onClick={(ev) => {
+                ev.stopPropagation();
+                onRequiredChange(e.ioKey, !e.required);
+              }}
+              onMouseDown={(ev) => ev.stopPropagation()}
+              className={`shrink-0 rounded px-1.5 py-px text-[10px] font-medium transition-colors ${
+                e.required
+                  ? "border border-red-400/40 bg-red-500/15 text-red-300 hover:bg-red-500/25"
+                  : "border border-white/[0.08] bg-white/[0.02] text-gray-500 hover:bg-white/[0.06] hover:text-gray-300"
+              }`}
+            >
+              {e.required ? "必填" : "可选"}
+            </button>
+          )}
           <span className={TYPE_BADGE} style={{ color: accent, background: `${accent}18` }}>
             {e.type}
           </span>
@@ -283,21 +317,25 @@ export function DynamicWorkflowForm({
 
         {e.control === "textarea" && (
           <textarea
-            className={inputCls}
+            className={`${inputCls} ${
+              e.required && !isInputFilled(v) ? "border-red-400/50" : ""
+            }`}
             rows={compact ? 3 : 4}
             value={typeof v === "string" ? v : ""}
             disabled={disabled}
-            placeholder={`输入 ${label}`}
+            placeholder={`输入 ${label}${e.required ? "（必填）" : ""}`}
             onChange={(ev) => set(e.ioKey, ev.target.value)}
           />
         )}
 
         {e.control === "text" && (
           <input
-            className={inputCls}
+            className={`${inputCls} ${
+              e.required && !isInputFilled(v) ? "border-red-400/50" : ""
+            }`}
             value={typeof v === "string" || typeof v === "number" ? String(v) : ""}
             disabled={disabled}
-            placeholder={`输入 ${label}`}
+            placeholder={`输入 ${label}${e.required ? "（必填）" : ""}`}
             onChange={(ev) => set(e.ioKey, ev.target.value)}
           />
         )}
@@ -327,7 +365,7 @@ export function DynamicWorkflowForm({
               v
                 ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
                 : "border-white/[0.08] bg-white/[0.03] text-gray-400"
-            }`}
+            } ${e.required && !isInputFilled(v) ? "border-red-400/50" : ""}`}
           >
             <span>{v ? "开启" : "关闭"}</span>
             <span
@@ -346,7 +384,9 @@ export function DynamicWorkflowForm({
         {e.control === "image" && (
           <button
             type="button"
-            className={ghostBtnCls}
+            className={`${ghostBtnCls} ${
+              e.required && !isInputFilled(v) ? "border-red-400/50" : ""
+            }`}
             disabled={disabled || uploading}
             onClick={() => pickFile(e.ioKey)}
           >
@@ -354,7 +394,7 @@ export function DynamicWorkflowForm({
               ? "上传中…"
               : typeof v === "string" && v
                 ? `已选：${v}`
-                : `上传 ${label}`}
+                : `上传 ${label}${e.required ? "（必填）" : ""}`}
           </button>
         )}
       </div>

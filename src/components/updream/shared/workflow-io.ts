@@ -26,6 +26,11 @@ export interface WorkflowIOEntry {
   defaultValue?: unknown;
   nodeTitle?: string;
   multiline?: boolean;
+  /** 2026-08-11 (R57): mark a widget-backed input as REQUIRED.  Authors
+   *  toggle this in IO-edit/preview mode.  At run time, consumers (CreatePanel
+   *  / Canvas `workflow` node) refuse to submit while a required value is
+   *  empty, surfacing a `getMissingRequiredInputs(io, values)` list. */
+  required?: boolean;
 }
 
 export type WorkflowIOMap = Record<string, WorkflowIOEntry>;
@@ -255,4 +260,43 @@ export function toWorkflowInputsPayload(
     payload.push({ nodeId: e.nodeId, name: e.name, value: v });
   }
   return payload;
+}
+
+/**
+ * 2026-08-11 (R57): treat a value as "filled" for the purpose of
+ * required-field validation.  `undefined` / `null` / empty string / NaN
+ * all count as empty; `false` (boolean switch) DOES count as filled,
+ * since a switch is either explicitly on or off — there's no third state.
+ */
+export function isInputFilled(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return Number.isFinite(value);
+  /* boolean / object / array — anything truthy-by-presence counts as filled. */
+  return true;
+}
+
+/**
+ * Return the ioKeys of every required widget input that has no usable
+ * value yet.  Used by CreatePanel / CanvasNode as a submit guard so a
+ * user can never enqueue a workflow with a missing `positive_prompt`
+ * when the author marked it as required.  Wire (param) inputs are
+ * intentionally excluded — those are validated by canvas wiring checks
+ * elsewhere (an unwired required wire still surfaces as a missing
+ * connection in the form's I/O 端点 strip).
+ */
+export function getMissingRequiredInputs(
+  io: WorkflowIOMap | undefined | null,
+  values: Record<string, unknown>
+): string[] {
+  if (!io) return [];
+  const out: string[] = [];
+  for (const [key, e] of Object.entries(io)) {
+    if (!e || typeof e !== "object") continue;
+    if (e.direction !== "input") continue;
+    if (!e.required) continue;
+    if (e.kind !== "widget") continue;
+    if (!isInputFilled(values[key])) out.push(key);
+  }
+  return out;
 }

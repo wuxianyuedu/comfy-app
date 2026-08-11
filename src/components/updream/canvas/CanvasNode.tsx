@@ -31,6 +31,7 @@ import {
   startGenerate,
   pollTask,
   runScript,
+  isTaskSuccess,
 } from "./canvas-helpers";
 import { chatAgent } from "@/lib/agent/agentic";
 
@@ -372,6 +373,15 @@ export function CanvasNode({ id, data }: NodeProps<CanvasNodeType>) {
     );
   const deleteSelf = () => setNodes((nds) => nds.filter((n) => n.id !== id));
 
+  /* Error panel state — collapsed by default (just a one-line summary),
+   *  expandable to show the raw backend error (incl. ComfyUI tracebacks).
+   *  Reset to collapsed whenever a new run starts so the next failure
+   *  presents fresh without the user seeing a stale expanded state. */
+  const [errExpanded, setErrExpanded] = useState(false);
+  useEffect(() => {
+    if (d.status === "running" || d.status === "idle") setErrExpanded(false);
+  }, [d.status]);
+
   /* file upload helper */
   const fileRef = React.useRef<HTMLInputElement>(null);
   const uploadTo = React.useRef<"inputImage" | "firstFrame" | "lastFrame">("inputImage");
@@ -472,7 +482,7 @@ export function CanvasNode({ id, data }: NodeProps<CanvasNodeType>) {
         const taskId = await startGenerate(payload);
         patch({ taskId });
         const result = await pollTask(taskId);
-        if (result) {
+        if (isTaskSuccess(result)) {
           // Auto-spawn a downstream image/video node and wire it to this node's
           // output handle, so the produced media is shown + chainable. Spawn
           // once per workflow node (workflowSinkId guards re-runs).
@@ -532,9 +542,19 @@ export function CanvasNode({ id, data }: NodeProps<CanvasNodeType>) {
               detail: { id, resultPath: result.localPath, resultMediaType: result.mediaType },
             })
           );
-        } else patch({ status: "error", error: "生成失败或无结果" });
+        } else {
+          patch({
+            status: "error",
+            error: result.error,
+            taskId: result.taskId,
+            errorStatus: result.status,
+          });
+        }
       } catch (e: any) {
-        patch({ status: "error", error: e?.message ?? "生成失败" });
+        patch({
+          status: "error",
+          error: e?.message ?? String(e) ?? "未捕获异常",
+        });
       }
       return;
     }
@@ -571,7 +591,7 @@ export function CanvasNode({ id, data }: NodeProps<CanvasNodeType>) {
       const taskId = await startGenerate(payload);
       patch({ taskId });
       const result = await pollTask(taskId);
-      if (result) {
+      if (isTaskSuccess(result)) {
         patch({
           status: "done",
           resultPath: result.localPath,
@@ -587,9 +607,19 @@ export function CanvasNode({ id, data }: NodeProps<CanvasNodeType>) {
             },
           })
         );
-      } else patch({ status: "error", error: "生成失败或无结果" });
+      } else {
+        patch({
+          status: "error",
+          error: result.error,
+          taskId: result.taskId,
+          errorStatus: result.status,
+        });
+      }
     } catch (e: any) {
-      patch({ status: "error", error: e?.message ?? "生成失败" });
+      patch({
+        status: "error",
+        error: e?.message ?? String(e) ?? "未捕获异常",
+      });
     }
   };
 
@@ -610,7 +640,7 @@ export function CanvasNode({ id, data }: NodeProps<CanvasNodeType>) {
       payload.workflow = isVid ? "txt2video" : "txt2img";
       const taskId = await startGenerate(payload);
       const result = await pollTask(taskId);
-      if (result) {
+      if (isTaskSuccess(result)) {
         patch({
           status: "done",
           resultPath: result.localPath,
@@ -625,9 +655,19 @@ export function CanvasNode({ id, data }: NodeProps<CanvasNodeType>) {
             },
           })
         );
-      } else patch({ status: "error", error: "生成失败" });
+      } else {
+        patch({
+          status: "error",
+          error: result.error,
+          taskId: result.taskId,
+          errorStatus: result.status,
+        });
+      }
     } catch (e: any) {
-      patch({ status: "error", error: e?.message ?? "生成失败" });
+      patch({
+        status: "error",
+        error: e?.message ?? String(e) ?? "未捕获异常",
+      });
     }
   };
 
@@ -1079,9 +1119,72 @@ export function CanvasNode({ id, data }: NodeProps<CanvasNodeType>) {
       </div>
       <div className="px-3.5 py-2.5">{body}</div>
       {d.error && d.status === "error" && (
-        <div className="flex items-start px-3.5 pb-2 text-[11px] text-red-300">
-          <Icon name="alert" size={12} className="mr-1 mt-px shrink-0" />
-          <span>{d.error}</span>
+        <div className="nodrag nopan border-t border-rose-400/20 bg-rose-500/[0.06] px-3 py-1.5 text-[10.5px]">
+          <div className="flex items-start gap-1.5">
+            <Icon
+              name="alert"
+              size={12}
+              className="mt-px shrink-0 text-rose-300"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="truncate font-medium text-rose-200">
+                  {d.errorStatus === "TIMEOUT"
+                    ? "轮询超时"
+                    : d.errorStatus === "CANCELLED"
+                      ? "任务被取消"
+                      : d.errorStatus
+                        ? "生成失败"
+                        : "未捕获异常"}
+                  <span className="ml-1 text-rose-300/60">
+                    · {d.errorStatus ? `task ${d.errorStatus}` : "client"}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setErrExpanded((v) => !v)}
+                  className="shrink-0 rounded border border-rose-400/20 px-1.5 py-0.5 text-[10px] text-rose-200/80 transition-colors hover:bg-rose-400/10"
+                  title={errExpanded ? "收起错误详情" : "展开错误详情"}
+                >
+                  {errExpanded ? "▲ 收起" : "▼ 展开"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void (async () => {
+                      try {
+                        await navigator.clipboard.writeText(
+                          JSON.stringify(
+                            {
+                              nodeId: id,
+                              taskId: d.taskId ?? null,
+                              errorStatus: d.errorStatus ?? null,
+                              error: d.error ?? null,
+                              ts: new Date().toISOString(),
+                            },
+                            null,
+                            2
+                          )
+                        );
+                      } catch {
+                        /* clipboard unavailable — silent; user can still
+                         *  hand-expand and select the raw error text */
+                      }
+                    })();
+                  }}
+                  className="shrink-0 rounded border border-rose-400/20 px-1.5 py-0.5 text-[10px] text-rose-200/80 transition-colors hover:bg-rose-400/10"
+                  title="复制错误详情到剪贴板（含 taskId）"
+                >
+                  ⧉ 复制
+                </button>
+              </div>
+              {errExpanded && (
+                <pre className="nodrag nopan mt-1 max-h-32 overflow-auto rounded border border-rose-400/15 bg-black/40 p-1.5 font-mono text-[10px] leading-tight text-rose-100/90">
+                  {d.error}
+                </pre>
+              )}
+            </div>
+          </div>
         </div>
       )}
       <input

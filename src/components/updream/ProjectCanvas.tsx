@@ -126,6 +126,11 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
   // Tracks which pending workflow we've already dropped, so navigating to the
   // canvas / re-rendering doesn't place the same node twice.
   const placedPendingRef = useRef<string | null>(null);
+  // Set true once the project's initial nodes have been hydrated into
+  // local state.  We skip the first mutation persistence flush (right
+  // after load) so the effect doesn't redundantly re-write the same
+  // state we just read from the store.
+  const firstMutationRef = useRef(true);
 
   /* ── Load (or create) the active project on mount ── */
   useEffect(() => {
@@ -319,6 +324,39 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
     },
     [setEdges, propagateFrom]
   );
+
+  /* ── Auto-persist on every meaningful mutation ──
+   *  Without this, drag/add/connect all sit in memory only and vanish on
+   *  reload.  Manual `upsertProject` calls in switchProject/newProject/
+   *  commitRename cover the corner cases; this effect catches every
+   *  other change with a 600 ms idle debounce so we don't spam
+   *  localStorage during a drag.
+   *
+   *  `firstMutationRef` guards against the post-load setter flush that
+   *  setNodes(proj.nodes) / setEdges(proj.edges) triggers — that round-trip
+   *  is a no-op rewrite, so we let it pass through without bumping the
+   *  `updatedAt` stamp.  Subsequent runs are real user mutations and
+   *  need to be persisted. */
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    if (!projectIdRef.current) return;
+    if (firstMutationRef.current) {
+      firstMutationRef.current = false;
+      return;
+    }
+    const handle = setTimeout(() => {
+      const id = projectIdRef.current;
+      if (!id) return;
+      upsertProject({
+        id,
+        name: projectNameRef.current,
+        updatedAt: Date.now(),
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+      });
+    }, 600);
+    return () => clearTimeout(handle);
+  }, [nodes, edges]);
 
   const onPaneContextMenu = useCallback((e: React.MouseEvent | MouseEvent) => {
     e.preventDefault();

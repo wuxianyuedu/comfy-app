@@ -22,6 +22,14 @@ interface DarkSelectProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /**
+   * Minimum popover width, in px.  Defaults to 360 so richly-decorated rows
+   * (dot + name + taskType + local/online badge) can breathe on narrow
+   * trigger containers; the popover still snaps back to `trigger.width`
+   * when the trigger is wider than this floor.  Capped to viewport with
+   * automatic left-shift so it never overflows the right edge.
+   */
+  popoverMinWidth?: number;
 }
 
 export function DarkSelect({
@@ -32,6 +40,7 @@ export function DarkSelect({
   placeholder = "选择…",
   disabled = false,
   className = "",
+  popoverMinWidth = 360,
 }: DarkSelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
@@ -75,21 +84,31 @@ export function DarkSelect({
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Recompute popover position when opening / on viewport changes.
-   * Auto-flips upward if the dropdown would overflow below the viewport. */
+   * Auto-flips upward if the dropdown would overflow below the viewport.
+   * 2026-08-11 (R56): popover width is `max(trigger.width, popoverMinWidth)`,
+   * and the left edge is left-shifted if the wider popover would overflow
+   * the right viewport edge. */
+  const POPOVER_MAX_H = 240; // ~max-h-60 (6-7 items @ py-1.5)
+  const VIEWPORT_MARGIN = 8;
   useLayoutEffect(() => {
     if (!open) return;
     const recompute = () => {
       const btn = ref.current;
       if (!btn) return;
       const rect = btn.getBoundingClientRect();
-      const POPOVER_MAX_H = 240; // ~max-h-60 (6-7 items @ py-1.5)
-      const MARGIN = 8;
-      const spaceBelow = window.innerHeight - rect.bottom - MARGIN;
+      const desiredWidth = Math.max(rect.width, popoverMinWidth);
+      const maxAllowedWidth = Math.max(0, window.innerWidth - VIEWPORT_MARGIN * 2);
+      const popoverWidth = Math.min(desiredWidth, maxAllowedWidth);
+      let left = rect.left;
+      if (left + popoverWidth > window.innerWidth - VIEWPORT_MARGIN) {
+        left = Math.max(VIEWPORT_MARGIN, window.innerWidth - VIEWPORT_MARGIN - popoverWidth);
+      }
+      const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
       const place: "down" | "up" = spaceBelow >= POPOVER_MAX_H || spaceBelow >= rect.top ? "down" : "up";
       setPos({
-        left: rect.left,
-        top: place === "down" ? rect.bottom + 4 : rect.top - POPOVER_MAX_H - 4,
-        width: rect.width,
+        left,
+        top: place === "down" ? rect.bottom + 4 : Math.max(VIEWPORT_MARGIN, rect.top - POPOVER_MAX_H - 4),
+        width: popoverWidth,
         placement: place,
       });
     };
@@ -100,7 +119,7 @@ export function DarkSelect({
       window.removeEventListener("scroll", recompute, true);
       window.removeEventListener("resize", recompute);
     };
-  }, [open]);
+  }, [open, popoverMinWidth]);
 
   const pick = useCallback((v: string) => { onChange(v); setOpen(false); }, [onChange]);
 
