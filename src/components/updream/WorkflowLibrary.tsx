@@ -1,28 +1,57 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AuroraBackground } from "@/components/updream/AuroraBackground";
 import { Icon } from "@/components/ui/Icon";
 import { DarkSelect } from "@/components/updream/ui/DarkSelect";
-import { WorkflowPreview } from "@/components/updream/ui/WorkflowPreview";
-import { WorkflowCanvasEditor } from "./WorkflowCanvasEditor";
+import { MultiModeSelect } from "@/components/updream/ui/MultiModeSelect";
+import dynamic from "next/dynamic";
 import { CustomNodesSettings } from "@/components/workflow-canvas/CustomNodesSettings";
 import { useToast } from "@/components/updream/Toast";
 import { SourceModal } from "@/components/updream/SourceModal";
+import { ModelTagManager } from "@/components/updream/ModelTagManager";
 import type { WorkflowPreview as WorkflowPreviewT } from "@/lib/comfyui/workflow";
 import type { WorkflowIOMap } from "@/components/updream/shared/workflow-io";
 import { splitWorkflowIO, ioLabel } from "@/components/updream/shared/workflow-io";
+import { ALL_WORKFLOW_TYPES, getWorkflowType, normalizeTaskType } from "@/lib/workflow-types";
+
+/**
+ * Lazy-load the canvas editor. It is a 7k-line module; keeping it behind a
+ * dynamic import means editing this file (or its sibling `ModelTagManager`)
+ * no longer forces webpack to recompile the editor graph on every save —
+ * this was the cause of the multi-second Fast Refresh stall reported on
+ * delete/tag operations. The editor chunk is only fetched when the modal
+ * actually opens.
+ */
+const WorkflowCanvasEditor = dynamic(
+  () => import("./WorkflowCanvasEditor").then((m) => m.WorkflowCanvasEditor),
+  { ssr: false, loading: () => null }
+);
 
 interface WorkflowRow {
   id: string;
   name: string;
   taskType: string;
+  /** 2026-08-13: a workflow may declare multiple modes at once.  When
+   *  absent or empty, the UI falls back to `[taskType]` for display
+   *  (backward compatibility for older rows).  Both `modes` and
+   *  `defaultMode` are returned by GET /api/workflows (persisted to
+   *  prisma.WorkflowTemplate.modes / .defaultMode). */
+  modes?: string[];
+  /** Canonical default mode code; must be present in `modes`. Kept in sync
+   *  with `taskType` for the legacy single-value filter. */
+  defaultMode?: string | null;
   createdAt: string;
   paramMap?: Record<string, string> | null;
   preview?: WorkflowPreviewT;
   /** 2026-08-09: user-curated external IO, returned by GET /api/workflows.
    *  Used to render the library card when no graph preview is available. */
   workflowIO?: WorkflowIOMap;
+  /** 2026-08-15: model tag names attached to this workflow (user-level
+   *  global tag library, e.g. ["z-image","wan2.2"]).  Returned by
+   *  GET /api/workflows.  Drives the library card chips + model filter. */
+  modelTags?: string[];
   /** Independent booleans (2026-08-09).  `hasApi` controls whether the
    *  workflow is actually executable; `hasRaw` is informational and lets
    *  the UI offer source-view / download-merged-bundle for RAW imports. */
@@ -67,6 +96,13 @@ interface WorkflowRow {
   diskMissing?: boolean;
   diskMtimeSec?: number | null;
   sourceMtimeSec?: number | null;
+  /** R-ardot105 (2026-08-17): the server detected that the source file
+   *  was renamed on disk and automatically re-linked the row to the
+   *  new path.  `diskRenamedTo` is a human-readable "old.json → new.json"
+   *  summary; the UI flashes a one-shot toast so the user knows the
+   *  link silently moved.  null for everything else. */
+  diskRenamed?: boolean;
+  diskRenamedTo?: string | null;
 }
 
 /** Resolve the three independent UI booleans + apiOrigin when the server
@@ -110,6 +146,11 @@ function deriveSyncFlags(row: WorkflowRow): {
   return { dirty, missing, canResync: dirty };
 }
 
+/* ── detectWorkflowFormat (2026-08-12 R71-1, extracted to shared lib in R76) ──
+ * Implementation lives in @/lib/workflow-format so the server-side
+ * PATCH endpoint can validate the same JSON shape (drag-to-upgrade). */
+import { detectWorkflowFormat } from "@/lib/workflow-format";
+
 /* ── WorkflowIOThumb (2026-08-09) ──
  * When a workflow row has no graph preview (no API graph or no preview-built
  * fixtures) but DOES have user-curated IO, render the inputs/outputs as a
@@ -126,6 +167,10 @@ function WorkflowIOThumb({ io }: { io: WorkflowIOMap | null | undefined }) {
   const MAX = 4;
   const hiddenIn = Math.max(0, inputs.length - MAX);
   const hiddenOut = Math.max(0, outputs.length - MAX);
+  /* 2026-08-15: pass the full IO map so two entries that resolve to
+   *  the same display label fall back to `name` and stay visually
+   *  distinguishable on the card. */
+  const conflictList = [...inputs, ...outputs];
   return (
     <div className="flex w-full items-center gap-2 px-3 py-1.5">
       <div className="flex min-w-0 max-w-[44%] flex-wrap items-center justify-end gap-1">
@@ -136,7 +181,7 @@ function WorkflowIOThumb({ io }: { io: WorkflowIOMap | null | undefined }) {
             title={`${e.nodeTitle ?? ""} · ${e.name}`}
           >
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#5BC6FF]" />
-            <span className="truncate">{ioLabel(e)}</span>
+            <span className="truncate">{ioLabel(e, conflictList)}</span>
           </span>
         ))}
         {hiddenIn > 0 && (
@@ -154,7 +199,7 @@ function WorkflowIOThumb({ io }: { io: WorkflowIOMap | null | undefined }) {
             title={`${e.nodeTitle ?? ""} · ${e.name}`}
           >
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#5BE3C4]" />
-            <span className="truncate">{ioLabel(e)}</span>
+            <span className="truncate">{ioLabel(e, conflictList)}</span>
           </span>
         ))}
         {hiddenOut > 0 && (
@@ -265,10 +310,12 @@ function RootGroupHeader({
   );
 }
 
-const TASK_LABELS: Record<string, { label: string; color: string }> = {
-  TXT2IMG: { label: "文生图", color: "text-violet-300 bg-violet-500/15" },
-  IMG2IMG: { label: "图生图", color: "text-emerald-300 bg-emerald-500/15" },
-};
+/* 2026-08-13 R*: Removed R70-2's per-category chip helper
+ * (TYPE_COLOR / getTypeView / TASK_TYPE_OPTIONS / TASK_TYPE_LABELS).
+ * The library card now uses MultiModeSelect which derives accent
+ * internally from each mode's category.  Kept the import for legacy
+ * normalization helpers (`getWorkflowType`, `normalizeTaskType`) since
+ * they're used by `useMemo` filters below. */
 
 /** ComfyUI default filenames start with a "date_slug" prefix and contain only
  *  lowercase letters / underscores / digits.  When we see such a name we
@@ -364,6 +411,18 @@ export function WorkflowLibrary({
 
   // ── Source filter: all / local (file-backed) / online (pasted/API) ──
   const [sourceFilter, setSourceFilter] = useState<"all" | "local" | "online">("all");
+  // ── Type filter: all / image / video / audio (R70-3) ──
+  const [typeFilter, setTypeFilter] = useState<"all" | "image" | "video" | "audio">("all");
+  // ── 2026-08-15 模型筛选：all 或某个模型标签名 ──
+  const [modelFilter, setModelFilter] = useState<string>("all");
+  // 用户级模型标签库（全局，跨工作流复用）；卡片 chips + 管理弹窗 + 筛选器共享
+  const [modelTags, setModelTags] = useState<{ id: string; name: string; count: number }[]>([]);
+  const [showModelManager, setShowModelManager] = useState(false);
+  // 当前正在编辑标签的卡片 id（card 内的「＋」popover）
+  const [assigningId, setAssigningId] = useState<string | null>(null);
+  // popover 锚点位置（按钮的视口矩形），用于 portal 固定定位，逃出卡片/滚动裁剪
+  const [assignRect, setAssignRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const modelManagerOpenRef = useRef(false);
 
   // ── Import panel state ──
   const [showImport, setShowImport] = useState(false);
@@ -375,6 +434,37 @@ export function WorkflowLibrary({
   const [importErr, setImportErr] = useState("");
   const [importWarn, setImportWarn] = useState<string[]>([]);
 
+  // 2026-08-12 R71-1: 恢复 drag-and-drop 导入（R12 当时移除 drag-drop 是
+  // 因为本地工作流只能从配置路径导入；现在用户在「本地工作流」tab 把任意
+  // JSON 文件拖进来 → 自动识别格式 → 弹出导入面板让用户确认 → 走现有
+  // POST /api/workflows 链路入库）。
+  // dragActive 控制整片列表区域的虚线高亮；dropErr 用于「文件解析失败」
+  // 时的悬浮错误条（3 秒后自隐）。
+  const [dragActive, setDragActive] = useState(false);
+  const [dropErr, setDropErr] = useState<string | null>(null);
+
+  // 2026-08-12 R76: drag-to-upgrade. User drops a real API JSON onto an
+  // existing workflow card (any card whose apiOrigin !== "user") → the
+  // PATCH endpoint replaces its graph with the user-provided API JSON,
+  // sets apiSource="user", keeps rawJson, and the next GET recomputes
+  // apiOrigin as "user" so the badge drops the "派生" sub-tag.
+  // State machine: idle → dragging → pendingUpgrade (modal open) → PATCHing.
+  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
+  const [pendingUpgrade, setPendingUpgrade] = useState<
+    | {
+        cardId: string;
+        cardName: string;
+        apiJson: object;
+        apiJsonText: string;
+        /** Approximate graph size for the modal preview line. */
+        nodeCount: number;
+      }
+    | null
+  >(null);
+  const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
+  const [upgradeErr, setUpgradeErr] = useState<string | null>(null);
+
   // 2026-08-10 R12: removed the "本机路径" import tab and all drag-and-drop
   // support per the new rule "本地工作流只能通过配置的路径导入".
   // Source-local workflows now show up automatically under the 本地工作流
@@ -382,8 +472,29 @@ export function WorkflowLibrary({
   // loaded via the existing local-file import path on the server.
 
   // ── Delete confirm state ──
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  // 2026-08-12 R77: { id, name } lets the delete modal show which workflow
+  // the user is about to remove (previously this was just an `id`, so the
+  // confirm bar read "确定删除该工作流？" with no name).
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // 2026-08-12 R77: pressing Escape dismisses the delete / upgrade modals
+  // (matches the convention of native <dialog> elements so keyboard users
+  // aren't trapped in the modal).
+  useEffect(() => {
+    if (!pendingDelete && !showUpgradeConfirm) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (pendingDelete) setPendingDelete(null);
+      if (showUpgradeConfirm) {
+        setShowUpgradeConfirm(false);
+        setPendingUpgrade(null);
+        setUpgradeErr(null);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [pendingDelete, showUpgradeConfirm]);
 
   // ── Canvas editor state ──
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -433,26 +544,87 @@ export function WorkflowLibrary({
 
   const load = useCallback(() => {
     setLoading(true);
+    /** 2026-08-13 R-hotfix: guard against 4xx/5xx & empty bodies.
+     *  Route can briefly 500 during Next.js Turbopack recompiles (or while
+     *  prisma client is regenerating).  Without this guard an empty
+     *  `r.json()` throws "Unexpected end of JSON input" — Next.js surfaces
+     *  it as a red "Unhandled Runtime Error" overlay that blocks the whole
+     *  library.  Fall through silently: the previous list state stays
+     *  intact, and `setLoading(false)` still flips back in `.finally`. */
     fetch("/api/workflows")
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) {
+          const text = await r.text().catch(() => "");
+          throw new Error(
+            `HTTP ${r.status}${text ? `: ${text.slice(0, 80)}` : ""}`
+          );
+        }
+        return r.json();
+      })
       .then((d) => {
         setWorkflows(d.workflows ?? []);
         setLocalPending(d.localPending ?? []);
         setLocalRoots(d.localRoots ?? []);
+        // R-ardot105 (2026-08-17): the server auto-relinked any rows whose
+        // source file was renamed on disk (matched by content checksum).
+        // Flash a one-shot toast so the user knows the link silently moved
+        // to the new filename.  `diskMissing` is already `false` for these
+        // rows, so no scary "文件不存在" error state is shown.
+        for (const w of (d.workflows ?? [])) {
+          if (w.diskRenamed && w.diskRenamedTo) {
+            toast.success("已自动重新链接", w.diskRenamedTo);
+          }
+        }
+      })
+      .catch((err) => {
+        // Keep previous list state (do not wipe to empty).  Re-render only
+        // when `load()` succeeds.  Stays quiet on background-tab events.
+        console.warn(
+          "[WorkflowLibrary] /api/workflows fetch failed:",
+          err?.message ?? err
+        );
       })
       .finally(() => setLoading(false));
   }, []);
 
+  /** 2026-08-15: 拉取用户级模型标签库（全局），供卡片 chips / 筛选器 /
+   *  管理弹窗共享。独立拉取，不与工作流列表耦合。 */
+  const loadModelTags = useCallback(() => {
+    fetch("/api/workflow-models")
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && Array.isArray(d.tags)) setModelTags(d.tags);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     load();
+    loadModelTags();
+  }, [load, loadModelTags]);
+
+  /** 2026-08-13: re-fetch when a sibling panel mutates LOCAL_WORKFLOWS_PATH.
+   *  The settings dialog (CustomNodesSettings) dispatches
+   *  `comfyapp:local-workflows-path-changed` after every save; without this
+   *  listener the list's `localRoots`/`localPending` state would stay stale
+   *  until the user hard-reloads. Both the chip "本地工作流 N" counter and
+   *  the "⤓ 未载入" placeholder cards rely on a fresh fetch. */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onChanged = () => {
+      load();
+    };
+    window.addEventListener("comfyapp:local-workflows-path-changed", onChanged);
+    return () => {
+      window.removeEventListener("comfyapp:local-workflows-path-changed", onChanged);
+    };
   }, [load]);
 
-  const filtered = useMemo(() => {
-    // 2026-08-10 R8: merge DB rows + disk-pending placeholders into one
-    // list before filtering by source tab. Pending rows already carry
-    // source: "local-pending" — they only show up under the local tab
-    // and inside "全部".
-    const merged = [
+  // 2026-08-10 R8: merge DB rows + disk-pending placeholders into one list
+  // before filtering.  Hoisted into its own memo so R70-3's type counts and
+  // the source filter share the same merged set without recomputing.
+  const mergedRows = useMemo(
+    () => [
       ...workflows,
       ...localPending.map((p) => ({
         id: p.id,
@@ -475,17 +647,35 @@ export function WorkflowLibrary({
         preview: { nodes: [], edges: [], w: 0, h: 0 },
         workflowIO: {},
       })),
-    ];
-    const bySource = merged.filter(
+    ],
+    [workflows, localPending]
+  );
+
+  const filtered = useMemo(() => {
+    const bySource = mergedRows.filter(
       (w) =>
         sourceFilter === "all" ||
         ((w as any).source ?? ((w as any).sourcePath ? "local" : "online")) === sourceFilter ||
         (sourceFilter === "local" && (w as any).source === "local-pending")
     );
-    if (!q) return bySource;
+    // 2026-08-12 R70-3: filter by high-level category (image / video / audio).
+    const byType = bySource.filter((w) => {
+      if (typeFilter === "all") return true;
+      const cat = getWorkflowType(normalizeTaskType((w as any).taskType ?? ""))?.category;
+      return cat === typeFilter;
+    });
+    // 2026-08-15: filter by model tag name.  "all" = no model constraint;
+    // any other value must match one of the row's modelTags (placeholders
+    // have none, so they're hidden when a model is selected).
+    const byModel = byType.filter((w) => {
+      if (modelFilter === "all") return true;
+      const tags = ((w as any).modelTags as string[] | undefined) ?? [];
+      return tags.includes(modelFilter);
+    });
+    if (!q) return byModel;
     const needle = q.toLowerCase();
-    return bySource.filter((w) => w.name.toLowerCase().includes(needle));
-  }, [workflows, localPending, q, sourceFilter]);
+    return byModel.filter((w) => w.name.toLowerCase().includes(needle));
+  }, [mergedRows, q, sourceFilter, typeFilter, modelFilter]);
 
   // 2026-08-10 R13: group filtered local rows by their stamped `sourceRoot`.
   // Online rows are intentionally NOT routed through grouping here — the
@@ -557,6 +747,17 @@ export function WorkflowLibrary({
     return base;
   }, [workflows, localPending]);
 
+  // 2026-08-12 R70-3: per-category counts for the type filter chips.  Counts
+  // over the same merged set used by `filtered`.
+  const typeCounts = useMemo(() => {
+    const base = { all: mergedRows.length, image: 0, video: 0, audio: 0 };
+    for (const w of mergedRows) {
+      const cat = getWorkflowType(normalizeTaskType((w as any).taskType ?? ""))?.category;
+      if (cat === "image" || cat === "video" || cat === "audio") base[cat] += 1;
+    }
+    return base;
+  }, [mergedRows]);
+
   const handleImport = useCallback(async () => {
     setImportErr("");
     setImportWarn([]);
@@ -607,6 +808,265 @@ export function WorkflowLibrary({
     }
   }, [importName, importTaskType, importFormat, importJson, load]);
 
+  // 2026-08-12 R71-1: drag-and-drop a workflow JSON onto the list area →
+  // parse → auto-detect format → pre-fill the existing import panel and
+  // open it so the user can confirm name/type/format before POSTing.
+  // This intentionally reuses the manual "粘贴 JSON" flow (handleImport
+  // above) so all validation, warnings, and error surfaces stay
+  // consistent with the copy-paste path. Only the front of the funnel
+  // (file → text → JSON → state) is new.
+  const handleDroppedFile = useCallback(
+    async (file: File) => {
+      setDropErr(null);
+      if (file.size > 5 * 1024 * 1024) {
+        setDropErr(`文件过大（${(file.size / 1024 / 1024).toFixed(1)} MB），单次拖入上限 5 MB`);
+        setTimeout(() => setDropErr(null), 4000);
+        return;
+      }
+      let text: string;
+      try {
+        text = await file.text();
+      } catch (e: any) {
+        setDropErr("无法读取文件：" + (e?.message ?? "未知错误"));
+        setTimeout(() => setDropErr(null), 4000);
+        return;
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        setDropErr("JSON 解析失败：不是合法的工作流 JSON");
+        setTimeout(() => setDropErr(null), 4000);
+        return;
+      }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        setDropErr("不是有效的工作流 JSON（应为对象）");
+        setTimeout(() => setDropErr(null), 4000);
+        return;
+      }
+      const detected = detectWorkflowFormat(parsed);
+      if (!detected) {
+        setDropErr("无法识别的工作流格式：既不是 API 也不是 LiteGraph RAW");
+        setTimeout(() => setDropErr(null), 4000);
+        return;
+      }
+      // Auto-name from filename (strip extension).
+      const baseName = file.name.replace(/\.(json|workflow)$/i, "").trim();
+      setImportName(baseName || "未命名工作流");
+      setImportFormat(detected); // already "api" | "raw"
+      setImportJson(text);
+      setImportErr("");
+      setImportWarn([]);
+      setShowImport(true);
+      // Best-effort taskType hint: if the JSON is API-format and contains
+      // an "Upscale" / "Image" class anywhere, suggest IMG2IMG; otherwise
+      // stick with TXT2IMG. This is only the dropdown default — the user
+      // can change it before submitting.
+      try {
+        let suggested: string = "TXT2IMG";
+        const obj = parsed as Record<string, unknown>;
+        if (detected === "api") {
+          for (const v of Object.values(obj)) {
+            const ct = (v as any)?.class_type;
+            if (typeof ct === "string" && /image|upscale|inpaint|edit/i.test(ct)) {
+              suggested = "IMG2IMG";
+              break;
+            }
+          }
+        } else if (detected === "raw") {
+          const nodes = Array.isArray(obj.nodes) ? (obj.nodes as any[]) : [];
+          for (const n of nodes) {
+            const t = (n as any)?.type;
+            if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
+              suggested = "IMG2IMG";
+              break;
+            }
+          }
+        }
+        setImportTaskType(suggested);
+      } catch {
+        /* swallow — keep default */
+      }
+    },
+    [],
+  );
+
+  // 2026-08-12 R71-1: drag event handlers bound on the list container.
+  // onDragOver: must preventDefault to allow drop; only light up when
+  // something with `Files` type is being dragged (so text-selection drags
+  // don't trigger the highlight). The drag counter on onDragLeave is
+  // needed because bubbling from child elements (cards) fires leave events
+  // even though the cursor is still inside the drop zone — we walk up
+  // to the container's own enter/leave cycle via the counter.
+  const dragCounterRef = useRef(0);
+  const onListDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+  const onListDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    dragCounterRef.current += 1;
+    setDragActive(true);
+  }, []);
+  const onListDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) setDragActive(false);
+  }, []);
+  const onListDrop = useCallback(
+    async (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      dragCounterRef.current = 0;
+      setDragActive(false);
+      const files = Array.from(e.dataTransfer.files ?? []);
+      if (files.length === 0) return;
+      if (files.length > 1) {
+        setDropErr(`一次只能拖入一个文件（收到了 ${files.length} 个）`);
+        setTimeout(() => setDropErr(null), 4000);
+        return;
+      }
+      await handleDroppedFile(files[0]);
+    },
+    [handleDroppedFile],
+  );
+
+  /* ── 2026-08-12 R76: drag-to-upgrade ──────────────────────────────
+   * Each imported card acts as its own drop target. Accept files only
+   * when the card currently has apiOrigin !== "user" (i.e. it's already
+   * "API" — drop would be a no-op — OR has no API at all — drop would
+   * create one out of nothing; either way it's not an "upgrade" action).
+   * RAW-only rows (apiOrigin === null) are also valid upgrade targets:
+   * the dropped API JSON becomes the new graph and we still set
+   * apiSource="user" so subsequent GETs return apiOrigin="user".
+   */
+  const cardAcceptsDrag = useCallback((card: any): boolean => {
+    return card && card.apiOrigin !== "user";
+  }, []);
+
+  const onCardDragOver = useCallback(
+    (e: React.DragEvent<HTMLDivElement>, card: any) => {
+      if (!e.dataTransfer.types.includes("Files")) return;
+      if (!cardAcceptsDrag(card)) return; // already "API" — no upgrade needed
+      e.preventDefault();
+      e.stopPropagation(); // keep the list-level handler from also firing
+      e.dataTransfer.dropEffect = "copy";
+      if (card?.id) setDragOverCardId(card.id);
+    },
+    [cardAcceptsDrag],
+  );
+
+  const onCardDragLeave = useCallback(
+    (e: React.DragEvent<HTMLDivElement>, card: any) => {
+      // Only clear when leaving the card itself, not its children.
+      if (e.currentTarget === e.target && card?.id === dragOverCardId) {
+        setDragOverCardId(null);
+      } else if (card?.id === dragOverCardId && !e.currentTarget.contains(e.relatedTarget as Node)) {
+        setDragOverCardId(null);
+      }
+    },
+    [dragOverCardId],
+  );
+
+  const onCardDrop = useCallback(
+    async (e: React.DragEvent<HTMLDivElement>, card: any) => {
+      e.preventDefault();
+      e.stopPropagation(); // prevent the list-level onListDrop from also firing
+      setDragOverCardId(null);
+      const files = Array.from(e.dataTransfer.files ?? []);
+      if (files.length === 0) return;
+      if (!cardAcceptsDrag(card)) {
+        setDropErr("该工作流已升级为 API，无需重复拖入");
+        setTimeout(() => setDropErr(null), 4000);
+        return;
+      }
+      if (files.length > 1) {
+        setDropErr(`一次只能拖入一个文件（收到了 ${files.length} 个）`);
+        setTimeout(() => setDropErr(null), 4000);
+        return;
+      }
+      const file = files[0];
+      if (file.size > 5 * 1024 * 1024) {
+        setDropErr(`文件过大（${(file.size / 1024 / 1024).toFixed(1)} MB），单次拖入上限 5 MB`);
+        setTimeout(() => setDropErr(null), 4000);
+        return;
+      }
+      let text: string;
+      try {
+        text = await file.text();
+      } catch (err: any) {
+        setDropErr("无法读取文件：" + (err?.message ?? "未知错误"));
+        setTimeout(() => setDropErr(null), 4000);
+        return;
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        setDropErr("JSON 解析失败：不是合法的工作流 JSON");
+        setTimeout(() => setDropErr(null), 4000);
+        return;
+      }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        setDropErr("不是有效的工作流 JSON（应为对象）");
+        setTimeout(() => setDropErr(null), 4000);
+        return;
+      }
+      const detected = detectWorkflowFormat(parsed);
+      if (detected !== "api") {
+        setDropErr(
+          detected === "raw"
+            ? "该工作流已存在，请拖入 API 格式 JSON（{ \"<id>\": { class_type, inputs } }）而不是 RAW 格式"
+            : "无法识别为 API 格式 JSON（需要 { \"<id>\": { class_type, inputs } } 结构）",
+        );
+        setTimeout(() => setDropErr(null), 4000);
+        return;
+      }
+      // Surface a confirmation modal — destructive-ish (overwrites graph)
+      // and we want the user to confirm before we PATCH.
+      const nodeCount = Object.keys(parsed as Record<string, unknown>).filter(
+        (k) => /^\d+$/.test(k),
+      ).length;
+      setPendingUpgrade({
+        cardId: card.id,
+        cardName: card.name,
+        apiJson: parsed as object,
+        apiJsonText: text,
+        nodeCount,
+      });
+      setUpgradeErr(null);
+      setShowUpgradeConfirm(true);
+    },
+    [cardAcceptsDrag],
+  );
+
+  const handleUpgradeConfirm = useCallback(async () => {
+    if (!pendingUpgrade) return;
+    setUpgrading(true);
+    setUpgradeErr(null);
+    try {
+      const res = await fetch(`/api/workflows/${pendingUpgrade.cardId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ upgradeFromApi: pendingUpgrade.apiJson }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setUpgradeErr(data?.error ?? `升级失败（HTTP ${res.status}）`);
+        return;
+      }
+      setShowUpgradeConfirm(false);
+      setPendingUpgrade(null);
+      // Refresh the list so the badge recomputes (apiOrigin "derived"→"user").
+      await load();
+      toast.success("已升级为真实 API 格式", "graph 已更新 · rawJson 保留");
+    } catch (err: any) {
+      setUpgradeErr(err?.message ?? "网络错误");
+    } finally {
+      setUpgrading(false);
+    }
+  }, [pendingUpgrade, load, toast]);
+
   const handleDelete = useCallback(
     async (id: string) => {
       setDeleting(true);
@@ -624,6 +1084,67 @@ export function WorkflowLibrary({
       }
     },
     [load]
+  );
+
+  /** 2026-08-13: 多模式持久化。
+   *  - modes[] 与 defaultMode 经 PATCH /api/workflows/[id] 一次性落库
+   *    （modes 走 JSON 字符串列；defaultMode 同步 taskType 列保持向后兼容）
+   *  - 乐观更新本地列表，失败则回滚（重新拉取列表）
+   *  - 替换了早期 v1 的临时 React-state 方案（modesMap 已在 prisma 迁移后移除） */
+  const patchModes = useCallback(
+    async (id: string, modes: string[], defaultMode: string) => {
+      setWorkflows((prev) =>
+        prev.map((w) =>
+          w.id === id
+            ? { ...w, modes, defaultMode, taskType: defaultMode }
+            : w
+        )
+      );
+      try {
+        const res = await fetch(`/api/workflows/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ modes, defaultMode }),
+        });
+        if (!res.ok) {
+          const d = await res.json().catch(() => null);
+          toast.error("更新模式失败", (d && d.error) || "未知错误");
+          load();
+        }
+      } catch (e: any) {
+        toast.error("更新模式失败", e?.message ?? "网络错误");
+        load();
+      }
+    },
+    [toast, load]
+  );
+
+  /** 2026-08-15: 模型标签绑定持久化。
+   *  - names 是去重后的标签名数组，PATCH /api/workflows/[id] 的 modelTags
+   *    字段（服务端 upsert 标签库 + set 关系到这些标签）。
+   *  - 乐观更新本地列表（直接写 modelTags），失败回滚（重新拉取）。 */
+  const patchModelTags = useCallback(
+    async (id: string, names: string[]) => {
+      setWorkflows((prev) =>
+        prev.map((w) => (w.id === id ? { ...w, modelTags: names } : w))
+      );
+      try {
+        const res = await fetch(`/api/workflows/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ modelTags: names }),
+        });
+        if (!res.ok) {
+          const d = await res.json().catch(() => null);
+          toast.error("更新模型标签失败", (d && d.error) || "未知错误");
+          load();
+        }
+      } catch (e: any) {
+        toast.error("更新模型标签失败", e?.message ?? "网络错误");
+        load();
+      }
+    },
+    [toast, load]
   );
 
   /** 2026-08-11 R38: download a single workflow's API OR RAW JSON
@@ -799,34 +1320,113 @@ const renderWorkflowCard = (w: any) => {
   // Full-fidelity card: 80px preview / chip strip / title / ago / actions.
   // Click the body to open the canvas editor; "使用 →" places a copy on
   // the project canvas (delegated to the parent's `onUse` callback).
-  const tl =
-    TASK_LABELS[w.taskType] ??
-    { label: w.taskType || "其他", color: "text-gray-300 bg-white/10" };
-  const paramCount = Object.keys(w.paramMap ?? {}).length;
+  const paramCount = (() => {
+    const io = (w.workflowIO ?? {}) as Record<string, { direction?: string }>;
+    return Object.values(io).filter((e) => e && e.direction === "input").length;
+  })();
   return (
     <div
       key={w.id}
       data-workflow-id={w.id}
-      className="group flex cursor-pointer flex-col rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 transition-all hover:border-violet-500/30 hover:bg-white/[0.04]"
-      onClick={() => setEditingId(w.id)}
+      data-card-id={w.id}
+      className={`group relative flex flex-col rounded-2xl border bg-white/[0.02] p-4 transition-all hover:border-violet-500/30 hover:bg-white/[0.04] ${
+        dragOverCardId === w.id
+          ? "border-cyan-400/70 ring-2 ring-cyan-400/40 shadow-[0_0_0_4px_rgba(34,211,238,0.12)]"
+          : "border-white/[0.06]"
+      }`}
+      onDragOver={(e) => onCardDragOver(e, w)}
+      onDragLeave={(e) => onCardDragLeave(e, w)}
+      onDrop={(e) => void onCardDrop(e, w)}
     >
-      <div className="relative mb-3 flex h-20 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-violet-500/10 to-sky-500/10">
+      {/* 2026-08-12 R76: drag-to-upgrade overlay. Pointer-events-none so the
+          drop handler still fires on the card; only lights up when this card
+          is the actual drag target. */}
+      {dragOverCardId === w.id && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl bg-cyan-500/[0.08] backdrop-blur-[1px]">
+          <Icon name="upload" size={22} className="mb-1 text-cyan-300" />
+          <p className="text-[12px] font-medium text-cyan-100">拖到这里升级为真实 API</p>
+          <p className="mt-0.5 text-[10px] text-cyan-200/70">rawJson 保留 · 仅替换 graph</p>
+        </div>
+      )}
+      {/* 2026-08-16 R-ardot85: 工作流标题上移到预览之上 + outer click 拆除。
+          卡片背景不再直接进入 WorkflowCanvasEditor，编辑入口只剩 footer
+          中的「编辑」按钮（紫字）。原 `cursor-pointer` + `onClick={() =>
+          setEditingId(w.id)}` 已经删除，避免误触开大画布。 */}
+      <h3
+        className={`mb-2 break-words text-sm font-semibold leading-snug text-gray-100 ${
+          isTechnicalName(w.name) ? "font-mono" : ""
+        }`}
+        style={{ color: "#F4F4F8" }}
+        title={w.name}
+      >
+        {w.name}
+      </h3>
+      {/* 2026-08-16 R-ardot95: the IO chip strip doubles as a secondary
+          editor-entry trigger.  R-ardot85 deliberately removed the
+          card-wide click to prevent accidental opens of the canvas
+          editor — but the IO preview is what authors look at first when
+          scanning a card, so clicking anywhere in that area should
+          also enter the editor (same behaviour as the footer "编辑"
+          button).  The whole 80px preview region — including the empty
+          gradient padding around the chips — is now the click target,
+          with a soft hover state so the affordance is obvious. */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditingId(w.id);
+        }}
+        className="group/io relative mb-3 flex h-20 w-full items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-violet-500/10 to-sky-500/10 text-left transition-colors hover:from-violet-500/15 hover:to-sky-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
+        title="点击进入工作流编辑器"
+      >
         {(() => {
           const ioCount = w.workflowIO ? Object.keys(w.workflowIO).length : 0;
           if (ioCount > 0) return <WorkflowIOThumb io={w.workflowIO} />;
-          if (w.preview && w.preview.nodes.length > 0)
-            return <WorkflowPreview preview={w.preview} />;
+          /* 2026-08-12 R70-1: 未配置 IO 时预览区留白，不再渲染 graph 的
+           * bezier 缩略图或 shuffle 占位图标，避免「已配置」的误导观感。 */
+          return null;
+        })()}
+      </button>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {/* 2026-08-13 R* v1: 多模式 chip + +N pill。点击主 chip 或 +N pill
+            都开同一多选 popover：搜索/分类勾选/取消·保存。
+            主 chip 颜色按 defaultMode 的 category 上色（image=violet /
+            video=sky / audio=amber），多出一律走紫底 8% 弱化占位。
+            R-ardot87 (2026-08-16): 工作流初始导入不再自动推断类型（用户
+            手动设过的才记录），所以这里**永远渲染** chip —— 旧逻辑在
+            `effModes.length === 0` 时直接 return null，结果新导入的工作
+            流卡片没有入口点让用户选类型。现在 modes 为空时显示「未选」chip
+            （MultiModeSelect 内部已处理空态：title "未选 · "），点开就
+            是 popover，用户挑完保存后变正常 chip。 */}
+        {(() => {
+          const effMode = normalizeTaskType(w.taskType ?? "");
+          const effModes =
+            Array.isArray(w.modes) && w.modes.length > 0
+              ? w.modes
+              : effMode
+                ? [effMode]
+                : [];
+          const defaultMode =
+            w.defaultMode && effModes.includes(w.defaultMode)
+              ? w.defaultMode
+              : effModes[0] ?? "";
           return (
-            <Icon
-              name="shuffle"
-              size={28}
-              className="text-violet-300 transition-transform group-hover:scale-105"
-            />
+            <span
+              onClick={(e) => e.stopPropagation()}
+              title={
+                effModes.length === 0
+                  ? "点击选择工作流类型（未选）"
+                  : "点击管理此工作流支持的模式（多选）"
+              }
+            >
+              <MultiModeSelect
+                modes={effModes}
+                defaultMode={defaultMode}
+                onChange={(ms, def) => void patchModes(w.id, ms, def)}
+              />
+            </span>
           );
         })()}
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${tl.color}`}>{tl.label}</span>
         <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-gray-400">
           {paramCount} 个参数位
         </span>
@@ -929,22 +1529,67 @@ const renderWorkflowCard = (w: any) => {
               </span>
             );
           }
+          // R-ardot105 (2026-08-17): the row was just auto-relinked to a
+          // renamed file this refresh.  Surface a soft confirmation chip so
+          // the move is visible even after the toast auto-dismisses.  The
+          // link is healthy again, so no action is offered.
+          if (w.diskRenamed && w.diskRenamedTo) {
+            return (
+              <span
+                className="inline-flex items-center gap-1 rounded-md bg-violet-500/15 px-2 py-0.5 text-[11px] font-medium text-violet-200"
+                title={`已在磁盘上检测到文件改名，已自动重新链接：\n${w.diskRenamedTo}`}
+              >
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-300" />
+                已重新链接
+              </span>
+            );
+          }
           return null;
         })()}
         {/* 2026-08-10 R13: SourceRootChip removed from the chip strip.
             The directory this row lives under is now part of the
             RootGroupHeader rendered above the card in the local tab;
             repeating it here would be redundant. */}
+
+        {/* 2026-08-15 模型标签 chips + 「＋」绑定 */}
+        {(() => {
+          const cur = ((w as any).modelTags as string[] | undefined) ?? [];
+          const open = assigningId === w.id;
+          const toggle = (name: string) => {
+            const next = cur.includes(name)
+              ? cur.filter((x) => x !== name)
+              : [...cur, name];
+            void patchModelTags(w.id, next);
+          };
+          return (
+            <span
+              className="relative inline-flex items-center gap-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {cur.map((mt) => (
+                <span
+                  key={mt}
+                  className="rounded-md bg-fuchsia-500/15 px-2 py-0.5 text-[11px] font-medium text-fuchsia-200"
+                >
+                  {mt}
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={(e) => {
+                  const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                  setAssignRect({ top: r.bottom + 6, left: r.left, width: r.width });
+                  setAssigningId(open ? null : w.id);
+                }}
+                className="rounded-md border border-white/15 px-1.5 py-0.5 text-[11px] text-gray-300 hover:bg-white/10"
+                title="绑定 / 解绑模型标签"
+              >
+                ＋
+              </button>
+            </span>
+          );
+        })()}
       </div>
-      <h3
-        className={`mt-1.5 break-words text-sm font-semibold leading-snug text-gray-100 ${
-          isTechnicalName(w.name) ? "font-mono" : ""
-        }`}
-        style={{ color: "#F4F4F8" }}
-        title={w.name}
-      >
-        {w.name}
-      </h3>
       <p className="mt-1 text-xs font-medium text-gray-400">{ago(w.createdAt)}</p>
       <div className="mt-3 space-y-2">
         {(() => {
@@ -1032,7 +1677,7 @@ const renderWorkflowCard = (w: any) => {
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setPendingDelete(w.id);
+              setPendingDelete({ id: w.id, name: w.name });
             }}
             className="text-xs font-medium text-gray-300 transition-colors hover:text-red-300"
           >
@@ -1077,6 +1722,68 @@ const renderWorkflowCard = (w: any) => {
             );
           })()}
         </div>
+        {/* 2026-08-15 模型标签绑定 popover（portal 到 body，逃出卡片/滚动裁剪） */}
+        {assigningId === w.id && assignRect && createPortal(
+          (() => {
+            const cur = ((w as any).modelTags as string[] | undefined) ?? [];
+            const toggle = (name: string) => {
+              const next = cur.includes(name)
+                ? cur.filter((x) => x !== name)
+                : [...cur, name];
+              void patchModelTags(w.id, next);
+            };
+            return (
+              <>
+                <div
+                  className="fixed inset-0 z-[90]"
+                  onClick={() => {
+                    setAssigningId(null);
+                    setAssignRect(null);
+                  }}
+                />
+                <div
+                  className="fixed z-[91] w-56 rounded-xl border border-white/10 bg-[#1b1b24] p-2 shadow-2xl"
+                  style={{ top: assignRect.top, left: assignRect.left }}
+                >
+                  <div className="mb-1 px-1 text-[11px] font-medium text-gray-400">绑定模型标签</div>
+                  {modelTags.length === 0 && (
+                    <div className="px-2 py-1 text-[11px] text-gray-500">先到「管理模型」添加标签</div>
+                  )}
+                  <div className="max-h-44 overflow-y-auto">
+                    {modelTags.map((t) => {
+                      const checked = cur.includes(t.name);
+                      return (
+                        <label
+                          key={t.id}
+                          className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-200 hover:bg-white/5"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggle(t.name)}
+                            className="accent-fuchsia-500"
+                          />
+                          <span className="truncate">{t.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssigningId(null);
+                      setAssignRect(null);
+                    }}
+                    className="mt-1.5 w-full rounded-md bg-white/5 py-1 text-[11px] text-gray-300 hover:bg-white/10"
+                  >
+                    完成
+                  </button>
+                </div>
+              </>
+            );
+          })(),
+          document.body
+        )}
       </div>
     </div>
   );
@@ -1209,26 +1916,125 @@ const renderWorkflowCard = (w: any) => {
           </div>
         )}
 
-        {/* ── Delete confirm bar ── */}
+        {/* ── Delete confirm modal ── */}
         {pendingDelete && (
-          <div className="mb-5 flex items-center justify-between rounded-xl border border-red-500/30 bg-red-500/[0.06] px-4 py-3">
-            <p className="text-sm text-gray-200">确定删除该工作流？此操作不可撤销。</p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPendingDelete(null)}
-                className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-gray-300 hover:bg-white/5"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDelete(pendingDelete)}
-                disabled={deleting}
-                className="rounded-lg bg-red-500/90 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
-              >
-                {deleting ? "删除中…" : "确认删除"}
-              </button>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-modal-title"
+            onClick={() => !deleting && setPendingDelete(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-2xl border border-red-500/30 bg-[#16161C] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
+            >
+              <div className="mb-3 flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-300">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6M14 11v6" />
+                    <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 id="delete-modal-title" className="text-base font-semibold text-white">
+                    删除工作流
+                  </h3>
+                  <p className="mt-1 break-words text-sm text-gray-400">
+                    确认删除「<span className="text-gray-200">{pendingDelete.name}</span>」？此操作不可撤销。
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPendingDelete(null)}
+                  disabled={deleting}
+                  className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-gray-300 hover:bg-white/5 disabled:opacity-50"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(pendingDelete.id)}
+                  disabled={deleting}
+                  className="rounded-lg bg-red-500/90 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                >
+                  {deleting ? "删除中…" : "确认删除"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── 2026-08-12 R76: drag-to-upgrade confirm modal ──
+            Shown after the user drops an API-format JSON onto an imported
+            card whose apiOrigin is still "derived". Confirms before PATCHing
+            `upgradeFromApi` (graph replaced, rawJson kept).
+            2026-08-12 R77: converted from a thin top bar to a centered modal
+            so the prompt is hard to miss and clearly tied to the action. */}
+        {showUpgradeConfirm && pendingUpgrade && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="upgrade-modal-title"
+            onClick={() => {
+              if (upgrading) return;
+              setShowUpgradeConfirm(false);
+              setPendingUpgrade(null);
+              setUpgradeErr(null);
+            }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-2xl border border-cyan-500/30 bg-[#16161C] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
+            >
+              <div className="mb-3 flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan-500/15 text-cyan-300">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="16 16 12 12 8 16" />
+                    <line x1="12" y1="12" x2="12" y2="21" />
+                    <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 id="upgrade-modal-title" className="text-base font-semibold text-white">
+                    升级为真实 API 格式
+                  </h3>
+                  <p className="mt-1 break-words text-sm text-gray-400">
+                    将工作流「<span className="text-gray-200">{pendingUpgrade.cardName}</span>」的 graph 替换为刚拖入的真实 API（{pendingUpgrade.nodeCount} 个节点）？
+                  </p>
+                  <p className="mt-1 text-[11px] text-gray-500">原 rawJson 保留用于查看。</p>
+                  {upgradeErr && (
+                    <p className="mt-2 break-words text-[11px] text-red-400">{upgradeErr}</p>
+                  )}
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUpgradeConfirm(false);
+                    setPendingUpgrade(null);
+                    setUpgradeErr(null);
+                  }}
+                  disabled={upgrading}
+                  className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-gray-300 hover:bg-white/5 disabled:opacity-50"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleUpgradeConfirm()}
+                  disabled={upgrading}
+                  className="rounded-lg bg-cyan-500/90 px-3 py-1.5 text-sm font-semibold text-white hover:bg-cyan-500 disabled:opacity-50"
+                >
+                  {upgrading ? "升级中…" : "确认升级"}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1265,20 +2071,165 @@ const renderWorkflowCard = (w: any) => {
           })}
         </div>
 
+        {/* ── Type filter (R70-3): 全部类型 / 图像 / 视频 / 音频 ── */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {([
+            { key: "all", label: "全部类型", count: typeCounts.all },
+            { key: "image", label: "图像", count: typeCounts.image },
+            { key: "video", label: "视频", count: typeCounts.video },
+            { key: "audio", label: "音频", count: typeCounts.audio },
+          ] as const).map((t) => {
+            const active = typeFilter === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTypeFilter(t.key)}
+                className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                  active
+                    ? "border-sky-500/60 bg-sky-500/15 text-sky-200"
+                    : "border-white/[0.08] bg-white/[0.02] text-gray-400 hover:border-white/20 hover:text-gray-200"
+                }`}
+              >
+                {t.label}
+                <span
+                  className={`rounded-full px-1.5 text-[11px] tabular-nums ${
+                    active ? "bg-sky-500/30 text-sky-100" : "bg-white/10 text-gray-400"
+                  }`}
+                >
+                  {t.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── 2026-08-15 模型筛选 + 标签库管理 ── */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setModelFilter("all")}
+            className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+              modelFilter === "all"
+                ? "border-fuchsia-500/60 bg-fuchsia-500/15 text-fuchsia-200"
+                : "border-white/[0.08] bg-white/[0.02] text-gray-400 hover:border-white/20 hover:text-gray-200"
+            }`}
+          >
+            全部模型
+            <span
+              className={`rounded-full px-1.5 text-[11px] tabular-nums ${
+                modelFilter === "all" ? "bg-fuchsia-500/30 text-fuchsia-100" : "bg-white/10 text-gray-400"
+              }`}
+            >
+              {modelTags.reduce((s, t) => s + t.count, 0)}
+            </span>
+          </button>
+          {modelTags.map((t) => {
+            const active = modelFilter === t.name;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setModelFilter(active ? "all" : t.name)}
+                className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                  active
+                    ? "border-fuchsia-500/60 bg-fuchsia-500/15 text-fuchsia-200"
+                    : "border-white/[0.08] bg-white/[0.02] text-gray-400 hover:border-white/20 hover:text-gray-200"
+                }`}
+              >
+                {t.name}
+                <span
+                  className={`rounded-full px-1.5 text-[11px] tabular-nums ${
+                    active ? "bg-fuchsia-500/30 text-fuchsia-100" : "bg-white/10 text-gray-400"
+                  }`}
+                >
+                  {t.count}
+                </span>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setShowModelManager(true)}
+            className="ml-1 flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5 text-sm font-medium text-gray-200 hover:bg-white/5"
+          >
+            <Icon name="tag" className="h-3.5 w-3.5" />
+            管理模型
+          </button>
+        </div>
+
         {/* ── List ── */}
-        {loading ? (
-          <p className="text-sm text-gray-500">加载中…</p>
-        ) : filtered.length === 0 ? (
-          <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-white/[0.08] text-gray-500">
-            <div className="text-center">
-              <Icon name="files" size={40} className="mx-auto mb-3 text-violet-300/70" />
-              <p className="text-lg font-medium text-gray-300">暂无导入的工作流</p>
-              <p className="mt-1 text-sm">
-                点击右上角「导入工作流」粘贴 JSON；或在「自定义节点 / 本地工作流」中配置本地目录，将自动出现 ⤓ 未载入 卡片。
-              </p>
+        {/* 2026-08-12 R71-1 + R72: drag-drop 的目标区是整片列表容器，handler
+         * 用 counter 防抖防冒泡。R72 把"全屏虚线 + 大 icon + 居中三行文案"
+         * 换成了列表顶部一条始终可见的小条 (compact banner)，只在拖入时
+         * 整条 cyan 高亮——视觉影响从「盖住整个列表」缩到「一小横条」，
+         * 普通态还有"把 JSON 拖到这里导入"的常驻提示。*/}
+        <div
+          className="relative"
+          onDragEnter={onListDragEnter}
+          onDragOver={onListDragOver}
+          onDragLeave={onListDragLeave}
+          onDrop={onListDrop}
+        >
+          {dropErr && (
+            <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/[0.08] px-3 py-2 text-sm text-red-200">
+              <span className="font-semibold">⚠</span>
+              <span>{dropErr}</span>
+              <button
+                type="button"
+                className="ml-auto text-xs text-red-300/70 hover:text-red-100"
+                onClick={() => setDropErr(null)}
+              >
+                ✕
+              </button>
             </div>
-          </div>
-        ) : sourceFilter === "local" && groupedByRoot.length > 0 ? (
+          )}
+
+          {/* R72 compact drop hint — 替代 R71-1 的全屏 overlay */}
+          {!loading && (
+            <div
+              className={`mb-3 flex items-center gap-3 rounded-xl border border-dashed px-4 py-2.5 transition-colors ${
+                dragActive
+                  ? "border-cyan-400/80 bg-cyan-500/[0.08] shadow-[inset_0_0_0_1px_rgba(34,211,238,0.12)]"
+                  : "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.16]"
+              }`}
+            >
+              <div
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                  dragActive ? "bg-cyan-500/15 text-cyan-300" : "bg-white/[0.04] text-gray-500"
+                }`}
+              >
+                <Icon name="upload" size={16} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div
+                  className={`truncate text-sm font-medium ${dragActive ? "text-cyan-100" : "text-gray-300"}`}
+                >
+                  {dragActive ? "松开鼠标即可导入工作流" : "把工作流 JSON 拖到这里快速导入"}
+                </div>
+                <div
+                  className={`truncate text-[11px] ${dragActive ? "text-cyan-200/70" : "text-gray-500"}`}
+                >
+                  {dragActive
+                    ? "支持 ComfyUI 导出（API 格式）/（工作流格式）· 单文件 ≤ 5 MB"
+                    : "或点击右上角「导入工作流」粘贴 JSON"}
+                </div>
+              </div>
+            </div>
+          )}
+          {loading ? (
+            <p className="text-sm text-gray-500">加载中…</p>
+          ) : filtered.length === 0 ? (
+            <div className="grid min-h-[220px] place-items-center rounded-2xl border border-dashed border-white/[0.08] text-gray-500">
+              <div className="text-center">
+                <Icon name="files" size={32} className="mx-auto mb-2 text-violet-300/70" />
+                <p className="text-base font-medium text-gray-300">暂无工作流</p>
+                <p className="mt-1 text-xs">
+                  配置本地工作流目录后会显示 ⤓ 未载入 卡片；或向上拖入 JSON 导入。
+                </p>
+              </div>
+            </div>
+          ) : sourceFilter === "local" && groupedByRoot.length > 0 ? (
           // 2026-08-10 R13: per-configured-root grouping for the local
           // tab.  Each LOCAL_WORKFLOWS_PATH entry becomes a RootGroupHeader
           // (caret + 📁 + verbatim path + status) whose collapsed state
@@ -1330,6 +2281,7 @@ const renderWorkflowCard = (w: any) => {
             {filtered.map(renderWorkflowCard)}
           </div>
         )}
+        </div>
       </div>
 
       {/* ── Canvas editor modal ── */}
@@ -1345,6 +2297,17 @@ const renderWorkflowCard = (w: any) => {
         <LibrarySourceModal
           wf={sourceFor}
           onClose={() => setSourceFor(null)}
+        />
+      )}
+
+      {/* ── 2026-08-15 模型标签库管理弹窗 ── */}
+      {showModelManager && (
+        <ModelTagManager
+          initialTags={modelTags}
+          onChanged={() => {
+            loadModelTags();
+          }}
+          onClose={() => setShowModelManager(false)}
         />
       )}
     </div>

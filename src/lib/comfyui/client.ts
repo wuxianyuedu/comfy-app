@@ -155,10 +155,34 @@ export async function getView(
 // Returns the list of real filenames on disk for a model folder.
 export async function listModels(folder: string): Promise<string[]> {
   try {
-    const res = await fetch(`${comfyBase()}/api/models/${folder}`);
+    const res = await fetch(`${comfyBase()}/api/models/${encodeURIComponent(folder)}`);
     if (!res.ok) return [];
     const data = (await res.json()) as string[];
     return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The model directories ComfyUI actually knows about (`GET /api/models`).
+ *
+ * This is the authoritative answer to "by what rules are models found": a live
+ * install exposes ~86 folders (checkpoints, loras, ultralytics_bbox, sams,
+ * gguf, …).  The model-library config UI lists these so the user picks from
+ * real directories instead of guessing a folder name.
+ *
+ * Returns `[]` when ComfyUI is unreachable — callers then show an empty
+ * directory list (the user configures from real directories only).
+ */
+export async function listModelFolders(): Promise<string[]> {
+  try {
+    const res = await fetch(`${comfyBase()}/api/models`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as string[];
+    return Array.isArray(data) ? data.filter((f) => typeof f === "string" && f.length > 0) : [];
   } catch {
     return [];
   }

@@ -3,18 +3,24 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbo",
+    "dev": "next dev",
     "dev:warm": "node scripts/dev-launcher.js warm",
     "build": "node scripts/prebuild-clean.mjs && next build",
     "start": "next start",
     "lint": "next lint",
     "db:push": "npx prisma db push --accept-data-loss",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:demo": "tsx prisma/seed-demo.ts",
     "smoke:canvas": "node scripts/canvas-smoke.mjs",
     "parse:custom-nodes": "node scripts/run-parse-custom-nodes.mjs",
     "test:comfy": "tsx scripts/regression.mts",
     "test:comfy:live": "tsx scripts/regression.mts --live",
-    "test:comfy:http": "tsx scripts/regression.mts --http"
+    "test:comfy:http": "tsx scripts/regression.mts --http",
+    "test:r74": "NODE_OPTIONS=\"\" node scripts/r74-subgraph-checkbox.mjs",
+    "test:r35": "npx tsx scripts/r35-ardot-io-reorder.mts",
+    "test:r36": "npx tsx scripts/r36-ardot-mode-pick-chip.mts",
+    "test:r37": "npx tsx scripts/r37-ardot-mode-consistency.mts",
+    "test:r38": "npx tsx scripts/r38-ardot-mode-popover.mts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

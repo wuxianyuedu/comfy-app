@@ -461,3 +461,29 @@ export function inferWorkflowTypeFromGraph(graph: Record<string, any>): string {
   // Default: text-to-image
   return "T2I";
 }
+
+/* ── 多模式 JSON 编解码（2026-08-13）────────────────────────────
+ * SQLite 不支持 Prisma 标量数组，故 WorkflowTemplate.modes 存为
+ * JSON 字符串（与 Skill.tags 同构）。下面两个函数统一在「DB 列 ↔
+ * TS 数组」之间转换，并在任何畸形输入下都安全降级为空数组 / 合法
+ * JSON，绝不抛错（路由层吞异常比崩溃更安全）。 */
+export function parseModesJson(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((x): x is string => typeof x === "string");
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        return arr.filter((x): x is string => typeof x === "string");
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  return [];
+}
+
+export function serializeModesJson(modes: string[]): string {
+  return JSON.stringify(Array.isArray(modes) ? modes : []);
+}

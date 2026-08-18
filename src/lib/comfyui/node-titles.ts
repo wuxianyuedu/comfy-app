@@ -98,9 +98,13 @@ const NODE_TITLES: Record<string, NodeTitleEntry> = {
 /** Friendly title lookup.
  *
  *  Resolution order:
- *    1. Static NODE_TITLES map (covers ~60 common nodes)
- *    2. The ComfyUI raw `title` property (from properties or root).
- *    3. A cleaned-up variant of the class_type.
+ *    1. **User-supplied `rawTitle`** (from ComfyUI's properties dialog —
+ *       e.g. "Save Z-Anime Upscaled").  Authors explicitly type these
+ *       to disambiguate same-classType siblings, so this intent must
+ *       win over the static map.  A `rawTitle` that merely echoes the
+ *       classType is treated as missing (no renaming happened).
+ *    2. Static NODE_TITLES map (covers ~60 well-known core nodes).
+ *    3. Cleaned-up classType (UUID → "子工作流", FooBarBaz → "Foo Bar Baz").
  *
  *  @param rawTitle — server-side `detail.nodes[i].title` (ComfyUI's preferred display)
  *  @param lang     — "zh" | "en"
@@ -111,13 +115,17 @@ export function friendlyNodeTitle(
   lang: "zh" | "en" = "zh"
 ): string {
   if (!classType) return rawTitle ?? "";
-  const entry = NODE_TITLES[classType];
-  if (entry) return lang === "zh" ? entry.zh : entry.en;
-
-  // If raw title is a plain class_type echo we treat it as missing; else use it.
+  // (1) Author-supplied title wins — typed explicitly to disambiguate
+  // from sibling same-classType nodes.  Without this order swap the
+  // static map (e.g. "保存图像" for SaveImage) would silently override
+  // the user's custom name (e.g. "Save Z-Anime Upscaled") and their
+  // intent would be invisible on the canvas.
   if (rawTitle && rawTitle.trim() && rawTitle.trim() !== classType) {
     return rawTitle.trim();
   }
+
+  const entry = NODE_TITLES[classType];
+  if (entry) return lang === "zh" ? entry.zh : entry.en;
 
   // UUID-style extension display nodes
   if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType)) {

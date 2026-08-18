@@ -95,18 +95,37 @@ export function WfEdge(props: EdgeProps) {
 
   return (
     <>
+      {/* 2026-08-13 R79: outer "glow" layer so a thin 2.5px stroke still reads
+       *  as a visible wire on the dark canvas (especially for the small set of
+       *  top-level edges that survive when subgraph inner nodes aren't
+       *  stitched into the rendered graph).  Painted first so the crisp
+       *  foreground stroke sits on top of its blurred halo. */}
+      <BaseEdge
+        id={`${id}-glow`}
+        path={edgePath}
+        style={{
+          ...style,
+          stroke: style?.stroke ?? "rgba(167,139,250,1)",
+          strokeWidth: 6,
+          opacity: 0.35,
+          filter: "blur(2.5px)",
+        }}
+      />
       <BaseEdge
         id={id}
         path={edgePath}
-        style={{ ...style, strokeWidth: 2, opacity: 0.92 }}
+        style={{ ...style, strokeWidth: 2.5, opacity: 1 }}
       />
-      {/* ComfyUI-style hub dot at the curve midpoint. */}
+      {/* ComfyUI-style hub dot at the curve midpoint.  Slightly larger
+       *  (r=4) and brighter than R25's r=3.5 / 0.55 so it survives at low
+       *  zoom levels when the wire itself is just a couple of screen pixels. */}
       <circle
         cx={labelX}
         cy={labelY}
-        r={3.5}
-        fill="rgba(255,255,255,0.55)"
-        stroke="none"
+        r={4}
+        fill="rgba(255,255,255,0.85)"
+        stroke="rgba(167,139,250,0.9)"
+        strokeWidth={1}
         pointerEvents="none"
       />
     </>

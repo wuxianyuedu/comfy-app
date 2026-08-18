@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 /**
@@ -23,13 +23,26 @@ interface DarkSelectProps {
   disabled?: boolean;
   className?: string;
   /**
-   * Minimum popover width, in px.  Defaults to 360 so richly-decorated rows
+   * Minimum popover width, in px.  Defaults to 480 so richly-decorated rows
    * (dot + name + taskType + local/online badge) can breathe on narrow
    * trigger containers; the popover still snaps back to `trigger.width`
    * when the trigger is wider than this floor.  Capped to viewport with
    * automatic left-shift so it never overflows the right edge.
+   *
+   * R-ardot47: when `autoFitFromOptions` is on, the *effective* minimum is
+   * `max(popoverMinWidth, longestLabelChars × 8 + 56)` so long model file
+   * names / workflowIO labels fit on narrow canvas nodes without each
+   * caller tuning this prop.  Capped at 720 so a single absurd string
+   * can't blow the popover off-screen.
    */
   popoverMinWidth?: number;
+  /**
+   * Auto-widen the popover to fit the longest option label (R-ardot47).
+   * Only string/number labels are measured — rich ReactNode labels (e.g.
+   * badges, icons) are skipped because we can't measure them without
+   * rendering off-screen.  Defaults to true.
+   */
+  autoFitFromOptions?: boolean;
 }
 
 export function DarkSelect({
@@ -40,7 +53,8 @@ export function DarkSelect({
   placeholder = "选择…",
   disabled = false,
   className = "",
-  popoverMinWidth = 360,
+  popoverMinWidth = 480,
+  autoFitFromOptions = true,
 }: DarkSelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
@@ -55,7 +69,13 @@ export function DarkSelect({
     placement: "down",
   });
 
-  /* Close on Escape / click outside */
+  /* Close on Escape / click outside.
+   *  R-ardot49 (2026-08-15): capture-phase + click 双重兜底 — R-ardot48
+   *  诊断结论同样适用于 DarkSelect：组件挂在项目画布节点里，React
+   *  Flow Pane 在 bubble 阶段会 stopPropagation，document 永远收不到
+   *  mousedown → setOpen(false) 永远跑不到 → popover 卡住。capture
+   *  阶段先于任何 stopPropagation 之前跑到 document。click 监听则
+   *  防 Pane 的 onPaneClick 只在 click 阶段拦截（单独 mousedown 不够）。 */
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent | KeyboardEvent) => {
@@ -65,9 +85,14 @@ export function DarkSelect({
         setOpen(false);
       }
     };
-    document.addEventListener("mousedown", handler);
+    document.addEventListener("mousedown", handler, true);
+    document.addEventListener("click", handler, true);
     document.addEventListener("keydown", handler);
-    return () => { document.removeEventListener("mousedown", handler); document.removeEventListener("keydown", handler); };
+    return () => {
+      document.removeEventListener("mousedown", handler, true);
+      document.removeEventListener("click", handler, true);
+      document.removeEventListener("keydown", handler);
+    };
   }, [open]);
 
   /* Reset highlight when opening */
@@ -87,16 +112,40 @@ export function DarkSelect({
    * Auto-flips upward if the dropdown would overflow below the viewport.
    * 2026-08-11 (R56): popover width is `max(trigger.width, popoverMinWidth)`,
    * and the left edge is left-shifted if the wider popover would overflow
-   * the right viewport edge. */
+   * the right viewport edge.
+   *
+   * R-ardot47: when `autoFitFromOptions` is on, the effective minimum is
+   * widened to fit the longest *string* label so long model file names
+   * don't get clipped on narrow canvas nodes.  Capped at 720. */
   const POPOVER_MAX_H = 240; // ~max-h-60 (6-7 items @ py-1.5)
   const VIEWPORT_MARGIN = 8;
+  const POPOVER_AUTO_MAX = 720;
+  const POPOVER_AUTO_HEADROOM = 56; // 24 px padding + ~32 px for dot / arrow
+  const POPOVER_PER_CHAR_PX = 8; // ~8 px per text-sm (14px) glyph in Inter
+  const POPOVER_AUTO_MIN = 160;
+  const effectiveMinWidth = useMemo(() => {
+    if (!autoFitFromOptions) return popoverMinWidth;
+    let longest = 0;
+    for (const opt of options) {
+      const node = labels?.[opt];
+      const text =
+        typeof node === "string" || typeof node === "number"
+          ? String(node)
+          : opt;
+      if (text.length > longest) longest = text.length;
+    }
+    const approx = longest * POPOVER_PER_CHAR_PX + POPOVER_AUTO_HEADROOM;
+    const bounded = Math.max(POPOVER_AUTO_MIN, approx);
+    const effective = Math.max(popoverMinWidth, bounded);
+    return Math.min(POPOVER_AUTO_MAX, effective);
+  }, [autoFitFromOptions, options, labels, popoverMinWidth]);
   useLayoutEffect(() => {
     if (!open) return;
     const recompute = () => {
       const btn = ref.current;
       if (!btn) return;
       const rect = btn.getBoundingClientRect();
-      const desiredWidth = Math.max(rect.width, popoverMinWidth);
+      const desiredWidth = Math.max(rect.width, effectiveMinWidth);
       const maxAllowedWidth = Math.max(0, window.innerWidth - VIEWPORT_MARGIN * 2);
       const popoverWidth = Math.min(desiredWidth, maxAllowedWidth);
       let left = rect.left;
@@ -119,7 +168,7 @@ export function DarkSelect({
       window.removeEventListener("scroll", recompute, true);
       window.removeEventListener("resize", recompute);
     };
-  }, [open, popoverMinWidth]);
+  }, [open, effectiveMinWidth]);
 
   const pick = useCallback((v: string) => { onChange(v); setOpen(false); }, [onChange]);
 
@@ -148,10 +197,12 @@ export function DarkSelect({
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={handleKeyDown}
-        className={`flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 outline-none transition-colors focus:border-violet-500/40 ${className}`}
+        className={`flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[12px] text-gray-200 outline-none transition-colors focus:border-violet-500/40 ${className}`}
       >
-        {/* R55: min-w-0 + flex-1 lets rich ReactNode labels (e.g. with
-         *  an ml-auto badge) take all remaining space and clip cleanly. */}
+        {/* R55: min-w-0 + flex-1 + truncate lets rich ReactNode labels clip
+         *  cleanly; callers that want a right-aligned badge (e.g. "本机" /
+         *  "在线") should place a `flex-1` spacer before the badge so it
+         *  pushes right even under this `truncate` (nowrap) context. */}
         <span className="flex min-w-0 flex-1 items-center truncate">{label}</span>
         <svg className={`ml-2 shrink-0 text-gray-500 transition-transform ${open ? "rotate-180" : ""}`} width="12" height="12" viewBox="0 0 12 12" fill="none">
           <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -182,7 +233,7 @@ export function DarkSelect({
                 aria-selected={value === opt}
                 onMouseEnter={() => setHighlighted(i)}
                 onClick={() => pick(opt)}
-                className={`flex items-center gap-1.5 cursor-pointer truncate px-3 py-1.5 text-sm transition-colors ${
+                className={`flex items-center gap-1.5 cursor-pointer truncate px-2.5 py-1 text-[12px] transition-colors ${
                   value === opt
                     ? "bg-violet-500/20 font-medium text-violet-200"
                     : i === highlighted

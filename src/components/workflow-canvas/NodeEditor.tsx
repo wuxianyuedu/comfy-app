@@ -17,6 +17,7 @@ import { useCallback, useEffect } from "react";
 import type { NodeData, FieldDef, ParamMap } from "./types";
 import { getNodeConfig } from "./node-registry";
 import { DarkSelect } from "@/components/updream/ui/DarkSelect";
+import { NumberField } from "@/components/updream/ui/NumberField";
 
 interface NodeEditorProps {
   /** Currently selected node data */
@@ -255,18 +256,25 @@ function FieldRow({ field, value, checkpoints, modelLists, onChange }: FieldRowP
       return (
         <div className="wf-field">
           <label className="wf-field__label">{field.label}</label>
-          <input
-            type="number"
-            value={(value as number) ?? ""}
-            onChange={handleChange}
-            placeholder={field.placeholder}
-            min={field.min}
-            max={field.max}
+          {/*
+           *  R-ardot92 (2026-08-17): 同样把原生 `<input type="number">` 替换为
+           *  NumberField（`─ value +` 左右 stepper，与 DynamicWorkflowForm
+           *  Ardot 规范统一）。`field.value` 一律经 Number() 化兜底：API 残留
+           *  字面量（如 "fixed"）会落回 field.min，杜绝渲染出方块字符。
+           */}
+          <NumberField
+            value={(typeof value === "number" ? value : Number(value)) || Number(field.min ?? 0)}
+            onChange={(n) => onChange(n)}
+            min={Number(field.min ?? 0)}
+            max={Number(field.max ?? 9999)}
             step={
               field.step ??
               (["seed", "steps"].includes(field.key) ? 1 :
               ["cfg", "denoise", "strength_model", "strength_clip"].includes(field.key) ? 0.05 :
               0.01)
+            }
+            decimalPlaces={
+              ["cfg", "denoise", "strength_model", "strength_clip"].includes(field.key) ? 2 : 0
             }
           />
         </div>

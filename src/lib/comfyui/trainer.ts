@@ -167,12 +167,13 @@ async function finishJob(spec: TrainJobSpec, outputName?: string): Promise<void>
   // Register a Model row so the LoRA appears in the selector / library.
   // (Assumes the backend already wrote finalName into the ComfyUI loras dir.)
   await prisma.model.upsert({
-    where: { fileName: finalName },
-    update: { isAvailable: true, name: spec.name, baseModel: spec.baseModel },
+    where: { fileName_folder: { fileName: finalName, folder: "loras" } },
+    update: { isAvailable: true, name: spec.name, baseModel: spec.baseModel, folder: "loras" },
     create: {
       name: spec.name,
       type: "LORA",
       fileName: finalName,
+      folder: "loras",
       baseModel: spec.baseModel,
       category: "USER",
       source: "LOCAL",

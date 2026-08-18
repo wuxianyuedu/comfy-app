@@ -9,6 +9,8 @@ import { useToast } from "@/components/updream/Toast";
 import { NumberField } from "@/components/updream/ui/NumberField";
 import { DarkSelect } from "@/components/updream/ui/DarkSelect";
 import { Icon } from "@/components/ui/Icon";
+import { ValidationErrorList } from "@/components/updream/shared/ValidationErrorList";
+import type { ValidationError } from "@/lib/comfyui/validation";
 import {
   WORKFLOW_CATEGORIES,
   IMAGE_WORKFLOW_TYPES,
@@ -191,6 +193,10 @@ export function CreatePanel({
   const [status, setStatus] = useState<"idle" | "running" | "done" | "error">("idle");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
+  /** R-Next (2026-08-17): structured ComfyUI /prompt validation errors,
+   *  surfaced inline below the error banner so the user can locate the bad
+   *  input instead of parsing the English summary. */
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [images, setImages] = useState<string[]>([]);
   const [taskId, setTaskId] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -488,8 +494,19 @@ export function CreatePanel({
     setProgress(0);
     setImages([]);
     setLogs([]);
+    setValidationErrors([]);
 
     const loadId = toast.loading("正在提交生成任务…");
+
+    // R-Next (2026-08-17): the SSE `msg` only carries `error`; re-fetch the
+    //  task to grab structured `validationErrors` for the inline panel.
+    const fetchValidationErrors = async (tid: string) => {
+      try {
+        const td = await (await fetch(`/api/tasks/${tid}`)).json();
+        const ve = td?.task?.validationErrors;
+        if (Array.isArray(ve)) setValidationErrors(ve as ValidationError[]);
+      } catch {}
+    };
 
     const res = await fetch("/api/generate", {
       method: "POST",
@@ -519,6 +536,7 @@ export function CreatePanel({
         if (msg.status === "FAILED") {
           setStatus("error");
           setError(msg.error ?? "生成失败");
+          void fetchValidationErrors(d.taskId);
           es.close();
           toast.update(loadId, { kind: "error", title: "生成失败", description: msg.error, duration: 5000 });
         }
@@ -530,6 +548,9 @@ export function CreatePanel({
           .then((td) => {
             const imgs = (td.task?.images ?? []).map((i: any) => i.localPath) as string[];
             setImages(imgs);
+            // R-Next (2026-08-17): keep any structured validation errors in sync
+            const ve = td.task?.validationErrors;
+            setValidationErrors(Array.isArray(ve) ? (ve as ValidationError[]) : []);
             toast.update(loadId, {
               kind: "success",
               title: tab === "video" ? "视频已生成" : "生成完成",
@@ -541,6 +562,7 @@ export function CreatePanel({
       } else if (msg.type === "error") {
         setStatus("error");
         setError(msg.error ?? "生成失败");
+        void fetchValidationErrors(d.taskId);
         es.close();
         toast.update(loadId, { kind: "error", title: "生成失败", description: msg.error, duration: 5000 });
       }
@@ -1482,7 +1504,11 @@ export function CreatePanel({
                   io={wfDetail.workflowIO ?? undefined}
                   values={customInputs}
                   onChange={setCustomInputs}
-                  showOutputs
+                  workflowId={customId}
+                  /* R-ardot22 (2026-08-14): 取消 showOutputs —— 紫圆点
+                     (images output PortHandle) 在 CreatePanel 上是视觉污染，
+                     工作流的输出在 IO-edit modal 里配置，这里只展示用户
+                     能填的表单。画布 workflow 节点同样默认 false (R-ardot21)。*/
                   emptyHint={
                     <>
                       该工作流尚未标记对外参数。
@@ -1494,7 +1520,12 @@ export function CreatePanel({
               </div>
             )}
 
-            {error && <p className="text-xs text-red-400">{error}</p>}
+            {error && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-red-400">{error}</p>
+                <ValidationErrorList errors={validationErrors} className="text-red-300" />
+              </div>
+            )}
 
             <button
               onClick={generate}

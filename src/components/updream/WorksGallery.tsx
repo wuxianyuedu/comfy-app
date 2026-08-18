@@ -2,83 +2,82 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/updream/Toast";
-import { MediaThumb, isVideo } from "@/components/updream/MediaThumb";
 import { AuroraBackground } from "@/components/updream/AuroraBackground";
+import {
+  listProjects,
+  reapAllEmptyDrafts,
+  deleteProject,
+  type CanvasProject,
+} from "@/components/updream/canvas/canvas-store";
+import { ModalDialog } from "@/components/updream/ModalDialog";
 
-interface TaskItem {
-  id: string;
-  type: string;
-  workflowName: string;
-  status: string;
-  prompt: string;
-  negativePrompt?: string | null;
-  params?: Record<string, unknown> | null;
-  createdAt: string;
-  cover: string | null;
-}
-
-const STATUS: Record<string, { label: string; cls: string }> = {
-  QUEUED: { label: "排队中", cls: "bg-white/10 text-gray-300" },
-  RUNNING: { label: "生成中", cls: "bg-violet-500/20 text-violet-300" },
-  SUCCEEDED: { label: "已完成", cls: "bg-emerald-500/15 text-emerald-400" },
-  FAILED: { label: "失败", cls: "bg-red-500/15 text-red-400" },
-  CANCELLED: { label: "已取消", cls: "bg-white/10 text-gray-400" },
-};
-
-function timeAgo(iso: string) {
-  const d = new Date(iso).getTime();
-  const diff = Date.now() - d;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "刚刚";
-  if (m < 60) return `${m} 分钟前`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
-  return `${Math.floor(h / 24)} 天前`;
-}
-
-export function WorksGallery({ onOpenTask }: { onOpenTask?: (id: string) => void }) {
+/**
+ * 项目页面（"所有项目"标签）— 仅展示本地画布项目。
+ *
+ * 历史意义上这里曾同时渲染"画布项目 + 生成作品 grid"两块（WorksGallery
+ * 双分区版）。用户要求"项目页面只显示项目，不要显示生成作品"
+ * （历史界面始终由 HistoryList 负责展示任务列表，无需在此重复）。
+ *
+ * 因此本组件现在只做一件事：读 canvas-store 的本地项目并渲染卡片网格，
+ * 附带 hover 删除 + 弹窗确认。所有"生成作品 / 任务 / 详情弹窗"相关 state、
+ * fetch /api/tasks、MediaThumb 等都已移除。
+ */
+export function WorksGallery({
+  onOpenTask,
+  onOpenCanvasProject,
+}: {
+  /** 「新建创作」按钮触发 —— 项目页保留它作为跳到生成器的入口。 */
+  onOpenTask?: (id: string) => void;
+  /** Open a canvas project (set active + jump to canvas view). */
+  onOpenCanvasProject?: (id: string) => void;
+}) {
   const toast = useToast();
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [detailId, setDetailId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<any>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    fetch("/api/tasks")
-      .then((r) => r.json())
-      .then((d) => setTasks(d.tasks ?? []))
-      .finally(() => setLoading(false));
+  /** Canvas projects sourced from localStorage (canvas-store). They never
+   * land in the /api/tasks table, so we read them separately and refresh on
+   * the `comfyapp:canvas-store-changed` event so editing inside the canvas
+   * view is reflected here live. */
+  const [canvasProjects, setCanvasProjects] = useState<CanvasProject[]>([]);
+
+  /** Canvas-project delete confirmation. Non-null id = the ModalDialog is
+   *  open for that project. Resolved projects' names are resolved BEFORE
+   *  clearing the dialog so the toast reads the original name even though
+   *  the underlying array changes one tick later. */
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState(false);
+
+  const handleConfirmDeleteCanvas = useCallback(() => {
+    if (!confirmDeleteId) return;
+    const id = confirmDeleteId;
+    const target = canvasProjects.find((p) => p.id === id);
+    setPendingDelete(true);
+    // Use a microtask delay so the dialog's spinner / disabled state is
+    // visible at least one paint frame. deleteProject itself fires
+    // `comfyapp:canvas-store-changed` which the mounted listener picks
+    // up to refresh `canvasProjects`.
+    queueMicrotask(() => {
+      deleteProject(id); // canvas-store also clears active-id when matched
+      setPendingDelete(false);
+      setConfirmDeleteId(null);
+      toast.success(`已删除项目「${target?.name || "未命名"}」`);
+    });
+  }, [confirmDeleteId, canvasProjects, toast]);
+
+  const refreshCanvasProjects = useCallback(() => {
+    setCanvasProjects(listProjects());
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
-
-  const openDetail = useCallback((id: string) => {
-    setDetailId(id);
-    setDetailLoading(true);
-    setDetail(null);
-    fetch(`/api/tasks/${id}`)
-      .then((r) => r.json())
-      .then((d) => setDetail(d.task))
-      .finally(() => setDetailLoading(false));
-  }, []);
-
-  const remove = useCallback(
-    async (id: string) => {
-      const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        toast.success("已删除作品");
-        setTasks((prev) => prev.filter((t) => t.id !== id));
-        if (detailId === id) setDetailId(null);
-      } else {
-        toast.error("删除失败");
-      }
-    },
-    [detailId, toast]
-  );
+    // Sweep legacy empty default-named drafts before listing.
+    reapAllEmptyDrafts();
+    refreshCanvasProjects();
+    window.addEventListener("comfyapp:canvas-store-changed", refreshCanvasProjects);
+    return () =>
+      window.removeEventListener(
+        "comfyapp:canvas-store-changed",
+        refreshCanvasProjects
+      );
+  }, [refreshCanvasProjects]);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -86,12 +85,14 @@ export function WorksGallery({ onOpenTask }: { onOpenTask?: (id: string) => void
       <div className="mx-auto max-w-[1200px] px-4 sm:px-8 py-8 sm:py-10">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-title text-xl font-bold text-gray-100">我的作品</h1>
-            <p className="mt-1 text-sm text-gray-500">本机 ComfyUI 生成的所有结果，按时间倒序排列。</p>
+            <h1 className="font-title text-xl font-bold text-gray-100">所有项目</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              本地画布项目，按时间倒序排列。生成作品请查看「历史记录」。
+            </p>
           </div>
           <div className="flex gap-2">
             <button
-              onClick={load}
+              onClick={refreshCanvasProjects}
               className="rounded-lg border border-white/10 px-3 py-2 text-xs text-gray-400 hover:text-gray-200"
             >
               ↻ 刷新
@@ -106,149 +107,159 @@ export function WorksGallery({ onOpenTask }: { onOpenTask?: (id: string) => void
           </div>
         </div>
 
-        {loading ? (
-          <p className="text-sm text-gray-500">加载中…</p>
-        ) : tasks.length === 0 ? (
-          <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-white/[0.08] text-gray-500">
-            <div className="text-center">
-              <p className="text-lg font-medium text-gray-300">还没有作品</p>
-              <p className="mt-1 text-sm">点击右上角「新建创作」生成你的第一张图吧。</p>
+        {/* ── Canvas Projects Section ── */}
+        {canvasProjects.length > 0 ? (
+          <section className="mb-10">
+            <div className="mb-4 flex items-baseline justify-between">
+              <h2 className="text-sm font-semibold text-gray-300">
+                画布项目{" "}
+                <span className="ml-1 text-xs font-normal text-gray-600">
+                  ({canvasProjects.length})
+                </span>
+              </h2>
+              <span className="text-[11px] text-gray-600">本地 · 可继续编辑</span>
             </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {tasks.map((t) => {
-              const st = STATUS[t.status] ?? STATUS.QUEUED;
-              return (
-                <div
-                  key={t.id}
-                  className="group overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] text-left transition-all hover:border-white/[0.14] hover:shadow-lg hover:shadow-black/30"
-                >
-                  <button
-                    type="button"
-                    onClick={() => openDetail(t.id)}
-                    className="relative block aspect-square w-full bg-[#111118]"
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {canvasProjects.map((p) => {
+                const nodeCount = p.nodes?.length ?? 0;
+                const edgeCount = p.edges?.length ?? 0;
+                return (
+                  <div
+                    key={p.id}
+                    className="group relative rounded-2xl border border-white/[0.06] bg-white/[0.02] transition-all hover:border-cyan-400/25 hover:bg-cyan-400/[0.04]"
                   >
-                    {t.cover ? (
-                      <MediaThumb
-                        src={t.cover}
-                        alt={t.prompt}
-                        className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
-                        autoPlay
-                        loop
-                      />
-                    ) : (
-                      <div className="grid h-full place-items-center text-xs text-gray-600">
-                        {t.status === "FAILED" ? "生成失败" : "无预览"}
+                    <button
+                      type="button"
+                      onClick={() => onOpenCanvasProject?.(p.id)}
+                      className="flex w-full items-start gap-3 rounded-2xl p-3.5 text-left"
+                    >
+                      <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-400/12 text-cyan-400">
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <rect x="3" y="3" width="18" height="18" rx="2" />
+                          <path d="M3 9h18M9 21V9" />
+                          <circle cx="15" cy="15" r="2" />
+                        </svg>
                       </div>
-                    )}
-                    <span className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${st.cls}`}>
-                      {st.label}
-                    </span>
-                  </button>
-                  <div className="p-3">
-                    <p className="line-clamp-2 text-xs text-gray-400">{t.prompt || "（无提示词）"}</p>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="text-[11px] text-gray-600">{timeAgo(t.createdAt)}</span>
-                      <button
-                        onClick={() => remove(t.id)}
-                        className="rounded px-1.5 py-0.5 text-[11px] text-gray-500 opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-200 group-hover:text-white">
+                          {p.name || "未命名项目"}
+                        </p>
+                        <p className="mt-1 truncate text-[11px] text-gray-500">
+                          {nodeCount > 0
+                            ? `${nodeCount} 节点 · ${edgeCount} 连线`
+                            : "空画布"}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-gray-600">
+                          {projectTimeAgo(p.updatedAt)}
+                        </p>
+                      </div>
+                    </button>
+                    {/* Per-card delete: hover-only, top-right corner.
+                       Stops propagation so the parent card-open button
+                       doesn't fire. */}
+                    <button
+                      type="button"
+                      aria-label={`删除项目「${p.name || "未命名"}」`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDeleteId(p.id);
+                      }}
+                      className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-gray-500 opacity-0 transition-opacity hover:bg-red-500/15 hover:text-red-300 focus-visible:opacity-100 group-hover:opacity-100"
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
                       >
-                        删除
-                      </button>
-                    </div>
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        <path d="M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                      </svg>
+                      <span>删除</span>
+                    </button>
                   </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : (
+          <section>
+            <div className="grid min-h-[360px] place-items-center rounded-2xl border border-dashed border-white/[0.08]">
+              <div className="text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/12 text-cyan-400">
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M3 9h18M9 21V9" />
+                    <circle cx="15" cy="15" r="2" />
+                  </svg>
                 </div>
-              );
-            })}
-          </div>
+                <p className="text-lg font-medium text-gray-300">还没有画布项目</p>
+                <p className="mt-1 text-sm text-gray-500">
+                  点击右上角「新建创作」开始你的第一个工作流，或者在工作流库载入模板。
+                </p>
+              </div>
+            </div>
+          </section>
         )}
       </div>
 
-      {/* Detail modal */}
-      {detailId && (
-        <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4 sm:p-6"
-          onClick={() => setDetailId(null)}
-        >
-          <div
-            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#16161e]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
-              <h3 className="u-title">作品详情</h3>
-              <div className="flex items-center gap-2">
-                {onOpenTask && detail && (
-                  <button
-                    onClick={() => onOpenTask(detail.id)}
-                    className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
-                  >
-                    打开完整详情 ↗
-                  </button>
-                )}
-                <button onClick={() => setDetailId(null)} className="text-gray-500 hover:text-gray-200">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 6 6 18M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-5">
-              {detailLoading ? (
-                <p className="text-sm text-gray-500">加载中…</p>
-              ) : detail ? (
-                <div className="space-y-4">
-                  {detail.images?.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {detail.images.map((img: any, i: number) => (
-                        <div key={i} className="group relative overflow-hidden rounded-xl border border-white/[0.06]">
-                          <MediaThumb
-                            src={img.localPath}
-                            alt=""
-                            className="aspect-square w-full object-cover"
-                            autoPlay
-                            loop
-                          />
-                          <a
-                            href={img.localPath}
-                            download
-                            className="absolute bottom-2 right-2 rounded bg-white/15 px-2 py-0.5 text-[11px] text-white opacity-0 transition-opacity hover:bg-white/25 group-hover:opacity-100"
-                          >
-                            {isVideo(img.localPath) ? "下载视频" : "下载"}
-                          </a>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">该任务没有生成图像。</p>
-                  )}
-                  <div>
-                    <p className="mb-1 text-xs font-semibold text-gray-400">正向提示词</p>
-                    <p className="whitespace-pre-wrap text-sm text-gray-300">{detail.prompt || "—"}</p>
-                  </div>
-                  {detail.negativePrompt && (
-                    <div>
-                      <p className="mb-1 text-xs font-semibold text-gray-400">反向提示词</p>
-                      <p className="whitespace-pre-wrap text-sm text-gray-400">{detail.negativePrompt}</p>
-                    </div>
-                  )}
-                  {detail.error && (
-                    <p className="rounded-lg bg-red-500/10 p-2.5 text-xs text-red-300">错误：{detail.error}</p>
-                  )}
-                  <button
-                    onClick={() => remove(detail.id)}
-                    className="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10"
-                  >
-                    删除此作品
-                  </button>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500">未找到任务。</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── Canvas-project delete confirm ── */}
+      <ModalDialog
+        open={confirmDeleteId !== null}
+        onClose={() => {
+          if (!pendingDelete) setConfirmDeleteId(null);
+        }}
+        danger
+        title="删除此画布项目？"
+        description={
+          confirmDeleteId
+            ? `即将永久删除「${
+                canvasProjects.find((p) => p.id === confirmDeleteId)?.name ||
+                "未命名项目"
+              }」。\n该操作不可撤销，画布内的节点与连线将一并丢失。`
+            : ""
+        }
+        confirmLabel="删除项目"
+        cancelLabel="取消"
+        pending={pendingDelete}
+        onConfirm={handleConfirmDeleteCanvas}
+      />
     </div>
   );
+}
+
+function projectTimeAgo(updatedAt: number) {
+  const diff = Date.now() - updatedAt;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "刚刚修改";
+  if (m < 60) return `${m} 分钟前修改`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} 小时前修改`;
+  return `${Math.floor(h / 24)} 天前修改`;
 }

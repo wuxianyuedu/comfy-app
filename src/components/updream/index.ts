@@ -35,6 +35,7 @@ export { WorkspaceNav } from "./WorkspaceNav";
 export type { WorkspaceView } from "./WorkspaceNav";
 
 export { WorksGallery } from "./WorksGallery";
+export { ProjectOutputs } from "./ProjectOutputs";
 
 export { SkillsGrid } from "./SkillsGrid";
 
@@ -58,6 +59,9 @@ export { WorkshopStudio } from "./WorkshopStudio";
 
 export { ToastProvider, useToast } from "./Toast";
 export type { ToastItem } from "./Toast";
+
+export { ModalDialog } from "./ModalDialog";
+export type { ModalDialogProps } from "./ModalDialog";
 
 export { AuroraBackground } from "./AuroraBackground";
 

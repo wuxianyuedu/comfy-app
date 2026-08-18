@@ -156,6 +156,45 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
       out[id] = [Number(n.pos[0]) || 0, Number(n.pos[1]) || 0];
     }
   }
+  // 2026-08-13 R78.3: subgraph wrapper inner nodes (rawJson.definitions.subgraphs[uid].nodes)
+  // are NOT in the top-level nodes[] — but they ARE part of `detail.nodes` /
+  // `detail.graph` after the wrapper is expanded (the server stitches them under
+  // `<wrapperId>:<internalId>` keys).  Without this loop, wrapper expansions
+  // render with zero saved positions and the client falls back to Kahn
+  // auto-layout even in RAW view, which never matches ComfyUI's look.
+  // Inner-node `pos` is ALREADY an absolute canvas coord (LiteGraph stores
+  // absolute positions for both top-level and sub-graph nodes), so we must
+  // NOT add wrapper.pos to it.
+  //
+  // 2026-08-13 R78.3 (lookup fix): `definitions.subgraphs` is keyed by
+  // numeric index "0", "1", ... — NOT by the wrapper UUID. The wrapper
+  // UUID lives inside each sub def as `sub.id`. So we have to scan all
+  // entries and match by `sub.id === wrapper.type` (the wrapper's `type`
+  // IS the subgraph UUID in ComfyUI's format).
+  const subs = (raw as unknown as { definitions?: { subgraphs?: Record<string, { id?: string; nodes?: any[] }> } })
+    .definitions?.subgraphs;
+  if (subs && typeof subs === "object") {
+    for (const wrapper of raw.nodes) {
+      if (!wrapper || typeof wrapper.type !== "string") continue;
+      if (!Array.isArray(wrapper.pos)) continue;
+      const wId = String(wrapper.id);
+      let innerNodes: any[] | undefined;
+      for (const k of Object.keys(subs)) {
+        const def = subs[k];
+        if (def && def.id === wrapper.type && Array.isArray(def.nodes)) {
+          innerNodes = def.nodes;
+          break;
+        }
+      }
+      if (!innerNodes) continue;
+      for (const inner of innerNodes) {
+        if (inner && Array.isArray(inner.pos) && inner.pos.length >= 2) {
+          const iId = String(inner.id);
+          out[`${wId}:${iId}`] = [Number(inner.pos[0]) || 0, Number(inner.pos[1]) || 0];
+        }
+      }
+    }
+  }
   return out;
 }
 
@@ -207,13 +246,18 @@ type ObjectInfo = Record<string, ObjectInfoClassDef>;
 
 /** Fetch ComfyUI node-class definitions (cached for 5 minutes) */
 let _objectInfoCache: { at: number; data: ObjectInfo } | null = null;
-async function fetchObjectInfo(): Promise<ObjectInfo | null> {
+export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
   if (_objectInfoCache && Date.now() - _objectInfoCache.at < 5 * 60_000) {
     return _objectInfoCache.data;
   }
   try {
     const res = await fetch(`${comfyBase()}/api/object_info`, {
-      signal: AbortSignal.timeout(2500),
+      /* 2026-08-16 R-ardot73-C: ComfyUI 序列化完整 object_info（~4.7MB）在
+       * Node 的 undici fetch 下实测需 ~5.2s 才返回，旧值 2500ms 必然超时返
+       * null，导致所有依赖 object_info 的 COMBO 选项解析静默失败（下拉退化
+       * 成文本框）。放宽到 20s；object_info 有 5 分钟缓存，慢请求仅 5 分钟
+       * 发生一次，放宽不影响常态响应。 */
+      signal: AbortSignal.timeout(20000),
     });
     if (!res.ok) return null;
     const data = (await res.json()) as ObjectInfo;

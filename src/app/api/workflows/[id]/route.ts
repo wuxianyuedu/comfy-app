@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerUser } from "@/lib/auth-server";
 import { detectParamMap } from "@/lib/comfyui/workflow";
-import { extractPositions, type RawWorkflow } from "@/lib/comfyui/raw";
+import { extractPositions, fallbackRawToApi, fetchObjectInfo, type RawWorkflow } from "@/lib/comfyui/raw";
 import { cacheJson, cacheDel, cachePeek } from "@/lib/server-cache";
 import { inferIsMultiline } from "@/lib/comfyui/types";
+import { normalizeTaskType, parseModesJson, serializeModesJson } from "@/lib/workflow-types";
+import { detectWorkflowFormat } from "@/lib/workflow-format";
+import { localModelFileNames } from "@/lib/models";
+import { modelFoldersForField } from "@/lib/model-types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +37,104 @@ export async function GET(
   const user = await getServerUser();
   const cacheKey = `wf:${user.id}:${id}`;
 
+  /* 2026-08-12 — COMBO option resolver.
+   * ComfyUI COMBO widgets (unet_name / clip_name / vae_name / ckpt_name …)
+   * carry NO candidate list in the raw JSON — the only authoritative source
+   * is /api/object_info.  We fetch it once per request (fetchObjectInfo
+   * itself caches for 5 min + degrades to null when ComfyUI is unreachable)
+   * and resolve `classType + field` → candidate array so the project-canvas
+   * form and the subgraph wrapper node can render a real <select> instead of
+   * a free-text box.  Missing / unreachable → undefined → graceful fallback
+   * to a plain text control. */
+  let _comboObjectInfo: Awaited<ReturnType<typeof fetchObjectInfo>> | undefined;
+  const ensureObjectInfo = async () => {
+    if (_comboObjectInfo === undefined) _comboObjectInfo = await fetchObjectInfo();
+    return _comboObjectInfo;
+  };
+  const comboOptionsFromSpec = (spec: unknown): string[] | undefined => {
+    if (!Array.isArray(spec)) return undefined;
+    const head = spec[0];
+    if (!Array.isArray(head)) return undefined;
+    const opts = head.filter((x: unknown) => typeof x === "string") as string[];
+    return opts.length ? opts : undefined;
+  };
+  /**
+   * Resolve COMBO candidate options for a wrapper widget field.
+   *
+   * R-ardot40 P4: union the node-declared `object_info` candidates with the
+   * locally-synced model files that map to this field (e.g. `ckpt_name` →
+   * CHECKPOINT files).  ComfyUI's own COMBO list is only ever the default set
+   * shipped in object_info; real on-disk models the user installed are NOT
+   * listed there, so without the union the canvas dropdown silently misses
+   * every local model.  Both sources are returned verbatim (extension kept)
+   * and de-duplicated + sorted; if neither yields anything we return
+   * `undefined` so the consumer falls back to a plain text control.
+   */
+  const comboOptionsForClassField = async (
+    classType: string | undefined,
+    field: string
+  ): Promise<string[] | undefined> => {
+    const [specOpts, localOpts] = await Promise.all([
+      (async () => {
+        if (!classType) return undefined;
+        const oi = await ensureObjectInfo();
+        if (!oi) return undefined;
+        const def = oi[classType];
+        if (!def || !def.input) return undefined;
+        const spec =
+          (def.input.required && def.input.required[field]) ||
+          (def.input.optional && def.input.optional[field]);
+        return comboOptionsFromSpec(spec);
+      })(),
+      localModelFileNames(modelFoldersForField(field)),
+    ]);
+
+    const merged = new Set<string>();
+    if (specOpts) for (const o of specOpts) merged.add(o);
+    for (const o of localOpts) merged.add(o);
+    const out = Array.from(merged);
+    return out.length ? out.sort((a, b) => a.localeCompare(b)) : undefined;
+  };
+
+  /**
+   * Fallback COMBO resolver used when the class-based lookup yields nothing —
+   * e.g. a `comfy-core` subgraph node (v0.7.0) whose `properties.proxyWidgets`
+   * is absent or quarantined, so we never learn the internal node's class and
+   * `comboOptionsForClassField(wrapperClass, field)` can't find the field.
+   *
+   * Scans EVERY `object_info` class that declares `field` as a COMBO and unions
+   * their candidate lists.  For uniquely-named fields (e.g. `resolution_preset`,
+   * declared by exactly one class) this recovers the full option list; for
+   * shared model fields (e.g. `unet_name`) it unions all known defaults, which
+   * is harmless because the local-model union below already covers the
+   * realistic on-disk set.  object_info is fetched once and cached, so the
+   * scan is cheap on repeated calls.
+   */
+  const comboOptionsForFieldName = async (
+    field: string
+  ): Promise<string[] | undefined> => {
+    const oi = await ensureObjectInfo();
+    if (!oi) return undefined;
+    const merged = new Set<string>();
+    let found = false;
+    for (const def of Object.values(oi)) {
+      const inp = (def as any)?.input;
+      if (!inp) continue;
+      const spec =
+        (inp.required && (inp.required as Record<string, unknown>)[field]) ||
+        (inp.optional && (inp.optional as Record<string, unknown>)[field]);
+      const opts = comboOptionsFromSpec(spec);
+      if (opts) {
+        found = true;
+        for (const o of opts) merged.add(o);
+      }
+    }
+    if (!found) return undefined;
+    for (const o of await localModelFileNames(modelFoldersForField(field))) merged.add(o);
+    const out = Array.from(merged);
+    return out.length ? out.sort((a, b) => a.localeCompare(b)) : undefined;
+  };
+
   /* 2026-08-06 R3: ?_bust=1 query flag forces the in-memory LRU to be
    *  bypassed (deleted + re-built) so the 顶栏 🔄 强制重载按钮 can pull
    *  a guaranteed-fresh serialisation from Prisma.  Without this, even
@@ -56,7 +158,7 @@ export async function GET(
   let sourcePath: string | null = null;
   const meta = await prisma.workflowTemplate.findFirst({
     where: { id, userId: user.id },
-    select: { id: true, sourcePath: true, sourceMtime: true, sourceChecksum: true },
+    select: { id: true, sourcePath: true, sourceMtime: true, sourceChecksum: true, taskType: true },
   });
   if (meta?.sourcePath) {
     sourcePath = meta.sourcePath;
@@ -65,6 +167,9 @@ export async function GET(
       sourcePath: meta.sourcePath,
       sourceMtime: meta.sourceMtime,
       sourceChecksum: meta.sourceChecksum,
+      /* R-ardot87 (2026-08-16): 透传已存在的 taskType 让 reimport 时保留
+       * 用户在 UI 里手动设置的值（不再被自动推断覆盖）。 */
+      existingTaskType: meta.taskType ?? null,
     });
     if (re.missing) {
       sourceMissing = true;
@@ -105,11 +210,14 @@ export async function GET(
       id: true,
       name: true,
       taskType: true,
+      modes: true,
+      defaultMode: true,
       graph: true,
       paramMap: true,
       workflowIO: true,
       rawJson: true,
       positions: true,
+      apiSource: true,
     },
   });
   if (!tpl) return NextResponse.json({ error: "未找到该工作流" }, { status: 404 });
@@ -120,7 +228,7 @@ export async function GET(
    *
    * 2026-08-06 R3: TTL shortened from 60_000ms → 30_000ms so it locks at
    * most 30s of staleness even if client cache:"no-store" is bypassed. */
-  const detailJson = await cacheJson(cacheKey, 30_000, () => {
+  const detailJson = await cacheJson(cacheKey, 30_000, async () => {
   const graph = tpl.graph as Record<string, any>;
   const raw = (tpl.rawJson ?? null) as any;
 
@@ -298,7 +406,18 @@ export async function GET(
         let widgetValue: unknown = undefined;
         if (widgetName && widgetCounter < rnWidgets.length) {
           widgetValue = rnWidgets[widgetCounter];
-          widgetCounter += 1;
+          /* seed / noise_seed widgets carry an implicit `control_after_generate`
+           * partner slot immediately after their own value inside widgets_values[].
+           * Advance the counter by 2 for those so every downstream widget value
+           * stays correctly aligned — otherwise steps / cfg / sampler_name … all
+           * shift one slot to the right (R94 fix).  This mirrors the 2-slot bundle
+           * handling already present in the subgraph `lookupFieldValue` helper. */
+          const isSeedBundle =
+            widgetName === "seed" ||
+            widgetName === "noise_seed" ||
+            inp.name === "seed" ||
+            inp.name === "noise_seed";
+          widgetCounter += isSeedBundle ? 2 : 1;
         }
         const entry: {
           name: string;
@@ -377,6 +496,200 @@ export async function GET(
           });
         }
       }
+    }
+  }
+
+  /* 2026-08-12 R73: Subgraph wrapper widget value lookup.
+   *
+   * ComfyUI's exported subgraph workflows carry a `properties.proxyWidgets`
+   * array on each wrapper node that maps wrapper.inputs[i] to an internal
+   * node + widget field: `proxyWidgets[i] = [internalNodeId, fieldName]`.
+   * The wrapper's own `widgets_values[]` is empty — the actual values
+   * live in the corresponding internal nodes' `widgets_values[]`, indexed
+   * by walking the internal node's `inputs[]` array to find the slot
+   * for `fieldName` (counting widget slots seen so far, since
+   * ComfyUI/LiteGraph stores widget values as a flat array in input
+   * order).
+   *
+   * Special case: KSampler / KSamplerAdvanced bundle `seed` and
+   * `control_after_generate` into TWO consecutive widget slots — the
+   * `seed` input occupies slot 0, `control_after_generate` slots into
+   * slot 1, so any slot counter that hits a seed widget advances by 2.
+   *
+   * The base parser (above) already stamps `widget: { name }` on inputs
+   * that carry the widget marker (ComfyUI's exported wrappers always do),
+   * `isConnection` from `inp.link`, and attempts `widgetValue` from
+   * `rn.widgets_values[widgetCounter]` — but for wrapper nodes the latter
+   * is empty, leaving every widget row blank until this enrichment runs. */
+  if (raw && raw.definitions && raw.definitions.subgraphs) {
+    const subs = raw.definitions.subgraphs as Record<string, any>;
+    /* Index internal nodes per subgraph def by id for O(1) lookup.  We
+     * pre-build this once per subgraph def rather than per wrapper to
+     * keep cost flat regardless of how many wrappers the workflow has. */
+    const internalByIdByKey = new Map<string, Map<string, any>>();
+    for (const subKey of Object.keys(subs)) {
+      const subDef = subs[subKey];
+      const m = new Map<string, any>();
+      if (Array.isArray(subDef?.nodes)) {
+        for (const inN of subDef.nodes) {
+          if (inN && inN.id != null) m.set(String(inN.id), inN);
+        }
+      }
+      internalByIdByKey.set(subKey, m);
+    }
+    /* Find the subgraph def that belongs to a wrapper's UUID classType.
+     *  Tries direct key match first, then a fallback scan by `id` field
+     *  (ComfyUI may key the def by either the UUID or an arbitrary key). */
+    const resolveSubDef = (classType: string): { key: string; def: any } | null => {
+      if (subs[classType]) return { key: classType, def: subs[classType] };
+      for (const k of Object.keys(subs)) {
+        if (subs[k]?.id === classType) return { key: k, def: subs[k] };
+      }
+      return null;
+    };
+    /* Look up a widget field's current value on an internal node by
+     * walking inputs[] to find the matching slot, then indexing
+     * widgets_values[].  Handles the seed+control_after_generate
+     * 2-slot bundle by advancing the slot counter twice wherever a
+     * seed/ noise_seed widget is encountered (those inputs always
+     * carry an implicit `control_after_generate` partner slot). */
+    const lookupFieldValue = (internalNode: any, fieldName: string): unknown => {
+      if (!internalNode || !Array.isArray(internalNode.inputs)) return undefined;
+      const inputs = internalNode.inputs;
+      const wv: unknown[] = Array.isArray(internalNode.widgets_values)
+        ? internalNode.widgets_values
+        : [];
+      /* control_after_generate always sits in the slot AFTER seed. */
+      if (fieldName === "control_after_generate") {
+        const seedIdx = inputs.findIndex(
+          (i: any) => i && (i.name === "seed" || i.name === "noise_seed")
+        );
+        if (seedIdx < 0) return undefined;
+        let slot = 0;
+        for (let k = 0; k <= seedIdx; k++) {
+          if (inputs[k]?.widget) slot++;
+        }
+        return slot < wv.length ? wv[slot] : undefined;
+      }
+      /* Generic: count widget slots before the target input. */
+      const inputIdx = inputs.findIndex(
+        (i: any) => i && i.name === fieldName
+      );
+      if (inputIdx < 0) return undefined;
+      let slot = 0;
+      for (let k = 0; k < inputIdx; k++) {
+        const inp = inputs[k];
+        if (inp?.widget) {
+          slot++;
+          /* seed bundle consumes an extra slot for control_after_generate */
+          if (inp.name === "seed" || inp.name === "noise_seed") slot++;
+        }
+      }
+      return slot < wv.length ? wv[slot] : undefined;
+    };
+
+    /* Precompute (subDefKey, proxyWidgets, internalById) per wrapper so
+     * the inner map stays cheap when the workflow has many wrappers. */
+    const wrapperNodeIds: string[] = [];
+    for (const nodeId of Object.keys(rawInputsById)) {
+      const rn = (raw as any)?.nodes?.find?.((n: any) => String(n?.id) === nodeId);
+      if (!rn) continue;
+      const classType = typeof rn.type === "string" ? rn.type : "";
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType)) continue;
+      wrapperNodeIds.push(nodeId);
+    }
+
+    for (const nodeId of wrapperNodeIds) {
+      const rn = (raw as any).nodes.find((n: any) => String(n?.id) === nodeId);
+      const classType = typeof rn.type === "string" ? rn.type : "";
+      const resolved = resolveSubDef(classType);
+      if (!resolved) continue;
+      const internalById = internalByIdByKey.get(resolved.key);
+      if (!internalById) continue;
+      const proxyWidgets: Array<[string, string]> = Array.isArray(rn.properties?.proxyWidgets)
+        ? (rn.properties.proxyWidgets as any[])
+            .filter((p): p is [unknown, unknown] => Array.isArray(p) && p.length === 2)
+            .map((p) => [String(p[0]), String(p[1])])
+        : [];
+      if (proxyWidgets.length === 0) continue;
+
+      const subNodeType =
+        typeof resolved.def?.name === "string" && resolved.def.name.trim()
+          ? resolved.def.name
+          : classType;
+
+      const existingList = rawInputsById[nodeId] || [];
+      /* `proxyWidgets` is indexed by *widget-input order* (the i-th exposed
+       *  widget slot), NOT by the raw input-array index — ComfyUI skips
+       *  pure-connection ports when it builds the array.  So we must walk
+       *  the widget slots with their own counter (`widgetSlot`) rather than
+       *  reuse the map's `idx` (which counts every input, ports included).
+       *  Reusing `idx` shifts the mapping whenever a wrapper has leading or
+       *  trailing non-widget ports: every wrapped value lands on the wrong
+       *  row, and the trailing widget inputs fall off the end of the array
+       *  and render as blank placeholder cells.  (This is exactly the
+       *  "子图 wrapper 只显示占位" symptom for wrappers like
+       *  image_qwen_image_edit_2511_int8's node 170, which has 3 leading
+       *  IMAGE ports before its 8 widget inputs.) */
+      let widgetSlot = 0;
+      const updatedList = existingList.map((entry) => {
+        /* Only enrich inputs that ALREADY have a widget marker (i.e.
+         *  they're exposed widget slots, not pure-connection ports).
+         *  Pure ports correctly stay in connInputs on the client side. */
+        if (!entry.widget) return entry;
+        const proxy = proxyWidgets[widgetSlot];
+        widgetSlot += 1;
+        if (!proxy) return entry;
+        const [internalNodeId, fieldName] = proxy;
+        const internalNode = internalById.get(internalNodeId);
+        const updated: any = { ...entry };
+        if (updated.widgetValue === undefined) {
+          const v = lookupFieldValue(internalNode, fieldName);
+          if (v !== undefined) updated.widgetValue = v;
+        }
+        /* Adopt the internal node's slot type as authoritative if our
+         *  wrapper entry didn't carry one (defensive — usually already
+         *  present from the raw JSON). */
+        if (internalNode && Array.isArray(internalNode.inputs)) {
+          const inp = internalNode.inputs.find(
+            (i: any) => i && i.name === fieldName
+          );
+          if (inp?.type) updated.type = inp.type;
+          if (!updated.label && inp?.localized_name) {
+            updated.label = inp.localized_name;
+          }
+          /* Stash the proxy target (internal node class + field) so the
+           *  async COMBO-option pass below can resolve candidate lists from
+           *  /api/object_info for any COMBO widget on this wrapper. */
+          (updated as any).__comboClass = internalNode.type;
+          (updated as any).__comboField = fieldName;
+        }
+        /* Re-stamp multiline if we just learned the value (the base
+         *  parser ran before this pass and may have skipped it). */
+        if (
+          updated.type === "STRING" &&
+          !updated.multiline &&
+          inferIsMultiline(subNodeType, entry.name, updated.widgetValue)
+        ) {
+          updated.multiline = true;
+        }
+        return updated;
+      });
+      /* Resolve COMBO candidate lists from /api/object_info (single fetch
+       *  per request, cached).  Only wrapper widget inputs that are COMBOs
+       *  get a `comboOptions` array; everything else is left untouched.  If
+       *  ComfyUI is unreachable the temp fields are just dropped and the
+       *  consumer falls back to a plain text control. */
+      for (const e of updatedList) {
+        const ec = e as any;
+        if (ec.type === "COMBO" && ec.__comboClass) {
+          const opts = await comboOptionsForClassField(ec.__comboClass, ec.__comboField);
+          if (opts) ec.comboOptions = opts;
+        }
+        delete ec.__comboClass;
+        delete ec.__comboField;
+      }
+      rawInputsById[nodeId] = updatedList;
     }
   }
 
@@ -482,11 +795,57 @@ export async function GET(
       size: sizeById[nodeId],
     };
   });
+  /* 2026-08-13 R82: raw 视图专用数据包。
+   * 存库的 `graph`（即 `detail.nodes` 的来源）在某些工作流里被「拆平」成了
+   * `N:xx` 节点（例如某工作流的 flat form，而其 `_t2i` 兄弟保留 wrapper）。
+   * 这种情况下画布 RAW 布局会显示 17 个被炸开的节点，而用户期望的是 5 个
+   * 原始 ComfyUI 节点（含 wrapper 紫色整卡）。这里直接从 rawJson 再派生一份
+   * `rawView`（保留 subgraph wrapper），让 RAW 布局与 wrapper-form 兄弟、与
+   * ComfyUI 自身画布一致。fallbackRawToApi 走离线启发式、不发网络请求。 */
+  let rawView: { nodes: any[]; positions: Record<string, [number, number]>; graph: any } | null = null;
+  if (raw && Array.isArray((raw as any).nodes)) {
+    const rawConv = fallbackRawToApi(raw as RawWorkflow);
+    const rawGraph = (rawConv.graph ?? {}) as Record<string, any>;
+    const rawViewNodes = Object.entries(rawGraph).map(([nodeId, n]) => {
+      const classType: string =
+        (n?.class_type as string) || (n?.type as string) || "?";
+      const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
+      let resolvedTitle: string | undefined;
+      if (isUuidClass && raw && raw.definitions && raw.definitions.subgraphs) {
+        const subs = raw.definitions.subgraphs as Record<string, any>;
+        let def = subs[classType];
+        if (!def) {
+          const matchKey = Object.keys(subs).find((k) => subs[k]?.id === classType);
+          if (matchKey) def = subs[matchKey];
+        }
+        if (def && typeof def.name === "string" && def.name.trim()) {
+          resolvedTitle = def.name.trim();
+        }
+      }
+      return {
+        id: nodeId,
+        class_type: classType,
+        title:
+          resolvedTitle ??
+          (n as any)?._meta?.title ??
+          (isUuidClass ? "" : classType) ??
+          nodeId,
+        is_subgraph: isUuidClass,
+        raw_inputs: rawInputsById[nodeId] ?? [],
+        size: sizeById[nodeId],
+      };
+    });
+    const rawViewPositions =
+      (rawConv.positions as Record<string, [number, number]>) ??
+      extractPositions(raw as RawWorkflow);
+    rawView = { nodes: rawViewNodes, positions: rawViewPositions, graph: rawGraph };
+  }
+
   const paramMap = (tpl.paramMap as Record<string, string>) ?? detectParamMap(graph);
   // User-curated exposure selection: which node params/widgets/outputs are
   // exposed as the workflow's external inputs/outputs.  (ioKey is
   // `${nodeId}::${kind}::${name}`; see the canvas editor's IO-edit mode.)
-  const workflowIORaw = (tpl.workflowIO as Record<string, { direction: "input" | "output"; kind: string; nodeId: string; name: string; label?: string }>) ?? {};
+  const workflowIORaw = (tpl.workflowIO as Record<string, { direction: "input" | "output"; kind: string; nodeId: string; name: string; label?: string; displayOrder?: number; value?: unknown }>) ?? {};
 
   /* ── workflowIO ENRICHMENT (2026-08-09) ──
    * The stored selection only records WHICH pin was exposed
@@ -513,6 +872,17 @@ export async function GET(
   const nodeTitleById: Record<string, string> = {};
   for (const n of nodes) nodeTitleById[n.id] = n.title || n.class_type;
 
+  /* Map node id → ComfyUI class type so a direct (non-wrapper) COMBO input can
+   *  have its candidate list resolved from /api/object_info by (classType, field).
+   *  Wrapper COMBOs already carry `comboOptions` from the R73-B pass above and
+   *  bypass this lookup. */
+  const nodeTypeById: Record<string, string> = {};
+  if (raw && Array.isArray((raw as any).nodes)) {
+    for (const n of (raw as any).nodes) {
+      if (n && n.id != null) nodeTypeById[String(n.id)] = typeof n.type === "string" ? n.type : "";
+    }
+  }
+
   const MULTILINE_HINT = /(prompt|text|caption|描述|提示)/i;
   const workflowIO: Record<
     string,
@@ -526,6 +896,13 @@ export async function GET(
       defaultValue?: unknown;
       nodeTitle?: string;
       multiline?: boolean;
+      /** COMBO candidate list (unet_name / clip_name / …) resolved from
+       *  /api/object_info.  Absent for non-COMBO pins or when ComfyUI is
+       *  unreachable — consumers fall back to a plain text control. */
+      options?: string[];
+      /** 2026-08-17 R94: author override of the default value, round-tripped
+       *  from the stored `workflowIORaw` so a custom default survives reload. */
+      value?: unknown;
     }
   > = {};
   for (const [ioKey, v] of Object.entries(workflowIORaw)) {
@@ -533,6 +910,8 @@ export async function GET(
     let type = "*";
     let defaultValue: unknown = undefined;
     let label = v.label;
+    /* COMBO candidate list — resolved below once we know the final `type`. */
+    let options: string[] | undefined;
 
     // Helper (2026-08-09): resolve a stored `v.nodeId` against keys that may
     // be stored in EITHER of two ID families —
@@ -589,6 +968,23 @@ export async function GET(
           type = Number.isInteger(defaultValue) ? "INT" : "FLOAT";
         else if (typeof defaultValue === "string") type = "STRING";
       }
+      /* COMBO candidate list: a wrapper COMBO already carries `comboOptions`
+       *  from the R73-B pass; a direct (non-wrapper) COMBO node resolves via
+       *  its class type.  ComfyUI unreachable → options stays undefined → the
+       *  form falls back to a plain text control. */
+      if (type === "COMBO") {
+        if (ri && (ri as any).comboOptions) {
+          options = (ri as any).comboOptions;
+        } else {
+          const byClass = await comboOptionsForClassField(nodeTypeById[canonicalNodeId], v.name);
+          /* R-ardot73-C: wrapper nodes (esp. `comfy-core` subgraphs whose
+           *  `properties.proxyWidgets` is absent/quarantined) can't resolve the
+           *  internal class, so the class lookup above returns nothing.  Fall
+           *  back to a field-name scan across object_info to recover the option
+           *  list for uniquely-named COMBOs (e.g. `resolution_preset`). */
+          options = byClass ?? (await comboOptionsForFieldName(v.name));
+        }
+      }
     }
 
     workflowIO[ioKey] = {
@@ -599,6 +995,7 @@ export async function GET(
       label: label ?? v.name,
       type,
       ...(defaultValue !== undefined ? { defaultValue } : {}),
+      ...(options ? { options } : {}),
       nodeTitle: nodeTitleById[canonicalNodeId] ?? nodeTitleById[String(v.nodeId)],
       ...(type === "STRING" &&
       (MULTILINE_HINT.test(v.name) ||
@@ -606,6 +1003,21 @@ export async function GET(
         (typeof defaultValue === "string" && defaultValue.length > 40))
         ? { multiline: true }
         : {}),
+      /* R-ardot35 (2026-08-15): pass the user-defined displayOrder
+       *  through.  It was authored on a previous session via the IO-edit
+       *  preview's drag-to-reorder gesture, persisted via PATCH, and now
+       *  read back here so consumers can sort by it.  Coerce to number
+       *  (PATCH might serialize a string for whatever reason) and only
+       *  forward finite integers so a corrupted value can't poison the
+       *  sort comparator downstream. */
+      ...(typeof v.displayOrder === "number" && Number.isFinite(v.displayOrder)
+        ? { displayOrder: v.displayOrder }
+        : {}),
+      /* R94 (2026-08-17): preserve any author override of the default value.
+       *  `value` is stored verbatim via PATCH (the whole workflowIO object is
+       *  persisted as-is) and must survive this GET rebuild so a custom
+       *  default isn't silently dropped on reload. */
+      ...(v.value !== undefined ? { value: v.value } : {}),
     };
   }
 
@@ -667,21 +1079,38 @@ export async function GET(
    *  came from a user-initiated API export or was auto-derived from raw. */
   const detailHasApi = !!graph && Object.keys(graph).length > 0;
   const detailHasRaw = !!raw;
+  /* 2026-08-12 R76: apiSource === "user" overrides the hasRaw heuristic —
+   *  when the user has explicitly drag-upgraded this workflow with a real
+   *  API JSON, it counts as user-imported even if rawJson is also kept
+   *  (rawJson is retained for viewing, graph is the real execution source). */
   const detailApiOrigin: "user" | "derived" | null = detailHasApi
-    ? detailHasRaw
-      ? "derived"
-      : "user"
+    ? tpl.apiSource === "user"
+      ? "user"
+      : detailHasRaw
+        ? "derived"
+        : "user"
     : null;
   return JSON.stringify({
     id: tpl.id,
     name: tpl.name,
     taskType: tpl.taskType,
+    /** 2026-08-13: multi-mode support. `modes` is the full set of mode codes
+     *  this workflow can run as (JSON-string column parsed here); `defaultMode`
+     *  is the canonical default (kept in sync with `taskType` on write). */
+    modes: parseModesJson(tpl.modes),
+    defaultMode: tpl.defaultMode ?? null,
     graph,
     /** The original RAW (UI-format) JSON as imported — forwarded so the
      *  client can show / re-download the source in its native form.  Null
      *  for API-only imports (no rawJson on disk). */
     rawJson: raw,
     nodes,
+    /** 2026-08-13 R82: RAW 视图专用节点/位置/图（保留 subgraph wrapper）。
+     *  flat form 等工作流的存库 graph 被拆平成 N:xx，RAW 布局若只用 `nodes`
+     *  会显示炸开的 17 节点；rawView 从 rawJson 重新派生，RAW 视图据此渲染
+     *  原始的 5 节点（含 wrapper 紫色整卡），与 wrapper-form 兄弟一致。
+     *  null 表示该工作流无 rawJson（API-only 导入）。 */
+    rawView,
     paramMap,
     workflowIO,
     positions,
@@ -735,6 +1164,88 @@ export async function PATCH(
   // 1b) Workflow IO exposure selection (subgraph input/output editing mode).
   if (body.workflowIO && typeof body.workflowIO === "object") {
     updateData.workflowIO = body.workflowIO;
+  }
+
+  // 1c) Workflow task type (manual override from the library card, R70-2).
+  if (typeof body.taskType === "string" && body.taskType.trim()) {
+    updateData.taskType = normalizeTaskType(body.taskType.trim());
+  }
+
+  // 1e) 2026-08-13 多模式持久化。
+  //     `modes` 数组以 JSON 字符串落库（SQLite 不支持标量数组）；
+  //     `defaultMode` 取 modes 内的合法项，并同步写回单值 `taskType` 列，
+  //     保持 `?type=` 列表筛选等旧逻辑向后兼容。
+  if (Array.isArray(body.modes)) {
+    const codes = body.modes.filter((x: unknown) => typeof x === "string");
+    if (codes.length > 0) {
+      updateData.modes = serializeModesJson(codes);
+      const incomingDefault =
+        typeof body.defaultMode === "string" && body.defaultMode.trim()
+          ? body.defaultMode.trim()
+          : undefined;
+      const def =
+        incomingDefault && codes.includes(incomingDefault)
+          ? incomingDefault
+          : codes[0];
+      if (def) {
+        updateData.defaultMode = def;
+        updateData.taskType = normalizeTaskType(def);
+      }
+    }
+  }
+
+  // 1f) 2026-08-15 模型标签赋值（用户级全局标签库）。
+  //     body.modelTags 是标签名字符串数组（如 ["z-image","wan2.2"]）。
+  //     先按 (user, name) upsert 标签（保证全局标签库存在且跨工作流复用），
+  //     再把本工作流的 modelTags 关系 set 到这些标签 id；未列出的标签自动解除关联。
+  if (Array.isArray(body.modelTags)) {
+    const names: string[] = Array.from(
+      new Set(
+        (body.modelTags as unknown[])
+          .map((x) => (typeof x === "string" ? x.trim() : ""))
+          .filter((s) => s.length > 0)
+      )
+    );
+    let tagIds: string[] = [];
+    if (names.length > 0) {
+      for (const nm of names) {
+        await prisma.workflowModelTag.upsert({
+          where: { userId_name: { userId: user.id, name: nm } },
+          update: {},
+          create: { userId: user.id, name: nm },
+        });
+      }
+      const tags = await prisma.workflowModelTag.findMany({
+        where: { userId: user.id, name: { in: names } },
+        select: { id: true },
+      });
+      tagIds = tags.map((t) => t.id);
+    }
+    updateData.modelTags = { set: tagIds.map((id) => ({ id })) };
+  }
+
+  // 1d) 2026-08-12 R76: drag-to-upgrade — user drops a real API JSON onto
+  //     an existing workflow card from the library. Replace the graph
+  //     with the user-provided API JSON, mark `apiSource = "user"` so the
+  //     next GET recomputes apiOrigin as "user" (badge drops the "派生"
+  //     sub-tag), and KEEP `rawJson` for the "view nodes with their
+  //     original coordinates" use case the user asked for.
+  //     Validation re-uses detectWorkflowFormat so client + server agree
+  //     on what counts as API format.
+  if (body.upgradeFromApi && typeof body.upgradeFromApi === "object") {
+    const detected = detectWorkflowFormat(body.upgradeFromApi);
+    if (detected !== "api") {
+      return NextResponse.json(
+        {
+          error:
+            "需要 API 格式 JSON（形如 { \"<id>\": { class_type, inputs } }，所有顶层 key 为数字 id）。检测到：" +
+            (detected ?? "未知"),
+        },
+        { status: 400 },
+      );
+    }
+    updateData.graph = body.upgradeFromApi;
+    updateData.apiSource = "user";
   }
 
   // 2) Saved node positions (real graph nodes), keyed by node id.

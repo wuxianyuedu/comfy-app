@@ -798,6 +798,16 @@ export function CustomNodesSettings() {
           if (!res.ok || !d.ok) throw new Error(d.error || "保存失败");
           setSavedLocalPaths(d.localWorkflowPaths ?? live);
           setLocalSavedAt(nowTimeStr());
+          // 2026-08-13: Notify any mounted list (e.g. WorkflowLibrary) to
+          // re-fetch /api/workflows so the newly-configured root's
+          // local-pending entries surface immediately. The dialog renders
+          // its own live preview below, but other panels downstream need a
+          // nudge. Event name is namespaced to avoid collisions.
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("comfyapp:local-workflows-path-changed", {
+              detail: { paths: d.localWorkflowPaths ?? live },
+            }));
+          }
           // No `reloadFromServer` here — the workflows list endpoint
           // owns the local-pending preview, not this dialog.
         } catch (e) {
@@ -1110,11 +1120,22 @@ export function CustomNodesSettings() {
                 onChange={(e) => setLocalPathsText(e.target.value)}
                 rows={Math.max(2, Math.min(savedLocalPaths.length || 2, 6))}
                 placeholder={
-                  "C:\\Users\\me\\AppData\\Local\\Programs\\ComfyUI\\resources\\app\\workflows\n" +
-                  "/home/me/ComfyUI/user/default/workflows"
+                  "示例 ·  C:\\Users\\me\\AppData\\Local\\Programs\\ComfyUI\\resources\\app\\workflows\n" +
+                  "示例 ·  /home/me/ComfyUI/user/default/workflows"
                 }
-                className="mb-2 w-full resize-none rounded-lg border border-border bg-surface p-3 font-mono text-xs text-ink outline-none placeholder:text-gray-500 focus:border-primary"
+                /* 2026-08-12 R71-2: placeholder 之前用 text-gray-500，看起来太
+                 * 像已填的内容，用户看到示例路径就误以为「已经配置好了」。加
+                 * italic + 更浅的 gray-600/60，并把前缀改成「示例 ·  」，与
+                 * 真实 text-ink 在视觉上彻底分开。*/
+                className="mb-2 w-full resize-none rounded-lg border border-border bg-surface p-3 font-mono text-xs text-ink outline-none placeholder:italic placeholder:text-gray-600/60 focus:border-primary"
               />
+              {/* 2026-08-12 R71-2: textarea 真正为空且没有已保存路径时，加一行
+               * 小灰提示明确告诉用户「上面灰字只是示例，需要你手动输入」。*/}
+              {localPathsText.trim() === "" && savedLocalPaths.length === 0 && !localSaving && (
+                <p className="mb-2 text-[11px] italic text-gray-500/80">
+                  ⓘ 上面 textarea 里灰色斜体只是示例路径，请手动输入你本地 ComfyUI 的工作流目录。
+                </p>
+              )}
               {savedLocalPaths.length > 0 && (
                 <ul className="mb-2 space-y-1">
                   {savedLocalPaths.map((p, i) => (
@@ -1153,7 +1174,11 @@ export function CustomNodesSettings() {
                     <span className="text-emerald-400">✓ 已配置（来自 .env）</span>
                   )}
                   {!localSaving && !localSaveErr && savedLocalPaths.length === 0 && (
-                    <span>未配置 — 在上面输入至少一个目录</span>
+                    /* 2026-08-12 R71-2: 这条消息之前是「在上面输入至少一个目录」，
+                     * 但用户看到灰色 placeholder（看起来像内容）就误以为已配置。
+                     * 现在 placeholder 已经加了 italic + 「示例 ·  」前缀并伴随
+                     * ⓘ 提示行，这条消息只要简短地说「尚未配置」即可。*/
+                    <span>尚未配置 — 请在上面的 textarea 里输入你的本地工作流目录</span>
                   )}
                 </div>
               </div>

@@ -10,15 +10,16 @@ import {
 } from "@/lib/comfyui/raw";
 import {
   normalizeTaskType,
-  inferWorkflowTypeFromGraph,
   VALID_TASK_TYPE_CODES,
   getWorkflowType,
+  parseModesJson,
 } from "@/lib/workflow-types";
 import { readEnvVar } from "@/lib/envfile";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import {
   scanLocalWorkflowRoots,
+  scanLocalWorkflowChecksums,
   type LocalWorkflowFile,
 } from "@/lib/comfyui/localWorkflows";
 
@@ -85,6 +86,23 @@ function findRootFor(
 // Supports ?type=T2I (or any valid code) to filter by workflow type.
 // Supports ?category=image|video|audio to filter by category.
 export async function GET(req: NextRequest) {
+  try {
+    return await getWorkflows(req);
+  } catch (e: any) {
+    /** 2026-08-13 R-hotfix: never let the handler return 0-byte body.
+     *  An empty body crashes the client's `r.json()` and pops a red
+     *  "Unhandled Runtime Error" overlay on /updream/.  Always serialise
+     *  the failure as JSON so the client can parse + display it. */
+    console.error("[api/workflows] GET failed:", e?.message ?? e);
+    console.error(e?.stack);
+    return NextResponse.json(
+      { error: e?.message ?? "服务器内部错误", workflows: [], localPending: [], localRoots: null },
+      { status: 500 }
+    );
+  }
+}
+
+async function getWorkflows(req: NextRequest) {
   const user = await getServerUser();
   const url = new URL(req.url);
 
@@ -107,6 +125,19 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // 2026-08-15: filter by model tag name (user-level global tag library).
+  // A workflow matches if it has ANY of the comma-separated tag names.
+  const modelParam = url.searchParams.get("model");
+  if (modelParam) {
+    const names = modelParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (names.length > 0) {
+      where.modelTags = { some: { name: { in: names } } };
+    }
+  }
+
   const list = await prisma.workflowTemplate.findMany({
     where,
     orderBy: { createdAt: "desc" },
@@ -119,6 +150,8 @@ export async function GET(req: NextRequest) {
       graph: true,
       rawJson: true,
       sourcePath: true,
+      /** 2026-08-15: model tag names attached to this workflow. */
+      modelTags: { select: { name: true } },
       /** 2026-08-10 R16: select sourceMtime/sourceChecksum so the list can
        *  compute isDirty (`diskMtimeSec > sourceMtime`) and surface a "↻
        *  同步" action when the on-disk file has changed since the last
@@ -132,6 +165,14 @@ export async function GET(req: NextRequest) {
        *  graph preview is available) instead of a blank gradient.
        *  Raw shape is fine — the client renders with its own helper. */
       workflowIO: true,
+      /** 2026-08-12 R76: marker that distinguishes "user-imported API +
+       *  kept RAW" from "RAW-derived API". Forwarded so the list can
+       *  compute apiOrigin correctly (overrides the hasRaw heuristic). */
+      apiSource: true,
+      /** 2026-08-13: multi-mode support — both columns are strings in SQLite
+       *  (modes is a JSON-string column); parsed before shipping to client. */
+      modes: true,
+      defaultMode: true,
     },
   });
 
@@ -184,6 +225,65 @@ export async function GET(req: NextRequest) {
     diskMtimeByPath.set(pathKey(f.absPath), f.mtimeMs);
   }
 
+  // ── Content-addressed relink (R-ardot105, 2026-08-17) ─────────────────
+  // When a user renames a local JSON on disk, the DB still points at the
+  // OLD absolute path; without help, the row surfaces as `diskMissing`
+  // and the library refuses to operate it.  We compute the SHA-1 slice
+  // for every readable `.json` / `.workflow` in the configured roots and
+  // match missing rows by `sourceChecksum` — content is identical after
+  // a rename, so the match is unambiguous.  On a hit we update the row
+  // in-place (new `sourcePath` + fresh `sourceMtime`) and remember the
+  // move so the UI can flash a "已自动重新链接 → 新文件名" toast.  If
+  // multiple files share the same checksum (rare but possible), we pick
+  // the one with the most recent mtime.
+  //
+  // No-op when no LOCAL_WORKFLOWS_PATH is configured or every scan
+  // fails — `diskMissing` then stays as-is and the manual "重新链接"
+  // button is the user's escape hatch.
+  const renamedFromTo = new Map<string, string>(); // id → "old.json" → "new.json"
+  if (localAllFiles.length > 0) {
+    const checksumEntries = await scanLocalWorkflowChecksums(localRoots);
+    // Build checksum → {absPath, mtimeMs}; on collision, keep the newer file.
+    const checksumIndex = new Map<string, { absPath: string; mtimeMs: number }>();
+    for (const e of checksumEntries) {
+      if (!e.checksum) continue;
+      const cur = checksumIndex.get(e.checksum);
+      if (!cur || e.mtimeMs > cur.mtimeMs) {
+        checksumIndex.set(e.checksum, { absPath: e.absPath, mtimeMs: e.mtimeMs });
+      }
+    }
+    for (const w of list) {
+      if (!w.sourcePath || !w.sourceChecksum) continue;
+      if (diskMtimeByPath.has(pathKey(w.sourcePath))) continue; // still there
+      const hit = checksumIndex.get(w.sourceChecksum);
+      if (!hit) continue;
+      // Persist the relink + remember the move for the UI toast.
+      const oldName = w.sourcePath.split(/[\\/]/).pop() ?? w.sourcePath;
+      const newName = hit.absPath.split(/[\\/]/).pop() ?? hit.absPath;
+      try {
+        await prisma.workflowTemplate.update({
+          where: { id: w.id },
+          data: {
+            sourcePath: hit.absPath,
+            sourceMtime: Math.floor(hit.mtimeMs / 1000),
+          },
+        });
+        // Mirror the DB write into the in-memory `list` row so the
+        // downstream `enriched.map` (and the `existingByPath` set that
+        // suppresses the rename-shifted pending card) sees the new
+        // path immediately.
+        w.sourcePath = hit.absPath;
+        w.sourceMtime = Math.floor(hit.mtimeMs / 1000);
+        diskMtimeByPath.set(pathKey(hit.absPath), hit.mtimeMs);
+        renamedFromTo.set(w.id, `${oldName} → ${newName}`);
+      } catch (e: any) {
+        console.warn(
+          `[api/workflows] R-ardot105 relink failed for ${w.id}: ${e?.message ?? e}`
+        );
+      }
+    }
+  }
+
   // Enrich with type metadata (label, category, description) and a compact
   // node-graph preview so the library card can show what the workflow looks
   // like without re-fetching the full graph.
@@ -197,13 +297,21 @@ export async function GET(req: NextRequest) {
     const hasRaw = !!w.rawJson;
     /* apiOrigin disambiguates where the executable graph came from (so the
      *  UI can label it honestly — see the modal/banner notes):
-     *   "user"    = imported as API Format from ComfyUI;
-     *   "derived" = generated from rawJson via convertRawToApi;
-     *   null      = no API at all (graph empty, only RAW was imported). */
+     *   "user"    = imported as API Format from ComfyUI, OR the user has
+     *               explicitly drag-upgraded this workflow by dragging a
+     *               real API JSON onto it (apiSource === "user");
+     *   "derived" = generated from rawJson via convertRawToApi (and the
+     *               user has NOT dragged a real API JSON onto it);
+     *   null      = no API at all (graph empty, only RAW was imported).
+     *  2026-08-12 R76: when apiSource === "user", the workflow counts as
+     *  user-imported even if rawJson is also present (user wants RAW
+     *  retained for viewing while having the real API source for execution). */
     const apiOrigin: "user" | "derived" | null = hasApi
-      ? hasRaw
-        ? "derived"
-        : "user"
+      ? w.apiSource === "user"
+        ? "user"
+        : hasRaw
+          ? "derived"
+          : "user"
       : null;
 
     // ── 2026-08-10 R16: dirty / missing flag for local rows ────────────
@@ -227,10 +335,25 @@ export async function GET(req: NextRequest) {
         }
       }
     }
+    // ── R-ardot105 (2026-08-17): the rename-relink pass ran just before
+    // this map; rows that hit a checksum match have already been
+    // re-written in DB and mirrored into the in-memory `list` row, so
+    // `diskMissing` is now `false` and `diskMtimeSec` reflects the NEW
+    // path.  We just need to surface `diskRenamed: true` (plus the
+    // `oldName → newName` summary) so the UI can flash a toast.
+    const renamed = renamedFromTo.get(w.id) ?? null;
+    const diskRenamed = renamed !== null;
     return {
       id: w.id,
       name: w.name,
       taskType: w.taskType,
+      /** 2026-08-13: multi-mode support. `modes` is the full set of mode
+       *  codes this workflow can run as; `defaultMode` is the one shown on
+       *  the card's main chip (and kept in sync with `taskType` for the
+       *  legacy single-value filter).  Empty array → client falls back to
+       *  `[taskType]`. */
+      modes: parseModesJson(w.modes),
+      defaultMode: w.defaultMode ?? null,
       createdAt: w.createdAt,
       paramMap: w.paramMap,
       sourcePath: w.sourcePath,
@@ -258,6 +381,10 @@ export async function GET(req: NextRequest) {
        *  pin.  Forwarded so library cards can fall back to IO chips
        *  when there is no graph preview yet. */
       workflowIO: (w.workflowIO as Record<string, any>) ?? {},
+      /** 2026-08-15: model tag names attached to this workflow (e.g.
+       *  ["z-image","wan2.2"]).  Forwarded so the library card can show
+       *  chips and the canvas node selector can filter by model. */
+      modelTags: ((w.modelTags as Array<{ name: string }>) ?? []).map((t) => t.name),
       /** 2026-08-10 R16: disk vs DB mtime comparison so the UI can
        *  surface a "↻ 同步" button when the on-disk file changed
        *  since the last reimport.  All four fields are null/false
@@ -266,6 +393,12 @@ export async function GET(req: NextRequest) {
       diskMtimeSec,
       diskDirty,
       diskMissing,
+      /** R-ardot105 (2026-08-17): this workflow was just automatically
+       *  relinked to a renamed file (format "old.json → new.json").
+       *  UI flashes a one-shot toast and the row's `diskMissing` is
+       *  already `false` from the same pass.  null for everything else. */
+      diskRenamed,
+      diskRenamedTo: renamed,
     };
   });
 
@@ -294,6 +427,9 @@ export async function GET(req: NextRequest) {
         id: pendingId(f.absPath),
         name: friendly,
         taskType: "",
+        /** Not yet imported → no mode config yet. */
+        modes: [],
+        defaultMode: null,
         createdAt: new Date(f.mtimeMs).toISOString(),
         paramMap: {},
         sourcePath: f.absPath,
@@ -316,6 +452,8 @@ export async function GET(req: NextRequest) {
         format: "api",
         preview: { nodes: [], edges: [], w: 0, h: 0 },
         workflowIO: {},
+        /** Local-pending files aren't imported yet → no tags. */
+        modelTags: [],
         pending: true,
         pendingSize: f.size,
         pendingMtime: f.mtimeMs,
@@ -486,17 +624,19 @@ export async function POST(req: NextRequest) {
   }
 
   const name = String(body.name ?? "未命名工作流").slice(0, 80);
+  /* R-ardot87 (2026-08-16): 工作流初始导入不再自动推断类型。旧逻辑在
+   * `body.taskType` 为空时调 `inferWorkflowTypeFromGraph(apiGraph)` 兜底，
+   * 但识别准确率不高（VAEEncode+LoadImage 一律判 I2I 而忽略 Inpaint 子分支
+   * 等），用户更愿意手动挑。现在未传 taskType 时直接留空，由 UI 让用户选。
+   * `inferWorkflowTypeFromGraph` 仍可作为 helper 留给后续显式调用使用。 */
   let taskType = String(body.taskType ?? "");
-  if (!taskType) {
-    // Use the new inference system for richer type detection
-    taskType = inferWorkflowTypeFromGraph(apiGraph);
-  } else {
+  if (taskType) {
     // Normalize legacy values (TXT2IMG → T2I, etc.)
     taskType = normalizeTaskType(taskType);
   }
 
   // Validate against known types (warn but don't block custom/unknown types)
-  if (!VALID_TASK_TYPE_CODES.has(taskType)) {
+  if (taskType && !VALID_TASK_TYPE_CODES.has(taskType)) {
     console.log(`[workflow] Unknown taskType "${taskType}", allowing as custom type`);
   }
 

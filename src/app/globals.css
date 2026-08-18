@@ -77,6 +77,16 @@ body {
   border-radius: 999px;
 }
 
+/* R-ardot18 (2026-08-14): canvas node textarea must not show the scrollbar
+   track even though it still scrolls (overflowY:auto + maxHeight).  We keep
+   wheel / PgDn / arrow keys usable but hide the chrome visual so the right
+   edge of the panel stays clean. */
+textarea::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+
 /* ── React Flow canvas grid ──
    The grid is drawn by two stacked native <Background> layers (see
    `CanvasGrid` in WorkflowCanvasEditor.tsx): a fine 20px cell grid plus
@@ -92,6 +102,54 @@ body {
    per layer through the `lineWidth` prop. */
 .react-flow__pane {
   background-color: transparent;
+}
+
+/* ── R-ardot106 (2026-08-17) MiniMap focus aids ──
+   • `pannable zoomable` on the MiniMap exposes an interactive viewport
+     rectangle; the default xyflow stroke (transparent / 1px) is invisible
+     against our dark canvas.  Re-tint to a violet accent + 1.5px so the
+     "current focus" rectangle is unmistakable on large graphs.
+   • The mask background colour comes from the `maskColor` prop, but the
+     mask's own fill is the cutout's *shadow* colour — make sure the cutout
+     itself reads as fully transparent. */
+.react-flow__minimap-mask {
+  --xy-minimap-mask-stroke-color: #c4b5fd;       /* violet-300 */
+  --xy-minimap-mask-stroke-width: 1.5;
+  fill: var(--xy-minimap-mask-background-color-props,
+    var(--xy-minimap-mask-background-color, var(--xy-minimap-mask-background-color-default)));
+}
+.react-flow__minimap-svg {
+  /* Cursor + hover affordance for click-to-jump */
+  cursor: crosshair;
+}
+.react-flow__minimap-svg:hover {
+  outline: 1px solid rgba(196, 181, 253, 0.25);
+  outline-offset: 1px;
+  border-radius: 6px;
+}
+
+/* ── ReactFlow Controls: dark-aurora theme (all canvases) ──
+   Override default light buttons so zoom/fit controls match #0a0a0f canvas. */
+.react-flow__controls {
+  display: flex !important;
+  gap: 2px !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.react-flow__controls-button {
+  width: 28px !important;
+  height: 28px !important;
+  background: #0D0818 !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 6px !important;
+  fill: #9A9AAD !important;           /* --color-muted */
+  transition: background 0.15s, fill 0.15s, border-color 0.15s;
+}
+.react-flow__controls-button:hover {
+  background: #1A1030 !important;
+  border-color: rgba(124,92,252,0.3) !important;   /* primary tint */
+  fill: #EDEDF2 !important;            /* --color-ink */
 }
 
 /* ───────────────────────────────────────────────────────────
@@ -179,6 +237,15 @@ body {
   50%  { transform: translateX(200%); }
   100% { transform: translateX(200%); }
 }
+
+/* R-ardot103 (2026-08-17): 生成进度水面水平滑动 —— WaterFillProgress 用。
+ * SVG viewBox 宽 120 = 渲染宽（100%），所以 translateX(-100%) 恰好移动一整个
+ * 波形周期，无缝循环。线性 6s，无限；配合水层高度过渡形成"水面涨起 + 流动"。 */
+@keyframes wf-wave {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+.wf-wave { animation: wf-wave 6s linear infinite; }
 
 /* 2026-08-11 R44: react18-json-view 主题 — 与 globals.css 暗色 token 对齐
    (violet/emerald/orange/amber/zinc 系)。挂在 `.json-view.jv-theme-comfy` 上避免污染其它地方。 */

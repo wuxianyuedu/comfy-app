@@ -38,6 +38,9 @@ export async function POST(
       sourcePath: true,
       sourceMtime: true,
       sourceChecksum: true,
+      /* R-ardot87 (2026-08-16): 同步时透传 taskType 给 reimportFromSource，
+       * 避免覆盖用户已手动设置的类型（不再被自动推断回写）。 */
+      taskType: true,
     },
   });
   if (!tpl) {
@@ -60,6 +63,7 @@ export async function POST(
       sourcePath: tpl.sourcePath,
       sourceMtime: tpl.sourceMtime,
       sourceChecksum: tpl.sourceChecksum,
+      existingTaskType: tpl.taskType ?? null,
     });
   } catch (e: any) {
     return NextResponse.json(

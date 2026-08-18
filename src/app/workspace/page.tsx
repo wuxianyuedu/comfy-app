@@ -17,11 +17,16 @@ import type {
   SkillShort,
 } from "@/components/updream";
 import type { AgentSpec } from "@/lib/agent/agentic";
+import { listProjects, setActive, reapAllEmptyDrafts } from "@/components/updream/canvas/canvas-store";
 
 /* ── Lazy-load view components so the initial bundle stays small ── */
 /* Only HomePage / WorkspaceNav / ToastProvider / VideoQueueModal are loaded eagerly. */
 const WorksGallery = dynamic(
   () => import("@/components/updream").then((m) => m.WorksGallery),
+  { ssr: false }
+);
+const ProjectOutputs = dynamic(
+  () => import("@/components/updream").then((m) => m.ProjectOutputs),
   { ssr: false }
 );
 const SkillsGrid = dynamic(
@@ -120,12 +125,18 @@ export default function WorkspacePage() {
 
   // ── Agent chat overlay ──
   const [agentOpen, setAgentOpen] = useState(false);
+  // R-ardot120 (2026-08-18): 控制「✦ AI 引导」FAB 是否渲染 —
+  // 默认 false, 详见下方 JSX 注释。要重新启用 = 改 true。
+  const SHOW_AI_FAB = false;
 
   // ── Video queue modal ──
   const [videoQueueOpen, setVideoQueueOpen] = useState(false);
 
   // ── Canvas: when true, the canvas opens a brand-new named project
   const [canvasSeedNew, setCanvasSeedNew] = useState(false);
+
+  // ── Bump to re-read canvas-store (recent projects) ──
+  const [recentsKey, setRecentsKey] = useState(0);
 
   // ── When set, the create panel opens directly in "custom" mode with this
   //    imported workflow pre-selected (from the Workflow Library "使用" action).
@@ -143,54 +154,61 @@ export default function WorkspacePage() {
   //    image pre-filled as the reference image (from HomePage "上传素材").
   const [pendingImage, setPendingImage] = useState<string | null>(null);
 
-  // ── Recent projects mock data ──
-  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
-
+  // ── Recent projects: sourced from canvas-store (localStorage), not Task table.
+  //    Task.type only accepts TXT2IMG|IMG2IMG|INPAINT|HIRERES|VIDEO, so canvas
+  //    projects never appear there. Reading from listProjects() guarantees the
+  //    "最近项目" section reflects the user's actual canvas work.
   // ── Read ?tab= query param to set initial view (avoids useSearchParams Suspense) ──
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
-    if (tab === "works" || tab === "skills" || tab === "create" || tab === "canvas" || tab === "models" || tab === "workshop" || tab === "history" || tab === "train" || tab === "film" || tab === "workflows") {
+    if (tab === "works" || tab === "skills" || tab === "create" || tab === "canvas" || tab === "models" || tab === "workshop" || tab === "history" || tab === "train" || tab === "film" || tab === "workflows" || tab === "outputs") {
       setViewMode(tab);
     }
   }, []);
 
-  // ── Load real recent tasks as "recent projects" on mount ──
+  // ── Load real recent canvas projects on mount + on store-change events ──
+  //    Stored in localStorage (canvas-store), so SSR returns []; we hydrate
+  //    after mount. The "comfyapp:canvas-store-changed" event lets the home
+  //    view stay in sync with edits made inside ProjectCanvas (upsert / delete
+  //    / rename) without requiring a full reload.
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
   useEffect(() => {
-    fetch("/api/tasks")
-      .then((r) => r.json())
-      .then((d) => {
-        const tasks = (d.tasks ?? []) as Array<{
-          id: string;
-          prompt?: string;
-          workflowName?: string;
-          type?: string;
-          status?: string;
-          cover?: string | null;
-          images?: string[];
-          createdAt?: string;
-        }>;
-        // 只显示画布项目，不混入生成作品
-        const canvasProjects: RecentProject[] = tasks
-          .filter((t) => t.type === "canvas")
-          .slice(0, 3)
-          .map((t) => {
-            const imgs = t.images ?? (t.cover ? [t.cover] : []);
+    // One-shot sweep on home mount: remove any stale empty default-named
+    // drafts that earlier code versions (R58 + prior) left in the index.
+    // Triggers `comfyapp:canvas-store-changed` if anything was reaped, so
+    // the refresh callback below will re-read `listProjects()` and the
+    // home recent-projects list stays clean without a hard reload.
+    reapAllEmptyDrafts();
+    const compute = () => {
+      setRecentProjects(
+        listProjects()
+          .slice(0, 8) // 给 HomePage 内部 recentsExpanded ? 7 : 3 切片留余量
+          .map((p) => {
+            const nodeCount = p.nodes?.length ?? 0;
+            const edgeCount = p.edges?.length ?? 0;
             return {
-              id: t.id,
-              name: (t.prompt || t.workflowName || "未命名画布").slice(0, 28),
-              updatedAt: t.createdAt ? ago(t.createdAt) : "刚刚",
+              id: p.id,
+              name: (p.name || "未命名项目").slice(0, 28),
+              updatedAt: p.updatedAt
+                ? ago(new Date(p.updatedAt).toISOString())
+                : "刚刚",
               kind: "canvas" as const,
-              subtitle: `${imgs.length > 0 ? imgs.length + " 张图" : "画布项目"}`,
-              thumbnails: imgs.slice(0, 3),
+              subtitle:
+                nodeCount > 0
+                  ? `${nodeCount} 节点 · ${edgeCount} 连线`
+                  : "空画布",
+              thumbnails: [],
             };
-          });
-        setRecentProjects(canvasProjects);
-      })
-      .catch(() => {
-        /* keep empty list — HomePage renders placeholders */
-      });
-  }, []);
+          })
+      );
+    };
+    compute();
+    const refresh = () => compute();
+    window.addEventListener("comfyapp:canvas-store-changed", refresh);
+    return () =>
+      window.removeEventListener("comfyapp:canvas-store-changed", refresh);
+  }, [recentsKey]);
 
   // ── Handlers ──
   const handleNavSelect = useCallback((id: WorkspaceView) => {
@@ -234,11 +252,28 @@ export default function WorkspacePage() {
     setPendingSkill(null);
   }, []);
 
-  const handleHomeNavigate = useCallback((view: string) => {
-    // Navigate to workspace views
-    if (view === "skills" || view === "models" || view === "workflows" || view === "create") {
-      navigateTo(view as WorkspaceView);
-    }
+  // Open a canvas project — set it as active and jump to the canvas view.
+  const handleOpenCanvasProject = useCallback(
+    (id: string) => {
+      setActive(id);
+      navigateTo("canvas");
+    },
+    [navigateTo]
+  );
+
+  const handleHomeNavigate = useCallback(
+    (view: WorkspaceView) => {
+      // Accept any registered WorkspaceView id; "home" is the current view,
+      // so clicking it again is a no-op.
+      if (view === "home") return;
+      navigateTo(view);
+    },
+    [navigateTo]
+  );
+
+  // HomePage "查看全部" → switch to the "项目" (works) tab.
+  const handleShowAllProjects = useCallback(() => {
+    navigateTo("works");
   }, [navigateTo]);
 
   // Upload a material from HomePage "上传素材" → open the Create panel in
@@ -315,9 +350,11 @@ export default function WorkspacePage() {
           onNewProject={handleNewProject}
           recentProjects={recentProjects}
           onOpenProject={handleOpenProject}
+          onOpenCanvasProject={handleOpenCanvasProject}
           activeNav="home"
           onNavigate={handleHomeNavigate}
           onUploadImage={handleUploadImage}
+          onShowAllProjects={handleShowAllProjects}
         />
         <VideoQueueModal open={videoQueueOpen} onClose={() => setVideoQueueOpen(false)} />
       </ToastProvider>
@@ -345,7 +382,7 @@ export default function WorkspacePage() {
         );
 
       case "works":
-        return <WorksGallery onOpenTask={handleOpenProject} />;
+        return <WorksGallery onOpenTask={handleOpenProject} onOpenCanvasProject={handleOpenCanvasProject} />;
 
       case "skills":
         return <SkillsGrid onUseSkill={handleUseSkill} />;
@@ -374,6 +411,9 @@ export default function WorkspacePage() {
 
       case "workflows":
         return <WorkflowLibrary onUse={handleUseWorkflow} />;
+
+      case "outputs":
+        return <ProjectOutputs />;
 
       case "workshop":
         return (
@@ -409,8 +449,11 @@ export default function WorkspacePage() {
           }}
         />
 
-        {/* AI 创作引导 — 浮动入口 + 多轮对话浮层 */}
-        {!agentOpen && (
+        {/* R-ardot120 (2026-08-18): 临时隐藏「✦ AI 引导」浮动入口。
+         *  原因：调试模式下日志面板浮在画布底部,缩小后恰好遮住右下 FAB,
+         *  两块视觉冲突。保留 `agentOpen` state 与 <AgentChat /> 节点,
+         *  仅折叠按钮入口。要恢复 = 把 SHOW_AI_FAB 改回 true。 */}
+        {SHOW_AI_FAB && !agentOpen && (
           <button
             type="button"
             onClick={() => setAgentOpen(true)}
@@ -420,7 +463,9 @@ export default function WorkspacePage() {
             AI 引导
           </button>
         )}
-        <AgentChat open={agentOpen} onClose={() => setAgentOpen(false)} onApply={handleApplySpec} />
+        {SHOW_AI_FAB && agentOpen && (
+          <AgentChat open={agentOpen} onClose={() => setAgentOpen(false)} onApply={handleApplySpec} />
+        )}
       </div>
     </ToastProvider>
   );

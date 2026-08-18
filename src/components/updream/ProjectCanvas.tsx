@@ -20,6 +20,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { CanvasNode } from "./canvas/CanvasNode";
+import { WorkflowNodeArdot } from "./canvas/WorkflowNode.ardot";
 import {
   CanvasNodeData,
   CanvasNodeType,
@@ -33,13 +34,43 @@ import {
   getProject,
   upsertProject,
   deleteProject,
-  createProject,
+  createProject as createRealProject, // legacy: kept for switch/import paths that must persist
+  createDraftProject, // new: lands on a canvas w/o polluting the index until first real change
+  reapEmptyProject,
+  reapAllEmptyDrafts,
+  commitDraftProject,
+  clearActiveIfDraft,
+  hydrateFromServer,
+  findNextAvailableName, // R65: avoid duplicate names on rename / new
+  isEmptyDraftName, // R68: single source of truth for empty-draft sentinel names
   setActive,
   getActiveId,
   type CanvasProject,
 } from "./canvas/canvas-store";
+import { ModalDialog } from "./ModalDialog";
+import { useToast } from "./Toast";
+import { useMiniMapJump } from "./shared/useMiniMapJump";
+import {
+  CanvasPanelToolbar,
+  type CanvasPanelType,
+} from "./canvas/CanvasPanelToolbar";
+import { MaterialLibraryPanel } from "./canvas/MaterialLibraryPanel";
+import { HistoryPanel } from "./canvas/HistoryPanel";
+import {
+  ProjectSettingsButton,
+  ProjectSettingsDrawer,
+} from "./ProjectCanvasSettings";
+import { GlobalStepLogPanel } from "./canvas/GlobalStepLogPanel";
 
-const nodeTypes = { canvasNode: CanvasNode };
+/* nodeTypes 注册：
+ *  - canvasNode       ：原有逻辑节点（kind=image/video/script/agent/workflow/...）
+ *  - workflowArdot    ：纯视觉测试节点（无运行时，对齐 Ardot 稿 714503087315759），
+ *                       由右键菜单的「测试自定义工作流」项创建
+ */
+const nodeTypes = {
+  canvasNode: CanvasNode,
+  workflowArdot: WorkflowNodeArdot,
+} as const;
 
 interface ProjectCanvasProps {
   seedNew?: boolean;
@@ -55,11 +86,14 @@ function ContextMenu({
   x,
   y,
   onPick,
+  onPickTest,
   onClose,
 }: {
   x: number;
   y: number;
   onPick: (kind: NodeKind) => void;
+  /** Spawn a pure-visual Ardot-style test node (no runtime). */
+  onPickTest: () => void;
   onClose: () => void;
 }) {
   return (
@@ -73,9 +107,29 @@ function ContextMenu({
         }}
       />
       <div
-        className="fixed z-50 w-44 overflow-hidden rounded-xl border border-white/[0.1] bg-[#14121f]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur"
+        className="fixed z-50 w-52 overflow-hidden rounded-xl border border-white/[0.1] bg-[#14121f]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur"
         style={{ left: x, top: y }}
       >
+        {/* ── 测试节点（纯视觉，对齐 Ardot 稿）── */}
+        <button
+          type="button"
+          data-canvas-node-kind="workflow-ardot"
+          onClick={onPickTest}
+          className="flex w-full items-center gap-2 rounded-lg border border-violet-400/30 bg-gradient-to-r from-[#7C5CFC]/15 to-[#FF5CA8]/10 px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:from-[#7C5CFC]/25 hover:to-[#FF5CA8]/15"
+        >
+          <span
+            className="flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold text-white"
+            style={{ background: "linear-gradient(135deg, #7C5CFC 0%, #FF5CA8 100%)" }}
+          >
+            W
+          </span>
+          <span className="flex flex-col">
+            <span className="font-medium">测试自定义工作流</span>
+            <span className="text-[10px] text-gray-500">纯视觉 · 对齐 Ardot 稿（无运行时）</span>
+          </span>
+        </button>
+
+        <div className="my-1 h-px bg-white/[0.06]" />
         <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-gray-500">创建节点</div>
         {(Object.keys(NODE_META) as NodeKind[]).map((k) => {
           const m = NODE_META[k];
@@ -102,6 +156,7 @@ function ContextMenu({
 
 /* ── Inner canvas (must be inside ReactFlowProvider) ── */
 function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending }: ProjectCanvasProps) {
+  const toast = useToast();
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNodeType>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -110,8 +165,23 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
   const [renameVal, setRenameVal] = useState("");
   const [projects, setProjects] = useState<CanvasProject[]>([]);
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [projectName, setProjectName] = useState("未命名项目");
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const [projectName, setProjectName] = useState("未命名");
+  /* Confirmation dialogs (R65: replaced window.confirm with custom dialog) */
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  /* Canvas panel system: 素材库 / 历史记录 slide-out panels */
+  const [activePanel, setActivePanel] = useState<CanvasPanelType>(null);
+  /* R-ardot119 (2026-08-18): top-right settings drawer (调试模式). The
+   * workflow editor already has its own drawer for grid/ruler/zoom; the
+   * project canvas only needs the debug toggle so the user can flip it
+   * without first drill-in'ing. State is shared with the workflow
+   * editor via useDebugMode (same localStorage key). */
+  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
+  const rf = useReactFlow();
+  const { screenToFlowPosition, fitView } = rf;
+  /* R-ardot106 (2026-08-17): MiniMap → main-viewport single-click jump.
+   *  Pairs with <MiniMap pannable zoomable onClick={onMiniMapJump} /> below. */
+  const onMiniMapJump = useMiniMapJump(rf);
 
   /* refs holding the latest values for event handlers / flush */
   const edgesRef = useRef(edges);
@@ -132,27 +202,44 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
   // state we just read from the store.
   const firstMutationRef = useRef(true);
 
-  /* ── Load (or create) the active project on mount ── */
+  /* ── Load (or create) the active project on mount ──
+   *
+   *  Draft-aware: when the user clicks "新建项目" we DO NOT immediately
+   *  persist an empty row to the project index.  Instead, `seedNew`
+   *  allocates a fresh id via `createDraftProject`, which only writes the
+   *  active-id.  The project row only enters the index the moment the
+   *  user produces real content (auto-persist effect below), or via the
+   *  manual upsert in `commitRename` / `newProject`.
+   *
+   *  Before mounting, we sweep any legacy empty-default rows left over
+   *  from earlier sessions so the recent-projects list stays clean. */
   useEffect(() => {
     if (loadedRef.current) return;
     loadedRef.current = true;
-    let proj: CanvasProject | null = null;
-    if (seedNew) {
-      proj = createProject();
-    } else {
-      const activeId = getActiveId();
-      if (activeId) proj = getProject(activeId);
-      if (!proj) proj = listProjects()[0] ?? null;
-      if (!proj) proj = createProject();
-    }
-    setProjectId(proj.id);
-    setProjectName(proj.name);
-    setNodes((proj.nodes as CanvasNodeType[]) ?? []);
-    setEdges(proj.edges ?? []);
-    setActive(proj.id);
-    // fit after nodes are applied
-    setTimeout(() => fitView({ padding: 0.25, duration: 300 }), 80);
-    onConsumeSeed?.();
+    (async () => {
+      // Reconcile server-side projects into localStorage BEFORE we read the
+      // active project, so a port-switch (3000↔3002) / device never loses
+      // canvas data that was persisted to the DB.
+      await hydrateFromServer();
+      reapAllEmptyDrafts(); // one-shot cleanup of pre-fix pollution
+      let proj: CanvasProject | null = null;
+      if (seedNew) {
+        proj = createDraftProject();
+      } else {
+        const activeId = getActiveId();
+        if (activeId) proj = getProject(activeId);
+        if (!proj) proj = listProjects()[0] ?? null;
+        if (!proj) proj = createDraftProject();
+      }
+      setProjectId(proj.id);
+      setProjectName(proj.name);
+      setNodes((proj.nodes as CanvasNodeType[]) ?? []);
+      setEdges(proj.edges ?? []);
+      setActive(proj.id);
+      // fit after nodes are applied
+      setTimeout(() => fitView({ padding: 0.25, duration: 300 }), 80);
+      onConsumeSeed?.();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -185,32 +272,62 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
     onConsumePending?.();
   }, [pendingWorkflow, screenToFlowPosition, setNodes, fitView, onConsumePending]);
 
-  /* ── Persist current project (debounced) ── */
+  /* ── Persist current project (debounced) ──
+   *
+   *  Draft-aware (R64): empty + default-named canvases are REAPED instead
+   *  of persisted, so visiting the canvas and walking away without doing
+   *  anything never pollutes the recent-projects list.  Non-empty
+   *  canvases keep the legacy "always-upsert" behaviour. */
   useEffect(() => {
     if (!projectId) return;
     const t = setTimeout(() => {
+      const nodesLive = nodesRef.current;
+      const edgesLive = edgesRef.current;
+      const nameLive = projectNameRef.current ?? projectName;
+      const isEmpty =
+        nodesLive.length === 0 && edgesLive.length === 0;
+      if (isEmpty && isEmptyDraftName(nameLive)) {
+        // User left an untouched draft — clean it from the index.
+        clearActiveIfDraft(projectId);
+        reapEmptyProject(projectId);
+        return;
+      }
       upsertProject({
         id: projectId,
-        name: projectName,
+        name: nameLive,
         updatedAt: Date.now(),
-        nodes,
-        edges,
+        nodes: nodesLive,
+        edges: edgesLive,
       });
     }, 500);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, edges, projectId, projectName]);
 
-  /* ── Flush on unmount / tab close (no data loss) ── */
+  /* ── Flush on unmount / tab close (no data loss) ──
+   *
+   *  Same draft-aware contract as the debounced effect: reaps empty
+   *  default-named drafts on the way out so the homepage never sees them. */
   useEffect(() => {
     const flush = () => {
       const pid = projectIdRef.current;
       if (!pid) return;
+      const nodesLive = nodesRef.current;
+      const edgesLive = edgesRef.current;
+      const nameLive = projectNameRef.current;
+      const isEmpty =
+        nodesLive.length === 0 && edgesLive.length === 0;
+      if (isEmpty && isEmptyDraftName(nameLive)) {
+        clearActiveIfDraft(pid);
+        reapEmptyProject(pid);
+        return;
+      }
       upsertProject({
         id: pid,
-        name: projectNameRef.current,
+        name: nameLive,
         updatedAt: Date.now(),
-        nodes: nodesRef.current,
-        edges: edgesRef.current,
+        nodes: nodesLive,
+        edges: edgesLive,
       });
     };
     window.addEventListener("beforeunload", flush);
@@ -234,9 +351,12 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
       if (outEdges.length === 0) return;
 
       // Only import the generated image if at least one downstream port needs it.
-      const needsImage = outEdges.some(
-        (e) => !e.targetHandle || e.targetHandle === "inputImage"
-      );
+      // A workflow target also needs the imported file when a wire input is an
+      // IMAGE-type pin (the import happens once and is reused below).
+      const needsImage = outEdges.some((e) => {
+        const t = nodesRef.current.find((n) => n.id === e.target);
+        return !e.targetHandle || e.targetHandle === "inputImage" || t?.data?.kind === "workflow";
+      });
       let importedFile: string | null = null;
       if (needsImage && rPath && rType !== "video") {
         try {
@@ -252,10 +372,62 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
           const edge = outEdges.find((e) => e.target === n.id);
           if (!edge) return n;
           const td = n.data as CanvasNodeData;
+          // 连线传入自定义工作流节点：按 ioKey 把上游输出写进 workflowInputs，
+          // 这样 runGenerate 的 toWorkflowInputsPayload 会把它一起发给后端。
+          if (td.kind === "workflow" && edge.targetHandle) {
+            const key = edge.targetHandle;
+            let stored: unknown = undefined;
+            if (src.kind === "text" && src.content?.trim()) stored = src.content;
+            else if ((src.kind === "picture" || src.kind === "movie") && src.mediaPath)
+              stored = src.mediaPath;
+            else if (src.resultPath && src.resultMediaType !== "video" && importedFile)
+              stored = importedFile;
+            if (stored !== undefined) {
+              return {
+                ...n,
+                data: {
+                  ...td,
+                  workflowInputs: { ...(td.workflowInputs ?? {}), [key]: stored },
+                  upstreamId: sourceId,
+                },
+              };
+            }
+            return n;
+          }
+          /* R-ardot59 (2026-08-15): 上游产出写入 picture / movie 资产节点 —
+           *  当 target 是 picture 或 movie 内容载体时，把 source 的 image
+           *  (importedFile 优先于 src.mediaPath) 写到 target.mediaPath，
+           *  让图片资产自动接收工作流生成的图作为内容；下游生图节点再
+           *  从 picture 节点的 output Handle 接收这个 mediaPath，形成
+           *  「工作流 → 图片资产 → 生图」完整链路。upstreamId 标记数据来源
+           *  便于 UI 后续显示「连线源：xxx 工作流」。 */
+          if (td.kind === "picture" || td.kind === "movie") {
+            const incoming: string | undefined =
+              importedFile ?? (src.kind === "picture" || src.kind === "movie" ? src.mediaPath ?? undefined : undefined);
+            if (incoming) {
+              return {
+                ...n,
+                data: {
+                  ...td,
+                  mediaPath: incoming,
+                  mediaName: src.resultPath
+                    ? String(src.resultPath).split(/[\\/]/).pop()
+                    : td.mediaName,
+                  upstreamId: sourceId,
+                },
+              };
+            }
+            return n;
+          }
           const next: CanvasNodeData = { ...td };
           switch (edge.targetHandle) {
             case "prompt":
-              if (src.prompt?.trim()) next.prompt = src.prompt;
+              // A text-carrier node feeds its free text; everything else feeds prompt.
+              if (src.kind === "text") {
+                if (src.content?.trim()) next.prompt = src.content;
+              } else if (src.prompt?.trim()) {
+                next.prompt = src.prompt;
+              }
               break;
             case "negative":
               if (src.negative?.trim()) next.negative = src.negative;
@@ -275,6 +447,16 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
                 next.inputImage = importedFile;
                 next.upstreamId = sourceId;
                 // auto-switch the consumer mode so the fed input is actually used
+                if (next.kind === "image" && next.mode === "txt2img") next.mode = "img2img";
+                if (next.kind === "video" && next.mode === "t2v") next.mode = "i2v";
+              } else if (
+                (src.kind === "picture" || src.kind === "movie") &&
+                src.mediaPath
+              ) {
+                // Content carriers already live in ComfyUI's input dir, so no
+                // re-import is needed — wire the existing filename straight in.
+                next.inputImage = src.mediaPath;
+                next.upstreamId = sourceId;
                 if (next.kind === "image" && next.mode === "txt2img") next.mode = "img2img";
                 if (next.kind === "video" && next.mode === "t2v") next.mode = "i2v";
               }
@@ -336,7 +518,8 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
    *  setNodes(proj.nodes) / setEdges(proj.edges) triggers — that round-trip
    *  is a no-op rewrite, so we let it pass through without bumping the
    *  `updatedAt` stamp.  Subsequent runs are real user mutations and
-   *  need to be persisted. */
+   *  need to be persisted (or reaped if the user emptied the canvas
+   *  back to a draft — see R64). */
   useEffect(() => {
     if (!loadedRef.current) return;
     if (!projectIdRef.current) return;
@@ -347,12 +530,23 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
     const handle = setTimeout(() => {
       const id = projectIdRef.current;
       if (!id) return;
+      const nodesLive = nodesRef.current;
+      const edgesLive = edgesRef.current;
+      const nameLive = projectNameRef.current;
+      const isEmpty =
+        nodesLive.length === 0 && edgesLive.length === 0;
+      // Same draft-aware contract as the 500ms + flush effects.
+      if (isEmpty && isEmptyDraftName(nameLive)) {
+        clearActiveIfDraft(id);
+        reapEmptyProject(id);
+        return;
+      }
       upsertProject({
         id,
-        name: projectNameRef.current,
+        name: nameLive,
         updatedAt: Date.now(),
-        nodes: nodesRef.current,
-        edges: edgesRef.current,
+        nodes: nodesLive,
+        edges: edgesLive,
       });
     }, 600);
     return () => clearTimeout(handle);
@@ -380,11 +574,118 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
     [menu, screenToFlowPosition, setNodes]
   );
 
+  /** Drops a pure-visual Ardot-style workflow node at the right-click position.
+   *  No data, no handlers — just renders the design reference component. */
+  const createTestWorkflowNode = useCallback(() => {
+    if (!menu) return;
+    const position = screenToFlowPosition({ x: menu.x, y: menu.y });
+    const id = `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    // `workflowArdot` is registered as a separate React Flow node type and
+    //  renders `WorkflowNodeArdot` (no CanvasNodeData, no handlers).  We
+    //  cast because `CanvasNodeType` constrains `type` to "canvasNode".
+    const node = {
+      id,
+      type: "workflowArdot",
+      position,
+      data: {},
+    } as unknown as CanvasNodeType;
+    setNodes((nds) => [...nds, node]);
+    setMenu(null);
+  }, [menu, screenToFlowPosition, setNodes]);
+
   const clearCanvas = useCallback(() => {
-    if (!confirm("清空当前画布？此操作不可撤销（项目本身会保留）。")) return;
+    if (nodes.length === 0 && edges.length === 0) {
+      toast.info("画布已是空的", undefined);
+      return;
+    }
+    setConfirmClear(true);
+  }, [nodes.length, edges.length, toast]);
+
+  /** Actual clearCanvas action — invoked from the ModalDialog confirm. */
+  const applyClearCanvas = useCallback(() => {
     setNodes([]);
     setEdges([]);
+    setConfirmClear(false);
   }, [setNodes, setEdges]);
+
+  /* ── 面板 →「加入画布」：把素材/历史产出落成内容载体节点 ──
+   *
+   *  素材库与历史记录里的文件都住在 public/generated（经 /api/generated 读盘），
+   *  但 picture / movie 节点的 mediaPath 必须是 ComfyUI **input 目录**里的文件名，
+   *  才能被下游 LoadImage / LoadVideo 直接消费。所以先走 importOutputAsInput
+   *  把字节回灌到 ComfyUI input（该函数按源路径缓存，重复投放不会重复上传），
+   *  再用返回的文件名建节点。
+   *
+   *  音频暂无对应节点类型，明确告知而不是静默失败。 */
+  const placeMediaNode = useCallback(
+    async (opts: {
+      url: string;
+      displayName: string;
+      /** image / video 才有对应节点；audio 与 doc 目前无载体。 */
+      mediaType: "image" | "video" | "audio" | "doc";
+      /** 拖拽落地时传入落点的 flow 坐标；缺省则落在视口中心。 */
+      position?: { x: number; y: number };
+    }) => {
+      const { url, displayName, mediaType, position } = opts;
+      if (mediaType !== "image" && mediaType !== "video") {
+        toast.info(
+          mediaType === "audio" ? "音频暂不支持落地画布" : "该文件类型暂不支持落地画布",
+          "画布目前只有图片 / 视频两种内容载体节点"
+        );
+        return;
+      }
+      try {
+        const name = await importOutputAsInput(url);
+        const kind: NodeKind = mediaType === "video" ? "movie" : "picture";
+        const center = position ?? screenToFlowPosition({
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2,
+        });
+        const node: CanvasNodeType = {
+          id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          type: "canvasNode",
+          position: center,
+          data: {
+            ...defaultData(kind),
+            mediaPath: name,
+            mediaName: displayName,
+            mediaKind: mediaType,
+          },
+        };
+        setNodes((nds) => [...nds, node]);
+        toast.success("已加入画布", displayName);
+      } catch (e: any) {
+        toast.error("加入画布失败", e?.message ?? undefined);
+      }
+    },
+    [screenToFlowPosition, setNodes, toast]
+  );
+
+  /* ── 拖拽落地：素材库 / 历史记录面板拖拽到画布，按落点坐标建内容载体节点 ──
+   *  payload 经 dataTransfer 传递（image / video 才有载体；audio / doc 落地时 toast 提示不支持）。 */
+  const onCanvasDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (e.dataTransfer.types.includes("application/x-comfyapp-media")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    }
+  }, []);
+
+  const onCanvasDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      const raw = e.dataTransfer.getData("application/x-comfyapp-media");
+      if (!raw) return; // 非本应用拖拽（如外部文件），忽略
+      e.preventDefault();
+      let payload: { url: string; displayName: string; mediaType: "image" | "video" | "audio" | "doc" };
+      try {
+        payload = JSON.parse(raw);
+      } catch {
+        return;
+      }
+      const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      placeMediaNode({ ...payload, position });
+    },
+    [screenToFlowPosition, placeMediaNode]
+  );
 
   const exportJson = useCallback(() => {
     const blob = new Blob([JSON.stringify({ nodes, edges }, null, 2)], {
@@ -408,14 +709,28 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
   const switchProject = useCallback(
     (id: string) => {
       const pid = projectIdRef.current;
-      if (pid)
-        upsertProject({
-          id: pid,
-          name: projectNameRef.current,
-          updatedAt: Date.now(),
-          nodes: nodesRef.current,
-          edges: edgesRef.current,
-        });
+      if (pid) {
+        // Reap empty drafts instead of persisting them (R64).
+        const nodesLive = nodesRef.current;
+        const edgesLive = edgesRef.current;
+        const nameLive = projectNameRef.current;
+        if (
+          nodesLive.length === 0 &&
+          edgesLive.length === 0 &&
+          isEmptyDraftName(nameLive)
+        ) {
+          clearActiveIfDraft(pid);
+          reapEmptyProject(pid);
+        } else {
+          upsertProject({
+            id: pid,
+            name: nameLive,
+            updatedAt: Date.now(),
+            nodes: nodesLive,
+            edges: edgesLive,
+          });
+        }
+      }
       const proj = getProject(id);
       if (!proj) return;
       setActive(id);
@@ -432,15 +747,31 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
 
   const newProject = useCallback(() => {
     const pid = projectIdRef.current;
-    if (pid)
-      upsertProject({
-        id: pid,
-        name: projectNameRef.current,
-        updatedAt: Date.now(),
-        nodes: nodesRef.current,
-        edges: edgesRef.current,
-      });
-    const p = createProject();
+    if (pid) {
+      // Reap empty drafts instead of persisting them (R64).
+      const nodesLive = nodesRef.current;
+      const edgesLive = edgesRef.current;
+      const nameLive = projectNameRef.current;
+      if (
+        nodesLive.length === 0 &&
+        edgesLive.length === 0 &&
+        isEmptyDraftName(nameLive)
+      ) {
+        clearActiveIfDraft(pid);
+        reapEmptyProject(pid);
+      } else {
+        upsertProject({
+          id: pid,
+          name: nameLive,
+          updatedAt: Date.now(),
+          nodes: nodesLive,
+          edges: edgesLive,
+        });
+      }
+    }
+    // New project is a draft — only persists when the user actually
+    // adds content.
+    const p = createDraftProject();
     setProjectId(p.id);
     setProjectName(p.name);
     setNodes([]);
@@ -452,13 +783,53 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
   const deleteCurrent = useCallback(() => {
     const pid = projectIdRef.current;
     if (!pid) return;
-    if (!confirm(`删除项目「${projectNameRef.current}」？此操作不可撤销。`)) return;
+    // Open the custom dark-themed dialog instead of the native browser
+    // confirm() (which sits in the top-left, ignores dark CSS, and
+    // breaks the visual flow).  R65.
+    setConfirmDelete(true);
+  }, []);
+
+  /**
+   * Pure load: read a project from the index and hydrate local state —
+   * WITHOUT persisting the currently-open project first.  Use this after
+   * the current project has been deleted (its id is now stale) or in any
+   * flow where re-saving the open project would be wrong.  Contrast with
+   * `switchProject`, which persists the current project's edits before
+   * loading the target (correct for the project switcher dropdown, where
+   * you want to keep your changes to the project you're leaving).
+   */
+  const loadProject = useCallback(
+    (id: string) => {
+      const proj = getProject(id);
+      if (!proj) return;
+      setActive(id);
+      setProjectId(proj.id);
+      setProjectName(proj.name);
+      setNodes((proj.nodes as CanvasNodeType[]) ?? []);
+      setEdges(proj.edges ?? []);
+      setProjMenu(false);
+      setRenaming(false);
+      setTimeout(() => fitView({ padding: 0.25, duration: 300 }), 80);
+    },
+    [setNodes, setEdges, fitView]
+  );
+
+  /** Actual deleteCurrent action — invoked from the ModalDialog confirm. */
+  const applyDeleteCurrent = useCallback(() => {
+    const pid = projectIdRef.current;
+    if (!pid) return;
+    // Delete from the index first.  Note: projectIdRef still holds the
+    // just-deleted id, so we must NOT route through switchProject (which
+    // would re-persist the dead id and resurrect the project).  Instead
+    // load the next project with the pure loadProject below.
     deleteProject(pid);
     const remaining = listProjects();
     if (remaining.length) {
-      switchProject(remaining[0].id);
+      loadProject(remaining[0].id);
     } else {
-      const p = createProject();
+      // No projects left — open a fresh draft (no row written until
+      // the user adds content).
+      const p = createDraftProject();
       setProjectId(p.id);
       setProjectName(p.name);
       setNodes([]);
@@ -466,7 +837,8 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
     }
     setProjects(listProjects());
     setProjMenu(false);
-  }, [switchProject, setNodes, setEdges]);
+    setConfirmDelete(false);
+  }, [loadProject, setNodes, setEdges]);
 
   const startRename = useCallback(() => {
     setRenameVal(projectNameRef.current);
@@ -474,26 +846,55 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
   }, []);
 
   const commitRename = useCallback(() => {
-    const name = renameVal.trim() || "未命名项目";
-    setProjectName(name);
     const pid = projectIdRef.current;
-    if (pid)
+    if (!pid) return;
+    const rawName = renameVal.trim();
+    // If the user clears the input, fall back to the default "未命名"
+    // and run it through the uniqueness pipeline so we end up with
+    // "未命名", "未命名_2", "未命名_3", … instead of clobbering
+    // siblings.
+    const baseName = rawName || "未命名";
+    const finalName = findNextAvailableName(baseName, pid);
+    setProjectName(finalName);
+    // Reap empty drafts instead of persisting them (R64) — also
+    // handles the case where the user clears the rename input back
+    // to default for an empty canvas.
+    const nodesLive = nodesRef.current;
+    const edgesLive = edgesRef.current;
+    if (
+      nodesLive.length === 0 &&
+      edgesLive.length === 0 &&
+      isEmptyDraftName(finalName)
+    ) {
+      clearActiveIfDraft(pid);
+      reapEmptyProject(pid);
+    } else {
       upsertProject({
         id: pid,
-        name,
+        name: finalName,
         updatedAt: Date.now(),
-        nodes: nodesRef.current,
-        edges: edgesRef.current,
+        nodes: nodesLive,
+        edges: edgesLive,
       });
+    }
+    // R65: surface the auto-rename so the user knows why "灵感" became
+    // "灵感_2" — silent renames are confusing.
+    if (finalName !== baseName) {
+      toast.info("已自动添加后缀", `项目名「${baseName}」已被占用，已保存为「${finalName}」。`);
+    }
     setRenaming(false);
     setProjMenu(false);
     setProjects(listProjects());
-  }, [renameVal, setNodes, setEdges]);
+  }, [renameVal, setNodes, setEdges, toast]);
 
   const onNodeClick: NodeMouseHandler = useCallback(() => setMenu(null), []);
 
   return (
-    <div className="relative h-full w-full bg-[#0a0a0f]">
+    <div
+      className="relative h-full w-full bg-[#0a0a0f]"
+      onDragOver={onCanvasDragOver}
+      onDrop={onCanvasDrop}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -507,6 +908,9 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
         fitView
         minZoom={0.2}
         maxZoom={2}
+        /* 选中节点后按 Backspace / Delete 删除（⌫ 工具栏按钮走 deleteSelf）。
+         * React Flow 会自动忽略输入框 / textarea 聚焦时的按键，不会误删。 */
+        deleteKeyCode={["Backspace", "Delete"]}
         defaultEdgeOptions={{
           type: "smoothstep",
           animated: true,
@@ -534,12 +938,18 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
           }}
         />
         <MiniMap
+          pannable
+          zoomable
+          ariaLabel="小地图：拖动或点击切换主画布焦点"
           nodeColor={(n) => NODE_META[(n.data as CanvasNodeData)?.kind]?.color ?? "#6B7280"}
-          maskColor="#050507CC"
+          maskColor="rgba(5,5,7,0.78)"
+          onClick={onMiniMapJump}
           style={{
             background: "#0B0712",
             border: "1px solid rgba(255,255,255,0.08)",
             borderRadius: 8,
+            width: 200,
+            height: 140,
           }}
         />
       </ReactFlow>
@@ -658,6 +1068,22 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
         </button>
       </div>
 
+      {/* R-ardot119: project-canvas settings (top-right gear). Opens a
+       *  right-edge drawer with the 调试模式 toggle. State is shared
+       *  with the workflow editor via useDebugMode. */}
+      <ProjectSettingsButton onClick={() => setProjectSettingsOpen(true)} />
+      {projectSettingsOpen && (
+        <ProjectSettingsDrawer onClose={() => setProjectSettingsOpen(false)} />
+      )}
+
+      {/* R-ardot119-fix (2026-08-18): also mount the global step-log panel
+       *  here on the project canvas. It self-gates by 调试模式 and uses
+       *  useActiveTaskId() so it picks up whichever task is running/just
+       *  ran anywhere in the workspace. Without this mount the panel only
+       *  existed in the workflow-canvas drill-in view (wf-editor-inner),
+       *  so toggling 调试模式 on the project canvas appeared to do nothing. */}
+      <GlobalStepLogPanel />
+
       {/* Empty hint — 友好引导卡片 */}
       {nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
@@ -697,7 +1123,72 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
       )}
 
       {menu && (
-        <ContextMenu x={menu.x} y={menu.y} onPick={createNode} onClose={() => setMenu(null)} />
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onPick={createNode}
+          onPickTest={createTestWorkflowNode}
+          onClose={() => setMenu(null)}
+        />
+      )}
+
+      {/* ── R65: replace window.confirm with custom dark-themed dialogs ── */}
+      <ModalDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title="删除此项目？"
+        description={`项目「${projectNameRef.current}」将被永久删除，连同画布上的所有节点和连线。\n\n此操作不可撤销。`}
+        confirmLabel="删除"
+        cancelLabel="取消"
+        danger
+        onConfirm={applyDeleteCurrent}
+      />
+      <ModalDialog
+        open={confirmClear}
+        onClose={() => setConfirmClear(false)}
+        title="清空当前画布？"
+        description="画布上的所有节点和连线将被移除，但项目本身会保留。"
+        confirmLabel="清空"
+        cancelLabel="取消"
+        danger
+        onConfirm={applyClearCanvas}
+      />
+
+      {/* ── Canvas panel system: toolbar + slide-out panels ── */}
+      {activePanel ? (
+        /* 面板打开时：工具栏紧贴面板左侧，同一 flex 容器内 */
+        <div className="absolute inset-y-0 left-0 z-20 flex">
+          <CanvasPanelToolbar active={activePanel} onSelect={setActivePanel} floating={false} />
+          {activePanel === "materials" && (
+            <MaterialLibraryPanel
+              projectId={projectId}
+              onClose={() => setActivePanel(null)}
+              onUse={(item) =>
+                placeMediaNode({
+                  url: item.url,
+                  displayName: item.name,
+                  mediaType: item.kind,
+                })
+              }
+            />
+          )}
+          {activePanel === "history" && (
+            <HistoryPanel
+              projectId={projectId}
+              onClose={() => setActivePanel(null)}
+              onUse={(t) =>
+                placeMediaNode({
+                  url: t.cover,
+                  displayName: t.cover.split("/").pop() || t.id.slice(0, 12),
+                  mediaType: t.mediaType,
+                })
+              }
+            />
+          )}
+        </div>
+      ) : (
+        /* 面板关闭时：工具栏独立浮动在画布左侧 */
+        <CanvasPanelToolbar active={null} onSelect={setActivePanel} />
       )}
     </div>
   );

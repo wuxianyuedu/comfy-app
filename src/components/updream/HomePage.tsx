@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useToast } from "./Toast";
+import { NAV_ITEMS, type WorkspaceView } from "./nav-config";
 
 /* ── Home Page — Updream-style Full-Screen Dashboard (Ardot-aligned) ─
   Dark-themed home page with left sidebar navigation + top bar + aurora bg.
@@ -44,40 +45,6 @@ const QUICK_START_ITEMS: QuickStartItem[] = [
   { id: "qs-2", title: "直出美术资产", cover: "", category: "图像" },
   { id: "qs-3", title: "剧本策划助手", cover: "", category: "剧本" },
   { id: "qs-4", title: "人物多视角生成", cover: "", category: "角色" },
-];
-
-/* ── Left Navigation Items (home view: simplified set) ── */
-const NAV_ITEMS = [
-  {
-    id: "home",
-    label: "首页",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
-      </svg>
-    ),
-    href: "/workspace",
-  },
-  {
-    id: "projects",
-    label: "项目",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
-      </svg>
-    ),
-    href: "/me/works",
-  },
-  {
-    id: "skills",
-    label: "技能",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-      </svg>
-    ),
-    href: "/workspace?tab=skills",
-  },
 ];
 
 /* Card type badge labels & icons */
@@ -126,12 +93,16 @@ export interface HomePageProps {
   onNewProject?: () => void;
   recentProjects?: RecentProject[];
   onOpenProject?: (id: string) => void;
-  /** Current active nav item */
-  activeNav?: string;
+  /** Open a canvas project (jump to canvas view, not /create/{id}). */
+  onOpenCanvasProject?: (id: string) => void;
+  /** Current active nav item (WorkspaceView id) */
+  activeNav?: WorkspaceView;
   /** Navigate to a workspace view (skills / models / workflows / create etc.) */
-  onNavigate?: (view: string) => void;
+  onNavigate?: (view: WorkspaceView) => void;
   /** Upload a material file → opens the create panel in "edit" mode pre-filled */
   onUploadImage?: (file: File) => void;
+  /** Switch to the "项目" (works) tab to show all projects */
+  onShowAllProjects?: () => void;
 }
 
 export function HomePage({
@@ -140,9 +111,11 @@ export function HomePage({
   onNewProject,
   recentProjects = [],
   onOpenProject,
+  onOpenCanvasProject,
   activeNav = "home",
   onNavigate,
   onUploadImage,
+  onShowAllProjects,
 }: HomePageProps) {
   const toast = useToast();
   const [inputValue, setInputValue] = useState("");
@@ -211,22 +184,39 @@ export function HomePage({
 
         {NAV_ITEMS.map((item) => {
           const isActive = activeNav === item.id;
+          const isEnabled = item.enabled !== false;
           return (
-            <Link
+            <button
               key={item.id}
-              href={item.href}
-              className={`group flex h-12 w-12 flex-col items-center justify-center rounded-xl transition-all ${
+              type="button"
+              disabled={!isEnabled}
+              onClick={() => {
+                if (!isEnabled) return;
+                if (item.id === "home") {
+                  // Already on home — no-op, but allow toast for click feedback
+                  return;
+                }
+                onNavigate?.(item.id);
+              }}
+              className={`group flex h-[42px] w-[42px] flex-col items-center justify-center rounded-xl transition-all ${
                 isActive
-                  ? "bg-white/[0.08] text-white shadow-sm shadow-black/20 ring-1 ring-violet-500/20"
-                  : "text-gray-500 hover:bg-white/[0.04] hover:text-gray-300"
+                  ? "bg-white/[0.08] text-white shadow-sm shadow-black/20 ring-1 ring-violet-500/25"
+                  : isEnabled
+                    ? "text-gray-500 hover:bg-white/[0.04] hover:text-gray-300"
+                    : "cursor-not-allowed text-gray-700 opacity-50"
               }`}
-              title={item.label}
+              title={isEnabled ? item.label : `${item.label}（即将推出）`}
+              aria-current={isActive ? "page" : undefined}
             >
               {item.icon}
-              <span className={`mt-0.5 text-[10px] leading-none ${isActive ? "text-violet-300" : "text-gray-600 group-hover:text-gray-400"}`}>
+              <span
+                className={`mt-0.5 text-[10px] leading-none ${
+                  isActive ? "text-violet-300" : isEnabled ? "text-gray-600 group-hover:text-gray-400" : "text-gray-700"
+                }`}
+              >
                 {item.label}
               </span>
-            </Link>
+            </button>
           );
         })}
 
@@ -406,7 +396,11 @@ export function HomePage({
                                     if (chip.key === "music") {
                                       toast.info("音乐创作", opt.desc);
                                     } else {
-                                      onNavigate?.(opt.action);
+                                      // `opt.action` carries strings like "txt2img" / "t2v"
+                                      // that are NOT WorkspaceView ids — those fall through
+                                      // the white-list in `handleHomeNavigate` and become no-ops.
+                                      // Accept here as `WorkspaceView | string` so the call type-checks.
+                                      onNavigate?.(opt.action as WorkspaceView);
                                     }
                                   } else {
                                     toast.info(chip.label, opt.desc);
@@ -466,12 +460,13 @@ export function HomePage({
             <section className="mt-14">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-[17px] font-semibold text-[#e5e7eb]">最近项目</h2>
-                <Link
-                  href="/workspace"
+                <button
+                  type="button"
+                  onClick={() => onShowAllProjects?.()}
                   className="text-xs text-[#8b90a8] transition-colors hover:text-gray-300"
                 >
                   查看全部 →
-                </Link>
+                </button>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -499,7 +494,11 @@ export function HomePage({
                       <button
                         key={proj.id}
                         type="button"
-                        onClick={() => onOpenProject?.(proj.id)}
+                        onClick={() =>
+                          proj.kind === "canvas"
+                            ? onOpenCanvasProject?.(proj.id)
+                            : onOpenProject?.(proj.id)
+                        }
                         className="group flex items-start gap-3 rounded-[16px] border border-white/[0.06] bg-white/[0.02] p-3.5 text-left transition-all hover:border-white/[0.12] hover:bg-white/[0.04] active:scale-[0.98]"
                       >
                         {/* Kind icon */}

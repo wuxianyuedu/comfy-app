@@ -17,6 +17,11 @@ const WorkflowInputSchema = z.object({
 });
 const GenerateSchema = z.object({
   workflow: z.string(),
+  // ── 2026-08-13 项目级产出：归属到某个画布项目 ──
+  // projectId 是 localStorage 里的 CanvasProject.id（client 侧 proj_... 字符串）。
+  projectId: z.string().optional(),
+  // 本次生成使用到的参考图路径/url 数组（img2img/inpaint/i2v/flf 上游、首末帧…）。
+  referenceImages: z.array(z.string()).optional(),
   prompt: z.string().max(2000).optional(),
   negative: z.string().max(2000).optional(),
   checkpoint: z.string().min(1).optional(), // optional for custom workflows
@@ -93,6 +98,32 @@ export async function POST(req: NextRequest) {
     if (!tpl && !data.canvasGraph) {
       return NextResponse.json({ error: "未找到该自定义工作流" }, { status: 404 });
     }
+    workflowName = tpl?.name ?? data.workflow;
+    taskType = tpl?.taskType ?? "TXT2IMG";
+
+    // Raw UI-format json (subgraph wrappers) → execute via comfy-cli, which
+    // natively expands subgraphs + converts UI→API client-side. Canvas-edited
+    // graphs (canvasGraph) and API-only imports keep the existing POST path.
+    if (tpl?.rawJson && !data.canvasGraph) {
+      const task = await prisma.task.create({
+        data: {
+          userId: user.id,
+          type: taskType,
+          prompt: data.prompt ?? "",
+          negativePrompt: data.negative,
+          params: data as object,
+          workflowName,
+          projectId: data.projectId ?? null,
+          referenceImages: (data.referenceImages?.length
+            ? data.referenceImages
+            : undefined) as object | undefined,
+          status: "QUEUED",
+        },
+      });
+      enqueue({ taskId: task.id, rawJson: tpl.rawJson as any, overrides: data.workflowInputs });
+      return NextResponse.json({ taskId: task.id });
+    }
+
     // Use canvas-edited graph if provided; otherwise fall back to template
     const graph = (data.canvasGraph as Record<string, any>) ?? (tpl?.graph as Record<string, any>);
     if (!graph) {
@@ -110,8 +141,6 @@ export async function POST(req: NextRequest) {
     } catch (e: any) {
       return NextResponse.json({ error: e?.message ?? "工作流构建失败" }, { status: 400 });
     }
-    workflowName = tpl?.name ?? data.workflow;
-    taskType = tpl?.taskType ?? "TXT2IMG";
   }
 
   if (!built.ok || !built.prompt) {
@@ -126,6 +155,10 @@ export async function POST(req: NextRequest) {
       negativePrompt: data.negative,
       params: data as object,
       workflowName,
+      projectId: data.projectId ?? null,
+      referenceImages: (data.referenceImages?.length
+        ? data.referenceImages
+        : undefined) as object | undefined,
       status: "QUEUED",
     },
   });

@@ -31,6 +31,27 @@ export interface WorkflowIOEntry {
    *  / Canvas `workflow` node) refuse to submit while a required value is
    *  empty, surfacing a `getMissingRequiredInputs(io, values)` list. */
   required?: boolean;
+  /** 2026-08-12: COMBO candidate list (unet_name / clip_name / …) resolved
+   *  from ComfyUI /object_info.  Present only for COMBO pins; consumers render
+   *  a <select> (DarkSelect) instead of a text box when this is non-empty. */
+  options?: string[];
+  /** 2026-08-15 R-ardot35: user-defined display order, written by the IO-edit
+   *  preview's drag-to-reorder gesture and persisted via PATCH.  Lower =
+   *  higher up.  Absent (undefined) → fall back to the IO map's natural
+   *  insertion order (Object.entries order).  Wire / widget / output groups
+   *  each maintain their own ordering, so a widget entry never slips between
+   *  two wire entries and vice versa.  `splitWorkflowIO()` is the single
+   *  source of truth for applying this sort — every consumer (preview,
+   *  CreatePanel, ProjectCanvas's workflow node, WorkflowLibrary chips)
+   *  already routes through it, so adding the field here automatically
+   *  propagates to all rendered surfaces. */
+  displayOrder?: number;
+  /** 2026-08-17 R94: author override of `defaultValue`.  When set, the IO-edit
+   *  preview and every runtime form (CreatePanel / canvas `workflow` node)
+   *  treat this as the pin's default instead of the graph-derived
+   *  `defaultValue`.  Cleared to restore the workflow's original default.
+   *  Stored verbatim via PATCH and round-tripped through GET. */
+  value?: unknown;
 }
 
 export type WorkflowIOMap = Record<string, WorkflowIOEntry>;
@@ -43,7 +64,8 @@ export type ControlKind =
   | "float"
   | "switch"
   | "image"
-  | "link"; // non-editable connection type (MODEL / CLIP / LATENT / …)
+  | "link" // non-editable connection type (MODEL / CLIP / LATENT / …)
+  | "select"; // COMBO with a resolved candidate list (DarkSelect dropdown)
 
 /** ComfyUI types that only ever arrive over a wire — no user input possible. */
 const LINK_ONLY = new Set([
@@ -81,7 +103,14 @@ export function controlForEntry(e: WorkflowIOEntry): ControlKind {
   if (t === "BOOLEAN" || t === "BOOL") return "switch";
   if (t === "INT") return "int";
   if (t === "FLOAT" || t === "NUMBER") return "float";
-  if (t === "STRING" || t === "*" || t === "COMBO") {
+  /* COMBO with a resolved candidate list → render a real <select>
+   *  (DarkSelect).  Without options (ComfyUI unreachable / non-enumerable)
+   *  fall back to a plain text control so the form never breaks. */
+  if (t === "COMBO") {
+    if (Array.isArray(e.options) && e.options.length > 0) return "select";
+    return "text";
+  }
+  if (t === "STRING" || t === "*") {
     if (e.multiline) return "textarea";
     /* A long current value is a strong hint this is a prompt box even when
      * the server heuristic missed the name. */
@@ -116,21 +145,45 @@ export function numericBounds(e: WorkflowIOEntry): {
     : { min: 0, max: 1_000_000, step: 1, decimalPlaces: 0 };
 }
 
-/** Best display label for an exposed pin. */
-export function ioLabel(e: WorkflowIOEntry): string {
-  return (e.label && e.label.trim()) || e.name;
+/** Best display label for an exposed pin.
+ *
+ * Per user direction (2026-08-15): the canvas's IO editor prefers the
+ * `label` field so authors see `positive_prompt` / `negative_prompt`
+ * instead of the bare ComfyUI key (`text` / `text_1`).  When the caller
+ * also passes the full list of entries being displayed together
+ * (`allEntries`), entries that share a label fall back to `name` so the
+ * two pins stay visually distinguishable (e.g. two pins both labeled
+ * "image" → one becomes "image (inputImage)", the other "image
+ * (outputImage)" — both via the name fallback).
+ *
+ * Without `allEntries` the function returns the same `label || name`
+ * behaviour the rest of the app already relies on, so existing callers
+ * in CreatePanel / CanvasNode keep working. */
+export function ioLabel(e: WorkflowIOEntry, allEntries?: readonly WorkflowIOEntry[]): string {
+  const candidate = (e.label && e.label.trim()) || e.name;
+  if (allEntries && allEntries.length > 1) {
+    for (const o of allEntries) {
+      if (o === e) continue;
+      const other = (o.label && o.label.trim()) || o.name;
+      if (other === candidate) return e.name;
+    }
+  }
+  return candidate;
 }
 
-/** Stable ordering: images first, then prompts, then numbers, then the rest. */
-const ORDER: Record<ControlKind, number> = {
-  image: 0,
-  textarea: 1,
-  text: 2,
-  switch: 3,
-  int: 4,
-  float: 5,
-  link: 9,
-};
+/** Per user direction (2026-08-14): the order of parameter rows is up
+ *  to the consumer — each row is an independent block, dynamically shown
+ *  or hidden based on which IO pins exist.  No forced ordering.  We rely
+ *  on the IO map's natural insertion order (Object.entries order), which
+ *  matches what the user sees when authoring the workflow in IO-edit
+ *  mode.  Outputs are sorted alphabetically by label as a stable-only
+ *  tie-breaker for cases where multiple outputs share an insertion
+ *  context.
+ *
+ *  See §"动态更新" in the design source-of-truth (Ardot 714503087315759):
+ *    > 「每一块都是可以动态根据是否有对应的参数需要显示来动态更新的，
+ *    >  参数可多可少，但是样式就是这样」
+ *  The style of each row is fixed by the design; the order is not. */
 
 /** Split + sort the IO map into the three buckets the UI actually needs.
  *
@@ -174,12 +227,27 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
       else wireInputs.push(enriched);
     }
   }
-  const sortInputs = (a: { control: ControlKind } & { [k: string]: unknown }, b: { control: ControlKind } & { [k: string]: unknown }) =>
-    (ORDER as Record<string, number>)[a.control] - (ORDER as Record<string, number>)[b.control] ||
-    String(ioLabel(a as never)).localeCompare(String(ioLabel(b as never)));
-  wireInputs.sort(sortInputs as never);
-  widgetInputs.sort(sortInputs as never);
-  outputs.sort((a, b) => ioLabel(a).localeCompare(ioLabel(b)));
+  /* R-ardot35 (2026-08-15): apply the user-driven displayOrder.  Absent
+   *  (undefined) → leave the IO map's natural insertion order untouched
+   *  by treating it as +Infinity, so existing workflows without an order
+   *  continue to render exactly as before.  Stable sort keeps the
+   *  relative order of items that share the same order (e.g. a brand-new
+   *  toggle alongside a manually-positioned one).  Each group
+   *  (wire / widget / output) is sorted independently — the canvas-side
+   *  IO preview keeps "wire + widget inputs above, outputs below" and the
+   *  user only reorders within those groups, which is what the design
+   *  intent of the preview panel calls for. */
+  const byDisplayOrder = (a: { displayOrder?: number }, b: { displayOrder?: number }) => {
+    const ao = a.displayOrder;
+    const bo = b.displayOrder;
+    if (ao === bo) return 0;
+    if (ao === undefined) return 1;
+    if (bo === undefined) return -1;
+    return ao - bo;
+  };
+  wireInputs.sort(byDisplayOrder);
+  widgetInputs.sort(byDisplayOrder);
+  outputs.sort(byDisplayOrder);
   return {
     wireInputs,
     widgetInputs,
@@ -216,7 +284,13 @@ export function defaultInputValues(io: WorkflowIOMap | undefined | null): Record
   const { inputs } = splitWorkflowIO(io);
   for (const e of inputs) {
     if (e.control === "link") continue;
-    if (e.defaultValue !== undefined) out[e.ioKey] = e.defaultValue;
+    /* R94 (2026-08-17): an author override (`value`) wins over the
+     *  graph-derived `defaultValue`, so the IO-edit preview + runtime forms
+     *  seed with the custom default.  Restoring a pin clears `value` (see
+     *  resetIOPreviewValues in wf-editor-inner) and falls back to
+     *  `defaultValue`. */
+    if (e.value !== undefined) out[e.ioKey] = e.value;
+    else if (e.defaultValue !== undefined) out[e.ioKey] = e.defaultValue;
     else if (e.control === "switch") out[e.ioKey] = false;
     else if (e.control === "int" || e.control === "float") out[e.ioKey] = numericBounds(e).min;
     else if (e.control === "textarea" || e.control === "text") out[e.ioKey] = "";
@@ -254,7 +328,9 @@ export function toWorkflowInputsPayload(
   const { inputs } = splitWorkflowIO(io);
   const payload: { nodeId: string; name: string; value: unknown }[] = [];
   for (const e of inputs) {
-    if (e.control === "link") continue;
+    // 2026-08-13 项目级产出：连线传入的 wire-input（link 控件）值也一并下发。
+    // 这类 key 仅在用户真正连线时才会写进 values（reconcile 会丢弃无值的 link key），
+    // 所以这里无需担心把无意义的 link 默认值发出去。
     const v = values[e.ioKey];
     if (v === undefined || v === "") continue;
     payload.push({ nodeId: e.nodeId, name: e.name, value: v });
@@ -299,4 +375,312 @@ export function getMissingRequiredInputs(
     if (!isInputFilled(values[key])) out.push(key);
   }
   return out;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * R-ardot98 (2026-08-17): parameter GROUP inference.
+ *
+ * A custom workflow often exposes a tightly-coupled set of widgets that the
+ * user would rather tune as one "paradigm" than as N separate boxes:
+ *   • Dimension group  — `width` + `height` (image workflows).  Two fill
+ *     styles: (A) edit W/H separately, (B) pick 比例(ratio) + 清晰度(scale)
+ *     and let the form compute W/H back into the two widgets.
+ *   • Video group      — `length`(frames) + `aspect`(比例) + `quality`(画质).
+ *     Two fill styles: (A) edit each widget separately, (B) pick 时长 + 画质
+ *     + 比例 from friendly presets that write the real widget values.
+ *
+ * Inference is purely name/label based (mirrors `numericBounds`'s keyword
+ * heuristic) so it needs no schema change and works for any workflow that
+ * exposes the conventional pins.  The grouping is discovered by the single
+ * consumer `DynamicWorkflowForm` and the matched widgets are then WITHHELD
+ * from the generic row rendering (so width/height never appear twice).
+ * ───────────────────────────────────────────────────────────────────────── */
+
+/** Enriched widget entry as produced by `splitWorkflowIO().widgetInputs`. */
+export type EnrichedWidget = WorkflowIOEntry & { ioKey: string; control: ControlKind };
+
+export interface DimensionGroup {
+  kind: "dimension";
+  groupId: string;
+  width: EnrichedWidget;
+  height: EnrichedWidget;
+}
+
+export interface VideoGroup {
+  kind: "video";
+  groupId: string;
+  length?: EnrichedWidget;
+  aspect?: EnrichedWidget;
+  quality?: EnrichedWidget;
+}
+
+export type InferredGroup = DimensionGroup | VideoGroup;
+
+/* ── Dimension presets (比例 + 清晰度 → 宽高) ──
+ * `ratio` = width / height. R-ardot104 (2026-08-17) splits `DIM_CLARITY_PRESETS`
+ * into two `kind`s:
+ *   • "pixel"     — long-edge in px (1k = 1024, 2k = 2048, 4k = 4096).  The
+ *                   user provides the longer side and the other side is
+ *                   derived from the ratio.
+ *   • "megapixel" — total pixel count (1M = 1,000,000, 2M = 2,000,000,
+ *                   4M = 4,000,000).  Both sides are derived from the
+ *                   ratio so each orientation is roughly the same file size.
+ *
+ * `dimsForRatio` recognises both kinds — `pixel` callers pass `longEdge`,
+ * `megapixel` callers pass `totalPixels` (the long edge is computed as
+ * `sqrt(totalPixels / ratio)` and then rounded through the same snap-to-8
+ * grid as the pixel path).
+ *
+ * `dimsForRatio` snaps the result to multiples of 8 and clamps to [64, 4096]
+ * (the same bounds `numericBounds` gives width/height). */
+export const DIM_RATIO_PRESETS: { label: string; ratio: number }[] = [
+  { label: "1:1 正方", ratio: 1 },
+  { label: "4:3", ratio: 4 / 3 },
+  { label: "3:2", ratio: 3 / 2 },
+  { label: "16:9 横屏", ratio: 16 / 9 },
+  { label: "21:9 超宽", ratio: 21 / 9 },
+  { label: "3:4", ratio: 3 / 4 },
+  { label: "2:3", ratio: 2 / 3 },
+  { label: "9:16 竖屏", ratio: 9 / 16 },
+];
+
+/** R-ardot104 (2026-08-17): clarity presets now carry a `kind` field so the
+ *  UI can group pixel-based (1k / 2k / 4k) and megapixel-based (1M / 2M /
+ *  4M) presets in two sub-rows inside the 清晰度 segment of the
+ *  MultiSegmentPopover. */
+export interface DimClarityPreset {
+  kind: "pixel" | "megapixel";
+  /** Display label as shown in the popover chip (e.g. "1k", "1M"). */
+  label: string;
+  /** Pixel kind: the long-edge in px. */
+  longEdge?: number;
+  /** Megapixel kind: total pixel count (width * height). */
+  totalPixels?: number;
+}
+
+export const DIM_CLARITY_PRESETS: DimClarityPreset[] = [
+  // Pixel (long edge) — R99 default
+  { kind: "pixel", label: "1k", longEdge: 1024 },
+  { kind: "pixel", label: "2k", longEdge: 2048 },
+  { kind: "pixel", label: "4k", longEdge: 4096 },
+  // Megapixel (total pixels) — R104
+  { kind: "megapixel", label: "1M", totalPixels: 1_000_000 },
+  { kind: "megapixel", label: "2M", totalPixels: 2_000_000 },
+  { kind: "megapixel", label: "4M", totalPixels: 4_000_000 },
+];
+
+/** Given a target ratio + clarity preset, return snapped {width, height}.
+ *
+ *  Pixel preset:     long edge = preset.longEdge; other side is derived
+ *                    from the ratio.  "Long edge" is whichever side
+ *                    of 1 the ratio sits on.
+ *  Megapixel preset: both sides are derived symmetrically — the
+ *                    constraint `totalPixels = w*h` together with
+ *                    `w/h = ratio` gives
+ *                      h = sqrt(totalPixels / ratio)
+ *                      w = totalPixels / h = sqrt(totalPixels * ratio)
+ *                    so the rectangle honours the total-pixel budget
+ *                    regardless of orientation.
+ *
+ *  R-ardot107 (2026-08-17) [fix #2]:
+ *    The previous megapixel branch took `rawLongEdge = sqrt(totalPixels)`
+ *    and used ratio only to scale the *other* side.  That produced a
+ *    geometrically-16:9 rectangle whose actual pixel count was
+ *    `totalPixels / ratio` — for 16:9 the user-visible area was
+ *    `totalPixels * 9/16 ≈ 0.56M`, exactly the "1M gives 1000×560" the
+ *    user reported.  Fix: keep `totalPixels = w*h` as a constraint by
+ *    letting ratio enter the square root.
+ *
+ *  Snap to multiples of 8 (pixel kind) or a user-selectable alignment
+ *  multiple (megapixel kind).  R-ardot108 (2026-08-17) made the megapixel
+ *  snap configurable because ComfyUI video / SDXL pipelines generally
+ *  expect W and H to be multiples of 64; the legacy 8-grid silently
+ *  produced non-64-aligned outputs (1336×752 for 1M@16:9) that some
+ *  model checkpoint unloaders refused.  Range [8, 128] in steps of 8,
+ *  default 64 (matches the user-pinned requirement).  The pixel kind
+ *  keeps the fine 8-grid because its long-edge values are already
+ *  64-aligned (1k=1024, 2k=2048, 4k=4096). */
+export const DEFAULT_ALIGN_MULTIPLE = 64;
+export const MIN_ALIGN_MULTIPLE = 8;
+export const MAX_ALIGN_MULTIPLE = 128;
+/** Clamp `m` into [MIN..MAX] and snap to the nearest multiple of 8.
+ *  Anything non-finite / NaN / sub-8 falls back to DEFAULT_ALIGN_MULTIPLE. */
+export function normalizeAlignMultiple(m: number): number {
+  if (!Number.isFinite(m) || m < MIN_ALIGN_MULTIPLE) return DEFAULT_ALIGN_MULTIPLE;
+  const clamped = Math.min(MAX_ALIGN_MULTIPLE, m);
+  const snapped = Math.round(clamped / 8) * 8;
+  return snapped >= MIN_ALIGN_MULTIPLE ? snapped : DEFAULT_ALIGN_MULTIPLE;
+}
+export function dimsForRatio(
+  ratio: number,
+  presetOrBase: DimClarityPreset | number,
+  alignMultiple: number = DEFAULT_ALIGN_MULTIPLE
+): { width: number; height: number } {
+  /* R-ardot108 (2026-08-17): megapixel branch honours the user
+   *  alignment; pixel branch keeps the legacy 8-grid. */
+  const alignM = normalizeAlignMultiple(alignMultiple);
+  const snapMega = (n: number) => {
+    const m = Math.round(n / alignM) * alignM;
+    return Math.max(64, Math.min(4096, m));
+  };
+  const snapPixel = (n: number) =>
+    Math.max(64, Math.min(4096, Math.round(n / 8) * 8));
+  /* Guard against a degenerate / missing ratio: NaN / 0 / negative falls
+   * back to a 1:1 square so the form still gets a finite, in-bounds
+   * answer. */
+  const r = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+
+  if (typeof presetOrBase === "number" || presetOrBase.kind === "pixel") {
+    /* Pixel-kind geometry: caller supplies the long edge in pixels, the
+     * other side is derived from ratio. */
+    const rawLongEdge =
+      typeof presetOrBase === "number"
+        ? presetOrBase
+        : presetOrBase.longEdge ?? 1024;
+    const horizontal = r >= 1;
+    const rawW = horizontal ? rawLongEdge : rawLongEdge * r;
+    const rawH = horizontal ? rawLongEdge / r : rawLongEdge;
+    return { width: snapPixel(rawW), height: snapPixel(rawH) };
+  }
+
+  /* Megapixel-kind geometry: totalPixels = w*h, w/h = ratio.  h and w
+   * derived symmetrically so the total-pixel budget is honoured for
+   * both landscape and portrait.  The user-selectable alignMultiple
+   * (default 64) snaps W and H to a ComfyUI-friendly grid. */
+  const totalPixels = presetOrBase.totalPixels ?? 1_000_000;
+  const rawH = Math.sqrt(totalPixels / r);
+  const rawW = totalPixels / rawH;
+  return { width: snapMega(rawW), height: snapMega(rawH) };
+}
+
+/** R-ardot107 (2026-08-17): rewrite the inverse preset picker.
+ *
+ *  The previous relative-error scorer had two problems:
+ *   (a) [previously documented] For 16:9 the cross-kind comparison
+ *       could silently flip a freshly-picked "4M" back to "2k", leaving
+ *       two highlights in the popover.
+ *   (b) [newly discovered] `dimsForRatio` itself was wrong for the
+ *       megapixel kind — see [fix #2] above.  At 16:9 the buggy
+ *       `dimsForRatio("4M")` snapped to 1504×848 (= 0.51 × 4M), so even
+ *       the "correct" round-trip answer was the wrong preset.
+ *
+ *  R-ardot108 (2026-08-17): the megapixel snap is now configurable
+ *  (`alignMultiple`, default 64).  The inverse picker must mirror the
+ *  same multiple — otherwise the forward and inverse functions fall
+ *  out of sync (e.g. dimsForRatio(16/9,"1M",64) → 1280×768 but
+ *  pickClarityPreset(1280,768) without the parameter → 2M).
+ *
+ *  The current implementation uses Manhattan distance over the
+ *  round-tripped dims: "which preset, when re-applied through
+ *  `dimsForRatio`, produces dims closest to the input?"  Ties resolve
+ *  to the first preset encountered in `DIM_CLARITY_PRESETS`
+ *  (deterministic). */
+export function pickClarityPreset(
+  width: number,
+  height: number,
+  alignMultiple: number = DEFAULT_ALIGN_MULTIPLE
+): DimClarityPreset {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return DIM_CLARITY_PRESETS[0];
+  }
+  const alignM = normalizeAlignMultiple(alignMultiple);
+  const ratio = width / height;
+  let best: DimClarityPreset = DIM_CLARITY_PRESETS[0];
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const p of DIM_CLARITY_PRESETS) {
+    const { width: dw, height: dh } = dimsForRatio(ratio, p, alignM);
+    const dist = Math.abs(width - dw) + Math.abs(height - dh);
+    if (dist < bestDist) {
+      best = p;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+/* ── Keyword matchers (name + label, case-insensitive) ── */
+function isDimWidth(e: EnrichedWidget): boolean {
+  const n = (e.name || "").toLowerCase();
+  const l = (e.label || "").toLowerCase();
+  if (/width/.test(n)) return true;
+  if (l === "宽度" || l === "横" || l === "横向") return true;
+  if (n === "宽") return true;
+  return false;
+}
+function isDimHeight(e: EnrichedWidget): boolean {
+  const n = (e.name || "").toLowerCase();
+  const l = (e.label || "").toLowerCase();
+  /* NOTE: a bare "高" inside a 画质 label like "高清" must NOT count as the
+   *  height pin — we only accept the exact Chinese shape 高度/纵向/纵 or the
+   *  English name, never a substring of an unrelated label. */
+  if (/height|heigth/.test(n)) return true;
+  if (l === "高度" || l === "纵" || l === "纵向") return true;
+  if (n === "高") return true;
+  return false;
+}
+function isVideoLength(e: EnrichedWidget): boolean {
+  const s = `${e.name} ${e.label ?? ""}`.toLowerCase();
+  return /length|duration|时长|帧数|frames|seconds|秒/.test(s);
+}
+function isVideoAspect(e: EnrichedWidget): boolean {
+  const s = `${e.name} ${e.label ?? ""}`.toLowerCase();
+  return /aspect|ratio|比例|纵横/.test(s);
+}
+function isVideoQuality(e: EnrichedWidget): boolean {
+  const s = `${e.name} ${e.label ?? ""}`.toLowerCase();
+  return /quality|clarity|清晰|画质/.test(s);
+}
+
+/** Detect a width+height dimension group from the widget list. */
+export function inferDimensionGroup(widgets: EnrichedWidget[]): DimensionGroup | null {
+  const w = widgets.filter((e) => e.control === "int" && isDimWidth(e));
+  const h = widgets.filter((e) => e.control === "int" && isDimHeight(e));
+  if (w.length === 0 || h.length === 0) return null;
+  const width = w[0];
+  const height = h[0];
+  if (width.ioKey === height.ioKey) return null;
+  return {
+    kind: "dimension",
+    groupId: `dim:${width.ioKey}|${height.ioKey}`,
+    width,
+    height,
+  };
+}
+
+/** Detect a length+aspect+quality video group from the widget list. */
+export function inferVideoGroup(widgets: EnrichedWidget[]): VideoGroup | null {
+  const len = widgets.filter(isVideoLength);
+  const asp = widgets.filter(isVideoAspect);
+  const q = widgets.filter(isVideoQuality);
+  if (len.length === 0) return null;
+  if (asp.length === 0 && q.length === 0) return null;
+  return {
+    kind: "video",
+    groupId: `video:${len[0].ioKey}|${(asp[0]?.ioKey) ?? ""}|${(q[0]?.ioKey) ?? ""}`,
+    length: len[0],
+    aspect: asp[0],
+    quality: q[0],
+  };
+}
+
+/** Run both inferences, excluding dimension pins from the video scan so a
+ *  single widget can never belong to two groups.  Returns the matched groups
+ *  plus the complete set of ioKeys they consume (so the caller can suppress
+ *  the generic per-widget rows for those pins). */
+export function inferGroups(widgets: EnrichedWidget[]): {
+  dimension: DimensionGroup | null;
+  video: VideoGroup | null;
+  groupedKeys: Set<string>;
+} {
+  const dimension = inferDimensionGroup(widgets);
+  const dimKeys = dimension ? new Set([dimension.width.ioKey, dimension.height.ioKey]) : new Set<string>();
+  const rest = widgets.filter((w) => !dimKeys.has(w.ioKey));
+  const video = inferVideoGroup(rest);
+  const groupedKeys = new Set<string>([...dimKeys]);
+  if (video) {
+    if (video.length) groupedKeys.add(video.length.ioKey);
+    if (video.aspect) groupedKeys.add(video.aspect.ioKey);
+    if (video.quality) groupedKeys.add(video.quality.ioKey);
+  }
+  return { dimension, video, groupedKeys };
 }

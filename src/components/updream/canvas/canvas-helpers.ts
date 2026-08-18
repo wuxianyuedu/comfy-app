@@ -4,6 +4,8 @@
  * duplicating server logic.
  */
 
+import type { ValidationError } from "@/lib/comfyui/validation";
+
 export async function uploadImageFile(file: File): Promise<string> {
   const fd = new FormData();
   fd.append("image", file);
@@ -29,6 +31,19 @@ export async function importOutputAsInput(localPath: string): Promise<string> {
   const name = await uploadImageFile(file);
   importCache.set(localPath, name);
   return name;
+}
+
+/* Upload a user asset (image OR video) for a content-carrier node.
+ * Reuses the same `/api/upload` endpoint the image nodes use (it drops the
+ * bytes into ComfyUI's input dir and returns the stored filename). Returns
+ * both the filename and a ready-to-use preview URL (proxied via /api/images
+ * so the browser never hits ComfyUI :8188 directly). */
+export async function uploadMediaFile(
+  file: File
+): Promise<{ name: string; url: string }> {
+  const name = await uploadImageFile(file);
+  const url = `/api/images?filename=${encodeURIComponent(name)}&type=input`;
+  return { name, url };
 }
 
 export async function startGenerate(payload: Record<string, unknown>): Promise<string> {
@@ -57,6 +72,13 @@ export interface TaskFailure {
   status: "FAILED" | "CANCELLED" | "ERROR" | "TIMEOUT";
   /** Raw backend / ComfyUI error message, already decoded to plain text. */
   error: string;
+  /** Snapshot of the original request payload (from `prisma.task.params`)
+   *  so the error UI can show "what was sent" next to "what failed". */
+  params?: unknown;
+  /** R-Next (2026-08-17): structured ComfyUI /prompt validation errors
+   *  (flattened `node_errors`), so the UI can render a precise per-field
+   *  list instead of parsing the English summary in `error`. */
+  validationErrors?: ValidationError[];
 }
 
 /** Polls a task until it has a result, fails, or times out.  On success
@@ -64,7 +86,12 @@ export interface TaskFailure {
  *  structured `TaskFailure` so callers can surface the real error. */
 export async function pollTask(
   taskId: string,
-  timeoutMs = 25 * 60 * 1000
+  timeoutMs = 25 * 60 * 1000,
+  /* R-ardot103 (2026-08-17): callback fired on every poll tick with a
+   *  clamped 0..100 progress. Optional — callers that don't care simply
+   *  omit it. Wired into CanvasNode.runGenerate so the picture/movie
+   *  preview can show a water-fill overlay while generation runs. */
+  onProgress?: (progress: number) => void
 ): Promise<TaskResult | TaskFailure> {
   const start = Date.now();
   // eslint-disable-next-line no-constant-condition
@@ -80,6 +107,13 @@ export async function pollTask(
       const res = await fetch(`/api/tasks/${taskId}`);
       if (res.ok) {
         const { task } = await res.json();
+        /* R-ardot103 (2026-08-17): surface 0..100 progress to the canvas.
+         *  Previously dropped — pollTask only read status + images, so the
+         *  canvas picture/image preview had no progress to show even
+         *  though /api/tasks/[id] returns task.progress. */
+        if (onProgress && typeof task?.progress === "number") {
+          onProgress(Math.max(0, Math.min(100, task.progress)));
+        }
         const imgs: TaskResult[] = task?.images ?? [];
         if (imgs.length) {
           const v = imgs.find((x) => x.mediaType === "video") ?? imgs[0];
@@ -87,10 +121,46 @@ export async function pollTask(
         }
         const st = task?.status as string | undefined;
         if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
+          // Defensive normalize (R67 + R69): `task.error` is typed `String?`
+          // in Prisma but legacy rows / older code paths (e.g.
+          // buildPromptError pre-R69 used `String(res.error)`) can land
+          // the literal "[object Object]" as the stored string.  We
+          // peel structured objects to JSON AND detect the literal
+          // garbage-string sentinel so the UI never shows
+          // `[object Object]`.  Garbage strings get replaced with the
+          // generic fallback (R69). */
+          const rawErr = task?.error;
+          const peeled =
+            typeof rawErr === "string"
+              ? rawErr
+              : rawErr && typeof rawErr === "object"
+                ? (() => {
+                    try {
+                      return JSON.stringify(rawErr);
+                    } catch {
+                      return "";
+                    }
+                  })()
+                : "";
+          const trimmed = peeled.trim();
+          const isGarbage =
+            !trimmed ||
+            trimmed === "[object Object]" ||
+            trimmed === "[unserializable error]";
           return {
             taskId,
             status: st,
-            error: task?.error || `任务 ${st}`,
+            error: isGarbage
+              ? `任务 ${st}（无详细错误，请查看后端日志）`
+              : trimmed,
+            /* 2026-08-13 R83: 失败也回传请求 payload 快照，前端用于在失败面板里
+             *  展示「执行了哪些参数」。task.params 由 /api/generate route.ts
+             *  写入（Prisma JSON 列）。 */
+            params: task?.params ?? undefined,
+            /* R-Next (2026-08-17): carry structured validation errors from
+             *  /api/tasks/[id].task.validationErrors into the failure result
+             *  so CanvasNode can render a precise per-field list. */
+            validationErrors: task?.validationErrors ?? undefined,
           };
         }
       }

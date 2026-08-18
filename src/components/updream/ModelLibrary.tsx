@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AuroraBackground } from "@/components/updream/AuroraBackground";
 import { Icon } from "@/components/ui/Icon";
+import { folderMeta, getFolderTooltip } from "@/lib/model-types";
 
 interface ModelRow {
   id: string;
@@ -14,14 +15,16 @@ interface ModelRow {
   createdAt: string;
 }
 
-const TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  CHECKPOINT: { label: "大模型", color: "text-violet-300 bg-violet-500/15" },
-  LORA: { label: "LoRA", color: "text-emerald-300 bg-emerald-500/15" },
-  VAE: { label: "VAE", color: "text-sky-300 bg-sky-500/15" },
-  CONTROLNET: { label: "ControlNet", color: "text-amber-300 bg-amber-500/15" },
-  EMBEDDING: { label: "Embedding", color: "text-pink-300 bg-pink-500/15" },
-  UPSCALER: { label: "放大", color: "text-rose-300 bg-rose-500/15" },
-};
+/** Shape of a row from GET /api/models/config (subset we render). */
+interface FolderConfigRow {
+  folder: string;
+  /** The directory name IS the model type (R-ardot45). */
+  type: string;
+  label: string;
+  enabled: boolean;
+  hasConfig: boolean;
+  count: number;
+}
 
 function fmtSize(n?: number | null) {
   if (!n) return "—";
@@ -35,8 +38,9 @@ export function ModelLibrary() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<string>("ALL");
+  const [configOpen, setConfigOpen] = useState(false);
 
-  useEffect(() => {
+  const loadModels = useCallback(() => {
     setLoading(true);
     fetch("/api/models")
       .then((r) => r.json())
@@ -44,10 +48,13 @@ export function ModelLibrary() {
       .finally(() => setLoading(false));
   }, []);
 
-  const types = useMemo(() => {
-    const set = new Set(models.map((m) => m.type));
-    return Array.from(set);
-  }, [models]);
+  useEffect(() => {
+    // Sync silently on mount so the library reflects the current config
+    // without the user having to click "重新扫描" first.
+    fetch("/api/models/sync", { method: "POST" })
+      .catch(() => null)
+      .finally(() => loadModels());
+  }, [loadModels]);
 
   const filtered = useMemo(() => {
     return models.filter((m) => {
@@ -57,6 +64,14 @@ export function ModelLibrary() {
     });
   }, [models, q, filter]);
 
+  // Distinct types present in the data, with counts — each is a directory
+  // name (its own model type).  Drives the filter chips.
+  const typeChips = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const m of models) counts.set(m.type, (counts.get(m.type) ?? 0) + 1);
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [models]);
+
   return (
     <div className="h-full overflow-y-auto">
       <AuroraBackground />
@@ -64,26 +79,40 @@ export function ModelLibrary() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-title text-xl font-bold text-gray-100">模型库</h1>
-            <p className="mt-1 text-sm text-gray-500">本机 ComfyUI 可用模型（Checkpoint / LoRA / VAE 等）。</p>
+            <p className="mt-1 text-sm text-gray-500">
+              本机 ComfyUI 可用模型，按扫描目录分类 —— 每个目录即一种独立的模型类型。
+            </p>
           </div>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="搜索模型名称…"
-            className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40 sm:w-64"
-          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setConfigOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 transition-colors hover:border-violet-500/40 hover:text-violet-200"
+            >
+              <Icon name="settings" size={16} />
+              模型目录配置
+            </button>
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="搜索模型名称…"
+              className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40 sm:w-64"
+            />
+          </div>
         </div>
 
         <div className="mb-5 flex flex-wrap gap-2">
           <FilterChip active={filter === "ALL"} onClick={() => setFilter("ALL")} label={`全部 (${models.length})`} />
-          {types.map((t) => (
-            <FilterChip
-              key={t}
-              active={filter === t}
-              onClick={() => setFilter(t)}
-              label={`${TYPE_LABELS[t]?.label ?? t} (${models.filter((m) => m.type === t).length})`}
-            />
-          ))}
+          {typeChips.map(([t, count]) => {
+            const meta = folderMeta(t);
+            return (
+              <FilterChip
+                key={t}
+                active={filter === t}
+                onClick={() => setFilter(t)}
+                label={`${meta.label} (${count})`}
+              />
+            );
+          })}
         </div>
 
         {loading ? (
@@ -91,39 +120,79 @@ export function ModelLibrary() {
         ) : filtered.length === 0 ? (
           <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-white/[0.08] text-gray-500">
             <div className="text-center">
-              <p className="text-lg font-medium text-gray-300">暂无模型</p>
-              <p className="mt-1 text-sm">请先在 ComfyUI 中安装模型，运行同步后在此显示。</p>
+              <p className="text-lg font-medium text-gray-300">模型库还没有内容</p>
+              <p className="mt-1 max-w-md text-sm">
+                没启用任何模型目录时这里为空。打开「模型目录配置」勾选需要扫描的目录，重新扫描后即可在此查看。
+              </p>
+              <button
+                onClick={() => setConfigOpen(true)}
+                className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-violet-500/20 px-4 py-2 text-sm font-medium text-violet-200 transition-colors hover:bg-violet-500/30"
+              >
+                <Icon name="settings" size={16} />
+                去配置目录
+              </button>
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {filtered.map((m) => {
-              const tl = TYPE_LABELS[m.type] ?? { label: m.type, color: "text-gray-300 bg-white/10" };
+          // R-ardot46: compact list — each row is [type pill][filename][size].
+          // The old card grid (4 cols + 28px placeholder icon + duplicate fileName)
+          // was way too heavy; an N-row gallery is way more legible for what is
+          // ultimately a 1-line filename + size payload.
+          <div
+            role="list"
+            aria-label="模型文件列表"
+            className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.015]"
+          >
+            {filtered.map((m, idx) => {
+              const meta = folderMeta(m.type);
+              const isLast = idx === filtered.length - 1;
               return (
                 <div
                   key={m.id}
-                  className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 transition-all hover:border-white/[0.14] hover:bg-white/[0.04]"
+                  role="listitem"
+                  className={`group flex items-center gap-3 px-3 py-2 transition-colors hover:bg-white/[0.04] ${
+                    isLast ? "" : "border-b border-white/[0.04]"
+                  }`}
                 >
-                  <div className="mb-3 flex h-20 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/10 to-sky-500/10 text-violet-300">
-                    <Icon name="package" size={28} />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${tl.color}`}>{tl.label}</span>
-                    {!m.isAvailable && <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] text-gray-400">不可用</span>}
-                  </div>
-                  <h3 className="u-title mt-2 line-clamp-1" title={m.name}>
-                    {m.name}
-                  </h3>
-                  <p className="mt-0.5 line-clamp-1 text-xs text-gray-500" title={m.fileName}>
+                  <span
+                    className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${meta.color}`}
+                  >
+                    {meta.label}
+                  </span>
+                  <span
+                    className="min-w-0 flex-1 truncate font-mono text-sm text-gray-200"
+                    title={m.fileName}
+                  >
                     {m.fileName}
-                  </p>
-                  <p className="mt-1 text-[11px] text-gray-600">{fmtSize(m.fileSize)}</p>
+                  </span>
+                  {!m.isAvailable && (
+                    <span
+                      className="shrink-0 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] text-gray-400"
+                      title="当前未在 ComfyUI 扫描结果中"
+                    >
+                      不可用
+                    </span>
+                  )}
+                  <span className="shrink-0 text-xs text-gray-500 tabular-nums" title="文件大小">
+                    {fmtSize(m.fileSize)}
+                  </span>
                 </div>
               );
             })}
           </div>
         )}
       </div>
+
+      {configOpen && (
+        <ModelConfigModal
+          onClose={() => {
+            setConfigOpen(false);
+            fetch("/api/models/sync", { method: "POST" })
+              .catch(() => null)
+              .finally(() => loadModels());
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -138,5 +207,313 @@ function FilterChip({ active, onClick, label }: { active: boolean; onClick: () =
     >
       {label}
     </button>
+  );
+}
+
+/* ── 模型目录配置 Modal (R-ardot43) ──
+ * Surfaces every ComfyUI directory the scanner can visit.  Each row's type
+ * is auto-resolved from the directory name (curated lookup → fuzzy match
+ * → CHECKPOINT fallback) so the user only needs to enable / disable the
+ * directory — they don't pick a type.  An "advanced" panel per row lets
+ * the user add *extra* COMBO field types (e.g. expose this folder's files
+ * under an additional field). */
+function ModelConfigModal({ onClose }: { onClose: () => void }) {
+  const [folders, setFolders] = useState<FolderConfigRow[]>([]);
+  const [comfyReachable, setComfyReachable] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [onlyEnabled, setOnlyEnabled] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const r = await fetch("/api/models/config");
+      if (!r.ok) {
+        setErr(`加载失败 (HTTP ${r.status})`);
+        return;
+      }
+      const d = await r.json();
+      if (d.ok) {
+        setFolders(d.folders ?? []);
+        setComfyReachable(Boolean(d.comfyReachable));
+      } else {
+        setErr(d.error || "加载失败");
+      }
+    } catch {
+      setErr("网络错误");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const mutate = useCallback(
+    async (req: () => Promise<Response>) => {
+      try {
+        const r = await req();
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({}));
+          setErr(d.error || `操作失败 (HTTP ${r.status})`);
+          return;
+        }
+        const d = await r.json().catch(() => ({}));
+        if (!d.ok) setErr(d.error || "操作失败");
+      } catch {
+        setErr("网络错误");
+      }
+      await load();
+    },
+    [load]
+  );
+
+  const rescan = useCallback(async () => {
+    setScanning(true);
+    setErr(null);
+    try {
+      const r = await fetch("/api/models/sync", { method: "POST" });
+      if (!r.ok) {
+        setErr(`扫描失败 (HTTP ${r.status})`);
+        setScanning(false);
+        return;
+      }
+      const d = await r.json().catch(() => ({}));
+      if (!d.ok) setErr(d.error || "扫描失败");
+    } catch {
+      setErr("网络错误");
+    }
+    setScanning(false);
+    await load();
+  }, [load]);
+
+  const enabledRows = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return folders
+      .filter((f) => f.enabled)
+      .filter((f) => !term || `${f.folder} ${f.label}`.toLowerCase().includes(term));
+  }, [folders, q]);
+  const availableRows = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return folders
+      .filter((f) => !f.enabled)
+      .filter((f) => !term || f.folder.toLowerCase().includes(term));
+  }, [folders, q]);
+  const visibleEnabled = onlyEnabled ? enabledRows : enabledRows;
+  const enabledCount = enabledRows.length;
+  const totalCount = folders.length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0E0E16] shadow-2xl shadow-black/50">
+        {/* header */}
+        <div className="flex items-start justify-between border-b border-white/[0.06] px-5 py-4">
+          <div>
+            <h2 className="flex items-center gap-2 text-base font-semibold text-gray-100">
+              <Icon name="foldertree" size={18} className="text-violet-300" />
+              模型目录配置
+            </h2>
+            <p className="mt-0.5 text-xs text-gray-500">
+              勾选需要扫描的 ComfyUI 模型目录；每个目录即独立模型类型（目录名即类型名）。禁用后该目录模型将从模型库与画布 COMBO 下拉中隐藏。
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
+          >
+            <Icon name="close" size={18} />
+          </button>
+        </div>
+
+        {/* status + scan */}
+        <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3">
+          <div className="flex items-center gap-3 text-xs">
+            {comfyReachable ? (
+              <span className="text-emerald-300">● ComfyUI 已连接 · 共 {totalCount} 个目录</span>
+            ) : (
+              <span className="text-amber-300">● ComfyUI 未连接</span>
+            )}
+            <span className="text-gray-500">· 已启用 {enabledCount} 个</span>
+            {err && <span className="text-rose-300">{err}</span>}
+          </div>
+          <button
+            onClick={rescan}
+            disabled={scanning}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-gray-200 transition-colors hover:border-violet-500/40 hover:text-violet-200 disabled:opacity-50"
+          >
+            <Icon name={scanning ? "loader" : "shuffle"} size={14} className={scanning ? "animate-spin" : ""} />
+            {scanning ? "扫描中…" : "重新扫描"}
+          </button>
+        </div>
+
+        {/* search + filter */}
+        <div className="flex items-center gap-3 px-5 py-3">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="搜索目录名…"
+            className="flex-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40"
+          />
+          <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-gray-400">
+            <input
+              type="checkbox"
+              checked={onlyEnabled}
+              onChange={(e) => setOnlyEnabled(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-white/20 bg-white/10 text-violet-500 focus:ring-violet-400/40"
+            />
+            仅显示已启用
+          </label>
+        </div>
+
+        {/* list */}
+        <div className="flex-1 overflow-y-auto px-5 pb-5">
+          {loading ? (
+            <p className="text-sm text-gray-500">加载中…</p>
+          ) : totalCount === 0 ? (
+            <div className="grid min-h-[160px] place-items-center rounded-xl border border-dashed border-white/[0.08] text-gray-500">
+              <p className="text-sm">
+                {comfyReachable
+                  ? "ComfyUI 中没有可识别的模型目录。"
+                  : "未连接 ComfyUI；请先启动本地 ComfyUI。"}
+              </p>
+            </div>
+          ) : (
+            <>
+              {visibleEnabled.length > 0 && (
+                <section className="mb-6">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                      已启用 · {visibleEnabled.length}
+                    </h3>
+                  </div>
+                  <div className="space-y-2">
+                    {visibleEnabled.map((f) => (
+                      <FolderConfigRow
+                        key={f.folder}
+                        row={f}
+                        onMutate={mutate}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {!onlyEnabled && availableRows.length > 0 && (
+                <section>
+                  <div className="mb-2 flex items-center justify-between">
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                      可添加 · {availableRows.length}
+                    </h3>
+                    <p className="text-[11px] text-gray-500">点「启用」加入扫描列表</p>
+                  </div>
+                  <div className="space-y-2">
+                    {availableRows.map((f) => (
+                      <FolderConfigRow
+                        key={f.folder}
+                        row={f}
+                        onMutate={mutate}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Single folder row.  Same shape is used for both enabled and available
+ * sections — the only difference is which button is shown.  The type pill
+ * shows the directory name verbatim (it IS the type); hover for an
+ * explanation (R-ardot45).
+ */
+function FolderConfigRow({
+  row,
+  onMutate,
+}: {
+  row: FolderConfigRow;
+  onMutate: (req: () => Promise<Response>) => Promise<void>;
+}) {
+  const primaryMeta = folderMeta(row.type);
+
+  const toggleEnabled = () =>
+    onMutate(() =>
+      fetch("/api/models/config", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder: row.folder, enabled: !row.enabled }),
+      })
+    );
+  const enableFromAvailable = () =>
+    onMutate(() =>
+      fetch("/api/models/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder: row.folder }),
+      })
+    );
+  const remove = () =>
+    onMutate(() =>
+      fetch(`/api/models/config?folder=${encodeURIComponent(row.folder)}`, { method: "DELETE" })
+    );
+
+  return (
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-sm text-gray-200">{row.folder}</span>
+            <span
+              className={`cursor-help rounded-md px-2 py-0.5 text-[11px] font-medium ${primaryMeta.color}`}
+              title={getFolderTooltip(row.folder)}
+            >
+              {primaryMeta.label}
+            </span>
+            {row.count > 0 && (
+              <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] text-gray-400">
+                {row.count} 个文件
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          {row.enabled ? (
+            <button
+              onClick={toggleEnabled}
+              className="rounded-lg bg-emerald-500/15 px-3 py-1.5 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/25"
+            >
+              已启用
+            </button>
+          ) : (
+            <button
+              onClick={enableFromAvailable}
+              className="inline-flex items-center gap-1 rounded-lg bg-violet-500/20 px-3 py-1.5 text-xs font-medium text-violet-200 transition-colors hover:bg-violet-500/30"
+            >
+              <Icon name="plus" size={12} />
+              启用
+            </button>
+          )}
+          {row.hasConfig && (
+            <button
+              onClick={remove}
+              className="rounded-md px-2 py-1 text-[11px] text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
+              title="删除配置（不再扫描）"
+            >
+              删除
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,8 +1,9 @@
 import type { Node } from "@xyflow/react";
+import type { ValidationError } from "@/lib/comfyui/validation";
 
 /* ── Canvas node model ── */
 
-export type NodeKind = "image" | "video" | "script" | "agent" | "workflow";
+export type NodeKind = "image" | "video" | "script" | "agent" | "workflow" | "text" | "picture" | "movie";
 
 /* Which parameters a given model exposes in its node UI.
  * Different models → different param sets.  The node renders only the params
@@ -86,6 +87,28 @@ export const MODEL_REGISTRY: Record<NodeKind, ModelRegistry> = {
     video: [],
     text: [],
   },
+  /* Content-carrier nodes: user-supplied assets (no model, no execution).
+   * They exist only to hold text / uploaded media and act as connection
+   * sources for downstream generator nodes. The model lists stay empty so
+   * ModelSelector renders nothing for them. */
+  text: {
+    chainable: true,
+    image: [],
+    video: [],
+    text: [],
+  },
+  picture: {
+    chainable: true,
+    image: [],
+    video: [],
+    text: [],
+  },
+  movie: {
+    chainable: true,
+    image: [],
+    video: [],
+    text: [],
+  },
 };
 
 /** First (default) model id for a given kind. */
@@ -107,6 +130,12 @@ export interface CanvasNodeData {
   kind: NodeKind;
   status: "idle" | "running" | "done" | "error";
   error?: string;
+  /** R-ardot103 (2026-08-17): 0..100 generation progress surfaced by pollTask
+   *  from /api/tasks/[id].task.progress; consumed by ContentAssetBody's
+   *  WaterFillProgress overlay while status === "running". Resets to 0 at
+   *  the start of each run; cleared by leaving "running" (done/error catch
+   *  paths leave it stale — overlay is gated by status, so it's hidden). */
+  progress?: number;
   /** Selected model id (from MODEL_REGISTRY for the given kind). */
   model: string;
 
@@ -137,6 +166,19 @@ export interface CanvasNodeData {
    *  the error came from a client-side exception (no task ever started) or
    *  from `requestFailure` upstream (network/CORS/etc.). */
   errorStatus?: "FAILED" | "CANCELLED" | "ERROR" | "TIMEOUT" | null;
+  /** 2026-08-13 R83: Structured context for the error panel.
+   *  `request` = exact request payload that was sent to /api/generate
+   *  (mirrored from pollTask().params on the failure path).
+   *  `timestamp` = ISO client-side time of the failure patch.
+   *  Stored on d so the canvas JSON-serializes it into the persisted
+   *  project and survives reloads. */
+  errorContext?: { request?: unknown; timestamp?: string };
+
+  /** R-Next (2026-08-17): structured ComfyUI /prompt validation errors
+   *  (flattened `node_errors`), surfaced in the canvas error panel as a
+   *  precise per-field list so the user can locate the bad input. Plumbed
+   *  from `pollTask().validationErrors`. */
+  validationErrors?: ValidationError[];
 
   // script node
   theme: string;
@@ -161,6 +203,25 @@ export interface CanvasNodeData {
   workflowInputs?: Record<string, unknown>;
   /** Downstream node auto-spawned for this workflow's output (so we only create it once). */
   workflowSinkId?: string;
+  /** R-ardot86 (2026-08-16): 生图/生成视频三步级联的「模型」步骤所选模型标签名
+   *  （与 WorkflowNode 的 modelFilter 同源，均来自 WorkflowModelTag 名称）。
+   *  工作流按 taskType + 该标签严格匹配。仅 image/video 节点在级联流程中使用。 */
+  genModelTag?: string;
+  /** Per-pin seed "control after generate" mode, keyed by ioKey.
+   *  Values: "fixed" | "increment" | "decrement" | "random".  Captured from
+   *  the canvas seed popover; forwarded to /api/generate so the backend can
+   *  map it onto ComfyUI's widgets_values control_after_generate slot. */
+  seedModes?: Record<string, string>;
+
+  // ── Content-carrier nodes (text / picture / movie) ──
+  /** Free text entered by the user on a `text` node; fed to downstream prompt/negative ports. */
+  content?: string;
+  /** Original filename of the uploaded asset (picture/movie), shown in the card header. */
+  mediaName?: string;
+  /** ComfyUI input-dir filename produced by `/api/upload` (already a valid LoadImage/LoadVideo source). */
+  mediaPath?: string;
+  /** Discriminator: picture → image, movie → video. */
+  mediaKind?: "image" | "video";
 
   // ReactFlow node data must be a plain record
   [key: string]: unknown;
@@ -189,6 +250,9 @@ export const NODE_META: Record<
   script:   { label: "生成剧本",     icon: "filetext",color: "#F59E0B", desc: "一句话扩写为分镜剧本", typeChar: "T" },
   agent:    { label: "Agent 模式",   icon: "bot",     color: "#34D399", desc: "多轮对话引导创作",     typeChar: "A" },
   workflow: { label: "自定义工作流", icon: "puzzle",  color: "#A78BFA", desc: "运行你上传的 ComfyUI 工作流", typeChar: "W" },
+  text:    { label: "文本", icon: "filetext", color: "#FBBF24", desc: "输入提示词 / 参考文字", typeChar: "T" },
+  picture: { label: "图片", icon: "image",    color: "#FB7185", desc: "上传图片作为参考图",     typeChar: "P" },
+  movie:   { label: "视频", icon: "film",     color: "#818CF8", desc: "上传视频作为参考帧",     typeChar: "V" },
 };
 
 /** Human-readable labels for the status badge shown on the node header + result card. */
@@ -209,11 +273,12 @@ export function defaultData(kind: NodeKind): CanvasNodeData {
     model: defaultModelFor(kind),
     prompt: "",
     negative: "",
-    mode: kind === "video" ? "t2v" : "txt2img",
+    mode: kind === "video" ? "T2V" : "T2I",
     size: kind === "video" ? "832x480" : "1024x1024",
     steps: kind === "video" ? 25 : 25,
     cfg: kind === "video" ? 6 : 7,
     seed: "",
+    content: "",
     frames: 49,
     fps: 16,
     theme: "",

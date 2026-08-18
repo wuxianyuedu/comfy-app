@@ -21,7 +21,6 @@ import {
 } from "@/lib/comfyui/raw";
 import {
   normalizeTaskType,
-  inferWorkflowTypeFromGraph,
   VALID_TASK_TYPE_CODES,
 } from "@/lib/workflow-types";
 import { detectParamMap } from "@/lib/comfyui/workflow";
@@ -121,13 +120,16 @@ export async function parseWorkflowContent(
     }
   }
 
+  /* R-ardot87 (2026-08-16): 不再自动推断 taskType —— 旧逻辑用
+   * `inferWorkflowTypeFromGraph(apiGraph)` 兜底，但识别准确率不高（例如把
+   * VAEEncode+LoadImage 一律判为 I2I，忽略 Inpaint 等子分支），用户更愿意
+   * 手动挑。现在未传 preferredTaskType 时直接留空，由用户在 UI 里选。
+   * 重导入路径走 `existingTaskType` 把旧 taskType 透传过来保留。 */
   let taskType = opts.preferredTaskType ?? "";
-  if (!taskType) {
-    taskType = inferWorkflowTypeFromGraph(apiGraph);
-  } else {
+  if (taskType) {
     taskType = normalizeTaskType(taskType);
   }
-  if (!VALID_TASK_TYPE_CODES.has(taskType)) {
+  if (taskType && !VALID_TASK_TYPE_CODES.has(taskType)) {
     console.log(`[importSource] Unknown taskType "${taskType}", allowing as custom type`);
   }
 
@@ -200,11 +202,17 @@ export interface ReimportResult {
  * from the file — the file is the source of truth once it changes, so the
  * editor reflects the latest on-disk workflow.  Re-parsing is idempotent on
  * identical content, so a mtime tick without content change is harmless.
- */
+ *
+ * R-ardot87 (2026-08-16): taskType 不再自动推断。重导入时若磁盘版本没带
+ * taskType（旧逻辑会重新推断并覆盖用户已手动设置的值），传 `existingTaskType`
+ * 透传过来 —— 用户的显式选择优先级最高。 */
 export async function reimportFromSource(tpl: {
   sourcePath: string;
   sourceMtime?: number | null;
   sourceChecksum?: string | null;
+  /** 已存在的 taskType（用户在 UI 里手动设过的）。透传给 parseWorkflowContent
+   *  作为 preferredTaskType，避免重导入时把空值回写覆盖。 */
+  existingTaskType?: string | null;
 }): Promise<ReimportResult> {
   let stat;
   try {
@@ -222,7 +230,9 @@ export async function reimportFromSource(tpl: {
 
   // mtime changed (or we had no mtime recorded) → read + re-parse.
   const text = await fs.readFile(tpl.sourcePath, "utf-8");
-  const parsed = await parseWorkflowContent(text);
+  const parsed = await parseWorkflowContent(text, {
+    preferredTaskType: tpl.existingTaskType ?? "",
+  });
   return {
     update: {
       graph: parsed.apiGraph,

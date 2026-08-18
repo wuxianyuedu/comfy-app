@@ -69,7 +69,7 @@ export function NumberField({
         type="button"
         onMouseDown={(e) => { e.preventDefault(); decr(); }}
         disabled={disabled || value <= min}
-        className="flex h-[30px] w-[30px] shrink-0 items-center justify-center text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200 active:text-white disabled:opacity-30"
+        className="flex h-[24px] w-[24px] shrink-0 items-center justify-center text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200 active:text-white disabled:opacity-30"
         title={`减少 ${step}`}
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -91,13 +91,13 @@ export function NumberField({
           else (e.target as HTMLInputElement).value = fmt(value);
         }}
         disabled={disabled}
-        className="min-w-[36px] flex-1 bg-transparent py-1 text-center text-xs font-mono text-gray-200 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40"
+        className="min-w-[36px] h-[24px] flex-1 bg-transparent py-0 text-center text-xs font-mono text-gray-200 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40"
       />
       <button
         type="button"
         onMouseDown={(e) => { e.preventDefault(); incr(); }}
         disabled={disabled || value >= max}
-        className="flex h-[30px] w-[30px] shrink-0 items-center justify-center text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200 active:text-white disabled:opacity-30"
+        className="flex h-[24px] w-[24px] shrink-0 items-center justify-center text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200 active:text-white disabled:opacity-30"
         title={`增加 ${step}`}
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
