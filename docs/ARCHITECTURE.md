@@ -191,7 +191,7 @@ flowchart TD
 | 阶段 | 目标 | 关键动作 | 涉及热点 |
 |------|------|----------|----------|
 | **P0 基座** ✅ | 建立模式骨架 + 落地 | `src/lib/core`：result/errors/logger/repository/api + **config/events/container** | projects 路由示范（已接入 DI）|
-| **P1 数据访问** ⚡ | 去裸 Prisma（首批落地） | `Model`/`WorkflowModelTag` Repository 已落地并注册 DI；`defineRoute` 增强 `legacyError`/`successStatus`/`NextResponse` 逃生舱；`workflow-models` 路由已迁到 `defineRoute`+Repository、`models` 路由去裸 Prisma（保留公共读取契约） | modelRepository / workflowModelTagRepository、workflow-models、models 路由 |
+| **P1 数据访问** ⚡ | 去裸 Prisma（分批落地） | `Model`/`WorkflowModelTag` Repository + DI；`defineRoute` 增强 `legacyError`/`successStatus`/`NextResponse` 逃生舱；已迁 `workflow-models`+`models` + `film/[id]`(及 cancel/start/compose) + `train/[id]`(及 cancel)/`train` 共 9 路由到 `defineRoute`+`legacyError`（错误体逐字节兼容旧前端）；剩余 god-route（workflows、generate、film/route、skills、models/config、subgraph）与公共/流式/formData 路由待逐路由设计 | modelRepository / workflowModelTagRepository、workflow-models、models、film/*、train/* 路由 |
 | **P2 客户端状态** | 引入轻量 store | 用 Zustand 替代 3 个 Context + prop-drill；画布状态收敛 | ProjectCanvas / CanvasNode / wf-editor-inner |
 | **P3 执行层解耦** | Strategy/Adapter | `runner.ts`(1971 行) 拆为 enqueue / executor / reaper；ComfyUI 协议适配为 Adapter | runner.ts、raw.ts |
 | **P4 巨型组件拆分** | 单一职责 | `wf-editor-inner`(2638) / `WorkflowLibrary`(2315) / `DynamicWorkflowForm`(1835) 按关注点拆分 | 对应组件 |

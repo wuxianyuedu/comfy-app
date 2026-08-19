@@ -1,19 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getServerUser } from "@/lib/auth-server";
+import { defineRoute, NotFoundError } from "@/lib/core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  const user = await getServerUser();
+// 迁移说明：手写 getServerUser + 404 {error:"任务不存在"} → defineRoute +
+// NotFoundError；legacyError:true 保持 {error:string}；成功体 {job} 不变。
+
+export const GET = defineRoute(async ({ params, user }) => {
+  const { id } = params;
   const job = await prisma.loraTrainingJob.findFirst({
     where: { id, userId: user.id },
   });
-  if (!job) return NextResponse.json({ error: "任务不存在" }, { status: 404 });
-  return NextResponse.json({ job });
-}
+  if (!job) throw new NotFoundError("任务不存在");
+  return { job };
+}, { legacyError: true });

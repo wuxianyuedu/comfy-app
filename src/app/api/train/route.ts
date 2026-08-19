@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { getServerUser } from "@/lib/auth-server";
+import { defineRoute, ValidationError } from "@/lib/core";
 import { enqueueTraining, isTrainerConfigured } from "@/lib/comfyui/trainer";
 import { getSettingsSync } from "@/lib/app-settings";
 
@@ -25,28 +24,31 @@ const CreateSchema = z.object({
   seed: z.number().int().optional(),
 });
 
-export async function GET() {
-  const user = await getServerUser();
+// 迁移说明：GET/POST 原手写 getServerUser + 400 {error:string}。
+// 现统一到 defineRoute；zod 校验失败抛 ValidationError(400)，错误信封经
+// legacyError:true 保持 {error:string}。GET 返回体 {jobs,backendConfigured,
+// trainerUrl} 与 POST 返回体 {jobId} 均不变。
+
+export const GET = defineRoute(async ({ user }) => {
   const jobs = await prisma.loraTrainingJob.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "desc" },
     take: 100,
   });
-  return NextResponse.json({
+  return {
     jobs,
     backendConfigured: isTrainerConfigured(),
     trainerUrl: getSettingsSync().trainerUrl || process.env.LORA_TRAINER_URL || null,
-  });
-}
+  };
+}, { legacyError: true });
 
-export async function POST(req: NextRequest) {
+export const POST = defineRoute(async ({ req, user }) => {
   const body = await req.json().catch(() => null);
   const parsed = CreateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "参数错误" }, { status: 400 });
+    throw new ValidationError(parsed.error.issues[0]?.message ?? "参数错误");
   }
   const d = parsed.data;
-  const user = await getServerUser();
 
   const job = await prisma.loraTrainingJob.create({
     data: {
@@ -70,5 +72,5 @@ export async function POST(req: NextRequest) {
   });
 
   await enqueueTraining(job.id);
-  return NextResponse.json({ jobId: job.id });
-}
+  return { jobId: job.id };
+}, { legacyError: true });
