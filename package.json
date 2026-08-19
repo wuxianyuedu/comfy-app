@@ -20,7 +20,9 @@
     "test:r35": "npx tsx scripts/r35-ardot-io-reorder.mts",
     "test:r36": "npx tsx scripts/r36-ardot-mode-pick-chip.mts",
     "test:r37": "npx tsx scripts/r37-ardot-mode-consistency.mts",
-    "test:r38": "npx tsx scripts/r38-ardot-mode-popover.mts"
+    "test:r38": "npx tsx scripts/r38-ardot-mode-popover.mts",
+    "docs:typedoc": "typedoc",
+    "docs:gen": "typedoc && echo \"see docs/api/ (generated from TSDoc)\""
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

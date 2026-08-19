@@ -1,0 +1,13 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/lib/core/index.ts"],
+  "out": "docs/api",
+  "name": "Comfy-APP · 架构核心层",
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "readme": "none",
+  "tsconfig": "tsconfig.json",
+  "categorizeByGroup": true,
+  "sort": ["source-order"],
+  "validation": { "notExported": false, "invalidLink": false }
+}
