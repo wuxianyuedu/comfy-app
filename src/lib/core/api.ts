@@ -62,12 +62,40 @@ export interface RouteContext {
 export type RouteHandler = (ctx: RouteContext) => Promise<unknown> | unknown;
 
 /**
+ * {@link defineRoute} 的可选行为开关。
+ *
+ * 设计取舍
+ * --------
+ * - **错误信封兼容性**：旧前端大量代码以 `d.error` 作为**字符串**读取
+ *   （如 `flash("err", d.error ?? "失败")`）。但本框架默认错误信封为
+ *   `{ error: { code, message } }`（结构化，含稳定错误码）。盲目迁移会让旧
+ *   toast 显示成 `[object Object]`。故提供 `legacyError` 开关，迁移旧路由时
+ *   置 `true` 保持 `{ error: "msg" }` 形态，待前端统一改造后再关掉。
+ * - **成功状态码**：REST 语义上 POST 应为 201，但历史路由多用 200。默认 200，
+ *   需要时显式传 `successStatus: 201`。
+ * - **逃生舱**：handler 直接 `return new NextResponse(...)`（流式/SSE/自定义
+ *   header/重定向场景）时，wrapper 原样放行，不做 JSON 包裹。
+ */
+export interface DefineRouteOptions {
+  /** 错误信封兼容旧客户端：true → `{ error: string }`；false → `{ error: { code, message } }`。默认 false。 */
+  legacyError?: boolean;
+  /** 成功响应状态码。默认 200。 */
+  successStatus?: number;
+}
+
+/**
  * 路由工厂。把 handler 包装成符合 Next.js App Router 签名的异步函数：
  * `(req, { params }) => Promise<NextResponse>`。
  *
  * 内部统一：认证 → 执行 → 成功返回 / 异常归一化。调用方零样板。
+ *
+ * @param handler 业务处理函数，直接返回数据或抛出 {@link AppError}。
+ * @param options 行为开关，见 {@link DefineRouteOptions}。
  */
-export function defineRoute(handler: RouteHandler) {
+export function defineRoute(handler: RouteHandler, options: DefineRouteOptions = {}) {
+  const legacyError = options.legacyError ?? false;
+  const successStatus = options.successStatus ?? 200;
+
   return async function (
     req: NextRequest,
     ctx: { params: Promise<Record<string, string>> }
@@ -78,7 +106,9 @@ export function defineRoute(handler: RouteHandler) {
       // Next.js 15 起动态路由的 params 是 Promise，统一在此 await 后交给 handler。
       const params: Record<string, string> = ctx?.params ? await ctx.params : {};
       const result = await handler({ req, user: user as RouteContext["user"], params });
-      return NextResponse.json(result ?? null, { status: 200 });
+      // 逃生舱：handler 需要流式 / 自定义 header / 非 200 状态码时，直接返回 NextResponse。
+      if (result instanceof NextResponse) return result;
+      return NextResponse.json(result ?? null, { status: successStatus });
     } catch (e) {
       const err = normalizeError(e);
       log.error("route failed", {
@@ -86,7 +116,9 @@ export function defineRoute(handler: RouteHandler) {
         status: err.httpStatus,
         message: err.message,
       });
-      return NextResponse.json(toErrorEnvelope(err), { status: err.httpStatus });
+      // legacyError 模式保持旧契约（{ error: string }），否则下发结构化信封。
+      const body = legacyError ? { error: err.message } : toErrorEnvelope(err);
+      return NextResponse.json(body, { status: err.httpStatus });
     }
   };
 }

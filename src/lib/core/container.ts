@@ -42,6 +42,10 @@ import {
   taskRepository,
   WorkflowTemplateRepository,
   workflowTemplateRepository,
+  ModelRepository,
+  modelRepository,
+  WorkflowModelTagRepository,
+  workflowModelTagRepository,
 } from "./repository";
 
 /**
@@ -60,6 +64,10 @@ export interface CoreServiceMap extends Record<string, unknown> {
   taskRepository: TaskRepository;
   /** 工作流模板仓储。 */
   workflowTemplateRepository: WorkflowTemplateRepository;
+  /** 模型目录仓储（公共可读）。 */
+  modelRepository: ModelRepository;
+  /** 模型标签库仓储（用户级）。 */
+  workflowModelTagRepository: WorkflowModelTagRepository;
 }
 
 /** 服务工厂：给定一个容器，产出该服务实例。 */
@@ -131,4 +139,6 @@ container
   .register("eventBus", () => eventBus)
   .register("projectRepository", () => projectRepository)
   .register("taskRepository", () => taskRepository)
-  .register("workflowTemplateRepository", () => workflowTemplateRepository);
+  .register("workflowTemplateRepository", () => workflowTemplateRepository)
+  .register("modelRepository", () => modelRepository)
+  .register("workflowModelTagRepository", () => workflowModelTagRepository);
