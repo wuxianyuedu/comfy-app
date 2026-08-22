@@ -18,8 +18,8 @@ import {
 import { ValidationErrorList } from "@/components/updream/shared/ValidationErrorList";
 import { DarkSelect } from "@/components/updream/ui/DarkSelect";
 import {
-  CanvasNodeData,
-  CanvasNodeType,
+  type CanvasNodeData,
+  type CanvasNodeType,
   NODE_META,
   IMAGE_SIZES,
   VIDEO_SIZES,
@@ -42,8 +42,9 @@ import {
 } from "./canvas-helpers";
 import { getActiveId } from "./canvas-store";
 import { setActiveTaskId } from "./activeTask";
+import { vanillaApi } from "~/trpc/vanilla";
 import { chatAgent } from "@/lib/agent/agentic";
-import { IMAGE_WORKFLOW_TYPES, VIDEO_WORKFLOW_TYPES, normalizeTaskType } from "@/lib/workflow-types";
+import { IMAGE_WORKFLOW_TYPES, VIDEO_WORKFLOW_TYPES, normalizeTaskType, parseModesJson } from "@/lib/workflow-types";
 
 /* 2026-08-13 项目级产出：从节点数据里收集「本次生成用到的参考图」，
  * 随生成请求一并落库，供元数据抽屉的参考图墙一键还原。 */
@@ -432,7 +433,7 @@ function ModelSelector({
     <div className="flex items-center gap-1.5">
       <span className="shrink-0 text-[11px] font-medium text-gray-300">模型</span>
       <DarkSelect
-        value={value || current.id}
+        value={value || current!.id}
         onChange={onChange}
         options={list.map((m) => m.id)}
         labels={Object.fromEntries(list.map((m) => [m.id, m.badge ? `${m.name} · ${m.badge}` : m.name]))}
@@ -504,7 +505,7 @@ function OutputRowPort({
 }
 
 /* ── Main node component ── */
-export function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
+export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
   const d = data as CanvasNodeData;
   const { setNodes, getNode, setEdges, fitView } = useReactFlow();
   const meta = NODE_META[d.kind];
@@ -551,9 +552,8 @@ export function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/tasks/${encodeURIComponent(taskIdForReconcile)}`);
-        if (!res.ok || cancelled) return;
-        const t = (await res.json()) as { status?: string; error?: string; progress?: number; resultImages?: unknown } | null;
+        if (cancelled) return;
+        const t = await vanillaApi.task.detail.query({ id: taskIdForReconcile });
         if (cancelled || !t || !t.status) return;
         if (t.status === "RUNNING") {
           // Legitimately still running on another runner — leave the node as-is.
@@ -690,6 +690,9 @@ export function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
    *  "本机 / 在线" badge in the option label).  The DB select already
    *  exposes it; only the client type was missing. */
   const [wfList, setWfList] = useState<{ id: string; name: string; taskType?: string; sourcePath?: string | null; modelTags?: string[] }[]>([]);
+  // True until the workflow list has finished loading. The dropdown must
+  // NOT render "暂无工作流" (empty) while the list is still in flight.
+  const [wfListLoading, setWfListLoading] = useState(true);
   // 2026-08-15: 用户级模型标签库（全局），供 WorkflowNode 的模型筛选 chip 使用
   const [modelTagLib, setModelTagLib] = useState<{ id: string; name: string; count: number }[]>([]);
   // 2026-08-15: 画布节点内的会话级模型筛选（不写 patch，仅当前节点 lifespan 生效）
@@ -697,14 +700,17 @@ export function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
   useEffect(() => {
     if (d.kind !== "workflow" && d.kind !== "image" && d.kind !== "video" && d.kind !== "picture") return;
     let alive = true;
-    fetch("/api/workflows")
-      .then((r) => r.json())
+    vanillaApi.workflow.list
+      .query({})
       .then((dd) => {
-        if (alive) setWfList(dd.workflows ?? []);
+        if (alive) setWfList((dd.workflows ?? []) as any);
       })
-      .catch(() => {});
-    fetch("/api/workflow-models")
-      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setWfListLoading(false);
+      });
+    vanillaApi.workflowModel.list
+      .query()
       .then((dd) => {
         if (alive && dd && Array.isArray(dd.tags)) setModelTagLib(dd.tags);
       })
@@ -734,11 +740,12 @@ export function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
     }
     let alive = true;
     setWfIOLoading(true);
-    fetch(`/api/workflows/${d.workflowId}`)
-      .then((r) => (r.ok ? r.json() : null))
+    vanillaApi.workflow.detail
+      .query({ id: d.workflowId })
       .then((dd) => {
-        if (!alive || !dd) return;
-        setWfIO((dd.workflowIO as WorkflowIOMap) ?? null);
+        const tpl = dd.template;
+        if (!alive || !tpl) return;
+        setWfIO((tpl.workflowIO as unknown as WorkflowIOMap) ?? null);
         /* R-ardot37 模式一致性：库卡片对 `taskType` 有 fallback（仅写
          *  taskType 没声明 modes[] 的旧工作流也能展示单模式 chip），画布
          *  也走完全相同的 fallback 避免「库显示文生图 / 画布显示未选」
@@ -746,10 +753,10 @@ export function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
          *   1) DB 的 modes[] + defaultMode（用户通过 MultiModeSelect 声明的）
          *   2) taskType 单模式兜底（向后兼容 2026-08-13 之前的旧工作流）
          *   3) 都为空才走「未选 + 该工作流没有声明可用模式」 */
-        const dbModes = Array.isArray(dd.modes) ? (dd.modes as string[]) : [];
-        const dbDefault = typeof dd.defaultMode === "string" ? dd.defaultMode : null;
+        const dbModes = parseModesJson(tpl.modes);
+        const dbDefault = typeof tpl.defaultMode === "string" ? tpl.defaultMode : null;
         const inferredMode =
-          typeof dd.taskType === "string" && dd.taskType ? dd.taskType : null;
+          typeof tpl.taskType === "string" && tpl.taskType ? tpl.taskType : null;
         const modes = dbModes.length > 0
           ? dbModes
           : inferredMode
@@ -1181,6 +1188,7 @@ export function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
         modelTagLib={modelTagLib}
         wfIO={wfIO}
         wfIOLoading={wfIOLoading}
+        wfListLoading={wfListLoading}
         seededFor={seededFor}
         setWfModes={setWfModes}
         onGenerate={runGenerate}
@@ -1295,6 +1303,7 @@ export function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
               modelTagLib={modelTagLib}
               wfIO={wfIO}
               wfIOLoading={wfIOLoading}
+              wfListLoading={wfListLoading}
               seededFor={seededFor}
               setWfModes={setWfModes}
               onGenerate={runGenerate}
@@ -1343,6 +1352,7 @@ export function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
           data={d}
           wfIO={wfIO}
           wfIOLoading={wfIOLoading}
+          wfListLoading={wfListLoading}
           wfList={wfList}
           wfModes={wfModes}
           sourceFilter={sourceFilter}
@@ -1374,12 +1384,11 @@ export function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
             if (!d.workflowId) return;
             setWfModes({ modes, defaultMode });
             try {
-              const r = await fetch(`/api/workflows/${d.workflowId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ modes, defaultMode }),
+              await vanillaApi.workflow.update.mutate({
+                id: d.workflowId,
+                modes,
+                defaultMode,
               });
-              if (!r.ok) throw new Error(`PATCH failed: ${r.status}`);
             } catch (err) {
               // rollback local state to avoid zombie mode chip
               setWfModes(wfModes);
@@ -1763,4 +1772,4 @@ export function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
       {/* agent: no output Handle */}
     </div>
   );
-}
+});

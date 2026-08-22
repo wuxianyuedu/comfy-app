@@ -24,7 +24,7 @@
  *   - `pending` prop puts the confirm button into a spinner state
  */
 
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 
 export interface ModalDialogProps {
@@ -80,6 +80,9 @@ export function ModalDialog({
   icon,
 }: ModalDialogProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
+  // Unique id per instance — a static "modal-dialog-title" would collide
+  // when multiple dialogs mount at once, breaking aria-labelledby wiring.
+  const titleId = useId();
 
   // Esc closes; nothing else needs keyboard handling.
   useEffect(() => {
@@ -124,7 +127,7 @@ export function ModalDialog({
     <div
       role="dialog"
       aria-modal="true"
-      aria-labelledby="modal-dialog-title"
+      aria-labelledby={titleId}
       onClick={onClose}
       className="fixed inset-0 z-[200] flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm"
     >
@@ -152,7 +155,7 @@ export function ModalDialog({
           </div>
           <div className="min-w-0 flex-1">
             <h2
-              id="modal-dialog-title"
+              id={titleId}
               className="text-[15px] font-semibold leading-tight text-gray-100"
             >
               {title}

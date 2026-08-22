@@ -46,6 +46,14 @@ import {
   modelRepository,
   WorkflowModelTagRepository,
   workflowModelTagRepository,
+  FilmRepository,
+  filmRepository,
+  SkillRepository,
+  skillRepository,
+  UserModelConfigRepository,
+  userModelConfigRepository,
+  LoraTrainingJobRepository,
+  loraTrainingJobRepository,
 } from "./repository";
 
 /**
@@ -68,6 +76,14 @@ export interface CoreServiceMap extends Record<string, unknown> {
   modelRepository: ModelRepository;
   /** 模型标签库仓储（用户级）。 */
   workflowModelTagRepository: WorkflowModelTagRepository;
+  /** 影片项目仓储。 */
+  filmRepository: FilmRepository;
+  /** 技能库仓储（公共可读）。 */
+  skillRepository: SkillRepository;
+  /** 模型目录配置仓储（用户级）。 */
+  userModelConfigRepository: UserModelConfigRepository;
+  /** LoRA 训练任务仓储。 */
+  loraTrainingJobRepository: LoraTrainingJobRepository;
 }
 
 /** 服务工厂：给定一个容器，产出该服务实例。 */
@@ -141,4 +157,8 @@ container
   .register("taskRepository", () => taskRepository)
   .register("workflowTemplateRepository", () => workflowTemplateRepository)
   .register("modelRepository", () => modelRepository)
-  .register("workflowModelTagRepository", () => workflowModelTagRepository);
+  .register("workflowModelTagRepository", () => workflowModelTagRepository)
+  .register("filmRepository", () => filmRepository)
+  .register("skillRepository", () => skillRepository)
+  .register("userModelConfigRepository", () => userModelConfigRepository)
+  .register("loraTrainingJobRepository", () => loraTrainingJobRepository);

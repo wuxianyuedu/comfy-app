@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { api } from "~/trpc/react";
 
 /* ── Types ──────────────────────────────────────────────── */
 export interface SkillData {
@@ -85,42 +86,42 @@ interface SkillSelectorProps {
 }
 
 export function SkillSelector({ onSelect, value, className = "" }: SkillSelectorProps) {
-  const [skills, setSkills] = React.useState<SkillData[]>([]);
-  const [categories, setCategories] = React.useState<CategorySummary[]>([]);
   const [activeCat, setActiveCat] = React.useState<string>("all");
   const [search, setSearch] = React.useState("");
-  const [loading, setLoading] = React.useState(true);
+  const [displaySkills, setDisplaySkills] = React.useState<SkillData[]>([]);
 
-  // Fetch skills
-  const fetchSkills = React.useCallback(
-    async (cat: string, q: string) => {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (cat && cat !== "all") params.set("category", cat);
-        if (q) params.set("q", q);
-        const res = await fetch(`/api/skills?${params.toString()}`);
-        if (!res.ok) throw new Error("Failed to load skills");
-        const data = await res.json();
-        setSkills(data.skills ?? []);
-        setCategories(data.categories ?? []);
-      } catch {
-        // silently fail — show empty state
-      } finally {
-        setLoading(false);
-      }
-    },
-    []
+  const queryParams = React.useMemo(() => {
+    const p: { category?: string; q?: string } = {};
+    if (activeCat !== "all") p.category = activeCat;
+    if (search) p.q = search;
+    return p;
+  }, [activeCat, search]);
+
+  const skillsQ = api.skill.list.useQuery(queryParams);
+  // 用 useMemo 稳定引用：data 未就绪时 ?? [] 每次渲染都是新数组，
+  // 直接作为 useEffect 依赖会触发「setState → 重渲染 → 新引用 → setState」死循环
+  const skills = React.useMemo(
+    () => (skillsQ.data?.skills ?? []) as SkillData[],
+    [skillsQ.data]
   );
+  const categories = React.useMemo(
+    () => (skillsQ.data?.categories ?? []) as CategorySummary[],
+    [skillsQ.data]
+  );
+  const loading = skillsQ.isLoading;
 
-  // Initial load + category/search changes
+  // Sync display skills when API data changes（引用守卫：仅数据真变化时同步）
+  const prevSkillsRef = React.useRef<SkillData[]>(skills);
   React.useEffect(() => {
-    fetchSkills(activeCat, search);
-  }, [activeCat, search, fetchSkills]);
+    if (prevSkillsRef.current !== skills) {
+      prevSkillsRef.current = skills;
+      setDisplaySkills(skills);
+    }
+  }, [skills]);
 
   // Shuffle ("换一批")
   const handleShuffle = () => {
-    setSkills((prev) => [...prev].sort(() => Math.random() - 0.5));
+    setDisplaySkills((prev) => [...prev].sort(() => Math.random() - 0.5));
   };
 
   // Current selection
@@ -202,13 +203,13 @@ export function SkillSelector({ onSelect, value, className = "" }: SkillSelector
             </div>
           ))}
         </div>
-      ) : skills.length === 0 ? (
+      ) : displaySkills.length === 0 ? (
         <div className="text-center py-8 text-sm text-white/25">
           {search ? "没有匹配的技能" : "暂无技能"}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2 max-h-[320px] overflow-y-auto pr-0.5 scrollbar-thin">
-          {skills.map((skill) => (
+          {displaySkills.map((skill) => (
             <SkillCard
               key={skill.id}
               skill={skill}

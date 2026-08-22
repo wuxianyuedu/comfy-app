@@ -1,5 +1,5 @@
-import { auth } from "./auth";
-import { prisma } from "./db";
+import { getSession } from "~/server/better-auth/server";
+import { userRepository } from "./core";
 
 export type ServerUser = { id: string; email: string; name: string | null };
 
@@ -17,28 +17,31 @@ let demoUserCache: ServerUser | null = null;
  * to a lazily-created demo user so the app keeps working in local single-user
  * mode (and the smoke scripts that hit the API without a cookie keep passing).
  *
- * Separated from `auth.ts` so the edge middleware (which only needs `auth`)
- * never pulls the Prisma client into its bundle.
+ * Uses better-auth's getSession (migrated from NextAuth v5).
  */
 export async function getServerUser(): Promise<ServerUser> {
-  const session = await auth();
+  const session = await getSession();
   if (session?.user?.email) {
-    let user = await prisma.user.findUnique({ where: { email: session.user.email } });
+    let user = await userRepository.findByEmail(session.user.email);
     if (!user) {
-      user = await prisma.user.create({
-        data: { email: session.user.email, name: session.user.name, passwordHash: "oauth-not-used" },
+      user = await userRepository.createUser({
+        email: session.user.email,
+        name: session.user.name ?? null,
+        password: "oauth-not-used",
       });
     }
-    return { id: user.id, email: user.email, name: user.name };
+    return { id: user.id, email: user.email, name: user.name ?? null };
   }
 
   if (demoUserCache) return demoUserCache;
-  let demo = await prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
+  let demo = await userRepository.findByEmail(DEMO_EMAIL);
   if (!demo) {
-    demo = await prisma.user.create({
-      data: { email: DEMO_EMAIL, name: "体验用户", passwordHash: "demo-not-used" },
+    demo = await userRepository.createUser({
+      email: DEMO_EMAIL,
+      name: "体验用户",
+      password: "demo-not-used",
     });
   }
-  demoUserCache = { id: demo.id, email: demo.email, name: demo.name };
+  demoUserCache = { id: demo.id, email: demo.email, name: demo.name ?? null };
   return demoUserCache;
 }

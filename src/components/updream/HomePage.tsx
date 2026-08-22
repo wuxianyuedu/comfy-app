@@ -504,9 +504,9 @@ export function HomePage({
                         {/* Kind icon */}
                         <div
                           className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors"
-                          style={{ backgroundColor: `${cfg.color}15`, color: cfg.color }}
+                          style={{ backgroundColor: `${cfg!.color}15`, color: cfg!.color }}
                         >
-                          {cfg.icon}
+                          {cfg!.icon}
                         </div>
 
                         {/* Info */}
@@ -518,12 +518,12 @@ export function HomePage({
                             <span
                               className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset backdrop-blur-sm"
                               style={{
-                                color: cfg.color,
-                                backgroundColor: `${cfg.color}15`,
-                                ["--tw-ring-color" as string]: `${cfg.color}30`,
+                                color: cfg!.color,
+                                backgroundColor: `${cfg!.color}15`,
+                                ["--tw-ring-color" as string]: `${cfg!.color}30`,
                               }}
                             >
-                              {cfg.label}
+                              {cfg!.label}
                             </span>
                           </div>
                           <div className="mt-1 flex items-center gap-2 text-[11.5px] text-[#6b7088]">
@@ -553,7 +553,7 @@ export function HomePage({
                   /* Empty state — placeholder cards */
                   [1, 2, 3].map((i) => {
                     const kinds = ["canvas", "generation", "workflow"] as const;
-                    const cfg = KIND_CONFIG[kinds[i - 1]];
+                    const cfg = KIND_CONFIG[kinds[i - 1]!]!;
                     return (
                       <div
                         key={i}

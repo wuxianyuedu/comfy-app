@@ -179,7 +179,7 @@ export function DarkSelect({
   }, [options.length]);
 
   const listKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && highlighted >= 0) { e.preventDefault(); pick(options[highlighted]); }
+    if (e.key === "Enter" && highlighted >= 0) { e.preventDefault(); pick(options[highlighted]!); }
     if (e.key === "ArrowDown") { e.preventDefault(); setHighlighted((h) => Math.min(h + 1, options.length - 1)); }
     if (e.key === "ArrowUp") { e.preventDefault(); setHighlighted((h) => Math.max(h - 1, 0)); }
   }, [highlighted, options, pick]);

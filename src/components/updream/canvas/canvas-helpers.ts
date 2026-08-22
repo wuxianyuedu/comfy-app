@@ -5,6 +5,7 @@
  */
 
 import type { ValidationError } from "@/lib/comfyui/validation";
+import { vanillaApi } from "~/trpc/vanilla";
 
 export async function uploadImageFile(file: File): Promise<string> {
   const fd = new FormData();
@@ -47,13 +48,8 @@ export async function uploadMediaFile(
 }
 
 export async function startGenerate(payload: Record<string, unknown>): Promise<string> {
-  const res = await fetch("/api/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const d = await res.json();
-  if (!d.taskId) throw new Error(d.error || "生成失败");
+  const d = await vanillaApi.generate.generate.mutate(payload as any);
+  if (!d.taskId) throw new Error("生成失败");
   return d.taskId;
 }
 
@@ -104,9 +100,7 @@ export async function pollTask(
       };
     }
     try {
-      const res = await fetch(`/api/tasks/${taskId}`);
-      if (res.ok) {
-        const { task } = await res.json();
+      const task = await vanillaApi.task.detail.query({ id: taskId });
         /* R-ardot103 (2026-08-17): surface 0..100 progress to the canvas.
          *  Previously dropped — pollTask only read status + images, so the
          *  canvas picture/image preview had no progress to show even
@@ -117,7 +111,7 @@ export async function pollTask(
         const imgs: TaskResult[] = task?.images ?? [];
         if (imgs.length) {
           const v = imgs.find((x) => x.mediaType === "video") ?? imgs[0];
-          return { taskId, localPath: v.localPath, mediaType: v.mediaType };
+          return { taskId, localPath: v!.localPath, mediaType: v!.mediaType };
         }
         const st = task?.status as string | undefined;
         if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
@@ -160,10 +154,9 @@ export async function pollTask(
             /* R-Next (2026-08-17): carry structured validation errors from
              *  /api/tasks/[id].task.validationErrors into the failure result
              *  so CanvasNode can render a precise per-field list. */
-            validationErrors: task?.validationErrors ?? undefined,
+            validationErrors: task?.validationErrors as unknown as ValidationError[] | undefined,
           };
         }
-      }
     } catch {
       /* transient — keep polling */
     }

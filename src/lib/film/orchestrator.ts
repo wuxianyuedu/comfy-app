@@ -10,8 +10,12 @@
 import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
-import { prisma } from "@/lib/db";
-import { getServerUser } from "@/lib/auth-server";
+import {
+  filmRepository,
+  filmShotRepository,
+  skillRepository,
+  taskRepository,
+} from "@/lib/core/repository";
 import { buildAndValidate } from "@/lib/comfyui/workflow";
 import { getWorkflow } from "@/lib/comfyui/_meta";
 import { enqueue, cancelTask } from "@/lib/comfyui/runner";
@@ -70,11 +74,7 @@ async function appendFilmLog(
   level: "info" | "progress" | "warn" | "error" | "success",
   msg: string
 ) {
-  const entry = { t: Date.now(), level, msg };
-  const film = await prisma.filmProject.findUnique({ where: { id }, select: { logs: true } });
-  const arr = (film?.logs as any[]) ?? [];
-  arr.push(entry);
-  await prisma.filmProject.update({ where: { id }, data: { logs: arr as any } }).catch(() => {});
+  await filmRepository.appendLog(id, { t: Date.now(), level, msg });
 }
 
 // ── script → storyboard ────────────────────────────────────
@@ -152,7 +152,7 @@ export async function createFilm(input: CreateFilmInput) {
   let stylePrompt: string | undefined;
   let styleNegative: string | undefined;
   if (input.styleSlug) {
-    const skill = await prisma.skill.findUnique({ where: { slug: input.styleSlug } });
+    const skill = await skillRepository.findBySlug(input.styleSlug);
     if (skill) {
       stylePrompt = skill.promptTemplate || undefined;
       styleNegative = skill.negativePrompt || undefined;
@@ -168,36 +168,32 @@ export async function createFilm(input: CreateFilmInput) {
 
   const wf = await pickVideoWorkflow();
 
-  const film = await prisma.filmProject.create({
-    data: {
-      userId: input.userId,
-      title: input.title,
-      script: input.script,
-      type: input.type ?? "short_video",
-      styleSlug: input.styleSlug ?? null,
-      size,
-      fps,
-      framesPerShot,
-      subtitleOn: input.subtitleOn ?? true,
-      bgmName: input.bgmName ?? null,
-      status: "PARSING",
-    },
+  const film = await filmRepository.create({
+    userId: input.userId,
+    title: input.title,
+    script: input.script,
+    type: input.type ?? "short_video",
+    styleSlug: input.styleSlug ?? null,
+    size,
+    fps,
+    framesPerShot,
+    subtitleOn: input.subtitleOn ?? true,
+    bgmName: input.bgmName ?? null,
   });
 
-  await prisma.filmShot.createMany({
-    data: shots.map((s) => {
+  await filmShotRepository.createMany(
+    film.id,
+    shots.map((s) => {
       const params: Record<string, any> = { frames: framesPerShot, fps, size, workflow: wf };
       return {
-        filmId: film.id,
         order: s.order,
         heading: s.heading ?? null,
         prompt: s.prompt,
         negative: s.negative ?? null,
-        status: "IDLE",
-        params: params as any,
+        params,
       };
-    }),
-  });
+    })
+  );
 
   await appendFilmLog(film.id, "success", `已生成分镜，共 ${shots.length} 个镜头`);
   return { id: film.id, shots: shots.length };
@@ -252,16 +248,13 @@ async function generateVideoShot(
   });
   if (!built.ok || !built.prompt) throw new Error(built.error ?? "工作流构建失败");
 
-  const task = await prisma.task.create({
-    data: {
-      userId,
-      type: meta.taskType,
-      prompt: shot.prompt,
-      negativePrompt: shot.negative ?? null,
-      params: { workflow: wf, ...p } as object,
-      workflowName: wf,
-      status: "QUEUED",
-    },
+  const task = await taskRepository.createQueued({
+    userId,
+    type: meta.taskType,
+    prompt: shot.prompt,
+    negativePrompt: shot.negative ?? null,
+    params: { workflow: wf, ...p },
+    workflowName: wf,
   });
   enqueue({ taskId: task.id, prompt: built.prompt });
   return task.id;
@@ -269,14 +262,14 @@ async function generateVideoShot(
 
 // ── start (autopilot) ───────────────────────────────────────
 export async function startFilm(id: string) {
-  const film = await prisma.filmProject.findUnique({ where: { id } });
+  const film = await filmRepository.findById(id);
   if (!film) throw new Error("影片不存在");
   if (film.status === "GENERATING" || film.status === "COMPOSING") return;
 
-  const shots = await prisma.filmShot.findMany({ where: { filmId: id, status: "IDLE" }, orderBy: { order: "asc" } });
+  const shots = await filmShotRepository.listByFilm(id, { status: "IDLE" });
   if (!shots.length) throw new Error("没有可生成的镜头，请重新创建");
 
-  await prisma.filmProject.update({ where: { id }, data: { status: "GENERATING", progress: 0, error: null } });
+  await filmRepository.markGenerating(id);
   await appendFilmLog(id, "info", `开始逐镜生成（共 ${shots.length} 镜）`);
 
   for (const shot of shots) {
@@ -286,12 +279,9 @@ export async function startFilm(id: string) {
         negative: shot.negative,
         params: shot.params,
       });
-      await prisma.filmShot.update({
-        where: { id: shot.id },
-        data: { taskId, status: "QUEUED", progress: 0 },
-      });
+      await filmShotRepository.markQueued(shot.id, taskId);
     } catch (e: any) {
-      await prisma.filmShot.update({ where: { id: shot.id }, data: { status: "FAILED" } });
+      await filmShotRepository.markFailed(shot.id);
       await appendFilmLog(id, "error", `镜头 ${shot.order + 1} 提交失败：${e?.message ?? ""}`);
     }
   }
@@ -304,13 +294,13 @@ export async function startFilm(id: string) {
 async function watchFilm(id: string) {
   const MAX_ITER = 240; // ~16 min at 4s
   for (let i = 0; i < MAX_ITER; i++) {
-    const film = await prisma.filmProject.findUnique({ where: { id } });
+    const film = await filmRepository.findById(id);
     if (!film || film.status === "CANCELLED" || film.status === "FAILED") return;
     if (film.status !== "GENERATING") {
       // already moved on (e.g. compose started)
     }
 
-    const shots = await prisma.filmShot.findMany({ where: { filmId: id }, orderBy: { order: "asc" } });
+    const shots = await filmShotRepository.listByFilm(id);
     let pending = 0;
     let done = 0;
     let failed = 0;
@@ -324,10 +314,7 @@ async function watchFilm(id: string) {
         shot.status === "SUCCEEDED" ? done++ : failed++;
         continue;
       }
-      const task = await prisma.task.findUnique({
-        where: { id: shot.taskId },
-        select: { status: true, progress: true, resultImages: true },
-      });
+      const task = await taskRepository.findExecutionProgress(shot.taskId);
       if (!task) {
         pending++;
         continue;
@@ -349,14 +336,11 @@ async function watchFilm(id: string) {
         const p = (shot.params as any) ?? {};
         duration = typeof p.duration === "number" ? p.duration : ((p.frames ?? 49) as number) / ((p.fps ?? 16) as number);
       }
-      await prisma.filmShot.update({
-        where: { id: shot.id },
-        data: {
-          status: next,
-          progress: task.progress,
-          videoPath: videoPath ?? undefined,
-          duration: duration ?? null,
-        },
+      await filmShotRepository.updateFromTask(shot.id, {
+        status: next,
+        progress: task.progress,
+        videoPath: videoPath ?? undefined,
+        duration: duration ?? null,
       });
       if (next === "SUCCEEDED") done++;
       else if (next === "FAILED") failed++;
@@ -365,11 +349,11 @@ async function watchFilm(id: string) {
 
     const total = shots.length;
     const progress = Math.round(((done + failed) / total) * 100);
-    await prisma.filmProject.update({ where: { id }, data: { progress } });
+    await filmRepository.updateProgress(id, progress);
 
     if (pending === 0) {
       if (failed > 0 && done === 0) {
-        await prisma.filmProject.update({ where: { id }, data: { status: "FAILED", error: `${failed} 个镜头生成失败` } });
+        await filmRepository.markFailed(id, `${failed} 个镜头生成失败`);
         await appendFilmLog(id, "error", `影片生成失败：${failed} 个镜头失败`);
         return;
       }
@@ -379,7 +363,7 @@ async function watchFilm(id: string) {
     }
     await sleep(4000);
   }
-  await prisma.filmProject.update({ where: { id }, data: { status: "FAILED", error: "生成超时" } });
+  await filmRepository.markFailed(id, "生成超时");
   await appendFilmLog(id, "error", "影片生成超时（超过 16 分钟）");
 }
 
@@ -424,19 +408,16 @@ function escapeFilter(s: string): string {
 
 // ── compose ────────────────────────────────────────────────
 export async function composeFilm(id: string) {
-  const film = await prisma.filmProject.findUnique({ where: { id } });
+  const film = await filmRepository.findById(id);
   if (!film) return;
   if (film.status === "COMPOSING" || film.status === "DONE") return;
 
-  await prisma.filmProject.update({ where: { id }, data: { status: "COMPOSING", progress: 90, error: null } });
+  await filmRepository.markComposing(id);
   await appendFilmLog(id, "info", "所有镜头完成，开始合成影片…");
 
   const ok = await isFFmpegAvailable();
   if (!ok) {
-    await prisma.filmProject.update({
-      where: { id },
-      data: { status: "FAILED", error: "未检测到 ffmpeg，无法合成。请安装 ffmpeg 后点「重新合成」" },
-    });
+    await filmRepository.markFailed(id, "未检测到 ffmpeg，无法合成。请安装 ffmpeg 后点「重新合成」");
     await appendFilmLog(
       id,
       "error",
@@ -445,12 +426,9 @@ export async function composeFilm(id: string) {
     return;
   }
 
-  const shots = await prisma.filmShot.findMany({
-    where: { filmId: id, status: "SUCCEEDED", NOT: { videoPath: null } },
-    orderBy: { order: "asc" },
-  });
+  const shots = await filmShotRepository.listByFilm(id, { status: "SUCCEEDED", onlyWithVideo: true });
   if (!shots.length) {
-    await prisma.filmProject.update({ where: { id }, data: { status: "FAILED", error: "没有可用的镜头视频" } });
+    await filmRepository.markFailed(id, "没有可用的镜头视频");
     return;
   }
 
@@ -464,9 +442,9 @@ export async function composeFilm(id: string) {
   try {
     for (let i = 0; i < shots.length; i++) {
       const shot = shots[i];
-      const clip = path.join(cwd, "public", (shot.videoPath as string).replace(/^\//, ""));
+      const clip = path.join(cwd, "public", (shot!.videoPath as string).replace(/^\//, ""));
       const segOut = path.join(tmpDir, `seg_${i}.mp4`);
-      const dur = shot.duration ?? (film.framesPerShot / fps);
+      const dur = shot!.duration ?? (film.framesPerShot / fps);
       const fadeOut = Math.max(0, dur - 0.3);
 
       let vf =
@@ -479,7 +457,7 @@ export async function composeFilm(id: string) {
       if (film.subtitleOn) {
         await fs.writeFile(
           srtPath,
-          `1\n00:00:00,000 --> 00:00:${String(Math.floor(dur)).padStart(2, "0")},000\n${(shot.heading || shot.prompt).slice(0, 80)}\n`,
+          `1\n00:00:00,000 --> 00:00:${String(Math.floor(dur)).padStart(2, "0")},000\n${(shot!.heading || shot!.prompt).slice(0, 80)}\n`,
           "utf-8"
         );
       }
@@ -553,16 +531,10 @@ export async function composeFilm(id: string) {
       await fs.copyFile(concatPath, finalPath);
     }
 
-    await prisma.filmProject.update({
-      where: { id },
-      data: { status: "DONE", progress: 100, finalVideo: localPath, error: null },
-    });
+    await filmRepository.markDone(id, localPath);
     await appendFilmLog(id, "success", `🎬 影片合成完成：${localPath}`);
   } catch (e: any) {
-    await prisma.filmProject.update({
-      where: { id },
-      data: { status: "FAILED", error: e?.message ?? "合成失败" },
-    });
+    await filmRepository.markFailed(id, e?.message ?? "合成失败");
     await appendFilmLog(id, "error", `合成失败：${e?.message ?? ""}`);
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
@@ -571,19 +543,14 @@ export async function composeFilm(id: string) {
 
 // ── cancel ──────────────────────────────────────────────────
 export async function cancelFilm(id: string) {
-  const film = await prisma.filmProject.findUnique({ where: { id } });
+  const film = await filmRepository.findById(id);
   if (!film) return;
-  const shots = await prisma.filmShot.findMany({
-    where: { filmId: id, status: { in: ["QUEUED", "RUNNING"] }, NOT: { taskId: null } },
-  });
+  const shots = await filmShotRepository.listActiveWithTask(id);
   for (const s of shots) {
     if (s.taskId) await cancelTask(s.taskId).catch(() => {});
   }
-  await prisma.filmShot.updateMany({
-    where: { filmId: id, status: { in: ["QUEUED", "RUNNING"] } },
-    data: { status: "FAILED" },
-  });
-  await prisma.filmProject.update({ where: { id }, data: { status: "CANCELLED", error: "已取消" } });
+  await filmShotRepository.markAllActiveFailed(id);
+  await filmRepository.markCancelled(id);
   await appendFilmLog(id, "warn", "影片已取消");
 }
 

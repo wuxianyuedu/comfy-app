@@ -545,7 +545,7 @@ function applyWidgets(
   for (let i = 0; i < widgets.length && i < names.length; i++) {
     const key = names[i];
     if (key === CONTROL_SENTINEL) continue; // 伪控件，不是真实 input
-    inputs[key] = widgets[i];
+    inputs[key!] = widgets[i]!;
   }
 }
 
@@ -757,7 +757,7 @@ export function prepareGraphForExecution(input: Record<string, any>): ExecutionP
     // 类型信息缺失（老工作流没存 type）时：只有一条入线就直接穿过去。
     const linked = candidates.filter((nm) => isLinkRef(node.inputs?.[nm], graph));
     if (linked.length === 1) {
-      const v = node.inputs[linked[0]] as [string | number, number];
+      const v = node.inputs[linked[0]!] as [string | number, number];
       return walk(String(v[0]), Number(v[1]), depth + 1);
     }
     return null;

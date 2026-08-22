@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { MediaThumb, isVideo } from "./MediaThumb";
 import { Icon } from "@/components/ui/Icon";
+import { vanillaApi } from "~/trpc/vanilla";
 
 /* ── Video Queue Modal — wired to real VIDEO tasks ──
   Fetches the user's VIDEO-type tasks from /api/tasks (filtered), shows live
@@ -49,8 +50,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
     if (!open) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/tasks?take=200");
-      const data = await res.json();
+      const data = await vanillaApi.task.list.query({ take: 200 });
       const all: any[] = data.tasks ?? [];
       const videos: VideoTask[] = all
         .filter((t) => t.type === "VIDEO")
@@ -98,12 +98,15 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
     try {
       let ok = 0;
       for (const it of items) {
-        const res = await fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...it.params, prompt: it.prompt }),
-        });
-        if (res.ok) ok++;
+        try {
+          const d = await vanillaApi.generate.generate.mutate({
+            ...it.params,
+            prompt: it.prompt,
+          } as any);
+          if (d.taskId) ok++;
+        } catch {
+          /* skip failed item */
+        }
       }
       if (ok > 0) {
         setDraft([]);
@@ -205,9 +208,9 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                       <div className="min-w-0 flex-1">
                         <div className="mb-0.5 flex items-center gap-2">
                           <span className="font-mono text-xs text-violet-300">V{String(i + 1).padStart(2, "0")}</span>
-                          <span className={`inline-flex items-center gap-1 text-xs ${meta.cls}`}>
-                            <Icon name={meta.icon} size={13} />
-                            {meta.label}
+                          <span className={`inline-flex items-center gap-1 text-xs ${meta!.cls}`}>
+                            <Icon name={meta!.icon} size={13} />
+                            {meta!.label}
                           </span>
                         </div>
                         <p

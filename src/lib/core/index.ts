@@ -10,7 +10,6 @@
  * | `errors`      | `AppError` 类树 + 归一化/信封            | 统一错误契约         |
  * | `logger`      | `createLogger` 结构化日志               | 横切关注点           |
  * | `repository`  | `Repository` 接口 + `PrismaRepository`  | Repository 模式     |
- * | `api`         | `defineRoute` / 解析助手                 | 模板方法 / 统一入口  |
  * | `config`      | `config` 集中类型化配置                 | Config 模式         |
  * | `events`      | `eventBus` 类型化领域事件总线           | Observer / Pub-Sub  |
  * | `container`   | `container` 服务容器 + `Container` 类    | DI / Composition Root|
@@ -27,4 +26,3 @@ export * from "./repository";
 export * from "./config";
 export * from "./events";
 export * from "./container";
-export * from "./api";

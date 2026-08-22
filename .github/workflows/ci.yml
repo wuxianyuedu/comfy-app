@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    name: Typecheck & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      # 说明：lint / format:check 因历史代码基线不一致暂未纳入门禁，
+      # 全量整改后应恢复（npm run lint / npm run format:check）。
+      # 当前门禁：类型安全 + 单元测试。
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test

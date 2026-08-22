@@ -27,7 +27,8 @@ import { createPortal } from "react-dom";
 import { useStore } from "@xyflow/react";
 import { DynamicWorkflowForm, PortHandle } from "@/components/updream/shared/DynamicWorkflowForm";
 import { type WorkflowIOMap, splitWorkflowIO, ioLabel } from "@/components/updream/shared/workflow-io";
-import { CanvasNodeData, NODE_META, STATUS_LABEL } from "./canvas-types";
+import { type CanvasNodeData, NODE_META, STATUS_LABEL } from "./canvas-types";
+import { Icon } from "@/components/ui/Icon";
 import { ALL_WORKFLOW_TYPES } from "@/lib/workflow-types";
 
 export type WorkflowSourceFilter = "all" | "local" | "online";
@@ -43,6 +44,8 @@ export interface WorkflowNodeProps {
   /** 该工作流暴露的 IO 映射（来自 GET /api/workflows/[id]）。 */
   wfIO: WorkflowIOMap | null;
   wfIOLoading: boolean;
+  /** 工作流列表是否仍在加载。为 true 时工作流选择区显示"加载中"而非空态。 */
+  wfListLoading?: boolean;
   /** 完整工作流列表（含 sourcePath / taskType）。 */
   wfList: { id: string; name: string; taskType?: string; sourcePath?: string | null; modelTags?: string[] }[];
   /** R-ardot25: 当前工作流的 modes 配置（来自 /api/workflows/[id] 的 modes/defaultMode）。 */
@@ -380,11 +383,14 @@ function WorkflowPickChip({
   options,
   onSelect,
   emptyHint,
+  loading = false,
 }: {
   value: string;
   options: { id: string; name: string; taskType?: string; sourcePath?: string | null; modelTags?: string[] }[];
   onSelect: (id: string) => void;
   emptyHint?: string;
+  /** 列表仍在加载时显示"加载中"，避免把加载态误渲染成空态。 */
+  loading?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -440,7 +446,13 @@ function WorkflowPickChip({
           className="min-w-0 flex-1 truncate text-left font-semibold text-[#EDEDF2]"
           style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 11 }}
         >
-          {sel ? name : <span className="text-gray-500">选择工作流…</span>}
+          {loading && !sel ? (
+            <span className="text-gray-500">加载中…</span>
+          ) : sel ? (
+            name
+          ) : (
+            <span className="text-gray-500">选择工作流…</span>
+          )}
         </span>
         <span
           className={`shrink-0 text-[#6E6E80] transition-transform ${open ? "rotate-180" : ""}`}
@@ -460,11 +472,17 @@ function WorkflowPickChip({
             style={{ position: "fixed", left: pos.left, top: pos.top, width: pos.width, zIndex: 50 }}
             className="max-h-72 overflow-y-auto rounded-lg border border-white/[0.08] bg-[#16161C] py-1 shadow-2xl shadow-violet-500/20"
           >
-            {options.length === 0 && (
-              <div className="px-3 py-3 text-[11px] text-gray-500">
-                {emptyHint ?? "暂无符合筛选的工作流"}
-              </div>
-            )}
+            {options.length === 0 &&
+              (loading ? (
+                <div className="flex items-center gap-2 px-3 py-3 text-[11px] text-gray-500">
+                  <Icon name="loader" size={12} className="animate-spin" />
+                  加载中…
+                </div>
+              ) : (
+                <div className="px-3 py-3 text-[11px] text-gray-500">
+                  {emptyHint ?? "暂无符合筛选的工作流"}
+                </div>
+              ))}
             {options.map((o) => {
               const ol = Boolean(o.sourcePath);
               const active = o.id === value;
@@ -690,6 +708,7 @@ export function WorkflowNode({
   data: d,
   wfIO,
   wfIOLoading,
+  wfListLoading = false,
   wfList,
   wfModes,
   sourceFilter = "all",
@@ -704,6 +723,14 @@ export function WorkflowNode({
   onModesChange,
 }: WorkflowNodeProps) {
     const meta = NODE_META[d.kind];
+
+  /* 2026-08-22: 右上角显示「短序号」#1/#2…（按画布节点列表顺序）。
+   * useStore 选择器结果不变时不触发重渲染：拖动/选中只改位置不改变 index，
+   * 仅节点增删导致序号变化时才重渲染此节点。完整 id 保留在 title 中。 */
+  const nodeSeq = useStore((s) => {
+    const idx = s.nodes.findIndex((n) => n.id === id);
+    return idx === -1 ? null : idx + 1;
+  });
 
   /* R-ardot52 (2026-08-15): 在所有输入参数下方渲染 outputs row — 用户在
    *  IO-edit 配的 output 在画布节点上要可见。Header (h-8) 不放，回到 Ardot
@@ -755,7 +782,7 @@ export function WorkflowNode({
             className="font-mono text-[10px] font-semibold text-cyan-200"
             style={{ fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, monospace" }}
           >
-            #{id.length > 10 ? id.slice(0, 9) + "…" : id}
+            {nodeSeq !== null ? `#${nodeSeq}` : `#${id.length > 10 ? id.slice(0, 9) + "…" : id}`}
           </span>
         </div>
       </div>
@@ -780,6 +807,7 @@ export function WorkflowNode({
             value={d.workflowId ?? ""}
             options={filteredList}
             onSelect={onSelectWorkflow}
+            loading={wfListLoading}
             emptyHint={
               sourceFilter !== "all"
                 ? `当前筛选下没有工作流，切换「${sourceFilter === "local" ? "本机" : "在线"}」试试`
@@ -896,4 +924,4 @@ export function WorkflowNode({
   );
 }
 
-export default WorkflowNode;
+export default React.memo(WorkflowNode);

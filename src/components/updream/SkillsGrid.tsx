@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import type { SkillData } from "@/components/skill";
 import { AuroraBackground } from "@/components/updream/AuroraBackground";
 import { Icon } from "@/components/ui/Icon";
+import { api } from "~/trpc/react";
 
 type SkillItem = SkillData;
 
@@ -16,15 +17,9 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export function SkillsGrid({ onUseSkill }: { onUseSkill?: (skill: SkillItem) => void }) {
-  const [skills, setSkills] = useState<SkillItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/skills")
-      .then((r) => r.json())
-      .then((d) => setSkills(d.skills ?? []))
-      .finally(() => setLoading(false));
-  }, []);
+  const skillsQ = api.skill.list.useQuery();
+  const skills = (skillsQ.data?.skills ?? []) as SkillItem[];
+  const loading = skillsQ.isLoading;
 
   return (
     <div className="h-full overflow-y-auto">

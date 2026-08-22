@@ -6,6 +6,17 @@ import { getServerUser } from "@/lib/auth-server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// R-T3-phase4 (OWASP A04/A05): whitelist audio types and cap the size.
+const ALLOWED_MIME = new Set([
+  "audio/mpeg",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/ogg",
+]);
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+
 export async function POST(req: NextRequest) {
   const user = await getServerUser();
   void user;
@@ -13,6 +24,18 @@ export async function POST(req: NextRequest) {
   if (!form) return NextResponse.json({ error: "表单解析失败" }, { status: 400 });
   const file = form.get("file");
   if (!(file instanceof File)) return NextResponse.json({ error: "未找到文件" }, { status: 400 });
+  if (!ALLOWED_MIME.has(file.type)) {
+    return NextResponse.json(
+      { error: "仅支持 MP3 / WAV / M4A / OGG 音频" },
+      { status: 400 }
+    );
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: "音频大小不能超过 100MB" },
+      { status: 400 }
+    );
+  }
 
   const buf = Buffer.from(await file.arrayBuffer());
   const ext = path.extname(file.name) || ".mp3";

@@ -1,7 +1,7 @@
 "use client";
 /* Extracted WfSubgraphNode (ComfyUI subgraph wrapper renderer).
  * Originally inside WorkflowCanvasEditor.tsx. */
-import React, { useCallback, useEffect, useMemo, useRef, useState, useContext } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Handle, Position, useStore } from "@xyflow/react";
 import {
   portColor, portLabel, inferInputType, inferOutputType, inferIsMultiline,
@@ -32,12 +32,9 @@ import {
 import { Chip, FrontendOnlyBadge, RequiredSummary } from "./wf-chips";
 import { PseudoFrostLayer, NodeFrost } from "./wf-frost";
 import { WfImagePreview, StringTextarea } from "./wf-image-preview";
-import {
-  IOEditContext, RgthreeGroupsContext, NodeJsonViewerContext,
-  IoCheckbox, NodeIdChip,
-} from "./wf-contexts";
-export function WfSubgraphNode({ data, selected }: { data: WfSubgraphData; selected?: boolean }) {
-  const io = useContext(IOEditContext);
+import { useIOEditContext, IoCheckbox, NodeIdChip } from "./wf-contexts";
+export const WfSubgraphNode = React.memo(function WfSubgraphNode({ data, selected }: { data: WfSubgraphData; selected?: boolean }) {
+  const io = useIOEditContext();
   /* Parent-graph subgraph card — mirrors WfNode's two-zone layout
    * (2026-08-07): a purple HEADER, a TOP PINS zone that zips the
    * wrapper's pure-connection input ports (left dot) with its exposed
@@ -253,16 +250,16 @@ export function WfSubgraphNode({ data, selected }: { data: WfSubgraphData; selec
             io={io}
             ioRef={{
               nodeId: String(data.nodeId),
-              name: cleanedOutputs[0].out.name,
+              name: cleanedOutputs[0]!.out.name,
               kind: "output",
               direction: "output",
               // 2026-08-15: forward the subgraph wrapper's output label
               // (e.g. business `IMAGE_FINAL`) so it reaches the IO
               // preview unchanged.
               label:
-                cleanedOutputs[0].out.label ??
-                cleanedOutputs[0].out.localized ??
-                cleanedOutputs[0].out.name,
+                cleanedOutputs[0]!.out.label ??
+                cleanedOutputs[0]!.out.localized ??
+                cleanedOutputs[0]!.out.name,
             }}
           />
         )}
@@ -747,5 +744,5 @@ export function WfSubgraphNode({ data, selected }: { data: WfSubgraphData; selec
       )}
     </div>
   );
-}
+});
 

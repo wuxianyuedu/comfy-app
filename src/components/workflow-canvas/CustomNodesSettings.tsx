@@ -755,7 +755,7 @@ export function CustomNodesSettings() {
           const res = await fetch("/api/custom-nodes", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "saveSettings", paths: live }),
+            body: JSON.stringify({ action: "saveSettings", customNodesPaths: live }),
           });
           const d = await res.json();
           if (!res.ok || !d.ok) throw new Error(d.error || "保存失败");
@@ -1173,7 +1173,13 @@ export function CustomNodesSettings() {
                   {!localSaving && !localSaveErr && !localSavedAt && savedLocalPaths.length > 0 && (
                     <span className="text-emerald-400">✓ 已配置（来自 .env）</span>
                   )}
-                  {!localSaving && !localSaveErr && savedLocalPaths.length === 0 && (
+                  {!localSaving && !localSaveErr && loading && (
+                    <span className="flex items-center gap-1.5 text-muted">
+                      <span className="inline-block h-2 w-2 animate-spin rounded-full border border-muted border-t-transparent" />
+                      加载中…
+                    </span>
+                  )}
+                  {!localSaving && !localSaveErr && !loading && savedLocalPaths.length === 0 && (
                     /* 2026-08-12 R71-2: 这条消息之前是「在上面输入至少一个目录」，
                      * 但用户看到灰色 placeholder（看起来像内容）就误以为已配置。
                      * 现在 placeholder 已经加了 italic + 「示例 ·  」前缀并伴随
@@ -1245,10 +1251,16 @@ export function CustomNodesSettings() {
                       )}
                     </>
                   )}
-                  {!saving && !saveErr && savedAt && totalAcrossParents.total === 0 && (
+                  {!saving && !saveErr && loading && (
+                    <span className="flex items-center gap-1.5 text-muted">
+                      <span className="inline-block h-2 w-2 animate-spin rounded-full border border-muted border-t-transparent" />
+                      加载中…
+                    </span>
+                  )}
+                  {!saving && !saveErr && !loading && savedAt && totalAcrossParents.total === 0 && (
                     <span className="text-emerald-400">✓ 已自动保存 {savedAt}</span>
                   )}
-                  {!saving && !saveErr && !savedAt && totalAcrossParents.total === 0 && (
+                  {!saving && !saveErr && !loading && !savedAt && totalAcrossParents.total === 0 && (
                     <span>未配置 — 上面输入至少一个目录</span>
                   )}
                 </div>
@@ -1646,9 +1658,9 @@ export function CustomNodesSettings() {
                               <span className="font-medium text-ink">{pkg.name}</span>
                               <span
                                 className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                                style={{ background: st.bg, color: st.fg }}
+                                style={{ background: st!.bg, color: st!.fg }}
                               >
-                                {st.label}
+                                {st!.label}
                               </span>
                             </div>
                             <div className="truncate font-mono text-[11px] text-muted" title={pkg.path}>
@@ -1656,7 +1668,7 @@ export function CustomNodesSettings() {
                             </div>
                           </div>
                           <div className="shrink-0 text-right">
-                            <div className="text-lg font-semibold" style={{ color: st.fg }}>
+                            <div className="text-lg font-semibold" style={{ color: st!.fg }}>
                               {pkg.nodeCount}
                             </div>
                             <div className="text-[11px] text-muted">节点类型</div>

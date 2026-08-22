@@ -107,7 +107,7 @@ export default function WorkspacePage() {
     setViewHistory((prev) => {
       if (prev.length <= 1) return prev; // already at root
       const sliced = prev.slice(0, -1);
-      setViewMode(sliced[sliced.length - 1]);
+      setViewMode(sliced[sliced.length - 1]!);
       return sliced;
     });
   }, []);

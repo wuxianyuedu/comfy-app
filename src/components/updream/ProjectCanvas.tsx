@@ -22,8 +22,8 @@ import "@xyflow/react/dist/style.css";
 import { CanvasNode } from "./canvas/CanvasNode";
 import { WorkflowNodeArdot } from "./canvas/WorkflowNode.ardot";
 import {
-  CanvasNodeData,
-  CanvasNodeType,
+  type CanvasNodeData,
+  type CanvasNodeType,
   NODE_META,
   defaultData,
   type NodeKind,
@@ -193,6 +193,9 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
   const projectNameRef = useRef(projectName);
   projectNameRef.current = projectName;
   const loadedRef = useRef(false);
+  // True until the initial project has been hydrated from storage.
+  // Prevents the empty-canvas hint from flashing while content loads.
+  const [hydrating, setHydrating] = useState(true);
   // Tracks which pending workflow we've already dropped, so navigating to the
   // canvas / re-rendering doesn't place the same node twice.
   const placedPendingRef = useRef<string | null>(null);
@@ -238,6 +241,7 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
       setActive(proj.id);
       // fit after nodes are applied
       setTimeout(() => fitView({ padding: 0.25, duration: 300 }), 80);
+      setHydrating(false);
       onConsumeSeed?.();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -825,7 +829,7 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
     deleteProject(pid);
     const remaining = listProjects();
     if (remaining.length) {
-      loadProject(remaining[0].id);
+      loadProject(remaining[0]!.id);
     } else {
       // No projects left — open a fresh draft (no row written until
       // the user adds content).
@@ -1084,8 +1088,18 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
        *  so toggling 调试模式 on the project canvas appeared to do nothing. */}
       <GlobalStepLogPanel />
 
+      {/* Empty hint — 友好引导卡片（仅当项目确实无内容且已加载完成时展示） */}
+      {hydrating && nodes.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+          <div className="flex flex-col items-center gap-3 rounded-3xl border border-white/[0.08] bg-gradient-to-br from-[#1a1530]/60 to-[#0f0b1c]/60 px-12 py-10 shadow-2xl shadow-black/40 backdrop-blur-md">
+            <Icon name="loader" size={40} className="animate-spin text-cyan-300/90" />
+            <p className="text-sm text-gray-400">加载中…</p>
+          </div>
+        </div>
+      )}
+
       {/* Empty hint — 友好引导卡片 */}
-      {nodes.length === 0 && (
+      {nodes.length === 0 && !hydrating && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
           <div className="rounded-3xl border border-white/[0.08] bg-gradient-to-br from-[#1a1530]/60 to-[#0f0b1c]/60 px-12 py-10 shadow-2xl shadow-black/40 backdrop-blur-md">
             <div className="mb-3 flex justify-center gap-2">

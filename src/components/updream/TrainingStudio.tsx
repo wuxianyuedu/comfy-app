@@ -5,6 +5,7 @@ import { DarkSelect } from "@/components/updream/ui/DarkSelect";
 import { NumberField } from "@/components/updream/ui/NumberField";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { vanillaApi } from "~/trpc/vanilla";
 
 type ModelOpt = { id: string; fileName: string; name: string };
 type TrainLogEntry = { t: number; level: string; msg: string };
@@ -89,16 +90,16 @@ export function TrainingStudio() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadModels = useCallback(() => {
-    fetch("/api/models?type=CHECKPOINT")
-      .then((r) => r.json())
-      .then((d) => setCheckpoints(d.models ?? []));
+    vanillaApi.model.list
+      .query({ type: "CHECKPOINT" })
+      .then((d) => setCheckpoints((d.models ?? []) as unknown as ModelOpt[]));
   }, []);
 
   const loadJobs = useCallback(() => {
-    fetch("/api/train")
-      .then((r) => r.json())
+    vanillaApi.train.list
+      .query()
       .then((d) => {
-        setJobs(d.jobs ?? []);
+        setJobs((d.jobs ?? []) as unknown as TrainJob[]);
         setBackendConfigured(d.backendConfigured ?? false);
       })
       .catch(() => {});
@@ -146,31 +147,22 @@ export function TrainingStudio() {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/train", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          baseModel,
-          triggerWord: triggerWord.trim(),
-          classWord: classWord.trim() || undefined,
-          datasetImages: dataset.map((d) => ({ name: d.name, caption: d.caption.trim() })),
-          resolution,
-          steps,
-          batchSize,
-          learningRate,
-          rankDim,
-          networkAlpha,
-          optimizer,
-          scheduler,
-          seed,
-        }),
+      await vanillaApi.train.create.mutate({
+        name: name.trim(),
+        baseModel,
+        triggerWord: triggerWord.trim(),
+        classWord: classWord.trim() || undefined,
+        datasetImages: dataset.map((d) => ({ name: d.name, caption: d.caption.trim() })),
+        resolution,
+        steps,
+        batchSize,
+        learningRate,
+        rankDim,
+        networkAlpha,
+        optimizer,
+        scheduler,
+        seed,
       });
-      const d = await res.json();
-      if (!res.ok) {
-        setError(d.error ?? "创建失败");
-        return;
-      }
       // reset form
       setName("");
       setTriggerWord("");
@@ -180,13 +172,15 @@ export function TrainingStudio() {
       setRankDim(32);
       setNetworkAlpha(16);
       loadJobs();
+    } catch (e: any) {
+      setError(e?.message ?? "创建失败");
     } finally {
       setSubmitting(false);
     }
   }
 
   async function cancelJob(id: string) {
-    await fetch(`/api/train/${id}/cancel`, { method: "POST" });
+    await vanillaApi.train.cancel.mutate({ id });
     loadJobs();
   }
 
@@ -371,8 +365,8 @@ export function TrainingStudio() {
           <div className="mb-4 flex items-center gap-2">
             <span className="text-[13px] font-semibold text-[#e5e7eb]">训练监控</span>
             {activeJob && (
-              <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${(STATUS_META[activeJob.status] ?? STATUS_META.QUEUED).cls}`}>
-                {(STATUS_META[activeJob.status] ?? STATUS_META.QUEUED).label}
+              <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${(STATUS_META[activeJob.status]! ?? STATUS_META.QUEUED).cls}`}>
+                {(STATUS_META[activeJob.status]! ?? STATUS_META.QUEUED).label}
               </span>
             )}
           </div>
@@ -474,7 +468,7 @@ export function TrainingStudio() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <h4 className="u-title truncate">{job.name}</h4>
-                            <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${sm.cls}`}>{sm.label}</span>
+                            <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${sm!.cls}`}>{sm!.label}</span>
                           </div>
                           <p className="mt-1 text-[11px] text-gray-500">
                             {job.baseModel} · 触发词 <span className="text-violet-300">{job.triggerWord}</span> · {job.datasetImages?.length ?? 0} 张图 · {job.steps} 步

@@ -175,7 +175,7 @@ export function folderMeta(folder: string): { label: string; color: string } {
   if (curated) return curated;
   return {
     label: prettyFolder(folder),
-    color: FALLBACK_PALETTE[hashString(folder) % FALLBACK_PALETTE.length],
+    color: FALLBACK_PALETTE[hashString(folder) % FALLBACK_PALETTE.length]!,
   };
 }
 

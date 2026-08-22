@@ -9,7 +9,7 @@ export function extractJson(text: string): unknown {
 
   // Strip ```json ... ``` fences
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence) t = fence[1].trim();
+  if (fence) t = fence[1]!.trim();
 
   const start = t.search(/[[{]/);
   const end = Math.max(t.lastIndexOf("]"), t.lastIndexOf("}"));

@@ -5,7 +5,7 @@
 
 import { promises as fs } from "fs";
 import path from "path";
-import { prisma } from "@/lib/db";
+import { taskRepository } from "@/lib/core/repository";
 import { buildAndValidate } from "./workflow";
 import { enqueue, subscribe } from "./runner";
 import { uploadImage } from "./client";
@@ -29,16 +29,13 @@ export async function synthesizeFirstFrame(opts: {
   });
   if (!built.ok || !built.prompt) throw new Error(built.error ?? "首帧构图失败");
 
-  const task = await prisma.task.create({
-    data: {
-      userId,
-      type: "TXT2IMG",
-      prompt,
-      negativePrompt: negative ?? null,
-      params: {} as object,
-      workflowName: "txt2img",
-      status: "QUEUED",
-    },
+  const task = await taskRepository.createQueued({
+    userId,
+    type: "TXT2IMG",
+    prompt,
+    negativePrompt: negative ?? null,
+    params: {},
+    workflowName: "txt2img",
   });
   enqueue({ taskId: task.id, prompt: built.prompt });
 

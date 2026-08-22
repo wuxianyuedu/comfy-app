@@ -41,6 +41,7 @@ const child = spawn("npm", ["run", "dev"], {
 });
 
 const rootPid = child.pid;
+/** @type {import("node:child_process").ChildProcess | null} */
 let warmChild = null;
 
 function killTree() {

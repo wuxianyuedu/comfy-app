@@ -35,7 +35,7 @@ export function WorkflowPreview({ preview }: { preview: WorkflowPreview }) {
   const pos: Record<string, { x: number; y: number }> = {};
   for (const n of nodes) {
     const arr = byLevel[n.level];
-    const row = arr.indexOf(n);
+    const row = arr!.indexOf(n);
     pos[n.id] = {
       x: padX + (levelCount > 1 ? n.level * colStep : innerW / 2),
       y: padY + (maxRows > 1 ? (row / (maxRows - 1)) * innerH : innerH / 2),
@@ -126,15 +126,15 @@ export function WorkflowPreview({ preview }: { preview: WorkflowPreview }) {
             <g key={n.id}>
               <title>{`${n.class_type} · ${n.kind}`}</title>
               <circle
-                cx={p.x}
-                cy={p.y}
+                cx={p!.x}
+                cy={p!.y}
                 r={nodeR + 1.4}
                 fill={c.glow}
                 opacity={0.45}
               />
               <circle
-                cx={p.x}
-                cy={p.y}
+                cx={p!.x}
+                cy={p!.y}
                 r={nodeR}
                 fill={c.fill}
                 stroke={c.stroke}

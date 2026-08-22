@@ -123,9 +123,9 @@ export function StoryboardPlanner({
       const charNames = characters.map((c) => c.name).filter(Boolean);
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
-        setAiProgress(`正在拆镜 ${i + 1}/${scenes.length} · ${scene.heading}`);
+        setAiProgress(`正在拆镜 ${i + 1}/${scenes.length} · ${scene!.heading}`);
         const full = await streamChat({
-          messages: buildStoryboardMessages(scene, charNames),
+          messages: buildStoryboardMessages(scene!, charNames),
           onToken: () => {},
         });
         const raws = parseStoryboard(full);
@@ -137,8 +137,8 @@ export function StoryboardPlanner({
           const shot: Shot = {
             id: workshopUid("shot"),
             index: n,
-            sceneId: scene.id,
-            sceneHeading: scene.heading,
+            sceneId: scene!.id,
+            sceneHeading: scene!.heading,
             shotType: r.shotType,
             description: r.description,
             characterIds: charIds,

@@ -106,8 +106,8 @@ function extractMeta(text: string): { location: string; time: string } {
   const locMatch = text.match(/(咖啡馆|办公室|街道|房间|实验室|森林|海边|城市|学校|医院|城堡|太空|车内|室外|室内|山顶|车站)/);
   const timeMatch = text.match(/(清晨|早晨|上午|中午|下午|黄昏|傍晚|夜晚|深夜|黎明|白天|月夜)/);
   return {
-    location: locMatch ? locMatch[1] : "未指定",
-    time: timeMatch ? timeMatch[1] : "未指定",
+    location: locMatch ? locMatch[1]! : "未指定",
+    time: timeMatch ? timeMatch[1]! : "未指定",
   };
 }
 

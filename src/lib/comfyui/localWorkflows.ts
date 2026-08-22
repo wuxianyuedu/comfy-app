@@ -282,7 +282,7 @@ export async function scanLocalWorkflowChecksums(
   async function worker() {
     while (cursor < allFiles.length) {
       const i = cursor++;
-      const f = allFiles[i];
+      const f = allFiles[i]!;
       if (!f.absPath) continue;
       const r = await checksumOfFile(f.absPath);
       if (r) {

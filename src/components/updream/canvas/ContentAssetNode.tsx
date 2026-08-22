@@ -3,6 +3,7 @@
 import React from "react";
 import { Icon } from "@/components/ui/Icon";
 import { WaterFillProgress } from "@/components/updream/ui/WaterFillProgress";
+import { vanillaApi } from "~/trpc/vanilla";
 import type { CanvasNodeData } from "./canvas-types";
 
 /* 项目画布 · 内容载体节点主体（text / picture / movie）
@@ -89,22 +90,29 @@ export function ContentAssetBody({
   const [galleryIndex, setGalleryIndex] = React.useState(0);
 
   React.useEffect(() => {
-    if (!data.taskId || kind !== "picture") {
+    const taskId = data.taskId;
+    if (!taskId || kind !== "picture") {
       setTaskImages(null);
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/tasks/${data.taskId}`);
-        if (!res.ok || cancelled) return;
-        const t = await res.json();
+        if (cancelled) return;
+        const t = await vanillaApi.task.detail.query({ id: taskId });
+        const rawImgs = (t.images ?? []) as unknown as {
+          id?: string;
+          localPath?: string;
+          isCover?: boolean;
+        }[];
         const imgs: { id: string; localPath: string; isCover: boolean }[] | undefined =
-          t.images?.map((img: { id: string; localPath: string; isCover: boolean }) => ({
-            id: img.id,
-            localPath: img.localPath,
-            isCover: img.isCover ?? false,
-          }));
+          rawImgs
+            .filter((img) => !!img && typeof img.localPath === "string")
+            .map((img) => ({
+              id: img.id ?? "",
+              localPath: img.localPath as string,
+              isCover: img.isCover ?? false,
+            }));
         if (!cancelled) setTaskImages(imgs && imgs.length > 1 ? imgs : null);
       } catch {
         /* silently ignore — 单图模式仍正常显示 */

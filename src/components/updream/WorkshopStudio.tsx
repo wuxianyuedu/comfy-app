@@ -8,6 +8,7 @@ import { ScriptGenerator } from "@/components/workshop/ScriptGenerator";
 import { CharacterDesigner } from "@/components/workshop/CharacterDesigner";
 import { StoryboardPlanner } from "@/components/workshop/StoryboardPlanner";
 import { LLMProvider, LLMStatusChip, LLMSettingsButton } from "@/components/workshop/llm-context";
+import { vanillaApi } from "~/trpc/vanilla";
 import type {
   ProjectMeta,
   Scene,
@@ -45,8 +46,8 @@ export function WorkshopStudio() {
 
   // Load styles (skills) + checkpoints
   React.useEffect(() => {
-    fetch("/api/skills")
-      .then((r) => r.json())
+    vanillaApi.skill.list
+      .query({})
       .then((d) => {
         const list: StyleRef[] = (d.skills ?? []).map((s: any) => ({
           slug: s.slug,
@@ -59,12 +60,12 @@ export function WorkshopStudio() {
         setStyles(list);
       })
       .catch(() => {});
-    fetch("/api/models?type=CHECKPOINT")
-      .then((r) => r.json())
+    vanillaApi.model.list
+      .query({ type: "CHECKPOINT" })
       .then((d) => {
         const names: string[] = (d.models ?? []).map((m: any) => m.fileName);
         setCheckpoints(names);
-        if (names.length) setCheckpoint(names[0]);
+        if (names.length) setCheckpoint(names[0]!);
       })
       .catch(() => {});
   }, []);
@@ -94,12 +95,7 @@ export function WorkshopStudio() {
     };
 
     try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
+      const data = await vanillaApi.generate.generate.mutate(payload as any);
       if (data.taskId) {
         setShots((prev) =>
           prev.map((s) => (s.id === shot.id ? { ...s, status: "done", taskId: data.taskId } : s))
@@ -107,7 +103,7 @@ export function WorkshopStudio() {
         // Poll for result to embed preview
         pollTask(data.taskId, shot.id);
       } else {
-        throw new Error(data.error || "生成失败");
+        throw new Error("生成失败");
       }
     } catch (err: any) {
       setShots((prev) =>

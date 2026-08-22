@@ -1,7 +1,7 @@
 "use client";
 /* Extracted WfNode (custom ComfyUI graph node renderer) + its private
  * rgthree body helpers.  Originally inside WorkflowCanvasEditor.tsx. */
-import React, { useCallback, useEffect, useMemo, useRef, useState, useContext } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Handle, Position, useStore } from "@xyflow/react";
 import {
   portColor, portLabel, inferInputType, inferOutputType, inferIsMultiline,
@@ -31,10 +31,7 @@ import {
 import { Chip, FrontendOnlyBadge, RequiredSummary } from "./wf-chips";
 import { PseudoFrostLayer, NodeFrost } from "./wf-frost";
 import { WfImagePreview, StringTextarea } from "./wf-image-preview";
-import {
-  IOEditContext, RgthreeGroupsContext, NodeJsonViewerContext,
-  IoCheckbox, NodeIdChip,
-} from "./wf-contexts";
+import { useIOEditContext, useRgthreeGroups, IoCheckbox, NodeIdChip } from "./wf-contexts";
 export function RgthreeFastGroupsBypasserBody({
   matchTitle,
   groups,
@@ -42,8 +39,9 @@ export function RgthreeFastGroupsBypasserBody({
   matchTitle: string;
   groups: WorkflowGroup[];
 }) {
-  const ctx = React.useContext(RgthreeGroupsContext);
-  if (!ctx) return null;
+  const ctx = useRgthreeGroups();
+  /* useRgthreeGroups 在 store 未挂载时抛错；但该组件只会在编辑器内渲染，
+   * 始终在 <WFStoresProvider> 之下，故可直接使用，无需 null 守卫。 */
   const needle = matchTitle.trim().toLowerCase();
   if (!needle) return null;
   const matches = groups
@@ -379,9 +377,9 @@ export const HEADER_TOTAL = 60;     // header (32) + #id bar (22) + small breath
  *  misleading).  When `imageRef` is absent (LoadImage with no uploaded
  *  image yet), we paint a 「需要上传图片」 placeholder so the body still
  *  has its preview slot — matching ComfyUI's empty-state affordance. */
-export function WfNode({ data, selected }: { data: WfNodeData; selected?: boolean }) {
+export const WfNode = React.memo(function WfNode({ data, selected }: { data: WfNodeData; selected?: boolean }) {
   const role = PORT_ROLES.find((r) => r.key === data.assignedRole);
-  const io = useContext(IOEditContext);
+  const io = useIOEditContext();
   // Live viewport zoom — drives <NodeFrost>'s counter-scale so its on-screen
   //  footprint never shrinks small enough to trigger the re-tile artefact.
   const zoom = useStore((s) => s.transform[2]);
@@ -787,7 +785,7 @@ export function WfNode({ data, selected }: { data: WfNodeData; selected?: boolea
             io={io}
             ioRef={{
               nodeId: data.nodeId,
-              name: outputs[0][0],
+              name: outputs[0]![0],
               kind: "output",
               direction: "output",
               // 2026-08-15: prefer the rawJson's output label /
@@ -798,7 +796,7 @@ export function WfNode({ data, selected }: { data: WfNodeData; selected?: boolea
               label:
                 data.rawOutputs?.[0]?.label ??
                 data.rawOutputs?.[0]?.localized ??
-                outputs[0][0],
+                outputs[0]![0],
             }}
           />
         )}
@@ -1053,7 +1051,7 @@ export function WfNode({ data, selected }: { data: WfNodeData; selected?: boolea
                           io={io}
                           ioRef={{
                             nodeId: data.nodeId,
-                            name: inName,
+                            name: inName ?? "",
                             kind: "param",
                             direction: "input",
                             // 2026-08-15: prefer the raw port's display
@@ -1584,6 +1582,6 @@ export function WfNode({ data, selected }: { data: WfNodeData; selected?: boolea
       )}
     </div>
   );
-}
+});
 
 /** Wrap inferOutputType so we always get a [name, type] tuple list. */

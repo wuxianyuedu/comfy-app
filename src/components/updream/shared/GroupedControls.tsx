@@ -478,8 +478,8 @@ function DimensionControl({
   const ratio = useMemo(() => {
     const r = h0 === 0 ? 1 : w0 / h0;
     return DIM_RATIO_PRESETS.reduce(
-      (b, p) => (Math.abs(p.ratio - r) < Math.abs(b.ratio - r) ? p : b),
-      DIM_RATIO_PRESETS[0]
+      (b, p) => (Math.abs(p.ratio - r) < Math.abs(b!.ratio - r) ? p : b),
+      DIM_RATIO_PRESETS[0]!
     ).label;
   }, [w0, h0]);
   /* R-ardot104 (2026-08-17): clarity preset is now picked across both
@@ -509,7 +509,7 @@ function DimensionControl({
         DIM_CLARITY_PRESETS.find((p) => p.label === cLabel) ?? DIM_CLARITY_PRESETS[0];
       /* R-ardot108 (2026-08-17): pass the user's alignMultiple through
        *  so megapixel presets (1M/2M/4M) snap to the chosen grid. */
-      const { width, height } = dimsForRatio(rp.ratio, cp, alignMultiple);
+      const { width, height } = dimsForRatio(rp!.ratio, cp!, alignMultiple);
       setExplicitClarity(cLabel);
       setMany({ [group.width.ioKey]: width, [group.height.ioKey]: height });
     },
@@ -531,7 +531,7 @@ function DimensionControl({
       const cp =
         DIM_CLARITY_PRESETS.find((p) => p.label === clarity) ??
         DIM_CLARITY_PRESETS[0];
-      const { width, height } = dimsForRatio(rp.ratio, cp, clamped);
+      const { width, height } = dimsForRatio(rp!.ratio, cp!, clamped);
       setExplicitClarity(null);
       setMany({ [group.width.ioKey]: width, [group.height.ioKey]: height });
     },
@@ -668,7 +668,7 @@ function VideoField({
   // COMBO with resolved candidates → always a select (both paradigms).
   if (entry.control === "select" && Array.isArray(entry.options) && entry.options.length > 0) {
     const opts = entry.options;
-    const val = typeof current === "string" && opts.includes(current) ? current : opts[0];
+    const val = typeof current === "string" && opts.includes(current) ? current : opts[0]!;
     return (
       <Field label={label}>
         <DarkSelect
@@ -685,8 +685,8 @@ function VideoField({
   if (preset) {
     if (role === "length") {
       const presets = VIDEO_DURATION_PRESETS;
-      const cur = Number(current ?? entry.defaultValue ?? presets[0].value);
-      const val = presets.find((p) => p.value === cur)?.label ?? presets[0].label;
+      const cur = Number(current ?? entry.defaultValue ?? presets[0]!.value);
+      const val = presets.find((p) => p.value === cur)?.label ?? presets[0]!.label;
       return (
         <Field label={label}>
           <DarkSelect
@@ -703,8 +703,8 @@ function VideoField({
     }
     if (role === "quality") {
       const presets = VIDEO_QUALITY_PRESETS;
-      const cur = Number(current ?? entry.defaultValue ?? presets[0].value);
-      const val = presets.find((p) => p.value === cur)?.label ?? presets[0].label;
+      const cur = Number(current ?? entry.defaultValue ?? presets[0]!.value);
+      const val = presets.find((p) => p.value === cur)?.label ?? presets[0]!.label;
       return (
         <Field label={label}>
           <DarkSelect
@@ -722,8 +722,8 @@ function VideoField({
     if (role === "aspect") {
       // numeric aspect → ratio presets writing the float ratio
       const presets = DIM_RATIO_PRESETS;
-      const cur = Number(current ?? entry.defaultValue ?? presets[0].ratio);
-      const val = presets.find((p) => Math.abs(p.ratio - cur) < 0.05)?.label ?? presets[0].label;
+      const cur = Number(current ?? entry.defaultValue ?? presets[0]!.ratio);
+      const val = presets.find((p) => Math.abs(p.ratio - cur) < 0.05)?.label ?? presets[0]!.label;
       return (
         <Field label={label}>
           <DarkSelect
@@ -828,7 +828,7 @@ function VideoControl({
     const cur = values[entry.ioKey];
     if (role === "length") {
       const presets = VIDEO_DURATION_PRESETS;
-      const v = Number(cur ?? entry.defaultValue ?? presets[0].value);
+      const v = Number(cur ?? entry.defaultValue ?? presets[0]!.value);
       return {
         label: "时长",
         value: videoDurationLabel(v),
@@ -841,7 +841,7 @@ function VideoControl({
     }
     if (role === "quality") {
       const presets = VIDEO_QUALITY_PRESETS;
-      const v = Number(cur ?? entry.defaultValue ?? presets[0].value);
+      const v = Number(cur ?? entry.defaultValue ?? presets[0]!.value);
       return {
         label: "画质",
         value: videoQualityLabel(v),
@@ -856,7 +856,7 @@ function VideoControl({
      *  friendly ratio preset writing the float ratio back into the widget. */
     if (entry.control === "select" && Array.isArray(entry.options) && entry.options.length > 0) {
       const opts = entry.options;
-      const val = typeof cur === "string" && opts.includes(cur) ? cur : opts[0];
+      const val = typeof cur === "string" && opts.includes(cur) ? cur : opts[0]!;
       return {
         label: "比例",
         value: val,
@@ -865,7 +865,7 @@ function VideoControl({
       };
     }
     const presets = DIM_RATIO_PRESETS;
-    const v = Number(cur ?? entry.defaultValue ?? presets[0].ratio);
+    const v = Number(cur ?? entry.defaultValue ?? presets[0]!.ratio);
     return {
       label: "比例",
       value: videoAspectLabel(v),

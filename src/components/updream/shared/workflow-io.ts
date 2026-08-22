@@ -581,11 +581,11 @@ export function pickClarityPreset(
   alignMultiple: number = DEFAULT_ALIGN_MULTIPLE
 ): DimClarityPreset {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    return DIM_CLARITY_PRESETS[0];
+    return DIM_CLARITY_PRESETS[0]!;
   }
   const alignM = normalizeAlignMultiple(alignMultiple);
   const ratio = width / height;
-  let best: DimClarityPreset = DIM_CLARITY_PRESETS[0];
+  let best: DimClarityPreset = DIM_CLARITY_PRESETS[0]!;
   let bestDist = Number.POSITIVE_INFINITY;
   for (const p of DIM_CLARITY_PRESETS) {
     const { width: dw, height: dh } = dimsForRatio(ratio, p, alignM);
@@ -636,12 +636,12 @@ export function inferDimensionGroup(widgets: EnrichedWidget[]): DimensionGroup |
   const w = widgets.filter((e) => e.control === "int" && isDimWidth(e));
   const h = widgets.filter((e) => e.control === "int" && isDimHeight(e));
   if (w.length === 0 || h.length === 0) return null;
-  const width = w[0];
-  const height = h[0];
-  if (width.ioKey === height.ioKey) return null;
+  const width = w[0]!;
+  const height = h[0]!;
+  if (width!.ioKey === height!.ioKey) return null;
   return {
     kind: "dimension",
-    groupId: `dim:${width.ioKey}|${height.ioKey}`,
+    groupId: `dim:${width!.ioKey}|${height!.ioKey}`,
     width,
     height,
   };
@@ -656,7 +656,7 @@ export function inferVideoGroup(widgets: EnrichedWidget[]): VideoGroup | null {
   if (asp.length === 0 && q.length === 0) return null;
   return {
     kind: "video",
-    groupId: `video:${len[0].ioKey}|${(asp[0]?.ioKey) ?? ""}|${(q[0]?.ioKey) ?? ""}`,
+    groupId: `video:${len[0]!.ioKey}|${(asp[0]?.ioKey) ?? ""}|${(q[0]?.ioKey) ?? ""}`,
     length: len[0],
     aspect: asp[0],
     quality: q[0],

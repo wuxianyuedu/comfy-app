@@ -1,0 +1,53 @@
+import { z } from "zod";
+import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
+import { container } from "@/lib/core";
+
+export const workflowModelRouter = createTRPCRouter({
+  /** GET /api/workflow-models — tag library */
+  list: authedProcedure.query(async ({ ctx }) => {
+    const repo = container.resolve("workflowModelTagRepository");
+    const tags = await repo.listByUser(ctx.user.id);
+    return { tags };
+  }),
+
+  /** POST /api/workflow-models — create tag (idempotent) */
+  create: authedProcedure
+    .input(z.object({ name: z.string().trim().min(1).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const repo = container.resolve("workflowModelTagRepository");
+      const tag = await repo.upsertByName(ctx.user.id, input.name);
+      return { tag };
+    }),
+
+  /** PATCH /api/workflow-models — rename tag */
+  rename: authedProcedure
+    .input(
+      z.object({
+        oldName: z.string().trim().min(1),
+        newName: z.string().trim().min(1).max(64),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const repo = container.resolve("workflowModelTagRepository");
+      if (input.oldName === input.newName) {
+        return { ok: true, renamed: false, reason: "same-name" };
+      }
+      const existing = await repo.findByUserAndName(ctx.user.id, input.oldName);
+      if (!existing) throw new Error("Tag does not exist");
+      const collision = await repo.findByUserAndName(ctx.user.id, input.newName);
+      if (collision) throw new Error("Tag already exists");
+      const tag = await repo.rename(existing.id, input.newName);
+      return { ok: true, renamed: true, tag };
+    }),
+
+  /** DELETE /api/workflow-models — delete tag (idempotent) */
+  delete: authedProcedure
+    .input(z.object({ name: z.string().trim().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const repo = container.resolve("workflowModelTagRepository");
+      const existing = await repo.findByUserAndName(ctx.user.id, input.name);
+      if (!existing) return { ok: true, deleted: false };
+      await repo.deleteById(existing.id);
+      return { ok: true, deleted: true };
+    }),
+});

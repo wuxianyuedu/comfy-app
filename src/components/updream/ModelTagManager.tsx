@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
+import { vanillaApi } from "~/trpc/vanilla";
 
 interface TagItem {
   id: string;
@@ -47,10 +48,8 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
 
   const refresh = useCallback(async () => {
     try {
-      const r = await fetch("/api/workflow-models");
-      if (!r.ok) return;
-      const d = await r.json();
-      if (Array.isArray(d.tags)) setTags(d.tags);
+      const d = await vanillaApi.workflowModel.list.query();
+      if (Array.isArray(d.tags)) setTags(d.tags as TagItem[]);
     } catch {
       /* ignore — list may be stale but the dialog stays usable */
     }
@@ -62,14 +61,9 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
     setBusy(true);
     setError("");
     try {
-      const r = await fetch("/api/workflow-models", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      const d = await r.json().catch(() => null);
-      if (!r.ok) {
-        setError(d?.error ?? "添加失败");
+      const d = await vanillaApi.workflowModel.create.mutate({ name });
+      if (!d.tag) {
+        setError("添加失败");
         return;
       }
       setDraft("");
@@ -92,14 +86,9 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
         if (!ok) return;
       }
       try {
-        const r = await fetch("/api/workflow-models", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
-        });
-        const d = await r.json().catch(() => null);
-        if (!r.ok) {
-          setError(d?.error ?? "删除失败");
+        const d = await vanillaApi.workflowModel.delete.mutate({ name });
+        if (!d.ok) {
+          setError("删除失败");
           return;
         }
         await refresh();
@@ -129,14 +118,12 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
         return true;
       }
       try {
-        const r = await fetch("/api/workflow-models", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ oldName, newName: trimmed }),
+        const d = await vanillaApi.workflowModel.rename.mutate({
+          oldName,
+          newName: trimmed,
         });
-        const d = await r.json().catch(() => null);
-        if (!r.ok) {
-          setError(d?.error ?? "重命名失败");
+        if (!d.tag) {
+          setError("重命名失败");
           return false;
         }
         setError("");

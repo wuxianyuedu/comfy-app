@@ -9,6 +9,7 @@ import type { WorkflowModesState } from "./WorkflowNode";
 import type { CanvasNodeData, NodeKind } from "./canvas-types";
 import { IMAGE_WORKFLOW_TYPES, VIDEO_WORKFLOW_TYPES, normalizeTaskType } from "@/lib/workflow-types";
 import { setActiveTaskId } from "./activeTask";
+import { vanillaApi } from "~/trpc/vanilla";
 
 /* ── 生成面板（生图 / 生成视频 / 图片资产共用）· R-ardot91 (2026-08-16) ──
  * 抽自 CanvasNode 的 image/video 分支（原 ~1071–1287）。把「类型 → 模型 →
@@ -33,6 +34,8 @@ export interface ImageGenerationPanelProps {
   modelTagLib: { id: string; name: string; count: number }[];
   wfIO: WorkflowIOMap | null;
   wfIOLoading: boolean;
+  /** 工作流列表是否仍在加载。为 true 时工作流/模型选择区显示"加载中"而非空态。 */
+  wfListLoading?: boolean;
   seededFor: React.MutableRefObject<string | null>;
   setWfModes: React.Dispatch<React.SetStateAction<WorkflowModesState | null>>;
   onGenerate: () => void;
@@ -48,6 +51,7 @@ export function ImageGenerationPanel({
   modelTagLib,
   wfIO,
   wfIOLoading,
+  wfListLoading = false,
   seededFor,
   setWfModes,
   onGenerate,
@@ -104,16 +108,7 @@ export function ImageGenerationPanel({
         patchRef.current({ status: "error", error: "取消请求异常：尚未生成 taskId" });
         return;
       }
-      const res = await fetch(`/api/tasks/${currentTaskId}/cancel`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reason: "用户强制取消（stuck-task escape）" }),
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        patchRef.current({ status: "error", error: `强制取消失败：HTTP ${res.status}` });
-        return;
-      }
+      await vanillaApi.task.cancel.mutate({ id: currentTaskId });
       // 取消请求已送达，等待 GlobalStepLogPanel 的 SSE error 收尾。
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -305,7 +300,11 @@ export function ImageGenerationPanel({
               />
             ) : (
               <div className="text-[11px] text-gray-500">
-                {genTag ? "当前模型下无工作流" : "该类型暂无工作流"}
+                {wfListLoading
+                  ? "加载中…"
+                  : genTag
+                    ? "当前模型下无工作流"
+                    : "该类型暂无工作流"}
               </div>
             )}
           </Field>
@@ -322,7 +321,12 @@ export function ImageGenerationPanel({
               />
             ) : (
               <div className="text-[11px] text-gray-500">
-                {genTag ? "模型「" + genTag + "」下" : ""}暂无该类型工作流
+                {wfListLoading
+                  ? "加载中…"
+                  : genTag
+                    ? "模型「" + genTag + "」下"
+                    : ""}
+                {wfListLoading ? "" : "暂无该类型工作流"}
               </div>
             )}
           </Field>

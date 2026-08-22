@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { DarkSelect } from "@/components/updream/ui/DarkSelect";
 import { Icon } from "@/components/ui/Icon";
+import { api } from "~/trpc/react";
 
 /**
  * WorkflowParamConfig — 工作流节点参数暴露配置器
@@ -120,23 +121,37 @@ export function WorkflowParamConfig({
   onSave,
   compact = false,
 }: WorkflowParamConfigProps) {
-  const [nodes, setNodes] = useState<WfNodeForConfig[]>(initialNodes ?? []);
   const [paramMap, setParamMap] = useState<ParamMapValue>(initialParamMap);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
 
   // Fetch nodes if not provided
+  const detailQ = api.workflow.detail.useQuery(
+    { id: workflowId },
+    { enabled: !(initialNodes && initialNodes.length > 0) }
+  );
+  const fetchedNodes: WfNodeForConfig[] = useMemo(
+    () => Object.entries(detailQ.data?.template.graph ?? {}).map(([id, n]) => ({
+      id,
+      class_type: n.class_type,
+      title: n.title ?? n.class_type,
+    })),
+    [detailQ.data?.template.graph]
+  );
+
+  const displayNodes = (initialNodes && initialNodes.length > 0) ? initialNodes : fetchedNodes;
+
+  // Sync paramMap from fetched data
   useEffect(() => {
-    if (initialNodes && initialNodes.length > 0) return;
-    fetch(`/api/workflows/${workflowId}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.nodes) setNodes(d.nodes);
-        if (d.paramMap) setParamMap(d.paramMap);
-      })
-      .catch(() => setError("无法加载工作流详情"));
-  }, [workflowId, initialNodes]);
+    if (detailQ.data?.template.paramMap) {
+      setParamMap(detailQ.data.template.paramMap as ParamMapValue);
+    }
+  }, [detailQ.data?.template.paramMap]);
+
+  useEffect(() => {
+    if (detailQ.isError) setError("无法加载工作流详情");
+  }, [detailQ.isError]);
 
   // Reverse map: nodeId -> roleKey (for showing which role a node has)
   const nodeRoleMap = useMemo(() => {
@@ -163,17 +178,13 @@ export function WorkflowParamConfig({
     setSaved(false);
   }, []);
 
+  const updateWf = api.workflow.update.useMutation();
+
   const handleSave = useCallback(async () => {
     setSaving(true);
     setError("");
     try {
-      const res = await fetch(`/api/workflows/${workflowId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paramMap }),
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? "保存失败");
+      await updateWf.mutateAsync({ id: workflowId, paramMap });
       setSaved(true);
       onSave?.(paramMap);
       setTimeout(() => setSaved(false), 2000);
@@ -182,7 +193,7 @@ export function WorkflowParamConfig({
     } finally {
       setSaving(false);
     }
-  }, [workflowId, paramMap, onSave]);
+  }, [workflowId, paramMap, onSave, updateWf]);
 
   /* ── Assigned roles summary ── */
   const assignedRoles = PARAM_ROLES.filter((r) => paramMap[r.key]);
@@ -231,7 +242,7 @@ export function WorkflowParamConfig({
 
         {/* Node list with role selectors */}
         <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
-          {nodes.map((node) => {
+          {displayNodes.map((node) => {
             const currentRole = nodeRoleMap[node.id];
             const roleDef = currentRole ? PARAM_ROLES.find((r) => r.key === currentRole) : null;
             return (
@@ -266,7 +277,7 @@ export function WorkflowParamConfig({
               </div>
             );
           })}
-          {nodes.length === 0 && (
+          {displayNodes.length === 0 && (
             <p className="py-6 text-center text-[11px] text-gray-600">
               暂无节点数据。请先确保工作流已正确导入。
             </p>
@@ -307,7 +318,7 @@ export function WorkflowParamConfig({
       <div className="space-y-1">
         {assignedRoles.map((r) => {
           const nodeId = paramMap[r.key];
-          const node = nodes.find((n) => n.id === nodeId);
+          const node = displayNodes.find((n) => n.id === nodeId);
           return (
             <div key={r.key} className="flex items-center justify-between gap-2">
               <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${r.color}`}>
@@ -335,7 +346,7 @@ export function WorkflowParamConfig({
             value=""
             onChange={(v) => {
               if (v) {
-                const unassignedNode = nodes.find(
+                const unassignedNode = displayNodes.find(
                   (n) => !Object.values(paramMap).includes(n.id)
                 );
                 if (unassignedNode) {

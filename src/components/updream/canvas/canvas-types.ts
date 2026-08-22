@@ -123,7 +123,7 @@ export function getModelPreset(kind: NodeKind, modelId?: string): ModelPreset | 
   const reg = MODEL_REGISTRY[kind];
   const list = reg.image.length ? reg.image : reg.video.length ? reg.video : reg.text;
   if (!list.length) return null;
-  return list.find((m) => m.id === modelId) ?? list[0];
+  return list.find((m) => m.id === modelId) ?? list[0] ?? null;
 }
 
 export interface CanvasNodeData {

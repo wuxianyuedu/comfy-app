@@ -144,7 +144,7 @@ export function prettifyClassType(classType: string, lang: "zh" | "en" = "zh"): 
   let name = classType;
   let suffix = "";
   if (parenMatch) {
-    suffix = parenMatch[1];
+    suffix = parenMatch[1]!;
     name = classType.slice(0, parenMatch.index!).trim();
   }
   // Convert camelCase / PascalCase into spaces.

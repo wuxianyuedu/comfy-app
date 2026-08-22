@@ -25,7 +25,7 @@ export function readEnvVar(key: string): string | null {
     for (const line of text.split("\n")) {
       const m = line.match(/^\s*([\w.-]+)\s*=\s*(.*?)\s*$/);
       if (m && m[1] === key) {
-        let v = m[2];
+        let v = m[2]!;
         if (
           (v.startsWith('"') && v.endsWith('"')) ||
           (v.startsWith("'") && v.endsWith("'"))
@@ -50,7 +50,7 @@ export function writeEnvVar(key: string, value: string): void {
   if (idx >= 0) {
     lines[idx] = newLine;
   } else {
-    if (lines.length && lines[lines.length - 1].trim() !== "") lines.push("");
+    if (lines.length && lines[lines.length - 1]!.trim() !== "") lines.push("");
     lines.push(newLine);
   }
   // Join with \n and ensure a single trailing newline.

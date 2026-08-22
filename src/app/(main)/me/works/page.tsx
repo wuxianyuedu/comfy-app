@@ -1,19 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getWorkflow } from "@/lib/comfyui/_meta";
-
-type TaskItem = {
-  id: string;
-  type: string;
-  workflowName: string;
-  status: string;
-  prompt: string;
-  createdAt: string;
-  cover: string | null;
-  checkpoint: string | null;
-};
+import { api } from "~/trpc/react";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   QUEUED: { label: "排队中", cls: "bg-subtle text-muted" },
@@ -24,15 +13,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 };
 
 export default function MyWorks() {
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/tasks")
-      .then((r) => r.json())
-      .then((d) => setTasks(d.tasks ?? []))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, isLoading } = api.task.list.useQuery();
 
   return (
     <div className="py-6">
@@ -49,9 +30,9 @@ export default function MyWorks() {
         </Link>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <p className="text-sm text-muted">加载中…</p>
-      ) : tasks.length === 0 ? (
+      ) : !data?.tasks || data.tasks.length === 0 ? (
         <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-border text-muted">
           <div className="text-center">
             <p className="text-lg font-medium text-ink">还没有作品</p>
@@ -60,8 +41,8 @@ export default function MyWorks() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {tasks.map((t) => {
-            const st = STATUS[t.status] ?? STATUS.QUEUED;
+          {data!.tasks.map((t) => {
+            const st = STATUS[t.status] ?? STATUS.QUEUED!;
             const wf = getWorkflow(t.workflowName)?.label ?? t.workflowName;
             return (
               <Link

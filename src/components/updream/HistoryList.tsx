@@ -5,6 +5,8 @@ import { useToast } from "@/components/updream/Toast";
 import { MediaThumb, isVideo } from "@/components/updream/MediaThumb";
 import { AuroraBackground } from "@/components/updream/AuroraBackground";
 import { ValidationErrorList } from "@/components/updream/shared/ValidationErrorList";
+import { api } from "~/trpc/react";
+import { vanillaApi } from "~/trpc/vanilla";
 import type { ValidationError } from "@/lib/comfyui/validation";
 
 interface TaskItem {
@@ -203,39 +205,46 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
 
   const progressMap = useSimulatedProgress(tasks);
 
+  const tasksQ = api.task.list.useQuery();
+  useEffect(() => {
+    if (!tasksQ.isLoading) {
+      setTasks((tasksQ.data?.tasks ?? []).map((t) => ({ ...t, createdAt: String(t.createdAt) } as TaskItem)));
+      setLoading(false);
+    }
+  }, [tasksQ.isLoading, tasksQ.data?.tasks]);
+
   const load = useCallback(() => {
     setLoading(true);
-    fetch("/api/tasks")
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => setTasks(d.tasks ?? []))
-      .catch(() => setTasks([]))
-      .finally(() => setLoading(false));
-  }, []);
+    tasksQ.refetch().finally(() => setLoading(false));
+  }, [tasksQ]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  const detailQ = api.task.detail.useQuery(
+    { id: detailId ?? "" },
+    { enabled: !!detailId }
+  );
   const openDetail = useCallback((id: string) => {
     setDetailId(id);
     setDetailLoading(true);
     setDetail(null);
     setWorkflowHints(null);
-    fetch(`/api/tasks/${id}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setDetail(d.task);
-        setWorkflowHints(d.workflowHints ?? null);
-      })
-      .catch(() => {
-        setDetail(null);
-        setWorkflowHints(null);
-      })
-      .finally(() => setDetailLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!detailId) return;
+    if (detailQ.isSuccess) {
+      setDetail(detailQ.data);
+      setWorkflowHints(null);
+      setDetailLoading(false);
+    } else if (detailQ.isError) {
+      setDetail(null);
+      setWorkflowHints(null);
+      setDetailLoading(false);
+    }
+  }, [detailQ.isSuccess, detailQ.isError, detailQ.data, detailId]);
 
   // Allow external components (e.g. VideoQueueModal "详情") to open a task.
   useEffect(() => {
@@ -247,26 +256,27 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
     return () => window.removeEventListener("open-task", handler);
   }, [openDetail]);
 
+  const cancelTask = api.task.cancel.useMutation();
+  const deleteTask = api.task.delete.useMutation();
+
   const cancel = useCallback(
     async (id: string) => {
       try {
-        const res = await fetch(`/api/tasks/${id}/cancel`, { method: "POST" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        await cancelTask.mutateAsync({ id });
         toast.info("已发送取消请求");
       } catch {
         toast.error("取消失败，请稍后重试");
       }
       load();
     },
-    [load, toast]
+    [cancelTask, load, toast]
   );
 
   const remove = useCallback(
     async (id: string) => {
       if (!confirm("删除此任务记录？已生成的文件不会从磁盘删除。")) return;
       try {
-        const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        await deleteTask.mutateAsync({ id });
         toast.success("已删除任务");
         setTasks((prev) => prev.filter((t) => t.id !== id));
         if (detailId === id) setDetailId(null);
@@ -274,29 +284,24 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
         toast.error("删除失败");
       }
     },
-    [detailId, toast]
+    [deleteTask, detailId, toast]
   );
 
   const retry = useCallback(
     async (t: TaskItem) => {
       setRetryingId(t.id);
       try {
-        const res = await fetch(`/api/tasks/${t.id}/retry`, { method: "POST" });
-        if (res.status === 404) {
-          toast.info("后端尚未提供重试接口，已复制参数到剪贴板，请到创作台手动重跑");
-          const params = JSON.stringify(t.params ?? {}, null, 2);
-          try {
-            await navigator.clipboard?.writeText(
-              `prompt: ${t.prompt ?? ""}\nworkflow: ${t.workflowName}\ntype: ${t.type}\nparams: ${params}`
-            );
-          } catch {
-            /* noop */
-          }
-        } else if (res.ok) {
-          toast.success("已重新提交任务");
-        } else {
-          toast.error("重试失败");
+        // 原 REST /api/tasks/[id]/retry 从未实现（历史一直 404）；后端无
+        // 重试接口，复制参数到剪贴板，请到创作台手动重跑。
+        const params = JSON.stringify(t.params ?? {}, null, 2);
+        try {
+          await navigator.clipboard?.writeText(
+            `prompt: ${t.prompt ?? ""}\nworkflow: ${t.workflowName}\ntype: ${t.type}\nparams: ${params}`
+          );
+        } catch {
+          /* noop */
         }
+        toast.info("后端尚未提供重试接口，已复制参数到剪贴板，请到创作台手动重跑");
       } catch {
         toast.error("网络错误，重试请求未发送");
       } finally {
@@ -462,9 +467,9 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                         key={t.id}
                         className={
                           "group relative overflow-hidden rounded-2xl border bg-white/[0.02] pl-5 pr-3 py-3 transition-all hover:bg-white/[0.04] border-l-4 " +
-                          st.accentCls +
+                          st!.accentCls +
                           " " +
-                          st.cardBorderCls
+                          st!.cardBorderCls
                         }
                       >
                         {/* 左缘 accent 额外强调（border-l-4 已在父级，再叠一层高亮条） */}
@@ -505,7 +510,7 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                               </span>
                             )}
                             {/* 进行中：底部进度条 */}
-                            {st.showProgress && (
+                            {st!.showProgress && (
                               <div className="absolute inset-x-0 bottom-0 h-1 bg-black/40">
                                 <div
                                   className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-1000 ease-linear"
@@ -526,11 +531,11 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                           >
                             <div className="flex flex-wrap items-center gap-2">
                               <span
-                                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${st.pillCls}`}
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${st!.pillCls}`}
                               >
-                                {st.label}
+                                {st!.label}
                               </span>
-                              {st.showProgress && (
+                              {st!.showProgress && (
                                 <span className="text-[10px] tabular-nums text-violet-300">
                                   {Math.floor(prog)}%
                                 </span>
@@ -551,9 +556,9 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                                   <span className="font-semibold">错误：</span>
                                   {t.error}
                                 </p>
-                                {st.failureSuggestion && (
+                                {st!.failureSuggestion && (
                                   <p className="mt-1 text-[11px] leading-relaxed text-amber-300/90">
-                                    {st.failureSuggestion(t.error)}
+                                    {st!.failureSuggestion(t.error)}
                                   </p>
                                 )}
                                 {/* R-Next (2026-08-17): 结构化校验错误逐字段列表 */}
@@ -575,7 +580,7 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                           {/* ── 操作按钮（永远可见） ── */}
                           <div className="flex shrink-0 flex-col items-end gap-2">
                             <div className="flex items-center gap-2">
-                              {st.isActive && (
+                              {st!.isActive && (
                                 <button
                                   onClick={() => cancel(t.id)}
                                   className="rounded-lg border border-amber-500/30 px-2.5 py-1 text-xs text-amber-300 hover:bg-amber-500/10"
@@ -648,17 +653,10 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                     if (!detail?.id) return;
                     setOpenFolderBusy(true);
                     try {
-                      const r = await fetch(
-                        `/api/tasks/${detail.id}/open-folder`,
-                        { method: "POST" }
-                      );
-                      const d: {
-                        opened?: boolean;
-                        absolutePath?: string;
-                        comfyappUrl?: string;
-                        error?: string;
-                      } = await r.json().catch(() => ({}));
-                      if (r.ok && d.comfyappUrl) {
+                      const d = await vanillaApi.task.openFolder.mutate({
+                        id: detail.id,
+                      });
+                      if (d.comfyappUrl) {
                         // 本机自定义协议方案（R-ardot72）：服务端已校验目录存在且在
                         // 白名单内，返回 comfyapp://open?path=... URL。
                         // 这里直接导航（user-initiated 点击），浏览器弹「是否打开外部
@@ -783,10 +781,6 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                 {(() => {
                   const first = Array.isArray(detail?.images) ? detail.images[0] : null;
                   if (!first?.localPath) return null;
-                  // 方案 B (2026-08-15)：改走新增的 /api/tasks/[id]/workflow 下载端点，
-                  // 它优先返回 Task.workflowSnapshot（执行时独立捕获、与模板解耦），
-                  // 历史任务无 DB 快照时回退磁盘 workflow.json。
-                  const wfUrl = `/api/tasks/${detail.id}/workflow`;
                   const snapSource = (detail?.workflowSnapshot as
                     | { source?: string }
                     | null
@@ -799,14 +793,32 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                       : "磁盘回退快照";
                   return (
                     <div className="flex items-center gap-2">
-                      <a
-                        href={wfUrl}
-                        download="workflow.json"
+                      <button
+                        onClick={async () => {
+                          try {
+                            const d = await vanillaApi.task.workflow.query({ id: detail.id });
+                            if (!d.workflow) {
+                              toast.error("未找到工作流快照");
+                              return;
+                            }
+                            const blob = new Blob([JSON.stringify(d.workflow, null, 2)], {
+                              type: "application/json",
+                            });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = "workflow.json";
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          } catch {
+                            toast.error("下载失败");
+                          }
+                        }}
                         className="rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-gray-300 transition-colors hover:border-white/20 hover:text-white"
                         title="下载本次执行实际用到的工作流 JSON（含当时的节点与参数，工作流模板后续改动也不影响复现）"
                       >
                         下载工作流
-                      </a>
+                      </button>
                       <span
                         className="hidden rounded bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-gray-500 sm:inline"
                         title={sourceLabel}

@@ -326,4 +326,4 @@ export function WorkflowNodeArdot() {
   );
 }
 
-export default WorkflowNodeArdot;
+export default React.memo(WorkflowNodeArdot);

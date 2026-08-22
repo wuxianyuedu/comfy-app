@@ -179,9 +179,9 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
     const inputs = (node as any).inputs;
     if (!inputs || typeof inputs !== "object") continue;
     for (const v of Object.values(inputs)) {
-      if (Array.isArray(v) && v.length >= 1 && typeof v[0] === "string" && outAdj[v[0]]) {
-        incoming[id].add(v[0]);
-        outAdj[v[0]].add(id);
+      if (Array.isArray(v) && v.length >= 1 && typeof v[0] === "string" && outAdj[v[0]!]) {
+        incoming[id]!.add(v[0]!);
+        outAdj[v[0]!]!.add(id);
       }
     }
   }
@@ -200,8 +200,8 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
   }
   while (queue.length) {
     const id = queue.shift()!;
-    for (const nxt of outAdj[id]) {
-      level[nxt] = Math.max(level[nxt] ?? 0, level[id] + 1);
+    for (const nxt of outAdj[id]!) {
+      level[nxt] = Math.max(level[nxt] ?? 0, level[id]! + 1);
       remaining.set(nxt, (remaining.get(nxt) ?? 0) - 1);
       if ((remaining.get(nxt) ?? 0) === 0) queue.push(nxt);
     }
@@ -218,7 +218,7 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
     const sinks = visible.filter((id) => classifyNode((graph[id] as any).class_type) === "output");
     const sources = visible.filter((id) => classifyNode((graph[id] as any).class_type) === "input");
     const mid = visible.filter((id) => !sinks.includes(id) && !sources.includes(id));
-    mid.sort((a, b) => level[a] - level[b]);
+    mid.sort((a, b) => (level[a] ?? 0) - (level[b] ?? 0));
     const midKeep = Math.max(0, 14 - sources.length - sinks.length);
     visible = [...sources, ...mid.slice(0, midKeep), ...sinks];
   }
@@ -248,7 +248,7 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
 
   const nodes: WorkflowPreviewNode[] = visible.map((id) => {
     const lv = level[id] ?? 0;
-    const arr = byLevel[lv];
+    const arr = byLevel[lv] ?? [];
     const row = arr.indexOf(id);
     const x = padX + (levelCount > 1 ? lv * colStep : innerW / 2);
     const y = padY + (maxRows > 1 ? (row / (maxRows - 1)) * innerH : innerH / 2);
@@ -265,8 +265,8 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
   const visibleSet = new Set(visible);
   const edges: WorkflowPreviewEdge[] = [];
   for (const id of visible) {
-    for (const nxt of outAdj[id]) {
-      if (visibleSet.has(nxt)) edges.push({ from: id, to: nxt });
+    for (const nxt of outAdj[id]!) {
+      if (visibleSet.has(nxt)) edges.push({ from: id!, to: nxt! });
     }
   }
 
@@ -475,7 +475,7 @@ function injectLoras(
     if (prevClip) prevClip = [id, 1];
     loraIds.push(id);
   });
-  return { baseModel, baseClip, lastLora: loraIds.length ? loraIds[loraIds.length - 1] : null };
+  return { baseModel, baseClip, lastLora: loraIds.length ? loraIds[loraIds.length - 1]! : null };
 }
 
 /** Re-point only the loader outputs that originally fed the base model/clip.

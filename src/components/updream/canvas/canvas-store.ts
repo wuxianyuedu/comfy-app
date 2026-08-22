@@ -5,6 +5,7 @@
 
 import type { Node, Edge } from "@xyflow/react";
 import type { CanvasNodeData } from "./canvas-types";
+import { vanillaApi } from "~/trpc/vanilla";
 
 export interface CanvasProject {
   id: string;
@@ -58,15 +59,11 @@ export function getProject(id: string): CanvasProject | null {
 async function persistProjectToServer(p: CanvasProject): Promise<void> {
   if (typeof window === "undefined") return;
   try {
-    await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: p.id,
-        name: p.name,
-        nodes: p.nodes ?? [],
-        edges: p.edges ?? [],
-      }),
+    await vanillaApi.project.upsert.mutate({
+      id: p.id,
+      name: p.name,
+      nodes: p.nodes ?? [],
+      edges: p.edges ?? [],
     });
   } catch {
     /* offline / server down — localStorage already has it */
@@ -78,9 +75,7 @@ async function persistProjectToServer(p: CanvasProject): Promise<void> {
  */
 function deleteProjectOnServer(id: string): void {
   if (typeof window === "undefined") return;
-  fetch(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(
-    () => {}
-  );
+  vanillaApi.project.delete.mutate({ projectId: id }).catch(() => {});
 }
 
 export function upsertProject(p: CanvasProject): void {
@@ -123,15 +118,10 @@ export async function hydrateFromServer(): Promise<void> {
   if (hydrated) return;
   hydrated = true;
   try {
-    const res = await fetch("/api/projects", { cache: "no-store" });
-    if (!res.ok) {
-      hydrated = false;
-      return;
-    }
-    const serverProjects = (await res.json()) as Array<{
+    const serverProjects = (await vanillaApi.project.list.query()) as Array<{
       id: string;
       name: string;
-      updatedAt: string; // ISO DateTime from Prisma
+      updatedAt: string | Date; // Date via SuperJSON / ISO from REST
       nodes?: unknown;
       edges?: unknown;
     }>;

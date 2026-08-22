@@ -37,6 +37,7 @@ import {
 import { useActiveTaskId } from "./activeTask";
 import { useCanvasSettings } from "../wf-canvas-settings";
 import { ValidationErrorList } from "@/components/updream/shared/ValidationErrorList";
+import { vanillaApi } from "~/trpc/vanilla";
 
 type Level = StepLogEntry["level"];
 
@@ -119,14 +120,7 @@ export function GlobalStepLogPanel() {
     if (!taskId || cancellingFromPanel) return;
     setCancellingFromPanel(true);
     try {
-      const res = await fetch(`/api/tasks/${taskId}/cancel`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reason: "用户强制取消（日志面板）" }),
-      });
-      if (!res.ok) {
-        setError(`强制取消失败：HTTP ${res.status}`);
-      }
+      await vanillaApi.task.cancel.mutate({ id: taskId });
     } catch (e: any) {
       setError(`取消请求异常：${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -245,7 +239,7 @@ export function GlobalStepLogPanel() {
       if (idle > 20000 && status === "RUNNING") {
         const now = Date.now();
         setLogs((prev) => {
-          if (prev.length && prev[prev.length - 1].msg.includes("无新日志") && now - prev[prev.length - 1].t < 5000)
+          if (prev.length && prev[prev.length - 1]!.msg.includes("无新日志") && now - prev[prev.length - 1]!.t < 5000)
             return prev;
           return [...prev, { t: now, level: "warn", msg: "⏳ 已 20s 无新日志，任务可能卡住（详见后端 runner 日志）" }];
         });

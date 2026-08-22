@@ -1,13 +1,19 @@
 {
-  "$schema": "https://typedoc.org/schema.json",
-  "entryPoints": ["src/lib/core/index.ts"],
+  "name": "Comfy-APP-T3 API",
+  "entryPoints": [
+    "src/lib/**/!(*.test).ts",
+    "src/server/**/!(*.test).ts",
+    "src/trpc/**/!(*.test).ts"
+  ],
   "out": "docs/api",
-  "name": "Comfy-APP · 架构核心层",
-  "excludeInternal": true,
+  "exclude": [
+    "**/*.test.ts",
+    "**/node_modules/**",
+    "**/workflows/**"
+  ],
   "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
   "readme": "none",
-  "tsconfig": "tsconfig.json",
-  "categorizeByGroup": true,
-  "sort": ["source-order"],
-  "validation": { "notExported": false, "invalidLink": false }
+  "searchInComments": true
 }

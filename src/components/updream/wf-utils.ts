@@ -112,7 +112,7 @@ export function extractNoteTitle(text: string, fallback?: string): string {
   const lines = text.split(/\r?\n/);
   for (const line of lines) {
     const m = line.match(/^#{1,3}\s+(.+?)\s*$/);
-    if (m) return m[1];
+    if (m) return m[1]!;
   }
   for (const line of lines) {
     const t = line.trim();
@@ -269,7 +269,7 @@ export function withAlpha(color: string): string {
   if (color.startsWith("#") && color.length === 7) return color + "66";
   const m = color.match(/rgba\(([^)]+)\)/);
   if (m) {
-    const parts = m[1].split(",").map((s) => s.trim());
+    const parts = m[1]!.split(",").map((s) => s.trim());
     if (parts.length === 4) return `rgba(${parts[0]},${parts[1]},${parts[2]},0.40)`;
   }
   return color;
@@ -449,7 +449,7 @@ export function computeKahnLayout(
         incoming[id]
       ) {
         incoming[id].add(v[0]);
-        outAdj[v[0]].add(id);
+        outAdj[v[0]!]!.add(id);
       }
     }
   }
@@ -463,7 +463,7 @@ export function computeKahnLayout(
   }
   while (queue.length) {
     const id = queue.shift()!;
-    for (const nxt of outAdj[id]) {
+    for (const nxt of outAdj[id]!) {
       level[nxt] = Math.max(level[nxt] ?? 0, (level[id] ?? 0) + 1);
       remaining.set(nxt, (remaining.get(nxt) ?? 0) - 1);
       if ((remaining.get(nxt) ?? 0) === 0) queue.push(nxt);
@@ -525,8 +525,8 @@ export function buildEdges(
       const slotNames = outSlotNameById?.[srcId];
       const staticNames = Object.keys(inferOutputTypeAll(srcClass ?? ""));
       let outName: string | null = null;
-      if (slotNames && srcSlot < slotNames.length) outName = slotNames[srcSlot];
-      else if (srcSlot < staticNames.length) outName = staticNames[srcSlot];
+      if (slotNames && srcSlot < slotNames.length) outName = slotNames[srcSlot]!;
+      else if (srcSlot < staticNames.length) outName = staticNames[srcSlot]!;
       edges.push({
         id: `e-${srcId}-${nodeId}-${inputName}-${i++}`,
         source: srcId,
@@ -649,9 +649,9 @@ export function buildConnectedOutputs(
       if (slotNames && slot < slotNames.length) {
         name = slotNames[slot] || null;
       } else if (slot < staticOuts.length) {
-        name = staticOuts[slot];
+        name = staticOuts[slot]!;
       } else if (slot < rawOuts.length) {
-        name = rawOuts[slot].name;
+        name = rawOuts[slot]!.name;
       }
       if (!name) continue;
       if (!map[srcId]) map[srcId] = new Set();

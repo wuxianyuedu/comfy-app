@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AuroraBackground } from "@/components/updream/AuroraBackground";
 import { Icon } from "@/components/ui/Icon";
 import { folderMeta, getFolderTooltip } from "@/lib/model-types";
+import { api } from "~/trpc/react";
 
 interface ModelRow {
   id: string;
@@ -40,21 +41,29 @@ export function ModelLibrary() {
   const [filter, setFilter] = useState<string>("ALL");
   const [configOpen, setConfigOpen] = useState(false);
 
+  const listQ = api.model.list.useQuery();
+  const syncMut = api.model.sync.useMutation();
+
   const loadModels = useCallback(() => {
     setLoading(true);
-    fetch("/api/models")
-      .then((r) => r.json())
-      .then((d) => setModels(d.models ?? []))
+    listQ
+      .refetch()
+      .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [listQ]);
 
   useEffect(() => {
     // Sync silently on mount so the library reflects the current config
     // without the user having to click "重新扫描" first.
-    fetch("/api/models/sync", { method: "POST" })
-      .catch(() => null)
-      .finally(() => loadModels());
-  }, [loadModels]);
+    syncMut.mutate(undefined, { onSettled: () => loadModels() });
+  }, [syncMut, loadModels]);
+
+  // react-query list -> local rows state
+  useEffect(() => {
+    if (listQ.data) {
+      setModels((listQ.data.models ?? []) as unknown as ModelRow[]);
+    }
+  }, [listQ.data]);
 
   const filtered = useMemo(() => {
     return models.filter((m) => {
@@ -187,9 +196,7 @@ export function ModelLibrary() {
         <ModelConfigModal
           onClose={() => {
             setConfigOpen(false);
-            fetch("/api/models/sync", { method: "POST" })
-              .catch(() => null)
-              .finally(() => loadModels());
+            syncMut.mutate(undefined, { onSettled: () => loadModels() });
           }}
         />
       )}
@@ -226,70 +233,72 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const [onlyEnabled, setOnlyEnabled] = useState(false);
 
+  const configQ = api.model.configList.useQuery();
+  const saveMut = api.model.configSave.useMutation();
+  const delMut = api.model.configDelete.useMutation();
+  const syncMut = api.model.sync.useMutation();
+
   const load = useCallback(async () => {
     setLoading(true);
     setErr(null);
     try {
-      const r = await fetch("/api/models/config");
-      if (!r.ok) {
-        setErr(`加载失败 (HTTP ${r.status})`);
-        return;
-      }
-      const d = await r.json();
-      if (d.ok) {
-        setFolders(d.folders ?? []);
-        setComfyReachable(Boolean(d.comfyReachable));
-      } else {
-        setErr(d.error || "加载失败");
-      }
+      await configQ.refetch();
     } catch {
       setErr("网络错误");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [configQ]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const mutate = useCallback(
-    async (req: () => Promise<Response>) => {
+  // react-query config data -> local folders state
+  useEffect(() => {
+    if (configQ.data) {
+      setFolders(configQ.data.folders ?? []);
+      setComfyReachable(Boolean(configQ.data.comfyReachable));
+    }
+  }, [configQ.data]);
+
+  const runMutate = useCallback(
+    async (fn: () => Promise<unknown>) => {
       try {
-        const r = await req();
-        if (!r.ok) {
-          const d = await r.json().catch(() => ({}));
-          setErr(d.error || `操作失败 (HTTP ${r.status})`);
-          return;
-        }
-        const d = await r.json().catch(() => ({}));
-        if (!d.ok) setErr(d.error || "操作失败");
-      } catch {
-        setErr("网络错误");
+        await fn();
+      } catch (e: any) {
+        setErr(e?.message ?? "网络错误");
       }
       await load();
     },
     [load]
   );
 
+  const handleToggle = useCallback(
+    (folder: string, enabled: boolean) =>
+      runMutate(() => saveMut.mutateAsync({ folder, enabled })),
+    [runMutate, saveMut]
+  );
+  const handleAdd = useCallback(
+    (folder: string) => runMutate(() => saveMut.mutateAsync({ folder, enabled: true })),
+    [runMutate, saveMut]
+  );
+  const handleDelete = useCallback(
+    (folder: string) => runMutate(() => delMut.mutateAsync({ folder })),
+    [runMutate, delMut]
+  );
+
   const rescan = useCallback(async () => {
     setScanning(true);
     setErr(null);
     try {
-      const r = await fetch("/api/models/sync", { method: "POST" });
-      if (!r.ok) {
-        setErr(`扫描失败 (HTTP ${r.status})`);
-        setScanning(false);
-        return;
-      }
-      const d = await r.json().catch(() => ({}));
-      if (!d.ok) setErr(d.error || "扫描失败");
-    } catch {
-      setErr("网络错误");
+      await syncMut.mutateAsync();
+    } catch (e: any) {
+      setErr(e?.message ?? "扫描失败");
     }
     setScanning(false);
     await load();
-  }, [load]);
+  }, [load, syncMut]);
 
   const enabledRows = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -396,7 +405,9 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                       <FolderConfigRow
                         key={f.folder}
                         row={f}
-                        onMutate={mutate}
+                        onToggle={handleToggle}
+                        onAdd={handleAdd}
+                        onDelete={handleDelete}
                       />
                     ))}
                   </div>
@@ -416,7 +427,9 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                       <FolderConfigRow
                         key={f.folder}
                         row={f}
-                        onMutate={mutate}
+                        onToggle={handleToggle}
+                        onAdd={handleAdd}
+                        onDelete={handleDelete}
                       />
                     ))}
                   </div>
@@ -438,33 +451,20 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
  */
 function FolderConfigRow({
   row,
-  onMutate,
+  onToggle,
+  onAdd,
+  onDelete,
 }: {
   row: FolderConfigRow;
-  onMutate: (req: () => Promise<Response>) => Promise<void>;
+  onToggle: (folder: string, enabled: boolean) => void;
+  onAdd: (folder: string) => void;
+  onDelete: (folder: string) => void;
 }) {
   const primaryMeta = folderMeta(row.type);
 
-  const toggleEnabled = () =>
-    onMutate(() =>
-      fetch("/api/models/config", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder: row.folder, enabled: !row.enabled }),
-      })
-    );
-  const enableFromAvailable = () =>
-    onMutate(() =>
-      fetch("/api/models/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder: row.folder }),
-      })
-    );
-  const remove = () =>
-    onMutate(() =>
-      fetch(`/api/models/config?folder=${encodeURIComponent(row.folder)}`, { method: "DELETE" })
-    );
+  const toggleEnabled = () => onToggle(row.folder, !row.enabled);
+  const enableFromAvailable = () => onAdd(row.folder);
+  const remove = () => onDelete(row.folder);
 
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">

@@ -3,6 +3,7 @@
 import React from "react";
 import { completeChat } from "@/lib/llm/browser";
 import { Icon } from "@/components/ui/Icon";
+import { api } from "~/trpc/react";
 import type { LLMConfigView, LLMProviderType } from "@/lib/llm/types";
 
 interface LLMContextValue {
@@ -27,14 +28,20 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = React.useState(true);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
 
+  const configQ = api.llm.configGet.useQuery();
   const refresh = React.useCallback(() => {
-    setLoading(true);
-    fetch("/api/llm/config")
-      .then((r) => r.json())
-      .then((d) => setConfig(d.config ?? null))
-      .catch(() => setConfig(null))
-      .finally(() => setLoading(false));
-  }, []);
+    configQ.refetch();
+  }, [configQ]);
+
+  React.useEffect(() => {
+    if (configQ.isLoading) {
+      setLoading(true);
+    } else {
+      const cfg = configQ.data?.config;
+      setConfig(cfg ? { ...cfg, hasApiKey: !!cfg.apiKey } : null);
+      setLoading(false);
+    }
+  }, [configQ.isLoading, configQ.data?.config]);
 
   React.useEffect(() => {
     refresh();
@@ -132,6 +139,7 @@ function LLMSettingsModal({
   const [saving, setSaving] = React.useState(false);
   const [testing, setTesting] = React.useState(false);
   const [msg, setMsg] = React.useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const saveCfg = api.llm.configSave.useMutation();
 
   const baseUrlPlaceholder =
     provider === "local" ? "http://localhost:11434/v1" : "https://api.openai.com/v1";
@@ -145,21 +153,16 @@ function LLMSettingsModal({
     setSaving(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/llm/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider,
-          baseUrl,
-          model,
-          apiKey: apiKey || undefined, // omit → keep existing
-          temperature,
-          maxTokens,
-        }),
+      const data = await saveCfg.mutateAsync({
+        provider,
+        baseUrl,
+        model,
+        apiKey: apiKey || undefined, // omit → keep existing
+        temperature,
+        maxTokens,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "保存失败");
-      onSaved(data.config);
+      const cfg = data.config;
+      onSaved({ ...cfg, hasApiKey: !!cfg.apiKey, provider: cfg.provider as "local" | "remote" });
     } catch (e: any) {
       setMsg({ kind: "err", text: e?.message || "保存失败" });
     } finally {

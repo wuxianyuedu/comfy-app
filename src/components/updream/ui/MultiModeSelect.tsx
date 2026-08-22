@@ -206,7 +206,7 @@ export function MultiModeSelect({
   const handleSave = useCallback(() => {
     const arr = Array.from(draft);
     if (arr.length === 0) return; // safety — should be unreachable (UI blocks it)
-    const def = arr.includes(draftDefault) ? draftDefault : arr[0];
+    const def = arr.includes(draftDefault) ? draftDefault : arr[0]!;
     onChange(arr, def);
     setOpen(false);
   }, [draft, draftDefault, onChange]);

@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "./Toast";
+import { vanillaApi } from "~/trpc/vanilla";
 
 /* ── Film Studio — Updream-style Video Editor (Ardot-aligned) ─
   Dark-themed timeline-based video editing studio.
@@ -169,13 +170,14 @@ export function FilmStudio() {
   /* ── API: load skills + recent films ── */
   const refreshMeta = useCallback(async () => {
     try {
-      const [sRes, fRes] = await Promise.all([fetch("/api/skills"), fetch("/api/film")]);
-      const sData = await sRes.json();
-      const list = sData.skills ?? sData ?? [];
+      const [sData, fData] = await Promise.all([
+        vanillaApi.skill.list.query(),
+        vanillaApi.film.list.query(),
+      ]);
+      const list = (sData.skills ?? sData ?? []) as any[];
       setSkills(list.map((s: any) => ({ slug: s.slug, name: s.name })));
-      const fData = await fRes.json();
-      setFfmpegAvailable(!!fData.ffmpegAvailable);
-      setRecent(fData.films ?? []);
+      setFfmpegAvailable(!!(fData as any).ffmpegAvailable);
+      setRecent((fData.films ?? []) as any);
     } catch {
       /* ignore */
     }
@@ -194,17 +196,19 @@ export function FilmStudio() {
   }, []);
 
   const fetchDetail = useCallback(async (id: string) => {
-    const res = await fetch(`/api/film/${id}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    const f: Film = data.film;
-    setFilm(f);
-    if (f.status === "GENERATING" || f.status === "COMPOSING" || f.status === "PARSING") {
-      if (!pollRef.current) {
-        pollRef.current = setInterval(() => void fetchDetail(id), 3000);
+    try {
+      const data = await vanillaApi.film.detail.query({ id });
+      const f: Film = (data as any).film;
+      setFilm(f);
+      if (f.status === "GENERATING" || f.status === "COMPOSING" || f.status === "PARSING") {
+        if (!pollRef.current) {
+          pollRef.current = setInterval(() => void fetchDetail(id), 3000);
+        }
+      } else {
+        stopPoll();
       }
-    } else {
-      stopPoll();
+    } catch {
+      /* ignore */
     }
   }, [stopPoll]);
 
@@ -216,15 +220,18 @@ export function FilmStudio() {
     setLoading(true);
     try {
       stopPoll();
-      const createRes = await fetch("/api/film", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, script, type, styleSlug: styleSlug || null, size, fps, framesPerShot: frames, subtitleOn, bgmName }),
+      const { id } = await vanillaApi.film.create.mutate({
+        title,
+        script,
+        type,
+        styleSlug: styleSlug || null,
+        size,
+        fps,
+        framesPerShot: frames,
+        subtitleOn,
+        bgmName,
       });
-      if (!createRes.ok) { const e = await createRes.json().catch(() => ({})); throw new Error(e.error ?? "创建失败"); }
-      const { id } = await createRes.json();
-      const startRes = await fetch(`/api/film/${id}/start`, { method: "POST" });
-      if (!startRes.ok) { const e = await startRes.json().catch(() => ({})); throw new Error(e.error ?? "启动失败"); }
+      await vanillaApi.film.start.mutate({ id });
       await fetchDetail(id);
       success("已启动一键成片，正在逐镜生成…");
     } catch (e: any) { error(e?.message ?? "启动失败"); }
@@ -233,7 +240,7 @@ export function FilmStudio() {
 
   const handleCancel = useCallback(async () => {
     if (!film) return;
-    await fetch(`/api/film/${film.id}/cancel`, { method: "POST" });
+    await vanillaApi.film.cancel.mutate({ id: film.id });
     stopPoll();
     await fetchDetail(film.id);
     info("已取消");
@@ -242,7 +249,7 @@ export function FilmStudio() {
   const handleRecompose = useCallback(async () => {
     if (!film) return;
     setLoading(true);
-    try { await fetch(`/api/film/${film.id}/compose`, { method: "POST" }); await fetchDetail(film.id); }
+    try { await vanillaApi.film.compose.mutate({ id: film.id }); await fetchDetail(film.id); }
     finally { setLoading(false); }
   }, [film, fetchDetail]);
 
@@ -552,7 +559,7 @@ export function FilmStudio() {
             <label className="block">
               <span className="mb-1.5 block text-[11px] text-[#8b90a8]">镜头名称</span>
               <input
-                value={selectedShot.name}
+                value={selectedShot!.name}
                 onChange={(e) => setShots((prev) => prev.map((s) => s.id === selectedShotId ? { ...s, name: e.target.value } : s))}
                 className="h-9 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-[#e5e7eb] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
@@ -566,7 +573,7 @@ export function FilmStudio() {
                 step="0.1"
                 min="0.5"
                 max="30"
-                value={parseFloat(selectedShot.duration)}
+                value={parseFloat(selectedShot!.duration)}
                 onChange={(e) => setShots((prev) => prev.map((s) => s.id === selectedShotId ? { ...s, duration: `${Number(e.target.value).toFixed(1)}`.padStart(5, "0") } : s))}
                 className="h-9 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-[#e5e7eb] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />

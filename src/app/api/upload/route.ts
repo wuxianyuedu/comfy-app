@@ -3,10 +3,32 @@ import { uploadImage, comfyBase } from "@/lib/comfyui/client";
 
 export const runtime = "nodejs";
 
+// R-T3-phase4 (OWASP A04/A05): whitelist image types and cap the size so a
+// malformed upload cannot write arbitrary extensions or exhaust memory.
+const ALLOWED_MIME = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+]);
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+
 export async function POST(req: NextRequest) {
   const form = await req.formData();
   const file = form.get("image") as File | null;
   if (!file) return NextResponse.json({ error: "未收到文件" }, { status: 400 });
+  if (!ALLOWED_MIME.has(file.type)) {
+    return NextResponse.json(
+      { error: "仅支持 PNG / JPG / WebP / GIF 图片" },
+      { status: 400 }
+    );
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: "图片大小不能超过 50MB" },
+      { status: 400 }
+    );
+  }
 
   const buf = Buffer.from(await file.arrayBuffer());
   const ext = file.name.includes(".")

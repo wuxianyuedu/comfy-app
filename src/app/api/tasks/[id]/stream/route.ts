@@ -1,5 +1,6 @@
-import { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { NextRequest, NextResponse } from "next/server";
+import { getServerUser } from "@/lib/auth-server";
+import { taskRepository } from "@/lib/core/repository";
 import { subscribe, type TaskEvent } from "@/lib/comfyui/runner";
 import { parseValidationErrors } from "@/lib/comfyui/validation";
 
@@ -7,9 +8,21 @@ export const runtime = "nodejs";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  ctx: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  const params = await ctx.params;
+  const id = params.id;
+
+  // R-T3-phase4: native Route Handler — replaces the legacy `defineRoute`
+  // wrapper.  Auth contract is kept identical (401 structured envelope).
+  const user = await getServerUser();
+  if (!user?.id) {
+    return NextResponse.json(
+      { error: { code: "auth.required", message: "未登录或会话已失效" } },
+      { status: 401 }
+    );
+  }
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -27,8 +40,8 @@ export async function GET(
       };
 
       // Initial state (covers tasks already finished before subscribe).
-      prisma.task
-        .findUnique({ where: { id } })
+      taskRepository
+        .findById(id)
         .then((t) => {
           if (t) {
             // R-Next (2026-08-17): forward structured validation errors so
@@ -98,29 +111,8 @@ export async function GET(
       const pollId = setInterval(() => {
         if (polling) return;
         polling = true;
-        prisma.task
-          .findUnique({
-            where: { id },
-            // R-ardot116 (2026-08-18): include `error` + `validationErrors`
-            // in the polling snapshot so a status transition can deliver
-            // the structured diagnostic *as part of the same state event*.
-            // Without this, if the runner's finalizeFailure ever forgot to
-            // emit a `state` event, the client would only see the bare
-            // status flip and would have to wait for a manual SSE
-            // reconnect to fetch the diagnostic from the initial state
-            // snapshot — which is exactly the stuck-generated bug we just
-            // patched in the runner's finalizeFailure.
-            select: {
-              status: true,
-              progress: true,
-              error: true,
-              validationErrors: true,
-              /* R-ardot121 (2026-08-18): poll workflowName too so the
-               *  dropdown label survives status transitions (e.g. a
-               *  QUEUED task finally flipping to RUNNING). */
-              workflowName: true,
-            },
-          })
+        taskRepository
+          .findById(id)
           .then((cur) => {
             if (!cur) return;
             if (
@@ -176,7 +168,7 @@ export async function GET(
     },
   });
 
-  return new Response(stream, {
+  return new NextResponse(stream, {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",

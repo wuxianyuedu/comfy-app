@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { MediaThumb, isVideo } from "@/components/updream/MediaThumb";
 import { AuroraBackground } from "@/components/updream/AuroraBackground";
 import { getActiveId, listProjects, type CanvasProject } from "@/components/updream/canvas/canvas-store";
+import { api } from "~/trpc/react";
 
 interface OutputImage {
   id: string;
@@ -76,8 +77,6 @@ function timeAgo(iso: string): string {
 export function ProjectOutputs() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<CanvasProject[]>([]);
-  const [outputs, setOutputs] = useState<OutputItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -95,26 +94,12 @@ export function ProjectOutputs() {
     return () => window.removeEventListener("comfyapp:canvas-store-changed", sync);
   }, [refreshProjects]);
 
-  const load = useCallback(() => {
-    if (!projectId) {
-      setOutputs([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    fetch(`/api/projects/${encodeURIComponent(projectId)}/outputs`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => setOutputs(d.outputs ?? []))
-      .catch(() => setOutputs([]))
-      .finally(() => setLoading(false));
-  }, [projectId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const outputsQ = api.project.outputs.useQuery(
+    { projectId: projectId ?? "" },
+    { enabled: !!projectId }
+  );
+  const outputs = (outputsQ.data?.outputs ?? []).map((o) => ({ ...o, createdAt: String(o.createdAt) })) as OutputItem[];
+  const loading = outputsQ.isLoading;
 
   const activeProject = useMemo(
     () => projects.find((p) => p.id === projectId) ?? null,
@@ -232,7 +217,7 @@ export function ProjectOutputs() {
               ))}
             </select>
             <button
-              onClick={load}
+              onClick={() => outputsQ.refetch()}
               className="rounded-lg border border-white/10 px-3 py-2 text-xs text-gray-400 hover:text-gray-200"
             >
               ↻ 刷新
@@ -321,8 +306,8 @@ export function ProjectOutputs() {
                         视频
                       </span>
                     )}
-                    <span className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${st.cls}`}>
-                      {st.label}
+                    <span className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${st!.cls}`}>
+                      {st!.label}
                     </span>
                   </div>
                   <div className="p-3">

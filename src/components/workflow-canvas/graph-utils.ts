@@ -105,8 +105,8 @@ function computeLayout(graph: ComfyGraph): Map<string, { x: number; y: number }>
   const positions = new Map<string, { x: number; y: number }>();
   for (let li = 0; li < layers.length; li++) {
     const layer = layers[li];
-    for (let ni = 0; ni < layer.length; ni++) {
-      const id = layer[ni];
+    for (let ni = 0; ni < layer!.length; ni++) {
+      const id = layer![ni]!;
       const config = getNodeConfig(graph[id]?.class_type ?? "");
       positions.set(id, {
         x: LAYER_X_BASE + li * H_GAP,
@@ -220,10 +220,10 @@ export function flowToComfyGraph(
     const targetMatch = edge.targetHandle?.match(/in-(.+)/);
     const sourceMatch = edge.sourceHandle?.match(/out-(.+)/);
     if (targetMatch) {
-      const inputKey = targetMatch[1];
-      targetNode.inputs[inputKey] = [
+      const inputKey = targetMatch[1]!;
+      targetNode.inputs[inputKey]! = [
         edge.source,
-        sourceMatch ? parseInt(sourceMatch[1], 10) : 0,
+        sourceMatch ? parseInt(sourceMatch[1]!, 10) : 0,
       ];
     }
   }

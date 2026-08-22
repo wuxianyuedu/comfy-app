@@ -1,6 +1,7 @@
 "use client";
 
-import { BaseEdge, EdgeProps, Position } from "@xyflow/react";
+import React from "react";
+import { BaseEdge, type EdgeProps, Position } from "@xyflow/react";
 
 /**
  * WfEdge — ComfyUI-style bezier connection.
@@ -60,7 +61,7 @@ function bezierMidpoint(
   return [x, y];
 }
 
-export function WfEdge(props: EdgeProps) {
+export const WfEdge = React.memo(function WfEdge(props: EdgeProps) {
   const {
     id,
     sourceX,
@@ -130,4 +131,4 @@ export function WfEdge(props: EdgeProps) {
       />
     </>
   );
-}
+});

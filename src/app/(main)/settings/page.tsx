@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { DarkSelect } from "@/components/updream/ui/DarkSelect";
+import { api } from "~/trpc/react";
 
 type Settings = {
   comfyuiUrl: string;
@@ -16,16 +17,13 @@ type LlmConfig = {
   model: string;
   temperature: number;
   maxTokens: number;
-  hasApiKey: boolean;
+  apiKey: string | null;
 };
 
 type Tab = "account" | "prefs";
 
 export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>("account");
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [llm, setLlm] = useState<LlmConfig | null>(null);
-  const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   // account
@@ -37,23 +35,23 @@ export default function SettingsPage() {
   // prefs
   const [saving, setSaving] = useState(false);
   const [llmApiKey, setLlmApiKey] = useState("");
+  const [llmDraft, setLlmDraft] = useState<LlmConfig | null>(null);
+  const [settingsDraft, setSettingsDraft] = useState<Settings | null>(null);
+
+  const settingsQ = api.setting.get.useQuery();
+  const llmQ = api.llm.configGet.useQuery();
+  const saveSetting = api.setting.save.useMutation();
+  const saveLlmCfg = api.llm.configSave.useMutation();
+
+  const settings = settingsQ.data?.settings ?? null;
+  const llm = llmQ.data?.config ?? null;
 
   useEffect(() => {
-    (async () => {
-      try {
-        const [s, l] = await Promise.all([
-          fetch("/api/settings").then((r) => r.json()),
-          fetch("/api/llm/config").then((r) => r.json()),
-        ]);
-        setSettings(s.settings);
-        setLlm(l.config);
-      } catch {
-        setMsg({ kind: "err", text: "加载设置失败" });
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    if (llmQ.data?.config) setLlmDraft({ ...llmQ.data.config, apiKey: llmQ.data.config.apiKey ?? null });
+  }, [llmQ.data?.config]);
+  useEffect(() => {
+    if (settingsQ.data?.settings) setSettingsDraft(settingsQ.data.settings);
+  }, [settingsQ.data?.settings]);
 
   function flash(kind: "ok" | "err", text: string) {
     setMsg({ kind, text });
@@ -100,17 +98,15 @@ export default function SettingsPage() {
   }
 
   async function saveLlm() {
-    if (!llm) return;
+    if (!llmDraft) return;
     setSaving(true);
     try {
-      const r = await fetch("/api/llm/config", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...llm, ...(llmApiKey ? { apiKey: llmApiKey } : {}) }),
-      });
-      const d = await r.json();
-      if (!r.ok) return flash("err", d.error ?? "保存失败");
+      await saveLlmCfg.mutateAsync({ ...llmDraft, apiKey: llmApiKey || undefined });
       flash("ok", "LLM 配置已保存");
+      if (llmApiKey) setLlmApiKey("");
+      await llmQ.refetch();
+    } catch (e: any) {
+      flash("err", e?.message ?? "保存失败");
     } finally {
       setSaving(false);
     }
@@ -120,21 +116,17 @@ export default function SettingsPage() {
     if (!settings) return;
     setSaving(true);
     try {
-      const r = await fetch("/api/settings", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(settings),
-      });
-      const d = await r.json();
-      if (!r.ok) return flash("err", d.error ?? "保存失败");
-      setSettings(d.settings);
+      const res = await saveSetting.mutateAsync(settings);
+      await settingsQ.refetch();
       flash("ok", "偏好已保存");
+    } catch (e: any) {
+      flash("err", e?.message ?? "保存失败");
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading || !settings || !llm) {
+  if (settingsQ.isLoading || llmQ.isLoading || !settings || !llm || !settingsDraft || !llmDraft) {
     return (
       <div className="dark grid min-h-screen place-items-center bg-[#0a0a0f] text-muted">
         加载中…
@@ -198,25 +190,25 @@ export default function SettingsPage() {
             <div className="mb-3 flex gap-2">
               <DarkSelect
                 className="!bg-white/5 text-sm text-ink"
-                value={llm.provider}
-                onChange={(v) => setLlm({ ...llm, provider: v as LlmConfig["provider"] })}
+                value={llmDraft.provider}
+                onChange={(v) => setLlmDraft({ ...llmDraft, provider: v as LlmConfig["provider"] })}
                 options={["local", "remote"]}
                 labels={{ local: "本地（Ollama）", remote: "远程（OpenAI 兼容）" }}
                 placeholder="选择提供商"
               />
             </div>
-            <Field label="Base URL" value={llm.baseUrl} onChange={(v) => setLlm({ ...llm, baseUrl: v })} placeholder="http://localhost:11434/v1" />
-            <Field label="模型" value={llm.model} onChange={(v) => setLlm({ ...llm, model: v })} placeholder="llama3.1" />
+            <Field label="Base URL" value={llmDraft.baseUrl} onChange={(v) => setLlmDraft({ ...llmDraft, baseUrl: v })} placeholder="http://localhost:11434/v1" />
+            <Field label="模型" value={llmDraft.model} onChange={(v) => setLlmDraft({ ...llmDraft, model: v })} placeholder="llama3.1" />
             <Field
               label="API Key"
-              value={llmApiKey || (llm.hasApiKey ? "••••••••" : "")}
+              value={llmApiKey || (!!llmDraft.apiKey ? "••••••••" : "")}
               onChange={setLlmApiKey}
               type="password"
-              placeholder={llm.hasApiKey ? "已设置，留空不改" : "远程提供商必填"}
+              placeholder={!!llmDraft.apiKey ? "已设置，留空不改" : "远程提供商必填"}
             />
             <div className="mb-4 grid grid-cols-2 gap-3">
-              <Field label="温度" value={String(llm.temperature)} onChange={(v) => setLlm({ ...llm, temperature: Number(v) || 0 })} />
-              <Field label="最大 Token" value={String(llm.maxTokens)} onChange={(v) => setLlm({ ...llm, maxTokens: Number(v) || 0 })} />
+              <Field label="温度" value={String(llmDraft.temperature)} onChange={(v) => setLlmDraft({ ...llmDraft, temperature: Number(v) || 0 })} />
+              <Field label="最大 Token" value={String(llmDraft.maxTokens)} onChange={(v) => setLlmDraft({ ...llmDraft, maxTokens: Number(v) || 0 })} />
             </div>
             <Btn onClick={saveLlm} disabled={saving}>
               保存 LLM 配置
@@ -226,22 +218,22 @@ export default function SettingsPage() {
           <Card title="创作后端">
             <Field
               label="ComfyUI 地址"
-              value={settings.comfyuiUrl}
-              onChange={(v) => setSettings({ ...settings, comfyuiUrl: v })}
+              value={settingsDraft.comfyuiUrl}
+              onChange={(v) => setSettingsDraft({ ...settingsDraft, comfyuiUrl: v })}
               placeholder="http://localhost:8188"
             />
             <Field
               label="训练后端 URL"
-              value={settings.trainerUrl}
-              onChange={(v) => setSettings({ ...settings, trainerUrl: v })}
+              value={settingsDraft.trainerUrl}
+              onChange={(v) => setSettingsDraft({ ...settingsDraft, trainerUrl: v })}
               placeholder="留空则显示「未配置」横幅"
             />
             <div className="mb-4">
               <label className="mb-1.5 block text-sm font-medium text-ink/80">默认视频工作流</label>
               <DarkSelect
                 className="w-full !bg-white/5 text-sm text-ink"
-                value={settings.defaultVideoWorkflow}
-                onChange={(v) => setSettings({ ...settings, defaultVideoWorkflow: v as Settings["defaultVideoWorkflow"] })}
+                value={settingsDraft.defaultVideoWorkflow}
+                onChange={(v) => setSettingsDraft({ ...settingsDraft, defaultVideoWorkflow: v as Settings["defaultVideoWorkflow"] })}
                 options={["auto", "txt2video", "img2video"]}
                 labels={{ auto: "自动（文生视频，本地合成首帧）", txt2video: "文生视频（本地合成首帧）", img2video: "图生视频（上传首帧）" }}
                 placeholder="选择默认视频工作流"
@@ -250,8 +242,8 @@ export default function SettingsPage() {
             </div>
             <Field
               label="LoRA 输出目录"
-              value={settings.comfyLorasDir}
-              onChange={(v) => setSettings({ ...settings, comfyLorasDir: v })}
+              value={settingsDraft.comfyLorasDir}
+              onChange={(v) => setSettingsDraft({ ...settingsDraft, comfyLorasDir: v })}
               placeholder="留空使用默认 models/loras"
             />
             <Btn onClick={savePrefs} disabled={saving}>
@@ -264,8 +256,6 @@ export default function SettingsPage() {
     </div>
   );
 }
-
-let llmApiKey = "";
 
 function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (

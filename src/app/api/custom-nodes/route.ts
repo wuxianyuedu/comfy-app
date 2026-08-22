@@ -9,7 +9,7 @@
  * it only reads source text and writes the generated manifest + report.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { readEnvVar, writeEnvVar } from "@/lib/envfile";
@@ -160,11 +160,11 @@ function runDiscoverStreaming(
         }
         return;
       }
-      const py = pyCandidates[i];
+      const py = pyCandidates[i]!;
       const cp = spawn(py, ["-u", "scripts/parse_custom_nodes.py", "--discover-parent", parent], {
         cwd: process.cwd(),
         env: process.env,
-      });
+      }) as ChildProcessWithoutNullStreams;
 
       let buf = "";
       cp.stdout.on("data", (d: Buffer) => {
@@ -184,7 +184,7 @@ function runDiscoverStreaming(
             const m = /^PROGRESS::(scan|hash)\|(.*)$/.exec(line);
             if (!m) continue;
             const phase = m[1] as "scan" | "hash";
-            const rest = m[2];
+            const rest = m[2]!;
             // Extract msg=... (may contain | inside if any; we treat
             // everything up to the next |key= or end-of-line as the msg).
             // Backward compat: old lines without `|msg=` use the entire
@@ -199,7 +199,7 @@ function runDiscoverStreaming(
             const kvRegex = /\|?(discovered|done|total)=(\d+)/g;
             let kv: RegExpExecArray | null;
             while ((kv = kvRegex.exec(rest)) !== null) {
-              fields[kv[1]] = parseInt(kv[2], 10);
+              fields[kv[1]!] = parseInt(kv[2]!, 10);
             }
             send({ type: "progress", parent, ...fields });
           } else if (line.startsWith("{")) {
@@ -281,8 +281,8 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
           controller.close();
           return;
         }
-        const py = pyCandidates[i];
-        const cp = spawn(py, args, { cwd: process.cwd(), env: process.env });
+        const py = pyCandidates[i]!;
+        const cp = spawn(py, args, { cwd: process.cwd(), env: process.env }) as ChildProcessWithoutNullStreams;
 
         cp.on("error", (e: NodeJS.ErrnoException) => {
           if (e.code === "ENOENT") {
@@ -400,8 +400,8 @@ export async function GET() {
         for (let idx = 0; idx < paths.length; idx++) {
           const parent = paths[idx];
           send({ type: "progress", parent, phase: "queue", msg: `📂 [${idx + 1}/${paths.length}] ${parent}` });
-          const pkgs = await runDiscoverStreaming(parent, send);
-          discoveredByParent[parent] = pkgs;
+          const pkgs = await runDiscoverStreaming(parent!, send);
+          discoveredByParent[parent!] = pkgs;
         }
         // R8: ship the companion LOCAL_WORKFLOWS_PATH list down the same
         // stream so the dialog can render the local-workflow scan results

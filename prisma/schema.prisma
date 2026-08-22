@@ -1,38 +1,109 @@
-// Comfy-APP data model (MVP). SQLite for local; enums are represented as
-// String fields because SQLite does not support Prisma enums. Allowed values
-// are centralized in src/lib/*.ts (membership, credits, comfyui meta).
+// Prisma schema for Better Auth
+// learn more: https://better-auth.com/docs/concepts/database
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../generated/prisma"
 }
+
+// NOTE: When using mysql or sqlserver, uncomment the //@db.Text annotations in model Account below
+// Further reading:
+// https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#string
 
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id           String      @id @default(cuid())
-  email        String      @unique
-  name         String?
-  passwordHash String
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  tasks        Task[]
-  favorites    Favorite[]
-  workflowTemplates WorkflowTemplate[]
-  loraTrainingJobs LoraTrainingJob[]
-  filmProjects     FilmProject[]
-  modelConfigs     UserModelConfig[]
-  modelTags        WorkflowModelTag[]
-  projects         Project[]
+model Post {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy   User   @relation(fields: [createdById], references: [id])
+  createdById String
+
+  @@index([name])
 }
 
-// ── 项目画布（Project Canvas）持久化 ──
-// 项目画布节点原先只存浏览器 localStorage（按 origin 隔离，换端口/清缓存就丢）。
-// 现改为服务端持久化：id 复用客户端生成的 `proj_...` 字符串，与 Task.projectId
-// 直接兼容，无需迁移。nodes/edges 直接存 React Flow 的完整节点/边对象（JSON 可序列化）。
-// 前端 canvas-store.ts 做 write-through：localStorage 即时写 + 异步同步到服务端。
+model User {
+  id            String    @id @default(cuid())
+  name          String? //@db.Text
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String? //@db.Text
+  // Comfy-APP: local credential login (bcrypt hash; "demo-not-used"/"oauth-not-used" for non-password users)
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  posts         Post[]
+
+  // Comfy-APP business relations
+  tasks             Task[]
+  favorites         Favorite[]
+  workflowTemplates WorkflowTemplate[]
+  loraTrainingJobs  LoraTrainingJob[]
+  filmProjects      FilmProject[]
+  modelConfigs      UserModelConfig[]
+  modelTags         WorkflowModelTag[]
+  projects          Project[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String? //@db.Text
+  userAgent String? //@db.Text
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String //@db.Text
+  providerId            String //@db.Text
+  issuer                String //@db.Text
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String? //@db.Text
+  refreshToken          String? //@db.Text
+  idToken               String? //@db.Text
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String? //@db.Text
+  password              String? //@db.Text
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([providerId, accountId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String //@db.Text
+  value      String //@db.Text
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@map("verification")
+}
+
+// ===== Comfy-APP business models (migrated from original project) =====
+
 model Project {
   id        String   @id // 复用客户端 proj_... id（与 Task.projectId 对齐）
   userId    String
@@ -333,4 +404,18 @@ model FilmShot {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([filmId, order])
+}
+
+// ── 审计日志（生产级安全留痕，见 src/server/lib/audit.ts）──
+// 敏感操作（登录失败、删除、导出、设置变更）落库，便于事后溯源与合规。
+model AuditLog {
+  id        String   @id @default(cuid())
+  event     String // login_failed | role_changed | post_deleted | ...
+  userId    String?
+  ip        String?
+  meta      String? // JSON 化的补充信息
+  createdAt DateTime @default(now())
+  @@index([event])
+  @@index([userId])
+  @@index([createdAt])
 }

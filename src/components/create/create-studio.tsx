@@ -9,6 +9,7 @@ import type { SkillData } from "@/components/skill";
 import dynamic from "next/dynamic";
 import { DarkSelect } from "@/components/updream/ui/DarkSelect";
 import { NumberField } from "@/components/updream/ui/NumberField";
+import { api } from "~/trpc/react";
 
 // Lazy-load the heavy ReactFlow canvas (only needed for custom workflows)
 const WorkflowCanvas = dynamic(
@@ -55,7 +56,7 @@ function computeLayout(graph: Record<string, any>) {
   for (const id of ids) {
     const inputs = graph[id]?.inputs || {};
     for (const v of Object.values(inputs)) {
-      if (Array.isArray(v) && typeof v[0] === "string" && graph[v[0]]) succ[id].push(v[0]);
+      if (Array.isArray(v) && typeof v[0] === "string" && graph[v[0]]) succ[id]!.push(v[0]);
     }
   }
   const layer: Record<string, number> = {};
@@ -65,7 +66,7 @@ function computeLayout(graph: Record<string, any>) {
     if (visiting[id]) return 0;
     visiting[id] = true;
     let l = 0;
-    for (const s of succ[id]) l = Math.max(l, dfs(s) + 1);
+    for (const s of succ[id]!) l = Math.max(l, dfs(s) + 1);
     visiting[id] = false;
     layer[id] = l;
     return l;
@@ -74,9 +75,9 @@ function computeLayout(graph: Record<string, any>) {
 
   const byLayer: Record<number, string[]> = {};
   ids.forEach((id) => {
-    (byLayer[layer[id]] ||= []).push(id);
+    (byLayer[layer[id]!] ||= []).push(id);
   });
-  const maxLayer = ids.length ? Math.max(...ids.map((i) => layer[i])) : 0;
+  const maxLayer = ids.length ? Math.max(...ids.map((i) => layer[i]!)) : 0;
 
   const colW = 196;
   const rowH = 66;
@@ -153,6 +154,15 @@ export function CreateStudio() {
   const [uploading, setUploading] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
+  const ckptQ = api.model.list.useQuery({ type: "CHECKPOINT" });
+  const loraQ = api.model.list.useQuery({ type: "LORA" });
+  const workflowsQ = api.workflow.list.useQuery();
+  const wfDetailQ = api.workflow.detail.useQuery({ id: customId }, { enabled: !!customId });
+  const createWf = api.workflow.create.useMutation();
+  const updateWf = api.workflow.update.useMutation();
+  const gen = api.generate.generate.useMutation();
+  const utils = api.useUtils();
+
   const workflowLabel =
     tab === "custom"
       ? customWorkflows.find((w) => w.id === customId)?.name ?? "自定义工作流"
@@ -168,16 +178,14 @@ export function CreateStudio() {
   const ksNodes = wfDetail?.nodes.filter((n) => n.class_type === "KSampler") ?? [];
 
   useEffect(() => {
-    fetch("/api/models?type=CHECKPOINT")
-      .then((r) => r.json())
-      .then((d) => setCheckpoints(d.models ?? []));
-    fetch("/api/models?type=LORA")
-      .then((r) => r.json())
-      .then((d) => setLoraOpts(d.models ?? []));
-    fetch("/api/workflows")
-      .then((r) => r.json())
-      .then((d) => setCustomWorkflows(d.workflows ?? []));
-  }, []);
+    if (ckptQ.data) setCheckpoints(ckptQ.data.models ?? []);
+  }, [ckptQ.data]);
+  useEffect(() => {
+    if (loraQ.data) setLoraOpts(loraQ.data.models ?? []);
+  }, [loraQ.data]);
+  useEffect(() => {
+    if (workflowsQ.data) setCustomWorkflows(workflowsQ.data.workflows ?? []);
+  }, [workflowsQ.data]);
 
   // Close fullscreen graph on Escape.
   useEffect(() => {
@@ -196,21 +204,18 @@ export function CreateStudio() {
       setParamMap({});
       return;
     }
-    let cancelled = false;
-    fetch(`/api/workflows/${customId}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled) return;
-        if (d.graph) {
-          setWfDetail({ graph: d.graph, nodes: d.nodes, paramMap: d.paramMap });
-          setParamMap(d.paramMap ?? {});
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [customId]);
+    const tpl = wfDetailQ.data?.template;
+    if (tpl?.graph) {
+      const nodes = Object.entries(tpl.graph as unknown as Record<string, any>).map(([id, n]) => ({
+        id,
+        class_type: n?.class_type ?? "",
+        title: n?._meta?.title ?? n?.class_type ?? id,
+      }));
+      const pm = (tpl.paramMap ?? {}) as ParamMap;
+      setWfDetail({ graph: tpl.graph as unknown as Record<string, any>, nodes, paramMap: pm });
+      setParamMap(pm);
+    }
+  }, [customId, wfDetailQ.data]);
 
   async function onUpload(file: File) {
     setUploading(true);
@@ -239,14 +244,11 @@ export function CreateStudio() {
       setImportError("JSON 解析失败，请检查格式");
       return;
     }
-    const res = await fetch("/api/workflows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: importName || "未命名工作流", graph }),
-    });
-    const d = await res.json();
-    if (!res.ok) {
-      setImportError(d.error ?? "导入失败");
+    let d: { id: string; name: string; taskType: string };
+    try {
+      d = await createWf.mutateAsync({ name: importName || "未命名工作流", graph: graph as any });
+    } catch (e: any) {
+      setImportError(e?.message ?? "导入失败");
       return;
     }
     setCustomWorkflows((prev) => [...prev, { id: d.id, name: d.name, taskType: d.taskType }]);
@@ -266,11 +268,8 @@ export function CreateStudio() {
       // Persist asynchronously.
       if (customId) {
         setSavingMap(true);
-        fetch(`/api/workflows/${customId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ paramMap: next }),
-        })
+        updateWf
+          .mutateAsync({ id: customId, paramMap: next })
           .catch(() => {})
           .finally(() => setSavingMap(false));
       }
@@ -341,15 +340,12 @@ export function CreateStudio() {
     setImages([]);
     setLogs([]);
 
-    const res = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const d = await res.json();
-    if (!res.ok) {
+    let d: { taskId: string };
+    try {
+      d = await gen.mutateAsync(payload as any);
+    } catch (e: any) {
       setStatus("error");
-      setError(d.error ?? "提交失败");
+      setError(e?.message ?? "提交失败");
       return;
     }
     setTaskId(d.taskId);
@@ -368,9 +364,10 @@ export function CreateStudio() {
       } else if (msg.type === "done") {
         setStatus("done");
         setProgress(100);
-        fetch(`/api/tasks/${d.taskId}`)
-          .then((r) => r.json())
-          .then((td) => setImages((td.task.images ?? []).map((i: any) => i.localPath)));
+        utils.task.detail
+          .fetch({ id: d.taskId })
+          .then((td) => setImages((td.images ?? []).map((i: any) => i.localPath)))
+          .catch(() => {});
         es.close();
       } else if (msg.type === "error") {
         setStatus("error");
@@ -488,11 +485,7 @@ export function CreateStudio() {
                   setParamMap(pm);
                   // Persist paramMap to server
                   if (customId) {
-                    fetch(`/api/workflows/${customId}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ paramMap: pm }),
-                    }).catch(() => {});
+                    updateWf.mutateAsync({ id: customId, paramMap: pm }).catch(() => {});
                   }
                 }}
                 onGenerate={(graph, pm) => {
@@ -808,7 +801,7 @@ export function CreateStudio() {
                     value={l.name}
                     onChange={(v) => {
                       const next = [...loras];
-                      next[i].name = v;
+                      next[i]!.name = v;
                       setLoras(next);
                     }}
                     options={loraOpts.map((m) => m.fileName)}
@@ -819,7 +812,7 @@ export function CreateStudio() {
                     value={l.weight}
                     onChange={(v) => {
                       const next = [...loras];
-                      next[i].weight = v;
+                      next[i]!.weight = v;
                       setLoras(next);
                     }}
                     min={0}

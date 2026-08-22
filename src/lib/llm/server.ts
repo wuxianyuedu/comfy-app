@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@/lib/db";
+import { llmConfigRepository } from "@/lib/core/repository";
 import type { LLMConfig, LLMMessage, LLMRequestOptions, LLMProviderType } from "./types";
 
 const ENV_DEFAULTS: LLMConfig = {
@@ -21,7 +21,7 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
   const cfg: LLMConfig = { ...ENV_DEFAULTS };
 
   try {
-    const row = await prisma.llmConfig.findUnique({ where: { id: "singleton" } });
+    const row = await llmConfigRepository.findSingleton();
     if (row) {
       if (row.provider) cfg.provider = row.provider as LLMProviderType;
       if (row.baseUrl) cfg.baseUrl = row.baseUrl;

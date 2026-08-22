@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ModelCard, type ModelCardData } from "./model-card";
+import { vanillaApi } from "~/trpc/vanilla";
 
 const FILTERS = [
   { key: "", label: "全部" },
@@ -21,25 +22,25 @@ export function ModelLibrary() {
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (type) params.set("type", type);
-    if (q) params.set("q", q);
-    fetch(`/api/models?${params.toString()}`)
-      .then((r) => r.json())
-      .then((d) => setModels(d.models ?? []))
+    const params: { type?: string; q?: string } = {};
+    if (type) params.type = type;
+    if (q) params.q = q;
+    vanillaApi.model.list
+      .query(params)
+      .then((d) => setModels((d.models ?? []) as unknown as ModelCardData[]))
       .finally(() => setLoading(false));
   }, [type, q]);
 
   async function sync() {
     setSyncing(true);
     try {
-      await fetch("/api/models/sync", { method: "POST" });
+      await vanillaApi.model.sync.mutate();
       // refresh
-      const params = new URLSearchParams();
-      if (type) params.set("type", type);
-      if (q) params.set("q", q);
-      const d = await (await fetch(`/api/models?${params.toString()}`)).json();
-      setModels(d.models ?? []);
+      const params: { type?: string; q?: string } = {};
+      if (type) params.type = type;
+      if (q) params.q = q;
+      const d = await vanillaApi.model.list.query(params);
+      setModels((d.models ?? []) as unknown as ModelCardData[]);
     } finally {
       setSyncing(false);
     }

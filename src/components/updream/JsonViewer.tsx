@@ -32,6 +32,7 @@ import {
 import JsonView from "react18-json-view";
 import "react18-json-view/src/style.css";
 import "react18-json-view/src/dark.css";
+import { Icon } from "@/components/ui/Icon";
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
 type JsonValue =
@@ -79,7 +80,7 @@ function collectHits(root: JsonValue, query: string): Path[] {
     // object
     for (const k of Object.keys(node)) {
       if (k.toLowerCase().includes(q)) hits.push([...path, k]);
-      visit((node as { [k: string]: JsonValue })[k], [...path, k]);
+      visit((node as { [k: string]: JsonValue })[k]!, [...path, k]);
     }
   };
 
@@ -367,7 +368,7 @@ export function JsonViewer({
 
       {/* 搜索条 */}
       <div className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-1.5 text-xs">
-        <span className="text-zinc-500">🔍</span>
+        <Icon name="search" size={14} className="shrink-0 text-zinc-500" />
         <input
           ref={searchRef}
           type="text"
@@ -391,7 +392,7 @@ export function JsonViewer({
               className="rounded border border-white/10 px-2 py-0.5 text-zinc-400 hover:bg-white/5 disabled:opacity-30"
               title="上一个 (Shift+Enter)"
             >
-              ↑
+              <Icon name="chevronup" size={14} className="text-zinc-400" />
             </button>
             <button
               type="button"
@@ -400,7 +401,7 @@ export function JsonViewer({
               className="rounded border border-white/10 px-2 py-0.5 text-zinc-400 hover:bg-white/5 disabled:opacity-30"
               title="下一个 (Enter)"
             >
-              ↓
+              <Icon name="chevrondown" size={14} className="text-zinc-400" />
             </button>
             <button
               type="button"
@@ -408,7 +409,7 @@ export function JsonViewer({
               className="rounded border border-white/10 px-2 py-0.5 text-zinc-400 hover:bg-white/5"
               title="清空 (Esc)"
             >
-              ✕
+              <Icon name="close" size={14} className="text-zinc-400" />
             </button>
           </>
         )}

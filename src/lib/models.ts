@@ -1,5 +1,5 @@
-import { prisma } from "./db";
 import { listModels, comfyBase } from "./comfyui/client";
+import { modelRepository, userModelConfigRepository } from "./core/repository";
 import { type ModelType } from "./model-types";
 
 export function baseFromName(name: string): string {
@@ -59,7 +59,7 @@ export async function syncModels(userId?: string): Promise<number> {
   type FolderOverride = { enabled: boolean; isCustom: boolean };
   const overrides = new Map<string, FolderOverride>();
   if (userId) {
-    const rows = await prisma.userModelConfig.findMany({ where: { userId } });
+    const rows = await userModelConfigRepository.listByUser(userId);
     for (const r of rows) {
       overrides.set(r.folder, { enabled: r.enabled, isCustom: r.isCustom });
     }
@@ -69,7 +69,7 @@ export async function syncModels(userId?: string): Promise<number> {
   }
 
   // STEP 1 — unconditionally retire every LOCAL row.
-  await prisma.model.updateMany({ where: { source: "LOCAL" }, data: { isAvailable: false } });
+  await modelRepository.disableAllLocal();
 
   // STEP 2 — re-fill from disk only if ComfyUI is reachable.
   if (!(await isComfyReachable())) return 0;
@@ -85,23 +85,12 @@ export async function syncModels(userId?: string): Promise<number> {
   }
 
   for (const s of scanned) {
-    await prisma.model.upsert({
-      where: { fileName_folder: { fileName: s.fileName, folder: s.folder } },
-      create: {
-        fileName: s.fileName,
-        folder: s.folder,
-        name: s.name,
-        type: s.type,
-        baseModel: s.baseModel,
-        isAvailable: true,
-        source: "LOCAL",
-      },
-      update: {
-        isAvailable: true,
-        name: s.name,
-        type: s.type,
-        baseModel: s.baseModel,
-      },
+    await modelRepository.upsertScanned({
+      fileName: s.fileName,
+      folder: s.folder,
+      name: s.name,
+      type: s.type,
+      baseModel: s.baseModel,
     });
   }
 
@@ -123,32 +112,14 @@ export async function syncModels(userId?: string): Promise<number> {
  */
 export async function localModelFileNames(folders: string[]): Promise<string[]> {
   if (!folders.length) return [];
-  const rows = await prisma.userModelConfig.findMany({
-    where: { enabled: true },
-    select: { folder: true },
-  });
+  const enabled = await userModelConfigRepository.listEnabledFolders();
   const wanted = new Set(folders);
-  const matchedFolders = rows.filter((r) => wanted.has(r.folder)).map((r) => r.folder);
+  const matchedFolders = enabled.filter((f) => wanted.has(f));
   if (!matchedFolders.length) return [];
-  const models = await prisma.model.findMany({
-    where: { isAvailable: true, folder: { in: matchedFolders } },
-    select: { fileName: true },
-  });
-  const out = new Set<string>();
-  for (const m of models) out.add(m.fileName);
-  return Array.from(out).sort((a, b) => a.localeCompare(b));
+  return modelRepository.listAvailableFileNamesByFolders(matchedFolders);
 }
 
 /** File counts per folder, for the config modal's "文件数" column. */
 export async function modelCountsByFolder(): Promise<Record<string, number>> {
-  const rows = await prisma.model.groupBy({
-    by: ["folder"],
-    where: { isAvailable: true },
-    _count: { _all: true },
-  });
-  const out: Record<string, number> = {};
-  for (const r of rows) {
-    if (r.folder) out[r.folder] = r._count._all;
-  }
-  return out;
+  return modelRepository.countsByFolder();
 }

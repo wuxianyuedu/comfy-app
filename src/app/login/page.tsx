@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { authClient } from "~/server/better-auth/client";
 import { Icon } from "@/components/ui/Icon";
 
 type Mode = "signin" | "register";
@@ -32,26 +32,24 @@ export default function LoginPage() {
     setLoading(true);
     try {
       if (mode === "register") {
-        const res = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name: name || undefined }),
+        const { error: signUpError } = await authClient.signUp.email({
+          email,
+          password,
+          name: name || "",
         });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setError(data.error ?? "注册失败，请稍后重试");
+        if (signUpError) {
+          setError(signUpError.message ?? "注册失败，请稍后重试");
           setLoading(false);
           return;
         }
       }
 
-      const result = await signIn("credentials", {
+      const { error: signInError } = await authClient.signIn.email({
         email,
         password,
-        redirect: false,
       });
 
-      if (result?.error) {
+      if (signInError) {
         setError(
           mode === "register" ? "注册成功，但自动登录失败，请重试" : "邮箱或密码错误",
         );

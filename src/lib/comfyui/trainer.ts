@@ -23,7 +23,7 @@
 //   On "done", `outputName` is the .safetensors filename already placed in the
 //   ComfyUI loras directory.
 
-import { prisma } from "../db";
+import { loraTrainingJobRepository, modelRepository } from "../core/repository";
 import { promises as fs } from "fs";
 import path from "path";
 import { getSettingsSync } from "../app-settings";
@@ -68,13 +68,7 @@ export function isTrainerConfigured(): boolean {
 }
 
 async function appendLog(jobId: string, level: TrainLogEntry["level"], msg: string) {
-  const job = await prisma.loraTrainingJob.findUnique({ where: { id: jobId }, select: { logs: true } });
-  const arr = (job?.logs as TrainLogEntry[] | null) ?? [];
-  arr.push({ t: Date.now(), level, msg });
-  await prisma.loraTrainingJob.update({
-    where: { id: jobId },
-    data: { logs: arr as any, updatedAt: new Date() },
-  });
+  await loraTrainingJobRepository.appendLog(jobId, { t: Date.now(), level, msg });
 }
 
 /**
@@ -82,7 +76,7 @@ async function appendLog(jobId: string, level: TrainLogEntry["level"], msg: stri
  * runner). Safe to call from a request handler.
  */
 export async function enqueueTraining(jobId: string): Promise<void> {
-  const job = await prisma.loraTrainingJob.findUnique({ where: { id: jobId } });
+  const job = await loraTrainingJobRepository.findById(jobId);
   if (!job) return;
 
   const spec = job as unknown as TrainJobSpec;
@@ -120,10 +114,7 @@ async function runRemote(spec: TrainJobSpec): Promise<void> {
   const data = (await res.json()) as { id?: string };
   const backendId = data.id ?? spec.id;
 
-  await prisma.loraTrainingJob.update({
-    where: { id: spec.id },
-    data: { status: "RUNNING", progress: 0 },
-  });
+  await loraTrainingJobRepository.markRunning(spec.id);
 
   // Poll until terminal.
   const POLL_MS = 4000;
@@ -142,10 +133,7 @@ async function runRemote(spec: TrainJobSpec): Promise<void> {
       for (const l of info.logs) await appendLog(spec.id, l.level, l.msg);
     }
     if (typeof info.progress === "number") {
-      await prisma.loraTrainingJob.update({
-        where: { id: spec.id },
-        data: { progress: Math.min(100, Math.max(0, info.progress)), status: "RUNNING" },
-      });
+      await loraTrainingJobRepository.updateProgress(spec.id, info.progress);
     }
 
     if (info.status === "done") {
@@ -166,39 +154,24 @@ async function finishJob(spec: TrainJobSpec, outputName?: string): Promise<void>
 
   // Register a Model row so the LoRA appears in the selector / library.
   // (Assumes the backend already wrote finalName into the ComfyUI loras dir.)
-  await prisma.model.upsert({
-    where: { fileName_folder: { fileName: finalName, folder: "loras" } },
-    update: { isAvailable: true, name: spec.name, baseModel: spec.baseModel, folder: "loras" },
-    create: {
-      name: spec.name,
-      type: "LORA",
-      fileName: finalName,
-      folder: "loras",
-      baseModel: spec.baseModel,
-      category: "USER",
-      source: "LOCAL",
-      isAvailable: true,
-      description: `由炼丹训练产出 · 触发词 ${spec.triggerWord}`,
-    },
+  await modelRepository.registerLora({
+    fileName: finalName,
+    name: spec.name,
+    baseModel: spec.baseModel,
+    triggerWord: spec.triggerWord,
   });
 
-  await prisma.loraTrainingJob.update({
-    where: { id: spec.id },
-    data: { status: "DONE", progress: 100, outputName: finalName, updatedAt: new Date() },
-  });
+  await loraTrainingJobRepository.markDone(spec.id, finalName);
   await appendLog(spec.id, "success", `训练完成，LoRA 已产出：${finalName}（可在创作台 LoRA 中选择使用）`);
 }
 
 async function failJob(jobId: string, error: string): Promise<void> {
-  await prisma.loraTrainingJob.update({
-    where: { id: jobId },
-    data: { status: "FAILED", error, updatedAt: new Date() },
-  });
+  await loraTrainingJobRepository.markFailed(jobId, error);
   await appendLog(jobId, "error", `训练失败：${error}`);
 }
 
 export async function cancelTraining(jobId: string): Promise<void> {
-  const job = await prisma.loraTrainingJob.findUnique({ where: { id: jobId }, select: { status: true } });
+  const job = await loraTrainingJobRepository.findStatusById(jobId);
   if (!job) return;
   if (job.status === "DONE" || job.status === "FAILED" || job.status === "CANCELLED") return;
 
@@ -209,10 +182,7 @@ export async function cancelTraining(jobId: string): Promise<void> {
       /* best-effort */
     }
   }
-  await prisma.loraTrainingJob.update({
-    where: { id: jobId },
-    data: { status: "CANCELLED", updatedAt: new Date() },
-  });
+  await loraTrainingJobRepository.markCancelled(jobId);
   await appendLog(jobId, "warn", "用户已取消训练任务");
 }
 

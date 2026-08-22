@@ -267,8 +267,8 @@ function buildFromApiGraph(graph: unknown): { nodes: Node<MiniNodeData>[]; edges
       if (Array.isArray(v) && v.length >= 2 && typeof v[0] === "string" && ids.includes(v[0])) {
         const srcId = v[0];
         const slot = v[1];
-        incoming[id].add(srcId);
-        outAdj[srcId].add(id);
+        incoming[id]!.add(srcId);
+        outAdj[srcId]!.add(id);
         edges.push({
           id: `e${eId++}`,
           type: "wf",
@@ -283,7 +283,7 @@ function buildFromApiGraph(graph: unknown): { nodes: Node<MiniNodeData>[]; edges
 
   // Longest-path layering (Kahn BFS)
   const level: Record<string, number> = {};
-  const remaining = new Map<string, number>(ids.map((id) => [id, incoming[id].size]));
+  const remaining = new Map<string, number>(ids.map((id) => [id, incoming[id]!.size]));
   const queue: string[] = [];
   for (const [id, deg] of remaining) {
     if (deg === 0) {
@@ -293,8 +293,8 @@ function buildFromApiGraph(graph: unknown): { nodes: Node<MiniNodeData>[]; edges
   }
   while (queue.length) {
     const id = queue.shift()!;
-    for (const nxt of outAdj[id]) {
-      level[nxt] = Math.max(level[nxt] ?? 0, level[id] + 1);
+    for (const nxt of outAdj[id]!) {
+      level[nxt] = Math.max(level[nxt] ?? 0, level[id]! + 1);
       remaining.set(nxt, (remaining.get(nxt) ?? 0) - 1);
       if ((remaining.get(nxt) ?? 0) === 0) queue.push(nxt);
     }

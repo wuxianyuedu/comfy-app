@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { MediaThumb } from "@/components/updream/MediaThumb";
+import { vanillaApi } from "~/trpc/vanilla";
 
 /* ── Types (mirror /api/tasks 响应) ─────────────────────────── */
 
@@ -123,18 +124,13 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
     const run = async () => {
       setLoading(true);
       setError(null);
-      const params = new URLSearchParams({ take: "80" });
-      if (scope === "project" && projectId) params.set("projectId", projectId);
-      if (filter !== "all") params.set("media", filter);
+      const params: { take?: number; projectId?: string; media?: "image" | "video" | "audio" } = { take: 80 };
+      if (scope === "project" && projectId) params.projectId = projectId;
+      if (filter !== "all") params.media = filter as "image" | "video" | "audio";
       try {
-        const res = await fetch(`/api/tasks?${params.toString()}`);
-        if (!res.ok) {
-          const d = await res.json().catch(() => ({}));
-          throw new Error(d?.error || `请求失败 (${res.status})`);
-        }
-        const d = await res.json();
+        const d = await vanillaApi.task.list.query(params);
         if (cancelled) return;
-        setTasks(Array.isArray(d.tasks) ? d.tasks : []);
+        setTasks((d.tasks ?? []) as unknown as TaskRow[]);
       } catch (e: any) {
         if (cancelled) return;
         setError(e?.message ?? "读取历史记录失败");
@@ -153,8 +149,8 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
   useEffect(() => {
     if (scope !== "project" || loading || tasks.length > 0 || globalCount !== null) return;
     let cancelled = false;
-    fetch("/api/tasks?take=1")
-      .then((res) => (res.ok ? res.json() : null))
+    vanillaApi.task.list
+      .query({ take: 1 })
       .then((d) => {
         if (cancelled || !d) return;
         setGlobalCount(Array.isArray(d.tasks) ? d.tasks.length : 0);

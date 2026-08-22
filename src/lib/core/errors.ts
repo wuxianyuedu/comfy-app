@@ -19,6 +19,7 @@
  * | `NotFoundError`       | 404  | 资源不存在或不属于当前用户              |
  * | `ConflictError`       | 409  | 唯一约束冲突/并发写冲突                  |
  * | `DomainError`         | 422  | 领域不变量被破坏（状态机非法迁移等）     |
+ * | `MethodNotAllowedError`| 405 | HTTP 方法不被该资源允许（如 GET 收到 POST）|
  * | `IntegrationError`    | 502  | 依赖的外部服务（ComfyUI 等）不可用      |
  * | `AppError`(基类)      | 500  | 未分类的内部错误（兜底）                |
  *
@@ -92,6 +93,13 @@ export class ConflictError extends AppError {
 export class DomainError extends AppError {
   constructor(message: string, code = "domain", details?: unknown) {
     super(message, code, 422, details);
+  }
+}
+
+/** HTTP 方法不被该资源允许（如路由只允许 GET 却收到 POST）→ 405。 */
+export class MethodNotAllowedError extends AppError {
+  constructor(message = "请求方法不被允许", code = "method.not_allowed") {
+    super(message, code, 405);
   }
 }
 

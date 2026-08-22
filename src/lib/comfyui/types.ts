@@ -186,7 +186,7 @@ const OUTPUT_TYPES: Record<string, string[]> = {
 /** Get the data type produced by a class's nth output slot. */
 export function inferOutputType(classType: string, slot: number): string {
   const types = OUTPUT_TYPES[classType];
-  if (types && slot >= 0 && slot < types.length) return types[slot];
+  if (types && slot >= 0 && slot < types.length) return types[slot]!;
   /* Heuristic fallback for custom nodes the static table doesn't list
    *  (EmptySD3LatentImage, ModelSamplingAuraFlow, ResolutionSelector, …).
    *  Match on the class name itself, which is highly stable across

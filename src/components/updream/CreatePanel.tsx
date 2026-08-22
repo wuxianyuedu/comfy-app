@@ -6,6 +6,7 @@ import { SkillSelector } from "@/components/skill";
 import type { SkillData } from "@/components/skill";
 import type { WorkspaceView } from "@/components/updream";
 import { useToast } from "@/components/updream/Toast";
+import { vanillaApi } from "~/trpc/vanilla";
 import { NumberField } from "@/components/updream/ui/NumberField";
 import { DarkSelect } from "@/components/updream/ui/DarkSelect";
 import { Icon } from "@/components/ui/Icon";
@@ -260,16 +261,16 @@ export function CreatePanel({
   }, [initialWorkflowId]);
 
   const fetchModels = useCallback(() => {
-    fetch("/api/models?type=CHECKPOINT")
-      .then((r) => r.json())
+    vanillaApi.model.list
+      .query({ type: "CHECKPOINT" })
       .then((d) => setCheckpoints(d.models ?? []));
-    fetch("/api/models?type=LORA")
-      .then((r) => r.json())
+    vanillaApi.model.list
+      .query({ type: "LORA" })
       .then((d) => setLoraOpts(d.models ?? []));
     // Fetch workflows with optional type filter
-    const typeParam = wfTypeFilter ? `?type=${wfTypeFilter}` : `?category=${wfCategory}`;
-    fetch(`/api/workflows${typeParam}`)
-      .then((r) => r.json())
+    const typeParam = wfTypeFilter ? { type: wfTypeFilter } : { category: wfCategory };
+    vanillaApi.workflow.list
+      .query(typeParam)
       .then((d) => setCustomWorkflows(d.workflows ?? []));
   }, [wfCategory, wfTypeFilter]);
 
@@ -285,8 +286,8 @@ export function CreatePanel({
     }
     // Fetch all workflows and collect unique taskTypes as the "supported" set for this model.
     // In future this could be replaced by a dedicated /api/models/[id]/types endpoint.
-    fetch("/api/workflows")
-      .then((r) => r.json())
+    vanillaApi.workflow.list
+      .query({})
       .then((d) => {
         const types: Set<string> = new Set(
           (d.workflows ?? []).map((w: { taskType: string }) => normalizeTaskType(w.taskType))
@@ -331,18 +332,24 @@ export function CreatePanel({
       return;
     }
     let cancelled = false;
-    fetch(`/api/workflows/${customId}`)
-      .then((r) => r.json())
+    vanillaApi.workflow.detail
+      .query({ id: customId })
       .then((d) => {
         if (cancelled) return;
-        if (d.graph) {
+        const tpl = d.template;
+        if (tpl.graph) {
+          const nodes: WfNode[] = Object.entries(tpl.graph).map(([id, n]) => ({
+            id,
+            class_type: (n as any)?.class_type ?? "?",
+            title: (n as any)?.title ?? (n as any)?.class_type ?? id,
+          }));
           setWfDetail({
-            graph: d.graph,
-            nodes: d.nodes,
-            paramMap: d.paramMap ?? {},
-            workflowIO: (d.workflowIO as WorkflowIOMap) ?? undefined,
+            graph: tpl.graph as Record<string, any>,
+            nodes,
+            paramMap: (tpl.paramMap as ParamMap) ?? {},
+            workflowIO: (tpl.workflowIO as unknown as WorkflowIOMap) ?? undefined,
           });
-          setParamMap(d.paramMap ?? {});
+          setParamMap((tpl.paramMap as ParamMap) ?? {});
         }
       })
       .catch(() => {});
@@ -502,22 +509,17 @@ export function CreatePanel({
     //  task to grab structured `validationErrors` for the inline panel.
     const fetchValidationErrors = async (tid: string) => {
       try {
-        const td = await (await fetch(`/api/tasks/${tid}`)).json();
-        const ve = td?.task?.validationErrors;
+        const td = await vanillaApi.task.detail.query({ id: tid });
+        const ve = (td as any)?.validationErrors;
         if (Array.isArray(ve)) setValidationErrors(ve as ValidationError[]);
       } catch {}
     };
 
-    const res = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const d = await res.json();
-    if (!res.ok) {
+    const d = await vanillaApi.generate.generate.mutate(payload as any);
+    if (!d.taskId) {
       setStatus("error");
-      setError(d.error ?? "提交失败");
-      toast.update(loadId, { kind: "error", title: "提交失败", description: d.error, duration: 4000 });
+      setError("提交失败");
+      toast.update(loadId, { kind: "error", title: "提交失败", description: "生成请求未返回任务 ID", duration: 4000 });
       return;
     }
 
@@ -543,13 +545,13 @@ export function CreatePanel({
       } else if (msg.type === "done") {
         setStatus("done");
         setProgress(100);
-        fetch(`/api/tasks/${d.taskId}`)
-          .then((r) => r.json())
+        vanillaApi.task.detail
+          .query({ id: d.taskId })
           .then((td) => {
-            const imgs = (td.task?.images ?? []).map((i: any) => i.localPath) as string[];
+            const imgs = (td.images ?? []).map((i: any) => i.localPath) as string[];
             setImages(imgs);
             // R-Next (2026-08-17): keep any structured validation errors in sync
-            const ve = td.task?.validationErrors;
+            const ve = td.validationErrors;
             setValidationErrors(Array.isArray(ve) ? (ve as ValidationError[]) : []);
             toast.update(loadId, {
               kind: "success",
@@ -620,7 +622,7 @@ export function CreatePanel({
           className={`absolute inset-0 rounded-full transition-all ${
             connected ? "scale-100 opacity-100" : "scale-50 opacity-0 group-hover:scale-100 group-hover:opacity-60"
           }`}
-          style={{ background: c.glow, boxShadow: `0 0 8px ${c.glow}` }}
+          style={{ background: c!.glow, boxShadow: `0 0 8px ${c!.glow}` }}
         />
         {/* Inner dot */}
         <div
@@ -628,9 +630,9 @@ export function CreatePanel({
             connected ? "shadow-sm" : ""
           }`}
           style={{
-            backgroundColor: connected ? c.bg : "transparent",
-            borderColor: c.ring,
-            boxShadow: connected ? `0 0 6px ${c.glow}` : "none",
+            backgroundColor: connected ? c!.bg : "transparent",
+            borderColor: c!.ring,
+            boxShadow: connected ? `0 0 6px ${c!.glow}` : "none",
           }}
         />
         {/* Tooltip label */}
@@ -1369,7 +1371,7 @@ export function CreatePanel({
                     <div key={i} className="flex items-center gap-2">
                       <DarkSelect
                         value={l.name}
-                        onChange={(v) => { const next = [...loras]; next[i].name = v; setLoras(next); }}
+                        onChange={(v) => { const next = [...loras]; next[i]!.name = v; setLoras(next); }}
                         options={["", ...loraOpts.map((m) => m.fileName)]}
                         labels={Object.fromEntries(loraOpts.map((m) => [m.fileName, m.name]))}
                         placeholder="选择 LoRA…"
@@ -1377,7 +1379,7 @@ export function CreatePanel({
                       />
                       <NumberField
                         value={l.weight}
-                        onChange={(v) => { const next = [...loras]; next[i].weight = v; setLoras(next); }}
+                        onChange={(v) => { const next = [...loras]; next[i]!.weight = v; setLoras(next); }}
                         min={-2} max={2} step={0.05} decimalPlaces={2}
                         className="w-16"
                       />

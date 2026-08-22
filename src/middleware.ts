@@ -1,27 +1,45 @@
-import { auth } from "@/lib/auth.config";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { getSessionCookie } from "better-auth/cookies";
 
-// Routes that should require a logged-in session.
-const PROTECTED = ["/workspace", "/main/me", "/main/create", "/main/models"];
+/**
+ * Edge 中间件：受保护页面的会话守卫（轻量、不触库）。
+ *
+ * - 只校验会话 cookie 是否存在；真实性由 better-auth 服务端校验。
+ * - /api/* 不在此拦截：tRPC 有 protectedProcedure / authedProcedure，
+ *   REST route 有 getServerUser()，服务端鉴权更可靠。
+ * - 未登录跳转 /login?next=<原路径>，登录后回跳。
+ */
 
-export default auth((req) => {
-  const isLoggedIn = !!req.auth;
-  const { pathname } = req.nextUrl;
-  const shouldProtect = PROTECTED.some(
-    (p) => pathname === p || pathname.startsWith(p + "/"),
-  );
+const PROTECTED_PREFIXES = [
+  "/create",
+  "/me",
+  "/models",
+  "/settings",
+  "/train",
+  "/workshop",
+];
 
-  // Local single-user mode keeps auth OPT-IN: enforcement only when
-  // AUTH_REQUIRED=true. Default off so the demo user + smoke tests keep working.
-  if (process.env.AUTH_REQUIRED === "true" && shouldProtect && !isLoggedIn) {
-    const url = new URL("/login", req.url);
-    url.searchParams.set("callbackUrl", pathname);
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/api")) return NextResponse.next();
+
+  const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+  if (!isProtected) return NextResponse.next();
+
+  // better-auth 的会话 cookie（edge 环境只能做存在性检查）
+  const sessionCookie = getSessionCookie(request);
+  if (!sessionCookie) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
-  matcher: ["/workspace/:path*", "/main/:path*"],
+  // 排除 Next 内部资源与静态文件
+  matcher: ["/((?!_next|.*\\..*).*)"],
 };
