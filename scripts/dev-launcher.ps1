@@ -6,11 +6,15 @@
 #
 # 改进（2026-08-04）：启动前按端口「精准」杀掉残留的 dev server，
 #   彻底避免「旧实例占着 3000、新实例被挤到 3001、浏览器连着旧代码」的尴尬。
-# 改进（2026-08-06）：默认每次启动都清空 .next（强制重新编译），彻底摆脱
-#   「Turbopack 编译产物缓存了旧 route.ts / API 旧 schema」的陷阱——这是
-#   之前子图 boundaryPin 改动「看不到效果」的根因之一。首次启动会慢 30~60s
-#   （Turbopack 重新打包），但 HMR 热更新不受影响；想省这点时间可设
-#   SKIP_CLEAN=1（如 `set SKIP_CLEAN=1 && .\run-ps.bat`）。
+# 改进（2026-08-23）：.next 缓存改为「指纹优先」策略——默认不再每次清空 .next，
+#   而是计算关键配置指纹（next.config.js / tsconfig.json / package.json /
+#   pnpm-lock.yaml 内容 hash + src\trpc / src\server 目录递归内容 hash），与
+#   .next\config-fingerprint 记录值比对：一致则保留缓存直接启动（秒起），
+#   不一致才清空 .next 全量重编译并写入新指纹。彻底摆脱「每次启动慢 30~60s」
+#   与「编译产物缓存了旧 route.ts / API schema 看不到改动」两个问题。
+#   控制开关（优先级 FORCE_CLEAN > SKIP_CLEAN > 指纹判断）：
+#     - SKIP_CLEAN=1  强制跳过清理（无论指纹如何都保留缓存，最快启动）
+#     - FORCE_CLEAN=1 强制清理（无论指纹如何都清空 .next 全量重编译）
 #   启动 Ready 后会自动打开/聚焦浏览器 http://localhost:3000：
 #     - 普通重启：Next 的 HMR 会自动重载已有标签页，无需手动硬刷；
 #     - 默认启动会带缓存破坏参数开新标签页，避免旧的 stale chunk 残留。
@@ -55,22 +59,77 @@ Write-Step "[0/5] 启动前清理：杀掉占用 3000/3001/3002 的旧 dev serve
 foreach ($p in @(3000, 3001, 3002)) { Stop-ProcessOnPort $p }
 Write-Step "        清理完成，将在 3000 端口启动全新实例。"
 
-# ── 默认清空 .next，强制重新编译（根治「编译产物缓存了旧 API schema」问题）──
-#     仅当显式 SKIP_CLEAN=1 才跳过。首次启动慢 30~60s，但保证全新编译。
-if ($env:SKIP_CLEAN -eq "1") {
-  Write-Step "[0.5/5] SKIP_CLEAN=1：跳过 .next 清理（保留编译缓存，首次启动更快）"
-} else {
-  $nextDir = Join-Path $PSScriptRoot "..\.next"
+# ── .next 缓存策略：基于「关键配置指纹」决定是否全量重编译 ──
+#     指纹 = SHA256 累积 next.config.js / tsconfig.json / package.json /
+#            pnpm-lock.yaml 内容 + src\trpc / src\server 目录递归内容。
+#     指纹与 .next\config-fingerprint 一致 → 保留 .next 直接启动（秒起）；
+#     不一致 → 清空 .next 全量重编译并写入新指纹。
+#     控制开关（优先级 FORCE_CLEAN > SKIP_CLEAN > 指纹判断）：
+#       FORCE_CLEAN=1 强制清理（无视指纹与 SKIP_CLEAN）
+#       SKIP_CLEAN=1  强制跳过清理（保留缓存，最快启动）
+function Get-ConfigFingerprint {
+  $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+  $targets = @("next.config.js", "tsconfig.json", "package.json", "pnpm-lock.yaml",
+               "src\trpc", "src\server")
+  $ih = [System.Security.Cryptography.IncrementalHash]::CreateHash(
+    [System.Security.Cryptography.HashAlgorithmName]::SHA256)
+  foreach ($rel in $targets) {
+    $full = Join-Path $root $rel
+    if (-not (Test-Path $full)) { continue }
+    $ih.AppendData([System.Text.Encoding]::UTF8.GetBytes($rel + "`0"))
+    if ((Get-Item $full).PSIsContainer) {
+      $files = @(Get-ChildItem $full -Recurse -File -ErrorAction SilentlyContinue |
+                 Sort-Object FullName)
+      foreach ($f in $files) {
+        $relPath = $f.FullName.Substring($root.Length).TrimStart('\')
+        $ih.AppendData([System.Text.Encoding]::UTF8.GetBytes($relPath + "`0"))
+        $ih.AppendData([System.IO.File]::ReadAllBytes($f.FullName))
+      }
+    } else {
+      $ih.AppendData([System.IO.File]::ReadAllBytes($full))
+    }
+  }
+  return [System.BitConverter]::ToString($ih.GetHashAndReset()).Replace("-", "").ToLowerInvariant()
+}
+
+$nextDir = Join-Path $PSScriptRoot "..\.next"
+$fingerprint = Get-ConfigFingerprint
+$fingerprintFile = Join-Path $nextDir "config-fingerprint"
+
+if ($env:FORCE_CLEAN -eq "1") {
   if (Test-Path $nextDir) {
     $nextSize = (Get-ChildItem $nextDir -Recurse -File -ErrorAction SilentlyContinue |
                  Measure-Object Length -Sum).Sum
     $sizeMB = if ($nextSize) { [math]::Round($nextSize / 1MB, 1) } else { 0 }
-    Write-Step "[0.5/5] 清空 .next（${sizeMB} MB，下次启动会重新编译，稍慢但保证全新）..."
+    Write-Step "[0.5/5] FORCE_CLEAN=1：强制清空 .next（${sizeMB} MB）并全量重编译..."
     Remove-Item -Recurse -Force $nextDir -ErrorAction SilentlyContinue
-    Write-Step "        已清空 .next。首次启动约需 30~60s（编译中），HMR 不受影响。"
   } else {
-    Write-Step "[0.5/5] .next 不存在，无需清理"
+    Write-Step "[0.5/5] FORCE_CLEAN=1：.next 不存在，无需清理"
   }
+  New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
+  Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
+  Write-Step "        已清空 .next 并写入新配置指纹（${fingerprint}）"
+} elseif ($env:SKIP_CLEAN -eq "1") {
+  Write-Step "[0.5/5] SKIP_CLEAN=1：跳过 .next 清理（保留编译缓存，最快启动）"
+} elseif (Test-Path $nextDir) {
+  $saved = ""
+  if (Test-Path $fingerprintFile) { $saved = (Get-Content $fingerprintFile -Raw).Trim() }
+  if ($saved -eq $fingerprint) {
+    Write-Step "[0.5/5] 配置指纹未变（${fingerprint}）：保留 .next 缓存，直接启动"
+  } else {
+    $nextSize = (Get-ChildItem $nextDir -Recurse -File -ErrorAction SilentlyContinue |
+                 Measure-Object Length -Sum).Sum
+    $sizeMB = if ($nextSize) { [math]::Round($nextSize / 1MB, 1) } else { 0 }
+    Write-Step "[0.5/5] 配置指纹变化（旧 ${saved} → 新 ${fingerprint}）：清空 .next（${sizeMB} MB）全量重编译..."
+    Remove-Item -Recurse -Force $nextDir -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
+    Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
+    Write-Step "        已清空 .next 并写入新配置指纹"
+  }
+} else {
+  New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
+  Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
+  Write-Step "[0.5/5] .next 不存在：写入初始配置指纹（${fingerprint}），首次启动全量编译"
 }
 
 try {
