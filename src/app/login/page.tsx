@@ -186,7 +186,7 @@ export default function LoginPage() {
                 onClick={() => setNotice("本地账号密码重置功能即将上线，如需帮助请联系管理员")}
                 className="text-sm text-primary/90 transition-colors hover:text-primary"
               >
-                忘记密码？
+                忘记密码?
               </button>
             </div>
           )}
