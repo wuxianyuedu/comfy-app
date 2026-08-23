@@ -2,3 +2,7 @@
 # will have compiled files and executables
 /target/
 /gen/schemas
+
+# 桌面壳生产构建产物（由 scripts/build-desktop.mjs 生成，不入库）
+/static/
+/binaries/

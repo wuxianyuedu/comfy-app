@@ -22,6 +22,10 @@
 #   若浏览器已有 Comfy-APP 旧标签页，请顺手关掉（sessionStorage 缓存按 tab
 #   隔离，缓存键版本虽已升到 v2 永久作废旧缓存，但关掉旧 tab 是最直观的保险）。
 
+param(
+  [switch]$Tauri   # 传 -Tauri 时启动 Tauri 桌面壳（pnpm tauri dev），否则启动 Web dev server
+)
+
 $ErrorActionPreference = "Stop"
 
 # 记录日志到文件（即使窗口一闪而过也能事后查看）
@@ -165,8 +169,14 @@ public class WJ {
   # ── 第四步：启动开发服务器（npm run dev，显式绑定 3000）──
   $psi = New-Object System.Diagnostics.ProcessStartInfo
   $psi.FileName = "cmd.exe"
-  # 显式 -p 3000：端口已在上一步清干净，保证新实例一定落在 3000
-  $psi.Arguments = "/c npm run dev -- -p 3000"
+  if ($Tauri) {
+    # Tauri 桌面壳：tauri CLI 会先跑 beforeDevCommand（pnpm dev）再弹桌面窗口；
+    # 整棵进程树都在本 Job Object 内，关闭窗口自动全清
+    $psi.Arguments = "/c pnpm tauri dev"
+  } else {
+    # Web 模式：显式 -p 3000，端口已在上一步清干净，保证新实例一定落在 3000
+    $psi.Arguments = "/c npm run dev -- -p 3000"
+  }
   $psi.WorkingDirectory = (Get-Location).Path
   $psi.UseShellExecute = $false
   $p = [System.Diagnostics.Process]::Start($psi)
@@ -179,11 +189,18 @@ public class WJ {
   # ── 第五步：显示状态横幅，等待进程退出 ──
   Write-Host ""
   Write-Host "============================================" -ForegroundColor Cyan
-  Write-Host "  Comfy-APP 开发服务器已启动" -ForegroundColor Cyan
-  Write-Host "  进程 PID：$($p.Id)" -ForegroundColor Cyan
-  Write-Host "  访问地址：http://localhost:3000" -ForegroundColor Green
-  Write-Host "  关闭此窗口即可停止服务器并清理所有子进程" -ForegroundColor Cyan
-  Write-Host "  （已自动打开浏览器；普通重启靠 HMR 自动刷新，无需手动硬刷）" -ForegroundColor DarkGray
+  if ($Tauri) {
+    Write-Host "  Comfy-APP 桌面壳（Tauri）已启动" -ForegroundColor Cyan
+    Write-Host "  进程 PID：$($p.Id)" -ForegroundColor Cyan
+    Write-Host "  桌面窗口加载 http://localhost:3000" -ForegroundColor Green
+    Write-Host "  关闭此窗口即可停止服务器并清理所有子进程" -ForegroundColor Cyan
+  } else {
+    Write-Host "  Comfy-APP 开发服务器已启动" -ForegroundColor Cyan
+    Write-Host "  进程 PID：$($p.Id)" -ForegroundColor Cyan
+    Write-Host "  访问地址：http://localhost:3000" -ForegroundColor Green
+    Write-Host "  关闭此窗口即可停止服务器并清理所有子进程" -ForegroundColor Cyan
+    Write-Host "  （已自动打开浏览器；普通重启靠 HMR 自动刷新，无需手动硬刷）" -ForegroundColor DarkGray
+  }
   Write-Host "============================================" -ForegroundColor Cyan
   Write-Host ""
 
@@ -191,7 +208,10 @@ public class WJ {
   #   普通重启时 Next 的 HMR 会自动重载已有标签页；这里额外自动开浏览器，
   #   让你连地址都不用敲。SKIP_CLEAN=1 时复用现有标签页（Next HMR 自动重载）；
   #   默认路径会带缓存破坏参数开新标签页，避免旧 chunk + 旧 sessionStorage 残留。
-  if ($env:NO_OPEN -ne "1") {
+  # Tauri 模式：桌面窗口由 tauri CLI 负责弹出，无需开浏览器、无需端口就绪探测
+  if ($Tauri) {
+    Write-Step "[4.5/5] Tauri 模式：等待 tauri dev 编译并弹出桌面窗口..."
+  } elseif ($env:NO_OPEN -ne "1") {
     Write-Step "[4.5/5] 等待服务器就绪并自动打开浏览器..."
     $ready = $false
     for ($i = 0; $i -lt 90; $i++) {

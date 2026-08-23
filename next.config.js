@@ -7,6 +7,9 @@ import path from "node:path";
 
 /** @type {import("next").NextConfig} */
 const config = {
+  // Tauri 桌面壳生产链路：输出 standalone（server.js + 裁剪版 node_modules），
+  // 由 scripts/build-desktop.mjs 组装进 src-tauri/static，并以 Node sidecar 运行
+  output: "standalone",
   // 双版本并存（typescript=TS6 alias / @typescript/native=TS7）下，Next 内置
   // TypeScript 检测无法识别 alias 包（误报 missing typescript）。
   // 类型正确性由独立 `tsc --noEmit`（CI 门禁）保证，此处跳过内嵌检查。
