@@ -23,12 +23,19 @@ interface CacheStore {
 const MAX_ENTRIES = 256;
 
 function getStore(): CacheStore {
-  const g = globalThis as unknown as { __comfyServerCache?: CacheStore };
-  if (!g.__comfyServerCache) {
-    g.__comfyServerCache = { map: new Map(), max: MAX_ENTRIES };
+
+  const globalObj = globalThis as unknown as { __comfyServerCache?: CacheStore };
+
+  if (!globalObj.__comfyServerCache) {
+
+    globalObj.__comfyServerCache = { map: new Map(), max: MAX_ENTRIES };
+
   }
-  return g.__comfyServerCache;
+
+  return globalObj.__comfyServerCache;
+
 }
+
 
 /**
  * Return a cached value if still fresh, otherwise call `build` (which may be

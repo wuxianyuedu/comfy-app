@@ -30,7 +30,7 @@ export interface NodeMeta {
 export type NodeRole = "positive" | "negative" | "checkpoint" | "sampler" | "lora" | "output" | "input";
 
 /* ── ReactFlow wrappers ── */
-export interface WfNode extends Node {
+export interface WorkflowNode extends Node {
   data: NodeData;
 }
 
@@ -52,7 +52,7 @@ export interface NodeData {
   [key: string]: any; // Index signature for ReactFlow compatibility
 }
 
-export interface WfEdge extends Edge {
+export interface WorkflowEdge extends Edge {
   sourceHandle?: string;
   targetHandle?: string;
 }

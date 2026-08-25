@@ -42,25 +42,25 @@ export async function GET(
       // Initial state (covers tasks already finished before subscribe).
       taskRepository
         .findById(id)
-        .then((t) => {
-          if (t) {
+        .then((task) => {
+          if (task) {
             // R-Next (2026-08-17): forward structured validation errors so
             //  consumers (CreatePanel) can render a per-field list instead of
             //  the English summary in `error`.
             send({
               type: "state",
-              status: t.status,
-              progress: t.progress,
-              error: t.error,
-              validationErrors: parseValidationErrors(t.validationErrors),
+              status: task.status,
+              progress: task.progress,
+              error: task.error,
+              validationErrors: parseValidationErrors(task.validationErrors),
               /* R-ardot121 (2026-08-18): forward workflowName so the
                *  GlobalStepLogPanel task-switcher can label the entry
                *  ("<name> · STATUS") instead of a bare 14-char id. */
-              workflowName: t.workflowName,
+              workflowName: task.workflowName,
             });
-            lastSent.status = t.status;
-            lastSent.progress = t.progress ?? 0;
-            const existing = (t.logs as any[]) ?? [];
+            lastSent.status = task.status;
+            lastSent.progress = task.progress ?? 0;
+            const existing = (task.logs as any[]) ?? [];
             existing.forEach((entry) => send({ type: "log", entry }));
           }
         })

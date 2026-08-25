@@ -143,28 +143,51 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
       return;
     }
     for (const ent of entries) {
-      const p = path.join(dir, ent);
+
+      const fullPath = path.join(dir, ent);
+
       let st;
+
       try {
-        st = fs.statSync(p);
+
+        st = fs.statSync(fullPath);
+
       } catch {
+
         continue;
+
       }
+
       if (st.isDirectory()) {
-        if (recursive) visit(p);
+
+        if (recursive) visit(fullPath);
+
         continue;
+
       }
+
       if (!st.isFile()) continue;
+
       if (!/\.(json|workflow)$/i.test(ent)) continue;
+
       out.push({
-        absPath: path.resolve(p),
+
+        absPath: path.resolve(fullPath),
+
         name: ent,
-        rawPath: p,
+
+        rawPath: fullPath,
+
         size: st.size,
+
         mtimeMs: st.mtimeMs,
+
         ...stampRoot(),
+
       });
+
     }
+
   };
   try {
     visit(abs);
@@ -178,7 +201,7 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
     };
   }
 
-  out.sort((a, b) => a.name.localeCompare(b.name));
+  out.sort((left, right) => left.name.localeCompare(right.name));
   return { rawPath: rawDir, absPath: abs, exists: true, files: out };
 }
 
@@ -195,18 +218,31 @@ export function scanLocalWorkflowRoots(
   const allFiles: LocalWorkflowFile[] = [];
   const roots: ScannedRoot[] = [];
   for (const p of rawPaths) {
+
     const trimmed = p.trim();
+
     if (!trimmed) continue;
+
     const r = scanRoot(trimmed, recursive);
+
     roots.push(r);
-    for (const f of r.files) {
-      if (!f.absPath) continue;
-      const key = pathKey(f.absPath);
+
+    for (const file of r.files) {
+
+      if (!file.absPath) continue;
+
+      const key = pathKey(file.absPath);
+
       if (seen.has(key)) continue;
+
       seen.add(key);
-      allFiles.push(f);
+
+      allFiles.push(file);
+
     }
+
   }
+
   return { roots, allFiles };
 }
 
@@ -281,14 +317,32 @@ export async function scanLocalWorkflowChecksums(
   let cursor = 0;
   async function worker() {
     while (cursor < allFiles.length) {
+
+
       const i = cursor++;
-      const f = allFiles[i]!;
-      if (!f.absPath) continue;
-      const r = await checksumOfFile(f.absPath);
-      if (r) {
-        out.push({ absPath: f.absPath, checksum: r.checksum, mtimeMs: r.mtimeMs });
+
+
+      const file = allFiles[i]!;
+
+
+      if (!file.absPath) continue;
+
+
+      const result = await checksumOfFile(file.absPath);
+
+
+      if (result) {
+
+
+        out.push({ absPath: file.absPath, checksum: result.checksum, mtimeMs: result.mtimeMs });
+
+
       }
+
+
     }
+
+
   }
   await Promise.all(Array.from({ length: Math.min(MAX_PARALLEL, allFiles.length) }, () => worker()));
   return out;

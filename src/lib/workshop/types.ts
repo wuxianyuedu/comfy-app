@@ -43,7 +43,7 @@ export interface Character {
   params: Record<string, unknown>; // recommended generation params
 }
 
-/** A storyboard shot that maps to one image-generation task */
+/** A storyboard shot that maps to one image-generation task (and later a video clip) */
 export interface Shot {
   id: string;
   index: number; // 镜号
@@ -56,10 +56,32 @@ export interface Shot {
   prompt: string; // final ComfyUI prompt
   negativePrompt: string;
   params: Record<string, unknown>;
-  status: "idle" | "queued" | "running" | "done" | "failed";
+  status: "idle" | "queued" | "running" | "done" | "failed" | "stale";
   taskId?: string;
   imageUrl?: string;
+  // ── Video generation plan ──
+  dialogue?: string; // 对白 / 字幕文本
+  motion?: MotionLevel; // 运动强度（I2V）
+  duration?: number; // 镜头时长（秒）
+  transition?: Transition; // 与下一镜的转场
+  clipStatus?: "idle" | "queued" | "running" | "done" | "failed" | "stale";
+  clipUrl?: string; // 生成的视频片段地址
 }
+
+export type MotionLevel = "low" | "medium" | "high";
+export type Transition = "cut" | "dissolve" | "fade";
+
+export const MOTION_LABELS: Record<MotionLevel, string> = {
+  low: "轻运动",
+  medium: "中运动",
+  high: "强运动",
+};
+
+export const TRANSITION_LABELS: Record<Transition, string> = {
+  cut: "硬切",
+  dissolve: "叠化",
+  fade: "淡入淡出",
+};
 
 export type ShotType =
   | "extreme_wide" // 大远景
@@ -99,4 +121,46 @@ export interface StyleRef {
   promptTemplate: string;
   negativePrompt?: string;
   defaultParams?: Record<string, unknown>;
+}
+
+// ── Full-chain pipeline stages ─────────────────────────────────
+
+export type PipelineStageId =
+  | "script"
+  | "character"
+  | "storyboard"
+  | "shot_generation"
+  | "video_generation"
+  | "final_edit";
+
+export type StageStatus = "locked" | "pending" | "ready" | "done" | "stale";
+
+export interface PipelineStage {
+  id: PipelineStageId;
+  label: string;
+  status: StageStatus;
+  count: number; // e.g. scenes / characters / shots / completed shots
+  total: number; // total expected items; 0 means not estimable yet
+}
+
+export type AssetKind =
+  | "script"
+  | "storyboard_script"
+  | "character_card"
+  | "scene_image"
+  | "video_clip"
+  | "audio"
+  | "final_video";
+
+export interface Asset {
+  id: string;
+  kind: AssetKind;
+  title: string;
+  /** Optional linked entity id (scene / shot / character) */
+  entityId?: string;
+  /** URL/path for media assets */
+  url?: string;
+  createdAt: string;
+  /** For generated media: generation status */
+  status?: "idle" | "queued" | "running" | "done" | "failed" | "stale";
 }

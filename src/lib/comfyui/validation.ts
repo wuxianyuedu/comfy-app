@@ -76,7 +76,7 @@ export function extractValidationErrors(
   if (!ne) return [];
   const out: ValidationError[] = [];
   const entries: [string, any][] = Array.isArray(ne)
-    ? (ne as any[]).map((r) => [String(r?.node_id ?? "?"), r] as [string, any])
+    ? (ne as any[]).map((item) => [String(item?.node_id ?? "?"), item] as [string, any])
     : (Object.entries(ne) as [string, any][]);
   for (const [nid, err] of entries) {
     const classType = err?.class_type ?? graph?.[nid]?.class_type ?? "";

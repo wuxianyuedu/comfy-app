@@ -395,17 +395,17 @@ export const ALL_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
 
 /** 按 code 查找 */
 export function getWorkflowType(code: string): WorkflowTypeDefinition | undefined {
-  return ALL_WORKFLOW_TYPES.find((t) => t.code === code);
+  return ALL_WORKFLOW_TYPES.find((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code === code);
 }
 
 /** 按分类查找 */
 export function getWorkflowTypesByCategory(cat: WorkflowCategory): WorkflowTypeDefinition[] {
-  return ALL_WORKFLOW_TYPES.filter((t) => t.category === cat);
+  return ALL_WORKFLOW_TYPES.filter((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.category === cat);
 }
 
 /** 获取所有合法的 taskType code 集合（用于校验 DB 字段） */
 export const VALID_TASK_TYPE_CODES: Set<string> = new Set(
-  ALL_WORKFLOW_TYPES.map((t) => t.code)
+  ALL_WORKFLOW_TYPES.map((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code)
 );
 
 /** 兼容旧值映射（旧代码用的 TXT2IMG → T2I 等） */

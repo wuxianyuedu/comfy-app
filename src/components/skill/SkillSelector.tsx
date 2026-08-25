@@ -125,7 +125,7 @@ export function SkillSelector({ onSelect, value, className = "" }: SkillSelector
   };
 
   // Current selection
-  const selectedSkill = skills.find((s) => s.id === value) ?? null;
+  const selectedSkill = skills.find((skill) => skill.id === value) ?? null;
 
   return (
     <div className={`space-y-3 ${className}`}>
@@ -162,7 +162,7 @@ export function SkillSelector({ onSelect, value, className = "" }: SkillSelector
           type="text"
           placeholder="搜索技能..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(event) => setSearch(event.target.value)}
           className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg pl-9 pr-3 py-2 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-purple-400/30 focus:bg-white/[0.05] transition-all"
         />
       </div>
@@ -192,7 +192,7 @@ export function SkillSelector({ onSelect, value, className = "" }: SkillSelector
       {loading ? (
         <div className="grid grid-cols-2 gap-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="rounded-xl px-4 py-3 bg-white/[0.02] border border-white/[0.04] animate-pulse">
+            <div key={`skeleton-${i}`} className="rounded-xl px-4 py-3 bg-white/[0.02] border border-white/[0.04] animate-pulse">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-white/[0.05]" />
                 <div className="flex-1 space-y-2">
@@ -214,11 +214,11 @@ export function SkillSelector({ onSelect, value, className = "" }: SkillSelector
               key={skill.id}
               skill={skill}
               selected={value === skill.id}
-              onClick={(s) => {
-                if (value === s.id) {
+              onClick={(skill) => {
+                if (value === skill.id) {
                   onSelect?.(null);
                 } else {
-                  onSelect?.(s);
+                  onSelect?.(skill);
                 }
               }}
             />

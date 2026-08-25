@@ -22,6 +22,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -166,11 +167,22 @@ export default function LoginPage() {
           />
           <Field
             label="密码"
-            type="password"
+            type={showPassword ? "text" : "password"}
             value={password}
             onChange={setPassword}
             placeholder={mode === "register" ? "至少 8 位" : "请输入密码"}
             autoComplete={mode === "register" ? "new-password" : "current-password"}
+            right={
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="rounded-md p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white"
+                aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                tabIndex={-1}
+              >
+                <Icon name={showPassword ? "eyeoff" : "eye"} size={18} />
+              </button>
+            }
           />
 
           {error && (
@@ -238,6 +250,7 @@ function Field({
   onChange,
   placeholder,
   autoComplete,
+  right,
 }: {
   label: string;
   type: string;
@@ -245,19 +258,27 @@ function Field({
   onChange: (v: string) => void;
   placeholder?: string;
   autoComplete?: string;
+  right?: React.ReactNode;
 }) {
   return (
     <label className="block">
       <span className="mb-1.5 block text-sm font-medium text-white/65">{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-        required
-        className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-3 text-sm text-white placeholder:text-white/30 focus:border-primary/50 focus:outline-none"
-      />
+      <div className="relative">
+        <input
+          type={type}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          required
+          className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-3 pr-11 text-sm text-white placeholder:text-white/30 focus:border-primary/50 focus:outline-none"
+        />
+        {right && (
+          <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+            {right}
+          </div>
+        )}
+      </div>
     </label>
   );
 }

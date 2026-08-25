@@ -24,7 +24,7 @@ export async function proxy(request: NextRequest) {
 
   if (pathname.startsWith("/api")) return NextResponse.next();
 
-  const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+  const isProtected = PROTECTED_PREFIXES.some((PROTECTED_PREFIXES) => pathname.startsWith(PROTECTED_PREFIXES));
   if (!isProtected) return NextResponse.next();
 
   // better-auth 的会话 cookie（Node.js runtime 做存在性检查）

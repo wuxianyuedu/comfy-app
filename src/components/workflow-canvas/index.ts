@@ -24,8 +24,8 @@ export {
 export type {
   ComfyGraph,
   ComfyGraphNode,
-  WfNode,
-  WfEdge,
+  WorkflowNode,
+  WorkflowEdge,
   NodeData,
   NodeMeta,
   ParamMap,

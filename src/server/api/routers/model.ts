@@ -27,7 +27,7 @@ export const modelRouter = createTRPCRouter({
       listModelFolders(),
       modelCountsByFolder(),
     ]);
-    const overrides = new Map(rows.map((r) => [r.folder, r]));
+    const overrides = new Map(rows.map((row) => [row.folder, row]));
     const folders = comfyFolders.slice().sort().map((folder) => {
       const ov = overrides.get(folder);
       return {
@@ -42,7 +42,7 @@ export const modelRouter = createTRPCRouter({
     const comfyReachable = await fetch(comfyBase(), {
       signal: AbortSignal.timeout(3000),
     })
-      .then((r) => r.ok)
+      .then((res) => res.ok)
       .catch(() => false);
     return { folders, rows, comfyReachable };
   }),

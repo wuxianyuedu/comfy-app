@@ -18,7 +18,7 @@ export type ModelType = string;
 export function prettyFolder(folder: string): string {
   return folder
     .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replace(/\b\w/g, (char) => char.toUpperCase())
     .trim();
 }
 
@@ -85,38 +85,71 @@ const FOLDER_TO_FIELDS: Record<string, string[]> = (() => {
  * Returns directory names (which ARE the model types).
  */
 export function modelFoldersForField(field: string): string[] {
+
   if (!field) return [];
+
   const exact = FIELD_TO_FOLDERS[field];
+
   if (exact) return exact;
 
-  const f = field.toLowerCase();
+
+
+  const lowerField = field.toLowerCase();
+
   const rules: [RegExp, string[]][] = [
+
     [/ckpt/, ["checkpoints"]],
+
     [/unet|diffusion/, ["unet", "diffusion_models"]],
+
     [/vae/, ["vae"]],
+
     [/clip/, ["clip", "clip_vision", "text_encoders"]],
+
     [/lora/, ["loras"]],
+
     [/control/, ["controlnet"]],
+
     [/embed/, ["embeddings"]],
+
     [/upscale/, ["upscale_models"]],
+
     [/ipadapter/, ["ipadapter"]],
+
     [/style/, ["style_models"]],
+
     [/hyper/, ["hypernetworks"]],
+
     [/gligen/, ["gligen"]],
+
     [/photomaker/, ["photomaker"]],
+
     [/instantid/, ["instantid"]],
+
     [/animatediff|motion_model/, ["animatediff_models", "animatediff_motion_lora"]],
+
     [/insightface/, ["insightface"]],
+
     [/sam/, ["sam"]],
+
     [/liveportrait/, ["liveportrait"]],
+
     [/pose/, ["pose"]],
+
     [/\bmodel\b/, ["checkpoints"]],
+
   ];
+
   for (const [re, folders] of rules) {
-    if (re.test(f)) return folders;
+
+    if (re.test(lowerField)) return folders;
+
   }
+
   return [];
+
 }
+
 
 /** Curated display metadata for the well-known ComfyUI directories. */
 const FOLDER_META: Record<string, { label: string; color: string }> = {
@@ -164,10 +197,15 @@ const FALLBACK_PALETTE = [
 ];
 
 function hashString(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
+
+  let hash = 0;
+
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) | 0;
+
+  return Math.abs(hash);
+
 }
+
 
 /** Display metadata for a directory name (curated label / color or derived). */
 export function folderMeta(folder: string): { label: string; color: string } {

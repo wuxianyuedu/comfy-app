@@ -11,8 +11,8 @@ import { skillRouter } from "~/server/api/routers/skill";
 import { llmRouter } from "~/server/api/routers/llm";
 import { settingRouter } from "~/server/api/routers/setting";
 import { materialRouter } from "~/server/api/routers/material";
-import { workflowModelRouter } from "~/server/api/routers/workflowModel";
-import { customNodeRouter } from "~/server/api/routers/customNode";
+import { workflowModelRouter } from "~/server/api/routers/workflow-model";
+import { customNodeRouter } from "~/server/api/routers/custom-nodes";
 import { generateRouter } from "~/server/api/routers/generate";
 
 /**

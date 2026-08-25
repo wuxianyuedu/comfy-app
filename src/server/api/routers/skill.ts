@@ -22,8 +22,9 @@ export const skillRouter = createTRPCRouter({
         q: input?.q?.trim() || undefined,
         includeInactive: input?.all === true,
       });
-      const parsed = skills.map((s) => {
-        const obj = s as unknown as Record<string, unknown>;
+      const parsed = skills.map((skill) =>
+{
+        const obj = skill as unknown as Record<string, unknown>;
         let tags: unknown = [];
         try {
           tags = JSON.parse((obj.tags as string) ?? "[]");
@@ -35,10 +36,9 @@ export const skillRouter = createTRPCRouter({
       const categories = await skillRepository.groupByActiveCategory();
       return {
         skills: parsed,
-        categories: categories.map((c) => ({
-          id: c.category,
-          label: CATEGORY_LABELS[c.category] ?? c.category,
-          count: c.count,
+        categories: categories.map((category) =>({          id: category.category,
+          label: CATEGORY_LABELS[category.category] ?? category.category,
+          count: category.count,
         })),
       };
     }),

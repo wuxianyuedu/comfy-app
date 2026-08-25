@@ -50,10 +50,9 @@ export const materialRouter = createTRPCRouter({
       const scopes = await resolveScopes(scopeMode, projectId);
 
       const byFolder = await collectByFolder(scopes);
-      const folders = MATERIAL_FOLDERS.map((f) => ({
-        id: f.id,
-        name: f.name,
-        count: byFolder.get(f.id)?.length ?? 0,
+      const folders = MATERIAL_FOLDERS.map((MATERIAL_FOLDERS) =>({        id: MATERIAL_FOLDERS.id,
+        name: MATERIAL_FOLDERS.name,
+        count: byFolder.get(MATERIAL_FOLDERS.id)?.length ?? 0,
       }));
 
       let items: MaterialItem[] = [];

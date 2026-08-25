@@ -27,16 +27,16 @@ export function parseIdeaToScenes(
   }
 
   // Split by blank lines first, fall back to explicit scene markers
-  let blocks = text.split(/\n\s*\n+/).map((b) => b.trim()).filter(Boolean);
+  let blocks = text.split(/\n\s*\n+/).map((block) => block.trim()).filter(Boolean);
   if (blocks.length === 1) {
     blocks = text
       .split(/(?=场景\s*\d+|场\s*\d+|SCENE\s*\d+)/i)
-      .map((b) => b.trim())
+      .map((block) => block.trim())
       .filter(Boolean);
   }
 
   return blocks.map((block, i) => {
-    const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
+    const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
     const first = lines[0] ?? "";
     const isHeading = /^(场景|场|SCENE)\s*\d+/i.test(first);
     const heading = isHeading ? first : `场景${i + 1} · ${first.slice(0, 12)}`;
@@ -91,14 +91,13 @@ function expandIdea(
   ];
 
   void type;
-  return template.map((s) => ({
-    id: uid("scene"),
-    heading: s.heading!,
-    location: s.location!,
-    time: s.time!,
-    action: s.action,
-    dialogue: s.dialogue,
-    shotCount: s.shotCount!,
+  return template.map((template) =>({    id: uid("scene"),
+    heading: template.heading!,
+    location: template.location!,
+    time: template.time!,
+    action: template.action,
+    dialogue: template.dialogue,
+    shotCount: template.shotCount!,
   }));
 }
 

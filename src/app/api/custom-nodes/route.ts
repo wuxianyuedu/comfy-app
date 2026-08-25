@@ -24,7 +24,7 @@ function getPaths(): string[] {
   const raw = readEnvVar("CUSTOM_NODES_PATH") || "";
   return raw
     .split(",")
-    .map((s) => s.trim())
+    .map((part) => part.trim())
     .filter(Boolean);
 }
 
@@ -36,7 +36,7 @@ function getLocalWorkflowPaths(): string[] {
   const raw = readEnvVar("LOCAL_WORKFLOWS_PATH") || "";
   return raw
     .split(/[\n,]/)
-    .map((s) => s.trim())
+    .map((part) => part.trim())
     .filter(Boolean);
 }
 
@@ -112,7 +112,7 @@ function runDiscover(parentDirs: string[]): any[] {
   if (cached && Date.now() - cached.at < 5000) return cached.result;
   for (const py of ["python3", "python", "py"]) {
     try {
-      const args = ["-u", "scripts/parse_custom_nodes.py", ...parentDirs.flatMap((d) => ["--discover-parent", d])];
+      const args = ["-u", "scripts/parse_custom_nodes.py", ...parentDirs.flatMap((parentDir) => ["--discover-parent", parentDir])];
       const out = spawnSync(py, args, { cwd: process.cwd(), env: process.env, encoding: "utf-8" });
       if (out.status === 0 && out.stdout) {
         const j = JSON.parse(out.stdout);
@@ -368,8 +368,9 @@ export async function GET() {
 
   // Cache hit on every parent → return JSON immediately (no progress needed).
   // Otherwise we stream ndjson so the UI can render a live progress bar.
-  const allCached = paths.length > 0 && paths.every((p) => {
-    const c = discoverCache.get(p);
+  const allCached = paths.length > 0 && paths.every((path) =>
+{
+    const c = discoverCache.get(path);
     return c && Date.now() - c.at < 5000;
   });
   // 2026-08-10 R8: include localWorkflowPaths in both branches so the
@@ -450,9 +451,9 @@ export async function POST(req: NextRequest) {
       // body.customNodesPaths is loosely typed (req.json() → any); cast the
       // array branch to string[] so flatMap's callback type is inferred.
       const clean = Array.isArray(body.customNodesPaths)
-        ? (body.customNodesPaths as string[]).flatMap((s) => String(s).split(/[\n,]/))
+        ? (body.customNodesPaths as string[]).flatMap((path) => String(path).split(/[\n,]/))
         : String(body.customNodesPaths).split(/[\n,]/);
-      const trimmed = clean.map((s) => s.trim()).filter(Boolean);
+      const trimmed = clean.map((clean) => clean.trim()).filter(Boolean);
       writeEnvVar("CUSTOM_NODES_PATH", trimmed.join(","));
       customNodesWritten = trimmed;
       wroteAny = true;
@@ -460,9 +461,9 @@ export async function POST(req: NextRequest) {
     let localWritten: string[] = [];
     if (Array.isArray(body.localWorkflowPaths) || typeof body.localWorkflowPaths === "string") {
       const clean = Array.isArray(body.localWorkflowPaths)
-        ? (body.localWorkflowPaths as string[]).flatMap((s) => String(s).split(/[\n,]/))
+        ? (body.localWorkflowPaths as string[]).flatMap((path) => String(path).split(/[\n,]/))
         : String(body.localWorkflowPaths).split(/[\n,]/);
-      const trimmed = clean.map((s) => s.trim()).filter(Boolean);
+      const trimmed = clean.map((clean) => clean.trim()).filter(Boolean);
       writeEnvVar("LOCAL_WORKFLOWS_PATH", trimmed.join(","));
       localWritten = trimmed;
       wroteAny = true;

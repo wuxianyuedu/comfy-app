@@ -51,21 +51,37 @@ const MULTITURN_SYSTEM = `你是一个 AI 创作引导助手，帮助用户用 C
    }}`;
 
 function offlineIdea(text: string, kind: "image" | "video" = "image"): AgentSpec {
-  const t = text.trim();
+
+  const trimmed = text.trim();
+
   return {
-    prompt: `${t}，电影级构图，细节丰富，光影自然，8k 高清`,
+
+    prompt: `${trimmed}，电影级构图，细节丰富，光影自然，8k 高清`,
+
     negative: "低质量，模糊，变形，水印，多余文字",
+
     params: {
+
       steps: 25,
+
       cfg: kind === "video" ? 6 : 7,
+
       sampler: "euler",
+
       scheduler: "normal",
+
       size: kind === "video" ? "832x480" : "1024x1024",
+
     },
+
     skillHint: "",
+
     kind,
+
   };
+
 }
+
 
 function detectKind(msgs: string[]): "image" | "video" | null {
   for (const m of msgs) {
@@ -79,7 +95,7 @@ function detectKind(msgs: string[]): "image" | "video" | null {
 
 /** Scripted multi-turn fallback used when no LLM is configured. */
 function offlineAgent(history: ChatMessage[]): AgentTurnResult {
-  const userMsgs = history.filter((m) => m.role === "user").map((m) => m.content);
+  const userMsgs = history.filter((history) => history.role === "user").map((msg) => msg.content);
   if (userMsgs.length === 0) {
     return { reply: "你好！想生成【图片】还是【视频】？简单描述下主题就行～", ready: false };
   }

@@ -13,7 +13,7 @@ export default function ModelsPage() {
             直接调用本机 ComfyUI 已安装的模型，文件名即契约，所见即所得。
           </p>
         </div>
-        <ButtonLink href="/create" size="sm">
+        <ButtonLink href="/workspace?tab=canvas" size="sm">
           去创作
         </ButtonLink>
       </div>

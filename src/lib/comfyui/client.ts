@@ -27,10 +27,15 @@ let _resolvedBase: string | null = null;
  */
 function forceIpv4Host(raw: string): string {
   try {
-    const u = new URL(raw);
-    if (u.hostname === "localhost") u.hostname = "127.0.0.1";
-    return u.toString().replace(/\/$/, "");
+
+    const url = new URL(raw);
+
+    if (url.hostname === "localhost") url.hostname = "127.0.0.1";
+
+    return url.toString().replace(/\/$/, "");
+
   } catch {
+
     return raw;
   }
 }
@@ -69,15 +74,25 @@ export async function resolveComfyBase(): Promise<string> {
 
   // Probe nearby ports (ComfyUI often auto-increments when port is occupied)
   for (let offset = 1; offset <= PROBE_RANGE; offset++) {
-    const p = configuredPort + offset;
-    if (await probePort(host, p)) {
-      _resolvedBase = `http://${host}:${p}`;
+
+    const port = configuredPort + offset;
+
+    if (await probePort(host, port)) {
+
+      _resolvedBase = `http://${host}:${port}`;
+
       console.warn(
-        `[comfyui] Configured port :${configuredPort} unreachable, auto-discovered ComfyUI on :${p}`
+
+        `[comfyui] Configured port :${configuredPort} unreachable, auto-discovered ComfyUI on :${port}`
+
       );
+
       return _resolvedBase;
+
     }
+
   }
+
 
   // All probes failed — fall back to configured value (callers will get 503)
   console.error(
@@ -143,14 +158,23 @@ export async function getView(
   subfolder: string,
   type: string
 ): Promise<Buffer> {
-  const u = new URL(`${comfyBase()}/api/view`);
-  u.searchParams.set("filename", filename);
-  u.searchParams.set("subfolder", subfolder ?? "");
-  u.searchParams.set("type", type ?? "");
-  const res = await fetch(u.toString());
+
+  const url = new URL(`${comfyBase()}/api/view`);
+
+  url.searchParams.set("filename", filename);
+
+  url.searchParams.set("subfolder", subfolder ?? "");
+
+  url.searchParams.set("type", type ?? "");
+
+  const res = await fetch(url.toString());
+
   if (!res.ok) throw new Error(`getView failed: ${res.status}`);
+
   return Buffer.from(await res.arrayBuffer());
+
 }
+
 
 // Returns the list of real filenames on disk for a model folder.
 export async function listModels(folder: string): Promise<string[]> {
@@ -182,7 +206,7 @@ export async function listModelFolders(): Promise<string[]> {
     });
     if (!res.ok) return [];
     const data = (await res.json()) as string[];
-    return Array.isArray(data) ? data.filter((f) => typeof f === "string" && f.length > 0) : [];
+    return Array.isArray(data) ? data.filter((datum) => typeof datum === "string" && datum.length > 0) : [];
   } catch {
     return [];
   }

@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { DarkSelect } from "@/components/updream/ui/DarkSelect";
-import { NumberField } from "@/components/updream/ui/NumberField";
+import { DarkSelect } from "@/components/studio/ui/DarkSelect";
+import { NumberField } from "@/components/studio/ui/NumberField";
 import { Icon } from "@/components/ui/Icon";
 import type { Scene, ProjectMeta, ProjectType } from "@/lib/workshop/types";
 import { PROJECT_TYPE_LABELS } from "@/lib/workshop/types";
@@ -55,18 +55,17 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
     try {
       const full = await streamChat({
         messages: buildScriptMessages(meta, idea),
-        onToken: (t) => setAiDraft((d) => d + t),
+        onToken: (token) => setAiDraft((draft) => draft + token),
       });
       const raws = parseScriptScenes(full);
       if (!raws.length) throw new Error("AI 未返回有效场景");
-      const newScenes: Scene[] = raws.map((r) => ({
-        id: workshopUid("scene"),
-        heading: r.heading,
-        location: r.location ?? "",
-        time: r.time ?? "",
-        action: r.action,
-        dialogue: r.dialogue ?? "",
-        shotCount: r.shotCount ?? 2,
+      const newScenes: Scene[] = raws.map((raw) =>({        id: workshopUid("scene"),
+        heading: raw.heading,
+        location: raw.location ?? "",
+        time: raw.time ?? "",
+        action: raw.action,
+        dialogue: raw.dialogue ?? "",
+        shotCount: raw.shotCount ?? 2,
       }));
       onScenesChange([...scenes, ...newScenes]);
       setIdea("");
@@ -79,11 +78,11 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
   }
 
   function updateScene(id: string, patch: Partial<Scene>) {
-    onScenesChange(scenes.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    onScenesChange(scenes.map((scene) =>(scene.id === id ? { ...scene, ...patch } : scene)));
   }
 
   function removeScene(id: string) {
-    onScenesChange(scenes.filter((s) => s.id !== id));
+    onScenesChange(scenes.filter((scene) => scene.id !== id));
   }
 
   function addScene() {
@@ -100,7 +99,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
             <span className="mb-1 block text-xs text-muted">标题</span>
             <input
               value={meta.title}
-              onChange={(e) => onMetaChange({ ...meta, title: e.target.value })}
+              onChange={(event) => onMetaChange({ ...meta, title: event.target.value })}
               className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
               placeholder="我的短片"
             />
@@ -110,7 +109,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
             <DarkSelect
               className="!bg-white/[0.03] !border-white/[0.08] text-sm"
               value={meta.type}
-              onChange={(v) => onMetaChange({ ...meta, type: v as ProjectType })}
+              onChange={(value) => onMetaChange({ ...meta, type: value as ProjectType })}
               options={PROJECT_TYPES}
               labels={PROJECT_TYPE_LABELS as Record<string, string>}
               placeholder="选择类型"
@@ -120,7 +119,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
             <span className="mb-1 block text-xs text-muted">基调 / 情绪</span>
             <input
               value={meta.tone}
-              onChange={(e) => onMetaChange({ ...meta, tone: e.target.value })}
+              onChange={(event) => onMetaChange({ ...meta, tone: event.target.value })}
               className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
               placeholder="温暖治愈 / 悬疑紧张 / 史诗感"
             />
@@ -129,7 +128,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
             <span className="mb-1 block text-xs text-muted">一句话梗概</span>
             <input
               value={meta.logline}
-              onChange={(e) => onMetaChange({ ...meta, logline: e.target.value })}
+              onChange={(event) => onMetaChange({ ...meta, logline: event.target.value })}
               className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
               placeholder="一个关于…的故事"
             />
@@ -145,7 +144,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
           </h3>
           <button
             type="button"
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => setExpanded((value) => !value)}
             className="text-xs text-muted hover:text-ink"
           >
             {expanded ? "收起" : "展开输入"}
@@ -155,7 +154,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
           <div className="space-y-2">
             <textarea
               value={idea}
-              onChange={(e) => setIdea(e.target.value)}
+              onChange={(event) => setIdea(event.target.value)}
               rows={3}
               className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
               placeholder="输入一句话灵感或粘贴一段粗稿，自动拆分为场景结构…"
@@ -231,7 +230,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
                   </span>
                   <input
                     value={scene.heading}
-                    onChange={(e) => updateScene(scene.id, { heading: e.target.value })}
+                    onChange={(event) => updateScene(scene.id, { heading: event.target.value })}
                     className="flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium text-ink outline-none hover:border-border focus:border-primary"
                   />
                   <button
@@ -249,13 +248,13 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
                 <div className="mb-2 grid grid-cols-2 gap-2">
                   <input
                     value={scene.location}
-                    onChange={(e) => updateScene(scene.id, { location: e.target.value })}
+                    onChange={(event) => updateScene(scene.id, { location: event.target.value })}
                     className="rounded-md border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-primary"
                     placeholder="地点"
                   />
                   <input
                     value={scene.time}
-                    onChange={(e) => updateScene(scene.id, { time: e.target.value })}
+                    onChange={(event) => updateScene(scene.id, { time: event.target.value })}
                     className="rounded-md border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-primary"
                     placeholder="时间"
                   />
@@ -263,14 +262,14 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
 
                 <textarea
                   value={scene.action}
-                  onChange={(e) => updateScene(scene.id, { action: e.target.value })}
+                  onChange={(event) => updateScene(scene.id, { action: event.target.value })}
                   rows={2}
                   className="mb-2 w-full rounded-md border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-primary"
                   placeholder="画面 / 动作描述"
                 />
                 <input
                   value={scene.dialogue}
-                  onChange={(e) => updateScene(scene.id, { dialogue: e.target.value })}
+                  onChange={(event) => updateScene(scene.id, { dialogue: event.target.value })}
                   className="w-full rounded-md border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-primary"
                   placeholder="台词 / 旁白"
                 />
@@ -279,7 +278,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
                   <span className="text-xs text-muted">建议镜头数</span>
                   <NumberField
                     value={scene.shotCount}
-                    onChange={(v) => updateScene(scene.id, { shotCount: v })}
+                    onChange={(value) => updateScene(scene.id, { shotCount: value })}
                     min={1}
                     max={10}
                     step={1}

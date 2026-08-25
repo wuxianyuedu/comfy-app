@@ -94,15 +94,25 @@ export async function parseWorkflowContent(
   const warnings: string[] = [];
 
   if (detected === "api") {
-    const g = candidate as Record<string, any>;
-    const looksLikeGraph = Object.values(g).some(
-      (n) => n && typeof n === "object" && "class_type" in (n as any)
+
+    const graph = candidate as Record<string, any>;
+
+    const looksLikeGraph = Object.values(graph).some(
+
+      (node) => node && typeof node === "object" && "class_type" in (node as any)
+
     );
+
     if (!looksLikeGraph) {
+
       throw new Error("不是有效的 ComfyUI API 工作流（未找到节点 class_type）");
+
     }
-    apiGraph = g;
+
+    apiGraph = graph;
+
   } else {
+
     rawJson = candidate;
     let result: ConversionResult;
     try {

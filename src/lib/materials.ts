@@ -33,14 +33,14 @@ export const MATERIAL_FOLDERS = [
 
 export type MaterialFolderId = (typeof MATERIAL_FOLDERS)[number]["id"];
 
-const FOLDER_IDS = new Set<string>(MATERIAL_FOLDERS.map((f) => f.id));
+const FOLDER_IDS = new Set<string>(MATERIAL_FOLDERS.map((MATERIAL_FOLDERS) => MATERIAL_FOLDERS.id));
 
 export function isValidFolder(id: string | null | undefined): id is MaterialFolderId {
   return !!id && FOLDER_IDS.has(id);
 }
 
 export function folderName(id: string): string {
-  return MATERIAL_FOLDERS.find((f) => f.id === id)?.name ?? id;
+  return MATERIAL_FOLDERS.find((MATERIAL_FOLDERS) => MATERIAL_FOLDERS.id === id)?.name ?? id;
 }
 
 /* ── 媒体种类推导 ── */
@@ -154,7 +154,7 @@ export async function listFolderItems(
     }
   }
   // 新的排前面
-  items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  items.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   return items;
 }
 
@@ -162,7 +162,7 @@ export async function listFolderItems(
 export async function listScopes(): Promise<string[]> {
   try {
     const entries = await fs.readdir(materialsRoot(), { withFileTypes: true });
-    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+    return entries.filter((entry) => entry.isDirectory()).map((dir) => dir.name);
   } catch {
     return [];
   }
@@ -184,6 +184,6 @@ export async function collectByFolder(
       if (items.length) map.get(f.id)!.push(...items);
     }
   }
-  for (const [, arr] of map) arr.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  for (const [, arr] of map) arr.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   return map;
 }

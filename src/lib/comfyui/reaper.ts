@@ -158,7 +158,7 @@ async function reapStaleRunningTasks(): Promise<void> {
                 if (q.ok) {
                   const qd = (await q.json()) as { queue_running?: { prompt_id?: string }[]; queue_pending?: { prompt_id?: string }[] } | null;
                   const all = [...(qd?.queue_running ?? []), ...(qd?.queue_pending ?? [])];
-                  inQueue = all.some((j) => j?.prompt_id === t.promptId);
+                  inQueue = all.some((all) => all?.prompt_id === t.promptId);
                 }
               } catch { /* queue probe failed — fall through to unknown */ }
               if (!inQueue) {

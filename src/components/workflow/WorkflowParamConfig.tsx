@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { DarkSelect } from "@/components/updream/ui/DarkSelect";
+import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { Icon } from "@/components/ui/Icon";
 import { api } from "~/trpc/react";
 
@@ -94,7 +94,7 @@ export const PARAM_ROLES: ParamRole[] = [
   },
 ];
 
-export type WfNodeForConfig = {
+export type WorkflowNodeForConfig = {
   id: string;
   class_type: string;
   title: string;
@@ -105,7 +105,7 @@ export type ParamMapValue = Record<string, string>; // roleKey -> nodeId
 interface WorkflowParamConfigProps {
   workflowId: string;
   /** Initial nodes list (from graph); if omitted, will fetch from API */
-  nodes?: WfNodeForConfig[];
+  nodes?: WorkflowNodeForConfig[];
   /** Initial paramMap */
   initialParamMap?: ParamMapValue;
   /** Called after save completes */
@@ -131,7 +131,7 @@ export function WorkflowParamConfig({
     { id: workflowId },
     { enabled: !(initialNodes && initialNodes.length > 0) }
   );
-  const fetchedNodes: WfNodeForConfig[] = useMemo(
+  const fetchedNodes: WorkflowNodeForConfig[] = useMemo(
     () => Object.entries(detailQ.data?.template.graph ?? {}).map(([id, n]) => ({
       id,
       class_type: n.class_type,
@@ -196,8 +196,8 @@ export function WorkflowParamConfig({
   }, [workflowId, paramMap, onSave, updateWf]);
 
   /* ── Assigned roles summary ── */
-  const assignedRoles = PARAM_ROLES.filter((r) => paramMap[r.key]);
-  const unassignedRoles = PARAM_ROLES.filter((r) => !paramMap[r.key]);
+  const assignedRoles = PARAM_ROLES.filter((PARAM_ROLES) => paramMap[PARAM_ROLES.key]);
+  const unassignedRoles = PARAM_ROLES.filter((PARAM_ROLES) => !paramMap[PARAM_ROLES.key]);
 
   if (!compact) {
     return (
@@ -229,12 +229,13 @@ export function WorkflowParamConfig({
         {assignedRoles.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             <span className="text-[10.5px] text-gray-500 pt-0.5">已配置：</span>
-            {assignedRoles.map((r) => (
+            {assignedRoles.map((assignedRole) =>
+(
               <span
-                key={r.key}
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${r.color}`}
+                key={assignedRole.key}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${assignedRole.color}`}
               >
-                {r.icon} {r.label}
+                {assignedRole.icon} {assignedRole.label}
               </span>
             ))}
           </div>
@@ -244,7 +245,7 @@ export function WorkflowParamConfig({
         <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
           {displayNodes.map((node) => {
             const currentRole = nodeRoleMap[node.id];
-            const roleDef = currentRole ? PARAM_ROLES.find((r) => r.key === currentRole) : null;
+            const roleDef = currentRole ? PARAM_ROLES.find((PARAM_ROLES) => PARAM_ROLES.key === currentRole) : null;
             return (
               <div
                 key={node.id}
@@ -262,9 +263,9 @@ export function WorkflowParamConfig({
                 <DarkSelect
                   className="h-7 w-[120px] py-1 text-[11px]"
                   value={currentRole ?? ""}
-                  onChange={(v) => handleRoleChange(node.id, v)}
-                  options={PARAM_ROLES.map((r) => r.key)}
-                  labels={Object.fromEntries(PARAM_ROLES.map((r) => [r.key, r.label]))}
+                  onChange={(value) => handleRoleChange(node.id, value)}
+                  options={PARAM_ROLES.map((PARAM_ROLES) => PARAM_ROLES.key)}
+                  labels={Object.fromEntries(PARAM_ROLES.map((PARAM_ROLES) => [PARAM_ROLES.key, PARAM_ROLES.label]))}
                   placeholder="— 不暴露 —"
                 />
 
@@ -287,7 +288,7 @@ export function WorkflowParamConfig({
         {/* Unassigned roles hint */}
         {unassignedRoles.length > 0 && unassignedRoles.length < PARAM_ROLES.length && (
           <p className="text-[10px] text-gray-600">
-            未配置：{unassignedRoles.map((r) => r.label).join("、")}（可选）
+            未配置：{unassignedRoles.map((unassignedRole) => unassignedRole.label).join("、")}（可选）
           </p>
         )}
       </div>
@@ -316,13 +317,14 @@ export function WorkflowParamConfig({
 
       {/* Compact: show only assigned roles + quick unassign */}
       <div className="space-y-1">
-        {assignedRoles.map((r) => {
-          const nodeId = paramMap[r.key];
-          const node = displayNodes.find((n) => n.id === nodeId);
+        {assignedRoles.map((assignedRole) =>
+{
+          const nodeId = paramMap[assignedRole.key];
+          const node = displayNodes.find((displayNode) => displayNode.id === nodeId);
           return (
-            <div key={r.key} className="flex items-center justify-between gap-2">
-              <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${r.color}`}>
-                <Icon name={r.icon} size={11} /> {r.label}
+            <div key={assignedRole.key} className="flex items-center justify-between gap-2">
+              <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${assignedRole.color}`}>
+                <Icon name={assignedRole.icon} size={11} /> {assignedRole.label}
               </span>
               <span className="min-w-0 flex-1 truncate text-[10.5px] text-gray-400">
                 {node?.title ?? nodeId?.slice(0, 12) ?? "—"}
@@ -344,18 +346,18 @@ export function WorkflowParamConfig({
           <DarkSelect
             className="h-6 flex-1 py-0.5 text-[10px]"
             value=""
-            onChange={(v) => {
-              if (v) {
+            onChange={(value) => {
+              if (value) {
                 const unassignedNode = displayNodes.find(
-                  (n) => !Object.values(paramMap).includes(n.id)
+                  (node) => !Object.values(paramMap).includes(node.id)
                 );
                 if (unassignedNode) {
-                  handleRoleChange(unassignedNode.id, v);
+                  handleRoleChange(unassignedNode.id, value);
                 }
               }
             }}
-            options={unassignedRoles.map((r) => r.key)}
-            labels={Object.fromEntries(unassignedRoles.map((r) => [r.key, r.label]))}
+            options={unassignedRoles.map((unassignedRole) => unassignedRole.key)}
+            labels={Object.fromEntries(unassignedRoles.map((unassignedRole) => [unassignedRole.key, unassignedRole.label]))}
             placeholder="+ 映射新参数…"
           />
         </div>

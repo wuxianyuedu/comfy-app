@@ -218,7 +218,7 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
     const sinks = visible.filter((id) => classifyNode((graph[id] as any).class_type) === "output");
     const sources = visible.filter((id) => classifyNode((graph[id] as any).class_type) === "input");
     const mid = visible.filter((id) => !sinks.includes(id) && !sources.includes(id));
-    mid.sort((a, b) => (level[a] ?? 0) - (level[b] ?? 0));
+    mid.sort((left, right) => (level[left] ?? 0) - (level[right] ?? 0));
     const midKeep = Math.max(0, 14 - sources.length - sinks.length);
     visible = [...sources, ...mid.slice(0, midKeep), ...sinks];
   }
@@ -232,7 +232,7 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
   for (const arr of Object.values(byLevel)) arr.sort();
 
   // Compute the densest level for vertical sizing.
-  const maxRows = Math.max(1, ...Object.values(byLevel).map((a) => a.length));
+  const maxRows = Math.max(1, ...Object.values(byLevel).map((sizing) => sizing.length));
   // Number of distinct levels (1 means everything is a single column).
   const levelCount = Object.keys(byLevel).length || 1;
 
@@ -247,19 +247,47 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
   const colStep = levelCount > 1 ? innerW / (levelCount - 1) : 0;
 
   const nodes: WorkflowPreviewNode[] = visible.map((id) => {
+
+
     const lv = level[id] ?? 0;
+
+
     const arr = byLevel[lv] ?? [];
+
+
     const row = arr.indexOf(id);
-    const x = padX + (levelCount > 1 ? lv * colStep : innerW / 2);
-    const y = padY + (maxRows > 1 ? (row / (maxRows - 1)) * innerH : innerH / 2);
+
+
+    const nodeX = padX + (levelCount > 1 ? lv * colStep : innerW / 2);
+
+
+    const nodeY = padY + (maxRows > 1 ? (row / (maxRows - 1)) * innerH : innerH / 2);
+
+
     return {
+
+
       id,
+
+
       class_type: (graph[id] as any).class_type,
+
+
       kind: classifyNode((graph[id] as any).class_type),
+
+
       level: lv,
+
+
       row,
+
+
     };
+
+
   });
+
+
 
   // Edges: only between visible nodes.
   const visibleSet = new Set(visible);
@@ -295,14 +323,22 @@ function findTextEncoder(
   if (!node || !node.inputs) return null;
   const TEXT_FIELDS = ["text", "text_g", "text_l", "prompt", "positive", "negative", "text_positive", "text_negative"];
   for (const f of TEXT_FIELDS) {
-    const v = node.inputs[f];
-    if (typeof v === "string" && !Array.isArray(v)) return startId;
+
+    const value = node.inputs[f];
+
+    if (typeof value === "string" && !Array.isArray(value)) return startId;
+
   }
+
   for (const v of Object.values(node.inputs)) {
     if (Array.isArray(v) && typeof v[0] === "string" && graph[v[0]]) {
-      const r = findTextEncoder(graph, v[0], visited);
-      if (r) return r;
+
+      const result = findTextEncoder(graph, v[0], visited);
+
+      if (result) return result;
+
     }
+
   }
   return null;
 }
@@ -325,11 +361,11 @@ export function detectParamMap(graph: Record<string, any>): ParamMap {
   const nodes = ids.map((id) => ({ id, node: graph[id] }));
 
   const sampler = nodes.find(
-    (x) =>
-      x.node &&
-      (x.node.class_type === "KSampler" ||
-        x.node.class_type === "KSamplerAdvanced" ||
-        isSamplerLike(x.node))
+    (node) =>
+      node.node &&
+      (node.node.class_type === "KSampler" ||
+        node.node.class_type === "KSamplerAdvanced" ||
+        isSamplerLike(node.node))
   );
   if (sampler) {
     const posEnc = findTextEncoder(graph, sampler.node.inputs.positive?.[0]);
@@ -339,20 +375,20 @@ export function detectParamMap(graph: Record<string, any>): ParamMap {
   }
   // Fallback: first two CLIPTextEncode by id (preserves old behavior if no sampler).
   if (!map.positiveNode || !map.negativeNode) {
-    const clips = nodes.filter((x) => x.node?.class_type === "CLIPTextEncode");
+    const clips = nodes.filter((node) => node.node?.class_type === "CLIPTextEncode");
     if (!map.positiveNode && clips[0]) map.positiveNode = clips[0].id;
     if (!map.negativeNode && clips[1]) map.negativeNode = clips[1].id;
   }
 
-  const ckpt = nodes.find((x) => x.node?.class_type === "CheckpointLoaderSimple");
+  const ckpt = nodes.find((node) => node.node?.class_type === "CheckpointLoaderSimple");
   if (ckpt) map.checkpointNode = ckpt.id;
 
   const ks = nodes.find(
-    (x) => x.node?.class_type === "KSampler" || x.node?.class_type === "KSamplerAdvanced"
+    (node) => node.node?.class_type === "KSampler" || node.node?.class_type === "KSamplerAdvanced"
   );
   if (ks) map.samplerNode = ks.id;
 
-  const li = nodes.find((x) => x.node?.class_type === "LoadImage");
+  const li = nodes.find((node) => node.node?.class_type === "LoadImage");
   if (li) map.inputImageNode = li.id;
 
   return map;
@@ -360,13 +396,20 @@ export function detectParamMap(graph: Record<string, any>): ParamMap {
 
 function replaceTokens(obj: unknown, values: Record<string, string>): unknown {
   if (typeof obj === "string") {
-    let s = obj;
+
+    let str = obj;
+
     for (const [k, v] of Object.entries(values)) {
-      s = s.split(k).join(v);
+
+      str = str.split(k).join(v);
+
     }
-    return s;
+
+    return str;
+
   }
-  if (Array.isArray(obj)) return obj.map((x) => replaceTokens(x, values));
+
+  if (Array.isArray(obj)) return obj.map((obj) => replaceTokens(obj, values));
   if (obj && typeof obj === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(obj)) out[k] = replaceTokens(v, values);
@@ -387,10 +430,15 @@ function randomSeed(): number {
 
 /** Clamp a user-provided seed into the valid uint32 range ComfyUI accepts. */
 function clampSeed(seed: number): number {
-  const t = Math.trunc(seed);
-  if (!Number.isFinite(t)) return randomSeed();
-  return Math.max(0, Math.min(0xffffffff, t));
+
+  const truncated = Math.trunc(seed);
+
+  if (!Number.isFinite(truncated)) return randomSeed();
+
+  return Math.max(0, Math.min(0xffffffff, truncated));
+
 }
+
 
 /**
  * Token substitution turns every `__TOKEN__` value into a string, and
@@ -411,12 +459,19 @@ function coerceNumericFields(graph: Record<string, any>): void {
   for (const node of Object.values(graph) as any[]) {
     if (!node || !node.inputs) continue;
     for (const key of Object.keys(node.inputs)) {
+
       if (!NUMERIC_INPUT_NAMES.has(key)) continue;
-      const v = node.inputs[key];
-      if (typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v))) {
-        node.inputs[key] = Number(v);
+
+      const value = node.inputs[key];
+
+      if (typeof value === "string" && value.trim() !== "" && !Number.isNaN(Number(value))) {
+
+        node.inputs[key] = Number(value);
+
       }
+
     }
+
   }
 }
 
@@ -547,7 +602,7 @@ export async function buildAndValidate(
   }
 
   const def = meta.defaultParams ?? {};
-  const [w, h] = (params.size ?? (def.size as string) ?? "1024x1024").split("x").map((n) => parseInt(n, 10));
+  const [w, h] = (params.size ?? (def.size as string) ?? "1024x1024").split("x").map((num) => parseInt(num, 10));
   const values: Record<string, string> = {
     __CKPT__: params.checkpoint ?? "",
     __PROMPT__: params.prompt ?? "",
@@ -615,7 +670,7 @@ export function buildCustomWorkflow(
     serialized.includes("__SEED__");
 
   if (hasTokens) {
-    const [w, h] = (params.size ?? "1024x1024").split("x").map((n) => parseInt(n, 10));
+    const [w, h] = (params.size ?? "1024x1024").split("x").map((num) => parseInt(num, 10));
     const values: Record<string, string> = {
       __PROMPT__: params.prompt ?? "",
       __NEG__: params.negative ?? "",
@@ -658,18 +713,31 @@ export function buildCustomWorkflow(
 
   const seedNum = params.seed;
   if (map.samplerNode && out[map.samplerNode]) {
-    const n = out[map.samplerNode];
-    if (typeof params.steps === "number") n.inputs.steps = params.steps;
-    if (typeof params.cfg === "number") n.inputs.cfg = params.cfg;
+
+    const samplerNode = out[map.samplerNode];
+
+    if (typeof params.steps === "number") samplerNode.inputs.steps = params.steps;
+
+    if (typeof params.cfg === "number") samplerNode.inputs.cfg = params.cfg;
+
     // KSampler uses `seed`, KSamplerAdvanced uses `noise_seed`.
+
     // Note: seed=0 is a valid, intentional value — the old `> 0` guard dropped it.
-    const seedKey = n.class_type === "KSamplerAdvanced" ? "noise_seed" : "seed";
+
+    const seedKey = samplerNode.class_type === "KSamplerAdvanced" ? "noise_seed" : "seed";
+
     if (typeof seedNum === "number" && !Number.isNaN(seedNum)) {
-      n.inputs[seedKey] = clampSeed(seedNum);
+
+      samplerNode.inputs[seedKey] = clampSeed(seedNum);
+
     }
-    if (params.sampler) n.inputs.sampler_name = params.sampler;
-    if (params.scheduler) n.inputs.scheduler = params.scheduler;
+
+    if (params.sampler) samplerNode.inputs.sampler_name = params.sampler;
+
+    if (params.scheduler) samplerNode.inputs.scheduler = params.scheduler;
+
   }
+
 
   // Feed an upstream-generated (or manually uploaded) image into the
   // workflow's LoadImage node so chains like 图生图 work out of the box.
@@ -683,17 +751,29 @@ export function buildCustomWorkflow(
   // the existing pin already holds a number we coerce a numeric-looking string.
   if (params.workflowInputs && Array.isArray(params.workflowInputs)) {
     for (const it of params.workflowInputs as { nodeId: string; name: string; value?: unknown }[]) {
+
       const node = out[it.nodeId];
+
       if (!node || !node.inputs) continue;
-      const v = it.value;
-      if (v === undefined) continue;
+
+      const value = it.value;
+
+      if (value === undefined) continue;
+
       const cur = node.inputs[it.name];
-      let assigned: unknown = v;
-      if (typeof cur === "number" && typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v))) {
-        assigned = Number(v);
+
+      let assigned: unknown = value;
+
+      if (typeof cur === "number" && typeof value === "string" && value.trim() !== "" && !Number.isNaN(Number(value))) {
+
+        assigned = Number(value);
+
       }
+
       node.inputs[it.name] = assigned;
+
     }
+
   }
 
   // Re-wire model/clip if LoRAs are present (custom workflows too).

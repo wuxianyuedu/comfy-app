@@ -39,7 +39,7 @@ export const taskRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const statusList = input.status
-        ? input.status.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean)
+        ? input.status.split(",").map((status) => status.trim().toUpperCase()).filter(Boolean)
         : undefined;
 
       const overFetch = input.media ? Math.min(input.take * 4, 400) : input.take;
@@ -51,28 +51,29 @@ export const taskRouter = createTRPCRouter({
         includeImages: true,
       });
 
-      let list = tasks.map((t) => {
-        const p = (t.params as Record<string, any>) ?? {};
-        const cover = t.images[0]?.localPath ?? null;
-        const coverMediaType = t.images[0]?.mediaType ?? null;
+      let list = tasks.map((task) =>
+{
+        const p = (task.params as Record<string, any>) ?? {};
+        const cover = task.images[0]?.localPath ?? null;
+        const coverMediaType = task.images[0]?.mediaType ?? null;
         return {
-          id: t.id,
-          type: t.type,
-          workflowName: t.workflowName,
-          status: t.status,
-          prompt: t.prompt,
-          createdAt: t.createdAt,
+          id: task.id,
+          type: task.type,
+          workflowName: task.workflowName,
+          status: task.status,
+          prompt: task.prompt,
+          createdAt: task.createdAt,
           cover,
           checkpoint: p.checkpoint ?? null,
-          mediaType: inferMediaType(cover, coverMediaType, t.type),
-          projectId: t.projectId ?? null,
-          progress: t.progress,
-          error: t.error ?? null,
+          mediaType: inferMediaType(cover, coverMediaType, task.type),
+          projectId: task.projectId ?? null,
+          progress: task.progress,
+          error: task.error ?? null,
         };
       });
 
       if (input.media) {
-        list = list.filter((t) => t.mediaType === input.media);
+        list = list.filter((list) => list.mediaType === input.media);
       }
       if (input.media) list = list.slice(0, input.take);
 

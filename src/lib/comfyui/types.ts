@@ -185,44 +185,83 @@ const OUTPUT_TYPES: Record<string, string[]> = {
 
 /** Get the data type produced by a class's nth output slot. */
 export function inferOutputType(classType: string, slot: number): string {
+
   const types = OUTPUT_TYPES[classType];
+
   if (types && slot >= 0 && slot < types.length) return types[slot]!;
+
   /* Heuristic fallback for custom nodes the static table doesn't list
+
    *  (EmptySD3LatentImage, ModelSamplingAuraFlow, ResolutionSelector, …).
+
    *  Match on the class name itself, which is highly stable across
+
    *  ComfyUI's wild ecosystem of community nodes. */
-  const c = classType.toLowerCase();
+
+  const lower = classType.toLowerCase();
+
   if (slot === 0) {
-    if (c.startsWith("empty") && c.includes("latent")) return "LATENT";
-    if (c.startsWith("empty") && c.includes("image")) return "IMAGE";
-    if (c.startsWith("empty") && c.includes("audio")) return "AUDIO";
-    if (c.startsWith("empty")) return "LATENT";
-    if (c.includes("modelsampling") || c.includes("modelloader") ||
-        c.includes("patchmodel") || c.includes("ipadapter") ||
-        c.includes("rescalemodel") || c.includes("modelsubpatch") ||
-        c === "modelmerge" || c.startsWith("modelload") ||
-        c.startsWith("modelsamp"))
+
+    if (lower.startsWith("empty") && lower.includes("latent")) return "LATENT";
+
+    if (lower.startsWith("empty") && lower.includes("image")) return "IMAGE";
+
+    if (lower.startsWith("empty") && lower.includes("audio")) return "AUDIO";
+
+    if (lower.startsWith("empty")) return "LATENT";
+
+    if (lower.includes("modelsampling") || lower.includes("modelloader") ||
+
+        lower.includes("patchmodel") || lower.includes("ipadapter") ||
+
+        lower.includes("rescalemodel") || lower.includes("modelsubpatch") ||
+
+        lower === "modelmerge" || lower.startsWith("modelload") ||
+
+        lower.startsWith("modelsamp"))
+
       return "MODEL";
-    if (c.includes("dualclip") || c.includes("tripleclip")) return "CLIP";
-    if (c.includes("clip") && !c.includes("textencode") && !c.includes("applyclip")) return "CLIP";
-    if (c.includes("vae") && c.includes("decode")) return "IMAGE";
-    if (c.includes("vae") && c.includes("encode")) return "LATENT";
-    if (c.includes("vae")) return "VAE";
-    if ((c.includes("controlnet") || c.includes("applycontrol")) && c.includes("apply")) return "CONDITIONING";
-    if (c.includes("controlnet")) return "CONTROL_NET";
-    if (c.includes("upscale") && c.includes("model")) return "UPSCALE_MODEL";
-    if (c.includes("upscale")) return "IMAGE";
-    if (c.includes("style") && c.includes("model")) return "STYLE_MODEL";
-    if (c.includes("style") && c.includes("apply")) return "CONDITIONING";
-    if (c.includes("ksampler") || (c.includes("sampler") && !c.includes("custom"))) return "LATENT";
-    if (c.includes("textencode") || c.includes("conditioning")) return "CONDITIONING";
-    if (c.includes("loadimage") || c.includes("loadmask")) return "IMAGE";
-    if (c.includes("imagescale") || c.includes("imagebatch") || c.includes("imagecomposite") || c.startsWith("image")) return "IMAGE";
-    if (c.includes("latent")) return "LATENT";
-    if (c.includes("audio") || c.includes("sound")) return "AUDIO";
+
+    if (lower.includes("dualclip") || lower.includes("tripleclip")) return "CLIP";
+
+    if (lower.includes("clip") && !lower.includes("textencode") && !lower.includes("applyclip")) return "CLIP";
+
+    if (lower.includes("vae") && lower.includes("decode")) return "IMAGE";
+
+    if (lower.includes("vae") && lower.includes("encode")) return "LATENT";
+
+    if (lower.includes("vae")) return "VAE";
+
+    if ((lower.includes("controlnet") || lower.includes("applycontrol")) && lower.includes("apply")) return "CONDITIONING";
+
+    if (lower.includes("controlnet")) return "CONTROL_NET";
+
+    if (lower.includes("upscale") && lower.includes("model")) return "UPSCALE_MODEL";
+
+    if (lower.includes("upscale")) return "IMAGE";
+
+    if (lower.includes("style") && lower.includes("model")) return "STYLE_MODEL";
+
+    if (lower.includes("style") && lower.includes("apply")) return "CONDITIONING";
+
+    if (lower.includes("ksampler") || (lower.includes("sampler") && !lower.includes("custom"))) return "LATENT";
+
+    if (lower.includes("textencode") || lower.includes("conditioning")) return "CONDITIONING";
+
+    if (lower.includes("loadimage") || lower.includes("loadmask")) return "IMAGE";
+
+    if (lower.includes("imagescale") || lower.includes("imagebatch") || lower.includes("imagecomposite") || lower.startsWith("image")) return "IMAGE";
+
+    if (lower.includes("latent")) return "LATENT";
+
+    if (lower.includes("audio") || lower.includes("sound")) return "AUDIO";
+
   }
+
   return "UNKNOWN";
+
 }
+
 
 /* ── Per-class *input* type table.  This is a small but high-signal
  *    lookup for the most-used nodes; fall through to heuristic
@@ -374,29 +413,53 @@ export function inferInputType(
 
 /** Heuristic over the input name alone. */
 export function inferInputTypeByName(name: string): string {
-  const n = name.toLowerCase();
-  if (n === "model" || n.includes("model")) return "MODEL";
-  if (n === "clip" || n === "clip_g" || n === "clip_l" || n === "clip_name") return "CLIP";
-  if (n === "vae" || n === "vae_name") return "VAE";
-  if (n === "positive" || n === "negative" || n === "conditioning" || n.startsWith("cond")) return "CONDITIONING";
-  if (n === "latent" || n === "latent_image" || n === "samples" || n.endsWith("_latent")) return "LATENT";
-  if (n === "image" || n === "images" || n === "pixels" || n === "output_image") return "IMAGE";
-  if (n === "mask" || n.endsWith("_mask")) return "MASK";
-  if (n === "control_net" || n.endsWith("_controlnet")) return "CONTROL_NET";
-  if (n === "upscale_model" || n === "model_name") return "UPSCALE_MODEL";
-  if (n === "audio" || n === "waveform") return "AUDIO";
+
+  const lower = name.toLowerCase();
+
+  if (lower === "model" || lower.includes("model")) return "MODEL";
+
+  if (lower === "clip" || lower === "clip_g" || lower === "clip_l" || lower === "clip_name") return "CLIP";
+
+  if (lower === "vae" || lower === "vae_name") return "VAE";
+
+  if (lower === "positive" || lower === "negative" || lower === "conditioning" || lower.startsWith("cond")) return "CONDITIONING";
+
+  if (lower === "latent" || lower === "latent_image" || lower === "samples" || lower.endsWith("_latent")) return "LATENT";
+
+  if (lower === "image" || lower === "images" || lower === "pixels" || lower === "output_image") return "IMAGE";
+
+  if (lower === "mask" || lower.endsWith("_mask")) return "MASK";
+
+  if (lower === "control_net" || lower.endsWith("_controlnet")) return "CONTROL_NET";
+
+  if (lower === "upscale_model" || lower === "model_name") return "UPSCALE_MODEL";
+
+  if (lower === "audio" || lower === "waveform") return "AUDIO";
+
   /* Widget types by suffix */
-  if (n === "seed") return "INT";
-  if (n === "steps" || n === "step") return "INT";
-  if (n === "cfg" || n === "denoise" || n === "strength" || n === "scale" || n.includes("strength")) return "FLOAT";
-  if (n === "width" || n === "height" || n === "batch_size" || n.endsWith("_size") || n.endsWith("_count")) return "INT";
-  if (n === "sampler_name" || n === "scheduler" || n === "method" || n.endsWith("_method")) return "COMBO";
-  if (n.endsWith("_name") || n === "filename_prefix" || n === "ckpt_name") return "COMBO";
-  if (n === "text" || n.endsWith("_text") || n === "prompt" || n === "negative_prompt") return "STRING";
-  if (n === "noise_mask" || n === "return_with_leftover_noise") return "COMBO";
-  if (n === "start_at_step" || n === "end_at_step" || n === "return_with_leftover_noise") return "COMBO";
+
+  if (lower === "seed") return "INT";
+
+  if (lower === "steps" || lower === "step") return "INT";
+
+  if (lower === "cfg" || lower === "denoise" || lower === "strength" || lower === "scale" || lower.includes("strength")) return "FLOAT";
+
+  if (lower === "width" || lower === "height" || lower === "batch_size" || lower.endsWith("_size") || lower.endsWith("_count")) return "INT";
+
+  if (lower === "sampler_name" || lower === "scheduler" || lower === "method" || lower.endsWith("_method")) return "COMBO";
+
+  if (lower.endsWith("_name") || lower === "filename_prefix" || lower === "ckpt_name") return "COMBO";
+
+  if (lower === "text" || lower.endsWith("_text") || lower === "prompt" || lower === "negative_prompt") return "STRING";
+
+  if (lower === "noise_mask" || lower === "return_with_leftover_noise") return "COMBO";
+
+  if (lower === "start_at_step" || lower === "end_at_step" || lower === "return_with_leftover_noise") return "COMBO";
+
   return "UNKNOWN";
+
 }
+
 
 /* ── Multiline STRING detection (2026-08-10 R18) ────────────────────────────
  *
@@ -415,7 +478,7 @@ export function inferInputTypeByName(name: string): string {
  *  arrives at us as nothing.
  *
  *  Curate layer mitigation (route.ts:400, MULTILINE_HINT) only fills the
- *  workflowIO enrichment key — it never reaches the WfNode / WfSubgraphNode
+ *  workflowIO enrichment key — it never reaches the WorkflowNode / WorkflowSubgraphNode
  *  widgetEntries renderer, which is what users actually see when the canvas
  *  zooms into a workflow.  So we backfill here:
  *
@@ -427,8 +490,8 @@ export function inferInputTypeByName(name: string): string {
  *    4.  Length heuristic (long strings clearly meant to be paragraphs)
  *
  *  Returns true when the input should render as a textarea.  Consumers:
- *    • WfNode  — `isStringWidget` (canvas-edit widget section)
- *    • WfSubgraphNode  — same (subgraph wrapper inputs)
+ *    • WorkflowNode  — `isStringWidget` (canvas-edit widget section)
+ *    • WorkflowSubgraphNode  — same (subgraph wrapper inputs)
  *    • Already wired up in DynamicWorkflowForm via `controlForEntry`'s
  *      workflowIO.multiline field — we keep this helper as the source of
  *      truth so both paths converge.
@@ -454,7 +517,7 @@ const SINGLE_LINE_NAMES: Set<string> = new Set([
 ]);
 
 /** Mirror of route.ts:400 — kept in sync so DynamicWorkflowForm (workflowIO
- *  path) and WfNode widgetEntries agree on what counts as a prompt. */
+ *  path) and WorkflowNode widgetEntries agree on what counts as a prompt. */
 const MULTILINE_NAME_HINT = /(prompt|text|caption|描述|提示)/i;
 
 export function inferIsMultiline(

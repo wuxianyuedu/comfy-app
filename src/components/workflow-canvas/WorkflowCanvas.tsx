@@ -41,11 +41,11 @@ import { BezierEdge, EdgeGradientDefs } from "./nodes/BezierEdge";
 import NodeEditor from "./NodeEditor";
 import { comfyGraphToFlow, flowToComfyGraph } from "./graph-utils";
 import { getNodeConfig, getAllNodeTypes, CATEGORY_LABELS } from "./node-registry";
-import { refreshCustomNodes, CUSTOM_NODES_UPDATED_EVENT } from "@/config/customNodes";
+import { refreshCustomNodes, CUSTOM_NODES_UPDATED_EVENT } from "@/config/custom-nodes";
 import type {
   ComfyGraph,
-  WfNode,
-  WfEdge,
+  WorkflowNode,
+  WorkflowEdge,
   NodeData,
   ParamMap,
 } from "./types";
@@ -104,7 +104,7 @@ export default function WorkflowCanvas({
     refreshCustomNodes().catch(() => {});
     const onUpdate = (ev: Event) => {
       const count = (ev as CustomEvent<{ count: number }>).detail?.count ?? 0;
-      if (count > 0) setCustomNodesVersion((v) => v + 1);
+      if (count > 0) setCustomNodesVersion((value) => value + 1);
     };
     window.addEventListener(CUSTOM_NODES_UPDATED_EVENT, onUpdate);
     return () => window.removeEventListener(CUSTOM_NODES_UPDATED_EVENT, onUpdate);
@@ -150,15 +150,15 @@ export default function WorkflowCanvas({
   const handleEdgesDelete: OnEdgesDelete = useCallback(
     (deleted: Edge[]) => {
       if (!deleted.length) return;
-      const targets = new Set(deleted.map((e) => e.target));
+      const targets = new Set(deleted.map((deleted) => deleted.target));
       setNodes((nds) =>
-        nds.map((n) => {
-          if (!targets.has(n.id)) return n;
-          const d = n.data as unknown as NodeData;
+        nds.map((node) => {
+          if (!targets.has(node.id)) return node;
+          const d = node.data as unknown as NodeData;
           let changed = false;
           const inputs = { ...d.inputs };
           for (const e of deleted) {
-            if (e.target !== n.id || !e.targetHandle) continue;
+            if (e.target !== node.id || !e.targetHandle) continue;
             const m = e.targetHandle.match(/^in-(.+)$/);
             const key = m?.[1];
             // 跳过兜底通用端口，避免写出 `generic` 伪输入 / 重复 Handle。
@@ -167,7 +167,7 @@ export default function WorkflowCanvas({
               changed = true;
             }
           }
-          return changed ? { ...n, data: { ...d, inputs } } : n;
+          return changed ? { ...node, data: { ...d, inputs } } : node;
         })
       );
     },
@@ -194,11 +194,11 @@ export default function WorkflowCanvas({
   const handleFieldChange = useCallback(
     (nodeId: string, fieldKey: string, value: any) => {
       setNodes((nds) =>
-        nds.map((n) => {
-          if (n.id !== nodeId) return n;
-          const d = { ...(n.data as any) };
+        nds.map((node) => {
+          if (node.id !== nodeId) return node;
+          const d = { ...(node.data as any) };
           d.inputs = { ...d.inputs, [fieldKey]: value };
-          return { ...n, data: d };
+          return { ...node, data: d };
         })
       );
     },
@@ -225,7 +225,7 @@ export default function WorkflowCanvas({
     (classType: string) => {
       const config = getNodeConfig(classType);
       const id = `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-      const newNode: WfNode = {
+      const newNode: WorkflowNode = {
         id,
         type: "comfyNode",
         position: {
@@ -266,21 +266,21 @@ export default function WorkflowCanvas({
     if (!selectedNodeId) return;
     // 收集将被移除的边，清理下游节点 data.inputs 中指向被删节点的连线引用。
     const removed = edges.filter(
-      (e) => e.source === selectedNodeId || e.target === selectedNodeId
+      (edge) => edge.source === selectedNodeId || edge.target === selectedNodeId
     );
     const downstream = new Set(
-      removed.filter((e) => e.source === selectedNodeId).map((e) => e.target)
+      removed.filter((removed) => removed.source === selectedNodeId).map((edge) => edge.target)
     );
     setNodes((nds) =>
       nds
-        .filter((n) => n.id !== selectedNodeId)
-        .map((n) => {
-          if (!downstream.has(n.id)) return n;
-          const d = n.data as unknown as NodeData;
+        .filter((node) => node.id !== selectedNodeId)
+        .map((node) => {
+          if (!downstream.has(node.id)) return node;
+          const d = node.data as unknown as NodeData;
           let changed = false;
           const inputs = { ...d.inputs };
           for (const e of removed) {
-            if (e.target !== n.id || !e.targetHandle) continue;
+            if (e.target !== node.id || !e.targetHandle) continue;
             const m = e.targetHandle.match(/^in-(.+)$/);
             const key = m?.[1];
             if (key && key !== "generic" && key in inputs && Array.isArray(inputs[key])) {
@@ -288,11 +288,12 @@ export default function WorkflowCanvas({
               changed = true;
             }
           }
-          return changed ? { ...n, data: { ...d, inputs } } : n;
+          return changed ? { ...node, data: { ...d, inputs } } : node;
         })
     );
     setEdges((eds) =>
-      eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId)
+      eds.filter((ed) => ed.source !== selectedNodeId && ed.target !== selectedNodeId)
+
     );
     setSelectedNodeId(null);
   }, [selectedNodeId, setNodes, setEdges, edges]);
@@ -338,8 +339,8 @@ export default function WorkflowCanvas({
             }}
           />
           <MiniMap
-            nodeColor={(n) => {
-              const d = n.data as unknown as NodeData;
+            nodeColor={(node) => {
+              const d = node.data as unknown as NodeData;
               return getNodeConfig(d.classType)?.color ?? "#6B7280";
             }}
             maskColor="#050010CC"
@@ -420,7 +421,7 @@ export default function WorkflowCanvas({
         {/* Export modal */}
         {showExport && (
           <div className="wf-export-modal" onClick={() => setShowExport(false)}>
-            <div className="wf-export-modal__card" onClick={(e) => e.stopPropagation()}>
+            <div className="wf-export-modal__card" onClick={(event) => event.stopPropagation()}>
               <h3>导出工作流 JSON</h3>
               <p style={{ fontSize: 11, color: "#888", marginBottom: 8 }}>
                 ComfyUI API 格式，可直接导入 ComfyUI 或保存为模板

@@ -35,17 +35,29 @@ export interface RawScene {
 
 export function parseScriptScenes(text: string): RawScene[] {
   const data = extractJsonArray(text);
-  return data.map((d) => {
-    const o = (d ?? {}) as Record<string, unknown>;
+  return data.map((datum) =>
+{
+
+    const obj = (datum ?? {}) as Record<string, unknown>;
+
     return {
-      heading: String(o.heading ?? "未命名场景"),
-      location: o.location ? String(o.location) : "",
-      time: o.time ? String(o.time) : "",
-      action: String(o.action ?? ""),
-      dialogue: o.dialogue ? String(o.dialogue) : "",
-      shotCount: Math.min(6, Math.max(1, Number(o.shotCount) || 2)),
+
+      heading: String(obj.heading ?? "未命名场景"),
+
+      location: obj.location ? String(obj.location) : "",
+
+      time: obj.time ? String(obj.time) : "",
+
+      action: String(obj.action ?? ""),
+
+      dialogue: obj.dialogue ? String(obj.dialogue) : "",
+
+      shotCount: Math.min(6, Math.max(1, Number(obj.shotCount) || 2)),
+
     };
+
   });
+
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -87,13 +99,21 @@ export interface RawCharacter {
 }
 
 export function parseCharacter(text: string): RawCharacter {
-  const o = (extractJson(text) as Record<string, unknown>) ?? {};
+
+  const obj = (extractJson(text) as Record<string, unknown>) ?? {};
+
   return {
-    appearance: o.appearance ? String(o.appearance) : "",
-    costume: o.costume ? String(o.costume) : "",
-    personality: o.personality ? String(o.personality) : "",
+
+    appearance: obj.appearance ? String(obj.appearance) : "",
+
+    costume: obj.costume ? String(obj.costume) : "",
+
+    personality: obj.personality ? String(obj.personality) : "",
+
   };
+
 }
+
 
 // Generate a full character card from a one-line brief.
 export const CHARACTER_FROM_BRIEF_SYSTEM = `你是角色设定助手。用户会给一句角色设定或灵感，请生成一个完整的、可用于 AI 绘画的视觉角色卡。
@@ -113,14 +133,23 @@ export interface RawCharacterFull extends RawCharacter {
 }
 
 export function parseCharacterFull(text: string): RawCharacterFull {
-  const o = (extractJson(text) as Record<string, unknown>) ?? {};
+
+  const obj = (extractJson(text) as Record<string, unknown>) ?? {};
+
   return {
-    name: o.name ? String(o.name) : "未命名角色",
-    appearance: o.appearance ? String(o.appearance) : "",
-    costume: o.costume ? String(o.costume) : "",
-    personality: o.personality ? String(o.personality) : "",
+
+    name: obj.name ? String(obj.name) : "未命名角色",
+
+    appearance: obj.appearance ? String(obj.appearance) : "",
+
+    costume: obj.costume ? String(obj.costume) : "",
+
+    personality: obj.personality ? String(obj.personality) : "",
+
   };
+
 }
+
 
 // ─────────────────────────────────────────────────────────────
 // Storyboard planning
@@ -169,15 +198,27 @@ export interface RawShot {
 
 export function parseStoryboard(text: string): RawShot[] {
   const data = extractJsonArray(text);
-  return data.map((d) => {
-    const o = (d ?? {}) as Record<string, unknown>;
-    const st = String(o.shotType ?? "medium") as ShotType;
+  return data.map((datum) =>
+{
+
+    const obj = (datum ?? {}) as Record<string, unknown>;
+
+    const st = String(obj.shotType ?? "medium") as ShotType;
+
     return {
+
       shotType: (SHOT_TYPES.includes(st) ? st : "medium") as ShotType,
-      description: String(o.description ?? ""),
-      characterNames: Array.isArray(o.characterNames)
-        ? (o.characterNames as unknown[]).map(String)
+
+      description: String(obj.description ?? ""),
+
+      characterNames: Array.isArray(obj.characterNames)
+
+        ? (obj.characterNames as unknown[]).map(String)
+
         : [],
+
     };
+
   });
+
 }

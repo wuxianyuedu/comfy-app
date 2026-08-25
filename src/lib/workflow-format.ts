@@ -32,12 +32,19 @@ export function detectWorkflowFormat(parsed: unknown): "api" | "raw" | null {
   if (keys.length === 0) return null;
   let apiHits = 0;
   for (const k of keys) {
+
     if (!/^\d+$/.test(k)) continue;
-    const v = obj[k];
-    if (v && typeof v === "object" && !Array.isArray(v) && typeof (v as any).class_type === "string") {
+
+    const value = obj[k];
+
+    if (value && typeof value === "object" && !Array.isArray(value) && typeof (value as any).class_type === "string") {
+
       apiHits += 1;
+
     }
+
   }
+
   if (apiHits > 0) return "api";
   return null;
 }

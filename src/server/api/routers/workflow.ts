@@ -17,7 +17,7 @@ import { buildWorkflowPreview, detectParamMap } from "@/lib/comfyui/workflow";
 import {
   buildWorkflowDetailFull,
   buildSubgraphDetail,
-} from "@/lib/comfyui/workflowDetail";
+} from "@/lib/comfyui/workflow-detail";
 import {
   detectFormat,
   convertRawToApi,
@@ -41,7 +41,7 @@ function getLocalWorkflowRoots(): string[] {
   const raw = readEnvVar("LOCAL_WORKFLOWS_PATH") || "";
   return raw
     .split(/[\n,]/)
-    .map((s) => s.trim())
+    .map((part) => part.trim())
     .filter(Boolean);
 }
 
@@ -104,14 +104,14 @@ export const workflowRouter = createTRPCRouter({
       } else if (input?.category) {
         const typesInCat = getWorkflowTypesByCategory(input.category as any);
         if (typesInCat.length > 0) {
-          where.taskType = { in: typesInCat.map((t) => t.code) };
+          where.taskType = { in: typesInCat.map((typesInCat) => typesInCat.code) };
         }
       }
 
       if (input?.model) {
         const names = input.model
           .split(",")
-          .map((s) => s.trim())
+          .map((part) => part.trim())
           .filter(Boolean);
         if (names.length > 0) {
           where.modelTags = { some: { name: { in: names } } };
@@ -155,17 +155,15 @@ export const workflowRouter = createTRPCRouter({
       let localAllFiles: LocalWorkflowFile[] = [];
       if (localRoots.length > 0) {
         const { roots, allFiles } = scanLocalWorkflowRoots(localRoots);
-        localRootsSummary = roots.map((r) => ({
-          rawPath: r.rawPath,
-          absPath: r.absPath,
-          exists: r.exists,
-          count: r.files.length,
-          error: r.error,
+        localRootsSummary = roots.map((root) =>({          rawPath: root.rawPath,
+          absPath: root.absPath,
+          exists: root.exists,
+          count: root.files.length,
+          error: root.error,
         }));
-        localRootsList = roots.map((r) => ({
-          rawPath: r.rawPath,
-          absPath: r.absPath,
-          exists: r.exists,
+        localRootsList = roots.map((root) =>({          rawPath: root.rawPath,
+          absPath: root.absPath,
+          exists: root.exists,
         }));
         localAllFiles = allFiles;
       }
@@ -212,13 +210,14 @@ export const workflowRouter = createTRPCRouter({
       }
 
       // ── Enrich with type metadata + compact preview ──
-      const enriched = list.map((w) => {
-        const def = getWorkflowType(normalizeTaskType(w.taskType));
-        const graphObj = (w.graph as Record<string, any> | null) ?? null;
+      const enriched = list.map((list) =>
+{
+        const def = getWorkflowType(normalizeTaskType(list.taskType));
+        const graphObj = (list.graph as Record<string, any> | null) ?? null;
         const hasApi = !!graphObj && Object.keys(graphObj).length > 0;
-        const hasRaw = !!w.rawJson;
+        const hasRaw = !!list.rawJson;
         const apiOrigin: "user" | "derived" | null = hasApi
-          ? w.apiSource === "user"
+          ? list.apiSource === "user"
             ? "user"
             : hasRaw
               ? "derived"
@@ -228,29 +227,29 @@ export const workflowRouter = createTRPCRouter({
         let diskMtimeSec: number | null = null;
         let diskDirty = false;
         let diskMissing = false;
-        if (w.sourcePath) {
-          const diskMs = diskMtimeByPath.get(pathKey(w.sourcePath));
+        if (list.sourcePath) {
+          const diskMs = diskMtimeByPath.get(pathKey(list.sourcePath));
           if (diskMs == null) {
             diskMissing = true;
           } else {
             diskMtimeSec = Math.floor(diskMs / 1000);
-            if (typeof w.sourceMtime === "number" && diskMtimeSec > w.sourceMtime) {
+            if (typeof list.sourceMtime === "number" && diskMtimeSec > list.sourceMtime) {
               diskDirty = true;
             }
           }
         }
-        const renamed = renamedFromTo.get(w.id) ?? null;
+        const renamed = renamedFromTo.get(list.id) ?? null;
         return {
-          id: w.id,
-          name: w.name,
-          taskType: w.taskType,
-          modes: parseModesJson(w.modes),
-          defaultMode: w.defaultMode ?? null,
-          createdAt: w.createdAt,
-          paramMap: w.paramMap,
-          sourcePath: w.sourcePath,
-          source: w.sourcePath ? "local" : "online",
-          typeLabel: def?.label ?? w.taskType,
+          id: list.id,
+          name: list.name,
+          taskType: list.taskType,
+          modes: parseModesJson(list.modes),
+          defaultMode: list.defaultMode ?? null,
+          createdAt: list.createdAt,
+          paramMap: list.paramMap,
+          sourcePath: list.sourcePath,
+          source: list.sourcePath ? "local" : "online",
+          typeLabel: def?.label ?? list.taskType,
           typeCategory: def?.category ?? "image",
           typeDescription: def?.description ?? "",
           isGenerative: def?.isGenerative ?? true,
@@ -260,9 +259,9 @@ export const workflowRouter = createTRPCRouter({
           usable: hasApi,
           format: hasRaw ? ("raw" as const) : ("api" as const),
           preview: buildWorkflowPreview(graphObj ?? {}),
-          workflowIO: (w.workflowIO as Record<string, any>) ?? {},
-          modelTags: ((w.modelTags as Array<{ name: string }>) ?? []).map((t) => t.name),
-          sourceMtimeSec: typeof w.sourceMtime === "number" ? w.sourceMtime : null,
+          workflowIO: (list.workflowIO as Record<string, any>) ?? {},
+          modelTags: ((list.modelTags as Array<{ name: string }>) ?? []).map((tag) => tag.name),
+          sourceMtimeSec: typeof list.sourceMtime === "number" ? list.sourceMtime : null,
           diskMtimeSec,
           diskDirty,
           diskMissing,
@@ -315,11 +314,11 @@ export const workflowRouter = createTRPCRouter({
         }
       }
 
-      const enrichedWithRoot = enriched.map((w) => ({
-        ...w,
+      const enrichedWithRoot = enriched.map((enriched) => ({
+        ...enriched,
         sourceRoot:
-          w.sourcePath && localRootsList.length
-            ? findRootFor(w.sourcePath, localRootsList)
+          enriched.sourcePath && localRootsList.length
+            ? findRootFor(enriched.sourcePath, localRootsList)
             : undefined,
       }));
 
@@ -418,7 +417,7 @@ export const workflowRouter = createTRPCRouter({
       if (detected === "api") {
         const g = candidate as Record<string, any>;
         const looksLikeGraph = Object.values(g).some(
-          (n) => n && typeof n === "object" && "class_type" in (n as any)
+          (node) => node && typeof node === "object" && "class_type" in (node as any)
         );
         if (!looksLikeGraph) {
           throw new TRPCError({

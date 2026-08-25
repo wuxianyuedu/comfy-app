@@ -6,7 +6,7 @@ import {
   colorFor,
   getCustomNodesManifest,
   type ManifestNodeRaw,
-} from "@/config/customNodes";
+} from "@/config/custom-nodes";
 
 interface PkgReport {
   path: string;
@@ -192,7 +192,7 @@ const STATUS_STYLE: Record<string, { bg: string; fg: string; label: string }> = 
 function splitPaths(text: string): string[] {
   return text
     .split(/[\n,]/)
-    .map((s) => s.trim())
+    .map((segment) => segment.trim())
     .filter(Boolean);
 }
 
@@ -234,8 +234,8 @@ function NodePreviewCard({
   const color = colorFor(data?.category);
   const inputs = data?.inputs ?? [];
   const outputs = data?.outputs ?? [];
-  const typed = inputs.filter((i) => !i.widget);
-  const widgets = inputs.filter((i) => i.widget != null);
+  const typed = inputs.filter((input) => !input.widget);
+  const widgets = inputs.filter((input) => input.widget != null);
   const title = data?.displayName || fallbackName;
 
   return (
@@ -251,9 +251,9 @@ function NodePreviewCard({
         role="button"
         tabIndex={0}
         onClick={onToggle}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
             onToggle();
           }
         }}
@@ -554,8 +554,8 @@ export function CustomNodesSettings() {
       parsing || Object.values(perPkgParsing).some(Boolean);
     if (stillParsing) {
       if (consoleRef.current) consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
-    } else if (logs.some((l) => l.level === "error" || l.msg.includes("✗"))) {
-      const idx = logs.findIndex((l) => l.level === "error" || l.msg.includes("✗"));
+    } else if (logs.some((log) => log.level === "error" || log.msg.includes("✗"))) {
+      const idx = logs.findIndex((log) => log.level === "error" || log.msg.includes("✗"));
       requestAnimationFrame(() => {
         const console_ = consoleRef.current;
         if (!console_) return;
@@ -662,12 +662,12 @@ export function CustomNodesSettings() {
             paths.push(...(ev.parents || []));
             setProgress({ phase: "queue", done: 0, total: 0, discovered: 0, parent: "", msg: "准备扫描…" });
           } else if (ev.type === "progress") {
-            setProgress((p) => {
+            setProgress((progress) => {
               // Pick up whatever the latest event told us. `total`/`done`/
               // `discovered` are only updated when the event actually carries
               // them (the parser emits them on every meaningful tick), so
               // events that only carry `msg` don't reset the counters.
-              const next = { ...p, parent: ev.parent || p.parent };
+              const next = { ...progress, parent: ev.parent || progress.parent };
               if (ev.phase === "queue") next.phase = "queue";
               if (ev.phase === "scan") next.phase = "scan";
               if (ev.phase === "hash") next.phase = "hash";
@@ -682,7 +682,7 @@ export function CustomNodesSettings() {
             // Don't touch the package counter here — the parser already
             // emitted its own final tick (✔ ... done=M|total=M) before the
             // JSON line. We just refresh the parent shown in the header.
-            setProgress((p) => ({ ...p, parent: ev.parent, msg: `✔ ${ev.parent}` }));
+            setProgress((progress) => ({ ...progress, parent: ev.parent, msg: `✔ ${ev.parent}` }));
           } else if (ev.type === "summary") {
             summary = ev.summary;
             lastReport = ev.lastReport;
@@ -888,7 +888,7 @@ export function CustomNodesSettings() {
   }
 
   async function onParseSingle(pkgPath: string) {
-    setPerPkgParsing((p) => ({ ...p, [pkgPath]: true }));
+    setPerPkgParsing((parsing) => ({ ...parsing, [pkgPath]: true }));
     setError_(null);
     setLogs([]);
     try {
@@ -907,8 +907,8 @@ export function CustomNodesSettings() {
     } catch (e) {
       setError_("解析失败：" + String(e));
     } finally {
-      setPerPkgParsing((p) => {
-        const np = { ...p };
+      setPerPkgParsing((parsing) => {
+        const np = { ...parsing };
         delete np[pkgPath];
         return np;
       });
@@ -920,7 +920,7 @@ export function CustomNodesSettings() {
    *  Empty / missing dirs are tolerated by the parser itself (logged + skipped). */
   async function onParseAllParent(parent: string) {
     const subs = discoveredByParent[parent] || [];
-    const targets = subs.map((s) => s.path).filter(Boolean);
+    const targets = subs.map((sub) => sub.path).filter(Boolean);
     if (targets.length === 0) {
       setError_("该目录下没有可解析的子包");
       return;
@@ -1006,7 +1006,7 @@ export function CustomNodesSettings() {
           <div
             ref={dialogRef}
             className="w-full max-w-3xl rounded-2xl border border-border bg-surface p-5"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
             style={{ maxHeight: "92vh", overflowY: "auto" }}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -1117,7 +1117,7 @@ export function CustomNodesSettings() {
               </p>
               <textarea
                 value={localPathsText}
-                onChange={(e) => setLocalPathsText(e.target.value)}
+                onChange={(event) => setLocalPathsText(event.target.value)}
                 rows={Math.max(2, Math.min(savedLocalPaths.length || 2, 6))}
                 placeholder={
                   "示例 ·  C:\\Users\\me\\AppData\\Local\\Programs\\ComfyUI\\resources\\app\\workflows\n" +
@@ -1138,14 +1138,14 @@ export function CustomNodesSettings() {
               )}
               {savedLocalPaths.length > 0 && (
                 <ul className="mb-2 space-y-1">
-                  {savedLocalPaths.map((p, i) => (
+                  {savedLocalPaths.map((path, i) => (
                     <li
-                      key={`${p}-${i}`}
+                      key={`${path}-${i}`}
                       className="flex items-center gap-2 truncate font-mono text-[11px] text-muted"
-                      title={p}
+                      title={path}
                     >
                       <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400" />
-                      <span className="truncate">{p}</span>
+                      <span className="truncate">{path}</span>
                     </li>
                   ))}
                 </ul>
@@ -1213,7 +1213,7 @@ export function CustomNodesSettings() {
               </p>
               <textarea
                 value={pathsText}
-                onChange={(e) => setPathsText(e.target.value)}
+                onChange={(event) => setPathsText(event.target.value)}
                 rows={Math.max(2, Math.min(savedPaths.length || 2, 6))}
                 placeholder={"scripts/fixtures/sample_custom_nodes\nD:/ComfyUI/custom_nodes"}
                 className="mb-2 w-full resize-none rounded-lg border border-border bg-surface p-3 font-mono text-xs text-ink outline-none placeholder:text-gray-500 focus:border-primary"
@@ -1379,11 +1379,11 @@ export function CustomNodesSettings() {
                       <div
                         role="button"
                         tabIndex={0}
-                        onClick={() => setExpandedParents((p) => ({ ...p, [parent]: !p[parent] }))}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            setExpandedParents((p) => ({ ...p, [parent]: !p[parent] }));
+                        onClick={() => setExpandedParents((parents) => ({ ...parents, [parent]: !parents[parent] }))}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setExpandedParents((parents) => ({ ...parents, [parent]: !parents[parent] }));
                           }
                         }}
                         className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left hover:bg-subtle"
@@ -1433,8 +1433,8 @@ export function CustomNodesSettings() {
                         <div className="flex shrink-0 items-center gap-2">
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            onClick={(event) => {
+                              event.stopPropagation();
                               onParseAllParent(parent);
                             }}
                             disabled={!!parsing || total === 0 || (parentParsed && cnt.outdated === 0)}
@@ -1496,20 +1496,20 @@ export function CustomNodesSettings() {
                                         <div
                                           role="button"
                                           tabIndex={0}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setExpandedNodeList((p) => ({
-                                              ...p,
-                                              [sub.path]: !p[sub.path],
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            setExpandedNodeList((nodeList) => ({
+                                              ...nodeList,
+                                              [sub.path]: !nodeList[sub.path],
                                             }));
                                           }}
-                                          onKeyDown={(e) => {
-                                            if (e.key === "Enter" || e.key === " ") {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              setExpandedNodeList((p) => ({
-                                                ...p,
-                                                [sub.path]: !p[sub.path],
+                                          onKeyDown={(event) => {
+                                            if (event.key === "Enter" || event.key === " ") {
+                                              event.preventDefault();
+                                              event.stopPropagation();
+                                              setExpandedNodeList((nodeList) => ({
+                                                ...nodeList,
+                                                [sub.path]: !nodeList[sub.path],
                                               }));
                                             }
                                           }}
@@ -1574,9 +1574,9 @@ export function CustomNodesSettings() {
                                             fallbackName={ct}
                                             expanded={!!nodeExpanded[ct]}
                                             onToggle={() =>
-                                              setNodeExpanded((p) => ({
-                                                ...p,
-                                                [ct]: !p[ct],
+                                              setNodeExpanded((expanded) => ({
+                                                ...expanded,
+                                                [ct]: !expanded[ct],
                                               }))
                                             }
                                           />

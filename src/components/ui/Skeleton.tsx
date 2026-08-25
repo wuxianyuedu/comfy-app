@@ -22,7 +22,7 @@ export function SkeletonList({ rows = 3, className }: { rows?: number; className
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3">
+        <div key={`skeleton-${i}`} className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3">
           <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
           <div className="min-w-0 flex-1 space-y-2">
             <Skeleton className="h-3.5 w-2/5" />

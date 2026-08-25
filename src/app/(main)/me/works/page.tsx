@@ -23,7 +23,7 @@ export default function MyWorks() {
           <p className="mt-1 text-sm text-muted">本机 ComfyUI 生成的所有结果，按时间倒序排列。</p>
         </div>
         <Link
-          href="/create"
+          href="/workspace?tab=canvas"
           className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-hover"
         >
           去创作
@@ -41,26 +41,27 @@ export default function MyWorks() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {data!.tasks.map((t) => {
-            const st = STATUS[t.status] ?? STATUS.QUEUED!;
-            const wf = getWorkflow(t.workflowName)?.label ?? t.workflowName;
+          {data!.tasks.map((task) =>
+{
+            const st = STATUS[task.status] ?? STATUS.QUEUED!;
+            const wf = getWorkflow(task.workflowName)?.label ?? task.workflowName;
             return (
               <Link
-                key={t.id}
-                href={`/create/${t.id}`}
+                key={task.id}
+                href={`/create/${task.id}`}
                 className="group overflow-hidden rounded-2xl border border-border bg-surface transition-colors hover:border-primary"
               >
                 <div className="relative aspect-square bg-bg">
-                  {t.cover ? (
+                  {task.cover ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={t.cover}
-                      alt={t.prompt}
+                      src={task.cover}
+                      alt={task.prompt}
                       className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
                     />
                   ) : (
                     <div className="grid h-full place-items-center text-xs text-muted">
-                      {t.status === "FAILED" ? "生成失败" : "无预览"}
+                      {task.status === "FAILED" ? "生成失败" : "无预览"}
                     </div>
                   )}
                   <span
@@ -75,7 +76,7 @@ export default function MyWorks() {
                       {wf}
                     </span>
                   </div>
-                  <p className="line-clamp-2 text-xs text-muted">{t.prompt}</p>
+                  <p className="line-clamp-2 text-xs text-muted">{task.prompt}</p>
                 </div>
               </Link>
             );

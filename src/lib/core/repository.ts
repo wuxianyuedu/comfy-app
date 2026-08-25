@@ -822,8 +822,8 @@ export class ModelRepository extends PrismaRepository<
       where: { isAvailable: true, folder: { in: folders } },
       select: { fileName: true },
     });
-    return Array.from(new Set(rows.map((m) => m.fileName))).sort((a, b) =>
-      a.localeCompare(b)
+    return Array.from(new Set(rows.map((row) => row.fileName))).sort((left, right) =>
+      left.localeCompare(right)
     );
   }
 
@@ -910,7 +910,7 @@ export class WorkflowModelTagRepository extends PrismaRepository<
       select: { id: true, name: true, _count: { select: { workflows: true } } },
       orderBy: { name: "asc" },
     });
-    return rows.map((t) => ({ id: t.id, name: t.name, count: t._count.workflows }));
+    return rows.map((row) =>({ id: row.id, name: row.name, count: row._count.workflows }));
   }
 
   /** 幂等 upsert：同名标签已存在则返回原记录，否则新建。 */
@@ -1020,14 +1020,13 @@ export class FilmRepository extends PrismaRepository<
         _count: { select: { shots: true } },
       },
     });
-    return rows.map((f) => ({
-      id: f.id,
-      title: f.title,
-      status: f.status,
-      progress: f.progress,
-      finalVideo: f.finalVideo,
-      shotCount: (f as { _count: { shots: number } })._count.shots,
-      createdAt: f.createdAt,
+    return rows.map((row) =>({      id: row.id,
+      title: row.title,
+      status: row.status,
+      progress: row.progress,
+      finalVideo: row.finalVideo,
+      shotCount: (row as { _count: { shots: number } })._count.shots,
+      createdAt: row.createdAt,
     }));
   }
 
@@ -1164,14 +1163,14 @@ export class FilmShotRepository {
     }>
   ): Promise<void> {
     await prisma.filmShot.createMany({
-      data: shots.map((s) => ({
+      data: shots.map((shot) => ({
         filmId,
-        order: s.order,
-        heading: s.heading ?? null,
-        prompt: s.prompt,
-        negative: s.negative ?? null,
+        order: shot.order,
+        heading: shot.heading ?? null,
+        prompt: shot.prompt,
+        negative: shot.negative ?? null,
         status: "IDLE",
-        params: s.params as Prisma.InputJsonValue,
+        params: shot.params as Prisma.InputJsonValue,
       })),
     });
   }
@@ -1308,21 +1307,20 @@ export class SkillRepository extends PrismaRepository<
     const count = await prisma.skill.count({ where: { isBuiltIn: true } });
     if (count > 0) return;
     await prisma.skill.createMany({
-      data: seeds.map((s) => ({
-        name: s.name,
-        slug: s.slug,
-        description: s.description,
-        icon: s.icon,
-        category: s.category,
-        promptTemplate: s.promptTemplate,
-        negativePrompt: s.negativePrompt,
-        defaultParams: s.defaultParams as unknown as Prisma.InputJsonValue,
-        recommendedModel: s.recommendedModel,
-        coverUrl: s.coverUrl,
-        sortOrder: s.sortOrder,
+      data: seeds.map((seed) =>({        name: seed.name,
+        slug: seed.slug,
+        description: seed.description,
+        icon: seed.icon,
+        category: seed.category,
+        promptTemplate: seed.promptTemplate,
+        negativePrompt: seed.negativePrompt,
+        defaultParams: seed.defaultParams as unknown as Prisma.InputJsonValue,
+        recommendedModel: seed.recommendedModel,
+        coverUrl: seed.coverUrl,
+        sortOrder: seed.sortOrder,
         isBuiltIn: true,
         isActive: true,
-        tags: JSON.stringify(s.tags),
+        tags: JSON.stringify(seed.tags),
       })),
     });
   }
@@ -1357,9 +1355,8 @@ export class SkillRepository extends PrismaRepository<
       _count: { category: true },
       orderBy: { _count: { category: "desc" } },
     });
-    return rows.map((r) => ({
-      category: r.category as string,
-      count: (r._count as { category: number }).category,
+    return rows.map((row) =>({      category: row.category as string,
+      count: (row._count as { category: number }).category,
     }));
   }
 
@@ -1444,7 +1441,7 @@ export class UserModelConfigRepository extends PrismaRepository<
       where: { enabled: true },
       select: { folder: true },
     });
-    return rows.map((r) => r.folder);
+    return rows.map((row) => row.folder);
   }
 
   /**

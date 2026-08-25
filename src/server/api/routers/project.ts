@@ -79,15 +79,16 @@ export const projectRouter = createTRPCRouter({
     .input(z.object({ projectId: z.string() }))
     .query(async ({ input }) => {
       const tasks = await taskRepository.findByProjectIdWithImages(input.projectId);
-      const outputs = tasks.map((t) => {
-        const params = (t.params ?? {}) as Record<string, any>;
+      const outputs = tasks.map((task) =>
+{
+        const params = (task.params ?? {}) as Record<string, any>;
         return {
-          id: t.id,
-          type: t.type,
-          status: t.status,
-          workflowName: t.workflowName,
-          prompt: t.prompt,
-          negativePrompt: t.negativePrompt,
+          id: task.id,
+          type: task.type,
+          status: task.status,
+          workflowName: task.workflowName,
+          prompt: task.prompt,
+          negativePrompt: task.negativePrompt,
           seed:
             typeof params.seed === "number" || typeof params.seed === "string"
               ? String(params.seed)
@@ -97,9 +98,9 @@ export const projectRouter = createTRPCRouter({
           steps: params.steps ?? null,
           cfg: params.cfg ?? null,
           checkpoint: params.checkpoint ?? null,
-          referenceImages: (t.referenceImages as string[] | null) ?? [],
-          createdAt: t.createdAt,
-          images: t.images.map((img) => ({
+          referenceImages: (task.referenceImages as string[] | null) ?? [],
+          createdAt: task.createdAt,
+          images: task.images.map((img) => ({
             id: img.id,
             localPath: img.localPath,
             mediaType: img.mediaType,

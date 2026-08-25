@@ -3,13 +3,21 @@ import { modelRepository, userModelConfigRepository } from "./core/repository";
 import { type ModelType } from "./model-types";
 
 export function baseFromName(name: string): string {
-  const n = name.toLowerCase();
-  if (n.includes("illustrious") || n.includes("sdxl")) return "SDXL";
-  if (n.includes("flux")) return "Flux";
-  if (n.includes("sd1.5") || n.includes("sd_1.5") || n.includes("sd15")) return "SD1.5";
-  if (n.includes("pony")) return "Pony";
+
+  const lower = name.toLowerCase();
+
+  if (lower.includes("illustrious") || lower.includes("sdxl")) return "SDXL";
+
+  if (lower.includes("flux")) return "Flux";
+
+  if (lower.includes("sd1.5") || lower.includes("sd_1.5") || lower.includes("sd15")) return "SD1.5";
+
+  if (lower.includes("pony")) return "Pony";
+
   return "未知";
+
 }
+
 
 /** Strip extension so a stored fileName becomes the loadable ComfyUI name. */
 export function stripExt(fileName: string): string {
@@ -114,7 +122,7 @@ export async function localModelFileNames(folders: string[]): Promise<string[]> 
   if (!folders.length) return [];
   const enabled = await userModelConfigRepository.listEnabledFolders();
   const wanted = new Set(folders);
-  const matchedFolders = enabled.filter((f) => wanted.has(f));
+  const matchedFolders = enabled.filter((enabled) => wanted.has(enabled));
   if (!matchedFolders.length) return [];
   return modelRepository.listAvailableFileNamesByFolders(matchedFolders);
 }

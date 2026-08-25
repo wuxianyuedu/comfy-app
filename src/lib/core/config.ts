@@ -110,33 +110,61 @@ const configSchema = z.object({
 
 /** 由原始 env 解析出强类型配置；失败时抛出可读错误（fail-fast）。 */
 function buildConfig(): AppConfig {
+
   const parsed = configSchema.safeParse(readRawEnv());
+
   if (!parsed.success) {
+
     const issues = parsed.error.issues
-      .map((i) => `  - ${i.path.join(".") || "<root>"}: ${i.message}`)
+
+      .map((issue) => `  - ${issue.path.join(".") || "<root>"}: ${issue.message}`)
+
       .join("\n");
+
     throw new Error(
+
       `应用配置校验失败，请检查环境变量：\n${issues}`
+
     );
+
   }
-  const v = parsed.data;
+
+  const data = parsed.data;
+
   return {
-    env: v.nodeEnv,
-    isDev: v.nodeEnv === "development",
-    isProd: v.nodeEnv === "production",
-    isTest: v.nodeEnv === "test",
-    logLevel: v.logLevel,
-    databaseUrl: v.databaseUrl,
-    comfyuiBaseUrl: v.comfyuiBaseUrl,
+
+    env: data.nodeEnv,
+
+    isDev: data.nodeEnv === "development",
+
+    isProd: data.nodeEnv === "production",
+
+    isTest: data.nodeEnv === "test",
+
+    logLevel: data.logLevel,
+
+    databaseUrl: data.databaseUrl,
+
+    comfyuiBaseUrl: data.comfyuiBaseUrl,
+
     // WebSocket 地址：把 http(s):// 换成 ws(s)://
-    comfyuiWsUrl: v.comfyuiBaseUrl.replace(/^http/, "ws"),
-    port: v.port,
+
+    comfyuiWsUrl: data.comfyuiBaseUrl.replace(/^http/, "ws"),
+
+    port: data.port,
+
     features: {
-      reaperEnabled: v.reaperEnabled,
-      debugModeDefault: v.debugModeDefault,
+
+      reaperEnabled: data.reaperEnabled,
+
+      debugModeDefault: data.debugModeDefault,
+
     },
+
   };
+
 }
+
 
 /**
  * 进程级配置单例。首次导入本模块即解析完成；后续所有读取走这个不可变对象。

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { DarkSelect } from "@/components/updream/ui/DarkSelect";
+import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { Icon } from "@/components/ui/Icon";
 import type { Shot, Scene, Character, StyleRef, ShotType } from "@/lib/workshop/types";
 import { SHOT_TYPE_LABELS } from "@/lib/workshop/types";
@@ -89,11 +89,12 @@ export function StoryboardPlanner({
 
   function updateShot(id: string, patch: Partial<Shot>) {
     onShotsChange(
-      shots.map((s) => {
-        if (s.id !== id) return s;
-        const next = { ...s, ...patch };
+      shots.map((shot) =>
+{
+        if (shot.id !== id) return shot;
+        const next = { ...shot, ...patch };
         const scene = scenes.find((sc) => sc.id === next.sceneId);
-        const chars = characters.filter((c) => next.characterIds.includes(c.id));
+        const chars = characters.filter((character) => next.characterIds.includes(character.id));
         const style = styles.find((st) => st.slug === next.skillSlug);
         return recompute(next, scene, chars, style);
       })
@@ -101,7 +102,7 @@ export function StoryboardPlanner({
   }
 
   function removeShot(id: string) {
-    onShotsChange(shots.filter((s) => s.id !== id));
+    onShotsChange(shots.filter((shot) => shot.id !== id));
   }
 
   function clearShots() {
@@ -120,7 +121,7 @@ export function StoryboardPlanner({
     try {
       const built: Shot[] = [];
       let n = shots.length;
-      const charNames = characters.map((c) => c.name).filter(Boolean);
+      const charNames = characters.map((character) => character.name).filter(Boolean);
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
         setAiProgress(`正在拆镜 ${i + 1}/${scenes.length} · ${scene!.heading}`);
@@ -129,25 +130,26 @@ export function StoryboardPlanner({
           onToken: () => {},
         });
         const raws = parseStoryboard(full);
-        raws.forEach((r) => {
+        raws.forEach((raw) =>
+{
           n += 1;
           const charIds = characters
-            .filter((c) => c.name && r.characterNames.includes(c.name))
-            .map((c) => c.id);
+            .filter((char) => char.name && raw.characterNames.includes(char.name))
+            .map((char) => char.id);
           const shot: Shot = {
             id: workshopUid("shot"),
             index: n,
             sceneId: scene!.id,
             sceneHeading: scene!.heading,
-            shotType: r.shotType,
-            description: r.description,
+            shotType: raw.shotType,
+            description: raw.description,
             characterIds: charIds,
             prompt: "",
             negativePrompt: "",
             params: {},
             status: "idle",
           };
-          const linkedChars = characters.filter((c) => charIds.includes(c.id));
+          const linkedChars = characters.filter((character) => charIds.includes(character.id));
           built.push(recompute(shot, scene, linkedChars, undefined));
         });
       }
@@ -161,13 +163,13 @@ export function StoryboardPlanner({
   }
 
   async function generateAll() {
-    const pending = shots.filter((s) => s.status === "idle" || s.status === "failed");
+    const pending = shots.filter((shot) => shot.status === "idle" || shot.status === "failed");
     for (const shot of pending) {
       await onGenerate(shot);
     }
   }
 
-  const idleCount = shots.filter((s) => s.status === "idle" || s.status === "failed").length;
+  const idleCount = shots.filter((shot) => shot.status === "idle" || shot.status === "failed").length;
 
   return (
     <div className="space-y-4">
@@ -241,8 +243,8 @@ export function StoryboardPlanner({
       ) : (
         <div className="space-y-3">
           {shots.map((shot) => {
-            const scene = scenes.find((s) => s.id === shot.sceneId);
-            const linkedChars = characters.filter((c) => shot.characterIds.includes(c.id));
+            const scene = scenes.find((scene) => scene.id === shot.sceneId);
+            const linkedChars = characters.filter((character) => shot.characterIds.includes(character.id));
             return (
               <div key={shot.id} className="rounded-xl border border-border bg-surface p-4">
                 <div className="mb-2 flex items-center gap-2">
@@ -270,7 +272,7 @@ export function StoryboardPlanner({
                     <DarkSelect
                       className="!bg-white/[0.03] !border-white/[0.08] text-xs"
                       value={shot.shotType}
-                      onChange={(v) => updateShot(shot.id, { shotType: v as ShotType })}
+                      onChange={(value) => updateShot(shot.id, { shotType: value as ShotType })}
                       options={SHOT_TYPES}
                       labels={SHOT_TYPE_LABELS as Record<string, string>}
                       placeholder="选择景别"
@@ -283,9 +285,9 @@ export function StoryboardPlanner({
                     <DarkSelect
                       className="!bg-white/[0.03] !border-white/[0.08] text-xs"
                       value={shot.skillSlug ?? ""}
-                      onChange={(v) => updateShot(shot.id, { skillSlug: v || undefined })}
-                      options={styles.map((s) => s.slug)}
-                      labels={Object.fromEntries(styles.map((s) => [s.slug, `${s.icon} ${s.name}`]))}
+                      onChange={(value) => updateShot(shot.id, { skillSlug: value || undefined })}
+                      options={styles.map((style) => style.slug)}
+                      labels={Object.fromEntries(styles.map((style) =>[style.slug, `${style.icon} ${style.name}`]))}
                       placeholder="跟随角色/默认"
                     />
                   </label>
@@ -294,7 +296,7 @@ export function StoryboardPlanner({
                 {/* Description */}
                 <textarea
                   value={shot.description}
-                  onChange={(e) => updateShot(shot.id, { description: e.target.value })}
+                  onChange={(event) => updateShot(shot.id, { description: event.target.value })}
                   rows={2}
                   className="mt-2 w-full rounded-md border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-primary"
                   placeholder="画面描述（留空则使用场景动作描述）"
@@ -305,17 +307,18 @@ export function StoryboardPlanner({
                   <div className="mt-2">
                     <span className="mb-1 block text-xs text-muted">出场角色</span>
                     <div className="flex flex-wrap gap-1.5">
-                      {characters.map((c) => {
-                        const on = shot.characterIds.includes(c.id);
+                      {characters.map((character) =>
+{
+                        const on = shot.characterIds.includes(character.id);
                         return (
                           <button
-                            key={c.id}
+                            key={character.id}
                             type="button"
                             onClick={() =>
                               updateShot(shot.id, {
                                 characterIds: on
-                                  ? shot.characterIds.filter((id) => id !== c.id)
-                                  : [...shot.characterIds, c.id],
+                                  ? shot.characterIds.filter((id) => id !== character.id)
+                                  : [...shot.characterIds, character.id],
                               })
                             }
                             className={`rounded-full px-2 py-0.5 text-xs transition-colors ${
@@ -324,7 +327,7 @@ export function StoryboardPlanner({
                                 : "border border-border text-muted hover:text-ink"
                             }`}
                           >
-                            {c.name || "未命名"}
+                            {character.name || "未命名"}
                           </button>
                         );
                       })}
@@ -340,7 +343,7 @@ export function StoryboardPlanner({
                   </p>
                   {linkedChars.length > 0 && (
                     <p className="mt-1 text-xs text-primary/70">
-                      关联角色：{linkedChars.map((c) => c.name || "未命名").join("、")}
+                      关联角色：{linkedChars.map((linkedChar) => linkedChar.name || "未命名").join("、")}
                     </p>
                   )}
                 </div>
@@ -382,6 +385,7 @@ function StatusBadge({ status }: { status: Shot["status"] }) {
     running: { label: "生成中", cls: "bg-blue-100 text-blue-700" },
     done: { label: "已完成", cls: "bg-emerald-100 text-emerald-700" },
     failed: { label: "失败", cls: "bg-red-100 text-red-700" },
+    stale: { label: "待更新", cls: "bg-red-100 text-red-700" },
   };
   const s = map[status];
   return (

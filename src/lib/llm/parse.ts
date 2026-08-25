@@ -4,25 +4,46 @@
  * first [ or { and the matching last ] or }.
  */
 export function extractJson(text: string): unknown {
-  let t = (text ?? "").trim();
-  if (!t) throw new Error("LLM 返回为空");
+
+  let trimmed = (text ?? "").trim();
+
+  if (!trimmed) throw new Error("LLM 返回为空");
+
+
 
   // Strip ```json ... ``` fences
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence) t = fence[1]!.trim();
 
-  const start = t.search(/[[{]/);
-  const end = Math.max(t.lastIndexOf("]"), t.lastIndexOf("}"));
+  const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+
+  if (fence) trimmed = fence[1]!.trim();
+
+
+
+  const start = trimmed.search(/[[{]/);
+
+  const end = Math.max(trimmed.lastIndexOf("]"), trimmed.lastIndexOf("}"));
+
   if (start >= 0 && end > start) {
-    t = t.slice(start, end + 1);
+
+    trimmed = trimmed.slice(start, end + 1);
+
   }
 
-  return JSON.parse(t);
+
+
+  return JSON.parse(trimmed);
+
 }
+
 
 /** Like extractJson but always returns an array (or throws). */
 export function extractJsonArray(text: string): unknown[] {
-  const v = extractJson(text);
-  if (!Array.isArray(v)) throw new Error("LLM 未返回数组");
-  return v;
+
+  const value = extractJson(text);
+
+  if (!Array.isArray(value)) throw new Error("LLM 未返回数组");
+
+  return value;
+
 }
+

@@ -17,6 +17,8 @@ import type { NodeProps } from "@xyflow/react";
 import type { NodeData, NodeTypeConfig } from "../types";
 import { getNodeConfig } from "../node-registry";
 import { PackageFooter } from "./PackageFooter";
+import { DebugChainFooter } from "../../studio/DebugChainFooter";
+import { getWorkflowCanvasRenderChain } from "../../studio/workflow-canvas-render-chain";
 
 /* ── Layout constants for the custom card (keep handles aligned to rows) ── */
 const HEADER_H = 38;
@@ -42,7 +44,7 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
     input: "输入",
   };
 
-  const previewFields = d.fields?.filter((f) => !f.hidden).slice(0, 2) ?? [];
+  const previewFields = d.fields?.filter((field) => !field.hidden).slice(0, 2) ?? [];
   const getPreviewValue = (key: string) => {
     const v = d.inputs?.[key];
     if (typeof v !== "string") return "";
@@ -125,16 +127,17 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
           flexDirection: "column",
           gap: 3,
         }}>
-          {previewFields.map((f) => (
-            <div key={f.key} style={{ fontSize: 11, color: "#A99BC7" }}>
-              <span style={{ color: "#6B7280", marginRight: 4 }}>{f.label}:</span>
+          {previewFields.map((previewField) =>
+(
+            <div key={previewField.key} style={{ fontSize: 11, color: "#A99BC7" }}>
+              <span style={{ color: "#6B7280", marginRight: 4 }}>{previewField.label}:</span>
               <span style={{
                 color: "#D4CFF9",
                 fontFamily: '"SF Mono", ui-monospace, monospace',
                 wordBreak: "break-all",
               }}>
-                {getPreviewValue(f.key) || (
-                  <span style={{ fontStyle: "italic", opacity: 0.5 }}>{f.placeholder || "..."}</span>
+                {getPreviewValue(previewField.key) || (
+                  <span style={{ fontStyle: "italic", opacity: 0.5 }}>{previewField.placeholder || "..."}</span>
                 )}
               </span>
             </div>
@@ -147,6 +150,8 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
       {renderHandles(d, "target")}
       {renderHandles(d, "source")}
       <PackageFooter config={config} classType={d.classType} />
+      {/* 调试模式：渲染链路模块标签（仅 debugMode 开启时显示） */}
+      <DebugChainFooter modules={getWorkflowCanvasRenderChain(d.classType)} />
     </div>
   );
 }
@@ -165,8 +170,8 @@ function ComfyNodeCustom({
   const outputs = config.outputsSpec ?? [];
 
   const rows = [
-    ...inputs.map((s) => ({ kind: "in" as const, spec: s, idx: 0 })),
-    ...outputs.map((s, j) => ({ kind: "out" as const, spec: s, idx: j })),
+    ...inputs.map((input) =>({ kind: "in" as const, spec: input, idx: 0 })),
+    ...outputs.map((spec, idx) => ({ kind: "out" as const, spec, idx })),
   ];
 
   return (
@@ -338,6 +343,8 @@ function ComfyNodeCustom({
 
       {/* ComfyUI-native bottom-left package source footer (custom card). */}
       <PackageFooter config={config} classType={d.classType} />
+      {/* 调试模式：渲染链路模块标签（仅 debugMode 开启时显示） */}
+      <DebugChainFooter modules={getWorkflowCanvasRenderChain(d.classType)} />
     </div>
   );
 }

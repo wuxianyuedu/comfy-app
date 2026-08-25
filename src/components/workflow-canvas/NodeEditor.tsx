@@ -16,8 +16,8 @@
 import { useCallback, useEffect } from "react";
 import type { NodeData, FieldDef, ParamMap } from "./types";
 import { getNodeConfig } from "./node-registry";
-import { DarkSelect } from "@/components/updream/ui/DarkSelect";
-import { NumberField } from "@/components/updream/ui/NumberField";
+import { DarkSelect } from "@/components/studio/ui/DarkSelect";
+import { NumberField } from "@/components/studio/ui/NumberField";
 
 interface NodeEditorProps {
   /** Currently selected node data */
@@ -126,9 +126,9 @@ export default function NodeEditor({
           <DarkSelect
             className="text-[12px]"
             value={currentRole}
-            onChange={(v) => onRoleChange(node.comfyId, v)}
-            options={ROLE_OPTIONS.map((r) => r.value)}
-            labels={Object.fromEntries(ROLE_OPTIONS.map((r) => [r.value, r.label]))}
+            onChange={(value) => onRoleChange(node.comfyId, value)}
+            options={ROLE_OPTIONS.map((ROLE_OPTIONS) => ROLE_OPTIONS.value)}
+            labels={Object.fromEntries(ROLE_OPTIONS.map((ROLE_OPTIONS) => [ROLE_OPTIONS.value, ROLE_OPTIONS.label]))}
             placeholder="选择角色"
           />
         </div>
@@ -137,9 +137,10 @@ export default function NodeEditor({
       {/* Field groups as tabs */}
       {groupNames.length > 1 ? (
         <div className="wf-editor__tabs">
-          {groupNames.map((g) => (
-            <button key={g} className="wf-editor__tab">
-              {g}
+          {groupNames.map((groupName) =>
+(
+            <button key={groupName} className="wf-editor__tab">
+              {groupName}
             </button>
           ))}
         </div>
@@ -245,7 +246,7 @@ function FieldRow({ field, value, checkpoints, modelLists, onChange }: FieldRowP
           <label className="wf-field__label">{field.label}</label>
           <DarkSelect
             value={(value as string) ?? ""}
-            onChange={(v) => onChange(v)}
+            onChange={(value) => onChange(value)}
             options={options}
             placeholder="-- 选择 --"
           />
@@ -264,7 +265,7 @@ function FieldRow({ field, value, checkpoints, modelLists, onChange }: FieldRowP
            */}
           <NumberField
             value={(typeof value === "number" ? value : Number(value)) || Number(field.min ?? 0)}
-            onChange={(n) => onChange(n)}
+            onChange={(value) => onChange(value)}
             min={Number(field.min ?? 0)}
             max={Number(field.max ?? 9999)}
             step={

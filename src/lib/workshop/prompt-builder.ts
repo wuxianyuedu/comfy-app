@@ -69,7 +69,7 @@ export function buildShotPrompt(
 
   // Character prompts
   const charPrompts = characters
-    .map((c) => buildCharacterPrompt(c, style))
+    .map((character) => buildCharacterPrompt(character, style))
     .filter(Boolean);
   if (charPrompts.length) parts.push(`characters: ${charPrompts.join("; ")}`);
 
@@ -90,8 +90,9 @@ export function buildShotNegative(characters: Character[], style?: StyleRef): st
     "text",
     "extra fingers",
   ];
-  characters.forEach((c) => {
-    if (c.negativePrompt) neg.push(c.negativePrompt);
+  characters.forEach((character) =>
+{
+    if (character.negativePrompt) neg.push(character.negativePrompt);
   });
   if (style?.negativePrompt) neg.push(style.negativePrompt);
   return Array.from(new Set(neg)).join(", ");

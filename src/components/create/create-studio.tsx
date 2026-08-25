@@ -7,13 +7,13 @@ import { getWorkflow } from "@/lib/comfyui/_meta";
 import { SkillSelector } from "@/components/skill";
 import type { SkillData } from "@/components/skill";
 import dynamic from "next/dynamic";
-import { DarkSelect } from "@/components/updream/ui/DarkSelect";
-import { NumberField } from "@/components/updream/ui/NumberField";
+import { DarkSelect } from "@/components/studio/ui/DarkSelect";
+import { NumberField } from "@/components/studio/ui/NumberField";
 import { api } from "~/trpc/react";
 
 // Lazy-load the heavy ReactFlow canvas (only needed for custom workflows)
 const WorkflowCanvas = dynamic(
-  () => import("@/components/workflow-canvas").then((m) => ({ default: m.WorkflowCanvas })),
+  () => import("@/components/workflow-canvas").then((module) => ({ default: module.WorkflowCanvas })),
   { ssr: false }
 );
 
@@ -26,8 +26,8 @@ type ParamMap = {
   checkpointNode?: string;
   samplerNode?: string;
 };
-type WfNode = { id: string; class_type: string; title: string };
-type WfDetail = { graph: Record<string, any>; nodes: WfNode[]; paramMap: ParamMap };
+type WorkflowNode = { id: string; class_type: string; title: string };
+type WorkflowDetail = { graph: Record<string, any>; nodes: WorkflowNode[]; paramMap: ParamMap };
 
 const LOG_STYLE: Record<LogEntry["level"], string> = {
   info: "text-muted",
@@ -55,8 +55,8 @@ function computeLayout(graph: Record<string, any>) {
   ids.forEach((id) => (succ[id] = []));
   for (const id of ids) {
     const inputs = graph[id]?.inputs || {};
-    for (const v of Object.values(inputs)) {
-      if (Array.isArray(v) && typeof v[0] === "string" && graph[v[0]]) succ[id]!.push(v[0]);
+    for (const value of Object.values(inputs)) {
+      if (Array.isArray(value) && typeof value[0] === "string" && graph[value[0]]) succ[id]!.push(value[0]);
     }
   }
   const layer: Record<string, number> = {};
@@ -65,11 +65,11 @@ function computeLayout(graph: Record<string, any>) {
     if (layer[id] !== undefined) return layer[id];
     if (visiting[id]) return 0;
     visiting[id] = true;
-    let l = 0;
-    for (const s of succ[id]!) l = Math.max(l, dfs(s) + 1);
+    let maxDepth = 0;
+    for (const successor of succ[id]!) maxDepth = Math.max(maxDepth, dfs(successor) + 1);
     visiting[id] = false;
-    layer[id] = l;
-    return l;
+    layer[id] = maxDepth;
+    return maxDepth;
   };
   ids.forEach(dfs);
 
@@ -77,7 +77,8 @@ function computeLayout(graph: Record<string, any>) {
   ids.forEach((id) => {
     (byLayer[layer[id]!] ||= []).push(id);
   });
-  const maxLayer = ids.length ? Math.max(...ids.map((i) => layer[i]!)) : 0;
+  const maxLayer = ids.length ? Math.max(...ids.map((id) => layer[id]!)) : 0;
+
 
   const colW = 196;
   const rowH = 66;
@@ -86,23 +87,23 @@ function computeLayout(graph: Record<string, any>) {
   const NODE_W = 158;
   const NODE_H = 48;
   const pos: Record<string, { x: number; y: number }> = {};
-  for (let L = maxLayer; L >= 0; L--) {
-    const arr = byLayer[L] || [];
+  for (let layerIdx = maxLayer; layerIdx >= 0; layerIdx--) {
+    const arr = byLayer[layerIdx] || [];
     arr.forEach((id, idx) => {
-      pos[id] = { x: padX + (maxLayer - L) * colW, y: padY + idx * rowH };
+      pos[id] = { x: padX + (maxLayer - layerIdx) * colW, y: padY + idx * rowH };
     });
   }
 
-  const maxRows = Math.max(1, ...Object.values(byLayer).map((a) => a.length));
+  const maxRows = Math.max(1, ...Object.values(byLayer).map((arr) => arr.length));
   const width = padX * 2 + maxLayer * colW + NODE_W;
   const height = padY * 2 + maxRows * rowH;
 
   const edges: { from: string; to: string }[] = [];
   for (const id of ids) {
     const inputs = graph[id]?.inputs || {};
-    for (const v of Object.values(inputs)) {
-      if (Array.isArray(v) && typeof v[0] === "string" && graph[v[0]]) {
-        edges.push({ from: v[0], to: id });
+    for (const value of Object.values(inputs)) {
+      if (Array.isArray(value) && typeof value[0] === "string" && graph[value[0]]) {
+        edges.push({ from: value[0], to: id });
       }
     }
   }
@@ -136,7 +137,7 @@ export function CreateStudio() {
   const [importJson, setImportJson] = useState("");
   const [importError, setImportError] = useState("");
 
-  const [wfDetail, setWfDetail] = useState<WfDetail | null>(null);
+  const [workflowDetail, setWfDetail] = useState<WorkflowDetail | null>(null);
   const [paramMap, setParamMap] = useState<ParamMap>({});
   const [savingMap, setSavingMap] = useState(false);
   const [graphFullscreen, setGraphFullscreen] = useState(false);
@@ -157,7 +158,7 @@ export function CreateStudio() {
   const ckptQ = api.model.list.useQuery({ type: "CHECKPOINT" });
   const loraQ = api.model.list.useQuery({ type: "LORA" });
   const workflowsQ = api.workflow.list.useQuery();
-  const wfDetailQ = api.workflow.detail.useQuery({ id: customId }, { enabled: !!customId });
+  const workflowDetailQuery = api.workflow.detail.useQuery({ id: customId }, { enabled: !!customId });
   const createWf = api.workflow.create.useMutation();
   const updateWf = api.workflow.update.useMutation();
   const gen = api.generate.generate.useMutation();
@@ -165,17 +166,17 @@ export function CreateStudio() {
 
   const workflowLabel =
     tab === "custom"
-      ? customWorkflows.find((w) => w.id === customId)?.name ?? "自定义工作流"
+      ? customWorkflows.find((workflow) => workflow.id === customId)?.name ?? "自定义工作流"
       : getWorkflow(tab)?.label ?? tab;
 
   const layout = useMemo(
-    () => (wfDetail ? computeLayout(wfDetail.graph) : null),
-    [wfDetail]
+    () => (workflowDetail ? computeLayout(workflowDetail.graph) : null),
+    [workflowDetail]
   );
 
-  const clipNodes = wfDetail?.nodes.filter((n) => n.class_type === "CLIPTextEncode") ?? [];
-  const ckptNodes = wfDetail?.nodes.filter((n) => n.class_type === "CheckpointLoaderSimple") ?? [];
-  const ksNodes = wfDetail?.nodes.filter((n) => n.class_type === "KSampler") ?? [];
+  const clipNodes = workflowDetail?.nodes.filter((node) => node.class_type === "CLIPTextEncode") ?? [];
+  const ckptNodes = workflowDetail?.nodes.filter((node) => node.class_type === "CheckpointLoaderSimple") ?? [];
+  const ksNodes = workflowDetail?.nodes.filter((node) => node.class_type === "KSampler") ?? [];
 
   useEffect(() => {
     if (ckptQ.data) setCheckpoints(ckptQ.data.models ?? []);
@@ -204,18 +205,18 @@ export function CreateStudio() {
       setParamMap({});
       return;
     }
-    const tpl = wfDetailQ.data?.template;
+    const tpl = workflowDetailQuery.data?.template;
     if (tpl?.graph) {
-      const nodes = Object.entries(tpl.graph as unknown as Record<string, any>).map(([id, n]) => ({
+      const nodes = Object.entries(tpl.graph as unknown as Record<string, any>).map(([id, node]) => ({
         id,
-        class_type: n?.class_type ?? "",
-        title: n?._meta?.title ?? n?.class_type ?? id,
+        class_type: node?.class_type ?? "",
+        title: node?._meta?.title ?? node?.class_type ?? id,
       }));
       const pm = (tpl.paramMap ?? {}) as ParamMap;
       setWfDetail({ graph: tpl.graph as unknown as Record<string, any>, nodes, paramMap: pm });
       setParamMap(pm);
     }
-  }, [customId, wfDetailQ.data]);
+  }, [customId, workflowDetailQuery.data]);
 
   async function onUpload(file: File) {
     setUploading(true);
@@ -223,9 +224,9 @@ export function CreateStudio() {
       const fd = new FormData();
       fd.append("image", file);
       const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const d = await res.json();
-      if (d.name) setInputImage(d.name);
-      else setError(d.error ?? "上传失败");
+      const data = await res.json();
+      if (data.name) setInputImage(data.name);
+      else setError(data.error ?? "上传失败");
     } finally {
       setUploading(false);
     }
@@ -244,15 +245,15 @@ export function CreateStudio() {
       setImportError("JSON 解析失败，请检查格式");
       return;
     }
-    let d: { id: string; name: string; taskType: string };
+    let created: { id: string; name: string; taskType: string };
     try {
-      d = await createWf.mutateAsync({ name: importName || "未命名工作流", graph: graph as any });
+      created = await createWf.mutateAsync({ name: importName || "未命名工作流", graph: graph as any });
     } catch (e: any) {
       setImportError(e?.message ?? "导入失败");
       return;
     }
-    setCustomWorkflows((prev) => [...prev, { id: d.id, name: d.name, taskType: d.taskType }]);
-    setCustomId(d.id);
+    setCustomWorkflows((prev) => [...prev, { id: created.id, name: created.name, taskType: created.taskType }]);
+    setCustomId(created.id);
     setTab("custom");
     setShowImport(false);
     setImportJson("");
@@ -340,16 +341,16 @@ export function CreateStudio() {
     setImages([]);
     setLogs([]);
 
-    let d: { taskId: string };
+    let genResult: { taskId: string };
     try {
-      d = await gen.mutateAsync(payload as any);
+      genResult = await gen.mutateAsync(payload as any);
     } catch (e: any) {
       setStatus("error");
       setError(e?.message ?? "提交失败");
       return;
     }
-    setTaskId(d.taskId);
-    const es = new EventSource(`/api/tasks/${d.taskId}/stream`);
+    setTaskId(genResult.taskId);
+    const es = new EventSource(`/api/tasks/${genResult.taskId}/stream`);
     es.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
       if (msg.type === "progress") setProgress(msg.progress ?? 0);
@@ -365,8 +366,8 @@ export function CreateStudio() {
         setStatus("done");
         setProgress(100);
         utils.task.detail
-          .fetch({ id: d.taskId })
-          .then((td) => setImages((td.images ?? []).map((i: any) => i.localPath)))
+          .fetch({ id: genResult.taskId })
+          .then((td) => setImages((td.images ?? []).map((img: any) => img.localPath)))
           .catch(() => {});
         es.close();
       } else if (msg.type === "error") {
@@ -389,15 +390,15 @@ export function CreateStudio() {
       {/* Parameter panel */}
       <aside className="rounded-2xl border border-border bg-surface p-5">
         <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl bg-subtle p-1">
-          {(["txt2img", "img2img", "custom"] as Tab[]).map((t) => (
+          {(["txt2img", "img2img", "custom"] as Tab[]).map((tabOption) => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
+              key={tabOption}
+              onClick={() => setTab(tabOption)}
               className={`rounded-lg py-2 text-sm font-medium transition-colors ${
-                tab === t ? "bg-surface text-primary shadow-sm" : "text-muted"
+                tab === tabOption ? "bg-surface text-primary shadow-sm" : "text-muted"
               }`}
             >
-              {t === "txt2img" ? "文生图" : t === "img2img" ? "图生图" : "自定义"}
+              {tabOption === "txt2img" ? "文生图" : tabOption === "img2img" ? "图生图" : "自定义"}
             </button>
           ))}
         </div>
@@ -414,18 +415,18 @@ export function CreateStudio() {
                 if (skill.negativePrompt) setNegative(skill.negativePrompt);
                 // Apply default params
                 if (skill.defaultParams) {
-                  const p = skill.defaultParams as Record<string, unknown>;
-                  if (typeof p.steps === "number") setSteps(p.steps);
-                  if (typeof p.cfg === "number") setCfg(p.cfg);
-                  if (typeof p.sampler === "string" && SAMPLERS.includes(p.sampler)) setSampler(p.sampler);
-                  if (typeof p.scheduler === "string" && SCHEDULERS.includes(p.scheduler)) setScheduler(p.scheduler);
-                  if (typeof p.width === "number" && typeof p.height === "number") {
-                    const sizeStr = `${p.width}x${p.height}`;
+                  const defaults = skill.defaultParams as Record<string, unknown>;
+                  if (typeof defaults.steps === "number") setSteps(defaults.steps);
+                  if (typeof defaults.cfg === "number") setCfg(defaults.cfg);
+                  if (typeof defaults.sampler === "string" && SAMPLERS.includes(defaults.sampler)) setSampler(defaults.sampler);
+                  if (typeof defaults.scheduler === "string" && SCHEDULERS.includes(defaults.scheduler)) setScheduler(defaults.scheduler);
+                  if (typeof defaults.width === "number" && typeof defaults.height === "number") {
+                    const sizeStr = `${defaults.width}x${defaults.height}`;
                     if (SIZES.includes(sizeStr) || true) setSize(sizeStr);
                   }
                 }
                 // Recommend model
-                if (skill.recommendedModel && checkpoints.some((c) => c.fileName === skill.recommendedModel)) {
+                if (skill.recommendedModel && checkpoints.some((model) => model.fileName === skill.recommendedModel)) {
                   setCheckpoint(skill.recommendedModel);
                 }
               } else {
@@ -442,9 +443,9 @@ export function CreateStudio() {
               <DarkSelect
                 className="flex-1 !bg-white/[0.03] !border-white/[0.08] text-sm py-2.5"
                 value={customId}
-                onChange={(v) => setCustomId(v)}
-                options={customWorkflows.map((w) => w.id)}
-                labels={Object.fromEntries(customWorkflows.map((w) => [w.id, w.name]))}
+                onChange={(value) => setCustomId(value)}
+                options={customWorkflows.map((workflow) => workflow.id)}
+                labels={Object.fromEntries(customWorkflows.map((workflow) => [workflow.id, workflow.name]))}
                 placeholder="选择已导入工作流…"
               />
               <button
@@ -461,7 +462,7 @@ export function CreateStudio() {
         ) : null}
 
         {/* ── Custom workflow: Interactive canvas engine ── */}
-        {tab === "custom" && wfDetail ? (
+        {tab === "custom" && workflowDetail ? (
           <div className="col-span-full">
             <div
               style={{
@@ -473,12 +474,12 @@ export function CreateStudio() {
               }}
             >
               <WorkflowCanvas
-                initialGraph={wfDetail.graph}
-                initialParamMap={wfDetail.paramMap ?? paramMap}
-                checkpoints={checkpoints.map((c) => c.fileName)}
+                initialGraph={workflowDetail.graph}
+                initialParamMap={workflowDetail.paramMap ?? paramMap}
+                checkpoints={checkpoints.map((model) => model.fileName)}
                 modelLists={{
-                  checkpoints: checkpoints.map((c) => c.fileName),
-                  loras: loraOpts.map((l) => l.fileName),
+                  checkpoints: checkpoints.map((model) => model.fileName),
+                  loras: loraOpts.map((lora) => lora.fileName),
                 }}
                 onGraphChange={(graph, pm) => {
                   setCanvasGraph(graph);
@@ -499,7 +500,7 @@ export function CreateStudio() {
         ) : null}
 
         {/* Fallback: static SVG preview (shown only if canvas hasn't loaded yet) */}
-        {tab === "custom" && wfDetail && layout && !canvasGraph && (
+        {tab === "custom" && workflowDetail && layout && !canvasGraph && (
           <div className="mb-4 rounded-xl border border-border bg-bg p-3">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-medium">节点图预览</span>
@@ -523,14 +524,14 @@ export function CreateStudio() {
                 viewBox={`0 0 ${layout.width} ${layout.height}`}
                 className="block"
               >
-                {layout.edges.map((e, i) => {
-                  const a = layout.pos[e.from];
-                  const b = layout.pos[e.to];
-                  if (!a || !b) return null;
-                  const x1 = a.x + layout.NODE_W;
-                  const y1 = a.y + layout.NODE_H / 2;
-                  const x2 = b.x;
-                  const y2 = b.y + layout.NODE_H / 2;
+                {layout.edges.map((edge, i) => {
+                  const fromPos = layout.pos[edge.from];
+                  const toPos = layout.pos[edge.to];
+                  if (!fromPos || !toPos) return null;
+                  const x1 = fromPos.x + layout.NODE_W;
+                  const y1 = fromPos.y + layout.NODE_H / 2;
+                  const x2 = toPos.x;
+                  const y2 = toPos.y + layout.NODE_H / 2;
                   const mx = (x1 + x2) / 2;
                   return (
                     <path
@@ -542,11 +543,11 @@ export function CreateStudio() {
                     />
                   );
                 })}
-                {wfDetail.nodes.map((n) => {
-                  const p = layout.pos[n.id];
-                  if (!p) return null;
+                {workflowDetail.nodes.map((node) => {
+                  const nodePos = layout.pos[node.id];
+                  if (!nodePos) return null;
                   const roleKey = (Object.keys(paramMap) as (keyof ParamMap)[]).find(
-                    (k) => paramMap[k] === n.id
+                    (key) => paramMap[key] === node.id
                   );
                   const roleColor = roleKey ? ROLE_COLORS[roleKey] : "var(--color-border)";
                   const roleLabel = roleKey
@@ -559,10 +560,10 @@ export function CreateStudio() {
                           : "采样"
                     : null;
                   return (
-                    <g key={n.id}>
+                    <g key={node.id}>
                       <rect
-                        x={p.x}
-                        y={p.y}
+                        x={nodePos.x}
+                        y={nodePos.y}
                         width={layout.NODE_W}
                         height={layout.NODE_H}
                         rx={8}
@@ -571,28 +572,28 @@ export function CreateStudio() {
                         strokeWidth={roleKey ? 2 : 1}
                       />
                       <text
-                        x={p.x + 10}
-                        y={p.y + 19}
+                        x={nodePos.x + 10}
+                        y={nodePos.y + 19}
                         fill="var(--color-ink)"
                         fontSize={11}
                         fontFamily="monospace"
                       >
-                        {n.class_type.length > 18 ? n.class_type.slice(0, 17) + "…" : n.class_type}
+                        {node.class_type.length > 18 ? node.class_type.slice(0, 17) + "…" : node.class_type}
                       </text>
-                      <text x={p.x + 10} y={p.y + 36} fill="var(--color-muted)" fontSize={10}>
-                        #{n.id}
+                      <text x={nodePos.x + 10} y={nodePos.y + 36} fill="var(--color-muted)" fontSize={10}>
+                        #{node.id}
                       </text>
                       {roleLabel && (
                         <g>
                           <rect
-                            x={p.x + layout.NODE_W - 38}
-                            y={p.y + 6}
+                            x={nodePos.x + layout.NODE_W - 38}
+                            y={nodePos.y + 6}
                             width={32}
                             height={16}
                             rx={8}
                             fill={roleColor}
                           />
-                          <text x={p.x + layout.NODE_W - 22} y={p.y + 17} fill="#fff" fontSize={10} textAnchor="middle">
+                          <text x={nodePos.x + layout.NODE_W - 22} y={nodePos.y + 17} fill="#fff" fontSize={10} textAnchor="middle">
                             {roleLabel}
                           </text>
                         </g>
@@ -610,25 +611,25 @@ export function CreateStudio() {
                 label="正向提示词节点"
                 value={paramMap.positiveNode ?? ""}
                 options={clipNodes}
-                onChange={(v) => updateRole("positiveNode", v)}
+                onChange={(value) => updateRole("positiveNode", value)}
               />
               <RoleSelect
                 label="负向提示词节点"
                 value={paramMap.negativeNode ?? ""}
                 options={clipNodes}
-                onChange={(v) => updateRole("negativeNode", v)}
+                onChange={(value) => updateRole("negativeNode", value)}
               />
               <RoleSelect
                 label="模型节点"
                 value={paramMap.checkpointNode ?? ""}
                 options={ckptNodes}
-                onChange={(v) => updateRole("checkpointNode", v)}
+                onChange={(value) => updateRole("checkpointNode", value)}
               />
               <RoleSelect
                 label="采样器节点"
                 value={paramMap.samplerNode ?? ""}
                 options={ksNodes}
-                onChange={(v) => updateRole("samplerNode", v)}
+                onChange={(value) => updateRole("samplerNode", value)}
               />
               <p className="text-[11px] text-muted">
                 留空即自动识别。修改后会保存到该工作流，下次直接生效。
@@ -640,7 +641,7 @@ export function CreateStudio() {
         <label className="mb-1 block text-sm font-medium">正向提示词</label>
         <textarea
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={(event) => setPrompt(event.target.value)}
           rows={3}
           placeholder="描述你想要的图像，例如：a girl with flowing hair, soft lighting, anime style"
           className="mb-3 w-full resize-none rounded-lg border border-border bg-bg p-3 text-sm outline-none focus:border-primary"
@@ -649,7 +650,7 @@ export function CreateStudio() {
         <label className="mb-1 block text-sm font-medium">反向提示词</label>
         <textarea
           value={negative}
-          onChange={(e) => setNegative(e.target.value)}
+          onChange={(event) => setNegative(event.target.value)}
           rows={2}
           placeholder="low quality, blurry, extra fingers"
           className="mb-3 w-full resize-none rounded-lg border border-border bg-bg p-3 text-sm outline-none focus:border-primary"
@@ -661,7 +662,7 @@ export function CreateStudio() {
             <input
               type="file"
               accept="image/*"
-              onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])}
+              onChange={(event) => event.target.files?.[0] && onUpload(event.target.files[0])}
               className="block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-primary-soft file:px-3 file:py-1.5 file:text-primary"
             />
             {inputImage && <p className="mt-1 text-xs text-primary">已上传：{inputImage}</p>}
@@ -677,9 +678,9 @@ export function CreateStudio() {
             <DarkSelect
               className="mb-3 w-full !bg-white/[0.03] !border-white/[0.08] text-sm py-2.5"
               value={checkpoint}
-              onChange={(v) => setCheckpoint(v)}
-              options={checkpoints.map((m) => m.fileName)}
-              labels={Object.fromEntries(checkpoints.map((m) => [m.fileName, m.name]))}
+              onChange={(value) => setCheckpoint(value)}
+              options={checkpoints.map((model) => model.fileName)}
+              labels={Object.fromEntries(checkpoints.map((model) => [model.fileName, model.name]))}
               placeholder={tab === "custom" ? "使用工作流自带模型" : "请选择…"}
             />
           </div>
@@ -691,7 +692,7 @@ export function CreateStudio() {
             <DarkSelect
               className="w-full !bg-white/[0.03] !border-white/[0.08] text-sm py-2"
               value={sampler}
-              onChange={(v) => setSampler(v)}
+              onChange={(value) => setSampler(value)}
               options={SAMPLERS}
               placeholder="选择采样器"
             />
@@ -701,7 +702,7 @@ export function CreateStudio() {
             <DarkSelect
               className="w-full !bg-white/[0.03] !border-white/[0.08] text-sm py-2"
               value={scheduler}
-              onChange={(v) => setScheduler(v)}
+              onChange={(value) => setScheduler(value)}
               options={SCHEDULERS}
               placeholder="选择调度器"
             />
@@ -716,7 +717,7 @@ export function CreateStudio() {
               min={1}
               max={50}
               value={steps}
-              onChange={(e) => setSteps(Number(e.target.value))}
+              onChange={(event) => setSteps(Number(event.target.value))}
               className="w-full accent-[var(--color-primary)]"
             />
           </div>
@@ -728,7 +729,7 @@ export function CreateStudio() {
               max={20}
               step={0.5}
               value={cfg}
-              onChange={(e) => setCfg(Number(e.target.value))}
+              onChange={(event) => setCfg(Number(event.target.value))}
               className="w-full accent-[var(--color-primary)]"
             />
           </div>
@@ -739,7 +740,7 @@ export function CreateStudio() {
               min={1}
               max={4}
               value={count}
-              onChange={(e) => setCount(Number(e.target.value))}
+              onChange={(event) => setCount(Number(event.target.value))}
               className="w-full accent-[var(--color-primary)]"
             />
           </div>
@@ -751,7 +752,7 @@ export function CreateStudio() {
             <DarkSelect
               className="w-full !bg-white/[0.03] !border-white/[0.08] text-sm py-2"
               value={size}
-              onChange={(v) => setSize(v)}
+              onChange={(value) => setSize(value)}
               options={SIZES}
               placeholder="选择尺寸"
             />
@@ -761,7 +762,7 @@ export function CreateStudio() {
             <div className="flex gap-1">
               <input
                 value={seed}
-                onChange={(e) => setSeed(e.target.value.replace(/[^0-9]/g, ""))}
+                onChange={(event) => setSeed(event.target.value.replace(/[^0-9]/g, ""))}
                 placeholder="随机"
                 className="w-full rounded-lg border border-border bg-bg p-2 text-sm outline-none focus:border-primary"
               />
@@ -784,7 +785,7 @@ export function CreateStudio() {
               max={1}
               step={0.05}
               value={denoise}
-              onChange={(e) => setDenoise(Number(e.target.value))}
+              onChange={(event) => setDenoise(Number(event.target.value))}
               className="w-full accent-[var(--color-primary)]"
             />
           </div>
@@ -794,25 +795,25 @@ export function CreateStudio() {
           <div className="mb-4">
             <label className="mb-1 block text-sm font-medium">LoRA（可选，可叠加）</label>
             <div className="space-y-2">
-              {loras.map((l, i) => (
-                <div key={i} className="flex items-center gap-2">
+              {loras.map((lora, i) => (
+                <div key={lora.name || `lora-${i}`} className="flex items-center gap-2">
                   <DarkSelect
                     className="flex-1 !bg-white/[0.03] !border-white/[0.08] text-sm py-1.5"
-                    value={l.name}
-                    onChange={(v) => {
+                    value={lora.name}
+                    onChange={(value) => {
                       const next = [...loras];
-                      next[i]!.name = v;
+                      next[i]!.name = value;
                       setLoras(next);
                     }}
-                    options={loraOpts.map((m) => m.fileName)}
-                    labels={Object.fromEntries(loraOpts.map((m) => [m.fileName, m.name]))}
+                    options={loraOpts.map((model) => model.fileName)}
+                    labels={Object.fromEntries(loraOpts.map((model) => [model.fileName, model.name]))}
                     placeholder="选择 LoRA…"
                   />
                   <NumberField
-                    value={l.weight}
-                    onChange={(v) => {
+                    value={lora.weight}
+                    onChange={(value) => {
                       const next = [...loras];
-                      next[i]!.weight = v;
+                      next[i]!.weight = value;
                       setLoras(next);
                     }}
                     min={0}
@@ -916,12 +917,12 @@ export function CreateStudio() {
               执行日志 · 工作流 {workflowLabel}
             </div>
             <div className="max-h-56 overflow-y-auto rounded-xl border border-border bg-bg p-3 font-mono text-xs leading-relaxed">
-              {logs.map((l, i) => (
-                <div key={i} className={LOG_STYLE[l.level]}>
+              {logs.map((entry, i) => (
+                <div key={`${entry.t}-${i}`} className={LOG_STYLE[entry.level]}>
                   <span className="mr-2 text-muted/60">
-                    {new Date(l.t).toLocaleTimeString("zh-CN", { hour12: false })}
+                    {new Date(entry.t).toLocaleTimeString("zh-CN", { hour12: false })}
                   </span>
-                  {l.msg}
+                  {entry.msg}
                 </div>
               ))}
             </div>
@@ -930,14 +931,14 @@ export function CreateStudio() {
       </section>
 
       {/* Fullscreen node-graph modal */}
-      {graphFullscreen && wfDetail && layout && (
+      {graphFullscreen && workflowDetail && layout && (
         <div
           className="fixed inset-0 z-50 flex flex-col bg-black/70 p-4"
           onClick={() => setGraphFullscreen(false)}
         >
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-medium text-white/90">
-              节点图 · {wfDetail.nodes.length} 个节点
+              节点图 · {workflowDetail.nodes.length} 个节点
             </h3>
             <button
               onClick={() => setGraphFullscreen(false)}
@@ -954,14 +955,14 @@ export function CreateStudio() {
               className="block mx-auto"
               style={{ minWidth: layout.width }}
             >
-              {layout.edges.map((e, i) => {
-                const a = layout.pos[e.from];
-                const b = layout.pos[e.to];
-                if (!a || !b) return null;
-                const x1 = a.x + layout.NODE_W;
-                const y1 = a.y + layout.NODE_H / 2;
-                const x2 = b.x;
-                const y2 = b.y + layout.NODE_H / 2;
+              {layout.edges.map((edge, i) => {
+                const fromPos = layout.pos[edge.from];
+                const toPos = layout.pos[edge.to];
+                if (!fromPos || !toPos) return null;
+                const x1 = fromPos.x + layout.NODE_W;
+                const y1 = fromPos.y + layout.NODE_H / 2;
+                const x2 = toPos.x;
+                const y2 = toPos.y + layout.NODE_H / 2;
                 const mx = (x1 + x2) / 2;
                 return (
                   <path
@@ -973,11 +974,11 @@ export function CreateStudio() {
                   />
                 );
               })}
-              {wfDetail.nodes.map((n) => {
-                const p = layout.pos[n.id];
-                if (!p) return null;
+              {workflowDetail.nodes.map((node) => {
+                const nodePos = layout.pos[node.id];
+                if (!nodePos) return null;
                 const roleKey = (Object.keys(paramMap) as (keyof ParamMap)[]).find(
-                  (k) => paramMap[k] === n.id
+                  (key) => paramMap[key] === node.id
                 );
                 const roleColor = roleKey ? ROLE_COLORS[roleKey] : "#475569";
                 const roleLabel = roleKey
@@ -990,10 +991,10 @@ export function CreateStudio() {
                         : "采样"
                   : null;
                 return (
-                  <g key={`fs-${n.id}`}>
+                  <g key={`fs-${node.id}`}>
                     <rect
-                      x={p.x}
-                      y={p.y}
+                      x={nodePos.x}
+                      y={nodePos.y}
                       width={layout.NODE_W}
                       height={layout.NODE_H}
                       rx={8}
@@ -1002,28 +1003,28 @@ export function CreateStudio() {
                       strokeWidth={roleKey ? 2.5 : 1.2}
                     />
                     <text
-                      x={p.x + 10}
-                      y={p.y + 19}
+                      x={nodePos.x + 10}
+                      y={nodePos.y + 19}
                       fill="#e2e8f0"
                       fontSize={12}
                       fontFamily="monospace"
                     >
-                      {n.class_type.length > 18 ? n.class_type.slice(0, 17) + "…" : n.class_type}
+                      {node.class_type.length > 18 ? node.class_type.slice(0, 17) + "…" : node.class_type}
                     </text>
-                    <text x={p.x + 10} y={p.y + 36} fill="#94a3b8" fontSize={11}>
-                      #{n.id}
+                    <text x={nodePos.x + 10} y={nodePos.y + 36} fill="#94a3b8" fontSize={11}>
+                      #{node.id}
                     </text>
                     {roleLabel && (
                       <g>
                         <rect
-                          x={p.x + layout.NODE_W - 38}
-                          y={p.y + 6}
+                          x={nodePos.x + layout.NODE_W - 38}
+                          y={nodePos.y + 6}
                           width={32}
                           height={16}
                           rx={8}
                           fill={roleColor}
                         />
-                        <text x={p.x + layout.NODE_W - 22} y={p.y + 17} fill="#fff" fontSize={10} textAnchor="middle">
+                        <text x={nodePos.x + layout.NODE_W - 22} y={nodePos.y + 17} fill="#fff" fontSize={10} textAnchor="middle">
                           {roleLabel}
                         </text>
                       </g>
@@ -1044,20 +1045,20 @@ export function CreateStudio() {
         >
           <div
             className="w-full max-w-lg rounded-2xl border border-border bg-surface p-5"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
             <h3 className="u-title mb-3">导入 ComfyUI 工作流</h3>
             <label className="mb-1 block text-sm font-medium">工作流名称</label>
             <input
               value={importName}
-              onChange={(e) => setImportName(e.target.value)}
+              onChange={(event) => setImportName(event.target.value)}
               placeholder="例如：我的二次元工作流"
               className="mb-3 w-full rounded-lg border border-border bg-bg p-2.5 text-sm outline-none focus:border-primary"
             />
             <label className="mb-1 block text-sm font-medium">API JSON</label>
             <textarea
               value={importJson}
-              onChange={(e) => setImportJson(e.target.value)}
+              onChange={(event) => setImportJson(event.target.value)}
               rows={6}
               placeholder='粘贴 ComfyUI「导出（API 格式）」的 JSON…'
               className="mb-2 w-full resize-none rounded-lg border border-border bg-bg p-3 font-mono text-xs outline-none focus:border-primary"
@@ -1066,9 +1067,9 @@ export function CreateStudio() {
               <input
                 type="file"
                 accept=".json,application/json"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) f.text().then(setImportJson);
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) file.text().then(setImportJson);
                 }}
                 className="block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-primary-soft file:px-3 file:py-1.5 file:text-primary"
               />
@@ -1097,8 +1098,8 @@ function RoleSelect({
 }: {
   label: string;
   value: string;
-  options: WfNode[];
-  onChange: (v: string) => void;
+  options: WorkflowNode[];
+  onChange: (value: string) => void;
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -1106,9 +1107,9 @@ function RoleSelect({
       <DarkSelect
         className="flex-1 !bg-white/[0.03] !border-white/[0.08] text-xs py-1.5"
         value={value}
-        onChange={(v) => onChange(v)}
-        options={options.map((n) => n.id)}
-        labels={Object.fromEntries(options.map((n) => [n.id, `#${n.id} · ${n.class_type}`]))}
+        onChange={(value) => onChange(value)}
+        options={options.map((node) => node.id)}
+        labels={Object.fromEntries(options.map((node) => [node.id, `#${node.id} · ${node.class_type}`]))}
         placeholder="自动"
       />
     </div>

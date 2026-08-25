@@ -69,10 +69,10 @@ function makeLogger(ns: string): Logger {
   };
 
   return {
-    debug: (m, f) => emit("debug", m, f),
-    info: (m, f) => emit("info", m, f),
-    warn: (m, f) => emit("warn", m, f),
-    error: (m, f) => emit("error", m, f),
+    debug: (message, fields) => emit("debug", message, fields),
+    info: (message, fields) => emit("info", message, fields),
+    warn: (message, fields) => emit("warn", message, fields),
+    error: (message, fields) => emit("error", message, fields),
     child: (childNs) => makeLogger(ns ? `${ns}:${childNs}` : childNs),
   };
 }

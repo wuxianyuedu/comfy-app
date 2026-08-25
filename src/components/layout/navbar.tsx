@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const NAV = [
-  { href: "/create", label: "创作" },
+  { href: "/workspace", label: "工作台" },
   { href: "/workshop", label: "创作工坊" },
   { href: "/models", label: "模型库" },
   { href: "/me/works", label: "我的作品" },
@@ -104,7 +104,7 @@ export function Navbar() {
 
           {/* Mobile menu trigger */}
           <button
-            onClick={() => setMobileOpen((v) => !v)}
+            onClick={() => setMobileOpen((value) => !value)}
             aria-label="打开菜单"
             className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted transition-colors hover:text-ink md:hidden"
           >

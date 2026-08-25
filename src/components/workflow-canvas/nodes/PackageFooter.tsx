@@ -35,7 +35,7 @@
  */
 
 import type { NodeTypeConfig } from "@/components/workflow-canvas/types";
-import { getCustomNodePackage } from "@/config/customNodes";
+import { getCustomNodePackage } from "@/config/custom-nodes";
 
 export function PackageFooter({
   config,
@@ -43,7 +43,7 @@ export function PackageFooter({
   name,
 }: {
   /** Optional — pass `config.custom`/`config.rawCategory` for richer fallback
-   *  resolution.  Callers that don't have a `NodeTypeConfig` (e.g. WfNode in
+   *  resolution.  Callers that don't have a `NodeTypeConfig` (e.g. WorkflowNode in
    *  the workspace editor) can omit it and supply `name` directly. */
   config?: NodeTypeConfig;
   classType: string;

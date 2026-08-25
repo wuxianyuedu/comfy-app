@@ -27,7 +27,7 @@ export function ModelLibrary() {
     if (q) params.q = q;
     vanillaApi.model.list
       .query(params)
-      .then((d) => setModels((d.models ?? []) as unknown as ModelCardData[]))
+      .then((data) => setModels((data.models ?? []) as unknown as ModelCardData[]))
       .finally(() => setLoading(false));
   }, [type, q]);
 
@@ -49,22 +49,23 @@ export function ModelLibrary() {
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        {FILTERS.map((f) => (
+        {FILTERS.map((FILTERS) =>
+(
           <button
-            key={f.key}
-            onClick={() => setType(f.key)}
+            key={FILTERS.key}
+            onClick={() => setType(FILTERS.key)}
             className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
-              type === f.key
+              type === FILTERS.key
                 ? "border-primary bg-primary-soft text-primary"
                 : "border-border text-muted hover:text-ink"
             }`}
           >
-            {f.label}
+            {FILTERS.label}
           </button>
         ))}
         <input
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(event) => setQ(event.target.value)}
           placeholder="搜索模型…"
           className="ml-auto h-9 w-44 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary sm:w-56"
         />
@@ -89,8 +90,9 @@ export function ModelLibrary() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {models.map((m) => (
-            <ModelCard key={m.id} model={m} />
+          {models.map((model) =>
+(
+            <ModelCard key={model.id} model={model} />
           ))}
         </div>
       )}

@@ -46,6 +46,8 @@ import {
   Package,
   X,
   Loader2,
+  Eye,
+  EyeOff,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
@@ -54,6 +56,9 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
+  LayoutGrid,
+  Play,
+  Film,
   type LucideIcon,
   type LucideProps,
 } from "lucide-react";
@@ -118,6 +123,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   package: Package,
   close: X,
   loader: Loader2,
+  eye: Eye,
+  eyeoff: EyeOff,
   chevronup: ChevronUp,
   chevrondown: ChevronDown,
   chevronleft: ChevronLeft,
@@ -126,6 +133,9 @@ const ICON_MAP: Record<string, LucideIcon> = {
   arrowdown: ArrowDown,
   arrowleft: ArrowLeft,
   arrowright: ArrowRight,
+  grid: LayoutGrid,
+  play: Play,
+  movie: Film,
 };
 
 export interface IconProps extends Omit<LucideProps, "name"> {

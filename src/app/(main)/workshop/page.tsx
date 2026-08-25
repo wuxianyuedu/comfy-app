@@ -1,7 +1,7 @@
 "use client";
 
-import { WorkshopStudio } from "@/components/updream/WorkshopStudio";
+import { WorkshopPipeline } from "@/components/workshop/WorkshopPipeline";
 
 export default function WorkshopPage() {
-  return <WorkshopStudio />;
+  return <WorkshopPipeline />;
 }

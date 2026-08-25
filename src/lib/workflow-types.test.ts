@@ -21,20 +21,25 @@ describe("workflow-types taxonomy", () => {
   });
 
   it("每个类型都有唯一 code", () => {
-    const codes = ALL_WORKFLOW_TYPES.map((t) => t.code);
+    const codes = ALL_WORKFLOW_TYPES.map((wfType) => wfType.code);
     expect(new Set(codes).size).toBe(codes.length);
   });
 
   it("getWorkflowType 按 code 精确命中", () => {
-    const t = getWorkflowType(IMAGE_WORKFLOW_TYPES[0]!.code);
-    expect(t?.code).toBe(IMAGE_WORKFLOW_TYPES[0]!.code);
+
+    const type = getWorkflowType(IMAGE_WORKFLOW_TYPES[0]!.code);
+
+    expect(type?.code).toBe(IMAGE_WORKFLOW_TYPES[0]!.code);
+
     expect(getWorkflowType("no-such-code")).toBeUndefined();
+
   });
+
 
   it("getWorkflowTypesByCategory 只返回该分类", () => {
     const imgs = getWorkflowTypesByCategory("image");
     expect(imgs.length).toBe(IMAGE_WORKFLOW_TYPES.length);
-    expect(imgs.every((t) => t.category === "image")).toBe(true);
+    expect(imgs.every((item) => item.category === "image")).toBe(true);
   });
 });
 

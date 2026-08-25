@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -9,66 +9,66 @@ import {
   WorkspaceNav,
   ToastProvider,
   AuroraBackground,
-} from "@/components/updream";
+} from "@/components/studio";
 import type {
   QuickStartItem,
   RecentProject,
   WorkspaceView,
   SkillShort,
-} from "@/components/updream";
+} from "@/components/studio";
 import type { AgentSpec } from "@/lib/agent/agentic";
-import { listProjects, setActive, reapAllEmptyDrafts } from "@/components/updream/canvas/canvas-store";
+import { listProjects, setActive, reapAllEmptyDrafts } from "@/components/studio/project-canvas/canvas-store";
 
 /* ── Lazy-load view components so the initial bundle stays small ── */
 /* Only HomePage / WorkspaceNav / ToastProvider / VideoQueueModal are loaded eagerly. */
 const WorksGallery = dynamic(
-  () => import("@/components/updream").then((m) => m.WorksGallery),
+  () => import("@/components/studio").then((mod) => mod.WorksGallery),
   { ssr: false }
 );
 const ProjectOutputs = dynamic(
-  () => import("@/components/updream").then((m) => m.ProjectOutputs),
+  () => import("@/components/studio").then((mod) => mod.ProjectOutputs),
   { ssr: false }
 );
 const SkillsGrid = dynamic(
-  () => import("@/components/updream").then((m) => m.SkillsGrid),
+  () => import("@/components/studio").then((mod) => mod.SkillsGrid),
   { ssr: false }
 );
 const CreatePanel = dynamic(
-  () => import("@/components/updream").then((m) => m.CreatePanel),
+  () => import("@/components/studio").then((mod) => mod.CreatePanel),
   { ssr: false }
 );
 const ModelLibrary = dynamic(
-  () => import("@/components/updream").then((m) => m.ModelLibrary),
+  () => import("@/components/studio").then((mod) => mod.ModelLibrary),
   { ssr: false }
 );
 const HistoryList = dynamic(
-  () => import("@/components/updream").then((m) => m.HistoryList),
+  () => import("@/components/studio").then((mod) => mod.HistoryList),
   { ssr: false }
 );
 const TrainingStudio = dynamic(
-  () => import("@/components/updream").then((m) => m.TrainingStudio),
+  () => import("@/components/studio").then((mod) => mod.TrainingStudio),
   { ssr: false }
 );
 const WorkflowLibrary = dynamic(
-  () => import("@/components/updream").then((m) => m.WorkflowLibrary),
+  () => import("@/components/studio").then((mod) => mod.WorkflowLibrary),
   { ssr: false }
 );
 const WorkshopStudio = dynamic(
-  () => import("@/components/updream").then((m) => m.WorkshopStudio),
+  () => import("@/components/studio").then((mod) => mod.WorkshopStudio),
   { ssr: false }
 );
 const AgentChat = dynamic(
-  () => import("@/components/updream").then((m) => m.AgentChat),
+  () => import("@/components/studio").then((mod) => mod.AgentChat),
   { ssr: false }
 );
 
 /* Lazy-load the heavier canvas/film editors (ReactFlow etc.) on the client. */
 const FilmStudio = dynamic(
-  () => import("@/components/updream/FilmStudio").then((m) => m.FilmStudio),
+  () => import("@/components/studio/FilmStudio").then((mod) => mod.FilmStudio),
   { ssr: false }
 );
 const ProjectCanvas = dynamic(
-  () => import("@/components/updream/ProjectCanvas").then((m) => m.ProjectCanvas),
+  () => import("@/components/studio/ProjectCanvas").then((mod) => mod.ProjectCanvas),
   { ssr: false }
 );
 
@@ -184,14 +184,14 @@ export default function WorkspacePage() {
       setRecentProjects(
         listProjects()
           .slice(0, 8) // 给 HomePage 内部 recentsExpanded ? 7 : 3 切片留余量
-          .map((p) => {
-            const nodeCount = p.nodes?.length ?? 0;
-            const edgeCount = p.edges?.length ?? 0;
+          .map((project) => {
+            const nodeCount = project.nodes?.length ?? 0;
+            const edgeCount = project.edges?.length ?? 0;
             return {
-              id: p.id,
-              name: (p.name || "未命名项目").slice(0, 28),
-              updatedAt: p.updatedAt
-                ? ago(new Date(p.updatedAt).toISOString())
+              id: project.id,
+              name: (project.name || "未命名项目").slice(0, 28),
+              updatedAt: project.updatedAt
+                ? ago(new Date(project.updatedAt).toISOString())
                 : "刚刚",
               kind: "canvas" as const,
               subtitle:
@@ -228,7 +228,7 @@ export default function WorkspacePage() {
       kind: spec.kind,
       autoStart: false,
     });
-    setAgentSeq((s) => s + 1);
+    setAgentSeq((state) => state + 1);
     navigateTo("create");
   }, []);
 

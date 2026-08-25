@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DarkSelect } from "@/components/updream/ui/DarkSelect";
+import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { api } from "~/trpc/react";
 
 type Settings = {
@@ -68,8 +68,8 @@ export default function SettingsPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ currentPassword: curPwd, newPassword: newPwd }),
       });
-      const d = await r.json();
-      if (!r.ok) return flash("err", d.error ?? "修改失败");
+      const res = await r.json();
+      if (!r.ok) return flash("err", res.error ?? "修改失败");
       flash("ok", "密码已更新");
       setCurPwd("");
       setNewPwd("");
@@ -88,8 +88,8 @@ export default function SettingsPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ newEmail }),
       });
-      const d = await r.json();
-      if (!r.ok) return flash("err", d.error ?? "修改失败");
+      const res = await r.json();
+      if (!r.ok) return flash("err", res.error ?? "修改失败");
       flash("ok", "邮箱已更新");
       setNewEmail("");
     } finally {
@@ -191,14 +191,14 @@ export default function SettingsPage() {
               <DarkSelect
                 className="!bg-white/5 text-sm text-ink"
                 value={llmDraft.provider}
-                onChange={(v) => setLlmDraft({ ...llmDraft, provider: v as LlmConfig["provider"] })}
+                onChange={(value) => setLlmDraft({ ...llmDraft, provider: value as LlmConfig["provider"] })}
                 options={["local", "remote"]}
                 labels={{ local: "本地（Ollama）", remote: "远程（OpenAI 兼容）" }}
                 placeholder="选择提供商"
               />
             </div>
-            <Field label="Base URL" value={llmDraft.baseUrl} onChange={(v) => setLlmDraft({ ...llmDraft, baseUrl: v })} placeholder="http://localhost:11434/v1" />
-            <Field label="模型" value={llmDraft.model} onChange={(v) => setLlmDraft({ ...llmDraft, model: v })} placeholder="llama3.1" />
+            <Field label="Base URL" value={llmDraft.baseUrl} onChange={(value) => setLlmDraft({ ...llmDraft, baseUrl: value })} placeholder="http://localhost:11434/v1" />
+            <Field label="模型" value={llmDraft.model} onChange={(value) => setLlmDraft({ ...llmDraft, model: value })} placeholder="llama3.1" />
             <Field
               label="API Key"
               value={llmApiKey || (!!llmDraft.apiKey ? "••••••••" : "")}
@@ -207,8 +207,8 @@ export default function SettingsPage() {
               placeholder={!!llmDraft.apiKey ? "已设置，留空不改" : "远程提供商必填"}
             />
             <div className="mb-4 grid grid-cols-2 gap-3">
-              <Field label="温度" value={String(llmDraft.temperature)} onChange={(v) => setLlmDraft({ ...llmDraft, temperature: Number(v) || 0 })} />
-              <Field label="最大 Token" value={String(llmDraft.maxTokens)} onChange={(v) => setLlmDraft({ ...llmDraft, maxTokens: Number(v) || 0 })} />
+              <Field label="温度" value={String(llmDraft.temperature)} onChange={(value) => setLlmDraft({ ...llmDraft, temperature: Number(value) || 0 })} />
+              <Field label="最大 Token" value={String(llmDraft.maxTokens)} onChange={(value) => setLlmDraft({ ...llmDraft, maxTokens: Number(value) || 0 })} />
             </div>
             <Btn onClick={saveLlm} disabled={saving}>
               保存 LLM 配置
@@ -219,13 +219,13 @@ export default function SettingsPage() {
             <Field
               label="ComfyUI 地址"
               value={settingsDraft.comfyuiUrl}
-              onChange={(v) => setSettingsDraft({ ...settingsDraft, comfyuiUrl: v })}
+              onChange={(value) => setSettingsDraft({ ...settingsDraft, comfyuiUrl: value })}
               placeholder="http://localhost:8188"
             />
             <Field
               label="训练后端 URL"
               value={settingsDraft.trainerUrl}
-              onChange={(v) => setSettingsDraft({ ...settingsDraft, trainerUrl: v })}
+              onChange={(value) => setSettingsDraft({ ...settingsDraft, trainerUrl: value })}
               placeholder="留空则显示「未配置」横幅"
             />
             <div className="mb-4">
@@ -233,7 +233,7 @@ export default function SettingsPage() {
               <DarkSelect
                 className="w-full !bg-white/5 text-sm text-ink"
                 value={settingsDraft.defaultVideoWorkflow}
-                onChange={(v) => setSettingsDraft({ ...settingsDraft, defaultVideoWorkflow: v as Settings["defaultVideoWorkflow"] })}
+                onChange={(value) => setSettingsDraft({ ...settingsDraft, defaultVideoWorkflow: value as Settings["defaultVideoWorkflow"] })}
                 options={["auto", "txt2video", "img2video"]}
                 labels={{ auto: "自动（文生视频，本地合成首帧）", txt2video: "文生视频（本地合成首帧）", img2video: "图生视频（上传首帧）" }}
                 placeholder="选择默认视频工作流"
@@ -243,7 +243,7 @@ export default function SettingsPage() {
             <Field
               label="LoRA 输出目录"
               value={settingsDraft.comfyLorasDir}
-              onChange={(v) => setSettingsDraft({ ...settingsDraft, comfyLorasDir: v })}
+              onChange={(value) => setSettingsDraft({ ...settingsDraft, comfyLorasDir: value })}
               placeholder="留空使用默认 models/loras"
             />
             <Btn onClick={savePrefs} disabled={saving}>
@@ -299,7 +299,7 @@ function Field({
         type={type}
         value={value}
         placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(event) => onChange(event.target.value)}
         className="w-full rounded-lg border border-border bg-white/5 px-3 py-2 text-sm text-ink placeholder:text-muted/60 outline-none focus:border-primary"
       />
     </div>

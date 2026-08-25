@@ -11,14 +11,14 @@
 import type {
   ComfyGraph,
   ComfyGraphNode,
-  WfNode,
-  WfEdge,
+  WorkflowNode,
+  WorkflowEdge,
   NodeData,
   NodeMeta,
   ParamMap,
 } from "./types";
 import { getNodeConfig } from "./node-registry";
-import { specToField } from "@/config/customNodes";
+import { specToField } from "@/config/custom-nodes";
 import type { Node, Edge } from "@xyflow/react";
 
 /* ── Constants ── */
@@ -121,8 +121,8 @@ function computeLayout(graph: ComfyGraph): Map<string, { x: number; y: number }>
 /* ── Convert ComfyUI graph → ReactFlow nodes + edges ── */
 
 export interface FlowData {
-  nodes: WfNode[];
-  edges: WfEdge[];
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
 }
 
 export function comfyGraphToFlow(
@@ -138,8 +138,8 @@ export function comfyGraphToFlow(
     }
   }
 
-  const nodes: WfNode[] = [];
-  const edges: WfEdge[] = [];
+  const nodes: WorkflowNode[] = [];
+  const edges: WorkflowEdge[] = [];
 
   for (const [id, node] of Object.entries(graph)) {
     if (!node) continue;
@@ -242,7 +242,7 @@ function buildFields(classType: string, inputs: Record<string, any>) {
     const fields = config.inputsSpec.map(specToField);
     for (const key of Object.keys(inputs)) {
       if (Array.isArray(inputs[key])) continue; // wired connection
-      if (!config.inputsSpec.find((s) => s.name === key)) {
+      if (!config.inputsSpec.find((inputsSpec) => inputsSpec.name === key)) {
         fields.push(inferField(key, inputs[key]));
       }
     }
@@ -250,7 +250,7 @@ function buildFields(classType: string, inputs: Record<string, any>) {
   }
 
   // Start with registry defaults, then overlay actual input keys
-  const fieldMap = new Map(config.defaultFields.map((f) => [f.key, f]));
+  const fieldMap = new Map(config.defaultFields.map((defaultField) => [defaultField.key, defaultField]));
 
   for (const key of Object.keys(inputs)) {
     // Skip wired connections (array values)

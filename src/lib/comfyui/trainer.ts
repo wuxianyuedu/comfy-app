@@ -29,14 +29,22 @@ import path from "path";
 import { getSettingsSync } from "../app-settings";
 
 function trainerUrl(): string {
-  const s = getSettingsSync();
-  return (s.trainerUrl || process.env.LORA_TRAINER_URL || "").replace(/\/$/, "");
+
+  const settings = getSettingsSync();
+
+  return (settings.trainerUrl || process.env.LORA_TRAINER_URL || "").replace(/\/$/, "");
+
 }
 
+
 function comfyLorasDir(): string {
-  const s = getSettingsSync();
-  return s.comfyLorasDir || process.env.COMFY_LORAS_DIR || path.join(process.cwd(), "models", "loras");
+
+  const settings = getSettingsSync();
+
+  return settings.comfyLorasDir || process.env.COMFY_LORAS_DIR || path.join(process.cwd(), "models", "loras");
+
 }
+
 
 export type TrainLogEntry = {
   t: number;
@@ -84,8 +92,8 @@ export async function enqueueTraining(jobId: string): Promise<void> {
   // expect it (the caption also rides along inside datasetImages).
   spec.captions = Object.fromEntries(
     (spec.datasetImages ?? [])
-      .filter((d) => d?.caption && d.caption.trim())
-      .map((d) => [d.name, d.caption!.trim()])
+      .filter((item) => item?.caption && item.caption.trim())
+      .map((item) => [item.name, item.caption!.trim()])
   );
 
   if (!trainerUrl()) {
@@ -119,7 +127,7 @@ async function runRemote(spec: TrainJobSpec): Promise<void> {
   // Poll until terminal.
   const POLL_MS = 4000;
   for (;;) {
-    await new Promise((r) => setTimeout(r, POLL_MS));
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
     const st = await fetch(`${base}/train/${encodeURIComponent(backendId)}`);
     if (!st.ok) throw new Error(`训练状态查询失败 ${st.status}`);
     const info = (await st.json()) as {

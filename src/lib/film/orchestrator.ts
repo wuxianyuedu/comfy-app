@@ -81,25 +81,45 @@ async function appendFilmLog(
 async function expandScriptLLM(raw: string, type: string): Promise<
   Array<{ heading: string; action: string; dialogue: string; shotCount: number }>
 > {
+
   const cfg = await getLLMConfig();
+
   const sys =
+
     "你是一个影视分镜助手。用户会给出一段创意 / 剧本 / 一句话。请把它拆分成分镜场景，" +
+
     "每个场景给出标题、画面动作描述、台词旁白、建议镜头数(shotCount 1-4)。只输出 JSON 数组，" +
+
     "不要解释，格式：[{\"heading\":\"场景1\",\"action\":\"画面描述\",\"dialogue\":\"台词\",\"shotCount\":2}]";
+
   const content = await completeLLM(cfg, [
+
     { role: "system", content: sys },
+
     { role: "user", content: raw },
+
   ]);
-  const m = content.match(/\[[\s\S]*\]/);
-  if (!m) throw new Error("llm no json");
-  const arr = JSON.parse(m[0]);
+
+  const match = content.match(/\[[\s\S]*\]/);
+
+  if (!match) throw new Error("llm no json");
+
+  const arr = JSON.parse(match[0]);
+
   return arr.map((s: any) => ({
+
     heading: String(s.heading ?? s.scene ?? "场景"),
+
     action: String(s.action ?? s.description ?? raw),
+
     dialogue: String(s.dialogue ?? ""),
+
     shotCount: Math.max(1, Math.min(4, Number(s.shotCount ?? 2) || 2)),
+
   }));
+
 }
+
 
 /** Turn a raw script into an ordered list of shot prompts. */
 async function parseScriptToShots(
@@ -111,14 +131,14 @@ async function parseScriptToShots(
   let scenes: Array<{ heading: string; action: string; shotCount: number }>;
   try {
     const expanded = await expandScriptLLM(raw, type);
-    scenes = expanded.map((s) => ({ heading: s.heading, action: s.action, shotCount: s.shotCount }));
+    scenes = expanded.map((expanded) =>({ heading: expanded.heading, action: expanded.action, shotCount: expanded.shotCount }));
   } catch {
     // offline fallback — reuse the workshop parser
     const sc = parseIdeaToScenes(raw, { title: "", type: (type as any) || "short_video", tone: "", logline: "" });
-    scenes = sc.map((s) => ({
-      heading: s.heading,
-      action: `${s.action}${s.dialogue ? " " + s.dialogue : ""}`,
-      shotCount: s.shotCount,
+    scenes = sc.map((scene) => ({
+      heading: scene.heading,
+      action: `${scene.action}${scene.dialogue ? " " + scene.dialogue : ""}`,
+      shotCount: scene.shotCount,
     }));
   }
 
@@ -183,13 +203,14 @@ export async function createFilm(input: CreateFilmInput) {
 
   await filmShotRepository.createMany(
     film.id,
-    shots.map((s) => {
+    shots.map((shot) =>
+{
       const params: Record<string, any> = { frames: framesPerShot, fps, size, workflow: wf };
       return {
-        order: s.order,
-        heading: s.heading ?? null,
-        prompt: s.prompt,
-        negative: s.negative ?? null,
+        order: shot.order,
+        heading: shot.heading ?? null,
+        prompt: shot.prompt,
+        negative: shot.negative ?? null,
         params,
       };
     })
@@ -218,47 +239,89 @@ async function generateVideoShot(
   userId: string,
   shot: { prompt: string; negative?: string | null; params?: any }
 ): Promise<string> {
-  const p = (shot.params ?? {}) as Record<string, any>;
+
+  const params = (shot.params ?? {}) as Record<string, any>;
+
   const wf: "txt2video" | "img2video" =
-    p.workflow === "img2video" ? "img2video" : "txt2video";
+
+    params.workflow === "img2video" ? "img2video" : "txt2video";
+
   const meta = getWorkflow("img2video")!;
 
-  let inputImage = (p.inputImage as string) ?? (p.firstFrame as string) ?? null;
+
+
+  let inputImage = (params.inputImage as string) ?? (params.firstFrame as string) ?? null;
+
   if (!inputImage) {
+
     inputImage = await synthesizeFirstFrame({
+
       userId,
+
       prompt: shot.prompt,
+
       negative: shot.negative ?? undefined,
-      size: (p.size as string) ?? "832x480",
+
+      size: (params.size as string) ?? "832x480",
+
     });
+
   }
 
+
+
   const built = await buildAndValidate("img2video", {
+
     prompt: shot.prompt,
+
     negative: shot.negative ?? undefined,
+
     inputImage,
-    frames: (p.frames as number) ?? 81,
-    fps: (p.fps as number) ?? 16,
-    size: (p.size as string) ?? "832x480",
+
+    frames: (params.frames as number) ?? 81,
+
+    fps: (params.fps as number) ?? 16,
+
+    size: (params.size as string) ?? "832x480",
+
     steps: 25,
+
     cfg: 6,
+
     sampler: "euler",
+
     scheduler: "unipc",
+
     count: 1,
+
   });
+
   if (!built.ok || !built.prompt) throw new Error(built.error ?? "工作流构建失败");
 
+
+
   const task = await taskRepository.createQueued({
+
     userId,
+
     type: meta.taskType,
+
     prompt: shot.prompt,
+
     negativePrompt: shot.negative ?? null,
-    params: { workflow: wf, ...p },
+
+    params: { workflow: wf, ...params },
+
     workflowName: wf,
+
   });
+
   enqueue({ taskId: task.id, prompt: built.prompt });
+
   return task.id;
+
 }
+
 
 // ── start (autopilot) ───────────────────────────────────────
 export async function startFilm(id: string) {
@@ -330,12 +393,19 @@ async function watchFilm(id: string) {
       let videoPath: string | undefined;
       let duration: number | undefined;
       if (next === "SUCCEEDED") {
+
         const imgs = (task.resultImages as any[]) ?? [];
-        const vid = imgs.find((v) => v.mediaType === "video") ?? imgs[0];
+
+        const vid = imgs.find((img) => img.mediaType === "video") ?? imgs[0];
+
         videoPath = vid?.localPath;
-        const p = (shot.params as any) ?? {};
-        duration = typeof p.duration === "number" ? p.duration : ((p.frames ?? 49) as number) / ((p.fps ?? 16) as number);
+
+        const params = (shot.params as any) ?? {};
+
+        duration = typeof params.duration === "number" ? params.duration : ((params.frames ?? 49) as number) / ((params.fps ?? 16) as number);
+
       }
+
       await filmShotRepository.updateFromTask(shot.id, {
         status: next,
         progress: task.progress,
@@ -390,7 +460,7 @@ function runFFmpeg(args: string[], cwd?: string, timeout = 120000): Promise<{ co
       cp.kill("SIGKILL");
       resolve({ code: -1, stderr: "timeout" });
     }, timeout);
-    cp.stderr.on("data", (d) => (stderr += d.toString()));
+    cp.stderr.on("data", (chunk) => (stderr += chunk.toString()));
     cp.on("close", (code) => {
       clearTimeout(to);
       resolve({ code: code ?? -1, stderr });
@@ -556,5 +626,5 @@ export async function cancelFilm(id: string) {
 
 // ── misc ───────────────────────────────────────────────────
 function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

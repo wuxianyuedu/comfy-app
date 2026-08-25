@@ -264,7 +264,7 @@ async function fetchHistoryEntry(promptId: string): Promise<any | null> {
     } catch {
       /* ComfyUI 短暂不可达，继续重试 */
     }
-    await new Promise((r) => setTimeout(r, HISTORY_RETRY_DELAY_MS));
+    await new Promise((resolve) => setTimeout(resolve, HISTORY_RETRY_DELAY_MS));
   }
   return null;
 }
@@ -360,9 +360,9 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   log(taskId, "info", `✓ history 就绪（${outputsCount} 节点输出）`);
 
   const msgs: any[] = entry.status?.messages ?? [];
-  const errored = msgs.some((m) => m?.[0] === "execution_error");
+  const errored = msgs.some((msg) => msg?.[0] === "execution_error");
   if (errored || entry.status?.status_str === "error") {
-    const ex = msgs.find((m) => m?.[0] === "execution_error")?.[1]?.exception_message;
+    const ex = msgs.find((msg) => msg?.[0] === "execution_error")?.[1]?.exception_message;
     await finalizeFailure(taskId, promptId, ex ?? "执行错误");
     return;
   }
@@ -635,7 +635,7 @@ export function friendlyError(raw: unknown): string {
   if (typeof raw === "number" || typeof raw === "boolean") return String(raw);
   if (typeof raw === "bigint") return raw.toString();
   if (Array.isArray(raw)) {
-    const parts = raw.map(friendlyError).filter((s) => s && s.trim());
+    const parts = raw.map(friendlyError).filter((msg) => msg && msg.trim());
     return parts.length ? parts.join("\n") : "";
   }
   if (typeof raw === "object") {

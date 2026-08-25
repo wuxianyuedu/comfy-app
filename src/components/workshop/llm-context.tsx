@@ -63,8 +63,8 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
         <LLMSettingsModal
           initial={config}
           onClose={() => setSettingsOpen(false)}
-          onSaved={(c) => {
-            setConfig(c);
+          onSaved={(config) => {
+            setConfig(config);
             setSettingsOpen(false);
           }}
         />
@@ -196,7 +196,7 @@ function LLMSettingsModal({
     >
       <div
         className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="u-title">LLM 文本生成设置</h3>
@@ -260,12 +260,12 @@ function LLMSettingsModal({
               max={2}
               step={0.05}
               value={temperature}
-              onChange={(e) => setTemperature(Number(e.target.value))}
+              onChange={(event) => setTemperature(Number(event.target.value))}
               className="w-full accent-primary"
             />
           </label>
 
-          <Field label="最大 Token" value={String(maxTokens)} onChange={(v) => setMaxTokens(Number(v) || 2048)} placeholder="2048" />
+          <Field label="最大 Token" value={String(maxTokens)} onChange={(value) => setMaxTokens(Number(value) || 2048)} placeholder="2048" />
         </div>
 
         {msg && (
@@ -325,7 +325,7 @@ function Field({
       <input
         type={password ? "password" : "text"}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
       />

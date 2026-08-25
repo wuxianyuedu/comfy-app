@@ -52,17 +52,17 @@ export async function synthesizeFirstFrame(opts: {
 function waitForImage(taskId: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("首帧生成超时")), 5 * 60 * 1000);
-    const off = subscribe(taskId, (e) => {
-      if (e.type === "done") {
+    const off = subscribe(taskId, (event) => {
+      if (event.type === "done") {
         clearTimeout(timeout);
         off();
-        const imgs = (e.images as any[]).filter((im) => im.mediaType === "image");
+        const imgs = (event.images as any[]).filter((im) => im.mediaType === "image");
         if (imgs[0]?.localPath) resolve(imgs[0].localPath);
         else reject(new Error("首帧无图像输出"));
-      } else if (e.type === "error") {
+      } else if (event.type === "error") {
         clearTimeout(timeout);
         off();
-        reject(new Error(e.error));
+        reject(new Error(event.error));
       }
     });
   });

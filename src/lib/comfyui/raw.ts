@@ -123,11 +123,11 @@ export function detectFormat(json: unknown): WorkflowFormat | null {
   const obj = json as Record<string, any>;
   // API format: any top-level value has class_type + inputs
   const apiHit = Object.values(obj).some(
-    (v) =>
-      v &&
-      typeof v === "object" &&
-      typeof (v as any).class_type === "string" &&
-      typeof (v as any).inputs === "object"
+    (value) =>
+      value &&
+      typeof value === "object" &&
+      typeof (value as any).class_type === "string" &&
+      typeof (value as any).inputs === "object"
   );
   if (apiHit) return "api";
   // Raw format: has `nodes` array + each node has `type` (not class_type)
@@ -235,10 +235,15 @@ function readInputSpec(spec: ObjectInfoInputSpec | undefined): {
     return { type: typeof head === "string" ? head : null, options };
   }
   if (spec && typeof spec === "object") {
-    const t = (spec as Record<string, any>).type;
-    if (Array.isArray(t)) return { type: "COMBO", options: spec as Record<string, any> };
-    if (typeof t === "string") return { type: t, options: spec as Record<string, any> };
+
+    const type = (spec as Record<string, any>).type;
+
+    if (Array.isArray(type)) return { type: "COMBO", options: spec as Record<string, any> };
+
+    if (typeof type === "string") return { type: type, options: spec as Record<string, any> };
+
   }
+
   return { type: null, options: {} };
 }
 
@@ -514,7 +519,7 @@ function indexNodes(
       raw: n,
       inputs: slots,
       outputTypes: Array.isArray(n.outputs)
-        ? n.outputs.map((o) => (o && typeof o.type === "string" ? o.type : ""))
+        ? n.outputs.map((output) => (output && typeof output.type === "string" ? output.type : ""))
         : [],
     });
   }
@@ -538,7 +543,7 @@ function applyWidgets(
   }
   // 老版本前端存的 widgets_values 里没有 control_after_generate 这一格。
   // 用长度精确匹配挑顺序，避免「多补一格」反而把所有值推错位。
-  const bare = widgetNames.filter((n) => n !== CONTROL_SENTINEL);
+  const bare = widgetNames.filter((widgetName) => widgetName !== CONTROL_SENTINEL);
   const names =
     bare.length !== widgetNames.length && widgets.length === bare.length ? bare : widgetNames;
 
@@ -587,15 +592,19 @@ function buildApiGraph(
       idx.virtual || idx.mode === NODE_MODE_BYPASS || idx.mode === NODE_MODE_NEVER;
     if (skipped) {
       inactive += 1;
-      meta.inputOrder = idx.inputs.map((s) => s.name);
+      meta.inputOrder = idx.inputs.map((input) => input.name);
       const types: Record<string, string> = {};
       for (const s of idx.inputs) if (s.type) types[s.name] = s.type;
       if (Object.keys(types).length) meta.inputTypes = types;
       if (idx.outputTypes.length) meta.outputTypes = idx.outputTypes;
       if (idx.type === "PrimitiveNode") {
-        const v = Array.isArray(idx.raw.widgets_values) ? idx.raw.widgets_values[0] : undefined;
-        if (v !== undefined) meta.value = v;
+
+        const value = Array.isArray(idx.raw.widgets_values) ? idx.raw.widgets_values[0] : undefined;
+
+        if (value !== undefined) meta.value = value;
+
       }
+
     }
 
     graph[idx.id] = {
@@ -748,18 +757,28 @@ export function prepareGraphForExecution(input: Record<string, any>): ExecutionP
     }
 
     for (const nm of candidates) {
-      const v = node.inputs?.[nm];
-      if (!isLinkRef(v, graph)) continue;
+
+      const value = node.inputs?.[nm];
+
+      if (!isLinkRef(value, graph)) continue;
+
       if (wanted && types[nm] && types[nm].toUpperCase() !== wanted.toUpperCase()) continue;
-      return walk(String(v[0]), Number(v[1]), depth + 1);
+
+      return walk(String(value[0]), Number(value[1]), depth + 1);
+
     }
+
 
     // 类型信息缺失（老工作流没存 type）时：只有一条入线就直接穿过去。
     const linked = candidates.filter((nm) => isLinkRef(node.inputs?.[nm], graph));
     if (linked.length === 1) {
-      const v = node.inputs[linked[0]!] as [string | number, number];
-      return walk(String(v[0]), Number(v[1]), depth + 1);
+
+      const value = node.inputs[linked[0]!] as [string | number, number];
+
+      return walk(String(value[0]), Number(value[1]), depth + 1);
+
     }
+
     return null;
   }
 
