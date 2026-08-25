@@ -25,6 +25,8 @@ export interface WorkflowDetailLoaderArgs {
   setRootWorkflowName: Dispatch<SetStateAction<string>>;
   setSubgraphLoading: Dispatch<SetStateAction<boolean>>;
   setSubgraphRawContext: Dispatch<SetStateAction<{ parentRawJson: unknown; subUid: string } | null>>;
+  /** Non-fatal drill-in error: keeps the PARENT graph visible (no library flash). */
+  setSubgraphError: Dispatch<SetStateAction<string>>;
 }
 
 /**
@@ -47,6 +49,7 @@ export function useWorkflowDetailLoader({
   setRootWorkflowName,
   setSubgraphLoading,
   setSubgraphRawContext,
+  setSubgraphError,
 }: WorkflowDetailLoaderArgs) {
   const pushSubgraphStack = useCallback(
     (uid: string, name: string) => {
@@ -255,7 +258,13 @@ export function useWorkflowDetailLoader({
           }
         }
       } catch (e: any) {
-        setError(e.message ?? "加载失败");
+        // 子工作流下钻失败：非致命 —— 保留父图，仅用内联错误提示，
+        // 绝不渲染「返回」错误屏（那会回退到工作流库界面）。
+        if (opts?.subgraphUid) {
+          setSubgraphError(e?.message ?? "子工作流加载失败");
+        } else {
+          setError(e?.message ?? "加载失败");
+        }
       } finally {
         if (myReqId === latestRequestIdRef.current) {
           setLoading(false);
@@ -323,6 +332,7 @@ export function useWorkflowDetailLoader({
        *  `ioEditMode=true` checkboxes dotted across it. */
       setIoEditMode(false);
       setIoPreviewOpen(false);
+      setSubgraphError("");
       setSubgraphLoading(true);
       setTimeout(() => fetchDetail({ subgraphUid: uid, parentTitle }), 0);
     },

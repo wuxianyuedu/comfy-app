@@ -44,8 +44,6 @@ interface LogContextValue {
 
 const LogContext = createContext<LogContextValue | null>(null);
 
-const MAX_LOGS = 2000;
-
 let entryId = 0;
 function nextId() {
   entryId = (entryId + 1) % 1_000_000;
@@ -115,7 +113,11 @@ function parseFileLogs(text: string): LogEntry[] {
   const today = new Date();
   const entries: LogEntry[] = [];
   for (const rawLine of text.split("\n")) {
-    const line = rawLine.replace(/\r$/, "");
+    // Strip ANSI SGR (e.g. \x1b[36m) that the launcher now writes into the
+    // transcript, so the [HH:mm:ss] [LEVEL] regex still matches cleanly.
+    const line = rawLine
+      .replace(/\r$/, "")
+      .replace(/\x1b\[[0-9;:]*m/g, "");
     if (!line.trim()) continue;
     const m = line.match(LOG_LINE_RE);
     if (m) {
@@ -167,11 +169,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
 
   const addEntry = useCallback((entry: Omit<LogEntry, "id" | "time">) => {
     const full: LogEntry = { ...entry, id: nextId(), time: Date.now() };
-    setLogs((prev) => {
-      const next = [...prev, full];
-      if (next.length > MAX_LOGS) next.splice(0, next.length - MAX_LOGS);
-      return next;
-    });
+    setLogs((prev) => [...prev, full]);
   }, []);
 
   // ── Intercept console.* so logs appear in the panel ──
@@ -273,11 +271,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
 
         const entries = parseFileLogs(data.content);
         if (entries.length > 0) {
-          setLogs((prev) => {
-            const next = [...prev, ...entries];
-            if (next.length > MAX_LOGS) next.splice(0, next.length - MAX_LOGS);
-            return next;
-          });
+          setLogs((prev) => [...prev, ...entries]);
         }
         fileOffsetRef.current = data.size;
       } catch {

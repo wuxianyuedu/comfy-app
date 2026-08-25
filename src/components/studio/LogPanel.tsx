@@ -10,6 +10,202 @@ const LEVEL_STYLES: Record<LogLevel, string> = {
   error: "bg-rose-500/15 text-rose-400 border-rose-500/20",
 };
 
+/* ── ANSI SGR → React spans ──
+ * 解析 \x1b[...m 颜色/样式码，把单色 message 渲染成与终端一致的多色文本。
+ * 支持 8 色、亮色、256 色、RGB 前景/背景、bold/italic/underline/faint。 */
+const ANSI_COLORS: Record<number, string> = {
+  0: "#000000",
+  1: "#ef4444",
+  2: "#22c55e",
+  3: "#f59e0b",
+  4: "#3b82f6",
+  5: "#a855f7",
+  6: "#06b6d4",
+  7: "#e5e7eb",
+};
+const ANSI_BRIGHT_COLORS: Record<number, string> = {
+  0: "#4b5563",
+  1: "#ff6b6b",
+  2: "#4ade80",
+  3: "#fbbf24",
+  4: "#60a5fa",
+  5: "#c084fc",
+  6: "#22d3ee",
+  7: "#f9fafb",
+};
+
+function parseAnsi256(i: number): string {
+  if (i < 8) return ANSI_COLORS[i]!;
+  if (i < 16) return ANSI_BRIGHT_COLORS[i - 8]!;
+  if (i >= 232) {
+    const v = (i - 232) * 10 + 8;
+    return `rgb(${v},${v},${v})`;
+  }
+  const r = Math.floor((i - 16) / 36);
+  const g = Math.floor(((i - 16) % 36) / 6);
+  const b = (i - 16) % 6;
+  const ramp = [0, 95, 135, 175, 215, 255];
+  return `rgb(${ramp[r]},${ramp[g]},${ramp[b]})`;
+}
+
+interface AnsiStyle {
+  color?: string;
+  backgroundColor?: string;
+  fontWeight?: "bold";
+  fontStyle?: "italic";
+  textDecoration?: string;
+  opacity?: number;
+}
+
+function ansiToSpans(text: string): React.ReactNode[] {
+  const regex = /\x1b\[([0-9;:]*)m/g;
+  const out: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let style: AnsiStyle = {};
+  let key = 0;
+
+  const pushChunk = (chunk: string, s: AnsiStyle) => {
+    if (!chunk) return;
+    if (Object.keys(s).length === 0) {
+      out.push(<span key={key++}>{chunk}</span>);
+      return;
+    }
+    const css: React.CSSProperties = {
+      color: s.color,
+      backgroundColor: s.backgroundColor,
+      fontWeight: s.fontWeight,
+      fontStyle: s.fontStyle,
+      textDecoration: s.textDecoration,
+      opacity: s.opacity,
+    };
+    out.push(<span key={key++} style={css}>{chunk}</span>);
+  };
+
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    pushChunk(text.slice(lastIndex, match.index), style);
+    lastIndex = regex.lastIndex;
+
+    const raw = match[1];
+    if (!raw || raw === "0" || raw === "00") {
+      style = {};
+      continue;
+    }
+
+    const parts = raw.split(";").map((n) => (n === "" ? 0 : Number(n)));
+    let i = 0;
+    while (i < parts.length) {
+      const code = parts[i]!;
+      if (code === 0) {
+        style = {};
+        i++;
+      } else if (code === 1) {
+        style.fontWeight = "bold";
+        i++;
+      } else if (code === 2) {
+        style.opacity = 0.65;
+        i++;
+      } else if (code === 3) {
+        style.fontStyle = "italic";
+        i++;
+      } else if (code === 4) {
+        style.textDecoration = "underline";
+        i++;
+      } else if (code >= 30 && code <= 37) {
+        style.color = ANSI_COLORS[code - 30];
+        i++;
+      } else if (code >= 40 && code <= 47) {
+        style.backgroundColor = ANSI_COLORS[code - 40];
+        i++;
+      } else if (code >= 90 && code <= 97) {
+        style.color = ANSI_BRIGHT_COLORS[code - 90];
+        i++;
+      } else if (code >= 100 && code <= 107) {
+        style.backgroundColor = ANSI_BRIGHT_COLORS[code - 100];
+        i++;
+      } else if (code === 38 && parts[i + 1] === 5) {
+        const idx = parts[i + 2];
+        if (idx !== undefined) style.color = parseAnsi256(idx);
+        i += 3;
+      } else if (code === 48 && parts[i + 1] === 5) {
+        const idx = parts[i + 2];
+        if (idx !== undefined) style.backgroundColor = parseAnsi256(idx);
+        i += 3;
+      } else if (code === 38 && parts[i + 1] === 2) {
+        const r = parts[i + 2];
+        const g = parts[i + 3];
+        const b = parts[i + 4];
+        if (r !== undefined && g !== undefined && b !== undefined) {
+          style.color = `rgb(${r},${g},${b})`;
+        }
+        i += 5;
+      } else if (code === 48 && parts[i + 1] === 2) {
+        const r = parts[i + 2];
+        const g = parts[i + 3];
+        const b = parts[i + 4];
+        if (r !== undefined && g !== undefined && b !== undefined) {
+          style.backgroundColor = `rgb(${r},${g},${b})`;
+        }
+        i += 5;
+      } else {
+        i++;
+      }
+    }
+  }
+  pushChunk(text.slice(lastIndex), style);
+  return out;
+}
+
+/* ── Plain-text log token coloring ──
+ * PowerShell Write-Host colors are host-rendered and NOT preserved by
+ * Start-Transcript as ANSI escape codes.  When a message has no ANSI codes,
+ * we colorize common launcher tokens ([OK], [STEP], URLs, etc.) so the
+ * in-app panel matches the terminal look.
+ */
+interface TokenStyle {
+  regex: RegExp;
+  style: React.CSSProperties;
+}
+const LOG_TOKENS: TokenStyle[] = [
+  { regex: /^\[\d{2}:\d{2}:\d{2}\]/g, style: { color: "#6b7280" } },
+  { regex: /\[OK\]/g, style: { color: "#22c55e", fontWeight: "bold" } },
+  { regex: /\[STEP\]/g, style: { color: "#06b6d4", fontWeight: "bold" } },
+  { regex: /\[WARN\]/g, style: { color: "#f59e0b", fontWeight: "bold" } },
+  { regex: /\[ERROR\]/g, style: { color: "#ef4444", fontWeight: "bold" } },
+  { regex: /\[INFO\]/g, style: { color: "#9ca3af" } },
+  { regex: /PID\s*[:：]\s*\d+/gi, style: { color: "#c084fc" } },
+  { regex: /https?:\/\/[^\s]+/g, style: { color: "#60a5fa", textDecoration: "underline" } },
+  { regex: /\b(?:[A-Z]:\\|\\)[^\s]*/g, style: { color: "#a78bfa" } },
+];
+
+function hasAnsi(text: string): boolean {
+  return /\x1b\[[0-9;:]*m/.test(text);
+}
+
+function tokenizeLogMessage(text: string): React.ReactNode[] {
+  const combined = /(\[\d{2}:\d{2}:\d{2}\]|\[OK\]|\[STEP\]|\[WARN\]|\[ERROR\]|\[INFO\]|PID\s*[:：]\s*\d+|https?:\/\/[^\s]+|\b(?:[A-Z]:\\|\\)[^\s]*)/gi;
+  const parts = text.split(combined).filter((p) => p !== undefined && p !== "");
+  let key = 0;
+  return parts.map((part) => {
+    for (const token of LOG_TOKENS) {
+      token.regex.lastIndex = 0;
+      if (token.regex.test(part)) {
+        return (
+          <span key={key++} style={token.style}>
+            {part}
+          </span>
+        );
+      }
+    }
+    return <span key={key++}>{part}</span>;
+  });
+}
+
+function renderLogMessage(text: string): React.ReactNode[] {
+  if (hasAnsi(text)) return ansiToSpans(text);
+  return tokenizeLogMessage(text);
+}
+
 const FILTER_LABELS: { label: string; value: LogFilter }[] = [
   { label: "全部", value: "all" },
   { label: "调试", value: "debug" },
@@ -32,7 +228,7 @@ function formatTime(ts: number): string {
 function LogRow({ entry }: { entry: LogEntry }) {
   const levelClass = LEVEL_STYLES[entry.level];
   return (
-    <div className="flex items-start gap-2.5 border-b border-white/[0.03] px-4 py-1.5 font-mono text-[13px] leading-relaxed hover:bg-white/[0.02]">
+    <div className="flex items-start gap-2.5 border-b border-white/[0.03] px-4 py-1 font-mono text-[13px] leading-snug hover:bg-white/[0.02]">
       <span className="shrink-0 pt-0.5 text-gray-500">{formatTime(entry.time)}</span>
       <span
         className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${levelClass}`}
@@ -51,7 +247,7 @@ function LogRow({ entry }: { entry: LogEntry }) {
         }`}
         title={entry.message}
       >
-        {entry.message}
+        {renderLogMessage(entry.message)}
       </span>
       {entry.source !== "console" && (
         <span className="shrink-0 pt-0.5 text-[11px] text-gray-600">{entry.source}</span>
@@ -280,7 +476,7 @@ export function LogPanel() {
                 恢复自动滚动
               </button>
             )}
-            <span>自动保留最近 {2000} 条</span>
+            <span>保留全部日志</span>
           </span>
         </div>
       </div>

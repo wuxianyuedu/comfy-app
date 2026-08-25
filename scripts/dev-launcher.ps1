@@ -38,6 +38,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# 让 Write-Host 的 ANSI 转义序列原样写进 Transcript（应用内日志面板用 ANSI
+# 解析器还原颜色）。默认 Host 模式会在写非终端目标时剥离颜色，所以这里强制
+# 输出 Ansi。仅 PowerShell 7 (pwsh) 支持 $PSStyle。
+if (Get-Variable -Name PSStyle -ErrorAction SilentlyContinue) {
+  $PSStyle.OutputRendering = "Ansi"
+}
+
 # ── 日志目录与文件 ──
 $logDir = Join-Path $PSScriptRoot "..\log"
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
@@ -55,14 +62,20 @@ Start-Transcript -Path $currentLog -Force -ErrorAction SilentlyContinue | Out-Nu
 
 # ── 日志输出：统一 [时间] [级别] 格式，颜色分级 ──
 #   级别：STEP（步骤进度/青）、OK（成功/绿）、WARN（警告/黄）、ERROR（错误/红）、INFO（详情/灰）
+#   颜色用 ANSI 转义序列直接写进输出流（而非 -ForegroundColor），这样
+#   Start-Transcript 会把颜色码也记录到 log/dev-launcher.log，应用内面板用
+#   ANSI 解析器原样还原多色日志。
 function Write-Log {
   param(
     [Parameter(Mandatory = $true)][string]$Message,
     [ValidateSet("STEP", "OK", "WARN", "ERROR", "INFO")][string]$Level = "INFO"
   )
-  $color = @{ STEP = "Cyan"; OK = "Green"; WARN = "Yellow"; ERROR = "Red"; INFO = "DarkGray" }[$Level]
-  $time = Get-Date -Format "HH:mm:ss"
-  Write-Host ("[{0}] [{1,-5}] {2}" -f $time, $Level, $Message) -ForegroundColor $color
+  $e = [char]27
+  $c = @{ STEP = "$e[36m"; OK = "$e[32m"; WARN = "$e[33m"; ERROR = "$e[31m"; INFO = "$e[90m" }[$Level]
+  $ts = Get-Date -Format "HH:mm:ss"
+  $lvl = ($Level).PadRight(5)
+  $line = "$e[90m[$ts]$e[0m ${c}[$lvl]$e[0m $Message$e[0m"
+  Write-Host $line
 }
 
 # ── 启动摘要卡片：标题 + 键值信息，分隔线包裹 ──
@@ -71,13 +84,15 @@ function Show-Summary {
     [Parameter(Mandatory = $true)][string]$Title,
     [Parameter(Mandatory = $true)][string[]]$Lines
   )
-  $rule = "─" * 64
+  $e = [char]27
+  $rule = "$e[36m" + ("─" * 64) + "$e[0m"
+  $cyan = "$e[36m"; $white = "$e[37m"; $reset = "$e[0m"
   Write-Host ""
-  Write-Host $rule -ForegroundColor Cyan
-  Write-Host ("  {0}" -f $Title) -ForegroundColor Cyan
-  Write-Host $rule -ForegroundColor Cyan
-  foreach ($line in $Lines) { Write-Host ("  " + $line) -ForegroundColor White }
-  Write-Host $rule -ForegroundColor Cyan
+  Write-Host $rule
+  Write-Host "$cyan  $Title$reset"
+  Write-Host $rule
+  foreach ($line in $Lines) { Write-Host "$white  $line$reset" }
+  Write-Host $rule
   Write-Host ""
 }
 

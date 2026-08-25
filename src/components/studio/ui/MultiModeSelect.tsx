@@ -85,9 +85,6 @@ export function MultiModeSelect({
   const [activeTab, setActiveTab] = useState<WorkflowCategory>("image");
   // Draft state inside the popover — only flushed on save.
   const [draft, setDraft] = useState<Set<string>>(new Set(modes));
-  const [draftDefault, setDraftDefault] = useState<string>(
-    defaultMode || modes[0] || ""
-  );
   const [query, setQuery] = useState("");
   const [pos, setPos] = useState<{ left: number; top: number; width: number }>({
     left: 0,
@@ -105,16 +102,13 @@ export function MultiModeSelect({
   useEffect(() => {
     if (open && !prevOpenRef.current) {
       setDraft(new Set(modes));
-      setDraftDefault(defaultMode || modes[0] || "");
       setQuery("");
-      // Open on the default mode's category tab.
-      const defCat =
-        ALL_WORKFLOW_TYPES.find((t) => t.code === defaultMode)?.category ??
-        "image";
-      setActiveTab(defCat);
+      // Open on the category of the first selected mode (falls back to image).
+      const firstSelected = ALL_WORKFLOW_TYPES.find((t) => modes.includes(t.code));
+      setActiveTab(firstSelected?.category ?? "image");
     }
     prevOpenRef.current = open;
-  }, [open, modes, defaultMode]);
+  }, [open, modes]);
 
   // Outside-click + Escape close.  Reuses DarkSelect's exact pattern (R55).
   useEffect(() => {
@@ -189,32 +183,10 @@ export function MultiModeSelect({
       setDraft((prev) => {
         const next = new Set(prev);
         if (next.has(code)) {
-          // Disallow removing the only selected mode (chip would go blank).
-          if (next.size <= 1) return prev;
           next.delete(code);
-          // If we just unchecked the default, promote one of the remaining.
-          if (code === draftDefault) {
-            const remaining = ALL_WORKFLOW_TYPES.map((t) => t.code).filter(
-              (code) => next.has(code)
-            );
-            setDraftDefault(remaining[0] ?? code);
-          }
         } else {
           next.add(code);
         }
-        return next;
-      });
-    },
-    [draftDefault]
-  );
-
-  const setAsDefault = useCallback(
-    (code: string) => {
-      setDraftDefault(code);
-      setDraft((prev) => {
-        if (prev.has(code)) return prev;
-        const next = new Set(prev);
-        next.add(code);
         return next;
       });
     },
@@ -223,20 +195,21 @@ export function MultiModeSelect({
 
   const handleSave = useCallback(() => {
     const arr = Array.from(draft);
-    if (arr.length === 0) return; // safety — should be unreachable (UI blocks it)
-    const def = arr.includes(draftDefault) ? draftDefault : arr[0]!;
+    // 默认模式 = 第一个被选中的模式（defaultMode ⊆ modes 的约束由后端校验）。
+    const def = arr[0] ?? "";
     onChange(arr, def);
     setOpen(false);
-  }, [draft, draftDefault, onChange]);
+  }, [draft, onChange]);
 
   const handleCancel = useCallback(() => setOpen(false), []);
 
   // Default mode's category drives the chip accent.
   const accent = useMemo(() => {
+    const first = ALL_WORKFLOW_TYPES.find((t) => modes.includes(t.code));
     const def = ALL_WORKFLOW_TYPES.find((t) => t.code === defaultMode);
-    const cat: WorkflowCategory = def?.category ?? "image";
+    const cat: WorkflowCategory = first?.category ?? def?.category ?? "image";
     return { pill: CATEGORY_PILL[cat], text: CATEGORY_TEXT[cat] };
-  }, [defaultMode]);
+  }, [modes, defaultMode]);
 
   // Filtered + grouped (by category) options.  Used inside the popover.
   const grouped = useMemo(() => {
@@ -257,8 +230,8 @@ export function MultiModeSelect({
     return g;
   }, [query]);
 
-  const def = ALL_WORKFLOW_TYPES.find((t) => t.code === defaultMode);
-  const mainLabel = def ? def.label : defaultMode || "未选";
+  const firstSelected = ALL_WORKFLOW_TYPES.find((t) => modes.includes(t.code));
+  const mainLabel = firstSelected ? firstSelected.label : "选择模式";
   const plusN = Math.max(0, modes.length - 1);
 
   return (
@@ -273,11 +246,11 @@ export function MultiModeSelect({
           event.stopPropagation();
           if (!disabled) setOpen((value) => !value);
         }}
-        title={`当前 ${modes.length} 种模式 · 默认 ${mainLabel} · 点击管理`}
+        title={`当前 ${modes.length} 种模式 · 点击管理`}
         className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all hover:brightness-110 ${accent.pill} ${accent.text} ${className}`}
       >
         <span>
-          {mainLabel} · {defaultMode}
+          {modes.length === 0 ? "选择模式" : mainLabel}
         </span>
         <svg
           className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
@@ -399,7 +372,6 @@ export function MultiModeSelect({
                 }
                 return items.map((item) => {
                   const isSelected = draft.has(item.code);
-                  const isDefault = draftDefault === item.code;
                   return (
                     <div
                       key={item.code}
@@ -418,7 +390,8 @@ export function MultiModeSelect({
                           : "text-gray-300 hover:bg-white/[0.04]"
                       }`}
                     >
-                      {/* checkbox */}
+                      {/* checkbox — the default mode is visually implied by
+                          the 「默认」 badge, so it doesn't also need a checkmark. */}
                       <span
                         className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
                           isSelected
@@ -451,28 +424,6 @@ export function MultiModeSelect({
                       >
                         {item.code}
                       </span>
-                      {/* default toggle (visible only when selected) */}
-                      {isSelected && (
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setAsDefault(item.code);
-                          }}
-                          title={
-                            isDefault
-                              ? "当前默认模式"
-                              : "设为默认模式（卡片主 chip 显示）"
-                          }
-                          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold transition-colors ${
-                            isDefault
-                              ? "bg-violet-500/30 text-violet-100"
-                              : "bg-white/[0.06] text-gray-500 hover:bg-white/[0.10] hover:text-gray-300"
-                          }`}
-                        >
-                          {isDefault ? "默认" : "设为默认"}
-                        </button>
-                      )}
                     </div>
                   );
                 });

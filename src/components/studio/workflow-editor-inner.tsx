@@ -210,6 +210,7 @@ function WorkflowEditorBody({
    *  the recursive "click subgraph name → enter another layer" bug. */
   const [rootWorkflowName, setRootWorkflowName] = useState<string>("");
   const [subgraphLoading, setSubgraphLoading] = useState(false);
+  const [subgraphError, setSubgraphError] = useState("");
 
   /* 2026-08-11 R42: 子工作流「查看 JSON」要支持 RAW。
    *
@@ -377,6 +378,7 @@ function WorkflowEditorBody({
     setRootWorkflowName,
     setSubgraphLoading,
     setSubgraphRawContext,
+    setSubgraphError,
   });
 ;
 
@@ -539,20 +541,39 @@ function WorkflowEditorBody({
 
       {/* ── Canvas ── */}
       <div className="relative min-h-0 flex-1">
-        {/* Subgraph drill-in / drill-out overlay: covers the canvas the instant
-         *  `subgraphLoading` flips true (set synchronously on click), so the
-         *  user never sees the parent graph flash before the subgraph paints. */}
+        {/* Subgraph drill-in / drill-out overlay: keep the parent graph fully
+         *  visible and only paint a lightweight centered spinner card on top.
+         *  This matches the requested UX: current content unchanged, then a
+         *  loading screen, then the subgraph content. */}
         {subgraphLoading && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#0a0a0f]/70 backdrop-blur-sm">
-            <div className="text-center">
-              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
-              <p className="text-sm text-gray-400">加载子工作流…</p>
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/20">
+            <div className="pointer-events-auto rounded-xl border border-white/10 bg-[#0a0a0f]/90 px-6 py-4 shadow-2xl backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
+                <span className="text-sm font-medium text-gray-200">加载子工作流…</span>
+              </div>
             </div>
           </div>
         )}
         {ioEditMode && (
           <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-amber-400/40 bg-amber-500/15 px-4 py-1.5 text-[12px] font-medium text-amber-100 shadow-lg backdrop-blur-sm">
             📌 IO 编辑模式：勾选节点参数前的复选框，即可将其暴露为工作流的「输入」或「输出」
+          </div>
+        )}
+        {/* 子工作流下钻失败：内联错误提示，父图保持可见（绝不回退到工作流库） */}
+        {subgraphError && (
+          <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2">
+            <div className="pointer-events-auto flex items-center gap-3 rounded-lg border border-rose-500/40 bg-rose-500/15 px-4 py-2 text-[12px] text-rose-100 shadow-lg backdrop-blur-sm">
+              <span>⚠ {subgraphError}</span>
+              <button
+                type="button"
+                onClick={() => setSubgraphError("")}
+                className="rounded px-1.5 py-0.5 text-rose-200 transition-colors hover:bg-white/10"
+                aria-label="关闭"
+              >
+                ×
+              </button>
+            </div>
           </div>
         )}
         {/* IO preview side panel (2026-08-09).  Renders the same
