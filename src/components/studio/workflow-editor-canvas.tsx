@@ -7,7 +7,7 @@
  *  viewport in a useEffect to enforce a minimum zoom of 0.35. */
 "use client";
 
-import React from "react";
+import React, { useCallback } from "react";
 import {
   ReactFlow, Controls, MiniMap,
   type Node, type Edge,
@@ -23,6 +23,12 @@ import { PORT_ROLES } from "./workflow-node";
 import type { WorkflowNodeData } from "./workflow-types";
 import { workflowNodeTypes, workflowEdgeTypes } from "./workflow-editor-nodes";
 
+/* Role key → minimap colour.  Hoisted to a module-level Map so the MiniMap
+ *  `nodeColor` callback can stay referentially stable (empty useCallback
+ *  deps): MiniMap only re-runs it while painting, and never re-renders
+ *  because of a fresh callback identity. */
+const ROLE_COLOR_BY_KEY = new Map(PORT_ROLES.map((r) => [r.key, r.color]));
+
 export interface WorkflowEditorCanvasProps {
   nodes: Node[];
   edges: Edge[];
@@ -36,6 +42,9 @@ export interface WorkflowEditorCanvasProps {
   canvasSettingsHydrated: boolean;
   onMiniMapJump: (event: React.MouseEvent, position: { x: number; y: number }) => void;
   onOpenSettings: () => void;
+  /** Lazily activates deletable/reconnectable for a clicked edge (see
+   *  defaultEdgeOptions below). */
+  onEdgeClick?: (event: React.MouseEvent, edge: Edge) => void;
 }
 
 export function WorkflowEditorCanvas({
@@ -48,7 +57,16 @@ export function WorkflowEditorCanvas({
   canvasSettingsHydrated,
   onMiniMapJump,
   onOpenSettings,
+  onEdgeClick,
 }: WorkflowEditorCanvasProps) {
+  /* Stable identity → colour lookup for the MiniMap.  Depends on nothing
+   *  (role colours are static), so MiniMap never re-renders due to a fresh
+   *  callback reference while nodes are dragged. */
+  const miniMapNodeColor = useCallback((node: Node) => {
+    const d = node.data as WorkflowNodeData | undefined;
+    return (d && d.assignedRole ? ROLE_COLOR_BY_KEY.get(d.assignedRole) : undefined) ?? "#333";
+  }, []);
+
   return (
     <ReactFlow
       nodes={nodes}
@@ -56,8 +74,20 @@ export function WorkflowEditorCanvas({
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onNodeDragStop={onNodeDragStop}
+      onEdgeClick={onEdgeClick}
       nodeTypes={workflowNodeTypes}
       edgeTypes={workflowEdgeTypes}
+      /* 2026-08-25: commercial-grade perf — only mount nodes/edges that
+       *  intersect the viewport.  The DaSiWa Wan 2.2 template ships 130
+       *  nodes across a ~7000 px bbox; React Flow was previously mounting
+       *  the ENTIRE graph (plus every rail IO port) and letting the
+       *  browser paint off-screen DOM every frame.  With viewport culling
+       *  the DOM stays proportional to what's visible, and drag/pan/zoom
+       *  costs drop to a small constant.
+       *  NOTE: the parent still drives the initial fitToMiddle() viewport
+       *  (min zoom floor 0.35) — culling uses each node's measured size
+       *  after first paint, so the initial fit is unaffected. */
+      onlyRenderVisibleElements
       /* `fitView` is intentionally NOT set here — we drive the
        *  initial viewport ourselves in a useEffect above so we can
        *  enforce a minimum zoom of 0.35.  Without that floor, the
@@ -70,6 +100,16 @@ export function WorkflowEditorCanvas({
       defaultEdgeOptions={{
         type: "default",
         animated: false,
+        /* 2026-08-25: lazily activate edge interactivity.  `deletable` /
+         * `reconnectable` default to true, which makes React Flow attach
+         * interaction plumbing to EVERY edge up front.  For 130+ node
+         * graphs that is a measurable per-frame cost even though almost
+         * every edge is never touched.  We default both to false and flip
+         * them on the first time the user clicks an edge (onEdgeClick in
+         * the parent), so ordinary edges stay inert and the graph keeps
+         * its full drag/pan/zoom budget. */
+        deletable: false,
+        reconnectable: false,
         style: {
           /* 2026-08-13 R79: bump opacity 0.85→1 and strokeWidth 2→2.5
            *  so the default `default`-typed edges look identical to
@@ -108,11 +148,7 @@ export function WorkflowEditorCanvas({
           zoomable
           ariaLabel="小地图：拖动或点击切换主画布焦点"
           onClick={onMiniMapJump}
-          nodeColor={(node) => {
-            const d = node.data as WorkflowNodeData;
-            const r = PORT_ROLES.find((role) => role.key === d.assignedRole);
-            return r?.color ?? "#333";
-          }}
+          nodeColor={miniMapNodeColor}
           maskColor="rgba(0,0,0,0.78)"
           className="!bg-[#14141a]/90 !border-white/10"
         />

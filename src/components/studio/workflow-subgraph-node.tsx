@@ -2,7 +2,7 @@
 /* Extracted WorkflowSubgraphNode (ComfyUI subgraph wrapper renderer).
  * Originally inside WorkflowCanvasEditor.tsx. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Handle, Position, useStore } from "@xyflow/react";
+import { Handle, Position } from "@xyflow/react";
 import {
   portColor, portLabel, inferInputType, inferOutputType, inferIsMultiline,
   edgeType, edgeTypeByInputName,
@@ -30,17 +30,19 @@ import {
   lightenHex, parseHex, mixHex,
 } from "./workflow-utils";
 import { Chip, FrontendOnlyBadge, RequiredSummary } from "./required-summary";
-import { PseudoFrostLayer, NodeFrost } from "./node-frost";
+import { FrostLayer } from "./node-frost";
 import { WorkflowImagePreview } from "./workflow-image-preview";
 import { StringTextarea } from "./string-textarea";
 import { useIOEditContext, IoCheckbox, NodeIdChip } from "./io-edit-context";
 export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ data, selected }: { data: WorkflowSubgraphData; selected?: boolean }) {
   const io = useIOEditContext();
-  /* Parent-graph subgraph card — mirrors WorkflowNode's two-zone layout
-   * (2026-08-07): a purple HEADER, a TOP PINS zone that zips the
-   * wrapper's pure-connection input ports (left dot) with its exposed
-   * output ports (right dot) on shared 22px rows, and a WIDGET zone
-   * listing the wrapper's exposed widget inputs as LABEL | VALUE rows
+  /* 2026-08-25: viewport zoom is NO LONGER subscribed here — see FlowNode /
+   *  FrostLayer: only frosted (bypass / disabled) nodes need to track zoom.
+   *  Parent-graph subgraph card — mirrors WorkflowNode's two-zone layout
+   *  (2026-08-07): a purple HEADER, a TOP PINS zone that zips the
+   *  wrapper's pure-connection input ports (left dot) with its exposed
+   *  output ports (right dot) on shared 22px rows, and a WIDGET zone
+   *  listing the wrapper's exposed widget inputs as LABEL | VALUE rows
    * (a dot only when the widget slot is ALSO wired, matching WorkflowNode's
    * "both" behaviour).  The purple identity + drill-in affordance are
    * the only subgraph-specific bits; the IO rows use the exact same
@@ -64,8 +66,6 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
    *  textarea then joins the flex chain and fills the box's remaining
    *  vertical space instead of being capped at a fixed pixel height. */
   const hasSize = !!data.size;
-  // Live viewport zoom — drives <NodeFrost>'s counter-scale (see WorkflowNode).
-  const zoom = useStore((state) => state.transform[2]);
   const inputsList = data.inputs ?? [];
   const outputsList = data.outputs ?? [];
 
@@ -179,7 +179,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
       }}
       title="双击进入子工作流"
     >
-      <NodeFrost zoom={zoom} color={accent} nodeMode={nodeMode} />
+      {accent && nodeMode !== 0 && <FrostLayer color={accent} nodeMode={nodeMode} />}
       {/* Header — purple accent (subgraph identity).  Same NODE_TITLE_H as
        *  the regular WorkflowNode header so titled nodes line up on the grid. */}
       <div

@@ -70,7 +70,7 @@ function loadSavedHeight(): number {
   return HEIGHT_DEFAULT;
 }
 
-export function GlobalStepLogPanel() {
+export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const { settings } = useCanvasSettings();
   const debugMode = settings.debugMode;
   const activeTaskId = useActiveTaskId();
@@ -573,4 +573,4 @@ export function GlobalStepLogPanel() {
       )}
     </div>
   );
-}
+});

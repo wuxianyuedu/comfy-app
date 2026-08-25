@@ -527,6 +527,26 @@ function WorkflowPickChip({
  *    · 点行即 onChange(modes, newDefault) + 关弹层，**无** footer / **无** 保存按钮。
  *  业务侧 modes 数组不变（工作流模板的固有属性，由库维护），只切 defaultMode；
  *  实际执行是后端 PATCH /api/workflows/[id] 时把 defaultMode 同步到 taskType。 */
+/* 2026-08-25: transform 订阅收敛（商业级性能）。
+ * 之前 ModePickChip 顶层常驻订阅 state.transform —— 画布每 pan/zoom 一次，
+ * 所有工作流节点都会跟着全量重渲染，即使 99% 的节点弹层根本没打开。
+ * 现在把订阅下沉到只在弹层打开时才挂载的 PopoverAutoClose：
+ *   - 弹层关闭（绝大多数时间）：零订阅，画布缩放/平移完全不碰这些节点；
+ *   - 弹层打开：仅该节点订阅 transform，画布一动就关弹层（行为与原来一致）。
+ * 语义等价：挂载首帧跳过，transform 首次变化即关闭；卸载即取消订阅。 */
+function PopoverAutoClose({ onClose }: { onClose: () => void }) {
+  const transform = useStore((state) => state.transform);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    onClose();
+  }, [transform, onClose]);
+  return null;
+}
+
 function ModePickChip({
   modes,
   defaultMode,
@@ -577,15 +597,6 @@ function ModePickChip({
     };
   }, [open]);
 
-  /* R-ardot38: 画布 pan/zoom (s.transform 变化) 时主动关弹层 ——
-   *  节点被拖走后 popover 即使有 rAF 跟位置也会"飘"，体验不好；
-   *  用户更自然的预期是画布动一下弹层就消失。close 由父组件 cleanup 触发。 */
-  const transform = useStore((state) => state.transform);
-  useEffect(() => {
-    if (!open) return;
-    setOpen(false);
-  }, [transform]);
-
   const defType = ALL_WORKFLOW_TYPES.find((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code === defaultMode);
   const triggerLabel = defType?.label ?? defaultMode ?? "未选";
   const hasModes = modes.length > 0;
@@ -611,6 +622,7 @@ function ModePickChip({
 
   return (
     <>
+      {open && <PopoverAutoClose onClose={() => setOpen(false)} />}
       <button
         ref={triggerRef}
         type="button"

@@ -72,6 +72,14 @@ const nodeTypes = {
   workflowArdot: WorkflowNodeArdot,
 } as const;
 
+/* 2026-08-25: MiniMap 颜色表 hoisted to a module-level Map so the
+ * `nodeColor` callback can stay referentially stable — MiniMap only re-runs
+ * it while painting and never re-renders because of a fresh callback
+ * identity during drags / state churn. */
+const MINIMAP_COLOR_BY_KIND = new Map(
+  (Object.keys(NODE_META) as NodeKind[]).map((k) => [k, NODE_META[k].color])
+);
+
 interface ProjectCanvasProps {
   seedNew?: boolean;
   onConsumeSeed?: () => void;
@@ -512,6 +520,33 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
     [setEdges, propagateFrom]
   );
 
+  /* 2026-08-25: lazy edge interactivity (same treatment as the workflow
+   *  canvas).  defaultEdgeOptions sets deletable/reconnectable=false so
+   *  untouched edges stay inert; the first click flips both flags on, after
+   *  which delete-key / drag-reconnect behave exactly as before. */
+  const onEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      if (edge.deletable === true && edge.reconnectable === true) return;
+      setEdges((eds) =>
+        eds.map((e) =>
+          e.id === edge.id ? { ...e, deletable: true, reconnectable: true } : e
+        )
+      );
+    },
+    [setEdges]
+  );
+
+  /* Stable identity → colour lookup for the MiniMap.  Depends on nothing
+   * (kind colours are static), so MiniMap never re-renders due to a fresh
+   * callback reference while nodes are dragged. */
+  const miniMapNodeColor = useCallback(
+    (node: { data?: unknown }) => {
+      const kind = (node.data as CanvasNodeData | undefined)?.kind;
+      return (kind ? MINIMAP_COLOR_BY_KIND.get(kind) : undefined) ?? "#6B7280";
+    },
+    []
+  );
+
   /* ── Auto-persist on every meaningful mutation ──
    *  Without this, drag/add/connect all sit in memory only and vanish on
    *  reload.  Manual `upsertProject` calls in switchProject/newProject/
@@ -909,7 +944,15 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
         onPaneContextMenu={onPaneContextMenu}
         onPaneClick={() => setMenu(null)}
         onNodeClick={onNodeClick}
+        onEdgeClick={onEdgeClick}
         nodeTypes={nodeTypes}
+        /* 2026-08-25: commercial-grade perf — only mount nodes/edges that
+         *  intersect the viewport (same treatment as the workflow canvas).
+         *  Project graphs with many workflow/material nodes previously
+         *  mounted the ENTIRE graph DOM every frame; viewport culling keeps
+         *  DOM proportional to what's visible so drag/pan/zoom costs stay a
+         *  small constant. */
+        onlyRenderVisibleElements
         fitView
         minZoom={0.2}
         maxZoom={2}
@@ -919,6 +962,11 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
         defaultEdgeOptions={{
           type: "smoothstep",
           animated: true,
+          /* 2026-08-25: lazy edge interactivity — untouched edges stay
+           *  inert (no delete/reconnect plumbing); onEdgeClick activates
+           *  them on first use. */
+          deletable: false,
+          reconnectable: false,
           style: { stroke: "url(#canvas-edge-gradient)", strokeWidth: 2.5 },
         }}
         proOptions={{ hideAttribution: true }}
@@ -946,7 +994,7 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
           pannable
           zoomable
           ariaLabel="小地图：拖动或点击切换主画布焦点"
-          nodeColor={(node) => NODE_META[(node.data as CanvasNodeData)?.kind]?.color ?? "#6B7280"}
+          nodeColor={miniMapNodeColor}
           maskColor="rgba(5,5,7,0.78)"
           onClick={onMiniMapJump}
           style={{

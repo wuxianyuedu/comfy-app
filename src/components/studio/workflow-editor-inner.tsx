@@ -472,6 +472,23 @@ function WorkflowEditorBody({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
+  /* 2026-08-25: lazy edge interactivity.  defaultEdgeOptions in the canvas
+   *  sets deletable/reconnectable=false so untouched edges stay inert; the
+   *  first click on an edge flips BOTH flags on (idempotent afterwards), so
+   *  the user can still delete / re-connect it exactly as before while the
+   *  graph never pays the interaction cost for edges nobody touches. */
+  const onEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      if (edge.deletable === true && edge.reconnectable === true) return;
+      setEdges((eds) =>
+        eds.map((e) =>
+          e.id === edge.id ? { ...e, deletable: true, reconnectable: true } : e
+        )
+      );
+    },
+    [setEdges]
+  );
+
   /* Sync nodes/edges when detail (or paramMap) changes.  useNodesState only
    * takes initialNodes on mount, so when the workflow detail arrives async
    * we have to push the freshly computed initialNodes into the flow state. */
@@ -627,6 +644,7 @@ function WorkflowEditorBody({
           canvasSettingsHydrated={canvasSettingsHydrated}
           onMiniMapJump={onMiniMapJump}
           onOpenSettings={() => setCanvasSettingsOpen(true)}
+          onEdgeClick={onEdgeClick}
         />
 
         {/* Floating instruction tooltip */}        {/* Floating instruction tooltip */}

@@ -2,7 +2,7 @@
 /* Extracted FlowNode (custom ComfyUI graph node renderer) + its private
  * rgthree body helpers.  Originally inside WorkflowCanvasEditor.tsx. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Handle, Position, useStore } from "@xyflow/react";
+import { Handle, Position } from "@xyflow/react";
 import {
   portColor, portLabel, inferInputType, inferOutputType, inferIsMultiline,
   edgeType, edgeTypeByInputName,
@@ -33,7 +33,7 @@ import {
 } from "./workflow-utils";
 import { Chip, FrontendOnlyBadge, RequiredSummary } from "./required-summary";
 import { RgthreeFastGroupsBypasserBody, RgthreePowerLoraLoaderBody, RgthreeLabelBody } from "./rgthree-bodies";
-import { PseudoFrostLayer, NodeFrost } from "./node-frost";
+import { FrostLayer } from "./node-frost";
 import { WorkflowImagePreview } from "./workflow-image-preview";
 import { StringTextarea } from "./string-textarea";
 import { useIOEditContext, IoCheckbox, NodeIdChip } from "./io-edit-context";
@@ -73,11 +73,11 @@ export const HEADER_TOTAL = 60;     // header (32) + #id bar (22) + small breath
 export const FlowNode = React.memo(function FlowNode({ data, selected }: { data: WorkflowNodeData; selected?: boolean }) {
   const role = PORT_ROLES.find((PORT_ROLES) => PORT_ROLES.key === data.assignedRole);
   const io = useIOEditContext();
-  // Live viewport zoom — drives <NodeFrost>'s counter-scale so its on-screen
-  //  footprint never shrinks small enough to trigger the re-tile artefact.
-  const zoom = useStore((state) => state.transform[2]);
-  // 2026-08-24: 调试模式 — 与项目画布共用全局 debug-store；开启后非折叠
-  // 节点在 PackageFooter 下方叠加渲染链路模块标签（DebugChainFooter）。
+  /* 2026-08-25: viewport zoom is NO LONGER subscribed here — it was only
+   *  consumed by <NodeFrost> (bypass / disabled nodes), yet the subscription
+   *  forced every node on the canvas to re-render on each zoom step.  The
+   *  zoom read now lives inside <FrostLayer>, so only nodes that actually
+   *  render a frosted layer re-render while zooming. */
   const debugMode = useDebugStore((state) => state.debugMode);
 
   /*  Frosted glass uses the REAL `backdrop-filter` (the actual canvas behind
@@ -397,7 +397,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
         outlineOffset: selected ? "2px" : undefined,
       }}
     >
-      <NodeFrost zoom={zoom} color={modeColor} nodeMode={nodeMode} />
+      {modeColor && nodeMode !== 0 && <FrostLayer color={modeColor} nodeMode={nodeMode} />}
       {/* Header — ComfyUI uses a darker top bar with the node class name.
        *  Pinned to NODE_TITLE_H (litegraph's NODE_TITLE_HEIGHT) so every
        *  titled node has an identical header height regardless of icon

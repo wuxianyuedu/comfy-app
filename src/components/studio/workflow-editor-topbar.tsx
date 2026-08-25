@@ -36,7 +36,7 @@ export interface WorkflowEditorTopBarProps {
   error: string;
 }
 
-export function WorkflowEditorTopBar({
+export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   onClose,
   detail,
   rootWorkflowName,
@@ -379,4 +379,4 @@ export function WorkflowEditorTopBar({
         </div>
       </header>
   );
-}
+});

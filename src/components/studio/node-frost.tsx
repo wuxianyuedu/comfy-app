@@ -1,5 +1,6 @@
 "use client";
 /* Extracted frost / overlay components — originally inside WorkflowCanvasEditor.tsx. */
+import { useStore } from "@xyflow/react";
 import { pseudoFrostPalette, hexToRgba } from "./workflow-utils";
 export const PSEUDO_FROST_NOISE_URL =
   // 180×180 turbulence tile; alpha ~0.55; inlined SVG ⇒ no extra HTTP cost.
@@ -100,6 +101,22 @@ export function NodeFrost({ zoom, color, nodeMode }: { zoom: number; color: stri
       />
     </div>
   );
+}
+
+/* ---------------------------------------------------------------------------
+ *  FrostLayer — zoom-aware wrapper around <NodeFrost>.
+ *
+ *  Only bypass / disabled nodes render <NodeFrost>, but previously EVERY
+ *  canvas node subscribed to `useStore(state => state.transform[2])` just to
+ *  pass `zoom` down — so a pinch/scroll zoom re-rendered all 130 nodes even
+ *  though the vast majority don't use frost at all.  Moving the zoom
+ *  subscription behind this component means only nodes that actually render
+ *  a frosted layer react to zoom changes (their on-screen frost size must
+ *  follow the viewport), and ordinary nodes stay put while zooming.
+ * ------------------------------------------------------------------------- */
+export function FrostLayer({ color, nodeMode }: { color: string | null; nodeMode: number }) {
+  const zoom = useStore((state) => state.transform[2]);
+  return <NodeFrost zoom={zoom} color={color} nodeMode={nodeMode} />;
 }
 
 /* ---------------------------------------------------------------------------
