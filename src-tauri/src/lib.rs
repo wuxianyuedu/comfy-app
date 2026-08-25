@@ -1,11 +1,17 @@
+#[cfg(not(debug_assertions))]
 use std::net::{TcpListener, TcpStream};
+#[cfg(not(debug_assertions))]
 use std::process::Command;
+#[cfg(not(debug_assertions))]
 use std::sync::Mutex;
+#[cfg(not(debug_assertions))]
 use std::time::Duration;
 
+#[cfg(not(debug_assertions))]
 use tauri::Manager;
 
 // 生产模式 sidecar（Next standalone server）PID，应用退出时回收
+#[cfg(not(debug_assertions))]
 static SIDECAR_PID: Mutex<Option<u32>> = Mutex::new(None);
 
 /// 挑一个空闲端口给 standalone server（避开固定端口冲突）

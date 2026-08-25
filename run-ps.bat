@@ -24,7 +24,12 @@ if not defined PS_EXE set "PS_EXE=powershell"
 
 echo [INFO] Using PowerShell: %PS_EXE%
 
-"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%PS1_SCRIPT%" %*
+if "%~1"=="" (
+    "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%PS1_SCRIPT%" -Tauri
+) else (
+    "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%PS1_SCRIPT%" %*
+)
+
 set "EXITCODE=%errorlevel%"
 
 if not "%EXITCODE%"=="0" (
