@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>工坊 · 全链路项目管线 — 生产稿</title>
+<style>
+  :root{
+    --bg:#0A0A0F; --surface:#12121A; --elevated:#1A1A24; --line:rgba(255,255,255,0.07);
+    --primary:#7C5CFC; --primary-soft:rgba(124,92,252,0.12); --accent:#FF5CA8;
+    --text:#EDEDF2; --muted:#9A9AAE; --faint:#6B6B7B;
+    --red:#FF5C7A; --amber:#FFB454; --blue:#5CA8FF;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#07070B;font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;color:var(--text);display:flex;justify-content:center;padding:32px}
+  .app{width:1440px;height:900px;background:var(--bg);border-radius:18px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.04);display:flex;flex-direction:column}
+  /* top bar */
+  .topbar{height:64px;flex:0 0 64px;background:linear-gradient(180deg,#14141C,#0E0E15);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 22px}
+  .brand{display:flex;align-items:center;gap:12px}
+  .mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#fff;box-shadow:0 6px 18px rgba(124,92,252,0.45)}
+  .brand h1{font-size:18px;font-weight:650;letter-spacing:.3px}
+  .brand .crumb{font-size:11px;color:var(--faint);margin-top:1px}
+  .topright{display:flex;align-items:center;gap:12px}
+  .chip{font-size:13px;color:var(--muted);padding:7px 12px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,0.02)}
+  .statuspill{font-size:12px;color:var(--amber);background:rgba(255,180,84,0.12);border:1px solid rgba(255,180,84,0.25);padding:7px 13px;border-radius:999px;font-weight:500}
+  .avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3a3a4a,#222230);border:1px solid var(--line)}
+  /* body */
+  .body{flex:1;display:flex;min-height:0}
+  /* left nav */
+  .nav{width:256px;flex:0 0 256px;background:var(--surface);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:6px;position:relative}
+  .nav .label{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint);padding:0 8px 4px;display:flex;align-items:center;justify-content:space-between}
+  .nav .label .tag{font-size:9px;color:var(--primary);background:var(--primary-soft);padding:2px 7px;border-radius:6px;letter-spacing:.5px}
+  .stage{display:flex;align-items:center;gap:13px;padding:11px 12px;border-radius:12px;cursor:default;position:relative}
+  .stage .badge{width:38px;height:38px;flex:0 0 38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;background:var(--elevated);color:var(--muted);border:1px solid var(--line)}
+  .stage .meta{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .stage .name{font-size:13.5px;font-weight:550;color:var(--text)}
+  .stage .sub{font-size:11px;color:var(--faint)}
+  .stage.active{background:var(--primary-soft)}
+  .stage.active::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:linear-gradient(180deg,var(--primary),var(--accent))}
+  .stage.active .badge{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;border:none}
+  .stage.active .name{color:var(--primary)}
+  .stage.done .badge{background:rgba(92,168,255,0.14);color:var(--blue);border:1px solid rgba(92,168,255,0.3)}
+  .stage.locked .badge{opacity:.55}
+  .stage .sub.done{color:var(--blue)} .stage .sub.lock{color:var(--faint)}
+  .connector{width:2px;height:10px;background:linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04));margin-left:30px}
+  /* center */
+  .center{flex:1;min-width:0;padding:26px 28px;display:flex;flex-direction:column;gap:18px;overflow:hidden}
+  .sec-head{display:flex;align-items:center;justify-content:space-between}
+  .sec-head h2{font-size:17px;font-weight:650}
+  .sec-head .pill{font-size:11px;color:var(--muted);background:rgba(255,255,255,0.04);border:1px solid var(--line);padding:5px 11px;border-radius:999px}
+  .subtitle{font-size:12.5px;color:var(--muted);margin-top:-8px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px}
+  .card .ctitle{font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .card .ctitle .count{font-size:11px;color:var(--primary);background:var(--primary-soft);padding:3px 9px;border-radius:7px}
+  .outline{font-size:12.5px;line-height:1.7;color:var(--muted)}
+  .divider{height:1px;background:var(--line);margin:14px 0}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .thumb{height:86px;border-radius:11px;background:linear-gradient(135deg,#20202c,#15151d);border:1px solid var(--line);position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:8px}
+  .thumb .tg{position:absolute;inset:0;background:radial-gradient(120% 100% at 20% 10%,rgba(124,92,252,0.18),transparent 60%),radial-gradient(120% 100% at 90% 90%,rgba(255,92,168,0.14),transparent 55%)}
+  .thumb .num{position:relative;font-size:11px;font-weight:600;color:var(--text)}
+  .thumb .dot{position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:var(--faint)}
+  .thumb.s1 .dot{background:var(--primary)} .thumb.s2 .dot{background:var(--blue)} .thumb.s3 .dot{background:var(--amber)}
+  .progcard{display:flex;flex-direction:column;gap:10px}
+  .progcard .row{display:flex;align-items:baseline;justify-content:space-between}
+  .progcard .big{font-size:22px;font-weight:700;background:linear-gradient(90deg,var(--primary),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .progcard .cap{font-size:11.5px;color:var(--muted)}
+  .track{height:9px;border-radius:9px;background:var(--elevated);overflow:hidden}
+  .fill{height:100%;width:23%;border-radius:9px;background:linear-gradient(90deg,var(--primary),var(--accent))}
+  .cta{display:flex;gap:12px}
+  .btn{font-size:13px;font-weight:600;padding:11px 18px;border-radius:11px;cursor:default;border:1px solid transparent}
+  .btn.primary{background:linear-gradient(135deg,var(--primary),#6A4CF0);color:#fff;box-shadow:0 8px 22px rgba(124,92,252,0.35)}
+  .btn.ghost{background:rgba(255,255,255,0.03);border-color:var(--line);color:var(--text)}
+  /* right */
+  .right{width:308px;flex:0 0 308px;background:var(--bg);border-left:1px solid var(--line);padding:22px 16px;display:flex;flex-direction:column;gap:16px;overflow:hidden}
+  .miss .ctitle .ic{width:22px;height:22px;border-radius:7px;background:rgba(255,180,84,0.16);color:var(--amber);display:flex;align-items:center;justify-content:center;font-size:13px}
+  .miss .item{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .miss .item:last-of-type{border-bottom:none}
+  .miss .sd{width:9px;height:9px;border-radius:50%;flex:0 0 9px}
+  .miss .sd.r{background:var(--red)} .miss .sd.a{background:var(--amber)} .miss .sd.b{background:var(--blue)}
+  .miss .itx{font-size:12.5px;color:var(--text);flex:1}
+  .miss .itc{font-size:11px;color:var(--faint)}
+  .miss .foot{margin-top:6px;font-size:12px;font-weight:600;color:var(--amber);text-align:center;padding:10px;border:1px dashed rgba(255,180,84,0.3);border-radius:10px}
+  .lib .li{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .lib .li:last-child{border-bottom:none}
+  .lib .fic{width:30px;height:30px;border-radius:8px;background:var(--elevated);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--primary)}
+  .lib .ln{font-size:12.5px;flex:1;color:var(--text)}
+  .lib .lt{font-size:10.5px;color:var(--faint);background:rgba(255,255,255,0.04);padding:2px 8px;border-radius:6px}
+  .lib .imp{margin-top:8px;font-size:12px;color:var(--muted);text-align:center;padding:9px;border:1px solid var(--line);border-radius:10px}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="mark">工</div>
+      <div>
+        <h1>工坊 · 全链路项目管线</h1>
+        <div class="crumb">Comfy-APP / 项目管线</div>
+      </div>
+    </div>
+    <div class="topright">
+      <div class="chip">未命名项目</div>
+      <div class="statuspill">距离成片还差 3 类素材</div>
+      <div class="avatar"></div>
+    </div>
+  </div>
+
+  <div class="body">
+    <!-- LEFT NAV -->
+    <div class="nav">
+      <div class="label">项目管线 <span class="tag">PRODUCTION</span></div>
+      <div class="stage active">
+        <div class="badge">1</div>
+        <div class="meta"><div class="name">剧本</div><div class="sub">进行中</div></div>
+      </div>
+      <div class="connector"></div>
+      <div class="stage">
+        <div class="badge">2</div>
+        <div class="meta"><div class="name">角色卡</div><div class="sub">待开始</div></div>
+      </div>
+      <div class="connector"></div>
+      <div class="stage">
+        <div class="badge">3</div>
+        <div class="meta"><div class="name">场景分镜</div><div class="sub">待开始</div></div>
+      </div>
+      <div class="connector"></div>
+      <div class="stage locked">
+        <div class="badge">4</div>
+        <div class="meta"><div class="name">镜头生图</div><div class="sub lock">已锁定</div></div>
+      </div>
+      <div class="connector"></div>
+      <div class="stage locked">
+        <div class="badge">5</div>
+        <div class="meta"><div class="name">视频生成</div><div class="sub lock">已锁定</div></div>
+      </div>
+      <div class="connector"></div>
+      <div class="stage locked">
+        <div class="badge">6</div>
+        <div class="meta"><div class="name">成片合成</div><div class="sub lock">已锁定</div></div>
+      </div>
+    </div>
+
+    <!-- CENTER -->
+    <div class="center">
+      <div class="sec-head">
+        <h2>剧本 · 故事大纲与分镜脚本</h2>
+        <div class="pill">阶段 1 / 6</div>
+      </div>
+      <div class="subtitle">从一句话梗概出发，自动派生角色、场景与分镜脚本，并贯穿到生图 / 视频全流程。</div>
+
+      <div class="card">
+        <div class="ctitle">故事大纲 <span class="count">自动生成</span></div>
+        <div class="outline">少女小满在旧城区的天台邂逅一台会说话的旧收音机，它声称能播放"未来的声音"。随着电波里浮现陌生又熟悉的话语，小满逐渐发现，那些声音来自十年后试图拯救这座即将被拆除的城市的自己……</div>
+        <div class="divider"></div>
+        <div class="ctitle">分镜脚本 <span class="count">16 镜</span></div>
+        <div class="grid">
+          <div class="thumb s1"><div class="tg"></div><div class="dot"></div><div class="num">镜 01</div></div>
+          <div class="thumb s1"><div class="tg"></div><div class="dot"></div><div class="num">镜 02</div></div>
+          <div class="thumb s1"><div class="tg"></div><div class="dot"></div><div class="num">镜 03</div></div>
+          <div class="thumb s2"><div class="tg"></div><div class="dot"></div><div class="num">镜 04</div></div>
+          <div class="thumb s2"><div class="tg"></div><div class="dot"></div><div class="num">镜 05</div></div>
+          <div class="thumb s2"><div class="tg"></div><div class="dot"></div><div class="num">镜 06</div></div>
+          <div class="thumb s3"><div class="tg"></div><div class="dot"></div><div class="num">镜 07</div></div>
+          <div class="thumb s3"><div class="tg"></div><div class="dot"></div><div class="num">镜 08</div></div>
+          <div class="thumb s3"><div class="tg"></div><div class="dot"></div><div class="num">镜 09</div></div>
+          <div class="thumb"><div class="tg"></div><div class="dot"></div><div class="num">镜 10</div></div>
+          <div class="thumb"><div class="tg"></div><div class="dot"></div><div class="num">镜 11</div></div>
+          <div class="thumb"><div class="tg"></div><div class="dot"></div><div class="num">镜 12</div></div>
+          <div class="thumb"><div class="tg"></div><div class="dot"></div><div class="num">镜 13</div></div>
+          <div class="thumb"><div class="tg"></div><div class="dot"></div><div class="num">镜 14</div></div>
+          <div class="thumb"><div class="tg"></div><div class="dot"></div><div class="num">镜 15</div></div>
+          <div class="thumb"><div class="tg"></div><div class="dot"></div><div class="num">镜 16</div></div>
+        </div>
+      </div>
+
+      <div class="card progcard">
+        <div class="row">
+          <div>
+            <div style="font-size:12px;color:var(--muted)">项目总进度</div>
+            <div class="big">23%</div>
+          </div>
+          <div class="cap">完成 1 / 6 阶段 · 剧本进行中</div>
+        </div>
+        <div class="track"><div class="fill"></div></div>
+      </div>
+
+      <div class="cta">
+        <div class="btn primary">从剧本生成 16 镜</div>
+        <div class="btn ghost">导入剧本</div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right">
+      <div class="card miss">
+        <div class="ctitle"><span style="display:flex;align-items:center;gap:8px"><span class="ic">!</span> 缺失素材 / 下一步</span></div>
+        <div class="item"><div class="sd r"></div><div class="itx">角色卡未建立</div><div class="itc">2 个待建</div></div>
+        <div class="item"><div class="sd a"></div><div class="itx">场景未规划</div><div class="itc">3 个待规划</div></div>
+        <div class="item"><div class="sd b"></div><div class="itx">分镜脚本</div><div class="itc">16 镜待生成</div></div>
+        <div class="foot">补齐缺失素材 →</div>
+      </div>
+
+      <div class="card lib">
+        <div class="ctitle">资源库</div>
+        <div class="li"><div class="fic">📄</div><div class="ln">剧本大纲.md</div><div class="lt">文档</div></div>
+        <div class="li"><div class="fic">🧩</div><div class="ln">分镜脚本.json</div><div class="lt">数据</div></div>
+        <div class="li"><div class="fic">👤</div><div class="ln">角色卡</div><div class="lt">0 项</div></div>
+        <div class="li"><div class="fic">🏞️</div><div class="ln">场景图</div><div class="lt">0 项</div></div>
+        <div class="li"><div class="fic">🎞️</div><div class="ln">视频片段</div><div class="lt">0 项</div></div>
+        <div class="imp">+ 导入素材</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

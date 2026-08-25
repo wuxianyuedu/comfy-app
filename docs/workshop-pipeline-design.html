@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>创作工坊 · 全链路管线 — 设计稿 (暗色极光)</title>
+<style>
+  :root{
+    --bg:#0A0A0F; --bg2:#0F0F16; --surface:#14141A; --surface2:#1A1A22;
+    --primary:#7C5CFC; --accent:#FF5CA8; --border:rgba(255,255,255,.06);
+    --muted:#8A8A9A; --ink:#EDEDF2; --ink2:#B6B6C2;
+    --red:#FF5C5C; --amber:#FFB23E; --blue:#5CA8FF; --green:#3FD68A;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:"Noto Sans SC",system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:var(--bg); color:var(--ink); overflow:hidden;
+  }
+  .app{display:flex;flex-direction:column;height:100vh}
+  /* Header */
+  header{border-bottom:var(--border);background:rgba(20,20,26,.9);backdrop-filter:blur(8px);padding:16px 20px}
+  .hrow{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+  h1{font-size:18px;font-weight:700}
+  .sub{margin-top:4px;font-size:12px;color:var(--muted)}
+  .chips{display:flex;gap:8px}
+  .chip{font-size:11px;padding:5px 10px;border-radius:999px;border:1px solid var(--border);color:var(--ink2);background:var(--surface)}
+  .chip.ok{color:var(--green);border-color:rgba(63,214,138,.3)}
+  .progwrap{margin-top:14px}
+  .progtop{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px}
+  .progtop b{color:var(--primary)}
+  .bar{height:8px;width:100%;background:var(--bg2);border-radius:999px;overflow:hidden}
+  .bar>i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--primary),var(--accent));width:42%}
+  /* Body */
+  .body{display:flex;flex:1;min-height:0}
+  /* Left nav */
+  nav{width:180px;shrink:0;border-right:var(--border);background:var(--bg2);padding:14px;overflow:auto}
+  .cap{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#55556a;margin:2px 6px 8px}
+  .stage{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:transparent;
+    color:var(--ink2);padding:9px 10px;border-radius:10px;font-size:13px;cursor:pointer;margin-bottom:3px}
+  .stage .ic{width:18px;height:18px;flex:0 0 18px;color:var(--muted)}
+  .stage .lb{flex:1}
+  .stage.active{background:rgba(124,92,252,.14);color:#C9BCFF}
+  .stage.locked{color:#4a4a58;cursor:not-allowed}
+  .dot{width:8px;height:8px;border-radius:50%;background:#55556a;flex:0 0 8px}
+  .dot.done{background:var(--green)} .dot.ready{background:var(--blue)}
+  .dot.pending{background:var(--amber)} .dot.stale{background:var(--red)}
+  .divider{height:1px;background:var(--border);margin:14px 6px}
+  .derive{display:flex;align-items:center;gap:8px;width:100%;border:1px solid rgba(124,92,252,.35);
+    background:rgba(124,92,252,.1);color:#C9BCFF;padding:9px 10px;border-radius:10px;font-size:12px;cursor:pointer}
+  /* Main */
+  main{flex:1;min-width:0;overflow:auto;padding:20px}
+  .mhead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .mhead h2{font-size:16px;font-weight:600}
+  .mhead p{font-size:12px;color:var(--muted);margin-top:3px}
+  .btn{font-size:12px;font-weight:600;color:#fff;background:var(--accent);border:0;border-radius:10px;padding:9px 16px;cursor:pointer}
+  .btn.ghost{background:var(--primary)}
+  .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(360px,1fr))}
+  .card{display:flex;gap:12px;border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:12px}
+  .thumb{width:138px;height:78px;border-radius:10px;flex:0 0 138px;
+    background:linear-gradient(135deg,#241a3a,#3a1f3a 60%,#4a2342);display:flex;align-items:center;justify-content:center;
+    color:#9a8cc8;font-size:11px}
+  .cbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+  .crow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .shotno{font-size:12px;font-weight:600}
+  .badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px}
+  .b-run{background:rgba(92,168,255,.15);color:var(--blue)}
+  .b-done{background:rgba(63,214,138,.15);color:var(--green)}
+  .b-stale{background:rgba(255,92,92,.15);color:var(--red)}
+  .ctrls{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px}
+  .field{display:flex;flex-direction:column;gap:3px}
+  .field span{font-size:10px;color:var(--muted)}
+  select,textarea,input{font-family:inherit;font-size:11px;color:var(--ink);background:rgba(255,255,255,.03);
+    border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:6px 8px;outline:none}
+  select:focus,textarea:focus,input:focus{border-color:rgba(124,92,252,.5)}
+  textarea{resize:vertical;min-height:38px}
+  .gen{background:rgba(255,92,168,.9);color:#fff;border:0;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;padding:0 12px}
+  .arrow{text-align:center;font-size:10px;color:var(--accent);opacity:.7}
+  /* Right */
+  aside{width:264px;shrink:0;border-left:var(--border);background:var(--bg2);padding:16px;overflow:auto}
+  .panel{border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:14px;margin-bottom:14px}
+  .panel h3{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--ink)}
+  .setrow{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+  .setrow span{font-size:11px;color:var(--muted)}
+  .miss{list-style:none;display:flex;flex-direction:column;gap:8px}
+  .miss li{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ink2)}
+  .mdot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:0 0 8px}
+  .m-err{background:var(--red)} .m-warn{background:var(--amber)} .m-info{background:#55556a}
+  .wbtn{width:100%;margin-top:10px;border:0;border-radius:10px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;color:#fff;background:var(--primary)}
+  .res{display:flex;flex-direction:column;gap:2px}
+  .res button{display:flex;justify-content:space-between;width:100%;text-align:left;border:0;background:transparent;
+    color:var(--ink2);font-size:12px;padding:7px 8px;border-radius:8px;cursor:pointer}
+  .res button:hover{background:rgba(255,255,255,.04);color:var(--ink)}
+  .res .n{font-size:10px;background:var(--bg2);border-radius:999px;padding:1px 8px}
+  .cur{margin-top:14px;border:1px solid rgba(124,92,252,.3);background:rgba(124,92,252,.08);border-radius:14px;padding:14px}
+  .cur .t{font-size:11px;color:var(--muted)} .cur .n{font-size:14px;font-weight:600;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="hrow">
+      <div>
+        <h1>创作工坊 · 全链路管线</h1>
+        <p class="sub">剧本 → 角色卡 → 分镜 → 生图 → 视频 → 成片，串联你的整个创作流程</p>
+      </div>
+      <div class="chips">
+        <span class="chip ok">● 模型在线</span>
+        <span class="chip">生成设置 ⚙</span>
+      </div>
+    </div>
+    <div class="progwrap">
+      <div class="progtop"><span>总进度</span><b>42%</b></div>
+      <div class="bar"><i></i></div>
+    </div>
+  </header>
+
+  <div class="body">
+    <nav>
+      <p class="cap">阶段</p>
+      <button class="stage"><span class="ic">▤</span><span class="lb">剧本</span><span class="dot done"></span></button>
+      <button class="stage"><span class="ic">◆</span><span class="lb">角色卡</span><span class="dot done"></span></button>
+      <button class="stage"><span class="ic">▦</span><span class="lb">场景/分镜</span><span class="dot done"></span></button>
+      <button class="stage active"><span class="ic">▣</span><span class="lb">镜头生图</span><span class="dot ready"></span></button>
+      <button class="stage locked"><span class="ic">▶</span><span class="lb">视频生成</span><span class="dot pending"></span></button>
+      <button class="stage locked"><span class="ic">★</span><span class="lb">成片合成</span><span class="dot locked"></span></button>
+      <div class="divider"></div>
+      <p class="cap">快速派生</p>
+      <button class="derive">✦ 从剧本生成分镜</button>
+    </nav>
+
+    <main>
+      <div class="mhead">
+        <div>
+          <h2>视频生成 · 镜头规划</h2>
+          <p>为每个镜头设置运动强度、时长与转场，然后生成视频片段（I2V / 图生视频）。</p>
+        </div>
+        <button class="btn">批量生成片段 (12)</button>
+      </div>
+
+      <div class="grid">
+        <!-- shot card -->
+        <div class="card">
+          <div class="thumb">镜 1 · 图</div>
+          <div class="cbody">
+            <div class="crow"><span class="shotno">镜 1</span><span class="badge b-done">已完成</span></div>
+            <div class="ctrls">
+              <div class="field"><span>运动强度</span><select><option>轻运动</option><option selected>中运动</option><option>强运动</option></select></div>
+              <div class="field"><span>时长(秒)</span><input value="4"/></div>
+              <div class="field"><span>转场→下镜</span><select><option selected>硬切</option><option>叠化</option><option>淡入淡出</option></select></div>
+              <button class="gen">重生成</button>
+            </div>
+            <textarea>本镜对白 / 字幕文本（用于最终成片烧录字幕）</textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="thumb">镜 2 · 图</div>
+          <div class="cbody">
+            <div class="crow"><span class="shotno">镜 2</span><span class="badge b-run">生成中</span></div>
+            <div class="ctrls">
+              <div class="field"><span>运动强度</span><select><option>轻运动</option><option selected>中运动</option><option>强运动</option></select></div>
+              <div class="field"><span>时长(秒)</span><input value="4"/></div>
+              <div class="field"><span>转场→下镜</span><select><option selected>硬切</option><option>叠化</option><option>淡入淡出</option></select></div>
+              <button class="gen">生成片段</button>
+            </div>
+            <textarea></textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="thumb">镜 3 · 图</div>
+          <div class="cbody">
+            <div class="crow"><span class="shotno">镜 3</span><span class="badge b-stale">待更新</span></div>
+            <div class="ctrls">
+              <div class="field"><span>运动强度</span><select><option>轻运动</option><option selected>中运动</option><option>强运动</option></select></div>
+              <div class="field"><span>时长(秒)</span><input value="4"/></div>
+              <div class="field"><span>转场→下镜</span><select><option selected>硬切</option><option>叠化</option><option>淡入淡出</option></select></div>
+              <button class="gen">重生成</button>
+            </div>
+            <p style="font-size:10px;color:var(--red)">⚠ 上游剧本已修改，本镜需重跑</p>
+          </div>
+        </div>
+      </div>
+      <p class="arrow">↓ 硬切 ↓</p>
+    </main>
+
+    <aside>
+      <div class="panel">
+        <h3>生成设置</h3>
+        <div class="setrow"><span>大模型（Checkpoint）</span><select><option>waiIllustriousSDXL_v170</option></select></div>
+        <p style="font-size:11px;color:var(--muted)">分镜生图统一使用此模型；风格细节由所选 Skill / 角色风格标签控制。</p>
+      </div>
+
+      <div class="panel">
+        <h3>缺失素材 / 下一步</h3>
+        <ul class="miss">
+          <li><span class="mdot m-warn"></span>9 个镜头待生图</li>
+          <li><span class="mdot m-info"></span>分镜图已完成，可进入视频生成</li>
+        </ul>
+        <button class="wbtn">批量生图 (9)</button>
+      </div>
+
+      <div class="panel">
+        <h3>资源库</h3>
+        <div class="res">
+          <button>剧本 <span class="n">1</span></button>
+          <button>分镜脚本 <span class="n">6</span></button>
+          <button>角色卡 <span class="n">3</span></button>
+          <button>场景图 <span class="n">12</span></button>
+          <button>视频片段 <span class="n">2</span></button>
+          <button>成片 <span class="n">0</span></button>
+        </div>
+      </div>
+
+      <div class="cur">
+        <p class="t">当前项目</p>
+        <p class="n">星语咖啡馆 · 第一幕</p>
+        <p style="font-size:11px;color:var(--muted);margin-top:4px">温暖治愈系短漫剧，女主在清晨的咖啡馆遇见一只会说话的猫。</p>
+      </div>
+    </aside>
+  </div>
+</div>
+</body>
+</html>
