@@ -2,7 +2,7 @@
 # 原理：把 npm 进程及其所有子进程挂到同一个 Job 对象上，
 #       并设置「关闭窗口时自动杀掉整个 Job」，从而实现关窗口零残留。
 # 用法：pwsh -ExecutionPolicy Bypass -File scripts\dev-launcher.ps1 [-Tauri]
-# 日志：自动写入项目根目录 dev-launcher.log，方便排查问题。
+# 日志：自动写入 .workbuddy/log/dev-launcher.log，避免污染项目根目录。
 #
 # 改进（2026-08-04）：启动前按端口「精准」杀掉残留的 dev server，
 #   彻底避免「旧实例占着 3000、新实例被挤到 3001、浏览器连着旧代码」的尴尬。
@@ -35,7 +35,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 # 记录日志到文件（即使窗口一闪而过也能事后查看）
-$logFile = Join-Path $PSScriptRoot "..\dev-launcher.log"
+$logDir = Join-Path $PSScriptRoot "..\.workbuddy\log"
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+$logFile = Join-Path $logDir "dev-launcher.log"
 try { Start-Transcript -Path $logFile -Force -ErrorAction SilentlyContinue } catch {}
 
 # ── 日志输出：统一 [时间] [级别] 格式，颜色分级 ──
