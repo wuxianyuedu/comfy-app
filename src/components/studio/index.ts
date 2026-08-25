@@ -17,9 +17,6 @@ export type { BottomBarProps } from "./BottomBar";
 export { CanvasArea } from "./CanvasArea";
 export type { CanvasAreaProps, ContextMenuItem } from "./CanvasArea";
 
-export { SkillPanel } from "./SkillPanel";
-export type { SkillPanelProps } from "./SkillPanel";
-
 export { AgentPanel } from "./AgentPanel";
 export type { AgentPanelProps, AgentTask } from "./AgentPanel";
 
@@ -27,7 +24,7 @@ export { VideoQueueModal } from "./VideoQueueModal";
 export type { VideoQueueModalProps } from "./VideoQueueModal";
 
 export { HomePage } from "./HomePage";
-export type { HomePageProps, QuickStartItem, RecentProject } from "./HomePage";
+export type { HomePageProps, RecentProject } from "./HomePage";
 
 export { MediaThumbnail } from "./MediaThumbnail";
 export { isVideo } from "@/lib/media";
@@ -37,11 +34,6 @@ export type { WorkspaceView } from "./WorkspaceNav";
 
 export { WorksGallery } from "./WorksGallery";
 export { ProjectOutputs } from "./ProjectOutputs";
-
-export { SkillsGrid } from "./SkillsGrid";
-
-export { CreatePanel } from "./CreatePanel";
-export type { SkillShort } from "./CreatePanel";
 
 export { ModelLibrary } from "./ModelLibrary";
 
@@ -65,6 +57,12 @@ export { ModalDialog } from "./ModalDialog";
 export type { ModalDialogProps } from "./ModalDialog";
 
 export { AuroraBackground } from "./AuroraBackground";
+
+export { BrowserStatusBar } from "./BrowserStatusBar";
+export type { BrowserStatusBarProps } from "./BrowserStatusBar";
+
+export { LogProvider, useLogPanel } from "./log-provider";
+export { LogPanel } from "./LogPanel";
 
 export { NumberField } from "./ui/NumberField";
 export { DarkSelect } from "./ui/DarkSelect";

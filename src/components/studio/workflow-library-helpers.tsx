@@ -102,7 +102,9 @@ export function deriveFormatFlags(row: WorkflowRow): {
     const hasRaw = row.hasRaw ?? row.format === "raw";
     const apiOrigin: "user" | "derived" | null = row.apiOrigin
       ?? (hasApi ? (hasRaw ? "derived" : "user") : null);
-    return { hasApi, hasRaw, apiOrigin, usable: hasApi };
+    // 2026-08-25: 一个工作流只保留一种格式。可用性仅取决于是否有可执行 graph。
+    const usable = hasApi;
+    return { hasApi, hasRaw, apiOrigin, usable };
   }
   return {
     hasApi: true,
@@ -353,7 +355,6 @@ export function LibrarySourceModal({
   const data = detailQ.data?.template
     ? {
         graph: detailQ.data.template.graph,
-        rawJson: detailQ.data.template.rawJson,
         name: detailQ.data.template.name ?? wf.name,
       }
     : null;

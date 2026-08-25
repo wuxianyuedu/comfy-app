@@ -52,6 +52,12 @@ const CATEGORY_LABEL: Record<WorkflowCategory, string> = {
   video: "视频",
   audio: "音频",
 };
+/* accent color for the active tab underline */
+const CATEGORY_ACCENT: Record<WorkflowCategory, string> = {
+  image: "bg-violet-400",
+  video: "bg-sky-400",
+  audio: "bg-amber-400",
+};
 
 interface MultiModeSelectProps {
   /** All selected mode codes (defaultMode ⊆ modes).  Empty array → blank chip. */
@@ -75,6 +81,8 @@ export function MultiModeSelect({
   disabled = false,
 }: MultiModeSelectProps) {
   const [open, setOpen] = useState(false);
+  // Which category tab is currently shown in the popover (图像/视频/音频).
+  const [activeTab, setActiveTab] = useState<WorkflowCategory>("image");
   // Draft state inside the popover — only flushed on save.
   const [draft, setDraft] = useState<Set<string>>(new Set(modes));
   const [draftDefault, setDraftDefault] = useState<string>(
@@ -89,13 +97,23 @@ export function MultiModeSelect({
   const triggerRef = useRef<HTMLSpanElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
 
-  // Reset draft whenever the popover opens OR upstream modes change.
+  // Reset draft only when the popover transitions from closed to open.
+  // Do NOT reset while the user is actively checking items, otherwise
+  // a parent re-render with a new `modes` array reference would wipe
+  // the user's selection.
+  const prevOpenRef = useRef(false);
   useEffect(() => {
-    if (open) {
+    if (open && !prevOpenRef.current) {
       setDraft(new Set(modes));
       setDraftDefault(defaultMode || modes[0] || "");
       setQuery("");
+      // Open on the default mode's category tab.
+      const defCat =
+        ALL_WORKFLOW_TYPES.find((t) => t.code === defaultMode)?.category ??
+        "image";
+      setActiveTab(defCat);
     }
+    prevOpenRef.current = open;
   }, [open, modes, defaultMode]);
 
   // Outside-click + Escape close.  Reuses DarkSelect's exact pattern (R55).
@@ -176,7 +194,7 @@ export function MultiModeSelect({
           next.delete(code);
           // If we just unchecked the default, promote one of the remaining.
           if (code === draftDefault) {
-            const remaining = ALL_WORKFLOW_TYPES.map((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code).filter(
+            const remaining = ALL_WORKFLOW_TYPES.map((t) => t.code).filter(
               (code) => next.has(code)
             );
             setDraftDefault(remaining[0] ?? code);
@@ -215,7 +233,7 @@ export function MultiModeSelect({
 
   // Default mode's category drives the chip accent.
   const accent = useMemo(() => {
-    const def = ALL_WORKFLOW_TYPES.find((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code === defaultMode);
+    const def = ALL_WORKFLOW_TYPES.find((t) => t.code === defaultMode);
     const cat: WorkflowCategory = def?.category ?? "image";
     return { pill: CATEGORY_PILL[cat], text: CATEGORY_TEXT[cat] };
   }, [defaultMode]);
@@ -223,14 +241,13 @@ export function MultiModeSelect({
   // Filtered + grouped (by category) options.  Used inside the popover.
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const filtered = ALL_WORKFLOW_TYPES.filter((ALL_WORKFLOW_TYPES) =>
-{
+    const filtered = ALL_WORKFLOW_TYPES.filter((t) => {
       if (!q) return true;
       return (
-        ALL_WORKFLOW_TYPES.code.toLowerCase().includes(q) ||
-        ALL_WORKFLOW_TYPES.label.toLowerCase().includes(q) ||
-        (ALL_WORKFLOW_TYPES.subCategory?.toLowerCase().includes(q) ?? false) ||
-        (ALL_WORKFLOW_TYPES.fullName.toLowerCase().includes(q) ?? false)
+        t.code.toLowerCase().includes(q) ||
+        t.label.toLowerCase().includes(q) ||
+        (t.subCategory?.toLowerCase().includes(q) ?? false) ||
+        (t.fullName.toLowerCase().includes(q) ?? false)
       );
     });
     const g: Partial<Record<WorkflowCategory, typeof ALL_WORKFLOW_TYPES>> = {};
@@ -240,7 +257,7 @@ export function MultiModeSelect({
     return g;
   }, [query]);
 
-  const def = ALL_WORKFLOW_TYPES.find((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code === defaultMode);
+  const def = ALL_WORKFLOW_TYPES.find((t) => t.code === defaultMode);
   const mainLabel = def ? def.label : defaultMode || "未选";
   const plusN = Math.max(0, modes.length - 1);
 
@@ -328,115 +345,138 @@ export function MultiModeSelect({
               />
             </div>
 
-            {/* list — grouped by category */}
+            {/* tabs — switchable 图像 / 视频 / 音频 */}
+            <div className="flex items-center gap-1 border-b border-white/[0.06] px-2 pt-2">
+              {(
+                ["image", "video", "audio"] as WorkflowCategory[]
+              ).map((cat) => {
+                const selCount = (grouped[cat] ?? []).filter((t) =>
+                  draft.has(t.code)
+                ).length;
+                const isActive = activeTab === cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setActiveTab(cat)}
+                    className={`relative flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold transition-colors ${
+                      isActive
+                        ? `${CATEGORY_TEXT[cat]} bg-white/[0.06]`
+                        : "text-gray-500 hover:text-gray-300"
+                    }`}
+                  >
+                    {CATEGORY_LABEL[cat]}
+                    {selCount > 0 && (
+                      <span className={`ml-1 text-[10px] ${CATEGORY_TEXT[cat]}`}>
+                        {selCount}
+                      </span>
+                    )}
+                    {isActive && (
+                      <span
+                        className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full ${CATEGORY_ACCENT[cat]}`}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* list — only the active tab's category */}
             <div
               style={{ maxHeight: POPOVER_MAX_H }}
               className="overflow-y-auto py-1"
             >
-              {Object.entries(grouped).length === 0 && (
-                <div className="px-3 py-4 text-center text-xs text-gray-500">
-                  没有匹配的模式
-                </div>
-              )}
-              {(
-                [
-                  "image",
-                  "video",
-                  "audio",
-                ] as WorkflowCategory[]
-              ).map((cat) => {
-                const items = grouped[cat];
-                if (!items || items.length === 0) return null;
-                return (
-                  <div key={cat}>
-                    <div
-                      className={`sticky top-0 px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider ${CATEGORY_TEXT[cat]} bg-[#16161C]/90 backdrop-blur`}
-                    >
-                      {CATEGORY_LABEL[cat]}
+              {(() => {
+                const items = grouped[activeTab] ?? [];
+                if (items.length === 0) {
+                  return (
+                    <div className="px-3 py-4 text-center text-xs text-gray-500">
+                      {query.trim()
+                        ? "没有匹配的模式"
+                        : `${CATEGORY_LABEL[activeTab]}暂无模式`}
                     </div>
-                    {items.map((item) =>
-{
-                      const isSelected = draft.has(item.code);
-                      const isDefault = draftDefault === item.code;
-                      return (
-                        <div
-                          key={item.code}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => toggle(item.code)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              toggle(item.code);
-                            }
+                  );
+                }
+                return items.map((item) => {
+                  const isSelected = draft.has(item.code);
+                  const isDefault = draftDefault === item.code;
+                  return (
+                    <div
+                      key={item.code}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => toggle(item.code)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          toggle(item.code);
+                        }
+                      }}
+                      className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors ${
+                        isSelected
+                          ? "bg-violet-500/10 text-violet-100"
+                          : "text-gray-300 hover:bg-white/[0.04]"
+                      }`}
+                    >
+                      {/* checkbox */}
+                      <span
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                          isSelected
+                            ? "border-violet-500/60 bg-violet-500/30"
+                            : "border-white/[0.18] bg-white/[0.02]"
+                        }`}
+                      >
+                        {isSelected && (
+                          <svg
+                            width="10"
+                            height="10"
+                            viewBox="0 0 12 12"
+                            fill="none"
+                          >
+                            <path
+                              d="M2.5 6l2.5 2.5L9.5 3.5"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                      </span>
+                      <span className="flex-1 truncate text-[13px] font-medium">
+                        {item.label}
+                      </span>
+                      <span
+                        className={`shrink-0 text-[11px] ${CATEGORY_TEXT[activeTab]} opacity-60`}
+                      >
+                        {item.code}
+                      </span>
+                      {/* default toggle (visible only when selected) */}
+                      {isSelected && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setAsDefault(item.code);
                           }}
-                          className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors ${
-                            isSelected
-                              ? "bg-violet-500/10 text-violet-100"
-                              : "text-gray-300 hover:bg-white/[0.04]"
+                          title={
+                            isDefault
+                              ? "当前默认模式"
+                              : "设为默认模式（卡片主 chip 显示）"
+                          }
+                          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold transition-colors ${
+                            isDefault
+                              ? "bg-violet-500/30 text-violet-100"
+                              : "bg-white/[0.06] text-gray-500 hover:bg-white/[0.10] hover:text-gray-300"
                           }`}
                         >
-                          {/* checkbox */}
-                          <span
-                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                              isSelected
-                                ? "border-violet-500/60 bg-violet-500/30"
-                                : "border-white/[0.18] bg-white/[0.02]"
-                            }`}
-                          >
-                            {isSelected && (
-                              <svg
-                                width="10"
-                                height="10"
-                                viewBox="0 0 12 12"
-                                fill="none"
-                              >
-                                <path
-                                  d="M2.5 6l2.5 2.5L9.5 3.5"
-                                  stroke="currentColor"
-                                  strokeWidth="1.5"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                            )}
-                          </span>
-                          <span className="flex-1 truncate text-[13px] font-medium">
-                            {item.label}
-                          </span>
-                          <span
-                            className={`shrink-0 text-[11px] ${CATEGORY_TEXT[cat]} opacity-60`}
-                          >
-                            {item.code}
-                          </span>
-                          {/* default toggle (visible only when selected) */}
-                          {isSelected && (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setAsDefault(item.code);
-                              }}
-                              title={
-                                isDefault
-                                  ? "当前默认模式"
-                                  : "设为默认模式（卡片主 chip 显示）"
-                              }
-                              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold transition-colors ${
-                                isDefault
-                                  ? "bg-violet-500/30 text-violet-100"
-                                  : "bg-white/[0.06] text-gray-500 hover:bg-white/[0.10] hover:text-gray-300"
-                              }`}
-                            >
-                              {isDefault ? "默认" : "设为默认"}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
+                          {isDefault ? "默认" : "设为默认"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
             </div>
 
             {/* footer */}

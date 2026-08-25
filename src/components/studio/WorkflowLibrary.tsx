@@ -14,7 +14,7 @@ import { ModelTagManager } from "@/components/studio/ModelTagManager";
 import type { WorkflowPreview as WorkflowPreviewT } from "@/lib/comfyui/workflow";
 import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 import { splitWorkflowIO, ioLabel } from "@/components/studio/shared/workflow-io";
-import { ALL_WORKFLOW_TYPES, getWorkflowType, normalizeTaskType } from "@/lib/workflow-types";
+import { getWorkflowType, normalizeTaskType } from "@/lib/workflow-types";
 import { api } from "~/trpc/react";
 import {
   ago,
@@ -32,7 +32,6 @@ import type { WorkflowRow } from "./workflow-library-helpers";
 import { WorkflowCard } from "./workflow-library-card";
 import { detectWorkflowFormat } from "@/lib/workflow-format";
 import { useWorkflowActions } from "./workflow-library-actions";
-import { UpgradeConfirmModal } from "./workflow-library-modals";
 
 /**
  * Lazy-load the canvas editor. It is a 7k-line module; keeping it behind a
@@ -92,12 +91,17 @@ export function WorkflowLibrary({
   // ── Import panel state ──
   const [showImport, setShowImport] = useState(false);
   const [importName, setImportName] = useState("");
-  const [importTaskType, setImportTaskType] = useState("TXT2IMG");
+  const [importModes, setImportModes] = useState<string[]>(["T2I"]);
+  const [importDefaultMode, setImportDefaultMode] = useState("T2I");
   const [importFormat, setImportFormat] = useState<"auto" | "api" | "raw">("auto");
   const [importJson, setImportJson] = useState("");
   const [importing, setImporting] = useState(false);
   const [importErr, setImportErr] = useState("");
   const [importWarn, setImportWarn] = useState<string[]>([]);
+  // 2026-08-25 (#53): the import-panel "?" help was hover-only
+  // (pointer-events-none + group-hover).  Clicking did nothing.  Make it a
+  // real toggle so a click shows/hides the explanation.
+  const [showHelpTip, setShowHelpTip] = useState(false);
 
   // 2026-08-12 R71-1: 恢复 drag-and-drop 导入（R12 当时移除 drag-drop 是
   // 因为本地工作流只能从配置路径导入；现在用户在「本地工作流」tab 把任意
@@ -108,27 +112,6 @@ export function WorkflowLibrary({
   const [dragActive, setDragActive] = useState(false);
   const [dropErr, setDropErr] = useState<string | null>(null);
 
-  // 2026-08-12 R76: drag-to-upgrade. User drops a real API JSON onto an
-  // existing workflow card (any card whose apiOrigin !== "user") → the
-  // PATCH endpoint replaces its graph with the user-provided API JSON,
-  // sets apiSource="user", keeps rawJson, and the next GET recomputes
-  // apiOrigin as "user" so the badge drops the "派生" sub-tag.
-  // State machine: idle → dragging → pendingUpgrade (modal open) → PATCHing.
-  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
-  const [pendingUpgrade, setPendingUpgrade] = useState<
-    | {
-        cardId: string;
-        cardName: string;
-        apiJson: object;
-        apiJsonText: string;
-        /** Approximate graph size for the modal preview line. */
-        nodeCount: number;
-      }
-    | null
-  >(null);
-  const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false);
-  const [upgrading, setUpgrading] = useState(false);
-  const [upgradeErr, setUpgradeErr] = useState<string | null>(null);
 
   // 2026-08-10 R12: removed the "本机路径" import tab and all drag-and-drop
   // support per the new rule "本地工作流只能通过配置的路径导入".
@@ -143,23 +126,18 @@ export function WorkflowLibrary({
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // 2026-08-12 R77: pressing Escape dismisses the delete / upgrade modals
+  // 2026-08-12 R77: pressing Escape dismisses the delete modal
   // (matches the convention of native <dialog> elements so keyboard users
   // aren't trapped in the modal).
   useEffect(() => {
-    if (!pendingDelete && !showUpgradeConfirm) return;
+    if (!pendingDelete) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (pendingDelete) setPendingDelete(null);
-      if (showUpgradeConfirm) {
-        setShowUpgradeConfirm(false);
-        setPendingUpgrade(null);
-        setUpgradeErr(null);
-      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [pendingDelete, showUpgradeConfirm]);
+  }, [pendingDelete]);
 
   // ── Canvas editor state ──
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -444,7 +422,8 @@ export function WorkflowLibrary({
     try {
       const d = await createMut.mutateAsync({
         name: importName.trim() || "未命名工作流",
-        taskType: importTaskType,
+        modes: importModes,
+        defaultMode: importDefaultMode,
         graph: parsed,
         format: importFormat !== "auto" ? importFormat : undefined,
       });
@@ -452,7 +431,8 @@ export function WorkflowLibrary({
       setShowImport(false);
       setImportName("");
       setImportJson("");
-      setImportTaskType("TXT2IMG");
+      setImportModes(["T2I"]);
+      setImportDefaultMode("T2I");
       setImportFormat("auto");
       load();
     } catch (e: any) {
@@ -460,7 +440,7 @@ export function WorkflowLibrary({
     } finally {
       setImporting(false);
     }
-  }, [importName, importTaskType, importFormat, importJson, load]);
+  }, [importName, importModes, importDefaultMode, importFormat, importJson, load]);
 
   // 2026-08-12 R71-1: drag-and-drop a workflow JSON onto the list area →
   // parse → auto-detect format → pre-fill the existing import panel and
@@ -512,18 +492,16 @@ export function WorkflowLibrary({
       setImportErr("");
       setImportWarn([]);
       setShowImport(true);
-      // Best-effort taskType hint: if the JSON is API-format and contains
-      // an "Upscale" / "Image" class anywhere, suggest IMG2IMG; otherwise
-      // stick with TXT2IMG. This is only the dropdown default — the user
-      // can change it before submitting.
+      // Best-effort mode hint: if the JSON hints at image-to-image
+      // (upscale / inpaint / img2img), suggest I2I as default; otherwise T2I.
       try {
-        let suggested: string = "TXT2IMG";
+        let suggested: string = "T2I";
         const obj = parsed as Record<string, unknown>;
         if (detected === "api") {
           for (const v of Object.values(obj)) {
             const ct = (v as any)?.class_type;
             if (typeof ct === "string" && /image|upscale|inpaint|edit/i.test(ct)) {
-              suggested = "IMG2IMG";
+              suggested = "I2I";
               break;
             }
           }
@@ -532,12 +510,13 @@ export function WorkflowLibrary({
           for (const n of nodes) {
             const t = (n as any)?.type;
             if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
-              suggested = "IMG2IMG";
+              suggested = "I2I";
               break;
             }
           }
         }
-        setImportTaskType(suggested);
+        setImportModes([suggested]);
+        setImportDefaultMode(suggested);
       } catch {
         /* swallow — keep default */
       }
@@ -585,117 +564,7 @@ export function WorkflowLibrary({
     [handleDroppedFile],
   );
 
-  /* ── 2026-08-12 R76: drag-to-upgrade ──────────────────────────────
-   * Each imported card acts as its own drop target. Accept files only
-   * when the card currently has apiOrigin !== "user" (i.e. it's already
-   * "API" — drop would be a no-op — OR has no API at all — drop would
-   * create one out of nothing; either way it's not an "upgrade" action).
-   * RAW-only rows (apiOrigin === null) are also valid upgrade targets:
-   * the dropped API JSON becomes the new graph and we still set
-   * apiSource="user" so subsequent GETs return apiOrigin="user".
-   */
-  const cardAcceptsDrag = useCallback((card: any): boolean => {
-    return card && card.apiOrigin !== "user";
-  }, []);
-
-  const onCardDragOver = useCallback(
-    (e: React.DragEvent<HTMLDivElement>, card: any) => {
-      if (!e.dataTransfer.types.includes("Files")) return;
-      if (!cardAcceptsDrag(card)) return; // already "API" — no upgrade needed
-      e.preventDefault();
-      e.stopPropagation(); // keep the list-level handler from also firing
-      e.dataTransfer.dropEffect = "copy";
-      if (card?.id) setDragOverCardId(card.id);
-    },
-    [cardAcceptsDrag],
-  );
-
-  const onCardDragLeave = useCallback(
-    (e: React.DragEvent<HTMLDivElement>, card: any) => {
-      // Only clear when leaving the card itself, not its children.
-      if (e.currentTarget === e.target && card?.id === dragOverCardId) {
-        setDragOverCardId(null);
-      } else if (card?.id === dragOverCardId && !e.currentTarget.contains(e.relatedTarget as Node)) {
-        setDragOverCardId(null);
-      }
-    },
-    [dragOverCardId],
-  );
-
-  const onCardDrop = useCallback(
-    async (e: React.DragEvent<HTMLDivElement>, card: any) => {
-      e.preventDefault();
-      e.stopPropagation(); // prevent the list-level onListDrop from also firing
-      setDragOverCardId(null);
-      const files = Array.from(e.dataTransfer.files ?? []);
-      if (files.length === 0) return;
-      if (!cardAcceptsDrag(card)) {
-        setDropErr("该工作流已升级为 API，无需重复拖入");
-        setTimeout(() => setDropErr(null), 4000);
-        return;
-      }
-      if (files.length > 1) {
-        setDropErr(`一次只能拖入一个文件（收到了 ${files.length} 个）`);
-        setTimeout(() => setDropErr(null), 4000);
-        return;
-      }
-      const file = files[0];
-      if (file!.size > 5 * 1024 * 1024) {
-        setDropErr(`文件过大（${(file!.size / 1024 / 1024).toFixed(1)} MB），单次拖入上限 5 MB`);
-        setTimeout(() => setDropErr(null), 4000);
-        return;
-      }
-      let text: string;
-      try {
-        text = await file!.text();
-      } catch (err: any) {
-        setDropErr("无法读取文件：" + (err?.message ?? "未知错误"));
-        setTimeout(() => setDropErr(null), 4000);
-        return;
-      }
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        setDropErr("JSON 解析失败：不是合法的工作流 JSON");
-        setTimeout(() => setDropErr(null), 4000);
-        return;
-      }
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        setDropErr("不是有效的工作流 JSON（应为对象）");
-        setTimeout(() => setDropErr(null), 4000);
-        return;
-      }
-      const detected = detectWorkflowFormat(parsed);
-      if (detected !== "api") {
-        setDropErr(
-          detected === "raw"
-            ? "该工作流已存在，请拖入 API 格式 JSON（{ \"<id>\": { class_type, inputs } }）而不是 RAW 格式"
-            : "无法识别为 API 格式 JSON（需要 { \"<id>\": { class_type, inputs } } 结构）",
-        );
-        setTimeout(() => setDropErr(null), 4000);
-        return;
-      }
-      // Surface a confirmation modal — destructive-ish (overwrites graph)
-      // and we want the user to confirm before we PATCH.
-      const nodeCount = Object.keys(parsed as Record<string, unknown>).filter(
-        (key) => /^\d+$/.test(key),
-      ).length;
-      setPendingUpgrade({
-        cardId: card.id,
-        cardName: card.name,
-        apiJson: parsed as object,
-        apiJsonText: text,
-        nodeCount,
-      });
-      setUpgradeErr(null);
-      setShowUpgradeConfirm(true);
-    },
-    [cardAcceptsDrag],
-  );
-
   const {
-    handleUpgradeConfirm,
     handleDelete,
     patchModes,
     patchModelTags,
@@ -703,11 +572,6 @@ export function WorkflowLibrary({
     resyncWorkflow,
     handleLoadPending,
   } = useWorkflowActions({
-    pendingUpgrade,
-    setUpgrading,
-    setUpgradeErr,
-    setShowUpgradeConfirm,
-    setPendingUpgrade,
     setDeleting,
     setPendingDelete,
     setImportErr,
@@ -748,10 +612,6 @@ const renderWorkflowCard = (w: any) => {
   return (
     <WorkflowCard
       w={w}
-      dragOverCardId={dragOverCardId}
-      onCardDragOver={onCardDragOver}
-      onCardDragLeave={onCardDragLeave}
-      onCardDrop={onCardDrop}
       isTechnicalName={isTechnicalName}
       normalizeTaskType={normalizeTaskType}
       patchModes={patchModes}
@@ -814,7 +674,7 @@ const renderWorkflowCard = (w: any) => {
         {showImport && (
           <div className="mb-6 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="u-title">导入 ComfyUI 工作流</h2>
+              <h2 className="text-sm font-semibold text-gray-100">导入 ComfyUI 工作流</h2>
               <button
                 type="button"
                 onClick={() => setShowImport(false)}
@@ -825,24 +685,26 @@ const renderWorkflowCard = (w: any) => {
               </button>
             </div>
 
-            {/* Common: name + type */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_200px]">
+            {/* Common: name + mode */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_220px]">
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-400">工作流名称</label>
+                <label className="mb-1 block text-xs font-medium text-gray-300">工作流名称</label>
                 <input
                   value={importName}
                   onChange={(event) => setImportName(event.target.value)}
                   placeholder="例如：胶片人像 _v2（留空则用文件名）"
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40"
+                  className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-violet-500/40"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-400">类型（可自动识别）</label>
-                <DarkSelect
-                  value={importTaskType}
-                  onChange={setImportTaskType}
-                  options={["TXT2IMG", "IMG2IMG", "OTHER"]}
-                  labels={{ TXT2IMG: "文生图 (TXT2IMG)", IMG2IMG: "图生图 (IMG2IMG)", OTHER: "其他 / 视频" }}
+                <label className="mb-1 block text-xs font-medium text-gray-300">模式</label>
+                <MultiModeSelect
+                  modes={importModes}
+                  defaultMode={importDefaultMode}
+                  onChange={(ms, def) => {
+                    setImportModes(ms);
+                    setImportDefaultMode(def);
+                  }}
                 />
               </div>
             </div>
@@ -858,8 +720,23 @@ const renderWorkflowCard = (w: any) => {
                 />
               </div>
               <div className="flex items-end">
-                <span className="text-xs text-gray-600">
-                  ComfyUI → 菜单 → 「导出(API格式)」 或 「导出(工作流格式)」
+                <span className="group relative inline-flex items-center gap-1.5 text-xs text-gray-500">
+                  <button
+                    type="button"
+                    onClick={() => setShowHelpTip((value) => !value)}
+                    aria-label="导入格式说明"
+                    aria-expanded={showHelpTip}
+                    className="flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] text-gray-400 transition-colors hover:border-violet-400/40 hover:text-violet-200"
+                  >
+                    ?
+                  </button>
+                  <span
+                    className={`absolute bottom-full left-0 mb-2 w-64 rounded-lg border border-white/10 bg-[#1b1b24] p-2.5 text-xs leading-relaxed text-gray-300 shadow-xl transition-opacity ${
+                      showHelpTip ? "opacity-100" : "pointer-events-none opacity-0 group-hover:opacity-100"
+                    }`}
+                  >
+                    ComfyUI → 菜单 → 「导出(API格式)」 或 「导出(工作流格式)」
+                  </span>
                 </span>
               </div>
             </div>
@@ -869,7 +746,7 @@ const renderWorkflowCard = (w: any) => {
                 onChange={(event) => setImportJson(event.target.value)}
                 rows={8}
                 placeholder='API 格式: { "3": { "class_type": "KSampler", "inputs": {...} } }\n\n工作流格式: { "last_node_id": 11, "nodes": [{ "id": 11, "type": "KSampler", "pos": [400, 300], "widgets_values": [...] }], "links": [...] }'
-                className="w-full resize-none rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 font-mono text-xs text-gray-200 outline-none focus:border-violet-500/40"
+                className="w-full resize-none rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 font-mono text-xs text-gray-100 outline-none placeholder:text-gray-500 focus:border-violet-500/40"
               />
             </div>
 
@@ -956,18 +833,6 @@ const renderWorkflowCard = (w: any) => {
             </div>
           </div>
         )}
-
-        <UpgradeConfirmModal
-          pendingUpgrade={showUpgradeConfirm ? pendingUpgrade : null}
-          upgrading={upgrading}
-          upgradeErr={upgradeErr}
-          onCancel={() => {
-            setShowUpgradeConfirm(false);
-            setPendingUpgrade(null);
-            setUpgradeErr(null);
-          }}
-          onConfirm={() => void handleUpgradeConfirm()}
-        />
 
         {/* ── Source filter tabs: 本地工作流 vs 在线工作流 ── */}
         <FilterTabs

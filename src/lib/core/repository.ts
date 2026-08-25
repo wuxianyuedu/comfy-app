@@ -687,6 +687,8 @@ export class WorkflowTemplateRepository extends PrismaRepository<
     sourcePath?: string | null;
     sourceChecksum?: string | null;
     sourceMtime?: number | null;
+    modes?: string[];
+    defaultMode?: string | null;
   }): Promise<WorkflowTemplate> {
     return prisma.workflowTemplate.create({
       data: {
@@ -700,6 +702,10 @@ export class WorkflowTemplateRepository extends PrismaRepository<
         sourcePath: input.sourcePath ?? undefined,
         sourceChecksum: input.sourceChecksum ?? undefined,
         sourceMtime: input.sourceMtime ?? undefined,
+        modes: input.modes?.length
+          ? JSON.stringify(input.modes)
+          : undefined,
+        defaultMode: input.defaultMode ?? undefined,
       },
     });
   }

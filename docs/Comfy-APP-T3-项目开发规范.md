@@ -187,7 +187,7 @@ git -c core.autocrlf=false -c filter.lfs.process= -c filter.lfs.clean= -c filter
 ### 6.3 构建与缓存
 
 - 指纹策略：清缓存仅依据构建配置（`next.config.js`/`tsconfig.json`/`package.json`/`pnpm-lock.yaml`），**禁止纳入源码目录 hash**——Turbopack 增量编译 + HMR 已处理源码改动，清缓存会导致每次改代码全量重编译慢 30~60s。
-- 启动脚本统一走 `scripts/dev-launcher.ps1`（Job 对象管理进程树、按端口精准清理残留、日志落 `.workbuddy/log/`）。
+- 启动脚本统一走 `scripts/dev-launcher.ps1`（Job 对象管理进程树、按端口精准清理残留、日志落项目根目录 `log/`：本次运行写入 `log/dev-launcher.log`，完整追加到 `log/dev-launcher-YYYY-MM-DD.log`）。
 
 ---
 

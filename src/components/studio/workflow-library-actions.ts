@@ -11,20 +11,7 @@ import { api } from "~/trpc/react";
 import { useToast } from "@/components/studio/toast-provider";
 import type { WorkflowRow } from "./workflow-library-helpers";
 
-export interface PendingUpgrade {
-  cardId: string;
-  cardName: string;
-  apiJson: object;
-  apiJsonText: string;
-  nodeCount: number;
-}
-
 export interface UseWorkflowActionsArgs {
-  pendingUpgrade: PendingUpgrade | null;
-  setUpgrading: (v: boolean) => void;
-  setUpgradeErr: (v: string | null) => void;
-  setShowUpgradeConfirm: (v: boolean) => void;
-  setPendingUpgrade: (v: PendingUpgrade | null) => void;
   setDeleting: (v: boolean) => void;
   setPendingDelete: (v: { id: string; name: string } | null) => void;
   setImportErr: (v: string) => void;
@@ -44,11 +31,6 @@ export interface UseWorkflowActionsArgs {
 
 export function useWorkflowActions(args: UseWorkflowActionsArgs) {
   const {
-    pendingUpgrade,
-    setUpgrading,
-    setUpgradeErr,
-    setShowUpgradeConfirm,
-    setPendingUpgrade,
     setDeleting,
     setPendingDelete,
     setImportErr,
@@ -64,27 +46,6 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     utils,
   } = args;
   const toast = useToast();
-
-  const handleUpgradeConfirm = useCallback(async () => {
-    if (!pendingUpgrade) return;
-    setUpgrading(true);
-    setUpgradeErr(null);
-    try {
-      await updateMut.mutateAsync({
-        id: pendingUpgrade.cardId,
-        upgradeFromApi: pendingUpgrade.apiJson,
-      });
-      setShowUpgradeConfirm(false);
-      setPendingUpgrade(null);
-      // Refresh the list so the badge recomputes (apiOrigin "derived"→"user").
-      await load();
-      toast.success("已升级为真实 API 格式", "graph 已更新 · rawJson 保留");
-    } catch (err: any) {
-      setUpgradeErr(err?.message ?? "网络错误");
-    } finally {
-      setUpgrading(false);
-    }
-  }, [pendingUpgrade, load, toast, setUpgrading, setUpgradeErr, updateMut, setShowUpgradeConfirm, setPendingUpgrade]);
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -138,9 +99,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     [setWorkflows, updateMut, toast, load]
   );
 
-  /** 2026-08-11 R38: download a single workflow's API OR RAW JSON. */
+  /** 下载当前工作流 JSON（只有一种格式，直接下载 graph）。 */
   const downloadJson = useCallback(
-    async (id: string, name: string, kind: "api" | "raw") => {
+    async (id: string, name: string) => {
       setBundleBusy(id);
       try {
         const d = await utils.workflow.detail.fetch({ id });
@@ -149,12 +110,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           toast.error("获取工作流失败", "未知错误");
           return;
         }
-        const payload = kind === "api" ? tpl.graph ?? null : tpl.rawJson ?? null;
+        const payload = tpl.graph ?? null;
         if (payload == null) {
-          toast.error(
-            `${kind.toUpperCase()} 不可用`,
-            kind === "raw" ? "该工作流未保存 RAW 格式" : "graph 为空"
-          );
+          toast.error("下载失败", "graph 为空");
           return;
         }
         const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -163,12 +121,12 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `${tpl.name ?? name}.${kind}.json`;
+        a.download = `${tpl.name ?? name}.json`;
         a.click();
         URL.revokeObjectURL(url);
         toast.success(
-          `已下载 ${kind.toUpperCase()}`,
-          `${tpl.name ?? name}.${kind}.json`
+          "已下载工作流",
+          `${tpl.name ?? name}.json`
         );
       } catch (e: any) {
         toast.error("下载失败", e?.message ?? "网络错误");
@@ -231,7 +189,6 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
   );
 
   return {
-    handleUpgradeConfirm,
     handleDelete,
     patchModes,
     patchModelTags,

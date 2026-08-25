@@ -33,15 +33,13 @@ export interface BuildInitialNodesCtx {
   >;
   outSlotNameById: Record<string, string[]>;
   paramMap: Record<string, string>;
-  viewMode: "raw" | "api";
-  apiLayoutOverrides: Record<string, [number, number]>;
   onEnterSubgraph?: (id: string, classType: string, title: string) => void;
 }
 
 export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   const {
     detail, scopeDetail, rawMetaById, outSlotNameById,
-    paramMap, viewMode, apiLayoutOverrides, onEnterSubgraph,
+    paramMap, onEnterSubgraph,
   } = ctx;
 
     if (!detail) return [];
@@ -576,27 +574,13 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
      *  gives a chaotic result because the auto-layout assumes a
      *  blank canvas — half-placed nodes disrupt the longest-path
      *  levels and produce a worse-looking fallback. */
-    // 2026-08-12 R78.2: 视图模式决定中部图节点的布局来源。
-    //  - "api": 强制 Kahn 拓扑布局（忽略 rawJson 导入位置，呈现执行图形态）；
-    //           叠加会话级 apiLayoutOverrides（API 视图下的拖拽，不写 DB）。
-    //  - "raw": 优先用 detail.positions（已含 rawJson 原始位置 + 用户拖拽覆盖），
-    //           不足时退回 Kahn（API-only 导入的历史兜底行为）。
+    // 2026-08-25: 单一格式（不再区分 RAW / API 视图）。节点布局优先使用
+    // detail.positions（已含 rawJson 原始位置 + 用户拖拽覆盖），不足时退回
+    // Kahn 拓扑自动布局兜底。
     const kahn = computeKahnLayout(realNodes, scopeDetail.graph ?? {}, colW, rowH, padX, padY);
 
-    if (viewMode === "api") {
-      const middleNodes = realNodes.map((realNode) =>
-{
-        const ov = apiLayoutOverrides[realNode.id];
-        const pos = ov ? { x: ov[0], y: ov[1] } : kahn[realNode.id] ?? { x: padX, y: padY };
-        return realNode.is_subgraph ? buildSubgraphNode(realNode, pos) : buildWfNode(realNode, pos);
-      });
-      const middlePosById = Object.fromEntries(
-        middleNodes.map((middleNode) => [middleNode.id, middleNode.position])
-      ) as Record<string, { x: number; y: number }>;
-      return [...groupNodes, ...noteNodes, ...middleNodes, ...layoutBoundaryPins(middlePosById)];
-    }
-
     const positionsCount = Object.keys(scopeDetail.positions ?? {}).length;
+
     const useSavedPositions =
       scopeDetail.positions != null &&
       positionsCount > 0 &&

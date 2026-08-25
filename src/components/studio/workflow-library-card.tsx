@@ -2,17 +2,12 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
-import { Icon } from "@/components/ui/Icon";
 import { MultiModeSelect } from "@/components/studio/ui/MultiModeSelect";
 import { WorkflowIOThumb } from "./workflow-library-helpers";
 import type { WorkflowRow } from "./workflow-library-helpers";
 
 export interface WorkflowCardProps {
   w: any;
-  dragOverCardId: string | null;
-  onCardDragOver: (e: any, id: any) => void;
-  onCardDragLeave: (e: any, id: any) => void;
-  onCardDrop: (e: any, id: any) => void | Promise<void>;
   isTechnicalName: (name: any) => boolean;
   normalizeTaskType: (t: any) => string;
   patchModes: (...args: any[]) => void;
@@ -39,10 +34,6 @@ export interface WorkflowCardProps {
 export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCardProps) {
   const {
     w,
-    dragOverCardId,
-    onCardDragOver,
-    onCardDragLeave,
-    onCardDrop,
     isTechnicalName,
     normalizeTaskType,
     patchModes,
@@ -74,25 +65,8 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
       key={w.id}
       data-workflow-id={w.id}
       data-card-id={w.id}
-      className={`group relative flex flex-col rounded-2xl border bg-white/[0.02] p-4 transition-all hover:border-violet-500/30 hover:bg-white/[0.04] ${
-        dragOverCardId === w.id
-          ? "border-cyan-400/70 ring-2 ring-cyan-400/40 shadow-[0_0_0_4px_rgba(34,211,238,0.12)]"
-          : "border-white/[0.06]"
-      }`}
-      onDragOver={(event) => onCardDragOver(event, w)}
-      onDragLeave={(event) => onCardDragLeave(event, w)}
-      onDrop={(event) => void onCardDrop(event, w)}
+      className="group relative flex flex-col rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 transition-all hover:border-violet-500/30 hover:bg-white/[0.04]"
     >
-      {/* 2026-08-12 R76: drag-to-upgrade overlay. Pointer-events-none so the
-          drop handler still fires on the card; only lights up when this card
-          is the actual drag target. */}
-      {dragOverCardId === w.id && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl bg-cyan-500/[0.08] backdrop-blur-[1px]">
-          <Icon name="upload" size={22} className="mb-1 text-cyan-300" />
-          <p className="text-[12px] font-medium text-cyan-100">拖到这里升级为真实 API</p>
-          <p className="mt-0.5 text-[10px] text-cyan-200/70">rawJson 保留 · 仅替换 graph</p>
-        </div>
-      )}
       {/* 2026-08-16 R-ardot85: 工作流标题上移到预览之上 + outer click 拆除。
           卡片背景不再直接进入 WorkflowCanvasEditor，编辑入口只剩 footer
           中的「编辑」按钮（紫字）。原 `cursor-pointer` + `onClick={() =>
@@ -180,50 +154,7 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
             - RAW 仅作为「额外保留了原始 UI 格式」的提示，与可用性无关。
             - !hasApi && hasRaw 时加 ⚠ 仅 RAW + ring ring-red-500/30，
               明确告知「此工作流不可用」并给出后续导出指引。
-            - apiOrigin === "derived" 时 API 徽章旁挂「派生」角标。 */}
-        {(() => {
-          const { hasApi, hasRaw, apiOrigin } = deriveFormatFlags(w);
-          return (
-            <>
-              {hasApi && (
-                <span
-                  className="flex items-center gap-1 rounded-md bg-sky-500/15 px-2 py-0.5 text-[11px] font-medium text-sky-300"
-                  title={
-                    apiOrigin === "derived"
-                      ? "API 格式：由原始 (RAW) 工作流自动转换而来的派生 API，用于执行。节点坐标与连接已自动构造。"
-                      : "API 格式：你从 ComfyUI 的「导出(API 格式)」拿到的可执行格式（graph）。"
-                  }
-                >
-                  API
-                  {apiOrigin === "derived" && (
-                    <span
-                      className="rounded bg-sky-500/25 px-1 text-[9px] font-semibold uppercase tracking-wide text-sky-200"
-                      title="派生 · 由 RAW 自动转换，并非来自 ComfyUI 的 API 格式导出"
-                    >
-                      派生
-                    </span>
-                  )}
-                </span>
-              )}
-              {hasRaw && (
-                <span
-                  className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300"
-                  title="原始格式（可选，保留节点坐标）"
-                >
-                  RAW
-                </span>
-              )}
-              {!hasApi && hasRaw && (
-                <span
-                  className="rounded-md bg-red-500/15 px-2 py-0.5 text-[11px] font-semibold text-red-300 ring-1 ring-red-500/30"
-                  title="仅有原始 UI 格式，graph 为空。需在 ComfyUI 中右键 → Save (API Format) 重新导出后再使用"
-                >
-                  ⚠ 仅 RAW
-                </span>
-              )}
-            </>
-          );
-        })()}
+              一个工作流只保留一种格式，不再显示 API / RAW 区分徽章。 */}
         {(w.source ?? (w.sourcePath ? "local" : "online")) === "local" ? (
           <span
             className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-300"
@@ -428,44 +359,18 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
           >
             删除
           </button>
-          {/* 2026-08-11 R38: download was a single `下载合并包` button
-              producing a `{ api, raw, name, taskType }` packed blob.
-              User feedback — too coarse; users want to download ONE
-              format at a time.  Split into `下载API` + `下载RAW`; the
-              RAW button disables itself when the row has no rawJson
-              (`hasRaw === false` from `deriveFormatFlags`).  Filename
-              pattern: `{name}.api.json` / `{name}.raw.json`. */}
-          {(() => {
-            const { hasRaw } = deriveFormatFlags(w);
-            return (
-              <>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void downloadJson(w.id, w.name, "api");
-                  }}
-                  disabled={bundleBusy === w.id}
-                  className="text-xs font-medium text-emerald-300 transition-colors hover:text-emerald-200 disabled:opacity-50"
-                  title="下载 API 格式 JSON（即 graph，可直接执行）"
-                >
-                  {bundleBusy === w.id ? "下载中…" : "下载API"}
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void downloadJson(w.id, w.name, "raw");
-                  }}
-                  disabled={bundleBusy === w.id || !hasRaw}
-                  className="text-xs font-medium text-emerald-300 transition-colors hover:text-emerald-200 disabled:opacity-40"
-                  title={hasRaw ? "下载原始 workflow JSON（保留节点坐标）" : "该工作流未保存 RAW 格式"}
-                >
-                  下载RAW
-                </button>
-              </>
-            );
-          })()}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              void downloadJson(w.id, w.name);
+            }}
+            disabled={bundleBusy === w.id}
+            className="text-xs font-medium text-emerald-300 transition-colors hover:text-emerald-200 disabled:opacity-50"
+            title="下载工作流 JSON"
+          >
+            {bundleBusy === w.id ? "下载中…" : "下载"}
+          </button>
         </div>
         {/* 2026-08-15 模型标签绑定 popover（portal 到 body，逃出卡片/滚动裁剪） */}
         {assigningId === w.id && assignRect && createPortal(

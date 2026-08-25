@@ -236,9 +236,22 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
           S
         </span>
         <span
-          className="min-w-0 flex-1 truncate text-[12px] font-semibold tracking-wide"
+          role="button"
+          tabIndex={0}
+          onClick={(event) => {
+            event.stopPropagation();
+            data.onEnter?.();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.stopPropagation();
+              data.onEnter?.();
+            }
+          }}
+          className="min-w-0 flex-1 cursor-pointer truncate text-[12px] font-semibold tracking-wide hover:text-white"
           style={{ color: "#E2E2EA" }}
-          title={data.title || "子工作流"}
+          title="点击进入子工作流"
         >
           {data.title || "子工作流"}
         </span>

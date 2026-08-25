@@ -12,14 +12,12 @@ export interface WorkflowPersistenceArgs {
   detail: WorkflowDetail | null;
   setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
   scopeDetail: WorkflowDetail | null;
-  viewMode: "raw" | "api";
   setNodes: Dispatch<SetStateAction<Node[]>>;
   paramMap: Record<string, string>;
   workflowIO: Record<string, WorkflowIOParam>;
   fitToMiddle: () => void;
   savePatch: ReturnType<typeof api.workflow.update.useMutation>;
   subgraphStack: { uid: string; name: string }[];
-  setApiLayoutOverrides: Dispatch<SetStateAction<Record<string, [number, number]>>>;
   onSave?: () => void;
   onClose: () => void;
   setSaving: Dispatch<SetStateAction<boolean>>;
@@ -35,14 +33,12 @@ export function useWorkflowPersistence({
   detail,
   setDetail,
   scopeDetail,
-  viewMode,
   setNodes,
   paramMap,
   workflowIO,
   fitToMiddle,
   savePatch,
   subgraphStack,
-  setApiLayoutOverrides,
   onSave,
   onClose,
   setSaving,
@@ -72,14 +68,14 @@ export function useWorkflowPersistence({
     /* 2026-08-13 R82: RAW / API 视图各有独立基线。RAW 视图按 rawView 的节点/
      *  位置快照，API 视图按 API 图的快照，互不干扰（避免 RAW 重置时误还原 API
      *  坐标，反之亦然）。 */
-    const snapKey = `${detail.id}:${viewMode}`;
+    const snapKey = `${detail.id}`;
     if (!(snapKey in originalLayoutByIdRef.current)) {
       originalLayoutByIdRef.current[snapKey] = {
         positions: scopeDetail?.positions ?? null,
         notes: scopeDetail?.notes ?? null,
       };
     }
-  }, [detail?.id, viewMode, scopeDetail]);
+  }, [detail?.id, scopeDetail]);
 
   /* Reset every node back to the layout as originally loaded for this view.
    *  - Restore `detail.positions` + `detail.notes` to the snapshot taken
@@ -106,7 +102,7 @@ export function useWorkflowPersistence({
   const resetLayout = useCallback(() => {
     if (!detail) return;
     if (!scopeDetail) return;
-    const snapKey = `${detail.id}:${viewMode}`;
+    const snapKey = `${detail.id}`;
     const snap = originalLayoutByIdRef.current[snapKey] ?? null;
     const orig = snap?.positions ?? null;
     const origNotes = snap?.notes ?? null;
@@ -151,7 +147,7 @@ export function useWorkflowPersistence({
       mergePositions: payload.merge === true,
     });
     requestAnimationFrame(() => requestAnimationFrame(() => fitToMiddle()));
-  }, [detail?.id, subgraphStack.length, workflowId, viewMode, scopeDetail, fitToMiddle, savePatch]);
+  }, [detail?.id, subgraphStack.length, workflowId, scopeDetail, fitToMiddle, savePatch]);
 
   /* Re-sync nodes when paramMap changes (update assignedRole badges) */
   useEffect(() => {
@@ -246,13 +242,8 @@ export function useWorkflowPersistence({
             notes: [{ id: noteId, pos: [x, noteY] }],
           });
         } else {
-          /* 2026-08-12 R78.2: API 视图下的图节点拖拽只存会话级 override，
-           * 不写 DB —— 保护 rawJson / tpl.positions 里的 ComfyUI 原始布局。
-           * RAW 视图照旧写回 detail.positions。 */
-          if (viewMode === "api") {
-            setApiLayoutOverrides((prev) => ({ ...prev, [node.id]: [x, y] }));
-            return;
-          }
+          /* 2026-08-25: 单一格式（不再区分 RAW / API 视图），图节点拖拽统一
+           * 写回 detail.positions（覆盖 ComfyUI 原始布局）。 */
           const nodeId = node.id;
           setDetail((prev) =>
             prev ? { ...prev, positions: { ...(prev.positions ?? {}), [nodeId]: [x, y] } } : prev
@@ -276,7 +267,7 @@ export function useWorkflowPersistence({
           });
         }
       },
-      [workflowId, subgraphStack.length, viewMode, setApiLayoutOverrides, savePatch]
+      [workflowId, subgraphStack.length, savePatch]
     );
 
   return { resetLayout, handleSave, onNodeDragStop };

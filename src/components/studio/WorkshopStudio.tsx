@@ -154,10 +154,10 @@ export function WorkshopStudio() {
             <LLMStatusChip />
             <LLMSettingsButton />
             <Link
-              href="/create"
+              href="/workspace"
               className="rounded-lg border border-border px-3 py-2 text-sm text-muted hover:bg-subtle"
             >
-              前往自由创作 →
+              前往创作空间 →
             </Link>
           </div>
         </div>

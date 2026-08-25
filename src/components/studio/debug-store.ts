@@ -7,7 +7,6 @@
  *  - wf-* 工作流画布（WorkflowNode，src/components/studio/wf-*）
  *  - canvas/ 项目画布（CanvasNode，ProjectCanvas + canvas/*）
  *  - workflow-canvas 节点画布（ComfyNode）
- *  - GraphPreview 只读节点画布（MiniWfNode）
  *
  * 打开后，各画布节点卡片底部叠加显示「渲染链路模块标签」，
  * 便于开发时快速定位某个节点卡片对应本项目哪些代码模块。

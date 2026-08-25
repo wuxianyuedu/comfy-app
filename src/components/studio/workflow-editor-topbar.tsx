@@ -1,6 +1,6 @@
 "use client";
 /* Extracted from wf-editor-inner.tsx (P4 refactor).  The editor's top bar:
- * breadcrumb, stats, RAW/API view switch, IO toggles, JSON viewer, reset
+ * breadcrumb, stats, IO toggles, JSON viewer, reset
  * and save buttons.  IO-related state is read straight from the Zustand
  * IOEditStore (getIOEditApi / useIOEditStore) — same pattern as
  * WorkflowEditorBody — so only workflow/view/nav props are threaded in. */
@@ -26,9 +26,6 @@ export interface WorkflowEditorTopBarProps {
   fetchDetail: (opts?: { subgraphUid?: string; parentTitle?: string; bust?: boolean }) => Promise<void>;
   onExitSubgraph: () => void;
   forceReloadDetail: () => void;
-  viewMode: "raw" | "api";
-  setViewMode: React.Dispatch<React.SetStateAction<"raw" | "api">>;
-  setApiLayoutOverrides: React.Dispatch<React.SetStateAction<Record<string, [number, number]>>>;
   setViewJsonOpen: React.Dispatch<React.SetStateAction<boolean>>;
   resetLayout: () => void;
   handleSave: () => void;
@@ -45,9 +42,6 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   fetchDetail,
   onExitSubgraph,
   forceReloadDetail,
-  viewMode,
-  setViewMode,
-  setApiLayoutOverrides,
   setViewJsonOpen,
   resetLayout,
   handleSave,
@@ -232,46 +226,11 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* 2026-08-12 R78.2: 主画布 RAW / API 视图切换。
-           *  - "raw" = ComfyUI 原始布局（detail.positions，已含 rawJson 位置）
-           *  - "api" = 执行图拓扑自动布局（detail.graph），与导入位置无关
-           *  两者都渲染同一批可编辑节点 + 同一套连线，仅位置不同。 */}
-          <div className="flex items-center rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
-            <button
-              type="button"
-              onClick={() => {
-                setViewMode("raw");
-                setApiLayoutOverrides({});
-              }}
-              className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
-                viewMode === "raw"
-                  ? "bg-violet-500/90 text-white shadow"
-                  : "text-gray-400 hover:text-gray-200"
-              }`}
-              title="RAW 布局：按 rawJson 原始位置（ComfyUI 画布布局）排布节点"
-            >
-              RAW 布局
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setViewMode("api");
-                setApiLayoutOverrides({});
-              }}
-              className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
-                viewMode === "api"
-                  ? "bg-cyan-500/90 text-white shadow"
-                  : "text-gray-400 hover:text-gray-200"
-              }`}
-              title="API 布局：按执行图拓扑自动排布节点（忽略 rawJson 导入位置）"
-            >
-              API 布局
-            </button>
-          </div>
+          {/* 2026-08-25: 单一格式（不再区分 RAW / API 视图），节点布局统一由
+           *  detail.positions 决定；RAW / API 切换 UI 已移除。 */}
           {/* 2026-08-24: 调试模式 — 节点卡片叠加显示渲染链路模块标签。
-           *  读写全局 debug-store（与项目画布共用同一开关）；沿用 RAW/API
-           *  view switch 的紫色 pill 风格，激活态高亮。开启后 wf-node 卡片
-           *  底部渲染 DebugChainFooter。 */}
+           *  读写全局 debug-store（与项目画布共用同一开关），激活态高亮。
+           *  开启后 wf-node 卡片底部渲染 DebugChainFooter。 */}
           <button
             type="button"
             onClick={toggleDebugMode}

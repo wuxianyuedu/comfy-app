@@ -51,3 +51,6 @@ build_log*.txt
 # generated & temp
 /generated/
 /temp/
+/.workbuddy/log/
+/.workbuddy/temp/
+/.workbuddy/tmp/

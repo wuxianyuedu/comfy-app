@@ -335,6 +335,8 @@ export const workflowRouter = createTRPCRouter({
       z.object({
         name: z.string().max(200).optional(),
         taskType: z.string().optional(),
+        modes: z.array(z.string()).optional(),
+        defaultMode: z.string().nullable().optional(),
         format: z.enum(["raw", "api"]).nullable().optional(),
         graph: z.any().optional(),
         raw: z.any().optional(),
@@ -369,10 +371,16 @@ export const workflowRouter = createTRPCRouter({
           typeof body.name === "string" && body.name.trim()
             ? body.name.trim()
             : fallbackName;
-        const tpl = await workflowTemplateRepository.createImported({
+        const modes = Array.isArray(body.modes) && body.modes.length > 0
+          ? body.modes as string[]
+          : undefined;
+      const defaultMode = typeof body.defaultMode === "string" && body.defaultMode
+          ? body.defaultMode
+          : modes?.[0];
+      const tpl = await workflowTemplateRepository.createImported({
           userId: ctx.user.id,
           name,
-          taskType: imported.taskType,
+          taskType: defaultMode ?? imported.taskType,
           graph: imported.apiGraph,
           paramMap: imported.paramMap,
           rawJson: imported.rawJson,
@@ -380,6 +388,8 @@ export const workflowRouter = createTRPCRouter({
           sourcePath: imported.sourcePath,
           sourceChecksum: imported.sourceChecksum,
           sourceMtime: imported.sourceMtime,
+          modes,
+          defaultMode,
         });
         return {
           id: tpl.id,
@@ -448,7 +458,14 @@ export const workflowRouter = createTRPCRouter({
       }
 
       const name = String(body.name ?? "未命名工作流").slice(0, 80);
-      let taskType = String(body.taskType ?? "");
+      const modes = Array.isArray(body.modes) && body.modes.length > 0
+          ? body.modes as string[]
+          : undefined;
+      const explicitDefaultMode = typeof body.defaultMode === "string" && body.defaultMode
+          ? body.defaultMode
+          : undefined;
+      const defaultMode = explicitDefaultMode ?? modes?.[0];
+      let taskType = defaultMode ?? String(body.taskType ?? "");
       if (taskType) {
         taskType = normalizeTaskType(taskType);
       }
@@ -465,6 +482,8 @@ export const workflowRouter = createTRPCRouter({
         paramMap,
         rawJson: rawJson ?? undefined,
         positions: positions ?? undefined,
+        modes,
+        defaultMode,
       });
       return {
         id: tpl.id,

@@ -28,7 +28,6 @@ export interface WorkflowDerivedData {
  */
 export function useWorkflowDerivedData(
   detail: WorkflowDetail | null,
-  viewMode: "raw" | "api",
 ): WorkflowDerivedData {
   const rawMetaById: Record<string, RawNodeMeta> = useMemo(() => {
     const m: Record<string, RawNodeMeta> = {};
@@ -53,7 +52,7 @@ export function useWorkflowDerivedData(
    *  会叠加在最上层，使 RAW 视图的手动拖拽无需重新拉取即生效。 */
   const scopeDetail: WorkflowDetail | null = useMemo(() => {
     if (!detail) return null;
-    if (viewMode === "raw" && detail.rawView) {
+    if (detail.rawView) {
       const rawIds = new Set(detail.rawView.nodes.map((node) => node.id));
       const overrides: Record<string, [number, number]> = {};
       const dp = detail.positions ?? {};
@@ -68,7 +67,7 @@ export function useWorkflowDerivedData(
       };
     }
     return detail;
-  }, [detail, viewMode]);
+  }, [detail]);
 
   const outSlotNameById: Record<string, string[]> = useMemo(() => {
     if (!scopeDetail) return {};

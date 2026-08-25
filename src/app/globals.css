@@ -61,10 +61,23 @@
 
 html,
 body {
-  background-color: var(--color-bg);
+  /* 2026-08-25: force a dark base so the window never flashes WHITE while
+     the Tauri webview is resized (the OS repaints the freshly-exposed area
+     before the page reflows).  `.dark` still toggles the component-level
+     design tokens below; this only guarantees the root surface is dark. */
+  background-color: #0a0a0f;
   color: var(--color-ink);
+  color-scheme: dark;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Fill the viewport even before the app's root containers mount, so a
+   drag-resize never reveals a default white/light gap behind the UI. */
+html,
+body {
+  height: 100%;
+  width: 100%;
 }
 
 /* Thin, modern scrollbar */
@@ -136,6 +149,18 @@ textarea::-webkit-scrollbar {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
+  /* 2026-08-25 (#55): the workspace status bar is fixed bottom-0 z-[100]
+     and overlaps the bottom-left controls.  Lift the controls (and keep
+     them in their own local z-order above the pane) so they stay clickable. */
+  bottom: 30px !important;
+  z-index: 60 !important;
+}
+
+/* 2026-08-25 (#55): same lift for the MiniMap (bottom-right) so it isn't
+   covered by the workspace status bar either. */
+.react-flow__minimap {
+  bottom: 30px !important;
+  z-index: 60 !important;
 }
 .react-flow__controls-button {
   width: 28px !important;
@@ -262,3 +287,9 @@ textarea::-webkit-scrollbar {
 .json-view.jv-theme-comfy .json-view--brace,
 .json-view.jv-theme-comfy .json-view--colon   { color: #71717a; }
 .json-view.jv-theme-comfy .jv-chevron path    { fill: #71717a; }
+
+/* Custom dark scrollbar for log panel / overflow containers */
+.custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }

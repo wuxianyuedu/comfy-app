@@ -11,7 +11,6 @@ import { getSessionCookie } from "better-auth/cookies";
  */
 
 const PROTECTED_PREFIXES = [
-  "/create",
   "/me",
   "/models",
   "/settings",

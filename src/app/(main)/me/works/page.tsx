@@ -46,9 +46,8 @@ export default function MyWorks() {
             const st = STATUS[task.status] ?? STATUS.QUEUED!;
             const wf = getWorkflow(task.workflowName)?.label ?? task.workflowName;
             return (
-              <Link
+              <div
                 key={task.id}
-                href={`/create/${task.id}`}
                 className="group overflow-hidden rounded-2xl border border-border bg-surface transition-colors hover:border-primary"
               >
                 <div className="relative aspect-square bg-bg">
@@ -78,7 +77,7 @@ export default function MyWorks() {
                   </div>
                   <p className="line-clamp-2 text-xs text-muted">{task.prompt}</p>
                 </div>
-              </Link>
+              </div>
             );
           })}
         </div>

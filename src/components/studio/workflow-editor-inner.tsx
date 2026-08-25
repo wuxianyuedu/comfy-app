@@ -243,59 +243,21 @@ function WorkflowEditorBody({
     detailRef.current = detail;
   }, [detail]);
 
-  /* 2026-08-11 R42 → R43: 喂给 SourceModal 的数据派生。
-   *  - 顶层 detail: 直接读 `detail.graph / detail.rawJson`
-   *  - sub 视图 (subgraphStack.length > 0): 优先从 `subgraphRawContext` 缓存的
-   *    父 rawJson 中切 `definitions.subgraphs[subUid]` 作为 sub 的 RAW;
-   *    若父不是 RAW 导入 (无 sub-definition)，**fallback 用 `detail.graph`
-   *    本身** — sub 自己的 API graph 本身就是 LiteGraph JSON 节点视图，
-   *    不应该让 modal 出现"无 RAW"的死角。
-   *  - `isSubgraph` + `isSubRawFromParent` 传给 modal 用于文案区分
-   *    "父级真切片 / sub API 派生 / API-only 顶层" 三种情况。 */
+  /* 2026-08-25 简化：单一格式，SourceModal 只展示 graph。
+   * 顶层与 sub 视图统一取 graph；isSubgraph 仅用于文案区分。 */
   const sourceModalData = useMemo<{
     name: string;
     graph: unknown;
-    rawJson: unknown;
     isSubgraph: boolean;
-    /* 仅当 isSubgraph=true 时有意义: true=从父 rawJson 切的真 sub-definition;
-     * false=从 sub API graph 派生 fallback */
-    isSubRawFromParent: boolean;
   } | null>(() => {
     if (!detail) return null;
     const isSubgraphView = subgraphStack.length > 0;
-    if (!isSubgraphView) {
-      return {
-        name: detail.name ?? "工作流",
-        graph: detail.graph,
-        rawJson: detail.rawJson ?? null,
-        isSubgraph: false,
-        isSubRawFromParent: false,
-      };
-    }
-    // sub 视图: 优先切父 rawJson; 兜底用 sub 自己的 graph
-    const ctx = subgraphRawContext;
-    if (ctx) {
-      const subs = (ctx.parentRawJson as { definitions?: { subgraphs?: Record<string, unknown> } } | null)
-        ?.definitions?.subgraphs;
-      if (subs && Object.prototype.hasOwnProperty.call(subs, ctx.subUid)) {
-        return {
-          name: detail.name ?? "工作流",
-          graph: detail.graph,
-          rawJson: subs[ctx.subUid],
-          isSubgraph: true,
-          isSubRawFromParent: true,
-        };
-      }
-    }
-    // fallback: 把 sub 自己的 API 当 RAW —— sub 本身就是 LiteGraph JSON
     return {
       name: detail.name ?? "工作流",
       graph: detail.graph,
-      rawJson: detail.graph,
-      isSubgraph: true,
-      isSubRawFromParent: false,
+      isSubgraph: isSubgraphView,
     };
-  }, [detail, subgraphStack.length, subgraphRawContext]);
+  }, [detail, subgraphStack.length]);
 
   /* After fitView completes, lock the viewport onto the middle (real
    *  WorkflowNode / WorkflowSubgraph / wfNote / wfGroup) nodes.  We (a) run
@@ -427,12 +389,11 @@ function WorkflowEditorBody({
   /* Hoisted raw meta + slot-name table — also referenced from the edges
    * useEffect below, so we keep them at component scope (not inside the
    * initialNodes memo). */
-  const [viewMode, setViewMode] = useState<"raw" | "api">("raw");
-  const [apiLayoutOverrides, setApiLayoutOverrides] = useState<Record<string, [number, number]>>({});
+  /* 2026-08-25: 单一格式，移除 RAW/API viewMode 与 apiLayoutOverrides 状态 */
 
   /* Derived lookups: raw-node metadata map, view-scoped detail (RAW / API),
    * and per-node output-slot names. */
-  const { rawMetaById, scopeDetail, outSlotNameById } = useWorkflowDerivedData(detail, viewMode);
+  const { rawMetaById, scopeDetail, outSlotNameById } = useWorkflowDerivedData(detail);
 
   /* P2: 把 detail 派生的查找上下文同步进 viewer / rgthree store，让
    * getNodeJson/getNodeView/getBypass 读到实时 detail（等价于旧 Context
@@ -461,12 +422,10 @@ function WorkflowEditorBody({
         rawMetaById,
         outSlotNameById,
         paramMap,
-        viewMode,
-        apiLayoutOverrides,
         onEnterSubgraph,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [detail, scopeDetail, rawMetaById, outSlotNameById, paramMap, viewMode, apiLayoutOverrides, onEnterSubgraph]
+    [detail, scopeDetail, rawMetaById, outSlotNameById, paramMap, onEnterSubgraph]
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -502,14 +461,12 @@ function WorkflowEditorBody({
     detail,
     setDetail,
     scopeDetail,
-    viewMode,
     setNodes,
     paramMap,
     workflowIO,
     fitToMiddle,
     savePatch,
     subgraphStack,
-    setApiLayoutOverrides,
     onSave,
     onClose,
     setSaving,
@@ -573,9 +530,6 @@ function WorkflowEditorBody({
           fetchDetail={fetchDetail}
           onExitSubgraph={onExitSubgraph}
           forceReloadDetail={forceReloadDetail}
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          setApiLayoutOverrides={setApiLayoutOverrides}
           setViewJsonOpen={setViewJsonOpen}
           resetLayout={resetLayout}
           handleSave={handleSave}

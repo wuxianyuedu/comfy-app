@@ -94,6 +94,54 @@ function formatTime(ts: number): string {
   });
 }
 
+const LOG_LINE_RE = /^\[(\d{2}):(\d{2}):(\d{2})\]\s*\[(STEP|OK|INFO|WARN|ERROR|DEBUG)\]\s*(.*)$/;
+
+function parseLogLevel(level: string): LogLevel {
+  switch (level.toLowerCase()) {
+    case "error":
+      return "error";
+    case "warn":
+    case "warning":
+      return "warn";
+    case "debug":
+      return "debug";
+    default:
+      return "info";
+  }
+}
+
+function parseFileLogs(text: string): LogEntry[] {
+  const now = Date.now();
+  const today = new Date();
+  const entries: LogEntry[] = [];
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.replace(/\r$/, "");
+    if (!line.trim()) continue;
+    const m = line.match(LOG_LINE_RE);
+    if (m) {
+      const [, hh, mm, ss, lv, msg] = m;
+      const d = new Date(today);
+      d.setHours(Number(hh ?? "0"), Number(mm ?? "0"), Number(ss ?? "0"), 0);
+      entries.push({
+        id: nextId(),
+        time: d.getTime(),
+        level: parseLogLevel(lv ?? "INFO"),
+        message: msg ?? "",
+        source: "system",
+      });
+    } else {
+      entries.push({
+        id: nextId(),
+        time: now,
+        level: "info",
+        message: line,
+        source: "system",
+      });
+    }
+  }
+  return entries;
+}
+
 function formatForClipboard(entries: LogEntry[]): string {
   return entries
     .map((e) => `[${formatTime(e.time)}] [${e.level.toUpperCase()}] ${e.message}`)
@@ -199,6 +247,51 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     void setup();
     return () => unlisten?.();
   }, [addEntry]);
+
+  // ── Load launcher log file: startup logs + ongoing dev-server output ──
+  const fileOffsetRef = useRef(0);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let mounted = true;
+    const POLL_MS = 2000;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/logs/current?offset=${fileOffsetRef.current}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          content: string;
+          size: number;
+          offset: number;
+        };
+        if (!mounted || !data.content) return;
+
+        // 文件被重置（新运行）时 offset 会回 0；此时丢弃旧 offset，完整重读
+        if (data.offset === 0 && fileOffsetRef.current > 0) {
+          fileOffsetRef.current = 0;
+        }
+
+        const entries = parseFileLogs(data.content);
+        if (entries.length > 0) {
+          setLogs((prev) => {
+            const next = [...prev, ...entries];
+            if (next.length > MAX_LOGS) next.splice(0, next.length - MAX_LOGS);
+            return next;
+          });
+        }
+        fileOffsetRef.current = data.size;
+      } catch {
+        // 开发服务器尚未就绪或日志文件不存在时静默忽略
+      }
+    };
+
+    void poll();
+    const id = setInterval(poll, POLL_MS);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, []);
 
   // ── Keyboard shortcut: Ctrl+Shift+L ──
   useEffect(() => {
