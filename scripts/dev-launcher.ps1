@@ -1,7 +1,7 @@
 # dev-launcher.ps1 — 用 Windows Job Object 启动开发服务器
 # 原理：把 npm 进程及其所有子进程挂到同一个 Job 对象上，
 #       并设置「关闭窗口时自动杀掉整个 Job」，从而实现关窗口零残留。
-# 用法：pwsh -ExecutionPolicy Bypass -File scripts\dev-launcher.ps1
+# 用法：pwsh -ExecutionPolicy Bypass -File scripts\dev-launcher.ps1 [-Tauri]
 # 日志：自动写入项目根目录 dev-launcher.log，方便排查问题。
 #
 # 改进（2026-08-04）：启动前按端口「精准」杀掉残留的 dev server，
@@ -12,16 +12,19 @@
 #   一致则保留缓存直接启动（秒起），不一致才清空 .next 全量重编译并写入新指纹。
 #   彻底摆脱「每次启动慢 30~60s」与「编译产物缓存了旧 route.ts / API schema
 #   看不到改动」两个问题。
-# 改进（2026-08-25）：指纹不再包含 src\trpc / src\server 源码目录内容 hash——
-#   源码改动本就由 Turbopack 增量编译 + HMR 处理，无需清缓存；把源码纳入指纹
-#   会导致「每改一行 API 代码就清空 .next 全量重编译」的慢启动。
+# 改进（2026-08-25）：
+#   1) 指纹不再包含 src\trpc / src\server 源码目录内容 hash——源码改动由
+#      Turbopack 增量编译 + HMR 处理，无需清缓存；把源码纳入指纹会导致
+#      「每改一行 API 代码就清空 .next 全量重编译」的慢启动。
+#   2) 日志输出重构：统一 [时间] [级别]（STEP/OK/WARN/ERROR/INFO）格式与
+#      颜色分级，步骤进度 + 启动摘要卡片，终端可读性与日志审计性兼顾。
 #   控制开关（优先级 FORCE_CLEAN > SKIP_CLEAN > 指纹判断）：
 #     - SKIP_CLEAN=1  强制跳过清理（无论指纹如何都保留缓存，最快启动）
 #     - FORCE_CLEAN=1 强制清理（无论指纹如何都清空 .next 全量重编译）
+#     - NO_OPEN=1     不自动打开浏览器
 #   启动 Ready 后会自动打开/聚焦浏览器 http://localhost:3000：
 #     - 普通重启：Next 的 HMR 会自动重载已有标签页，无需手动硬刷；
 #     - 默认启动会带缓存破坏参数开新标签页，避免旧的 stale chunk 残留。
-#   若不想自动开浏览器，设 NO_OPEN=1 即可。
 #   若浏览器已有 Comfy-APP 旧标签页，请顺手关掉（sessionStorage 缓存按 tab
 #   隔离，缓存键版本虽已升到 v2 永久作废旧缓存，但关掉旧 tab 是最直观的保险）。
 
@@ -35,8 +38,32 @@ $ErrorActionPreference = "Stop"
 $logFile = Join-Path $PSScriptRoot "..\dev-launcher.log"
 try { Start-Transcript -Path $logFile -Force -ErrorAction SilentlyContinue } catch {}
 
-function Write-Step($msg) {
-  Write-Host $msg -ForegroundColor DarkGray
+# ── 日志输出：统一 [时间] [级别] 格式，颜色分级 ──
+#   级别：STEP（步骤进度/青）、OK（成功/绿）、WARN（警告/黄）、ERROR（错误/红）、INFO（详情/灰）
+function Write-Log {
+  param(
+    [Parameter(Mandatory = $true)][string]$Message,
+    [ValidateSet("STEP", "OK", "WARN", "ERROR", "INFO")][string]$Level = "INFO"
+  )
+  $color = @{ STEP = "Cyan"; OK = "Green"; WARN = "Yellow"; ERROR = "Red"; INFO = "DarkGray" }[$Level]
+  $time = Get-Date -Format "HH:mm:ss"
+  Write-Host ("[{0}] [{1,-5}] {2}" -f $time, $Level, $Message) -ForegroundColor $color
+}
+
+# ── 启动摘要卡片：标题 + 键值信息，分隔线包裹 ──
+function Show-Summary {
+  param(
+    [Parameter(Mandatory = $true)][string]$Title,
+    [Parameter(Mandatory = $true)][string[]]$Lines
+  )
+  $rule = "─" * 64
+  Write-Host ""
+  Write-Host $rule -ForegroundColor Cyan
+  Write-Host ("  {0}" -f $Title) -ForegroundColor Cyan
+  Write-Host $rule -ForegroundColor Cyan
+  foreach ($line in $Lines) { Write-Host ("  " + $line) -ForegroundColor White }
+  Write-Host $rule -ForegroundColor Cyan
+  Write-Host ""
 }
 
 # ── 启动前清理：按端口精准杀掉残留 dev server（不误伤其它 node 进程）──
@@ -50,7 +77,7 @@ function Stop-ProcessOnPort($port) {
       try {
         $proc = Get-Process -Id $id -ErrorAction SilentlyContinue
         if ($proc) {
-          Write-Host "        [清理] 端口 $port 被 PID $id ($($proc.ProcessName)) 占用，正在终止..." -ForegroundColor Yellow
+          Write-Log ("端口 {0} 被 PID {1} ({2}) 占用，正在终止..." -f $port, $id, $proc.ProcessName) -Level WARN
           # 先尝试优雅退出，再强制
           $proc.CloseMainWindow() | Out-Null
           Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
@@ -62,9 +89,9 @@ function Stop-ProcessOnPort($port) {
   } catch { }
 }
 
-Write-Step "[0/5] 启动前清理：杀掉占用 3000/3001/3002 的旧 dev server..."
+Write-Log "检查端口占用（3000/3001/3002）..." -Level STEP
 foreach ($p in @(3000, 3001, 3002)) { Stop-ProcessOnPort $p }
-Write-Step "        清理完成，将在 3000 端口启动全新实例。"
+Write-Log "端口已就绪，将启动全新实例于 3000" -Level OK
 
 # ── .next 缓存策略：基于「关键配置指纹」决定是否全量重编译 ──
 #     指纹 = SHA256 累积 next.config.js / tsconfig.json / package.json /
@@ -108,40 +135,40 @@ if ($env:FORCE_CLEAN -eq "1") {
     $nextSize = (Get-ChildItem $nextDir -Recurse -File -ErrorAction SilentlyContinue |
                  Measure-Object Length -Sum).Sum
     $sizeMB = if ($nextSize) { [math]::Round($nextSize / 1MB, 1) } else { 0 }
-    Write-Step "[0.5/5] FORCE_CLEAN=1：强制清空 .next（${sizeMB} MB）并全量重编译..."
+    Write-Log ("FORCE_CLEAN=1：强制清空 .next（{0} MB）并全量重编译..." -f $sizeMB) -Level STEP
     Remove-Item -Recurse -Force $nextDir -ErrorAction SilentlyContinue
   } else {
-    Write-Step "[0.5/5] FORCE_CLEAN=1：.next 不存在，无需清理"
+    Write-Log "FORCE_CLEAN=1：.next 不存在，无需清理" -Level INFO
   }
   New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
   Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
-  Write-Step "        已清空 .next 并写入新配置指纹（${fingerprint}）"
+  Write-Log "已清空 .next 并写入新配置指纹" -Level OK
 } elseif ($env:SKIP_CLEAN -eq "1") {
-  Write-Step "[0.5/5] SKIP_CLEAN=1：跳过 .next 清理（保留编译缓存，最快启动）"
+  Write-Log "SKIP_CLEAN=1：跳过 .next 清理（保留编译缓存，最快启动）" -Level INFO
 } elseif (Test-Path $nextDir) {
   $saved = ""
   if (Test-Path $fingerprintFile) { $saved = (Get-Content $fingerprintFile -Raw).Trim() }
   if ($saved -eq $fingerprint) {
-    Write-Step "[0.5/5] 配置指纹未变（${fingerprint}）：保留 .next 缓存，直接启动"
+    Write-Log ("配置指纹未变（{0}），保留 .next 缓存，直接启动" -f $fingerprint) -Level OK
   } else {
     $nextSize = (Get-ChildItem $nextDir -Recurse -File -ErrorAction SilentlyContinue |
                  Measure-Object Length -Sum).Sum
     $sizeMB = if ($nextSize) { [math]::Round($nextSize / 1MB, 1) } else { 0 }
-    Write-Step "[0.5/5] 配置指纹变化（旧 ${saved} → 新 ${fingerprint}）：清空 .next（${sizeMB} MB）全量重编译..."
+    Write-Log ("配置指纹变化（旧 {0} → 新 {1}），清空 .next（{2} MB）全量重编译..." -f $saved, $fingerprint, $sizeMB) -Level STEP
     Remove-Item -Recurse -Force $nextDir -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
     Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
-    Write-Step "        已清空 .next 并写入新配置指纹"
+    Write-Log "已清空 .next 并写入新配置指纹" -Level OK
   }
 } else {
   New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
   Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
-  Write-Step "[0.5/5] .next 不存在：写入初始配置指纹（${fingerprint}），首次启动全量编译"
+  Write-Log ("首次启动：写入初始配置指纹（{0}），执行全量编译" -f $fingerprint) -Level STEP
 }
 
 try {
   # ── 第一步：定义 C# 互操作类，调用 kernel32 的 Job Object API ──
-  Write-Step "[1/5] 创建 Windows Job Object（进程容器）"
+  Write-Log "创建 Windows Job Object（进程容器）..." -Level STEP
   $sig = @"
 using System;
 using System.Runtime.InteropServices;
@@ -161,13 +188,14 @@ public class WJ {
   # ── 第二步：创建 Job 对象 ──
   $h = [WJ]::CreateJobObject([IntPtr]::Zero, $null)
   if ($h -eq [IntPtr]::Zero) { throw "CreateJobObject 返回空句柄" }
+  Write-Log "Job Object 创建成功" -Level OK
 
   # ── 第三步：设置「关闭窗口即终止」标志（0x2000 = KILL_ON_JOB_CLOSE）──
   $m = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4)
   [System.Runtime.InteropServices.Marshal]::WriteInt32($m, 0x2000)
   $null = [WJ]::SetInformationJobObject($h, 7, $m, 4)
   [System.Runtime.InteropServices.Marshal]::FreeHGlobal($m)
-  Write-Step "[2/5] 已设置「关闭窗口自动终止所有子进程」标志"
+  Write-Log "已设置「关闭窗口自动终止所有子进程」标志" -Level OK
 
   # ── 第四步：启动开发服务器（npm run dev，显式绑定 3000）──
   $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -183,29 +211,28 @@ public class WJ {
   $psi.WorkingDirectory = (Get-Location).Path
   $psi.UseShellExecute = $false
   $p = [System.Diagnostics.Process]::Start($psi)
-  Write-Step "[3/5] 开发服务器进程已启动（PID: $($p.Id)）"
+  Write-Log ("开发服务器进程已启动（PID: {0}）" -f $p.Id) -Level OK
 
   # 把进程绑到 Job 对象
   $null = [WJ]::AssignProcessToJobObject($h, $p.Handle)
-  Write-Step "[4/5] 已把进程绑定到 Job Object（关窗口时一起清理）"
+  Write-Log "进程已绑定到 Job Object（关窗口时一起清理）" -Level OK
 
-  # ── 第五步：显示状态横幅，等待进程退出 ──
-  Write-Host ""
-  Write-Host "============================================" -ForegroundColor Cyan
+  # ── 第五步：显示启动摘要，等待进程退出 ──
   if ($Tauri) {
-    Write-Host "  Comfy-APP 桌面壳（Tauri）已启动" -ForegroundColor Cyan
-    Write-Host "  进程 PID：$($p.Id)" -ForegroundColor Cyan
-    Write-Host "  桌面窗口加载 http://localhost:3000" -ForegroundColor Green
-    Write-Host "  关闭此窗口即可停止服务器并清理所有子进程" -ForegroundColor Cyan
+    Show-Summary -Title "Comfy-APP 桌面壳（Tauri）已启动" -Lines @(
+      "模式   : Tauri 桌面壳",
+      "PID    : $($p.Id)",
+      "地址   : http://localhost:3000",
+      "停止   : 关闭此窗口（自动清理全部子进程）"
+    )
   } else {
-    Write-Host "  Comfy-APP 开发服务器已启动" -ForegroundColor Cyan
-    Write-Host "  进程 PID：$($p.Id)" -ForegroundColor Cyan
-    Write-Host "  访问地址：http://localhost:3000" -ForegroundColor Green
-    Write-Host "  关闭此窗口即可停止服务器并清理所有子进程" -ForegroundColor Cyan
-    Write-Host "  （已自动打开浏览器；普通重启靠 HMR 自动刷新，无需手动硬刷）" -ForegroundColor DarkGray
+    Show-Summary -Title "Comfy-APP 开发服务器已启动" -Lines @(
+      "模式   : Web 开发服务器（Next.js + Turbopack）",
+      "PID    : $($p.Id)",
+      "地址   : http://localhost:3000",
+      "停止   : 关闭此窗口（自动清理全部子进程）"
+    )
   }
-  Write-Host "============================================" -ForegroundColor Cyan
-  Write-Host ""
 
   # ── 第五步（续）：等服务器 Ready 后自动打开/刷新浏览器 ──
   #   普通重启时 Next 的 HMR 会自动重载已有标签页；这里额外自动开浏览器，
@@ -213,9 +240,9 @@ public class WJ {
   #   默认路径会带缓存破坏参数开新标签页，避免旧 chunk + 旧 sessionStorage 残留。
   # Tauri 模式：桌面窗口由 tauri CLI 负责弹出，无需开浏览器、无需端口就绪探测
   if ($Tauri) {
-    Write-Step "[4.5/5] Tauri 模式：等待 tauri dev 编译并弹出桌面窗口..."
+    Write-Log "Tauri 模式：等待 tauri dev 编译并弹出桌面窗口..." -Level STEP
   } elseif ($env:NO_OPEN -ne "1") {
-    Write-Step "[4.5/5] 等待服务器就绪并自动打开浏览器..."
+    Write-Log "等待服务器就绪（http://127.0.0.1:3000）..." -Level STEP
     $ready = $false
     for ($i = 0; $i -lt 90; $i++) {
       try {
@@ -228,33 +255,29 @@ public class WJ {
       if ($env:SKIP_CLEAN -eq "1") {
         # 用户明确跳过清理：尝试复用现有标签页（Next HMR 会自动重载）
         $url = "http://localhost:3000"
-        Write-Host "        已打开/聚焦浏览器（SKIP_CLEAN=1，Next HMR 自动重载）" -ForegroundColor Green
+        Write-Log "服务器已就绪，复用现有标签页（Next HMR 自动重载）" -Level OK
       } else {
         # 默认路径：带缓存破坏参数开新标签页，避免旧 chunk + 旧 sessionStorage 残留
         $url = "http://localhost:3000/?__fresh=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
-        Write-Host "        已自动打开全新标签页（带缓存破坏参数 + 旧 tab 可关闭）" -ForegroundColor Green
+        Write-Log "服务器已就绪，打开全新标签页（带缓存破坏参数）" -Level OK
       }
       try { Start-Process $url -ErrorAction SilentlyContinue } catch { }
     } else {
-      Write-Host "        [警告] 90s 内未就绪，请手动打开 http://localhost:3000" -ForegroundColor Yellow
+      Write-Log "90 秒内未就绪，请手动打开 http://localhost:3000" -Level WARN
     }
   }
 
   # 阻塞等待开发服务器退出
   $p.WaitForExit()
-  Write-Host ""
-  Write-Step "[5/5] 开发服务器进程已退出，正在释放 Job Object..."
+  Write-Log "开发服务器已退出，正在释放 Job Object..." -Level STEP
   $null = [WJ]::CloseHandle($h)
-  Write-Host ""
-  Write-Host ">> 已完成。所有子进程均已清理干净。" -ForegroundColor Green
+  Write-Log "全部子进程已清理，启动器正常退出" -Level OK
 }
 catch {
-  Write-Host ""
-  Write-Host "[错误] 启动失败：" -ForegroundColor Red
-  Write-Host $_.Exception.Message -ForegroundColor Red
-  Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
-  Write-Host ""
-  Write-Host "请查看日志文件：dev-launcher.log" -ForegroundColor Yellow
+  Write-Log "启动失败：" -Level ERROR
+  Write-Log $_.Exception.Message -Level ERROR
+  Write-Log $_.ScriptStackTrace -Level ERROR
+  Write-Log ("详情请查看日志：{0}" -f $logFile) -Level WARN
 }
 finally {
   try { Stop-Transcript -ErrorAction SilentlyContinue } catch {}
