@@ -220,14 +220,6 @@ export function useWorkflowDetailLoader({
             }
           })
           .catch(() => {});
-        if (typeof window !== "undefined") {
-          // eslint-disable-next-line no-console
-          console.log(
-            "%c[WFCACHE R3] HIT%c url=" + url + " ns=wfdetail:R3 ttl=" + WFCACHE_TTL_MS + "ms",
-            "background:#7C5CFC;color:#fff;padding:2px 4px;border-radius:3px",
-            "color:#aaa"
-          );
-        }
         return;
       }
 
@@ -262,14 +254,6 @@ export function useWorkflowDetailLoader({
             pushSubgraphStack(opts.subgraphUid, opts.parentTitle || (d as any).name || "子工作流");
           }
         }
-        if (typeof window !== "undefined") {
-          // eslint-disable-next-line no-console
-          console.log(
-            "%c[WFCACHE R3] MISS → FRESH%c url=" + url + " ttl=" + WFCACHE_TTL_MS + "ms",
-            "background:#10b981;color:#fff;padding:2px 4px;border-radius:3px",
-            "color:#aaa"
-          );
-        }
       } catch (e: any) {
         setError(e.message ?? "加载失败");
       } finally {
@@ -303,14 +287,6 @@ export function useWorkflowDetailLoader({
     setLoading(true);
     setSubgraphLoading(false);
     fetchDetail({ bust: true });
-    if (typeof window !== "undefined") {
-      // eslint-disable-next-line no-console
-      console.log(
-        "%c[WFCACHE R3] FORCE RELOAD%c cleared sessionStorage + bumped request id → fresh fetch (server LRU busted)",
-        "background:#ef4444;color:#fff;padding:2px 4px;border-radius:3px",
-        "color:#aaa"
-      );
-    }
   }, [fetchDetail]);
 
   useEffect(() => {

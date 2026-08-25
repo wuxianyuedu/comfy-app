@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useLogPanel } from "./log-provider";
 
 /* ── Tauri window bottom status bar ─────────────────────────
    Shows the current browser address (window.location.href) and
@@ -8,6 +9,8 @@ import React, { useEffect, useState } from "react";
    navigation by wrapping history.pushState / replaceState, so the
    displayed URL updates on every route change without needing a
    full reload.
+   
+   Must be rendered inside <LogProvider> so the log toggle works.
 */
 
 export interface BrowserStatusBarProps {
@@ -16,6 +19,7 @@ export interface BrowserStatusBarProps {
 }
 
 export function BrowserStatusBar({ status = "就绪" }: BrowserStatusBarProps) {
+  const { isOpen, toggleOpen, counts } = useLogPanel();
   const [url, setUrl] = useState<string>("");
   const [secure, setSecure] = useState(true);
 
@@ -94,6 +98,29 @@ export function BrowserStatusBar({ status = "就绪" }: BrowserStatusBarProps) {
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={toggleOpen}
+          title={`日志面板 (${isOpen ? "开" : "关"}) — Ctrl+Shift+L`}
+          className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors ${
+            isOpen
+              ? "bg-violet-500/20 text-violet-300"
+              : "text-gray-500 hover:bg-white/[0.05] hover:text-gray-300"
+          }`}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <line x1="10" y1="9" x2="9" y2="9" />
+          </svg>
+          {counts.error > 0 && (
+            <span className="rounded-full bg-rose-500/20 px-1 text-[10px] text-rose-300">
+              {counts.error}
+            </span>
+          )}
+        </button>
         <span className="hidden sm:inline">{status}</span>
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
       </div>
