@@ -8,10 +8,13 @@
 #   彻底避免「旧实例占着 3000、新实例被挤到 3001、浏览器连着旧代码」的尴尬。
 # 改进（2026-08-23）：.next 缓存改为「指纹优先」策略——默认不再每次清空 .next，
 #   而是计算关键配置指纹（next.config.js / tsconfig.json / package.json /
-#   pnpm-lock.yaml 内容 hash + src\trpc / src\server 目录递归内容 hash），与
-#   .next\config-fingerprint 记录值比对：一致则保留缓存直接启动（秒起），
-#   不一致才清空 .next 全量重编译并写入新指纹。彻底摆脱「每次启动慢 30~60s」
-#   与「编译产物缓存了旧 route.ts / API schema 看不到改动」两个问题。
+#   pnpm-lock.yaml 内容 hash），与 .next\config-fingerprint 记录值比对：
+#   一致则保留缓存直接启动（秒起），不一致才清空 .next 全量重编译并写入新指纹。
+#   彻底摆脱「每次启动慢 30~60s」与「编译产物缓存了旧 route.ts / API schema
+#   看不到改动」两个问题。
+# 改进（2026-08-25）：指纹不再包含 src\trpc / src\server 源码目录内容 hash——
+#   源码改动本就由 Turbopack 增量编译 + HMR 处理，无需清缓存；把源码纳入指纹
+#   会导致「每改一行 API 代码就清空 .next 全量重编译」的慢启动。
 #   控制开关（优先级 FORCE_CLEAN > SKIP_CLEAN > 指纹判断）：
 #     - SKIP_CLEAN=1  强制跳过清理（无论指纹如何都保留缓存，最快启动）
 #     - FORCE_CLEAN=1 强制清理（无论指纹如何都清空 .next 全量重编译）
@@ -65,16 +68,16 @@ Write-Step "        清理完成，将在 3000 端口启动全新实例。"
 
 # ── .next 缓存策略：基于「关键配置指纹」决定是否全量重编译 ──
 #     指纹 = SHA256 累积 next.config.js / tsconfig.json / package.json /
-#            pnpm-lock.yaml 内容 + src\trpc / src\server 目录递归内容。
+#            pnpm-lock.yaml 内容（仅构建配置与依赖，不含源码）。
 #     指纹与 .next\config-fingerprint 一致 → 保留 .next 直接启动（秒起）；
 #     不一致 → 清空 .next 全量重编译并写入新指纹。
+#     源码（src\**）改动不纳入指纹：Turbopack 增量编译 + HMR 足够，清缓存反而慢。
 #     控制开关（优先级 FORCE_CLEAN > SKIP_CLEAN > 指纹判断）：
 #       FORCE_CLEAN=1 强制清理（无视指纹与 SKIP_CLEAN）
 #       SKIP_CLEAN=1  强制跳过清理（保留缓存，最快启动）
 function Get-ConfigFingerprint {
   $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-  $targets = @("next.config.js", "tsconfig.json", "package.json", "pnpm-lock.yaml",
-               "src\trpc", "src\server")
+  $targets = @("next.config.js", "tsconfig.json", "package.json", "pnpm-lock.yaml")
   $ih = [System.Security.Cryptography.IncrementalHash]::CreateHash(
     [System.Security.Cryptography.HashAlgorithmName]::SHA256)
   foreach ($rel in $targets) {
