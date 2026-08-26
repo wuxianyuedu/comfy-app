@@ -20,6 +20,8 @@ start_tauri_launcher.py — Comfy-APP 桌面壳启动器（纯 Win32 启动画�
 请将生成的 dist/start-tauri.exe 放在项目根目录（与 scripts/ 同级）。
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import time
@@ -27,10 +29,16 @@ import math
 import shutil
 import threading
 import subprocess
+import traceback
+import tempfile
+from datetime import datetime
+from pathlib import Path
 
 import ctypes
 
-# ── Win32 类型别名 ──
+# ═══════════════════════════════════════════════════════════════════════════════
+#  Win32 类型别名
+# ═══════════════════════════════════════════════════════════════════════════════
 # Python 3.13 大幅精简 ctypes.wintypes，很多 HANDLE 类别名被移除。
 # 这里全部用 ctypes 原生类型定义，避免打包后运行时找不到属性。
 LRESULT = ctypes.c_ssize_t
@@ -55,11 +63,17 @@ HFONT = HANDLE
 HPEN = HANDLE
 HGDIOBJ = HANDLE
 LPVOID = HANDLE
+
+# 回调类型
 TIMERPROC = ctypes.WINFUNCTYPE(None, HWND, UINT, UINT_PTR, DWORD)
+WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, HWND, LPARAM)
 
 # 预定义光标 ID（IDC_ARROW）通过 MAKEINTRESOURCE 方式传递
 IDC_ARROW = ctypes.c_void_p(32512)
 
+# ═══════════════════════════════════════════════════════════════════════════════
+#  Win32 常量
+# ═══════════════════════════════════════════════════════════════════════════════
 CW_USEDEFAULT = 0x80000000
 WS_POPUP = 0x80000000
 WS_VISIBLE = 0x10000000
@@ -72,6 +86,8 @@ WM_TIMER = 275
 WM_CLOSE = 16
 WM_QUIT = 18
 WM_LBUTTONDOWN = 0x0201
+WM_KEYDOWN = 0x0100
+VK_ESCAPE = 0x1B
 SRCCOPY = 0x00CC0020
 TRANSPARENT = 1
 OPAQUE = 2
@@ -87,11 +103,19 @@ SWP_NOSIZE = 0x0001
 SWP_SHOWWINDOW = 0x0040
 SWP_NOACTIVATE = 0x0010
 LOGPIXELSX = 88
+SM_CXSCREEN = 0
+SM_CYSCREEN = 1
 DEFAULT_GUI_FONT = 17
 FW_NORMAL = 400
 FW_BOLD = 700
+MB_ICONERROR = 0x10
+MB_ICONWARNING = 0x30
+MB_OK = 0x00
+PROCESS_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = ctypes.c_void_p(-4)
 
-# ── 暗色极光配色（与 app 的 #0A0A0F 背景 / violet 主色一致）──
+# ═══════════════════════════════════════════════════════════════════════════════
+#  暗色极光配色（与 app 的 #0A0A0F 背景 / violet 主色一致）
+# ═══════════════════════════════════════════════════════════════════════════════
 BG = 0x0F0A0A  # 0A0A0F in BGR
 PANEL = 0x1C1012  # #12101C in BGR
 VIOLET = 0xFC5C7C  # #7C5CFC in BGR
@@ -102,29 +126,117 @@ ERROR_RED = 0x4444EF  # #EF4444 in BGR
 SPLASH_W = 420
 SPLASH_H = 170
 
+APP_TITLE = "Comfy APP"
+APP_WINDOW_TITLE = "Comfy APP"
 
-# ── 项目根目录探测 ──
+# ═══════════════════════════════════════════════════════════════════════════════
+#  日志（辅助排查，写入项目根目录 log/start-tauri-launcher.log）
+# ═══════════════════════════════════════════════════════════════════════════════
+_log_file: object | None = None
+_log_lock = threading.Lock()
+
+
+def _ensure_log_dir(project_root: str) -> str:
+    log_dir = os.path.join(project_root, "log")
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+    except OSError:
+        pass
+    return log_dir
+
+
+def log(message: str) -> None:
+    """写一行日志到文件；失败则静默忽略，不阻塞启动流程。"""
+    try:
+        with _log_lock:
+            if _log_file is None:
+                return
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            _log_file.write(f"[{timestamp}] {message}\n")
+            _log_file.flush()
+    except Exception:
+        pass
+
+
+def init_logging(project_root: str) -> None:
+    global _log_file
+    try:
+        log_dir = _ensure_log_dir(project_root)
+        # 按日期轮转，保留最近 5 份
+        base = os.path.join(log_dir, "start-tauri-launcher.log")
+        if os.path.exists(base) and os.path.getsize(base) > 512 * 1024:
+            for i in range(4, 0, -1):
+                src = f"{base}.{i}"
+                dst = f"{base}.{i + 1}"
+                if os.path.exists(src):
+                    try:
+                        shutil.move(src, dst)
+                    except OSError:
+                        pass
+            try:
+                shutil.move(base, f"{base}.1")
+            except OSError:
+                pass
+        _log_file = open(base, "a", encoding="utf-8", buffering=1)
+        log("=== launcher started ===")
+        log(f"python={sys.version}")
+        log(f"exe={sys.executable}")
+        log(f"cwd={os.getcwd()}")
+    except Exception:
+        _log_file = None
+
+
+def close_logging() -> None:
+    try:
+        with _log_lock:
+            if _log_file is not None:
+                _log_file.close()
+    except Exception:
+        pass
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  工具函数
+# ═══════════════════════════════════════════════════════════════════════════════
+def _is_project_root(path: str) -> bool:
+    return os.path.isfile(os.path.join(path, "scripts", "dev-launcher.ps1"))
+
+
 def get_project_root() -> str:
-    """打包单文件 exe 时，工作目录通常是用户放 exe 的目录（项目根目录）。"""
+    """
+    项目根目录探测顺序：
+      1. 当前工作目录（双击 exe 时通常是 exe 所在目录）。
+      2. exe 所在目录（单文件 exe 被 PyInstaller 解压后的 _MEI 父目录）。
+      3. 脚本源文件所在目录的父目录（开发时直接 python 运行）。
+    """
+    candidates: list[str] = []
+
     cwd = os.getcwd()
-    if os.path.isfile(os.path.join(cwd, "scripts", "dev-launcher.ps1")):
+    if _is_project_root(cwd):
         return cwd
-    # 非打包运行：脚本在 scripts/ 下，父目录即项目根目录
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    parent = os.path.dirname(script_dir)
-    if os.path.isfile(os.path.join(parent, "scripts", "dev-launcher.ps1")):
-        return parent
-    # 再回退 sys.executable 所在目录
+    candidates.append(cwd)
+
     exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-    if os.path.isfile(os.path.join(exe_dir, "scripts", "dev-launcher.ps1")):
+    if exe_dir not in candidates and _is_project_root(exe_dir):
         return exe_dir
+    candidates.append(exe_dir)
+
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        parent = os.path.dirname(script_dir)
+        if parent not in candidates and _is_project_root(parent):
+            return parent
+        candidates.append(parent)
+    except NameError:
+        pass
+
+    log(f"warning: cannot locate project root, tried {candidates}")
     return cwd
 
 
-# ── Win32 窗口探测：Tauri 主窗口标题为 "Comfy APP" ──
 def find_tauri_window() -> bool:
+    """枚举顶层窗口，查找标题包含 APP_WINDOW_TITLE 的可见窗口。"""
     try:
-        user32 = ctypes.windll.user32
         found = [False]
 
         def callback(hwnd: HWND, _lparam: LPARAM) -> bool:
@@ -136,21 +248,84 @@ def find_tauri_window() -> bool:
             buf = ctypes.create_unicode_buffer(length + 1)
             user32.GetWindowTextW(hwnd, buf, length + 1)
             title = buf.value or ""
-            if "Comfy APP" in title:
+            if APP_WINDOW_TITLE in title:
                 found[0] = True
                 return False
             return True
 
-        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, HWND, LPARAM)
         proc = WNDENUMPROC(callback)
         user32.EnumWindows(proc, 0)
         callback._keep = proc  # type: ignore[attr-defined]
         return found[0]
-    except Exception:
+    except Exception as exc:
+        log(f"find_tauri_window error: {exc}")
         return False
 
 
-# ── Win32 API 原型 ──
+def find_and_focus_tauri_window() -> bool:
+    """如果 Tauri 窗口已存在，尝试把它带到前台并返回 True。"""
+    try:
+        target: HWND = 0
+
+        def callback(hwnd: HWND, _lparam: LPARAM) -> bool:
+            nonlocal target
+            if not user32.IsWindowVisible(hwnd):
+                return True
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length == 0:
+                return True
+            buf = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buf, length + 1)
+            title = buf.value or ""
+            if APP_WINDOW_TITLE in title:
+                target = hwnd
+                return False
+            return True
+
+        proc = WNDENUMPROC(callback)
+        user32.EnumWindows(proc, 0)
+        callback._keep = proc  # type: ignore[attr-defined]
+
+        if target:
+            user32.ShowWindow(target, 9)  # SW_RESTORE
+            user32.SetForegroundWindow(target)
+            log("found existing tauri window, brought to foreground")
+            return True
+        return False
+    except Exception as exc:
+        log(f"find_and_focus_tauri_window error: {exc}")
+        return False
+
+
+def set_dpi_aware() -> None:
+    """高 DPI 屏幕避免模糊。"""
+    try:
+        user32.SetProcessDpiAwarenessContext(PROCESS_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+    except Exception:
+        try:
+            user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
+def create_mutex(name: str) -> HANDLE:
+    """创建命名互斥体，用于防止重复启动。"""
+    try:
+        return kernel32.CreateMutexW(None, False, name)
+    except Exception:
+        return 0
+
+
+def is_another_instance_running(mutex: HANDLE) -> bool:
+    if not mutex:
+        return False
+    err = kernel32.GetLastError()
+    return err == 183  # ERROR_ALREADY_EXISTS
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  Win32 API 原型
+# ═══════════════════════════════════════════════════════════════════════════════
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 gdi32 = ctypes.windll.gdi32
@@ -167,6 +342,9 @@ user32.DefWindowProcW.restype = LRESULT
 
 user32.RegisterClassExW.argtypes = [ctypes.c_void_p]
 user32.RegisterClassExW.restype = ATOM
+
+user32.UnregisterClassW.argtypes = [LPCWSTR, HINSTANCE]
+user32.UnregisterClassW.restype = BOOL
 
 user32.GetMessageW.argtypes = [ctypes.c_void_p, HWND, UINT, UINT]
 user32.GetMessageW.restype = ctypes.c_int
@@ -218,6 +396,55 @@ user32.GetWindowRect.restype = BOOL
 
 user32.SetWindowTextW.argtypes = [HWND, LPCWSTR]
 
+user32.IsWindowVisible.argtypes = [HWND]
+user32.IsWindowVisible.restype = BOOL
+
+user32.GetWindowTextLengthW.argtypes = [HWND]
+user32.GetWindowTextLengthW.restype = ctypes.c_int
+
+user32.GetWindowTextW.argtypes = [HWND, LPCWSTR, ctypes.c_int]
+user32.GetWindowTextW.restype = ctypes.c_int
+
+user32.EnumWindows.argtypes = [WNDENUMPROC, LPARAM]
+user32.EnumWindows.restype = BOOL
+
+user32.ShowWindow.argtypes = [HWND, ctypes.c_int]
+user32.ShowWindow.restype = BOOL
+
+user32.SetForegroundWindow.argtypes = [HWND]
+user32.SetForegroundWindow.restype = BOOL
+
+user32.MessageBoxW.argtypes = [HWND, LPCWSTR, LPCWSTR, UINT]
+user32.MessageBoxW.restype = ctypes.c_int
+
+user32.SetProcessDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+user32.SetProcessDpiAwarenessContext.restype = BOOL
+
+user32.SetProcessDPIAware.restype = BOOL
+
+user32.GetCursorPos.argtypes = [ctypes.c_void_p]
+user32.GetCursorPos.restype = BOOL
+
+user32.MonitorFromPoint.argtypes = [ctypes.c_long * 2, DWORD]
+user32.MonitorFromPoint.restype = HANDLE
+
+user32.GetMonitorInfoW.argtypes = [HANDLE, ctypes.c_void_p]
+user32.GetMonitorInfoW.restype = BOOL
+
+kernel32.GetModuleHandleW.argtypes = [LPCWSTR]
+kernel32.GetModuleHandleW.restype = HINSTANCE
+
+kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, BOOL, LPCWSTR]
+kernel32.CreateMutexW.restype = HANDLE
+
+kernel32.GetLastError.restype = DWORD
+
+kernel32.ReleaseMutex.argtypes = [HANDLE]
+kernel32.ReleaseMutex.restype = BOOL
+
+kernel32.CloseHandle.argtypes = [HANDLE]
+kernel32.CloseHandle.restype = BOOL
+
 # ── GDI ──
 gdi32.CreateSolidBrush.argtypes = [COLORREF]
 gdi32.CreateSolidBrush.restype = HBRUSH
@@ -257,17 +484,26 @@ gdi32.CreateFontW.argtypes = [
 ]
 gdi32.CreateFontW.restype = HFONT
 
-gdi32.DrawTextW.argtypes = [
+gdi32.GetDeviceCaps.argtypes = [HDC, ctypes.c_int]
+gdi32.GetDeviceCaps.restype = ctypes.c_int
+
+# DrawTextW 在 user32.dll 中，不是 gdi32
+user32.DrawTextW.argtypes = [
     HDC, LPCWSTR, ctypes.c_int, ctypes.c_void_p,
     UINT,
 ]
-gdi32.DrawTextW.restype = ctypes.c_int
+user32.DrawTextW.restype = ctypes.c_int
 
-
-# ── RECT / WNDCLASSEX 结构 ──
+# ═══════════════════════════════════════════════════════════════════════════════
+#  RECT / WNDCLASSEX 结构
+# ═══════════════════════════════════════════════════════════════════════════════
 class RECT(ctypes.Structure):
-    _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
-                ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+    _fields_ = [
+        ("left", ctypes.c_long),
+        ("top", ctypes.c_long),
+        ("right", ctypes.c_long),
+        ("bottom", ctypes.c_long),
+    ]
 
 
 class WNDCLASSEXW(ctypes.Structure):
@@ -302,6 +538,15 @@ class POINT(ctypes.Structure):
     _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
 
 
+class MONITORINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", DWORD),
+        ("rcMonitor", RECT),
+        ("rcWork", RECT),
+        ("dwFlags", DWORD),
+    ]
+
+
 class MSG(ctypes.Structure):
     _fields_ = [
         ("hwnd", HWND),
@@ -313,7 +558,9 @@ class MSG(ctypes.Structure):
     ]
 
 
-# ── 启动画面窗口类 ──
+# ═══════════════════════════════════════════════════════════════════════════════
+#  启动画面窗口类
+# ═══════════════════════════════════════════════════════════════════════════════
 class SplashWindow:
     def __init__(self):
         self.hwnd: HWND = 0
@@ -321,11 +568,15 @@ class SplashWindow:
         self._progress = 0.0
         self._status = "ok"  # ok | error | timeout
         self._msg = "首次启动需编译，约 30–90 秒，请稍候…"
-        self._title = "Comfy APP"
+        self._title = APP_TITLE
         self._subtitle = "正在启动桌面应用…"
         self._wc_atom = 0
         self._class_name = "ComfyAppSplashW"
         self._timer_id = 1
+        self._dragging = False
+        self._drag_start_x = 0
+        self._drag_start_y = 0
+        self._wnd_proc_ref = None
 
     def _register_class(self) -> bool:
         wnd_proc = ctypes.WINFUNCTYPE(
@@ -343,6 +594,7 @@ class SplashWindow:
 
         atom = user32.RegisterClassExW(ctypes.byref(wc))
         if atom == 0:
+            log("RegisterClassExW failed")
             return False
         self._wc_atom = atom
         return True
@@ -361,9 +613,31 @@ class SplashWindow:
             user32.InvalidateRect(hwnd, None, False)
             return 0
         if msg == WM_LBUTTONDOWN:
+            self._dragging = True
+            self._drag_start_x = ctypes.c_short(lparam & 0xFFFF).value
+            self._drag_start_y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
+            return 0
+        if msg == WM_MOUSEMOVE and self._dragging:
+            x = ctypes.c_short(lparam & 0xFFFF).value
+            y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
+            dx = x - self._drag_start_x
+            dy = y - self._drag_start_y
+            rect = RECT()
+            user32.GetWindowRect(hwnd, ctypes.byref(rect))
+            user32.SetWindowPos(
+                hwnd, 0,
+                rect.left + dx, rect.top + dy,
+                0, 0,
+                SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER,
+            )
+            return 0
+        if msg == WM_LBUTTONUP:
+            self._dragging = False
+            return 0
+        if msg == WM_KEYDOWN and wparam == VK_ESCAPE:
             user32.PostQuitMessage(0)
             return 0
-        if msg == WM_DESTROY:
+        if msg == WM_CLOSE or msg == WM_DESTROY:
             user32.PostQuitMessage(0)
             return 0
         return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
@@ -414,8 +688,8 @@ class SplashWindow:
         title_rc.top = pad + 22
         title_rc.right = w - pad - 24
         title_rc.bottom = title_rc.top + 32
-        gdi32.DrawTextW(hdc, self._title, -1, ctypes.byref(title_rc),
-                        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
+        user32.DrawTextW(hdc, self._title, -1, ctypes.byref(title_rc),
+                         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
         gdi32.SelectObject(hdc, old_font)
         gdi32.DeleteObject(title_font)
 
@@ -427,8 +701,8 @@ class SplashWindow:
         sub_rc.top = pad + 58
         sub_rc.right = w - pad - 24
         sub_rc.bottom = sub_rc.top + 22
-        gdi32.DrawTextW(hdc, self._subtitle, -1, ctypes.byref(sub_rc),
-                        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
+        user32.DrawTextW(hdc, self._subtitle, -1, ctypes.byref(sub_rc),
+                         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
 
         msg_rc = RECT()
         msg_rc.left = pad + 24
@@ -436,8 +710,8 @@ class SplashWindow:
         msg_rc.right = w - pad - 24
         msg_rc.bottom = msg_rc.top + 18
         gdi32.SetTextColor(hdc, GRAY_DIM)
-        gdi32.DrawTextW(hdc, self._msg, -1, ctypes.byref(msg_rc),
-                        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
+        user32.DrawTextW(hdc, self._msg, -1, ctypes.byref(msg_rc),
+                         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
         gdi32.SelectObject(hdc, old_font)
         gdi32.DeleteObject(sub_font)
 
@@ -448,7 +722,7 @@ class SplashWindow:
             bar_x = pad + 24
             bar_w = w - 2 * pad - 48
 
-            track_brush = gdi32.CreateSolidBrush(0x1C1012)  # 与面板同色稍深，BGR
+            track_brush = gdi32.CreateSolidBrush(0x1C1012)
             track_pen = gdi32.CreatePen(0, 1, 0x1C1012)
             old_b = gdi32.SelectObject(hdc, track_brush)
             old_p = gdi32.SelectObject(hdc, track_pen)
@@ -470,19 +744,43 @@ class SplashWindow:
                 gdi32.SelectObject(hdc, old_b)
                 gdi32.DeleteObject(grad_brush)
 
-    def show(self):
+    def _center_on_cursor_monitor(self) -> tuple[int, int]:
+        """在鼠标所在显示器居中；获取失败则回退到主屏居中。"""
+        try:
+            pt = POINT()
+            if user32.GetCursorPos(ctypes.byref(pt)):
+                mi = MONITORINFO()
+                mi.cbSize = ctypes.sizeof(MONITORINFO)
+                hmon = user32.MonitorFromPoint(
+                    (ctypes.c_long * 2)(pt.x, pt.y),
+                    2,  # MONITOR_DEFAULTTONEAREST
+                )
+                if hmon and user32.GetMonitorInfoW(hmon, ctypes.byref(mi)):
+                    mw = mi.rcMonitor.right - mi.rcMonitor.left
+                    mh = mi.rcMonitor.bottom - mi.rcMonitor.top
+                    return (
+                        mi.rcMonitor.left + (mw - SPLASH_W) // 2,
+                        mi.rcMonitor.top + (mh - SPLASH_H) // 2,
+                    )
+        except Exception as exc:
+            log(f"_center_on_cursor_monitor error: {exc}")
+
+        try:
+            screen = user32.GetDC(0)
+            screen_w = gdi32.GetDeviceCaps(screen, 118)  # HORZRES
+            screen_h = gdi32.GetDeviceCaps(screen, 117)  # VERTRES
+            user32.ReleaseDC(0, screen)
+            return (screen_w - SPLASH_W) // 2, (screen_h - SPLASH_H) // 2
+        except Exception as exc:
+            log(f"fallback center error: {exc}")
+            return 100, 100
+
+    def show(self) -> bool:
         if not self._register_class():
             return False
 
         hinstance = kernel32.GetModuleHandleW(None)
-
-        # 屏幕居中
-        screen = user32.GetDC(0)
-        screen_w = gdi32.GetDeviceCaps(screen, 118)  # HORZRES
-        screen_h = gdi32.GetDeviceCaps(screen, 117)  # VERTRES
-        user32.ReleaseDC(0, screen)
-        x = (screen_w - SPLASH_W) // 2
-        y = (screen_h - SPLASH_H) // 2
+        x, y = self._center_on_cursor_monitor()
 
         self.hwnd = user32.CreateWindowExW(
             WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
@@ -493,6 +791,7 @@ class SplashWindow:
             0, 0, hinstance, None,
         )
         if not self.hwnd:
+            log("CreateWindowExW failed")
             return False
 
         user32.SetWindowPos(
@@ -504,7 +803,7 @@ class SplashWindow:
 
     def set_error(self, msg: str):
         self._status = "error"
-        self._title = "Comfy APP"
+        self._title = APP_TITLE
         self._subtitle = "启动失败"
         self._msg = msg
         user32.InvalidateRect(self.hwnd, None, False)
@@ -522,6 +821,20 @@ class SplashWindow:
         user32.KillTimer(self.hwnd, self._timer_id)
         threading.Timer(delay_ms / 1000.0, lambda: user32.PostQuitMessage(0)).start()
 
+    def destroy(self):
+        """清理窗口类与 GDI 资源。"""
+        try:
+            if self.hwnd:
+                user32.KillTimer(self.hwnd, self._timer_id)
+                user32.DestroyWindow(self.hwnd)
+                self.hwnd = 0
+            if self._wc_atom:
+                hinst = kernel32.GetModuleHandleW(None)
+                user32.UnregisterClassW(self._class_name, hinst)
+                self._wc_atom = 0
+        except Exception as exc:
+            log(f"destroy error: {exc}")
+
     def run_message_loop(self):
         msg = MSG()
         while True:
@@ -532,76 +845,205 @@ class SplashWindow:
             user32.DispatchMessageW(ctypes.byref(msg))
 
 
-# ── 启动 dev-launcher.ps1 ──
-def launch_dev_server(project_root: str) -> "subprocess.Popen | None":
+# ═══════════════════════════════════════════════════════════════════════════════
+#  启动 dev-launcher.ps1
+# ═══════════════════════════════════════════════════════════════════════════════
+def launch_dev_server(project_root: str) -> "subprocess.Popen[str] | None":
     ps1 = os.path.join(project_root, "scripts", "dev-launcher.ps1")
     if not os.path.isfile(ps1):
+        log(f"dev-launcher.ps1 not found: {ps1}")
         return None
+
     pwsh = shutil.which("pwsh") or shutil.which("pwsh.exe")
+    shell_name = "PowerShell 7"
     if not pwsh:
         pwsh = shutil.which("powershell") or shutil.which("powershell.exe")
+        shell_name = "Windows PowerShell"
     if not pwsh:
+        log("neither pwsh nor powershell found in PATH")
         return None
-    return subprocess.Popen(
-        [pwsh, "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
-         "-File", ps1, "-Tauri"],
-        cwd=project_root,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+
+    log(f"using shell: {shell_name} ({pwsh})")
+    log(f"launching {ps1} -Tauri")
+
+    # 启动 PowerShell 隐藏窗口；stdin 也关闭避免句柄泄漏
+    try:
+        return subprocess.Popen(
+            [pwsh, "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
+             "-File", ps1, "-Tauri"],
+            cwd=project_root,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    except Exception as exc:
+        log(f"subprocess.Popen failed: {exc}")
+        return None
 
 
-# ── 后台监控线程 ──
-def monitor(proc: "subprocess.Popen | None", splash: SplashWindow):
+# ═══════════════════════════════════════════════════════════════════════════════
+#  后台监控线程
+# ═══════════════════════════════════════════════════════════════════════════════
+def monitor(proc: "subprocess.Popen[str] | None", splash: SplashWindow):
     deadline = time.time() + 240
-    while time.time() < deadline:
-        if splash._closed:
-            return
-        if find_tauri_window():
-            splash.close_later(600)
-            return
-        if proc is not None and proc.poll() is not None:
-            splash.set_error("启动进程已退出，请检查 log/dev-launcher.log")
-            splash.close_later(4000)
-            return
-        time.sleep(0.5)
-    splash.set_timeout()
-    splash.close_later(3000)
+    try:
+        while time.time() < deadline:
+            if splash._closed:
+                log("splash already closed, monitor exiting")
+                return
+            if find_tauri_window():
+                log("tauri window detected, closing splash in 600ms")
+                splash.close_later(600)
+                return
+            if proc is not None and proc.poll() is not None:
+                exit_code = proc.returncode
+                log(f"dev-launcher process exited early with code {exit_code}")
+                splash.set_error("启动进程已退出，请检查 log/dev-launcher.log")
+                splash.close_later(5000)
+                return
+            time.sleep(0.5)
+        log("monitor deadline reached (240s)")
+        splash.set_timeout()
+        splash.close_later(4000)
+    except Exception as exc:
+        log(f"monitor thread error: {exc}")
+        splash.set_error(f"监控线程异常：{exc}")
+        splash.close_later(5000)
 
 
-def main() -> int:
+# ═══════════════════════════════════════════════════════════════════════════════
+#  顶层错误处理与启动入口
+# ═══════════════════════════════════════════════════════════════════════════════
+def _fatal_box(message: str, title: str = f"{APP_TITLE} 启动器") -> int:
+    log(f"FATAL: {message}")
+    try:
+        user32.MessageBoxW(0, message, title, MB_ICONERROR | MB_OK)
+    except Exception:
+        pass
+    return 1
+
+
+def _parse_args(argv: list[str]) -> dict[str, bool | str]:
+    args: dict[str, bool | str] = {"splash": True, "focus": True}
+    for arg in argv[1:]:
+        a = arg.lower().lstrip("-/")
+        if a in ("no-splash", "nosplash"):
+            args["splash"] = False
+        elif a in ("no-focus", "nofocus"):
+            args["focus"] = False
+        elif a in ("help", "h", "?"):
+            args["help"] = True
+    return args
+
+
+def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv
+
+    args = _parse_args(argv)
+    if args.get("help"):
+        user32.MessageBoxW(
+            0,
+            "用法：start-tauri.exe [选项]\n\n"
+            "  --no-splash    不显示启动画面，直接后台启动\n"
+            "  --no-focus     发现已有窗口时不置顶\n"
+            "  --help         显示此帮助",
+            f"{APP_TITLE} 启动器",
+            MB_OK,
+        )
+        return 0
+
+    set_dpi_aware()
+
     project_root = get_project_root()
+    init_logging(project_root)
+    log(f"project_root={project_root}")
+
     ps1_path = os.path.join(project_root, "scripts", "dev-launcher.ps1")
     if not os.path.isfile(ps1_path):
-        ctypes.windll.user32.MessageBoxW(
-            0,
-            f"找不到启动脚本：{ps1_path}\n请把 start-tauri.exe 放在项目根目录。",
-            "Comfy APP 启动器",
-            0x10,  # MB_ICONERROR
+        return _fatal_box(
+            f"找不到启动脚本：{ps1_path}\n请把 start-tauri.exe 放在项目根目录。"
         )
-        return 1
+
+    # 单实例：如果已有实例在运行，直接聚焦已有窗口后退出
+    mutex = create_mutex("Local\\ComfyAppTauriLauncherMutex")
+    if is_another_instance_running(mutex):
+        log("another instance is already running")
+        if args.get("focus", True):
+            find_and_focus_tauri_window()
+        if mutex:
+            kernel32.CloseHandle(mutex)
+        close_logging()
+        return 0
+
+    # 如果 Tauri 窗口已经存在，直接聚焦（不重复启动）
+    if args.get("focus", True) and find_and_focus_tauri_window():
+        if mutex:
+            kernel32.ReleaseMutex(mutex)
+            kernel32.CloseHandle(mutex)
+        close_logging()
+        return 0
+
+    if not args.get("splash", True):
+        # 无启动画面模式：直接启动进程并立即返回
+        proc = launch_dev_server(project_root)
+        if proc is None:
+            if mutex:
+                kernel32.CloseHandle(mutex)
+            close_logging()
+            return _fatal_box("无法启动 dev-launcher.ps1，请检查 PowerShell 是否可用。")
+        if mutex:
+            kernel32.ReleaseMutex(mutex)
+            kernel32.CloseHandle(mutex)
+        close_logging()
+        return 0
 
     splash = SplashWindow()
     if not splash.show():
-        ctypes.windll.user32.MessageBoxW(
-            0,
-            "无法创建启动画面窗口。",
-            "Comfy APP 启动器",
-            0x10,
-        )
-        return 1
+        if mutex:
+            kernel32.CloseHandle(mutex)
+        close_logging()
+        return _fatal_box("无法创建启动画面窗口。")
 
     proc = launch_dev_server(project_root)
     if proc is None:
         splash.set_error("无法找到 PowerShell / pwsh，请安装后重试")
-        splash.close_later(4000)
+        splash.close_later(5000)
     else:
+        log(f"dev-launcher pid={proc.pid}")
         t = threading.Thread(target=monitor, args=(proc, splash), daemon=True)
         t.start()
 
-    splash.run_message_loop()
+    try:
+        splash.run_message_loop()
+    finally:
+        splash.destroy()
+        if mutex:
+            kernel32.ReleaseMutex(mutex)
+            kernel32.CloseHandle(mutex)
+        close_logging()
+
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception as exc:
+        # 顶层兜底：记录日志并弹出友好错误框，而不是 Python 默认的 traceback 弹窗
+        try:
+            log(f"UNHANDLED EXCEPTION: {exc}\n{traceback.format_exc()}")
+        except Exception:
+            pass
+        try:
+            user32.MessageBoxW(
+                0,
+                f"启动器遇到未预期错误：\n{exc}\n\n"
+                f"详细日志请查看 log/start-tauri-launcher.log",
+                f"{APP_TITLE} 启动器",
+                MB_ICONERROR | MB_OK,
+            )
+        except Exception:
+            pass
+        sys.exit(1)
