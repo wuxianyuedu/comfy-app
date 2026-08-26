@@ -65,7 +65,6 @@ HGDIOBJ = HANDLE
 LPVOID = HANDLE
 
 # 回调类型
-TIMERPROC = ctypes.WINFUNCTYPE(None, HWND, UINT, UINT_PTR, DWORD)
 WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, HWND, LPARAM)
 
 # 预定义光标 ID（IDC_ARROW）通过 MAKEINTRESOURCE 方式传递
@@ -365,7 +364,9 @@ user32.SetWindowPos.argtypes = [
 ]
 user32.SetWindowPos.restype = BOOL
 
-user32.SetTimer.argtypes = [HWND, UINT_PTR, UINT, TIMERPROC]
+# lpTimerFunc 传 None(=NULL) 表示用 WM_TIMER 消息投递到窗口过程，
+# 不能用 TIMERPROC 函数指针类型声明（ctypes 不接受把 None 传给函数指针形参）。
+user32.SetTimer.argtypes = [HWND, UINT_PTR, UINT, ctypes.c_void_p]
 user32.SetTimer.restype = UINT_PTR
 
 user32.KillTimer.argtypes = [HWND, UINT_PTR]
