@@ -32,10 +32,12 @@ import ctypes
 from ctypes import wintypes
 
 # ── Win32 常量 ──
-# Python 3.13 从 ctypes.wintypes 移除了 LRESULT/WPARAM/LPARAM，手动定义。
+# Python 3.13 从 ctypes.wintypes 移除了 LRESULT/WPARAM/LPARAM/UINT_PTR/TIMERPROC，手动定义。
 LRESULT = ctypes.c_ssize_t
 WPARAM = ctypes.c_size_t
 LPARAM = ctypes.c_ssize_t
+UINT_PTR = ctypes.c_size_t
+TIMERPROC = ctypes.WINFUNCTYPE(None, wintypes.HWND, wintypes.UINT, UINT_PTR, wintypes.DWORD)
 
 CW_USEDEFAULT = 0x80000000
 WS_POPUP = 0x80000000
@@ -164,10 +166,10 @@ user32.SetWindowPos.argtypes = [
 ]
 user32.SetWindowPos.restype = wintypes.BOOL
 
-user32.SetTimer.argtypes = [wintypes.HWND, wintypes.UINT_PTR, wintypes.UINT, wintypes.TIMERPROC]
-user32.SetTimer.restype = wintypes.UINT_PTR
+user32.SetTimer.argtypes = [wintypes.HWND, UINT_PTR, wintypes.UINT, TIMERPROC]
+user32.SetTimer.restype = UINT_PTR
 
-user32.KillTimer.argtypes = [wintypes.HWND, wintypes.UINT_PTR]
+user32.KillTimer.argtypes = [wintypes.HWND, UINT_PTR]
 user32.KillTimer.restype = wintypes.BOOL
 
 user32.InvalidateRect.argtypes = [wintypes.HWND, ctypes.c_void_p, wintypes.BOOL]
