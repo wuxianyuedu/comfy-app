@@ -29,15 +29,36 @@ import threading
 import subprocess
 
 import ctypes
-from ctypes import wintypes
 
-# ── Win32 常量 ──
-# Python 3.13 从 ctypes.wintypes 移除了 LRESULT/WPARAM/LPARAM/UINT_PTR/TIMERPROC，手动定义。
+# ── Win32 类型别名 ──
+# Python 3.13 大幅精简 ctypes.wintypes，很多 HANDLE 类别名被移除。
+# 这里全部用 ctypes 原生类型定义，避免打包后运行时找不到属性。
 LRESULT = ctypes.c_ssize_t
 WPARAM = ctypes.c_size_t
 LPARAM = ctypes.c_ssize_t
 UINT_PTR = ctypes.c_size_t
-TIMERPROC = ctypes.WINFUNCTYPE(None, wintypes.HWND, wintypes.UINT, UINT_PTR, wintypes.DWORD)
+BOOL = ctypes.c_int
+DWORD = ctypes.c_uint32
+UINT = ctypes.c_uint
+ATOM = ctypes.c_ushort
+COLORREF = ctypes.c_uint32
+LPCWSTR = ctypes.c_wchar_p
+HANDLE = ctypes.c_void_p
+HWND = HANDLE
+HINSTANCE = HANDLE
+HMENU = HANDLE
+HICON = HANDLE
+HCURSOR = HANDLE
+HBRUSH = HANDLE
+HDC = HANDLE
+HFONT = HANDLE
+HPEN = HANDLE
+HGDIOBJ = HANDLE
+LPVOID = HANDLE
+TIMERPROC = ctypes.WINFUNCTYPE(None, HWND, UINT, UINT_PTR, DWORD)
+
+# 预定义光标 ID（IDC_ARROW）通过 MAKEINTRESOURCE 方式传递
+IDC_ARROW = ctypes.c_void_p(32512)
 
 CW_USEDEFAULT = 0x80000000
 WS_POPUP = 0x80000000
@@ -106,7 +127,7 @@ def find_tauri_window() -> bool:
         user32 = ctypes.windll.user32
         found = [False]
 
-        def callback(hwnd: wintypes.HWND, _lparam: LPARAM) -> bool:
+        def callback(hwnd: HWND, _lparam: LPARAM) -> bool:
             if not user32.IsWindowVisible(hwnd):
                 return True
             length = user32.GetWindowTextLengthW(hwnd)
@@ -120,7 +141,7 @@ def find_tauri_window() -> bool:
                 return False
             return True
 
-        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, LPARAM)
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, HWND, LPARAM)
         proc = WNDENUMPROC(callback)
         user32.EnumWindows(proc, 0)
         callback._keep = proc  # type: ignore[attr-defined]
@@ -135,110 +156,110 @@ kernel32 = ctypes.windll.kernel32
 gdi32 = ctypes.windll.gdi32
 
 user32.CreateWindowExW.argtypes = [
-    wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
+    DWORD, LPCWSTR, LPCWSTR, DWORD,
     ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
-    wintypes.HWND, wintypes.HMENU, wintypes.HINSTANCE, wintypes.LPVOID,
+    HWND, HMENU, HINSTANCE, LPVOID,
 ]
-user32.CreateWindowExW.restype = wintypes.HWND
+user32.CreateWindowExW.restype = HWND
 
-user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, WPARAM, LPARAM]
+user32.DefWindowProcW.argtypes = [HWND, UINT, WPARAM, LPARAM]
 user32.DefWindowProcW.restype = LRESULT
 
 user32.RegisterClassExW.argtypes = [ctypes.c_void_p]
-user32.RegisterClassExW.restype = wintypes.ATOM
+user32.RegisterClassExW.restype = ATOM
 
-user32.GetMessageW.argtypes = [ctypes.c_void_p, wintypes.HWND, wintypes.UINT, wintypes.UINT]
+user32.GetMessageW.argtypes = [ctypes.c_void_p, HWND, UINT, UINT]
 user32.GetMessageW.restype = ctypes.c_int
 
 user32.TranslateMessage.argtypes = [ctypes.c_void_p]
-user32.TranslateMessage.restype = wintypes.BOOL
+user32.TranslateMessage.restype = BOOL
 
 user32.DispatchMessageW.argtypes = [ctypes.c_void_p]
 user32.DispatchMessageW.restype = LRESULT
 
 user32.PostQuitMessage.argtypes = [ctypes.c_int]
 
-user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.c_void_p]
+user32.GetClientRect.argtypes = [HWND, ctypes.c_void_p]
 
 user32.SetWindowPos.argtypes = [
-    wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int,
-    ctypes.c_int, ctypes.c_int, wintypes.UINT,
+    HWND, HWND, ctypes.c_int, ctypes.c_int,
+    ctypes.c_int, ctypes.c_int, UINT,
 ]
-user32.SetWindowPos.restype = wintypes.BOOL
+user32.SetWindowPos.restype = BOOL
 
-user32.SetTimer.argtypes = [wintypes.HWND, UINT_PTR, wintypes.UINT, TIMERPROC]
+user32.SetTimer.argtypes = [HWND, UINT_PTR, UINT, TIMERPROC]
 user32.SetTimer.restype = UINT_PTR
 
-user32.KillTimer.argtypes = [wintypes.HWND, UINT_PTR]
-user32.KillTimer.restype = wintypes.BOOL
+user32.KillTimer.argtypes = [HWND, UINT_PTR]
+user32.KillTimer.restype = BOOL
 
-user32.InvalidateRect.argtypes = [wintypes.HWND, ctypes.c_void_p, wintypes.BOOL]
-user32.InvalidateRect.restype = wintypes.BOOL
+user32.InvalidateRect.argtypes = [HWND, ctypes.c_void_p, BOOL]
+user32.InvalidateRect.restype = BOOL
 
-user32.LoadCursorW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR]
-user32.LoadCursorW.restype = wintypes.HCURSOR
+user32.LoadCursorW.argtypes = [HINSTANCE, HANDLE]
+user32.LoadCursorW.restype = HCURSOR
 
-user32.GetDC.argtypes = [wintypes.HWND]
-user32.GetDC.restype = wintypes.HDC
+user32.GetDC.argtypes = [HWND]
+user32.GetDC.restype = HDC
 
-user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
+user32.ReleaseDC.argtypes = [HWND, HDC]
 user32.ReleaseDC.restype = ctypes.c_int
 
-user32.BeginPaint.argtypes = [wintypes.HWND, ctypes.c_void_p]
-user32.BeginPaint.restype = wintypes.HDC
+user32.BeginPaint.argtypes = [HWND, ctypes.c_void_p]
+user32.BeginPaint.restype = HDC
 
-user32.EndPaint.argtypes = [wintypes.HWND, ctypes.c_void_p]
-user32.EndPaint.restype = wintypes.BOOL
+user32.EndPaint.argtypes = [HWND, ctypes.c_void_p]
+user32.EndPaint.restype = BOOL
 
-user32.GetDesktopWindow.restype = wintypes.HWND
+user32.GetDesktopWindow.restype = HWND
 
-user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.c_void_p]
-user32.GetWindowRect.restype = wintypes.BOOL
+user32.GetWindowRect.argtypes = [HWND, ctypes.c_void_p]
+user32.GetWindowRect.restype = BOOL
 
-user32.SetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPCWSTR]
+user32.SetWindowTextW.argtypes = [HWND, LPCWSTR]
 
 # ── GDI ──
-gdi32.CreateSolidBrush.argtypes = [wintypes.COLORREF]
-gdi32.CreateSolidBrush.restype = wintypes.HBRUSH
+gdi32.CreateSolidBrush.argtypes = [COLORREF]
+gdi32.CreateSolidBrush.restype = HBRUSH
 
-gdi32.CreatePen.argtypes = [ctypes.c_int, ctypes.c_int, wintypes.COLORREF]
-gdi32.CreatePen.restype = wintypes.HPEN
+gdi32.CreatePen.argtypes = [ctypes.c_int, ctypes.c_int, COLORREF]
+gdi32.CreatePen.restype = HPEN
 
-gdi32.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
-gdi32.SelectObject.restype = wintypes.HGDIOBJ
+gdi32.SelectObject.argtypes = [HDC, HGDIOBJ]
+gdi32.SelectObject.restype = HGDIOBJ
 
-gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
-gdi32.DeleteObject.restype = wintypes.BOOL
+gdi32.DeleteObject.argtypes = [HGDIOBJ]
+gdi32.DeleteObject.restype = BOOL
 
-gdi32.SetTextColor.argtypes = [wintypes.HDC, wintypes.COLORREF]
-gdi32.SetTextColor.restype = wintypes.COLORREF
+gdi32.SetTextColor.argtypes = [HDC, COLORREF]
+gdi32.SetTextColor.restype = COLORREF
 
-gdi32.SetBkColor.argtypes = [wintypes.HDC, wintypes.COLORREF]
-gdi32.SetBkColor.restype = wintypes.COLORREF
+gdi32.SetBkColor.argtypes = [HDC, COLORREF]
+gdi32.SetBkColor.restype = COLORREF
 
-gdi32.SetBkMode.argtypes = [wintypes.HDC, ctypes.c_int]
+gdi32.SetBkMode.argtypes = [HDC, ctypes.c_int]
 gdi32.SetBkMode.restype = ctypes.c_int
 
-gdi32.Rectangle.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
-gdi32.Rectangle.restype = wintypes.BOOL
+gdi32.Rectangle.argtypes = [HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+gdi32.Rectangle.restype = BOOL
 
 gdi32.RoundRect.argtypes = [
-    wintypes.HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+    HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
     ctypes.c_int, ctypes.c_int,
 ]
-gdi32.RoundRect.restype = wintypes.BOOL
+gdi32.RoundRect.restype = BOOL
 
 gdi32.CreateFontW.argtypes = [
     ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
-    wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
-    wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
-    wintypes.LPCWSTR,
+    DWORD, DWORD, DWORD, DWORD,
+    DWORD, DWORD, DWORD, DWORD,
+    LPCWSTR,
 ]
-gdi32.CreateFontW.restype = wintypes.HFONT
+gdi32.CreateFontW.restype = HFONT
 
 gdi32.DrawTextW.argtypes = [
-    wintypes.HDC, wintypes.LPCWSTR, ctypes.c_int, ctypes.c_void_p,
-    wintypes.UINT,
+    HDC, LPCWSTR, ctypes.c_int, ctypes.c_void_p,
+    UINT,
 ]
 gdi32.DrawTextW.restype = ctypes.c_int
 
@@ -256,23 +277,23 @@ class WNDCLASSEXW(ctypes.Structure):
         ("lpfnWndProc", ctypes.c_void_p),
         ("cbClsExtra", ctypes.c_int),
         ("cbWndExtra", ctypes.c_int),
-        ("hInstance", wintypes.HINSTANCE),
-        ("hIcon", wintypes.HICON),
-        ("hCursor", wintypes.HCURSOR),
-        ("hbrBackground", wintypes.HBRUSH),
-        ("lpszMenuName", wintypes.LPCWSTR),
-        ("lpszClassName", wintypes.LPCWSTR),
-        ("hIconSm", wintypes.HICON),
+        ("hInstance", HINSTANCE),
+        ("hIcon", HICON),
+        ("hCursor", HCURSOR),
+        ("hbrBackground", HBRUSH),
+        ("lpszMenuName", LPCWSTR),
+        ("lpszClassName", LPCWSTR),
+        ("hIconSm", HICON),
     ]
 
 
 class PAINTSTRUCT(ctypes.Structure):
     _fields_ = [
-        ("hdc", wintypes.HDC),
-        ("fErase", wintypes.BOOL),
+        ("hdc", HDC),
+        ("fErase", BOOL),
         ("rcPaint", RECT),
-        ("fRestore", wintypes.BOOL),
-        ("fIncUpdate", wintypes.BOOL),
+        ("fRestore", BOOL),
+        ("fIncUpdate", BOOL),
         ("rgbReserved", ctypes.c_byte * 32),
     ]
 
@@ -283,11 +304,11 @@ class POINT(ctypes.Structure):
 
 class MSG(ctypes.Structure):
     _fields_ = [
-        ("hwnd", wintypes.HWND),
-        ("message", wintypes.UINT),
+        ("hwnd", HWND),
+        ("message", UINT),
         ("wParam", WPARAM),
         ("lParam", LPARAM),
-        ("time", wintypes.DWORD),
+        ("time", DWORD),
         ("pt", POINT),
     ]
 
@@ -295,7 +316,7 @@ class MSG(ctypes.Structure):
 # ── 启动画面窗口类 ──
 class SplashWindow:
     def __init__(self):
-        self.hwnd: wintypes.HWND = 0
+        self.hwnd: HWND = 0
         self._closed = False
         self._progress = 0.0
         self._status = "ok"  # ok | error | timeout
@@ -308,7 +329,7 @@ class SplashWindow:
 
     def _register_class(self) -> bool:
         wnd_proc = ctypes.WINFUNCTYPE(
-            LRESULT, wintypes.HWND, wintypes.UINT, WPARAM, LPARAM
+            LRESULT, HWND, UINT, WPARAM, LPARAM
         )(self._wnd_proc)
         self._wnd_proc_ref = wnd_proc  # keep reference
 
@@ -316,7 +337,7 @@ class SplashWindow:
         wc.cbSize = ctypes.sizeof(WNDCLASSEXW)
         wc.lpfnWndProc = ctypes.cast(wnd_proc, ctypes.c_void_p).value
         wc.hInstance = kernel32.GetModuleHandleW(None)
-        wc.hCursor = user32.LoadCursorW(None, wintypes.LPCWSTR(32512))  # IDC_ARROW
+        wc.hCursor = user32.LoadCursorW(None, IDC_ARROW)
         wc.hbrBackground = 0
         wc.lpszClassName = self._class_name
 
@@ -326,7 +347,7 @@ class SplashWindow:
         self._wc_atom = atom
         return True
 
-    def _wnd_proc(self, hwnd: wintypes.HWND, msg: wintypes.UINT,
+    def _wnd_proc(self, hwnd: HWND, msg: UINT,
                   wparam: WPARAM, lparam: LPARAM) -> LRESULT:
         if msg == WM_PAINT:
             ps = PAINTSTRUCT()
@@ -347,7 +368,7 @@ class SplashWindow:
             return 0
         return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
-    def _create_font(self, hdc: wintypes.HDC, size: int, bold: bool = False) -> wintypes.HFONT:
+    def _create_font(self, hdc: HDC, size: int, bold: bool = False) -> HFONT:
         # 将 pt 转换为逻辑高度（负数表示字符高度）
         dpi = gdi32.GetDeviceCaps(hdc, LOGPIXELSX)
         height = -int(size * dpi / 72)
@@ -357,7 +378,7 @@ class SplashWindow:
             "Microsoft YaHei UI",
         )
 
-    def _paint(self, hdc: wintypes.HDC):
+    def _paint(self, hdc: HDC):
         rc = RECT()
         user32.GetClientRect(self.hwnd, ctypes.byref(rc))
         w, h = rc.right, rc.bottom
