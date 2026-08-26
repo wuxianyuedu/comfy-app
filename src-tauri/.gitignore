@@ -4,5 +4,10 @@
 /gen/schemas
 
 # 桌面壳生产构建产物（由 scripts/build-desktop.mjs 生成，不入库）
-/static/
+# 用 /static/* 只排除目录内容、不排目录本身，以便对源脚本开例外（见下）。
+/static/*
+# §10.2：dev-launcher.ps1 是手工维护的源脚本（主脚本 scripts/dev-launcher.ps1
+# 的同步副本），需入库并保持同步；其余 static 仍为构建产物忽略。
+!/static/scripts/
+!/static/scripts/dev-launcher.ps1
 /binaries/
