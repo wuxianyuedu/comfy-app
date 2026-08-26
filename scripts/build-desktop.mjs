@@ -60,6 +60,18 @@ console.log("[build-desktop] 2/4 组装 src-tauri/static ...");
 rmSync(staticDir, { recursive: true, force: true });
 mkdirSync(staticDir, { recursive: true });
 
+// ── 2.1 §10.2 自动同步启动脚本 ─────────────────────────────
+// dev-launcher.ps1 是手工维护的主脚本（scripts/dev-launcher.ps1）在
+// Tauri 打包内的同步副本。原本靠人工维护，这里改为构建时自动覆盖，
+// 保证 §10.2「改主脚本须同步副本」由构建流程保证，不再依赖手动同步。
+const launcherSrc = join(root, "scripts", "dev-launcher.ps1");
+if (existsSync(launcherSrc)) {
+  const launcherDestDir = join(staticDir, "scripts");
+  mkdirSync(launcherDestDir, { recursive: true });
+  copyFileSync(launcherSrc, join(launcherDestDir, "dev-launcher.ps1"));
+  console.log("[build-desktop]   §10.2 已自动同步 scripts/dev-launcher.ps1 → static/scripts/dev-launcher.ps1");
+}
+
 cpSync(nextOut, staticDir, { recursive: true }); // server.js + 裁剪 node_modules
 cpSync(join(root, ".next", "static"), join(staticDir, ".next", "static"), { recursive: true });
 if (existsSync(join(root, "public"))) {

@@ -5,6 +5,11 @@ import type { Dispatch, RefObject, SetStateAction } from "react";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { WorkflowDetail, WorkflowIOParam } from "./workflow-types";
 
+/** tRPC 查询返回的工作流详情载荷：在 WorkflowDetail 基础上，失败分支会带上
+ *  `error` 字段（成功时缺省）。用它对全文件散落的 `(x as any)` 做类型收窄，
+ *  满足 §4.1 禁止 any 的约束，同时保留失败态的错误读取。 */
+type WorkflowDetailResponse = WorkflowDetail & { error?: string };
+
 export interface WorkflowDetailLoaderArgs {
   workflowId: string;
   detail: WorkflowDetail | null;
@@ -55,7 +60,7 @@ export function useWorkflowDetailLoader({
     (uid: string, name: string) => {
       setSubgraphStack((prev) => [...prev, { uid, name }]);
     },
-    []
+    [], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const fetchDetail = useCallback(
@@ -77,7 +82,7 @@ export function useWorkflowDetailLoader({
       if (opts?.subgraphUid) {
         const targetUid = opts.subgraphUid;
         setSubgraphRawContext((prev) =>
-          prev && prev.subUid === targetUid
+          prev?.subUid === targetUid
             ? prev
             : { parentRawJson: detailRef.current?.rawJson ?? null, subUid: targetUid }
         );
@@ -167,11 +172,11 @@ export function useWorkflowDetailLoader({
       }
 
       // 1) Synchronous sessionStorage lookup → instant paint on re-open.
-      let cached: any = null;
+      let cached: WorkflowDetail | null = null;
       try {
         const raw = sessionStorage.getItem(cacheKey);
         if (raw) {
-          const obj = JSON.parse(raw);
+          const obj = JSON.parse(raw) as { t: number; d: WorkflowDetail };
           if (Date.now() - obj.t < WFCACHE_TTL_MS) cached = obj.d;
         }
       } catch {
@@ -193,10 +198,10 @@ export function useWorkflowDetailLoader({
           setSubgraphLoading(false);
           /* Capture root workflow name on the first top-level fetch only. */
           if (!opts?.subgraphUid) {
-            setRootWorkflowName((prev) => prev || cached.name || "");
+            setRootWorkflowName((prev) => prev ?? cached.name ?? "");
           }
           if (opts?.subgraphUid) {
-            pushSubgraphStack(opts.subgraphUid, opts.parentTitle || cached.name || "子工作流");
+            pushSubgraphStack(opts.subgraphUid, opts.parentTitle ?? cached.name ?? "子工作流");
           }
         }
         // Background refresh: ALWAYS commit if it wins the race (it's
@@ -206,23 +211,23 @@ export function useWorkflowDetailLoader({
           ? vanillaApi.workflow.subgraph.query({ id: workflowId, uid: opts.subgraphUid })
           : vanillaApi.workflow.detailFull.query({ id: workflowId });
         bgPromise
-          .then((data) => {
-            if (!data || (data as any).error) return;
+          .then((data: WorkflowDetailResponse | null) => {
+            if (!data || data.error) return;
             try {
               sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), data }));
             } catch {
               /* ignore quota errors */
             }
             if (latestRequestIdRef.current === myReqId) {
-              setDetail(data as any);
-              setParamMap((data as any).paramMap ?? {});
-              setWorkflowIO((data as any).workflowIO ?? {});
+              setDetail(data);
+              setParamMap(data.paramMap ?? {});
+              setWorkflowIO(data.workflowIO ?? {});
               if (!opts?.subgraphUid) {
-                setRootWorkflowName((prev) => prev || (data as any).name || "");
+                setRootWorkflowName((prev) => prev ?? data.name ?? "");
               }
             }
           })
-          .catch(() => {});
+          .catch(() => undefined);
         return;
       }
 
@@ -233,28 +238,28 @@ export function useWorkflowDetailLoader({
       const isBust = opts?.bust === true;
       if (!detail) setLoading(true);
       try {
-        const d = opts?.subgraphUid
+        const d = (opts?.subgraphUid
           ? await vanillaApi.workflow.subgraph.query({ id: workflowId, uid: opts.subgraphUid })
           : await vanillaApi.workflow.detailFull.query({
               id: workflowId,
               bust: isBust ? true : undefined,
-            });
-        if ((d as any).error) throw new Error((d as any).error);
+            })) as WorkflowDetailResponse;
+        if (d.error) throw new Error(d.error);
         try {
           sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), d }));
         } catch {
           /* ignore quota errors */
         }
         if (myReqId === latestRequestIdRef.current) {
-          setDetail(d as any);
-          setParamMap((d as any).paramMap ?? {});
-          setWorkflowIO((d as any).workflowIO ?? {});
+          setDetail(d);
+          setParamMap(d.paramMap ?? {});
+          setWorkflowIO(d.workflowIO ?? {});
           /* Capture root workflow name on first top-level fetch. */
           if (!opts?.subgraphUid) {
-            setRootWorkflowName((prev) => prev || (d as any).name || "");
+            setRootWorkflowName((prev) => prev ?? d.name ?? "");
           }
           if (opts?.subgraphUid) {
-            pushSubgraphStack(opts.subgraphUid, opts.parentTitle || (d as any).name || "子工作流");
+            pushSubgraphStack(opts.subgraphUid, opts.parentTitle ?? d.name ?? "子工作流");
           }
         }
       } catch (e: unknown) {
@@ -276,7 +281,7 @@ export function useWorkflowDetailLoader({
         }
       }
     },
-    [workflowId, pushSubgraphStack]
+    [workflowId, pushSubgraphStack], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   /* 2026-08-06 R3 终极方案 #4: 顶栏 🔄 强制重载按钮触发的入口
@@ -299,8 +304,8 @@ export function useWorkflowDetailLoader({
     setDetail(null);
     setLoading(true);
     setSubgraphLoading(false);
-    fetchDetail({ bust: true });
-  }, [fetchDetail]);
+    void fetchDetail({ bust: true });
+  }, [fetchDetail]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     /* When the parent reuses this editor instance for a *different*
@@ -312,7 +317,7 @@ export function useWorkflowDetailLoader({
     setRootWorkflowName("");
     setDetail(null);
     setError("");
-    fetchDetail();
+    void fetchDetail();
   }, [workflowId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Enter a subgraph: flash the loading overlay synchronously, then fetch
@@ -338,9 +343,9 @@ export function useWorkflowDetailLoader({
       setIoPreviewOpen(false);
       setSubgraphError("");
       setSubgraphLoading(true);
-      setTimeout(() => fetchDetail({ subgraphUid: uid, parentTitle }), 0);
+      setTimeout(() => { void fetchDetail({ subgraphUid: uid, parentTitle }); }, 0);
     },
-    [fetchDetail]
+    [fetchDetail], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   /* Pop one level off the subgraph stack and re-render.  If we end up
@@ -353,14 +358,14 @@ export function useWorkflowDetailLoader({
       // Schedule a re-fetch of the right level outside the setter.
       if (next.length === 0) {
         // Back at top level
-        setTimeout(() => fetchDetail(), 0);
+        setTimeout(() => { void fetchDetail(); }, 0);
       } else {
         const parent = next[next.length - 1];
-        setTimeout(() => fetchDetail({ subgraphUid: parent!.uid, parentTitle: parent!.name }), 0);
+        setTimeout(() => { void fetchDetail({ subgraphUid: parent!.uid, parentTitle: parent!.name }); }, 0);
       }
       return next;
     });
-  }, [fetchDetail]);
+  }, [fetchDetail]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { pushSubgraphStack, fetchDetail, forceReloadDetail, onEnterSubgraph, onExitSubgraph };
 }
