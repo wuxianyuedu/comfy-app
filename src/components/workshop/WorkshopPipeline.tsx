@@ -42,6 +42,12 @@ export function WorkshopPipeline() {
   const [checkpoint, setCheckpoint] = React.useState("");
   const [generating, setGenerating] = React.useState(false);
 
+  const [outline, setOutline] = React.useState(
+    "少女小满在旧城区的天台邂逅一台会说话的旧收音机，它声称能播放“未来的声音”。随着电波里浮现陌生又熟悉的话语，小满逐渐发现，那些声音来自十年后试图拯救这座即将被拆除的城市的自己……"
+  );
+  const [editingOutline, setEditingOutline] = React.useState(false);
+  const [draftOutline, setDraftOutline] = React.useState(outline);
+
   React.useEffect(() => {
     fetch("/api/skills")
       .then((res) => res.json())
@@ -131,6 +137,23 @@ export function WorkshopPipeline() {
   const totalStages = 6;
   const progressPct = 23; // 设计稿固定展示 23%，后续可改为动态 Math.round((completedStages / totalStages) * 100)
 
+  const stageTitles: Record<Tab, { title: string; desc: string }> = {
+    script: {
+      title: "剧本 · 故事大纲",
+      desc: "从一句话梗概出发，自动派生角色、场景与分镜脚本，并贯穿到生图 / 视频全流程。",
+    },
+    character: {
+      title: "角色卡 · 角色设计",
+      desc: "为项目创建并管理角色形象、特征与参考，统一后续分镜与生图风格。",
+    },
+    storyboard: {
+      title: "场景分镜 · 分镜脚本",
+      desc: "将剧本拆解为可执行的镜头序列，规划画面、动作与镜头语言。",
+    },
+  };
+  const { title: stageTitle, desc: stageDesc } = stageTitles[tab];
+  const stageIndex = STAGES.findIndex((s) => s.id === tab) + 1;
+
   const missing = [
     { label: "角色卡未建立", detail: `${Math.max(2 - characters.length, 0)} 个待建`, color: "#FF5C76" },
     { label: "场景未规划", detail: `${Math.max(3 - scenes.length, 0)} 个待规划`, color: "#FFB553" },
@@ -157,13 +180,30 @@ export function WorkshopPipeline() {
       <div className="dark min-h-screen w-full bg-bg text-ink">
         {/* ── Top bar ── */}
         <header className="flex h-16 items-center gap-3 border-b border-border px-6">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-base font-bold text-white">工</div>
-          <div className="flex flex-col leading-tight">
-            <span className="text-[17px] font-semibold text-ink">工坊 · 全链路项目管线</span>
-            <span className="text-[11px] text-muted">Comfy-APP / 项目管线</span>
+          <div className="flex flex-1 items-center gap-3">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-base font-bold text-white">工</div>
+            <div className="flex flex-col leading-tight">
+              <span className="text-[17px] font-semibold text-ink">工坊 · 全链路项目管线</span>
+              <span className="text-[11px] text-muted">Comfy-APP / 项目管线</span>
+            </div>
+            <span className="ml-4 rounded-lg bg-white/[0.04] px-3 py-1.5 text-[13px] text-muted">{meta.title}</span>
           </div>
-          <span className="ml-4 rounded-lg bg-white/[0.04] px-3 py-1.5 text-[13px] text-muted">{meta.title}</span>
-          <div className="ml-auto flex items-center gap-3">
+
+          {/* 项目总进度：放到最顶部（设计稿红框区域） */}
+          <div className="hidden w-full max-w-[260px] lg:block">
+            <div className="flex items-center justify-between text-[11px] text-muted">
+              <span>项目总进度</span>
+              <span className="font-medium text-primary">{progressPct}%</span>
+            </div>
+            <div className="mt-1.5 h-2 w-full rounded-full bg-elevated">
+              <div
+                className="h-2 rounded-full bg-primary transition-all"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-1 items-center justify-end gap-3">
             <span className="rounded-full bg-[#FFB553]/15 px-3 py-1.5 text-xs font-medium text-[#FFB553]">
               距离成片还差 3 类素材
             </span>
@@ -176,8 +216,9 @@ export function WorkshopPipeline() {
         {/* ── Horizontal stage nav ── */}
         <nav className="flex items-stretch gap-3 border-b border-border px-6 py-4">
           {STAGES.map((st, index) => {
-            const active = st.state === "active";
+            const active = tab === st.id;
             const locked = st.state === "locked";
+            const sub = locked ? "已锁定" : active ? "进行中" : "待开始";
             return (
               <button
                 key={st.id}
@@ -200,7 +241,7 @@ export function WorkshopPipeline() {
                 </span>
                 <div className="leading-tight">
                   <div className={`text-[13.5px] font-semibold ${active ? "text-primary" : "text-ink"}`}>{st.label}</div>
-                  <div className={`text-[11px] ${locked ? "text-faint" : "text-muted"}`}>{st.sub}</div>
+                  <div className={`text-[11px] ${locked ? "text-faint" : "text-muted"}`}>{sub}</div>
                 </div>
               </button>
             );
@@ -213,13 +254,11 @@ export function WorkshopPipeline() {
           <div className="min-w-0">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-[17px] font-semibold text-ink">剧本 · 故事大纲</h2>
-                <p className="mt-1 text-[12px] text-muted">
-                  从一句话梗概出发，自动派生角色、场景与分镜脚本，并贯穿到生图 / 视频全流程。
-                </p>
+                <h2 className="text-[17px] font-semibold text-ink">{stageTitle}</h2>
+                <p className="mt-1 text-[12px] text-muted">{stageDesc}</p>
               </div>
               <span className="shrink-0 rounded-full bg-white/[0.04] px-3 py-1 text-[11px] text-muted">
-                阶段 1 / 6
+                阶段 {stageIndex} / {totalStages}
               </span>
             </div>
 
@@ -228,15 +267,49 @@ export function WorkshopPipeline() {
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-[13px] font-semibold text-ink">故事大纲</span>
                 <div className="flex items-center gap-2">
-                  <button className="rounded-lg bg-white/[0.04] px-4 py-1.5 text-xs font-medium text-ink hover:bg-white/[0.08]">
-                    编辑
-                  </button>
+                  {!editingOutline ? (
+                    <button
+                      onClick={() => {
+                        setDraftOutline(outline);
+                        setEditingOutline(true);
+                      }}
+                      className="rounded-lg bg-white/[0.04] px-4 py-1.5 text-xs font-medium text-ink hover:bg-white/[0.08]"
+                    >
+                      编辑
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setEditingOutline(false)}
+                        className="rounded-lg bg-white/[0.04] px-4 py-1.5 text-xs font-medium text-ink hover:bg-white/[0.08]"
+                      >
+                        取消
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOutline(draftOutline);
+                          setEditingOutline(false);
+                        }}
+                        className="rounded-lg bg-primary/[0.12] px-4 py-1.5 text-[11px] text-primary hover:bg-primary/[0.18]"
+                      >
+                        保存
+                      </button>
+                    </>
+                  )}
                   <span className="rounded-lg bg-primary/[0.12] px-4 py-1.5 text-[11px] text-primary">自动生成</span>
                 </div>
               </div>
-              <p className="text-[12.5px] leading-relaxed text-muted">
-                少女小满在旧城区的天台邂逅一台会说话的旧收音机，它声称能播放“未来的声音”。随着电波里浮现陌生又熟悉的话语，小满逐渐发现，那些声音来自十年后试图拯救这座即将被拆除的城市的自己……
-              </p>
+              {editingOutline ? (
+                <textarea
+                  value={draftOutline}
+                  onChange={(e) => setDraftOutline(e.target.value)}
+                  rows={4}
+                  className="w-full resize-none rounded-xl border border-border bg-bg p-3 text-[12.5px] leading-relaxed text-ink outline-none ring-primary/30 transition focus:border-primary/50 focus:ring-2"
+                  placeholder="输入故事大纲……"
+                />
+              ) : (
+                <p className="text-[12.5px] leading-relaxed text-muted">{outline}</p>
+              )}
             </section>
 
             {/* Storyboard card */}
@@ -267,41 +340,6 @@ export function WorkshopPipeline() {
               </div>
             </section>
 
-            {/* Progress + CTA */}
-            <section className="mt-5 rounded-2xl border border-border bg-surface p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div>
-                    <div className="text-[12px] text-muted">项目总进度</div>
-                    <div className="text-xl font-bold text-primary">{progressPct}%</div>
-                  </div>
-                  <div className="h-9 w-px bg-border" />
-                  <div className="text-[11px] text-muted">完成 1 / 6 阶段 · 剧本进行中</div>
-                </div>
-              </div>
-              <div className="h-2.5 w-full rounded-full bg-elevated">
-                <div
-                  className="h-2.5 rounded-full bg-primary transition-all"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-            </section>
-
-            <div className="mt-4 flex gap-3">
-              <button
-                onClick={() => setTab("storyboard")}
-                className="rounded-xl bg-primary px-6 py-3 text-[13px] font-semibold text-white hover:bg-primary-hover"
-              >
-                从剧本生成 16 镜
-              </button>
-              <button
-                onClick={() => setTab("script")}
-                className="rounded-xl bg-white/[0.04] px-6 py-3 text-[13px] font-semibold text-ink hover:bg-white/[0.08]"
-              >
-                导入剧本
-              </button>
-            </div>
-
             {/* Tool panels (reused from old UI, hidden by default) */}
             {tab === "script" && (
               <section className="mt-5 rounded-2xl border border-border bg-surface p-5">
@@ -318,6 +356,23 @@ export function WorkshopPipeline() {
                 <CharacterDesigner characters={characters} styles={styles} onCharactersChange={setCharacters} />
               </section>
             )}
+            {tab === "storyboard" && (
+              <div className="mt-5 flex gap-3">
+                <button
+                  onClick={() => setTab("storyboard")}
+                  className="rounded-xl bg-primary px-6 py-3 text-[13px] font-semibold text-white hover:bg-primary-hover"
+                >
+                  从剧本生成 16 镜
+                </button>
+                <button
+                  onClick={() => setTab("script")}
+                  className="rounded-xl bg-white/[0.04] px-6 py-3 text-[13px] font-semibold text-ink hover:bg-white/[0.08]"
+                >
+                  导入剧本
+                </button>
+              </div>
+            )}
+
             {tab === "storyboard" && (
               <section className="mt-5 rounded-2xl border border-border bg-surface p-5">
                 <h3 className="mb-3 text-[14px] font-semibold text-ink">分镜工具</h3>
