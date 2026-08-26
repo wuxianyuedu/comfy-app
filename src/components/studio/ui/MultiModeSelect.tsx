@@ -390,8 +390,7 @@ export function MultiModeSelect({
                           : "text-gray-300 hover:bg-white/[0.04]"
                       }`}
                     >
-                      {/* checkbox — the default mode is visually implied by
-                          the 「默认」 badge, so it doesn't also need a checkmark. */}
+                      {/* checkbox: 每个被选中的模式都显示勾选标记 */}
                       <span
                         className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
                           isSelected
