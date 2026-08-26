@@ -93,6 +93,22 @@ function formatTime(ts: number): string {
 }
 
 const LOG_LINE_RE = /^\[(\d{2}):(\d{2}):(\d{2})\]\s*\[(STEP|OK|INFO|WARN|ERROR|DEBUG)\]\s*(.*)$/;
+const LOG_FILENAME_DATE_RE = /dev-launcher-(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})\.log$/;
+
+function parseLogFileDate(name: string): Date | undefined {
+  const m = LOG_FILENAME_DATE_RE.exec(name);
+  if (!m) return undefined;
+  const [, y, mo, d, h, mi, s] = m;
+  const date = new Date(
+    Number(y),
+    Number(mo) - 1,
+    Number(d),
+    Number(h),
+    Number(mi),
+    Number(s)
+  );
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
 
 function parseLogLevel(level: string): LogLevel {
   switch (level.toLowerCase()) {
@@ -108,9 +124,9 @@ function parseLogLevel(level: string): LogLevel {
   }
 }
 
-function parseFileLogs(text: string): LogEntry[] {
+function parseFileLogs(text: string, baseDate?: Date): LogEntry[] {
   const now = Date.now();
-  const today = new Date();
+  const today = baseDate ?? new Date();
   const entries: LogEntry[] = [];
   for (const rawLine of text.split("\n")) {
     // Strip ANSI SGR (e.g. \x1b[36m) that the launcher now writes into the
@@ -119,7 +135,7 @@ function parseFileLogs(text: string): LogEntry[] {
       .replace(/\r$/, "")
       .replace(/\x1b\[[0-9;:]*m/g, "");
     if (!line.trim()) continue;
-    const m = line.match(LOG_LINE_RE);
+    const m = LOG_LINE_RE.exec(line);
     if (m) {
       const [, hh, mm, ss, lv, msg] = m;
       const d = new Date(today);
@@ -245,6 +261,66 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     void setup();
     return () => unlisten?.();
   }, [addEntry]);
+
+  // ── Load historical launcher log files so the panel shows the full picture ──
+  // 实时日志只写入 log/dev-launcher.log；每次运行结束后该文件会被归档到
+  // log/YYYY-MM/dev-launcher-YYYY-MM-DD_HH-mm-ss.log。打开面板时先加载最近
+  // 的历史文件，再轮询当前文件，避免「只能看到本次运行」导致显示不全。
+  const historicalLoadedRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (historicalLoadedRef.current) return;
+    historicalLoadedRef.current = true;
+
+    const loadHistorical = async () => {
+      try {
+        const listRes = await fetch("/api/logs/list");
+        if (!listRes.ok) return;
+        const list = (await listRes.json()) as {
+          files: Array<{ name: string; relativePath: string; size: number }>;
+        };
+        if (!list.files?.length) return;
+
+        const MAX_FILES = 10;
+        const MAX_BYTES = 5 * 1024 * 1024;
+        let usedBytes = 0;
+        const toLoad = [];
+        for (const f of list.files.slice(0, MAX_FILES)) {
+          if (usedBytes + f.size > MAX_BYTES) break;
+          usedBytes += f.size;
+          toLoad.push(f);
+        }
+
+        const batches: LogEntry[][] = [];
+        for (const f of toLoad) {
+          const res = await fetch(
+            `/api/logs/history?file=${encodeURIComponent(f.relativePath)}`
+          );
+          if (!res.ok) continue;
+          const data = (await res.json()) as { content: string };
+          if (!data.content) continue;
+
+          const marker: LogEntry = {
+            id: nextId(),
+            time: Date.now(),
+            level: "info",
+            message: `--- 历史日志: ${f.name} ---`,
+            source: "system",
+          };
+          const baseDate = parseLogFileDate(f.name);
+          const entries = parseFileLogs(data.content, baseDate);
+          batches.unshift(marker, ...entries);
+        }
+        if (batches.length > 0) {
+          setLogs((prev) => [...batches, ...prev]);
+        }
+      } catch {
+        // 历史日志读取失败不应阻塞当前日志轮询
+      }
+    };
+
+    void loadHistorical();
+  }, []);
 
   // ── Load launcher log file: startup logs + ongoing dev-server output ──
   const fileOffsetRef = useRef(0);
