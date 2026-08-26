@@ -18,6 +18,7 @@
 import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useDebugMode } from "./workflow-canvas-settings";
+import { useDebugStore } from "./debug-store";
 
 /* ── Toggle (inline, mirrors CanvasSettingsPanel's ToggleRow look) ── */
 function ToggleRow({
@@ -65,7 +66,12 @@ function ToggleRow({
 
 /* ── Drawer ── */
 export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
-  const { debugMode, setDebugMode } = useDebugMode();
+  /* 「渲染链路标签」开关走全局 debug-store（与工作流画布顶栏"调试"按钮、
+   *  workflow-canvas ComfyNode 共用同一开关）；「日志面板」开关走
+   *  useCanvasSettings.debugMode（与工作流画布设置抽屉共享）。 */
+  const debugMode = useDebugStore((state) => state.debugMode);
+  const toggleDebugMode = useDebugStore((state) => state.toggleDebugMode);
+  const { debugMode: logPanelMode, setDebugMode: setLogPanelMode } = useDebugMode();
 
   /* Esc closes the drawer — standard drawer affordance, mirrors
    * CanvasSettingsPanel's behaviour. */
@@ -118,13 +124,22 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
             调试
           </h3>
           <p className="mb-3 px-1 text-[11px] leading-relaxed text-gray-500">
-            开启后，drill-in 到工作流画布时，底部会显示独立的执行日志面板与红框结构化校验错误清单；与此处共享同一个开关。
+            「渲染链路标签」在节点卡片上叠加显示对应本项目代码模块的路径，点击可查看源码；
+            「日志面板」控制画布底部独立的执行日志面板。两者相互独立。
           </p>
           <ToggleRow
-            label="调试模式"
-            hint="独立日志面板 + file:line 调用位置"
+            label="渲染链路标签"
+            hint="节点卡片底部显示代码模块，点击查看源码"
             value={debugMode}
-            onChange={setDebugMode}
+            onChange={toggleDebugMode}
+            tooltip="开启后每个节点卡片底部叠加显示渲染链路模块标签（如 workflow-node.tsx / CanvasNode.tsx），点击标签弹出对应源码"
+          />
+          <div className="h-2" />
+          <ToggleRow
+            label="日志面板"
+            hint="独立日志面板 + file:line 调用位置"
+            value={logPanelMode}
+            onChange={setLogPanelMode}
             tooltip="开启后画布底部显示独立的执行日志面板，并在每条日志后标注调用代码位置（file:line）"
           />
         </div>

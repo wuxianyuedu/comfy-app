@@ -21,7 +21,7 @@ import { isCustomNode, getCustomNodePackage } from "@/config/custom-nodes";
 
 /** 工作流画布所有节点共用的渲染链路（不随 classType 变化） */
 const WF_COMMON: RenderChainModule[] = [
-  { file: "src/components/studio/wf-node.tsx", label: "wf-node" },
+  { file: "src/components/studio/workflow-node.tsx", label: "workflow-node" },
   { file: "src/lib/comfyui/types.ts", label: "comfyui/types" },
   { file: "src/lib/comfyui/node-titles.ts", label: "node-titles" },
 ];

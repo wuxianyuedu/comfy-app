@@ -9,7 +9,7 @@
  *    （节点渲染器）、canvas/canvas-types.ts（节点类型/元数据）、
  *    canvas/canvas-store.ts（项目数据状态）
  *  - workflow：追加 canvas/WorkflowNode.tsx + shared/workflow-io.ts
- *  - workflowArdot：追加 canvas/WorkflowNode.ardot.tsx（ardot 场景变体）
+ *  - workflowArdot：追加 canvas/WorkflowNodeArdot.tsx（ardot 场景变体）
  *  - image / video：追加 canvas/ImageGenerationPanel.tsx + canvas/canvas-helpers.ts
  *    （startGenerate / pollTask）
  *  - script：追加 canvas/canvas-helpers.ts（runScript）
@@ -23,12 +23,13 @@
 import type { RenderChainModule } from "../DebugChainFooter";
 import type { NodeKind } from "./canvas-types";
 
-/** 项目画布所有节点共用的渲染链路（不随 kind 变化） */
+/** 项目画布所有节点共用的渲染链路（不随 kind 变化）。
+ *  scope: canvas=画布级（容器/编排/状态层），node=节点级（节点渲染/类型）。 */
 const CANVAS_COMMON: RenderChainModule[] = [
-  { file: "src/components/studio/ProjectCanvas.tsx", label: "ProjectCanvas" },
-  { file: "src/components/studio/project-canvas/CanvasNode.tsx", label: "CanvasNode" },
-  { file: "src/components/studio/project-canvas/canvas-types.ts", label: "canvas-types" },
-  { file: "src/components/studio/project-canvas/canvas-store.ts", label: "canvas-store" },
+  { file: "src/components/studio/ProjectCanvas.tsx", label: "ProjectCanvas", scope: "canvas" },
+  { file: "src/components/studio/project-canvas/CanvasNode.tsx", label: "CanvasNode", scope: "node" },
+  { file: "src/components/studio/project-canvas/canvas-types.ts", label: "canvas-types", scope: "node" },
+  { file: "src/components/studio/project-canvas/canvas-store.ts", label: "canvas-store", scope: "canvas" },
 ];
 
 /** 按 kind 追加的渲染链路（不含公共链路） */
@@ -38,7 +39,7 @@ const KIND_CHAIN: Record<NodeKind | "workflowArdot", RenderChainModule[]> = {
     { file: "src/components/studio/shared/workflow-io.ts", label: "workflow-io" },
   ],
   workflowArdot: [
-    { file: "src/components/studio/project-canvas/WorkflowNode.ardot.tsx", label: "WorkflowNode.ardot" },
+    { file: "src/components/studio/project-canvas/WorkflowNodeArdot.tsx", label: "WorkflowNodeArdot" },
   ],
   image: [
     { file: "src/components/studio/project-canvas/ImageGenerationPanel.tsx", label: "ImageGenerationPanel" },

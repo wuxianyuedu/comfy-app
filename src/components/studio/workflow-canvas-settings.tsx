@@ -332,12 +332,12 @@ export function CanvasSettingsPanel({
             />
           </Section>
 
-          <Section title="调试" subtitle="统一开关执行日志面板">
+          <Section title="调试" subtitle="日志面板开关；节点渲染链路标签由顶栏「调试」按钮控制">
             <ToggleRow
-              label="调试模式"
+              label="日志面板"
               value={settings.debugMode}
               onChange={(value) => update({ debugMode: value })}
-              tooltip="开启后画布底部显示独立的执行日志面板，并在每条日志后标注调用代码位置（file:line）"
+              tooltip="开启后画布底部显示独立的执行日志面板，并在每条日志后标注调用代码位置（file:line）；节点卡片上的渲染链路标签请用顶栏「调试」按钮"
             />
           </Section>
         </div>

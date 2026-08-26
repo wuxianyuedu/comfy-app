@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import {
   ReactFlow,
@@ -24,29 +24,29 @@ import { WorkflowNodeArdot } from "./project-canvas/WorkflowNodeArdot";
 import {
   type CanvasNodeData,
   type CanvasNodeType,
+  isCanvasNode,
   NODE_META,
   defaultData,
   type NodeKind,
 } from "./project-canvas/canvas-types";
-import { importOutputAsInput } from "./project-canvas/canvas-helpers";
 import {
+  applyPropagationToNodes,
+  importOutputAsInput,
+  makeFitViewScheduler,
+  makeNodeId,
+} from "./project-canvas/canvas-helpers";
+import {
+  createDraftProject, // new: lands on a canvas w/o polluting the index until first real change
+  hydrateFromServer,
   listProjects,
   getProject,
-  upsertProject,
-  deleteProject,
-  createProject as createRealProject, // legacy: kept for switch/import paths that must persist
-  createDraftProject, // new: lands on a canvas w/o polluting the index until first real change
-  reapEmptyProject,
   reapAllEmptyDrafts,
-  commitDraftProject,
-  clearActiveIfDraft,
-  hydrateFromServer,
-  findNextAvailableName, // R65: avoid duplicate names on rename / new
-  isEmptyDraftName, // R68: single source of truth for empty-draft sentinel names
   setActive,
   getActiveId,
   type CanvasProject,
 } from "./project-canvas/canvas-store";
+import { useProjectPersistence } from "./project-canvas/use-project-persistence";
+import { useProjectManager } from "./project-canvas/use-project-manager";
 import { ModalDialog } from "./ModalDialog";
 import { useToast } from "./toast-provider";
 import { useMiniMapJump } from "./shared/useMiniMapJump";
@@ -168,14 +168,9 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNodeType>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const [projMenu, setProjMenu] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [renameVal, setRenameVal] = useState("");
-  const [projects, setProjects] = useState<CanvasProject[]>([]);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("未命名");
   /* Confirmation dialogs (R65: replaced window.confirm with custom dialog) */
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   /* Canvas panel system: 素材库 / 历史记录 slide-out panels */
   const [activePanel, setActivePanel] = useState<CanvasPanelType>(null);
@@ -207,11 +202,56 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
   // Tracks which pending workflow we've already dropped, so navigating to the
   // canvas / re-rendering doesn't place the same node twice.
   const placedPendingRef = useRef<string | null>(null);
-  // Set true once the project's initial nodes have been hydrated into
-  // local state.  We skip the first mutation persistence flush (right
-  // after load) so the effect doesn't redundantly re-write the same
-  // state we just read from the store.
-  const firstMutationRef = useRef(true);
+
+  /* ── 拆分（2026-08-26）：持久化三件套 → useProjectPersistence；
+   *  项目 CRUD + 下拉 UI 状态 → useProjectManager；CanvasInner 只留编排与 JSX。 */
+  const { persistNow } = useProjectPersistence({
+    projectId,
+    nodes,
+    edges,
+    projectName,
+    loaded: !hydrating,
+  });
+  const projectManager = useProjectManager({
+    getCurrent: () => ({
+      pid: projectIdRef.current,
+      name: projectNameRef.current,
+      nodes: nodesRef.current,
+      edges: edgesRef.current,
+    }),
+    persistNow,
+    setProjectId,
+    setProjectName,
+    setNodes,
+    setEdges,
+    fitView,
+    toast,
+  });
+  const {
+    projects,
+    projMenu,
+    renaming,
+    renameVal,
+    confirmDelete,
+    setProjMenu,
+    setRenaming,
+    setRenameVal,
+    setConfirmDelete,
+    openProjMenu,
+    switchProject,
+    newProject,
+    deleteCurrent,
+    applyDeleteCurrent,
+    startRename,
+    commitRename,
+  } = projectManager;
+
+  /* 双 rAF fitView：等 ReactFlow 完成本轮布局后再 fit，
+   * 替代 setTimeout(80ms) 魔法数字（慢机器上可能布局未完成）。 */
+  const requestFitView = useMemo(
+    () => makeFitViewScheduler(fitView),
+    [fitView]
+  );
 
   /* ── Load (or create) the active project on mount ──
    *
@@ -247,8 +287,8 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
       setNodes((proj.nodes as CanvasNodeType[]) ?? []);
       setEdges(proj.edges ?? []);
       setActive(proj.id);
-      // fit after nodes are applied
-      setTimeout(() => fitView({ padding: 0.25, duration: 300 }), 80);
+      // fit after nodes are applied（双 rAF，等 ReactFlow 完成布局）
+      requestFitView();
       setHydrating(false);
       onConsumeSeed?.();
     })();
@@ -267,9 +307,8 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
       x: window.innerWidth / 2,
       y: window.innerHeight / 2,
     });
-    const id = `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const node: CanvasNodeType = {
-      id,
+      id: makeNodeId(),
       type: "canvasNode",
       position: center,
       data: {
@@ -280,82 +319,16 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
       },
     };
     setNodes((nds) => [...nds, node]);
-    setTimeout(() => fitView({ padding: 0.25, duration: 300 }), 80);
+    requestFitView();
     onConsumePending?.();
-  }, [pendingWorkflow, screenToFlowPosition, setNodes, fitView, onConsumePending]);
-
-  /* ── Persist current project (debounced) ──
-   *
-   *  Draft-aware (R64): empty + default-named canvases are REAPED instead
-   *  of persisted, so visiting the canvas and walking away without doing
-   *  anything never pollutes the recent-projects list.  Non-empty
-   *  canvases keep the legacy "always-upsert" behaviour. */
-  useEffect(() => {
-    if (!projectId) return;
-    const t = setTimeout(() => {
-      const nodesLive = nodesRef.current;
-      const edgesLive = edgesRef.current;
-      const nameLive = projectNameRef.current ?? projectName;
-      const isEmpty =
-        nodesLive.length === 0 && edgesLive.length === 0;
-      if (isEmpty && isEmptyDraftName(nameLive)) {
-        // User left an untouched draft — clean it from the index.
-        clearActiveIfDraft(projectId);
-        reapEmptyProject(projectId);
-        return;
-      }
-      upsertProject({
-        id: projectId,
-        name: nameLive,
-        updatedAt: Date.now(),
-        nodes: nodesLive,
-        edges: edgesLive,
-      });
-    }, 500);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges, projectId, projectName]);
-
-  /* ── Flush on unmount / tab close (no data loss) ──
-   *
-   *  Same draft-aware contract as the debounced effect: reaps empty
-   *  default-named drafts on the way out so the homepage never sees them. */
-  useEffect(() => {
-    const flush = () => {
-      const pid = projectIdRef.current;
-      if (!pid) return;
-      const nodesLive = nodesRef.current;
-      const edgesLive = edgesRef.current;
-      const nameLive = projectNameRef.current;
-      const isEmpty =
-        nodesLive.length === 0 && edgesLive.length === 0;
-      if (isEmpty && isEmptyDraftName(nameLive)) {
-        clearActiveIfDraft(pid);
-        reapEmptyProject(pid);
-        return;
-      }
-      upsertProject({
-        id: pid,
-        name: nameLive,
-        updatedAt: Date.now(),
-        nodes: nodesLive,
-        edges: edgesLive,
-      });
-    };
-    window.addEventListener("beforeunload", flush);
-    return () => {
-      window.removeEventListener("beforeunload", flush);
-      flush();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pendingWorkflow, screenToFlowPosition, setNodes, onConsumePending, requestFitView]);
 
   /* ── Connection chaining (routes by which port/handle is connected) ── */
   const propagateFrom = useCallback(
     async (sourceId: string, resultPathOverride?: string, edgesOverride?: Edge[]) => {
       const srcNode = nodesRef.current.find((current) => current.id === sourceId);
-      const src = srcNode?.data as CanvasNodeData | undefined;
-      if (!src) return;
+      if (!srcNode || !isCanvasNode(srcNode)) return;
+      const src = srcNode.data;
       const rPath = resultPathOverride ?? src.resultPath;
       const rType = src.resultMediaType;
       const es = edgesOverride ?? edgesRef.current;
@@ -379,104 +352,9 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
         }
       }
 
+      // targetHandle 分派与数据写入抽到 canvas-helpers（纯函数，可独立测试）。
       setNodes((nds) =>
-        nds.map((node) => {
-          if (node.id === sourceId) return node;
-          const edge = outEdges.find((outEdge) => outEdge.target === node.id);
-          if (!edge) return node;
-          const td = node.data as CanvasNodeData;
-          // 连线传入自定义工作流节点：按 ioKey 把上游输出写进 workflowInputs，
-          // 这样 runGenerate 的 toWorkflowInputsPayload 会把它一起发给后端。
-          if (td.kind === "workflow" && edge.targetHandle) {
-            const key = edge.targetHandle;
-            let stored: unknown = undefined;
-            if (src.kind === "text" && src.content?.trim()) stored = src.content;
-            else if ((src.kind === "picture" || src.kind === "movie") && src.mediaPath)
-              stored = src.mediaPath;
-            else if (src.resultPath && src.resultMediaType !== "video" && importedFile)
-              stored = importedFile;
-            if (stored !== undefined) {
-              return {
-                ...node,
-                data: {
-                  ...td,
-                  workflowInputs: { ...(td.workflowInputs ?? {}), [key]: stored },
-                  upstreamId: sourceId,
-                },
-              };
-            }
-            return node;
-          }
-          /* R-ardot59 (2026-08-15): 上游产出写入 picture / movie 资产节点 —
-           *  当 target 是 picture 或 movie 内容载体时，把 source 的 image
-           *  (importedFile 优先于 src.mediaPath) 写到 target.mediaPath，
-           *  让图片资产自动接收工作流生成的图作为内容；下游生图节点再
-           *  从 picture 节点的 output Handle 接收这个 mediaPath，形成
-           *  「工作流 → 图片资产 → 生图」完整链路。upstreamId 标记数据来源
-           *  便于 UI 后续显示「连线源：xxx 工作流」。 */
-          if (td.kind === "picture" || td.kind === "movie") {
-            const incoming: string | undefined =
-              importedFile ?? (src.kind === "picture" || src.kind === "movie" ? src.mediaPath ?? undefined : undefined);
-            if (incoming) {
-              return {
-                ...node,
-                data: {
-                  ...td,
-                  mediaPath: incoming,
-                  mediaName: src.resultPath
-                    ? String(src.resultPath).split(/[\\/]/).pop()
-                    : td.mediaName,
-                  upstreamId: sourceId,
-                },
-              };
-            }
-            return node;
-          }
-          const next: CanvasNodeData = { ...td };
-          switch (edge.targetHandle) {
-            case "prompt":
-              // A text-carrier node feeds its free text; everything else feeds prompt.
-              if (src.kind === "text") {
-                if (src.content?.trim()) next.prompt = src.content;
-              } else if (src.prompt?.trim()) {
-                next.prompt = src.prompt;
-              }
-              break;
-            case "negative":
-              if (src.negative?.trim()) next.negative = src.negative;
-              break;
-            case "steps":
-              if (src.steps != null) next.steps = src.steps;
-              break;
-            case "cfg":
-              if (src.cfg != null) next.cfg = src.cfg;
-              break;
-            case "seed":
-              if (src.seed?.trim()) next.seed = src.seed;
-              break;
-            case "inputImage":
-            default:
-              if (importedFile) {
-                next.inputImage = importedFile;
-                next.upstreamId = sourceId;
-                // auto-switch the consumer mode so the fed input is actually used
-                if (next.kind === "image" && next.mode === "txt2img") next.mode = "img2img";
-                if (next.kind === "video" && next.mode === "t2v") next.mode = "i2v";
-              } else if (
-                (src.kind === "picture" || src.kind === "movie") &&
-                src.mediaPath
-              ) {
-                // Content carriers already live in ComfyUI's input dir, so no
-                // re-import is needed — wire the existing filename straight in.
-                next.inputImage = src.mediaPath;
-                next.upstreamId = sourceId;
-                if (next.kind === "image" && next.mode === "txt2img") next.mode = "img2img";
-                if (next.kind === "video" && next.mode === "t2v") next.mode = "i2v";
-              }
-              break;
-          }
-          return { ...node, data: next };
-        })
+        applyPropagationToNodes(nds, sourceId, { srcData: src, outEdges, importedFile })
       );
     },
     [setNodes]
@@ -547,50 +425,7 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
     []
   );
 
-  /* ── Auto-persist on every meaningful mutation ──
-   *  Without this, drag/add/connect all sit in memory only and vanish on
-   *  reload.  Manual `upsertProject` calls in switchProject/newProject/
-   *  commitRename cover the corner cases; this effect catches every
-   *  other change with a 600 ms idle debounce so we don't spam
-   *  localStorage during a drag.
-   *
-   *  `firstMutationRef` guards against the post-load setter flush that
-   *  setNodes(proj.nodes) / setEdges(proj.edges) triggers — that round-trip
-   *  is a no-op rewrite, so we let it pass through without bumping the
-   *  `updatedAt` stamp.  Subsequent runs are real user mutations and
-   *  need to be persisted (or reaped if the user emptied the canvas
-   *  back to a draft — see R64). */
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    if (!projectIdRef.current) return;
-    if (firstMutationRef.current) {
-      firstMutationRef.current = false;
-      return;
-    }
-    const handle = setTimeout(() => {
-      const id = projectIdRef.current;
-      if (!id) return;
-      const nodesLive = nodesRef.current;
-      const edgesLive = edgesRef.current;
-      const nameLive = projectNameRef.current;
-      const isEmpty =
-        nodesLive.length === 0 && edgesLive.length === 0;
-      // Same draft-aware contract as the 500ms + flush effects.
-      if (isEmpty && isEmptyDraftName(nameLive)) {
-        clearActiveIfDraft(id);
-        reapEmptyProject(id);
-        return;
-      }
-      upsertProject({
-        id,
-        name: nameLive,
-        updatedAt: Date.now(),
-        nodes: nodesLive,
-        edges: edgesLive,
-      });
-    }, 600);
-    return () => clearTimeout(handle);
-  }, [nodes, edges]);
+  /* ── Auto-persist on every meaningful mutation（已抽入 useProjectPersistence）── */
 
   const onPaneContextMenu = useCallback((e: React.MouseEvent | MouseEvent) => {
     e.preventDefault();
@@ -601,9 +436,8 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
     (kind: NodeKind) => {
       if (!menu) return;
       const position = screenToFlowPosition({ x: menu.x, y: menu.y });
-      const id = `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const node: CanvasNodeType = {
-        id,
+        id: makeNodeId(),
         type: "canvasNode",
         position,
         data: defaultData(kind),
@@ -615,20 +449,17 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
   );
 
   /** Drops a pure-visual Ardot-style workflow node at the right-click position.
-   *  No data, no handlers — just renders the design reference component. */
+   *  No data, no handlers — just renders the design reference component.
+   *  `workflowArdot` 已收进 CanvasNodeType 联合类型，无需强转。 */
   const createTestWorkflowNode = useCallback(() => {
     if (!menu) return;
     const position = screenToFlowPosition({ x: menu.x, y: menu.y });
-    const id = `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    // `workflowArdot` is registered as a separate React Flow node type and
-    //  renders `WorkflowNodeArdot` (no CanvasNodeData, no handlers).  We
-    //  cast because `CanvasNodeType` constrains `type` to "canvasNode".
-    const node = {
-      id,
+    const node: CanvasNodeType = {
+      id: makeNodeId(),
       type: "workflowArdot",
       position,
       data: {},
-    } as unknown as CanvasNodeType;
+    };
     setNodes((nds) => [...nds, node]);
     setMenu(null);
   }, [menu, screenToFlowPosition, setNodes]);
@@ -682,7 +513,7 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
           y: window.innerHeight / 2,
         });
         const node: CanvasNodeType = {
-          id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          id: makeNodeId(),
           type: "canvasNode",
           position: center,
           data: {
@@ -739,193 +570,9 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
     URL.revokeObjectURL(url);
   }, [nodes, edges, projectName]);
 
-  /* ── Project switcher actions ── */
-  const openProjMenu = useCallback(() => {
-    setProjects(listProjects());
-    setRenaming(false);
-    setProjMenu((value) => !value);
-  }, []);
-
-  const switchProject = useCallback(
-    (id: string) => {
-      const pid = projectIdRef.current;
-      if (pid) {
-        // Reap empty drafts instead of persisting them (R64).
-        const nodesLive = nodesRef.current;
-        const edgesLive = edgesRef.current;
-        const nameLive = projectNameRef.current;
-        if (
-          nodesLive.length === 0 &&
-          edgesLive.length === 0 &&
-          isEmptyDraftName(nameLive)
-        ) {
-          clearActiveIfDraft(pid);
-          reapEmptyProject(pid);
-        } else {
-          upsertProject({
-            id: pid,
-            name: nameLive,
-            updatedAt: Date.now(),
-            nodes: nodesLive,
-            edges: edgesLive,
-          });
-        }
-      }
-      const proj = getProject(id);
-      if (!proj) return;
-      setActive(id);
-      setProjectId(proj.id);
-      setProjectName(proj.name);
-      setNodes((proj.nodes as CanvasNodeType[]) ?? []);
-      setEdges(proj.edges ?? []);
-      setProjMenu(false);
-      setRenaming(false);
-      setTimeout(() => fitView({ padding: 0.25, duration: 300 }), 80);
-    },
-    [setNodes, setEdges, fitView]
-  );
-
-  const newProject = useCallback(() => {
-    const pid = projectIdRef.current;
-    if (pid) {
-      // Reap empty drafts instead of persisting them (R64).
-      const nodesLive = nodesRef.current;
-      const edgesLive = edgesRef.current;
-      const nameLive = projectNameRef.current;
-      if (
-        nodesLive.length === 0 &&
-        edgesLive.length === 0 &&
-        isEmptyDraftName(nameLive)
-      ) {
-        clearActiveIfDraft(pid);
-        reapEmptyProject(pid);
-      } else {
-        upsertProject({
-          id: pid,
-          name: nameLive,
-          updatedAt: Date.now(),
-          nodes: nodesLive,
-          edges: edgesLive,
-        });
-      }
-    }
-    // New project is a draft — only persists when the user actually
-    // adds content.
-    const p = createDraftProject();
-    setProjectId(p.id);
-    setProjectName(p.name);
-    setNodes([]);
-    setEdges([]);
-    setProjects(listProjects());
-    setProjMenu(false);
-  }, [setNodes, setEdges]);
-
-  const deleteCurrent = useCallback(() => {
-    const pid = projectIdRef.current;
-    if (!pid) return;
-    // Open the custom dark-themed dialog instead of the native browser
-    // confirm() (which sits in the top-left, ignores dark CSS, and
-    // breaks the visual flow).  R65.
-    setConfirmDelete(true);
-  }, []);
-
-  /**
-   * Pure load: read a project from the index and hydrate local state —
-   * WITHOUT persisting the currently-open project first.  Use this after
-   * the current project has been deleted (its id is now stale) or in any
-   * flow where re-saving the open project would be wrong.  Contrast with
-   * `switchProject`, which persists the current project's edits before
-   * loading the target (correct for the project switcher dropdown, where
-   * you want to keep your changes to the project you're leaving).
-   */
-  const loadProject = useCallback(
-    (id: string) => {
-      const proj = getProject(id);
-      if (!proj) return;
-      setActive(id);
-      setProjectId(proj.id);
-      setProjectName(proj.name);
-      setNodes((proj.nodes as CanvasNodeType[]) ?? []);
-      setEdges(proj.edges ?? []);
-      setProjMenu(false);
-      setRenaming(false);
-      setTimeout(() => fitView({ padding: 0.25, duration: 300 }), 80);
-    },
-    [setNodes, setEdges, fitView]
-  );
-
-  /** Actual deleteCurrent action — invoked from the ModalDialog confirm. */
-  const applyDeleteCurrent = useCallback(() => {
-    const pid = projectIdRef.current;
-    if (!pid) return;
-    // Delete from the index first.  Note: projectIdRef still holds the
-    // just-deleted id, so we must NOT route through switchProject (which
-    // would re-persist the dead id and resurrect the project).  Instead
-    // load the next project with the pure loadProject below.
-    deleteProject(pid);
-    const remaining = listProjects();
-    if (remaining.length) {
-      loadProject(remaining[0]!.id);
-    } else {
-      // No projects left — open a fresh draft (no row written until
-      // the user adds content).
-      const p = createDraftProject();
-      setProjectId(p.id);
-      setProjectName(p.name);
-      setNodes([]);
-      setEdges([]);
-    }
-    setProjects(listProjects());
-    setProjMenu(false);
-    setConfirmDelete(false);
-  }, [loadProject, setNodes, setEdges]);
-
-  const startRename = useCallback(() => {
-    setRenameVal(projectNameRef.current);
-    setRenaming(true);
-  }, []);
-
-  const commitRename = useCallback(() => {
-    const pid = projectIdRef.current;
-    if (!pid) return;
-    const rawName = renameVal.trim();
-    // If the user clears the input, fall back to the default "未命名"
-    // and run it through the uniqueness pipeline so we end up with
-    // "未命名", "未命名_2", "未命名_3", … instead of clobbering
-    // siblings.
-    const baseName = rawName || "未命名";
-    const finalName = findNextAvailableName(baseName, pid);
-    setProjectName(finalName);
-    // Reap empty drafts instead of persisting them (R64) — also
-    // handles the case where the user clears the rename input back
-    // to default for an empty canvas.
-    const nodesLive = nodesRef.current;
-    const edgesLive = edgesRef.current;
-    if (
-      nodesLive.length === 0 &&
-      edgesLive.length === 0 &&
-      isEmptyDraftName(finalName)
-    ) {
-      clearActiveIfDraft(pid);
-      reapEmptyProject(pid);
-    } else {
-      upsertProject({
-        id: pid,
-        name: finalName,
-        updatedAt: Date.now(),
-        nodes: nodesLive,
-        edges: edgesLive,
-      });
-    }
-    // R65: surface the auto-rename so the user knows why "灵感" became
-    // "灵感_2" — silent renames are confusing.
-    if (finalName !== baseName) {
-      toast.info("已自动添加后缀", `项目名「${baseName}」已被占用，已保存为「${finalName}」。`);
-    }
-    setRenaming(false);
-    setProjMenu(false);
-    setProjects(listProjects());
-  }, [renameVal, setNodes, setEdges, toast]);
+  /* ── Project switcher actions（已抽入 useProjectManager：openProjMenu /
+   *  switchProject / newProject / deleteCurrent / applyDeleteCurrent /
+   *  loadProject / startRename / commitRename）── */
 
   const onNodeClick: NodeMouseHandler = useCallback(() => setMenu(null), []);
 

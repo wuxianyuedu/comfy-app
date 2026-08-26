@@ -3,15 +3,16 @@
  * user can keep several named canvases and switch between them safely.
  */
 
-import type { Node, Edge } from "@xyflow/react";
-import type { CanvasNodeData } from "./canvas-types";
+import type { Edge } from "@xyflow/react";
+import type { CanvasNodeType } from "./canvas-types";
 import { vanillaApi } from "~/trpc/vanilla";
 
 export interface CanvasProject {
   id: string;
   name: string;
   updatedAt: number;
-  nodes: Node<CanvasNodeData>[];
+  /** 收窄为 CanvasNodeType：workflowArdot 纯视觉节点也持久化（R-ardot59 起）。 */
+  nodes: CanvasNodeType[];
   edges: Edge[];
 }
 

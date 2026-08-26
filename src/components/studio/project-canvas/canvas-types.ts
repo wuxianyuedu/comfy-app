@@ -227,7 +227,16 @@ export interface CanvasNodeData {
   [key: string]: unknown;
 }
 
-export type CanvasNodeType = Node<CanvasNodeData, "canvasNode">;
+export type CanvasNodeType =
+  | Node<CanvasNodeData, "canvasNode">
+  | Node<Record<string, never>, "workflowArdot">;
+
+/** 类型守卫：是否是带 CanvasNodeData 的逻辑节点（排除 workflowArdot 纯视觉节点）。 */
+export function isCanvasNode(
+  node: CanvasNodeType
+): node is Extract<CanvasNodeType, { type: "canvasNode" }> {
+  return node.type === "canvasNode";
+}
 
 /* ── Sizes ── */
 export const IMAGE_SIZES = ["1024x1024", "832x1216", "1216x832", "768x768", "640x640", "512x512"];

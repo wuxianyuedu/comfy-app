@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * wf-render-chain — workflow-canvas 节点画布的「渲染链路模块」规则。
+ * workflow-canvas-render-chain — workflow-canvas 节点画布的「渲染链路模块」规则。
  *
  * 为 ComfyNode（create-studio 与 CreatePanel 中共用的 workflow-canvas 节点卡片）
  * 列出该节点卡片对应的本项目代码模块，并按 classType 区分链路：
@@ -14,14 +14,15 @@
 import type { RenderChainModule } from "./DebugChainFooter";
 import { isCustomNode, getCustomNodePackage } from "@/config/custom-nodes";
 
-/** 所有 ComfyNode 卡片共用的画布渲染链路（不随 classType 变化） */
+/** 所有 ComfyNode 卡片共用的画布渲染链路（不随 classType 变化）。
+ *  scope: canvas=画布级（容器/编排/图工具），node=节点级（节点渲染/类型）。 */
 const WF_CANVAS_COMMON: RenderChainModule[] = [
-  { file: "src/components/workflow-canvas/WorkflowCanvas.tsx", label: "WorkflowCanvas" },
-  { file: "src/components/workflow-canvas/nodes/ComfyNode.tsx", label: "ComfyNode" },
-  { file: "src/components/workflow-canvas/nodes/PackageFooter.tsx", label: "PackageFooter" },
-  { file: "src/components/workflow-canvas/node-registry.ts", label: "node-registry" },
-  { file: "src/components/workflow-canvas/graph-utils.ts", label: "graph-utils" },
-  { file: "src/components/workflow-canvas/types.ts", label: "types" },
+  { file: "src/components/workflow-canvas/WorkflowCanvas.tsx", label: "WorkflowCanvas", scope: "canvas" },
+  { file: "src/components/workflow-canvas/nodes/ComfyNode.tsx", label: "ComfyNode", scope: "node" },
+  { file: "src/components/workflow-canvas/nodes/PackageFooter.tsx", label: "PackageFooter", scope: "node" },
+  { file: "src/components/workflow-canvas/node-registry.ts", label: "node-registry", scope: "node" },
+  { file: "src/components/workflow-canvas/graph-utils.ts", label: "graph-utils", scope: "canvas" },
+  { file: "src/components/workflow-canvas/types.ts", label: "types", scope: "node" },
 ];
 
 /**

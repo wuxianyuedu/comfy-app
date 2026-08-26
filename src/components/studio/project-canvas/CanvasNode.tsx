@@ -35,6 +35,7 @@ import {
   uploadImageFile,
   uploadMediaFile,
   importOutputAsInput,
+  makeNodeId,
   startGenerate,
   pollTask,
   runScript,
@@ -45,6 +46,8 @@ import { setActiveTaskId } from "./activeTask";
 import { vanillaApi } from "~/trpc/vanilla";
 import { chatAgent } from "@/lib/agent/agentic";
 import { IMAGE_WORKFLOW_TYPES, VIDEO_WORKFLOW_TYPES, normalizeTaskType, parseModesJson } from "@/lib/workflow-types";
+import { DebugChainFooter } from "../DebugChainFooter";
+import { getProjectCanvasRenderChain } from "./canvas-render-chain";
 
 /* 2026-08-13 项目级产出：从节点数据里收集「本次生成用到的参考图」，
  * 随生成请求一并落库，供元数据抽屉的参考图墙一键还原。 */
@@ -513,7 +516,9 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
   const patch = (p: Partial<CanvasNodeData>) =>
     setNodes((nds) =>
       nds.map((node) =>
-        node.id === id ? { ...node, data: { ...(node.data as CanvasNodeData), ...p } } : node
+        node.id === id
+          ? { ...node, data: { ...(node.data as CanvasNodeData), ...p } }
+          : node
       )
     );
   const deleteSelf = () => setNodes((nds) => nds.filter((nd) => nd.id !== id));
@@ -892,7 +897,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
           // once per workflow node (workflowSinkId guards re-runs).
           let sinkId = d.workflowSinkId;
           if (!sinkId) {
-            const nid = `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+            const nid = makeNodeId();
             const cur = getNode(id);
             const base = cur?.position ?? { x: 0, y: 0 };
             const isVideoOut =
@@ -1157,7 +1162,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
   /* script → spawn a video node from the script */
   const addVideoFromScript = () => {
     if (!d.scriptText) return;
-    const nid = `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const nid = makeNodeId();
     const cur = getNode(id);
     const base = cur?.position ?? { x: 0, y: 0 };
     const node: CanvasNodeType = {
@@ -1771,6 +1776,9 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
        *  — 与 WorkflowNode.outputs row 视觉对齐。agent / text / picture / movie 仍由各自
        *  body 内的 Handle 处理。 */}
       {/* agent: no output Handle */}
+      {/* 调试模式：渲染链路模块标签（仅 debug-store 开启时由
+       *  DebugChainFooter 自行显示，kind 决定链路）。 */}
+      <DebugChainFooter modules={getProjectCanvasRenderChain(d.kind)} />
     </div>
   );
 });
