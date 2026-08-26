@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useLogPanel, type LogEntry, type LogLevel, type LogFilter } from "./log-provider";
 
 const LEVEL_STYLES: Record<LogLevel, string> = {
@@ -201,9 +201,20 @@ function tokenizeLogMessage(text: string): React.ReactNode[] {
   });
 }
 
+/* Per-message render cache: a parsed log line is immutable, so we cache the
+ * produced React spans by the raw message string.  This avoids re-running the
+ * ANSI/token parser for every row on every parent re-render (search, filter,
+ * scroll, new-log arrival) — the single biggest cost in the old panel. */
+const RENDER_CACHE = new Map<string, React.ReactNode[]>();
+const RENDER_CACHE_MAX = 5000;
+
 function renderLogMessage(text: string): React.ReactNode[] {
-  if (hasAnsi(text)) return ansiToSpans(text);
-  return tokenizeLogMessage(text);
+  const hit = RENDER_CACHE.get(text);
+  if (hit) return hit;
+  const out = hasAnsi(text) ? ansiToSpans(text) : tokenizeLogMessage(text);
+  if (RENDER_CACHE.size >= RENDER_CACHE_MAX) RENDER_CACHE.clear();
+  RENDER_CACHE.set(text, out);
+  return out;
 }
 
 const FILTER_LABELS: { label: string; value: LogFilter }[] = [
@@ -225,18 +236,34 @@ function formatTime(ts: number): string {
   });
 }
 
-function LogRow({ entry }: { entry: LogEntry }) {
+/* Fixed row height for windowed rendering.  Logs are line-based, so each entry
+ * is a single truncated line (full text available via hover title).  This lets
+ * us virtualize: only the visible slice is ever in the DOM, so even tens of
+ * thousands of lines open instantly. */
+const ROW_HEIGHT = 22;
+const OVERSCAN = 12;
+
+const LogRow = memo(function LogRow({
+  entry,
+  top,
+}: {
+  entry: LogEntry;
+  top: number;
+}) {
   const levelClass = LEVEL_STYLES[entry.level];
   return (
-    <div className="flex items-start gap-2.5 border-b border-white/[0.03] px-4 py-1 font-mono text-[13px] leading-snug hover:bg-white/[0.02]">
-      <span className="shrink-0 pt-0.5 text-gray-500">{formatTime(entry.time)}</span>
+    <div
+      className="absolute left-0 right-0 flex items-center gap-2.5 border-b border-white/[0.03] px-4 font-mono text-[13px] leading-none hover:bg-white/[0.02]"
+      style={{ top, height: ROW_HEIGHT }}
+    >
+      <span className="shrink-0 text-gray-500">{formatTime(entry.time)}</span>
       <span
         className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${levelClass}`}
       >
         {entry.level}
       </span>
       <span
-        className={`min-w-0 flex-1 whitespace-pre-wrap break-all pt-0.5 ${
+        className={`min-w-0 flex-1 truncate ${
           entry.level === "error"
             ? "text-rose-300"
             : entry.level === "warn"
@@ -250,11 +277,11 @@ function LogRow({ entry }: { entry: LogEntry }) {
         {renderLogMessage(entry.message)}
       </span>
       {entry.source !== "console" && (
-        <span className="shrink-0 pt-0.5 text-[11px] text-gray-600">{entry.source}</span>
+        <span className="shrink-0 text-[11px] text-gray-600">{entry.source}</span>
       )}
     </div>
   );
-}
+});
 
 export function LogPanel() {
   const {
@@ -273,7 +300,21 @@ export function LogPanel() {
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportH, setViewportH] = useState(600);
   const prevCountRef = useRef(filteredLogs.length);
+
+  // Keep viewport height accurate (after layout + on resize) so the visible
+  // window math is correct even before the first scroll event.
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const update = () => setViewportH(el.clientHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Auto-scroll to bottom when new logs arrive, unless user scrolled up.
   useEffect(() => {
@@ -288,6 +329,7 @@ export function LogPanel() {
   const onScroll = () => {
     const el = bodyRef.current;
     if (!el) return;
+    setScrollTop(el.scrollTop);
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
     setAutoScroll(nearBottom);
   };
@@ -295,6 +337,13 @@ export function LogPanel() {
   const errorCount = useMemo(() => counts.error, [counts.error]);
 
   if (!isOpen) return null;
+
+  const total = filteredLogs.length;
+  const totalHeight = total * ROW_HEIGHT;
+  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const visibleCount = Math.ceil(viewportH / ROW_HEIGHT) + OVERSCAN * 2;
+  const endIndex = Math.min(total, startIndex + visibleCount);
+  const visible = filteredLogs.slice(startIndex, endIndex);
 
   return (
     <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -427,13 +476,13 @@ export function LogPanel() {
           </div>
         </div>
 
-        {/* Body */}
+        {/* Body — virtualized: only the visible slice is rendered. */}
         <div
           ref={bodyRef}
           onScroll={onScroll}
-          className="custom-scrollbar flex-1 overflow-y-auto bg-[#0d0d14]/60"
+          className="custom-scrollbar relative flex-1 overflow-y-auto bg-[#0d0d14]/60"
         >
-          {filteredLogs.length === 0 ? (
+          {total === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-gray-600">
               <svg
                 width="32"
@@ -453,7 +502,11 @@ export function LogPanel() {
               暂无匹配的日志
             </div>
           ) : (
-            filteredLogs.map((entry) => <LogRow key={entry.id} entry={entry} />)
+            <div style={{ height: totalHeight, position: "relative" }}>
+              {visible.map((entry, i) => (
+                <LogRow key={entry.id} entry={entry} top={(startIndex + i) * ROW_HEIGHT} />
+              ))}
+            </div>
           )}
         </div>
 
@@ -476,7 +529,7 @@ export function LogPanel() {
                 恢复自动滚动
               </button>
             )}
-            <span>保留全部日志</span>
+            <span>保留全部日志（仅渲染可见行）</span>
           </span>
         </div>
       </div>
