@@ -16,8 +16,8 @@
 | 认证 | better-auth 1.3 | 会话接入 tRPC context |
 | 样式 | Tailwind CSS 4 | `@tailwindcss/postcss` |
 | 画布 | @xyflow/react 12 | 工作流画布 + 项目画布 |
-| 状态 | zustand 4 | 轻量全局状态（debug-store 等） |
-| 校验 | zod 3 | 所有输入边界 |
+| 状态 | zustand 5 | 轻量全局状态（debug-store 等） |
+| 校验 | zod 4 | 所有输入边界 |
 | 桌面壳 | Tauri 2 | 套壳 WebView2 |
 | 日志 | pino + pino-pretty | 服务端结构化日志 |
 
@@ -188,6 +188,22 @@ git -c core.autocrlf=false -c filter.lfs.process= -c filter.lfs.clean= -c filter
 
 - 指纹策略：清缓存仅依据构建配置（`next.config.js`/`tsconfig.json`/`package.json`/`pnpm-lock.yaml`），**禁止纳入源码目录 hash**——Turbopack 增量编译 + HMR 已处理源码改动，清缓存会导致每次改代码全量重编译慢 30~60s。
 - 启动脚本统一走 `scripts/dev-launcher.ps1`（Job 对象管理进程树、按端口精准清理残留、日志落项目根目录 `log/`：本次运行写入 `log/dev-launcher.log`，完整追加到 `log/dev-launcher-YYYY-MM-DD.log`）。
+
+### 6.4 优化点归档（强制）
+
+**任何代码审查/优化过程中发现的可复用改进模式，必须整理进本文档后再提交代码**，避免产出代码后重新优化。归档格式：模式名 + 适用场景 + 落地方案（可引用已实现文件作为范例）。
+
+已沉淀的可复用模式：
+
+| 模式 | 适用场景 | 落地方案（范例） |
+|---|---|---|
+| 大组件拆分三件套 | 组件文件过大（>1000 行），混合编排、持久化、CRUD | 持久化 effect 抽 `useProjectPersistence` hook；纯函数逻辑抽 `canvas-helpers.ts`；CRUD 状态与方法抽 `useProjectManager` hook；容器只保留编排与 JSX（范例：`ProjectCanvas.tsx` 拆分） |
+| 多形态节点类型洞 | 节点 data 形态随 type 变化，遍历时需按类型分派 | 必须用 discriminated union（`type` 字面量判别），禁止 `as unknown as` 双重断言；遍历先守卫窄化（`isCanvasNode`）再访问字段（范例：`canvas-types.ts` CanvasNodeType） |
+| 节点 id 工厂 | 多处重复 `n_${Date.now()}_${random}` 生成节点 id | 收敛为单一工厂 `makeNodeId()`，禁止散落内联生成（范例：`canvas-helpers.ts`） |
+| fitView 时序 | 依赖 setTimeout 魔法数字等待布局完成 | 用 `onInit` / `requestAnimationFrame` 双保险，禁止裸 setTimeout（范例：`makeFitViewScheduler`） |
+| 渲染链路分组 | 调试标签平铺无层级，难以区分画布级/节点级模块 | `RenderChainModule.scope` 字段区分 `canvas`（容器/编排/状态）与 `node`（节点渲染/工具），DebugChainFooter 按组分行渲染（范例：`DebugChainFooter.tsx` + 各 `*-render-chain.ts`） |
+
+**升级依赖前**：先 grep 全库 API 使用点评估破坏性变更（如 zod 4 移除 `z.string().url()` 等 format 方法、`z.record` 改双参、`.default({})` 类型收窄；zustand 5 迁移 `zustand/react/shallow`），改完必须 `tsc --noEmit` 零错误。
 
 ---
 
