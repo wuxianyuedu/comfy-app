@@ -1,15 +1,15 @@
-import { FlatCompat } from "@eslint/eslintrc";
 import tseslint from "typescript-eslint";
-
-const compat = new FlatCompat({
-  baseDirectory: import.meta.dirname,
-});
+import next from "eslint-config-next/core-web-vitals";
 
 export default tseslint.config(
   {
     ignores: [".next"],
   },
-  ...compat.extends("next/core-web-vitals"),
+  // eslint-config-next@16 已改为扁平（flat）配置，直接导出配置数组。
+  // 旧写法用 FlatCompat.extends() 去加载它会触发 config-validator 对含
+  // 插件/函数的扁平对象做 JSON 序列化，从而 TypeError: Converting circular
+  // structure to JSON。这里直接展开扁平数组，绕开该崩溃。
+  ...next,
   {
     files: ["**/*.ts", "**/*.tsx"],
     extends: [
@@ -17,6 +17,11 @@ export default tseslint.config(
       ...tseslint.configs.recommendedTypeChecked,
       ...tseslint.configs.stylisticTypeChecked,
     ],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+      },
+    },
     rules: {
       "@typescript-eslint/array-type": "off",
       "@typescript-eslint/consistent-type-definitions": "off",
@@ -38,11 +43,6 @@ export default tseslint.config(
   {
     linterOptions: {
       reportUnusedDisableDirectives: true,
-    },
-    languageOptions: {
-      parserOptions: {
-        projectService: true,
-      },
     },
   },
 );
