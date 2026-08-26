@@ -46,7 +46,7 @@ const WorkflowCanvasEditor = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0a0f]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-bg)]">
         <div className="text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
           <p className="text-sm text-gray-400">加载工作流编辑器…</p>
