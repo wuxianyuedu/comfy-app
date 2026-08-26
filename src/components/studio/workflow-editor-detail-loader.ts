@@ -257,13 +257,17 @@ export function useWorkflowDetailLoader({
             pushSubgraphStack(opts.subgraphUid, opts.parentTitle || (d as any).name || "子工作流");
           }
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         // 子工作流下钻失败：非致命 —— 保留父图，仅用内联错误提示，
         // 绝不渲染「返回」错误屏（那会回退到工作流库界面）。
+        // e 为 unknown：先用 instanceof Error 收窄再取 message，否则回退到约定文案。
+        const msg =
+          (e instanceof Error ? e.message : "") ||
+          (opts?.subgraphUid ? "子工作流加载失败" : "加载失败");
         if (opts?.subgraphUid) {
-          setSubgraphError(e?.message ?? "子工作流加载失败");
+          setSubgraphError(msg);
         } else {
-          setError(e?.message ?? "加载失败");
+          setError(msg);
         }
       } finally {
         if (myReqId === latestRequestIdRef.current) {
