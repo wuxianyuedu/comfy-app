@@ -39,9 +39,9 @@ export const GenerateSchema = z.object({
   t5Model: z.string().optional(),
   firstFrame: z.string().optional(),
   lastFrame: z.string().optional(),
-  paramMap: z.record(z.string()).optional(),
+  paramMap: z.record(z.string(), z.string()).optional(),
   workflowInputs: z.array(WorkflowInputSchema).optional(),
-  canvasGraph: z.record(z.any()).optional(),
+  canvasGraph: z.record(z.string(), z.any()).optional(),
   projectId: z.string().optional(),
   referenceImages: z.array(z.string()).optional(),
 });

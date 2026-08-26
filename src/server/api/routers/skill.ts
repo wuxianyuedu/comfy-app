@@ -54,7 +54,7 @@ export const skillRouter = createTRPCRouter({
         category: z.string().default("style"),
         promptTemplate: z.string().min(1),
         negativePrompt: z.string().optional(),
-        defaultParams: z.record(z.unknown()).optional(),
+        defaultParams: z.record(z.string(), z.unknown()).optional(),
         recommendedModel: z.string().optional(),
         tags: z.array(z.string()).default([]),
         coverUrl: z.string().optional(),

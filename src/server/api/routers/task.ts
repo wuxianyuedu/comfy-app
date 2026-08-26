@@ -34,8 +34,7 @@ export const taskRouter = createTRPCRouter({
           media: z.enum(["image", "video", "audio"]).optional(),
           status: z.string().optional(),
         })
-        .optional()
-        .default({})
+        .default({ take: 60 })
     )
     .query(async ({ ctx, input }) => {
       const statusList = input.status

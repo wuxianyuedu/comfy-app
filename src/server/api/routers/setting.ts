@@ -13,7 +13,7 @@ export const settingRouter = createTRPCRouter({
   save: authedProcedure
     .input(
       z.object({
-        comfyuiUrl: z.string().url().optional(),
+        comfyuiUrl: z.url().optional(),
         trainerUrl: z
           .string()
           .refine((url) => url === "" || /^https?:\/\//.test(url))
