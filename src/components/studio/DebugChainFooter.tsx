@@ -264,7 +264,13 @@ export function DebugChainFooter({ modules }: { modules: RenderChainModule[] }) 
                       <span>{source.size.toLocaleString()} 字符</span>
                       <span>{source.modifiedAt}</span>
                     </div>
-                    <CodeBlock code={source.content} language={extToLanguage(openFile)} />
+                    {/* key=openFile：切换查看的文件时强制重挂载 CodeBlock，
+                        避免复用旧实例的 html/error 状态闪现上一份源码。 */}
+                    <CodeBlock
+                      key={openFile}
+                      code={source.content}
+                      language={extToLanguage(openFile)}
+                    />
                   </div>
                 )}
               </div>
