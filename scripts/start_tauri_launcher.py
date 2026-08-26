@@ -356,6 +356,9 @@ user32.DispatchMessageW.restype = LRESULT
 
 user32.PostQuitMessage.argtypes = [ctypes.c_int]
 
+user32.PostMessageW.argtypes = [HWND, UINT, WPARAM, LPARAM]
+user32.PostMessageW.restype = BOOL
+
 user32.GetClientRect.argtypes = [HWND, ctypes.c_void_p]
 
 user32.SetWindowPos.argtypes = [
@@ -488,6 +491,12 @@ gdi32.CreateFontW.restype = HFONT
 gdi32.GetDeviceCaps.argtypes = [HDC, ctypes.c_int]
 gdi32.GetDeviceCaps.restype = ctypes.c_int
 
+gdi32.MoveToEx.argtypes = [HDC, ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
+gdi32.MoveToEx.restype = BOOL
+
+gdi32.LineTo.argtypes = [HDC, ctypes.c_int, ctypes.c_int]
+gdi32.LineTo.restype = BOOL
+
 # DrawTextW 在 user32.dll 中，不是 gdi32
 user32.DrawTextW.argtypes = [
     HDC, LPCWSTR, ctypes.c_int, ctypes.c_void_p,
@@ -566,7 +575,8 @@ class SplashWindow:
     def __init__(self):
         self.hwnd: HWND = 0
         self._closed = False
-        self._progress = 0.0
+        self._progress = 0.0  # 0~1，基于启动阶段的真实进度
+        self._marquee = 0.0  # 0~1，进度条上的流动高亮位置
         self._status = "ok"  # ok | error | timeout
         self._msg = "首次启动需编译，约 30–90 秒，请稍候…"
         self._title = APP_TITLE
@@ -578,6 +588,12 @@ class SplashWindow:
         self._drag_start_x = 0
         self._drag_start_y = 0
         self._wnd_proc_ref = None
+        self._proc: "subprocess.Popen[str] | None" = None
+        self._start_time = time.time()
+        self._log_tailer: threading.Thread | None = None
+        self._stop_tailer = threading.Event()
+        self._close_btn_rect = (0, 0, 0, 0)  # left, top, right, bottom
+        self._close_should_terminate = False
 
     def _register_class(self) -> bool:
         wnd_proc = ctypes.WINFUNCTYPE(
@@ -610,13 +626,20 @@ class SplashWindow:
             return 0
         if msg == WM_TIMER:
             if self._status == "ok":
-                self._progress = (self._progress + 0.03) % 1.0
+                self._marquee = (self._marquee + 0.03) % 1.0
             user32.InvalidateRect(hwnd, None, False)
             return 0
         if msg == WM_LBUTTONDOWN:
+            x = ctypes.c_short(lparam & 0xFFFF).value
+            y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
+            lx, ty, rx, by = self._close_btn_rect
+            if lx <= x <= rx and ty <= y <= by:
+                self._close_should_terminate = True
+                user32.PostMessageW(self.hwnd, WM_CLOSE, 0, 0)
+                return 0
             self._dragging = True
-            self._drag_start_x = ctypes.c_short(lparam & 0xFFFF).value
-            self._drag_start_y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
+            self._drag_start_x = x
+            self._drag_start_y = y
             return 0
         if msg == WM_MOUSEMOVE and self._dragging:
             x = ctypes.c_short(lparam & 0xFFFF).value
@@ -636,9 +659,12 @@ class SplashWindow:
             self._dragging = False
             return 0
         if msg == WM_KEYDOWN and wparam == VK_ESCAPE:
-            user32.PostQuitMessage(0)
+            self._close_should_terminate = True
+            user32.PostMessageW(self.hwnd, WM_CLOSE, 0, 0)
             return 0
         if msg == WM_CLOSE or msg == WM_DESTROY:
+            if self._close_should_terminate:
+                self._terminate_proc()
             user32.PostQuitMessage(0)
             return 0
         return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
@@ -652,6 +678,75 @@ class SplashWindow:
             0, 0, 0, 0, 0, 0, 0, 0,
             "Microsoft YaHei UI",
         )
+
+    def _start_log_tailer(self, project_root: str):
+        """后台读取 dev-launcher.log，把最新 STEP/OK 消息映射到画面状态与进度。"""
+        log_path = os.path.join(project_root, "log", "dev-launcher.log")
+        last_size = 0
+        # 阶段 → 进度百分比（粗略但有效）
+        phase_progress = {
+            "检查端口占用": 0.05,
+            "端口已就绪": 0.10,
+            "配置指纹": 0.15,
+            "清空 .next": 0.20,
+            "创建 Windows Job Object": 0.35,
+            "开发服务器进程已启动": 0.45,
+            "等待 tauri dev 编译": 0.55,
+            "服务器已就绪": 0.85,
+        }
+
+        def _tail():
+            nonlocal last_size
+            while not self._stop_tailer.is_set():
+                try:
+                    if not os.path.isfile(log_path):
+                        time.sleep(0.5)
+                        continue
+                    size = os.path.getsize(log_path)
+                    if size < last_size:
+                        last_size = 0
+                    if size == last_size:
+                        time.sleep(0.3)
+                        continue
+                    with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                        f.seek(last_size)
+                        text = f.read()
+                    last_size = size
+                    # 取最后一行非空内容
+                    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+                    if not lines:
+                        continue
+                    latest = lines[-1]
+                    # 解析 [HH:MM:SS] [LEVEL] Message
+                    msg = latest
+                    if "[" in latest and "]" in latest:
+                        # 去掉时间标签和级别标签
+                        parts = latest.split("]")
+                        if len(parts) >= 2:
+                            msg = "]".join(parts[1:]).strip()
+                            msg = msg.lstrip("[]STEP OK WARN ERROR INFO ").strip()
+                    if not msg:
+                        continue
+                    # 根据关键字更新状态/进度
+                    matched_progress = None
+                    for key, pct in phase_progress.items():
+                        if key in latest:
+                            matched_progress = pct
+                            break
+                    if matched_progress is not None:
+                        self._progress = matched_progress
+                    if "ERROR" in latest or "错误" in latest:
+                        self._msg = f"⚠ {msg[:60]}"
+                    elif "STEP" in latest or "OK" in latest:
+                        self._msg = msg[:70]
+                    user32.InvalidateRect(self.hwnd, None, False)
+                except Exception as exc:
+                    log(f"log tailer error: {exc}")
+                    time.sleep(1)
+
+        t = threading.Thread(target=_tail, daemon=True)
+        t.start()
+        self._log_tailer = t
 
     def _paint(self, hdc: HDC):
         rc = RECT()
@@ -687,7 +782,7 @@ class SplashWindow:
         title_rc = RECT()
         title_rc.left = pad + 24
         title_rc.top = pad + 22
-        title_rc.right = w - pad - 24
+        title_rc.right = w - pad - 50  # 给关闭按钮留空
         title_rc.bottom = title_rc.top + 32
         user32.DrawTextW(hdc, self._title, -1, ctypes.byref(title_rc),
                          DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
@@ -713,11 +808,45 @@ class SplashWindow:
         gdi32.SetTextColor(hdc, GRAY_DIM)
         user32.DrawTextW(hdc, self._msg, -1, ctypes.byref(msg_rc),
                          DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
+
+        # 已用时间（右下角）
+        elapsed = time.time() - self._start_time
+        elapsed_text = f"已用 {int(elapsed // 60):02d}:{int(elapsed % 60):02d}"
+        time_rc = RECT()
+        time_rc.left = w - pad - 90
+        time_rc.top = h - pad - 26
+        time_rc.right = w - pad - 14
+        time_rc.bottom = time_rc.top + 16
+        gdi32.SetTextColor(hdc, GRAY_DIM)
+        user32.DrawTextW(hdc, elapsed_text, -1, ctypes.byref(time_rc),
+                         DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
         gdi32.SelectObject(hdc, old_font)
         gdi32.DeleteObject(sub_font)
 
+        # 关闭按钮（右上角 X）
+        btn_size = 26
+        btn_pad = 16
+        self._close_btn_rect = (w - btn_pad - btn_size, btn_pad,
+                                w - btn_pad, btn_pad + btn_size)
+        lx, ty, rx, by = self._close_btn_rect
+        # 绘制半透明白色 hover 区域（简化为固定淡色）
+        close_brush = gdi32.CreateSolidBrush(0x2A2024)  # 稍亮的面板色
+        old_b = gdi32.SelectObject(hdc, close_brush)
+        gdi32.RoundRect(hdc, lx, ty, rx, by, 6, 6)
+        gdi32.SelectObject(hdc, old_b)
+        gdi32.DeleteObject(close_brush)
+        close_pen = gdi32.CreatePen(0, 2, GRAY)
+        old_p = gdi32.SelectObject(hdc, close_pen)
+        margin = 8
+        gdi32.MoveToEx(hdc, lx + margin, ty + margin, None)
+        gdi32.LineTo(hdc, rx - margin, by - margin)
+        gdi32.MoveToEx(hdc, rx - margin, ty + margin, None)
+        gdi32.LineTo(hdc, lx + margin, by - margin)
+        gdi32.SelectObject(hdc, old_p)
+        gdi32.DeleteObject(close_pen)
+
         # 进度条
-        if self._status == "ok":
+        if self._status in ("ok", "timeout"):
             bar_y = pad + 90
             bar_h = 6
             bar_x = pad + 24
@@ -733,17 +862,27 @@ class SplashWindow:
             gdi32.DeleteObject(track_brush)
             gdi32.DeleteObject(track_pen)
 
-            # 流动高亮块
-            seg_w = max(40, int(bar_w * 0.25))
-            pos = int(self._progress * (bar_w + seg_w)) - seg_w
-            x1 = max(bar_x, bar_x + pos)
-            x2 = min(bar_x + bar_w, bar_x + pos + seg_w)
-            if x2 > x1:
-                grad_brush = gdi32.CreateSolidBrush(VIOLET)
-                old_b = gdi32.SelectObject(hdc, grad_brush)
-                gdi32.RoundRect(hdc, x1, bar_y, x2, bar_y + bar_h, bar_h, bar_h)
+            # phase 进度底（浅紫填充已走部分）
+            fill_w = int(bar_w * min(self._progress, 1.0))
+            if fill_w > 0:
+                fill_brush = gdi32.CreateSolidBrush(0x3E2A4A)  # 半透明紫
+                old_b = gdi32.SelectObject(hdc, fill_brush)
+                gdi32.RoundRect(hdc, bar_x, bar_y, bar_x + fill_w, bar_y + bar_h, bar_h, bar_h)
                 gdi32.SelectObject(hdc, old_b)
-                gdi32.DeleteObject(grad_brush)
+                gdi32.DeleteObject(fill_brush)
+
+            if self._status == "ok":
+                # 流动高亮块
+                seg_w = max(40, int(bar_w * 0.25))
+                pos = int(self._marquee * (bar_w + seg_w)) - seg_w
+                x1 = max(bar_x, bar_x + pos)
+                x2 = min(bar_x + bar_w, bar_x + pos + seg_w)
+                if x2 > x1:
+                    grad_brush = gdi32.CreateSolidBrush(VIOLET)
+                    old_b = gdi32.SelectObject(hdc, grad_brush)
+                    gdi32.RoundRect(hdc, x1, bar_y, x2, bar_y + bar_h, bar_h, bar_h)
+                    gdi32.SelectObject(hdc, old_b)
+                    gdi32.DeleteObject(grad_brush)
 
     def _center_on_cursor_monitor(self) -> tuple[int, int]:
         """在鼠标所在显示器居中；获取失败则回退到主屏居中。"""
@@ -815,15 +954,41 @@ class SplashWindow:
         self._msg = "窗口尚未出现，但启动进程仍在运行，请稍候…"
         user32.InvalidateRect(self.hwnd, None, False)
 
-    def close_later(self, delay_ms: int):
+    def close_later(self, delay_ms: int, *, terminate: bool = False):
         if self._closed:
             return
         self._closed = True
+        self._close_should_terminate = terminate
         user32.KillTimer(self.hwnd, self._timer_id)
-        threading.Timer(delay_ms / 1000.0, lambda: user32.PostQuitMessage(0)).start()
+        # 必须从 GUI 线程调用 PostQuitMessage 才有效；Timer 线程不能直接发 WM_QUIT。
+        # 改发 WM_CLOSE 到窗口，WndProc 在主线程里收到后再 PostQuitMessage。
+        def _post_close():
+            try:
+                user32.PostMessageW(self.hwnd, WM_CLOSE, 0, 0)
+            except Exception as exc:
+                log(f"post close error: {exc}")
+        threading.Timer(delay_ms / 1000.0, _post_close).start()
+
+    def _terminate_proc(self):
+        """用户主动关闭/超时时，终止 dev-launcher 进程树，避免后台残留。"""
+        self._stop_tailer.set()
+        try:
+            proc = self._proc
+            if proc is not None and proc.poll() is None:
+                log(f"terminating dev-launcher pid={proc.pid}")
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    log("dev-launcher did not terminate in 5s, killing")
+                    proc.kill()
+                    proc.wait(timeout=5)
+        except Exception as exc:
+            log(f"terminate proc error: {exc}")
 
     def destroy(self):
         """清理窗口类与 GDI 资源。"""
+        self._stop_tailer.set()
         try:
             if self.hwnd:
                 user32.KillTimer(self.hwnd, self._timer_id)
@@ -895,22 +1060,22 @@ def monitor(proc: "subprocess.Popen[str] | None", splash: SplashWindow):
                 return
             if find_tauri_window():
                 log("tauri window detected, closing splash in 600ms")
-                splash.close_later(600)
+                splash.close_later(600, terminate=False)
                 return
             if proc is not None and proc.poll() is not None:
                 exit_code = proc.returncode
                 log(f"dev-launcher process exited early with code {exit_code}")
                 splash.set_error("启动进程已退出，请检查 log/dev-launcher.log")
-                splash.close_later(5000)
+                splash.close_later(5000, terminate=False)
                 return
             time.sleep(0.5)
         log("monitor deadline reached (240s)")
         splash.set_timeout()
-        splash.close_later(4000)
+        splash.close_later(4000, terminate=False)
     except Exception as exc:
         log(f"monitor thread error: {exc}")
         splash.set_error(f"监控线程异常：{exc}")
-        splash.close_later(5000)
+        splash.close_later(5000, terminate=False)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1013,6 +1178,8 @@ def main(argv: list[str] | None = None) -> int:
         splash.close_later(5000)
     else:
         log(f"dev-launcher pid={proc.pid}")
+        splash._proc = proc
+        splash._start_log_tailer(project_root)
         t = threading.Thread(target=monitor, args=(proc, splash), daemon=True)
         t.start()
 

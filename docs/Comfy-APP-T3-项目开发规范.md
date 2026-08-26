@@ -115,7 +115,73 @@ lib（纯函数） ← 任意层
 - 颜色/圆角/阴影从设计 tokens 取值，禁止散落魔法值（画布节点色表收敛为模块级 Map）。
 - 全局样式只在 `src/styles` 与 `globals.css` 中维护。
 
-### 4.4 文案与注释
+### 4.4 UI/UX 生产级规范（2026-08-26 新增）
+
+本规范依据 AppShell 生产级评审沉淀，后续所有组件必须遵守。
+
+#### 4.4.1 Design Tokens（设计令牌）
+
+所有颜色、尺寸、圆角、阴影必须从 `src/app/globals.css` 的 `@theme` 取值，禁止在组件里写死十六进制或像素值。
+
+| 用途 | Token 示例 | 组件写法 |
+|---|---|---|
+| 背景 | `--color-surface-0` / `--color-surface-1` | `bg-surface-0` |
+| 边框 | `--color-border-subtle` | `border-border-subtle` |
+| 文字 | `--color-ink` / `--color-muted` | `text-ink` |
+| 布局尺寸 | `--panel-right-width` | `w-[var(--panel-right-width)]` |
+
+反例：`bg-[#0a0a0f]`、`border-white/6`、`style={{ width: 360 }}`。
+
+#### 4.4.2 可访问性（a11y）
+
+- 布局区域必须加语义化标签与 `aria-label`：`<header>`、`<main>`、`<aside>`、`<nav>`。
+- 可展开/收起面板必须提供 `aria-expanded`、`aria-hidden`、`role`。
+- 按钮/链接必须可键盘聚焦；自定义焦点样式由 `*:focus-visible` 全局管理。
+
+#### 4.4.3 面板/弹窗动画
+
+优先使用 **CSS transition**（零依赖、性能好、不阻塞渲染）：
+
+```tsx
+<aside
+  className={cn(
+    "transition-all duration-300 ease-out",
+    rightPanelOpen ? "w-[var(--panel-right-width)] opacity-100" : "w-0 opacity-0 pointer-events-none"
+  )}
+>
+  {rightPanel}
+</aside>
+```
+
+- 需要进入/退出动画时，**始终保留 DOM**，用 `width`/`opacity`/`transform` 控制显隐；避免 `{open && <Panel />}` 导致硬切。
+- 仅当项目已安装 `framer-motion` 且动画复杂度超出 CSS 能力时，才使用 `framer-motion`。
+
+#### 4.4.4 字体加载
+
+禁止在组件内联 `style={{ fontFamily: ... }}`（FOUC + 不可维护）。
+
+正确做法：
+
+1. Latin 字体通过 `next/font/google` 加载并导出 CSS 变量；
+2. CJK 字体使用系统回退栈（`PingFang SC`、`Microsoft YaHei`、`Noto Sans SC` 等），避免下载超大中文字体文件；
+3. 在 `src/app/globals.css` 的 `--font-sans` 中组合变量与系统字体；
+4. `src/app/layout.tsx` 的 `<body>` 应用 `font-sans`。
+
+#### 4.4.5 "use client" 位置
+
+- **纯布局壳**（无 state/effect/事件）理论上应为 Server Component。
+- 但本项目的画布/工作流页面都是 Client Component，且直接 import 布局壳，因此 `AppShell` 保留 `"use client"`。
+- 新增纯布局组件时：若调用方是 Server Component，**必须去掉 `"use client"`**；若调用方是 Client Component，可保留或在外层套一个极薄的 Client Wrapper。
+
+#### 4.4.6 className 合并
+
+复杂组件使用 `cn()` 工具（`src/lib/utils.ts`）。
+
+- 当前 `cn()` 为轻量实现：过滤 falsy + 展平一层数组。
+- **后续应迁移到 `clsx` + `tailwind-merge`**，以正确处理冲突类名（如 `p-2` vs `p-4`）。
+- 调用方传入 `className` 时，必须放到 `cn()` 最后，确保可覆盖默认样式。
+
+### 4.5 文案与注释
 
 - 面向用户的文案一律中文；代码注释中文或英文均可，同一文件内保持一致。
 - 注释解释"为什么"，不解释"是什么"；性能/兼容性决策必须写注释说明动机。
