@@ -322,6 +322,53 @@ def is_another_instance_running(mutex: HANDLE) -> bool:
     return err == 183  # ERROR_ALREADY_EXISTS
 
 
+# ── 陈旧锁自愈（比纯命名互斥量更容易定位/回收遗留进程）─────────────────────────
+def _launcher_lock_file(project_root: str) -> str:
+    """记录本实例 PID 的锁文件，供下一次启动判断锁是否陈旧。"""
+    return os.path.join(project_root, "run", ".launcher.lock")
+
+
+def _read_lock_pid(lock_file: str) -> int | None:
+    try:
+        with open(lock_file, "r", encoding="utf-8") as f:
+            return int(f.read().strip())
+    except Exception:
+        return None
+
+
+def _write_lock_pid(lock_file: str) -> None:
+    try:
+        os.makedirs(os.path.dirname(lock_file), exist_ok=True)
+        with open(lock_file, "w", encoding="utf-8") as f:
+            f.write(str(os.getpid()))
+    except Exception as e:
+        log(f"write lock pid failed: {e}")
+
+
+def _is_pid_alive(pid: int) -> bool:
+    if not pid or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # 进程存在但无信号权限，仍视为存活
+        return True
+    except Exception:
+        return False
+
+
+def _safe_remove(path: str) -> None:
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except Exception:
+        pass
+
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  Win32 API 原型
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1132,22 +1179,38 @@ def main(argv: list[str] | None = None) -> int:
             f"找不到启动脚本：{ps1_path}\n请把 start-tauri.exe 放在项目根目录。"
         )
 
-    # 单实例：如果已有实例在运行，直接聚焦已有窗口后退出
+    # 单实例保护 + 陈旧锁自愈
+    lock_file = _launcher_lock_file(project_root)
+    _stale_pid = _read_lock_pid(lock_file)
+    if _stale_pid is not None and not _is_pid_alive(_stale_pid):
+        log(f"stale lock file (pid {_stale_pid} dead), removing")
+        _safe_remove(lock_file)
+
     mutex = create_mutex("Local\\ComfyAppTauriLauncherMutex")
     if is_another_instance_running(mutex):
-        log("another instance is already running")
-        if args.get("focus", True):
-            find_and_focus_tauri_window()
+        # 互斥量被占用：若真有 Tauri 窗口在跑，置顶已有窗口后退出（正常单实例行为）
+        if find_and_focus_tauri_window():
+            log("another instance is already running (tauri window found), focusing it")
+            if mutex:
+                kernel32.CloseHandle(mutex)
+            close_logging()
+            return 0
+        # 互斥量被占用但没有任何 Tauri 窗口 -> 判定为陈旧锁
+        # （典型场景：上次崩溃 / 调试遗留的 launcher 进程仍攥着互斥量）。
+        # 直接覆盖启动，避免被陈旧锁永久阻塞。
+        log("another instance detected but NO tauri window -> overriding stale lock")
         if mutex:
             kernel32.CloseHandle(mutex)
-        close_logging()
-        return 0
+        mutex = None
+
+    _write_lock_pid(lock_file)
 
     # 如果 Tauri 窗口已经存在，直接聚焦（不重复启动）
     if args.get("focus", True) and find_and_focus_tauri_window():
         if mutex:
             kernel32.ReleaseMutex(mutex)
             kernel32.CloseHandle(mutex)
+        _safe_remove(lock_file)
         close_logging()
         return 0
 
@@ -1190,6 +1253,7 @@ def main(argv: list[str] | None = None) -> int:
         if mutex:
             kernel32.ReleaseMutex(mutex)
             kernel32.CloseHandle(mutex)
+        _safe_remove(lock_file)
         close_logging()
 
     return 0
