@@ -2,17 +2,31 @@ import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 
-const LOG_FILE = path.join(process.cwd(), "log", "dev-launcher.log");
+const DEFAULT_LOG_FILE = path.join(process.cwd(), "log", "dev-launcher.log");
+const SENTINEL_FILE = path.join(process.cwd(), "log", "dev-launcher-current.txt");
+
+function resolveCurrentLog(): string {
+  try {
+    const sentinel = fs.readFileSync(SENTINEL_FILE, "utf8").trim();
+    if (sentinel && fs.existsSync(sentinel)) {
+      return sentinel;
+    }
+  } catch {
+    // sentinel 不存在或无效时回退到默认文件
+  }
+  return DEFAULT_LOG_FILE;
+}
 
 export async function GET(request: Request) {
+  const logFile = resolveCurrentLog();
   try {
-    if (!fs.existsSync(LOG_FILE)) {
+    if (!fs.existsSync(logFile)) {
       return NextResponse.json({ content: "", size: 0, offset: 0 });
     }
 
     const { searchParams } = new URL(request.url);
     const requestedOffset = Number(searchParams.get("offset") ?? "0");
-    const content = fs.readFileSync(LOG_FILE, "utf8");
+    const content = fs.readFileSync(logFile, "utf8");
 
     // 如果文件被重置（新运行），offset 可能超过文件大小，此时从头读取
     const safeOffset =

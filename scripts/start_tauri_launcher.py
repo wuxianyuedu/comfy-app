@@ -395,6 +395,23 @@ def _status_file_path(project_root: str) -> str:
     return os.path.join(project_root, "run", STATUS_FILE)
 
 
+def _resolve_dev_log_path(project_root: str) -> str:
+    """dev-launcher.ps1 可能因 dev-launcher.log 被占用而回退到其它文件名，
+
+    通过 sentinel 文件定位本次运行的真实日志路径。
+    """
+    default = os.path.join(project_root, "log", "dev-launcher.log")
+    sentinel = os.path.join(project_root, "log", "dev-launcher-current.txt")
+    try:
+        with open(sentinel, "r", encoding="utf-8") as f:
+            path = f.read().strip()
+        if path and os.path.isfile(path):
+            return path
+    except Exception:
+        pass
+    return default
+
+
 def _write_status(
     project_root: str,
     phase: str,
@@ -797,7 +814,7 @@ class SplashWindow:
 
     def _start_log_tailer(self, project_root: str):
         """后台读取 dev-launcher.log，把最新 STEP/OK 消息映射到画面状态与进度。"""
-        log_path = os.path.join(project_root, "log", "dev-launcher.log")
+        log_path = _resolve_dev_log_path(project_root)
         last_size = 0
         # 阶段 → 进度百分比（粗略但有效）
         phase_progress = {
@@ -812,9 +829,15 @@ class SplashWindow:
         }
 
         def _tail():
-            nonlocal last_size
+            nonlocal last_size, log_path
             while not self._stop_tailer.is_set():
                 try:
+                    # dev-launcher.ps1 可能因文件被占用回退到 dev-launcher-<pid>.log，
+                    # 通过 sentinel 文件 dev-launcher-current.txt 定位本次运行的真实日志。
+                    resolved = _resolve_dev_log_path(project_root)
+                    if resolved != log_path:
+                        log_path = resolved
+                        last_size = 0
                     if not os.path.isfile(log_path):
                         time.sleep(0.5)
                         continue
@@ -1156,14 +1179,25 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
         log(f"launching {ps1} -Prebuilt")
 
     # 启动 PowerShell 隐藏窗口；stdin 也关闭避免句柄泄漏
+    # stdout/stderr 重定向到文件，方便排查「提前退出但无日志」的问题。
     try:
+        out_path = os.path.join(project_root, "log", "dev-launcher-stdout.log")
+        err_path = os.path.join(project_root, "log", "dev-launcher-stderr.log")
+        for p in (out_path, err_path):
+            try:
+                with open(p, "w", encoding="utf-8") as f:
+                    f.write("")
+            except OSError:
+                pass
+        out = open(out_path, "a", encoding="utf-8", buffering=1)
+        err = open(err_path, "a", encoding="utf-8", buffering=1)
         return subprocess.Popen(
             [pwsh, "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
              "-File", ps1] + ps_args,
             cwd=project_root,
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=out,
+            stderr=err,
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
     except Exception as exc:
@@ -1212,7 +1246,7 @@ def _monitor_headless(
     """
     start_time = time.time()
     deadline = start_time + timeout
-    log_path = os.path.join(project_root, "log", "dev-launcher.log")
+    log_path = _resolve_dev_log_path(project_root)
     last_size = 0
     current_phase = "initial"
     current_message = LAUNCH_PHASES["initial"]["message"]
@@ -1264,6 +1298,11 @@ def _monitor_headless(
         last_write = 0.0
         while time.time() < deadline:
             try:
+                # 如果 dev-launcher.ps1 切换了当前日志文件，跟随 sentinel
+                resolved = _resolve_dev_log_path(project_root)
+                if resolved != log_path:
+                    log_path = resolved
+                    last_size = 0
                 if os.path.isfile(log_path):
                     size = os.path.getsize(log_path)
                     if size < last_size:

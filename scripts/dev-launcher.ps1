@@ -62,7 +62,31 @@ $runLog = Join-Path $monthDir ("dev-launcher-" + $runTimestamp + ".log")
 $currentLog = Join-Path $logDir "dev-launcher.log"
 
 # 本次运行日志：覆盖清空，作为实时读取源
-Set-Content -Path $currentLog -Value "" -Encoding utf8 -Force
+# 若旧实例崩溃未退出，Start-Transcript 仍持有 dev-launcher.log 句柄，会导致
+# Set-Content 报「文件被占用」。这里先尝试重命名旧日志，再创建新文件。
+function Clear-CurrentLog {
+  param([string]$Path)
+  try {
+    Set-Content -Path $Path -Value "" -Encoding utf8 -Force -ErrorAction Stop
+    return $Path
+  } catch {
+    $backup = $Path -replace '\.log$', "-locked-$($now.ToString('yyyyMMdd_HHmmss')).log"
+    try {
+      Move-Item -Path $Path -Destination $backup -Force -ErrorAction Stop
+      Set-Content -Path $Path -Value "" -Encoding utf8 -Force -ErrorAction Stop
+      return $Path
+    } catch {
+      # 重命名也失败：回退到唯一文件名，避免永远起不来
+      $fallback = $Path -replace '\.log$', "-$(PID).log"
+      Set-Content -Path $fallback -Value "" -Encoding utf8 -Force -ErrorAction Stop
+      return $fallback
+    }
+  }
+}
+$currentLog = Clear-CurrentLog -Path $currentLog
+# 让 Python 启动器和应用内日志面板能实时定位到本次运行的实际日志文件
+Set-Content -Path (Join-Path $logDir "dev-launcher-current.txt") -Value $currentLog -Encoding utf8 -Force
+
 # 历史运行文件：写入开始标记
 $runStartMarker = "===== 运行开始 {0} =====" -f ($now.ToString("yyyy-MM-dd HH:mm:ss"))
 Set-Content -Path $runLog -Value $runStartMarker -Encoding utf8 -Force
@@ -369,9 +393,30 @@ public class WJ {
     }
   }
 
-  # 阻塞等待开发服务器退出
-  $p.WaitForExit()
-  Write-Log "开发服务器已退出，正在释放 Job Object..." -Level STEP
+  # 阻塞等待主进程退出
+  if ($Prebuilt) {
+    # 预编译模式：以 Tauri 桌面壳窗口为生命周期锚点，关闭窗口即结束全部。
+    # 之前这里等待 dev server，导致用户关闭 Tauri 后 PowerShell 仍挂起并锁住 dev-launcher.log。
+    Write-Log "等待 Tauri 桌面壳或 dev server 任一退出..." -Level INFO
+    while (-not $tauriProc.HasExited -and -not $devProc.HasExited) {
+      Start-Sleep -Milliseconds 500
+    }
+    if (-not $devProc.HasExited) {
+      Write-Log "Tauri 已退出，正在终止 dev server..." -Level STEP
+      try { $devProc.Kill() } catch {}
+      try { $devProc.WaitForExit(5000) } catch {}
+    }
+    if (-not $tauriProc.HasExited) {
+      Write-Log "dev server 已退出，正在终止 Tauri 壳..." -Level STEP
+      try { $tauriProc.Kill() } catch {}
+      try { $tauriProc.WaitForExit(5000) } catch {}
+    }
+    Write-Log "全部子进程已退出，正在释放 Job Object..." -Level STEP
+  } else {
+    Write-Log "等待开发服务器退出..." -Level INFO
+    $p.WaitForExit()
+    Write-Log "开发服务器已退出，正在释放 Job Object..." -Level STEP
+  }
   $null = [WJ]::CloseHandle($h)
   Write-Log "全部子进程已清理，启动器正常退出" -Level OK
 }
