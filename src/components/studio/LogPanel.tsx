@@ -1,7 +1,12 @@
 "use client";
 
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
-import { useLogPanel, type LogEntry, type LogLevel, type LogFilter } from "./log-provider";
+import {
+  useLogPanel,
+  type LogEntry,
+  type LogLevel,
+  type LogFilter,
+} from "./log-provider";
 
 const LEVEL_STYLES: Record<LogLevel, string> = {
   debug: "bg-gray-500/15 text-gray-400 border-gray-500/20",
@@ -78,7 +83,11 @@ function ansiToSpans(text: string): React.ReactNode[] {
       textDecoration: s.textDecoration,
       opacity: s.opacity,
     };
-    out.push(<span key={key++} style={css}>{chunk}</span>);
+    out.push(
+      <span key={key++} style={css}>
+        {chunk}
+      </span>,
+    );
   };
 
   let match: RegExpExecArray | null;
@@ -174,7 +183,10 @@ const LOG_TOKENS: TokenStyle[] = [
   { regex: /\[ERROR\]/g, style: { color: "#ef4444", fontWeight: "bold" } },
   { regex: /\[INFO\]/g, style: { color: "#9ca3af" } },
   { regex: /PID\s*[:：]\s*\d+/gi, style: { color: "#c084fc" } },
-  { regex: /https?:\/\/[^\s]+/g, style: { color: "#60a5fa", textDecoration: "underline" } },
+  {
+    regex: /https?:\/\/[^\s]+/g,
+    style: { color: "#60a5fa", textDecoration: "underline" },
+  },
   { regex: /\b(?:[A-Z]:\\|\\)[^\s]*/g, style: { color: "#a78bfa" } },
 ];
 
@@ -183,7 +195,8 @@ function hasAnsi(text: string): boolean {
 }
 
 function tokenizeLogMessage(text: string): React.ReactNode[] {
-  const combined = /(\[\d{2}:\d{2}:\d{2}\]|\[OK\]|\[STEP\]|\[WARN\]|\[ERROR\]|\[INFO\]|PID\s*[:：]\s*\d+|https?:\/\/[^\s]+|\b(?:[A-Z]:\\|\\)[^\s]*)/gi;
+  const combined =
+    /(\[\d{2}:\d{2}:\d{2}\]|\[OK\]|\[STEP\]|\[WARN\]|\[ERROR\]|\[INFO\]|PID\s*[:：]\s*\d+|https?:\/\/[^\s]+|\b(?:[A-Z]:\\|\\)[^\s]*)/gi;
   const parts = text.split(combined).filter((p) => p !== undefined && p !== "");
   let key = 0;
   return parts.map((part) => {
@@ -225,15 +238,29 @@ const FILTER_LABELS: { label: string; value: LogFilter }[] = [
   { label: "错误", value: "error" },
 ];
 
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 function formatTime(ts: number): string {
   const d = new Date(ts);
-  return d.toLocaleTimeString("zh-CN", {
+  const time = d.toLocaleTimeString("zh-CN", {
     hour12: false,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     fractionalSecondDigits: 3,
   });
+  if (!isSameDay(d, new Date())) {
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${month}-${day} ${time}`;
+  }
+  return time;
 }
 
 /* Fixed row height for windowed rendering.  Logs are line-based, so each entry
@@ -253,7 +280,7 @@ const LogRow = memo(function LogRow({
   const levelClass = LEVEL_STYLES[entry.level];
   return (
     <div
-      className="absolute left-0 right-0 flex items-center gap-2.5 border-b border-white/[0.03] px-4 font-mono text-[13px] leading-none hover:bg-white/[0.02]"
+      className="absolute right-0 left-0 flex items-center gap-2.5 border-b border-white/[0.03] px-4 font-mono text-[13px] leading-none hover:bg-white/[0.02]"
       style={{ top, height: ROW_HEIGHT }}
     >
       <span className="shrink-0 text-gray-500">{formatTime(entry.time)}</span>
@@ -277,7 +304,9 @@ const LogRow = memo(function LogRow({
         {renderLogMessage(entry.message)}
       </span>
       {entry.source !== "console" && (
-        <span className="shrink-0 text-[11px] text-gray-600">{entry.source}</span>
+        <span className="shrink-0 text-[11px] text-gray-600">
+          {entry.source}
+        </span>
       )}
     </div>
   );
@@ -366,7 +395,9 @@ export function LogPanel() {
               <line x1="16" y1="17" x2="8" y2="17" />
               <line x1="10" y1="9" x2="9" y2="9" />
             </svg>
-            <span className="text-[15px] font-semibold text-gray-100">应用日志</span>
+            <span className="text-[15px] font-semibold text-gray-100">
+              应用日志
+            </span>
             {errorCount > 0 && (
               <span className="rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[11px] font-medium text-rose-300">
                 {errorCount} 错误
@@ -389,7 +420,9 @@ export function LogPanel() {
                 title={`${f.label} (${counts[f.value]})`}
               >
                 {f.label}
-                <span className="ml-1 text-[11px] text-gray-600">{counts[f.value]}</span>
+                <span className="ml-1 text-[11px] text-gray-600">
+                  {counts[f.value]}
+                </span>
               </button>
             ))}
           </div>
@@ -413,7 +446,7 @@ export function LogPanel() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="搜索日志..."
-              className="h-8 w-full rounded-lg border border-white/[0.06] bg-[#13131a] pl-8 pr-7 text-[13px] text-gray-200 placeholder:text-gray-600 outline-none focus:border-violet-500/40"
+              className="h-8 w-full rounded-lg border border-white/[0.06] bg-[#13131a] pr-7 pl-8 text-[13px] text-gray-200 outline-none placeholder:text-gray-600 focus:border-violet-500/40"
             />
             {search && (
               <button
@@ -434,7 +467,14 @@ export function LogPanel() {
               title="复制全部"
               className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                 <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
               </svg>
@@ -445,7 +485,14 @@ export function LogPanel() {
               title="下载日志"
               className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
@@ -457,7 +504,14 @@ export function LogPanel() {
               title="清空"
               className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <polyline points="3 6 5 6 21 6" />
                 <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
               </svg>
@@ -468,7 +522,14 @@ export function LogPanel() {
               title="关闭 (Ctrl+Shift+L)"
               className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
@@ -504,7 +565,11 @@ export function LogPanel() {
           ) : (
             <div style={{ height: totalHeight, position: "relative" }}>
               {visible.map((entry, i) => (
-                <LogRow key={entry.id} entry={entry} top={(startIndex + i) * ROW_HEIGHT} />
+                <LogRow
+                  key={entry.id}
+                  entry={entry}
+                  top={(startIndex + i) * ROW_HEIGHT}
+                />
               ))}
             </div>
           )}

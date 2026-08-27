@@ -56,7 +56,9 @@ function serializeOne(a: unknown): string {
   if (a === undefined) return "undefined";
   if (a === null) return "null";
   if (a instanceof Error) {
-    return a.stack ? `${a.name}: ${a.message}\n${a.stack}` : `${a.name}: ${a.message}`;
+    return a.stack
+      ? `${a.name}: ${a.message}\n${a.stack}`
+      : `${a.name}: ${a.message}`;
   }
   // Preserve stack-like strings that may come from serialized error objects.
   if (
@@ -66,14 +68,21 @@ function serializeOne(a: unknown): string {
     typeof (a as { stack?: unknown }).stack === "string"
   ) {
     const e = a as { name?: unknown; message?: unknown; stack: string };
-    const head =
-      typeof e.message === "string" ? e.message : JSON.stringify(a);
+    const head = typeof e.message === "string" ? e.message : JSON.stringify(a);
     return `${head}\n${e.stack}`;
   }
   try {
     return JSON.stringify(a, null, 2);
   } catch {
-    return String(a);
+    if (
+      typeof a === "string" ||
+      typeof a === "number" ||
+      typeof a === "boolean" ||
+      typeof a === "bigint"
+    ) {
+      return String(a);
+    }
+    return "";
   }
 }
 
@@ -81,34 +90,33 @@ function serialize(args: unknown[]): string {
   return args.map(serializeOne).join(" ");
 }
 
-function formatTime(ts: number): string {
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function formatTime(ts: number, opts?: { alwaysDate?: boolean }): string {
   const d = new Date(ts);
-  return d.toLocaleTimeString("zh-CN", {
+  const time = d.toLocaleTimeString("zh-CN", {
     hour12: false,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     fractionalSecondDigits: 3,
   });
+  if (opts?.alwaysDate || !isSameDay(d, new Date())) {
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${month}-${day} ${time}`;
+  }
+  return time;
 }
 
-const LOG_LINE_RE = /^\[(\d{2}):(\d{2}):(\d{2})\]\s*\[(STEP|OK|INFO|WARN|ERROR|DEBUG)\]\s*(.*)$/;
-const LOG_FILENAME_DATE_RE = /dev-launcher-(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})\.log$/;
-
-function parseLogFileDate(name: string): Date | undefined {
-  const m = LOG_FILENAME_DATE_RE.exec(name);
-  if (!m) return undefined;
-  const [, y, mo, d, h, mi, s] = m;
-  const date = new Date(
-    Number(y),
-    Number(mo) - 1,
-    Number(d),
-    Number(h),
-    Number(mi),
-    Number(s)
-  );
-  return Number.isNaN(date.getTime()) ? undefined : date;
-}
+const LOG_LINE_RE =
+  /^\[(\d{2}):(\d{2}):(\d{2})\]\s*\[(STEP|OK|INFO|WARN|ERROR|DEBUG)\]\s*(.*)$/;
 
 function parseLogLevel(level: string): LogLevel {
   switch (level.toLowerCase()) {
@@ -131,9 +139,7 @@ function parseFileLogs(text: string, baseDate?: Date): LogEntry[] {
   for (const rawLine of text.split("\n")) {
     // Strip ANSI SGR (e.g. \x1b[36m) that the launcher now writes into the
     // transcript, so the [HH:mm:ss] [LEVEL] regex still matches cleanly.
-    const line = rawLine
-      .replace(/\r$/, "")
-      .replace(/\x1b\[[0-9;:]*m/g, "");
+    const line = rawLine.replace(/\r$/, "").replace(/\x1b\[[0-9;:]*m/g, "");
     if (!line.trim()) continue;
     const m = LOG_LINE_RE.exec(line);
     if (m) {
@@ -162,7 +168,10 @@ function parseFileLogs(text: string, baseDate?: Date): LogEntry[] {
 
 function formatForClipboard(entries: LogEntry[]): string {
   return entries
-    .map((e) => `[${formatTime(e.time)}] [${e.level.toUpperCase()}] ${e.message}`)
+    .map(
+      (e) =>
+        `[${formatTime(e.time, { alwaysDate: true })}] [${e.level.toUpperCase()}] ${e.message}`,
+    )
     .join("\n");
 }
 
@@ -215,7 +224,8 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
 
     addEntry({
       level: "info",
-      message: "日志面板已启用。按 Ctrl+Shift+L 或点击状态栏日志按钮打开/关闭。",
+      message:
+        "日志面板已启用。按 Ctrl+Shift+L 或点击状态栏日志按钮打开/关闭。",
       source: "system",
     });
 
@@ -251,7 +261,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
                     ? "debug"
                     : "info";
             addEntry({ level, message, source: "tauri" });
-          }
+          },
         );
       } catch {
         // Not running inside Tauri — ignore.
@@ -262,66 +272,6 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     return () => unlisten?.();
   }, [addEntry]);
 
-  // ── Load historical launcher log files so the panel shows the full picture ──
-  // 实时日志只写入 log/dev-launcher.log；每次运行结束后该文件会被归档到
-  // log/YYYY-MM/dev-launcher-YYYY-MM-DD_HH-mm-ss.log。打开面板时先加载最近
-  // 的历史文件，再轮询当前文件，避免「只能看到本次运行」导致显示不全。
-  const historicalLoadedRef = useRef(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (historicalLoadedRef.current) return;
-    historicalLoadedRef.current = true;
-
-    const loadHistorical = async () => {
-      try {
-        const listRes = await fetch("/api/logs/list");
-        if (!listRes.ok) return;
-        const list = (await listRes.json()) as {
-          files: Array<{ name: string; relativePath: string; size: number }>;
-        };
-        if (!list.files?.length) return;
-
-        const MAX_FILES = 10;
-        const MAX_BYTES = 5 * 1024 * 1024;
-        let usedBytes = 0;
-        const toLoad = [];
-        for (const f of list.files.slice(0, MAX_FILES)) {
-          if (usedBytes + f.size > MAX_BYTES) break;
-          usedBytes += f.size;
-          toLoad.push(f);
-        }
-
-        const batches: LogEntry[][] = [];
-        for (const f of toLoad) {
-          const res = await fetch(
-            `/api/logs/history?file=${encodeURIComponent(f.relativePath)}`
-          );
-          if (!res.ok) continue;
-          const data = (await res.json()) as { content: string };
-          if (!data.content) continue;
-
-          const marker: LogEntry = {
-            id: nextId(),
-            time: Date.now(),
-            level: "info",
-            message: `--- 历史日志: ${f.name} ---`,
-            source: "system",
-          };
-          const baseDate = parseLogFileDate(f.name);
-          const entries = parseFileLogs(data.content, baseDate);
-          batches.unshift(marker, ...entries);
-        }
-        if (batches.length > 0) {
-          setLogs((prev) => [...batches, ...prev]);
-        }
-      } catch {
-        // 历史日志读取失败不应阻塞当前日志轮询
-      }
-    };
-
-    void loadHistorical();
-  }, []);
-
   // ── Load launcher log file: startup logs + ongoing dev-server output ──
   const fileOffsetRef = useRef(0);
   useEffect(() => {
@@ -331,7 +281,9 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/logs/current?offset=${fileOffsetRef.current}`);
+        const res = await fetch(
+          `/api/logs/current?offset=${fileOffsetRef.current}`,
+        );
         if (!res.ok) return;
         const data = (await res.json()) as {
           content: string;
@@ -356,7 +308,9 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     };
 
     void poll();
-    const id = setInterval(poll, POLL_MS);
+    const id = setInterval(() => {
+      void poll();
+    }, POLL_MS);
     return () => {
       mounted = false;
       clearInterval(id);
@@ -461,7 +415,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       copyAll,
       download,
       counts,
-    ]
+    ],
   );
 
   return <LogContext.Provider value={value}>{children}</LogContext.Provider>;
