@@ -186,6 +186,16 @@ lib（纯函数） ← 任意层
 - 面向用户的文案一律中文；代码注释中文或英文均可，同一文件内保持一致。
 - 注释解释"为什么"，不解释"是什么"；性能/兼容性决策必须写注释说明动机。
 
+### 4.6 React 19 严格模式 lint 实践（2026-08-27 新增）
+
+React 19 已移除 `setState-in-render` 豁免并新增严格 hooks 规则，`eslint errors` 必须清零（warnings 另立任务跟踪）。踩坑与规范写法：
+
+- **set-state-in-effect 不再豁免**：禁止用文件级 `/* eslint-disable react-hooks/set-state-in-effect */` 掩盖违规；必须逐处改为规范写法。
+- **规范写法一（渲染期对比 + 渲染期 setState）**：同一 render 内先读 `latestRef.current` 与本次值比较，不等才 `setState`（React 19 允许渲染期 setState，遇冲突自动重渲染）。
+- **规范写法二（setTimeout 延迟提交）**：纯 effect 场景改用 `setTimeout(() => setState(...))` 延迟到 render 提交后，避免同步 setState 触发 lint。
+- **已改造文件**：`settings/page.tsx`、`FilmStudio.tsx`、`ModelLibrary.tsx`、`ContentAssetNode.tsx`、`llm-context.tsx`、`CanvasNode.tsx`、`workflow-stores.tsx`、`workflow-editor-build-nodes.ts` 等；配套删除 5 个文件的文件级豁免。
+- **提交粒度**：lint 修复与功能改动分开提交，便于回滚与 review。
+
 ---
 
 ## 5. Git 工作流
@@ -338,3 +348,33 @@ pnpm build && pnpm start   # 生产预览
 ---
 
 *本文档随项目演进持续维护；任何与既有规范的冲突以本文档最新版本为准。*
+
+---
+
+## 11. 疑难排查记录
+
+### 11.1 子工作流展开"卡死"排查（2026-08-27 沉淀）
+
+**现象**：画布点击展开子工作流后，加载覆盖层长时间无恢复（实测约 10 分钟无响应后手动关闭）。
+
+**排查链路**（按序）：
+1. 前端下钻链路：`onEnterSubgraph → fetchDetail({subgraphUid}) → tRPC subgraph 接口`；`workflow-editor-detail-loader.ts` 有 sessionStorage 冷/热缓存 + `latestRequestIdRef` 竞态守卫。
+2. 服务端：`src/lib/comfyui/workflow-detail.ts` 的 `buildSubgraphDetail` / `buildWorkflowDetailFull`，带 120s 内存缓存，无死锁路径。
+3. 底层依赖：`raw.ts fetchObjectInfo` 请求 ComfyUI `object_info`（~4.7MB），超时 `AbortSignal.timeout(20s)`；**ComfyUI 不可达时每次请求都白等 20s 才返回 null**，是卡顿主因。
+
+**加固方案**（commit `2715e7d`）：
+- `fetchObjectInfo` 增加**失败负缓存**：失败后 30s 内直接返回 null，避免 ComfyUI 未启动时反复拖慢 20s。
+- 详情加载冷路径增加 **60s 超时兜底**（`withTimeout` + `Promise.race`，vanilla tRPC client 不支持传 signal）：后端长时间不返回时抛错提示，不再无限转圈。
+
+**经验**：排查"点 UI 后卡死"按 前端请求链路 → 服务端接口 → 外部依赖超时 三级排查；外部服务（ComfyUI）不可达时的超时等待是最常见隐性拖慢点，优先加失败负缓存与请求超时兜底。
+
+### 11.2 Git 换行符（CRLF/LF）提交噪声处理
+
+**现象**：外部工具（IDE/脚本）批量改写文件换行后，`git diff` 出现全文件行级噪声（如 818 insertions / 808 deletions，`-w` 后仅 22 行真实改动）。
+
+**判定**：`git diff -w --numstat` 对比普通 diff，若行数骤减即为换行噪声；`git ls-files --eol` 查看 index/工作区换行状态。
+
+**处理**：
+- 工作区转回仓库规范换行（本仓库为 CRLF），再用 `git -c core.autocrlf=false add <file>` 让换行原样入库，保持 blob 与历史版本一致。
+- `core.autocrlf=true` 时 clean 过滤会把 CRLF 转 LF 入库，导致与历史 CRLF blob 产生噪声；临时 `-c` 覆盖可避免。
+- 提交前必须复查 `git diff HEAD~1 HEAD --numstat`，确认无换行噪声混入。
