@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 "use client";
 /* ════════════════════════════════════════════════════════════════════════
  *  wf-stores.ts — Zustand 状态层（P2：替代 3 个 React Context）
@@ -137,6 +136,8 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         let changed = false;
         for (const [entryKey, entry] of Object.entries(state.workflowIO)) {
           if (entry?.kind === "widget" && entry.value !== undefined) {
+            // value 仅在本分支被剔除（widget 的运行时值不持久化到 IO 配置）
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { value, ...rest } = entry;
             nextMap[entryKey] = rest;
             changed = true;
@@ -349,41 +350,65 @@ export function createNodeJsonViewerStore(
     getNodeJson: (nodeId) => {
       const { detail } = get();
       if (!detail?.graph) return null;
-      const entry = detail.graph[nodeId];
-      return entry && typeof entry === "object" ? (entry as Record<string, any>) : null;
+      const entry: unknown = detail.graph[nodeId];
+      return entry && typeof entry === "object"
+        ? (entry as Record<string, unknown>)
+        : null;
     },
 
     getNodeView: (nodeId) => {
       const { detail, rawMetaById, positions, subgraphRawContext, subgraphStackLength } = get();
       if (!detail) return null;
-      const rawEntry = detail.graph?.[nodeId];
+      const rawEntry: unknown = detail.graph?.[nodeId];
       const entry =
-        rawEntry && typeof rawEntry === "object" ? (rawEntry as Record<string, any>) : null;
-      let rawNodesSource: any[] | null = null;
+        rawEntry && typeof rawEntry === "object"
+          ? (rawEntry as Record<string, unknown>)
+          : null;
+      let rawNodesSource: Array<Record<string, unknown>> | null = null;
       const isSubView = subgraphStackLength > 0 && subgraphRawContext;
       if (isSubView) {
         const subs = (
           subgraphRawContext.parentRawJson as
-            | { definitions?: { subgraphs?: Record<string, any> } }
+            | { definitions?: { subgraphs?: Record<string, unknown> } }
             | null
         )?.definitions?.subgraphs;
         const targetUid = subgraphRawContext.subUid;
-        let subDef: any = subs?.[targetUid];
+        // raw subgraph definitions are untyped server payloads; read only
+        // the fields the viewer needs (id / nodes) through a narrow shape.
+        type RawSubgraphDef = {
+          id?: string;
+          nodes?: Array<Record<string, unknown>>;
+        };
+        let subDef: RawSubgraphDef | undefined = subs?.[targetUid] as
+          | RawSubgraphDef
+          | undefined;
         if (!subDef || !Array.isArray(subDef.nodes)) {
           const matchKey = subs
-            ? Object.keys(subs).find((key) => subs[key]?.id === targetUid)
+            ? Object.keys(subs).find(
+                (key) =>
+                  (subs[key] as RawSubgraphDef | undefined)?.id === targetUid,
+              )
             : undefined;
-          if (matchKey && subs) subDef = subs[matchKey];
+          if (matchKey && subs) subDef = subs[matchKey] as RawSubgraphDef;
         }
         if (subDef && Array.isArray(subDef.nodes)) {
-          rawNodesSource = subDef.nodes as any[];
+          rawNodesSource = subDef.nodes;
         }
       }
-      if (!rawNodesSource && Array.isArray((detail.rawJson as any)?.nodes)) {
-        rawNodesSource = (detail.rawJson as any).nodes as any[];
+      if (
+        !rawNodesSource &&
+        typeof detail.rawJson === "object" &&
+        detail.rawJson !== null &&
+        Array.isArray((detail.rawJson as { nodes?: unknown }).nodes)
+      ) {
+        rawNodesSource = (detail.rawJson as {
+          nodes: Array<Record<string, unknown>>;
+        }).nodes;
       }
       const rawNode = rawNodesSource
-        ? (rawNodesSource.find((rawNodesSource) => String(rawNodesSource?.id) === nodeId) ?? null)
+        ? (rawNodesSource.find(
+            (rawNode) => String(rawNode?.id) === nodeId,
+          ) ?? null)
         : null;
       return {
         entry,
