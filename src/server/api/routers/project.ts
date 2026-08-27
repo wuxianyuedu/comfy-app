@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment */
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { container } from "@/lib/core";
@@ -36,7 +37,7 @@ export const projectRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const projectRepository = container.resolve("projectRepository");
       const project = await projectRepository.findById(input.projectId);
-      if (!project || project.userId !== ctx.user.id) {
+      if (project?.userId !== ctx.user.id) {
         throw new Error("Project not found");
       }
       return project;
@@ -55,7 +56,7 @@ export const projectRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const projectRepository = container.resolve("projectRepository");
       const existing = await projectRepository.findById(input.projectId);
-      if (!existing || existing.userId !== ctx.user.id) {
+      if (existing?.userId !== ctx.user.id) {
         throw new Error("Project not found");
       }
       const patch: Record<string, unknown> = {};

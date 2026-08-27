@@ -121,8 +121,8 @@ export class EventBus implements IEventBus {
       try {
         const r = (handler as EventHandler<E>)(payload);
         // 允许异步处理器，但不阻塞 emit；异常由各处理器自行 catch 亦可
-        if (r && typeof (r as Promise<void>).catch === "function") {
-          (r as Promise<void>).catch((err) =>
+        if (r && typeof (r).catch === "function") {
+          (r).catch((err) =>
             this.log.error("async listener rejected", {
               event: name,
               error: err instanceof Error ? err.message : String(err),

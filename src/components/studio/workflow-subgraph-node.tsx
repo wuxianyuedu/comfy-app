@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access */
 "use client";
 /* Extracted WorkflowSubgraphNode (ComfyUI subgraph wrapper renderer).
  * Originally inside WorkflowCanvasEditor.tsx. */
@@ -544,7 +545,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
             const isStringWidget =
               !isConn &&
               inp.type === "STRING" &&
-              (inferIsMultiline(data["classType"] as string | undefined, inp.name, stringText) ||
+              (inferIsMultiline(data.classType as string | undefined, inp.name, stringText) ||
                 stringText.length >= 32 ||
                 stringText.includes("\n"));
             const displayValue = isStringWidget ? "" : renderSubgraphWidgetValue(v);
@@ -638,7 +639,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                          *  doesn't break the uniform pin rhythm. */}
                         <DarkSelect
                           value={typeof v === "string" ? v : ""}
-                          onChange={() => {}}
+                          onChange={() => undefined}
                           options={(inp as any).comboOptions as string[]}
                           disabled
                           className="!h-[22px] !py-0 !text-[11px] flex-1 min-w-0"

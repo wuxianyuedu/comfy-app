@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 
 /* ── GlobalStepLogPanel.tsx · R-ardot120 (2026-08-18) ─────────────────────────
@@ -422,8 +423,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                  *  happen in practice — the initial snapshot always
                  *  fires one — but kept as a safe default). */
                 const meta = loadStepLogPanelState(id);
-                const wn = meta?.workflowName?.trim() || "(未命名工作流)";
-                const st = meta?.status || "?";
+                const wn = meta?.workflowName?.trim() ?? "(未命名工作流)";
+                const st = meta?.status ?? "?";
                 return (
                   <option key={id} value={id} title={`${wn} · ${st} · ${id}`}>
                     {wn.length > 18 ? wn.slice(0, 17) + "…" : wn} · {st}

@@ -404,7 +404,7 @@ export function getWorkflowTypesByCategory(cat: WorkflowCategory): WorkflowTypeD
 }
 
 /** 获取所有合法的 taskType code 集合（用于校验 DB 字段） */
-export const VALID_TASK_TYPE_CODES: Set<string> = new Set(
+export const VALID_TASK_TYPE_CODES = new Set<string>(
   ALL_WORKFLOW_TYPES.map((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code)
 );
 
@@ -427,9 +427,14 @@ export function normalizeTaskType(raw: string): string {
 }
 
 /** 根据图中节点自动推断工作流类型 */
-export function inferWorkflowTypeFromGraph(graph: Record<string, any>): string {
+export function inferWorkflowTypeFromGraph(graph: Record<string, unknown>): string {
   const nodeClasses = new Set(
-    Object.values(graph).map((n: any) => n?.class_type).filter(Boolean)
+    Object.values(graph)
+      .map((n) => {
+        const classType = (n as { class_type?: string } | null | undefined)?.class_type;
+        return typeof classType === "string" ? classType : "";
+      })
+      .filter(Boolean)
   );
 
   // Video detection
@@ -473,7 +478,7 @@ export function parseModesJson(raw: unknown): string[] {
   }
   if (typeof raw === "string" && raw.trim()) {
     try {
-      const arr = JSON.parse(raw);
+      const arr = JSON.parse(raw) as unknown;
       if (Array.isArray(arr)) {
         return arr.filter((x): x is string => typeof x === "string");
       }

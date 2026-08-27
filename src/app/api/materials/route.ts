@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { promises as fs } from "fs";
 import path from "path";
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import {
   MATERIAL_FOLDERS,
   SHARED_SCOPE,
@@ -54,8 +55,8 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const projectId = sanitizeScope(url.searchParams.get("projectId"));
     const scopeMode = url.searchParams.get("scope"); // "project" | "cross"
-    const folder = url.searchParams.get("folder")?.trim() || null;
-    const q = url.searchParams.get("q")?.trim().toLowerCase() || null;
+    const folder = url.searchParams.get("folder")?.trim() ?? null;
+    const q = url.searchParams.get("q")?.trim().toLowerCase() ?? null;
 
     const scopes = await resolveScopes(scopeMode, projectId);
 
@@ -102,14 +103,17 @@ export async function POST(req: NextRequest) {
     const file = form.get("file") as File | null;
     if (!file) return NextResponse.json({ error: "未收到文件" }, { status: 400 });
 
-    const folder = String(form.get("folder") ?? "").trim();
+    const folderRaw = form.get("folder");
+    const folder = (typeof folderRaw === "string" ? folderRaw : "").trim();
     if (!isValidFolder(folder)) {
       return NextResponse.json({ error: `未知分类：${folder || "(空)"}` }, { status: 400 });
     }
 
     // shared=true 时落到共享目录，否则落到项目目录
-    const shared = String(form.get("shared") ?? "") === "true";
-    const projectId = sanitizeScope(String(form.get("projectId") ?? ""));
+    const sharedRaw = form.get("shared");
+    const shared = (typeof sharedRaw === "string" ? sharedRaw : "") === "true";
+    const projectIdRaw = form.get("projectId");
+    const projectId = sanitizeScope(typeof projectIdRaw === "string" ? projectIdRaw : "");
     const scope = shared ? SHARED_SCOPE : projectId;
     if (!scope) {
       return NextResponse.json(

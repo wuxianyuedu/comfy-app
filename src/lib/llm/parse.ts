@@ -13,7 +13,7 @@ export function extractJson(text: string): unknown {
 
   // Strip ```json ... ``` fences
 
-  const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
 
   if (fence) trimmed = fence[1]!.trim();
 

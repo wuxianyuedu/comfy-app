@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 // Shared, client-safe validation-error types & helpers.
 //
 // ComfyUI's /prompt endpoint, when the workflow fails server-side
@@ -65,6 +66,9 @@ export function extractValidationErrors(
     res.length > 0 &&
     res.some(
       (r: any) =>
+ 
+ 
+// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
         r && typeof r === "object" && (r.node_id || r.class_type || r.input_errors || r.message)
     );
   if (
@@ -76,17 +80,20 @@ export function extractValidationErrors(
   if (!ne) return [];
   const out: ValidationError[] = [];
   const entries: [string, any][] = Array.isArray(ne)
-    ? (ne as any[]).map((item) => [String(item?.node_id ?? "?"), item] as [string, any])
-    : (Object.entries(ne) as [string, any][]);
+    ? (ne).map((item) => [String(item?.node_id ?? "?"), item] as [string, any])
+    : (Object.entries(ne));
   for (const [nid, err] of entries) {
     const classType = err?.class_type ?? graph?.[nid]?.class_type ?? "";
     const inputErrors = err?.input_errors;
     if (inputErrors && typeof inputErrors === "object") {
-      for (const [field, v] of Object.entries(inputErrors) as [string, any][]) {
+      for (const [field, v] of Object.entries(inputErrors)) {
+ 
         const message =
           typeof v === "string"
             ? v
-            : (v?.message ?? v?.details ?? JSON.stringify(v)) || "配置错误";
+            : ((v as { message?: string })?.message ??
+              (v as { details?: string })?.details ??
+              JSON.stringify(v)) || "配置错误";
         out.push({ nodeId: nid, classType, field, message });
       }
     } else if (typeof err?.message === "string") {

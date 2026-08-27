@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Internal shared state + log persistence for the comfyui runner layer.
 
 //
@@ -16,7 +17,7 @@
 
 import { EventEmitter } from "events";
 
-import WebSocket from "ws";
+import type WebSocket from "ws";
 
 import { taskRepository } from "../core/repository";
 
@@ -287,16 +288,18 @@ function callerLoc(): string {
     // lines[0] = "Error", lines[1] = "    at log (…)", lines[2] = real caller.
 
 
+ 
+// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const frame = lines[2] || lines[1] || "";
 
 
-    const match = frame.match(/\(([^():]+):(\d+):(\d+)\)/);
+    const match = /\(([^():]+):(\d+):(\d+)\)/.exec(frame);
 
 
     if (match) {
 
 
-      const file = match[1]!.split(/[\\/]/).pop() || match[1]!;
+      const file = match[1]!.split(/[\\/]/).pop() ?? match[1]!;
 
 
       return `${file}:${match[2]}`;
@@ -305,13 +308,13 @@ function callerLoc(): string {
     }
 
 
-    const m2 = frame.match(/at\s+(\S+):(\d+):(\d+)/);
+    const m2 = /at\s+(\S+):(\d+):(\d+)/.exec(frame);
 
 
     if (m2) {
 
 
-      const file = m2[1]!.split(/[\\/]/).pop() || m2[1]!;
+      const file = m2[1]!.split(/[\\/]/).pop() ?? m2[1]!;
 
 
       return `${file}:${m2[2]}`;

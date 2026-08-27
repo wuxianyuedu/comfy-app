@@ -23,25 +23,21 @@ export async function getServerUser(): Promise<ServerUser> {
   const session = await getSession();
   if (session?.user?.email) {
     let user = await userRepository.findByEmail(session.user.email);
-    if (!user) {
-      user = await userRepository.createUser({
-        email: session.user.email,
-        name: session.user.name ?? null,
-        password: "oauth-not-used",
-      });
-    }
+    user ??= await userRepository.createUser({
+      email: session.user.email,
+      name: session.user.name ?? null,
+      password: "oauth-not-used",
+    });
     return { id: user.id, email: user.email, name: user.name ?? null };
   }
 
   if (demoUserCache) return demoUserCache;
   let demo = await userRepository.findByEmail(DEMO_EMAIL);
-  if (!demo) {
-    demo = await userRepository.createUser({
-      email: DEMO_EMAIL,
-      name: "体验用户",
-      password: "demo-not-used",
-    });
-  }
+  demo ??= await userRepository.createUser({
+    email: DEMO_EMAIL,
+    name: "体验用户",
+    password: "demo-not-used",
+  });
   demoUserCache = { id: demo.id, email: demo.email, name: demo.name ?? null };
   return demoUserCache;
 }

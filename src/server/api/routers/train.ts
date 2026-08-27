@@ -11,7 +11,7 @@ export const trainRouter = createTRPCRouter({
     return {
       jobs,
       backendConfigured: isTrainerConfigured(),
-      trainerUrl: getSettingsSync().trainerUrl || process.env.LORA_TRAINER_URL || null,
+      trainerUrl: getSettingsSync().trainerUrl || (process.env.LORA_TRAINER_URL ?? null),
     };
   }),
 

@@ -76,7 +76,7 @@ async function persistProjectToServer(p: CanvasProject): Promise<void> {
  */
 function deleteProjectOnServer(id: string): void {
   if (typeof window === "undefined") return;
-  vanillaApi.project.delete.mutate({ projectId: id }).catch(() => {});
+  vanillaApi.project.delete.mutate({ projectId: id }).catch(() => undefined);
 }
 
 export function upsertProject(p: CanvasProject): void {
@@ -231,7 +231,7 @@ export function findNextAvailableName(
   // already named a project "灵感_3" and we start from "灵感_3", we'd
   // otherwise collide with it instead of finding the next free slot.
   let suffix = 2;
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     const candidate = `${baseClean}_${suffix}`;
     if (!taken.has(candidate)) return candidate;
@@ -246,7 +246,7 @@ export function findNextAvailableName(
 export function createProject(name?: string): CanvasProject {
   const p: CanvasProject = {
     id: `proj_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    name: findNextAvailableName(name?.trim() || EMPTY_DRAFT_NAME),
+    name: findNextAvailableName(name?.trim() ?? EMPTY_DRAFT_NAME),
     updatedAt: Date.now(),
     nodes: [],
     edges: [],
@@ -274,7 +274,7 @@ export function createProject(name?: string): CanvasProject {
 export function createDraftProject(name?: string): CanvasProject {
   const p: CanvasProject = {
     id: `proj_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    name: findNextAvailableName(name?.trim() || EMPTY_DRAFT_NAME),
+    name: findNextAvailableName(name?.trim() ?? EMPTY_DRAFT_NAME),
     updatedAt: Date.now(),
     nodes: [],
     edges: [],

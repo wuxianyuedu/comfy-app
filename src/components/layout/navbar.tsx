@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 const NAV = [
   { href: "/workspace", label: "工作台" },
@@ -45,17 +45,15 @@ function MenuIcon() {
 
 export function Navbar() {
   const pathname = usePathname();
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => {
-    setDark(document.documentElement.classList.contains("dark"));
-  }, []);
-
-  // Close the mobile menu on route change.
-  useEffect(() => {
+  // Close the mobile menu on route change（render 阶段同步，避免 effect 级联渲染）。
+  const [prevPath, setPrevPath] = useState(pathname);
+  if (prevPath !== pathname) {
+    setPrevPath(pathname);
     setMobileOpen(false);
-  }, [pathname]);
+  }
 
   function toggleTheme() {
     const next = !dark;

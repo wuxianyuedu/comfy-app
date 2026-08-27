@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
+import { type NextRequest, NextResponse } from "next/server";
 import { getLLMConfig, completeLLM, streamLLM } from "@/lib/llm/server";
 import type { LLMMessage, LLMRequestOptions, LLMProviderType } from "@/lib/llm/types";
 
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     parsed = BodySchema.parse(body);
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "请求格式错误" }, { status: 400 });
+    return NextResponse.json({ error: e?.message ?? "请求格式错误" }, { status: 400 });
   }
 
   const cfg = await getLLMConfig(parsed.opts);
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
       const content = await completeLLM(cfg, parsed.messages);
       return NextResponse.json({ content });
     } catch (e: any) {
-      return NextResponse.json({ error: e?.message || "LLM 调用失败" }, { status: 502 });
+      return NextResponse.json({ error: e?.message ?? "LLM 调用失败" }, { status: 502 });
     }
   }
 
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       } catch (e: any) {
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: e?.message || "LLM 调用失败" })}\n\n`)
+          encoder.encode(`data: ${JSON.stringify({ error: e?.message ?? "LLM 调用失败" })}\n\n`)
         );
       } finally {
         controller.close();

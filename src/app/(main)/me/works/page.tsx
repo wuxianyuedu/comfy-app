@@ -41,7 +41,7 @@ export default function MyWorks() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {data!.tasks.map((task) =>
+          {data.tasks.map((task) =>
 {
             const st = STATUS[task.status] ?? STATUS.QUEUED!;
             const wf = getWorkflow(task.workflowName)?.label ?? task.workflowName;

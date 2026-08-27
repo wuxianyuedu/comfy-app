@@ -52,7 +52,8 @@ export const taskRouter = createTRPCRouter({
 
       let list = tasks.map((task) =>
 {
-        const p = (task.params as Record<string, any>) ?? {};
+        const p = (task.params ?? {}) as Record<string, unknown>;
+        const checkpoint = typeof p.checkpoint === "string" ? p.checkpoint : null;
         const cover = task.images[0]?.localPath ?? null;
         const coverMediaType = task.images[0]?.mediaType ?? null;
         return {
@@ -63,7 +64,7 @@ export const taskRouter = createTRPCRouter({
           prompt: task.prompt,
           createdAt: task.createdAt,
           cover,
-          checkpoint: p.checkpoint ?? null,
+          checkpoint,
           mediaType: inferMediaType(cover, coverMediaType, task.type),
           projectId: task.projectId ?? null,
           progress: task.progress,
@@ -84,7 +85,7 @@ export const taskRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const task = await taskRepository.findByIdWithImages(input.id);
-      if (!task || task.userId !== ctx.user.id) {
+      if (task?.userId !== ctx.user.id) {
         throw new Error("Task not found");
       }
       return task;
@@ -104,7 +105,7 @@ export const taskRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Returns the output directory path for the task
       const task = await taskRepository.findByIdWithImages(input.id);
-      if (!task || task.userId !== ctx.user.id) {
+      if (task?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       }
       const fsPromises = await import("fs/promises");
@@ -164,7 +165,7 @@ export const taskRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const task = await taskRepository.findByIdWithImages(input.id);
-      if (!task || task.userId !== ctx.user.id) {
+      if (task?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Task not found" });
       }
       // Delete image files on disk as well.
@@ -172,10 +173,10 @@ export const taskRouter = createTRPCRouter({
       const path = await import("path");
       for (const img of task.images) {
         const full = path.join(process.cwd(), "public", img.localPath.replace(/^\//, ""));
-        fsPromises.unlink(full).catch(() => {});
+        fsPromises.unlink(full).catch(() => undefined);
       }
       const dir = path.join(process.cwd(), "public", "generated", input.id);
-      fsPromises.rm(dir, { recursive: true, force: true }).catch(() => {});
+      fsPromises.rm(dir, { recursive: true, force: true }).catch(() => undefined);
       await taskRepository.delete(input.id);
       return { ok: true };
     }),

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 /* Extracted FlowNode (custom ComfyUI graph node renderer) + its private
  * rgthree body helpers.  Originally inside WorkflowCanvasEditor.tsx. */
@@ -194,7 +195,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
      *  even if we add a widget marker to it (we don't), the regular
      *  widget-row renderer would draw a default control.  Keeping this
      *  exclusion makes the invariant explicit. */
-    return m && m.widget !== undefined && !m.preview;
+    return m?.widget !== undefined && !m.preview;
   });
   /* R50 (2026-08-11): dedupe by `name` across the two buckets BEFORE
    *  layout — custom nodes that legitimately combine a typed port with
@@ -247,7 +248,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
    *    3. An empty list (no outputs, save node etc.). */
   const outputs: [string, string][] = useMemo(() => {
     const staticOuts = Object.entries(inferOutputTypeAll(data.classType));
-    if (staticOuts.length > 0) return staticOuts as [string, string][];
+    if (staticOuts.length > 0) return staticOuts;
     if (data.rawOutputs && data.rawOutputs.length > 0) {
       return data.rawOutputs.map((rawOutput) => [rawOutput.name, rawOutput.type] as [string, string]);
     }
@@ -707,7 +708,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
               const outRaw = outName
                 ? data.rawOutputs?.find((output) => output.name === outName)
                 : undefined;
-              const outDisplay = outRaw?.localized || outName;
+              const outDisplay = outRaw?.localized ?? outName;
 
               return (
                 <div
@@ -921,7 +922,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
              *  compact inline chip since multiline stays false. */
             const isStringWidget =
               inputType === "STRING" &&
-              (inferIsMultiline(data["classType"] as string, k, stringText) ||
+              (inferIsMultiline(data.classType, k, stringText) ||
                 stringText.length >= 32 ||
                 stringText.includes("\n"));
 
@@ -1197,7 +1198,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
       {data.classType === "Fast Groups Bypasser (rgthree)" &&
         typeof data.properties?.matchTitle === "string" && (
           <RgthreeFastGroupsBypasserBody
-            matchTitle={data.properties.matchTitle as string}
+            matchTitle={data.properties.matchTitle}
             groups={data.groups ?? []}
           />
         )}

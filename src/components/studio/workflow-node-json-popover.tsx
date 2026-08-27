@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 "use client";
 /* ════════════════════════════════════════════════════════════════════════
  *  wf-node-json-popover.tsx — 节点 JSON 查看弹层（纯展示组件）。
@@ -52,14 +53,14 @@ export function NodeJsonPopover({
   const viewObj = useMemo<Record<string, any> | null>(() => {
     if (!nodeView) return null;
     if (nodeView.rawNode && typeof nodeView.rawNode === "object") {
-      return nodeView.rawNode as Record<string, any>;
+      return nodeView.rawNode;
     }
     const out: Record<string, any> = {};
     const e = nodeView.entry;
     const r = nodeView.raw;
     if (e && typeof e.class_type === "string") out.class_type = e.class_type;
     if (e && typeof e === "object" && "inputs" in e) out.inputs = e.inputs;
-    if (e && e._meta && Object.keys(e._meta as Record<string, any>).length) out._meta = e._meta;
+    if (e?._meta && Object.keys(e._meta as Record<string, any>).length) out._meta = e._meta;
     if (r) {
       if (r.mode !== 0) out.mode = r.mode;
       if (r.widgets_values?.length) out.widgets_values = r.widgets_values;
@@ -362,10 +363,10 @@ export function NodeJsonPopover({
                     <Chip color="#a1a1aa" label={`inputs: ${Object.keys(viewObj.inputs as Record<string, any> ?? {}).length} 个`} />
                   )}
                   {viewObj?.outputs && Array.isArray(viewObj.outputs) && (
-                    <Chip color="#a1a1aa" label={`outputs: ${(viewObj.outputs as any[]).length} 个`} />
+                    <Chip color="#a1a1aa" label={`outputs: ${(viewObj.outputs).length} 个`} />
                   )}
                   {viewObj?.widgets_values && Array.isArray(viewObj.widgets_values) && (
-                    <Chip color="#a1a1aa" label={`widgets: ${(viewObj.widgets_values as any[]).length} 项`} />
+                    <Chip color="#a1a1aa" label={`widgets: ${(viewObj.widgets_values).length} 项`} />
                   )}
                   {viewObj?.properties && (
                     <Chip color="#a1a1aa" label={`properties: ${Object.keys(viewObj.properties as Record<string, any> ?? {}).length} 项`} />

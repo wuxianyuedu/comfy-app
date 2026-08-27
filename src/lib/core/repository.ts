@@ -24,7 +24,7 @@ import { prisma } from "@/lib/db";
 import { NotFoundError } from "./errors";
 import { createLogger } from "./logger";
 import {
-  Prisma,
+  type Prisma,
   type Task,
   type WorkflowTemplate,
   type Model,
@@ -189,14 +189,14 @@ export class ProjectRepository extends PrismaRepository<
       create: {
         id: data.id,
         name: data.name,
-        nodes: data.nodes as unknown as Prisma.InputJsonValue,
-        edges: data.edges as unknown as Prisma.InputJsonValue,
+        nodes: data.nodes as Prisma.InputJsonValue,
+        edges: data.edges as Prisma.InputJsonValue,
         userId,
       },
       update: {
         name: data.name,
-        nodes: data.nodes as unknown as Prisma.InputJsonValue,
-        edges: data.edges as unknown as Prisma.InputJsonValue,
+        nodes: data.nodes as Prisma.InputJsonValue,
+        edges: data.edges as Prisma.InputJsonValue,
         updatedAt: new Date(),
       },
     });
@@ -331,7 +331,7 @@ export class TaskRepository extends PrismaRepository<
   /** 取单条且仅当归属该用户；否则返回 `null`（杜绝越权读取）。 */
   async findByIdForUser(userId: string, id: string): Promise<Task | null> {
     const task = await this.findById(id);
-    return task && task.userId === userId ? task : null;
+    return task?.userId === userId ? task : null;
   }
 
   /**
@@ -481,7 +481,7 @@ export class TaskRepository extends PrismaRepository<
         status: "FAILED",
         error,
         validationErrors:
-          validationErrors && validationErrors.length
+          validationErrors?.length
             ? JSON.stringify(validationErrors)
             : null,
         finishedAt: new Date(),
@@ -523,7 +523,7 @@ export class TaskRepository extends PrismaRepository<
   async replaceLogs(taskId: string, logs: unknown[]): Promise<void> {
     await prisma.task
       .update({ where: { id: taskId }, data: { logs: logs as Prisma.InputJsonValue } })
-      .catch(() => {});
+      .catch(() => undefined);
   }
 
   /** reaper：取「卡在 QUEUED 超过 cutoff 且从未拿到 promptId」的孤儿行。 */
@@ -630,7 +630,7 @@ export class WorkflowTemplateRepository extends PrismaRepository<
     id: string
   ): Promise<WorkflowTemplate | null> {
     const wf = await this.findById(id);
-    return wf && wf.userId === userId ? wf : null;
+    return wf?.userId === userId ? wf : null;
   }
 
   /**
@@ -750,7 +750,7 @@ export class ModelRepository extends PrismaRepository<
 > {
   constructor() {
     super(
-      prisma.model as unknown as PrismaDelegate<Model, Model, Partial<Model>, { id: string }>
+      prisma.model
     );
   }
 
@@ -900,12 +900,7 @@ export class WorkflowModelTagRepository extends PrismaRepository<
 > {
   constructor() {
     super(
-      prisma.workflowModelTag as unknown as PrismaDelegate<
-        WorkflowModelTag,
-        WorkflowModelTag,
-        Partial<WorkflowModelTag>,
-        { id: string }
-      >
+      prisma.workflowModelTag
     );
   }
 
@@ -1096,7 +1091,7 @@ export class FilmRepository extends PrismaRepository<
     arr.push(entry);
     await prisma.filmProject
       .update({ where: { id }, data: { logs: arr as Prisma.InputJsonValue } })
-      .catch(() => {});
+      .catch(() => undefined);
   }
 
   /** 开始逐镜生成：GENERATING + 进度归零 + 清错误。 */
@@ -1361,8 +1356,8 @@ export class SkillRepository extends PrismaRepository<
       _count: { category: true },
       orderBy: { _count: { category: "desc" } },
     });
-    return rows.map((row) =>({      category: row.category as string,
-      count: (row._count as { category: number }).category,
+    return rows.map((row) =>({      category: row.category,
+      count: (row._count).category,
     }));
   }
 
@@ -1427,12 +1422,7 @@ export class UserModelConfigRepository extends PrismaRepository<
 > {
   constructor() {
     super(
-      prisma.userModelConfig as unknown as PrismaDelegate<
-        UserModelConfig,
-        UserModelConfig,
-        Partial<UserModelConfig>,
-        { id: string }
-      >
+      prisma.userModelConfig
     );
   }
 
@@ -1731,7 +1721,7 @@ export class LlmConfigRepository {
         ...(input.provider !== undefined ? { provider: input.provider } : {}),
         ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
         ...(input.model !== undefined ? { model: input.model } : {}),
-        ...(input.apiKey !== undefined ? { apiKey: input.apiKey || null } : {}),
+        ...(input.apiKey !== undefined ? { apiKey: input.apiKey ?? null } : {}),
         ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
         ...(input.maxTokens !== undefined ? { maxTokens: input.maxTokens } : {}),
       },

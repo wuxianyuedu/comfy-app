@@ -59,7 +59,7 @@ async function probePort(host: string, port: number): Promise<boolean> {
 export async function resolveComfyBase(): Promise<string> {
   if (_resolvedBase) return _resolvedBase;
 
-  const raw = getSettingsSync().comfyuiUrl || process.env.COMFYUI_BASE || "http://localhost:8188";
+  const raw = getSettingsSync().comfyuiUrl || (process.env.COMFYUI_BASE ?? "http://localhost:8188");
   let url: URL;
   try { url = new URL(raw); } catch { url = new URL("http://localhost:8188"); }
   const host = url.hostname === "localhost" ? "127.0.0.1" : url.hostname;

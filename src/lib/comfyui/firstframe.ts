@@ -56,8 +56,11 @@ function waitForImage(taskId: string): Promise<string> {
       if (event.type === "done") {
         clearTimeout(timeout);
         off();
-        const imgs = (event.images as any[]).filter((im) => im.mediaType === "image");
-        if (imgs[0]?.localPath) resolve(imgs[0].localPath);
+        const imgs = (event.images as Array<{ mediaType?: string; localPath?: string }>).filter(
+          (im) => im.mediaType === "image"
+        );
+        const first = imgs[0];
+        if (first?.localPath) resolve(first.localPath);
         else reject(new Error("首帧无图像输出"));
       } else if (event.type === "error") {
         clearTimeout(timeout);

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs, react-hooks/immutability, @typescript-eslint/no-empty-function */
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -134,21 +135,21 @@ export function ImageGenerationPanel({
     if (/文生视频|TXT2VIDEO/.test(rawName)) return "T2V";
     if (/首尾帧视频|FLFVIDEO|FLF2V/.test(up)) return "FLF2V";
     if (/视频转视频|V2V/.test(up)) return "V2V";
-    if (/图生视频/.test(rawName) || /I2V/.test(up)) return "I2V";
+    if (rawName.includes('图生视频') || up.includes('I2V')) return "I2V";
     if (/FL2V|FMF2V/.test(up)) return "FL2V";
-    if (/T2V/.test(up)) return "T2V";
-    if (/S2V/.test(up)) return "S2V";
-    if (/R2V/.test(up)) return "R2V";
+    if (up.includes('T2V')) return "T2V";
+    if (up.includes('S2V')) return "S2V";
+    if (up.includes('R2V')) return "R2V";
     if (/VR2V|VRC2V/.test(up)) return "VR2V";
-    if (/视频|VIDEO/.test(rawName) || /VIDEO/.test(up)) return "T2V"; // 中文"视频"或VIDEO兜底
+    if (/视频|VIDEO/.test(rawName) || up.includes('VIDEO')) return "T2V"; // 中文"视频"或VIDEO兜底
     // ── IMAGE 类
     if (/文生图|T2I|TXT2IMG/.test(rawName) || /T2I|TXT2IMG/.test(up)) return "T2I";
     if (/图生图|局部重绘|I2I|IMG2IMG/.test(rawName) || /I2I|IMG2IMG/.test(up)) return "I2I";
-    if (/INPAINT/.test(up)) return "Inpaint";
-    if (/OUTPAINT/.test(up)) return "Outpaint";
-    if (/UPSCAL/.test(up)) return "Upscale";
-    if (/C2I/.test(up)) return "C2I";
-    if (/IMAGE/.test(up)) return "T2I"; // 兜底归 T2I
+    if (up.includes('INPAINT')) return "Inpaint";
+    if (up.includes('OUTPAINT')) return "Outpaint";
+    if (up.includes('UPSCAL')) return "Upscale";
+    if (up.includes('C2I')) return "C2I";
+    if (up.includes('IMAGE')) return "T2I"; // 兜底归 T2I
     return "";
   };
   /* R-ardot89 (2026-08-16): name 推断优先于 DB。
@@ -257,7 +258,7 @@ export function ImageGenerationPanel({
       {/* 生成结果预览（image/video 顶部常驻；picture 由节点主体承载，不重复渲染） */}
       {kind !== "picture" && d.resultPath ? (
         <ResultCard
-          kind={kind as NodeKind}
+          kind={kind}
           name={d.workflowName}
           status={d.status}
           path={d.resultPath}

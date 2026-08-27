@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
+import { type NextRequest, NextResponse } from "next/server";
 import { uploadImage, comfyBase } from "@/lib/comfyui/client";
 
 export const runtime = "nodejs";

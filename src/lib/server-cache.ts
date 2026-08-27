@@ -26,11 +26,7 @@ function getStore(): CacheStore {
 
   const globalObj = globalThis as unknown as { __comfyServerCache?: CacheStore };
 
-  if (!globalObj.__comfyServerCache) {
-
-    globalObj.__comfyServerCache = { map: new Map(), max: MAX_ENTRIES };
-
-  }
+  globalObj.__comfyServerCache ??= { map: new Map(), max: MAX_ENTRIES };
 
   return globalObj.__comfyServerCache;
 
@@ -59,7 +55,7 @@ export async function cacheJson<T>(
   const value = await build();
   const entry: Entry<T> = { value, expiresAt: now + ttlMs };
   store.map.delete(key);
-  store.map.set(key, entry as Entry<unknown>);
+  store.map.set(key, entry);
 
   // Evict oldest if over capacity.
   while (store.map.size > store.max) {

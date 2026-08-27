@@ -1,4 +1,4 @@
-import type { ProjectMeta, Scene, Character, ShotType } from "@/lib/workshop/types";
+import type { ProjectMeta, Scene, ShotType } from "@/lib/workshop/types";
 import type { LLMMessage } from "./types";
 import { extractJson, extractJsonArray } from "./parse";
 
@@ -33,6 +33,17 @@ export interface RawScene {
   shotCount?: number;
 }
 
+/** 将未知值安全转字符串：字符串原样返回，对象 JSON 序列化，避免 [object Object]。 */
+function asText(v: unknown, fallback = ""): string {
+  if (typeof v === "string") return v;
+  if (v === undefined || v === null) return fallback;
+  if (typeof v === "object") return JSON.stringify(v) ?? fallback;
+  if (typeof v === "function") return v.name || fallback;
+  if (typeof v === "symbol" || typeof v === "bigint") return v.toString();
+  if (typeof v === "number" || typeof v === "boolean") return `${v}`;
+  return fallback;
+}
+
 export function parseScriptScenes(text: string): RawScene[] {
   const data = extractJsonArray(text);
   return data.map((datum) =>
@@ -42,15 +53,15 @@ export function parseScriptScenes(text: string): RawScene[] {
 
     return {
 
-      heading: String(obj.heading ?? "未命名场景"),
+      heading: asText(obj.heading, "未命名场景"),
 
-      location: obj.location ? String(obj.location) : "",
+      location: asText(obj.location),
 
-      time: obj.time ? String(obj.time) : "",
+      time: asText(obj.time),
 
-      action: String(obj.action ?? ""),
+      action: asText(obj.action, ""),
 
-      dialogue: obj.dialogue ? String(obj.dialogue) : "",
+      dialogue: asText(obj.dialogue),
 
       shotCount: Math.min(6, Math.max(1, Number(obj.shotCount) || 2)),
 
@@ -104,11 +115,11 @@ export function parseCharacter(text: string): RawCharacter {
 
   return {
 
-    appearance: obj.appearance ? String(obj.appearance) : "",
+    appearance: asText(obj.appearance),
 
-    costume: obj.costume ? String(obj.costume) : "",
+    costume: asText(obj.costume),
 
-    personality: obj.personality ? String(obj.personality) : "",
+    personality: asText(obj.personality),
 
   };
 
@@ -138,13 +149,13 @@ export function parseCharacterFull(text: string): RawCharacterFull {
 
   return {
 
-    name: obj.name ? String(obj.name) : "未命名角色",
+    name: asText(obj.name, "未命名角色"),
 
-    appearance: obj.appearance ? String(obj.appearance) : "",
+    appearance: asText(obj.appearance),
 
-    costume: obj.costume ? String(obj.costume) : "",
+    costume: asText(obj.costume),
 
-    personality: obj.personality ? String(obj.personality) : "",
+    personality: asText(obj.personality),
 
   };
 
@@ -175,7 +186,7 @@ export function buildStoryboardMessages(
   characterNames: string[],
   styleName?: string
 ): LLMMessage[] {
-  const user = `艺术风格：${styleName || "默认"}
+  const user = `艺术风格：${styleName ?? "默认"}
 可选角色名单：${characterNames.join("、") || "（无）"}
 
 场景：
@@ -203,13 +214,13 @@ export function parseStoryboard(text: string): RawShot[] {
 
     const obj = (datum ?? {}) as Record<string, unknown>;
 
-    const st = String(obj.shotType ?? "medium") as ShotType;
+    const st = asText(obj.shotType, "medium") as ShotType;
 
     return {
 
-      shotType: (SHOT_TYPES.includes(st) ? st : "medium") as ShotType,
+      shotType: (SHOT_TYPES.includes(st) ? st : "medium"),
 
-      description: String(obj.description ?? ""),
+      description: asText(obj.description, ""),
 
       characterNames: Array.isArray(obj.characterNames)
 

@@ -118,7 +118,7 @@ export function ZoomIndicator({
 
   const applyZoom = (z: number) => {
     const clamped = Math.min(maxZoom, Math.max(minZoom, z));
-    rf.zoomTo(clamped, { duration: 0 });
+    void rf.zoomTo(clamped, { duration: 0 });
   };
 
   const beginEdit = () => {
@@ -155,7 +155,7 @@ export function ZoomIndicator({
       const st = dragRef.current;
       dragRef.current = null;
       setDragging(false);
-      if (st && st.moved) justDraggedRef.current = true;
+      if (st?.moved) justDraggedRef.current = true;
       else if (st) beginEdit();
     };
     window.addEventListener("mousemove", onMove);
@@ -219,7 +219,6 @@ export function CanvasRulers({
   const zoom = useStore((state) => state.transform[2]);
   const width = useStore((state) => state.width);
   const height = useStore((state) => state.height);
-  if (!settings.showRulers) return null;
 
   // Pick the smallest world-unit step that keeps screen spacing ≥ 48px
   // so labels never overlap.  Always a multiple of the major grid step.
@@ -257,6 +256,8 @@ export function CanvasRulers({
     }
     return out;
   }, [ty, zoom, height, labelStep]);
+
+  if (!settings.showRulers) return null;
 
   // Unicode minus for typographic parity (the existing widget values
   // use plain `-`; rulers use `−` because they sit at a larger size

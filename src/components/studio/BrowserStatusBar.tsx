@@ -35,14 +35,14 @@ export function BrowserStatusBar({ status = "就绪" }: BrowserStatusBarProps) {
     window.addEventListener("popstate", update);
     window.addEventListener("hashchange", update);
 
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
+    const originalPushState = history.pushState.bind(history);
+    const originalReplaceState = history.replaceState.bind(history);
 
-    history.pushState = function (...args) {
+    history.pushState = function (this: History, ...args: Parameters<typeof history.pushState>) {
       originalPushState.apply(this, args);
       update();
     };
-    history.replaceState = function (...args) {
+    history.replaceState = function (this: History, ...args: Parameters<typeof history.replaceState>) {
       originalReplaceState.apply(this, args);
       update();
     };

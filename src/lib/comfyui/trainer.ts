@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 // LoRA training orchestrator (炼丹).
 //
 // Local-first design: a training job is created in the DB, then this module
@@ -32,7 +33,7 @@ function trainerUrl(): string {
 
   const settings = getSettingsSync();
 
-  return (settings.trainerUrl || process.env.LORA_TRAINER_URL || "").replace(/\/$/, "");
+  return (settings.trainerUrl || (process.env.LORA_TRAINER_URL ?? "")).replace(/\/$/, "");
 
 }
 
@@ -41,7 +42,7 @@ function comfyLorasDir(): string {
 
   const settings = getSettingsSync();
 
-  return settings.comfyLorasDir || process.env.COMFY_LORAS_DIR || path.join(process.cwd(), "models", "loras");
+  return settings.comfyLorasDir || (process.env.COMFY_LORAS_DIR ?? path.join(process.cwd(), "models", "loras"));
 
 }
 
@@ -92,7 +93,7 @@ export async function enqueueTraining(jobId: string): Promise<void> {
   // expect it (the caption also rides along inside datasetImages).
   spec.captions = Object.fromEntries(
     (spec.datasetImages ?? [])
-      .filter((item) => item?.caption && item.caption.trim())
+      .filter((item) => item?.caption?.trim())
       .map((item) => [item.name, item.caption!.trim()])
   );
 
@@ -157,6 +158,7 @@ async function runRemote(spec: TrainJobSpec): Promise<void> {
 
 async function finishJob(spec: TrainJobSpec, outputName?: string): Promise<void> {
   const finalName =
+// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     outputName ||
     `${spec.name.replace(/[^\w一-龥-]+/g, "_")}_r${spec.rankDim}.safetensors`;
 

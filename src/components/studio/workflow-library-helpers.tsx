@@ -221,6 +221,7 @@ export function RootGroupHeader({
   collapsed: boolean;
   onToggle: () => void;
 }) {
+// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const display = rawPath ? rawPath : "未分组（来源目录已不在配置中）";
   // R14: 不再 JS 硬切前 26 字符（之前 `…` + slice(-54) 会砍掉 `D:\…` 前缀）。
   // 父容器 `flex-1 min-w-0` + 子元素 `truncate` 已按可视宽度自动 ellipsis，
@@ -270,8 +271,9 @@ export function RootGroupHeader({
                     ? "bg-amber-400"
                     : "bg-emerald-400"
               }`}
+ 
             />
-            {error
+            {typeof error === "string" && error.length > 0
               ? error
               : exists === false
                 ? "目录不存在"

@@ -46,7 +46,7 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
 
   const previewFields = d.fields?.filter((field) => !field.hidden).slice(0, 2) ?? [];
   const getPreviewValue = (key: string) => {
-    const v = d.inputs?.[key];
+    const v = (d.inputs as Record<string, unknown> | undefined)?.[key];
     if (typeof v !== "string") return "";
     if (v.length > 30) return v.slice(0, 28) + "...";
     return v;
@@ -89,7 +89,7 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
           borderRadius: 6,
           flexShrink: 0,
         }}>
-          {config.icon || "\u2699"}
+          {config.icon ?? "\u2699"}
         </span>
 
         <span style={{
@@ -137,7 +137,7 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
                 wordBreak: "break-all",
               }}>
                 {getPreviewValue(previewField.key) || (
-                  <span style={{ fontStyle: "italic", opacity: 0.5 }}>{previewField.placeholder || "..."}</span>
+                  <span style={{ fontStyle: "italic", opacity: 0.5 }}>{previewField.placeholder ?? "..."}</span>
                 )}
               </span>
             </div>
@@ -207,7 +207,7 @@ function ComfyNodeCustom({
         fontWeight: 700,
         fontSize: 13,
       }}>
-        <span style={{ fontSize: 14 }}>{config.icon || "\u{1F4E6}"}</span>
+        <span style={{ fontSize: 14 }}>{config.icon ?? "\u{1F4E6}"}</span>
         <span style={{
           flex: 1,
           whiteSpace: "nowrap",

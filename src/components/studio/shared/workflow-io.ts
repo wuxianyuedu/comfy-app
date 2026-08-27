@@ -16,8 +16,9 @@
 /** One exposed pin, as returned by GET /api/workflows/[id]. */
 export interface WorkflowIOEntry {
   direction: "input" | "output";
-  /** Semantic bucket chosen in IO-edit mode — NOT the data type. */
-  kind: "param" | "widget" | "output" | string;
+  /** Semantic bucket chosen in IO-edit mode — NOT the data type.
+   *  Values: "param" | "widget" | "output" | (free-form for custom kinds). */
+  kind: string;
   nodeId: string;
   name: string;
   label?: string;
@@ -133,7 +134,7 @@ export function numericBounds(e: WorkflowIOEntry): {
   const name = `${e.name} ${e.label ?? ""}`.toLowerCase();
   const isFloat = (e.type ?? "").toUpperCase() === "FLOAT";
   if (/seed|noise_seed/.test(name)) return { min: 0, max: 4294967295, step: 1, decimalPlaces: 0 };
-  if (/steps/.test(name)) return { min: 1, max: 200, step: 1, decimalPlaces: 0 };
+  if (name.includes('steps')) return { min: 1, max: 200, step: 1, decimalPlaces: 0 };
   if (/^cfg|cfg$|guidance/.test(name)) return { min: 0, max: 30, step: 0.5, decimalPlaces: 1 };
   if (/denoise|strength|weight|scale|ratio/.test(name))
     return { min: 0, max: 2, step: 0.05, decimalPlaces: 2 };
@@ -160,11 +161,11 @@ export function numericBounds(e: WorkflowIOEntry): {
  * behaviour the rest of the app already relies on, so existing callers
  * in CreatePanel / CanvasNode keep working. */
 export function ioLabel(e: WorkflowIOEntry, allEntries?: readonly WorkflowIOEntry[]): string {
-  const candidate = (e.label && e.label.trim()) || e.name;
+  const candidate = (e.label?.trim()) ?? e.name;
   if (allEntries && allEntries.length > 1) {
     for (const entry of allEntries) {
       if (entry === e) continue;
-      const other = (entry.label && entry.label.trim()) || entry.name;
+      const other = (entry.label?.trim()) ?? entry.name;
       if (other === candidate) return e.name;
     }
   }
@@ -601,15 +602,15 @@ export function pickClarityPreset(
 /* ── Keyword matchers (name + label, case-insensitive) ── */
 function isDimWidth(e: EnrichedWidget): boolean {
   const name = (e.name || "").toLowerCase();
-  const label = (e.label || "").toLowerCase();
-  if (/width/.test(name)) return true;
+  const label = (e.label ?? "").toLowerCase();
+  if (name.includes('width')) return true;
   if (label === "宽度" || label === "横" || label === "横向") return true;
   if (name === "宽") return true;
   return false;
 }
 function isDimHeight(e: EnrichedWidget): boolean {
   const name = (e.name || "").toLowerCase();
-  const label = (e.label || "").toLowerCase();
+  const label = (e.label ?? "").toLowerCase();
   /* NOTE: a bare "高" inside a 画质 label like "高清" must NOT count as the
    *  height pin — we only accept the exact Chinese shape 高度/纵向/纵 or the
    *  English name, never a substring of an unrelated label. */
@@ -638,10 +639,10 @@ export function inferDimensionGroup(widgets: EnrichedWidget[]): DimensionGroup |
   if (widthWidgets.length === 0 || heightWidgets.length === 0) return null;
   const width = widthWidgets[0]!;
   const height = heightWidgets[0]!;
-  if (width!.ioKey === height!.ioKey) return null;
+  if (width.ioKey === height.ioKey) return null;
   return {
     kind: "dimension",
-    groupId: `dim:${width!.ioKey}|${height!.ioKey}`,
+    groupId: `dim:${width.ioKey}|${height.ioKey}`,
     width,
     height,
   };

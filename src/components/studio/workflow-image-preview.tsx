@@ -6,7 +6,9 @@ import type { RawInputMeta } from "./workflow-types";
 /** The roles a node can be assigned in the paramMap */
 export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
   const ref = entry.imageRef;
-  const label = entry.localized || entry.label || entry.name;
+  const label = entry.localized ?? entry.label ?? entry.name;
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const [failed, setFailed] = useState(false);
   /* Empty LoadImage (no widgets_values[0]) → placeholder card.  Same layout
    * dimensions as the thumbnail (110px tall) so the preview area is
    * visually consistent regardless of upload state, and the bordered /
@@ -26,8 +28,6 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
   const src = `/api/images?filename=${encodeURIComponent(ref.filename)}&subfolder=${encodeURIComponent(
     ref.subfolder
   )}&type=${encodeURIComponent(ref.type)}`;
-  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
-  const [failed, setFailed] = useState(false);
   return (
     <div className="flex flex-col gap-1">
       <div className="truncate text-[11px] text-zinc-300" title={label}>

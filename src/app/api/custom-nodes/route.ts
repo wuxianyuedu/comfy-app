@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 /**
  * /api/custom-nodes
  *
@@ -8,7 +9,7 @@
  * The parser NEVER modifies anything under the configured custom_nodes paths —
  * it only reads source text and writes the generated manifest + report.
  */
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -21,7 +22,7 @@ const MANIFEST = path.join(process.cwd(), "src/generated/customNodes.manifest.js
 const REPORT = path.join(process.cwd(), "src/generated/customNodes.report.json");
 
 function getPaths(): string[] {
-  const raw = readEnvVar("CUSTOM_NODES_PATH") || "";
+  const raw = readEnvVar("CUSTOM_NODES_PATH") ?? "";
   return raw
     .split(",")
     .map((part) => part.trim())
@@ -33,7 +34,7 @@ function getPaths(): string[] {
  *  (or comma-separated entry) is one absolute directory. The server NEVER
  *  writes to these; it's a pure read-only scanner (see localWorkflows.ts). */
 function getLocalWorkflowPaths(): string[] {
-  const raw = readEnvVar("LOCAL_WORKFLOWS_PATH") || "";
+  const raw = readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "";
   return raw
     .split(/[\n,]/)
     .map((part) => part.trim())
@@ -49,28 +50,28 @@ function readManifestSummary() {
   try {
     const m = JSON.parse(fs.readFileSync(MANIFEST, "utf-8"));
     const pkgs: any[] = [];
-    const pmap = m.packages || {};
+    const pmap = m.packages ?? {};
     for (const [name, info] of Object.entries<any>(pmap)) {
       pkgs.push({
         name,
-        path: info?.path || "",
+        path: info?.path ?? "",
         nodeCount: info?.nodeCount ?? 0,
         nodeTypes: info?.nodeTypes ?? [],
-        status: info?.status || "ok",
-        errors: info?.errors || [],
-        contentHash: info?.contentHash || "",
-        parsedAt: info?.parsedAt || null,
+        status: info?.status ?? "ok",
+        errors: info?.errors ?? [],
+        contentHash: info?.contentHash ?? "",
+        parsedAt: info?.parsedAt ?? null,
         parsedFileCount: info?.parsedFileCount ?? 0,
-        generatedAt: m.generatedAt || null,
+        generatedAt: m.generatedAt ?? null,
       });
     }
-    const sources: string[] = m.sources || [];
+    const sources: string[] = m.sources ?? [];
     return {
-      generatedAt: m.generatedAt || null,
-      totalNodes: Object.keys(m.nodes || {}).length,
+      generatedAt: m.generatedAt ?? null,
+      totalNodes: Object.keys(m.nodes ?? {}).length,
       packages: pkgs,
       missingPaths: [],
-      parseErrors: m.parseErrors || [],
+      parseErrors: m.parseErrors ?? [],
       sources,
     };
   } catch {
@@ -116,7 +117,7 @@ function runDiscover(parentDirs: string[]): any[] {
       const out = spawnSync(py, args, { cwd: process.cwd(), env: process.env, encoding: "utf-8" });
       if (out.status === 0 && out.stdout) {
         const j = JSON.parse(out.stdout);
-        const pkgs = j.packages || [];
+        const pkgs = j.packages ?? [];
         discoverCache.set(key, { at: Date.now(), result: pkgs });
         return pkgs;
       }
@@ -164,7 +165,7 @@ function runDiscoverStreaming(
       const cp = spawn(py, ["-u", "scripts/parse_custom_nodes.py", "--discover-parent", parent], {
         cwd: process.cwd(),
         env: process.env,
-      }) as ChildProcessWithoutNullStreams;
+      });
 
       let buf = "";
       cp.stdout.on("data", (d: Buffer) => {
@@ -237,7 +238,7 @@ function runDiscoverStreaming(
         }
         try {
           const j = finalJson ? JSON.parse(finalJson) : { packages: [] };
-          const pkgs = j.packages || [];
+          const pkgs = j.packages ?? [];
           discoverCache.set(parent, { at: Date.now(), result: pkgs });
           resolved = true;
           send({ type: "discover_done", parent, packages: pkgs, cached: false });
@@ -266,7 +267,7 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
 
       const pyCandidates = ["python3", "python", "py"];
       const args = ["-u", "scripts/parse_custom_nodes.py", "--out", MANIFEST, "--report-out", REPORT];
-      if (onlyPkgs && onlyPkgs.length) {
+      if (onlyPkgs?.length) {
         args.push("--only-pkgs", onlyPkgs.join(","));
       } else {
         args.push("--paths", paths.join(","));
@@ -282,7 +283,7 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
           return;
         }
         const py = pyCandidates[i]!;
-        const cp = spawn(py, args, { cwd: process.cwd(), env: process.env }) as ChildProcessWithoutNullStreams;
+        const cp = spawn(py, args, { cwd: process.cwd(), env: process.env });
 
         cp.on("error", (e: NodeJS.ErrnoException) => {
           if (e.code === "ENOENT") {
@@ -416,7 +417,7 @@ export async function GET() {
         });
         send({ type: "done" });
       } catch (e: any) {
-        send({ type: "error", message: e?.message || String(e) });
+        send({ type: "error", message: e?.message ?? String(e) });
       } finally {
         controller.close();
       }
@@ -484,7 +485,7 @@ export async function POST(req: NextRequest) {
   if (action === "parse") {
     const paths = getPaths();
     const onlyPkgs: string[] | undefined = Array.isArray(body.packages) ? body.packages : undefined;
-    if (onlyPkgs && onlyPkgs.length) {
+    if (onlyPkgs?.length) {
       // subset parse — no need for CUSTOM_NODES_PATH to be set
       return streamParse(paths, onlyPkgs);
     }

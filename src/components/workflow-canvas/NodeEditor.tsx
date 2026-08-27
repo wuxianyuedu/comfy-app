@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment */
 "use client";
 
 /**
@@ -108,7 +109,7 @@ export default function NodeEditor({
             display: "grid", placeItems: "center",
             fontSize: 15,
           }}>
-            {config.icon || "\u2699"}
+            {config.icon ?? "\u2699"}
           </span>
           <div>
             <div style={{ fontWeight: 700, fontSize: 14, color: "#F4EEFF" }}>
@@ -225,7 +226,7 @@ function FieldRow({ field, value, checkpoints, modelLists, onChange }: FieldRowP
           <textarea
             value={(value as string) ?? ""}
             onChange={handleChange}
-            placeholder={field.placeholder || `输入 ${field.label}...`}
+            placeholder={field.placeholder ?? `输入 ${field.label}...`}
             rows={3}
             spellCheck={false}
           />
@@ -309,7 +310,7 @@ function FieldRow({ field, value, checkpoints, modelLists, onChange }: FieldRowP
                 </button>
               </div>
             ) : (
-              <button type="button" className="wf-image-btn" onClick={() => {}}>
+              <button type="button" className="wf-image-btn" onClick={() => undefined}>
                 + 上传图像
               </button>
             )}

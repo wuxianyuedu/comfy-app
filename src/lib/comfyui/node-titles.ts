@@ -120,7 +120,7 @@ export function friendlyNodeTitle(
   // static map (e.g. "保存图像" for SaveImage) would silently override
   // the user's custom name (e.g. "Save Z-Anime Upscaled") and their
   // intent would be invisible on the canvas.
-  if (rawTitle && rawTitle.trim() && rawTitle.trim() !== classType) {
+  if (rawTitle?.trim() && rawTitle.trim() !== classType) {
     return rawTitle.trim();
   }
 
@@ -145,7 +145,7 @@ export function prettifyClassType(classType: string, lang: "zh" | "en" = "zh"): 
   let suffix = "";
   if (parenMatch) {
     suffix = parenMatch[1]!;
-    name = classType.slice(0, parenMatch.index!).trim();
+    name = classType.slice(0, parenMatch.index).trim();
   }
   // Convert camelCase / PascalCase into spaces.
   const spaced = name

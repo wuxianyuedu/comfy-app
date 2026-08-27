@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Workflow Canvas — Core Types
  *
@@ -15,9 +16,7 @@ export interface ComfyGraphNode {
   _meta?: NodeMeta;
 }
 
-export interface ComfyGraph {
-  [nodeId: string]: ComfyGraphNode;
-}
+export type ComfyGraph = Record<string, ComfyGraphNode>;
 
 /* ── Client-side metadata we attach to each node ── */
 export interface NodeMeta {

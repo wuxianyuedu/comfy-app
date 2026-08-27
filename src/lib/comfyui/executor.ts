@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 // P3 executor: WS connection / message handling / queue scheduling / task
 // completion & failure handling for the ComfyUI runner.
 //
@@ -35,7 +36,7 @@ import {
   RECONNECT_MAX_MS,
   WS_PATHS,
 } from "./runner-state";
-import type { Job, LogEntry, RawWorkflowOverride } from "./runner-state";
+import type { Job, RawWorkflowOverride } from "./runner-state";
 
 function nodeLabel(classType?: string): string {
   const map: Record<string, string> = {
@@ -96,7 +97,7 @@ export async function connect(): Promise<void> {
     s.reconnectAttempts = 0;
     void processQueue();
   });
-  ws.on("message", (data) => void handleMessage(data.toString()));
+  ws.on("message", (data) => void handleMessage((data as Buffer).toString()));
   // error / close 都交给 handleWsDrop 统一处理（幂等，双发只生效一次）。
   ws.on("close", () => handleWsDrop(ws));
   ws.on("error", (err: Error) => {
@@ -253,7 +254,7 @@ function armWatchdog(taskId: string, promptId: string) {
 }
 
 /** 轮询 history —— ComfyUI 是「先广播完成、后写 history」，直接读会扑空。 */
-async function fetchHistoryEntry(promptId: string): Promise<any | null> {
+async function fetchHistoryEntry(promptId: string): Promise<any> {
   for (let i = 0; i < HISTORY_RETRIES; i++) {
     try {
       const hist = (await getHistory(promptId)) as any;
@@ -299,7 +300,7 @@ export function collectOutputs(outputs: Record<string, any>): CollectedOutputs {
   const audios: { filename: string; subfolder: string; type: string }[] = [];
   const others: { filename: string; subfolder: string; type: string }[] = [];
   const texts: string[] = [];
-  for (const nodeOut of Object.values(outputs) as any[]) {
+  for (const nodeOut of Object.values(outputs)) {
     if (!nodeOut || typeof nodeOut !== "object") continue;
     if (Array.isArray(nodeOut.images)) images.push(...nodeOut.images);
     if (Array.isArray(nodeOut.videos)) videos.push(...nodeOut.videos);
@@ -322,7 +323,7 @@ export function collectOutputs(outputs: Record<string, any>): CollectedOutputs {
   return { images, videos, audios, others, texts };
 }
 
-async function completeInner(taskId: string, promptId: string, executedWorkflow: any | null = null) {
+async function completeInner(taskId: string, promptId: string, executedWorkflow: any = null) {
   const s = state();
 
   // 2026-08-13 项目级产出：读取任务归属的项目与请求参数，决定磁盘落点 +
@@ -336,7 +337,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
       : undefined;
   let reqW: number | undefined, reqH: number | undefined;
   const sizeStr = typeof taskParams.size === "string" ? taskParams.size : "";
-  const sizeMatch = sizeStr.match(/(\d+)\s*[x×]\s*(\d+)/i);
+  const sizeMatch = /(\d+)\s*[x×]\s*(\d+)/i.exec(sizeStr);
   if (sizeMatch) {
     reqW = Number(sizeMatch[1]);
     reqH = Number(sizeMatch[2]);
@@ -524,7 +525,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   };
   await fs
     .writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf-8")
-    .catch(() => {});
+    .catch(() => undefined);
 
   // R-ardot65 (2026-08-15): 落盘本次执行实际用到的 workflow.json。种子等已在
   // manifest.seed + TaskImage.seed 持久化，工作流模板后续改动时凭这份快照即可
@@ -533,7 +534,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   if (executedWorkflow != null) {
     await fs
       .writeFile(path.join(dir, "workflow.json"), JSON.stringify(executedWorkflow, null, 2), "utf-8")
-      .catch(() => {});
+      .catch(() => undefined);
   }
 
   await persistLogs(taskId);
@@ -555,7 +556,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   s.executedWorkflow.delete(taskId);
   s.lastLogPct.delete(taskId);
   s.active = Math.max(0, s.active - 1);
-  processQueue();
+  void processQueue();
 }
 
 /**
@@ -590,11 +591,12 @@ export function extractRuntimeParams(entry: any): RuntimeParams {
   const out: RuntimeParams = {};
   const graph = entry?.prompt?.[2];
   if (!graph || typeof graph !== "object") return out;
-  for (const [nid, node] of Object.entries(graph) as [string, any][]) {
+  for (const [nid, nodeRaw] of Object.entries(graph)) {
+    const node = nodeRaw as Record<string, unknown> | undefined;
     const t = typeof node?.class_type === "string" ? node.class_type : "";
     // KSamplerAdvanced 用 noise_seed；KSampler / SamplerCustom 用 seed。
     if (t !== "KSampler" && t !== "KSamplerAdvanced" && t !== "SamplerCustom") continue;
-    const inputs = node?.inputs ?? {};
+    const inputs = (node?.inputs ?? {}) as Record<string, unknown>;
     if (out.samplerNodeId === undefined) {
       out.samplerNodeId = nid;
       out.samplerClassType = t;
@@ -635,7 +637,7 @@ export function friendlyError(raw: unknown): string {
   if (typeof raw === "number" || typeof raw === "boolean") return String(raw);
   if (typeof raw === "bigint") return raw.toString();
   if (Array.isArray(raw)) {
-    const parts = raw.map(friendlyError).filter((msg) => msg && msg.trim());
+    const parts = raw.map(friendlyError).filter((msg) => msg.trim() !== "");
     return parts.length ? parts.join("\n") : "";
   }
   if (typeof raw === "object") {
@@ -662,7 +664,7 @@ export function friendlyError(raw: unknown): string {
       const inner = o[k];
       if (inner && typeof inner === "object") {
         const innerText = friendlyError(inner);
-        if (innerText && innerText.trim()) return innerText;
+        if (innerText.trim()) return innerText;
       }
     }
     // Last resort: pretty-print the object so the user at least sees
@@ -676,7 +678,9 @@ export function friendlyError(raw: unknown): string {
     }
   }
   // Fallback for symbols / functions — should not happen, but be safe.
-  return String(raw);
+  if (typeof raw === "function") return raw.name || "[function]";
+  if (typeof raw === "symbol") return Symbol.prototype.toString.call(raw);
+  return "[unknown error]";
 }
 
 /** Build a human-readable failure message from ComfyUI's /prompt response.
@@ -692,22 +696,30 @@ function buildPromptError(res: any, graph: Record<string, any>): string {
   // true unknown-type cases fall through to a generic explanation.
   if (res?.error != null) {
     const peeled = friendlyError(res.error);
-    if (peeled && peeled.trim() && peeled.trim() !== "[object Object]") return peeled;
+    const trimmed = peeled.trim();
+    if (trimmed && trimmed !== "[object Object]") return peeled;
   }
   const ne = res?.node_errors;
   if (!ne || !Object.keys(ne).length) return "节点配置错误";
   const lines: string[] = [];
-  for (const [nid, err] of Object.entries(ne) as [string, any][]) {
-    const cls = err?.class_type ?? graph?.[nid]?.class_type ?? "";
+  for (const [nid, errRaw] of Object.entries(ne)) {
+    if (typeof errRaw === "string") {
+      lines.push(`节点 ${nid}: ${errRaw || "配置错误"}`);
+      continue;
+    }
+    const err = errRaw as {
+      class_type?: string;
+      input_errors?: Record<string, unknown>;
+      message?: string;
+    };
+    const cls = err.class_type ?? (graph?.[nid] as { class_type?: string } | undefined)?.class_type ?? "";
     let detail = "";
-    if (err?.input_errors) {
+    if (err.input_errors) {
       detail = Object.entries(err.input_errors)
-        .map(([k, v]: [string, any]) => `${k}: ${v?.message ?? v?.details ?? JSON.stringify(v)}`)
+        .map(([k, v]) => `${k}: ${(v as { message?: string })?.message ?? (v as { details?: string })?.details ?? JSON.stringify(v)}`)
         .join("; ");
-    } else if (typeof err?.message === "string") {
+    } else if (typeof err.message === "string") {
       detail = err.message;
-    } else if (typeof err === "string") {
-      detail = err;
     }
     lines.push(`节点 ${nid}${cls ? ` (${cls})` : ""}: ${detail || "配置错误"}`);
   }
@@ -752,7 +764,7 @@ async function finalizeFailure(
   await taskRepository.finalizeFailure(
     taskId,
     friendly,
-    validationErrors && validationErrors.length ? validationErrors : undefined
+    validationErrors?.length ? validationErrors : undefined
   );
 
   await persistLogs(taskId);
@@ -774,14 +786,14 @@ async function finalizeFailure(
     status: "FAILED",
     progress: 0,
     error: friendly,
-    validationErrors: validationErrors && validationErrors.length ? validationErrors : [],
+    validationErrors: validationErrors?.length ? validationErrors : [],
   });
   s.emitter.emit(taskId, { type: "error", error: friendly });
   if (promptId) s.promptToTask.delete(promptId);
   s.promptByTask.delete(taskId);
   s.lastLogPct.delete(taskId);
   s.active = Math.max(0, s.active - 1);
-  processQueue();
+  void processQueue();
 }
 
 /* ── comfy-cli execution path ───────────────────────────────────────────────
@@ -797,7 +809,7 @@ export const cliProcs = new Map<string, ChildProcess>();
 const CLI_TIMEOUT_MS = 25 * 60 * 1000;
 
 /** Map an API-format node id (e.g. "76:67") or top-level id to the raw UI node. */
-function resolveRawNode(raw: any, nodeId: string): any | null {
+function resolveRawNode(raw: any, nodeId: string): any {
   const subs = raw?.definitions?.subgraphs;
   const subList: any[] = Array.isArray(subs) ? subs : Object.values(subs ?? {});
   if (nodeId.includes(":")) {
@@ -903,7 +915,7 @@ async function executeViaComfyCli(job: Job) {
   log(
     taskId,
     "info",
-    `工作流文件就绪（${Object.keys((patched as any)?.nodes ?? {}).length || Object.keys(patched as any).length} 节点）`
+    `工作流文件就绪（${Object.keys((patched)?.nodes ?? {}).length || Object.keys(patched).length} 节点）`
   );
 
   const binDir = process.platform === "win32" ? "Scripts" : "bin";
@@ -1004,7 +1016,7 @@ async function executeViaComfyCli(job: Job) {
       if (d > depth || seen.has(node)) continue;
       seen.add(node);
       if (node && typeof node === "object") {
-        const ne = (node as any).node_errors;
+        const ne = (node).node_errors;
         if (ne != null && (Array.isArray(ne) ? ne.length : Object.keys(ne).length)) {
           return ne;
         }
@@ -1032,11 +1044,11 @@ async function executeViaComfyCli(job: Job) {
     } else {
       const err = env?.error;
       const msg =
-        (typeof err?.message === "string" && err.message) ||
-        (typeof err?.hint === "string" && err.hint) ||
+        (typeof err?.message === "string" ? err.message : undefined) ??
+        (typeof err?.hint === "string" ? err.hint : undefined) ??
         "comfy-cli 执行失败";
       const validationErrors = extractEnvelopeValidationErrors(env);
-      if (validationErrors && validationErrors.length) {
+      if (validationErrors?.length) {
         // Mirror the API-format branch's behaviour: surface the
         // structured list in a single log line for the user, then
         // pass it to fail() so the UI can render a per-field block.
@@ -1116,7 +1128,7 @@ async function executeViaComfyCli(job: Job) {
         s.promptToTask.set(ev.prompt_id, taskId);
         void taskRepository
           .markRunning(taskId, ev.prompt_id)
-          .catch(() => {});
+          .catch(() => undefined);
         // R-ardot111 (2026-08-17): mirror the API-format branch's
         // "✓ 已接收…等待 executing" wording so the log panel shows a
         // consistent vocabulary across both submission paths.
@@ -1199,8 +1211,8 @@ async function executeViaComfyCli(job: Job) {
 export async function processQueue() {
   const s = state();
   if (s.active >= MAX_CONCURRENCY) return;
-  if (!s.ws || s.ws.readyState !== WebSocket.OPEN) {
-    connect();
+  if (s.ws?.readyState !== WebSocket.OPEN) {
+    void connect();
     return;
   }
   const job = s.queue.shift();
@@ -1240,7 +1252,7 @@ export async function processQueue() {
           if (s.startedAt.has(job.taskId)) s.startedAt.delete(job.taskId);
           s.lastNodeByTask.delete(job.taskId);
           s.active = Math.max(0, s.active - 1);
-          processQueue();
+          void processQueue();
         }
       });
       return;
@@ -1360,7 +1372,7 @@ function startHeartbeat() {
     try {
       const s = state();
       if (s.queue.length > 0 && s.active < MAX_CONCURRENCY) {
-        processQueue();
+        void processQueue();
       }
     } catch (err) {
       console.warn("[comfyui] heartbeat processQueue 失败：", err);

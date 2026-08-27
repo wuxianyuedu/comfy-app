@@ -44,8 +44,8 @@ export const materialRouter = createTRPCRouter({
     .query(async ({ input }) => {
       const projectId = sanitizeScope(input?.projectId ?? null);
       const scopeMode = input?.scope ?? null;
-      const folder = input?.folder?.trim() || null;
-      const q = input?.q?.trim().toLowerCase() || null;
+      const folder = input?.folder?.trim() ?? null;
+      const q = input?.q?.trim().toLowerCase() ?? null;
 
       const scopes = await resolveScopes(scopeMode, projectId);
 

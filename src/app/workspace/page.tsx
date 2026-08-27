@@ -91,15 +91,6 @@ export default function WorkspacePage() {
     setViewMode(view);
   }, []);
 
-  /** Go back to the previous view (or home if no history). */
-  const goBack = useCallback(() => {
-    setViewHistory((prev) => {
-      if (prev.length <= 1) return prev; // already at root
-      const sliced = prev.slice(0, -1);
-      setViewMode(sliced[sliced.length - 1]!);
-      return sliced;
-    });
-  }, []);
   // ── Agent chat overlay ──
   const [agentOpen, setAgentOpen] = useState(false);
   // R-ardot120 (2026-08-18): 控制「✦ AI 引导」FAB 是否渲染 —
@@ -127,15 +118,6 @@ export default function WorkspacePage() {
   //    Task.type only accepts TXT2IMG|IMG2IMG|INPAINT|HIRERES|VIDEO, so canvas
   //    projects never appear there. Reading from listProjects() guarantees the
   //    "最近项目" section reflects the user's actual canvas work.
-  // ── Read ?tab= query param to set initial view (avoids useSearchParams Suspense) ──
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get("tab");
-    if (tab === "works" || tab === "canvas" || tab === "models" || tab === "workshop" || tab === "history" || tab === "train" || tab === "film" || tab === "workflows" || tab === "outputs") {
-      setViewMode(tab);
-    }
-  }, []);
-
   // ── Load real recent canvas projects on mount + on store-change events ──
   //    Stored in localStorage (canvas-store), so SSR returns []; we hydrate
   //    after mount. The "comfyapp:canvas-store-changed" event lets the home

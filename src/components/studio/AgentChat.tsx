@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { chatAgent, type ChatMessage, type AgentSpec } from "@/lib/agent/agentic";
 import { Icon } from "@/components/ui/Icon";
 
@@ -27,13 +27,14 @@ export function AgentChat({ open, onClose, onApply }: AgentChatProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  // Seed the greeting the first time the panel opens.
-  useEffect(() => {
+  // Greeting is derived: shown as long as the panel is open and the user has
+  // not sent anything yet — no effect-driven state seeding needed.
+  const visibleMessages = useMemo<ChatMessage[]>(() => {
     if (open && messages.length === 0) {
-      setMessages([{ role: "assistant", content: GREETING }]);
+      return [{ role: "assistant", content: GREETING }];
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+    return messages;
+  }, [open, messages]);
 
   // Keep the message list scrolled to the bottom.
   useEffect(() => {
@@ -44,7 +45,7 @@ export function AgentChat({ open, onClose, onApply }: AgentChatProps) {
   const send = useCallback(async () => {
     const text = input.trim();
     if (!text || loading) return;
-    const next: ChatMessage[] = [...messages, { role: "user", content: text }];
+    const next: ChatMessage[] = [...visibleMessages, { role: "user", content: text }];
     setMessages(next);
     setInput("");
     setLoading(true);
@@ -57,7 +58,7 @@ export function AgentChat({ open, onClose, onApply }: AgentChatProps) {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages]);
+  }, [input, loading, visibleMessages]);
 
   if (!open) return null;
 
@@ -81,7 +82,7 @@ export function AgentChat({ open, onClose, onApply }: AgentChatProps) {
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
-        {messages.map((msg, index) => (
+        {visibleMessages.map((msg, index) => (
           <div key={`msg-${index}`} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div
               className={`max-w-[82%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-[13px] leading-relaxed ${
@@ -158,7 +159,7 @@ export function AgentChat({ open, onClose, onApply }: AgentChatProps) {
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                send();
+                void send();
               }
             }}
             rows={1}

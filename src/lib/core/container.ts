@@ -36,23 +36,23 @@ import { createLogger, type Logger } from "./logger";
 import { config, type AppConfig } from "./config";
 import { eventBus, type EventBus } from "./events";
 import {
-  ProjectRepository,
+  type ProjectRepository,
   projectRepository,
-  TaskRepository,
+  type TaskRepository,
   taskRepository,
-  WorkflowTemplateRepository,
+  type WorkflowTemplateRepository,
   workflowTemplateRepository,
-  ModelRepository,
+  type ModelRepository,
   modelRepository,
-  WorkflowModelTagRepository,
+  type WorkflowModelTagRepository,
   workflowModelTagRepository,
-  FilmRepository,
+  type FilmRepository,
   filmRepository,
-  SkillRepository,
+  type SkillRepository,
   skillRepository,
-  UserModelConfigRepository,
+  type UserModelConfigRepository,
   userModelConfigRepository,
-  LoraTrainingJobRepository,
+  type LoraTrainingJobRepository,
   loraTrainingJobRepository,
 } from "./repository";
 
@@ -111,7 +111,7 @@ export class Container<
    * 重复注册会覆盖并清掉已缓存实例，便于测试替换。
    */
   register<K extends keyof C>(key: K, factory: ServiceFactory<C, K>): this {
-    this.factories.set(key, factory as ServiceFactory<C, keyof C>);
+    this.factories.set(key, factory);
     this.instances.delete(key);
     return this;
   }

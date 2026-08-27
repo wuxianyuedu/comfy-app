@@ -18,6 +18,7 @@ import {
   convertRawToApi,
   fallbackRawToApi,
   type ConversionResult,
+  type RawWorkflow,
 } from "@/lib/comfyui/raw";
 import {
   normalizeTaskType,
@@ -26,8 +27,8 @@ import {
 import { detectParamMap } from "@/lib/comfyui/workflow";
 
 export interface ParsedWorkflow {
-  apiGraph: Record<string, any>;
-  rawJson: unknown | null;
+  apiGraph: Record<string, unknown>;
+  rawJson: unknown;
   positions: Record<string, [number, number]> | null;
   taskType: string;
   paramMap: Record<string, string> | null;
@@ -43,11 +44,15 @@ export async function readLocalFile(
   let stat;
   try {
     stat = await fs.stat(absPath);
-  } catch (e: any) {
-    if (e?.code === "ENOENT") {
+  } catch (e: unknown) {
+    const err = (typeof e === "object" && e !== null ? e : {}) as {
+      code?: string;
+      message?: string;
+    };
+    if (err.code === "ENOENT") {
       throw new Error(`本地文件不存在：${absPath}`);
     }
-    throw new Error(`无法读取本地文件 ${absPath}：${e?.message ?? e}`);
+    throw new Error(`无法读取本地文件 ${absPath}：${err.message ?? String(e)}`);
   }
   const text = await fs.readFile(absPath, "utf-8");
   return { text, mtimeMs: stat.mtimeMs };
@@ -88,18 +93,18 @@ export async function parseWorkflowContent(
     );
   }
 
-  let apiGraph: Record<string, any>;
+  let apiGraph: Record<string, unknown>;
   let positions: Record<string, [number, number]> | null = null;
   let rawJson: unknown = null;
   const warnings: string[] = [];
 
   if (detected === "api") {
 
-    const graph = candidate as Record<string, any>;
+    const graph = candidate as Record<string, unknown>;
 
     const looksLikeGraph = Object.values(graph).some(
 
-      (node) => node && typeof node === "object" && "class_type" in (node as any)
+      (node) => node && typeof node === "object" && "class_type" in (node)
 
     );
 
@@ -116,10 +121,11 @@ export async function parseWorkflowContent(
     rawJson = candidate;
     let result: ConversionResult;
     try {
-      result = await convertRawToApi(candidate as any);
-    } catch (e: any) {
-      console.warn("[importSource] /object_info convert failed, using fallback:", e?.message);
-      result = fallbackRawToApi(candidate as any);
+      result = await convertRawToApi(candidate as unknown as RawWorkflow);
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      console.warn("[importSource] /object_info convert failed, using fallback:", errMsg);
+      result = fallbackRawToApi(candidate as unknown as RawWorkflow);
     }
     apiGraph = result.graph;
     positions =
@@ -191,8 +197,8 @@ export interface ReimportResult {
   unchanged?: boolean;
   /** file changed → re-parsed fields to persist back to the DB */
   update?: {
-    graph: Record<string, any>;
-    rawJson: unknown | null;
+    graph: Record<string, unknown>;
+    rawJson: unknown;
     positions: Record<string, [number, number]> | null;
     paramMap: Record<string, string> | null;
     taskType: string;
@@ -227,8 +233,9 @@ export async function reimportFromSource(tpl: {
   let stat;
   try {
     stat = await fs.stat(tpl.sourcePath);
-  } catch (e: any) {
-    if (e?.code === "ENOENT") return { missing: true };
+  } catch (e: unknown) {
+    const err = e as { code?: string } | null;
+    if (err?.code === "ENOENT") return { missing: true };
     return { missing: true };
   }
 

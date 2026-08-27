@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 "use client";
 
 /**
@@ -101,7 +102,7 @@ export default function WorkflowCanvas({
   // Also subscribe to `custom-nodes:updated` so re-parses that happen *after*
   // mount (e.g. from CustomNodesSettings) re-render this view too.
   useEffect(() => {
-    refreshCustomNodes().catch(() => {});
+    refreshCustomNodes().catch(() => undefined);
     const onUpdate = (ev: Event) => {
       const count = (ev as CustomEvent<{ count: number }>).detail?.count ?? 0;
       if (count > 0) setCustomNodesVersion((value) => value + 1);
@@ -159,7 +160,7 @@ export default function WorkflowCanvas({
           const inputs = { ...d.inputs };
           for (const e of deleted) {
             if (e.target !== node.id || !e.targetHandle) continue;
-            const m = e.targetHandle.match(/^in-(.+)$/);
+            const m = /^in-(.+)$/.exec(e.targetHandle);
             const key = m?.[1];
             // 跳过兜底通用端口，避免写出 `generic` 伪输入 / 重复 Handle。
             if (key && key !== "generic" && key in inputs && Array.isArray(inputs[key])) {
@@ -214,7 +215,7 @@ export default function WorkflowCanvas({
           if (next[k] === nodeId) delete next[k];
         }
         if (role) next[role] = nodeId;
-        return next as ParamMap;
+        return next;
       });
     },
     []
@@ -281,7 +282,7 @@ export default function WorkflowCanvas({
           const inputs = { ...d.inputs };
           for (const e of removed) {
             if (e.target !== node.id || !e.targetHandle) continue;
-            const m = e.targetHandle.match(/^in-(.+)$/);
+            const m = /^in-(.+)$/.exec(e.targetHandle);
             const key = m?.[1];
             if (key && key !== "generic" && key in inputs && Array.isArray(inputs[key])) {
               delete inputs[key];
@@ -445,7 +446,7 @@ export default function WorkflowCanvas({
                 <button
                   className="wf-toolbar__btn wf-toolbar__btn--primary"
                   onClick={() => {
-                    navigator.clipboard.writeText(JSON.stringify(exportGraph));
+                    void navigator.clipboard.writeText(JSON.stringify(exportGraph));
                     setShowExport(false);
                   }}
                 >

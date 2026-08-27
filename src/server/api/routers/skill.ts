@@ -19,7 +19,7 @@ export const skillRouter = createTRPCRouter({
       await skillRepository.ensureBuiltIns(BUILTIN_SKILLS);
       const skills = await skillRepository.list({
         category: input?.category ?? null,
-        q: input?.q?.trim() || undefined,
+        q: input?.q?.trim() ?? undefined,
         includeInactive: input?.all === true,
       });
       const parsed = skills.map((skill) =>

@@ -115,7 +115,7 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
           ) : (
             <JsonViewer
               key="single"
-              data={data.graph as never}
+              data={data.graph}
               title="JSON 格式"
               initialCollapsedDepth={1}
             />

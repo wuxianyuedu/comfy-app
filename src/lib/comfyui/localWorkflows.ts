@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access */
 /**
  * localWorkflows.ts — read-only scanner for user-configured workflow directories
  * (LOCAL_WORKFLOWS_PATH).

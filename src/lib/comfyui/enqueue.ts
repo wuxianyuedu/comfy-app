@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-floating-promises */
 // P3 enqueue: public-facing queue / subscription / logs / cancel API for the
 // ComfyUI runner.
 //

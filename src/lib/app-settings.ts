@@ -21,10 +21,10 @@ export type AppSettings = {
 };
 
 const DEFAULTS: AppSettings = {
-  comfyuiUrl: process.env.COMFYUI_BASE || "http://localhost:8188",
-  trainerUrl: process.env.LORA_TRAINER_URL || "",
+  comfyuiUrl: process.env.COMFYUI_BASE ?? "http://localhost:8188",
+  trainerUrl: process.env.LORA_TRAINER_URL ?? "",
   defaultVideoWorkflow: "auto",
-  comfyLorasDir: process.env.COMFY_LORAS_DIR || "",
+  comfyLorasDir: process.env.COMFY_LORAS_DIR ?? "",
 };
 
 let cache: AppSettings | null = null;

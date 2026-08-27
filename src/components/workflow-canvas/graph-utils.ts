@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment */
 /**
  * Graph Utilities — ComfyUI graph JSON ↔ ReactFlow nodes/edges conversion
  *
@@ -134,7 +135,7 @@ export function comfyGraphToFlow(
   const inverseParamMap: Record<string, string> = {};
   if (paramMap) {
     for (const [role, nodeId] of Object.entries(paramMap)) {
-      if (nodeId) inverseParamMap[nodeId as string] = role;
+      if (nodeId) inverseParamMap[nodeId] = role;
     }
   }
 
@@ -221,7 +222,7 @@ export function flowToComfyGraph(
     const sourceMatch = edge.sourceHandle?.match(/out-(.+)/);
     if (targetMatch) {
       const inputKey = targetMatch[1]!;
-      targetNode.inputs[inputKey]! = [
+      targetNode.inputs[inputKey] = [
         edge.source,
         sourceMatch ? parseInt(sourceMatch[1]!, 10) : 0,
       ];

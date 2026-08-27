@@ -158,7 +158,7 @@ export function ProjectOutputs() {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       },
-      () => {}
+      () => undefined
     );
   }, [metaJson]);
 
@@ -197,7 +197,7 @@ export function ProjectOutputs() {
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <h1 className="font-title text-xl font-bold text-gray-100">
-              {activeProject?.name || "未命名项目"}
+              {activeProject?.name ?? "未命名项目"}
             </h1>
             <span className="rounded-full bg-violet-500/15 px-2.5 py-0.5 text-[11px] font-medium text-violet-300">
               {outputs.length} 个产出
@@ -212,7 +212,7 @@ export function ProjectOutputs() {
               {projects.map((project) =>
 (
                 <option key={project.id} value={project.id} className="bg-[#16161e]">
-                  {project.name || "未命名项目"}
+                  {project.name ?? "未命名项目"}
                 </option>
               ))}
             </select>
@@ -246,7 +246,7 @@ export function ProjectOutputs() {
               封面
             </span>
             <p className="mt-1.5 font-title text-lg font-bold text-white drop-shadow">
-              {activeProject?.name || "未命名项目"} · 创作合集
+              {activeProject?.name ?? "未命名项目"} · 创作合集
             </p>
           </div>
         </div>
@@ -386,7 +386,7 @@ export function ProjectOutputs() {
                 <div>
                   <p className="mb-1 text-xs font-semibold text-gray-400">正向提示词</p>
                   <div className="max-h-28 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5 text-[12px] leading-relaxed text-gray-300">
-                    {selected.prompt || "—"}
+                    {selected.prompt ?? "—"}
                   </div>
                 </div>
                 {selected.negativePrompt && (
@@ -429,7 +429,7 @@ export function ProjectOutputs() {
               <section>
                 <p className="mb-1 text-xs font-semibold text-gray-400">来源</p>
                 <p className="text-[12px] text-gray-300">
-                  工作流：{selected.workflowName || "—"}
+                  工作流：{selected.workflowName ?? "—"}
                 </p>
               </section>
             </div>

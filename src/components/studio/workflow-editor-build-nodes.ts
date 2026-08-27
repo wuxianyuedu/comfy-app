@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 /* Extracted initialNodes builder from WorkflowEditorInner (wf-editor-inner.tsx).
  *  Pure function — takes the derived context object and returns the React
  *  Flow node array.  No hooks / no component state: the caller owns the
@@ -157,7 +158,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
          *  the cost stays O(1) per node regardless of workflow size. */
         groups: detail.groups ?? [],
         size: n.size ? { w: n.size[0], h: n.size[1] } : undefined,
-      } as WorkflowNodeData,
+      },
     });
 
     /* Subgraph wrapper node: class_type is a UUID and ComfyUI exposed
@@ -202,7 +203,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
           size: n.size ? { w: n.size[0], h: n.size[1] } : undefined,
           mode: rawMetaById[n.id]?.mode ?? 0,
           onEnter: () => onEnterSubgraph?.(n.id, n.class_type, n.title),
-        } as WorkflowSubgraphData,
+        },
       };
     };
 
@@ -240,9 +241,9 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
           draggable: false,
           selectable: false,
           connectable: false,
-          data: { title: group.title, color: group.color } as WorkflowGroupData,
+          data: { title: group.title, color: group.color },
           style: { width: w, height: h, pointerEvents: "none" },
-        } as Node;
+        };
       });
 
     /* ── Note / MarkdownNote annotations ── */
@@ -268,7 +269,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         draggable: true,
         selectable: true,
         connectable: false,
-        data: { title, text: note.text, color: note.color } as WorkflowNoteData,
+        data: { title, text: note.text, color: note.color },
         /* `size` in the ComfyUI/litegraph payload stores the BODY CONTENT
          *  height (the 30 px title bar is NOT included in `size[1]` per the
          *  R49 rule — see the NODE_TITLE_H comment).  Titled notes add the
@@ -279,7 +280,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
           width: note.size[0],
           height: note.size[1] + (noteHasTitle ? NODE_TITLE_H : 0),
         },
-      } as Node;
+      };
     });
 
     // Real graph nodes only (note-class nodes are rendered separately above).
@@ -341,11 +342,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         title: pin.label ?? pin.localized ?? pin.name ?? "",
         type: pin.type,
         direction: kind,
-        parentNodeId: null as any,
+        parentNodeId: null,
         parentNodeTitle: "",
-        connectsTo: null as any,
-        connectsFrom: null as any,
-      } as WorkflowIoPortData,
+        connectsTo: null,
+        connectsFrom: null,
+      },
     });
 
     /* X-anchor for a wfIoPort child inside its rail group (2026-08-08
@@ -394,9 +395,9 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         draggable: true,
         selectable: true,
         connectable: false,
-        data: { title, color: GROUP_RAIL_COLOR, draggable: true } as WorkflowGroupData,
+        data: { title, color: GROUP_RAIL_COLOR, draggable: true },
         style: { width: IO_PORT_WIDTH + 2 * GROUP_PAD_X, height },
-      } as Node;
+      };
     };
 
     /* Compute rail-anchor positions and (when needed) fall back to
@@ -486,14 +487,10 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
 
       const inputsGroupPos = savedIn
         ? { x: savedIn[0], y: savedIn[1] }
-        : inputsDefault
-        ? inputsDefault
-        : { x: leftRailX - GROUP_PAD_X, y: minY - GROUP_TITLE_BAR };
+        : inputsDefault ?? { x: leftRailX - GROUP_PAD_X, y: minY - GROUP_TITLE_BAR };
       const outputsGroupPos = savedOut
         ? { x: savedOut[0], y: savedOut[1] }
-        : outputsDefault
-        ? outputsDefault
-        : { x: rightRailX - GROUP_PAD_X, y: minY - GROUP_TITLE_BAR };
+        : outputsDefault ?? { x: rightRailX - GROUP_PAD_X, y: minY - GROUP_TITLE_BAR };
 
       const stackRel = (i: number) => GROUP_TITLE_BAR + i * (IO_PORT_HEIGHT + PORT_ROW_GAP);
       const inputsRelYs = detail.boundaryPins.inputs.map((_p: any, i: number) => {
@@ -586,7 +583,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       positionsCount > 0 &&
       positionsCount >= realNodes.length;
     if (useSavedPositions) {
-      const positionsById = scopeDetail.positions as Record<string, [number, number]>;
+      const positionsById = scopeDetail.positions!;
       const middleNodes = realNodes.map((realNode) =>
 {
         const p = positionsById[realNode.id];
@@ -609,7 +606,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
      *    - 未匹配的节点 → 复用上面算好的 kahn 排到一块独立区域（紧贴第一行下方）。
      *  这样至少已定位的节点不会"乱跳"，新增的 subgraph 内层节点也不会堆在 (padX, padY)。*/
     if (positionsCount > 0) {
-      const positionsById = scopeDetail.positions as Record<string, [number, number]>;
+      const positionsById = scopeDetail.positions!;
       const middleNodes = realNodes.map((realNode) =>
 {
         const saved = positionsById[realNode.id];

@@ -29,10 +29,10 @@ export function readEnvVar(key: string): string | null {
     for (const line of text.split("\n")) {
 
 
-      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*?)\s*$/);
+      const match = /^\s*([\w.-]+)\s*=\s*(.*?)\s*$/.exec(line);
 
 
-      if (match && match[1] === key) {
+      if (match?.[1] === key) {
 
 
 
@@ -91,7 +91,7 @@ export function writeEnvVar(key: string, value: string): void {
 
 
 
-  const idx = lines.findIndex((line) => line.match(new RegExp(`^\\s*${key}\\s*=`)));
+  const idx = lines.findIndex((line) => new RegExp(`^\\s*${key}\\s*=`).exec(line));
 
   const newLine = `${key}=${value}`;
 

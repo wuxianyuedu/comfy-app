@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Node } from "@xyflow/react";
-import { api } from "~/trpc/react";
+import { type api } from "~/trpc/react";
 import type { WorkflowDetail, WorkflowIOParam } from "./workflow-types";
 import { NODE_TITLE_H, extractNoteTitle } from "./workflow-utils";
 

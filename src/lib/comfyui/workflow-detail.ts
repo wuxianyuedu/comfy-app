@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 /**
  * Workflow detail / subgraph detail builders — ported from the legacy
  * REST routes (src/app/api/workflows/[id]/route.ts GET and
@@ -100,7 +101,7 @@ export async function buildWorkflowDetailFull(
     if (!Array.isArray(spec)) return undefined;
     const head = spec[0];
     if (!Array.isArray(head)) return undefined;
-    const opts = head.filter((x: unknown) => typeof x === "string") as string[];
+    const opts = head.filter((x: unknown) => typeof x === "string");
     return opts.length ? opts : undefined;
   };
   /**
@@ -125,10 +126,10 @@ export async function buildWorkflowDetailFull(
         const oi = await ensureObjectInfo();
         if (!oi) return undefined;
         const def = oi[classType];
-        if (!def || !def.input) return undefined;
+        if (!def?.input) return undefined;
         const spec =
-          (def.input.required && def.input.required[field]) ||
-          (def.input.optional && def.input.optional[field]);
+          def.input.required?.[field] ??
+          def.input.optional?.[field];
         return comboOptionsFromSpec(spec);
       })(),
       localModelFileNames(modelFoldersForField(field)),
@@ -166,8 +167,8 @@ export async function buildWorkflowDetailFull(
       const inp = (def as any)?.input;
       if (!inp) continue;
       const spec =
-        (inp.required && (inp.required as Record<string, unknown>)[field]) ||
-        (inp.optional && (inp.optional as Record<string, unknown>)[field]);
+        (inp.required as Record<string, unknown> | undefined)?.[field] ??
+        (inp.optional as Record<string, unknown> | undefined)?.[field];
       const opts = comboOptionsFromSpec(spec);
       if (opts) {
         found = true;
@@ -229,12 +230,12 @@ export async function buildWorkflowDetailFull(
       await workflowTemplateRepository.update(id, {
         graph: re.update.graph as any,
         rawJson: re.update.rawJson as any,
-        positions: re.update.positions as any,
-        paramMap: re.update.paramMap as any,
+        positions: re.update.positions,
+        paramMap: re.update.paramMap,
         taskType: re.update.taskType,
         sourceChecksum: re.update.sourceChecksum,
         sourceMtime: re.update.sourceMtime,
-      } as any);
+      });
       sourceChanged = true;
       cacheDel(cacheKey); // force a fresh re-serialisation below
     }
@@ -339,29 +340,19 @@ export async function buildWorkflowDetailFull(
   const nodeMetaById: Record<string, { type: string; widgets_values: any[] }> = {};
   if (raw && Array.isArray(raw.nodes)) {
     for (const nd of raw.nodes) {
-      if (!nd || nd.id == null) continue;
+      if (nd?.id == null) continue;
       nodeMetaById[String(nd.id)] = {
         type: typeof nd.type === "string" ? nd.type : "?",
-        widgets_values: Array.isArray((nd as any).widgets_values) ? (nd as any).widgets_values : [],
+        widgets_values: Array.isArray((nd).widgets_values) ? (nd).widgets_values : [],
       };
     }
   }
   const linkSourceById: Record<string, string> = {};
-  if (raw && Array.isArray((raw as any).links)) {
-    for (const lk of (raw as any).links) {
+  if (raw && Array.isArray((raw).links)) {
+    for (const lk of (raw).links) {
       if (!Array.isArray(lk) || lk.length < 2) continue;
       linkSourceById[String(lk[0])] = String(lk[1]);
     }
-  }
-  function resolveImageRef(link: any): { filename: string; subfolder: string; type: string } | null {
-    if (link == null) return null;
-    const srcId = linkSourceById[String(link)];
-    if (!srcId) return null;
-    const src = nodeMetaById[srcId];
-    if (!src || !LOAD_IMAGE_NODE_TYPES.has(src.type)) return null;
-    const fname = src.widgets_values?.[0];
-    if (typeof fname !== "string" || fname.length === 0) return null;
-    return { filename: fname, subfolder: "", type: "input" };
   }
 
   /* Build a `rawInputs` lookup for every graph node.  In raw UI format, each
@@ -417,11 +408,11 @@ export async function buildWorkflowDetailFull(
        *  rawInputsById pass below still needs `inputs`, hence the separate
        *  guard below.) */
       const rnSize =
-        Array.isArray((rn as any).size) && (rn as any).size.length >= 2 ? (rn as any).size : undefined;
+        Array.isArray((rn).size) && (rn).size.length >= 2 ? (rn).size : undefined;
       if (rnSize) {
-        sizeById[String((rn as any).id)] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
+        sizeById[String((rn).id)] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
       }
-      if (!Array.isArray((rn as any).inputs)) continue;
+      if (!Array.isArray((rn).inputs)) continue;
       const list: {
         name: string;
         label?: string;
@@ -434,11 +425,11 @@ export async function buildWorkflowDetailFull(
         imageRef?: { filename: string; subfolder: string; type: string };
         preview?: boolean;
       }[] = [];
-      const rnWidgets = Array.isArray((rn as any).widgets_values)
-        ? (rn as any).widgets_values
+      const rnWidgets = Array.isArray((rn).widgets_values)
+        ? (rn).widgets_values
         : [];
       let widgetCounter = 0;
-      for (const inp of (rn as any).inputs) {
+      for (const inp of (rn).inputs) {
         if (!inp || typeof inp.name !== "string") continue;
         const isConn = inp.link != null;
         /* ComfyUI bakes the widget handle as `{ widget: { name: "…" } }`
@@ -525,9 +516,9 @@ export async function buildWorkflowDetailFull(
        * correct ComfyUI-parity shape.  The dedicated `preview: true` flag
        * is checked by the renderer's connEntries / widgetEntries filters
        * so this entry never lands in the port row or widget control list. */
-      if (LOAD_IMAGE_NODE_TYPES.has(typeof (rn as any).type === "string" ? (rn as any).type : "")) {
+      if (LOAD_IMAGE_NODE_TYPES.has(typeof (rn).type === "string" ? (rn).type : "")) {
         if (!list.some((list) => list.preview)) {
-          const wv0 = (rn as any).widgets_values?.[0];
+          const wv0 = (rn).widgets_values?.[0];
           const fname = typeof wv0 === "string" ? wv0.trim() : "";
           list.push({
             name: "__loadimage_preview__",
@@ -567,7 +558,7 @@ export async function buildWorkflowDetailFull(
    * `isConnection` from `inp.link`, and attempts `widgetValue` from
    * `rn.widgets_values[widgetCounter]` — but for wrapper nodes the latter
    * is empty, leaving every widget row blank until this enrichment runs. */
-  if (raw && raw.definitions && raw.definitions.subgraphs) {
+  if (raw?.definitions?.subgraphs) {
     const subs = raw.definitions.subgraphs as Record<string, any>;
     /* Index internal nodes per subgraph def by id for O(1) lookup.  We
      * pre-build this once per subgraph def rather than per wrapper to
@@ -583,7 +574,7 @@ export async function buildWorkflowDetailFull(
 
         for (const inN of subDef.nodes) {
 
-          if (inN && inN.id != null) map.set(String(inN.id), inN);
+          if (inN?.id != null) map.set(String(inN.id), inN);
 
         }
 
@@ -629,7 +620,7 @@ export async function buildWorkflowDetailFull(
       }
       /* Generic: count widget slots before the target input. */
       const inputIdx = inputs.findIndex(
-        (i: any) => i && i.name === fieldName
+        (i: any) => i?.name === fieldName
       );
       if (inputIdx < 0) return undefined;
       let slot = 0;
@@ -648,7 +639,7 @@ export async function buildWorkflowDetailFull(
      * the inner map stays cheap when the workflow has many wrappers. */
     const wrapperNodeIds: string[] = [];
     for (const nodeId of Object.keys(rawInputsById)) {
-      const rn = (raw as any)?.nodes?.find?.((n: any) => String(n?.id) === nodeId);
+      const rn = (raw)?.nodes?.find?.((n: any) => String(n?.id) === nodeId);
       if (!rn) continue;
       const classType = typeof rn.type === "string" ? rn.type : "";
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType)) continue;
@@ -656,7 +647,7 @@ export async function buildWorkflowDetailFull(
     }
 
     for (const nodeId of wrapperNodeIds) {
-      const rn = (raw as any).nodes.find((n: any) => String(n?.id) === nodeId);
+      const rn = (raw).nodes.find((n: any) => String(n?.id) === nodeId);
       const classType = typeof rn.type === "string" ? rn.type : "";
       const resolved = resolveSubDef(classType);
       if (!resolved) continue;
@@ -674,7 +665,7 @@ export async function buildWorkflowDetailFull(
           ? resolved.def.name
           : classType;
 
-      const existingList = rawInputsById[nodeId] || [];
+      const existingList = rawInputsById[nodeId] ?? [];
       /* `proxyWidgets` is indexed by *widget-input order* (the i-th exposed
        *  widget slot), NOT by the raw input-array index — ComfyUI skips
        *  pure-connection ports when it builds the array.  So we must walk
@@ -712,7 +703,7 @@ export async function buildWorkflowDetailFull(
          *  present from the raw JSON). */
         if (internalNode && Array.isArray(internalNode.inputs)) {
           const inp = internalNode.inputs.find(
-            (i: any) => i && i.name === fieldName
+            (i: any) => i?.name === fieldName
           );
           if (inp?.type) updated.type = inp.type;
           if (!updated.label && inp?.localized_name) {
@@ -721,8 +712,8 @@ export async function buildWorkflowDetailFull(
           /* Stash the proxy target (internal node class + field) so the
            *  async COMBO-option pass below can resolve candidate lists from
            *  /api/object_info for any COMBO widget on this wrapper. */
-          (updated as any).__comboClass = internalNode.type;
-          (updated as any).__comboField = fieldName;
+          (updated).__comboClass = internalNode.type;
+          (updated).__comboField = fieldName;
         }
         /* Re-stamp multiline if we just learned the value (the base
          *  parser ran before this pass and may have skipped it). */
@@ -741,7 +732,7 @@ export async function buildWorkflowDetailFull(
        *  ComfyUI is unreachable the temp fields are just dropped and the
        *  consumer falls back to a plain text control. */
       for (const e of updatedList) {
-        const ec = e as any;
+        const ec = e;
         if (ec.type === "COMBO" && ec.__comboClass) {
           const opts = await comboOptionsForClassField(ec.__comboClass, ec.__comboField);
           if (opts) ec.comboOptions = opts;
@@ -762,8 +753,8 @@ export async function buildWorkflowDetailFull(
     for (const rn of raw.nodes) {
       if (!rn || rn.type === "Note" || rn.type === "MarkdownNote") continue;
       const outputs: { name: string; localized?: string; label?: string; type: string; links: number[] }[] = [];
-      if (Array.isArray((rn as any).outputs)) {
-        for (const o of (rn as any).outputs) {
+      if (Array.isArray((rn).outputs)) {
+        for (const o of (rn).outputs) {
           if (!o || typeof o.name !== "string") continue;
           outputs.push({
             name: o.name,
@@ -786,12 +777,12 @@ export async function buildWorkflowDetailFull(
       //  plain-object flags are kept; everything else is dropped to
       //  avoid leaking class-instances into the JSON payload.
       const flags =
-        rn && typeof (rn as any).flags === "object" && (rn as any).flags !== null
-          ? ((rn as any).flags as Record<string, any>)
+        rn && typeof (rn).flags === "object" && (rn).flags !== null
+          ? ((rn).flags as Record<string, any>)
           : {};
       rawNodeMeta.push({
         id: String(rn.id),
-        widgets_values: Array.isArray((rn as any).widgets_values) ? (rn as any).widgets_values : [],
+        widgets_values: Array.isArray((rn).widgets_values) ? (rn).widgets_values : [],
         outputs,
         flags,
         /* Custom-node `properties` (2026-08-09).  Forwarded so the canvas
@@ -802,10 +793,10 @@ export async function buildWorkflowDetailFull(
          *  `inputs` array is empty, so without forwarding `properties`
          *  the WorkflowNode would have no way to know what toggles to draw). */
         properties:
-          rn && typeof (rn as any).properties === "object" && (rn as any).properties !== null
-            ? ((rn as any).properties as Record<string, any>)
+          rn && typeof (rn).properties === "object" && (rn).properties !== null
+            ? ((rn).properties as Record<string, any>)
             : {},
-        mode: typeof (rn as any).mode === "number" ? (rn as any).mode : 0,
+        mode: typeof (rn).mode === "number" ? (rn).mode : 0,
       });
     }
   }
@@ -828,7 +819,7 @@ export async function buildWorkflowDetailFull(
      *  client-side friendlyNodeTitle() then renders "子工作流" as a
      *  last-resort label, identical to the pre-fix behaviour. */
     let resolvedTitle: string | undefined;
-    if (isUuidClass && raw && raw.definitions && raw.definitions.subgraphs) {
+    if (isUuidClass && raw?.definitions?.subgraphs) {
       const subs = raw.definitions.subgraphs as Record<string, any>;
       let def = subs[classType];
       if (!def) {
@@ -863,7 +854,7 @@ export async function buildWorkflowDetailFull(
    * `rawView`（保留 subgraph wrapper），让 RAW 布局与 wrapper-form 兄弟、与
    * ComfyUI 自身画布一致。fallbackRawToApi 走离线启发式、不发网络请求。 */
   let rawView: { nodes: any[]; positions: Record<string, [number, number]>; graph: any } | null = null;
-  if (raw && Array.isArray((raw as any).nodes)) {
+  if (raw && Array.isArray((raw).nodes)) {
     const rawConv = fallbackRawToApi(raw as RawWorkflow);
     const rawGraph = (rawConv.graph ?? {}) as Record<string, any>;
     const rawViewNodes = Object.entries(rawGraph).map(([nodeId, n]) => {
@@ -871,7 +862,7 @@ export async function buildWorkflowDetailFull(
         (n?.class_type as string) || (n?.type as string) || "?";
       const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
       let resolvedTitle: string | undefined;
-      if (isUuidClass && raw && raw.definitions && raw.definitions.subgraphs) {
+      if (isUuidClass && raw?.definitions?.subgraphs) {
         const subs = raw.definitions.subgraphs as Record<string, any>;
         let def = subs[classType];
         if (!def) {
@@ -887,7 +878,7 @@ export async function buildWorkflowDetailFull(
         class_type: classType,
         title:
           resolvedTitle ??
-          (n as any)?._meta?.title ??
+          (n)?._meta?.title ??
           (isUuidClass ? "" : classType) ??
           nodeId,
         is_subgraph: isUuidClass,
@@ -896,7 +887,7 @@ export async function buildWorkflowDetailFull(
       };
     });
     const rawViewPositions =
-      (rawConv.positions as Record<string, [number, number]>) ??
+      (rawConv.positions) ??
       extractPositions(raw as RawWorkflow);
     rawView = { nodes: rawViewNodes, positions: rawViewPositions, graph: rawGraph };
   }
@@ -930,16 +921,16 @@ export async function buildWorkflowDetailFull(
    * and the canvas auto-spawn logic (first output's `type` decides whether
    * the downstream node is an image or a video node). */
   const nodeTitleById: Record<string, string> = {};
-  for (const n of nodes) nodeTitleById[n.id] = n.title || n.class_type;
+  for (const n of nodes) nodeTitleById[n.id] = n.title ?? n.class_type;
 
   /* Map node id → ComfyUI class type so a direct (non-wrapper) COMBO input can
    *  have its candidate list resolved from /api/object_info by (classType, field).
    *  Wrapper COMBOs already carry `comboOptions` from the R73-B pass above and
    *  bypass this lookup. */
   const nodeTypeById: Record<string, string> = {};
-  if (raw && Array.isArray((raw as any).nodes)) {
-    for (const n of (raw as any).nodes) {
-      if (n && n.id != null) nodeTypeById[String(n.id)] = typeof n.type === "string" ? n.type : "";
+  if (raw && Array.isArray((raw).nodes)) {
+    for (const n of (raw).nodes) {
+      if (n?.id != null) nodeTypeById[String(n.id)] = typeof n.type === "string" ? n.type : "";
     }
   }
 
@@ -986,14 +977,14 @@ export async function buildWorkflowDetailFull(
     // Returns the CANONICAL key in whatever shape the data lives in.
     const full = String(v.nodeId);
     const canonicalNodeId = (() => {
-      for (const dict of [rawInputsById, Object.fromEntries(rawNodeMeta.map((rawNodeMeta) => [rawNodeMeta.id, true])), graph as Record<string, any>]) {
+      for (const dict of [rawInputsById, Object.fromEntries(rawNodeMeta.map((rawNodeMeta) => [rawNodeMeta.id, true])), graph]) {
         if (!dict) continue;
         if (Object.prototype.hasOwnProperty.call(dict, full)) return full;
       }
       /* Fallback: match `9b9009e4` against `9b9009e4-2d3d-…`.  Requires a
        * word-boundary char (`-`) right after the prefix so `9b9009e4` never
        * collides with `9b9009e44`. */
-      for (const dict of [rawInputsById, Object.fromEntries(rawNodeMeta.map((rawNodeMeta) => [rawNodeMeta.id, true])), graph as Record<string, any>]) {
+      for (const dict of [rawInputsById, Object.fromEntries(rawNodeMeta.map((rawNodeMeta) => [rawNodeMeta.id, true])), graph]) {
         if (!dict) continue;
         const hit = Object.keys(dict).find((key) => key.length > full.length && key.startsWith(full) && key.charAt(full.length) === "-");
         if (hit) return hit;
@@ -1019,7 +1010,7 @@ export async function buildWorkflowDetailFull(
        * back to the literal sitting in the API graph and infer the type
        * from its JS runtime type (good enough to pick a control). */
       if (defaultValue === undefined) {
-        const gv = (graph as Record<string, any>)[canonicalNodeId]?.inputs?.[v.name];
+        const gv = (graph)[canonicalNodeId]?.inputs?.[v.name];
         if (gv !== undefined && !Array.isArray(gv)) defaultValue = gv;
       }
       if (type === "*" && defaultValue !== undefined) {
@@ -1114,7 +1105,7 @@ export async function buildWorkflowDetailFull(
 
          *  ComfyUI's own frontend reads it. */
 
-        bypass: !!(g.flags && (g.flags as any).bypass),
+        bypass: !!(g.flags?.bypass),
 
       });
 
@@ -1236,7 +1227,7 @@ export async function buildSubgraphDetail(
   if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
 
   const raw = (tpl.rawJson ?? null) as any;
-  if (!raw || !raw.definitions || !raw.definitions.subgraphs) {
+  if (!raw?.definitions?.subgraphs) {
     throw new TRPCError({ code: "NOT_FOUND", message: "该工作流没有内嵌子工作流" });
   }
   // Subgraph definitions may be keyed by either the UUID or a numeric id;
@@ -1294,20 +1285,16 @@ export async function buildSubgraphDetail(
    *  input/output index — used to attach a `targetHandle` / `sourceHandle`
    *  name to the resulting React Flow edge so it lands on the right
    *  WorkflowNode handle. */
-  const inputSlotNameByNode: Record<string, string[]> = {};
-  const outputSlotNameByNode: Record<string, string[]> = {};
-  const innerRawInputsByNode: Record<string, any[]> = {};
-  const innerRawOutputsByNode: Record<string, any[]> = {};
 
   for (const lk of Array.isArray(sub.links) ? sub.links : []) {
     if (!lk || typeof lk !== "object") continue;
-    const id = Number((lk as any).id);
+    const id = Number((lk).id);
     if (!Number.isFinite(id)) continue;
-    const originId = Number((lk as any).origin_id);
-    const originSlot = Number((lk as any).origin_slot) || 0;
-    const targetId = Number((lk as any).target_id);
-    const targetSlot = Number((lk as any).target_slot) || 0;
-    const type = String((lk as any).type ?? "*");
+    const originId = Number((lk).origin_id);
+    const originSlot = Number((lk).origin_slot) || 0;
+    const targetId = Number((lk).target_id);
+    const targetSlot = Number((lk).target_slot) || 0;
+    const type = String((lk).type ?? "*");
     linkById[id] = {
       src: Number.isFinite(originId) ? String(originId) : "?",
       slot: originSlot,
@@ -1349,22 +1336,12 @@ export async function buildSubgraphDetail(
     "Load Image", "ImageLoader", "ComfyUI-ImageLoader",
   ]);
   const innerNodeById: Record<string, { type: string; widgets_values: any[] }> = {};
-  for (const nd of Array.isArray((sub as any).nodes) ? (sub as any).nodes : []) {
-    if (!nd || nd.id == null) continue;
+  for (const nd of Array.isArray((sub).nodes) ? (sub).nodes : []) {
+    if (nd?.id == null) continue;
     innerNodeById[String(nd.id)] = {
       type: typeof nd.type === "string" ? nd.type : "?",
       widgets_values: Array.isArray(nd.widgets_values) ? nd.widgets_values : [],
     };
-  }
-  function resolveImageRef(link: any): { filename: string; subfolder: string; type: string } | null {
-    if (link == null) return null;
-    const lk = linkById[Number(link)];
-    if (!lk || lk.src === "-10" || lk.src === "-20") return null;
-    const src = innerNodeById[lk.src];
-    if (!src || !LOAD_IMAGE_NODE_TYPES.has(src.type)) return null;
-    const fname = src.widgets_values?.[0];
-    if (typeof fname !== "string" || fname.length === 0) return null;
-    return { filename: fname, subfolder: "", type: "input" };
   }
 
   const rawOutputsById: Record<string, any[]> = {};
@@ -1407,7 +1384,7 @@ export async function buildSubgraphDetail(
   const outputNameByNodeSlot: Record<string, string[]> = {};
   /** Per-node lookup of a raw input/output index → widget value (for
    *  inputs that *also* have boundary wires, e.g. CLIPTextEncode's text). */
-  const inputWidgetValueByNodeSlot: Record<string, (any | undefined)[]> = {};
+  const inputWidgetValueByNodeSlot: Record<string, any[]> = {};
   /** Inverse: linkId → boundary_pin_id resolved after we walk the
    *  subgraph's input/output definitions. */
   const pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }> = {};
@@ -1430,7 +1407,7 @@ export async function buildSubgraphDetail(
    * sourceHandle).  Modern ComfyUI puts an `idx` on each slot entry;
    * older versions fall back to array order (idx=0,1,2,...). */
   for (const rn of innerNodes) {
-    if (!rn || !rn.id) continue;
+    if (!rn?.id) continue;
     const nodeId = String(rn.id);
     if (Array.isArray(rn.inputs)) {
       const sorted = [...rn.inputs].sort(
@@ -1459,13 +1436,12 @@ export async function buildSubgraphDetail(
     }
   }
   for (const rn of innerNodes) {
-    if (!rn || !rn.id) continue;
+    if (!rn?.id) continue;
     const nodeId = String(rn.id);
     const classType: string = rn.type ?? "?";
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
     /* Capture the raw litegraph box size so the client can paint the node
      *  at its exact ComfyUI dimensions (see `sizeById` declaration above). */
-    const rnSize = Array.isArray((rn as any).size) && (rn as any).size.length >= 2 ? (rn as any).size : undefined;
+    const rnSize = Array.isArray((rn).size) && (rn).size.length >= 2 ? (rn).size : undefined;
     if (rnSize) sizeById[nodeId] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
 
     /* Per-input metadata.  We tag a connection as "internal" (originates
@@ -1477,7 +1453,7 @@ export async function buildSubgraphDetail(
     const rawInputs: any[] = [];
     const inputMap: Record<string, any> = {};
     if (Array.isArray(rn.inputs)) {
-      const rnWidgets = Array.isArray((rn as any).widgets_values) ? (rn as any).widgets_values : [];
+      const rnWidgets = Array.isArray((rn).widgets_values) ? (rn).widgets_values : [];
       /* Sentinel-aware pairing: ComfyUI inserts a `control_after_generate`
        *  slot into `widgets_values` right after a seed-type INT widget, so
        *  a naive index match would shift every later widget by one.  Use the
@@ -1485,7 +1461,7 @@ export async function buildSubgraphDetail(
        *  value.  This is what makes inner-node widgets (KSampler seed/steps/
        *  cfg/sampler/scheduler/denoise, CLIPTextEncode's prompt, …) show
        *  their real values instead of blank/offset rows. */
-      const wvMap = pairWidgetValues(rn.inputs as any, rnWidgets);
+      const wvMap = pairWidgetValues(rn.inputs, rnWidgets);
       for (const inp of rn.inputs) {
         if (!inp || typeof inp.name !== "string") continue;
         const isConn = inp.link != null;
@@ -1566,6 +1542,7 @@ export async function buildSubgraphDetail(
              *  node id as `connects_from` (used by the OUTPUT endpoint
              *  positioning helper).  We only keep the FIRST non-sentinel
              *  source to keep positioning deterministic. */
+            // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 需保留 first-truthy 语义（空串也视为未设置）
             if (!connectsFromByNode[nodeId]) connectsFromByNode[nodeId] = lk?.src ?? "";
           }
         } else if (widgetValue !== undefined) {
@@ -1597,12 +1574,10 @@ export async function buildSubgraphDetail(
               /* Stash the boundary output port for the canvas to render
                *  a compact wfIoPort label on the LEFT edge.  Only the
                *  first -20-bearing output is recorded. */
-              if (!boundaryOutputByNode[nodeId]) {
-                boundaryOutputByNode[nodeId] = {
-                  name: o.name,
-                  type: typeof o.type === "string" ? o.type : "*",
-                };
-              }
+              boundaryOutputByNode[nodeId] ??= {
+                name: o.name,
+                type: typeof o.type === "string" ? o.type : "*",
+              };
               break;
             }
             /* Non-sentinel target → record first as `connects_to` (used
@@ -1660,7 +1635,7 @@ export async function buildSubgraphDetail(
         widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
         outputs: rawOutputs,
         flags: rn && typeof rn.flags === "object" && rn.flags !== null ? (rn.flags as Record<string, any>) : {},
-        mode: typeof (rn as any).mode === "number" ? (rn as any).mode : 0,
+        mode: typeof (rn).mode === "number" ? (rn).mode : 0,
       });
     }
   }
@@ -1772,7 +1747,7 @@ export async function buildSubgraphDetail(
    *  only seed raw-positions for nodes present in this subgraph, so
    *  neighbouring subgraphs' positions can't leak in. */
   const positions: Record<string, [number, number]> = {};
-  const innerNodeIdSet = new Set(innerNodes.filter((rn: any) => rn && rn.id != null).map((rn: any) => String(rn.id)));
+  const innerNodeIdSet = new Set(innerNodes.filter((rn: any) => rn?.id != null).map((rn: any) => String(rn.id)));
   const tplPositions = (tpl.positions as Record<string, [number, number]>) ?? {};
   for (const [id, pos] of Object.entries(tplPositions)) {
     if (innerNodeIdSet.has(id) && Array.isArray(pos) && pos.length >= 2) {
@@ -1780,7 +1755,7 @@ export async function buildSubgraphDetail(
     }
   }
   for (const rn of innerNodes) {
-    if (!rn || !rn.id) continue;
+    if (!rn?.id) continue;
     const id = String(rn.id);
     if (positions[id]) continue; // user drag wins
     if (Array.isArray(rn.pos) && rn.pos.length >= 2) {
@@ -1828,26 +1803,26 @@ export async function buildSubgraphDetail(
 
   const normalizePin = (p: any): BoundaryPin | null => {
     if (!p || typeof p !== "object") return null;
-    const id = typeof (p as any).id === "string" ? (p as any).id : "";
+    const id = typeof (p).id === "string" ? (p).id : "";
     if (!id) return null;
-    const posRaw = Array.isArray((p as any).pos) ? (p as any).pos : [0, 0];
+    const posRaw = Array.isArray((p).pos) ? (p).pos : [0, 0];
     const pos: [number, number] = [
       Number(posRaw[0]) || 0,
       Number(posRaw[1]) || 0,
     ];
-    const linkIdsRaw = Array.isArray((p as any).linkIds)
-      ? (p as any).linkIds
-      : (p as any).link !== undefined
-      ? [(p as any).link]
-      : Array.isArray((p as any).links)
-      ? (p as any).links
+    const linkIdsRaw = Array.isArray((p).linkIds)
+      ? (p).linkIds
+      : (p).link !== undefined
+      ? [(p).link]
+      : Array.isArray((p).links)
+      ? (p).links
       : [];
     return {
       id,
-      name: typeof (p as any).name === "string" ? (p as any).name : "",
-      type: typeof (p as any).type === "string" ? (p as any).type : "*",
-      localized: typeof (p as any).localized_name === "string" ? (p as any).localized_name : undefined,
-      label: typeof (p as any).label === "string" ? (p as any).label : undefined,
+      name: typeof (p).name === "string" ? (p).name : "",
+      type: typeof (p).type === "string" ? (p).type : "*",
+      localized: typeof (p).localized_name === "string" ? (p).localized_name : undefined,
+      label: typeof (p).label === "string" ? (p).label : undefined,
       pos,
       linkIds: linkIdsRaw.map((n: any) => Number(n) || 0).filter((n: number) => n > 0),
     };

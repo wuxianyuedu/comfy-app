@@ -100,7 +100,7 @@ export function useProjectManager(options: UseProjectManagerOptions) {
       setActive(id);
       setProjectId(proj.id);
       setProjectName(proj.name);
-      setNodes((proj.nodes as CanvasNodeType[]) ?? []);
+      setNodes((proj.nodes) ?? []);
       setEdges(proj.edges ?? []);
       closeMenus();
       requestFitView();
@@ -143,7 +143,7 @@ export function useProjectManager(options: UseProjectManagerOptions) {
       setActive(id);
       setProjectId(proj.id);
       setProjectName(proj.name);
-      setNodes((proj.nodes as CanvasNodeType[]) ?? []);
+      setNodes((proj.nodes) ?? []);
       setEdges(proj.edges ?? []);
       closeMenus();
       requestFitView();

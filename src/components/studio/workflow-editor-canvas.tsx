@@ -64,7 +64,7 @@ export function WorkflowEditorCanvas({
    *  callback reference while nodes are dragged. */
   const miniMapNodeColor = useCallback((node: Node) => {
     const d = node.data as WorkflowNodeData | undefined;
-    return (d && d.assignedRole ? ROLE_COLOR_BY_KEY.get(d.assignedRole) : undefined) ?? "#333";
+    return (d?.assignedRole ? ROLE_COLOR_BY_KEY.get(d.assignedRole) : undefined) ?? "#333";
   }, []);
 
   return (

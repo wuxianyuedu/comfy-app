@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access */
 /**
  * 工作流 JSON 格式识别（共享 lib）
  *

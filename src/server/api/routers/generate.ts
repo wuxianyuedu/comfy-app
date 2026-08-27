@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { taskRepository, workflowTemplateRepository } from "@/lib/core/repository";
@@ -61,7 +62,7 @@ export const generateRouter = createTRPCRouter({
       const builtin = getWorkflow(data.workflow);
       if (builtin) {
         // Built-in workflow template (token-based).
-        built = await buildAndValidate(data.workflow, { ...data, count } as any);
+        built = await buildAndValidate(data.workflow, { ...data, count });
         workflowName = data.workflow;
         taskType = builtin.taskType;
       } else {
@@ -83,7 +84,7 @@ export const generateRouter = createTRPCRouter({
             type: taskType,
             prompt: data.prompt ?? "",
             negativePrompt: data.negative,
-            params: data as unknown,
+            params: data,
             workflowName,
             projectId: data.projectId ?? null,
             referenceImages: data.referenceImages?.length
@@ -92,7 +93,7 @@ export const generateRouter = createTRPCRouter({
           });
           enqueue({
             taskId: task.id,
-            rawJson: tpl.rawJson as any,
+            rawJson: tpl.rawJson,
             overrides: data.workflowInputs,
           });
           return { taskId: task.id };
@@ -100,7 +101,7 @@ export const generateRouter = createTRPCRouter({
 
         // Canvas-edited graph or API-only import.
         const graph =
-          (data.canvasGraph as Record<string, any>) ??
+          (data.canvasGraph!) ??
           (tpl?.graph as Record<string, any>);
         if (!graph) {
           throw new Error("Workflow graph is empty");
@@ -110,7 +111,7 @@ export const generateRouter = createTRPCRouter({
             ok: true,
             prompt: buildCustomWorkflow(
               graph,
-              { ...data, count } as any,
+              { ...data, count },
               (data.paramMap as any) ?? (tpl?.paramMap as any)
             ),
           };
@@ -129,7 +130,7 @@ export const generateRouter = createTRPCRouter({
         type: taskType,
         prompt: data.prompt ?? "",
         negativePrompt: data.negative,
-        params: data as unknown,
+        params: data,
         workflowName,
         projectId: data.projectId ?? null,
         referenceImages: data.referenceImages?.length

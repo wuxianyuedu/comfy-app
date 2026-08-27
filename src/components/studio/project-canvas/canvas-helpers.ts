@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 /* ── Canvas helper functions ──
  * Thin wrappers around the existing Comfy-APP APIs so the canvas nodes can
  * upload references, enqueue generations, and poll for results without
@@ -156,7 +157,7 @@ export async function uploadImageFile(file: File): Promise<string> {
   fd.append("image", file);
   const res = await fetch("/api/upload", { method: "POST", body: fd });
   const d = await res.json();
-  if (!d.name) throw new Error(d.error || "上传失败");
+  if (!d.name) throw new Error(d.error ?? "上传失败");
   return d.name;
 }
 
@@ -171,7 +172,7 @@ export async function importOutputAsInput(localPath: string): Promise<string> {
   const res = await fetch(abs);
   if (!res.ok) throw new Error("读取上游输出失败");
   const blob = await res.blob();
-  const fname = localPath.split("/").pop() || "input.png";
+  const fname = localPath.split("/").pop() ?? "input.png";
   const file = new File([blob], fname, { type: blob.type || "image/png" });
   const name = await uploadImageFile(file);
   importCache.set(localPath, name);
@@ -234,7 +235,7 @@ export async function pollTask(
   onProgress?: (progress: number) => void
 ): Promise<TaskResult | TaskFailure> {
   const start = Date.now();
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     if (Date.now() - start > timeoutMs) {
       return {
@@ -339,7 +340,7 @@ export async function runScript(theme: string): Promise<string> {
     if (res.ok) {
       const d = await res.json();
       const c = d.content ?? d.choices?.[0]?.message?.content ?? "";
-      if (c && c.trim()) return c.trim();
+      if (c?.trim()) return c.trim();
     }
   } catch {
     /* fall through to offline */

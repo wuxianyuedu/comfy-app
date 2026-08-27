@@ -289,9 +289,9 @@ export function WirePortRows({
         // 数值类（ComfyUI INT/FLOAT/NUMBER）→ 端口行底部用紧凑数字输入，
         // 避免和 text/textarea/image 分支重复触发。
         const numericType =
-          (wireInput.type || "").toUpperCase() === "INT" ||
-          (wireInput.type || "").toUpperCase() === "FLOAT" ||
-          (wireInput.type || "").toUpperCase() === "NUMBER";
+          (wireInput.type ?? "").toUpperCase() === "INT" ||
+          (wireInput.type ?? "").toUpperCase() === "FLOAT" ||
+          (wireInput.type ?? "").toUpperCase() === "NUMBER";
         const v = values[wireInput.ioKey];
         {/* ── PortRowInt · 数值行 · h=33 严格（Ardot 3:52）───────────────
             单行：Handle 在整行中部 (y_in_row=16.5)，label · spacer · 数字

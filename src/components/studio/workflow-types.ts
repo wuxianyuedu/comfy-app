@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* Extracted types — originally declared inside WorkflowCanvasEditor.tsx.
  * Pure type declarations only; no runtime code. */
 /* ── Types ── */

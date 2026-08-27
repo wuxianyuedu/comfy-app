@@ -47,7 +47,7 @@ export async function streamChat({ messages, opts, onToken, signal }: ChatArgs):
       const data = trimmed.slice(5).trim();
       if (data === "[DONE]") continue;
       try {
-        const json = JSON.parse(data);
+        const json = JSON.parse(data) as { error?: string; token?: string };
         if (json.error) throw new Error(json.error);
         const token: string = json.token ?? "";
         if (token) {
@@ -71,6 +71,6 @@ export async function completeChat({ messages, opts }: ChatArgs): Promise<string
     body: JSON.stringify({ messages, stream: false, ...opts }),
   });
   const json = (await res.json()) as { content?: string; error?: string };
-  if (!res.ok) throw new Error(json.error || `LLM 请求失败 (${res.status})`);
+  if (!res.ok) throw new Error(json.error ?? `LLM 请求失败 (${res.status})`);
   return json.content ?? "";
 }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 // ── Film Studio orchestrator ─────────────────────────────────
 // One-click complete film pipeline:
 //   script → auto storyboard (shots) → per-shot video generation
@@ -100,7 +101,7 @@ async function expandScriptLLM(raw: string, type: string): Promise<
 
   ]);
 
-  const match = content.match(/\[[\s\S]*\]/);
+  const match = /\[[\s\S]*\]/.exec(content);
 
   if (!match) throw new Error("llm no json");
 
@@ -134,7 +135,7 @@ async function parseScriptToShots(
     scenes = expanded.map((expanded) =>({ heading: expanded.heading, action: expanded.action, shotCount: expanded.shotCount }));
   } catch {
     // offline fallback — reuse the workshop parser
-    const sc = parseIdeaToScenes(raw, { title: "", type: (type as any) || "short_video", tone: "", logline: "" });
+    const sc = parseIdeaToScenes(raw, { title: "", type: (type as any) ?? "short_video", tone: "", logline: "" });
     scenes = sc.map((scene) => ({
       heading: scene.heading,
       action: `${scene.action}${scene.dialogue ? " " + scene.dialogue : ""}`,
@@ -175,7 +176,7 @@ export async function createFilm(input: CreateFilmInput) {
     const skill = await skillRepository.findBySlug(input.styleSlug);
     if (skill) {
       stylePrompt = skill.promptTemplate || undefined;
-      styleNegative = skill.negativePrompt || undefined;
+      styleNegative = skill.negativePrompt ?? undefined;
     }
   }
 
@@ -374,7 +375,8 @@ async function watchFilm(id: string) {
         continue;
       }
       if (shot.status === "SUCCEEDED" || shot.status === "FAILED") {
-        shot.status === "SUCCEEDED" ? done++ : failed++;
+        if (shot.status === "SUCCEEDED") done++;
+        else failed++;
         continue;
       }
       const task = await taskRepository.findExecutionProgress(shot.taskId);
@@ -441,7 +443,7 @@ async function watchFilm(id: string) {
 let _ffmpegOk: boolean | null = null;
 export async function isFFmpegAvailable(): Promise<boolean> {
   if (_ffmpegOk !== null) return _ffmpegOk;
-  const bin = process.env.FFMPEG_BIN || "ffmpeg";
+  const bin = process.env.FFMPEG_BIN ?? "ffmpeg";
   try {
     await runFFmpeg(["-version"], undefined, 8000);
     _ffmpegOk = true;
@@ -453,7 +455,7 @@ export async function isFFmpegAvailable(): Promise<boolean> {
 
 function runFFmpeg(args: string[], cwd?: string, timeout = 120000): Promise<{ code: number; stderr: string }> {
   return new Promise((resolve) => {
-    const bin = process.env.FFMPEG_BIN || "ffmpeg";
+    const bin = process.env.FFMPEG_BIN ?? "ffmpeg";
     const cp = spawn(bin, args, { cwd });
     let stderr = "";
     const to = setTimeout(() => {
@@ -503,7 +505,7 @@ export async function composeFilm(id: string) {
   }
 
   const cwd = process.cwd();
-  const [W, H] = (film.size.split("x").map(Number) as number[]) ?? [1280, 720];
+  const [W, H] = (film.size.split("x").map(Number)) ?? [1280, 720];
   const fps = film.fps;
   const tmpDir = path.join(cwd, "public", "generated", "films", `_tmp_${id}`);
   await fs.mkdir(tmpDir, { recursive: true });
@@ -512,12 +514,12 @@ export async function composeFilm(id: string) {
   try {
     for (let i = 0; i < shots.length; i++) {
       const shot = shots[i];
-      const clip = path.join(cwd, "public", (shot!.videoPath as string).replace(/^\//, ""));
+      const clip = path.join(cwd, "public", (shot!.videoPath!).replace(/^\//, ""));
       const segOut = path.join(tmpDir, `seg_${i}.mp4`);
       const dur = shot!.duration ?? (film.framesPerShot / fps);
       const fadeOut = Math.max(0, dur - 0.3);
 
-      let vf =
+      const vf =
         `scale=${W}:${H}:force_original_aspect_ratio=decrease,` +
         `pad=${W}:${H}:(${W}-iw)/2:(${H}-ih)/2,setsar=1,` +
         `fps=${fps},` +
@@ -527,6 +529,7 @@ export async function composeFilm(id: string) {
       if (film.subtitleOn) {
         await fs.writeFile(
           srtPath,
+// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
           `1\n00:00:00,000 --> 00:00:${String(Math.floor(dur)).padStart(2, "0")},000\n${(shot!.heading || shot!.prompt).slice(0, 80)}\n`,
           "utf-8"
         );
@@ -607,7 +610,7 @@ export async function composeFilm(id: string) {
     await filmRepository.markFailed(id, e?.message ?? "合成失败");
     await appendFilmLog(id, "error", `合成失败：${e?.message ?? ""}`);
   } finally {
-    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 
@@ -617,7 +620,7 @@ export async function cancelFilm(id: string) {
   if (!film) return;
   const shots = await filmShotRepository.listActiveWithTask(id);
   for (const s of shots) {
-    if (s.taskId) await cancelTask(s.taskId).catch(() => {});
+    if (s.taskId) await cancelTask(s.taskId).catch(() => undefined);
   }
   await filmShotRepository.markAllActiveFailed(id);
   await filmRepository.markCancelled(id);

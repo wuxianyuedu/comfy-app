@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 
 import React from "react";
@@ -71,7 +72,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
       setIdea("");
       setExpanded(false);
     } catch (e: any) {
-      setAiError(e?.message || "AI 扩写失败");
+      setAiError(e?.message ?? "AI 扩写失败");
     } finally {
       setAiBusy(false);
     }

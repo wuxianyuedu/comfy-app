@@ -88,7 +88,7 @@ export function NumberField({
           // Re-format on blur for consistent display
           const n = parseFloat(event.target.value);
           if (!isNaN(n)) onChange(clamp(n));
-          else (event.target as HTMLInputElement).value = fmt(value);
+          else (event.target).value = fmt(value);
         }}
         disabled={disabled}
         className="min-w-[36px] h-[24px] flex-1 bg-transparent py-0 text-center text-xs font-mono text-gray-200 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40"

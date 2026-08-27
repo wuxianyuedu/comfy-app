@@ -59,7 +59,7 @@ export default function LoginPage() {
       }
 
       const params = new URLSearchParams(window.location.search);
-      const callback = params.get("callbackUrl") || "/workspace";
+      const callback = params.get("callbackUrl") ?? "/workspace";
       router.push(callback);
       router.refresh();
     } catch {

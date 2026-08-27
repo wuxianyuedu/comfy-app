@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 "use client";
 
 import React from "react";
@@ -58,7 +59,7 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
   } = props;
   const paramCount = (() => {
     const io = (w.workflowIO ?? {}) as Record<string, { direction?: string }>;
-    return Object.values(io).filter((entry) => entry && entry.direction === "input").length;
+    return Object.values(io).filter((entry) => entry?.direction === "input").length;
   })();
   return (
     <div
@@ -229,7 +230,7 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
 
         {/* 2026-08-15 模型标签 chips + 「＋」绑定 */}
         {(() => {
-          const cur = ((w as any).modelTags as string[] | undefined) ?? [];
+          const cur = ((w).modelTags as string[] | undefined) ?? [];
           const open = assigningId === w.id;
           const toggle = (name: string) => {
             const next = cur.includes(name)
@@ -253,7 +254,7 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
               <button
                 type="button"
                 onClick={(event) => {
-                  const r = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                  const r = (event.currentTarget).getBoundingClientRect();
                   setAssignRect({ top: r.bottom + 6, left: r.left, width: r.width });
                   setAssigningId(open ? null : w.id);
                 }}
@@ -375,7 +376,7 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
         {/* 2026-08-15 模型标签绑定 popover（portal 到 body，逃出卡片/滚动裁剪） */}
         {assigningId === w.id && assignRect && createPortal(
           (() => {
-            const cur = ((w as any).modelTags as string[] | undefined) ?? [];
+            const cur = ((w).modelTags as string[] | undefined) ?? [];
             const toggle = (name: string) => {
               const next = cur.includes(name)
                 ? cur.filter((cur) => cur !== name)

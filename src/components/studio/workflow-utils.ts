@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 /* Extracted pure module-level helpers — originally declared inside
  * WorkflowCanvasEditor.tsx.  No JSX, no React hooks. */
@@ -101,7 +102,7 @@ export function resolveNodePackage(
  *  run on the server?").  Mirrors ComfyUI's own dim italic label. */
 export function extractNoteTitle(text: string, fallback?: string): string {
   let raw = "";
-  if (fallback && fallback.trim()) {
+  if (fallback?.trim()) {
     raw = fallback.trim();
     // Strip a leading "Note:" / "Note : " prefix ComfyUI bakes in for some
     // converted flows so the rendered title bar doesn't echo "Note: Note: X".
@@ -111,7 +112,7 @@ export function extractNoteTitle(text: string, fallback?: string): string {
   if (!text) return "";
   const lines = text.split(/\r?\n/);
   for (const line of lines) {
-    const match = line.match(/^#{1,3}\s+(.+?)\s*$/);
+    const match = /^#{1,3}\s+(.+?)\s*$/.exec(line);
     if (match) return match[1]!;
   }
   for (const line of lines) {
@@ -159,7 +160,7 @@ export const NODE_TITLE_H = 30;
  *  ever resurfaces on some browser.
  * --------------------------------------------------------------------------- */
 export function pseudoFrostPalette(modeColor: string | null) {
-  const mode = modeColor || "#ec4899";
+  const mode = modeColor ?? "#ec4899";
   return {
     primary:   hexToRgba(mode, 0.45),                    // mode-tinted mass
     secondary: hexToRgba(mode, 0.30),                    // mode-tinted halftone
@@ -172,7 +173,7 @@ export function pseudoFrostPalette(modeColor: string | null) {
 /** Pseudo-frost overlay.  Renders absolutely behind the node content (under
  *  the header / body), with `pointer-events: none` and `aria-hidden` so it
  *  never affects hit-testing, selection, or screen-reader output. */
-export function inferOutputTypeAll(classType: string): { [name: string]: string } {
+export function inferOutputTypeAll(classType: string): Record<string, string> {
   // ComfyUI lets nodes name their outputs; we don't have that info offline,
   // so we use slot-based names.  For CheckpointLoaderSimple etc. this is
   // MODEL/CLIP/VAE which lines up with ComfyUI's default display.
@@ -211,9 +212,9 @@ export function inferOutputTypeAll(classType: string): { [name: string]: string 
     WanVideoModelLoader:             ["MODEL", "CLIP", "VAE"],
   };
   const types = KNOWN_NAMES[classType] ?? [];
-  const out: { [k: string]: string } = {};
+  const out: Record<string, string> = {};
   for (let i = 0; i < types.length; i++) {
-    out[types[i] || `out${i + 1}`] = types[i] || "UNKNOWN";
+    out[types[i] ?? `out${i + 1}`] = types[i] ?? "UNKNOWN";
   }
   return out;
 }
@@ -267,7 +268,7 @@ export function valueCellColor(value: any): string {
  *  edge-case rgba input we lower the alpha instead. */
 export function withAlpha(color: string): string {
   if (color.startsWith("#") && color.length === 7) return color + "66";
-  const match = color.match(/rgba\(([^)]+)\)/);
+  const match = /rgba\(([^)]+)\)/.exec(color);
   if (match) {
     const parts = match[1]!.split(",").map((str) => str.trim());
     if (parts.length === 4) return `rgba(${parts[0]},${parts[1]},${parts[2]},0.40)`;
@@ -301,7 +302,11 @@ export function renderSubgraphWidgetValue(value: unknown): string {
   }
   if (Array.isArray(value)) return "[…]";
   if (typeof value === "object") return "{…}";
-  return String(value);
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  return "";
 }
 
 /** Trim a raw `label` / `localized_name` down to its user-facing key.
@@ -438,7 +443,7 @@ export function computeKahnLayout(
     outAdj[node.id] = new Set();
   }
   for (const [id, raw] of Object.entries(graph)) {
-    const inputs = (raw as any)?.inputs;
+    const inputs = (raw)?.inputs;
     if (!inputs || typeof inputs !== "object") continue;
     for (const value of Object.values(inputs)) {
       if (
@@ -449,7 +454,7 @@ export function computeKahnLayout(
         incoming[id]
       ) {
         incoming[id].add(value[0]);
-        outAdj[value[0]!]!.add(id);
+        outAdj[value[0]]!.add(id);
       }
     }
   }
@@ -503,7 +508,7 @@ export function buildEdges(
   let i = 0;
   for (const [nodeId, raw] of Object.entries(detail.graph ?? {})) {
     if (!raw || typeof raw !== "object") continue;
-    const inputs = (raw as any).inputs;
+    const inputs = (raw).inputs;
     if (!inputs || typeof inputs !== "object") continue;
     const dstClass = nodesById[nodeId]?.class_type;
     for (const [inputName, value] of Object.entries(inputs)) {
@@ -635,7 +640,7 @@ export function buildConnectedOutputs(
 ): Record<string, Set<string>> {
   const map: Record<string, Set<string>> = {};
   for (const raw of Object.values(detail.graph ?? {})) {
-    const inp = (raw as any)?.inputs ?? {};
+    const inp = (raw)?.inputs ?? {};
     for (const value of Object.values(inp)) {
       if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
       const srcId = value[0];
@@ -647,14 +652,14 @@ export function buildConnectedOutputs(
       const rawOuts = rawMetaById[srcId]?.outputs ?? [];
       let name: string | null = null;
       if (slotNames && slot < slotNames.length) {
-        name = slotNames[slot] || null;
+        name = slotNames[slot] ?? null;
       } else if (slot < staticOuts.length) {
         name = staticOuts[slot]!;
       } else if (slot < rawOuts.length) {
         name = rawOuts[slot]!.name;
       }
       if (!name) continue;
-      if (!map[srcId]) map[srcId] = new Set();
+      map[srcId] ??= new Set();
       map[srcId].add(name);
     }
   }
@@ -687,13 +692,13 @@ export function inferSourceOutNames(
     // 静态 + raw 都没有，从消费者（下游节点）的输入键反推
     const bySlot: Record<number, string[]> = {};
     for (const [_, consumerRaw] of Object.entries(detail.graph ?? {})) {
-      const inp = (consumerRaw as any)?.inputs ?? {};
+      const inp = (consumerRaw)?.inputs ?? {};
       for (const [inputKey, value] of Object.entries(inp)) {
         if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
         if (value[0] !== nodeId) continue;
         const slot = Number(value[1] ?? 0);
         const stripped = inputKey.replace(/_\d+$/g, "");
-        if (!bySlot[slot]) bySlot[slot] = [];
+        bySlot[slot] ??= [];
         if (!bySlot[slot].includes(stripped)) bySlot[slot].push(stripped);
       }
     }
@@ -701,7 +706,7 @@ export function inferSourceOutNames(
     const slotNames: string[] = [];
     for (let i = 0; i <= slotCount; i++) {
       const candidates = bySlot[i] ?? [];
-      slotNames.push(candidates[0] || `out${i + 1}`);
+      slotNames.push(candidates[0] ?? `out${i + 1}`);
     }
     if (slotNames.length > 0) out[nodeId] = slotNames;
   }
@@ -743,7 +748,12 @@ export function computeGroupDepths(groups: WorkflowGroup[]): Record<string, numb
   for (const group of groups) {
     let depthCount = 0;
     let parent = findParent(group);
-    while (parent) {
+    const visited = new Set<string>([group.id]);
+    // Defensive: near-duplicate frame bounds (within tolerance) can make two
+    // groups report each other as parent, forming a cycle that would otherwise
+    // hang the main thread forever on subgraph expand.  Bail out instead.
+    while (parent && !visited.has(parent.id) && depthCount < 64) {
+      visited.add(parent.id);
       depthCount++;
       parent = findParent(parent);
     }

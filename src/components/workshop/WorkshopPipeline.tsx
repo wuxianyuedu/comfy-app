@@ -26,6 +26,30 @@ const SCENE_PLACEHOLDERS = [
 
 type Tab = "script" | "character" | "storyboard";
 
+/** /api/skills 返回 payload：用于在 fetch 边界收窄，消除 any 散落。 */
+type SkillsApiResponse = {
+  skills?: Array<{
+    slug: string;
+    name: string;
+    icon: string;
+    promptTemplate: string;
+    negativePrompt?: string | null;
+    defaultParams?: Record<string, unknown> | null;
+  }>;
+};
+
+/** /api/models?type=CHECKPOINT 返回 payload。 */
+type ModelsApiResponse = {
+  models?: Array<{ fileName: string }>;
+};
+
+/** /api/tasks/:id/stream 的 SSE 消息 payload。 */
+type TaskStreamMessage = {
+  type?: string;
+  image?: string;
+  images?: string[];
+};
+
 export function WorkshopPipeline() {
   const [tab, setTab] = React.useState<Tab>("script");
   const [meta, setMeta] = React.useState<ProjectMeta>({
@@ -38,9 +62,8 @@ export function WorkshopPipeline() {
   const [characters, setCharacters] = React.useState<Character[]>([]);
   const [shots, setShots] = React.useState<Shot[]>([]);
   const [styles, setStyles] = React.useState<StyleRef[]>([]);
-  const [checkpoints, setCheckpoints] = React.useState<string[]>([]);
   const [checkpoint, setCheckpoint] = React.useState("");
-  const [generating, setGenerating] = React.useState(false);
+  const [generating] = React.useState(false);
 
   const [outline, setOutline] = React.useState(
     "少女小满在旧城区的天台邂逅一台会说话的旧收音机，它声称能播放“未来的声音”。随着电波里浮现陌生又熟悉的话语，小满逐渐发现，那些声音来自十年后试图拯救这座即将被拆除的城市的自己……"
@@ -51,46 +74,54 @@ export function WorkshopPipeline() {
   React.useEffect(() => {
     fetch("/api/skills")
       .then((res) => res.json())
-      .then((data) => {
-        const list: StyleRef[] = (data.skills ?? []).map((skill: any) => ({
+      .then((data: SkillsApiResponse) => {
+        const list: StyleRef[] = (data.skills ?? []).map((skill) => ({
           slug: skill.slug,
           name: skill.name,
           icon: skill.icon,
           promptTemplate: skill.promptTemplate,
           negativePrompt: skill.negativePrompt ?? undefined,
-          defaultParams: (skill.defaultParams as Record<string, unknown>) ?? undefined,
+          defaultParams: skill.defaultParams ?? undefined,
         }));
         setStyles(list);
       })
-      .catch(() => {});
+      .catch(() => undefined);
     fetch("/api/models?type=CHECKPOINT")
       .then((res) => res.json())
-      .then((data) => {
-        const names: string[] = (data.models ?? []).map((model: any) => model.fileName);
-        setCheckpoints(names);
+      .then((data: ModelsApiResponse) => {
+        const names: string[] = (data.models ?? []).map((model) => model.fileName);
         const first = names[0];
         if (first) setCheckpoint(first);
       })
-      .catch(() => {});
+      .catch(() => undefined);
   }, []);
+
+  /** 安全读取 Shot 参数：对象/数组等会被拒绝，返回 fallback。 */
+  function paramString(value: unknown, fallback: string): string {
+    return typeof value === "string" ? value : fallback;
+  }
+  function paramNumber(value: unknown, fallback: number): number {
+    const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
+    return Number.isFinite(n) ? n : fallback;
+  }
 
   async function generateShot(shot: Shot) {
     if (!checkpoint) {
       alert("请先在右侧选择一个大模型（Checkpoint）");
       return;
     }
-    setShots((prev) => prev.map((prev) =>(prev.id === shot.id ? { ...prev, status: "running" } : prev)));
+    setShots((prev) => prev.map((s) => (s.id === shot.id ? { ...s, status: "running" } : s)));
     const style = styles.find((st) => st.slug === shot.skillSlug);
     const payload: Record<string, unknown> = {
       workflow: "txt2img",
       prompt: shot.prompt,
-      negative: shot.negativePrompt || undefined,
+      negative: shot.negativePrompt ?? undefined,
       checkpoint,
-      steps: Number(shot.params.steps ?? 28),
-      cfg: Number(shot.params.cfg ?? 7),
-      sampler: String(shot.params.sampler ?? "euler_ancestral"),
-      scheduler: String(shot.params.scheduler ?? "normal"),
-      size: String(shot.params.size ?? "832x1216"),
+      steps: paramNumber(shot.params.steps, 28),
+      cfg: paramNumber(shot.params.cfg, 7),
+      sampler: paramString(shot.params.sampler, "euler_ancestral"),
+      scheduler: paramString(shot.params.scheduler, "normal"),
+      size: paramString(shot.params.size, "832x1216"),
       count: 1,
       skillSlug: style?.slug,
       skillName: style?.name,
@@ -101,18 +132,18 @@ export function WorkshopPipeline() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      const data = (await res.json()) as { taskId?: string; error?: string };
       if (data.taskId) {
         setShots((prev) =>
-          prev.map((prev) =>(prev.id === shot.id ? { ...prev, status: "done", taskId: data.taskId } : prev))
+          prev.map((s) => (s.id === shot.id ? { ...s, status: "done", taskId: data.taskId } : s))
         );
         pollTask(data.taskId, shot.id);
       } else {
-        throw new Error(data.error || "生成失败");
+        throw new Error(data.error ?? "生成失败");
       }
-    } catch (err: any) {
-      setShots((prev) => prev.map((prev) =>(prev.id === shot.id ? { ...prev, status: "failed" } : prev)));
-      console.error(err);
+    } catch (err: unknown) {
+      setShots((prev) => prev.map((s) => (s.id === shot.id ? { ...s, status: "failed" } : s)));
+      console.error(err instanceof Error ? err.message : err);
     }
   }
 
@@ -120,22 +151,23 @@ export function WorkshopPipeline() {
     const es = new EventSource(`/api/tasks/${taskId}/stream`);
     es.onmessage = (ev) => {
       try {
-        const msg = JSON.parse(ev.data);
+        const msg = JSON.parse(String(ev.data)) as TaskStreamMessage;
         if (msg.type === "done" || msg.type === "image") {
-          const url = msg.image || (msg.images && msg.images[0]);
+          const url = msg.image ?? msg.images?.[0];
           if (url) {
-            setShots((prev) => prev.map((prev) =>(prev.id === shotId ? { ...prev, imageUrl: url } : prev)));
+            setShots((prev) => prev.map((s) => (s.id === shotId ? { ...s, imageUrl: url } : s)));
           }
           if (msg.type === "done") es.close();
         }
-      } catch {}
+      } catch {
+        /* SSE 消息解析失败时忽略本条 */
+      }
     };
     es.onerror = () => es.close();
   }
 
-  const completedStages = (scenes.length > 0 ? 1 : 0) + (characters.length > 0 ? 1 : 0) + (shots.length > 0 ? 1 : 0);
   const totalStages = 6;
-  const progressPct = 23; // 设计稿固定展示 23%，后续可改为动态 Math.round((completedStages / totalStages) * 100)
+  const progressPct = 23; // 设计稿固定展示 23%，后续可改为动态计算
 
   const stageTitles: Record<Tab, { title: string; desc: string }> = {
     script: {
@@ -170,9 +202,9 @@ export function WorkshopPipeline() {
   const gridShots: { idx: number; heading: string; status: typeof statusByRow[number]; color: string }[] = [];
   for (let i = 0; i < 16; i++) {
     const sc = scenes[i];
-    const state = statusByRow[Math.floor(i / 4)] as typeof statusByRow[number];
-    const heading = sc ? sc.heading.replace(/^场景\d+\s*·\s*/, "") : SCENE_PLACEHOLDERS[i];
-    gridShots.push({ idx: i, heading: heading as string, status: state, color: statusMeta[state].dot });
+    const state = statusByRow[Math.floor(i / 4)]!;
+    const heading = sc?.heading?.replace(/^场景\d+\s*·\s*/, "") ?? SCENE_PLACEHOLDERS[i] ?? "";
+    gridShots.push({ idx: i, heading, status: state, color: statusMeta[state].dot });
   }
 
   return (

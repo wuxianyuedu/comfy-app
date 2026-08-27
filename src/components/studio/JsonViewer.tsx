@@ -80,7 +80,7 @@ function collectHits(root: JsonValue, query: string): Path[] {
     // object
     for (const k of Object.keys(node)) {
       if (k.toLowerCase().includes(q)) hits.push([...path, k]);
-      visit((node as { [k: string]: JsonValue })[k]!, [...path, k]);
+      visit((node)[k]!, [...path, k]);
     }
   };
 
@@ -176,7 +176,7 @@ function applyHighlights(
       }
       return NodeFilter.FILTER_REJECT;
     },
-  }) as TreeWalker);
+  }));
 
   type HitNode = { node: Text; count: number };
   const targets: HitNode[] = [];
@@ -270,10 +270,12 @@ export function JsonViewer({
 
   const hits = useMemo(() => collectHits(data as JsonValue, query.trim()), [data, query]);
 
-  // 数据 / query 变化: 重置 hitIndex
-  useEffect(() => {
+  // 数据 / query 变化: 重置 hitIndex（render 阶段同步，避免 effect 级联渲染）
+  const [prevQuery, setPrevQuery] = useState(query);
+  if (prevQuery !== query) {
+    setPrevQuery(query);
     setHitIndex(0);
-  }, [query]);
+  }
 
   // ── DOM 后处理: query / hitIndex / data 变化时重新注入高亮 ──
   useEffect(() => {
@@ -425,7 +427,7 @@ export function JsonViewer({
           <span className="text-zinc-500">(empty)</span>
         ) : (
           <JsonView
-            src={data as never}
+            src={data}
             dark
             theme="default"
             // collapsed={false} 让初始全部展开, dense 场景靠 collapseObjectsAfterLength 自然折叠

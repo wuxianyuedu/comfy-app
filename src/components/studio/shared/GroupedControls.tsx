@@ -393,7 +393,7 @@ const AlignMultipleStepper = React.memo(function AlignMultipleStepper({
           type="button"
           aria-label="减小对齐倍数"
           onClick={dec}
-          disabled={disabled || value <= MIN_ALIGN_MULTIPLE}
+          disabled={disabled === true || value <= MIN_ALIGN_MULTIPLE}
           className="nodrag nopan h-6 w-6 rounded text-[#9A9AAD] transition-colors hover:bg-white/[0.06] hover:text-[#EDEDF2] disabled:cursor-not-allowed disabled:opacity-40"
         >
           −
@@ -407,8 +407,9 @@ const AlignMultipleStepper = React.memo(function AlignMultipleStepper({
         <button
           type="button"
           aria-label="增大对齐倍数"
+ 
           onClick={inc}
-          disabled={disabled || value >= MAX_ALIGN_MULTIPLE}
+          disabled={disabled === true || value >= MAX_ALIGN_MULTIPLE}
           className="nodrag nopan h-6 w-6 rounded text-[#9A9AAD] transition-colors hover:bg-white/[0.06] hover:text-[#EDEDF2] disabled:cursor-not-allowed disabled:opacity-40"
         >
           +
@@ -478,7 +479,7 @@ function DimensionControl({
   const ratio = useMemo(() => {
     const currentRatio = h0 === 0 ? 1 : w0 / h0;
     return DIM_RATIO_PRESETS.reduce(
-      (best, preset) => (Math.abs(preset.ratio - currentRatio) < Math.abs(best!.ratio - currentRatio) ? preset : best),
+      (best, preset) => (Math.abs(preset.ratio - currentRatio) < Math.abs(best.ratio - currentRatio) ? preset : best),
       DIM_RATIO_PRESETS[0]!
     ).label;
   }, [w0, h0]);
@@ -758,11 +759,12 @@ function VideoField({
       </Field>
     );
   }
-  const str = typeof current === "string" ? current : (current ?? entry.defaultValue ?? "");
+  const rawValue = current ?? entry.defaultValue ?? "";
+  const str = typeof rawValue === "string" ? rawValue : "";
   return (
     <Field label={label}>
       <input
-        value={String(str)}
+        value={str}
         disabled={disabled}
         className="nodrag nopan w-full rounded-md bg-[#0F0F14] px-2.5 py-2 text-[11px] text-[#C9C9D6] outline-none focus:ring-1 focus:ring-[#7C5CFC]/40"
         onChange={(event) => set(entry.ioKey, event.target.value)}

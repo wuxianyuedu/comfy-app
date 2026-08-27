@@ -21,11 +21,10 @@ export function ModelLibrary() {
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
     const params: { type?: string; q?: string } = {};
     if (type) params.type = type;
     if (q) params.q = q;
-    vanillaApi.model.list
+    void vanillaApi.model.list
       .query(params)
       .then((data) => setModels((data.models ?? []) as unknown as ModelCardData[]))
       .finally(() => setLoading(false));

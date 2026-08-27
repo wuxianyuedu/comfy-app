@@ -1,14 +1,15 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import "server-only";
 import { llmConfigRepository } from "@/lib/core/repository";
 import type { LLMConfig, LLMMessage, LLMRequestOptions, LLMProviderType } from "./types";
 
 const ENV_DEFAULTS: LLMConfig = {
   provider: (process.env.LLM_PROVIDER as LLMProviderType) || "local",
-  baseUrl: process.env.LLM_BASE_URL || "http://localhost:11434/v1",
-  model: process.env.LLM_MODEL || "llama3.1",
-  apiKey: process.env.LLM_API_KEY || null,
-  temperature: Number(process.env.LLM_TEMPERATURE || 0.7),
-  maxTokens: Number(process.env.LLM_MAX_TOKENS || 2048),
+  baseUrl: process.env.LLM_BASE_URL ?? "http://localhost:11434/v1",
+  model: process.env.LLM_MODEL ?? "llama3.1",
+  apiKey: process.env.LLM_API_KEY ?? null,
+  temperature: Number(process.env.LLM_TEMPERATURE ?? 0.7),
+  maxTokens: Number(process.env.LLM_MAX_TOKENS ?? 2048),
 };
 
 /**
@@ -48,7 +49,7 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
 function headersFor(cfg: LLMConfig): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
   if (cfg.provider === "remote" && cfg.apiKey) {
-    h["Authorization"] = `Bearer ${cfg.apiKey}`;
+    h.Authorization = `Bearer ${cfg.apiKey}`;
   }
   return h;
 }

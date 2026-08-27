@@ -121,19 +121,28 @@ function offlineAgent(history: ChatMessage[]): AgentTurnResult {
   };
 }
 
-function normalizeSpec(s: any): AgentSpec {
+type RawSpec = {
+  prompt?: unknown;
+  negative?: unknown;
+  kind?: unknown;
+  skillHint?: unknown;
+  params?: Partial<Record<"steps" | "cfg" | "sampler" | "scheduler" | "size", unknown>>;
+};
+
+function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
+  const params = s?.params ?? {};
   return {
-    prompt: s?.prompt ?? "",
-    negative: s?.negative,
+    prompt: typeof s?.prompt === "string" ? s.prompt : "",
+    negative: typeof s?.negative === "string" ? s.negative : undefined,
     kind: s?.kind === "video" ? "video" : "image",
     params: {
-      steps: s?.params?.steps,
-      cfg: s?.params?.cfg,
-      sampler: s?.params?.sampler,
-      scheduler: s?.params?.scheduler,
-      size: s?.params?.size,
+      steps: typeof params.steps === "number" ? params.steps : undefined,
+      cfg: typeof params.cfg === "number" ? params.cfg : undefined,
+      sampler: typeof params.sampler === "string" ? params.sampler : undefined,
+      scheduler: typeof params.scheduler === "string" ? params.scheduler : undefined,
+      size: typeof params.size === "string" ? params.size : undefined,
     },
-    skillHint: s?.skillHint,
+    skillHint: typeof s?.skillHint === "string" ? s.skillHint : undefined,
   };
 }
 
@@ -155,11 +164,18 @@ export async function chatAgent(history: ChatMessage[]): Promise<AgentTurnResult
       }),
     });
     if (!res.ok) throw new Error("llm failed");
-    const data = await res.json();
+    const data = (await res.json()) as {
+      content?: string;
+      choices?: Array<{ message?: { content?: string } }>;
+    };
     const content = data.content ?? data.choices?.[0]?.message?.content ?? "";
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const jsonMatch = /\{[\s\S]*\}/.exec(content);
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
+      const parsed = JSON.parse(jsonMatch[0]) as {
+        ready?: boolean;
+        reply?: string;
+        spec?: RawSpec;
+      };
       if (parsed.ready === true && parsed.spec) {
         return {
           reply: parsed.reply ?? "已为你整理好方案。",

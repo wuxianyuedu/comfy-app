@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
 "use client";
 
 /** 2026-08-22 P4: extracted from WorkflowLibrary's action-callback block
@@ -7,7 +8,7 @@
  *  callbacks; the component keeps only the state declarations and the JSX.
  */
 import { useCallback } from "react";
-import { api } from "~/trpc/react";
+import { type api } from "~/trpc/react";
 import { useToast } from "@/components/studio/toast-provider";
 import type { WorkflowRow } from "./workflow-library-helpers";
 

@@ -16,9 +16,13 @@ export function EditableLabel({
   const inputRef = useRef<HTMLInputElement>(null);
   const editable = typeof onChange === "function";
 
-  React.useEffect(() => {
+  /* Sync external label changes into the draft editor during render
+   * (React 19 recommended "adjusting state when a prop changes" pattern). */
+  const [prevLabel, setPrevLabel] = useState(label);
+  if (label !== prevLabel) {
+    setPrevLabel(label);
     setDraft(label);
-  }, [label]);
+  }
 
   React.useEffect(() => {
     if (editing) {

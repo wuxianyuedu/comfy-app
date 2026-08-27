@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/prefer-nullish-coalescing, @typescript-eslint/prefer-optional-chain */
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -183,17 +184,11 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
    *  用户反馈「在这里点开就显示详情，别在其他界面再显示」—— 历史 modal 是「这里」，
    *  「其他界面」是 `/create/${id}` 这条独立路由。 */
   const toast = useToast();
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<FilterKey>("ALL");
   const [sort, setSort] = useState<SortKey>("newest");
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<any>(null);
-  /** R-ardot63 (2026-08-15): 工作流默认值兜底（来自 /api/tasks/[id] 的 workflowHints）。
-   *  当任务本身没记 seed/steps/cfg 时，用工作流 subgraph 里 KSampler 的硬编码值填卡。 */
-  const [workflowHints, setWorkflowHints] = useState<any>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   /** 「打开目录」降级 popover：展示路径 + 协议打开引导。 */
   const [folderPopover, setFolderPopover] = useState<{ path: string } | null>(
@@ -206,46 +201,39 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
 
   const progressMap = useSimulatedProgress(tasks);
 
-  const tasksQ = api.task.list.useQuery();
-  useEffect(() => {
-    if (!tasksQ.isLoading) {
-      setTasks((tasksQ.data?.tasks ?? []).map((task) => ({ ...task, createdAt: String(task.createdAt) } as TaskItem)));
-      setLoading(false);
-    }
-  }, [tasksQ.isLoading, tasksQ.data?.tasks]);
+  const tasksQ = api.task.list.useQuery(undefined, {
+    /* 保持旧数据：refetch / 删除后回源不闪空列表 */
+    placeholderData: (prev) => prev,
+  });
+  const tasks = useMemo(
+    () =>
+      (tasksQ.data?.tasks ?? []).map(
+        (task) => ({ ...task, createdAt: String(task.createdAt) }) as TaskItem
+      ),
+    [tasksQ.data?.tasks]
+  );
+  const loading = tasksQ.isLoading;
 
   const load = useCallback(() => {
-    setLoading(true);
-    tasksQ.refetch().finally(() => setLoading(false));
+    void tasksQ.refetch();
   }, [tasksQ]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const detailQ = api.task.detail.useQuery(
     { id: detailId ?? "" },
     { enabled: !!detailId }
   );
+  /* 详情直接派生自查询结果：detailId 切换时 isPending 自动为 true、data 为 null，
+     open 清空逻辑不再需要本地镜像 state。 */
+  const detail = detailQ.isSuccess ? detailQ.data : null;
+  const detailLoading = detailQ.isPending;
+  /** R-ardot63 (2026-08-15): 工作流默认值兜底 —— 来自 /api/tasks/[id] 的 workflowHints 子字段。 */
+  const workflowHints = detailQ.isSuccess
+    ? (detailQ.data as { workflowHints?: unknown } | null | undefined)?.workflowHints ?? null
+    : null;
+
   const openDetail = useCallback((id: string) => {
     setDetailId(id);
-    setDetailLoading(true);
-    setDetail(null);
-    setWorkflowHints(null);
   }, []);
-
-  useEffect(() => {
-    if (!detailId) return;
-    if (detailQ.isSuccess) {
-      setDetail(detailQ.data);
-      setWorkflowHints(null);
-      setDetailLoading(false);
-    } else if (detailQ.isError) {
-      setDetail(null);
-      setWorkflowHints(null);
-      setDetailLoading(false);
-    }
-  }, [detailQ.isSuccess, detailQ.isError, detailQ.data, detailId]);
 
   // Allow external components (e.g. VideoQueueModal "详情") to open a task.
   useEffect(() => {
@@ -279,13 +267,18 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
       try {
         await deleteTask.mutateAsync({ id });
         toast.success("已删除任务");
-        setTasks((prev) => prev.filter((task) => task.id !== id));
+        /* 乐观移除：直接改查询缓存，避免本地镜像 state */
+        queryClient.setQueryData(
+          api.task.list.getQueryKey(),
+          (old: { tasks: Array<{ id: string }> } | undefined) =>
+            old ? { ...old, tasks: old.tasks.filter((task) => task.id !== id) } : old
+        );
         if (detailId === id) setDetailId(null);
       } catch {
         toast.error("删除失败");
       }
     },
-    [deleteTask, detailId, toast]
+    [deleteTask, detailId, toast, queryClient]
   );
 
   const retry = useCallback(

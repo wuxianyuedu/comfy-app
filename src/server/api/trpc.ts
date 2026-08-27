@@ -38,13 +38,11 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
   let user: TRPCUser | null = null;
   if (session?.user?.email) {
     let dbUser = await userRepository.findByEmail(session.user.email);
-    if (!dbUser) {
-      dbUser = await userRepository.createUser({
-        email: session.user.email,
-        name: session.user.name ?? null,
-        password: "oauth-not-used",
-      });
-    }
+    dbUser ??= await userRepository.createUser({
+      email: session.user.email,
+      name: session.user.name ?? null,
+      password: "oauth-not-used",
+    });
     user = { id: dbUser.id, email: dbUser.email, name: dbUser.name ?? null };
   }
 
@@ -122,13 +120,11 @@ export const authedProcedure = t.procedure
       // Demo fallback
       if (!demoUserCache) {
         let demo = await userRepository.findByEmail(DEMO_EMAIL);
-        if (!demo) {
-          demo = await userRepository.createUser({
-            email: DEMO_EMAIL,
-            name: "体验用户",
-            password: "demo-not-used",
-          });
-        }
+        demo ??= await userRepository.createUser({
+          email: DEMO_EMAIL,
+          name: "体验用户",
+          password: "demo-not-used",
+        });
         demoUserCache = { id: demo.id, email: demo.email, name: demo.name ?? null };
       }
       user = demoUserCache;

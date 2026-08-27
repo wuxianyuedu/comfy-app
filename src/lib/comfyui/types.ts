@@ -396,7 +396,7 @@ const INPUT_TYPES: Record<string, Record<string, string>> = {
 export function inferInputType(
   classType: string,
   inputName: string,
-  value?: any
+  value?: unknown
 ): string {
   const fromTable = INPUT_TYPES[classType]?.[inputName];
   if (fromTable) return fromTable;
@@ -509,7 +509,7 @@ const MULTILINE_INPUTS: Record<string, Set<string>> = {
 /** ComfyUI STRING inputs that LOOK like text but stay single-line in the
  *  native UI.  Excluded explicitly so the name heuristic below never
  *  wrongly upgrades them. */
-const SINGLE_LINE_NAMES: Set<string> = new Set([
+const SINGLE_LINE_NAMES = new Set<string>([
   "filename_prefix",
   "ckpt_name",
   "model_name",

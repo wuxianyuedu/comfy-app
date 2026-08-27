@@ -8,7 +8,7 @@ export function RequiredSummary({ io }: { io: WorkflowIOMap | null }) {
     let optional = 0;
     if (!io) return { required, optional };
     for (const e of Object.values(io)) {
-      if (!e || e.direction !== "input") continue;
+      if (e?.direction !== "input") continue;
       if (e.kind !== "widget") continue;
       if (e.required) required++;
       else optional++;
