@@ -56,6 +56,7 @@ build_log*.txt
 /.workbuddy/tmp/
 
 # PyInstaller launcher build artifacts (start-tauri.exe 由 scripts/start_tauri_launcher.py 重建)
-start-tauri.exe
-start-tauri.spec
+start-tauri*.exe
+start-tauri*.spec
 /dist/
+/build-launcher/
