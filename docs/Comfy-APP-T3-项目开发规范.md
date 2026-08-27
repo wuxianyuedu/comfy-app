@@ -370,11 +370,13 @@ pnpm build && pnpm start   # 生产预览
 
 ### 11.2 Git 换行符（CRLF/LF）提交噪声处理
 
+**规范（2026-08-27 起）**：本仓库换行符统一使用 **LF**。新提交的代码文件一律 LF；历史 CRLF 文件在涉及改动时随本次提交一并转为 LF，不做增量混用。
+
 **现象**：外部工具（IDE/脚本）批量改写文件换行后，`git diff` 出现全文件行级噪声（如 818 insertions / 808 deletions，`-w` 后仅 22 行真实改动）。
 
 **判定**：`git diff -w --numstat` 对比普通 diff，若行数骤减即为换行噪声；`git ls-files --eol` 查看 index/工作区换行状态。
 
 **处理**：
-- 工作区转回仓库规范换行（本仓库为 CRLF），再用 `git -c core.autocrlf=false add <file>` 让换行原样入库，保持 blob 与历史版本一致。
-- `core.autocrlf=true` 时 clean 过滤会把 CRLF 转 LF 入库，导致与历史 CRLF blob 产生噪声；临时 `-c` 覆盖可避免。
-- 提交前必须复查 `git diff HEAD~1 HEAD --numstat`，确认无换行噪声混入。
+- 工作区文件批量转为 LF：读取文件字节流，将 `\r\n` 替换为 `\n` 后写回（Python 脚本即可，注意二进制读写避免编码损坏）。
+- 提交时使用 `git -c core.autocrlf=false add <file>` 让 LF 原样入库，避免 autocrlf 的 clean 过滤再次改写换行；`core.autocrlf=true` 时 clean 会把 CRLF 转 LF 入库、checkout 又转回 CRLF，造成工作区与 index 反复不一致。
+- 提交前必须复查 `git diff HEAD~1 HEAD --numstat`，确认换行统一为 LF 后无异常噪声混入。
