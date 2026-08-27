@@ -3,19 +3,10 @@ import { z } from "zod";
 import {
   createTRPCRouter,
   authedProcedure,
-  publicProcedure,
 } from "~/server/api/trpc";
 import { prisma } from "@/lib/db";
 
 export const postRouter = createTRPCRouter({
-  hello: publicProcedure
-    .input(z.object({ text: z.string() }))
-    .query(({ input }) => {
-      return {
-        greeting: `Hello ${input.text}`,
-      };
-    }),
-
   // R-T3-phase4 (OWASP A01): demo scaffold query no longer public — list/read
   // endpoints require an authed (or local demo) user.
   getLatest: authedProcedure.query(async () => {
