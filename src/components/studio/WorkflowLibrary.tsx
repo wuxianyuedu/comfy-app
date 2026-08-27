@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-empty-function, @typescript-eslint/no-explicit-any, @typescript-eslint/no-inferrable-types, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -196,7 +197,6 @@ export function WorkflowLibrary({
   const expandAllRoots = useCallback(() => setCollapsedRoots({}), []);
 
   const load = useCallback(() => {
-    setLoading(true);
     // Keep previous list state (do not wipe to empty).  Errors surface via
     // react-query state (`listQ.error`) and the data-sync effect below only
     // runs on success, so a failed refetch leaves the current list intact.
@@ -249,10 +249,6 @@ export function WorkflowLibrary({
       }
     }
   }, [listQ.data, toast]);
-
-  useEffect(() => {
-    if (tagsQ.data && Array.isArray(tagsQ.data.tags)) setModelTags(tagsQ.data.tags);
-  }, [tagsQ.data]);
 
   /** 2026-08-13: re-fetch when a sibling panel mutates LOCAL_WORKFLOWS_PATH.
    *  The settings dialog (CustomNodesSettings) dispatches

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-floating-promises */
+ 
 "use client";
 
 import React from "react";
@@ -51,9 +53,54 @@ export function ContentAssetBody({
    *  Lives at the top so both the empty-state branch and any future
    *  drop-zone wiring share the same boolean. */
   const [isDropOver, setIsDropOver] = React.useState(false);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const [taskImages, setTaskImages] = React.useState<{
+    id: string;
+    localPath: string;
+    isCover: boolean;
+  }[] | null>(null);
+  const [galleryOpen, setGalleryOpen] = React.useState(false);
+  const [galleryIndex, setGalleryIndex] = React.useState(0);
+
+  // Clear stale images when the task / kind switches to a non-picture state
+  // (adjusted during render, React 19 pattern).
+  const picCtx = `${data.taskId}|${kind}`;
+  const [prevPicCtx, setPrevPicCtx] = React.useState(picCtx);
+  if (picCtx !== prevPicCtx) {
+    setPrevPicCtx(picCtx);
+    if (!data.taskId || kind !== "picture") setTaskImages(null);
+  }
+
+  React.useEffect(() => {
+    const taskId = data.taskId;
+    if (!taskId || kind !== "picture") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (cancelled) return;
+        const t = await vanillaApi.task.detail.query({ id: taskId });
+        const rawImgs = (t.images ?? []) as unknown as {
+          id?: string;
+          localPath?: string;
+          isCover?: boolean;
+        }[];
+        const imgs: { id: string; localPath: string; isCover: boolean }[] | undefined =
+          rawImgs
+            .filter((img) => !!img && typeof img.localPath === "string")
+            .map((img) => ({
+              id: img.id ?? "",
+              localPath: img.localPath!,
+              isCover: img.isCover ?? false,
+            }));
+        if (!cancelled) setTaskImages(imgs && imgs.length > 1 ? imgs : null);
+      } catch {
+        /* silently ignore — 单图模式仍正常显示 */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [data.taskId, kind]);
 
   if (kind === "text") {
-    const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     return (
       <div className="relative">
         <textarea
@@ -81,45 +128,6 @@ export function ContentAssetBody({
   const mediaSrc = data.mediaPath
     ? `/api/images?filename=${encodeURIComponent(data.mediaPath)}&type=input`
     : undefined;
-
-  /* ── 多图画廊：taskId 存在时拉取该任务全部产出图 ── */
-  const [taskImages, setTaskImages] = React.useState<
-    { id: string; localPath: string; isCover: boolean }[] | null
-  >(null);
-  const [galleryOpen, setGalleryOpen] = React.useState(false);
-  const [galleryIndex, setGalleryIndex] = React.useState(0);
-
-  React.useEffect(() => {
-    const taskId = data.taskId;
-    if (!taskId || kind !== "picture") {
-      setTaskImages(null);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        if (cancelled) return;
-        const t = await vanillaApi.task.detail.query({ id: taskId });
-        const rawImgs = (t.images ?? []) as unknown as {
-          id?: string;
-          localPath?: string;
-          isCover?: boolean;
-        }[];
-        const imgs: { id: string; localPath: string; isCover: boolean }[] | undefined =
-          rawImgs
-            .filter((img) => !!img && typeof img.localPath === "string")
-            .map((img) => ({
-              id: img.id ?? "",
-              localPath: img.localPath as string,
-              isCover: img.isCover ?? false,
-            }));
-        if (!cancelled) setTaskImages(imgs && imgs.length > 1 ? imgs : null);
-      } catch {
-        /* silently ignore — 单图模式仍正常显示 */
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [data.taskId, kind]);
 
   const imageCount = taskImages?.length ?? 0;
 

@@ -126,12 +126,17 @@ function applySettings(next: CanvasSettings) {
 }
 
 export function useCanvasSettings() {
-  /* Start with defaults so SSR / first paint don't flash a saved state. */
-  const [hydrated, setHydrated] = useState(false);
+  /* Start with defaults so SSR / first paint don't flash a saved state.
+   * `hydrated` flips client-side only, via useSyncExternalStore (no
+   * set-state-in-effect). */
+  const hydrated = useSyncExternalStore(
+    useCallback(() => () => undefined, []),
+    () => true,
+    () => false,
+  );
 
   useEffect(() => {
     CURRENT_SETTINGS = readSettings();
-    setHydrated(true);
     notifySettings();
   }, []);
 

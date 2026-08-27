@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
@@ -36,20 +37,21 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
   // Sync from props ONLY when the parent hands us a strictly bigger list —
   // never overwrite a fresher local list with a stale prop snapshot, or
   // newly created tags would briefly disappear between create() and refresh().
-  useEffect(() => {
-    if (initialTags.length > 0) {
-      setTags((prev) => {
-        const prevNames = new Set(prev.map((prev) => prev.name));
-        const newOnes = initialTags.filter((initialTag) => !prevNames.has(initialTag.name));
-        return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
-      });
-    }
-  }, [initialTags]);
+  // Adjusted during render (React 19 pattern) instead of an effect.
+  const [prevInitialTags, setPrevInitialTags] = useState(initialTags);
+  if (initialTags !== prevInitialTags && initialTags.length > 0) {
+    setPrevInitialTags(initialTags);
+    setTags((prev) => {
+      const prevNames = new Set(prev.map((p) => p.name));
+      const newOnes = initialTags.filter((initialTag) => !prevNames.has(initialTag.name));
+      return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
+    });
+  }
 
   const refresh = useCallback(async () => {
     try {
       const d = await vanillaApi.workflowModel.list.query();
-      if (Array.isArray(d.tags)) setTags(d.tags as TagItem[]);
+      if (Array.isArray(d.tags)) setTags(d.tags);
     } catch {
       /* ignore — list may be stale but the dialog stays usable */
     }

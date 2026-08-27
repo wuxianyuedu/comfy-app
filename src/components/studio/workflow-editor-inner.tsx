@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-empty-function, @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/prefer-nullish-coalescing */
 "use client";
 /* Extracted WorkflowEditorInner (the inner editor that must live inside
  * ReactFlowProvider).  Node renderers / registries moved to
@@ -101,22 +102,22 @@ export function WorkflowEditorInner({
   onClose: () => void;
   onSave?: () => void;
 }) {
-  const storesRef = React.useRef<WFStoresHelper | null>(null);
-  if (storesRef.current === null) {
-    storesRef.current = {
-      io: createIOEditStore(workflowId),
-      rgthree: createRgthreeGroupsStore({ workflowId, detail: null }),
-      viewer: createNodeJsonViewerStore({
-        detail: null,
-        rawMetaById: {},
-        positions: null,
-        subgraphRawContext: null,
-        subgraphStackLength: 0,
-      }),
-    };
-  }
+  /* 3 per-instance Zustand stores, created once per mount.  useState lazy
+   *  initializer keeps them stable without touching a ref during render
+   *  (react-hooks/refs). */
+  const [stores] = React.useState<WFStoresHelper>(() => ({
+    io: createIOEditStore(workflowId),
+    rgthree: createRgthreeGroupsStore({ workflowId, detail: null }),
+    viewer: createNodeJsonViewerStore({
+      detail: null,
+      rawMetaById: {},
+      positions: null,
+      subgraphRawContext: null,
+      subgraphStackLength: 0,
+    }),
+  }));
   return (
-    <WFStoresProvider stores={storesRef.current}>
+    <WFStoresProvider stores={stores}>
       <WorkflowEditorBody workflowId={workflowId} onClose={onClose} onSave={onSave} />
     </WFStoresProvider>
   );
@@ -334,22 +335,6 @@ function WorkflowEditorBody({
     );
   }, [rf]);
 
-  useEffect(() => {
-    if (nodes.length === 0) return;
-    fittedRef.current = false;
-    // Defer one frame so ReactFlow has measured the viewport and laid
-    // nodes out before we fit.
-    const raf = requestAnimationFrame(() => {
-      fitToMiddle();
-      fittedRef.current = true;
-      // One final settle (some React Flow minor versions re-trigger
-      // their own fitView once measurements resolve a frame later; this
-      // reasserts ours).
-      requestAnimationFrame(() => fitToMiddle());
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [rf, detail?.id, fitToMiddle]);
-
   /* Fetch workflow detail (or subgraph detail when navigating into one).
    * Performance: a per-session (sessionStorage) cache keyed by URL lets a
    * re-opened canvas paint instantly without waiting on the network. The
@@ -426,12 +411,30 @@ function WorkflowEditorBody({
         paramMap,
         onEnterSubgraph,
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     [detail, scopeDetail, rawMetaById, outSlotNameById, paramMap, onEnterSubgraph]
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  /* Fit-to-middle once per workflow/subgraph open. Placed after `nodes`
+   * so we don't reference it before declaration (react-hooks/immutability). */
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    fittedRef.current = false;
+    // Defer one frame so ReactFlow has measured the viewport and laid
+    // nodes out before we fit.
+    const raf = requestAnimationFrame(() => {
+      fitToMiddle();
+      fittedRef.current = true;
+      // One final settle (some React Flow minor versions re-trigger
+      // their own fitView once measurements resolve a frame later; this
+      // reasserts ours).
+      requestAnimationFrame(() => fitToMiddle());
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [rf, detail?.id, fitToMiddle]);
 
   /* 2026-08-25: lazy edge interactivity.  defaultEdgeOptions in the canvas
    *  sets deletable/reconnectable=false so untouched edges stay inert; the

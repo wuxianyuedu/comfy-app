@@ -182,7 +182,20 @@ export function useLogPanel(): LogContextValue {
 }
 
 export function LogProvider({ children }: { children: React.ReactNode }) {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>(() =>
+    typeof window === "undefined"
+      ? []
+      : [
+          {
+            id: nextId(),
+            time: Date.now(),
+            level: "info",
+            message:
+              "日志面板已启用。按 Ctrl+Shift+L 或点击状态栏日志按钮打开/关闭。",
+            source: "system",
+          },
+        ],
+  );
   const [filter, setFilter] = useState<LogFilter>("all");
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -221,13 +234,6 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     console.warn = makeLogger("warn");
     console.error = makeLogger("error");
     console.debug = makeLogger("debug");
-
-    addEntry({
-      level: "info",
-      message:
-        "日志面板已启用。按 Ctrl+Shift+L 或点击状态栏日志按钮打开/关闭。",
-      source: "system",
-    });
 
     return () => {
       console.log = originals.log;

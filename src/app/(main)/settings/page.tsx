@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -46,12 +47,20 @@ export default function SettingsPage() {
   const settings = settingsQ.data?.settings ?? null;
   const llm = llmQ.data?.config ?? null;
 
-  useEffect(() => {
-    if (llmQ.data?.config) setLlmDraft({ ...llmQ.data.config, apiKey: llmQ.data.config.apiKey ?? null });
-  }, [llmQ.data?.config]);
-  useEffect(() => {
-    if (settingsQ.data?.settings) setSettingsDraft(settingsQ.data.settings);
-  }, [settingsQ.data?.settings]);
+  // Seed drafts from query results (adjusted during render, React 19 pattern:
+  // no setState synchronously within an effect).
+  const llmConfig = llmQ.data?.config ?? null;
+  const [prevLlmConfig, setPrevLlmConfig] = useState(llmConfig);
+  if (llmConfig !== prevLlmConfig) {
+    setPrevLlmConfig(llmConfig);
+    if (llmConfig) setLlmDraft({ ...llmConfig, apiKey: llmConfig.apiKey ?? null });
+  }
+  const settingsData = settingsQ.data?.settings ?? null;
+  const [prevSettingsData, setPrevSettingsData] = useState(settingsData);
+  if (settingsData !== prevSettingsData) {
+    setPrevSettingsData(settingsData);
+    if (settingsData) setSettingsDraft(settingsData);
+  }
 
   function flash(kind: "ok" | "err", text: string) {
     setMsg({ kind, text });

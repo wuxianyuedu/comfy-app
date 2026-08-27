@@ -95,18 +95,25 @@ export function DarkSelect({
     };
   }, [open]);
 
-  /* Reset highlight when opening */
-  useEffect(() => {
+  /* Reset highlight when opening (adjusted during render, React 19 pattern) */
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
       const idx = options.indexOf(value);
       setHighlighted(idx >= 0 ? idx : -1);
-      /* Scroll highlighted into view after render */
+    }
+  }
+  /* Scroll highlighted into view after render */
+  useEffect(() => {
+    if (open) {
       requestAnimationFrame(() => {
-        const el = listRef.current?.children[idx >= 0 ? idx : 0] as HTMLElement | undefined;
+        const idx = highlighted >= 0 ? highlighted : 0;
+        const el = listRef.current?.children[idx] as HTMLElement | undefined;
         el?.scrollIntoView({ block: "nearest" });
       });
     }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, highlighted]);
 
   /* Recompute popover position when opening / on viewport changes.
    * Auto-flips upward if the dropdown would overflow below the viewport.

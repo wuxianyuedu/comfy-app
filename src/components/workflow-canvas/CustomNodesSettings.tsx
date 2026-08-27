@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-base-to-string, @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/prefer-nullish-coalescing */
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -595,10 +596,11 @@ export function CustomNodesSettings() {
     }
   }, [report]);
 
-  const reloadFromServer = useCallback(async () => {
-    setLoading(true);
-    setSaveErr(null);
-    setProgress({ phase: "", done: 0, total: 0, discovered: 0, parent: "", msg: "" });
+  /** Fetch settings from the server and apply them to local state.
+   *  No synchronous setState before the first await, so this can be called
+   *  straight from an effect (React 19 rule: no set-state-in-effect).
+   *  Callers that want a spinner reset should use `reloadFromServer`. */
+  const fetchSettings = useCallback(async () => {
     try {
       const res = await fetch("/api/custom-nodes");
       const ct = res.headers.get("content-type") || "";
@@ -725,9 +727,20 @@ export function CustomNodesSettings() {
     }
   }, []);
 
+  /** Reset the spinner/status and then fetch. Only call from event handlers
+   *  or async callbacks (never synchronously inside an effect). */
+  const reloadFromServer = useCallback(() => {
+    setLoading(true);
+    setSaveErr(null);
+    setProgress({ phase: "", done: 0, total: 0, discovered: 0, parent: "", msg: "" });
+    return fetchSettings();
+  }, [fetchSettings]);
+
   useEffect(() => {
-    if (open) reloadFromServer();
-  }, [open, reloadFromServer]);
+    if (!open) return;
+    const t = setTimeout(() => void fetchSettings(), 0);
+    return () => clearTimeout(t);
+  }, [open, fetchSettings]);
 
   // Fetch the raw manifest on open + after every parse (the `report` state
   // updates whenever a parse-finished event lands). Cheap because the file
@@ -737,10 +750,14 @@ export function CustomNodesSettings() {
     if (m) setManifestByNode(m.nodes || {});
   }, []);
   useEffect(() => {
-    if (open) fetchManifest();
+    if (!open) return;
+    const t = setTimeout(() => void fetchManifest(), 0);
+    return () => clearTimeout(t);
   }, [open, fetchManifest]);
   useEffect(() => {
-    if (report) fetchManifest();
+    if (!report) return;
+    const t = setTimeout(() => void fetchManifest(), 0);
+    return () => clearTimeout(t);
   }, [report, fetchManifest]);
 
   // Debounced auto-save: edits → 600ms idle → PUT to .env

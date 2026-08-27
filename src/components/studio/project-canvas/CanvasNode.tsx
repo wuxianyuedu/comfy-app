@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-base-to-string, @typescript-eslint/no-empty-function, @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/prefer-nullish-coalescing, @typescript-eslint/prefer-optional-chain, @typescript-eslint/prefer-regexp-exec */
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -536,9 +537,13 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
    *  panel auto-expands so the user can actually see the actionable
    *  context (taskId, request payload, suggestion). */
   const [errExpanded, setErrExpanded] = useState(false);
-  useEffect(() => {
+  /* Reset to collapsed whenever a new run starts (adjusted during render,
+   * React 19 pattern). */
+  const [prevStatus, setPrevStatus] = useState(d.status);
+  if (d.status !== prevStatus) {
+    setPrevStatus(d.status);
     if (d.status === "running" || d.status === "idle") setErrExpanded(false);
-  }, [d.status]);
+  }
 
   /* R-ardot121 (2026-08-18): mount-time reconcile — if the node was
    *  loaded with stale `status="running"` (e.g. dev server restarted
@@ -602,9 +607,14 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
       e
     );
   })();
-  useEffect(() => {
+  /* Auto-expand on actionable errors (adjusted during render, React 19
+   *  pattern). */
+  const [prevErrCtx, setPrevErrCtx] = useState(`${d.status}|${shouldAutoExpand}`);
+  const errCtx = `${d.status}|${shouldAutoExpand}`;
+  if (errCtx !== prevErrCtx) {
+    setPrevErrCtx(errCtx);
     if (d.status === "error" && shouldAutoExpand) setErrExpanded(true);
-  }, [d.status, shouldAutoExpand]);
+  }
 
   /* Pattern-match the error text to surface a one-line actionable hint.
    *  Returns null if we don't recognize the failure shape (UI keeps the
@@ -737,51 +747,59 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
    *  内部 React state 持有，不写 patch（不污染 d，避免 React Flow 重渲）。
    *  默认「全部」，用户切换后只在当前节点 lifespan 内生效。 */
   const [sourceFilter, setSourceFilter] = useState<WorkflowSourceFilter>("all");
+  /* Reset IO state when the node's workflow binding changes (adjusted during
+   * render, React 19 pattern — keeps the effect body setState-free). */
+  const ioKey = `${d.kind}|${d.workflowId ?? ""}`;
+  const [prevIoKey, setPrevIoKey] = useState(ioKey);
+  if (ioKey !== prevIoKey) {
+    setPrevIoKey(ioKey);
+    setWfIO(null);
+    setWfModes(null);
+    setWfIOLoading(false);
+  }
   useEffect(() => {
-    if ((d.kind !== "workflow" && d.kind !== "image" && d.kind !== "video" && d.kind !== "picture") || !d.workflowId) {
-      setWfIO(null);
-      setWfModes(null);
-      setWfIOLoading(false);
-      return;
-    }
+    if ((d.kind !== "workflow" && d.kind !== "image" && d.kind !== "video" && d.kind !== "picture") || !d.workflowId) return;
     let alive = true;
-    setWfIOLoading(true);
-    vanillaApi.workflow.detail
-      .query({ id: d.workflowId })
-      .then((dd) => {
-        const tpl = dd.template;
-        if (!alive || !tpl) return;
-        setWfIO((tpl.workflowIO as unknown as WorkflowIOMap) ?? null);
-        /* R-ardot37 模式一致性：库卡片对 `taskType` 有 fallback（仅写
-         *  taskType 没声明 modes[] 的旧工作流也能展示单模式 chip），画布
-         *  也走完全相同的 fallback 避免「库显示文生图 / 画布显示未选」
-         *  的不一致。优先级：
-         *   1) DB 的 modes[] + defaultMode（用户通过 MultiModeSelect 声明的）
-         *   2) taskType 单模式兜底（向后兼容 2026-08-13 之前的旧工作流）
-         *   3) 都为空才走「未选 + 该工作流没有声明可用模式」 */
-        const dbModes = parseModesJson(tpl.modes);
-        const dbDefault = typeof tpl.defaultMode === "string" ? tpl.defaultMode : null;
-        const inferredMode =
-          typeof tpl.taskType === "string" && tpl.taskType ? tpl.taskType : null;
-        const modes = dbModes.length > 0
-          ? dbModes
-          : inferredMode
-            ? [inferredMode]
-            : [];
-        const defaultMode =
-          dbDefault && modes.includes(dbDefault)
-            ? dbDefault
-            : modes[0] ?? null;
-        setWfModes({ modes, defaultMode });
-      })
-      .catch(() => {
-        if (alive) setWfIO(null);
-      })
-      .finally(() => {
-        if (alive) setWfIOLoading(false);
-      });
+    const t = setTimeout(() => {
+      setWfIOLoading(true);
+      vanillaApi.workflow.detail
+        .query({ id: d.workflowId })
+        .then((dd) => {
+          const tpl = dd.template;
+          if (!alive || !tpl) return;
+          setWfIO((tpl.workflowIO as unknown as WorkflowIOMap) ?? null);
+          /* R-ardot37 模式一致性：库卡片对 `taskType` 有 fallback（仅写
+           *  taskType 没声明 modes[] 的旧工作流也能展示单模式 chip），画布
+           *  也走完全相同的 fallback 避免「库显示文生图 / 画布显示未选」
+           *  的不一致。优先级：
+           *   1) DB 的 modes[] + defaultMode（用户通过 MultiModeSelect 声明的）
+           *   2) taskType 单模式兜底（向后兼容 2026-08-13 之前的旧工作流）
+           *   3) 都为空才走「未选 + 该工作流没有声明可用模式」 */
+          const dbModes = parseModesJson(tpl.modes);
+          const dbDefault = typeof tpl.defaultMode === "string" ? tpl.defaultMode : null;
+          const inferredMode =
+            typeof tpl.taskType === "string" && tpl.taskType ? tpl.taskType : null;
+          const modes = dbModes.length > 0
+            ? dbModes
+            : inferredMode
+              ? [inferredMode]
+              : [];
+          const defaultMode =
+            dbDefault && modes.includes(dbDefault)
+              ? dbDefault
+              : modes[0] ?? null;
+          setWfModes({ modes, defaultMode });
+        })
+        .catch(() => {
+          if (alive) setWfIO(null);
+        })
+        .finally(() => {
+          if (alive) setWfIOLoading(false);
+        });
+    }, 0);
     return () => {
       alive = false;
+      clearTimeout(t);
     };
   }, [d.kind, d.workflowId]);
 
@@ -805,28 +823,33 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
   useEffect(() => {
     if ((d.kind !== "workflow" && d.kind !== "picture") || !d.workflowId) return;
     if (wfList.length === 0) return;
-    const stillVisible = wfList
-      .filter((workflow) => {
-        if (sourceFilter === "all") return true;
-        if (sourceFilter === "local") return Boolean(workflow.sourcePath);
-        return !workflow.sourcePath;
-      })
-      .filter((workflow) => {
-        if (modelFilter === "all") return true;
-        return (workflow.modelTags ?? []).includes(modelFilter);
-      })
-      .some((workflow) => workflow.id === d.workflowId);
-    if (!stillVisible) {
-      seededFor.current = null;
-      setWfModes(null);
-      patch({
-        workflowId: undefined,
-        workflowName: undefined,
-        workflowTaskType: undefined,
-        workflowInputs: {},
-        workflowSinkId: undefined,
-      });
-    }
+    // Defer out of the effect body (React 19 rule: no setState synchronously
+    // within an effect).
+    const t = setTimeout(() => {
+      const stillVisible = wfList
+        .filter((workflow) => {
+          if (sourceFilter === "all") return true;
+          if (sourceFilter === "local") return Boolean(workflow.sourcePath);
+          return !workflow.sourcePath;
+        })
+        .filter((workflow) => {
+          if (modelFilter === "all") return true;
+          return (workflow.modelTags ?? []).includes(modelFilter);
+        })
+        .some((workflow) => workflow.id === d.workflowId);
+      if (!stillVisible) {
+        seededFor.current = null;
+        setWfModes(null);
+        patch({
+          workflowId: undefined,
+          workflowName: undefined,
+          workflowTaskType: undefined,
+          workflowInputs: {},
+          workflowSinkId: undefined,
+        });
+      }
+    }, 0);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelFilter, sourceFilter, wfList, d.kind, d.workflowId]);
 

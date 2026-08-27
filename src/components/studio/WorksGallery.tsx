@@ -37,7 +37,10 @@ export function WorksGallery({
    * land in the /api/tasks table, so we read them separately and refresh on
    * the `comfyapp:canvas-store-changed` event so editing inside the canvas
    * view is reflected here live. */
-  const [canvasProjects, setCanvasProjects] = useState<CanvasProject[]>([]);
+  const [canvasProjects, setCanvasProjects] = useState<CanvasProject[]>(() => {
+    reapAllEmptyDrafts();
+    return listProjects();
+  });
 
   /** Canvas-project delete confirmation. Non-null id = the ModalDialog is
    *  open for that project. Resolved projects' names are resolved BEFORE
@@ -59,7 +62,7 @@ export function WorksGallery({
       deleteProject(id); // canvas-store also clears active-id when matched
       setPendingDelete(false);
       setConfirmDeleteId(null);
-      toast.success(`已删除项目「${target?.name || "未命名"}」`);
+      toast.success(`已删除项目「${target?.name ?? "未命名"}」`);
     });
   }, [confirmDeleteId, canvasProjects, toast]);
 
@@ -69,8 +72,6 @@ export function WorksGallery({
 
   useEffect(() => {
     // Sweep legacy empty default-named drafts before listing.
-    reapAllEmptyDrafts();
-    refreshCanvasProjects();
     window.addEventListener("comfyapp:canvas-store-changed", refreshCanvasProjects);
     return () =>
       window.removeEventListener(
@@ -241,7 +242,7 @@ export function WorksGallery({
         description={
           confirmDeleteId
             ? `即将永久删除「${
-                canvasProjects.find((canvasProject) => canvasProject.id === confirmDeleteId)?.name ||
+                canvasProjects.find((canvasProject) => canvasProject.id === confirmDeleteId)?.name ??
                 "未命名项目"
               }」。\n该操作不可撤销，画布内的节点与连线将一并丢失。`
             : ""

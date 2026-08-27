@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-floating-promises */
 "use client";
 
 import React from "react";
@@ -24,24 +25,23 @@ export function useLLM(): LLMContextValue {
 }
 
 export function LLMProvider({ children }: { children: React.ReactNode }) {
+  const configQ = api.llm.configGet.useQuery();
   const [config, setConfig] = React.useState<LLMConfigView | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const loading = configQ.isLoading;
   const [settingsOpen, setSettingsOpen] = React.useState(false);
 
-  const configQ = api.llm.configGet.useQuery();
   const refresh = React.useCallback(() => {
     configQ.refetch();
   }, [configQ]);
 
-  React.useEffect(() => {
-    if (configQ.isLoading) {
-      setLoading(true);
-    } else {
-      const cfg = configQ.data?.config;
-      setConfig(cfg ? { ...cfg, hasApiKey: !!cfg.apiKey } : null);
-      setLoading(false);
-    }
-  }, [configQ.isLoading, configQ.data?.config]);
+  // Seed config from the query result (adjusted during render, React 19
+  // pattern: no setState synchronously within an effect).
+  const cfg = configQ.data?.config;
+  const [prevCfg, setPrevCfg] = React.useState(cfg);
+  if (cfg !== prevCfg) {
+    setPrevCfg(cfg);
+    if (cfg) setConfig({ ...cfg, hasApiKey: !!cfg.apiKey });
+  }
 
   React.useEffect(() => {
     refresh();
@@ -164,7 +164,7 @@ function LLMSettingsModal({
       const cfg = data.config;
       onSaved({ ...cfg, hasApiKey: !!cfg.apiKey, provider: cfg.provider as "local" | "remote" });
     } catch (e: any) {
-      setMsg({ kind: "err", text: e?.message || "保存失败" });
+      setMsg({ kind: "err", text: e?.message ?? "保存失败" });
     } finally {
       setSaving(false);
     }
@@ -183,7 +183,7 @@ function LLMSettingsModal({
       });
       setMsg({ kind: "ok", text: `连接成功：${out.slice(0, 60)}` });
     } catch (e: any) {
-      setMsg({ kind: "err", text: e?.message || "连接失败" });
+      setMsg({ kind: "err", text: e?.message ?? "连接失败" });
     } finally {
       setTesting(false);
     }

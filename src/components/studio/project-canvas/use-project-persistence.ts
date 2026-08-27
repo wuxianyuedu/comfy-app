@@ -40,7 +40,9 @@ export function useProjectPersistence({
 }: UseProjectPersistenceParams) {
   /** 始终指向最新快照，供 persistNow 读取，避免闭包过期。 */
   const ref = useRef({ projectId, nodes, edges, projectName });
-  ref.current = { projectId, nodes, edges, projectName };
+  useEffect(() => {
+    ref.current = { projectId, nodes, edges, projectName };
+  });
 
   /** hydrate 后首轮 setNodes/setEdges 会造成「空项目覆盖」误写，跳过一次。 */
   const firstMutationRef = useRef(true);

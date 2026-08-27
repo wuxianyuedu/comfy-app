@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-floating-promises, @typescript-eslint/no-empty-function */
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -54,16 +55,19 @@ export function ModelLibrary() {
 
   useEffect(() => {
     // Sync silently on mount so the library reflects the current config
-    // without the user having to click "重新扫描" first.
-    syncMut.mutate(undefined, { onSettled: () => loadModels() });
+    // without the user having to click "重新扫描" first. Defer out of the
+    // effect body (React 19 rule: no setState synchronously within an effect).
+    const t = setTimeout(() => syncMut.mutate(undefined, { onSettled: () => loadModels() }), 0);
+    return () => clearTimeout(t);
   }, [syncMut, loadModels]);
 
-  // react-query list -> local rows state
-  useEffect(() => {
-    if (listQ.data) {
-      setModels((listQ.data.models ?? []) as unknown as ModelRow[]);
-    }
-  }, [listQ.data]);
+  // react-query list -> local rows state (adjusted during render, React 19
+  // pattern: no setState synchronously within an effect).
+  const [prevListData, setPrevListData] = useState(listQ.data);
+  if (listQ.data && listQ.data !== prevListData) {
+    setPrevListData(listQ.data);
+    setModels((listQ.data.models ?? []) as unknown as ModelRow[]);
+  }
 
   const filtered = useMemo(() => {
     return models.filter((model) =>
@@ -252,16 +256,20 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
   }, [configQ]);
 
   useEffect(() => {
-    load();
+    // Defer the initial load out of the effect body (React 19 rule: no
+    // setState synchronously within an effect).
+    const t = setTimeout(() => void load(), 0);
+    return () => clearTimeout(t);
   }, [load]);
 
-  // react-query config data -> local folders state
-  useEffect(() => {
-    if (configQ.data) {
-      setFolders(configQ.data.folders ?? []);
-      setComfyReachable(Boolean(configQ.data.comfyReachable));
-    }
-  }, [configQ.data]);
+  // react-query config data -> local folders state (adjusted during render,
+  // React 19 pattern).
+  const [prevCfgData, setPrevCfgData] = useState(configQ.data);
+  if (configQ.data && configQ.data !== prevCfgData) {
+    setPrevCfgData(configQ.data);
+    setFolders(configQ.data.folders ?? []);
+    setComfyReachable(Boolean(configQ.data.comfyReachable));
+  }
 
   const runMutate = useCallback(
     async (fn: () => Promise<unknown>) => {

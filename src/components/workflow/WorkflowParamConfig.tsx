@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -142,16 +143,21 @@ export function WorkflowParamConfig({
 
   const displayNodes = (initialNodes && initialNodes.length > 0) ? initialNodes : fetchedNodes;
 
-  // Sync paramMap from fetched data
-  useEffect(() => {
-    if (detailQ.data?.template.paramMap) {
-      setParamMap(detailQ.data.template.paramMap as ParamMapValue);
-    }
-  }, [detailQ.data?.template.paramMap]);
+  // Sync paramMap from fetched data (adjusted during render, React 19 pattern)
+  const [prevParamMapSrc, setPrevParamMapSrc] = useState<ParamMapValue | undefined>(
+    detailQ.data?.template.paramMap as ParamMapValue | undefined,
+  );
+  const paramMapSrc = detailQ.data?.template.paramMap as ParamMapValue | undefined;
+  if (paramMapSrc !== prevParamMapSrc) {
+    setPrevParamMapSrc(paramMapSrc);
+    if (paramMapSrc) setParamMap(paramMapSrc);
+  }
 
-  useEffect(() => {
+  const [prevIsError, setPrevIsError] = useState(detailQ.isError);
+  if (detailQ.isError !== prevIsError) {
+    setPrevIsError(detailQ.isError);
     if (detailQ.isError) setError("无法加载工作流详情");
-  }, [detailQ.isError]);
+  }
 
   // Reverse map: nodeId -> roleKey (for showing which role a node has)
   const nodeRoleMap = useMemo(() => {

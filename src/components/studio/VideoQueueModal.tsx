@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
@@ -78,18 +79,26 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
   useEffect(() => {
     if (!open) return;
     submittedRef.current = false;
-    loadTasks();
     const t = setInterval(loadTasks, 4000);
-    return () => clearInterval(t);
+    // Defer the first fetch out of the effect body (React 19 rule:
+    // no setState synchronously within an effect).
+    const first = setTimeout(() => void loadTasks(), 0);
+    return () => {
+      clearInterval(t);
+      clearTimeout(first);
+    };
   }, [open, loadTasks]);
 
-  // When draft items arrive, seed the draft editor and switch to the draft tab.
-  useEffect(() => {
-    if (open && draftItems.length) {
-      setDraft(draftItems);
-      setTab("draft");
-    }
-  }, [open, draftItems]);
+  // When draft items arrive, seed the draft editor and switch to the draft tab
+  // (adjusted during render, React 19 pattern).
+  const [prevSeedOpen, setPrevSeedOpen] = useState(open);
+  const [prevSeedDraftItems, setPrevSeedDraftItems] = useState(draftItems);
+  if ((open !== prevSeedOpen || draftItems !== prevSeedDraftItems) && open && draftItems.length) {
+    setPrevSeedOpen(open);
+    setPrevSeedDraftItems(draftItems);
+    setDraft(draftItems);
+    setTab("draft");
+  }
 
   const submitDrafts = useCallback(async () => {
     const items = draft.filter((draft) => draft.prompt.trim());

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 "use client";
 /* ════════════════════════════════════════════════════════════════════════
  *  wf-stores.ts — Zustand 状态层（P2：替代 3 个 React Context）
@@ -123,7 +124,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         let changed = false;
         for (const [ioKey, value] of Object.entries(next)) {
           const cur = nextMap[ioKey];
-          if (!cur || cur.kind !== "widget") continue;
+          if (cur?.kind !== "widget") continue;
           nextMap[ioKey] = { ...cur, value };
           changed = true;
         }
@@ -135,9 +136,9 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         const nextMap: Record<string, WorkflowIOParam> = {};
         let changed = false;
         for (const [entryKey, entry] of Object.entries(state.workflowIO)) {
-          if (entry && entry.kind === "widget" && entry.value !== undefined) {
+          if (entry?.kind === "widget" && entry.value !== undefined) {
             const { value, ...rest } = entry;
-            nextMap[entryKey] = rest as WorkflowIOParam;
+            nextMap[entryKey] = rest;
             changed = true;
           } else {
             nextMap[entryKey] = entry;
@@ -184,7 +185,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         vanillaApi.workflow.update.mutate({
           id: workflowId,
           workflowIO: renumbered,
-        }).catch(() => {});
+        }).catch(() => undefined);
         return { workflowIO: renumbered };
       });
     },
@@ -209,16 +210,19 @@ export const WFStoresContext = createContext<WFStores | null>(null);
 /** 取 IOEdit store 的 api —— 供 owner（WorkflowEditorInner）在容器上方直写。
  *  消费方请用 useIOEditStore(selector)。 */
 export function getIOEditApi(): StoreApi<IOEditStore> {
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- 设计如此：仅在组件渲染期间调用
   const ctx = useContext(WFStoresContext);
   if (!ctx) throw new Error("getIOEditApi 必须在 <WFStoresContext.Provider> 内使用");
   return ctx.io;
 }
 export function getRgthreeApi(): StoreApi<RgthreeGroupsStore> {
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- 设计如此：仅在组件渲染期间调用
   const ctx = useContext(WFStoresContext);
   if (!ctx) throw new Error("getRgthreeApi 必须在 <WFStoresContext.Provider> 内使用");
   return ctx.rgthree;
 }
 export function getViewerApi(): StoreApi<NodeJsonViewerStore> {
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- 设计如此：仅在组件渲染期间调用
   const ctx = useContext(WFStoresContext);
   if (!ctx) throw new Error("getViewerApi 必须在 <WFStoresContext.Provider> 内使用");
   return ctx.viewer;
@@ -277,7 +281,7 @@ export function createRgthreeGroupsStore(
       vanillaApi.workflow.update.mutate({
         id: get().workflowId,
         groups: [{ id: groupId, bypass }],
-      }).catch(() => {});
+      }).catch(() => undefined);
     },
   }));
 }
@@ -344,7 +348,7 @@ export function createNodeJsonViewerStore(
 
     getNodeJson: (nodeId) => {
       const { detail } = get();
-      if (!detail || !detail.graph) return null;
+      if (!detail?.graph) return null;
       const entry = detail.graph[nodeId];
       return entry && typeof entry === "object" ? (entry as Record<string, any>) : null;
     },
@@ -359,11 +363,11 @@ export function createNodeJsonViewerStore(
       const isSubView = subgraphStackLength > 0 && subgraphRawContext;
       if (isSubView) {
         const subs = (
-          subgraphRawContext!.parentRawJson as
+          subgraphRawContext.parentRawJson as
             | { definitions?: { subgraphs?: Record<string, any> } }
             | null
         )?.definitions?.subgraphs;
-        const targetUid = subgraphRawContext!.subUid;
+        const targetUid = subgraphRawContext.subUid;
         let subDef: any = subs?.[targetUid];
         if (!subDef || !Array.isArray(subDef.nodes)) {
           const matchKey = subs

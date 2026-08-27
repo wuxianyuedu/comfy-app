@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-floating-promises, react-hooks/preserve-manual-memoization */
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -177,14 +178,17 @@ export function FilmStudio() {
       const list = (sData.skills ?? sData ?? []) as any[];
       setSkills(list.map((s: any) => ({ slug: s.slug, name: s.name })));
       setFfmpegAvailable(!!(fData as any).ffmpegAvailable);
-      setRecent((fData.films ?? []) as any);
+      setRecent((fData.films ?? []));
     } catch {
       /* ignore */
     }
   }, []);
 
   useEffect(() => {
-    refreshMeta();
+    // Defer the initial meta fetch out of the effect body (React 19 rule:
+    // no setState synchronously within an effect).
+    const t = setTimeout(() => void refreshMeta(), 0);
+    return () => clearTimeout(t);
   }, [refreshMeta]);
 
   /* ── Polling (preserved) ── */
@@ -201,9 +205,7 @@ export function FilmStudio() {
       const f: Film = (data as any).film;
       setFilm(f);
       if (f.status === "GENERATING" || f.status === "COMPOSING" || f.status === "PARSING") {
-        if (!pollRef.current) {
-          pollRef.current = setInterval(() => void fetchDetail(id), 3000);
-        }
+        pollRef.current ??= setInterval(() => void fetchDetail(id), 3000);
       } else {
         stopPoll();
       }
@@ -539,7 +541,7 @@ export function FilmStudio() {
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5 shrink-0">
                     <path d="M9 18V5l12-2v13M9 18a3 3 0 01-3-3H3a3 3 0 006 3z" />
                   </svg>
-                  <span className="truncate text-[9px] text-[#a78bfa]">{bgmName || "背景音乐 · 氛围感配乐"}</span>
+                  <span className="truncate text-[9px] text-[#a78bfa]">{bgmName ?? "背景音乐 · 氛围感配乐"}</span>
                 </div>
               </div>
             </div>

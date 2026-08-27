@@ -3,7 +3,14 @@ import next from "eslint-config-next/core-web-vitals";
 
 export default tseslint.config(
   {
-    ignores: [".next"],
+    ignores: [
+      ".next",
+      // 构建产物与生成代码：无需 lint
+      "generated/**",
+      "src-tauri/static/**",
+      "temp/**",
+      ".workbuddy/**",
+    ],
   },
   // eslint-config-next@16 已改为扁平（flat）配置，直接导出配置数组。
   // 旧写法用 FlatCompat.extends() 去加载它会触发 config-validator 对含

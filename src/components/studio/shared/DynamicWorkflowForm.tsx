@@ -1,3 +1,4 @@
+ 
 "use client";
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -128,6 +129,18 @@ export interface DynamicWorkflowFormProps {
   onReorder?: (fromKey: string, beforeKey: string | null) => void;
 }
 
+/* Section header used for the two sub-sections in IO edit/preview mode
+ *  (2026-08-09).  Module-level so it isn't re-created on every render
+ *  (react-hooks/static-components). */
+const SectionHeader = ({ label, count, accent }: { label: string; count: number; accent: string }) => (
+  <div className="mt-1 flex items-center gap-2 border-t border-white/[0.1] pt-2.5">
+    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} />
+    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9A9AAD]">{label}</span>
+    <span className="rounded-full bg-white/[0.1] px-1.5 py-px font-mono text-[10px] text-gray-400">{count}</span>
+    <div className="flex-1 border-t border-dashed border-white/[0.08]" />
+  </div>
+);
+
 export function DynamicWorkflowForm({
   io,
   values,
@@ -227,7 +240,7 @@ export function DynamicWorkflowForm({
       // （width/height 等）在此剔除，改由 GroupedControls 统一渲染。
       ...widgetInputs.filter((widgetInput) =>
 {
-        const t = (widgetInput.type || "").toUpperCase();
+        const t = (widgetInput.type ?? "").toUpperCase();
         return (t === "INT" || t === "FLOAT" || t === "NUMBER") && !groupedKeys.has(widgetInput.ioKey);
       }),
     ],
@@ -239,7 +252,7 @@ export function DynamicWorkflowForm({
     () =>
       widgetInputs.filter((widgetInput) =>
 {
-        const t = (widgetInput.type || "").toUpperCase();
+        const t = (widgetInput.type ?? "").toUpperCase();
         return t !== "INT" && t !== "FLOAT" && t !== "NUMBER" && !groupedKeys.has(widgetInput.ioKey);
       }),
     [widgetInputs, groupedKeys]
@@ -307,19 +320,6 @@ export function DynamicWorkflowForm({
 
   // 紧凑（画布）模式：端口行紧贴，对齐 Ardot 稿（测试节点端口行无间隔）
   const gridCls = compact ? "space-y-0" : "space-y-3";
-
-  /* Section header used for the two sub-sections in IO edit/preview mode
-   *  (2026-08-09).  Same visual scaffolding as before; kept inside the
-   *  component because it's only ever consumed here, and duplicating it
-   *  across callers would risk divergence. */
-  const SectionHeader = ({ label, count, accent }: { label: string; count: number; accent: string }) => (
-    <div className="mt-1 flex items-center gap-2 border-t border-white/[0.1] pt-2.5">
-      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} />
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9A9AAD]">{label}</span>
-      <span className="rounded-full bg-white/[0.1] px-1.5 py-px font-mono text-[10px] text-gray-400">{count}</span>
-      <div className="flex-1 border-t border-dashed border-white/[0.08]" />
-    </div>
-  );
 
   /* Render a single editable input row (text / textarea / number / switch /
    *  image upload).  Used for widget-backed pins only — wire pins render
@@ -915,7 +915,7 @@ if (compact) {
       {/* 🧩 组合参数 (R-ardot98)：命中的 dimension / video group 用单一下拉框
        *  切换录入范式，避免 width/height、时长/画质/比例 散落成多个独立框。
        *  非 compact（CreatePanel / IO-edit 预览）会带「组合参数」段头。 */}
-      {(groups.dimension || groups.video) && (
+      {(groups.dimension ?? groups.video) && (
         <GroupedControls
           dimension={groups.dimension}
           video={groups.video}
