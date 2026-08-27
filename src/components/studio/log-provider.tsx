@@ -46,6 +46,9 @@ interface LogContextValue {
 
 const LogContext = createContext<LogContextValue | null>(null);
 
+/** 环形缓冲上限：内存中最多保留 2000 条日志（规范 07 §7.5） */
+const MAX_LOG_ENTRIES = 2000;
+
 let entryId = 0;
 function nextId() {
   entryId = (entryId + 1) % 1_000_000;
@@ -291,7 +294,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
 
   const addEntry = useCallback((entry: Omit<LogEntry, "id" | "time">) => {
     const full: LogEntry = { ...entry, id: nextId(), time: Date.now() };
-    setLogs((prev) => [...prev, full]);
+    setLogs((prev) => [...prev, full].slice(-MAX_LOG_ENTRIES));
   }, []);
 
   // ── Intercept console.* so logs appear in the panel ──
@@ -396,7 +399,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
 
         const entries = parseFileLogs(data.content);
         if (entries.length > 0) {
-          setLogs((prev) => [...prev, ...entries]);
+          setLogs((prev) => [...prev, ...entries].slice(-MAX_LOG_ENTRIES));
         }
         fileOffsetRef.current = data.size;
       } catch {
