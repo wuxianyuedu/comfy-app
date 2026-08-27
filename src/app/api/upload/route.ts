@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { type NextRequest, NextResponse } from "next/server";
 import { uploadImage, comfyBase } from "@/lib/comfyui/client";
+import { getServerUser } from "@/lib/auth-server";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,14 @@ const ALLOWED_MIME = new Set([
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
+  const user = await getServerUser();
+  if (!user?.id) {
+    return NextResponse.json(
+      { error: { code: "auth.required", message: "未登录或会话已失效" } },
+      { status: 401 }
+    );
+  }
+
   const form = await req.formData();
   const file = form.get("image") as File | null;
   if (!file) return NextResponse.json({ error: "未收到文件" }, { status: 400 });

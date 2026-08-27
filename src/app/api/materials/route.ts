@@ -2,6 +2,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { type NextRequest, NextResponse } from "next/server";
+import { getServerUser } from "@/lib/auth-server";
 import {
   MATERIAL_FOLDERS,
   SHARED_SCOPE,
@@ -17,6 +18,56 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/* ── 上传白名单：素材库覆盖 image/video/audio/doc 四类 ──
+ * 与 src/lib/materials.ts 的 MaterialKind 推断保持一致；
+ * 防止任意扩展名/超大体量写入 public 素材目录（OWASP A04/A05）。 */
+const ALLOWED_MIME = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "image/bmp",
+  "image/avif",
+  "image/svg+xml",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/x-matroska",
+  "video/x-msvideo",
+  "audio/mpeg",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/ogg",
+  "audio/flac",
+  "audio/aac",
+  "application/pdf",
+  "application/json",
+  "text/plain",
+  "text/markdown",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/zip",
+]);
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+
+/** 鉴权守卫：无有效会话时返回 401（响应对象）。 */
+async function requireUser(): Promise<NextResponse | null> {
+  const user = await getServerUser();
+  if (!user?.id) {
+    return NextResponse.json(
+      { error: { code: "auth.required", message: "未登录或会话已失效" } },
+      { status: 401 }
+    );
+  }
+  return null;
+}
 
 /* ── 画布素材库 API ───────────────────────────────────────────
  * 文件系统支撑，落点 public/generated/materials/{scope}/{folder}/。
@@ -51,6 +102,8 @@ async function resolveScopes(
 }
 
 export async function GET(req: NextRequest) {
+  const denied = await requireUser();
+  if (denied) return denied;
   try {
     const url = new URL(req.url);
     const projectId = sanitizeScope(url.searchParams.get("projectId"));
@@ -98,10 +151,25 @@ export async function GET(req: NextRequest) {
 
 /** 上传素材。multipart/form-data: file, projectId, folder, shared? */
 export async function POST(req: NextRequest) {
+  const denied = await requireUser();
+  if (denied) return denied;
   try {
     const form = await req.formData();
     const file = form.get("file") as File | null;
     if (!file) return NextResponse.json({ error: "未收到文件" }, { status: 400 });
+
+    if (!ALLOWED_MIME.has(file.type)) {
+      return NextResponse.json(
+        { error: "不支持的文件类型（仅限图片 / 视频 / 音频 / 文档）" },
+        { status: 400 }
+      );
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(
+        { error: "文件大小不能超过 100MB" },
+        { status: 400 }
+      );
+    }
 
     const folderRaw = form.get("folder");
     const folder = (typeof folderRaw === "string" ? folderRaw : "").trim();
@@ -167,6 +235,8 @@ export async function POST(req: NextRequest) {
 
 /** 删除素材。?id=scope/folder/name（GET 返回的 item.id 原样回传）。 */
 export async function DELETE(req: NextRequest) {
+  const denied = await requireUser();
+  if (denied) return denied;
   try {
     const url = new URL(req.url);
     const id = url.searchParams.get("id")?.trim();

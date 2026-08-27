@@ -14,6 +14,7 @@ import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:chil
 import fs from "node:fs";
 import path from "node:path";
 import { readEnvVar, writeEnvVar } from "@/lib/envfile";
+import { getServerUser } from "@/lib/auth-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -354,6 +355,14 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
 }
 
 export async function GET() {
+  const user = await getServerUser();
+  if (!user?.id) {
+    return NextResponse.json(
+      { error: { code: "auth.required", message: "未登录或会话已失效" } },
+      { status: 401 }
+    );
+  }
+
   const paths = getPaths();
   const localWorkflowPaths = getLocalWorkflowPaths();
   const summary = readManifestSummary();
@@ -434,6 +443,14 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await getServerUser();
+  if (!user?.id) {
+    return NextResponse.json(
+      { error: { code: "auth.required", message: "未登录或会话已失效" } },
+      { status: 401 }
+    );
+  }
+
   const body = await req.json().catch(() => ({}));
   const action = body?.action;
 

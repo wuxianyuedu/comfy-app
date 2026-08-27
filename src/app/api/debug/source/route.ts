@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
+import { getServerUser } from "@/lib/auth-server";
 
 /**
  * GET /api/debug/source?file=src/components/studio/workflow-node.tsx
@@ -33,6 +34,14 @@ const ALLOWED_EXT = new Set([
 ]);
 
 export async function GET(request: NextRequest) {
+  const user = await getServerUser();
+  if (!user?.id) {
+    return NextResponse.json(
+      { error: { code: "auth.required", message: "未登录或会话已失效" } },
+      { status: 401 }
+    );
+  }
+
   const file = request.nextUrl.searchParams.get("file");
   if (!file) {
     return NextResponse.json({ error: "missing file param" }, { status: 400 });

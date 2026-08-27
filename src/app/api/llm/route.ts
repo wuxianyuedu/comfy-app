@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { type NextRequest, NextResponse } from "next/server";
 import { getLLMConfig, completeLLM, streamLLM } from "@/lib/llm/server";
+import { getServerUser } from "@/lib/auth-server";
 import type { LLMMessage, LLMRequestOptions, LLMProviderType } from "@/lib/llm/types";
 
 export const runtime = "nodejs";
@@ -25,6 +26,14 @@ const BodySchema = {
 };
 
 export async function POST(req: NextRequest) {
+  const user = await getServerUser();
+  if (!user?.id) {
+    return NextResponse.json(
+      { error: { code: "auth.required", message: "未登录或会话已失效" } },
+      { status: 401 }
+    );
+  }
+
   let parsed: Awaited<ReturnType<typeof BodySchema.parse>>;
   try {
     const body = await req.json();
