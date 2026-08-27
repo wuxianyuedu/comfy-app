@@ -90,6 +90,18 @@ function serialize(args: unknown[]): string {
   return args.map(serializeOne).join(" ");
 }
 
+/**
+ * 过滤 React Query 内部查询日志（如 `%c << query #488 %cworkflowModel.list`）。
+ * 这些日志会在 tRPC 组件重渲染时大量产生，淹没业务日志；但它们对业务排错
+ * 没有价值，因此直接丢弃。
+ */
+function isReactQueryLog(args: unknown[]): boolean {
+  if (args.length < 2) return false;
+  const first = args[0];
+  if (typeof first !== "string") return false;
+  return /^\s*%c\s*(<<|>>)\s*query\s+#\d+/i.test(first);
+}
+
 function isSameDay(a: Date, b: Date): boolean {
   return (
     a.getFullYear() === b.getFullYear() &&
@@ -226,6 +238,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       (level: LogLevel) =>
       (...args: unknown[]) => {
         originals[level](...args);
+        if (isReactQueryLog(args)) return;
         addEntry({ level, message: serialize(args), source: "console" });
       };
 

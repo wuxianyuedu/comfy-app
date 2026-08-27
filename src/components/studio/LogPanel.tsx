@@ -263,26 +263,16 @@ function formatTime(ts: number): string {
   return time;
 }
 
-/* Fixed row height for windowed rendering.  Logs are line-based, so each entry
- * is a single truncated line (full text available via hover title).  This lets
- * us virtualize: only the visible slice is ever in the DOM, so even tens of
- * thousands of lines open instantly. */
-const ROW_HEIGHT = 22;
-const OVERSCAN = 12;
-
 const LogRow = memo(function LogRow({
   entry,
-  top,
+  wrap,
 }: {
   entry: LogEntry;
-  top: number;
+  wrap: boolean;
 }) {
   const levelClass = LEVEL_STYLES[entry.level];
   return (
-    <div
-      className="absolute right-0 left-0 flex items-center gap-2.5 border-b border-white/[0.03] px-4 font-mono text-[13px] leading-none hover:bg-white/[0.02]"
-      style={{ top, height: ROW_HEIGHT }}
-    >
+    <div className="flex items-start gap-2.5 border-b border-white/[0.03] px-4 py-1 font-mono text-[13px] leading-snug hover:bg-white/[0.02]">
       <span className="shrink-0 text-gray-500">{formatTime(entry.time)}</span>
       <span
         className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${levelClass}`}
@@ -290,7 +280,9 @@ const LogRow = memo(function LogRow({
         {entry.level}
       </span>
       <span
-        className={`min-w-0 flex-1 truncate ${
+        className={`min-w-0 flex-1 ${
+          wrap ? "break-words whitespace-pre-wrap" : "truncate"
+        } ${
           entry.level === "error"
             ? "text-rose-300"
             : entry.level === "warn"
@@ -299,7 +291,7 @@ const LogRow = memo(function LogRow({
                 ? "text-gray-400"
                 : "text-gray-300"
         }`}
-        title={entry.message}
+        title={!wrap ? entry.message : undefined}
       >
         {renderLogMessage(entry.message)}
       </span>
@@ -329,21 +321,8 @@ export function LogPanel() {
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewportH, setViewportH] = useState(600);
+  const [wrap, setWrap] = useState(true);
   const prevCountRef = useRef(filteredLogs.length);
-
-  // Keep viewport height accurate (after layout + on resize) so the visible
-  // window math is correct even before the first scroll event.
-  useEffect(() => {
-    const el = bodyRef.current;
-    if (!el) return;
-    const update = () => setViewportH(el.clientHeight);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   // Auto-scroll to bottom when new logs arrive, unless user scrolled up.
   useEffect(() => {
@@ -358,7 +337,6 @@ export function LogPanel() {
   const onScroll = () => {
     const el = bodyRef.current;
     if (!el) return;
-    setScrollTop(el.scrollTop);
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
     setAutoScroll(nearBottom);
   };
@@ -368,11 +346,6 @@ export function LogPanel() {
   if (!isOpen) return null;
 
   const total = filteredLogs.length;
-  const totalHeight = total * ROW_HEIGHT;
-  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-  const visibleCount = Math.ceil(viewportH / ROW_HEIGHT) + OVERSCAN * 2;
-  const endIndex = Math.min(total, startIndex + visibleCount);
-  const visible = filteredLogs.slice(startIndex, endIndex);
 
   return (
     <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -463,6 +436,29 @@ export function LogPanel() {
           <div className="flex items-center gap-1 pl-2">
             <button
               type="button"
+              onClick={() => setWrap((w) => !w)}
+              title={wrap ? "折叠超长行" : "自动换行显示"}
+              className={`rounded-md p-2 transition-colors ${
+                wrap
+                  ? "bg-white/[0.08] text-gray-200"
+                  : "text-gray-500 hover:bg-white/[0.05] hover:text-gray-300"
+              }`}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <polyline points="4 7 4 4 20 4 20 7" />
+                <line x1="9" y1="20" x2="15" y2="20" />
+                <line x1="12" y1="4" x2="12" y2="20" />
+              </svg>
+            </button>
+            <button
+              type="button"
               onClick={copyAll}
               title="复制全部"
               className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300"
@@ -537,11 +533,11 @@ export function LogPanel() {
           </div>
         </div>
 
-        {/* Body — virtualized: only the visible slice is rendered. */}
+        {/* Body */}
         <div
           ref={bodyRef}
           onScroll={onScroll}
-          className="custom-scrollbar relative flex-1 overflow-y-auto bg-[#0d0d14]/60"
+          className="custom-scrollbar flex-1 overflow-y-auto bg-[#0d0d14]/60"
         >
           {total === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-gray-600">
@@ -563,13 +559,9 @@ export function LogPanel() {
               暂无匹配的日志
             </div>
           ) : (
-            <div style={{ height: totalHeight, position: "relative" }}>
-              {visible.map((entry, i) => (
-                <LogRow
-                  key={entry.id}
-                  entry={entry}
-                  top={(startIndex + i) * ROW_HEIGHT}
-                />
+            <div className="flex flex-col">
+              {filteredLogs.map((entry) => (
+                <LogRow key={entry.id} entry={entry} wrap={wrap} />
               ))}
             </div>
           )}
@@ -594,7 +586,7 @@ export function LogPanel() {
                 恢复自动滚动
               </button>
             )}
-            <span>保留全部日志（仅渲染可见行）</span>
+            <span>保留全部日志</span>
           </span>
         </div>
       </div>
