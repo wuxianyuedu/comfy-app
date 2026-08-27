@@ -13,7 +13,8 @@ import React from "react";
 export class ErrorBoundary extends React.Component<
   {
     children: React.ReactNode;
-    fallback?: React.ReactNode;
+    /** 降级 UI：可传 ReactNode，也可传 (error) => ReactNode 函数以拿到真实错误对象 */
+    fallback?: React.ReactNode | ((error: Error | null) => React.ReactNode);
     onError?: (error: Error, info: React.ErrorInfo) => void;
   },
   { hasError: boolean; error: Error | null }
@@ -37,7 +38,11 @@ export class ErrorBoundary extends React.Component<
 
   render() {
     if (this.state.hasError) {
-      if (this.props.fallback) return this.props.fallback;
+      if (this.props.fallback) {
+        return typeof this.props.fallback === "function"
+          ? (this.props.fallback as (error: Error | null) => React.ReactNode)(this.state.error)
+          : this.props.fallback;
+      }
       return (
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/5 px-6 py-12 text-center">
           <p className="text-sm font-semibold text-red-400">组件渲染出错</p>
