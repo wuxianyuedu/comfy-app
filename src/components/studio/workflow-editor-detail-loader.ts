@@ -10,6 +10,19 @@ import type { WorkflowDetail, WorkflowIOParam } from "./workflow-types";
  *  满足 §4.1 禁止 any 的约束，同时保留失败态的错误读取。 */
 type WorkflowDetailResponse = WorkflowDetail & { error?: string };
 
+/** 冷路径请求超时兜底：tRPC vanilla client 不支持直接传 signal，用
+ *  Promise.race 在超时后抛错，避免后端长时间不返回时加载覆盖层无限
+ *  转圈（用户侧表现为"点展开后一直没恢复"）。底层请求超时后仍可能
+ *  最终返回，但 myReqId 守卫 + 错误提示保证 UI 不会卡死。 */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`${label}加载超时（${ms / 1000}s），请重试`)), ms);
+    }),
+  ]);
+}
+
 export interface WorkflowDetailLoaderArgs {
   workflowId: string;
   detail: WorkflowDetail | null;
@@ -238,12 +251,16 @@ export function useWorkflowDetailLoader({
       const isBust = opts?.bust === true;
       if (!detail) setLoading(true);
       try {
-        const d = (opts?.subgraphUid
-          ? await vanillaApi.workflow.subgraph.query({ id: workflowId, uid: opts.subgraphUid })
-          : await vanillaApi.workflow.detailFull.query({
-              id: workflowId,
-              bust: isBust ? true : undefined,
-            })) as WorkflowDetailResponse;
+        const d = (await withTimeout(
+          opts?.subgraphUid
+            ? vanillaApi.workflow.subgraph.query({ id: workflowId, uid: opts.subgraphUid })
+            : vanillaApi.workflow.detailFull.query({
+                id: workflowId,
+                bust: isBust ? true : undefined,
+              }),
+          60_000,
+          opts?.subgraphUid ? "子工作流" : "工作流",
+        )) as WorkflowDetailResponse;
         if (d.error) throw new Error(d.error);
         try {
           sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), d }));

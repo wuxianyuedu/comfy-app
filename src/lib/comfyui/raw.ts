@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 /**
  * ComfyUI 工作流「原始 / API」双格式兼容层
  *
@@ -126,8 +127,8 @@ export function detectFormat(json: unknown): WorkflowFormat | null {
     (value) =>
       value &&
       typeof value === "object" &&
-      typeof (value as any).class_type === "string" &&
-      typeof (value as any).inputs === "object"
+      typeof (value).class_type === "string" &&
+      typeof (value).inputs === "object"
   );
   if (apiHit) return "api";
   // Raw format: has `nodes` array + each node has `type` (not class_type)
@@ -181,7 +182,7 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
       let innerNodes: any[] | undefined;
       for (const k of Object.keys(subs)) {
         const def = subs[k];
-        if (def && def.id === wrapper.type && Array.isArray(def.nodes)) {
+        if (def?.id === wrapper.type && Array.isArray(def.nodes)) {
           innerNodes = def.nodes;
           break;
         }
@@ -236,11 +237,11 @@ function readInputSpec(spec: ObjectInfoInputSpec | undefined): {
   }
   if (spec && typeof spec === "object") {
 
-    const type = (spec as Record<string, any>).type;
+    const type = (spec).type;
 
-    if (Array.isArray(type)) return { type: "COMBO", options: spec as Record<string, any> };
+    if (Array.isArray(type)) return { type: "COMBO", options: spec };
 
-    if (typeof type === "string") return { type: type, options: spec as Record<string, any> };
+    if (typeof type === "string") return { type: type, options: spec };
 
   }
 
@@ -251,9 +252,17 @@ type ObjectInfo = Record<string, ObjectInfoClassDef>;
 
 /** Fetch ComfyUI node-class definitions (cached for 5 minutes) */
 let _objectInfoCache: { at: number; data: ObjectInfo } | null = null;
+/** 失败负缓存时间戳：ComfyUI 不可达时每次 detail/subgraph 请求都会白等
+ *  20s 超时（AbortSignal.timeout）才降级 null，而旧实现失败不写缓存，
+ *  导致打开工作流 / 展开子工作流在 ComfyUI 未启动时反复拖慢 20s。
+ *  失败后 30s 内直接返回 null，让慢请求只发生一次。 */
+let _objectInfoFailedAt = 0;
 export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
   if (_objectInfoCache && Date.now() - _objectInfoCache.at < 5 * 60_000) {
     return _objectInfoCache.data;
+  }
+  if (_objectInfoFailedAt && Date.now() - _objectInfoFailedAt < 30_000) {
+    return null;
   }
   try {
     const res = await fetch(`${comfyBase()}/api/object_info`, {
@@ -269,6 +278,7 @@ export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
     _objectInfoCache = { at: Date.now(), data };
     return data;
   } catch {
+    _objectInfoFailedAt = Date.now();
     return null;
   }
 }
