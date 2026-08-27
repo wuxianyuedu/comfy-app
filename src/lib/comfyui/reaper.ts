@@ -12,6 +12,7 @@
 import { taskRepository } from "../core/repository";
 import { resolveComfyBase } from "./client";
 import { state, log, persistLogs } from "./runner-state";
+import { logger } from "~/server/lib/logger";
 
 /* ── R-ardot121 (2026-08-18): DB-side QUEUED reaper ─────────────────────────
  * Symptom: after a dev-server cold restart (R-117), tasks in
@@ -106,12 +107,12 @@ async function reapStaleQueuedTasks(): Promise<void> {
       }
     }
     if (stale.length > 0) {
-      console.warn(
+      logger.warn(
         `[comfyui] reaper: marked ${stale.length} stale QUEUED task(s) as FAILED (older than ${STALE_MS / 1000}s, no promptId)`
       );
     }
   } catch (err) {
-    console.warn("[comfyui] reapStaleQueuedTasks 失败：", err);
+    logger.warn(`[comfyui] reapStaleQueuedTasks 失败：${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -208,11 +209,11 @@ async function reapStaleRunningTasks(): Promise<void> {
         reaperState.reaping.delete(t.id);
       }
     }
-    console.warn(
+    logger.warn(
       `[comfyui] reaper(running): checked ${stale.length} stale RUNNING task(s) (older than ${RUNNING_STALE_MS / 1000}s)`
     );
   } catch (err) {
-    console.warn("[comfyui] reapStaleRunningTasks 失败：", err);
+    logger.warn(`[comfyui] reapStaleRunningTasks 失败：${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

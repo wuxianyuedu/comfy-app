@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
+import { logger } from "~/server/lib/logger";
 import {
   MATERIAL_FOLDERS,
   SHARED_SCOPE,
@@ -141,7 +142,7 @@ export async function GET(req: NextRequest) {
       items,
     });
   } catch (e: any) {
-    console.error(`[materials] GET failed | ${e?.message ?? e}`);
+    logger.error(`[materials] GET failed | ${e?.message ?? e}`);
     return NextResponse.json(
       { error: e?.message ?? "读取素材库失败", folders: [], items: [] },
       { status: 500 }
@@ -228,7 +229,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (e: any) {
-    console.error(`[materials] POST failed | ${e?.message ?? e}`);
+    logger.error(`[materials] POST failed | ${e?.message ?? e}`);
     return NextResponse.json({ error: e?.message ?? "上传失败" }, { status: 500 });
   }
 }
@@ -273,7 +274,7 @@ export async function DELETE(req: NextRequest) {
     }
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    console.error(`[materials] DELETE failed | ${e?.message ?? e}`);
+    logger.error(`[materials] DELETE failed | ${e?.message ?? e}`);
     return NextResponse.json({ error: e?.message ?? "删除失败" }, { status: 500 });
   }
 }

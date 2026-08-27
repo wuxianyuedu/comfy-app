@@ -13,6 +13,7 @@
 
 import { promises as fs } from "fs";
 import { createHash } from "crypto";
+import { logger } from "~/server/lib/logger";
 import {
   detectFormat,
   convertRawToApi,
@@ -124,7 +125,7 @@ export async function parseWorkflowContent(
       result = await convertRawToApi(candidate as unknown as RawWorkflow);
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
-      console.warn("[importSource] /object_info convert failed, using fallback:", errMsg);
+      logger.warn(`[importSource] /object_info convert failed, using fallback: ${errMsg}`);
       result = fallbackRawToApi(candidate as unknown as RawWorkflow);
     }
     apiGraph = result.graph;
@@ -146,7 +147,7 @@ export async function parseWorkflowContent(
     taskType = normalizeTaskType(taskType);
   }
   if (taskType && !VALID_TASK_TYPE_CODES.has(taskType)) {
-    console.log(`[importSource] Unknown taskType "${taskType}", allowing as custom type`);
+    logger.info(`[importSource] Unknown taskType "${taskType}", allowing as custom type`);
   }
 
   const paramMap = detectParamMap(apiGraph);

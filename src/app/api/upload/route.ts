@@ -2,6 +2,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { uploadImage, comfyBase } from "@/lib/comfyui/client";
 import { getServerUser } from "@/lib/auth-server";
+import { logger } from "~/server/lib/logger";
 
 export const runtime = "nodejs";
 
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     const base = comfyBase();
     // Detect common connectivity issues and provide actionable guidance
     if (msg.includes("fetch failed") || msg.includes("ECONNREFUSED") || msg.includes("ENOTFOUND")) {
-      console.error(
+      logger.error(
         `[upload] 503 ComfyUI unreachable — ${base} | error: ${msg} | file: ${filename} (${(buf.length/1024).toFixed(0)}KB)`
       );
       return NextResponse.json(
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
       );
     }
     // Log other upload errors too
-    console.error(`[upload] ${msg} | file: ${filename}`);
+    logger.error(`[upload] ${msg} | file: ${filename}`);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

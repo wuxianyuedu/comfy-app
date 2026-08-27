@@ -3,6 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import type { Prisma } from "../../../../generated/prisma";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
+import { logger } from "~/server/lib/logger";
 import {
   workflowTemplateRepository,
   workflowModelTagRepository,
@@ -205,7 +206,7 @@ export const workflowRouter = createTRPCRouter({
             diskMtimeByPath.set(pathKey(hit.absPath), hit.mtimeMs);
             renamedFromTo.set(w.id, `${oldName} → ${newName}`);
           } catch (e: any) {
-            console.warn(`[workflow.list] relink failed for ${w.id}: ${e?.message ?? e}`);
+            logger.warn(`[workflow.list] relink failed for ${w.id}: ${e?.message ?? e}`);
           }
         }
       }
@@ -443,7 +444,7 @@ export const workflowRouter = createTRPCRouter({
         try {
           result = await convertRawToApi(candidate);
         } catch (e: any) {
-          console.warn("[workflow] /object_info convert failed, using fallback:", e?.message);
+          logger.warn("[workflow] /object_info convert failed, using fallback:", e?.message);
           result = fallbackRawToApi(candidate);
         }
         apiGraph = result.graph;
@@ -471,7 +472,7 @@ export const workflowRouter = createTRPCRouter({
         taskType = normalizeTaskType(taskType);
       }
       if (taskType && !VALID_TASK_TYPE_CODES.has(taskType)) {
-        console.log(`[workflow] Unknown taskType "${taskType}", allowing as custom type`);
+        logger.info(`[workflow] Unknown taskType "${taskType}", allowing as custom type`);
       }
 
       const paramMap = detectParamMap(apiGraph);

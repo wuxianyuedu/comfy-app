@@ -10,6 +10,7 @@
 // session lifetime.
 
 import { getSettingsSync } from "../app-settings";
+import { logger } from "~/server/lib/logger";
 
 /** How many extra ports to probe when the configured one is unreachable */
 const PROBE_RANGE = 5;
@@ -68,7 +69,7 @@ export async function resolveComfyBase(): Promise<string> {
   // Try configured port first
   if (await probePort(host, configuredPort)) {
     _resolvedBase = `http://${host}:${configuredPort}`;
-    console.log(`[comfyui] Connected on configured port :${configuredPort}`);
+    logger.info(`[comfyui] Connected on configured port :${configuredPort}`);
     return _resolvedBase;
   }
 
@@ -81,7 +82,7 @@ export async function resolveComfyBase(): Promise<string> {
 
       _resolvedBase = `http://${host}:${port}`;
 
-      console.warn(
+      logger.warn(
 
         `[comfyui] Configured port :${configuredPort} unreachable, auto-discovered ComfyUI on :${port}`
 
@@ -95,7 +96,7 @@ export async function resolveComfyBase(): Promise<string> {
 
 
   // All probes failed — fall back to configured value (callers will get 503)
-  console.error(
+  logger.error(
     `[comfyui] Cannot reach ComfyUI on :${configuredPort} or any of [${Array.from({length: PROBE_RANGE}, (_, i) => configuredPort + i + 1).join(", ")}]`
   );
   return raw;

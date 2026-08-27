@@ -12,6 +12,7 @@ import { spawn, type ChildProcess } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import { taskRepository } from "../core/repository";
+import { logger } from "~/server/lib/logger";
 import {
   getView,
   getHistory,
@@ -103,7 +104,7 @@ export async function connect(): Promise<void> {
   ws.on("error", (err: Error) => {
     // 某些 ComfyUI 版本 / 网络下 error 之后不一定再发 close，
     // 这里兜底触发重连，否则队列会卡死在 RUNNING。
-    console.warn(`[comfyui] WS(${path}) 出错：${err?.message ?? err}`);
+    logger.warn(`[comfyui] WS(${path}) 出错：${err?.message ?? err}`);
     // 连接阶段（未 open）就失败：换下一条 WS 路径重试一次。
     if (!opened) s.wsPathIndex += 1;
     handleWsDrop(ws);
@@ -1375,7 +1376,7 @@ function startHeartbeat() {
         void processQueue();
       }
     } catch (err) {
-      console.warn("[comfyui] heartbeat processQueue 失败：", err);
+      logger.warn(`[comfyui] heartbeat processQueue 失败：${err instanceof Error ? err.message : String(err)}`);
     }
   }, HEARTBEAT_MS);
 }
