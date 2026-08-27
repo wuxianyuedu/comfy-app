@@ -295,6 +295,14 @@ const LogRow = memo(function LogRow({
       >
         {renderLogMessage(entry.message)}
       </span>
+      {entry.location && (
+        <span
+          className="max-w-[200px] shrink-0 truncate text-[11px] text-gray-600 hover:text-gray-400"
+          title={entry.location}
+        >
+          {entry.location}
+        </span>
+      )}
       {entry.source !== "console" && (
         <span className="shrink-0 text-[11px] text-gray-600">
           {entry.source}

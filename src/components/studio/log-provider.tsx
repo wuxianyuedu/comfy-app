@@ -22,6 +22,8 @@ export interface LogEntry {
   message: string;
   /** Where the log came from */
   source: "console" | "tauri" | "system";
+  /** Caller location (file:line) for console logs */
+  location?: string;
 }
 
 export type LogFilter = LogLevel | "all";
@@ -88,6 +90,76 @@ function serializeOne(a: unknown): string {
 
 function serialize(args: unknown[]): string {
   return args.map(serializeOne).join(" ");
+}
+
+/**
+ * 从调用栈中定位真正的业务调用方。
+ * 拦截 console.* 时，栈顶是 log-provider 自己的包装函数，需要跳过；
+ * 再跳过 React / Next.js / Tauri 等框架帧，返回第一个业务代码位置。
+ */
+function captureLocation(): string | undefined {
+  try {
+    const stack = new Error().stack;
+    if (!stack) return undefined;
+
+    const loggerSelfRe = /log-provider\.(tsx|ts|jsx|js)/;
+    const frameworkRe =
+      /node_modules|react-dom|react\.production|react\.development|next\/(?:dist|server|client)|@tauri-apps|scheduler|webpack[\/](?:runtime|bootstrap)|\[native code\]/i;
+
+    const lines = stack.split("\n");
+    for (let pass = 0; pass < 2; pass++) {
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (!line?.startsWith("at ")) continue;
+        if (loggerSelfRe.test(line)) continue;
+        if (pass === 0 && frameworkRe.test(line)) continue;
+
+        // 取 frame 中的位置部分：优先用最后一个 (...) 里的内容，否则取整行
+        const parenMatch = /\(([^)]+)\)\s*$/.exec(line);
+        const loc = parenMatch ? parenMatch[1] : line.replace(/^at\s+/, "");
+        if (!loc) continue;
+
+        // 位置段末尾一定是 :line:col，取最后两个冒号分割
+        const lastColon = loc.lastIndexOf(":");
+        if (lastColon <= 0) continue;
+        const secondLastColon = loc.lastIndexOf(":", lastColon - 1);
+        const lineNo =
+          secondLastColon >= 0
+            ? loc.slice(secondLastColon + 1, lastColon)
+            : loc.slice(lastColon + 1);
+        let path =
+          secondLastColon >= 0
+            ? loc.slice(0, secondLastColon)
+            : loc.slice(0, lastColon);
+
+        // 清理常见前缀 / 协议
+        path = path.replace(/^webpack-internal:\/\/\/\.\//, "");
+        path = path.replace(/^webpack-internal:\/+/i, "");
+        path = path.replace(/^file:\/\/\//, "");
+        path = path.replace(/^https?:\/\/[^/]+\/_next\/static\/chunks\//, "");
+        path = path.replace(/^https?:\/\/[^/]+\//, "");
+
+        if (
+          pass === 1 &&
+          (path.includes("node_modules") || path.endsWith(".js"))
+        ) {
+          // 兜底帧来自 node_modules/chunks，只保留文件名
+          path = path.replace(/^.*\//, "");
+        }
+
+        // 取 /src/ 之后的路径作为最简可读形式
+        const srcIdx = path.indexOf("/src/");
+        if (srcIdx !== -1) path = path.slice(srcIdx + 1);
+
+        if (path && /^\d+$/.test(lineNo) && !/^\d+$/.test(path)) {
+          return `${path}:${lineNo}`;
+        }
+      }
+    }
+  } catch {
+    // 解析失败不应影响日志记录
+  }
+  return undefined;
 }
 
 /**
@@ -182,7 +254,7 @@ function formatForClipboard(entries: LogEntry[]): string {
   return entries
     .map(
       (e) =>
-        `[${formatTime(e.time, { alwaysDate: true })}] [${e.level.toUpperCase()}] ${e.message}`,
+        `[${formatTime(e.time, { alwaysDate: true })}] [${e.level.toUpperCase()}]${e.location ? ` [${e.location}]` : ""} ${e.message}`,
     )
     .join("\n");
 }
@@ -239,7 +311,13 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       (...args: unknown[]) => {
         originals[level](...args);
         if (isReactQueryLog(args)) return;
-        addEntry({ level, message: serialize(args), source: "console" });
+        const location = captureLocation();
+        addEntry({
+          level,
+          message: serialize(args),
+          source: "console",
+          location,
+        });
       };
 
     console.log = makeLogger("info");
@@ -388,7 +466,10 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     const needle = search.trim().toLowerCase();
     return logs.filter((entry) => {
       const levelOk = filter === "all" || entry.level === filter;
-      const searchOk = !needle || entry.message.toLowerCase().includes(needle);
+      const searchOk =
+        !needle ||
+        entry.message.toLowerCase().includes(needle) ||
+        entry.location?.toLowerCase().includes(needle);
       return levelOk && searchOk;
     });
   }, [logs, filter, search]);
