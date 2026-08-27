@@ -1,7 +1,8 @@
 # Comfy-APP-T3 商业级项目开发规范
 
 > 版本：v1.0 ｜ 适用仓库：`F:\AI\Other\Comfy-APP-T3` ｜ 维护者：yuedu
-> 本规范是项目开发、评审、提交的强制性基准；与既有《Comfy-APP-T3-命名规范》《Comfy-APP-T3-命名审计报告》《docs/TESTING.md》配套使用。
+> 本规范是项目开发、评审、提交的强制性基准；与既有《Comfy-APP-T3-命名规范》《Comfy-APP-T3-命名审计报告》《docs/guides/TESTING.md》配套使用。
+> 前端工程深度细则见《前端工程规范文档集》（docs/standards/，README + 01~15 章）；与文档集的章节映射、冲突处理见统一索引 [docs/README.md](../README.md)。
 
 ---
 
@@ -293,7 +294,7 @@ git -c core.autocrlf=false -c filter.lfs.process= -c filter.lfs.clean= -c filter
 | 单测 | `pnpm test`（vitest） | 全绿；纯函数必须覆盖 |
 | 生产构建 | `pnpm build`（next build） | 涉及构建链改动时必跑 |
 
-- 单测聚焦纯函数与可单元化的业务逻辑（见 `docs/TESTING.md`）；API 文档由 `pnpm docs`（typedoc）生成。
+- 单测聚焦纯函数与可单元化的业务逻辑（见 `docs/guides/TESTING.md`）；API 文档由 `pnpm docs`（typedoc）生成。
 - 提交门槛最低要求：`typecheck` + 相关单测通过。
 
 ---
@@ -314,7 +315,7 @@ git -c core.autocrlf=false -c filter.lfs.process= -c filter.lfs.clean= -c filter
 |---|---|---|
 | 项目开发规范（本文档） | `docs/` | 架构/规范变更时 |
 | 命名规范 | 项目 docs 或 output 归档 | 命名规则变更时 |
-| 测试说明 | `docs/TESTING.md` | 测试体系变更时 |
+| 测试说明 | `docs/guides/TESTING.md` | 测试体系变更时 |
 | API 文档 | `docs/api`（typedoc 生成） | `pnpm docs` 随构建链更新 |
 
 - 代码行为变更必须同步相关文档；文档与代码同提交。
