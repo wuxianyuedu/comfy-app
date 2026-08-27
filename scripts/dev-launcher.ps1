@@ -34,7 +34,8 @@
 #   隔离，缓存键版本虽已升到 v2 永久作废旧缓存，但关掉旧 tab 是最直观的保险）。
 
 param(
-  [switch]$Tauri   # 传 -Tauri 时启动 Tauri 桌面壳（pnpm tauri dev），否则启动 Web dev server
+  [switch]$Tauri,    # 传 -Tauri 时启动 Tauri 桌面壳（pnpm tauri dev），完整 Rust 热重载但启动慢
+  [switch]$Prebuilt  # 传 -Prebuilt 时直接启动预编译的 Tauri 壳（窗口秒出），后台再启动 next dev
 )
 
 $ErrorActionPreference = "Stop"
@@ -236,28 +237,71 @@ public class WJ {
   [System.Runtime.InteropServices.Marshal]::FreeHGlobal($m)
   Write-Log "已设置「关闭窗口自动终止所有子进程」标志" -Level OK
 
-  # ── 第四步：启动开发服务器（npm run dev，显式绑定 3000）──
-  $psi = New-Object System.Diagnostics.ProcessStartInfo
-  $psi.FileName = "cmd.exe"
-  if ($Tauri) {
-    # Tauri 桌面壳：tauri CLI 会先跑 beforeDevCommand（pnpm dev）再弹桌面窗口；
-    # 整棵进程树都在本 Job Object 内，关闭窗口自动全清
-    $psi.Arguments = "/c pnpm tauri dev"
-  } else {
-    # Web 模式：显式 -p 3000，端口已在上一步清干净，保证新实例一定落在 3000
-    $psi.Arguments = "/c npm run dev -- -p 3000"
-  }
-  $psi.WorkingDirectory = (Get-Location).Path
-  $psi.UseShellExecute = $false
-  $p = [System.Diagnostics.Process]::Start($psi)
-  Write-Log ("开发服务器进程已启动（PID: {0}）" -f $p.Id) -Level OK
+  # ── 第四步：启动进程 ──
+  $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
-  # 把进程绑到 Job 对象
-  $null = [WJ]::AssignProcessToJobObject($h, $p.Handle)
-  Write-Log "进程已绑定到 Job Object（关窗口时一起清理）" -Level OK
+  if ($Prebuilt) {
+    # Prebuilt 模式：先启动 next dev，再立刻启动预编译 Tauri 壳，窗口秒出。
+    $psiDev = New-Object System.Diagnostics.ProcessStartInfo
+    $psiDev.FileName = "cmd.exe"
+    $psiDev.Arguments = "/c npm run dev -- -p 3000"
+    $psiDev.WorkingDirectory = $root
+    $psiDev.UseShellExecute = $false
+    $psiDev.CreateNoWindow = $true
+    $devProc = [System.Diagnostics.Process]::Start($psiDev)
+    Write-Log ("Next.js dev server 已启动（PID: {0}）" -f $devProc.Id) -Level OK
+    $null = [WJ]::AssignProcessToJobObject($h, $devProc.Handle)
+
+    $tauriExe = Join-Path $root "src-tauri\target\debug\app.exe"
+    if (-not (Test-Path $tauriExe)) {
+      $tauriExe = Join-Path $root "src-tauri\target\release\app.exe"
+    }
+    if (-not (Test-Path $tauriExe)) {
+      throw "找不到预编译 Tauri 壳：src-tauri\target\debug\app.exe（或 release）。请先执行 cargo build 或 pnpm tauri build。"
+    }
+
+    $psiTauri = New-Object System.Diagnostics.ProcessStartInfo
+    $psiTauri.FileName = $tauriExe
+    $psiTauri.WorkingDirectory = $root
+    $psiTauri.UseShellExecute = $false
+    $psiTauri.Environment["COMFYAPP_PROJECT_ROOT"] = $root
+    $psiTauri.Environment["COMFYAPP_DEV_URL"] = "http://localhost:3000/workspace"
+    $tauriProc = [System.Diagnostics.Process]::Start($psiTauri)
+    Write-Log ("预编译 Tauri 壳已启动（PID: {0}）：{1}" -f $tauriProc.Id, $tauriExe) -Level OK
+    $null = [WJ]::AssignProcessToJobObject($h, $tauriProc.Handle)
+    Write-Log "Tauri 壳与 dev server 已绑定到同一 Job Object（关闭窗口时一起清理）" -Level OK
+    $p = $devProc  # 后续 WaitForExit 以 dev server 为主
+  } else {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = "cmd.exe"
+    if ($Tauri) {
+      # Tauri 桌面壳：tauri CLI 会先跑 beforeDevCommand（pnpm dev）再弹桌面窗口；
+      # 整棵进程树都在本 Job Object 内，关闭窗口自动全清
+      $psi.Arguments = "/c pnpm tauri dev"
+    } else {
+      # Web 模式：显式 -p 3000，端口已在上一步清干净，保证新实例一定落在 3000
+      $psi.Arguments = "/c npm run dev -- -p 3000"
+    }
+    $psi.WorkingDirectory = (Get-Location).Path
+    $psi.UseShellExecute = $false
+    $p = [System.Diagnostics.Process]::Start($psi)
+    Write-Log ("开发服务器进程已启动（PID: {0}）" -f $p.Id) -Level OK
+
+    # 把进程绑到 Job 对象
+    $null = [WJ]::AssignProcessToJobObject($h, $p.Handle)
+    Write-Log "进程已绑定到 Job Object（关窗口时一起清理）" -Level OK
+  }
 
   # ── 第五步：显示启动摘要，等待进程退出 ──
-  if ($Tauri) {
+  if ($Prebuilt) {
+    Show-Summary -Title "Comfy-APP 预编译桌面壳已启动" -Lines @(
+      "模式   : 预编译 Tauri 壳（窗口秒出）",
+      "dev    : PID $($devProc.Id)",
+      "tauri  : PID $($tauriProc.Id)",
+      "地址   : http://localhost:3000",
+      "停止   : 关闭桌面窗口（自动清理全部子进程）"
+    )
+  } elseif ($Tauri) {
     Show-Summary -Title "Comfy-APP 桌面壳（Tauri）已启动" -Lines @(
       "模式   : Tauri 桌面壳",
       "PID    : $($p.Id)",
@@ -277,11 +321,15 @@ public class WJ {
   #   普通重启时 Next 的 HMR 会自动重载已有标签页；这里额外自动开浏览器，
   #   让你连地址都不用敲。SKIP_CLEAN=1 时复用现有标签页（Next HMR 自动重载）；
   #   默认路径会带缓存破坏参数开新标签页，避免旧 chunk + 旧 sessionStorage 残留。
-  # Tauri 模式：桌面窗口由 tauri CLI 负责弹出，无需开浏览器；
-  # 但仍探测 Next.js dev server 就绪，让 launcher/启动页能推进到"服务已就绪"。
-  if ($Tauri) {
-    Write-Log "Tauri 模式：等待 tauri dev 编译并弹出桌面窗口..." -Level STEP
-    Write-Log "等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
+  # Prebuilt/Tauri 模式：桌面窗口已秒出，只需探测 Next.js dev server 就绪，
+  # 让 launcher/启动页能把进度推进到"服务已就绪"。
+  if ($Prebuilt -or $Tauri) {
+    if ($Prebuilt) {
+      Write-Log "预编译 Tauri 壳窗口已弹出，等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
+    } else {
+      Write-Log "Tauri 模式：等待 tauri dev 编译并弹出桌面窗口..." -Level STEP
+      Write-Log "等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
+    }
     $ready = $false
     for ($i = 0; $i -lt 180; $i++) {
       try {

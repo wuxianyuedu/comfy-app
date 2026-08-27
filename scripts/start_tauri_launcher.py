@@ -382,7 +382,8 @@ LAUNCH_PHASES = {
     "cache": {"progress": 0.20, "message": "处理 .next 编译缓存…"},
     "job-object": {"progress": 0.35, "message": "创建 Windows 进程容器…"},
     "dev-server-starting": {"progress": 0.45, "message": "开发服务器进程已启动"},
-    "tauri-compiling": {"progress": 0.55, "message": "等待 Tauri 桌面壳编译并弹出窗口…"},
+    "tauri-compiling": {"progress": 0.55, "message": "等待 Tauri 桌面壳启动…"},
+    "tauri-shell-started": {"progress": 0.58, "message": "Tauri 桌面壳已启动，等待服务就绪…"},
     "dev-server-ready": {"progress": 0.85, "message": "本地服务已就绪，正在加载应用…"},
     "ready": {"progress": 1.0, "message": "启动完成"},
     "error": {"progress": 1.0, "message": "启动失败"},
@@ -1130,7 +1131,7 @@ class SplashWindow:
 # ═══════════════════════════════════════════════════════════════════════════════
 #  启动 dev-launcher.ps1
 # ═══════════════════════════════════════════════════════════════════════════════
-def launch_dev_server(project_root: str) -> "subprocess.Popen[str] | None":
+def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.Popen[str] | None":
     ps1 = os.path.join(project_root, "scripts", "dev-launcher.ps1")
     if not os.path.isfile(ps1):
         log(f"dev-launcher.ps1 not found: {ps1}")
@@ -1146,13 +1147,19 @@ def launch_dev_server(project_root: str) -> "subprocess.Popen[str] | None":
         return None
 
     log(f"using shell: {shell_name} ({pwsh})")
-    log(f"launching {ps1} -Tauri")
+
+    if mode == "tauri":
+        ps_args = ["-Tauri"]
+        log(f"launching {ps1} -Tauri")
+    else:
+        ps_args = ["-Prebuilt"]
+        log(f"launching {ps1} -Prebuilt")
 
     # 启动 PowerShell 隐藏窗口；stdin 也关闭避免句柄泄漏
     try:
         return subprocess.Popen(
             [pwsh, "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
-             "-File", ps1, "-Tauri"],
+             "-File", ps1] + ps_args,
             cwd=project_root,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -1217,6 +1224,8 @@ def _monitor_headless(
         "清空 .next": "cache",
         "创建 Windows Job Object": "job-object",
         "开发服务器进程已启动": "dev-server-starting",
+        "Next.js dev server 已启动": "dev-server-starting",
+        "预编译 Tauri 壳已启动": "tauri-shell-started",
         "等待 tauri dev 编译": "tauri-compiling",
         "服务器已就绪": "dev-server-ready",
     }
@@ -1357,14 +1366,16 @@ def _fatal_box(message: str, title: str = f"{APP_TITLE} 启动器") -> int:
 
 
 def _parse_args(argv: list[str]) -> dict[str, bool | str]:
-    # 默认不显示 Python 小弹窗：启动过程改由 Tauri 主窗口内嵌页展示。
-    args: dict[str, bool | str] = {"splash": False, "focus": True}
+    # 默认使用预编译 Tauri 壳（窗口秒出）；--tauri-dev 走旧版 tauri dev（慢，但支持 Rust 热重载）。
+    args: dict[str, bool | str] = {"splash": False, "focus": True, "tauri_dev": False}
     for arg in argv[1:]:
         a = arg.lower().lstrip("-/")
         if a in ("splash",):
             args["splash"] = True
         elif a in ("no-splash", "nosplash"):
             args["splash"] = False
+        elif a in ("tauri-dev", "tauridev", "dev-build"):
+            args["tauri_dev"] = True
         elif a in ("no-focus", "nofocus"):
             args["focus"] = False
         elif a in ("help", "h", "?"):
@@ -1381,10 +1392,11 @@ def main(argv: list[str] | None = None) -> int:
         user32.MessageBoxW(
             0,
             "用法：start-tauri.exe [选项]\n\n"
-            "  默认         不显示 Python 小弹窗，由 Tauri 主窗口展示启动进度\n"
-            "  --splash     启用旧版 Win32 启动小弹窗（调试用）\n"
-            "  --no-focus   发现已有窗口时不置顶\n"
-            "  --help       显示此帮助",
+            "  默认          使用预编译 Tauri 壳（窗口秒出）\n"
+            "  --tauri-dev   走旧版 tauri dev（慢，但支持 Rust 热重载）\n"
+            "  --splash      启用旧版 Win32 启动小弹窗（调试用）\n"
+            "  --no-focus    发现已有窗口时不置顶\n"
+            "  --help        显示此帮助",
             f"{APP_TITLE} 启动器",
             MB_OK,
         )
@@ -1437,13 +1449,17 @@ def main(argv: list[str] | None = None) -> int:
         close_logging()
         return 0
 
-    # 把项目根目录传给 Tauri 侧，让 Rust 能找到 launch-status.json
+    # 把项目根目录与目标 URL 传给 Tauri 侧，让 Rust 能找到 launch-status.json 并正确导航。
     os.environ["COMFYAPP_PROJECT_ROOT"] = project_root
+    os.environ["COMFYAPP_DEV_URL"] = "http://localhost:3000/workspace"
+
+    # 启动模式：默认预编译壳（秒出窗口）；--splash / --tauri-dev 走旧版 tauri dev。
+    mode = "tauri" if (args.get("splash") or args.get("tauri_dev")) else "prebuilt"
 
     if not args.get("splash", True):
         # 默认模式：不显示 Python 小弹窗，启动过程由 Tauri 主窗口内嵌页展示。
         # launcher 负责 tail dev-launcher.log 并把进度写入 run/launch-status.json。
-        proc = launch_dev_server(project_root)
+        proc = launch_dev_server(project_root, mode=mode)
         if proc is None:
             if mutex:
                 kernel32.CloseHandle(mutex)
@@ -1470,7 +1486,7 @@ def main(argv: list[str] | None = None) -> int:
         close_logging()
         return _fatal_box("无法创建启动画面窗口。")
 
-    proc = launch_dev_server(project_root)
+    proc = launch_dev_server(project_root, mode=mode)
     if proc is None:
         splash.set_error("无法找到 PowerShell / pwsh，请安装后重试")
         splash.close_later(5000)

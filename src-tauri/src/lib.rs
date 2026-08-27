@@ -164,8 +164,10 @@ fn resolve_project_root() -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let project_root = resolve_project_root();
-  // 开发模式默认跳本地 Next.js dev server；生产模式在 spawn_sidecar 中更新为实际 sidecar 端口。
-  let app_url = "http://localhost:3000/workspace".to_string();
+  // 开发模式默认跳本地 Next.js dev server；可由 launcher 通过环境变量注入。
+  // 生产模式在 spawn_sidecar 中更新为实际 sidecar 端口。
+  let app_url = std::env::var("COMFYAPP_DEV_URL")
+    .unwrap_or_else(|_| "http://localhost:3000/workspace".to_string());
 
   let app = tauri::Builder::default()
     .manage(AppState::new(project_root, app_url))
