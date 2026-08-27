@@ -186,11 +186,24 @@
     }
 
     let navigating = false;
+    let statusMisses = 0;
+    const isDevLocalhost = window.location.hostname === 'localhost' && window.location.port === '3000';
 
     async function tick() {
       if (navigating) return;
       const status = await fetchStatus();
-      if (!status) return;
+
+      if (!status) {
+        statusMisses++;
+        // Fallback：在开发模式下，如果连续 5 秒拿不到状态文件（launcher 未传环境变量），
+        // 而 splash.html 本身已经能加载，说明 dev server 已好，直接跳主应用。
+        if (isDevLocalhost && statusMisses >= 20) {
+          navigating = true;
+          window.location.replace('/workspace');
+        }
+        return;
+      }
+      statusMisses = 0;
 
       const progress = Math.max(0, Math.min(1, status.progress || 0));
       const pct = Math.round(progress * 100);
