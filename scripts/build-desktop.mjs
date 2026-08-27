@@ -20,6 +20,7 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -78,32 +79,21 @@ if (existsSync(join(root, "public"))) {
   cpSync(join(root, "public"), join(staticDir, "public"), { recursive: true });
 }
 
-// sidecar 就绪前的过渡加载页（Rust 侧 navigate 到本地服务前的短暂展示）
-writeFileSync(
-  join(staticDir, "index.html"),
-  `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Comfy APP</title>
-<style>
-  html, body { margin: 0; height: 100%; background: #0f1117; color: #e5e7eb; font-family: system-ui, "Segoe UI", sans-serif; display: flex; align-items: center; justify-content: center; }
-  .box { text-align: center; }
-  .spinner { width: 36px; height: 36px; margin: 0 auto 16px; border: 3px solid #374151; border-top-color: #60a5fa; border-radius: 50%; animation: spin 1s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-</style>
-</head>
-<body>
-  <div class="box">
-    <div class="spinner"></div>
-    <div>Comfy APP 正在启动本地服务…</div>
-  </div>
-</body>
-</html>
-`,
-  "utf8",
-);
-console.log("[build-desktop]   static 组装完成（standalone + .next/static + public + index.html）");
+// 启动页：Tauri 窗口初始 URL 为 splash.html（tauri.conf.json windows[0].url）。
+// public/splash.html 在 Next.js dev 模式下由 localhost:3000/splash.html 服务；
+// 生产构建时把它复制到 static 根，让 Tauri 内置服务器直接提供。
+const splashSrc = join(root, "public", "splash.html");
+if (existsSync(splashSrc)) {
+  copyFileSync(splashSrc, join(staticDir, "splash.html"));
+}
+
+// fallback index.html：与 splash.html 内容一致，避免直接访问根路径时出现旧 spinner
+const splashHtml = existsSync(splashSrc) ? readFileSync(splashSrc, "utf8") : `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Comfy APP</title></head>
+<body style="background:#0A0A0F;color:#E5E5E7;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui,sans-serif;">Comfy APP 正在启动…</body></html>`;
+writeFileSync(join(staticDir, "index.html"), splashHtml, "utf8");
+
+console.log("[build-desktop]   static 组装完成（standalone + .next/static + public + splash.html + index.html fallback）");
 
 // ── 3/4 Node 运行时 sidecar ────────────────────────────────
 console.log("[build-desktop] 3/4 复制 Node 运行时为 sidecar ...");

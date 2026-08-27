@@ -277,9 +277,24 @@ public class WJ {
   #   普通重启时 Next 的 HMR 会自动重载已有标签页；这里额外自动开浏览器，
   #   让你连地址都不用敲。SKIP_CLEAN=1 时复用现有标签页（Next HMR 自动重载）；
   #   默认路径会带缓存破坏参数开新标签页，避免旧 chunk + 旧 sessionStorage 残留。
-  # Tauri 模式：桌面窗口由 tauri CLI 负责弹出，无需开浏览器、无需端口就绪探测
+  # Tauri 模式：桌面窗口由 tauri CLI 负责弹出，无需开浏览器；
+  # 但仍探测 Next.js dev server 就绪，让 launcher/启动页能推进到"服务已就绪"。
   if ($Tauri) {
     Write-Log "Tauri 模式：等待 tauri dev 编译并弹出桌面窗口..." -Level STEP
+    Write-Log "等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
+    $ready = $false
+    for ($i = 0; $i -lt 180; $i++) {
+      try {
+        $r = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 1 -UseBasicParsing -ErrorAction SilentlyContinue
+        if ($r.StatusCode -eq 200) { $ready = $true; break }
+      } catch { }
+      Start-Sleep -Seconds 1
+    }
+    if ($ready) {
+      Write-Log "服务器已就绪（Tauri 桌面壳加载中）" -Level OK
+    } else {
+      Write-Log "180 秒内未检测到服务就绪，Tauri 仍在编译中，请稍候" -Level WARN
+    }
   } elseif ($env:NO_OPEN -ne "1") {
     Write-Log "等待服务器就绪（http://127.0.0.1:3000）..." -Level STEP
     $ready = $false

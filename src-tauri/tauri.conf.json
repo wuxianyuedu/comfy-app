@@ -20,7 +20,8 @@
         "center": true,
         "resizable": true,
         "fullscreen": false,
-        "backgroundColor": "#0A0A0F"
+        "backgroundColor": "#0A0A0F",
+        "url": "splash.html"
       }
     ],
     "security": {

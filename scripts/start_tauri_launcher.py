@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import os
 import sys
+import json
 import time
 import math
 import shutil
@@ -122,8 +123,8 @@ GRAY = 0xAF9CA3  # #9CA3AF in BGR
 GRAY_DIM = 0x80726B  # #6B7280 in BGR
 ERROR_RED = 0x4444EF  # #EF4444 in BGR
 
-SPLASH_W = 420
-SPLASH_H = 170
+SPLASH_W = 520
+SPLASH_H = 210
 
 APP_TITLE = "Comfy APP"
 APP_WINDOW_TITLE = "Comfy APP"
@@ -367,6 +368,73 @@ def _safe_remove(path: str) -> None:
     except Exception:
         pass
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  启动状态文件（供 Tauri 内嵌启动页读取）
+# ═══════════════════════════════════════════════════════════════════════════════
+STATUS_FILE = "launch-status.json"  # 位于 <project_root>/run/ 下
+
+LAUNCH_PHASES = {
+    "initial": {"progress": 0.0, "message": "启动器正在初始化…"},
+    "port-check": {"progress": 0.05, "message": "检查端口占用…"},
+    "port-ready": {"progress": 0.10, "message": "端口已就绪"},
+    "cache": {"progress": 0.20, "message": "处理 .next 编译缓存…"},
+    "job-object": {"progress": 0.35, "message": "创建 Windows 进程容器…"},
+    "dev-server-starting": {"progress": 0.45, "message": "开发服务器进程已启动"},
+    "tauri-compiling": {"progress": 0.55, "message": "等待 Tauri 桌面壳编译并弹出窗口…"},
+    "dev-server-ready": {"progress": 0.85, "message": "本地服务已就绪，正在加载应用…"},
+    "ready": {"progress": 1.0, "message": "启动完成"},
+    "error": {"progress": 1.0, "message": "启动失败"},
+    "timeout": {"progress": 1.0, "message": "启动时间较长，但仍在进行中…"},
+}
+
+
+def _status_file_path(project_root: str) -> str:
+    return os.path.join(project_root, "run", STATUS_FILE)
+
+
+def _write_status(
+    project_root: str,
+    phase: str,
+    message: str = "",
+    *,
+    ready: bool = False,
+    error: bool = False,
+    elapsed: float = 0.0,
+    app_url: str = "http://localhost:3000/workspace",
+) -> None:
+    """把当前启动状态写入 <project_root>/run/launch-status.json。
+
+    Tauri 内嵌启动页通过调用 Rust command 读取该文件并展示进度。
+    """
+    try:
+        info = LAUNCH_PHASES.get(phase, LAUNCH_PHASES["initial"])
+        payload = {
+            "phase": phase,
+            "progress": info["progress"],
+            "message": message or info["message"],
+            "elapsed": round(elapsed, 1),
+            "ready": ready,
+            "error": error,
+            "app_url": app_url,
+            "updated_at": datetime.now().isoformat(),
+        }
+        path = _status_file_path(project_root)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=None)
+            f.flush()
+            os.fsync(f.fileno())
+    except Exception as exc:
+        log(f"write_status error: {exc}")
+
+
+def _cleanup_status(project_root: str) -> None:
+    try:
+        _safe_remove(_status_file_path(project_root))
+    except Exception:
+        pass
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -822,39 +890,40 @@ class SplashWindow:
         # 文字
         gdi32.SetBkMode(hdc, TRANSPARENT)
 
-        title_font = self._create_font(hdc, 20, bold=True)
+        title_font = self._create_font(hdc, 18, bold=True)
         old_font = gdi32.SelectObject(hdc, title_font)
         gdi32.SetTextColor(hdc, VIOLET if self._status != "error" else ERROR_RED)
 
         title_rc = RECT()
         title_rc.left = pad + 24
-        title_rc.top = pad + 22
+        title_rc.top = pad + 20
         title_rc.right = w - pad - 50  # 给关闭按钮留空
-        title_rc.bottom = title_rc.top + 32
+        title_rc.bottom = title_rc.top + 28
         user32.DrawTextW(hdc, self._title, -1, ctypes.byref(title_rc),
                          DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
         gdi32.SelectObject(hdc, old_font)
         gdi32.DeleteObject(title_font)
 
-        sub_font = self._create_font(hdc, 12)
+        sub_font = self._create_font(hdc, 11)
         old_font = gdi32.SelectObject(hdc, sub_font)
         gdi32.SetTextColor(hdc, GRAY)
         sub_rc = RECT()
         sub_rc.left = pad + 24
-        sub_rc.top = pad + 58
+        sub_rc.top = pad + 52
         sub_rc.right = w - pad - 24
-        sub_rc.bottom = sub_rc.top + 22
+        sub_rc.bottom = sub_rc.top + 20
         user32.DrawTextW(hdc, self._subtitle, -1, ctypes.byref(sub_rc),
                          DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
 
+        # 阶段消息：允许多行折行，显示更多日志内容
         msg_rc = RECT()
         msg_rc.left = pad + 24
-        msg_rc.top = pad + 118
+        msg_rc.top = pad + 108
         msg_rc.right = w - pad - 24
-        msg_rc.bottom = msg_rc.top + 18
+        msg_rc.bottom = msg_rc.top + 44
         gdi32.SetTextColor(hdc, GRAY_DIM)
         user32.DrawTextW(hdc, self._msg, -1, ctypes.byref(msg_rc),
-                         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
+                         DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX)
 
         # 已用时间（右下角）
         elapsed = time.time() - self._start_time
@@ -970,7 +1039,7 @@ class SplashWindow:
         x, y = self._center_on_cursor_monitor()
 
         self.hwnd = user32.CreateWindowExW(
-            WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+            WS_EX_TOOLWINDOW,
             self._class_name,
             "ComfyAPP Bootstrap",
             WS_POPUP | WS_VISIBLE,
@@ -1125,6 +1194,156 @@ def monitor(proc: "subprocess.Popen[str] | None", splash: SplashWindow):
         splash.close_later(5000, terminate=False)
 
 
+def _monitor_headless(
+    project_root: str,
+    proc: "subprocess.Popen[str] | None",
+    timeout: float = 240.0,
+) -> None:
+    """无启动画面模式：后台 tail dev-launcher.log 并写 run/launch-status.json，
+
+    直到 Tauri 主窗口出现、dev-launcher 异常退出或超时。
+    """
+    start_time = time.time()
+    deadline = start_time + timeout
+    log_path = os.path.join(project_root, "log", "dev-launcher.log")
+    last_size = 0
+    current_phase = "initial"
+    current_message = LAUNCH_PHASES["initial"]["message"]
+
+    log_to_phase = {
+        "检查端口占用": "port-check",
+        "端口已就绪": "port-ready",
+        "配置指纹": "cache",
+        "清空 .next": "cache",
+        "创建 Windows Job Object": "job-object",
+        "开发服务器进程已启动": "dev-server-starting",
+        "等待 tauri dev 编译": "tauri-compiling",
+        "服务器已就绪": "dev-server-ready",
+    }
+
+    def elapsed() -> float:
+        return time.time() - start_time
+
+    def update_from_log(text: str) -> bool:
+        nonlocal current_phase, current_message
+        changed = False
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        if not lines:
+            return False
+        for latest in lines:
+            msg = latest
+            if "[" in latest and "]" in latest:
+                parts = latest.split("]")
+                if len(parts) >= 2:
+                    msg = "]".join(parts[1:]).strip()
+                    msg = msg.lstrip("[]STEP OK WARN ERROR INFO ").strip()
+            for key, phase in log_to_phase.items():
+                if key in latest:
+                    if current_phase != phase:
+                        current_phase = phase
+                        current_message = msg
+                        changed = True
+                    break
+            if "ERROR" in latest or "错误" in latest:
+                current_message = f"⚠ {msg[:80]}"
+                changed = True
+        return changed
+
+    _write_status(project_root, current_phase, message=current_message, elapsed=elapsed())
+
+    try:
+        last_write = 0.0
+        while time.time() < deadline:
+            try:
+                if os.path.isfile(log_path):
+                    size = os.path.getsize(log_path)
+                    if size < last_size:
+                        last_size = 0
+                    if size > last_size:
+                        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                            f.seek(last_size)
+                            text = f.read()
+                        last_size = size
+                        if update_from_log(text):
+                            _write_status(
+                                project_root,
+                                current_phase,
+                                message=current_message,
+                                elapsed=elapsed(),
+                            )
+                            last_write = time.time()
+            except Exception as exc:
+                log(f"headless tail error: {exc}")
+
+            # 至少每秒刷新一次状态文件，让启动页感知存活
+            if time.time() - last_write >= 1.0:
+                _write_status(
+                    project_root,
+                    current_phase,
+                    message=current_message,
+                    elapsed=elapsed(),
+                )
+                last_write = time.time()
+
+            # Tauri 主窗口已出现 -> 启动完成，launcher 可以退出
+            if find_tauri_window():
+                _write_status(
+                    project_root,
+                    "ready",
+                    message="启动完成",
+                    ready=True,
+                    elapsed=elapsed(),
+                )
+                log("tauri window detected, launcher exiting")
+                if proc is not None and proc.poll() is None:
+                    try:
+                        proc.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        pass
+                return
+
+            # dev-launcher 提前退出（异常）
+            if proc is not None and proc.poll() is not None:
+                exit_code = proc.returncode
+                log(f"dev-launcher process exited early with code {exit_code}")
+                _write_status(
+                    project_root,
+                    "error",
+                    message="启动进程已退出，请检查 log/dev-launcher.log",
+                    error=True,
+                    elapsed=elapsed(),
+                )
+                return
+
+            time.sleep(0.5)
+
+        log("headless monitor deadline reached (240s)")
+        if find_tauri_window():
+            _write_status(
+                project_root,
+                "ready",
+                message="启动完成",
+                ready=True,
+                elapsed=elapsed(),
+            )
+        else:
+            _write_status(
+                project_root,
+                "timeout",
+                message="启动时间较长，但仍在进行中，请稍候…",
+                elapsed=elapsed(),
+            )
+    except Exception as exc:
+        log(f"headless monitor error: {exc}")
+        _write_status(
+            project_root,
+            "error",
+            message=f"监控线程异常：{exc}",
+            error=True,
+            elapsed=elapsed(),
+        )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  顶层错误处理与启动入口
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1138,10 +1357,13 @@ def _fatal_box(message: str, title: str = f"{APP_TITLE} 启动器") -> int:
 
 
 def _parse_args(argv: list[str]) -> dict[str, bool | str]:
-    args: dict[str, bool | str] = {"splash": True, "focus": True}
+    # 默认不显示 Python 小弹窗：启动过程改由 Tauri 主窗口内嵌页展示。
+    args: dict[str, bool | str] = {"splash": False, "focus": True}
     for arg in argv[1:]:
         a = arg.lower().lstrip("-/")
-        if a in ("no-splash", "nosplash"):
+        if a in ("splash",):
+            args["splash"] = True
+        elif a in ("no-splash", "nosplash"):
             args["splash"] = False
         elif a in ("no-focus", "nofocus"):
             args["focus"] = False
@@ -1159,9 +1381,10 @@ def main(argv: list[str] | None = None) -> int:
         user32.MessageBoxW(
             0,
             "用法：start-tauri.exe [选项]\n\n"
-            "  --no-splash    不显示启动画面，直接后台启动\n"
-            "  --no-focus     发现已有窗口时不置顶\n"
-            "  --help         显示此帮助",
+            "  默认         不显示 Python 小弹窗，由 Tauri 主窗口展示启动进度\n"
+            "  --splash     启用旧版 Win32 启动小弹窗（调试用）\n"
+            "  --no-focus   发现已有窗口时不置顶\n"
+            "  --help       显示此帮助",
             f"{APP_TITLE} 启动器",
             MB_OK,
         )
@@ -1214,18 +1437,30 @@ def main(argv: list[str] | None = None) -> int:
         close_logging()
         return 0
 
+    # 把项目根目录传给 Tauri 侧，让 Rust 能找到 launch-status.json
+    os.environ["COMFYAPP_PROJECT_ROOT"] = project_root
+
     if not args.get("splash", True):
-        # 无启动画面模式：直接启动进程并立即返回
+        # 默认模式：不显示 Python 小弹窗，启动过程由 Tauri 主窗口内嵌页展示。
+        # launcher 负责 tail dev-launcher.log 并把进度写入 run/launch-status.json。
         proc = launch_dev_server(project_root)
         if proc is None:
             if mutex:
                 kernel32.CloseHandle(mutex)
+            _cleanup_status(project_root)
             close_logging()
             return _fatal_box("无法启动 dev-launcher.ps1，请检查 PowerShell 是否可用。")
-        if mutex:
-            kernel32.ReleaseMutex(mutex)
-            kernel32.CloseHandle(mutex)
-        close_logging()
+        _write_status(project_root, "initial")
+        try:
+            _monitor_headless(project_root, proc)
+        finally:
+            if mutex:
+                kernel32.ReleaseMutex(mutex)
+                kernel32.CloseHandle(mutex)
+            _safe_remove(lock_file)
+            # 保留状态文件 30 秒，让启动页能读到最终 ready；随后清理。
+            threading.Timer(30.0, lambda: _cleanup_status(project_root)).start()
+            close_logging()
         return 0
 
     splash = SplashWindow()
@@ -1254,6 +1489,7 @@ def main(argv: list[str] | None = None) -> int:
             kernel32.ReleaseMutex(mutex)
             kernel32.CloseHandle(mutex)
         _safe_remove(lock_file)
+        _cleanup_status(project_root)
         close_logging()
 
     return 0
