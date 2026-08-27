@@ -23,8 +23,9 @@
 // ❌ 错误：魔法透明度值散落各处
 "bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06]"
 
-// ✅ 方案 A：tailwind.config / @theme 扩展语义色
+// ✅ 方案 A：@theme 扩展语义色（Tailwind v4 用 CSS 配置，见 src/app/globals.css）
 // @theme { --color-surface-1: rgba(255,255,255,0.04); }
+// 组件里用 bg-surface-1 引用，禁止直接写 bg-white/[0.04] 散落各处
 
 // ✅ 方案 B：用 cva 管理变体（推荐用于复用按钮/面板）
 import { cva } from "class-variance-authority";

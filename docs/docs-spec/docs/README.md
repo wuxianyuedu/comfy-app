@@ -1,10 +1,12 @@
 # 前端工程规范文档
 
-> **适用范围**：T3 Stack 项目（Next.js 16 + Tailwind v4 + Zustand 5 + @xyflow/react 12 + Tauri）
+> **适用范围**：T3 Stack 项目（Next.js 16.3 + TypeScript 7 + tRPC 11 + Prisma 6 + better-auth + Tailwind v4 + Zustand 5 + @xyflow/react 12 + Tauri）
 >
-> **版本**：v1.1 | 2026-08-27
+> **版本**：v1.2 | 2026-08-27（审核修订）
 >
 > **目标**：将已验证的架构决策与代码质量问题固化为团队规范，避免重复踩坑；达到商业级覆盖。
+>
+> **与项目开发规范的关系**：本套文档是前端工程细则，总纲以 `docs/Comfy-APP-T3-项目开发规范.md` 为准；两处冲突时以主规范最新版本为准。
 
 ## 快速查阅
 
