@@ -19,7 +19,9 @@ export interface BrowserStatusBarProps {
 }
 
 export function BrowserStatusBar({ status = "就绪" }: BrowserStatusBarProps) {
-  const { isOpen, toggleOpen, counts } = useLogPanel();
+  const isOpen = useLogPanel((s) => s.isOpen);
+  const toggleOpen = useLogPanel((s) => s.toggleOpen);
+  const counts = useLogPanel((s) => s.counts);
   const [url, setUrl] = useState<string>("");
   const [secure, setSecure] = useState(true);
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import {
   useLogPanel,
   type LogEntry,
@@ -313,19 +314,21 @@ const LogRow = memo(function LogRow({
 });
 
 export function LogPanel() {
-  const {
-    filteredLogs,
-    filter,
-    setFilter,
-    search,
-    setSearch,
-    isOpen,
-    setIsOpen,
-    clear,
-    copyAll,
-    download,
-    counts,
-  } = useLogPanel();
+  const { filteredLogs, filter, search, isOpen, counts } = useLogPanel(
+    useShallow((s) => ({
+      filteredLogs: s.filteredLogs,
+      filter: s.filter,
+      search: s.search,
+      isOpen: s.isOpen,
+      counts: s.counts,
+    })),
+  );
+  const setFilter = useLogPanel((s) => s.setFilter);
+  const setSearch = useLogPanel((s) => s.setSearch);
+  const setIsOpen = useLogPanel((s) => s.setIsOpen);
+  const clear = useLogPanel((s) => s.clear);
+  const copyAll = useLogPanel((s) => s.copyAll);
+  const download = useLogPanel((s) => s.download);
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);

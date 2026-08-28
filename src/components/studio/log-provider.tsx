@@ -14,8 +14,12 @@ import {
 
 export type { LogEntry, LogFilter, LogLevel } from "./log-store";
 
-export function useLogPanel(): LogStoreState {
-  return useLogStore();
+/**
+ * 订阅日志 store 的指定字段（规范 07 §7.4：组件只订阅自己需要的字段，
+ * 避免高频日志更新导致所有消费组件 re-render）。
+ */
+export function useLogPanel<T>(selector: (state: LogStoreState) => T): T {
+  return useLogStore(selector);
 }
 
 export function LogProvider({ children }: { children: React.ReactNode }) {
