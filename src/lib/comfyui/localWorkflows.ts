@@ -130,7 +130,7 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
     let entries: string[];
     try {
       entries = fs.readdirSync(dir);
-    } catch (e: any) {
+    } catch {
       out.push({
         absPath: "",
         name: `(无法读取 ${dir})`,

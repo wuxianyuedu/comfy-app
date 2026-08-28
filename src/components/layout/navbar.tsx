@@ -61,7 +61,9 @@ export function Navbar() {
     document.documentElement.classList.toggle("dark", next);
     try {
       localStorage.setItem("theme", next ? "dark" : "light");
-    } catch {}
+    } catch {
+      /* localStorage unavailable (privacy mode / quota) — theme still applies this session */
+    }
   }
 
   return (

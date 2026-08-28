@@ -72,7 +72,9 @@ export async function GET(
         if (e.type === "done" || e.type === "error") {
           try {
             controller.close();
-          } catch {}
+          } catch {
+            /* SSE already closed — ignore */
+          }
           unsub();
         }
       });
@@ -157,13 +159,19 @@ export async function GET(
       req.signal.addEventListener("abort", () => {
         try {
           clearInterval(hbId);
-        } catch {}
+        } catch {
+          /* interval already cleared — ignore */
+        }
         try {
           clearInterval(pollId);
-        } catch {}
+        } catch {
+          /* interval already cleared — ignore */
+        }
         try {
           controller.close();
-        } catch {}
+        } catch {
+          /* stream already closed — ignore */
+        }
         unsub();
       });
     },

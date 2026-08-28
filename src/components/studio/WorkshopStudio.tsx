@@ -128,7 +128,9 @@ export function WorkshopStudio() {
           }
           if (msg.type === "done") es.close();
         }
-      } catch {}
+      } catch {
+        /* malformed SSE frame — ignore this message */
+      }
     };
     es.onerror = () => es.close();
   }

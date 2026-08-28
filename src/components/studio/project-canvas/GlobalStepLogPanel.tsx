@@ -289,7 +289,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const onHandleDown = (e: React.PointerEvent) => {
     if (collapsed) return;
     dragRef.current = { startY: e.clientY, startH: height };
-    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* pointer capture unavailable — drag still works */ }
     document.body.style.cursor = "ns-resize";
     document.body.style.userSelect = "none";
   };
@@ -303,7 +303,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const onHandleUp = (e: React.PointerEvent) => {
     if (!dragRef.current) return;
     dragRef.current = null;
-    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* pointer capture already released — ignore */ }
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
     try {
@@ -321,7 +321,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     const max = Math.floor(window.innerHeight * HEIGHT_MAX_RATIO);
     const next = Math.max(HEIGHT_MIN, Math.min(max, height + delta));
     setHeight(next);
-    try { window.localStorage.setItem(HEIGHT_KEY, String(next)); } catch {}
+    try { window.localStorage.setItem(HEIGHT_KEY, String(next)); } catch { /* localStorage may be disabled — height still applies this session */ }
   };
 
   const levels: Level[] = ["error", "warn", "success", "progress", "info"];
