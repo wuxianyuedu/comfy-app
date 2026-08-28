@@ -487,7 +487,7 @@ function OutputRowPort({
       <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
         <span
           className="min-w-0 truncate text-[12px] font-semibold text-[#EDEDF2]"
-          style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+          style={{ fontFamily: "var(--font-sans)" }}
           title={`IO 输出 · ${outLabel}${outType ? ` · ${outType}` : ""}`}
         >
           {outLabel}
@@ -495,7 +495,7 @@ function OutputRowPort({
         <span
           className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
           style={{
-            fontFamily: "'Inter', system-ui, sans-serif",
+            fontFamily: "var(--font-sans)",
             background: "#26262E",
             color: "#9A9AAD",
           }}

@@ -160,7 +160,7 @@ export function AutoResizeTextarea({
       onChange={(ev) => onChange(ev.target.value)}
       className="nodrag nopan block w-full min-w-0 resize-none overflow-x-hidden rounded-md bg-[#0F0F14] py-2 pl-2.5 pr-3 text-[11px] leading-relaxed text-[#C9C9D6] outline-none placeholder:text-[#5A5A6B]"
       style={{
-        fontFamily: "'Inter', system-ui, sans-serif",
+        fontFamily: "var(--font-sans)",
         boxSizing: "border-box",
         minHeight,
         maxHeight,
@@ -319,7 +319,7 @@ export function WirePortRows({
               />
               <span
                 className="text-[12px] font-medium text-[#EDEDF2]"
-                style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+                style={{ fontFamily: "var(--font-sans)" }}
               >
                 {label}
               </span>
@@ -353,7 +353,7 @@ export function WirePortRows({
               )}
               <span
                 className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
-                style={{ fontFamily: "'Inter', system-ui, sans-serif", ...chipStyle }}
+                style={{ fontFamily: "var(--font-sans)", ...chipStyle }}
               >
                 {normalizeTypeChip(wireInput.type, wireInput.control === "float" ? "FLOAT" : "INT")}
               </span>
@@ -393,13 +393,13 @@ export function WirePortRows({
               <div className="relative flex h-4 shrink-0 items-center justify-between gap-2.5 pl-[14px] pr-[14px]">
                 <span
                   className="text-[12px] font-medium text-[#EDEDF2]"
-                  style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+                  style={{ fontFamily: "var(--font-sans)" }}
                 >
                   {label}
                 </span>
                 <span
                   className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
-                  style={{ fontFamily: "'Inter', system-ui, sans-serif", ...chipStyle }}
+                  style={{ fontFamily: "var(--font-sans)", ...chipStyle }}
                 >
                   {wireInput.type}
                 </span>
@@ -425,7 +425,7 @@ export function WirePortRows({
                     placeholder={`输入 ${label}`}
                     onChange={(ev) => set(wireInput.ioKey, ev.target.value)}
                     className="nodrag nopan h-full w-full rounded-md bg-[#0F0F14] px-2.5 py-2 text-[11px] text-[#C9C9D6] outline-none placeholder:text-[#5A5A6B]"
-                    style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+                    style={{ fontFamily: "var(--font-sans)" }}
                   />
                 )}
                 {wireInput.control === "image" && (
@@ -480,13 +480,13 @@ export function WirePortRows({
                 <div className="flex-1" />
                 <span
                   className="text-[12px] font-medium text-[#EDEDF2]"
-                  style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+                  style={{ fontFamily: "var(--font-sans)" }}
                 >
                   {label}
                 </span>
                 <span
                   className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
-                  style={{ fontFamily: "'Inter', system-ui, sans-serif", ...chipStyle }}
+                  style={{ fontFamily: "var(--font-sans)", ...chipStyle }}
                 >
                   {normalizeTypeChip(output.type)}
                 </span>

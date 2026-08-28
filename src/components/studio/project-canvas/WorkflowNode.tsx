@@ -183,13 +183,13 @@ function ModelFilterChip({
         />
         <span
           className="max-w-[80px] truncate font-semibold text-[#FF8AC4]"
-          style={{ fontFamily: "'Noto Sans SC', system-ui, sans-serif", fontSize: 10 }}
+          style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
         >
           {label}
         </span>
         <span
           className={`shrink-0 text-[#6E6E80] transition-transform ${open ? "rotate-180" : ""}`}
-          style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 9 }}
+          style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
         </span>
@@ -321,13 +321,13 @@ function SourceFilterChip({
           className={`font-semibold ${
             value === "all" ? "text-[#A78BFA]" : isLocal ? "text-[#33D499]" : "text-[#A78BFA]"
           }`}
-          style={{ fontFamily: "'Noto Sans SC', system-ui, sans-serif", fontSize: 10 }}
+          style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
         >
           {label}
         </span>
         <span
           className={`shrink-0 text-[#6E6E80] transition-transform ${open ? "rotate-180" : ""}`}
-          style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 9 }}
+          style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
         </span>
@@ -445,7 +445,7 @@ function WorkflowPickChip({
       >
         <span
           className="min-w-0 flex-1 truncate text-left font-semibold text-[#EDEDF2]"
-          style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 11 }}
+          style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}
         >
           {loading && !sel ? (
             <span className="text-gray-500">加载中…</span>
@@ -457,7 +457,7 @@ function WorkflowPickChip({
         </span>
         <span
           className={`shrink-0 text-[#6E6E80] transition-transform ${open ? "rotate-180" : ""}`}
-          style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 9 }}
+          style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
         </span>
@@ -634,7 +634,7 @@ function ModePickChip({
       >
         <span
           className={`font-semibold ${hasModes ? "text-[#EDEDF2]" : "text-gray-500"}`}
-          style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 10 }}
+          style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
         >
           {hasModes ? triggerLabel : "未选"}
         </span>
@@ -642,7 +642,7 @@ function ModePickChip({
          *  trigger 只展示当前默认，没必要再用 +N 暗示"还有几个未展示" */}
         <span
           className={`shrink-0 text-[#9A9AAD] transition-transform ${open ? "rotate-180" : ""}`}
-          style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 9 }}
+          style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
         </span>
@@ -703,7 +703,7 @@ function ModePickChip({
                     </span>
                     <span
                       className="shrink-0 rounded bg-white/[0.06] px-1 py-px text-[9.5px] text-[#9A9AAD]"
-                      style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+                      style={{ fontFamily: "var(--font-sans)" }}
                     >
                       {item.code}
                     </span>
@@ -778,13 +778,13 @@ export function WorkflowNode({
           <span
             aria-label="类型 工作流"
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold text-[#7C5CFC]"
-            style={{ background: "#2A1F4A", fontFamily: "'Inter', system-ui, sans-serif" }}
+            style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
           >
             W
           </span>
           <span
             className="truncate text-[14px] font-bold text-[#EDEDF2]"
-            style={{ fontFamily: "'Noto Sans SC', system-ui, sans-serif" }}
+            style={{ fontFamily: "var(--font-sans)" }}
             title={meta.label}
           >
             {meta.label}
@@ -796,7 +796,7 @@ export function WorkflowNode({
         >
           <span
             className="font-mono text-[10px] font-semibold text-cyan-200"
-            style={{ fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, monospace" }}
+            style={{ fontFamily: "var(--font-mono)" }}
           >
             {nodeSeq !== null ? `#${nodeSeq}` : `#${id.length > 10 ? id.slice(0, 9) + "…" : id}`}
           </span>
@@ -903,7 +903,7 @@ export function WorkflowNode({
                 <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
                   <span
                     className="min-w-0 truncate text-[12px] font-semibold text-[#EDEDF2]"
-                    style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+                    style={{ fontFamily: "var(--font-sans)" }}
                     title={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}
                   >
                     {oLabel}
@@ -911,7 +911,7 @@ export function WorkflowNode({
                   <span
                     className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
                     style={{
-                      fontFamily: "'Inter', system-ui, sans-serif",
+                      fontFamily: "var(--font-sans)",
                       background: "#26262E",
                       color: "#9A9AAD",
                     }}
@@ -933,7 +933,7 @@ export function WorkflowNode({
         disabled={d.status === "running"}
         onClick={onGenerate}
         className="nodrag nopan flex h-[43px] w-full items-center justify-center gap-2 rounded-b-[14px] bg-gradient-to-r from-[#7C5CFC] to-[#FF5CA8] text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
-        style={{ fontFamily: "'Noto Sans SC', system-ui, sans-serif" }}
+        style={{ fontFamily: "var(--font-sans)" }}
       >
         {d.status === "running" ? "生成中…" : "▶ 用此工作流生成"}
       </button>

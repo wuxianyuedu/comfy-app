@@ -348,7 +348,7 @@ export function DynamicWorkflowForm({
       <span
         className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
         style={{
-          fontFamily: "'Inter', system-ui, sans-serif",
+          fontFamily: "var(--font-sans)",
           background: "#26262E",
           color: "#9A9AAD",
         }}
@@ -445,7 +445,7 @@ const labelRow = (
             <span className="min-w-0 flex-1 truncate text-[11px] text-[#C9C9D6]">{label}</span>
             <span
               className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
-              style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#26262E", color: "#9A9AAD" }}
+              style={{ fontFamily: "var(--font-sans)", background: "#26262E", color: "#9A9AAD" }}
             >
               {e.type}
             </span>

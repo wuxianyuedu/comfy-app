@@ -437,7 +437,7 @@ export default function WorkflowCanvas({
                   border: "1px solid rgba(255,255,255,0.1)",
                   borderRadius: 8,
                   color: "#A99BC7",
-                  fontFamily: '"SF Mono", ui-monospace, monospace',
+                  fontFamily: "var(--font-mono)",
                   fontSize: 11,
                   padding: 10,
                 }}

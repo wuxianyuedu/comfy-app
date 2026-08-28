@@ -33,6 +33,8 @@
 
   /* Body / default — next/font 加载的 Latin 字体 + 系统 CJK 字体回退 */
   --font-sans: var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  /* Mono / code — unified stack (T10: merged from inline fontFamily usage) */
+  --font-mono: "SF Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas, monospace;
   /* Display / titles — Sarasa Gothic SC Bold preferred, falls back to Noto/PingFang (Ardot #169~#177) */
   --font-title: "Sarasa Gothic SC", var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif;
 }

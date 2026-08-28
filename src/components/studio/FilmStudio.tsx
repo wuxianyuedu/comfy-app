@@ -299,7 +299,7 @@ export function FilmStudio() {
 
   /* ── Render ── */
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-[#0a0a0f]" style={{ fontFamily: 'Inter, "Noto Sans SC", system-ui, -apple-system, sans-serif' }}>
+    <div className="flex h-full w-full flex-col overflow-hidden bg-[#0a0a0f]" style={{ fontFamily: "var(--font-sans)" }}>
       {/* ── Aurora Background Blobs ───────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <div

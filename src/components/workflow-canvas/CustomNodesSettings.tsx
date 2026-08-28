@@ -432,7 +432,7 @@ function WidgetValueChip({
         style={{
           background: on ? "rgba(16,185,129,0.18)" : "rgba(239,68,68,0.18)",
           color: on ? "#10B981" : "#EF4444",
-          fontFamily: '"SF Mono", ui-monospace, monospace',
+          fontFamily: "var(--font-mono)",
         }}
       >
         {on ? "✓" : "✗"}
@@ -446,7 +446,7 @@ function WidgetValueChip({
         style={{
           background: "rgba(168,85,247,0.18)",
           color: "#A855F7",
-          fontFamily: '"SF Mono", ui-monospace, monospace',
+          fontFamily: "var(--font-mono)",
         }}
         title={value == null ? "" : String(value)}
       >
@@ -461,7 +461,7 @@ function WidgetValueChip({
         style={{
           background: "rgba(245,158,11,0.18)",
           color: "#F59E0B",
-          fontFamily: '"SF Mono", ui-monospace, monospace',
+          fontFamily: "var(--font-mono)",
         }}
         title={value == null ? "" : String(value)}
       >
@@ -476,7 +476,7 @@ function WidgetValueChip({
       style={{
         background: "rgba(0,0,0,0.4)",
         color: "#C9C2E8",
-        fontFamily: '"SF Mono", ui-monospace, monospace',
+        fontFamily: "var(--font-mono)",
       }}
       title={value == null ? "" : String(value)}
     >

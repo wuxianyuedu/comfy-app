@@ -44,7 +44,7 @@ function PortChip({ type }: { type: string }) {
   return (
     <span
       className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
-      style={{ fontFamily: "'Inter', system-ui, sans-serif", ...style }}
+      style={{ fontFamily: "var(--font-sans)", ...style }}
     >
       {type}
     </span>
@@ -115,7 +115,7 @@ function PortRowString({
       <div className="flex h-4 items-center justify-between gap-2.5 pl-[14px] pr-[14px]">
         <span
           className="text-[12px] font-medium text-[#EDEDF2]"
-          style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+          style={{ fontFamily: "var(--font-sans)" }}
         >
           {label}
         </span>
@@ -126,7 +126,7 @@ function PortRowString({
         rows={2}
         defaultValue={value}
         className="mx-[14px] h-[52px] resize-none rounded-md border border-white/[0.04] bg-[#0F0F14] px-2.5 py-2 text-[11px] leading-relaxed text-[#C9C9D6] outline-none"
-        style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+        style={{ fontFamily: "var(--font-sans)" }}
       />
     </div>
   );
@@ -146,7 +146,7 @@ function PortRowInt({
     <div className="flex h-[33px] items-center gap-2.5 pl-[14px] pr-[14px]">
       <span
         className="text-[12px] font-medium text-[#EDEDF2]"
-        style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+        style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}
       </span>
@@ -155,7 +155,7 @@ function PortRowInt({
         readOnly
         defaultValue={value}
         className="h-[21px] w-[140px] rounded border border-[#26262E] bg-[#0F0F14] px-2 text-right text-[12px] tabular-nums text-[#EDEDF2] outline-none"
-        style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+        style={{ fontFamily: "var(--font-sans)" }}
       />
       <PortChip type={type} />
     </div>
@@ -175,7 +175,7 @@ function PortRowOutput({
       <div className="flex-1" />
       <span
         className="text-[12px] font-medium text-[#EDEDF2]"
-        style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+        style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}
       </span>
@@ -205,13 +205,13 @@ export function WorkflowNodeArdot() {
             <span
               aria-label="类型 工作流"
               className="flex h-7 w-7 items-center justify-center rounded-[14px] text-[14px] font-bold text-[#7C5CFC]"
-              style={{ background: "#2A1F4A", fontFamily: "'Inter', system-ui, sans-serif" }}
+              style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
             >
               W
             </span>
             <span
               className="text-[14px] font-bold text-[#EDEDF2]"
-              style={{ fontFamily: "'Noto Sans SC', system-ui, sans-serif" }}
+              style={{ fontFamily: "var(--font-sans)" }}
             >
               自定义工作流
             </span>
@@ -222,7 +222,7 @@ export function WorkflowNodeArdot() {
             <span className="h-1.5 w-1.5 rounded-full bg-[#7C5CFC]" />
             <span
               className="text-[10px] font-medium text-[#C9C9D6]"
-              style={{ fontFamily: "'Noto Sans SC', system-ui, sans-serif" }}
+              style={{ fontFamily: "var(--font-sans)" }}
             >
               待开始
             </span>
@@ -247,11 +247,11 @@ export function WorkflowNodeArdot() {
             />
             <span
               className="text-[#33D499] font-semibold"
-              style={{ fontFamily: "'Noto Sans SC', system-ui, sans-serif", fontSize: 10 }}
+              style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
             >
               本机
             </span>
-            <span aria-hidden className="shrink-0 text-[#6E6E80]" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 10 }}>▾</span>
+            <span aria-hidden className="shrink-0 text-[#6E6E80]" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
           </button>
           {/* Chip 2：image_z_image_int8（具体工作流名）· flex-1 撑满中间 */}
           <button
@@ -260,11 +260,11 @@ export function WorkflowNodeArdot() {
           >
             <span
               className="min-w-0 flex-1 truncate text-left font-semibold text-[#EDEDF2]"
-              style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 11 }}
+              style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}
             >
               image_z_image_int8
             </span>
-            <span aria-hidden className="shrink-0 text-[#6E6E80]" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 10 }}>▾</span>
+            <span aria-hidden className="shrink-0 text-[#6E6E80]" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
           </button>
           {/* Chip 3：T2I（类型，单独下拉，最右）· 紫描边加深强调可切换 */}
           <button
@@ -273,11 +273,11 @@ export function WorkflowNodeArdot() {
           >
             <span
               className="font-medium text-[#EDEDF2]"
-              style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 10 }}
+              style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
             >
               T2I
             </span>
-            <span aria-hidden className="shrink-0 text-[#9A9AAD]" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 10 }}>▾</span>
+            <span aria-hidden className="shrink-0 text-[#9A9AAD]" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
           </button>
         </div>
 
@@ -306,7 +306,7 @@ export function WorkflowNodeArdot() {
           type="button"
           className="flex h-[43px] w-full items-center justify-center gap-2 bg-gradient-to-r from-[#7C5CFC] to-[#FF5CA8] text-[13px] font-bold text-white"
           style={{
-            fontFamily: "'Noto Sans SC', system-ui, sans-serif",
+            fontFamily: "var(--font-sans)",
             boxShadow: "0 4px 12px rgba(124,92,252,0.35)",
           }}
         >

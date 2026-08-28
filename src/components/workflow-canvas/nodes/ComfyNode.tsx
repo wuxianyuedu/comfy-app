@@ -68,7 +68,7 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
         transition: "box-shadow 0.2s, border-color 0.2s",
         overflow: "hidden",
         position: "relative",
-        fontFamily: 'system-ui, -apple-system, "PingFang SC", sans-serif',
+        fontFamily: "var(--font-sans)",
       }}
     >
       <div style={{ height: 3, background: config.color }} />
@@ -133,7 +133,7 @@ function ComfyNodeInner({ data, selected }: NodeProps) {
               <span style={{ color: "#6B7280", marginRight: 4 }}>{previewField.label}:</span>
               <span style={{
                 color: "#D4CFF9",
-                fontFamily: '"SF Mono", ui-monospace, monospace',
+                fontFamily: "var(--font-mono)",
                 wordBreak: "break-all",
               }}>
                 {getPreviewValue(previewField.key) || (
@@ -189,7 +189,7 @@ function ComfyNodeCustom({
           : "0 2px 10px rgba(0,0,0,0.35)",
         overflow: "hidden",
         position: "relative",
-        fontFamily: 'system-ui, -apple-system, "PingFang SC", sans-serif',
+        fontFamily: "var(--font-sans)",
       }}
     >
       {/* Solid rounded header */}
@@ -285,7 +285,7 @@ function ComfyNodeCustom({
                   <span style={{
                     marginLeft: "auto",
                     fontSize: 10,
-                    fontFamily: '"SF Mono", ui-monospace, monospace',
+                    fontFamily: "var(--font-mono)",
                     background: "rgba(0,0,0,0.4)",
                     color: "#C9C2E8",
                     borderRadius: 5,

@@ -81,7 +81,7 @@ export function PackageFooter({
         padding: "2px 6px",
         fontSize: 9,
         lineHeight: 1.2,
-        fontFamily: '"SF Mono", ui-monospace, monospace',
+        fontFamily: "var(--font-mono)",
         color: "rgba(255, 255, 255, 0.5)",
         letterSpacing: 0.3,
         border: "1px solid rgba(255, 255, 255, 0.22)",

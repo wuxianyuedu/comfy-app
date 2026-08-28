@@ -39,7 +39,7 @@ export function EditableLabel({
        *  拥有相同字体权重的 label。 */
       <span
         className="group flex min-w-0 flex-1 items-center gap-1 truncate text-[12px] font-semibold text-[#EDEDF2]"
-        style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+        style={{ fontFamily: "var(--font-sans)" }}
         title={title}
       >
         <span className="min-w-0 flex-1 truncate">{label}</span>
@@ -96,7 +96,7 @@ export function EditableLabel({
         /* R-ardot56 (2026-08-15): 与展示态字体一致 — text-[12px] font-semibold
          *  text-[#EDEDF2] + 'Inter'，避免编辑切回展示态时出现字重跳变。 */
         className="nodrag nopan min-w-0 flex-1 rounded border border-violet-400/40 bg-white/[0.06] px-1.5 py-px text-[12px] font-semibold text-[#EDEDF2] outline-none focus:border-violet-400/70"
-        style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+        style={{ fontFamily: "var(--font-sans)" }}
       />
     </span>
   );

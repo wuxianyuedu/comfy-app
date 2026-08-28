@@ -210,8 +210,7 @@ export function NodeJsonPopover({
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
-              fontFamily:
-                'system-ui, -apple-system, "Segoe UI", "Noto Sans SC", sans-serif',
+              fontFamily: "var(--font-sans)",
             }}
           >
             <div
@@ -247,7 +246,7 @@ export function NodeJsonPopover({
                   <span style={{ color: "rgba(255,255,255,0.18)" }}>·</span>
                   <span
                     style={{
-                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                      fontFamily: "var(--font-mono)",
                       color: accent,
                     }}
                   >
@@ -334,8 +333,7 @@ export function NodeJsonPopover({
                         : "RAW 格式：detail.rawJson.nodes[id] —— 与整工作流「查看 JSON」RAW 逐字节一致"
                     }
                     style={{
-                      fontFamily:
-                        'ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas, monospace',
+                      fontFamily: "var(--font-mono)",
                       fontSize: 11,
                       padding: "5px 10px",
                       borderRadius: "6px 6px 0 0",
@@ -410,8 +408,7 @@ export function NodeJsonPopover({
                 padding: "12px 14px",
                 overflow: "auto",
                 flex: 1,
-                fontFamily:
-                  'ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas, monospace',
+                fontFamily: "var(--font-mono)",
                 fontSize: 11.5,
                 lineHeight: 1.55,
                 color: "var(--color-ink, #EDEDF2)",
@@ -437,7 +434,7 @@ export function NodeJsonPopover({
                   ? "展示的是 `detail.graph[nodeId]` 原始条目，再导出后字节级一致。"
                   : "画布视图：聚合 raw 元数据 + 画布坐标；非导出字节 — 仅排查用。"}
               </span>
-              <span style={{ fontFamily: "ui-monospace, monospace" }}>esc ×</span>
+              <span style={{ fontFamily: "var(--font-mono)" }}>esc ×</span>
             </div>
           </div>
         </>,

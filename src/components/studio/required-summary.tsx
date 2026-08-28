@@ -56,7 +56,7 @@ export function Chip({ color, label }: { color: string; label: string }) {
     <span
       style={{
         fontSize: 10,
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+        fontFamily: "var(--font-mono)",
         padding: "2px 7px",
         borderRadius: 999,
         background: `${color}1f`,
@@ -85,7 +85,7 @@ export function FrontendOnlyBadge() {
         padding: "1px 5px",
         fontSize: 9,
         lineHeight: 1.2,
-        fontFamily: '"SF Mono", ui-monospace, monospace',
+        fontFamily: "var(--font-mono)",
         fontStyle: "italic",
         color: "rgba(255, 255, 255, 0.42)",
         letterSpacing: 0.2,

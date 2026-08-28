@@ -31,7 +31,7 @@ export interface RenderChainModule {
 const PILL_STYLE: CSSProperties = {
   cursor: "pointer",
   userSelect: "none",
-  fontFamily: '"SF Mono", ui-monospace, monospace',
+  fontFamily: "var(--font-mono)",
   fontSize: 9,
   lineHeight: 1,
   padding: "2px 6px",
@@ -136,7 +136,7 @@ export function DebugChainFooter({ modules }: { modules: RenderChainModule[] }) 
             borderRadius: 4,
             background: "rgba(255,255,255,0.06)",
             color: "#8b8b9e",
-            fontFamily: '"SF Mono", ui-monospace, monospace',
+            fontFamily: "var(--font-mono)",
             whiteSpace: "nowrap",
           }}
         >
