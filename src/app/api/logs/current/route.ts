@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import { requireServerUser } from "@/lib/auth-server";
 import fs from "node:fs";
 import path from "node:path";
-import { getServerUser } from "@/lib/auth-server";
 
 const DEFAULT_LOG_FILE = path.join(process.cwd(), "log", "dev-launcher.log");
 const SENTINEL_FILE = path.join(process.cwd(), "log", "dev-launcher-current.txt");
@@ -19,8 +19,8 @@ function resolveCurrentLog(): string {
 }
 
 export async function GET(request: Request) {
-  const user = await getServerUser();
-  if (!user?.id) {
+  const user = await requireServerUser();
+  if (!user) {
     return NextResponse.json(
       { error: { code: "auth.required", message: "未登录或会话已失效" } },
       { status: 401 }

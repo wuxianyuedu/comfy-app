@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { type NextRequest, NextResponse } from "next/server";
+import { requireServerUser } from "@/lib/auth-server";
 import { uploadImage, comfyBase } from "@/lib/comfyui/client";
-import { getServerUser } from "@/lib/auth-server";
 import { logger } from "~/server/lib/logger";
 
 export const runtime = "nodejs";
@@ -17,8 +17,8 @@ const ALLOWED_MIME = new Set([
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
-  const user = await getServerUser();
-  if (!user?.id) {
+  const user = await requireServerUser();
+  if (!user) {
     return NextResponse.json(
       { error: { code: "auth.required", message: "未登录或会话已失效" } },
       { status: 401 }

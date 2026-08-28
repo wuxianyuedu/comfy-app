@@ -41,3 +41,25 @@ export async function getServerUser(): Promise<ServerUser> {
   demoUserCache = { id: demo.id, email: demo.email, name: demo.name ?? null };
   return demoUserCache;
 }
+
+/**
+ * Auth gate for REST Route Handlers (主规范 §8 鉴权边界).
+ *
+ * Returns the real logged-in user only when a valid better-auth session
+ * exists; returns null otherwise so the caller can respond 401. Unlike
+ * getServerUser() it does NOT fall back to the demo user — REST endpoints
+ * that mutate or expose sensitive data (materials / upload / logs / llm /
+ * custom-nodes / debug) must not be reachable without an authenticated
+ * session.
+ */
+export async function requireServerUser(): Promise<ServerUser | null> {
+  const session = await getSession();
+  if (!session?.user?.email) return null;
+  let user = await userRepository.findByEmail(session.user.email);
+  user ??= await userRepository.createUser({
+    email: session.user.email,
+    name: session.user.name ?? null,
+    password: "oauth-not-used",
+  });
+  return { id: user.id, email: user.email, name: user.name ?? null };
+}
