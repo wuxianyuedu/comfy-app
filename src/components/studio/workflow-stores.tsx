@@ -136,8 +136,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         let changed = false;
         for (const [entryKey, entry] of Object.entries(state.workflowIO)) {
           if (entry?.kind === "widget" && entry.value !== undefined) {
-            // value 仅在本分支被剔除（widget 的运行时值不持久化到 IO 配置）
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars -- value 仅在本分支被剔除（widget 的运行时值不持久化到 IO 配置）
             const { value, ...rest } = entry;
             nextMap[entryKey] = rest;
             changed = true;
