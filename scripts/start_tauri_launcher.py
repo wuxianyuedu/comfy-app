@@ -209,7 +209,7 @@ def get_project_root() -> str:
     """
     项目根目录探测顺序：
       1. 当前工作目录（双击 exe 时通常是 exe 所在目录）。
-      2. exe 所在目录（单文件 exe 被 PyInstaller 解压后的 _MEI 父目录）。
+      2. exe 所在目录，及其父目录（兼容 --onedir 布局：start-tauri/start-tauri.exe）。
       3. 脚本源文件所在目录的父目录（开发时直接 python 运行）。
     """
     candidates: list[str] = []
@@ -219,10 +219,13 @@ def get_project_root() -> str:
         return cwd
     candidates.append(cwd)
 
+    # --onedir 产物: start-tauri/start-tauri.exe 时，exe_dir 是 start-tauri/，
+    # 项目根目录是它的父目录；onefile 产物: start-tauri.exe 直接在根目录。
     exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-    if exe_dir not in candidates and _is_project_root(exe_dir):
-        return exe_dir
-    candidates.append(exe_dir)
+    for depth, directory in enumerate([exe_dir, os.path.dirname(exe_dir)]):
+        if directory not in candidates and _is_project_root(directory):
+            return directory
+        candidates.append(f"{directory} (up {depth})")
 
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
