@@ -15,9 +15,12 @@ start_tauri_launcher.py — Comfy-APP 桌面壳启动器（纯 Win32 启动画�
 
 依赖：仅 Python 标准库 + ctypes（无需 tkinter，避免 PyInstaller 打包缺库）。
 
-打包为单文件 exe（无控制台窗口）：
-    pyinstaller --onefile --windowed --name start-tauri scripts/start_tauri_launcher.py
-请将生成的 dist/start-tauri.exe 放在项目根目录（与 scripts/ 同级）。
+打包为目录式 exe（onedir，无控制台窗口）：
+    pyinstaller --onedir --windowed --name start-tauri --distpath . scripts/start_tauri_launcher.py
+生成的 start-tauri/ 目录（含 start-tauri.exe 与 _internal 依赖）放在项目根目录。
+使用 --onedir 而非 --onefile：避免单文件运行时解压到 Temp/_MEI* 临时目录，
+退出时若子进程持有该目录句柄会清理失败并弹警告。onedir 模式无需解压，
+双击 start-tauri/start-tauri.exe 即可启动。
 """
 
 from __future__ import annotations
@@ -1198,6 +1201,13 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
             stdin=subprocess.DEVNULL,
             stdout=out,
             stderr=err,
+            # close_fds=True: 子进程不继承本进程（含 PyInstaller 运行时）的可继承
+            # 句柄，避免它占用 PyInstaller 单文件临时目录导致退出时清理失败。
+            # 对 onedir 模式同样有益：子进程不会误持 launcher 目录下的文件句柄。
+            close_fds=True,
+            # 独立进程组：Ctrl+C / 关闭启动器不会误伤 dev server 与 Tauri 子进程；
+            # 它们的清理完全由 dev-launcher.ps1 的 Job Object 负责。
+            start_new_session=True,
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
     except Exception as exc:
