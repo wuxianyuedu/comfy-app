@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 "use client";
 /* ════════════════════════════════════════════════════════════════════════
  *  wf-node-json-popover.tsx — 节点 JSON 查看弹层（纯展示组件）。
@@ -10,7 +9,7 @@
 import React, { useMemo, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { NodeJsonViewerRequest, RawOutputMeta } from "./workflow-types";
-import { rectToAnchor, computePos } from "./workflow-utils";
+import { computePos } from "./workflow-utils";
 import { Chip } from "./required-summary";
 
 /* The popover itself.  Three blocks stacked vertically:
@@ -23,6 +22,37 @@ import { Chip } from "./required-summary";
  *   │  JSON dump — monospace, syntax-toned, copyable  │
  *   └────────────────────────────────────────────────┘
  */
+/* ── 逐字段收敛的 Raw 节点 JSON 形状 ──
+ * 服务端返回的 LiteGraph 节点/RawMeta 荷载是无约束 JSON；组件只消费下述
+ * 已声明字段，其余一律保持 unknown 接收，不再以 any 逃生。 */
+export type RawNodeJson = {
+  class_type?: string;
+  id?: string;
+  type?: string;
+  mode?: number;
+  widgets_values?: unknown[];
+  inputs?: Record<string, unknown>;
+  outputs?: unknown[];
+  _meta?: Record<string, unknown>;
+  flags?: Record<string, unknown>;
+  properties?: Record<string, unknown>;
+  pos?: [number, number];
+  [key: string]: unknown;
+};
+
+export type RawNodeView = {
+  entry: RawNodeJson | null;
+  raw?: {
+    widgets_values: unknown[];
+    outputs: RawOutputMeta[];
+    flags: Record<string, unknown>;
+    properties: Record<string, unknown>;
+    mode: number;
+  };
+  rawNode?: RawNodeJson | null;
+  pos: [number, number] | null;
+};
+
 export function NodeJsonPopover({
   request,
   getJson,
@@ -30,37 +60,32 @@ export function NodeJsonPopover({
   onDismiss,
 }: {
   request: NodeJsonViewerRequest;
-  getJson: (nodeId: string) => Record<string, any> | null;
-  getView: (
-    nodeId: string
-  ) => {
-    entry: Record<string, any> | null;
-    raw?: {
-      widgets_values: any[];
-      outputs: RawOutputMeta[];
-      flags: Record<string, any>;
-      properties: Record<string, any>;
-      mode: number;
-    };
-    rawNode?: Record<string, any> | null;
-    pos: [number, number] | null;
-  } | null;
+  getJson: (nodeId: string) => RawNodeJson | null;
+  getView: (nodeId: string) => RawNodeView | null;
   onDismiss: () => void;
 }) {
   const json = useMemo(() => getJson(request.nodeId), [getJson, request.nodeId]);
   const nodeView = useMemo(() => getView?.(request.nodeId) ?? null, [getView, request.nodeId]);
   const [tab, setTab] = useState<"saved" | "view">("view");
-  const viewObj = useMemo<Record<string, any> | null>(() => {
+  const viewObj = useMemo<RawNodeJson | null>(() => {
     if (!nodeView) return null;
     if (nodeView.rawNode && typeof nodeView.rawNode === "object") {
       return nodeView.rawNode;
     }
-    const out: Record<string, any> = {};
+    const out: RawNodeJson = {};
     const e = nodeView.entry;
     const r = nodeView.raw;
     if (e && typeof e.class_type === "string") out.class_type = e.class_type;
-    if (e && typeof e === "object" && "inputs" in e) out.inputs = e.inputs;
-    if (e?._meta && Object.keys(e._meta as Record<string, any>).length) out._meta = e._meta;
+    if (
+      e &&
+      typeof e === "object" &&
+      "inputs" in e &&
+      e.inputs &&
+      typeof e.inputs === "object"
+    ) {
+      out.inputs = e.inputs;
+    }
+    if (e?._meta && Object.keys(e._meta).length) out._meta = e._meta;
     if (r) {
       if (r.mode !== 0) out.mode = r.mode;
       if (r.widgets_values?.length) out.widgets_values = r.widgets_values;
@@ -79,10 +104,10 @@ export function NodeJsonPopover({
     }
     if (viewObj) return JSON.stringify(viewObj, null, 2);
     if (json) {
-      const thin: Record<string, any> = {};
+      const thin: RawNodeJson = {};
       if (typeof json.class_type === "string") thin.class_type = json.class_type;
       if (json.inputs && typeof json.inputs === "object") thin.inputs = json.inputs;
-      if (json._meta && Object.keys(json._meta as Record<string, any>).length) thin._meta = json._meta;
+      if (json._meta && Object.keys(json._meta).length) thin._meta = json._meta;
       if (Object.keys(thin).length) return JSON.stringify(thin, null, 2);
     }
     return "（节点详情尚未加载 — 等待 detail.ready）";
@@ -134,16 +159,16 @@ export function NodeJsonPopover({
     );
   };
   const accent = request.kind === "subgraph" ? "#7C5CFC" : "#5BC6FF";
-  const nodeClass = (json?.class_type ?? "?") as string;
+  const nodeClass = (json?.class_type ?? "?");
   const nodeMode = (
     typeof nodeView?.raw?.mode === "number"
       ? nodeView.raw.mode
-      : typeof (json as any)?._meta?.mode === "number"
-        ? (json as any)._meta.mode
+      : typeof json?._meta?.mode === "number"
+        ? json._meta.mode
         : typeof json?.mode === "number"
           ? json.mode
           : 0
-  ) as number;
+  );
   const modeLabel =
     nodeMode === 4 ? "Bypass" : nodeMode === 2 ? "Disabled" : "Normal";
   const modeColor =
@@ -347,20 +372,20 @@ export function NodeJsonPopover({
               {tab === "saved" ? (
                 <>
                   {json && "widgets_values" in json && (
-                    <Chip color="#a1a1aa" label={`widgets: ${(json.widgets_values as any[])?.length ?? 0} 项`} />
+                    <Chip color="#a1a1aa" label={`widgets: ${json.widgets_values?.length ?? 0} 项`} />
                   )}
                   {json && "inputs" in json && (
-                    <Chip color="#a1a1aa" label={`inputs: ${Object.keys((json.inputs as Record<string, any>) ?? {}).length} 个`} />
+                    <Chip color="#a1a1aa" label={`inputs: ${Object.keys(json.inputs ?? {}).length} 个`} />
                   )}
                   {json && "outputs" in json && (
-                    <Chip color="#a1a1aa" label={`outputs: ${(json.outputs as any[])?.length ?? 0} 个`} />
+                    <Chip color="#a1a1aa" label={`outputs: ${json.outputs?.length ?? 0} 个`} />
                   )}
                   {!json && <Chip color="#f59e0b" label="节点未在 graph 中" />}
                 </>
               ) : (
                 <>
                   {viewObj?.inputs && (
-                    <Chip color="#a1a1aa" label={`inputs: ${Object.keys(viewObj.inputs as Record<string, any> ?? {}).length} 个`} />
+                    <Chip color="#a1a1aa" label={`inputs: ${Object.keys(viewObj.inputs ?? {}).length} 个`} />
                   )}
                   {viewObj?.outputs && Array.isArray(viewObj.outputs) && (
                     <Chip color="#a1a1aa" label={`outputs: ${(viewObj.outputs).length} 个`} />
@@ -369,10 +394,10 @@ export function NodeJsonPopover({
                     <Chip color="#a1a1aa" label={`widgets: ${(viewObj.widgets_values).length} 项`} />
                   )}
                   {viewObj?.properties && (
-                    <Chip color="#a1a1aa" label={`properties: ${Object.keys(viewObj.properties as Record<string, any> ?? {}).length} 项`} />
+                    <Chip color="#a1a1aa" label={`properties: ${Object.keys(viewObj.properties ?? {}).length} 项`} />
                   )}
                   {viewObj?.pos && Array.isArray(viewObj.pos) && (
-                    <Chip color="#a1a1aa" label={`pos: ${(viewObj.pos as number[]).map((num) => Math.round(num)).join(", ")}`} />
+                    <Chip color="#a1a1aa" label={`pos: ${viewObj.pos.map((num) => Math.round(num)).join(", ")}`} />
                   )}
                   {!viewObj && <Chip color="#f59e0b" label="无画布态数据 — 纯 API 工作流" />}
                 </>

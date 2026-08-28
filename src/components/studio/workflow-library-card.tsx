@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 "use client";
 
 import React from "react";
@@ -7,28 +6,39 @@ import { MultiModeSelect } from "@/components/studio/ui/MultiModeSelect";
 import { WorkflowIOThumb } from "./workflow-library-helpers";
 import type { WorkflowRow } from "./workflow-library-helpers";
 
+type AssignRect = { top: number; left: number; width: number } | null;
+type RowNameRef = { id: string; name: string };
+
 export interface WorkflowCardProps {
-  w: any;
-  isTechnicalName: (name: any) => boolean;
-  normalizeTaskType: (t: any) => string;
-  patchModes: (...args: any[]) => void;
-  deriveFormatFlags: (row: any) => any;
-  deriveSyncFlags: (row: any) => any;
-  resyncWorkflow: (...args: any[]) => void;
+  w: WorkflowRow;
+  isTechnicalName: (name: string) => boolean;
+  normalizeTaskType: (t: string) => string;
+  patchModes: (id: string, modes: string[], defaultMode: string) => Promise<void>;
+  deriveFormatFlags: (row: WorkflowRow) => {
+    hasApi: boolean;
+    hasRaw: boolean;
+    apiOrigin: "user" | "derived" | null;
+    usable: boolean;
+  };
+  deriveSyncFlags: (row: WorkflowRow) => {
+    dirty: boolean;
+    missing: boolean;
+    canResync: boolean;
+  };
+  resyncWorkflow: (id: string, name: string) => Promise<void>;
   resyncBusy: string | null;
-  toast: any;
   assigningId: string | null;
-  patchModelTags: (...args: any[]) => void;
-  setAssignRect: (r: any) => void;
-  setAssigningId: (id: any) => void;
-  ago: (iso: any) => string;
-  onUse?: (...args: any[]) => void;
-  downloadJson: (...args: any[]) => void;
+  patchModelTags: (id: string, names: string[]) => Promise<void>;
+  setAssignRect: (r: AssignRect) => void;
+  setAssigningId: (id: string | null) => void;
+  ago: (iso: string) => string;
+  onUse?: (id: string, meta?: { name: string; taskType: string }) => void;
+  downloadJson: (id: string, name: string) => Promise<void>;
   bundleBusy: string | null;
-  setEditingId: (id: any) => void;
-  setSourceFor: (id: any) => void;
-  assignRect: any;
-  setPendingDelete: (id: any) => void;
+  setEditingId: (id: string) => void;
+  setSourceFor: (v: RowNameRef | null) => void;
+  assignRect: AssignRect;
+  setPendingDelete: (v: RowNameRef | null) => void;
   modelTags: { id: string; name: string; count: number }[];
 }
 
@@ -42,7 +52,6 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
     deriveSyncFlags,
     resyncWorkflow,
     resyncBusy,
-    toast,
     assigningId,
     patchModelTags,
     setAssignRect,
@@ -230,14 +239,8 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
 
         {/* 2026-08-15 模型标签 chips + 「＋」绑定 */}
         {(() => {
-          const cur = ((w).modelTags as string[] | undefined) ?? [];
+          const cur = w.modelTags ?? [];
           const open = assigningId === w.id;
-          const toggle = (name: string) => {
-            const next = cur.includes(name)
-              ? cur.filter((cur) => cur !== name)
-              : [...cur, name];
-            void patchModelTags(w.id, next);
-          };
           return (
             <span
               className="relative inline-flex items-center gap-1"
@@ -376,7 +379,7 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
         {/* 2026-08-15 模型标签绑定 popover（portal 到 body，逃出卡片/滚动裁剪） */}
         {assigningId === w.id && assignRect && createPortal(
           (() => {
-            const cur = ((w).modelTags as string[] | undefined) ?? [];
+            const cur = w.modelTags ?? [];
             const toggle = (name: string) => {
               const next = cur.includes(name)
                 ? cur.filter((cur) => cur !== name)

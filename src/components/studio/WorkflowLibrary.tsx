@@ -1,8 +1,6 @@
-/* eslint-disable @typescript-eslint/no-empty-function, @typescript-eslint/no-explicit-any, @typescript-eslint/no-inferrable-types, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { AuroraBackground } from "@/components/studio/AuroraBackground";
 import { Icon } from "@/components/ui/Icon";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
@@ -10,11 +8,7 @@ import { MultiModeSelect } from "@/components/studio/ui/MultiModeSelect";
 import dynamic from "next/dynamic";
 import { CustomNodesSettings } from "@/components/workflow-canvas/CustomNodesSettings";
 import { useToast } from "@/components/studio/toast-provider";
-import { SourceModal } from "@/components/studio/SourceModal";
 import { ModelTagManager } from "@/components/studio/ModelTagManager";
-import type { WorkflowPreview as WorkflowPreviewT } from "@/lib/comfyui/workflow";
-import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
-import { splitWorkflowIO, ioLabel } from "@/components/studio/shared/workflow-io";
 import { getWorkflowType, normalizeTaskType } from "@/lib/workflow-types";
 import { api } from "~/trpc/react";
 import {
@@ -23,8 +17,6 @@ import {
   deriveSyncFlags,
   isTechnicalName,
   LibrarySourceModal,
-  RootGroupHeader,
-  WorkflowIOThumb,
   PendingWorkflowCard,
   FilterTabs,
   WorkflowListBody,
@@ -91,14 +83,12 @@ export function WorkflowLibrary({
   // ── 2026-08-15 模型筛选：all 或某个模型标签名 ──
   const [modelFilter, setModelFilter] = useState<string>("all");
   // 用户级模型标签库（全局，跨工作流复用）；卡片 chips + 管理弹窗 + 筛选器共享
-  const [modelTags, setModelTags] = useState<{ id: string; name: string; count: number }[]>([]);
+  const [modelTags] = useState<{ id: string; name: string; count: number }[]>([]);
   const [showModelManager, setShowModelManager] = useState(false);
   // 当前正在编辑标签的卡片 id（card 内的「＋」popover）
   const [assigningId, setAssigningId] = useState<string | null>(null);
   // popover 锚点位置（按钮的视口矩形），用于 portal 固定定位，逃出卡片/滚动裁剪
   const [assignRect, setAssignRect] = useState<{ top: number; left: number; width: number } | null>(null);
-  const modelManagerOpenRef = useRef(false);
-
   // ── Import panel state ──
   const [showImport, setShowImport] = useState(false);
   const [importName, setImportName] = useState("");
@@ -202,11 +192,10 @@ export function WorkflowLibrary({
     // runs on success, so a failed refetch leaves the current list intact.
     listQ
       .refetch()
-      .catch((err: any) => {
-        console.warn(
-          "[WorkflowLibrary] /api/workflows fetch failed:",
-          err?.message ?? err
-        );
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof Error ? err.message : JSON.stringify(err ?? null);
+        console.warn("[WorkflowLibrary] /api/workflows fetch failed:", msg);
       })
       .finally(() => setLoading(false));
   }, [listQ]);
@@ -214,7 +203,7 @@ export function WorkflowLibrary({
   /** 2026-08-15: 拉取用户级模型标签库（全局），供卡片 chips / 筛选器 /
    *  管理弹窗共享。独立拉取，不与工作流列表耦合。 */
   const loadModelTags = useCallback(() => {
-    tagsQ.refetch().catch(() => {});
+    tagsQ.refetch().catch(() => undefined);
   }, [tagsQ]);
 
   useEffect(() => {
@@ -270,7 +259,19 @@ export function WorkflowLibrary({
   // 2026-08-10 R8: merge DB rows + disk-pending placeholders into one list
   // before filtering.  Hoisted into its own memo so R70-3's type counts and
   // the source filter share the same merged set without recomputing.
-  const mergedRows = useMemo(
+  type LibraryRow = Omit<WorkflowRow, "source"> & {
+    /** 2026-08-10: 行的归属来源（服务端行可为 local/online；占位行 local-pending）。 */
+    source?: string;
+    sourcePath?: string | null;
+    sourceRoot?: string | null;
+    pending?: boolean;
+    pendingSize?: number;
+    /** Unix 秒时间戳（占位行由服务端返回；200 行 catch 分支为 Date 字符串时
+     *  其将被转 ISO 字符串）。 */
+    pendingMtime?: number | string | null;
+  };
+
+  const mergedRows = useMemo<LibraryRow[]>(
     () => [
       ...workflows,
       ...localPending.map((localPending) =>({        id: localPending.id,
@@ -290,7 +291,7 @@ export function WorkflowLibrary({
         // before reading them.
         taskType: "",
         paramMap: {},
-        preview: { nodes: [], edges: [], w: 0, h: 0 },
+        preview: { nodes: [], edges: [], total: 0, width: 0, height: 0, truncated: false },
         workflowIO: {},
       })),
     ],
@@ -301,14 +302,14 @@ export function WorkflowLibrary({
     const bySource = mergedRows.filter(
       (workflow) =>
         sourceFilter === "all" ||
-        ((workflow as any).source ?? ((workflow as any).sourcePath ? "local" : "online")) === sourceFilter ||
-        (sourceFilter === "local" && (workflow as any).source === "local-pending")
+        (workflow.source ?? (workflow.sourcePath ? "local" : "online")) === sourceFilter ||
+        (sourceFilter === "local" && workflow.source === "local-pending")
     );
     // 2026-08-12 R70-3: filter by high-level category (image / video / audio).
     const byType = bySource.filter((bySource) =>
 {
       if (typeFilter === "all") return true;
-      const cat = getWorkflowType(normalizeTaskType((bySource as any).taskType ?? ""))?.category;
+      const cat = getWorkflowType(normalizeTaskType(bySource.taskType ?? ""))?.category;
       return cat === typeFilter;
     });
     // 2026-08-15: filter by model tag name.  "all" = no model constraint;
@@ -317,7 +318,7 @@ export function WorkflowLibrary({
     const byModel = byType.filter((byType) =>
 {
       if (modelFilter === "all") return true;
-      const tags = ((byType as any).modelTags as string[] | undefined) ?? [];
+      const tags = byType.modelTags ?? [];
       return tags.includes(modelFilter);
     });
     if (!q) return byModel;
@@ -342,9 +343,9 @@ export function WorkflowLibrary({
     // out of scope of the directory groupings.
     const localRows = filtered.filter(
       (workflow) =>
-        (workflow as any).source === "local" ||
-        (workflow as any).source === "local-pending" ||
-        (workflow.sourcePath != null && (workflow as any).source !== "online")
+        workflow.source === "local" ||
+        workflow.source === "local-pending" ||
+        (workflow.sourcePath != null && workflow.source !== "online")
     );
     const map = new Map<string, RootBucket>();
     for (const w of localRows) {
@@ -400,7 +401,7 @@ export function WorkflowLibrary({
   const typeCounts = useMemo(() => {
     const base = { all: mergedRows.length, image: 0, video: 0, audio: 0 };
     for (const w of mergedRows) {
-      const cat = getWorkflowType(normalizeTaskType((w as any).taskType ?? ""))?.category;
+      const cat = getWorkflowType(normalizeTaskType(w.taskType ?? ""))?.category;
       if (cat === "image" || cat === "video" || cat === "audio") base[cat] += 1;
     }
     return base;
@@ -441,12 +442,14 @@ export function WorkflowLibrary({
       setImportDefaultMode("T2I");
       setImportFormat("auto");
       load();
-    } catch (e: any) {
-      setImportErr(e?.message ?? "导入失败");
+    } catch (e: unknown) {
+      setImportErr(
+        e instanceof Error ? e.message : JSON.stringify(e ?? null)
+      );
     } finally {
       setImporting(false);
     }
-  }, [importName, importModes, importDefaultMode, importFormat, importJson, load]);
+  }, [importName, importModes, importDefaultMode, importFormat, importJson, load, createMut]);
 
   // 2026-08-12 R71-1: drag-and-drop a workflow JSON onto the list area →
   // parse → auto-detect format → pre-fill the existing import panel and
@@ -466,8 +469,11 @@ export function WorkflowLibrary({
       let text: string;
       try {
         text = await file.text();
-      } catch (e: any) {
-        setDropErr("无法读取文件：" + (e?.message ?? "未知错误"));
+      } catch (e: unknown) {
+        setDropErr(
+          "无法读取文件：" +
+            (e instanceof Error ? e.message : JSON.stringify(e ?? null))
+        );
         setTimeout(() => setDropErr(null), 4000);
         return;
       }
@@ -501,20 +507,26 @@ export function WorkflowLibrary({
       // Best-effort mode hint: if the JSON hints at image-to-image
       // (upscale / inpaint / img2img), suggest I2I as default; otherwise T2I.
       try {
-        let suggested: string = "T2I";
+        let suggested = "T2I";
         const obj = parsed as Record<string, unknown>;
         if (detected === "api") {
           for (const v of Object.values(obj)) {
-            const ct = (v as any)?.class_type;
+            const ct =
+              v && typeof v === "object"
+                ? (v as { class_type?: unknown }).class_type
+                : undefined;
             if (typeof ct === "string" && /image|upscale|inpaint|edit/i.test(ct)) {
               suggested = "I2I";
               break;
             }
           }
         } else if (detected === "raw") {
-          const nodes = Array.isArray(obj.nodes) ? (obj.nodes as any[]) : [];
+          const nodes = Array.isArray(obj.nodes) ? (obj.nodes as unknown[]) : [];
           for (const n of nodes) {
-            const t = (n as any)?.type;
+            const t =
+              n && typeof n === "object"
+                ? (n as { type?: unknown }).type
+                : undefined;
             if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
               suggested = "I2I";
               break;
@@ -593,7 +605,23 @@ export function WorkflowLibrary({
     utils,
   });
 
-const renderWorkflowCard = (w: any) => {
+/**
+ * 2026-08-27 T7: LibraryRow 内部使用扩展的 `source` 标签（含 "local-pending"
+ * 占位），而 WorkflowCard / PendingWorkflowCard 只接收 WorkflowRow。
+ * 这里把库内行投影回 WorkflowRow：`source` 收缩为合法两值，占位特有字段
+ * 降级为 undefined 以便传入共享卡片。
+ */
+const toWorkflowRow = (
+  row: LibraryRow
+): WorkflowRow & { pendingSize?: number } => ({
+  ...row,
+  source: row.source === "online" ? "online" : "local",
+  sourcePath: row.sourcePath ?? undefined,
+  sourceRoot: row.sourceRoot ?? undefined,
+  pendingSize: row.pendingSize,
+});
+
+const renderWorkflowCard = (w: LibraryRow) => {
   // ── Pending-local branch (simplified) ─────────────────────────────────
   // 2026-08-10 R13 simplified the original R8 layout by removing the
   // 80px icon hero, the chip strip, and the inline source-path line —
@@ -604,9 +632,12 @@ const renderWorkflowCard = (w: any) => {
   if (w.source === "local-pending") {
     return (
       <PendingWorkflowCard
-        w={w}
+        w={toWorkflowRow(w)}
         isLoading={!!pendingLoading[w.id]}
-        onLoad={() => void handleLoadPending(w)}
+        onLoad={() => {
+          if (!w.sourcePath) return;
+          void handleLoadPending({ id: w.id, name: w.name, sourcePath: w.sourcePath });
+        }}
       />
     );
   }
@@ -617,7 +648,7 @@ const renderWorkflowCard = (w: any) => {
   // the project canvas (delegated to the parent's `onUse` callback).
   return (
     <WorkflowCard
-      w={w}
+      w={toWorkflowRow(w)}
       isTechnicalName={isTechnicalName}
       normalizeTaskType={normalizeTaskType}
       patchModes={patchModes}
@@ -625,7 +656,6 @@ const renderWorkflowCard = (w: any) => {
       deriveSyncFlags={deriveSyncFlags}
       resyncWorkflow={resyncWorkflow}
       resyncBusy={resyncBusy}
-      toast={toast}
       assigningId={assigningId}
       patchModelTags={patchModelTags}
       setAssignRect={setAssignRect}

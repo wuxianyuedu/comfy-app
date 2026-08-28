@@ -1,7 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import type { Prisma } from "../../../../generated/prisma";
+import type { Prisma, WorkflowTemplate } from "../../../../generated/prisma";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { logger } from "~/server/lib/logger";
 import {
@@ -25,7 +24,9 @@ import {
   convertRawToApi,
   fallbackRawToApi,
   type ConversionResult,
+  type RawWorkflow,
 } from "@/lib/comfyui/raw";
+import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 import {
   normalizeTaskType,
   VALID_TASK_TYPE_CODES,
@@ -51,6 +52,37 @@ function getLocalWorkflowRoots(): string[] {
  *  haven't been imported yet. */
 function pendingId(absPath: string): string {
   return "pending-" + createHash("sha1").update(absPath).digest("hex").slice(0, 12);
+}
+
+/** 2026-08-28 T7: shape of the local-pending placeholder rows appended to
+ *  `list`.  Kept structurally identical to the `enriched` DB rows so the
+ *  frontend `LibraryRow` merge stays friction-free. */
+interface LocalPendingRow {
+  id: string;
+  name: string;
+  taskType: string;
+  modes: string[];
+  defaultMode: string | null;
+  createdAt: string;
+  paramMap: Record<string, unknown>;
+  sourcePath: string;
+  sourceRoot: string | undefined;
+  source: "local-pending";
+  typeLabel: string;
+  typeCategory: string;
+  typeDescription: string;
+  isGenerative: boolean;
+  hasApi: boolean;
+  hasRaw: boolean;
+  apiOrigin: null;
+  usable: boolean;
+  format: "api";
+  preview: { nodes: unknown[]; edges: unknown[]; w: number; h: number };
+  workflowIO: WorkflowIOMap;
+  modelTags: string[];
+  pending: boolean;
+  pendingSize: number;
+  pendingMtime: number;
 }
 
 /** Normalise an absolute path the same way `localWorkflows.pathKey` does. */
@@ -104,7 +136,11 @@ export const workflowRouter = createTRPCRouter({
       if (input?.type) {
         where.taskType = normalizeTaskType(input.type);
       } else if (input?.category) {
-        const typesInCat = getWorkflowTypesByCategory(input.category as any);
+        const category =
+          input.category === "image" || input.category === "video" || input.category === "audio"
+            ? input.category
+            : null;
+        const typesInCat = category ? getWorkflowTypesByCategory(category) : [];
         if (typesInCat.length > 0) {
           where.taskType = { in: typesInCat.map((typesInCat) => typesInCat.code) };
         }
@@ -205,8 +241,9 @@ export const workflowRouter = createTRPCRouter({
             w.sourceMtime = Math.floor(hit.mtimeMs / 1000);
             diskMtimeByPath.set(pathKey(hit.absPath), hit.mtimeMs);
             renamedFromTo.set(w.id, `${oldName} → ${newName}`);
-          } catch (e: any) {
-            logger.warn(`[workflow.list] relink failed for ${w.id}: ${e?.message ?? e}`);
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            logger.warn(`[workflow.list] relink failed for ${w.id}: ${msg}`);
           }
         }
       }
@@ -215,7 +252,10 @@ export const workflowRouter = createTRPCRouter({
       const enriched = list.map((list) =>
 {
         const def = getWorkflowType(normalizeTaskType(list.taskType));
-        const graphObj = (list.graph as Record<string, any> | null) ?? null;
+        const graphObj =
+          list.graph && typeof list.graph === "object" && !Array.isArray(list.graph)
+            ? (list.graph as Record<string, unknown>)
+            : null;
         const hasApi = !!graphObj && Object.keys(graphObj).length > 0;
         const hasRaw = !!list.rawJson;
         const apiOrigin: "user" | "derived" | null = hasApi
@@ -261,7 +301,10 @@ export const workflowRouter = createTRPCRouter({
           usable: hasApi,
           format: hasRaw ? ("raw" as const) : ("api" as const),
           preview: buildWorkflowPreview(graphObj ?? {}),
-          workflowIO: (list.workflowIO as Record<string, any>) ?? {},
+          workflowIO:
+            list.workflowIO && typeof list.workflowIO === "object" && !Array.isArray(list.workflowIO)
+              ? (list.workflowIO as unknown as WorkflowIOMap)
+              : {},
           modelTags: ((list.modelTags as Array<{ name: string }>) ?? []).map((tag) => tag.name),
           sourceMtimeSec: typeof list.sourceMtime === "number" ? list.sourceMtime : null,
           diskMtimeSec,
@@ -273,7 +316,7 @@ export const workflowRouter = createTRPCRouter({
       });
 
       // ── Local-pending placeholder builder ──
-      const localPending: any[] = [];
+      const localPending: LocalPendingRow[] = [];
       if (localRoots.length > 0) {
         const existingByPath = new Set<string>();
         for (const w of enriched) {
@@ -340,13 +383,13 @@ export const workflowRouter = createTRPCRouter({
         modes: z.array(z.string()).optional(),
         defaultMode: z.string().nullable().optional(),
         format: z.enum(["raw", "api"]).nullable().optional(),
-        graph: z.any().optional(),
-        raw: z.any().optional(),
+        graph: z.unknown().optional(),
+        raw: z.unknown().optional(),
         sourcePath: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const body = input as any;
+      const body = input;
       const explicitFormat = body.format === "raw" || body.format === "api" ? body.format : null;
       const candidate = body.raw ?? body.graph;
 
@@ -360,10 +403,11 @@ export const workflowRouter = createTRPCRouter({
             preferredTaskType: typeof body.taskType === "string" ? body.taskType : undefined,
             defaultName: typeof body.name === "string" ? body.name : undefined,
           });
-        } catch (e: any) {
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: e?.message ?? "本地文件读取失败",
+            message: msg || "本地文件读取失败",
           });
         }
         const fallbackName =
@@ -374,7 +418,7 @@ export const workflowRouter = createTRPCRouter({
             ? body.name.trim()
             : fallbackName;
         const modes = Array.isArray(body.modes) && body.modes.length > 0
-          ? body.modes as string[]
+          ? body.modes
           : undefined;
       const defaultMode = typeof body.defaultMode === "string" && body.defaultMode
           ? body.defaultMode
@@ -421,13 +465,13 @@ export const workflowRouter = createTRPCRouter({
         });
       }
 
-      let apiGraph: Record<string, any>;
+      let apiGraph: Record<string, unknown>;
       let positions: Record<string, [number, number]> | null = null;
       let rawJson: unknown = null;
       const warnings: string[] = [];
 
       if (detected === "api") {
-        const g = candidate as Record<string, any>;
+        const g = candidate as Record<string, unknown>;
         const looksLikeGraph = Object.values(g).some(
           (node) => node && typeof node === "object" && "class_type" in (node)
         );
@@ -442,10 +486,10 @@ export const workflowRouter = createTRPCRouter({
         rawJson = candidate;
         let result: ConversionResult;
         try {
-          result = await convertRawToApi(candidate);
-        } catch (e: any) {
-          logger.warn("[workflow] /object_info convert failed, using fallback:", e?.message);
-          result = fallbackRawToApi(candidate);
+          result = await convertRawToApi(candidate as RawWorkflow);
+        } catch (e: unknown) {
+          logger.warn(`[workflow] /object_info convert failed, using fallback: ${e instanceof Error ? e.message : String(e)}`);
+          result = fallbackRawToApi(candidate as RawWorkflow);
         }
         apiGraph = result.graph;
         positions = Object.keys(result.positions).length > 0 ? result.positions : null;
@@ -461,7 +505,7 @@ export const workflowRouter = createTRPCRouter({
 
       const name = String(body.name ?? "未命名工作流").slice(0, 80);
       const modes = Array.isArray(body.modes) && body.modes.length > 0
-          ? body.modes as string[]
+          ? body.modes
           : undefined;
       const explicitDefaultMode = typeof body.defaultMode === "string" && body.defaultMode
           ? body.defaultMode
@@ -525,20 +569,20 @@ export const workflowRouter = createTRPCRouter({
       z.object({
         id: z.string(),
         name: z.string().min(1).max(200).optional(),
-        graph: z.any().optional(),
-        rawJson: z.any().optional(),
-        paramMap: z.any().optional(),
-        positions: z.any().optional(),
-        workflowIO: z.any().optional(),
+        graph: z.unknown().optional(),
+        rawJson: z.unknown().optional(),
+        paramMap: z.unknown().optional(),
+        positions: z.unknown().optional(),
+        workflowIO: z.unknown().optional(),
         taskType: z.string().optional(),
         thumb: z.string().optional(),
         modes: z.array(z.string()).optional(),
         defaultMode: z.string().nullable().optional(),
         modelTags: z.array(z.string()).optional(),
-        upgradeFromApi: z.any().optional(),
+        upgradeFromApi: z.unknown().optional(),
         mergePositions: z.boolean().optional(),
-        groups: z.any().optional(),
-        notes: z.any().optional(),
+        groups: z.unknown().optional(),
+        notes: z.unknown().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -549,7 +593,18 @@ export const workflowRouter = createTRPCRouter({
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Workflow not found" });
 
       const { id, modelTags, upgradeFromApi, mergePositions, groups, notes, ...rest } = input;
-      const patch: Partial<any> = { ...rest };
+      // T7: WorkflowTemplate 无 thumb 列（旧遗留字段），保留透传不参与 DB 写入
+      const patch: Partial<WorkflowTemplate> & { thumb?: string } = {
+        name: rest.name,
+        taskType: rest.taskType,
+        thumb: rest.thumb,
+        defaultMode: rest.defaultMode,
+        graph: rest.graph as Prisma.JsonValue | undefined,
+        rawJson: rest.rawJson as Prisma.JsonValue | undefined,
+        paramMap: rest.paramMap as Prisma.JsonValue | undefined,
+        positions: rest.positions as Prisma.JsonValue | undefined,
+        workflowIO: rest.workflowIO as Prisma.JsonValue | undefined,
+      };
 
       if (input.taskType !== undefined) {
         patch.taskType = normalizeTaskType(input.taskType);
@@ -573,16 +628,25 @@ export const workflowRouter = createTRPCRouter({
       }
 
       // positions merge / replace + groups & notes write-back into rawJson
-      let nextRawJson = existing.rawJson as Record<string, any> | null;
+      let nextRawJson: Record<string, unknown> | null = null;
+      if (existing.rawJson && typeof existing.rawJson === "object" && !Array.isArray(existing.rawJson)) {
+        nextRawJson = existing.rawJson;
+      }
       if (input.positions !== undefined || groups !== undefined || notes !== undefined) {
-        nextRawJson = nextRawJson && typeof nextRawJson === "object" ? { ...nextRawJson } : {};
-        const nodes = Array.isArray(nextRawJson.nodes) ? [...nextRawJson.nodes] : [];
+        nextRawJson = nextRawJson ? { ...nextRawJson } : {};
+        const nodes = Array.isArray(nextRawJson.nodes) ? [...(nextRawJson.nodes as unknown[])] : [];
         if (input.positions !== undefined) {
           const posMap = input.positions as Record<string, [number, number]>;
           for (let i = 0; i < nodes.length; i++) {
             const nd = nodes[i];
             if (!nd || typeof nd !== "object") continue;
-            const pid = (nd.id as string) ?? nd.id;
+            const rawId = nd && "id" in nd ? (nd as { id?: unknown }).id : undefined;
+            const pid =
+              typeof rawId === "string"
+                ? rawId
+                : typeof rawId === "number"
+                  ? String(rawId)
+                  : "";
             if (pid && posMap?.[pid]) {
               nodes[i] = { ...nd, pos: posMap[pid] };
             }
@@ -591,12 +655,15 @@ export const workflowRouter = createTRPCRouter({
         if (groups !== undefined) nextRawJson.groups = groups;
         if (notes !== undefined) nextRawJson.notes = notes;
         if (nodes.length > 0) nextRawJson.nodes = nodes;
-        patch.rawJson = nextRawJson;
+        patch.rawJson = nextRawJson as Prisma.JsonValue;
         if (input.positions !== undefined) {
           if (mergePositions) {
             // Merge into the existing positions column (single-key drags from
             // subgraph / RAW views must not wipe the other namespace).
-            const cur = (existing.positions as Record<string, [number, number]>) ?? {};
+            const cur =
+              existing.positions && typeof existing.positions === "object" && !Array.isArray(existing.positions)
+                ? (existing.positions as Record<string, [number, number]>)
+                : {};
             patch.positions = { ...cur, ...(input.positions as Record<string, [number, number]>) };
           } else {
             patch.positions = input.positions;
