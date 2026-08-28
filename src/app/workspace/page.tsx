@@ -301,7 +301,7 @@ export default function WorkspacePage() {
   return (
     <LogProvider>
       <ToastProvider>
-        <div className="flex h-screen w-screen overflow-hidden bg-[#0a0a0f] text-gray-200" style={{ fontFamily: "var(--font-sans)" }}>
+        <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-canvas)] text-gray-200" style={{ fontFamily: "var(--font-sans)" }}>
           {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
           <AuroraBackground />
 

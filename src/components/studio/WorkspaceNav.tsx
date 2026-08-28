@@ -22,7 +22,7 @@ interface WorkspaceNavProps {
  */
 export function WorkspaceNav({ active, onSelect }: WorkspaceNavProps) {
   return (
-    <nav className="flex h-full w-[64px] shrink-0 flex-col items-center gap-1 border-r border-white/[0.06] bg-[#0a0a0f]/85 py-4 backdrop-blur-sm">
+    <nav className="flex h-full w-[64px] shrink-0 flex-col items-center gap-1 border-r border-white/[0.06] bg-[var(--color-canvas)]/85 py-4 backdrop-blur-sm">
       {/* Logo / Brand mark */}
       <Link
         href="/workspace"

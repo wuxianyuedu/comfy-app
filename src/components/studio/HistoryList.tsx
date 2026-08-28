@@ -374,10 +374,10 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
               className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-gray-300 outline-none focus:border-violet-500/40"
               aria-label="排序"
             >
-              <option value="newest" className="bg-[#16161e]">
+              <option value="newest" className="bg-[var(--color-node)]">
                 时间倒序
               </option>
-              <option value="oldest" className="bg-[#16161e]">
+              <option value="oldest" className="bg-[var(--color-node)]">
                 时间正序
               </option>
             </select>
@@ -634,7 +634,7 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
           onClick={() => setDetailId(null)}
         >
           <div
-            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#16161e]"
+            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[var(--color-node)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="relative flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3">

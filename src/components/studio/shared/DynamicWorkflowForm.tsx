@@ -47,9 +47,9 @@ export { PortHandle } from "./workflow-form-controls";
  *  - resize-none — 稿是固定 52h，不该出现 webkit resize 把手
  *  - placeholder #5A5A6B */
 const inputCls =
-  "nodrag nopan w-full resize-none rounded-md bg-[#0F0F14] p-2.5 text-[11px] leading-relaxed text-[#C9C9D6] outline-none transition-colors placeholder:text-[#5A5A6B] focus:ring-1 focus:ring-[#7C5CFC]/40";
+  "nodrag nopan w-full resize-none rounded-md bg-[var(--color-canvas-deep)] p-2.5 text-[11px] leading-relaxed text-[var(--color-ink-soft)] outline-none transition-colors placeholder:text-[var(--color-ink-placeholder)] focus:ring-1 focus:ring-[var(--color-primary)]/40";
 const ghostBtnCls =
-  "nodrag nopan w-full truncate rounded-md bg-[#0F0F14] px-2.5 py-2 text-left text-[11px] text-[#C9C9D6] transition-colors hover:bg-[#0F0F14]/80 disabled:opacity-40";
+  "nodrag nopan w-full truncate rounded-md bg-[var(--color-canvas-deep)] px-2.5 py-2 text-left text-[11px] text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-canvas-deep)]/80 disabled:opacity-40";
 
 /** Colour accent per control kind — mirrors the canvas port palette. */
 const ACCENT: Record<ControlKind, string> = {
@@ -135,7 +135,7 @@ export interface DynamicWorkflowFormProps {
 const SectionHeader = ({ label, count, accent }: { label: string; count: number; accent: string }) => (
   <div className="mt-1 flex items-center gap-2 border-t border-white/[0.1] pt-2.5">
     <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} />
-    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9A9AAD]">{label}</span>
+    <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">{label}</span>
     <span className="rounded-full bg-white/[0.1] px-1.5 py-px font-mono text-[10px] text-gray-400">{count}</span>
     <div className="flex-1 border-t border-dashed border-white/[0.08]" />
   </div>
@@ -349,8 +349,8 @@ export function DynamicWorkflowForm({
         className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
         style={{
           fontFamily: "var(--font-sans)",
-          background: "#26262E",
-          color: "#9A9AAD",
+          background: "var(--color-border-strong)",
+          color: "var(--color-ink-muted)",
         }}
       >
         {/* R-ardot93-A (2026-08-17): previous edit (R-ardot92) wired this
@@ -440,12 +440,12 @@ const labelRow = (
       return (
         <div key={e.ioKey} className="relative">
           {withHandle && <PortHandle id={e.ioKey} dir="in" type={e.type} />}
-          <div className="flex items-center gap-2 rounded-md bg-[#0F0F14] px-2.5 py-1.5 pl-[14px] pr-[14px]">
+          <div className="flex items-center gap-2 rounded-md bg-[var(--color-canvas-deep)] px-2.5 py-1.5 pl-[14px] pr-[14px]">
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} />
-            <span className="min-w-0 flex-1 truncate text-[11px] text-[#C9C9D6]">{label}</span>
+            <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--color-ink-soft)]">{label}</span>
             <span
               className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
-              style={{ fontFamily: "var(--font-sans)", background: "#26262E", color: "#9A9AAD" }}
+              style={{ fontFamily: "var(--font-sans)", background: "var(--color-border-strong)", color: "var(--color-ink-muted)" }}
             >
               {e.type}
             </span>
@@ -565,8 +565,8 @@ const labelRow = (
                 type="button"
                 disabled={disabled}
                 onClick={() => set(e.ioKey, !v)}
-                className={`nodrag nopan flex h-[28px] w-full items-center justify-between rounded-md bg-[#0F0F14] px-2.5 text-[12px] transition-colors ${
-                  v ? "text-emerald-200" : "text-[#9A9AAD]"
+                className={`nodrag nopan flex h-[28px] w-full items-center justify-between rounded-md bg-[var(--color-canvas-deep)] px-2.5 text-[12px] transition-colors ${
+                  v ? "text-emerald-200" : "text-[var(--color-ink-muted)]"
                 } ${e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""}`}
               >
                 <span>{v ? "开启" : "关闭"}</span>
@@ -589,8 +589,8 @@ const labelRow = (
               type="button"
               disabled={disabled}
               onClick={() => set(e.ioKey, !v)}
-              className={`nodrag nopan mt-1 flex h-[30px] w-full items-center justify-between rounded-md bg-[#0F0F14] px-3 text-[12px] transition-colors ${
-                v ? "text-emerald-200" : "text-[#9A9AAD]"
+              className={`nodrag nopan mt-1 flex h-[30px] w-full items-center justify-between rounded-md bg-[var(--color-canvas-deep)] px-3 text-[12px] transition-colors ${
+                v ? "text-emerald-200" : "text-[var(--color-ink-muted)]"
               } ${e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""}`}
             >
               <span>{v ? "开启" : "关闭"}</span>
@@ -612,7 +612,7 @@ const labelRow = (
               <button
                 key={keyPrefix}
                 type="button"
-                className={`nodrag nopan inline-flex h-[28px] w-full items-center gap-1.5 rounded-md bg-[#0F0F14] px-2.5 text-[11px] text-[#C9C9D6] transition-colors hover:text-[#EDEDF2] ${
+                className={`nodrag nopan inline-flex h-[28px] w-full items-center gap-1.5 rounded-md bg-[var(--color-canvas-deep)] px-2.5 text-[11px] text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink-bright)] ${
                   e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""
                 }`}
                 disabled={disabled || uploading}
@@ -630,7 +630,7 @@ const labelRow = (
             <button
               key={keyPrefix}
               type="button"
-              className={`nodrag nopan mt-1 inline-flex items-center gap-1.5 rounded-md bg-[#0F0F14] px-2.5 py-1.5 text-[11px] text-[#C9C9D6] transition-colors hover:text-[#EDEDF2] ${
+              className={`nodrag nopan mt-1 inline-flex items-center gap-1.5 rounded-md bg-[var(--color-canvas-deep)] px-2.5 py-1.5 text-[11px] text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink-bright)] ${
                 e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""
               }`}
               disabled={disabled || uploading}
@@ -772,8 +772,8 @@ if (compact) {
             type="button"
             disabled={disabled}
             onClick={() => set(e.ioKey, !v)}
-            className={`nodrag nopan mt-1 flex h-[30px] w-full items-center justify-between rounded-md bg-[#0F0F14] px-3 text-[12px] transition-colors ${
-              v ? "text-emerald-200" : "text-[#9A9AAD]"
+            className={`nodrag nopan mt-1 flex h-[30px] w-full items-center justify-between rounded-md bg-[var(--color-canvas-deep)] px-3 text-[12px] transition-colors ${
+              v ? "text-emerald-200" : "text-[var(--color-ink-muted)]"
             } ${e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""}`}
           >
             <span>{v ? "开启" : "关闭"}</span>
@@ -793,7 +793,7 @@ if (compact) {
         {e.control === "image" && (
           <button
             type="button"
-            className={`nodrag nopan mt-1 inline-flex items-center gap-1.5 rounded-md bg-[#0F0F14] px-2.5 py-1.5 text-[11px] text-[#C9C9D6] transition-colors hover:text-[#EDEDF2] ${
+            className={`nodrag nopan mt-1 inline-flex items-center gap-1.5 rounded-md bg-[var(--color-canvas-deep)] px-2.5 py-1.5 text-[11px] text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink-bright)] ${
               e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""
             }`}
             disabled={disabled || uploading}
@@ -986,10 +986,10 @@ if (compact) {
                     return (
                       <span
                         key={wireInput.ioKey}
-                        className="inline-flex items-center gap-1 rounded-md border border-[#5BC6FF]/25 bg-[#5BC6FF]/10 px-1.5 py-0.5 text-[10px] text-[#5BC6FF]"
+                        className="inline-flex items-center gap-1 rounded-md border border-[var(--color-info)]/25 bg-[var(--color-info)]/10 px-1.5 py-0.5 text-[10px] text-[var(--color-info)]"
                         title={`${wireInput.nodeTitle ?? ""} · ${wireInput.name} · 仅可通过连线输入`}
                       >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#5BC6FF]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-info)]" />
                         {label}
                         <span className="font-mono text-[9px] opacity-70">{wireInput.type}</span>
                       </span>
@@ -1011,10 +1011,10 @@ if (compact) {
 (
                       <span
                         key={output.ioKey}
-                        className="inline-flex items-center gap-1 rounded-md border border-[#5BE3C4]/25 bg-[#5BE3C4]/10 px-1.5 py-0.5 text-[10px] text-[#5BE3C4]"
+                        className="inline-flex items-center gap-1 rounded-md border border-[var(--color-success)]/25 bg-[var(--color-success)]/10 px-1.5 py-0.5 text-[10px] text-[var(--color-success)]"
                         title={`${output.nodeTitle ?? ""} · ${output.name}`}
                       >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#5BE3C4]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
                         {/* 2026-08-15: conflict-aware — see ioLabel(). */}
                         {ioLabel(output, [...inputs, ...outputs])}
                         <span className="font-mono text-[9px] opacity-70">{normalizeTypeChip(output.type)}</span>

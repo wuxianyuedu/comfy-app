@@ -236,7 +236,7 @@ export function WorkshopPipeline() {
           </div>
 
           <div className="flex flex-1 items-center justify-end gap-3">
-            <span className="rounded-full bg-[#FFB553]/15 px-3 py-1.5 text-xs font-medium text-[#FFB553]">
+            <span className="rounded-full bg-[var(--color-amber)]/15 px-3 py-1.5 text-xs font-medium text-[var(--color-amber)]">
               距离成片还差 3 类素材
             </span>
             <button className="grid h-8 w-8 place-items-center rounded-full bg-primary/50 text-white" aria-label="账户">
@@ -426,7 +426,7 @@ export function WorkshopPipeline() {
             {/* Missing materials */}
             <div className="rounded-2xl border border-border bg-surface p-4">
               <div className="mb-3 flex items-center gap-2">
-                <span className="grid h-[22px] w-[22px] place-items-center rounded-lg bg-[#FFB553]/20 text-[13px] font-bold text-[#FFB553]">!</span>
+                <span className="grid h-[22px] w-[22px] place-items-center rounded-lg bg-[var(--color-amber)]/20 text-[13px] font-bold text-[var(--color-amber)]">!</span>
                 <span className="text-[13px] font-semibold text-ink">缺失素材 / 下一步</span>
               </div>
               <div className="space-y-2.5">
@@ -439,7 +439,7 @@ export function WorkshopPipeline() {
                   </div>
                 ))}
               </div>
-              <button className="mt-3 w-full rounded-lg bg-[#FFB553]/10 py-2.5 text-xs font-semibold text-[#FFB553] hover:bg-[#FFB553]/15">
+              <button className="mt-3 w-full rounded-lg bg-[var(--color-amber)]/10 py-2.5 text-xs font-semibold text-[var(--color-amber)] hover:bg-[var(--color-amber)]/15">
                 补齐缺失素材 →
               </button>
             </div>

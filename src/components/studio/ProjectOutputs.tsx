@@ -211,7 +211,7 @@ export function ProjectOutputs() {
             >
               {projects.map((project) =>
 (
-                <option key={project.id} value={project.id} className="bg-[#16161e]">
+                <option key={project.id} value={project.id} className="bg-[var(--color-node)]">
                   {project.name ?? "未命名项目"}
                 </option>
               ))}
@@ -331,7 +331,7 @@ export function ProjectOutputs() {
             className="fixed inset-0 z-[80] bg-black/50"
             onClick={() => setSelectedId(null)}
           />
-          <aside className="fixed right-0 top-0 z-[90] flex h-full w-[380px] max-w-[90vw] flex-col overflow-hidden border-l border-white/10 bg-[#16161e] shadow-2xl">
+          <aside className="fixed right-0 top-0 z-[90] flex h-full w-[380px] max-w-[90vw] flex-col overflow-hidden border-l border-white/10 bg-[var(--color-node)] shadow-2xl">
             {/* head */}
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
               <div className="flex items-center gap-2">
@@ -362,7 +362,7 @@ export function ProjectOutputs() {
                     {selected.referenceImages.map((image, index) => (
                       <div
                         key={image}
-                        className="aspect-square overflow-hidden rounded-lg border border-white/[0.06] bg-[#0f0f16]"
+                        className="aspect-square overflow-hidden rounded-lg border border-white/[0.06] bg-[var(--color-panel-deep)]"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img

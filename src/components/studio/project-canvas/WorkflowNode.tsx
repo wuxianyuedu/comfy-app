@@ -174,21 +174,21 @@ function ModelFilterChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-[#FF5CA8]/[0.35] bg-[#1E1A2E] px-2.5 text-[12px]"
+        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-accent)]/[0.35] bg-[var(--color-node-accent)] px-2.5 text-[12px]"
         title={value === "all" ? "按模型筛选" : `已筛选模型：${value}`}
       >
         <span
           className="h-1.5 w-1.5 shrink-0 rounded-full"
-          style={{ background: value === "all" ? "#FF5CA8" : "#FF8AC4" }}
+          style={{ background: value === "all" ? "var(--color-accent)" : "var(--color-accent-soft)" }}
         />
         <span
-          className="max-w-[80px] truncate font-semibold text-[#FF8AC4]"
+          className="max-w-[80px] truncate font-semibold text-[var(--color-accent-soft)]"
           style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
         >
           {label}
         </span>
         <span
-          className={`shrink-0 text-[#6E6E80] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-[var(--color-ink-icon)] transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -203,7 +203,7 @@ function ModelFilterChip({
             role="listbox"
             aria-label="按模型筛选工作流"
             style={{ position: "fixed", left: pos.left, top: pos.top, width: pos.width, zIndex: 50 }}
-            className="max-h-72 overflow-y-auto rounded-lg border border-white/[0.08] bg-[#16161C] py-1 shadow-2xl shadow-fuchsia-500/20"
+            className="max-h-72 overflow-y-auto rounded-lg border border-white/[0.08] bg-[var(--color-card)] py-1 shadow-2xl shadow-fuchsia-500/20"
           >
             <button
               type="button"
@@ -217,7 +217,7 @@ function ModelFilterChip({
                 value === "all" ? "bg-fuchsia-500/20 text-fuchsia-200" : "text-gray-300 hover:bg-white/[0.06]"
               }`}
             >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#FF5CA8" }} />
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--color-accent)" }} />
               <span className="flex-1">全部模型</span>
               {value === "all" && <span className="text-fuchsia-300">✓</span>}
             </button>
@@ -241,7 +241,7 @@ function ModelFilterChip({
                     sel ? "bg-fuchsia-500/20 text-fuchsia-200" : "text-gray-300 hover:bg-white/[0.06]"
                   }`}
                 >
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#FF8AC4" }} />
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--color-accent-soft)" }} />
                   <span className="flex-1 truncate">{tag.name}</span>
                   <span className="text-[9px] tabular-nums text-gray-500">{tag.count}</span>
                   {sel && <span className="text-fuchsia-300">✓</span>}
@@ -311,7 +311,7 @@ function SourceFilterChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-[#7C5CFC]/[0.35] bg-[#1E1A2E] px-2.5 text-[12px]"
+        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-primary)]/[0.35] bg-[var(--color-node-accent)] px-2.5 text-[12px]"
       >
         <span
           className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -326,7 +326,7 @@ function SourceFilterChip({
           {label}
         </span>
         <span
-          className={`shrink-0 text-[#6E6E80] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-[var(--color-ink-icon)] transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -341,7 +341,7 @@ function SourceFilterChip({
             role="listbox"
             aria-label="工作流来源筛选"
             style={{ position: "fixed", left: pos.left, top: pos.top, width: pos.width, zIndex: 50 }}
-            className="rounded-lg border border-white/[0.08] bg-[#16161C] py-1 shadow-2xl shadow-violet-500/20"
+            className="rounded-lg border border-white/[0.08] bg-[var(--color-card)] py-1 shadow-2xl shadow-violet-500/20"
           >
             {(
               [
@@ -441,10 +441,10 @@ function WorkflowPickChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="nodrag nopan flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-[#7C5CFC]/[0.35] bg-[#1E1A2E] px-2.5 text-[12px]"
+        className="nodrag nopan flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-[var(--color-primary)]/[0.35] bg-[var(--color-node-accent)] px-2.5 text-[12px]"
       >
         <span
-          className="min-w-0 flex-1 truncate text-left font-semibold text-[#EDEDF2]"
+          className="min-w-0 flex-1 truncate text-left font-semibold text-[var(--color-ink-bright)]"
           style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}
         >
           {loading && !sel ? (
@@ -456,7 +456,7 @@ function WorkflowPickChip({
           )}
         </span>
         <span
-          className={`shrink-0 text-[#6E6E80] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-[var(--color-ink-icon)] transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -471,7 +471,7 @@ function WorkflowPickChip({
             role="listbox"
             aria-label="选择工作流"
             style={{ position: "fixed", left: pos.left, top: pos.top, width: pos.width, zIndex: 50 }}
-            className="max-h-72 overflow-y-auto rounded-lg border border-white/[0.08] bg-[#16161C] py-1 shadow-2xl shadow-violet-500/20"
+            className="max-h-72 overflow-y-auto rounded-lg border border-white/[0.08] bg-[var(--color-card)] py-1 shadow-2xl shadow-violet-500/20"
           >
             {options.length === 0 &&
               (loading ? (
@@ -505,7 +505,7 @@ function WorkflowPickChip({
                   <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${ol ? "bg-emerald-400" : "bg-violet-400"}`} />
                   <span className="min-w-0 flex-1 truncate">{option.name}</span>
                   {option.taskType && (
-                    <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[9.5px] text-[#9A9AAD]">
+                    <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[9.5px] text-[var(--color-ink-muted)]">
                       {option.taskType}
                     </span>
                   )}
@@ -628,12 +628,12 @@ function ModePickChip({
         type="button"
         onClick={() => setOpen((value) => !value)}
         disabled={disabled}
-        className={`nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-[#7C5CFC]/[0.55] bg-[#1E1A2E] px-2.5 text-[12px] ${
+        className={`nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-primary)]/[0.55] bg-[var(--color-node-accent)] px-2.5 text-[12px] ${
           disabled ? "opacity-50" : ""
         }`}
       >
         <span
-          className={`font-semibold ${hasModes ? "text-[#EDEDF2]" : "text-gray-500"}`}
+          className={`font-semibold ${hasModes ? "text-[var(--color-ink-bright)]" : "text-gray-500"}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
         >
           {hasModes ? triggerLabel : "未选"}
@@ -641,7 +641,7 @@ function ModePickChip({
         {/* R-ardot38: 不再显示 +N 徽章 — 弹层只列工作流实际支持的 N 个模式，
          *  trigger 只展示当前默认，没必要再用 +N 暗示"还有几个未展示" */}
         <span
-          className={`shrink-0 text-[#9A9AAD] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-[var(--color-ink-muted)] transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -656,11 +656,11 @@ function ModePickChip({
             role="listbox"
             aria-label="工作流模式选择"
             style={{ position: "fixed", left: pos.left, top: pos.top, width: pos.width, zIndex: 50 }}
-            className="rounded-xl border border-white/[0.08] bg-[#16161C] py-1 shadow-2xl shadow-violet-500/20"
+            className="rounded-xl border border-white/[0.08] bg-[var(--color-card)] py-1 shadow-2xl shadow-violet-500/20"
           >
             {/* R-ardot36: 仅展示工作流 modes 数组里的 N 个，单选 + 点选即切换 */}
             {items.length === 0 ? (
-              <div className="px-3 py-3 text-center text-[11px] text-[#9A9AAD]">
+              <div className="px-3 py-3 text-center text-[11px] text-[var(--color-ink-muted)]">
                 该工作流没有声明可用模式
               </div>
             ) : (
@@ -702,7 +702,7 @@ function ModePickChip({
                       {item.label}
                     </span>
                     <span
-                      className="shrink-0 rounded bg-white/[0.06] px-1 py-px text-[9.5px] text-[#9A9AAD]"
+                      className="shrink-0 rounded bg-white/[0.06] px-1 py-px text-[9.5px] text-[var(--color-ink-muted)]"
                       style={{ fontFamily: "var(--font-sans)" }}
                     >
                       {item.code}
@@ -777,13 +777,13 @@ export function WorkflowNode({
         <div className="flex min-w-0 items-center gap-2">
           <span
             aria-label="类型 工作流"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold text-[#7C5CFC]"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold text-[var(--color-primary)]"
             style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
           >
             W
           </span>
           <span
-            className="truncate text-[14px] font-bold text-[#EDEDF2]"
+            className="truncate text-[14px] font-bold text-[var(--color-ink-bright)]"
             style={{ fontFamily: "var(--font-sans)" }}
             title={meta.label}
           >
@@ -791,7 +791,7 @@ export function WorkflowNode({
           </span>
         </div>
         <div
-          className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-[#1E1A2E] px-2"
+          className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-[var(--color-node-accent)] px-2"
           title={`项目画布节点 Id：${id}`}
         >
           <span
@@ -804,7 +804,7 @@ export function WorkflowNode({
       </div>
 
       {/* 分隔线 340×1 #26262E */}
-      <div className="h-px bg-[#26262E]" />
+      <div className="h-px bg-[var(--color-border-strong)]" />
 
       {/* R-ardot83: 拆双行 — 头部窄节点挤 4 chip，按用户给优先级排。
        *   Row 1 (高优先级，筛选类)  ① SourceFilterChip + ④ ModelFilterChip
@@ -902,7 +902,7 @@ export function WorkflowNode({
                  *  labelRow 中线（pt-1.5=6 + h-5/2=10=16px），与 typeChip 上下对齐。 */}
                 <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
                   <span
-                    className="min-w-0 truncate text-[12px] font-semibold text-[#EDEDF2]"
+                    className="min-w-0 truncate text-[12px] font-semibold text-[var(--color-ink-bright)]"
                     style={{ fontFamily: "var(--font-sans)" }}
                     title={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}
                   >
@@ -912,8 +912,8 @@ export function WorkflowNode({
                     className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
                     style={{
                       fontFamily: "var(--font-sans)",
-                      background: "#26262E",
-                      color: "#9A9AAD",
+                      background: "var(--color-border-strong)",
+                      color: "var(--color-ink-muted)",
                     }}
                   >
                     {oType}
@@ -932,7 +932,7 @@ export function WorkflowNode({
         type="button"
         disabled={d.status === "running"}
         onClick={onGenerate}
-        className="nodrag nopan flex h-[43px] w-full items-center justify-center gap-2 rounded-b-[14px] bg-gradient-to-r from-[#7C5CFC] to-[#FF5CA8] text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
+        className="nodrag nopan flex h-[43px] w-full items-center justify-center gap-2 rounded-b-[14px] bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)] text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {d.status === "running" ? "生成中…" : "▶ 用此工作流生成"}

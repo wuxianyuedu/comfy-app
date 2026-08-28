@@ -828,7 +828,7 @@ const renderWorkflowCard = (w: LibraryRow) => {
           >
             <div
               onClick={(event) => event.stopPropagation()}
-              className="w-full max-w-md rounded-2xl border border-red-500/30 bg-[#16161C] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
+              className="w-full max-w-md rounded-2xl border border-red-500/30 bg-[var(--color-card)] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
             >
               <div className="mb-3 flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-300">

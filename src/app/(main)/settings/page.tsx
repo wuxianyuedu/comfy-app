@@ -137,14 +137,14 @@ export default function SettingsPage() {
 
   if (settingsQ.isLoading || llmQ.isLoading || !settings || !llm || !settingsDraft || !llmDraft) {
     return (
-      <div className="dark grid min-h-screen place-items-center bg-[#0a0a0f] text-muted">
+      <div className="dark grid min-h-screen place-items-center bg-[var(--color-canvas)] text-muted">
         加载中…
       </div>
     );
   }
 
   return (
-    <div className="dark min-h-screen bg-[#0a0a0f] px-4 py-8 sm:px-8">
+    <div className="dark min-h-screen bg-[var(--color-canvas)] px-4 py-8 sm:px-8">
       <div className="mx-auto max-w-[1200px]">
         <div className="mb-6">
           <h1 className="u-title-page">设置</h1>

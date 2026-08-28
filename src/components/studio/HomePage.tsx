@@ -99,7 +99,7 @@ export function HomePage({
 }: HomePageProps) {
   const toast = useToast();
   return (
-    <div className="relative flex h-screen w-screen overflow-hidden bg-[#0a0a0f] text-gray-200" style={{ fontFamily: "var(--font-sans)" }}>
+    <div className="relative flex h-screen w-screen overflow-hidden bg-[var(--color-canvas)] text-gray-200" style={{ fontFamily: "var(--font-sans)" }}>
       {/* ── Aurora Background Blobs ───────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <div
@@ -122,7 +122,7 @@ export function HomePage({
       {/* ── Right Area: Top Bar + Main Content ──────────── */}
       <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* ── Top Bar ── */}
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.05] bg-[#14141a]/88 px-5 py-0 backdrop-blur-md">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.05] bg-[var(--color-panel)]/88 px-5 py-0 backdrop-blur-md">
           {/* Search */}
           <div className="flex max-w-[280px] flex-1 items-center gap-2.5 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-1.8 text-sm text-gray-500 transition-colors focus-within:border-white/[0.13] focus-within:bg-white/[0.05]">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
@@ -160,7 +160,7 @@ export function HomePage({
             <h1 className="mb-3 text-center text-[34px] font-bold tracking-tight text-[var(--color-ink)]">
               灵感从这里开始
             </h1>
-            <p className="mb-10 text-center text-sm text-[#8b90a8]">
+            <p className="mb-10 text-center text-sm text-[var(--color-ink-faint)]">
               用本地 AI 模型，自由创作图像、视频与专属模型
             </p>
 
@@ -228,11 +228,11 @@ export function HomePage({
             {/* ── Recent Projects ── */}
             <section className="mt-14">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-[17px] font-semibold text-[#e5e7eb]">最近项目</h2>
+                <h2 className="text-[17px] font-semibold text-[var(--color-ink-field)]">最近项目</h2>
                 <button
                   type="button"
                   onClick={() => onShowAllProjects?.()}
-                  className="text-xs text-[#8b90a8] transition-colors hover:text-gray-300"
+                  className="text-xs text-[var(--color-ink-faint)] transition-colors hover:text-gray-300"
                 >
                   查看全部 →
                 </button>
@@ -281,7 +281,7 @@ export function HomePage({
                         {/* Info */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
-                            <span className="truncate text-[13px] font-medium text-[#e5e7eb] group-hover:text-white transition-colors">
+                            <span className="truncate text-[13px] font-medium text-[var(--color-ink-field)] group-hover:text-white transition-colors">
                               {proj.name}
                             </span>
                             <span
@@ -295,7 +295,7 @@ export function HomePage({
                               {cfg!.label}
                             </span>
                           </div>
-                          <div className="mt-1 flex items-center gap-2 text-[11.5px] text-[#6b7088]">
+                          <div className="mt-1 flex items-center gap-2 text-[11.5px] text-[var(--color-ink-fainter)]">
                             {proj.subtitle && <span>{proj.subtitle}</span>}
                             <span className="shrink-0">{proj.updatedAt}</span>
                           </div>

@@ -727,7 +727,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
                         position={Position.Left}
                         id={inName}
                         isConnectable={false}
-                        className="!h-2.5 !w-2.5 !rounded-full !border !border-[#0a0a0f]"
+                        className="!h-2.5 !w-2.5 !rounded-full !border !border-[var(--color-canvas)]"
                         style={{
                           left: 5,
                           background: inCol,
@@ -796,7 +796,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
                           position={Position.Right}
                           id={`out:${outName}`}
                           isConnectable={false}
-                          className="!h-2.5 !w-2.5 !rounded-full !border !border-[#0a0a0f]"
+                          className="!h-2.5 !w-2.5 !rounded-full !border !border-[var(--color-canvas)]"
                           style={{
                             right: 5,
                             background: outCol,
@@ -992,7 +992,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
                     position={Position.Left}
                     id={k}
                     isConnectable={false}
-                    className="!h-2.5 !w-2.5 !rounded-full !border !border-[#0a0a0f]"
+                    className="!h-2.5 !w-2.5 !rounded-full !border !border-[var(--color-canvas)]"
                     style={{
                       left: 5,
                       background: typeCol,
@@ -1053,7 +1053,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
                        *  STRING-stacked row label too — same rationale
                        *  as the inline branch above. */
                       className="shrink-0 whitespace-normal break-words text-left text-[11px]"
-                      style={{ color: isConn ? "#e4e4e7" : "#d4d4d8" }}
+                      style={{ color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)" }}
                       title={k}
                     >
                       {friendlyLabel}
@@ -1096,7 +1096,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
                        *  row.  Full text is still available via the
                        *  native `title` tooltip. */
                       className="min-w-0 shrink whitespace-normal break-words text-left text-[11px]"
-                      style={{ flex: "0 1 auto", color: isConn ? "#e4e4e7" : "#d4d4d8" }}
+                      style={{ flex: "0 1 auto", color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)" }}
                       title={k}
                     >
                       {friendlyLabel}
@@ -1239,7 +1239,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
           type="target"
           position={Position.Left}
           id="__default_in"
-          className="!h-2.5 !w-2.5 !border-2 !border-[#0a0a0f] !bg-violet-400/80"
+          className="!h-2.5 !w-2.5 !border-2 !border-[var(--color-canvas)] !bg-violet-400/80"
           style={{ left: -5 }}
         />
       )}

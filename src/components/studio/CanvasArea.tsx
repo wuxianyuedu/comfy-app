@@ -95,7 +95,7 @@ export function CanvasArea({
   return (
     <div
       ref={containerRef}
-      className={`relative flex h-full w-full overflow-hidden bg-[#0a0a0f] ${className}`}
+      className={`relative flex h-full w-full overflow-hidden bg-[var(--color-canvas)] ${className}`}
       onContextMenu={handleContextMenu}
     >
       {/* Canvas content */}

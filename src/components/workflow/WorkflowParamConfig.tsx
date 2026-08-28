@@ -207,15 +207,15 @@ export function WorkflowParamConfig({
 
   if (!compact) {
     return (
-      <div className="space-y-3 rounded-xl border border-white/[0.06] bg-[#0f0f16]/70 p-4">
+      <div className="space-y-3 rounded-xl border border-white/[0.06] bg-[var(--color-panel-deep)]/70 p-4">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="flex items-center text-[13px] font-semibold text-[#e5e7eb]">
+            <h3 className="flex items-center text-[13px] font-semibold text-[var(--color-ink-field)]">
               <Icon name="settings" size={14} className="mr-1.5 inline align-[-2px]" />
               参数暴露配置
             </h3>
-            <p className="mt-0.5 text-[10.5px] text-[#6b7088]">
+            <p className="mt-0.5 text-[10.5px] text-[var(--color-ink-fainter)]">
               选择工作流中哪些节点作为输入参数暴露给创作台
             </p>
           </div>
@@ -259,8 +259,8 @@ export function WorkflowParamConfig({
               >
                 {/* Node info */}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-medium text-[#e5e7eb]">{node.title}</p>
-                  <p className="truncate text-[10px] text-[#6b7088]">
+                  <p className="truncate text-[12px] font-medium text-[var(--color-ink-field)]">{node.title}</p>
+                  <p className="truncate text-[10px] text-[var(--color-ink-fainter)]">
                     {node.class_type} · {node.id.slice(0, 8)}…
                   </p>
                 </div>

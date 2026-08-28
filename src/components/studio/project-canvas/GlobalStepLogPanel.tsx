@@ -411,7 +411,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             <select
               value={taskId ?? ""}
               onChange={(event) => setViewTaskId(event.target.value || null)}
-              className="max-w-[260px] truncate rounded-md border border-white/10 bg-[#14141a] px-1.5 py-0.5 text-[10.5px] text-gray-300 outline-none"
+              className="max-w-[260px] truncate rounded-md border border-white/10 bg-[var(--color-panel)] px-1.5 py-0.5 text-[10.5px] text-gray-300 outline-none"
               title="切换查看的任务"
             >
               {!taskId && <option value="">（无任务）</option>}
@@ -454,7 +454,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         <>
           {/* 级别过滤条 — Chrome DevTools 风格 chip toggle */}
           <div className="flex shrink-0 items-center gap-1.5 border-b border-white/[0.05] px-3 py-1.5">
-            <span className="text-[10px] text-[#9A9AAD]">级别</span>
+            <span className="text-[10px] text-[var(--color-ink-muted)]">级别</span>
             {levels.map((lv) => {
               const ch = levelChip(lv);
               const on = filters[lv];
@@ -482,7 +482,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 </button>
               );
             })}
-            <span className="ml-auto flex shrink-0 items-center gap-2 text-[10px] text-[#9A9AAD]">
+            <span className="ml-auto flex shrink-0 items-center gap-2 text-[10px] text-[var(--color-ink-muted)]">
               <label className="flex cursor-pointer select-none items-center gap-1">
                 <input
                   type="checkbox"
@@ -522,7 +522,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             )}
 
             {visible.length === 0 ? (
-              <div className="py-6 text-center text-[10.5px] text-[#9A9AAD]">
+              <div className="py-6 text-center text-[10.5px] text-[var(--color-ink-muted)]">
                 {taskId
                   ? "等待日志…（运行生成后此处显示每节点执行步骤）"
                   : "运行生成后此处会显示执行步骤日志 · 顶部手柄可拖动调整高度"}

@@ -431,7 +431,7 @@ function WidgetValueChip({
         className="rounded px-1.5 py-px text-[10px] font-semibold"
         style={{
           background: on ? "rgba(16,185,129,0.18)" : "rgba(239,68,68,0.18)",
-          color: on ? "#10B981" : "#EF4444",
+          color: on ? "var(--color-success-strong)" : "#EF4444",
           fontFamily: "var(--font-mono)",
         }}
       >
@@ -460,7 +460,7 @@ function WidgetValueChip({
         className="max-w-[100px] truncate rounded px-1.5 py-px text-[10px] font-semibold"
         style={{
           background: "rgba(245,158,11,0.18)",
-          color: "#F59E0B",
+          color: "var(--color-warning)",
           fontFamily: "var(--font-mono)",
         }}
         title={value == null ? "" : String(value)}
@@ -1219,7 +1219,7 @@ export function CustomNodesSettings() {
                 </label>
                 <span
                   className="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
-                  style={{ background: "rgba(16,185,129,0.18)", color: "#10B981" }}
+                  style={{ background: "rgba(16,185,129,0.18)", color: "var(--color-success-strong)" }}
                   title="解析器只读取这些目录里的 .py、绝不修改其中任何文件"
                 >
                   🔒 只读
@@ -1253,7 +1253,7 @@ export function CustomNodesSettings() {
                       {totalAcrossParents.loaded > 0 && (
                         <span
                           className="rounded-full px-2 py-0.5 font-medium"
-                          style={{ background: "rgba(16,185,129,0.18)", color: "#10B981" }}
+                          style={{ background: "rgba(16,185,129,0.18)", color: "var(--color-success-strong)" }}
                         >
                           ✓ 已加载 {totalAcrossParents.loaded}
                         </span>
@@ -1261,7 +1261,7 @@ export function CustomNodesSettings() {
                       {totalAcrossParents.outdated > 0 && (
                         <span
                           className="rounded-full px-2 py-0.5 font-medium"
-                          style={{ background: "rgba(245,158,11,0.22)", color: "#F59E0B" }}
+                          style={{ background: "rgba(245,158,11,0.22)", color: "var(--color-warning)" }}
                         >
                           ↻ 有更新 {totalAcrossParents.outdated}
                         </span>
@@ -1365,7 +1365,7 @@ export function CustomNodesSettings() {
                 <span className="text-sm font-medium text-ink">
                   可导入的节点包
                   {totalAcrossParents.outdated > 0 && (
-                    <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: "rgba(245,158,11,0.18)", color: "#F59E0B" }}>
+                    <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: "rgba(245,158,11,0.18)", color: "var(--color-warning)" }}>
                       ↻ {totalAcrossParents.outdated} 个有更新
                     </span>
                   )}
@@ -1421,12 +1421,12 @@ export function CustomNodesSettings() {
                           <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
                             <span>{total} 个子包</span>
                             {cnt.loaded > 0 && (
-                              <span className="rounded-full px-1.5 py-0.5" style={{ background: "rgba(16,185,129,0.18)", color: "#10B981" }}>
+                              <span className="rounded-full px-1.5 py-0.5" style={{ background: "rgba(16,185,129,0.18)", color: "var(--color-success-strong)" }}>
                                 ✓ {cnt.loaded}
                               </span>
                             )}
                             {cnt.outdated > 0 && (
-                              <span className="rounded-full px-1.5 py-0.5" style={{ background: "rgba(245,158,11,0.20)", color: "#F59E0B" }}>
+                              <span className="rounded-full px-1.5 py-0.5" style={{ background: "rgba(245,158,11,0.20)", color: "var(--color-warning)" }}>
                                 ↻ {cnt.outdated}
                               </span>
                             )}
@@ -1441,7 +1441,7 @@ export function CustomNodesSettings() {
                               </span>
                             )}
                             {cnt.missing > 0 && (
-                              <span className="rounded-full px-1.5 py-0.5" style={{ background: "rgba(245,158,11,0.20)", color: "#F59E0B" }}>
+                              <span className="rounded-full px-1.5 py-0.5" style={{ background: "rgba(245,158,11,0.20)", color: "var(--color-warning)" }}>
                                 ⚠ {cnt.missing} 不存在
                               </span>
                             )}

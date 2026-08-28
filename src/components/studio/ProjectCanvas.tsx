@@ -124,7 +124,7 @@ function ContextMenu({
           type="button"
           data-canvas-node-kind="workflow-ardot"
           onClick={onPickTest}
-          className="flex w-full items-center gap-2 rounded-lg border border-violet-400/30 bg-gradient-to-r from-[#7C5CFC]/15 to-[#FF5CA8]/10 px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:from-[#7C5CFC]/25 hover:to-[#FF5CA8]/15"
+          className="flex w-full items-center gap-2 rounded-lg border border-violet-400/30 bg-gradient-to-r from-[var(--color-primary)]/15 to-[var(--color-accent)]/10 px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:from-[var(--color-primary)]/25 hover:to-[var(--color-accent)]/15"
         >
           <span
             className="flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold text-white"
@@ -579,7 +579,7 @@ function CanvasInner({ seedNew, onConsumeSeed, pendingWorkflow, onConsumePending
 
   return (
     <div
-      className="relative h-full w-full bg-[#0a0a0f]"
+      className="relative h-full w-full bg-[var(--color-canvas)]"
       onDragOver={onCanvasDragOver}
       onDrop={onCanvasDrop}
     >

@@ -93,7 +93,7 @@ function MidDot() {
     <span
       aria-hidden
       className="select-none text-[12px] leading-none"
-      style={{ color: "#5A5A6B" }}
+      style={{ color: "var(--color-ink-placeholder)" }}
     >
       ·
     </span>
@@ -114,7 +114,7 @@ function PortRowString({
     <div className="flex h-[86px] flex-col gap-[6px] py-[6px]">
       <div className="flex h-4 items-center justify-between gap-2.5 pl-[14px] pr-[14px]">
         <span
-          className="text-[12px] font-medium text-[#EDEDF2]"
+          className="text-[12px] font-medium text-[var(--color-ink-bright)]"
           style={{ fontFamily: "var(--font-sans)" }}
         >
           {label}
@@ -125,7 +125,7 @@ function PortRowString({
         readOnly
         rows={2}
         defaultValue={value}
-        className="mx-[14px] h-[52px] resize-none rounded-md border border-white/[0.04] bg-[#0F0F14] px-2.5 py-2 text-[11px] leading-relaxed text-[#C9C9D6] outline-none"
+        className="mx-[14px] h-[52px] resize-none rounded-md border border-white/[0.04] bg-[var(--color-canvas-deep)] px-2.5 py-2 text-[11px] leading-relaxed text-[var(--color-ink-soft)] outline-none"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </div>
@@ -145,7 +145,7 @@ function PortRowInt({
   return (
     <div className="flex h-[33px] items-center gap-2.5 pl-[14px] pr-[14px]">
       <span
-        className="text-[12px] font-medium text-[#EDEDF2]"
+        className="text-[12px] font-medium text-[var(--color-ink-bright)]"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}
@@ -154,7 +154,7 @@ function PortRowInt({
       <input
         readOnly
         defaultValue={value}
-        className="h-[21px] w-[140px] rounded border border-[#26262E] bg-[#0F0F14] px-2 text-right text-[12px] tabular-nums text-[#EDEDF2] outline-none"
+        className="h-[21px] w-[140px] rounded border border-[var(--color-border-strong)] bg-[var(--color-canvas-deep)] px-2 text-right text-[12px] tabular-nums text-[var(--color-ink-bright)] outline-none"
         style={{ fontFamily: "var(--font-sans)" }}
       />
       <PortChip type={type} />
@@ -174,7 +174,7 @@ function PortRowOutput({
     <div className="flex h-7 items-center gap-2.5 pl-[14px] pr-[14px]">
       <div className="flex-1" />
       <span
-        className="text-[12px] font-medium text-[#EDEDF2]"
+        className="text-[12px] font-medium text-[var(--color-ink-bright)]"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}
@@ -198,30 +198,30 @@ export function WorkflowNodeArdot() {
   return (
     <div className="relative w-[340px]">
       {/* ── Card 自身（overflow-hidden 保护底部 ActionBtn 圆角）── */}
-      <div className="relative rounded-[14px] border border-[#26262E] bg-[#16161C] overflow-hidden">
+      <div className="relative rounded-[14px] border border-[var(--color-border-strong)] bg-[var(--color-card)] overflow-hidden">
         {/* ── CardHeader 340×32 ── */}
         <div className="flex h-8 items-center justify-between gap-2.5 pl-[14px] pr-[14px]">
           <div className="flex items-center gap-2.5">
             <span
               aria-label="类型 工作流"
-              className="flex h-7 w-7 items-center justify-center rounded-[14px] text-[14px] font-bold text-[#7C5CFC]"
+              className="flex h-7 w-7 items-center justify-center rounded-[14px] text-[14px] font-bold text-[var(--color-primary)]"
               style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
             >
               W
             </span>
             <span
-              className="text-[14px] font-bold text-[#EDEDF2]"
+              className="text-[14px] font-bold text-[var(--color-ink-bright)]"
               style={{ fontFamily: "var(--font-sans)" }}
             >
               自定义工作流
             </span>
           </div>
           <div
-            className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-[#1E1A2E] px-2"
+            className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-[var(--color-node-accent)] px-2"
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-[#7C5CFC]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-primary)]" />
             <span
-              className="text-[10px] font-medium text-[#C9C9D6]"
+              className="text-[10px] font-medium text-[var(--color-ink-soft)]"
               style={{ fontFamily: "var(--font-sans)" }}
             >
               待开始
@@ -230,7 +230,7 @@ export function WorkflowNodeArdot() {
         </div>
 
         {/* ── Divider 340×1 ── */}
-        <div className="h-px bg-[#26262E]" />
+        <div className="h-px bg-[var(--color-border-strong)]" />
 
         {/* ── WorkflowChipRow 340×44（chip 24h 居中）── */}
         {/* 顺序：本机（位置）→ image_z_image_int8（名称）→ T2I（类型，最右） */}
@@ -238,7 +238,7 @@ export function WorkflowNodeArdot() {
           {/* Chip 1：本机（位置）· 绿点+本机+▾ */}
           <button
             type="button"
-            className="flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-[#7C5CFC]/[0.35] bg-[#1E1A2E] px-2.5 text-[12px]"
+            className="flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-primary)]/[0.35] bg-[var(--color-node-accent)] px-2.5 text-[12px]"
           >
             <span
               aria-hidden
@@ -251,33 +251,33 @@ export function WorkflowNodeArdot() {
             >
               本机
             </span>
-            <span aria-hidden className="shrink-0 text-[#6E6E80]" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
+            <span aria-hidden className="shrink-0 text-[var(--color-ink-icon)]" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
           </button>
           {/* Chip 2：image_z_image_int8（具体工作流名）· flex-1 撑满中间 */}
           <button
             type="button"
-            className="flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-[#7C5CFC]/[0.35] bg-[#1E1A2E] px-2.5 text-[12px]"
+            className="flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-[var(--color-primary)]/[0.35] bg-[var(--color-node-accent)] px-2.5 text-[12px]"
           >
             <span
-              className="min-w-0 flex-1 truncate text-left font-semibold text-[#EDEDF2]"
+              className="min-w-0 flex-1 truncate text-left font-semibold text-[var(--color-ink-bright)]"
               style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}
             >
               image_z_image_int8
             </span>
-            <span aria-hidden className="shrink-0 text-[#6E6E80]" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
+            <span aria-hidden className="shrink-0 text-[var(--color-ink-icon)]" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
           </button>
           {/* Chip 3：T2I（类型，单独下拉，最右）· 紫描边加深强调可切换 */}
           <button
             type="button"
-            className="flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-[#7C5CFC]/[0.55] bg-[#1E1A2E] px-2.5 text-[12px]"
+            className="flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-primary)]/[0.55] bg-[var(--color-node-accent)] px-2.5 text-[12px]"
           >
             <span
-              className="font-medium text-[#EDEDF2]"
+              className="font-medium text-[var(--color-ink-bright)]"
               style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
             >
               T2I
             </span>
-            <span aria-hidden className="shrink-0 text-[#9A9AAD]" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
+            <span aria-hidden className="shrink-0 text-[var(--color-ink-muted)]" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
           </button>
         </div>
 
@@ -304,7 +304,7 @@ export function WorkflowNodeArdot() {
         {/* ── ActionBtn 340×43（紧贴端口行下沿，0 间距） ── */}
         <button
           type="button"
-          className="flex h-[43px] w-full items-center justify-center gap-2 bg-gradient-to-r from-[#7C5CFC] to-[#FF5CA8] text-[13px] font-bold text-white"
+          className="flex h-[43px] w-full items-center justify-center gap-2 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)] text-[13px] font-bold text-white"
           style={{
             fontFamily: "var(--font-sans)",
             boxShadow: "0 4px 12px rgba(124,92,252,0.35)",

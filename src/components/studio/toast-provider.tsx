@@ -114,7 +114,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           return (
             <div
               key={item.id}
-              className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-[#14141a]/95 p-3.5 shadow-xl shadow-black/40 backdrop-blur-md transition-all`}
+              className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-[var(--color-panel)]/95 p-3.5 shadow-xl shadow-black/40 backdrop-blur-md transition-all`}
             >
               <div className={`mt-0.5 ${st.iconColor}`}>
                 <Icon name={st.icon} size={16} />

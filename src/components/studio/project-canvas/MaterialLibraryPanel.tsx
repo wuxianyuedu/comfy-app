@@ -230,7 +230,7 @@ export function MaterialLibraryPanel({
       : [{ label: "全部", key: null }];
 
   return (
-    <aside className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l border-white/[0.06] bg-[#14141a]/98 backdrop-blur-md">
+    <aside className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l border-white/[0.06] bg-[var(--color-panel)]/98 backdrop-blur-md">
       {/* ── Header ── */}
       <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3">
         <h2 className="flex-1 text-[15px] font-semibold text-gray-100">素材库</h2>
@@ -298,7 +298,7 @@ export function MaterialLibraryPanel({
             }}
             className={`pb-2.5 text-[13px] font-medium transition-colors ${
               scope === scopeItem.id
-                ? "border-b-2 border-[#FF5CA8] text-gray-100"
+                ? "border-b-2 border-[var(--color-accent)] text-gray-100"
                 : "text-gray-500 hover:text-gray-300"
             }`}
           >

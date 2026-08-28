@@ -231,7 +231,7 @@ export function DarkSelect({
               width: pos.width,
               zIndex: 9999,
             }}
-            className="max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-[#16161C] py-1 shadow-lg shadow-black/40"
+            className="max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-[var(--color-card)] py-1 shadow-lg shadow-black/40"
           >
             {options.map((opt, i) => (
               <li

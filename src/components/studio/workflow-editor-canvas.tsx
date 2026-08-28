@@ -141,7 +141,7 @@ export function WorkflowEditorCanvas({
         hasOverrides={canvasSettingsHydrated && isCustomCanvasSettings(canvasSettings)}
         onClick={onOpenSettings}
       />
-      <Controls showInteractive={false} className="!bg-[#14141a]/90 !border-white/10 !text-gray-400 [&>button]:!bg-white/5 [&>button]:!border-white/10 [&>button]:!text-gray-400 [&>button:hover]:!bg-white/10" />
+      <Controls showInteractive={false} className="!bg-[var(--color-panel)]/90 !border-white/10 !text-gray-400 [&>button]:!bg-white/5 [&>button]:!border-white/10 [&>button]:!text-gray-400 [&>button:hover]:!bg-white/10" />
       {canvasSettings.showMiniMap && (
         <MiniMap
           pannable
@@ -150,7 +150,7 @@ export function WorkflowEditorCanvas({
           onClick={onMiniMapJump}
           nodeColor={miniMapNodeColor}
           maskColor="rgba(0,0,0,0.78)"
-          className="!bg-[#14141a]/90 !border-white/10"
+          className="!bg-[var(--color-panel)]/90 !border-white/10"
         />
       )}
     </ReactFlow>

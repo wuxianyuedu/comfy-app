@@ -214,15 +214,15 @@ export function TrainingStudio() {
   }, []);
 
   const fieldClass =
-    "h-9 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-[#e5e7eb] outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20";
-  const labelClass = "mb-1.5 block text-[11px] font-medium text-[#8b90a8]";
+    "h-9 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-[var(--color-ink-field)] outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20";
+  const labelClass = "mb-1.5 block text-[11px] font-medium text-[var(--color-ink-faint)]";
 
   const RING_R = 36;
   const RING_C = 2 * Math.PI * RING_R;
 
   return (
     <div
-      className="flex h-full w-full flex-col overflow-hidden bg-[#0a0a0f]"
+      className="flex h-full w-full flex-col overflow-hidden bg-[var(--color-canvas)]"
       style={{ fontFamily: "var(--font-sans)" }}
     >
       {/* ── Aurora Background Blobs ───────────────── */}
@@ -238,10 +238,10 @@ export function TrainingStudio() {
       </div>
 
       {/* ── Top Toolbar ───────────────────────────── */}
-      <header className="relative z-10 flex h-12 shrink-0 items-center gap-3 border-b border-white/[0.05] bg-[#14141a]/88 px-4 backdrop-blur-md">
+      <header className="relative z-10 flex h-12 shrink-0 items-center gap-3 border-b border-white/[0.05] bg-[var(--color-panel)]/88 px-4 backdrop-blur-md">
         <div className="flex items-center gap-2">
           <span className="u-title">LoRA 训练工作室</span>
-          <span className="text-xs text-[#6b7088]">· 炼丹</span>
+          <span className="text-xs text-[var(--color-ink-fainter)]">· 炼丹</span>
         </div>
 
         {/* Backend status pill */}
@@ -275,11 +275,11 @@ export function TrainingStudio() {
       <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
 
         {/* ═══ Left: Dataset Panel (300px) ═══ */}
-        <aside className="flex w-[300px] shrink-0 flex-col border-r border-white/[0.04] bg-[#0f0f16]/85 backdrop-blur-sm">
+        <aside className="flex w-[300px] shrink-0 flex-col border-r border-white/[0.04] bg-[var(--color-panel-deep)]/85 backdrop-blur-sm">
           <div className="flex h-11 items-center justify-between border-b border-white/[0.04] px-4">
             <div className="flex items-center gap-2">
-              <span className="text-[13px] font-semibold text-[#e5e7eb]">数据集</span>
-              <span className="text-[11px] text-[#6b7088]">{dataset.length} 张</span>
+              <span className="text-[13px] font-semibold text-[var(--color-ink-field)]">数据集</span>
+              <span className="text-[11px] text-[var(--color-ink-fainter)]">{dataset.length} 张</span>
             </div>
           </div>
 
@@ -302,7 +302,7 @@ export function TrainingStudio() {
                 <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
               </svg>
               <p className="text-[12px] font-medium text-[#c4b5fd]">{uploading ? "上传中…" : "点击或拖拽上传图片"}</p>
-              <p className="text-[10px] text-[#6b7088]">建议 10–30 张同主题图片</p>
+              <p className="text-[10px] text-[var(--color-ink-fainter)]">建议 10–30 张同主题图片</p>
               <input
                 ref={fileRef}
                 type="file"
@@ -317,7 +317,7 @@ export function TrainingStudio() {
             {dataset.length > 0 && (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-[#8b90a8]">逐图 caption 标注</span>
+                  <span className="text-[11px] font-medium text-[var(--color-ink-faint)]">逐图 caption 标注</span>
                   <button
                     type="button"
                     onClick={fillBlankCaptions}
@@ -353,7 +353,7 @@ export function TrainingStudio() {
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] leading-relaxed text-[#5a5f73]">
+                <p className="text-[10px] leading-relaxed text-[var(--color-ink-faintest)]">
                   文件名与 caption 会随任务一起提交给训练后端；留空则默认使用触发词。
                 </p>
               </>
@@ -364,7 +364,7 @@ export function TrainingStudio() {
         {/* ═══ Center: Training Monitor ═══ */}
         <main className="flex min-w-0 flex-1 flex-col overflow-y-auto p-5">
           <div className="mb-4 flex items-center gap-2">
-            <span className="text-[13px] font-semibold text-[#e5e7eb]">训练监控</span>
+            <span className="text-[13px] font-semibold text-[var(--color-ink-field)]">训练监控</span>
             {activeJob && (
               <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${(STATUS_META[activeJob.status]! ?? STATUS_META.QUEUED).cls}`}>
                 {(STATUS_META[activeJob.status]! ?? STATUS_META.QUEUED).label}
@@ -400,24 +400,24 @@ export function TrainingStudio() {
                   </defs>
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-lg font-semibold text-[#e5e7eb]">{ringProgress}%</span>
-                  <span className="text-[10px] text-[#6b7088]">进度</span>
+                  <span className="text-lg font-semibold text-[var(--color-ink-field)]">{ringProgress}%</span>
+                  <span className="text-[10px] text-[var(--color-ink-fainter)]">进度</span>
                 </div>
               </div>
 
               {/* Metrics */}
               <div className="grid min-w-0 flex-1 grid-cols-2 gap-x-4 gap-y-3">
                 <div>
-                  <p className="text-[10px] text-[#6b7088]">当前步数</p>
-                  <p className="truncate text-[13px] font-medium text-[#e5e7eb]">{ringSteps} / {activeJob?.steps ?? 0}</p>
+                  <p className="text-[10px] text-[var(--color-ink-fainter)]">当前步数</p>
+                  <p className="truncate text-[13px] font-medium text-[var(--color-ink-field)]">{ringSteps} / {activeJob?.steps ?? 0}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-[#6b7088]">触发词</p>
+                  <p className="text-[10px] text-[var(--color-ink-fainter)]">触发词</p>
                   <p className="truncate text-[13px] font-medium text-violet-300">{activeJob?.triggerWord ?? "—"}</p>
                 </div>
                 <div className="col-span-2 min-w-0">
-                  <p className="text-[10px] text-[#6b7088]">底模</p>
-                  <p className="truncate text-[13px] font-medium text-[#e5e7eb]">{activeJob?.baseModel ?? "—"}</p>
+                  <p className="text-[10px] text-[var(--color-ink-fainter)]">底模</p>
+                  <p className="truncate text-[13px] font-medium text-[var(--color-ink-field)]">{activeJob?.baseModel ?? "—"}</p>
                 </div>
               </div>
             </div>
@@ -434,8 +434,8 @@ export function TrainingStudio() {
           {/* Loss curve card */}
           <div className="mt-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-[12px] font-medium text-[#e5e7eb]">Loss 曲线</span>
-              <div className="flex items-center gap-3 text-[10px] text-[#6b7088]">
+              <span className="text-[12px] font-medium text-[var(--color-ink-field)]">Loss 曲线</span>
+              <div className="flex items-center gap-3 text-[10px] text-[var(--color-ink-fainter)]">
                 <span className="flex items-center gap-1"><span className="inline-block h-[2px] w-3 bg-violet-400" />训练</span>
                 <span className="flex items-center gap-1"><span className="inline-block h-[2px] w-3 bg-cyan-400" />验证</span>
               </div>
@@ -452,7 +452,7 @@ export function TrainingStudio() {
 
           {/* Job list */}
           <div className="mt-4">
-            <h3 className="mb-3 text-[12px] font-medium text-[#8b90a8]">训练任务</h3>
+            <h3 className="mb-3 text-[12px] font-medium text-[var(--color-ink-faint)]">训练任务</h3>
             {jobs.length === 0 ? (
               <div className="grid min-h-[160px] place-items-center rounded-2xl border border-dashed border-white/[0.08] text-gray-500">
                 <p className="text-sm">还没有训练任务。在右侧配置并点击「开始训练」。</p>
@@ -546,9 +546,9 @@ export function TrainingStudio() {
         </main>
 
         {/* ═══ Right: Hyperparameters (320px) ═══ */}
-        <aside className="flex w-[320px] shrink-0 flex-col border-l border-white/[0.04] bg-[#0f0f16]/85 backdrop-blur-sm">
+        <aside className="flex w-[320px] shrink-0 flex-col border-l border-white/[0.04] bg-[var(--color-panel-deep)]/85 backdrop-blur-sm">
           <div className="flex h-11 items-center border-b border-white/[0.04] px-4">
-            <span className="text-[13px] font-semibold text-[#e5e7eb]">超参数</span>
+            <span className="text-[13px] font-semibold text-[var(--color-ink-field)]">超参数</span>
           </div>
 
           <div className="flex-1 space-y-3.5 overflow-y-auto p-4">
@@ -560,7 +560,7 @@ export function TrainingStudio() {
             <div>
               <label className={labelClass}>底模（Checkpoint）</label>
               <DarkSelect
-                className="!bg-white/[0.03] !border-white/[0.08] h-9 text-[13px] text-[#e5e7eb]"
+                className="!bg-white/[0.03] !border-white/[0.08] h-9 text-[13px] text-[var(--color-ink-field)]"
                 value={baseModel}
                 onChange={(value) => setBaseModel(value)}
                 options={checkpoints.map((checkpoint) => checkpoint.fileName)}
@@ -583,7 +583,7 @@ export function TrainingStudio() {
             <div>
               <label className={labelClass}>分辨率</label>
               <DarkSelect
-                className="!bg-white/[0.03] !border-white/[0.08] h-9 text-[13px] text-[#e5e7eb]"
+                className="!bg-white/[0.03] !border-white/[0.08] h-9 text-[13px] text-[var(--color-ink-field)]"
                 value={String(resolution)}
                 onChange={(value) => setResolution(Number(value))}
                 options={RESOLUTIONS.map(String)}
@@ -593,7 +593,7 @@ export function TrainingStudio() {
 
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[11px] font-medium text-[#8b90a8]">训练步数</span>
+                <span className="text-[11px] font-medium text-[var(--color-ink-faint)]">训练步数</span>
                 <span className="text-[11px] font-medium text-violet-300">{steps}</span>
               </div>
               <input type="range" min={500} max={4000} step={100} value={steps} onChange={(event) => setSteps(Number(event.target.value))} className="w-full accent-violet-500" />
@@ -601,7 +601,7 @@ export function TrainingStudio() {
 
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[11px] font-medium text-[#8b90a8]">批次大小</span>
+                <span className="text-[11px] font-medium text-[var(--color-ink-faint)]">批次大小</span>
                 <span className="text-[11px] font-medium text-violet-300">{batchSize}</span>
               </div>
               <input type="range" min={1} max={8} value={batchSize} onChange={(event) => setBatchSize(Number(event.target.value))} className="w-full accent-violet-500" />
@@ -609,7 +609,7 @@ export function TrainingStudio() {
 
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[11px] font-medium text-[#8b90a8]">LoRA 维度 (rank)</span>
+                <span className="text-[11px] font-medium text-[var(--color-ink-faint)]">LoRA 维度 (rank)</span>
                 <span className="text-[11px] font-medium text-violet-300">{rankDim}</span>
               </div>
               <input type="range" min={8} max={128} step={8} value={rankDim} onChange={(event) => setRankDim(Number(event.target.value))} className="w-full accent-violet-500" />
@@ -617,7 +617,7 @@ export function TrainingStudio() {
 
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[11px] font-medium text-[#8b90a8]">Alpha</span>
+                <span className="text-[11px] font-medium text-[var(--color-ink-faint)]">Alpha</span>
                 <span className="text-[11px] font-medium text-violet-300">{networkAlpha}</span>
               </div>
               <input type="range" min={0} max={128} step={8} value={networkAlpha} onChange={(event) => setNetworkAlpha(Number(event.target.value))} className="w-full accent-violet-500" />
@@ -639,7 +639,7 @@ export function TrainingStudio() {
               <div>
                 <label className={labelClass}>优化器</label>
                 <DarkSelect
-                  className="!bg-white/[0.03] !border-white/[0.08] h-9 text-[13px] text-[#e5e7eb]"
+                  className="!bg-white/[0.03] !border-white/[0.08] h-9 text-[13px] text-[var(--color-ink-field)]"
                   value={optimizer}
                   onChange={(value) => setOptimizer(value)}
                   options={OPTIMIZERS}
@@ -649,7 +649,7 @@ export function TrainingStudio() {
               <div>
                 <label className={labelClass}>调度器</label>
                 <DarkSelect
-                  className="!bg-white/[0.03] !border-white/[0.08] h-9 text-[13px] text-[#e5e7eb]"
+                  className="!bg-white/[0.03] !border-white/[0.08] h-9 text-[13px] text-[var(--color-ink-field)]"
                   value={scheduler}
                   onChange={(value) => setScheduler(value)}
                   options={SCHEDULERS}
@@ -672,7 +672,7 @@ export function TrainingStudio() {
             >
               {submitting ? "提交中…" : "开始训练"}
             </button>
-            <p className="text-center text-[10px] leading-relaxed text-[#5a5f73]">
+            <p className="text-center text-[10px] leading-relaxed text-[var(--color-ink-faintest)]">
               全部在本机运行 · 无需登录 · 零授权
             </p>
           </div>
@@ -680,7 +680,7 @@ export function TrainingStudio() {
       </div>
 
       {/* ── Status Bar ────────────────────────────── */}
-      <footer className="relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t border-white/[0.04] bg-[#0f0f16]/95 backdrop-blur-sm">
+      <footer className="relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t border-white/[0.04] bg-[var(--color-panel-deep)]/95 backdrop-blur-sm">
         <span className="inline-block h-[7px] w-[7px] rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/40" />
         <span className="text-[11px] text-[#6b788f]">
           ComfyUI·Kohya 就绪 · 本地算力 · 零授权

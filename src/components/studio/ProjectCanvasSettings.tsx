@@ -163,7 +163,7 @@ export function ProjectSettingsButton({ onClick }: { onClick: () => void }) {
       title="项目画布设置"
       aria-label="项目画布设置"
       data-testid="project-canvas-settings-button"
-      className="pointer-events-auto absolute right-3 top-3 z-20 select-none rounded-md border border-white/10 bg-[#14141a]/90 px-2.5 py-1.5 text-[11.5px] font-medium tracking-tight text-gray-300 shadow-lg backdrop-blur-sm transition-colors hover:border-white/25 hover:text-gray-100"
+      className="pointer-events-auto absolute right-3 top-3 z-20 select-none rounded-md border border-white/10 bg-[var(--color-panel)]/90 px-2.5 py-1.5 text-[11.5px] font-medium tracking-tight text-gray-300 shadow-lg backdrop-blur-sm transition-colors hover:border-white/25 hover:text-gray-100"
     >
       <span aria-hidden className="mr-1 align-baseline text-[12.5px]">⚙</span>
       设置

@@ -83,7 +83,7 @@ function StyleSwitcher({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <span className="text-[10px] text-[#9A9AAD]">{label}</span>
+      <span className="text-[10px] text-[var(--color-ink-muted)]">{label}</span>
       {children}
     </div>
   );
@@ -196,14 +196,14 @@ function MultiSegmentPopoverInner({
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={handleToggle}
-        className="nodrag nopan flex w-full items-center gap-2 rounded-lg border border-[#7C5CFC]/35 bg-[#0F0F14] px-3 py-2 text-left text-[12px] text-[#EDEDF2] outline-none transition-colors hover:border-[#7C5CFC]/70 focus:border-[#7C5CFC]/70"
+        className="nodrag nopan flex w-full items-center gap-2 rounded-lg border border-[var(--color-primary)]/35 bg-[var(--color-canvas-deep)] px-3 py-2 text-left text-[12px] text-[var(--color-ink-bright)] outline-none transition-colors hover:border-[var(--color-primary)]/70 focus:border-[var(--color-primary)]/70"
       >
         <span className="flex-1 truncate">{triggerContent}</span>
         <svg
           width="10"
           height="10"
           viewBox="0 0 10 10"
-          className={`shrink-0 text-[#9A9AAD] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-[var(--color-ink-muted)] transition-transform ${open ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           strokeWidth="1.6"
@@ -268,13 +268,13 @@ const Section = React.memo(function Section({
 
   return (
     <div className={first ? "" : "mt-3"}>
-      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#9A9AAD]">
+      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">
         {section.label}
       </div>
       {grouped.map((group, gi) => (
         <div key={group.key} className={gi > 0 ? "mt-2" : ""}>
           {group.label && (
-            <div className="mb-1 text-[9px] uppercase tracking-wider text-[#6E6E80]">
+            <div className="mb-1 text-[9px] uppercase tracking-wider text-[var(--color-ink-icon)]">
               {group.label}
             </div>
           )}
@@ -290,8 +290,8 @@ const Section = React.memo(function Section({
                   onClick={() => onPick(opt.value)}
                   className={`nodrag nopan flex min-w-[52px] flex-col items-center gap-1 rounded-md px-1.5 py-1.5 text-[11px] transition-colors ${
                     selected
-                      ? "bg-[#7C5CFC]/20 text-[#EDEDF2] ring-1 ring-[#7C5CFC]/55"
-                      : "text-[#9A9AAD] hover:bg-white/[0.06] hover:text-[#EDEDF2]"
+                      ? "bg-[var(--color-primary)]/20 text-[var(--color-ink-bright)] ring-1 ring-[var(--color-primary)]/55"
+                      : "text-[var(--color-ink-muted)] hover:bg-white/[0.06] hover:text-[var(--color-ink-bright)]"
                   }`}
                 >
                   {opt.render}
@@ -383,9 +383,9 @@ const AlignMultipleStepper = React.memo(function AlignMultipleStepper({
       data-testid="align-multiple-stepper"
       className="flex items-center gap-2"
     >
-      <span className="shrink-0 text-[10px] text-[#9A9AAD]">倍数</span>
+      <span className="shrink-0 text-[10px] text-[var(--color-ink-muted)]">倍数</span>
       <div
-        className={`flex flex-1 items-center justify-between rounded-md border border-[#7C5CFC]/35 bg-[#0F0F14] px-2 py-1 ${
+        className={`flex flex-1 items-center justify-between rounded-md border border-[var(--color-primary)]/35 bg-[var(--color-canvas-deep)] px-2 py-1 ${
           disabled ? "opacity-50" : ""
         }`}
       >
@@ -394,13 +394,13 @@ const AlignMultipleStepper = React.memo(function AlignMultipleStepper({
           aria-label="减小对齐倍数"
           onClick={dec}
           disabled={disabled === true || value <= MIN_ALIGN_MULTIPLE}
-          className="nodrag nopan h-6 w-6 rounded text-[#9A9AAD] transition-colors hover:bg-white/[0.06] hover:text-[#EDEDF2] disabled:cursor-not-allowed disabled:opacity-40"
+          className="nodrag nopan h-6 w-6 rounded text-[var(--color-ink-muted)] transition-colors hover:bg-white/[0.06] hover:text-[var(--color-ink-bright)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           −
         </button>
         <span
           aria-label={`当前对齐倍数 ${value}`}
-          className="min-w-[40px] text-center text-[12px] font-medium tabular-nums text-[#EDEDF2]"
+          className="min-w-[40px] text-center text-[12px] font-medium tabular-nums text-[var(--color-ink-bright)]"
         >
           {value}
         </span>
@@ -410,7 +410,7 @@ const AlignMultipleStepper = React.memo(function AlignMultipleStepper({
  
           onClick={inc}
           disabled={disabled === true || value >= MAX_ALIGN_MULTIPLE}
-          className="nodrag nopan h-6 w-6 rounded text-[#9A9AAD] transition-colors hover:bg-white/[0.06] hover:text-[#EDEDF2] disabled:cursor-not-allowed disabled:opacity-40"
+          className="nodrag nopan h-6 w-6 rounded text-[var(--color-ink-muted)] transition-colors hover:bg-white/[0.06] hover:text-[var(--color-ink-bright)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           +
         </button>
@@ -587,9 +587,9 @@ function DimensionControl({
     <div className="space-y-2.5">
       {/* R-ardot101: 比例 + 清晰度 单段摆在 W/H 上方——既对应「预设 → 推算
           宽高」的方向，又让下方两个 NumberField 紧挨在一起形成紧凑一行。 */}
-      <div className="rounded-lg border border-[#FF5CA8]/30 bg-[#FF5CA8]/[0.04] p-2.5">
+      <div className="rounded-lg border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/[0.04] p-2.5">
         <div className="flex items-center gap-2">
-          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-[#FF5CA8]">
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-accent)]">
             比例 + 清晰度
           </span>
           <div className="min-w-0 flex-1">
@@ -766,7 +766,7 @@ function VideoField({
       <input
         value={str}
         disabled={disabled}
-        className="nodrag nopan w-full rounded-md bg-[#0F0F14] px-2.5 py-2 text-[11px] text-[#C9C9D6] outline-none focus:ring-1 focus:ring-[#7C5CFC]/40"
+        className="nodrag nopan w-full rounded-md bg-[var(--color-canvas-deep)] px-2.5 py-2 text-[11px] text-[var(--color-ink-soft)] outline-none focus:ring-1 focus:ring-[var(--color-primary)]/40"
         onChange={(event) => set(entry.ioKey, event.target.value)}
       />
     </Field>
@@ -931,7 +931,7 @@ export function GroupedControls({
       {!compact && (
         <div className="mt-1 flex items-center gap-2 border-t border-white/[0.1] pt-2.5">
           <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: "#FF9C5B" }} />
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9A9AAD]">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">
             组合参数
           </span>
           <span className="rounded-full bg-white/[0.1] px-1.5 py-px font-mono text-[10px] text-gray-400">

@@ -47,7 +47,7 @@ export function RightPanel({
 
   if (compact) {
     return (
-      <aside className="flex w-12 shrink-0 flex-col items-center gap-1 border-l border-white/6 bg-[#14141a]/98 py-3 backdrop-blur-md">
+      <aside className="flex w-12 shrink-0 flex-col items-center gap-1 border-l border-white/6 bg-[var(--color-panel)]/98 py-3 backdrop-blur-md">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -68,7 +68,7 @@ export function RightPanel({
   }
 
   return (
-    <aside className="flex w-[360px] max-w-[45vw] shrink-0 flex-col overflow-hidden border-l border-white/6 bg-[#14141a]/98 backdrop-blur-md">
+    <aside className="flex w-[360px] max-w-[45vw] shrink-0 flex-col overflow-hidden border-l border-white/6 bg-[var(--color-panel)]/98 backdrop-blur-md">
       {/* Header */}
       <header className="flex shrink-0 items-center justify-between border-b border-white/6 px-4 py-3">
         <div className="flex items-center gap-2">

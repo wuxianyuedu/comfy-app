@@ -486,7 +486,7 @@ function OutputRowPort({
       />
       <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
         <span
-          className="min-w-0 truncate text-[12px] font-semibold text-[#EDEDF2]"
+          className="min-w-0 truncate text-[12px] font-semibold text-[var(--color-ink-bright)]"
           style={{ fontFamily: "var(--font-sans)" }}
           title={`IO 输出 · ${outLabel}${outType ? ` · ${outType}` : ""}`}
         >
@@ -496,8 +496,8 @@ function OutputRowPort({
           className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
           style={{
             fontFamily: "var(--font-sans)",
-            background: "#26262E",
-            color: "#9A9AAD",
+            background: "var(--color-border-strong)",
+            color: "var(--color-ink-muted)",
           }}
         >
           {outType}
@@ -1356,7 +1356,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
        *  R-ardot93-B (stepper capped at max-w-[180px]) the layout is
        *  now:  [label flex-1] ……… [type chip] / [stepper ≤180]   on
        *  each workflow widget row. */
-      className="relative w-[380px] rounded-[14px] border border-[#26262E] bg-[#16161C] transition-[outline,box-shadow] duration-150"
+      className="relative w-[380px] rounded-[14px] border border-[var(--color-border-strong)] bg-[var(--color-card)] transition-[outline,box-shadow] duration-150"
       style={
         selected
           ? {

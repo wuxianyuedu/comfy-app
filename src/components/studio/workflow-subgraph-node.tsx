@@ -169,7 +169,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
         //  root is transparent + a stacking context (isolation) so the frost's
         //  negative z stays contained.  Normal subgraphs keep a solid panel.
         isolation: "isolate",
-        background: nodeMode !== 0 ? "transparent" : "#16161E",
+        background: nodeMode !== 0 ? "transparent" : "var(--color-node)",
         // ComfyUI draws a bright selection rectangle around the active node.
         outline: selected ? "2px solid rgba(56,189,248,0.9)" : "none",
         outlineOffset: selected ? "2px" : undefined,
@@ -231,7 +231,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
         </button>
         <span
           className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded text-[9px] font-bold"
-          style={{ background: accent, color: "#0a0a0f", boxShadow: `0 0 6px ${accent}` }}
+          style={{ background: accent, color: "var(--color-canvas)", boxShadow: `0 0 6px ${accent}` }}
           title="子工作流"
         >
           S
@@ -437,7 +437,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                         position={Position.Left}
                         id={inName}
                         isConnectable={false}
-                        className="!h-2.5 !w-2.5 !rounded-full !border !border-[#0a0a0f]"
+                        className="!h-2.5 !w-2.5 !rounded-full !border !border-[var(--color-canvas)]"
                         style={{
                           left: 5,
                           background: inCol,
@@ -506,7 +506,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                           position={Position.Right}
                           id={`out:${outName}`}
                           isConnectable={false}
-                          className="!h-2.5 !w-2.5 !rounded-full !border !border-[#0a0a0f]"
+                          className="!h-2.5 !w-2.5 !rounded-full !border !border-[var(--color-canvas)]"
                           style={{
                             right: 5,
                             background: outCol,
@@ -578,7 +578,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                     position={Position.Left}
                     id={inp.name}
                     isConnectable={false}
-                    className="!h-2.5 !w-2.5 !rounded-full !border !border-[#0a0a0f]"
+                    className="!h-2.5 !w-2.5 !rounded-full !border !border-[var(--color-canvas)]"
                     style={{
                       left: 5,
                       background: typeCol,
@@ -622,7 +622,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                            *  onto multiple lines instead of being clipped
                            *  (same fix as the WorkflowNode inline branch). */
                           className="min-w-0 shrink whitespace-normal break-words text-left text-[11px]"
-                          style={{ flex: "0 1 auto", color: isConn ? "#e4e4e7" : "#d4d4d8" }}
+                          style={{ flex: "0 1 auto", color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)" }}
                           title={label}
                         >
                           {label}
@@ -654,7 +654,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                            *  multiple lines instead of being clipped
                            *  (same fix as the WorkflowNode inline branch). */
                           className="min-w-0 shrink whitespace-normal break-words text-left text-[11px]"
-                          style={{ flex: "0 1 auto", color: isConn ? "#e4e4e7" : "#d4d4d8" }}
+                          style={{ flex: "0 1 auto", color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)" }}
                           title={label}
                         >
                           {label}
@@ -727,7 +727,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                          *  subgraph STRING-stacked row label too — same
                          *  rationale as the WorkflowNode inline branch. */
                         className="shrink-0 whitespace-normal break-words text-left text-[11px]"
-                        style={{ color: isConn ? "#e4e4e7" : "#d4d4d8" }}
+                        style={{ color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)" }}
                         title={label}
                       >
                         {label}

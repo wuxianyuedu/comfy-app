@@ -298,7 +298,7 @@ export function MultiModeSelect({
               width: pos.width,
               zIndex: 9999,
             }}
-            className="rounded-xl border border-white/[0.08] bg-[#16161C] shadow-2xl shadow-violet-500/20"
+            className="rounded-xl border border-white/[0.08] bg-[var(--color-card)] shadow-2xl shadow-violet-500/20"
           >
             {/* search */}
             <div className="border-b border-white/[0.06] p-2">

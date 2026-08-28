@@ -22,6 +22,35 @@
   --color-ink: #1A1A1F;
   --color-muted: #6B6B76;
 
+  /* Fixed dark UI (canvas / node / editor surfaces) — T11
+     These components are always dark regardless of the app theme,
+     so they must NOT be overridden in `.dark`. */
+  --color-canvas: #0A0A0F;           /* 画布/工作区背景 */
+  --color-canvas-deep: #0F0F14;      /* 输入控件/深面板底 */
+  --color-panel: #14141A;            /* 面板/顶栏/浮层 */
+  --color-panel-deep: #0F0F16;       /* 侧栏/页脚 */
+  --color-card: #16161C;             /* 卡片/下拉浮层 */
+  --color-node: #16161E;             /* 节点表面/option */
+  --color-node-accent: #1E1A2E;      /* 节点强调底 */
+  --color-border-strong: #26262E;    /* 强边框/分隔线 */
+  --color-ink-bright: #EDEDF2;       /* 主文字（亮） */
+  --color-ink-field: #E5E7EB;        /* 输入控件文字 */
+  --color-ink-strong: #E4E4E7;       /* 连接高亮文字 */
+  --color-ink-soft: #C9C9D6;         /* 次级文字 */
+  --color-ink-subtle: #D4D4D8;       /* 次级文字 2 */
+  --color-ink-muted: #9A9AAD;        /* 弱文字 */
+  --color-ink-faint: #8B90A8;        /* 标签/更弱文字 */
+  --color-ink-fainter: #6B7088;      /* 辅助说明文字 */
+  --color-ink-faintest: #5A5F73;     /* 极弱文字 */
+  --color-ink-icon: #6E6E80;         /* 折叠箭头/图标弱文字 */
+  --color-ink-placeholder: #5A5A6B;  /* placeholder */
+  --color-info: #5BC6FF;             /* 信息/链接强调 */
+  --color-success: #5BE3C4;          /* 成功/薄荷强调 */
+  --color-success-strong: #10B981;   /* 成功绿 */
+  --color-warning: #F59E0B;          /* 警告 */
+  --color-amber: #FFB553;            /* 琥珀强调（workshop 徽章/按钮） */
+  --color-accent-soft: #FF8AC4;      /* accent 浅色 */
+
   /* Layout */
   --panel-right-width: 360px;
 

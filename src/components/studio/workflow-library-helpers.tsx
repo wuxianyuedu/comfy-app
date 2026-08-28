@@ -160,10 +160,10 @@ export function WorkflowIOThumb({ io }: { io: WorkflowIOMap | null | undefined }
         {inputs.slice(0, MAX).map((entry) => (
           <span
             key={entry.ioKey}
-            className="inline-flex max-w-full items-center gap-1 truncate rounded-md bg-[#5BC6FF]/10 px-1.5 py-0.5 text-[10px] text-[#5BC6FF]"
+            className="inline-flex max-w-full items-center gap-1 truncate rounded-md bg-[var(--color-info)]/10 px-1.5 py-0.5 text-[10px] text-[var(--color-info)]"
             title={`${entry.nodeTitle ?? ""} · ${entry.name}`}
           >
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#5BC6FF]" />
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-info)]" />
             <span className="truncate">{ioLabel(entry, conflictList)}</span>
           </span>
         ))}
@@ -172,16 +172,16 @@ export function WorkflowIOThumb({ io }: { io: WorkflowIOMap | null | undefined }
         )}
       </div>
       <div className="flex h-3 flex-1 items-center">
-        <div className="h-px w-full bg-gradient-to-r from-[#5BC6FF]/40 via-white/20 to-[#10B981]/40" />
+        <div className="h-px w-full bg-gradient-to-r from-[var(--color-info)]/40 via-white/20 to-[var(--color-success-strong)]/40" />
       </div>
       <div className="flex min-w-0 max-w-[44%] flex-wrap items-center justify-start gap-1">
         {outputs.slice(0, MAX).map((entry) => (
           <span
             key={entry.ioKey}
-            className="inline-flex max-w-full items-center gap-1 truncate rounded-md bg-[#5BE3C4]/10 px-1.5 py-0.5 text-[10px] text-[#5BE3C4]"
+            className="inline-flex max-w-full items-center gap-1 truncate rounded-md bg-[var(--color-success)]/10 px-1.5 py-0.5 text-[10px] text-[var(--color-success)]"
             title={`${entry.nodeTitle ?? ""} · ${entry.name}`}
           >
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#5BE3C4]" />
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-success)]" />
             <span className="truncate">{ioLabel(entry, conflictList)}</span>
           </span>
         ))}

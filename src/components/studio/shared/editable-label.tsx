@@ -34,11 +34,11 @@ export function EditableLabel({
   if (!editable || !editing) {
     return (
       /* R-ardot56 (2026-08-15): 字体与 outputs label 一致 — text-[12px] font-semibold
-       *  text-[#EDEDF2] + 'Inter' font-family，与 outputs 的 `text-[12px] font-semibold
-       *  text-[#EDEDF2] font-Inter'` 视觉严格对齐，让 inputs 与 outputs 在同一节点内
+       *  text-[var(--color-ink-bright)] + 'Inter' font-family，与 outputs 的 `text-[12px] font-semibold
+       *  text-[var(--color-ink-bright)] font-Inter'` 视觉严格对齐，让 inputs 与 outputs 在同一节点内
        *  拥有相同字体权重的 label。 */
       <span
-        className="group flex min-w-0 flex-1 items-center gap-1 truncate text-[12px] font-semibold text-[#EDEDF2]"
+        className="group flex min-w-0 flex-1 items-center gap-1 truncate text-[12px] font-semibold text-[var(--color-ink-bright)]"
         style={{ fontFamily: "var(--font-sans)" }}
         title={title}
       >
@@ -94,8 +94,8 @@ export function EditableLabel({
         onMouseDown={(event) => event.stopPropagation()}
         title={title}
         /* R-ardot56 (2026-08-15): 与展示态字体一致 — text-[12px] font-semibold
-         *  text-[#EDEDF2] + 'Inter'，避免编辑切回展示态时出现字重跳变。 */
-        className="nodrag nopan min-w-0 flex-1 rounded border border-violet-400/40 bg-white/[0.06] px-1.5 py-px text-[12px] font-semibold text-[#EDEDF2] outline-none focus:border-violet-400/70"
+         *  text-[var(--color-ink-bright)] + 'Inter'，避免编辑切回展示态时出现字重跳变。 */
+        className="nodrag nopan min-w-0 flex-1 rounded border border-violet-400/40 bg-white/[0.06] px-1.5 py-px text-[12px] font-semibold text-[var(--color-ink-bright)] outline-none focus:border-violet-400/70"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </span>

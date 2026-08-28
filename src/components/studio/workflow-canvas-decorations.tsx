@@ -180,7 +180,7 @@ export function ZoomIndicator({
           }
         }}
         title="输入缩放百分比后回车"
-        className="absolute right-3 top-3 z-[6] h-7 w-16 rounded-md border border-purple-400/60 bg-[#14141a] px-2 text-right text-[11px] font-medium tabular-nums text-gray-100 shadow-lg outline-none"
+        className="absolute right-3 top-3 z-[6] h-7 w-16 rounded-md border border-purple-400/60 bg-[var(--color-panel)] px-2 text-right text-[11px] font-medium tabular-nums text-gray-100 shadow-lg outline-none"
       />
     );
   }
@@ -197,7 +197,7 @@ export function ZoomIndicator({
         beginEdit();
       }}
       title="点击输入缩放倍数，或按住上下拖动调整"
-      className={`pointer-events-auto absolute right-3 top-3 z-[6] select-none rounded-md border border-white/10 bg-[#14141a]/90 px-2.5 py-1 text-[11px] font-medium tabular-nums tracking-tight text-gray-300 shadow-lg backdrop-blur-sm transition-colors hover:border-white/25 hover:text-gray-100 ${
+      className={`pointer-events-auto absolute right-3 top-3 z-[6] select-none rounded-md border border-white/10 bg-[var(--color-panel)]/90 px-2.5 py-1 text-[11px] font-medium tabular-nums tracking-tight text-gray-300 shadow-lg backdrop-blur-sm transition-colors hover:border-white/25 hover:text-gray-100 ${
         dragging ? "cursor-grabbing border-purple-400/50" : "cursor-ns-resize"
       }`}
     >

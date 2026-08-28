@@ -34,7 +34,7 @@ export function RgthreeFastGroupsBypasserBody({
           >
             <span
               className="min-w-0 shrink truncate text-left text-[11px]"
-              style={{ flex: "0 1 auto", color: bypass ? "#71717a" : "#d4d4d8" }}
+              style={{ flex: "0 1 auto", color: bypass ? "#71717a" : "var(--color-ink-subtle)" }}
               title={group.title}
             >
               {label}
@@ -92,7 +92,7 @@ export function RgthreeFastGroupsBypasserBody({
                   width: 10,
                   height: 10,
                   borderRadius: 5,
-                  background: bypass ? "#fce7f3" : "#d4d4d8",
+                  background: bypass ? "#fce7f3" : "var(--color-ink-subtle)",
                   transition: "left 120ms",
                 }}
               />
