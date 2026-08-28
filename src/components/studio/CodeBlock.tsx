@@ -123,7 +123,7 @@ function PlainCodeBlock({ code }: { code: string }) {
   return (
     <div className="cb-code-block">
       {lines.map((line, index) => (
-        <div key={index} className="cb-line">
+        <div key={`line-${index}`} className="cb-line">
           <span className="cb-ln">{index + 1}</span>
           <span className="cb-code">{line.length > 0 ? line : " "}</span>
         </div>

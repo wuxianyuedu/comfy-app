@@ -1640,7 +1640,7 @@ export function CustomNodesSettings() {
                 >
                   {logs.map((l, idx) => (
                     <div
-                      key={idx}
+                      key={`log-${idx}`}
                       data-log-row
                       className={l.level === "error" ? "text-red-400" : "text-emerald-300/90"}
                     >
@@ -1665,10 +1665,10 @@ export function CustomNodesSettings() {
                   </span>
                 </div>
                 <div className="space-y-2">
-                  {(report.packages ?? []).map((pkg, i) => {
+                  {(report.packages ?? []).map((pkg) => {
                     const st = STATUS_STYLE[pkg.status] || STATUS_STYLE.ok;
                     return (
-                      <div key={i} className="rounded-xl border border-border bg-bg p-3">
+                      <div key={pkg.name} className="rounded-xl border border-border bg-bg p-3">
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">

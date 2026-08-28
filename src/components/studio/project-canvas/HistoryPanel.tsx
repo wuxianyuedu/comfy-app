@@ -303,7 +303,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
         {loading ? (
           <div className="space-y-1 px-2 pt-1">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 py-2">
+              <div key={`skeleton-${i}`} className="flex items-center gap-3 py-2">
                 <div className="h-10 w-10 shrink-0 animate-pulse rounded-md bg-white/[0.05]" />
                 <div className="min-w-0 flex-1 space-y-1.5">
                   <div className="h-3 w-3/4 animate-pulse rounded bg-white/[0.05]" />

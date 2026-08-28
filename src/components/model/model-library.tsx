@@ -80,7 +80,7 @@ export function ModelLibrary() {
       {loading ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="aspect-[4/3] animate-pulse rounded-xl bg-subtle" />
+            <div key={`skeleton-${i}`} className="aspect-[4/3] animate-pulse rounded-xl bg-subtle" />
           ))}
         </div>
       ) : models.length === 0 ? (

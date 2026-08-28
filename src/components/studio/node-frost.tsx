@@ -34,7 +34,7 @@ export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
     >
       {PSEUDO_FROST_BLOBS.map((blob, idx) => (
         <div
-          key={idx}
+          key={`blob-${idx}`}
           className="absolute rounded-full"
           style={{
             left: blob.left,

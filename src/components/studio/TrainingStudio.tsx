@@ -330,7 +330,7 @@ export function TrainingStudio() {
 
                 <div className="space-y-1.5">
                   {dataset.map((data, i) => (
-                    <div key={i} className="flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.02] p-1.5">
+                    <div key={data.name} className="flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.02] p-1.5">
                       <img
                         src={`/api/file/${encodeURIComponent(data.name)}`}
                         alt={data.name}
@@ -518,7 +518,7 @@ export function TrainingStudio() {
                           ) : (
                             logs.map((log, i) => (
                               <div
-                                key={i}
+                                key={`${log.t}-${i}`}
                                 className={
                                   log.level === "error"
                                     ? "text-red-400"

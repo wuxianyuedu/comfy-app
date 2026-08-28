@@ -361,7 +361,7 @@ export function ProjectOutputs() {
                   <div className="grid grid-cols-4 gap-2">
                     {selected.referenceImages.map((image, index) => (
                       <div
-                        key={index}
+                        key={image}
                         className="aspect-square overflow-hidden rounded-lg border border-white/[0.06] bg-[#0f0f16]"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
