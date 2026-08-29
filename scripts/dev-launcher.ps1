@@ -265,17 +265,11 @@ public class WJ {
   $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
   if ($Prebuilt) {
-    # Prebuilt 模式：先启动 next dev，再立刻启动预编译 Tauri 壳，窗口秒出。
-    $psiDev = New-Object System.Diagnostics.ProcessStartInfo
-    $psiDev.FileName = "cmd.exe"
-    $psiDev.Arguments = "/c npm run dev -- -p 3000"
-    $psiDev.WorkingDirectory = $root
-    $psiDev.UseShellExecute = $false
-    $psiDev.CreateNoWindow = $true
-    $devProc = [System.Diagnostics.Process]::Start($psiDev)
-    Write-Log ("Next.js dev server 已启动（PID: {0}）" -f $devProc.Id) -Level OK
-    $null = [WJ]::AssignProcessToJobObject($h, $devProc.Handle)
-
+    # 2026-08-29 修复：先等 Next.js dev server 就绪，再启动预编译 Tauri 壳。
+    # 旧流程是「dev + Tauri 同时起」，Tauri 窗口秒出但页面访问 localhost:3000
+    # 时服务还没起来，直接报 ERR_CONNECTION_REFUSED。现在改为服务 Ready 后再
+    # 弹窗，桌面窗口一出现就能加载到页面；同时把地址从 localhost 改成
+    # 127.0.0.1，避免 Windows 把 localhost 优先解析到 ::1（IPv6）导致连接失败。
     $tauriExe = Join-Path $root "src-tauri\target\debug\app.exe"
     if (-not (Test-Path $tauriExe)) {
       $tauriExe = Join-Path $root "src-tauri\target\release\app.exe"
@@ -284,17 +278,45 @@ public class WJ {
       throw "找不到预编译 Tauri 壳：src-tauri\target\debug\app.exe（或 release）。请先执行 cargo build 或 pnpm tauri build。"
     }
 
+    # 1. 启动 Next.js dev server
+    $psiDev = New-Object System.Diagnostics.ProcessStartInfo
+    $psiDev.FileName = "cmd.exe"
+    # -H 127.0.0.1 固定 IPv4，避免 Windows 把 localhost 解析到 ::1 导致连接失败
+    $psiDev.Arguments = "/c npm run dev -- -p 3000 -H 127.0.0.1"
+    $psiDev.WorkingDirectory = $root
+    $psiDev.UseShellExecute = $false
+    $psiDev.CreateNoWindow = $true
+    $devProc = [System.Diagnostics.Process]::Start($psiDev)
+    Write-Log ("Next.js dev server 已启动（PID: {0}）" -f $devProc.Id) -Level OK
+    $null = [WJ]::AssignProcessToJobObject($h, $devProc.Handle)
+
+    # 2. 等服务 Ready（避免 Tauri 窗口加载时看到 ERR_CONNECTION_REFUSED）
+    Write-Log "等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
+    $ready = $false
+    for ($i = 0; $i -lt 180; $i++) {
+      try {
+        $r = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 1 -UseBasicParsing -ErrorAction SilentlyContinue
+        if ($r.StatusCode -eq 200) { $ready = $true; break }
+      } catch { }
+      Start-Sleep -Seconds 1
+    }
+    if (-not $ready) {
+      throw "180 秒内未检测到 http://127.0.0.1:3000 服务就绪，启动失败。"
+    }
+    Write-Log "服务器已就绪，启动预编译 Tauri 壳..." -Level OK
+
+    # 3. 启动预编译 Tauri 壳（此时服务已就绪，窗口一出现就能加载）
     $psiTauri = New-Object System.Diagnostics.ProcessStartInfo
     $psiTauri.FileName = $tauriExe
     $psiTauri.WorkingDirectory = $root
     $psiTauri.UseShellExecute = $false
     $psiTauri.Environment["COMFYAPP_PROJECT_ROOT"] = $root
-    $psiTauri.Environment["COMFYAPP_DEV_URL"] = "http://localhost:3000/workspace"
+    $psiTauri.Environment["COMFYAPP_DEV_URL"] = "http://127.0.0.1:3000/workspace"
     $tauriProc = [System.Diagnostics.Process]::Start($psiTauri)
     Write-Log ("预编译 Tauri 壳已启动（PID: {0}）：{1}" -f $tauriProc.Id, $tauriExe) -Level OK
     $null = [WJ]::AssignProcessToJobObject($h, $tauriProc.Handle)
     Write-Log "Tauri 壳与 dev server 已绑定到同一 Job Object（关闭窗口时一起清理）" -Level OK
-    $p = $devProc  # 后续 WaitForExit 以 dev server 为主
+    $p = $tauriProc  # 后续 WaitForExit 以 Tauri 窗口生命周期为锚点
   } else {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = "cmd.exe"
@@ -319,10 +341,10 @@ public class WJ {
   # ── 第五步：显示启动摘要，等待进程退出 ──
   if ($Prebuilt) {
     Show-Summary -Title "Comfy-APP 预编译桌面壳已启动" -Lines @(
-      "模式   : 预编译 Tauri 壳（窗口秒出）",
+      "模式   : 预编译 Tauri 壳（服务就绪后弹出）",
       "dev    : PID $($devProc.Id)",
       "tauri  : PID $($tauriProc.Id)",
-      "地址   : http://localhost:3000",
+      "地址   : http://127.0.0.1:3000",
       "停止   : 关闭桌面窗口（自动清理全部子进程）"
     )
   } elseif ($Tauri) {
@@ -345,15 +367,11 @@ public class WJ {
   #   普通重启时 Next 的 HMR 会自动重载已有标签页；这里额外自动开浏览器，
   #   让你连地址都不用敲。SKIP_CLEAN=1 时复用现有标签页（Next HMR 自动重载）；
   #   默认路径会带缓存破坏参数开新标签页，避免旧 chunk + 旧 sessionStorage 残留。
-  # Prebuilt/Tauri 模式：桌面窗口已秒出，只需探测 Next.js dev server 就绪，
-  # 让 launcher/启动页能把进度推进到"服务已就绪"。
-  if ($Prebuilt -or $Tauri) {
-    if ($Prebuilt) {
-      Write-Log "预编译 Tauri 壳窗口已弹出，等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
-    } else {
-      Write-Log "Tauri 模式：等待 tauri dev 编译并弹出桌面窗口..." -Level STEP
-      Write-Log "等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
-    }
+  # Prebuilt 模式已在第四步等服务就绪后再启动 Tauri 壳，这里不用再等。
+  # Tauri 模式：tauri dev 会自己编译/启动 dev server，仍需探测服务就绪。
+  if ($Tauri) {
+    Write-Log "Tauri 模式：等待 tauri dev 编译并弹出桌面窗口..." -Level STEP
+    Write-Log "等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
     $ready = $false
     for ($i = 0; $i -lt 180; $i++) {
       try {

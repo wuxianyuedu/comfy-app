@@ -1502,8 +1502,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     # 把项目根目录与目标 URL 传给 Tauri 侧，让 Rust 能找到 launch-status.json 并正确导航。
+    # 2026-08-29：用 127.0.0.1 替代 localhost，避免部分 Windows 把 localhost 优先
+    # 解析到 ::1（IPv6）而 Next.js dev server 监听在 IPv4，导致 ERR_CONNECTION_REFUSED。
     os.environ["COMFYAPP_PROJECT_ROOT"] = project_root
-    os.environ["COMFYAPP_DEV_URL"] = "http://localhost:3000/workspace"
+    os.environ["COMFYAPP_DEV_URL"] = "http://127.0.0.1:3000/workspace"
 
     # 启动模式：默认预编译壳（秒出窗口）；--splash / --tauri-dev 走旧版 tauri dev。
     mode = "tauri" if (args.get("splash") or args.get("tauri_dev")) else "prebuilt"
