@@ -50,6 +50,14 @@ export default tseslint.config(
         "error",
         { checksVoidReturn: { attributes: false } },
       ],
+      /* 2026-08-30：按场景豁免。项目里 6 处 <img> 承载的全是运行时动态 URL
+       *  （ComfyUI 产出走 /api/images、数据集图走 /api/file/、头像可能是外部
+       *  链接），且多处尺寸完全自适应（max-h-[85vh]、w-full）。next/image 需要
+       *  remotePatterns 白名单，自适应尺寸还得改写成 fill + 定位容器；而这些
+       *  产出图本身已是压缩后的 jpg/webp，优化收益接近于零，反而多一次服务端
+       *  图片处理开销。故在此关闭本规则——新增静态资源图（logo、插图）时仍应
+       *  优先使用 next/image。 */
+      "@next/next/no-img-element": "off",
     },
   },
   {
