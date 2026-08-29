@@ -2,7 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, Image, LayoutGrid, List, Music, Plus, RefreshCw, Video, X } from "lucide-react";
+import { Download, Image as ImageIcon, LayoutGrid, List, Music, Plus, RefreshCw, Video, X } from "lucide-react";
 import { MediaThumbnail } from "@/components/studio/ui/MediaThumbnail";
 import { vanillaApi } from "~/trpc/vanilla";
 
@@ -66,7 +66,7 @@ function KindIcon({ kind }: { kind: TaskRow["mediaType"] }) {
     return <Video size={16} strokeWidth={1.8} />;
   if (kind === "audio")
     return <Music size={16} strokeWidth={1.8} />;
-  return <Image size={16} strokeWidth={1.8} />;
+  return <ImageIcon size={16} strokeWidth={1.8} />;
 }
 
 /* ── Component ─────────────────────────────────────────────── */

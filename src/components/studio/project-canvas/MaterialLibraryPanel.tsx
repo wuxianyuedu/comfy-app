@@ -9,7 +9,7 @@ import {
   Download,
   FileText,
   Folder,
-  Image,
+  Image as ImageIcon,
   LayoutGrid,
   List,
   Music,
@@ -63,7 +63,7 @@ const KIND_STYLE: Record<MaterialKind, string> = {
 };
 
 function KindIcon({ kind }: { kind: MaterialKind }) {
-  if (kind === "image") return <Image size={18} strokeWidth={1.8} />;
+  if (kind === "image") return <ImageIcon size={18} strokeWidth={1.8} />;
   if (kind === "video") return <Video size={18} strokeWidth={1.8} />;
   if (kind === "audio") return <Music size={18} strokeWidth={1.8} />;
   return <FileText size={18} strokeWidth={1.8} />;

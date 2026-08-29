@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 /**
@@ -56,6 +56,10 @@ export function DarkSelect({
   popoverMinWidth = 480,
   autoFitFromOptions = true,
 }: DarkSelectProps) {
+  /* a11y：role="combobox" 必须能通过 aria-controls 指向它控制的 listbox，
+   *  否则读屏软件无法把触发按钮与选项列表关联起来。useId 保证同一页面上
+   *  多个 DarkSelect 实例不会撞 id。 */
+  const listboxId = useId();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -199,6 +203,7 @@ export function DarkSelect({
         ref={ref}
         type="button"
         role="combobox"
+        aria-controls={listboxId}
         aria-expanded={open}
         aria-haspopup="listbox"
         disabled={disabled}
@@ -220,6 +225,7 @@ export function DarkSelect({
         typeof document !== "undefined" &&
         createPortal(
           <ul
+            id={listboxId}
             ref={listRef}
             role="listbox"
             tabIndex={-1}

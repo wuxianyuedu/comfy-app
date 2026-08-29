@@ -5,7 +5,7 @@ import {
   ArrowRight,
   Clipboard,
   Eye,
-  Image,
+  Image as ImageIcon,
   Layers,
   LayoutGrid,
   Maximize,
@@ -267,7 +267,7 @@ function MenuIconText() {
   return <Type size={14} />;
 }
 function MenuIconImage() {
-  return <Image size={14} />;
+  return <ImageIcon size={14} />;
 }
 function MenuIconVideo() {
   return <SquarePlay size={14} />;

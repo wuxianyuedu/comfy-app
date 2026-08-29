@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Clock, Folder, Home, Image, Wrench, Zap } from "lucide-react";
+import { Clock, Folder, Home, Image as ImageIcon, Wrench, Zap } from "lucide-react";
 
 /* ── Updream-style Left Toolbar ──────────────────────────
   Vertical icon bar (48px wide):
@@ -41,7 +41,7 @@ const DEFAULT_TOOLS: ToolItem[] = [
     id: "assets",
     label: "资源",
     icon: (
-      <Image size={20} strokeWidth={1.8} />
+      <ImageIcon size={20} strokeWidth={1.8} />
     ),
   },
   {

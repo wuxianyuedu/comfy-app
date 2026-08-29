@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { BookOpen, Box, Film, Folder, History, Home, Image } from "lucide-react";
+import { BookOpen, Box, Film, Folder, History, Home, Image as ImageIcon } from "lucide-react";
 
 /**
  * Shared left-sidebar navigation registry.
@@ -92,7 +92,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "产出",
     enabled: true,
     icon: (
-      <Image size={22} strokeWidth={1.8} />
+      <ImageIcon size={22} strokeWidth={1.8} />
     ),
   },
   {

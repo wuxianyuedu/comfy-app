@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Activity, Bell, BookOpen, Box, Image, LayoutTemplate, Plus, Search, Video } from "lucide-react";
+import { Activity, Bell, BookOpen, Box, Image as ImageIcon, LayoutTemplate, Plus, Search, Video } from "lucide-react";
 import { useToast } from "./ToastProvider";
 import { type WorkspaceView } from "./NavItems";
 import { WorkspaceNav } from "./WorkspaceNav";
@@ -47,7 +47,7 @@ const KIND_CONFIG: Record<string, { label: string; color: string; icon: React.Re
     label: "生成",
     color: "#a78bfa",
     icon: (
-      <Image size={14} />
+      <ImageIcon size={14} />
     ),
   },
   workflow: {
