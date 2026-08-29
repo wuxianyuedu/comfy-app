@@ -229,7 +229,7 @@ export function WorkshopStudio() {
             <label className="block">
               <span className="mb-1 block text-xs text-muted">大模型（Checkpoint）</span>
               <DarkSelect
-                className="!bg-white/[0.03] !border-white/[0.08] text-sm"
+                className="!bg-white/3 !border-white/8 text-sm"
                 value={checkpoint}
                 onChange={(value) => setCheckpoint(value)}
                 options={checkpoints}

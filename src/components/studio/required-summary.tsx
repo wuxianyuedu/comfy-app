@@ -20,7 +20,7 @@ export function RequiredSummary({ io }: { io: WorkflowIOMap | null }) {
       <span className="rounded border border-red-400/40 bg-red-500/15 px-1.5 py-px font-mono text-[10px] text-red-300">
         必填 {counts.required}
       </span>
-      <span className="rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-px font-mono text-[10px] text-gray-400">
+      <span className="rounded border border-white/8 bg-white/4 px-1.5 py-px font-mono text-[10px] text-gray-400">
         可选 {counts.optional}
       </span>
     </span>

@@ -190,9 +190,9 @@ function DimensionControl({
     <div className="space-y-2.5">
       {/* R-ardot101: 比例 + 清晰度 单段摆在 W/H 上方——既对应「预设 → 推算
           宽高」的方向，又让下方两个 NumberField 紧挨在一起形成紧凑一行。 */}
-      <div className="rounded-lg border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/[0.04] p-2.5">
+      <div className="rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5">
         <div className="flex items-center gap-2">
-          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-accent)]">
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-(--color-accent)">
             比例 + 清晰度
           </span>
           <div className="min-w-0 flex-1">

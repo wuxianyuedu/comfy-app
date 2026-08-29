@@ -2,6 +2,7 @@
 "use client";
 
 import React from "react";
+import { Trash } from "lucide-react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { NumberField } from "@/components/studio/ui/NumberField";
 import { Icon } from "@/components/ui/Icon";
@@ -108,7 +109,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
           <label className="block">
             <span className="mb-1 block text-xs text-muted">类型</span>
             <DarkSelect
-              className="!bg-white/[0.03] !border-white/[0.08] text-sm"
+              className="!bg-white/3 !border-white/8 text-sm"
               value={meta.type}
               onChange={(value) => onMetaChange({ ...meta, type: value as ProjectType })}
               options={PROJECT_TYPES}
@@ -240,9 +241,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
                     className="text-muted hover:text-red-500"
                     aria-label="删除场景"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-                    </svg>
+                    <Trash size={16} />
                   </button>
                 </div>
 

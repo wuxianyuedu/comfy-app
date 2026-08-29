@@ -44,7 +44,7 @@ export function ProjectSwitcher({
   return (
     <div className="relative">
       <button
-        className="flex items-center gap-2 rounded-full border border-white/[0.1] bg-gradient-to-br from-[#1a1530]/85 to-[#16121f]/85 px-3.5 py-1.5 text-[12px] font-medium text-gray-100 shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-violet-400/40 hover:shadow-violet-500/15"
+        className="flex items-center gap-2 rounded-full border border-white/10 bg-linear-to-br from-[#1a1530]/85 to-[#16121f]/85 px-3.5 py-1.5 text-[12px] font-medium text-gray-100 shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-violet-400/40 hover:shadow-violet-500/15"
         onClick={onToggleMenu}
         title="项目列表"
       >
@@ -55,7 +55,7 @@ export function ProjectSwitcher({
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-30" onClick={onCloseMenu} />
-          <div className="absolute top-10 left-0 z-40 w-60 overflow-hidden rounded-xl border border-white/[0.1] bg-[#14121f]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur">
+          <div className="absolute top-10 left-0 z-40 w-60 overflow-hidden rounded-xl border border-white/10 bg-[#14121f]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur">
             <div className="px-2 py-1 text-[10px] tracking-wider text-gray-500 uppercase">
               我的画布项目
             </div>
@@ -65,7 +65,7 @@ export function ProjectSwitcher({
                   key={project.id}
                   type="button"
                   onClick={() => onSwitch(project.id)}
-                  className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-white/[0.06] ${
+                  className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-white/6 ${
                     project.id === projectId
                       ? "text-violet-300"
                       : "text-gray-200"
@@ -83,7 +83,7 @@ export function ProjectSwitcher({
                 </p>
               )}
             </div>
-            <div className="my-1 h-px bg-white/[0.06]" />
+            <div className="my-1 h-px bg-white/6" />
             {renaming ? (
               <div className="space-y-1 p-1">
                 <input
@@ -94,7 +94,7 @@ export function ProjectSwitcher({
                     if (event.key === "Enter") onCommitRename();
                     if (event.key === "Escape") onCancelRename();
                   }}
-                  className="w-full rounded-md border border-white/[0.08] bg-black/30 px-2 py-1 text-[12px] text-gray-200 outline-none focus:border-violet-400/60"
+                  className="w-full rounded-md border border-white/8 bg-black/30 px-2 py-1 text-[12px] text-gray-200 outline-none focus:border-violet-400/60"
                   placeholder="项目名称"
                 />
                 <div className="flex gap-1">
@@ -107,7 +107,7 @@ export function ProjectSwitcher({
                   </button>
                   <button
                     type="button"
-                    className="flex-1 rounded-md border border-white/[0.08] px-2 py-1 text-[11px] text-gray-300 hover:bg-white/[0.06]"
+                    className="flex-1 rounded-md border border-white/8 px-2 py-1 text-[11px] text-gray-300 hover:bg-white/6"
                     onClick={onCancelRename}
                   >
                     取消
@@ -119,7 +119,7 @@ export function ProjectSwitcher({
                 <button
                   type="button"
                   onClick={onNew}
-                  className="rounded-lg px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:bg-white/[0.06]"
+                  className="rounded-lg px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:bg-white/6"
                 >
                   <Icon
                     name="plus"
@@ -131,7 +131,7 @@ export function ProjectSwitcher({
                 <button
                   type="button"
                   onClick={onStartRename}
-                  className="rounded-lg px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:bg-white/[0.06]"
+                  className="rounded-lg px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:bg-white/6"
                 >
                   <Icon
                     name="pen"
@@ -143,7 +143,7 @@ export function ProjectSwitcher({
                 <button
                   type="button"
                   onClick={onDelete}
-                  className="rounded-lg px-2 py-1.5 text-left text-[12px] text-red-400 transition-colors hover:bg-red-400/[0.08]"
+                  className="rounded-lg px-2 py-1.5 text-left text-[12px] text-red-400 transition-colors hover:bg-red-400/8"
                 >
                   <Icon
                     name="trash"

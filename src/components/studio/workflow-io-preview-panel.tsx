@@ -100,11 +100,11 @@ export function WorkflowIoPreviewPanel({ workflowIO, detailIOMap, onClose }: Wor
   return (
     <div className="pointer-events-none absolute right-4 top-4 z-30 flex max-h-[calc(100%-2rem)] w-[360px] flex-col">
       <div className="pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-400/30 bg-[#0a0a14]/92 shadow-2xl backdrop-blur-md">
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/[0.06] px-3 py-2">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/6 px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400" />
             <span className="truncate text-[12px] font-semibold text-gray-200">IO 预览</span>
-            <span className="rounded-full bg-white/[0.06] px-1.5 py-px text-[10px] font-mono text-gray-400">
+            <span className="rounded-full bg-white/6 px-1.5 py-px text-[10px] font-mono text-gray-400">
               {Object.keys(workflowIO).length}
             </span>
           </div>
@@ -112,7 +112,7 @@ export function WorkflowIoPreviewPanel({ workflowIO, detailIOMap, onClose }: Wor
             <button
               type="button"
               onClick={resetIOPreviewValues}
-              className="rounded-md border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[11px] text-gray-300 transition-colors hover:bg-white/[0.08] hover:text-gray-100"
+              className="rounded-md border border-white/8 bg-white/4 px-1.5 py-0.5 text-[11px] text-gray-300 transition-colors hover:bg-white/8 hover:text-gray-100"
               title="把所有参数恢复到工作流原本的默认值"
             >
               恢复默认
@@ -121,7 +121,7 @@ export function WorkflowIoPreviewPanel({ workflowIO, detailIOMap, onClose }: Wor
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[11px] text-gray-400 transition-colors hover:bg-white/[0.08] hover:text-gray-200"
+            className="rounded-md border border-white/8 bg-white/4 px-1.5 py-0.5 text-[11px] text-gray-400 transition-colors hover:bg-white/8 hover:text-gray-200"
             title="关闭预览"
           >
             ✕
@@ -129,7 +129,7 @@ export function WorkflowIoPreviewPanel({ workflowIO, detailIOMap, onClose }: Wor
         </div>
         <div className="nodrag nopan flex-1 overflow-y-auto px-3 py-3 text-gray-200">
           {Object.keys(workflowIO).length === 0 ? (
-            <div className="rounded-lg border border-dashed border-white/[0.10] bg-white/[0.02] px-3 py-4 text-center text-[11px] leading-relaxed text-gray-500">
+            <div className="rounded-lg border border-dashed border-white/10 bg-white/2 px-3 py-4 text-center text-[11px] leading-relaxed text-gray-500">
               尚未勾选任何 IO。
               <br />
               在画布上勾选参数后，这里会同步出现对应的表单行；每个名称旁的 ✎ 可点击重命名。
@@ -158,9 +158,9 @@ export function WorkflowIoPreviewPanel({ workflowIO, detailIOMap, onClose }: Wor
             />
           )}
         </div>
-        <div className="shrink-0 border-t border-white/[0.06] px-3 py-1.5 text-[10px] text-gray-500">
+        <div className="shrink-0 border-t border-white/6 px-3 py-1.5 text-[10px] text-gray-500">
           <span className="opacity-80">点击任意名称旁的</span>
-          <span className="mx-1 inline-block rounded bg-white/[0.08] px-1 font-mono text-[10px] text-gray-300">✎</span>
+          <span className="mx-1 inline-block rounded bg-white/8 px-1 font-mono text-[10px] text-gray-300">✎</span>
           <span className="opacity-80">可重命名；「必填 / 可选」切换是否在运行时强校验。</span>
           <RequiredSummary io={previewIO} />
         </div>

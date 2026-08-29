@@ -44,8 +44,8 @@ export function AgentPanel({
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-[10px] font-bold text-white">
+      <div className="flex items-center gap-2 border-b border-white/6 px-4 py-3">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 text-[10px] font-bold text-white">
           {initial}
         </span>
         <h3 className="u-title">{name}</h3>
@@ -55,7 +55,7 @@ export function AgentPanel({
       <div className="flex-1 overflow-y-auto p-3">
         {tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.03] text-gray-600">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/3 text-gray-600">
               <Icon name="smile" size={22} strokeWidth={1.5} />
             </div>
             <p className="text-xs text-gray-600">添加技能给我任务</p>
@@ -71,7 +71,7 @@ export function AgentPanel({
                   type="button"
                   disabled={!onTaskClick}
                   onClick={() => onTaskClick?.(task)}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors enabled:hover:bg-white/[0.04]"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors enabled:hover:bg-white/4"
                 >
                   <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
                   <span className="min-w-0 flex-1 truncate text-xs text-gray-300">
@@ -89,7 +89,7 @@ export function AgentPanel({
 
       {/* Footer: keep the add action reachable without scrolling */}
       {onAddTask && (
-        <div className="shrink-0 border-t border-white/[0.06] px-3 py-3">
+        <div className="shrink-0 border-t border-white/6 px-3 py-3">
           <button
             type="button"
             onClick={onAddTask}

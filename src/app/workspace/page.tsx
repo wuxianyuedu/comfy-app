@@ -301,7 +301,7 @@ export default function WorkspacePage() {
   return (
     <LogProvider>
       <ToastProvider>
-        <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-canvas)] text-gray-200" style={{ fontFamily: "var(--font-sans)" }}>
+        <div className="flex h-screen w-screen overflow-hidden bg-(--color-canvas) text-gray-200" style={{ fontFamily: "var(--font-sans)" }}>
           {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
           <AuroraBackground />
 
@@ -329,7 +329,7 @@ export default function WorkspacePage() {
             <button
               type="button"
               onClick={() => setAgentOpen(true)}
-              className="fixed bottom-9 right-4 z-30 flex items-center gap-2 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-transform hover:scale-105"
+              className="fixed bottom-9 right-4 z-30 flex items-center gap-2 rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-transform hover:scale-105"
             >
               <span className="text-[15px]">✦</span>
               AI 引导

@@ -38,35 +38,32 @@ grep -rn "AgentPanel" src --include="*.tsx" --include="*.ts" | grep -v "AgentPan
 
 ## 4. 内联 SVG → lucide-react 迁移
 
-项目图标统一走中央组件 `src/components/ui/Icon.tsx`(字符串 key → lucide 图标映射),组件里用 `<Icon name="plus" size={16} />`。
+2026-08-29 已完成主体迁移(127 处替换)。剩余 ~20 个文件的内联 `<svg>` 是规范豁免项(03 §3.4:非 24×24 viewBox、渐变/图表/特效、实心填充无对应变体、品牌图形),不要盲目替换。
+
+静态图标直接 import lucide;数据驱动/可序列化的 key 走中央组件 `<Icon name>`(`src/components/ui/Icon.tsx`,新图标先加 ICON_MAP)。
 
 ```bash
-# 找出所有还带内联 <svg> 的文件(迁移目标清单)
+# 回归监控:新增的内联 <svg> 清单(排除豁免文件后应保持为空增量)
 grep -rln "<svg" src --include="*.tsx"
 
-# 数量统计
-grep -rln "<svg" src --include="*.tsx" | wc -l
-
-# 迁移前先确认图标是否已在中央映射里(没有就先在 Icon.tsx 的 import 和 ICON_MAP 各加一行)
+# 迁移前先确认图标是否已在中央映射里(走 Icon 组件时)
 grep -in "smile" src/components/ui/Icon.tsx
 ```
 
 ## 5. Tailwind 检查
 
 ```bash
-# 透明度写法规范(standards/03 §3.1):只有预设档 /5 /10 /15 /20 /25 /30 ... 可直接写,
-# /6 这类非预设值必须写成 /[0.06]。排查违规的单数字非预设透明度(命中里只有 /5 是合法的):
-grep -rEn --include="*.tsx" -e "-[a-z]+-?[0-9]*/[0-9]\b" src
+# 规范写法(standards/03 §3.1):透明度一律斜杠百分比 /6(小数 /1.5 合法);
+# 渐变 bg-linear-to-*;CSS 变量任意值 -(--x)。排查三类 v3 旧写法(均应为 0):
+grep -rEn --include="*.tsx" --include="*.ts" -e "/\[0\.[0-9]+\]" src
+grep -rEn --include="*.tsx" --include="*.ts" -e "bg-gradient-to-" src
+grep -rEo --include="*.tsx" --include="*.ts" -e "\[var\(--[a-zA-Z0-9-]+\)\]" src
 
-# 列出全部 颜色/透明度 组合及次数,人工核对非预设档(/12、/18、/22 等两档位违规也逃不掉):
-grep -rEoh --include="*.tsx" -e "[a-z]+-?[0-9]*/[0-9]+" src | sort | uniq -c | sort -rn
+# 批量迁移脚本(幂等,只处理上面三类模式):
+grep -rlE --include="*.tsx" --include="*.ts" -e "/\[0\.[0-9]+\]|bg-gradient-to-|\[var\(--" src | tr -d '\r' | while IFS= read -r f; do node scripts/tw4-canonical-codemod.cjs "$f"; done
 
 # 检查自定义工具类(如 u-title)是否真的存在于 globals.css,防止拼错类名静默失效
 grep -n "u-title" src/app/globals.css
-
-# 统计两种透明度写法的占比(括号形式应为绝对主流)
-grep -roh --include="*.tsx" -e "white/\[[0-9.]*\]" src | wc -l
-grep -roh --include="*.tsx" -e "white/[0-9]\+" src | wc -l
 ```
 
 ## 6. 查看可用脚本

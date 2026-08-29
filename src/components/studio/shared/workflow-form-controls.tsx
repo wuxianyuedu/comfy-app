@@ -158,7 +158,7 @@ export function AutoResizeTextarea({
       placeholder={placeholder}
       rows={1}
       onChange={(ev) => onChange(ev.target.value)}
-      className="nodrag nopan block w-full min-w-0 resize-none overflow-x-hidden rounded-md bg-[var(--color-canvas-deep)] py-2 pl-2.5 pr-3 text-[11px] leading-relaxed text-[var(--color-ink-soft)] outline-none placeholder:text-[var(--color-ink-placeholder)]"
+      className="nodrag nopan block w-full min-w-0 resize-none overflow-x-hidden rounded-md bg-(--color-canvas-deep) py-2 pl-2.5 pr-3 text-[11px] leading-relaxed text-(--color-ink-soft) outline-none placeholder:text-(--color-ink-placeholder)"
       style={{
         fontFamily: "var(--font-sans)",
         boxSizing: "border-box",
@@ -318,7 +318,7 @@ export function WirePortRows({
                 style={{ top: "50%", transform: "translateY(-50%)" }}
               />
               <span
-                className="text-[12px] font-medium text-[var(--color-ink-bright)]"
+                className="text-[12px] font-medium text-(--color-ink-bright)"
                 style={{ fontFamily: "var(--font-sans)" }}
               >
                 {label}
@@ -392,7 +392,7 @@ export function WirePortRows({
                   chip 在右（pr-14 贴 Card 右内缘）——chip 永远在 subrow 右端。*/}
               <div className="relative flex h-4 shrink-0 items-center justify-between gap-2.5 pl-[14px] pr-[14px]">
                 <span
-                  className="text-[12px] font-medium text-[var(--color-ink-bright)]"
+                  className="text-[12px] font-medium text-(--color-ink-bright)"
                   style={{ fontFamily: "var(--font-sans)" }}
                 >
                   {label}
@@ -424,7 +424,7 @@ export function WirePortRows({
                     value={typeof v === "string" || typeof v === "number" ? String(v) : ""}
                     placeholder={`输入 ${label}`}
                     onChange={(ev) => set(wireInput.ioKey, ev.target.value)}
-                    className="nodrag nopan h-full w-full rounded-md bg-[var(--color-canvas-deep)] px-2.5 py-2 text-[11px] text-[var(--color-ink-soft)] outline-none placeholder:text-[var(--color-ink-placeholder)]"
+                    className="nodrag nopan h-full w-full rounded-md bg-(--color-canvas-deep) px-2.5 py-2 text-[11px] text-(--color-ink-soft) outline-none placeholder:text-(--color-ink-placeholder)"
                     style={{ fontFamily: "var(--font-sans)" }}
                   />
                 )}
@@ -433,7 +433,7 @@ export function WirePortRows({
                     type="button"
                     disabled={uploading}
                     onClick={() => pickFile(wireInput.ioKey)}
-                    className="nodrag nopan inline-flex h-full items-center gap-1.5 rounded-md bg-[var(--color-canvas-deep)] px-2.5 py-1.5 text-[11px] text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink-bright)]"
+                    className="nodrag nopan inline-flex h-full items-center gap-1.5 rounded-md bg-(--color-canvas-deep) px-2.5 py-1.5 text-[11px] text-(--color-ink-soft) transition-colors hover:text-(--color-ink-bright)"
                   >
                     {uploading && uploadTarget === wireInput.ioKey
                       ? "上传中…"
@@ -479,7 +479,7 @@ export function WirePortRows({
                 />
                 <div className="flex-1" />
                 <span
-                  className="text-[12px] font-medium text-[var(--color-ink-bright)]"
+                  className="text-[12px] font-medium text-(--color-ink-bright)"
                   style={{ fontFamily: "var(--font-sans)" }}
                 >
                   {label}
@@ -616,7 +616,7 @@ export function SeedModeButton({
         setOpen((value) => !value);
       }}
       onMouseDown={(event) => event.stopPropagation()}
-      className="nodrag nopan flex h-[30px] shrink-0 items-center gap-1 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-canvas-deep)] px-2 text-[11px] font-medium text-[var(--color-ink-soft)] transition-colors hover:border-[var(--color-primary)]/40 hover:text-[var(--color-ink-bright)]"
+      className="nodrag nopan flex h-[30px] shrink-0 items-center gap-1 rounded-md border border-(--color-border-strong) bg-(--color-canvas-deep) px-2 text-[11px] font-medium text-(--color-ink-soft) transition-colors hover:border-(--color-primary)/40 hover:text-(--color-ink-bright)"
       title="控件后行为 · CONTROL AFTER GENERATE"
     >
       <span className="truncate">{current}</span>
@@ -650,7 +650,7 @@ export function SeedModeButton({
             onMouseDown={(event) => event.stopPropagation()}
           />
           <div
-            className="nodrag nopan fixed w-[280px] overflow-hidden rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-card)] p-3 shadow-2xl shadow-black/60"
+            className="nodrag nopan fixed w-[280px] overflow-hidden rounded-xl border border-(--color-border-strong) bg-(--color-card) p-3 shadow-2xl shadow-black/60"
             style={{
               zIndex: 9999,
               top: pos?.top ?? -9999,
@@ -660,10 +660,10 @@ export function SeedModeButton({
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="space-y-0.5">
-              <h4 className="text-[12px] font-semibold text-[var(--color-ink-bright)]">
-                控件后行为 <span className="text-[var(--color-ink-muted)]">· CONTROL AFTER GENERATE</span>
+              <h4 className="text-[12px] font-semibold text-(--color-ink-bright)">
+                控件后行为 <span className="text-(--color-ink-muted)">· CONTROL AFTER GENERATE</span>
               </h4>
-              <p className="text-[10.5px] leading-relaxed text-[var(--color-ink-muted)]">
+              <p className="text-[10.5px] leading-relaxed text-(--color-ink-muted)">
                 seed / 类似数值 widget 点击数字弹出 4 选 1 切换面板
               </p>
             </div>
@@ -682,32 +682,32 @@ export function SeedModeButton({
                     onMouseDown={(event) => event.stopPropagation()}
                     className={`nodrag nopan flex w-full items-center gap-2.5 rounded-lg border px-2 py-1.5 text-left transition-colors ${
                       selected
-                        ? "border-[var(--color-primary)]/40 bg-[var(--color-node-accent)]"
-                        : "border-transparent hover:bg-white/[0.04]"
+                        ? "border-(--color-primary)/40 bg-(--color-node-accent)"
+                        : "border-transparent hover:bg-white/4"
                     }`}
                   >
                     <span
                       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-                        selected ? "bg-[#2A1F4A]" : "bg-[var(--color-node-accent)]"
+                        selected ? "bg-[#2A1F4A]" : "bg-(--color-node-accent)"
                       }`}
                     >
                       <SeedModeIcon value={SEED_MODES.value} />
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col">
-                      <span className={`text-[12px] font-semibold ${selected ? "text-[var(--color-ink-bright)]" : "text-[var(--color-ink-bright)]"}`}>
+                      <span className={`text-[12px] font-semibold ${selected ? "text-(--color-ink-bright)" : "text-(--color-ink-bright)"}`}>
                         {SEED_MODES.label}
                       </span>
-                      <span className="truncate text-[10.5px] leading-snug text-[var(--color-ink-muted)]">
+                      <span className="truncate text-[10.5px] leading-snug text-(--color-ink-muted)">
                         {SEED_MODES.hint}
                       </span>
                     </span>
                     <span
                       className={`h-3.5 w-3.5 shrink-0 rounded-full border-2 transition-colors ${
-                        selected ? "border-[var(--color-primary)] bg-[var(--color-primary)]" : "border-[#4D4D59] bg-transparent"
+                        selected ? "border-(--color-primary) bg-(--color-primary)" : "border-[#4D4D59] bg-transparent"
                       }`}
                     >
                       {selected && (
-                        <span className="block h-full w-full rounded-full ring-2 ring-[var(--color-card)]" />
+                        <span className="block h-full w-full rounded-full ring-2 ring-(--color-card)" />
                       )}
                     </span>
                   </button>

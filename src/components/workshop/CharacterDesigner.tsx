@@ -2,6 +2,7 @@
 "use client";
 
 import React from "react";
+import { Trash } from "lucide-react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { Icon } from "@/components/ui/Icon";
 import type { Character, StyleRef } from "@/lib/workshop/types";
@@ -239,9 +240,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange }: Pr
                   className="text-muted hover:text-red-500"
                   aria-label="删除角色"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-                  </svg>
+                  <Trash size={16} />
                 </button>
               </div>
 
@@ -288,7 +287,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange }: Pr
               <div className="mt-2">
                 <span className="mb-1 block text-xs text-muted">艺术风格（Skill）</span>
                 <DarkSelect
-                  className="!bg-white/[0.03] !border-white/[0.08] text-sm"
+                  className="!bg-white/3 !border-white/8 text-sm"
                   value={character.skillSlug ?? ""}
                   onChange={(value) => update(character.id, { skillSlug: value || undefined })}
                   options={styles.map((style) => style.slug)}

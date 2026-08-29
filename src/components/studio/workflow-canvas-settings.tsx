@@ -231,16 +231,16 @@ export function CanvasSettingsPanel({
       <aside
         role="dialog"
         aria-label="工作流画布设置"
-        className="flex h-full w-[340px] flex-col border-l border-white/[0.06] bg-[#0c0c14]/97 text-gray-200 shadow-2xl"
+        className="flex h-full w-[340px] flex-col border-l border-white/6 bg-[#0c0c14]/97 text-gray-200 shadow-2xl"
       >
         {/* Header bar */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/[0.06] px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/6 px-4 py-3">
           <div className="flex min-w-0 items-center gap-2">
             <span aria-hidden className="text-[15px]">⚙</span>
             <span className="truncate text-[12.5px] font-semibold tracking-wide text-gray-100">
               画布设置
             </span>
-            <span className="rounded-full bg-white/[0.06] px-1.5 py-px text-[10px] font-mono text-gray-500">
+            <span className="rounded-full bg-white/6 px-1.5 py-px text-[10px] font-mono text-gray-500">
               v1
             </span>
           </div>
@@ -248,7 +248,7 @@ export function CanvasSettingsPanel({
             type="button"
             onClick={onClose}
             aria-label="关闭"
-            className="rounded-md border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[11px] text-gray-400 transition-colors hover:bg-white/[0.08] hover:text-gray-200"
+            className="rounded-md border border-white/8 bg-white/4 px-1.5 py-0.5 text-[11px] text-gray-400 transition-colors hover:bg-white/8 hover:text-gray-200"
           >
             ✕
           </button>
@@ -348,12 +348,12 @@ export function CanvasSettingsPanel({
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-white/[0.06] px-4 py-3 text-[11px] text-gray-500">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-white/6 px-4 py-3 text-[11px] text-gray-500">
           <span>设置保存在本浏览器</span>
           <button
             type="button"
             onClick={reset}
-            className="rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] font-medium text-gray-300 transition-colors hover:bg-white/[0.08] hover:text-gray-100"
+            className="rounded-md border border-white/8 bg-white/4 px-2 py-1 text-[11px] font-medium text-gray-300 transition-colors hover:bg-white/8 hover:text-gray-100"
           >
             恢复默认
           </button>
@@ -378,7 +378,7 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
       onClick={onClick}
       title="画布设置 · 调整格子 / 坐标尺 / 缩略图 等"
       aria-label="画布设置"
-      className="pointer-events-auto absolute right-3 top-12 z-[6] select-none rounded-md border border-white/10 bg-[var(--color-panel)]/90 px-2.5 py-1 text-[11px] font-medium tracking-tight text-gray-300 shadow-lg backdrop-blur-sm transition-colors hover:border-white/25 hover:text-gray-100"
+      className="pointer-events-auto absolute right-3 top-12 z-[6] select-none rounded-md border border-white/10 bg-(--color-panel)/90 px-2.5 py-1 text-[11px] font-medium tracking-tight text-gray-300 shadow-lg backdrop-blur-sm transition-colors hover:border-white/25 hover:text-gray-100"
     >
       <span aria-hidden className="mr-1 align-baseline text-[12px]">⚙</span>
       设置
@@ -416,7 +416,7 @@ function Section({
           <p className="mt-0.5 text-[10.5px] text-gray-500">{subtitle}</p>
         )}
       </header>
-      <div className="space-y-2.5 rounded-lg border border-white/[0.05] bg-white/[0.02] p-3">
+      <div className="space-y-2.5 rounded-lg border border-white/5 bg-white/2 p-3">
         {children}
       </div>
     </section>
@@ -459,7 +459,7 @@ function SliderRow({
         step={step}
         value={value}
         onChange={(event) => onChange(parseFloat(event.target.value))}
-        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/[0.06] accent-violet-500 outline-none"
+        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/6 accent-violet-500 outline-none"
         style={{
           /* Range input theming that's hard to do with Tailwind alone;
            * we paint the filled portion via a gradient that mirrors the
@@ -494,7 +494,7 @@ function ToggleRow({
         aria-checked={value}
         onClick={() => onChange(!value)}
         className={`relative h-[18px] w-[32px] shrink-0 rounded-full transition-colors ${
-          value ? "bg-violet-500" : "bg-white/[0.12]"
+          value ? "bg-violet-500" : "bg-white/12"
         }`}
       >
         <span

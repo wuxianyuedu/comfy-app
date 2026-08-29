@@ -2,6 +2,23 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  Download,
+  FileText,
+  Folder,
+  Image,
+  LayoutGrid,
+  List,
+  Music,
+  Plus,
+  Search,
+  Trash2,
+  Video,
+  X,
+} from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "@/components/studio/MediaThumbnail";
 
 /* ── Types (mirror /api/materials 响应) ─────────────────────── */
@@ -42,51 +59,14 @@ const KIND_STYLE: Record<MaterialKind, string> = {
   image: "bg-violet-500/10 text-violet-400",
   video: "bg-blue-500/10 text-blue-400",
   audio: "bg-emerald-500/10 text-emerald-400",
-  doc: "bg-white/[0.04] text-gray-400",
+  doc: "bg-white/4 text-gray-400",
 };
 
 function KindIcon({ kind }: { kind: MaterialKind }) {
-  const common = {
-    width: 18,
-    height: 18,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.8,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-  };
-  if (kind === "image")
-    return (
-      <svg {...common}>
-        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-        <circle cx="8.5" cy="8.5" r="1.5" />
-        <polyline points="21 15 16 10 5 21" />
-      </svg>
-    );
-  if (kind === "video")
-    return (
-      <svg {...common}>
-        <polygon points="23 7 16 12 23 17 23 7" />
-        <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-      </svg>
-    );
-  if (kind === "audio")
-    return (
-      <svg {...common}>
-        <path d="M9 18V5l12-2v13" />
-        <circle cx="6" cy="18" r="3" />
-        <circle cx="18" cy="16" r="3" />
-      </svg>
-    );
-  return (
-    <svg {...common}>
-      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-    </svg>
-  );
+  if (kind === "image") return <Image size={18} strokeWidth={1.8} />;
+  if (kind === "video") return <Video size={18} strokeWidth={1.8} />;
+  if (kind === "audio") return <Music size={18} strokeWidth={1.8} />;
+  return <FileText size={18} strokeWidth={1.8} />;
 }
 
 /* ── Component ─────────────────────────────────────────────── */
@@ -230,33 +210,26 @@ export function MaterialLibraryPanel({
       : [{ label: "全部", key: null }];
 
   return (
-    <aside className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l border-white/[0.06] bg-[var(--color-panel)]/98 backdrop-blur-md">
+    <aside className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l border-white/6 bg-(--color-panel)/98 backdrop-blur-md">
       {/* ── Header ── */}
-      <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3">
+      <div className="flex items-center gap-2 border-b border-white/6 px-4 py-3">
         <h2 className="flex-1 text-[15px] font-semibold text-gray-100">素材库</h2>
         <button
           type="button"
-          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-300"
           title="素材保存在 public/generated/materials 下，可直接把文件丢进对应分类目录"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
+          <CircleHelp size={14} />
         </button>
         {/* 显示密度切换 */}
-        <div className="flex items-center gap-0.5 rounded-lg bg-white/[0.04] p-0.5">
+        <div className="flex items-center gap-0.5 rounded-lg bg-white/4 p-0.5">
           <button
             type="button"
             onClick={() => setDisplay("grid")}
             className={`rounded-md p-1 transition-colors ${display === "grid" ? "bg-white/10 text-gray-200" : "text-gray-500 hover:text-gray-300"}`}
             title="网格视图"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
-            </svg>
+            <LayoutGrid size={14} />
           </button>
           <button
             type="button"
@@ -264,27 +237,21 @@ export function MaterialLibraryPanel({
             className={`rounded-md p-1 transition-colors ${display === "list" ? "bg-white/10 text-gray-200" : "text-gray-500 hover:text-gray-300"}`}
             title="列表视图"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" />
-              <line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" />
-              <line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
-            </svg>
+            <List size={14} />
           </button>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-300"
           title="关闭"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
+          <X size={14} />
         </button>
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex gap-4 border-b border-white/[0.06] px-4 pt-2">
+      <div className="flex gap-4 border-b border-white/6 px-4 pt-2">
         {([
           { id: "project" as MaterialScope, label: "本项目" },
           { id: "cross" as MaterialScope, label: "跨项目" },
@@ -298,7 +265,7 @@ export function MaterialLibraryPanel({
             }}
             className={`pb-2.5 text-[13px] font-medium transition-colors ${
               scope === scopeItem.id
-                ? "border-b-2 border-[var(--color-accent)] text-gray-100"
+                ? "border-b-2 border-(--color-accent) text-gray-100"
                 : "text-gray-500 hover:text-gray-300"
             }`}
           >
@@ -309,10 +276,8 @@ export function MaterialLibraryPanel({
 
       {/* ── Search + upload ── */}
       <div className="flex items-center gap-2 px-4 py-3">
-        <div className="flex flex-1 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-500">
-            <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
-          </svg>
+        <div className="flex flex-1 items-center gap-2 rounded-lg border border-white/8 bg-white/3 px-3 py-2">
+          <Search size={14} className="shrink-0 text-gray-500" />
           <input
             type="text"
             value={search}
@@ -327,9 +292,7 @@ export function MaterialLibraryPanel({
               className="shrink-0 text-gray-600 transition-colors hover:text-gray-300"
               title="清空"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
+              <X size={12} strokeWidth={2.5} />
             </button>
           )}
         </div>
@@ -344,7 +307,7 @@ export function MaterialLibraryPanel({
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-gray-200 disabled:opacity-40"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-white/6 hover:text-gray-200 disabled:opacity-40"
           title={folder ? `上传到「${folders.find((fld) => fld.id === folder)?.name ?? folder}」` : "上传到「参考素材」"}
         >
           {uploading ? (
@@ -353,9 +316,7 @@ export function MaterialLibraryPanel({
               <path d="M21 12a9 9 0 00-9-9" strokeLinecap="round" />
             </svg>
           ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
+            <Plus size={16} strokeWidth={1.8} />
           )}
         </button>
       </div>
@@ -397,11 +358,9 @@ export function MaterialLibraryPanel({
           <button
             type="button"
             onClick={() => setFolder(null)}
-            className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
+            className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-300"
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
+            <ChevronLeft size={11} strokeWidth={2.5} />
             返回
           </button>
         )}
@@ -428,8 +387,8 @@ export function MaterialLibraryPanel({
           <div className="space-y-1 px-2 pt-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={`skeleton-${i}`} className="flex items-center gap-3 py-2">
-                <div className="h-9 w-9 shrink-0 animate-pulse rounded-lg bg-white/[0.05]" />
-                <div className="h-3 flex-1 animate-pulse rounded bg-white/[0.05]" />
+                <div className="h-9 w-9 shrink-0 animate-pulse rounded-lg bg-white/5" />
+                <div className="h-3 flex-1 animate-pulse rounded bg-white/5" />
               </div>
             ))}
           </div>
@@ -438,10 +397,8 @@ export function MaterialLibraryPanel({
             /* 空状态：大图标 + 提示文案 + 操作引导 */
             <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
               {/* 文件夹图标 */}
-              <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.02]">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600">
-                  <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
-                </svg>
+              <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl border border-white/8 bg-white/2">
+                <Folder size={40} strokeWidth={1.2} className="text-gray-600" />
               </div>
               <p className="text-[14px] font-medium text-gray-400">
                 {searching ? "没有匹配的素材" : "暂无内容"}
@@ -453,15 +410,11 @@ export function MaterialLibraryPanel({
                     onClick={() => fileRef.current?.click()}
                     className="flex items-center gap-2 transition-colors hover:text-violet-400"
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
+                    <Plus size={14} />
                     点击 + 或右键菜单创建内容
                   </button>
                   <p className="flex items-center gap-2">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                    </svg>
+                    <Download size={14} strokeWidth={1.8} />
                     也可以从画布拖入素材保存到这里
                   </p>
                 </div>
@@ -481,7 +434,7 @@ export function MaterialLibraryPanel({
                     );
                     event.dataTransfer.effectAllowed = "copy";
                   }}
-                  className={`group relative overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.02] ${
+                  className={`group relative overflow-hidden rounded-lg border border-white/6 bg-white/2 ${
                     item.kind === "image" || item.kind === "video" ? "cursor-grab active:cursor-grabbing" : ""
                   }`}
                 >
@@ -508,9 +461,7 @@ export function MaterialLibraryPanel({
                         className="flex h-6 w-6 items-center justify-center rounded bg-black/60 text-gray-300 backdrop-blur transition-colors hover:text-white"
                         title="加入画布"
                       >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                        </svg>
+                        <Plus size={12} strokeWidth={2.5} />
                       </button>
                     )}
                     <button
@@ -519,10 +470,7 @@ export function MaterialLibraryPanel({
                       className="flex h-6 w-6 items-center justify-center rounded bg-black/60 text-gray-300 backdrop-blur transition-colors hover:text-red-400"
                       title="删除"
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m5 0V4a1 1 0 011-1h2a1 1 0 011 1v2" />
-                      </svg>
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 </div>
@@ -542,7 +490,7 @@ export function MaterialLibraryPanel({
                     );
                     event.dataTransfer.effectAllowed = "copy";
                   }}
-                  className={`group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-white/[0.04] ${
+                  className={`group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-white/4 ${
                     item.kind === "image" || item.kind === "video" ? "cursor-grab active:cursor-grabbing" : ""
                   }`}
                 >
@@ -567,35 +515,28 @@ export function MaterialLibraryPanel({
                       <button
                         type="button"
                         onClick={() => onUse(item)}
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/[0.08] hover:text-gray-200"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/8 hover:text-gray-200"
                         title="加入画布"
                       >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                        </svg>
+                        <Plus size={13} strokeWidth={2.5} />
                       </button>
                     )}
                     <a
                       href={item.url}
                       download={item.name}
                       draggable={false}
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/[0.08] hover:text-gray-200"
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/8 hover:text-gray-200"
                       title="下载"
                     >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                      </svg>
+                      <Download size={13} />
                     </a>
                     <button
                       type="button"
                       onClick={() => doDelete(item)}
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/[0.08] hover:text-red-400"
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/8 hover:text-red-400"
                       title="删除"
                     >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m5 0V4a1 1 0 011-1h2a1 1 0 011 1v2" />
-                      </svg>
+                      <Trash2 size={13} />
                     </button>
                   </div>
                 </div>
@@ -612,12 +553,10 @@ export function MaterialLibraryPanel({
                   key={folder.id}
                   type="button"
                   onClick={() => setFolder(folder.id)}
-                  className="group flex flex-col items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] py-4 transition-colors hover:bg-white/[0.04] hover:border-white/[0.1]"
+                  className="group flex flex-col items-center gap-2 rounded-lg border border-white/6 bg-white/2 py-4 transition-colors hover:bg-white/4 hover:border-white/10"
                 >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-yellow-500/20 to-orange-500/10 text-yellow-400/80">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
-                    </svg>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-400/80">
+                    <Folder size={22} strokeWidth={1.8} />
                   </div>
                   <span className="min-w-0 truncate text-center text-[12px] text-gray-300">{folder.name}</span>
                   {folder.count > 0 && (
@@ -634,20 +573,16 @@ export function MaterialLibraryPanel({
                   key={folder.id}
                   type="button"
                   onClick={() => setFolder(folder.id)}
-                  className="group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-white/[0.04]"
+                  className="group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-white/4"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-yellow-500/20 to-orange-500/10 text-yellow-400/80">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
-                    </svg>
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-400/80">
+                    <Folder size={18} strokeWidth={1.8} />
                   </div>
                   <span className="min-w-0 flex-1 truncate text-[13px] text-gray-200">{folder.name}</span>
                   <span className="shrink-0 text-[11px] tabular-nums text-gray-600">
                     {folder.count > 0 ? folder.count : ""}
                   </span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-700 group-hover:text-gray-500">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
+                  <ChevronRight size={12} strokeWidth={2.5} className="shrink-0 text-gray-700 group-hover:text-gray-500" />
                 </button>
               ))}
             </div>

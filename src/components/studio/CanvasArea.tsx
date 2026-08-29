@@ -1,6 +1,22 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
+import {
+  ArrowRight,
+  Clipboard,
+  Eye,
+  Image,
+  Layers,
+  LayoutGrid,
+  Maximize,
+  Music,
+  RotateCcw,
+  RotateCw,
+  SquarePlay,
+  Type,
+  Upload,
+  Wrench,
+} from "lucide-react";
 
 /* ── Canvas Area with Context Menu + Bottom Toolbar ────
   Wraps content (e.g. WorkflowCanvas) with:
@@ -95,7 +111,7 @@ export function CanvasArea({
   return (
     <div
       ref={containerRef}
-      className={`relative flex h-full w-full overflow-hidden bg-[var(--color-canvas)] ${className}`}
+      className={`relative flex h-full w-full overflow-hidden bg-(--color-canvas) ${className}`}
       onContextMenu={handleContextMenu}
     >
       {/* Canvas content */}
@@ -141,9 +157,7 @@ export function CanvasArea({
             onClick={() => onContextAction?.("run")}
             active
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            </svg>
+            <ArrowRight size={14} strokeWidth={2.5} />
           </ToolbarButton>
 
           <ToolbarDivider />
@@ -167,33 +181,24 @@ export function CanvasArea({
 
           {/* Fit screen */}
           <ToolbarButton title="适应屏幕" onClick={() => onContextAction?.("fit-view")}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" />
-            </svg>
+            <Maximize size={13} />
           </ToolbarButton>
 
           {/* Toggle visibility */}
           <ToolbarButton title="显示/隐藏" onClick={() => onContextAction?.("toggle-visibility")}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
+            <Eye size={13} />
           </ToolbarButton>
 
           <ToolbarDivider />
 
           {/* Undo */}
           <ToolbarButton title="撤销" onClick={() => onContextAction?.("undo")}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 7v6h6" /><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
-            </svg>
+            <RotateCcw size={13} />
           </ToolbarButton>
 
           {/* Redo */}
           <ToolbarButton title="重做" onClick={() => onContextAction?.("redo")}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 7v6h-6" /><path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7" />
-            </svg>
+            <RotateCw size={13} />
           </ToolbarButton>
 
           {/* Extra */}
@@ -212,9 +217,7 @@ export function CanvasArea({
               : "border-white/10 bg-[#1a1a24]/80 text-gray-500 hover:text-gray-300"
           } backdrop-blur-sm`}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
-          </svg>
+          <LayoutGrid size={12} />
           小地图
         </button>
       )}
@@ -258,65 +261,29 @@ function ToolbarDivider() {
 /* ── Menu Icons ──────────────────────────────────────── */
 
 function MenuIconUpload() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
-    </svg>
-  );
+  return <Upload size={14} />;
 }
 function MenuIconText() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 7V4h16v3M9 20h6M12 4v16" />
-    </svg>
-  );
+  return <Type size={14} />;
 }
 function MenuIconImage() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
-    </svg>
-  );
+  return <Image size={14} />;
 }
 function MenuIconVideo() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" /><path d="M10 8l6 4-6 4V8z" />
-    </svg>
-  );
+  return <SquarePlay size={14} />;
 }
 function MenuIconAudio() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
-    </svg>
-  );
+  return <Music size={14} />;
 }
 function MenuIconAgent() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-    </svg>
-  );
+  return <Layers size={14} />;
 }
 function MenuIconPlugin() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
-    </svg>
-  );
+  return <Wrench size={14} />;
 }
 function MenuIconFit() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" />
-    </svg>
-  );
+  return <Maximize size={14} />;
 }
 function MenuIconPaste() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-    </svg>
-  );
+  return <Clipboard size={14} />;
 }

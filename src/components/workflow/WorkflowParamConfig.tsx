@@ -207,15 +207,15 @@ export function WorkflowParamConfig({
 
   if (!compact) {
     return (
-      <div className="space-y-3 rounded-xl border border-white/[0.06] bg-[var(--color-panel-deep)]/70 p-4">
+      <div className="space-y-3 rounded-xl border border-white/6 bg-(--color-panel-deep)/70 p-4">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="flex items-center text-[13px] font-semibold text-[var(--color-ink-field)]">
+            <h3 className="flex items-center text-[13px] font-semibold text-(--color-ink-field)">
               <Icon name="settings" size={14} className="mr-1.5 inline align-[-2px]" />
               参数暴露配置
             </h3>
-            <p className="mt-0.5 text-[10.5px] text-[var(--color-ink-fainter)]">
+            <p className="mt-0.5 text-[10.5px] text-(--color-ink-fainter)">
               选择工作流中哪些节点作为输入参数暴露给创作台
             </p>
           </div>
@@ -255,12 +255,12 @@ export function WorkflowParamConfig({
             return (
               <div
                 key={node.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.05] bg-white/[0.02] px-3 py-2 transition-colors hover:border-white/[0.1]"
+                className="flex items-center justify-between gap-2 rounded-lg border border-white/5 bg-white/2 px-3 py-2 transition-colors hover:border-white/10"
               >
                 {/* Node info */}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-medium text-[var(--color-ink-field)]">{node.title}</p>
-                  <p className="truncate text-[10px] text-[var(--color-ink-fainter)]">
+                  <p className="truncate text-[12px] font-medium text-(--color-ink-field)">{node.title}</p>
+                  <p className="truncate text-[10px] text-(--color-ink-fainter)">
                     {node.class_type} · {node.id.slice(0, 8)}…
                   </p>
                 </div>
@@ -303,7 +303,7 @@ export function WorkflowParamConfig({
 
   /* ── Compact mode (for inline use in CreatePanel) ── */
   return (
-    <div className="space-y-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+    <div className="space-y-2 rounded-lg border border-white/6 bg-white/2 p-3">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-medium text-gray-300">
           参数映射

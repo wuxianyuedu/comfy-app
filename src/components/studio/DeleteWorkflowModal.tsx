@@ -5,6 +5,7 @@
  *  modal: the listener is active only while the modal is mounted.
  */
 import { useEffect } from "react";
+import { Trash2 } from "lucide-react";
 
 interface DeleteWorkflowModalProps {
   pendingDelete: { id: string; name: string } | null;
@@ -48,26 +49,11 @@ export function DeleteWorkflowModal({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-md rounded-2xl border border-red-500/30 bg-[var(--color-card)] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
+        className="w-full max-w-md rounded-2xl border border-red-500/30 bg-(--color-card) p-5 shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
       >
         <div className="mb-3 flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-300">
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-              <path d="M10 11v6M14 11v6" />
-              <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-            </svg>
+            <Trash2 size={18} />
           </div>
           <div className="min-w-0 flex-1">
             <h3

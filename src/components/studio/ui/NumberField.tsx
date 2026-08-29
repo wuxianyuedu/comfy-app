@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { Minus, Plus } from "lucide-react";
 
 /**
  * ComfyUI-style numeric stepper:  [—] [value] [+]
@@ -61,7 +62,7 @@ export function NumberField({
 
   return (
     <div
-      className={`nodrag nopan flex items-center gap-0 rounded-lg border border-white/[0.08] bg-white/[0.03] transition-opacity ${
+      className={`nodrag nopan flex items-center gap-0 rounded-lg border border-white/8 bg-white/3 transition-opacity ${
         disabled ? "opacity-40 pointer-events-none" : ""
       } ${className ?? ""}`}
     >
@@ -69,12 +70,10 @@ export function NumberField({
         type="button"
         onMouseDown={(event) => { event.preventDefault(); decr(); }}
         disabled={disabled || value <= min}
-        className="flex h-[24px] w-[24px] shrink-0 items-center justify-center text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200 active:text-white disabled:opacity-30"
+        className="flex h-[24px] w-[24px] shrink-0 items-center justify-center text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-200 active:text-white disabled:opacity-30"
         title={`减少 ${step}`}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-          <path d="M5 12h14" />
-        </svg>
+        <Minus size={12} strokeWidth={2.5} />
       </button>
       <input
         type="text"
@@ -97,12 +96,10 @@ export function NumberField({
         type="button"
         onMouseDown={(event) => { event.preventDefault(); incr(); }}
         disabled={disabled || value >= max}
-        className="flex h-[24px] w-[24px] shrink-0 items-center justify-center text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200 active:text-white disabled:opacity-30"
+        className="flex h-[24px] w-[24px] shrink-0 items-center justify-center text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-200 active:text-white disabled:opacity-30"
         title={`增加 ${step}`}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
+        <Plus size={12} strokeWidth={2.5} />
       </button>
     </div>
   );

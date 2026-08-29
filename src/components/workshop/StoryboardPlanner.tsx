@@ -2,6 +2,7 @@
 "use client";
 
 import React from "react";
+import { Trash } from "lucide-react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { Icon } from "@/components/ui/Icon";
 import type { Shot, Scene, Character, StyleRef, ShotType } from "@/lib/workshop/types";
@@ -259,9 +260,7 @@ export function StoryboardPlanner({
                     className="ml-auto text-muted hover:text-red-500"
                     aria-label="删除镜头"
                   >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-                    </svg>
+                    <Trash size={15} />
                   </button>
                 </div>
 
@@ -270,7 +269,7 @@ export function StoryboardPlanner({
                   <label className="block">
                     <span className="mb-1 block text-xs text-muted">景别</span>
                     <DarkSelect
-                      className="!bg-white/[0.03] !border-white/[0.08] text-xs"
+                      className="!bg-white/3 !border-white/8 text-xs"
                       value={shot.shotType}
                       onChange={(value) => updateShot(shot.id, { shotType: value as ShotType })}
                       options={SHOT_TYPES}
@@ -283,7 +282,7 @@ export function StoryboardPlanner({
                   <label className="block">
                     <span className="mb-1 block text-xs text-muted">风格 Skill</span>
                     <DarkSelect
-                      className="!bg-white/[0.03] !border-white/[0.08] text-xs"
+                      className="!bg-white/3 !border-white/8 text-xs"
                       value={shot.skillSlug ?? ""}
                       onChange={(value) => updateShot(shot.id, { skillSlug: value || undefined })}
                       options={styles.map((style) => style.slug)}

@@ -12,7 +12,7 @@ interface CanvasToolbarProps {
 }
 
 const ghostTool =
-  "rounded-full px-3 py-1 text-[12px] text-gray-300 transition-colors hover:bg-white/[0.06]";
+  "rounded-full px-3 py-1 text-[12px] text-gray-300 transition-colors hover:bg-white/6";
 
 export function CanvasToolbar({
   onFitView,
@@ -20,7 +20,7 @@ export function CanvasToolbar({
   onClear,
 }: CanvasToolbarProps) {
   return (
-    <div className="absolute top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/[0.1] bg-gradient-to-br from-[#1a1530]/85 to-[#16121f]/85 px-2 py-1.5 shadow-lg shadow-black/30 backdrop-blur-md">
+    <div className="absolute top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-linear-to-br from-[#1a1530]/85 to-[#16121f]/85 px-2 py-1.5 shadow-lg shadow-black/30 backdrop-blur-md">
       <span className="flex items-center px-2 text-[11px] font-medium text-violet-200">
         <Icon name="sparkles" size={13} className="mr-1.5" />
         无限画布

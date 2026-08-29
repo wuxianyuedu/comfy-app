@@ -53,7 +53,7 @@ export function StyleSwitcher({
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <span className="text-[10px] text-[var(--color-ink-muted)]">{label}</span>
+      <span className="text-[10px] text-(--color-ink-muted)">{label}</span>
       {children}
     </div>
   );

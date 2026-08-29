@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FileText, Lock, TriangleAlert } from "lucide-react";
 import { useLogPanel } from "./log-provider";
 
 /* ── Tauri window bottom status bar ─────────────────────────
@@ -61,37 +62,14 @@ export function BrowserStatusBar({ status = "就绪" }: BrowserStatusBarProps) {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-[100] flex h-6 items-center justify-between border-t border-white/[0.06] bg-[#0c0c12]/95 px-3 text-[11px] text-gray-500 backdrop-blur-sm"
+      className="fixed bottom-0 left-0 right-0 z-[100] flex h-6 items-center justify-between border-t border-white/6 bg-[#0c0c12]/95 px-3 text-[11px] text-gray-500 backdrop-blur-sm"
       aria-label="浏览器地址栏"
     >
       <div className="flex min-w-0 items-center gap-1.5">
         {secure ? (
-          <svg
-            width="11"
-            height="11"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className="shrink-0 text-emerald-400"
-          >
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0110 0v4" />
-          </svg>
+          <Lock size={11} className="shrink-0 text-emerald-400" />
         ) : (
-          <svg
-            width="11"
-            height="11"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className="shrink-0 text-amber-400"
-          >
-            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
+          <TriangleAlert size={11} className="shrink-0 text-amber-400" />
         )}
         <span className="shrink-0 text-gray-600">{secure ? "安全" : "不安全"}</span>
         <span className="truncate text-gray-400" title={url}>
@@ -107,16 +85,10 @@ export function BrowserStatusBar({ status = "就绪" }: BrowserStatusBarProps) {
           className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors ${
             isOpen
               ? "bg-violet-500/20 text-violet-300"
-              : "text-gray-500 hover:bg-white/[0.05] hover:text-gray-300"
+              : "text-gray-500 hover:bg-white/5 hover:text-gray-300"
           }`}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-            <line x1="10" y1="9" x2="9" y2="9" />
-          </svg>
+          <FileText size={12} />
           {counts.error > 0 && (
             <span className="rounded-full bg-rose-500/20 px-1 text-[10px] text-rose-300">
               {counts.error}

@@ -218,7 +218,7 @@ export function WorkshopPipeline() {
               <span className="text-[17px] font-semibold text-ink">工坊 · 全链路项目管线</span>
               <span className="text-[11px] text-muted">Comfy-APP / 项目管线</span>
             </div>
-            <span className="ml-4 rounded-lg bg-white/[0.04] px-3 py-1.5 text-[13px] text-muted">{meta.title}</span>
+            <span className="ml-4 rounded-lg bg-white/4 px-3 py-1.5 text-[13px] text-muted">{meta.title}</span>
           </div>
 
           {/* 项目总进度：放到最顶部（设计稿红框区域） */}
@@ -236,7 +236,7 @@ export function WorkshopPipeline() {
           </div>
 
           <div className="flex flex-1 items-center justify-end gap-3">
-            <span className="rounded-full bg-[var(--color-amber)]/15 px-3 py-1.5 text-xs font-medium text-[var(--color-amber)]">
+            <span className="rounded-full bg-(--color-amber)/15 px-3 py-1.5 text-xs font-medium text-(--color-amber)">
               距离成片还差 3 类素材
             </span>
             <button className="grid h-8 w-8 place-items-center rounded-full bg-primary/50 text-white" aria-label="账户">
@@ -261,7 +261,7 @@ export function WorkshopPipeline() {
                   }
                 }}
                 className={`flex flex-1 items-center gap-3 rounded-xl px-4 py-3 transition-colors ${
-                  active ? "bg-primary/[0.12] ring-1 ring-primary/25" : "bg-surface"
+                  active ? "bg-primary/12 ring-1 ring-primary/25" : "bg-surface"
                 } ${locked ? "opacity-60" : ""}`}
               >
                 <span
@@ -289,7 +289,7 @@ export function WorkshopPipeline() {
                 <h2 className="text-[17px] font-semibold text-ink">{stageTitle}</h2>
                 <p className="mt-1 text-[12px] text-muted">{stageDesc}</p>
               </div>
-              <span className="shrink-0 rounded-full bg-white/[0.04] px-3 py-1 text-[11px] text-muted">
+              <span className="shrink-0 rounded-full bg-white/4 px-3 py-1 text-[11px] text-muted">
                 阶段 {stageIndex} / {totalStages}
               </span>
             </div>
@@ -305,7 +305,7 @@ export function WorkshopPipeline() {
                         setDraftOutline(outline);
                         setEditingOutline(true);
                       }}
-                      className="rounded-lg bg-white/[0.04] px-4 py-1.5 text-xs font-medium text-ink hover:bg-white/[0.08]"
+                      className="rounded-lg bg-white/4 px-4 py-1.5 text-xs font-medium text-ink hover:bg-white/8"
                     >
                       编辑
                     </button>
@@ -313,7 +313,7 @@ export function WorkshopPipeline() {
                     <>
                       <button
                         onClick={() => setEditingOutline(false)}
-                        className="rounded-lg bg-white/[0.04] px-4 py-1.5 text-xs font-medium text-ink hover:bg-white/[0.08]"
+                        className="rounded-lg bg-white/4 px-4 py-1.5 text-xs font-medium text-ink hover:bg-white/8"
                       >
                         取消
                       </button>
@@ -322,13 +322,13 @@ export function WorkshopPipeline() {
                           setOutline(draftOutline);
                           setEditingOutline(false);
                         }}
-                        className="rounded-lg bg-primary/[0.12] px-4 py-1.5 text-[11px] text-primary hover:bg-primary/[0.18]"
+                        className="rounded-lg bg-primary/12 px-4 py-1.5 text-[11px] text-primary hover:bg-primary/18"
                       >
                         保存
                       </button>
                     </>
                   )}
-                  <span className="rounded-lg bg-primary/[0.12] px-4 py-1.5 text-[11px] text-primary">自动生成</span>
+                  <span className="rounded-lg bg-primary/12 px-4 py-1.5 text-[11px] text-primary">自动生成</span>
                 </div>
               </div>
               {editingOutline ? (
@@ -348,7 +348,7 @@ export function WorkshopPipeline() {
             <section className="mt-5 rounded-2xl border border-border bg-surface p-5">
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-[13px] font-semibold text-ink">分镜脚本</span>
-                <span className="rounded-lg bg-primary/[0.12] px-4 py-1.5 text-[11px] text-primary">{gridShots.length} 镜</span>
+                <span className="rounded-lg bg-primary/12 px-4 py-1.5 text-[11px] text-primary">{gridShots.length} 镜</span>
               </div>
               <div className="grid grid-cols-4 gap-4">
                 {gridShots.map((gs) => (
@@ -365,8 +365,8 @@ export function WorkshopPipeline() {
                       镜 {String(gs.idx + 1).padStart(2, "0")}
                     </div>
                     {/* faint placeholder image */}
-                    <div className="absolute right-2 top-1/2 h-11 w-[54px] -translate-y-1/2 rounded-md bg-white/[0.03]" />
-                    <div className="absolute right-[22px] top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white/[0.06]" />
+                    <div className="absolute right-2 top-1/2 h-11 w-[54px] -translate-y-1/2 rounded-md bg-white/3" />
+                    <div className="absolute right-[22px] top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white/6" />
                   </div>
                 ))}
               </div>
@@ -398,7 +398,7 @@ export function WorkshopPipeline() {
                 </button>
                 <button
                   onClick={() => setTab("script")}
-                  className="rounded-xl bg-white/[0.04] px-6 py-3 text-[13px] font-semibold text-ink hover:bg-white/[0.08]"
+                  className="rounded-xl bg-white/4 px-6 py-3 text-[13px] font-semibold text-ink hover:bg-white/8"
                 >
                   导入剧本
                 </button>
@@ -426,7 +426,7 @@ export function WorkshopPipeline() {
             {/* Missing materials */}
             <div className="rounded-2xl border border-border bg-surface p-4">
               <div className="mb-3 flex items-center gap-2">
-                <span className="grid h-[22px] w-[22px] place-items-center rounded-lg bg-[var(--color-amber)]/20 text-[13px] font-bold text-[var(--color-amber)]">!</span>
+                <span className="grid h-[22px] w-[22px] place-items-center rounded-lg bg-(--color-amber)/20 text-[13px] font-bold text-(--color-amber)">!</span>
                 <span className="text-[13px] font-semibold text-ink">缺失素材 / 下一步</span>
               </div>
               <div className="space-y-2.5">
@@ -439,7 +439,7 @@ export function WorkshopPipeline() {
                   </div>
                 ))}
               </div>
-              <button className="mt-3 w-full rounded-lg bg-[var(--color-amber)]/10 py-2.5 text-xs font-semibold text-[var(--color-amber)] hover:bg-[var(--color-amber)]/15">
+              <button className="mt-3 w-full rounded-lg bg-(--color-amber)/10 py-2.5 text-xs font-semibold text-(--color-amber) hover:bg-(--color-amber)/15">
                 补齐缺失素材 →
               </button>
             </div>
@@ -461,11 +461,11 @@ export function WorkshopPipeline() {
                       <Icon name="file" size={14} className="text-muted" />
                     </span>
                     <span className="flex-1 truncate text-[12.5px] text-ink">{name}</span>
-                    <span className="rounded-md bg-white/[0.04] px-2 py-1 text-[10.5px] text-faint">{tag}</span>
+                    <span className="rounded-md bg-white/4 px-2 py-1 text-[10.5px] text-faint">{tag}</span>
                   </div>
                 ))}
               </div>
-              <button className="mt-3 w-full rounded-lg bg-white/[0.04] py-2.5 text-xs text-muted hover:bg-white/[0.08]">
+              <button className="mt-3 w-full rounded-lg bg-white/4 py-2.5 text-xs text-muted hover:bg-white/8">
                 + 导入素材
               </button>
             </div>

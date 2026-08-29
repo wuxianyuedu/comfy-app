@@ -158,10 +158,10 @@ export function WorkflowIOThumb({ io }: { io: WorkflowIOMap | null | undefined }
         {inputs.slice(0, MAX).map((entry) => (
           <span
             key={entry.ioKey}
-            className="inline-flex max-w-full items-center gap-1 truncate rounded-md bg-[var(--color-info)]/10 px-1.5 py-0.5 text-[10px] text-[var(--color-info)]"
+            className="inline-flex max-w-full items-center gap-1 truncate rounded-md bg-(--color-info)/10 px-1.5 py-0.5 text-[10px] text-(--color-info)"
             title={`${entry.nodeTitle ?? ""} · ${entry.name}`}
           >
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-info)]" />
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-(--color-info)" />
             <span className="truncate">{ioLabel(entry, conflictList)}</span>
           </span>
         ))}
@@ -170,16 +170,16 @@ export function WorkflowIOThumb({ io }: { io: WorkflowIOMap | null | undefined }
         )}
       </div>
       <div className="flex h-3 flex-1 items-center">
-        <div className="h-px w-full bg-gradient-to-r from-[var(--color-info)]/40 via-white/20 to-[var(--color-success-strong)]/40" />
+        <div className="h-px w-full bg-linear-to-r from-(--color-info)/40 via-white/20 to-(--color-success-strong)/40" />
       </div>
       <div className="flex min-w-0 max-w-[44%] flex-wrap items-center justify-start gap-1">
         {outputs.slice(0, MAX).map((entry) => (
           <span
             key={entry.ioKey}
-            className="inline-flex max-w-full items-center gap-1 truncate rounded-md bg-[var(--color-success)]/10 px-1.5 py-0.5 text-[10px] text-[var(--color-success)]"
+            className="inline-flex max-w-full items-center gap-1 truncate rounded-md bg-(--color-success)/10 px-1.5 py-0.5 text-[10px] text-(--color-success)"
             title={`${entry.nodeTitle ?? ""} · ${entry.name}`}
           >
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-success)]" />
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-(--color-success)" />
             <span className="truncate">{ioLabel(entry, conflictList)}</span>
           </span>
         ))}
@@ -229,12 +229,12 @@ export function RootGroupHeader({
       type="button"
       onClick={onToggle}
       aria-expanded={!collapsed}
-      className="group/root flex w-full items-center gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-left transition-colors hover:border-cyan-400/30 hover:bg-white/[0.04]"
+      className="group/root flex w-full items-center gap-2.5 rounded-xl border border-white/6 bg-white/2 px-3 py-2 text-left transition-colors hover:border-cyan-400/30 hover:bg-white/4"
     >
       <span
         className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] font-bold transition-transform ${
           collapsed ? "" : "rotate-90"
-        } bg-white/[0.06] text-gray-300`}
+        } bg-white/6 text-gray-300`}
         aria-hidden
       >
         ▶
@@ -282,7 +282,7 @@ export function RootGroupHeader({
       <span
         className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${
           collapsed
-            ? "bg-white/[0.05] text-gray-400"
+            ? "bg-white/5 text-gray-400"
             : "bg-cyan-500/15 text-cyan-300"
         }`}
         title={collapsed ? "已折叠，点击展开" : "已展开，点击折叠"}
@@ -384,7 +384,7 @@ export function PendingWorkflowCard({
   return (
     <div
       key={w.id}
-      className="group flex flex-col rounded-2xl border border-dashed border-cyan-400/25 bg-white/[0.015] p-4"
+      className="group flex flex-col rounded-2xl border border-dashed border-cyan-400/25 bg-white/1.5 p-4"
     >
       <h3
         className="break-words text-sm font-semibold leading-snug text-gray-100"
@@ -455,7 +455,7 @@ export function FilterTabs<T extends string>({
             className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
               isActive
                 ? activeCls
-                : "border-white/[0.08] bg-white/[0.02] text-gray-400 hover:border-white/20 hover:text-gray-200"
+                : "border-white/8 bg-white/2 text-gray-400 hover:border-white/20 hover:text-gray-200"
             }`}
           >
             {tab.label}
@@ -526,7 +526,7 @@ export function WorkflowListBody<TRow extends { id: string } = WorkflowRow>({
       onDrop={onListDrop}
     >
       {dropErr && (
-        <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/[0.08] px-3 py-2 text-sm text-red-200">
+        <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/8 px-3 py-2 text-sm text-red-200">
           <span className="font-semibold">⚠</span>
           <span>{dropErr}</span>
           <button
@@ -544,13 +544,13 @@ export function WorkflowListBody<TRow extends { id: string } = WorkflowRow>({
         <div
           className={`mb-3 flex items-center gap-3 rounded-xl border border-dashed px-4 py-2.5 transition-colors ${
             dragActive
-              ? "border-cyan-400/80 bg-cyan-500/[0.08] shadow-[inset_0_0_0_1px_rgba(34,211,238,0.12)]"
-              : "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.16]"
+              ? "border-cyan-400/80 bg-cyan-500/8 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.12)]"
+              : "border-white/8 bg-white/2 hover:border-white/16"
           }`}
         >
           <div
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-              dragActive ? "bg-cyan-500/15 text-cyan-300" : "bg-white/[0.04] text-gray-500"
+              dragActive ? "bg-cyan-500/15 text-cyan-300" : "bg-white/4 text-gray-500"
             }`}
           >
             <Icon name="upload" size={16} />
@@ -583,7 +583,7 @@ export function WorkflowListBody<TRow extends { id: string } = WorkflowRow>({
           </div>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="grid min-h-[220px] place-items-center rounded-2xl border border-dashed border-white/[0.08] text-gray-500">
+        <div className="grid min-h-[220px] place-items-center rounded-2xl border border-dashed border-white/8 text-gray-500">
           <div className="text-center">
             <Icon name="files" size={32} className="mx-auto mb-2 text-violet-300/70" />
             <p className="text-base font-medium text-gray-300">暂无工作流</p>

@@ -31,7 +31,7 @@ export function HistoryTaskCard({
     <div
       key={task.id}
       className={
-        "group relative overflow-hidden rounded-2xl border bg-white/[0.02] pl-5 pr-3 py-3 transition-all hover:bg-white/[0.04] border-l-4 " +
+        "group relative overflow-hidden rounded-2xl border bg-white/2 pl-5 pr-3 py-3 transition-all hover:bg-white/4 border-l-4 " +
         st.accentCls +
         " " +
         st.cardBorderCls
@@ -78,7 +78,7 @@ export function HistoryTaskCard({
           {st.showProgress && (
             <div className="absolute inset-x-0 bottom-0 h-1 bg-black/40">
               <div
-                className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-1000 ease-linear"
+                className="h-full bg-linear-to-r from-violet-500 to-fuchsia-500 transition-all duration-1000 ease-linear"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -107,7 +107,7 @@ export function HistoryTaskCard({
             {task.prompt || "（无提示词）"}
           </p>
           {task.status === "FAILED" && task.error && (
-            <div className="mt-2 rounded-md border border-red-500/20 bg-red-500/[0.06] px-2.5 py-1.5">
+            <div className="mt-2 rounded-md border border-red-500/20 bg-red-500/6 px-2.5 py-1.5">
               <p className="text-[11px] leading-relaxed text-red-300">
                 <span className="font-semibold">错误：</span>
                 {task.error}

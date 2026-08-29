@@ -42,7 +42,7 @@ export function WorkflowImportPanel({
   } = state;
 
   return (
-    <div className="mb-6 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5">
+    <div className="mb-6 rounded-2xl border border-white/8 bg-white/2 p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-gray-100">
           导入 ComfyUI 工作流
@@ -67,7 +67,7 @@ export function WorkflowImportPanel({
             value={importName}
             onChange={(event) => setImportName(event.target.value)}
             placeholder="例如：胶片人像 _v2（留空则用文件名）"
-            className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-violet-500/40"
+            className="w-full rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-violet-500/40"
           />
         </div>
         <div>
@@ -110,7 +110,7 @@ export function WorkflowImportPanel({
               onClick={() => setShowHelpTip((value) => !value)}
               aria-label="导入格式说明"
               aria-expanded={showHelpTip}
-              className="flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] text-gray-400 transition-colors hover:border-violet-400/40 hover:text-violet-200"
+              className="flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-white/4 text-[11px] text-gray-400 transition-colors hover:border-violet-400/40 hover:text-violet-200"
             >
               ?
             </button>
@@ -132,13 +132,13 @@ export function WorkflowImportPanel({
           onChange={(event) => setImportJson(event.target.value)}
           rows={8}
           placeholder='API 格式: { "3": { "class_type": "KSampler", "inputs": {...} } }\n\n工作流格式: { "last_node_id": 11, "nodes": [{ "id": 11, "type": "KSampler", "pos": [400, 300], "widgets_values": [...] }], "links": [...] }'
-          className="w-full resize-none rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 font-mono text-xs text-gray-100 outline-none placeholder:text-gray-500 focus:border-violet-500/40"
+          className="w-full resize-none rounded-lg border border-white/10 bg-white/3 px-3 py-2 font-mono text-xs text-gray-100 outline-none placeholder:text-gray-500 focus:border-violet-500/40"
         />
       </div>
 
       {importErr && <p className="mt-2 text-xs text-red-400">{importErr}</p>}
       {importWarn.length > 0 && (
-        <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/[0.06] p-2 text-xs text-amber-200">
+        <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/6 p-2 text-xs text-amber-200">
           <p className="font-medium">导入提示：</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-4">
             {importWarn.map((warning, i) => (

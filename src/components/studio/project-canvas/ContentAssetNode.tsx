@@ -3,6 +3,7 @@
 "use client";
 
 import React from "react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Icon } from "@/components/ui/Icon";
 import { WaterFillProgress } from "@/components/studio/ui/WaterFillProgress";
 import { vanillaApi } from "~/trpc/vanilla";
@@ -105,7 +106,7 @@ export function ContentAssetBody({
       <div className="relative">
         <textarea
           ref={textareaRef}
-          className="h-[260px] w-full resize-none rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2.5 text-[12px] leading-relaxed text-gray-200 outline-none transition-colors focus:border-violet-500/40"
+          className="h-[260px] w-full resize-none rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 text-[12px] leading-relaxed text-gray-200 outline-none transition-colors focus:border-violet-500/40"
           value={data.content ?? ""}
           placeholder="输入要喂给下游生成节点的提示词 / 参考文字…"
           onChange={(event) => onPatch({ content: event.target.value })}
@@ -139,7 +140,7 @@ export function ContentAssetBody({
           <img
             src={mediaSrc}
             alt={data.mediaName ?? "参考图"}
-            className="h-[260px] w-full rounded-xl border border-white/[0.08] bg-black/20 object-cover"
+            className="h-[260px] w-full rounded-xl border border-white/8 bg-black/20 object-cover"
             onClick={() => { if (imageCount > 1) { setGalleryIndex(0); setGalleryOpen(true); } }}
             style={imageCount > 1 ? { cursor: "pointer" } : undefined}
           />
@@ -147,7 +148,7 @@ export function ContentAssetBody({
           <video
             src={mediaSrc}
             controls
-            className="h-[260px] w-full rounded-xl border border-white/[0.08] bg-black/20 object-cover"
+            className="h-[260px] w-full rounded-xl border border-white/8 bg-black/20 object-cover"
           />
         )
       ) : (
@@ -188,7 +189,7 @@ export function ContentAssetBody({
           className={`nodrag nopan flex h-[260px] w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed text-gray-400 transition-colors ${
             isDropOver
               ? "border-violet-500/70 bg-violet-500/10 text-gray-200"
-              : "border-white/[0.14] bg-black/15 hover:border-white/30 hover:text-gray-200"
+              : "border-white/14.000000000000002 bg-black/15 hover:border-white/30 hover:text-gray-200"
           }`}
         >
           <Icon name={isPic ? "image" : "film"} size={38} className="opacity-60" />
@@ -240,16 +241,14 @@ export function ContentAssetBody({
             className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white"
             title="关闭"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <X size={16} />
           </button>
 
           {/* 主图 */}
           <img
             src={`/api/images?filename=${encodeURIComponent(taskImages[galleryIndex]?.localPath ?? "")}&type=input`}
             alt={`图片 ${galleryIndex + 1}/${taskImages.length}`}
-            className="max-h-[85vh] max-w-[85vw] rounded-lg border border-white/[0.08] object-contain shadow-2xl"
+            className="max-h-[85vh] max-w-[85vw] rounded-lg border border-white/8 object-contain shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           />
 
@@ -266,9 +265,7 @@ export function ContentAssetBody({
                 className="absolute left-4 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-30"
                 title="上一张"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 18 9 12 15 6" />
-                </svg>
+                <ChevronLeft size={18} />
               </button>
               <button
                 type="button"
@@ -280,9 +277,7 @@ export function ContentAssetBody({
                 className="absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-30"
                 title="下一张"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
+                <ChevronRight size={18} />
               </button>
               {/* 底部计数 + 缩略条 */}
               <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3">

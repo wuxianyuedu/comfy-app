@@ -2,30 +2,41 @@
 
 > 本项目使用 Tailwind CSS v4（`@theme` 配置）+ 少量 CSS 变量。样式规则的目标是：一致性、可维护性、暗色模式可切换。
 
-### 3.1 Tailwind v4 透明度写法
+### 3.1 Tailwind v4 规范类名写法
+
+v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 遗留写法，编辑器（suggestCanonicalClasses）会持续提示改写：
 
 ```tsx
-// ❌ 错误：/6 不是 Tailwind 预设值，会被忽略
-"hover:bg-white/6"
-
-// ✅ 正确：用方括号任意值
+// ❌ 旧写法：方括号 alpha 值
 "hover:bg-white/[0.06]"
 
-// ✅ 或者用最接近的预设
-"hover:bg-white/5"
+// ✅ 正确：任意百分比直接写（v4 canonical，编译为 color-mix 6%）
+"hover:bg-white/6"
 ```
 
-**Tailwind v4 预设透明度比例**：`/0 /5 /10 /15 /20 /25 /30 /35 /40 /45 /50 /55 /60 /65 /70 /75 /80 /85 /90 /95 /100`。只有这些可以直接写，`/6`、`/8` 等必须用 `/[0.06]` 形式。
+同类规范写法迁移还有两组（历史存量已由 `scripts/tw4-canonical-codemod.cjs` 清零，新代码禁止旧写法）：
+
+```tsx
+// 渐变更名：
+"bg-linear-to-br"               // ✅ v4
+"bg-gradient-to-br"             // ❌ v3 旧名
+
+// CSS 变量任意值有专用简写：
+"w-(--panel-right-width)"       // ✅ v4
+"w-[var(--panel-right-width)]"  // ❌ v3 写法
+```
+
+**规则**：透明度一律 `/百分比`（小数合法，如 `/1.5`——tailwindcss 内部正是以 `parseFloat(alpha)*100` 做规范化的）。
 
 ### 3.2 避免魔法字符串：提取到主题/Design Token
 
 ```tsx
 // ❌ 错误：魔法透明度值散落各处
-"bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06]"
+"bg-white/4 hover:bg-white/8 border-white/6"
 
 // ✅ 方案 A：@theme 扩展语义色（Tailwind v4 用 CSS 配置，见 src/app/globals.css）
 // @theme { --color-surface-1: rgba(255,255,255,0.04); }
-// 组件里用 bg-surface-1 引用，禁止直接写 bg-white/[0.04] 散落各处
+// 组件里用 bg-surface-1 引用，禁止直接写 bg-white/4 散落各处
 
 // ✅ 方案 B：用 cva 管理变体（推荐用于复用按钮/面板）
 import { cva } from "class-variance-authority";
@@ -34,7 +45,7 @@ const panelVariants = cva(
   {
     variants: {
       tone: {
-        default: "bg-white/[0.02] border-white/[0.06]",
+        default: "bg-white/2 border-white/6",
         active:  "bg-violet-500/10 border-violet-500/30",
       },
     },

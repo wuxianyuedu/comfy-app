@@ -64,7 +64,7 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
         onClick={(event) => event.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-white/[0.08] px-5 py-3">
+        <div className="flex items-start justify-between border-b border-white/8 px-5 py-3">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-100">
               查看源文件 · {data?.name ?? "—"}
@@ -92,7 +92,7 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-3 border-b border-white/[0.08] px-5 py-2">
+        <div className="flex items-center gap-3 border-b border-white/8 px-5 py-2">
           <span className="flex-1" />
           <button
             type="button"
@@ -123,7 +123,7 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
         </div>
 
         {/* Footer */}
-        <div className="border-t border-white/[0.08] px-5 py-2.5">
+        <div className="border-t border-white/8 px-5 py-2.5">
           <p className="text-xs text-gray-500">
             下载 = 导出当前 JSON · ⌘/Ctrl+F 在视图内搜索 · 点击 chevron 折叠/展开
           </p>

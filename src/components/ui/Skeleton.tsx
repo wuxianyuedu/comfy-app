@@ -10,7 +10,7 @@ export function Skeleton({ className }: { className?: string }) {
     <div
       aria-hidden
       className={cn(
-        "animate-pulse rounded-md bg-white/[0.06]",
+        "animate-pulse rounded-md bg-white/6",
         className,
       )}
     />

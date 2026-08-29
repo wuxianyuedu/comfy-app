@@ -3,6 +3,7 @@
 /* Extracted WorkflowSubgraphNode (ComfyUI subgraph wrapper renderer).
  * Originally inside WorkflowCanvasEditor.tsx. */
 import React, { useState } from "react";
+import { ExternalLink } from "lucide-react";
 import { Handle, Position } from "@xyflow/react";
 import {
   portColor, inferIsMultiline,
@@ -277,11 +278,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
              *  to mark drill-in as the *primary* subgraph action. */
             className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] text-violet-200 transition-colors hover:bg-violet-500/30 hover:text-white"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 3h6v6" />
-              <path d="M10 14L21 3" />
-              <path d="M21 14v7H3V3h7" />
-            </svg>
+            <ExternalLink size={12} strokeWidth={2.5} />
           </button>
         )}
       </div>
@@ -385,7 +382,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
        *  Hidden when the user / config marks the chip collapsed. */}
       {!isCollapsed && pinRows > 0 && (
         <div
-          className="border-b border-white/[0.05] py-0.5"
+          className="border-b border-white/5 py-0.5"
           style={{ background: "rgba(255,255,255,0.015)" }}
         >
             {Array.from({ length: pinRows }).map((_, rowIdx) => {
@@ -418,7 +415,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                         position={Position.Left}
                         id={inName}
                         isConnectable={false}
-                        className="!h-2.5 !w-2.5 !rounded-full !border !border-[var(--color-canvas)]"
+                        className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
                         style={{
                           left: 5,
                           background: inCol,
@@ -487,7 +484,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                           position={Position.Right}
                           id={`out:${outName}`}
                           isConnectable={false}
-                          className="!h-2.5 !w-2.5 !rounded-full !border !border-[var(--color-canvas)]"
+                          className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
                           style={{
                             right: 5,
                             background: outCol,
@@ -559,7 +556,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                     position={Position.Left}
                     id={inp.name}
                     isConnectable={false}
-                    className="!h-2.5 !w-2.5 !rounded-full !border !border-[var(--color-canvas)]"
+                    className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
                     style={{
                       left: 5,
                       background: typeCol,
@@ -609,7 +606,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                           {label}
                         </span>
                         {/* Vertical 1px divider between label and value. */}
-                        <span className="h-2 w-px shrink-0 bg-white/[0.05]" aria-hidden />
+                        <span className="h-2 w-px shrink-0 bg-white/5" aria-hidden />
                         {/* 2026-08-12: COMBO widget on the workflow canvas
                          *  renders as a display-only DarkSelect — it shows the
                          *  currently-selected model as a dropdown shell, but
@@ -645,7 +642,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                          *  fade to transparent) instead of a hard bar — reads as
                          *  a column hint rather than a "cut the row in half" line.
                          *  Width still 1px so it doesn't claim row real estate. */}
-                        <span className="h-2 w-px shrink-0 bg-white/[0.05]" aria-hidden />
+                        <span className="h-2 w-px shrink-0 bg-white/5" aria-hidden />
                         <span
                           className="min-w-0 truncate text-right text-[10.5px] tabular-nums"
                           style={{
@@ -713,7 +710,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                       >
                         {label}
                       </span>
-                      <span className="h-2 w-px shrink-0 bg-white/[0.05]" aria-hidden />
+                      <span className="h-2 w-px shrink-0 bg-white/5" aria-hidden />
                       <span
                         className="text-right text-[10px] uppercase tracking-wider text-gray-500"
                         title={`STRING · ${stringText.length} chars`}

@@ -5,6 +5,7 @@
  * IOEditStore (getIOEditApi / useIOEditStore) — same pattern as
  * WorkflowEditorBody — so only workflow/view/nav props are threaded in. */
 import React, { useCallback } from "react";
+import { ArrowLeft, RotateCw } from "lucide-react";
 import type { WorkflowDetail } from "./workflow-types";
 import { useToast } from "@/components/studio/toast-provider";
 import { isNoteType } from "./workflow-utils";
@@ -67,16 +68,14 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   const toast = useToast();
 
   return (
-      <header className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-4 py-3 backdrop-blur-md" style={{ background: "rgba(10,10,15,0.85)" }}>
+      <header className="flex shrink-0 items-center justify-between border-b border-white/6 px-4 py-3 backdrop-blur-md" style={{ background: "rgba(10,10,15,0.85)" }}>
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onClose}
             className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-white/10 hover:text-gray-300"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5M12 19l-7-7 7-7"/>
-            </svg>
+            <ArrowLeft size={18} />
           </button>
           <div className="flex flex-col">
             {/* Breadcrumb: root workflow name · subgraph 1 · subgraph 2 …
@@ -165,9 +164,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                   className="ml-2 inline-flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-200 transition-colors hover:bg-violet-500/20"
                   title="返回上一级"
                 >
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M19 12H5M12 19l-7-7 7-7"/>
-                  </svg>
+                  <ArrowLeft size={10} strokeWidth={2.5} />
                   返回上一级
                 </button>
               )}
@@ -182,10 +179,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 className="ml-1 inline-flex items-center gap-1 rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-200 transition-colors hover:bg-rose-500/20"
                 title="强制重载（清 sessionStorage + 跳过 server LRU + 重拉数据）"
               >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12a9 9 0 1 1-3-6.7L21 8"/>
-                  <polyline points="21 3 21 8 16 8"/>
-                </svg>
+                <RotateCw size={10} strokeWidth={2.5} />
                 强制重载
               </button>
             </div>
@@ -206,18 +200,18 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             </p>
             {detail.sourcePath ? (
               detail.sourceMissing ? (
-                <p className="mt-1 flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/[0.07] px-2 py-1 text-[11px] text-red-300">
+                <p className="mt-1 flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/7.000000000000001 px-2 py-1 text-[11px] text-red-300">
                   <span className="font-semibold">本地文件已丢失：</span>
                   <span className="truncate font-mono">{detail.sourcePath}</span>
                   <span className="ml-1 shrink-0 text-red-400/80">· 修改保存后刷新将自动重连</span>
                 </p>
               ) : detail.sourceChanged ? (
-                <p className="mt-1 flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/[0.07] px-2 py-1 text-[11px] text-emerald-300">
+                <p className="mt-1 flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/7.000000000000001 px-2 py-1 text-[11px] text-emerald-300">
                   <span className="font-semibold">已从本地文件刷新最新内容</span>
                   <span className="truncate font-mono text-emerald-400/80">{detail.sourcePath}</span>
                 </p>
               ) : (
-                <p className="mt-1 truncate rounded-md border border-emerald-500/20 bg-emerald-500/[0.05] px-2 py-1 text-[11px] text-emerald-400/80" title={detail.sourcePath}>
+                <p className="mt-1 truncate rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-1 text-[11px] text-emerald-400/80" title={detail.sourcePath}>
                   已连接本地文件 · 文件改动后刷新即可同步
                 </p>
               )

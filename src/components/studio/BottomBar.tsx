@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback } from "react";
+import { ArrowRight, Layers, MessageSquare } from "lucide-react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 
 /* ── Updream-style Bottom Bar ────────────────────────────
@@ -124,11 +125,7 @@ export function BottomBar({
             value={agentMode}
             options={agentModes}
             onChange={onAgentModeChange}
-            icon={
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            }
+            icon={<Layers size={13} />}
           />
 
           {/* Ask Mode */}
@@ -136,11 +133,7 @@ export function BottomBar({
             value={askMode}
             options={askModes}
             onChange={onAskModeChange}
-            icon={
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-              </svg>
-            }
+            icon={<MessageSquare size={13} />}
           />
         </div>
 
@@ -153,7 +146,7 @@ export function BottomBar({
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             rows={1}
-            className="w-full resize-none rounded-xl border border-white/8 bg-white/[0.04] px-4 py-2.5 pr-11 text-sm text-gray-200 outline-none placeholder:text-gray-600 transition-colors focus:border-violet-500/40 focus:bg-white/[0.06]"
+            className="w-full resize-none rounded-xl border border-white/8 bg-white/4 px-4 py-2.5 pr-11 text-sm text-gray-200 outline-none placeholder:text-gray-600 transition-colors focus:border-violet-500/40 focus:bg-white/6"
           />
           {/* Send button */}
           <button
@@ -168,9 +161,7 @@ export function BottomBar({
                 <path d="M12 2v4m0 12v4m-8-10H2m20 0h-4" />
               </svg>
             ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14m-7-7l7 7-7 7" />
-              </svg>
+              <ArrowRight size={14} strokeWidth={2.5} />
             )}
           </button>
         </div>
@@ -194,7 +185,7 @@ function DropdownSelect({
 }) {
   if (options.length <= 1 && !onChange) {
     return (
-      <span className="flex items-center gap-1 rounded-lg border border-white/8 bg-white/[0.03] px-2 py-1.5 text-xs text-gray-400">
+      <span className="flex items-center gap-1 rounded-lg border border-white/8 bg-white/3 px-2 py-1.5 text-xs text-gray-400">
         {icon} {value}
       </span>
     );

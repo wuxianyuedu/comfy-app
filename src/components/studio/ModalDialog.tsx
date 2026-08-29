@@ -10,7 +10,7 @@
  *
  * Visual language matches the global design tokens:
  *   - backdrop:  bg-black/65 + backdrop-blur-sm
- *   - card:      bg-[#1b1b22]/95, ring-1 ring-white/[0.06]
+ *   - card:      bg-[#1b1b22]/95, ring-1 ring-white/6
  *                + border border-violet-500/20 (info) /
  *                border-red-500/30 + glow (danger variant)
  *   - spacing:   p-6, gap-4, rounded-2xl
@@ -26,6 +26,7 @@
 
 import React, { useCallback, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import { Info, LoaderCircle, TriangleAlert } from "lucide-react";
 
 export interface ModalDialogProps {
   open: boolean;
@@ -51,21 +52,9 @@ export interface ModalDialogProps {
   icon?: React.ReactNode;
 }
 
-const ICON_WARN = (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-    <line x1="12" y1="9" x2="12" y2="13" />
-    <line x1="12" y1="17" x2="12.01" y2="17" />
-  </svg>
-);
+const ICON_WARN = <TriangleAlert size={22} strokeWidth={1.8} />;
 
-const ICON_INFO = (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" y1="16" x2="12" y2="12" />
-    <line x1="12" y1="8" x2="12.01" y2="8" />
-  </svg>
-);
+const ICON_INFO = <Info size={22} strokeWidth={1.8} />;
 
 export function ModalDialog({
   open,
@@ -121,7 +110,7 @@ export function ModalDialog({
     ? "bg-red-500/90 hover:bg-red-500 focus-visible:ring-red-400/60 text-white shadow-sm shadow-red-950/40"
     : "bg-violet-500/90 hover:bg-violet-500 focus-visible:ring-violet-400/60 text-white shadow-sm shadow-violet-950/40";
   const cancelClass =
-    "bg-white/[0.04] hover:bg-white/[0.08] focus-visible:ring-white/30 text-gray-300";
+    "bg-white/4 hover:bg-white/8 focus-visible:ring-white/30 text-gray-300";
 
   return createPortal(
     <div
@@ -140,8 +129,8 @@ export function ModalDialog({
           aria-hidden
           className={`pointer-events-none absolute inset-x-0 top-0 h-24 ${
             danger
-              ? "bg-gradient-to-b from-red-500/10 via-red-500/0"
-              : "bg-gradient-to-b from-violet-500/10 via-violet-500/0"
+              ? "bg-linear-to-b from-red-500/10 via-red-500/0"
+              : "bg-linear-to-b from-violet-500/10 via-violet-500/0"
           }`}
         />
 
@@ -185,19 +174,11 @@ export function ModalDialog({
             className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-70 ${confirmClass}`}
           >
             {pending && (
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
+              <LoaderCircle
+                size={14}
+                strokeWidth={2.5}
                 className="animate-spin"
-                aria-hidden
-              >
-                <path d="M21 12a9 9 0 1 1-6.22-8.56" />
-              </svg>
+              />
             )}
             {confirmLabel}
           </button>

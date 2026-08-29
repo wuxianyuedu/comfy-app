@@ -355,7 +355,7 @@ export function JsonViewer({
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#0c0a14]">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b border-white/[0.08] bg-[#12101c] px-3 py-1.5 text-xs">
+      <div className="flex items-center gap-2 border-b border-white/8 bg-[#12101c] px-3 py-1.5 text-xs">
         <span className="font-medium text-zinc-300">{title}</span>
         <span className="flex-1" />
         <button
@@ -369,7 +369,7 @@ export function JsonViewer({
       </div>
 
       {/* 搜索条 */}
-      <div className="flex items-center gap-2 border-b border-white/[0.06] px-3 py-1.5 text-xs">
+      <div className="flex items-center gap-2 border-b border-white/6 px-3 py-1.5 text-xs">
         <Icon name="search" size={14} className="shrink-0 text-zinc-500" />
         <input
           ref={searchRef}

@@ -80,7 +80,7 @@ export function FlowNodeWidgetRows({
                 position={Position.Left}
                 id={k}
                 isConnectable={false}
-                className="!h-2.5 !w-2.5 !rounded-full !border !border-[var(--color-canvas)]"
+                className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
                 style={{
                   left: 5,
                   background: typeCol,
@@ -137,8 +137,8 @@ export function FlowNodeWidgetRows({
                   <span
                     className={
                       isConn
-                        ? "h-2 w-px shrink-0 bg-white/[0.05] opacity-50"
-                        : "h-2 w-px shrink-0 bg-white/[0.05]"
+                        ? "h-2 w-px shrink-0 bg-white/5 opacity-50"
+                        : "h-2 w-px shrink-0 bg-white/5"
                     }
                     aria-hidden
                   />

@@ -75,7 +75,7 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
       key={w.id}
       data-workflow-id={w.id}
       data-card-id={w.id}
-      className="group relative flex flex-col rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 transition-all hover:border-violet-500/30 hover:bg-white/[0.04]"
+      className="group relative flex flex-col rounded-2xl border border-white/6 bg-white/2 p-4 transition-all hover:border-violet-500/30 hover:bg-white/4"
     >
       {/* 2026-08-16 R-ardot85: 工作流标题上移到预览之上 + outer click 拆除。
           卡片背景不再直接进入 WorkflowCanvasEditor，编辑入口只剩 footer
@@ -105,7 +105,7 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
           event.stopPropagation();
           setEditingId(w.id);
         }}
-        className="group/io relative mb-3 flex h-20 w-full items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-violet-500/10 to-sky-500/10 text-left transition-colors hover:from-violet-500/15 hover:to-sky-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
+        className="group/io relative mb-3 flex h-20 w-full items-center justify-center overflow-hidden rounded-xl bg-linear-to-br from-violet-500/10 to-sky-500/10 text-left transition-colors hover:from-violet-500/15 hover:to-sky-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
         title="点击进入工作流编辑器"
       >
         {(() => {
@@ -293,7 +293,7 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
             <button
               type="button"
               disabled
-              className="w-full cursor-not-allowed rounded-lg bg-white/[0.05] px-3 py-2 text-xs font-semibold text-gray-500"
+              className="w-full cursor-not-allowed rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold text-gray-500"
               title="此工作流 graph 为空，需要在 ComfyUI 中右键 → Save (API Format) 重新导出后才能使用"
             >
               不可用 ↗

@@ -204,7 +204,7 @@ export function DarkSelect({
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
         onKeyDown={handleKeyDown}
-        className={`flex w-full items-center justify-between rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[12px] text-gray-200 outline-none transition-colors focus:border-violet-500/40 ${className}`}
+        className={`flex w-full items-center justify-between rounded-md border border-white/10 bg-white/3 px-2.5 py-1.5 text-[12px] text-gray-200 outline-none transition-colors focus:border-violet-500/40 ${className}`}
       >
         {/* R55: min-w-0 + flex-1 + truncate lets rich ReactNode labels clip
          *  cleanly; callers that want a right-aligned badge (e.g. "本机" /
@@ -231,7 +231,7 @@ export function DarkSelect({
               width: pos.width,
               zIndex: 9999,
             }}
-            className="max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-[var(--color-card)] py-1 shadow-lg shadow-black/40"
+            className="max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-(--color-card) py-1 shadow-lg shadow-black/40"
           >
             {options.map((opt, i) => (
               <li
@@ -244,8 +244,8 @@ export function DarkSelect({
                   value === opt
                     ? "bg-violet-500/20 font-medium text-violet-200"
                     : i === highlighted
-                      ? "bg-white/[0.06] text-gray-200"
-                      : "text-gray-400 hover:bg-white/[0.04] hover:text-gray-200"
+                      ? "bg-white/6 text-gray-200"
+                      : "text-gray-400 hover:bg-white/4 hover:text-gray-200"
                 }`}
               >
                 {labels?.[opt] ?? opt}

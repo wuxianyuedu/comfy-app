@@ -3,17 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { X, Zap } from "lucide-react";
 import { authClient } from "~/server/better-auth/client";
 import { Icon } from "@/components/ui/Icon";
 
 type Mode = "signin" | "register";
 
 function BoltIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
-      <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" />
-    </svg>
-  );
+  return <Zap size={22} />;
 }
 
 export default function LoginPage() {
@@ -90,7 +87,7 @@ export default function LoginPage() {
         style={{ background: "radial-gradient(circle, rgba(19,221,196,0.16), transparent 70%)" }}
       />
 
-      <div className="relative w-full max-w-[440px] rounded-[20px] border border-white/10 bg-white/[0.03] p-9 shadow-[0_8px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+      <div className="relative w-full max-w-[440px] rounded-[20px] border border-white/10 bg-white/3 p-9 shadow-[0_8px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
         {/* Brand */}
         <Link href="/" className="mb-7 flex items-center justify-center gap-2 font-semibold">
           <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-white">
@@ -139,9 +136,7 @@ export default function LoginPage() {
               className="text-violet-300/70 transition-colors hover:text-white"
               aria-label="关闭提示"
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
+              <X size={13} />
             </button>
           </div>
         )}

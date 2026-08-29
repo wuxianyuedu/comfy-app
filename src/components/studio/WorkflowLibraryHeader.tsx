@@ -34,7 +34,7 @@ export function WorkflowLibraryHeader({
           value={q}
           onChange={(event) => onQChange(event.target.value)}
           placeholder="搜索工作流名称…"
-          className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40 sm:w-56"
+          className="w-full rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40 sm:w-56"
         />
         <button
           type="button"

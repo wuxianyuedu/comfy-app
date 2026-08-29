@@ -32,7 +32,7 @@ export function WorkflowModelFilterChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-accent)]/[0.35] bg-[var(--color-node-accent)] px-2.5 text-[12px]"
+        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-(--color-accent)/35 bg-(--color-node-accent) px-2.5 text-[12px]"
         title={value === "all" ? "按模型筛选" : `已筛选模型：${value}`}
       >
         <span
@@ -45,13 +45,13 @@ export function WorkflowModelFilterChip({
           }}
         />
         <span
-          className="max-w-[80px] truncate font-semibold text-[var(--color-accent-soft)]"
+          className="max-w-[80px] truncate font-semibold text-(--color-accent-soft)"
           style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
         >
           {label}
         </span>
         <span
-          className={`shrink-0 text-[var(--color-ink-icon)] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-(--color-ink-icon) transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -72,7 +72,7 @@ export function WorkflowModelFilterChip({
               width: pos.width,
               zIndex: 50,
             }}
-            className="max-h-72 overflow-y-auto rounded-lg border border-white/[0.08] bg-[var(--color-card)] py-1 shadow-2xl shadow-fuchsia-500/20"
+            className="max-h-72 overflow-y-auto rounded-lg border border-white/8 bg-(--color-card) py-1 shadow-2xl shadow-fuchsia-500/20"
           >
             <button
               type="button"
@@ -85,7 +85,7 @@ export function WorkflowModelFilterChip({
               className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
                 value === "all"
                   ? "bg-fuchsia-500/20 text-fuchsia-200"
-                  : "text-gray-300 hover:bg-white/[0.06]"
+                  : "text-gray-300 hover:bg-white/6"
               }`}
             >
               <span
@@ -115,7 +115,7 @@ export function WorkflowModelFilterChip({
                   className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
                     sel
                       ? "bg-fuchsia-500/20 text-fuchsia-200"
-                      : "text-gray-300 hover:bg-white/[0.06]"
+                      : "text-gray-300 hover:bg-white/6"
                   }`}
                 >
                   <span

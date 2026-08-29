@@ -481,7 +481,7 @@ function WorkflowEditorBody({
   /* Loading state */
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-canvas)]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas)">
         <div className="text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
           <p className="text-sm text-gray-400">加载工作流节点…</p>
@@ -492,7 +492,7 @@ function WorkflowEditorBody({
 
   if (error || !detail) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-canvas)]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas)">
         <div className="text-center">
           <p className="text-red-400">{error ?? "未知错误"}</p>
           <button
@@ -512,7 +512,7 @@ function WorkflowEditorBody({
    *  component for the full rationale.) */
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[var(--color-canvas)]">
+    <div className="fixed inset-0 z-50 flex flex-col bg-(--color-canvas)">
         {/* ── Top bar ── */}
         <WorkflowEditorTopBar
           onClose={onClose}
@@ -538,7 +538,7 @@ function WorkflowEditorBody({
          *  loading screen, then the subgraph content. */}
         {subgraphLoading && (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/20">
-            <div className="pointer-events-auto rounded-xl border border-white/10 bg-[var(--color-canvas)]/90 px-6 py-4 shadow-2xl backdrop-blur-sm">
+            <div className="pointer-events-auto rounded-xl border border-white/10 bg-(--color-canvas)/90 px-6 py-4 shadow-2xl backdrop-blur-sm">
               <div className="flex items-center gap-3">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
                 <span className="text-sm font-medium text-gray-200">加载子工作流…</span>

@@ -100,7 +100,7 @@ export function ModelLibrary() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setConfigOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 transition-colors hover:border-violet-500/40 hover:text-violet-200"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-sm text-gray-200 transition-colors hover:border-violet-500/40 hover:text-violet-200"
             >
               <Icon name="settings" size={16} />
               模型目录配置
@@ -109,7 +109,7 @@ export function ModelLibrary() {
               value={q}
               onChange={(event) => setQ(event.target.value)}
               placeholder="搜索模型名称…"
-              className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40 sm:w-64"
+              className="w-full rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40 sm:w-64"
             />
           </div>
         </div>
@@ -132,7 +132,7 @@ export function ModelLibrary() {
         {loading ? (
           <p className="text-sm text-gray-500">加载中…</p>
         ) : filtered.length === 0 ? (
-          <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-white/[0.08] text-gray-500">
+          <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-white/8 text-gray-500">
             <div className="text-center">
               <p className="text-lg font-medium text-gray-300">模型库还没有内容</p>
               <p className="mt-1 max-w-md text-sm">
@@ -155,7 +155,7 @@ export function ModelLibrary() {
           <div
             role="list"
             aria-label="模型文件列表"
-            className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.015]"
+            className="overflow-hidden rounded-xl border border-white/6 bg-white/1.5"
           >
             {filtered.map((m, idx) => {
               const meta = folderMeta(m.type);
@@ -164,8 +164,8 @@ export function ModelLibrary() {
                 <div
                   key={m.id}
                   role="listitem"
-                  className={`group flex items-center gap-3 px-3 py-2 transition-colors hover:bg-white/[0.04] ${
-                    isLast ? "" : "border-b border-white/[0.04]"
+                  className={`group flex items-center gap-3 px-3 py-2 transition-colors hover:bg-white/4 ${
+                    isLast ? "" : "border-b border-white/4"
                   }`}
                 >
                   <span
@@ -214,7 +214,7 @@ function FilterChip({ active, onClick, label }: { active: boolean; onClick: () =
     <button
       onClick={onClick}
       className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-        active ? "bg-violet-500/20 text-violet-200" : "bg-white/[0.04] text-gray-400 hover:text-gray-200"
+        active ? "bg-violet-500/20 text-violet-200" : "bg-white/4 text-gray-400 hover:text-gray-200"
       }`}
     >
       {label}
@@ -330,7 +330,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0E0E16] shadow-2xl shadow-black/50">
         {/* header */}
-        <div className="flex items-start justify-between border-b border-white/[0.06] px-5 py-4">
+        <div className="flex items-start justify-between border-b border-white/6 px-5 py-4">
           <div>
             <h2 className="flex items-center gap-2 text-base font-semibold text-gray-100">
               <Icon name="foldertree" size={18} className="text-violet-300" />
@@ -342,14 +342,14 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
+            className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-200"
           >
             <Icon name="close" size={18} />
           </button>
         </div>
 
         {/* status + scan */}
-        <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3">
+        <div className="flex items-center justify-between gap-3 border-b border-white/6 px-5 py-3">
           <div className="flex items-center gap-3 text-xs">
             {comfyReachable ? (
               <span className="text-emerald-300">● ComfyUI 已连接 · 共 {totalCount} 个目录</span>
@@ -362,7 +362,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
           <button
             onClick={rescan}
             disabled={scanning}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-gray-200 transition-colors hover:border-violet-500/40 hover:text-violet-200 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/3 px-3 py-1.5 text-xs text-gray-200 transition-colors hover:border-violet-500/40 hover:text-violet-200 disabled:opacity-50"
           >
             <Icon name={scanning ? "loader" : "shuffle"} size={14} className={scanning ? "animate-spin" : ""} />
             {scanning ? "扫描中…" : "重新扫描"}
@@ -375,7 +375,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
             value={q}
             onChange={(event) => setQ(event.target.value)}
             placeholder="搜索目录名…"
-            className="flex-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40"
+            className="flex-1 rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40"
           />
           <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-gray-400">
             <input
@@ -393,7 +393,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
           {loading ? (
             <p className="text-sm text-gray-500">加载中…</p>
           ) : totalCount === 0 ? (
-            <div className="grid min-h-[160px] place-items-center rounded-xl border border-dashed border-white/[0.08] text-gray-500">
+            <div className="grid min-h-[160px] place-items-center rounded-xl border border-dashed border-white/8 text-gray-500">
               <p className="text-sm">
                 {comfyReachable
                   ? "ComfyUI 中没有可识别的模型目录。"
@@ -478,7 +478,7 @@ function FolderConfigRow({
   const remove = () => onDelete(row.folder);
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+    <div className="rounded-xl border border-white/6 bg-white/2 px-3 py-2.5">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -517,7 +517,7 @@ function FolderConfigRow({
           {row.hasConfig && (
             <button
               onClick={remove}
-              className="rounded-md px-2 py-1 text-[11px] text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
+              className="rounded-md px-2 py-1 text-[11px] text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-300"
               title="删除配置（不再扫描）"
             >
               删除

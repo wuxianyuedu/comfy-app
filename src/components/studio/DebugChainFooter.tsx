@@ -199,7 +199,7 @@ export function DebugChainFooter({ modules }: { modules: RenderChainModule[] }) 
               onDoubleClick={(event) => event.stopPropagation()}
             >
               {/* 头部：路径 + 操作按钮 */}
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/6 px-4 py-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <span aria-hidden className="text-[14px] text-amber-300/90">
                     ◈
@@ -221,7 +221,7 @@ export function DebugChainFooter({ modules }: { modules: RenderChainModule[] }) 
                   <button
                     type="button"
                     onClick={() => copyText(openFile)}
-                    className="rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-gray-300 transition-colors hover:bg-white/[0.08] hover:text-gray-100"
+                    className="rounded-md border border-white/10 bg-white/4 px-2.5 py-1 text-[11px] font-medium text-gray-300 transition-colors hover:bg-white/8 hover:text-gray-100"
                     title="复制完整相对路径"
                   >
                     复制路径
@@ -239,7 +239,7 @@ export function DebugChainFooter({ modules }: { modules: RenderChainModule[] }) 
                     type="button"
                     onClick={closeModal}
                     aria-label="关闭"
-                    className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-gray-400 transition-colors hover:bg-white/[0.08] hover:text-gray-200"
+                    className="rounded-md border border-white/10 bg-white/4 px-2 py-1 text-[11px] text-gray-400 transition-colors hover:bg-white/8 hover:text-gray-200"
                   >
                     ✕
                   </button>
@@ -260,7 +260,7 @@ export function DebugChainFooter({ modules }: { modules: RenderChainModule[] }) 
                 )}
                 {!loading && source && (
                   <div className="flex flex-col">
-                    <div className="flex shrink-0 items-center justify-between border-b border-white/[0.04] bg-white/[0.02] px-4 py-1.5 font-mono text-[10.5px] text-gray-500">
+                    <div className="flex shrink-0 items-center justify-between border-b border-white/4 bg-white/2 px-4 py-1.5 font-mono text-[10.5px] text-gray-500">
                       <span>{source.size.toLocaleString()} 字符</span>
                       <span>{source.modifiedAt}</span>
                     </div>

@@ -32,7 +32,7 @@ export function WorkflowSourceFilterChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-primary)]/[0.35] bg-[var(--color-node-accent)] px-2.5 text-[12px]"
+        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-(--color-primary)/35 bg-(--color-node-accent) px-2.5 text-[12px]"
       >
         <span
           className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -54,7 +54,7 @@ export function WorkflowSourceFilterChip({
           {label}
         </span>
         <span
-          className={`shrink-0 text-[var(--color-ink-icon)] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-(--color-ink-icon) transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -75,7 +75,7 @@ export function WorkflowSourceFilterChip({
               width: pos.width,
               zIndex: 50,
             }}
-            className="rounded-lg border border-white/[0.08] bg-[var(--color-card)] py-1 shadow-2xl shadow-violet-500/20"
+            className="rounded-lg border border-white/8 bg-(--color-card) py-1 shadow-2xl shadow-violet-500/20"
           >
             {(
               [
@@ -98,7 +98,7 @@ export function WorkflowSourceFilterChip({
                   className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
                     sel
                       ? "bg-violet-500/20 text-violet-200"
-                      : "text-gray-300 hover:bg-white/[0.06]"
+                      : "text-gray-300 hover:bg-white/6"
                   }`}
                 >
                   <span

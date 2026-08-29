@@ -137,14 +137,14 @@ export default function SettingsPage() {
 
   if (settingsQ.isLoading || llmQ.isLoading || !settings || !llm || !settingsDraft || !llmDraft) {
     return (
-      <div className="dark grid min-h-screen place-items-center bg-[var(--color-canvas)] text-muted">
+      <div className="dark grid min-h-screen place-items-center bg-(--color-canvas) text-muted">
         加载中…
       </div>
     );
   }
 
   return (
-    <div className="dark min-h-screen bg-[var(--color-canvas)] px-4 py-8 sm:px-8">
+    <div className="dark min-h-screen bg-(--color-canvas) px-4 py-8 sm:px-8">
       <div className="mx-auto max-w-[1200px]">
         <div className="mb-6">
           <h1 className="u-title-page">设置</h1>
@@ -281,7 +281,7 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-border bg-white/[0.03] p-5 backdrop-blur">
+    <section className="rounded-2xl border border-border bg-white/3 p-5 backdrop-blur">
       <h2 className="mb-4 text-base font-semibold text-ink">{title}</h2>
       {children}
     </section>

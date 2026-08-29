@@ -34,7 +34,7 @@ export function CanvasContextMenu({
         }}
       />
       <div
-        className="fixed z-50 w-52 overflow-hidden rounded-xl border border-white/[0.1] bg-[#14121f]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur"
+        className="fixed z-50 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#14121f]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur"
         style={{ left: x, top: y }}
       >
         {/* ── 测试节点（纯视觉，对齐 Ardot 稿）── */}
@@ -42,7 +42,7 @@ export function CanvasContextMenu({
           type="button"
           data-canvas-node-kind="workflow-ardot"
           onClick={onPickTest}
-          className="flex w-full items-center gap-2 rounded-lg border border-violet-400/30 bg-gradient-to-r from-[var(--color-primary)]/15 to-[var(--color-accent)]/10 px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:from-[var(--color-primary)]/25 hover:to-[var(--color-accent)]/15"
+          className="flex w-full items-center gap-2 rounded-lg border border-violet-400/30 bg-linear-to-r from-(--color-primary)/15 to-(--color-accent)/10 px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:from-(--color-primary)/25 hover:to-(--color-accent)/15"
         >
           <span
             className="flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold text-white"
@@ -60,7 +60,7 @@ export function CanvasContextMenu({
           </span>
         </button>
 
-        <div className="my-1 h-px bg-white/[0.06]" />
+        <div className="my-1 h-px bg-white/6" />
         <div className="px-2 py-1 text-[10px] tracking-wider text-gray-500 uppercase">
           创建节点
         </div>
@@ -72,7 +72,7 @@ export function CanvasContextMenu({
               type="button"
               data-canvas-node-kind={kind}
               onClick={() => onPick(kind)}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:bg-white/[0.06]"
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:bg-white/6"
             >
               <Icon name={meta.icon} size={15} className="text-violet-300" />
               <span className="flex flex-col">

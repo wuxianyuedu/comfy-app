@@ -29,7 +29,7 @@ export function FlowNodePinRows({
 }: FlowNodePinRowsProps) {
   return (
     <div
-      className="border-b border-white/[0.05] py-0.5"
+      className="border-b border-white/5 py-0.5"
       style={{ background: "rgba(255,255,255,0.015)" }}
     >
       {Array.from({ length: Math.max(uniqueConnEntries.length, outputs.length) }).map(
@@ -75,7 +75,7 @@ export function FlowNodePinRows({
                     position={Position.Left}
                     id={inName}
                     isConnectable={false}
-                    className="!h-2.5 !w-2.5 !rounded-full !border !border-[var(--color-canvas)]"
+                    className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
                     style={{
                       left: 5,
                       background: inCol,
@@ -126,7 +126,7 @@ export function FlowNodePinRows({
                       position={Position.Right}
                       id={`out:${outName}`}
                       isConnectable={false}
-                      className="!h-2.5 !w-2.5 !rounded-full !border !border-[var(--color-canvas)]"
+                      className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
                       style={{
                         right: 5,
                         background: outCol,

@@ -105,7 +105,7 @@ export function AppShell({
           className={cn(
             "shrink-0 overflow-y-auto border-l border-border-subtle bg-surface-1/98 backdrop-blur-md transition-all duration-300 ease-out",
             rightPanelOpen
-              ? "w-[var(--panel-right-width)] opacity-100"
+              ? "w-(--panel-right-width) opacity-100"
               : "w-0 opacity-0 pointer-events-none"
           )}
         >

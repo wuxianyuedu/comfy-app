@@ -33,9 +33,9 @@ export const AlignMultipleStepper = React.memo(function AlignMultipleStepper({
       data-testid="align-multiple-stepper"
       className="flex items-center gap-2"
     >
-      <span className="shrink-0 text-[10px] text-[var(--color-ink-muted)]">倍数</span>
+      <span className="shrink-0 text-[10px] text-(--color-ink-muted)">倍数</span>
       <div
-        className={`flex flex-1 items-center justify-between rounded-md border border-[var(--color-primary)]/35 bg-[var(--color-canvas-deep)] px-2 py-1 ${
+        className={`flex flex-1 items-center justify-between rounded-md border border-(--color-primary)/35 bg-(--color-canvas-deep) px-2 py-1 ${
           disabled ? "opacity-50" : ""
         }`}
       >
@@ -44,13 +44,13 @@ export const AlignMultipleStepper = React.memo(function AlignMultipleStepper({
           aria-label="减小对齐倍数"
           onClick={dec}
           disabled={disabled === true || value <= MIN_ALIGN_MULTIPLE}
-          className="nodrag nopan h-6 w-6 rounded text-[var(--color-ink-muted)] transition-colors hover:bg-white/[0.06] hover:text-[var(--color-ink-bright)] disabled:cursor-not-allowed disabled:opacity-40"
+          className="nodrag nopan h-6 w-6 rounded text-(--color-ink-muted) transition-colors hover:bg-white/6 hover:text-(--color-ink-bright) disabled:cursor-not-allowed disabled:opacity-40"
         >
           −
         </button>
         <span
           aria-label={`当前对齐倍数 ${value}`}
-          className="min-w-[40px] text-center text-[12px] font-medium tabular-nums text-[var(--color-ink-bright)]"
+          className="min-w-[40px] text-center text-[12px] font-medium tabular-nums text-(--color-ink-bright)"
         >
           {value}
         </span>
@@ -60,7 +60,7 @@ export const AlignMultipleStepper = React.memo(function AlignMultipleStepper({
 
           onClick={inc}
           disabled={disabled === true || value >= MAX_ALIGN_MULTIPLE}
-          className="nodrag nopan h-6 w-6 rounded text-[var(--color-ink-muted)] transition-colors hover:bg-white/[0.06] hover:text-[var(--color-ink-bright)] disabled:cursor-not-allowed disabled:opacity-40"
+          className="nodrag nopan h-6 w-6 rounded text-(--color-ink-muted) transition-colors hover:bg-white/6 hover:text-(--color-ink-bright) disabled:cursor-not-allowed disabled:opacity-40"
         >
           +
         </button>

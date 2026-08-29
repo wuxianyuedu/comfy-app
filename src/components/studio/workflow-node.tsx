@@ -196,7 +196,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
           type="target"
           position={Position.Left}
           id="__default_in"
-          className="!h-2.5 !w-2.5 !border-2 !border-[var(--color-canvas)] !bg-violet-400/80"
+          className="!h-2.5 !w-2.5 !border-2 !border-(--color-canvas) !bg-violet-400/80"
           style={{ left: -5 }}
         />
       )}

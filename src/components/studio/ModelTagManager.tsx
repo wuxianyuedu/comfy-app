@@ -229,7 +229,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
             return (
               <div
                 key={tag.id}
-                className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+                className="flex items-center justify-between rounded-lg border border-white/6 bg-white/2 px-3 py-2"
               >
                 {isEditing ? (
                   <input

@@ -47,10 +47,10 @@ export function WorkflowPickChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="nodrag nopan flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-[var(--color-primary)]/[0.35] bg-[var(--color-node-accent)] px-2.5 text-[12px]"
+        className="nodrag nopan flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-(--color-primary)/35 bg-(--color-node-accent) px-2.5 text-[12px]"
       >
         <span
-          className="min-w-0 flex-1 truncate text-left font-semibold text-[var(--color-ink-bright)]"
+          className="min-w-0 flex-1 truncate text-left font-semibold text-(--color-ink-bright)"
           style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}
         >
           {loading && !sel ? (
@@ -62,7 +62,7 @@ export function WorkflowPickChip({
           )}
         </span>
         <span
-          className={`shrink-0 text-[var(--color-ink-icon)] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-(--color-ink-icon) transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -83,7 +83,7 @@ export function WorkflowPickChip({
               width: pos.width,
               zIndex: 50,
             }}
-            className="max-h-72 overflow-y-auto rounded-lg border border-white/[0.08] bg-[var(--color-card)] py-1 shadow-2xl shadow-violet-500/20"
+            className="max-h-72 overflow-y-auto rounded-lg border border-white/8 bg-(--color-card) py-1 shadow-2xl shadow-violet-500/20"
           >
             {options.length === 0 &&
               (loading ? (
@@ -112,7 +112,7 @@ export function WorkflowPickChip({
                   className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
                     active
                       ? "bg-violet-500/20 text-violet-200"
-                      : "text-gray-300 hover:bg-white/[0.06]"
+                      : "text-gray-300 hover:bg-white/6"
                   }`}
                 >
                   <span
@@ -120,7 +120,7 @@ export function WorkflowPickChip({
                   />
                   <span className="min-w-0 flex-1 truncate">{option.name}</span>
                   {option.taskType && (
-                    <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[9.5px] text-[var(--color-ink-muted)]">
+                    <span className="shrink-0 rounded bg-white/6 px-1.5 py-0.5 text-[9.5px] text-(--color-ink-muted)">
                       {option.taskType}
                     </span>
                   )}

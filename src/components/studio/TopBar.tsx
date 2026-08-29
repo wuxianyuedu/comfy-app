@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { ChevronLeft, MessageSquare, Search } from "lucide-react";
 import { Icon } from "@/components/ui/Icon";
 
 /* ── Updream-style Top Bar ───────────────────────────────
@@ -46,9 +47,7 @@ export function TopBar({
           className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-white/8 hover:text-gray-200"
           aria-label="返回"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
+          <ChevronLeft size={18} />
         </button>
         <h1
           className="max-w-[200px] truncate text-sm font-semibold text-gray-100"
@@ -95,10 +94,7 @@ export function TopBar({
             className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-white/8 hover:text-gray-200"
             aria-label="搜索"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" />
-              <path d="M21 21l-4.35-4.35" />
-            </svg>
+            <Search size={16} />
           </button>
         )}
 
@@ -110,9 +106,7 @@ export function TopBar({
             className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-white/8 hover:text-gray-200"
             aria-label="对话"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-            </svg>
+            <MessageSquare size={16} />
           </button>
         )}
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { ArrowRight } from "lucide-react";
 import { chatAgent, type ChatMessage, type AgentSpec } from "@/lib/agent/agentic";
 import { Icon } from "@/components/ui/Icon";
 
@@ -63,10 +64,10 @@ export function AgentChat({ open, onClose, onApply }: AgentChatProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 flex h-[540px] w-[380px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[var(--color-panel-deep)]/95 shadow-2xl backdrop-blur-xl">
+    <div className="fixed bottom-4 right-4 z-40 flex h-[540px] w-[380px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-(--color-panel-deep)/95 shadow-2xl backdrop-blur-xl">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-white/8 px-4 py-3">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white">
           <Icon name="sparkles" size={13} className="text-white" />
         </span>
         <h3 className="u-title flex-1">AI 创作引导</h3>
@@ -88,7 +89,7 @@ export function AgentChat({ open, onClose, onApply }: AgentChatProps) {
               className={`max-w-[82%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-[13px] leading-relaxed ${
                 msg.role === "user"
                   ? "bg-violet-500/90 text-white"
-                  : "bg-white/[0.06] text-gray-200"
+                  : "bg-white/6 text-gray-200"
               }`}
             >
               {msg.content}
@@ -97,7 +98,7 @@ export function AgentChat({ open, onClose, onApply }: AgentChatProps) {
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="rounded-2xl bg-white/[0.06] px-3 py-2.5">
+            <div className="rounded-2xl bg-white/6 px-3 py-2.5">
               <span className="inline-flex gap-1">
                 <Dot />
                 <Dot d={0.2} />
@@ -164,7 +165,7 @@ export function AgentChat({ open, onClose, onApply }: AgentChatProps) {
             }}
             rows={1}
             placeholder="描述你的想法，或回答助手的问题…"
-            className="min-w-0 flex-1 resize-none rounded-xl border border-white/8 bg-white/[0.04] px-3 py-2 text-[13px] text-gray-200 outline-none placeholder:text-gray-600 focus:border-violet-500/40"
+            className="min-w-0 flex-1 resize-none rounded-xl border border-white/8 bg-white/4 px-3 py-2 text-[13px] text-gray-200 outline-none placeholder:text-gray-600 focus:border-violet-500/40"
           />
           <button
             type="button"
@@ -199,9 +200,5 @@ function Spinner() {
 }
 
 function Arrow() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 12h14m-7-7l7 7-7 7" />
-    </svg>
-  );
+  return <ArrowRight size={14} strokeWidth={2.5} />;
 }

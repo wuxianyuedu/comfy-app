@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Download, Image, LayoutGrid, List, Music, Plus, RefreshCw, Video, X } from "lucide-react";
 import { MediaThumbnail } from "@/components/studio/MediaThumbnail";
 import { vanillaApi } from "~/trpc/vanilla";
 
@@ -61,38 +62,11 @@ function titleOf(t: TaskRow): string {
 }
 
 function KindIcon({ kind }: { kind: TaskRow["mediaType"] }) {
-  const c = {
-    width: 16,
-    height: 16,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.8,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-  };
   if (kind === "video")
-    return (
-      <svg {...c}>
-        <polygon points="23 7 16 12 23 17 23 7" />
-        <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-      </svg>
-    );
+    return <Video size={16} strokeWidth={1.8} />;
   if (kind === "audio")
-    return (
-      <svg {...c}>
-        <path d="M9 18V5l12-2v13" />
-        <circle cx="6" cy="18" r="3" />
-        <circle cx="18" cy="16" r="3" />
-      </svg>
-    );
-  return (
-    <svg {...c}>
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-      <circle cx="8.5" cy="8.5" r="1.5" />
-      <polyline points="21 15 16 10 5 21" />
-    </svg>
-  );
+    return <Music size={16} strokeWidth={1.8} />;
+  return <Image size={16} strokeWidth={1.8} />;
 }
 
 /* ── Component ─────────────────────────────────────────────── */
@@ -184,9 +158,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
   ];
 
   return (
-    <aside className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l border-white/[0.06] bg-[var(--color-panel)]/98 backdrop-blur-md">
+    <aside className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l border-white/6 bg-(--color-panel)/98 backdrop-blur-md">
       {/* ── Header ── */}
-      <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3">
+      <div className="flex items-center gap-2 border-b border-white/6 px-4 py-3">
         <h2 className="flex-1 text-[15px] font-semibold text-gray-100">历史记录</h2>
         {activeCount > 0 && (
           <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-300">
@@ -196,26 +170,20 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
         <button
           type="button"
           onClick={refresh}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-300"
           title="刷新"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M23 4v6h-6M1 20v-6h6" />
-            <path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" />
-          </svg>
+          <RefreshCw size={13} />
         </button>
         {/* 显示密度切换 */}
-        <div className="flex items-center gap-0.5 rounded-lg bg-white/[0.04] p-0.5">
+        <div className="flex items-center gap-0.5 rounded-lg bg-white/4 p-0.5">
           <button
             type="button"
             onClick={() => setDisplay("grid")}
             className={`rounded-md p-1 transition-colors ${display === "grid" ? "bg-white/10 text-gray-200" : "text-gray-500 hover:text-gray-300"}`}
             title="网格视图"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
-            </svg>
+            <LayoutGrid size={14} />
           </button>
           <button
             type="button"
@@ -223,28 +191,22 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             className={`rounded-md p-1 transition-colors ${display === "list" ? "bg-white/10 text-gray-200" : "text-gray-500 hover:text-gray-300"}`}
             title="列表视图"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" />
-              <line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" />
-              <line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
-            </svg>
+            <List size={14} />
           </button>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-300"
           title="关闭"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
+          <X size={14} />
         </button>
       </div>
 
       {/* ── 作用域切换（仅在有项目时出现）── */}
       {projectId && (
-        <div className="flex gap-4 border-b border-white/[0.06] px-4 pt-2">
+        <div className="flex gap-4 border-b border-white/6 px-4 pt-2">
           {([
             { id: "project" as HistoryScope, label: "本项目" },
             { id: "all" as HistoryScope, label: "全部" },
@@ -255,7 +217,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
               onClick={() => setScope(scopeItem.id)}
               className={`pb-2.5 text-[13px] font-medium transition-colors ${
                 scope === scopeItem.id
-                  ? "border-b-2 border-[var(--color-accent)] text-gray-100"
+                  ? "border-b-2 border-(--color-accent) text-gray-100"
                   : "text-gray-500 hover:text-gray-300"
               }`}
             >
@@ -276,7 +238,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-all ${
               filter === filterTab.id
                 ? "bg-white/12 text-gray-100 ring-1 ring-white/10"
-                : "text-gray-500 hover:bg-white/[0.04] hover:text-gray-300"
+                : "text-gray-500 hover:bg-white/4 hover:text-gray-300"
             }`}
           >
             {filterTab.label}
@@ -304,10 +266,10 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           <div className="space-y-1 px-2 pt-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={`skeleton-${i}`} className="flex items-center gap-3 py-2">
-                <div className="h-10 w-10 shrink-0 animate-pulse rounded-md bg-white/[0.05]" />
+                <div className="h-10 w-10 shrink-0 animate-pulse rounded-md bg-white/5" />
                 <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="h-3 w-3/4 animate-pulse rounded bg-white/[0.05]" />
-                  <div className="h-2 w-1/3 animate-pulse rounded bg-white/[0.04]" />
+                  <div className="h-3 w-3/4 animate-pulse rounded bg-white/5" />
+                  <div className="h-2 w-1/3 animate-pulse rounded bg-white/4" />
                 </div>
               </div>
             ))}
@@ -321,7 +283,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
               <button
                 type="button"
                 onClick={() => setScope("all")}
-                className="mt-3 rounded-lg border border-white/[0.08] px-3 py-1.5 text-[11px] text-gray-400 transition-colors hover:bg-white/[0.04] hover:text-gray-200"
+                className="mt-3 rounded-lg border border-white/8 px-3 py-1.5 text-[11px] text-gray-400 transition-colors hover:bg-white/4 hover:text-gray-200"
               >
                 查看全部记录
               </button>
@@ -349,7 +311,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                     );
                     event.dataTransfer.effectAllowed = "copy";
                   }}
-                  className={`group relative overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.02] ${
+                  className={`group relative overflow-hidden rounded-lg border border-white/6 bg-white/2 ${
                     task.cover && (task.mediaType === "image" || task.mediaType === "video")
                       ? "cursor-grab active:cursor-grabbing"
                       : ""
@@ -377,9 +339,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       className="absolute right-1 top-1 hidden h-6 w-6 items-center justify-center rounded bg-black/60 text-gray-300 backdrop-blur transition-colors hover:text-white group-hover:flex"
                       title="加入画布"
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                      </svg>
+                      <Plus size={12} strokeWidth={2.5} />
                     </button>
                   )}
                 </div>
@@ -408,7 +368,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                     );
                     event.dataTransfer.effectAllowed = "copy";
                   }}
-                  className={`group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-white/[0.04] ${
+                  className={`group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-white/4 ${
                     task.cover && (task.mediaType === "image" || task.mediaType === "video")
                       ? "cursor-grab active:cursor-grabbing"
                       : ""
@@ -447,12 +407,10 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       <button
                         type="button"
                         onClick={() => onUse({ id: task.id, cover: task.cover!, mediaType: task.mediaType })}
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/[0.08] hover:text-gray-200"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/8 hover:text-gray-200"
                         title="加入画布"
                       >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                        </svg>
+                        <Plus size={13} strokeWidth={2.5} />
                       </button>
                     )}
                     {task.cover && (
@@ -460,12 +418,10 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                         href={task.cover}
                         download
                         draggable={false}
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/[0.08] hover:text-gray-200"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/8 hover:text-gray-200"
                         title="下载"
                       >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                        </svg>
+                        <Download size={13} />
                       </a>
                     )}
                   </div>

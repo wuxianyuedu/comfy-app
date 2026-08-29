@@ -129,7 +129,7 @@ lib（纯函数） ← 任意层
 | 背景 | `--color-surface-0` / `--color-surface-1` | `bg-surface-0` |
 | 边框 | `--color-border-subtle` | `border-border-subtle` |
 | 文字 | `--color-ink` / `--color-muted` | `text-ink` |
-| 布局尺寸 | `--panel-right-width` | `w-[var(--panel-right-width)]` |
+| 布局尺寸 | `--panel-right-width` | `w-(--panel-right-width)` |
 
 反例：`bg-[#0a0a0f]`、`border-white/6`、`style={{ width: 360 }}`。
 
@@ -147,7 +147,7 @@ lib（纯函数） ← 任意层
 <aside
   className={cn(
     "transition-all duration-300 ease-out",
-    rightPanelOpen ? "w-[var(--panel-right-width)] opacity-100" : "w-0 opacity-0 pointer-events-none"
+    rightPanelOpen ? "w-(--panel-right-width) opacity-100" : "w-0 opacity-0 pointer-events-none"
   )}
 >
   {rightPanel}

@@ -22,9 +22,9 @@ const STATUS_STYLES: Record<string, string> = {
   ERROR: "bg-red-500/10 text-red-400 border-red-500/30",
   BANNED: "bg-red-500/10 text-red-400 border-red-500/30",
   // 中性
-  IDLE: "bg-white/[0.06] text-gray-400 border-white/10",
-  DISABLED: "bg-white/[0.06] text-gray-400 border-white/10",
-  INACTIVE: "bg-white/[0.06] text-gray-400 border-white/10",
+  IDLE: "bg-white/6 text-gray-400 border-white/10",
+  DISABLED: "bg-white/6 text-gray-400 border-white/10",
+  INACTIVE: "bg-white/6 text-gray-400 border-white/10",
 };
 
 export function StatusBadge({

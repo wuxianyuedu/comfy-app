@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Redo2, Undo2 } from "lucide-react";
 import { useToast } from "./toast-provider";
 import { vanillaApi } from "~/trpc/vanilla";
 
@@ -116,7 +117,7 @@ const MODE_LABELS: Record<ShotMode, string> = {
 };
 
 const STATUS_BADGE: Record<ShotStatus, { bg: string; text: string; label: string }> = {
-  IDLE: { bg: "bg-white/[0.06]", text: "text-[var(--color-ink-fainter)]", label: "待处理" },
+  IDLE: { bg: "bg-white/6", text: "text-(--color-ink-fainter)", label: "待处理" },
   QUEUED: { bg: "bg-amber-500/15", text: "text-amber-300", label: "排队中" },
   RUNNING: { bg: "bg-violet-500/15", text: "text-violet-300", label: "生成中" },
   SUCCEEDED: { bg: "bg-emerald-500/15", text: "text-emerald-300", label: "完成" },
@@ -294,7 +295,7 @@ export function FilmStudio() {
 
   /* ── Render ── */
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--color-canvas)]" style={{ fontFamily: "var(--font-sans)" }}>
+    <div className="flex h-full w-full flex-col overflow-hidden bg-(--color-canvas)" style={{ fontFamily: "var(--font-sans)" }}>
       {/* ── Aurora Background Blobs ───────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <div
@@ -308,25 +309,21 @@ export function FilmStudio() {
       </div>
 
       {/* ── Top Toolbar ─────────────────────────────── */}
-      <header className="relative z-10 flex shrink-0 items-center gap-3 border-b border-white/[0.05] bg-[var(--color-panel)]/88 px-4 py-0 backdrop-blur-md">
+      <header className="relative z-10 flex shrink-0 items-center gap-3 border-b border-white/5 bg-(--color-panel)/88 px-4 py-0 backdrop-blur-md">
         {/* Project name */}
         <div className="flex items-center gap-2">
           <span className="u-title">{title}</span>
-          <span className="text-xs text-[var(--color-ink-fainter)]">· 视频成片工作室</span>
+          <span className="text-xs text-(--color-ink-fainter)">· 视频成片工作室</span>
         </div>
 
-        <div className="h-5 w-px bg-white/[0.06]" />
+        <div className="h-5 w-px bg-white/6" />
 
         {/* Undo / Redo */}
-        <button type="button" onClick={handleUndo} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300" title="撤销">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 10h11a5 5 0 010 10H3M3 10l4-4M3 10l4 4" />
-          </svg>
+        <button type="button" onClick={handleUndo} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300" title="撤销">
+          <Undo2 size={16} />
         </button>
-        <button type="button" onClick={handleRedo} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300" title="重做">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 10H10a5 5 0 00-5 10h11M21 10l-4-4m4 4l-4 4" />
-          </svg>
+        <button type="button" onClick={handleRedo} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300" title="重做">
+          <Redo2 size={16} />
         </button>
 
         {/* Spacer */}
@@ -349,12 +346,12 @@ export function FilmStudio() {
         <div className="w-3" />
 
         {/* Zoom label + Export */}
-        <span className="text-[11px] text-[var(--color-ink-faintest)]">时间轴缩放</span>
+        <span className="text-[11px] text-(--color-ink-faintest)">时间轴缩放</span>
         <button
           type="button"
           onClick={handleCreate}
           disabled={loading}
-          className="flex items-center gap-1.5 rounded-lg border border-violet-500/35 bg-white/[0.03] px-3.5 py-1.5 text-xs font-semibold text-[#c4b5fd] transition-all hover:border-violet-500/55 hover:bg-violet-500/8 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-lg border border-violet-500/35 bg-white/3 px-3.5 py-1.5 text-xs font-semibold text-[#c4b5fd] transition-all hover:border-violet-500/55 hover:bg-violet-500/8 disabled:opacity-50"
         >
           {loading ? "启动中…" : "导出成片"}
         </button>
@@ -363,7 +360,7 @@ export function FilmStudio() {
         {film && running && (
           <button
             onClick={handleCancel}
-            className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/[0.06]"
+            className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/6"
           >
             取消
           </button>
@@ -374,12 +371,12 @@ export function FilmStudio() {
       <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
 
         {/* ═══ Left: Shot List Panel (260px) ═══ */}
-        <aside className="flex w-[260px] shrink-0 flex-col border-r border-white/[0.04] bg-[var(--color-panel-deep)]/85 backdrop-blur-sm">
+        <aside className="flex w-[260px] shrink-0 flex-col border-r border-white/4 bg-(--color-panel-deep)/85 backdrop-blur-sm">
           {/* Header */}
-          <div className="flex h-11 items-center justify-between border-b border-white/[0.04] px-4">
+          <div className="flex h-11 items-center justify-between border-b border-white/4 px-4">
             <div className="flex items-center gap-2">
-              <span className="text-[13px] font-semibold text-[var(--color-ink-field)]">分镜列表</span>
-              <span className="text-[11px] text-[var(--color-ink-fainter)]">{shots.length} 镜头</span>
+              <span className="text-[13px] font-semibold text-(--color-ink-field)">分镜列表</span>
+              <span className="text-[11px] text-(--color-ink-fainter)">{shots.length} 镜头</span>
             </div>
             <button
               type="button"
@@ -404,25 +401,25 @@ export function FilmStudio() {
                   className={`group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all ${
                     isSelected
                       ? "border-violet-500/40 bg-violet-500/12 shadow-sm shadow-black/10"
-                      : "border-transparent bg-white/[0.02] hover:border-white/[0.08] hover:bg-white/[0.04]"
+                      : "border-transparent bg-white/2 hover:border-white/8 hover:bg-white/4"
                   }`}
                 >
                   {/* Thumbnail placeholder */}
                   <div className={`flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] ${
-                    isSelected ? "bg-violet-500/10 text-violet-400" : "bg-white/[0.03] text-[var(--color-ink-faintest)]"
+                    isSelected ? "bg-violet-500/10 text-violet-400" : "bg-white/3 text-(--color-ink-faintest)"
                   }`}>
                     镜头缩略图
                   </div>
 
                   {/* Info */}
                   <div className="min-w-0 flex-1">
-                    <p className={`truncate text-[12px] font-medium ${isSelected ? "text-[var(--color-ink-field)]" : "text-[#b6bccf]"}`}>
+                    <p className={`truncate text-[12px] font-medium ${isSelected ? "text-(--color-ink-field)" : "text-[#b6bccf]"}`}>
                       {shot.name}
                     </p>
                     <div className="mt-1 flex items-center gap-2">
-                      <span className="text-[10px] text-[var(--color-ink-faintest)]">{shot.duration}</span>
-                      <span className="text-[10px] text-[var(--color-ink-faintest)]">·</span>
-                      <span className="text-[10px] text-[var(--color-ink-fainter)]">{MODE_LABELS[shot.mode]}</span>
+                      <span className="text-[10px] text-(--color-ink-faintest)">{shot.duration}</span>
+                      <span className="text-[10px] text-(--color-ink-faintest)">·</span>
+                      <span className="text-[10px] text-(--color-ink-fainter)">{MODE_LABELS[shot.mode]}</span>
                     </div>
                   </div>
 
@@ -439,9 +436,9 @@ export function FilmStudio() {
         {/* ═══ Center: Preview + Timeline ═══ */}
         <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden p-5 pb-3">
           {/* Preview Canvas */}
-          <div className="relative mb-3 flex min-h-[320px] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-white/[0.06] bg-[#08080c]">
+          <div className="relative mb-3 flex min-h-[320px] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-white/6 bg-[#08080c]">
             {/* Resolution hint */}
-            <span className="absolute left-3 top-2.5 rounded bg-black/50 px-2 py-0.5 text-[10px] font-mono text-[var(--color-ink-faintest)] backdrop-blur-sm">
+            <span className="absolute left-3 top-2.5 rounded bg-black/50 px-2 py-0.5 text-[10px] font-mono text-(--color-ink-faintest) backdrop-blur-sm">
               {size} · {fps}fps
             </span>
 
@@ -449,7 +446,7 @@ export function FilmStudio() {
             <button
               type="button"
               onClick={handleTogglePlay}
-              className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 border border-white/[0.18] shadow-lg shadow-black/30 transition-all hover:scale-105 hover:bg-black/55 active:scale-95"
+              className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 border border-white/18 shadow-lg shadow-black/30 transition-all hover:scale-105 hover:bg-black/55 active:scale-95"
               title={isPlaying ? "暂停" : "播放"}
             >
               {isPlaying ? (
@@ -466,9 +463,9 @@ export function FilmStudio() {
                   <span className="font-medium text-gray-200">{STAGE_LABEL[film.status]}</span>
                   <span className="text-gray-400">{film.progress}%</span>
                 </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/8">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all"
+                    className="h-full rounded-full bg-linear-to-r from-violet-500 to-fuchsia-500 transition-all"
                     style={{ width: `${film.progress}%` }}
                   />
                 </div>
@@ -487,12 +484,12 @@ export function FilmStudio() {
           </div>
 
           {/* Timeline */}
-          <div className="mt-auto rounded-xl border border-white/[0.04] bg-[var(--color-panel-deep)]/90 p-3 backdrop-blur-sm">
+          <div className="mt-auto rounded-xl border border-white/4 bg-(--color-panel-deep)/90 p-3 backdrop-blur-sm">
             {/* Time ruler */}
             <div className="mb-2 flex items-center justify-between px-1">
-              <span className="text-[10px] font-mono text-[var(--color-ink-faintest)]">00:00</span>
-              <span className="text-[10px] font-mono text-[var(--color-ink-faintest)]">00:05</span>
-              <span className="text-[10px] font-mono text-[var(--color-ink-faintest)]">00:10</span>
+              <span className="text-[10px] font-mono text-(--color-ink-faintest)">00:00</span>
+              <span className="text-[10px] font-mono text-(--color-ink-faintest)">00:05</span>
+              <span className="text-[10px] font-mono text-(--color-ink-faintest)">00:10</span>
             </div>
 
             {/* Tracks container */}
@@ -506,13 +503,13 @@ export function FilmStudio() {
               </div>
 
               {/* Video track */}
-              <div className="flex h-11 items-center gap-2 rounded-md bg-white/[0.04] px-2">
-                <span className="w-12 shrink-0 text-[10px] text-[var(--color-ink-faint)]">视频轨</span>
+              <div className="flex h-11 items-center gap-2 rounded-md bg-white/4 px-2">
+                <span className="w-12 shrink-0 text-[10px] text-(--color-ink-faint)">视频轨</span>
                 <div className="flex flex-1 gap-1.5">
                   {VIDEO_CLIPS.map((clip) => (
                     <div
                       key={clip.id}
-                      className={`flex h-8 items-center rounded-md bg-gradient-to-r ${clip.colorClass} px-2.5 shadow-sm`}
+                      className={`flex h-8 items-center rounded-md bg-linear-to-r ${clip.colorClass} px-2.5 shadow-sm`}
                       style={{ width: `${clip.width}px` }}
                     >
                       <span className={`text-[10px] font-semibold ${clip.textColorClass}`}>{clip.label}</span>
@@ -523,7 +520,7 @@ export function FilmStudio() {
 
               {/* Subtitle track */}
               <div className="flex h-9 items-center gap-2 rounded-md px-2">
-                <span className="w-12 shrink-0 text-[10px] text-[var(--color-ink-fainter)]">字幕轨</span>
+                <span className="w-12 shrink-0 text-[10px] text-(--color-ink-fainter)">字幕轨</span>
                 <div className="flex h-6 flex-1 items-center rounded bg-emerald-400/15 px-2.5 ring-1 ring-inset ring-emerald-400/25" style={{ width: "280px" }}>
                   <span className="truncate text-[9px] text-cyan-300">「城市在晨光中苏醒，镜头缓缓推进…」</span>
                 </div>
@@ -531,8 +528,8 @@ export function FilmStudio() {
 
               {/* BGM / Audio track */}
               <div className="flex h-9 items-center gap-2 rounded-md px-2">
-                <span className="w-12 shrink-0 text-[10px] text-[var(--color-ink-fainter)]">BGM</span>
-                <div className="flex h-6 flex-1 items-center rounded bg-gradient-to-r from-blue-500/20 to-violet-500/20 px-2.5" style={{ width: "200px" }}>
+                <span className="w-12 shrink-0 text-[10px] text-(--color-ink-fainter)">BGM</span>
+                <div className="flex h-6 flex-1 items-center rounded bg-linear-to-r from-blue-500/20 to-violet-500/20 px-2.5" style={{ width: "200px" }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5 shrink-0">
                     <path d="M9 18V5l12-2v13M9 18a3 3 0 01-3-3H3a3 3 0 006 3z" />
                   </svg>
@@ -544,27 +541,27 @@ export function FilmStudio() {
         </main>
 
         {/* ═══ Right: Properties Panel (280px) ═══ */}
-        <aside className="flex w-[280px] shrink-0 flex-col border-l border-white/[0.04] bg-[var(--color-panel-deep)]/85 backdrop-blur-sm">
+        <aside className="flex w-[280px] shrink-0 flex-col border-l border-white/4 bg-(--color-panel-deep)/85 backdrop-blur-sm">
           {/* Header */}
-          <div className="flex h-11 items-center border-b border-white/[0.04] px-4">
-            <span className="text-[13px] font-semibold text-[var(--color-ink-field)]">镜头属性</span>
+          <div className="flex h-11 items-center border-b border-white/4 px-4">
+            <span className="text-[13px] font-semibold text-(--color-ink-field)">镜头属性</span>
           </div>
 
           {/* Form fields */}
           <div className="flex-1 space-y-4 overflow-y-auto p-4">
             {/* Shot name */}
             <label className="block">
-              <span className="mb-1.5 block text-[11px] text-[var(--color-ink-faint)]">镜头名称</span>
+              <span className="mb-1.5 block text-[11px] text-(--color-ink-faint)">镜头名称</span>
               <input
                 value={selectedShot!.name}
                 onChange={(event) => setShots((prev) => prev.map((prev) =>prev.id === selectedShotId ? { ...prev, name: event.target.value } : prev))}
-                className="h-9 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-[var(--color-ink-field)] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="h-9 w-full rounded-lg border border-white/8 bg-white/3 px-3 text-[13px] text-(--color-ink-field) outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
             </label>
 
             {/* Duration */}
             <label className="block">
-              <span className="mb-1.5 block text-[11px] text-[var(--color-ink-faint)]">时长 (秒)</span>
+              <span className="mb-1.5 block text-[11px] text-(--color-ink-faint)">时长 (秒)</span>
               <input
                 type="number"
                 step="0.1"
@@ -572,54 +569,54 @@ export function FilmStudio() {
                 max="30"
                 value={parseFloat(selectedShot!.duration)}
                 onChange={(event) => setShots((prev) => prev.map((prev) =>prev.id === selectedShotId ? { ...prev, duration: `${Number(event.target.value).toFixed(1)}`.padStart(5, "0") } : prev))}
-                className="h-9 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-[var(--color-ink-field)] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="h-9 w-full rounded-lg border border-white/8 bg-white/3 px-3 text-[13px] text-(--color-ink-field) outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
             </label>
 
             {/* Mode select */}
             <label className="block">
-              <span className="mb-1.5 block text-[11px] text-[var(--color-ink-faint)]">生成模式</span>
-              <div className="flex h-9 items-center rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-[var(--color-ink-field)]">
+              <span className="mb-1.5 block text-[11px] text-(--color-ink-faint)">生成模式</span>
+              <div className="flex h-9 items-center rounded-lg border border-white/8 bg-white/3 px-3 text-[13px] text-(--color-ink-field)">
                 图生视频 (Wan I2V)
               </div>
             </label>
 
             {/* Transition */}
             <label className="block">
-              <span className="mb-1.5 block text-[11px] text-[var(--color-ink-faint)]">转场效果</span>
-              <div className="flex h-9 items-center rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-[#b6bccf]">
+              <span className="mb-1.5 block text-[11px] text-(--color-ink-faint)">转场效果</span>
+              <div className="flex h-9 items-center rounded-lg border border-white/8 bg-white/3 px-3 text-[13px] text-[#b6bccf]">
                 溶解过渡 (Cross Dissolve)
               </div>
             </label>
 
             {/* Prompt textarea */}
             <label className="block">
-              <span className="mb-1.5 block text-[11px] text-[var(--color-ink-faint)]">提示词 / 描述</span>
+              <span className="mb-1.5 block text-[11px] text-(--color-ink-faint)">提示词 / 描述</span>
               <textarea
                 rows={3}
                 defaultValue="城市在晨光中苏醒，镜头缓缓推进，展现繁忙街道与远处天际线…"
-                className="w-full resize-none rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[12px] leading-relaxed text-[#9aa0b5] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="w-full resize-none rounded-lg border border-white/8 bg-white/3 px-3 py-2 text-[12px] leading-relaxed text-[#9aa0b5] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
             </label>
 
             {/* Divider */}
-            <hr className="border-white/[0.05]" />
+            <hr className="border-white/5" />
 
             {/* Global config: Script input (collapsed from original) */}
             <label className="block">
-              <span className="mb-1.5 block text-[11px] text-[var(--color-ink-faint)]">剧本 / 创意</span>
+              <span className="mb-1.5 block text-[11px] text-(--color-ink-faint)">剧本 / 创意</span>
               <textarea
                 value={script}
                 onChange={(event) => setScript(event.target.value)}
                 rows={3}
                 placeholder="支持一句话自动分镜…"
-                className="w-full resize-none rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[12px] leading-relaxed text-[#9aa0b5] outline-none placeholder:text-[var(--color-ink-faintest)] focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="w-full resize-none rounded-lg border border-white/8 bg-white/3 px-3 py-2 text-[12px] leading-relaxed text-[#9aa0b5] outline-none placeholder:text-(--color-ink-faintest) focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
             </label>
 
             {/* Subtitle toggle */}
-            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-white/[0.08] bg-[var(--color-canvas)]/60 px-3 py-2.5">
-              <span className="text-sm text-[var(--color-ink-field)]">烧录字幕</span>
+            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-white/8 bg-(--color-canvas)/60 px-3 py-2.5">
+              <span className="text-sm text-(--color-ink-field)">烧录字幕</span>
               <input
                 type="checkbox"
                 checked={subtitleOn}
@@ -630,12 +627,12 @@ export function FilmStudio() {
 
             {/* BGM upload */}
             <div>
-              <span className="mb-1.5 block text-[11px] text-[var(--color-ink-faint)]">背景音乐（可选）</span>
+              <span className="mb-1.5 block text-[11px] text-(--color-ink-faint)">背景音乐（可选）</span>
               <input
                 type="file"
                 accept="audio/*"
                 onChange={(event) => { const f = event.target.files?.[0]; if (f) void handleBgm(f); }}
-                className="w-full text-[11px] text-[var(--color-ink-fainter)] file:mr-2 file:rounded-lg file:border-0 file:bg-violet-500/20 file:px-3 file:py-1.5 file:text-[11px] file:text-violet-300"
+                className="w-full text-[11px] text-(--color-ink-fainter) file:mr-2 file:rounded-lg file:border-0 file:bg-violet-500/20 file:px-3 file:py-1.5 file:text-[11px] file:text-violet-300"
               />
               {bgmName && <p className="mt-1 truncate text-[11px] text-violet-300">已选：{bgmName}</p>}
             </div>
@@ -663,7 +660,7 @@ export function FilmStudio() {
       </div>
 
       {/* ── Status Bar ──────────────────────────────── */}
-      <footer className="relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t border-white/[0.04] bg-[var(--color-panel-deep)]/95 backdrop-blur-sm">
+      <footer className="relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t border-white/4 bg-(--color-panel-deep)/95 backdrop-blur-sm">
         <span className="inline-block h-[7px] w-[7px] rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/40" />
         <span className="text-[11px] text-[#6b788f]">
           ComfyUI 本地已连接 · Wan I2V 视频模型就绪 · GPU 可用

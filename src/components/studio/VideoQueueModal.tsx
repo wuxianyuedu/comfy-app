@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { Trash, X } from "lucide-react";
 import { MediaThumbnail } from "./MediaThumbnail";
 import { isVideo } from "@/lib/media";
 import { Icon } from "@/components/ui/Icon";
@@ -138,7 +139,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
 
   return (
     <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[var(--color-node)] shadow-2xl">
+      <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-(--color-node) shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/6 px-5 py-3.5">
           <div className="flex items-center gap-3">
@@ -158,7 +159,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex rounded-lg bg-white/[0.04] p-0.5">
+            <div className="flex rounded-lg bg-white/4 p-0.5">
               <button
                 type="button"
                 onClick={() => setTab("queue")}
@@ -179,9 +180,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
               </button>
             </div>
             <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-300" aria-label="关闭">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
+              <X size={16} />
             </button>
           </div>
         </div>
@@ -202,7 +201,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                   return (
                     <div
                       key={task.id}
-                      className="flex items-center gap-3 rounded-xl border border-white/6 bg-white/[0.02] p-3"
+                      className="flex items-center gap-3 rounded-xl border border-white/6 bg-white/2 p-3"
                     >
                       <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black/40">
                         {task.video ? (
@@ -266,7 +265,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                 </p>
               ) : (
                 draft.map((draftItem, index) => (
-                  <div key={`draft-${index}`} className="flex items-start gap-2 rounded-xl border border-white/6 bg-white/[0.02] p-3">
+                  <div key={`draft-${index}`} className="flex items-start gap-2 rounded-xl border border-white/6 bg-white/2 p-3">
                     <span className="mt-1 font-mono text-xs text-violet-300">V{String(index + 1).padStart(2, "0")}</span>
                     <textarea
                       value={draftItem.prompt}
@@ -275,7 +274,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                       }
                       rows={2}
                       placeholder="分镜提示词，含镜头运动描述…"
-                      className="min-w-0 flex-1 resize-none rounded-lg border border-white/8 bg-white/[0.04] px-3 py-2 text-xs text-gray-200 outline-none placeholder:text-gray-600 focus:border-violet-500/40"
+                      className="min-w-0 flex-1 resize-none rounded-lg border border-white/8 bg-white/4 px-3 py-2 text-xs text-gray-200 outline-none placeholder:text-gray-600 focus:border-violet-500/40"
                     />
                     <button
                       type="button"
@@ -283,9 +282,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                       className="mt-1 text-gray-500 transition-colors hover:text-red-400"
                       aria-label="删除"
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m2 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6" />
-                      </svg>
+                      <Trash size={14} />
                     </button>
                   </div>
                 ))

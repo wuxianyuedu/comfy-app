@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Folder, X } from "lucide-react";
 
 import { MediaThumbnail } from "@/components/studio/MediaThumbnail";
 import { useToast } from "@/components/studio/toast-provider";
@@ -42,10 +43,10 @@ export function HistoryDetailModal({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[var(--color-node)]"
+        className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-(--color-node)"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="relative flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3">
+        <div className="relative flex items-center justify-between gap-3 border-b border-white/6 px-5 py-3">
           <h3 className="u-title">任务详情</h3>
           <div className="flex items-center gap-2">
             <button
@@ -95,18 +96,7 @@ export function HistoryDetailModal({
               className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-gray-300 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               title="在系统文件管理器中打开本次生成的目录（图片 / 视频 / 音频 / workflow.json / manifest.json 都在这里）"
             >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              </svg>
+              <Folder size={12} />
               打开目录
             </button>
             {folderPopover && (
@@ -124,18 +114,7 @@ export function HistoryDetailModal({
                     className="text-gray-500 hover:text-gray-200"
                     aria-label="关闭"
                   >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M18 6 6 18M6 6l12 12" />
-                    </svg>
+                    <X size={12} />
                   </button>
                 </div>
                 {helperMissing ? (
@@ -147,7 +126,7 @@ export function HistoryDetailModal({
                     或直接 <a href="/api/helper/install" className="underline hover:text-amber-100">下载安装脚本</a>。
                   </div>
                 ) : (
-                  <div className="mb-2 rounded border border-emerald-500/20 bg-emerald-500/[0.06] px-2.5 py-1.5 text-[10.5px] leading-relaxed text-emerald-200/90">
+                  <div className="mb-2 rounded border border-emerald-500/20 bg-emerald-500/6 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-emerald-200/90">
                     若浏览器弹出「是否打开外部应用」，点击「打开」即可在资源管理器中打开该目录。
                   </div>
                 )}
@@ -231,7 +210,7 @@ export function HistoryDetailModal({
                     下载工作流
                   </button>
                   <span
-                    className="hidden rounded bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-gray-500 sm:inline"
+                    className="hidden rounded bg-white/4 px-1.5 py-0.5 text-[10px] text-gray-500 sm:inline"
                     title={sourceLabel}
                   >
                     {sourceLabel}
@@ -244,18 +223,7 @@ export function HistoryDetailModal({
               className="text-gray-500 hover:text-gray-200"
               aria-label="关闭"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
+              <X size={16} />
             </button>
           </div>
         </div>
@@ -269,7 +237,7 @@ export function HistoryDetailModal({
                   {current.images.map((img) => (
                     <div
                       key={img.localPath}
-                      className="group relative overflow-hidden rounded-xl border border-white/[0.06]"
+                      className="group relative overflow-hidden rounded-xl border border-white/6"
                     >
                       <MediaThumbnail
                         src={img.localPath}
@@ -446,7 +414,7 @@ export function HistoryDetailModal({
                 if (genValues.length === 0) {
                   // R-ardot63 空态说明：让用户一眼知道是工作流没暴露参数，不是系统 bug。
                   return (
-                    <div className="rounded-lg border border-dashed border-white/[0.08] bg-white/[0.02] px-3 py-2.5 text-xs text-gray-500">
+                    <div className="rounded-lg border border-dashed border-white/8 bg-white/2 px-3 py-2.5 text-xs text-gray-500">
                       本任务所用工作流未暴露常见生成参数（seed/steps/cfg 等在节点硬编码默认值中）。
                       如需查看完整参数，请展开下方的「原始 JSON」。
                     </div>
@@ -455,7 +423,7 @@ export function HistoryDetailModal({
                 return (
                   <div>
                     <p className="mb-1 text-xs font-semibold text-gray-400">生成参数</p>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 sm:grid-cols-3">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-white/6 bg-white/2 p-3 sm:grid-cols-3">
                       {genValues.map((item) => (
                         <div key={item.label} className="flex flex-col gap-0.5">
                           <div className="flex items-baseline gap-2">
@@ -529,16 +497,16 @@ export function HistoryDetailModal({
                     <p className="mb-1 text-xs font-semibold text-gray-400">参数</p>
 
                     {workflowInputs.length > 0 && (
-                      <div className="mb-2 overflow-hidden rounded-lg border border-white/[0.06]">
+                      <div className="mb-2 overflow-hidden rounded-lg border border-white/6">
                         <table className="w-full text-[11px]">
                           <tbody>
                             {workflowInputs.map((input, i) => (
                               <tr
                                 key={(input.nodeId ?? "?") + ":" + input.name + ":" + i}
-                                className="border-b border-white/[0.04] last:border-b-0"
+                                className="border-b border-white/4 last:border-b-0"
                               >
                                 <td
-                                  className="w-[36%] max-w-[180px] shrink-0 truncate align-top border-r border-white/[0.04] bg-white/[0.02] px-2.5 py-1.5 font-mono text-violet-300"
+                                  className="w-[36%] max-w-[180px] shrink-0 truncate align-top border-r border-white/4 bg-white/2 px-2.5 py-1.5 font-mono text-violet-300"
                                   title={input.name}
                                 >
                                   {input.name}
@@ -556,11 +524,11 @@ export function HistoryDetailModal({
                     )}
 
                     {topLevelEntries.length > 0 && (
-                      <details className="rounded-lg border border-white/[0.06] bg-black/30">
+                      <details className="rounded-lg border border-white/6 bg-black/30">
                         <summary className="cursor-pointer select-none px-3 py-1.5 text-[11px] text-gray-500 hover:text-gray-300">
                           原始 JSON · {topLevelEntries.length + (workflowInputs.length ? 1 : 0)} 个字段
                         </summary>
-                        <pre className="max-w-full whitespace-pre-wrap break-all border-t border-white/[0.06] p-3 text-[11px] text-gray-400">
+                        <pre className="max-w-full whitespace-pre-wrap break-all border-t border-white/6 p-3 text-[11px] text-gray-400">
                           {JSON.stringify(params, null, 2)}
                         </pre>
                       </details>

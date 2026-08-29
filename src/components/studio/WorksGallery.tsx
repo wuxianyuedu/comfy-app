@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { useToast } from "@/components/studio/toast-provider";
 import { AuroraBackground } from "@/components/studio/AuroraBackground";
 import {
@@ -128,7 +129,7 @@ export function WorksGallery({
                 return (
                   <div
                     key={canvasProject.id}
-                    className="group relative rounded-2xl border border-white/[0.06] bg-white/[0.02] transition-all hover:border-cyan-400/25 hover:bg-cyan-400/[0.04]"
+                    className="group relative rounded-2xl border border-white/6 bg-white/2 transition-all hover:border-cyan-400/25 hover:bg-cyan-400/4"
                   >
                     <button
                       type="button"
@@ -177,23 +178,7 @@ export function WorksGallery({
                       }}
                       className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-gray-500 opacity-0 transition-opacity hover:bg-red-500/15 hover:text-red-300 focus-visible:opacity-100 group-hover:opacity-100"
                     >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden
-                      >
-                        <path d="M3 6h18" />
-                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        <path d="M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                        <path d="M10 11v6" />
-                        <path d="M14 11v6" />
-                      </svg>
+                      <Trash2 size={12} />
                       <span>删除</span>
                     </button>
                   </div>
@@ -203,7 +188,7 @@ export function WorksGallery({
           </section>
         ) : (
           <section>
-            <div className="grid min-h-[360px] place-items-center rounded-2xl border border-dashed border-white/[0.08]">
+            <div className="grid min-h-[360px] place-items-center rounded-2xl border border-dashed border-white/8">
               <div className="text-center">
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/12 text-cyan-400">
                   <svg

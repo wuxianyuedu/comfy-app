@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "@/components/studio/MediaThumbnail";
 import { AuroraBackground } from "@/components/studio/AuroraBackground";
 import { getActiveId, listProjects, type CanvasProject } from "@/components/studio/project-canvas/canvas-store";
@@ -207,11 +208,11 @@ export function ProjectOutputs() {
             <select
               value={projectId}
               onChange={(event) => setProjectId(event.target.value)}
-              className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-gray-300 outline-none focus:border-violet-500/40"
+              className="rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-xs text-gray-300 outline-none focus:border-violet-500/40"
             >
               {projects.map((project) =>
 (
-                <option key={project.id} value={project.id} className="bg-[var(--color-node)]">
+                <option key={project.id} value={project.id} className="bg-(--color-node)">
                   {project.name ?? "未命名项目"}
                 </option>
               ))}
@@ -236,11 +237,11 @@ export function ProjectOutputs() {
               loop
             />
           ) : (
-            <div className="grid h-full place-items-center bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 text-sm text-gray-500">
+            <div className="grid h-full place-items-center bg-linear-to-br from-violet-500/10 to-fuchsia-500/10 text-sm text-gray-500">
               生成结果将作为封面展示在这里
             </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+          <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/30 to-transparent" />
           <div className="absolute bottom-3 left-4">
             <span className="rounded-md bg-violet-500/90 px-2 py-0.5 text-[11px] font-semibold text-white">
               封面
@@ -255,7 +256,7 @@ export function ProjectOutputs() {
         {loading ? (
           <p className="text-sm text-gray-500">加载中…</p>
         ) : outputs.length === 0 ? (
-          <div className="grid min-h-[280px] place-items-center rounded-2xl border border-dashed border-white/[0.08] text-gray-500">
+          <div className="grid min-h-[280px] place-items-center rounded-2xl border border-dashed border-white/8 text-gray-500">
             <div className="text-center">
               <p className="text-lg font-medium text-gray-300">还没有产出</p>
               <p className="mt-1 text-sm">在画布里跑一次生成，结果会自动归档到本项目目录。</p>
@@ -277,8 +278,8 @@ export function ProjectOutputs() {
                   className={`group relative overflow-hidden rounded-2xl border text-left transition-all hover:shadow-lg hover:shadow-black/30 ${
                     active
                       ? "border-violet-400/70 ring-1 ring-violet-400/40"
-                      : "border-white/[0.06] hover:border-white/[0.14]"
-                  } bg-white/[0.02]`}
+                      : "border-white/6 hover:border-white/14.000000000000002"
+                  } bg-white/2`}
                 >
                   <div className="relative aspect-square w-full bg-[#111118]">
                     {c ? (
@@ -331,9 +332,9 @@ export function ProjectOutputs() {
             className="fixed inset-0 z-[80] bg-black/50"
             onClick={() => setSelectedId(null)}
           />
-          <aside className="fixed right-0 top-0 z-[90] flex h-full w-[380px] max-w-[90vw] flex-col overflow-hidden border-l border-white/10 bg-[var(--color-node)] shadow-2xl">
+          <aside className="fixed right-0 top-0 z-[90] flex h-full w-[380px] max-w-[90vw] flex-col overflow-hidden border-l border-white/10 bg-(--color-node) shadow-2xl">
             {/* head */}
-            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
+            <div className="flex items-center justify-between border-b border-white/6 px-5 py-3">
               <div className="flex items-center gap-2">
                 <h3 className="font-title text-sm font-bold text-gray-100">
                   产出 #{selected.id.slice(-4)}
@@ -347,9 +348,7 @@ export function ProjectOutputs() {
                 className="text-gray-500 hover:text-gray-200"
                 aria-label="关闭"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
+                <X size={16} />
               </button>
             </div>
 
@@ -362,7 +361,7 @@ export function ProjectOutputs() {
                     {selected.referenceImages.map((image, index) => (
                       <div
                         key={image}
-                        className="aspect-square overflow-hidden rounded-lg border border-white/[0.06] bg-[var(--color-panel-deep)]"
+                        className="aspect-square overflow-hidden rounded-lg border border-white/6 bg-(--color-panel-deep)"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -385,14 +384,14 @@ export function ProjectOutputs() {
               <section className="space-y-2">
                 <div>
                   <p className="mb-1 text-xs font-semibold text-gray-400">正向提示词</p>
-                  <div className="max-h-28 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5 text-[12px] leading-relaxed text-gray-300">
+                  <div className="max-h-28 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/6 bg-white/2 p-2.5 text-[12px] leading-relaxed text-gray-300">
                     {selected.prompt ?? "—"}
                   </div>
                 </div>
                 {selected.negativePrompt && (
                   <div>
                     <p className="mb-1 text-xs font-semibold text-gray-400">反向提示词</p>
-                    <div className="max-h-24 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5 text-[12px] leading-relaxed text-gray-400">
+                    <div className="max-h-24 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/6 bg-white/2 p-2.5 text-[12px] leading-relaxed text-gray-400">
                       {selected.negativePrompt}
                     </div>
                   </div>
@@ -402,7 +401,7 @@ export function ProjectOutputs() {
               {/* params table */}
               <section>
                 <p className="mb-2 text-xs font-semibold text-gray-400">参数</p>
-                <div className="overflow-hidden rounded-lg border border-white/[0.06]">
+                <div className="overflow-hidden rounded-lg border border-white/6">
                   {[
                     ["Seed", selected.seed ?? "—"],
                     ["模型", selected.checkpoint ?? "—"],
@@ -415,7 +414,7 @@ export function ProjectOutputs() {
                     <div
                       key={k}
                       className={`flex items-center justify-between px-3 py-2 text-[12px] ${
-                        i % 2 === 0 ? "bg-white/[0.02]" : ""
+                        i % 2 === 0 ? "bg-white/2" : ""
                       }`}
                     >
                       <span className="text-gray-500">{k}</span>
@@ -435,7 +434,7 @@ export function ProjectOutputs() {
             </div>
 
             {/* footer actions */}
-            <div className="border-t border-white/[0.06] p-4">
+            <div className="border-t border-white/6 p-4">
               <div className="flex gap-2">
                 <button
                   onClick={handleCopy}
@@ -445,7 +444,7 @@ export function ProjectOutputs() {
                 </button>
                 <button
                   onClick={handleExport}
-                  className="flex-1 rounded-lg border border-white/10 px-3 py-2 text-[12px] text-gray-300 transition-colors hover:bg-white/[0.06]"
+                  className="flex-1 rounded-lg border border-white/10 px-3 py-2 text-[12px] text-gray-300 transition-colors hover:bg-white/6"
                 >
                   导出 JSON
                 </button>
