@@ -184,7 +184,7 @@ const Section = React.memo(function Section({
       map.get(key)!.options.push(option);
     }
     return order.map((key) => map.get(key)!);
-  }, [section.options]);
+  }, [section]);
 
   const onPick = useCallback(
     (value: string) => section.onChange(value),

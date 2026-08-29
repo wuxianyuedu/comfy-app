@@ -262,6 +262,11 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   // conditional return — the cachedIds useMemo used to live here, which caused
   // "Rendered more hooks than during the previous render" the first time the
   // user toggled 调试模式 ON on the project canvas.
+  /* listCachedTaskIds() 读的是 stepLogCache 的模块级 Map，签名上不接收参数，
+   *  所以下面三个值都不会出现在函数体里——但任一变化都意味着缓存内容已改
+   *  变，必须靠依赖数组触发重算，否则任务选择器会一直停在旧列表上。
+   *  这是规则无法静态推断的「重算触发器」用法，故在此逐处豁免并说明。 */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const cachedIds = useMemo(() => listCachedTaskIds(), [logs, validationErrors, taskId]);
 
   // Unified debug switch: panel hidden entirely when debug mode is off.

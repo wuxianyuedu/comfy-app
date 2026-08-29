@@ -127,7 +127,7 @@ export function CustomNodesSettings() {
         logsRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
     }
-  }, [report]);
+  }, [report, parsing, perPkgParsing]);
 
   /** Fetch settings from the server and apply them to local state.
    *  No synchronous setState before the first await, so this can be called

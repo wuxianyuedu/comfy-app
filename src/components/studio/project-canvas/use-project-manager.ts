@@ -101,7 +101,9 @@ export function useProjectManager(options: UseProjectManagerOptions) {
       closeMenus();
       requestFitView();
     },
-    [getCurrent, persistNow, setActive, setProjectId, setProjectName, setNodes, setEdges, closeMenus, requestFitView]
+    /* setActive 是 canvas-store 的模块级导出，引用恒定，属于 outer scope，
+     *  放进依赖数组会被 react-hooks/exhaustive-deps 判为不必要依赖。 */
+    [getCurrent, persistNow, setProjectId, setProjectName, setNodes, setEdges, closeMenus, requestFitView]
   );
 
   const newProject = useCallback(() => {
@@ -144,7 +146,7 @@ export function useProjectManager(options: UseProjectManagerOptions) {
       closeMenus();
       requestFitView();
     },
-    [setActive, setProjectId, setProjectName, setNodes, setEdges, closeMenus, requestFitView]
+    [setProjectId, setProjectName, setNodes, setEdges, closeMenus, requestFitView]
   );
 
   /** 删除确认弹窗的实际动作。 */

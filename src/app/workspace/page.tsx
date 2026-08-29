@@ -176,7 +176,7 @@ export default function WorkspacePage() {
     // (the previous project is preserved in the project store).
     setCanvasSeedNew(true);
     navigateTo("canvas");
-  }, []);
+  }, [navigateTo]);
 
   // Open a canvas project — set it as active and jump to the canvas view.
   const handleOpenCanvasProject = useCallback(

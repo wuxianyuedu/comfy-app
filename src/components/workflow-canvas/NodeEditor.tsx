@@ -62,6 +62,9 @@ export default function NodeEditor({
         el.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
     }
+    /* 只在切到另一个节点（comfyId 变化）时滚动。node 对象每次渲染都是新引用，
+     * 若把它放进依赖，编辑器会在每一次无关重渲染里反复滚动、抢走用户焦点。 */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node?.comfyId]);
 
   if (!node) {
