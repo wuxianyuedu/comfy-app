@@ -1,0 +1,33 @@
+# CanvasNode 代码审查归档(2026-08-30)
+
+> 对象:`src/components/studio/project-canvas/CanvasNode/CanvasNode.tsx`(拆分后主组件,~1260 行)。
+> 外部审查意见 6+2 条,本文逐条给出核实结论与处置。**结论先行:6 条中 2 条驳回
+> (与 React 官方语义相悖),2 条采纳落地,1 条部分采纳,1 条归入路线图。**
+
+## 逐条判定
+
+| # | 审查主张 | 核实结论 | 处置 |
+|---|---------|---------|------|
+| 1 | render 里 setState 的"React 19 pattern"有隐患,应改 useEffect | **驳回。** 两处实例(L74/L144)均带 prev 守卫,是 react.dev《You Might Not Need an Effect》明确推荐的"prop 变化时调整状态"模式:render 阶段 setState 会**丢弃当前渲染并立即重渲**,不产生额外 DOM 提交;审查所称"每帧多一次 re-render"不成立(status 不变时 if 守卫直接短路)。反倒是审查建议的 `useEffect` 方案会造成"错误面板展开态晚一帧收起"的可见闪烁——官方文档正是以这一点作为反例推荐 render 方案。| **保留原样**;在 02-性能规范 §2.4 补充说明防止未来误改 |
+| 2 | runGenerate 巨闭包每 render 重建,应 useCallback | **部分成立但不值得做。** 函数引用确实每次重建,但其闭包依赖(`d`、`wfIO`、`seededFor`…)每次 patch 都变,useCallback 的依赖数组同样每次失效——引用稳定性在不把数据流迁入 store 前无法达成。且消费方 `ImageGenerationPanel`/`ContentAssetBody` 未 memo,父渲染时它们本就重渲。| **归入路线图**(store 化后才有意义),见下 |
+| 3 | patch 每次 render 都是新的,应 useCallback | **采纳。** 零风险纯稳定化:`useCallback([id, setNodes])`,ReactFlow setter 恒定,选中态切换等无关重渲染时 patch 引用稳定。| ✅ 已落地 |
+| 4 | wfList/modelTagLib 每节点各自拉取,20 节点 = 40 次相同请求 | **采纳,是最实质的性能问题。** 已改为模块级 in-flight 去重:并发挂载共享同一 Promise(2 次请求),**刻意不做 TTL 缓存**——新建工作流后,后挂载节点必须看到最新列表,TTL 会把变更挡在过期数据外。| ✅ 已落地 |
+| 5 | as 断言泛滥(`as unknown as`/`as never`) | **成立,归入路线图。** 根因是 `CanvasNodeData` 索引签名过宽 + 后端字段结构与前端类型有缝;收窄需要动 `canvas-types.ts` 并梳理后端契约,超出本次行为保持式清理的范围。| 路线图 |
+| 6 | errorSuggestion IIFE 每 render 跑正则,应 useMemo | **采纳(低成本)。** progress 高频更新期间同一 `d.error` 会反复跑 5 组正则;`useMemo([d.error])` 消除。| ✅ 已落地 |
+| 7 | reconcile effect 在 taskId 变化时不会取消前一个请求,可能双 patch | **驳回。** `cancelled` 标志的清理函数在**任何依赖变化时**都会先执行(React effect 语义),in-flight 回调被 `if (cancelled) return` 双重守卫(await 前后各一次),结果必被丢弃。网络请求本身未 abort 但无副作用。| 保留原样 |
+
+## 已落地修改(本次提交)
+
+1. `patch` → `useCallback([id, setNodes])`(问题 3)。
+2. `errorSuggestion` → `useMemo([d.error])`(问题 6)。
+3. wfList/modelTagLib 模块级 in-flight 去重(问题 4):`sharedListsInflight` +
+   `WfListItem`/`TagLibItem` 类型上提;注意实现细节——in-flight 的清理
+   (`finally` 置空)必须挂在**派生链**上,直接对存储引用 `.then` 会把它
+   void 化,导致晚到的订阅者拿不到数据。
+
+## 路线图(记录在案,未做)
+
+- `runGenerate`/`patch`/`wfIO` 迁入组件级作用域 store(同 `workflow-stores.tsx`
+  的 createStore 工厂模式),届时 runGenerate 才能获得真正稳定的引用;
+- `canvas-types.ts` 收窄 `CanvasNodeData` 索引签名,消除 `as unknown as` 双断言;
+- `errorSuggestion` 的正则规则表外置为数据(便于新增错误形态)。

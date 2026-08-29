@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-base-to-string, @typescript-eslint/no-empty-function, @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/prefer-nullish-coalescing, @typescript-eslint/prefer-optional-chain, @typescript-eslint/prefer-regexp-exec */
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { WorkflowNode, type WorkflowModesState, type WorkflowSourceFilter } from "../WorkflowNode";
 import { ContentAssetBody } from "../ContentAssetNode";
@@ -33,6 +33,14 @@ import {
 import { getActiveId } from "../canvas-store";
 import { setActiveTaskId } from "../activeTask";
 import { vanillaApi } from "~/trpc/vanilla";
+
+/* ── 跨节点共享的列表请求去重(模块级 in-flight;2026-08-30 审查)──
+ *  画布上 N 个 workflow/image/video/picture 节点挂载时共享同一份
+ *  workflow.list + workflowModel.list,并发挂载只发 2 次请求。
+ *  刻意不做 TTL 缓存:新建工作流后,后挂载的节点必须看到最新列表。 */
+type WfListItem = { id: string; name: string; taskType?: string; sourcePath?: string | null; modelTags?: string[] };
+type TagLibItem = { id: string; name: string; count: number };
+let sharedListsInflight: Promise<{ wfList: WfListItem[]; modelTagLib: TagLibItem[] }> | null = null;
 import { parseModesJson } from "@/lib/workflow-types";
 import { DebugChainFooter } from "../../debug/DebugChainFooter";
 import { getProjectCanvasRenderChain } from "../canvas-render-chain";
@@ -46,14 +54,17 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
   const { setNodes, getNode, setEdges, fitView } = useReactFlow();
   const meta = NODE_META[d.kind];
 
-  const patch = (p: Partial<CanvasNodeData>) =>
-    setNodes((nds) =>
-      nds.map((node) =>
-        node.id === id
-          ? { ...node, data: { ...(node.data as CanvasNodeData), ...p } }
-          : node
-      )
-    );
+  const patch = useCallback(
+    (p: Partial<CanvasNodeData>) =>
+      setNodes((nds) =>
+        nds.map((node) =>
+          node.id === id
+            ? { ...node, data: { ...(node.data as CanvasNodeData), ...p } }
+            : node
+        )
+      ),
+    [id, setNodes]
+  );
   const deleteSelf = () => setNodes((nds) => nds.filter((nd) => nd.id !== id));
 
   const focusNode = () =>
@@ -151,7 +162,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
   /* Pattern-match the error text to surface a one-line actionable hint.
    *  Returns null if we don't recognize the failure shape (UI keeps the
    *  generic raw-error block instead of making up bad advice). */
-  const errorSuggestion: string | null = (() => {
+  const errorSuggestion: string | null = useMemo(() => {
     const e = d.error ?? "";
     if (!e) return null;
     /* UUID-class wrapper / ComfyUI subgraph not installed */
@@ -172,7 +183,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
       return "ComfyUI 端请求超时 / 拒绝连接。请确认本地 8188 端口的 ComfyUI 进程还活着、最近没在初始化大模型。";
     }
     return null;
-  })();
+  }, [d.error]);
 
   /* file upload helper */
   const fileRef = React.useRef<HTMLInputElement>(null);
@@ -237,32 +248,56 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
    *  local-on-disk imports from user-uploaded online workflows (the dot +
    *  "本机 / 在线" badge in the option label).  The DB select already
    *  exposes it; only the client type was missing. */
-  const [wfList, setWfList] = useState<{ id: string; name: string; taskType?: string; sourcePath?: string | null; modelTags?: string[] }[]>([]);
+  const [wfList, setWfList] = useState<WfListItem[]>([]);
   // True until the workflow list has finished loading. The dropdown must
   // NOT render "暂无工作流" (empty) while the list is still in flight.
   const [wfListLoading, setWfListLoading] = useState(true);
   // 2026-08-15: 用户级模型标签库（全局），供 WorkflowNode 的模型筛选 chip 使用
-  const [modelTagLib, setModelTagLib] = useState<{ id: string; name: string; count: number }[]>([]);
+  const [modelTagLib, setModelTagLib] = useState<TagLibItem[]>([]);
   // 2026-08-15: 画布节点内的会话级模型筛选（不写 patch，仅当前节点 lifespan 生效）
   const [modelFilter, setModelFilter] = useState<string>("all");
   useEffect(() => {
     if (d.kind !== "workflow" && d.kind !== "image" && d.kind !== "video" && d.kind !== "picture") return;
+    /* 2026-08-30 审查修复:跨节点共享列表去重。画布上 N 个 image/workflow 节点
+     *  挂载时会各自拉 workflow.list + workflowModel.list(2N 次相同请求)——
+     *  模块级 in-flight 去重让并发挂载只发 2 次,且不做 TTL 缓存(不会把
+     *  新建工作流的变更挡在过期列表外)。 */
     let alive = true;
-    vanillaApi.workflow.list
-      .query({})
-      .then((dd) => {
-        if (alive) setWfList((dd.workflows ?? []) as any);
-      })
-      .catch(() => {})
-      .finally(() => {
+    const apply = (data: { wfList: WfListItem[]; modelTagLib: TagLibItem[] }) => {
+      if (!alive) return;
+      setWfList(data.wfList);
+      setModelTagLib(data.modelTagLib);
+      setWfListLoading(false);
+    };
+    if (sharedListsInflight) {
+      sharedListsInflight.then(apply).catch(() => {
         if (alive) setWfListLoading(false);
       });
-    vanillaApi.workflowModel.list
-      .query()
-      .then((dd) => {
-        if (alive && dd && Array.isArray(dd.tags)) setModelTagLib(dd.tags);
-      })
-      .catch(() => {});
+    } else {
+      const p = (async () => {
+        const data: { wfList: WfListItem[]; modelTagLib: TagLibItem[] } = {
+          wfList: [],
+          modelTagLib: [],
+        };
+        const [wfRes, tagRes] = await Promise.allSettled([
+          vanillaApi.workflow.list.query({}),
+          vanillaApi.workflowModel.list.query(),
+        ]);
+        if (wfRes.status === "fulfilled") data.wfList = (wfRes.value.workflows ?? []) as WfListItem[];
+        if (tagRes.status === "fulfilled" && tagRes.value && Array.isArray(tagRes.value.tags))
+          data.modelTagLib = tagRes.value.tags;
+        return data;
+      })();
+      sharedListsInflight = p;
+      p.then((data) => {
+        apply(data);
+      }).catch(() => {
+        if (alive) setWfListLoading(false);
+      });
+      void p.finally(() => {
+        sharedListsInflight = null;
+      });
+    }
     return () => {
       alive = false;
     };
