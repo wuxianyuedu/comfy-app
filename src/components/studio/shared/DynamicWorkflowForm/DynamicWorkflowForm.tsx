@@ -1,4 +1,3 @@
- 
 "use client";
 
 import React, { useCallback, useMemo, useRef, useState } from "react";
@@ -12,10 +11,9 @@ import {
   isInputFilled,
   inferGroups,
   type WorkflowIOMap,
-  type ControlKind,
-} from "./workflow-io";
-import { GroupedControls } from "./GroupedControls";
-import { EditableLabel } from "./EditableLabel";
+} from "../workflow-io";
+import { GroupedControls } from "../GroupedControls";
+import { EditableLabel } from "../EditableLabel";
 import {
   AutoResizeTextarea,
   isSeedLike,
@@ -23,8 +21,12 @@ import {
   PortHandle,
   SeedModeButton,
   WirePortRows,
-} from "./WorkflowFormControls";
-export { PortHandle } from "./WorkflowFormControls";
+} from "../WorkflowFormControls";
+import { ACCENT, inputCls } from "./constants";
+import { SectionHeader } from "./SectionHeader";
+import { LoadingSkeleton } from "./sections/LoadingSkeleton";
+import { EmptyStateHint } from "./sections/EmptyStateHint";
+import { IoEndpointsSection } from "./sections/IoEndpointsSection";
 
 /* ── DynamicWorkflowForm ──
  * Renders the parameter form for a custom ComfyUI workflow strictly from the
@@ -34,29 +36,6 @@ export { PortHandle } from "./WorkflowFormControls";
  * irrelevant fields.
  *
  * Shared by CreatePanel（宽版）and the canvas `workflow` node（compact）. */
-
-/** v2 (2026-08-14) Aligned with Ardot 3:40 PortRow1:
- *  - bg #0F0F14 (深于卡片 #16161C)
- *  - rounded-[6px]  +  no border
- *  - 11pt Inter Regular, color #C9C9D6
- *  - p-2.5 (10px) on all sides
- *  - leading-relaxed (16-17px line-height for 11pt)
- *  - resize-none — 稿是固定 52h，不该出现 webkit resize 把手
- *  - placeholder #5A5A6B */
-const inputCls =
-  "nodrag nopan w-full resize-none rounded-md bg-(--color-canvas-deep) p-2.5 text-[11px] leading-relaxed text-(--color-ink-soft) outline-none transition-colors placeholder:text-(--color-ink-placeholder) focus:ring-1 focus:ring-(--color-primary)/40";
-
-/** Colour accent per control kind — mirrors the canvas port palette. */
-const ACCENT: Record<ControlKind, string> = {
-  image: "#5BE3C4",
-  textarea: "#FF9C5B",
-  text: "#FF9C5B",
-  select: "#8B7CFC",
-  switch: "#67E89D",
-  int: "#B584FF",
-  float: "#FFD571",
-  link: "#5BC6FF",
-};
 
 /** Inline-editable label row.  When `onChange` is set, the label text is
  *  click-to-edit: a single click swaps the <span> for an <input> pre-filled
@@ -118,18 +97,6 @@ export interface DynamicWorkflowFormProps {
    *  CreatePanel, WorkflowLibrary, canvas `workflow` node). */
   onReorder?: (fromKey: string, beforeKey: string | null) => void;
 }
-
-/* Section header used for the two sub-sections in IO edit/preview mode
- *  (2026-08-09).  Module-level so it isn't re-created on every render
- *  (react-hooks/static-components). */
-const SectionHeader = ({ label, count, accent }: { label: string; count: number; accent: string }) => (
-  <div className="mt-1 flex items-center gap-2 border-t border-white/10 pt-2.5">
-    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} />
-    <span className="text-[10px] font-semibold uppercase tracking-wider text-(--color-ink-muted)">{label}</span>
-    <span className="rounded-full bg-white/10 px-1.5 py-px font-mono text-[10px] text-gray-400">{count}</span>
-    <div className="flex-1 border-t border-dashed border-white/8" />
-  </div>
-);
 
 export function DynamicWorkflowForm({
   io,
@@ -281,31 +248,12 @@ export function DynamicWorkflowForm({
   );
 
   if (loading) {
-    return (
-      <div className="space-y-2">
-        {[0, 1, 2].map((index) => (
-          <div key={`skeleton-${index}`} className="space-y-1.5">
-            <div className="h-2.5 w-16 animate-pulse rounded bg-white/6" />
-            <div className="h-8 w-full animate-pulse rounded-lg bg-white/4" />
-          </div>
-        ))}
-      </div>
-    );
+    return <LoadingSkeleton />;
   }
 
   /* No curated IO at all → tell the user exactly how to fix it. */
   if (inputs.length === 0 && outputs.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-white/12 bg-white/2 px-3 py-3 text-[11px] leading-relaxed text-gray-400">
-        {emptyHint ?? (
-          <>
-            该工作流尚未标记对外参数。
-            <br />
-            打开工作流编辑器 → 顶栏「IO 编辑」→ 勾选想要暴露的输入/输出，保存后这里会自动出现对应的表单。
-          </>
-        )}
-      </div>
-    );
+    return <EmptyStateHint emptyHint={emptyHint} />;
   }
 
   // 紧凑（画布）模式：端口行紧贴，对齐 Ardot 稿（测试节点端口行无间隔）
@@ -960,60 +908,12 @@ if (compact) {
               }}
             />
           ) : (
-            <>
-              <SectionHeader
-                label="I/O 端点"
-                count={wireInputs.length + (showOutputs ? outputs.length : 0)}
-                accent="#5BC6FF"
-              />
-              {wireInputs.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {wireInputs.map((wireInput) =>
-{
-                    /* 2026-08-15: conflict-aware — see ioLabel() in
-                     *  src/components/updream/shared/workflow-io.ts. */
-                    const label = ioLabel(wireInput, [...inputs, ...outputs]);
-                    return (
-                      <span
-                        key={wireInput.ioKey}
-                        className="inline-flex items-center gap-1 rounded-md border border-(--color-info)/25 bg-(--color-info)/10 px-1.5 py-0.5 text-[10px] text-(--color-info)"
-                        title={`${wireInput.nodeTitle ?? ""} · ${wireInput.name} · 仅可通过连线输入`}
-                      >
-                        <span className="h-1.5 w-1.5 rounded-full bg-(--color-info)" />
-                        {label}
-                        <span className="font-mono text-[9px] opacity-70">{wireInput.type}</span>
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-              {wireInputs.length > 0 && outputs.length > 0 && showOutputs && (
-                <div className="h-px shrink-0 border-t border-dashed border-white/6" />
-              )}
-              {showOutputs && outputs.length > 0 && (
-                <>
-                  <div className="flex items-center gap-1.5 pt-1">
-                    <span className="text-[10px] font-medium text-gray-500">输出端点</span>
-                    <div className="flex-1 border-t border-dashed border-white/4" />
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {outputs.map((output) =>
-(
-                      <span
-                        key={output.ioKey}
-                        className="inline-flex items-center gap-1 rounded-md border border-(--color-success)/25 bg-(--color-success)/10 px-1.5 py-0.5 text-[10px] text-(--color-success)"
-                        title={`${output.nodeTitle ?? ""} · ${output.name}`}
-                      >
-                        <span className="h-1.5 w-1.5 rounded-full bg-(--color-success)" />
-                        {/* 2026-08-15: conflict-aware — see ioLabel(). */}
-                        {ioLabel(output, [...inputs, ...outputs])}
-                        <span className="font-mono text-[9px] opacity-70">{normalizeTypeChip(output.type)}</span>
-                      </span>
-                    ))}
-                  </div>
-                </>
-              )}
-            </>
+            <IoEndpointsSection
+              wireInputs={wireInputs}
+              inputs={inputs}
+              outputs={outputs}
+              showOutputs={showOutputs}
+            />
           )}
         </>
       )}
@@ -1029,6 +929,4 @@ if (compact) {
   );
 }
 
-
 export default DynamicWorkflowForm;
-

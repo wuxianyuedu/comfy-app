@@ -63,11 +63,14 @@ function MultiSegmentPopoverInner({
   align = "left",
   ariaLabel,
   footer,
+  disabled,
 }: {
   triggerContent: React.ReactNode;
   sections: SegmentSection<string>[];
   align?: "left" | "right";
   ariaLabel?: string;
+  /** 2026-08-29: grey out + block opening while the owning form is disabled. */
+  disabled?: boolean;
   /** R-ardot108 (2026-08-17): optional slot rendered below the sections
    *  inside the popover card.  Used for the megapixel alignment-multiple
    *  stepper (a continuous number control that doesn't fit the
@@ -98,6 +101,7 @@ function MultiSegmentPopoverInner({
   }, [open]);
 
   const handleToggle = () => {
+    if (disabled) return;
     if (!open && wrapRef.current && typeof window !== "undefined") {
       const rect = wrapRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
@@ -113,8 +117,11 @@ function MultiSegmentPopoverInner({
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
+        disabled={disabled}
         onClick={handleToggle}
-        className="nodrag nopan flex w-full items-center gap-2 rounded-lg border border-(--color-primary)/35 bg-(--color-canvas-deep) px-3 py-2 text-left text-[12px] text-(--color-ink-bright) outline-none transition-colors hover:border-(--color-primary)/70 focus:border-(--color-primary)/70"
+        className={`nodrag nopan flex w-full items-center gap-2 rounded-lg border border-(--color-primary)/35 bg-(--color-canvas-deep) px-3 py-2 text-left text-[12px] text-(--color-ink-bright) outline-none transition-colors focus:border-(--color-primary)/70 ${
+          disabled ? "cursor-not-allowed opacity-50" : "hover:border-(--color-primary)/70"
+        }`}
       >
         <span className="flex-1 truncate">{triggerContent}</span>
         <svg

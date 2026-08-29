@@ -96,6 +96,34 @@ const VIDEO_TYPES = new Set([
   "AUDIO",
 ]);
 
+/** When a workflowIO entry has no explicit ComfyUI type (e.g. ComfyUI was
+ *  offline when the IO map was saved), try to recover the control kind from
+ *  the pin name / label / default value so width/height/steps/seed/etc. still
+ *  render as numeric steppers and COMBO-like pins like aspect_ratio still
+ *  render as select/text instead of plain text.
+ *
+ *  2026-08-29: this fixes the "DimensionControl disappeared" regression —
+ *  without it, every untyped widget falls back to "text", so width/height
+ *  pairs are never grouped and the 比例+清晰度 picker never renders. */
+function inferControlFromName(e: WorkflowIOEntry): ControlKind | null {
+  if (typeof e.defaultValue === "number") {
+    return Number.isInteger(e.defaultValue) ? "int" : "float";
+  }
+  const search = `${e.name} ${e.label ?? ""}`.toLowerCase();
+  if (e.name.toLowerCase() === "aspect_ratio" || /\baspect_ratio\b/.test(search)) {
+    return Array.isArray(e.options) && e.options.length > 0 ? "select" : "text";
+  }
+  if (e.name.toLowerCase() === "megapixels" || /megapixel|百万像素/.test(search)) return "float";
+  if (
+    /\b(width|height|size|resolution|steps|seed|cfg|denoise|strength|scale|weight|batch|count|frames|length|duration|multiple|倍数)\b/.test(
+      search
+    )
+  ) {
+    return "int";
+  }
+  return null;
+}
+
 /** Decide the control to render for one exposed input. */
 export function controlForEntry(e: WorkflowIOEntry): ControlKind {
   const type = (e.type ?? "*").toUpperCase();
@@ -111,11 +139,19 @@ export function controlForEntry(e: WorkflowIOEntry): ControlKind {
     if (Array.isArray(e.options) && e.options.length > 0) return "select";
     return "text";
   }
-  if (type === "STRING" || type === "*") {
+  if (type === "STRING") {
     if (e.multiline) return "textarea";
     /* A long current value is a strong hint this is a prompt box even when
      * the server heuristic missed the name. */
     if (typeof e.defaultValue === "string" && e.defaultValue.length > 40) return "textarea";
+    return "text";
+  }
+  if (type === "*") {
+    if (e.multiline) return "textarea";
+    /* A long current value is a strong hint this is a prompt box. */
+    if (typeof e.defaultValue === "string" && e.defaultValue.length > 40) return "textarea";
+    const inferred = inferControlFromName(e);
+    if (inferred) return inferred;
     return "text";
   }
   /* Unknown custom-node type: if it already holds a scalar we can still
@@ -403,8 +439,13 @@ export type EnrichedWidget = WorkflowIOEntry & { ioKey: string; control: Control
 export interface DimensionGroup {
   kind: "dimension";
   groupId: string;
-  width: EnrichedWidget;
-  height: EnrichedWidget;
+  /** Conventional W/H pair — renders the "比例 + 清晰度" picker. */
+  width?: EnrichedWidget;
+  height?: EnrichedWidget;
+  /** ResolutionSelector-style pair — renders a "比例 + 像素" quick picker
+   *  that writes directly into the two exposed widgets. */
+  aspect?: EnrichedWidget;
+  megapixels?: EnrichedWidget;
 }
 
 export interface VideoGroup {
@@ -469,6 +510,44 @@ export const DIM_CLARITY_PRESETS: DimClarityPreset[] = [
   { kind: "megapixel", label: "2M", totalPixels: 2_000_000 },
   { kind: "megapixel", label: "4M", totalPixels: 4_000_000 },
 ];
+
+/* ── ResolutionSelector quick presets (2026-08-29) ──
+ *  Some custom nodes (e.g. ResolutionSelector) don't expose raw
+ *  width/height; they expose `aspect_ratio` (a COMBO whose value is a label
+ *  string like "16:9 (Widescreen)") plus `megapixels` (a FLOAT where 1 ≈
+ *  1M total pixels).  The dimension picker needs explicit value mappings
+ *  for that paradigm because nothing derives W/H from them.
+ *
+ *  `parseRatioFromLabel` below lets the picker still detect the ACTUAL
+ *  ratio from a workflow-specific label string, so a workflow whose node
+ *  spells the option differently ("16:9 宽屏", "16:9") still highlights
+ *  the right chip instead of silently falling back to "自定义". */
+export const ASPECT_RATIO_LABEL_PRESETS: { label: string; value: string; ratio: number }[] = [
+  { label: "1:1", value: "1:1 (Square)", ratio: 1 },
+  { label: "4:3", value: "4:3 (Standard)", ratio: 4 / 3 },
+  { label: "3:2", value: "3:2 (Photo)", ratio: 3 / 2 },
+  { label: "16:9", value: "16:9 (Widescreen)", ratio: 16 / 9 },
+  { label: "21:9", value: "21:9 (Ultrawide)", ratio: 21 / 9 },
+  { label: "9:16", value: "9:16 (Portrait)", ratio: 9 / 16 },
+  { label: "2:3", value: "2:3 (Portrait Photo)", ratio: 2 / 3 },
+];
+
+export const MEGAPIXEL_VALUE_PRESETS: { label: string; value: number }[] = [
+  { label: "1M", value: 1 },
+  { label: "2M", value: 2 },
+  { label: "4M", value: 4 },
+];
+
+/** Pull a numeric w/h ratio out of a free-form aspect label ("16:9 (Wide)").
+ *  Returns null when the string carries no recognisable ratio. */
+export function parseRatioFromLabel(value: string): number | null {
+  const match = /(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)/.exec(value);
+  if (!match) return null;
+  const w = Number(match[1]);
+  const h = Number(match[2]);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  return w / h;
+}
 
 /** Given a target ratio + clarity preset, return snapped {width, height}.
  *
@@ -619,6 +698,20 @@ function isDimHeight(e: EnrichedWidget): boolean {
   if (name === "高") return true;
   return false;
 }
+function isDimAspect(e: EnrichedWidget): boolean {
+  const name = (e.name || "").toLowerCase();
+  const label = (e.label ?? "").toLowerCase();
+  if (/\baspect_ratio\b/.test(name) || /\baspect\b|\bratio\b/.test(name)) return true;
+  if (label === "宽高比" || label.includes("比例") || label.includes("纵横")) return true;
+  return false;
+}
+function isDimMegapixels(e: EnrichedWidget): boolean {
+  const name = (e.name || "").toLowerCase();
+  const label = (e.label ?? "").toLowerCase();
+  if (name.includes("megapixel")) return true;
+  if (label.includes("百万像素") || label.includes("像素")) return true;
+  return false;
+}
 function isVideoLength(e: EnrichedWidget): boolean {
   const searchText = `${e.name} ${e.label ?? ""}`.toLowerCase();
   return /length|duration|时长|帧数|frames|seconds|秒/.test(searchText);
@@ -632,20 +725,51 @@ function isVideoQuality(e: EnrichedWidget): boolean {
   return /quality|clarity|清晰|画质/.test(searchText);
 }
 
-/** Detect a width+height dimension group from the widget list. */
+/** Detect a dimension-like widget group from the widget list.
+ *
+ *  Supports two paradigms:
+ *    • width + height            → renders the classic "比例 + 清晰度" picker
+ *    • aspect_ratio + megapixels → renders a "比例 + 像素" quick picker that
+ *      writes directly into the two exposed widgets (e.g. ResolutionSelector).
+ */
 export function inferDimensionGroup(widgets: EnrichedWidget[]): DimensionGroup | null {
-  const widthWidgets = widgets.filter((entry) => entry.control === "int" && isDimWidth(entry));
-  const heightWidgets = widgets.filter((entry) => entry.control === "int" && isDimHeight(entry));
-  if (widthWidgets.length === 0 || heightWidgets.length === 0) return null;
-  const width = widthWidgets[0]!;
-  const height = heightWidgets[0]!;
-  if (width.ioKey === height.ioKey) return null;
-  return {
-    kind: "dimension",
-    groupId: `dim:${width.ioKey}|${height.ioKey}`,
-    width,
-    height,
-  };
+  const widthWidgets = widgets.filter(
+    (entry) => (entry.control === "int" || entry.control === "float") && isDimWidth(entry)
+  );
+  const heightWidgets = widgets.filter(
+    (entry) => (entry.control === "int" || entry.control === "float") && isDimHeight(entry)
+  );
+  if (widthWidgets.length > 0 && heightWidgets.length > 0) {
+    const width = widthWidgets[0]!;
+    const height = heightWidgets[0]!;
+    if (width.ioKey === height.ioKey) return null;
+    return {
+      kind: "dimension",
+      groupId: `dim:${width.ioKey}|${height.ioKey}`,
+      width,
+      height,
+    };
+  }
+
+  /* ResolutionSelector-style: the user exposed "宽高比" + "百万像素" instead
+   *  of raw width/height.  We don't require a specific control kind because
+   *  these pins are often COMBO/FLOAT but may arrive as untyped "text" when
+   *  ComfyUI was offline during IO curation. */
+  const aspectWidgets = widgets.filter(isDimAspect);
+  const mpWidgets = widgets.filter(isDimMegapixels);
+  if (aspectWidgets.length > 0 && mpWidgets.length > 0) {
+    const aspect = aspectWidgets[0]!;
+    const megapixels = mpWidgets[0]!;
+    if (aspect.ioKey === megapixels.ioKey) return null;
+    return {
+      kind: "dimension",
+      groupId: `aspect-mp:${aspect.ioKey}|${megapixels.ioKey}`,
+      aspect,
+      megapixels,
+    };
+  }
+
+  return null;
 }
 
 /** Detect a length+aspect+quality video group from the widget list. */
@@ -674,7 +798,16 @@ export function inferGroups(widgets: EnrichedWidget[]): {
   groupedKeys: Set<string>;
 } {
   const dimension = inferDimensionGroup(widgets);
-  const dimKeys = dimension ? new Set([dimension.width.ioKey, dimension.height.ioKey]) : new Set<string>();
+  /* R-ardot109 (2026-08-29): a dimension group may be either the W/H pair or
+   *  the 宽高比 + 百万像素 pair, so collect whichever pins it actually holds
+   *  instead of assuming `width`/`height` are present. */
+  const dimKeys = new Set<string>();
+  if (dimension) {
+    if (dimension.width) dimKeys.add(dimension.width.ioKey);
+    if (dimension.height) dimKeys.add(dimension.height.ioKey);
+    if (dimension.aspect) dimKeys.add(dimension.aspect.ioKey);
+    if (dimension.megapixels) dimKeys.add(dimension.megapixels.ioKey);
+  }
   const rest = widgets.filter((widget) => !dimKeys.has(widget.ioKey));
   const video = inferVideoGroup(rest);
   const groupedKeys = new Set<string>([...dimKeys]);
