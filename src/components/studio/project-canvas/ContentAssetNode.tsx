@@ -228,7 +228,7 @@ export function ContentAssetBody({
       {/* ── 画廊覆盖层 ── */}
       {galleryOpen && taskImages && taskImages.length > 0 && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm"
           onClick={() => setGalleryOpen(false)}
           role="dialog"
           aria-modal

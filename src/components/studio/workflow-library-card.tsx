@@ -389,14 +389,14 @@ export const WorkflowCard = React.memo(function WorkflowCard(props: WorkflowCard
             return (
               <>
                 <div
-                  className="fixed inset-0 z-[90]"
+                  className="fixed inset-0 z-90"
                   onClick={() => {
                     setAssigningId(null);
                     setAssignRect(null);
                   }}
                 />
                 <div
-                  className="fixed z-[91] w-56 rounded-xl border border-white/10 bg-[#1b1b24] p-2 shadow-2xl"
+                  className="fixed z-91 w-56 rounded-xl border border-white/10 bg-[#1b1b24] p-2 shadow-2xl"
                   style={{ top: assignRect.top, left: assignRect.left }}
                 >
                   <div className="mb-1 px-1 text-[11px] font-medium text-gray-400">绑定模型标签</div>

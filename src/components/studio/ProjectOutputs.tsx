@@ -329,10 +329,10 @@ export function ProjectOutputs() {
       {selected && (
         <>
           <div
-            className="fixed inset-0 z-[80] bg-black/50"
+            className="fixed inset-0 z-80 bg-black/50"
             onClick={() => setSelectedId(null)}
           />
-          <aside className="fixed right-0 top-0 z-[90] flex h-full w-[380px] max-w-[90vw] flex-col overflow-hidden border-l border-white/10 bg-(--color-node) shadow-2xl">
+          <aside className="fixed right-0 top-0 z-90 flex h-full w-[380px] max-w-[90vw] flex-col overflow-hidden border-l border-white/10 bg-(--color-node) shadow-2xl">
             {/* head */}
             <div className="flex items-center justify-between border-b border-white/6 px-5 py-3">
               <div className="flex items-center gap-2">

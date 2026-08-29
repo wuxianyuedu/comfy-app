@@ -120,7 +120,7 @@ export function CanvasArea({
       {/* ── Context Menu ── */}
       {menu && (
         <div
-          className="fixed z-[9999] min-w-[200px] rounded-xl border border-white/10 bg-[#1a1a24] py-1.5 shadow-2xl shadow-black/50 backdrop-blur-md"
+          className="fixed z-9999 min-w-[200px] rounded-xl border border-white/10 bg-[#1a1a24] py-1.5 shadow-2xl shadow-black/50 backdrop-blur-md"
           style={{ left: menu.x, top: menu.y }}
         >
           {contextItems.map((item) =>

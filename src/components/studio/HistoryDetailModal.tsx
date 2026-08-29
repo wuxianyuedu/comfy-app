@@ -39,7 +39,7 @@ export function HistoryDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4 sm:p-6"
+      className="fixed inset-0 z-90 flex items-center justify-center bg-black/80 p-4 sm:p-6"
       onClick={onClose}
     >
       <div

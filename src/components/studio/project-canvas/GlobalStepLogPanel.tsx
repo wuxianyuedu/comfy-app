@@ -329,7 +329,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   return (
     <div
       data-testid="global-step-log-panel"
-      className="pointer-events-auto absolute bottom-0 left-3 right-3 z-[7] flex flex-col rounded-t-xl border border-b-0 border-white/8 bg-[#0c0c14]/97 shadow-2xl shadow-black/50 backdrop-blur-sm"
+      className="pointer-events-auto absolute bottom-0 left-3 right-3 z-7 flex flex-col rounded-t-xl border border-b-0 border-white/8 bg-[#0c0c14]/97 shadow-2xl shadow-black/50 backdrop-blur-sm"
       style={{ height: collapsed ? "auto" : height }}
     >
       {/* 拖动手柄: 顶部 8px, hover 紫色, 键盘可调 (↑/↓ = ±10, shift = ±60) */}

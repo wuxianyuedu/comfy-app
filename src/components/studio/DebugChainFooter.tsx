@@ -178,7 +178,7 @@ export function DebugChainFooter({ modules }: { modules: RenderChainModule[] }) 
       {openFile &&
         createPortal(
           <div
-            className="fixed inset-0 z-[100] flex items-center justify-center"
+            className="fixed inset-0 z-100 flex items-center justify-center"
             role="presentation"
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}

@@ -1,8 +1,10 @@
 /**
- * Tailwind v4 canonical class codemod(一次性迁移脚本,保留备用):
+ * Tailwind v4 canonical class codemod(幂等,保留备用):
  *   1. 透明度括号写法 /-[0.06] → /6(v4 任意百分比直接写,小数如 /1.5 同理)
  *   2. bg-gradient-to-X → bg-linear-to-X(v4 改名)
  *   3. -[var(--x)] → -(--x)(v4 CSS 变量简写)
+ *   4. 负值前缀 -top-[20%] → top-[-20%](负号移入括号)
+ *   5. z-[99] → z-99(纯整数任意值,z 用裸数字形式)
  * 用法:node scripts/tw4-canonical-codemod.cjs <file...>
  * 只改字符串字面量里的类名模式,不解析 AST——模式足够特异,误伤风险低。
  */
@@ -23,6 +25,14 @@ for (const file of process.argv.slice(2)) {
     .replace(/-\[var\(--([a-zA-Z0-9-]+)\)\]/g, (_, v) => {
       count++;
       return "-(--" + v + ")";
+    })
+    .replace(/(^|[\s"'`])(-[a-z][a-z0-9]*)-\[([0-9][^\]]*)\]/g, (m, pre, util, value) => {
+      count++;
+      return pre + util.slice(1) + "-[-" + value + "]";
+    })
+    .replace(/\bz-\[(\d+)\]/g, (_, n) => {
+      count++;
+      return "z-" + n;
     });
   if (count) {
     fs.writeFileSync(file, after);

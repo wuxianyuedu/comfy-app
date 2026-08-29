@@ -3,8 +3,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
-import { NumberField } from "@/components/studio/ui/NumberField";
-import { DynamicWorkflowForm, PortHandle } from "@/components/studio/shared/DynamicWorkflowForm";
+import { PortHandle } from "@/components/studio/shared/DynamicWorkflowForm";
 import { WorkflowNode, type WorkflowModesState, type WorkflowSourceFilter } from "./WorkflowNode";
 import { ContentAssetBody } from "./ContentAssetNode";
 import { ImageGenerationPanel } from "./ImageGenerationPanel";
@@ -17,18 +16,12 @@ import {
   type WorkflowIOMap,
 } from "@/components/studio/shared/workflow-io";
 import { ValidationErrorList } from "@/components/studio/shared/ValidationErrorList";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import {
   type CanvasNodeData,
   type CanvasNodeType,
   NODE_META,
-  IMAGE_SIZES,
-  VIDEO_SIZES,
-  MODEL_REGISTRY,
-  getModelPreset,
   STATUS_LABEL,
   type NodeKind,
-  type ModelParamSchema,
   defaultData,
 } from "./canvas-types";
 import { Icon } from "@/components/ui/Icon";
@@ -39,14 +32,12 @@ import {
   makeNodeId,
   startGenerate,
   pollTask,
-  runScript,
   isTaskSuccess,
 } from "./canvas-helpers";
 import { getActiveId } from "./canvas-store";
 import { setActiveTaskId } from "./activeTask";
 import { vanillaApi } from "~/trpc/vanilla";
-import { chatAgent } from "@/lib/agent/agentic";
-import { IMAGE_WORKFLOW_TYPES, VIDEO_WORKFLOW_TYPES, normalizeTaskType, parseModesJson } from "@/lib/workflow-types";
+import { parseModesJson } from "@/lib/workflow-types";
 import { DebugChainFooter } from "../DebugChainFooter";
 import { getProjectCanvasRenderChain } from "./canvas-render-chain";
 
@@ -86,12 +77,8 @@ function seedModeOverrides(
 }
 
 /* ── Small shared UI primitives ── */
-const inputCls =
-  "w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[12px] text-gray-200 outline-none transition-colors focus:border-violet-500/40";
 export const btnCls =
   "rounded-md bg-violet-500/90 px-2.5 py-1 text-[12px] font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-40";
-const ghostBtnCls =
-  "rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[12px] text-gray-300 transition-colors hover:bg-white/[0.06]";
 
 export function Field({
   label,
@@ -181,33 +168,6 @@ const PORT_STYLE = {
 } as const;
 type PortType = keyof typeof PORT_STYLE;
 
-function Seg<T extends string>({
-  value,
-  options,
-  onChange,
-}: {
-  value: T;
-  options: [T, string][];
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="flex rounded-md bg-white/[0.03] p-0.5 text-[11px]">
-      {options.map(([v, l]) => (
-        <button
-          key={v}
-          type="button"
-          onClick={() => onChange(v)}
-          className={`flex-1 rounded px-2 py-1 transition-colors ${
-            value === v ? "bg-violet-500/80 text-white" : "text-gray-400 hover:text-gray-200"
-          }`}
-        >
-          {l}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /* ── Result preview card ──
  * The card itself mimics a node: it has a top-left "type char + name" header
  * and a status badge below, so the user can read the output's identity and
@@ -238,29 +198,29 @@ export function ResultCard({
   /* ── Text result ── */
   if (kind === "script" || kind === "agent" || (!src && text)) {
     return (
-      <div className="nodrag nopan relative mt-2 overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.03]">
+      <div className="nodrag nopan relative mt-2 overflow-hidden rounded-xl border border-white/8 bg-white/3">
         {/* Header — top-left: type char + name, top-right: status badge */}
-        <div className="flex items-center justify-between border-b border-white/[0.06] bg-black/15 px-2.5 py-1.5">
+        <div className="flex items-center justify-between border-b border-white/6 bg-black/15 px-2.5 py-1.5">
           <NodeChip kind={kind} name={displayName} size="sm" />
           <StatusBadge status={status} />
         </div>
         {/* Edit toolbar */}
-        <div className="flex items-center justify-center gap-1 border-b border-white/[0.06] bg-black/20 px-2 py-1.5">
-          <button type="button" title="字号减小" className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-300 hover:bg-white/[0.06]">A-</button>
-          <button type="button" title="字号增大" className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-300 hover:bg-white/[0.06]">A+</button>
-          <span className="mx-1 h-3 w-px bg-white/[0.08]" />
-          <button type="button" title="编辑" className="rounded-md px-2 py-1 text-[11px] text-gray-300 hover:bg-white/[0.06]">
+        <div className="flex items-center justify-center gap-1 border-b border-white/6 bg-black/20 px-2 py-1.5">
+          <button type="button" title="字号减小" className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-300 hover:bg-white/6">A-</button>
+          <button type="button" title="字号增大" className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-300 hover:bg-white/6">A+</button>
+          <span className="mx-1 h-3 w-px bg-white/8" />
+          <button type="button" title="编辑" className="rounded-md px-2 py-1 text-[11px] text-gray-300 hover:bg-white/6">
             <Icon name="pen" size={11} className="mr-1 inline align-[-1px]" />编辑
           </button>
-          <button type="button" title="下载" onClick={() => text && navigator.clipboard?.writeText(text)} className="rounded-md px-2 py-1 text-[11px] text-gray-300 hover:bg-white/[0.06]">
+          <button type="button" title="下载" onClick={() => text && navigator.clipboard?.writeText(text)} className="rounded-md px-2 py-1 text-[11px] text-gray-300 hover:bg-white/6">
             <Icon name="download" size={11} className="mr-1 inline align-[-1px]" />下载
           </button>
         </div>
         <div className="max-h-56 overflow-auto p-3 text-[12px] leading-relaxed text-gray-200">
           {text || <span className="text-gray-500">尚无文本输出</span>}
         </div>
-        <div className="flex items-center justify-center border-t border-white/[0.06] py-2">
-          <button type="button" onClick={onReplace} className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 text-[11px] text-gray-200 ring-1 ring-white/[0.08] transition-colors hover:bg-black/60">
+        <div className="flex items-center justify-center border-t border-white/6 py-2">
+          <button type="button" onClick={onReplace} className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 text-[11px] text-gray-200 ring-1 ring-white/8 transition-colors hover:bg-black/60">
             <Icon name="refresh" size={11} />替换
           </button>
         </div>
@@ -270,13 +230,13 @@ export function ResultCard({
 
   /* ── Image / video result ── */
   return (
-    <div className="nodrag nopan relative mt-2 overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.03]">
+    <div className="nodrag nopan relative mt-2 overflow-hidden rounded-xl border border-white/8 bg-white/3">
       {/* Header — top-left: type char + name, top-right: status badge */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] bg-black/15 px-2.5 py-1.5">
+      <div className="flex items-center justify-between border-b border-white/6 bg-black/15 px-2.5 py-1.5">
         <NodeChip kind={kind} name={displayName} size="sm" />
         <StatusBadge status={status} />
       </div>
-      <div className="relative flex aspect-video items-center justify-center bg-gradient-to-br from-[#1a1530]/40 to-[#0f0b1c]/40">
+      <div className="relative flex aspect-video items-center justify-center bg-linear-to-br from-[#1a1530]/40 to-[#0f0b1c]/40">
         {!src ? (
           <Icon name={isVideo ? "film" : "image"} size={32} className="text-gray-600" />
         ) : isVideo ? (
@@ -286,8 +246,8 @@ export function ResultCard({
           <img src={src} alt="result" className="max-h-56 w-full object-contain" />
         )}
       </div>
-      <div className="flex items-center justify-center border-t border-white/[0.06] py-2">
-        <button type="button" onClick={onReplace} className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 text-[11px] text-gray-200 ring-1 ring-white/[0.08] transition-colors hover:bg-black/60">
+      <div className="flex items-center justify-center border-t border-white/6 py-2">
+        <button type="button" onClick={onReplace} className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 text-[11px] text-gray-200 ring-1 ring-white/8 transition-colors hover:bg-black/60">
           <Icon name="refresh" size={11} />替换
         </button>
       </div>
@@ -328,7 +288,7 @@ function StatusBadge({ status }: { status: CanvasNodeData["status"] }) {
       ? "bg-emerald-400/10 text-emerald-300 border-emerald-400/20"
       : status === "error"
       ? "bg-rose-400/10 text-rose-300 border-rose-400/20"
-      : "bg-white/[0.05] text-gray-300 border-white/[0.08]";
+      : "bg-white/5 text-gray-300 border-white/8";
   return (
     <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${style}`}>
       {STATUS_LABEL[status]}
@@ -391,9 +351,9 @@ function SelectedToolbar({
   onFocusNode: () => void;
 }) {
   const btn =
-    "nodrag nopan flex h-7 w-7 items-center justify-center rounded-full text-[13px] text-gray-300 transition-colors hover:bg-white/[0.08]";
+    "nodrag nopan flex h-7 w-7 items-center justify-center rounded-full text-[13px] text-gray-300 transition-colors hover:bg-white/8";
   return (
-    <div className="nodrag nopan absolute -top-12 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-white/[0.1] bg-[#16121f]/95 px-1 py-1 shadow-lg shadow-black/40 backdrop-blur">
+    <div className="nodrag nopan absolute -top-12 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-white/10 bg-[#16121f]/95 px-1 py-1 shadow-lg shadow-black/40 backdrop-blur">
       <button type="button" title="删除节点 (Delete)" onClick={onDelete} className={`${btn} text-rose-300 hover:bg-rose-500/15`}>
         ⌫
       </button>
@@ -412,37 +372,6 @@ function SelectedToolbar({
       <button type="button" title="更多" className={btn}>
         ⋮
       </button>
-    </div>
-  );
-}
-
-/* ── Model selector (per-node) ──
- * Renders a DarkSelect listing the available models for the node's kind.
- * Switching models updates the node's `model` field; the params below are
- * filtered by the selected model's param schema. */
-function ModelSelector({
-  kind,
-  value,
-  onChange,
-}: {
-  kind: NodeKind;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const reg = MODEL_REGISTRY[kind];
-  const list = reg.image.length ? reg.image : reg.video.length ? reg.video : reg.text;
-  if (list.length === 0) return null;
-  const current = list.find((item) => item.id === value) ?? list[0];
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="shrink-0 text-[11px] font-medium text-gray-300">模型</span>
-      <DarkSelect
-        value={value || current!.id}
-        onChange={onChange}
-        options={list.map((list) => list.id)}
-        labels={Object.fromEntries(list.map((list) =>[list.id, list.badge ? `${list.name} · ${list.badge}` : list.name]))}
-        className="nodrag nopan"
-      />
     </div>
   );
 }
@@ -486,7 +415,7 @@ function OutputRowPort({
       />
       <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
         <span
-          className="min-w-0 truncate text-[12px] font-semibold text-[var(--color-ink-bright)]"
+          className="min-w-0 truncate text-[12px] font-semibold text-(--color-ink-bright)"
           style={{ fontFamily: "var(--font-sans)" }}
           title={`IO 输出 · ${outLabel}${outType ? ` · ${outType}` : ""}`}
         >
@@ -761,8 +690,9 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
     if ((d.kind !== "workflow" && d.kind !== "image" && d.kind !== "video" && d.kind !== "picture") || !d.workflowId) return;
     let alive = true;
     const t = setTimeout(() => {
+      if (!d.workflowId) return;
       setWfIOLoading(true);
-      vanillaApi.workflow.detail
+      void vanillaApi.workflow.detail
         .query({ id: d.workflowId })
         .then((dd) => {
           const tpl = dd.template;
@@ -1004,7 +934,6 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
       return;
     }
 
-    const isVideo = d.kind === "video";
     if (!d.prompt.trim()) {
       patch({ error: "请输入提示词", status: "error" });
       return;
@@ -1084,121 +1013,6 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
         },
       });
     }
-  };
-
-  /* ── agent generation (uses spec) ── */
-  const runAgentGenerate = async () => {
-    const spec = d.agentSpec;
-    if (!spec) return;
-    patch({ status: "running" });
-    /* 2026-08-13 R83: hoist payload so catch can snapshot. */
-    let payload: Record<string, unknown> | null = null;
-    try {
-      const isVid = spec.kind === "video";
-      payload = {
-        prompt: spec.prompt,
-        negative: spec.negative || undefined,
-        size: spec.params?.size || (isVid ? "832x480" : "1024x1024"),
-        steps: spec.params?.steps || 25,
-        cfg: spec.params?.cfg || (isVid ? 6 : 7),
-      };
-      payload.workflow = isVid ? "txt2video" : "txt2img";
-      // 2026-08-13 项目级产出：归属到当前画布项目。
-      payload.projectId = getActiveId() ?? undefined;
-      const taskId = await startGenerate(payload);
-      setActiveTaskId(taskId);
-      const result = await pollTask(taskId);
-      if (isTaskSuccess(result)) {
-        patch({
-          status: "done",
-          resultPath: result.localPath,
-          resultMediaType: result.mediaType,
-        });
-        window.dispatchEvent(
-          new CustomEvent("canvas:produce", {
-            detail: {
-              id,
-              resultPath: result.localPath,
-              resultMediaType: result.mediaType,
-            },
-          })
-        );
-      } else {
-        patch({
-          status: "error",
-          error: result.error,
-          taskId: result.taskId,
-          errorStatus: result.status,
-          /* R-Next (2026-08-17): 结构化校验错误落节点数据 */
-          validationErrors: result.validationErrors,
-          errorContext: {
-            request: result.params ?? payload,
-            timestamp: new Date().toISOString(),
-          },
-        });
-      }
-    } catch (e: any) {
-      patch({
-        status: "error",
-        error: e?.message ?? String(e) ?? "未捕获异常",
-        errorContext: {
-          request: payload,
-          timestamp: new Date().toISOString(),
-        },
-      });
-    }
-  };
-
-  /* ── agent chat ── */
-  const [agentInput, setAgentInput] = useState("");
-  const sendAgent = async () => {
-    const text = agentInput.trim();
-    if (!text) return;
-    const history = [...d.agentHistory, { role: "user" as const, content: text }];
-    patch({ agentHistory: history, agentReply: "思考中…", status: "running" });
-    setAgentInput("");
-    const res = await chatAgent(history);
-    patch({
-      agentHistory: [...history, { role: "assistant" as const, content: res.reply }],
-      agentReply: res.reply,
-      agentReady: res.ready,
-      agentSpec: res.spec,
-      status: res.ready ? "done" : "idle",
-    });
-  };
-
-  /* ── script generation ── */
-  const genScript = async () => {
-    if (!d.theme.trim()) {
-      patch({ error: "请输入主题或梗概", status: "error" });
-      return;
-    }
-    patch({ status: "running" });
-    try {
-      const text = await runScript(d.theme);
-      patch({ scriptText: text, status: "done" });
-    } catch (e: any) {
-      patch({ status: "error", error: e?.message ?? "生成失败" });
-    }
-  };
-
-  /* script → spawn a video node from the script */
-  const addVideoFromScript = () => {
-    if (!d.scriptText) return;
-    const nid = makeNodeId();
-    const cur = getNode(id);
-    const base = cur?.position ?? { x: 0, y: 0 };
-    const node: CanvasNodeType = {
-      id: nid,
-      type: "canvasNode",
-      position: { x: base.x + 340, y: base.y },
-      data: {
-        ...defaultData("video"),
-        prompt: d.scriptText.replace(/\n+/g, " ").slice(0, 400),
-        mode: "t2v",
-      },
-    };
-    setNodes((nds) => [...nds, node]);
   };
 
   /* ── render body by kind ── */
@@ -1323,7 +1137,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
           />
         </div>
         {selected && (
-          <div className="border-t border-white/[0.06] pt-2">
+          <div className="border-t border-white/6 pt-2">
             <ImageGenerationPanel
               kind="picture"
               d={d}
@@ -1356,7 +1170,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
        *  R-ardot93-B (stepper capped at max-w-[180px]) the layout is
        *  now:  [label flex-1] ……… [type chip] / [stepper ≤180]   on
        *  each workflow widget row. */
-      className="relative w-[380px] rounded-[14px] border border-[var(--color-border-strong)] bg-[var(--color-card)] transition-[outline,box-shadow] duration-150"
+      className="relative w-[380px] rounded-[14px] border border-(--color-border-strong) bg-(--color-card) transition-[outline,box-shadow] duration-150"
       style={
         selected
           ? {
@@ -1439,7 +1253,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
              * ⌫ 按钮统一承担。*/
             const isAsset = d.kind === "text" || d.kind === "picture" || d.kind === "movie";
             return (
-              <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-3.5 py-2.5">
+              <div className="flex items-center justify-between gap-2 border-b border-white/6 px-3.5 py-2.5">
                 <NodeChip kind={d.kind} name={meta.label} />
                 {!isAsset && (
                   <div className="flex shrink-0 items-center gap-1.5">
@@ -1462,7 +1276,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
         </>
       )}
       {d.status === "error" && (d.error || (d.validationErrors?.length ?? 0) > 0) && (
-        <div className="nodrag nopan border-t border-rose-400/20 bg-rose-500/[0.06] px-3 py-2 text-[10.5px]">
+        <div className="nodrag nopan border-t border-rose-400/20 bg-rose-500/6 px-3 py-2 text-[10.5px]">
           <div className="flex items-start gap-1.5">
             <Icon
               name="alert"
@@ -1671,7 +1485,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
                   <div className="nodrag nopan mt-1.5 space-y-1.5">
                     {/* 0) 结构化校验错误（R-Next 2026-08-17）：精确指出哪个节点哪个字段 */}
                     {(d.validationErrors?.length ?? 0) > 0 && (
-                      <div className="rounded border border-rose-400/25 bg-rose-500/[0.10] px-2 py-1.5">
+                      <div className="rounded border border-rose-400/25 bg-rose-500/10 px-2 py-1.5">
                         <div className="mb-1 text-[10px] font-semibold text-rose-200">
                           节点配置校验（{(d.validationErrors ?? []).length} 项）
                         </div>
@@ -1709,7 +1523,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
 
                     {/* 2) 自动建议 — 正则推断的纠错提示 */}
                     {errorSuggestion && (
-                      <div className="rounded border border-amber-400/25 bg-amber-500/[0.08] px-2 py-1 text-[10px] leading-relaxed text-amber-100">
+                      <div className="rounded border border-amber-400/25 bg-amber-500/8 px-2 py-1 text-[10px] leading-relaxed text-amber-100">
                         <span className="mr-1 font-semibold text-amber-300">
                           建议
                         </span>
@@ -1775,7 +1589,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
       {/* R-ardot88-b (2026-08-16): 主输出端口 + 类型标签 — 改为与 WorkflowNode.outputs
        *  row 同款结构（label + typeChip + PortHandle）。image / video / script 通用。 */}
       {(d.kind === "image" || d.kind === "video" || d.kind === "script") && (
-        <div className="border-t border-white/[0.06]">
+        <div className="border-t border-white/6">
           <OutputRowPort kind={d.kind} wfIO={wfIO ?? null} />
         </div>
       )}

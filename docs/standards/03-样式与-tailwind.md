@@ -14,7 +14,7 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 "hover:bg-white/6"
 ```
 
-同类规范写法迁移还有两组（历史存量已由 `scripts/tw4-canonical-codemod.cjs` 清零，新代码禁止旧写法）：
+同类规范写法迁移还有四组（历史存量已由 `scripts/tw4-canonical-codemod.cjs` 清零，新代码禁止旧写法）：
 
 ```tsx
 // 渐变更名：
@@ -24,6 +24,14 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 // CSS 变量任意值有专用简写：
 "w-(--panel-right-width)"       // ✅ v4
 "w-[var(--panel-right-width)]"  // ❌ v3 写法
+
+// 负值：负号移入括号内（前缀负号是 v3 形式）：
+"top-[-20%]"                    // ✅ v4
+"-top-[20%]"                    // ❌ v3 写法
+
+// 纯整数任意值用裸数字（z / order / duration 等数值工具类同理）：
+"z-99"                          // ✅ v4
+"z-[99]"                        // ❌ 多余括号
 ```
 
 **规则**：透明度一律 `/百分比`（小数合法，如 `/1.5`——tailwindcss 内部正是以 `parseFloat(alpha)*100` 做规范化的）。

@@ -118,7 +118,7 @@ export function ModalDialog({
       aria-modal="true"
       aria-labelledby={titleId}
       onClick={onClose}
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-200 flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm"
     >
       <div
         onClick={stop}

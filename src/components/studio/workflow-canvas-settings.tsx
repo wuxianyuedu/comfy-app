@@ -378,7 +378,7 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
       onClick={onClick}
       title="画布设置 · 调整格子 / 坐标尺 / 缩略图 等"
       aria-label="画布设置"
-      className="pointer-events-auto absolute right-3 top-12 z-[6] select-none rounded-md border border-white/10 bg-(--color-panel)/90 px-2.5 py-1 text-[11px] font-medium tracking-tight text-gray-300 shadow-lg backdrop-blur-sm transition-colors hover:border-white/25 hover:text-gray-100"
+      className="pointer-events-auto absolute right-3 top-12 z-6 select-none rounded-md border border-white/10 bg-(--color-panel)/90 px-2.5 py-1 text-[11px] font-medium tracking-tight text-gray-300 shadow-lg backdrop-blur-sm transition-colors hover:border-white/25 hover:text-gray-100"
     >
       <span aria-hidden className="mr-1 align-baseline text-[12px]">⚙</span>
       设置

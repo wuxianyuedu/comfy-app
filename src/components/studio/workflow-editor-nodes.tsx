@@ -14,7 +14,7 @@ import { NODE_TITLE_H, lightenHex, hexToRgba, mixHex } from "./workflow-utils";
 
 export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({ data }: { data: WorkflowGroupData }) {
   /* 2026-08-07: title is now a "tab" inside the top-left corner of the
-   *  frame (was floating ABOVE the box at `-top-[16px]` — looked detached
+   *  frame (was floating ABOVE the box at `top-[-16px]` — looked detached
    *  and competed with adjacent note headers).  The tab's bg picks up
    *  the group colour at 0.12 alpha so it visually anchors to its
    *  parent frame; the body fill drops to 0.04 so internal nodes
@@ -97,7 +97,7 @@ export const PORT_ROW_GAP = 4;
  *  column.  Keeps the label text from kissing the purple border. */
 export const GROUP_PAD_X = 10;
 /** Vertical padding at the top of a wfGroup — leaves room for the -top-16
- *  title chip (rendered at `-top-[16px]` above the box, taking ~18 px). */
+ *  title chip (rendered at `top-[-16px]` above the box, taking ~18 px). */
 export const GROUP_TITLE_BAR = 24;
 /** Vertical padding at the bottom of a wfGroup. */
 export const GROUP_PAD_Y_BOTTOM = 10;
@@ -243,7 +243,7 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: {
   const html = useMemo(() => renderMarkdown(data.text), [data.text]);
   return (
     <div
-      className="relative z-[5] flex h-full w-full cursor-move flex-col overflow-hidden rounded-md"
+      className="relative z-5 flex h-full w-full cursor-move flex-col overflow-hidden rounded-md"
       style={{
         background: bg,
         border: `2.5px solid ${border}`,

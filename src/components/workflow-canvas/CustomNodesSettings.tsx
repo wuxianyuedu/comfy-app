@@ -82,16 +82,16 @@ type RowState =
   | { kind: "missing" }
   | { kind: "empty" };
 
-function pathKey(p: string): string {
-  if (!p) return "";
+function pathKey(path: string): string {
+  if (!path) return "";
   // Match server-side normalisation in route.ts: absolute → lowercased →
   // backslashes to forward slashes. This way the discover output (which carries
   // user-typed casing + native separators) joins the manifest's byPath keys
   // without Windows complaining about case.
-  let s = p.replace(/\\/g, "/");
+  let normalized = path.replace(/\\/g, "/");
   // drop trailing slash for directory roots
-  if (s.length > 1 && s.endsWith("/")) s = s.replace(/\/+$/, "");
-  return s.toLowerCase();
+  if (normalized.length > 1 && normalized.endsWith("/")) normalized = normalized.replace(/\/+$/, "");
+  return normalized.toLowerCase();
 }
 
 function deriveRowState(
@@ -186,8 +186,8 @@ const STATUS_STYLE: Record<string, { bg: string; fg: string; label: string }> = 
   error: { bg: "rgba(239,68,68,0.18)", fg: "#EF4444", label: "解析出错" },
   empty: { bg: "rgba(107,114,128,0.18)", fg: "#9CA3AF", label: "无 NODE_CLASS_MAPPINGS" },
 };function nowTimeStr() {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const date = new Date();
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function splitPaths(text: string): string[] {
@@ -197,9 +197,9 @@ function splitPaths(text: string): string[] {
     .filter(Boolean);
 }
 
-function eqArr(a: string[], b: string[]) {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+function eqArr(first: string[], second: string[]) {
+  if (first.length !== second.length) return false;
+  for (let i = 0; i < first.length; i++) if (first[i] !== second[i]) return false;
   return true;
 }
 
@@ -319,8 +319,8 @@ function NodePreviewCard({
                 ))}
               </div>
               <div className="flex flex-col items-end gap-[3px]">
-                {outputs.map((o, idx) => (
-                  <PortRow key={`to-${idx}`} side="out" color={color} type={o.type} name={o.name} />
+                {outputs.map((output, idx) => (
+                  <PortRow key={`to-${idx}`} side="out" color={color} type={output.type} name={output.name} />
                 ))}
               </div>
             </div>
@@ -332,7 +332,7 @@ function NodePreviewCard({
               className="flex flex-col gap-[2px] border-t pt-1.5"
               style={{ borderColor: "rgba(255,255,255,0.07)" }}
             >
-              {widgets.slice(0, 32).map((w, idx) => (
+              {widgets.slice(0, 32).map((widget, idx) => (
                 <div key={`w-${idx}`} className="flex items-center gap-1.5 text-[10.5px]">
                   <span
                     className="inline-block shrink-0 rounded-full"
@@ -340,11 +340,11 @@ function NodePreviewCard({
                   />
                   <span
                     className="min-w-0 flex-1 truncate text-[#CFC9E5]"
-                    title={w.name}
+                    title={widget.name}
                   >
-                    {w.name}
+                    {widget.name}
                   </span>
-                  <WidgetValueChip widget={w.widget ?? null} value={w.default} />
+                  <WidgetValueChip widget={widget.widget ?? null} value={widget.default} />
                 </div>
               ))}
               {widgets.length > 32 && (
@@ -738,26 +738,26 @@ export function CustomNodesSettings() {
 
   useEffect(() => {
     if (!open) return;
-    const t = setTimeout(() => void fetchSettings(), 0);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => void fetchSettings(), 0);
+    return () => clearTimeout(timer);
   }, [open, fetchSettings]);
 
   // Fetch the raw manifest on open + after every parse (the `report` state
   // updates whenever a parse-finished event lands). Cheap because the file
   // is already on disk; the response is small JSON.
   const fetchManifest = useCallback(async () => {
-    const m = await getCustomNodesManifest();
-    if (m) setManifestByNode(m.nodes || {});
+    const manifest = await getCustomNodesManifest();
+    if (manifest) setManifestByNode(manifest.nodes || {});
   }, []);
   useEffect(() => {
     if (!open) return;
-    const t = setTimeout(() => void fetchManifest(), 0);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => void fetchManifest(), 0);
+    return () => clearTimeout(timer);
   }, [open, fetchManifest]);
   useEffect(() => {
     if (!report) return;
-    const t = setTimeout(() => void fetchManifest(), 0);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => void fetchManifest(), 0);
+    return () => clearTimeout(timer);
   }, [report, fetchManifest]);
 
   // Debounced auto-save: edits → 600ms idle → PUT to .env
@@ -774,9 +774,9 @@ export function CustomNodesSettings() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "saveSettings", customNodesPaths: live }),
           });
-          const d = await res.json();
-          if (!res.ok || !d.ok) throw new Error(d.error || "保存失败");
-          setSavedPaths(d.paths);
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || "保存失败");
+          setSavedPaths(data.paths);
           setSavedAt(nowTimeStr());
           await reloadFromServer(); // re-discover subpackages under new paths
         } catch (e) {
@@ -811,9 +811,9 @@ export function CustomNodesSettings() {
               localWorkflowPaths: live,
             }),
           });
-          const d = await res.json();
-          if (!res.ok || !d.ok) throw new Error(d.error || "保存失败");
-          setSavedLocalPaths(d.localWorkflowPaths ?? live);
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || "保存失败");
+          setSavedLocalPaths(data.localWorkflowPaths ?? live);
           setLocalSavedAt(nowTimeStr());
           // 2026-08-13: Notify any mounted list (e.g. WorkflowLibrary) to
           // re-fetch /api/workflows so the newly-configured root's
@@ -822,7 +822,7 @@ export function CustomNodesSettings() {
           // nudge. Event name is namespaced to avoid collisions.
           if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("comfyapp:local-workflows-path-changed", {
-              detail: { paths: d.localWorkflowPaths ?? live },
+              detail: { paths: data.localWorkflowPaths ?? live },
             }));
           }
           // No `reloadFromServer` here — the workflows list endpoint
@@ -890,9 +890,9 @@ export function CustomNodesSettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "parse" }),
       });
-      await readNdjson(res, async (r, ok) => {
-        if (ok && r) {
-          setReport(r as ParseReport);
+      await readNdjson(res, async (record, ok) => {
+        if (ok && record) {
+          setReport(record as ParseReport);
           await refreshCustomNodes();
         }
         await reloadFromServer();
@@ -914,9 +914,9 @@ export function CustomNodesSettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "parse", packages: [pkgPath] }),
       });
-      await readNdjson(res, async (r, ok) => {
-        if (ok && r) {
-          setReport(r as ParseReport);
+      await readNdjson(res, async (record, ok) => {
+        if (ok && record) {
+          setReport(record as ParseReport);
           await refreshCustomNodes();
         }
         await reloadFromServer();
@@ -951,9 +951,9 @@ export function CustomNodesSettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "parse", packages: targets }),
       });
-      await readNdjson(res, async (r, ok) => {
-        if (ok && r) {
-          setReport(r as ParseReport);
+      await readNdjson(res, async (record, ok) => {
+        if (ok && record) {
+          setReport(record as ParseReport);
           await refreshCustomNodes();
         }
         await reloadFromServer();
@@ -1060,7 +1060,7 @@ export function CustomNodesSettings() {
                 <span aria-hidden>📁</span>
                 <span>本地工作流</span>
                 {savedLocalPaths.length > 0 && (
-                  <span className="rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-muted">
+                  <span className="rounded-full bg-white/6 px-2 py-0.5 font-mono text-[10px] text-muted">
                     已配 {savedLocalPaths.length}
                   </span>
                 )}
@@ -1085,12 +1085,12 @@ export function CustomNodesSettings() {
                 <span aria-hidden>{"\u{1F9E9}"}</span>
                 <span>自定义节点</span>
                 {totalAcrossParents.total > 0 && (
-                  <span className="rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-muted">
+                  <span className="rounded-full bg-white/6 px-2 py-0.5 font-mono text-[10px] text-muted">
                     {totalAcrossParents.loaded}/{totalAcrossParents.total}
                   </span>
                 )}
                 {!totalAcrossParents.total && savedPaths.length > 0 && (
-                  <span className="rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-muted">
+                  <span className="rounded-full bg-white/6 px-2 py-0.5 font-mono text-[10px] text-muted">
                     扫描中…
                   </span>
                 )}
@@ -1247,7 +1247,7 @@ export function CustomNodesSettings() {
                   {/* Directory overview chips — show totals + outdated count when any subpackage is detected. */}
                   {totalAcrossParents.total > 0 && (
                     <>
-                      <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-ink">
+                      <span className="rounded-full bg-white/6 px-2 py-0.5 text-ink">
                         总览 {totalAcrossParents.total} 个子包
                       </span>
                       {totalAcrossParents.loaded > 0 && (
@@ -1638,13 +1638,13 @@ export function CustomNodesSettings() {
                   ref={consoleRef}
                   className="h-48 overflow-y-auto rounded-lg border border-border bg-black/70 p-3 font-mono text-[11px] leading-relaxed"
                 >
-                  {logs.map((l, idx) => (
+                  {logs.map((log, idx) => (
                     <div
                       key={`log-${idx}`}
                       data-log-row
-                      className={l.level === "error" ? "text-red-400" : "text-emerald-300/90"}
+                      className={log.level === "error" ? "text-red-400" : "text-emerald-300/90"}
                     >
-                      {l.msg}
+                      {log.msg}
                     </div>
                   ))}
                   {parsing && <div className="text-gray-500">…</div>}
@@ -1696,13 +1696,13 @@ export function CustomNodesSettings() {
                             {pkg.nodeTypes.slice(0, 24).map((ct) => (
                               <span
                                 key={ct}
-                                className="rounded-md bg-white/[0.04] px-1.5 py-0.5 font-mono text-[11px] text-muted"
+                                className="rounded-md bg-white/4 px-1.5 py-0.5 font-mono text-[11px] text-muted"
                               >
                                 {ct}
                               </span>
                             ))}
                             {pkg.nodeTypes.length > 24 && (
-                              <span className="rounded-md bg-white/[0.04] px-1.5 py-0.5 font-mono text-[11px] text-muted">
+                              <span className="rounded-md bg-white/4 px-1.5 py-0.5 font-mono text-[11px] text-muted">
                                 +{pkg.nodeTypes.length - 24}
                               </span>
                             )}

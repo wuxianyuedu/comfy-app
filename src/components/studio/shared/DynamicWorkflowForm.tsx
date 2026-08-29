@@ -1,9 +1,7 @@
  
 "use client";
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { Handle, Position } from "@xyflow/react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { NumberField } from "@/components/studio/ui/NumberField";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { uploadImageFile } from "@/components/studio/project-canvas/canvas-helpers";
@@ -14,7 +12,6 @@ import {
   isInputFilled,
   inferGroups,
   type WorkflowIOMap,
-  type WorkflowIOEntry,
   type ControlKind,
 } from "./workflow-io";
 import { GroupedControls } from "./GroupedControls";
@@ -47,9 +44,7 @@ export { PortHandle } from "./workflow-form-controls";
  *  - resize-none — 稿是固定 52h，不该出现 webkit resize 把手
  *  - placeholder #5A5A6B */
 const inputCls =
-  "nodrag nopan w-full resize-none rounded-md bg-[var(--color-canvas-deep)] p-2.5 text-[11px] leading-relaxed text-[var(--color-ink-soft)] outline-none transition-colors placeholder:text-[var(--color-ink-placeholder)] focus:ring-1 focus:ring-[var(--color-primary)]/40";
-const ghostBtnCls =
-  "nodrag nopan w-full truncate rounded-md bg-[var(--color-canvas-deep)] px-2.5 py-2 text-left text-[11px] text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-canvas-deep)]/80 disabled:opacity-40";
+  "nodrag nopan w-full resize-none rounded-md bg-(--color-canvas-deep) p-2.5 text-[11px] leading-relaxed text-(--color-ink-soft) outline-none transition-colors placeholder:text-(--color-ink-placeholder) focus:ring-1 focus:ring-(--color-primary)/40";
 
 /** Colour accent per control kind — mirrors the canvas port palette. */
 const ACCENT: Record<ControlKind, string> = {
@@ -62,11 +57,6 @@ const ACCENT: Record<ControlKind, string> = {
   float: "#FFD571",
   link: "#5BC6FF",
 };
-
-/** v2 TypeChip — matches Ardot 3:44 TypeChip-STRING (50×16, r=3, bg #26262E, text #9A9AAD).
- *  统一用 port chip 配色，control 类型不再决定 chip 颜色（与稿一致）。 */
-const TYPE_BADGE =
-  "inline-flex items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold";
 
 /** Inline-editable label row.  When `onChange` is set, the label text is
  *  click-to-edit: a single click swaps the <span> for an <input> pre-filled
@@ -133,11 +123,11 @@ export interface DynamicWorkflowFormProps {
  *  (2026-08-09).  Module-level so it isn't re-created on every render
  *  (react-hooks/static-components). */
 const SectionHeader = ({ label, count, accent }: { label: string; count: number; accent: string }) => (
-  <div className="mt-1 flex items-center gap-2 border-t border-white/[0.1] pt-2.5">
+  <div className="mt-1 flex items-center gap-2 border-t border-white/10 pt-2.5">
     <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} />
-    <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">{label}</span>
-    <span className="rounded-full bg-white/[0.1] px-1.5 py-px font-mono text-[10px] text-gray-400">{count}</span>
-    <div className="flex-1 border-t border-dashed border-white/[0.08]" />
+    <span className="text-[10px] font-semibold uppercase tracking-wider text-(--color-ink-muted)">{label}</span>
+    <span className="rounded-full bg-white/10 px-1.5 py-px font-mono text-[10px] text-gray-400">{count}</span>
+    <div className="flex-1 border-t border-dashed border-white/8" />
   </div>
 );
 
@@ -184,23 +174,23 @@ export function DynamicWorkflowForm({
   const dragHandlers = useMemo(() => {
     if (!onReorder) return null;
     return {
-      onDragStart: (ioKey: string) => (e: React.DragEvent<HTMLDivElement>) => {
+      onDragStart: (ioKey: string) => (event: React.DragEvent<HTMLDivElement>) => {
         setDraggingKey(ioKey);
         setDragOverKey(ioKey);
         /* Required by HTML5 drag — without dataTransfer.setData, Firefox
          *  refuses to actually start the drag.  The payload itself is
          *  ignored; the caller identifies rows by ioKey via state. */
         try {
-          e.dataTransfer.setData("text/plain", ioKey);
-          e.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", ioKey);
+          event.dataTransfer.effectAllowed = "move";
         } catch {
           /* Some browsers throw on setData outside user gestures; safe to ignore. */
         }
       },
-      onDragOver: (ioKey: string) => (e: React.DragEvent<HTMLDivElement>) => {
+      onDragOver: (ioKey: string) => (event: React.DragEvent<HTMLDivElement>) => {
         if (!draggingKey || draggingKey === ioKey) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
         if (dragOverKey !== ioKey) setDragOverKey(ioKey);
       },
       onDragLeave: (ioKey: string) => (_e: React.DragEvent<HTMLDivElement>) => {
@@ -211,8 +201,8 @@ export function DynamicWorkflowForm({
          *  on the next dragover/drop/dragend. */
         if (dragOverKey === ioKey && draggingKey) return;
       },
-      onDrop: (ioKey: string) => (e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
+      onDrop: (ioKey: string) => (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
         const fromKey = draggingKey;
         setDraggingKey(null);
         setDragOverKey(null);
@@ -240,8 +230,8 @@ export function DynamicWorkflowForm({
       // （width/height 等）在此剔除，改由 GroupedControls 统一渲染。
       ...widgetInputs.filter((widgetInput) =>
 {
-        const t = (widgetInput.type ?? "").toUpperCase();
-        return (t === "INT" || t === "FLOAT" || t === "NUMBER") && !groupedKeys.has(widgetInput.ioKey);
+        const typeUpper = (widgetInput.type ?? "").toUpperCase();
+        return (typeUpper === "INT" || typeUpper === "FLOAT" || typeUpper === "NUMBER") && !groupedKeys.has(widgetInput.ioKey);
       }),
     ],
     [wireInputs, widgetInputs, groupedKeys]
@@ -252,8 +242,8 @@ export function DynamicWorkflowForm({
     () =>
       widgetInputs.filter((widgetInput) =>
 {
-        const t = (widgetInput.type ?? "").toUpperCase();
-        return t !== "INT" && t !== "FLOAT" && t !== "NUMBER" && !groupedKeys.has(widgetInput.ioKey);
+        const typeUpper = (widgetInput.type ?? "").toUpperCase();
+        return typeUpper !== "INT" && typeUpper !== "FLOAT" && typeUpper !== "NUMBER" && !groupedKeys.has(widgetInput.ioKey);
       }),
     [widgetInputs, groupedKeys]
   );
@@ -272,13 +262,13 @@ export function DynamicWorkflowForm({
   }, []);
 
   const onFile = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const f = e.target.files?.[0];
-      e.target.value = "";
-      if (!f || !uploadTarget) return;
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file || !uploadTarget) return;
       setUploading(true);
       try {
-        const name = await uploadImageFile(f);
+        const name = await uploadImageFile(file);
         set(uploadTarget, name);
       } catch (err) {
         console.error("[DynamicWorkflowForm] upload failed", err);
@@ -295,8 +285,8 @@ export function DynamicWorkflowForm({
       <div className="space-y-2">
         {[0, 1, 2].map((index) => (
           <div key={`skeleton-${index}`} className="space-y-1.5">
-            <div className="h-2.5 w-16 animate-pulse rounded bg-white/[0.06]" />
-            <div className="h-8 w-full animate-pulse rounded-lg bg-white/[0.04]" />
+            <div className="h-2.5 w-16 animate-pulse rounded bg-white/6" />
+            <div className="h-8 w-full animate-pulse rounded-lg bg-white/4" />
           </div>
         ))}
       </div>
@@ -306,7 +296,7 @@ export function DynamicWorkflowForm({
   /* No curated IO at all → tell the user exactly how to fix it. */
   if (inputs.length === 0 && outputs.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-white/[0.12] bg-white/[0.02] px-3 py-3 text-[11px] leading-relaxed text-gray-400">
+      <div className="rounded-lg border border-dashed border-white/12 bg-white/2 px-3 py-3 text-[11px] leading-relaxed text-gray-400">
         {emptyHint ?? (
           <>
             该工作流尚未标记对外参数。
@@ -331,16 +321,16 @@ export function DynamicWorkflowForm({
    *  Handle 挂在 subrow 内（圆心 = subrow 中心 = 14，相对 row y），与
    *  Ardot 稿 H-pos-in y=85 / 圆心 91 严格一致。 */
   const renderInputRow = (
-    e: (typeof widgetInputs)[number],
+    widgetInput: (typeof widgetInputs)[number],
     opts: { withHandle?: boolean } = {}
   ) => {
     const withHandle = !!opts.withHandle;
-    const accent = ACCENT[e.control];
+    const accent = ACCENT[widgetInput.control];
     /* 2026-08-15: pass `inputs + outputs` so two pins that happen to
      *  resolve to the same label (e.g. both rendered as `image`)
      *  fall back to the raw `name` and stay visually distinguishable. */
-    const label = ioLabel(e, [...inputs, ...outputs]);
-    const v = values[e.ioKey];
+    const label = ioLabel(widgetInput, [...inputs, ...outputs]);
+    const v = values[widgetInput.ioKey];
 
     /* Shared sub-row pieces — used in both compact (inline) and wide
      * (label-on-top) layouts so we don't drift between the two. */
@@ -361,14 +351,14 @@ export function DynamicWorkflowForm({
          *  through API-only enrichment (`"fixed"`/`"randomize"`/…),
          *  the chip showed that string instead of `INT`.  Unify the
          *  two paths on `normalizeTypeChip()`. */}
-        {normalizeTypeChip(e.type, e.control === "float" ? "FLOAT" : "INT")}
+        {normalizeTypeChip(widgetInput.type, widgetInput.control === "float" ? "FLOAT" : "INT")}
       </span>
     );
     const labelText = (
       <EditableLabel
         label={label}
-        title={`${e.nodeTitle ?? ""} · ${e.name}`}
-        onChange={onLabelChange ? (next: string) => onLabelChange(e.ioKey, next) : undefined}
+        title={`${widgetInput.nodeTitle ?? ""} · ${widgetInput.name}`}
+        onChange={onLabelChange ? (next: string) => onLabelChange(widgetInput.ioKey, next) : undefined}
       />
     );
     /* ACCENT 圆点 + 必填/可选 toggle 仅 IO-edit 模式用 (CreatePanel /
@@ -380,22 +370,22 @@ export function DynamicWorkflowForm({
       <button
         type="button"
         title={
-          e.required
+          widgetInput.required
             ? "已标记为必填，点击切换为可选"
             : "点击将其标记为必填"
         }
         onClick={(ev) => {
           ev.stopPropagation();
-          onRequiredChange(e.ioKey, !e.required);
+          onRequiredChange(widgetInput.ioKey, !widgetInput.required);
         }}
         onMouseDown={(ev) => ev.stopPropagation()}
         className={`nodrag nopan shrink-0 rounded px-1.5 py-px text-[10px] font-medium transition-colors ${
-          e.required
+          widgetInput.required
             ? "border border-red-400/40 bg-red-500/15 text-red-300 hover:bg-red-500/25"
-            : "border border-white/[0.08] bg-white/[0.02] text-gray-500 hover:bg-white/[0.06] hover:text-gray-300"
+            : "border border-white/8 bg-white/2 text-gray-500 hover:bg-white/6 hover:text-gray-300"
         }`}
       >
-        {e.required ? "必填" : "可选"}
+        {widgetInput.required ? "必填" : "可选"}
       </button>
     ) : null;
 
@@ -424,12 +414,12 @@ const labelRow = (
   </div>
 );
 
-    if (e.control === "link") {
+    if (widgetInput.control === "link") {
       // link-only 类型无可用控件（仍挂 Handle，方便用户连 link 类型数据）
       if (compact) {
         return (
-          <div key={e.ioKey} className="relative">
-            {withHandle && <PortHandle id={e.ioKey} dir="in" type={e.type} style={{ top: 16, transform: "translateY(-50%)" }} />}
+          <div key={widgetInput.ioKey} className="relative">
+            {withHandle && <PortHandle id={widgetInput.ioKey} dir="in" type={widgetInput.type} style={{ top: 16, transform: "translateY(-50%)" }} />}
             <div className="px-[14px] pt-1.5">{labelRow}</div>
             <div className="px-[14px] pt-1 pb-1.5">
               <span className="text-[11px] text-gray-500">只接受连线</span>
@@ -438,16 +428,16 @@ const labelRow = (
         );
       }
       return (
-        <div key={e.ioKey} className="relative">
-          {withHandle && <PortHandle id={e.ioKey} dir="in" type={e.type} />}
-          <div className="flex items-center gap-2 rounded-md bg-[var(--color-canvas-deep)] px-2.5 py-1.5 pl-[14px] pr-[14px]">
+        <div key={widgetInput.ioKey} className="relative">
+          {withHandle && <PortHandle id={widgetInput.ioKey} dir="in" type={widgetInput.type} />}
+          <div className="flex items-center gap-2 rounded-md bg-(--color-canvas-deep) px-2.5 py-1.5 pl-[14px] pr-[14px]">
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} />
-            <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--color-ink-soft)]">{label}</span>
+            <span className="min-w-0 flex-1 truncate text-[11px] text-(--color-ink-soft)">{label}</span>
             <span
               className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
               style={{ fontFamily: "var(--font-sans)", background: "var(--color-border-strong)", color: "var(--color-ink-muted)" }}
             >
-              {e.type}
+              {widgetInput.type}
             </span>
           </div>
         </div>
@@ -459,15 +449,15 @@ const labelRow = (
      *  + max-h-[80px] 上限 + overflow-y-auto，避免长 prompt 把后续行
      *  标签挤到不同 y 位置 — labels align 依赖此处的行为一致。 */
     const renderControl = (keyPrefix: string) => {
-      switch (e.control) {
+      switch (widgetInput.control) {
         case "textarea":
           if (compact) {
             return (
               <AutoResizeTextarea
                 key={keyPrefix}
                 value={typeof v === "string" ? v : ""}
-                placeholder={`输入 ${label}${e.required ? "（必填）" : ""}`}
-                onChange={(value) => set(e.ioKey, value)}
+                placeholder={`输入 ${label}${widgetInput.required ? "（必填）" : ""}`}
+                onChange={(value) => set(widgetInput.ioKey, value)}
                 minHeight={28}
                 maxHeight={80}
               />
@@ -477,13 +467,13 @@ const labelRow = (
             <textarea
               key={keyPrefix}
               className={`${inputCls} mt-1.5 min-h-[52px] ${
-                e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""
+                widgetInput.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""
               }`}
               rows={compact ? 2 : 4}
               value={typeof v === "string" ? v : ""}
               disabled={disabled}
-              placeholder={`输入 ${label}${e.required ? "（必填）" : ""}`}
-              onChange={(ev) => set(e.ioKey, ev.target.value)}
+              placeholder={`输入 ${label}${widgetInput.required ? "（必填）" : ""}`}
+              onChange={(ev) => set(widgetInput.ioKey, ev.target.value)}
             />
           );
         case "text":
@@ -491,18 +481,18 @@ const labelRow = (
             <input
               key={keyPrefix}
               className={`${inputCls} ${compact ? "" : "mt-1"} ${
-                e.required && !isInputFilled(v) ? "border-red-400/50" : ""
+                widgetInput.required && !isInputFilled(v) ? "border-red-400/50" : ""
               }`}
               value={typeof v === "string" || typeof v === "number" ? String(v) : ""}
               disabled={disabled}
-              placeholder={`输入 ${label}${e.required ? "（必填）" : ""}`}
-              onChange={(ev) => set(e.ioKey, ev.target.value)}
+              placeholder={`输入 ${label}${widgetInput.required ? "（必填）" : ""}`}
+              onChange={(ev) => set(widgetInput.ioKey, ev.target.value)}
             />
           );
         case "int":
         case "float": {
-          const b = numericBounds(e);
-          const isSeed = compact && isSeedLike(e);
+          const bounds = numericBounds(widgetInput);
+          const isSeed = compact && isSeedLike(widgetInput);
           if (compact) {
             return (
               /* R-ardot93-B (2026-08-17): previous edit capped the stepper
@@ -517,19 +507,19 @@ const labelRow = (
               <div key={keyPrefix} className="flex items-center gap-1.5">
                 <div className="min-w-[120px] max-w-[180px]">
                   <NumberField
-                    value={typeof v === "number" ? v : Number(v) || b.min}
-                    onChange={(value) => set(e.ioKey, value)}
-                    min={b.min}
-                    max={b.max}
-                    step={b.step}
-                    decimalPlaces={e.control === "float" ? b.decimalPlaces : 0}
+                    value={typeof v === "number" ? v : Number(v) || bounds.min}
+                    onChange={(value) => set(widgetInput.ioKey, value)}
+                    min={bounds.min}
+                    max={bounds.max}
+                    step={bounds.step}
+                    decimalPlaces={widgetInput.control === "float" ? bounds.decimalPlaces : 0}
                     disabled={disabled}
                   />
                 </div>
                 {isSeed && (
                   <SeedModeButton
-                    mode={seedModes?.[e.ioKey]}
-                    onPick={(mode) => onSeedModeChange?.(e.ioKey, mode)}
+                    mode={seedModes?.[widgetInput.ioKey]}
+                    onPick={(mode) => onSeedModeChange?.(widgetInput.ioKey, mode)}
                   />
                 )}
               </div>
@@ -539,19 +529,19 @@ const labelRow = (
             <div key={keyPrefix} className={isSeed ? "mt-1 flex items-center gap-1.5" : "mt-1"}>
               <div className={isSeed ? "flex-1" : undefined}>
                 <NumberField
-                  value={typeof v === "number" ? v : Number(v) || b.min}
-                  onChange={(value) => set(e.ioKey, value)}
-                  min={b.min}
-                  max={b.max}
-                  step={b.step}
-                  decimalPlaces={e.control === "float" ? b.decimalPlaces : 0}
+                  value={typeof v === "number" ? v : Number(v) || bounds.min}
+                  onChange={(value) => set(widgetInput.ioKey, value)}
+                  min={bounds.min}
+                  max={bounds.max}
+                  step={bounds.step}
+                  decimalPlaces={widgetInput.control === "float" ? bounds.decimalPlaces : 0}
                   disabled={disabled}
                 />
               </div>
               {isSeed && (
                 <SeedModeButton
-                  mode={seedModes?.[e.ioKey]}
-                  onPick={(mode) => onSeedModeChange?.(e.ioKey, mode)}
+                  mode={seedModes?.[widgetInput.ioKey]}
+                  onPick={(mode) => onSeedModeChange?.(widgetInput.ioKey, mode)}
                 />
               )}
             </div>
@@ -564,15 +554,15 @@ const labelRow = (
                 key={keyPrefix}
                 type="button"
                 disabled={disabled}
-                onClick={() => set(e.ioKey, !v)}
-                className={`nodrag nopan flex h-[28px] w-full items-center justify-between rounded-md bg-[var(--color-canvas-deep)] px-2.5 text-[12px] transition-colors ${
-                  v ? "text-emerald-200" : "text-[var(--color-ink-muted)]"
-                } ${e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""}`}
+                onClick={() => set(widgetInput.ioKey, !v)}
+                className={`nodrag nopan flex h-[28px] w-full items-center justify-between rounded-md bg-(--color-canvas-deep) px-2.5 text-[12px] transition-colors ${
+                  v ? "text-emerald-200" : "text-(--color-ink-muted)"
+                } ${widgetInput.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""}`}
               >
                 <span>{v ? "开启" : "关闭"}</span>
                 <span
                   className={`relative h-3.5 w-7 rounded-full transition-colors ${
-                    v ? "bg-emerald-400/70" : "bg-white/[0.12]"
+                    v ? "bg-emerald-400/70" : "bg-white/12"
                   }`}
                 >
                   <span
@@ -588,15 +578,15 @@ const labelRow = (
               key={keyPrefix}
               type="button"
               disabled={disabled}
-              onClick={() => set(e.ioKey, !v)}
-              className={`nodrag nopan mt-1 flex h-[30px] w-full items-center justify-between rounded-md bg-[var(--color-canvas-deep)] px-3 text-[12px] transition-colors ${
-                v ? "text-emerald-200" : "text-[var(--color-ink-muted)]"
-              } ${e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""}`}
+              onClick={() => set(widgetInput.ioKey, !v)}
+              className={`nodrag nopan mt-1 flex h-[30px] w-full items-center justify-between rounded-md bg-(--color-canvas-deep) px-3 text-[12px] transition-colors ${
+                v ? "text-emerald-200" : "text-(--color-ink-muted)"
+              } ${widgetInput.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""}`}
             >
               <span>{v ? "开启" : "关闭"}</span>
               <span
                 className={`relative h-3.5 w-7 rounded-full transition-colors ${
-                  v ? "bg-emerald-400/70" : "bg-white/[0.12]"
+                  v ? "bg-emerald-400/70" : "bg-white/12"
                 }`}
               >
                 <span
@@ -612,17 +602,17 @@ const labelRow = (
               <button
                 key={keyPrefix}
                 type="button"
-                className={`nodrag nopan inline-flex h-[28px] w-full items-center gap-1.5 rounded-md bg-[var(--color-canvas-deep)] px-2.5 text-[11px] text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink-bright)] ${
-                  e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""
+                className={`nodrag nopan inline-flex h-[28px] w-full items-center gap-1.5 rounded-md bg-(--color-canvas-deep) px-2.5 text-[11px] text-(--color-ink-soft) transition-colors hover:text-(--color-ink-bright) ${
+                  widgetInput.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""
                 }`}
                 disabled={disabled || uploading}
-                onClick={() => pickFile(e.ioKey)}
+                onClick={() => pickFile(widgetInput.ioKey)}
               >
-                {uploading && uploadTarget === e.ioKey
+                {uploading && uploadTarget === widgetInput.ioKey
                   ? "上传中…"
                   : typeof v === "string" && v
                     ? `已选：${v}`
-                    : `上传 ${label}${e.required ? "（必填）" : ""}`}
+                    : `上传 ${label}${widgetInput.required ? "（必填）" : ""}`}
               </button>
             );
           }
@@ -630,17 +620,17 @@ const labelRow = (
             <button
               key={keyPrefix}
               type="button"
-              className={`nodrag nopan mt-1 inline-flex items-center gap-1.5 rounded-md bg-[var(--color-canvas-deep)] px-2.5 py-1.5 text-[11px] text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink-bright)] ${
-                e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""
+              className={`nodrag nopan mt-1 inline-flex items-center gap-1.5 rounded-md bg-(--color-canvas-deep) px-2.5 py-1.5 text-[11px] text-(--color-ink-soft) transition-colors hover:text-(--color-ink-bright) ${
+                widgetInput.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""
               }`}
               disabled={disabled || uploading}
-              onClick={() => pickFile(e.ioKey)}
+              onClick={() => pickFile(widgetInput.ioKey)}
             >
-              {uploading && uploadTarget === e.ioKey
+              {uploading && uploadTarget === widgetInput.ioKey
                 ? "上传中…"
                 : typeof v === "string" && v
                   ? `已选：${v}`
-                  : `上传 ${label}${e.required ? "（必填）" : ""}`}
+                  : `上传 ${label}${widgetInput.required ? "（必填）" : ""}`}
             </button>
           );
         case "select":
@@ -648,12 +638,12 @@ const labelRow = (
             <DarkSelect
               key={keyPrefix}
               value={typeof v === "string" ? v : ""}
-              onChange={(val) => set(e.ioKey, val)}
-              options={Array.isArray(e.options) ? e.options : []}
+              onChange={(val) => set(widgetInput.ioKey, val)}
+              options={Array.isArray(widgetInput.options) ? widgetInput.options : []}
               disabled={disabled}
-              placeholder={`选择 ${label}${e.required ? "（必填）" : ""}`}
+              placeholder={`选择 ${label}${widgetInput.required ? "（必填）" : ""}`}
               className={`w-full ${
-                e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50 rounded-md" : ""
+                widgetInput.required && !isInputFilled(v) ? "ring-1 ring-red-400/50 rounded-md" : ""
               }`}
               popoverMinWidth={compact ? 220 : 260}
             />
@@ -671,12 +661,12 @@ const labelRow = (
  */
 if (compact) {
   return (
-    <div key={e.ioKey} className="relative">
-      {withHandle && <PortHandle id={e.ioKey} dir="in" type={e.type} style={{ top: 16, transform: "translateY(-50%)" }} />}
+    <div key={widgetInput.ioKey} className="relative">
+      {withHandle && <PortHandle id={widgetInput.ioKey} dir="in" type={widgetInput.type} style={{ top: 16, transform: "translateY(-50%)" }} />}
       {/* block A — label + 类型 badge */}
       <div className="px-[14px] pt-1.5">{labelRow}</div>
       {/* block B — 控件独占一行（h 28 自动 / AutoResize minH 28 maxH 80） */}
-      <div className="px-[14px] pt-1 pb-1.5">{renderControl("compact-" + e.ioKey)}</div>
+      <div className="px-[14px] pt-1 pb-1.5">{renderControl("compact-" + widgetInput.ioKey)}</div>
     </div>
   );
 }
@@ -684,7 +674,7 @@ if (compact) {
     /* Wide 布局：label-on-top + control-below（保持原貌，给 CreatePanel
      *  与 IO-edit 预览面板的较宽场景用）。 */
     return (
-      <div key={e.ioKey} className="relative">
+      <div key={widgetInput.ioKey} className="relative">
         {/* R-ardot24 (2026-08-14): PortHandle 提升到 wrapper 外（Card 直接
          *  子元素的 relative 容器），让 `left: -6` 重新相对 Card 自己 →
          *  圆心在 Card 左外 6px（骑跨边框）。R-ardot23 把 wrapper 改成
@@ -695,7 +685,7 @@ if (compact) {
          *  cx=334，差 28px（14×2，正是 padding 叠加的副作用）。
          * 提升到 wrapper 外后与 PortRow 共用同一个 Card 边框基准，所有
          * input handle 圆心统一落在 Card 左外 6px。*/}
-        {withHandle && <PortHandle id={e.ioKey} dir="in" type={e.type} />}
+        {withHandle && <PortHandle id={widgetInput.ioKey} dir="in" type={widgetInput.type} />}
         {/* v3 subrow：与 Ardot 3:155 PosSubRow 一致 — h-4 + SPACE_BETWEEN
          *  (label 左对齐 / chip 右对齐)；与端口行（WirePortRows）共用布局。
          *  withHandle 时挂左侧 PortHandle（圆心骑跨 Card 左缘 0）。
@@ -714,52 +704,52 @@ if (compact) {
          *  与 compact 仅内边距不同，避免 label-row 漂移。 */}
         <div className="px-[14px] pt-1.5">{labelRow}</div>
 
-        {e.control === "textarea" && (
+        {widgetInput.control === "textarea" && (
           <textarea
             className={`${inputCls} mt-1.5 min-h-[52px] ${
-              e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""
+              widgetInput.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""
             }`}
             rows={4}
             value={typeof v === "string" ? v : ""}
             disabled={disabled}
-            placeholder={`输入 ${label}${e.required ? "（必填）" : ""}`}
-            onChange={(ev) => set(e.ioKey, ev.target.value)}
+            placeholder={`输入 ${label}${widgetInput.required ? "（必填）" : ""}`}
+            onChange={(ev) => set(widgetInput.ioKey, ev.target.value)}
           />
         )}
 
-        {e.control === "text" && (
+        {widgetInput.control === "text" && (
           <input
             className={`${inputCls} mt-1 ${
-              e.required && !isInputFilled(v) ? "border-red-400/50" : ""
+              widgetInput.required && !isInputFilled(v) ? "border-red-400/50" : ""
             }`}
             value={typeof v === "string" || typeof v === "number" ? String(v) : ""}
             disabled={disabled}
-            placeholder={`输入 ${label}${e.required ? "（必填）" : ""}`}
-            onChange={(ev) => set(e.ioKey, ev.target.value)}
+            placeholder={`输入 ${label}${widgetInput.required ? "（必填）" : ""}`}
+            onChange={(ev) => set(widgetInput.ioKey, ev.target.value)}
           />
         )}
 
-        {(e.control === "int" || e.control === "float") && (
+        {(widgetInput.control === "int" || widgetInput.control === "float") && (
           (() => {
-            const b = numericBounds(e);
-            const isSeed = compact && isSeedLike(e);
+            const bounds = numericBounds(widgetInput);
+            const isSeed = compact && isSeedLike(widgetInput);
             return (
               <div className={isSeed ? "mt-1 flex items-center gap-1.5" : "mt-1"}>
                 <div className={isSeed ? "flex-1" : undefined}>
                   <NumberField
-                    value={typeof v === "number" ? v : Number(v) || b.min}
-                    onChange={(value) => set(e.ioKey, value)}
-                    min={b.min}
-                    max={b.max}
-                    step={b.step}
-                    decimalPlaces={e.control === "float" ? b.decimalPlaces : 0}
+                    value={typeof v === "number" ? v : Number(v) || bounds.min}
+                    onChange={(value) => set(widgetInput.ioKey, value)}
+                    min={bounds.min}
+                    max={bounds.max}
+                    step={bounds.step}
+                    decimalPlaces={widgetInput.control === "float" ? bounds.decimalPlaces : 0}
                     disabled={disabled}
                   />
                 </div>
                 {isSeed && (
                   <SeedModeButton
-                    mode={seedModes?.[e.ioKey]}
-                    onPick={(mode) => onSeedModeChange?.(e.ioKey, mode)}
+                    mode={seedModes?.[widgetInput.ioKey]}
+                    onPick={(mode) => onSeedModeChange?.(widgetInput.ioKey, mode)}
                   />
                 )}
               </div>
@@ -767,19 +757,19 @@ if (compact) {
           })()
         )}
 
-        {e.control === "switch" && (
+        {widgetInput.control === "switch" && (
           <button
             type="button"
             disabled={disabled}
-            onClick={() => set(e.ioKey, !v)}
-            className={`nodrag nopan mt-1 flex h-[30px] w-full items-center justify-between rounded-md bg-[var(--color-canvas-deep)] px-3 text-[12px] transition-colors ${
-              v ? "text-emerald-200" : "text-[var(--color-ink-muted)]"
-            } ${e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""}`}
+            onClick={() => set(widgetInput.ioKey, !v)}
+            className={`nodrag nopan mt-1 flex h-[30px] w-full items-center justify-between rounded-md bg-(--color-canvas-deep) px-3 text-[12px] transition-colors ${
+              v ? "text-emerald-200" : "text-(--color-ink-muted)"
+            } ${widgetInput.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""}`}
           >
             <span>{v ? "开启" : "关闭"}</span>
             <span
               className={`relative h-3.5 w-7 rounded-full transition-colors ${
-                v ? "bg-emerald-400/70" : "bg-white/[0.12]"
+                v ? "bg-emerald-400/70" : "bg-white/12"
               }`}
             >
               <span
@@ -790,33 +780,33 @@ if (compact) {
           </button>
         )}
 
-        {e.control === "image" && (
+        {widgetInput.control === "image" && (
           <button
             type="button"
-            className={`nodrag nopan mt-1 inline-flex items-center gap-1.5 rounded-md bg-[var(--color-canvas-deep)] px-2.5 py-1.5 text-[11px] text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink-bright)] ${
-              e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""
+            className={`nodrag nopan mt-1 inline-flex items-center gap-1.5 rounded-md bg-(--color-canvas-deep) px-2.5 py-1.5 text-[11px] text-(--color-ink-soft) transition-colors hover:text-(--color-ink-bright) ${
+              widgetInput.required && !isInputFilled(v) ? "ring-1 ring-red-400/50" : ""
             }`}
             disabled={disabled || uploading}
-            onClick={() => pickFile(e.ioKey)}
+            onClick={() => pickFile(widgetInput.ioKey)}
           >
-            {uploading && uploadTarget === e.ioKey
+            {uploading && uploadTarget === widgetInput.ioKey
               ? "上传中…"
               : typeof v === "string" && v
                 ? `已选：${v}`
-                : `上传 ${label}${e.required ? "（必填）" : ""}`}
+                : `上传 ${label}${widgetInput.required ? "（必填）" : ""}`}
           </button>
         )}
 
-        {e.control === "select" && (
+        {widgetInput.control === "select" && (
           <div className="mt-1">
             <DarkSelect
               value={typeof v === "string" ? v : ""}
-              onChange={(val) => set(e.ioKey, val)}
-              options={Array.isArray(e.options) ? e.options : []}
+              onChange={(val) => set(widgetInput.ioKey, val)}
+              options={Array.isArray(widgetInput.options) ? widgetInput.options : []}
               disabled={disabled}
-              placeholder={`选择 ${label}${e.required ? "（必填）" : ""}`}
+              placeholder={`选择 ${label}${widgetInput.required ? "（必填）" : ""}`}
               className={`w-full ${
-                e.required && !isInputFilled(v) ? "ring-1 ring-red-400/50 rounded-md" : ""
+                widgetInput.required && !isInputFilled(v) ? "ring-1 ring-red-400/50 rounded-md" : ""
               }`}
               popoverMinWidth={260}
             />
@@ -900,7 +890,7 @@ if (compact) {
                  *  fall through to the input underneath, so a click
                  *  on the handle area still focuses the field. */}
                 <div
-                  className="pointer-events-none absolute right-1 top-1/2 z-[5] -translate-y-1/2 select-none text-[10px] leading-[6px] text-white/30"
+                  className="pointer-events-none absolute right-1 top-1/2 z-5 -translate-y-1/2 select-none text-[10px] leading-[6px] text-white/30"
                   aria-hidden
                 >
                   ⋮⋮
@@ -986,10 +976,10 @@ if (compact) {
                     return (
                       <span
                         key={wireInput.ioKey}
-                        className="inline-flex items-center gap-1 rounded-md border border-[var(--color-info)]/25 bg-[var(--color-info)]/10 px-1.5 py-0.5 text-[10px] text-[var(--color-info)]"
+                        className="inline-flex items-center gap-1 rounded-md border border-(--color-info)/25 bg-(--color-info)/10 px-1.5 py-0.5 text-[10px] text-(--color-info)"
                         title={`${wireInput.nodeTitle ?? ""} · ${wireInput.name} · 仅可通过连线输入`}
                       >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-info)]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-(--color-info)" />
                         {label}
                         <span className="font-mono text-[9px] opacity-70">{wireInput.type}</span>
                       </span>
@@ -998,23 +988,23 @@ if (compact) {
                 </div>
               )}
               {wireInputs.length > 0 && outputs.length > 0 && showOutputs && (
-                <div className="h-px shrink-0 border-t border-dashed border-white/[0.06]" />
+                <div className="h-px shrink-0 border-t border-dashed border-white/6" />
               )}
               {showOutputs && outputs.length > 0 && (
                 <>
                   <div className="flex items-center gap-1.5 pt-1">
                     <span className="text-[10px] font-medium text-gray-500">输出端点</span>
-                    <div className="flex-1 border-t border-dashed border-white/[0.04]" />
+                    <div className="flex-1 border-t border-dashed border-white/4" />
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {outputs.map((output) =>
 (
                       <span
                         key={output.ioKey}
-                        className="inline-flex items-center gap-1 rounded-md border border-[var(--color-success)]/25 bg-[var(--color-success)]/10 px-1.5 py-0.5 text-[10px] text-[var(--color-success)]"
+                        className="inline-flex items-center gap-1 rounded-md border border-(--color-success)/25 bg-(--color-success)/10 px-1.5 py-0.5 text-[10px] text-(--color-success)"
                         title={`${output.nodeTitle ?? ""} · ${output.name}`}
                       >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-(--color-success)" />
                         {/* 2026-08-15: conflict-aware — see ioLabel(). */}
                         {ioLabel(output, [...inputs, ...outputs])}
                         <span className="font-mono text-[9px] opacity-70">{normalizeTypeChip(output.type)}</span>
@@ -1032,7 +1022,7 @@ if (compact) {
       {!compact && widgetSectionEntries.length > 0 && (
         <>
           <SectionHeader label="可编辑参数" count={widgetSectionEntries.length} accent="#FF9C5B" />
-          {widgetSectionEntries.map((e, _i) => renderInputRow(e))}
+          {widgetSectionEntries.map((widgetInput, _i) => renderInputRow(widgetInput))}
         </>
       )}
     </div>
@@ -1041,3 +1031,4 @@ if (compact) {
 
 
 export default DynamicWorkflowForm;
+

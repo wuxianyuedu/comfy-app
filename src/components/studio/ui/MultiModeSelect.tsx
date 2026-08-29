@@ -104,7 +104,7 @@ export function MultiModeSelect({
       setDraft(new Set(modes));
       setQuery("");
       // Open on the category of the first selected mode (falls back to image).
-      const firstSelected = ALL_WORKFLOW_TYPES.find((t) => modes.includes(t.code));
+      const firstSelected = ALL_WORKFLOW_TYPES.find((type) => modes.includes(type.code));
       setActiveTab(firstSelected?.category ?? "image");
     }
     prevOpenRef.current = open;
@@ -113,15 +113,15 @@ export function MultiModeSelect({
   // Outside-click + Escape close.  Reuses DarkSelect's exact pattern (R55).
   useEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent && e.key === "Escape") {
+    const handler = (event: MouseEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent && event.key === "Escape") {
         setOpen(false);
         return;
       }
-      if (e instanceof MouseEvent) {
+      if (event instanceof MouseEvent) {
         if (
-          triggerRef.current?.contains(e.target as Node) ||
-          popRef.current?.contains(e.target as Node)
+          triggerRef.current?.contains(event.target as Node) ||
+          popRef.current?.contains(event.target as Node)
         )
           return;
         setOpen(false);
@@ -205,32 +205,32 @@ export function MultiModeSelect({
 
   // Default mode's category drives the chip accent.
   const accent = useMemo(() => {
-    const first = ALL_WORKFLOW_TYPES.find((t) => modes.includes(t.code));
-    const def = ALL_WORKFLOW_TYPES.find((t) => t.code === defaultMode);
+    const first = ALL_WORKFLOW_TYPES.find((type) => modes.includes(type.code));
+    const def = ALL_WORKFLOW_TYPES.find((type) => type.code === defaultMode);
     const cat: WorkflowCategory = first?.category ?? def?.category ?? "image";
     return { pill: CATEGORY_PILL[cat], text: CATEGORY_TEXT[cat] };
   }, [modes, defaultMode]);
 
   // Filtered + grouped (by category) options.  Used inside the popover.
   const grouped = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const filtered = ALL_WORKFLOW_TYPES.filter((t) => {
-      if (!q) return true;
+    const lowerQuery = query.trim().toLowerCase();
+    const filtered = ALL_WORKFLOW_TYPES.filter((type) => {
+      if (!lowerQuery) return true;
       return (
-        t.code.toLowerCase().includes(q) ||
-        t.label.toLowerCase().includes(q) ||
-        (t.subCategory?.toLowerCase().includes(q) ?? false) ||
-        (t.fullName.toLowerCase().includes(q) ?? false)
+        type.code.toLowerCase().includes(lowerQuery) ||
+        type.label.toLowerCase().includes(lowerQuery) ||
+        (type.subCategory?.toLowerCase().includes(lowerQuery) ?? false) ||
+        (type.fullName.toLowerCase().includes(lowerQuery) ?? false)
       );
     });
-    const g: Partial<Record<WorkflowCategory, typeof ALL_WORKFLOW_TYPES>> = {};
-    for (const t of filtered) {
-      (g[t.category] ??= []).push(t);
+    const groupedMap: Partial<Record<WorkflowCategory, typeof ALL_WORKFLOW_TYPES>> = {};
+    for (const type of filtered) {
+      (groupedMap[type.category] ??= []).push(type);
     }
-    return g;
+    return groupedMap;
   }, [query]);
 
-  const firstSelected = ALL_WORKFLOW_TYPES.find((t) => modes.includes(t.code));
+  const firstSelected = ALL_WORKFLOW_TYPES.find((type) => modes.includes(type.code));
   const mainLabel = firstSelected ? firstSelected.label : "选择模式";
   const plusN = Math.max(0, modes.length - 1);
 
@@ -278,7 +278,7 @@ export function MultiModeSelect({
             if (!disabled) setOpen(true);
           }}
           title={`还有 ${plusN} 种其他模式，点击管理`}
-          className="inline-flex items-center rounded-md bg-violet-500/[0.08] px-1.5 py-0.5 text-[11px] font-medium text-gray-400 transition-colors hover:bg-violet-500/[0.18] hover:text-violet-200"
+          className="inline-flex items-center rounded-md bg-violet-500/8 px-1.5 py-0.5 text-[11px] font-medium text-gray-400 transition-colors hover:bg-violet-500/18 hover:text-violet-200"
         >
           +{plusN}
         </button>
@@ -298,10 +298,10 @@ export function MultiModeSelect({
               width: pos.width,
               zIndex: 9999,
             }}
-            className="rounded-xl border border-white/[0.08] bg-[var(--color-card)] shadow-2xl shadow-violet-500/20"
+            className="rounded-xl border border-white/8 bg-(--color-card) shadow-2xl shadow-violet-500/20"
           >
             {/* search */}
-            <div className="border-b border-white/[0.06] p-2">
+            <div className="border-b border-white/6 p-2">
               <input
                 autoFocus
                 type="text"
@@ -314,17 +314,17 @@ export function MultiModeSelect({
                     handleSave();
                   }
                 }}
-                className="w-full rounded-md bg-white/[0.04] px-2.5 py-1.5 text-sm text-gray-200 placeholder-gray-500 outline-none transition-colors focus:bg-white/[0.06] focus:ring-1 focus:ring-violet-500/30"
+                className="w-full rounded-md bg-white/4 px-2.5 py-1.5 text-sm text-gray-200 placeholder-gray-500 outline-none transition-colors focus:bg-white/6 focus:ring-1 focus:ring-violet-500/30"
               />
             </div>
 
             {/* tabs — switchable 图像 / 视频 / 音频 */}
-            <div className="flex items-center gap-1 border-b border-white/[0.06] px-2 pt-2">
+            <div className="flex items-center gap-1 border-b border-white/6 px-2 pt-2">
               {(
                 ["image", "video", "audio"] as WorkflowCategory[]
               ).map((cat) => {
-                const selCount = (grouped[cat] ?? []).filter((t) =>
-                  draft.has(t.code)
+                const selCount = (grouped[cat] ?? []).filter((type) =>
+                  draft.has(type.code)
                 ).length;
                 const isActive = activeTab === cat;
                 return (
@@ -334,7 +334,7 @@ export function MultiModeSelect({
                     onClick={() => setActiveTab(cat)}
                     className={`relative flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold transition-colors ${
                       isActive
-                        ? `${CATEGORY_TEXT[cat]} bg-white/[0.06]`
+                        ? `${CATEGORY_TEXT[cat]} bg-white/6`
                         : "text-gray-500 hover:text-gray-300"
                     }`}
                   >
@@ -387,7 +387,7 @@ export function MultiModeSelect({
                       className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors ${
                         isSelected
                           ? "bg-violet-500/10 text-violet-100"
-                          : "text-gray-300 hover:bg-white/[0.04]"
+                          : "text-gray-300 hover:bg-white/4"
                       }`}
                     >
                       {/* checkbox: 每个被选中的模式都显示勾选标记 */}
@@ -395,7 +395,7 @@ export function MultiModeSelect({
                         className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
                           isSelected
                             ? "border-violet-500/60 bg-violet-500/30"
-                            : "border-white/[0.18] bg-white/[0.02]"
+                            : "border-white/18 bg-white/2"
                         }`}
                       >
                         {isSelected && (
@@ -430,11 +430,11 @@ export function MultiModeSelect({
             </div>
 
             {/* footer */}
-            <div className="flex items-center gap-2 border-t border-white/[0.06] p-2">
+            <div className="flex items-center gap-2 border-t border-white/6 p-2">
               <button
                 type="button"
                 onClick={handleCancel}
-                className="flex-1 rounded-md bg-white/[0.04] px-3 py-1.5 text-sm text-gray-300 transition-colors hover:bg-white/[0.08]"
+                className="flex-1 rounded-md bg-white/4 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:bg-white/8"
               >
                 取消
               </button>
@@ -442,7 +442,7 @@ export function MultiModeSelect({
                 type="button"
                 onClick={handleSave}
                 disabled={draft.size === 0}
-                className="flex-1 rounded-md bg-violet-500/90 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-white/[0.06] disabled:text-gray-500"
+                className="flex-1 rounded-md bg-violet-500/90 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-white/6 disabled:text-gray-500"
               >
                 保存（{draft.size}）
               </button>

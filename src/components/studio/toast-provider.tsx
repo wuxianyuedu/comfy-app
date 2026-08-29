@@ -8,6 +8,7 @@ import React, {
   useRef,
   useMemo,
 } from "react";
+import { X } from "lucide-react";
 import { Icon } from "@/components/ui/Icon";
 
 type ToastKind = "success" | "error" | "info" | "loading";
@@ -21,7 +22,7 @@ export interface ToastItem {
   duration?: number;
 }
 
-interface ToastContextValue {
+export interface ToastContextValue {
   toast: (t: Omit<ToastItem, "id">) => string;
   success: (title: string, description?: string) => string;
   error: (title: string, description?: string) => string;
@@ -107,14 +108,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed bottom-5 right-5 z-[100] flex w-[340px] flex-col gap-2.5">
+      <div className="pointer-events-none fixed bottom-5 right-5 z-100 flex w-[340px] flex-col gap-2.5">
         {items.map((item) =>
 {
           const st = KIND_STYLE[item.kind];
           return (
             <div
               key={item.id}
-              className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-[var(--color-panel)]/95 p-3.5 shadow-xl shadow-black/40 backdrop-blur-md transition-all`}
+              className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-(--color-panel)/95 p-3.5 shadow-xl shadow-black/40 backdrop-blur-md transition-all`}
             >
               <div className={`mt-0.5 ${st.iconColor}`}>
                 <Icon name={st.icon} size={16} />
@@ -131,9 +132,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 className="text-gray-500 transition-colors hover:text-gray-200"
                 aria-label="关闭"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
+                <X size={14} />
               </button>
             </div>
           );

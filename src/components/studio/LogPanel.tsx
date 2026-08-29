@@ -1,6 +1,15 @@
 "use client";
 
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Copy,
+  Download,
+  FileText,
+  Search,
+  Trash2,
+  Type,
+  X,
+} from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import {
   useLogPanel,
@@ -44,14 +53,14 @@ function parseAnsi256(i: number): string {
   if (i < 8) return ANSI_COLORS[i]!;
   if (i < 16) return ANSI_BRIGHT_COLORS[i - 8]!;
   if (i >= 232) {
-    const v = (i - 232) * 10 + 8;
-    return `rgb(${v},${v},${v})`;
+    const gray = (i - 232) * 10 + 8;
+    return `rgb(${gray},${gray},${gray})`;
   }
-  const r = Math.floor((i - 16) / 36);
-  const g = Math.floor(((i - 16) % 36) / 6);
-  const b = (i - 16) % 6;
+  const redIndex = Math.floor((i - 16) / 36);
+  const greenIndex = Math.floor(((i - 16) % 36) / 6);
+  const blueIndex = (i - 16) % 6;
   const ramp = [0, 95, 135, 175, 215, 255];
-  return `rgb(${ramp[r]},${ramp[g]},${ramp[b]})`;
+  return `rgb(${ramp[redIndex]},${ramp[greenIndex]},${ramp[blueIndex]})`;
 }
 
 interface AnsiStyle {
@@ -102,7 +111,7 @@ function ansiToSpans(text: string): React.ReactNode[] {
       continue;
     }
 
-    const parts = raw.split(";").map((n) => (n === "" ? 0 : Number(n)));
+    const parts = raw.split(";").map((part) => (part === "" ? 0 : Number(part)));
     let i = 0;
     while (i < parts.length) {
       const code = parts[i]!;
@@ -142,19 +151,19 @@ function ansiToSpans(text: string): React.ReactNode[] {
         if (idx !== undefined) style.backgroundColor = parseAnsi256(idx);
         i += 3;
       } else if (code === 38 && parts[i + 1] === 2) {
-        const r = parts[i + 2];
-        const g = parts[i + 3];
-        const b = parts[i + 4];
-        if (r !== undefined && g !== undefined && b !== undefined) {
-          style.color = `rgb(${r},${g},${b})`;
+        const red = parts[i + 2];
+        const green = parts[i + 3];
+        const blue = parts[i + 4];
+        if (red !== undefined && green !== undefined && blue !== undefined) {
+          style.color = `rgb(${red},${green},${blue})`;
         }
         i += 5;
       } else if (code === 48 && parts[i + 1] === 2) {
-        const r = parts[i + 2];
-        const g = parts[i + 3];
-        const b = parts[i + 4];
-        if (r !== undefined && g !== undefined && b !== undefined) {
-          style.backgroundColor = `rgb(${r},${g},${b})`;
+        const red = parts[i + 2];
+        const green = parts[i + 3];
+        const blue = parts[i + 4];
+        if (red !== undefined && green !== undefined && blue !== undefined) {
+          style.backgroundColor = `rgb(${red},${green},${blue})`;
         }
         i += 5;
       } else {
@@ -198,7 +207,7 @@ function hasAnsi(text: string): boolean {
 function tokenizeLogMessage(text: string): React.ReactNode[] {
   const combined =
     /(\[\d{2}:\d{2}:\d{2}\]|\[OK\]|\[STEP\]|\[WARN\]|\[ERROR\]|\[INFO\]|PID\s*[:：]\s*\d+|https?:\/\/[^\s]+|\b(?:[A-Z]:\\|\\)[^\s]*)/gi;
-  const parts = text.split(combined).filter((p) => p !== undefined && p !== "");
+  const parts = text.split(combined).filter((segment) => segment !== undefined && segment !== "");
   let key = 0;
   return parts.map((part) => {
     for (const token of LOG_TOKENS) {
@@ -248,17 +257,17 @@ function isSameDay(a: Date, b: Date): boolean {
 }
 
 function formatTime(ts: number): string {
-  const d = new Date(ts);
-  const time = d.toLocaleTimeString("zh-CN", {
+  const date = new Date(ts);
+  const time = date.toLocaleTimeString("zh-CN", {
     hour12: false,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     fractionalSecondDigits: 3,
   });
-  if (!isSameDay(d, new Date())) {
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
+  if (!isSameDay(date, new Date())) {
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
     return `${month}-${day} ${time}`;
   }
   return time;
@@ -273,7 +282,7 @@ const LogRow = memo(function LogRow({
 }) {
   const levelClass = LEVEL_STYLES[entry.level];
   return (
-    <div className="flex items-start gap-2.5 border-b border-white/[0.03] px-4 py-1 font-mono text-[13px] leading-snug hover:bg-white/[0.02]">
+    <div className="flex items-start gap-2.5 border-b border-white/3 px-4 py-1 font-mono text-[13px] leading-snug hover:bg-white/2">
       <span className="shrink-0 text-gray-500">{formatTime(entry.time)}</span>
       <span
         className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${levelClass}`}
@@ -315,20 +324,20 @@ const LogRow = memo(function LogRow({
 
 export function LogPanel() {
   const { filteredLogs, filter, search, isOpen, counts } = useLogPanel(
-    useShallow((s) => ({
-      filteredLogs: s.filteredLogs,
-      filter: s.filter,
-      search: s.search,
-      isOpen: s.isOpen,
-      counts: s.counts,
+    useShallow((state) => ({
+      filteredLogs: state.filteredLogs,
+      filter: state.filter,
+      search: state.search,
+      isOpen: state.isOpen,
+      counts: state.counts,
     })),
   );
-  const setFilter = useLogPanel((s) => s.setFilter);
-  const setSearch = useLogPanel((s) => s.setSearch);
-  const setIsOpen = useLogPanel((s) => s.setIsOpen);
-  const clear = useLogPanel((s) => s.clear);
-  const copyAll = useLogPanel((s) => s.copyAll);
-  const download = useLogPanel((s) => s.download);
+  const setFilter = useLogPanel((state) => state.setFilter);
+  const setSearch = useLogPanel((state) => state.setSearch);
+  const setIsOpen = useLogPanel((state) => state.setIsOpen);
+  const clear = useLogPanel((state) => state.clear);
+  const copyAll = useLogPanel((state) => state.copyAll);
+  const download = useLogPanel((state) => state.download);
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -359,26 +368,12 @@ export function LogPanel() {
   const total = filteredLogs.length;
 
   return (
-    <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#12101c] shadow-2xl shadow-black/60">
+    <div className="fixed inset-0 z-99 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60">
         {/* Header */}
-        <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/[0.08] bg-white/[0.02] px-4">
+        <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/8 bg-white/2 px-4">
           <div className="flex items-center gap-2">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="text-violet-400"
-            >
-              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="16" y1="13" x2="8" y2="13" />
-              <line x1="16" y1="17" x2="8" y2="17" />
-              <line x1="10" y1="9" x2="9" y2="9" />
-            </svg>
+            <FileText size={16} className="text-violet-400" />
             <span className="text-[15px] font-semibold text-gray-100">
               应用日志
             </span>
@@ -391,21 +386,21 @@ export function LogPanel() {
 
           {/* Level filters */}
           <div className="ml-4 flex items-center gap-1">
-            {FILTER_LABELS.map((f) => (
+            {FILTER_LABELS.map((option) => (
               <button
-                key={f.value}
+                key={option.value}
                 type="button"
-                onClick={() => setFilter(f.value)}
+                onClick={() => setFilter(option.value)}
                 className={`rounded-md px-2.5 py-1 text-[13px] transition-colors ${
-                  filter === f.value
-                    ? "bg-white/[0.10] text-gray-100"
-                    : "text-gray-500 hover:bg-white/[0.04] hover:text-gray-300"
+                  filter === option.value
+                    ? "bg-white/10 text-gray-100"
+                    : "text-gray-500 hover:bg-white/4 hover:text-gray-300"
                 }`}
-                title={`${f.label} (${counts[f.value]})`}
+                title={`${option.label} (${counts[option.value]})`}
               >
-                {f.label}
+                {option.label}
                 <span className="ml-1 text-[11px] text-gray-600">
-                  {counts[f.value]}
+                  {counts[option.value]}
                 </span>
               </button>
             ))}
@@ -413,24 +408,13 @@ export function LogPanel() {
 
           {/* Search */}
           <div className="relative ml-auto flex w-60 items-center">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="pointer-events-none absolute left-2.5 text-gray-600"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
+            <Search size={14} className="pointer-events-none absolute left-2.5 text-gray-600" />
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(event) => setSearch(event.target.value)}
               placeholder="搜索日志..."
-              className="h-8 w-full rounded-lg border border-white/[0.06] bg-[#13131a] pr-7 pl-8 text-[13px] text-gray-200 outline-none placeholder:text-gray-600 focus:border-violet-500/40"
+              className="h-8 w-full rounded-lg border border-white/6 bg-[#13131a] pr-7 pl-8 text-[13px] text-gray-200 outline-none placeholder:text-gray-600 focus:border-violet-500/40"
             />
             {search && (
               <button
@@ -447,99 +431,47 @@ export function LogPanel() {
           <div className="flex items-center gap-1 pl-2">
             <button
               type="button"
-              onClick={() => setWrap((w) => !w)}
+              onClick={() => setWrap((prev) => !prev)}
               title={wrap ? "折叠超长行" : "自动换行显示"}
               className={`rounded-md p-2 transition-colors ${
                 wrap
-                  ? "bg-white/[0.08] text-gray-200"
-                  : "text-gray-500 hover:bg-white/[0.05] hover:text-gray-300"
+                  ? "bg-white/8 text-gray-200"
+                  : "text-gray-500 hover:bg-white/5 hover:text-gray-300"
               }`}
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <polyline points="4 7 4 4 20 4 20 7" />
-                <line x1="9" y1="20" x2="15" y2="20" />
-                <line x1="12" y1="4" x2="12" y2="20" />
-              </svg>
+              <Type size={16} />
             </button>
             <button
               type="button"
               onClick={copyAll}
               title="复制全部"
-              className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300"
+              className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-              </svg>
+              <Copy size={16} />
             </button>
             <button
               type="button"
               onClick={download}
               title="下载日志"
-              className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300"
+              className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
+              <Download size={16} />
             </button>
             <button
               type="button"
               onClick={clear}
               title="清空"
-              className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300"
+              className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-              </svg>
+              <Trash2 size={16} />
             </button>
             <button
               type="button"
               onClick={() => setIsOpen(false)}
               title="关闭 (Ctrl+Shift+L)"
-              className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-300"
+              className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
+              <X size={16} />
             </button>
           </div>
         </div>
@@ -552,21 +484,7 @@ export function LogPanel() {
         >
           {total === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-gray-600">
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                className="opacity-30"
-              >
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <line x1="10" y1="9" x2="9" y2="9" />
-              </svg>
+              <FileText size={32} strokeWidth={1.5} className="opacity-30" />
               暂无匹配的日志
             </div>
           ) : (
@@ -579,7 +497,7 @@ export function LogPanel() {
         </div>
 
         {/* Footer / count */}
-        <div className="flex h-9 shrink-0 items-center justify-between border-t border-white/[0.08] bg-white/[0.02] px-4 text-[12px] text-gray-500">
+        <div className="flex h-9 shrink-0 items-center justify-between border-t border-white/8 bg-white/2 px-4 text-[12px] text-gray-500">
           <span>
             显示 {filteredLogs.length} / 总计 {counts.all} 条
           </span>
