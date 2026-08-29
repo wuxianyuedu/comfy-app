@@ -32,18 +32,27 @@ npm run typecheck
 - 路径别名：`@/*` → `src/*`
 - 测试文件与源码同目录放置，命名 `*.test.ts`
 
-### 当前覆盖（28 用例 / 3 文件）
+### 当前覆盖（41 用例 / 5 文件）
 
 | 文件 | 覆盖模块 | 用例数 |
 |---|---|---|
 | `src/lib/workflow-types.test.ts` | 工作流类型映射（code→类型、类别、分类、边界值） | 7 |
 | `src/lib/comfyui/markdown.test.ts` | Markdown 渲染（标题层级、列表、引用、XSS 转义、空输入） | 9 |
-| `src/components/updream/wf-utils.test.ts` | 画布颜色工具（hexToRgba、mixHex、lightenHex、hexToRgba 边界） | 12 |
+| `src/components/studio/workflow-utils.test.ts` | 画布颜色工具（hexToRgba、mixHex、lightenHex、hexToRgba 边界） | 12 |
+| `src/server/api/middleware/rate-limit.test.ts` | 限流中间件（滑动窗口、独立 key、过期重置） | 5 |
+| `src/components/studio/AgentPanel.test.tsx` | AgentPanel 组件（空态、四状态、回调、禁用态、头像兜底） | 8 |
 
 ### 新增测试指引
 - 纯函数模块（lib 层、utils）优先补 `*.test.ts`
 - 涉及 DOM/组件渲染的用例需为对应测试文件增加 `// @vitest-environment jsdom` 或迁移到独立环境
 - 断言基于实现语义编写，禁止为"让测试通过"而弱化断言
+
+### 组件测试（@testing-library/react）
+
+- 依赖已装：`@testing-library/react` / `user-event` / `jest-dom`（匹配器在 `tests/setup.ts` 全局注册，`toBeInTheDocument`、`toBeDisabled` 等直接用）
+- vitest 是 `globals: false`，RTL 不会自动 cleanup——测试文件里手动 `afterEach(cleanup)`
+- 交互用 `userEvent.click`（比 `fireEvent` 更接近真实事件序列）
+- 组件测试范例：`src/components/studio/AgentPanel.test.tsx`（空态、状态渲染、回调回传、禁用态、兜底渲染）
 
 ## API 文档（TypeDoc）
 
