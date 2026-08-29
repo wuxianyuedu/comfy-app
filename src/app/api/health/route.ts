@@ -7,7 +7,7 @@ import { logger } from "~/server/lib/logger";
  * - 不缓存，真实探活（SELECT 1 打库）
  * - 只暴露 ok/db 状态，不泄漏版本与内部细节
  */
-export const err = "force-dynamic";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -18,7 +18,7 @@ export async function GET() {
       t: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error({ err }, "health_check_failed");
+    logger.error({ err: error }, "health_check_failed");
     return NextResponse.json(
       { status: "error", db: "down", t: new Date().toISOString() },
       { status: 503 },
