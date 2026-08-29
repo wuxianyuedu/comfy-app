@@ -284,7 +284,8 @@ function WorkflowEditorBody({
    *  indistinguishable from background.  Re-runs on subgraph
    *  navigation so a cramped child graph still fits. */
   const rf = useReactFlow();
-  const fittedRef = useRef(false);
+  /** 已自动 fit 过的图的 key（detail.id），而非布尔——切换子图时要重新 fit。 */
+  const fittedRef = useRef<string | null>(null);
   /* R-ardot106 (2026-08-17): MiniMap → main-viewport single-click jump.
    *  Pairs with <MiniMap pannable zoomable onClick={onMiniMapJump} /> below. */
   const onMiniMapJump = useMiniMapJump(rf);
@@ -430,19 +431,24 @@ function WorkflowEditorBody({
    * so we don't reference it before declaration (react-hooks/immutability). */
   useEffect(() => {
     if (nodes.length === 0) return;
-    fittedRef.current = false;
+    /* nodes 是异步填充的：依赖里若没有 nodes.length，effect 会在数组还空着时
+     * 提前 return，且此后不再触发，画布将永远停在默认缩放。这里按「图的 key」
+     * 记录已经 fit 过的那份图——首次拿到节点、或切到另一份图/子图时才 fit，
+     * 用户后续增删节点不会反复抢走其视角。 */
+    const fitKey = detail?.id ?? "__root__";
+    if (fittedRef.current === fitKey) return;
+    fittedRef.current = fitKey;
     // Defer one frame so ReactFlow has measured the viewport and laid
     // nodes out before we fit.
     const raf = requestAnimationFrame(() => {
       fitToMiddle();
-      fittedRef.current = true;
       // One final settle (some React Flow minor versions re-trigger
       // their own fitView once measurements resolve a frame later; this
       // reasserts ours).
       requestAnimationFrame(() => fitToMiddle());
     });
     return () => cancelAnimationFrame(raf);
-  }, [rf, detail?.id, fitToMiddle]);
+  }, [rf, detail?.id, fitToMiddle, nodes.length]);
 
   /* 2026-08-25: lazy edge interactivity.  defaultEdgeOptions in the canvas
    *  sets deletable/reconnectable=false so untouched edges stay inert; the
@@ -479,7 +485,6 @@ function WorkflowEditorBody({
     workflowIO,
     fitToMiddle,
     savePatch,
-    subgraphStack,
     onSave,
     onClose,
     setSaving,

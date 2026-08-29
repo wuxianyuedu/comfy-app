@@ -17,7 +17,6 @@ export interface WorkflowPersistenceArgs {
   workflowIO: Record<string, WorkflowIOParam>;
   fitToMiddle: () => void;
   savePatch: ReturnType<typeof api.workflow.update.useMutation>;
-  subgraphStack: { uid: string; name: string }[];
   onSave?: () => void;
   onClose: () => void;
   setSaving: Dispatch<SetStateAction<boolean>>;
@@ -38,7 +37,6 @@ export function useWorkflowPersistence({
   workflowIO,
   fitToMiddle,
   savePatch,
-  subgraphStack,
   onSave,
   onClose,
   setSaving,
@@ -64,11 +62,14 @@ export function useWorkflowPersistence({
     >
   >({});
   useEffect(() => {
-    if (!detail) return;
+    /* 只读取 detail.id：整体引用 detail 会让本 effect 依赖整个对象（每次
+     *  PATCH 后都是新引用），而这里只关心「换了另一份图」这一个信号。 */
+    const detailId = detail?.id;
+    if (!detailId) return;
     /* 2026-08-13 R82: RAW / API 视图各有独立基线。RAW 视图按 rawView 的节点/
      *  位置快照，API 视图按 API 图的快照，互不干扰（避免 RAW 重置时误还原 API
      *  坐标，反之亦然）。 */
-    const snapKey = `${detail.id}`;
+    const snapKey = `${detailId}`;
     if (!(snapKey in originalLayoutByIdRef.current)) {
       originalLayoutByIdRef.current[snapKey] = {
         positions: scopeDetail?.positions ?? null,
@@ -147,7 +148,7 @@ export function useWorkflowPersistence({
       mergePositions: payload.merge === true,
     });
     requestAnimationFrame(() => requestAnimationFrame(() => fitToMiddle()));
-  }, [detail?.id, subgraphStack.length, workflowId, scopeDetail, fitToMiddle, savePatch]);
+  }, [detail, setDetail, workflowId, scopeDetail, fitToMiddle, savePatch]);
 
   /* Re-sync nodes when paramMap changes (update assignedRole badges) */
   useEffect(() => {
@@ -180,7 +181,7 @@ export function useWorkflowPersistence({
     } finally {
       setSaving(false);
     }
-  }, [workflowId, paramMap, workflowIO, onSave, onClose, savePatch]);
+  }, [workflowId, paramMap, workflowIO, onSave, onClose, savePatch, setError, setSaving]);
 
   /* Persist a node's position after the user finishes dragging it.
    *  - Note nodes (`note:<id>`) → write back into rawJson.nodes[i].pos via
@@ -267,7 +268,7 @@ export function useWorkflowPersistence({
           });
         }
       },
-      [workflowId, subgraphStack.length, savePatch]
+      [detail, setDetail, workflowId, savePatch]
     );
 
   return { resetLayout, handleSave, onNodeDragStop };
