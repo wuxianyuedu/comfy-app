@@ -3,7 +3,7 @@
 import React from "react";
 import { Activity, Bell, BookOpen, Box, Image, LayoutTemplate, Plus, Search, Video } from "lucide-react";
 import { useToast } from "./ToastProvider";
-import { type WorkspaceView } from "./nav-items";
+import { type WorkspaceView } from "./NavItems";
 import { WorkspaceNav } from "./WorkspaceNav";
 
 /* ── Home Page — Updream-style Full-Screen Dashboard (Ardot-aligned) ─

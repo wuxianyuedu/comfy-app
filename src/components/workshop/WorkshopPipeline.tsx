@@ -3,7 +3,7 @@
 import React from "react";
 import { Icon } from "@/components/ui/Icon";
 import type { Scene, Character, Shot, StyleRef, ProjectMeta } from "@/lib/workshop/types";
-import { LLMProvider, LLMStatusChip } from "@/components/workshop/llm-context";
+import { LLMProvider, LLMStatusChip } from "@/components/workshop/LLMContext";
 import { ScriptGenerator } from "@/components/workshop/ScriptGenerator";
 import { CharacterDesigner } from "@/components/workshop/CharacterDesigner";
 import { StoryboardPlanner } from "@/components/workshop/StoryboardPlanner";

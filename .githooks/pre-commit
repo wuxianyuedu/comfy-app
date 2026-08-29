@@ -1,0 +1,13 @@
+#!/bin/sh
+# 提交门槛(2026-08-29):结构硬规则 + 类型检查 + lint。
+# 临时绕过用 git commit --no-verify(慎用,绕过会进历史)。
+echo "[pre-commit] 1/3 文件结构硬规则"
+node scripts/check-file-structure.cjs || exit 1
+
+echo "[pre-commit] 2/3 tsc --noEmit"
+npx tsc --noEmit || exit 1
+
+echo "[pre-commit] 3/3 eslint"
+npx eslint . || exit 1
+
+echo "[pre-commit] 全部通过 ✓"

@@ -110,7 +110,17 @@ PR 合并前必须通过：
 ✅ playwright test（关键 E2E 流程）
 ```
 
-**规则**：CI 失败阻断合并；本地 pre-commit（lint-staged）做轻量 lint + typecheck，快速反馈。
+**规则**：CI 失败阻断合并；**本地提交门槛已实装**——`.githooks/pre-commit`（经
+`git config core.hooksPath .githooks` 启用）依次跑：
+
+```
+✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则（见 §12.8、12 §12.6）
+✅ npx tsc --noEmit
+✅ npx eslint .
+```
+
+任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。
+新克隆仓库后需重设一次：`git config core.hooksPath .githooks`。
 
 ### 13.6 分支与合并策略
 

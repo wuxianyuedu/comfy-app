@@ -8,7 +8,7 @@ import { Icon } from "@/components/ui/Icon";
 import type { Character, StyleRef } from "@/lib/workshop/types";
 import { buildCharacterPrompt, buildCharacterNegative } from "@/lib/workshop/prompt-builder";
 import { workshopUid } from "@/lib/workshop/script-parser";
-import { useLLM } from "@/components/workshop/llm-context";
+import { useLLM } from "@/components/workshop/LLMContext";
 import { streamChat } from "@/lib/llm/browser";
 import {
   buildCharacterMessages,

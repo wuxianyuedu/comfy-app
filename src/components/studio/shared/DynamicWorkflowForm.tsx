@@ -15,7 +15,7 @@ import {
   type ControlKind,
 } from "./workflow-io";
 import { GroupedControls } from "./GroupedControls";
-import { EditableLabel } from "./editable-label";
+import { EditableLabel } from "./EditableLabel";
 import {
   AutoResizeTextarea,
   isSeedLike,
@@ -23,8 +23,8 @@ import {
   PortHandle,
   SeedModeButton,
   WirePortRows,
-} from "./workflow-form-controls";
-export { PortHandle } from "./workflow-form-controls";
+} from "./WorkflowFormControls";
+export { PortHandle } from "./WorkflowFormControls";
 
 /* ── DynamicWorkflowForm ──
  * Renders the parameter form for a custom ComfyUI workflow strictly from the

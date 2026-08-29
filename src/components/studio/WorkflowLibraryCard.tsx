@@ -3,8 +3,8 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { MultiModeSelect } from "@/components/studio/ui/MultiModeSelect";
-import { WorkflowIOThumb } from "./workflow-library-helpers";
-import type { WorkflowRow } from "./workflow-library-helpers";
+import { WorkflowIOThumb } from "./workflow-library/WorkflowLibraryHelpers";
+import type { WorkflowRow } from "./workflow-library/WorkflowLibraryHelpers";
 
 type AssignRect = { top: number; left: number; width: number } | null;
 type RowNameRef = { id: string; name: string };

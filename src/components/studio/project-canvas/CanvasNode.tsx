@@ -38,7 +38,7 @@ import { getActiveId } from "./canvas-store";
 import { setActiveTaskId } from "./activeTask";
 import { vanillaApi } from "~/trpc/vanilla";
 import { parseModesJson } from "@/lib/workflow-types";
-import { DebugChainFooter } from "../DebugChainFooter";
+import { DebugChainFooter } from "../debug/DebugChainFooter";
 import { getProjectCanvasRenderChain } from "./canvas-render-chain";
 
 /* 2026-08-13 项目级产出：从节点数据里收集「本次生成用到的参考图」，

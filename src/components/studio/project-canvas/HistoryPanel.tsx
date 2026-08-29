@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, Image, LayoutGrid, List, Music, Plus, RefreshCw, Video, X } from "lucide-react";
-import { MediaThumbnail } from "@/components/studio/MediaThumbnail";
+import { MediaThumbnail } from "@/components/studio/ui/MediaThumbnail";
 import { vanillaApi } from "~/trpc/vanilla";
 
 /* ── Types (mirror /api/tasks 响应) ─────────────────────────── */

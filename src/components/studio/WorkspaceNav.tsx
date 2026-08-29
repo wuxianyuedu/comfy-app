@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { Layers, Settings } from "lucide-react";
-import { NAV_ITEMS, type WorkspaceView } from "./nav-items";
+import { NAV_ITEMS, type WorkspaceView } from "./NavItems";
 
 // Re-export `WorkspaceView` so existing imports like
 //   `import type { WorkspaceView } from "./WorkspaceNav"`
 // keep working. The canonical source is `./nav-items`.
-export type { WorkspaceView } from "./nav-items";
+export type { WorkspaceView } from "./NavItems";
 
 interface WorkspaceNavProps {
   active: WorkspaceView;

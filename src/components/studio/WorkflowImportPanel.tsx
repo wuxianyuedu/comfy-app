@@ -8,7 +8,7 @@
  */
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { MultiModeSelect } from "@/components/studio/ui/MultiModeSelect";
-import type { useWorkflowImport } from "./workflow-library-import";
+import type { useWorkflowImport } from "./workflow-library/workflow-library-import";
 
 type ImportState = ReturnType<typeof useWorkflowImport>;
 

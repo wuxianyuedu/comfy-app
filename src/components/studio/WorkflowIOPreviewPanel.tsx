@@ -27,7 +27,7 @@ import { DynamicWorkflowForm } from "@/components/studio/shared/DynamicWorkflowF
 import { defaultInputValues, type WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 import type { WorkflowIOParam } from "./workflow-types";
 import { RequiredSummary } from "./RequiredSummary";
-import { getIOEditApi } from "./workflow-stores";
+import { getIOEditApi } from "./workflow-editor/WorkflowStores";
 
 export interface WorkflowIoPreviewPanelProps {
   workflowIO: Record<string, WorkflowIOParam>;

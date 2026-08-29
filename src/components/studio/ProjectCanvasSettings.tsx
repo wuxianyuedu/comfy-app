@@ -17,8 +17,8 @@
  */
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useDebugMode } from "./workflow-canvas-settings";
-import { useDebugStore } from "./debug-store";
+import { useDebugMode } from "./canvas/WorkflowCanvasSettings";
+import { useDebugStore } from "./debug/debug-store";
 
 /* ── Toggle (inline, mirrors CanvasSettingsPanel's ToggleRow look) ── */
 function ToggleRow({

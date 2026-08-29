@@ -19,7 +19,7 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { MediaThumbnail as MediaThumb } from "@/components/studio/MediaThumbnail";
+import { MediaThumbnail as MediaThumb } from "@/components/studio/ui/MediaThumbnail";
 
 /* ── Types (mirror /api/materials 响应) ─────────────────────── */
 

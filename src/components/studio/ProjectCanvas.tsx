@@ -50,7 +50,7 @@ import { useProjectPersistence } from "./project-canvas/use-project-persistence"
 import { useProjectManager } from "./project-canvas/use-project-manager";
 import { useCanvasConnections } from "./project-canvas/use-canvas-connections";
 import { useCanvasDrop } from "./project-canvas/use-canvas-drop";
-import { ModalDialog } from "./ModalDialog";
+import { ModalDialog } from "./ui/ModalDialog";
 import { useToast } from "./ToastProvider";
 import { useMiniMapJump } from "./shared/useMiniMapJump";
 import { FpsMeter } from "./FpsMeter";

@@ -9,7 +9,7 @@ import type { Shot, Scene, Character, StyleRef, ShotType } from "@/lib/workshop/
 import { SHOT_TYPE_LABELS } from "@/lib/workshop/types";
 import { buildShotPrompt, buildShotNegative, mergeParams } from "@/lib/workshop/prompt-builder";
 import { workshopUid } from "@/lib/workshop/script-parser";
-import { useLLM } from "@/components/workshop/llm-context";
+import { useLLM } from "@/components/workshop/LLMContext";
 import { streamChat } from "@/lib/llm/browser";
 import { buildStoryboardMessages, parseStoryboard } from "@/lib/llm/prompts";
 

@@ -36,7 +36,7 @@ import {
   setStepLogValidationErrors,
 } from "./stepLogCache";
 import { useActiveTaskId } from "./activeTask";
-import { useCanvasSettings } from "../workflow-canvas-settings";
+import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
 import { ValidationErrorList } from "@/components/studio/shared/ValidationErrorList";
 import { vanillaApi } from "~/trpc/vanilla";
 

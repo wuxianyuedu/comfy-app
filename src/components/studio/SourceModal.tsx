@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo } from "react";
-import { JsonViewer } from "./JsonViewer";
+import { JsonViewer } from "./ui/JsonViewer";
 
 /**
  * 查看源文件弹窗（只读）。

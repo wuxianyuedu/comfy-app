@@ -2,7 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AuroraBackground } from "@/components/studio/AuroraBackground";
+import { AuroraBackground } from "@/components/studio/ui/AuroraBackground";
 import { Icon } from "@/components/ui/Icon";
 import { folderMeta, getFolderTooltip } from "@/lib/model-types";
 import { api } from "~/trpc/react";

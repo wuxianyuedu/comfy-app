@@ -17,8 +17,8 @@ import type { NodeProps } from "@xyflow/react";
 import type { NodeData, NodeTypeConfig } from "../types";
 import { getNodeConfig } from "../node-registry";
 import { PackageFooter } from "./PackageFooter";
-import { DebugChainFooter } from "../../studio/DebugChainFooter";
-import { getWorkflowCanvasRenderChain } from "../../studio/workflow-canvas-render-chain";
+import { DebugChainFooter } from "../../studio/debug/DebugChainFooter";
+import { getWorkflowCanvasRenderChain } from "../../studio/canvas/workflow-canvas-render-chain";
 
 /* ── Layout constants for the custom card (keep handles aligned to rows) ── */
 const HEADER_H = 38;

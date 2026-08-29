@@ -2,8 +2,8 @@
 /* Extracted canvas decoration components — originally inside WorkflowCanvasEditor.tsx. */
 import React, { useState, useRef, useMemo } from "react";
 import { useReactFlow, useStore, Background, BackgroundVariant } from "@xyflow/react";
-import type { CanvasSettings } from "./workflow-canvas-settings";
-import { DEFAULT_CANVAS_SETTINGS } from "./workflow-canvas-settings";
+import type { CanvasSettings } from "./canvas/WorkflowCanvasSettings";
+import { DEFAULT_CANVAS_SETTINGS } from "./canvas/WorkflowCanvasSettings";
 export const GRID_CELL = 10;
 export const GRID_MAJOR_EVERY = 10;
 export const CANVAS_BG = "#0a0a0f";

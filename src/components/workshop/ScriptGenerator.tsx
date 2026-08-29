@@ -9,7 +9,7 @@ import { Icon } from "@/components/ui/Icon";
 import type { Scene, ProjectMeta, ProjectType } from "@/lib/workshop/types";
 import { PROJECT_TYPE_LABELS } from "@/lib/workshop/types";
 import { parseIdeaToScenes, newScene, workshopUid } from "@/lib/workshop/script-parser";
-import { useLLM } from "@/components/workshop/llm-context";
+import { useLLM } from "@/components/workshop/LLMContext";
 import { streamChat } from "@/lib/llm/browser";
 import { buildScriptMessages, parseScriptScenes } from "@/lib/llm/prompts";
 

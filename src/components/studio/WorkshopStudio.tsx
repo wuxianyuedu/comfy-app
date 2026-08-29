@@ -8,7 +8,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ScriptGenerator } from "@/components/workshop/ScriptGenerator";
 import { CharacterDesigner } from "@/components/workshop/CharacterDesigner";
 import { StoryboardPlanner } from "@/components/workshop/StoryboardPlanner";
-import { LLMProvider, LLMStatusChip, LLMSettingsButton } from "@/components/workshop/llm-context";
+import { LLMProvider, LLMStatusChip, LLMSettingsButton } from "@/components/workshop/LLMContext";
 import { vanillaApi } from "~/trpc/vanilla";
 import type {
   ProjectMeta,

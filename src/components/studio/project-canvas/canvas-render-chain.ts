@@ -20,7 +20,7 @@
  * 供 DebugChainFooter 渲染调试标签：点击复制完整相对路径、title 显示完整路径。
  */
 
-import type { RenderChainModule } from "../DebugChainFooter";
+import type { RenderChainModule } from "../debug/DebugChainFooter";
 import type { NodeKind } from "./canvas-types";
 
 /** 项目画布所有节点共用的渲染链路（不随 kind 变化）。
