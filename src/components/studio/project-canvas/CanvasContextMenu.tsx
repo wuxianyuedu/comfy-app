@@ -1,0 +1,88 @@
+"use client";
+
+/** 2026-08-29 T12-3: extracted from ProjectCanvas's right-click context
+ *  menu.  Pure presentational — the caller owns `menu` state and the
+ *  node-creation actions.
+ */
+import { Icon } from "@/components/ui/Icon";
+import { NODE_META, type NodeKind } from "./canvas-types";
+
+interface CanvasContextMenuProps {
+  x: number;
+  y: number;
+  onPick: (kind: NodeKind) => void;
+  /** Spawn a pure-visual Ardot-style test node (no runtime). */
+  onPickTest: () => void;
+  onClose: () => void;
+}
+
+export function CanvasContextMenu({
+  x,
+  y,
+  onPick,
+  onPickTest,
+  onClose,
+}: CanvasContextMenuProps) {
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-40"
+        onClick={onClose}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          onClose();
+        }}
+      />
+      <div
+        className="fixed z-50 w-52 overflow-hidden rounded-xl border border-white/[0.1] bg-[#14121f]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur"
+        style={{ left: x, top: y }}
+      >
+        {/* ── 测试节点（纯视觉，对齐 Ardot 稿）── */}
+        <button
+          type="button"
+          data-canvas-node-kind="workflow-ardot"
+          onClick={onPickTest}
+          className="flex w-full items-center gap-2 rounded-lg border border-violet-400/30 bg-gradient-to-r from-[var(--color-primary)]/15 to-[var(--color-accent)]/10 px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:from-[var(--color-primary)]/25 hover:to-[var(--color-accent)]/15"
+        >
+          <span
+            className="flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold text-white"
+            style={{
+              background: "linear-gradient(135deg, #7C5CFC 0%, #FF5CA8 100%)",
+            }}
+          >
+            W
+          </span>
+          <span className="flex flex-col">
+            <span className="font-medium">测试自定义工作流</span>
+            <span className="text-[10px] text-gray-500">
+              纯视觉 · 对齐 Ardot 稿（无运行时）
+            </span>
+          </span>
+        </button>
+
+        <div className="my-1 h-px bg-white/[0.06]" />
+        <div className="px-2 py-1 text-[10px] tracking-wider text-gray-500 uppercase">
+          创建节点
+        </div>
+        {(Object.keys(NODE_META) as NodeKind[]).map((kind) => {
+          const meta = NODE_META[kind];
+          return (
+            <button
+              key={kind}
+              type="button"
+              data-canvas-node-kind={kind}
+              onClick={() => onPick(kind)}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:bg-white/[0.06]"
+            >
+              <Icon name={meta.icon} size={15} className="text-violet-300" />
+              <span className="flex flex-col">
+                <span className="font-medium">{meta.label}</span>
+                <span className="text-[10px] text-gray-500">{meta.desc}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
