@@ -79,7 +79,7 @@ export function FpsMeter({ className = "" }: { className?: string }) {
       aria-live="off"
     >
       <span aria-hidden className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${dot}`} />
-      <span className={tone}>{fps === null ? "—" : fps}</span>
+      <span className={tone}>{fps ?? "—"}</span>
       <span className="ml-1 text-gray-400">FPS</span>
     </div>
   );

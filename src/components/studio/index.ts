@@ -27,7 +27,6 @@ export { HomePage } from "./HomePage";
 export type { HomePageProps, RecentProject } from "./HomePage";
 
 export { MediaThumbnail } from "./MediaThumbnail";
-export { isVideo } from "@/lib/media";
 
 export { WorkspaceNav } from "./WorkspaceNav";
 export type { WorkspaceView } from "./WorkspaceNav";
@@ -50,8 +49,8 @@ export { HistoryList } from "./HistoryList";
 
 export { WorkshopStudio } from "./WorkshopStudio";
 
-export { ToastProvider, useToast } from "./toast-provider";
-export type { ToastItem } from "./toast-provider";
+export { ToastProvider, useToast } from "./ToastProvider";
+export type { ToastItem } from "./ToastProvider";
 
 export { ModalDialog } from "./ModalDialog";
 export type { ModalDialogProps } from "./ModalDialog";
@@ -61,7 +60,7 @@ export { AuroraBackground } from "./AuroraBackground";
 export { BrowserStatusBar } from "./BrowserStatusBar";
 export type { BrowserStatusBarProps } from "./BrowserStatusBar";
 
-export { LogProvider, useLogPanel } from "./log-provider";
+export { LogProvider, useLogPanel } from "./LogProvider";
 export { LogPanel } from "./LogPanel";
 
 export { NumberField } from "./ui/NumberField";

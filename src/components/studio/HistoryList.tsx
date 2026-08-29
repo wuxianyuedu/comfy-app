@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
-import { useToast } from "@/components/studio/toast-provider";
+import { useToast } from "@/components/studio/ToastProvider";
 import { AuroraBackground } from "@/components/studio/AuroraBackground";
 import { api } from "~/trpc/react";
 

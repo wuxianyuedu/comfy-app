@@ -16,7 +16,7 @@ import {
   type LogEntry,
   type LogLevel,
   type LogFilter,
-} from "./log-provider";
+} from "./LogProvider";
 
 const LEVEL_STYLES: Record<LogLevel, string> = {
   debug: "bg-gray-500/15 text-gray-400 border-gray-500/20",

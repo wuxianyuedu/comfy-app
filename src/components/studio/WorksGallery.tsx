@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
-import { useToast } from "@/components/studio/toast-provider";
+import { useToast } from "@/components/studio/ToastProvider";
 import { AuroraBackground } from "@/components/studio/AuroraBackground";
 import {
   listProjects,

@@ -10,7 +10,7 @@ import "@xyflow/react/dist/style.css";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 
-import { WorkflowEditorInner } from "./workflow-editor-inner";
+import { WorkflowEditorInner } from "./WorkflowEditorInner";
 
 /* 编辑器渲染期异常兜底：全屏降级 UI。此前编辑器没有任何错误边界，
  * 一旦 WorkflowEditorInner 渲染抛错（如子工作流数据形状异常），React

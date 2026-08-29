@@ -16,7 +16,7 @@ import {
 import {
   IO_PORT_WIDTH, IO_PORT_HEIGHT, PORT_ROW_GAP, GROUP_PAD_X,
   GROUP_TITLE_BAR, GROUP_PAD_Y_BOTTOM, GROUP_RAIL_COLOR,
-} from "./workflow-editor-nodes";
+} from "./WorkflowEditorNodes";
 
 export interface BuildInitialNodesCtx {
   detail: WorkflowDetail | null;

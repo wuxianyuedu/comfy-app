@@ -9,7 +9,7 @@
  */
 import { useCallback } from "react";
 import { type api } from "~/trpc/react";
-import { useToast } from "@/components/studio/toast-provider";
+import { useToast } from "@/components/studio/ToastProvider";
 import type { WorkflowRow } from "./workflow-library-helpers";
 
 export interface UseWorkflowActionsArgs {

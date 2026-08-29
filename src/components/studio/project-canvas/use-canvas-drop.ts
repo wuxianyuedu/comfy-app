@@ -18,7 +18,7 @@ import {
   type CanvasNodeType,
   type NodeKind,
 } from "./canvas-types";
-import { useToast } from "../toast-provider";
+import { useToast } from "../ToastProvider";
 
 export interface UseCanvasDropArgs {
   screenToFlowPosition: (p: XYPosition) => XYPosition;

@@ -51,7 +51,7 @@ import { useProjectManager } from "./project-canvas/use-project-manager";
 import { useCanvasConnections } from "./project-canvas/use-canvas-connections";
 import { useCanvasDrop } from "./project-canvas/use-canvas-drop";
 import { ModalDialog } from "./ModalDialog";
-import { useToast } from "./toast-provider";
+import { useToast } from "./ToastProvider";
 import { useMiniMapJump } from "./shared/useMiniMapJump";
 import { FpsMeter } from "./FpsMeter";
 import {

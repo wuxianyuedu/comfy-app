@@ -26,7 +26,7 @@ import { useCallback, useMemo } from "react";
 import { DynamicWorkflowForm } from "@/components/studio/shared/DynamicWorkflowForm";
 import { defaultInputValues, type WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 import type { WorkflowIOParam } from "./workflow-types";
-import { RequiredSummary } from "./required-summary";
+import { RequiredSummary } from "./RequiredSummary";
 import { getIOEditApi } from "./workflow-stores";
 
 export interface WorkflowIoPreviewPanelProps {

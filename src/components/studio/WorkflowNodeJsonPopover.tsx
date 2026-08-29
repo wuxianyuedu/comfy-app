@@ -10,7 +10,7 @@ import { useMemo, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { NodeJsonViewerRequest, RawOutputMeta } from "./workflow-types";
 import { computePos } from "./workflow-utils";
-import { Chip } from "./required-summary";
+import { Chip } from "./RequiredSummary";
 
 /* The popover itself.  Three blocks stacked vertically:
  *   ┌────────────────────────────────────────────────┐

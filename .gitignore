@@ -63,3 +63,9 @@ start-tauri*.exe
 start-tauri*.spec
 /dist/
 /build-launcher/
+
+# 运行时产物与本地工具(2026-08-29 文件组织审查补充)
+/log/
+/run/
+__pycache__/
+/.workbuddy/

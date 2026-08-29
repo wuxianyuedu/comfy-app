@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Folder, X } from "lucide-react";
 
 import { MediaThumbnail } from "@/components/studio/MediaThumbnail";
-import { useToast } from "@/components/studio/toast-provider";
+import { useToast } from "@/components/studio/ToastProvider";
 import { isVideo } from "@/lib/media";
 import { vanillaApi } from "~/trpc/vanilla";
 

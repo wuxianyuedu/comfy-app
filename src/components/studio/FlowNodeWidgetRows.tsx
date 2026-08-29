@@ -8,7 +8,7 @@ import { portColor, inferInputType, inferIsMultiline } from "@/lib/comfyui/types
 import { friendlyInputName } from "@/lib/comfyui/node-titles";
 import { renderWidgetValue, valueCellColor, withAlpha, sanitizeComboLabel } from "./workflow-utils";
 import { IoCheckbox, type IOEditContextValue } from "./io-edit-context";
-import { StringTextarea } from "./string-textarea";
+import { StringTextarea } from "./StringTextarea";
 import type { WorkflowNodeData, RawInputMeta } from "./workflow-types";
 
 interface FlowNodeWidgetRowsProps {

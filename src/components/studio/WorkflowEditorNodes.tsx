@@ -6,9 +6,9 @@ import React, { useMemo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "@/lib/comfyui/types";
 import { renderMarkdown } from "@/lib/comfyui/markdown";
-import { WorkflowEdge } from "@/components/studio/workflow-edge";
-import { FlowNode } from "./workflow-node";
-import { WorkflowSubgraphNode } from "./workflow-subgraph-node";
+import { WorkflowEdge } from "@/components/studio/WorkflowEdge";
+import { FlowNode } from "./WorkflowNode";
+import { WorkflowSubgraphNode } from "./WorkflowSubgraphNode";
 import type { WorkflowGroupData, WorkflowIoPortData, WorkflowNoteData } from "./workflow-types";
 import { NODE_TITLE_H, lightenHex, hexToRgba, mixHex } from "./workflow-utils";
 

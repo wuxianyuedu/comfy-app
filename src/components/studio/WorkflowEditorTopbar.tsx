@@ -7,7 +7,7 @@
 import React, { useCallback } from "react";
 import { ArrowLeft, RotateCw } from "lucide-react";
 import type { WorkflowDetail } from "./workflow-types";
-import { useToast } from "@/components/studio/toast-provider";
+import { useToast } from "@/components/studio/ToastProvider";
 import { isNoteType } from "./workflow-utils";
 import { useDebugStore } from "./debug-store";
 import {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FileText, Lock, TriangleAlert } from "lucide-react";
-import { useLogPanel } from "./log-provider";
+import { useLogPanel } from "./LogProvider";
 
 /* ── Tauri window bottom status bar ─────────────────────────
    Shows the current browser address (window.location.href) and

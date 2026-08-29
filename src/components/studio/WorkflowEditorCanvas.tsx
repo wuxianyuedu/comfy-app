@@ -13,16 +13,16 @@ import {
   type Node, type Edge,
   type OnNodesChange, type OnEdgesChange,
 } from "@xyflow/react";
-import { CanvasGrid, ZoomIndicator, CanvasRulers } from "./workflow-canvas-decorations";
+import { CanvasGrid, ZoomIndicator, CanvasRulers } from "./WorkflowCanvasDecorations";
 import {
   CanvasSettingsButton,
   isCustomCanvasSettings,
   type CanvasSettings,
 } from "./workflow-canvas-settings";
-import { PORT_ROLES } from "./workflow-node";
+import { PORT_ROLES } from "./WorkflowNode";
 import { FpsMeter } from "./FpsMeter";
 import type { WorkflowNodeData } from "./workflow-types";
-import { workflowNodeTypes, workflowEdgeTypes } from "./workflow-editor-nodes";
+import { workflowNodeTypes, workflowEdgeTypes } from "./WorkflowEditorNodes";
 
 /* Role key → minimap colour.  Hoisted to a module-level Map so the MiniMap
  *  `nodeColor` callback can stay referentially stable (empty useCallback

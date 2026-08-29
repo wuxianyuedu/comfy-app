@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Activity, Bell, BookOpen, Box, Image, LayoutTemplate, Plus, Search, Video } from "lucide-react";
-import { useToast } from "./toast-provider";
+import { useToast } from "./ToastProvider";
 import { type WorkspaceView } from "./nav-items";
 import { WorkspaceNav } from "./WorkspaceNav";
 

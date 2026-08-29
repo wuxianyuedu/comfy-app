@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Redo2, Undo2 } from "lucide-react";
-import { useToast } from "./toast-provider";
+import { useToast } from "./ToastProvider";
 import { vanillaApi } from "~/trpc/vanilla";
 
 /* ── Film Studio — Updream-style Video Editor (Ardot-aligned) ─

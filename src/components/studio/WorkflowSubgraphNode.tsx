@@ -14,8 +14,8 @@ import type { WorkflowSubgraphData,
 import { valueCellColor,
   renderSubgraphWidgetValue, sanitizeComboLabel, NODE_TITLE_H, hexToRgba, mixHex,
 } from "./workflow-utils";
-import { FrostLayer } from "./node-frost";
-import { StringTextarea } from "./string-textarea";
+import { FrostLayer } from "./NodeFrost";
+import { StringTextarea } from "./StringTextarea";
 import { useIOEditContext, IoCheckbox, NodeIdChip } from "./io-edit-context";
 export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ data, selected }: { data: WorkflowSubgraphData; selected?: boolean }) {
   const io = useIOEditContext();

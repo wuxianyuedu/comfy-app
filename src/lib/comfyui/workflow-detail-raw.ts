@@ -124,7 +124,7 @@ export async function buildRawInputs(
    * 拿不到表也只是退回旧逻辑，不会拖慢。 */
   let widgetOrderTable: Record<string, string[]> | null = null;
   const ensureWidgetOrderTable = async (): Promise<Record<string, string[]>> => {
-    if (widgetOrderTable === null) widgetOrderTable = await fetchWidgetOrderTable();
+    widgetOrderTable ??= await fetchWidgetOrderTable();
     return widgetOrderTable;
   };
   if (raw && Array.isArray(raw.nodes)) {

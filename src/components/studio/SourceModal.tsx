@@ -33,7 +33,7 @@ export interface SourceModalProps {
 
 export function SourceModal({ data, loading, error, onClose }: SourceModalProps) {
   const activeText = useMemo(() => {
-    if (!data || data.source == null) return "";
+    if (data?.source == null) return "";
     return JSON.stringify(data.source, null, 2);
   }, [data]);
 
@@ -124,7 +124,7 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
             <p className="px-5 py-3 text-sm text-gray-500">加载中…</p>
           ) : error ? (
             <p className="px-5 py-3 text-sm text-red-400">{error}</p>
-          ) : !data || data.source == null ? (
+          ) : data?.source == null ? (
             <p className="px-5 py-3 text-sm text-gray-500">没有可显示的数据</p>
           ) : (
             <JsonViewer

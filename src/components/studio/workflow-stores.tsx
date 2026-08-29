@@ -35,7 +35,7 @@ import type {
   NodeJsonViewerContextValue,
 } from "./workflow-types";
 import { rectToAnchor } from "./workflow-utils";
-import { NodeJsonPopover } from "./workflow-node-json-popover";
+import { NodeJsonPopover } from "./WorkflowNodeJsonPopover";
 import { vanillaApi } from "~/trpc/vanilla";
 
 /* ───────────────────────────────────────────────────────────────────────

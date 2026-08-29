@@ -40,9 +40,9 @@ import {
   createNodeJsonViewerStore,
 } from "./workflow-stores";
 
-import { WorkflowEditorTopBar } from "./workflow-editor-topbar";
-import { WorkflowIoPreviewPanel } from "./workflow-io-preview-panel";
-import { WorkflowEditorCanvas } from "./workflow-editor-canvas";
+import { WorkflowEditorTopBar } from "./WorkflowEditorTopbar";
+import { WorkflowIoPreviewPanel } from "./WorkflowIOPreviewPanel";
+import { WorkflowEditorCanvas } from "./WorkflowEditorCanvas";
 import { buildInitialNodes } from "./workflow-editor-build-nodes";
 import { useWorkflowDetailLoader } from "./workflow-editor-detail-loader";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";

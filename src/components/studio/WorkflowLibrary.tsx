@@ -9,7 +9,7 @@ import {
 } from "react";
 import dynamic from "next/dynamic";
 import { AuroraBackground } from "@/components/studio/AuroraBackground";
-import { useToast } from "@/components/studio/toast-provider";
+import { useToast } from "@/components/studio/ToastProvider";
 import { ModelTagManager } from "@/components/studio/ModelTagManager";
 import { getWorkflowType, normalizeTaskType } from "@/lib/workflow-types";
 import { api } from "~/trpc/react";
@@ -23,7 +23,7 @@ import {
   WorkflowListBody,
 } from "./workflow-library-helpers";
 import type { WorkflowRow } from "./workflow-library-helpers";
-import { WorkflowCard } from "./workflow-library-card";
+import { WorkflowCard } from "./WorkflowLibraryCard";
 import { useWorkflowActions } from "./workflow-library-actions";
 import { useWorkflowImport } from "./workflow-library-import";
 import { WorkflowImportPanel } from "./WorkflowImportPanel";
