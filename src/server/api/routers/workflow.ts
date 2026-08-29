@@ -592,7 +592,9 @@ export const workflowRouter = createTRPCRouter({
       );
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Workflow not found" });
 
-      const { id, modelTags, upgradeFromApi, mergePositions, groups, notes, ...rest } = input;
+      // patch 为显式字段构造（不含 ...rest 展开），故 upgradeFromApi 无需在此
+      // 排除——它的读取走下方 input.upgradeFromApi，解构里留着反而是死变量。
+      const { id, modelTags, mergePositions, groups, notes, ...rest } = input;
       // T7: WorkflowTemplate 无 thumb 列（旧遗留字段），保留透传不参与 DB 写入
       const patch: Partial<WorkflowTemplate> & { thumb?: string } = {
         name: rest.name,

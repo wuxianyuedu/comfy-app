@@ -224,7 +224,7 @@ export function inferOutputTypeAll(classType: string): Record<string, string> {
  *   - booleans → ✓ / ✕ icon
  *   - long strings → first 50 chars + ellipsis (full text in title)
  *   - objects → "{...}" */
-export function renderWidgetValue(value: any, classType: string, key: string): string {
+export function renderWidgetValue(value: any): string {
   if (value === undefined || value === null) return "—";
   if (typeof value === "boolean") return value ? "✓" : "✕";
   if (typeof value === "number") {
@@ -690,7 +690,7 @@ export function inferSourceOutNames(
 
     // 静态 + raw 都没有，从消费者（下游节点）的输入键反推
     const bySlot: Record<number, string[]> = {};
-    for (const [_, consumerRaw] of Object.entries(detail.graph ?? {})) {
+    for (const consumerRaw of Object.values(detail.graph ?? {})) {
       const inp = (consumerRaw)?.inputs ?? {};
       for (const [inputKey, value] of Object.entries(inp)) {
         if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;

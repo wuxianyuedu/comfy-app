@@ -65,7 +65,7 @@ function computeLayout(graph: ComfyGraph): Map<string, { x: number; y: number }>
   // Assign layers via BFS from roots (in-degree = 0)
   const layers: string[][] = [];
   const visited = new Set<string>();
-  let queue = [...entries.filter(([id, n]) => !deps.get(id)?.size).map(([id]) => id)];
+  let queue = [...entries.filter(([id]) => !deps.get(id)?.size).map(([id]) => id)];
 
   while (queue.length || visited.size < entries.length) {
     if (!queue.length) {

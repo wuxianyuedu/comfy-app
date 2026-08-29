@@ -153,7 +153,7 @@ export function FlowNodeWidgetRows({
                     }}
                     title={String(v)}
                   >
-                    {renderWidgetValue(v, data.classType, k)}
+                    {renderWidgetValue(v)}
                   </span>
                 </>
               </div>

@@ -79,7 +79,7 @@ async function appendFilmLog(
 }
 
 // ── script → storyboard ────────────────────────────────────
-async function expandScriptLLM(raw: string, type: string): Promise<
+async function expandScriptLLM(raw: string): Promise<
   Array<{ heading: string; action: string; dialogue: string; shotCount: number }>
 > {
 
@@ -131,7 +131,7 @@ async function parseScriptToShots(
 ): Promise<FilmShotInput[]> {
   let scenes: Array<{ heading: string; action: string; shotCount: number }>;
   try {
-    const expanded = await expandScriptLLM(raw, type);
+    const expanded = await expandScriptLLM(raw);
     scenes = expanded.map((expanded) =>({ heading: expanded.heading, action: expanded.action, shotCount: expanded.shotCount }));
   } catch {
     // offline fallback — reuse the workshop parser
