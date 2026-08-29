@@ -7,7 +7,7 @@ import { DynamicWorkflowForm } from "@/components/studio/shared/DynamicWorkflowF
 import { Field, ResultCard, btnCls } from "./CanvasNode";
 import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 import type { WorkflowModesState } from "./WorkflowNode";
-import type { CanvasNodeData, NodeKind } from "./canvas-types";
+import type { CanvasNodeData } from "./canvas-types";
 import { IMAGE_WORKFLOW_TYPES, VIDEO_WORKFLOW_TYPES, normalizeTaskType } from "@/lib/workflow-types";
 import { setActiveTaskId } from "./activeTask";
 import { vanillaApi } from "~/trpc/vanilla";

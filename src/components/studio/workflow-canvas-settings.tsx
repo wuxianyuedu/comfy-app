@@ -27,7 +27,7 @@
  *  Storage key is versioned (`v1`) so future shape changes can migrate
  *  without colliding with old payloads.
  */
-import React, { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import React, { useCallback, useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 export interface CanvasSettings {

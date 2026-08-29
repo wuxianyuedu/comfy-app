@@ -443,7 +443,6 @@ async function watchFilm(id: string) {
 let _ffmpegOk: boolean | null = null;
 export async function isFFmpegAvailable(): Promise<boolean> {
   if (_ffmpegOk !== null) return _ffmpegOk;
-  const bin = process.env.FFMPEG_BIN ?? "ffmpeg";
   try {
     await runFFmpeg(["-version"], undefined, 8000);
     _ffmpegOk = true;

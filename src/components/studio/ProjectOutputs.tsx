@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { MediaThumbnail as MediaThumb } from "@/components/studio/MediaThumbnail";
 import { AuroraBackground } from "@/components/studio/AuroraBackground";
 import { getActiveId, listProjects, type CanvasProject } from "@/components/studio/project-canvas/canvas-store";

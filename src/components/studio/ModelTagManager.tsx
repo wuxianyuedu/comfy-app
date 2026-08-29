@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { vanillaApi } from "~/trpc/vanilla";
 

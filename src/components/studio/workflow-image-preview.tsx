@@ -1,6 +1,6 @@
 "use client";
 /* Extracted image preview + string textarea — originally inside WorkflowCanvasEditor.tsx. */
-import React, { useState } from "react";
+import { useState } from "react";
 import type { RawInputMeta } from "./workflow-types";
 
 /** The roles a node can be assigned in the paramMap */

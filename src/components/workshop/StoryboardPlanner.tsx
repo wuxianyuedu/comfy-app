@@ -244,7 +244,6 @@ export function StoryboardPlanner({
       ) : (
         <div className="space-y-3">
           {shots.map((shot) => {
-            const scene = scenes.find((scene) => scene.id === shot.sceneId);
             const linkedChars = characters.filter((character) => shot.characterIds.includes(character.id));
             return (
               <div key={shot.id} className="rounded-xl border border-border bg-surface p-4">

@@ -2,7 +2,6 @@
 
 import React, { useMemo } from "react";
 import { Icon } from "@/components/ui/Icon";
-import { MultiModeSelect } from "@/components/studio/ui/MultiModeSelect";
 import { SourceModal } from "@/components/studio/SourceModal";
 import type { WorkflowPreview as WorkflowPreviewT } from "@/lib/comfyui/workflow";
 import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
@@ -132,7 +131,6 @@ export function deriveSyncFlags(row: WorkflowRow): {
 /* ── detectWorkflowFormat (2026-08-12 R71-1, extracted to shared lib in R76) ──
  * Implementation lives in @/lib/workflow-format so the server-side
  * PATCH endpoint can validate the same JSON shape (drag-to-upgrade). */
-import { detectWorkflowFormat } from "@/lib/workflow-format";
 
 /* ── WorkflowIOThumb (2026-08-09) ──
  * When a workflow row has no graph preview (no API graph or no preview-built

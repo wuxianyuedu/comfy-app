@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-empty-function, @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/prefer-nullish-coalescing */
+/* eslint-disable @typescript-eslint/no-empty-function, @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 "use client";
 /* Extracted WorkflowEditorInner (the inner editor that must live inside
  * ReactFlowProvider).  Node renderers / registries moved to
@@ -11,22 +11,14 @@ import {
   type Node, type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { friendlyNodeTitle } from "@/lib/comfyui/node-titles";
 import { refreshCustomNodes } from "@/config/custom-nodes";
 import { SourceModal } from "@/components/studio/SourceModal";
 import { api } from "~/trpc/react";
-import { vanillaApi } from "~/trpc/vanilla";
 import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
-import type {
-  WorkflowNodeData, WorkflowSubgraphData, WorkflowGroupData, WorkflowIoPortData, WorkflowNoteData,
-  RawInputMeta, RawOutputMeta, ComfyGraphNode, WorkflowDetail,
+import type { WorkflowDetail,
   WorkflowIOParam,
 } from "./workflow-types";
-import {
-  NODE_TITLE_H, computeKahnLayout, buildEdges,
-  buildInputSources, buildConnectedOutputs, inferSourceOutNames,
-  computeGroupDepths, extractNoteTitle,
-  isNoteType,
+import { buildEdges,
 } from "./workflow-utils";
 import { useMiniMapJump } from "./shared/useMiniMapJump";
 import {
@@ -47,10 +39,7 @@ import {
   createRgthreeGroupsStore,
   createNodeJsonViewerStore,
 } from "./workflow-stores";
-import {
-  IO_PORT_WIDTH, IO_PORT_HEIGHT, PORT_ROW_GAP, GROUP_PAD_X,
-  GROUP_TITLE_BAR, GROUP_PAD_Y_BOTTOM, GROUP_RAIL_COLOR,
-} from "./workflow-editor-nodes";
+
 import { WorkflowEditorTopBar } from "./workflow-editor-topbar";
 import { WorkflowIoPreviewPanel } from "./workflow-io-preview-panel";
 import { WorkflowEditorCanvas } from "./workflow-editor-canvas";
@@ -342,7 +331,6 @@ function WorkflowEditorBody({
    * src/lib/server-cache.ts). On a cache hit we render immediately and then
    * refresh the stored copy in the background without disturbing the UI. */
   const {
-    pushSubgraphStack,
     fetchDetail,
     forceReloadDetail,
     onEnterSubgraph,

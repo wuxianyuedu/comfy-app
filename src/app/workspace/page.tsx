@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
@@ -79,7 +79,7 @@ export default function WorkspacePage() {
   // ── Layout state ──
   const [viewMode, setViewMode] = useState<WorkspaceView>("home");
   // View history stack for smart back-navigation (avoids jumping straight to home)
-  const [viewHistory, setViewHistory] = useState<WorkspaceView[]>(["home"]);
+  const [, setViewHistory] = useState<WorkspaceView[]>(["home"]);
 
   /** Navigate to a new view while recording history for back-button support. */
   const navigateTo = useCallback((view: WorkspaceView) => {
@@ -104,7 +104,7 @@ export default function WorkspacePage() {
   const [canvasSeedNew, setCanvasSeedNew] = useState(false);
 
   // ── Bump to re-read canvas-store (recent projects) ──
-  const [recentsKey, setRecentsKey] = useState(0);
+  const [recentsKey] = useState(0);
 
   // ── When set, the infinite canvas receives this workflow and drops a
   //    `kind="workflow"` node for it (from the Workflow Library "使用" action).

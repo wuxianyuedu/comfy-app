@@ -15,7 +15,7 @@
  * store (useSyncExternalStore + localStorage `v1`), so toggling here
  * instantly takes effect there and vice versa.
  */
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useDebugMode } from "./workflow-canvas-settings";
 import { useDebugStore } from "./debug-store";

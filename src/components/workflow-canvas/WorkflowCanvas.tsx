@@ -28,10 +28,8 @@ import {
   type Connection,
   type OnConnect,
   type OnNodesChange,
-  type OnEdgesChange,
   type OnEdgesDelete,
   type NodeChange,
-  type EdgeChange,
   type Node,
   type Edge,
 } from "@xyflow/react";
@@ -46,7 +44,6 @@ import { refreshCustomNodes, CUSTOM_NODES_UPDATED_EVENT } from "@/config/custom-
 import type {
   ComfyGraph,
   WorkflowNode,
-  WorkflowEdge,
   NodeData,
   ParamMap,
 } from "./types";
@@ -95,7 +92,7 @@ export default function WorkflowCanvas({
   // registry — the mount-only fetch in the useEffect below isn't enough once a
   // user re-parses from CustomNodesSettings (the registry is a module-level
   // mutable const, so React has no other reason to re-render).
-  const [customNodesVersion, setCustomNodesVersion] = useState(0);
+  const [, setCustomNodesVersion] = useState(0);
 
   // Live-refresh the custom-node registry from the on-disk manifest so newly
   // parsed packages show up in the add-node menu without a server restart.

@@ -43,7 +43,7 @@ export function WorkshopStudio() {
   const [styles, setStyles] = React.useState<StyleRef[]>([]);
   const [checkpoints, setCheckpoints] = React.useState<string[]>([]);
   const [checkpoint, setCheckpoint] = React.useState("");
-  const [generating, setGenerating] = React.useState(false);
+  const [generating] = React.useState(false);
 
   // Load styles (skills) + checkpoints
   React.useEffect(() => {

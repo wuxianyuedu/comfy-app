@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Handle, Position } from "@xyflow/react";
-import { ioLabel, numericBounds, type ControlKind, type WorkflowIOEntry, type WorkflowIOMap } from "./workflow-io";
+import { ioLabel, numericBounds, type ControlKind, type WorkflowIOEntry } from "./workflow-io";
 import { NumberField } from "@/components/studio/ui/NumberField";
 
 /* ── Workflow-canvas endpoint styling (compact canvas mode) ──

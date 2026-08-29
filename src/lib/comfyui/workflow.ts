@@ -232,20 +232,9 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
   }
   for (const arr of Object.values(byLevel)) arr.sort();
 
-  // Compute the densest level for vertical sizing.
-  const maxRows = Math.max(1, ...Object.values(byLevel).map((sizing) => sizing.length));
-  // Number of distinct levels (1 means everything is a single column).
-  const levelCount = Object.keys(byLevel).length || 1;
-
   // Layout constants.
   const width = 280;
   const height = 80;
-  const padX = 16;
-  const padY = 12;
-  const innerW = width - padX * 2;
-  const innerH = height - padY * 2;
-
-  const colStep = levelCount > 1 ? innerW / (levelCount - 1) : 0;
 
   const nodes: WorkflowPreviewNode[] = visible.map((id) => {
 
@@ -257,12 +246,6 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
 
 
     const row = arr.indexOf(id);
-
-
-    const nodeX = padX + (levelCount > 1 ? lv * colStep : innerW / 2);
-
-
-    const nodeY = padY + (maxRows > 1 ? (row / (maxRows - 1)) * innerH : innerH / 2);
 
 
     return {

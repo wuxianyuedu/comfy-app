@@ -6,7 +6,7 @@
  *    wf-*-node.tsx →  import store hooks（消费方，无环）
  *  本文件不 import 任何 store / context，只接收 props 渲染。
  * ════════════════════════════════════════════════════════════════════════ */
-import React, { useMemo, useEffect, useState } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { NodeJsonViewerRequest, RawOutputMeta } from "./workflow-types";
 import { computePos } from "./workflow-utils";

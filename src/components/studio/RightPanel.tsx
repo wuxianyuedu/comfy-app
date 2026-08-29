@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 
 /* ── Updream-style Right Panel ───────────────────────────
   Slide-out panel (360px) with tabbed content:

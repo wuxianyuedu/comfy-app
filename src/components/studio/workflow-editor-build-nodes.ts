@@ -6,7 +6,6 @@
 import type { Node } from "@xyflow/react";
 import { friendlyNodeTitle } from "@/lib/comfyui/node-titles";
 import type {
-  WorkflowNodeData, WorkflowSubgraphData, WorkflowGroupData, WorkflowIoPortData, WorkflowNoteData,
   RawInputMeta, RawOutputMeta, ComfyGraphNode, WorkflowDetail,
 } from "./workflow-types";
 import {

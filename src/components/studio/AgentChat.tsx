@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { chatAgent, type ChatMessage, type AgentSpec } from "@/lib/agent/agentic";
 import { Icon } from "@/components/ui/Icon";
 

@@ -1,5 +1,6 @@
 import tseslint from "typescript-eslint";
 import next from "eslint-config-next/core-web-vitals";
+import unusedImports from "eslint-plugin-unused-imports";
 
 export default tseslint.config(
   {
@@ -29,7 +30,11 @@ export default tseslint.config(
         projectService: true,
       },
     },
+    plugins: {
+      "unused-imports": unusedImports,
+    },
     rules: {
+      "unused-imports/no-unused-imports": "error",
       "@typescript-eslint/array-type": "off",
       "@typescript-eslint/consistent-type-definitions": "off",
       "@typescript-eslint/consistent-type-imports": [

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/studio/toast-provider";
 import { AuroraBackground } from "@/components/studio/AuroraBackground";
 import {

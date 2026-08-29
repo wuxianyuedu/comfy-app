@@ -2,37 +2,18 @@
 "use client";
 /* Extracted WorkflowSubgraphNode (ComfyUI subgraph wrapper renderer).
  * Originally inside WorkflowCanvasEditor.tsx. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useState } from "react";
 import { Handle, Position } from "@xyflow/react";
 import {
-  portColor, portLabel, inferInputType, inferOutputType, inferIsMultiline,
-  edgeType, edgeTypeByInputName,
+  portColor, inferIsMultiline,
 } from "@/lib/comfyui/types";
-import { friendlyNodeTitle, friendlyInputName, friendlySubgraphLabel } from "@/lib/comfyui/node-titles";
-import { renderMarkdown } from "@/lib/comfyui/markdown";
-import { PackageFooter } from "@/components/workflow-canvas/nodes/PackageFooter";
-import { getCustomNodePackage, refreshCustomNodes } from "@/config/custom-nodes";
-import { DynamicWorkflowForm } from "@/components/studio/shared/DynamicWorkflowForm";
-import { WorkflowEdge } from "@/components/studio/workflow-edge";
-import { SourceModal } from "@/components/studio/SourceModal";
-import { useToast } from "@/components/studio/toast-provider";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
-import type {
-  WorkflowNodeData, WorkflowSubgraphData, WorkflowGroupData, WorkflowIoPortData, WorkflowNoteData,
-  RawInputMeta, RawOutputMeta, ComfyGraphNode, WorkflowDetail, WorkflowGroup,
-  WorkflowIOParam, IoRef, IOEditContextValue, RgthreeGroupsContextValue,
-  NodeJsonViewerRequest, NodeJsonViewerContextValue, RawMetaEntry,
+import type { WorkflowSubgraphData,
 } from "./workflow-types";
-import {
-  inferOutputTypeAll, renderWidgetValue, valueCellColor, withAlpha,
-  renderSubgraphWidgetValue, sanitizeComboLabel, resolveNodePackage,
-  pseudoFrostPalette, NODE_TITLE_H, colorToRgba, hexToRgba,
-  lightenHex, parseHex, mixHex,
+import { valueCellColor,
+  renderSubgraphWidgetValue, sanitizeComboLabel, NODE_TITLE_H, hexToRgba, mixHex,
 } from "./workflow-utils";
-import { Chip, FrontendOnlyBadge, RequiredSummary } from "./required-summary";
 import { FrostLayer } from "./node-frost";
-import { WorkflowImagePreview } from "./workflow-image-preview";
 import { StringTextarea } from "./string-textarea";
 import { useIOEditContext, IoCheckbox, NodeIdChip } from "./io-edit-context";
 export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ data, selected }: { data: WorkflowSubgraphData; selected?: boolean }) {

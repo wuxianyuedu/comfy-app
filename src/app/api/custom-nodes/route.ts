@@ -10,7 +10,7 @@
  * it only reads source text and writes the generated manifest + report.
  */
 import { type NextRequest, NextResponse } from "next/server";
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { readEnvVar, writeEnvVar } from "@/lib/envfile";

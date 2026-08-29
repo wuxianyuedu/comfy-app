@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { api } from "~/trpc/react";
 
@@ -125,7 +125,7 @@ export default function SettingsPage() {
     if (!settings) return;
     setSaving(true);
     try {
-      const res = await saveSetting.mutateAsync(settings);
+      await saveSetting.mutateAsync(settings);
       await settingsQ.refetch();
       flash("ok", "偏好已保存");
     } catch (e: any) {

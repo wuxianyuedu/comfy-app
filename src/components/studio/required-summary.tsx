@@ -1,6 +1,6 @@
 "use client";
 /* Extracted small presentational chips — originally inside WorkflowCanvasEditor.tsx. */
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 export function RequiredSummary({ io }: { io: WorkflowIOMap | null }) {
   const counts = useMemo(() => {

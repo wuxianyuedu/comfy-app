@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLogPanel } from "./log-provider";
 
 /* ── Tauri window bottom status bar ─────────────────────────

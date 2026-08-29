@@ -11,19 +11,17 @@
 
 import type {
   ComfyGraph,
-  ComfyGraphNode,
   WorkflowNode,
   WorkflowEdge,
   NodeData,
-  NodeMeta,
   ParamMap,
+  FieldDef,
 } from "./types";
 import { getNodeConfig } from "./node-registry";
 import { specToField } from "@/config/custom-nodes";
 import type { Node, Edge } from "@xyflow/react";
 
 /* ── Constants ── */
-const NODE_WIDTH = 220;
 const NODE_HEIGHT = 80;
 const H_GAP = 180;        // horizontal gap between layers
 const V_GAP = 60;         // vertical gap within a layer
@@ -31,13 +29,6 @@ const LAYER_X_BASE = 40;  // left margin
 const LAYER_Y_BASE = 40;  // top margin
 
 /* ── Simple layered layout (topological sort + BFS layers) ── */
-
-interface LayoutNode {
-  id: string;
-  node: ComfyGraphNode;
-  layer: number;
-  indexInLayer: number;
-}
 
 function computeLayout(graph: ComfyGraph): Map<string, { x: number; y: number }> {
   const entries = Object.entries(graph);
@@ -266,7 +257,7 @@ function buildFields(classType: string, inputs: Record<string, any>) {
   return Array.from(fieldMap.values());
 }
 
-function inferField(key: string, value: any): import("./types").FieldDef {
+function inferField(key: string, value: any): FieldDef {
   if (typeof value === "number")
     return { key, label: key, type: "number", group: "参数" };
   if (typeof value === "boolean")

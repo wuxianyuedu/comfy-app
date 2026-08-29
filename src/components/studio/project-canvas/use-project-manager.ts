@@ -18,16 +18,12 @@ import type { Dispatch, SetStateAction } from "react";
 import type { Edge, FitViewOptions } from "@xyflow/react";
 import type { CanvasNodeType } from "./canvas-types";
 import {
-  clearActiveIfDraft,
   createDraftProject,
   deleteProject,
   findNextAvailableName,
   getProject,
-  isEmptyDraftName,
   listProjects,
-  reapEmptyProject,
   setActive,
-  upsertProject,
   type CanvasProject,
 } from "./canvas-store";
 import { makeFitViewScheduler } from "./canvas-helpers";

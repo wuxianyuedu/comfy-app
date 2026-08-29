@@ -510,7 +510,6 @@ export function buildEdges(
     if (!raw || typeof raw !== "object") continue;
     const inputs = (raw).inputs;
     if (!inputs || typeof inputs !== "object") continue;
-    const dstClass = nodesById[nodeId]?.class_type;
     for (const [inputName, value] of Object.entries(inputs)) {
       if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
       const srcId = value[0];

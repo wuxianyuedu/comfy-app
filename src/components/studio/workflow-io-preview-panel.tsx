@@ -22,7 +22,7 @@
  *  on top so an un-saved rename wins immediately. */
 "use client";
 
-import React, { useCallback, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { DynamicWorkflowForm } from "@/components/studio/shared/DynamicWorkflowForm";
 import { defaultInputValues, type WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 import type { WorkflowIOParam } from "./workflow-types";

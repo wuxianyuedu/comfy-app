@@ -87,19 +87,6 @@ function PortDot({
   );
 }
 
-/* 中点分隔符（chip 内：本机 · T2I · image_z_image_int8）*/
-function MidDot() {
-  return (
-    <span
-      aria-hidden
-      className="select-none text-[12px] leading-none"
-      style={{ color: "var(--color-ink-placeholder)" }}
-    >
-      ·
-    </span>
-  );
-}
-
 /* ── STRING 端口行（label subrow + textarea，不含端点；端点由外层 wrapper 渲染）── */
 function PortRowString({
   label,

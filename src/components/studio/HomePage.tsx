@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
 import { useToast } from "./toast-provider";
 import { type WorkspaceView } from "./nav-items";
 import { WorkspaceNav } from "./WorkspaceNav";

@@ -278,13 +278,6 @@ export interface LocalChecksumEntry {
   mtimeMs: number;
 }
 
-/** Same algorithm as `importSource.checksum(text)`: SHA-1 of the UTF-8
- *  text, first 16 hex characters.  Kept in sync by hand — if you change
- *  one, change the other. */
-function checksumOfText(text: string): string {
-  return createHash("sha1").update(text).digest("hex").slice(0, 16);
-}
-
 /** Compute the checksum of a single file by streaming its contents.
  *  Resolves to `null` on any read error (permission, vanished, etc.) so
  *  the caller can skip it without aborting the whole scan. */

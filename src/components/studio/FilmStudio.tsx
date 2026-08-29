@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-floating-promises, react-hooks/preserve-manual-memoization */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, react-hooks/preserve-manual-memoization */
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "./toast-provider";
 import { vanillaApi } from "~/trpc/vanilla";
 
@@ -137,31 +137,30 @@ export function FilmStudio() {
   const { success, error, info } = useToast();
 
   /* ── Original business state (preserved) ── */
-  const [title, setTitle] = useState("未命名成片");
+  const [title] = useState("未命名成片");
   const [script, setScript] = useState(
     "清晨，老咖啡馆里，一位老人正在擦拭相框。阳光斜照进来，他想起年轻时的约定。门外，一个熟悉的身影出现……"
   );
-  const [type, setType] = useState("short_video");
-  const [styleSlug, setStyleSlug] = useState("");
-  const [size, setSize] = useState("1280x720");
-  const [fps, setFps] = useState(16);
-  const [frames, setFrames] = useState(49);
+  const [type] = useState("short_video");
+  const [styleSlug] = useState("");
+  const [size] = useState("1280x720");
+  const [fps] = useState(16);
+  const [frames] = useState(49);
   const [subtitleOn, setSubtitleOn] = useState(true);
   const [bgmName, setBgmName] = useState<string | null>(null);
-  const [skills, setSkills] = useState<{ slug: string; name: string }[]>([]);
+  const [, setSkills] = useState<{ slug: string; name: string }[]>([]);
   const [ffmpegAvailable, setFfmpegAvailable] = useState(true);
 
   /* ── New visual-editor state ── */
   const [shots, setShots] = useState<ShotListItem[]>(MOCK_SHOTS);
   const [selectedShotId, setSelectedShotId] = useState<string>("shot-1");
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playheadPos, setPlayheadPos] = useState(180); /* px from timeline left */
+  const [playheadPos] = useState(180); /* px from timeline left */
 
   /* ── Film API state (preserved) ── */
   const [film, setFilm] = useState<Film | null>(null);
-  const [recent, setRecent] = useState<{ id: string; title: string; status: string }[]>([]);
+  const [, setRecent] = useState<{ id: string; title: string; status: string }[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showLogs, setShowLogs] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   /* ── Derived ── */
@@ -261,10 +260,6 @@ export function FilmStudio() {
     if (!res.ok) { error("BGM 上传失败"); return; }
     const { name } = await res.json(); setBgmName(name); success("背景音乐已上传");
   }, [error, success]);
-
-  const openRecent = useCallback(async (id: string) => {
-    stopPoll(); await fetchDetail(id);
-  }, [stopPoll, fetchDetail]);
 
   /* ── Visual-editor actions ── */
   const handleSelectShot = useCallback((id: string) => {
