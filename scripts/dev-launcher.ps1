@@ -367,8 +367,12 @@ public class WJ {
   #   普通重启时 Next 的 HMR 会自动重载已有标签页；这里额外自动开浏览器，
   #   让你连地址都不用敲。SKIP_CLEAN=1 时复用现有标签页（Next HMR 自动重载）；
   #   默认路径会带缓存破坏参数开新标签页，避免旧 chunk + 旧 sessionStorage 残留。
-  # Prebuilt 模式已在第四步等服务就绪后再启动 Tauri 壳，这里不用再等。
-  # Tauri 模式：tauri dev 会自己编译/启动 dev server，仍需探测服务就绪。
+  #
+  #   ⚠ 只在「纯 Web 模式」（既非 Prebuilt 也非 Tauri）才开浏览器：
+  #     - Prebuilt：桌面壳已在第四步等服务就绪后启动，界面就是 Tauri 窗口，
+  #       再开浏览器属于多余（2026-08-29 修复：此前因 elseif 未排除 $Prebuilt，
+  #       Prebuilt 会落进本分支，导致双击 start-tauri.exe 时浏览器被一并打开）。
+  #     - Tauri：tauri dev 自己编译/启动 dev server 并弹出桌面窗口，无需浏览器。
   if ($Tauri) {
     Write-Log "Tauri 模式：等待 tauri dev 编译并弹出桌面窗口..." -Level STEP
     Write-Log "等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
@@ -385,7 +389,7 @@ public class WJ {
     } else {
       Write-Log "180 秒内未检测到服务就绪，Tauri 仍在编译中，请稍候" -Level WARN
     }
-  } elseif ($env:NO_OPEN -ne "1") {
+  } elseif (-not $Prebuilt -and $env:NO_OPEN -ne "1") {
     Write-Log "等待服务器就绪（http://127.0.0.1:3000）..." -Level STEP
     $ready = $false
     for ($i = 0; $i -lt 90; $i++) {
