@@ -207,7 +207,10 @@ function hasAnsi(text: string): boolean {
 function tokenizeLogMessage(text: string): React.ReactNode[] {
   const combined =
     /(\[\d{2}:\d{2}:\d{2}\]|\[OK\]|\[STEP\]|\[WARN\]|\[ERROR\]|\[INFO\]|PID\s*[:：]\s*\d+|https?:\/\/[^\s]+|\b(?:[A-Z]:\\|\\)[^\s]*)/gi;
-  const parts = text.split(combined).filter((segment) => segment !== undefined && segment !== "");
+  // split 带捕获组时，匹配到的分隔符（时间戳/[OK]/URL 等）会保留在结果里；
+  // 空串只出现在文本开头/结尾或相邻 token 之间，丢弃不会丢内容。
+  // 每段是否着色由下方逐段匹配 LOG_TOKENS 决定，与这里的过滤无关。
+  const parts = text.split(combined).filter(Boolean);
   let key = 0;
   return parts.map((part) => {
     for (const token of LOG_TOKENS) {
@@ -227,7 +230,10 @@ function tokenizeLogMessage(text: string): React.ReactNode[] {
 /* Per-message render cache: a parsed log line is immutable, so we cache the
  * produced React spans by the raw message string.  This avoids re-running the
  * ANSI/token parser for every row on every parent re-render (search, filter,
- * scroll, new-log arrival) — the single biggest cost in the old panel. */
+ * scroll, new-log arrival) — the single biggest cost in the old panel.
+ * Memory is bounded by RENDER_CACHE_MAX (full clear on overflow).  Dev note:
+ * Fast Refresh re-executes this module on edit, so rule changes naturally
+ * start with a fresh cache — no stale-entry purge needed. */
 const RENDER_CACHE = new Map<string, React.ReactNode[]>();
 const RENDER_CACHE_MAX = 5000;
 
