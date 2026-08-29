@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AuroraBackground } from "@/components/studio/AuroraBackground";
-import { Icon } from "@/components/ui/Icon";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import { MultiModeSelect } from "@/components/studio/ui/MultiModeSelect";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import dynamic from "next/dynamic";
-import { CustomNodesSettings } from "@/components/workflow-canvas/CustomNodesSettings";
+import { AuroraBackground } from "@/components/studio/AuroraBackground";
 import { useToast } from "@/components/studio/toast-provider";
 import { ModelTagManager } from "@/components/studio/ModelTagManager";
 import { getWorkflowType, normalizeTaskType } from "@/lib/workflow-types";
@@ -18,13 +20,17 @@ import {
   isTechnicalName,
   LibrarySourceModal,
   PendingWorkflowCard,
-  FilterTabs,
   WorkflowListBody,
 } from "./workflow-library-helpers";
 import type { WorkflowRow } from "./workflow-library-helpers";
 import { WorkflowCard } from "./workflow-library-card";
-import { detectWorkflowFormat } from "@/lib/workflow-format";
 import { useWorkflowActions } from "./workflow-library-actions";
+import { useWorkflowImport } from "./workflow-library-import";
+import { WorkflowImportPanel } from "./WorkflowImportPanel";
+import { DeleteWorkflowModal } from "./DeleteWorkflowModal";
+import { WorkflowLibraryHeader } from "./WorkflowLibraryHeader";
+import { WorkflowLibraryFilters } from "./WorkflowLibraryFilters";
+import type { SourceFilter, TypeFilter } from "./WorkflowLibraryFilters";
 
 /**
  * Lazy-load the canvas editor. It is a 7k-line module; keeping it behind a
@@ -35,7 +41,8 @@ import { useWorkflowActions } from "./workflow-library-actions";
  * actually opens.
  */
 const WorkflowCanvasEditor = dynamic(
-  () => import("./WorkflowCanvasEditor").then((mod) => mod.WorkflowCanvasEditor),
+  () =>
+    import("./WorkflowCanvasEditor").then((mod) => mod.WorkflowCanvasEditor),
   {
     ssr: false,
     loading: () => (
@@ -46,10 +53,21 @@ const WorkflowCanvasEditor = dynamic(
         </div>
       </div>
     ),
-  }
+  },
 );
 
-
+/**
+ * 2026-08-29 T12-3: WorkflowLibrary was 973 lines — the import panel JSX,
+ * the delete-confirm modal, the page header, the filter rows, and the
+ * import/drag-drop logic are now extracted into sibling modules:
+ *   - WorkflowImportPanel.tsx      (import panel UI, controlled)
+ *   - DeleteWorkflowModal.tsx      (delete-confirm modal)
+ *   - WorkflowLibraryHeader.tsx    (title / search / import button)
+ *   - WorkflowLibraryFilters.tsx   (source / type / model filter rows)
+ *   - workflow-library-import.ts   (useWorkflowImport hook)
+ * This file keeps the data plumbing (queries, memos, actions) and the
+ * page assembly.  External API (`WorkflowLibrary` export) unchanged.
+ */
 export function WorkflowLibrary({
   onUse,
 }: {
@@ -77,42 +95,24 @@ export function WorkflowLibrary({
   const [q, setQ] = useState("");
 
   // ── Source filter: all / local (file-backed) / online (pasted/API) ──
-  const [sourceFilter, setSourceFilter] = useState<"all" | "local" | "online">("all");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   // ── Type filter: all / image / video / audio (R70-3) ──
-  const [typeFilter, setTypeFilter] = useState<"all" | "image" | "video" | "audio">("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   // ── 2026-08-15 模型筛选：all 或某个模型标签名 ──
   const [modelFilter, setModelFilter] = useState<string>("all");
   // 用户级模型标签库（全局，跨工作流复用）；卡片 chips + 管理弹窗 + 筛选器共享
-  const [modelTags] = useState<{ id: string; name: string; count: number }[]>([]);
+  const [modelTags] = useState<{ id: string; name: string; count: number }[]>(
+    [],
+  );
   const [showModelManager, setShowModelManager] = useState(false);
   // 当前正在编辑标签的卡片 id（card 内的「＋」popover）
   const [assigningId, setAssigningId] = useState<string | null>(null);
   // popover 锚点位置（按钮的视口矩形），用于 portal 固定定位，逃出卡片/滚动裁剪
-  const [assignRect, setAssignRect] = useState<{ top: number; left: number; width: number } | null>(null);
-  // ── Import panel state ──
-  const [showImport, setShowImport] = useState(false);
-  const [importName, setImportName] = useState("");
-  const [importModes, setImportModes] = useState<string[]>([]);
-  const [importDefaultMode, setImportDefaultMode] = useState("");
-  const [importFormat, setImportFormat] = useState<"auto" | "api" | "raw">("auto");
-  const [importJson, setImportJson] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [importErr, setImportErr] = useState("");
-  const [importWarn, setImportWarn] = useState<string[]>([]);
-  // 2026-08-25 (#53): the import-panel "?" help was hover-only
-  // (pointer-events-none + group-hover).  Clicking did nothing.  Make it a
-  // real toggle so a click shows/hides the explanation.
-  const [showHelpTip, setShowHelpTip] = useState(false);
-
-  // 2026-08-12 R71-1: 恢复 drag-and-drop 导入（R12 当时移除 drag-drop 是
-  // 因为本地工作流只能从配置路径导入；现在用户在「本地工作流」tab 把任意
-  // JSON 文件拖进来 → 自动识别格式 → 弹出导入面板让用户确认 → 走现有
-  // POST /api/workflows 链路入库）。
-  // dragActive 控制整片列表区域的虚线高亮；dropErr 用于「文件解析失败」
-  // 时的悬浮错误条（3 秒后自隐）。
-  const [dragActive, setDragActive] = useState(false);
-  const [dropErr, setDropErr] = useState<string | null>(null);
-
+  const [assignRect, setAssignRect] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
 
   // 2026-08-10 R12: removed the "本机路径" import tab and all drag-and-drop
   // support per the new rule "本地工作流只能通过配置的路径导入".
@@ -124,27 +124,20 @@ export function WorkflowLibrary({
   // 2026-08-12 R77: { id, name } lets the delete modal show which workflow
   // the user is about to remove (previously this was just an `id`, so the
   // confirm bar read "确定删除该工作流？" with no name).
-  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  // 2026-08-12 R77: pressing Escape dismisses the delete modal
-  // (matches the convention of native <dialog> elements so keyboard users
-  // aren't trapped in the modal).
-  useEffect(() => {
-    if (!pendingDelete) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (pendingDelete) setPendingDelete(null);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [pendingDelete]);
 
   // ── Canvas editor state ──
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // ── Source view modal + combined download state ──
-  const [sourceFor, setSourceFor] = useState<{ id: string; name: string } | null>(null);
+  const [sourceFor, setSourceFor] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [bundleBusy, setBundleBusy] = useState<string | null>(null);
   /** 2026-08-10 R16: one busy id for manual re-sync. Triggers the
    *  "↻ 同步" button's spinner on a per-card basis. */
@@ -170,7 +163,9 @@ export function WorkflowLibrary({
     Array<{ rawPath: string; exists: boolean; count: number; error?: string }>
   >([]);
   // One busy flag per pending id so a slow import doesn't disable siblings.
-  const [pendingLoading, setPendingLoading] = useState<Record<string, boolean>>({});
+  const [pendingLoading, setPendingLoading] = useState<Record<string, boolean>>(
+    {},
+  );
 
   // ── R13: per-configured-root collapse state ────────────────────────────
   // Key = the LOCAL_WORKFLOWS_PATH entry's verbatim raw path (same string
@@ -179,7 +174,9 @@ export function WorkflowLibrary({
   // user collapses persists across reloads until they close the page.
   // The synthetic key "__no_root__" catches orphan rows (older imports
   // whose `sourcePath` predates the server stamp).
-  const [collapsedRoots, setCollapsedRoots] = useState<Record<string, boolean>>({});
+  const [collapsedRoots, setCollapsedRoots] = useState<Record<string, boolean>>(
+    {},
+  );
 
   const toggleRoot = useCallback((key: string) => {
     setCollapsedRoots((state) => ({ ...state, [key]: !state[key] }));
@@ -252,7 +249,10 @@ export function WorkflowLibrary({
     };
     window.addEventListener("comfyapp:local-workflows-path-changed", onChanged);
     return () => {
-      window.removeEventListener("comfyapp:local-workflows-path-changed", onChanged);
+      window.removeEventListener(
+        "comfyapp:local-workflows-path-changed",
+        onChanged,
+      );
     };
   }, [load]);
 
@@ -274,7 +274,8 @@ export function WorkflowLibrary({
   const mergedRows = useMemo<LibraryRow[]>(
     () => [
       ...workflows,
-      ...localPending.map((localPending) =>({        id: localPending.id,
+      ...localPending.map((localPending) => ({
+        id: localPending.id,
         name: localPending.name,
         sourcePath: localPending.sourcePath,
         /** 2026-08-10 R11: forward the server's sourceRoot stamp onto the
@@ -291,39 +292,49 @@ export function WorkflowLibrary({
         // before reading them.
         taskType: "",
         paramMap: {},
-        preview: { nodes: [], edges: [], total: 0, width: 0, height: 0, truncated: false },
+        preview: {
+          nodes: [],
+          edges: [],
+          total: 0,
+          width: 0,
+          height: 0,
+          truncated: false,
+        },
         workflowIO: {},
       })),
     ],
-    [workflows, localPending]
+    [workflows, localPending],
   );
 
   const filtered = useMemo(() => {
     const bySource = mergedRows.filter(
       (workflow) =>
         sourceFilter === "all" ||
-        (workflow.source ?? (workflow.sourcePath ? "local" : "online")) === sourceFilter ||
-        (sourceFilter === "local" && workflow.source === "local-pending")
+        (workflow.source ?? (workflow.sourcePath ? "local" : "online")) ===
+          sourceFilter ||
+        (sourceFilter === "local" && workflow.source === "local-pending"),
     );
     // 2026-08-12 R70-3: filter by high-level category (image / video / audio).
-    const byType = bySource.filter((bySource) =>
-{
+    const byType = bySource.filter((bySource) => {
       if (typeFilter === "all") return true;
-      const cat = getWorkflowType(normalizeTaskType(bySource.taskType ?? ""))?.category;
+      const cat = getWorkflowType(
+        normalizeTaskType(bySource.taskType ?? ""),
+      )?.category;
       return cat === typeFilter;
     });
     // 2026-08-15: filter by model tag name.  "all" = no model constraint;
     // any other value must match one of the row's modelTags (placeholders
     // have none, so they're hidden when a model is selected).
-    const byModel = byType.filter((byType) =>
-{
+    const byModel = byType.filter((byType) => {
       if (modelFilter === "all") return true;
       const tags = byType.modelTags ?? [];
       return tags.includes(modelFilter);
     });
     if (!q) return byModel;
     const needle = q.toLowerCase();
-    return byModel.filter((byModel) => byModel.name.toLowerCase().includes(needle));
+    return byModel.filter((byModel) =>
+      byModel.name.toLowerCase().includes(needle),
+    );
   }, [mergedRows, q, sourceFilter, typeFilter, modelFilter]);
 
   // 2026-08-10 R13: group filtered local rows by their stamped `sourceRoot`.
@@ -332,8 +343,8 @@ export function WorkflowLibrary({
   // user is on the "本地" tab does this structure matter; the two
   // consumers below decide which one to use.
   type RootBucket = {
-    key: string;             // unique id (rawPath or "__no_root__")
-    rawPath: string | null;  // null = orphan bucket
+    key: string; // unique id (rawPath or "__no_root__")
+    rawPath: string | null; // null = orphan bucket
     rows: typeof filtered;
     meta?: { exists: boolean; error?: string };
   };
@@ -345,7 +356,7 @@ export function WorkflowLibrary({
       (workflow) =>
         workflow.source === "local" ||
         workflow.source === "local-pending" ||
-        (workflow.sourcePath != null && workflow.source !== "online")
+        (workflow.sourcePath != null && workflow.source !== "online"),
     );
     const map = new Map<string, RootBucket>();
     for (const w of localRows) {
@@ -387,10 +398,14 @@ export function WorkflowLibrary({
       all: workflows.length + localPending.length,
       local:
         workflows.filter(
-          (workflow) => (workflow.source ?? (workflow.sourcePath ? "local" : "online")) === "local"
+          (workflow) =>
+            (workflow.source ?? (workflow.sourcePath ? "local" : "online")) ===
+            "local",
         ).length + localPending.length,
       online: workflows.filter(
-        (workflow) => (workflow.source ?? (workflow.sourcePath ? "local" : "online")) === "online"
+        (workflow) =>
+          (workflow.source ?? (workflow.sourcePath ? "local" : "online")) ===
+          "online",
       ).length,
     };
     return base;
@@ -401,186 +416,13 @@ export function WorkflowLibrary({
   const typeCounts = useMemo(() => {
     const base = { all: mergedRows.length, image: 0, video: 0, audio: 0 };
     for (const w of mergedRows) {
-      const cat = getWorkflowType(normalizeTaskType(w.taskType ?? ""))?.category;
+      const cat = getWorkflowType(
+        normalizeTaskType(w.taskType ?? ""),
+      )?.category;
       if (cat === "image" || cat === "video" || cat === "audio") base[cat] += 1;
     }
     return base;
   }, [mergedRows]);
-
-  const handleImport = useCallback(async () => {
-    setImportErr("");
-    setImportWarn([]);
-    if (!importJson.trim()) {
-      setImportErr("请粘贴 ComfyUI「导出(API格式)」或「导出(工作流格式)」的 JSON");
-      return;
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(importJson);
-    } catch {
-      setImportErr("JSON 解析失败，请检查格式");
-      return;
-    }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      setImportErr("不是有效的工作流 JSON（应为对象）");
-      return;
-    }
-    setImporting(true);
-    try {
-      const d = await createMut.mutateAsync({
-        name: importName.trim() || "未命名工作流",
-        modes: importModes,
-        defaultMode: importDefaultMode,
-        graph: parsed,
-        format: importFormat !== "auto" ? importFormat : undefined,
-      });
-      if (Array.isArray(d.warnings)) setImportWarn(d.warnings);
-      setShowImport(false);
-      setImportName("");
-      setImportJson("");
-      setImportModes(["T2I"]);
-      setImportDefaultMode("T2I");
-      setImportFormat("auto");
-      load();
-    } catch (e: unknown) {
-      setImportErr(
-        e instanceof Error ? e.message : JSON.stringify(e ?? null)
-      );
-    } finally {
-      setImporting(false);
-    }
-  }, [importName, importModes, importDefaultMode, importFormat, importJson, load, createMut]);
-
-  // 2026-08-12 R71-1: drag-and-drop a workflow JSON onto the list area →
-  // parse → auto-detect format → pre-fill the existing import panel and
-  // open it so the user can confirm name/type/format before POSTing.
-  // This intentionally reuses the manual "粘贴 JSON" flow (handleImport
-  // above) so all validation, warnings, and error surfaces stay
-  // consistent with the copy-paste path. Only the front of the funnel
-  // (file → text → JSON → state) is new.
-  const handleDroppedFile = useCallback(
-    async (file: File) => {
-      setDropErr(null);
-      if (file.size > 5 * 1024 * 1024) {
-        setDropErr(`文件过大（${(file.size / 1024 / 1024).toFixed(1)} MB），单次拖入上限 5 MB`);
-        setTimeout(() => setDropErr(null), 4000);
-        return;
-      }
-      let text: string;
-      try {
-        text = await file.text();
-      } catch (e: unknown) {
-        setDropErr(
-          "无法读取文件：" +
-            (e instanceof Error ? e.message : JSON.stringify(e ?? null))
-        );
-        setTimeout(() => setDropErr(null), 4000);
-        return;
-      }
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        setDropErr("JSON 解析失败：不是合法的工作流 JSON");
-        setTimeout(() => setDropErr(null), 4000);
-        return;
-      }
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        setDropErr("不是有效的工作流 JSON（应为对象）");
-        setTimeout(() => setDropErr(null), 4000);
-        return;
-      }
-      const detected = detectWorkflowFormat(parsed);
-      if (!detected) {
-        setDropErr("无法识别的工作流格式：既不是 API 也不是 LiteGraph RAW");
-        setTimeout(() => setDropErr(null), 4000);
-        return;
-      }
-      // Auto-name from filename (strip extension).
-      const baseName = file.name.replace(/\.(json|workflow)$/i, "").trim();
-      setImportName(baseName || "未命名工作流");
-      setImportFormat(detected); // already "api" | "raw"
-      setImportJson(text);
-      setImportErr("");
-      setImportWarn([]);
-      setShowImport(true);
-      // Best-effort mode hint: if the JSON hints at image-to-image
-      // (upscale / inpaint / img2img), suggest I2I as default; otherwise T2I.
-      try {
-        let suggested = "T2I";
-        const obj = parsed as Record<string, unknown>;
-        if (detected === "api") {
-          for (const v of Object.values(obj)) {
-            const ct =
-              v && typeof v === "object"
-                ? (v as { class_type?: unknown }).class_type
-                : undefined;
-            if (typeof ct === "string" && /image|upscale|inpaint|edit/i.test(ct)) {
-              suggested = "I2I";
-              break;
-            }
-          }
-        } else if (detected === "raw") {
-          const nodes = Array.isArray(obj.nodes) ? (obj.nodes as unknown[]) : [];
-          for (const n of nodes) {
-            const t =
-              n && typeof n === "object"
-                ? (n as { type?: unknown }).type
-                : undefined;
-            if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
-              suggested = "I2I";
-              break;
-            }
-          }
-        }
-        setImportModes([suggested]);
-        setImportDefaultMode(suggested);
-      } catch {
-        /* swallow — keep default */
-      }
-    },
-    [],
-  );
-
-  // 2026-08-12 R71-1: drag event handlers bound on the list container.
-  // onDragOver: must preventDefault to allow drop; only light up when
-  // something with `Files` type is being dragged (so text-selection drags
-  // don't trigger the highlight). The drag counter on onDragLeave is
-  // needed because bubbling from child elements (cards) fires leave events
-  // even though the cursor is still inside the drop zone — we walk up
-  // to the container's own enter/leave cycle via the counter.
-  const dragCounterRef = useRef(0);
-  const onListDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    if (!e.dataTransfer.types.includes("Files")) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-  }, []);
-  const onListDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    if (!e.dataTransfer.types.includes("Files")) return;
-    dragCounterRef.current += 1;
-    setDragActive(true);
-  }, []);
-  const onListDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    if (!e.dataTransfer.types.includes("Files")) return;
-    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
-    if (dragCounterRef.current === 0) setDragActive(false);
-  }, []);
-  const onListDrop = useCallback(
-    async (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      dragCounterRef.current = 0;
-      setDragActive(false);
-      const files = Array.from(e.dataTransfer.files ?? []);
-      if (files.length === 0) return;
-      if (files.length > 1) {
-        setDropErr(`一次只能拖入一个文件（收到了 ${files.length} 个）`);
-        setTimeout(() => setDropErr(null), 4000);
-        return;
-      }
-      await handleDroppedFile(files[0]!);
-    },
-    [handleDroppedFile],
-  );
 
   const {
     handleDelete,
@@ -592,7 +434,7 @@ export function WorkflowLibrary({
   } = useWorkflowActions({
     setDeleting,
     setPendingDelete,
-    setImportErr,
+    setImportErr: () => undefined,
     setBundleBusy,
     setResyncBusy,
     setPendingLoading,
@@ -605,315 +447,135 @@ export function WorkflowLibrary({
     utils,
   });
 
-/**
- * 2026-08-27 T7: LibraryRow 内部使用扩展的 `source` 标签（含 "local-pending"
- * 占位），而 WorkflowCard / PendingWorkflowCard 只接收 WorkflowRow。
- * 这里把库内行投影回 WorkflowRow：`source` 收缩为合法两值，占位特有字段
- * 降级为 undefined 以便传入共享卡片。
- */
-const toWorkflowRow = (
-  row: LibraryRow
-): WorkflowRow & { pendingSize?: number } => ({
-  ...row,
-  source: row.source === "online" ? "online" : "local",
-  sourcePath: row.sourcePath ?? undefined,
-  sourceRoot: row.sourceRoot ?? undefined,
-  pendingSize: row.pendingSize,
-});
+  // ── Import panel + drag-and-drop (R71-1) — logic in the hook, UI in
+  //    WorkflowImportPanel; the drop path pre-fills panel state then opens
+  //    it so the user can confirm before POSTing. ──
+  const importState = useWorkflowImport({ createMut, load });
 
-const renderWorkflowCard = (w: LibraryRow) => {
-  // ── Pending-local branch (simplified) ─────────────────────────────────
-  // 2026-08-10 R13 simplified the original R8 layout by removing the
-  // 80px icon hero, the chip strip, and the inline source-path line —
-  // the directory the file lives under is already shown in the parent
-  // group header (RootGroupHeader), so the same info would only be
-  // redundant here. The card now reads top-to-bottom as:
-  //   title (small + multi-line)  →  status line  →  ⤓ 载入  →  source path.
-  if (w.source === "local-pending") {
+  const toggleImport = useCallback(
+    () => importState.setShowImport((value) => !value),
+    [importState],
+  );
+
+  const cancelDelete = useCallback(() => setPendingDelete(null), []);
+
+  /**
+   * 2026-08-27 T7: LibraryRow 内部使用扩展的 `source` 标签（含 "local-pending"
+   * 占位），而 WorkflowCard / PendingWorkflowCard 只接收 WorkflowRow。
+   * 这里把库内行投影回 WorkflowRow：`source` 收缩为合法两值，占位特有字段
+   * 降级为 undefined 以便传入共享卡片。
+   */
+  const toWorkflowRow = (
+    row: LibraryRow,
+  ): WorkflowRow & { pendingSize?: number } => ({
+    ...row,
+    source: row.source === "online" ? "online" : "local",
+    sourcePath: row.sourcePath ?? undefined,
+    sourceRoot: row.sourceRoot ?? undefined,
+    pendingSize: row.pendingSize,
+  });
+
+  const renderWorkflowCard = (w: LibraryRow) => {
+    // ── Pending-local branch (simplified) ─────────────────────────────────
+    // 2026-08-10 R13 simplified the original R8 layout by removing the
+    // 80px icon hero, the chip strip, and the inline source-path line —
+    // the directory the file lives under is already shown in the parent
+    // group header (RootGroupHeader), so the same info would only be
+    // redundant here. The card now reads top-to-bottom as:
+    //   title (small + multi-line)  →  status line  →  ⤓ 载入  →  source path.
+    if (w.source === "local-pending") {
+      return (
+        <PendingWorkflowCard
+          w={toWorkflowRow(w)}
+          isLoading={!!pendingLoading[w.id]}
+          onLoad={() => {
+            if (!w.sourcePath) return;
+            void handleLoadPending({
+              id: w.id,
+              name: w.name,
+              sourcePath: w.sourcePath,
+            });
+          }}
+        />
+      );
+    }
+
+    // ── Imported workflow branch ──────────────────────────────────────────
+    // Full-fidelity card: 80px preview / chip strip / title / ago / actions.
+    // Click the body to open the canvas editor; "使用 →" places a copy on
+    // the project canvas (delegated to the parent's `onUse` callback).
     return (
-      <PendingWorkflowCard
+      <WorkflowCard
         w={toWorkflowRow(w)}
-        isLoading={!!pendingLoading[w.id]}
-        onLoad={() => {
-          if (!w.sourcePath) return;
-          void handleLoadPending({ id: w.id, name: w.name, sourcePath: w.sourcePath });
-        }}
+        isTechnicalName={isTechnicalName}
+        normalizeTaskType={normalizeTaskType}
+        patchModes={patchModes}
+        deriveFormatFlags={deriveFormatFlags}
+        deriveSyncFlags={deriveSyncFlags}
+        resyncWorkflow={resyncWorkflow}
+        resyncBusy={resyncBusy}
+        assigningId={assigningId}
+        patchModelTags={patchModelTags}
+        setAssignRect={setAssignRect}
+        setAssigningId={setAssigningId}
+        ago={ago}
+        onUse={onUse}
+        downloadJson={downloadJson}
+        bundleBusy={bundleBusy}
+        setEditingId={setEditingId}
+        setSourceFor={setSourceFor}
+        assignRect={assignRect}
+        setPendingDelete={setPendingDelete}
+        modelTags={modelTags}
       />
     );
-  }
+  };
 
-  // ── Imported workflow branch ──────────────────────────────────────────
-  // Full-fidelity card: 80px preview / chip strip / title / ago / actions.
-  // Click the body to open the canvas editor; "使用 →" places a copy on
-  // the project canvas (delegated to the parent's `onUse` callback).
   return (
-    <WorkflowCard
-      w={toWorkflowRow(w)}
-      isTechnicalName={isTechnicalName}
-      normalizeTaskType={normalizeTaskType}
-      patchModes={patchModes}
-      deriveFormatFlags={deriveFormatFlags}
-      deriveSyncFlags={deriveSyncFlags}
-      resyncWorkflow={resyncWorkflow}
-      resyncBusy={resyncBusy}
-      assigningId={assigningId}
-      patchModelTags={patchModelTags}
-      setAssignRect={setAssignRect}
-      setAssigningId={setAssigningId}
-      ago={ago}
-      onUse={onUse}
-      downloadJson={downloadJson}
-      bundleBusy={bundleBusy}
-      setEditingId={setEditingId}
-      setSourceFor={setSourceFor}
-      assignRect={assignRect}
-      setPendingDelete={setPendingDelete}
-      modelTags={modelTags}
-    />
-  );
-}
-
-    return (
     <div className="relative h-full overflow-y-auto">
       <AuroraBackground />
-      <div className="mx-auto max-w-[1200px] px-4 sm:px-8 py-8 sm:py-10">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="font-title text-xl font-bold text-gray-100">工作流库</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              导入本机 ComfyUI 的自定义工作流：支持「导出(API 格式)」与「导出(工作流格式)」两种 JSON；原始格式会保留节点坐标，画布布局与你 ComfyUI 中看到的一致。
-              <span className="ml-1 text-cyan-300/80">· 本地工作流请在「自定义节点 / 本地工作流」中配置目录后自动载入。</span>
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              value={q}
-              onChange={(event) => setQ(event.target.value)}
-              placeholder="搜索工作流名称…"
-              className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40 sm:w-56"
-            />
-            <button
-              type="button"
-              onClick={() => setShowImport((value) => !value)}
-              className="rounded-lg bg-violet-500/90 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-500"
-            >
-              ＋ 导入工作流
-            </button>
-            <CustomNodesSettings />
-          </div>
-        </div>
+      <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10">
+        <WorkflowLibraryHeader
+          q={q}
+          onQChange={setQ}
+          onToggleImport={toggleImport}
+        />
 
         {/* ── Import panel — only "粘贴 JSON" mode remains (R12).
             The "本机路径" tab was removed: local workflows now load
             exclusively from the configured LOCAL_WORKFLOWS_PATH roots
             (see ⤓ 未载入 cards below). */}
-        {showImport && (
-          <div className="mb-6 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-gray-100">导入 ComfyUI 工作流</h2>
-              <button
-                type="button"
-                onClick={() => setShowImport(false)}
-                className="text-gray-500 transition-colors hover:text-gray-300"
-                title="关闭"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Common: name + mode */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_220px]">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-300">工作流名称</label>
-                <input
-                  value={importName}
-                  onChange={(event) => setImportName(event.target.value)}
-                  placeholder="例如：胶片人像 _v2（留空则用文件名）"
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-violet-500/40"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-300">模式</label>
-                <MultiModeSelect
-                  modes={importModes}
-                  defaultMode={importDefaultMode}
-                  onChange={(ms, def) => {
-                    setImportModes(ms);
-                    setImportDefaultMode(def);
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[200px_1fr]">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-400">JSON 格式</label>
-                <DarkSelect
-                  value={importFormat}
-                  onChange={(value) => setImportFormat((value as "auto" | "api" | "raw") ?? "auto")}
-                  options={["auto", "api", "raw"]}
-                  labels={{ auto: "自动识别", api: "API 格式", raw: "工作流格式(RAW)" }}
-                />
-              </div>
-              <div className="flex items-end">
-                <span className="group relative inline-flex items-center gap-1.5 text-xs text-gray-500">
-                  <button
-                    type="button"
-                    onClick={() => setShowHelpTip((value) => !value)}
-                    aria-label="导入格式说明"
-                    aria-expanded={showHelpTip}
-                    className="flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] text-gray-400 transition-colors hover:border-violet-400/40 hover:text-violet-200"
-                  >
-                    ?
-                  </button>
-                  <span
-                    className={`absolute bottom-full left-0 mb-2 w-64 rounded-lg border border-white/10 bg-[#1b1b24] p-2.5 text-xs leading-relaxed text-gray-300 shadow-xl transition-opacity ${
-                      showHelpTip ? "opacity-100" : "pointer-events-none opacity-0 group-hover:opacity-100"
-                    }`}
-                  >
-                    ComfyUI → 菜单 → 「导出(API格式)」 或 「导出(工作流格式)」
-                  </span>
-                </span>
-              </div>
-            </div>
-            <div className="mt-3">
-              <textarea
-                value={importJson}
-                onChange={(event) => setImportJson(event.target.value)}
-                rows={8}
-                placeholder='API 格式: { "3": { "class_type": "KSampler", "inputs": {...} } }\n\n工作流格式: { "last_node_id": 11, "nodes": [{ "id": 11, "type": "KSampler", "pos": [400, 300], "widgets_values": [...] }], "links": [...] }'
-                className="w-full resize-none rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 font-mono text-xs text-gray-100 outline-none placeholder:text-gray-500 focus:border-violet-500/40"
-              />
-            </div>
-
-            {importErr && <p className="mt-2 text-xs text-red-400">{importErr}</p>}
-            {importWarn.length > 0 && (
-              <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/[0.06] p-2 text-xs text-amber-200">
-                <p className="font-medium">导入提示：</p>
-                <ul className="mt-1 list-disc pl-4 space-y-0.5">
-                  {importWarn.map((warning, i) => (
-                    <li key={`warn-${i}`}>{warning}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <div className="mt-3 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowImport(false)}
-                className="rounded-lg border border-white/15 px-4 py-2 text-sm text-gray-300 transition-colors hover:bg-white/5"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={handleImport}
-                disabled={importing}
-                className="rounded-lg bg-violet-500/90 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:opacity-50"
-              >
-                {importing ? "导入中…" : "确认导入"}
-              </button>
-            </div>
-          </div>
+        {importState.showImport && (
+          <WorkflowImportPanel
+            state={importState}
+            onClose={() => importState.setShowImport(false)}
+            onImport={importState.handleImport}
+          />
         )}
 
         {/* ── Delete confirm modal ── */}
-        {pendingDelete && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-modal-title"
-            onClick={() => !deleting && setPendingDelete(null)}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
-          >
-            <div
-              onClick={(event) => event.stopPropagation()}
-              className="w-full max-w-md rounded-2xl border border-red-500/30 bg-[var(--color-card)] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
-            >
-              <div className="mb-3 flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-300">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                    <path d="M10 11v6M14 11v6" />
-                    <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-                  </svg>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h3 id="delete-modal-title" className="text-base font-semibold text-white">
-                    删除工作流
-                  </h3>
-                  <p className="mt-1 break-words text-sm text-gray-400">
-                    确认删除「<span className="text-gray-200">{pendingDelete.name}</span>」？此操作不可撤销。
-                  </p>
-                </div>
-              </div>
-              <div className="mt-5 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPendingDelete(null)}
-                  disabled={deleting}
-                  className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-gray-300 hover:bg-white/5 disabled:opacity-50"
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(pendingDelete.id)}
-                  disabled={deleting}
-                  className="rounded-lg bg-red-500/90 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
-                >
-                  {deleting ? "删除中…" : "确认删除"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Source filter tabs: 本地工作流 vs 在线工作流 ── */}
-        <FilterTabs
-          tabs={[
-            { key: "all", label: "全部", count: sourceCounts.all },
-            { key: "local", label: "本地工作流", count: sourceCounts.local },
-            { key: "online", label: "在线工作流", count: sourceCounts.online },
-          ] as const}
-          active={sourceFilter}
-          onChange={(key) => setSourceFilter(key)}
-          accent="violet"
+        <DeleteWorkflowModal
+          pendingDelete={pendingDelete}
+          deleting={deleting}
+          onConfirm={handleDelete}
+          onCancel={cancelDelete}
+          onBackdropClick={() => {
+            if (!deleting) setPendingDelete(null);
+          }}
         />
 
-        {/* ── Type filter (R70-3): 全部类型 / 图像 / 视频 / 音频 ── */}
-        <FilterTabs
-          tabs={[
-            { key: "all", label: "全部类型", count: typeCounts.all },
-            { key: "image", label: "图像", count: typeCounts.image },
-            { key: "video", label: "视频", count: typeCounts.video },
-            { key: "audio", label: "音频", count: typeCounts.audio },
-          ] as const}
-          active={typeFilter}
-          onChange={(key) => setTypeFilter(key)}
-          accent="sky"
-        />
-
-        {/* ── 2026-08-15 模型筛选 + 标签库管理 ── */}
-        <FilterTabs
-          tabs={[
-            { key: "all", label: "全部模型", count: modelTags.reduce((sum, tag) => sum + tag.count, 0) },
-            ...modelTags.map((modelTag) =>({ key: modelTag.name, label: modelTag.name, count: modelTag.count })),
-          ]}
-          active={modelFilter}
-          onChange={(key) => setModelFilter(key === modelFilter ? "all" : key)}
-          accent="fuchsia"
-          trailing={
-            <button
-              type="button"
-              onClick={() => setShowModelManager(true)}
-              className="ml-1 flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5"
-            >
-              <Icon name="tag" className="h-3.5 w-3.5" />
-              管理模型
-            </button>
-          }
+        {/* ── Filter rows: source / type / model ── */}
+        <WorkflowLibraryFilters
+          sourceFilter={sourceFilter}
+          onSourceFilterChange={setSourceFilter}
+          sourceCounts={sourceCounts}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          typeCounts={typeCounts}
+          modelFilter={modelFilter}
+          onModelFilterChange={setModelFilter}
+          modelTags={modelTags}
+          onManageModels={() => setShowModelManager(true)}
         />
 
         {/* ── List ── */}
@@ -931,13 +593,13 @@ const renderWorkflowCard = (w: LibraryRow) => {
           expandAllRoots={expandAllRoots}
           toggleRoot={toggleRoot}
           renderCard={renderWorkflowCard}
-          onListDragEnter={onListDragEnter}
-          onListDragOver={onListDragOver}
-          onListDragLeave={onListDragLeave}
-          onListDrop={onListDrop}
-          dropErr={dropErr}
-          setDropErr={setDropErr}
-          dragActive={dragActive}
+          onListDragEnter={importState.onListDragEnter}
+          onListDragOver={importState.onListDragOver}
+          onListDragLeave={importState.onListDragLeave}
+          onListDrop={importState.onListDrop}
+          dropErr={importState.dropErr}
+          setDropErr={importState.setDropErr}
+          dragActive={importState.dragActive}
         />
       </div>
 
@@ -951,10 +613,7 @@ const renderWorkflowCard = (w: LibraryRow) => {
 
       {/* ── Source view modal ── */}
       {sourceFor && (
-        <LibrarySourceModal
-          wf={sourceFor}
-          onClose={() => setSourceFor(null)}
-        />
+        <LibrarySourceModal wf={sourceFor} onClose={() => setSourceFor(null)} />
       )}
 
       {/* ── 2026-08-15 模型标签库管理弹窗 ── */}
