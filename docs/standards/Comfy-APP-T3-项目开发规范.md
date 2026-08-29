@@ -279,6 +279,7 @@ git -c core.autocrlf=false -c filter.lfs.process= -c filter.lfs.clean= -c filter
 | 节点 id 工厂 | 多处重复 `n_${Date.now()}_${random}` 生成节点 id | 收敛为单一工厂 `makeNodeId()`，禁止散落内联生成（范例：`canvas-helpers.ts`） |
 | fitView 时序 | 依赖 setTimeout 魔法数字等待布局完成 | 用 `onInit` / `requestAnimationFrame` 双保险，禁止裸 setTimeout（范例：`makeFitViewScheduler`） |
 | 渲染链路分组 | 调试标签平铺无层级，难以区分画布级/节点级模块 | `RenderChainModule.scope` 字段区分 `canvas`（容器/编排/状态）与 `node`（节点渲染/工具），DebugChainFooter 按组分行渲染（范例：`DebugChainFooter.tsx` + 各 `*-render-chain.ts`） |
+| 弱元数据回退推断 | 元数据由外部服务富化、该服务不可达时字段为空（ComfyUI 离线 → `workflowIO` 无 `type`），下游按类型分派的功能**静默退化**（控件变纯文本框、组合选择器整块消失），用户只看到「组件不见了」而不报错 | 分派函数对空类型做**分级回退**：先按 `defaultValue` 实际类型，再按名称/标签关键词推断；同时放宽下游分组识别的类型约束，避免「上游认不出类型 → 下游永不命中」的连锁失效。回退逻辑是纯函数，**必须有单测锁定**，否则极易在下一次类型重构中静默回归（范例：`workflow-io.ts` 的 `inferControlFromName` + `inferDimensionGroup` 双形态，测试见 `workflow-io.test.ts`） |
 
 **升级依赖前**：先 grep 全库 API 使用点评估破坏性变更（如 zod 4 移除 `z.string().url()` 等 format 方法、`z.record` 改双参、`.default({})` 类型收窄；zustand 5 迁移 `zustand/react/shallow`），改完必须 `tsc --noEmit` 零错误。
 
