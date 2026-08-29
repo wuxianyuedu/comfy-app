@@ -1,68 +1,91 @@
----
-AIGC:
-    Label: "1"
-    ContentProducer: 001191440300708461136T1XGW3
-    ProduceID: 04b5474aa852c5c0d1326b763e831d7b_3aeabfcb9de511f1a413525400287e28
-    ReservedCode1: Vvh6v3bSX9NzNdlEKu1L+9rt2TvSKXcFID8dqabzsCugw83yc4j3nKexim/Rk2pUcsfpNiSd0rReRVToLE1w1WNyOyjvsFHywz14fQNJ47ZXcZ4xMvHImULWs6ptdQ+iXTeIlIZAduz3vW/+WSP+wlsCLZTqTOVfYYuPuLtq89cw8P95ogK+rvYVy3c=
-    ContentPropagator: 001191440300708461136T1XGW3
-    PropagateID: 04b5474aa852c5c0d1326b763e831d7b_3aeabfcb9de511f1a413525400287e28
-    ReservedCode2: Vvh6v3bSX9NzNdlEKu1L+9rt2TvSKXcFID8dqabzsCugw83yc4j3nKexim/Rk2pUcsfpNiSd0rReRVToLE1w1WNyOyjvsFHywz14fQNJ47ZXcZ4xMvHImULWs6ptdQ+iXTeIlIZAduz3vW/+WSP+wlsCLZTqTOVfYYuPuLtq89cw8P95ogK+rvYVy3c=
----
-
 # Comfy-APP-T3 测试与文档
+
+> 测试分层:纯函数/store 用 node 环境,组件渲染用 jsdom;断言基于实现语义,
+> 禁止为"让测试通过"而弱化断言。最后校准:2026-08-29。
 
 ## 快速开始
 
 ```bash
-# 运行单元测试（Vitest）
-npm test
-
-# 生成 API 文档（TypeDoc → docs/api）
-npm run docs
-
-# 类型检查
-npm run typecheck
+npm run test            # 全量单测(vitest run)
+npm run test:coverage   # 覆盖率(v8,含棘轮阈值门槛)
+npm run typecheck       # tsc --noEmit
 ```
 
 ## 单元测试（Vitest）
 
 ### 配置
 - 配置文件：`vitest.config.ts`
-- 环境：node（纯函数单测，不依赖浏览器/DB）
-- 路径别名：`@/*` → `src/*`
-- 测试文件与源码同目录放置，命名 `*.test.ts`
+- 默认环境：node（纯函数/store，不依赖 DOM）
+- 组件渲染：测试文件头 `// @vitest-environment jsdom`
+- 路径别名：`@/*`、`~/*` → `src/*`
+- 测试文件与源码同目录，命名 `*.test.ts(x)`
+- `globals: false`：显式 `import { describe, it, expect } from "vitest"`；
+  RTL 不自动 cleanup，组件测试需 `afterEach(cleanup)`
 
-### 当前覆盖（41 用例 / 5 文件）
+### 测试栈与配方
+
+| 层 | 工具 | 要点 |
+|----|------|------|
+| 纯函数 | vitest | 正常路径 + 边界 + 非法输入；文件名中文描述行为 |
+| Zustand store | vitest | 每用例前重置状态（`setState` 初始值或 reset）；派生字段必须通过 action 触发（直接 setState 不会重算） |
+| 组件渲染 | @testing-library/react + jsdom | `getByRole`/`getByText` 优先；交互用 `userEvent`；jest-dom 匹配器已在 `tests/setup.ts` 全局注册 |
+| hooks | renderHook（@testing-library/react） | ReactFlow 等有 Provider 依赖的需包对应 Provider，否则跳过该分支并注明 |
+
+### 当前覆盖（231 用例 / 17 文件）
 
 | 文件 | 覆盖模块 | 用例数 |
 |---|---|---|
 | `src/lib/workflow-types.test.ts` | 工作流类型映射（code→类型、类别、分类、边界值） | 7 |
 | `src/lib/comfyui/markdown.test.ts` | Markdown 渲染（标题层级、列表、引用、XSS 转义、空输入） | 9 |
-| `src/components/studio/workflow-utils.test.ts` | 画布颜色工具（hexToRgba、mixHex、lightenHex、hexToRgba 边界） | 12 |
+| `src/components/studio/workflow-utils.test.ts` | 画布颜色工具（hexToRgba、mixHex、lightenHex、边界） | 12 |
 | `src/server/api/middleware/rate-limit.test.ts` | 限流中间件（滑动窗口、独立 key、过期重置） | 5 |
-| `src/components/studio/AgentPanel.test.tsx` | AgentPanel 组件（空态、四状态、回调、禁用态、头像兜底） | 8 |
+| `src/components/studio/AgentPanel.test.tsx` | AgentPanel（空态、四状态、回调、禁用态、头像兜底） | 8 |
+| `src/components/studio/logs/log-store.test.ts` | 日志 store（批量追加/上限裁剪/过滤搜索/serialize/解析） | 53 |
+| `src/components/studio/debug/debug-store.test.ts` | 调试开关 store（状态迁移、幂等） | 7 |
+| `src/components/workflow-canvas/CustomNodesSettings/parsing.test.ts` | 解析纯函数（pathKey/deriveRowState/splitPaths/eqArr） | 33 |
+| `src/components/studio/workflow-library/WorkflowLibraryHelpers.test.ts` | 库卡片派生（格式标志/同步态/技术名/ago） | 27 |
+| `src/lib/media.test.ts` | isVideo（扩展名/大小写/URL/查询串/边界） | 9 |
+| `src/components/studio/canvas/SubgraphHeader.test.tsx` | 子图头（标题回退、折叠/钻入回调、IO checkbox 条件） | 12 |
+| `src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.test.tsx` | Field/StatusDot/StatusBadge/NodeChip | 11 |
+| `src/components/studio/project-canvas/CanvasNode/ResultCard.test.tsx` | 结果卡（三分支、mediaType 判定、占位与回退） | 11 |
+| `src/components/studio/shared/DynamicWorkflowForm/sections/*.test.tsx` | 表单分区（骨架/空态/I/O 端点 chip） | 10 |
+| `src/components/workflow-canvas/CustomNodesSettings/SettingsParts.test.tsx` | 设置行/值 chip/汇总/进度/报告卡 | 17 |
+| （另 2 个文件为既有 lib 测试） | — | — |
 
 ### 新增测试指引
 - 纯函数模块（lib 层、utils）优先补 `*.test.ts`
-- 涉及 DOM/组件渲染的用例需为对应测试文件增加 `// @vitest-environment jsdom` 或迁移到独立环境
+- 组件测试范例：`AgentPanel.test.tsx`（轻量交互）、`SubgraphHeader.test.tsx`（真实 Provider 包装）
 - 断言基于实现语义编写，禁止为"让测试通过"而弱化断言
 
 ### 组件测试（@testing-library/react）
 
-- 依赖已装：`@testing-library/react` / `user-event` / `jest-dom`（匹配器在 `tests/setup.ts` 全局注册，`toBeInTheDocument`、`toBeDisabled` 等直接用）
+- 依赖已装：`@testing-library/react` / `user-event` / `jest-dom`（匹配器在 `tests/setup.ts` 全局注册）
 - vitest 是 `globals: false`，RTL 不会自动 cleanup——测试文件里手动 `afterEach(cleanup)`
 - 交互用 `userEvent.click`（比 `fireEvent` 更接近真实事件序列）
-- 组件测试范例：`src/components/studio/AgentPanel.test.tsx`（空态、状态渲染、回调回传、禁用态、兜底渲染）
+- jsdom 未实现的 Web API（clipboard、HTMLMediaElement.play）用 `vi.fn` 桩替换
+
+## 覆盖率策略（棘轮制）
+
+`npm run test:coverage` 跑 v8 覆盖率并对**已覆盖目录**设硬阈值（低于即失败）：
+
+| 目录 | 门槛（lines/funcs/stmts/branches） |
+|------|------|
+| `src/server/api/middleware/**` | 75 / 75 / 75 / 70 |
+
+**规则**：新覆盖一个目录（测试补齐到 70%+）就把它加进 `vitest.config.ts` 的
+`thresholds` 表并抬高数字；阈值只升不降。全库整体数字（当前 ~3%，组件库为主）
+仅作参考，不设全局门槛——组件库的覆盖随功能测试逐步爬坡。
 
 ## API 文档（TypeDoc）
 
 - 配置：`typedoc.json`
 - 入口：`src/lib`、`src/server`、`src/trpc` 下非测试 TS 文件
-- 输出：`docs/api`（HTML，428 文件）
+- 输出：`docs/api`（HTML）
 - 排除：`*.test.ts`、`node_modules`、`workflows`
 
-## 已知边界
+## 已知边界与路线图
 
-- 当前单测不覆盖服务端路由/DB 交互层（依赖运行时环境，由阶段 4/5 的 Repository 收口保证可测性）
-- `next build` 受 Prisma EPERM 环境 bug 影响（prisma#27555），完整构建验证需在 C 盘或调整 Prisma output 后进行
-*（内容由AI生成，仅供参考）*
+- [ ] `DynamicWorkflowForm` 主组件与 `CanvasNode` 主组件的行为测试（依赖 ReactFlow Provider，需 Provider 包装方案）
+- [ ] tRPC router 集成测试（需 db mock 方案）
+- [ ] Playwright 关键 E2E（登录 → 画布 → 生成链路）
+- [ ] `log-store.parseFileLogs`：`[WARNING]` 行当前回退 info 级（源码怪癖，测试已按现状断言并标注）
