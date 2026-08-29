@@ -190,14 +190,20 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
       )}
 
       {/* Default target handle for nodes with no inputs at all —
-       *  unmapped/fallback edges need somewhere to anchor. */}
+       *  unmapped/fallback edges need somewhere to anchor.
+       *
+       *  2026-08-29：这个 Handle 之前是可见的紫色圆点，但无输入的节点
+       *  （各类 Loader / EmptyLatentImage …）本就没有入端口，左侧挂一颗
+       *  孤零零的圆点看起来像渲染 bug。改为完全透明 + isConnectable=false：
+       *  连线锚点能力保留（避免既有 fallback 边断开），视觉上不再出现。 */}
       {entries.uniqueConnEntries.length === 0 && entries.uniqueWidgetEntries.length === 0 && (
         <Handle
           type="target"
           position={Position.Left}
           id="__default_in"
-          className="!h-2.5 !w-2.5 !border-2 !border-(--color-canvas) !bg-violet-400/80"
-          style={{ left: -5 }}
+          isConnectable={false}
+          className="!h-2.5 !w-2.5 !border-0"
+          style={{ left: -5, opacity: 0, pointerEvents: "none" }}
         />
       )}
 

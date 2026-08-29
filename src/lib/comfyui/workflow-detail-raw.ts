@@ -11,9 +11,11 @@
 import {
   extractPositions,
   fallbackRawToApi,
+  fetchWidgetOrderTable,
+  mapWidgetValuesByOrder,
   type RawWorkflow,
 } from "@/lib/comfyui/raw";
-import { inferIsMultiline } from "@/lib/comfyui/types";
+import { inferInputType, inferIsMultiline } from "@/lib/comfyui/types";
 
 /* IMAGE-input thumbnail preview (2026-08-10 R27, narrowed in R28).  ComfyUI's
  * LoadImage node keeps the uploaded filename in `widgets_values[0]`; we
@@ -116,6 +118,15 @@ export async function buildRawInputs(
    *  internal whitespace).  Raw API-format `tpl.graph` drops `size`, so we
    *  pull it back from `raw.nodes` (which still carries it) keyed by id. */
   const sizeById: Record<string, [number, number]> = {};
+  /* 2026-08-29：控件顺序表（classType → 控件名数组，含 control_after_generate
+   * 哨兵槽）。惰性拉取 —— 只有真的遇到「inputs[] 没覆盖到的控件值」时才请求
+   * object_info，避免每个工作流都白跑一次；ComfyUI 未启动时 30s 负缓存生效，
+   * 拿不到表也只是退回旧逻辑，不会拖慢。 */
+  let widgetOrderTable: Record<string, string[]> | null = null;
+  const ensureWidgetOrderTable = async (): Promise<Record<string, string[]>> => {
+    if (widgetOrderTable === null) widgetOrderTable = await fetchWidgetOrderTable();
+    return widgetOrderTable;
+  };
   if (raw && Array.isArray(raw.nodes)) {
     for (const rn of raw.nodes) {
       if (!rn) continue;
@@ -146,7 +157,44 @@ export async function buildRawInputs(
       const rnWidgets = Array.isArray((rn).widgets_values)
         ? (rn).widgets_values
         : [];
+      const rnClassType = typeof (rn).type === "string" ? (rn).type : "";
+
+      /* ── 旧配对（兜底）：按 inputs[] 中控件出现的顺序，用游标依次取
+       *  widgets_values。只在拿不到该类的控件顺序表时使用 —— 见下方 byOrder。 */
+      const legacyByName = new Map<string, unknown>();
       let widgetCounter = 0;
+      for (const inp of (rn).inputs) {
+        if (!inp || typeof inp.name !== "string") continue;
+        const widgetName = inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
+        if (!widgetName || widgetCounter >= rnWidgets.length) continue;
+        legacyByName.set(widgetName, rnWidgets[widgetCounter]);
+        /* seed / noise_seed widgets carry an implicit `control_after_generate`
+         * partner slot immediately after their own value (R94 fix). */
+        const isSeedBundle =
+          widgetName === "seed" ||
+          widgetName === "noise_seed" ||
+          inp.name === "seed" ||
+          inp.name === "noise_seed";
+        widgetCounter += isSeedBundle ? 2 : 1;
+      }
+
+      /* ── 顺序表配对（2026-08-29）：把整个 widgets_values 反查成「控件名 → 值」。
+       *  ComfyUI 默认只把「转成输入」的控件写进 raw 节点的 inputs[]，其余控件的
+       *  值仅存在于 widgets_values[]。仅靠 inputs[] 配对会整段漏掉它们
+       *  （CLIPTextEncode 的提示词、SenseNovaU15Loader 的模型名…），节点上看
+       *  不到任何参数。这里改用与 convertRawToApi 同源的控件顺序表反查下标。 */
+      let byOrder: { name: string; value: unknown }[] | null = null;
+      if (rnWidgets.length > 0 && (widgetCounter < rnWidgets.length || legacyByName.size === 0)) {
+        const table = await ensureWidgetOrderTable();
+        byOrder = mapWidgetValuesByOrder(table[rnClassType], rnWidgets);
+      }
+      const valueByName = new Map<string, unknown>();
+      if (byOrder) for (const w of byOrder) valueByName.set(w.name, w.value);
+      else for (const [name, value] of legacyByName) valueByName.set(name, value);
+
+      /* 已被 inputs[] 占据的控件名 —— 下面补齐时不再重复生成。 */
+      const usedWidgetNames = new Set<string>();
+
       for (const inp of (rn).inputs) {
         if (!inp || typeof inp.name !== "string") continue;
         const isConn = inp.link != null;
@@ -159,20 +207,10 @@ export async function buildRawInputs(
          *  "<input name still showing no value>" regression). */
         const widgetName = inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
         let widgetValue: unknown = undefined;
-        if (widgetName && widgetCounter < rnWidgets.length) {
-          widgetValue = rnWidgets[widgetCounter];
-          /* seed / noise_seed widgets carry an implicit `control_after_generate`
-           * partner slot immediately after their own value inside widgets_values[].
-           * Advance the counter by 2 for those so every downstream widget value
-           * stays correctly aligned — otherwise steps / cfg / sampler_name … all
-           * shift one slot to the right (R94 fix).  This mirrors the 2-slot bundle
-           * handling already present in the subgraph `lookupFieldValue` helper. */
-          const isSeedBundle =
-            widgetName === "seed" ||
-            widgetName === "noise_seed" ||
-            inp.name === "seed" ||
-            inp.name === "noise_seed";
-          widgetCounter += isSeedBundle ? 2 : 1;
+        if (widgetName) {
+          usedWidgetNames.add(widgetName);
+          if (valueByName.has(widgetName)) widgetValue = valueByName.get(widgetName);
+          else if (legacyByName.has(widgetName)) widgetValue = legacyByName.get(widgetName);
         }
         const entry: {
           name: string;
@@ -206,6 +244,30 @@ export async function buildRawInputs(
         }
         list.push(entry);
       }
+
+      /* 补齐「没有出现在 inputs[] 里的控件」—— 它们的值只存在于 widgets_values[]，
+       * 之前整段丢失，画布上这类节点（各类 Loader / CLIPTextEncode …）看起来
+       * 一个参数都没有。LoadImage 家族例外：它的 image 控件由下方合成的
+       * preview 条目以缩略图呈现，不需要再重复一行文本。 */
+      if (byOrder && !LOAD_IMAGE_NODE_TYPES.has(rnClassType)) {
+        for (const w of byOrder) {
+          if (usedWidgetNames.has(w.name) || w.value === undefined) continue;
+          /* 数组值是连线元组（[nodeId, slot]），不是控件值 —— 跳过。 */
+          if (Array.isArray(w.value)) continue;
+          const type = inferInputType(rnClassType, w.name, w.value);
+          list.push({
+            name: w.name,
+            type,
+            isConnection: false,
+            widget: { name: w.name },
+            widgetValue: w.value,
+            ...(type === "STRING" && inferIsMultiline(rnClassType, w.name, w.value)
+              ? { multiline: true as const }
+              : {}),
+          });
+        }
+      }
+
       rawInputsById[String(rn.id)] = list;
 
       /* LoadImage-family nodes carry the uploaded filename in widgets_values[0]

@@ -352,10 +352,14 @@ export function LibrarySourceModal({
   onClose: () => void;
 }) {
   const detailQ = api.workflow.detail.useQuery({ id: wf.id });
-  const data = detailQ.data?.template
+  /* 2026-08-29：「查看源文件」展示磁盘上的原始导入 JSON（`rawJson`），而不是
+   * /prompt 用的可执行图（`graph`）。纯 API 导入（rawJson 为 null）才回退。 */
+  const tpl = detailQ.data?.template;
+  const data = tpl
     ? {
-        graph: detailQ.data.template.graph,
-        name: detailQ.data.template.name ?? wf.name,
+        source: tpl.rawJson ?? tpl.graph,
+        name: tpl.name ?? wf.name,
+        isApiFallback: tpl.rawJson == null,
       }
     : null;
 

@@ -3,19 +3,23 @@ import { useEffect, useMemo } from "react";
 import { JsonViewer } from "./JsonViewer";
 
 /**
- * 查看 JSON 源文件弹窗（单一格式）。
+ * 查看源文件弹窗（只读）。
  *
- * 2026-08-25 简化：工作流现在只有一种格式（可执行 graph），移除原先的
- * RAW / API 双 tab 与「节点画布」tab，仅展示 graph 一份 JSON。下载也只导出
- * 这一种格式。
+ * 2026-08-29：之前这里展示的是 `detail.graph`（`/prompt` 用的可执行图，节点
+ * 字典 `{nodeId: {class_type, inputs, ...}}`），并不是磁盘上的源文件内容 —— 用户
+ * 点「查看源文件」期望看到的是 ComfyUI 保存的原始 JSON（`last_node_id` /
+ * `nodes[]` / `widgets_values` …）。改为直接展示 `rawJson`；纯 API 导入（没有
+ * rawJson）的工作流才回退到 graph，并在副标题里写明。
  */
 export interface SourceModalData {
-  /** 工作流名（标题、副标题都用） */
+  /** 工作流名（标题用） */
   name: string;
-  /** 单一格式 — 可执行 graph（`{ [nodeId]: { class_type, inputs, widgets_values, ... } }`） */
-  graph: unknown;
+  /** 磁盘上的原始导入 JSON（ComfyUI UI 格式）。null 表示纯 API 导入。 */
+  source: unknown;
   /** 当前 detail 是否来自子工作流 (drill-in 进 sub) 视图。用于文案区分。 */
   isSubgraph?: boolean;
+  /** true = 该工作流没有原始格式，当前展示的是可执行图兜底。 */
+  isApiFallback?: boolean;
 }
 
 export interface SourceModalProps {
@@ -29,8 +33,8 @@ export interface SourceModalProps {
 
 export function SourceModal({ data, loading, error, onClose }: SourceModalProps) {
   const activeText = useMemo(() => {
-    if (!data) return "";
-    return JSON.stringify(data.graph ?? null, null, 2);
+    if (!data || data.source == null) return "";
+    return JSON.stringify(data.source, null, 2);
   }, [data]);
 
   const downloadCurrent = () => {
@@ -69,16 +73,26 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
             <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-100">
               查看源文件 · {data?.name ?? "—"}
               <span
-                title="单一格式：detail.graph —— ComfyUI /prompt 用的执行图（节点字典 {nodeId: {class_type, inputs, widgets_values}}）"
-                className="rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40"
+                title={
+                  data?.isApiFallback
+                    ? "该工作流是纯 API 格式导入，没有原始文件；当前显示的是可执行图"
+                    : "ComfyUI 原始 JSON（nodes[] / links[] / widgets_values）"
+                }
+                className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide ring-1 ${
+                  data?.isApiFallback
+                    ? "bg-amber-500/20 text-amber-300 ring-amber-500/40"
+                    : "bg-cyan-500/20 text-cyan-300 ring-cyan-500/40"
+                }`}
               >
-                JSON
+                {data?.isApiFallback ? "API 兜底" : "源文件内容"}
               </span>
             </h2>
             <p className="mt-0.5 text-xs text-gray-500">
               {data?.isSubgraph
-                ? "当前为子工作流的可执行格式（节点字典视图）"
-                : "该工作流为单一格式 — 显示可执行 JSON 视图"}
+                ? "当前为子工作流的源文件内容"
+                : data?.isApiFallback
+                  ? "纯 API 导入，无原始文件 — 显示可执行图作为兜底"
+                  : "显示磁盘上的原始导入文件内容，未做任何转换"}
             </p>
           </div>
           <button
@@ -110,13 +124,13 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
             <p className="px-5 py-3 text-sm text-gray-500">加载中…</p>
           ) : error ? (
             <p className="px-5 py-3 text-sm text-red-400">{error}</p>
-          ) : !data ? (
+          ) : !data || data.source == null ? (
             <p className="px-5 py-3 text-sm text-gray-500">没有可显示的数据</p>
           ) : (
             <JsonViewer
-              key="single"
-              data={data.graph}
-              title="JSON 格式"
+              key="source"
+              data={data.source}
+              title={data.isApiFallback ? "API 格式（兜底）" : "源文件内容"}
               initialCollapsedDepth={1}
             />
           )}

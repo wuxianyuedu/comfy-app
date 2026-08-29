@@ -53,6 +53,7 @@ import { useCanvasDrop } from "./project-canvas/use-canvas-drop";
 import { ModalDialog } from "./ModalDialog";
 import { useToast } from "./toast-provider";
 import { useMiniMapJump } from "./shared/useMiniMapJump";
+import { FpsMeter } from "./FpsMeter";
 import {
   CanvasPanelToolbar,
   type CanvasPanelType,
@@ -448,6 +449,10 @@ function CanvasInner({
           }}
         />
       </ReactFlow>
+
+      {/* 2026-08-29：帧率指示器（右上角，与工作流画布一致）——节点多了之后
+       *  拖拽会掉帧，有个实时读数就能区分「卡」和「死」。 */}
+      <FpsMeter className="right-3 top-3" />
 
       {/* Project switcher (top-left) */}
       <div className="absolute top-3 left-3 z-20">

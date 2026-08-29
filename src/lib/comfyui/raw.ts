@@ -341,6 +341,56 @@ export function pairWidgetValues(
   return map;
 }
 
+/** 画布 raw_inputs 配对用的「classType → 控件名顺序表」。
+ *
+ *  与 {@link convertRawToApi} 内部使用的 `widgetOrder` 同源：object_info 可达时
+ *  逐类解析，否则退回内置的 {@link FALLBACK_WIDGETS}。表中每一项对应
+ *  `widgets_values` 的一个下标（含 control_after_generate 哨兵槽）。
+ *
+ *  2026-08-29：画布之前只按 raw 节点 `inputs[]` 里的 `widget` 标记配对控件值，
+ *  而 ComfyUI **默认不会把未「转成输入」的控件写进 inputs[]** —— 于是
+ *  CLIPTextEncode 的提示词、各类 Loader 的模型名整段丢失，节点上一个参数都不显示。 */
+export async function fetchWidgetOrderTable(): Promise<Record<string, string[]>> {
+  const info = await fetchObjectInfo();
+  const table: Record<string, string[]> = {};
+  if (info) {
+    for (const [clsName, def] of Object.entries(info)) {
+      table[clsName] = resolveWidgetOrder(def);
+    }
+  } else {
+    for (const [clsName, list] of Object.entries(FALLBACK_WIDGETS)) table[clsName] = list;
+  }
+  return table;
+}
+
+/** 把一整个 `widgets_values` 按类定义的控件顺序还原成「控件名 → 值」列表。
+ *
+ *  老版本 ComfyUI 前端不写 control_after_generate，故长度对不上时自动退到
+ *  「无哨兵」顺序（与 {@link applyWidgets} 的 bare/names 选择一致）。
+ *
+ *  顺序未知 / 长度仍对不上（自定义节点动态控件）→ 返回 null，调用方退回
+ *  旧的游标配对，保证不引入新的错位。 */
+export function mapWidgetValuesByOrder(
+  widgetOrder: string[] | undefined,
+  widgetsValues: unknown[]
+): { name: string; value: unknown }[] | null {
+  if (!widgetOrder || widgetOrder.length === 0 || widgetsValues.length === 0) return null;
+  const bare = widgetOrder.filter((name) => name !== CONTROL_SENTINEL);
+  const names =
+    widgetsValues.length === widgetOrder.length
+      ? widgetOrder
+      : widgetsValues.length === bare.length
+        ? bare
+        : null;
+  if (!names) return null;
+  const out: { name: string; value: unknown }[] = [];
+  names.forEach((name, index) => {
+    if (name === CONTROL_SENTINEL) return;
+    out.push({ name, value: widgetsValues[index] });
+  });
+  return out;
+}
+
 function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): string[] {
   if (!cls) return [];
   const reqOrder = cls.input_order?.required ?? [];

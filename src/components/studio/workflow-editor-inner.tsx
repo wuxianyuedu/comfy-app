@@ -234,21 +234,41 @@ function WorkflowEditorBody({
     detailRef.current = detail;
   }, [detail]);
 
-  /* 2026-08-25 简化：单一格式，SourceModal 只展示 graph。
-   * 顶层与 sub 视图统一取 graph；isSubgraph 仅用于文案区分。 */
+  /* 2026-08-29：「查看源文件」要展示**磁盘上的原始 JSON**，而不是 /prompt 用的
+   * 可执行图（`detail.graph`）—— 用户点这个按钮是想核对 ComfyUI 保存的源文件
+   * （nodes[] / links[] / widgets_values）。所以这里取 `detail.rawJson`；
+   * 只有纯 API 导入（rawJson 为 null）才回退到 graph，并标记 isApiFallback
+   * 让弹窗如实说明。sub 视图同理。 */
   const sourceModalData = useMemo<{
     name: string;
-    graph: unknown;
+    source: unknown;
     isSubgraph: boolean;
+    isApiFallback: boolean;
   } | null>(() => {
     if (!detail) return null;
     const isSubgraphView = subgraphStack.length > 0;
+    const raw: unknown = (() => {
+      if (!isSubgraphView) return detail.rawJson ?? null;
+      /* sub 视图：源文件 = 父 rawJson 的 definitions.subgraphs[subUid]（见上方
+       * subgraphRawContext 的注释）。 */
+      const ctx = subgraphRawContext;
+      if (!ctx) return null;
+      const subs = (ctx.parentRawJson as { definitions?: { subgraphs?: Record<string, unknown> } } | null)
+        ?.definitions?.subgraphs;
+      if (!subs) return null;
+      return (
+        subs[ctx.subUid] ??
+        Object.values(subs).find((s) => (s as { id?: unknown } | null)?.id === ctx.subUid) ??
+        null
+      );
+    })();
     return {
       name: detail.name ?? "工作流",
-      graph: detail.graph,
+      source: raw ?? detail.graph,
       isSubgraph: isSubgraphView,
+      isApiFallback: raw == null,
     };
-  }, [detail, subgraphStack.length]);
+  }, [detail, subgraphStack.length, subgraphRawContext]);
 
   /* After fitView completes, lock the viewport onto the middle (real
    *  WorkflowNode / WorkflowSubgraph / wfNote / wfGroup) nodes.  We (a) run

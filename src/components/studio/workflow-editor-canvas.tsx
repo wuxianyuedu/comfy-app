@@ -20,6 +20,7 @@ import {
   type CanvasSettings,
 } from "./workflow-canvas-settings";
 import { PORT_ROLES } from "./workflow-node";
+import { FpsMeter } from "./FpsMeter";
 import type { WorkflowNodeData } from "./workflow-types";
 import { workflowNodeTypes, workflowEdgeTypes } from "./workflow-editor-nodes";
 
@@ -141,6 +142,9 @@ export function WorkflowEditorCanvas({
         hasOverrides={canvasSettingsHydrated && isCustomCanvasSettings(canvasSettings)}
         onClick={onOpenSettings}
       />
+      {/* 2026-08-29：帧率指示器 —— 大图拖拽/缩放时给用户一个「还活着」的信号。
+       *  放在「设置」按钮下方（top-12 → top-[76px]），不与缩放/设置抢占同一格。 */}
+      <FpsMeter className="right-3 top-[76px]" />
       <Controls showInteractive={false} className="!bg-(--color-panel)/90 !border-white/10 !text-gray-400 [&>button]:!bg-white/5 [&>button]:!border-white/10 [&>button]:!text-gray-400 [&>button:hover]:!bg-white/10" />
       {canvasSettings.showMiniMap && (
         <MiniMap
