@@ -9,9 +9,11 @@
     "moduleDetection": "force",
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    "forceConsistentCasingInFileNames": true,
     /* Strictness */
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
     "checkJs": true,
     /* Bundled projects */
     "lib": [
