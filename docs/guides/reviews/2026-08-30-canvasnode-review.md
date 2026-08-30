@@ -31,3 +31,35 @@
   的 createStore 工厂模式),届时 runGenerate 才能获得真正稳定的引用;
 - `canvas-types.ts` 收窄 `CanvasNodeData` 索引签名,消除 `as unknown as` 双断言;
 - `errorSuggestion` 的正则规则表外置为数据(便于新增错误形态)。
+
+## 二、注册表方案(Strategy/Registry)评审(同日追加)
+
+外部第二份方案:CanvasNodeTypeDef 接口 + NODE_REGISTRY + node-defs/\*.ts +
+primitives/ 语义化壳(Node.Root/Header 命名空间)+ 60 行薄壳主组件。
+
+**判定:方向正统(Radix/Headless 确为此模式),但与本项目领域模型存在两处硬
+冲突,现在不全盘采纳;触发式增量采纳。**
+
+| 提案要点 | 判定 | 依据 |
+|---|---|---|
+| 扩展 NODE_META → CanvasNodeTypeDef(category/isRunnable/Body 映射) | ✅ 触发式采纳 | 注册表已存在 70%:`canvas-types.ts:246 NODE_META`(Record<NodeKind,{label,icon,color,desc,typeChar}>);缺 category/Body 映射 |
+| 声明式静态端口 `inputs?: NodePortDef[]`,框架自动渲染 Handle | ❌ 永久拒绝 | 本画布端口是**节点实例状态**的函数:OutputRowPort 由 `wfIO`(绑定工作流的运行时 IO 映射)驱动,绑定工作流 A/B 端口数不同;折叠态另有圆柱锚点几何。静态 per-kind def 无法表达——要表达就得把 def 变成 (node)=>PortDef[] 函数,等于把组件逻辑搬进注册表,负迁移 |
+| `run: (ctx) => Promise` 进 def | ⏸ 条件采纳 | 生成流程跨 kind 共享 poll/对账/错误上下文机制(use-generate 已是共享引擎);现在按 kind 拆 run = 复制引擎,零收益。先有引擎,def.run 才是薄封装 |
+| Node.Root/Header 命名空间原语 | ⏸ 低优先级 | CanvasNodePrimitives.tsx 已集中壳组件;命名空间化是纯风格收益 |
+| "600 行 → 60 行" | ❌ 误估 | 复杂度守恒:薄壳把体量转移进 node-defs 与 Body;收益是组织性,不是行数 |
+| "未用节点可 tree-shake" | ❌ 不成立 | 运行时 Record 查表,属性引用齐全,bundler 摇不掉对象属性 |
+
+### "加新节点"的真实成本基线(今天)
+
+7 个文件的声明式触点:kind 联合(canvas-types)、NODE_META、defaultData、
+CanvasContextMenu、use-canvas-drop、ResultCard、canvas-render-chain——多为
+小型声明,不是方案暗示的"5-6 处 if/else 逻辑"。触发热后按 ✅ 项收编,可降至 ~4。
+
+### 触发条件与执行顺序
+
+下次需要新增节点 kind(如 audio/3D)时:
+
+1. 先把 NODE_META 扩成 CanvasNodeTypeDef(新 kind 按 def 文件写,旧 kind 顺手迁);
+2. CanvasContextMenu/use-canvas-drop 改读注册表(7 触点 → ~4);
+3. Body 逐 kind 抽出(新 kind 直接按 Body 写);**端口渲染保持 wfIO 驱动,不进 def**;
+4. def.run 仅作共享引擎(use-generate)的薄封装。
