@@ -76,3 +76,4 @@ __pycache__/
 # playwright e2e artifacts
 test-results/
 playwright-report/
+/src/generated/
