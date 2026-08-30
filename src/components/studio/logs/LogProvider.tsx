@@ -44,12 +44,23 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       (...args: unknown[]) => {
         originals[level](...args);
         if (isReactQueryLog(args)) return;
+        /* 同步捕获调用点与序列化参数：调用栈只在当前 tick 有效，而参数
+         * 可能在日志入库前就被调用方改写。 */
         const location = captureLocation();
-        addEntry({
-          level,
-          message: serialize(args),
-          source: "console",
-          location,
+        const message = serialize(args);
+        /* 延迟入库：React Flow 等第三方库会在 render 期间打日志（例如
+         *  EdgeWrapper 校验 edge 时 console.warn）。同步调用 addEntry 会在
+         *  渲染另一个组件的过程中更新 BrowserStatusBar / LogPanel，触发
+         *  React 的 "Cannot update a component while rendering a different
+         *  component" 报错。排到微任务，等本次渲染提交后再写入 store。
+         *  微任务按入队顺序执行，日志先后顺序保持不变。 */
+        queueMicrotask(() => {
+          addEntry({
+            level,
+            message,
+            source: "console",
+            location,
+          });
         });
       };
 
