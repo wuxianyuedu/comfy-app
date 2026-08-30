@@ -14,10 +14,9 @@
 
 ## P1 — 测试覆盖爬坡(商业级下限)
 
-- [ ] 表单/画布主组件行为测试:ReactFlow Provider 包装方案
-      (`tests/helpers/react-flow.tsx` 提供 Provider + 固定尺寸容器 + mocked
-      useReactFlow),覆盖 `DynamicWorkflowForm` 主组件与 `CanvasNode` 主组件
-      的分 kind 渲染与交互。
+- [x] ReactFlow Provider 包装方案落地(tests/helpers/react-flow.tsx)+
+      CanvasNode/FlowNode 渲染冒烟与折叠交互(7 用例)。表单/生成链路的深度
+      行为测试(fetch/poll 生命周期)仍开放。
 - [ ] `CustomNodesSettings` 主组件(1116 行)拆分后行为测试。
 - [x] Playwright 框架 + 冒烟 E2E(e2e/smoke.spec.ts:login 渲染/Tab 切换、/ 重定向 workspace;`npm run test:e2e`)。
 - [ ] 覆盖率棘轮抬升:`src/lib/comfyui/**` 入榜(executor 家族已类型化,
