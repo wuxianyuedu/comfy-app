@@ -34,7 +34,7 @@ function portColorFor(type?: string): string {
  *  to JS-type inference.  Any non-{INT,FLOAT,NUMBER} type on a row the
  *  caller already classified as numeric (compact WirePortRows path)
  *  is coerced to INT so the chip is honest about the row's edit semantics. */
-export function normalizeTypeChip(raw: string | undefined, fallback: "INT" | "FLOAT" = "INT"): string {
+export function normalizeTypeChip(raw: string | undefined, fallback = "INT"): string {
   const t = (raw ?? "").toUpperCase();
   if (t === "INT" || t === "FLOAT" || t === "NUMBER" || t === "STRING" || t === "BOOLEAN" || t === "BOOL" || t === "COMBO" || t === "IMAGE" || t === "MASK" || t === "VIDEO" || t === "AUDIO" || t === "*") return t;
   return fallback;

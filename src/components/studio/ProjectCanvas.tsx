@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, react-hooks/refs */
 "use client";
 
 import React, {
@@ -128,14 +127,16 @@ function CanvasInner({
 
   /* refs holding the latest values for event handlers / flush */
   const edgesRef = useRef(edges);
-  edgesRef.current = edges;
   const nodesRef = useRef(nodes);
-  nodesRef.current = nodes;
   const projectIdRef = useRef(projectId);
-  projectIdRef.current = projectId;
   const projectNameRef = useRef(projectName);
-  projectNameRef.current = projectName;
   const loadedRef = useRef(false);
+  useEffect(() => {
+    edgesRef.current = edges;
+    nodesRef.current = nodes;
+    projectIdRef.current = projectId;
+    projectNameRef.current = projectName;
+  }, [edges, nodes, projectId, projectName]);
   // True until the initial project has been hydrated from storage.
   // Prevents the empty-canvas hint from flashing while content loads.
   const [hydrating, setHydrating] = useState(true);
@@ -166,7 +167,9 @@ function CanvasInner({
     setProjectName,
     setNodes,
     setEdges,
-    fitView,
+    fitView: (...fitViewArgs: Parameters<typeof fitView>) => {
+      fitView(...fitViewArgs).catch(() => { /* noop */ });
+    },
     toast,
   });
   const {
@@ -203,7 +206,10 @@ function CanvasInner({
   /* 双 rAF fitView：等 ReactFlow 完成本轮布局后再 fit，
    * 替代 setTimeout(80ms) 魔法数字（慢机器上可能布局未完成）。 */
   const requestFitView = useMemo(
-    () => makeFitViewScheduler(fitView),
+    () =>
+      makeFitViewScheduler((...fitViewArgs: Parameters<typeof fitView>) => {
+        fitView(...fitViewArgs).catch(() => { /* noop */ });
+      }),
     [fitView],
   );
 
@@ -221,7 +227,7 @@ function CanvasInner({
   useEffect(() => {
     if (loadedRef.current) return;
     loadedRef.current = true;
-    (async () => {
+    void (async () => {
       // Reconcile server-side projects into localStorage BEFORE we read the
       // active project, so a port-switch (3000↔3002) / device never loses
       // canvas data that was persisted to the DB.
@@ -245,7 +251,7 @@ function CanvasInner({
       requestFitView();
       setHydrating(false);
       onConsumeSeed?.();
-    })();
+    })().catch(() => { /* noop */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -517,7 +523,7 @@ function CanvasInner({
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}
         title="删除此项目？"
-        description={`项目「${projectNameRef.current}」将被永久删除，连同画布上的所有节点和连线。\n\n此操作不可撤销。`}
+        description={`项目「${projectName}」将被永久删除，连同画布上的所有节点和连线。\n\n此操作不可撤销。`}
         confirmLabel="删除"
         cancelLabel="取消"
         danger

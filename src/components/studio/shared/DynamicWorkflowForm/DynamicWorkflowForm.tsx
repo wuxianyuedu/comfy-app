@@ -10,6 +10,7 @@ import {
   ioLabel,
   isInputFilled,
   inferGroups,
+  type ControlKind,
   type WorkflowIOMap,
 } from "../workflow-io";
 import { GroupedControls } from "../GroupedControls";
@@ -47,6 +48,30 @@ import { IoEndpointsSection } from "./sections/IoEndpointsSection";
  *  Visual cue: a small ✏ icon appears next to the label when `onChange` is
  *  set, so authors can tell at a glance which labels are user-editable.
  *  Hovering the row turns the icon from 30% to 100% opacity. */
+
+/** When the backend type is missing/unknown, fall back to a chip that
+ *  matches the control we actually render so the badge is honest about
+ *  the row's edit semantics (e.g. textarea → STRING instead of INT). */
+function controlTypeFallback(control: ControlKind): string {
+  switch (control) {
+    case "textarea":
+    case "text":
+    case "select":
+      return "STRING";
+    case "int":
+      return "INT";
+    case "float":
+      return "FLOAT";
+    case "switch":
+      return "BOOLEAN";
+    case "image":
+      return "IMAGE";
+    case "link":
+      return "*";
+    default:
+      return "INT";
+  }
+}
 
 export interface DynamicWorkflowFormProps {
   /** Enriched workflowIO map from GET /api/workflows/[id]. */
@@ -299,7 +324,7 @@ export function DynamicWorkflowForm({
          *  through API-only enrichment (`"fixed"`/`"randomize"`/…),
          *  the chip showed that string instead of `INT`.  Unify the
          *  two paths on `normalizeTypeChip()`. */}
-        {normalizeTypeChip(widgetInput.type, widgetInput.control === "float" ? "FLOAT" : "INT")}
+        {normalizeTypeChip(widgetInput.type, controlTypeFallback(widgetInput.control))}
       </span>
     );
     const labelText = (
