@@ -32,6 +32,10 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
     const rel = p;
     const base = e.name.replace(/\.(tsx?|mjs|cjs|js)$/, "").replace(/\.test$/, "");
     if (/\d{8}_\d{6}/.test(e.name)) problems.push("R3 时间戳备份文件:" + rel);
+    if (/^\/\* eslint-disable @typescript-eslint\/no-explicit-any/.test(
+      fs.readFileSync(p, "utf8").split("\n")[0] || "",
+    ))
+      problems.push("R6 文件级 no-explicit-any 禁用头(战役已清零,禁止回流):" + rel);
     if (/\.(tsx|mjs|cjs|js)$/.test(e.name) && rel.startsWith("src/")) {
       if (e.name.endsWith(".tsx")) {
         /* §12.6 把「目录索引」单列为一种命名约定（index.tsx 组件 /
