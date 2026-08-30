@@ -47,7 +47,7 @@ export interface ResolvedMedia {
  * Load image bytes from a data URL, a locally generated path, or an absolute
  * http(s) URL. Throws with a readable message when the source is unusable.
  */
-export async function resolveMediaBytes(src: string, origin: string): Promise<ResolvedMedia> {
+export async function resolveMediaBytes(src: string, _origin: string): Promise<ResolvedMedia> {
   if (src.startsWith("data:")) {
     const comma = src.indexOf(",");
     if (comma < 0) throw new Error("data URL 格式无效");
@@ -91,8 +91,8 @@ export async function resolveMediaBytes(src: string, origin: string): Promise<Re
 }
 
 /** Same as resolveMediaBytes but returning an inline data URL (for remote APIs). */
-export async function resolveMediaDataUrl(src: string, origin: string): Promise<string> {
-  const { buffer, mime } = await resolveMediaBytes(src, origin);
+export async function resolveMediaDataUrl(src: string, _origin: string): Promise<string> {
+  const { buffer, mime } = await resolveMediaBytes(src, _origin);
   return `data:${mime};base64,${buffer.toString("base64")}`;
 }
 
