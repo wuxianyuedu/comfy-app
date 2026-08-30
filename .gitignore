@@ -69,3 +69,7 @@ start-tauri*.spec
 /run/
 __pycache__/
 /.workbuddy/
+
+# playwright e2e artifacts
+test-results/
+playwright-report/

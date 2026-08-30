@@ -19,6 +19,7 @@
     "preview": "next build && next start",
     "start": "next start",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "docs": "typedoc",
     "typecheck": "tsc --noEmit",
     "test:coverage": "vitest run --coverage"
@@ -51,6 +52,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.0.15",
     "@tauri-apps/cli": "^2.11.4",
     "@testing-library/dom": "^10.4.1",
