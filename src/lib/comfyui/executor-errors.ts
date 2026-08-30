@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 /**
  * `executor-errors.ts` — ComfyUI 错误信息人性化（纯函数）
  * ===========================================================================
@@ -10,6 +9,8 @@
  *
  * @module comfyui/executor-errors
  */
+
+import type { PromptResult } from "./client";
 
 // Map raw ComfyUI/node errors to user-actionable hints.
 //
@@ -76,7 +77,7 @@ export function friendlyError(raw: unknown): string {
  *  ComfyUI returns `node_errors` keyed by node id, each with `input_errors`
  *  (field → {message}) or a top-level `message`. Surface those instead of a
  *  generic "节点配置错误" so the user can fix the actual bad value. */
-export function buildPromptError(res: any, graph: Record<string, any>): string {
+export function buildPromptError(res: PromptResult, graph: Record<string, unknown>): string {
   // R69: previously `String(res.error)` — that collapses a structured
   // error object to the literal "[object Object]" and gets stored as
   // the task's error string, which then surfaces verbatim in the UI.

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 /**
  * `executor-scheduler.ts` — 队列调度与心跳（executor 的调度层）
  * ===========================================================================
@@ -99,7 +98,7 @@ export async function processQueue() {
     // makes it impossible to tell whether the request was ever sent.
     const nodeCount = Object.keys(prep.graph).length;
     log(job.taskId, "info", `→ 准备提交到 ComfyUI /prompt（${nodeCount} 节点）`);
-    const res = (await postPrompt(prep.graph, CLIENT_ID)) as any;
+    const res = await postPrompt(prep.graph, CLIENT_ID);
     if (res.error || (res.node_errors && Object.keys(res.node_errors).length)) {
       // R-Next (2026-08-17): carry the flattened `node_errors` into the task
       // so the UI can show "节点 X · 字段 Y：消息" instead of just the
@@ -146,7 +145,9 @@ export async function processQueue() {
       );
       return;
     }
-    const promptId: string = res.prompt_id;
+    // prompt_id 缺失时保持原行为（undefined 透传给 markRunning / watchdog），
+    // 这里仅做类型收口，不改变运行时取值。
+    const promptId = res.prompt_id!;
     s.promptToTask.set(promptId, job.taskId);
     await taskRepository.markRunning(job.taskId, promptId);
     // R-ardot111 (2026-08-17): richer post-submit log so the user
@@ -154,8 +155,12 @@ export async function processQueue() {
     // /history/{prompt_id} ComfyUI URL when investigating hangs.
     log(job.taskId, "info", `✓ ComfyUI 已接收（prompt_id: ${promptId}），等待首个 executing 事件…`);
     armWatchdog(job.taskId, promptId);
-  } catch (e: any) {
-    await fail(job.taskId, "", e?.message ?? "提交失败");
+  } catch (e) {
+    await fail(
+      job.taskId,
+      "",
+      (e as { message?: unknown } | null | undefined)?.message ?? "提交失败"
+    );
   }
 }
 

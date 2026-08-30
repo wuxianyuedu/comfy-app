@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 /**
  * `executor-finalize.ts` — 任务终态收口（成功下载 / 失败落库）
  * ===========================================================================
@@ -21,32 +20,59 @@ import { taskRepository } from "../core/repository";
 import { getView } from "./client";
 import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
 import { friendlyError } from "./executor-errors";
-import { claimSettle, fetchHistoryEntry } from "./executor-ws";
+import { claimSettle, fetchHistoryEntry, type ComfyHistoryEntry } from "./executor-ws";
 import { processQueue } from "./executor-scheduler";
 import { state, log, persistLogs } from "./runner-state";
 import type { ValidationError } from "./validation";
 
+/** ComfyUI `status.messages` 条目是 `[type, payload?]` 元组，payload 形状随
+ *  版本漂移 —— 只按本层读取的两个位置（`[0]` 类型名 / `[1].exception_message`）
+ *  做窄化，其余原样保留。 */
+function statusMessageTypeOf(msg: unknown): unknown {
+  return Array.isArray(msg) ? msg[0] : undefined;
+}
+
+function executionErrorMessageOf(msg: unknown): unknown {
+  if (!Array.isArray(msg)) return undefined;
+  // Array.isArray 把 unknown 收窄为 any[]，索引取值后立即断言收口。
+  const payload = msg[1] as Record<string, unknown> | null | undefined;
+  return payload != null && typeof payload === "object"
+    ? payload.exception_message
+    : undefined;
+}
+
+/** runner-state 的 `executedWorkflow` 是 `Map<string, any>`（不在本次 8 文件
+ *  改动范围内）—— 经这里统一收口为 `unknown` 读取；`undefined` 归一为 `null`
+ *  与拆分前一致（completeInner 内两者等价）。 */
+function executedWorkflowOf(taskId: string): unknown {
+  const map = state().executedWorkflow as ReadonlyMap<string, unknown>;
+  return map.get(taskId) ?? null;
+}
+
 /** 完成入口：抢终态 → completeInner → 兜底失败。 */
 export async function complete(taskId: string, promptId: string) {
   if (!claimSettle(taskId)) return;
-  const s = state();
-  const executedWorkflow = s.executedWorkflow.get(taskId) ?? null;
+  const executedWorkflow = executedWorkflowOf(taskId);
   try {
     await completeInner(taskId, promptId, executedWorkflow);
-  } catch (e: any) {
+  } catch (e) {
     // 下载 / 落盘 / 写库任何一步炸了，都必须把任务收口，否则队列同样会卡死。
-    await finalizeFailure(taskId, promptId, e?.message ?? "结果处理失败");
+    await finalizeFailure(
+      taskId,
+      promptId,
+      (e as { message?: unknown } | null | undefined)?.message ?? "结果处理失败"
+    );
   }
 }
 
-async function completeInner(taskId: string, promptId: string, executedWorkflow: any = null) {
+async function completeInner(taskId: string, promptId: string, executedWorkflow: unknown = null) {
   const s = state();
 
   // 2026-08-13 项目级产出：读取任务归属的项目与请求参数，决定磁盘落点 +
   // 复现元数据。projectId 为 localStorage 的 CanvasProject.id（client 侧字符串）。
   const taskRow = await taskRepository.findExecutionMeta(taskId);
   const projectId: string | null = taskRow?.projectId ?? null;
-  const taskParams = (taskRow?.params as Record<string, any>) ?? {};
+  const taskParams = (taskRow?.params as Record<string, unknown> | null) ?? {};
   const reqSeed =
     typeof taskParams.seed === "number" || typeof taskParams.seed === "string"
       ? String(taskParams.seed)
@@ -68,7 +94,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // are persisted), so a hang in this window would otherwise look
   // like "the runner froze".
   log(taskId, "info", "🔍 拉取 ComfyUI history（最长 ~3s）…");
-  const entry = await fetchHistoryEntry(promptId);
+  const entry: ComfyHistoryEntry | null = await fetchHistoryEntry(promptId);
   if (!entry) {
     await finalizeFailure(taskId, promptId, "未找到生成结果");
     return;
@@ -76,11 +102,11 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   const outputsCount = Object.keys(entry.outputs ?? {}).length;
   log(taskId, "info", `✓ history 就绪（${outputsCount} 节点输出）`);
 
-  const msgs: any[] = entry.status?.messages ?? [];
-  const errored = msgs.some((msg) => msg?.[0] === "execution_error");
+  const msgs: unknown[] = entry.status?.messages ?? [];
+  const errored = msgs.some((msg) => statusMessageTypeOf(msg) === "execution_error");
   if (errored || entry.status?.status_str === "error") {
-    const ex = msgs.find((msg) => msg?.[0] === "execution_error")?.[1]?.exception_message;
-    await finalizeFailure(taskId, promptId, ex ?? "执行错误");
+    const ex = msgs.find((msg) => statusMessageTypeOf(msg) === "execution_error");
+    await finalizeFailure(taskId, promptId, executionErrorMessageOf(ex) ?? "执行错误");
     return;
   }
 
@@ -174,10 +200,11 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // R-ardot62 (2026-08-15): 把真 seed + 采样器元数据一起回写 Task。
   // priority：actualSeed (history) > reqSeed (用户填) > null。`runtime` 块独立于
   // `params.seed` 字段（用户输入），便于审计「用户填了什么 vs server 跑的是什么」。
-  const taskParamsPatched: Record<string, any> = { ...taskParams };
+  const taskParamsPatched: Record<string, unknown> = { ...taskParams };
   if (Object.keys(runtime).length > 0) {
+    const prevRuntime = taskParamsPatched.runtime;
     taskParamsPatched.runtime = {
-      ...(typeof taskParamsPatched.runtime === "object" && taskParamsPatched.runtime ? taskParamsPatched.runtime : {}),
+      ...(typeof prevRuntime === "object" && prevRuntime ? prevRuntime : {}),
       ...(actualSeed !== undefined ? { seed: actualSeed } : {}),
       ...(runtime.steps !== undefined ? { steps: runtime.steps } : {}),
       ...(runtime.cfg !== undefined ? { cfg: runtime.cfg } : {}),

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 /**
  * `executor-outputs.ts` — 产物收集与运行时参数提取（纯函数）
  * ===========================================================================
@@ -11,11 +10,18 @@
  *
  * @module comfyui/executor-outputs
  */
+/** ComfyUI history 输出文件条目（images / videos / gifs / audios 及 3D 兜底）。 */
+export type CollectedOutputFile = {
+  filename: string;
+  subfolder: string;
+  type: string;
+};
+
 export type CollectedOutputs = {
-  images: { filename: string; subfolder: string; type: string }[];
-  videos: { filename: string; subfolder: string; type: string }[];
-  audios: { filename: string; subfolder: string; type: string }[];
-  others: { filename: string; subfolder: string; type: string }[];
+  images: CollectedOutputFile[];
+  videos: CollectedOutputFile[];
+  audios: CollectedOutputFile[];
+  others: CollectedOutputFile[];
   texts: string[];
 };
 
@@ -23,30 +29,40 @@ export type CollectedOutputs = {
  * 从 ComfyUI history 的 outputs 中收集各类产物。
  * 纯函数，便于单测（P2：补齐 audio/text/3D，避免只认 images/videos 导致的死锁）。
  */
-export function collectOutputs(outputs: Record<string, any>): CollectedOutputs {
-  const images: { filename: string; subfolder: string; type: string }[] = [];
-  const videos: { filename: string; subfolder: string; type: string }[] = [];
-  const audios: { filename: string; subfolder: string; type: string }[] = [];
-  const others: { filename: string; subfolder: string; type: string }[] = [];
+export function collectOutputs(outputs: Record<string, unknown>): CollectedOutputs {
+  const images: CollectedOutputFile[] = [];
+  const videos: CollectedOutputFile[] = [];
+  const audios: CollectedOutputFile[] = [];
+  const others: CollectedOutputFile[] = [];
   const texts: string[] = [];
   for (const nodeOut of Object.values(outputs)) {
     if (!nodeOut || typeof nodeOut !== "object") continue;
-    if (Array.isArray(nodeOut.images)) images.push(...nodeOut.images);
-    if (Array.isArray(nodeOut.videos)) videos.push(...nodeOut.videos);
+    const node = nodeOut as Record<string, unknown>;
+    if (Array.isArray(node.images)) images.push(...(node.images as CollectedOutputFile[]));
+    if (Array.isArray(node.videos)) videos.push(...(node.videos as CollectedOutputFile[]));
     // VHS_VideoCombine emits its files under `gifs` (mp4/gif/webm).
-    if (Array.isArray(nodeOut.gifs)) videos.push(...nodeOut.gifs);
+    if (Array.isArray(node.gifs)) videos.push(...(node.gifs as CollectedOutputFile[]));
     // SaveAudio / AudioComposite emit under `audios`.
-    if (Array.isArray(nodeOut.audios)) audios.push(...nodeOut.audios);
+    if (Array.isArray(node.audios)) audios.push(...(node.audios as CollectedOutputFile[]));
     // ShowText / 任意文本输出节点：保留渲染文本（无文件）.
-    if (typeof nodeOut.text === "string" && nodeOut.text.trim()) texts.push(nodeOut.text);
-    else if (Array.isArray(nodeOut.text))
-      for (const t of nodeOut.text) if (typeof t === "string" && t.trim()) texts.push(t);
+    if (typeof node.text === "string" && node.text.trim()) texts.push(node.text);
+    else if (Array.isArray(node.text))
+      for (const t of node.text) if (typeof t === "string" && t.trim()) texts.push(t);
     // 3D / 未知文件输出（Hunyuan3D、mesh、gltf…）：兜底收集任何其它
     // 「数组内含 {filename,...}」的输出，避免被静默丢弃。
-    for (const [k, v] of Object.entries(nodeOut)) {
+    for (const [k, v] of Object.entries(node)) {
       if (k === "images" || k === "videos" || k === "gifs" || k === "audios" || k === "text") continue;
-      if (Array.isArray(v) && v.length && v.every((it: any) => it && typeof it.filename === "string"))
-        others.push(...v);
+      if (
+        Array.isArray(v) &&
+        v.length &&
+        v.every(
+          (it) =>
+            it &&
+            typeof it === "object" &&
+            typeof (it as Record<string, unknown>).filename === "string"
+        )
+      )
+        others.push(...(v as CollectedOutputFile[]));
     }
   }
   return { images, videos, audios, others, texts };
@@ -80,10 +96,12 @@ export type RuntimeParams = {
   samplerClassType?: string;
 };
 
-export function extractRuntimeParams(entry: any): RuntimeParams {
+export function extractRuntimeParams(entry: unknown): RuntimeParams {
   const out: RuntimeParams = {};
-  const graph = entry?.prompt?.[2];
-  if (!graph || typeof graph !== "object") return out;
+  const prompt = (entry as { prompt?: unknown } | null | undefined)?.prompt;
+  const graphRaw = (prompt as Record<string, unknown> | null | undefined)?.[2];
+  if (!graphRaw || typeof graphRaw !== "object") return out;
+  const graph = graphRaw as Record<string, unknown>;
   for (const [nid, nodeRaw] of Object.entries(graph)) {
     const node = nodeRaw as Record<string, unknown> | undefined;
     const t = typeof node?.class_type === "string" ? node.class_type : "";

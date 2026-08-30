@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 /**
  * `executor-ws.ts` — WS 连接 / 消息处理 / 看门狗（executor 的通道层）
  * ===========================================================================
@@ -21,7 +20,7 @@ import {
   resetComfyBase,
   toWsBase,
 } from "./client";
-import { comfyProtocol } from "./protocol-adapter";
+import { comfyProtocol, type ComfyWsMessage } from "./protocol-adapter";
 import {
   state,
   log,
@@ -48,6 +47,21 @@ function nodeLabel(classType?: string): string {
   };
   return map[classType ?? ""] ?? classType ?? "未知节点";
 }
+
+/**
+ * ComfyUI `GET /history/{prompt_id}` 单条条目的最小结构视图
+ * （外部输入，字段仅取本层与 finalize / outputs 层实际读取的部分；
+ * 结构对照 0.33.1：`outputs`、`status.status_str`、`status.messages`、
+ * `prompt`（prompt graph 数组，`prompt[2]` 为 API graph））。
+ */
+export type ComfyHistoryEntry = {
+  outputs?: Record<string, unknown>;
+  status?: {
+    status_str?: string;
+    messages?: unknown[];
+  };
+  prompt?: unknown;
+};
 
 /**
  * 建立事件通道。
@@ -135,20 +149,24 @@ function scheduleReconnect() {
  * 都委托给 `comfyProtocol` Adapter，协议差异只存在于 protocol-adapter.ts。
  */
 async function handleMessage(raw: string) {
-  let msg: any;
+  let msg: unknown;
   try {
     msg = JSON.parse(raw);
   } catch {
     return;
   }
-  const data = msg.data ?? {};
-  const promptId: string | undefined = data.prompt_id;
+  if (!msg || typeof msg !== "object") return;
+  // ComfyUI WS 消息的最小结构视图（协议判断委托给 comfyProtocol Adapter）。
+  const message = msg as ComfyWsMessage;
+  const data = message.data ?? {};
+  const promptId: string | undefined =
+    typeof data.prompt_id === "string" ? data.prompt_id : undefined;
   if (!promptId) return;
   const s = state();
   const taskId = s.promptToTask.get(promptId);
   if (!taskId) return;
 
-  const signal = comfyProtocol.classify(msg);
+  const signal = comfyProtocol.classify(message);
 
   // 任何来自 ComfyUI 的活动（节点开始执行 / 进度推进）都续期看门狗，
   // 避免长任务被 5 分钟硬超时误杀（P2 修复）。完成/错误分支走 claimSettle
@@ -159,8 +177,20 @@ async function handleMessage(raw: string) {
 
   if (signal === "node-started") {
     // A node started executing — surface it in the log for transparency.
-    const graph = s.promptByTask.get(taskId);
-    const classType = graph?.[data.node]?.class_type;
+    const graph: Record<string, unknown> | undefined = s.promptByTask.get(taskId);
+    const graphNode = graph?.[String(data.node)];
+    const classTypeRaw =
+      graphNode && typeof graphNode === "object"
+        ? (graphNode as Record<string, unknown>).class_type
+        : undefined;
+    // class_type 正常是 string；非 string 时保留原值（断言仅收口类型，
+    // 运行时与原 any 行为逐值一致：nodeLabel 内部按 string 键查表）。
+    const classType =
+      typeof classTypeRaw === "string"
+        ? classTypeRaw
+        : classTypeRaw != null
+          ? (classTypeRaw as string)
+          : undefined;
     const nodeId = String(data.node);
     // R-ardot111 (2026-08-17): remember this node so we can log its
     // completion when ComfyUI emits the next `executing` with
@@ -252,11 +282,11 @@ export function armWatchdog(taskId: string, promptId: string) {
 }
 
 /** 轮询 history —— ComfyUI 是「先广播完成、后写 history」，直接读会扑空。 */
-export async function fetchHistoryEntry(promptId: string): Promise<any> {
+export async function fetchHistoryEntry(promptId: string): Promise<ComfyHistoryEntry | null> {
   for (let i = 0; i < HISTORY_RETRIES; i++) {
     try {
-      const hist = (await getHistory(promptId)) as any;
-      const entry = hist?.[promptId];
+      const hist = await getHistory(promptId);
+      const entry = hist?.[promptId] as ComfyHistoryEntry | undefined;
       // outputs 落盘也可能晚一拍，等到有 outputs 或明确报错为止。
       if (entry && (entry.outputs || entry.status?.status_str)) return entry;
       if (entry && i >= 3) return entry; // 有条目但一直空 → 不再干等

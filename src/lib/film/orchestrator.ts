@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 // ── Film Studio orchestrator ─────────────────────────────────
 // One-click complete film pipeline:
 //   script → auto storyboard (shots) → per-shot video generation
@@ -24,6 +23,7 @@ import { synthesizeFirstFrame } from "@/lib/comfyui/firstframe";
 import { getSettingsSync } from "@/lib/app-settings";
 import { parseIdeaToScenes } from "@/lib/workshop/script-parser";
 import { getLLMConfig, completeLLM } from "@/lib/llm/server";
+import type { ProjectType } from "@/lib/workshop/types";
 
 export type FilmStatus =
   | "PARSING"
@@ -70,6 +70,13 @@ const CAMERA_KEYWORDS = [
 ];
 
 // ── logging ────────────────────────────────────────────────
+/** unknown → string：与原 `String(x)` / 模板插值行为逐值一致。 */
+const toStr = (v: unknown): string => String(v);
+
+/** `e?.message ?? fallback` 的等价收口（Error.message 恒为 string）。 */
+const errorMessage = (e: unknown, fallback = ""): string =>
+  toStr((e as { message?: unknown } | null | undefined)?.message ?? fallback);
+
 async function appendFilmLog(
   id: string,
   level: "info" | "progress" | "warn" | "error" | "success",
@@ -105,19 +112,27 @@ async function expandScriptLLM(raw: string): Promise<
 
   if (!match) throw new Error("llm no json");
 
-  const arr = JSON.parse(match[0]);
+  const arr: unknown = JSON.parse(match[0]);
 
-  return arr.map((s: any) => ({
+  if (!Array.isArray(arr)) throw new Error("llm no json");
 
-    heading: String(s.heading ?? s.scene ?? "场景"),
+  return arr.map((s) => {
 
-    action: String(s.action ?? s.description ?? raw),
+    const rec = s as Record<string, unknown>;
 
-    dialogue: String(s.dialogue ?? ""),
+    return {
 
-    shotCount: Math.max(1, Math.min(4, Number(s.shotCount ?? 2) || 2)),
+      heading: toStr(rec.heading ?? rec.scene ?? "场景"),
 
-  }));
+      action: toStr(rec.action ?? rec.description ?? raw),
+
+      dialogue: toStr(rec.dialogue ?? ""),
+
+      shotCount: Math.max(1, Math.min(4, Number(rec.shotCount ?? 2) || 2)),
+
+    };
+
+  });
 
 }
 
@@ -135,7 +150,7 @@ async function parseScriptToShots(
     scenes = expanded.map((expanded) =>({ heading: expanded.heading, action: expanded.action, shotCount: expanded.shotCount }));
   } catch {
     // offline fallback — reuse the workshop parser
-    const sc = parseIdeaToScenes(raw, { title: "", type: (type as any) ?? "short_video", tone: "", logline: "" });
+    const sc = parseIdeaToScenes(raw, { title: "", type: (type as ProjectType) ?? "short_video", tone: "", logline: "" });
     scenes = sc.map((scene) => ({
       heading: scene.heading,
       action: `${scene.action}${scene.dialogue ? " " + scene.dialogue : ""}`,
@@ -206,7 +221,7 @@ export async function createFilm(input: CreateFilmInput) {
     film.id,
     shots.map((shot) =>
 {
-      const params: Record<string, any> = { frames: framesPerShot, fps, size, workflow: wf };
+      const params: Record<string, unknown> = { frames: framesPerShot, fps, size, workflow: wf };
       return {
         order: shot.order,
         heading: shot.heading ?? null,
@@ -238,10 +253,10 @@ async function pickVideoWorkflow(): Promise<"txt2video" | "img2video"> {
 // the prompt via a local txt2img pass (no cloud, no authorization).
 async function generateVideoShot(
   userId: string,
-  shot: { prompt: string; negative?: string | null; params?: any }
+  shot: { prompt: string; negative?: string | null; params?: unknown }
 ): Promise<string> {
 
-  const params = (shot.params ?? {}) as Record<string, any>;
+  const params = (shot.params ?? {}) as Record<string, unknown>;
 
   const wf: "txt2video" | "img2video" =
 
@@ -249,9 +264,11 @@ async function generateVideoShot(
 
   const meta = getWorkflow("img2video")!;
 
+  const size = (params.size ?? "832x480") as string;
 
-
-  let inputImage = (params.inputImage as string) ?? (params.firstFrame as string) ?? null;
+  // 断言仅收口类型（运行时擦除）：inputImage 为 "" 等 falsy 值时仍需走
+  // 下方合成首帧分支，与原 any 行为逐值一致。
+  let inputImage = (params.inputImage ?? params.firstFrame ?? null) as string;
 
   if (!inputImage) {
 
@@ -263,7 +280,7 @@ async function generateVideoShot(
 
       negative: shot.negative ?? undefined,
 
-      size: (params.size as string) ?? "832x480",
+      size,
 
     });
 
@@ -279,11 +296,11 @@ async function generateVideoShot(
 
     inputImage,
 
-    frames: (params.frames as number) ?? 81,
+    frames: (params.frames ?? 81) as number,
 
-    fps: (params.fps as number) ?? 16,
+    fps: (params.fps ?? 16) as number,
 
-    size: (params.size as string) ?? "832x480",
+    size,
 
     steps: 25,
 
@@ -344,9 +361,13 @@ export async function startFilm(id: string) {
         params: shot.params,
       });
       await filmShotRepository.markQueued(shot.id, taskId);
-    } catch (e: any) {
+    } catch (e) {
       await filmShotRepository.markFailed(shot.id);
-      await appendFilmLog(id, "error", `镜头 ${shot.order + 1} 提交失败：${e?.message ?? ""}`);
+      await appendFilmLog(
+        id,
+        "error",
+        `镜头 ${shot.order + 1} 提交失败：${errorMessage(e)}`
+      );
     }
   }
 
@@ -396,13 +417,13 @@ async function watchFilm(id: string) {
       let duration: number | undefined;
       if (next === "SUCCEEDED") {
 
-        const imgs = (task.resultImages as any[]) ?? [];
+        const imgs = (task.resultImages as Array<{ mediaType?: unknown; localPath?: string }> | null) ?? [];
 
         const vid = imgs.find((img) => img.mediaType === "video") ?? imgs[0];
 
         videoPath = vid?.localPath;
 
-        const params = (shot.params as any) ?? {};
+        const params = (shot.params ?? {}) as Record<string, unknown>;
 
         duration = typeof params.duration === "number" ? params.duration : ((params.frames ?? 49) as number) / ((params.fps ?? 16) as number);
 
@@ -461,7 +482,7 @@ function runFFmpeg(args: string[], cwd?: string, timeout = 120000): Promise<{ co
       cp.kill("SIGKILL");
       resolve({ code: -1, stderr: "timeout" });
     }, timeout);
-    cp.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+    cp.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
     cp.on("close", (code) => {
       clearTimeout(to);
       resolve({ code: code ?? -1, stderr });
@@ -605,9 +626,9 @@ export async function composeFilm(id: string) {
 
     await filmRepository.markDone(id, localPath);
     await appendFilmLog(id, "success", `🎬 影片合成完成：${localPath}`);
-  } catch (e: any) {
-    await filmRepository.markFailed(id, e?.message ?? "合成失败");
-    await appendFilmLog(id, "error", `合成失败：${e?.message ?? ""}`);
+  } catch (e) {
+    await filmRepository.markFailed(id, errorMessage(e, "合成失败"));
+    await appendFilmLog(id, "error", `合成失败：${errorMessage(e)}`);
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
   }

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access */
 /**
  * 工作流 JSON 格式识别（共享 lib）
  *
@@ -38,7 +37,7 @@ export function detectWorkflowFormat(parsed: unknown): "api" | "raw" | null {
 
     const value = obj[k];
 
-    if (value && typeof value === "object" && !Array.isArray(value) && typeof (value as any).class_type === "string") {
+    if (value && typeof value === "object" && !Array.isArray(value) && typeof (value as { class_type?: unknown }).class_type === "string") {
 
       apiHits += 1;
 
