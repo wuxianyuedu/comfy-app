@@ -140,10 +140,6 @@ function CanvasInner({
   // True until the initial project has been hydrated from storage.
   // Prevents the empty-canvas hint from flashing while content loads.
   const [hydrating, setHydrating] = useState(true);
-  // Tracks which pending workflow we've already dropped, so navigating to the
-  // canvas / re-rendering doesn't place the same node twice.
-  const placedPendingRef = useRef<string | null>(null);
-
   /* ── 拆分（2026-08-26）：持久化三件套 → useProjectPersistence；
    *  项目 CRUD + 下拉 UI 状态 → useProjectManager；CanvasInner 只留编排与 JSX。
    *  T12-3（2026-08-29）：连线分派 → useCanvasConnections；媒体落地 →
@@ -244,7 +240,34 @@ function CanvasInner({
       }
       setProjectId(proj.id);
       setProjectName(proj.name);
-      setNodes(proj.nodes ?? []);
+
+      /* 2026-08-30: 从工作流库「使用」跳转回来时，pendingWorkflow 在挂载时就
+       * 已传入。project 加载 effect 会覆盖 nodes，因此必须在这里把新节点合并进
+       * baseNodes，否则原来的独立 effect 临时放置的节点会被 setNodes(baseNodes)
+       * 覆盖掉，导致用户只看到已有节点被聚焦。 */
+      const baseNodes = proj.nodes ?? [];
+      let nextNodes = baseNodes;
+      if (pendingWorkflow) {
+        const center = screenToFlowPosition({
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2,
+        });
+        const node: CanvasNodeType = {
+          id: makeNodeId(),
+          type: "canvasNode",
+          position: center,
+          data: {
+            ...defaultData("workflow"),
+            workflowId: pendingWorkflow.id,
+            workflowName: pendingWorkflow.name,
+            workflowTaskType: pendingWorkflow.taskType,
+          },
+        };
+        nextNodes = [...baseNodes, node];
+        onConsumePending?.();
+      }
+      setNodes(nextNodes);
+
       setEdges(proj.edges ?? []);
       setActive(proj.id);
       // fit after nodes are applied（双 rAF，等 ReactFlow 完成布局）
@@ -254,40 +277,6 @@ function CanvasInner({
     })().catch(() => { /* noop */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  /* ── Drop a workflow node when one is handed in from the Workspace library ──
-   *  (the "使用" action on a workflow card).  Placed at the current viewport
-   *  center; the user can then pick parameters / run it on the canvas. */
-  useEffect(() => {
-    if (!pendingWorkflow) return;
-    if (placedPendingRef.current === pendingWorkflow.id) return;
-    placedPendingRef.current = pendingWorkflow.id;
-
-    const center = screenToFlowPosition({
-      x: window.innerWidth / 2,
-      y: window.innerHeight / 2,
-    });
-    const node: CanvasNodeType = {
-      id: makeNodeId(),
-      type: "canvasNode",
-      position: center,
-      data: {
-        ...defaultData("workflow"),
-        workflowId: pendingWorkflow.id,
-        workflowName: pendingWorkflow.name,
-        workflowTaskType: pendingWorkflow.taskType,
-      },
-    };
-    setNodes((nds) => [...nds, node]);
-    requestFitView();
-    onConsumePending?.();
-  }, [
-    pendingWorkflow,
-    screenToFlowPosition,
-    setNodes,
-    onConsumePending,
-    requestFitView,
-  ]);
 
   /* Stable identity → colour lookup for the MiniMap.  Depends on nothing
    * (kind colours are static), so MiniMap never re-renders due to a fresh
