@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment */
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { container } from "@/lib/core";
@@ -17,8 +16,9 @@ export const projectRouter = createTRPCRouter({
       z.object({
         id: z.string().min(1),
         name: z.string().min(1),
-        nodes: z.any().optional(),
-        edges: z.any().optional(),
+        // React Flow 节点/边 JSON,形状由前端持有;仓储层入参即 unknown,收口校验由调用方保证。
+        nodes: z.unknown().optional(),
+        edges: z.unknown().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -49,8 +49,8 @@ export const projectRouter = createTRPCRouter({
       z.object({
         projectId: z.string(),
         name: z.string().optional(),
-        nodes: z.any().optional(),
-        edges: z.any().optional(),
+        nodes: z.unknown().optional(),
+        edges: z.unknown().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -82,7 +82,13 @@ export const projectRouter = createTRPCRouter({
       const tasks = await taskRepository.findByProjectIdWithImages(input.projectId);
       const outputs = tasks.map((task) =>
 {
-        const params = (task.params ?? {}) as Record<string, any>;
+        // params 是 Prisma Json 列:非对象(标量)时所有属性读取均为 undefined,与原
+        // `(task.params ?? {}) as Record<string, any>` 的读取结果一致。
+        const rawParams: unknown = task.params ?? {};
+        const params: Record<string, unknown> =
+          typeof rawParams === "object" && rawParams !== null
+            ? (rawParams as Record<string, unknown>)
+            : {};
         return {
           id: task.id,
           type: task.type,

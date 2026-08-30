@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment */
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { getLLMConfig, completeLLM } from "@/lib/llm/server";
+import type { LLMProviderType } from "@/lib/llm/types";
 
 export const llmRouter = createTRPCRouter({
   /** GET /api/llm/config */
@@ -46,7 +46,9 @@ export const llmRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const cfg = await getLLMConfig({
-        provider: input.provider as any,
+        // 原 `as any`:字符串透传。非 "local"/"remote" 的值在 getLLMConfig 里按非 remote
+        // 处理,加守卫反而会改变该退化行为,这里只恢复静态类型。
+        provider: input.provider as LLMProviderType | undefined,
         model: input.model,
         temperature: input.temperature,
         maxTokens: input.maxTokens,
