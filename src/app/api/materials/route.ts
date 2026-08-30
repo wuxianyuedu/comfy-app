@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { promises as fs } from "fs";
 import path from "path";
 import { type NextRequest, NextResponse } from "next/server";
@@ -57,6 +56,16 @@ const ALLOWED_MIME = new Set([
   "application/zip",
 ]);
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+
+/** 提取错误信息,等价原 `e?.message ?? fallback`(catch 变量为 unknown 后的窄化版)。 */
+function errorMessage(e: unknown, fallback: string): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const msg: unknown = e.message;
+    if (typeof msg === "string") return msg;
+  }
+  return fallback;
+}
 
 /** 鉴权守卫：无有效会话时返回 401（响应对象）。 */
 async function requireUser(): Promise<NextResponse | null> {
@@ -141,10 +150,10 @@ export async function GET(req: NextRequest) {
       folders,
       items,
     });
-  } catch (e: any) {
-    logger.error(`[materials] GET failed | ${e?.message ?? e}`);
+  } catch (e) {
+    logger.error(`[materials] GET failed | ${errorMessage(e, String(e))}`);
     return NextResponse.json(
-      { error: e?.message ?? "读取素材库失败", folders: [], items: [] },
+      { error: errorMessage(e, "读取素材库失败"), folders: [], items: [] },
       { status: 500 }
     );
   }
@@ -228,9 +237,9 @@ export async function POST(req: NextRequest) {
         scope,
       },
     });
-  } catch (e: any) {
-    logger.error(`[materials] POST failed | ${e?.message ?? e}`);
-    return NextResponse.json({ error: e?.message ?? "上传失败" }, { status: 500 });
+  } catch (e) {
+    logger.error(`[materials] POST failed | ${errorMessage(e, String(e))}`);
+    return NextResponse.json({ error: errorMessage(e, "上传失败") }, { status: 500 });
   }
 }
 
@@ -265,16 +274,16 @@ export async function DELETE(req: NextRequest) {
 
     try {
       await fs.unlink(target);
-    } catch (e: any) {
-      if (e?.code === "ENOENT") {
+    } catch (e) {
+      if (typeof e === "object" && e !== null && "code" in e && e.code === "ENOENT") {
         // 已经不在了，视作成功（幂等删除）
         return NextResponse.json({ ok: true, alreadyGone: true });
       }
       throw e;
     }
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    logger.error(`[materials] DELETE failed | ${e?.message ?? e}`);
-    return NextResponse.json({ error: e?.message ?? "删除失败" }, { status: 500 });
+  } catch (e) {
+    logger.error(`[materials] DELETE failed | ${errorMessage(e, String(e))}`);
+    return NextResponse.json({ error: errorMessage(e, "删除失败") }, { status: 500 });
   }
 }

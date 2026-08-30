@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 /**
  * /api/custom-nodes
  *
@@ -21,6 +20,43 @@ export const dynamic = "force-dynamic";
 
 const MANIFEST = path.join(process.cwd(), "src/generated/customNodes.manifest.json");
 const REPORT = path.join(process.cwd(), "src/generated/customNodes.report.json");
+
+/* ── 外部 JSON 的窄化工具(替代原 any)───────────────────────────
+ * manifest / report / python stdout 都是外部输入,统一 unknown 进、守卫窄化读;
+ * 字段值仅在非 nullish 时原样透传,回退语义与原 `?.` + `??` 完全一致。 */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** 等价原 `src?.[key] ?? fallback`:值非 null/undefined 时原样返回,类型由调用处声明。 */
+function jsonField<T>(src: Record<string, unknown> | null | undefined, key: string, fallback: T): T {
+  const v: unknown = src?.[key];
+  return (v ?? fallback) as T;
+}
+
+/** manifest 里单个已解析包的摘要形状(与前端 SummaryPkg 消费契约一致)。 */
+interface ManifestPackageSummary {
+  name: string;
+  path: string;
+  nodeCount: number;
+  nodeTypes: string[];
+  status: string;
+  errors: unknown[];
+  contentHash: string;
+  parsedAt: string | null;
+  parsedFileCount: number;
+  generatedAt: string | null;
+}
+
+/** 提取错误信息,等价原 `e?.message ?? fallback`。 */
+function errorMessage(e: unknown, fallback: string): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const msg: unknown = e.message;
+    if (typeof msg === "string") return msg;
+  }
+  return fallback;
+}
 
 function getPaths(): string[] {
   const raw = readEnvVar("CUSTOM_NODES_PATH") ?? "";
@@ -49,30 +85,34 @@ function getLocalWorkflowPaths(): string[] {
 function readManifestSummary() {
   if (!fs.existsSync(MANIFEST)) return null;
   try {
-    const m = JSON.parse(fs.readFileSync(MANIFEST, "utf-8"));
-    const pkgs: any[] = [];
-    const pmap = m.packages ?? {};
-    for (const [name, info] of Object.entries<any>(pmap)) {
+    const parsed: unknown = JSON.parse(fs.readFileSync(MANIFEST, "utf-8"));
+    // 标量 JSON 在原 `m.packages` 处会抛 TypeError → catch → null;守卫把该行为显式化。
+    if (!isRecord(parsed)) return null;
+    const m = parsed;
+    const pkgs: ManifestPackageSummary[] = [];
+    const pmap: Record<string, unknown> = isRecord(m.packages) ? m.packages : {};
+    for (const [name, info] of Object.entries(pmap)) {
+      const fields: Record<string, unknown> | undefined = isRecord(info) ? info : undefined;
       pkgs.push({
         name,
-        path: info?.path ?? "",
-        nodeCount: info?.nodeCount ?? 0,
-        nodeTypes: info?.nodeTypes ?? [],
-        status: info?.status ?? "ok",
-        errors: info?.errors ?? [],
-        contentHash: info?.contentHash ?? "",
-        parsedAt: info?.parsedAt ?? null,
-        parsedFileCount: info?.parsedFileCount ?? 0,
-        generatedAt: m.generatedAt ?? null,
+        path: jsonField(fields, "path", ""),
+        nodeCount: jsonField(fields, "nodeCount", 0),
+        nodeTypes: jsonField<string[]>(fields, "nodeTypes", []),
+        status: jsonField(fields, "status", "ok"),
+        errors: jsonField<unknown[]>(fields, "errors", []),
+        contentHash: jsonField(fields, "contentHash", ""),
+        parsedAt: jsonField<string | null>(fields, "parsedAt", null),
+        parsedFileCount: jsonField(fields, "parsedFileCount", 0),
+        generatedAt: jsonField<string | null>(m, "generatedAt", null),
       });
     }
-    const sources: string[] = m.sources ?? [];
+    const sources: string[] = jsonField<string[]>(m, "sources", []);
     return {
-      generatedAt: m.generatedAt ?? null,
-      totalNodes: Object.keys(m.nodes ?? {}).length,
+      generatedAt: jsonField<string | null>(m, "generatedAt", null),
+      totalNodes: Object.keys(jsonField<Record<string, unknown>>(m, "nodes", {})).length,
       packages: pkgs,
-      missingPaths: [],
-      parseErrors: m.parseErrors ?? [],
+      missingPaths: [] as string[],
+      parseErrors: jsonField<unknown[]>(m, "parseErrors", []),
       sources,
     };
   } catch {
@@ -96,9 +136,11 @@ function pathKey(p: string): string {
 /** Build a `abs-path -> summary package` map the UI can use to detect
  *  which discovered subpackages have already been parsed and whether the
  *  on-disk content has changed since (status: loaded / outdated / error / missing). */
-function buildPathMap(summary: ReturnType<typeof readManifestSummary>): Record<string, any> {
+function buildPathMap(
+  summary: ReturnType<typeof readManifestSummary>
+): Record<string, ManifestPackageSummary> {
   if (!summary) return {};
-  const out: Record<string, any> = {};
+  const out: Record<string, ManifestPackageSummary> = {};
   for (const p of summary.packages) {
     out[pathKey(p.path)] = p;
   }
@@ -107,18 +149,20 @@ function buildPathMap(summary: ReturnType<typeof readManifestSummary>): Record<s
 
 /** Run the read-only `discover` mode for a list of parent dirs and return subpackages.
  *  Cached briefly because the UI calls this when the path input changes. */
-const discoverCache = new Map<string, { at: number; result: any[] }>();
-function runDiscover(parentDirs: string[]): any[] {
+const discoverCache = new Map<string, { at: number; result: unknown[] }>();
+function runDiscover(parentDirs: readonly unknown[]): unknown[] {
   const key = parentDirs.join("|");
   const cached = discoverCache.get(key);
   if (cached && Date.now() - cached.at < 5000) return cached.result;
   for (const py of ["python3", "python", "py"]) {
     try {
-      const args = ["-u", "scripts/parse_custom_nodes.py", ...parentDirs.flatMap((parentDir) => ["--discover-parent", parentDir])];
+      // spawn 的 args 需要 string[];原 any 同样把原始值直接交给 Node(非字符串由 Node 校验报错),
+      // 断言只为恢复静态类型,不改运行时取值。
+      const args = ["-u", "scripts/parse_custom_nodes.py", ...parentDirs.flatMap((parentDir) => ["--discover-parent", parentDir as string])];
       const out = spawnSync(py, args, { cwd: process.cwd(), env: process.env, encoding: "utf-8" });
       if (out.status === 0 && out.stdout) {
-        const j = JSON.parse(out.stdout);
-        const pkgs = j.packages ?? [];
+        const parsed: unknown = JSON.parse(out.stdout);
+        const pkgs: unknown[] = isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : [];
         discoverCache.set(key, { at: Date.now(), result: pkgs });
         return pkgs;
       }
@@ -134,13 +178,23 @@ function runDiscover(parentDirs: string[]): any[] {
  *  final pkgs list when the JSON line comes back. Cache hits short-circuit.
  *
  *  Output protocol (ndjson):
- *    {type:"progress", parent, phase:"scan"|"hash"|"queue", msg?, discovered?, done?, total?}
+ *    {type:"progress", parent, phase:"scan"|"hash", msg?, discovered?, done?, total?}
  *    {type:"discover_done", parent, packages, cached:false}
  */
+
+/** PROGRESS:: 行解析出的进度字段(msg + 可选计数,键由 kvRegex 决定)。 */
+interface DiscoverProgressFields {
+  phase: "scan" | "hash";
+  msg: string;
+  discovered?: number;
+  done?: number;
+  total?: number;
+}
+
 function runDiscoverStreaming(
   parent: string,
-  send: (obj: any) => void
-): Promise<any[]> {
+  send: (obj: unknown) => void
+): Promise<unknown[]> {
   const cached = discoverCache.get(parent);
   if (cached && Date.now() - cached.at < 5000) {
     send({ type: "discover_done", parent, packages: cached.result, cached: true });
@@ -191,17 +245,21 @@ function runDiscoverStreaming(
             // everything up to the next |key= or end-of-line as the msg).
             // Backward compat: old lines without `|msg=` use the entire
             // rest as the msg.
-            const fields: Record<string, any> = { phase };
+            const fields: DiscoverProgressFields = { phase, msg: "" };
             const msgM = /\|?msg=([^|]*)/.exec(rest);
             if (msgM) {
-              fields.msg = msgM[1];
+              fields.msg = msgM[1]!;
             } else {
               fields.msg = rest;
             }
             const kvRegex = /\|?(discovered|done|total)=(\d+)/g;
             let kv: RegExpExecArray | null;
             while ((kv = kvRegex.exec(rest)) !== null) {
-              fields[kv[1]!] = parseInt(kv[2]!, 10);
+              const n = parseInt(kv[2]!, 10);
+              const k = kv[1]!;
+              if (k === "discovered") fields.discovered = n;
+              else if (k === "done") fields.done = n;
+              else if (k === "total") fields.total = n;
             }
             send({ type: "progress", parent, ...fields });
           } else if (line.startsWith("{")) {
@@ -238,8 +296,8 @@ function runDiscoverStreaming(
           return;
         }
         try {
-          const j = finalJson ? JSON.parse(finalJson) : { packages: [] };
-          const pkgs = j.packages ?? [];
+          const parsed: unknown = finalJson ? JSON.parse(finalJson) : { packages: [] };
+          const pkgs: unknown[] = isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : [];
           discoverCache.set(parent, { at: Date.now(), result: pkgs });
           resolved = true;
           send({ type: "discover_done", parent, packages: pkgs, cached: false });
@@ -259,7 +317,7 @@ function runDiscoverStreaming(
 /** Build a streaming response that pipes the parser's live logs, then the report.
  *  Pass `onlyPkgs` (specific subpackage paths) to do a subset/merge parse; otherwise
  *  `paths` is the full list of roots. */
-function streamParse(paths: string[], onlyPkgs?: string[]): Response {
+function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -330,7 +388,7 @@ function streamParse(paths: string[], onlyPkgs?: string[]): Response {
             tryRun();
             return;
           }
-          let report: any = null;
+          let report: unknown = null;
           try {
             if (fs.existsSync(REPORT)) report = JSON.parse(fs.readFileSync(REPORT, "utf-8"));
           } catch {
@@ -366,7 +424,7 @@ export async function GET() {
   const paths = getPaths();
   const localWorkflowPaths = getLocalWorkflowPaths();
   const summary = readManifestSummary();
-  let lastReport: any = null;
+  let lastReport: unknown = null;
   if (fs.existsSync(REPORT)) {
     try {
       lastReport = JSON.parse(fs.readFileSync(REPORT, "utf-8"));
@@ -388,7 +446,7 @@ export async function GET() {
   // CUSTOM_NODES_PATH configured (the cold path).
   const settings = { paths, localWorkflowPaths };
   if (allCached) {
-    const discoveredByParent: Record<string, any[]> = {};
+    const discoveredByParent: Record<string, unknown[]> = {};
     for (const p of paths) discoveredByParent[p] = discoverCache.get(p)!.result;
     return NextResponse.json({
       settings,
@@ -407,7 +465,7 @@ export async function GET() {
         controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
       try {
         send({ type: "discover_start", parents: paths, total: paths.length });
-        const discoveredByParent: Record<string, any[]> = {};
+        const discoveredByParent: Record<string, unknown[]> = {};
         for (let idx = 0; idx < paths.length; idx++) {
           const parent = paths[idx];
           send({ type: "progress", parent, phase: "queue", msg: `📂 [${idx + 1}/${paths.length}] ${parent}` });
@@ -425,8 +483,8 @@ export async function GET() {
           settings: { paths, localWorkflowPaths },
         });
         send({ type: "done" });
-      } catch (e: any) {
-        send({ type: "error", message: e?.message ?? String(e) });
+      } catch (e) {
+        send({ type: "error", message: errorMessage(e, String(e)) });
       } finally {
         controller.close();
       }
@@ -451,8 +509,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body = await req.json().catch(() => ({}));
-  const action = body?.action;
+  const body: unknown = await req.json().catch(() => ({}));
+  const rec: Record<string, unknown> = isRecord(body) ? body : {};
+  const action: unknown = rec.action;
 
   if (action === "saveSettings") {
     /* 2026-08-10 R8: support updating both knobs in one shot. Either
@@ -460,27 +519,27 @@ export async function POST(req: NextRequest) {
      *  var so the user can "unset" without hand-editing .env. */
     let wroteAny = false;
     let customNodesWritten: string[] = [];
-    if (Array.isArray(body.customNodesPaths) || typeof body.customNodesPaths === "string") {
+    const rawCustomNodesPaths: unknown = rec.customNodesPaths;
+    if (Array.isArray(rawCustomNodesPaths) || typeof rawCustomNodesPaths === "string") {
       // Accept both shapes:
       //   • array  — [{ "a\nb" }] needs per-element split (preserves any
       //              "," inside a single path that the client already
       //              pre-split on newline), so we flatMap.
       //   • string — multi-line / comma-joined paste, single split is enough.
-      // body.customNodesPaths is loosely typed (req.json() → any); cast the
-      // array branch to string[] so flatMap's callback type is inferred.
-      const clean = Array.isArray(body.customNodesPaths)
-        ? (body.customNodesPaths as string[]).flatMap((path) => String(path).split(/[\n,]/))
-        : String(body.customNodesPaths).split(/[\n,]/);
+      const clean = Array.isArray(rawCustomNodesPaths)
+        ? rawCustomNodesPaths.flatMap((path: unknown) => String(path).split(/[\n,]/))
+        : String(rawCustomNodesPaths).split(/[\n,]/);
       const trimmed = clean.map((clean) => clean.trim()).filter(Boolean);
       writeEnvVar("CUSTOM_NODES_PATH", trimmed.join(","));
       customNodesWritten = trimmed;
       wroteAny = true;
     }
     let localWritten: string[] = [];
-    if (Array.isArray(body.localWorkflowPaths) || typeof body.localWorkflowPaths === "string") {
-      const clean = Array.isArray(body.localWorkflowPaths)
-        ? (body.localWorkflowPaths as string[]).flatMap((path) => String(path).split(/[\n,]/))
-        : String(body.localWorkflowPaths).split(/[\n,]/);
+    const rawLocalWorkflowPaths: unknown = rec.localWorkflowPaths;
+    if (Array.isArray(rawLocalWorkflowPaths) || typeof rawLocalWorkflowPaths === "string") {
+      const clean = Array.isArray(rawLocalWorkflowPaths)
+        ? rawLocalWorkflowPaths.flatMap((path: unknown) => String(path).split(/[\n,]/))
+        : String(rawLocalWorkflowPaths).split(/[\n,]/);
       const trimmed = clean.map((clean) => clean.trim()).filter(Boolean);
       writeEnvVar("LOCAL_WORKFLOWS_PATH", trimmed.join(","));
       localWritten = trimmed;
@@ -501,7 +560,8 @@ export async function POST(req: NextRequest) {
 
   if (action === "parse") {
     const paths = getPaths();
-    const onlyPkgs: string[] | undefined = Array.isArray(body.packages) ? body.packages : undefined;
+    // 仅做 join(",") 透传给子进程,元素类型无需收窄(与原 any 行为逐字一致)。
+    const onlyPkgs: readonly unknown[] | undefined = Array.isArray(rec.packages) ? rec.packages : undefined;
     if (onlyPkgs?.length) {
       // subset parse — no need for CUSTOM_NODES_PATH to be set
       return streamParse(paths, onlyPkgs);
@@ -517,7 +577,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "discover") {
-    const parents: string[] = Array.isArray(body.parents) ? body.parents : [];
+    const parents: unknown[] = Array.isArray(rec.parents) ? rec.parents : [];
     const result = runDiscover(parents);
     return NextResponse.json({ ok: true, packages: result });
   }
