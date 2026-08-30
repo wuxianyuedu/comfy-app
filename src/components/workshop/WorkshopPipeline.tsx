@@ -2,11 +2,18 @@
 
 import React from "react";
 import { Icon } from "@/components/ui/Icon";
-import type { Scene, Character, Shot, StyleRef, ProjectMeta } from "@/lib/workshop/types";
+import type {
+  Scene,
+  Character,
+  Shot,
+  StyleRef,
+  ProjectMeta,
+} from "@/lib/workshop/types";
 import { LLMProvider, LLMStatusChip } from "@/components/workshop/LLMContext";
 import { ScriptGenerator } from "@/components/workshop/ScriptGenerator";
 import { CharacterDesigner } from "@/components/workshop/CharacterDesigner";
 import { StoryboardPlanner } from "@/components/workshop/StoryboardPlanner";
+import { ScriptMarkdownEditor } from "@/components/workshop/ScriptMarkdownEditor";
 
 const STAGES = [
   { id: "script", label: "剧本", sub: "进行中", state: "active" as const },
@@ -18,10 +25,22 @@ const STAGES = [
 ];
 
 const SCENE_PLACEHOLDERS = [
-  "天台初遇", "旧收音机", "未来声音", "旧城区夜",
-  "神秘电波", "记忆闪回", "城市拆除", "时间裂缝",
-  "十年之后", "拯救计划", "天台对峙", "真相揭露",
-  "最后广播", "城市黎明", "新的开始", "尾声字幕",
+  "天台初遇",
+  "旧收音机",
+  "未来声音",
+  "旧城区夜",
+  "神秘电波",
+  "记忆闪回",
+  "城市拆除",
+  "时间裂缝",
+  "十年之后",
+  "拯救计划",
+  "天台对峙",
+  "真相揭露",
+  "最后广播",
+  "城市黎明",
+  "新的开始",
+  "尾声字幕",
 ];
 
 type Tab = "script" | "character" | "storyboard";
@@ -66,8 +85,12 @@ export function WorkshopPipeline() {
   const [generating] = React.useState(false);
 
   const [outline, setOutline] = React.useState(
-    "少女小满在旧城区的天台邂逅一台会说话的旧收音机，它声称能播放“未来的声音”。随着电波里浮现陌生又熟悉的话语，小满逐渐发现，那些声音来自十年后试图拯救这座即将被拆除的城市的自己……"
+    "少女小满在旧城区的天台邂逅一台会说话的旧收音机，它声称能播放“未来的声音”。随着电波里浮现陌生又熟悉的话语，小满逐渐发现，那些声音来自十年后试图拯救这座即将被拆除的城市的自己……",
   );
+  const [scriptMarkdown, setScriptMarkdown] = React.useState(
+    meta.scriptMarkdown ?? "# 未命名剧本\n\n## 故事大纲\n\n" + outline + "\n",
+  );
+  const [isScriptEditorOpen, setIsScriptEditorOpen] = React.useState(false);
   const [editingOutline, setEditingOutline] = React.useState(false);
   const [draftOutline, setDraftOutline] = React.useState(outline);
 
@@ -89,7 +112,9 @@ export function WorkshopPipeline() {
     fetch("/api/models?type=CHECKPOINT")
       .then((res) => res.json())
       .then((data: ModelsApiResponse) => {
-        const names: string[] = (data.models ?? []).map((model) => model.fileName);
+        const names: string[] = (data.models ?? []).map(
+          (model) => model.fileName,
+        );
         const first = names[0];
         if (first) setCheckpoint(first);
       })
@@ -101,7 +126,12 @@ export function WorkshopPipeline() {
     return typeof value === "string" ? value : fallback;
   }
   function paramNumber(value: unknown, fallback: number): number {
-    const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
+    const n =
+      typeof value === "string"
+        ? Number(value)
+        : typeof value === "number"
+          ? value
+          : NaN;
     return Number.isFinite(n) ? n : fallback;
   }
 
@@ -110,7 +140,9 @@ export function WorkshopPipeline() {
       alert("请先在右侧选择一个大模型（Checkpoint）");
       return;
     }
-    setShots((prev) => prev.map((s) => (s.id === shot.id ? { ...s, status: "running" } : s)));
+    setShots((prev) =>
+      prev.map((s) => (s.id === shot.id ? { ...s, status: "running" } : s)),
+    );
     const style = styles.find((st) => st.slug === shot.skillSlug);
     const payload: Record<string, unknown> = {
       workflow: "txt2img",
@@ -135,14 +167,20 @@ export function WorkshopPipeline() {
       const data = (await res.json()) as { taskId?: string; error?: string };
       if (data.taskId) {
         setShots((prev) =>
-          prev.map((s) => (s.id === shot.id ? { ...s, status: "done", taskId: data.taskId } : s))
+          prev.map((s) =>
+            s.id === shot.id
+              ? { ...s, status: "done", taskId: data.taskId }
+              : s,
+          ),
         );
         pollTask(data.taskId, shot.id);
       } else {
         throw new Error(data.error ?? "生成失败");
       }
     } catch (err: unknown) {
-      setShots((prev) => prev.map((s) => (s.id === shot.id ? { ...s, status: "failed" } : s)));
+      setShots((prev) =>
+        prev.map((s) => (s.id === shot.id ? { ...s, status: "failed" } : s)),
+      );
       console.error(err instanceof Error ? err.message : err);
     }
   }
@@ -155,7 +193,9 @@ export function WorkshopPipeline() {
         if (msg.type === "done" || msg.type === "image") {
           const url = msg.image ?? msg.images?.[0];
           if (url) {
-            setShots((prev) => prev.map((s) => (s.id === shotId ? { ...s, imageUrl: url } : s)));
+            setShots((prev) =>
+              prev.map((s) => (s.id === shotId ? { ...s, imageUrl: url } : s)),
+            );
           }
           if (msg.type === "done") es.close();
         }
@@ -187,49 +227,82 @@ export function WorkshopPipeline() {
   const stageIndex = STAGES.findIndex((s) => s.id === tab) + 1;
 
   const missing = [
-    { label: "角色卡未建立", detail: `${Math.max(2 - characters.length, 0)} 个待建`, color: "#FF5C76" },
-    { label: "场景未规划", detail: `${Math.max(3 - scenes.length, 0)} 个待规划`, color: "#FFB553" },
-    { label: "分镜脚本", detail: `${Math.max(16 - shots.length, 0)} 镜待生成`, color: "#5CA8FF" },
+    {
+      label: "角色卡未建立",
+      detail: `${Math.max(2 - characters.length, 0)} 个待建`,
+      color: "#FF5C76",
+    },
+    {
+      label: "场景未规划",
+      detail: `${Math.max(3 - scenes.length, 0)} 个待规划`,
+      color: "#FFB553",
+    },
+    {
+      label: "分镜脚本",
+      detail: `${Math.max(16 - shots.length, 0)} 镜待生成`,
+      color: "#5CA8FF",
+    },
   ];
 
   const statusByRow = ["done", "pending", "running", "draft"] as const;
-  const statusMeta: Record<typeof statusByRow[number], { dot: string }> = {
+  const statusMeta: Record<(typeof statusByRow)[number], { dot: string }> = {
     done: { dot: "#7C5CFC" },
     pending: { dot: "#5CA8FF" },
     running: { dot: "#FFB553" },
     draft: { dot: "#9A9AAD" },
   };
-  const gridShots: { idx: number; heading: string; status: typeof statusByRow[number]; color: string }[] = [];
+  const gridShots: {
+    idx: number;
+    heading: string;
+    status: (typeof statusByRow)[number];
+    color: string;
+  }[] = [];
   for (let i = 0; i < 16; i++) {
     const sc = scenes[i];
     const state = statusByRow[Math.floor(i / 4)]!;
-    const heading = sc?.heading?.replace(/^场景\d+\s*·\s*/, "") ?? SCENE_PLACEHOLDERS[i] ?? "";
-    gridShots.push({ idx: i, heading, status: state, color: statusMeta[state].dot });
+    const heading =
+      sc?.heading?.replace(/^场景\d+\s*·\s*/, "") ??
+      SCENE_PLACEHOLDERS[i] ??
+      "";
+    gridShots.push({
+      idx: i,
+      heading,
+      status: state,
+      color: statusMeta[state].dot,
+    });
   }
 
   return (
     <LLMProvider>
-      <div className="dark min-h-screen w-full bg-bg text-ink">
+      <div className="dark bg-bg text-ink min-h-screen w-full">
         {/* ── Top bar ── */}
-        <header className="flex h-16 items-center gap-3 border-b border-border px-6">
+        <header className="border-border flex h-16 items-center gap-3 border-b px-6">
           <div className="flex flex-1 items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-base font-bold text-white">工</div>
-            <div className="flex flex-col leading-tight">
-              <span className="text-[17px] font-semibold text-ink">工坊 · 全链路项目管线</span>
-              <span className="text-[11px] text-muted">Comfy-APP / 项目管线</span>
+            <div className="bg-primary grid h-9 w-9 place-items-center rounded-xl text-base font-bold text-white">
+              工
             </div>
-            <span className="ml-4 rounded-lg bg-white/4 px-3 py-1.5 text-[13px] text-muted">{meta.title}</span>
+            <div className="flex flex-col leading-tight">
+              <span className="text-ink text-[17px] font-semibold">
+                工坊 · 全链路项目管线
+              </span>
+              <span className="text-muted text-[11px]">
+                Comfy-APP / 项目管线
+              </span>
+            </div>
+            <span className="text-muted ml-4 rounded-lg bg-white/4 px-3 py-1.5 text-[13px]">
+              {meta.title}
+            </span>
           </div>
 
           {/* 项目总进度：放到最顶部（设计稿红框区域） */}
           <div className="hidden w-full max-w-[260px] lg:block">
-            <div className="flex items-center justify-between text-[11px] text-muted">
+            <div className="text-muted flex items-center justify-between text-[11px]">
               <span>项目总进度</span>
-              <span className="font-medium text-primary">{progressPct}%</span>
+              <span className="text-primary font-medium">{progressPct}%</span>
             </div>
-            <div className="mt-1.5 h-2 w-full rounded-full bg-elevated">
+            <div className="bg-elevated mt-1.5 h-2 w-full rounded-full">
               <div
-                className="h-2 rounded-full bg-primary transition-all"
+                className="bg-primary h-2 rounded-full transition-all"
                 style={{ width: `${progressPct}%` }}
               />
             </div>
@@ -239,14 +312,17 @@ export function WorkshopPipeline() {
             <span className="rounded-full bg-(--color-amber)/15 px-3 py-1.5 text-xs font-medium text-(--color-amber)">
               距离成片还差 3 类素材
             </span>
-            <button className="grid h-8 w-8 place-items-center rounded-full bg-primary/50 text-white" aria-label="账户">
+            <button
+              className="bg-primary/50 grid h-8 w-8 place-items-center rounded-full text-white"
+              aria-label="账户"
+            >
               <Icon name="user" size={16} />
             </button>
           </div>
         </header>
 
         {/* ── Horizontal stage nav ── */}
-        <nav className="flex items-stretch gap-3 border-b border-border px-6 py-4">
+        <nav className="border-border flex items-stretch gap-3 border-b px-6 py-4">
           {STAGES.map((st, index) => {
             const active = tab === st.id;
             const locked = st.state === "locked";
@@ -256,12 +332,16 @@ export function WorkshopPipeline() {
                 key={st.id}
                 disabled={locked}
                 onClick={() => {
-                  if (st.id === "script" || st.id === "character" || st.id === "storyboard") {
+                  if (
+                    st.id === "script" ||
+                    st.id === "character" ||
+                    st.id === "storyboard"
+                  ) {
                     setTab(st.id);
                   }
                 }}
                 className={`flex flex-1 items-center gap-3 rounded-xl px-4 py-3 transition-colors ${
-                  active ? "bg-primary/12 ring-1 ring-primary/25" : "bg-surface"
+                  active ? "bg-primary/12 ring-primary/25 ring-1" : "bg-surface"
                 } ${locked ? "opacity-60" : ""}`}
               >
                 <span
@@ -272,8 +352,16 @@ export function WorkshopPipeline() {
                   {locked ? <Icon name="lock" size={14} /> : index + 1}
                 </span>
                 <div className="leading-tight">
-                  <div className={`text-[13.5px] font-semibold ${active ? "text-primary" : "text-ink"}`}>{st.label}</div>
-                  <div className={`text-[11px] ${locked ? "text-faint" : "text-muted"}`}>{sub}</div>
+                  <div
+                    className={`text-[13.5px] font-semibold ${active ? "text-primary" : "text-ink"}`}
+                  >
+                    {st.label}
+                  </div>
+                  <div
+                    className={`text-[11px] ${locked ? "text-faint" : "text-muted"}`}
+                  >
+                    {sub}
+                  </div>
                 </div>
               </button>
             );
@@ -286,156 +374,220 @@ export function WorkshopPipeline() {
           <div className="min-w-0">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-[17px] font-semibold text-ink">{stageTitle}</h2>
-                <p className="mt-1 text-[12px] text-muted">{stageDesc}</p>
+                <h2 className="text-ink text-[17px] font-semibold">
+                  {stageTitle}
+                </h2>
+                <p className="text-muted mt-1 text-[12px]">{stageDesc}</p>
               </div>
-              <span className="shrink-0 rounded-full bg-white/4 px-3 py-1 text-[11px] text-muted">
+              <span className="text-muted shrink-0 rounded-full bg-white/4 px-3 py-1 text-[11px]">
                 阶段 {stageIndex} / {totalStages}
               </span>
             </div>
 
-            {/* Script outline card */}
-            <section className="rounded-2xl border border-border bg-surface p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-[13px] font-semibold text-ink">故事大纲</span>
-                <div className="flex items-center gap-2">
-                  {!editingOutline ? (
-                    <button
-                      onClick={() => {
-                        setDraftOutline(outline);
-                        setEditingOutline(true);
-                      }}
-                      className="rounded-lg bg-white/4 px-4 py-1.5 text-xs font-medium text-ink hover:bg-white/8"
-                    >
-                      编辑
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => setEditingOutline(false)}
-                        className="rounded-lg bg-white/4 px-4 py-1.5 text-xs font-medium text-ink hover:bg-white/8"
-                      >
-                        取消
-                      </button>
-                      <button
-                        onClick={() => {
-                          setOutline(draftOutline);
-                          setEditingOutline(false);
-                        }}
-                        className="rounded-lg bg-primary/12 px-4 py-1.5 text-[11px] text-primary hover:bg-primary/18"
-                      >
-                        保存
-                      </button>
-                    </>
-                  )}
-                  <span className="rounded-lg bg-primary/12 px-4 py-1.5 text-[11px] text-primary">自动生成</span>
-                </div>
-              </div>
-              {editingOutline ? (
-                <textarea
-                  value={draftOutline}
-                  onChange={(e) => setDraftOutline(e.target.value)}
-                  rows={4}
-                  className="w-full resize-none rounded-xl border border-border bg-bg p-3 text-[12.5px] leading-relaxed text-ink outline-none ring-primary/30 transition focus:border-primary/50 focus:ring-2"
-                  placeholder="输入故事大纲……"
-                />
-              ) : (
-                <p className="text-[12.5px] leading-relaxed text-muted">{outline}</p>
-              )}
-            </section>
-
-            {/* Storyboard card */}
-            <section className="mt-5 rounded-2xl border border-border bg-surface p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-[13px] font-semibold text-ink">分镜脚本</span>
-                <span className="rounded-lg bg-primary/12 px-4 py-1.5 text-[11px] text-primary">{gridShots.length} 镜</span>
-              </div>
-              <div className="grid grid-cols-4 gap-4">
-                {gridShots.map((gs) => (
-                  <div
-                    key={gs.idx}
-                    className="relative h-[86px] rounded-[11px] bg-elevated p-3"
-                  >
-                    <span
-                      className="absolute right-3 top-3 h-2 w-2 rounded-full"
-                      style={{ background: gs.color }}
-                    />
-                    <div className="text-[10.5px] text-muted truncate pr-6">{gs.heading}</div>
-                    <div className="mt-5 text-xs font-medium text-ink">
-                      镜 {String(gs.idx + 1).padStart(2, "0")}
-                    </div>
-                    {/* faint placeholder image */}
-                    <div className="absolute right-2 top-1/2 h-11 w-[54px] -translate-y-1/2 rounded-md bg-white/3" />
-                    <div className="absolute right-[22px] top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white/6" />
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Tool panels (reused from old UI, hidden by default) */}
+            {/* ── Tab: Script ── */}
             {tab === "script" && (
-              <section className="mt-5 rounded-2xl border border-border bg-surface p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-[14px] font-semibold text-ink">剧本工具</h3>
-                  <LLMStatusChip />
-                </div>
-                <ScriptGenerator meta={meta} scenes={scenes} onMetaChange={setMeta} onScenesChange={setScenes} />
-              </section>
-            )}
-            {tab === "character" && (
-              <section className="mt-5 rounded-2xl border border-border bg-surface p-5">
-                <h3 className="mb-3 text-[14px] font-semibold text-ink">角色工具</h3>
-                <CharacterDesigner characters={characters} styles={styles} onCharactersChange={setCharacters} />
-              </section>
-            )}
-            {tab === "storyboard" && (
-              <div className="mt-5 flex gap-3">
-                <button
-                  onClick={() => setTab("storyboard")}
-                  className="rounded-xl bg-primary px-6 py-3 text-[13px] font-semibold text-white hover:bg-primary-hover"
-                >
-                  从剧本生成 16 镜
-                </button>
-                <button
-                  onClick={() => setTab("script")}
-                  className="rounded-xl bg-white/4 px-6 py-3 text-[13px] font-semibold text-ink hover:bg-white/8"
-                >
-                  导入剧本
-                </button>
-              </div>
+              <>
+                {/* Script outline card */}
+                <section className="border-border bg-surface rounded-2xl border p-5">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-ink text-[13px] font-semibold">
+                      故事大纲
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {!editingOutline ? (
+                        <button
+                          onClick={() => {
+                            setDraftOutline(outline);
+                            setEditingOutline(true);
+                          }}
+                          className="text-ink rounded-lg bg-white/4 px-4 py-1.5 text-xs font-medium hover:bg-white/8"
+                        >
+                          编辑
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setEditingOutline(false)}
+                            className="text-ink rounded-lg bg-white/4 px-4 py-1.5 text-xs font-medium hover:bg-white/8"
+                          >
+                            取消
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOutline(draftOutline);
+                              setEditingOutline(false);
+                            }}
+                            className="bg-primary/12 text-primary hover:bg-primary/18 rounded-lg px-4 py-1.5 text-[11px]"
+                          >
+                            保存
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => setIsScriptEditorOpen(true)}
+                        className="btn-gradient rounded-lg px-4 py-1.5 text-[11px] font-medium text-white shadow-lg shadow-purple-900/20"
+                      >
+                        编辑剧本
+                      </button>
+                    </div>
+                  </div>
+                  {editingOutline ? (
+                    <textarea
+                      value={draftOutline}
+                      onChange={(e) => setDraftOutline(e.target.value)}
+                      rows={4}
+                      className="border-border bg-bg text-ink ring-primary/30 focus:border-primary/50 w-full resize-none rounded-xl border p-3 text-[12.5px] leading-relaxed transition outline-none focus:ring-2"
+                      placeholder="输入故事大纲……"
+                    />
+                  ) : (
+                    <p className="text-muted text-[12.5px] leading-relaxed">
+                      {outline}
+                    </p>
+                  )}
+                </section>
+
+                {/* Script tool panel */}
+                <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-ink text-[14px] font-semibold">
+                      剧本工具
+                    </h3>
+                    <LLMStatusChip />
+                  </div>
+                  <ScriptGenerator
+                    meta={meta}
+                    scenes={scenes}
+                    onMetaChange={setMeta}
+                    onScenesChange={setScenes}
+                  />
+                </section>
+              </>
             )}
 
-            {tab === "storyboard" && (
-              <section className="mt-5 rounded-2xl border border-border bg-surface p-5">
-                <h3 className="mb-3 text-[14px] font-semibold text-ink">分镜工具</h3>
-                <StoryboardPlanner
-                  scenes={scenes}
+            {/* ── Tab: Character ── */}
+            {tab === "character" && (
+              <section className="border-border bg-surface rounded-2xl border p-5">
+                <h3 className="text-ink mb-3 text-[14px] font-semibold">
+                  角色工具
+                </h3>
+                <CharacterDesigner
                   characters={characters}
                   styles={styles}
-                  shots={shots}
-                  onShotsChange={setShots}
-                  onGenerate={generateShot}
-                  generating={generating}
+                  onCharactersChange={setCharacters}
                 />
               </section>
+            )}
+
+            {/* ── Tab: Storyboard ── */}
+            {tab === "storyboard" && (
+              <>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setTab("storyboard")}
+                    className="bg-primary hover:bg-primary-hover rounded-xl px-6 py-3 text-[13px] font-semibold text-white"
+                  >
+                    从剧本生成 16 镜
+                  </button>
+                  <button
+                    onClick={() => setTab("script")}
+                    className="text-ink rounded-xl bg-white/4 px-6 py-3 text-[13px] font-semibold hover:bg-white/8"
+                  >
+                    导入剧本
+                  </button>
+                </div>
+
+                {/* Storyboard card */}
+                <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-ink text-[13px] font-semibold">
+                      分镜脚本
+                    </span>
+                    <span className="bg-primary/12 text-primary rounded-lg px-4 py-1.5 text-[11px]">
+                      {gridShots.length} 镜
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-4">
+                    {gridShots.map((gs) => (
+                      <div
+                        key={gs.idx}
+                        className="bg-elevated relative h-[86px] rounded-[11px] p-3"
+                      >
+                        <span
+                          className="absolute top-3 right-3 h-2 w-2 rounded-full"
+                          style={{ background: gs.color }}
+                        />
+                        <div className="text-muted truncate pr-6 text-[10.5px]">
+                          {gs.heading}
+                        </div>
+                        <div className="text-ink mt-5 text-xs font-medium">
+                          镜 {String(gs.idx + 1).padStart(2, "0")}
+                        </div>
+                        {/* faint placeholder image */}
+                        <div className="absolute top-1/2 right-2 h-11 w-[54px] -translate-y-1/2 rounded-md bg-white/3" />
+                        <div className="absolute top-1/2 right-[22px] h-4 w-4 -translate-y-1/2 rounded-full bg-white/6" />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* Storyboard tool panel */}
+                <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
+                  <h3 className="text-ink mb-3 text-[14px] font-semibold">
+                    分镜工具
+                  </h3>
+                  <StoryboardPlanner
+                    scenes={scenes}
+                    characters={characters}
+                    styles={styles}
+                    shots={shots}
+                    onShotsChange={setShots}
+                    onGenerate={generateShot}
+                    generating={generating}
+                  />
+                </section>
+              </>
+            )}
+
+            {/* Full-screen markdown script editor */}
+            {isScriptEditorOpen && (
+              <ScriptMarkdownEditor
+                title={meta.title || "编辑剧本"}
+                value={scriptMarkdown}
+                onChange={setScriptMarkdown}
+                onSave={() => {
+                  setMeta({ ...meta, scriptMarkdown });
+                  setIsScriptEditorOpen(false);
+                }}
+                onCancel={() => setIsScriptEditorOpen(false)}
+              />
             )}
           </div>
 
           {/* Right panel */}
           <aside className="space-y-4">
             {/* Missing materials */}
-            <div className="rounded-2xl border border-border bg-surface p-4">
+            <div className="border-border bg-surface rounded-2xl border p-4">
               <div className="mb-3 flex items-center gap-2">
-                <span className="grid h-[22px] w-[22px] place-items-center rounded-lg bg-(--color-amber)/20 text-[13px] font-bold text-(--color-amber)">!</span>
-                <span className="text-[13px] font-semibold text-ink">缺失素材 / 下一步</span>
+                <span className="grid h-[22px] w-[22px] place-items-center rounded-lg bg-(--color-amber)/20 text-[13px] font-bold text-(--color-amber)">
+                  !
+                </span>
+                <span className="text-ink text-[13px] font-semibold">
+                  缺失素材 / 下一步
+                </span>
               </div>
               <div className="space-y-2.5">
-                {missing.map((missing) =>
-(
+                {missing.map((missing) => (
                   <div key={missing.label} className="flex items-center gap-3">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: missing.color }} />
-                    <span className="flex-1 text-[12.5px] text-ink">{missing.label}</span>
-                    <span className="text-[11px] text-faint">{missing.detail}</span>
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ background: missing.color }}
+                    />
+                    <span className="text-ink flex-1 text-[12.5px]">
+                      {missing.label}
+                    </span>
+                    <span className="text-faint text-[11px]">
+                      {missing.detail}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -445,8 +597,10 @@ export function WorkshopPipeline() {
             </div>
 
             {/* Resource library */}
-            <div className="rounded-2xl border border-border bg-surface p-4">
-              <div className="mb-3 text-[13px] font-semibold text-ink">资源库</div>
+            <div className="border-border bg-surface rounded-2xl border p-4">
+              <div className="text-ink mb-3 text-[13px] font-semibold">
+                资源库
+              </div>
               <div className="space-y-3">
                 {[
                   ["剧本大纲.md", "文档"],
@@ -457,15 +611,19 @@ export function WorkshopPipeline() {
                   ["参考图 / 音效", "0 项"],
                 ].map(([name, tag]) => (
                   <div key={name} className="flex items-center gap-3">
-                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-elevated">
+                    <span className="bg-elevated grid h-8 w-8 place-items-center rounded-lg">
                       <Icon name="file" size={14} className="text-muted" />
                     </span>
-                    <span className="flex-1 truncate text-[12.5px] text-ink">{name}</span>
-                    <span className="rounded-md bg-white/4 px-2 py-1 text-[10.5px] text-faint">{tag}</span>
+                    <span className="text-ink flex-1 truncate text-[12.5px]">
+                      {name}
+                    </span>
+                    <span className="text-faint rounded-md bg-white/4 px-2 py-1 text-[10.5px]">
+                      {tag}
+                    </span>
                   </div>
                 ))}
               </div>
-              <button className="mt-3 w-full rounded-lg bg-white/4 py-2.5 text-xs text-muted hover:bg-white/8">
+              <button className="text-muted mt-3 w-full rounded-lg bg-white/4 py-2.5 text-xs hover:bg-white/8">
                 + 导入素材
               </button>
             </div>
