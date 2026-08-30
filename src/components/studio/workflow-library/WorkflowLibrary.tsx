@@ -101,8 +101,11 @@ export function WorkflowLibrary({
   // ── 2026-08-15 模型筛选：all 或某个模型标签名 ──
   const [modelFilter, setModelFilter] = useState<string>("all");
   // 用户级模型标签库（全局，跨工作流复用）；卡片 chips + 管理弹窗 + 筛选器共享
-  const [modelTags] = useState<{ id: string; name: string; count: number }[]>(
-    [],
+  // 2026-08-30: 之前硬编码为空数组，导致标签库已有数据时卡片「＋」绑定
+  // 菜单仍显示「先到管理模型添加标签」。改为从 tagsQ.data 派生。
+  const modelTags = useMemo(
+    () => (tagsQ.data?.tags ?? []) as { id: string; name: string; count: number }[],
+    [tagsQ.data],
   );
   const [showModelManager, setShowModelManager] = useState(false);
   // 当前正在编辑标签的卡片 id（card 内的「＋」popover）
