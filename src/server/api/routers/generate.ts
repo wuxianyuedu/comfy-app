@@ -1,13 +1,32 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { taskRepository, workflowTemplateRepository } from "@/lib/core/repository";
 import {
   buildAndValidate,
   buildCustomWorkflow,
+  type ParamMap,
 } from "@/lib/comfyui/workflow";
 import { getWorkflow } from "@/lib/comfyui/_meta";
 import { enqueue } from "@/lib/comfyui/runner";
+
+/** ComfyUI API-format graph(Export (API Format)):nodeId → node。
+ *  最小精确形状:buildCustomWorkflow 只对节点整体深拷贝并回填 inputs,
+ *  字段值类型多样,故 inputs 值收口为 unknown(不入本文件以外的共享类型)。 */
+type ApiGraph = Record<string, { class_type?: unknown; inputs?: Record<string, unknown> }>;
+
+/** Prisma Json 列(graph)→ 预期形状。仅排除 null/标量;原 `as any` 同样把任何
+ *  对象/数组原样透传给 buildCustomWorkflow,数组因此也放行,保持运行时一致。 */
+function asGraph(v: unknown): ApiGraph | null {
+  if (typeof v !== "object" || v === null) return null;
+  return v as ApiGraph;
+}
+
+/** Prisma Json 列(paramMap)→ ParamMap。仅排除 null/标量,其余原样透传
+ *  (object 已可赋给全可选属性的 ParamMap,无需断言)。 */
+function asParamMap(v: unknown): ParamMap | null {
+  if (typeof v !== "object" || v === null) return null;
+  return v;
+}
 
 const LoraSchema = z.object({ name: z.string(), weight: z.number() });
 const WorkflowInputSchema = z.object({
@@ -42,7 +61,8 @@ export const GenerateSchema = z.object({
   lastFrame: z.string().optional(),
   paramMap: z.record(z.string(), z.string()).optional(),
   workflowInputs: z.array(WorkflowInputSchema).optional(),
-  canvasGraph: z.record(z.string(), z.any()).optional(),
+  // 画布导出的 ComfyUI API-format graph:节点值形状动态,按规约收口为 unknown。
+  canvasGraph: z.record(z.string(), z.unknown()).optional(),
   projectId: z.string().optional(),
   referenceImages: z.array(z.string()).optional(),
 });
@@ -102,7 +122,7 @@ export const generateRouter = createTRPCRouter({
         // Canvas-edited graph or API-only import.
         const graph =
           (data.canvasGraph!) ??
-          (tpl?.graph as Record<string, any>);
+          asGraph(tpl?.graph);
         if (!graph) {
           throw new Error("Workflow graph is empty");
         }
@@ -112,7 +132,7 @@ export const generateRouter = createTRPCRouter({
             prompt: buildCustomWorkflow(
               graph,
               { ...data, count },
-              (data.paramMap as any) ?? (tpl?.paramMap as any)
+              data.paramMap ?? asParamMap(tpl?.paramMap)
             ),
           };
         } catch (e) {

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-empty-function */
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
 import { taskRepository } from "@/lib/core/repository";
@@ -61,11 +60,14 @@ export async function GET(
             });
             lastSent.status = task.status;
             lastSent.progress = task.progress ?? 0;
-            const existing = (task.logs as any[]) ?? [];
+            // logs 是 Prisma Json 列(运行时为 LogEntry[];send 收 unknown,无需断言)。
+            const existing: unknown[] = Array.isArray(task.logs) ? task.logs : [];
             existing.forEach((entry) => send({ type: "log", entry }));
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          /* 初始回放失败可忽略 — 订阅与轮询随后仍会推送状态 */
+        });
 
       const unsub = subscribe(id, (e: TaskEvent) => {
         send(e);

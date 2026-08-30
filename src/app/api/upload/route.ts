@@ -1,10 +1,19 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { type NextRequest, NextResponse } from "next/server";
 import { requireServerUser } from "@/lib/auth-server";
 import { uploadImage, comfyBase } from "@/lib/comfyui/client";
 import { logger } from "~/server/lib/logger";
 
 export const runtime = "nodejs";
+
+/** 提取错误信息,等价原 `e?.message ?? fallback`(catch 变量为 unknown 后的窄化版)。 */
+function errorMessage(e: unknown, fallback: string): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const msg: unknown = e.message;
+    if (typeof msg === "string") return msg;
+  }
+  return fallback;
+}
 
 // R-T3-phase4 (OWASP A04/A05): whitelist image types and cap the size so a
 // malformed upload cannot write arbitrary extensions or exhaust memory.
@@ -51,8 +60,8 @@ export async function POST(req: NextRequest) {
     const res = await uploadImage(buf, filename, "input");
     if (!res.name) return NextResponse.json({ error: "上传失败" }, { status: 500 });
     return NextResponse.json({ name: res.name });
-  } catch (e: any) {
-    const msg = e?.message ?? "上传失败";
+  } catch (e) {
+    const msg = errorMessage(e, "上传失败");
     const base = comfyBase();
     // Detect common connectivity issues and provide actionable guidance
     if (msg.includes("fetch failed") || msg.includes("ECONNREFUSED") || msg.includes("ENOTFOUND")) {
