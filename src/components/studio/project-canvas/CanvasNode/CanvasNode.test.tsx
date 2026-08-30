@@ -16,7 +16,11 @@ afterEach(cleanup);
  * mock 返回「永不 resolve」的 pending promise：渲染冒烟不依赖列表内容，
  * 同时避免微任务里的 setState 落在 act() 外产生告警/竞态。 */
 vi.mock("~/trpc/vanilla", () => {
-  const pending = <T,>() => new Promise<T>(() => undefined);
+  const pending = <T,>() =>
+  // 永不 resolve:让挂载期请求保持 pending,渲染路径不依赖其结果
+  new Promise<T>(() => {
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- 永不 resolve 的 pending 桩
+  });
   const query = () => vi.fn(() => pending());
   return {
     vanillaApi: {
