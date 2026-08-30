@@ -1,15 +1,17 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 "use client";
 
 import { useMemo } from "react";
 import type { ComfyGraphNode, RawOutputMeta, WorkflowDetail } from "../workflow-types";
 import { inferSourceOutNames } from "../workflow-utils";
 
+/** Raw ComfyUI node metadata — `widgets_values` elements and the flags /
+ *  properties dicts are opaque raw-JSON payloads, kept `unknown` (they were
+ *  `any` before; consumers already treat them opaquely). */
 export type RawNodeMeta = {
-  widgets_values: any[];
+  widgets_values: unknown[];
   outputs: RawOutputMeta[];
-  flags: Record<string, any>;
-  properties: Record<string, any>;
+  flags: Record<string, unknown>;
+  properties: Record<string, unknown>;
   mode: number;
 };
 
@@ -36,10 +38,11 @@ export function useWorkflowDerivedData(
       if (rn?.id) {
         m[rn.id] = {
           widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
-          outputs: Array.isArray((rn as any).outputs) ? (rn as any).outputs : [],
-          flags: (rn as any).flags && typeof (rn as any).flags === "object" ? (rn as any).flags : {},
-          properties: (rn as any).properties && typeof (rn as any).properties === "object" ? (rn as any).properties : {},
-          mode: typeof (rn as any).mode === "number" ? (rn as any).mode : 0,
+          outputs: Array.isArray(rn.outputs) ? rn.outputs : [],
+          flags: rn.flags && typeof rn.flags === "object" ? rn.flags : {},
+          properties:
+            rn.properties && typeof rn.properties === "object" ? rn.properties : {},
+          mode: typeof rn.mode === "number" ? rn.mode : 0,
         };
       }
     }

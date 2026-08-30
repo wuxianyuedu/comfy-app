@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
 "use client";
 
 /** 2026-08-22 P4: extracted from WorkflowLibrary's action-callback block
@@ -30,6 +29,16 @@ export interface UseWorkflowActionsArgs {
   utils: ReturnType<typeof api.useUtils>;
 }
 
+/** Extract `e.message` from an unknown thrown value, mirroring the previous
+ *  `(e as any)?.message ?? fallback` semantics (empty-string message kept). */
+function errMsg(e: unknown, fallback: string): string {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m: unknown = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return fallback;
+}
+
 export function useWorkflowActions(args: UseWorkflowActionsArgs) {
   const {
     setDeleting,
@@ -54,9 +63,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
       try {
         await deleteMut.mutateAsync({ id });
         setPendingDelete(null);
-        load();
-      } catch (e: any) {
-        setImportErr(e?.message ?? "删除失败");
+        void load();
+      } catch (e) {
+        setImportErr(errMsg(e, "删除失败"));
       } finally {
         setDeleting(false);
       }
@@ -76,9 +85,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
       );
       try {
         await updateMut.mutateAsync({ id, modes, defaultMode });
-      } catch (e: any) {
-        toast.error("更新模式失败", e?.message ?? "未知错误");
-        load();
+      } catch (e) {
+        toast.error("更新模式失败", errMsg(e, "未知错误"));
+        void load();
       }
     },
     [setWorkflows, updateMut, toast, load]
@@ -92,9 +101,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
       );
       try {
         await updateMut.mutateAsync({ id, modelTags: names });
-      } catch (e: any) {
-        toast.error("更新模型标签失败", e?.message ?? "未知错误");
-        load();
+      } catch (e) {
+        toast.error("更新模型标签失败", errMsg(e, "未知错误"));
+        void load();
       }
     },
     [setWorkflows, updateMut, toast, load]
@@ -129,8 +138,8 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           "已下载工作流",
           `${tpl.name ?? name}.json`
         );
-      } catch (e: any) {
-        toast.error("下载失败", e?.message ?? "网络错误");
+      } catch (e) {
+        toast.error("下载失败", errMsg(e, "网络错误"));
       } finally {
         setBundleBusy(null);
       }
@@ -155,8 +164,8 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           toast.success("已同步磁盘内容", name);
           await load();
         }
-      } catch (e: any) {
-        toast.error("同步请求失败", e?.message ?? "网络错误");
+      } catch (e) {
+        toast.error("同步请求失败", errMsg(e, "网络错误"));
       } finally {
         setResyncBusy(null);
       }
@@ -175,9 +184,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           name: pending.name,
         });
         toast.success(`已载入「${pending.name}」`, "开始跟踪文件变化");
-        load();
-      } catch (e: any) {
-        toast.error("载入失败", e?.message ?? "网络错误");
+        void load();
+      } catch (e) {
+        toast.error("载入失败", errMsg(e, "网络错误"));
       } finally {
         setPendingLoading((state) => {
           const cp = { ...state };

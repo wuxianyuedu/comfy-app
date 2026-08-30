@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-empty-function */
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -28,6 +27,14 @@ interface FolderConfigRow {
   count: number;
 }
 
+/** Extract `e.message` from an unknown thrown value (was `(e as any)?.message`). */
+function errMsg(e: unknown, fallback: string): string {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m: unknown = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return fallback;
+}
 function fmtSize(n?: number | null) {
   if (!n) return "—";
   if (n > 1024 * 1024 * 1024) return `${(n / 1024 / 1024 / 1024).toFixed(1)} GB`;
@@ -36,7 +43,7 @@ function fmtSize(n?: number | null) {
 }
 
 export function ModelLibrary() {
-  const [models, setModels] = useState<ModelRow[]>([]);
+const [models, setModels] = useState<ModelRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<string>("ALL");
@@ -49,7 +56,9 @@ export function ModelLibrary() {
     setLoading(true);
     listQ
       .refetch()
-      .catch(() => {})
+      .catch(() => {
+        /* refetch errors surface via the query's own error state */
+      })
       .finally(() => setLoading(false));
   }, [listQ]);
 
@@ -275,8 +284,8 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
     async (fn: () => Promise<unknown>) => {
       try {
         await fn();
-      } catch (e: any) {
-        setErr(e?.message ?? "网络错误");
+      } catch (e) {
+        setErr(errMsg(e, "网络错误"));
       }
       await load();
     },
@@ -302,8 +311,8 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
     setErr(null);
     try {
       await syncMut.mutateAsync();
-    } catch (e: any) {
-      setErr(e?.message ?? "扫描失败");
+    } catch (e) {
+      setErr(errMsg(e, "扫描失败"));
     }
     setScanning(false);
     await load();

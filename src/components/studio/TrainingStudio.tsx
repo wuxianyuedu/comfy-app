@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-floating-promises, @typescript-eslint/no-empty-function */
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -35,6 +34,14 @@ type TrainJob = {
   createdAt: string;
 };
 
+/** Extract `e.message` from an unknown thrown value (was `(e as any)?.message`). */
+function errMsg(e: unknown, fallback: string): string {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m: unknown = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return fallback;
+}
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   QUEUED: { label: "等待中", cls: "text-gray-300 bg-white/10" },
   RUNNING: { label: "训练中", cls: "text-violet-300 bg-violet-500/15" },
@@ -92,7 +99,7 @@ export function TrainingStudio() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadModels = useCallback(() => {
-    vanillaApi.model.list
+    void vanillaApi.model.list
       .query({ type: "CHECKPOINT" })
       .then((data) => setCheckpoints((data.models ?? []) as unknown as ModelOpt[]));
   }, []);
@@ -104,7 +111,9 @@ export function TrainingStudio() {
         setJobs((data.jobs ?? []) as unknown as TrainJob[]);
         setBackendConfigured(data.backendConfigured ?? false);
       })
-      .catch(() => {});
+      .catch(() => {
+        /* 轮询失败静默忽略，下一次 interval 会重试 */
+      });
   }, []);
 
   useEffect(() => {
@@ -123,8 +132,12 @@ export function TrainingStudio() {
         const fd = new FormData();
         fd.append("image", f);
         const res = await fetch("/api/upload", { method: "POST", body: fd });
-        const d = await res.json();
-        if (d.name) setDataset((prev) => [...prev, { name: d.name, caption: "" }]);
+        const d: unknown = await res.json();
+        const name =
+          typeof d === "object" && d !== null && "name" in d && typeof (d as { name?: unknown }).name === "string"
+            ? (d as { name: string }).name
+            : undefined;
+        if (name) setDataset((prev) => [...prev, { name, caption: "" }]);
       }
     } finally {
       setUploading(false);
@@ -174,8 +187,8 @@ export function TrainingStudio() {
       setRankDim(32);
       setNetworkAlpha(16);
       loadJobs();
-    } catch (e: any) {
-      setError(e?.message ?? "创建失败");
+    } catch (e) {
+      setError(errMsg(e, "创建失败"));
     } finally {
       setSubmitting(false);
     }

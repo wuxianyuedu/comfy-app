@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -98,6 +97,35 @@ export function MaterialLibraryPanel({
 
   const fileRef = useRef<HTMLInputElement>(null);
   /** 递增触发重新拉取（上传/删除后刷新） */
+/** Read a JSON body as unknown (res.json() is untyped); mirrors the old
+ *  `.catch(() => ({}))` fallback for malformed responses. */
+async function readJson(res: Response): Promise<unknown> {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
+}
+
+/** Pull the `error` string out of a JSON body (was `d?.error ?? …`). */
+async function extractError(body: Promise<unknown>): Promise<string | undefined> {
+  const d = await body;
+  if (typeof d === "object" && d !== null && "error" in d) {
+    const err: unknown = (d as { error?: unknown }).error;
+    if (typeof err === "string") return err;
+  }
+  return undefined;
+}
+
+/** Extract `e.message` from an unknown thrown value (was `(e as any)?.message`). */
+function errMsg(e: unknown, fallback: string): string {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m: unknown = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return fallback;
+}
+
   const [reloadKey, setReloadKey] = useState(0);
   const refresh = useCallback(() => setReloadKey((key) => key + 1), []);
 
@@ -118,16 +146,19 @@ export function MaterialLibraryPanel({
       try {
         const res = await fetch(`/api/materials?${params.toString()}`);
         if (!res.ok) {
-          const d = await res.json().catch(() => ({}));
-          throw new Error(d?.error ?? `请求失败 (${res.status})`);
+          const errVal = await extractError(readJson(res));
+          throw new Error(errVal ?? `请求失败 (${res.status})`);
         }
-        const d = await res.json();
+        const d = await readJson(res);
         if (cancelled) return;
-        setFolders(Array.isArray(d.folders) ? d.folders : []);
-        setItems(Array.isArray(d.items) ? d.items : []);
-      } catch (e: any) {
+        const obj = typeof d === "object" && d !== null ? (d as Record<string, unknown>) : null;
+        const foldersRaw = obj?.folders;
+        const itemsRaw = obj?.items;
+        setFolders(Array.isArray(foldersRaw) ? (foldersRaw as MaterialFolder[]) : []);
+        setItems(Array.isArray(itemsRaw) ? (itemsRaw as MaterialItem[]) : []);
+      } catch (e) {
         if (cancelled) return;
-        setError(e?.message ?? "读取素材库失败");
+        setError(errMsg(e, "读取素材库失败"));
         setFolders([]);
         setItems([]);
       } finally {
@@ -160,13 +191,13 @@ export function MaterialLibraryPanel({
         else fd.append("shared", "true");
         const res = await fetch("/api/materials", { method: "POST", body: fd });
         if (!res.ok) {
-          const d = await res.json().catch(() => ({}));
-          throw new Error(d?.error ?? `上传失败 (${res.status})`);
+          const errVal = await extractError(readJson(res));
+          throw new Error(errVal ?? `上传失败 (${res.status})`);
         }
       }
       refresh();
-    } catch (e: any) {
-      setError(e?.message ?? "上传失败");
+    } catch (e) {
+      setError(errMsg(e, "上传失败"));
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -181,14 +212,14 @@ export function MaterialLibraryPanel({
         method: "DELETE",
       });
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d?.error ?? `删除失败 (${res.status})`);
+        const errVal = await extractError(readJson(res));
+        throw new Error(errVal ?? `删除失败 (${res.status})`);
       }
       // 乐观移除，再拉一次校准计数
       setItems((prev) => prev.filter((prev) => prev.id !== item.id));
       refresh();
-    } catch (e: any) {
-      setError(e?.message ?? "删除失败");
+    } catch (e) {
+      setError(errMsg(e, "删除失败"));
     }
   };
 

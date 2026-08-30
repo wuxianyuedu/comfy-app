@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -7,6 +6,16 @@ import { MediaThumbnail } from "./ui/MediaThumbnail";
 import { isVideo } from "@/lib/media";
 import { Icon } from "@/components/ui/Icon";
 import { vanillaApi } from "~/trpc/vanilla";
+import type { RouterInputs, RouterOutputs } from "~/trpc/react";
+
+/** Wire type of the generate mutation input (was `as any`). */
+type GenerateInput = RouterInputs["generate"]["generate"];
+/** One row of task.list.  The route's mapper no longer carries the legacy
+ *  `images` array (it always reads undefined today) — kept optional here so
+ *  the existing lookup keeps its exact runtime behaviour. */
+type TaskListItem = RouterOutputs["task"]["list"]["tasks"][number] & {
+  images?: { localPath: string }[];
+};
 
 /* ── Video Queue Modal — wired to real VIDEO tasks ──
   Fetches the user's VIDEO-type tasks from /api/tasks (filtered), shows live
@@ -54,20 +63,17 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
     setLoading(true);
     try {
       const data = await vanillaApi.task.list.query({ take: 200 });
-      const all: any[] = data.tasks ?? [];
+      const all: TaskListItem[] = data.tasks ?? [];
       const videos: VideoTask[] = all
         .filter((task) => task.type === "VIDEO")
-        .map((task) => {
-          const video = (task.images ?? []).find((im: any) => isVideo(im.localPath));
-          return {
-            id: task.id,
-            status: task.status,
-            prompt: task.prompt,
-            workflowName: task.workflowName,
-            video: video?.localPath ?? null,
-            error: task.error ?? null,
-          } as VideoTask;
-        });
+        .map((task) => ({
+          id: task.id,
+          status: task.status,
+          prompt: task.prompt,
+          workflowName: task.workflowName,
+          video: (task.images ?? []).find((im) => isVideo(im.localPath))?.localPath ?? null,
+          error: task.error ?? null,
+        }));
       setTasks(videos);
     } catch {
       setError("加载队列失败");
@@ -80,7 +86,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
   useEffect(() => {
     if (!open) return;
     submittedRef.current = false;
-    const t = setInterval(loadTasks, 4000);
+    const t = setInterval(() => void loadTasks(), 4000);
     // Defer the first fetch out of the effect body (React 19 rule:
     // no setState synchronously within an effect).
     const first = setTimeout(() => void loadTasks(), 0);
@@ -113,7 +119,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
           const d = await vanillaApi.generate.generate.mutate({
             ...it.params,
             prompt: it.prompt,
-          } as any);
+          } as GenerateInput);
           if (d.taskId) ok++;
         } catch {
           /* skip failed item */
@@ -122,7 +128,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
       if (ok > 0) {
         setDraft([]);
         setTab("queue");
-        loadTasks();
+        void loadTasks();
       } else {
         setError("提交失败，请检查参数或 ComfyUI 连接");
       }

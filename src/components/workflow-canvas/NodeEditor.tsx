@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment */
 "use client";
 
 /**
@@ -24,7 +23,7 @@ interface NodeEditorProps {
   /** Currently selected node data */
   node: NodeData | null;
   /** Callback when a field value changes */
-  onFieldChange: (nodeId: string, fieldKey: string, value: any) => void;
+  onFieldChange: (nodeId: string, fieldKey: string, value: unknown) => void;
   /** Current paramMap for role assignment */
   paramMap: ParamMap;
   /** Callback when role changes */
@@ -161,7 +160,7 @@ export default function NodeEditor({
               <FieldRow
                 key={field.key}
                 field={field}
-                value={node.inputs?.[field.key]}
+                value={node.inputs?.[field.key] as unknown}
                 checkpoints={checkpoints}
                 modelLists={modelLists}
                 onChange={(val) =>
@@ -197,17 +196,17 @@ export default function NodeEditor({
 
 interface FieldRowProps {
   field: FieldDef;
-  value: any;
+  value: unknown;
   checkpoints?: string[];
   modelLists?: Record<string, string[]>;
-  onChange: (value: any) => void;
+  onChange: (value: unknown) => void;
 }
 
 function FieldRow({ field, value, checkpoints, modelLists, onChange }: FieldRowProps) {
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
       const raw = e.target.value;
-      let parsed: any = raw;
+      let parsed: unknown = raw;
 
       if (field.type === "number") {
         const n = parseFloat(raw);

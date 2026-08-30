@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-floating-promises, react-hooks/refs */
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -93,7 +92,16 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
   /** 全局是否有记录 —— 本项目为空时用来决定是否提示「查看全部」。 */
   const [globalCount, setGlobalCount] = useState<number | null>(null);
 
-  /* ── 拉取任务 ── */
+/** Extract `e.message` from an unknown thrown value (was `(e as any)?.message`). */
+function errMsg(e: unknown, fallback: string): string {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m: unknown = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return fallback;
+}
+
+/* ── 拉取任务 ── */
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -106,15 +114,15 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
         const d = await vanillaApi.task.list.query(params);
         if (cancelled) return;
         setTasks((d.tasks ?? []) as unknown as TaskRow[]);
-      } catch (e: any) {
+      } catch (e) {
         if (cancelled) return;
-        setError(e?.message ?? "读取历史记录失败");
+        setError(errMsg(e, "读取历史记录失败"));
         setTasks([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
-    run();
+    void run();
     return () => {
       cancelled = true;
     };
@@ -143,7 +151,12 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
     (task) => task.status === "RUNNING" || task.status === "QUEUED"
   ).length;
   const refreshRef = useRef(refresh);
-  refreshRef.current = refresh;
+  // Keep the polled callback fresh without reading/writing refs mid-render
+  // (React Compiler forbids ref access during render; the interval only ever
+  // fires after effects have run, so this is timing-equivalent).
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
   useEffect(() => {
     if (activeCount === 0) return;
     const timer = setInterval(() => refreshRef.current(), 4000);

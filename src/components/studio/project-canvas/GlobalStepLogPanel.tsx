@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 
 /* ── GlobalStepLogPanel.tsx · R-ardot120 (2026-08-18) ─────────────────────────
@@ -39,6 +38,19 @@ import { useActiveTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
 import { ValidationErrorList } from "@/components/studio/shared/ValidationErrorList";
 import { vanillaApi } from "~/trpc/vanilla";
+
+/** Runtime shape of an SSE frame from /api/tasks/[id]/stream — only the
+ *  fields this panel consumes.  `JSON.parse` yields `unknown`; the guards
+ *  below narrow each field before use. */
+interface SseFrame {
+  type?: unknown;
+  entry?: unknown;
+  validationErrors?: unknown;
+  status?: unknown;
+  progress?: unknown;
+  error?: unknown;
+  workflowName?: unknown;
+}
 
 type Level = StepLogEntry["level"];
 
@@ -122,7 +134,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     setCancellingFromPanel(true);
     try {
       await vanillaApi.task.cancel.mutate({ id: taskId });
-    } catch (e: any) {
+    } catch (e) {
       setError(`取消请求异常：${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setCancellingFromPanel(false);
@@ -173,7 +185,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     };
     es.onmessage = (ev) => {
       try {
-        const msg = JSON.parse(ev.data);
+        const msg = JSON.parse(ev.data as string) as SseFrame;
         lastActivityRef.current = Date.now();
         if (msg.type === "log" && msg.entry) {
           const entry = msg.entry as StepLogEntry;

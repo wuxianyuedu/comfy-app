@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 
 import { useCallback, useState } from "react";
@@ -29,7 +28,15 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
   // our own /api/workflow-models fetch (refresh on mount) — the parent's
   // snapshot can be older than ours, so we must not overwrite a fresher local
   // list with a stale prop value.
-  const [tags, setTags] = useState<TagItem[]>(initialTags);
+  /** Extract `e.message` from an unknown thrown value (was `(e as any)?.message`). */
+function errMsg(e: unknown, fallback: string): string {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m: unknown = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return fallback;
+}
+const [tags, setTags] = useState<TagItem[]>(initialTags);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -71,8 +78,8 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
       setDraft("");
       await refresh();
       onChanged();
-    } catch (e: any) {
-      setError(e?.message ?? "添加失败");
+    } catch (e) {
+      setError(errMsg(e, "添加失败"));
     } finally {
       setBusy(false);
     }
@@ -95,8 +102,8 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
         }
         await refresh();
         onChanged();
-      } catch (e: any) {
-        setError(e?.message ?? "删除失败");
+      } catch (e) {
+        setError(errMsg(e, "删除失败"));
       }
     },
     [refresh, onChanged],
@@ -136,8 +143,8 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
         onChanged();
         onCloseEdit?.(); // close the editor AFTER state is consistent
         return true;
-      } catch (e: any) {
-        setError(e?.message ?? "重命名失败");
+      } catch (e) {
+        setError(errMsg(e, "重命名失败"));
         return false;
       }
     },

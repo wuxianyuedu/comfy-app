@@ -1,9 +1,26 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 
 import { useState } from "react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { api } from "~/trpc/react";
+
+/** Pull the `error` string out of a JSON response body (was `res.error ?? …`). */
+function errorOfBody(d: unknown): string | undefined {
+  if (typeof d === "object" && d !== null && "error" in d) {
+    const err: unknown = (d as { error?: unknown }).error;
+    if (typeof err === "string") return err;
+  }
+  return undefined;
+}
+
+/** Extract `e.message` from an unknown thrown value (was `(e as any)?.message`). */
+function errMsg(e: unknown, fallback: string): string {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m: unknown = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return fallback;
+}
 
 type Settings = {
   comfyuiUrl: string;
@@ -77,8 +94,8 @@ export default function SettingsPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ currentPassword: curPwd, newPassword: newPwd }),
       });
-      const res = await r.json();
-      if (!r.ok) return flash("err", res.error ?? "修改失败");
+      const res: unknown = await r.json();
+      if (!r.ok) return flash("err", errorOfBody(res) ?? "修改失败");
       flash("ok", "密码已更新");
       setCurPwd("");
       setNewPwd("");
@@ -97,8 +114,8 @@ export default function SettingsPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ newEmail }),
       });
-      const res = await r.json();
-      if (!r.ok) return flash("err", res.error ?? "修改失败");
+      const res: unknown = await r.json();
+      if (!r.ok) return flash("err", errorOfBody(res) ?? "修改失败");
       flash("ok", "邮箱已更新");
       setNewEmail("");
     } finally {
@@ -114,8 +131,8 @@ export default function SettingsPage() {
       flash("ok", "LLM 配置已保存");
       if (llmApiKey) setLlmApiKey("");
       await llmQ.refetch();
-    } catch (e: any) {
-      flash("err", e?.message ?? "保存失败");
+    } catch (e) {
+      flash("err", errMsg(e, "保存失败"));
     } finally {
       setSaving(false);
     }
@@ -128,8 +145,8 @@ export default function SettingsPage() {
       await saveSetting.mutateAsync(settings);
       await settingsQ.refetch();
       flash("ok", "偏好已保存");
-    } catch (e: any) {
-      flash("err", e?.message ?? "保存失败");
+    } catch (e) {
+      flash("err", errMsg(e, "保存失败"));
     } finally {
       setSaving(false);
     }

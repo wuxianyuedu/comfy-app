@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 /* Extracted initialNodes builder from WorkflowEditorInner (wf-editor-inner.tsx).
  *  Pure function — takes the derived context object and returns the React
  *  Flow node array.  No hooks / no component state: the caller owns the
@@ -6,8 +5,9 @@
 import type { Node } from "@xyflow/react";
 import { friendlyNodeTitle } from "@/lib/comfyui/node-titles";
 import type {
-  RawInputMeta, RawOutputMeta, ComfyGraphNode, WorkflowDetail,
+  RawInputMeta, ComfyGraphNode, WorkflowDetail, WorkflowNodeData,
 } from "../workflow-types";
+import type { RawNodeMeta } from "./workflow-editor-derived";
 import {
   NODE_TITLE_H, computeKahnLayout, buildInputSources,
   buildConnectedOutputs, computeGroupDepths, extractNoteTitle,
@@ -18,19 +18,18 @@ import {
   GROUP_TITLE_BAR, GROUP_PAD_Y_BOTTOM, GROUP_RAIL_COLOR,
 } from "./WorkflowEditorNodes";
 
+/** One entry of `WorkflowDetail.graph` (ComfyUI API-format graph).  The
+ *  detail type declares `graph: Record<string, any>`; this narrows the
+ *  two access sites here without touching shared types. */
+type GraphEntry = { inputs?: WorkflowNodeData["inputs"] };
+/** A boundary pin from `detail.boundaryPins.inputs / .outputs` — both
+ *  arrays share the same element shape. */
+type BoundaryPin = NonNullable<WorkflowDetail["boundaryPins"]>["inputs"][number];
+
 export interface BuildInitialNodesCtx {
   detail: WorkflowDetail | null;
   scopeDetail: WorkflowDetail | null;
-  rawMetaById: Record<
-    string,
-    {
-      widgets_values: any[];
-      outputs: RawOutputMeta[];
-      flags: Record<string, any>;
-      properties: Record<string, any>;
-      mode: number;
-    }
-  >;
+  rawMetaById: Record<string, RawNodeMeta>;
   outSlotNameById: Record<string, string[]>;
   paramMap: Record<string, string>;
   onEnterSubgraph?: (id: string, classType: string, title: string) => void;
@@ -111,6 +110,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     // see the NODE_TITLE_H comment for the full rationale).  The body
     // content height carried in `data.size.h` is exactly `size[1]`.
     const NODE_ANCHOR_OFFSET_Y = NODE_TITLE_H;
+    const graphById = detail.graph as Record<string, GraphEntry | undefined>;
     const buildWfNode = (n: ComfyGraphNode, pos: { x: number; y: number }): Node => ({
       id: n.id,
       type: "wfNode",
@@ -123,8 +123,8 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         nodeId: n.id,
         classType: n.class_type,
         title: n.title,
-        inputs: (detail.graph[n.id]?.inputs ?? {}) as Record<string, any>,
-        inputSources: buildInputSources(detail.graph[n.id]?.inputs, nodesById),
+        inputs: graphById[n.id]?.inputs ?? {},
+        inputSources: buildInputSources(graphById[n.id]?.inputs, nodesById),
         assignedRole: Object.entries(paramMap).find(([, nid]) => nid === n.id)?.[0] ?? null,
         rawInputs: n.raw_inputs ?? [],
         rawOutputs: rawMetaById[n.id]?.outputs ?? [],
@@ -174,7 +174,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
        *  ones the parent workflow wires into it.  We pull this from
        *  detail.graph[subgraph_node_id].inputs — anything keyed here
        *  whose value is a [srcId, slot] tuple is connected. */
-      const subgraphInp = (detail.graph?.[n.id]?.inputs ?? {}) as Record<string, any>;
+      const subgraphInp = graphById[n.id]?.inputs ?? {};
       const connectedInputs = new Set<string>();
       for (const [name, v] of Object.entries(subgraphInp)) {
         if (Array.isArray(v) && typeof v[0] === "string") connectedInputs.add(name);
@@ -313,7 +313,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
      *      always reset to bbox-anchored rail; persisting the group
      *      position is what makes a moved column stay put. */
     const buildBoundaryPinNode = (
-      pin: any,
+      pin: BoundaryPin,
       kind: "input" | "output",
       parentId: string,
       relY: number,
@@ -439,7 +439,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       const leftRailX = minX - RAIL_GAP;
       const rightRailX = maxX + RAIL_GAP;
 
-      const rawPosOf = (pin: any): [number, number] | null => {
+      const rawPosOf = (pin: BoundaryPin): [number, number] | null => {
         if (Array.isArray(pin.pos) && pin.pos.length >= 2) {
           const x = Number(pin.pos[0]) || 0;
           const y = Number(pin.pos[1]) || 0;
@@ -492,11 +492,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         : outputsDefault ?? { x: rightRailX - GROUP_PAD_X, y: minY - GROUP_TITLE_BAR };
 
       const stackRel = (i: number) => GROUP_TITLE_BAR + i * (IO_PORT_HEIGHT + PORT_ROW_GAP);
-      const inputsRelYs = detail.boundaryPins.inputs.map((_p: any, i: number) => {
+      const inputsRelYs = detail.boundaryPins.inputs.map((_p, i) => {
         const r = inputsRaw[i];
         return r ? r[1] - inputsGroupPos.y : stackRel(i);
       });
-      const outputsRelYs = detail.boundaryPins.outputs.map((_p: any, i: number) => {
+      const outputsRelYs = detail.boundaryPins.outputs.map((_p, i) => {
         const r = outputsRaw[i];
         return r ? r[1] - outputsGroupPos.y : stackRel(i);
       });
@@ -516,7 +516,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       );
       if (inputsGroup) {
         out.push(inputsGroup);
-        detail.boundaryPins.inputs.forEach((pin: any, i: number) => {
+        detail.boundaryPins.inputs.forEach((pin, i) => {
           out.push(
             buildBoundaryPinNode(pin, "input", "grp:bpin:inputs", inputsRelYs[i]!, inputRelX)
           );
@@ -531,7 +531,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       );
       if (outputsGroup) {
         out.push(outputsGroup);
-        detail.boundaryPins.outputs.forEach((pin: any, i: number) => {
+        detail.boundaryPins.outputs.forEach((pin, i) => {
           out.push(
             buildBoundaryPinNode(pin, "output", "grp:bpin:outputs", outputsRelYs[i]!, outputRelX)
           );

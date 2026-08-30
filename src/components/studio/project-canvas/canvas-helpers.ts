@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 /* ── Canvas helper functions ──
  * Thin wrappers around the existing Comfy-APP APIs so the canvas nodes can
  * upload references, enqueue generations, and poll for results without
@@ -7,6 +6,7 @@
 
 import type { ValidationError } from "@/lib/comfyui/validation";
 import { vanillaApi } from "~/trpc/vanilla";
+import type { RouterInputs } from "~/trpc/react";
 import type { Edge, FitViewOptions } from "@xyflow/react";
 import {
   type CanvasNodeType,
@@ -156,9 +156,15 @@ export async function uploadImageFile(file: File): Promise<string> {
   const fd = new FormData();
   fd.append("image", file);
   const res = await fetch("/api/upload", { method: "POST", body: fd });
-  const d = await res.json();
-  if (!d.name) throw new Error(d.error ?? "上传失败");
-  return d.name;
+  const d: unknown = await res.json();
+  const obj = typeof d === "object" && d !== null ? (d as Record<string, unknown>) : null;
+  const name = typeof obj?.name === "string" ? obj.name : "";
+  if (!name) {
+    const errRaw = obj?.error;
+    // /api/upload's `error` is a plain string; non-string payloads fall back.
+    throw new Error(typeof errRaw === "string" ? errRaw : "上传失败");
+  }
+  return name;
 }
 
 /* Re-upload an already-generated output (served via /outputs/...) back into
@@ -192,8 +198,11 @@ export async function uploadMediaFile(
   return { name, url };
 }
 
+/** tRPC wire contract for the generate mutation (was `payload as any`). */
+type GenerateInput = RouterInputs["generate"]["generate"];
+
 export async function startGenerate(payload: Record<string, unknown>): Promise<string> {
-  const d = await vanillaApi.generate.generate.mutate(payload as any);
+  const d = await vanillaApi.generate.generate.mutate(payload as GenerateInput);
   if (!d.taskId) throw new Error("生成失败");
   return d.taskId;
 }
@@ -338,9 +347,22 @@ export async function runScript(theme: string): Promise<string> {
       }),
     });
     if (res.ok) {
-      const d = await res.json();
-      const c = d.content ?? d.choices?.[0]?.message?.content ?? "";
-      if (c?.trim()) return c.trim();
+      const d: unknown = await res.json();
+      const obj = typeof d === "object" && d !== null ? (d as Record<string, unknown>) : null;
+      const choices = obj?.choices;
+      const choiceContent =
+        Array.isArray(choices) &&
+        typeof choices[0] === "object" &&
+        choices[0] !== null
+          ? (choices[0] as { message?: { content?: unknown } }).message?.content
+          : undefined;
+      const c =
+        typeof obj?.content === "string"
+          ? obj.content
+          : typeof choiceContent === "string"
+            ? choiceContent
+            : "";
+      if (c.trim()) return c.trim();
     }
   } catch {
     /* fall through to offline */

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 import { useRgthreeGroups } from "./IOEditContext";
 import type { WorkflowGroup } from "../workflow-types";
@@ -114,8 +113,8 @@ export function RgthreeFastGroupsBypasserBody({
  *   • efficiency-nodes' SetNode / GetNode — its pkg has no on-disk marker
  *     in our install and its nodes carry no `cnr_id`, so we hard-code the
  *     attribution. */
-export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: any[] }) {
-  const fmtStrength = (v: any): string | undefined => {
+export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) {
+  const fmtStrength = (v: unknown): string | undefined => {
     if (typeof v === "number") {
       // ComfyUI strips trailing zeros ("1.00" → "1", "0.85" stays).
       const s = v.toFixed(2);
@@ -127,7 +126,9 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: any[] }) {
   };
 
   // Per-lora rows: filter out the header widget and empty placeholders.
-  const loras: any[] = (widgets ?? []).filter((widget) => {
+  // Row shape is pack-dependent (bare filename string or a widget record).
+  type PowerLoraWidget = string | Record<string, unknown>;
+  const loras: PowerLoraWidget[] = ((widgets ?? []) as PowerLoraWidget[]).filter((widget) => {
     if (widget === null || widget === undefined) return false;
     if (typeof widget !== "object" || Array.isArray(widget)) {
       return typeof widget === "string" && widget.length > 0; // bare lora filename
@@ -187,17 +188,16 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: any[] }) {
       ) : (
         loras.map((widget, index) => {
           const isObj = typeof widget === "object" && !Array.isArray(widget);
+          const rec = isObj ? widget : undefined;
           const name =
             typeof widget === "string"
               ? widget
-              : isObj
-                ? widget.name ?? widget.lora_name ?? widget.model_name ?? ""
-                : "";
+              : ((rec?.name ?? rec?.lora_name ?? rec?.model_name) as string | undefined) ?? "";
           const modelStr = isObj
-            ? fmtStrength(widget.model_strength ?? widget.model_str ?? widget.strength)
+            ? fmtStrength(rec?.model_strength ?? rec?.model_str ?? rec?.strength)
             : undefined;
           const clipStr = isObj
-            ? fmtStrength(widget.clip_strength ?? widget.clip_str)
+            ? fmtStrength(rec?.clip_strength ?? rec?.clip_str)
             : undefined;
           return (
             <div
@@ -276,7 +276,7 @@ export function RgthreeLabelBody({
   properties,
 }: {
   text: string;
-  properties: Record<string, any>;
+  properties: Record<string, unknown>;
 }) {
   const p = properties ?? {};
   const fontSize = typeof p.fontSize === "number" ? p.fontSize : 24;
@@ -285,7 +285,9 @@ export function RgthreeLabelBody({
   const textAlign =
     p.textAlign === "center" || p.textAlign === "right" ? p.textAlign : "left";
   const bg =
-    p.backgroundColor && p.backgroundColor !== "transparent" ? p.backgroundColor : "transparent";
+    typeof p.backgroundColor === "string" && p.backgroundColor !== "transparent"
+      ? p.backgroundColor
+      : "transparent";
   const angle = typeof p.angle === "number" ? p.angle : 0;
   return (
     <div

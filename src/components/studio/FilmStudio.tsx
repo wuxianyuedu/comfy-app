@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, react-hooks/preserve-manual-memoization */
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -60,6 +59,15 @@ interface Film {
   error: string | null;
   logs: { t: number; level: string; msg: string }[] | null;
   shots: FilmShot[];
+}
+
+/** Extract `e.message` from an unknown thrown value (was `(e as any)?.message`). */
+function errMsg(e: unknown, fallback: string): string {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m: unknown = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return fallback;
 }
 
 /* ── Mock Data (visual design reference) ── */
@@ -175,9 +183,18 @@ export function FilmStudio() {
         vanillaApi.skill.list.query(),
         vanillaApi.film.list.query(),
       ]);
-      const list = (sData.skills ?? sData ?? []) as any[];
-      setSkills(list.map((s: any) => ({ slug: s.slug, name: s.name })));
-      setFfmpegAvailable(!!(fData as any).ffmpegAvailable);
+      // skill.list returns `{...record, tags}` rows (index signature lost by
+      // the router spread) — read slug/name off the record view.  Values are
+      // asserted (not coerced) so malformed payloads behave exactly as before.
+      const rawList: unknown = sData.skills;
+      const list = Array.isArray(rawList) ? rawList : [];
+      setSkills(
+        list.map((raw) => {
+          const s = raw as Record<string, unknown>;
+          return { slug: s.slug as string, name: s.name as string };
+        })
+      );
+      setFfmpegAvailable(!!fData.ffmpegAvailable);
       setRecent((fData.films ?? []));
     } catch {
       /* ignore */
@@ -200,18 +217,30 @@ export function FilmStudio() {
   }, []);
 
   const fetchDetail = useCallback(async (id: string) => {
-    try {
-      const data = await vanillaApi.film.detail.query({ id });
-      const f: Film = (data as any).film;
-      setFilm(f);
-      if (f.status === "GENERATING" || f.status === "COMPOSING" || f.status === "PARSING") {
-        pollRef.current ??= setInterval(() => void fetchDetail(id), 3000);
-      } else {
-        stopPoll();
+    // Local recursive poller — referencing `fetchDetail` itself from inside
+    // its own useCallback would make the memoisation unverifiable by the
+    // React Compiler (rh/preserve-manual-memoization); a local function
+    // keeps the same polling semantics without the self reference.
+    const poll = async (tid: string): Promise<void> => {
+      try {
+        const data = await vanillaApi.film.detail.query({ id: tid });
+        // /api/film/[id] returns the raw Prisma FilmProject row; its
+        // status/logs/shots columns are wider than the local `Film` view
+        // type, and the shape is fixed by the route — cast through `any`
+        // as the original code did.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access -- Prisma row → UI view type, shape guaranteed by /api/film/[id]
+        const f: Film = (data as any).film;
+        setFilm(f);
+        if (f.status === "GENERATING" || f.status === "COMPOSING" || f.status === "PARSING") {
+          pollRef.current ??= setInterval(() => void poll(tid), 3000);
+        } else {
+          stopPoll();
+        }
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
-    }
+    };
+    await poll(id);
   }, [stopPoll]);
 
   useEffect(() => () => stopPoll(), [stopPoll]);
@@ -236,7 +265,7 @@ export function FilmStudio() {
       await vanillaApi.film.start.mutate({ id });
       await fetchDetail(id);
       success("已启动一键成片，正在逐镜生成…");
-    } catch (e: any) { error(e?.message ?? "启动失败"); }
+    } catch (e) { error(errMsg(e, "启动失败")); }
     finally { setLoading(false); }
   }, [script, title, type, styleSlug, size, fps, frames, subtitleOn, bgmName, stopPoll, fetchDetail, error, success]);
 
@@ -259,7 +288,12 @@ export function FilmStudio() {
     const form = new FormData(); form.append("file", file);
     const res = await fetch("/api/film/bgm", { method: "POST", body: form });
     if (!res.ok) { error("BGM 上传失败"); return; }
-    const { name } = await res.json(); setBgmName(name); success("背景音乐已上传");
+    const d: unknown = await res.json();
+    const name =
+      typeof d === "object" && d !== null && "name" in d && typeof (d as { name?: unknown }).name === "string"
+        ? (d as { name: string }).name
+        : null;
+    setBgmName(name); success("背景音乐已上传");
   }, [error, success]);
 
   /* ── Visual-editor actions ── */

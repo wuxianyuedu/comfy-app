@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-floating-promises, @typescript-eslint/no-empty-function */
 "use client";
 
 import React from "react";
@@ -10,6 +9,18 @@ import { CharacterDesigner } from "@/components/workshop/CharacterDesigner";
 import { StoryboardPlanner } from "@/components/workshop/StoryboardPlanner";
 import { LLMProvider, LLMStatusChip, LLMSettingsButton } from "@/components/workshop/LLMContext";
 import { vanillaApi } from "~/trpc/vanilla";
+import type { RouterInputs } from "~/trpc/react";
+
+/** Wire type of the generate mutation input (was `payload as any`). */
+type GenerateInput = RouterInputs["generate"]["generate"];
+
+/** Runtime shape of an SSE frame from /api/tasks/[id]/stream — only the
+ *  fields consumed here.  `JSON.parse` yields unknown; guards narrow. */
+interface SseFrame {
+  type?: unknown;
+  image?: unknown;
+  images?: unknown;
+}
 import type {
   ProjectMeta,
   Scene,
@@ -50,25 +61,36 @@ export function WorkshopStudio() {
     vanillaApi.skill.list
       .query({})
       .then((data) => {
-        const list: StyleRef[] = (data.skills ?? []).map((skill: any) => ({
-          slug: skill.slug,
-          name: skill.name,
-          icon: skill.icon,
-          promptTemplate: skill.promptTemplate,
-          negativePrompt: skill.negativePrompt ?? undefined,
-          defaultParams: (skill.defaultParams as Record<string, unknown>) ?? undefined,
-        }));
+        // skill.list rows are `{...record, tags}` — the router spread drops the
+        // record props, so read fields off a record view.  Values are asserted
+        // (not coerced) so malformed payloads behave exactly as before.
+        const list: StyleRef[] = (data.skills ?? []).map((raw) => {
+          const skill = raw as Record<string, unknown>;
+          return {
+            slug: skill.slug as string,
+            name: skill.name as string,
+            icon: skill.icon as string,
+            promptTemplate: skill.promptTemplate as string,
+            negativePrompt: (skill.negativePrompt as string | undefined) ?? undefined,
+            defaultParams:
+              (skill.defaultParams as Record<string, unknown> | undefined) ?? undefined,
+          };
+        });
         setStyles(list);
       })
-      .catch(() => {});
+      .catch(() => {
+        /* 初始加载失败静默忽略（用户可手动重试） */
+      });
     vanillaApi.model.list
       .query({ type: "CHECKPOINT" })
       .then((data) => {
-        const names: string[] = (data.models ?? []).map((model: any) => model.fileName);
+        const names: string[] = (data.models ?? []).map((model) => model.fileName);
         setCheckpoints(names);
         if (names.length) setCheckpoint(names[0]!);
       })
-      .catch(() => {});
+      .catch(() => {
+        /* 初始加载失败静默忽略（用户可手动重试） */
+      });
   }, []);
 
   async function generateShot(shot: Shot) {
@@ -96,17 +118,17 @@ export function WorkshopStudio() {
     };
 
     try {
-      const data = await vanillaApi.generate.generate.mutate(payload as any);
+      const data = await vanillaApi.generate.generate.mutate(payload as GenerateInput);
       if (data.taskId) {
         setShots((prev) =>
           prev.map((prev) =>(prev.id === shot.id ? { ...prev, status: "done", taskId: data.taskId } : prev))
         );
         // Poll for result to embed preview
-        pollTask(data.taskId, shot.id);
+        void pollTask(data.taskId, shot.id);
       } else {
         throw new Error("生成失败");
       }
-    } catch (err: any) {
+    } catch (err) {
       setShots((prev) =>
         prev.map((prev) =>(prev.id === shot.id ? { ...prev, status: "failed" } : prev))
       );
@@ -118,9 +140,12 @@ export function WorkshopStudio() {
     const es = new EventSource(`/api/tasks/${taskId}/stream`);
     es.onmessage = (ev) => {
       try {
-        const msg = JSON.parse(ev.data);
+        const msg = JSON.parse(ev.data as string) as SseFrame;
         if (msg.type === "done" || msg.type === "image") {
-          const url = msg.image ?? (msg.images?.[0]);
+          const images = msg.images;
+          const url =
+            (msg.image as string | undefined) ??
+            (Array.isArray(images) ? (images[0] as string | undefined) : undefined);
           if (url) {
             setShots((prev) =>
               prev.map((prev) =>(prev.id === shotId ? { ...prev, imageUrl: url } : prev))

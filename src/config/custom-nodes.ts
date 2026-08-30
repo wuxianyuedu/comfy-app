@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 /**
  * customNodes.ts — Loads the generated custom-node manifest and exposes it as
  * `NodeTypeConfig` entries for the workflow canvas.
@@ -99,7 +98,8 @@ interface ManifestInput {
   type: string;
   widget?: string | null;
   options?: string[] | null;
-  default?: any;
+  /** Opaque widget default (string / number / bool … raw-JSON value). */
+  default?: unknown;
   required?: boolean;
 }
 
@@ -210,7 +210,8 @@ export interface ManifestNodeRaw {
     type: string;
     widget?: string | null;
     options?: string[] | null;
-    default?: any;
+    /** Opaque widget default (string / number / bool … raw-JSON value). */
+    default?: unknown;
     required?: boolean;
   }>;
   outputs?: Array<{ type: string; name: string }>;
@@ -227,8 +228,13 @@ export async function getCustomNodesManifest(
   try {
     const res = await fetch(`${base}/api/custom-nodes/manifest`);
     if (!res.ok) return null;
-    const data = await res.json();
-    if (!data || typeof data !== "object" || !data.nodes) return null;
+    const data: unknown = await res.json();
+    if (
+      !data || typeof data !== "object" ||
+      !("nodes" in data) || !data.nodes
+    ) {
+      return null;
+    }
     return data as { nodes: Record<string, ManifestNodeRaw> };
   } catch {
     return null;

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment */
 /**
  * Graph Utilities — ComfyUI graph JSON ↔ ReactFlow nodes/edges conversion
  *
@@ -189,11 +188,11 @@ export function flowToComfyGraph(
   const graph: ComfyGraph = {};
 
   for (const node of nodes) {
-    const d = node.data as unknown as NodeData;
-    const inputs: Record<string, any> = {};
+    const d = node.data as NodeData;
+    const inputs: Record<string, unknown> = {};
     // 先剥离所有连线引用（数组型 [nodeId, slot]），只保留字面量值。
     // 否则删除边后，data.inputs 里残留的旧连线引用会让导出图仍带着已删除的连接。
-    for (const [k, v] of Object.entries(d.inputs ?? {})) {
+    for (const [k, v] of Object.entries<unknown>(d.inputs ?? {})) {
       if (Array.isArray(v) && typeof v[0] === "string") continue;
       inputs[k] = v;
     }
@@ -225,7 +224,7 @@ export function flowToComfyGraph(
 
 /* ── Build field definitions for a node's current inputs ── */
 
-function buildFields(classType: string, inputs: Record<string, any>) {
+function buildFields(classType: string, inputs: Record<string, unknown>) {
   const config = getNodeConfig(classType);
 
   // Custom nodes: drive field list from the manifest spec (names + types +
@@ -257,7 +256,7 @@ function buildFields(classType: string, inputs: Record<string, any>) {
   return Array.from(fieldMap.values());
 }
 
-function inferField(key: string, value: any): FieldDef {
+function inferField(key: string, value: unknown): FieldDef {
   if (typeof value === "number")
     return { key, label: key, type: "number", group: "参数" };
   if (typeof value === "boolean")

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/prefer-nullish-coalescing */
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -23,6 +22,44 @@ import type {
   SettingsResp,
   SummaryPkg,
 } from "./types";
+
+/** Typed view of the POST /api/custom-nodes save response.  The route returns
+ *  `{ ok, error?, paths? / localWorkflowPaths? }`; fields are unknown-typed so
+ *  the guards below decide trust. */
+interface SaveSettingsResp {
+  ok?: unknown;
+  error?: unknown;
+  paths?: string[];
+  localWorkflowPaths?: string[];
+}
+
+/** One ndjson line of the settings/parse progress stream — only the fields
+ *  this dialog consumes. */
+interface SettingsStreamEvent {
+  type?: string;
+  parents?: string[];
+  parent?: string;
+  phase?: string;
+  msg?: string;
+  discovered?: number;
+  total?: number;
+  done?: number;
+  packages?: DiscoveredSubpkg[];
+  summary?: SettingsResp["summary"];
+  lastReport?: ParseReport | null;
+  byPath?: Record<string, SummaryPkg>;
+  settings?: { localWorkflowPaths?: string[] };
+  message?: string;
+}
+
+/** One ndjson line of the parse log stream. */
+interface ParseStreamEvent {
+  type?: string;
+  level?: string;
+  msg?: string;
+  report?: ParseReport | null;
+  ok?: boolean;
+}
 
 export function CustomNodesSettings() {
   const [open, setOpen] = useState(false);
@@ -136,12 +173,12 @@ export function CustomNodesSettings() {
   const fetchSettings = useCallback(async () => {
     try {
       const res = await fetch("/api/custom-nodes");
-      const ct = res.headers.get("content-type") || "";
+      const ct = res.headers.get("content-type") ?? "";
       const isStream = ct.includes("ndjson");
 
       if (!isStream) {
         // Warm cache path: server returned a single JSON blob.
-        const data: SettingsResp = await res.json();
+        const data = (await res.json()) as SettingsResp;
         const paths = data.settings.paths || [];
         setPathsText(paths.join("\n"));
         setSavedPaths(paths);
@@ -172,14 +209,14 @@ export function CustomNodesSettings() {
       if (!reader) throw new Error("服务器未返回流式响应");
       const decoder = new TextDecoder();
       let buf = "";
-      let summary: any = null;
-      let lastReport: any = null;
-      let byPath: any = {};
+      let summary: SettingsResp["summary"] = null;
+      let lastReport: ParseReport | null = null;
+      let byPath: Record<string, SummaryPkg> = {};
       // 2026-08-11 R38: the `summary` event carries the local-workflow
       // path list under `settings.localWorkflowPaths`.  We collect it
       // here and push to React state when the stream finishes.
       let localWorkflowPathsArr: string[] = [];
-      const discoveredByParent: Record<string, any[]> = {};
+      const discoveredByParent: Record<string, DiscoveredSubpkg[]> = {};
       const paths: string[] = [];
 
       while (true) {
@@ -191,10 +228,12 @@ export function CustomNodesSettings() {
           const line = buf.slice(0, nl);
           buf = buf.slice(nl + 1);
           if (!line.trim()) continue;
-          let ev: any;
-          try { ev = JSON.parse(line); } catch { continue; }
+          // ndjson event from the settings stream — only the fields this
+          // dialog consumes; each line is validated by JSON.parse itself.
+          let ev: SettingsStreamEvent;
+          try { ev = JSON.parse(line) as SettingsStreamEvent; } catch { continue; }
           if (ev.type === "discover_start") {
-            paths.push(...(ev.parents || []));
+            paths.push(...(ev.parents ?? []));
             setProgress({ phase: "queue", done: 0, total: 0, discovered: 0, parent: "", msg: "准备扫描…" });
           } else if (ev.type === "progress") {
             setProgress((progress) => {
@@ -202,7 +241,12 @@ export function CustomNodesSettings() {
               // `discovered` are only updated when the event actually carries
               // them (the parser emits them on every meaningful tick), so
               // events that only carry `msg` don't reset the counters.
-              const next = { ...progress, parent: ev.parent || progress.parent };
+              // Empty-string parent must keep the previous value (was `||`).
+              const evParent = typeof ev.parent === "string" ? ev.parent : "";
+              const next = {
+                ...progress,
+                parent: evParent.length > 0 ? evParent : progress.parent,
+              };
               if (ev.phase === "queue") next.phase = "queue";
               if (ev.phase === "scan") next.phase = "scan";
               if (ev.phase === "hash") next.phase = "hash";
@@ -213,24 +257,34 @@ export function CustomNodesSettings() {
               return next;
             });
           } else if (ev.type === "discover_done") {
-            discoveredByParent[ev.parent] = ev.packages || [];
+            if (typeof ev.parent === "string") {
+              discoveredByParent[ev.parent] = ev.packages ?? [];
+            }
             // Don't touch the package counter here — the parser already
             // emitted its own final tick (✔ ... done=M|total=M) before the
             // JSON line. We just refresh the parent shown in the header.
-            setProgress((progress) => ({ ...progress, parent: ev.parent, msg: `✔ ${ev.parent}` }));
+            setProgress((progress) => ({
+              ...progress,
+              parent: ev.parent ?? progress.parent,
+              msg: `✔ ${ev.parent ?? ""}`,
+            }));
           } else if (ev.type === "summary") {
-            summary = ev.summary;
-            lastReport = ev.lastReport;
-            byPath = ev.byPath || {};
+            summary = ev.summary ?? null;
+            lastReport = ev.lastReport ?? null;
+            byPath = ev.byPath ?? {};
             // 2026-08-11 R38: same fix as the warm-cache branch — the
             // `summary` event already carries `settings.localWorkflowPaths`
             // (server route.ts:414) but the client never picked it up,
             // so the dialog always rendered an empty textarea and the
             // "未配置" badge even when the .env had saved paths.
-            const lwp = ev.settings?.localWorkflowPaths || [];
+            const lwp = ev.settings?.localWorkflowPaths ?? [];
             localWorkflowPathsArr = lwp;
           } else if (ev.type === "error") {
-            setSaveErr("扫描失败：" + (ev.message || "未知错误"));
+            const message =
+              typeof ev.message === "string" && ev.message.length > 0
+                ? ev.message
+                : "未知错误";
+            setSaveErr("扫描失败：" + message);
           }
         }
       }
@@ -298,7 +352,7 @@ export function CustomNodesSettings() {
     const live = splitPaths(pathsText);
     if (open && !eqArr(live, savedPaths)) {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(async () => {
+      const savePaths = async (): Promise<void> => {
         setSaving(true);
         setSaveErr(null);
         try {
@@ -307,9 +361,15 @@ export function CustomNodesSettings() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "saveSettings", customNodesPaths: live }),
           });
-          const data = await res.json();
-          if (!res.ok || !data.ok) throw new Error(data.error || "保存失败");
-          setSavedPaths(data.paths);
+          const data = (await res.json()) as SaveSettingsResp;
+          if (!res.ok || !data.ok) {
+            throw new Error(
+              typeof data.error === "string" && data.error.length > 0
+                ? data.error
+                : "保存失败"
+            );
+          }
+          setSavedPaths(data.paths ?? live);
           setSavedAt(nowTimeStr());
           await reloadFromServer(); // re-discover subpackages under new paths
         } catch (e) {
@@ -317,6 +377,9 @@ export function CustomNodesSettings() {
         } finally {
           setSaving(false);
         }
+      };
+      saveTimerRef.current = setTimeout(() => {
+        void savePaths();
       }, 600);
     }
     return () => {
@@ -332,7 +395,7 @@ export function CustomNodesSettings() {
     const live = splitPaths(localPathsText);
     if (open && !eqArr(live, savedLocalPaths)) {
       if (localSaveTimerRef.current) clearTimeout(localSaveTimerRef.current);
-      localSaveTimerRef.current = setTimeout(async () => {
+      const saveLocalPaths = async (): Promise<void> => {
         setLocalSaving(true);
         setLocalSaveErr(null);
         try {
@@ -344,8 +407,14 @@ export function CustomNodesSettings() {
               localWorkflowPaths: live,
             }),
           });
-          const data = await res.json();
-          if (!res.ok || !data.ok) throw new Error(data.error || "保存失败");
+          const data = (await res.json()) as SaveSettingsResp;
+          if (!res.ok || !data.ok) {
+            throw new Error(
+              typeof data.error === "string" && data.error.length > 0
+                ? data.error
+                : "保存失败"
+            );
+          }
           setSavedLocalPaths(data.localWorkflowPaths ?? live);
           setLocalSavedAt(nowTimeStr());
           // 2026-08-13: Notify any mounted list (e.g. WorkflowLibrary) to
@@ -365,6 +434,9 @@ export function CustomNodesSettings() {
         } finally {
           setLocalSaving(false);
         }
+      };
+      localSaveTimerRef.current = setTimeout(() => {
+        void saveLocalPaths();
       }, 600);
     }
     return () => {
@@ -372,9 +444,12 @@ export function CustomNodesSettings() {
     };
   }, [localPathsText, savedLocalPaths, open]);
 
-  async function readNdjson(res: Response, onDone: (report: any, ok: boolean) => void) {
+  async function readNdjson(
+    res: Response,
+    onDone: (report: ParseReport | null, ok: boolean) => Promise<void> | void
+  ) {
     if (!res.body) {
-      onDone(null, false);
+      void onDone(null, false);
       setError_("服务器未返回流式日志");
       return;
     }
@@ -391,11 +466,11 @@ export function CustomNodesSettings() {
         buf = buf.slice(nl + 1);
         if (!line.trim()) continue;
         try {
-          const obj = JSON.parse(line);
+          const obj = JSON.parse(line) as ParseStreamEvent;
           if (obj.type === "log") {
-            setLogs((prev) => [...prev, { level: obj.level || "info", msg: obj.msg }]);
+            setLogs((prev) => [...prev, { level: obj.level ?? "info", msg: obj.msg ?? "" }]);
           } else if (obj.type === "done") {
-            onDone(obj.report, !!obj.ok);
+            void onDone(obj.report ?? null, !!obj.ok);
           }
         } catch {
           // ignore non-JSON
@@ -425,7 +500,7 @@ export function CustomNodesSettings() {
       });
       await readNdjson(res, async (record, ok) => {
         if (ok && record) {
-          setReport(record as ParseReport);
+          setReport(record);
           await refreshCustomNodes();
         }
         await reloadFromServer();
@@ -449,7 +524,7 @@ export function CustomNodesSettings() {
       });
       await readNdjson(res, async (record, ok) => {
         if (ok && record) {
-          setReport(record as ParseReport);
+          setReport(record);
           await refreshCustomNodes();
         }
         await reloadFromServer();
@@ -469,7 +544,7 @@ export function CustomNodesSettings() {
    *  Reuses the same subset-parser path, just with N absolute paths at once.
    *  Empty / missing dirs are tolerated by the parser itself (logged + skipped). */
   async function onParseAllParent(parent: string) {
-    const subs = discoveredByParent[parent] || [];
+    const subs = discoveredByParent[parent] ?? [];
     const targets = subs.map((sub) => sub.path).filter(Boolean);
     if (targets.length === 0) {
       setError_("该目录下没有可解析的子包");
@@ -486,7 +561,7 @@ export function CustomNodesSettings() {
       });
       await readNdjson(res, async (record, ok) => {
         if (ok && record) {
-          setReport(record as ParseReport);
+          setReport(record);
           await refreshCustomNodes();
         }
         await reloadFromServer();
@@ -507,7 +582,7 @@ export function CustomNodesSettings() {
   // by joining against the manifest's byPath map.
   const parentBlocks = useMemo(() => {
     return savedPaths.map((parent) => {
-      const subs = discoveredByParent[parent] || [];
+      const subs = discoveredByParent[parent] ?? [];
       const enriched = subs.map((sub) => {
         const saved = byPath[pathKey(sub.path)];
         return { sub, saved, state: deriveRowState(sub, saved) };
@@ -927,7 +1002,7 @@ export function CustomNodesSettings() {
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation();
-                              onParseAllParent(parent);
+                              void onParseAllParent(parent);
                             }}
                             disabled={!!parsing || total === 0 || (parentParsed && cnt.outdated === 0)}
                             className="rounded-lg border border-border bg-bg px-3 py-1 text-[11px] font-medium text-ink hover:bg-subtle disabled:cursor-not-allowed disabled:opacity-50"
@@ -961,7 +1036,7 @@ export function CustomNodesSettings() {
                               const nodesAreLoaded =
                                 state.kind === "loaded" || state.kind === "outdated";
                               const nodeListOpen = !!expandedNodeList[sub.path];
-                              const nodeTypeList = (saved?.nodeTypes ?? []) as string[];
+                              const nodeTypeList = saved?.nodeTypes ?? [];
                               return (
                                 <div key={sub.path}>
                                   <div

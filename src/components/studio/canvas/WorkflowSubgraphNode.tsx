@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access */
 "use client";
 /* Extracted WorkflowSubgraphNode (ComfyUI subgraph wrapper renderer).
  * Originally inside WorkflowCanvasEditor.tsx. */
@@ -9,8 +8,12 @@ import {
   portColor, inferIsMultiline,
 } from "@/lib/comfyui/types";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import type { WorkflowSubgraphData,
+import type { WorkflowSubgraphData, RawInputMeta,
 } from "../workflow-types";
+
+/** COMBO inputs additionally carry their option list (stamped by the import
+ *  pipeline; not part of the shared RawInputMeta contract). */
+type ComboInputMeta = RawInputMeta & { comboOptions?: unknown };
 import { valueCellColor,
   renderSubgraphWidgetValue, sanitizeComboLabel, NODE_TITLE_H, hexToRgba, 
 } from "../workflow-utils";
@@ -498,8 +501,8 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                 {!isStringWidget && (
                   <>
                     {inp.type === "COMBO" &&
-                    Array.isArray((inp as any).comboOptions) &&
-                    (inp as any).comboOptions.length > 0 ? (
+                    Array.isArray((inp as ComboInputMeta).comboOptions) &&
+                    ((inp as ComboInputMeta).comboOptions as unknown[]).length > 0 ? (
                       <>
                         <span
                           /* 2026-08-16 R-ardot71: drop `truncate` so a long
@@ -525,7 +528,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                         <DarkSelect
                           value={typeof v === "string" ? v : ""}
                           onChange={() => undefined}
-                          options={(inp as any).comboOptions as string[]}
+                          options={(inp as ComboInputMeta).comboOptions as string[]}
                           disabled
                           className="!h-[22px] !py-0 !text-[11px] flex-1 min-w-0"
                           popoverMinWidth={220}

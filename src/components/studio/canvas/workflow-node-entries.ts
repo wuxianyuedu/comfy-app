@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 /* Extracted input/output row computation for FlowNode (workflow-node.tsx).
  * Split out of the 1276-line FlowNode component (T12) so the renderer only
@@ -11,18 +10,18 @@ export interface FlowNodeEntries {
   /** raw_inputs (per-node metadata with localized labels) keyed by API `name`. */
   rawMeta: Record<string, RawInputMeta>;
   /** Composed input rows: rawInputs (server-paired widget values) first, then data.inputs. */
-  allEntries: [string, any][];
+  allEntries: [string, unknown][];
   /** Pure-typed port rows (rawInputs[i].widget absent) — get a Handle on the left edge. */
-  connEntries: [string, any][];
+  connEntries: [string, unknown][];
   /** Rows that back a widgets_values slot (rawInputs[i].widget present). */
-  widgetEntries: [string, any][];
+  widgetEntries: [string, unknown][];
   /** connEntries minus names that also appear as widgets (R50 dedupe). */
-  uniqueConnEntries: [string, any][];
-  uniqueWidgetEntries: [string, any][];
+  uniqueConnEntries: [string, unknown][];
+  uniqueWidgetEntries: [string, unknown][];
   /** Legacy combined list — kept for the overflow-handle fallback. */
-  orderedEntries: [string, any][];
+  orderedEntries: [string, unknown][];
   /** No cap — every widget renders (DaSiWa etc. show full parameter list). */
-  visibleWidgetEntries: [string, any][];
+  visibleWidgetEntries: [string, unknown][];
   /** LoadImage synthetic `preview: true` entries (inline thumbnail / placeholder). */
   imagePreviewEntries: RawInputMeta[];
   /** Output ports: static inferOutputTypeAll table → rawOutputs → empty. */
@@ -41,17 +40,17 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
     return out;
   }, [data.rawInputs]);
 
-  const allEntries: [string, any][] = useMemo(() => {
+  const allEntries: [string, unknown][] = useMemo(() => {
     if (data.rawInputs && data.rawInputs.length > 0) {
       return data.rawInputs.map((rawInput) => {
         // Server-paired widget value — present for EVERY widget-type input,
         // connected or not.  Show it regardless of link state.
         if (rawInput.widgetValue !== undefined) {
-          return [rawInput.name, rawInput.widgetValue] as [string, any];
+          return [rawInput.name, rawInput.widgetValue] as [string, unknown];
         }
         // Pure-connection inputs carry no widget value — emit an array so
         // the conn/widget splitter keeps them as wire rows with a Handle.
-        return [rawInput.name, rawInput.isConnection ? [] : ""] as [string, any];
+        return [rawInput.name, rawInput.isConnection ? [] : ""] as [string, unknown];
       });
     }
     const fromGraph = Object.entries(data.inputs ?? {});

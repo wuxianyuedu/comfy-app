@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 "use client";
 
 /**
@@ -190,11 +189,11 @@ export default function WorkflowCanvas({
   }, []);
 
   const handleFieldChange = useCallback(
-    (nodeId: string, fieldKey: string, value: any) => {
+    (nodeId: string, fieldKey: string, value: unknown) => {
       setNodes((nds) =>
         nds.map((node) => {
           if (node.id !== nodeId) return node;
-          const d = { ...(node.data as any) };
+          const d = { ...node.data } as NodeData & Record<string, unknown>;
           d.inputs = { ...d.inputs, [fieldKey]: value };
           return { ...node, data: d };
         })
