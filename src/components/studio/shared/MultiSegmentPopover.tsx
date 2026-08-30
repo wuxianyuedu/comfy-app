@@ -96,8 +96,20 @@ function MultiSegmentPopoverInner({
         setOpen(false);
       }
     };
+    /* 节点失去焦点（Tab 离开、画布切到另一节点）时也要收起下拉，单靠
+     *  mousedown 不够：React Flow 画布可能吞掉点击事件，而键盘导航会触发
+     *  focus 移动但不会触发 mousedown。 */
+    const onFocusIn = (e: FocusEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
     document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
+    document.addEventListener("focusin", onFocusIn);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("focusin", onFocusIn);
+    };
   }, [open]);
 
   const handleToggle = () => {
