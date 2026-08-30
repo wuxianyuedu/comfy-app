@@ -18,8 +18,8 @@ afterEach(cleanup);
 vi.mock("~/trpc/vanilla", () => {
   const pending = <T,>() =>
   // 永不 resolve:让挂载期请求保持 pending,渲染路径不依赖其结果
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- never-resolve pending 桩
   new Promise<T>(() => {
-    // eslint-disable-next-line @typescript-eslint/no-empty-function -- 永不 resolve 的 pending 桩
   });
   const query = () => vi.fn(() => pending());
   return {
