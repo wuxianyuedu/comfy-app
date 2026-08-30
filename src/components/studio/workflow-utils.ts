@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 /* Extracted pure module-level helpers — originally declared inside
  * WorkflowCanvasEditor.tsx.  No JSX, no React hooks. */
@@ -12,6 +11,13 @@ import type {
   WorkflowGroup,
   NodeJsonViewerRequest,
 } from "./workflow-types";
+/** 宽松对象视图：`typeof v === "object" && v !== null`（含数组）→ Record 视图，
+ *  否则 null。与旧 any 代码 `x?.prop` / `Object.entries(x ?? {})` 的运行时语义
+ *  一致（§5.6：graph / JSON 值一律 unknown + 守卫）。 */
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return typeof v === "object" && v !== null ? (v as Record<string, unknown>) : null;
+}
+
 export function rectToAnchor(rect: DOMRect): NodeJsonViewerRequest["anchorRect"] {
   return {
     left: rect.left,
@@ -79,7 +85,7 @@ export const KNOWN_PACKAGE_HEURISTIC: Record<string, string> = {
  *  treats that as the built-in hint and hides the label entirely. */
 export function resolveNodePackage(
   classType: string,
-  properties?: Record<string, any>
+  properties?: Record<string, unknown>
 ): string {
   const fromManifest = getCustomNodePackage(classType);
   if (fromManifest) return fromManifest;
@@ -224,7 +230,7 @@ export function inferOutputTypeAll(classType: string): Record<string, string> {
  *   - booleans → ✓ / ✕ icon
  *   - long strings → first 50 chars + ellipsis (full text in title)
  *   - objects → "{...}" */
-export function renderWidgetValue(value: any): string {
+export function renderWidgetValue(value: unknown): string {
   if (value === undefined || value === null) return "—";
   if (typeof value === "boolean") return value ? "✓" : "✕";
   if (typeof value === "number") {
@@ -245,7 +251,9 @@ export function renderWidgetValue(value: any): string {
   }
   if (Array.isArray(value)) return "[…]";
   if (typeof value === "object") return "{…}";
-  return String(value);
+  // 剩余只可能是 bigint / symbol / function —— 均带自有 toString，与
+  // String(value) 运行时一致（显式收窄以满足 no-base-to-string）。
+  return (value as { toString(): string }).toString();
 }
 
 /** Choose a text color for the value cell based on its JS type.  The
@@ -253,7 +261,7 @@ export function renderWidgetValue(value: any): string {
  *  column while still being easy to scan at a glance — we keep all
  *  hues inside a low-saturation palette so the chip never looks like
  *  a rainbow.  Returns a CSS color (rgba) suitable for inline style. */
-export function valueCellColor(value: any): string {
+export function valueCellColor(value: unknown): string {
   if (value === undefined || value === null) return "rgba(255,255,255,0.30)";
   if (typeof value === "boolean") return value ? "#86efac" /* green-300 */ : "#fca5a5" /* red-300 */;
   if (typeof value === "number") return "#fcd34d" /* amber-300 */;
@@ -429,7 +437,7 @@ export function mixHex(colorA: string, colorB: string, ratio: number): string {
  * execution-graph topology regardless of the imported rawJson layout). */
 export function computeKahnLayout(
   realNodes: ComfyGraphNode[],
-  graph: Record<string, any>,
+  graph: Record<string, unknown>,
   colW: number,
   rowH: number,
   padX: number,
@@ -443,8 +451,8 @@ export function computeKahnLayout(
     outAdj[node.id] = new Set();
   }
   for (const [id, raw] of Object.entries(graph)) {
-    const inputs = (raw)?.inputs;
-    if (!inputs || typeof inputs !== "object") continue;
+    const inputs = asRecord(asRecord(raw)?.inputs);
+    if (!inputs) continue;
     for (const value of Object.values(inputs)) {
       if (
         Array.isArray(value) &&
@@ -508,8 +516,8 @@ export function buildEdges(
   let i = 0;
   for (const [nodeId, raw] of Object.entries(detail.graph ?? {})) {
     if (!raw || typeof raw !== "object") continue;
-    const inputs = (raw).inputs;
-    if (!inputs || typeof inputs !== "object") continue;
+    const inputs = asRecord(raw.inputs);
+    if (!inputs) continue;
     for (const [inputName, value] of Object.entries(inputs)) {
       if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
       const srcId = value[0];
@@ -605,7 +613,7 @@ export function buildEdges(
  * "← <title> #id" next to that row and so the edge colour can be chosen
  * by data type.  Inputs that aren't connections are skipped. */
 export function buildInputSources(
-  inputs: Record<string, any> | undefined,
+  inputs: Record<string, unknown> | undefined,
   nodesById: Record<string, ComfyGraphNode>
 ): Record<string, { id: string; title: string; slot: number; classType?: string }> {
   const out: Record<string, { id: string; title: string; slot: number; classType?: string }> = {};
@@ -634,12 +642,12 @@ export function buildInputSources(
 export function buildConnectedOutputs(
   detail: WorkflowDetail,
   nodesById: Record<string, ComfyGraphNode>,
-  rawMetaById: Record<string, { widgets_values: any[]; outputs: RawOutputMeta[]; flags?: Record<string, any>; properties?: Record<string, any> }>,
+  rawMetaById: Record<string, { widgets_values: unknown[]; outputs: RawOutputMeta[]; flags?: Record<string, unknown>; properties?: Record<string, unknown> }>,
   outSlotNameById?: Record<string, string[]>
 ): Record<string, Set<string>> {
   const map: Record<string, Set<string>> = {};
   for (const raw of Object.values(detail.graph ?? {})) {
-    const inp = (raw)?.inputs ?? {};
+    const inp = asRecord(asRecord(raw)?.inputs) ?? {};
     for (const value of Object.values(inp)) {
       if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
       const srcId = value[0];
@@ -679,7 +687,7 @@ export function buildConnectedOutputs(
 export function inferSourceOutNames(
   detail: WorkflowDetail,
   nodesById: Record<string, ComfyGraphNode>,
-  rawMetaById: Record<string, { widgets_values: any[]; outputs: RawOutputMeta[]; flags?: Record<string, any> }>
+  rawMetaById: Record<string, { widgets_values: unknown[]; outputs: RawOutputMeta[]; flags?: Record<string, unknown> }>
 ): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const [nodeId, node] of Object.entries(nodesById)) {
@@ -691,7 +699,7 @@ export function inferSourceOutNames(
     // 静态 + raw 都没有，从消费者（下游节点）的输入键反推
     const bySlot: Record<number, string[]> = {};
     for (const consumerRaw of Object.values(detail.graph ?? {})) {
-      const inp = (consumerRaw)?.inputs ?? {};
+      const inp = asRecord(asRecord(consumerRaw)?.inputs) ?? {};
       for (const [inputKey, value] of Object.entries(inp)) {
         if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
         if (value[0] !== nodeId) continue;

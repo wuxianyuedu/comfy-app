@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 /**
  * Subgraph (inner workflow) parsing helpers — extracted from
  * workflow-detail.ts (T12 batch 4).
@@ -8,8 +7,21 @@
  * detail builder serves.  All are free of I/O (positions overlay is passed
  * in), so the caller can cache the serialized result.
  */
-import { pairWidgetValues } from "@/lib/comfyui/raw";
+import {
+  asRecord,
+  pairWidgetValues,
+  toStringValue,
+  type ApiWorkflowNode,
+  type RawNode,
+  type RawSubgraphDef,
+} from "@/lib/comfyui/raw";
 import { inferIsMultiline } from "@/lib/comfyui/types";
+import {
+  type DetailNodeView,
+  type RawInputEntry,
+  type RawNodeMeta,
+  type RawOutputEntry,
+} from "@/lib/comfyui/workflow-detail-raw";
 
 /* IMAGE-input thumbnail preview (2026-08-10 R27, narrowed in R28).
  * Mirrors the parent route.  We surface the LoadImage upstream filename as
@@ -66,7 +78,7 @@ export interface BoundaryLinkInfo {
  * the wrapper).  The clean approach is to treat the boundary
  * PINS (definitions.subgraphs[u].inputs / .outputs) as separate
  * first-class entities — see also `boundaryPins` below. */
-export function parseSubgraphLinks(sub: any): {
+export function parseSubgraphLinks(sub: RawSubgraphDef): {
   linkById: Record<number, SubgraphLinkEntry>;
   boundaryLinkInfoById: Record<number, BoundaryLinkInfo>;
 } {
@@ -74,14 +86,15 @@ export function parseSubgraphLinks(sub: any): {
   const boundaryLinkInfoById: Record<number, BoundaryLinkInfo> = {};
 
   for (const lk of Array.isArray(sub.links) ? sub.links : []) {
-    if (!lk || typeof lk !== "object") continue;
-    const id = Number((lk).id);
+    const rec = asRecord(lk);
+    if (!rec) continue;
+    const id = Number(rec.id);
     if (!Number.isFinite(id)) continue;
-    const originId = Number((lk).origin_id);
-    const originSlot = Number((lk).origin_slot) || 0;
-    const targetId = Number((lk).target_id);
-    const targetSlot = Number((lk).target_slot) || 0;
-    const type = String((lk).type ?? "*");
+    const originId = Number(rec.origin_id);
+    const originSlot = Number(rec.origin_slot) || 0;
+    const targetId = Number(rec.target_id);
+    const targetSlot = Number(rec.target_slot) || 0;
+    const type = toStringValue(rec.type ?? "*");
     linkById[id] = {
       src: Number.isFinite(originId) ? String(originId) : "?",
       slot: originSlot,
@@ -117,32 +130,32 @@ export function parseSubgraphLinks(sub: any): {
  * *name* (which becomes the React Flow edge's targetHandle /
  * sourceHandle).  Modern ComfyUI puts an `idx` on each slot entry;
  * older versions fall back to array order (idx=0,1,2,...). */
-export function parseSubgraphSlots(sub: any): {
+export function parseSubgraphSlots(sub: RawSubgraphDef): {
   inputNameByNodeSlot: Record<string, string[]>;
   outputNameByNodeSlot: Record<string, string[]>;
-  inputWidgetValueByNodeSlot: Record<string, any[]>;
+  inputWidgetValueByNodeSlot: Record<string, unknown[]>;
 } {
   const inputNameByNodeSlot: Record<string, string[]> = {};
   const outputNameByNodeSlot: Record<string, string[]> = {};
   /** Per-node lookup of a raw input/output index → widget value (for
    *  inputs that *also* have boundary wires, e.g. CLIPTextEncode's text). */
-  const inputWidgetValueByNodeSlot: Record<string, any[]> = {};
+  const inputWidgetValueByNodeSlot: Record<string, unknown[]> = {};
 
-  const innerNodes = Array.isArray(sub.nodes) ? sub.nodes : [];
+  const innerNodes: RawNode[] = Array.isArray(sub.nodes) ? sub.nodes : [];
   for (const rn of innerNodes) {
     if (!rn?.id) continue;
     const nodeId = String(rn.id);
     if (Array.isArray(rn.inputs)) {
       const sorted = [...rn.inputs].sort(
-        (a: any, b: any) => (a?.idx ?? 0) - (b?.idx ?? 0)
+        (a, b) => (a?.idx ?? 0) - (b?.idx ?? 0)
       );
       inputNameByNodeSlot[nodeId] = sorted.map(
-        (x: any) => (typeof x?.name === "string" ? x.name : "")
+        (x) => (typeof x?.name === "string" ? x.name : "")
       );
       // Snapshot widget values aligned with slot order so the boundary
       // pass can also surface a default `value` (CLIPTextEncode's `text`
       // sits here when the wrapper exposes the prompt as an input).
-      inputWidgetValueByNodeSlot[nodeId] = sorted.map((x: any, i: number) => {
+      inputWidgetValueByNodeSlot[nodeId] = sorted.map((x, i) => {
         if (!x || typeof x.name !== "string") return undefined;
         if (!x.widget) return undefined;
         const wv = Array.isArray(rn.widgets_values) ? rn.widgets_values : [];
@@ -151,10 +164,10 @@ export function parseSubgraphSlots(sub: any): {
     }
     if (Array.isArray(rn.outputs)) {
       const sorted = [...rn.outputs].sort(
-        (a: any, b: any) => (a?.idx ?? 0) - (b?.idx ?? 0)
+        (a, b) => (a?.idx ?? 0) - (b?.idx ?? 0)
       );
       outputNameByNodeSlot[nodeId] = sorted.map(
-        (x: any) => (typeof x?.name === "string" ? x.name : "")
+        (x) => (typeof x?.name === "string" ? x.name : "")
       );
     }
   }
@@ -163,15 +176,15 @@ export function parseSubgraphSlots(sub: any): {
 }
 
 export interface SubgraphGraphResult {
-  graph: Record<string, any>;
-  rawInputsById: Record<string, any[]>;
-  rawOutputsById: Record<string, any[]>;
-  rawNodeMeta: { id: string; widgets_values: any[]; outputs: any[]; flags: Record<string, any>; mode: number }[];
+  graph: Record<string, ApiWorkflowNode>;
+  rawInputsById: Record<string, RawInputEntry[]>;
+  rawOutputsById: Record<string, RawOutputEntry[]>;
+  rawNodeMeta: RawNodeMeta[];
   sizeById: Record<string, [number, number]>;
-  nodes: any[];
+  nodes: DetailNodeView[];
   inputEndpointNodes: Set<string>;
   outputEndpointNodes: Set<string>;
-  boundaryInputByNode: Record<string, { name: string; type: string; value: any }>;
+  boundaryInputByNode: Record<string, { name: string; type: string; value: unknown }>;
   boundaryOutputByNode: Record<string, { name: string; type: string }>;
   connectsToByNode: Record<string, string>;
   connectsFromByNode: Record<string, string>;
@@ -190,20 +203,20 @@ export interface SubgraphGraphResult {
  * link table.
  */
 export function buildSubgraphGraph(
-  sub: any,
+  sub: RawSubgraphDef,
   linkById: Record<number, SubgraphLinkEntry>
 ): SubgraphGraphResult {
-  const innerNodes = Array.isArray(sub.nodes) ? sub.nodes : [];
-  const graph: Record<string, any> = {};
-  const rawInputsById: Record<string, any[]> = {};
+  const innerNodes: RawNode[] = Array.isArray(sub.nodes) ? sub.nodes : [];
+  const graph: Record<string, ApiWorkflowNode> = {};
+  const rawInputsById: Record<string, RawInputEntry[]> = {};
 
-  const rawOutputsById: Record<string, any[]> = {};
+  const rawOutputsById: Record<string, RawOutputEntry[]> = {};
   /* Exact ComfyUI box size ([w, h]) per inner node — forwarded so the
    *  inner-canvas nodes match their imported config dimensions.  Pulled
    *  from the raw inner-node JSON (sub.nodes), since the synthetic `graph`
    *  map below only keeps class_type + inputs. */
   const sizeById: Record<string, [number, number]> = {};
-  const rawNodeMeta: { id: string; widgets_values: any[]; outputs: any[]; flags: Record<string, any>; mode: number }[] = [];
+  const rawNodeMeta: RawNodeMeta[] = [];
   /* Boundary node-id collectors — populated as we walk nodes + links so
    * the client can mark "this node is on the inputs/outputs boundary of
    * the subgraph" without re-doing the link scan.  A node is considered
@@ -222,7 +235,7 @@ export function buildSubgraphGraph(
    * ignores them now. */
   const inputEndpointNodes = new Set<string>();
   const outputEndpointNodes = new Set<string>();
-  const boundaryInputByNode: Record<string, { name: string; type: string; value: any }> = {};
+  const boundaryInputByNode: Record<string, { name: string; type: string; value: unknown }> = {};
   const boundaryOutputByNode: Record<string, { name: string; type: string }> = {};
   const connectsToByNode: Record<string, string> = {};
   const connectsFromByNode: Record<string, string> = {};
@@ -235,7 +248,7 @@ export function buildSubgraphGraph(
     const classType: string = rn.type ?? "?";
     /* Capture the raw litegraph box size so the client can paint the node
      *  at its exact ComfyUI dimensions (see `sizeById` declaration above). */
-    const rnSize = Array.isArray((rn).size) && (rn).size.length >= 2 ? (rn).size : undefined;
+    const rnSize = Array.isArray(rn.size) && rn.size.length >= 2 ? rn.size : undefined;
     if (rnSize) sizeById[nodeId] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
 
     /* Per-input metadata.  We tag a connection as "internal" (originates
@@ -244,10 +257,10 @@ export function buildSubgraphGraph(
      * the parent wrapper).  Boundary connections are still recorded as
      * isConnection for UI labelling but skipped when writing inputMap
      * so the value isn't bound to a sentinel source. */
-    const rawInputs: any[] = [];
-    const inputMap: Record<string, any> = {};
+    const rawInputs: RawInputEntry[] = [];
+    const inputMap: Record<string, unknown> = {};
     if (Array.isArray(rn.inputs)) {
-      const rnWidgets = Array.isArray((rn).widgets_values) ? (rn).widgets_values : [];
+      const rnWidgets = Array.isArray(rn.widgets_values) ? rn.widgets_values : [];
       /* Sentinel-aware pairing: ComfyUI inserts a `control_after_generate`
        *  slot into `widgets_values` right after a seed-type INT widget, so
        *  a naive index match would shift every later widget by one.  Use the
@@ -261,19 +274,7 @@ export function buildSubgraphGraph(
         const isConn = inp.link != null;
         const widgetName = inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
         const widgetValue = widgetName ? wvMap[widgetName] : undefined;
-        const entry: {
-          name: string;
-          imageRef?: { filename: string; subfolder: string; type: string };
-          preview?: boolean;
-          label?: string;
-          localized?: string;
-          type: string;
-          isConnection: boolean;
-          isBoundary: boolean;
-          widget?: { name: string };
-          widgetValue?: unknown;
-          multiline?: boolean;
-        } = {
+        const entry: RawInputEntry = {
           name: inp.name,
           label: typeof inp.label === "string" ? inp.label : undefined,
           localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
@@ -349,7 +350,7 @@ export function buildSubgraphGraph(
     graph[nodeId] = { class_type: classType, inputs: inputMap };
 
     /* Per-output metadata. */
-    const rawOutputs: any[] = [];
+    const rawOutputs: RawOutputEntry[] = [];
     if (Array.isArray(rn.outputs)) {
       for (const o of rn.outputs) {
         if (!o || typeof o.name !== "string") continue;
@@ -385,7 +386,7 @@ export function buildSubgraphGraph(
           name: o.name,
           localized: typeof o.localized_name === "string" ? o.localized_name : undefined,
           type: typeof o.type === "string" ? o.type : "*",
-          links: Array.isArray(o.links) ? o.links.map((n: any) => Number(n) || 0) : [],
+          links: Array.isArray(o.links) ? o.links.map((n) => Number(n) || 0) : [],
           isBoundary: isBoundaryOut,
         });
       }
@@ -428,8 +429,11 @@ export function buildSubgraphGraph(
         id: nodeId,
         widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
         outputs: rawOutputs,
-        flags: rn && typeof rn.flags === "object" && rn.flags !== null ? (rn.flags as Record<string, any>) : {},
-        mode: typeof (rn).mode === "number" ? (rn).mode : 0,
+        flags:
+          typeof rn.flags === "object" && rn.flags !== null
+            ? rn.flags
+            : {},
+        mode: typeof rn.mode === "number" ? rn.mode : 0,
       });
     }
   }
@@ -439,22 +443,22 @@ export function buildSubgraphGraph(
    *  `is_input_endpoint` / `is_output_endpoint` (2026-08-05) so the
    *  client can draw INPUTS / OUTPUTS wfGroup rectangles around the
    *  two clusters without re-walking the link table. */
-  const nodes = Object.entries(graph).map(([nodeId, n]) => {
+  const nodes: DetailNodeView[] = Object.entries(graph).map(([nodeId, n]) => {
     // Same class_type / type fallback as the parent route — newer ComfyUI
     // exports put the class name in `class_type`, but older / rgthree-comfy
     // exports use `type` only.  Without this fallback subgraph wrappers
     // come back with classType="?" and `is_subgraph: false`, so the
     // inner canvas paints them as full WorkflowNodes instead of compact
-    // WorkflowSubgraphNode chips.
-    const classType: string =
-      (n?.class_type as string) || (n?.type as string) || "?";
+    // WorkflowSubgraphNode chips.  (graph entries are built above with a
+    // string class_type, so it is always present here.)
+    const classType: string = n.class_type;
     const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
     const isInEp = inputEndpointNodes.has(nodeId);
     const isOutEp = outputEndpointNodes.has(nodeId);
     return {
       id: nodeId,
       class_type: classType,
-      title: n?._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
+      title: n._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
       is_subgraph: isUuidClass,
       raw_inputs: rawInputsById[nodeId] ?? [],
       is_input_endpoint: isInEp,
@@ -524,7 +528,7 @@ export interface BoundaryPin {
  * inner node).  Also builds the inverse `pinIdByLinkId` map used to
  * resolve the sentinel-link table into `boundaryLinks`.
  */
-export function parseSubgraphPins(sub: any): {
+export function parseSubgraphPins(sub: RawSubgraphDef): {
   boundaryPins: { inputs: BoundaryPin[]; outputs: BoundaryPin[] };
   pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }>;
 } {
@@ -533,33 +537,34 @@ export function parseSubgraphPins(sub: any): {
     outputs: [],
   };
   const pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }> = {};
-  const rawSubInputs = Array.isArray(sub.inputs) ? sub.inputs : [];
-  const rawSubOutputs = Array.isArray(sub.outputs) ? sub.outputs : [];
+  const rawSubInputs: unknown[] = Array.isArray(sub.inputs) ? sub.inputs : [];
+  const rawSubOutputs: unknown[] = Array.isArray(sub.outputs) ? sub.outputs : [];
 
-  const normalizePin = (p: any): BoundaryPin | null => {
-    if (!p || typeof p !== "object") return null;
-    const id = typeof (p).id === "string" ? (p).id : "";
+  const normalizePin = (p: unknown): BoundaryPin | null => {
+    const rec = asRecord(p);
+    if (!rec) return null;
+    const id = typeof rec.id === "string" ? rec.id : "";
     if (!id) return null;
-    const posRaw = Array.isArray((p).pos) ? (p).pos : [0, 0];
+    const posRaw: unknown[] = Array.isArray(rec.pos) ? rec.pos : [0, 0];
     const pos: [number, number] = [
       Number(posRaw[0]) || 0,
       Number(posRaw[1]) || 0,
     ];
-    const linkIdsRaw = Array.isArray((p).linkIds)
-      ? (p).linkIds
-      : (p).link !== undefined
-      ? [(p).link]
-      : Array.isArray((p).links)
-      ? (p).links
+    const linkIdsRaw: unknown[] = Array.isArray(rec.linkIds)
+      ? rec.linkIds
+      : rec.link !== undefined
+      ? [rec.link]
+      : Array.isArray(rec.links)
+      ? rec.links
       : [];
     return {
       id,
-      name: typeof (p).name === "string" ? (p).name : "",
-      type: typeof (p).type === "string" ? (p).type : "*",
-      localized: typeof (p).localized_name === "string" ? (p).localized_name : undefined,
-      label: typeof (p).label === "string" ? (p).label : undefined,
+      name: typeof rec.name === "string" ? rec.name : "",
+      type: typeof rec.type === "string" ? rec.type : "*",
+      localized: typeof rec.localized_name === "string" ? rec.localized_name : undefined,
+      label: typeof rec.label === "string" ? rec.label : undefined,
       pos,
-      linkIds: linkIdsRaw.map((n: any) => Number(n) || 0).filter((n: number) => n > 0),
+      linkIds: linkIdsRaw.map((n) => Number(n) || 0).filter((n) => n > 0),
     };
   };
   for (const p of rawSubInputs) {
@@ -584,6 +589,17 @@ export function parseSubgraphPins(sub: any): {
   return { boundaryPins, pinIdByLinkId };
 }
 
+/** Sentinel-bearing wire resolved to a boundary pin ↔ inner-node slot
+ *  pair (client renders a React Flow edge from the pin's handle to the
+ *  inner node's matching input/output handle). */
+export interface BoundaryLink {
+  linkId: number;
+  kind: "input" | "output";
+  pinId: string;
+  innerNodeId: string;
+  innerSlotName: string;
+}
+
 /**
  * Resolve the sentinel-link table collected up-front into a list of
  * `boundaryLinks` for the client.  Each entry maps one boundary-bearing
@@ -595,20 +611,8 @@ export function buildBoundaryLinks(
   pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }>,
   inputNameByNodeSlot: Record<string, string[]>,
   outputNameByNodeSlot: Record<string, string[]>
-): {
-  linkId: number;
-  kind: "input" | "output";
-  pinId: string;
-  innerNodeId: string;
-  innerSlotName: string;
-}[] {
-  const boundaryLinks: {
-    linkId: number;
-    kind: "input" | "output";
-    pinId: string;
-    innerNodeId: string;
-    innerSlotName: string;
-  }[] = [];
+): BoundaryLink[] {
+  const boundaryLinks: BoundaryLink[] = [];
   for (const [linkIdStr, info] of Object.entries(boundaryLinkInfoById)) {
     const linkId = Number(linkIdStr);
     const pinInfo = pinIdByLinkId[linkId];
@@ -640,7 +644,7 @@ export function buildBoundaryLinks(
  * subgraphs' positions can't leak in.
  */
 export function extractSubgraphAnnotations(
-  sub: any,
+  sub: RawSubgraphDef,
   tplPositions: Record<string, [number, number]>
 ): {
   groups: { id: string; title: string; bounding: [number, number, number, number]; color: string }[];
@@ -650,36 +654,31 @@ export function extractSubgraphAnnotations(
   /* Inner group frames. */
   const groups: { id: string; title: string; bounding: [number, number, number, number]; color: string }[] = [];
   if (Array.isArray(sub.groups)) {
-    sub.groups.forEach((g: any, idx: number) => {
+    sub.groups.forEach((g: unknown, idx: number) => {
+      const rec = asRecord(g);
+      if (!rec) return;
 
-      if (!g) return;
-
-      const bounds = Array.isArray(g.bounding) && g.bounding.length >= 4 ? g.bounding : [0, 0, 0, 0];
+      const bounds: unknown[] =
+        Array.isArray(rec.bounding) && rec.bounding.length >= 4 ? rec.bounding : [0, 0, 0, 0];
 
       groups.push({
-
-        id: String(g.id ?? `g-${idx}`),
-
-        title: typeof g.title === "string" ? g.title : "",
-
+        id: toStringValue(rec.id ?? `g-${idx}`),
+        title: typeof rec.title === "string" ? rec.title : "",
         bounding: [Number(bounds[0]) || 0, Number(bounds[1]) || 0, Number(bounds[2]) || 0, Number(bounds[3]) || 0],
-
-        color: typeof g.color === "string" ? g.color : "#3b3b3b",
-
+        color: typeof rec.color === "string" ? rec.color : "#3b3b3b",
       });
-
     });
   }
 
   /* Inner note annotations. */
   const notes: { id: string; title: string; text: string; pos: [number, number]; size: [number, number]; color: string }[] = [];
-  const innerNodes = Array.isArray(sub.nodes) ? sub.nodes : [];
+  const innerNodes: RawNode[] = Array.isArray(sub.nodes) ? sub.nodes : [];
   for (const n of innerNodes) {
     if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) continue;
     const pos = Array.isArray(n.pos) && n.pos.length >= 2 ? n.pos : [0, 0];
     const size = Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
     const wv = Array.isArray(n.widgets_values) ? n.widgets_values[0] : "";
-    const text = typeof wv === "string" ? wv : String(wv ?? "");
+    const text = typeof wv === "string" ? wv : toStringValue(wv ?? "");
     const title = typeof n.title === "string" ? n.title : "";
     notes.push({
       id: String(n.id),
@@ -694,7 +693,9 @@ export function extractSubgraphAnnotations(
   /* Positions: raw.pos per node, layered with user-dragged positions
    *  from `tpl.positions`. */
   const positions: Record<string, [number, number]> = {};
-  const innerNodeIdSet = new Set(innerNodes.filter((rn: any) => rn?.id != null).map((rn: any) => String(rn.id)));
+  const innerNodeIdSet = new Set(
+    innerNodes.filter((rn) => rn?.id != null).map((rn) => String(rn.id))
+  );
   for (const [id, pos] of Object.entries(tplPositions)) {
     if (innerNodeIdSet.has(id) && Array.isArray(pos) && pos.length >= 2) {
       positions[id] = [Number(pos[0]) || 0, Number(pos[1]) || 0];

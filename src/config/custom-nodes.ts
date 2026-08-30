@@ -70,8 +70,12 @@ export function specToField(s: PortSpec): FieldDef {
     label: s.name,
     type: (s.widget!) ?? "string",
     options: s.options,
+    /* 与 String(s.default) 运行时一致（default 来自 manifest JSON，无 symbol），
+     * 收窄以满足 no-base-to-string。 */
     placeholder:
-      s.default !== undefined && s.default !== null ? String(s.default) : undefined,
+      s.default !== undefined && s.default !== null
+        ? (s.default as { toString(): string }).toString()
+        : undefined,
     group: "参数",
     // Connection-only ports are rendered as handles, not editor fields.
     hidden: !s.widget,

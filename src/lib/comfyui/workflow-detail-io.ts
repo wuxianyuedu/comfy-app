@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 /**
  * workflowIO enrichment — extracted from workflow-detail.ts (T12 batch 4).
  *
@@ -24,44 +23,30 @@
  * and the canvas auto-spawn logic (first output's `type` decides whether
  * the downstream node is an image or a video node).
  */
+import { asRecord } from "@/lib/comfyui/raw";
+import {
+  type RawInputEntry,
+  type RawNodeMeta,
+} from "@/lib/comfyui/workflow-detail-raw";
 
 const MULTILINE_HINT = /(prompt|text|caption|描述|提示)/i;
 
+/** 存库 workflowIO 列的单条记录（PATCH 原样落库的「哪根 pin 被暴露」）。 */
+export interface WorkflowIORawEntry {
+  direction: "input" | "output";
+  kind: string;
+  nodeId: string;
+  name: string;
+  label?: string;
+  displayOrder?: number;
+  value?: unknown;
+}
+
 export interface WorkflowIOEnrichParams {
-  workflowIORaw: Record<
-    string,
-    {
-      direction: "input" | "output";
-      kind: string;
-      nodeId: string;
-      name: string;
-      label?: string;
-      displayOrder?: number;
-      value?: unknown;
-    }
-  >;
-  rawInputsById: Record<
-    string,
-    {
-      name: string;
-      label?: string;
-      localized?: string;
-      type: string;
-      isConnection: boolean;
-      widget?: { name: string };
-      widgetValue?: unknown;
-      multiline?: boolean;
-    }[]
-  >;
-  rawNodeMeta: {
-    id: string;
-    widgets_values: any[];
-    outputs: { name: string; localized?: string; label?: string; type: string; links: number[] }[];
-    flags: Record<string, any>;
-    properties: Record<string, any>;
-    mode: number;
-  }[];
-  graph: Record<string, any>;
+  workflowIORaw: Record<string, WorkflowIORawEntry>;
+  rawInputsById: Record<string, RawInputEntry[]>;
+  rawNodeMeta: RawNodeMeta[];
+  graph: Record<string, unknown>;
   nodeTitleById: Record<string, string>;
   nodeTypeById: Record<string, string>;
   comboOptionsForClassField: (
@@ -129,14 +114,18 @@ export async function enrichWorkflowIO(
     // Returns the CANONICAL key in whatever shape the data lives in.
     const full = String(v.nodeId);
     const canonicalNodeId = (() => {
-      for (const dict of [rawInputsById, Object.fromEntries(rawNodeMeta.map((rawNodeMeta) => [rawNodeMeta.id, true])), graph]) {
+      const metaById: Record<string, boolean> = Object.fromEntries(
+        rawNodeMeta.map((meta) => [meta.id, true])
+      );
+      const dicts: Record<string, unknown>[] = [rawInputsById, metaById, graph];
+      for (const dict of dicts) {
         if (!dict) continue;
         if (Object.prototype.hasOwnProperty.call(dict, full)) return full;
       }
       /* Fallback: match `9b9009e4` against `9b9009e4-2d3d-…`.  Requires a
        * word-boundary char (`-`) right after the prefix so `9b9009e4` never
        * collides with `9b9009e44`. */
-      for (const dict of [rawInputsById, Object.fromEntries(rawNodeMeta.map((rawNodeMeta) => [rawNodeMeta.id, true])), graph]) {
+      for (const dict of dicts) {
         if (!dict) continue;
         const hit = Object.keys(dict).find((key) => key.length > full.length && key.startsWith(full) && key.charAt(full.length) === "-");
         if (hit) return hit;
@@ -162,7 +151,7 @@ export async function enrichWorkflowIO(
        * back to the literal sitting in the API graph and infer the type
        * from its JS runtime type (good enough to pick a control). */
       if (defaultValue === undefined) {
-        const gv = (graph)[canonicalNodeId]?.inputs?.[v.name];
+        const gv = asRecord(asRecord(graph[canonicalNodeId])?.inputs)?.[v.name];
         if (gv !== undefined && !Array.isArray(gv)) defaultValue = gv;
       }
       if (type === "*" && defaultValue !== undefined) {
@@ -176,8 +165,8 @@ export async function enrichWorkflowIO(
        *  its class type.  ComfyUI unreachable → options stays undefined → the
        *  form falls back to a plain text control. */
       if (type === "COMBO") {
-        if (ri && (ri as any).comboOptions) {
-          options = (ri as any).comboOptions;
+        if (ri?.comboOptions) {
+          options = ri.comboOptions;
         } else {
           const byClass = await comboOptionsForClassField(nodeTypeById[canonicalNodeId], v.name);
           /* R-ardot73-C: wrapper nodes (esp. `comfy-core` subgraphs whose

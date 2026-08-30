@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 /**
  * COMBO option resolvers — extracted from workflow-detail.ts (T12 batch 4).
  *
@@ -19,9 +18,9 @@ import { modelFoldersForField } from "@/lib/model-types";
  *  `[["option-a", "option-b"], {...extra}]` → string list. */
 const comboOptionsFromSpec = (spec: unknown): string[] | undefined => {
   if (!Array.isArray(spec)) return undefined;
-  const head = spec[0];
+  const head: unknown = spec[0];
   if (!Array.isArray(head)) return undefined;
-  const opts = head.filter((x: unknown) => typeof x === "string");
+  const opts = head.filter((x): x is string => typeof x === "string");
   return opts.length ? opts : undefined;
 };
 
@@ -105,11 +104,11 @@ export function createComboResolver(): {
     const merged = new Set<string>();
     let found = false;
     for (const def of Object.values(oi)) {
-      const inp = (def as any)?.input;
+      const inp = def.input;
       if (!inp) continue;
       const spec =
-        (inp.required as Record<string, unknown> | undefined)?.[field] ??
-        (inp.optional as Record<string, unknown> | undefined)?.[field];
+        inp.required?.[field] ??
+        inp.optional?.[field];
       const opts = comboOptionsFromSpec(spec);
       if (opts) {
         found = true;

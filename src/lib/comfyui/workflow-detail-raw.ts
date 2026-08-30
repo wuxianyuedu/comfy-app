@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 /**
  * RAW (UI-format) workflow parsing helpers — extracted from
  * workflow-detail.ts (T12 batch 4).
@@ -13,9 +12,79 @@ import {
   fallbackRawToApi,
   fetchWidgetOrderTable,
   mapWidgetValuesByOrder,
+  type ApiWorkflowNode,
+  type RawNode,
+  type RawSubgraphDef,
   type RawWorkflow,
 } from "@/lib/comfyui/raw";
 import { inferInputType, inferIsMultiline } from "@/lib/comfyui/types";
+
+/* ── RAW 解析结果共享形状（workflow-detail-io / workflow-subgraph-parse 复用）── */
+
+/** rawInputsById / raw_inputs 的单条输入元数据（镜像客户端 RawInputMeta）。 */
+export interface RawInputEntry {
+  name: string;
+  label?: string;
+  localized?: string;
+  type: string;
+  isConnection: boolean;
+  /** 哨兵边界线（子图暴露输入/输出）标记，画布渲染 Handle 用 */
+  isBoundary?: boolean;
+  widget?: { name: string };
+  widgetValue?: unknown;
+  multiline?: boolean;
+  imageRef?: { filename: string; subfolder: string; type: string };
+  preview?: boolean;
+  /** R73 wrapper 解析的内部暂存字段：代理目标 (class, field)，COMBO 解析后删除 */
+  __comboClass?: string;
+  __comboField?: string;
+  /** COMBO 候选列表（object_info 解析成功时写入，随 detail 下发） */
+  comboOptions?: string[];
+}
+
+/** outputs[] 单条元数据（镜像客户端 RawOutputMeta；isBoundary 仅子图路径写入）。 */
+export interface RawOutputEntry {
+  name: string;
+  localized?: string;
+  label?: string;
+  type: string;
+  links: number[];
+  isBoundary?: boolean;
+}
+
+/** sparse raw-node 元数据（detail.rawNodes / subgraph rawNodeMeta）。 */
+export interface RawNodeMeta {
+  id: string;
+  widgets_values: unknown[];
+  outputs: RawOutputEntry[];
+  flags: Record<string, unknown>;
+  /** 自定义节点 properties（rgthree Fast Groups Bypasser 等）；子图路径未采集 */
+  properties?: Record<string, unknown>;
+  mode: number;
+}
+
+/** detail.nodes / rawView.nodes / 子图 nodes 的条目形状（镜像客户端 ComfyGraphNode）。 */
+export interface DetailNodeView {
+  id: string;
+  class_type: string;
+  title: string;
+  is_subgraph: boolean;
+  raw_inputs: RawInputEntry[];
+  size?: [number, number];
+  is_input_endpoint?: boolean;
+  is_output_endpoint?: boolean;
+  boundary_input?: { name: string; type: string; value: unknown } | null;
+  boundary_output?: { name: string; type: string } | null;
+  connects_to?: string | null;
+  connects_from?: string | null;
+}
+
+/** R82 RAW 视图数据包（从 rawJson 派生、保留 subgraph wrapper）。 */
+export interface RawViewPacket {
+  nodes: DetailNodeView[];
+  positions: Record<string, [number, number]>;
+  graph: Record<string, ApiWorkflowNode>;
+}
 
 /* IMAGE-input thumbnail preview (2026-08-10 R27, narrowed in R28).  ComfyUI's
  * LoadImage node keeps the uploaded filename in `widgets_values[0]`; we
@@ -54,25 +123,13 @@ const LOAD_IMAGE_NODE_TYPES = new Set([
  * (single fetch per resolver, cached) and stamped as `comboOptions`.
  */
 export async function buildRawInputs(
-  raw: any,
+  raw: RawWorkflow | null,
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string
   ) => Promise<string[] | undefined>
 ): Promise<{
-  rawInputsById: Record<
-    string,
-    {
-      name: string;
-      label?: string;
-      localized?: string;
-      type: string;
-      isConnection: boolean;
-      widget?: { name: string };
-      widgetValue?: unknown;
-      multiline?: boolean;
-    }[]
-  >;
+  rawInputsById: Record<string, RawInputEntry[]>;
   sizeById: Record<string, [number, number]>;
 }> {
   /* Build a `rawInputs` lookup for every graph node.  In raw UI format, each
@@ -82,36 +139,7 @@ export async function buildRawInputs(
    * and `type` is the ComfyUI data-type string used for both connections and
    * widget values.  When the workflow was imported as API JSON only, this
    * map is empty. */
-  const rawInputsById: Record<string, {
-    name: string;
-    label?: string;
-    localized?: string;
-    type: string;
-    isConnection: boolean;
-    /** ComfyUI wrapper-node widget marker (only set on inputs that expose
-     *  an internal widget value back to the author).  When present the
-     *  parent paint can render a `VALUE` cell to the right of the label
-     *  without reaching for rawJson again.  Subgraph proxy pins that are
-     *  plain connections leave this `undefined`. */
-    widget?: { name: string };
-    /** The current value of the widget this input exposes, drawn from
-     *  `widgets_values[k]` where `k` is the running count of widgets
-     *  seen before this row in the inputs[] array.  Undefined when the
-     *  input is a pure connection (no widget).  Type-as-strings keep the
-     *  JSON round-trip lossless; the canvas decides how to colour it
-     *  (bool=green/red, number=amber, string=indigo) via `valueCellColor`. */
-    widgetValue?: unknown;
-    /** 2026-08-10 R18: server-stamped `multiline` flag — TRUE when this
-     *  STRING input should render as a textarea, regardless of value
-     *  length.  Sourced from `inferIsMultiline(classType, name, value)`
-     *  which combines a static table (ComfyUI's own known-multiline
-     *  inputs) with a name heuristic + length heuristic.  API-format
-     *  rawJson does not preserve the original `widgets[i].config
-     *  .multiline` flag, so we backfill here.  Affects widgetEntries
-     *  rendering (WorkflowNode / WorkflowSubgraphNode); the workflowIO enrichment
-     *  below has its own parallel stamp via MULTILINE_HINT. */
-    multiline?: boolean;
-  }[]> = {};
+  const rawInputsById: Record<string, RawInputEntry[]> = {};
   /* ComfyUI/litegraph node `size` ([w, h]) — forwarded so the canvas can
    *  paint each node box at its exact ComfyUI dimensions (the user expects
    *  the card to match the imported config, including oversized boxes with
@@ -142,18 +170,7 @@ export async function buildRawInputs(
         sizeById[String((rn).id)] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
       }
       if (!Array.isArray((rn).inputs)) continue;
-      const list: {
-        name: string;
-        label?: string;
-        localized?: string;
-        type: string;
-        isConnection: boolean;
-        widget?: { name: string };
-        widgetValue?: unknown;
-        multiline?: boolean;
-        imageRef?: { filename: string; subfolder: string; type: string };
-        preview?: boolean;
-      }[] = [];
+      const list: RawInputEntry[] = [];
       const rnWidgets = Array.isArray((rn).widgets_values)
         ? (rn).widgets_values
         : [];
@@ -212,18 +229,7 @@ export async function buildRawInputs(
           if (valueByName.has(widgetName)) widgetValue = valueByName.get(widgetName);
           else if (legacyByName.has(widgetName)) widgetValue = legacyByName.get(widgetName);
         }
-        const entry: {
-          name: string;
-          imageRef?: { filename: string; subfolder: string; type: string };
-          preview?: boolean;
-          label?: string;
-          localized?: string;
-          type: string;
-          isConnection: boolean;
-          widget?: { name: string };
-          widgetValue?: unknown;
-          multiline?: boolean;
-        } = {
+        const entry: RawInputEntry = {
           name: inp.name,
           label: typeof inp.label === "string" ? inp.label : undefined,
           localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
@@ -327,14 +333,14 @@ export async function buildRawInputs(
    * `rn.widgets_values[widgetCounter]` — but for wrapper nodes the latter
    * is empty, leaving every widget row blank until this enrichment runs. */
   if (raw?.definitions?.subgraphs) {
-    const subs = raw.definitions.subgraphs as Record<string, any>;
+    const subs = raw.definitions.subgraphs;
     /* Index internal nodes per subgraph def by id for O(1) lookup. */
-    const internalByIdByKey = new Map<string, Map<string, any>>();
+    const internalByIdByKey = new Map<string, Map<string, RawNode>>();
     for (const subKey of Object.keys(subs)) {
 
       const subDef = subs[subKey];
 
-      const map = new Map<string, any>();
+      const map = new Map<string, RawNode>();
 
       if (Array.isArray(subDef?.nodes)) {
 
@@ -351,10 +357,12 @@ export async function buildRawInputs(
     }
 
     /* Find the subgraph def that belongs to a wrapper's UUID classType. */
-    const resolveSubDef = (classType: string): { key: string; def: any } | null => {
-      if (subs[classType]) return { key: classType, def: subs[classType] };
+    const resolveSubDef = (classType: string): { key: string; def: RawSubgraphDef } | null => {
+      const direct = subs[classType];
+      if (direct) return { key: classType, def: direct };
       for (const k of Object.keys(subs)) {
-        if (subs[k]?.id === classType) return { key: k, def: subs[k] };
+        const cand = subs[k];
+        if (cand?.id === classType) return { key: k, def: cand };
       }
       return null;
     };
@@ -364,7 +372,7 @@ export async function buildRawInputs(
      * 2-slot bundle by advancing the slot counter twice wherever a
      * seed/ noise_seed widget is encountered (those inputs always
      * carry an implicit `control_after_generate` partner slot). */
-    const lookupFieldValue = (internalNode: any, fieldName: string): unknown => {
+    const lookupFieldValue = (internalNode: RawNode | undefined, fieldName: string): unknown => {
       if (!internalNode || !Array.isArray(internalNode.inputs)) return undefined;
       const inputs = internalNode.inputs;
       const wv: unknown[] = Array.isArray(internalNode.widgets_values)
@@ -373,7 +381,7 @@ export async function buildRawInputs(
       /* control_after_generate always sits in the slot AFTER seed. */
       if (fieldName === "control_after_generate") {
         const seedIdx = inputs.findIndex(
-          (i: any) => i && (i.name === "seed" || i.name === "noise_seed")
+          (i) => !!i && (i.name === "seed" || i.name === "noise_seed")
         );
         if (seedIdx < 0) return undefined;
         let slot = 0;
@@ -384,7 +392,7 @@ export async function buildRawInputs(
       }
       /* Generic: count widget slots before the target input. */
       const inputIdx = inputs.findIndex(
-        (i: any) => i?.name === fieldName
+        (i) => i?.name === fieldName
       );
       if (inputIdx < 0) return undefined;
       let slot = 0;
@@ -403,7 +411,7 @@ export async function buildRawInputs(
      * the inner map stays cheap when the workflow has many wrappers. */
     const wrapperNodeIds: string[] = [];
     for (const nodeId of Object.keys(rawInputsById)) {
-      const rn = (raw)?.nodes?.find?.((n: any) => String(n?.id) === nodeId);
+      const rn = raw.nodes.find((n) => String(n?.id) === nodeId);
       if (!rn) continue;
       const classType = typeof rn.type === "string" ? rn.type : "";
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType)) continue;
@@ -411,14 +419,15 @@ export async function buildRawInputs(
     }
 
     for (const nodeId of wrapperNodeIds) {
-      const rn = (raw).nodes.find((n: any) => String(n?.id) === nodeId);
+      const rn = raw.nodes.find((n) => String(n?.id) === nodeId);
+      if (!rn) continue;
       const classType = typeof rn.type === "string" ? rn.type : "";
       const resolved = resolveSubDef(classType);
       if (!resolved) continue;
       const internalById = internalByIdByKey.get(resolved.key);
       if (!internalById) continue;
       const proxyWidgets: Array<[string, string]> = Array.isArray(rn.properties?.proxyWidgets)
-        ? (rn.properties.proxyWidgets as any[])
+        ? (rn.properties.proxyWidgets as unknown[])
             .filter((p): p is [unknown, unknown] => Array.isArray(p) && p.length === 2)
             .map((pair) => [String(pair[0]), String(pair[1])])
         : [];
@@ -450,7 +459,7 @@ export async function buildRawInputs(
         if (!proxy) return entry;
         const [internalNodeId, fieldName] = proxy;
         const internalNode = internalById.get(internalNodeId);
-        const updated: any = { ...entry };
+        const updated: RawInputEntry = { ...entry };
         if (updated.widgetValue === undefined) {
 
           const value = lookupFieldValue(internalNode, fieldName);
@@ -464,17 +473,17 @@ export async function buildRawInputs(
          *  present from the raw JSON). */
         if (internalNode && Array.isArray(internalNode.inputs)) {
           const inp = internalNode.inputs.find(
-            (i: any) => i?.name === fieldName
+            (i) => i?.name === fieldName
           );
-          if (inp?.type) updated.type = inp.type;
-          if (!updated.label && inp?.localized_name) {
+          if (typeof inp?.type === "string") updated.type = inp.type;
+          if (!updated.label && typeof inp?.localized_name === "string") {
             updated.label = inp.localized_name;
           }
           /* Stash the proxy target (internal node class + field) so the
            *  async COMBO-option pass below can resolve candidate lists from
            *  /api/object_info for any COMBO widget on this wrapper. */
-          (updated).__comboClass = internalNode.type;
-          (updated).__comboField = fieldName;
+          updated.__comboClass = internalNode.type;
+          updated.__comboField = fieldName;
         }
         /* Re-stamp multiline if we just learned the value (the base
          *  parser ran before this pass and may have skipped it). */
@@ -493,13 +502,12 @@ export async function buildRawInputs(
        *  ComfyUI is unreachable the temp fields are just dropped and the
        *  consumer falls back to a plain text control. */
       for (const e of updatedList) {
-        const ec = e;
-        if (ec.type === "COMBO" && ec.__comboClass) {
-          const opts = await comboOptionsForClassField(ec.__comboClass, ec.__comboField);
-          if (opts) ec.comboOptions = opts;
+        if (e.type === "COMBO" && e.__comboClass) {
+          const opts = await comboOptionsForClassField(e.__comboClass, e.__comboField ?? "");
+          if (opts) e.comboOptions = opts;
         }
-        delete ec.__comboClass;
-        delete ec.__comboField;
+        delete e.__comboClass;
+        delete e.__comboField;
       }
       rawInputsById[nodeId] = updatedList;
     }
@@ -513,19 +521,12 @@ export async function buildRawInputs(
  * the OUTPUT port strip and to feed Subgraph UI nodes (which need
  * widget_values to label their fields).  Note nodes are excluded.
  */
-export function buildRawNodeMeta(raw: any): {
-  id: string;
-  widgets_values: any[];
-  outputs: { name: string; localized?: string; label?: string; type: string; links: number[] }[];
-  flags: Record<string, any>;
-  properties: Record<string, any>;
-  mode: number;
-}[] {
-  const rawNodeMeta: { id: string; widgets_values: any[]; outputs: { name: string; localized?: string; label?: string; type: string; links: number[] }[]; flags: Record<string, any>; properties: Record<string, any>; mode: number }[] = [];
+export function buildRawNodeMeta(raw: RawWorkflow | null): RawNodeMeta[] {
+  const rawNodeMeta: RawNodeMeta[] = [];
   if (raw && Array.isArray(raw.nodes)) {
     for (const rn of raw.nodes) {
       if (!rn || rn.type === "Note" || rn.type === "MarkdownNote") continue;
-      const outputs: { name: string; localized?: string; label?: string; type: string; links: number[] }[] = [];
+      const outputs: RawOutputEntry[] = [];
       if (Array.isArray((rn).outputs)) {
         for (const o of (rn).outputs) {
           if (!o || typeof o.name !== "string") continue;
@@ -537,7 +538,7 @@ export function buildRawNodeMeta(raw: any): {
              *  inner WorkflowIoPortNode display stay in lock-step. */
             label: typeof o.label === "string" ? o.label : undefined,
             type: typeof o.type === "string" ? o.type : "*",
-            links: Array.isArray(o.links) ? o.links.map((n: any) => Number(n) || 0) : [],
+            links: Array.isArray(o.links) ? o.links.map((n) => Number(n) || 0) : [],
           });
         }
       }
@@ -548,7 +549,7 @@ export function buildRawNodeMeta(raw: any): {
       //  avoid leaking class-instances into the JSON payload.
       const flags =
         rn && typeof (rn).flags === "object" && (rn).flags !== null
-          ? ((rn).flags as Record<string, any>)
+          ? (rn).flags
           : {};
       rawNodeMeta.push({
         id: String(rn.id),
@@ -560,7 +561,7 @@ export function buildRawNodeMeta(raw: any): {
          *  prominent example is rgthree's `Fast Groups Bypasser`. */
         properties:
           rn && typeof (rn).properties === "object" && (rn).properties !== null
-            ? ((rn).properties as Record<string, any>)
+            ? (rn).properties
             : {},
         mode: typeof (rn).mode === "number" ? (rn).mode : 0,
       });
@@ -571,7 +572,7 @@ export function buildRawNodeMeta(raw: any): {
 
 /** Map node id → ComfyUI class type (raw.nodes), used by the workflowIO
  *  enrichment to resolve direct (non-wrapper) COMBO candidates. */
-export function buildNodeTypeMap(raw: any): Record<string, string> {
+export function buildNodeTypeMap(raw: RawWorkflow | null): Record<string, string> {
   const nodeTypeById: Record<string, string> = {};
   if (raw && Array.isArray((raw).nodes)) {
     for (const n of (raw).nodes) {
@@ -589,25 +590,27 @@ export function buildNodeTypeMap(raw: any): Record<string, string> {
  * `rawView`（保留 subgraph wrapper），让 RAW 布局与 wrapper-form 兄弟、与
  * ComfyUI 自身画布一致。fallbackRawToApi 走离线启发式、不发网络请求。 */
 export function buildRawView(
-  raw: any,
-  rawInputsById: Record<string, any[]>,
+  raw: RawWorkflow | null,
+  rawInputsById: Record<string, RawInputEntry[]>,
   sizeById: Record<string, [number, number]>
-): {
-  nodes: any[];
-  positions: Record<string, [number, number]>;
-  graph: any;
-} | null {
-  let rawView: { nodes: any[]; positions: Record<string, [number, number]>; graph: any } | null = null;
+): RawViewPacket | null {
+  let rawView: RawViewPacket | null = null;
   if (raw && Array.isArray((raw).nodes)) {
-    const rawConv = fallbackRawToApi(raw as RawWorkflow);
-    const rawGraph = (rawConv.graph ?? {}) as Record<string, any>;
-    const rawViewNodes = Object.entries(rawGraph).map(([nodeId, n]) => {
+    const rawConv = fallbackRawToApi(raw);
+    const rawGraph = rawConv.graph;
+    const rawViewNodes: DetailNodeView[] = Object.entries(rawGraph).map(([nodeId, n]) => {
+      /* 与旧 `n?.class_type || (n?.type as string) || "?"` 语义逐值等价
+       *  （`a || b` ≡ `a ? a : b`）：class_type/type 为空串时同样回退。 */
       const classType: string =
-        (n?.class_type as string) || (n?.type as string) || "?";
+        n?.class_type
+          ? n.class_type
+          : n?.type
+            ? (n.type as string)
+            : "?";
       const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
       let resolvedTitle: string | undefined;
       if (isUuidClass && raw?.definitions?.subgraphs) {
-        const subs = raw.definitions.subgraphs as Record<string, any>;
+        const subs = raw.definitions.subgraphs;
         let def = subs[classType];
         if (!def) {
           const matchKey = Object.keys(subs).find((key) => subs[key]?.id === classType);
@@ -622,7 +625,7 @@ export function buildRawView(
         class_type: classType,
         title:
           resolvedTitle ??
-          (n)?._meta?.title ??
+          n?._meta?.title ??
           (isUuidClass ? "" : classType) ??
           nodeId,
         is_subgraph: isUuidClass,
@@ -632,7 +635,7 @@ export function buildRawView(
     });
     const rawViewPositions =
       (rawConv.positions) ??
-      extractPositions(raw as RawWorkflow);
+      extractPositions(raw);
     rawView = { nodes: rawViewNodes, positions: rawViewPositions, graph: rawGraph };
   }
   return rawView;

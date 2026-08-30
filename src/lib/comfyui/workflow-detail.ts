@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 /**
  * Workflow detail / subgraph detail builders — ported from the legacy
  * REST routes (src/app/api/workflows/[id]/route.ts GET and
@@ -16,9 +15,16 @@
  * parsing).  This file keeps only the orchestration + caching layers.
  */
 import { TRPCError } from "@trpc/server";
+import type { Prisma } from "../../../generated/prisma";
 import { workflowTemplateRepository } from "@/lib/core/repository";
 import { detectParamMap } from "@/lib/comfyui/workflow";
-import { extractPositions, type RawWorkflow } from "@/lib/comfyui/raw";
+import {
+  asRawWorkflow,
+  asRecord,
+  extractPositions,
+  toStringValue,
+  type ApiWorkflowNode,
+} from "@/lib/comfyui/raw";
 import { cacheJson, cacheDel, cachePeek } from "@/lib/server-cache";
 import { parseModesJson } from "@/lib/workflow-types";
 import { createComboResolver } from "@/lib/comfyui/workflow-detail-combo";
@@ -27,15 +33,52 @@ import {
   buildRawNodeMeta,
   buildNodeTypeMap,
   buildRawView,
+  type DetailNodeView,
+  type RawNodeMeta,
+  type RawViewPacket,
 } from "@/lib/comfyui/workflow-detail-raw";
-import { enrichWorkflowIO } from "@/lib/comfyui/workflow-detail-io";
+import {
+  enrichWorkflowIO,
+  type WorkflowIOEntry,
+  type WorkflowIORawEntry,
+} from "@/lib/comfyui/workflow-detail-io";
 import {
   parseSubgraphLinks,
   buildSubgraphGraph,
   parseSubgraphPins,
   buildBoundaryLinks,
   extractSubgraphAnnotations,
+  type BoundaryLink,
+  type BoundaryPin,
 } from "@/lib/comfyui/workflow-subgraph-parse";
+
+/** workflowIO 条目（enrichWorkflowIO 的返回形状 + kind 收窄为客户端契约的
+ *  联合类型）。`kind` 是 IO-edit 模式写入的三桶语义标记（param/widget/
+ *  output），PATCH 原样落库、GET 原样回显；JSON 序列化边界处按此类型收窄，
+ *  与客户端 WorkflowDetail.workflowIO（components/studio/workflow-types.ts
+ *  的 WorkflowIOParam）保持 tRPC 推断兼容。 */
+export interface WorkflowDetailIOEntry extends WorkflowIOEntry {
+  kind: "param" | "widget" | "output";
+}
+
+/** ComfyUI group frames 的下发形状（镜像客户端 WorkflowGroup，bypass 恒写入）。 */
+export interface WorkflowDetailGroup {
+  id: string;
+  title: string;
+  bounding: [number, number, number, number];
+  color: string;
+  bypass: boolean;
+}
+
+/** Note / MarkdownNote 注记的下发形状（镜像客户端 WorkflowNote）。 */
+export interface WorkflowDetailNote {
+  id: string;
+  title: string;
+  text: string;
+  pos: [number, number];
+  size: [number, number];
+  color: string;
+}
 
 /** Shape returned by the legacy `GET /api/workflows/:id` (and the subgraph
  *  variant) — mirrors the client-side `WorkflowDetail` interface in
@@ -49,22 +92,18 @@ export interface WorkflowDetailFull {
    *  JSON-string column).  Subgraph variant omits it. */
   modes?: string[];
   defaultMode?: string | null;
-  graph: Record<string, any>;
+  graph: Record<string, ApiWorkflowNode>;
   /** Original RAW (UI-format) JSON as imported; null for API-only. */
   rawJson?: unknown;
-  nodes: any[];
+  nodes: DetailNodeView[];
   /** RAW view packet (nodes/positions/graph) re-derived from rawJson. */
-  rawView?: {
-    nodes: any[];
-    positions: Record<string, [number, number]> | null;
-    graph: Record<string, any>;
-  } | null;
+  rawView?: RawViewPacket | null;
   paramMap: Record<string, string>;
-  workflowIO: Record<string, any>;
+  workflowIO: Record<string, WorkflowDetailIOEntry>;
   positions: Record<string, [number, number]> | null;
-  groups: any[] | null;
-  notes: any[] | null;
-  rawNodes: any[] | null;
+  groups: WorkflowDetailGroup[];
+  notes: WorkflowDetailNote[];
+  rawNodes: RawNodeMeta[];
   format: string;
   hasApi?: boolean;
   hasRaw?: boolean;
@@ -80,11 +119,11 @@ export interface WorkflowDetailFull {
   subgraphUid?: string;
   /** Subgraph variant: boundary pin entities. */
   boundaryPins?: {
-    inputs: any[];
-    outputs: any[];
+    inputs: BoundaryPin[];
+    outputs: BoundaryPin[];
   };
   /** Subgraph variant: sentinel wire ↔ pin/slot pairs. */
-  boundaryLinks?: any[];
+  boundaryLinks?: BoundaryLink[];
 }
 
 
@@ -155,8 +194,8 @@ export async function buildWorkflowDetailFull(
       cacheDel(cacheKey); // rebuild so the missing flag reaches the client
     } else if (re.update) {
       await workflowTemplateRepository.update(id, {
-        graph: re.update.graph as any,
-        rawJson: re.update.rawJson as any,
+        graph: re.update.graph as Prisma.JsonValue,
+        rawJson: re.update.rawJson as Prisma.JsonValue,
         positions: re.update.positions,
         paramMap: re.update.paramMap,
         taskType: re.update.taskType,
@@ -174,7 +213,7 @@ export async function buildWorkflowDetailFull(
    * (The cache entry is invalidated on PATCH/DELETE; a 404 is never cached.) */
   const cached = cachePeek<string>(cacheKey);
   if (cached !== undefined && typeof cached === "string") {
-    return JSON.parse(cached);
+    return JSON.parse(cached) as WorkflowDetailFull;
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUserSelect(
@@ -203,8 +242,10 @@ export async function buildWorkflowDetailFull(
    * 2026-08-06 R3: TTL shortened from 60_000ms → 30_000ms so it locks at
    * most 30s of staleness even if client cache:"no-store" is bypassed. */
   const detailJson = await cacheJson(cacheKey, 30_000, async () => {
-  const graph = tpl.graph as Record<string, any>;
-  const raw = (tpl.rawJson ?? null) as any;
+  /* 存库 graph 恒为 API 格式对象（Json 列）；rawJson 收窄为 RawWorkflow 视图
+   * （根不是普通对象时为 null，下游均有守卫，路径与旧 any 代码等价）。 */
+  const graph = tpl.graph as Record<string, ApiWorkflowNode>;
+  const raw = asRawWorkflow(tpl.rawJson);
 
   /* Resolve effective node positions.
    *
@@ -235,7 +276,7 @@ export async function buildWorkflowDetailFull(
    *      positions by graph node id, so an unknown key is silently
    *      ignored. */
   const positionsFromRaw =
-    raw && Array.isArray(raw.nodes) ? extractPositions(raw as RawWorkflow) : {};
+    raw && Array.isArray(raw.nodes) ? extractPositions(raw) : {};
   const tplPositions = (tpl.positions as Record<string, [number, number]>) ?? {};
   const effectivePositions: Record<string, [number, number]> = {
     ...positionsFromRaw,
@@ -262,15 +303,20 @@ export async function buildWorkflowDetailFull(
    * here; the saved graph + positions are already on detail. */
   const rawNodeMeta = buildRawNodeMeta(raw);
 
-  const nodes = Object.entries(graph).map(([nodeId, n]) => {
+  const nodes: DetailNodeView[] = Object.entries(graph).map(([nodeId, n]) => {
     // ComfyUI exports vary: newer snapshots use `class_type`, older / some
     // rgthree-comfy exports use `type` only.  Fall back to `type` so the
     // subgraph-wrapper check below picks up UUID class names that live in
     // either field — without this fallback every node renders as a plain
     // WorkflowNode and subgraph wrappers dump their 10+ IO rows inline instead
     // of being recognised as `is_subgraph: true` for the compact WorkflowSubgraphNode.
-    const classType: string =
-      (n?.class_type as string) || (n?.type as string) || "?";
+    // （与旧 `n?.class_type || (n?.type as string) || "?"` 逐值等价：
+    //  `a || b` ≡ `a ? a : b`，空串同样回退。）
+    const classType: string = n.class_type
+      ? n.class_type
+      : n.type
+        ? (n.type as string)
+        : "?";
     const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
     /* Subgraph wrapper nodes (class_type === UUID) get their display name
      *  from raw.definitions.subgraphs[uid].name.  Same lookup as the
@@ -281,7 +327,7 @@ export async function buildWorkflowDetailFull(
      *  last-resort label, identical to the pre-fix behaviour. */
     let resolvedTitle: string | undefined;
     if (isUuidClass && raw?.definitions?.subgraphs) {
-      const subs = raw.definitions.subgraphs as Record<string, any>;
+      const subs = raw.definitions.subgraphs;
       let def = subs[classType];
       if (!def) {
         const matchKey = Object.keys(subs).find((key) => subs[key]?.id === classType);
@@ -296,7 +342,7 @@ export async function buildWorkflowDetailFull(
       class_type: classType,
       title:
         resolvedTitle ??
-        n?._meta?.title ??
+        n._meta?.title ??
         (isUuidClass ? "" : classType) ??
         nodeId,
       is_subgraph: isUuidClass,
@@ -321,7 +367,7 @@ export async function buildWorkflowDetailFull(
   // User-curated exposure selection: which node params/widgets/outputs are
   // exposed as the workflow's external inputs/outputs.  (ioKey is
   // `${nodeId}::${kind}::${name}`; see the canvas editor's IO-edit mode.)
-  const workflowIORaw = (tpl.workflowIO as Record<string, { direction: "input" | "output"; kind: string; nodeId: string; name: string; label?: string; displayOrder?: number; value?: unknown }>) ?? {};
+  const workflowIORaw = (asRecord(tpl.workflowIO) ?? {}) as Record<string, WorkflowIORawEntry>;
 
   const nodeTitleById: Record<string, string> = {};
   for (const n of nodes) nodeTitleById[n.id] = n.title ?? n.class_type;
@@ -365,52 +411,38 @@ export async function buildWorkflowDetailFull(
    *   { title, bounding: [x, y, w, h], color }   (color is a hex string)
    * We forward them so the editor can render faithful background frames that
    * can be nested (a child group's bounding box sits inside its parent's). */
-  const groups: { id: string; title: string; bounding: [number, number, number, number]; color: string; bypass: boolean }[] = [];
+  const groups: WorkflowDetailGroup[] = [];
   if (raw && Array.isArray(raw.groups)) {
-    raw.groups.forEach((g: any, idx: number) => {
-
-      if (!g) return;
-
-      const bounds = Array.isArray(g.bounding) && g.bounding.length >= 4 ? g.bounding : [0, 0, 0, 0];
-
+    raw.groups.forEach((g: unknown, idx: number) => {
+      const rec = asRecord(g);
+      if (!rec) return;
+      const bounds: unknown[] =
+        Array.isArray(rec.bounding) && rec.bounding.length >= 4 ? rec.bounding : [0, 0, 0, 0];
       groups.push({
-
-        id: String(g.id ?? `g-${idx}`),
-
-        title: typeof g.title === "string" ? g.title : "",
-
+        id: toStringValue(rec.id ?? `g-${idx}`),
+        title: typeof rec.title === "string" ? rec.title : "",
         bounding: [Number(bounds[0]) || 0, Number(bounds[1]) || 0, Number(bounds[2]) || 0, Number(bounds[3]) || 0],
-
-        color: typeof g.color === "string" ? g.color : "#3b3b3b",
-
+        color: typeof rec.color === "string" ? rec.color : "#3b3b3b",
         /* Group bypass state (2026-08-09).  Forwarded so rgthree's
-
          *  `Fast Groups Bypasser` runtime UI can reflect — and toggle —
-
          *  the `flags.bypass` of every matched group via PATCH.  Stored
-
          *  on the group's `flags` object in rawJson, same place
-
          *  ComfyUI's own frontend reads it. */
-
-        bypass: !!(g.flags?.bypass),
-
+        bypass: !!(asRecord(rec.flags)?.bypass),
       });
-
     });
-
   }
 
   /* ── Notes (Note / MarkdownNote annotation nodes) ──
    * Their text lives in widgets_values[0]; position/size in pos/size. */
-  const notes: { id: string; title: string; text: string; pos: [number, number]; size: [number, number]; color: string }[] = [];
+  const notes: WorkflowDetailNote[] = [];
   if (raw && Array.isArray(raw.nodes)) {
-    raw.nodes.forEach((n: any) => {
+    raw.nodes.forEach((n) => {
       if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) return;
       const pos = Array.isArray(n.pos) && n.pos.length >= 2 ? n.pos : [0, 0];
       const size = Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
       const wv = Array.isArray(n.widgets_values) ? n.widgets_values[0] : "";
-      const text = typeof wv === "string" ? wv : String(wv ?? "");
+      const text = typeof wv === "string" ? wv : toStringValue(wv ?? "");
       // ComfyUI's Note node may carry an explicit `title` field (newer
       // versions); if absent we leave the title empty so the client can
       // fall back to extracting one from the first markdown heading line.
@@ -485,7 +517,7 @@ export async function buildWorkflowDetailFull(
   });
   });
 
-  return JSON.parse(detailJson);
+  return JSON.parse(detailJson) as WorkflowDetailFull;
 }
 
 
@@ -500,7 +532,7 @@ export async function buildSubgraphDetail(
    * the Prisma read + transform.  (Never cached: 400/404 cases below.) */
   const cached = cachePeek<string>(cacheKey);
   if (cached !== undefined && typeof cached === "string") {
-    return JSON.parse(cached);
+    return JSON.parse(cached) as WorkflowDetailFull;
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUserSelect(userId, id, {
@@ -514,7 +546,7 @@ export async function buildSubgraphDetail(
   });
   if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
 
-  const raw = (tpl.rawJson ?? null) as any;
+  const raw = asRawWorkflow(tpl.rawJson);
   if (!raw?.definitions?.subgraphs) {
     throw new TRPCError({ code: "NOT_FOUND", message: "该工作流没有内嵌子工作流" });
   }
@@ -582,5 +614,5 @@ export async function buildSubgraphDetail(
     });
   });
 
-  return JSON.parse(detailJson);
+  return JSON.parse(detailJson) as WorkflowDetailFull;
 }

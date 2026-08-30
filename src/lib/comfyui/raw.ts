@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 /**
  * ComfyUI 工作流「原始 / API」双格式兼容层
  *
@@ -26,24 +25,102 @@ import { comfyBase } from "./client";
 
 export type WorkflowFormat = "api" | "raw";
 
+/* ── raw JSON 收窄工具（§5.6：外部输入 unknown + 守卫）──────────────────
+ * 这些 helper 是本模块与 workflow-detail-* / workflow-subgraph-parse 共用的
+ * JSON 收窄原语：把 DB Json 列 / JSON.parse 产物的 unknown 收成可读视图，
+ * 运行时零转换（断言只在编译期）。 */
+
+/** 宽松对象视图：`typeof v === "object" && v !== null` 的值（含数组）→
+ *  Record 视图，否则 null。对应旧 any 代码 `x?.prop` / `Object.keys(x ?? {})`
+ *  的运行时语义。 */
+export function asRecord(v: unknown): Record<string, unknown> | null {
+  return typeof v === "object" && v !== null ? (v as Record<string, unknown>) : null;
+}
+
+/** 严格普通对象守卫（排除数组）—— 用于 groups / pins 等逐条收窄。 */
+export function isJsonObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** JSON 数组守卫：Array.isArray(unknown) 会把元素窄化成 any，这里统一收敛为
+ *  unknown[]，避免 Number/String 调用点触发 no-unsafe-argument。 */
+export function asUnknownArray(v: unknown): unknown[] {
+  return Array.isArray(v) ? (v as unknown[]) : [];
+}
+
+/** DB Json 列 / JSON.parse 产物 → RawWorkflow 视图。根不是普通对象时返回
+ *  null（下游均有 `Array.isArray(raw.nodes)` 类守卫，路径与旧代码等价）。 */
+export function asRawWorkflow(v: unknown): RawWorkflow | null {
+  return isJsonObject(v) ? (v as RawWorkflow) : null;
+}
+
+/** `String(v)` 的类型收窄等价：值全部来自 JSON 反序列化产物（无 symbol /
+ *  自定义 toString），运行时行为与 String(v) 完全一致 —— 对象走其 toString
+ *  （普通对象即 Object.prototype.toString → "[object Object]"）。显式收窄
+ *  只为满足 no-base-to-string（该规则把 String(unknown/{}) 一律视为误报）。 */
+export function toStringValue(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (v === null) return "null";
+  if (v === undefined) return "undefined";
+  return (v as { toString(): string }).toString();
+}
+
+/** raw UI 格式节点的 inputs[] 条目（ComfyUI 只把「转为输入」的槽位写进来）。
+ *  字段值来自外部 JSON，一律 unknown，读取点自行 typeof 守卫。 */
+export interface RawNodeInput {
+  name?: unknown;
+  /** zh-CN 本地化标签（ComfyUI 逐节点保存） */
+  localized_name?: unknown;
+  label?: unknown;
+  type?: unknown;
+  /** 槽位序号（新版 ComfyUI 写入；旧版按数组序） */
+  idx?: number;
+  /** raw.links 里的 link id；null 表示该槽位没有接线 */
+  link?: number | null;
+  /** 暴露内部控件的槽位标记（值存于 widgets_values） */
+  widget?: { name?: unknown } | null;
+  [k: string]: unknown;
+}
+
+/** raw UI 格式节点的 outputs[] 条目。 */
+export interface RawNodeOutput {
+  name?: unknown;
+  localized_name?: unknown;
+  label?: unknown;
+  type?: unknown;
+  /** 槽位序号（新版 ComfyUI 写入；旧版按数组序） */
+  idx?: number;
+  /** 下游 link id 列表 */
+  links?: number[];
+  [k: string]: unknown;
+}
+
 export interface RawNode {
+  /** 节点 id — ComfyUI 导出为 number，畸形数据可能是 string；统一 String() 后使用 */
   id: number | string;
-  type: string;
-  pos?: [number, number];
-  size?: [number, number];
+  /** 节点类名（raw 格式没有 class_type） */
+  type?: string;
+  /** 画布坐标 [x, y]（LiteGraph 绝对坐标） */
+  pos?: number[];
+  /** 节点盒尺寸 [w, h] */
+  size?: number[];
   /**
    * LiteGraph 执行模式：0=ALWAYS(正常) 1=ON_EVENT 2=NEVER(静音) 3=ON_TRIGGER 4=BYPASS。
    * ComfyUI 前端在导出 prompt 时会剔除 2/4 的节点，4 还要把连线「穿透」过去。
    */
   mode?: number;
   /** 节点控件值的有序数组，含义由 class_type 决定 */
-  widgets_values?: any[];
+  widgets_values?: unknown[];
   /** 部分工作流的 raw 节点也会显式包含 inputs/outputs（用于嵌套连接） */
-  inputs?: any[];
-  outputs?: any[];
-  /** 节点属性，如 title */
-  properties?: Record<string, any>;
+  inputs?: RawNodeInput[];
+  outputs?: RawNodeOutput[];
+  /** 节点属性，如 title / proxyWidgets */
+  properties?: Record<string, unknown>;
   title?: string;
+  /** LiteGraph 运行时 flags（如 collapsed / bypass） */
+  flags?: Record<string, unknown>;
+  /** 其余动态字段（color 等），按需 typeof 守卫后读取 */
+  [k: string]: unknown;
 }
 
 /* ── LiteGraph 节点模式 ── */
@@ -72,11 +149,41 @@ export interface RawWorkflow {
   last_node_id?: number;
   last_link_id?: number;
   nodes: RawNode[];
-  links?: any[];
-  groups?: any[];
-  config?: Record<string, any>;
-  extra?: Record<string, any>;
-  [k: string]: any;
+  /** 每条 link 是 [link_id, src_id, src_slot, dst_id, dst_slot, type]（元素动态） */
+  links?: unknown[][];
+  groups?: unknown[];
+  config?: Record<string, unknown>;
+  extra?: Record<string, unknown>;
+  /** ComfyUI ≥ v0.7 的子图定义（subgraph wrapper） */
+  definitions?: RawDefinitions;
+  [k: string]: unknown;
+}
+
+/** ComfyUI v0.7+ 子图定义容器（rawJson.definitions）。 */
+export interface RawDefinitions {
+  /** 子图定义：键为 UUID 或数字序号；wrapper 的 class_type 即对应 UUID */
+  subgraphs?: Record<string, RawSubgraphDef>;
+  [k: string]: unknown;
+}
+
+/** 单个子图定义（rawJson.definitions.subgraphs[uid]）。
+ *  与顶层 raw 的差异：links 是对象数组（非元组），inputs/outputs 是边界 pin。 */
+export interface RawSubgraphDef {
+  /** 子图 UUID（与 wrapper 的 class_type 对应；键可能是数字序号） */
+  id?: unknown;
+  /** 子图显示名（wrapper 卡片标题） */
+  name?: unknown;
+  /** 内部节点（与顶层 nodes 同构） */
+  nodes?: RawNode[];
+  /** 对象形式连线：{ id, origin_id, origin_slot, target_id, target_slot, type } */
+  links?: unknown[];
+  /** 边界输入 pin 定义 */
+  inputs?: unknown[];
+  /** 边界输出 pin 定义 */
+  outputs?: unknown[];
+  /** 内部分组框 */
+  groups?: unknown[];
+  [k: string]: unknown;
 }
 
 /**
@@ -102,8 +209,10 @@ export interface ApiNodeMeta {
 export interface ApiWorkflowNode {
   class_type: string;
   /** API inputs: 命名参数；数组 [nodeId, slotIdx] 表示连线 */
-  inputs: Record<string, any>;
+  inputs: Record<string, unknown>;
   _meta?: ApiNodeMeta;
+  /** 部分导出携带的其余动态字段（如旧 rgthree 导出的 type） */
+  [k: string]: unknown;
 }
 
 export interface ConversionResult {
@@ -121,23 +230,21 @@ export interface ConversionResult {
 /** Detect whether a JSON value is API format, raw format, or neither. */
 export function detectFormat(json: unknown): WorkflowFormat | null {
   if (!json || typeof json !== "object" || Array.isArray(json)) return null;
-  const obj = json as Record<string, any>;
+  const obj = asRecord(json);
+  if (!obj) return null;
   // API format: any top-level value has class_type + inputs
-  const apiHit = Object.values(obj).some(
-    (value) =>
-      value &&
-      typeof value === "object" &&
-      typeof (value).class_type === "string" &&
-      typeof (value).inputs === "object"
-  );
+  const apiHit = Object.values(obj).some((value) => {
+    const v = asRecord(value);
+    return !!v && typeof v.class_type === "string" && typeof v.inputs === "object";
+  });
   if (apiHit) return "api";
   // Raw format: has `nodes` array + each node has `type` (not class_type)
+  const rawObj = asRawWorkflow(json);
   if (
-    Array.isArray(obj.nodes) &&
-    obj.nodes.length > 0 &&
-    obj.nodes.every(
-      (n: any) => n && typeof n === "object" && typeof n.type === "string"
-    )
+    rawObj &&
+    Array.isArray(rawObj.nodes) &&
+    rawObj.nodes.length > 0 &&
+    rawObj.nodes.every((n) => !!n && typeof n.type === "string")
   ) {
     return "raw";
   }
@@ -172,14 +279,13 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
   // UUID lives inside each sub def as `sub.id`. So we have to scan all
   // entries and match by `sub.id === wrapper.type` (the wrapper's `type`
   // IS the subgraph UUID in ComfyUI's format).
-  const subs = (raw as unknown as { definitions?: { subgraphs?: Record<string, { id?: string; nodes?: any[] }> } })
-    .definitions?.subgraphs;
+  const subs = raw.definitions?.subgraphs;
   if (subs && typeof subs === "object") {
     for (const wrapper of raw.nodes) {
       if (!wrapper || typeof wrapper.type !== "string") continue;
       if (!Array.isArray(wrapper.pos)) continue;
       const wId = String(wrapper.id);
-      let innerNodes: any[] | undefined;
+      let innerNodes: RawNode[] | undefined;
       for (const k of Object.keys(subs)) {
         const def = subs[k];
         if (def?.id === wrapper.type && Array.isArray(def.nodes)) {
@@ -212,7 +318,7 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
  *   "sampler_name": [["euler", "euler_ancestral", …], {}]   ← COMBO：首项是候选数组
  * 少数新版（V3 schema）会给对象形式 `{ type: "INT", … }`，这里两种都兼容。
  */
-type ObjectInfoInputSpec = [unknown, Record<string, any>?] | Record<string, any>;
+type ObjectInfoInputSpec = [unknown, Record<string, unknown>?] | Record<string, unknown>;
 
 interface ObjectInfoClassDef {
   input_order?: { required?: string[]; optional?: string[] };
@@ -220,17 +326,17 @@ interface ObjectInfoClassDef {
     required?: Record<string, ObjectInfoInputSpec>;
     optional?: Record<string, ObjectInfoInputSpec>;
   };
-  [k: string]: any;
+  [k: string]: unknown;
 }
 
 /** 把 /object_info 的输入定义规范化为 { type, options }。 */
 function readInputSpec(spec: ObjectInfoInputSpec | undefined): {
   type: string | null;
-  options: Record<string, any>;
+  options: Record<string, unknown>;
 } {
   if (Array.isArray(spec)) {
     const head = spec[0];
-    const options = (spec[1] ?? {}) as Record<string, any>;
+    const options: Record<string, unknown> = spec[1] ?? {};
     // COMBO：候选值以数组形式直接放在首项
     if (Array.isArray(head)) return { type: "COMBO", options };
     return { type: typeof head === "string" ? head : null, options };
@@ -299,7 +405,7 @@ const CONNECTION_TYPE_RE = /^(MODEL|LATENT|IMAGE|IMAGE_TENSOR|MASK|CONDITIONING|
 const CONTROL_SENTINEL = "__control_after_generate__";
 const SEED_WIDGET_NAMES = new Set(["seed", "noise_seed"]);
 
-function hasControlAfterGenerate(name: string, type: string, options: Record<string, any>): boolean {
+function hasControlAfterGenerate(name: string, type: string, options: Record<string, unknown>): boolean {
   if (type !== "INT") return false;
   return SEED_WIDGET_NAMES.has(name) || options?.control_after_generate === true;
 }
@@ -318,7 +424,7 @@ function hasControlAfterGenerate(name: string, type: string, options: Record<str
  * 两个 route 共用），避免重复实现导致再次错位。
  */
 export function pairWidgetValues(
-  inputs: { name?: string; widget?: { name?: string }; type?: string }[],
+  inputs: RawNodeInput[],
   widgetsValues: unknown[]
 ): Record<string, unknown> {
   // 规范 widget 顺序：按 raw inputs[] 顺序收集 widget 名，并在每个
@@ -593,7 +699,7 @@ function applyWidgets(
   clsType: string,
   id: string,
   warnings: string[],
-  inputs: Record<string, any>
+  inputs: Record<string, unknown>
 ) {
   const widgets = Array.isArray(node.widgets_values) ? node.widgets_values : [];
   if (!widgets.length) return;
@@ -627,7 +733,7 @@ function buildApiGraph(
   let inactive = 0;
 
   for (const idx of index.values()) {
-    const inputs: Record<string, any> = {};
+    const inputs: Record<string, unknown> = {};
 
     applyWidgets(idx.raw, widgetOrder.get(idx.type) ?? [], idx.type, idx.id, warnings, inputs);
 
@@ -644,7 +750,7 @@ function buildApiGraph(
     // `_meta` 只在本地存储/画布使用，执行前会被 prepareGraphForExecution 剥掉。
     const meta: ApiNodeMeta = {};
     const title = idx.raw.title ?? idx.raw.properties?.title;
-    if (title) meta.title = String(title);
+    if (title) meta.title = toStringValue(title);
     if (idx.mode !== NODE_MODE_ALWAYS) meta.mode = idx.mode;
     if (idx.virtual) meta.virtual = true;
 
@@ -751,7 +857,7 @@ export interface ExecutionPrep {
 /** 判断一个 input 值是否为连线引用 `[nodeId, slot]`（且目标节点真实存在）。 */
 function isLinkRef(
   v: unknown,
-  graph: Record<string, ApiWorkflowNode>
+  graph: Record<string, unknown>
 ): v is [string | number, number] {
   return (
     Array.isArray(v) &&
@@ -766,19 +872,29 @@ type ResolvedOrigin =
   | { kind: "link"; value: [string, number] }
   | { kind: "value"; value: unknown };
 
-export function prepareGraphForExecution(input: Record<string, any>): ExecutionPrep {
-  const graph = (input ?? {}) as Record<string, ApiWorkflowNode>;
+export function prepareGraphForExecution(input: Record<string, unknown>): ExecutionPrep {
+  /* 存库 graph 来自 JSON：先把每个节点一次性收窄成稳定视图（值仍逐字透传），
+   * 后续 walk / 剔除逻辑都读写视图，不再到处 unknown。 */
+  interface PrepEntry {
+    /** 运行时恒为 string；保持原值逐字透传（断言仅在编译期） */
+    classType: string;
+    inputs: Record<string, unknown>;
+    meta: Record<string, unknown>;
+  }
+  const graph: Record<string, PrepEntry> = {};
 
   const removed: string[] = [];
-  for (const [id, n] of Object.entries(graph)) {
-    if (!n || typeof n !== "object") continue;
-    const meta = n._meta ?? {};
+  for (const [id, n] of Object.entries(input ?? {})) {
+    const rec = asRecord(n);
+    if (!rec) continue;
+    const meta = asRecord(rec._meta) ?? {};
+    graph[id] = { classType: rec.class_type as string, inputs: asRecord(rec.inputs) ?? {}, meta };
     const mode = Number(meta.mode ?? NODE_MODE_ALWAYS);
     if (
       mode === NODE_MODE_NEVER ||
       mode === NODE_MODE_BYPASS ||
       meta.virtual === true ||
-      isVirtualNodeType(n.class_type)
+      (typeof rec.class_type === "string" && isVirtualNodeType(rec.class_type))
     ) {
       removed.push(id);
     }
@@ -792,15 +908,23 @@ export function prepareGraphForExecution(input: Record<string, any>): ExecutionP
     if (!node) return null;
     if (!inactive.has(originId)) return { kind: "link", value: [originId, originSlot] };
 
-    const meta = node._meta ?? {};
+    const meta = node.meta;
     // 静音节点不透传：下游这一路直接断掉（与 ComfyUI 行为一致）。
     if (Number(meta.mode ?? NODE_MODE_ALWAYS) === NODE_MODE_NEVER) return null;
     // PrimitiveNode：把字面量直接内联给下游。
-    if (meta.value !== undefined) return { kind: "value", value: meta.value };
+    const literal = meta.value;
+    if (literal !== undefined) return { kind: "value", value: literal };
 
-    const order = meta.inputOrder ?? Object.keys(node.inputs ?? {});
-    const types = meta.inputTypes ?? {};
-    const wanted = meta.outputTypes?.[originSlot];
+    const orderRaw = meta.inputOrder;
+    const order: string[] = Array.isArray(orderRaw)
+      ? orderRaw.map((x: unknown) => String(x))
+      : Object.keys(node.inputs);
+    const types = asRecord(meta.inputTypes) ?? {};
+    const outTypes = meta.outputTypes;
+    const wanted =
+      Array.isArray(outTypes) && typeof outTypes[originSlot] === "string"
+        ? outTypes[originSlot]
+        : undefined;
 
     // ComfyUI 的顺序：先试与输出槽同序号的入参，再遍历其余入参做类型匹配。
     const seen = new Set<string>();
@@ -818,11 +942,12 @@ export function prepareGraphForExecution(input: Record<string, any>): ExecutionP
 
     for (const nm of candidates) {
 
-      const value = node.inputs?.[nm];
+      const value = node.inputs[nm];
 
       if (!isLinkRef(value, graph)) continue;
 
-      if (wanted && types[nm] && types[nm].toUpperCase() !== wanted.toUpperCase()) continue;
+      const typeOfNm = types[nm];
+      if (wanted && typeof typeOfNm === "string" && typeOfNm.toUpperCase() !== wanted.toUpperCase()) continue;
 
       return walk(String(value[0]), Number(value[1]), depth + 1);
 
@@ -830,13 +955,12 @@ export function prepareGraphForExecution(input: Record<string, any>): ExecutionP
 
 
     // 类型信息缺失（老工作流没存 type）时：只有一条入线就直接穿过去。
-    const linked = candidates.filter((nm) => isLinkRef(node.inputs?.[nm], graph));
+    const linked = candidates.filter((nm) => isLinkRef(node.inputs[nm], graph));
     if (linked.length === 1) {
-
-      const value = node.inputs[linked[0]!] as [string | number, number];
-
-      return walk(String(value[0]), Number(value[1]), depth + 1);
-
+      const value = node.inputs[linked[0]!];
+      if (isLinkRef(value, graph)) {
+        return walk(String(value[0]), Number(value[1]), depth + 1);
+      }
     }
 
     return null;
@@ -846,9 +970,8 @@ export function prepareGraphForExecution(input: Record<string, any>): ExecutionP
   let droppedInputs = 0;
 
   for (const [id, n] of Object.entries(graph)) {
-    if (!n || typeof n !== "object" || inactive.has(id)) continue;
-    const inputs: Record<string, any> = {};
-    for (const [k, v] of Object.entries(n.inputs ?? {})) {
+    const inputs: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(n.inputs)) {
       if (!isLinkRef(v, graph)) {
         inputs[k] = v;
         continue;
@@ -860,9 +983,10 @@ export function prepareGraphForExecution(input: Record<string, any>): ExecutionP
       }
       inputs[k] = resolved.value;
     }
-    const title = n._meta?.title;
+    const titleRaw = n.meta.title;
+    const title = typeof titleRaw === "string" ? titleRaw : undefined;
     // 只保留官方认可的 `_meta.title`，本地字段一律不外发。
-    out[id] = { class_type: n.class_type, inputs, ...(title ? { _meta: { title } } : {}) };
+    out[id] = { class_type: n.classType, inputs, ...(title ? { _meta: { title } } : {}) };
   }
 
   return { graph: out, removed, droppedInputs };

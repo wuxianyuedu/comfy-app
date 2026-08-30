@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 // Shared, client-safe validation-error types & helpers.
 //
 // ComfyUI's /prompt endpoint, when the workflow fails server-side
@@ -57,20 +56,22 @@ export interface ValidationError {
  *  returned `[]` and the per-field 6-item list never rendered. */
 export function extractValidationErrors(
   res: unknown,
-  graph?: Record<string, any>
+  graph?: Record<string, unknown>
 ): ValidationError[] {
-  let ne = (res as any)?.node_errors;
+  // 外部输入一律 unknown + 收窄：res 可能是 carrier 对象 / 列表 / 任意 JSON。
+  const resObj =
+    typeof res === "object" && res !== null ? (res as Record<string, unknown>) : undefined;
+  let ne: unknown = resObj?.node_errors;
   // `res` is the LIST carrier directly (comfy-cli envelope path).
   const isListCarrier =
     Array.isArray(res) &&
     res.length > 0 &&
-    res.some(
-      (r: any) =>
- 
- 
-// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-        r && typeof r === "object" && (r.node_id || r.class_type || r.input_errors || r.message)
-    );
+    res.some((r: unknown): boolean => {
+      if (!r || typeof r !== "object") return false;
+      const rec = r as Record<string, unknown>;
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+      return !!(rec.node_id || rec.class_type || rec.input_errors || rec.message);
+    });
   if (
     (!ne || (Array.isArray(ne) ? ne.length === 0 : Object.keys(ne).length === 0)) &&
     isListCarrier
@@ -79,15 +80,29 @@ export function extractValidationErrors(
   }
   if (!ne) return [];
   const out: ValidationError[] = [];
-  const entries: [string, any][] = Array.isArray(ne)
-    ? (ne).map((item) => [String(item?.node_id ?? "?"), item] as [string, any])
-    : (Object.entries(ne));
+  const entries: [string, unknown][] = Array.isArray(ne)
+    ? ne.map((item: unknown) => {
+        const rec = item as Record<string, unknown> | null | undefined;
+        // String(x) 的收窄等价（见本文件底部 toStringValue）：值来自外部 JSON。
+        return [toStringValue(rec?.node_id ?? "?"), item] as [string, unknown];
+      })
+    : Object.entries(ne as Record<string, unknown>);
   for (const [nid, err] of entries) {
-    const classType = err?.class_type ?? graph?.[nid]?.class_type ?? "";
-    const inputErrors = err?.input_errors;
+    const errRec = err as Record<string, unknown> | null | undefined;
+    const graphNode = graph?.[nid];
+    const graphClass =
+      typeof graphNode === "object" && graphNode !== null
+        ? (graphNode as Record<string, unknown>).class_type
+        : undefined;
+    const errClass = errRec?.class_type;
+    const classType: string =
+      (typeof errClass === "string" ? errClass : undefined) ??
+      (typeof graphClass === "string" ? graphClass : undefined) ??
+      "";
+    const inputErrors = errRec?.input_errors;
     if (inputErrors && typeof inputErrors === "object") {
-      for (const [field, v] of Object.entries(inputErrors)) {
- 
+      for (const [field, v] of Object.entries(inputErrors as Record<string, unknown>)) {
+
         const message =
           typeof v === "string"
             ? v
@@ -96,8 +111,8 @@ export function extractValidationErrors(
               JSON.stringify(v)) || "配置错误";
         out.push({ nodeId: nid, classType, field, message });
       }
-    } else if (typeof err?.message === "string") {
-      out.push({ nodeId: nid, classType, field: "", message: err.message });
+    } else if (typeof errRec?.message === "string") {
+      out.push({ nodeId: nid, classType, field: "", message: errRec.message });
     } else if (typeof err === "string") {
       out.push({ nodeId: nid, classType, field: "", message: err });
     } else if (err && typeof err === "object") {
@@ -121,10 +136,22 @@ export function parseValidationErrors(
 ): ValidationError[] | null {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(raw) as unknown;
     if (Array.isArray(parsed)) return parsed as ValidationError[];
   } catch {
     /* fall through */
   }
   return null;
+}
+
+/** `String(v)` 的类型收窄等价（本模块保持 client-safe，不引入 comfyui/raw 依赖；
+ *  与 raw.ts 导出的同名 helper 行为一致）：值全部来自 JSON 反序列化产物（无
+ *  symbol / 自定义 toString），运行时行为与 String(v) 完全一致 —— 对象走其
+ *  toString（普通对象即 "[object Object]"）。显式收窄只为满足
+ *  no-base-to-string（该规则把 String(unknown/{}) 一律视为误报）。 */
+function toStringValue(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (v === null) return "null";
+  if (v === undefined) return "undefined";
+  return (v as { toString(): string }).toString();
 }

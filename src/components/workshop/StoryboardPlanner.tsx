@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-empty-function */
 "use client";
 
 import React from "react";
@@ -12,6 +11,16 @@ import { workshopUid } from "@/lib/workshop/script-parser";
 import { useLLM } from "@/components/workshop/LLMContext";
 import { streamChat } from "@/lib/llm/browser";
 import { buildStoryboardMessages, parseStoryboard } from "@/lib/llm/prompts";
+
+/** catch 抛出值（unknown）→ 与旧 `e?.message ?? fallback` 逐值等价的消息提取：
+ *  带 string message 的对象取 message（Error 实例即此路径），其余回退。 */
+function errorMessage(e: unknown, fallback: string): string {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return fallback;
+}
 
 interface Props {
   scenes: Scene[];
@@ -129,7 +138,7 @@ export function StoryboardPlanner({
         setAiProgress(`正在拆镜 ${i + 1}/${scenes.length} · ${scene!.heading}`);
         const full = await streamChat({
           messages: buildStoryboardMessages(scene!, charNames),
-          onToken: () => {},
+          /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
         });
         const raws = parseStoryboard(full);
         raws.forEach((raw) =>
@@ -157,8 +166,8 @@ export function StoryboardPlanner({
       }
       onShotsChange([...shots, ...built]);
       setAiProgress(`已用 AI 生成 ${built.length} 个镜头`);
-    } catch (e: any) {
-      setAiError(e?.message ?? "AI 拆镜失败");
+    } catch (e: unknown) {
+      setAiError(errorMessage(e, "AI 拆镜失败"));
     } finally {
       setAiBusy(false);
     }

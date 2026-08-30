@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access */
 /**
  * localWorkflows.ts — read-only scanner for user-configured workflow directories
  * (LOCAL_WORKFLOWS_PATH).
@@ -115,13 +114,16 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
         error: "配置的路径不是目录（指向的是一个文件）",
       };
     }
-  } catch (e: any) {
+  } catch (e) {
+    // e 为 unknown：`(e as Error)?.message ?? String(e)` 与旧 `e?.message ?? String(e)`
+    // 的运行时语义逐字一致（node fs 抛的都是 Error 实例）。
+    const msg = (e as Error | undefined)?.message ?? String(e);
     return {
       rawPath: rawDir,
       absPath: abs,
       exists: false,
       files: [],
-      error: `无法访问：${e?.message ?? String(e)}`,
+      error: `无法访问：${msg}`,
     };
   }
 
@@ -192,13 +194,14 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
   };
   try {
     visit(abs);
-  } catch (e: any) {
+  } catch (e) {
+    const msg = (e as Error | undefined)?.message ?? String(e);
     return {
       rawPath: rawDir,
       absPath: abs,
       exists: true,
       files: out,
-      error: `扫描失败：${e?.message ?? String(e)}`,
+      error: `扫描失败：${msg}`,
     };
   }
 

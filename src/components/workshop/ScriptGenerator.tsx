@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
-
 import React from "react";
 import { Trash } from "lucide-react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
@@ -12,6 +10,16 @@ import { parseIdeaToScenes, newScene, workshopUid } from "@/lib/workshop/script-
 import { useLLM } from "@/components/workshop/LLMContext";
 import { streamChat } from "@/lib/llm/browser";
 import { buildScriptMessages, parseScriptScenes } from "@/lib/llm/prompts";
+
+/** catch 抛出值（unknown）→ 与旧 `e?.message ?? fallback` 逐值等价的消息提取：
+ *  带 string message 的对象取 message（Error 实例即此路径），其余回退。 */
+function errorMessage(e: unknown, fallback: string): string {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return fallback;
+}
 
 interface Props {
   meta: ProjectMeta;
@@ -72,8 +80,8 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
       onScenesChange([...scenes, ...newScenes]);
       setIdea("");
       setExpanded(false);
-    } catch (e: any) {
-      setAiError(e?.message ?? "AI 扩写失败");
+    } catch (e: unknown) {
+      setAiError(errorMessage(e, "AI 扩写失败"));
     } finally {
       setAiBusy(false);
     }

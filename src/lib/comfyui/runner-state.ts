@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // Internal shared state + log persistence for the comfyui runner layer.
 
 //
@@ -163,7 +162,7 @@ export type RunnerState = {
 
   promptToTask: Map<string, string>;
 
-  promptByTask: Map<string, Record<string, any>>;
+  promptByTask: Map<string, Record<string, unknown>>;
 
   logs: Map<string, LogEntry[]>;
 
@@ -209,7 +208,7 @@ export type RunnerState = {
 
    *  时仍能完整复现本次生成结果（种子已存 manifest.seed + TaskImage.seed）。 */
 
-  executedWorkflow: Map<string, any>;
+  executedWorkflow: Map<string, unknown>;
 
 };
 

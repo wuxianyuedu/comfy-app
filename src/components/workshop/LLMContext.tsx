@@ -1,11 +1,19 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-floating-promises */
 "use client";
-
 import React from "react";
 import { completeChat } from "@/lib/llm/browser";
 import { Icon } from "@/components/ui/Icon";
 import { api } from "~/trpc/react";
 import type { LLMConfigView, LLMProviderType } from "@/lib/llm/types";
+
+/** catch 抛出值（unknown）→ 与旧 `e?.message ?? fallback` 逐值等价的消息提取：
+ *  带 string message 的对象取 message（Error 实例即此路径），其余回退。 */
+function errorMessage(e: unknown, fallback: string): string {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return fallback;
+}
 
 interface LLMContextValue {
   config: LLMConfigView | null;
@@ -31,7 +39,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
   const [settingsOpen, setSettingsOpen] = React.useState(false);
 
   const refresh = React.useCallback(() => {
-    configQ.refetch();
+    void configQ.refetch();
   }, [configQ]);
 
   // Seed config from the query result (adjusted during render, React 19
@@ -163,8 +171,8 @@ function LLMSettingsModal({
       });
       const cfg = data.config;
       onSaved({ ...cfg, hasApiKey: !!cfg.apiKey, provider: cfg.provider as "local" | "remote" });
-    } catch (e: any) {
-      setMsg({ kind: "err", text: e?.message ?? "保存失败" });
+    } catch (e: unknown) {
+      setMsg({ kind: "err", text: errorMessage(e, "保存失败") });
     } finally {
       setSaving(false);
     }
@@ -182,8 +190,8 @@ function LLMSettingsModal({
         opts: { provider, baseUrl, model, temperature: 0.2, maxTokens: 16 },
       });
       setMsg({ kind: "ok", text: `连接成功：${out.slice(0, 60)}` });
-    } catch (e: any) {
-      setMsg({ kind: "err", text: e?.message ?? "连接失败" });
+    } catch (e: unknown) {
+      setMsg({ kind: "err", text: errorMessage(e, "连接失败") });
     } finally {
       setTesting(false);
     }

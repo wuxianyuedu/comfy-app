@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 // LoRA training orchestrator (炼丹).
 //
 // Local-first design: a training job is created in the DB, then this module
@@ -107,8 +106,11 @@ export async function enqueueTraining(jobId: string): Promise<void> {
   }
 
   await appendLog(jobId, "info", `已提交至训练后端 ${trainerUrl()}`);
-  void runRemote(spec).catch((e: any) => {
-    void failJob(jobId, e?.message ?? "训练后端通信失败");
+  void runRemote(spec).catch((e: unknown) => {
+    // e 可能是任意 throw 值：先收窄再取 message（与旧 `e?.message ?? …` 等价，
+    // fetch/undici 抛的都是 Error 实例）。
+    const msg = (e as Error | undefined)?.message ?? "训练后端通信失败";
+    void failJob(jobId, msg);
   });
 }
 

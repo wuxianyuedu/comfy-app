@@ -295,7 +295,8 @@ function ComfyNodeCustom({
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
                   }}>
-                    {String(r.spec.default)}
+                    {/* 与 String(default) 运行时一致（JSON 值无 symbol），收窄以满足 no-base-to-string */}
+                    {(r.spec.default as { toString(): string }).toString()}
                   </span>
                 )}
               </div>

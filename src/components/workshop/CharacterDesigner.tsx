@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-floating-promises, @typescript-eslint/no-empty-function */
 "use client";
-
 import React from "react";
 import { Trash } from "lucide-react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
@@ -16,6 +14,16 @@ import {
   parseCharacter,
   parseCharacterFull,
 } from "@/lib/llm/prompts";
+
+/** catch 抛出值（unknown）→ 与旧 `e?.message ?? fallback` 逐值等价的消息提取：
+ *  带 string message 的对象取 message（Error 实例即此路径），其余回退。 */
+function errorMessage(e: unknown, fallback: string): string {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return fallback;
+}
 
 interface Props {
   characters: Character[];
@@ -81,7 +89,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange }: Pr
     try {
       const full = await streamChat({
         messages: buildCharacterFromBriefMessages(brief),
-        onToken: () => {},
+        /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
       });
       const r = parseCharacterFull(full);
       const character = newCharacter();
@@ -95,8 +103,8 @@ export function CharacterDesigner({ characters, styles, onCharactersChange }: Pr
       character.negativePrompt = buildCharacterNegative(character, style);
       onCharactersChange([...characters, character]);
       setBrief("");
-    } catch (e: any) {
-      setAiError(e?.message ?? "AI 生成失败");
+    } catch (e: unknown) {
+      setAiError(errorMessage(e, "AI 生成失败"));
     } finally {
       setGenBusy(false);
     }
@@ -124,7 +132,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange }: Pr
           styleTags: character.styleTags,
           skillName: style?.name,
         }),
-        onToken: () => {},
+        /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
       });
       const r = parseCharacter(full);
       update(character.id, {
@@ -132,8 +140,8 @@ export function CharacterDesigner({ characters, styles, onCharactersChange }: Pr
         costume: r.costume || character.costume,
         personality: r.personality || character.personality,
       });
-    } catch (e: any) {
-      setAiError(e?.message ?? "AI 润色失败");
+    } catch (e: unknown) {
+      setAiError(errorMessage(e, "AI 润色失败"));
     } finally {
       setAiBusyId(null);
     }
@@ -182,7 +190,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange }: Pr
             value={brief}
             onChange={(event) => setBrief(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !genBusy) handleAIGenerate();
+              if (event.key === "Enter" && !genBusy) void handleAIGenerate();
             }}
             placeholder="例如：一位穿唐装的白发剑客，气质孤傲"
             className="flex-1 rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"

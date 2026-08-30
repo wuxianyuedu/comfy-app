@@ -160,7 +160,7 @@ export default function NodeEditor({
               <FieldRow
                 key={field.key}
                 field={field}
-                value={node.inputs?.[field.key] as unknown}
+                value={node.inputs?.[field.key]}
                 checkpoints={checkpoints}
                 modelLists={modelLists}
                 onChange={(val) =>

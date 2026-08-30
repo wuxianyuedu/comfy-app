@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 import { listModels } from "./client";
 import { getWorkflow } from "./_meta";
 import txt2img from "./workflows/txt2img.json";
@@ -52,7 +51,7 @@ export type GenerateParams = {
   firstFrame?: string; // filename already in ComfyUI input dir (首尾帧首图)
   lastFrame?: string; // filename already in ComfyUI input dir (首尾帧尾图)
   // Custom workflow: user-curated exposed pins from the IO-edit mode
-  workflowInputs?: { nodeId: string; name: string; value?: any }[];
+  workflowInputs?: { nodeId: string; name: string; value?: unknown }[];
 };
 
 export type BuildResult = {
@@ -154,16 +153,33 @@ function classifyNode(classType: string): WorkflowPreviewNodeKind {
   return "process";
 }
 
+/* ── 图收窄工具（§5.6：graph 来自 DB Json 列 / JSON.parse，值一律 unknown）── */
+
+/** 宽松对象视图：`typeof v === "object" && v !== null`（含数组）→ Record 视图，
+ *  否则 null。与旧 any 代码 `x?.prop` / `Object.keys(x ?? {})` 的运行时语义一致。 */
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return typeof v === "object" && v !== null ? (v as Record<string, unknown>) : null;
+}
+
+/** 连线元组 `[nodeId, slot]` 的首位（JS 对象键恒为 string）。 */
+function linkTupleHead(v: unknown): string | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const head: unknown = v[0];
+  return typeof head === "string" || typeof head === "number" ? String(head) : undefined;
+}
+
 /**
  * Build a compact preview for a workflow graph. We do a lightweight
  * longest-path layering so nodes with no incoming edges sit on the left
  * and pure sinks sit on the right. We then trim to the first ~14 nodes
  * by topological order so the card stays readable; `truncated` is set.
  */
-export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPreview {
-  const entries = Object.entries(graph).filter(
-    ([, n]) => n && typeof n === "object" && typeof (n).class_type === "string"
-  );
+export function buildWorkflowPreview(graph: Record<string, unknown>): WorkflowPreview {
+  const entries: [string, Record<string, unknown>][] = [];
+  for (const [id, n] of Object.entries(graph)) {
+    const rec = asRecord(n);
+    if (rec && typeof rec.class_type === "string") entries.push([id, rec]);
+  }
   const total = entries.length;
   if (total === 0) {
     return { nodes: [], edges: [], total: 0, width: 280, height: 80, truncated: false };
@@ -177,8 +193,8 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
     outAdj[id] = new Set();
   }
   for (const [id, node] of entries) {
-    const inputs = (node).inputs;
-    if (!inputs || typeof inputs !== "object") continue;
+    const inputs = asRecord(node.inputs);
+    if (!inputs) continue;
     for (const v of Object.values(inputs)) {
       if (Array.isArray(v) && v.length >= 1 && typeof v[0] === "string" && outAdj[v[0]]) {
         incoming[id]!.add(v[0]);
@@ -212,12 +228,18 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
 
   // Pick a representative subset if too many nodes. Keep at most 14, biased
   // toward sources and sinks, and to early layers.
+  /** graph[id].class_type（entries 已保证为 string；不可达 id → ""） */
+  const classTypeOf = (id: string): string => {
+    const rec = asRecord(graph[id]);
+    const ct = rec?.class_type;
+    return typeof ct === "string" ? ct : "";
+  };
   let visible = entries.map(([id]) => id);
   let truncated = false;
   if (visible.length > 14) {
     truncated = true;
-    const sinks = visible.filter((id) => classifyNode((graph[id]).class_type) === "output");
-    const sources = visible.filter((id) => classifyNode((graph[id]).class_type) === "input");
+    const sinks = visible.filter((id) => classifyNode(classTypeOf(id)) === "output");
+    const sources = visible.filter((id) => classifyNode(classTypeOf(id)) === "input");
     const mid = visible.filter((id) => !sinks.includes(id) && !sources.includes(id));
     mid.sort((left, right) => (level[left] ?? 0) - (level[right] ?? 0));
     const midKeep = Math.max(0, 14 - sources.length - sinks.length);
@@ -254,10 +276,10 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
       id,
 
 
-      class_type: (graph[id]).class_type,
+      class_type: classTypeOf(id),
 
 
-      kind: classifyNode((graph[id]).class_type),
+      kind: classifyNode(classTypeOf(id)),
 
 
       level: lv,
@@ -297,24 +319,26 @@ export function buildWorkflowPreview(graph: Record<string, any>): WorkflowPrevie
  * follows the real graph topology instead of guessing by node id order.
  */
 function findTextEncoder(
-  graph: Record<string, any>,
+  graph: Record<string, unknown>,
   startId: string | undefined,
   visited = new Set<string>()
 ): string | null {
   if (!startId || visited.has(startId)) return null;
   visited.add(startId);
-  const node = graph[startId];
-  if (!node?.inputs) return null;
+  const node = asRecord(graph[startId]);
+  if (!node) return null;
+  const inputs = asRecord(node.inputs);
+  if (!inputs) return null;
   const TEXT_FIELDS = ["text", "text_g", "text_l", "prompt", "positive", "negative", "text_positive", "text_negative"];
   for (const f of TEXT_FIELDS) {
 
-    const value = node.inputs[f];
+    const value = inputs[f];
 
     if (typeof value === "string" && !Array.isArray(value)) return startId;
 
   }
 
-  for (const v of Object.values(node.inputs)) {
+  for (const v of Object.values(inputs)) {
     if (Array.isArray(v) && typeof v[0] === "string" && graph[v[0]]) {
 
       const result = findTextEncoder(graph, v[0], visited);
@@ -327,8 +351,11 @@ function findTextEncoder(
   return null;
 }
 
-function isSamplerLike(node: any): boolean {
-  return !!node?.inputs && Array.isArray(node.inputs.positive) && Array.isArray(node.inputs.negative);
+function isSamplerLike(node: unknown): boolean {
+  const rec = asRecord(node);
+  if (!rec) return false;
+  const inputs = asRecord(rec.inputs);
+  return !!inputs && Array.isArray(inputs.positive) && Array.isArray(inputs.negative);
 }
 
 /**
@@ -339,40 +366,45 @@ function isSamplerLike(node: any): boolean {
  * text-encode node (CLIPTextEncode / SDXL / Flux / T5 …). Falls back to the
  * first two CLIPTextEncode when no sampler is present.
  */
-export function detectParamMap(graph: Record<string, any>): ParamMap {
+export function detectParamMap(graph: Record<string, unknown>): ParamMap {
   const map: ParamMap = {};
   const ids = Object.keys(graph);
   const nodes = ids.map((id) => ({ id, node: graph[id] }));
+  const isClass = (node: unknown, cls: string): boolean => asRecord(node)?.class_type === cls;
 
-  const sampler = nodes.find(
-    (node) =>
-      node.node &&
-      (node.node.class_type === "KSampler" ||
-        node.node.class_type === "KSamplerAdvanced" ||
-        isSamplerLike(node.node))
-  );
+  const sampler = nodes.find((node) => {
+    const rec = asRecord(node.node);
+    if (!rec) return false;
+    return (
+      rec.class_type === "KSampler" ||
+      rec.class_type === "KSamplerAdvanced" ||
+      isSamplerLike(rec)
+    );
+  });
   if (sampler) {
-    const posEnc = findTextEncoder(graph, sampler.node.inputs.positive?.[0]);
-    const negEnc = findTextEncoder(graph, sampler.node.inputs.negative?.[0]);
+    const sRec = asRecord(sampler.node);
+    const sInputs = asRecord(sRec?.inputs);
+    const posEnc = findTextEncoder(graph, linkTupleHead(sInputs?.positive));
+    const negEnc = findTextEncoder(graph, linkTupleHead(sInputs?.negative));
     if (posEnc) map.positiveNode = posEnc;
     if (negEnc) map.negativeNode = negEnc;
   }
   // Fallback: first two CLIPTextEncode by id (preserves old behavior if no sampler).
   if (!map.positiveNode || !map.negativeNode) {
-    const clips = nodes.filter((node) => node.node?.class_type === "CLIPTextEncode");
+    const clips = nodes.filter((node) => isClass(node.node, "CLIPTextEncode"));
     if (!map.positiveNode && clips[0]) map.positiveNode = clips[0].id;
     if (!map.negativeNode && clips[1]) map.negativeNode = clips[1].id;
   }
 
-  const ckpt = nodes.find((node) => node.node?.class_type === "CheckpointLoaderSimple");
+  const ckpt = nodes.find((node) => isClass(node.node, "CheckpointLoaderSimple"));
   if (ckpt) map.checkpointNode = ckpt.id;
 
   const ks = nodes.find(
-    (node) => node.node?.class_type === "KSampler" || node.node?.class_type === "KSamplerAdvanced"
+    (node) => isClass(node.node, "KSampler") || isClass(node.node, "KSamplerAdvanced")
   );
   if (ks) map.samplerNode = ks.id;
 
-  const li = nodes.find((node) => node.node?.class_type === "LoadImage");
+  const li = nodes.find((node) => isClass(node.node, "LoadImage"));
   if (li) map.inputImageNode = li.id;
 
   return map;
@@ -439,18 +471,19 @@ const NUMERIC_INPUT_NAMES = new Set([
   "samples", "num_inference_steps", "strength", "noise", "clip_sample",
 ]);
 
-function coerceNumericFields(graph: Record<string, any>): void {
+function coerceNumericFields(graph: Record<string, unknown>): void {
   for (const node of Object.values(graph)) {
-    if (!node?.inputs) continue;
-    for (const key of Object.keys(node.inputs)) {
+    const inputs = asRecord(asRecord(node)?.inputs);
+    if (!inputs) continue;
+    for (const key of Object.keys(inputs)) {
 
       if (!NUMERIC_INPUT_NAMES.has(key)) continue;
 
-      const value = node.inputs[key];
+      const value = inputs[key];
 
       if (typeof value === "string" && value.trim() !== "" && !Number.isNaN(Number(value))) {
 
-        node.inputs[key] = Number(value);
+        inputs[key] = Number(value);
 
       }
 
@@ -476,20 +509,21 @@ const CLIP_LOADER = new Set(["DualCLIPLoader", "TripleCLIPLoader", "CLIPLoader",
  * originally consumed the base model/clip (preserving refiner / dual-CLIP chains).
  */
 function injectLoras(
-  graph: Record<string, any>,
+  graph: Record<string, unknown>,
   loras: LoraSpec[]
 ): { baseModel: [string, number] | null; baseClip: [string, number] | null; lastLora: string | null } {
   let baseModel: [string, number] | null = null;
   let baseClip: [string, number] | null = null;
   for (const [id, node] of Object.entries(graph)) {
-    if (!node?.class_type) continue;
-    if (CHECKPOINT_LOADER.has(node.class_type)) {
+    const ct = asRecord(node)?.class_type;
+    if (typeof ct !== "string") continue;
+    if (CHECKPOINT_LOADER.has(ct)) {
       // CheckpointLoaderSimple: outputs [MODEL0, CLIP1, VAE2].
       baseModel ??= [id, 0];
       baseClip ??= [id, 1];
-    } else if (UNET_LOADER.has(node.class_type) && !baseModel) {
+    } else if (UNET_LOADER.has(ct) && !baseModel) {
       baseModel = [id, 0];
-    } else if (CLIP_LOADER.has(node.class_type) && !baseClip) {
+    } else if (CLIP_LOADER.has(ct) && !baseClip) {
       baseClip = [id, 0];
     }
   }
@@ -500,7 +534,7 @@ function injectLoras(
   const loraIds: string[] = [];
   loras.forEach((lora, i) => {
     const id = `lora_${i}`;
-    const inputs: Record<string, any> = {
+    const inputs: Record<string, unknown> = {
       lora_name: lora.name,
       strength_model: lora.weight,
       model: prevModel,
@@ -521,43 +555,46 @@ function injectLoras(
  *  Skips the injected LoraLoader nodes themselves (their model/clip inputs
  *  legitimately reference the previous link in the chain). */
 function rewireLoaders(
-  graph: Record<string, any>,
+  graph: Record<string, unknown>,
   baseModel: [string, number] | null,
   baseClip: [string, number] | null,
   lastLora: string
 ) {
   for (const node of Object.values(graph)) {
-    if (!node?.inputs) continue;
-    if (node.class_type === "LoraLoader" || node.class_type === "LoraLoaderModelOnly") continue;
+    const rec = asRecord(node);
+    const inputs = asRecord(rec?.inputs);
+    if (!rec || !inputs) continue;
+    if (rec.class_type === "LoraLoader" || rec.class_type === "LoraLoaderModelOnly") continue;
     if (
       baseModel &&
-      Array.isArray(node.inputs.model) &&
-      node.inputs.model[0] === baseModel[0] &&
-      node.inputs.model[1] === baseModel[1]
+      Array.isArray(inputs.model) &&
+      inputs.model[0] === baseModel[0] &&
+      inputs.model[1] === baseModel[1]
     ) {
-      node.inputs.model = [lastLora, 0];
+      inputs.model = [lastLora, 0];
     }
     if (
       baseClip &&
-      Array.isArray(node.inputs.clip) &&
-      node.inputs.clip[0] === baseClip[0] &&
-      node.inputs.clip[1] === baseClip[1]
+      Array.isArray(inputs.clip) &&
+      inputs.clip[0] === baseClip[0] &&
+      inputs.clip[1] === baseClip[1]
     ) {
-      node.inputs.clip = [lastLora, 1];
+      inputs.clip = [lastLora, 1];
     }
   }
 }
 
 /** Set the prompt string on a CLIPTextEncode-style node (handles SDXL text_g/text_l). */
-function setPromptText(node: any, prompt: string) {
-  if (!node?.inputs) return;
-  if (node.inputs.text_g !== undefined) {
+function setPromptText(node: unknown, prompt: string) {
+  const inputs = asRecord(asRecord(node)?.inputs);
+  if (!inputs) return;
+  if (inputs.text_g !== undefined) {
     // SDXL / SDXL-simplified: both text_g and text_l carry the prompt.
-    node.inputs.text_g = prompt;
-    if (node.inputs.text_l !== undefined) node.inputs.text_l = prompt;
-  } else if (!Array.isArray(node.inputs.text)) {
+    inputs.text_g = prompt;
+    if (inputs.text_l !== undefined) inputs.text_l = prompt;
+  } else if (!Array.isArray(inputs.text)) {
     // Plain CLIPTextEncode: `text` is the prompt (unless it's a link).
-    node.inputs.text = prompt;
+    inputs.text = prompt;
   }
 }
 
@@ -612,7 +649,7 @@ export async function buildAndValidate(
     __LAST_FRAME__: params.lastFrame ?? "",
   };
 
-  const graph = replaceTokens(template, values) as Record<string, any>;
+  const graph = replaceTokens(template, values) as Record<string, unknown>;
 
   // ComfyUI rejects string values for numeric inputs, but token substitution
   // produces strings. Coerce the known numeric fields back to numbers after the
@@ -641,11 +678,11 @@ export async function buildAndValidate(
  *    Format)" graph be reused with new prompts without manual editing.
  */
 export function buildCustomWorkflow(
-  graph: Record<string, any>,
+  graph: Record<string, unknown>,
   params: GenerateParams,
   paramMap?: ParamMap | null
-): Record<string, any> {
-  const out: Record<string, any> = JSON.parse(JSON.stringify(graph));
+): Record<string, unknown> {
+  const out: Record<string, unknown> = JSON.parse(JSON.stringify(graph)) as Record<string, unknown>;
 
   const serialized = JSON.stringify(out);
   const hasTokens =
@@ -674,7 +711,7 @@ export function buildCustomWorkflow(
       __LAST_FRAME__: params.lastFrame ?? "",
       __INPUT__: params.inputImage ?? "",
     };
-    const tok = replaceTokens(out, values) as Record<string, any>;
+    const tok = replaceTokens(out, values) as Record<string, unknown>;
     coerceNumericFields(tok);
     return tok;
   }
@@ -692,43 +729,53 @@ export function buildCustomWorkflow(
     setPromptText(out[map.negativeNode], params.negative);
   }
 
-  if (params.checkpoint && map.checkpointNode && out[map.checkpointNode]?.inputs) {
-    const ck = out[map.checkpointNode];
-    if (ck.inputs.ckpt_name !== undefined) ck.inputs.ckpt_name = params.checkpoint;
+  if (params.checkpoint && map.checkpointNode) {
+    const ckInputs = asRecord(asRecord(out[map.checkpointNode])?.inputs);
+    if (ckInputs?.ckpt_name !== undefined) ckInputs.ckpt_name = params.checkpoint;
   }
 
   const seedNum = params.seed;
-  if (map.samplerNode && out[map.samplerNode]) {
+  if (map.samplerNode) {
 
-    const samplerNode = out[map.samplerNode];
+    const samplerNode = asRecord(out[map.samplerNode]);
 
-    if (typeof params.steps === "number") samplerNode.inputs.steps = params.steps;
+    const sInputs = asRecord(samplerNode?.inputs);
 
-    if (typeof params.cfg === "number") samplerNode.inputs.cfg = params.cfg;
+    if (sInputs) {
 
-    // KSampler uses `seed`, KSamplerAdvanced uses `noise_seed`.
+      if (typeof params.steps === "number") sInputs.steps = params.steps;
 
-    // Note: seed=0 is a valid, intentional value — the old `> 0` guard dropped it.
+      if (typeof params.cfg === "number") sInputs.cfg = params.cfg;
 
-    const seedKey = samplerNode.class_type === "KSamplerAdvanced" ? "noise_seed" : "seed";
+      // KSampler uses `seed`, KSamplerAdvanced uses `noise_seed`.
 
-    if (typeof seedNum === "number" && !Number.isNaN(seedNum)) {
+      // Note: seed=0 is a valid, intentional value — the old `> 0` guard dropped it.
 
-      samplerNode.inputs[seedKey] = clampSeed(seedNum);
+      const seedKey = samplerNode?.class_type === "KSamplerAdvanced" ? "noise_seed" : "seed";
+
+      if (typeof seedNum === "number" && !Number.isNaN(seedNum)) {
+
+        sInputs[seedKey] = clampSeed(seedNum);
+
+      }
+
+      if (params.sampler) sInputs.sampler_name = params.sampler;
+
+      if (params.scheduler) sInputs.scheduler = params.scheduler;
 
     }
-
-    if (params.sampler) samplerNode.inputs.sampler_name = params.sampler;
-
-    if (params.scheduler) samplerNode.inputs.scheduler = params.scheduler;
 
   }
 
 
   // Feed an upstream-generated (or manually uploaded) image into the
   // workflow's LoadImage node so chains like 图生图 work out of the box.
-  if (params.inputImage && map.inputImageNode && out[map.inputImageNode]?.inputs) {
-    out[map.inputImageNode].inputs.image = params.inputImage;
+  const imageInputs =
+    map.inputImageNode && params.inputImage
+      ? asRecord(asRecord(out[map.inputImageNode])?.inputs)
+      : undefined;
+  if (params.inputImage && imageInputs) {
+    imageInputs.image = params.inputImage;
   }
 
   // Apply user-curated exposed-pin values (the dynamic form). These win over
@@ -736,17 +783,17 @@ export function buildCustomWorkflow(
   // Numeric coercion: ComfyUI rejects string values for numeric inputs, so when
   // the existing pin already holds a number we coerce a numeric-looking string.
   if (params.workflowInputs && Array.isArray(params.workflowInputs)) {
-    for (const it of params.workflowInputs as { nodeId: string; name: string; value?: unknown }[]) {
+    for (const it of params.workflowInputs) {
 
-      const node = out[it.nodeId];
+      const inputs = asRecord(asRecord(out[it.nodeId])?.inputs);
 
-      if (!node?.inputs) continue;
+      if (!inputs) continue;
 
       const value = it.value;
 
       if (value === undefined) continue;
 
-      const cur = node.inputs[it.name];
+      const cur = inputs[it.name];
 
       let assigned: unknown = value;
 
@@ -756,7 +803,7 @@ export function buildCustomWorkflow(
 
       }
 
-      node.inputs[it.name] = assigned;
+      inputs[it.name] = assigned;
 
     }
 

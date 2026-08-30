@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Workflow Canvas — Core Types
  *
@@ -11,7 +10,7 @@ import type { Node, Edge } from "@xyflow/react";
 /* ── ComfyUI graph shape (Export API Format) ── */
 export interface ComfyGraphNode {
   class_type: string;
-  inputs: Record<string, any>;
+  inputs: Record<string, unknown>;
   // _meta? not in raw export; we attach it client-side for UI hints
   _meta?: NodeMeta;
 }
@@ -43,12 +42,12 @@ export interface NodeData {
   /** Role badge */
   role?: NodeRole;
   /** Current input values (mirrors graph[nodeId].inputs) */
-  inputs: Record<string, any>;
+  inputs: Record<string, unknown>;
   /** Input field definitions (derived from INPUT_TYPES registry) */
   fields: FieldDef[];
   /** Selected state drives the editor panel */
   selected?: boolean;
-  [key: string]: any; // Index signature for ReactFlow compatibility
+  [key: string]: unknown; // Index signature for ReactFlow compatibility
 }
 
 export interface WorkflowEdge extends Edge {
@@ -90,7 +89,7 @@ export interface PortSpec {
   type: string;             // e.g. "FLOAT" | "IMAGE" | "COMBO" ...
   widget?: FieldType;       // editor widget (absent for pure connection ports)
   options?: string[];       // for COMBO
-  default?: any;            // default value (for value chip / placeholder)
+  default?: unknown;        // default value (for value chip / placeholder)
   required: boolean;
 }
 

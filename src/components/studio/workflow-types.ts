@@ -1,6 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* Extracted types — originally declared inside WorkflowCanvasEditor.tsx.
- * Pure type declarations only; no runtime code. */
+ * Pure type declarations only; no runtime code.
+ * `import type` below is compile-time only (fully erased) — it reuses the
+ * server's API-graph node shape so detail.graph consumers keep their
+ * class_type/inputs accessors without any. */
+import type { ApiWorkflowNode } from "@/lib/comfyui/raw";
+
 /* ── Types ── */
 export interface RawInputMeta {
   /** ComfyUI input name (English field name). */
@@ -94,7 +98,7 @@ export interface ComfyGraphNode {
   /** Boundary input port details for wfIoPort rendering (2026-08-05 v3).
    *  Only set when `is_input_endpoint` is true.  Captured by the
    *  subgraph route from the sentinel -10 link + matching widget value. */
-  boundary_input?: { name: string; type: string; value: any } | null;
+  boundary_input?: { name: string; type: string; value: unknown } | null;
   /** Boundary output port details for wfIoPort rendering.  Only set
    *  when `is_output_endpoint` is true. */
   boundary_output?: { name: string; type: string } | null;
@@ -217,7 +221,7 @@ export interface NodeJsonViewerContextValue {
    *  `null` when `detail` hasn't loaded yet (top bar Loading… state) or
    *  the key isn't present (e.g. fully-decorated node whose API form
    *  omits the entry). */
-  getNodeJson: (nodeId: string) => Record<string, any> | null;
+  getNodeJson: (nodeId: string) => Record<string, unknown> | null;
   /** Richer lookup covering the same node for the popover's "节点视图"
    *  synthesised tab — bundles the byte-perfect graph entry together
    *  with the raw-ui metadata (`detail.rawNodes[i]` matched by id) and
@@ -226,20 +230,20 @@ export interface NodeJsonViewerContextValue {
   getNodeView: (
     nodeId: string
   ) => {
-    entry: Record<string, any> | null;
+    entry: Record<string, unknown> | null;
     raw:
       | {
-          widgets_values: any[];
+          widgets_values: unknown[];
           outputs: RawOutputMeta[];
-          flags: Record<string, any>;
-          properties: Record<string, any>;
+          flags: Record<string, unknown>;
+          properties: Record<string, unknown>;
           mode: number;
         }
       | undefined;
     /** Literal RAW node (`detail.rawJson.nodes[i]`) — byte-identical to the
      *  corresponding slice of the whole-workflow RAW view. `null` when the
      *  workflow was API-only imported (no rawJson) or the node isn't found. */
-    rawNode?: Record<string, any> | null;
+    rawNode?: Record<string, unknown> | null;
     pos: [number, number] | null;
   } | null;
   /** Show the popover.  `anchorEl` should be the `#id` chip element
@@ -254,10 +258,10 @@ export interface NodeJsonViewerContextValue {
   viewer: NodeJsonViewerRequest | null;
 }
 export type RawMetaEntry = {
-  widgets_values: any[];
+  widgets_values: unknown[];
   outputs: RawOutputMeta[];
-  flags: Record<string, any>;
-  properties: Record<string, any>;
+  flags: Record<string, unknown>;
+  properties: Record<string, unknown>;
   mode: number;
 };
 
@@ -265,7 +269,7 @@ export interface WorkflowDetail {
   id: string;
   name: string;
   taskType: string;
-  graph: Record<string, any>;
+  graph: Record<string, ApiWorkflowNode>;
   /** 2026-08-11 R40: 从 `/api/workflows/:id` 返回的原始导入格式 (LiteGraph
    *  JSON)；canvas 顶部「📋 查看 JSON」modal 直接读这里喂给 SourceModal。
    *  null 表示该工作流纯 API 导入，无原始格式。 */
@@ -277,7 +281,7 @@ export interface WorkflowDetail {
   rawView?: {
     nodes: ComfyGraphNode[];
     positions: Record<string, [number, number]> | null;
-    graph: Record<string, any>;
+    graph: Record<string, ApiWorkflowNode>;
   } | null;
   paramMap: Record<string, string>;
   /** User-curated exposure selection: ioKey → metadata.  ioKey =
@@ -298,16 +302,16 @@ export interface WorkflowDetail {
    *  the raw JSON). */
   rawNodes: {
     id: string;
-    widgets_values: any[];
+    widgets_values: unknown[];
     outputs: RawOutputMeta[];
     /** Per-node LiteGraph flags (e.g. `collapsed`).  Empty when raw was
      *  absent (API-only import).  The Flow already consumed these via
      *  `(rn as any).flags`; declared here so the JSON popover can show
      *  them in the synthesised "节点视图" tab. */
-    flags?: Record<string, any>;
+    flags?: Record<string, unknown>;
     /** Custom-node properties (e.g. rgthree's `Fast Groups Bypasser`
      *  reads `matchTitle` from this).  Empty when raw was absent. */
-    properties?: Record<string, any>;
+    properties?: Record<string, unknown>;
     mode?: number;
   }[] | null;
   /** Boundary pin entities (subgraph.inputs/outputs from ComfyUI raw).
@@ -407,7 +411,7 @@ export interface WorkflowNodeData {
   nodeId: string;          // ComfyUI node ID
   classType: string;
   title: string;
-  inputs: Record<string, any>;
+  inputs: Record<string, unknown>;
   /** Which port role this node is assigned (if any) */
   assignedRole: string | null;
   /** For every input that is a connection ([srcId, slot]), the source node's
@@ -447,7 +451,7 @@ export interface WorkflowNodeData {
    *  values in rawJson.widgets_values rather than folding them into
    *  `graph[id].inputs`).  When set, WorkflowNode uses rawInputs as the input
    *  source with positional values from this array. */
-  rawWidgetValues?: any[];
+  rawWidgetValues?: unknown[];
   /** Output NAMES (matching the keys of `inferOutputTypeAll(classType)`
    *  or `rawOutputs[i].name`) that have at least one downstream edge in
    *  this workflow.  WorkflowNode only renders a source Handle for output rows
@@ -459,7 +463,7 @@ export interface WorkflowNodeData {
    *  SetNode / rgthree Compact).  The editor reads `flags.collapsed` and
    *  collapses the chip body when present.  Other flag keys (pinned,
    *  allow_interaction, …) are kept opaque for future use. */
-  flags?: Record<string, any>;
+  flags?: Record<string, unknown>;
   /** LiteGraph `mode` value (0 = Always / normal, 2 = Never / muted, 4 = Bypass).
    *  Surfaced from raw JSON so the canvas can tint nodes by their ComfyUI
    *  status — bypass → purple, disabled → grey, normal → role/default. */
@@ -472,7 +476,7 @@ export interface WorkflowNodeData {
    *  `classType === "Fast Groups Bypasser (rgthree)"` and renders the
    *  matched groups as a runtime body.  Empty / undefined for nodes
    *  that don't carry properties. */
-  properties?: Record<string, any>;
+  properties?: Record<string, unknown>;
   /** Workflow groups (2026-08-09).  Forwarded to WorkflowNode so the rgthree
    *  Fast Groups Bypasser runtime body can match against the live
    *  group list without re-fetching.  Read-only here — toggling a
@@ -584,7 +588,7 @@ export interface WorkflowSubgraphData {
   /** Per-output display metadata from raw JSON (e.g. the IMAGE output a
    *  subgraph exposes).  Empty when the subgraph has no outputs. */
   outputs?: RawOutputMeta[];
-  widgetValues: any[];
+  widgetValues: unknown[];
   /** Callback to enter the subgraph's internal graph. */
   onEnter?: () => void;
   /** Same semantics as WorkflowNodeData.connectedOutputs — only outputs in this
@@ -606,6 +610,6 @@ export interface WorkflowSubgraphData {
   /** LiteGraph flags forwarded verbatim from raw JSON.  Currently
    *  read for `flags.collapsed` so an imported subgraph that ComfyUI
    *  ships collapsed stays collapsed here too. */
-  flags?: Record<string, any>;
+  flags?: Record<string, unknown>;
 }
 

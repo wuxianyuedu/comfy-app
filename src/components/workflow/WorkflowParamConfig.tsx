@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
@@ -133,11 +132,16 @@ export function WorkflowParamConfig({
     { enabled: !(initialNodes && initialNodes.length > 0) }
   );
   const fetchedNodes: WorkflowNodeForConfig[] = useMemo(
-    () => Object.entries(detailQ.data?.template.graph ?? {}).map(([id, n]) => ({
-      id,
-      class_type: n.class_type,
-      title: n.title ?? n.class_type,
-    })),
+    () => Object.entries(detailQ.data?.template.graph ?? {}).map(([id, n]) => {
+      // graph 列是 JsonValue：逐条收窄后再读 class_type / title（§5.6）。
+      const rec = typeof n === "object" && n !== null ? (n as Record<string, unknown>) : {};
+      const classType = typeof rec.class_type === "string" ? rec.class_type : "";
+      return {
+        id,
+        class_type: classType,
+        title: typeof rec.title === "string" ? rec.title : classType,
+      };
+    }),
     [detailQ.data?.template.graph]
   );
 
@@ -194,8 +198,9 @@ export function WorkflowParamConfig({
       setSaved(true);
       onSave?.(paramMap);
       setTimeout(() => setSaved(false), 2000);
-    } catch (e: any) {
-      setError(e.message ?? "保存失败");
+    } catch (e: unknown) {
+      // 与旧 `e.message ?? "保存失败"` 等价（tRPC mutateAsync 抛出的恒为 Error 子类）。
+      setError(e instanceof Error ? e.message : "保存失败");
     } finally {
       setSaving(false);
     }

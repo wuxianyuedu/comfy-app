@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/prefer-optional-chain */
 "use client";
 
 /* 2026-08-30: extracted from CanvasNode — task-run logic.
@@ -29,6 +28,22 @@ import { setActiveTaskId } from "../activeTask";
 import { vanillaApi } from "~/trpc/vanilla";
 import { collectReferenceImages, seedModeOverrides } from "./helpers";
 
+/** catch 抛出值（unknown）→ 与旧 `e?.message ?? String(e)` 逐值等价的错误文案：
+ *  带 string message 的对象取 message（Error 实例即此路径），其余走 String(v)
+ *  等价实现（对象经其 toString → "[object Object]"，null/undefined →
+ *  "null"/"undefined"）。旧代码兜底的 `?? "未捕获异常"` 不可达（String 恒返回
+ *  非空值），此处一并收敛。 */
+function catchMessage(e: unknown): string {
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const m = (e as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  if (typeof e === "string") return e;
+  if (e === null) return "null";
+  if (e === undefined) return "undefined";
+  return (e as { toString(): string }).toString();
+}
+
 export interface UseGenerateArgs {
   id: string;
   d: CanvasNodeData;
@@ -56,11 +71,11 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
   useEffect(() => {
     if (d.status !== "running" || !taskIdForReconcile) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         if (cancelled) return;
         const t = await vanillaApi.task.detail.query({ id: taskIdForReconcile });
-        if (cancelled || !t || !t.status) return;
+        if (cancelled || !t?.status) return;
         if (t.status === "RUNNING") {
           // Legitimately still running on another runner — leave the node as-is.
           return;
@@ -70,7 +85,7 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
             status: "done",
             error: undefined,
             progress: 100,
-            ...(t.resultImages ? { resultImages: t.resultImages as never } : {}),
+            ...(t.resultImages ? { resultImages: t.resultImages } : {}),
           });
         } else if (t.status === "FAILED" || t.status === "CANCELLED") {
           patch({
@@ -184,7 +199,7 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
                     resultPath: result.localPath,
                     resultMediaType: result.mediaType,
                     inputImage: imported ?? null,
-                    mode: (imported ? "img2img" : "txt2img") as "img2img" | "txt2img",
+                    mode: imported ? "img2img" : "txt2img",
                   };
             setNodes((nds) => [
               ...nds,
@@ -228,10 +243,10 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
             },
           });
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         patch({
           status: "error",
-          error: e?.message ?? String(e) ?? "未捕获异常",
+          error: catchMessage(e),
           errorContext: {
             request: payload,
             timestamp: new Date().toISOString(),
@@ -310,10 +325,10 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
           },
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       patch({
         status: "error",
-        error: e?.message ?? String(e) ?? "未捕获异常",
+        error: catchMessage(e),
         errorContext: {
           request: payload,
           timestamp: new Date().toISOString(),
@@ -354,10 +369,10 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
           },
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       patch({
         status: "error",
-        error: e?.message ?? String(e) ?? "重试失败",
+        error: catchMessage(e),
         errorContext: {
           request: req,
           timestamp: new Date().toISOString(),
