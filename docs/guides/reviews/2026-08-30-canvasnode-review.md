@@ -63,3 +63,13 @@ CanvasContextMenu、use-canvas-drop、ResultCard、canvas-render-chain——多�
 2. CanvasContextMenu/use-canvas-drop 改读注册表(7 触点 → ~4);
 3. Body 逐 kind 抽出(新 kind 直接按 Body 写);**端口渲染保持 wfIO 驱动,不进 def**;
 4. def.run 仅作共享引擎(use-generate)的薄封装。
+
+## 三、origin/dev 合并评审(同日)
+
+3 个提交(工作流库左右分栏重构/剧本 Markdown 编辑器/PyInstaller 启动器),+3122/−1443。
+
+- **合规信号**:新文件命名全合规(Pascal 组件/kebab 模块/scripts py);any/disable 仅 1 处、console 1 处。
+- **冲突**:workflow.ts 单文件 16 处(我方 lint 修复 vs dev 重构)——按 dev 重构版解决,门禁复检补质量。
+- **发现并修复**:dev 带入 2 个新的文件级 no-explicit-any 头(workflow-preview.ts 22 处/workflow.ts 85 处),已按战役标准类型化清零(107→0)。
+- console.warn 在客户端错误路径可接受(喂 LogPanel 捕获)。
+- dev 新模块(workflow-preview 331 行/ScriptMarkdownEditor 539 行)暂无测试,列入覆盖爬坡。

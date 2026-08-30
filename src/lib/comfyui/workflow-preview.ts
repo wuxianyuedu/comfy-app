@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 
 /**
  * Client-safe workflow graph preview helpers.
@@ -40,6 +39,43 @@ export type WorkflowPreview = {
   /** True when nodes[] only shows a representative subset of total nodes. */
   truncated: boolean;
 };
+
+/**
+ * Structural view of one node in a ComfyUI API-format graph ("Export (API
+ * Format)" JSON: `{ "nodeId": { class_type, inputs } }`). Only `class_type`
+ * and `inputs` are interpreted; every other field passes through untouched.
+ */
+export type WorkflowGraphNode = {
+  class_type: string;
+  /** Named inputs; link values are `[nodeId, outputIndex]` tuples. */
+  inputs?: Record<string, unknown>;
+};
+
+/**
+ * Runtime guard for {@link WorkflowGraphNode}. ComfyUI node objects carry
+ * extra dynamic fields, so any object with a string `class_type` is accepted;
+ * `inputs` is validated structurally only where it is actually read.
+ */
+export function isWorkflowGraphNode(
+  value: unknown,
+): value is WorkflowGraphNode {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "class_type" in value &&
+    typeof value.class_type === "string"
+  );
+}
+
+/**
+ * Extract the upstream node id from a ComfyUI link — an input value that is a
+ * `[nodeId, outputIndex]` tuple. Non-link values (strings, numbers, …) yield
+ * undefined.
+ */
+export function linkTargetId(value: unknown): string | undefined {
+  if (!Array.isArray(value) || value.length < 1) return undefined;
+  return typeof value[0] === "string" ? value[0] : undefined;
+}
 
 /** Class types that act as data sources (no other node feeds them). */
 const INPUT_CLASSES = new Set([
@@ -92,10 +128,11 @@ function classifyNode(classType: string): WorkflowPreviewNodeKind {
  * by topological order so the card stays readable; `truncated` is set.
  */
 export function buildWorkflowPreview(
-  graph: Record<string, any>,
+  graph: Record<string, unknown>,
 ): WorkflowPreview {
   const entries = Object.entries(graph).filter(
-    ([, n]) => n && typeof n === "object" && typeof n.class_type === "string",
+    (entry): entry is [string, WorkflowGraphNode] =>
+      isWorkflowGraphNode(entry[1]),
   );
   const total = entries.length;
   if (total === 0) {
@@ -120,14 +157,10 @@ export function buildWorkflowPreview(
     const inputs = node.inputs;
     if (!inputs || typeof inputs !== "object") continue;
     for (const v of Object.values(inputs)) {
-      if (
-        Array.isArray(v) &&
-        v.length >= 1 &&
-        typeof v[0] === "string" &&
-        outAdj[v[0]]
-      ) {
-        incoming[id]!.add(v[0]);
-        outAdj[v[0]]!.add(id);
+      const src = linkTargetId(v);
+      if (src && outAdj[src]) {
+        incoming[id]!.add(src);
+        outAdj[src].add(id);
       }
     }
   }
@@ -157,16 +190,14 @@ export function buildWorkflowPreview(
 
   // Pick a representative subset if too many nodes. Keep at most 14, biased
   // toward sources and sinks, and to early layers.
+  const nodeById = new Map(entries);
   let visible = entries.map(([id]) => id);
   let truncated = false;
   if (visible.length > 14) {
     truncated = true;
-    const sinks = visible.filter(
-      (id) => classifyNode(graph[id].class_type) === "output",
-    );
-    const sources = visible.filter(
-      (id) => classifyNode(graph[id].class_type) === "input",
-    );
+    const kindOf = (id: string) => classifyNode(nodeById.get(id)!.class_type);
+    const sinks = visible.filter((id) => kindOf(id) === "output");
+    const sources = visible.filter((id) => kindOf(id) === "input");
     const mid = visible.filter(
       (id) => !sinks.includes(id) && !sources.includes(id),
     );
@@ -194,12 +225,14 @@ export function buildWorkflowPreview(
 
     const row = arr.indexOf(id);
 
+    const node = nodeById.get(id)!;
+
     return {
       id,
 
-      class_type: graph[id].class_type,
+      class_type: node.class_type,
 
-      kind: classifyNode(graph[id].class_type),
+      kind: classifyNode(node.class_type),
 
       level: lv,
 
@@ -232,10 +265,11 @@ export const FULL_PREVIEW_MARGIN = 32;
  * wider, more readable grid so the user can inspect the full canvas topology.
  */
 export function buildWorkflowPreviewFull(
-  graph: Record<string, any>,
+  graph: Record<string, unknown>,
 ): WorkflowPreview {
   const entries = Object.entries(graph).filter(
-    ([, n]) => n && typeof n === "object" && typeof n.class_type === "string",
+    (entry): entry is [string, WorkflowGraphNode] =>
+      isWorkflowGraphNode(entry[1]),
   );
   const total = entries.length;
   if (total === 0) {
@@ -259,14 +293,10 @@ export function buildWorkflowPreviewFull(
     const inputs = node.inputs;
     if (!inputs || typeof inputs !== "object") continue;
     for (const v of Object.values(inputs)) {
-      if (
-        Array.isArray(v) &&
-        v.length >= 1 &&
-        typeof v[0] === "string" &&
-        outAdj[v[0]]
-      ) {
-        incoming[id]!.add(v[0]);
-        outAdj[v[0]]!.add(id);
+      const src = linkTargetId(v);
+      if (src && outAdj[src]) {
+        incoming[id]!.add(src);
+        outAdj[src].add(id);
       }
     }
   }
@@ -299,14 +329,14 @@ export function buildWorkflowPreviewFull(
   }
   for (const arr of Object.values(byLevel)) arr.sort();
 
-  const nodes: WorkflowPreviewNode[] = entries.map(([id]) => {
+  const nodes: WorkflowPreviewNode[] = entries.map(([id, node]) => {
     const lv = level[id] ?? 0;
     const arr = byLevel[lv] ?? [];
     const row = arr.indexOf(id);
     return {
       id,
-      class_type: graph[id].class_type,
-      kind: classifyNode(graph[id].class_type),
+      class_type: node.class_type,
+      kind: classifyNode(node.class_type),
       level: lv,
       row,
     };

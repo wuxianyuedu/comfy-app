@@ -1,6 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 import { listModels } from "./client";
 import { getWorkflow } from "./_meta";
+import { linkTargetId } from "./workflow-preview";
+import type { RawWorkflowOverride } from "./runner-state";
 import txt2img from "./workflows/txt2img.json";
 import img2img from "./workflows/img2img.json";
 import inpaint from "./workflows/inpaint.json";
@@ -51,8 +52,10 @@ export type GenerateParams = {
   resolution?: string;
   firstFrame?: string; // filename already in ComfyUI input dir (首尾帧首图)
   lastFrame?: string; // filename already in ComfyUI input dir (首尾帧尾图)
-  // Custom workflow: user-curated exposed pins from the IO-edit mode
-  workflowInputs?: { nodeId: string; name: string; value?: any }[];
+  // Custom workflow: user-curated exposed pins from the IO-edit mode.
+  // Same shape as the runner's RawWorkflowOverride — the generate router feeds
+  // the same array to buildCustomWorkflow and to enqueue().overrides.
+  workflowInputs?: RawWorkflowOverride[];
 };
 
 export type BuildResult = {
@@ -106,14 +109,32 @@ export {
  * that actually holds the prompt string (CLIPTextEncode / SDXL / Flux …). This
  * follows the real graph topology instead of guessing by node id order.
  */
+/**
+ * Loose structural view of a possibly-incomplete graph node. Imported graphs
+ * are user JSON — fields may be missing or hold unexpected types — so the
+ * walkers below interpret every field defensively instead of trusting shapes.
+ */
+type GraphNodeLike = {
+  class_type?: unknown;
+  inputs: Record<string, unknown>;
+};
+
+/** Object check returning a structural view of `value` (same reference — no
+ *  copy — so mutations through it write back into the graph). */
+function asGraphNode(value: unknown): GraphNodeLike | null {
+  return typeof value === "object" && value !== null
+    ? (value as GraphNodeLike)
+    : null;
+}
+
 function findTextEncoder(
-  graph: Record<string, any>,
+  graph: Record<string, unknown>,
   startId: string | undefined,
   visited = new Set<string>(),
 ): string | null {
   if (!startId || visited.has(startId)) return null;
   visited.add(startId);
-  const node = graph[startId];
+  const node = asGraphNode(graph[startId]);
   if (!node?.inputs) return null;
   const TEXT_FIELDS = [
     "text",
@@ -132,8 +153,9 @@ function findTextEncoder(
   }
 
   for (const v of Object.values(node.inputs)) {
-    if (Array.isArray(v) && typeof v[0] === "string" && graph[v[0]]) {
-      const result = findTextEncoder(graph, v[0], visited);
+    const target = linkTargetId(v);
+    if (target && graph[target]) {
+      const result = findTextEncoder(graph, target, visited);
 
       if (result) return result;
     }
@@ -141,9 +163,9 @@ function findTextEncoder(
   return null;
 }
 
-function isSamplerLike(node: any): boolean {
+function isSamplerLike(node: GraphNodeLike): boolean {
   return (
-    !!node?.inputs &&
+    !!node.inputs &&
     Array.isArray(node.inputs.positive) &&
     Array.isArray(node.inputs.negative)
   );
@@ -157,21 +179,24 @@ function isSamplerLike(node: any): boolean {
  * text-encode node (CLIPTextEncode / SDXL / Flux / T5 …). Falls back to the
  * first two CLIPTextEncode when no sampler is present.
  */
-export function detectParamMap(graph: Record<string, any>): ParamMap {
+export function detectParamMap(graph: Record<string, unknown>): ParamMap {
   const map: ParamMap = {};
   const ids = Object.keys(graph);
-  const nodes = ids.map((id) => ({ id, node: graph[id] }));
+  const nodes = ids.map((id) => ({ id, node: asGraphNode(graph[id]) }));
 
-  const sampler = nodes.find(
-    (node) =>
-      node.node &&
-      (node.node.class_type === "KSampler" ||
-        node.node.class_type === "KSamplerAdvanced" ||
-        isSamplerLike(node.node)),
-  );
-  if (sampler) {
-    const posEnc = findTextEncoder(graph, sampler.node.inputs.positive?.[0]);
-    const negEnc = findTextEncoder(graph, sampler.node.inputs.negative?.[0]);
+  const sampler = nodes.find((node) => {
+    const n = node.node;
+    if (!n) return false;
+    return (
+      n.class_type === "KSampler" ||
+      n.class_type === "KSamplerAdvanced" ||
+      isSamplerLike(n)
+    );
+  });
+  if (sampler?.node) {
+    const inputs = sampler.node.inputs;
+    const posEnc = findTextEncoder(graph, linkTargetId(inputs.positive));
+    const negEnc = findTextEncoder(graph, linkTargetId(inputs.negative));
     if (posEnc) map.positiveNode = posEnc;
     if (negEnc) map.negativeNode = negEnc;
   }
@@ -278,8 +303,9 @@ const NUMERIC_INPUT_NAMES = new Set([
   "clip_sample",
 ]);
 
-function coerceNumericFields(graph: Record<string, any>): void {
-  for (const node of Object.values(graph)) {
+function coerceNumericFields(graph: Record<string, unknown>): void {
+  for (const nodeValue of Object.values(graph)) {
+    const node = asGraphNode(nodeValue);
     if (!node?.inputs) continue;
     for (const key of Object.keys(node.inputs)) {
       if (!NUMERIC_INPUT_NAMES.has(key)) continue;
@@ -319,7 +345,7 @@ const CLIP_LOADER = new Set([
  * originally consumed the base model/clip (preserving refiner / dual-CLIP chains).
  */
 function injectLoras(
-  graph: Record<string, any>,
+  graph: Record<string, unknown>,
   loras: LoraSpec[],
 ): {
   baseModel: [string, number] | null;
@@ -328,15 +354,16 @@ function injectLoras(
 } {
   let baseModel: [string, number] | null = null;
   let baseClip: [string, number] | null = null;
-  for (const [id, node] of Object.entries(graph)) {
-    if (!node?.class_type) continue;
-    if (CHECKPOINT_LOADER.has(node.class_type)) {
+  for (const [id, value] of Object.entries(graph)) {
+    const classType = asGraphNode(value)?.class_type;
+    if (typeof classType !== "string") continue;
+    if (CHECKPOINT_LOADER.has(classType)) {
       // CheckpointLoaderSimple: outputs [MODEL0, CLIP1, VAE2].
       baseModel ??= [id, 0];
       baseClip ??= [id, 1];
-    } else if (UNET_LOADER.has(node.class_type) && !baseModel) {
+    } else if (UNET_LOADER.has(classType) && !baseModel) {
       baseModel = [id, 0];
-    } else if (CLIP_LOADER.has(node.class_type) && !baseClip) {
+    } else if (CLIP_LOADER.has(classType) && !baseClip) {
       baseClip = [id, 0];
     }
   }
@@ -347,7 +374,7 @@ function injectLoras(
   const loraIds: string[] = [];
   loras.forEach((lora, i) => {
     const id = `lora_${i}`;
-    const inputs: Record<string, any> = {
+    const inputs: Record<string, unknown> = {
       lora_name: lora.name,
       strength_model: lora.weight,
       model: prevModel,
@@ -372,13 +399,15 @@ function injectLoras(
  *  Skips the injected LoraLoader nodes themselves (their model/clip inputs
  *  legitimately reference the previous link in the chain). */
 function rewireLoaders(
-  graph: Record<string, any>,
+  graph: Record<string, unknown>,
   baseModel: [string, number] | null,
   baseClip: [string, number] | null,
   lastLora: string,
 ) {
-  for (const node of Object.values(graph)) {
+  for (const value of Object.values(graph)) {
+    const node = asGraphNode(value);
     if (!node?.inputs) continue;
+    const inputs = node.inputs;
     if (
       node.class_type === "LoraLoader" ||
       node.class_type === "LoraLoaderModelOnly"
@@ -386,33 +415,34 @@ function rewireLoaders(
       continue;
     if (
       baseModel &&
-      Array.isArray(node.inputs.model) &&
-      node.inputs.model[0] === baseModel[0] &&
-      node.inputs.model[1] === baseModel[1]
+      Array.isArray(inputs.model) &&
+      inputs.model[0] === baseModel[0] &&
+      inputs.model[1] === baseModel[1]
     ) {
-      node.inputs.model = [lastLora, 0];
+      inputs.model = [lastLora, 0];
     }
     if (
       baseClip &&
-      Array.isArray(node.inputs.clip) &&
-      node.inputs.clip[0] === baseClip[0] &&
-      node.inputs.clip[1] === baseClip[1]
+      Array.isArray(inputs.clip) &&
+      inputs.clip[0] === baseClip[0] &&
+      inputs.clip[1] === baseClip[1]
     ) {
-      node.inputs.clip = [lastLora, 1];
+      inputs.clip = [lastLora, 1];
     }
   }
 }
 
 /** Set the prompt string on a CLIPTextEncode-style node (handles SDXL text_g/text_l). */
-function setPromptText(node: any, prompt: string) {
+function setPromptText(node: GraphNodeLike | null, prompt: string) {
   if (!node?.inputs) return;
-  if (node.inputs.text_g !== undefined) {
+  const inputs = node.inputs;
+  if (inputs.text_g !== undefined) {
     // SDXL / SDXL-simplified: both text_g and text_l carry the prompt.
-    node.inputs.text_g = prompt;
-    if (node.inputs.text_l !== undefined) node.inputs.text_l = prompt;
-  } else if (!Array.isArray(node.inputs.text)) {
+    inputs.text_g = prompt;
+    if (inputs.text_l !== undefined) inputs.text_l = prompt;
+  } else if (!Array.isArray(inputs.text)) {
     // Plain CLIPTextEncode: `text` is the prompt (unless it's a link).
-    node.inputs.text = prompt;
+    inputs.text = prompt;
   }
 }
 
@@ -479,7 +509,7 @@ export async function buildAndValidate(
     __LAST_FRAME__: params.lastFrame ?? "",
   };
 
-  const graph = replaceTokens(template, values) as Record<string, any>;
+  const graph = replaceTokens(template, values) as Record<string, unknown>;
 
   // ComfyUI rejects string values for numeric inputs, but token substitution
   // produces strings. Coerce the known numeric fields back to numbers after the
@@ -508,11 +538,11 @@ export async function buildAndValidate(
  *    Format)" graph be reused with new prompts without manual editing.
  */
 export function buildCustomWorkflow(
-  graph: Record<string, any>,
+  graph: Record<string, unknown>,
   params: GenerateParams,
   paramMap?: ParamMap | null,
-): Record<string, any> {
-  const out: Record<string, any> = JSON.parse(JSON.stringify(graph));
+): Record<string, unknown> {
+  const out = JSON.parse(JSON.stringify(graph)) as Record<string, unknown>;
 
   const serialized = JSON.stringify(out);
   const hasTokens =
@@ -542,7 +572,7 @@ export function buildCustomWorkflow(
       __LAST_FRAME__: params.lastFrame ?? "",
       __INPUT__: params.inputImage ?? "",
     };
-    const tok = replaceTokens(out, values) as Record<string, any>;
+    const tok = replaceTokens(out, values) as Record<string, unknown>;
     coerceNumericFields(tok);
     return tok;
   }
@@ -558,59 +588,57 @@ export function buildCustomWorkflow(
     out[map.positiveNode] &&
     params.prompt !== undefined
   ) {
-    setPromptText(out[map.positiveNode], params.prompt);
+    setPromptText(asGraphNode(out[map.positiveNode]), params.prompt);
   }
   if (
     map.negativeNode &&
     out[map.negativeNode] &&
     params.negative !== undefined
   ) {
-    setPromptText(out[map.negativeNode], params.negative);
+    setPromptText(asGraphNode(out[map.negativeNode]), params.negative);
   }
 
-  if (
-    params.checkpoint &&
-    map.checkpointNode &&
-    out[map.checkpointNode]?.inputs
-  ) {
-    const ck = out[map.checkpointNode];
-    if (ck.inputs.ckpt_name !== undefined)
-      ck.inputs.ckpt_name = params.checkpoint;
+  if (params.checkpoint && map.checkpointNode) {
+    const ck = asGraphNode(out[map.checkpointNode]);
+    const inputs = ck?.inputs;
+    if (inputs?.ckpt_name !== undefined)
+      inputs.ckpt_name = params.checkpoint;
   }
 
   const seedNum = params.seed;
-  if (map.samplerNode && out[map.samplerNode]) {
-    const samplerNode = out[map.samplerNode];
+  if (map.samplerNode) {
+    const samplerNode = asGraphNode(out[map.samplerNode]);
 
-    if (typeof params.steps === "number")
-      samplerNode.inputs.steps = params.steps;
+    if (samplerNode?.inputs) {
+      const inputs = samplerNode.inputs;
 
-    if (typeof params.cfg === "number") samplerNode.inputs.cfg = params.cfg;
+      if (typeof params.steps === "number")
+        inputs.steps = params.steps;
 
-    // KSampler uses `seed`, KSamplerAdvanced uses `noise_seed`.
+      if (typeof params.cfg === "number") inputs.cfg = params.cfg;
 
-    // Note: seed=0 is a valid, intentional value — the old `> 0` guard dropped it.
+      // KSampler uses `seed`, KSamplerAdvanced uses `noise_seed`.
 
-    const seedKey =
-      samplerNode.class_type === "KSamplerAdvanced" ? "noise_seed" : "seed";
+      // Note: seed=0 is a valid, intentional value — the old `> 0` guard dropped it.
 
-    if (typeof seedNum === "number" && !Number.isNaN(seedNum)) {
-      samplerNode.inputs[seedKey] = clampSeed(seedNum);
+      const seedKey =
+        samplerNode.class_type === "KSamplerAdvanced" ? "noise_seed" : "seed";
+
+      if (typeof seedNum === "number" && !Number.isNaN(seedNum)) {
+        inputs[seedKey] = clampSeed(seedNum);
+      }
+
+      if (params.sampler) inputs.sampler_name = params.sampler;
+
+      if (params.scheduler) inputs.scheduler = params.scheduler;
     }
-
-    if (params.sampler) samplerNode.inputs.sampler_name = params.sampler;
-
-    if (params.scheduler) samplerNode.inputs.scheduler = params.scheduler;
   }
 
   // Feed an upstream-generated (or manually uploaded) image into the
   // workflow's LoadImage node so chains like 图生图 work out of the box.
-  if (
-    params.inputImage &&
-    map.inputImageNode &&
-    out[map.inputImageNode]?.inputs
-  ) {
-    out[map.inputImageNode].inputs.image = params.inputImage;
+  if (params.inputImage && map.inputImageNode) {
+    const inputNode = asGraphNode(out[map.inputImageNode]);
+    if (inputNode?.inputs) inputNode.inputs.image = params.inputImage;
   }
 
   // Apply user-curated exposed-pin values (the dynamic form). These win over
@@ -618,12 +646,8 @@ export function buildCustomWorkflow(
   // Numeric coercion: ComfyUI rejects string values for numeric inputs, so when
   // the existing pin already holds a number we coerce a numeric-looking string.
   if (params.workflowInputs && Array.isArray(params.workflowInputs)) {
-    for (const it of params.workflowInputs as {
-      nodeId: string;
-      name: string;
-      value?: unknown;
-    }[]) {
-      const node = out[it.nodeId];
+    for (const it of params.workflowInputs) {
+      const node = asGraphNode(out[it.nodeId]);
 
       if (!node?.inputs) continue;
 
