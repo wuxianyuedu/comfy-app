@@ -8,6 +8,20 @@ import type { Shot, Scene, Character, StyleRef, ShotType } from "@/lib/workshop/
 import { SHOT_TYPE_LABELS } from "@/lib/workshop/types";
 import { buildShotPrompt, buildShotNegative, mergeParams } from "@/lib/workshop/prompt-builder";
 import { workshopUid } from "@/lib/workshop/script-parser";
+import {
+  type ExtractChannel,
+  ExtractToolbar,
+} from "@/components/workshop/ExtractToolbar";
+import {
+  buildExtractShotsMessages,
+  buildShotsFromEntries,
+  draftToShotEntry,
+  mergeCharacterDrafts,
+  parseExtractedShots,
+  parseImportedCharacterCards,
+  parseShotDrafts,
+} from "@/lib/workshop/script-parse";
+import type { ShotEntry } from "@/lib/workshop/script-parse";
 import { useLLM } from "@/components/workshop/LLMContext";
 import { streamChat } from "@/lib/llm/browser";
 import { buildStoryboardMessages, parseStoryboard } from "@/lib/llm/prompts";
@@ -30,6 +44,15 @@ interface Props {
   onShotsChange: (s: Shot[]) => void;
   onGenerate: (shot: Shot) => Promise<void>;
   generating: boolean;
+  /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
+  scriptMarkdown?: string;
+  /** 分镜阶段导入角色卡 JSON 时的角色写入口(可选,未接入时仅提示) */
+  onCharactersChange?: (c: Character[]) => void;
+}
+
+/** 判断导入内容是否为 JSON(分镜/角色卡 JSON 走结构化解析,其余按剧本 markdown 解析) */
+function looksLikeJson(text: string): boolean {
+  return text.startsWith("{") || text.startsWith("[");
 }
 
 const SHOT_TYPES: ShotType[] = [
@@ -51,11 +74,127 @@ export function StoryboardPlanner({
   onShotsChange,
   onGenerate,
   generating,
+  scriptMarkdown,
+  onCharactersChange,
 }: Props) {
   const [aiBusy, setAiBusy] = React.useState(false);
   const [aiProgress, setAiProgress] = React.useState("");
   const [aiError, setAiError] = React.useState("");
   const { config, openSettings } = useLLM();
+
+  // ── 三通道提取(工具 / 本地模型 / 配置API)+ 外部导入 ──
+  const [extractChannel, setExtractChannel] = React.useState<ExtractChannel>("tool");
+  const [extractBusy, setExtractBusy] = React.useState(false);
+  const [extractStatus, setExtractStatus] = React.useState("");
+  const [extractError, setExtractError] = React.useState("");
+
+  const hasScript = !!scriptMarkdown?.trim();
+  const knownNames = characters.map((character) => character.name).filter(Boolean);
+
+  /** 通道 → LLM provider(工具通道不调用模型;本地/远端复用既有 /api/llm 链路) */
+  function channelProvider(channel: ExtractChannel): "local" | "remote" {
+    return channel === "local" ? "local" : "remote";
+  }
+
+  /** 条目 → 既有 Shot 结构(场景/角色关联与提示词重算复用既有链路) */
+  function appendShots(entries: ShotEntry[]) {
+    const built = buildShotsFromEntries(entries, shots.length, scenes, characters);
+    onShotsChange([...shots, ...built]);
+    setExtractStatus(`已提取 ${built.length} 个镜头`);
+  }
+
+  /** 三通道提取入口:工具=确定性拆分;本地/API=LLM 输出 JSON,失败降级提示 */
+  async function handleExtract() {
+    const script = (scriptMarkdown ?? "").trim();
+    if (!script) {
+      setExtractError("未获取到剧本文本,请先在「剧本」阶段编写或编辑剧本");
+      return;
+    }
+    if (extractChannel !== "tool" && !config) {
+      openSettings();
+      return;
+    }
+    setExtractBusy(true);
+    setExtractStatus(extractChannel === "tool" ? "" : "正在调用模型提取分镜…");
+    setExtractError("");
+    try {
+      let entries: ShotEntry[];
+      if (extractChannel === "tool") {
+        const drafts = parseShotDrafts(script, knownNames);
+        if (drafts.length === 0) {
+          setExtractError(
+            "工具通道未在剧本中找到场景标题(如「1-1 场景 外 地点(时间)」)或 Δ动作 / Vx台词 行。可检查剧本结构后重试,或切换到本地模型 / 配置API 通道。"
+          );
+          return;
+        }
+        entries = drafts.map(draftToShotEntry);
+      } else {
+        const full = await streamChat({
+          messages: buildExtractShotsMessages(script, knownNames),
+          opts: { provider: channelProvider(extractChannel) },
+        });
+        entries = parseExtractedShots(full);
+        if (entries.length === 0) {
+          setExtractError("模型未返回有效分镜 JSON,解析失败。可重试,或改用「工具」通道。");
+          return;
+        }
+      }
+      appendShots(entries);
+    } catch (e: unknown) {
+      setExtractError(`${errorMessage(e, "提取失败")} 可重试,或改用「工具」通道。`);
+    } finally {
+      setExtractBusy(false);
+    }
+  }
+
+  /** 外部导入:分镜脚本 markdown 走工具解析器;JSON 支持分镜数组与角色卡文件 */
+  async function handleImportFile(file: File) {
+    setExtractBusy(true);
+    setExtractStatus("");
+    setExtractError("");
+    try {
+      const text = await file.text();
+      const trimmed = text.trim();
+      if (!trimmed) throw new Error("文件内容为空");
+      if (looksLikeJson(trimmed)) {
+        let entries: ShotEntry[];
+        try {
+          entries = parseExtractedShots(trimmed);
+        } catch {
+          // 非分镜 JSON:尝试按角色卡文件导入(写入角色列表)
+          const cards = parseImportedCharacterCards(trimmed);
+          if (!onCharactersChange) {
+            throw new Error("这是角色卡文件,但当前页面未接入角色写入,请到「角色卡」阶段导入");
+          }
+          const res = mergeCharacterDrafts(characters, cards, styles);
+          if (res.added === 0) {
+            throw new Error("角色卡均已存在或无有效内容,未新增");
+          }
+          onCharactersChange(res.list);
+          setExtractStatus(
+            `已从文件导入 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`
+          );
+          return;
+        }
+        if (entries.length === 0) {
+          throw new Error("JSON 中未解析出任何镜头(需含 sceneHeading 或 description 字段)");
+        }
+        appendShots(entries);
+        return;
+      }
+      const drafts = parseShotDrafts(trimmed, knownNames);
+      if (drafts.length === 0) {
+        throw new Error(
+          "未在文件中找到场景标题(如「1-1 场景 外 地点(时间)」)或 Δ动作 / Vx台词 行"
+        );
+      }
+      appendShots(drafts.map(draftToShotEntry));
+    } catch (e: unknown) {
+      setExtractError(errorMessage(e, "导入失败"));
+    } finally {
+      setExtractBusy(false);
+    }
+  }
 
   // Import shots from script: each scene → shotCount shots
   function importFromScript() {
@@ -224,6 +363,25 @@ export function StoryboardPlanner({
           </button>
         </div>
       </div>
+
+      {/* 三通道提取 + 外部导入 */}
+      <ExtractToolbar
+        channel={extractChannel}
+        onChannelChange={setExtractChannel}
+        extractLabel="从剧本提取分镜"
+        onExtract={() => {
+          void handleExtract();
+        }}
+        onImportFile={(file) => {
+          void handleImportFile(file);
+        }}
+        busy={extractBusy}
+        busyText="提取中…"
+        statusText={extractStatus}
+        errorText={extractError}
+        extractDisabled={!hasScript}
+        extractDisabledReason="未获取到剧本文本(在「剧本」阶段编写后可提取)。仍可用「外部导入」载入分镜脚本或角色卡文件。"
+      />
 
       {scenes.length === 0 && (
         <div className="rounded-xl border border-dashed border-border py-6 text-center text-xs text-muted">

@@ -232,6 +232,7 @@ export function WorkshopStudio() {
               characters={characters}
               styles={styles}
               onCharactersChange={setCharacters}
+              scriptMarkdown={meta.scriptMarkdown ?? ""}
             />
           )}
           {tab === "storyboard" && (
@@ -243,6 +244,8 @@ export function WorkshopStudio() {
               onShotsChange={setShots}
               onGenerate={generateShot}
               generating={generating}
+              scriptMarkdown={meta.scriptMarkdown ?? ""}
+              onCharactersChange={setCharacters}
             />
           )}
         </div>

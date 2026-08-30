@@ -1,0 +1,310 @@
+"use client";
+import React from "react";
+import { Icon } from "@/components/ui/Icon";
+import { DarkSelect } from "@/components/studio/ui/DarkSelect";
+import { MOTION_LABELS, TRANSITION_LABELS, type MotionLevel, type Shot, type Transition } from "@/lib/workshop/types";
+
+interface Props {
+  shots: Shot[];
+  title: string;
+  /** Shot-list owner callback (duration / transition / motion edits). */
+  onShotsChange: (shots: Shot[]) => void;
+  /** Raised when the user exports the composition plan (成片产出物完成). */
+  onRendered: () => void;
+  rendered: boolean;
+}
+
+const TRANSITIONS: Transition[] = ["cut", "dissolve", "fade"];
+const MOTIONS: MotionLevel[] = ["low", "medium", "high"];
+
+/** 顺序播放预览中的一个时间线条目。 */
+interface TimelineEntry {
+  shot: Shot;
+  duration: number;
+}
+
+const MOTION_PROMPTS: Record<MotionLevel, string> = {
+  low: "subtle motion, gentle camera drift",
+  medium: "moderate motion, smooth camera movement",
+  high: "dynamic motion, dramatic camera movement",
+};
+
+/** 供视频阶段复用的运动提示词后缀。 */
+export function motionPromptSuffix(motion: MotionLevel | undefined): string {
+  return motion ? MOTION_PROMPTS[motion] : MOTION_PROMPTS.medium;
+}
+
+/**
+ * 成片合成 stage: consumes the shot list produced upstream (imageUrl / clipUrl /
+ * duration / transition / dialogue) — pure client-side composition. Provides a
+ * sequential preview player, per-shot duration & transition editing, and a
+ * composition-plan export (JSON) as the pipeline's final artifact.
+ */
+export function FinalComposer({ shots, title, onShotsChange, onRendered, rendered }: Props) {
+  const [playing, setPlaying] = React.useState(false);
+  const [currentIdx, setCurrentIdx] = React.useState(0);
+  const imageTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const timeline: TimelineEntry[] = shots.map((shot) => ({
+    shot,
+    duration: typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 4,
+  }));
+
+  const clipsDone = timeline.filter((entry) => entry.shot.clipUrl).length;
+  const totalDuration = timeline.reduce((acc, entry) => acc + entry.duration, 0);
+  const current = timeline[currentIdx];
+
+  React.useEffect(() => {
+    return () => {
+      if (imageTimerRef.current) clearTimeout(imageTimerRef.current);
+    };
+  }, []);
+
+  /** Advance to the next entry (or stop at the end). */
+  function advance() {
+    if (imageTimerRef.current) {
+      clearTimeout(imageTimerRef.current);
+      imageTimerRef.current = null;
+    }
+    setCurrentIdx((idx) => {
+      if (idx + 1 >= timeline.length) {
+        setPlaying(false);
+        return idx;
+      }
+      const next = timeline[idx + 1];
+      if (next && !next.shot.clipUrl && next.shot.imageUrl) {
+        // Still frame fallback: hold for the shot duration.
+        imageTimerRef.current = setTimeout(() => advance(), next.duration * 1000);
+      }
+      return idx + 1;
+    });
+  }
+
+  function startPlayback() {
+    if (timeline.length === 0) return;
+    if (imageTimerRef.current) clearTimeout(imageTimerRef.current);
+    const first = timeline[0];
+    setCurrentIdx(0);
+    setPlaying(true);
+    if (first && !first.shot.clipUrl && first.shot.imageUrl) {
+      imageTimerRef.current = setTimeout(() => advance(), first.duration * 1000);
+    }
+  }
+
+  function stopPlayback() {
+    setPlaying(false);
+    if (imageTimerRef.current) {
+      clearTimeout(imageTimerRef.current);
+      imageTimerRef.current = null;
+    }
+  }
+
+  function updateShot(id: string, patch: Partial<Shot>) {
+    onShotsChange(shots.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }
+
+  function exportPlan() {
+    const plan = {
+      project: title,
+      exportedAt: new Date().toISOString(),
+      totalShots: timeline.length,
+      totalDurationSec: Number(totalDuration.toFixed(1)),
+      timeline: timeline.map((entry, i) => ({
+        order: i + 1,
+        shotId: entry.shot.id,
+        scene: entry.shot.sceneHeading,
+        shotType: entry.shot.shotType,
+        prompt: entry.shot.prompt,
+        imageUrl: entry.shot.imageUrl ?? null,
+        clipUrl: entry.shot.clipUrl ?? null,
+        durationSec: entry.duration,
+        motion: entry.shot.motion ?? "medium",
+        transition: entry.shot.transition ?? "cut",
+        dialogue: entry.shot.dialogue ?? "",
+      })),
+    };
+    const blob = new Blob([JSON.stringify(plan, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title || "composition"}-合成清单.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    onRendered();
+  }
+
+  if (shots.length === 0) {
+    return (
+      <div className="border-border bg-surface rounded-2xl border border-dashed p-8 text-center">
+        <p className="text-muted text-sm">暂无分镜数据。请先完成「场景分镜」与「视频生成」，再回到这里合成成片。</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Summary row */}
+      <div className="border-border bg-surface flex flex-wrap items-center gap-3 rounded-2xl border p-4">
+        <span className="text-ink text-[13px] font-semibold">成片时间线</span>
+        <span className="bg-primary/12 text-primary rounded-lg px-3 py-1 text-[11px]">
+          {timeline.length} 镜 · 片长约 {Math.round(totalDuration)}s
+        </span>
+        <span
+          className={`rounded-lg px-3 py-1 text-[11px] ${
+            clipsDone === timeline.length
+              ? "bg-emerald-100 text-emerald-700"
+              : "bg-(--color-amber)/15 text-(--color-amber)"
+          }`}
+        >
+          片段 {clipsDone}/{timeline.length}
+        </span>
+        <div className="ml-auto flex gap-2">
+          {!playing ? (
+            <button
+              type="button"
+              onClick={startPlayback}
+              disabled={clipsDone === 0 && timeline.every((entry) => !entry.shot.imageUrl)}
+              className="bg-primary rounded-xl px-4 py-2 text-xs font-semibold text-white disabled:opacity-40"
+            >
+              <Icon name="play" size={13} className="mr-1 inline align-[-2px]" />
+              串播预览
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={stopPlayback}
+              className="text-ink rounded-xl bg-white/4 px-4 py-2 text-xs font-semibold hover:bg-white/8"
+            >
+              停止
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={exportPlan}
+            className="btn-gradient rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-purple-900/20"
+          >
+            导出合成清单
+          </button>
+        </div>
+      </div>
+
+      {rendered && (
+        <div className="rounded-xl bg-emerald-100 px-4 py-2 text-xs text-emerald-700">
+          ✓ 合成清单已导出，成片产物完成。可在右侧资源库下载。
+        </div>
+      )}
+
+      {/* Preview player */}
+      {playing && current && (
+        <div className="border-border bg-surface rounded-2xl border p-4">
+          <div className="text-muted mb-2 flex items-center justify-between text-[11px]">
+            <span>
+              预览中 · 镜 {String(currentIdx + 1).padStart(2, "0")} / {String(timeline.length).padStart(2, "0")}
+            </span>
+            <span>{current.shot.sceneHeading}</span>
+          </div>
+          <div className="bg-bg grid min-h-[240px] place-items-center overflow-hidden rounded-xl">
+            {current.shot.clipUrl ? (
+              <video
+                key={current.shot.id}
+                src={current.shot.clipUrl}
+                autoPlay
+                controls
+                onEnded={advance}
+                className="max-h-[420px] w-full"
+              />
+            ) : current.shot.imageUrl ? (
+               
+              <img src={current.shot.imageUrl} alt={current.shot.sceneHeading} className="max-h-[420px] w-full object-contain" />
+            ) : (
+              <span className="text-muted text-xs">该镜头缺少画面，已跳过</span>
+            )}
+          </div>
+          {current.shot.dialogue && (
+            <p className="text-ink mt-2 text-center text-[12.5px]">{current.shot.dialogue}</p>
+          )}
+        </div>
+      )}
+
+      {/* Timeline list */}
+      <div className="space-y-3">
+        {timeline.map((entry, idx) => {
+          const shot = entry.shot;
+          const active = playing && idx === currentIdx;
+          return (
+            <div
+              key={shot.id}
+              className={`border-border bg-surface flex items-center gap-3 rounded-xl border p-3 ${
+                active ? "ring-primary/40 ring-1" : ""
+              }`}
+            >
+              <span className="bg-primary-soft text-primary grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-semibold">
+                {idx + 1}
+              </span>
+              <div className="bg-elevated h-14 w-20 shrink-0 overflow-hidden rounded-lg">
+                {shot.imageUrl ? (
+                   
+                  <img src={shot.imageUrl} alt={shot.sceneHeading} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="text-muted grid h-full place-items-center">
+                    <Icon name="image" size={16} />
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-ink truncate text-xs font-medium">{shot.sceneHeading}</div>
+                <div className="text-muted mt-0.5 truncate text-[10.5px]">
+                  {shot.clipUrl ? "片段就绪" : shot.imageUrl ? "待生成视频（以静帧占位）" : "待生成画面"}
+                  {shot.dialogue ? ` · 字幕: ${shot.dialogue}` : ""}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <label className="block">
+                  <span className="text-muted mb-0.5 block text-[10px]">时长(s)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={entry.duration}
+                    onChange={(event) =>
+                      updateShot(shot.id, { duration: Math.max(1, Math.min(20, Number(event.target.value) || 4)) })
+                    }
+                    className="border-border bg-bg text-ink w-14 rounded-md border px-2 py-1 text-xs outline-none focus:border-primary"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-muted mb-0.5 block text-[10px]">转场</span>
+                  <DarkSelect
+                    className="!bg-white/3 !border-white/8 text-xs"
+                    value={shot.transition ?? "cut"}
+                    onChange={(value) => updateShot(shot.id, { transition: value as Transition })}
+                    options={TRANSITIONS}
+                    labels={TRANSITION_LABELS}
+                    placeholder="转场"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-muted mb-0.5 block text-[10px]">运动</span>
+                  <DarkSelect
+                    className="!bg-white/3 !border-white/8 text-xs"
+                    value={shot.motion ?? "medium"}
+                    onChange={(value) => updateShot(shot.id, { motion: value as MotionLevel })}
+                    options={MOTIONS}
+                    labels={MOTION_LABELS}
+                    placeholder="运动"
+                  />
+                </label>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {clipsDone < timeline.length && (
+        <div className="text-muted rounded-xl bg-subtle px-3 py-2 text-xs">
+          {timeline.length - clipsDone} 个镜头还没有视频片段 — 可回到「视频生成」补齐；导出清单时缺片段镜头将以静帧占位。
+        </div>
+      )}
+    </div>
+  );
+}

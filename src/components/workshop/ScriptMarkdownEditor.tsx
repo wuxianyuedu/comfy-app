@@ -47,6 +47,70 @@ interface HistoryFrame {
 
 const MAX_HISTORY = 50;
 
+/* 编辑区/预览区可见滚动条样式。globals.css 里有两条未分层的全局规则
+ * (`::-webkit-scrollbar` 定宽、`textarea::-webkit-scrollbar { width: 0 }`
+ * 隐藏 textarea 滚动条),未分层声明在 cascade layers 中优先于 Tailwind 的
+ * @layer utilities,因此这里必须带 `!`(important 后缀)才能覆盖,保证滚动条
+ * 可见、可拖动、滚轮可用,且观感与全站 10px 圆角滚动条一致。 */
+const SCROLLBAR_VISIBLE_CLASSES =
+  "overflow-y-auto [&::-webkit-scrollbar]:h-2.5! [&::-webkit-scrollbar]:w-2.5! [&::-webkit-scrollbar-track]:bg-transparent! [&::-webkit-scrollbar-thumb]:rounded-full! [&::-webkit-scrollbar-thumb]:bg-[#3a3a4a]! [&::-webkit-scrollbar-thumb:hover]:bg-[#52526a]!";
+
+/* ── Markdown 归一化(编辑器接收内容的入口)────────────────────────────
+ * 针对导入 markdown 剧本后常见的空行/换行异常:
+ * 1. CRLF / 孤立 CR 统一为 LF;
+ * 2. 去除每行行尾空白(空格/制表符),只含空白的行视为空行;
+ * 3. 连续 3 个及以上空行折叠为 1 个空行(1~2 个空行保持原样);
+ * 4. 标题 / 列表 / 引用 / 分隔线等行的内容不做改写,其余内容原样保留;
+ * 5. 围栏代码块(``` 或 ~~~)内部不做任何处理,避免破坏代码内容。 */
+function normalizeMarkdown(source: string): string {
+  const lines = source.replace(/\r\n?/g, "\n").split("\n");
+  const result: string[] = [];
+  let inFence = false;
+  let fenceMarker = "";
+  let index = 0;
+  while (index < lines.length) {
+    const raw = lines[index]!;
+    const fenceMatch = /^ {0,3}(`{3,}|~{3,})/.exec(raw);
+    if (fenceMatch) {
+      const marker = fenceMatch[1]!.charAt(0);
+      if (!inFence) {
+        inFence = true;
+        fenceMarker = marker;
+      } else if (
+        marker === fenceMarker &&
+        raw.slice(fenceMatch[1]!.length).trim() === ""
+      ) {
+        inFence = false;
+      }
+      result.push(raw);
+      index += 1;
+      continue;
+    }
+    if (inFence) {
+      result.push(raw);
+      index += 1;
+      continue;
+    }
+    const line = raw.replace(/[ \t]+$/u, "");
+    if (line !== "") {
+      result.push(line);
+      index += 1;
+      continue;
+    }
+    let blankRun = 0;
+    while (
+      index < lines.length &&
+      lines[index]!.replace(/[ \t]+$/u, "") === ""
+    ) {
+      blankRun += 1;
+      index += 1;
+    }
+    const kept = blankRun >= 3 ? 1 : blankRun;
+    for (let i = 0; i < kept; i += 1) result.push("");
+  }
+  return result.join("\n");
+}
+
 function buildOutline(value: string): OutlineItem[] {
   const items: OutlineItem[] = [];
   const lines = value.split("\n");
@@ -87,12 +151,53 @@ export function ScriptMarkdownEditor({
   const [historyIndex, setHistoryIndex] = React.useState(0);
   const historyLockRef = React.useRef(false);
   const selectionRef = React.useRef({ start: value.length, end: value.length });
+  // 记录编辑器最近一次自己发出的内容,用于区分「外部赋值(导入/回填)」与「内部编辑」。
+  const lastEmittedRef = React.useRef<string | null>(null);
+  // 归一化后的新历史基线:effect 中不直接 setState(react-hooks/set-state-in-effect),
+  // 延迟到下一次 pushHistory(事件处理器)时替换历史基帧。
+  const pendingHistoryBaseRef = React.useRef<string | null>(null);
+
+  const emitChange = React.useCallback(
+    (nextValue: string) => {
+      lastEmittedRef.current = nextValue;
+      onChange(nextValue);
+    },
+    [onChange],
+  );
+
+  // 外部内容入口:导入/回填的 markdown 先归一化再进入编辑器(折叠异常空行、
+  // 去行尾空白等,见 normalizeMarkdown)。编辑器内部编辑不经此路径,避免干扰
+  // 用户输入(如行尾补空格)。lastEmittedRef 相等说明是编辑器自己发出的内容。
+  React.useEffect(() => {
+    if (value === lastEmittedRef.current) return;
+    const normalized = normalizeMarkdown(value);
+    lastEmittedRef.current = normalized;
+    if (normalized === value) return;
+    pendingHistoryBaseRef.current = normalized;
+    emitChange(normalized);
+  }, [value, emitChange]);
 
   const outline = React.useMemo(() => buildOutline(value), [value]);
   const previewHtml = React.useMemo(() => markdownToHtml(value), [value]);
 
   function pushHistory(nextValue: string, start: number, end: number) {
     if (historyLockRef.current) return;
+    const pendingBase = pendingHistoryBaseRef.current;
+    if (pendingBase !== null) {
+      // 外部内容刚被归一化:用归一化文本替换撤销历史基帧,避免 Ctrl+Z
+      // 退回归一化前带异常空行的原始内容。
+      pendingHistoryBaseRef.current = null;
+      setHistory([
+        {
+          value: pendingBase,
+          selectionStart: pendingBase.length,
+          selectionEnd: pendingBase.length,
+        },
+        { value: nextValue, selectionStart: start, selectionEnd: end },
+      ]);
+      setHistoryIndex(1);
+      return;
+    }
     setHistory((prev) => {
       const sliced = prev.slice(0, historyIndex + 1);
       const next = [
@@ -112,7 +217,7 @@ export function ScriptMarkdownEditor({
       const frame = history[nextIndex];
       if (!frame) return;
       historyLockRef.current = true;
-      onChange(frame.value);
+      emitChange(frame.value);
       setHistoryIndex(nextIndex);
       setTimeout(() => {
         const el = textareaRef.current;
@@ -123,7 +228,7 @@ export function ScriptMarkdownEditor({
         historyLockRef.current = false;
       }, 0);
     },
-    [history, historyIndex, onChange],
+    [history, historyIndex, emitChange],
   );
 
   function getSelection(): { start: number; end: number; text: string } {
@@ -148,7 +253,7 @@ export function ScriptMarkdownEditor({
     const nextStart = start + (cursorOffset ?? replacement.length);
     const nextEnd =
       selectionLength === undefined ? nextStart : nextStart + selectionLength;
-    onChange(nextValue);
+    emitChange(nextValue);
     pushHistory(nextValue, nextStart, nextEnd);
     setTimeout(() => {
       el.focus();
@@ -191,7 +296,7 @@ export function ScriptMarkdownEditor({
       value.slice(0, lineStart) + transformed + value.slice(lineEnd);
     const nextStart = lineStart;
     const nextEnd = lineStart + transformed.length;
-    onChange(nextValue);
+    emitChange(nextValue);
     pushHistory(nextValue, nextStart, nextEnd);
     setTimeout(() => {
       el.focus();
@@ -215,7 +320,7 @@ export function ScriptMarkdownEditor({
       .join("\n");
     const nextValue =
       value.slice(0, lineStart) + transformed + value.slice(lineEnd);
-    onChange(nextValue);
+    emitChange(nextValue);
     pushHistory(nextValue, lineStart, lineStart + transformed.length);
     setTimeout(() => {
       el.focus();
@@ -238,15 +343,17 @@ export function ScriptMarkdownEditor({
   }
 
   function jumpToLine(line: number) {
-    const el = textareaRef.current;
-    if (!el) return;
+    // 预览态下点击目录:先切回编辑态,再定位到对应行。
+    setShowPreview(false);
     const lines = value.split("\n");
     let position = 0;
     for (let i = 0; i < line && i < lines.length; i++) {
       position += lines[i]!.length + 1;
     }
-    onChange(value); // ensure focus sync
+    emitChange(value); // ensure focus sync
     setTimeout(() => {
+      const el = textareaRef.current;
+      if (!el) return;
       el.focus();
       el.setSelectionRange(position, position);
       const lineHeight = el.scrollHeight / lines.length;
@@ -394,7 +501,7 @@ export function ScriptMarkdownEditor({
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-[#9a9aad] transition-colors hover:bg-white/5 hover:text-[#ededf2]"
           >
             {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
-            {showPreview ? "隐藏预览" : "预览"}
+            {showPreview ? "返回编辑" : "预览"}
           </button>
         </div>
       </div>
@@ -432,15 +539,21 @@ export function ScriptMarkdownEditor({
           )}
         </aside>
 
-        {/* Editor area */}
+        {/* Editor area:单列布局 —— 编辑态直接显示 markdown 源(全宽),
+            右上「预览」按钮按需切换到整区渲染视图,再点返回编辑。 */}
         <main className="relative flex min-w-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1">
+          {showPreview ? (
+            <div
+              className={`${SCROLLBAR_VISIBLE_CLASSES} min-h-0 flex-1 bg-[#0a0a0f] p-6 text-[13px] leading-7 text-[#d4d4d8]`}
+              dangerouslySetInnerHTML={{ __html: previewHtml }}
+            />
+          ) : (
             <textarea
               ref={textareaRef}
               value={value}
               onChange={(event) => {
                 const nextValue = event.target.value;
-                onChange(nextValue);
+                emitChange(nextValue);
                 selectionRef.current = {
                   start: event.target.selectionStart,
                   end: event.target.selectionEnd,
@@ -457,7 +570,7 @@ export function ScriptMarkdownEditor({
                   const { start, end } = getSelection();
                   const nextValue =
                     value.slice(0, start) + "  " + value.slice(end);
-                  onChange(nextValue);
+                  emitChange(nextValue);
                   pushHistory(nextValue, start + 2, start + 2);
                   setTimeout(
                     () =>
@@ -471,18 +584,10 @@ export function ScriptMarkdownEditor({
               }}
               spellCheck={false}
               placeholder="# 剧本标题\n\n## 第一场\n\n（在此处编写完整剧本……）"
-              className={`flex-1 resize-none bg-[#0a0a0f] p-6 font-mono text-[13px] leading-7 text-[#e5e7eb] outline-none placeholder:text-[#5a5a6b] ${
-                showPreview ? "border-r border-[#26262e]" : ""
-              }`}
+              className={`${SCROLLBAR_VISIBLE_CLASSES} min-h-0 flex-1 resize-none bg-[#0a0a0f] p-6 font-mono text-[13px] leading-7 text-[#e5e7eb] outline-none placeholder:text-[#5a5a6b]`}
               style={{ tabSize: 2 }}
             />
-            {showPreview && (
-              <div
-                className="flex-1 overflow-y-auto bg-[#0a0a0f] p-6 text-[13px] leading-7 text-[#d4d4d8]"
-                dangerouslySetInnerHTML={{ __html: previewHtml }}
-              />
-            )}
-          </div>
+          )}
         </main>
       </div>
 

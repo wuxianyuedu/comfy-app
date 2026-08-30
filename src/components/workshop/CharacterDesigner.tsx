@@ -6,6 +6,18 @@ import { Icon } from "@/components/ui/Icon";
 import type { Character, StyleRef } from "@/lib/workshop/types";
 import { buildCharacterPrompt, buildCharacterNegative } from "@/lib/workshop/prompt-builder";
 import { workshopUid } from "@/lib/workshop/script-parser";
+import {
+  type ExtractChannel,
+  ExtractToolbar,
+} from "@/components/workshop/ExtractToolbar";
+import {
+  buildExtractCharactersMessages,
+  mergeCharacterDrafts,
+  parseCharacterEntries,
+  parseExtractedCharacters,
+  parseImportedCharacterCards,
+} from "@/lib/workshop/script-parse";
+import type { ParsedCharacterDraft } from "@/lib/workshop/script-parse";
 import { useLLM } from "@/components/workshop/LLMContext";
 import { streamChat } from "@/lib/llm/browser";
 import {
@@ -29,6 +41,13 @@ interface Props {
   characters: Character[];
   styles: StyleRef[]; // available Skill styles
   onCharactersChange: (c: Character[]) => void;
+  /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
+  scriptMarkdown?: string;
+}
+
+/** 判断导入内容是否为 JSON(角色卡 JSON 走结构化解析,其余按剧本 markdown 解析) */
+function looksLikeJson(text: string): boolean {
+  return text.startsWith("{") || text.startsWith("[");
 }
 
 function newCharacter(): Character {
@@ -46,13 +65,26 @@ function newCharacter(): Character {
   };
 }
 
-export function CharacterDesigner({ characters, styles, onCharactersChange }: Props) {
+export function CharacterDesigner({ characters, styles, onCharactersChange, scriptMarkdown }: Props) {
   const [tagInputs, setTagInputs] = React.useState<Record<string, string>>({});
   const [brief, setBrief] = React.useState("");
   const [genBusy, setGenBusy] = React.useState(false);
   const [aiBusyId, setAiBusyId] = React.useState<string | null>(null);
   const [aiError, setAiError] = React.useState("");
   const { config, openSettings } = useLLM();
+
+  // ── 三通道提取(工具 / 本地模型 / 配置API)+ 外部导入 ──
+  const [extractChannel, setExtractChannel] = React.useState<ExtractChannel>("tool");
+  const [extractBusy, setExtractBusy] = React.useState(false);
+  const [extractStatus, setExtractStatus] = React.useState("");
+  const [extractError, setExtractError] = React.useState("");
+
+  const hasScript = !!scriptMarkdown?.trim();
+
+  /** 通道 → LLM provider(工具通道不调用模型;本地/远端复用既有 /api/llm 链路) */
+  function channelProvider(channel: ExtractChannel): "local" | "remote" {
+    return channel === "local" ? "local" : "remote";
+  }
 
   function update(id: string, patch: Partial<Character>) {
     onCharactersChange(
@@ -147,6 +179,89 @@ export function CharacterDesigner({ characters, styles, onCharactersChange }: Pr
     }
   }
 
+  /** 三通道提取入口:工具=确定性解析;本地/API=LLM 输出 JSON,失败降级提示 */
+  async function handleExtract() {
+    const script = (scriptMarkdown ?? "").trim();
+    if (!script) {
+      setExtractError("未获取到剧本文本,请先在「剧本」阶段编写或编辑剧本");
+      return;
+    }
+    if (extractChannel !== "tool" && !config) {
+      openSettings();
+      return;
+    }
+    setExtractBusy(true);
+    setExtractStatus(extractChannel === "tool" ? "" : "正在调用模型提取角色卡…");
+    setExtractError("");
+    try {
+      let drafts: ParsedCharacterDraft[];
+      if (extractChannel === "tool") {
+        drafts = parseCharacterEntries(script);
+        if (drafts.length === 0) {
+          setExtractError(
+            "工具通道未在剧本中找到「人物:/角色:」行。可检查剧本结构后重试,或切换到本地模型 / 配置API 通道。"
+          );
+          return;
+        }
+      } else {
+        const full = await streamChat({
+          messages: buildExtractCharactersMessages(script),
+          opts: { provider: channelProvider(extractChannel) },
+        });
+        drafts = parseExtractedCharacters(full);
+        if (drafts.length === 0) {
+          setExtractError("模型未返回有效角色卡 JSON,解析失败。可重试,或改用「工具」通道。");
+          return;
+        }
+      }
+      const res = mergeCharacterDrafts(characters, drafts, styles);
+      if (res.added === 0 && res.skipped > 0) {
+        setExtractError("剧本中的角色均已存在,未新增角色卡");
+        return;
+      }
+      setExtractStatus(
+        `已提取 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`
+      );
+    } catch (e: unknown) {
+      setExtractError(`${errorMessage(e, "提取失败")} 可重试,或改用「工具」通道。`);
+    } finally {
+      setExtractBusy(false);
+    }
+  }
+
+  /** 外部导入:角色卡 JSON 按既有 Character 字段解析;markdown 走工具解析器 */
+  async function handleImportFile(file: File) {
+    setExtractBusy(true);
+    setExtractStatus("");
+    setExtractError("");
+    try {
+      const text = await file.text();
+      const trimmed = text.trim();
+      if (!trimmed) throw new Error("文件内容为空");
+      let drafts: ParsedCharacterDraft[];
+      if (looksLikeJson(trimmed)) {
+        drafts = parseImportedCharacterCards(trimmed);
+      } else {
+        drafts = parseCharacterEntries(trimmed);
+        if (drafts.length === 0) {
+          throw new Error("未在文件中找到「人物:/角色:」行");
+        }
+      }
+      const res = mergeCharacterDrafts(characters, drafts, styles);
+      if (res.added === 0 && res.skipped > 0) {
+        setExtractError("导入的角色均与现有角色重名,未新增");
+        return;
+      }
+      setExtractStatus(
+        `已导入 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`
+      );
+    } catch (e: unknown) {
+      setExtractError(errorMessage(e, "导入失败"));
+    } finally {
+      setExtractBusy(false);
+    }
+  }
+
   function addTag(id: string, raw: string) {
     const tag = raw.trim();
     if (!tag) return;
@@ -210,6 +325,25 @@ export function CharacterDesigner({ characters, styles, onCharactersChange }: Pr
           </p>
         )}
       </div>
+
+      {/* 三通道提取 + 外部导入 */}
+      <ExtractToolbar
+        channel={extractChannel}
+        onChannelChange={setExtractChannel}
+        extractLabel="从剧本提取角色"
+        onExtract={() => {
+          void handleExtract();
+        }}
+        onImportFile={(file) => {
+          void handleImportFile(file);
+        }}
+        busy={extractBusy}
+        busyText="提取中…"
+        statusText={extractStatus}
+        errorText={extractError}
+        extractDisabled={!hasScript}
+        extractDisabledReason="未获取到剧本文本(在「剧本」阶段编写后可提取)。仍可用「外部导入」载入角色卡 JSON 或人物清单。"
+      />
 
       {aiError && (
         <p className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">{aiError}</p>
