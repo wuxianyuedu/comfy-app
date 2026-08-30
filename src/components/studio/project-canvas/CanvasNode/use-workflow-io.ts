@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 "use client";
 
 /* 2026-08-30: extracted from CanvasNode — workflow-node IO lifecycle.
@@ -74,7 +73,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           vanillaApi.workflow.list.query({}),
           vanillaApi.workflowModel.list.query(),
         ]);
-        if (wfRes.status === "fulfilled") data.wfList = (wfRes.value.workflows ?? []) as WfListItem[];
+        if (wfRes.status === "fulfilled") data.wfList = wfRes.value.workflows ?? [];
         if (tagRes.status === "fulfilled" && tagRes.value && Array.isArray(tagRes.value.tags))
           data.modelTagLib = tagRes.value.tags;
         return data;

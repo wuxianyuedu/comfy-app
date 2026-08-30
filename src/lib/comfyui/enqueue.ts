@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises */
 // P3 enqueue: public-facing queue / subscription / logs / cancel API for the
 // ComfyUI runner.
 //
@@ -53,7 +52,7 @@ export function enqueue(job: Job) {
 
   );
 
-  connect();
+  void connect();
 
   void processQueue();
 
@@ -213,7 +212,7 @@ export async function cancelTask(taskId: string) {
 
   await persistLogs(taskId);
 
-  if (hadSlot) processQueue();
+  if (hadSlot) void processQueue();
 
 }
 

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises */
  
 "use client";
 
@@ -76,7 +75,7 @@ export function ContentAssetBody({
     const taskId = data.taskId;
     if (!taskId || kind !== "picture") return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         if (cancelled) return;
         const t = await vanillaApi.task.detail.query({ id: taskId });
@@ -168,7 +167,7 @@ export function ContentAssetBody({
             event.stopPropagation();
             setIsDropOver(false);
             const f = event.dataTransfer.files?.[0];
-            if (f && onUploadFile) onUploadFile(f);
+            if (f && onUploadFile) void onUploadFile(f);
           }}
           onDragOver={(event) => {
             event.preventDefault();
