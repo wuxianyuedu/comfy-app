@@ -1,6 +1,9 @@
 "use client";
 
-import type { WorkflowPreview, WorkflowPreviewNode } from "@/lib/comfyui/workflow";
+import type {
+  WorkflowPreview,
+  WorkflowPreviewNode,
+} from "@/lib/comfyui/workflow-preview";
 
 /**
  * Compact SVG preview of a ComfyUI workflow graph for use on workflow
@@ -28,8 +31,12 @@ export function WorkflowPreview({ preview }: { preview: WorkflowPreview }) {
   // Group by level to find row positions.
   const byLevel: Record<number, WorkflowPreviewNode[]> = {};
   for (const n of nodes) (byLevel[n.level] ||= []).push(n);
-  for (const arr of Object.values(byLevel)) arr.sort((left, right) => left.row - right.row);
-  const maxRows = Math.max(1, ...Object.values(byLevel).map((arr) => arr.length));
+  for (const arr of Object.values(byLevel))
+    arr.sort((left, right) => left.row - right.row);
+  const maxRows = Math.max(
+    1,
+    ...Object.values(byLevel).map((arr) => arr.length),
+  );
 
   const pos: Record<string, { x: number; y: number }> = {};
   for (const n of nodes) {
@@ -41,10 +48,25 @@ export function WorkflowPreview({ preview }: { preview: WorkflowPreview }) {
     };
   }
 
-  const kindColor: Record<WorkflowPreviewNode["kind"], { fill: string; stroke: string; glow: string }> = {
-    input:   { fill: "url(#g-input)",   stroke: "#7DD3FC", glow: "rgba(125,211,252,0.55)" },
-    process: { fill: "url(#g-process)", stroke: "#C4B5FD", glow: "rgba(196,181,253,0.55)" },
-    output:  { fill: "url(#g-output)",  stroke: "#6EE7B7", glow: "rgba(110,231,183,0.55)" },
+  const kindColor: Record<
+    WorkflowPreviewNode["kind"],
+    { fill: string; stroke: string; glow: string }
+  > = {
+    input: {
+      fill: "url(#g-input)",
+      stroke: "#7DD3FC",
+      glow: "rgba(125,211,252,0.55)",
+    },
+    process: {
+      fill: "url(#g-process)",
+      stroke: "#C4B5FD",
+      glow: "rgba(196,181,253,0.55)",
+    },
+    output: {
+      fill: "url(#g-output)",
+      stroke: "#6EE7B7",
+      glow: "rgba(110,231,183,0.55)",
+    },
   };
 
   const nodeR = 5.5;
@@ -118,8 +140,7 @@ export function WorkflowPreview({ preview }: { preview: WorkflowPreview }) {
 
       {/* Nodes */}
       <g>
-        {nodes.map((node) =>
-{
+        {nodes.map((node) => {
           const p = pos[node.id];
           const c = kindColor[node.kind];
           return (

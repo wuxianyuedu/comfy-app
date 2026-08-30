@@ -5,51 +5,51 @@
 
 @theme {
   /* Brand — refined violet/magenta (liblib-style), kept desaturated, no neon glow */
-  --color-primary: #7C5CFC;
-  --color-primary-hover: #6A47E8;
-  --color-primary-soft: #F1ECFF;
-  --color-accent: #FF5CA8;
+  --color-primary: #7c5cfc;
+  --color-primary-hover: #6a47e8;
+  --color-primary-soft: #f1ecff;
+  --color-accent: #ff5ca8;
 
   /* Surfaces & text (light default) */
-  --color-bg: #FFFFFF;
-  --color-surface: #FFFFFF;
-  --color-surface-0: #FFFFFF;
-  --color-surface-1: #F7F8FA;
-  --color-surface-2: #F0F0F5;
-  --color-subtle: #F7F8FA;
-  --color-border: #ECECF1;
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-0: #ffffff;
+  --color-surface-1: #f7f8fa;
+  --color-surface-2: #f0f0f5;
+  --color-subtle: #f7f8fa;
+  --color-border: #ececf1;
   --color-border-subtle: rgb(0 0 0 / 0.06);
-  --color-ink: #1A1A1F;
-  --color-muted: #6B6B76;
+  --color-ink: #1a1a1f;
+  --color-muted: #6b6b76;
 
   /* Fixed dark UI (canvas / node / editor surfaces) — T11
      These components are always dark regardless of the app theme,
      so they must NOT be overridden in `.dark`. */
-  --color-canvas: #0A0A0F;           /* 画布/工作区背景 */
-  --color-canvas-deep: #0F0F14;      /* 输入控件/深面板底 */
-  --color-panel: #14141A;            /* 面板/顶栏/浮层 */
-  --color-panel-deep: #0F0F16;       /* 侧栏/页脚 */
-  --color-card: #16161C;             /* 卡片/下拉浮层 */
-  --color-node: #16161E;             /* 节点表面/option */
-  --color-node-accent: #1E1A2E;      /* 节点强调底 */
-  --color-border-strong: #26262E;    /* 强边框/分隔线 */
-  --color-ink-bright: #EDEDF2;       /* 主文字（亮） */
-  --color-ink-field: #E5E7EB;        /* 输入控件文字 */
-  --color-ink-strong: #E4E4E7;       /* 连接高亮文字 */
-  --color-ink-soft: #C9C9D6;         /* 次级文字 */
-  --color-ink-subtle: #D4D4D8;       /* 次级文字 2 */
-  --color-ink-muted: #9A9AAD;        /* 弱文字 */
-  --color-ink-faint: #8B90A8;        /* 标签/更弱文字 */
-  --color-ink-fainter: #6B7088;      /* 辅助说明文字 */
-  --color-ink-faintest: #5A5F73;     /* 极弱文字 */
-  --color-ink-icon: #6E6E80;         /* 折叠箭头/图标弱文字 */
-  --color-ink-placeholder: #5A5A6B;  /* placeholder */
-  --color-info: #5BC6FF;             /* 信息/链接强调 */
-  --color-success: #5BE3C4;          /* 成功/薄荷强调 */
-  --color-success-strong: #10B981;   /* 成功绿 */
-  --color-warning: #F59E0B;          /* 警告 */
-  --color-amber: #FFB553;            /* 琥珀强调（workshop 徽章/按钮） */
-  --color-accent-soft: #FF8AC4;      /* accent 浅色 */
+  --color-canvas: #0a0a0f; /* 画布/工作区背景 */
+  --color-canvas-deep: #0f0f14; /* 输入控件/深面板底 */
+  --color-panel: #14141a; /* 面板/顶栏/浮层 */
+  --color-panel-deep: #0f0f16; /* 侧栏/页脚 */
+  --color-card: #16161c; /* 卡片/下拉浮层 */
+  --color-node: #16161e; /* 节点表面/option */
+  --color-node-accent: #1e1a2e; /* 节点强调底 */
+  --color-border-strong: #26262e; /* 强边框/分隔线 */
+  --color-ink-bright: #ededf2; /* 主文字（亮） */
+  --color-ink-field: #e5e7eb; /* 输入控件文字 */
+  --color-ink-strong: #e4e4e7; /* 连接高亮文字 */
+  --color-ink-soft: #c9c9d6; /* 次级文字 */
+  --color-ink-subtle: #d4d4d8; /* 次级文字 2 */
+  --color-ink-muted: #9a9aad; /* 弱文字 */
+  --color-ink-faint: #8b90a8; /* 标签/更弱文字 */
+  --color-ink-fainter: #6b7088; /* 辅助说明文字 */
+  --color-ink-faintest: #5a5f73; /* 极弱文字 */
+  --color-ink-icon: #6e6e80; /* 折叠箭头/图标弱文字 */
+  --color-ink-placeholder: #5a5a6b; /* placeholder */
+  --color-info: #5bc6ff; /* 信息/链接强调 */
+  --color-success: #5be3c4; /* 成功/薄荷强调 */
+  --color-success-strong: #10b981; /* 成功绿 */
+  --color-warning: #f59e0b; /* 警告 */
+  --color-amber: #ffb553; /* 琥珀强调（workshop 徽章/按钮） */
+  --color-accent-soft: #ff8ac4; /* accent 浅色 */
 
   /* Layout */
   --panel-right-width: 360px;
@@ -61,26 +61,32 @@
   --radius-xl: 20px;
 
   /* Body / default — next/font 加载的 Latin 字体 + 系统 CJK 字体回退 */
-  --font-sans: var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  --font-sans:
+    var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", "Noto Sans SC",
+    system-ui, -apple-system, sans-serif;
   /* Mono / code — unified stack (T10: merged from inline fontFamily usage) */
-  --font-mono: "SF Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas, monospace;
+  --font-mono:
+    "SF Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas,
+    monospace;
   /* Display / titles — Sarasa Gothic SC Bold preferred, falls back to Noto/PingFang (Ardot #169~#177) */
-  --font-title: "Sarasa Gothic SC", var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  --font-title:
+    "Sarasa Gothic SC", var(--font-geist-sans), "PingFang SC",
+    "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif;
 }
 
 /* Dark mode overrides — utilities reference these CSS vars, so they respond to .dark */
 .dark {
-  --color-bg: #0A0A0F;
-  --color-surface: #16161C;
-  --color-surface-0: #0A0A0F;
-  --color-surface-1: #16161C;
-  --color-surface-2: #1A1A24;
+  --color-bg: #0a0a0f;
+  --color-surface: #16161c;
+  --color-surface-0: #0a0a0f;
+  --color-surface-1: #16161c;
+  --color-surface-2: #1a1a24;
   --color-subtle: #141419;
-  --color-border: #26262E;
+  --color-border: #26262e;
   --color-border-subtle: rgb(255 255 255 / 0.06);
-  --color-ink: #EDEDF2;
-  --color-muted: #9A9AAD;
-  --color-primary-soft: #221C3A;
+  --color-ink: #ededf2;
+  --color-muted: #9a9aad;
+  --color-primary-soft: #221c3a;
 }
 
 /* ── Native form control dark styling ──
@@ -92,7 +98,7 @@
 }
 .dark select option {
   background-color: #1e1e26;
-  color: #edeDF2;
+  color: #ededf2;
   padding: 4px 8px;
 }
 
@@ -168,10 +174,15 @@ textarea::-webkit-scrollbar {
      mask's own fill is the cutout's *shadow* colour — make sure the cutout
      itself reads as fully transparent. */
 .react-flow__minimap-mask {
-  --xy-minimap-mask-stroke-color: #c4b5fd;       /* violet-300 */
+  --xy-minimap-mask-stroke-color: #c4b5fd; /* violet-300 */
   --xy-minimap-mask-stroke-width: 1.5;
-  fill: var(--xy-minimap-mask-background-color-props,
-    var(--xy-minimap-mask-background-color, var(--xy-minimap-mask-background-color-default)));
+  fill: var(
+    --xy-minimap-mask-background-color-props,
+    var(
+      --xy-minimap-mask-background-color,
+      var(--xy-minimap-mask-background-color-default)
+    )
+  );
 }
 .react-flow__minimap-svg {
   /* Cursor + hover affordance for click-to-jump */
@@ -207,16 +218,19 @@ textarea::-webkit-scrollbar {
 .react-flow__controls-button {
   width: 28px !important;
   height: 28px !important;
-  background: #0D0818 !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
+  background: #0d0818 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 6px !important;
-  fill: #9A9AAD !important;           /* --color-muted */
-  transition: background 0.15s, fill 0.15s, border-color 0.15s;
+  fill: #9a9aad !important; /* --color-muted */
+  transition:
+    background 0.15s,
+    fill 0.15s,
+    border-color 0.15s;
 }
 .react-flow__controls-button:hover {
-  background: #1A1030 !important;
-  border-color: rgba(124,92,252,0.3) !important;   /* primary tint */
-  fill: #EDEDF2 !important;            /* --color-ink */
+  background: #1a1030 !important;
+  border-color: rgba(124, 92, 252, 0.3) !important; /* primary tint */
+  fill: #ededf2 !important; /* --color-ink */
 }
 
 /* ───────────────────────────────────────────────────────────
@@ -231,11 +245,17 @@ textarea::-webkit-scrollbar {
     border-radius: var(--radius-lg);
   }
   .u-card-hover {
-    transition: background-color 0.15s ease, border-color 0.15s ease;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease;
   }
   .u-card-hover:hover {
     background: var(--color-subtle);
-    border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+    border-color: color-mix(
+      in srgb,
+      var(--color-primary) 35%,
+      var(--color-border)
+    );
   }
   .u-surface {
     background: var(--color-surface);
@@ -259,17 +279,26 @@ textarea::-webkit-scrollbar {
     background: var(--color-surface);
     color: var(--color-muted);
     border-radius: 999px;
-    transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+    transition:
+      border-color 0.15s ease,
+      color 0.15s ease,
+      background-color 0.15s ease;
   }
   .u-chip:hover {
-    border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+    border-color: color-mix(
+      in srgb,
+      var(--color-primary) 45%,
+      var(--color-border)
+    );
     background: var(--color-subtle);
     color: var(--color-ink);
   }
   .u-ghost {
     color: var(--color-muted);
     border-radius: var(--radius-md);
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
   }
   .u-ghost:hover {
     background: var(--color-subtle);
@@ -294,44 +323,104 @@ textarea::-webkit-scrollbar {
     letter-spacing: -0.02em;
     color: var(--color-ink);
   }
+  /* 主按钮渐变：紫→粉，用于工作流库、画布生成等关键 CTA。
+     这是扁平规范中的有意例外，回应用户对渐变强调色的偏好。 */
+  .btn-gradient {
+    background: linear-gradient(135deg, #7c3aed 0%, #c026d3 50%, #ec4899 100%);
+    transition:
+      filter 0.15s ease,
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+  .btn-gradient:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+  .btn-gradient:active:not(:disabled) {
+    transform: translateY(1px);
+  }
 }
 
 /* Indeterminate progress bar: a 1/3-width block slides left→right inside
    the track, looping forever. Used by CustomNodesSettings when a scan is
    running but we don't yet know the total (file-walk phase). */
 @keyframes progressStripe {
-  0%   { transform: translateX(-100%); }
-  50%  { transform: translateX(200%); }
-  100% { transform: translateX(200%); }
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(200%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
 }
 
 /* R-ardot103 (2026-08-17): 生成进度水面水平滑动 —— WaterFillProgress 用。
  * SVG viewBox 宽 120 = 渲染宽（100%），所以 translateX(-100%) 恰好移动一整个
  * 波形周期，无缝循环。线性 6s，无限；配合水层高度过渡形成"水面涨起 + 流动"。 */
 @keyframes wf-wave {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-100%); }
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
 }
-.wf-wave { animation: wf-wave 6s linear infinite; }
+.wf-wave {
+  animation: wf-wave 6s linear infinite;
+}
 
 /* 2026-08-11 R44: react18-json-view 主题 — 与 globals.css 暗色 token 对齐
    (violet/emerald/orange/amber/zinc 系)。挂在 `.json-view.jv-theme-comfy` 上避免污染其它地方。 */
-.json-view.jv-theme-comfy { color: var(--color-ink, #d4d4d8); font-size: 11px; line-height: 1.6; }
+.json-view.jv-theme-comfy {
+  color: var(--color-ink, #d4d4d8);
+  font-size: 11px;
+  line-height: 1.6;
+}
 .json-view.jv-theme-comfy .json-view--property,
-.json-view.jv-theme-comfy .json-view--index { color: #c4b5fd; }
-.json-view.jv-theme-comfy .json-view--string    { color: #6ee7b7; }
-.json-view.jv-theme-comfy .json-view--number    { color: #fdba74; }
-.json-view.jv-theme-comfy .json-view--boolean   { color: #fcd34d; }
-.json-view.jv-theme-comfy .json-view--null      { color: #71717a; font-style: italic; }
-.json-view.jv-theme-comfy .json-view--pair:hover { background-color: rgba(255,255,255,0.04); }
+.json-view.jv-theme-comfy .json-view--index {
+  color: #c4b5fd;
+}
+.json-view.jv-theme-comfy .json-view--string {
+  color: #6ee7b7;
+}
+.json-view.jv-theme-comfy .json-view--number {
+  color: #fdba74;
+}
+.json-view.jv-theme-comfy .json-view--boolean {
+  color: #fcd34d;
+}
+.json-view.jv-theme-comfy .json-view--null {
+  color: #71717a;
+  font-style: italic;
+}
+.json-view.jv-theme-comfy .json-view--pair:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+}
 .json-view.jv-theme-comfy .json-view--object,
-.json-view.jv-theme-comfy .json-view--array    { color: #a1a1aa; }
+.json-view.jv-theme-comfy .json-view--array {
+  color: #a1a1aa;
+}
 .json-view.jv-theme-comfy .json-view--brace,
-.json-view.jv-theme-comfy .json-view--colon   { color: #71717a; }
-.json-view.jv-theme-comfy .jv-chevron path    { fill: #71717a; }
+.json-view.jv-theme-comfy .json-view--colon {
+  color: #71717a;
+}
+.json-view.jv-theme-comfy .jv-chevron path {
+  fill: #71717a;
+}
 
 /* Custom dark scrollbar for log panel / overflow containers */
-.custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+}

@@ -7,6 +7,8 @@ export interface ProjectMeta {
   type: ProjectType;
   tone: string; // e.g. "温暖治愈", "悬疑紧张"
   logline: string; // one-line pitch
+  /** Full free-form script written in Markdown (seen in the script editor). */
+  scriptMarkdown?: string;
 }
 
 export type ProjectType =

@@ -63,6 +63,9 @@ start-tauri*.exe
 start-tauri*.spec
 /dist/
 /build-launcher/
+# 由 scripts/dev_tools_launcher.py 重建，不入库
+/dev-tools/
+dev-tools*.spec
 
 # 运行时产物与本地工具(2026-08-29 文件组织审查补充)
 /log/
