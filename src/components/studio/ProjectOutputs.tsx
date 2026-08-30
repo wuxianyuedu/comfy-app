@@ -363,7 +363,7 @@ export function ProjectOutputs() {
                         key={image}
                         className="aspect-square overflow-hidden rounded-lg border border-white/6 bg-(--color-panel-deep)"
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        { }
                         <img
                           src={refSrc(image)}
                           alt={`参考图 ${index + 1}`}

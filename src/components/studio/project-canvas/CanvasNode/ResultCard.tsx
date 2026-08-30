@@ -79,7 +79,7 @@ export function ResultCard({
         ) : isVideo ? (
           <video src={src} controls autoPlay loop muted className="max-h-56 w-full object-contain" />
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img src={src} alt="result" className="max-h-56 w-full object-contain" />
         )}
       </div>

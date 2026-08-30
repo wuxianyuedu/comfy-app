@@ -37,7 +37,7 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
         {failed ? (
           <div className="flex h-[110px] items-center justify-center text-[10px] text-gray-500">图片不可用</div>
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img
             src={src}
             alt={ref.filename}

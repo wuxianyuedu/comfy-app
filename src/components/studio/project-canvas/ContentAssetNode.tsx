@@ -136,7 +136,7 @@ export function ContentAssetBody({
     <div className="relative">
       {mediaSrc ? (
         isPic ? (
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img
             src={mediaSrc}
             alt={data.mediaName ?? "参考图"}

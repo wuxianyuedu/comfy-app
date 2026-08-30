@@ -28,6 +28,6 @@ export const MediaThumbnail = React.memo(function MediaThumbnail({
       <video src={src} className={className} autoPlay={autoPlay} muted={muted} loop={loop} playsInline preload="metadata" />
     );
   }
-  // eslint-disable-next-line @next/next/no-img-element
+   
   return <img src={src} alt={alt} className={className} loading="lazy" decoding="async" />;
 });

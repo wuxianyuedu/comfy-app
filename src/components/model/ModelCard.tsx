@@ -41,7 +41,7 @@ export function ModelCard({ model }: { model: ModelCardData }) {
       <div className="relative overflow-hidden rounded-xl border border-border bg-surface transition-shadow group-hover:shadow-[0_8px_30px_rgba(20,20,40,0.10)]">
         <div className="relative aspect-[4/3] w-full overflow-hidden">
           {model.cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
+             
             <img src={model.cover} alt={model.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
           ) : (
             <div className="h-full w-full transition-transform duration-300 group-hover:scale-105" style={{ background: grad }} />

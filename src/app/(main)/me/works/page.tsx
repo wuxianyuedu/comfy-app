@@ -52,7 +52,7 @@ export default function MyWorks() {
               >
                 <div className="relative aspect-square bg-bg">
                   {task.cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
+                     
                     <img
                       src={task.cover}
                       alt={task.prompt}
