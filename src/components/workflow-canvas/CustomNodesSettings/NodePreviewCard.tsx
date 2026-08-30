@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/prefer-nullish-coalescing */
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 "use client";
 
 import { colorFor, type ManifestNodeRaw } from "@/config/custom-nodes";
