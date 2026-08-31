@@ -34,12 +34,13 @@
     }
     .card {
       width: min(520px, calc(100vw - 48px));
-      background: rgba(18, 16, 28, 0.72);
-      border: 1px solid var(--border);
+      /* 不用半透明 + backdrop-filter：WebView2 在某些显卡/驱动下会把这层渲染成
+         透明或黑块，导致启动页只剩窗口底色。改用不透明面板保证可见。 */
+      background: #151320;
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: var(--radius);
       padding: 32px;
       box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
-      backdrop-filter: blur(12px);
     }
     .brand {
       font-size: 22px;

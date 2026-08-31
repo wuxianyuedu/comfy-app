@@ -180,7 +180,9 @@ def init_logging(project_root: str) -> None:
                 shutil.move(base, f"{base}.1")
             except OSError:
                 pass
-        _log_file = open(base, "a", encoding="utf-8", buffering=1)
+        # 覆盖模式打开：应用内日志面板只应显示「本次」启动的 launcher 日志，
+        # 避免把昨天/之前的启动记录也带进来。历史日志仍通过上方的轮转保留。
+        _log_file = open(base, "w", encoding="utf-8", buffering=1)
         log("=== launcher started ===")
         log(f"python={sys.version}")
         log(f"exe={sys.executable}")
