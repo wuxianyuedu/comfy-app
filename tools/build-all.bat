@@ -5,6 +5,7 @@ rem 一键发布构建：先构建 release Tauri 壳，再打包 start-tauri.exe
 rem 编排脚本（不重复实现构建逻辑，分别 call 子脚本）。
 
 cd /d "%~dp0"
+for /F "delims=" %%I in ("%~dp0..") do set "PROJECT_ROOT=%%~fI"
 echo ==========================================================
 echo   Comfy APP - 一键发布构建
 echo ==========================================================
@@ -30,7 +31,7 @@ if errorlevel 1 (
 echo.
 echo ==========================================================
 echo   全部完成
-echo   可双击 <项目根>\start-tauri\start-tauri.exe 启动应用
+echo   可双击 %PROJECT_ROOT%\start-tauri\start-tauri.exe 启动应用
 echo   （将自动使用 release 版 Tauri 壳，启动更快）
 echo ==========================================================
 echo.
