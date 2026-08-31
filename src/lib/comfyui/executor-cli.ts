@@ -162,6 +162,53 @@ function strField(o: unknown, key: string): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
+/**
+ * 部分第三方节点（如 rgthree 的 Fast Groups Bypasser / Muter）是纯 UI 控制节点，
+ * 没有后端实现，不会出现在 ComfyUI 的 object_info 中。comfy-cli 做 UI→API 转换后
+ * 向 /prompt 校验时会因 unknown_class_type 整单失败。提交前把它们从 raw UI-format
+ * 工作流里剔除即可：它们不携带数据流，只影响画布分组显隐。
+ */
+const UI_ONLY_NODE_TYPES = new Set([
+  "Fast Groups Bypasser (rgthree)",
+  "Fast Groups Muter (rgthree)",
+  "Fast Groups Bookmarker (rgthree)",
+]);
+
+function stripUiOnlyNodes(raw: JsonRecord): JsonRecord {
+  if (!Array.isArray(raw.nodes)) return raw;
+  const removedIds = new Set<string>();
+  const filtered: unknown[] = [];
+  for (const n of raw.nodes) {
+    if (n == null || typeof n !== "object") {
+      filtered.push(n);
+      continue;
+    }
+    const node = n as JsonRecord;
+    const type = strField(node, "type") ?? strField(node, "class_type");
+    if (type && UI_ONLY_NODE_TYPES.has(type)) {
+      const rawId = node.id;
+      const id =
+        typeof rawId === "string" || typeof rawId === "number" ? String(rawId) : undefined;
+      if (id) removedIds.add(id);
+      continue;
+    }
+    filtered.push(n);
+  }
+  if (removedIds.size === 0) return raw;
+  raw.nodes = filtered;
+  // 同时清理 LiteGraph links 中与被删节点相关的连接（格式：
+  // [linkId, originNodeId, originSlot, targetNodeId, targetSlot, type]）
+  if (Array.isArray(raw.links)) {
+    raw.links = raw.links.filter((link) => {
+      if (!Array.isArray(link)) return true;
+      const origin = String(link[1] ?? "");
+      const target = String(link[3] ?? "");
+      return !removedIds.has(origin) && !removedIds.has(target);
+    });
+  }
+  return raw;
+}
+
 export async function executeViaComfyCli(job: Job) {
   const s = state();
   const { taskId, rawJson, overrides } = job;
@@ -180,7 +227,17 @@ export async function executeViaComfyCli(job: Job) {
   } catch { /* keep defaults */ }
   log(taskId, "info", `ComfyUI 目标：${host}:${port}（${base}）`);
 
-  const patched = applyRawOverrides(rawJson, overrides);
+  let patched = applyRawOverrides(rawJson, overrides);
+  const nodeCountBefore = Array.isArray(patched.nodes) ? patched.nodes.length : 0;
+  patched = stripUiOnlyNodes(patched);
+  const nodeCountAfter = Array.isArray(patched.nodes) ? patched.nodes.length : 0;
+  if (nodeCountAfter !== nodeCountBefore) {
+    log(
+      taskId,
+      "info",
+      `已剔除 ${nodeCountBefore - nodeCountAfter} 个纯 UI 控制节点（无后端实现），避免 comfy-cli 校验失败`
+    );
+  }
   /* 临时工作流文件统一放到项目根目录 temp/comfy-cli/，便于清理和跨平台管理。 */
   const tmpDir = path.join(process.cwd(), "temp", "comfy-cli");
   await fs.mkdir(tmpDir, { recursive: true });
