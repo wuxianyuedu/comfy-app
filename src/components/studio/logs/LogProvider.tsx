@@ -114,17 +114,18 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     return () => unlisten?.();
   }, [addEntry]);
 
-  // ── Load launcher log file: startup logs + ongoing dev-server output ──
-  const fileOffsetRef = useRef(0);
+  // ── Load launcher log files: startup logs + ongoing dev-server output ──
+  const offsetsRef = useRef({ dev: 0, launcher: 0 });
   useEffect(() => {
     if (typeof window === "undefined") return;
     let mounted = true;
     const POLL_MS = 2000;
 
-    const poll = async () => {
+    const pollSource = async (source: "dev" | "launcher") => {
       try {
+        const offset = offsetsRef.current[source];
         const res = await fetch(
-          `/api/logs/current?offset=${fileOffsetRef.current}`,
+          `/api/logs/current?source=${source === "dev" ? "dev-launcher" : "launcher"}&offset=${offset}`,
         );
         if (!res.ok) return;
         const data = (await res.json()) as {
@@ -135,18 +136,23 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
         if (!mounted || !data.content) return;
 
         // 文件被重置（新运行）时 offset 会回 0；此时丢弃旧 offset，完整重读
-        if (data.offset === 0 && fileOffsetRef.current > 0) {
-          fileOffsetRef.current = 0;
+        if (data.offset === 0 && offsetsRef.current[source] > 0) {
+          offsetsRef.current[source] = 0;
         }
 
         const entries = parseFileLogs(data.content);
         if (entries.length > 0) {
           appendFileLogs(entries);
         }
-        fileOffsetRef.current = data.size;
+        offsetsRef.current[source] = data.size;
       } catch {
         // 开发服务器尚未就绪或日志文件不存在时静默忽略
       }
+    };
+
+    const poll = async () => {
+      await pollSource("launcher");
+      await pollSource("dev");
     };
 
     void poll();

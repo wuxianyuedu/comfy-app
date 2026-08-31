@@ -205,6 +205,8 @@ function formatTime(ts: number, opts?: { alwaysDate?: boolean }): string {
 
 const LOG_LINE_RE =
   /^\[(\d{2}):(\d{2}):(\d{2})\]\s*\[(STEP|OK|INFO|WARN|ERROR|DEBUG)\]\s*(.*)$/;
+const LAUNCHER_LOG_RE =
+  /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]\s*(.*)$/;
 
 function parseLogLevel(level: string): LogLevel {
   switch (level.toLowerCase()) {
@@ -241,15 +243,36 @@ export function parseFileLogs(text: string, baseDate?: Date): LogEntry[] {
         message: msg ?? "",
         source: "system",
       });
-    } else {
+      continue;
+    }
+    const lm = LAUNCHER_LOG_RE.exec(line);
+    if (lm) {
+      const [, year, month, day, hh, mm, ss, ms, msg] = lm;
+      const d = new Date(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        Number(hh),
+        Number(mm),
+        Number(ss),
+        Number(ms),
+      );
       entries.push({
         id: nextId(),
-        time: now,
+        time: d.getTime(),
         level: "info",
-        message: line,
+        message: msg ?? "",
         source: "system",
       });
+      continue;
     }
+    entries.push({
+      id: nextId(),
+      time: now,
+      level: "info",
+      message: line,
+      source: "system",
+    });
   }
   return entries;
 }

@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
-import { requireServerUser } from "@/lib/auth-server";
 import fs from "node:fs";
 import path from "node:path";
 
-const DEFAULT_LOG_FILE = path.join(process.cwd(), "log", "dev-launcher.log");
-const SENTINEL_FILE = path.join(process.cwd(), "log", "dev-launcher-current.txt");
+const LOG_DIR = path.join(process.cwd(), "log");
+const DEFAULT_LOG_FILE = path.join(LOG_DIR, "dev-launcher.log");
+const LAUNCHER_LOG_FILE = path.join(LOG_DIR, "start-tauri-launcher.log");
+const SENTINEL_FILE = path.join(LOG_DIR, "dev-launcher-current.txt");
 
-function resolveCurrentLog(): string {
+function resolveCurrentLog(source = "dev-launcher"): string {
+  if (source === "launcher") {
+    return LAUNCHER_LOG_FILE;
+  }
   try {
     const sentinel = fs.readFileSync(SENTINEL_FILE, "utf8").trim();
     if (sentinel && fs.existsSync(sentinel)) {
@@ -19,15 +23,9 @@ function resolveCurrentLog(): string {
 }
 
 export async function GET(request: Request) {
-  const user = await requireServerUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 }
-    );
-  }
-
-  const logFile = resolveCurrentLog();
+  const { searchParams } = new URL(request.url);
+  const source = searchParams.get("source") ?? "dev-launcher";
+  const logFile = resolveCurrentLog(source);
   try {
     if (!fs.existsSync(logFile)) {
       return NextResponse.json({ content: "", size: 0, offset: 0 });

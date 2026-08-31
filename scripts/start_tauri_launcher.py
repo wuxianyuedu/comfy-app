@@ -1327,6 +1327,9 @@ def _monitor_headless(
         "开发服务器进程已启动": "dev-server-starting",
         "Next.js dev server 已启动": "dev-server-starting",
         "预编译 Tauri 壳已启动": "tauri-shell-started",
+        "Tauri 桌面壳已启动": "tauri-shell-started",
+        "正在启动本地服务": "dev-server-starting",
+        "等待本地服务就绪": "dev-server-starting",
         "等待 tauri dev 编译": "tauri-compiling",
         "服务器已就绪": "dev-server-ready",
     }
