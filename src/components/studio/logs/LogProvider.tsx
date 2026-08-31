@@ -6,6 +6,7 @@ import {
   type LogLevel,
   type LogStoreState,
   captureLocation,
+  isNoisyFrameworkLog,
   isReactQueryLog,
   parseFileLogs,
   serialize,
@@ -43,7 +44,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       (level: LogLevel) =>
       (...args: unknown[]) => {
         originals[level](...args);
-        if (isReactQueryLog(args)) return;
+        if (isReactQueryLog(args) || isNoisyFrameworkLog(args)) return;
         /* 同步捕获调用点与序列化参数：调用栈只在当前 tick 有效，而参数
          * 可能在日志入库前就被调用方改写。 */
         const location = captureLocation();

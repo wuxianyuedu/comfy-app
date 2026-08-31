@@ -165,6 +165,19 @@ export function isReactQueryLog(args: unknown[]): boolean {
   return /^\s*%c\s*(<<|>>)\s*query\s+#\d+/i.test(first);
 }
 
+/**
+ * 过滤已知的、无害的框架/运行时噪音，避免它们淹没业务日志。
+ * 典型例子：Tauri v2 在 Windows WebView2 上 IPC custom protocol fetch 失败时
+ * 会自动降级到 postMessage，并打印一条 warn。这是正常行为，不影响功能。
+ */
+export function isNoisyFrameworkLog(args: unknown[]): boolean {
+  if (args.length === 0) return false;
+  const text = serialize(args);
+  return /IPC custom protocol failed|Tauri will now use the postMessage interface/i.test(
+    text,
+  );
+}
+
 function isSameDay(a: Date, b: Date): boolean {
   return (
     a.getFullYear() === b.getFullYear() &&
