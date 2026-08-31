@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-base-to-string, @typescript-eslint/no-empty-function, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/prefer-regexp-exec */
+/* eslint-disable @typescript-eslint/no-base-to-string, @typescript-eslint/no-empty-function, @typescript-eslint/no-unnecessary-type-assertion */
 "use client";
 
 /* 2026-08-30: extracted from CanvasNode — the collapsible error panel.
@@ -12,6 +12,7 @@ import { useMemo, useState } from "react";
 import { type CanvasNodeData } from "../canvas-types";
 import { ValidationErrorList } from "@/components/studio/shared/ValidationErrorList";
 import { Icon } from "@/components/ui/Icon";
+import { shouldAutoExpandError, suggestForError } from "./error-suggestions";
 
 interface ErrorPanelProps {
   nodeId: string;
@@ -61,16 +62,7 @@ export function ErrorPanel({
 
   /* Auto-expand on structured / actionable errors so the suggestion +
    *  request-payload sections are visible without an extra click. */
-  const shouldAutoExpand = (() => {
-    // R-Next (2026-08-17): structured validation errors are always actionable
-    //  → expand so the per-field list is visible without an extra click.
-    if ((validationErrors?.length ?? 0) > 0) return true;
-    if (!error) return false;
-    const e = error;
-    return /not found|not installed|out of memory|cannot find model|checkpoint.*not exists|missing\s+\w+\s+model|ValueError|IndexError|KeyError|BackendError|server_busy|insufficient/i.test(
-      e
-    );
-  })();
+  const shouldAutoExpand = shouldAutoExpandError(error, validationErrors?.length ?? 0);
   /* Auto-expand on actionable errors (adjusted during render, React 19
    *  pattern). */
   const [prevErrCtx, setPrevErrCtx] = useState(`${status}|${shouldAutoExpand}`);
@@ -83,28 +75,7 @@ export function ErrorPanel({
   /* Pattern-match the error text to surface a one-line actionable hint.
    *  Returns null if we don't recognize the failure shape (UI keeps the
    *  generic raw-error block instead of making up bad advice). */
-  const errorSuggestion: string | null = useMemo(() => {
-    const e = error ?? "";
-    if (!e) return null;
-    /* UUID-class wrapper / ComfyUI subgraph not installed */
-    const uuid = e.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    if (uuid && /not found|not installed/i.test(e)) {
-      return `wrapper 子图 (${uuid[0].slice(0, 8)}…) 找不到。自定义工作流依赖的节点未在 ComfyUI 端安装；请确认 wrapper 在源工作流里声明了相同的自定义节点包，或者回退到「无 wrapper」的 flat form 模板。`;
-    }
-    if (/out of memory|oom|cuda out|tried to allocate/i.test(e)) {
-      return "ComfyUI 显存不足。建议：把工作流拆成更小的批次 / 关闭其他任务 / 减小图片分辨率 / 加 ControlNets 或 LoRA 占用的层数。";
-    }
-    if (/checkpoint.*not.*found|cannot find.*model|model.*not.*exists|FileNotFoundError.*safetensors|missing.*\.safetensors/i.test(e)) {
-      return "指定的模型文件不存在。请在 ComfyUI `models/checkpoints/` 中放入该 .safetensors（或 .ckpt），或在节点参数下拉里换一个已下载的模型。";
-    }
-    if (/valueerror|indexerror|keyerror|prompthelperror|input type mismatch|got.*expected/i.test(e)) {
-      return "ComfyUI 节点参数类型不匹配。常见原因：把 wrong type 的连线插入了强类型节点；请检查出错节点的输入端口和上游数据形状。";
-    }
-    if (/timeout|timed out|connection.*refused|server_busy|503|429/i.test(e)) {
-      return "ComfyUI 端请求超时 / 拒绝连接。请确认本地 8188 端口的 ComfyUI 进程还活着、最近没在初始化大模型。";
-    }
-    return null;
-  }, [error]);
+  const errorSuggestion: string | null = useMemo(() => suggestForError(error), [error]);
 
   /* Hidden entirely when the node isn't showing an actionable error. Kept
    *  after the hooks (instead of gating the mount in the parent) so the
