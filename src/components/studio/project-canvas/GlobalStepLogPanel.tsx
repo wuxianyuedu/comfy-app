@@ -14,6 +14,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNodes } from "@xyflow/react";
 import { FileText, X } from "lucide-react";
 import type { ValidationError } from "@/lib/comfyui/validation";
 import type { StepLogEntry } from "./stepLogCache";
@@ -25,7 +26,7 @@ import {
   patchStepLogMeta,
   setStepLogValidationErrors,
 } from "./stepLogCache";
-import { useActiveTaskId } from "./activeTask";
+import { useActiveTaskId, getNodeIdByTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
 import { ValidationErrorList } from "@/components/studio/shared/ValidationErrorList";
 import { vanillaApi } from "~/trpc/vanilla";
@@ -204,6 +205,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             patchStepLogMeta(tid, {
               workflowName: typeof msg.workflowName === "string" ? msg.workflowName : undefined,
               status: typeof msg.status === "string" ? msg.status : undefined,
+              nodeId: getNodeIdByTaskId(tid) ?? undefined,
             });
           }
         } else if (msg.type === "done") {
@@ -260,6 +262,21 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const cachedIds = useMemo(() => listCachedTaskIds(), [logs, validationErrors, taskId]);
+
+  /* 把每个已缓存的 taskId 映射回画布节点短序号 (#1, #2…)。
+   * 映射来源：运行开始时 setActiveTaskId(taskId, nodeId) 写进 activeTask，
+   * 随后通过 patchStepLogMeta 持久化到 stepLogCache。 */
+  const nodes = useNodes();
+  const nodeSeqByTaskId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const cachedId of cachedIds) {
+      const nodeId = getNodeIdByTaskId(cachedId) ?? loadStepLogPanelState(cachedId)?.nodeId;
+      if (!nodeId) continue;
+      const idx = nodes.findIndex((node) => node.id === nodeId);
+      if (idx !== -1) map.set(cachedId, idx + 1);
+    }
+    return map;
+  }, [cachedIds, nodes]);
 
   /* 弹窗已打开时不受 debugMode 开关影响（关闭开关不应让正在查看的日志
    * 瞬间消失）；关闭弹窗后入口按钮与弹窗一起隐藏。 */
@@ -359,11 +376,15 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                     {!taskId && <option value="">（无任务）</option>}
                     {cachedIds.map((id) => {
                       const meta = loadStepLogPanelState(id);
-                      const wn = meta?.workflowName?.trim() ?? "(未命名工作流)";
+                      const seq = nodeSeqByTaskId.get(id);
+                      const wn = meta?.workflowName?.trim();
                       const st = meta?.status ?? "?";
+                      const seqLabel = seq ? `#${seq}` : null;
+                      const titleParts = [seqLabel, wn, st, id].filter(Boolean);
+                      const displayParts = [seqLabel, wn ?? `task ${id.slice(0, 8)}`, st].filter(Boolean);
                       return (
-                        <option key={id} value={id} title={`${wn} · ${st} · ${id}`}>
-                          {wn.length > 16 ? wn.slice(0, 15) + "…" : wn} · {st}
+                        <option key={id} value={id} title={titleParts.join(" · ")}>
+                          {displayParts.join(" · ")}
                         </option>
                       );
                     })}

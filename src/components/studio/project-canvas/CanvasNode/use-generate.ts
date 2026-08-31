@@ -141,7 +141,7 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
         if (refs.length) payload.referenceImages = refs;
         const taskId = await startGenerate(payload);
         patch({ taskId });
-        setActiveTaskId(taskId);
+        setActiveTaskId(taskId, id);
         const result = await pollTask(taskId, undefined, (progress) => patch({ progress }));
         if (isTaskSuccess(result)) {
           // R-ardot91 (2026-08-16): picture 节点 = 图片资产本身，生成结果直接
@@ -347,7 +347,7 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
       patch({ status: "running", error: undefined });
       const taskId = await startGenerate(req as Record<string, unknown>);
       patch({ taskId });
-      setActiveTaskId(taskId);
+      setActiveTaskId(taskId, id);
       const result = await pollTask(taskId, undefined, (progress) => patch({ progress }));
       if (isTaskSuccess(result)) {
         patch({

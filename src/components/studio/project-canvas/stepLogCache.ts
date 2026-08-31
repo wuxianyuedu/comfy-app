@@ -66,6 +66,8 @@ export interface StepLogPanelState {
    *  Populated by GlobalStepLogPanel on every SSE `state` event. */
   workflowName?: string;
   status?: string;
+  /** 触发该任务的画布节点 id，用于日志面板按 #1/#2… 短序号筛选。 */
+  nodeId?: string;
 }
 
 const MAX_ENTRIES = 256;
@@ -137,7 +139,7 @@ export function setStepLogValidationErrors(
  *  instead of forcing the user to read a truncated 14-char id. */
 export function patchStepLogMeta(
   taskId: string | null | undefined,
-  meta: { workflowName?: string; status?: string }
+  meta: { workflowName?: string; status?: string; nodeId?: string }
 ): void {
   if (!taskId) return;
   const prev = cache.get(taskId) ?? { logs: [] as StepLogEntry[], validationErrors: null };
@@ -146,6 +148,7 @@ export function patchStepLogMeta(
     validationErrors: prev.validationErrors,
     workflowName: meta.workflowName ?? prev.workflowName,
     status: meta.status ?? prev.status,
+    nodeId: meta.nodeId ?? prev.nodeId,
   });
 }
 
