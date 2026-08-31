@@ -116,8 +116,9 @@ pnpm db:push
 | 方式 | 命令 / 入口 | 说明 |
 |------|------------|------|
 | 纯前端（浏览器） | `pnpm dev` | 启动 Next dev server，访问 http://localhost:3000 |
-| 桌面壳（带热重载） | `pnpm tauri dev` | 自动起 dev server + Rust 壳，修改前端即时刷新 |
-| 桌面壳（无控制台） | 双击 `start-tauri.vbs` | 隐藏窗口启动 dev 模式桌面壳 |
+| 桌面壳（Rust 也热重载） | `pnpm tauri dev` 或双击 `start-tauri.exe --tauri-dev` | 自动起 dev server + 重新编译 Rust 壳，前端/后端改动即时刷新（首次编译较慢） |
+| 桌面壳（预编译秒出 + 前端热重载） | 双击 `start-tauri.exe` | 默认 prebuilt 模式：用已编译的 release 壳秒出窗口，后台连 dev server，改前端即时刷新（Rust 改动需重新 `cargo build`） |
+| 桌面壳（无控制台） | 双击 `start-tauri.vbs` | 隐藏窗口启动 dev 模式桌面壳（等价于 `start-tauri.exe --tauri-dev`） |
 | Web 开发（可见日志） | 双击 `start-web.bat` | 控制台打印 dev-launcher 日志 |
 
 > Dev 模式下窗口初始加载 `splash.html` 启动页，随后自动探测 `http://localhost:3000` 就绪并跳转应用。
@@ -133,6 +134,11 @@ pnpm db:push
 > 正常情况下 `build-all` 流程会自动同步资源；若曾出现异常，先跑 `tools\rebuild-static.bat` 再构建。
 
 ### 方式一：一键发布（推荐）
+
+> 说明：`tools\build-all.bat` 产出的 `start-tauri.exe` 本身就是一个「开发/预编译」启动入口——
+> 双击它会用预编译壳秒出窗口并后台连接 dev server（前端热重载），**日常开发直接双击即可**，
+> 无需先构建。它并非只能用于发布：当你需要**不依赖 dev server 的独立程序**时，才用下面的
+> 「方式三：完整安装包」（内嵌 standalone server，双击即独立运行）。
 
 ```text
 双击 tools\build-all.bat
@@ -162,6 +168,21 @@ pnpm tauri build
 
 由 Tauri CLI 走 `beforeBuildCommand`（`node scripts/build-desktop.mjs`）组装资源，
 再产出系统安装包（位于 `src-tauri/target/release/bundle/`）。
+
+### start-tauri.exe 的启动模式
+
+`start-tauri.exe`（由 `build-launcher.bat` 打包 `scripts/start_tauri_launcher.py`）支持：
+
+| 启动方式 | 模式 | 说明 |
+|----------|------|------|
+| 双击 `start-tauri.exe` | prebuilt（默认） | 预编译壳秒出窗口 + 后台 dev server（前端 HMR），改前端即时生效；Rust 改动需重新 `cargo build` |
+| `start-tauri.exe --tauri-dev` | tauri dev | 重新编译 Rust 壳 + dev server，前端与 Rust 均热重载（首次编译较慢） |
+| 独立安装包（`pnpm tauri build`） | standalone | 内嵌 Next standalone server，不依赖 dev server，双击即独立运行 |
+
+> 为何 prebuilt 默认连 dev server 而非独立运行：直接运行 `target/release/app.exe` 时，
+> Tauri 的 `resource_dir()` 指向 `src-tauri`，而 standalone 的 `server.js` 在 `src-tauri/static`
+> 子目录，壳检测不到 `server.js` 便回退到 `COMFYAPP_DEV_URL`（dev server）；只有打包安装后
+> `resource_dir()` 指向 resources 且 `server.js` 在根，才会走真正独立的 standalone 模式。
 
 ### 资源异常时清理重建
 
