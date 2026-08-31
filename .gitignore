@@ -58,7 +58,10 @@ build_log*.txt
 # 由 scripts/start_tauri_launcher.py 重建，不入库
 /start-tauri/
 start-tauri*.exe
+# start-tauri*.spec 默认忽略（避免根目录遗留 spec 入库），
+# 但 tools/start-tauri.spec 是构建配置，需纳入版本控制：
 start-tauri*.spec
+!tools/start-tauri.spec
 /dist/
 /build-launcher/
 # 由 scripts/dev_tools_launcher.py 重建，不入库
