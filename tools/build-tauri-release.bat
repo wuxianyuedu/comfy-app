@@ -26,7 +26,7 @@ if errorlevel 1 (
   echo.
   echo        https://rustup.rs/
   echo.
-  pause
+  if /I not "%~1"=="no-pause" pause
   exit /b 1
 )
 
@@ -45,7 +45,7 @@ popd
 if %BUILD_ERR% neq 0 (
   echo.
   echo [错误] 构建失败，请查看上方 cargo 输出。
-  pause
+  if /I not "%~1"=="no-pause" pause
   exit /b 1
 )
 
@@ -58,4 +58,4 @@ echo   之后打包 start-tauri.exe 时，Prebuilt 模式会自动优先使用该壳。
 echo   如需完整发布构建，请运行 tools\build-all.bat
 echo ==========================================================
 echo.
-pause
+if /I not "%~1"=="no-pause" pause

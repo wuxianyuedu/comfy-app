@@ -121,13 +121,20 @@ cargo build --release
 
 ## 一键发布构建
 
-需要「最快启动」的完整发布包时，依次完成「release Tauri 壳 + 打包 start-tauri.exe」
-两步。可直接双击 `tools\build-all.bat`（内部 `call` 上述两个脚本），或在项目根执行：
+需要「最快启动」的完整发布包时，直接双击 `tools\build-all.bat`：
+
+1. 自动调用 `build-tauri-release.bat` 构建 release Tauri 壳；
+2. 完成后自动调用 `build-launcher.bat` 打包 `start-tauri.exe`；
+3. 全部完成后在 `build-all.bat` 末尾暂停一次，方便确认结果。
 
 ```powershell
-tools\build-tauri-release.bat
-tools\build-launcher.bat
+# 在项目根目录执行
+tools\build-all.bat
 ```
 
 两个脚本职责独立、前置工具链不同（Rust vs Python），**不合并为单文件**，
 仅由 `build-all.bat` 做编排，便于单独重编其中一环。
+
+> 单独双击 `build-tauri-release.bat` 或 `build-launcher.bat` 时，每个脚本仍会在
+> 自身完成后暂停，方便查看日志；只有被 `build-all.bat` 调用时才会自动跳过子脚本
+> 的 `pause`，实现真正一键无人值守。

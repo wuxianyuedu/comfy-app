@@ -25,7 +25,7 @@ rem ---- 1. 检查 Python / PyInstaller ----
 where python >nul 2>&1
 if errorlevel 1 (
   echo [错误] 未找到 python，请先安装 Python 3.10+ 并加入 PATH。
-  pause
+  if /I not "%~1"=="no-pause" pause
   exit /b 1
 )
 
@@ -35,7 +35,7 @@ if errorlevel 1 (
   echo.
   echo        pip install pyinstaller
   echo.
-  pause
+  if /I not "%~1"=="no-pause" pause
   exit /b 1
 )
 
@@ -61,7 +61,7 @@ pyinstaller --clean --noconfirm ^
 if errorlevel 1 (
   echo.
   echo [错误] 打包失败，请查看上方输出。
-  pause
+  if /I not "%~1"=="no-pause" pause
   exit /b 1
 )
 
@@ -71,4 +71,4 @@ echo   打包完成
 echo   产物: %PROJECT_ROOT%\start-tauri\start-tauri.exe
 echo ==========================================================
 echo.
-pause
+if /I not "%~1"=="no-pause" pause

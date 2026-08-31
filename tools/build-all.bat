@@ -13,14 +13,14 @@ echo   2) 打包 start-tauri.exe    (build-launcher.bat)
 echo ==========================================================
 echo.
 
-call "%~dp0build-tauri-release.bat"
+call "%~dp0build-tauri-release.bat" no-pause
 if errorlevel 1 (
   echo [错误] Tauri 壳构建失败，已中止发布流程。
   pause
   exit /b 1
 )
 
-call "%~dp0build-launcher.bat"
+call "%~dp0build-launcher.bat" no-pause
 if errorlevel 1 (
   echo [错误] start-tauri.exe 打包失败，已中止发布流程。
   pause
