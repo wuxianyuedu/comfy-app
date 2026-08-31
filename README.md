@@ -116,9 +116,10 @@ pnpm db:push
 | 方式 | 命令 / 入口 | 说明 |
 |------|------------|------|
 | 纯前端（浏览器） | `pnpm dev` | 启动 Next dev server，访问 http://localhost:3000 |
-| 桌面壳（Rust 也热重载） | `pnpm tauri dev` 或双击 `start-tauri.exe --tauri-dev` | 自动起 dev server + 重新编译 Rust 壳，前端/后端改动即时刷新（首次编译较慢） |
 | 桌面壳（预编译秒出 + 前端热重载） | 双击 `start-tauri.exe` | 默认 prebuilt 模式：用已编译的 release 壳秒出窗口，后台连 dev server，改前端即时刷新（Rust 改动需重新 `cargo build`） |
-| 桌面壳（无控制台） | 双击 `start-tauri.vbs` | 隐藏窗口启动 dev 模式桌面壳（等价于 `start-tauri.exe --tauri-dev`） |
+| 桌面壳（Rust 也热重载） | 双击 `start-tauri-dev.exe` 或 `pnpm tauri dev` | 自动起 dev server + 重新编译 Rust 壳，前端/后端改动即时刷新（首次编译较慢） |
+| 桌面壳（独立运行，不连 dev server） | 双击 `start-tauri-standalone.exe`（需先 `tools\build-standalone.bat`） | standalone 模式：内置 Node sidecar 运行 Next standalone server，双击即独立运行，改动需重新构建才生效 |
+| 桌面壳（无控制台 vbs） | 双击 `start-tauri.vbs` | 隐藏窗口启动 tauri dev 模式（等价于 `start-tauri-dev.exe`） |
 | Web 开发（可见日志） | 双击 `start-web.bat` | 控制台打印 dev-launcher 日志 |
 
 > Dev 模式下窗口初始加载 `splash.html` 启动页，随后自动探测 `http://localhost:3000` 就绪并跳转应用。
@@ -169,15 +170,21 @@ pnpm tauri build
 由 Tauri CLI 走 `beforeBuildCommand`（`node scripts/build-desktop.mjs`）组装资源，
 再产出系统安装包（位于 `src-tauri/target/release/bundle/`）。
 
-### start-tauri.exe 的启动模式
+### 启动入口一览（三种独立 exe）
 
-`start-tauri.exe`（由 `build-launcher.bat` 打包 `scripts/start_tauri_launcher.py`）支持：
+`scripts/start_tauri_launcher.py` 是**一份源码**，由 `tools\build-launcher*.bat` 通过
+`LAUNCHER_NAME` 环境变量打包出三个入口 exe；运行时再按 **exe 文件名**自动选择模式
+（也可显式用参数覆盖：`--tauri-dev` / `--standalone`）：
 
-| 启动方式 | 模式 | 说明 |
-|----------|------|------|
-| 双击 `start-tauri.exe` | prebuilt（默认） | 预编译壳秒出窗口 + 后台 dev server（前端 HMR），改前端即时生效；Rust 改动需重新 `cargo build` |
-| `start-tauri.exe --tauri-dev` | tauri dev | 重新编译 Rust 壳 + dev server，前端与 Rust 均热重载（首次编译较慢） |
-| 独立安装包（`pnpm tauri build`） | standalone | 内嵌 Next standalone server，不依赖 dev server，双击即独立运行 |
+| 入口 exe | 模式 | 说明 | 改动热更新 |
+|----------|------|------|-----------|
+| 双击 `start-tauri.exe` | prebuilt（默认） | 预编译壳秒出窗口 + 后台 dev server | 前端 HMR；Rust 需重编 |
+| 双击 `start-tauri-dev.exe` | tauri dev | 重新编译 Rust 壳 + dev server | 前端 + Rust 均热重载 |
+| 双击 `start-tauri-standalone.exe` | standalone | 内置 Node sidecar 独立运行（需先 `tools\build-standalone.bat`） | 不可（需重构建） |
+| `pnpm tauri build` 安装包 | standalone | 以安装包形式分发的独立程序 | 不可 |
+
+> 三种方式的「哪些能热更 / 哪些不能 / 构建 `static` 对谁有影响」，见
+> [docs/startup-hotreload.md](./docs/startup-hotreload.md)。
 
 > 为何 prebuilt 默认连 dev server 而非独立运行：直接运行 `target/release/app.exe` 时，
 > Tauri 的 `resource_dir()` 指向 `src-tauri`，而 standalone 的 `server.js` 在 `src-tauri/static`
@@ -200,9 +207,11 @@ pnpm tauri build
 | 目标 | 命令 |
 |------|------|
 | 浏览器开发 | `pnpm dev` |
-| 桌面壳开发（热重载） | `pnpm tauri dev` |
+| 桌面壳开发（热重载） | `pnpm tauri dev` 或双击 `start-tauri-dev.exe` |
 | 一键发布（壳 + launcher） | `tools\build-all.bat` |
 | 仅 release 壳 | `tools\build-tauri-release.bat` |
+| 独立模式壳（standalone） | `tools\build-standalone.bat` |
+| 独立模式启动入口 | `tools\build-launcher-standalone.bat`（打包 `start-tauri-standalone.exe`） |
 | 完整安装包 | `pnpm tauri build` |
 | 清理重建前端资源 | `tools\rebuild-static.bat` |
 

@@ -8,13 +8,50 @@
 
 ## 目录内容
 
-| 文件 | 用途 |
-|------|------|
-| `build-launcher.bat` | 重新打包 `start-tauri/start-tauri.exe`（双击即可执行） |
-| `build-tauri-release.bat` | 构建 `src-tauri/target/release/app.exe`（release 版预编译壳，启动更快） |
-| `build-all.bat` | 一键发布：先构建 release Tauri 壳，再打包 `start-tauri.exe` |
-| `start-tauri.spec` | PyInstaller 打包配置（onedir 模式，无控制台窗口） |
-| `README.md` | 本文件 |
+| 文件 | 类别 | 用途 |
+|------|------|------|
+| `build-launcher.bat` | 启动器（通用） | 打包 `start-tauri/start-tauri.exe`（prebuilt 默认入口，秒出窗口 + dev server） |
+| `build-launcher-dev.bat` | 启动器（dev） | 打包 `start-tauri-dev/start-tauri-dev.exe`（双击即走 tauri dev，Rust 热重载） |
+| `build-launcher-standalone.bat` | 启动器（standalone） | 打包 `start-tauri-standalone/start-tauri-standalone.exe`（双击即走独立模式） |
+| `build-tauri-release.bat` | 壳（dev 用） | 构建 `src-tauri/target/release/app.exe`（release 壳，prebuilt / tauri dev 使用，运行时回退 dev server） |
+| `build-standalone.bat` | 壳（standalone 用） | 完整生产构建独立壳：`pnpm tauri build --no-bundle`，产出不连 dev server 的可分发壳 |
+| `build-all.bat` | 一键编排 | 构建 release 壳 + 打包 `start-tauri.exe` |
+| `rebuild-static.bat` | 资源 | 清理并重建 `src-tauri/static`（standalone / 嵌入资源来源） |
+| `start-tauri.spec` | 打包配置 | PyInstaller（onedir）；入口名由环境变量 `LAUNCHER_NAME` 决定，一份 spec 服务三个入口 |
+| `README.md` | 文档 | 本文件 |
+
+## 按用途分类（dev 构建 vs standalone 构建）
+
+三种**启动方式**现在各有一个独立 exe 入口，构建脚本也按职责归类：
+
+### A. 开发 / 快速预览（连 dev server，前端 HMR）
+
+- **入口 exe**：`start-tauri.exe`（prebuilt，默认）或 `start-tauri-dev.exe`（tauri dev）
+- **壳来源**：`build-tauri-release.bat` 产出的 `target/release/app.exe`
+  （该壳运行时 `server.js` 不在资源根，会自动**回退到 dev server**）
+- **打包入口 exe**：`build-launcher.bat` / `build-launcher-dev.bat`
+- **适用**：只改前端（`src/` TS/TSX）靠 HMR 即时生效；改 Rust 后用 dev 入口自动重载
+- 详见 [`../docs/startup-hotreload.md`](../docs/startup-hotreload.md)
+
+### B. 独立模式（standalone，不连 dev server）
+
+- **入口 exe**：`start-tauri-standalone.exe`（双击即走独立模式）
+- **壳来源**：`build-standalone.bat`（`pnpm tauri build --no-bundle`）产出的
+  `target/release/app.exe` + 同级 `server.js` / `.next/static` / `binaries/node.exe`
+  （运行时 `resource_dir` 根有 `server.js`，走内置 Node sidecar，**不依赖 dev server**）
+- **打包入口 exe**：`build-launcher-standalone.bat`（仅打包 launcher，壳本身靠 `build-standalone.bat`）
+- **适用**：需要「双击即独立运行、无需起 dev server」的分发场景
+- ⚠️ 必须先跑 `build-standalone.bat` 才有独立壳；否则双击 `start-tauri-standalone.exe` 会提示先构建
+
+### C. 资源清理（两类构建共用）
+
+- `rebuild-static.bat`：删除并重建 `src-tauri/static`（standalone 资源来源）；
+  当 `static` 被污染导致黑屏时，先跑它再重新构建壳
+
+> 三个入口 exe 由**同一份** `scripts/start_tauri_launcher.py` 打包而来：PyInstaller 在
+> `build-launcher-dev.bat` / `build-launcher-standalone.bat` 中通过 `LAUNCHER_NAME`
+> 指定 exe 名；launcher 运行时再按 exe 文件名自动选择 prebuilt / tauri / standalone 模式。
+> 因此改完 `start_tauri_launcher.py` 后，**三个入口都要重新打包**才生效。
 
 ## 重新打包 start-tauri.exe
 

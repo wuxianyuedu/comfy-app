@@ -22,6 +22,13 @@ except NameError:
 
 _PROJECT_ROOT = os.path.dirname(os.path.abspath(_SPEC_DIR))
 
+# 入口名可由环境变量覆盖，使同一份 spec 打包出三个启动入口：
+#   start-tauri.exe           (默认，prebuilt 模式)
+#   start-tauri-dev.exe       (LAUNCHER_NAME=start-tauri-dev，tauri dev 模式)
+#   start-tauri-standalone.exe(LAUNCHER_NAME=start-tauri-standalone，standalone 模式)
+# launcher 源码会根据 exe 文件名自动选择对应启动模式（见 scripts/start_tauri_launcher.py）。
+_LAUNCHER_NAME = os.environ.get('LAUNCHER_NAME', 'start-tauri')
+
 a = Analysis(
     [os.path.join(_PROJECT_ROOT, 'scripts', 'start_tauri_launcher.py')],
     pathex=[],
@@ -42,7 +49,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='start-tauri',
+    name=_LAUNCHER_NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -61,5 +68,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='start-tauri',
+    name=_LAUNCHER_NAME,
 )

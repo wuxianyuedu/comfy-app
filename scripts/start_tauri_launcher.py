@@ -1478,7 +1478,7 @@ def _fatal_box(message: str, title: str = f"{APP_TITLE} 启动器") -> int:
 
 def _parse_args(argv: list[str]) -> dict[str, bool | str]:
     # 默认使用预编译 Tauri 壳（窗口秒出）；--tauri-dev 走旧版 tauri dev（慢，但支持 Rust 热重载）。
-    args: dict[str, bool | str] = {"splash": False, "focus": True, "tauri_dev": False}
+    args: dict[str, bool | str] = {"splash": False, "focus": True, "tauri_dev": False, "standalone": False}
     for arg in argv[1:]:
         a = arg.lower().lstrip("-/")
         if a in ("splash",):
@@ -1487,11 +1487,104 @@ def _parse_args(argv: list[str]) -> dict[str, bool | str]:
             args["splash"] = False
         elif a in ("tauri-dev", "tauridev", "dev-build"):
             args["tauri_dev"] = True
+        elif a in ("standalone", "portable", "no-dev"):
+            args["standalone"] = True
         elif a in ("no-focus", "nofocus"):
             args["focus"] = False
         elif a in ("help", "h", "?"):
             args["help"] = True
     return args
+
+
+def _default_mode_from_exe() -> str:
+    """按 exe 文件名决定默认启动模式，使一个源码可打包出三个入口：
+
+    - ``start-tauri.exe``            -> prebuilt  （默认，秒出窗口 + dev server）
+    - ``start-tauri-dev.exe``        -> tauri     （Rust 热重载）
+    - ``start-tauri-standalone.exe`` -> standalone（独立运行，不连 dev server）
+
+    显式参数（--tauri-dev / --standalone）优先级最高，可覆盖文件名默认值。
+    """
+    base = os.path.splitext(os.path.basename(sys.executable))[0].lower()
+    if base.endswith("-dev"):
+        return "tauri"
+    if base.endswith("-standalone"):
+        return "standalone"
+    return "prebuilt"
+
+
+def _resolve_mode(args: dict) -> str:
+    if args.get("standalone"):
+        return "standalone"
+    if args.get("splash") or args.get("tauri_dev"):
+        return "tauri"
+    return _default_mode_from_exe()
+
+
+def _run_standalone(project_root: str, mutex, args) -> int:
+    """独立模式：直接运行已构建的 standalone Tauri 壳（app.exe），不连 dev server。
+
+    前置：``tools\\build-standalone.bat``（``pnpm tauri build``）已把 standalone 资源
+    （server.js + .next/static + Node sidecar）组装到 app.exe 同级/资源目录。
+    资源缺失时明确报错，避免静默黑屏或 Rust 侧 panic。
+    """
+    set_dpi_aware()
+    app_exe = os.path.join(project_root, "src-tauri", "target", "release", "app.exe")
+    res_dir = os.path.dirname(app_exe)
+    server_js = os.path.join(res_dir, "server.js")
+    node_exe = os.path.join(res_dir, "binaries", "node.exe")
+
+    def _cleanup_and_exit(code: int, message: str = "") -> int:
+        _safe_remove(_launcher_lock_file(project_root))
+        if mutex:
+            kernel32.ReleaseMutex(mutex)
+            kernel32.CloseHandle(mutex)
+        close_logging()
+        if message:
+            return _fatal_box(message)
+        return code
+
+    if not os.path.isfile(app_exe):
+        log("standalone mode: app.exe not found")
+        return _cleanup_and_exit(
+            1,
+            f"找不到 standalone 壳：{app_exe}\n\n"
+            "请先运行 tools\\build-standalone.bat（pnpm tauri build）构建独立版本。",
+        )
+    if not os.path.isfile(server_js) or not os.path.isfile(node_exe):
+        log("standalone mode: standalone resources missing")
+        return _cleanup_and_exit(
+            1,
+            "standalone 资源缺失（server.js / Node sidecar）。\n\n"
+            "请先运行 tools\\build-standalone.bat（pnpm tauri build）完成完整生产构建，\n"
+            "请勿用纯 cargo build --release（其 app.exe 不内嵌 standalone 资源）。",
+        )
+
+    log(f"standalone mode: launching {app_exe}")
+    try:
+        proc = subprocess.Popen(
+            [app_exe],
+            cwd=project_root,
+            env={**os.environ, "COMFYAPP_PROJECT_ROOT": project_root},
+            close_fds=True,
+            start_new_session=True,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    except Exception as exc:
+        log(f"standalone mode: failed to launch app.exe: {exc}")
+        return _cleanup_and_exit(1, f"无法启动 standalone 壳：{exc}")
+
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        if find_tauri_window():
+            log("standalone mode: tauri window detected, launcher exiting")
+            break
+        if proc.poll() is not None:
+            log("standalone mode: app.exe exited early")
+            _fatal_box("standalone 壳启动后异常退出，请查看 log/ 下日志。")
+            break
+        time.sleep(0.5)
+    return _cleanup_and_exit(0)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1503,8 +1596,9 @@ def main(argv: list[str] | None = None) -> int:
         user32.MessageBoxW(
             0,
             "用法：start-tauri.exe [选项]\n\n"
-            "  默认          使用预编译 Tauri 壳（窗口秒出）\n"
-            "  --tauri-dev   走旧版 tauri dev（慢，但支持 Rust 热重载）\n"
+            "  默认          使用预编译 Tauri 壳（窗口秒出，连 dev server）\n"
+            "  --tauri-dev   走 Tauri dev（慢，但支持 Rust 热重载）\n"
+            "  --standalone  走独立模式（需先 pnpm tauri build，不连 dev server）\n"
             "  --splash      启用旧版 Win32 启动小弹窗（调试用）\n"
             "  --no-focus    发现已有窗口时不置顶\n"
             "  --help        显示此帮助",
@@ -1519,11 +1613,16 @@ def main(argv: list[str] | None = None) -> int:
     init_logging(project_root)
     log(f"project_root={project_root}")
 
-    ps1_path = os.path.join(project_root, "scripts", "dev-launcher.ps1")
-    if not os.path.isfile(ps1_path):
-        return _fatal_box(
-            f"找不到启动脚本：{ps1_path}\n请把 start-tauri.exe 放在项目根目录。"
-        )
+    # 启动模式（prebuilt / tauri / standalone）由参数或 exe 文件名决定。
+    mode = _resolve_mode(args)
+    if mode != "standalone":
+        ps1_path = os.path.join(project_root, "scripts", "dev-launcher.ps1")
+        if not os.path.isfile(ps1_path):
+            return _fatal_box(
+                f"找不到启动脚本：{ps1_path}\n请把 start-tauri.exe 放在项目根目录。"
+            )
+    else:
+        ps1_path = None
 
     # 单实例保护 + 陈旧锁自愈
     lock_file = _launcher_lock_file(project_root)
@@ -1569,8 +1668,9 @@ def main(argv: list[str] | None = None) -> int:
     # 检测 comfy-cli 虚拟环境；缺失则后台触发安装（不阻塞启动）
     ensure_comfy_cli_venv(project_root)
 
-    # 启动模式：默认预编译壳（秒出窗口）；--splash / --tauri-dev 走旧版 tauri dev。
-    mode = "tauri" if (args.get("splash") or args.get("tauri_dev")) else "prebuilt"
+    # 启动模式已由 _resolve_mode 根据参数 / exe 文件名决定（见上方 mode 赋值）。
+    if mode == "standalone":
+        return _run_standalone(project_root, mutex, args)
 
     if not args.get("splash", True):
         # 默认模式：不显示 Python 小弹窗，启动过程由 Tauri 主窗口内嵌页展示。

@@ -12,7 +12,7 @@
 | 启动方式 | 入口 | 模式 | 实际加载的内容 | 是否需要编译 Rust | 热更新能力 |
 |----------|------|------|----------------|------------------|------------|
 | **prebuilt（默认）** | 双击 `start-tauri.exe` | prebuilt | 已编译的 `target/release/app.exe` 秒出窗口；壳检测不到 standalone `server.js`（直接运行时 `resource_dir()=src-tauri`，`server.js` 在 `static` 子目录）⇒ 回退加载 `COMFYAPP_DEV_URL`（dev server，默认 `http://localhost:3000/workspace`） | 否（壳已就绪；`start-tauri.exe` 会自动起 dev server） | 前端源码可 HMR；Rust/配置改动需重新 `cargo build --release` |
-| **tauri dev** | `start-tauri.exe --tauri-dev` / 双击 `start-tauri.vbs` / `pnpm tauri dev` | tauri dev | `cargo` 重新编译 Rust 壳 + 起 dev server，前端/后端同源 | 是（增量编译，首次较慢） | 前端 **和** Rust 均热重载 |
+| **tauri dev** | 双击 `start-tauri-dev.exe` / `start-tauri.exe --tauri-dev` / `start-tauri.vbs` / `pnpm tauri dev` | tauri dev | `cargo` 重新编译 Rust 壳 + 起 dev server，前端/后端同源 | 是（增量编译，首次较慢） | 前端 **和** Rust 均热重载 |
 | **standalone 安装包** | `pnpm tauri build` 产出的安装包 | standalone | `beforeBuildCommand` 组装 `src-tauri/static`（standalone `server.js` + `.next/static` + Node sidecar）；打包后 `resource_dir()=resources` 根、`server.js` 在根 ⇒ 壳以 Node sidecar 运行内嵌 server，**不依赖 dev server** | 是（cargo release + 打包） | 全部不可热更新（除非重新构建发布包） |
 
 > **为什么 prebuilt 默认连 dev server 而不是独立运行**：直接运行 `target/release/app.exe` 时 `resource_dir()` 指向 `src-tauri`，而 `server.js` 在 `src-tauri/static` 子目录，壳检测不到根目录的 `server.js`，便回退到 dev URL。只有 `pnpm tauri build` 打包安装后 `resource_dir()` 指向 resources 根、`server.js` 在根，才会走真正独立的 standalone 模式（`src-tauri/src/lib.rs` 的 `spawn_sidecar` 逻辑）。
@@ -21,7 +21,7 @@
 
 ## 2. 热更新能力矩阵（按代码/资源区域）
 
-| 代码 / 资源 | prebuilt（`start-tauri.exe`） | tauri dev（`--tauri-dev` / `.vbs`） | standalone 安装包 |
+| 代码 / 资源 | prebuilt（`start-tauri.exe`） | tauri dev（`start-tauri-dev.exe`） | standalone（`start-tauri-standalone.exe`） |
 |-------------|------------------------------|--------------------------------------|--------------------|
 | **前端源码** `src/`（app / components / server / lib 等） | ✅ HMR（dev server 提供） | ✅ HMR + Rust 热重载 | ❌ 产物快照，不可变 |
 | **启动页** `public/splash.html` | ❌ 已随 `frontendDist` 嵌入二进制；仅窗口初始屏显示，跳转后才是 dev 应用。改动需重编壳 | ❌ 同上（初始屏仍用嵌入副本） | ❌ 内嵌，需重打包才生效 |
@@ -61,20 +61,28 @@
 
 ---
 
-## 5. 痛点与改进：每种启动方式应有一个独立 exe
+## 5. 三种启动方式各有一个独立 exe（已实现）
 
-当前三种启动方式集中在 `start-tauri.exe` 一个 exe，靠参数区分：
+原痛点：`--tauri-dev` 带参数在「双击 / 发给他人」场景不便；dev 入口原本只有 `.vbs`。
+现已实现**一份 launcher 源码打包出三个独立 exe**，双击即用、无需记参数：
 
-| 启动方式 | 现状入口 | 是否「双击即用（无参数）」 |
-|----------|----------|----------------------------|
-| prebuilt | 双击 `start-tauri.exe` | ✅ 是 |
-| tauri dev | `start-tauri.exe --tauri-dev`（带参数）或双击 `start-tauri.vbs`（无参数，但为 `.vbs`） | ⚠️ 带参数不便；`.vbs` 非 `.exe` |
-| standalone | 安装包独立 exe | ✅ 是 |
+| 启动方式 | 独立 exe 入口 | 打包脚本 | 双击即用 |
+|----------|--------------|----------|----------|
+| prebuilt | `start-tauri.exe` | `tools\build-launcher.bat` | ✅ |
+| tauri dev | `start-tauri-dev.exe` | `tools\build-launcher-dev.bat` | ✅ |
+| standalone | `start-tauri-standalone.exe` | `tools\build-launcher-standalone.bat`（壳本身需先 `tools\build-standalone.bat`） | ✅ |
 
-**痛点**：`--tauri-dev` 带参数在「双击 / 发给他人」场景不便；且 dev 入口目前是 `.vbs` 而非 `.exe`。
+实现要点：
+- `scripts/start_tauri_launcher.py` 在运行时按 **exe 文件名**自动选模式
+  （`start-tauri-dev.exe` → tauri dev，`start-tauri-standalone.exe` → standalone，否则 prebuilt）；
+  也可用参数 `--tauri-dev` / `--standalone` 显式覆盖。
+- `tools\start-tauri.spec` 的入口名由环境变量 `LAUNCHER_NAME` 决定，
+  三个 `build-launcher*.bat` 各自注入不同 `LAUNCHER_NAME`，复用同一份 spec。
+- standalone 入口不依赖 `dev-launcher.ps1`，直接 spawn 已构建的
+  `src-tauri/target/release/app.exe`；若 standalone 资源（server.js / node sidecar）缺失会
+  明确报错提示先跑 `tools\build-standalone.bat`，避免黑屏。
 
-**改进方向**（尚未实现，待确认）：
-- 为 tauri dev 模式新增一个独立无参数 exe（如 `start-tauri-dev.exe`），与 `start-tauri.exe` 并列，内部默认走 `pnpm tauri dev`；
-- 或统一以 `start-tauri.vbs`（已是 dev 无参数入口）作为 dev 方式，prebuilt 用 `start-tauri.exe`，安装包用 `.msi/.exe`。
+> ⚠️ 改完 `scripts/start_tauri_launcher.py` 后，三个入口都要重新打包（dev / standalone / 默认）
+> 才生效——它们共享同一份源码。
 
-> 需要我实现 `start-tauri-dev.exe`（改 `scripts/start_tauri_launcher.py` + 新增 `tools/build-launcher-dev.bat`）时告知即可。
+`tools\` 目录按用途归类（dev 构建 vs standalone 构建）见 [`../tools/README.md`](../tools/README.md)。
