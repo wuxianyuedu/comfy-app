@@ -1,37 +1,37 @@
 @echo off
-chcp 65001 >nul
+chcp 936 >nul
 setlocal
-rem ä¸€é”®å‘å¸ƒæ„å»ºï¼šå…ˆæ„å»º release Tauri å£³ï¼Œå†æ‰“åŒ… start-tauri.exe
-rem ç¼–æ’è„šæœ¬ï¼ˆä¸é‡å¤å®ç°æ„å»ºé€»è¾‘ï¼Œåˆ†åˆ« call å­è„šæœ¬ï¼‰ã€‚
+rem Ò»¼ü·¢²¼¹¹½¨£ºÏÈ¹¹½¨ release Tauri ¿Ç£¬ÔÙ´ò°ü start-tauri.exe
+rem ±àÅÅ½Å±¾£¨²»ÖØ¸´ÊµÏÖ¹¹½¨Âß¼­£¬·Ö±ğ call ×Ó½Å±¾£©¡£
 
 cd /d "%~dp0"
 echo ==========================================================
-echo   Comfy APP - ä¸€é”®å‘å¸ƒæ„å»º
+echo   Comfy APP - Ò»¼ü·¢²¼¹¹½¨
 echo ==========================================================
-echo   1) æ„å»º release Tauri å£³   (build-tauri-release.bat)
-echo   2) æ‰“åŒ… start-tauri.exe    (build-launcher.bat)
+echo   1) ¹¹½¨ release Tauri ¿Ç   (build-tauri-release.bat)
+echo   2) ´ò°ü start-tauri.exe    (build-launcher.bat)
 echo ==========================================================
 echo.
 
 call "%~dp0build-tauri-release.bat"
 if errorlevel 1 (
-  echo [é”™è¯¯] Tauri å£³æ„å»ºå¤±è´¥ï¼Œå·²ä¸­æ­¢å‘å¸ƒæµç¨‹ã€‚
+  echo [´íÎó] Tauri ¿Ç¹¹½¨Ê§°Ü£¬ÒÑÖĞÖ¹·¢²¼Á÷³Ì¡£
   pause
   exit /b 1
 )
 
 call "%~dp0build-launcher.bat"
 if errorlevel 1 (
-  echo [é”™è¯¯] start-tauri.exe æ‰“åŒ…å¤±è´¥ï¼Œå·²ä¸­æ­¢å‘å¸ƒæµç¨‹ã€‚
+  echo [´íÎó] start-tauri.exe ´ò°üÊ§°Ü£¬ÒÑÖĞÖ¹·¢²¼Á÷³Ì¡£
   pause
   exit /b 1
 )
 
 echo.
 echo ==========================================================
-echo   å…¨éƒ¨å®Œæˆ
-echo   å¯åŒå‡» <é¡¹ç›®æ ¹>\start-tauri\start-tauri.exe å¯åŠ¨åº”ç”¨
-echo   ï¼ˆå°†è‡ªåŠ¨ä½¿ç”¨ release ç‰ˆ Tauri å£³ï¼Œå¯åŠ¨æ›´å¿«ï¼‰
+echo   È«²¿Íê³É
+echo   ¿ÉË«»÷ <ÏîÄ¿¸ù>\start-tauri\start-tauri.exe Æô¶¯Ó¦ÓÃ
+echo   £¨½«×Ô¶¯Ê¹ÓÃ release °æ Tauri ¿Ç£¬Æô¶¯¸ü¿ì£©
 echo ==========================================================
 echo.
 pause

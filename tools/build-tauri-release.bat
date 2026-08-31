@@ -1,28 +1,28 @@
 @echo off
-chcp 65001 >nul
+chcp 936 >nul
 setlocal
-rem æ„å»º release ç‰ˆ Tauri å£³ï¼ˆcargo build --releaseï¼‰
-rem äº§ç‰©ï¼š<é¡¹ç›®æ ¹>\src-tauri\target\release\app.exe
-rem è¯´æ˜ï¼šæœ¬è„šæœ¬ä½äº <é¡¹ç›®æ ¹>\tools\ï¼Œä¼šè‡ªåŠ¨ cd åˆ°é¡¹ç›®æ ¹å†ç¼–è¯‘ã€‚
-rem è¯¥ release å£³å¯åŠ¨æ›´å¿«ï¼Œæ˜¯åŒå‡» start-tauri.exe æ¨èä½¿ç”¨çš„é¢„ç¼–è¯‘å£³
-rem ï¼ˆscripts/dev-launcher.ps1 çš„ Prebuilt åˆ†æ”¯ä¼˜å…ˆç”¨ release/app.exeï¼Œ
-rem  ç¼ºå¤±æ—¶æ‰å›é€€ debug/app.exeï¼‰ã€‚
+rem ¹¹½¨ release °æ Tauri ¿Ç£¨cargo build --release£©
+rem ²úÎï£º<ÏîÄ¿¸ù>\src-tauri\target\release\app.exe
+rem ËµÃ÷£º±¾½Å±¾Î»ÓÚ <ÏîÄ¿¸ù>\tools\£¬»á×Ô¶¯ cd µ½ÏîÄ¿¸ùÔÙ±àÒë¡£
+rem ¸Ã release ¿ÇÆô¶¯¸ü¿ì£¬ÊÇË«»÷ start-tauri.exe ÍÆ¼öÊ¹ÓÃµÄÔ¤±àÒë¿Ç
+rem £¨scripts/dev-launcher.ps1 µÄ Prebuilt ·ÖÖ§ÓÅÏÈÓÃ release/app.exe£¬
+rem  È±Ê§Ê±²Å»ØÍË debug/app.exe£©¡£
 
 cd /d "%~dp0.."
 set "PROJECT_ROOT=%CD%"
 set "TAURI_DIR=%PROJECT_ROOT%\src-tauri"
 
 echo ==========================================================
-echo   Comfy APP - æ„å»º release ç‰ˆ Tauri å£³
+echo   Comfy APP - ¹¹½¨ release °æ Tauri ¿Ç
 echo ==========================================================
-echo   é¡¹ç›®æ ¹ç›®å½•: %PROJECT_ROOT%
-echo   ç¼–è¯‘ç›®å½•:   %TAURI_DIR%
+echo   ÏîÄ¿¸ùÄ¿Â¼: %PROJECT_ROOT%
+echo   ±àÒëÄ¿Â¼:   %TAURI_DIR%
 echo.
 
-rem ---- 1. æ£€æŸ¥ cargo / rustc ----
+rem ---- 1. ¼ì²é cargo / rustc ----
 where cargo >nul 2>&1
 if errorlevel 1 (
-  echo [é”™è¯¯] æœªæ‰¾åˆ° cargo / Rust å·¥å…·é“¾ã€‚è¯·å…ˆå®‰è£… Rust å¹¶åŠ å…¥ PATHï¼š
+  echo [´íÎó] Î´ÕÒµ½ cargo / Rust ¹¤¾ßÁ´¡£ÇëÏÈ°²×° Rust ²¢¼ÓÈë PATH£º
   echo.
   echo        https://rustup.rs/
   echo.
@@ -30,13 +30,13 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [1/2] ç¯å¢ƒæ£€æŸ¥
+echo [1/2] »·¾³¼ì²é
 cargo --version
 rustc --version
 echo.
 
-rem ---- 2. æ„å»º release ----
-echo [2/2] å¼€å§‹æ„å»º release Tauri å£³ï¼ˆé¦–æ¬¡è€—æ—¶è¾ƒé•¿ï¼Œå¯èƒ½ 5-15 åˆ†é’Ÿï¼‰...
+rem ---- 2. ¹¹½¨ release ----
+echo [2/2] ¿ªÊ¼¹¹½¨ release Tauri ¿Ç£¨Ê×´ÎºÄÊ±½Ï³¤£¬¿ÉÄÜ 5-15 ·ÖÖÓ£©...
 pushd "%TAURI_DIR%"
 cargo build --release
 set "BUILD_ERR=%errorlevel%"
@@ -44,18 +44,18 @@ popd
 
 if %BUILD_ERR% neq 0 (
   echo.
-  echo [é”™è¯¯] æ„å»ºå¤±è´¥ï¼Œè¯·æŸ¥çœ‹ä¸Šæ–¹ cargo è¾“å‡ºã€‚
+  echo [´íÎó] ¹¹½¨Ê§°Ü£¬Çë²é¿´ÉÏ·½ cargo Êä³ö¡£
   pause
   exit /b 1
 )
 
 echo.
 echo ==========================================================
-echo   æ„å»ºå®Œæˆ
-echo   äº§ç‰©: %TAURI_DIR%\target\release\app.exe
+echo   ¹¹½¨Íê³É
+echo   ²úÎï: %TAURI_DIR%\target\release\app.exe
 echo.
-echo   ä¹‹åæ‰“åŒ… start-tauri.exe æ—¶ï¼ŒPrebuilt æ¨¡å¼ä¼šè‡ªåŠ¨ä¼˜å…ˆä½¿ç”¨è¯¥å£³ã€‚
-echo   å¦‚éœ€å®Œæ•´å‘å¸ƒæ„å»ºï¼Œè¯·è¿è¡Œ tools\build-all.bat
+echo   Ö®ºó´ò°ü start-tauri.exe Ê±£¬Prebuilt Ä£Ê½»á×Ô¶¯ÓÅÏÈÊ¹ÓÃ¸Ã¿Ç¡£
+echo   ÈçĞèÍêÕû·¢²¼¹¹½¨£¬ÇëÔËĞĞ tools\build-all.bat
 echo ==========================================================
 echo.
 pause
