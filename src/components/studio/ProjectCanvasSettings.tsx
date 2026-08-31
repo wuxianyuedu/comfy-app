@@ -125,7 +125,7 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
           </h3>
           <p className="mb-3 px-1 text-[11px] leading-relaxed text-gray-500">
             「渲染链路标签」在节点卡片上叠加显示对应本项目代码模块的路径，点击可查看源码；
-            「日志面板」控制画布底部独立的执行日志面板。两者相互独立。
+            「日志面板」在画布右上角显示执行日志入口按钮，点击以弹窗形式查看实时执行日志。两者相互独立。
           </p>
           <ToggleRow
             label="渲染链路标签"
@@ -137,10 +137,10 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
           <div className="h-2" />
           <ToggleRow
             label="日志面板"
-            hint="独立日志面板 + file:line 调用位置"
+            hint="弹窗形式查看执行日志 + file:line 调用位置"
             value={logPanelMode}
             onChange={setLogPanelMode}
-            tooltip="开启后画布底部显示独立的执行日志面板，并在每条日志后标注调用代码位置（file:line）"
+            tooltip="开启后在画布右上角显示『执行日志』入口按钮，点击以弹窗形式查看实时执行日志，并在每条日志后标注调用代码位置（file:line）"
           />
         </div>
 

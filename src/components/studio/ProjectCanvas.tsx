@@ -485,12 +485,11 @@ function CanvasInner({
         <ProjectSettingsDrawer onClose={() => setProjectSettingsOpen(false)} />
       )}
 
-      {/* R-ardot119-fix (2026-08-18): also mount the global step-log panel
+      {/* R-ardot119-fix (2026-08-18): also mount the global step-log trigger
        *  here on the project canvas. It self-gates by 调试模式 and uses
        *  useActiveTaskId() so it picks up whichever task is running/just
-       *  ran anywhere in the workspace. Without this mount the panel only
-       *  existed in the workflow-canvas drill-in view (wf-editor-inner),
-       *  so toggling 调试模式 on the project canvas appeared to do nothing. */}
+       *  ran anywhere in the workspace. The log UI is now a modal instead of
+       *  a bottom-docked panel (R-ardot122). */}
       <GlobalStepLogPanel />
 
       {/* Empty hints — 加载中 / 右键引导（仅当项目确实无内容且已加载完成时展示） */}
