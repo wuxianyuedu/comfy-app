@@ -148,9 +148,14 @@ cargo build --release
 
 ### 两种运行模式（重要）
 
-`cargo build --release` 只编译 Rust 壳，**不会**运行 `tauri.conf.json` 的
-`beforeBuildCommand`（`node scripts/build-desktop.mjs`），因此 `target/release/`
-下没有 standalone 资源（`server.js` + Node sidecar）。运行时的处理：
+> **流程已统一（推荐）**：直接双击 `tools\build-tauri-release.bat` 或 `tools\build-all.bat`
+> 即可，脚本会在 `cargo build --release` **之前自动同步前端资源**——`src-tauri/static`
+> 缺失时跑完整 `build-desktop.mjs`（含 `pnpm build` + Node sidecar），已存在时仅增量
+> 同步 `splash.html` / `dev-launcher.ps1` / `index.html`。**无需再手动 `cp`**。
+
+裸 `cargo build --release`（手动在 `src-tauri` 目录敲命令）只编译 Rust 壳，**不会**
+运行 `tauri.conf.json` 的 `beforeBuildCommand`（`node scripts/build-desktop.mjs`），
+因此 `target/release/` 下没有 standalone 资源（`server.js` + Node sidecar）。运行时的处理：
 
 - **缺 `server.js` 时**：release 壳会自动**回退到 dev URL 模式**——`dev-launcher.ps1`
   的 `-Prebuilt` 分支已经起了 Next dev server，壳只需加载 `COMFYAPP_DEV_URL`
@@ -171,7 +176,7 @@ cargo build --release
 
 需要「最快启动」的完整发布包时，直接双击 `tools\build-all.bat`：
 
-1. 自动调用 `build-tauri-release.bat` 构建 release Tauri 壳；
+1. 自动调用 `build-tauri-release.bat` 构建 release Tauri 壳（脚本内部已自动组装前端资源，无需手动 build-desktop）；
 2. 完成后自动调用 `build-launcher.bat` 打包 `start-tauri.exe`；
 3. 全部完成后在 `build-all.bat` 末尾暂停一次，方便确认结果。
 

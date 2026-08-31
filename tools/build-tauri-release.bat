@@ -35,6 +35,33 @@ cargo --version
 rustc --version
 echo.
 
+rem ---- 1.5 同步前端资源（把 build-desktop 职责纳入本流程，避免手动 cp 遗漏）----
+rem Tauri 壳依赖 src-tauri/static 中的前端资源与启动页 splash.html
+rem 此前该同步仅靠 pnpm tauri build 的 beforeBuildCommand 自动触发
+rem 直接 cargo build --release 会漏掉，导致黑屏或启动页不更新
+rem 此处统一处理：static 缺失则跑完整 build-desktop（含 pnpm build 与 Node sidecar）
+rem 已存在则仅增量同步易改忘的 splash.html 、 dev-launcher.ps1 、 index.html
+if not exist "%TAURI_DIR%\static" (
+  echo [1.5] 未检测到 static 目录，运行完整 build-desktop.mjs（含 pnpm build + node sidecar）...
+  node scripts/build-desktop.mjs
+  if errorlevel 1 (
+    echo [错误] build-desktop.mjs 失败，已中止。
+    if /I not "%~1"=="no-pause" pause
+    exit /b 1
+  )
+) else (
+  echo [1.5] 增量同步 splash.html / dev-launcher.ps1 / index.html（无需重新 pnpm build）...
+  if exist "%PROJECT_ROOT%\public\splash.html" (
+    copy /Y "%PROJECT_ROOT%\public\splash.html" "%TAURI_DIR%\static\splash.html"
+    copy /Y "%PROJECT_ROOT%\public\splash.html" "%TAURI_DIR%\static\index.html"
+  )
+  if exist "%PROJECT_ROOT%\scripts\dev-launcher.ps1" (
+    if not exist "%TAURI_DIR%\static\scripts" mkdir "%TAURI_DIR%\static\scripts"
+    copy /Y "%PROJECT_ROOT%\scripts\dev-launcher.ps1" "%TAURI_DIR%\static\scripts\dev-launcher.ps1"
+  )
+)
+echo.
+
 rem ---- 2. 构建 release ----
 echo [2/2] 开始构建 release Tauri 壳（首次耗时较长，可能 5-15 分钟）...
 pushd "%TAURI_DIR%"
