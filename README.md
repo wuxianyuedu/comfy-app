@@ -208,6 +208,8 @@ pnpm tauri build
 
 更详细的脚本职责、启动入口对比（start-tauri.exe vs start-tauri.vbs）、CSP 与 standalone 模式说明，
 见 [`tools/README.md`](./tools/README.md)。
+启动方式的热更新（HMR）能力矩阵、以及重建 `src-tauri/static` 对每种方式的影响，
+见 [`docs/startup-hotreload.md`](./docs/startup-hotreload.md)。
 
 ---
 
