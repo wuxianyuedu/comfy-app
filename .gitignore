@@ -78,3 +78,7 @@ __pycache__/
 test-results/
 playwright-report/
 /src/generated/
+
+# Tauri generated assets (rebuilt by scripts/build-desktop.mjs)
+/src-tauri/static/
+/src-tauri/binaries/

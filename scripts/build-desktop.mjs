@@ -73,7 +73,7 @@ if (existsSync(launcherSrc)) {
   console.log("[build-desktop]   §10.2 已自动同步 scripts/dev-launcher.ps1 → static/scripts/dev-launcher.ps1");
 }
 
-cpSync(nextOut, staticDir, { recursive: true }); // server.js + 裁剪 node_modules
+cpSync(nextOut, staticDir, { recursive: true, dereference: true }); // server.js + 裁剪 node_modules（解引用 symlink，避免 Windows 无开发者权限时 EPERM）
 cpSync(join(root, ".next", "static"), join(staticDir, ".next", "static"), { recursive: true });
 if (existsSync(join(root, "public"))) {
   cpSync(join(root, "public"), join(staticDir, "public"), { recursive: true });
