@@ -45,19 +45,43 @@ interface SseFrame {
 
 type Level = StepLogEntry["level"];
 
-function levelChip(level: Level): { bg: string; text: string; icon: string; label: string } {
+/* 与应用日志 (LogPanel) 同款 level badge 配色。 */
+const LEVEL_STYLES: Record<Level, string> = {
+  error: "bg-rose-500/15 text-rose-400 border-rose-500/20",
+  warn: "bg-amber-500/15 text-amber-400 border-amber-500/20",
+  success: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+  progress: "bg-violet-500/15 text-violet-400 border-violet-500/20",
+  info: "bg-cyan-500/15 text-cyan-400 border-cyan-500/20",
+};
+
+const FILTER_LABELS: { label: string; value: Level | "all" }[] = [
+  { label: "全部", value: "all" },
+  { label: "错误", value: "error" },
+  { label: "警告", value: "warn" },
+  { label: "完成", value: "success" },
+  { label: "进度", value: "progress" },
+  { label: "信息", value: "info" },
+];
+
+function levelLabel(level: Level): string {
   switch (level) {
-    case "error":    return { bg: "bg-red-500/20",    text: "text-red-300",     icon: "✕", label: "ERROR" };
-    case "warn":     return { bg: "bg-amber-500/20",  text: "text-amber-300",   icon: "⚠", label: "WARN"  };
-    case "success":  return { bg: "bg-emerald-500/20",text: "text-emerald-300", icon: "✓", label: "OK"    };
-    case "progress": return { bg: "bg-violet-500/20", text: "text-violet-300",  icon: "•", label: "PROG"  };
-    default:         return { bg: "bg-sky-500/15",    text: "text-sky-300",     icon: "ℹ", label: "INFO"  };
+    case "error": return "ERROR";
+    case "warn": return "WARN";
+    case "success": return "OK";
+    case "progress": return "PROG";
+    default: return "INFO";
   }
 }
 
+/* 与应用日志同款，带毫秒。 */
 function fmtTime(t: number): string {
-  const ts = new Date(t);
-  return `${String(ts.getHours()).padStart(2, "0")}:${String(ts.getMinutes()).padStart(2, "0")}:${String(ts.getSeconds()).padStart(2, "0")}`;
+  return new Date(t).toLocaleTimeString("zh-CN", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    fractionalSecondDigits: 3,
+  });
 }
 
 export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
@@ -76,13 +100,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
-  const [filters, setFilters] = useState<Record<Level, boolean>>({
-    info: true,
-    progress: true,
-    warn: true,
-    error: true,
-    success: true,
-  });
+  /* 过滤改为单选（与应用日志同款交互），默认「全部」。 */
+  const [filter, setFilter] = useState<Level | "all">("all");
   const [autoscroll, setAutoscroll] = useState(true);
   const [cancellingFromPanel, setCancellingFromPanel] = useState(false);
 
@@ -237,7 +256,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     const el = scrollerRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [logs, filters, autoscroll]);
+  }, [logs, filter, autoscroll]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const cachedIds = useMemo(() => listCachedTaskIds(), [logs, validationErrors, taskId]);
@@ -247,7 +266,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   if (!debugMode && !open) return null;
 
   const visibleAll = logs.slice(-300);
-  const visible = visibleAll.filter((log) => filters[log.level]);
+  const visible = filter === "all" ? visibleAll : visibleAll.filter((log) => log.level === filter);
   const valErrs = validationErrors ?? [];
   const statusLabel =
     status === "SUCCEEDED" ? "完成" : status === "FAILED" ? "失败" : status === "CANCELLED" ? "已取消"
@@ -269,8 +288,6 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     setError(null);
     loadedForRef.current = null;
   };
-
-  const levels: Level[] = ["error", "warn", "success", "progress", "info"];
 
   return (
     <>
@@ -370,122 +387,105 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               </div>
             </div>
 
-            {/* Level filter bar */}
-            <div className="flex shrink-0 items-center gap-1.5 border-b border-white/5 px-3 py-1.5">
-              <span className="text-[10px] text-(--color-ink-muted)">级别</span>
-              {levels.map((lv) => {
-                const ch = levelChip(lv);
-                const on = filters[lv];
-                const count = visibleAll.filter((l) => l.level === lv).length;
-                return (
-                  <button
-                    key={lv}
-                    type="button"
-                    onClick={() => setFilters((f) => ({ ...f, [lv]: !f[lv] }))}
-                    title={`${on ? "隐藏" : "显示"} ${ch.label}（当前 ${count} 条）`}
-                    data-testid={`log-filter-${lv}`}
-                    className={`flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-semibold transition-all ${
-                      on
-                        ? `${ch.bg} ${ch.text} ring-1 ring-inset ring-white/10`
-                        : "bg-white/3 text-[#5b5b6b] opacity-60 hover:opacity-90 line-through"
-                    }`}
-                  >
-                    <span aria-hidden className="text-[10px] leading-none">{ch.icon}</span>
-                    {ch.label}
-                    {count > 0 && (
-                      <span className="ml-0.5 rounded bg-black/30 px-1 text-[9px] tabular-nums leading-none text-white/80">
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-              <span className="ml-auto flex shrink-0 items-center gap-2 text-[10px] text-(--color-ink-muted)">
-                <label className="flex cursor-pointer select-none items-center gap-1">
-                  <input
-                    type="checkbox"
-                    checked={autoscroll}
-                    onChange={(event) => setAutoscroll(event.target.checked)}
-                    className="h-3 w-3 cursor-pointer accent-violet-500"
-                  />
-                  自动滚动
-                </label>
-                <span className="tabular-nums" data-testid="log-count">
-                  {visible.length}/{visibleAll.length}
-                </span>
-              </span>
+            {/* Level filter bar — 与应用日志同款单选按钮 */}
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-white/2 px-4 py-1.5">
+              <div className="flex items-center gap-1">
+                {FILTER_LABELS.map((option) => {
+                  const count =
+                    option.value === "all"
+                      ? visibleAll.length
+                      : visibleAll.filter((l) => l.level === option.value).length;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setFilter(option.value)}
+                      title={`${option.label}（${count} 条）`}
+                      data-testid={`log-filter-${option.value}`}
+                      className={`rounded-md px-2.5 py-1 text-[13px] transition-colors ${
+                        filter === option.value
+                          ? "bg-white/10 text-gray-100"
+                          : "text-gray-500 hover:bg-white/4 hover:text-gray-300"
+                      }`}
+                    >
+                      {option.label}
+                      <span className="ml-1 text-[11px] text-gray-600">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <label className="flex cursor-pointer select-none items-center gap-1.5 text-[12px] text-gray-400">
+                <input
+                  type="checkbox"
+                  checked={autoscroll}
+                  onChange={(event) => setAutoscroll(event.target.checked)}
+                  className="h-3.5 w-3.5 cursor-pointer accent-violet-500"
+                />
+                自动滚动
+              </label>
             </div>
 
-            {/* Log body */}
+            {/* Log body — 与应用日志同款行样式 */}
             <div
               ref={scrollerRef}
-              className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-[#0d0d14]/60 px-2 py-1 font-mono text-[10.5px] leading-[1.6]"
+              className="custom-scrollbar flex-1 overflow-y-auto bg-[#0d0d14]/60"
             >
               {valErrs.length > 0 && (
                 <div className="mb-2 rounded border border-red-500/40 bg-red-500/8 p-2">
-                  <div className="mb-1.5 text-[10.5px] font-semibold text-red-300">
+                  <div className="mb-1.5 text-[13px] font-semibold text-red-300">
                     ⚠ 工作流验证错误（{valErrs.length}）
                   </div>
                   <ValidationErrorList errors={valErrs.slice(0, 12)} className="text-red-200/95" />
                   {valErrs.length > 12 && (
-                    <div className="mt-1 text-[10px] text-red-300/70">+{valErrs.length - 12} more…</div>
+                    <div className="mt-1 text-[12px] text-red-300/70">+{valErrs.length - 12} more…</div>
                   )}
                 </div>
               )}
 
               {!valErrs.length && error && (
-                <div className="mb-2 space-y-1 rounded border border-red-500/30 bg-red-500/6 p-2 text-[10.5px] text-red-200/90">
+                <div className="mb-2 space-y-1 rounded border border-red-500/30 bg-red-500/6 p-2 text-[13px] text-red-200/90">
                   <div className="break-words whitespace-pre-wrap">{error}</div>
                 </div>
               )}
 
               {visible.length === 0 ? (
-                <div className="py-6 text-center text-[10.5px] text-(--color-ink-muted)">
-                  {taskId
-                    ? "等待日志…（运行生成后此处显示每节点执行步骤）"
-                    : "运行生成后此处会显示执行步骤日志"}
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-gray-600">
+                  <FileText size={32} strokeWidth={1.5} className="opacity-30" />
+                  {taskId ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
                 </div>
               ) : (
-                <ul className="space-y-px">
+                <div className="flex flex-col">
                   {visible.map((log, index) => {
-                    const ch = levelChip(log.level);
                     const isClient = log.client === true;
                     return (
-                      <li
+                      <div
                         key={`${log.t}:${index}`}
                         data-testid="log-line"
                         data-level={log.level}
-                        className="group/line flex items-baseline gap-1.5 rounded px-1 py-px transition-colors hover:bg-white/4"
+                        className="flex items-start gap-2.5 border-b border-white/3 px-4 py-1 font-mono text-[13px] leading-snug hover:bg-white/2"
                       >
+                        <span className="shrink-0 text-gray-500">{fmtTime(log.t)}</span>
                         <span
-                          aria-hidden
-                          className="shrink-0 select-none text-[9.5px] tabular-nums text-gray-500"
+                          className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_STYLES[log.level]}`}
                         >
-                          {fmtTime(log.t)}
-                        </span>
-                        <span
-                          className={`shrink-0 inline-flex items-center gap-0.5 rounded px-1 text-[9px] font-bold leading-none ${ch.bg} ${ch.text}`}
-                          aria-label={`级别 ${ch.label}`}
-                        >
-                          <span aria-hidden>{ch.icon}</span>
-                          {ch.label}
+                          {levelLabel(log.level)}
                         </span>
                         <span
                           className={`min-w-0 flex-1 break-words ${
-                            isClient ? "italic text-gray-400" : "text-gray-200"
+                            isClient ? "italic text-gray-400" : "text-gray-300"
                           }`}
                         >
                           {log.msg}
                         </span>
                         {log.src && (
-                          <span className="shrink-0 rounded bg-white/5 px-1 text-[9px] font-normal text-gray-500">
+                          <span className="max-w-[200px] shrink-0 truncate text-[11px] text-gray-600 hover:text-gray-400">
                             {log.src}
                           </span>
                         )}
-                      </li>
+                      </div>
                     );
                   })}
-                </ul>
+                </div>
               )}
             </div>
 
