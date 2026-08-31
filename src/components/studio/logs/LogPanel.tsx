@@ -317,7 +317,7 @@ const LogRow = memo(function LogRow({
         <button
           type="button"
           onClick={() => void navigator.clipboard.writeText(entry.location!).catch(() => undefined)}
-          className="max-w-[280px] shrink-0 cursor-pointer truncate text-left text-[11px] text-gray-600 hover:text-gray-400"
+          className="max-w-[45%] shrink-0 cursor-pointer break-all text-right text-[11px] text-gray-600 hover:text-gray-400"
           title={`${entry.location}（点击复制）`}
         >
           {entry.location}
@@ -380,7 +380,7 @@ export function LogPanel() {
 
   return (
     <div className="fixed inset-0 z-99 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className={`flex h-[85vh] w-full ${wide ? "max-w-7xl" : "max-w-5xl"} flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60`}>
+      <div className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60`}>
         {/* Header */}
         <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/8 bg-white/2 px-4">
           <div className="flex items-center gap-2">

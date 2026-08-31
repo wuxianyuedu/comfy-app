@@ -334,7 +334,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             if (e.target === e.currentTarget) setOpen(false);
           }}
         >
-          <div className={`flex h-[85vh] w-full ${wide ? "max-w-7xl" : "max-w-5xl"} flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60`}>
+          <div className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60`}>
             {/* Header */}
             <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-white/2 px-4">
               <div className="flex min-w-0 items-center gap-2">
