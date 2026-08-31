@@ -485,11 +485,9 @@ function CanvasInner({
         <ProjectSettingsDrawer onClose={() => setProjectSettingsOpen(false)} />
       )}
 
-      {/* R-ardot119-fix (2026-08-18): also mount the global step-log trigger
-       *  here on the project canvas. It self-gates by 调试模式 and uses
-       *  useActiveTaskId() so it picks up whichever task is running/just
-       *  ran anywhere in the workspace. The log UI is now a modal instead of
-       *  a bottom-docked panel (R-ardot122). */}
+      {/* 项目画布也需要挂载执行日志入口：面板内部靠 useActiveTaskId()
+       *  自动跟随全工作区正在跑 / 刚跑完的任务。缺了这处挂载，在项目画布
+       *  里打开「日志面板」开关会毫无反应。 */}
       <GlobalStepLogPanel />
 
       {/* Empty hints — 加载中 / 右键引导（仅当项目确实无内容且已加载完成时展示） */}

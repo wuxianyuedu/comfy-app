@@ -656,11 +656,8 @@ function WorkflowEditorBody({
           />
         )}
 
-        {/* R-ardot118 (2026-08-18): global, separate execution-log trigger.
-         *  Gated entirely by the canvas "调试模式" setting (renders null
-         *  when off), so it never competes with the node body for space
-         *  and there is no per-node log toggle. The log UI is now a modal
-         *  instead of a bottom-docked panel (R-ardot122). */}
+        {/* 执行日志入口：整块由画布「日志面板」开关控制，且日志以弹窗呈现
+         *  而非常驻面板，所以不与节点主体争抢画布空间，也不需要逐节点开关。 */}
         <GlobalStepLogPanel />
 
         {/* 2026-08-11 R40: 顶部「📋 查看 JSON」触发的全屏 modal。

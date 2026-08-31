@@ -1,16 +1,17 @@
 "use client";
 
-/* ── GlobalStepLogPanel.tsx · R-ardot122 (2026-08-31) ─────────────────────────
- * 之前的版本把执行日志做成底部可拖动的面板，会压缩画布可用空间，且
- * 与右下 MiniMap / 底部状态栏容易重叠。现改为「应用日志」同款的
- * 居中弹窗：开关（调试模式）仅控制入口按钮显隐，点击按钮打开弹窗，
- * 运行新任务时自动弹出。
+/**
+ * GlobalStepLogPanel —— 全局执行步骤日志面板
  *
- * 保留能力:
- *   • SSE 实时拉取 /api/tasks/[id]/stream
- *   • 缓存复现 / 任务切换 / 取消当前任务
- *   • 级别过滤 chip、自动滚动、原始错误展示、结构化校验错误
- * ─────────────────────────────────────────────────────────────────────── */
+ * 设计决策（Why 弹窗而非底部抽屉）：
+ *   1. 底部抽屉会压缩画布可用空间；
+ *   2. 与右下 MiniMap、底部状态栏容易重叠。
+ * 故采用「应用日志」同款的居中弹窗。
+ *
+ * 交互约定：
+ *   - 「调试模式」开关仅控制入口按钮显隐；
+ *   - 弹窗打开后不受该开关影响，避免操作中突然消失。
+ */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FileText, X } from "lucide-react";
@@ -241,7 +242,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const cachedIds = useMemo(() => listCachedTaskIds(), [logs, validationErrors, taskId]);
 
-  if (!debugMode) return null;
+  /* 弹窗已打开时不受 debugMode 开关影响（关闭开关不应让正在查看的日志
+   * 瞬间消失）；关闭弹窗后入口按钮与弹窗一起隐藏。 */
+  if (!debugMode && !open) return null;
 
   const visibleAll = logs.slice(-300);
   const visible = visibleAll.filter((log) => filters[log.level]);
