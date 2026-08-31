@@ -10,6 +10,7 @@
     "beforeBuildCommand": "node scripts/build-desktop.mjs"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Comfy APP",
@@ -21,7 +22,7 @@
         "resizable": true,
         "fullscreen": false,
         "backgroundColor": "#0A0A0F",
-        "url": "splash.html"
+        "url": "tauri://localhost/splash.html"
       }
     ],
     "security": {

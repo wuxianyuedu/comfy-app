@@ -186,49 +186,78 @@
       return null;
     }
 
-    let navigating = false;
-    let statusMisses = 0;
-    const isDevLocalhost = window.location.hostname === 'localhost' && window.location.port === '3000';
+    // 解析出需要探测的真实应用 URL：优先 Rust 状态 > launch-status.json > 兜底 dev URL
+    async function resolveAppUrl() {
+      try {
+        const url = await invoke('get_app_url');
+        if (url) return url;
+      } catch (e) {}
+      try {
+        const status = await fetchStatus();
+        if (status && status.app_url) return status.app_url;
+      } catch (e) {}
+      return 'http://127.0.0.1:3000/workspace';
+    }
 
-    async function tick() {
-      if (navigating) return;
-      const status = await fetchStatus();
-
-      if (!status) {
-        statusMisses++;
-        // Fallback：在开发模式下，如果连续 5 秒拿不到状态文件（launcher 未传环境变量），
-        // 而 splash.html 本身已经能加载，说明 dev server 已好，直接跳主应用。
-        if (isDevLocalhost && statusMisses >= 20) {
-          navigating = true;
-          window.location.replace('/workspace');
-        }
-        return;
+    // 探测后端是否已可访问：先尝试跨域 GET，失败再用 no-cors HEAD 兜底
+    async function probeBackend(url) {
+      try {
+        const r = await fetch(url, { method: 'GET', cache: 'no-store', mode: 'cors' });
+        if (r.ok) return true;
+      } catch (e) {
+        // 可能 CORS 或尚未就绪，继续 fallback
       }
-      statusMisses = 0;
+      try {
+        await fetch(url, { method: 'HEAD', cache: 'no-store', mode: 'no-cors' });
+        return true;
+      } catch (e) {}
+      return false;
+    }
 
-      const progress = Math.max(0, Math.min(1, status.progress || 0));
-      const pct = Math.round(progress * 100);
+    function updateUI(progress, phase, message, error, elapsed) {
+      const pct = Math.round(Math.max(0, Math.min(1, progress || 0)) * 100);
       bar.style.width = `${pct}%`;
       percentEl.textContent = `${pct}%`;
 
-      const label = PHASE_LABELS[status.phase] || status.phase;
-      phaseEl.innerHTML = status.ready
+      const label = PHASE_LABELS[phase] || phase || '启动中';
+      phaseEl.innerHTML = pct >= 100
         ? '✓ ' + label
         : '<span class="spinner"></span>' + label;
 
-      messageEl.textContent = status.message || '';
-      messageEl.classList.toggle('error', !!status.error);
-      elapsedEl.textContent = fmtTime(status.elapsed || 0);
+      messageEl.textContent = message || '';
+      messageEl.classList.toggle('error', !!error);
+      elapsedEl.textContent = fmtTime(elapsed || 0);
+    }
 
-      if (status.ready && !navigating) {
+    let navigating = false;
+    let ticks = 0;
+    let appUrl = null;
+
+    async function tick() {
+      if (navigating) return;
+      ticks++;
+
+      if (!appUrl) appUrl = await resolveAppUrl();
+
+      // 1. 先尝试读取 launcher 写入的进度信息（如果有）
+      const status = await fetchStatus();
+      if (status) {
+        updateUI(status.progress || 0, status.phase, status.message, status.error, status.elapsed);
+      } else {
+        // 没有状态文件时显示等待动画，进度按时间平滑增长但不要满 100%
+        const fakeProgress = Math.min(0.9, ticks / 480); // 约 2 分钟到 90%
+        updateUI(fakeProgress, 'dev-server-starting', `正在等待本地服务就绪：${appUrl}（${fmtTime(Math.floor(ticks / 4))}）`, false, Math.floor(ticks / 4));
+      }
+
+      // 2. 自主探测后端，就绪后立即跳转
+      if (await probeBackend(appUrl)) {
         navigating = true;
-        // 优先让 Rust 侧执行跨协议导航；失败则尝试同域跳转
+        updateUI(1, 'ready', '服务已就绪，正在进入应用…', false, Math.floor(ticks / 4));
         try {
           await invoke('navigate_to_app');
         } catch (e) {
           console.warn('navigate_to_app failed:', e);
-          const url = status.app_url || (window.location.origin + '/workspace');
-          window.location.replace(url);
+          window.location.replace(appUrl);
         }
       }
     }

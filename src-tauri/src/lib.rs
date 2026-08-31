@@ -70,6 +70,12 @@ fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHand
   }
 }
 
+/// 供启动页读取当前应用目标 URL，用于自主探测后端是否就绪。
+#[tauri::command]
+fn get_app_url(state: tauri::State<'_, AppState>) -> String {
+  state.app_url()
+}
+
 /// 生产模式：挑一个空闲端口给 standalone server（避开固定端口冲突）
 #[cfg(not(debug_assertions))]
 fn pick_free_port() -> u16 {
@@ -182,7 +188,7 @@ pub fn run() {
 
   let app = tauri::Builder::default()
     .manage(AppState::new(project_root, app_url))
-    .invoke_handler(tauri::generate_handler![get_launch_status, navigate_to_app])
+    .invoke_handler(tauri::generate_handler![get_launch_status, navigate_to_app, get_app_url])
     .setup(|app| {
       #[cfg(debug_assertions)]
       {

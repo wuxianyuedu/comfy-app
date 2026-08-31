@@ -89,6 +89,33 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-comfy-cli-venv
 
 想跳过自动准备、改用已有环境，设置环境变量 `COMFY_CLI_PYTHON` 指向你的 Python 解释器。
 
+### 两个启动入口对比：start-tauri.exe 与 start-tauri.vbs
+
+两者最终都会拉起「Next.js dev server + Tauri 桌面包壳」，但走的 `dev-launcher.ps1`
+分支不同，体验与适用场景也不同：
+
+| 维度 | `start-tauri.exe`（Prebuilt） | `start-tauri.vbs`（Tauri） |
+|------|-------------------------------|----------------------------|
+| 实际执行 | `dev-launcher.ps1 -Prebuilt` | `dev-launcher.ps1 -Tauri` → `pnpm tauri dev` |
+| 启动 Tauri 壳方式 | 直接运行**已编译**的 `target/release/app.exe` | `tauri dev` 现编译 Rust 壳（debug） |
+| 窗口出现速度 | **秒出**（壳已编译好） | 慢，要等 Rust 编译（首次数分钟） |
+| Rust 改动热重载 | ❌ 无（用预编译壳） | ✅ 改 Rust 自动重编译 |
+| 前端 HMR | ✅ 有（next dev） | ✅ 有 |
+| 自带启动画面 / 单实例 / comfy-cli 自动准备 | ✅ 由 Python launcher（`scripts/start_tauri_launcher.py`）负责 | ❌ 无（vbs 仅隐藏窗口调 pwsh） |
+| 前提 | 需先 `cargo build --release`（否则回退 debug 壳更慢） | 无需预编译，首次自动编译 Rust |
+
+- **`start-tauri.exe`（Prebuilt）= 日常使用 / 快速预览**：双击即用，窗口立刻弹出
+  （显示 Tauri 内嵌 splash 加载页），后台并行起 dev server，就绪后自动跳转应用。
+  适合只改前端（src/ 下的 TS/TSX，靠 HMR 生效）；改 Rust 壳后必须重新
+  `cargo build --release` 才生效。
+- **`start-tauri.vbs`（Tauri）= 开发桌面壳时用**：走 `pnpm tauri dev`，Rust 侧改完
+  自动重载，适合调壳本身逻辑（如 `lib.rs`、窗口配置）。启动慢在编译 Rust，且绕过
+  了 Python launcher 的额外逻辑（单实例 / comfy-cli 自动准备不在）。
+
+> 窗口初始页（`splash.html`）通过 `tauri://localhost/splash.html` 加载，不依赖 dev
+> server；它会主动轮询 `COMFYAPP_DEV_URL` 直到后端就绪再跳转，因此 dev server 未起
+> 时显示「加载中」而非 Edge 错误页。
+
 ## 修改启动器后的注意事项
 
 `start-tauri.exe` 是**打包产物**，改完 `scripts/start_tauri_launcher.py` 后必须重新执行

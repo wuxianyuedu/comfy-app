@@ -130,6 +130,24 @@ function Show-Summary {
   Write-Host ""
 }
 
+# ── 确保 Tauri 内置启动页资源存在 ──
+# splash.html 通过 tauri://localhost/splash.html 加载，不依赖 Next.js dev server。
+# 开发模式下 src-tauri/static 可能不存在，这里从 public 同步一份，避免窗口白屏或 Edge 错误页。
+function Ensure-SplashResource {
+  $staticDir = Join-Path $root "src-tauri\static"
+  $splashSrc = Join-Path $root "public\splash.html"
+  $splashDest = Join-Path $staticDir "splash.html"
+  if (-not (Test-Path $staticDir)) {
+    New-Item -ItemType Directory -Path $staticDir -Force | Out-Null
+  }
+  if (Test-Path $splashSrc) {
+    Copy-Item -Path $splashSrc -Destination $splashDest -Force
+    Write-Log "已同步 splash.html → src-tauri/static/splash.html（Tauri 内置资源）" -Level INFO
+  } else {
+    Write-Log "未找到 public/splash.html，Tauri 启动页可能无法显示" -Level WARN
+  }
+}
+
 # ── 启动前清理：按端口精准杀掉残留 dev server（不误伤其它 node 进程）──
 #     只杀真正占用 3000/3001/3002 的进程，不影响你后台跑的其它程序。
 function Stop-ProcessOnPort($port) {
@@ -277,6 +295,9 @@ public class WJ {
       throw "找不到预编译 Tauri 壳：src-tauri\target\release\app.exe（或 debug）。请先执行 cargo build 或 pnpm tauri build。"
     }
 
+    # 0. 确保 Tauri 内置启动页资源就位（tauri://localhost/splash.html）
+    Ensure-SplashResource
+
     # 1. 先启动预编译 Tauri 壳（窗口秒出），splash 页会显示启动进度
     $psiTauri = New-Object System.Diagnostics.ProcessStartInfo
     $psiTauri.FileName = $tauriExe
@@ -318,6 +339,9 @@ public class WJ {
     Write-Log "服务器已就绪，桌面壳正在加载应用…" -Level OK
     $p = $tauriProc  # 后续 WaitForExit 以 Tauri 窗口生命周期为锚点
   } else {
+    # 确保 Tauri 内置启动页资源就位（tauri://localhost/splash.html）
+    Ensure-SplashResource
+
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = "cmd.exe"
     if ($Tauri) {
