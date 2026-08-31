@@ -1,17 +1,17 @@
 @echo off
 chcp 936 >nul
 setlocal
-rem æœ¬æ–‡ä»¶ä»¥ GBK(936) ä¿å­˜ â€”â€” cmd é»˜è®¤æŒ‰ç³»ç»Ÿ ANSI ä»£ç é¡µè§£æ batï¼Œ
-rem å­˜æˆ UTF-8 ä¼šè®©ä¸­æ–‡æ³¨é‡Š/echo å˜æˆä¹±ç å¹¶è¢«å½“ä½œå‘½ä»¤æ‰§è¡Œã€‚
+rem ±¾ÎÄ¼şÒÔ GBK(936) ±£´æ ¡ª¡ª cmd Ä¬ÈÏ°´ÏµÍ³ ANSI ´úÂëÒ³½âÎö bat£¬
+rem ´æ³É UTF-8 »áÈÃÖĞÎÄ×¢ÊÍ/echo ±ä³ÉÂÒÂë²¢±»µ±×÷ÃüÁîÖ´ĞĞ¡£
 rem ============================================================================
-rem  build-launcher-standalone.bat â€” é‡æ–°æ‰“åŒ… start-tauri-standalone.exe
+rem  build-launcher-standalone.bat ¡ª ÖØĞÂ´ò°ü start-tauri-standalone.exe
 rem
-rem  äº§ç‰©ï¼š<é¡¹ç›®æ ¹>\start-tauri-standalone\start-tauri-standalone.exe ï¼ˆonedir æ¨¡å¼ï¼‰
-rem  è¯´æ˜ï¼šå¤ç”¨ tools\start-tauri.specï¼Œé€šè¿‡ç¯å¢ƒå˜é‡ LAUNCHER_NAME æŒ‡å®šå…¥å£åï¼Œ
-rem        launcher æºç ä¼šæŒ‰ exe æ–‡ä»¶ååˆ¤å®šé»˜è®¤èµ°ã€Œstandaloneã€æ¨¡å¼
-rem        ï¼ˆç›´æ¥è¿è¡Œå·²æ„å»ºçš„ standalone å£³ï¼Œä¸è¿ dev serverï¼‰ã€‚
-rem        standalone å£³æœ¬èº«éœ€å…ˆç”± tools\build-standalone.batï¼ˆpnpm tauri buildï¼‰
-rem        äº§å‡ºï¼›å¦åˆ™åŒå‡»ä¼šæç¤ºå…ˆæ„å»ºã€‚
+rem  ²úÎï£º<ÏîÄ¿¸ù>\start-tauri-standalone\start-tauri-standalone.exe £¨onedir Ä£Ê½£©
+rem  ËµÃ÷£º¸´ÓÃ tools\start-tauri.spec£¬Í¨¹ı»·¾³±äÁ¿ LAUNCHER_NAME Ö¸¶¨Èë¿ÚÃû£¬
+rem        launcher Ô´Âë»á°´ exe ÎÄ¼şÃûÅĞ¶¨Ä¬ÈÏ×ß¡¸standalone¡¹Ä£Ê½
+rem        £¨Ö±½ÓÔËĞĞÒÑ¹¹½¨µÄ standalone ¿Ç£¬²»Á¬ dev server£©¡£
+rem        standalone ¿Ç±¾ÉíĞèÏÈÓÉ tools\build-standalone.bat£¨pnpm tauri build£©
+rem        ²ú³ö£»·ñÔòË«»÷»áÌáÊ¾ÏÈ¹¹½¨¡£
 rem ============================================================================
 
 set "LAUNCHER_NAME=start-tauri-standalone"
@@ -20,23 +20,23 @@ cd /d "%~dp0.."
 set "PROJECT_ROOT=%CD%"
 
 echo ==========================================================
-echo   Comfy APP - é‡æ–°æ‰“åŒ… start-tauri-standalone.exeï¼ˆç‹¬ç«‹æ¨¡å¼ï¼‰
+echo   Comfy APP - ÖØĞÂ´ò°ü start-tauri-standalone.exe£¨¶ÀÁ¢Ä£Ê½£©
 echo ==========================================================
-echo   é¡¹ç›®æ ¹ç›®å½•: %PROJECT_ROOT%
-echo   å…¥å£å    : %LAUNCHER_NAME%ï¼ˆåŒå‡»å³èµ° standaloneï¼Œä¸è¿ dev serverï¼‰
+echo   ÏîÄ¿¸ùÄ¿Â¼: %PROJECT_ROOT%
+echo   Èë¿ÚÃû    : %LAUNCHER_NAME%£¨Ë«»÷¼´×ß standalone£¬²»Á¬ dev server£©
 echo.
 
-rem ---- 1. æ£€æŸ¥ Python / PyInstaller ----
+rem ---- 1. ¼ì²é Python / PyInstaller ----
 where python >nul 2>&1
 if errorlevel 1 (
-  echo [é”™è¯¯] æœªæ‰¾åˆ° pythonï¼Œè¯·å…ˆå®‰è£… Python 3.10+ å¹¶åŠ å…¥ PATHã€‚
+  echo [´íÎó] Î´ÕÒµ½ python£¬ÇëÏÈ°²×° Python 3.10+ ²¢¼ÓÈë PATH¡£
   if /I not "%~1"=="no-pause" pause
   exit /b 1
 )
 
 where pyinstaller >nul 2>&1
 if errorlevel 1 (
-  echo [é”™è¯¯] æœªæ‰¾åˆ° pyinstallerã€‚è¯·å…ˆå®‰è£…ï¼š
+  echo [´íÎó] Î´ÕÒµ½ pyinstaller¡£ÇëÏÈ°²×°£º
   echo.
   echo        pip install pyinstaller
   echo.
@@ -44,20 +44,20 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [1/3] ç¯å¢ƒæ£€æŸ¥
+echo [1/3] »·¾³¼ì²é
 python --version
 pyinstaller --version
 echo.
 
-rem ---- 2. æ¸…ç†æ—§äº§ç‰© ----
-echo [2/3] æ¸…ç†æ—§äº§ç‰©...
+rem ---- 2. ÇåÀí¾É²úÎï ----
+echo [2/3] ÇåÀí¾É²úÎï...
 if exist "%PROJECT_ROOT%\start-tauri-standalone" rmdir /s /q "%PROJECT_ROOT%\start-tauri-standalone"
 if exist "%PROJECT_ROOT%\build-launcher-standalone" rmdir /s /q "%PROJECT_ROOT%\build-launcher-standalone"
-echo       å·²æ¸…ç† start-tauri-standalone\ ä¸ build-launcher-standalone\
+echo       ÒÑÇåÀí start-tauri-standalone\ Óë build-launcher-standalone\
 echo.
 
-rem ---- 3. æ‰“åŒ… ----
-echo [3/3] å¼€å§‹æ‰“åŒ…ï¼ˆonedir æ¨¡å¼ï¼Œè€—æ—¶çº¦ 1-3 åˆ†é’Ÿï¼‰...
+rem ---- 3. ´ò°ü ----
+echo [3/3] ¿ªÊ¼´ò°ü£¨onedir Ä£Ê½£¬ºÄÊ±Ô¼ 1-3 ·ÖÖÓ£©...
 pyinstaller --clean --noconfirm ^
   --distpath . ^
   --workpath build-launcher-standalone ^
@@ -65,18 +65,18 @@ pyinstaller --clean --noconfirm ^
 
 if errorlevel 1 (
   echo.
-  echo [é”™è¯¯] æ‰“åŒ…å¤±è´¥ï¼Œè¯·æŸ¥çœ‹ä¸Šæ–¹è¾“å‡ºã€‚
+  echo [´íÎó] ´ò°üÊ§°Ü£¬Çë²é¿´ÉÏ·½Êä³ö¡£
   if /I not "%~1"=="no-pause" pause
   exit /b 1
 )
 
 echo.
 echo ==========================================================
-echo   æ‰“åŒ…å®Œæˆ
-echo   äº§ç‰©: %PROJECT_ROOT%\start-tauri-standalone\start-tauri-standalone.exe
+echo   ´ò°üÍê³É
+echo   ²úÎï: %PROJECT_ROOT%\start-tauri-standalone\start-tauri-standalone.exe
 echo.
-echo   åŒå‡»å³ç”¨ï¼šèµ° standalone æ¨¡å¼ï¼ˆç‹¬ç«‹è¿è¡Œï¼Œä¸è¿ dev serverï¼‰ã€‚
-echo   æ³¨æ„ï¼šéœ€å…ˆè¿è¡Œ tools\build-standalone.bat æ„å»ºç‹¬ç«‹å£³ï¼Œå¦åˆ™ä¼šæç¤ºå…ˆæ„å»ºã€‚
+echo   Ë«»÷¼´ÓÃ£º×ß standalone Ä£Ê½£¨¶ÀÁ¢ÔËĞĞ£¬²»Á¬ dev server£©¡£
+echo   ×¢Òâ£ºĞèÏÈÔËĞĞ tools\build-standalone.bat ¹¹½¨¶ÀÁ¢¿Ç£¬·ñÔò»áÌáÊ¾ÏÈ¹¹½¨¡£
 echo ==========================================================
 echo.
 if /I not "%~1"=="no-pause" pause

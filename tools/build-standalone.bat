@@ -1,79 +1,79 @@
 @echo off
 chcp 936 >nul
 setlocal
-rem æœ¬æ–‡ä»¶ä»¥ GBK(936) ä¿å­˜ â€”â€” cmd é»˜è®¤æŒ‰ç³»ç»Ÿ ANSI ä»£ç é¡µè§£æ batã€‚
+rem ±¾ÎÄ¼şÒÔ GBK(936) ±£´æ ¡ª¡ª cmd Ä¬ÈÏ°´ÏµÍ³ ANSI ´úÂëÒ³½âÎö bat¡£
 rem ============================================================================
-rem  build-standalone.bat â€” æ„å»ºã€Œç‹¬ç«‹æ¨¡å¼ã€Tauri å£³ï¼ˆstandaloneï¼‰
+rem  build-standalone.bat ¡ª ¹¹½¨¡¸¶ÀÁ¢Ä£Ê½¡¹Tauri ¿Ç£¨standalone£©
 rem
-rem  èŒè´£ï¼šåœ¨é¡¹ç›®æ ¹è¿è¡Œ pnpm tauri build --no-bundleï¼Œäº§å‡º
-rem        <é¡¹ç›®æ ¹>\src-tauri\target\release\app.exe
-rem        ä»¥åŠåŒçº§ standalone èµ„æºï¼ˆserver.js / .next/static / binaries/node.exeï¼‰ã€‚
-rem        app.exe è¿è¡Œæ—¶ resource_dir æŒ‡å‘è¯¥ç›®å½•ï¼Œserver.js åœ¨æ ¹ï¼Œå› æ­¤èµ°
-rem        å†…ç½® Node sidecar æ¨¡å¼ï¼Œä¸ä¾èµ– dev serverï¼ŒåŒå‡»å³ç‹¬ç«‹è¿è¡Œã€‚
+rem  Ö°Ôğ£ºÔÚÏîÄ¿¸ùÔËĞĞ pnpm tauri build --no-bundle£¬²ú³ö
+rem        <ÏîÄ¿¸ù>\src-tauri\target\release\app.exe
+rem        ÒÔ¼°Í¬¼¶ standalone ×ÊÔ´£¨server.js / .next/static / binaries/node.exe£©¡£
+rem        app.exe ÔËĞĞÊ± resource_dir Ö¸Ïò¸ÃÄ¿Â¼£¬server.js ÔÚ¸ù£¬Òò´Ë×ß
+rem        ÄÚÖÃ Node sidecar Ä£Ê½£¬²»ÒÀÀµ dev server£¬Ë«»÷¼´¶ÀÁ¢ÔËĞĞ¡£
 rem
-rem  é‡è¦ï¼šå¿…é¡»åœ¨ã€Œé¡¹ç›®æ ¹ã€è¿è¡Œï¼Œä¸èƒ½åœ¨ src-tauri ä¸‹è¿è¡Œ â€”â€”
-rem        src-tauri ç›®å½•æ²¡æœ‰å¯ç”¨çš„ tauri CLIï¼ˆpnpm ä¼šæŠ¥ Command "tauri" not foundï¼Œ
-rem        å¯¼è‡´çª—å£ç¬é—´å…³é—­ï¼‰ã€‚dev / tauri dev ä¹Ÿæ˜¯åœ¨é¡¹ç›®æ ¹è°ƒç”¨çš„ï¼Œè¿™é‡Œä¿æŒä¸€è‡´ã€‚
+rem  ÖØÒª£º±ØĞëÔÚ¡¸ÏîÄ¿¸ù¡¹ÔËĞĞ£¬²»ÄÜÔÚ src-tauri ÏÂÔËĞĞ ¡ª¡ª
+rem        src-tauri Ä¿Â¼Ã»ÓĞ¿ÉÓÃµÄ tauri CLI£¨pnpm »á±¨ Command "tauri" not found£¬
+rem        µ¼ÖÂ´°¿ÚË²¼ä¹Ø±Õ£©¡£dev / tauri dev Ò²ÊÇÔÚÏîÄ¿¸ùµ÷ÓÃµÄ£¬ÕâÀï±£³ÖÒ»ÖÂ¡£
 rem
-rem  ä¸ build-tauri-release.bat çš„åŒºåˆ«ï¼š
-rem    - build-tauri-release åª cargo build --releaseï¼Œapp.exe ä¸å†…åµŒ standalone èµ„æºï¼Œ
-rem      è¿è¡Œæ—¶å›é€€ dev serverï¼ˆprebuilt æ¨¡å¼ç”¨ï¼‰ï¼›
-rem    - æœ¬è„šæœ¬èµ° tauri buildï¼ˆå« beforeBuildCommand ç»„è£… static + å®Œæ•´ç”Ÿäº§æ„å»ºï¼‰ï¼Œ
-rem      äº§å‡ºçœŸæ­£å¯ç‹¬ç«‹åˆ†å‘çš„å£³ï¼Œé…åˆ start-tauri-standalone.exe ä½¿ç”¨ã€‚
+rem  Óë build-tauri-release.bat µÄÇø±ğ£º
+rem    - build-tauri-release Ö» cargo build --release£¬app.exe ²»ÄÚÇ¶ standalone ×ÊÔ´£¬
+rem      ÔËĞĞÊ±»ØÍË dev server£¨prebuilt Ä£Ê½ÓÃ£©£»
+rem    - ±¾½Å±¾×ß tauri build£¨º¬ beforeBuildCommand ×é×° static + ÍêÕûÉú²ú¹¹½¨£©£¬
+rem      ²ú³öÕæÕı¿É¶ÀÁ¢·Ö·¢µÄ¿Ç£¬ÅäºÏ start-tauri-standalone.exe Ê¹ÓÃ¡£
 rem
-rem  å¦‚éœ€å¸¦å®‰è£…åŒ…ï¼ˆmsi/nsisï¼‰çš„å‘å¸ƒå½¢å¼ï¼Œå»æ‰ä¸‹æ–¹ --no-bundle å³å¯ã€‚
+rem  ÈçĞè´ø°²×°°ü£¨msi/nsis£©µÄ·¢²¼ĞÎÊ½£¬È¥µôÏÂ·½ --no-bundle ¼´¿É¡£
 rem ============================================================================
 
 cd /d "%~dp0.."
 set "PROJECT_ROOT=%CD%"
 
 echo ==========================================================
-echo   Comfy APP - æ„å»ºç‹¬ç«‹æ¨¡å¼ï¼ˆstandaloneï¼‰å£³
+echo   Comfy APP - ¹¹½¨¶ÀÁ¢Ä£Ê½£¨standalone£©¿Ç
 echo ==========================================================
-echo   é¡¹ç›®æ ¹ç›®å½•: %PROJECT_ROOT%
+echo   ÏîÄ¿¸ùÄ¿Â¼: %PROJECT_ROOT%
 echo.
 
-rem ---- 1. æ£€æŸ¥ cargo / pnpm ----
+rem ---- 1. ¼ì²é cargo / pnpm ----
 where cargo >nul 2>&1
 if errorlevel 1 (
-  echo [é”™è¯¯] æœªæ‰¾åˆ° cargo / Rust å·¥å…·é“¾ã€‚è¯·å…ˆå®‰è£… Rustï¼šhttps://rustup.rs/
+  echo [´íÎó] Î´ÕÒµ½ cargo / Rust ¹¤¾ßÁ´¡£ÇëÏÈ°²×° Rust£ºhttps://rustup.rs/
   pause
   exit /b 1
 )
 where pnpm >nul 2>&1
 if errorlevel 1 (
-  echo [é”™è¯¯] æœªæ‰¾åˆ° pnpmã€‚è¯·å…ˆå®‰è£… pnpmï¼šcorepack enable
+  echo [´íÎó] Î´ÕÒµ½ pnpm¡£ÇëÏÈ°²×° pnpm£ºcorepack enable
   pause
   exit /b 1
 )
 
-echo [1/2] ç¯å¢ƒæ£€æŸ¥
+echo [1/2] »·¾³¼ì²é
 cargo --version
 pnpm --version
 echo.
 
-rem ---- 2. å®Œæ•´ç”Ÿäº§æ„å»ºï¼ˆstandaloneï¼Œå« beforeBuildCommand ç»„è£… staticï¼‰----
-rem     å¿…é¡»åœ¨é¡¹ç›®æ ¹è¿è¡Œï¼ˆtauri CLI åœ¨é¡¹ç›®æ ¹å¯è§£æï¼›src-tauri ä¸‹ä¼šæ‰¾ä¸åˆ°å‘½ä»¤ï¼‰
-echo [2/2] å¼€å§‹ tauri build --no-bundleï¼ˆé¦–æ¬¡è€—æ—¶è¾ƒé•¿ï¼špnpm build + cargo build + èµ„æºæ‹·è´ï¼‰...
+rem ---- 2. ÍêÕûÉú²ú¹¹½¨£¨standalone£¬º¬ beforeBuildCommand ×é×° static£©----
+rem     ±ØĞëÔÚÏîÄ¿¸ùÔËĞĞ£¨tauri CLI ÔÚÏîÄ¿¸ù¿É½âÎö£»src-tauri ÏÂ»áÕÒ²»µ½ÃüÁî£©
+echo [2/2] ¿ªÊ¼ tauri build --no-bundle£¨Ê×´ÎºÄÊ±½Ï³¤£ºpnpm build + cargo build + ×ÊÔ´¿½±´£©...
 echo.
 call pnpm tauri build --no-bundle
 set "BUILD_ERR=%errorlevel%"
 
 if %BUILD_ERR% neq 0 (
   echo.
-  echo [é”™è¯¯] ç‹¬ç«‹æ¨¡å¼æ„å»ºå¤±è´¥ï¼ˆexit=%BUILD_ERR%ï¼‰ï¼Œè¯·æŸ¥çœ‹ä¸Šæ–¹è¾“å‡ºã€‚
+  echo [´íÎó] ¶ÀÁ¢Ä£Ê½¹¹½¨Ê§°Ü£¨exit=%BUILD_ERR%£©£¬Çë²é¿´ÉÏ·½Êä³ö¡£
   pause
   exit /b 1
 )
 
 echo.
 echo ==========================================================
-echo   æ„å»ºå®Œæˆï¼ˆç‹¬ç«‹æ¨¡å¼ï¼‰
-echo   å£³      : %PROJECT_ROOT%\src-tauri\target\release\app.exe
-echo   èµ„æº    : %PROJECT_ROOT%\src-tauri\target\release\ ä¸‹ server.js / .next / binaries
+echo   ¹¹½¨Íê³É£¨¶ÀÁ¢Ä£Ê½£©
+echo   ¿Ç      : %PROJECT_ROOT%\src-tauri\target\release\app.exe
+echo   ×ÊÔ´    : %PROJECT_ROOT%\src-tauri\target\release\ ÏÂ server.js / .next / binaries
 echo.
-echo   é…å¥—å¯åŠ¨å…¥å£ï¼šåŒå‡» start-tauri-standalone.exe
-echo   ï¼ˆè‹¥å°šæœªæ‰“åŒ…ï¼Œè¯·è¿è¡Œ tools\build-launcher-standalone.batï¼‰
+echo   ÅäÌ×Æô¶¯Èë¿Ú£ºË«»÷ start-tauri-standalone.exe
+echo   £¨ÈôÉĞÎ´´ò°ü£¬ÇëÔËĞĞ tools\build-launcher-standalone.bat£©
 echo ==========================================================
 echo.
 pause

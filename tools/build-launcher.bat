@@ -1,37 +1,37 @@
 @echo off
-rem 本文件以 GBK(936) 保存 —— cmd 默认按系统 ANSI 代码页解析 bat，
-rem 存成 UTF-8 会让中文注释/echo 变成乱码并被当作命令执行。
+rem ??????? GBK(936) ???? ???? cmd ?????? ANSI ????????? bat??
+rem ??? UTF-8 ???????????/echo ???????????????????С?
 chcp 936 >nul
 setlocal
 
 rem ============================================================================
-rem  build-launcher.bat — 重新打包 start-tauri.exe
+rem  build-launcher.bat ?? ???′?? start-tauri.exe
 rem
-rem  产物：<项目根>\start-tauri\start-tauri.exe （onedir 模式）
-rem  说明：本脚本位于 <项目根>\tools\，会自动 cd 到项目根目录再打包。
-rem        打包前会删除旧的 start-tauri\ 与 build-launcher\ 产物。
+rem  ????<?????>\start-tauri\start-tauri.exe ??onedir ????
+rem  ??????????λ?? <?????>\tools\??????? cd ???????????????
+rem        ???????????? start-tauri\ ?? build-launcher\ ????
 rem ============================================================================
 
 cd /d "%~dp0.."
 set "PROJECT_ROOT=%CD%"
 
 echo ==========================================================
-echo   Comfy APP - 重新打包 start-tauri.exe
+echo   Comfy APP - ???′?? start-tauri.exe
 echo ==========================================================
-echo   项目根目录: %PROJECT_ROOT%
+echo   ???????: %PROJECT_ROOT%
 echo.
 
-rem ---- 1. 检查 Python / PyInstaller ----
+rem ---- 1. ??? Python / PyInstaller ----
 where python >nul 2>&1
 if errorlevel 1 (
-  echo [错误] 未找到 python，请先安装 Python 3.10+ 并加入 PATH。
+  echo [????] δ??? python???????? Python 3.10+ ?????? PATH??
   if /I not "%~1"=="no-pause" pause
   exit /b 1
 )
 
 where pyinstaller >nul 2>&1
 if errorlevel 1 (
-  echo [错误] 未找到 pyinstaller。请先安装：
+  echo [????] δ??? pyinstaller??????????
   echo.
   echo        pip install pyinstaller
   echo.
@@ -39,20 +39,20 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [1/3] 环境检查
+echo [1/3] ???????
 python --version
 pyinstaller --version
 echo.
 
-rem ---- 2. 清理旧产物 ----
-echo [2/3] 清理旧产物...
+rem ---- 2. ????????? ----
+echo [2/3] ?????????...
 if exist "%PROJECT_ROOT%\start-tauri" rmdir /s /q "%PROJECT_ROOT%\start-tauri"
 if exist "%PROJECT_ROOT%\build-launcher" rmdir /s /q "%PROJECT_ROOT%\build-launcher"
-echo       已清理 start-tauri\ 与 build-launcher\
+echo       ?????? start-tauri\ ?? build-launcher\
 echo.
 
-rem ---- 3. 打包 ----
-echo [3/3] 开始打包（onedir 模式，耗时约 1-3 分钟）...
+rem ---- 3. ??? ----
+echo [3/3] ????????onedir ???????? 1-3 ?????...
 pyinstaller --clean --noconfirm ^
   --distpath . ^
   --workpath build-launcher ^
@@ -60,15 +60,15 @@ pyinstaller --clean --noconfirm ^
 
 if errorlevel 1 (
   echo.
-  echo [错误] 打包失败，请查看上方输出。
+  echo [????] ??????????????????
   if /I not "%~1"=="no-pause" pause
   exit /b 1
 )
 
 echo.
 echo ==========================================================
-echo   打包完成
-echo   产物: %PROJECT_ROOT%\start-tauri\start-tauri.exe
+echo   ??????
+echo   ????: %PROJECT_ROOT%\start-tauri\start-tauri.exe
 echo ==========================================================
 echo.
 if /I not "%~1"=="no-pause" pause

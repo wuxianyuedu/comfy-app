@@ -1,16 +1,16 @@
 @echo off
 chcp 936 >nul
 setlocal
-rem æœ¬æ–‡ä»¶ä»¥ GBK(936) ä¿å­˜ â€”â€” cmd é»˜è®¤æŒ‰ç³»ç»Ÿ ANSI ä»£ç é¡µè§£æ batï¼Œ
-rem å­˜æˆ UTF-8 ä¼šè®©ä¸­æ–‡æ³¨é‡Š/echo å˜æˆä¹±ç å¹¶è¢«å½“ä½œå‘½ä»¤æ‰§è¡Œã€‚
+rem ±¾ÎÄ¼şÒÔ GBK(936) ±£´æ ¡ª¡ª cmd Ä¬ÈÏ°´ÏµÍ³ ANSI ´úÂëÒ³½âÎö bat£¬
+rem ´æ³É UTF-8 »áÈÃÖĞÎÄ×¢ÊÍ/echo ±ä³ÉÂÒÂë²¢±»µ±×÷ÃüÁîÖ´ĞĞ¡£
 rem ============================================================================
-rem  build-launcher-dev.bat â€” é‡æ–°æ‰“åŒ… start-tauri-dev.exe
+rem  build-launcher-dev.bat ¡ª ÖØĞÂ´ò°ü start-tauri-dev.exe
 rem
-rem  äº§ç‰©ï¼š<é¡¹ç›®æ ¹>\start-tauri-dev\start-tauri-dev.exe ï¼ˆonedir æ¨¡å¼ï¼‰
-rem  è¯´æ˜ï¼šå¤ç”¨ tools\start-tauri.specï¼Œé€šè¿‡ç¯å¢ƒå˜é‡ LAUNCHER_NAME æŒ‡å®šå…¥å£åï¼Œ
-rem        ä½¿æ‰“åŒ…å‡ºçš„ exe åä¸º start-tauri-dev.exeã€‚launcher æºç ä¼šæŒ‰ exe æ–‡ä»¶å
-rem        åˆ¤å®šé»˜è®¤èµ°ã€Œtauri devã€æ¨¡å¼ï¼ˆRust çƒ­é‡è½½ï¼‰ï¼ŒåŒå‡»å³ç”¨ï¼Œæ— éœ€è®°å‚æ•°ã€‚
-rem        æ‰“åŒ…å‰ä¼šåˆ é™¤æ—§çš„ start-tauri-dev\ ä¸ build-launcher-dev\ äº§ç‰©ã€‚
+rem  ²úÎï£º<ÏîÄ¿¸ù>\start-tauri-dev\start-tauri-dev.exe £¨onedir Ä£Ê½£©
+rem  ËµÃ÷£º¸´ÓÃ tools\start-tauri.spec£¬Í¨¹ı»·¾³±äÁ¿ LAUNCHER_NAME Ö¸¶¨Èë¿ÚÃû£¬
+rem        Ê¹´ò°ü³öµÄ exe ÃûÎª start-tauri-dev.exe¡£launcher Ô´Âë»á°´ exe ÎÄ¼şÃû
+rem        ÅĞ¶¨Ä¬ÈÏ×ß¡¸tauri dev¡¹Ä£Ê½£¨Rust ÈÈÖØÔØ£©£¬Ë«»÷¼´ÓÃ£¬ÎŞĞè¼Ç²ÎÊı¡£
+rem        ´ò°üÇ°»áÉ¾³ı¾ÉµÄ start-tauri-dev\ Óë build-launcher-dev\ ²úÎï¡£
 rem ============================================================================
 
 set "LAUNCHER_NAME=start-tauri-dev"
@@ -19,23 +19,23 @@ cd /d "%~dp0.."
 set "PROJECT_ROOT=%CD%"
 
 echo ==========================================================
-echo   Comfy APP - é‡æ–°æ‰“åŒ… start-tauri-dev.exeï¼ˆå¼€å‘æ¨¡å¼ï¼‰
+echo   Comfy APP - ÖØĞÂ´ò°ü start-tauri-dev.exe£¨¿ª·¢Ä£Ê½£©
 echo ==========================================================
-echo   é¡¹ç›®æ ¹ç›®å½•: %PROJECT_ROOT%
-echo   å…¥å£å    : %LAUNCHER_NAME%ï¼ˆåŒå‡»å³èµ° tauri devï¼ŒRust çƒ­é‡è½½ï¼‰
+echo   ÏîÄ¿¸ùÄ¿Â¼: %PROJECT_ROOT%
+echo   Èë¿ÚÃû    : %LAUNCHER_NAME%£¨Ë«»÷¼´×ß tauri dev£¬Rust ÈÈÖØÔØ£©
 echo.
 
-rem ---- 1. æ£€æŸ¥ Python / PyInstaller ----
+rem ---- 1. ¼ì²é Python / PyInstaller ----
 where python >nul 2>&1
 if errorlevel 1 (
-  echo [é”™è¯¯] æœªæ‰¾åˆ° pythonï¼Œè¯·å…ˆå®‰è£… Python 3.10+ å¹¶åŠ å…¥ PATHã€‚
+  echo [´íÎó] Î´ÕÒµ½ python£¬ÇëÏÈ°²×° Python 3.10+ ²¢¼ÓÈë PATH¡£
   if /I not "%~1"=="no-pause" pause
   exit /b 1
 )
 
 where pyinstaller >nul 2>&1
 if errorlevel 1 (
-  echo [é”™è¯¯] æœªæ‰¾åˆ° pyinstallerã€‚è¯·å…ˆå®‰è£…ï¼š
+  echo [´íÎó] Î´ÕÒµ½ pyinstaller¡£ÇëÏÈ°²×°£º
   echo.
   echo        pip install pyinstaller
   echo.
@@ -43,20 +43,20 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [1/3] ç¯å¢ƒæ£€æŸ¥
+echo [1/3] »·¾³¼ì²é
 python --version
 pyinstaller --version
 echo.
 
-rem ---- 2. æ¸…ç†æ—§äº§ç‰© ----
-echo [2/3] æ¸…ç†æ—§äº§ç‰©...
+rem ---- 2. ÇåÀí¾É²úÎï ----
+echo [2/3] ÇåÀí¾É²úÎï...
 if exist "%PROJECT_ROOT%\start-tauri-dev" rmdir /s /q "%PROJECT_ROOT%\start-tauri-dev"
 if exist "%PROJECT_ROOT%\build-launcher-dev" rmdir /s /q "%PROJECT_ROOT%\build-launcher-dev"
-echo       å·²æ¸…ç† start-tauri-dev\ ä¸ build-launcher-dev\
+echo       ÒÑÇåÀí start-tauri-dev\ Óë build-launcher-dev\
 echo.
 
-rem ---- 3. æ‰“åŒ… ----
-echo [3/3] å¼€å§‹æ‰“åŒ…ï¼ˆonedir æ¨¡å¼ï¼Œè€—æ—¶çº¦ 1-3 åˆ†é’Ÿï¼‰...
+rem ---- 3. ´ò°ü ----
+echo [3/3] ¿ªÊ¼´ò°ü£¨onedir Ä£Ê½£¬ºÄÊ±Ô¼ 1-3 ·ÖÖÓ£©...
 pyinstaller --clean --noconfirm ^
   --distpath . ^
   --workpath build-launcher-dev ^
@@ -64,18 +64,18 @@ pyinstaller --clean --noconfirm ^
 
 if errorlevel 1 (
   echo.
-  echo [é”™è¯¯] æ‰“åŒ…å¤±è´¥ï¼Œè¯·æŸ¥çœ‹ä¸Šæ–¹è¾“å‡ºã€‚
+  echo [´íÎó] ´ò°üÊ§°Ü£¬Çë²é¿´ÉÏ·½Êä³ö¡£
   if /I not "%~1"=="no-pause" pause
   exit /b 1
 )
 
 echo.
 echo ==========================================================
-echo   æ‰“åŒ…å®Œæˆ
-echo   äº§ç‰©: %PROJECT_ROOT%\start-tauri-dev\start-tauri-dev.exe
+echo   ´ò°üÍê³É
+echo   ²úÎï: %PROJECT_ROOT%\start-tauri-dev\start-tauri-dev.exe
 echo.
-echo   åŒå‡»å³ç”¨ï¼šèµ° tauri devï¼ˆRust çƒ­é‡è½½ï¼‰ï¼Œæ— éœ€ --tauri-dev å‚æ•°ã€‚
-echo   è‹¥è¦æ”¹å›é»˜è®¤è¡Œä¸ºï¼Œé‡æ–°è¿è¡Œ tools\build-launcher.bat ç”Ÿæˆ start-tauri.exeã€‚
+echo   Ë«»÷¼´ÓÃ£º×ß tauri dev£¨Rust ÈÈÖØÔØ£©£¬ÎŞĞè --tauri-dev ²ÎÊı¡£
+echo   ÈôÒª¸Ä»ØÄ¬ÈÏĞĞÎª£¬ÖØĞÂÔËĞĞ tools\build-launcher.bat Éú³É start-tauri.exe¡£
 echo ==========================================================
 echo.
 if /I not "%~1"=="no-pause" pause
