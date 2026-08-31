@@ -53,9 +53,9 @@ AIGC:
 | §4.2 React 组件模式 | [04 组件设计](standards/04-组件设计.md)、[1.1 状态归属](standards/01-架构与状态管理.md#11-全局高频状态禁止用-react-context) | 文档集全面展开拆分阈值、事件隔离、memo 准则 |
 | §4.3 样式规范 | [03 样式与 Tailwind](standards/03-样式与-tailwind.md) | 文档集展开 Tailwind v4 透明度、Design Token、图标规范 |
 | §4.4 UI/UX 生产级规范 | [03 样式](standards/03-样式与-tailwind.md)（Design Token）、[06 a11y](standards/06-无障碍访问-a11y.md)、[2.7 动画](standards/02-性能规范.md#27-动画用-transformopacity不动画-layout-属性) | 主规范为生产级底线；文档集逐项展开（对比度、焦点管理、晕动症） |
-| §4.5 文案与注释 | [12.4 注释规范](standards/12-代码组织与文件结构.md#124-注释要解释为什么不只是是什么) | 主规范总则；文档集给"为什么型注释"示例 |
+| §4.5 文案与注释 | [12.4 注释规范](standards/12-代码组织与文件结构.md#124-注释规范只写当前代码的-why) | 主规范总则；文档集给"为什么型注释"示例与"不写作者/日期流水"硬约束 |
 | §4.6 React 19 严格 lint | [2.4 渲染期 setState](standards/02-性能规范.md#24-避免在-render-阶段调用-setstate)、[8.6 set-state-in-effect](standards/08-异步与副作用.md#86-避免-useeffect-内-setstate-触发循环)、[14.5 Y3](standards/14-反模式速查表.md#145-类型异步a11y错误) | 文档集提供两种规范写法与禁禁禁用声明 |
-| §5 Git 工作流 | [13 提交与 Code Review](standards/13-提交与-code-review.md) | 文档集展开为完整流程：自查清单、PR 模板、Review 维度、CI 门禁、LF/git-lfs |
+| §5 Git 工作流 | [13 提交与 Code Review](standards/13-提交与-code-review.md) | 文档集展开为完整流程：自查清单、PR 模板、Review 维度、CI 门禁、LF/git-lfs、CHANGELOG（13.10） |
 | §6 性能规范 | [02 性能规范](standards/02-性能规范.md) | 主规范沉淀已落地模式（画布/列表）；文档集全面展开（虚拟滚动、分片、动画、memo） |
 | §7 测试与质量规范 | [11 测试与可观测性](standards/11-测试与可观测性.md) | 文档集展开测试分层、行为测试、埋点、CI 门禁 |
 | §8 安全规范 | [5.5 API 响应 Zod 校验](standards/05-类型安全.md#55-api-响应一律-zod-校验)、[10 错误处理与降级](standards/10-错误处理与降级.md) | 主规范为安全基线；文档集落实输入校验、降级、敏感信息防护 |
@@ -101,7 +101,7 @@ AIGC:
 | 10 | [错误处理与降级](standards/10-错误处理与降级.md) | 三级降级、ErrorBoundary、error.tsx、空状态 |
 | 11 | [测试与可观测性](standards/11-测试与可观测性.md) | 测试分层、行为测试、埋点、CI 门禁 |
 | 12 | [代码组织与文件结构](standards/12-代码组织与文件结构.md) | 目录约定、barrel、命名、循环依赖预防 |
-| 13 | [提交与 Code Review](standards/13-提交与-code-review.md) | 提交前自查、Commit Message、PR、Review 维度、CI、LF/git-lfs |
+| 13 | [提交与 Code Review](standards/13-提交与-code-review.md) | 提交前自查、Commit Message、PR、Review 维度、CI、LF/git-lfs、CHANGELOG 记录规范 |
 | 14 | [反模式速查表](standards/14-反模式速查表.md) | 状态/性能/样式/组件/类型/异步/a11y/Git 反模式对照 |
 | 15 | [附录](standards/15-附录.md) | 技术栈速查、组件评分、ADR、命令速查、新成员路径、疑难索引 |
 

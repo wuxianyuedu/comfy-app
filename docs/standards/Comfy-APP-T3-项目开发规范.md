@@ -244,6 +244,19 @@ git -c core.autocrlf=false -c filter.lfs.process= -c filter.lfs.clean= -c filter
 - 大改动先建特性分支（`feat/<描述>` / `perf/<描述>`），验证通过后合回。
 - 提交前自检清单：`tsc --noEmit` ✓ → `pnpm lint` ✓ → 相关测试 ✓ → `next build`（涉及构建链时）✓。
 
+### 5.4 CHANGELOG 记录规范
+
+仓库根目录 `CHANGELOG.md` 记录**两次发布之间用户可感知的差异**（Keep a Changelog + SemVer）。
+
+- **该记**：破坏性变更（必须附迁移方式）、新增用户可见功能、行为变更（默认值 / UI 形态 /
+  交互路径变化，即使不是缺陷）、影响升级或数据迁移的修复。
+- **不该记**：内部重构、类型 / lint 清理、注释与文档修订、测试补充 —— 这些归 `git log`。
+- **时机**：PR 合入前随代码一起改，条目先落 `[Unreleased]`；**禁止发版前集中补写**（必然漏项失真）。
+
+三层分工，三者不互相抄：注释写**当前代码的 Why**，commit message 写**这一次改了什么**，
+CHANGELOG 写**对外差异**。完整细则见
+[文档集 13.10](13-提交与-code-review.md#1310-changelog-记录规范)。
+
 ---
 
 ## 6. 性能规范
@@ -322,6 +335,7 @@ git -c core.autocrlf=false -c filter.lfs.process= -c filter.lfs.clean= -c filter
 | 项目开发规范（本文档） | `docs/` | 架构/规范变更时 |
 | 命名规范 | 项目 docs 或 output 归档 | 命名规则变更时 |
 | 测试说明 | `docs/guides/TESTING.md` | 测试体系变更时 |
+| 更新日志 | `CHANGELOG.md`（仓库根目录） | 用户可感知的变更随 PR 落 `[Unreleased]`（见 §5.4） |
 | API 文档 | `docs/api`（typedoc 生成） | `pnpm docs` 随构建链更新 |
 
 - 代码行为变更必须同步相关文档；文档与代码同提交。
@@ -350,7 +364,8 @@ pnpm build && pnpm start   # 生产预览
 1. 类型/Lint/单测/生产构建全绿；
 2. 敏感信息（.env、密钥）未入库；
 3. 无关文件未混入提交；
-4. 变更文档已同步。
+4. 变更文档已同步；
+5. `CHANGELOG.md` 的 `[Unreleased]` 条目已归入本次版本段落（见 §5.4）。
 
 ---
 
