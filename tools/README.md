@@ -119,6 +119,27 @@ cargo build --release
 
 > 首次构建会拉取并编译全部 Rust 依赖，耗时通常 5–15 分钟；之后的增量构建较快。
 
+### 两种运行模式（重要）
+
+`cargo build --release` 只编译 Rust 壳，**不会**运行 `tauri.conf.json` 的
+`beforeBuildCommand`（`node scripts/build-desktop.mjs`），因此 `target/release/`
+下没有 standalone 资源（`server.js` + Node sidecar）。运行时的处理：
+
+- **缺 `server.js` 时**：release 壳会自动**回退到 dev URL 模式**——`dev-launcher.ps1`
+  的 `-Prebuilt` 分支已经起了 Next dev server，壳只需加载 `COMFYAPP_DEV_URL`
+  （`http://127.0.0.1:3000/workspace`）即可，不会因资源缺失而 panic 退窗。
+  这是开发 / 快速预览的推荐路径：双击 `start-tauri.exe` 即秒弹窗口，前端由 dev server 提供。
+- **要做真正「独立分发」**（壳自带 Next standalone server、连 dev server 都不需要、
+  启动最快）：必须执行完整生产构建，让 `beforeBuildCommand` 组装好资源：
+
+  ```powershell
+  pnpm tauri build --no-bundle   # 只产出裸壳 + 资源，不打安装包
+  # 或 pnpm tauri build          # 同时打 msi/nsis 安装包
+  ```
+
+  该路径会先 `pnpm build`（Next standalone 全量编译，较慢），再拷贝 `server.js` /
+  Node sidecar 到资源目录；此时 release 壳走真正的 standalone 模式。
+
 ## 一键发布构建
 
 需要「最快启动」的完整发布包时，直接双击 `tools\build-all.bat`：

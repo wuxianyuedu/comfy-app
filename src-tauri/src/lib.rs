@@ -90,6 +90,17 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error
   let server = res_dir.join("server.js");
 
   if !server.exists() {
+    // 生产资源（standalone server.js + Node sidecar）缺失：回退到 dev URL 模式。
+    // launcher 的 Prebuilt 分支会单独启动 Next dev server，壳只需加载 COMFYAPP_DEV_URL 即可，
+    // 避免「直接 cargo build --release（未跑 beforeBuildCommand）」导致壳启动即 panic、窗口一闪而过。
+    // 后续执行 pnpm tauri build（完整生产构建）后 server.js 就位，则会走真正的 standalone 模式。
+    if let Ok(dev_url) = std::env::var("COMFYAPP_DEV_URL") {
+      eprintln!("[ComfyAPP] standalone server.js 缺失，回退到 dev URL: {}", dev_url);
+      if let Some(state) = app.try_state::<AppState>() {
+        state.set_app_url(dev_url);
+      }
+      return Ok(());
+    }
     return Err(format!(
       "standalone server.js 不存在：{:?}。请先执行 pnpm tauri build（beforeBuildCommand 会组装 src-tauri/static）",
       server
