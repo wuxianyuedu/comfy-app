@@ -22,6 +22,8 @@
 - **应用日志代码位置列可读性提升**：自动还原 Turbopack / 某些 webpack source-map 配置下
   把 `/` 编码为 `_` 的模块路径（`src_components_studio_...` → `src/components/studio/...`），
   列宽加宽到 280px，点击可复制完整路径。
+- **两个日志弹窗支持加宽 / 收缩**：执行日志与应用日志弹窗头部新增展开图标，
+  点击从 `max-w-5xl` 切换到 `max-w-7xl`，再次点击恢复。
 
 ### Fixed
 

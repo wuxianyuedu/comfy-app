@@ -15,7 +15,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNodes } from "@xyflow/react";
-import { FileText, X } from "lucide-react";
+import { FileText, X, Maximize2, Minimize2 } from "lucide-react";
 import type { ValidationError } from "@/lib/comfyui/validation";
 import type { StepLogEntry } from "./stepLogCache";
 import {
@@ -103,6 +103,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const [connected, setConnected] = useState(false);
   /* 过滤改为单选（与应用日志同款交互），默认「全部」。 */
   const [filter, setFilter] = useState<Level | "all">("all");
+  /* 弹窗宽度切换：默认 max-w-5xl，点击加宽到 max-w-7xl。 */
+  const [wide, setWide] = useState(false);
   const [autoscroll, setAutoscroll] = useState(true);
   const [cancellingFromPanel, setCancellingFromPanel] = useState(false);
 
@@ -332,7 +334,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             if (e.target === e.currentTarget) setOpen(false);
           }}
         >
-          <div className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60">
+          <div className={`flex h-[85vh] w-full ${wide ? "max-w-7xl" : "max-w-5xl"} flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60`}>
             {/* Header */}
             <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-white/2 px-4">
               <div className="flex min-w-0 items-center gap-2">
@@ -396,6 +398,14 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   className="rounded-md border border-white/10 bg-white/4 px-2 py-0.5 text-[10.5px] text-gray-300 transition-colors hover:bg-white/8 hover:text-gray-100"
                 >
                   清空
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWide((w) => !w)}
+                  title={wide ? "收缩" : "加宽"}
+                  className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
+                >
+                  {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                 </button>
                 <button
                   type="button"
