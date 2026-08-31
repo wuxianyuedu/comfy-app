@@ -32,8 +32,8 @@ pyinstaller --clean --noconfirm --distpath . --workpath build-launcher tools/sta
 
 产物：`<项目根>\start-tauri\start-tauri.exe`（连同 `_internal\` 依赖目录）。
 
-> **必须在项目根目录执行**——`start-tauri.spec` 里 `Analysis(['scripts/start_tauri_launcher.py'])`
-> 是相对项目根的路径。`build-launcher.bat` 已自动 `cd /d "%~dp0.."`，手敲命令时请注意。
+> `start-tauri.spec` 内部已按 `SPECPATH` 上溯到项目根计算源码绝对路径，手敲命令时不必
+> 强制在项目根执行；但 `build-launcher.bat` 仍会自动 `cd /d "%~dp0.."` 再打包。
 
 ### 打包产物不入库
 

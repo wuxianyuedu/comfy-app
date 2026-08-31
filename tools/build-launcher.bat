@@ -1,35 +1,37 @@
 @echo off
-chcp 65001 >nul
+rem ±¾ÎÄ¼şÒÔ GBK(936) ±£´æ ¡ª¡ª cmd Ä¬ÈÏ°´ÏµÍ³ ANSI ´úÂëÒ³½âÎö bat£¬
+rem ´æ³É UTF-8 »áÈÃÖĞÎÄ×¢ÊÍ/echo ±ä³ÉÂÒÂë²¢±»µ±×÷ÃüÁîÖ´ĞĞ¡£
+chcp 936 >nul
 setlocal
 
 rem ============================================================================
-rem  build-launcher.bat â€” é‡æ–°æ‰“åŒ… start-tauri.exe
+rem  build-launcher.bat ¡ª ÖØĞÂ´ò°ü start-tauri.exe
 rem
-rem  äº§ç‰©ï¼š<é¡¹ç›®æ ¹>\start-tauri\start-tauri.exe ï¼ˆonedir æ¨¡å¼ï¼‰
-rem  è¯´æ˜ï¼šæœ¬è„šæœ¬ä½äº <é¡¹ç›®æ ¹>\tools\ï¼Œä¼šè‡ªåŠ¨ cd åˆ°é¡¹ç›®æ ¹ç›®å½•å†æ‰“åŒ…ã€‚
-rem        æ‰“åŒ…å‰ä¼šåˆ é™¤æ—§çš„ start-tauri\ ä¸ build-launcher\ äº§ç‰©ã€‚
+rem  ²úÎï£º<ÏîÄ¿¸ù>\start-tauri\start-tauri.exe £¨onedir Ä£Ê½£©
+rem  ËµÃ÷£º±¾½Å±¾Î»ÓÚ <ÏîÄ¿¸ù>\tools\£¬»á×Ô¶¯ cd µ½ÏîÄ¿¸ùÄ¿Â¼ÔÙ´ò°ü¡£
+rem        ´ò°üÇ°»áÉ¾³ı¾ÉµÄ start-tauri\ Óë build-launcher\ ²úÎï¡£
 rem ============================================================================
 
 cd /d "%~dp0.."
 set "PROJECT_ROOT=%CD%"
 
 echo ==========================================================
-echo   Comfy APP - é‡æ–°æ‰“åŒ… start-tauri.exe
+echo   Comfy APP - ÖØĞÂ´ò°ü start-tauri.exe
 echo ==========================================================
-echo   é¡¹ç›®æ ¹ç›®å½•: %PROJECT_ROOT%
+echo   ÏîÄ¿¸ùÄ¿Â¼: %PROJECT_ROOT%
 echo.
 
-rem ---- 1. æ£€æŸ¥ Python / PyInstaller ----
+rem ---- 1. ¼ì²é Python / PyInstaller ----
 where python >nul 2>&1
 if errorlevel 1 (
-  echo [é”™è¯¯] æœªæ‰¾åˆ° pythonï¼Œè¯·å…ˆå®‰è£… Python 3.10+ å¹¶åŠ å…¥ PATHã€‚
+  echo [´íÎó] Î´ÕÒµ½ python£¬ÇëÏÈ°²×° Python 3.10+ ²¢¼ÓÈë PATH¡£
   pause
   exit /b 1
 )
 
 where pyinstaller >nul 2>&1
 if errorlevel 1 (
-  echo [é”™è¯¯] æœªæ‰¾åˆ° pyinstallerã€‚è¯·å…ˆå®‰è£…ï¼š
+  echo [´íÎó] Î´ÕÒµ½ pyinstaller¡£ÇëÏÈ°²×°£º
   echo.
   echo        pip install pyinstaller
   echo.
@@ -37,20 +39,20 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [1/3] ç¯å¢ƒæ£€æŸ¥
+echo [1/3] »·¾³¼ì²é
 python --version
 pyinstaller --version
 echo.
 
-rem ---- 2. æ¸…ç†æ—§äº§ç‰© ----
-echo [2/3] æ¸…ç†æ—§äº§ç‰©...
+rem ---- 2. ÇåÀí¾É²úÎï ----
+echo [2/3] ÇåÀí¾É²úÎï...
 if exist "%PROJECT_ROOT%\start-tauri" rmdir /s /q "%PROJECT_ROOT%\start-tauri"
 if exist "%PROJECT_ROOT%\build-launcher" rmdir /s /q "%PROJECT_ROOT%\build-launcher"
-echo       å·²æ¸…ç† start-tauri\ ä¸ build-launcher\
+echo       ÒÑÇåÀí start-tauri\ Óë build-launcher\
 echo.
 
-rem ---- 3. æ‰“åŒ… ----
-echo [3/3] å¼€å§‹æ‰“åŒ…ï¼ˆonedir æ¨¡å¼ï¼Œè€—æ—¶çº¦ 1-3 åˆ†é’Ÿï¼‰...
+rem ---- 3. ´ò°ü ----
+echo [3/3] ¿ªÊ¼´ò°ü£¨onedir Ä£Ê½£¬ºÄÊ±Ô¼ 1-3 ·ÖÖÓ£©...
 pyinstaller --clean --noconfirm ^
   --distpath . ^
   --workpath build-launcher ^
@@ -58,15 +60,15 @@ pyinstaller --clean --noconfirm ^
 
 if errorlevel 1 (
   echo.
-  echo [é”™è¯¯] æ‰“åŒ…å¤±è´¥ï¼Œè¯·æŸ¥çœ‹ä¸Šæ–¹è¾“å‡ºã€‚
+  echo [´íÎó] ´ò°üÊ§°Ü£¬Çë²é¿´ÉÏ·½Êä³ö¡£
   pause
   exit /b 1
 )
 
 echo.
 echo ==========================================================
-echo   æ‰“åŒ…å®Œæˆ
-echo   äº§ç‰©: %PROJECT_ROOT%\start-tauri\start-tauri.exe
+echo   ´ò°üÍê³É
+echo   ²úÎï: %PROJECT_ROOT%\start-tauri\start-tauri.exe
 echo ==========================================================
 echo.
 pause
