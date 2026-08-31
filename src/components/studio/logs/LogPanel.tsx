@@ -186,6 +186,7 @@ function ansiToSpans(text: string): React.ReactNode[] {
 interface TokenStyle {
   regex: RegExp;
   style: React.CSSProperties;
+  id?: string;
 }
 const LOG_TOKENS: TokenStyle[] = [
   { regex: /^\[\d{2}:\d{2}:\d{2}\]/g, style: { color: "#6b7280" } },
@@ -199,7 +200,11 @@ const LOG_TOKENS: TokenStyle[] = [
     regex: /https?:\/\/[^\s]+/g,
     style: { color: "#60a5fa", textDecoration: "underline" },
   },
-  { regex: /\b(?:[A-Z]:\\|\\)[^\s]*/g, style: { color: "#a78bfa" } },
+  {
+    id: "path",
+    regex: /\b(?:[A-Z]:\\|\\)[^\s]*/g,
+    style: { color: "#a78bfa" },
+  },
 ];
 
 function hasAnsi(text: string): boolean {
@@ -218,9 +223,12 @@ function tokenizeLogMessage(text: string): React.ReactNode[] {
     for (const token of LOG_TOKENS) {
       token.regex.lastIndex = 0;
       if (token.regex.test(part)) {
+        // Windows 路径中的反斜杠在小字号等宽字体下容易与相邻字符“粘连”
+        // 导致看不清；显示为正斜杠既保持可读性，又不影响复制原始日志。
+        const children = token.id === "path" ? part.replace(/\\/g, "/") : part;
         return (
           <span key={key++} style={token.style}>
-            {part}
+            {children}
           </span>
         );
       }
