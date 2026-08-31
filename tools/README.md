@@ -11,6 +11,8 @@
 | 文件 | 用途 |
 |------|------|
 | `build-launcher.bat` | 重新打包 `start-tauri/start-tauri.exe`（双击即可执行） |
+| `build-tauri-release.bat` | 构建 `src-tauri/target/release/app.exe`（release 版预编译壳，启动更快） |
+| `build-all.bat` | 一键发布：先构建 release Tauri 壳，再打包 `start-tauri.exe` |
 | `start-tauri.spec` | PyInstaller 打包配置（onedir 模式，无控制台窗口） |
 | `README.md` | 本文件 |
 
@@ -91,3 +93,41 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-comfy-cli-venv
 
 `start-tauri.exe` 是**打包产物**，改完 `scripts/start_tauri_launcher.py` 后必须重新执行
 `tools\build-launcher.bat`，否则双击仍跑旧逻辑。
+
+## 构建 release 版 Tauri 壳
+
+`scripts/dev-launcher.ps1` 的 `-Prebuilt` 模式会**优先**使用
+`src-tauri/target/release/app.exe`（启动更快），仅在它缺失时才回退到
+`src-tauri/target/debug/app.exe`（debug 启动较慢）。因此发布前建议先构建 release 壳：
+
+### 前置条件
+
+- 已安装 Rust 工具链（`cargo` / `rustc`，推荐通过 https://rustup.rs/ 安装）；
+- Windows 上需 Visual Studio Build Tools（含「使用 C++ 的桌面开发」工作负载），
+  否则 `cargo build` 会因缺少 MSVC 链接器失败。
+
+### 执行
+
+双击 `tools\build-tauri-release.bat`，或在项目根目录执行：
+
+```powershell
+cd src-tauri
+cargo build --release
+```
+
+产物：`<项目根>\src-tauri\target\release\app.exe`。
+
+> 首次构建会拉取并编译全部 Rust 依赖，耗时通常 5–15 分钟；之后的增量构建较快。
+
+## 一键发布构建
+
+需要「最快启动」的完整发布包时，依次完成「release Tauri 壳 + 打包 start-tauri.exe」
+两步。可直接双击 `tools\build-all.bat`（内部 `call` 上述两个脚本），或在项目根执行：
+
+```powershell
+tools\build-tauri-release.bat
+tools\build-launcher.bat
+```
+
+两个脚本职责独立、前置工具链不同（Rust vs Python），**不合并为单文件**，
+仅由 `build-all.bat` 做编排，便于单独重编其中一环。
