@@ -10,7 +10,7 @@ export default tseslint.config(
       "generated/**",
       "src-tauri/static/**",
       "temp/**",
-      ".workbuddy/**",
+      "python-venv/**",
     ],
   },
   // eslint-config-next@16 已改为扁平（flat）配置，直接导出配置数组。

@@ -181,7 +181,8 @@ export async function executeViaComfyCli(job: Job) {
   log(taskId, "info", `ComfyUI 目标：${host}:${port}（${base}）`);
 
   const patched = applyRawOverrides(rawJson, overrides);
-  const tmpDir = path.join(process.cwd(), ".workbuddy", "tmp");
+  /* 临时工作流文件统一放到项目根目录 temp/comfy-cli/，便于清理和跨平台管理。 */
+  const tmpDir = path.join(process.cwd(), "temp", "comfy-cli");
   await fs.mkdir(tmpDir, { recursive: true });
   const tmpFile = path.join(tmpDir, `wf-${taskId}.json`);
   log(taskId, "info", `写入临时工作流文件：${tmpFile}`);
@@ -197,9 +198,9 @@ export async function executeViaComfyCli(job: Job) {
 
   const binDir = process.platform === "win32" ? "Scripts" : "bin";
   const pyName = process.platform === "win32" ? "python.exe" : "python";
+  /* Python 虚拟环境放在项目根目录 python-venv/comfy-cli，便于安装、升级和统一配置。 */
   const py = path.join(
     process.cwd(),
-    ".workbuddy",
     "python-venv",
     "comfy-cli",
     binDir,

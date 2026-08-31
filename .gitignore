@@ -51,9 +51,7 @@ build_log*.txt
 # generated & temp
 /generated/
 /temp/
-/.workbuddy/log/
-/.workbuddy/temp/
-/.workbuddy/tmp/
+/temp/comfy-cli/
 
 # PyInstaller launcher build artifacts
 # onedir 模式产物：start-tauri/ 目录（含 start-tauri.exe 与 _internal 依赖）
@@ -71,7 +69,7 @@ dev-tools*.spec
 /log/
 /run/
 __pycache__/
-/.workbuddy/
+/python-venv/
 
 # playwright e2e artifacts
 test-results/
