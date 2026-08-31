@@ -198,14 +198,16 @@ export async function executeViaComfyCli(job: Job) {
 
   const binDir = process.platform === "win32" ? "Scripts" : "bin";
   const pyName = process.platform === "win32" ? "python.exe" : "python";
-  /* Python 虚拟环境放在项目根目录 python-venv/comfy-cli，便于安装、升级和统一配置。 */
-  const py = path.join(
+  /* Python 虚拟环境放在项目根目录 python-venv/comfy-cli，便于安装、升级和统一配置。
+   * 可通过 COMFY_CLI_PYTHON 环境变量覆盖，指向已有的 Python 解释器。 */
+  const defaultPy = path.join(
     process.cwd(),
     "python-venv",
     "comfy-cli",
     binDir,
     pyName
   );
+  const py = process.env.COMFY_CLI_PYTHON ?? defaultPy;
   const args = [
     "-m", "comfy_cli", "run",
     "--workflow", tmpFile,
@@ -216,6 +218,28 @@ export async function executeViaComfyCli(job: Job) {
     "--no-notify",
     "--timeout", "600",
   ];
+
+  // 提前检查 Python 解释器是否存在，避免把原始 ENOENT 抛给用户
+  try {
+    await fs.access(py, fs.constants.F_OK);
+  } catch {
+    const winHint =
+      "请在项目根目录执行：\n" +
+      "  python -m venv python-venv\\comfy-cli\n" +
+      "  python-venv\\comfy-cli\\Scripts\\python.exe -m pip install --upgrade pip\n" +
+      "  python-venv\\comfy-cli\\Scripts\\python.exe -m pip install comfy-cli\n" +
+      "或设置环境变量 COMFY_CLI_PYTHON 指向已有的 Python 解释器。";
+    const nixHint =
+      "请在项目根目录执行：\n" +
+      "  python3 -m venv python-venv/comfy-cli\n" +
+      "  python-venv/comfy-cli/bin/pip install --upgrade pip\n" +
+      "  python-venv/comfy-cli/bin/pip install comfy-cli\n" +
+      "或设置环境变量 COMFY_CLI_PYTHON 指向已有的 Python 解释器。";
+    const hint = process.platform === "win32" ? winHint : nixHint;
+    log(taskId, "error", `未找到 comfy-cli Python 解释器：${py}\n${hint}`);
+    void fail(taskId, "", `未找到 comfy-cli Python 解释器：${py}`);
+    return;
+  }
 
   // R-ardot115 (2026-08-18): surface the literal comfy-cli command so
   // the user (and we, on support) can reproduce the exact invocation
