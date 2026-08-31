@@ -26,6 +26,11 @@
   点击从 `max-w-5xl` 切换到 `max-w-[96vw]`（几乎占满视口），再次点击恢复。
 - **应用日志代码位置列换行显示**：location 列改为 `max-w-[45%] break-all`，
   优先展示完整文件路径与行号，不再截断。
+- **comfy-cli 虚拟环境随启动自动准备**：`start-tauri.exe` 启动时检测
+  `python-venv/comfy-cli`，缺失则后台自动创建 venv 并安装 comfy-cli，不阻塞启动。
+- **新增 `tools/` 构建脚本目录**：`build-launcher.bat` 可一键重新打包
+  `start-tauri.exe`；打包配置 `start-tauri.spec` 纳入版本控制（此前被 `.gitignore`
+  的 `start-tauri*.spec` 规则一并忽略，打包流程无法从仓库复现）。
 
 ### Fixed
 
