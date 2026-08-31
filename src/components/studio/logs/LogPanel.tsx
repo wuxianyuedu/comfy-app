@@ -312,12 +312,14 @@ const LogRow = memo(function LogRow({
         {renderLogMessage(entry.message)}
       </span>
       {entry.location && (
-        <span
-          className="max-w-[200px] shrink-0 truncate text-[11px] text-gray-600 hover:text-gray-400"
-          title={entry.location}
+        <button
+          type="button"
+          onClick={() => void navigator.clipboard.writeText(entry.location!).catch(() => undefined)}
+          className="max-w-[280px] shrink-0 cursor-pointer truncate text-left text-[11px] text-gray-600 hover:text-gray-400"
+          title={`${entry.location}（点击复制）`}
         >
           {entry.location}
-        </span>
+        </button>
       )}
       {entry.source !== "console" && (
         <span className="shrink-0 text-[11px] text-gray-600">

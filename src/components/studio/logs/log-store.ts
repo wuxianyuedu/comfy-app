@@ -123,6 +123,13 @@ export function captureLocation(): string | undefined {
         path = path.replace(/^https?:\/\/[^/]+\/_next\/static\/chunks\//, "");
         path = path.replace(/^https?:\/\/[^/]+\//, "");
 
+        // Turbopack / 某些 webpack source-map 配置会把模块路径里的 "/" 编码为 "_"，
+        // 形成 "src_components_studio_15hhqk_logs_log-store.ts" 这种标识符。
+        // 在肉眼可读性层面把它还原（heuristic：以 src_ 开头且没有 "/"）。
+        if (!path.includes("/") && path.startsWith("src_")) {
+          path = path.replace(/_/g, "/");
+        }
+
         if (
           pass === 1 &&
           (path.includes("node_modules") || path.endsWith(".js"))
