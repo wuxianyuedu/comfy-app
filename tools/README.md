@@ -6,6 +6,10 @@
 的 `start-tauri*.spec` 规则一并忽略，导致**打包流程无法从仓库复现**。现统一收拢
 到本目录并纳入版本控制。
 
+> **结构约定**：`*.bat` 仅作 Windows 双击入口（不含业务逻辑、不含中文），真正的
+> 环境检查 / 打包 / 日志等逻辑都放在 `scripts/*.ps1`（UTF-8 with BOM 保存，避免中文乱码）。
+> 后续新增脚本请遵循：双击入口用 `tools\xxx.bat`，逻辑写在 `tools\scripts\xxx.ps1`。
+
 ## 目录内容
 
 | 文件 | 类别 | 用途 |
@@ -19,6 +23,7 @@
 | `rebuild-static.bat` | 资源 | 清理并重建 `src-tauri/static`（standalone / 嵌入资源来源） |
 | `start-tauri.spec` | 打包配置 | PyInstaller（onedir）；入口名由环境变量 `LAUNCHER_NAME` 决定，一份 spec 服务三个入口 |
 | `README.md` | 文档 | 本文件 |
+| `scripts/` | 逻辑脚本 | `*.bat` 对应的 PowerShell 实现：环境检查 / 打包 / 日志都在这里 |
 
 ## 按用途分类（dev 构建 vs standalone 构建）
 
