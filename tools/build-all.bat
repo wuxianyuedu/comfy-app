@@ -4,7 +4,8 @@ setlocal
 
 cd /d "%~dp0"
 set "PROJECT_ROOT=%~dp0.."
-set "LOG=%PROJECT_ROOT%\build-all.log"
+if not exist "%PROJECT_ROOT%\log\tool" mkdir "%PROJECT_ROOT%\log\tool" >nul 2>&1
+set "LOG=%PROJECT_ROOT%\log\tool\build-all.log"
 if exist "%LOG%" del "%LOG%"
 
 call :log ==========================================================
