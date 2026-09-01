@@ -13,7 +13,7 @@ import {
   Maximize2,
 } from "lucide-react";
 import { api } from "~/trpc/react";
-import { WorkflowDetailPreview } from "./WorkflowDetailPreview";
+import { WorkflowCanvasNodePreview } from "./WorkflowCanvasNodePreview";
 import { SourceModal } from "../SourceModal";
 import { DynamicWorkflowForm } from "../shared/DynamicWorkflowForm";
 import type { WorkflowIOMap } from "../shared/workflow-io";
@@ -246,7 +246,7 @@ export function WorkflowLibraryDetail({
           <div className="flex h-full min-h-[420px] flex-col rounded-2xl border border-white/8 bg-[#0B0B10] p-1">
             <div className="flex items-center justify-between px-3 py-2">
               <span className="text-xs font-medium text-white/60">
-                节点拓扑预览
+                画布样式预览（与项目画布节点一致，可直接运行调试）
               </span>
               <button
                 type="button"
@@ -257,9 +257,13 @@ export function WorkflowLibraryDetail({
                 在编辑器中打开
               </button>
             </div>
-            <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl bg-black/40">
-              <WorkflowDetailPreview
-                graph={template?.graph as Record<string, unknown> | undefined}
+            <div className="flex min-h-0 flex-1 justify-center overflow-y-auto py-3">
+              <WorkflowCanvasNodePreview
+                workflowId={workflow.id}
+                workflowName={workflow.name}
+                taskType={workflow.taskType}
+                workflowIO={workflowIO}
+                usable={usable}
               />
             </div>
           </div>
