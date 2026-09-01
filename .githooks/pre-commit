@@ -1,13 +1,16 @@
 #!/bin/sh
 # 提交门槛(2026-08-29):结构硬规则 + 类型检查 + lint。
 # 临时绕过用 git commit --no-verify(慎用,绕过会进历史)。
+# 2026-09-02: npx → pnpm exec。本项目使用 pnpm 管理 node_modules，
+# npx/npm 在该环境下解析 .bin 别名链（typescript → typescript6/7）会崩溃，
+# 且 npx 可能触发与 pnpm 布局不一致的隐式安装。
 echo "[pre-commit] 1/3 文件结构硬规则"
 node scripts/check-file-structure.cjs || exit 1
 
 echo "[pre-commit] 2/3 tsc --noEmit"
-npx tsc --noEmit || exit 1
+pnpm exec tsc --noEmit || exit 1
 
 echo "[pre-commit] 3/3 eslint"
-npx eslint . || exit 1
+pnpm exec eslint . || exit 1
 
 echo "[pre-commit] 全部通过 ✓"

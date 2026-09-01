@@ -13,6 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
+        "label": "splash",
         "title": "Comfy APP",
         "width": 1280,
         "height": 800,
@@ -22,7 +23,7 @@
         "resizable": true,
         "fullscreen": false,
         "backgroundColor": "#0A0A0F",
-        "url": "tauri://localhost/splash.html"
+        "url": "splash.html"
       }
     ],
     "security": {

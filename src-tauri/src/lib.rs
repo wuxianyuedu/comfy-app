@@ -54,20 +54,44 @@ fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, String
   }
 }
 
-/// 启动页检测到 ready 后，让 Rust 侧把主窗口导航到真正的应用 URL。
+/// 启动页检测到 ready 后，让 Rust 侧把「应用」窗口（main，隐藏）导航到真正的应用 URL。
+/// 启动页（splash）保持可见，直到 main 的页面真正加载完成（on_page_load Finished）才交换窗口。
 /// 这比前端直接 window.location 更可靠，可跨越 tauri:// 与 http:// 协议边界。
 #[tauri::command]
 fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
   let url = state.app_url();
+  eprintln!("[ComfyAPP] navigate_to_app called with url: {}", url);
   let parsed: tauri::Url = url.parse().map_err(|e| format!("非法 URL {}: {}", url, e))?;
   if let Some(win) = app_handle.get_webview_window("main") {
     win
       .navigate(parsed)
       .map_err(|e| format!("导航失败: {:?}", e))?;
-    Ok(())
+    eprintln!("[ComfyAPP] navigate_to_app: navigation dispatched");
   } else {
-    Err("找不到主窗口 main".to_string())
+    return Err("找不到应用窗口 main".to_string());
   }
+
+  // 安全网：若 150s 内「应用」窗口仍未就绪（on_page_load 未触发，极端情况下后端可响应
+  // 但页面一直加载不出），强制显示主窗口并关闭启动页，避免用户永久卡在启动页。
+  let monitor = app_handle.clone();
+  std::thread::spawn(move || {
+    std::thread::sleep(std::time::Duration::from_secs(150));
+    let splash_open = monitor.get_webview_window("splash").is_some();
+    let main_hidden = match monitor.get_webview_window("main") {
+      Some(m) => !m.is_visible().unwrap_or(false),
+      None => false,
+    };
+    if splash_open && main_hidden {
+      if let Some(m) = monitor.get_webview_window("main") {
+        let _ = m.show();
+        let _ = m.set_focus();
+      }
+      if let Some(s) = monitor.get_webview_window("splash") {
+        let _ = s.close();
+      }
+    }
+  });
+  Ok(())
 }
 
 /// 供启动页读取当前应用目标 URL，用于自主探测后端是否就绪。
@@ -128,23 +152,10 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error
     state.set_app_url(app_url.clone());
   }
 
-  // 后台轮询端口就绪后，把主窗口导航到本地服务（窗口先显示 splash.html 加载页）
-  let handle = app.clone();
-  std::thread::spawn(move || {
-    let url = format!("http://127.0.0.1:{}", port);
-    for _ in 0..240 {
-      if TcpStream::connect(("127.0.0.1", port)).is_ok() {
-        std::thread::sleep(Duration::from_millis(300));
-        if let Some(win) = handle.get_webview_window("main") {
-          if let Ok(u) = url.parse() {
-            let _ = win.navigate(u);
-          }
-        }
-        return;
-      }
-      std::thread::sleep(Duration::from_millis(500));
-    }
-  });
+  // 注意：不再在此直接导航「应用」窗口。启动页（splash）会自行探测 sidecar 端口，
+  // 就绪后调用 navigate_to_app 命令把隐藏的 main 窗口导航到应用 URL；main 页面真正
+  // 加载完成（on_page_load Finished）时再由 setup 中注册的回调交换窗口。这样由启动页
+  // 统一编排，避免与启动页的探测重复导航导致应用被加载两次。
 
   Ok(())
 }
@@ -174,6 +185,12 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
           if let Ok(target) = url.parse::<tauri::Url>() {
             let _ = win.navigate(target);
           }
+          // 启动页（splash）不可用，无窗口可交换：直接显示「应用」窗口并关闭黑屏 splash
+          let _ = win.show();
+          let _ = win.set_focus();
+        }
+        if let Some(splash) = handle.get_webview_window("splash") {
+          let _ = splash.close();
         }
         return;
       }
@@ -224,6 +241,51 @@ pub fn run() {
     .manage(AppState::new(project_root, app_url))
     .invoke_handler(tauri::generate_handler![get_launch_status, navigate_to_app, get_app_url])
     .setup(|app| {
+      // ── 方向 B：启动页与「应用」窗口分离 ──
+      // 配置里的 splash 窗口（label="splash"）仅显示启动进度，可见。
+      // 真正的应用窗口（label="main"）在此创建为隐藏窗口，先停在 about:blank，
+      // 由启动页探测后端就绪后调用 navigate_to_app 导航到应用 URL；main 页面真正
+      // 加载完成（on_page_load Finished）时再交换窗口：显示 main、关闭 splash。
+      // 这样启动页会一直显示到应用首屏真正可见，不再出现「启动完成却还要等很久」。
+      let main_url: tauri::Url = "about:blank"
+        .parse()
+        .unwrap_or_else(|_| tauri::Url::parse("http://127.0.0.1:3000/workspace").unwrap());
+      let app_handle_for_page = app.handle().clone();
+      let _main_win = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(main_url))
+        .title("Comfy APP")
+        .inner_size(1280.0, 800.0)
+        .min_inner_size(1024.0, 700.0)
+        .center()
+        .resizable(true)
+        .fullscreen(false)
+        .visible(false)
+        .on_page_load(move |_win, payload| {
+          if payload.event() == tauri::webview::PageLoadEvent::Finished {
+            let url = payload.url().as_str();
+            eprintln!("[ComfyAPP] main window Finished: {}", url);
+            // 忽略初始 about:blank / 空 URL / 内部错误页，只有在真正导航到应用 URL（http/https）
+            // 后才交换窗口，避免主窗口提前显示在黑屏的 about:blank 上。
+            if url.is_empty()
+              || url.starts_with("about:blank")
+              || url.starts_with("tauri://")
+              || url.starts_with("https://tauri.localhost")
+              || (!url.starts_with("http://") && !url.starts_with("https://"))
+            {
+              eprintln!("[ComfyAPP] ignoring initial/non-app page load");
+              return;
+            }
+            eprintln!("[ComfyAPP] app page loaded, swapping windows");
+            if let Some(m) = app_handle_for_page.get_webview_window("main") {
+              let _ = m.show();
+              let _ = m.set_focus();
+            }
+            if let Some(s) = app_handle_for_page.get_webview_window("splash") {
+              let _ = s.close();
+            }
+          }
+        })
+        .build()?;
+
       #[cfg(debug_assertions)]
       {
         app.handle().plugin(
@@ -239,7 +301,9 @@ pub fn run() {
         // 启动页资源缺失兜底（详见 navigate_when_ready 注释）：
         // 老版本 app.exe 未嵌入 splash.html，窗口会 404 黑屏且无法自动跳转，
         // 这里检测不到启动页就直接等应用地址就绪后导航，避免永久黑屏。
-        if app.asset_resolver().get("splash.html".to_string()).is_none() {
+        let has_splash = app.asset_resolver().get("splash.html".to_string()).is_some();
+        eprintln!("[ComfyAPP] splash.html embedded: {}", has_splash);
+        if !has_splash {
           if let Some(state) = app.try_state::<AppState>() {
             let url = state.app_url();
             if !url.is_empty() {

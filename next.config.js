@@ -16,6 +16,14 @@ const config = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Next 16.3.2 起 experimental.useTypeScriptCli 默认 true（CLI 模式要求
+  // typescript 包带 bin/tsc 文件）。本仓库 typescript 别名到 @typescript/typescript6
+  // （bin 只有 tsc6，无 bin/tsc），CLI 模式会误报「typescript 未安装」并使 dev
+  // server 所有请求挂死。关掉回退到 typescript-api 模式（TS6 别名带完整
+  // lib/typescript.js API）；类型正确性仍由独立 `tsc --noEmit`（TS7 native）门禁保证。
+  experimental: {
+    useTypeScriptCli: false,
+  },
   // 整治 standalone file tracing 把非 Next 运行时的根级目录纳入 .next/standalone
   // （此前实验键位写错导致完全不生效；Next 16 已把 outputFileTracingExcludes 移为顶层键）。
   // 排除 src-tauri / python-venv / 仓库工具与缓存目录，避免整仓库根被复制进

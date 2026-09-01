@@ -250,10 +250,11 @@
         updateUI(fakeProgress, 'dev-server-starting', `正在等待本地服务就绪：${appUrl}（${fmtTime(Math.floor(ticks / 4))}）`, false, Math.floor(ticks / 4));
       }
 
-      // 2. 自主探测后端，就绪后立即跳转
+      // 2. 自主探测后端可响应后，导航到真实应用地址。
+      //    此时 Next.js 页面仍需编译/加载/渲染，不能把“后端就绪”报成“启动完成”。
       if (await probeBackend(appUrl)) {
         navigating = true;
-        updateUI(1, 'ready', '服务已就绪，正在进入应用…', false, Math.floor(ticks / 4));
+        updateUI(0.95, 'dev-server-ready', '服务已就绪，正在加载应用…', false, Math.floor(ticks / 4));
         try {
           await invoke('navigate_to_app');
         } catch (e) {

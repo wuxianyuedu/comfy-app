@@ -82,3 +82,6 @@ playwright-report/
 # Tauri generated assets (rebuilt by scripts/build-desktop.mjs)
 /src-tauri/static/
 /src-tauri/binaries/
+
+# 依赖修复过程中的旧副本（pnpm 策略拒装导致的残缺 node_modules 备份）
+/node_modules.old/
