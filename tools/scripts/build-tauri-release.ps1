@@ -14,11 +14,13 @@ $LOG_DIR = Join-Path $PROJECT_ROOT "log\tool"
 if (-not (Test-Path $LOG_DIR)) { New-Item -ItemType Directory -Force $LOG_DIR | Out-Null }
 $LOG = Join-Path $LOG_DIR "build-tauri-release.log"
 if (Test-Path $LOG) { Remove-Item $LOG }
+# 写入 UTF-8 BOM 头，让记事本/编辑器按 UTF-8 打开，避免中文乱码
+[System.IO.File]::WriteAllBytes($LOG, [System.Text.Encoding]::UTF8.GetPreamble())
 
 function Log {
     param([string]$Msg)
     Write-Host $Msg
-    Add-Content -Encoding Default -Path $LOG -Value $Msg
+    Add-Content -Encoding UTF8 -Path $LOG -Value $Msg
 }
 function Invoke-Logged {
     param([string]$Command)
@@ -26,7 +28,7 @@ function Invoke-Logged {
     & $sb 2>&1 | ForEach-Object {
         $line = "$_"
         Write-Host $line
-        Add-Content -Encoding Default -Path $LOG -Value $line
+        Add-Content -Encoding UTF8 -Path $LOG -Value $line
         $script:LAST_INVOKE_CODE = $LASTEXITCODE
     }
     $script:LAST_INVOKE_CODE = $LASTEXITCODE
@@ -56,8 +58,8 @@ if (-not (Test-Command rustc)) {
 }
 
 Log "[1/2] 环境检查"
-Invoke-Logged "cargo --version"
-Invoke-Logged "rustc --version"
+Log "  cargo : $(cargo --version 2>&1)"
+Log "  rustc : $(rustc --version 2>&1)"
 Log ""
 
 Log "[1.5] 同步前端资源（避免直接 cargo build 漏掉 static 导致黑屏）"
