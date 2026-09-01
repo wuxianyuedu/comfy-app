@@ -100,11 +100,11 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
   // by `visit` so callers can show "📂 <root 短名>" without re-computing
   // the prefix match on their end. (See R11 in the daily log.)
   const stampRoot = () => ({ rootRawPath: rawDir, rootAbsPath: abs });
-  if (!fs.existsSync(abs)) {
+  if (!fs.existsSync(/*turbopackIgnore: true*/ abs)) {
     return { rawPath: rawDir, absPath: abs, exists: false, files: [] };
   }
   try {
-    const stat = fs.statSync(abs);
+    const stat = fs.statSync(/*turbopackIgnore: true*/ abs);
     if (!stat.isDirectory()) {
       return {
         rawPath: rawDir,

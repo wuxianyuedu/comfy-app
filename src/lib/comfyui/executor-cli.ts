@@ -321,7 +321,7 @@ export async function executeViaComfyCli(job: Job) {
   let promptId: string | null = null;
   let settled = false;
 
-  const child = spawn(py, args, {
+  const child = spawn(/*turbopackIgnore: true*/ py, args, {
     cwd: process.cwd(),
     env: { ...process.env, DO_NOT_TRACK: "1", COMFY_CLI_NO_TELEMETRY: "1" },
     windowsHide: true,

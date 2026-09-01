@@ -13,7 +13,7 @@ import { requireServerUser } from "@/lib/auth-server";
  *  - 只允许读取源码/文本类扩展名。
  */
 
-const PROJECT_ROOT = path.resolve(process.cwd());
+const PROJECT_ROOT = path.resolve(process.cwd() /* turbopackIgnore: true */);
 const SRC_ROOT = path.join(PROJECT_ROOT, "src");
 const ALLOWED_EXT = new Set([
   ".ts",
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "invalid file param" }, { status: 400 });
   }
 
-  const resolved = path.resolve(PROJECT_ROOT, file);
+  const resolved = path.resolve(/*turbopackIgnore: true*/ PROJECT_ROOT, file);
   const rel = path.relative(SRC_ROOT, resolved);
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
     return NextResponse.json({ error: "forbidden: outside src/" }, { status: 403 });

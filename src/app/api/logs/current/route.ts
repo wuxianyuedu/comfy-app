@@ -27,13 +27,13 @@ export async function GET(request: Request) {
   const source = searchParams.get("source") ?? "dev-launcher";
   const logFile = resolveCurrentLog(source);
   try {
-    if (!fs.existsSync(logFile)) {
+    if (!fs.existsSync(/*turbopackIgnore: true*/ logFile)) {
       return NextResponse.json({ content: "", size: 0, offset: 0 });
     }
 
     const { searchParams } = new URL(request.url);
     const requestedOffset = Number(searchParams.get("offset") ?? "0");
-    const content = fs.readFileSync(logFile, "utf8");
+    const content = fs.readFileSync(/*turbopackIgnore: true*/ logFile, "utf8");
 
     // 如果文件被重置（新运行），offset 可能超过文件大小，此时从头读取
     const safeOffset =

@@ -16,38 +16,31 @@ const config = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Next 16 默认 useTypeScriptCli=true 要求 typescript/bin/tsc，而双版本并存下
-  // TS6 alias 包只提供 bin/tsc6，会导致误报 missing。显式关闭走 API 检测
-  // （lib/typescript.js 存在，配合 ignoreBuildErrors 仅做 setup 验证）。
-  experimental: {
-    useTypeScriptCli: false,
-    // ── 整治 standalone file tracing 把整个仓库根塞进 .next/standalone（>8GB）──
-    // Prisma 的 schema.prisma 引用导致 Next tracing 把仓库根（含 src-tauri 7.5GB、
-    // python-venv、generated 等）整份纳入 standalone，进而被 build-desktop.mjs
-    // 复制进 src-tauri/static 并嵌入 exe。此处从源头排除所有非 Next 运行时的
-    // 根级目录，使 standalone 仅保留 server.js + 裁剪 node_modules + 必要 chunks。
-    outputFileTracingExcludes: {
-      "/**": [
-        "./src-tauri/**",
-        "./python-venv/**",
-        "./generated/**",
-        "./node_modules/.cache/**",
-        "./.git/**",
-        "./.workbuddy/**",
-        "./coverage/**",
-        "./docs/**",
-        "./tests/**",
-        "./test-results/**",
-        "./e2e/**",
-        "./tools/**",
-        "./log/**",
-        "./temp/**",
-        "./run/**",
-        "./dist/**",
-        "./build-launcher*/**",
-        "./start-tauri*/**",
-      ],
-    },
+  // 整治 standalone file tracing 把非 Next 运行时的根级目录纳入 .next/standalone
+  // （此前实验键位写错导致完全不生效；Next 16 已把 outputFileTracingExcludes 移为顶层键）。
+  // 排除 src-tauri / python-venv / 仓库工具与缓存目录，避免整仓库根被复制进
+  // static 进而嵌入 exe。
+  // 注意：`generated/**` 不能排除——generated/prisma 是 Prisma 运行时必需。
+  outputFileTracingExcludes: {
+    "/**": [
+      "./src-tauri/**",
+      "./python-venv/**",
+      "./node_modules/.cache/**",
+      "./.git/**",
+      "./.workbuddy/**",
+      "./coverage/**",
+      "./docs/**",
+      "./tests/**",
+      "./test-results/**",
+      "./e2e/**",
+      "./tools/**",
+      "./log/**",
+      "./temp/**",
+      "./run/**",
+      "./dist/**",
+      "./build-launcher*/**",
+      "./start-tauri*/**",
+    ],
   },
   // tsconfig paths 在无 baseUrl（TS6/7 已移除）时 Next 不自动生成 alias，手动补齐
   turbopack: {

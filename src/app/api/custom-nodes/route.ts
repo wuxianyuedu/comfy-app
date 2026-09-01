@@ -159,7 +159,7 @@ function runDiscover(parentDirs: readonly unknown[]): unknown[] {
       // spawn 的 args 需要 string[];原 any 同样把原始值直接交给 Node(非字符串由 Node 校验报错),
       // 断言只为恢复静态类型,不改运行时取值。
       const args = ["-u", "scripts/parse_custom_nodes.py", ...parentDirs.flatMap((parentDir) => ["--discover-parent", parentDir as string])];
-      const out = spawnSync(py, args, { cwd: process.cwd(), env: process.env, encoding: "utf-8" });
+      const out = spawnSync(/*turbopackIgnore: true*/ py, args, { cwd: process.cwd(), env: process.env, encoding: "utf-8" });
       if (out.status === 0 && out.stdout) {
         const parsed: unknown = JSON.parse(out.stdout);
         const pkgs: unknown[] = isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : [];
@@ -217,7 +217,7 @@ function runDiscoverStreaming(
         return;
       }
       const py = pyCandidates[i]!;
-      const cp = spawn(py, ["-u", "scripts/parse_custom_nodes.py", "--discover-parent", parent], {
+      const cp = spawn(/*turbopackIgnore: true*/ py, ["-u", "scripts/parse_custom_nodes.py", "--discover-parent", parent], {
         cwd: process.cwd(),
         env: process.env,
       });
@@ -342,7 +342,7 @@ function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
           return;
         }
         const py = pyCandidates[i]!;
-        const cp = spawn(py, args, { cwd: process.cwd(), env: process.env });
+        const cp = spawn(/*turbopackIgnore: true*/ py, args, { cwd: process.cwd(), env: process.env });
 
         cp.on("error", (e: NodeJS.ErrnoException) => {
           if (e.code === "ENOENT") {

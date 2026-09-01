@@ -134,7 +134,7 @@ export async function listFolderItems(
   for (const name of entries) {
     if (name.startsWith(".")) continue; // 跳过 .DS_Store 之类
     try {
-      const st = await fs.stat(path.join(dir, name));
+      const st = await fs.stat(/*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ dir, name));
       if (!st.isFile()) continue;
       items.push({
         id: `${scope}/${folder}/${name}`,
