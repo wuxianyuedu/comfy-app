@@ -36,6 +36,9 @@ function errorMessage(e: unknown, fallback: string): string {
   return fallback;
 }
 
+/** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别），由管线页传入。 */
+type ShotProgress = Record<string, { pct: number; label?: string }>;
+
 interface Props {
   scenes: Scene[];
   characters: Character[];
@@ -44,6 +47,8 @@ interface Props {
   onShotsChange: (s: Shot[]) => void;
   onGenerate: (shot: Shot) => Promise<void>;
   generating: boolean;
+  /** 镜头节点上的实时生成进度（running 时在节点内渲染进度条） */
+  progressByShot?: ShotProgress;
   /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
   scriptMarkdown?: string;
   /** 分镜阶段导入角色卡 JSON 时的角色写入口(可选,未接入时仅提示) */
@@ -74,6 +79,7 @@ export function StoryboardPlanner({
   onShotsChange,
   onGenerate,
   generating,
+  progressByShot,
   scriptMarkdown,
   onCharactersChange,
 }: Props) {
@@ -514,6 +520,35 @@ export function StoryboardPlanner({
                   )}
                 </div>
 
+                {/* 节点上的实时生成进度：ComfyUI 当前节点 + 百分比（2026-09-02） */}
+                {shot.status === "running" &&
+                  (() => {
+                    const p = progressByShot?.[shot.id];
+                    const pct = p?.pct ?? 0;
+                    return (
+                      <div className="mt-2" aria-live="polite">
+                        <div className="mb-1 flex items-center justify-between text-xs">
+                          <span className="text-muted">
+                            {p?.label ? `正在执行 ${p.label}` : "正在生成…"}
+                          </span>
+                          <span className="font-medium text-primary">{pct}%</span>
+                        </div>
+                        <div
+                          className="h-1.5 w-full overflow-hidden rounded-full bg-subtle"
+                          role="progressbar"
+                          aria-valuenow={pct}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                        >
+                          <div
+                            className="h-full rounded-full bg-primary transition-[width] duration-300"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                 {/* Generate button */}
                 <button
                   type="button"
@@ -522,7 +557,9 @@ export function StoryboardPlanner({
                   className="mt-2 w-full rounded-lg bg-primary/90 py-2 text-xs font-medium text-white transition-opacity disabled:opacity-40"
                 >
                   {shot.status === "running"
-                    ? "生成中…"
+                    ? progressByShot?.[shot.id]
+                      ? `生成中 ${progressByShot[shot.id]?.pct ?? 0}%`
+                      : "生成中…"
                     : shot.status === "done"
                     ? "重新生成"
                     : "生成此镜头"}

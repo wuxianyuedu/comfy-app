@@ -110,7 +110,12 @@ export type LogEntry = {
 
 export type TaskEvent =
 
-  | { type: "progress"; progress: number }
+  | {
+      type: "progress";
+      progress: number;
+      /** 当前正在执行的 ComfyUI 节点与步数（progress 消息自带；UI 用于节点级进度展示） */
+      node?: { id: string; label?: string; value: number; max: number };
+    }
 
   | { type: "done"; images: unknown[] }
 

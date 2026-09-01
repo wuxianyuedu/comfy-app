@@ -27,8 +27,16 @@ export async function startLocalGenerate(input: GenerateInput): Promise<string> 
   return res.taskId;
 }
 
+/** 进度事件附带的节点级信息（ComfyUI progress 消息里的当前节点与步数）。 */
+export interface TaskProgressNode {
+  id: string;
+  label?: string;
+  value: number;
+  max: number;
+}
+
 export interface TaskWatchHandlers {
-  onProgress?: (progress: number) => void;
+  onProgress?: (progress: number, node?: TaskProgressNode) => void;
   /** Fired for each saved output file as the task completes. */
   onOutput?: (output: SavedOutput) => void;
   /** Called exactly once when the task reaches a terminal state. */
@@ -56,7 +64,24 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
       if (type === "progress" || type === "state") {
         const p: unknown = msg.progress;
         if (typeof p === "number" && Number.isFinite(p)) {
-          h.onProgress?.(Math.max(0, Math.min(100, p)));
+          // 节点级信息（可选）：progress 消息里带的当前节点 id / 类别名 / 步数
+          let node: TaskProgressNode | undefined;
+          const rawNode: unknown = msg.node;
+          if (isRecord(rawNode)) {
+            const id: unknown = rawNode.id;
+            const value: unknown = rawNode.value;
+            const max: unknown = rawNode.max;
+            const label: unknown = rawNode.label;
+            if (typeof id === "string" && typeof value === "number" && typeof max === "number") {
+              node = {
+                id,
+                value,
+                max,
+                ...(typeof label === "string" && label ? { label } : {}),
+              };
+            }
+          }
+          h.onProgress?.(Math.max(0, Math.min(100, p)), node);
         }
         if (type === "state") {
           // DB truth-poller re-emits terminal verdicts the emitter missed.

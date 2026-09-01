@@ -231,7 +231,30 @@ async function handleMessage(raw: string) {
     const max = Number(data.max ?? 1);
     const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
     await taskRepository.updateProgress(taskId, pct);
-    s.emitter.emit(taskId, { type: "progress", progress: pct });
+    // 2026-09-02: progress 消息自带 node id——把节点 id / 类别名 / 步数一并
+    // 发给前端，画布与管线节点才能显示「当前节点 + 百分比」而不仅是总数。
+    let node: { id: string; label?: string; value: number; max: number } | undefined;
+    const rawNodeId: unknown = data.node;
+    const nodeId =
+      typeof rawNodeId === "string" || typeof rawNodeId === "number"
+        ? String(rawNodeId)
+        : null;
+    if (nodeId) {
+      const graph: Record<string, unknown> | undefined = s.promptByTask.get(taskId);
+      const graphNode = graph?.[nodeId];
+      const classTypeRaw =
+        graphNode && typeof graphNode === "object"
+          ? (graphNode as Record<string, unknown>).class_type
+          : undefined;
+      const classType = typeof classTypeRaw === "string" ? classTypeRaw : undefined;
+      node = {
+        id: nodeId,
+        value,
+        max,
+        ...(classType ? { label: nodeLabel(classType) } : {}),
+      };
+    }
+    s.emitter.emit(taskId, { type: "progress", progress: pct, node });
 
     // Throttled milestone log so the panel stays readable.
     const last = s.lastLogPct.get(taskId) ?? -1;

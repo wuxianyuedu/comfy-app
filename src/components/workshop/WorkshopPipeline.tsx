@@ -129,6 +129,8 @@ export function WorkshopPipeline() {
   const [checkpoints, setCheckpoints] = React.useState<string[]>([]);
   const [checkpoint, setCheckpoint] = React.useState("");
   const [generating, setGenerating] = React.useState(false);
+  /** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别），用于节点上渲染进度条 */
+  const [shotProgress, setShotProgress] = React.useState<Record<string, { pct: number; label?: string }>>({});
   const [rendered, setRendered] = React.useState(false);
   const [apiChannels, setApiChannels] = React.useState<ApiChannelsView | null>(null);
   const [apiSettingsOpen, setApiSettingsOpen] = React.useState(false);
@@ -206,6 +208,12 @@ export function WorkshopPipeline() {
       );
       await new Promise<void>((resolve) => {
         watchTask(taskId, {
+          onProgress: (pct, node) => {
+            setShotProgress((prev) => ({
+              ...prev,
+              [shot.id]: { pct, ...(node?.label ? { label: node.label } : {}) },
+            }));
+          },
           onOutput: (out) => {
             if (out.kind !== "video") {
               setShots((prev) =>
@@ -216,6 +224,11 @@ export function WorkshopPipeline() {
             }
           },
           onSettled: (r) => {
+            setShotProgress((prev) => {
+              const next = { ...prev };
+              delete next[shot.id];
+              return next;
+            });
             setShots((prev) =>
               prev.map((s) =>
                 s.id === shot.id ? { ...s, status: r.ok ? "done" : "failed" } : s,
@@ -694,6 +707,7 @@ export function WorkshopPipeline() {
                     onShotsChange={setShots}
                     onGenerate={generateShot}
                     generating={generating}
+                    progressByShot={shotProgress}
                     scriptMarkdown={scriptMarkdown}
                     onCharactersChange={setCharacters}
                   />
