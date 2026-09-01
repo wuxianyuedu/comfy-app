@@ -10,32 +10,8 @@ function Test-Command {
     return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
-$LOG_DIR = Join-Path $PROJECT_ROOT "log\tool"
-if (-not (Test-Path $LOG_DIR)) { New-Item -ItemType Directory -Force $LOG_DIR | Out-Null }
-$LOG = Join-Path $LOG_DIR "build-standalone.log"
-if (Test-Path $LOG) { Remove-Item $LOG }
-# 写入 UTF-8 BOM 头，让记事本/编辑器按 UTF-8 打开，避免中文乱码
-[System.IO.File]::WriteAllBytes($LOG, [System.Text.Encoding]::UTF8.GetPreamble())
-
-function Log {
-    param([string]$Msg)
-    Write-Host $Msg
-    Add-Content -Encoding UTF8 -Path $LOG -Value $Msg
-}
-function Invoke-Logged {
-    param([string]$Command)
-    $sb = [scriptblock]::Create($Command)
-    & $sb 2>&1 | ForEach-Object {
-        $line = "$_"
-        Write-Host $line
-        Add-Content -Encoding UTF8 -Path $LOG -Value $line
-        $script:LAST_INVOKE_CODE = $LASTEXITCODE
-    }
-    $script:LAST_INVOKE_CODE = $LASTEXITCODE
-}
-function Open-Log {
-    Start-Process -FilePath notepad -ArgumentList $LOG
-}
+. "$PSScriptRoot\Log-Common.ps1"
+Initialize-Log "build-standalone.log"
 
 Log "=========================================================="
 Log "  Comfy APP - 构建独立模式（standalone）壳"
