@@ -6,6 +6,12 @@ $TOOLS_DIR = Split-Path -Parent $PSScriptRoot
 $PROJECT_ROOT = Split-Path -Parent $TOOLS_DIR
 Set-Location $PROJECT_ROOT
 
+Write-Host "=========================================================="
+Write-Host "  Comfy APP - 重新打包 start-tauri.exe"
+Write-Host "=========================================================="
+Write-Host "  项目根目录: $PROJECT_ROOT"
+Write-Host ""
+
 function Test-Command {
     param([string]$Name)
     return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
