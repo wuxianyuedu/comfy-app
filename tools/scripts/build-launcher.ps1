@@ -1,7 +1,6 @@
 ﻿[CmdletBinding()]
 param()
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
 $TOOLS_DIR = Split-Path -Parent $PSScriptRoot
 $PROJECT_ROOT = Split-Path -Parent $TOOLS_DIR
 Set-Location $PROJECT_ROOT

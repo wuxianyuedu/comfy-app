@@ -1,7 +1,6 @@
 ﻿[CmdletBinding()]
 param()
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
 $TOOLS_DIR = Split-Path -Parent $PSScriptRoot
 $PROJECT_ROOT = Split-Path -Parent $TOOLS_DIR
 Set-Location $PROJECT_ROOT
@@ -18,12 +17,15 @@ if (Test-Path $LOG) { Remove-Item $LOG }
 
 function Log {
     param([string]$Msg)
-    $Msg | Tee-Object -FilePath $LOG -Append
+    Write-Host $Msg
+    Add-Content -Encoding Default -Path $LOG -Value $Msg
 }
 function Invoke-Logged {
     param([string]$Command)
-    & cmd /c "$Command >> `"$LOG`" 2>&1"
+    $sb = [scriptblock]::Create($Command)
+    $output = & $sb 2>&1
     $script:LAST_INVOKE_CODE = $LASTEXITCODE
+    $output | Out-File -Encoding Default -Append $LOG
 }
 function Open-Log {
     Start-Process -FilePath notepad -ArgumentList $LOG
