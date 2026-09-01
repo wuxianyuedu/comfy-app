@@ -20,6 +20,7 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -49,6 +50,31 @@ function fail(msg) {
   process.exit(1);
 }
 
+// 递归计算目录字节数（用于体积护栏 / Top 目录定位）
+function dirSize(dir) {
+  let total = 0;
+  const stack = [dir];
+  while (stack.length) {
+    const cur = stack.pop();
+    let ents;
+    try {
+      ents = readdirSync(cur, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of ents) {
+      const p = join(cur, e.name);
+      try {
+        if (e.isDirectory()) stack.push(p);
+        else if (e.isFile()) total += statSync(p).size;
+      } catch {
+        /* 忽略无权限文件 */
+      }
+    }
+  }
+  return total;
+}
+
 // ── 1/4 next build（standalone）────────────────────────────
 console.log("[build-desktop] 1/4 执行 pnpm build（Next standalone 输出）...");
 execSync("pnpm build", { stdio: "inherit", cwd: root });
@@ -74,6 +100,25 @@ if (existsSync(launcherSrc)) {
 }
 
 cpSync(nextOut, staticDir, { recursive: true, dereference: true }); // server.js + 裁剪 node_modules（解引用 symlink，避免 Windows 无开发者权限时 EPERM）
+
+// ── 2.1 §整治：剔除 standalone tracing 误纳入的根项目噪声目录 ──
+// next.config 的 outputFileTracingExcludes 已从源头排除 src-tauri/python-venv/
+// generated 等，但此处再兜底清理一次（防字段失效或新增大目录），避免任何
+// 整仓库副本被带进 static 进而嵌入 exe。注意：node_modules/.cache 单独清理，
+// 不能整体删除 node_modules（standalone 运行时必需裁剪版）。
+const STATIC_NOISE = new Set([
+  ".git", ".workbuddy", "coverage", "docs", "tests", "test-results",
+  "e2e", "tools", "log", "temp", "run", "dist", "python-venv",
+  "generated", "src-tauri",
+]);
+for (const name of STATIC_NOISE) {
+  const p = join(staticDir, name);
+  if (existsSync(p)) {
+    rmSync(p, { recursive: true, force: true });
+    console.log(`[build-desktop]   §整治 已剔除 tracing 噪声目录 static/${name}`);
+  }
+}
+rmSync(join(staticDir, "node_modules", ".cache"), { recursive: true, force: true });
 cpSync(join(root, ".next", "static"), join(staticDir, ".next", "static"), { recursive: true });
 if (existsSync(join(root, "public"))) {
   cpSync(join(root, "public"), join(staticDir, "public"), { recursive: true });
@@ -94,6 +139,26 @@ const splashHtml = existsSync(splashSrc) ? readFileSync(splashSrc, "utf8") : `<!
 writeFileSync(join(staticDir, "index.html"), splashHtml, "utf8");
 
 console.log("[build-desktop]   static 组装完成（standalone + .next/static + public + splash.html + index.html fallback）");
+
+// ── 2.5 §整治：体积护栏 ──
+// 若 static 仍超过阈值，说明 Next standalone file tracing 再次失控（把整仓库
+// 根塞了进来）。立即失败并列出 Top 目录，绝不把 >GB 级副本打包进 exe。
+const MAX_STATIC_GB = 1.5;
+const totalMB = dirSize(staticDir) / 1024 / 1024;
+if (totalMB / 1024 > MAX_STATIC_GB) {
+  const top = readdirSync(staticDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => ({ name: e.name, mb: dirSize(join(staticDir, e.name)) / 1024 / 1024 }))
+    .sort((a, b) => b.mb - a.mb)
+    .slice(0, 8);
+  fail(
+    `static 体积 ${(totalMB / 1024).toFixed(2)}GB 超过护栏阈值 ${MAX_STATIC_GB}GB，` +
+      "说明 Next standalone file tracing 再次失控。Top 目录: " +
+      top.map((t) => `${t.name}=${t.mb.toFixed(0)}MB`).join(", ") +
+      "。请检查 next.config.js 的 outputFileTracingExcludes 是否覆盖了新的大目录。",
+  );
+}
+console.log(`[build-desktop]   static 体积 ${totalMB.toFixed(1)}MB（护栏阈值 ${MAX_STATIC_GB}GB）`);
 
 // ── 3/4 Node 运行时 sidecar ────────────────────────────────
 console.log("[build-desktop] 3/4 复制 Node 运行时为 sidecar ...");

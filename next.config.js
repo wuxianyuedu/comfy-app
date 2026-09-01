@@ -21,6 +21,33 @@ const config = {
   // （lib/typescript.js 存在，配合 ignoreBuildErrors 仅做 setup 验证）。
   experimental: {
     useTypeScriptCli: false,
+    // ── 整治 standalone file tracing 把整个仓库根塞进 .next/standalone（>8GB）──
+    // Prisma 的 schema.prisma 引用导致 Next tracing 把仓库根（含 src-tauri 7.5GB、
+    // python-venv、generated 等）整份纳入 standalone，进而被 build-desktop.mjs
+    // 复制进 src-tauri/static 并嵌入 exe。此处从源头排除所有非 Next 运行时的
+    // 根级目录，使 standalone 仅保留 server.js + 裁剪 node_modules + 必要 chunks。
+    outputFileTracingExcludes: {
+      "/**": [
+        "./src-tauri/**",
+        "./python-venv/**",
+        "./generated/**",
+        "./node_modules/.cache/**",
+        "./.git/**",
+        "./.workbuddy/**",
+        "./coverage/**",
+        "./docs/**",
+        "./tests/**",
+        "./test-results/**",
+        "./e2e/**",
+        "./tools/**",
+        "./log/**",
+        "./temp/**",
+        "./run/**",
+        "./dist/**",
+        "./build-launcher*/**",
+        "./start-tauri*/**",
+      ],
+    },
   },
   // tsconfig paths 在无 baseUrl（TS6/7 已移除）时 Next 不自动生成 alias，手动补齐
   turbopack: {
