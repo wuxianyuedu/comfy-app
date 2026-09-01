@@ -23,9 +23,13 @@ function Log {
 function Invoke-Logged {
     param([string]$Command)
     $sb = [scriptblock]::Create($Command)
-    $output = & $sb 2>&1
+    & $sb 2>&1 | ForEach-Object {
+        $line = "$_"
+        Write-Host $line
+        Add-Content -Encoding Default -Path $LOG -Value $line
+        $script:LAST_INVOKE_CODE = $LASTEXITCODE
+    }
     $script:LAST_INVOKE_CODE = $LASTEXITCODE
-    $output | Out-File -Encoding Default -Append $LOG
 }
 function Open-Log {
     Start-Process -FilePath notepad -ArgumentList $LOG
