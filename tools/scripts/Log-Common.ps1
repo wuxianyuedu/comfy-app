@@ -27,10 +27,17 @@ function Initialize-Log {
     [System.IO.File]::WriteAllBytes($script:LOG, [System.Text.Encoding]::UTF8.GetPreamble())
 }
 
+function Strip-Ansi([string]$s) {
+    # 去掉 ANSI 转义序列（颜色、光标控制等），让日志文件在记事本里也干净可读；
+    # 控制台输出仍保留原样，所以 cmd/终端里继续有颜色。
+    return [regex]::Replace($s, "$([char]0x1b)\[[0-9;]*[a-zA-Z]", '')
+}
+
 function Log {
     param([string]$Msg)
     Write-Host $Msg
-    Add-Content -Encoding UTF8 -Path $script:LOG -Value $Msg
+    $clean = Strip-Ansi $Msg
+    Add-Content -Encoding UTF8 -Path $script:LOG -Value $clean
 }
 
 function Invoke-Logged {
@@ -39,7 +46,8 @@ function Invoke-Logged {
     & $sb 2>&1 | ForEach-Object {
         $line = "$_"
         Write-Host $line
-        Add-Content -Encoding UTF8 -Path $script:LOG -Value $line
+        $clean = Strip-Ansi $line
+        Add-Content -Encoding UTF8 -Path $script:LOG -Value $clean
         $script:LAST_INVOKE_CODE = $LASTEXITCODE
     }
     $script:LAST_INVOKE_CODE = $LASTEXITCODE

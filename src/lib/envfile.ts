@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 function envPath(name: string): string {
-  return path.join(process.cwd() /* turbopackIgnore: true */, name);
+  return path.join(/*turbopackIgnore: true*/ process.cwd(), name);
 }
 
 /** Read a single var from .env.local / .env on disk (not process.env). */

@@ -13,7 +13,7 @@ import { requireServerUser } from "@/lib/auth-server";
  *  - 只允许读取源码/文本类扩展名。
  */
 
-const PROJECT_ROOT = path.resolve(process.cwd() /* turbopackIgnore: true */);
+const PROJECT_ROOT = path.resolve(/*turbopackIgnore: true*/ process.cwd());
 const SRC_ROOT = path.join(PROJECT_ROOT, "src");
 const ALLOWED_EXT = new Set([
   ".ts",
