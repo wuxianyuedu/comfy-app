@@ -32,8 +32,10 @@ Write-Host "  入口名    : $env:LAUNCHER_NAME（双击即走 tauri dev，Rust 
 Write-Host ""
 
 Write-Host "[1/3] 环境检查"
-python --version
-pyinstaller --version
+$pyVer = python --version 2>&1
+$piVer = pyinstaller --version 2>&1
+Write-Host "  Python      : $pyVer"
+Write-Host "  PyInstaller : $piVer"
 Write-Host ""
 
 Write-Host "[2/3] 清理旧产物..."

@@ -23,7 +23,7 @@ function Log {
 function Invoke-Logged {
     param([string]$Command)
     & cmd /c "$Command >> `"$LOG`" 2>&1"
-    return $LASTEXITCODE
+    $script:LAST_INVOKE_CODE = $LASTEXITCODE
 }
 function Open-Log {
     Start-Process -FilePath notepad -ArgumentList $LOG
@@ -58,7 +58,8 @@ Log "[1.5] 同步前端资源（避免直接 cargo build 漏掉 static 导致黑
 $staticDir = Join-Path $TAURI_DIR "static"
 if (-not (Test-Path $staticDir)) {
     Log "[1.5] 未检测到 static 目录，运行完整 build-desktop.mjs（含 pnpm build + node sidecar）..."
-    $r = Invoke-Logged "node scripts/build-desktop.mjs"
+    Invoke-Logged "node scripts/build-desktop.mjs"
+$r = $script:LAST_INVOKE_CODE
     if ($r -ne 0) {
         Log "[错误] build-desktop.mjs 失败，已中止。"
         Open-Log
@@ -82,7 +83,8 @@ Log ""
 
 Log "[2/2] 开始构建 release Tauri 壳（首次耗时较长，可能 5-15 分钟）..."
 Push-Location $TAURI_DIR
-$buildErr = Invoke-Logged "cargo build --release"
+Invoke-Logged "cargo build --release"
+$buildErr = $script:LAST_INVOKE_CODE
 Pop-Location
 if ($buildErr -ne 0) {
     Log ""

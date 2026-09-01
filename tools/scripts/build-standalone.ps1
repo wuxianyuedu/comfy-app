@@ -23,7 +23,7 @@ function Log {
 function Invoke-Logged {
     param([string]$Command)
     & cmd /c "$Command >> `"$LOG`" 2>&1"
-    return $LASTEXITCODE
+    $script:LAST_INVOKE_CODE = $LASTEXITCODE
 }
 function Open-Log {
     Start-Process -FilePath notepad -ArgumentList $LOG
@@ -58,7 +58,8 @@ Invoke-Logged "pnpm --version"
 Log ""
 
 Log "[2/2] 开始 tauri build --no-bundle（首次耗时较长：pnpm build + cargo build + 资源拷贝）..."
-$buildErr = Invoke-Logged "pnpm tauri build --no-bundle"
+Invoke-Logged "pnpm tauri build --no-bundle"
+$buildErr = $script:LAST_INVOKE_CODE
 if ($buildErr -ne 0) {
     Log ""
     Log "[错误] 独立模式构建失败（exit=$buildErr），已用记事本打开日志：$LOG"
