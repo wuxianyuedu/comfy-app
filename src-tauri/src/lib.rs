@@ -149,6 +149,40 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error
   Ok(())
 }
 
+/// 启动页兜底：老版本 app.exe 编译时 src-tauri/static 里还没有 splash.html，
+/// 窗口加载 tauri://localhost/splash.html 会 404 —— 画面只剩窗口底色（纯黑），
+/// 且页面里的 JS 根本不执行，永远不会自动跳转到 dev server，表现为「窗口黑屏」。
+/// 检测到资源缺失时改为轮询应用地址，就绪后直接导航，保证用户最终能看到界面。
+#[cfg(not(debug_assertions))]
+fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
+  let parsed = match url.parse::<tauri::Url>() {
+    Ok(u) => u,
+    Err(e) => {
+      eprintln!("[ComfyAPP] 应用地址非法 {}：{}", url, e);
+      return;
+    }
+  };
+  let host = parsed.host_str().unwrap_or("127.0.0.1").to_string();
+  let port = parsed.port_or_known_default().unwrap_or(80);
+
+  std::thread::spawn(move || {
+    for _ in 0..240 {
+      if TcpStream::connect((host.as_str(), port)).is_ok() {
+        // 端口刚通时 HTTP 未必已能响应，稍等一下再导航
+        std::thread::sleep(Duration::from_millis(500));
+        if let Some(win) = handle.get_webview_window("main") {
+          if let Ok(target) = url.parse::<tauri::Url>() {
+            let _ = win.navigate(target);
+          }
+        }
+        return;
+      }
+      std::thread::sleep(Duration::from_millis(500));
+    }
+    eprintln!("[ComfyAPP] 等待应用地址就绪超时：{}", url);
+  });
+}
+
 /// 应用退出时回收 sidecar 整棵进程树（Windows）
 #[cfg(not(debug_assertions))]
 fn kill_sidecar() {
@@ -201,6 +235,19 @@ pub fn run() {
       #[cfg(not(debug_assertions))]
       {
         spawn_sidecar(app.handle())?;
+
+        // 启动页资源缺失兜底（详见 navigate_when_ready 注释）：
+        // 老版本 app.exe 未嵌入 splash.html，窗口会 404 黑屏且无法自动跳转，
+        // 这里检测不到启动页就直接等应用地址就绪后导航，避免永久黑屏。
+        if app.asset_resolver().get("splash.html".to_string()).is_none() {
+          if let Some(state) = app.try_state::<AppState>() {
+            let url = state.app_url();
+            if !url.is_empty() {
+              eprintln!("[ComfyAPP] splash.html 未嵌入，启动页不可用，就绪后直接导航到 {}", url);
+              navigate_when_ready(app.handle().clone(), url);
+            }
+          }
+        }
       }
       Ok(())
     })

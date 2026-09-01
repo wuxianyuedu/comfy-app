@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Comfy APP 正在启动</title>
+  <style>
+    :root {
+      --bg: #0A0A0F;
+      --surface: #12101C;
+      --border: rgba(255, 255, 255, 0.08);
+      --violet: #7C5CFC;
+      --violet-dim: rgba(124, 92, 252, 0.25);
+      --text: #E5E5E7;
+      --muted: #9CA3AF;
+      --dim: #6B7280;
+      --error: #EF4444;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: radial-gradient(1200px 600px at 20% -10%, rgba(124, 92, 252, 0.12), transparent),
+                  radial-gradient(1000px 500px at 90% 110%, rgba(255, 92, 168, 0.08), transparent),
+                  var(--bg);
+      color: var(--text);
+      font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      user-select: none;
+    }
+    .card {
+      width: min(520px, calc(100vw - 48px));
+      /* 不用半透明 + backdrop-filter：WebView2 在某些显卡/驱动下会把这层渲染成
+         透明或黑块，导致启动页只剩窗口底色。改用不透明面板保证可见。 */
+      background: #151320;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius);
+      padding: 32px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+    }
+    .brand {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--violet);
+      margin: 0 0 6px;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0 0 22px;
+    }
+    .bar-track {
+      height: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--violet), #9F7CFF);
+      border-radius: 999px;
+      transition: width 0.35s ease;
+      box-shadow: 0 0 12px var(--violet-dim);
+    }
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 12px;
+      color: var(--dim);
+      margin-bottom: 10px;
+    }
+    .phase {
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .message {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--dim);
+      min-height: 36px;
+      word-break: break-word;
+    }
+    .message.error {
+      color: var(--error);
+    }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 20px;
+      font-size: 11px;
+      color: var(--dim);
+    }
+    .elapsed {
+      font-variant-numeric: tabular-nums;
+    }
+    .hint {
+      opacity: 0.7;
+    }
+    .spinner {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border: 1.5px solid rgba(124, 92, 252, 0.3);
+      border-top-color: var(--violet);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1 class="brand">Comfy APP</h1>
+    <p class="subtitle">正在启动桌面应用…</p>
+    <div class="bar-track">
+      <div class="bar-fill" id="bar"></div>
+    </div>
+    <div class="meta">
+      <span class="phase" id="phase"><span class="spinner"></span>初始化</span>
+      <span id="percent">0%</span>
+    </div>
+    <div class="message" id="message">启动器正在初始化…</div>
+    <div class="footer">
+      <span class="hint">窗口关闭即可终止启动</span>
+      <span class="elapsed" id="elapsed">00:00</span>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const bar = $('bar');
+    const phaseEl = $('phase');
+    const percentEl = $('percent');
+    const messageEl = $('message');
+    const elapsedEl = $('elapsed');
+
+    const PHASE_LABELS = {
+      initial: '初始化',
+      'port-check': '检查端口占用',
+      'port-ready': '端口已就绪',
+      cache: '处理编译缓存',
+      'job-object': '创建进程容器',
+      'dev-server-starting': '启动本地服务',
+      'tauri-compiling': '编译桌面壳',
+      'tauri-shell-started': '桌面壳已启动',
+      'dev-server-ready': '服务已就绪',
+      ready: '启动完成',
+      error: '启动失败',
+      timeout: '仍在启动',
+    };
+
+    function fmtTime(sec) {
+      const m = Math.floor(sec / 60).toString().padStart(2, '0');
+      const s = Math.floor(sec % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    async function invoke(cmd, args) {
+      try {
+        if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
+          return await window.__TAURI__.core.invoke(cmd, args || {});
+        }
+      } catch (e) {
+        console.warn('tauri invoke failed:', e);
+      }
+      return null;
+    }
+
+    async function fetchStatus() {
+      try {
+        const data = await invoke('get_launch_status');
+        if (data) return typeof data === 'string' ? JSON.parse(data) : data;
+      } catch (e) {
+        // 首次启动时 Rust command 可能尚未注册，静默重试
+      }
+      return null;
+    }
+
+    // 解析出需要探测的真实应用 URL：优先 Rust 状态 > launch-status.json > 兜底 dev URL
+    async function resolveAppUrl() {
+      try {
+        const url = await invoke('get_app_url');
+        if (url) return url;
+      } catch (e) {}
+      try {
+        const status = await fetchStatus();
+        if (status && status.app_url) return status.app_url;
+      } catch (e) {}
+      return 'http://127.0.0.1:3000/workspace';
+    }
+
+    // 探测后端是否已可访问：先尝试跨域 GET，失败再用 no-cors HEAD 兜底
+    async function probeBackend(url) {
+      try {
+        const r = await fetch(url, { method: 'GET', cache: 'no-store', mode: 'cors' });
+        if (r.ok) return true;
+      } catch (e) {
+        // 可能 CORS 或尚未就绪，继续 fallback
+      }
+      try {
+        await fetch(url, { method: 'HEAD', cache: 'no-store', mode: 'no-cors' });
+        return true;
+      } catch (e) {}
+      return false;
+    }
+
+    function updateUI(progress, phase, message, error, elapsed) {
+      const pct = Math.round(Math.max(0, Math.min(1, progress || 0)) * 100);
+      bar.style.width = `${pct}%`;
+      percentEl.textContent = `${pct}%`;
+
+      const label = PHASE_LABELS[phase] || phase || '启动中';
+      phaseEl.innerHTML = pct >= 100
+        ? '✓ ' + label
+        : '<span class="spinner"></span>' + label;
+
+      messageEl.textContent = message || '';
+      messageEl.classList.toggle('error', !!error);
+      elapsedEl.textContent = fmtTime(elapsed || 0);
+    }
+
+    let navigating = false;
+    let ticks = 0;
+    let appUrl = null;
+
+    async function tick() {
+      if (navigating) return;
+      ticks++;
+
+      if (!appUrl) appUrl = await resolveAppUrl();
+
+      // 1. 先尝试读取 launcher 写入的进度信息（如果有）
+      const status = await fetchStatus();
+      if (status) {
+        updateUI(status.progress || 0, status.phase, status.message, status.error, status.elapsed);
+      } else {
+        // 没有状态文件时显示等待动画，进度按时间平滑增长但不要满 100%
+        const fakeProgress = Math.min(0.9, ticks / 480); // 约 2 分钟到 90%
+        updateUI(fakeProgress, 'dev-server-starting', `正在等待本地服务就绪：${appUrl}（${fmtTime(Math.floor(ticks / 4))}）`, false, Math.floor(ticks / 4));
+      }
+
+      // 2. 自主探测后端，就绪后立即跳转
+      if (await probeBackend(appUrl)) {
+        navigating = true;
+        updateUI(1, 'ready', '服务已就绪，正在进入应用…', false, Math.floor(ticks / 4));
+        try {
+          await invoke('navigate_to_app');
+        } catch (e) {
+          console.warn('navigate_to_app failed:', e);
+          window.location.replace(appUrl);
+        }
+      }
+    }
+
+    // 首次立即执行，随后每 250ms 轮询，保证启动页观感顺滑
+    tick();
+    setInterval(tick, 250);
+  </script>
+</body>
+</html>

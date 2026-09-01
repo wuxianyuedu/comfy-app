@@ -171,9 +171,11 @@ function Stop-ProcessOnPort($port) {
   } catch { }
 }
 
-Write-Log "检查端口占用（3000/3001/3002）..." -Level STEP
-foreach ($p in @(3000, 3001, 3002)) { Stop-ProcessOnPort $p }
-Write-Log "端口已就绪，将启动全新实例于 3000" -Level OK
+function Reset-DevPorts {
+  Write-Log "检查端口占用（3000/3001/3002）..." -Level STEP
+  foreach ($port in @(3000, 3001, 3002)) { Stop-ProcessOnPort $port }
+  Write-Log "端口已就绪，将启动全新实例于 3000" -Level OK
+}
 
 # ── .next 缓存策略：基于「关键配置指纹」决定是否全量重编译 ──
 #     指纹 = SHA256 累积 next.config.js / tsconfig.json / package.json /
@@ -208,48 +210,52 @@ function Get-ConfigFingerprint {
   return [System.BitConverter]::ToString($ih.GetHashAndReset()).Replace("-", "").ToLowerInvariant()
 }
 
-$nextDir = Join-Path $PSScriptRoot "..\.next"
-$fingerprint = Get-ConfigFingerprint
-$fingerprintFile = Join-Path $nextDir "config-fingerprint"
+function Sync-NextCache {
+  $nextDir = Join-Path $PSScriptRoot "..\.next"
+  $fingerprint = Get-ConfigFingerprint
+  $fingerprintFile = Join-Path $nextDir "config-fingerprint"
 
-if ($env:FORCE_CLEAN -eq "1") {
-  if (Test-Path $nextDir) {
-    $nextSize = (Get-ChildItem $nextDir -Recurse -File -ErrorAction SilentlyContinue |
-                 Measure-Object Length -Sum).Sum
-    $sizeMB = if ($nextSize) { [math]::Round($nextSize / 1MB, 1) } else { 0 }
-    Write-Log ("FORCE_CLEAN=1：强制清空 .next（{0} MB）并全量重编译..." -f $sizeMB) -Level STEP
-    Remove-Item -Recurse -Force $nextDir -ErrorAction SilentlyContinue
-  } else {
-    Write-Log "FORCE_CLEAN=1：.next 不存在，无需清理" -Level INFO
-  }
-  New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
-  Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
-  Write-Log "已清空 .next 并写入新配置指纹" -Level OK
-} elseif ($env:SKIP_CLEAN -eq "1") {
-  Write-Log "SKIP_CLEAN=1：跳过 .next 清理（保留编译缓存，最快启动）" -Level INFO
-} elseif (Test-Path $nextDir) {
-  $saved = ""
-  if (Test-Path $fingerprintFile) { $saved = (Get-Content $fingerprintFile -Raw).Trim() }
-  if ($saved -eq $fingerprint) {
-    Write-Log ("配置指纹未变（{0}），保留 .next 缓存，直接启动" -f $fingerprint) -Level OK
-  } else {
-    $nextSize = (Get-ChildItem $nextDir -Recurse -File -ErrorAction SilentlyContinue |
-                 Measure-Object Length -Sum).Sum
-    $sizeMB = if ($nextSize) { [math]::Round($nextSize / 1MB, 1) } else { 0 }
-    Write-Log ("配置指纹变化（旧 {0} → 新 {1}），清空 .next（{2} MB）全量重编译..." -f $saved, $fingerprint, $sizeMB) -Level STEP
-    Remove-Item -Recurse -Force $nextDir -ErrorAction SilentlyContinue
+  if ($env:FORCE_CLEAN -eq "1") {
+    if (Test-Path $nextDir) {
+      $nextSize = (Get-ChildItem $nextDir -Recurse -File -ErrorAction SilentlyContinue |
+                   Measure-Object Length -Sum).Sum
+      $sizeMB = if ($nextSize) { [math]::Round($nextSize / 1MB, 1) } else { 0 }
+      Write-Log ("FORCE_CLEAN=1：强制清空 .next（{0} MB）并全量重编译..." -f $sizeMB) -Level STEP
+      Remove-Item -Recurse -Force $nextDir -ErrorAction SilentlyContinue
+    } else {
+      Write-Log "FORCE_CLEAN=1：.next 不存在，无需清理" -Level INFO
+    }
     New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
     Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
     Write-Log "已清空 .next 并写入新配置指纹" -Level OK
+  } elseif ($env:SKIP_CLEAN -eq "1") {
+    Write-Log "SKIP_CLEAN=1：跳过 .next 清理（保留编译缓存，最快启动）" -Level INFO
+  } elseif (Test-Path $nextDir) {
+    $saved = ""
+    if (Test-Path $fingerprintFile) { $saved = (Get-Content $fingerprintFile -Raw).Trim() }
+    if ($saved -eq $fingerprint) {
+      Write-Log ("配置指纹未变（{0}），保留 .next 缓存，直接启动" -f $fingerprint) -Level OK
+    } else {
+      $nextSize = (Get-ChildItem $nextDir -Recurse -File -ErrorAction SilentlyContinue |
+                   Measure-Object Length -Sum).Sum
+      $sizeMB = if ($nextSize) { [math]::Round($nextSize / 1MB, 1) } else { 0 }
+      Write-Log ("配置指纹变化（旧 {0} → 新 {1}），清空 .next（{2} MB）全量重编译..." -f $saved, $fingerprint, $sizeMB) -Level STEP
+      Remove-Item -Recurse -Force $nextDir -ErrorAction SilentlyContinue
+      New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
+      Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
+      Write-Log "已清空 .next 并写入新配置指纹" -Level OK
+    }
+  } else {
+    New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
+    Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
+    Write-Log ("首次启动：写入初始配置指纹（{0}），执行全量编译" -f $fingerprint) -Level STEP
   }
-} else {
-  New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
-  Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
-  Write-Log ("首次启动：写入初始配置指纹（{0}），执行全量编译" -f $fingerprint) -Level STEP
 }
 
-try {
-  # ── 第一步：定义 C# 互操作类，调用 kernel32 的 Job Object API ──
+function New-JobObject {
+  # ── 定义 C# 互操作类，调用 kernel32 的 Job Object API ──
+  # Add-Type 需要现场编译 C#，在部分机器上要数秒。做成函数后由调用方决定时机：
+  # Prebuilt 模式安排在 Tauri 窗口出现之后再调用，不拖慢「双击到见窗口」。
   Write-Log "创建 Windows Job Object（进程容器）..." -Level STEP
   $sig = @"
 using System;
@@ -268,24 +274,28 @@ public class WJ {
   Add-Type -TypeDefinition $sig -Language CSharp -ErrorAction Stop
 
   # ── 第二步：创建 Job 对象 ──
-  $h = [WJ]::CreateJobObject([IntPtr]::Zero, $null)
-  if ($h -eq [IntPtr]::Zero) { throw "CreateJobObject 返回空句柄" }
+  $job = [WJ]::CreateJobObject([IntPtr]::Zero, $null)
+  if ($job -eq [IntPtr]::Zero) { throw "CreateJobObject 返回空句柄" }
   Write-Log "Job Object 创建成功" -Level OK
 
   # ── 第三步：设置「关闭窗口即终止」标志（0x2000 = KILL_ON_JOB_CLOSE）──
   $m = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4)
   [System.Runtime.InteropServices.Marshal]::WriteInt32($m, 0x2000)
-  $null = [WJ]::SetInformationJobObject($h, 7, $m, 4)
+  $null = [WJ]::SetInformationJobObject($job, 7, $m, 4)
   [System.Runtime.InteropServices.Marshal]::FreeHGlobal($m)
   Write-Log "已设置「关闭窗口自动终止所有子进程」标志" -Level OK
+  return $job
+}
 
-  # ── 第四步：启动进程 ──
+try {
+  # ── 启动进程 ──
   $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
   if ($Prebuilt) {
-    # 2026-08-31 优化：先启动预编译 Tauri 壳（窗口秒出），再启动 Next.js dev server。
-    # 旧流程是先等 dev server Ready 再弹窗，用户双击后长时间看不到窗口；现在
-    # Tauri 壳立即显示内嵌启动页，后台并行启动 dev server，服务 Ready 后自动导航。
+    # 2026-09-01 优化：双击后的第一件事就是拉起预编译壳，让用户立刻看到窗口。
+    # 旧流程在弹窗之前还要依次做端口清理 / 缓存指纹 / Add-Type 编译 C#（Job Object），
+    # 这几步在部分机器上要数秒，窗口迟迟不出现；现在它们全部挪到窗口出现之后执行，
+    # 由内嵌启动页（splash.html）展示进度，服务 Ready 后自动导航。
     # 地址仍用 127.0.0.1，避免 Windows 把 localhost 优先解析到 ::1（IPv6）。
     $tauriExe = Join-Path $root "src-tauri\target\release\app.exe"
     if (-not (Test-Path $tauriExe)) {
@@ -295,10 +305,8 @@ public class WJ {
       throw "找不到预编译 Tauri 壳：src-tauri\target\release\app.exe（或 debug）。请先执行 cargo build 或 pnpm tauri build。"
     }
 
-    # 0. 确保 Tauri 内置启动页资源就位（tauri://localhost/splash.html）
+    # 1. 确保 Tauri 内置启动页资源就位（tauri://localhost/splash.html），随后立刻弹窗
     Ensure-SplashResource
-
-    # 1. 先启动预编译 Tauri 壳（窗口秒出），splash 页会显示启动进度
     $psiTauri = New-Object System.Diagnostics.ProcessStartInfo
     $psiTauri.FileName = $tauriExe
     $psiTauri.WorkingDirectory = $root
@@ -307,10 +315,15 @@ public class WJ {
     $psiTauri.Environment["COMFYAPP_DEV_URL"] = "http://127.0.0.1:3000/workspace"
     $tauriProc = [System.Diagnostics.Process]::Start($psiTauri)
     Write-Log ("预编译 Tauri 壳已启动（PID: {0}）：{1}" -f $tauriProc.Id, $tauriExe) -Level OK
-    $null = [WJ]::AssignProcessToJobObject($h, $tauriProc.Handle)
     Write-Log "Tauri 桌面壳已启动，正在启动本地服务…" -Level STEP
 
-    # 2. 启动 Next.js dev server
+    # 2. 窗口已出现，再补做准备工作：进程容器 → 端口清理 → 缓存策略
+    $h = New-JobObject
+    $null = [WJ]::AssignProcessToJobObject($h, $tauriProc.Handle)
+    Reset-DevPorts
+    Sync-NextCache
+
+    # 3. 启动 Next.js dev server
     $psiDev = New-Object System.Diagnostics.ProcessStartInfo
     $psiDev.FileName = "cmd.exe"
     # -H 127.0.0.1 固定 IPv4，避免 Windows 把 localhost 解析到 ::1 导致连接失败
@@ -323,7 +336,7 @@ public class WJ {
     $null = [WJ]::AssignProcessToJobObject($h, $devProc.Handle)
     Write-Log "Tauri 壳与 dev server 已绑定到同一 Job Object（关闭窗口时一起清理）" -Level OK
 
-    # 3. 等服务 Ready（避免 Tauri 导航时看到 ERR_CONNECTION_REFUSED）
+    # 4. 等服务 Ready（避免 Tauri 导航时看到 ERR_CONNECTION_REFUSED）
     Write-Log "等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
     $ready = $false
     for ($i = 0; $i -lt 180; $i++) {
@@ -339,6 +352,10 @@ public class WJ {
     Write-Log "服务器已就绪，桌面壳正在加载应用…" -Level OK
     $p = $tauriProc  # 后续 WaitForExit 以 Tauri 窗口生命周期为锚点
   } else {
+    Reset-DevPorts
+    Sync-NextCache
+    $h = New-JobObject
+
     # 确保 Tauri 内置启动页资源就位（tauri://localhost/splash.html）
     Ensure-SplashResource
 

@@ -38,30 +38,26 @@ Log "  cargo : $(cargo --version 2>&1)"
 Log "  rustc : $(rustc --version 2>&1)"
 Log ""
 
-Log "[1.5] 同步前端资源（避免直接 cargo build 漏掉 static 导致黑屏）"
-$staticDir = Join-Path $TAURI_DIR "static"
-if (-not (Test-Path $staticDir)) {
-    Log "[1.5] 未检测到 static 目录，运行完整 build-desktop.mjs（含 pnpm build + node sidecar）..."
-    Invoke-Logged "node scripts/build-desktop.mjs"
-$r = $script:LAST_INVOKE_CODE
-    if ($r -ne 0) {
-        Log "[错误] build-desktop.mjs 失败，已中止。"
-        Open-Log
-        exit 1
-    }
+Log "[1.5] 同步启动页资源（prebuilt 壳只需内嵌 splash.html）"
+# prebuilt 模式的页面由 dev server（http://127.0.0.1:3000）提供，壳里只需要启动页；
+# standalone 资源（server.js / .next / Node sidecar）由 tools\build-standalone.bat 负责。
+# 过去这里在 static 缺失时会跑完整 build-desktop.mjs，而 Next standalone 的 file
+# tracing 会把整个项目（node_modules / python-venv / 各构建产物）拷进 static（实测 8GB+），
+# 随后被 cargo build 一起嵌进 app.exe —— 既拖慢构建又浪费空间。故改为只同步启动页。
+$assetsDir = Join-Path $TAURI_DIR "splash-assets"
+if (-not (Test-Path $assetsDir)) { New-Item -ItemType Directory -Force $assetsDir | Out-Null }
+$splash = Join-Path $PROJECT_ROOT "public\splash.html"
+if (Test-Path $splash) {
+    Copy-Item -Force $splash (Join-Path $TAURI_DIR "splash-assets\splash.html")
+    Copy-Item -Force $splash (Join-Path $TAURI_DIR "splash-assets\index.html")
 } else {
-    Log "[1.5] 增量同步 splash.html / dev-launcher.ps1 / index.html（无需重新 pnpm build）..."
-    $splash = Join-Path $PROJECT_ROOT "public\splash.html"
-    if (Test-Path $splash) {
-        Copy-Item -Force $splash (Join-Path $TAURI_DIR "static\splash.html")
-        Copy-Item -Force $splash (Join-Path $TAURI_DIR "static\index.html")
-    }
-    $devLauncher = Join-Path $PROJECT_ROOT "scripts\dev-launcher.ps1"
-    if (Test-Path $devLauncher) {
-        $destScripts = Join-Path $TAURI_DIR "static\scripts"
-        if (-not (Test-Path $destScripts)) { New-Item -ItemType Directory -Force $destScripts | Out-Null }
-        Copy-Item -Force $devLauncher (Join-Path $destScripts "dev-launcher.ps1")
-    }
+    Log "[警告] 未找到 public/splash.html，构建出的壳将缺少启动页（窗口可能黑屏）"
+}
+$devLauncher = Join-Path $PROJECT_ROOT "scripts\dev-launcher.ps1"
+if (Test-Path $devLauncher) {
+    $destScripts = Join-Path $TAURI_DIR "static\scripts"
+    if (-not (Test-Path $destScripts)) { New-Item -ItemType Directory -Force $destScripts | Out-Null }
+    Copy-Item -Force $devLauncher (Join-Path $destScripts "dev-launcher.ps1")
 }
 Log ""
 
