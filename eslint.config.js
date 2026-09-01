@@ -11,6 +11,10 @@ export default tseslint.config(
       "src-tauri/static/**",
       "temp/**",
       "python-venv/**",
+      // PyInstaller onedir 产物（start-tauri/、start-tauri-standalone/ 等）：
+      // 目录被清理后 eslint 9 默认会 walk 全部目录，humanfs 遇到不存在目录会 ENOENT 崩溃，显式忽略避免
+      "start-tauri*/",
+      "build-launcher*/",
     ],
   },
   // eslint-config-next@16 已改为扁平（flat）配置，直接导出配置数组。
