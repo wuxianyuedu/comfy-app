@@ -26,6 +26,7 @@ start_tauri_launcher.py — Comfy-APP 桌面壳启动器（纯 Win32 启动画�
 from __future__ import annotations
 
 import os
+import re
 import sys
 import json
 import time
@@ -242,6 +243,39 @@ def get_project_root() -> str:
     return cwd
 
 
+def _window_process_name(hwnd: HWND) -> str:
+    """返回窗口所属进程的 exe 文件名（小写），失败返回空串。
+
+    用于窗口识别防误判：浏览器打开 localhost:3000 时标签页标题同样是
+    "Comfy APP"，仅按标题子串匹配会把浏览器窗口误认成 Tauri 壳，
+    导致双击启动器只聚焦浏览器就退出、应用根本没启动。
+    """
+    try:
+        pid = DWORD(0)
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if not pid.value:
+            return ""
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        h = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
+        if not h:
+            return ""
+        try:
+            buf = ctypes.create_unicode_buffer(260)
+            size = DWORD(260)
+            if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                return os.path.basename(buf.value).lower()
+        finally:
+            kernel32.CloseHandle(h)
+    except Exception:
+        return ""
+    return ""
+
+
+def _is_app_shell_window(hwnd: HWND, title: str) -> bool:
+    """标题命中且窗口属于本项目 Tauri 壳（app.exe）才算应用窗口。"""
+    return APP_WINDOW_TITLE in (title or "") and _window_process_name(hwnd) == "app.exe"
+
+
 def find_tauri_window() -> bool:
     """枚举顶层窗口，查找标题包含 APP_WINDOW_TITLE 的可见窗口。"""
     try:
@@ -255,8 +289,7 @@ def find_tauri_window() -> bool:
                 return True
             buf = ctypes.create_unicode_buffer(length + 1)
             user32.GetWindowTextW(hwnd, buf, length + 1)
-            title = buf.value or ""
-            if APP_WINDOW_TITLE in title:
+            if _is_app_shell_window(hwnd, buf.value):
                 found[0] = True
                 return False
             return True
@@ -284,8 +317,7 @@ def find_and_focus_tauri_window() -> bool:
                 return True
             buf = ctypes.create_unicode_buffer(length + 1)
             user32.GetWindowTextW(hwnd, buf, length + 1)
-            title = buf.value or ""
-            if APP_WINDOW_TITLE in title:
+            if _is_app_shell_window(hwnd, buf.value):
                 target = hwnd
                 return False
             return True
@@ -355,17 +387,30 @@ def _write_lock_pid(lock_file: str) -> None:
 
 
 def _is_pid_alive(pid: int) -> bool:
+    """Windows 安全的进程探活。
+
+    注意：绝不能用 os.kill(pid, 0)——Windows CPython 的实现是
+    OpenProcess + TerminateProcess(handle, 0)，探活即击杀，会把锁文件里
+    记录的存活启动器（或 PID 复用后的无关进程）直接终止。
+    这里改用 OpenProcess(SYNCHRONIZE) + WaitForSingleObject(0) 非阻塞探测。
+    """
     if not pid or pid <= 0:
         return False
     try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        # 进程存在但无信号权限，仍视为存活
-        return True
+        SYNCHRONIZE = 0x00100000
+        WAIT_TIMEOUT = 0x00000102
+        ERROR_ACCESS_DENIED = 5
+        handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+        if not handle:
+            # 打开失败：拒绝访问说明进程存在（受保护/其他用户）→ 存活；
+            # 进程不存在时 OpenProcess 失败且非 access denied → 已退出。
+            return kernel32.GetLastError() == ERROR_ACCESS_DENIED
+        try:
+            return kernel32.WaitForSingleObject(handle, 0) == WAIT_TIMEOUT
+        finally:
+            kernel32.CloseHandle(handle)
     except Exception:
+        # 探测本身出错时保守返回 False（配合互斥体的窗口检测，不会误杀进程）
         return False
 
 
@@ -420,6 +465,45 @@ def _resolve_dev_log_path(project_root: str) -> str:
     return default
 
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
+
+
+def _read_log_tail(path: str, lines: int = 25) -> str:
+    """读取日志最后 N 行（去 ANSI 颜色码），失败返回空串。"""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            content = _strip_ansi(f.read())
+        return "\n".join(content.splitlines()[-lines:]).strip()
+    except Exception:
+        return ""
+
+
+def _build_failure_message(project_root: str, detail: str) -> str:
+    """组装启动失败的 MessageBox 文案：结论 + 日志尾部 + 日志位置。
+
+    历史教训：dev-launcher 提前退出时若只把错误写进 30 秒后自删的状态文件，
+    对用户完全静默（表现为「双击没反应」）。失败必须有人类可见的出口。
+    """
+    dev_log = _resolve_dev_log_path(project_root)
+    tail_dev = _read_log_tail(dev_log, 20)
+    tail_err = _read_log_tail(os.path.join(project_root, "log", "dev-launcher-stderr.log"), 15)
+    parts = [f"应用启动失败：{detail}"]
+    if tail_err:
+        parts.append("— 启动器错误输出（dev-launcher-stderr.log）—\n" + tail_err)
+    if tail_dev:
+        parts.append("— 启动器日志尾部（dev-launcher.log）—\n" + tail_dev)
+    parts.append(
+        "详细日志：\n"
+        f"  {dev_log}\n"
+        f"  {os.path.join(project_root, 'log', 'dev-launcher-stderr.log')}"
+    )
+    return "\n\n".join(parts)
+
+
 def _write_status(
     project_root: str,
     phase: str,
@@ -428,7 +512,7 @@ def _write_status(
     ready: bool = False,
     error: bool = False,
     elapsed: float = 0.0,
-    app_url: str = "http://localhost:3000/workspace",
+    app_url: str = "http://127.0.0.1:3000/workspace",
 ) -> None:
     """把当前启动状态写入 <project_root>/run/launch-status.json。
 
@@ -1264,9 +1348,9 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
             # 句柄，避免它占用 PyInstaller 单文件临时目录导致退出时清理失败。
             # 对 onedir 模式同样有益：子进程不会误持 launcher 目录下的文件句柄。
             close_fds=True,
-            # 独立进程组：Ctrl+C / 关闭启动器不会误伤 dev server 与 Tauri 子进程；
-            # 它们的清理完全由 dev-launcher.ps1 的 Job Object 负责。
-            start_new_session=True,
+            # Windows 上无 POSIX 进程组概念（start_new_session 仅 POSIX 有效）。
+            # 启动器与子进程的隔离由 dev-launcher.ps1 负责：其内部用
+            # taskkill /T /F + Job Object 兜底回收整棵进程树。
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
     except Exception as exc:
@@ -1433,7 +1517,15 @@ def _monitor_headless(
                     error=True,
                     elapsed=elapsed(),
                 )
-                return
+                # 失败必须有人类可见的出口：历史版本只写 30 秒后自删的状态
+                # 文件，用户看到的是「双击没反应」。弹窗展示日志尾部。
+                _fatal_box(
+                    _build_failure_message(
+                        project_root,
+                        f"启动进程 dev-launcher.ps1 提前退出（exit={exit_code}）。",
+                    )
+                )
+                return 1
 
             time.sleep(0.5)
 
@@ -1462,6 +1554,9 @@ def _monitor_headless(
             error=True,
             elapsed=elapsed(),
         )
+        _fatal_box(_build_failure_message(project_root, f"启动器监控异常：{exc}"))
+        return 1
+    return 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1683,8 +1778,9 @@ def main(argv: list[str] | None = None) -> int:
             close_logging()
             return _fatal_box("无法启动 dev-launcher.ps1，请检查 PowerShell 是否可用。")
         _write_status(project_root, "initial")
+        monitor_code = 0
         try:
-            _monitor_headless(project_root, proc)
+            monitor_code = _monitor_headless(project_root, proc)
         finally:
             if mutex:
                 kernel32.ReleaseMutex(mutex)
@@ -1693,7 +1789,7 @@ def main(argv: list[str] | None = None) -> int:
             # 保留状态文件 30 秒，让启动页能读到最终 ready；随后清理。
             threading.Timer(30.0, lambda: _cleanup_status(project_root)).start()
             close_logging()
-        return 0
+        return monitor_code
 
     splash = SplashWindow()
     if not splash.show():

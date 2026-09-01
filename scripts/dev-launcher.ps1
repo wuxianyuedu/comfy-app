@@ -277,6 +277,77 @@ function Sync-NextCache {
   }
 }
 
+# ── 预检 1：node_modules 健康检查 ──
+# pnpm 策略拒装 / 中断安装会留下「目录存在但不可用」的残缺依赖（缺
+# .modules.yaml 或 .bin/next）。直接启动 dev server 会 180 秒空等或触发
+# pnpm 的依赖状态检查失败。不健康时执行一次显式 pnpm install（CI 模式
+# 无交互），失败则立即报错并展示日志尾部，而不是空等。
+function Test-DevDependencies {
+  $nextBin = Join-Path $root "node_modules\.bin\next*"
+  $modulesYaml = Join-Path $root "node_modules\.modules.yaml"
+  if ((Test-Path $modulesYaml) -and ((Get-ChildItem $nextBin -ErrorAction SilentlyContinue))) {
+    Write-Log "node_modules 预检通过（.modules.yaml 与 .bin/next 存在）" -Level INFO
+    return
+  }
+  Write-Log "node_modules 不完整（缺 .modules.yaml 或 .bin/next），执行显式 pnpm install..." -Level WARN
+  $env:CI = "true"
+  $installOut = Join-Path $logDir "pnpm-install-stdout.log"
+  $installErr = Join-Path $logDir "pnpm-install-stderr.log"
+  $psiInstall = New-Object System.Diagnostics.ProcessStartInfo
+  $psiInstall.FileName = "cmd.exe"
+  $psiInstall.Arguments = "/c pnpm install > `"$installOut`" 2> `"$installErr`""
+  $psiInstall.WorkingDirectory = $root
+  $psiInstall.UseShellExecute = $false
+  $psiInstall.CreateNoWindow = $true
+  $installProc = [System.Diagnostics.Process]::Start($psiInstall)
+  if (-not $installProc.WaitForExit(600000)) {
+    try { taskkill /PID $installProc.Id /T /F 2>&1 | Out-Null } catch { }
+    throw "pnpm install 超过 10 分钟未完成（可能网络/存储异常），已终止。详见 $installOut"
+  }
+  $errTail = Get-OutputTail -Path $installErr
+  $outTail = Get-OutputTail -Path $installOut
+  if ($installProc.ExitCode -ne 0) {
+    throw "pnpm install 失败（exit=$($installProc.ExitCode)）。最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $installOut 与 $installErr）"
+  }
+  if (-not (Test-Path $modulesYaml)) {
+    throw "pnpm install 退出码 0 但 node_modules 仍不完整（缺 .modules.yaml），请检查 $installOut"
+  }
+  Write-Log "pnpm install 完成，node_modules 预检通过" -Level OK
+}
+
+# ── 预检 2：桌面壳过期提醒 ──
+# app.exe 是编译产物，tauri.conf.json（窗口配置编译期内嵌）/ src\*.rs /
+# splash-assets（frontendDist 编译期嵌入）都比它新时，本次运行的仍是旧壳，
+# 界面行为与源码不一致（例：改了启动页配置却出现黑屏/资源缺失）。
+function Test-ShellFreshness {
+  param([string]$ShellExe)
+  $exeTime = (Get-Item -LiteralPath $ShellExe).LastWriteTime
+  $newest = $exeTime
+  $newestPath = ""
+  foreach ($target in @(
+    (Join-Path $root "src-tauri\tauri.conf.json"),
+    (Join-Path $root "src-tauri\src"),
+    (Join-Path $root "src-tauri\splash-assets")
+  )) {
+    $item = Get-Item -LiteralPath $target -ErrorAction SilentlyContinue
+    if (-not $item) { continue }
+    $files = if ($item.PSIsContainer) {
+      Get-ChildItem -LiteralPath $target -Recurse -File -ErrorAction SilentlyContinue
+    } else { $item }
+    $latest = $files | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($latest -and $latest.LastWriteTime -gt $newest) {
+      $newest = $latest.LastWriteTime
+      $newestPath = $latest.FullName
+    }
+  }
+  if ($newestPath) {
+    Write-Log ("桌面壳（app.exe，{0:yyyy-MM-dd HH:mm}）比源码/配置旧（{1}，{2:yyyy-MM-dd HH:mm}），本次运行旧版界面逻辑。" -f $exeTime, (Split-Path $newestPath -Leaf), $newest) -Level WARN
+    Write-Log "如遇黑屏/资源缺失/行为不符，请先执行：cd src-tauri; cargo build --release" -Level WARN
+  } else {
+    Write-Log "桌面壳与源码/配置时间戳一致（预检通过）" -Level INFO
+  }
+}
+
 function New-JobObject {
   # ── 定义 C# 互操作类，调用 kernel32 的 Job Object API ──
   # Add-Type 需要现场编译 C#，在部分机器上要数秒。做成函数后由调用方决定时机：
@@ -356,6 +427,7 @@ try {
     if (-not (Test-Path $tauriExe)) {
       throw "找不到预编译 Tauri 壳：src-tauri\target\release\app.exe（或 debug）。请先执行 cargo build 或 pnpm tauri build。"
     }
+    Test-ShellFreshness -ShellExe $tauriExe
 
     # 1. 清理上次运行残留的同项目 Tauri 壳：启动器上次失败退出时不带清理，
     #    会留下卡在启动页的僵尸窗口，下次启动出现两个窗口叠在一起。
@@ -383,6 +455,7 @@ try {
     $null = [WJ]::AssignProcessToJobObject($h, $tauriProc.Handle)
     Reset-DevPorts
     Sync-NextCache
+    Test-DevDependencies
 
     # 3. 启动 Next.js dev server
     $psiDev = New-Object System.Diagnostics.ProcessStartInfo
@@ -438,6 +511,7 @@ try {
   } else {
     Reset-DevPorts
     Sync-NextCache
+    Test-DevDependencies
     $h = New-JobObject
 
     # 确保 Tauri 内置启动页资源就位（tauri://localhost/splash.html）

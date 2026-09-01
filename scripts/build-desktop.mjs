@@ -132,6 +132,17 @@ if (existsSync(splashSrc)) {
   copyFileSync(splashSrc, join(staticDir, "splash.html"));
 }
 
+// 同步启动页到 frontendDist（splash-assets/）：Tauri 窗口内嵌资源在编译期
+// 来自该目录（tauri.conf.json build.frontendDist）。不同步的话重编壳时嵌入的
+// 还是旧版启动页（历史故障：壳内 embedded=true 但内容陈旧/缺失 → 黑屏）。
+const splashDistDir = join(root, "src-tauri", "splash-assets");
+if (existsSync(splashSrc)) {
+  mkdirSync(splashDistDir, { recursive: true });
+  copyFileSync(splashSrc, join(splashDistDir, "splash.html"));
+  copyFileSync(splashSrc, join(splashDistDir, "index.html"));
+  console.log("[build-desktop]   已同步启动页 → src-tauri/splash-assets/（frontendDist，编译期嵌入）");
+}
+
 // fallback index.html：与 splash.html 内容一致，避免直接访问根路径时出现旧 spinner
 const splashHtml = existsSync(splashSrc) ? readFileSync(splashSrc, "utf8") : `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Comfy APP</title></head>
