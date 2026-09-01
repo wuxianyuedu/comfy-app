@@ -18,6 +18,19 @@ export type AppSettings = {
   trainerUrl: string;
   defaultVideoWorkflow: VideoWorkflowPref;
   comfyLorasDir: string;
+  /**
+   * ComfyUI 安装目录（包含 main.py 的安装根）。
+   * 支持三种布局，启动时自动识别：
+   *   - 便携版：<path>\python_embeded\python.exe + <path>\main.py
+   *   - 桌面版/standalone：<path>\standalone-env\python.exe + <path>\ComfyUI\main.py
+   *   - venv：<path>\.venv\Scripts\python.exe + <path>\main.py
+   * 配置后任务执行前若 ComfyUI 未运行会自动拉起（comfyuiAutoStart）。
+   */
+  comfyuiPath: string;
+  /** 传给 ComfyUI main.py 的额外命令行参数（如 --input-directory ...）。 */
+  comfyuiExtraArgs: string;
+  /** 提交任务发现 ComfyUI 未运行时，是否自动按 comfyuiPath 启动。 */
+  comfyuiAutoStart: boolean;
 };
 
 const DEFAULTS: AppSettings = {
@@ -25,6 +38,9 @@ const DEFAULTS: AppSettings = {
   trainerUrl: process.env.LORA_TRAINER_URL ?? "",
   defaultVideoWorkflow: "auto",
   comfyLorasDir: process.env.COMFY_LORAS_DIR ?? "",
+  comfyuiPath: process.env.COMFYUI_PATH ?? "",
+  comfyuiExtraArgs: "",
+  comfyuiAutoStart: true,
 };
 
 let cache: AppSettings | null = null;

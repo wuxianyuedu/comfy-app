@@ -33,6 +33,7 @@ import {
   WS_PATHS,
 } from "./runner-state";
 import { complete, fail } from "./executor-finalize";
+import { ensureComfyUiReady } from "./lifecycle";
 import { processQueue } from "./executor-scheduler";
 
 function nodeLabel(classType?: string): string {
@@ -80,6 +81,15 @@ export async function connect(): Promise<void> {
     base = await resolveComfyBase();
   } catch {
     s.connecting = false;
+    // ComfyUI 不可达：若配置了安装路径 + 自动启动，则按需拉起并等待就绪。
+    // 队列任务在 WS 未 OPEN 时不会出队，此前只能等 reaper 30s 判死；
+    // 现在启动成功后下一次重连即可打开 WS，任务恢复正常执行。
+    // ensureComfyUiReady 自带单飞锁 + 探测快路径，反复调用安全。
+    void ensureComfyUiReady().catch((err: unknown) => {
+      logger.warn(
+        `[comfyui] 自动启动失败：${err instanceof Error ? err.message : String(err)}`
+      );
+    });
     scheduleReconnect();
     return;
   }

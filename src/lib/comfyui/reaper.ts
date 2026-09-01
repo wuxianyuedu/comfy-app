@@ -11,6 +11,7 @@
 
 import { taskRepository } from "../core/repository";
 import { resolveComfyBase } from "./client";
+import { isComfyStarting } from "./lifecycle";
 import { state, log, persistLogs } from "./runner-state";
 import { logger } from "~/server/lib/logger";
 
@@ -84,6 +85,12 @@ async function reapStaleQueuedTasks(): Promise<void> {
       reaperState.reaping.add(t.id);
       try {
         const ageSec = Math.round((Date.now() - t.createdAt.getTime()) / 1000);
+        /* 2026-09-02: ComfyUI 正在自动启动（lifecycle 单飞进行中）时暂不回收——
+         * 启动可能需要 30-120s，任务会在 WS 连上后正常出队执行。 */
+        if (isComfyStarting()) {
+          log(t.id, "warn", `任务在队列中等待 ComfyUI 自动启动（已 ${ageSec}s）——启动完成后自动执行`);
+          continue;
+        }
         const reason = `任务卡在队列超过 ${ageSec}s（dev server 重启后 in-memory 队列清空，无人 re-claim）— 请重新执行`;
         log(t.id, "error", reason);
         /* R-ardot121: emit a synthetic state → error pair so any SSE

@@ -27,6 +27,9 @@ type Settings = {
   trainerUrl: string;
   defaultVideoWorkflow: "auto" | "txt2video" | "img2video";
   comfyLorasDir: string;
+  comfyuiPath: string;
+  comfyuiExtraArgs: string;
+  comfyuiAutoStart: boolean;
 };
 
 type LlmConfig = {
@@ -60,6 +63,30 @@ export default function SettingsPage() {
   const llmQ = api.llm.configGet.useQuery();
   const saveSetting = api.setting.save.useMutation();
   const saveLlmCfg = api.llm.configSave.useMutation();
+  const comfyStatusQ = api.setting.comfyStatus.useQuery(undefined, { refetchInterval: 15_000 });
+  const comfyStartM = api.setting.comfyStart.useMutation();
+
+  const [comfyStarting, setComfyStarting] = useState(false);
+  async function startComfy() {
+    setSaving(true);
+    setComfyStarting(true);
+    try {
+      await saveSetting.mutateAsync({
+        comfyuiUrl: settingsDraft?.comfyuiUrl,
+        comfyuiPath: settingsDraft?.comfyuiPath,
+        comfyuiExtraArgs: settingsDraft?.comfyuiExtraArgs,
+        comfyuiAutoStart: settingsDraft?.comfyuiAutoStart,
+      });
+      const r = await comfyStartM.mutateAsync({});
+      flash(r.ok ? "ok" : "err", r.detail);
+      await comfyStatusQ.refetch();
+    } catch (e) {
+      flash("err", errMsg(e, "启动 ComfyUI 失败"));
+    } finally {
+      setSaving(false);
+      setComfyStarting(false);
+    }
+  }
 
   const settings = settingsQ.data?.settings ?? null;
   const llm = llmQ.data?.config ?? null;
@@ -248,6 +275,57 @@ export default function SettingsPage() {
               onChange={(value) => setSettingsDraft({ ...settingsDraft, comfyuiUrl: value })}
               placeholder="http://localhost:8188"
             />
+            <Field
+              label="ComfyUI 路径（安装根目录，含 main.py）"
+              value={settingsDraft.comfyuiPath}
+              onChange={(value) => setSettingsDraft({ ...settingsDraft, comfyuiPath: value })}
+              placeholder="例如 D:\\ComfyUI 或 D:\\Comfy-Desktop\\ComfyUI-Installs\\ComfyUI"
+            />
+            <p className="-mt-2 mb-3 text-xs text-muted">
+              支持：便携版（python_embeded\\python.exe + main.py）、桌面版（standalone-env +
+              ComfyUI\\main.py）、venv（.venv + main.py）。
+              {comfyStatusQ.data?.pathConfigured
+                ? "已配置——ComfyUI 未运行时提交任务会自动拉起。"
+                : "未配置——ComfyUI 未运行时任务会失败。"}
+            </p>
+            <Field
+              label="ComfyUI 启动参数（可选）"
+              value={settingsDraft.comfyuiExtraArgs}
+              onChange={(value) => setSettingsDraft({ ...settingsDraft, comfyuiExtraArgs: value })}
+              placeholder="例如 --input-directory D:\\ComfyUI-Shared\\input"
+            />
+            <div className="mb-4 flex items-center gap-2">
+              <input
+                id="comfyui-autostart"
+                type="checkbox"
+                className="size-4 accent-[var(--primary,#7c5cff)]"
+                checked={settingsDraft.comfyuiAutoStart}
+                onChange={(e) => setSettingsDraft({ ...settingsDraft, comfyuiAutoStart: e.target.checked })}
+              />
+              <label htmlFor="comfyui-autostart" className="text-sm text-ink/80">
+                提交任务时 ComfyUI 未运行则自动启动
+              </label>
+            </div>
+            <div className="mb-4 flex items-center gap-3 rounded-lg border border-border bg-white/3 px-3 py-2">
+              <span
+                className={`inline-block size-2 shrink-0 rounded-full ${
+                  comfyStatusQ.data?.up ? "bg-emerald-400" : comfyStatusQ.data?.starting ? "bg-amber-400" : "bg-rose-400"
+                }`}
+              />
+              <span className="text-sm text-ink/80">
+                {comfyStatusQ.data?.up
+                  ? `ComfyUI 运行中${comfyStatusQ.data.base ? `（${comfyStatusQ.data.base}）` : ""}`
+                  : comfyStarting || comfyStatusQ.data?.starting
+                    ? "ComfyUI 正在启动…"
+                    : "ComfyUI 未运行"}
+              </span>
+              <Btn
+                onClick={startComfy}
+                disabled={saving || comfyStarting || comfyStatusQ.data?.up}
+              >
+                {comfyStarting ? "启动中…" : "启动 ComfyUI"}
+              </Btn>
+            </div>
             <Field
               label="训练后端 URL"
               value={settingsDraft.trainerUrl}
