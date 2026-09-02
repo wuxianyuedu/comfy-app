@@ -1,6 +1,7 @@
 import tseslint from "typescript-eslint";
 import next from "eslint-config-next/core-web-vitals";
 import unusedImports from "eslint-plugin-unused-imports";
+import boundaries from "eslint-plugin-boundaries";
 
 export default tseslint.config(
   {
@@ -62,6 +63,51 @@ export default tseslint.config(
        *  图片处理开销。故在此关闭本规则——新增静态资源图（logo、插图）时仍应
        *  优先使用 next/image。 */
       "@next/next/no-img-element": "off",
+    },
+  },
+  // ── 分层边界（2026-09-02）：用 eslint-plugin-boundaries 强制 前端/数据/逻辑 分层 ──
+  // server     = 数据层(src/server、仓储 src/lib/core、db 实例 src/lib/db)
+  // components = UI 层       features = 逻辑层(当前仓库暂无该目录,规则预留)
+  // 说明:src/lib/comfyui、src/lib/film、src/lib/llm 含 client-safe 的 types/helpers,
+  //       不整体划入 server,避免误伤组件对它们的合法 import。
+  // Drizzle schema 位于 src/server/db/schema(已属 server),故 UI import schema/仓储即被
+  //       components→server 拦截;UI 直引 drizzle-orm orm 包在本 pnpm 解析下 module.source
+  //       为 null,无法用 module 选择器匹配,故交由 repositories 间接管控。
+  {
+    plugins: { boundaries },
+    settings: {
+      "boundaries/elements": [
+        { type: "server", pattern: "src/server/**" },
+        { type: "server", pattern: "src/lib/core/**" },
+        { type: "server", pattern: "src/lib/db/**" },
+        { type: "components", pattern: "src/components/**" },
+        { type: "features", pattern: "src/features/**" },
+      ],
+    },
+    rules: {
+      "boundaries/dependencies": [
+        "error",
+        {
+          default: "allow",
+          policies: [
+            // UI 不得 import 数据层
+            {
+              from: { element: { type: "components" } },
+              disallow: { to: { element: { type: "server" } } },
+            },
+            // 反向越界:数据层不得 import UI(保证 server 不跨入 components/)
+            {
+              from: { element: { type: "server" } },
+              disallow: { to: { element: { type: "components" } } },
+            },
+            // features 不得 import 数据层
+            {
+              from: { element: { type: "features" } },
+              disallow: { to: { element: { type: "server" } } },
+            },
+          ],
+        },
+      ],
     },
   },
   {
