@@ -12,7 +12,7 @@ export interface WorkflowRow {
   id: string;
   name: string;
   taskType: string;
-  /** 2026-08-13: a workflow may declare multiple modes at once.  When
+  /** A workflow may declare multiple modes at once.  When
    *  absent or empty, the UI falls back to `[taskType]` for display
    *  (backward compatibility for older rows).  Both `modes` and
    *  `defaultMode` are returned by GET /api/workflows (persisted to
@@ -24,19 +24,19 @@ export interface WorkflowRow {
   createdAt: string;
   paramMap?: Record<string, string> | null;
   preview?: WorkflowPreviewT;
-  /** 2026-08-09: user-curated external IO, returned by GET /api/workflows.
+  /** User-curated external IO, returned by GET /api/workflows.
    *  Used to render the library card when no graph preview is available. */
   workflowIO?: WorkflowIOMap;
-  /** 2026-08-15: model tag names attached to this workflow (user-level
+  /** Model tag names attached to this workflow (user-level
    *  global tag library, e.g. ["z-image","wan2.2"]).  Returned by
    *  GET /api/workflows.  Drives the library card chips + model filter. */
   modelTags?: string[];
-  /** Independent booleans (2026-08-09).  `hasApi` controls whether the
+  /** Independent booleans.  `hasApi` controls whether the
    *  workflow is actually executable; `hasRaw` is informational and lets
    *  the UI offer source-view / download-merged-bundle for RAW imports. */
   hasApi?: boolean;
   hasRaw?: boolean;
-  /** Where the executable graph came from (2026-08-09).
+  /** Where the executable graph came from.
    *   - "user": the user explicitly exported API Format from ComfyUI
    *   - "derived": auto-derived from rawJson via convertRawToApi
    *   - null: no API at all (only RAW was imported, graph was empty)
@@ -56,7 +56,7 @@ export interface WorkflowRow {
    *  card, or future ad-hoc imports).  When set, the server tracks the
    *  file and re-imports it whenever it changes on disk. */
   sourcePath?: string | null;
-  /** 2026-08-10 R11: which configured LOCAL_WORKFLOWS_PATH entry (verbatim
+  /** Which configured LOCAL_WORKFLOWS_PATH entry (verbatim
    *  raw path) this file lives under.  The server stamps this on every
    *  already-imported local workflow.  Same value for all rows from the
    *  same configured root — used by the card to label "📂 from which
@@ -66,7 +66,7 @@ export interface WorkflowRow {
   /** Classification: "local" = tied to an on-disk file; "online" = pasted /
    *  API-only import. Derived from `sourcePath` presence. */
   source?: "local" | "online";
-  /** 2026-08-10 R16: manual-sync support.  `diskDirty = (diskMtimeSec >
+  /** Manual-sync support.  `diskDirty = (diskMtimeSec >
    *  sourceMtimeSec)` means the on-disk file changed since the last
    *  reimport; the card then surfaces a "↻ 同步" action that POSTs to
    *  /api/workflows/[id]/resync.  All four fields are null/false for
@@ -75,7 +75,7 @@ export interface WorkflowRow {
   diskMissing?: boolean;
   diskMtimeSec?: number | null;
   sourceMtimeSec?: number | null;
-  /** R-ardot105 (2026-08-17): the server detected that the source file
+  /** The server detected that the source file
    *  was renamed on disk and automatically re-linked the row to the
    *  new path.  `diskRenamedTo` is a human-readable "old.json → new.json"
    *  summary; the UI flashes a one-shot toast so the user knows the
@@ -101,7 +101,7 @@ export function deriveFormatFlags(row: WorkflowRow): {
     const hasRaw = row.hasRaw ?? row.format === "raw";
     const apiOrigin: "user" | "derived" | null = row.apiOrigin
       ?? (hasApi ? (hasRaw ? "derived" : "user") : null);
-    // 2026-08-25: 一个工作流只保留一种格式。可用性仅取决于是否有可执行 graph。
+    // 一个工作流只保留一种格式。可用性仅取决于是否有可执行 graph。
     const usable = hasApi;
     return { hasApi, hasRaw, apiOrigin, usable };
   }
@@ -113,7 +113,7 @@ export function deriveFormatFlags(row: WorkflowRow): {
   };
 }
 
-/* 2026-08-10 R16: aggregate the four manual-sync fields into UI booleans.
+/* Aggregate the four manual-sync fields into UI booleans.
  *  Online rows (no sourcePath) get `dirty=false, missing=false,
  *  canResync=false`; missing-on-disk rows stay dirty=false but flag
  *  missing so the card can show "📁 文件已不存在" instead of a sync
@@ -128,11 +128,11 @@ export function deriveSyncFlags(row: WorkflowRow): {
   return { dirty, missing, canResync: dirty };
 }
 
-/* ── detectWorkflowFormat (2026-08-12 R71-1, extracted to shared lib in R76) ──
+/* ── detectWorkflowFormat：实现已抽到 @/lib/workflow-format 供服务端复用 ──
  * Implementation lives in @/lib/workflow-format so the server-side
  * PATCH endpoint can validate the same JSON shape (drag-to-upgrade). */
 
-/* ── WorkflowIOThumb (2026-08-09) ──
+/* ── WorkflowIOThumb ──
  * When a workflow row has no graph preview (no API graph or no preview-built
  * fixtures) but DOES have user-curated IO, render the inputs/outputs as a
  * tiny "input chips → output chips" strip so the library card honestly
@@ -148,7 +148,7 @@ export function WorkflowIOThumb({ io }: { io: WorkflowIOMap | null | undefined }
   const MAX = 4;
   const hiddenIn = Math.max(0, inputs.length - MAX);
   const hiddenOut = Math.max(0, outputs.length - MAX);
-  /* 2026-08-15: pass the full IO map so two entries that resolve to
+  /* Pass the full IO map so two entries that resolve to
    *  the same display label fall back to `name` and stay visually
    *  distinguishable on the card. */
   const conflictList = [...inputs, ...outputs];
@@ -191,14 +191,7 @@ export function WorkflowIOThumb({ io }: { io: WorkflowIOMap | null | undefined }
   );
 }
 
-/* SourceRootChip was used in R11 to put a small "📂 来源目录" pill on every
- * local-source card.  In R13 we moved that information into the per-root
- * `RootGroupHeader` above each group, so each card no longer carries the
- * directory by itself — the group header owns it.  The component is no
- * longer used anywhere; kept here only as a reference for future similar
- * chips. */
-
-/** R13 — collapsible group header for one LOCAL_WORKFLOWS_PATH root.
+/** Collapsible group header for one LOCAL_WORKFLOWS_PATH root.
  *  The whole row is the click target (button), caret rotates on toggle, and
  *  the count chip tells the user how many cards are hidden.  When a root
  *  is missing on disk (`exists === false`) we add an amber dot and replace
@@ -221,7 +214,7 @@ export function RootGroupHeader({
 }) {
 // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const display = rawPath ? rawPath : "未分组（来源目录已不在配置中）";
-  // R14: 不再 JS 硬切前 26 字符（之前 `…` + slice(-54) 会砍掉 `D:\…` 前缀）。
+  // 不再 JS 硬切前 26 字符（之前 `…` + slice(-54) 会砍掉 `D:\…` 前缀）。
   // 父容器 `flex-1 min-w-0` + 子元素 `truncate` 已按可视宽度自动 ellipsis，
   // 保留最有判别力的 `D:\…` 前缀；只有超宽时末端才出省略号。`title` hover 仍看全路径。
   return (
@@ -293,12 +286,10 @@ export function RootGroupHeader({
   );
 }
 
-/* 2026-08-13 R*: Removed R70-2's per-category chip helper
- * (TYPE_COLOR / getTypeView / TASK_TYPE_OPTIONS / TASK_TYPE_LABELS).
- * The library card now uses MultiModeSelect which derives accent
- * internally from each mode's category.  Kept the import for legacy
- * normalization helpers (`getWorkflowType`, `normalizeTaskType`) since
- * they're used by `useMemo` filters below. */
+/* 移除了 per-category chip helper（TYPE_COLOR / getTypeView / TASK_TYPE_OPTIONS /
+ * TASK_TYPE_LABELS）：library card 现改用 MultiModeSelect（其内部按 mode 的 category
+ * 派生 accent）。保留 getWorkflowType / normalizeTaskType 的 import——下方 useMemo
+ * 过滤仍用到。 */
 
 /** ComfyUI default filenames start with a "date_slug" prefix and contain only
  *  lowercase letters / underscores / digits.  When we see such a name we
@@ -324,7 +315,7 @@ export function ago(iso: string): string {
  *  copy and per-file download.  The combined-bundle download reuses the same
  *  detail endpoint (and the card's `下载合并包` action).
  *
- *  Performance notes (2026-08-09):
+ *  Performance notes:
  *  - The previous implementation rendered a 30-100 kB JSON with
  *    `<pre>{JSON.stringify(...)}</pre>`; React had to hold the whole text
  *    node in memory, the browser had to layout/paint every line, and the
@@ -341,8 +332,8 @@ export function ago(iso: string): string {
  * library is the only consumer that needs a network fetch — canvas opens
  * the modal from in-memory store data.
  *
- * R39 history: this used to be a giant inline modal with a `<textarea>`;
- * R39 swapped the body for `JsonViewer`. R40 then extracted the modal so
+ * 该弹窗最早是内联 <textarea> 大弹窗，后改用 JsonViewer 渲染主体，并抽出
+ * 可复用的 SourceModal 供 canvas 复用（避免 fork 渲染代码）。
  * canvas could open it too without forking the rendering code. */
 export function LibrarySourceModal({
   wf,
@@ -352,8 +343,8 @@ export function LibrarySourceModal({
   onClose: () => void;
 }) {
   const detailQ = api.workflow.detail.useQuery({ id: wf.id });
-  /* 2026-08-29：「查看源文件」展示磁盘上的原始导入 JSON（`rawJson`），而不是
-   * /prompt 用的可执行图（`graph`）。纯 API 导入（rawJson 为 null）才回退。 */
+  /* 「查看源文件」展示磁盘上的原始导入 JSON（`rawJson`），而不是
+  * /prompt 用的可执行图（`graph`）。纯 API 导入（rawJson 为 null）才回退。 */
   const tpl = detailQ.data?.template;
   const data = tpl
     ? {
@@ -373,7 +364,7 @@ export function LibrarySourceModal({
   );
 }
 
-/** 2026-08-21 P4-2: extracted from WorkflowLibrary.renderWorkflowCard's
+/** Extracted from WorkflowLibrary.renderWorkflowCard's
  *  "local-pending" branch. Self-contained: only needs the row plus an
  *  isLoading flag and the load callback. */
 export function PendingWorkflowCard({
@@ -419,7 +410,7 @@ export function PendingWorkflowCard({
   );
 }
 
-/** 2026-08-22 P4: generic pill filter tabs extracted from WorkflowLibrary's
+/** Generic pill filter tabs，从 WorkflowLibrary 的 source/type 过滤行抽出（相同标记，不同 accent）。
  *  source/type filter rows (identical markup, different accent). */
 export function FilterTabs<T extends string>({
   tabs,
@@ -478,7 +469,7 @@ export function FilterTabs<T extends string>({
   );
 }
 
-/** 2026-08-21 P4-3: extracted from WorkflowLibrary's list container
+/** 从 WorkflowLibrary 的列表容器抽出（drop banner + 分组/平铺列表渲染）。所有拖放 handler、过滤器、卡片渲染器都作 props 传入。
  *  (drop banner + grouped/plain list rendering).  All drag-drop handlers,
  *  filters and card renderer are passed in as props. */
 export interface WorkflowRowGroup<TRow = WorkflowRow> {
@@ -543,7 +534,7 @@ export function WorkflowListBody<TRow extends { id: string } = WorkflowRow>({
         </div>
       )}
 
-      {/* R72 compact drop hint — 替代 R71-1 的全屏 overlay */}
+      {/* 紧凑的 drop 提示，替代原先的全屏 overlay */}
       {(!loading || filtered.length > 0) && (
         <div
           className={`mb-3 flex items-center gap-3 rounded-xl border border-dashed px-4 py-2.5 transition-colors ${
@@ -597,13 +588,10 @@ export function WorkflowListBody<TRow extends { id: string } = WorkflowRow>({
           </div>
         </div>
       ) : sourceFilter === "local" && groupedByRoot.length > 0 ? (
-      // 2026-08-10 R13: per-configured-root grouping for the local
-      // tab.  Each LOCAL_WORKFLOWS_PATH entry becomes a RootGroupHeader
-      // (caret + 📁 + verbatim path + status) whose collapsed state
-      // is local to this page session.  Collapsed groups render as
-      // header-only (no children); expanded groups show the cards in
-      // a 3-up grid that nests INSIDE the section, indented so it's
-      // obvious which directory each card belongs to.
+      // 本地 tab 按配置目录分组：每个 LOCAL_WORKFLOWS_PATH 条目变成一个
+      // RootGroupHeader（caret + 📁 + verbatim path + status），其折叠状态
+      // 仅在本页面会话内有效。折叠组只显示 header（无子项）；展开组在
+      // section 内嵌 3 列网格（带缩进），明确每张卡片属于哪个目录。
       <div className="space-y-6">
         {groupedByRoot.length > 1 && (
           <div className="flex items-center justify-between">
