@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { FileText, Lock, TriangleAlert } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { FileText, Lock } from "lucide-react";
 import { useLogPanel } from "./logs/LogProvider";
 
 /* ── Tauri window bottom status bar ─────────────────────────
-   Shows the current browser address (window.location.href) and
-   a simple security indicator.  It listens to Next.js client-side
-   navigation by wrapping history.pushState / replaceState, so the
-   displayed URL updates on every route change without needing a
-   full reload.
-   
-   Must be rendered inside <LogProvider> so the log toggle works.
+   显示当前浏览器地址与安全标识。规范 08 §8.4 禁止 monkey-patch
+   history（pushState / replaceState）——同步 setState 会在第三方库
+   的 useInsertionEffect 阶段触发 "useInsertionEffect must not
+   schedule updates"。改用 Next.js usePathname()：路由变化自动
+   re-render，无需手动拦截。
+   本应用始终运行于 localhost / tauri://，连接恒为安全，故不再维护
+   不安全态。
+   须渲染在 <LogProvider> 内部，日志开关才能工作。
 */
 
 export interface BrowserStatusBarProps {
@@ -23,42 +24,7 @@ export function BrowserStatusBar({ status = "就绪" }: BrowserStatusBarProps) {
   const isOpen = useLogPanel((s) => s.isOpen);
   const toggleOpen = useLogPanel((s) => s.toggleOpen);
   const counts = useLogPanel((s) => s.counts);
-  const [url, setUrl] = useState<string>("");
-  const [secure, setSecure] = useState(true);
-
-  useEffect(() => {
-    const update = () => {
-      const href = typeof window !== "undefined" ? window.location.href : "";
-      setUrl(href);
-      setSecure(href.startsWith("https://") || href.startsWith("http://localhost") || href.startsWith("http://127.0.0.1") || href.startsWith("tauri://"));
-    };
-
-    update();
-
-    window.addEventListener("popstate", update);
-    window.addEventListener("hashchange", update);
-
-    const originalPushState = history.pushState.bind(history);
-    const originalReplaceState = history.replaceState.bind(history);
-
-    history.pushState = function (this: History, ...args: Parameters<typeof history.pushState>) {
-      originalPushState.apply(this, args);
-      update();
-    };
-    history.replaceState = function (this: History, ...args: Parameters<typeof history.replaceState>) {
-      originalReplaceState.apply(this, args);
-      update();
-    };
-
-    return () => {
-      window.removeEventListener("popstate", update);
-      window.removeEventListener("hashchange", update);
-      history.pushState = originalPushState;
-      history.replaceState = originalReplaceState;
-    };
-  }, []);
-
-  const displayUrl = url.replace(/^https?:\/\//, "").replace(/^tauri:\/\//, "");
+  const pathname = usePathname();
 
   return (
     <div
@@ -66,14 +32,10 @@ export function BrowserStatusBar({ status = "就绪" }: BrowserStatusBarProps) {
       aria-label="浏览器地址栏"
     >
       <div className="flex min-w-0 items-center gap-1.5">
-        {secure ? (
-          <Lock size={11} className="shrink-0 text-emerald-400" />
-        ) : (
-          <TriangleAlert size={11} className="shrink-0 text-amber-400" />
-        )}
-        <span className="shrink-0 text-gray-600">{secure ? "安全" : "不安全"}</span>
-        <span className="truncate text-gray-400" title={url}>
-          {displayUrl || url}
+        <Lock size={11} className="shrink-0 text-emerald-400" />
+        <span className="shrink-0 text-gray-600">安全</span>
+        <span className="truncate text-gray-400" title={pathname}>
+          {pathname}
         </span>
       </div>
 
