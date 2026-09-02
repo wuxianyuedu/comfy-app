@@ -356,6 +356,35 @@ function Test-ShellFreshness {
   }
 }
 
+# ── 预检 1.5：数据库 schema 同步（Drizzle）──
+# 改用 Drizzle 后，数据层 schema 是 TS 源码（src/server/db/schema.ts），
+# 不再有「运行时必须重新 prisma generate 一个庞大 client + DLL 被锁」的步骤。
+# 但表结构仍需同步进 db.sqlite：启动前执行一次 drizzle-kit push，以 ALTER 方式
+# 增量同步（保留现有数据）。失败不阻断启动（仅告警），避免启动卡死。
+function Sync-DatabaseSchema {
+  $schemaOut = Join-Path $logDir "drizzle-push-stdout.log"
+  $schemaErr = Join-Path $logDir "drizzle-push-stderr.log"
+  $psiSchema = New-Object System.Diagnostics.ProcessStartInfo
+  $psiSchema.FileName = "cmd.exe"
+  $psiSchema.Arguments = "/c pnpm exec drizzle-kit push > `"$schemaOut`" 2> `"$schemaErr`""
+  $psiSchema.WorkingDirectory = $root
+  $psiSchema.UseShellExecute = $false
+  $psiSchema.CreateNoWindow = $true
+  $schemaProc = [System.Diagnostics.Process]::Start($psiSchema)
+  if (-not $schemaProc.WaitForExit(120000)) {
+    try { taskkill /PID $schemaProc.Id /T /F 2>&1 | Out-Null } catch {}
+    Write-Log "drizzle-kit push 超时（120s），继续启动" -Level WARN
+    return
+  }
+  if ($schemaProc.ExitCode -ne 0) {
+    $errTail = Get-OutputTail -Path $schemaErr
+    Write-Log ("drizzle-kit push 失败（exit=$($schemaProc.ExitCode)）：`n$errTail") -Level WARN
+    Write-Log "数据库 schema 未能同步，应用可能在读写新字段时报错；请检查 DATABASE_URL 与 db.sqlite" -Level WARN
+  } else {
+    Write-Log "数据库 schema 已同步（drizzle-kit push）" -Level OK
+  }
+}
+
 function New-JobObject {
   # ── 定义 C# 互操作类，调用 kernel32 的 Job Object API ──
   # Add-Type 需要现场编译 C#，在部分机器上要数秒。做成函数后由调用方决定时机：
@@ -464,6 +493,7 @@ try {
     Reset-DevPorts
     Sync-NextCache
     Test-DevDependencies
+    Sync-DatabaseSchema
 
     # 3. 启动 Next.js dev server
     $psiDev = New-Object System.Diagnostics.ProcessStartInfo
@@ -520,6 +550,7 @@ try {
     Reset-DevPorts
     Sync-NextCache
     Test-DevDependencies
+    Sync-DatabaseSchema
     $h = New-JobObject
 
     # 确保 Tauri 内置启动页资源就位（tauri://localhost/splash.html）

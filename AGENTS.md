@@ -34,7 +34,7 @@
    `pnpm exec`）。钩子失败先修代码，禁止 `--no-verify` 绕过进历史。
 7. **新增含 postinstall 构建脚本的依赖**：同步更新 `pnpm-workspace.yaml`
    的 `allowBuilds`，否则非交互模式 `pnpm install` 会 exit 1。
-8. **dev server 运行期间不要执行 `pnpm install`**（prisma 引擎 DLL 被进程
+8. **dev server 运行期间不要执行 `pnpm install`**（better-sqlite3 等原生模块（`.node`）被进程
    锁定会 EPERM 连锁失败）。
 
 ## 快速排障

@@ -9,9 +9,16 @@
  *
  * @module tests/helpers/trpc
  */
-import type { PrismaClient } from "../../generated/prisma";
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import type Database from "better-sqlite3";
+import type * as schema from "~/server/db/schema";
 import type { TRPCUser } from "~/server/api/trpc";
 import { getTestDb } from "./test-db";
+
+/** 与 `createTRPCContext` 返回形状一致的 db 类型（Drizzle better-sqlite3 实例）。 */
+export type TestDb = BetterSQLite3Database<typeof schema> & {
+  $client: Database.Database;
+};
 
 /** 构造一个默认测试用户（id 固定为 user-a，可与 seedUser 对齐）。 */
 export function makeUser(overrides: Partial<TRPCUser> = {}): TRPCUser {
@@ -25,14 +32,14 @@ export function makeUser(overrides: Partial<TRPCUser> = {}): TRPCUser {
 
 /** 构造 tRPC caller 所需的 context；`opts.user === null` 时显式传空用户。 */
 export function makeCtx(opts: { user?: TRPCUser | null } = {}): {
-  db: PrismaClient;
+  db: TestDb;
   session: null;
   user: TRPCUser | null;
   headers: Headers;
 } {
   const user = opts.user === undefined ? makeUser() : opts.user;
   return {
-    db: getTestDb() as unknown as PrismaClient,
+    db: getTestDb() as unknown as TestDb,
     session: null,
     user,
     headers: new Headers({ "x-forwarded-for": "127.0.0.1" }),

@@ -125,7 +125,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
         .then((dd) => {
           const tpl = dd.template;
           if (!alive || !tpl) return;
-          setWfIO((tpl.workflowIO as unknown as WorkflowIOMap) ?? null);
+          setWfIO((tpl.workflowIO as WorkflowIOMap) ?? null);
           /* R-ardot37 模式一致性：库卡片对 `taskType` 有 fallback（仅写
            *  taskType 没声明 modes[] 的旧工作流也能展示单模式 chip），画布
            *  也走完全相同的 fallback 避免「库显示文生图 / 画布显示未选」

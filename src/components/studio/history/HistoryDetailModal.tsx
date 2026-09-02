@@ -167,7 +167,7 @@ export function HistoryDetailModal({
               const first = current.images[0];
               if (!first?.localPath) return null;
               const snapSource = (
-                current.workflowSnapshot as unknown as
+                current.workflowSnapshot as
                   | { source?: string }
                   | null
                   | undefined

@@ -1,79 +1,65 @@
 /**
- * `repository-project.ts` — Project 业务仓储
- * ===========================================================================
- *
- * 项目仓储。在基类 CRUD 之上，强制所有查询按 `userId` 隔离，
- * 杜绝「A 用户读到 B 用户项目」的越权风险。
- *
+ * `repository-project.ts` — Project 业务仓储（Drizzle 版）
  * @module core/repository-project
  */
-import { prisma } from "@/lib/db";
-import { type Prisma, type Project } from "../../../generated/prisma";
-import { PrismaRepository, type PrismaDelegate } from "./repository-base";
+import { db } from "@/lib/db";
+import { project, type Project } from "~/server/db/schema";
+import { DrizzleRepository } from "./repository-base";
+import { eq, and, desc } from "drizzle-orm";
 
-/**
- * 项目仓储。在基类 CRUD 之上，强制所有查询按 `userId` 隔离，
- * 杜绝「A 用户读到 B 用户项目」的越权风险。
- */
-export class ProjectRepository extends PrismaRepository<
-  Project,
-  Project,
-  Partial<Project>,
-  { id: string }
-> {
+export class ProjectRepository extends DrizzleRepository<Project> {
   constructor() {
-    super(prisma.project as unknown as PrismaDelegate<
-      Project,
-      Project,
-      Partial<Project>,
-      { id: string }
-    >);
+    super(project, project.id);
   }
 
-  /** 取某用户的所有项目（按更新时间倒序，最新的在前）。 */
   async listByUser(userId: string): Promise<Project[]> {
-    return prisma.project.findMany({
-      where: { userId },
-      orderBy: { updatedAt: "desc" },
-    });
+    return db
+      .select()
+      .from(project)
+      .where(eq(project.userId, userId))
+      .orderBy(desc(project.updatedAt));
   }
 
-  /**
-   * 按用户 upsert：客户端生成的稳定 `proj_*` id 即主键，
-   * 首次写入建行（归属 userId），之后仅更新字段。
-   */
   async upsertForUser(
     userId: string,
-    data: {
-      id: string;
-      name: string;
-      nodes?: unknown;
-      edges?: unknown;
-    }
+    data: { id: string; name: string; nodes?: unknown; edges?: unknown }
   ): Promise<Project> {
-    return prisma.project.upsert({
-      where: { id: data.id },
-      create: {
-        id: data.id,
+    const existing = await db
+      .select()
+      .from(project)
+      .where(eq(project.id, data.id))
+      .limit(1);
+    if (!existing[0]) {
+      const rows = await db
+        .insert(project)
+        .values({
+          id: data.id,
+          userId,
+          name: data.name,
+          nodes: (data.nodes ?? "[]"),
+          edges: (data.edges ?? "[]"),
+        })
+        .returning();
+      return rows[0]!;
+    }
+    const rows = await db
+      .update(project)
+      .set({
         name: data.name,
-        nodes: data.nodes as Prisma.InputJsonValue,
-        edges: data.edges as Prisma.InputJsonValue,
-        userId,
-      },
-      update: {
-        name: data.name,
-        nodes: data.nodes as Prisma.InputJsonValue,
-        edges: data.edges as Prisma.InputJsonValue,
+        nodes: (data.nodes ?? "[]"),
+        edges: (data.edges ?? "[]"),
         updatedAt: new Date(),
-      },
-    });
+      })
+      .where(eq(project.id, data.id))
+      .returning();
+    return rows[0]!;
   }
 
-  /** 仅当用户拥有该项目时才删除，避免越权删除。 */
   async deleteForUser(userId: string, id: string): Promise<void> {
-    await prisma.project.deleteMany({ where: { id, userId } });
+    await db
+      .delete(project)
+      .where(and(eq(project.id, id), eq(project.userId, userId)));
   }
 }
 
-/** 进程内单例：API 路由与 server action 共享同一实例。 */
 export const projectRepository = new ProjectRepository();

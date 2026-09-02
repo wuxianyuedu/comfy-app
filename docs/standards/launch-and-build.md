@@ -39,6 +39,11 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 5. **壳时效提醒**：app.exe 比 tauri.conf.json / src\*.rs / splash-assets 旧时
    WARN 提醒重编（`cd src-tauri; cargo build --release`）。窗口配置与启动页是
    编译期内嵌的，只改源码不重编壳 = 跑旧逻辑（黑屏问题的直接来源）。
+6. **数据库 schema 同步（Drizzle）**：依赖预检后执行 `pnpm exec drizzle-kit push`，
+   以 ALTER 方式把 `src/server/db/schema.ts` 的表结构增量同步进 `db.sqlite`
+   （保留现有数据）。改用 Drizzle 后不再有「运行时必须重新 prisma generate 一个
+   庞大 client + DLL 被锁」的步骤；改了 schema 后双击启动即可自动生效。失败仅
+   WARN（不阻断启动），日志：`log/drizzle-push-stdout/stderr.log`。
 
 ## 3. 进程树管理规范
 
@@ -49,7 +54,7 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
   兜底清理。**不要**假设 Job 标志生效。
 - pnpm 已关闭 `verifyDepsBeforeRun`（见 §6）：任何 pnpm 命令都不会隐式
   补跑 install。dev server 运行期间不要手动跑 `pnpm install`
-  （prisma 引擎 DLL 被进程锁定，postinstall 会 EPERM）。
+  （better-sqlite3 等原生模块被进程锁定，install 会 EPERM）。
 
 ## 4. 日志布局（排障从上往下看）
 
@@ -77,7 +82,7 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 | dev server「提前退出 exit=1」且无输出 | cmd 重定向目标文件被残留进程锁定，打开即失败 | 已修复：nextjs 日志按次命名。残留进程见 §3 |
 | `pnpm install` 被拒：`minimumReleaseAge` / `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` | pnpm 11 默认拒绝发布不足 24h 的包 | 已在 pnpm-workspace.yaml 关闭；新包确认可信后可按需放开 |
 | `pnpm install` exit 1：`ERR_PNPM_IGNORED_BUILDS` | pnpm 11 默认不批准第三方 postinstall | 已在 pnpm-workspace.yaml `allowBuilds` 批准 5 个包；新增含构建脚本的依赖需补充 |
-| 任何 pnpm 命令连锁失败：prisma `EPERM rename ...dll.node` | dev server 运行中锁着引擎 DLL + pnpm 隐式依赖检查触发 install | 已关闭 `verifyDepsBeforeRun`；关 dev server 再装依赖 |
+| 任何 pnpm 命令连锁失败：better-sqlite3 `EPERM rename ...node` | dev server 运行中锁着原生模块 + pnpm 隐式依赖检查触发 install | 已关闭 `verifyDepsBeforeRun`；关 dev server 再装依赖 |
 | `next dev` 报 `Invalid project directory ... \-p` | pnpm 11 不再剥离 `--`，字面量传给了 next | 已修复：`pnpm dev -p 3000 -H 127.0.0.1` |
 | 所有请求挂死、`tsc` 报 typescript 缺失 | Next 16.3.2 默认 `useTypeScriptCli: true`，与 typescript6 别名不兼容 | 已在 next.config.js 关闭；换回标准 typescript 包后可移除该配置 |
 | 提交时钩子报 `Class extends value undefined` | npm 11.19 在本机解析 .bin 别名链崩溃 | 钩子已改 `pnpm exec`；勿把钩子改回 npx |

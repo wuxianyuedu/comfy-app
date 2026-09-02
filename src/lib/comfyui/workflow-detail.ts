@@ -15,7 +15,6 @@
  * parsing).  This file keeps only the orchestration + caching layers.
  */
 import { TRPCError } from "@trpc/server";
-import type { Prisma } from "../../../generated/prisma";
 import { workflowTemplateRepository } from "@/lib/core/repository";
 import { detectParamMap } from "@/lib/comfyui/workflow";
 import {
@@ -194,8 +193,8 @@ export async function buildWorkflowDetailFull(
       cacheDel(cacheKey); // rebuild so the missing flag reaches the client
     } else if (re.update) {
       await workflowTemplateRepository.update(id, {
-        graph: re.update.graph as Prisma.JsonValue,
-        rawJson: re.update.rawJson as Prisma.JsonValue,
+        graph: re.update.graph,
+        rawJson: re.update.rawJson,
         positions: re.update.positions,
         paramMap: re.update.paramMap,
         taskType: re.update.taskType,

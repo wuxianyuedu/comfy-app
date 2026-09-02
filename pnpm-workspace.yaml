@@ -21,3 +21,5 @@ allowBuilds:
   "@sentry/cli": true
   prisma: true
   unrs-resolver: true
+  # better-sqlite3 含原生模块构建脚本（node-gyp），需批准
+  "better-sqlite3": true

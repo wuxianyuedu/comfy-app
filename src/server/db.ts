@@ -1,22 +1,40 @@
+/**
+ * `db.ts` — Drizzle 实例（替代原 PrismaClient 单例）
+ * ===========================================================================
+ *
+ * 使用 better-sqlite3 同步驱动连接 `db.sqlite`（`DATABASE_URL` 形如
+ * `file:./db.sqlite`）。开发模式单例挂到 globalThis，避免 Next dev 热重载
+ * 反复打开连接。
+ *
+ * @module server/db
+ */
+import "server-only";
 import { env } from "~/env";
-import { PrismaClient } from "../../generated/prisma";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import * as schema from "./db/schema";
 
-// 开发模式下默认只打印 error / warn。
-// 每条 SQL 都打印会让控制台被 `prisma:query` 刷屏（尤其是工作流库 /
-// reaper 轮询），调试 SQL 时再设 PRISMA_LOG_QUERIES=1 开启。
-const prismaLogLevels: ("query" | "error" | "warn")[] =
-  process.env.PRISMA_LOG_QUERIES === "1"
-    ? ["query", "error", "warn"]
-    : env.NODE_ENV === "development"
-      ? ["error", "warn"]
-      : ["error"];
+function resolveDbPath(url: string): string {
+  if (url.startsWith("file:")) {
+    const u = new URL(url);
+    let p = decodeURIComponent(u.pathname);
+    // Windows 上 pathname 可能带前导 "/"，如 "/C:/..."，需去掉
+    if (process.platform === "win32" && p.startsWith("/") && /^[A-Za-z]:/.test(p.slice(1))) {
+      p = p.slice(1);
+    }
+    return p;
+  }
+  return url;
+}
 
-const createPrismaClient = () => new PrismaClient({ log: prismaLogLevels });
+const sqlite = new Database(resolveDbPath(env.DATABASE_URL));
+sqlite.pragma("journal_mode = WAL");
+sqlite.pragma("foreign_keys = ON");
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: ReturnType<typeof createPrismaClient> | undefined;
+const globalForDb = globalThis as unknown as {
+  db: ReturnType<typeof drizzle<typeof schema>> | undefined;
 };
 
-export const db = globalForPrisma.prisma ?? createPrismaClient();
+export const db = globalForDb.db ?? drizzle(sqlite, { schema });
 
-if (env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+if (env.NODE_ENV !== "production") globalForDb.db = db;

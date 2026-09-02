@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import type { Prisma, WorkflowTemplate } from "../../../../generated/prisma";
+import type { WorkflowTemplate } from "~/server/db/schema";
+import {
+  workflowTemplate,
+  workflowModelTag,
+  workflowModelTagToWorkflowTemplate,
+} from "~/server/db/schema";
+import { db } from "@/lib/db";
+import { eq, and, inArray, desc, exists, sql, type SQL } from "drizzle-orm";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { logger } from "~/server/lib/logger";
 import {
@@ -131,10 +138,10 @@ export const workflowRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const userId = ctx.user.id;
-      const where: Prisma.WorkflowTemplateWhereInput = {};
+      const whereConditions: SQL[] = [];
 
       if (input?.type) {
-        where.taskType = normalizeTaskType(input.type);
+        whereConditions.push(eq(workflowTemplate.taskType, normalizeTaskType(input.type)));
       } else if (input?.category) {
         const category =
           input.category === "image" || input.category === "video" || input.category === "audio"
@@ -142,7 +149,7 @@ export const workflowRouter = createTRPCRouter({
             : null;
         const typesInCat = category ? getWorkflowTypesByCategory(category) : [];
         if (typesInCat.length > 0) {
-          where.taskType = { in: typesInCat.map((typesInCat) => typesInCat.code) };
+          whereConditions.push(inArray(workflowTemplate.taskType, typesInCat.map((t) => t.code)));
         }
       }
 
@@ -152,31 +159,59 @@ export const workflowRouter = createTRPCRouter({
           .map((part) => part.trim())
           .filter(Boolean);
         if (names.length > 0) {
-          where.modelTags = { some: { name: { in: names } } };
+          const tagRows = await db
+            .select({ id: workflowModelTag.id })
+            .from(workflowModelTag)
+            .where(and(eq(workflowModelTag.userId, userId), inArray(workflowModelTag.name, names)));
+          const tagIds = tagRows.map((r) => r.id);
+          if (tagIds.length > 0) {
+            whereConditions.push(
+              exists(
+                db
+                  .select({ one: sql`1` })
+                  .from(workflowModelTagToWorkflowTemplate)
+                  .where(
+                    and(
+                      eq(workflowModelTagToWorkflowTemplate.workflowTemplate, workflowTemplate.id),
+                      inArray(workflowModelTagToWorkflowTemplate.workflowModelTag, tagIds)
+                    )
+                  )
+              )
+            );
+          } else {
+            // 没有任何匹配标签 → 结果为空
+            whereConditions.push(sql`0 = 1`);
+          }
         }
       }
 
+      const where = whereConditions.length > 0 ? and(...whereConditions) : undefined;
       const list = await workflowTemplateRepository.listForUser(userId, {
         where,
-        orderBy: [{ createdAt: "desc" }],
-        select: {
-          id: true,
-          name: true,
-          taskType: true,
-          createdAt: true,
-          paramMap: true,
-          graph: true,
-          rawJson: true,
-          sourcePath: true,
-          modelTags: { select: { name: true } },
-          sourceMtime: true,
-          sourceChecksum: true,
-          workflowIO: true,
-          apiSource: true,
-          modes: true,
-          defaultMode: true,
-        },
+        orderBy: [desc(workflowTemplate.createdAt)],
       });
+
+      // 批量取出每个模板的模型标签名（替代 Prisma modelTags 关系投影）
+      const wfIds = list.map((w) => w.id);
+      const tagRows = wfIds.length
+        ? await db
+            .select({
+              id: workflowModelTagToWorkflowTemplate.workflowTemplate,
+              name: workflowModelTag.name,
+            })
+            .from(workflowModelTagToWorkflowTemplate)
+            .innerJoin(
+              workflowModelTag,
+              eq(workflowModelTagToWorkflowTemplate.workflowModelTag, workflowModelTag.id)
+            )
+            .where(inArray(workflowModelTagToWorkflowTemplate.workflowTemplate, wfIds))
+        : [];
+      const tagsByName = new Map<string, string[]>();
+      for (const r of tagRows) {
+        const arr = tagsByName.get(r.id) ?? [];
+        arr.push(r.name);
+        tagsByName.set(r.id, arr);
+      }
 
       // ── Local-on-disk roots ──
       const localRoots = getLocalWorkflowRoots();
@@ -305,7 +340,7 @@ export const workflowRouter = createTRPCRouter({
             list.workflowIO && typeof list.workflowIO === "object" && !Array.isArray(list.workflowIO)
               ? (list.workflowIO as unknown as WorkflowIOMap)
               : {},
-          modelTags: ((list.modelTags as Array<{ name: string }>) ?? []).map((tag) => tag.name),
+          modelTags: tagsByName.get(list.id) ?? [],
           sourceMtimeSec: typeof list.sourceMtime === "number" ? list.sourceMtime : null,
           diskMtimeSec,
           diskDirty,
@@ -601,11 +636,11 @@ export const workflowRouter = createTRPCRouter({
         taskType: rest.taskType,
         thumb: rest.thumb,
         defaultMode: rest.defaultMode,
-        graph: rest.graph as Prisma.JsonValue | undefined,
-        rawJson: rest.rawJson as Prisma.JsonValue | undefined,
-        paramMap: rest.paramMap as Prisma.JsonValue | undefined,
-        positions: rest.positions as Prisma.JsonValue | undefined,
-        workflowIO: rest.workflowIO as Prisma.JsonValue | undefined,
+        graph: rest.graph,
+        rawJson: rest.rawJson,
+        paramMap: rest.paramMap,
+        positions: rest.positions,
+        workflowIO: rest.workflowIO,
       };
 
       if (input.taskType !== undefined) {
@@ -632,7 +667,7 @@ export const workflowRouter = createTRPCRouter({
       // positions merge / replace + groups & notes write-back into rawJson
       let nextRawJson: Record<string, unknown> | null = null;
       if (existing.rawJson && typeof existing.rawJson === "object" && !Array.isArray(existing.rawJson)) {
-        nextRawJson = existing.rawJson;
+        nextRawJson = existing.rawJson as Record<string, unknown>;
       }
       if (input.positions !== undefined || groups !== undefined || notes !== undefined) {
         nextRawJson = nextRawJson ? { ...nextRawJson } : {};
@@ -657,7 +692,7 @@ export const workflowRouter = createTRPCRouter({
         if (groups !== undefined) nextRawJson.groups = groups;
         if (notes !== undefined) nextRawJson.notes = notes;
         if (nodes.length > 0) nextRawJson.nodes = nodes;
-        patch.rawJson = nextRawJson as Prisma.JsonValue;
+        patch.rawJson = nextRawJson;
         if (input.positions !== undefined) {
           if (mergePositions) {
             // Merge into the existing positions column (single-key drags from
@@ -727,7 +762,7 @@ export const workflowRouter = createTRPCRouter({
       }
       // Persist the reimported content back onto the template
       const updated = await workflowTemplateRepository.update(existing.id, {
-        graph: result.update.graph as unknown as Prisma.JsonValue,
+        graph: result.update.graph,
         rawJson: result.update.rawJson ?? existing.rawJson,
         paramMap: result.update.paramMap ?? existing.paramMap,
         positions: result.update.positions ?? existing.positions,

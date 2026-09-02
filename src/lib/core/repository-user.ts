@@ -1,28 +1,15 @@
 /**
- * `repository-user.ts` — User（用户）与 LlmConfig（LLM 配置）仓储
- * ===========================================================================
- *
- * 用户仓储：认证链路（register / change-email / change-password /
- * getServerUser）统一通过本类访问 `User`，不直接碰 Prisma。查询按 email
- * 建立索引；密码哈希生成/校验仍由调用方（bcrypt）负责，本类只做持久化收口。
- *
- * LLM 配置仓储：全局单例行（`id: "singleton"`）的读写在 lib/llm/server 与
- * 本路由间收口；`upsertSingleton` 保持旧路由语义。
- *
+ * `repository-user.ts` — User 与 LlmConfig 仓储（Drizzle 版）
  * @module core/repository-user
  */
-import { prisma } from "@/lib/db";
-import type { LlmConfig, User } from "../../../generated/prisma";
-import { Prisma } from "../../../generated/prisma";
+import { db } from "@/lib/db";
+import { user, llmConfig, type User, type LlmConfig } from "~/server/db/schema";
+import { eq } from "drizzle-orm";
 
-/**
- * 用户仓储。认证链路（register / change-email / change-password / getServerUser）
- * 统一通过本类访问 `User`，不直接碰 Prisma。查询按 email 建立索引；密码哈希
- * 生成/校验仍由调用方（bcrypt）负责，本类只做持久化收口。
- */
 export class UserRepository {
   async findByEmail(email: string): Promise<User | null> {
-    return prisma.user.findUnique({ where: { email } });
+    const rows = await db.select().from(user).where(eq(user.email, email)).limit(1);
+    return rows[0] ?? null;
   }
 
   async createUser(input: {
@@ -30,27 +17,29 @@ export class UserRepository {
     name: string | null;
     password: string;
   }): Promise<User> {
-    return prisma.user.create({ data: input });
+    const rows = await db.insert(user).values(input).returning();
+    return rows[0]!;
   }
 
   async updateEmail(id: string, email: string): Promise<User> {
-    return prisma.user.update({ where: { id }, data: { email } });
+    const rows = await db.update(user).set({ email }).where(eq(user.id, id)).returning();
+    return rows[0]!;
   }
 
   async updatePassword(id: string, password: string): Promise<User> {
-    return prisma.user.update({ where: { id }, data: { password } });
+    const rows = await db.update(user).set({ password }).where(eq(user.id, id)).returning();
+    return rows[0]!;
   }
 }
 
-/**
- * LLM 配置仓储。全局单例行（`id: "singleton"`）的读写在 lib/llm/server 与
- * 本路由间收口；`upsertSingleton` 保持旧路由语义：仅显式传入的字段参与
- * update，空字符串 apiKey 视为清除。
- */
 export class LlmConfigRepository {
-  /** 读取全局单例行；未初始化返回 `null`（调用方走默认配置）。 */
   async findSingleton(): Promise<LlmConfig | null> {
-    return prisma.llmConfig.findUnique({ where: { id: "singleton" } });
+    const rows = await db
+      .select()
+      .from(llmConfig)
+      .where(eq(llmConfig.id, "singleton"))
+      .limit(1);
+    return rows[0] ?? null;
   }
 
   async upsertSingleton(input: {
@@ -59,33 +48,41 @@ export class LlmConfigRepository {
     model?: string;
     apiKey?: string | null;
     temperature?: number;
-    temperatureByTask?: Prisma.InputJsonValue | null;
+    temperatureByTask?: unknown;
     maxTokens?: number;
   }): Promise<LlmConfig> {
-    // Prisma Json 字段需要用 DbNull / JsonNull 来区分 SQL NULL 与 JSON null
-    const taskJson = input.temperatureByTask ?? Prisma.DbNull;
-    return prisma.llmConfig.upsert({
-      where: { id: "singleton" },
-      create: {
-        id: "singleton",
-        provider: input.provider ?? "local",
-        baseUrl: input.baseUrl ?? "http://localhost:11434/v1",
-        model: input.model ?? "llama3.1",
-        apiKey: input.apiKey ?? null,
-        temperature: input.temperature ?? 0.7,
-        temperatureByTask: taskJson,
-        maxTokens: input.maxTokens ?? 2048,
-      },
-      update: {
-        ...(input.provider !== undefined ? { provider: input.provider } : {}),
-        ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
-        ...(input.model !== undefined ? { model: input.model } : {}),
-        ...(input.apiKey !== undefined ? { apiKey: input.apiKey ?? null } : {}),
-        ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
-        ...(input.temperatureByTask !== undefined ? { temperatureByTask: taskJson } : {}),
-        ...(input.maxTokens !== undefined ? { maxTokens: input.maxTokens } : {}),
-      },
-    });
+    const taskJson = input.temperatureByTask ?? null;
+    const existing = await this.findSingleton();
+    if (!existing) {
+      const rows = await db
+        .insert(llmConfig)
+        .values({
+          id: "singleton",
+          provider: input.provider ?? "local",
+          baseUrl: input.baseUrl ?? "http://localhost:11434/v1",
+          model: input.model ?? "llama3.1",
+          apiKey: input.apiKey ?? null,
+          temperature: input.temperature ?? 0.7,
+          temperatureByTask: taskJson,
+          maxTokens: input.maxTokens ?? 2048,
+        })
+        .returning();
+      return rows[0]!;
+    }
+    const patch: Partial<LlmConfig> = {};
+    if (input.provider !== undefined) patch.provider = input.provider;
+    if (input.baseUrl !== undefined) patch.baseUrl = input.baseUrl;
+    if (input.model !== undefined) patch.model = input.model;
+    if (input.apiKey !== undefined) patch.apiKey = input.apiKey ?? null;
+    if (input.temperature !== undefined) patch.temperature = input.temperature;
+    if (input.temperatureByTask !== undefined) patch.temperatureByTask = taskJson;
+    if (input.maxTokens !== undefined) patch.maxTokens = input.maxTokens;
+    const rows = await db
+      .update(llmConfig)
+      .set(patch)
+      .where(eq(llmConfig.id, "singleton"))
+      .returning();
+    return rows[0]!;
   }
 }
 

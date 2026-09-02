@@ -1,104 +1,97 @@
 /**
- * `repository-model-tag.ts` — WorkflowModelTag 业务仓储（用户级模型标签库）
- * ===========================================================================
- *
- * 标签是「用户级全局库」，按 `(userId, name)` 唯一；一个标签可被多张工作流
- * （隐式多对多 `WorkflowTemplate.modelTags`）引用。本类集中实现列表 /
- * 幂等 upsert / 重命名（保留关联）/ 删除，并把越权校验（必须归属当前用户）
- * 收敛在仓储内，调用方不再手写 `where: { userId }`。
- *
+ * `repository-model-tag.ts` — WorkflowModelTag 仓储（Drizzle 版）
  * @module core/repository-model-tag
  */
-import { prisma } from "@/lib/db";
-import type { WorkflowModelTag } from "../../../generated/prisma";
-import { PrismaRepository } from "./repository-base";
+import { db } from "@/lib/db";
+import {
+  workflowModelTag,
+  workflowModelTagToWorkflowTemplate,
+  type WorkflowModelTag,
+} from "~/server/db/schema";
+import { DrizzleRepository } from "./repository-base";
+import { eq, and, asc, count, inArray } from "drizzle-orm";
 
-/** 标签视图：去掉内部关系字段，只暴露 UI 需要的 id / name / count。 */
 export interface WorkflowModelTagView {
   id: string;
   name: string;
   count: number;
 }
 
-/**
- * 模型标签仓储。标签是「用户级全局库」，按 `(userId, name)` 唯一；一个标签
- * 可被多张工作流（隐式多对多 `WorkflowTemplate.modelTags`）引用。本类集中
- * 实现列表 / 幂等 upsert / 重命名（保留关联）/ 删除，并把越权校验
- * （必须归属当前用户）收敛在仓储内，调用方不再手写 `where: { userId }`。
- */
-export class WorkflowModelTagRepository extends PrismaRepository<
-  WorkflowModelTag,
-  WorkflowModelTag,
-  Partial<WorkflowModelTag>,
-  { id: string }
-> {
+export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelTag> {
   constructor() {
-    super(
-      prisma.workflowModelTag
-    );
+    super(workflowModelTag, workflowModelTag.id);
   }
 
-  /** 取该用户的全部标签，附各自被引用次数，按名称字母序稳定排序。 */
   async listByUser(userId: string): Promise<WorkflowModelTagView[]> {
-    const rows = await prisma.workflowModelTag.findMany({
-      where: { userId },
-      select: { id: true, name: true, _count: { select: { workflows: true } } },
-      orderBy: { name: "asc" },
-    });
-    return rows.map((row) =>({ id: row.id, name: row.name, count: row._count.workflows }));
+    const rows = await db
+      .select({
+        id: workflowModelTag.id,
+        name: workflowModelTag.name,
+        count: count(),
+      })
+      .from(workflowModelTag)
+      .leftJoin(
+        workflowModelTagToWorkflowTemplate,
+        eq(workflowModelTagToWorkflowTemplate.workflowModelTag, workflowModelTag.id)
+      )
+      .where(eq(workflowModelTag.userId, userId))
+      .groupBy(workflowModelTag.id)
+      .orderBy(asc(workflowModelTag.name));
+    return rows.map((r) => ({ id: r.id, name: r.name, count: Number(r.count) }));
   }
 
-  /** 幂等 upsert：同名标签已存在则返回原记录，否则新建。 */
-  async upsertByName(
-    userId: string,
-    name: string
-  ): Promise<WorkflowModelTagView> {
-    const tag = await prisma.workflowModelTag.upsert({
-      where: { userId_name: { userId, name } },
-      update: {},
-      create: { userId, name },
-      select: { id: true, name: true, _count: { select: { workflows: true } } },
-    });
-    return { id: tag.id, name: tag.name, count: tag._count.workflows };
+  async upsertByName(userId: string, name: string): Promise<WorkflowModelTagView> {
+    const existing = await db
+      .select()
+      .from(workflowModelTag)
+      .where(and(eq(workflowModelTag.userId, userId), eq(workflowModelTag.name, name)))
+      .limit(1);
+    const row =
+      existing[0] ??
+      (await db.insert(workflowModelTag).values({ userId, name }).returning())[0]!;
+    const [c] = await db
+      .select({ v: count() })
+      .from(workflowModelTagToWorkflowTemplate)
+      .where(eq(workflowModelTagToWorkflowTemplate.workflowModelTag, row.id));
+    return { id: row.id, name: row.name, count: Number(c?.v ?? 0) };
   }
 
-  /** 按「用户 + 名称」取主键（仅取 id），不存在返回 `null`。 */
   async findByUserAndName(
     userId: string,
     name: string
   ): Promise<{ id: string } | null> {
-    return prisma.workflowModelTag.findUnique({
-      where: { userId_name: { userId, name } },
-      select: { id: true },
-    });
+    const rows = await db
+      .select({ id: workflowModelTag.id })
+      .from(workflowModelTag)
+      .where(and(eq(workflowModelTag.userId, userId), eq(workflowModelTag.name, name)))
+      .limit(1);
+    return rows[0] ?? null;
   }
 
-  /** 仅改名（关联行按 tag id 关联，重命名不破坏任何绑定）。 */
   async rename(id: string, newName: string): Promise<WorkflowModelTagView> {
-    const tag = await prisma.workflowModelTag.update({
-      where: { id },
-      data: { name: newName },
-      select: { id: true, name: true, _count: { select: { workflows: true } } },
-    });
-    return { id: tag.id, name: tag.name, count: tag._count.workflows };
+    const updated = await db
+      .update(workflowModelTag)
+      .set({ name: newName })
+      .where(eq(workflowModelTag.id, id))
+      .returning();
+    const [c] = await db
+      .select({ v: count() })
+      .from(workflowModelTagToWorkflowTemplate)
+      .where(eq(workflowModelTagToWorkflowTemplate.workflowModelTag, id));
+    return { id: updated[0]!.id, name: updated[0]!.name, count: Number(c?.v ?? 0) };
   }
 
-  /** 按主键删除（隐式关联的 workflow 绑定由关系级联清理）。 */
   async deleteById(id: string): Promise<void> {
-    await prisma.workflowModelTag.delete({ where: { id } });
+    await db.delete(workflowModelTag).where(eq(workflowModelTag.id, id));
   }
 
-  /** 按「用户 + 名称列表」批量取 id（PATCH modelTags set 场景）。 */
-  async listIdsByNames(
-    userId: string,
-    names: string[]
-  ): Promise<{ id: string }[]> {
-    return prisma.workflowModelTag.findMany({
-      where: { userId, name: { in: names } },
-      select: { id: true },
-    });
+  async listIdsByNames(userId: string, names: string[]): Promise<{ id: string }[]> {
+    if (!names.length) return [];
+    return db
+      .select({ id: workflowModelTag.id })
+      .from(workflowModelTag)
+      .where(and(eq(workflowModelTag.userId, userId), inArray(workflowModelTag.name, names)));
   }
 }
 
-/** 进程内单例。 */
 export const workflowModelTagRepository = new WorkflowModelTagRepository();

@@ -1,330 +1,307 @@
 /**
- * tests/helpers/test-db.ts — 内存版 Prisma 客户端替身（测试基建，不触碰 src 源码）。
+ * tests/helpers/test-db.ts — Drizzle 内存测试库（测试基建，不触碰 src 源码）
  * ===========================================================================
  *
  * mock 策略：
- * - 测试文件通过 `vi.mock("~/server/db", ...)` 返回 `createTestDb()` 的单例。
- *   `@/lib/db`（兼容 shim，re-export 自 `~/server/db`）随之被替换，因此
- *   Repository 层与 tRPC ctx.db 共享同一套内存表，src 源码零改动。
- * - 只实现项目实际用到的 Prisma 语义子集：
- *   where（标量等值 / `{ in }` / `{ some }` 关系 / 复合唯一键 userId_name）、
- *   orderBy、take/skip、select 投影（含关系 select）、include（images 排序/截取）、
- *   create / update（undefined 字段跳过，null 覆盖，modelTags `{ set }` 关系替换）、
- *   upsert / delete / deleteMany。
- * - 测试体内用 `getTestDb()` 取同一实例做 seeding 与落库断言。
+ * - 测试文件通过 `vi.mock("~/server/db", () => ({ db: createTestDb() }))` 把
+ *   `~/server/db`（即 `@/lib/db`）的 `db` 替换成本文件创建的「内存 SQLite +
+ *   Drizzle」实例。Repository 层与 tRPC ctx 直接复用同一实例，src 源码零改动。
+ * - 用的是真实 Drizzle API（`db.select().from(task)` …），因此 repository 的
+ *   任何改写都能在集成测试里真实跑通，而非 mock 一套假语义。
+ * - 内存库 `:memory:` 每次测试文件新建，建表用 CREATE_SQL（与 schema.ts 对齐），
+ *   测试间用 `$reset()` 清空。
+ *
+ * 兼容旧测试 API（不破坏 generate.test.ts / workflow.test.ts）：
+ * - `getTestDb()` 返回带 `$reset()` 与 `$tables` 的对象；`$tables.X` 是同步行数组
+ *   （JSON 列已自动解析回对象），断言沿用 `tdb.$tables.tasks.find(...)` 等写法。
+ * - `seedUser` / `seedWorkflowTemplate` / `seedTask` / `seedProject` 用底层同步
+ *   写入（better-sqlite3），保持与原同步 seed 调用一致。
  *
  * @module tests/helpers/test-db
  */
-import { vi, type Mock } from "vitest";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import * as schema from "~/server/db/schema";
 
 export type Row = Record<string, unknown>;
 
-export interface FindArgs {
-  where?: Row;
-  orderBy?: Row | Row[];
-  take?: number;
-  skip?: number;
-  select?: Row;
-  include?: Row;
-}
+/** schema.ts 中声明为 `{ mode: "json" }` 的列（存为 JSON 字符串，读取需解析）。 */
+const jsonColumns = new Set<string>([
+  "nodes",
+  "edges",
+  "params",
+  "workflowSnapshot",
+  "referenceImages",
+  "resultImages",
+  "logs",
+  "validationErrors",
+  "graph",
+  "paramMap",
+  "workflowIO",
+  "rawJson",
+  "positions",
+  "defaultParams",
+  "datasetImages",
+  "temperatureByTask",
+]);
 
-export interface FakeModel {
-  findUnique: Mock;
-  findFirst: Mock;
-  findMany: Mock;
-  create: Mock;
-  update: Mock;
-  delete: Mock;
-  deleteMany: Mock;
-  upsert: Mock;
-}
+const TABLES = [
+  "user",
+  "session",
+  "account",
+  "verification",
+  "post",
+  "project",
+  "model",
+  "userModelConfig",
+  "favorite",
+  "task",
+  "taskImage",
+  "workflowTemplate",
+  "workflowModelTag",
+  "workflowModelTagToWorkflowTemplate",
+  "llmConfig",
+  "skill",
+  "loraTrainingJob",
+  "filmProject",
+  "filmShot",
+  "auditLog",
+];
 
-export interface TestDbTables {
+const CREATE_SQL = `
+CREATE TABLE IF NOT EXISTS user (
+  id TEXT PRIMARY KEY, name TEXT, email TEXT NOT NULL UNIQUE, emailVerified INTEGER NOT NULL DEFAULT 0,
+  image TEXT, password TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS session (
+  id TEXT PRIMARY KEY, expiresAt TEXT NOT NULL, token TEXT NOT NULL UNIQUE, createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL, ipAddress TEXT, userAgent TEXT, userId TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS account (
+  id TEXT PRIMARY KEY, accountId TEXT NOT NULL, providerId TEXT NOT NULL, issuer TEXT, userId TEXT NOT NULL,
+  accessToken TEXT, refreshToken TEXT, idToken TEXT, accessTokenExpiresAt TEXT, refreshTokenExpiresAt TEXT,
+  scope TEXT, password TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS verification (
+  id TEXT PRIMARY KEY, identifier TEXT NOT NULL, value TEXT NOT NULL, expiresAt TEXT NOT NULL,
+  createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS post (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, createdById TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS project (
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, nodes TEXT NOT NULL DEFAULT '[]',
+  edges TEXT NOT NULL DEFAULT '[]', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS model (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, fileName TEXT NOT NULL, folder TEXT, subfolder TEXT,
+  baseModel TEXT, coverUrl TEXT, description TEXT, category TEXT, isAvailable INTEGER NOT NULL DEFAULT 0,
+  source TEXT NOT NULL DEFAULT 'LOCAL', createdAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS userModelConfig (
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, folder TEXT NOT NULL, label TEXT, type TEXT NOT NULL,
+  types TEXT NOT NULL DEFAULT '[]', enabled INTEGER NOT NULL DEFAULT 1, isCustom INTEGER NOT NULL DEFAULT 0, createdAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS favorite (
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, modelId TEXT NOT NULL, createdAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS task (
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, type TEXT NOT NULL, prompt TEXT NOT NULL, negativePrompt TEXT,
+  params TEXT NOT NULL, workflowName TEXT NOT NULL, workflowSnapshot TEXT, projectId TEXT, referenceImages TEXT,
+  status TEXT NOT NULL DEFAULT 'QUEUED', promptId TEXT, progress INTEGER NOT NULL DEFAULT 0, resultImages TEXT,
+  logs TEXT, error TEXT, validationErrors TEXT, createdAt TEXT NOT NULL, finishedAt TEXT
+);
+CREATE TABLE IF NOT EXISTS taskImage (
+  id TEXT PRIMARY KEY, taskId TEXT NOT NULL, localPath TEXT NOT NULL, mediaType TEXT NOT NULL DEFAULT 'image',
+  seed TEXT, width INTEGER, height INTEGER, isCover INTEGER NOT NULL DEFAULT 0, sortIndex INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS workflowTemplate (
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, taskType TEXT NOT NULL DEFAULT 'TXT2IMG',
+  modes TEXT NOT NULL DEFAULT '[]', defaultMode TEXT, graph TEXT NOT NULL, paramMap TEXT, workflowIO TEXT,
+  rawJson TEXT, positions TEXT, sourcePath TEXT, sourceChecksum TEXT, sourceMtime INTEGER, apiSource TEXT, createdAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workflowModelTag (
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, createdAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workflowModelTagToWorkflowTemplate (
+  workflowModelTag TEXT NOT NULL, workflowTemplate TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS llmConfig (
+  id TEXT PRIMARY KEY, provider TEXT NOT NULL DEFAULT 'local', baseUrl TEXT NOT NULL DEFAULT 'http://localhost:11434/v1',
+  model TEXT NOT NULL DEFAULT 'llama3.1', apiKey TEXT, temperature REAL NOT NULL DEFAULT 0.7,
+  temperatureByTask TEXT, maxTokens INTEGER NOT NULL DEFAULT 2048, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS skill (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE, description TEXT NOT NULL, icon TEXT NOT NULL DEFAULT '✨',
+  category TEXT NOT NULL DEFAULT 'style', promptTemplate TEXT NOT NULL, negativePrompt TEXT, defaultParams TEXT,
+  recommendedModel TEXT, tags TEXT DEFAULT '[]', coverUrl TEXT, isBuiltIn INTEGER NOT NULL DEFAULT 0,
+  sortOrder INTEGER NOT NULL DEFAULT 0, isActive INTEGER NOT NULL DEFAULT 1, createdAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS loraTrainingJob (
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, baseModel TEXT NOT NULL, triggerWord TEXT NOT NULL,
+  classWord TEXT, datasetImages TEXT NOT NULL, resolution INTEGER NOT NULL DEFAULT 512, steps INTEGER NOT NULL DEFAULT 1500,
+  batchSize INTEGER NOT NULL DEFAULT 4, learningRate REAL NOT NULL DEFAULT 0.0001, rankDim INTEGER NOT NULL DEFAULT 32,
+  networkAlpha INTEGER NOT NULL DEFAULT 16, optimizer TEXT NOT NULL DEFAULT 'AdamW8bit', scheduler TEXT NOT NULL DEFAULT 'cosine',
+  seed INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'QUEUED', progress INTEGER NOT NULL DEFAULT 0,
+  outputName TEXT, logs TEXT, error TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS filmProject (
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, title TEXT NOT NULL, script TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'short_video',
+  styleSlug TEXT, size TEXT NOT NULL DEFAULT '1280x720', fps INTEGER NOT NULL DEFAULT 16, framesPerShot INTEGER NOT NULL DEFAULT 49,
+  subtitleOn INTEGER NOT NULL DEFAULT 1, bgmName TEXT, status TEXT NOT NULL DEFAULT 'PARSING', progress INTEGER NOT NULL DEFAULT 0,
+  finalVideo TEXT, logs TEXT, error TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS filmShot (
+  id TEXT PRIMARY KEY, filmId TEXT NOT NULL, "order" INTEGER NOT NULL, heading TEXT, prompt TEXT NOT NULL,
+  negative TEXT, params TEXT, taskId TEXT, status TEXT NOT NULL DEFAULT 'IDLE', progress INTEGER NOT NULL DEFAULT 0,
+  videoPath TEXT, duration REAL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS auditLog (
+  id TEXT PRIMARY KEY, event TEXT NOT NULL, userId TEXT, ip TEXT, meta TEXT, createdAt TEXT NOT NULL
+);
+`;
+
+export interface TestTables {
   users: Row[];
   projects: Row[];
   workflowTemplates: Row[];
   workflowModelTags: Row[];
   tasks: Row[];
+  taskImages: Row[];
+  llmConfig: Row[];
+  posts: Row[];
+  models: Row[];
 }
 
 export interface TestDb {
-  $tables: TestDbTables;
   $reset(): void;
-  user: FakeModel;
-  project: FakeModel;
-  workflowTemplate: FakeModel;
-  workflowModelTag: FakeModel;
-  task: FakeModel;
-  llmConfig: FakeModel;
+  $tables: TestTables;
+  [key: string]: unknown;
 }
 
-// ────────────────────────── where / orderBy / 投影 ──────────────────────────
-
-function isPlainObject(v: unknown): v is Row {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-function clone<T>(v: T): T {
-  return structuredClone(v);
-}
-
-/** 只保留非 undefined 字段（对齐 Prisma「undefined = 不写入」语义）。 */
-function defined(data: Row): Row {
-  const out: Row = {};
-  for (const [k, v] of Object.entries(data)) {
-    if (v !== undefined) out[k] = v;
-  }
-  return out;
-}
-
-function matchWhere(row: Row, where?: Row): boolean {
-  if (!where) return true;
-  return Object.entries(where).every(([key, cond]) => {
-    if (cond === undefined) return true;
-    if (key === "AND" && Array.isArray(cond)) {
-      return (cond as Row[]).every((w) => matchWhere(row, w));
-    }
-    if (key === "OR" && Array.isArray(cond)) {
-      return (cond as Row[]).some((w) => matchWhere(row, w));
-    }
-    if (isPlainObject(cond)) {
-      if ("in" in cond && Array.isArray(cond.in)) {
-        return (cond.in as unknown[]).includes(row[key]);
-      }
-      if ("some" in cond) {
-        const rel = Array.isArray(row[key]) ? (row[key] as Row[]) : [];
-        return rel.some((item) => matchWhere(item, cond.some as Row));
-      }
-      // 复合唯一键（userId_name: { userId, name }）与嵌套等值对象
-      return Object.entries(cond).every(([k, c]) => row[k] === c);
-    }
-    return row[key] === cond;
-  });
-}
-
-function cmp(a: unknown, b: unknown): number {
-  if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
-  if (typeof a === "number" && typeof b === "number") return a - b;
-  // 内存排序键:对象值仅作展示排序,不参与语义(两行同豁免)
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string
-  const sa = a == null ? "" : typeof a === "object" ? JSON.stringify(a) : String(a);
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string
-  const sb = b == null ? "" : typeof b === "object" ? JSON.stringify(b) : String(b);
-  return sa < sb ? -1 : sa > sb ? 1 : 0;
-}
-
-function applyOrderBy<T extends Row>(rows: T[], orderBy?: Row | Row[]): T[] {
-  if (!orderBy) return rows;
-  const specs = Array.isArray(orderBy) ? [...orderBy] : [orderBy];
-  const out = [...rows];
-  // 多键排序：从最后一个键开始排（Array#sort 稳定，前者覆盖后者）。
-  for (const spec of specs.reverse()) {
-    const entry = Object.entries(spec)[0];
-    if (!entry) continue;
-    const [key, dir] = entry;
-    const desc = dir === "desc";
-    out.sort((a, b) => (desc ? -cmp(a[key], b[key]) : cmp(a[key], b[key])));
-  }
-  return out;
-}
-
-/** select 投影：true → 原字段；{ select } → 关系数组逐项投影。 */
-function project(row: Row, select: Row): Row {
-  const out: Row = {};
-  for (const [key, spec] of Object.entries(select)) {
-    if (spec === true) {
-      out[key] = clone(row[key]);
-    } else if (isPlainObject(spec) && isPlainObject(spec.select)) {
-      const rel = Array.isArray(row[key]) ? (row[key] as Row[]) : [];
-      out[key] = rel.map((item) => project(item, spec.select as Row));
-    }
-    // 其余（_count 等）本套件未涉及，保持缺省。
-  }
-  return out;
-}
-
-/** include 展开：对关系数组字段按 orderBy/take 处理（images 场景）。 */
-function applyInclude(row: Row, include: Row): Row {
-  const out = clone(row);
-  for (const [key, spec] of Object.entries(include)) {
-    if (!isPlainObject(spec)) continue;
-    let rel = Array.isArray(row[key]) ? (row[key] as Row[]) : [];
-    if (spec.orderBy) rel = applyOrderBy(rel, spec.orderBy as Row | Row[]);
-    if (typeof spec.take === "number") rel = rel.slice(0, spec.take);
-    out[key] = rel;
-  }
-  return out;
-}
-
-function shape(row: Row, args?: FindArgs): Row {
-  let out = clone(row);
-  if (args?.include) out = applyInclude(out, args.include);
-  if (args?.select) out = project(out, args.select);
-  return out;
-}
-
-// ────────────────────────────── 工厂 ──────────────────────────────
-
+let currentSqlite: Database.Database | null = null;
 let currentDb: TestDb | null = null;
 
-/** 供 vi.mock("~/server/db") 工厂调用：创建并登记当前文件的内存 db。 */
-export function createTestDb(): TestDb {
-  const users: Row[] = [];
-  const projects: Row[] = [];
-  const workflowTemplates: Row[] = [];
-  const workflowModelTags: Row[] = [];
-  const tasks: Row[] = [];
-  let seq = 0;
-  const nextId = (prefix: string) => `${prefix}_${++seq}`;
-
-  const resolveTags = (ids: string[]): Row[] =>
-    ids
-      .map((id) => workflowModelTags.find((t) => t.id === id))
-      .filter((t): t is Row => !!t)
-      .map(clone);
-
-  const makeModel = (
-    table: Row[],
-    prefix: string,
-    defaults?: (row: Row) => void
-  ): FakeModel => {
-    const find = (where?: Row) => table.find((r) => matchWhere(r, where));
-    return {
-      findUnique: vi.fn(async ({ where }: { where: Row }) => {
-        const row = find(where);
-        return row ? clone(row) : null;
-      }),
-      findFirst: vi.fn(async (args: FindArgs = {}) => {
-        const row = find(args.where);
-        return row ? clone(row) : null;
-      }),
-      findMany: vi.fn(async (args: FindArgs = {}) => {
-        let rows = table.filter((r) => matchWhere(r, args.where));
-        rows = applyOrderBy(rows, args.orderBy);
-        if (args.skip !== undefined) rows = rows.slice(args.skip);
-        if (args.take !== undefined) rows = rows.slice(0, args.take);
-        return rows.map((r) => shape(r, args));
-      }),
-      create: vi.fn(async ({ data }: { data: Row }) => {
-        const row: Row = {
-          id: typeof data.id === "string" ? data.id : nextId(prefix),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          ...defined(data),
-        };
-        defaults?.(row);
-        table.push(row);
-        return clone(row);
-      }),
-      update: vi.fn(async ({ where, data }: { where: Row; data: Row }) => {
-        const row = find(where);
-        if (!row) {
-          throw new Error(`Record to update not found: ${JSON.stringify(where)}`);
-        }
-        const patch = defined(data);
-        const mt = patch.modelTags;
-        if (isPlainObject(mt) && Array.isArray(mt.set)) {
-          patch.modelTags = resolveTags((mt.set as Row[]).map((t) => t.id as string));
-        }
-        Object.assign(row, patch);
-        return clone(row);
-      }),
-      delete: vi.fn(async ({ where }: { where: Row }) => {
-        const idx = table.findIndex((r) => matchWhere(r, where));
-        if (idx < 0) throw new Error("Record to delete does not exist");
-        const removed = table.splice(idx, 1)[0];
-        return clone(removed!);
-      }),
-      deleteMany: vi.fn(async ({ where }: { where?: Row } = {}) => {
-        let count = 0;
-        for (let i = table.length - 1; i >= 0; i--) {
-          const r = table[i];
-          if (r && matchWhere(r, where)) {
-            table.splice(i, 1);
-            count++;
-          }
-        }
-        return { count };
-      }),
-      upsert: vi.fn(
-        async ({
-          where,
-          create,
-          update,
-          select,
-        }: {
-          where: Row;
-          create: Row;
-          update: Row;
-          select?: Row;
-        }) => {
-          const existing = find(where);
-          if (existing) {
-            Object.assign(existing, defined(update));
-            return shape(existing, { select });
-          }
-          const row: Row = {
-            id: typeof create.id === "string" ? create.id : nextId(prefix),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            ...defined(create),
-          };
-          defaults?.(row);
-          table.push(row);
-          return shape(row, { select });
-        }
-      ),
-    };
-  };
-
-  const taskDefaults = (row: Row): void => {
-    if (!Array.isArray(row.images)) row.images = [];
-    if (typeof row.progress !== "number") row.progress = 0;
-  };
-
-  const workflowTemplate = makeModel(workflowTemplates, "wt");
-  const workflowModelTag = makeModel(workflowModelTags, "tag");
-
-  // workflowModelTag.upsert 的 select 带 _count: { select: { workflows: true } }
-  const baseTagUpsert = workflowModelTag.upsert;
-  workflowModelTag.upsert = vi.fn(
-    async (args: { where: Row; create: Row; update: Row; select?: Row }) => {
-      const row = (await baseTagUpsert(args)) as Row;
-      const usedBy = workflowTemplates.filter((w) =>
-        (Array.isArray(w.modelTags) ? (w.modelTags as Row[]) : []).some(
-          (t) => t.id === row.id
-        )
-      ).length;
-      return { id: row.id, name: row.name, _count: { workflows: usedBy } };
+function parseRow(table: string, row: Record<string, unknown>): Row {
+  const out: Row = { ...row };
+  for (const [k, v] of Object.entries(out)) {
+    if (v != null && jsonColumns.has(k) && typeof v === "string") {
+      try {
+        out[k] = JSON.parse(v);
+      } catch {
+        /* 保留原值 */
+      }
     }
-  );
+  }
+  return out;
+}
 
-  currentDb = {
-    $tables: { users, projects, workflowTemplates, workflowModelTags, tasks },
-    $reset(): void {
-      users.length = 0;
-      projects.length = 0;
-      workflowTemplates.length = 0;
-      workflowModelTags.length = 0;
-      tasks.length = 0;
-      seq = 0;
-    },
-    user: makeModel(users, "usr"),
-    project: makeModel(projects, "proj"),
-    workflowTemplate,
-    workflowModelTag,
-    task: makeModel(tasks, "task", taskDefaults),
-    llmConfig: makeModel([], "llm"),
+function serializeValue(col: string, v: unknown): unknown {
+  if (v === null || v === undefined) return v;
+  if (v instanceof Date) return v.toISOString();
+  if (jsonColumns.has(col)) return JSON.stringify(v);
+  return v;
+}
+
+function allRows(table: string): Row[] {
+  if (!currentSqlite) throw new Error("test db 未初始化");
+  return (
+    currentSqlite.prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[]
+  ).map((r) => parseRow(table, r));
+}
+
+function insertInto(table: string, obj: Record<string, unknown>): void {
+  if (!currentSqlite) throw new Error("test db 未初始化");
+  const entries = Object.entries(obj).filter(([, v]) => v !== undefined);
+  const cols = entries.map(([k]) => k);
+  const vals = entries.map(([k, v]) => serializeValue(k, v));
+  const placeholders = cols.map(() => "?").join(",");
+  const sql = `INSERT INTO ${table} (${cols.join(",")}) VALUES (${placeholders})`;
+  currentSqlite.prepare(sql).run(...vals);
+}
+
+function getRow(table: string, id: string): Row {
+  if (!currentSqlite) throw new Error("test db 未初始化");
+  const raw = currentSqlite
+    .prepare(`SELECT * FROM ${table} WHERE id = ?`)
+    .get(id) as Record<string, unknown> | undefined;
+  if (!raw) throw new Error(`row not found: ${table} ${id}`);
+  return parseRow(table, raw);
+}
+
+export function createTestDb(): TestDb {
+  const sqlite = new Database(":memory:");
+  sqlite.pragma("foreign_keys = OFF"); // 内存库独立插入，放宽外键
+  sqlite.exec(CREATE_SQL);
+  currentSqlite = sqlite;
+  const db = drizzle(sqlite, { schema });
+
+  const workflowTemplatesWithTags = (): Row[] => {
+    const rows = allRows("workflowTemplate");
+    const tagRows = sqlite
+      .prepare(
+        `SELECT wm.workflowModelTag AS tagId, wm.workflowTemplate AS wtId, t.name AS name, t.userId AS userId
+         FROM workflowModelTagToWorkflowTemplate wm
+         JOIN workflowModelTag t ON wm.workflowModelTag = t.id`
+      )
+      .all() as Array<{ tagId: string; wtId: string; name: string; userId: string }>;
+    const byWt = new Map<string, Array<{ id: string; name: string; userId: string }>>();
+    for (const r of tagRows) {
+      const arr = byWt.get(r.wtId) ?? [];
+      arr.push({ id: r.tagId, name: r.name, userId: r.userId });
+      byWt.set(r.wtId, arr);
+    }
+    return rows.map((row) => ({ ...row, modelTags: byWt.get(row.id as string) ?? [] }));
   };
-  return currentDb;
+
+  const tables: TestTables = {
+    get users() {
+      return allRows("user");
+    },
+    get projects() {
+      return allRows("project");
+    },
+    get workflowTemplates() {
+      return workflowTemplatesWithTags();
+    },
+    get workflowModelTags() {
+      return allRows("workflowModelTag");
+    },
+    get tasks() {
+      return allRows("task");
+    },
+    get taskImages() {
+      return allRows("taskImage");
+    },
+    get llmConfig() {
+      return allRows("llmConfig");
+    },
+    get posts() {
+      return allRows("post");
+    },
+    get models() {
+      return allRows("model");
+    },
+  };
+
+  const reset = (): void => {
+    for (const t of TABLES) sqlite.prepare(`DELETE FROM ${t}`).run();
+  };
+
+  // 把 $reset / $tables 挂到 drizzle 实例上，供测试与 vi.mock 共用同一对象
+  const api = Object.assign(db, {
+    $reset: reset,
+    $tables: tables,
+  }) as unknown as TestDb;
+
+  currentDb = api;
+  return api;
 }
 
 /** 取当前测试文件已创建的内存 db（须先触发 ~/server/db 的 mock 工厂）。 */
 export function getTestDb(): TestDb {
   if (!currentDb) {
-    throw new Error(
-      'test db 未初始化：请先 vi.mock("~/server/db") 并导入被测 router'
-    );
+    throw new Error('test db 未初始化：请先 vi.mock("~/server/db") 并导入被测 router');
   }
   return currentDb;
 }
@@ -334,18 +311,18 @@ export function getTestDb(): TestDb {
 let seedSeq = 0;
 
 export function seedUser(
-  tdb: TestDb,
+  _tdb: TestDb,
   input: { id: string; email: string; name?: string | null }
 ): Row {
-  const row: Row = {
+  const now = new Date().toISOString();
+  insertInto("user", {
     id: input.id,
     email: input.email,
     name: input.name ?? null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-  tdb.$tables.users.push(row);
-  return row;
+    createdAt: now,
+    updatedAt: now,
+  });
+  return getRow("user", input.id);
 }
 
 export interface SeedWorkflowTemplateInput {
@@ -364,16 +341,15 @@ export interface SeedWorkflowTemplateInput {
   sourcePath?: string | null;
   sourceChecksum?: string | null;
   sourceMtime?: number | null;
-  modelTags?: Row[];
+  modelTags?: Array<{ id: string; name: string; userId: string }>;
   createdAt?: Date;
 }
 
-export function seedWorkflowTemplate(
-  tdb: TestDb,
-  input: SeedWorkflowTemplateInput
-): Row {
-  const row: Row = {
-    id: input.id ?? `seed-wt-${++seedSeq}`,
+export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateInput): Row {
+  const id = input.id ?? `seed-wt-${++seedSeq}`;
+  const now = new Date().toISOString();
+  insertInto("workflowTemplate", {
+    id,
     userId: input.userId,
     name: input.name ?? "seeded workflow",
     taskType: input.taskType ?? "T2I",
@@ -388,12 +364,24 @@ export function seedWorkflowTemplate(
     sourcePath: input.sourcePath ?? null,
     sourceChecksum: input.sourceChecksum ?? null,
     sourceMtime: input.sourceMtime ?? null,
-    modelTags: input.modelTags ?? [],
     createdAt: input.createdAt ?? new Date(),
-    updatedAt: new Date(),
-  };
-  tdb.$tables.workflowTemplates.push(row);
-  return row;
+    updatedAt: now,
+  });
+  if (input.modelTags?.length) {
+    for (const tag of input.modelTags) {
+      insertInto("workflowModelTag", {
+        id: tag.id,
+        userId: tag.userId,
+        name: tag.name,
+        createdAt: now,
+      });
+      insertInto("workflowModelTagToWorkflowTemplate", {
+        workflowModelTag: tag.id,
+        workflowTemplate: id,
+      });
+    }
+  }
+  return getRow("workflowTemplate", id);
 }
 
 export interface SeedTaskInput {
@@ -414,9 +402,11 @@ export interface SeedTaskInput {
   createdAt?: Date;
 }
 
-export function seedTask(tdb: TestDb, input: SeedTaskInput): Row {
-  const row: Row = {
-    id: input.id ?? `seed-task-${++seedSeq}`,
+export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
+  const id = input.id ?? `seed-task-${++seedSeq}`;
+  const now = new Date().toISOString();
+  insertInto("task", {
+    id,
     userId: input.userId,
     type: input.type ?? "TXT2IMG",
     status: input.status ?? "SUCCEEDED",
@@ -431,25 +421,25 @@ export function seedTask(tdb: TestDb, input: SeedTaskInput): Row {
     progress: input.progress ?? 0,
     error: input.error ?? null,
     createdAt: input.createdAt ?? new Date(),
-    updatedAt: new Date(),
-  };
-  tdb.$tables.tasks.push(row);
-  return row;
+    updatedAt: now,
+  });
+  return getRow("task", id);
 }
 
 export function seedProject(
-  tdb: TestDb,
+  _tdb: TestDb,
   input: { id?: string; userId: string; name: string; nodes?: unknown; edges?: unknown; updatedAt?: Date }
 ): Row {
-  const row: Row = {
-    id: input.id ?? `seed-proj-${++seedSeq}`,
+  const id = input.id ?? `seed-proj-${++seedSeq}`;
+  const now = new Date().toISOString();
+  insertInto("project", {
+    id,
     userId: input.userId,
     name: input.name,
     nodes: input.nodes ?? null,
     edges: input.edges ?? null,
-    createdAt: new Date(),
-    updatedAt: input.updatedAt ?? new Date(),
-  };
-  tdb.$tables.projects.push(row);
-  return row;
+    createdAt: input.updatedAt ?? new Date(),
+    updatedAt: now,
+  });
+  return getRow("project", id);
 }

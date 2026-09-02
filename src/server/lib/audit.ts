@@ -1,4 +1,5 @@
 import { db } from "~/server/db";
+import { auditLog } from "~/server/db/schema";
 import { logger } from "~/server/lib/logger";
 
 /**
@@ -32,14 +33,13 @@ export async function audit(
 
   logger.warn({ event, userId, ip, ...meta }, "audit");
 
-  await db.auditLog
-    .create({
-      data: {
-        event,
-        userId,
-        ip,
-        meta: JSON.stringify(meta),
-      },
+  await db
+    .insert(auditLog)
+    .values({
+      event,
+      userId,
+      ip,
+      meta: JSON.stringify(meta),
     })
     .catch((err) => {
       // 审计失败不能影响主流程，只记日志
