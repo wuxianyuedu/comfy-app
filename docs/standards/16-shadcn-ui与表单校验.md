@@ -66,7 +66,7 @@ pnpm dlx shadcn@latest add dialog form input select
    ```
 3. 校验：`src/components/ui/form.tsx` 存在，且 import 来自 `@base-ui/react`（**非** `@radix-ui/*`）。
 
-> 当前状态（2026-09-02）：`zod@4` 已具备；`react-hook-form` / `@hookform/resolvers` / `ui/form.tsx` 待按上述步骤补齐。补齐后本范式即可直接用。
+> 当前状态（2026-09-02，已补齐）：`zod@4` ✅；`react-hook-form@7.87` ✅；`@hookform/resolvers@5.9.1` ✅；`src/components/ui/form.tsx` 已生成（base-ui 兼容：RHF `Controller` + 项目 `Label`，`FormControl` 用 `cloneElement` 透传 `id`/`aria-*`，未引入 radix 依赖）。开箱即用。
 
 ### 最小范式（schema 驱动 + 自动校验）
 
