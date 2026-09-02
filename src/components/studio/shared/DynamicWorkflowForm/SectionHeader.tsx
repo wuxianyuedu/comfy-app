@@ -1,6 +1,6 @@
-/* Section header used for the two sub-sections in IO edit/preview mode
- *  (2026-08-09).  Module-level so it isn't re-created on every render
- *  (react-hooks/static-components). */
+/* Section header used for the two sub-sections in IO edit/preview mode.
+ *  定义在模块级（而非组件内）是刻意的：避免每次渲染重建组件而触发
+ *  react-hooks/static-components。 */
 export const SectionHeader = ({ label, count, accent }: { label: string; count: number; accent: string }) => (
   <div className="mt-1 flex items-center gap-2 border-t border-white/10 pt-2.5">
     <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} />

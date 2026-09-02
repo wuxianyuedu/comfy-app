@@ -12,8 +12,7 @@ interface IoEndpointsSectionProps {
 }
 
 /* 宽版「I/O 端点」段 (非 compact，CreatePanel / IO-edit 预览)：wire inputs
- *  (蓝色 chip) + outputs (绿色 chip)，带 SectionHeader 分段头。逐字搬移自
- *  原主组件的非 compact 分支，行为不变。 */
+ *  (蓝色 chip) + outputs (绿色 chip)，带 SectionHeader 分段头。 */
 export function IoEndpointsSection({ wireInputs, inputs, outputs, showOutputs }: IoEndpointsSectionProps) {
   return (
     <>
@@ -26,8 +25,8 @@ export function IoEndpointsSection({ wireInputs, inputs, outputs, showOutputs }:
         <div className="flex flex-wrap gap-1.5">
           {wireInputs.map((wireInput) =>
 {
-            /* 2026-08-15: conflict-aware — see ioLabel() in
-             *  src/components/updream/shared/workflow-io.ts. */
+            /* conflict-aware：两个 pin 撞名时 ioLabel() 会回退到原始 name，
+             * 因此必须传全量 pin，而不只是当前这一段。 */
             const label = ioLabel(wireInput, [...inputs, ...outputs]);
             return (
               <span
@@ -61,7 +60,7 @@ export function IoEndpointsSection({ wireInputs, inputs, outputs, showOutputs }:
                 title={`${output.nodeTitle ?? ""} · ${output.name}`}
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-(--color-success)" />
-                {/* 2026-08-15: conflict-aware — see ioLabel(). */}
+                {/* conflict-aware：同上，撞名时回退到原始 name。 */}
                 {ioLabel(output, [...inputs, ...outputs])}
                 <span className="font-mono text-[9px] opacity-70">{normalizeTypeChip(output.type)}</span>
               </span>

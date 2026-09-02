@@ -1,13 +1,9 @@
 import type { ControlKind } from "../workflow-io";
 
-/** v2 (2026-08-14) Aligned with Ardot 3:40 PortRow1:
- *  - bg #0F0F14 (深于卡片 #16161C)
- *  - rounded-[6px]  +  no border
- *  - 11pt Inter Regular, color #C9C9D6
- *  - p-2.5 (10px) on all sides
- *  - leading-relaxed (16-17px line-height for 11pt)
- *  - resize-none — 稿是固定 52h，不该出现 webkit resize 把手
- *  - placeholder #5A5A6B */
+/** 输入框基础样式。取值来自设计稿规格：底色比卡片更深（#0F0F14 vs 卡片
+ *  #16161C）、6px 圆角无描边、11pt 正文、四边 10px 内边距、relaxed 行高。
+ *  `resize-none` 是刻意的：设计稿为固定高度，出现 webkit 缩放把手会破坏
+ *  紧凑节点的行高对齐。 */
 export const inputCls =
   "nodrag nopan w-full resize-none rounded-md bg-(--color-canvas-deep) p-2.5 text-[11px] leading-relaxed text-(--color-ink-soft) outline-none transition-colors placeholder:text-(--color-ink-placeholder) focus:ring-1 focus:ring-(--color-primary)/40";
 
