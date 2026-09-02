@@ -72,7 +72,7 @@ export default tseslint.config(
   //       不整体划入 server,避免误伤组件对它们的合法 import。
   // Drizzle schema 位于 src/server/db/schema(已属 server),故 UI import schema/仓储即被
   //       components→server 拦截;UI 直引 drizzle-orm orm 包在本 pnpm 解析下 module.source
-  //       为 null,无法用 module 选择器匹配,故交由 repositories 间接管控。
+  //       为 null,无法用 module 选择器匹配,改用下方 scoped no-restricted-imports 兜底。
   {
     plugins: { boundaries },
     settings: {
@@ -104,6 +104,26 @@ export default tseslint.config(
             {
               from: { element: { type: "features" } },
               disallow: { to: { element: { type: "server" } } },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // ── Drizzle orm 兜底(2026-09-02)：UI/features 不得直接 import drizzle-orm ──
+  // boundaries 在 pnpm 下无法匹配外部包(module.source 为 null),故用 scoped
+  // no-restricted-imports 拦截 components/features 直引 orm 包(含子路径)。
+  {
+    files: ["src/components/**", "src/features/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["drizzle-orm", "drizzle-orm/*"],
+              message:
+                "UI/features 不得直接依赖 Drizzle orm,请经 src/lib/core 仓储访问数据。",
             },
           ],
         },
