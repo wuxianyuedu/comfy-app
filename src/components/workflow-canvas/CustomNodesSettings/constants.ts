@@ -44,7 +44,7 @@ export const ROW_STATE_PRESET: Record<
     fg: "#F59E0B",
     label: "目录不存在",
     chip: "border-amber-500/40",
-    btn: "border border-border text-muted cursor-not-allowed",
+    btn: "border border-border text-muted-foreground cursor-not-allowed",
     btnLabel: "无法解析",
   },
   empty: {
@@ -52,7 +52,7 @@ export const ROW_STATE_PRESET: Record<
     fg: "#9CA3AF",
     label: "无 NODE_CLASS_MAPPINGS",
     chip: "border-gray-500/30",
-    btn: "border border-border text-muted cursor-not-allowed",
+    btn: "border border-border text-muted-foreground cursor-not-allowed",
     btnLabel: "无可导入节点",
   },
 };

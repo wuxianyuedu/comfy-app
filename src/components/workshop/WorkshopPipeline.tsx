@@ -484,18 +484,18 @@ export function WorkshopPipeline() {
               <span className="text-ink text-[17px] font-semibold">
                 工坊 · 全链路项目管线
               </span>
-              <span className="text-muted text-[11px]">
+              <span className="text-muted-foreground text-[11px]">
                 Comfy-APP / 项目管线
               </span>
             </div>
-            <span className="text-muted ml-4 rounded-lg bg-white/4 px-3 py-1.5 text-[13px]">
+            <span className="text-muted-foreground ml-4 rounded-lg bg-white/4 px-3 py-1.5 text-[13px]">
               {meta.title}
             </span>
           </div>
 
           {/* 项目总进度：放到最顶部（设计稿红框区域） */}
           <div className="hidden w-full max-w-[260px] lg:block">
-            <div className="text-muted flex items-center justify-between text-[11px]">
+            <div className="text-muted-foreground flex items-center justify-between text-[11px]">
               <span>项目总进度</span>
               <span className="text-primary font-medium">{progressPct}%</span>
             </div>
@@ -514,7 +514,7 @@ export function WorkshopPipeline() {
             <button
               type="button"
               onClick={() => setApiSettingsOpen(true)}
-              className="text-muted hover:text-ink flex items-center gap-1 rounded-full bg-white/4 px-3 py-1.5 text-xs hover:bg-white/8"
+              className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-full bg-white/4 px-3 py-1.5 text-xs hover:bg-white/8"
               title="配置生图 / 视频 API 直连通道"
             >
               <Icon name="settings" size={13} />
@@ -553,7 +553,7 @@ export function WorkshopPipeline() {
                       ? "bg-emerald-500/80 text-white"
                       : active
                         ? "bg-primary text-white"
-                        : "bg-elevated text-muted"
+                        : "bg-elevated text-muted-foreground"
                   }`}
                 >
                   {ratio >= 1 ? <Icon name="check" size={14} /> : index + 1}
@@ -565,7 +565,7 @@ export function WorkshopPipeline() {
                     {st.label}
                   </div>
                   <div
-                    className={`text-[11px] ${ratio >= 1 ? "text-emerald-400" : "text-muted"}`}
+                    className={`text-[11px] ${ratio >= 1 ? "text-emerald-400" : "text-muted-foreground"}`}
                   >
                     {stageSub(st.id)}
                   </div>
@@ -584,9 +584,9 @@ export function WorkshopPipeline() {
                 <h2 className="text-ink text-[17px] font-semibold">
                   {stageTitle}
                 </h2>
-                <p className="text-muted mt-1 text-[12px]">{stageDesc}</p>
+                <p className="text-muted-foreground mt-1 text-[12px]">{stageDesc}</p>
               </div>
-              <span className="text-muted shrink-0 rounded-full bg-white/4 px-3 py-1 text-[11px]">
+              <span className="text-muted-foreground shrink-0 rounded-full bg-white/4 px-3 py-1 text-[11px]">
                 阶段 {stageIndex} / {STAGE_DEFS.length}
               </span>
             </div>
@@ -603,7 +603,7 @@ export function WorkshopPipeline() {
                     <div className="flex items-center gap-2">
                       {draftSavedAt && !editingOutline && (
                         <span
-                          className="text-[10px] text-muted"
+                          className="text-[10px] text-muted-foreground"
                           title="剧本内容自动保存在本机浏览器，刷新/重启后仍在"
                         >
                           已自动保存{" "}
@@ -663,11 +663,11 @@ export function WorkshopPipeline() {
                       placeholder="输入故事大纲……"
                     />
                   ) : outline ? (
-                    <p className="text-muted text-[12.5px] leading-relaxed">
+                    <p className="text-muted-foreground text-[12.5px] leading-relaxed">
                       {outline}
                     </p>
                   ) : (
-                    <p className="text-[12.5px] leading-relaxed text-muted/60 italic">
+                    <p className="text-[12.5px] leading-relaxed text-muted-foreground/60 italic">
                       暂无大纲——点击「编辑」输入故事大纲，或在下方用一句话梗概 /
                       智能辅助结构化开始。
                     </p>
@@ -762,7 +762,7 @@ export function WorkshopPipeline() {
                           className="absolute top-3 right-3 h-2 w-2 rounded-full"
                           style={{ background: gs.color }}
                         />
-                        <div className="text-muted truncate pr-6 text-[10.5px]">
+                        <div className="text-muted-foreground truncate pr-6 text-[10.5px]">
                           {gs.heading}
                         </div>
                         <div className="text-ink mt-5 text-xs font-medium">
@@ -808,7 +808,7 @@ export function WorkshopPipeline() {
                     <h3 className="text-ink text-[14px] font-semibold">
                       生图工具
                     </h3>
-                    <span className="text-muted rounded-lg bg-white/4 px-3 py-1 text-[11px]">
+                    <span className="text-muted-foreground rounded-lg bg-white/4 px-3 py-1 text-[11px]">
                       图 {imgDoneCount}/{shots.length}
                     </span>
                   </div>
@@ -840,7 +840,7 @@ export function WorkshopPipeline() {
                     <h3 className="text-ink text-[14px] font-semibold">
                       视频工具
                     </h3>
-                    <span className="text-muted rounded-lg bg-white/4 px-3 py-1 text-[11px]">
+                    <span className="text-muted-foreground rounded-lg bg-white/4 px-3 py-1 text-[11px]">
                       片段 {clipDoneCount}/{shots.length}
                     </span>
                   </div>
@@ -940,7 +940,7 @@ export function WorkshopPipeline() {
                 </span>
               </div>
               <label className="block">
-                <span className="text-muted mb-1 block text-[11px]">
+                <span className="text-muted-foreground mb-1 block text-[11px]">
                   本地 Checkpoint（生图工作流）
                 </span>
                 <select
@@ -959,7 +959,7 @@ export function WorkshopPipeline() {
               <button
                 type="button"
                 onClick={() => setApiSettingsOpen(true)}
-                className="text-muted mt-3 w-full rounded-lg bg-white/4 py-2.5 text-xs hover:bg-white/8"
+                className="text-muted-foreground mt-3 w-full rounded-lg bg-white/4 py-2.5 text-xs hover:bg-white/8"
               >
                 配置 API 直连通道
               </button>
@@ -981,7 +981,7 @@ export function WorkshopPipeline() {
                 ].map(([name, tag]) => (
                   <div key={name} className="flex items-center gap-3">
                     <span className="bg-elevated grid h-8 w-8 place-items-center rounded-lg">
-                      <Icon name="file" size={14} className="text-muted" />
+                      <Icon name="file" size={14} className="text-muted-foreground" />
                     </span>
                     <span className="text-ink flex-1 truncate text-[12.5px]">
                       {name}
@@ -992,7 +992,7 @@ export function WorkshopPipeline() {
                   </div>
                 ))}
               </div>
-              <button className="text-muted mt-3 w-full rounded-lg bg-white/4 py-2.5 text-xs hover:bg-white/8">
+              <button className="text-muted-foreground mt-3 w-full rounded-lg bg-white/4 py-2.5 text-xs hover:bg-white/8">
                 + 导入素材
               </button>
             </div>

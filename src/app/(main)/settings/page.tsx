@@ -196,7 +196,7 @@ export default function SettingsPage() {
 
   if (settingsQ.isLoading || llmQ.isLoading || !settings || !settingsDraft || !llmDraft) {
     return (
-      <div className="dark grid min-h-screen place-items-center bg-(--color-canvas) text-muted">
+      <div className="dark grid min-h-screen place-items-center bg-(--color-canvas) text-muted-foreground">
         加载中…
       </div>
     );
@@ -217,7 +217,7 @@ export default function SettingsPage() {
       <div className="flex items-center gap-3 border-b border-border px-6 py-4">
         <button
           onClick={() => router.back()}
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-subtle hover:text-ink"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-subtle hover:text-ink"
           title="返回"
         >
           <ArrowLeft size={18} />
@@ -236,7 +236,7 @@ export default function SettingsPage() {
               className={`w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
                 section === item.id
                   ? "bg-primary/10 text-primary"
-                  : "text-muted hover:bg-subtle hover:text-ink"
+                  : "text-muted-foreground hover:bg-subtle hover:text-ink"
               }`}
             >
               {item.label}
@@ -278,8 +278,8 @@ export default function SettingsPage() {
                 <div className="mb-4 flex items-center gap-3 rounded-lg border border-border bg-white/3 px-3 py-2.5">
                   {ollamaStatus === "checking" && (
                     <>
-                      <Loader2 size={14} className="animate-spin text-muted" />
-                      <span className="text-sm text-muted">检测 Ollama 服务…</span>
+                      <Loader2 size={14} className="animate-spin text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">检测 Ollama 服务…</span>
                     </>
                   )}
                   {ollamaStatus === "up" && (
@@ -348,7 +348,7 @@ export default function SettingsPage() {
                 onChange={(value) => setSettingsDraft({ ...settingsDraft, comfyuiPath: value })}
                 placeholder="例如 D:\\ComfyUI 或 D:\\Comfy-Desktop\\ComfyUI-Installs\\ComfyUI"
               />
-              <p className="-mt-2 mb-3 text-xs text-muted">
+              <p className="-mt-2 mb-3 text-xs text-muted-foreground">
                 支持：便携版（python_embeded\\python.exe + main.py）、桌面版（standalone-env + ComfyUI\\main.py）、venv（.venv + main.py）。
                 {comfyStatusQ.data?.pathConfigured
                   ? "已配置——ComfyUI 未运行时提交任务会自动拉起。"
@@ -448,7 +448,7 @@ function Field({
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-lg border border-border bg-white/5 px-3 py-2 text-sm text-ink placeholder:text-muted/60 outline-none focus:border-primary"
+        className="w-full rounded-lg border border-border bg-white/5 px-3 py-2 text-sm text-ink placeholder:text-muted-foreground/60 outline-none focus:border-primary"
       />
     </div>
   );

@@ -52,7 +52,7 @@ export function ModelCard({ model }: { model: ModelCardData }) {
         </div>
         <div className="p-3">
           <p className="u-title truncate">{model.name}</p>
-          <div className="mt-1 flex items-center justify-between text-xs text-muted">
+          <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
             <span>{model.baseModel ?? "SDXL"}</span>
             <span>
               {model.uses ? `${model.uses} 用` : ""}

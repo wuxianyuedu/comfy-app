@@ -85,7 +85,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
 export function LLMStatusChip() {
   const { config, loading, openSettings } = useLLM();
   if (loading) {
-    return <span className="rounded-full bg-subtle px-2 py-0.5 text-xs text-muted">LLM…</span>;
+    return <span className="rounded-full bg-subtle px-2 py-0.5 text-xs text-muted-foreground">LLM…</span>;
   }
   if (!config) {
     return (
@@ -117,7 +117,7 @@ export function LLMSettingsButton() {
       type="button"
       onClick={openSettings}
       title="LLM 文本生成设置"
-      className="rounded-lg border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-subtle"
+      className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-subtle"
     >
       <Icon name="settings" size={14} className="mr-1.5 inline align-[-2px]" />LLM 设置
     </button>
@@ -211,7 +211,7 @@ function LLMSettingsModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-muted hover:text-ink"
+            className="text-muted-foreground hover:text-ink"
             aria-label="关闭"
           >
             ✕
@@ -220,7 +220,7 @@ function LLMSettingsModal({
 
         <div className="space-y-3">
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">提供方</span>
+            <span className="mb-1 block text-xs text-muted-foreground">提供方</span>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -228,7 +228,7 @@ function LLMSettingsModal({
                 className={`rounded-lg border px-3 py-2 text-sm ${
                   provider === "local"
                     ? "border-primary bg-primary-soft text-primary"
-                    : "border-border text-muted hover:bg-subtle"
+                    : "border-border text-muted-foreground hover:bg-subtle"
                 }`}
               >
                 本地 LLM（Ollama/LM Studio）
@@ -239,7 +239,7 @@ function LLMSettingsModal({
                 className={`rounded-lg border px-3 py-2 text-sm ${
                   provider === "remote"
                     ? "border-primary bg-primary-soft text-primary"
-                    : "border-border text-muted hover:bg-subtle"
+                    : "border-border text-muted-foreground hover:bg-subtle"
                 }`}
               >
                 远端 API（OpenAI 兼容）
@@ -258,7 +258,7 @@ function LLMSettingsModal({
           />
 
           <label className="block">
-            <span className="mb-1 flex items-center justify-between text-xs text-muted">
+            <span className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
               <span>温度（Temperature）</span>
               <span className="text-ink">{temperature.toFixed(2)}</span>
             </span>
@@ -291,7 +291,7 @@ function LLMSettingsModal({
             type="button"
             onClick={handleTest}
             disabled={testing}
-            className="rounded-lg border border-border px-3 py-2 text-sm text-muted hover:bg-subtle disabled:opacity-40"
+            className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-subtle disabled:opacity-40"
           >
             {testing ? "测试中…" : "测试连接"}
           </button>
@@ -305,7 +305,7 @@ function LLMSettingsModal({
           </button>
         </div>
 
-        <p className="mt-3 text-[11px] leading-relaxed text-muted">
+        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
           支持任何 OpenAI 兼容接口：本地可填 Ollama（http://localhost:11434/v1）或 LM Studio；
           远端可填 OpenAI / DeepSeek / 通义等。API Key 仅存储于服务端，不会下发到浏览器。
         </p>
@@ -329,7 +329,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs text-muted">{label}</span>
+      <span className="mb-1 block text-xs text-muted-foreground">{label}</span>
       <input
         type={password ? "password" : "text"}
         value={value}

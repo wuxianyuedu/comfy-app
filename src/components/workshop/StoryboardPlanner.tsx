@@ -331,7 +331,7 @@ export function StoryboardPlanner({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="u-title">
-          分镜规划 <span className="text-muted">({shots.length})</span>
+          分镜规划 <span className="text-muted-foreground">({shots.length})</span>
         </h3>
         <div className="flex gap-2">
           <button
@@ -354,7 +354,7 @@ export function StoryboardPlanner({
             <button
               type="button"
               onClick={clearShots}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:bg-subtle"
+              className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-subtle"
             >
               清空
             </button>
@@ -390,7 +390,7 @@ export function StoryboardPlanner({
       />
 
       {scenes.length === 0 && (
-        <div className="rounded-xl border border-dashed border-border py-6 text-center text-xs text-muted">
+        <div className="rounded-xl border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
           先在「剧本」中创建场景，再点「从剧本导入」或「AI 智能拆镜」自动生成分镜。
         </div>
       )}
@@ -406,13 +406,13 @@ export function StoryboardPlanner({
       )}
 
       {!config && scenes.length > 0 && (
-        <div className="rounded-lg bg-subtle px-3 py-2 text-xs text-muted">
+        <div className="rounded-lg bg-subtle px-3 py-2 text-xs text-muted-foreground">
           未配置 LLM。「AI 智能拆镜」将不可用，可改用「从剧本导入」（按镜头数模板拆分），或在右上角「LLM 设置」接入本地/远端模型。
         </div>
       )}
 
       {shots.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted">
+        <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
           暂无分镜。导入剧本后，每个场景会按建议镜头数拆分为多个镜头。
         </div>
       ) : (
@@ -425,12 +425,12 @@ export function StoryboardPlanner({
                   <span className="grid h-6 w-6 place-items-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
                     {shot.index}
                   </span>
-                  <span className="text-xs text-muted">{shot.sceneHeading}</span>
+                  <span className="text-xs text-muted-foreground">{shot.sceneHeading}</span>
                   <StatusBadge status={shot.status} />
                   <button
                     type="button"
                     onClick={() => removeShot(shot.id)}
-                    className="ml-auto text-muted hover:text-red-500"
+                    className="ml-auto text-muted-foreground hover:text-red-500"
                     aria-label="删除镜头"
                   >
                     <Trash size={15} />
@@ -440,7 +440,7 @@ export function StoryboardPlanner({
                 <div className="grid gap-2 sm:grid-cols-2">
                   {/* Shot type */}
                   <label className="block">
-                    <span className="mb-1 block text-xs text-muted">景别</span>
+                    <span className="mb-1 block text-xs text-muted-foreground">景别</span>
                     <DarkSelect
                       className="!bg-white/3 !border-white/8 text-xs"
                       value={shot.shotType}
@@ -453,7 +453,7 @@ export function StoryboardPlanner({
 
                   {/* Style */}
                   <label className="block">
-                    <span className="mb-1 block text-xs text-muted">风格 Skill</span>
+                    <span className="mb-1 block text-xs text-muted-foreground">风格 Skill</span>
                     <DarkSelect
                       className="!bg-white/3 !border-white/8 text-xs"
                       value={shot.skillSlug ?? ""}
@@ -477,7 +477,7 @@ export function StoryboardPlanner({
                 {/* Character multi-select */}
                 {characters.length > 0 && (
                   <div className="mt-2">
-                    <span className="mb-1 block text-xs text-muted">出场角色</span>
+                    <span className="mb-1 block text-xs text-muted-foreground">出场角色</span>
                     <div className="flex flex-wrap gap-1.5">
                       {characters.map((character) =>
 {
@@ -496,7 +496,7 @@ export function StoryboardPlanner({
                             className={`rounded-full px-2 py-0.5 text-xs transition-colors ${
                               on
                                 ? "bg-primary text-white"
-                                : "border border-border text-muted hover:text-ink"
+                                : "border border-border text-muted-foreground hover:text-ink"
                             }`}
                           >
                             {character.name || "未命名"}
@@ -509,7 +509,7 @@ export function StoryboardPlanner({
 
                 {/* Prompt preview */}
                 <div className="mt-3 rounded-lg bg-subtle p-3">
-                  <p className="mb-1 text-xs font-medium text-muted">生图提示词</p>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">生图提示词</p>
                   <p className="text-xs leading-relaxed text-ink/80 break-words">
                     {shot.prompt || "填写描述后自动生成…"}
                   </p>
@@ -528,7 +528,7 @@ export function StoryboardPlanner({
                     return (
                       <div className="mt-2" aria-live="polite">
                         <div className="mb-1 flex items-center justify-between text-xs">
-                          <span className="text-muted">
+                          <span className="text-muted-foreground">
                             {p?.label ? `正在执行 ${p.label}` : "正在生成…"}
                           </span>
                           <span className="font-medium text-primary">{pct}%</span>
@@ -583,7 +583,7 @@ export function StoryboardPlanner({
 
 function StatusBadge({ status }: { status: Shot["status"] }) {
   const map: Record<Shot["status"], { label: string; cls: string }> = {
-    idle: { label: "待生成", cls: "bg-subtle text-muted" },
+    idle: { label: "待生成", cls: "bg-subtle text-muted-foreground" },
     queued: { label: "排队中", cls: "bg-amber-100 text-amber-700" },
     running: { label: "生成中", cls: "bg-blue-100 text-blue-700" },
     done: { label: "已完成", cls: "bg-emerald-100 text-emerald-700" },

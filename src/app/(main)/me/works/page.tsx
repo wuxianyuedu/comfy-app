@@ -5,11 +5,11 @@ import { getWorkflow } from "@/lib/comfyui/_meta";
 import { api } from "~/trpc/react";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
-  QUEUED: { label: "排队中", cls: "bg-subtle text-muted" },
+  QUEUED: { label: "排队中", cls: "bg-subtle text-muted-foreground" },
   RUNNING: { label: "生成中", cls: "bg-primary-soft text-primary" },
   SUCCEEDED: { label: "已完成", cls: "bg-emerald-500/15 text-emerald-500" },
   FAILED: { label: "失败", cls: "bg-red-500/15 text-red-500" },
-  CANCELLED: { label: "已取消", cls: "bg-subtle text-muted" },
+  CANCELLED: { label: "已取消", cls: "bg-subtle text-muted-foreground" },
 };
 
 export default function MyWorks() {
@@ -20,7 +20,7 @@ export default function MyWorks() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="u-title-page">我的作品</h1>
-          <p className="mt-1 text-sm text-muted">本机 ComfyUI 生成的所有结果，按时间倒序排列。</p>
+          <p className="mt-1 text-sm text-muted-foreground">本机 ComfyUI 生成的所有结果，按时间倒序排列。</p>
         </div>
         <Link
           href="/workspace?tab=canvas"
@@ -31,9 +31,9 @@ export default function MyWorks() {
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted">加载中…</p>
+        <p className="text-sm text-muted-foreground">加载中…</p>
       ) : !data?.tasks || data.tasks.length === 0 ? (
-        <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-border text-muted">
+        <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-border text-muted-foreground">
           <div className="text-center">
             <p className="text-lg font-medium text-ink">还没有作品</p>
             <p className="mt-1 text-sm">去创作台生成你的第一张图吧。</p>
@@ -59,7 +59,7 @@ export default function MyWorks() {
                       className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
                     />
                   ) : (
-                    <div className="grid h-full place-items-center text-xs text-muted">
+                    <div className="grid h-full place-items-center text-xs text-muted-foreground">
                       {task.status === "FAILED" ? "生成失败" : "无预览"}
                     </div>
                   )}
@@ -75,7 +75,7 @@ export default function MyWorks() {
                       {wf}
                     </span>
                   </div>
-                  <p className="line-clamp-2 text-xs text-muted">{task.prompt}</p>
+                  <p className="line-clamp-2 text-xs text-muted-foreground">{task.prompt}</p>
                 </div>
               </div>
             );

@@ -103,7 +103,7 @@ export function ApiChannelSettings({ initial, onClose, onSaved }: Props) {
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="u-title">API 直连通道设置</h3>
-          <button type="button" onClick={onClose} className="text-muted hover:text-ink" aria-label="关闭">
+          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-ink" aria-label="关闭">
             ✕
           </button>
         </div>
@@ -117,7 +117,7 @@ export function ApiChannelSettings({ initial, onClose, onSaved }: Props) {
               className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
                 tab === kind
                   ? "border-primary bg-primary-soft text-primary"
-                  : "border-border text-muted hover:bg-subtle"
+                  : "border-border text-muted-foreground hover:bg-subtle"
               }`}
             >
               {KIND_META[kind].title}
@@ -154,7 +154,7 @@ export function ApiChannelSettings({ initial, onClose, onSaved }: Props) {
           />
         </div>
 
-        <p className="text-muted mt-3 text-[11px] leading-relaxed">{meta.hint}</p>
+        <p className="text-muted-foreground mt-3 text-[11px] leading-relaxed">{meta.hint}</p>
         {msg && (
           <p
             className={`mt-3 rounded-lg px-3 py-2 text-xs ${
@@ -183,7 +183,7 @@ export function ApiChannelSettings({ initial, onClose, onSaved }: Props) {
           </button>
         </div>
 
-        <p className="text-muted mt-3 flex items-center gap-1 text-[11px]">
+        <p className="text-muted-foreground mt-3 flex items-center gap-1 text-[11px]">
           <Icon name="info" size={12} />
           API Key 仅存储于服务端（data/workshop-api-settings.json），不会下发到浏览器。
         </p>
@@ -207,7 +207,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-muted mb-1 block text-xs">{label}</span>
+      <span className="text-muted-foreground mb-1 block text-xs">{label}</span>
       <input
         type={password ? "password" : "text"}
         value={value}

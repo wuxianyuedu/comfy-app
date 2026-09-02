@@ -94,7 +94,7 @@ export function NodePreviewCard({
       </div>
 
       {!data ? (
-        <div className="px-2.5 py-1.5 text-[10px] italic text-muted">
+        <div className="px-2.5 py-1.5 text-[10px] italic text-muted-foreground">
           清单中未找到该节点（可能解析后未重导入此包）
         </div>
       ) : !expanded ? (
@@ -149,7 +149,7 @@ export function NodePreviewCard({
                 </div>
               ))}
               {widgets.length > 32 && (
-                <div className="pl-3 text-[10px] text-muted">
+                <div className="pl-3 text-[10px] text-muted-foreground">
                   … +{widgets.length - 32} more
                 </div>
               )}
@@ -157,7 +157,7 @@ export function NodePreviewCard({
           )}
 
           {typed.length === 0 && widgets.length === 0 && outputs.length === 0 && (
-            <div className="py-1 text-center text-[10px] italic text-muted">
+            <div className="py-1 text-center text-[10px] italic text-muted-foreground">
               无输入 / 输出参数
             </div>
           )}

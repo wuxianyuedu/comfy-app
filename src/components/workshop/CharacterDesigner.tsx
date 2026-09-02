@@ -282,7 +282,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="u-title">
-          角色设计 <span className="text-muted">({characters.length})</span>
+          角色设计 <span className="text-muted-foreground">({characters.length})</span>
         </h3>
         <div className="flex gap-2">
           <button
@@ -320,7 +320,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
           </button>
         </div>
         {!config && (
-          <p className="mt-2 text-[11px] text-muted">
+          <p className="mt-2 text-[11px] text-muted-foreground">
             未配置 LLM。点右上角「LLM 设置」接入本地或远端模型后即可使用 AI。
           </p>
         )}
@@ -350,7 +350,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
       )}
 
       {characters.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted">
+        <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
           还没有角色。添加角色后会自动生成可送入生图的提示词。
         </div>
       ) : (
@@ -379,7 +379,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
                 <button
                   type="button"
                   onClick={() => remove(character.id)}
-                  className="text-muted hover:text-red-500"
+                  className="text-muted-foreground hover:text-red-500"
                   aria-label="删除角色"
                 >
                   <Trash size={16} />
@@ -395,7 +395,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
 
               {/* Style tags */}
               <div className="mt-2">
-                <span className="mb-1 block text-xs text-muted">风格标签</span>
+                <span className="mb-1 block text-xs text-muted-foreground">风格标签</span>
                 <div className="flex flex-wrap gap-1.5">
                   {character.styleTags.map((styleTag) =>
 (
@@ -427,7 +427,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
 
               {/* Linked style skill */}
               <div className="mt-2">
-                <span className="mb-1 block text-xs text-muted">艺术风格（Skill）</span>
+                <span className="mb-1 block text-xs text-muted-foreground">艺术风格（Skill）</span>
                 <DarkSelect
                   className="!bg-white/3 !border-white/8 text-sm"
                   value={character.skillSlug ?? ""}
@@ -440,12 +440,12 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
 
               {/* Generated prompt preview */}
               <div className="mt-3 rounded-lg bg-subtle p-3">
-                <p className="mb-1 text-xs font-medium text-muted">生成提示词预览</p>
+                <p className="mb-1 text-xs font-medium text-muted-foreground">生成提示词预览</p>
                 <p className="text-xs leading-relaxed text-ink/80 break-words">
                   {character.positivePrompt || "填写角色信息后自动生成…"}
                 </p>
                 {character.negativePrompt && (
-                  <p className="mt-2 text-xs leading-relaxed text-muted/70 break-words">
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground/70 break-words">
                     <span className="font-medium">负向：</span>
                     {character.negativePrompt}
                   </p>
@@ -472,7 +472,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs text-muted">{label}</span>
+      <span className="mb-1 block text-xs text-muted-foreground">{label}</span>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}

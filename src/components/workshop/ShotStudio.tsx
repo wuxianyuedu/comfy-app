@@ -195,7 +195,7 @@ export function ShotStudio({
     <div className="space-y-4">
       {/* Channel switch (local ComfyUI / configured API) */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-muted text-xs">生成通道</span>
+        <span className="text-muted-foreground text-xs">生成通道</span>
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -203,7 +203,7 @@ export function ShotStudio({
             className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
               channel === "local"
                 ? "border-primary bg-primary-soft text-primary"
-                : "border-border text-muted hover:bg-subtle"
+                : "border-border text-muted-foreground hover:bg-subtle"
             }`}
           >
             本地 · ComfyUI 工作流
@@ -214,7 +214,7 @@ export function ShotStudio({
             className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
               channel === "api"
                 ? "border-primary bg-primary-soft text-primary"
-                : "border-border text-muted hover:bg-subtle"
+                : "border-border text-muted-foreground hover:bg-subtle"
             }`}
           >
             API 直连{apiChannels ? (apiReady ? " · 已配置" : " · 未配置") : ""}
@@ -223,14 +223,14 @@ export function ShotStudio({
         <button
           type="button"
           onClick={onOpenApiSettings}
-          className="text-muted hover:text-ink flex items-center gap-1 rounded-lg bg-white/4 px-3 py-1.5 text-xs hover:bg-white/8"
+          className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-lg bg-white/4 px-3 py-1.5 text-xs hover:bg-white/8"
         >
           <Icon name="settings" size={12} />
           API 通道设置
         </button>
         {channel === "local" && checkpoints.length > 0 && (
           <label className="ml-auto flex items-center gap-2 text-xs">
-            <span className="text-muted">Checkpoint</span>
+            <span className="text-muted-foreground">Checkpoint</span>
             <select
               value={checkpoint}
               onChange={(e) => onCheckpointChange(e.target.value)}
@@ -264,7 +264,7 @@ export function ShotStudio({
 
       {/* Channel-specific gating hints (gentle, stage stays usable) */}
       {channel === "local" && !checkpoint && (
-        <div className="text-muted rounded-lg bg-subtle px-3 py-2 text-xs">
+        <div className="text-muted-foreground rounded-lg bg-subtle px-3 py-2 text-xs">
           本地通道需要选择 Checkpoint(ComfyUI 需在本机运行)。生成任务走与画布一致的本地工作流链路。
         </div>
       )}
@@ -276,7 +276,7 @@ export function ShotStudio({
       )}
 
       {shots.length === 0 ? (
-        <div className="border-border text-muted rounded-xl border border-dashed py-10 text-center text-sm">
+        <div className="border-border text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">
           暂无镜头数据。请先在「场景分镜」阶段提取或生成分镜 — 镜头提示词会自动带入本阶段。
         </div>
       ) : (
@@ -290,10 +290,10 @@ export function ShotStudio({
                   <span className="bg-primary-soft text-primary grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold">
                     {shot.index}
                   </span>
-                  <span className="text-muted truncate text-xs">{shot.sceneHeading}</span>
+                  <span className="text-muted-foreground truncate text-xs">{shot.sceneHeading}</span>
                   <StatusBadge status={shot.status} />
                   {busyCount > 0 && shot.status === "running" && (
-                    <span className="text-muted text-[10px]">{p > 0 ? `${Math.round(p)}%` : "排队中…"}</span>
+                    <span className="text-muted-foreground text-[10px]">{p > 0 ? `${Math.round(p)}%` : "排队中…"}</span>
                   )}
                   <span className="text-faint ml-auto text-[10px]">{channel === "local" ? "本地" : "API"}</span>
                 </div>
@@ -344,7 +344,7 @@ export function ShotStudio({
       )}
 
       {shots.length > 0 && (
-        <p className="text-muted text-[11px]">
+        <p className="text-muted-foreground text-[11px]">
           已生成 {doneCount}/{shots.length} 镜 — 图片会自动作为下一阶段「视频生成」的首帧;缺失镜头仍可回上一阶段补齐。
         </p>
       )}
@@ -354,7 +354,7 @@ export function ShotStudio({
 
 function StatusBadge({ status }: { status: Shot["status"] }) {
   const map: Record<Shot["status"], { label: string; cls: string }> = {
-    idle: { label: "待生成", cls: "bg-subtle text-muted" },
+    idle: { label: "待生成", cls: "bg-subtle text-muted-foreground" },
     queued: { label: "排队中", cls: "bg-amber-100 text-amber-700" },
     running: { label: "生成中", cls: "bg-blue-100 text-blue-700" },
     done: { label: "已完成", cls: "bg-emerald-100 text-emerald-700" },

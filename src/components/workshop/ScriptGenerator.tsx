@@ -106,7 +106,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
         <h3 className="u-title mb-3">项目信息</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">标题</span>
+            <span className="mb-1 block text-xs text-muted-foreground">标题</span>
             <input
               value={meta.title}
               onChange={(event) => onMetaChange({ ...meta, title: event.target.value })}
@@ -115,7 +115,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">类型</span>
+            <span className="mb-1 block text-xs text-muted-foreground">类型</span>
             <DarkSelect
               className="!bg-white/3 !border-white/8 text-sm"
               value={meta.type}
@@ -126,7 +126,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">基调 / 情绪</span>
+            <span className="mb-1 block text-xs text-muted-foreground">基调 / 情绪</span>
             <input
               value={meta.tone}
               onChange={(event) => onMetaChange({ ...meta, tone: event.target.value })}
@@ -135,7 +135,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">一句话梗概</span>
+            <span className="mb-1 block text-xs text-muted-foreground">一句话梗概</span>
             <input
               value={meta.logline}
               onChange={(event) => onMetaChange({ ...meta, logline: event.target.value })}
@@ -155,7 +155,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
           <button
             type="button"
             onClick={() => setExpanded((value) => !value)}
-            className="text-xs text-muted hover:text-ink"
+            className="text-xs text-muted-foreground hover:text-ink"
           >
             {expanded ? "收起" : "展开输入"}
           </button>
@@ -198,14 +198,14 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
               </p>
             )}
             {!config && !aiBusy && (
-              <p className="text-xs text-muted">
+              <p className="text-xs text-muted-foreground">
                 未配置 LLM，AI 扩写将不可用。可在右上角「LLM 设置」中接入本地或远端模型。
               </p>
             )}
           </div>
         )}
         {!expanded && (
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted-foreground">
             输入一句话灵感或粘贴粗稿，自动拆分为场景结构（场景名 / 地点 / 时间 / 画面 / 台词）。
           </p>
         )}
@@ -215,7 +215,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
       <section>
         <div className="mb-2 flex items-center justify-between">
           <h3 className="u-title">
-            场景列表 <span className="text-muted">({scenes.length})</span>
+            场景列表 <span className="text-muted-foreground">({scenes.length})</span>
           </h3>
           <button
             type="button"
@@ -227,7 +227,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
         </div>
 
         {scenes.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted">
+          <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
             还没有场景。试试上方「智能辅助」或手动添加。
           </div>
         ) : (
@@ -246,7 +246,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
                   <button
                     type="button"
                     onClick={() => removeScene(scene.id)}
-                    className="text-muted hover:text-red-500"
+                    className="text-muted-foreground hover:text-red-500"
                     aria-label="删除场景"
                   >
                     <Trash size={16} />
@@ -283,7 +283,7 @@ export function ScriptGenerator({ meta, scenes, onMetaChange, onScenesChange }: 
                 />
 
                 <div className="mt-2 flex items-center gap-2">
-                  <span className="text-xs text-muted">建议镜头数</span>
+                  <span className="text-xs text-muted-foreground">建议镜头数</span>
                   <NumberField
                     value={scene.shotCount}
                     onChange={(value) => updateScene(scene.id, { shotCount: value })}

@@ -68,7 +68,7 @@ export function Navbar() {
                 key={item.href}
                 href={item.href}
                 className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  active ? "bg-primary-soft text-primary" : "text-muted hover:bg-subtle hover:text-ink"
+                  active ? "bg-primary-soft text-primary" : "text-muted-foreground hover:bg-subtle hover:text-ink"
                 }`}
               >
                 {item.label}
@@ -81,7 +81,7 @@ export function Navbar() {
           <button
             onClick={toggleTheme}
             aria-label="切换主题"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted transition-colors hover:text-ink"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:text-ink"
           >
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>
@@ -90,7 +90,7 @@ export function Navbar() {
           <button
             onClick={() => setMobileOpen((value) => !value)}
             aria-label="打开菜单"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted transition-colors hover:text-ink md:hidden"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:text-ink md:hidden"
           >
             <MenuIcon />
           </button>
@@ -115,7 +115,7 @@ export function Navbar() {
                   key={item.href}
                   href={item.href}
                   className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                    active ? "bg-primary-soft text-primary" : "text-muted hover:bg-subtle hover:text-ink"
+                    active ? "bg-primary-soft text-primary" : "text-muted-foreground hover:bg-subtle hover:text-ink"
                   }`}
                 >
                   {item.label}
@@ -124,7 +124,7 @@ export function Navbar() {
             })}
             <Link
               href="/settings"
-              className="rounded-lg px-3 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-subtle hover:text-ink"
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-subtle hover:text-ink"
             >
               设置
             </Link>

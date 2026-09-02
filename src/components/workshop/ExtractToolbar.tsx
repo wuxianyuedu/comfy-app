@@ -64,7 +64,7 @@ export function ExtractToolbar({
               title={ch.title}
               onClick={() => onChannelChange(ch.value)}
               className={`px-2.5 py-1 text-xs transition-colors ${
-                channel === ch.value ? "bg-primary text-white" : "bg-bg text-muted hover:text-ink"
+                channel === ch.value ? "bg-primary text-white" : "bg-bg text-muted-foreground hover:text-ink"
               }`}
             >
               {ch.label}
@@ -107,7 +107,7 @@ export function ExtractToolbar({
       {statusText && !errorText && <p className="mt-2 text-xs text-primary">{statusText}</p>}
       {errorText && <p className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">{errorText}</p>}
       {extractDisabled && !busy && !errorText && (
-        <p className="mt-2 text-[11px] text-muted">{extractDisabledReason ?? "从剧本提取暂不可用"}</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">{extractDisabledReason ?? "从剧本提取暂不可用"}</p>
       )}
     </div>
   );

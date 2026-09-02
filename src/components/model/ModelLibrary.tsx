@@ -56,7 +56,7 @@ export function ModelLibrary() {
             className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
               type === FILTERS.key
                 ? "border-primary bg-primary-soft text-primary"
-                : "border-border text-muted hover:text-ink"
+                : "border-border text-muted-foreground hover:text-ink"
             }`}
           >
             {FILTERS.label}
@@ -71,7 +71,7 @@ export function ModelLibrary() {
         <button
           onClick={sync}
           disabled={syncing}
-          className="h-9 rounded-lg border border-border px-3 text-sm text-muted transition-colors hover:text-ink disabled:opacity-50"
+          className="h-9 rounded-lg border border-border px-3 text-sm text-muted-foreground transition-colors hover:text-ink disabled:opacity-50"
         >
           {syncing ? "同步中…" : "同步模型"}
         </button>
@@ -84,7 +84,7 @@ export function ModelLibrary() {
           ))}
         </div>
       ) : models.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-12 text-center text-muted">
+        <div className="rounded-xl border border-dashed border-border p-12 text-center text-muted-foreground">
           暂无可用的本地模型。请确认 ComfyUI 已启动，然后点击「同步模型」。
         </div>
       ) : (

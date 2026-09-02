@@ -136,7 +136,7 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
   if (shots.length === 0) {
     return (
       <div className="border-border bg-surface rounded-2xl border border-dashed p-8 text-center">
-        <p className="text-muted text-sm">暂无分镜数据。请先完成「场景分镜」与「视频生成」，再回到这里合成成片。</p>
+        <p className="text-muted-foreground text-sm">暂无分镜数据。请先完成「场景分镜」与「视频生成」，再回到这里合成成片。</p>
       </div>
     );
   }
@@ -197,7 +197,7 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
       {/* Preview player */}
       {playing && current && (
         <div className="border-border bg-surface rounded-2xl border p-4">
-          <div className="text-muted mb-2 flex items-center justify-between text-[11px]">
+          <div className="text-muted-foreground mb-2 flex items-center justify-between text-[11px]">
             <span>
               预览中 · 镜 {String(currentIdx + 1).padStart(2, "0")} / {String(timeline.length).padStart(2, "0")}
             </span>
@@ -217,7 +217,7 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
                
               <img src={current.shot.imageUrl} alt={current.shot.sceneHeading} className="max-h-[420px] w-full object-contain" />
             ) : (
-              <span className="text-muted text-xs">该镜头缺少画面，已跳过</span>
+              <span className="text-muted-foreground text-xs">该镜头缺少画面，已跳过</span>
             )}
           </div>
           {current.shot.dialogue && (
@@ -246,21 +246,21 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
                    
                   <img src={shot.imageUrl} alt={shot.sceneHeading} className="h-full w-full object-cover" />
                 ) : (
-                  <div className="text-muted grid h-full place-items-center">
+                  <div className="text-muted-foreground grid h-full place-items-center">
                     <Icon name="image" size={16} />
                   </div>
                 )}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-ink truncate text-xs font-medium">{shot.sceneHeading}</div>
-                <div className="text-muted mt-0.5 truncate text-[10.5px]">
+                <div className="text-muted-foreground mt-0.5 truncate text-[10.5px]">
                   {shot.clipUrl ? "片段就绪" : shot.imageUrl ? "待生成视频（以静帧占位）" : "待生成画面"}
                   {shot.dialogue ? ` · 字幕: ${shot.dialogue}` : ""}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <label className="block">
-                  <span className="text-muted mb-0.5 block text-[10px]">时长(s)</span>
+                  <span className="text-muted-foreground mb-0.5 block text-[10px]">时长(s)</span>
                   <input
                     type="number"
                     min={1}
@@ -273,7 +273,7 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
                   />
                 </label>
                 <label className="block">
-                  <span className="text-muted mb-0.5 block text-[10px]">转场</span>
+                  <span className="text-muted-foreground mb-0.5 block text-[10px]">转场</span>
                   <DarkSelect
                     className="!bg-white/3 !border-white/8 text-xs"
                     value={shot.transition ?? "cut"}
@@ -284,7 +284,7 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
                   />
                 </label>
                 <label className="block">
-                  <span className="text-muted mb-0.5 block text-[10px]">运动</span>
+                  <span className="text-muted-foreground mb-0.5 block text-[10px]">运动</span>
                   <DarkSelect
                     className="!bg-white/3 !border-white/8 text-xs"
                     value={shot.motion ?? "medium"}
@@ -301,7 +301,7 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
       </div>
 
       {clipsDone < timeline.length && (
-        <div className="text-muted rounded-xl bg-subtle px-3 py-2 text-xs">
+        <div className="text-muted-foreground rounded-xl bg-subtle px-3 py-2 text-xs">
           {timeline.length - clipsDone} 个镜头还没有视频片段 — 可回到「视频生成」补齐；导出清单时缺片段镜头将以静帧占位。
         </div>
       )}

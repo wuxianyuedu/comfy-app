@@ -32,7 +32,7 @@ export function EmptyState({
       <div className="space-y-1">
         <p className="text-sm font-semibold text-ink">{title}</p>
         {description && (
-          <p className="mx-auto max-w-sm text-[13px] leading-relaxed text-muted">
+          <p className="mx-auto max-w-sm text-[13px] leading-relaxed text-muted-foreground">
             {description}
           </p>
         )}

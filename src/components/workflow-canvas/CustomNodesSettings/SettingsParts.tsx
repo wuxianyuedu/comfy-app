@@ -136,7 +136,7 @@ export function ManifestSummary({
   summary: NonNullable<SettingsResp["summary"]>;
 }) {
   return (
-    <div className="mb-4 rounded-lg border border-border bg-bg px-3 py-2 text-xs text-muted">
+    <div className="mb-4 rounded-lg border border-border bg-bg px-3 py-2 text-xs text-muted-foreground">
       当前清单：共 <b className="text-ink">{summary.totalNodes}</b> 个节点类型
       {summary.generatedAt ? ` · 生成于 ${summary.generatedAt}` : ""}
       {summary.missingPaths?.length ? ` · ⚠️ ${summary.missingPaths.length} 个目录未找到` : ""}
@@ -153,7 +153,7 @@ export function ParseProgressBanner({
   progress: ParseProgress;
 }) {
   return (
-    <div className="mb-4 rounded-lg border border-dashed border-border bg-bg/50 px-3 py-3 text-xs text-muted">
+    <div className="mb-4 rounded-lg border border-dashed border-border bg-bg/50 px-3 py-3 text-xs text-muted-foreground">
       {/* Top line: current phase, with package counter (the user's
           primary interest). The .py file count is gone — they
           explicitly said it isn't useful. */}
@@ -163,7 +163,7 @@ export function ParseProgressBanner({
           <span className="text-ink">
             🔎 正在处理 <span className="font-mono">{progress.done}/{progress.total}</span> 个节点包
             {progress.parent && (
-              <span className="ml-2 truncate font-mono text-[11px] text-muted" title={progress.parent}>
+              <span className="ml-2 truncate font-mono text-[11px] text-muted-foreground" title={progress.parent}>
                 · {progress.parent.split(/[\\/]/).slice(-2).join("/")}
               </span>
             )}
@@ -171,7 +171,7 @@ export function ParseProgressBanner({
         ) : progress.phase === "scan" && progress.discovered > 0 ? (
           <span className="text-ink">
             📦 已发现 <span className="font-mono">{progress.discovered}</span> 个节点包
-            <span className="ml-2 text-muted text-[11px]">（总数待定，正在扫描…）</span>
+            <span className="ml-2 text-muted-foreground text-[11px]">（总数待定，正在扫描…）</span>
           </span>
         ) : (
           <span>首次扫描目录中的节点包…</span>
@@ -201,7 +201,7 @@ export function ParseProgressBanner({
       </div>
       {progress.msg && (
         <div
-          className="mt-1.5 truncate font-mono text-[10px] text-muted"
+          className="mt-1.5 truncate font-mono text-[10px] text-muted-foreground"
           title={progress.msg}
         >
           {progress.msg}
@@ -228,7 +228,7 @@ export function ParseConsole({
   return (
     <div ref={logsRef} className="mb-4">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs font-medium text-muted">解析日志</span>
+        <span className="text-xs font-medium text-muted-foreground">解析日志</span>
         {parsing && (
           <span className="flex items-center gap-1.5 text-xs text-primary">
             <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
@@ -237,7 +237,7 @@ export function ParseConsole({
         )}
       </div>
       {logs.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-bg/30 p-3 text-center text-[11px] text-muted">
+        <div className="rounded-lg border border-dashed border-border bg-bg/30 p-3 text-center text-[11px] text-muted-foreground">
           {parsing ? "等待第一条日志…" : "点击「解析全部」或「导入此包」后日志会出现在这里。"}
         </div>
       ) : (
@@ -268,7 +268,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
     <div className="mt-2">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium text-ink">最近解析结果</span>
-        <span className="text-xs text-muted">
+        <span className="text-xs text-muted-foreground">
           {(report as any).mode === "subset"
             ? `增量 +${(report as any).addedNodes ?? 0}`
             : `${report.pathCount} 个目录 · ${report.totalNodes} 个节点`}
@@ -291,7 +291,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
                       {st!.label}
                     </span>
                   </div>
-                  <div className="truncate font-mono text-[11px] text-muted" title={pkg.path}>
+                  <div className="truncate font-mono text-[11px] text-muted-foreground" title={pkg.path}>
                     {pkg.path}
                   </div>
                 </div>
@@ -299,7 +299,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   <div className="text-lg font-semibold" style={{ color: st!.fg }}>
                     {pkg.nodeCount}
                   </div>
-                  <div className="text-[11px] text-muted">节点类型</div>
+                  <div className="text-[11px] text-muted-foreground">节点类型</div>
                 </div>
               </div>
               {pkg.nodeTypes?.length > 0 && (
@@ -307,13 +307,13 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   {pkg.nodeTypes.slice(0, 24).map((ct) => (
                     <span
                       key={ct}
-                      className="rounded-md bg-white/4 px-1.5 py-0.5 font-mono text-[11px] text-muted"
+                      className="rounded-md bg-white/4 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
                     >
                       {ct}
                     </span>
                   ))}
                   {pkg.nodeTypes.length > 24 && (
-                    <span className="rounded-md bg-white/4 px-1.5 py-0.5 font-mono text-[11px] text-muted">
+                    <span className="rounded-md bg-white/4 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
                       +{pkg.nodeTypes.length - 24}
                     </span>
                   )}

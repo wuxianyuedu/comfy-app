@@ -174,7 +174,7 @@ export function WorkshopStudio() {
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-ink">创作工坊 · 全链路管线</h1>
-            <p className="mt-1 text-sm text-muted">
+            <p className="mt-1 text-sm text-muted-foreground">
               剧本生成 → 角色设计 → 分镜规划 → 一键生图，串联你的整个创作流程。
             </p>
           </div>
@@ -183,7 +183,7 @@ export function WorkshopStudio() {
             <LLMSettingsButton />
             <Link
               href="/workspace"
-              className="rounded-lg border border-border px-3 py-2 text-sm text-muted hover:bg-subtle"
+              className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-subtle"
             >
               前往创作空间 →
             </Link>
@@ -200,7 +200,7 @@ export function WorkshopStudio() {
               key={TABS.id}
               onClick={() => setTab(TABS.id)}
               className={`relative flex flex-col items-center rounded-lg px-2 py-3 text-center transition-colors ${
-                active ? "bg-primary-soft text-primary" : "text-muted hover:text-ink"
+                active ? "bg-primary-soft text-primary" : "text-muted-foreground hover:text-ink"
               }`}
             >
               <Icon name={TABS.icon} size={20} />
@@ -255,7 +255,7 @@ export function WorkshopStudio() {
           <div className="rounded-xl border border-border bg-surface p-4">
             <h3 className="u-title mb-3">生成设置</h3>
             <label className="block">
-              <span className="mb-1 block text-xs text-muted">大模型（Checkpoint）</span>
+              <span className="mb-1 block text-xs text-muted-foreground">大模型（Checkpoint）</span>
               <DarkSelect
                 className="!bg-white/3 !border-white/8 text-sm"
                 value={checkpoint}
@@ -264,7 +264,7 @@ export function WorkshopStudio() {
                 placeholder={checkpoints.length === 0 ? "（无可用模型）" : "选择模型"}
               />
             </label>
-            <p className="mt-2 text-xs text-muted">
+            <p className="mt-2 text-xs text-muted-foreground">
               分镜生图将统一使用此模型；风格细节由所选 Skill / 角色风格标签控制。
             </p>
           </div>
@@ -274,16 +274,16 @@ export function WorkshopStudio() {
             <PipelineRow icon="filetext" label="剧本场景" count={scenes.length} active={tab === "script"} onClick={() => setTab("script")} />
             <PipelineRow icon="drama" label="角色" count={characters.length} active={tab === "character"} onClick={() => setTab("character")} />
             <PipelineRow icon="film" label="分镜镜头" count={shots.length} active={tab === "storyboard"} onClick={() => setTab("storyboard")} />
-            <div className="mt-2 border-t border-border pt-2 text-xs text-muted">
+            <div className="mt-2 border-t border-border pt-2 text-xs text-muted-foreground">
               已完成生图：{shots.filter((shot) => shot.status === "done").length} / {shots.length}
             </div>
           </div>
 
           {meta.title && (
             <div className="rounded-xl border-primary-soft bg-primary-soft/30 p-4">
-              <p className="text-xs text-muted">当前项目</p>
+              <p className="text-xs text-muted-foreground">当前项目</p>
               <p className="mt-1 text-sm font-medium text-ink">{meta.title}</p>
-              {meta.logline && <p className="mt-1 text-xs text-muted">{meta.logline}</p>}
+              {meta.logline && <p className="mt-1 text-xs text-muted-foreground">{meta.logline}</p>}
             </div>
           )}
         </aside>
@@ -311,7 +311,7 @@ function PipelineRow({
       type="button"
       onClick={onClick}
       className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors ${
-        active ? "bg-primary-soft text-primary" : "text-muted hover:bg-subtle"
+        active ? "bg-primary-soft text-primary" : "text-muted-foreground hover:bg-subtle"
       }`}
     >
       <Icon name={icon} size={16} />

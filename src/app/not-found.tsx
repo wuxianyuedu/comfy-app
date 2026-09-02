@@ -6,7 +6,7 @@ export default function NotFound() {
       <p className="text-7xl font-bold tracking-tight text-primary">404</p>
       <div>
         <h1 className="text-2xl font-bold tracking-tight">页面走丢了</h1>
-        <p className="mt-2 text-muted">你访问的页面不存在，或已被移动。</p>
+        <p className="mt-2 text-muted-foreground">你访问的页面不存在，或已被移动。</p>
       </div>
       <Link
         href="/"

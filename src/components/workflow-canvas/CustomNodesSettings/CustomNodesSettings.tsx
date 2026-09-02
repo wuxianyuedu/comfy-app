@@ -638,7 +638,7 @@ export function CustomNodesSettings() {
               <h3 className="text-base font-semibold text-ink">自定义节点 & 本地工作流</h3>
               <button
                 onClick={() => setOpen(false)}
-                className="rounded-lg px-2 py-1 text-muted hover:bg-subtle hover:text-ink"
+                className="rounded-lg px-2 py-1 text-muted-foreground hover:bg-subtle hover:text-ink"
               >
                 关闭
               </button>
@@ -662,13 +662,13 @@ export function CustomNodesSettings() {
                 onClick={() => setTab("workflows")}
                 className={
                   "relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors " +
-                  (tab === "workflows" ? "text-ink" : "text-muted hover:text-ink")
+                  (tab === "workflows" ? "text-ink" : "text-muted-foreground hover:text-ink")
                 }
               >
                 <span aria-hidden>📁</span>
                 <span>本地工作流</span>
                 {savedLocalPaths.length > 0 && (
-                  <span className="rounded-full bg-white/6 px-2 py-0.5 font-mono text-[10px] text-muted">
+                  <span className="rounded-full bg-white/6 px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
                     已配 {savedLocalPaths.length}
                   </span>
                 )}
@@ -687,18 +687,18 @@ export function CustomNodesSettings() {
                 onClick={() => setTab("nodes")}
                 className={
                   "relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors " +
-                  (tab === "nodes" ? "text-ink" : "text-muted hover:text-ink")
+                  (tab === "nodes" ? "text-ink" : "text-muted-foreground hover:text-ink")
                 }
               >
                 <span aria-hidden>{"\u{1F9E9}"}</span>
                 <span>自定义节点</span>
                 {totalAcrossParents.total > 0 && (
-                  <span className="rounded-full bg-white/6 px-2 py-0.5 font-mono text-[10px] text-muted">
+                  <span className="rounded-full bg-white/6 px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
                     {totalAcrossParents.loaded}/{totalAcrossParents.total}
                   </span>
                 )}
                 {!totalAcrossParents.total && savedPaths.length > 0 && (
-                  <span className="rounded-full bg-white/6 px-2 py-0.5 font-mono text-[10px] text-muted">
+                  <span className="rounded-full bg-white/6 px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
                     扫描中…
                   </span>
                 )}
@@ -733,7 +733,7 @@ export function CustomNodesSettings() {
                   🔒 只读
                 </span>
               </div>
-              <p className="mb-2 text-xs text-muted">
+              <p className="mb-2 text-xs text-muted-foreground">
                 每行一个目录（也可英文逗号分隔）。支持绝对路径，或相对（项目根）路径。
                 服务端扫描时会列出其下的 <code className="font-mono">.json</code> / <code className="font-mono">.workflow</code> 文件，
                 尚未导入到数据库的会显示在工作流库的「本地工作流」分组里，标题为「⤓ 未载入」，
@@ -766,7 +766,7 @@ export function CustomNodesSettings() {
                   {savedLocalPaths.map((path, i) => (
                     <li
                       key={`${path}-${i}`}
-                      className="flex items-center gap-2 truncate font-mono text-[11px] text-muted"
+                      className="flex items-center gap-2 truncate font-mono text-[11px] text-muted-foreground"
                       title={path}
                     >
                       <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400" />
@@ -775,7 +775,7 @@ export function CustomNodesSettings() {
                   ))}
                 </ul>
               )}
-              <div className="flex items-center justify-between text-xs text-muted">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <div className="flex flex-wrap items-center gap-2">
                   {localSaving && (
                     <span className="flex items-center gap-1.5 text-primary">
@@ -799,7 +799,7 @@ export function CustomNodesSettings() {
                     <span className="text-emerald-400">✓ 已配置（来自 .env）</span>
                   )}
                   {!localSaving && !localSaveErr && loading && (
-                    <span className="flex items-center gap-1.5 text-muted">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
                       <span className="inline-block h-2 w-2 animate-spin rounded-full border border-muted border-t-transparent" />
                       加载中…
                     </span>
@@ -833,7 +833,7 @@ export function CustomNodesSettings() {
                   🔒 只读
                 </span>
               </div>
-              <p className="mb-2 text-xs text-muted">
+              <p className="mb-2 text-xs text-muted-foreground">
                 每行一个目录（也可英文逗号分隔）。支持相对（项目根）或绝对路径。解析器只读取这些目录、绝不修改其中任何文件。
               </p>
               <textarea
@@ -844,7 +844,7 @@ export function CustomNodesSettings() {
                 className="mb-2 w-full resize-none rounded-lg border border-border bg-surface p-3 font-mono text-xs text-ink outline-none placeholder:text-gray-500 focus:border-primary"
               />
               <div className="mb-4 flex items-center justify-between text-xs">
-                <div className="flex flex-wrap items-center gap-2 text-muted">
+                <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
                   {saving && (
                     <span className="flex items-center gap-1.5 text-primary">
                       <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
@@ -877,7 +877,7 @@ export function CustomNodesSettings() {
                     </>
                   )}
                   {!saving && !saveErr && loading && (
-                    <span className="flex items-center gap-1.5 text-muted">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
                       <span className="inline-block h-2 w-2 animate-spin rounded-full border border-muted border-t-transparent" />
                       加载中…
                     </span>
@@ -920,7 +920,7 @@ export function CustomNodesSettings() {
                     </span>
                   )}
                 </span>
-                <span className="text-xs text-muted">
+                <span className="text-xs text-muted-foreground">
                   共 {totalAcrossParents.total} 个子包
                   {savedPaths.length > 0
                     ? ` · 已加载 ${totalAcrossParents.loaded + totalAcrossParents.outdated}/${totalAcrossParents.total}`
@@ -928,7 +928,7 @@ export function CustomNodesSettings() {
                 </span>
               </div>
               {savedPaths.length === 0 && !loading && (
-                <div className="rounded-lg border border-dashed border-border bg-bg/50 p-4 text-center text-xs text-muted">
+                <div className="rounded-lg border border-dashed border-border bg-bg/50 p-4 text-center text-xs text-muted-foreground">
                   上面输入至少一个目录后，会自动发现其下的节点包。
                 </div>
               )}
@@ -957,7 +957,7 @@ export function CustomNodesSettings() {
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-muted">
+                            <span className="font-mono text-xs text-muted-foreground">
                               {isOpen ? "▾" : "▸"}
                             </span>
                             <span className="font-medium text-ink">📁</span>
@@ -968,7 +968,7 @@ export function CustomNodesSettings() {
                               {parent}
                             </span>
                           </div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
                             <span>{total} 个子包</span>
                             {cnt.loaded > 0 && (
                               <span className="rounded-full px-1.5 py-0.5" style={{ background: "rgba(16,185,129,0.18)", color: "var(--color-success-strong)" }}>
@@ -1054,11 +1054,11 @@ export function CustomNodesSettings() {
                                           {state.kind === "loaded" && saved?.parsedAt ? `已加载 ${saved.parsedAt.split("T")[1]?.slice(0, 5) ?? ""}` : preset.label}
                                         </span>
                                       </div>
-                                      <div className="truncate font-mono text-[10px] text-muted" title={sub.path}>
+                                      <div className="truncate font-mono text-[10px] text-muted-foreground" title={sub.path}>
                                         {sub.path}
                                       </div>
                                     </div>
-                                    <div className="flex shrink-0 items-center gap-3 text-xs text-muted">
+                                    <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
                                       {nodesAreLoaded ? (
                                         <div
                                           role="button"
@@ -1091,7 +1091,7 @@ export function CustomNodesSettings() {
                                             <span className="font-mono text-sm font-semibold text-ink">
                                               {nodeCount}
                                             </span>
-                                            <span className="text-[10px] text-muted">
+                                            <span className="text-[10px] text-muted-foreground">
                                               {nodeListOpen ? "▾" : "▸"}
                                             </span>
                                           </div>
@@ -1130,7 +1130,7 @@ export function CustomNodesSettings() {
                                       style={{ borderColor: preset.fg + "30" }}
                                     >
                                       {nodeTypeList.length === 0 ? (
-                                        <div className="text-[10px] italic text-muted">
+                                        <div className="text-[10px] italic text-muted-foreground">
                                           此包的清单中没有列出节点类型
                                         </div>
                                       ) : (
@@ -1158,7 +1158,7 @@ export function CustomNodesSettings() {
                         </div>
                       )}
                       {isOpen && subs.length === 0 && (
-                        <div className="border-t border-border bg-surface/50 p-3 text-center text-[11px] text-muted">
+                        <div className="border-t border-border bg-surface/50 p-3 text-center text-[11px] text-muted-foreground">
                           这个目录下没有发现包含 NODE_CLASS_MAPPINGS 的子包
                         </div>
                       )}
