@@ -88,3 +88,9 @@ playwright-report/
 
 # 本机应用设置（含 ComfyUI 路径等，local-only）
 /data/
+
+# 代码智能 / 语义检索索引（agent 工具链本地产物，不入版本库）
+# codegraph（Rust 内核本地图）
+.codegraph/
+# zvec-grep（ripgrep+BM25+向量 本地索引）
+.zvec-grep/

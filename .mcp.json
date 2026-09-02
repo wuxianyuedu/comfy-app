@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "codegraph": {
+      "type": "stdio",
+      "command": "codegraph",
+      "args": ["serve", "--mcp"],
+      "description": "本地代码知识图谱：符号/调用边/依赖关系预建索引，一次调用返回相关源码+调用路径+变更爆炸半径。Rust 内核，100% 本地。"
+    },
+    "zvec-grep": {
+      "type": "stdio",
+      "command": "zg",
+      "args": ["server", "--stdio", "--mcp-toolset", "full"],
+      "description": "本地优先混合检索：ripgrep(精确/正则) + BM25 + 向量(语义) 统一接口，按含义发现代码并带回链证据。"
+    }
+  }
+}
