@@ -57,6 +57,48 @@ const SCENE_PLACEHOLDERS = [
   "尾声字幕",
 ];
 
+/** 工坊草稿在 localStorage 的键（单草稿：该页面即一个未命名项目流）。 */
+const WORKSHOP_DRAFT_KEY = "comfyapp.workshop.draft.v1";
+
+/** 自动保存的工坊状态（恢复时逐字段校验类型，损坏则按全新状态继续）。 */
+interface WorkshopDraft {
+  meta: ProjectMeta;
+  outline: string;
+  scriptMarkdown: string;
+  scenes: Scene[];
+  characters: Character[];
+  shots: Shot[];
+  checkpoint: string;
+}
+
+/** 读取本机草稿；损坏/不可用返回 null（SSR 与隐私模式下同样安全）。 */
+function loadWorkshopDraft(): WorkshopDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(WORKSHOP_DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as Partial<WorkshopDraft>;
+    return {
+      meta: d.meta ?? { title: "未命名项目", type: "short_video", tone: "", logline: "" },
+      outline: typeof d.outline === "string" ? d.outline : "",
+      scriptMarkdown: typeof d.scriptMarkdown === "string" ? d.scriptMarkdown : "",
+      scenes: Array.isArray(d.scenes) ? d.scenes : [],
+      characters: Array.isArray(d.characters) ? d.characters : [],
+      shots: Array.isArray(d.shots) ? d.shots : [],
+      checkpoint: typeof d.checkpoint === "string" ? d.checkpoint : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** 页面加载期间只读一次 localStorage（state 惰性初始化器共用）。 */
+let workshopDraftCache: WorkshopDraft | null | undefined;
+function loadWorkshopDraftOnce(): WorkshopDraft | null {
+  workshopDraftCache ??= loadWorkshopDraft();
+  return workshopDraftCache;
+}
+
 /** /api/skills 返回 payload：用于在 fetch 边界收窄，消除 any 散落。 */
 type SkillsApiResponse = {
   skills?: Array<{
@@ -116,18 +158,15 @@ function StageHint({ text, onGo }: { text: string; onGo: () => void }) {
 
 export function WorkshopPipeline() {
   const [tab, setTab] = React.useState<Tab>("script");
-  const [meta, setMeta] = React.useState<ProjectMeta>({
-    title: "未命名项目",
-    type: "short_video",
-    tone: "",
-    logline: "",
-  });
-  const [scenes, setScenes] = React.useState<Scene[]>([]);
-  const [characters, setCharacters] = React.useState<Character[]>([]);
-  const [shots, setShots] = React.useState<Shot[]>([]);
+  const [meta, setMeta] = React.useState<ProjectMeta>(
+    () => loadWorkshopDraftOnce()?.meta ?? { title: "未命名项目", type: "short_video", tone: "", logline: "" },
+  );
+  const [scenes, setScenes] = React.useState<Scene[]>(() => loadWorkshopDraftOnce()?.scenes ?? []);
+  const [characters, setCharacters] = React.useState<Character[]>(() => loadWorkshopDraftOnce()?.characters ?? []);
+  const [shots, setShots] = React.useState<Shot[]>(() => loadWorkshopDraftOnce()?.shots ?? []);
   const [styles, setStyles] = React.useState<StyleRef[]>([]);
   const [checkpoints, setCheckpoints] = React.useState<string[]>([]);
-  const [checkpoint, setCheckpoint] = React.useState("");
+  const [checkpoint, setCheckpoint] = React.useState(() => loadWorkshopDraftOnce()?.checkpoint ?? "");
   const [generating, setGenerating] = React.useState(false);
   /** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别），用于节点上渲染进度条 */
   const [shotProgress, setShotProgress] = React.useState<Record<string, { pct: number; label?: string }>>({});
@@ -135,15 +174,41 @@ export function WorkshopPipeline() {
   const [apiChannels, setApiChannels] = React.useState<ApiChannelsView | null>(null);
   const [apiSettingsOpen, setApiSettingsOpen] = React.useState(false);
 
-  const [outline, setOutline] = React.useState(
-    "少女小满在旧城区的天台邂逅一台会说话的旧收音机，它声称能播放“未来的声音”。随着电波里浮现陌生又熟悉的话语，小满逐渐发现，那些声音来自十年后试图拯救这座即将被拆除的城市的自己……",
-  );
+  // 2026-09-02: 剧本内容此前是纯内存 state（刷新即丢），且大纲默认塞了
+  // 一段硬编码示例文案。现在大纲/剧本默认为空，全部内容经 localStorage
+  // 草稿持久化（防抖自动保存，挂载时惰性恢复）。
+  const [outline, setOutline] = React.useState(() => loadWorkshopDraftOnce()?.outline ?? "");
   const [scriptMarkdown, setScriptMarkdown] = React.useState(
-    meta.scriptMarkdown ?? "# 未命名剧本\n\n## 故事大纲\n\n" + outline + "\n",
+    () => loadWorkshopDraftOnce()?.scriptMarkdown ?? "",
   );
   const [isScriptEditorOpen, setIsScriptEditorOpen] = React.useState(false);
   const [editingOutline, setEditingOutline] = React.useState(false);
-  const [draftOutline, setDraftOutline] = React.useState(outline);
+  const [draftOutline, setDraftOutline] = React.useState("");
+
+  const [draftSavedAt, setDraftSavedAt] = React.useState<Date | null>(null);
+  React.useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const d: WorkshopDraft = {
+          meta,
+          outline,
+          scriptMarkdown,
+          scenes,
+          characters,
+          shots,
+          checkpoint,
+        };
+        window.localStorage.setItem(
+          WORKSHOP_DRAFT_KEY,
+          JSON.stringify({ v: 1, ...d }),
+        );
+        setDraftSavedAt(new Date());
+      } catch {
+        /* 存储满/隐私模式：静默失败，不影响编辑 */
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [meta, outline, scriptMarkdown, scenes, characters, shots, checkpoint]);
 
   React.useEffect(() => {
     fetch("/api/skills")
@@ -536,6 +601,18 @@ export function WorkshopPipeline() {
                       故事大纲
                     </span>
                     <div className="flex items-center gap-2">
+                      {draftSavedAt && !editingOutline && (
+                        <span
+                          className="text-[10px] text-muted"
+                          title="剧本内容自动保存在本机浏览器，刷新/重启后仍在"
+                        >
+                          已自动保存{" "}
+                          {draftSavedAt.toLocaleTimeString("zh-CN", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      )}
                       {!editingOutline ? (
                         <button
                           type="button"
@@ -585,9 +662,14 @@ export function WorkshopPipeline() {
                       className="border-border bg-bg text-ink ring-primary/30 focus:border-primary/50 w-full resize-none rounded-xl border p-3 text-[12.5px] leading-relaxed transition outline-none focus:ring-2"
                       placeholder="输入故事大纲……"
                     />
-                  ) : (
+                  ) : outline ? (
                     <p className="text-muted text-[12.5px] leading-relaxed">
                       {outline}
+                    </p>
+                  ) : (
+                    <p className="text-[12.5px] leading-relaxed text-muted/60 italic">
+                      暂无大纲——点击「编辑」输入故事大纲，或在下方用一句话梗概 /
+                      智能辅助结构化开始。
                     </p>
                   )}
                 </section>
