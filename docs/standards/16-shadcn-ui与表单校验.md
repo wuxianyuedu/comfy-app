@@ -135,6 +135,66 @@ export function LoginForm() {
 - 非受控、校验与 UI 解耦、生态最大、文档最全；
 - 与既有 `zod@4` 无缝衔接，schema 同时驱动前后端类型。
 
+## 16.6 团队 Registry（本地，base-ui 兼容）
+
+> 没有公共 shadcn registry，团队自建本地 registry，供 `shadcn add @comfy-app-t3/<comp>` 使用。
+
+### 目录（本地，独立于项目仓库）
+
+```
+D:/dev/Comfy-APP-T3/registry/
+├── index.json            ← 注册表索引（= r/registry.json）
+├── r/
+│   ├── registry.json     ← 索引副本（shadcn list 需要）
+│   ├── form.json         ← 各组件 manifest（含内联源码 content）
+│   ├── button.json
+│   ├── input.json
+│   ├── label.json
+│   ├── textarea.json
+│   ├── select.json
+│   └── switch.json
+├── serve.mjs             ← 本地静态服务（Node，修复 Windows 路径）
+└── gen.mjs              ← 批量生成器：从 src/components/ui/*.tsx 抽依赖并写 r/<name>.json
+```
+
+`index.json` + `r/registry.json` 已登记并内联全部 28 个 `ui/` 组件源码（base-ui 版）。
+
+### 启动本地服务（必须，shadcn CLI 不支持 `file://`）
+
+双击 `tools\start-registry.bat`（或手动）：
+
+```bash
+node D:/dev/Comfy-APP-T3/registry/serve.mjs 3874
+# → http://127.0.0.1:3874   （前台运行；关掉终端即停；端口占用会提示已在运行）
+```
+
+### 项目侧注册（`components.json` 已配）
+
+```json
+"registries": {
+  "@comfy-app-t3": "http://127.0.0.1:3874/r/{name}.json"
+}
+```
+
+### 使用
+
+```bash
+# 列出团队组件
+pnpm exec shadcn list @comfy-app-t3
+# 查看单个组件 manifest
+pnpm exec shadcn view @comfy-app-t3/form
+# 安装（生成的 base-ui 版会写入 src/components/ui/）
+shadcn add @comfy-app-t3/form @comfy-app-t3/select
+```
+
+### 新增/更新一个团队组件
+
+- **批量（推荐）**：改完 `src/components/ui/*.tsx` 后跑 `node D:/dev/Comfy-APP-T3/registry/gen.mjs`，自动抽依赖、写 `r/<name>.json`、重建 `index.json` + `r/registry.json`（已存在的 manifest 不会被覆盖，保留手调内容）。
+- **手动**：复制源码到 `r/<name>.json` 的 `files[].content`（`target` 指定落地 `src/components/ui/<name>.tsx`），并在 `index.json` + `r/registry.json` 的 `items` 登记 `name`/`type: registry:ui`/`title`/`description`/`dependencies`/`registryDependencies`。
+- 服务已在跑则立即生效，无需重启。
+
+> 注意：`components.json` 指向的是本地 dev 服务 `127.0.0.1:3874`，仅本机/团队内网可用；若要对外共享，把 `registry/` 推到任意可 HTTP 访问的位置并改 URL 即可。
+
 **何时换 TanStack Form**：当表单出现"超复杂动态字段 + 极致类型推导"需求（如字段级条件联动、嵌套数组的严格推断），TanStack Form 的 headless + 编译期类型推断更省心（无 `Controller`/`ref` 心智负担）。其余情况保持 RHF + Zod。
 
 ## 16.6 base-ui 注意事项
