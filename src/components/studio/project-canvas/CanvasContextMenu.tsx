@@ -4,7 +4,7 @@
  *  menu.  Pure presentational — the caller owns `menu` state and the
  *  node-creation actions.
  */
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import { NODE_META, type NodeKind } from "./canvas-types";
 
 interface CanvasContextMenuProps {

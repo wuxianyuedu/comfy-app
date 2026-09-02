@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import type {
   Scene,
   Character,

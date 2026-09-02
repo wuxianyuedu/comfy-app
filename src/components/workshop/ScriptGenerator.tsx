@@ -3,7 +3,7 @@ import React from "react";
 import { Trash } from "lucide-react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { NumberField } from "@/components/studio/ui/NumberField";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import type { Scene, ProjectMeta, ProjectType } from "@/lib/workshop/types";
 import { PROJECT_TYPE_LABELS } from "@/lib/workshop/types";
 import { parseIdeaToScenes, newScene, workshopUid } from "@/lib/workshop/script-parser";

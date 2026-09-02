@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import { api } from "~/trpc/react";
 
 /**

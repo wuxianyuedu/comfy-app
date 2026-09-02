@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import type { Character, Scene, Shot, StyleRef } from "@/lib/workshop/types";
 import { buildShotNegative, buildShotPrompt } from "@/lib/workshop/prompt-builder";
 import {

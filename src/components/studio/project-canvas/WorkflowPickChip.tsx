@@ -5,7 +5,7 @@
  */
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import { usePopoverDismiss, usePopoverPosition } from "./workflow-node-popover";
 
 export type WorkflowPickOption = {

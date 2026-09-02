@@ -1,3 +1,5 @@
+import Link from "next/link"
+import { type ComponentProps } from "react"
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -55,4 +57,27 @@ function Button({
   )
 }
 
-export { Button, buttonVariants }
+type ButtonLinkProps = ComponentProps<typeof Link> &
+  VariantProps<typeof buttonVariants>
+
+/**
+ * ButtonLink — 渲染为 next/link 的按钮（shadcn base-ui Button 无 asChild，
+ * 故单独封装）。与 Button 共用 variant/size。
+ */
+function ButtonLink({
+  className,
+  variant = "default",
+  size = "default",
+  href,
+  ...props
+}: ButtonLinkProps) {
+  return (
+    <Link
+      href={href}
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
+  )
+}
+
+export { Button, ButtonLink, buttonVariants }

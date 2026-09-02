@@ -17,7 +17,7 @@ import {
   type CanvasNodeType,
   NODE_META,
 } from "../canvas-types";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import { vanillaApi } from "~/trpc/vanilla";
 import { DebugChainFooter } from "../../debug/DebugChainFooter";
 import { getProjectCanvasRenderChain } from "../canvas-render-chain";

@@ -11,7 +11,7 @@
 import { useMemo, useState } from "react";
 import { type CanvasNodeData } from "../canvas-types";
 import { ValidationErrorList } from "@/components/studio/shared/ValidationErrorList";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import { shouldAutoExpandError, suggestForError } from "./error-suggestions";
 
 interface ErrorPanelProps {

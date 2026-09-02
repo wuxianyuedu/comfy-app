@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { ArrowRight } from "lucide-react";
 import { chatAgent, type ChatMessage, type AgentSpec } from "@/lib/agent/agentic";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 
 /* ── AgentChat — multi-turn creation guidance overlay ──
   A floating chat panel where the user refines an idea with the AI assistant

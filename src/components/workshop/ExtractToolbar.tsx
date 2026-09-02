@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 
 /** 提取通道:①工具(内置规则) ②本地模型(provider=local) ③配置API(provider=remote) */
 export type ExtractChannel = "tool" | "local" | "remote";

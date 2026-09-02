@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import { SourceModal } from "../SourceModal";
 import type { WorkflowPreview as WorkflowPreviewT } from "@/lib/comfyui/workflow";
 import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";

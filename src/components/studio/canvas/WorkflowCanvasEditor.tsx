@@ -7,7 +7,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 
-import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 
 import { WorkflowEditorInner } from "../workflow-editor/WorkflowEditorInner";

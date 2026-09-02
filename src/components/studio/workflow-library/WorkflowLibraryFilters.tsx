@@ -3,7 +3,7 @@
 /** 2026-08-29 T12-3: extracted from WorkflowLibrary's three filter-tab
  *  rows (source / type / model) plus the "管理模型" shortcut.
  */
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import { FilterTabs } from "./WorkflowLibraryHelpers";
 
 export type SourceFilter = "all" | "local" | "online";

@@ -3,7 +3,7 @@
 import React from "react";
 import { Trash } from "lucide-react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import type { Shot, Scene, Character, StyleRef, ShotType } from "@/lib/workshop/types";
 import { SHOT_TYPE_LABELS } from "@/lib/workshop/types";
 import { buildShotPrompt, buildShotNegative, mergeParams } from "@/lib/workshop/prompt-builder";

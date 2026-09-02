@@ -2,7 +2,7 @@
 
 import React from "react";
 import { ChevronLeft, MessageSquare, Search } from "lucide-react";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 
 /* ── Updream-style Top Bar ───────────────────────────────
   [<]  ProjectName          ⚡360  👤User  🔍  💬

@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { completeChat } from "@/lib/llm/browser";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import { api } from "~/trpc/react";
 import type { LLMConfigView, LLMProviderType } from "@/lib/llm/types";
 

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 "use client";
 
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import { NODE_META, type CanvasNodeData, type NodeKind } from "../canvas-types";
 import { NodeChip, StatusBadge } from "./CanvasNodePrimitives";
 

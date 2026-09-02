@@ -1,6 +1,6 @@
 "use client";
 
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 
 /* ── Agent Panel (Left slide-out or embedded) ───────────
   Task list per agent + empty state.

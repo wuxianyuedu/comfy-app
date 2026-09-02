@@ -3,7 +3,7 @@
 import React from "react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import Link from "next/link";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import { ScriptGenerator } from "@/components/workshop/ScriptGenerator";
 import { CharacterDesigner } from "@/components/workshop/CharacterDesigner";
 import { StoryboardPlanner } from "@/components/workshop/StoryboardPlanner";

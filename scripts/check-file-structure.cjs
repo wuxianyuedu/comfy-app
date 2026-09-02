@@ -3,7 +3,8 @@
  * 文件组织硬规则(规范见 docs/standards/12-代码组织与文件结构.md):
  *   R1  src 下 .tsx 文件名必须 PascalCase(测试伙伴文件 X.test.tsx 同样以大写开头;
  *       豁免:src/app 下 Next 保留名、CONVENTION_EXEMPT 列出的库惯例文件、
- *       目录索引 index.tsx、以及 src/components/ui/(shadcn 官方 kebab-case 约定)——§12.6/§12.8)
+ *       目录索引 index.tsx;src/components/ui/ 采用 shadcn 官方 kebab-case 约定
+ *       (硬强制 kebab,禁止 PascalCase——§12.6/§12.8)
  *   R2  src 下 .ts 文件名禁止 PascalCase(非组件模块一律 kebab-case)
  *   R3  禁止时间戳备份文件(\d{8}_\d{6} 模式)——版本回退用 git,不进 src
  *   R4  src/lib 下禁止 .tsx(12.5:lib 无 React)
@@ -31,7 +32,8 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
     if (!/\.(tsx?|mjs|cjs|js)$/.test(e.name)) continue;
     const rel = p;
     // shadcn/ui 官方约定:组件文件 kebab-case(button.tsx/dialog.tsx),
-    // 与本项目 R1(PascalCase)冲突——放开 src/components/ui/ 目录(§12.6 例外)。
+    // 与本项目 R1(PascalCase)相反——本脚本对 src/components/ui/ 硬强制 kebab
+    // (禁止大写开头,§12.6),不再豁免。
     const isUiDir = rel.startsWith("src/components/ui/");
     const base = e.name.replace(/\.(tsx?|mjs|cjs|js)$/, "").replace(/\.test$/, "");
     if (/\d{8}_\d{6}/.test(e.name)) problems.push("R3 时间戳备份文件:" + rel);
@@ -41,18 +43,23 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
       problems.push("R6 文件级 no-explicit-any 禁用头(战役已清零,禁止回流):" + rel);
     if (/\.(tsx|mjs|cjs|js)$/.test(e.name) && rel.startsWith("src/")) {
       if (e.name.endsWith(".tsx")) {
-        /* §12.6 把「目录索引」单列为一种命名约定（index.tsx 组件 /
-         *  index.ts 模块），它是 barrel，不承载组件实现，因此不受
-         *  R1「组件文件须 PascalCase」约束。 */
+        /* §12.6:目录索引 index.tsx 是 barrel,不承载组件实现,不受 R1 约束。
+         *  src/components/ui/ 采用 shadcn 官方 kebab-case 约定(§12.6),
+         *  故 ui/ 下组件文件须 kebab-case(禁止 PascalCase)。 */
         const isDirectoryIndex = base === "index";
         const reserved = (rel.startsWith("src/app/") && NEXT_RESERVED.has(base))
           || CONVENTION_EXEMPT.has(rel)
-          || isDirectoryIndex
-          || isUiDir;
-        if (!reserved && !/^[A-Z]/.test(base)) problems.push("R1 组件文件须 PascalCase:" + rel);
+          || isDirectoryIndex;
+        if (isUiDir) {
+          // shadcn 约定:kebab-case,禁止大写开头
+          if (/^[A-Z]/.test(base)) problems.push("R1(ui) 组件文件须 kebab-case:" + rel);
+        } else if (!reserved && !/^[A-Z]/.test(base)) {
+          problems.push("R1 组件文件须 PascalCase:" + rel);
+        }
         if (rel.startsWith("src/lib/")) problems.push("R4 lib 下禁止 .tsx:" + rel);
       } else if (e.name.endsWith(".ts") && !e.name.endsWith(".d.ts")) {
-        if (!isUiDir && /^[A-Z]/.test(base)) problems.push("R2 模块文件须 kebab-case:" + rel);
+        // ui/ 下 .ts 模块同样须 kebab-case(shadcn 约定)
+        if (/^[A-Z]/.test(base)) problems.push("R2 模块文件须 kebab-case:" + rel);
       }
       const lines = fs.readFileSync(p, "utf8").split("\n").length;
       if (rel.startsWith("src/components/") && lines > 900)

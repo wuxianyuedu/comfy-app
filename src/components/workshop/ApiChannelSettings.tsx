@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import type { ApiChannelKind, ApiChannelsView, ApiChannelSaveInput } from "@/lib/workshop/api-channel-shared";
 
 /** catch 抛出值（unknown）→ 消息提取：带 string message 的对象取 message，其余回退。 */

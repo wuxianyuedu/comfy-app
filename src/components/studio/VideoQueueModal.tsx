@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Trash, X } from "lucide-react";
 import { MediaThumbnail } from "./ui/MediaThumbnail";
 import { isVideo } from "@/lib/media";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs, RouterOutputs } from "~/trpc/react";
 

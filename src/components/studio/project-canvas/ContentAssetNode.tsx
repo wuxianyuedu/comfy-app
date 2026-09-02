@@ -3,7 +3,7 @@
 
 import React from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 import { WaterFillProgress } from "@/components/studio/ui/WaterFillProgress";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { CanvasNodeData } from "./canvas-types";

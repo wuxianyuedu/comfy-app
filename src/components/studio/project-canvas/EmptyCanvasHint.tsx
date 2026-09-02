@@ -5,7 +5,7 @@
  *  friendly "right-click to start" guide card (shown when the canvas is
  *  genuinely empty).
  */
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 
 interface EmptyCanvasHintProps {
   /** True → hydrating overlay; false → empty-canvas guide. */

@@ -89,7 +89,7 @@ import { Home, Zap, FolderOpen, Search, X } from "lucide-react";
 
 ```tsx
 // ✅ 动态 key：中央 Icon 组件（src/components/ui/Icon.tsx，内部已带 aria-hidden）
-import { Icon } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/icon";
 <Icon name="plus" size={16} strokeWidth={2} />
 ```
 
