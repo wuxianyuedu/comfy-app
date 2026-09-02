@@ -2,6 +2,9 @@ import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { getLLMConfig, completeLLM } from "@/lib/llm/server";
 
+/** 合法的任务类型 key（用于温度覆盖） */
+const taskTypeKeys = ["txt2img", "img2video", "chat", "code", "creative"] as const;
+
 export const llmRouter = createTRPCRouter({
   /** GET /api/llm/config */
   configGet: authedProcedure.query(async () => {
@@ -18,6 +21,7 @@ export const llmRouter = createTRPCRouter({
         baseUrl: z.string().optional(),
         model: z.string().optional(),
         temperature: z.number().optional(),
+        temperatureByTask: z.record(z.enum(taskTypeKeys), z.number()).optional(),
         maxTokens: z.number().optional(),
       })
     )

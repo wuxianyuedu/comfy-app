@@ -298,14 +298,15 @@ model WorkflowModelTag {
 // OpenAI-compatible API). A single row with id="singleton" is used because the
 // app is single-user local. API key is only ever read server-side.
 model LlmConfig {
-  id          String   @id @default("singleton")
-  provider    String   @default("local") // "local" | "remote"
-  baseUrl     String   @default("http://localhost:11434/v1")
-  model       String   @default("llama3.1")
-  apiKey      String? // only needed for remote providers
-  temperature Float
-  maxTokens   Int      @default(2048)
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default("singleton")
+  provider         String   @default("local") // "local" | "remote"
+  baseUrl          String   @default("http://localhost:11434/v1")
+  model            String   @default("llama3.1")
+  apiKey           String? // only needed for remote providers
+  temperature      Float    @default(0.7) // 全局默认温度
+  temperatureByTask Json?    // 按任务类型覆盖的温度：{"txt2img":0.3,"chat":0.7,...}
+  maxTokens        Int      @default(2048)
+  updatedAt        DateTime @updatedAt
 }
 
 model Skill {

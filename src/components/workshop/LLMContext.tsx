@@ -170,7 +170,12 @@ function LLMSettingsModal({
         maxTokens,
       });
       const cfg = data.config;
-      onSaved({ ...cfg, hasApiKey: !!cfg.apiKey, provider: cfg.provider as "local" | "remote" });
+      onSaved({
+        ...cfg,
+        hasApiKey: !!cfg.apiKey,
+        provider: cfg.provider as "local" | "remote",
+        temperatureByTask: (cfg.temperatureByTask as Record<string, number> | null | undefined) ?? undefined,
+      });
     } catch (e: unknown) {
       setMsg({ kind: "err", text: errorMessage(e, "保存失败") });
     } finally {

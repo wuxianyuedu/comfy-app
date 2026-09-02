@@ -110,6 +110,11 @@ Start-Transcript -Path $currentLog -Force -ErrorAction SilentlyContinue | Out-Nu
 #   颜色用 ANSI 转义序列直接写进输出流（而非 -ForegroundColor），这样
 #   Start-Transcript 会把颜色码也记录到 log/dev-launcher.log，应用内面板用
 #   ANSI 解析器原样还原多色日志。
+#
+#   2026-09-02 修复：PowerShell Start-Transcript 会缓冲输出、仅在 Stop-Transcript
+#   （脚本退出时）才 flush 到磁盘，导致运行期间查看 dev-launcher.log 几乎为空。
+#   现在采用双写策略：Write-Host（供 Transcript + 终端显示）+ 直接 Append 到文件
+#   （实时落盘，应用内日志面板可立即读取）。
 function Write-Log {
   param(
     [Parameter(Mandatory = $true)][string]$Message,
@@ -119,8 +124,11 @@ function Write-Log {
   $c = @{ STEP = "$e[36m"; OK = "$e[32m"; WARN = "$e[33m"; ERROR = "$e[31m"; INFO = "$e[90m" }[$Level]
   $ts = Get-Date -Format "HH:mm:ss"
   $lvl = ($Level).PadRight(5)
+  $plainLine = "[$ts] [$lvl] $Message"
   $line = "$e[90m[$ts]$e[0m ${c}[$lvl]$e[0m $Message$e[0m"
   Write-Host $line
+  # 直接追加到当前日志文件——绕过 Transcript 缓冲，确保实时可读
+  try { Add-Content -LiteralPath $currentLog -Value $plainLine -Encoding utf8 -ErrorAction SilentlyContinue } catch {}
 }
 
 # ── 启动摘要卡片：标题 + 键值信息，分隔线包裹 ──

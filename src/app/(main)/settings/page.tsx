@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { api } from "~/trpc/react";
+import { TASK_TYPES, type TaskType } from "@/lib/llm/types";
 
 /* ── Helpers ──────────────────────────────────────────────── */
 
@@ -33,6 +34,7 @@ type LlmConfig = {
   baseUrl: string;
   model: string;
   temperature: number;
+  temperatureByTask?: Record<TaskType, number>;
   maxTokens: number;
   apiKey: string | null;
 };
@@ -59,6 +61,7 @@ export default function SettingsPage() {
   const [ollamaStatus, setOllamaStatus] = useState<"checking" | "up" | "down">("checking");
   const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
   const [ollamaStarting, setOllamaStarting] = useState(false);
+  const [showTaskTemps, setShowTaskTemps] = useState(false);
 
   // ComfyUI
   const [settingsDraft, setSettingsDraft] = useState<Settings | null>(null);
@@ -77,7 +80,11 @@ export default function SettingsPage() {
   const [prevLlmConfig, setPrevLlmConfig] = useState(llmConfig);
   if (llmConfig !== prevLlmConfig) {
     setPrevLlmConfig(llmConfig);
-    if (llmConfig) setLlmDraft({ ...llmConfig, apiKey: llmConfig.apiKey ?? null });
+    if (llmConfig) setLlmDraft({
+      ...llmConfig,
+      apiKey: llmConfig.apiKey ?? null,
+      temperatureByTask: llmConfig.temperatureByTask ?? undefined,
+    });
   }
   const settingsData = settingsQ.data?.settings ?? null;
   const [prevSettingsData, setPrevSettingsData] = useState(settingsData);
@@ -192,12 +199,36 @@ export default function SettingsPage() {
     }
   }
 
-  /* ── Loading state ────────────────────────────────────── */
+  /* ── Loading / Error state ───────────────────────────────── */
 
-  if (settingsQ.isLoading || llmQ.isLoading || !settings || !settingsDraft || !llmDraft) {
+  const hasError = settingsQ.isError || llmQ.isError;
+  const isInitialLoad = settingsQ.isLoading || llmQ.isLoading;
+  // 仅在首次加载且无数据时显示 loading；若 query 已结束但数据为空或出错则放行渲染
+  if (isInitialLoad && !settingsQ.data && !llmQ.data && !hasError) {
     return (
-      <div className="dark grid min-h-screen place-items-center bg-(--color-canvas) text-muted-foreground">
+      <div className="dark grid h-[calc(100vh-var(--toolbar-height,48px))] place-items-center bg-(--color-canvas) text-muted-foreground">
         加载中…
+      </div>
+    );
+  }
+
+  if (hasError && !settings && !llmConfig) {
+    return (
+      <div className="dark grid h-[calc(100vh-var(--toolbar-height,48px))] place-items-center bg-(--color-canvas) p-6 text-center">
+        <p className="text-rose-400">加载设置失败，请刷新重试</p>
+        <p className="mt-2 text-xs text-muted-foreground">{errMsg(settingsQ.error ?? llmQ.error, "未知错误")}</p>
+        <button onClick={() => { void settingsQ.refetch(); void llmQ.refetch(); }} className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm text-white">
+          重试
+        </button>
+      </div>
+    );
+  }
+
+  // 此时 drafts 应已就绪；若仍为空则显示降级 UI（不应触发，但满足 TypeScript)
+  if (!llmDraft || !settingsDraft) {
+    return (
+      <div className="dark grid h-[calc(100vh-var(--toolbar-height,48px))] place-items-center bg-(--color-canvas) text-muted-foreground">
+        配置数据未就绪
       </div>
     );
   }
@@ -212,7 +243,7 @@ export default function SettingsPage() {
   /* ── Render ───────────────────────────────────────────── */
 
   return (
-    <div className="dark min-h-screen bg-(--color-canvas)">
+    <div className="dark h-[calc(100vh-var(--toolbar-height,48px))] bg-(--color-canvas) overflow-y-auto">
       {/* Header bar */}
       <div className="flex items-center gap-3 border-b border-border px-6 py-4">
         <button
@@ -233,7 +264,7 @@ export default function SettingsPage() {
               key={item.id}
               type="button"
               onClick={() => setSection(item.id)}
-              className={`w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
+              className={`w-full rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors ${
                 section === item.id
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-subtle hover:text-ink"
@@ -330,9 +361,66 @@ export default function SettingsPage() {
                 />
               )}
               <div className="mb-4 grid grid-cols-2 gap-3">
-                <Field label="温度" value={String(llmDraft.temperature)} onChange={(value) => setLlmDraft({ ...llmDraft, temperature: Number(value) || 0 })} />
+                <Field label="全局默认温度" value={String(llmDraft.temperature)} onChange={(value) => setLlmDraft({ ...llmDraft, temperature: Number(value) || 0 })} />
                 <Field label="最大 Token" value={String(llmDraft.maxTokens)} onChange={(value) => setLlmDraft({ ...llmDraft, maxTokens: Number(value) || 0 })} />
               </div>
+
+              {/* 按任务类型配置温度 */}
+              <div className="mb-4 rounded-xl border border-border bg-white/[0.02] p-4">
+                <button
+                  type="button"
+                  onClick={() => setShowTaskTemps((v) => !v)}
+                  className="mb-3 flex w-full items-center justify-between text-sm font-medium text-ink/80 hover:text-ink"
+                >
+                  <span>按任务类型配置温度（可选覆盖全局默认）</span>
+                  <span className="text-muted-foreground">{showTaskTemps ? "▾" : "▸"}</span>
+                </button>
+                {showTaskTemps && (
+                  <div className="space-y-3">
+                    {(Object.entries(TASK_TYPES) as [TaskType, typeof TASK_TYPES[TaskType]][]).map(([key, meta]) => {
+                      const taskTemp = llmDraft.temperatureByTask?.[key];
+                      const isOverridden = taskTemp !== undefined && taskTemp !== null;
+                      return (
+                        <div key={key} className="flex items-center gap-3 rounded-lg border border-border/50 bg-white/[0.02] px-3 py-2.5">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-ink">{meta.label}</span>
+                              {isOverridden && (
+                                <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">已覆盖</span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">{meta.desc}（建议 {meta.hint}）</p>
+                          </div>
+                          <input
+                            type="number"
+                            step={0.05}
+                            min={0}
+                            max={2}
+                            value={isOverridden ? String(taskTemp) : ""}
+                            placeholder={`默认 ${llmDraft.temperature}`}
+                            onChange={(e) => {
+                              const v = e.target.value === "" ? undefined : Number(e.target.value);
+                              const base = llmDraft.temperatureByTask ?? {};
+                              // 当用户清空输入时删除该 key（而非设为 undefined）
+                              const rawNext = v !== undefined
+                                ? { ...base, [key]: v }
+                                : Object.fromEntries(Object.entries(base).filter(([k]) => k !== key));
+                              const next: Record<TaskType, number> | undefined =
+                                Object.keys(rawNext).length > 0 ? rawNext as Record<TaskType, number> : undefined;
+                              setLlmDraft({
+                                ...llmDraft,
+                                temperatureByTask: next,
+                              });
+                            }}
+                            className="w-24 rounded-lg border border-border bg-white/5 px-2 py-1.5 text-right text-sm text-ink outline-none focus:border-primary placeholder:text-muted-foreground/50"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <Btn onClick={saveLlm} disabled={saving}>
                 保存 LLM 配置
               </Btn>

@@ -13,6 +13,7 @@
  */
 import { prisma } from "@/lib/db";
 import type { LlmConfig, User } from "../../../generated/prisma";
+import { Prisma } from "../../../generated/prisma";
 
 /**
  * 用户仓储。认证链路（register / change-email / change-password / getServerUser）
@@ -58,8 +59,11 @@ export class LlmConfigRepository {
     model?: string;
     apiKey?: string | null;
     temperature?: number;
+    temperatureByTask?: Prisma.InputJsonValue | null;
     maxTokens?: number;
   }): Promise<LlmConfig> {
+    // Prisma Json 字段需要用 DbNull / JsonNull 来区分 SQL NULL 与 JSON null
+    const taskJson = input.temperatureByTask ?? Prisma.DbNull;
     return prisma.llmConfig.upsert({
       where: { id: "singleton" },
       create: {
@@ -69,6 +73,7 @@ export class LlmConfigRepository {
         model: input.model ?? "llama3.1",
         apiKey: input.apiKey ?? null,
         temperature: input.temperature ?? 0.7,
+        temperatureByTask: taskJson,
         maxTokens: input.maxTokens ?? 2048,
       },
       update: {
@@ -77,6 +82,7 @@ export class LlmConfigRepository {
         ...(input.model !== undefined ? { model: input.model } : {}),
         ...(input.apiKey !== undefined ? { apiKey: input.apiKey ?? null } : {}),
         ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
+        ...(input.temperatureByTask !== undefined ? { temperatureByTask: taskJson } : {}),
         ...(input.maxTokens !== undefined ? { maxTokens: input.maxTokens } : {}),
       },
     });

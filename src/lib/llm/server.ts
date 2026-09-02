@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import "server-only";
 import { llmConfigRepository } from "@/lib/core/repository";
-import type { LLMConfig, LLMMessage, LLMRequestOptions, LLMProviderType } from "./types";
+import type { LLMConfig, LLMMessage, LLMRequestOptions, LLMProviderType, TaskType } from "./types";
 
 const ENV_DEFAULTS: LLMConfig = {
   provider: (process.env.LLM_PROVIDER as LLMProviderType) || "local",
@@ -17,6 +17,8 @@ const ENV_DEFAULTS: LLMConfig = {
  *   1. process.env (defaults)
  *   2. DB singleton row (user overrides via the settings UI)
  *   3. per-request override (rarely used; the browser never sends apiKey)
+ *
+ * 温度解析优先级：override.taskType → override.temperature → DB.taskType → DB.temperature → ENV
  */
 export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMConfig> {
   const cfg: LLMConfig = { ...ENV_DEFAULTS };
@@ -29,6 +31,9 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       if (row.model) cfg.model = row.model;
       if (row.apiKey) cfg.apiKey = row.apiKey;
       if (row.temperature != null) cfg.temperature = row.temperature;
+      // temperatureByTask 是 Json 字段，prisma generate 后类型会自动包含；先用 any 绕过
+      const raw = row as Record<string, unknown>;
+      if (raw.temperatureByTask) cfg.temperatureByTask = raw.temperatureByTask as Record<TaskType, number>;
       if (row.maxTokens != null) cfg.maxTokens = row.maxTokens;
     }
   } catch {
@@ -39,7 +44,12 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
     if (override.provider) cfg.provider = override.provider;
     if (override.baseUrl) cfg.baseUrl = override.baseUrl;
     if (override.model) cfg.model = override.model;
-    if (override.temperature != null) cfg.temperature = override.temperature;
+    // 按任务类型查找覆盖温度，没有则回退到显式 temperature 或全局默认
+    if (override.taskType && cfg.temperatureByTask?.[override.taskType] != null) {
+      cfg.temperature = cfg.temperatureByTask[override.taskType];
+    } else if (override.temperature != null) {
+      cfg.temperature = override.temperature;
+    }
     if (override.maxTokens != null) cfg.maxTokens = override.maxTokens;
   }
 
