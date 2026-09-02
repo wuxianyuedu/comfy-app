@@ -45,6 +45,7 @@ export const llmRouter = createTRPCRouter({
         model: z.string().optional(),
         temperature: z.number().optional(),
         maxTokens: z.number().optional(),
+        taskType: z.enum(taskTypeKeys).optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -55,6 +56,7 @@ export const llmRouter = createTRPCRouter({
         model: input.model,
         temperature: input.temperature,
         maxTokens: input.maxTokens,
+        taskType: input.taskType,
       });
       const content = await completeLLM(cfg, input.messages);
       return { content };

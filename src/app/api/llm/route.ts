@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getLLMConfig, completeLLM, streamLLM } from "@/lib/llm/server";
 import { requireServerUser } from "@/lib/auth-server";
-import type { LLMMessage, LLMRequestOptions, LLMProviderType } from "@/lib/llm/types";
+import { TASK_TYPES, type LLMMessage, type LLMRequestOptions, type LLMProviderType, type TaskType } from "@/lib/llm/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +47,9 @@ const BodySchema = {
     }
     if (typeof rec.temperature === "number") opts.temperature = rec.temperature;
     if (typeof rec.maxTokens === "number") opts.maxTokens = rec.maxTokens;
+    if (typeof rec.taskType === "string" && rec.taskType in TASK_TYPES) {
+      opts.taskType = rec.taskType as TaskType;
+    }
     return { messages, stream: rec.stream === true, opts };
   },
 };

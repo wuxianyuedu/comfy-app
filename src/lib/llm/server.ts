@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import "server-only";
+import type { ZodType } from "zod";
 import { llmConfigRepository } from "@/lib/core/repository";
 import type { LLMConfig, LLMMessage, LLMRequestOptions, LLMProviderType, TaskType } from "./types";
 
@@ -148,4 +149,44 @@ export async function streamLLM(
   }
 
   return full;
+}
+
+/**
+ * 结构化（JSON）补全：强制 JSON 输出并用 Zod schema 校验，
+ * 端到端类型安全，避免手写 JSON.parse + 类型断言导致解析失败。
+ */
+export async function completeLLMStructured<T>(
+  cfg: LLMConfig,
+  messages: LLMMessage[],
+  schema: ZodType<T>,
+): Promise<T> {
+  const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: headersFor(cfg),
+    body: JSON.stringify({
+      model: cfg.model,
+      messages,
+      temperature: cfg.temperature,
+      max_tokens: cfg.maxTokens,
+      stream: false,
+      response_format: { type: "json_object" },
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`LLM 请求失败 (${res.status}): ${detail.slice(0, 200)}`);
+  }
+
+  const json = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const content = json.choices?.[0]?.message?.content ?? "{}";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error("LLM 返回非 JSON，无法解析结构化结果");
+  }
+  return schema.parse(parsed);
 }

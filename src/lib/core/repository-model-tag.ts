@@ -6,10 +6,11 @@ import { db } from "@/lib/db";
 import {
   workflowModelTag,
   workflowModelTagToWorkflowTemplate,
+  workflowTemplate,
   type WorkflowModelTag,
 } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
-import { eq, and, asc, count, inArray } from "drizzle-orm";
+import { eq, and, asc, count, inArray, exists, sql, type SQL } from "drizzle-orm";
 
 export interface WorkflowModelTagView {
   id: string;
@@ -91,6 +92,37 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
       .select({ id: workflowModelTag.id })
       .from(workflowModelTag)
       .where(and(eq(workflowModelTag.userId, userId), inArray(workflowModelTag.name, names)));
+  }
+
+  /** 批量取出模板→模型标签名映射，替代 router 内裸写 join。 */
+  async getTemplateTagRows(templateIds: string[]): Promise<{ templateId: string; name: string }[]> {
+    if (!templateIds.length) return [];
+    return db
+      .select({
+        templateId: workflowModelTagToWorkflowTemplate.workflowTemplate,
+        name: workflowModelTag.name,
+      })
+      .from(workflowModelTagToWorkflowTemplate)
+      .innerJoin(
+        workflowModelTag,
+        eq(workflowModelTagToWorkflowTemplate.workflowModelTag, workflowModelTag.id)
+      )
+      .where(inArray(workflowModelTagToWorkflowTemplate.workflowTemplate, templateIds));
+  }
+
+  /** 返回 WHERE 条件：模板关联到给定 tagIds 中任意一个（供 router 组合 where）。 */
+  templateHasTagIdsWhere(tagIds: string[]): SQL {
+    return exists(
+      db
+        .select({ one: sql`1` })
+        .from(workflowModelTagToWorkflowTemplate)
+        .where(
+          and(
+            eq(workflowModelTagToWorkflowTemplate.workflowTemplate, workflowTemplate.id),
+            inArray(workflowModelTagToWorkflowTemplate.workflowModelTag, tagIds)
+          )
+        )
+    );
   }
 }
 

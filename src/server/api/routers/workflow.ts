@@ -1,13 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import type { WorkflowTemplate } from "~/server/db/schema";
-import {
-  workflowTemplate,
-  workflowModelTag,
-  workflowModelTagToWorkflowTemplate,
-} from "~/server/db/schema";
-import { db } from "@/lib/db";
-import { eq, and, inArray, desc, exists, sql, type SQL } from "drizzle-orm";
+import { workflowTemplate } from "~/server/db/schema";
+import { eq, and, inArray, desc, sql, type SQL } from "drizzle-orm";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { logger } from "~/server/lib/logger";
 import {
@@ -33,7 +28,7 @@ import {
   type ConversionResult,
   type RawWorkflow,
 } from "@/lib/comfyui/raw";
-import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/lib/workflow-io-types";
 import {
   normalizeTaskType,
   VALID_TASK_TYPE_CODES,
@@ -159,25 +154,10 @@ export const workflowRouter = createTRPCRouter({
           .map((part) => part.trim())
           .filter(Boolean);
         if (names.length > 0) {
-          const tagRows = await db
-            .select({ id: workflowModelTag.id })
-            .from(workflowModelTag)
-            .where(and(eq(workflowModelTag.userId, userId), inArray(workflowModelTag.name, names)));
+          const tagRows = await workflowModelTagRepository.listIdsByNames(userId, names);
           const tagIds = tagRows.map((r) => r.id);
           if (tagIds.length > 0) {
-            whereConditions.push(
-              exists(
-                db
-                  .select({ one: sql`1` })
-                  .from(workflowModelTagToWorkflowTemplate)
-                  .where(
-                    and(
-                      eq(workflowModelTagToWorkflowTemplate.workflowTemplate, workflowTemplate.id),
-                      inArray(workflowModelTagToWorkflowTemplate.workflowModelTag, tagIds)
-                    )
-                  )
-              )
-            );
+            whereConditions.push(workflowModelTagRepository.templateHasTagIdsWhere(tagIds));
           } else {
             // 没有任何匹配标签 → 结果为空
             whereConditions.push(sql`0 = 1`);
@@ -193,24 +173,12 @@ export const workflowRouter = createTRPCRouter({
 
       // 批量取出每个模板的模型标签名（替代 Prisma modelTags 关系投影）
       const wfIds = list.map((w) => w.id);
-      const tagRows = wfIds.length
-        ? await db
-            .select({
-              id: workflowModelTagToWorkflowTemplate.workflowTemplate,
-              name: workflowModelTag.name,
-            })
-            .from(workflowModelTagToWorkflowTemplate)
-            .innerJoin(
-              workflowModelTag,
-              eq(workflowModelTagToWorkflowTemplate.workflowModelTag, workflowModelTag.id)
-            )
-            .where(inArray(workflowModelTagToWorkflowTemplate.workflowTemplate, wfIds))
-        : [];
+      const tagRows = await workflowModelTagRepository.getTemplateTagRows(wfIds);
       const tagsByName = new Map<string, string[]>();
       for (const r of tagRows) {
-        const arr = tagsByName.get(r.id) ?? [];
+        const arr = tagsByName.get(r.templateId) ?? [];
         arr.push(r.name);
-        tagsByName.set(r.id, arr);
+        tagsByName.set(r.templateId, arr);
       }
 
       // ── Local-on-disk roots ──

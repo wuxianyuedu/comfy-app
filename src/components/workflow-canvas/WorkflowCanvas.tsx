@@ -312,6 +312,7 @@ export default function WorkflowCanvas({
           onPaneClick={handlePaneClick}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
+          onlyRenderVisibleElements
           fitView
           snapToGrid
           snapGrid={[12, 12]}

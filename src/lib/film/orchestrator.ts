@@ -22,7 +22,8 @@ import { enqueue, cancelTask } from "@/lib/comfyui/runner";
 import { synthesizeFirstFrame } from "@/lib/comfyui/firstframe";
 import { getSettingsSync } from "@/lib/app-settings";
 import { parseIdeaToScenes } from "@/lib/workshop/script-parser";
-import { getLLMConfig, completeLLM } from "@/lib/llm/server";
+import { z } from "zod";
+import { getLLMConfig, completeLLMStructured } from "@/lib/llm/server";
 import type { ProjectType } from "@/lib/workshop/types";
 
 export type FilmStatus =
@@ -86,54 +87,39 @@ async function appendFilmLog(
 }
 
 // ── script → storyboard ────────────────────────────────────
+const ShotSchema = z.object({
+  heading: z.unknown(),
+  action: z.unknown(),
+  dialogue: z.unknown(),
+  shotCount: z.unknown(),
+});
+
 async function expandScriptLLM(raw: string): Promise<
   Array<{ heading: string; action: string; dialogue: string; shotCount: number }>
 > {
-
-  const cfg = await getLLMConfig();
+  // 结构化 JSON 解析：低温度（code 任务）+ Zod 校验，避免手写正则/JSON.parse 不稳。
+  const cfg = await getLLMConfig({ taskType: "code" });
 
   const sys =
-
     "你是一个影视分镜助手。用户会给出一段创意 / 剧本 / 一句话。请把它拆分成分镜场景，" +
-
     "每个场景给出标题、画面动作描述、台词旁白、建议镜头数(shotCount 1-4)。只输出 JSON 数组，" +
-
     "不要解释，格式：[{\"heading\":\"场景1\",\"action\":\"画面描述\",\"dialogue\":\"台词\",\"shotCount\":2}]";
 
-  const content = await completeLLM(cfg, [
+  const shots = await completeLLMStructured(
+    cfg,
+    [
+      { role: "system", content: sys },
+      { role: "user", content: raw },
+    ],
+    z.array(ShotSchema),
+  );
 
-    { role: "system", content: sys },
-
-    { role: "user", content: raw },
-
-  ]);
-
-  const match = /\[[\s\S]*\]/.exec(content);
-
-  if (!match) throw new Error("llm no json");
-
-  const arr: unknown = JSON.parse(match[0]);
-
-  if (!Array.isArray(arr)) throw new Error("llm no json");
-
-  return arr.map((s) => {
-
-    const rec = s as Record<string, unknown>;
-
-    return {
-
-      heading: toStr(rec.heading ?? rec.scene ?? "场景"),
-
-      action: toStr(rec.action ?? rec.description ?? raw),
-
-      dialogue: toStr(rec.dialogue ?? ""),
-
-      shotCount: Math.max(1, Math.min(4, Number(rec.shotCount ?? 2) || 2)),
-
-    };
-
-  });
-
+  return shots.map((rec) => ({
+    heading: toStr(rec.heading ?? "场景"),
+    action: toStr(rec.action ?? raw),
+    dialogue: toStr(rec.dialogue ?? ""),
+    shotCount: Math.max(1, Math.min(4, Number(rec.shotCount ?? 2) || 2)),
+  }));
 }
 
 

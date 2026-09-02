@@ -13,49 +13,8 @@
  * (see src/app/api/workflows/[id]/route.ts → "workflowIO ENRICHMENT").
  */
 
-/** One exposed pin, as returned by GET /api/workflows/[id]. */
-export interface WorkflowIOEntry {
-  direction: "input" | "output";
-  /** Semantic bucket chosen in IO-edit mode — NOT the data type.
-   *  Values: "param" | "widget" | "output" | (free-form for custom kinds). */
-  kind: string;
-  nodeId: string;
-  name: string;
-  label?: string;
-  /** ComfyUI data type: STRING / INT / FLOAT / BOOLEAN / IMAGE / VIDEO / … */
-  type?: string;
-  defaultValue?: unknown;
-  nodeTitle?: string;
-  multiline?: boolean;
-  /** 2026-08-11 (R57): mark a widget-backed input as REQUIRED.  Authors
-   *  toggle this in IO-edit/preview mode.  At run time, consumers (CreatePanel
-   *  / Canvas `workflow` node) refuse to submit while a required value is
-   *  empty, surfacing a `getMissingRequiredInputs(io, values)` list. */
-  required?: boolean;
-  /** 2026-08-12: COMBO candidate list (unet_name / clip_name / …) resolved
-   *  from ComfyUI /object_info.  Present only for COMBO pins; consumers render
-   *  a <select> (DarkSelect) instead of a text box when this is non-empty. */
-  options?: string[];
-  /** 2026-08-15 R-ardot35: user-defined display order, written by the IO-edit
-   *  preview's drag-to-reorder gesture and persisted via PATCH.  Lower =
-   *  higher up.  Absent (undefined) → fall back to the IO map's natural
-   *  insertion order (Object.entries order).  Wire / widget / output groups
-   *  each maintain their own ordering, so a widget entry never slips between
-   *  two wire entries and vice versa.  `splitWorkflowIO()` is the single
-   *  source of truth for applying this sort — every consumer (preview,
-   *  CreatePanel, ProjectCanvas's workflow node, WorkflowLibrary chips)
-   *  already routes through it, so adding the field here automatically
-   *  propagates to all rendered surfaces. */
-  displayOrder?: number;
-  /** 2026-08-17 R94: author override of `defaultValue`.  When set, the IO-edit
-   *  preview and every runtime form (CreatePanel / canvas `workflow` node)
-   *  treat this as the pin's default instead of the graph-derived
-   *  `defaultValue`.  Cleared to restore the workflow's original default.
-   *  Stored verbatim via PATCH and round-tripped through GET. */
-  value?: unknown;
-}
-
-export type WorkflowIOMap = Record<string, WorkflowIOEntry>;
+import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow-io-types";
+export type { WorkflowIOEntry, WorkflowIOMap };
 
 /** Which control a dynamic form should render for a given entry. */
 export type ControlKind =

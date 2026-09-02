@@ -33,3 +33,4 @@ export * from "./repository-film";
 export * from "./repository-skill";
 export * from "./repository-lora";
 export * from "./repository-user";
+export * from "./repository-post";
