@@ -94,3 +94,6 @@ playwright-report/
 .codegraph/
 # zvec-grep（ripgrep+BM25+向量 本地索引）
 .zvec-grep/
+
+# agent 工具链本地产物（IDE 会话记忆 / temp / tmp，不入版本库）
+.workbuddy/
