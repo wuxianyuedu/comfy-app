@@ -28,6 +28,66 @@ ui/（工具生成，界面源码）        ← 尽量不碰
   - 上游更新：`shadcn add <comp>` 可覆盖重生成（会覆盖本地改动）——因此保持 `ui/` 干净、把定制收敛到使用处，是长期低成本的关键。
 - 别名（见 `tsconfig.json` / `components.json`）：`~/components/ui`、`~/components`、`~/lib/utils`（`cn`）。**统一用 `~` 前缀**（`@/` 非本仓库约定）。
 
+### 16.2.1 落地范式：controller hook + 纯展示视图
+
+> 2026-09-02：以 `components/workshop/WorkshopPipeline.tsx`（原 1017 行 UI+逻辑混合体）为样板确立。
+> 新页面与大型组件照此拆——目标是**逻辑可单测、界面可由工具重生成**。
+
+四层职责（同一 feature 目录内）：
+
+| 层 | 位置 / 命名 | 职责 | 禁止 |
+|---|---|---|---|
+| ① 纯配置 | `<feature>/stage-config.ts`（kebab，`.ts`） | 常量 + 派生展示数据（完成度、文案、网格）的**纯函数** | React、副作用、DOM |
+| ② 逻辑 | `<feature>/hooks/use-<feature>.ts`（kebab，`.ts`） | state、持久化、拉取、生成流程、派生进度；返回 controller 对象 | `alert` / 直接操作 DOM |
+| ③ 视图 | `<feature>/<Name>.tsx`（PascalCase） | 只收 props + 组合 `ui/` 原语渲染，事件上抛 | 自发请求、自算业务规则 |
+| ④ 容器 | `<feature>/<Feature>.tsx` | 取 controller → 传给视图 → 挂弹层 | 任何业务规则 |
+
+要点：
+
+- **controller 是唯一数据出入口**：`<WorkshopStageBody controller={controller} />`
+  优于 30+ props 透传；视图仍是纯展示，只是整体消费 controller。
+- **失败/阻断不走 `alert`**：逻辑层产出 `notice` 文案 + `dismissNotice`，由视图渲染提示条；
+  `console.error` 照常保留，满足硬规则「失败路径必须有日志 + 用户可见出口」。
+- **原生控件一律换 shadcn 原语**：`<button>` → `Button`、`<select>` → `Select`、
+  `<textarea>` → `Textarea`；项目自有视觉 token（`bg-surface` / `text-ink` / `bg-primary/12`）
+  在使用处以 `className` 覆盖（即 §16.2 允许的覆盖方式）。
+- **base-ui 差异**：`Select` 的 `onValueChange` 签名为 `(value: string | null, details) => void`，
+  业务侧用空串表达「未选」时需 `value ?? ""` 收敛。
+- **顶层不建 `src/hooks/`**（§12.5）：feature 私有 hook 放 `<feature>/hooks/`，
+  跨功能复用的就近放 `lib/`。
+
+### 16.2.2 已落地案例
+
+> 落地顺序：① `components/workshop/WorkshopPipeline.tsx`（见 §16.2.1 开头）、
+> ② `workflow-library/WorkflowLibraryDetail`、③ `shared/DynamicWorkflowForm`。
+> 后续 `studio/` 下的大组件照此推进。
+
+**`workflow-library/WorkflowLibraryDetail`（原 399 行）**
+
+| 层 | 产物 | 内容 |
+|---|---|---|
+| ① 配置 | `workflow-library-detail-config.ts` | 页签定义、props 契约、IO 归一化、源数据派生 |
+| ② 逻辑 | `hooks/use-workflow-library-detail.ts` | 详情查询、格式/同步标志派生、页签与弹层状态、动作包装 |
+| ③ 视图 | `WorkflowLibraryDetailView.tsx` + `sections/DetailHeader.tsx`、`DetailBody.tsx`、`DetailControls.tsx` | 纯展示，动作经 `controller.actions` 上抛 |
+| ④ 容器 | `WorkflowLibraryDetail.tsx` | 取 controller → 传视图，仅 ~20 行 |
+
+**`shared/DynamicWorkflowForm`（原 958 行 UI + 逻辑混合体）**
+
+| 层 | 产物 | 内容 |
+|---|---|---|
+| ① 配置 | `dynamic-workflow-form-config.ts` | 对外 props 契约、数值行判定、类型徽章回退 |
+| ② 逻辑 | `hooks/use-dynamic-workflow-form.ts` | IO 切分/分组、行拖拽手势、图片上传、值写入 |
+| ③ 视图 | `DynamicWorkflowFormView.tsx` + `sections/WidgetInputRow.tsx`、`WidgetControl.tsx` | 纯展示，事件全部上抛 |
+| ④ 容器 | `DynamicWorkflowForm.tsx` | 取 controller → 传视图，仅 ~45 行 |
+
+两条共同要点：
+
+- **容器对外 API 保持不变**（props / default 导出 / 类型名），消费方零改动：
+  WorkflowLibraryDetail 只有 1 处消费方；DynamicWorkflowForm 有 5 处，靠 barrel
+  `index.tsx` 原样导出兜住 ——"内部重构不影响调用方"全靠这一层。
+- **hook 内不做 early return**：空态 / loading 交给视图判断，保证 hooks 顺序稳定
+  （WorkflowLibraryDetail 的「未选中工作流」空态即走这条）。
+
 ## 16.3 新增一个组件的标准动作
 
 ```bash
