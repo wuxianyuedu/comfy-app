@@ -6,24 +6,26 @@
 的 `start-tauri*.spec` 规则一并忽略，导致**打包流程无法从仓库复现**。现统一收拢
 到本目录并纳入版本控制。
 
-> **结构约定**：`*.bat` 仅作 Windows 双击入口（不含业务逻辑、不含中文），真正的
-> 环境检查 / 打包 / 日志等逻辑都放在 `scripts/*.ps1`（UTF-8 with BOM 保存，避免中文乱码）。
-> 后续新增脚本请遵循：双击入口用 `tools\xxx.bat`，逻辑写在 `tools\scripts\xxx.ps1`。
+> **结构约定**：`*.bat` 仅作 Windows 双击入口（不含业务逻辑、不含中文），按用途归入子目录
+> （`build/` 打包类、`registry/` 团队 Registry 等）；真正的逻辑都放在 `scripts/*.ps1`
+> （UTF-8 with BOM 保存，避免中文乱码）。`.bat` 内用 `%~dp0..\..` 上溯到项目根、用
+> `%~dp0..\scripts\xxx.ps1` 引用逻辑脚本。后续新增入口：放 `tools/<分类>/xxx.bat`。
 
 ## 目录内容
 
-| 文件 | 类别 | 用途 |
-|------|------|------|
-| `build-launcher.bat` | 启动器（通用） | 打包 `start-tauri/start-tauri.exe`（prebuilt 默认入口，秒出窗口 + dev server） |
-| `build-launcher-dev.bat` | 启动器（dev） | 打包 `start-tauri-dev/start-tauri-dev.exe`（双击即走 tauri dev，Rust 热重载） |
-| `build-launcher-standalone.bat` | 启动器（standalone） | 打包 `start-tauri-standalone/start-tauri-standalone.exe`（双击即走独立模式） |
-| `build-tauri-release.bat` | 壳（dev 用） | 构建 `src-tauri/target/release/app.exe`（release 壳，prebuilt / tauri dev 使用，运行时回退 dev server） |
-| `build-standalone.bat` | 壳（standalone 用） | 完整生产构建独立壳：`pnpm tauri build --no-bundle`，产出不连 dev server 的可分发壳 |
-| `build-all.bat` | 一键编排 | 构建 release 壳 + 打包 `start-tauri.exe` |
-| `rebuild-static.bat` | 资源 | 清理并重建 `src-tauri/static`（standalone / 嵌入资源来源） |
-| `start-tauri.spec` | 打包配置 | PyInstaller（onedir）；入口名由环境变量 `LAUNCHER_NAME` 决定，一份 spec 服务三个入口 |
-| `README.md` | 文档 | 本文件 |
-| `scripts/` | 逻辑脚本 | `*.bat` 对应的 PowerShell 实现：环境检查 / 打包 / 日志都在这里 |
+| 文件 | 目录 | 类别 | 用途 |
+|------|------|------|------|
+| `build/build-launcher.bat` | build/ | 启动器（通用） | 打包 `start-tauri/start-tauri.exe`（prebuilt 默认入口，秒出窗口 + dev server） |
+| `build/build-launcher-dev.bat` | build/ | 启动器（dev） | 打包 `start-tauri-dev/start-tauri-dev.exe`（双击即走 tauri dev，Rust 热重载） |
+| `build/build-launcher-standalone.bat` | build/ | 启动器（standalone） | 打包 `start-tauri-standalone/start-tauri-standalone.exe`（双击即走独立模式） |
+| `build/build-tauri-release.bat` | build/ | 壳（dev 用） | 构建 `src-tauri/target/release/app.exe`（release 壳，prebuilt / tauri dev 使用，运行时回退 dev server） |
+| `build/build-standalone.bat` | build/ | 壳（standalone 用） | 完整生产构建独立壳：`pnpm tauri build --no-bundle`，产出不连 dev server 的可分发壳 |
+| `build/build-all.bat` | build/ | 一键编排 | 构建 release 壳 + 打包 `start-tauri.exe` |
+| `build/rebuild-static.bat` | build/ | 资源 | 清理并重建 `src-tauri/static`（standalone / 嵌入资源来源） |
+| `registry/start-registry.bat` | registry/ | 团队 Registry | 启动本地 shadcn Registry HTTP 服务（`D:/dev/Comfy-APP-T3/registry`，供 `shadcn add @comfy-app-t3/*`） |
+| `start-tauri.spec` | (根) | 打包配置 | PyInstaller（onedir）；入口名由环境变量 `LAUNCHER_NAME` 决定，一份 spec 服务三个入口 |
+| `README.md` | (根) | 文档 | 本文件 |
+| `scripts/` | scripts/ | 逻辑脚本 | `*.bat` 对应的 PowerShell 实现：环境检查 / 打包 / 日志都在这里 |
 
 ## 按用途分类（dev 构建 vs standalone 构建）
 
@@ -32,29 +34,29 @@
 ### A. 开发 / 快速预览（连 dev server，前端 HMR）
 
 - **入口 exe**：`start-tauri.exe`（prebuilt，默认）或 `start-tauri-dev.exe`（tauri dev）
-- **壳来源**：`build-tauri-release.bat` 产出的 `target/release/app.exe`
+- **壳来源**：`build/build-tauri-release.bat` 产出的 `target/release/app.exe`
   （该壳运行时 `server.js` 不在资源根，会自动**回退到 dev server**）
-- **打包入口 exe**：`build-launcher.bat` / `build-launcher-dev.bat`
+- **打包入口 exe**：`build/build-launcher.bat` / `build/build-launcher-dev.bat`
 - **适用**：只改前端（`src/` TS/TSX）靠 HMR 即时生效；改 Rust 后用 dev 入口自动重载
 - 详见 [`../docs/startup-hotreload.md`](../docs/startup-hotreload.md)
 
 ### B. 独立模式（standalone，不连 dev server）
 
 - **入口 exe**：`start-tauri-standalone.exe`（双击即走独立模式）
-- **壳来源**：`build-standalone.bat`（`pnpm tauri build --no-bundle`）产出的
+- **壳来源**：`build/build-standalone.bat`（`pnpm tauri build --no-bundle`）产出的
   `target/release/app.exe` + 同级 `server.js` / `.next/static` / `binaries/node.exe`
   （运行时 `resource_dir` 根有 `server.js`，走内置 Node sidecar，**不依赖 dev server**）
-- **打包入口 exe**：`build-launcher-standalone.bat`（仅打包 launcher，壳本身靠 `build-standalone.bat`）
+- **打包入口 exe**：`build/build-launcher-standalone.bat`（仅打包 launcher，壳本身靠 `build/build-standalone.bat`）
 - **适用**：需要「双击即独立运行、无需起 dev server」的分发场景
-- ⚠️ 必须先跑 `build-standalone.bat` 才有独立壳；否则双击 `start-tauri-standalone.exe` 会提示先构建
+- ⚠️ 必须先跑 `build/build-standalone.bat` 才有独立壳；否则双击 `start-tauri-standalone.exe` 会提示先构建
 
 ### C. 资源清理（两类构建共用）
 
-- `rebuild-static.bat`：删除并重建 `src-tauri/static`（standalone 资源来源）；
+- `build/rebuild-static.bat`：删除并重建 `src-tauri/static`（standalone 资源来源）；
   当 `static` 被污染导致黑屏时，先跑它再重新构建壳
 
 > 三个入口 exe 由**同一份** `scripts/start_tauri_launcher.py` 打包而来：PyInstaller 在
-> `build-launcher-dev.bat` / `build-launcher-standalone.bat` 中通过 `LAUNCHER_NAME`
+> `build/build-launcher-dev.bat` / `build/build-launcher-standalone.bat` 中通过 `LAUNCHER_NAME`
 > 指定 exe 名；launcher 运行时再按 exe 文件名自动选择 prebuilt / tauri / standalone 模式。
 > 因此改完 `start_tauri_launcher.py` 后，**三个入口都要重新打包**才生效。
 
@@ -68,7 +70,7 @@ pip install pyinstaller
 
 ### 执行
 
-双击 `tools\build-launcher.bat`，或在项目根目录执行：
+双击 `tools\build\build-launcher.bat`，或在项目根目录执行：
 
 ```powershell
 pyinstaller --clean --noconfirm --distpath . --workpath build-launcher tools/start-tauri.spec
@@ -77,7 +79,7 @@ pyinstaller --clean --noconfirm --distpath . --workpath build-launcher tools/sta
 产物：`<项目根>\start-tauri\start-tauri.exe`（连同 `_internal\` 依赖目录）。
 
 > `start-tauri.spec` 内部已按 `SPECPATH` 上溯到项目根计算源码绝对路径，手敲命令时不必
-> 强制在项目根执行；但 `build-launcher.bat` 仍会自动 `cd /d "%~dp0.."` 再打包。
+> 强制在项目根执行；但 `build/build-launcher.bat` 仍会自动 `cd /d "%~dp0..\.."` 再打包。
 
 ### 打包产物不入库
 
@@ -161,7 +163,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-comfy-cli-venv
 ## 修改启动器后的注意事项
 
 `start-tauri.exe` 是**打包产物**，改完 `scripts/start_tauri_launcher.py` 后必须重新执行
-`tools\build-launcher.bat`，否则双击仍跑旧逻辑。
+`tools\build\build-launcher.bat`，否则双击仍跑旧逻辑。
 
 ## 构建 release 版 Tauri 壳
 
@@ -177,7 +179,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-comfy-cli-venv
 
 ### 执行
 
-双击 `tools\build-tauri-release.bat`，或在项目根目录执行：
+双击 `tools\build\build-tauri-release.bat`，或在项目根目录执行：
 
 ```powershell
 cd src-tauri
@@ -190,7 +192,7 @@ cargo build --release
 
 ### 两种运行模式（重要）
 
-> **流程已统一（推荐）**：直接双击 `tools\build-tauri-release.bat` 或 `tools\build-all.bat`
+> **流程已统一（推荐）**：直接双击 `tools\build\build-tauri-release.bat` 或 `tools\build\build-all.bat`
 > 即可，脚本会在 `cargo build --release` **之前自动同步前端资源**——`src-tauri/static`
 > 缺失时跑完整 `build-desktop.mjs`（含 `pnpm build` + Node sidecar），已存在时仅增量
 > 同步 `splash.html` / `dev-launcher.ps1` / `index.html`。**无需再手动 `cp`**。
@@ -216,20 +218,20 @@ cargo build --release
 
 ## 一键发布构建
 
-需要「最快启动」的完整发布包时，直接双击 `tools\build-all.bat`：
+需要「最快启动」的完整发布包时，直接双击 `tools\build\build-all.bat`：
 
-1. 自动调用 `build-tauri-release.bat` 构建 release Tauri 壳（脚本内部已自动组装前端资源，无需手动 build-desktop）；
-2. 完成后自动调用 `build-launcher.bat` 打包 `start-tauri.exe`；
-3. 全部完成后在 `build-all.bat` 末尾暂停一次，方便确认结果。
+1. 自动调用 `build/build-tauri-release.bat` 构建 release Tauri 壳（脚本内部已自动组装前端资源，无需手动 build-desktop）；
+2. 完成后自动调用 `build/build-launcher.bat` 打包 `start-tauri.exe`；
+3. 全部完成后在 `build/build-all.bat` 末尾暂停一次，方便确认结果。
 
 ```powershell
 # 在项目根目录执行
-tools\build-all.bat
+tools\build\build-all.bat
 ```
 
 两个脚本职责独立、前置工具链不同（Rust vs Python），**不合并为单文件**，
-仅由 `build-all.bat` 做编排，便于单独重编其中一环。
+仅由 `build/build-all.bat` 做编排，便于单独重编其中一环。
 
-> 单独双击 `build-tauri-release.bat` 或 `build-launcher.bat` 时，每个脚本仍会在
-> 自身完成后暂停，方便查看日志；只有被 `build-all.bat` 调用时才会自动跳过子脚本
+> 单独双击 `build/build-tauri-release.bat` 或 `build/build-launcher.bat` 时，每个脚本仍会在
+> 自身完成后暂停，方便查看日志；只有被 `build/build-all.bat` 调用时才会自动跳过子脚本
 > 的 `pause`，实现真正一键无人值守。
