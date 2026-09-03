@@ -437,14 +437,16 @@ function Test-ShellFreshness {
 # ── 预检 1.5：数据库 schema 同步（Drizzle）──
 # 改用 Drizzle 后，数据层 schema 是 TS 源码（src/server/db/schema.ts），
 # 运行时驱动为 better-sqlite3（Node 24 预编译绑定，无需本地编译）。
-# 但表结构仍需同步进 db.sqlite：启动前执行一次 drizzle-kit push，以 ALTER 方式
-# 增量同步（保留现有数据）。失败不阻断启动（仅告警），避免启动卡死。
+# 但表结构仍需同步进 db.sqlite：启动前执行一次 schema 同步（保留现有数据）。
+# 改为调用 scripts/heal-db.cjs——它先清理上次失败残留的 __new_* 临时表，再执行
+# drizzle-kit push --force；若遇缺列（no such column）会自动 ALTER 补列后重试。
+# 这样旧库 push 失败无需手动 ALTER。失败时仍只告警、不阻断启动，避免卡死。
 function Sync-DatabaseSchema {
   $schemaOut = Join-Path $logDir "drizzle-push-stdout.log"
   $schemaErr = Join-Path $logDir "drizzle-push-stderr.log"
   $psiSchema = New-Object System.Diagnostics.ProcessStartInfo
   $psiSchema.FileName = "cmd.exe"
-    $psiSchema.Arguments = "/c pnpm exec drizzle-kit push --force > `"$schemaOut`" 2> `"$schemaErr`""
+    $psiSchema.Arguments = "/c node scripts/heal-db.cjs > `"$schemaOut`" 2> `"$schemaErr`""
   $psiSchema.WorkingDirectory = $root
   $psiSchema.UseShellExecute = $false
   $psiSchema.CreateNoWindow = $true
@@ -573,10 +575,11 @@ try {
     Write-LaunchStatus -Phase "cache" -Progress 0.12 -Message "端口已就绪，处理编译缓存与依赖预检…"
     Sync-NextCache
     Test-DevDependencies
-    Sync-DatabaseSchema
     Write-LaunchStatus -Phase "dev-server-starting" -Progress 0.2 -Message "正在启动本地服务（Next.js dev server）…"
 
-    # 3. 启动 Next.js dev server
+    # 3. 启动 Next.js dev server（最先启动）：其冷编译是启动耗时主轴，
+    #    把它提前到 DB schema 预检之前，让后者与编译并行，整体启动更短。
+    #    dev 脚本本身已带 --turbo（Turbopack，见 package.json "dev"），无需在此重复。
     $psiDev = New-Object System.Diagnostics.ProcessStartInfo
     $psiDev.FileName = "cmd.exe"
     # 项目使用 pnpm；固定 -H 127.0.0.1 避免 Windows 把 localhost 解析到 ::1（IPv6）
@@ -604,6 +607,9 @@ try {
     $null = [WJ]::AssignProcessToJobObject($h, $devProc.Handle)
     Write-Log "Tauri 壳与 dev server 已绑定到同一 Job Object（关闭窗口时一起清理）" -Level OK
     Write-LaunchStatus -Phase "dev-server-starting" -Progress 0.25 -Message "本地服务进程已启动，等待就绪…"
+
+    # 3.5 DB schema 同步（drizzle-kit push）与 dev 编译并行，不再阻塞端口就绪判定
+    Sync-DatabaseSchema
 
     # 4. 等服务 Ready（避免 Tauri 导航时看到 ERR_CONNECTION_REFUSED）
     Write-Log "等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
