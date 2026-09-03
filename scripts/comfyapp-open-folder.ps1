@@ -1,4 +1,4 @@
-param([string]$Url)
+﻿param([string]$Url)
 
 # comfyapp:// custom-protocol handler (Windows).
 # Registered via scripts/install-comfyapp-helper.ps1 as the shell\open\command

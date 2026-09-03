@@ -1,4 +1,4 @@
-# 启动 Drizzle Studio（drizzle-kit studio）并打开可视化界面。
+﻿# 启动 Drizzle Studio（drizzle-kit studio）并打开可视化界面。
 # 关键修复：先拉起 Studio 服务、等待端口就绪，再打开浏览器前端，
 # 避免「前端界面先打开、服务还没起来」导致页面卡在
 # "Connecting to the Drizzle Kit on localhost:4983"。

@@ -1,4 +1,4 @@
-# dev-launcher.ps1 — 用 pnpm 拉起 dev server / Tauri 壳，并以进程树回收做唯一编排者
+﻿# dev-launcher.ps1 — 用 pnpm 拉起 dev server / Tauri 壳，并以进程树回收做唯一编排者
 # 原理：通过 pnpm 启动子进程，清理时用 `taskkill /PID <pid> /T /F` 杀整棵进程树
 #       （docs/standards/launch-and-build.md §3）。Job Object 的 KILL_ON_JOB_CLOSE 在本机
 #       设置失败（Win32 错误 87），仅 WARN 兜底、不依赖其生效。
@@ -263,6 +263,11 @@ function Get-ConfigFingerprint {
   $targets = @("next.config.js", "tsconfig.json", "package.json", "pnpm-lock.yaml")
   $ih = [System.Security.Cryptography.IncrementalHash]::CreateHash(
     [System.Security.Cryptography.HashAlgorithmName]::SHA256)
+  # [SHA256]::ComputeHash 是 .NET 5+/PowerShell 7 才加入的静态方法；Windows PowerShell
+  # 5.1（start-tauri.vbs 在找不到 pwsh 7 时的回退路径）下 SHA256 只是抽象基类，调用静态
+  # 方法会报 "does not contain a method named 'ComputeHash'"，导致 Get-ConfigFingerprint
+  # 抛错、整个启动失败。这里统一改用 Create() 取实例再算哈希，PS 5.1 / PS 7 都能跑。
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
   $files = @{}
   foreach ($rel in $targets) {
     $full = Join-Path $root $rel
@@ -276,15 +281,17 @@ function Get-ConfigFingerprint {
         $ih.AppendData([System.Text.Encoding]::UTF8.GetBytes($relPath + "`0"))
         $bytes = [System.IO.File]::ReadAllBytes($f.FullName)
         $ih.AppendData($bytes)
-        $files[$relPath] = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::ComputeHash($bytes)).Replace("-", "").ToLowerInvariant()
+        $files[$relPath] = [System.BitConverter]::ToString($sha256.ComputeHash($bytes)).Replace("-", "").ToLowerInvariant()
       }
     } else {
       $bytes = [System.IO.File]::ReadAllBytes($full)
       $ih.AppendData($bytes)
-      $files[$rel] = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::ComputeHash($bytes)).Replace("-", "").ToLowerInvariant()
+      $files[$rel] = [System.BitConverter]::ToString($sha256.ComputeHash($bytes)).Replace("-", "").ToLowerInvariant()
     }
   }
   $hash = [System.BitConverter]::ToString($ih.GetHashAndReset()).Replace("-", "").ToLowerInvariant()
+  $sha256.Dispose()
+  $ih.Dispose()
   # 返回组合指纹 + 逐文件指纹映射，供 Sync-NextCache 比对「具体哪些文件变了」
   return @{ Hash = $hash; Files = $files }
 }
