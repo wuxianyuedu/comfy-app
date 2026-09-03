@@ -25,6 +25,8 @@ allowBuilds:
   # pnpm 11 对新依赖的 postinstall 校验（与上面策略一致）。
   "@modelcontextprotocol/sdk": true
   "tsx": true
-  '@prisma/client': set this to true or false
-  '@prisma/engines': set this to true or false
-  prisma: set this to true or false
+  # prisma 系为 better-auth prisma-adapter 的传递依赖（本项目用 Drizzle/sqlite，schema 已删）。
+  # 显式拒绝其构建脚本：既不生成 client，也不触发 ERR_PNPM_IGNORED_BUILDS。
+  '@prisma/client': false
+  '@prisma/engines': false
+  prisma: false
