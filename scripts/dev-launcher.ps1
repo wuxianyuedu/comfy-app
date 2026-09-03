@@ -263,29 +263,38 @@ function Get-ConfigFingerprint {
   $targets = @("next.config.js", "tsconfig.json", "package.json", "pnpm-lock.yaml")
   $ih = [System.Security.Cryptography.IncrementalHash]::CreateHash(
     [System.Security.Cryptography.HashAlgorithmName]::SHA256)
+  $files = @{}
   foreach ($rel in $targets) {
     $full = Join-Path $root $rel
     if (-not (Test-Path $full)) { continue }
     $ih.AppendData([System.Text.Encoding]::UTF8.GetBytes($rel + "`0"))
     if ((Get-Item $full).PSIsContainer) {
-      $files = @(Get-ChildItem $full -Recurse -File -ErrorAction SilentlyContinue |
+      $items = @(Get-ChildItem $full -Recurse -File -ErrorAction SilentlyContinue |
                  Sort-Object FullName)
-      foreach ($f in $files) {
+      foreach ($f in $items) {
         $relPath = $f.FullName.Substring($root.Length).TrimStart('\')
         $ih.AppendData([System.Text.Encoding]::UTF8.GetBytes($relPath + "`0"))
-        $ih.AppendData([System.IO.File]::ReadAllBytes($f.FullName))
+        $bytes = [System.IO.File]::ReadAllBytes($f.FullName)
+        $ih.AppendData($bytes)
+        $files[$relPath] = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::ComputeHash($bytes)).Replace("-", "").ToLowerInvariant()
       }
     } else {
-      $ih.AppendData([System.IO.File]::ReadAllBytes($full))
+      $bytes = [System.IO.File]::ReadAllBytes($full)
+      $ih.AppendData($bytes)
+      $files[$rel] = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::ComputeHash($bytes)).Replace("-", "").ToLowerInvariant()
     }
   }
-  return [System.BitConverter]::ToString($ih.GetHashAndReset()).Replace("-", "").ToLowerInvariant()
+  $hash = [System.BitConverter]::ToString($ih.GetHashAndReset()).Replace("-", "").ToLowerInvariant()
+  # 返回组合指纹 + 逐文件指纹映射，供 Sync-NextCache 比对「具体哪些文件变了」
+  return @{ Hash = $hash; Files = $files }
 }
 
 function Sync-NextCache {
   $nextDir = Join-Path $PSScriptRoot "..\.next"
-  $fingerprint = Get-ConfigFingerprint
+  $fp = Get-ConfigFingerprint
+  $fingerprint = $fp.Hash
   $fingerprintFile = Join-Path $nextDir "config-fingerprint"
+  $fingerprintFilesFile = Join-Path $nextDir "config-fingerprint-files.json"
 
   if ($env:FORCE_CLEAN -eq "1") {
     if (Test-Path $nextDir) {
@@ -299,6 +308,7 @@ function Sync-NextCache {
     }
     New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
     Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
+    Set-Content -Path $fingerprintFilesFile -Value ($fp.Files | ConvertTo-Json -Compress) -Encoding utf8
     Write-Log "已清空 .next 并写入新配置指纹" -Level OK
   } elseif ($env:SKIP_CLEAN -eq "1") {
     Write-Log "SKIP_CLEAN=1：跳过 .next 清理（保留编译缓存，最快启动）" -Level INFO
@@ -311,15 +321,41 @@ function Sync-NextCache {
       $nextSize = (Get-ChildItem $nextDir -Recurse -File -ErrorAction SilentlyContinue |
                    Measure-Object Length -Sum).Sum
       $sizeMB = if ($nextSize) { [math]::Round($nextSize / 1MB, 1) } else { 0 }
-      Write-Log ("配置指纹变化（旧 {0} → 新 {1}），清空 .next（{2} MB）全量重编译..." -f $saved, $fingerprint, $sizeMB) -Level STEP
+      # 比对具体哪些文件内容变化，便于排查「为何触发全量重编译」
+      $changed = @()
+      $savedFiles = @{}
+      if (Test-Path $fingerprintFilesFile) {
+        try {
+          $raw = Get-Content $fingerprintFilesFile -Raw -ErrorAction SilentlyContinue
+          if ($raw) {
+            $savedObj = $raw | ConvertFrom-Json -ErrorAction SilentlyContinue
+            if ($savedObj) { $savedObj.PSObject.Properties | ForEach-Object { $savedFiles[$_.Name] = $_.Value } }
+          }
+        } catch { }
+      }
+      if ($savedFiles.Count -gt 0) {
+        foreach ($rel in $fp.Files.Keys) {
+          if (-not $savedFiles.ContainsKey($rel) -or $savedFiles[$rel] -ne $fp.Files[$rel]) { $changed += $rel }
+        }
+        foreach ($rel in $savedFiles.Keys) {
+          if (-not $fp.Files.ContainsKey($rel)) { $changed += "$rel (已删除)" }
+        }
+      } else {
+        # 旧版无逐文件明细（首次升级），笼统列出全部指纹目标
+        $changed = @($fp.Files.Keys)
+      }
+      $changedList = ($changed | ForEach-Object { "    • $_" }) -join "`n"
+      Write-Log ("配置指纹变化（旧 {0} → 新 {1}），以下 {2} 个文件内容变更，清空 .next（{3} MB）全量重编译：`n{4}" -f $saved, $fingerprint, $changed.Count, $sizeMB, $changedList) -Level STEP
       Remove-Item -Recurse -Force $nextDir -ErrorAction SilentlyContinue
       New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
       Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
+      Set-Content -Path $fingerprintFilesFile -Value ($fp.Files | ConvertTo-Json -Compress) -Encoding utf8
       Write-Log "已清空 .next 并写入新配置指纹" -Level OK
     }
   } else {
     New-Item -ItemType Directory -Path $nextDir -Force | Out-Null
     Set-Content -Path $fingerprintFile -Value $fingerprint -Encoding utf8
+    Set-Content -Path $fingerprintFilesFile -Value ($fp.Files | ConvertTo-Json -Compress) -Encoding utf8
     Write-Log ("首次启动：写入初始配置指纹（{0}），执行全量编译" -f $fingerprint) -Level STEP
   }
 }
