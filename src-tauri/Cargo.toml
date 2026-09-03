@@ -14,6 +14,14 @@ rust-version = "1.77.2"
 name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# 官方模板同款 feature 透传：启用后 tauri 的 cfg(dev) 关闭，
+# 窗口相对 URL 解析到编译期内嵌资源（http://tauri.localhost/splash.html），
+# 资源真正内嵌进二进制；不带它 cargo build --release 会把启动页导航到
+# build.devUrl（dev server），服务未就绪时启动页就是 Edge 错误页。
+# 重编壳必须带：cargo build --release --features custom-protocol
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
 

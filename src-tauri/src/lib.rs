@@ -1,9 +1,9 @@
+use std::net::TcpStream;
 #[cfg(not(debug_assertions))]
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpListener;
 #[cfg(not(debug_assertions))]
 use std::process::Command;
 use std::sync::Mutex;
-#[cfg(not(debug_assertions))]
 use std::time::Duration;
 
 use tauri::Manager;
@@ -98,6 +98,134 @@ fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHand
 #[tauri::command]
 fn get_app_url(state: tauri::State<'_, AppState>) -> String {
   state.app_url()
+}
+
+/// 目标 URL 的 host:port 当前能否建立 TCP 连接。
+/// 交换窗口前的二次校验依据：WebView2 对「导航失败」（连接被拒/超时）同样会
+/// 触发 on_page_load(Finished)，页面内嵌 Edge 错误页且 URL 仍是 http://，
+/// 单看事件参数无法区分加载成功与否，必须实际探测端口。
+fn url_reachable(url: &tauri::Url) -> bool {
+  let Some(host) = url.host_str() else {
+    return false;
+  };
+  if host.is_empty() {
+    return false;
+  }
+  match url.port_or_known_default() {
+    Some(port) => TcpStream::connect((host, port)).is_ok(),
+    None => false,
+  }
+}
+
+/// main 窗口加载到错误页后的重导航循环：每 2s 探测一次应用地址，恢复可达后
+/// 重新导航；最多约 3 分钟（覆盖 150s 安全网）。RENAVIGATING 防止多次
+/// Finished 事件触发重复循环。
+static RENAVIGATING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn spawn_renavigate(handle: tauri::AppHandle, url: tauri::Url) {
+  use std::sync::atomic::Ordering;
+  if RENAVIGATING.swap(true, Ordering::SeqCst) {
+    return;
+  }
+  std::thread::spawn(move || {
+    eprintln!("[ComfyAPP] 应用地址在交换窗口时不可达，进入重导航循环：{}", url);
+    for _ in 0..90 {
+      std::thread::sleep(Duration::from_secs(2));
+      // 启动页已关闭（安全网强制交换 / 用户退出）则无需再重试
+      if handle.get_webview_window("splash").is_none() {
+        break;
+      }
+      if url_reachable(&url) {
+        if let Some(m) = handle.get_webview_window("main") {
+          let _ = m.navigate(url.clone());
+          break;
+        }
+      }
+    }
+    RENAVIGATING.store(false, Ordering::SeqCst);
+  });
+}
+
+/// 去掉 ANSI 转义序列（ESC + 参数字节 + 字母终止符），PowerShell 日志里
+/// 可能写入颜色码，启动页日志面板只应显示纯文本。
+fn strip_ansi(text: &str) -> String {
+  let mut out = String::with_capacity(text.len());
+  let mut chars = text.chars();
+  while let Some(c) = chars.next() {
+    if c == '\u{1b}' {
+      for nc in chars.by_ref() {
+        if nc.is_ascii_alphabetic() {
+          break;
+        }
+      }
+    } else {
+      out.push(c);
+    }
+  }
+  out
+}
+
+/// 读取日志文件尾部：max_bytes 截断 + max_lines 限行，去 ANSI，失败返回 None。
+fn tail_log_file(path: &std::path::Path, max_bytes: usize, max_lines: usize) -> Option<String> {
+  let data = std::fs::read(path).ok()?;
+  if data.is_empty() {
+    return Some(String::new());
+  }
+  let start = data.len().saturating_sub(max_bytes);
+  let text = String::from_utf8_lossy(&data[start..]);
+  let plain = strip_ansi(&text);
+  let mut lines: Vec<&str> = plain
+    .lines()
+    .map(str::trim_end)
+    // PowerShell Transcript 会把每秒一次的健康检查超时原样灌进日志
+    //（PS>TerminatingError(...)），对「执行到哪一步」毫无信息量，直接滤掉
+    .filter(|l| !l.starts_with("PS>TerminatingError"))
+    .collect();
+  if start > 0 && !lines.is_empty() {
+    lines.remove(0); // 丢弃被截断的不完整首行
+  }
+  if lines.len() > max_lines {
+    lines = lines[lines.len() - max_lines..].to_vec();
+  }
+  Some(lines.join("\n"))
+}
+
+/// 启动页「查看日志」面板的数据源：返回本次启动的编排日志尾部。
+/// dev-launcher.ps1 的日志在文件被占用时会回退改名，以 sentinel
+/// log/dev-launcher-current.txt 指向的真实文件为准；附带 stderr 尾部，
+/// 启动卡住时用户能直接在启动页看到「执行到哪一步 / 卡在哪里」。
+#[tauri::command]
+fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
+  let root = state.project_root();
+  if root.is_empty() {
+    return Err("COMFYAPP_PROJECT_ROOT not set".to_string());
+  }
+  let log_dir = std::path::Path::new(&root).join("log");
+  let mut sections: Vec<String> = Vec::new();
+
+  let dev_log = std::fs::read_to_string(log_dir.join("dev-launcher-current.txt"))
+    .ok()
+    .map(|s| s.trim().to_string())
+    .filter(|s| !s.is_empty() && std::path::Path::new(s).is_file())
+    .unwrap_or_else(|| log_dir.join("dev-launcher.log").to_string_lossy().into_owned());
+  let dev_log_name = std::path::Path::new(&dev_log)
+    .file_name()
+    .map(|s| s.to_string_lossy().into_owned())
+    .unwrap_or_else(|| "dev-launcher.log".to_string());
+  if let Some(tail) = tail_log_file(std::path::Path::new(&dev_log), 16 * 1024, 160) {
+    if !tail.trim().is_empty() {
+      sections.push(format!("─ 启动编排日志（{}）─\n{}", dev_log_name, tail));
+    }
+  }
+  if let Some(tail) = tail_log_file(&log_dir.join("dev-launcher-stderr.log"), 4 * 1024, 60) {
+    if !tail.trim().is_empty() {
+      sections.push(format!("─ 错误输出（dev-launcher-stderr.log）─\n{}", tail));
+    }
+  }
+  if sections.is_empty() {
+    return Ok("（暂无日志：启动器尚未写入输出）".to_string());
+  }
+  Ok(sections.join("\n\n"))
 }
 
 /// 生产模式：挑一个空闲端口给 standalone server（避开固定端口冲突）
@@ -239,7 +367,7 @@ pub fn run() {
 
   let app = tauri::Builder::default()
     .manage(AppState::new(project_root, app_url))
-    .invoke_handler(tauri::generate_handler![get_launch_status, navigate_to_app, get_app_url])
+    .invoke_handler(tauri::generate_handler![get_launch_status, navigate_to_app, get_app_url, get_launch_log])
     .setup(|app| {
       // ── 方向 B：启动页与「应用」窗口分离 ──
       // 配置里的 splash 窗口（label="splash"）仅显示启动进度，可见。
@@ -275,6 +403,15 @@ pub fn run() {
               return;
             }
             eprintln!("[ComfyAPP] app page loaded, swapping windows");
+            // 导航失败（连接被拒/服务又挂掉）时 WebView2 也会以 http URL 触发
+            // Finished，页面内容是内嵌的 Edge「无法访问此页面」错误页——历史上
+            // 它曾被当成「应用加载完成」直接顶给用户。交换前用 TCP 可达性做
+            // 二次校验：不可达就不交换，交给重导航循环，保持启动页可见。
+            if !url_reachable(payload.url()) {
+              eprintln!("[ComfyAPP] swap aborted, app url unreachable: {}", url);
+              spawn_renavigate(app_handle_for_page.clone(), payload.url().clone());
+              return;
+            }
             if let Some(m) = app_handle_for_page.get_webview_window("main") {
               let _ = m.show();
               let _ = m.set_focus();
@@ -285,6 +422,55 @@ pub fn run() {
           }
         })
         .build()?;
+
+      // ── 启动页看门狗（仅 custom-protocol 构建）──
+      // custom-protocol 关闭时（tauri dev），tauri 的 cfg(dev) 开启，窗口相对
+      // URL 解析到 build.devUrl——启动页由 dev server 提供，那是 dev 模式的预期。
+      // custom-protocol 开启时（正式壳，cargo build --release --features
+      // custom-protocol），启动页加载编译期内嵌资源；页面一旦被任何导航带走
+      // （错误页/其它地址），页内 JS 全部失效，进度/日志界面无法自愈，只能干等
+      // main 加载完成后交换窗口。看门狗每秒检查启动页当前 URL，偏离内嵌资源
+      // 地址就导航回去，保证进度界面必然恢复。
+      #[cfg(feature = "custom-protocol")]
+      {
+        let handle = app.handle().clone();
+        std::thread::spawn(move || {
+          // 等启动页创建并拿到基准 URL（= 配置解析出的内嵌资源地址）
+          let mut base: Option<tauri::Url> = None;
+          for _ in 0..50 {
+            match handle.get_webview_window("splash") {
+              None => return, // 启动页已关闭（秒就绪），无需看门狗
+              Some(s) => {
+                if let Ok(u) = s.url() {
+                  if u.as_str().ends_with("splash.html") {
+                    base = Some(u);
+                    break;
+                  }
+                }
+              }
+            }
+            std::thread::sleep(Duration::from_millis(100));
+          }
+          let Some(splash_url) = base else {
+            eprintln!("[ComfyAPP] splash watchdog: base url not seen in 5s, giving up");
+            return;
+          };
+          eprintln!("[ComfyAPP] splash watchdog: base url {}", splash_url);
+          for _ in 0..300 {
+            std::thread::sleep(Duration::from_millis(1000));
+            let Some(s) = handle.get_webview_window("splash") else { return };
+            let drifted = match s.url() {
+              Ok(u) => u != splash_url,
+              Err(_) => false,
+            };
+            if drifted {
+              let cur = s.url().map(|u| u.to_string()).unwrap_or_default();
+              eprintln!("[ComfyAPP] splash watchdog: url drifted to {}, restoring", cur);
+              let _ = s.navigate(splash_url.clone());
+            }
+          }
+        });
+      }
 
       #[cfg(debug_assertions)]
       {

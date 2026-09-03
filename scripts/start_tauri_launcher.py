@@ -271,13 +271,27 @@ def _window_process_name(hwnd: HWND) -> str:
     return ""
 
 
-def _is_app_shell_window(hwnd: HWND, title: str) -> bool:
-    """标题命中且窗口属于本项目 Tauri 壳（app.exe）才算应用窗口。"""
-    return APP_WINDOW_TITLE in (title or "") and _window_process_name(hwnd) == "app.exe"
+def _is_app_shell_window(hwnd: HWND, title: str, exact: bool = False) -> bool:
+    """标题命中且窗口属于本项目 Tauri 壳（app.exe）才算应用窗口。
+
+    exact=True 要求标题精确等于「Comfy APP」（主窗口）：启动页窗口标题带
+    「启动中」后缀，从壳启动那一刻就可见——按子串匹配会把启动页误判为
+    「应用已就绪」，launcher 提前退出并在 30s 后删除状态文件，启动页从此
+    只能显示假进度（2026-09-02 假进度问题根因）。
+    """
+    title = title or ""
+    if not title:
+        return False
+    matched = title.strip() == APP_WINDOW_TITLE if exact else APP_WINDOW_TITLE in title
+    return matched and _window_process_name(hwnd) == "app.exe"
 
 
-def find_tauri_window() -> bool:
-    """枚举顶层窗口，查找标题包含 APP_WINDOW_TITLE 的可见窗口。"""
+def find_tauri_window(exact: bool = False) -> bool:
+    """枚举顶层窗口，查找可见的应用壳窗口。
+
+    exact=True 只认主窗口（标题精确「Comfy APP」），用于就绪判定；
+    默认子串匹配，启动页/主窗口都算。
+    """
     try:
         found = [False]
 
@@ -289,7 +303,7 @@ def find_tauri_window() -> bool:
                 return True
             buf = ctypes.create_unicode_buffer(length + 1)
             user32.GetWindowTextW(hwnd, buf, length + 1)
-            if _is_app_shell_window(hwnd, buf.value):
+            if _is_app_shell_window(hwnd, buf.value, exact):
                 found[0] = True
                 return False
             return True
@@ -1368,7 +1382,7 @@ def monitor(proc: "subprocess.Popen[str] | None", splash: SplashWindow):
             if splash._closed:
                 log("splash already closed, monitor exiting")
                 return
-            if find_tauri_window():
+            if find_tauri_window(exact=True):
                 log("tauri window detected, closing splash in 600ms")
                 splash.close_later(600, terminate=False)
                 return
@@ -1490,7 +1504,7 @@ def _monitor_headless(
                 last_write = time.time()
 
             # Tauri 主窗口已出现 -> 启动完成，launcher 可以退出
-            if find_tauri_window():
+            if find_tauri_window(exact=True):
                 _write_status(
                     project_root,
                     "ready",
@@ -1530,7 +1544,7 @@ def _monitor_headless(
             time.sleep(0.5)
 
         log("headless monitor deadline reached (240s)")
-        if find_tauri_window():
+        if find_tauri_window(exact=True):
             _write_status(
                 project_root,
                 "ready",
@@ -1671,7 +1685,7 @@ def _run_standalone(project_root: str, mutex, args) -> int:
 
     deadline = time.time() + 120
     while time.time() < deadline:
-        if find_tauri_window():
+        if find_tauri_window(exact=True):
             log("standalone mode: tauri window detected, launcher exiting")
             break
         if proc.poll() is not None:

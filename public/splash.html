@@ -105,6 +105,53 @@
     .hint {
       opacity: 0.7;
     }
+    .stale-banner {
+      display: none;
+      margin: 0 0 14px;
+      padding: 10px 12px;
+      border: 1px solid rgba(245, 180, 60, 0.35);
+      background: rgba(245, 180, 60, 0.1);
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #F5C07A;
+      word-break: break-word;
+    }
+    .log-toggle {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .log-toggle:hover {
+      color: var(--text);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    .log-panel {
+      display: none;
+      margin-top: 14px;
+      background: #0B0A12;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 10px 12px;
+      height: 180px;
+      overflow-y: auto;
+    }
+    .log-panel pre {
+      margin: 0;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--muted);
+      white-space: pre-wrap;
+      word-break: break-all;
+      /* 日志内容允许选中复制，便于把启动卡住的现场发给协作者 */
+      user-select: text;
+    }
     .spinner {
       display: inline-block;
       width: 10px;
@@ -123,6 +170,7 @@
   <div class="card">
     <h1 class="brand">Comfy APP</h1>
     <p class="subtitle">正在启动桌面应用…</p>
+    <div class="stale-banner" id="stale-banner"></div>
     <div class="bar-track">
       <div class="bar-fill" id="bar"></div>
     </div>
@@ -133,7 +181,11 @@
     <div class="message" id="message">启动器正在初始化…</div>
     <div class="footer">
       <span class="hint">窗口关闭即可终止启动</span>
+      <button class="log-toggle" id="log-btn" type="button">查看日志</button>
       <span class="elapsed" id="elapsed">00:00</span>
+    </div>
+    <div class="log-panel" id="log-panel">
+      <pre id="log-pre"></pre>
     </div>
   </div>
 
@@ -144,6 +196,9 @@
     const percentEl = $('percent');
     const messageEl = $('message');
     const elapsedEl = $('elapsed');
+    const logBtn = $('log-btn');
+    const logPanel = $('log-panel');
+    const logPre = $('log-pre');
 
     const PHASE_LABELS = {
       initial: '初始化',
@@ -166,11 +221,18 @@
       return `${m}:${s}`;
     }
 
+    // 原始 IPC 调用：命令返回 Err 时抛错。invoke 封装会吞掉错误返回 null，
+    // 而导航失败时上层需要区分「失败」（继续轮询重试）与「无数据」。
+    async function invokeRaw(cmd, args) {
+      if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
+        return await window.__TAURI__.core.invoke(cmd, args || {});
+      }
+      throw new Error('tauri ipc unavailable');
+    }
+
     async function invoke(cmd, args) {
       try {
-        if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
-          return await window.__TAURI__.core.invoke(cmd, args || {});
-        }
+        return await invokeRaw(cmd, args);
       } catch (e) {
         console.warn('tauri invoke failed:', e);
       }
@@ -230,6 +292,45 @@
       elapsedEl.textContent = fmtTime(elapsed || 0);
     }
 
+    // ── 日志面板：展示 dev-launcher 编排日志尾部（Rust 命令 get_launch_log 提供）──
+    let logVisible = false;
+    let logTimer = null;
+    let logFailCount = 0;
+
+    function renderLog(text) {
+      if (text === logPre.dataset.raw) return;
+      logPre.dataset.raw = text || '';
+      logPre.textContent = text || '';
+      logPanel.scrollTop = logPanel.scrollHeight;
+    }
+
+    async function fetchLog() {
+      const data = await invoke('get_launch_log');
+      if (typeof data === 'string') {
+        logFailCount = 0;
+        renderLog(data);
+      } else {
+        logFailCount++;
+        // 连续拿不到日志（壳版本过旧 / IPC 不可用 / 日志尚未产生）时给出指引
+        if (logFailCount === 4 && !logPre.dataset.raw) {
+          renderLog('（暂无日志：启动器尚未写入输出；若持续为空请重编桌面壳：cd src-tauri && cargo build --release）');
+        }
+      }
+    }
+
+    logBtn.addEventListener('click', () => {
+      logVisible = !logVisible;
+      logPanel.style.display = logVisible ? 'block' : 'none';
+      logBtn.textContent = logVisible ? '隐藏日志' : '查看日志';
+      if (logVisible) {
+        fetchLog();
+        logTimer = setInterval(fetchLog, 800);
+      } else if (logTimer) {
+        clearInterval(logTimer);
+        logTimer = null;
+      }
+    });
+
     let navigating = false;
     let ticks = 0;
     let appUrl = null;
@@ -244,22 +345,34 @@
       const status = await fetchStatus();
       if (status) {
         updateUI(status.progress || 0, status.phase, status.message, status.error, status.elapsed);
+        // 壳过期提醒（dev-launcher 预检写入 launch-status.json 的 stale_shell）
+        const banner = document.getElementById('stale-banner');
+        if (banner) {
+          if (status.stale_shell) {
+            banner.textContent = '⚠ ' + status.stale_shell;
+            banner.style.display = 'block';
+          } else {
+            banner.style.display = 'none';
+          }
+        }
       } else {
         // 没有状态文件时显示等待动画，进度按时间平滑增长但不要满 100%
         const fakeProgress = Math.min(0.9, ticks / 480); // 约 2 分钟到 90%
         updateUI(fakeProgress, 'dev-server-starting', `正在等待本地服务就绪：${appUrl}（${fmtTime(Math.floor(ticks / 4))}）`, false, Math.floor(ticks / 4));
       }
 
-      // 2. 自主探测后端可响应后，导航到真实应用地址。
-      //    此时 Next.js 页面仍需编译/加载/渲染，不能把“后端就绪”报成“启动完成”。
+      // 2. 自主探测后端可响应后，请 Rust 侧把隐藏的应用窗口导航到应用地址。
+      //    不再把本启动窗口 location.replace 过去：服务未就绪时那会正好把
+      //    Edge「无法访问此页面」错误页顶到用户面前。导航失败就下个 tick 重试
+      //    （3 秒节流，避免高频重复导航打断正在编译路由的 dev server）。
       if (await probeBackend(appUrl)) {
         navigating = true;
         updateUI(0.95, 'dev-server-ready', '服务已就绪，正在加载应用…', false, Math.floor(ticks / 4));
+        setTimeout(() => { navigating = false; }, 3000);
         try {
-          await invoke('navigate_to_app');
+          await invokeRaw('navigate_to_app');
         } catch (e) {
-          console.warn('navigate_to_app failed:', e);
-          window.location.replace(appUrl);
+          console.warn('navigate_to_app failed, will retry:', e);
         }
       }
     }
