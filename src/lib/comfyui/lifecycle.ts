@@ -73,16 +73,13 @@ export function getComfyUiStatus(): ComfyUiStatus {
  * 命中不了返回可读的错误信息而不是裸异常。
  */
 /**
- * 选择解释器：优先 pythonw.exe（Windows 下完全不创建控制台窗口，真正的
- * 「仅控制台」后台进程），回退到 python.exe（由 spawn 的 windowsHide 隐藏控制台）。
- * 工坊/工作室只把 ComfyUI 当后端服务，绝不拉起桌面版 GUI 窗口。
+ * 选择解释器：一律用 python.exe，保留控制台窗口，能实时看到 ComfyUI 的打印输出。
+ * 绝不用 pythonw.exe——它会彻底吞掉 stdout/stderr，出问题时看不到任何日志，难以排查。
+ * 工坊/工作室只把 ComfyUI 当后端服务（python.exe + main.py 起的是 server，不是桌面版 GUI）。
  */
 function resolveInterp(dir: string): string | null {
-  for (const name of ["pythonw.exe", "python.exe"]) {
-    const p = path.join(dir, name);
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
+  const p = path.join(dir, "python.exe");
+  return fs.existsSync(p) ? p : null;
 }
 
 function resolveLaunchPlan(installDir: string): LaunchPlan | { error: string } {
@@ -192,7 +189,9 @@ export async function ensureComfyUiReady(
       child = spawn(plan.cmd, args, {
         cwd: plan.cwd,
         stdio: ["ignore", "pipe", "pipe"],
-        windowsHide: true,
+        // 不隐藏控制台：python.exe 会弹出一个窗口，实时显示 ComfyUI 的启动/打印输出，
+        // 方便排查问题（请勿改回 windowsHide: true，否则看不到日志）。
+        windowsHide: false,
       });
     } catch (e) {
       const detail = `启动 ComfyUI 失败：${e instanceof Error ? e.message : String(e)}`;
