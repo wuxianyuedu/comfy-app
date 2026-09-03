@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 "use client";
 
 import { Icon } from "@/components/ui/icon";
@@ -30,6 +29,7 @@ export function ResultCard({
   const isVideo = kind === "video" || mediaType === "video" || (path && /\.(mp4|webm|ogg)$/i.test(path));
   const src = path?.startsWith("/") ? path : path ? `/${path}` : undefined;
   const meta = NODE_META[kind];
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空字符串名视为无输出，需用 || 回退到 meta.label
   const displayName = name?.trim() || meta.label;
 
   /* ── Text result ── */
@@ -54,7 +54,10 @@ export function ResultCard({
           </button>
         </div>
         <div className="max-h-56 overflow-auto p-3 text-[12px] leading-relaxed text-gray-200">
-          {text || <span className="text-gray-500">尚无文本输出</span>}
+          {
+            // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空字符串也视为无输出，需回退占位
+            text || <span className="text-gray-500">尚无文本输出</span>
+          }
         </div>
         <div className="flex items-center justify-center border-t border-white/6 py-2">
           <button type="button" onClick={onReplace} className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 text-[11px] text-gray-200 ring-1 ring-white/8 transition-colors hover:bg-black/60">

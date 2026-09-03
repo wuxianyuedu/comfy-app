@@ -71,6 +71,7 @@
 
 - **规范**：`docs/standards/14` Y2「禁止 eslint-disable 堆砌；修类型 / 单行禁用+原因」。
 - **建议**：不要整文件删除（会暴露大量 `any` 报错、风险高）。按文件逐个把「确实无法在本轮安全类型化」的少数行改为**带原因的单行 `eslint-disable-next-line`**，其余去掉禁用并补全类型。建议结合「去 `as any`」专项（见 D2）一起做。
+- **状态**：✅ 已修复（2026-09-03）。移除 6 个文件第 1 行的整文件 `/* eslint-disable ... */`，原 41 处违规逐行处理：可安全类型化的直接修（`server.ts` 给 `JSON.parse` 结果补具体类型；`WorkflowEditorInner` 的 `as any` 包 `Number()` 消除级联 `no-unsafe-assignment`、`as unknown as` 冗余断言移除、空 `catch`/空函数改 `() => undefined`、`fitView`/`setViewport` 加 `void`、`||`→`??`；`SettingsParts` 抽 `widgetValueToText` 辅助函数统一安全字符串化）；无法安全类型化的用**带原因单行禁用**（`react-hooks/refs`、`react-hooks/immutability`、`no-base-to-string` 兜底、`as any` 读 ReactFlow `measured`）。复验 `eslint` 0 error、`tsc --noEmit` 通过。
 
 ### D2 — 残留 `as any` / `as Record<string, any>`（违反 Y1）
 - 集中在 `src/components/studio/**`（WorkflowEditorInner.tsx、FilmStudio.tsx、SettingsParts.tsx 等）与 `src/server/api/routers/project.ts:86` 注释示例。

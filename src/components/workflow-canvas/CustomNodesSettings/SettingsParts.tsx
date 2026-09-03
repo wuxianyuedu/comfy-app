@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-base-to-string, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/prefer-nullish-coalescing */
 /* Small presentational building blocks for the CustomNodesSettings dialog.
  * PortRow / WidgetValueChip moved verbatim from the original single-file
  * CustomNodesSettings.tsx; ManifestSummary / ParseProgressBanner / ParseConsole
@@ -60,6 +59,20 @@ export function PortRow({
  *  so the user can tell at a glance: strings / numbers / booleans / selects
  *  each get a distinct colour family. Mirrors how ComfyUI's own node renders
  *  the per-widget value chip. */
+
+/** 把 widget 值安全转成展示文本：对象走 JSON，null/undefined 给空串，其余 String。 */
+function widgetValueToText(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "object") return JSON.stringify(v);
+  if (typeof v === "string") return v;
+  if (typeof v === "number") return String(v);
+  if (typeof v === "boolean") return v ? "true" : "false";
+  if (typeof v === "bigint") return v.toString();
+  if (typeof v === "symbol") return v.toString();
+  if (typeof v === "function") return v.toString();
+  return "";
+}
+
 export function WidgetValueChip({
   widget,
   value,
@@ -91,9 +104,9 @@ export function WidgetValueChip({
           color: "#A855F7",
           fontFamily: "var(--font-mono)",
         }}
-        title={value == null ? "" : String(value)}
+        title={widgetValueToText(value)}
       >
-        {value == null ? "—" : String(value)}
+        {value == null ? "—" : widgetValueToText(value)}
       </span>
     );
   }
@@ -106,9 +119,9 @@ export function WidgetValueChip({
           color: "var(--color-warning)",
           fontFamily: "var(--font-mono)",
         }}
-        title={value == null ? "" : String(value)}
+        title={widgetValueToText(value)}
       >
-        {value == null ? "—" : String(value)}
+        {value == null ? "—" : widgetValueToText(value)}
       </span>
     );
   }
@@ -121,9 +134,9 @@ export function WidgetValueChip({
         color: "#C9C2E8",
         fontFamily: "var(--font-mono)",
       }}
-      title={value == null ? "" : String(value)}
+      title={widgetValueToText(value)}
     >
-      {value == null ? "—" : String(value)}
+      {value == null ? "—" : widgetValueToText(value)}
     </span>
   );
 }
@@ -269,15 +282,19 @@ export function ReportCards({ report }: { report: ParseReport }) {
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium text-ink">最近解析结果</span>
         <span className="text-xs text-muted-foreground">
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access -- report 为解析报告，按任意结构读取 mode/addedNodes */}
           {(report as any).mode === "subset"
-            ? `增量 +${(report as any).addedNodes ?? 0}`
+            ? `增量 +${
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access -- 同上，按任意结构读取 addedNodes
+              (report as any).addedNodes ?? 0
+            }`
             : `${report.pathCount} 个目录 · ${report.totalNodes} 个节点`}
           {report.errorCount ? ` · ${report.errorCount} 个错误` : ""}
         </span>
       </div>
       <div className="space-y-2">
         {(report.packages ?? []).map((pkg) => {
-          const st = STATUS_STYLE[pkg.status] || STATUS_STYLE.ok;
+          const st = STATUS_STYLE[pkg.status] ?? STATUS_STYLE.ok;
           return (
             <div key={pkg.name} className="rounded-xl border border-border bg-bg p-3">
               <div className="flex items-center justify-between gap-2">

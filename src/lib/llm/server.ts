@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import "server-only";
 import type { ZodType } from "zod";
 import { llmConfigRepository } from "@/lib/core/repository";
@@ -136,7 +135,9 @@ export async function streamLLM(
       const data = trimmed.slice(5).trim();
       if (data === "[DONE]") continue;
       try {
-        const json = JSON.parse(data);
+        const json = JSON.parse(data) as {
+          choices?: Array<{ delta?: { content?: string } }>;
+        };
         const token: string = json.choices?.[0]?.delta?.content ?? "";
         if (token) {
           full += token;

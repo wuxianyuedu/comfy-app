@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-base-to-string, @typescript-eslint/no-empty-function, @typescript-eslint/no-unnecessary-type-assertion */
 "use client";
 
 /* 2026-08-30: extracted from CanvasNode — the collapsible error panel.
@@ -271,8 +270,8 @@ export function ErrorPanel({
                           type="button"
                           onClick={() =>
                             void navigator.clipboard
-                              .writeText(taskId!)
-                              .catch(() => {})
+                              .writeText(taskId)
+                              .catch(() => undefined)
                           }
                           className="nodrag nopan min-w-0 truncate text-left font-mono text-rose-100/90 hover:text-rose-50"
                           title="点击复制 taskId"
@@ -317,6 +316,7 @@ export function ErrorPanel({
                                 2
                               );
                             } catch {
+                              // eslint-disable-next-line @typescript-eslint/no-base-to-string -- request 非字符串且 JSON 序列化失败时兜底展示原始对象
                               return String(errorContext.request);
                             }
                           })()}

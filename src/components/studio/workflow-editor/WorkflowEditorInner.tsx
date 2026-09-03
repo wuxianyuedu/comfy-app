@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-empty-function, @typescript-eslint/no-explicit-any, @typescript-eslint/no-floating-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 "use client";
 /* Extracted WorkflowEditorInner (the inner editor that must live inside
  * ReactFlowProvider).  Node renderers / registries moved to
@@ -14,7 +13,6 @@ import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "@/config/custom-nodes";
 import { SourceModal } from "../SourceModal";
 import { api } from "~/trpc/react";
-import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 import type { WorkflowDetail,
   WorkflowIOParam,
 } from "../workflow-types";
@@ -185,7 +183,7 @@ function WorkflowEditorBody({
    *  manifest is already cached server-side after the first parse, so
    *  this is one cheap roundtrip per page open. */
   useEffect(() => {
-    refreshCustomNodes().catch(() => {});
+    refreshCustomNodes().catch(() => undefined);
   }, []);
   /* Subgraph navigation stack.  Empty while viewing the top-level workflow.
    *  Each entry is {uid, name} for breadcrumb display; clicking a crumb
@@ -316,8 +314,10 @@ function WorkflowEditorBody({
       if (n.type === "wfIoPort") continue;
       if (String(n.id).startsWith("grp:bpin:")) continue;
       hasMiddle = true;
-      const w = (n as any).measured?.width ?? (n as any).width ?? 240;
-      const h = (n as any).measured?.height ?? (n as any).height ?? 80;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access -- ReactFlow Node 未暴露 measured，按任意结构读取尺寸兜底
+      const w = Number((n as any).measured?.width ?? (n as any).width ?? 240);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access -- 同上
+      const h = Number((n as any).measured?.height ?? (n as any).height ?? 80);
       const x = n.position.x;
       const y = n.position.y;
       if (x < minX) minX = x;
@@ -326,7 +326,7 @@ function WorkflowEditorBody({
       if (y + h > maxY) maxY = y + h;
     }
     if (!hasMiddle || !Number.isFinite(minX)) {
-      rf.fitView({ padding: 0.10, duration: 0 });
+      void rf.fitView({ padding: 0.10, duration: 0 });
       return;
     }
     const bboxW = Math.max(1, maxX - minX);
@@ -339,7 +339,7 @@ function WorkflowEditorBody({
     if (zoom < 0.35) zoom = 0.35;
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
-    rf.setViewport(
+    void rf.setViewport(
       { x: containerW / 2 - zoom * centerX, y: containerH / 2 - zoom * centerY, zoom },
       { duration: 0 }
     );
@@ -621,7 +621,7 @@ function WorkflowEditorBody({
         {ioPreviewOpen && (
           <WorkflowIoPreviewPanel
             workflowIO={workflowIO}
-            detailIOMap={(detail.workflowIO as unknown as WorkflowIOMap | null) ?? null}
+            detailIOMap={detail.workflowIO ?? null}
             onClose={() => setIoPreviewOpen(false)}
           />
         )}

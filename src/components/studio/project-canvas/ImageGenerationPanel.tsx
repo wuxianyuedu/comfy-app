@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/refs, react-hooks/immutability, @typescript-eslint/no-empty-function */
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -72,8 +71,10 @@ export function ImageGenerationPanel({
   // Keep `patch` / `d` in refs so the cancel handler (fired from an async
   // callback) always sees the latest values without being re-created.
   const patchRef = useRef(patch);
+  // eslint-disable-next-line react-hooks/refs -- 渲染期把最新 props 写入 ref，供异步取消回调读取最新值（刻意模式）
   patchRef.current = patch;
   const dRef = useRef(d);
+  // eslint-disable-next-line react-hooks/refs -- 同上，dRef 保存最新 d 供取消回调
   dRef.current = d;
 
   /* R-ardot118 (2026-08-18): 节点拿到 taskId（生成开始）时，设为全局面板活跃
@@ -188,6 +189,7 @@ export function ImageGenerationPanel({
   const modelTagOptions = modelTagLib.filter((modelTagLib) => availableModelTags.has(modelTagLib.name));
 
   const selectType = (code: string) => {
+    // eslint-disable-next-line react-hooks/immutability -- seededFor 为 useRef，重选类型时清空种子标记
     seededFor.current = null;
     setWfModes(null);
     /* R-ardot89 (2026-08-16): 切类型时若当前模型标签在新类型下没有工作流
@@ -209,6 +211,7 @@ export function ImageGenerationPanel({
     });
   };
   const selectModelTag = (name: string) => {
+    // eslint-disable-next-line react-hooks/immutability -- 同上，重选模型标签时重置种子
     seededFor.current = null;
     setWfModes(null);
     // R-ardot97 (2026-08-17): 该模型下若只剩 1 个工作流，就直接选它，避免
@@ -243,6 +246,7 @@ export function ImageGenerationPanel({
   };
   const selectWorkflow = (wfId: string) => {
     const wf = wfList.find((wfList) => wfList.id === wfId);
+    // eslint-disable-next-line react-hooks/immutability -- 重选工作流时重置种子
     seededFor.current = null;
     patch({
       workflowId: wfId,
@@ -263,7 +267,7 @@ export function ImageGenerationPanel({
           status={d.status}
           path={d.resultPath}
           mediaType={d.resultMediaType}
-          onReplace={onReplaceResult ?? (() => {})}
+          onReplace={onReplaceResult ?? (() => undefined)}
         />
       ) : null}
 
