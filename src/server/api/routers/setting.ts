@@ -48,9 +48,9 @@ export const settingRouter = createTRPCRouter({
 
   /** 手动启动 ComfyUI（设置页按钮）：未运行时按配置路径拉起并等待就绪 */
   comfyStart: authedProcedure
-    .input(z.object({ timeoutMs: z.number().int().min(5000).max(300000).optional() }))
+    .input(z.object({ timeoutMs: z.number().int().min(5000).max(600000).optional() }))
     .mutation(async ({ input }) => {
-      const r = await ensureComfyUiReady({ timeoutMs: input.timeoutMs ?? 180_000 });
+      const r = await ensureComfyUiReady({ timeoutMs: input.timeoutMs ?? 420_000 });
       return r;
     }),
 });

@@ -76,8 +76,9 @@ function resolveLaunchPlan(installDir: string): LaunchPlan | { error: string } {
   const root = path.resolve(installDir);
   const candidates: Array<{ py: string; main: string }> = [
     { py: path.join(root, "python_embeded", "python.exe"), main: path.join(root, "main.py") },
-    // ComfyUI Desktop 的 vendor 构建：uv 在 ComfyUI/.venv 里装依赖，
-    // standalone-env 只是基础解释器（site-packages 是空的，直接用它必报 No torch）
+    // ComfyUI Desktop 的 vendor 构建：uv 在 ComfyUI/.venv 里装依赖（含 torch），
+    // 必须用这个解释器。standalone-env 只是基础解释器（site-packages 是空的，
+    // 直接用它必报 No module named 'torch'）。所以 vendor venv 必须排在 standalone-env 之前。
     {
       py: path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"),
       main: path.join(root, "ComfyUI", "main.py"),
@@ -87,6 +88,7 @@ function resolveLaunchPlan(installDir: string): LaunchPlan | { error: string } {
       main: path.join(root, "main.py"),
     },
     { py: path.join(root, "venv", "Scripts", "python.exe"), main: path.join(root, "main.py") },
+    // 最后兜底：桌面版基础解释器（无 torch，仅当以上都缺失时才用——多半会启动失败）
     {
       py: path.join(root, "standalone-env", "python.exe"),
       main: path.join(root, "ComfyUI", "main.py"),
@@ -133,7 +135,10 @@ function appendRuntimeLog(line: string): void {
 export async function ensureComfyUiReady(
   opts: { timeoutMs?: number; onLog?: (msg: string) => void } = {}
 ): Promise<EnsureResult> {
-  const timeoutMs = opts.timeoutMs ?? 180_000;
+  // 冷启动（尤其带大量自定义节点 / CUDA 初始化的重安装）从拉起到绑定端口常需
+  // 3-7 分钟；180s 太短会让应用在 ComfyUI 仍在加载时就误报「超时未就绪」，
+  // 用户看到的就是「一直黑屏 / 打不开页面」。默认放宽到 7 分钟。
+  const timeoutMs = opts.timeoutMs ?? 420_000;
   const note = (msg: string) => {
     logger.info(`[comfyui-lifecycle] ${msg}`);
     opts.onLog?.(msg);
