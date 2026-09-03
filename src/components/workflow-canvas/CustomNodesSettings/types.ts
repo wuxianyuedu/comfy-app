@@ -19,6 +19,10 @@ export interface ParseReport {
   errorCount: number;
   packages: PkgReport[];
   parseErrors?: { file: string; error: string }[];
+  /** 增量解析报告携带的模式标记（全量报告缺省为 undefined）。 */
+  mode?: "subset" | "full";
+  /** 增量解析时新增节点数（全量报告缺省为 undefined）。 */
+  addedNodes?: number;
 }
 
 export interface DiscoveredSubpkg {

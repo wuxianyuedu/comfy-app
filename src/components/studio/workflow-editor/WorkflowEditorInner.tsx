@@ -314,10 +314,8 @@ function WorkflowEditorBody({
       if (n.type === "wfIoPort") continue;
       if (String(n.id).startsWith("grp:bpin:")) continue;
       hasMiddle = true;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access -- ReactFlow Node 未暴露 measured，按任意结构读取尺寸兜底
-      const w = Number((n as any).measured?.width ?? (n as any).width ?? 240);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access -- 同上
-      const h = Number((n as any).measured?.height ?? (n as any).height ?? 80);
+      const w = Number(n.measured?.width ?? n.width ?? 240);
+      const h = Number(n.measured?.height ?? n.height ?? 80);
       const x = n.position.x;
       const y = n.position.y;
       if (x < minX) minX = x;

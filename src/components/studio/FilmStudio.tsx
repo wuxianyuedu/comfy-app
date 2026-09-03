@@ -224,12 +224,9 @@ export function FilmStudio() {
     const poll = async (tid: string): Promise<void> => {
       try {
         const data = await vanillaApi.film.detail.query({ id: tid });
-        // /api/film/[id] returns the raw Prisma FilmProject row; its
-        // status/logs/shots columns are wider than the local `Film` view
-        // type, and the shape is fixed by the route — cast through `any`
-        // as the original code did.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access -- Prisma row → UI view type, shape guaranteed by /api/film/[id]
-        const f: Film = (data as any).film;
+        // /api/film/[id] 返回原始 Prisma FilmProject 行（status/logs/shots 比本地
+        // `Film` 视图类型更宽，shape 由路由固定）；经 unknown 收窄为 UI 视图类型。
+        const f: Film = data.film as unknown as Film;
         setFilm(f);
         if (f.status === "GENERATING" || f.status === "COMPOSING" || f.status === "PARSING") {
           pollRef.current ??= setInterval(() => void poll(tid), 3000);

@@ -282,12 +282,8 @@ export function ReportCards({ report }: { report: ParseReport }) {
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium text-ink">最近解析结果</span>
         <span className="text-xs text-muted-foreground">
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access -- report 为解析报告，按任意结构读取 mode/addedNodes */}
-          {(report as any).mode === "subset"
-            ? `增量 +${
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access -- 同上，按任意结构读取 addedNodes
-              (report as any).addedNodes ?? 0
-            }`
+          {report.mode === "subset"
+            ? `增量 +${report.addedNodes ?? 0}`
             : `${report.pathCount} 个目录 · ${report.totalNodes} 个节点`}
           {report.errorCount ? ` · ${report.errorCount} 个错误` : ""}
         </span>

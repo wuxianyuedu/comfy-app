@@ -78,6 +78,11 @@
 - **规范**：Y1「禁止 any / as Record<string, any>；用 Zod 校验 / unknown + 守卫」。
 - **现状**：多数已有语义化 helper（如 `extractErrorMessage(e)`、`workflow-types.ts` 的 wire type），但仍有散落 `as any`。
 - **建议**：随 D1 专项清理；新代码严禁 `any`。
+- **状态**：✅ 已修复（2026-09-03）。全仓运行期 `as any` / `as Record<string, any>` 已清零（剩余 17 处均为"原 `as any` 已移除"的说明性注释，非代码）。逐文件处理：
+  - `SettingsParts.tsx` 的 `ReportCards`：`ParseReport`（`types.ts`）补可选 `mode?: "subset" | "full"` 与 `addedNodes?: number`，原 `(report as any).mode` / `(report as any).addedNodes` 改为直接 typed 读取；同步移除测试里 `as unknown as ParseReport` 的冗余断言。
+  - `FilmStudio.tsx` 的 `(data as any).film` → `data.film as unknown as Film`（经 `unknown` 收窄；`/api/film/[id]` 返回 Prisma 行 shape 由路由固定）。
+  - `WorkflowEditorInner.tsx` 的 `(n as any).measured` → `n.measured?.width` / `n.measured?.height`（`@xyflow/react` v12 的 `Node` 已正式含 `measured` 字段，无需兜底 `as any`）。
+  - 复验：`eslint` 0 error（无 `no-explicit-any` / `no-unsafe-*`）、`tsc --noEmit` 通过、`SettingsParts.test.tsx` 全绿。
 
 ### D3 — 超大组件（违反 C1）
 | 文件 | 规模 | 问题 |
@@ -112,6 +117,7 @@
 - `pnpm exec eslint .`：0 error（新增测试与修复均通过 lint）。
 - `node scripts/check-file-structure.cjs`：结构检查通过。
 - `pnpm exec vitest run`：新增 3 个测试文件全绿；既有套件不受影响。
+- D2 复验：`src` 下运行期 `as any` / `as Record<string, any>` / `: any` / `any[]` 清零（`eslint` 无 `no-explicit-any`/`no-unsafe-*`）；`tsc --noEmit` 通过；`SettingsParts.test.tsx` 全绿。
 
 ## 5. 提交
 - 修复：`build-tauri-release.ps1` / `repair-imports.cjs` / `dev-launcher.ps1`。

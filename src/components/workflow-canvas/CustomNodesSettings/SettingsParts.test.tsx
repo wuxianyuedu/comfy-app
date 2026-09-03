@@ -229,11 +229,11 @@ describe("ReportCards", () => {
   });
 
   it("mode=subset(增量解析)时头部改为「增量 +N」而非目录统计", () => {
-    const subset = {
+    const subset: ParseReport = {
       ...REPORT,
       mode: "subset",
       addedNodes: 4,
-    } as unknown as ParseReport;
+    };
     render(<ReportCards report={subset} />);
     expect(screen.getByText("增量 +4")).toBeInTheDocument();
     expect(screen.queryByText(/个目录/)).not.toBeInTheDocument();
