@@ -1,329 +1,31 @@
 "use client";
 
-import React from "react";
-import { Trash } from "lucide-react";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { Icon } from "@/components/ui/icon";
-import type { Shot, Scene, Character, StyleRef, ShotType } from "@/lib/workshop/types";
-import { SHOT_TYPE_LABELS } from "@/lib/workshop/types";
-import { buildShotPrompt, buildShotNegative, mergeParams } from "@/lib/workshop/prompt-builder";
-import { workshopUid } from "@/lib/workshop/script-parser";
-import {
-  type ExtractChannel,
-  ExtractToolbar,
-} from "@/components/workshop/ExtractToolbar";
-import {
-  buildExtractShotsMessages,
-  buildShotsFromEntries,
-  draftToShotEntry,
-  mergeCharacterDrafts,
-  parseExtractedShots,
-  parseImportedCharacterCards,
-  parseShotDrafts,
-} from "@/lib/workshop/script-parse";
-import type { ShotEntry } from "@/lib/workshop/script-parse";
-import { useLLM } from "@/components/workshop/LLMContext";
-import { streamChat } from "@/lib/llm/browser";
-import { buildStoryboardMessages, parseStoryboard } from "@/lib/llm/prompts";
+import { ExtractToolbar } from "@/components/workshop/ExtractToolbar";
+import { useStoryboardPlanner, type Props } from "./useStoryboardPlanner";
+import { ShotRow } from "./StoryboardPlanner.parts";
 
-/** catch 抛出值（unknown）→ 与旧 `e?.message ?? fallback` 逐值等价的消息提取：
- *  带 string message 的对象取 message（Error 实例即此路径），其余回退。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return fallback;
-}
-
-/** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别），由管线页传入。 */
-type ShotProgress = Record<string, { pct: number; label?: string }>;
-
-interface Props {
-  scenes: Scene[];
-  characters: Character[];
-  styles: StyleRef[];
-  shots: Shot[];
-  onShotsChange: (s: Shot[]) => void;
-  onGenerate: (shot: Shot) => Promise<void>;
-  generating: boolean;
-  /** 镜头节点上的实时生成进度（running 时在节点内渲染进度条） */
-  progressByShot?: ShotProgress;
-  /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
-  scriptMarkdown?: string;
-  /** 分镜阶段导入角色卡 JSON 时的角色写入口(可选,未接入时仅提示) */
-  onCharactersChange?: (c: Character[]) => void;
-}
-
-/** 判断导入内容是否为 JSON(分镜/角色卡 JSON 走结构化解析,其余按剧本 markdown 解析) */
-function looksLikeJson(text: string): boolean {
-  return text.startsWith("{") || text.startsWith("[");
-}
-
-const SHOT_TYPES: ShotType[] = [
-  "extreme_wide",
-  "wide",
-  "full",
-  "medium",
-  "close",
-  "extreme_close",
-  "poi",
-  "pod",
-];
-
-export function StoryboardPlanner({
-  scenes,
-  characters,
-  styles,
-  shots,
-  onShotsChange,
-  onGenerate,
-  generating,
-  progressByShot,
-  scriptMarkdown,
-  onCharactersChange,
-}: Props) {
-  const [aiBusy, setAiBusy] = React.useState(false);
-  const [aiProgress, setAiProgress] = React.useState("");
-  const [aiError, setAiError] = React.useState("");
-  const { config, openSettings } = useLLM();
-
-  // ── 三通道提取(工具 / 本地模型 / 配置API)+ 外部导入 ──
-  const [extractChannel, setExtractChannel] = React.useState<ExtractChannel>("tool");
-  const [extractBusy, setExtractBusy] = React.useState(false);
-  const [extractStatus, setExtractStatus] = React.useState("");
-  const [extractError, setExtractError] = React.useState("");
-
-  const hasScript = !!scriptMarkdown?.trim();
-  const knownNames = characters.map((character) => character.name).filter(Boolean);
-
-  /** 通道 → LLM provider(工具通道不调用模型;本地/远端复用既有 /api/llm 链路) */
-  function channelProvider(channel: ExtractChannel): "local" | "remote" {
-    return channel === "local" ? "local" : "remote";
-  }
-
-  /** 条目 → 既有 Shot 结构(场景/角色关联与提示词重算复用既有链路) */
-  function appendShots(entries: ShotEntry[]) {
-    const built = buildShotsFromEntries(entries, shots.length, scenes, characters);
-    onShotsChange([...shots, ...built]);
-    setExtractStatus(`已提取 ${built.length} 个镜头`);
-  }
-
-  /** 三通道提取入口:工具=确定性拆分;本地/API=LLM 输出 JSON,失败降级提示 */
-  async function handleExtract() {
-    const script = (scriptMarkdown ?? "").trim();
-    if (!script) {
-      setExtractError("未获取到剧本文本,请先在「剧本」阶段编写或编辑剧本");
-      return;
-    }
-    if (extractChannel !== "tool" && !config) {
-      openSettings();
-      return;
-    }
-    setExtractBusy(true);
-    setExtractStatus(extractChannel === "tool" ? "" : "正在调用模型提取分镜…");
-    setExtractError("");
-    try {
-      let entries: ShotEntry[];
-      if (extractChannel === "tool") {
-        const drafts = parseShotDrafts(script, knownNames);
-        if (drafts.length === 0) {
-          setExtractError(
-            "工具通道未在剧本中找到场景标题(如「1-1 场景 外 地点(时间)」)或 Δ动作 / Vx台词 行。可检查剧本结构后重试,或切换到本地模型 / 配置API 通道。"
-          );
-          return;
-        }
-        entries = drafts.map(draftToShotEntry);
-      } else {
-        const full = await streamChat({
-          messages: buildExtractShotsMessages(script, knownNames),
-          opts: { provider: channelProvider(extractChannel) },
-        });
-        entries = parseExtractedShots(full);
-        if (entries.length === 0) {
-          setExtractError("模型未返回有效分镜 JSON,解析失败。可重试,或改用「工具」通道。");
-          return;
-        }
-      }
-      appendShots(entries);
-    } catch (e: unknown) {
-      setExtractError(`${errorMessage(e, "提取失败")} 可重试,或改用「工具」通道。`);
-    } finally {
-      setExtractBusy(false);
-    }
-  }
-
-  /** 外部导入:分镜脚本 markdown 走工具解析器;JSON 支持分镜数组与角色卡文件 */
-  async function handleImportFile(file: File) {
-    setExtractBusy(true);
-    setExtractStatus("");
-    setExtractError("");
-    try {
-      const text = await file.text();
-      const trimmed = text.trim();
-      if (!trimmed) throw new Error("文件内容为空");
-      if (looksLikeJson(trimmed)) {
-        let entries: ShotEntry[];
-        try {
-          entries = parseExtractedShots(trimmed);
-        } catch {
-          // 非分镜 JSON:尝试按角色卡文件导入(写入角色列表)
-          const cards = parseImportedCharacterCards(trimmed);
-          if (!onCharactersChange) {
-            throw new Error("这是角色卡文件,但当前页面未接入角色写入,请到「角色卡」阶段导入");
-          }
-          const res = mergeCharacterDrafts(characters, cards, styles);
-          if (res.added === 0) {
-            throw new Error("角色卡均已存在或无有效内容,未新增");
-          }
-          onCharactersChange(res.list);
-          setExtractStatus(
-            `已从文件导入 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`
-          );
-          return;
-        }
-        if (entries.length === 0) {
-          throw new Error("JSON 中未解析出任何镜头(需含 sceneHeading 或 description 字段)");
-        }
-        appendShots(entries);
-        return;
-      }
-      const drafts = parseShotDrafts(trimmed, knownNames);
-      if (drafts.length === 0) {
-        throw new Error(
-          "未在文件中找到场景标题(如「1-1 场景 外 地点(时间)」)或 Δ动作 / Vx台词 行"
-        );
-      }
-      appendShots(drafts.map(draftToShotEntry));
-    } catch (e: unknown) {
-      setExtractError(errorMessage(e, "导入失败"));
-    } finally {
-      setExtractBusy(false);
-    }
-  }
-
-  // Import shots from script: each scene → shotCount shots
-  function importFromScript() {
-    const built: Shot[] = [];
-    let n = shots.length;
-    scenes.forEach((scene) => {
-      const count = Math.max(1, scene.shotCount);
-      for (let i = 0; i < count; i++) {
-        n += 1;
-        const shot: Shot = {
-          id: workshopUid("shot"),
-          index: n,
-          sceneId: scene.id,
-          sceneHeading: scene.heading,
-          shotType: i === 0 ? "wide" : "medium",
-          description: i === 0 ? scene.action : "",
-          characterIds: [],
-          prompt: "",
-          negativePrompt: "",
-          params: {},
-          status: "idle",
-        };
-        // Auto-build prompt
-        recompute(shot, scene, [], undefined);
-        built.push(shot);
-      }
-    });
-    onShotsChange([...shots, ...built]);
-  }
-
-  function recompute(
-    shot: Shot,
-    scene: Scene | undefined,
-    chars: Character[],
-    style?: StyleRef
-  ): Shot {
-    const prompt = buildShotPrompt(shot, scene, chars, style);
-    const neg = buildShotNegative(chars, style);
-    const params = mergeParams(style, undefined);
-    return { ...shot, prompt, negativePrompt: neg, params: { ...shot.params, ...params } };
-  }
-
-  function updateShot(id: string, patch: Partial<Shot>) {
-    onShotsChange(
-      shots.map((shot) =>
-{
-        if (shot.id !== id) return shot;
-        const next = { ...shot, ...patch };
-        const scene = scenes.find((sc) => sc.id === next.sceneId);
-        const chars = characters.filter((character) => next.characterIds.includes(character.id));
-        const style = styles.find((st) => st.slug === next.skillSlug);
-        return recompute(next, scene, chars, style);
-      })
-    );
-  }
-
-  function removeShot(id: string) {
-    onShotsChange(shots.filter((shot) => shot.id !== id));
-  }
-
-  function clearShots() {
-    if (confirm("确定清空当前所有分镜？")) onShotsChange([]);
-  }
-
-  async function handleAISplit() {
-    if (scenes.length === 0) return;
-    if (!config) {
-      openSettings();
-      return;
-    }
-    setAiBusy(true);
-    setAiProgress("");
-    setAiError("");
-    try {
-      const built: Shot[] = [];
-      let n = shots.length;
-      const charNames = characters.map((character) => character.name).filter(Boolean);
-      for (let i = 0; i < scenes.length; i++) {
-        const scene = scenes[i];
-        setAiProgress(`正在拆镜 ${i + 1}/${scenes.length} · ${scene!.heading}`);
-        const full = await streamChat({
-          messages: buildStoryboardMessages(scene!, charNames),
-          /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
-        });
-        const raws = parseStoryboard(full);
-        raws.forEach((raw) =>
-{
-          n += 1;
-          const charIds = characters
-            .filter((char) => char.name && raw.characterNames.includes(char.name))
-            .map((char) => char.id);
-          const shot: Shot = {
-            id: workshopUid("shot"),
-            index: n,
-            sceneId: scene!.id,
-            sceneHeading: scene!.heading,
-            shotType: raw.shotType,
-            description: raw.description,
-            characterIds: charIds,
-            prompt: "",
-            negativePrompt: "",
-            params: {},
-            status: "idle",
-          };
-          const linkedChars = characters.filter((character) => charIds.includes(character.id));
-          built.push(recompute(shot, scene, linkedChars, undefined));
-        });
-      }
-      onShotsChange([...shots, ...built]);
-      setAiProgress(`已用 AI 生成 ${built.length} 个镜头`);
-    } catch (e: unknown) {
-      setAiError(errorMessage(e, "AI 拆镜失败"));
-    } finally {
-      setAiBusy(false);
-    }
-  }
-
-  async function generateAll() {
-    const pending = shots.filter((shot) => shot.status === "idle" || shot.status === "failed");
-    for (const shot of pending) {
-      await onGenerate(shot);
-    }
-  }
+export function StoryboardPlanner(props: Props) {
+  const { shots, scenes, characters, styles, onGenerate, generating, progressByShot } = props;
+  const planner = useStoryboardPlanner(props);
+  const {
+    aiBusy,
+    aiProgress,
+    aiError,
+    config,
+    extractChannel,
+    setExtractChannel,
+    extractBusy,
+    extractStatus,
+    extractError,
+    hasScript,
+    handleExtract,
+    handleImportFile,
+    importFromScript,
+    handleAISplit,
+    clearShots,
+    generateAll,
+  } = planner;
 
   const idleCount = shots.filter((shot) => shot.status === "idle" || shot.status === "failed").length;
 
@@ -348,7 +50,16 @@ export function StoryboardPlanner({
             disabled={scenes.length === 0 || aiBusy}
             className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
           >
-            {aiBusy ? "AI 拆镜中…" : (<><Icon name="sparkles" size={13} className="mr-1 inline align-[-2px]" />AI 智能拆镜</>)}
+            {aiBusy ? (
+              "AI 拆镜中…"
+            ) : (
+              (
+                <>
+                  <Icon name="sparkles" size={13} className="mr-1 inline align-[-2px]" />
+                  AI 智能拆镜
+                </>
+              )
+            )}
           </button>
           {shots.length > 0 && (
             <button
@@ -417,181 +128,21 @@ export function StoryboardPlanner({
         </div>
       ) : (
         <div className="space-y-3">
-          {shots.map((shot) => {
-            const linkedChars = characters.filter((character) => shot.characterIds.includes(character.id));
-            return (
-              <div key={shot.id} className="rounded-xl border border-border bg-surface p-4">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
-                    {shot.index}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{shot.sceneHeading}</span>
-                  <StatusBadge status={shot.status} />
-                  <button
-                    type="button"
-                    onClick={() => removeShot(shot.id)}
-                    className="ml-auto text-muted-foreground hover:text-red-500"
-                    aria-label="删除镜头"
-                  >
-                    <Trash size={15} />
-                  </button>
-                </div>
-
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {/* Shot type */}
-                  <label className="block">
-                    <span className="mb-1 block text-xs text-muted-foreground">景别</span>
-                    <DarkSelect
-                      className="!bg-white/3 !border-white/8 text-xs"
-                      value={shot.shotType}
-                      onChange={(value) => updateShot(shot.id, { shotType: value as ShotType })}
-                      options={SHOT_TYPES}
-                      labels={SHOT_TYPE_LABELS as Record<string, string>}
-                      placeholder="选择景别"
-                    />
-                  </label>
-
-                  {/* Style */}
-                  <label className="block">
-                    <span className="mb-1 block text-xs text-muted-foreground">风格 Skill</span>
-                    <DarkSelect
-                      className="!bg-white/3 !border-white/8 text-xs"
-                      value={shot.skillSlug ?? ""}
-                      onChange={(value) => updateShot(shot.id, { skillSlug: value || undefined })}
-                      options={styles.map((style) => style.slug)}
-                      labels={Object.fromEntries(styles.map((style) =>[style.slug, `${style.icon} ${style.name}`]))}
-                      placeholder="跟随角色/默认"
-                    />
-                  </label>
-                </div>
-
-                {/* Description */}
-                <textarea
-                  value={shot.description}
-                  onChange={(event) => updateShot(shot.id, { description: event.target.value })}
-                  rows={2}
-                  className="mt-2 w-full rounded-md border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-primary"
-                  placeholder="画面描述（留空则使用场景动作描述）"
-                />
-
-                {/* Character multi-select */}
-                {characters.length > 0 && (
-                  <div className="mt-2">
-                    <span className="mb-1 block text-xs text-muted-foreground">出场角色</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {characters.map((character) =>
-{
-                        const on = shot.characterIds.includes(character.id);
-                        return (
-                          <button
-                            key={character.id}
-                            type="button"
-                            onClick={() =>
-                              updateShot(shot.id, {
-                                characterIds: on
-                                  ? shot.characterIds.filter((id) => id !== character.id)
-                                  : [...shot.characterIds, character.id],
-                              })
-                            }
-                            className={`rounded-full px-2 py-0.5 text-xs transition-colors ${
-                              on
-                                ? "bg-primary text-white"
-                                : "border border-border text-muted-foreground hover:text-ink"
-                            }`}
-                          >
-                            {character.name || "未命名"}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Prompt preview */}
-                <div className="mt-3 rounded-lg bg-subtle p-3">
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">生图提示词</p>
-                  <p className="text-xs leading-relaxed text-ink/80 break-words">
-                    {shot.prompt || "填写描述后自动生成…"}
-                  </p>
-                  {linkedChars.length > 0 && (
-                    <p className="mt-1 text-xs text-primary/70">
-                      关联角色：{linkedChars.map((linkedChar) => linkedChar.name || "未命名").join("、")}
-                    </p>
-                  )}
-                </div>
-
-                {/* 节点上的实时生成进度：ComfyUI 当前节点 + 百分比（2026-09-02） */}
-                {shot.status === "running" &&
-                  (() => {
-                    const p = progressByShot?.[shot.id];
-                    const pct = p?.pct ?? 0;
-                    return (
-                      <div className="mt-2" aria-live="polite">
-                        <div className="mb-1 flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">
-                            {p?.label ? `正在执行 ${p.label}` : "正在生成…"}
-                          </span>
-                          <span className="font-medium text-primary">{pct}%</span>
-                        </div>
-                        <div
-                          className="h-1.5 w-full overflow-hidden rounded-full bg-subtle"
-                          role="progressbar"
-                          aria-valuenow={pct}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                        >
-                          <div
-                            className="h-full rounded-full bg-primary transition-[width] duration-300"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                {/* Generate button */}
-                <button
-                  type="button"
-                  onClick={() => onGenerate(shot)}
-                  disabled={shot.status === "running" || generating || !shot.prompt}
-                  className="mt-2 w-full rounded-lg bg-primary/90 py-2 text-xs font-medium text-white transition-opacity disabled:opacity-40"
-                >
-                  {shot.status === "running"
-                    ? progressByShot?.[shot.id]
-                      ? `生成中 ${progressByShot[shot.id]?.pct ?? 0}%`
-                      : "生成中…"
-                    : shot.status === "done"
-                    ? "重新生成"
-                    : "生成此镜头"}
-                </button>
-
-                {shot.imageUrl && (
-                  <img
-                    src={shot.imageUrl}
-                    alt={shot.sceneHeading}
-                    className="mt-2 w-full rounded-lg border border-border"
-                  />
-                )}
-              </div>
-            );
-          })}
+          {shots.map((shot) => (
+            <ShotRow
+              key={shot.id}
+              shot={shot}
+              characters={characters}
+              styles={styles}
+              progressByShot={progressByShot}
+              generating={generating}
+              onUpdate={planner.updateShot}
+              onRemove={planner.removeShot}
+              onGenerate={onGenerate}
+            />
+          ))}
         </div>
       )}
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status: Shot["status"] }) {
-  const map: Record<Shot["status"], { label: string; cls: string }> = {
-    idle: { label: "待生成", cls: "bg-subtle text-muted-foreground" },
-    queued: { label: "排队中", cls: "bg-amber-100 text-amber-700" },
-    running: { label: "生成中", cls: "bg-blue-100 text-blue-700" },
-    done: { label: "已完成", cls: "bg-emerald-100 text-emerald-700" },
-    failed: { label: "失败", cls: "bg-red-100 text-red-700" },
-    stale: { label: "待更新", cls: "bg-red-100 text-red-700" },
-  };
-  const s = map[status];
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.cls}`}>{s.label}</span>
   );
 }

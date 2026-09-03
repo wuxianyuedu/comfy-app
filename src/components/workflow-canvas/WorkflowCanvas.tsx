@@ -38,8 +38,10 @@ import { ComfyNode } from "./nodes/ComfyNode";
 import { BezierEdge, EdgeGradientDefs } from "./nodes/BezierEdge";
 import NodeEditor from "./NodeEditor";
 import { comfyGraphToFlow, flowToComfyGraph } from "./graph-utils";
-import { getNodeConfig, getAllNodeTypes, CATEGORY_LABELS } from "./node-registry";
+import { getNodeConfig } from "./node-registry";
 import { refreshCustomNodes, CUSTOM_NODES_UPDATED_EVENT } from "@/config/custom-nodes";
+import { CanvasToolbar, AddNodeMenu, ExportModal } from "./WorkflowCanvas.parts";
+import { cleanupDownstreamInputs } from "./workflow-canvas-utils";
 import type {
   ComfyGraph,
   WorkflowNode,
@@ -147,26 +149,7 @@ export default function WorkflowCanvas({
   const handleEdgesDelete: OnEdgesDelete = useCallback(
     (deleted: Edge[]) => {
       if (!deleted.length) return;
-      const targets = new Set(deleted.map((deleted) => deleted.target));
-      setNodes((nds) =>
-        nds.map((node) => {
-          if (!targets.has(node.id)) return node;
-          const d = node.data as unknown as NodeData;
-          let changed = false;
-          const inputs = { ...d.inputs };
-          for (const e of deleted) {
-            if (e.target !== node.id || !e.targetHandle) continue;
-            const m = /^in-(.+)$/.exec(e.targetHandle);
-            const key = m?.[1];
-            // 跳过兜底通用端口，避免写出 `generic` 伪输入 / 重复 Handle。
-            if (key && key !== "generic" && key in inputs && Array.isArray(inputs[key])) {
-              delete inputs[key];
-              changed = true;
-            }
-          }
-          return changed ? { ...node, data: { ...d, inputs } } : node;
-        })
-      );
+      setNodes((nds) => cleanupDownstreamInputs(nds, deleted));
     },
     [setNodes]
   );
@@ -269,28 +252,14 @@ export default function WorkflowCanvas({
       removed.filter((removed) => removed.source === selectedNodeId).map((edge) => edge.target)
     );
     setNodes((nds) =>
-      nds
-        .filter((node) => node.id !== selectedNodeId)
-        .map((node) => {
-          if (!downstream.has(node.id)) return node;
-          const d = node.data as unknown as NodeData;
-          let changed = false;
-          const inputs = { ...d.inputs };
-          for (const e of removed) {
-            if (e.target !== node.id || !e.targetHandle) continue;
-            const m = /^in-(.+)$/.exec(e.targetHandle);
-            const key = m?.[1];
-            if (key && key !== "generic" && key in inputs && Array.isArray(inputs[key])) {
-              delete inputs[key];
-              changed = true;
-            }
-          }
-          return changed ? { ...node, data: { ...d, inputs } } : node;
-        })
+      cleanupDownstreamInputs(
+        nds.filter((node) => node.id !== selectedNodeId),
+        removed,
+        downstream
+      )
     );
     setEdges((eds) =>
       eds.filter((ed) => ed.source !== selectedNodeId && ed.target !== selectedNodeId)
-
     );
     setSelectedNodeId(null);
   }, [selectedNodeId, setNodes, setEdges, edges]);
@@ -355,109 +324,30 @@ export default function WorkflowCanvas({
         </ReactFlow>
 
         {/* Floating Toolbar */}
-        <div className="wf-toolbar">
-          <button
-            className="wf-toolbar__btn"
-            onClick={() => setShowAddMenu(!showAddMenu)}
-            title="添加节点"
-          >
-            +
-          </button>
-          <button
-            className="wf-toolbar__btn"
-            onClick={deleteSelected}
-            disabled={!selectedNodeId}
-            title="删除选中"
-          >
-            {"\u2715"}
-          </button>
-          <span className="wf-toolbar__sep" />
-
-          <button
-            className="wf-toolbar__btn wf-toolbar__btn--primary"
-            onClick={handleGenerate}
-            title="生成图像"
-          >
-            {"\u25B6"} 生成
-          </button>
-          <button
-            className="wf-toolbar__btn"
-            onClick={() => setShowExport(!showExport)}
-            title="导出 JSON"
-          >
-            {"\u{1F4BE}"}
-          </button>
-        </div>
+        <CanvasToolbar
+          onToggleAddMenu={() => setShowAddMenu(!showAddMenu)}
+          onDeleteSelected={deleteSelected}
+          canDelete={!!selectedNodeId}
+          onGenerate={handleGenerate}
+          onToggleExport={() => setShowExport(!showExport)}
+        />
 
         {/* Add-node menu */}
         {showAddMenu && (
-          <div className="wf-add-menu" onMouseLeave={() => setShowAddMenu(false)}>
-            <div className="wf-add-menu__header">添加节点</div>
-            {Object.entries(CATEGORY_LABELS).map(([cat, label]) => (
-              <div key={cat} className="wf-add-menu__group">
-                <div className="wf-add-menu__group-label">{label}</div>
-                {getAllNodeTypes().filter((ct) => getNodeConfig(ct).category === cat)
-                  .map((ct) => {
-                    const cfg = getNodeConfig(ct);
-                    return (
-                      <button
-                        key={ct}
-                        className="wf-add-menu__item"
-                        onClick={() => addNode(ct)}
-                      >
-                        <span style={{ color: cfg.color }}>{cfg.icon}</span>
-                        <span>{cfg.label}</span>
-                        <span className="wf-add-menu__item-type">{ct}</span>
-                      </button>
-                    );
-                  })}
-              </div>
-            ))}
-          </div>
+          <AddNodeMenu
+            open={showAddMenu}
+            onClose={() => setShowAddMenu(false)}
+            onAdd={addNode}
+          />
         )}
 
         {/* Export modal */}
         {showExport && (
-          <div className="wf-export-modal" onClick={() => setShowExport(false)}>
-            <div className="wf-export-modal__card" onClick={(event) => event.stopPropagation()}>
-              <h3>导出工作流 JSON</h3>
-              <p style={{ fontSize: 11, color: "#888", marginBottom: 8 }}>
-                ComfyUI API 格式，可直接导入 ComfyUI 或保存为模板
-              </p>
-              <textarea
-                readOnly
-                value={JSON.stringify(exportGraph, null, 2)}
-                rows={12}
-                style={{
-                  width: "100%",
-                  background: "#0D0818",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: 8,
-                  color: "#A99BC7",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  padding: 10,
-                }}
-              />
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button
-                  className="wf-toolbar__btn wf-toolbar__btn--primary"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(JSON.stringify(exportGraph));
-                    setShowExport(false);
-                  }}
-                >
-                  复制到剪贴板
-                </button>
-                <button
-                  className="wf-toolbar__btn"
-                  onClick={() => setShowExport(false)}
-                >
-                  关闭
-                </button>
-              </div>
-            </div>
-          </div>
+          <ExportModal
+            open={showExport}
+            onClose={() => setShowExport(false)}
+            graph={exportGraph}
+          />
         )}
       </div>
 
