@@ -6,6 +6,9 @@ export default defineConfig({
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
       "~": path.resolve(import.meta.dirname, "src"),
+      // server-only 包在 vitest node 环境会抛错（它就是干这个的）；
+      // 数据访问层的硬约束在 Next 构建期仍然生效，测试里换空实现。
+      "server-only": path.resolve(import.meta.dirname, "tests/stubs/server-only.ts"),
     },
   },
   test: {

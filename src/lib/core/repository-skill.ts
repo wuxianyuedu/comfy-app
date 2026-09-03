@@ -2,6 +2,8 @@
  * `repository-skill.ts` — Skill 业务仓储（Drizzle 版）
  * @module core/repository-skill
  */
+import "server-only";
+
 import { db } from "@/lib/db";
 import { skill, type Skill } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";

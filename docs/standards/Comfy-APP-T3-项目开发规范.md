@@ -13,7 +13,7 @@
 | 框架 | Next.js 16.3（App Router, Turbopack） | `next dev --turbo` 开发 |
 | 语言 | TypeScript 7（strict） | `tsc --noEmit` 零错误为提交门槛 |
 | 全栈类型安全 | tRPC 11 + @tanstack/react-query | superjson 序列化 |
-| ORM | Prisma 6 + SQLite | generated client 在 `generated/prisma` |
+| ORM | Drizzle ORM + better-sqlite3 | schema 在 `src/server/db/schema.ts`，数据访问收敛到 `src/lib/core/repository*` |
 | 认证 | better-auth 1.3 | 会话接入 tRPC context |
 | 样式 | Tailwind CSS 4 | `@tailwindcss/postcss` |
 | 画布 | @xyflow/react 12 | 工作流画布 + 项目画布 |

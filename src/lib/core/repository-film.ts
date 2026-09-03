@@ -2,6 +2,8 @@
  * `repository-film.ts` — FilmProject 与 FilmShot 业务仓储（Drizzle 版）
  * @module core/repository-film
  */
+import "server-only";
+
 import { db } from "@/lib/db";
 import { filmProject, filmShot, type FilmProject } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";

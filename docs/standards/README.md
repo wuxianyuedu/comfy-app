@@ -1,6 +1,6 @@
 # 前端工程规范文档
 
-> **适用范围**：T3 Stack 项目（Next.js 16.3 + TypeScript 7 + tRPC 11 + Prisma 6 + better-auth + Tailwind v4 + Zustand 5 + @xyflow/react 12 + Tauri）
+> **适用范围**：T3 Stack 项目（Next.js 16.3 + TypeScript 7 + tRPC 11 + Drizzle ORM（better-sqlite3）+ better-auth + Tailwind v4 + Zustand 5 + @xyflow/react 12 + Tauri）
 >
 > **版本**：v1.2 | 2026-08-27（审核修订）
 >

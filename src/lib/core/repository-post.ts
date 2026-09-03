@@ -2,6 +2,8 @@
  * `repository-post.ts` — Post 仓储（Drizzle 版）
  * @module core/repository-post
  */
+import "server-only";
+
 import { db } from "@/lib/db";
 import { post, type Post } from "~/server/db/schema";
 import { desc } from "drizzle-orm";

@@ -2,6 +2,8 @@
  * `repository-task.ts` — Task 业务仓储（Drizzle 版）
  * @module core/repository-task
  */
+import "server-only";
+
 import { db } from "@/lib/db";
 import { task, taskImage, type Task } from "~/server/db/schema";
 import { NotFoundError } from "./errors";

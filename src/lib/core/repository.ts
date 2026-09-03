@@ -23,6 +23,8 @@
  *
  * @module core/repository
  */
+import "server-only";
+
 export * from "./repository-base";
 export * from "./repository-project";
 export * from "./repository-task";

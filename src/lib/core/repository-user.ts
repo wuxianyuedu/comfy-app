@@ -2,6 +2,8 @@
  * `repository-user.ts` — User 与 LlmConfig 仓储（Drizzle 版）
  * @module core/repository-user
  */
+import "server-only";
+
 import { db } from "@/lib/db";
 import { user, llmConfig, type User, type LlmConfig } from "~/server/db/schema";
 import { eq } from "drizzle-orm";

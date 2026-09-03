@@ -2,6 +2,8 @@
  * `repository-workflow-template.ts` — WorkflowTemplate 业务仓储（Drizzle 版）
  * @module core/repository-workflow-template
  */
+import "server-only";
+
 import { db } from "@/lib/db";
 import {
   workflowTemplate,

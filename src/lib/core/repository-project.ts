@@ -2,6 +2,8 @@
  * `repository-project.ts` — Project 业务仓储（Drizzle 版）
  * @module core/repository-project
  */
+import "server-only";
+
 import { db } from "@/lib/db";
 import { project, type Project } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";

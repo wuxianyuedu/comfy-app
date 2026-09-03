@@ -46,7 +46,7 @@ AIGC:
 | §1 项目总览与技术栈 | [15.1 技术栈速查](standards/15-附录.md#151-技术栈速查) | 主规范为选型总纲；附录为速查表（版本/约定一致） |
 | §2.1 目录结构约定 | [12.1 顶层目录约定](standards/12-代码组织与文件结构.md#121-顶层目录约定与主规范-21-一致) | 文档集细化（含 `(studio)` 分组路由、`api/`、`HistoryList` 拆目录、`ui/`） |
 | §2.2 tRPC router 组织 | [1.9 认证与会话](standards/01-架构与状态管理.md#19-认证better-auth-会话与-trpc-context)、[1.7 tRPC/React Query/Zustand 分工](standards/01-架构与状态管理.md#17-trpc--react-query-与-zustand-的分工) | 主规范总则；文档集提供 context 接入代码与数据流示例 |
-| §2.3 Prisma 数据层规范 | [1.10 数据层规范](standards/01-架构与状态管理.md#110-prisma-数据层) | 内容基本一致（历史重复）；主规范保留强制条款，文档集补充 `db:*` 命令与细节 |
+| §2.3 数据层规范（Drizzle） | [1.10 数据层规范](standards/01-架构与状态管理.md#110-数据层规范drizzle-对齐主规范-23) | 内容基本一致（历史重复）；主规范保留强制条款，文档集补充 `db:*` 命令与细节 |
 | §2.4 better-auth 会话 | [1.9 认证与会话](standards/01-架构与状态管理.md#19-认证better-auth-会话与-trpc-context) | 内容基本一致（历史重复）；文档集补充受保护 procedure 示例 |
 | §3 命名规范 | [12.6.1 变量命名硬约束](standards/12-代码组织与文件结构.md#1261-变量命名硬约束对齐主规范-3)、[14.4 C8](standards/14-反模式速查表.md#144-组件) | 主规范为命名总表；文档集细化变量级硬约束（禁单字母、事件参数语义化） |
 | §4.1 TypeScript 规范 | [05 类型安全](standards/05-类型安全.md) | 主规范硬约束（strict/禁 any）；文档集展开 any/unknown/as/Zod/类型守卫 |
@@ -75,7 +75,7 @@ AIGC:
 | 2 | commit type 表 | §5.1：feat/perf/refactor/fix/chore/docs/test（7 项，无 style） | 13.2：feat/fix/refactor/perf/docs/test/chore/style（8 项） | **以文档集 13.2 为完整 type 表**；主规范为子集，新增 `style` 类已纳入文档集 |
 | 3 | 右侧面板动画 | §4.4.3：`transition-all + w-(--panel-right-width)` CSS 宽度过渡（已落地） | 2.7：通用规则避免动画 layout 属性；同节"与主规范调和"明确面板显隐为**面板级例外**；15.3 ADR 记录常驻 DOM + 列宽过渡 | **已调和**：元素级动画走 2.7（transform/opacity）；面板显隐走主规范 §4.4.3 特例。新增类似面板过渡须注释引用该例外 |
 | 4 | 版本与裁决 | v1.0 强制基准 | README 声明 v1.2 细则、冲突以主规范最新版为准 | **冲突裁决链**：standards → 主规范 → 本索引；本索引为唯一入口，修订时须同步更新 |
-| 5 | Prisma / better-auth | §2.3/§2.4 | 1.9/1.10（内容几乎逐字重复） | 保留双份（主规范强制条款 + 文档集示例与命令）；**今后增补须两处同步**，或只改文档集并在主规范保留引用 |
+| 5 | Drizzle 数据层 / better-auth | §2.3/§2.4 | 1.9/1.10（内容几乎逐字重复） | 保留双份（主规范强制条款 + 文档集示例与命令）；**今后增补须两处同步**，或只改文档集并在主规范保留引用 |
 | 6 | 目录结构 | §2.1 简化版 | 12.1 细化版（含 `(studio)`、`api/`、组件拆目录） | 无矛盾：12.1 是 2.1 的实现细则；文档集 12.5 明确"无顶层 hooks/stores/types 目录"，与主规范一致 |
 | 7 | 测试门禁命令 | §7：typecheck/lint/format:check/test/build | 11.7/13.5：typecheck/lint/test/build/playwright | 以 package.json 脚本为准，两者为同一套（文档集 11.7 已注明"避免两处重复维护"） |
 | 8 | 命名规范 | §3 总表（引用《命名规范》v1.1）；§3 文件行 kebab-case 仅约束**非组件模块**，反例 `wfNode.tsx` 属域前缀违规 | 12.6 文件命名约定：**组件文件 PascalCase**、非组件模块 kebab-case；12.6.1 变量级硬约束（禁单字母、事件参数语义化） | 互补：命名总表在主规范，变量细则在文档集；文档集 C8 反向引用主规范 §3。**T13 裁决（2026-08-28）**：组件文件 PascalCase 合规，依据 §3 组件行"组件 PascalCase；文件与导出组件同名" + 文档集 12.6；与 §3 文件行 kebab-case 不构成字面冲突（该行仅针对非组件模块），**组件文件不改名**。存量 84 个非组件模块 `.ts` 为 PascalCase 属另一类问题，后续单列任务处理 |
@@ -89,7 +89,7 @@ AIGC:
 | 章节 | 文件 | 一句话定位 |
 |---|---|---|
 | 总览 | [README.md](standards/README.md) | 文档集用法、快速查阅、与主规范关系 |
-| 01 | [架构与状态管理](standards/01-架构与状态管理.md) | Context vs Zustand、状态归属、React Flow/tRPC/Prisma/认证边界 |
+| 01 | [架构与状态管理](standards/01-架构与状态管理.md) | Context vs Zustand、状态归属、React Flow/tRPC/Drizzle/认证边界 |
 | 02 | [性能规范](standards/02-性能规范.md) | 列表上限、虚拟滚动、动画 transform、分片、memo 准则、画布性能 |
 | 03 | [样式与 Tailwind](standards/03-样式与-tailwind.md) | Tailwind v4 透明度、Design Token、图标、暗色模式 |
 | 04 | [组件设计](standards/04-组件设计.md) | 单一职责、数组驱动、事件隔离、props、memo |

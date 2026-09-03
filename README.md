@@ -16,7 +16,7 @@
 | 样式 | Tailwind CSS v4（`@tailwindcss/postcss`） |
 | API | tRPC v11 + TanStack React Query |
 | 鉴权 | better-auth |
-| 数据库 | Prisma 6 + SQLite/Postgres（见 `prisma/schema.prisma`） |
+| 数据库 | Drizzle ORM + better-sqlite3（SQLite；schema 见 `src/server/db/schema.ts`） |
 | 状态管理 | Zustand |
 | 桌面壳 | Tauri v2（Rust）+ WebView2 |
 | 测试 | Vitest（单元/组件）、Playwright（e2e） |
@@ -52,7 +52,6 @@ Comfy-APP-T3/
 │  ├─ build-launcher.bat    # 仅打包 start-tauri.exe
 │  ├─ rebuild-static.bat    # 清理并重建 src-tauri/static
 │  └─ README.md             # 各构建脚本的详细对比与说明
-├─ prisma/                  # Prisma schema 与迁移
 ├─ public/                  # 静态资源（含 splash.html 启动加载页、favicon.ico）
 ├─ docs/                    # API 文档（TypeDoc 生成，HTML）
 ├─ e2e/                     # Playwright e2e 测试
@@ -74,7 +73,6 @@ Comfy-APP-T3/
 | `postcss.config.js` | Tailwind CSS v4 接入 |
 | `vitest.config.ts` `playwright.config.ts` | 测试配置 |
 | `typedoc.json` | API 文档生成配置 |
-| `prisma/` | 数据库 schema（开发期用 `pnpm db:push`） |
 | `public/splash.html` | 桌面壳启动加载页（编译时嵌入，由 Tauri 窗口初始显示） |
 | `register-comfyapp-protocol.bat` | 双击注册 `comfyapp://` 自定义 URL 协议（无需管理员） |
 | `start-web.bat` | 控制台模式启动 **Web 开发**（调用 `dev-launcher.ps1`，可见日志） |

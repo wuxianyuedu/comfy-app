@@ -2,6 +2,8 @@
  * `repository-model-tag.ts` — WorkflowModelTag 仓储（Drizzle 版）
  * @module core/repository-model-tag
  */
+import "server-only";
+
 import { db } from "@/lib/db";
 import {
   workflowModelTag,

@@ -28,7 +28,7 @@
 | **`src-tauri/static` 内嵌产物**（`server.js` / `.next/static` / Node sidecar） | 不加载（回退 dev server） | dev server 不依赖这些产物 | ❌ 核心来源，必须重打包 |
 | **Rust 代码** `src-tauri/src/*`（lib.rs / main.rs / build.rs） | ❌ 需 `cargo build --release` | ✅ 热重载 | ❌ 需重打包 |
 | **Tauri 配置** `tauri.conf.json` / capabilities / permissions | ❌ 需 `cargo build` | ✅（部分变更触发壳重编） | ❌ 需重打包 |
-| **Prisma schema** `prisma/schema.prisma` | 需 `pnpm db:push`（非 HMR，数据库独立） | 同左 | 同左（数据库独立于安装包） |
+| **Drizzle schema** `src/server/db/schema.ts` | 需 `pnpm db:push`（非 HMR，数据库独立；启动器每次启动也会自动 push） | 同左 | 同左（数据库独立于安装包） |
 | **运行时配置** `.env` 等 | 通常需重启 dev server 才生效 | 同左 | 已固化，需重打包 |
 
 **一句话**：`prebuilt` 与 `tauri dev` 是「源码驱动」（dev server + HMR）；`standalone 安装包` 是「产物驱动」（`static` 快照，不可变）。

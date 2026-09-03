@@ -59,7 +59,7 @@ const TABLES = [
   "taskImage",
   "workflowTemplate",
   "workflowModelTag",
-  "workflowModelTagToWorkflowTemplate",
+  "workflowModelTag_workflowTemplate",
   "llmConfig",
   "skill",
   "loraTrainingJob",
@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS workflowTemplate (
 CREATE TABLE IF NOT EXISTS workflowModelTag (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, createdAt TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS workflowModelTagToWorkflowTemplate (
+CREATE TABLE IF NOT EXISTS workflowModelTag_workflowTemplate (
   workflowModelTag TEXT NOT NULL, workflowTemplate TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS llmConfig (
@@ -241,7 +241,7 @@ export function createTestDb(): TestDb {
     const tagRows = sqlite
       .prepare(
         `SELECT wm.workflowModelTag AS tagId, wm.workflowTemplate AS wtId, t.name AS name, t.userId AS userId
-         FROM workflowModelTagToWorkflowTemplate wm
+         FROM workflowModelTag_workflowTemplate wm
          JOIN workflowModelTag t ON wm.workflowModelTag = t.id`
       )
       .all() as Array<{ tagId: string; wtId: string; name: string; userId: string }>;
@@ -353,19 +353,20 @@ export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateIn
     userId: input.userId,
     name: input.name ?? "seeded workflow",
     taskType: input.taskType ?? "T2I",
-    graph: input.graph ?? null,
+    graph: input.graph ?? {},
     rawJson: input.rawJson ?? null,
     paramMap: input.paramMap ?? null,
     positions: input.positions ?? null,
     workflowIO: input.workflowIO ?? null,
     apiSource: input.apiSource ?? null,
-    modes: input.modes ?? null,
+    modes: input.modes ?? "[]",
     defaultMode: input.defaultMode ?? null,
     sourcePath: input.sourcePath ?? null,
     sourceChecksum: input.sourceChecksum ?? null,
     sourceMtime: input.sourceMtime ?? null,
+    // schema.ts 的 workflowTemplate 没有 updatedAt 列（此前 seed 多写导致
+    // insertInto 报 no column named updatedAt，14 个用例全红）
     createdAt: input.createdAt ?? new Date(),
-    updatedAt: now,
   });
   if (input.modelTags?.length) {
     for (const tag of input.modelTags) {
@@ -375,7 +376,7 @@ export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateIn
         name: tag.name,
         createdAt: now,
       });
-      insertInto("workflowModelTagToWorkflowTemplate", {
+      insertInto("workflowModelTag_workflowTemplate", {
         workflowModelTag: tag.id,
         workflowTemplate: id,
       });
@@ -404,7 +405,6 @@ export interface SeedTaskInput {
 
 export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
   const id = input.id ?? `seed-task-${++seedSeq}`;
-  const now = new Date().toISOString();
   insertInto("task", {
     id,
     userId: input.userId,
@@ -415,13 +415,22 @@ export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
     params: input.params ?? {},
     workflowName: input.workflowName ?? "seeded-workflow",
     projectId: input.projectId ?? null,
-    images: input.images ?? [],
     workflowSnapshot: input.workflowSnapshot ?? null,
     referenceImages: input.referenceImages ?? null,
     progress: input.progress ?? 0,
     error: input.error ?? null,
     createdAt: input.createdAt ?? new Date(),
-    updatedAt: now,
+  });
+  // task 表没有 images 列（Drizzle 用 taskImage 子表 + 关系装载）：
+  // seed 的 images 逐行写入 taskImage，首图 isCover=1（与 task.list 封面投影一致）
+  (input.images ?? []).forEach((img, idx) => {
+    insertInto("taskImage", {
+      sortIndex: idx,
+      isCover: idx === 0 ? 1 : 0,
+      ...img,
+      id: img.id ?? `${id}-img-${idx}`,
+      taskId: id,
+    });
   });
   return getRow("task", id);
 }

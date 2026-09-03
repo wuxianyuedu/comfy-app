@@ -2,6 +2,8 @@
  * `repository-model.ts` — Model 与 UserModelConfig 仓储（Drizzle 版）
  * @module core/repository-model
  */
+import "server-only";
+
 import { db } from "@/lib/db";
 import { model, userModelConfig, type Model, type UserModelConfig } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";

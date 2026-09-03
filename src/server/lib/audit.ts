@@ -1,3 +1,5 @@
+import "server-only";
+
 import { db } from "~/server/db";
 import { auditLog } from "~/server/db/schema";
 import { logger } from "~/server/lib/logger";
