@@ -29,6 +29,12 @@ export function WorkshopPipeline() {
           pendingCategories={controller.pendingCategories}
           apiChannels={controller.apiChannels}
           onOpenApiSettings={controller.openApiSettings}
+          projects={controller.projects}
+          activeProjectId={controller.activeProjectId}
+          onSwitchProject={controller.switchProject}
+          onCreateProject={controller.createProject}
+          onRenameProject={controller.renameProject}
+          onDeleteProject={controller.deleteProject}
         />
 
         <WorkshopStageNav

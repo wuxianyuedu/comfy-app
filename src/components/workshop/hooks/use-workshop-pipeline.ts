@@ -34,8 +34,13 @@ import {
   type Tab,
 } from "~/components/workshop/stage-config";
 
-/** 工坊草稿在 localStorage 的键（单草稿：该页面即一个未命名项目流）。 */
-const WORKSHOP_DRAFT_KEY = "comfyapp.workshop.draft.v1";
+/* ── 工坊项目存储层（2026-09-03：单草稿 → 多项目可切换） ──
+ *
+ *  索引（项目列表 + 当前项目 id）单独存一个键，每个项目的正文按 id 各存一个键。
+ *  这样切换项目只读当前那份草稿，不必把全部项目正文都解析一遍。
+ *  旧版只有一个固定键的单草稿，首次升级时会被收编成项目 #1，老用户不丢内容。 */
+const PROJECTS_INDEX_KEY = "comfyapp.workshop.projects.v1";
+const LEGACY_DRAFT_KEY = "comfyapp.workshop.draft.v1";
 
 const DEFAULT_META: ProjectMeta = {
   title: "未命名项目",
@@ -55,12 +60,41 @@ interface WorkshopDraft {
   checkpoint: string;
 }
 
-/** 读取本机草稿；损坏/不可用返回 null（SSR 与隐私模式下同样安全）。 */
-function loadWorkshopDraft(): WorkshopDraft | null {
-  if (typeof window === "undefined") return null;
+/** 项目摘要：切换器只需要这几个字段，正文按 id 另读。 */
+export interface WorkshopProjectSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+interface WorkshopProjectsIndex {
+  activeId: string;
+  items: WorkshopProjectSummary[];
+}
+
+function emptyDraft(): WorkshopDraft {
+  return {
+    meta: DEFAULT_META,
+    outline: "",
+    scriptMarkdown: "",
+    scenes: [],
+    characters: [],
+    shots: [],
+    checkpoint: "",
+  };
+}
+
+function draftKeyFor(id: string): string {
+  return `comfyapp.workshop.draft.${id}.v1`;
+}
+
+function newProjectId(): string {
+  return `wsp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** 解析并补全一份草稿：逐字段校验类型，损坏则回退成空草稿。 */
+function parseDraft(raw: string | null): WorkshopDraft {
+  if (!raw) return emptyDraft();
   try {
-    const raw = window.localStorage.getItem(WORKSHOP_DRAFT_KEY);
-    if (!raw) return null;
     const draft = JSON.parse(raw) as Partial<WorkshopDraft>;
     return {
       meta: draft.meta ?? DEFAULT_META,
@@ -73,14 +107,82 @@ function loadWorkshopDraft(): WorkshopDraft | null {
       checkpoint: typeof draft.checkpoint === "string" ? draft.checkpoint : "",
     };
   } catch {
-    return null;
+    return emptyDraft();
+  }
+}
+
+/** SSR / 隐私模式下同样安全：读不到就当作空草稿。 */
+function readDraft(id: string): WorkshopDraft {
+  if (typeof window === "undefined") return emptyDraft();
+  try {
+    return parseDraft(window.localStorage.getItem(draftKeyFor(id)));
+  } catch {
+    return emptyDraft();
+  }
+}
+
+function writeDraft(id: string, draft: WorkshopDraft): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(draftKeyFor(id), JSON.stringify({ v: 1, ...draft }));
+  } catch {
+    /* 存储满 / 隐私模式：静默失败，不影响编辑 */
+  }
+}
+
+function saveProjectsIndex(index: WorkshopProjectsIndex): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PROJECTS_INDEX_KEY, JSON.stringify(index));
+  } catch {
+    /* 存储满 / 隐私模式：静默失败 */
+  }
+}
+
+/** 读取项目索引。索引不存在时把旧版单草稿迁移为第一个项目。 */
+function loadProjectsIndex(): WorkshopProjectsIndex {
+  const freshIndex = (draft: WorkshopDraft): WorkshopProjectsIndex => {
+    const id = newProjectId();
+    writeDraft(id, draft);
+    const index: WorkshopProjectsIndex = {
+      activeId: id,
+      items: [
+        { id, title: draft.meta.title, updatedAt: new Date().toISOString() },
+      ],
+    };
+    saveProjectsIndex(index);
+    return index;
+  };
+  if (typeof window === "undefined") return freshIndex(emptyDraft());
+  try {
+    const raw = window.localStorage.getItem(PROJECTS_INDEX_KEY);
+    if (!raw) {
+      /* 首次升级：旧单草稿收编成项目 #1 —— 老用户不会丢内容。 */
+      return freshIndex(parseDraft(window.localStorage.getItem(LEGACY_DRAFT_KEY)));
+    }
+    const parsed = JSON.parse(raw) as Partial<WorkshopProjectsIndex>;
+    const items = Array.isArray(parsed.items) ? parsed.items : [];
+    if (items.length === 0) return freshIndex(emptyDraft());
+    const activeId = items.some((item) => item.id === parsed.activeId)
+      ? parsed.activeId!
+      : items[0]!.id;
+    return { activeId, items };
+  } catch {
+    return freshIndex(emptyDraft());
   }
 }
 
 /** 页面加载期间只读一次 localStorage（多个 state 惰性初始化器共用）。 */
+let projectsCache: WorkshopProjectsIndex | undefined;
+function loadProjectsOnce(): WorkshopProjectsIndex {
+  projectsCache ??= loadProjectsIndex();
+  return projectsCache;
+}
 let workshopDraftCache: WorkshopDraft | null | undefined;
 function loadWorkshopDraftOnce(): WorkshopDraft | null {
-  workshopDraftCache ??= loadWorkshopDraft();
+  if (workshopDraftCache === undefined) {
+    workshopDraftCache = readDraft(loadProjectsOnce().activeId);
+  }
   return workshopDraftCache;
 }
 
@@ -186,6 +288,13 @@ export interface WorkshopPipelineController {
   handleApiChannelsSaved: (channels: ApiChannelsView) => void;
   dismissNotice: () => void;
   markRendered: () => void;
+  /* ── 多项目（2026-09-03）：工坊可在多个项目间切换 ── */
+  projects: WorkshopProjectSummary[];
+  activeProjectId: string;
+  switchProject: (id: string) => void;
+  createProject: (title?: string) => void;
+  renameProject: (id: string, title: string) => void;
+  deleteProject: (id: string) => void;
 }
 
 export function useWorkshopPipeline(): WorkshopPipelineController {
@@ -229,29 +338,165 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const [draftOutline, setDraftOutline] = React.useState("");
   const [draftSavedAt, setDraftSavedAt] = React.useState<Date | null>(null);
 
+  /* ── 多项目：索引与当前项目 id ── */
+  const [projectsIndex, setProjectsIndex] = React.useState<WorkshopProjectsIndex>(
+    () => loadProjectsOnce(),
+  );
+  const [activeProjectId, setActiveProjectId] = React.useState<string>(
+    () => loadProjectsOnce().activeId,
+  );
+
+  /** 当前全部可持久化内容（落盘、切换前保存都用它）。 */
+  const currentDraft = React.useCallback(
+    (): WorkshopDraft => ({
+      meta,
+      outline,
+      scriptMarkdown,
+      scenes,
+      characters,
+      shots,
+      checkpoint,
+    }),
+    [meta, outline, scriptMarkdown, scenes, characters, shots, checkpoint],
+  );
+
+  /** 把一份草稿灌进所有受管 state（切换 / 删除项目后接手时调用）。 */
+  const applyDraft = React.useCallback((draft: WorkshopDraft) => {
+    setMeta(draft.meta);
+    setScenes(draft.scenes);
+    setCharacters(draft.characters);
+    setShots(draft.shots);
+    setCheckpoint(draft.checkpoint);
+    setOutline(draft.outline);
+    setScriptMarkdown(draft.scriptMarkdown);
+  }, []);
+
+  /** 切换 / 增删项目后：让模块级缓存失效，避免组件重挂载时读回旧的当前项目。 */
+  const invalidateDraftCache = () => {
+    workshopDraftCache = null;
+    projectsCache = undefined;
+  };
+
+  /** 把当前项目的标题与更新时间快照进索引（切换、新建前调用）。 */
+  const snapshotActiveInto = React.useCallback(
+    (items: WorkshopProjectSummary[]): WorkshopProjectSummary[] =>
+      items.map((item) =>
+        item.id === activeProjectId
+          ? { ...item, title: meta.title, updatedAt: new Date().toISOString() }
+          : item,
+      ),
+    [activeProjectId, meta.title],
+  );
+
+  const switchProject = React.useCallback(
+    (id: string) => {
+      if (id === activeProjectId) return;
+      /* 先把当前内容同步落盘：否则防抖中的定时器醒来会把旧内容写到新项目上。 */
+      writeDraft(activeProjectId, currentDraft());
+      const next: WorkshopProjectsIndex = {
+        activeId: id,
+        items: snapshotActiveInto(projectsIndex.items),
+      };
+      saveProjectsIndex(next);
+      setProjectsIndex(next);
+      setActiveProjectId(id);
+      invalidateDraftCache();
+      applyDraft(readDraft(id));
+    },
+    [
+      activeProjectId,
+      currentDraft,
+      projectsIndex.items,
+      snapshotActiveInto,
+      applyDraft,
+    ],
+  );
+
+  const createProject = React.useCallback(
+    (title?: string) => {
+      writeDraft(activeProjectId, currentDraft());
+      const id = newProjectId();
+      const trimmed = title?.trim();
+      const projectTitle =
+        trimmed && trimmed.length > 0 ? trimmed : DEFAULT_META.title;
+      const draft: WorkshopDraft = {
+        ...emptyDraft(),
+        meta: { ...DEFAULT_META, title: projectTitle },
+      };
+      writeDraft(id, draft);
+      const next: WorkshopProjectsIndex = {
+        activeId: id,
+        items: [
+          ...snapshotActiveInto(projectsIndex.items),
+          { id, title: draft.meta.title, updatedAt: new Date().toISOString() },
+        ],
+      };
+      saveProjectsIndex(next);
+      setProjectsIndex(next);
+      setActiveProjectId(id);
+      invalidateDraftCache();
+      applyDraft(draft);
+    },
+    [
+      activeProjectId,
+      currentDraft,
+      projectsIndex.items,
+      snapshotActiveInto,
+      applyDraft,
+    ],
+  );
+
+  const renameProject = React.useCallback(
+    (id: string, title: string) => {
+      const nextTitle = title.trim();
+      if (!nextTitle) return;
+      const next: WorkshopProjectsIndex = {
+        ...projectsIndex,
+        items: projectsIndex.items.map((item) =>
+          item.id === id ? { ...item, title: nextTitle } : item,
+        ),
+      };
+      saveProjectsIndex(next);
+      setProjectsIndex(next);
+      /* 改的是当前项目时，正文里的标题也要跟着变。 */
+      if (id === activeProjectId) setMeta((m) => ({ ...m, title: nextTitle }));
+    },
+    [projectsIndex, activeProjectId],
+  );
+
+  const deleteProject = React.useCallback(
+    (id: string) => {
+      /* 至少保留一个项目，避免工坊变成没有可编辑对象的空壳。 */
+      if (projectsIndex.items.length <= 1) return;
+      const items = projectsIndex.items.filter((item) => item.id !== id);
+      let activeId = projectsIndex.activeId;
+      if (activeId === id) {
+        activeId = items[0]!.id;
+        applyDraft(readDraft(activeId));
+        setActiveProjectId(activeId);
+      }
+      try {
+        window.localStorage.removeItem(draftKeyFor(id));
+      } catch {
+        /* 隐私模式下可能直接抛错，忽略 */
+      }
+      const next: WorkshopProjectsIndex = { activeId, items };
+      saveProjectsIndex(next);
+      setProjectsIndex(next);
+      invalidateDraftCache();
+    },
+    [projectsIndex, applyDraft],
+  );
+
+  /* 自动保存只写当前项目的键；索引里的标题在切换 / 新建时快照，
+   * 因此这里不需要动 React state，也就不会自触发形成回环。 */
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      try {
-        const draft: WorkshopDraft = {
-          meta,
-          outline,
-          scriptMarkdown,
-          scenes,
-          characters,
-          shots,
-          checkpoint,
-        };
-        window.localStorage.setItem(
-          WORKSHOP_DRAFT_KEY,
-          JSON.stringify({ v: 1, ...draft }),
-        );
-        setDraftSavedAt(new Date());
-      } catch {
-        /* 存储满/隐私模式：静默失败，不影响编辑 */
-      }
+      writeDraft(activeProjectId, currentDraft());
+      setDraftSavedAt(new Date());
     }, 600);
     return () => clearTimeout(timer);
-  }, [meta, outline, scriptMarkdown, scenes, characters, shots, checkpoint]);
+  }, [activeProjectId, currentDraft]);
 
   React.useEffect(() => {
     fetch("/api/skills")
@@ -509,5 +754,11 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     handleApiChannelsSaved,
     dismissNotice,
     markRendered,
+    projects: projectsIndex.items,
+    activeProjectId,
+    switchProject,
+    createProject,
+    renameProject,
+    deleteProject,
   };
 }
