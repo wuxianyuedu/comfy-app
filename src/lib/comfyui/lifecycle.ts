@@ -72,31 +72,36 @@ export function getComfyUiStatus(): ComfyUiStatus {
  * 从 comfyuiPath 推导启动命令。支持三种常见布局（详见 app-settings 的注释），
  * 命中不了返回可读的错误信息而不是裸异常。
  */
+/**
+ * 选择解释器：优先 pythonw.exe（Windows 下完全不创建控制台窗口，真正的
+ * 「仅控制台」后台进程），回退到 python.exe（由 spawn 的 windowsHide 隐藏控制台）。
+ * 工坊/工作室只把 ComfyUI 当后端服务，绝不拉起桌面版 GUI 窗口。
+ */
+function resolveInterp(dir: string): string | null {
+  for (const name of ["pythonw.exe", "python.exe"]) {
+    const p = path.join(dir, name);
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 function resolveLaunchPlan(installDir: string): LaunchPlan | { error: string } {
   const root = path.resolve(installDir);
-  const candidates: Array<{ py: string; main: string }> = [
-    { py: path.join(root, "python_embeded", "python.exe"), main: path.join(root, "main.py") },
+  const candidates: Array<{ pyDir: string; main: string }> = [
+    { pyDir: path.join(root, "python_embeded"), main: path.join(root, "main.py") },
     // ComfyUI Desktop 的 vendor 构建：uv 在 ComfyUI/.venv 里装依赖（含 torch），
     // 必须用这个解释器。standalone-env 只是基础解释器（site-packages 是空的，
     // 直接用它必报 No module named 'torch'）。所以 vendor venv 必须排在 standalone-env 之前。
-    {
-      py: path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"),
-      main: path.join(root, "ComfyUI", "main.py"),
-    },
-    {
-      py: path.join(root, ".venv", "Scripts", "python.exe"),
-      main: path.join(root, "main.py"),
-    },
-    { py: path.join(root, "venv", "Scripts", "python.exe"), main: path.join(root, "main.py") },
+    { pyDir: path.join(root, "ComfyUI", ".venv", "Scripts"), main: path.join(root, "ComfyUI", "main.py") },
+    { pyDir: path.join(root, ".venv", "Scripts"), main: path.join(root, "main.py") },
+    { pyDir: path.join(root, "venv", "Scripts"), main: path.join(root, "main.py") },
     // 最后兜底：桌面版基础解释器（无 torch，仅当以上都缺失时才用——多半会启动失败）
-    {
-      py: path.join(root, "standalone-env", "python.exe"),
-      main: path.join(root, "ComfyUI", "main.py"),
-    },
+    { pyDir: path.join(root, "standalone-env"), main: path.join(root, "ComfyUI", "main.py") },
   ];
   for (const c of candidates) {
-    if (fs.existsSync(c.py) && fs.existsSync(c.main)) {
-      return { cmd: c.py, baseArgs: ["-s", c.main], cwd: path.dirname(c.main), mainPy: c.main };
+    const py = resolveInterp(c.pyDir);
+    if (py && fs.existsSync(c.main)) {
+      return { cmd: py, baseArgs: ["-s", c.main], cwd: path.dirname(c.main), mainPy: c.main };
     }
   }
   if (!fs.existsSync(root)) {
