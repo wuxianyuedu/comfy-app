@@ -63,7 +63,9 @@ Log ""
 
 Log "[2/2] 开始构建 release Tauri 壳（首次耗时较长，可能 5-15 分钟）..."
 Push-Location $TAURI_DIR
-Invoke-Logged "cargo build --release"
+# 必须带 --features custom-protocol（见 docs/standards/launch-and-build.md §5/§7）：
+# 不带则 dev/prebuilt 模式下启动页导航到 devUrl 且资源不内嵌 → 黑屏 / Edge 错误页。
+Invoke-Logged "cargo build --release --features custom-protocol"
 $buildErr = $script:LAST_INVOKE_CODE
 Pop-Location
 if ($buildErr -ne 0) {

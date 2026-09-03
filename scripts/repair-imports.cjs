@@ -65,7 +65,7 @@ function fixDynamicUndefined() {
 function parseAndFixDepth() {
   let out;
   try {
-    out = execSync("npx tsc --noEmit", { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
+    out = execSync("pnpm exec tsc --noEmit", { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
   } catch (e) {
     out = String(e.stdout || "");
   }

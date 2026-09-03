@@ -113,20 +113,10 @@ export class IntegrationError extends AppError {
 /**
  * 把任意异常归一化为 {@link AppError}：
  * - 已是 `AppError` → 原样返回；
- * - Prisma 已知错误码 → 映射为对应 `AppError`；
  * - 其余 → 包装为基类 `AppError`（保持 500，不泄露内部细节）。
  */
 export function normalizeError(err: unknown): AppError {
   if (err instanceof AppError) return err;
-
-  // Prisma 客户端错误携带 `code`（如 P2025 记录不存在、P2002 唯一冲突）
-  const prismaCode = (err as { code?: string })?.code;
-  if (prismaCode === "P2025") {
-    return new NotFoundError("记录不存在或已被删除", "db.not_found");
-  }
-  if (prismaCode === "P2002") {
-    return new ConflictError("唯一约束冲突", "db.unique");
-  }
 
   const message =
     err instanceof Error ? err.message : "未知内部错误";

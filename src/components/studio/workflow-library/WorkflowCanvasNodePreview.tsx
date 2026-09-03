@@ -21,9 +21,19 @@ import {
 import { DynamicWorkflowForm } from "../shared/DynamicWorkflowForm";
 import {
   getMissingRequiredInputs,
+  splitWorkflowIO,
   toWorkflowInputsPayload,
   type WorkflowIOMap,
 } from "../shared/workflow-io";
+import {
+  WorkflowNodeActionButton,
+  WorkflowNodeCardShell,
+  WorkflowNodeDivider,
+  WorkflowNodeHeader,
+  WorkflowNodeOutputsRow,
+  WorkflowNodePill,
+  WorkflowStaticChip,
+} from "../shared/WorkflowNodeParts";
 
 type Phase =
   | { kind: "idle" }
@@ -60,6 +70,9 @@ export function WorkflowCanvasNodePreview({
     [workflowIO, values],
   );
   const canRun = usable && !running && missing.length === 0;
+  /* 与画布 WorkflowNode 同源的双行结构：inputs 由 DynamicWorkflowForm(compact)
+   * 渲染（库内无 React Flow 上下文，不带端点），outputs 单独成段在表单之后。 */
+  const { inputs, outputs } = splitWorkflowIO(workflowIO);
 
   const statusLabel =
     phase.kind === "running"
@@ -124,97 +137,97 @@ export function WorkflowCanvasNodePreview({
         画布样式预览（与项目画布节点一致，可直接运行调试）
       </p>
 
-      {/* ── 画布同款节点卡片（Ardot v5 token）── */}
-      <div className="relative w-[340px] rounded-[14px] border border-(--color-border-strong) bg-(--color-card) shadow-xl shadow-black/30">
-        {/* 头部：W 图标 + 名称 + 状态胶囊 */}
-        <div className="flex h-8 items-center justify-between gap-2.5 px-[14px]">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span
-              aria-label="类型 工作流"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold text-(--color-primary)"
-              style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
-            >
-              W
-            </span>
-            <span
-              className="truncate text-[14px] font-bold text-(--color-ink-bright)"
-              style={{ fontFamily: "var(--font-sans)" }}
-              title={workflowName}
-            >
-              {workflowName}
-            </span>
-          </div>
-          <div className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-(--color-node-accent) px-2">
-            <span
-              className={[
-                "h-1.5 w-1.5 rounded-full",
-                phase.kind === "running" || phase.kind === "starting"
-                  ? "animate-pulse bg-amber-300"
-                  : phase.kind === "done"
-                    ? "bg-emerald-400"
-                    : phase.kind === "failed"
-                      ? "bg-rose-400"
-                      : "bg-(--color-primary)",
-              ].join(" ")}
-            />
-            <span
-              className="text-[10px] font-medium text-(--color-ink-soft)"
-              style={{ fontFamily: "var(--font-sans)" }}
-            >
-              {statusLabel}
-            </span>
-          </div>
-        </div>
-
-        <div className="h-px bg-(--color-border-strong)" />
-
-        {/* chips 行：本机 + 工作流名 + 任务类型（与画布节点一致） */}
-        <div className="flex h-11 items-center gap-1.5 px-[14px]">
-          <span className="flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-(--color-primary)/35 bg-(--color-node-accent) px-2.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#33D499]" />
-            <span className="text-[10px] font-semibold text-[#33D499]">本机</span>
-          </span>
-          <span className="flex h-6 min-w-0 flex-1 items-center rounded-lg border border-(--color-primary)/35 bg-(--color-node-accent) px-2.5">
-            <span className="truncate text-[11px] font-semibold text-(--color-ink-bright)">
-              {workflowName}
-            </span>
-          </span>
-          <span className="flex h-6 shrink-0 items-center rounded-lg border border-(--color-primary)/55 bg-(--color-node-accent) px-2.5">
-            <span className="text-[10px] font-medium text-(--color-ink-bright)">
-              {taskType || "—"}
-            </span>
-          </span>
-        </div>
-
-        {/* 输入参数表单：与画布节点/参数配置页同一渲染器 */}
-        <div className="px-1 pb-1">
-          <DynamicWorkflowForm
-            io={workflowIO}
-            values={values}
-            onChange={setValues}
-            workflowId={workflowId}
-          />
-        </div>
-
-        {/* 渐变运行按钮（画布 ActionBtn 同款） */}
-        <button
-          type="button"
-          onClick={run}
-          disabled={!canRun}
-          title={
-            missing.length > 0
-              ? `必填参数未填：${missing.join("、")}`
-              : undefined
+      {/* ── 画布同款节点卡片：唯一视觉源在 shared/workflow-node-parts ── */}
+      <WorkflowNodeCardShell>
+        <WorkflowNodeHeader
+          title={workflowName}
+          right={
+            <WorkflowNodePill>
+              <span
+                className={[
+                  "h-1.5 w-1.5 rounded-full",
+                  phase.kind === "running" || phase.kind === "starting"
+                    ? "animate-pulse bg-amber-300"
+                    : phase.kind === "done"
+                      ? "bg-emerald-400"
+                      : phase.kind === "failed"
+                        ? "bg-rose-400"
+                        : "bg-(--color-primary)",
+                ].join(" ")}
+              />
+              <span
+                className="text-[10px] font-medium text-(--color-ink-soft)"
+                style={{ fontFamily: "var(--font-sans)" }}
+              >
+                {statusLabel}
+              </span>
+            </WorkflowNodePill>
           }
-          className={[
-            "flex h-[43px] w-full items-center justify-center gap-2 bg-linear-to-r from-(--color-primary) to-(--color-accent) text-[13px] font-bold text-white transition-opacity",
-            !canRun ? "opacity-50" : "hover:opacity-90",
-          ].join(" ")}
-          style={{ boxShadow: "0 4px 12px rgba(124,92,252,0.35)" }}
-        >
-          {running ? `生成中 ${pct}%` : "▶ 运行调试"}
-        </button>
-      </div>
+        />
+
+        <WorkflowNodeDivider />
+
+        {/* chips 双行：与画布 WorkflowNode 同构（Row1 来源+模型，Row2 工作流+模式）；
+         *  库内为只读语境，固定「本机 / 全部模型 / 当前工作流 / 任务类型」。 */}
+        <div className="flex flex-col gap-1 pr-[14px] pb-1.5 pl-[14px]">
+          <div className="flex h-7 min-w-0 items-center gap-1">
+            <WorkflowStaticChip>
+              <span className="h-1.5 w-1.5 rounded-full bg-[#33D499]" />
+              <span className="text-[11px] font-semibold text-[#33D499]">本机</span>
+            </WorkflowStaticChip>
+            <WorkflowStaticChip className="min-w-0 flex-1">
+              <span className="truncate text-[11px] font-semibold text-(--color-ink-bright)">
+                全部模型
+              </span>
+            </WorkflowStaticChip>
+          </div>
+          <div className="flex h-7 min-w-0 items-center gap-1">
+            <WorkflowStaticChip className="min-w-0 flex-1" title={workflowName}>
+              <span className="truncate text-[11px] font-semibold text-(--color-ink-bright)">
+                {workflowName}
+              </span>
+            </WorkflowStaticChip>
+            <WorkflowStaticChip>
+              <span className="text-[11px] font-medium text-(--color-ink-bright)">
+                {taskType || "—"}
+              </span>
+            </WorkflowStaticChip>
+          </div>
+        </div>
+
+        {/* 动态表单：与画布同一渲染器。注意不能加 `compact`——compact 的
+         *  端口行会渲染 React Flow 的 <Handle>，需要 ReactFlowProvider
+         *  祖先，库内没有（reactflow.dev/error#001）；showOutputs=false
+         *  与画布一致，outputs 由下方 WorkflowNodeOutputsRow 呈现。 */}
+        <DynamicWorkflowForm
+          io={workflowIO ?? undefined}
+          values={values}
+          onChange={setValues}
+          showOutputs={false}
+          workflowId={workflowId}
+        />
+
+        {/* outputs 行：与画布 outputs labelRow 镜像同构（库内无端点） */}
+        {outputs.length > 0 && (
+          <div className="border-t border-white/6">
+            {outputs.map((output) => (
+              <WorkflowNodeOutputsRow
+                key={output.nodeId + ":" + output.name}
+                output={output}
+                inputs={inputs}
+                outputs={outputs}
+              />
+            ))}
+          </div>
+        )}
+
+        <WorkflowNodeActionButton
+          label={running ? `生成中 ${pct}%` : "▶ 用此工作流生成"}
+          disabled={!canRun}
+          onClick={run}
+          title={missing.length > 0 ? `必填参数未填：${missing.join("、")}` : undefined}
+        />
+      </WorkflowNodeCardShell>
 
       {/* 进度条（running 时） */}
       {phase.kind === "running" && (

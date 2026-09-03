@@ -1,6 +1,7 @@
-# dev-launcher.ps1 — 用 Windows Job Object 启动开发服务器
-# 原理：把 npm 进程及其所有子进程挂到同一个 Job 对象上，
-#       并设置「关闭窗口时自动杀掉整个 Job」，从而实现关窗口零残留。
+# dev-launcher.ps1 — 用 pnpm 拉起 dev server / Tauri 壳，并以进程树回收做唯一编排者
+# 原理：通过 pnpm 启动子进程，清理时用 `taskkill /PID <pid> /T /F` 杀整棵进程树
+#       （docs/standards/launch-and-build.md §3）。Job Object 的 KILL_ON_JOB_CLOSE 在本机
+#       设置失败（Win32 错误 87），仅 WARN 兜底、不依赖其生效。
 # 用法：pwsh -ExecutionPolicy Bypass -File scripts\dev-launcher.ps1 [-Tauri]
 # 日志：
 #   - 本次运行日志：log/dev-launcher.log（每次运行覆盖，供应用内面板实时读取）
@@ -160,6 +161,44 @@ function Get-OutputTail {
     }
   } catch { }
   return ""
+}
+
+# ── 启动状态文件（run/launch-status.json，供 Tauri 内嵌启动页读取）──
+# 由 dev-launcher 直接写入（python 启动器还有一套 tail dev-launcher.log 的旧方案，
+# 但冻结在 start-tauri.exe 里的旧版会把「启动页窗口一出现」误判为就绪而提前退出，
+# 30s 后还会删除状态文件——启动页从此只能显示假进度。因此 Prebuilt 模式的真实
+# 进度由本脚本每秒刷新接管：从壳启动一直写到服务就绪，失败时写 error 态。
+# JSON 用 UTF-8 无 BOM（启动页 JSON.parse 遇 BOM 会失败），非 ASCII 字符由
+# ConvertTo-Json 转成 \uXXXX 转义。
+$script:LaunchStart = $null
+$script:ShellStaleMsg = $null
+
+function Write-LaunchStatus {
+  param(
+    [string]$Phase,
+    [double]$Progress,
+    [string]$Message,
+    [switch]$IsError
+  )
+  try {
+    if ($null -eq $script:LaunchStart) { $script:LaunchStart = Get-Date }
+    $elapsed = [math]::Round(((Get-Date) - $script:LaunchStart).TotalSeconds, 1)
+    $payload = [ordered]@{
+      phase      = $Phase
+      progress   = [math]::Round($Progress, 3)
+      message    = $Message
+      elapsed    = $elapsed
+      ready      = $false
+      error      = [bool]$IsError
+      app_url    = "http://127.0.0.1:3000/workspace"
+      stale_shell = $script:ShellStaleMsg
+      updated_at = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss")
+    }
+    $dir = Join-Path $PSScriptRoot "..\run"
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $path = Join-Path $dir "launch-status.json"
+    [System.IO.File]::WriteAllText($path, ($payload | ConvertTo-Json -Compress))
+  } catch { }
 }
 
 # ── 确保 Tauri 内置启动页资源存在 ──
@@ -350,15 +389,18 @@ function Test-ShellFreshness {
   }
   if ($newestPath) {
     Write-Log ("桌面壳（app.exe，{0:yyyy-MM-dd HH:mm}）比源码/配置旧（{1}，{2:yyyy-MM-dd HH:mm}），本次运行旧版界面逻辑。" -f $exeTime, (Split-Path $newestPath -Leaf), $newest) -Level WARN
-    Write-Log "如遇黑屏/资源缺失/行为不符，请先执行：cd src-tauri; cargo build --release" -Level WARN
+    Write-Log "如遇黑屏/资源缺失/行为不符，请先执行：cd src-tauri; cargo build --release --features custom-protocol" -Level WARN
+    # 透出到启动页的可见提醒（launch-status.json 的 stale_shell 字段）
+    $script:ShellStaleMsg = "正在运行旧版桌面壳（app.exe 编译于 {0:MM-dd HH:mm}，源码此后有改动），界面可能不是最新逻辑；建议重编：cd src-tauri && cargo build --release --features custom-protocol" -f $exeTime
   } else {
     Write-Log "桌面壳与源码/配置时间戳一致（预检通过）" -Level INFO
+    $script:ShellStaleMsg = $null
   }
 }
 
 # ── 预检 1.5：数据库 schema 同步（Drizzle）──
 # 改用 Drizzle 后，数据层 schema 是 TS 源码（src/server/db/schema.ts），
-# 不再有「运行时必须重新 prisma generate 一个庞大 client + DLL 被锁」的步骤。
+# 运行时驱动为 better-sqlite3（Node 24 预编译绑定，无需本地编译）。
 # 但表结构仍需同步进 db.sqlite：启动前执行一次 drizzle-kit push，以 ALTER 方式
 # 增量同步（保留现有数据）。失败不阻断启动（仅告警），避免启动卡死。
 function Sync-DatabaseSchema {
@@ -366,7 +408,7 @@ function Sync-DatabaseSchema {
   $schemaErr = Join-Path $logDir "drizzle-push-stderr.log"
   $psiSchema = New-Object System.Diagnostics.ProcessStartInfo
   $psiSchema.FileName = "cmd.exe"
-  $psiSchema.Arguments = "/c pnpm exec drizzle-kit push > `"$schemaOut`" 2> `"$schemaErr`""
+    $psiSchema.Arguments = "/c pnpm exec drizzle-kit push --force > `"$schemaOut`" 2> `"$schemaErr`""
   $psiSchema.WorkingDirectory = $root
   $psiSchema.UseShellExecute = $false
   $psiSchema.CreateNoWindow = $true
@@ -486,14 +528,17 @@ try {
     $tauriProc = [System.Diagnostics.Process]::Start($psiTauri)
     Write-Log ("预编译 Tauri 壳已启动（PID: {0}）：{1}" -f $tauriProc.Id, $tauriExe) -Level OK
     Write-Log "Tauri 桌面壳已启动，正在启动本地服务…" -Level STEP
+    Write-LaunchStatus -Phase "port-check" -Progress 0.05 -Message "桌面壳已启动，正在检查端口占用…"
 
     # 2. 窗口已出现，再补做准备工作：进程容器 → 端口清理 → 缓存策略
     $h = New-JobObject
     $null = [WJ]::AssignProcessToJobObject($h, $tauriProc.Handle)
     Reset-DevPorts
+    Write-LaunchStatus -Phase "cache" -Progress 0.12 -Message "端口已就绪，处理编译缓存与依赖预检…"
     Sync-NextCache
     Test-DevDependencies
     Sync-DatabaseSchema
+    Write-LaunchStatus -Phase "dev-server-starting" -Progress 0.2 -Message "正在启动本地服务（Next.js dev server）…"
 
     # 3. 启动 Next.js dev server
     $psiDev = New-Object System.Diagnostics.ProcessStartInfo
@@ -522,6 +567,7 @@ try {
     Write-Log ("Next.js dev server 已启动（PID: {0}）" -f $devProc.Id) -Level OK
     $null = [WJ]::AssignProcessToJobObject($h, $devProc.Handle)
     Write-Log "Tauri 壳与 dev server 已绑定到同一 Job Object（关闭窗口时一起清理）" -Level OK
+    Write-LaunchStatus -Phase "dev-server-starting" -Progress 0.25 -Message "本地服务进程已启动，等待就绪…"
 
     # 4. 等服务 Ready（避免 Tauri 导航时看到 ERR_CONNECTION_REFUSED）
     Write-Log "等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
@@ -537,6 +583,10 @@ try {
         $r = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 1 -UseBasicParsing -ErrorAction SilentlyContinue
         if ($r.StatusCode -eq 200) { $ready = $true; break }
       } catch { }
+      # 每秒刷新启动页进度（python 启动器已提前退出，真实进度由本脚本接管）
+      Write-LaunchStatus -Phase "dev-server-starting" `
+        -Progress (0.25 + [math]::Min(0.6, $i * 0.6 / 180.0)) `
+        -Message ("正在等待本地服务就绪（http://127.0.0.1:3000，第 {0}s）…" -f $i)
       Start-Sleep -Seconds 1
     }
     if (-not $ready) {
@@ -545,6 +595,7 @@ try {
       throw "180 秒内未检测到 http://127.0.0.1:3000 服务就绪。Next.js 最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $nextOut 与 $nextErr）"
     }
     Write-Log "服务器已就绪，桌面壳正在加载应用…" -Level OK
+    Write-LaunchStatus -Phase "dev-server-ready" -Progress 0.85 -Message "本地服务已就绪，桌面壳正在加载应用…"
     $p = $tauriProc  # 后续 WaitForExit 以 Tauri 窗口生命周期为锚点
   } else {
     Reset-DevPorts
@@ -686,6 +737,13 @@ catch {
   Write-Log "启动失败：" -Level ERROR
   Write-Log $_.Exception.Message -Level ERROR
   Write-Log $_.ScriptStackTrace -Level ERROR
+  # 启动页失败态：让内嵌启动页把「启动失败」红字 + 日志面板直接展示给用户
+  #（python 启动器的失败弹窗依赖它自己存活到此刻，不可依赖）
+  if ($Prebuilt) {
+    $failMsg = $_.Exception.Message
+    if ($failMsg.Length -gt 160) { $failMsg = $failMsg.Substring(0, 160) + "…" }
+    Write-LaunchStatus -Phase "error" -Progress 1.0 -Message ("启动失败：{0}" -f ($failMsg -replace "`r?`n", " ")) -IsError
+  }
   # 2026-09-01 修复：失败时回收本次已拉起的进程树。此前直接退出，会留下卡在
   # 启动页的僵尸 Tauri 窗口和挂死的 dev server / pnpm 进程；残留进程还握着
   # nextjs-*.log 句柄，导致下次启动 cmd 重定向失败、瞬间 exit=1。
