@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 /**
+ * ⚠ 已废弃（2026-09-03）：本脚本已被 scripts/dev-launcher.ps1 取代，
+ * 全仓已无任何引用。其注释使用 `npm run dev` 亦违反 AGENTS.md「包管理只用 pnpm」硬规则。
+ * 后续确认无副作用后请直接删除本文件。
+ *
  * dev-launcher.js — 启动 Next.js dev server 并确保整棵进程树干净退出
  *
  * 问题背景：

@@ -100,6 +100,7 @@
 - **位置**：`scripts/dev-launcher.js`（仅自引用注释，全仓无其他引用）。
 - **问题**：注释写 `npm run dev`（与 AGENTS 规则 1 冲突），已被 `scripts/dev-launcher.ps1` 取代。
 - **建议**：确认不再使用后删除，或加顶部 `⚠ 已废弃，请用 dev-launcher.ps1` 注释。
+- **状态**：✅ 已处理（2026-09-03）。全仓检索确认 `dev-launcher.js` 零引用（所有 `dev-launcher` 引用均指向在用的 `dev-launcher.ps1`）；其注释 `npm run dev` 仍违反 AGENTS 规则 1。删除操作因审批未响应暂未执行，改为在其顶部加 `⚠ 已废弃` 声明（审计允许的等价路径），并标注「后续确认无副作用后请直接删除本文件」。
 
 ## 3. 单元测试缺口（本轮已补齐）
 
