@@ -279,14 +279,14 @@ export function WorkflowNode({
                  *  labelRow 中线（pt-1.5=6 + h-5/2=10=16px），与 typeChip 上下对齐。 */}
                 <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
                   <span
-                    className="min-w-0 truncate text-[12px] font-semibold text-(--color-ink-bright)"
+                    className="min-w-0 truncate text-[14px] font-semibold text-(--color-ink-bright)"
                     style={{ fontFamily: "var(--font-sans)" }}
                     title={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}
                   >
                     {oLabel}
                   </span>
                   <span
-                    className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
+                    className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
                     style={{
                       fontFamily: "var(--font-sans)",
                       background: "var(--color-border-strong)",

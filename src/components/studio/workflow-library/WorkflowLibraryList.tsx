@@ -58,39 +58,8 @@ export function WorkflowLibraryList({
         </div>
       </div>
 
-      {/* 列表 */}
+      {/* 列表：已载入工作流排在前 */}
       <div className="flex-1 overflow-y-auto p-2">
-        {pendingRows.length > 0 && (
-          <div className="mb-3 rounded-xl border border-dashed border-cyan-500/25 bg-cyan-500/[0.04] p-2.5">
-            <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-cyan-300/80">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400" />
-              未载入的本地工作流
-            </p>
-            <ul className="space-y-1">
-              {pendingRows.map((pending) => (
-                <li key={pending.id}>
-                  <button
-                    type="button"
-                    onClick={() => onLoadPending?.(pending)}
-                    className="flex w-full items-center justify-between rounded-lg border border-white/6 bg-white/[0.03] px-2.5 py-2 text-left transition-colors hover:border-cyan-500/30 hover:bg-cyan-500/10"
-                  >
-                    <span
-                      className="truncate text-[11px] text-white/75"
-                      title={pending.name}
-                    >
-                      {pending.name}
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-[10px] text-cyan-300">
-                      <Download className="h-3 w-3" />
-                      载入
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
         {workflows.length === 0 && pendingRows.length === 0 ? (
           <div className="py-10 text-center text-xs text-white/35">
             未找到匹配的工作流
@@ -106,6 +75,38 @@ export function WorkflowLibraryList({
               />
             ))}
           </ul>
+        )}
+
+        {/* 未载入的本地工作流排在已载入之后 */}
+        {pendingRows.length > 0 && (
+          <div className="mb-3 mt-3 rounded-xl border border-dashed border-cyan-500/25 bg-cyan-500/[0.04] p-2.5">
+            <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-cyan-300/80">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400" />
+              未载入的本地工作流
+            </p>
+            <ul className="space-y-1">
+              {pendingRows.map((pending) => (
+                <li key={pending.id}>
+                  <button
+                    type="button"
+                    onClick={() => onLoadPending?.(pending)}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-white/6 bg-white/[0.03] px-2.5 py-2 text-left transition-colors hover:border-cyan-500/30 hover:bg-cyan-500/10"
+                  >
+                    <span
+                      className="truncate text-[11px] text-white/75"
+                      title={pending.name}
+                    >
+                      {pending.name}
+                    </span>
+                    <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] text-cyan-300">
+                      <Download className="h-3 w-3" />
+                      载入
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 
