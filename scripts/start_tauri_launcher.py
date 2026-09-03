@@ -1724,6 +1724,10 @@ def main(argv: list[str] | None = None) -> int:
 
     # 启动模式（prebuilt / tauri / standalone）由参数或 exe 文件名决定。
     mode = _resolve_mode(args)
+    # 把启动模式透传给 Rust 壳，让 dev/standalone 不再依赖 resource_dir 探测：
+    #   standalone -> 壳必须走内嵌 server.js（缺失即报错，不回退 dev）
+    #   其它        -> 壳直接加载 COMFYAPP_DEV_URL（由 dev-launcher.ps1 起 dev server）
+    os.environ["COMFYAPP_LAUNCH_MODE"] = mode
     if mode != "standalone":
         ps1_path = os.path.join(project_root, "scripts", "dev-launcher.ps1")
         if not os.path.isfile(ps1_path):

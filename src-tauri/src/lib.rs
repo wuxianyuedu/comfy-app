@@ -247,11 +247,20 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error
   let node = res_dir.join("binaries").join("node.exe");
   let server = res_dir.join("server.js");
 
+  let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
   if !server.exists() {
-    // 生产资源（standalone server.js + Node sidecar）缺失：回退到 dev URL 模式。
-    // launcher 的 Prebuilt 分支会单独启动 Next dev server，壳只需加载 COMFYAPP_DEV_URL 即可，
-    // 避免「直接 cargo build --release（未跑 beforeBuildCommand）」导致壳启动即 panic、窗口一闪而过。
-    // 后续执行 pnpm tauri build（完整生产构建）后 server.js 就位，则会走真正的 standalone 模式。
+    if launch_mode == "standalone" {
+      // 显式 standalone 模式但资源缺失：必须报错，禁止悄悄回退 dev——
+      // 否则「双击 start-tauri-standalone.exe 却跑成 dev」会产生歧义行为。
+      return Err(format!(
+        "standalone 模式但 server.js 不存在：{:?}。请先执行 pnpm tauri build（beforeBuildCommand 会组装 src-tauri/static）",
+        server
+      )
+      .into());
+    }
+    // 默认/未显式指定：回退到 dev URL 模式（launcher 的 Prebuilt 分支会单独
+    // 启动 Next dev server，壳只需加载 COMFYAPP_DEV_URL 即可），避免「直接
+    // cargo build --release（未跑 beforeBuildCommand）」导致壳启动即 panic。
     if let Ok(dev_url) = std::env::var("COMFYAPP_DEV_URL") {
       eprintln!("[ComfyAPP] standalone server.js 缺失，回退到 dev URL: {}", dev_url);
       if let Some(state) = app.try_state::<AppState>() {
@@ -482,7 +491,18 @@ pub fn run() {
       }
       #[cfg(not(debug_assertions))]
       {
-        spawn_sidecar(app.handle())?;
+        let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
+        if launch_mode == "standalone" {
+          // 显式 standalone：必须启动内嵌 server（缺失时 spawn_sidecar 会报错）。
+          spawn_sidecar(app.handle())?;
+        } else {
+          // prebuilt / tauri / 未指定：壳直接加载 COMFYAPP_DEV_URL（由
+          // dev-launcher.ps1 起 dev server），不启动 standalone sidecar。
+          eprintln!(
+            "[ComfyAPP] launch mode={:?}，跳过 standalone sidecar，使用 dev URL",
+            launch_mode
+          );
+        }
 
         // 启动页资源缺失兜底（详见 navigate_when_ready 注释）：
         // 老版本 app.exe 未嵌入 splash.html，窗口会 404 黑屏且无法自动跳转，
