@@ -28,8 +28,11 @@
 4. **失败路径必须有日志 + 用户可见出口**；日志按规范 §4 的布局落 `log/`，
    不得引入新的固定名日志文件（残留进程句柄会锁死它，用按次命名 + 轮转）。
 5. **改了 `tauri.conf.json` / `src-tauri/src/**` / `splash-assets/**` 必须
-   `cd src-tauri && cargo build --release` 重编壳**——窗口配置与启动页是
-   编译期内嵌的，只改源码不重编 = 跑旧二进制（历史黑屏事故来源）。
+   `cd src-tauri && cargo build --release --features custom-protocol` 重编壳**
+   （**feature 不能省**：不带它 tauri 的 `cfg(dev)` 开启，启动页会被导航到
+   `build.devUrl` 且资源不内嵌——冷启动必现 Edge「无法访问此页面」错误页，
+   详见规范 §5）——窗口配置与启动页是编译期内嵌的，只改源码不重编 =
+   跑旧二进制（历史黑屏事故来源）。
 6. **提交必须通过 `.githooks/pre-commit`**（结构检查 + tsc + eslint，全部走
    `pnpm exec`）。钩子失败先修代码，禁止 `--no-verify` 绕过进历史。
 7. **新增含 postinstall 构建脚本的依赖**：同步更新 `pnpm-workspace.yaml`
