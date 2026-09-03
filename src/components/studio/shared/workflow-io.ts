@@ -13,8 +13,16 @@
  * (see src/app/api/workflows/[id]/route.ts → "workflowIO ENRICHMENT").
  */
 
-import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow-io-types";
-export type { WorkflowIOEntry, WorkflowIOMap };
+import {
+  collectModeCodes,
+  isVisibleInMode,
+  resolveEntryDefault,
+  type WorkflowIOEntry,
+  type WorkflowIOMap,
+  type WorkflowIOModeOverride,
+} from "~/lib/workflow-io-types";
+export type { WorkflowIOEntry, WorkflowIOMap, WorkflowIOModeOverride };
+export { collectModeCodes, isVisibleInMode, resolveEntryDefault };
 
 /** Which control a dynamic form should render for a given entry. */
 export type ControlKind =
@@ -252,6 +260,19 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
   };
 }
 
+/** 按当前模式过滤掉 `modes[mode].visible === false` 的行。未开启模式时原样返回，
+ *  既有调用方行为完全不变。
+ *
+ *  刻意只在「展示层」过滤：`defaultInputValues` 依旧给被隐藏的参数播种模式默认值，
+ *  因此提交给 ComfyUI 的 payload 不会因为某个参数在当前模式不可见就缺字段——
+ *  隐藏只是不打扰用户，不代表这个值不需要下发给工作流。 */
+export function filterVisibleInMode<
+  T extends { modes?: Record<string, WorkflowIOModeOverride> },
+>(entries: T[], mode?: string | null): T[] {
+  if (!mode) return entries;
+  return entries.filter((entry) => isVisibleInMode(entry, mode));
+}
+
 /**
  * What kind of downstream canvas node should receive this workflow's result?
  * Driven by the exposed OUTPUT pins (the user's own curation), falling back
@@ -274,8 +295,16 @@ export function outputTargetKind(
   return "image";
 }
 
-/** Seed a value map from the enriched `defaultValue`s. */
-export function defaultInputValues(io: WorkflowIOMap | undefined | null): Record<string, unknown> {
+/** Seed a value map from the enriched `defaultValue`s.
+ *
+ *  2026-09-03 多模式：传入 `mode` 时走两级回退「模式默认值 → 通用默认值」
+ *  （`resolveEntryDefault`），未开启模式时与旧行为完全一致。
+ *  注意：这里**不过滤**被隐藏的参数——它们同样需要拿到模式默认值，否则提交
+ *  给 ComfyUI 的 payload 会缺字段。隐藏只影响展示层（filterVisibleInMode）。 */
+export function defaultInputValues(
+  io: WorkflowIOMap | undefined | null,
+  mode?: string | null
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const { inputs } = splitWorkflowIO(io);
   for (const entry of inputs) {
@@ -284,9 +313,9 @@ export function defaultInputValues(io: WorkflowIOMap | undefined | null): Record
      *  graph-derived `defaultValue`, so the IO-edit preview + runtime forms
      *  seed with the custom default.  Restoring a pin clears `value` (see
      *  resetIOPreviewValues in wf-editor-inner) and falls back to
-     *  `defaultValue`. */
-    if (entry.value !== undefined) out[entry.ioKey] = entry.value;
-    else if (entry.defaultValue !== undefined) out[entry.ioKey] = entry.defaultValue;
+     *  `defaultValue`.  2026-09-03: 模式默认值再压在两者之上。 */
+    const resolved = resolveEntryDefault(entry, mode);
+    if (resolved !== undefined) out[entry.ioKey] = resolved;
     else if (entry.control === "switch") out[entry.ioKey] = false;
     else if (entry.control === "int" || entry.control === "float") out[entry.ioKey] = numericBounds(entry).min;
     else if (entry.control === "textarea" || entry.control === "text") out[entry.ioKey] = "";
@@ -301,9 +330,10 @@ export function defaultInputValues(io: WorkflowIOMap | undefined | null): Record
  */
 export function reconcileInputValues(
   io: WorkflowIOMap | undefined | null,
-  stored: Record<string, unknown> | undefined
+  stored: Record<string, unknown> | undefined,
+  mode?: string | null
 ): Record<string, unknown> {
-  const base = defaultInputValues(io);
+  const base = defaultInputValues(io, mode);
   if (!stored) return base;
   for (const key of Object.keys(base)) {
     if (stored[key] !== undefined) base[key] = stored[key];

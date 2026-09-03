@@ -28,6 +28,58 @@ export interface WorkflowIOEntry {
   displayOrder?: number;
   /** 2026-08-17 R94: author override of `defaultValue`. */
   value?: unknown;
+  /** 2026-09-03: 多模式参数覆盖层。键为模式码，值为该模式下的默认值与可见性。
+   *  存在 workflowIO 的 JSON 列内，因此新增模式无需改表结构。 */
+  modes?: Record<string, WorkflowIOModeOverride>;
+}
+
+/** 2026-09-03: 单个参数在某一个模式下的覆盖项。 */
+export interface WorkflowIOModeOverride {
+  /** 覆盖该模式下的默认值；undefined = 不覆盖，回退到通用默认值。 */
+  defaultValue?: unknown;
+  /** 该模式下是否显示此参数；undefined = 显示（默认可见）。 */
+  visible?: boolean;
 }
 
 export type WorkflowIOMap = Record<string, WorkflowIOEntry>;
+
+/** 该参数在指定模式下是否可见。未开启模式（mode 为空）时一律可见。
+ *
+ *  入参刻意只要求「带 modes 字段」这一结构子集，这样派生产物
+ *  （WorkflowIOEntry & { ioKey, control } 等）也能直接传进来。 */
+export function isVisibleInMode(
+  entry: { modes?: Record<string, WorkflowIOModeOverride> } | undefined | null,
+  mode?: string | null
+): boolean {
+  if (!entry || typeof entry !== "object") return true;
+  if (!mode) return true;
+  return entry.modes?.[mode]?.visible ?? true;
+}
+
+/** 参数默认值的两级回退：模式默认值 → 作者覆盖值(value) → 通用默认值。
+ *
+ *  注意顺序：模式默认值优先级最高（它就是"该模式下应该用这个"的显式声明），
+ *  其次才是作者在 IO 编辑里写的通用覆盖 value，最后才是工作流图里读出的 defaultValue。 */
+export function resolveEntryDefault(
+  entry: WorkflowIOEntry,
+  mode?: string | null
+): unknown {
+  if (mode) {
+    const modeDefault = entry.modes?.[mode]?.defaultValue;
+    if (modeDefault !== undefined) return modeDefault;
+  }
+  if (entry.value !== undefined) return entry.value;
+  return entry.defaultValue;
+}
+
+/** 收集整张 IO 表里出现过的全部模式码（去重、保持稳定顺序）。 */
+export function collectModeCodes(io: WorkflowIOMap | null | undefined): string[] {
+  const seen = new Set<string>();
+  for (const entry of Object.values(io ?? {})) {
+    if (!entry || typeof entry !== "object") continue;
+    for (const code of Object.keys(entry.modes ?? {})) {
+      if (code) seen.add(code);
+    }
+  }
+  return [...seen];
+}

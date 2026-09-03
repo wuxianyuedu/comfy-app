@@ -34,6 +34,7 @@ import type {
   NodeJsonViewerRequest,
   NodeJsonViewerContextValue,
 } from "../workflow-types";
+import type { WorkflowIOModeOverride } from "~/lib/workflow-io-types";
 import { rectToAnchor } from "../workflow-utils";
 import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
 import { vanillaApi } from "~/trpc/vanilla";
@@ -63,6 +64,15 @@ export interface IOEditActions {
   setIOValues: (next: Record<string, unknown>) => void;
   resetIOPreviewValues: () => void;
   reorderIO: (fromKey: string, beforeKey: string | null) => void;
+  /** 2026-09-03 多模式：写入 / 清除某个参数在某一模式下的覆盖项。
+   *  `patch` 为 null 表示删除该模式的覆盖（回到「通用默认值 + 默认可见」）。
+   *  与 setIOLabel / toggleIORequired 同路径持久化：下一次 PATCH 整体
+   *  workflowIO 时一起落库，无需改表。 */
+  setIOModeOverride: (
+    key: string,
+    mode: string,
+    patch: WorkflowIOModeOverride | null
+  ) => void;
 }
 export type IOEditStore = IOEditState & IOEditActions;
 
@@ -115,6 +125,23 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         if (!cur) return {};
         if (cur.kind !== "widget") return {}; /* only widget inputs are tunable */
         return { workflowIO: { ...state.workflowIO, [key]: { ...cur, required: !cur.required } } };
+      }),
+
+    setIOModeOverride: (key, mode, patch) =>
+      set((state) => {
+        const cur = state.workflowIO[key];
+        if (!cur || !mode) return {};
+        const modes: Record<string, WorkflowIOModeOverride> = { ...(cur.modes ?? {}) };
+        if (patch === null) {
+          if (!(mode in modes)) return {};
+          delete modes[mode];
+        } else {
+          modes[mode] = { ...(modes[mode] ?? {}), ...patch };
+        }
+        /* modes 全空时把字段摘掉，避免往服务端 JSON 里塞一个空对象。 */
+        const nextEntry: WorkflowIOParam =
+          Object.keys(modes).length > 0 ? { ...cur, modes } : { ...cur, modes: undefined };
+        return { workflowIO: { ...state.workflowIO, [key]: nextEntry } };
       }),
 
     setIOValues: (next) =>

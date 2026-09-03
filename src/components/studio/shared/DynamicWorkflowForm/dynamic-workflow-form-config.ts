@@ -57,6 +57,11 @@ export interface DynamicWorkflowFormProps {
    *  preference survives reloads.  Omit to fall back to a per-browser
    *  global key. */
   workflowId?: string;
+  /** 2026-09-03 多模式：当前模式码。传入后表单只渲染该模式下
+   *  `visible !== false` 的参数行；默认值由调用方用
+   *  `defaultInputValues(io, mode)` 播种，走「模式默认值 → 通用默认值」
+   *  两级回退。不传（null/undefined）= 不分模式，与旧行为一致。 */
+  mode?: string | null;
 }
 
 /** ComfyUI types that render as connectable port rows instead of generic

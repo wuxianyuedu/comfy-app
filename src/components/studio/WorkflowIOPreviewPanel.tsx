@@ -19,12 +19,23 @@
  *  freshly toggled pin would render as a read-only `link` placeholder.
  *  Solution: for each key in the local state, prefer
  *  `detailIOMap[key]` (already enriched), and overlay the local `label`
- *  on top so an un-saved rename wins immediately. */
+ *  on top so an un-saved rename wins immediately.
+ *
+ *  2026-09-03 多模式：顶部新增「模式页签」。「通用」页签下编辑的是全局默认值
+ *  （写 `value`）；切到某个模式码页签后，编辑的是该模式下的覆盖层
+ *  （写 `modes[code] = { defaultValue, visible }`）。覆盖层就在 workflowIO 的
+ *  JSON 列里，随整体 workflowIO 一起 PATCH 落库，因此新增模式无需改表。 */
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { DynamicWorkflowForm } from "@/components/studio/shared/DynamicWorkflowForm";
-import { defaultInputValues, type WorkflowIOMap } from "@/components/studio/shared/workflow-io";
+import {
+  collectModeCodes,
+  defaultInputValues,
+  ioLabel,
+  splitWorkflowIO,
+  type WorkflowIOMap,
+} from "@/components/studio/shared/workflow-io";
 import type { WorkflowIOParam } from "./workflow-types";
 import { RequiredSummary } from "./RequiredSummary";
 import { getIOEditApi } from "./workflow-editor/WorkflowStores";
@@ -35,8 +46,37 @@ export interface WorkflowIoPreviewPanelProps {
   onClose: () => void;
 }
 
-export function WorkflowIoPreviewPanel({ workflowIO, detailIOMap, onClose }: WorkflowIoPreviewPanelProps) {
+/** 覆盖值 → 输入框文本。对象/数组没有可编辑的文本形态，直接留空表示沿用通用值。 */
+function stringifyModeDefault(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  /* 对象 / 数组 / symbol 等没有可编辑的文本形态，留空表示沿用通用默认值。 */
+  return "";
+}
+
+/** 把模式默认值输入框里的文本还原成参数真实类型（避免 "512" 变成字符串 512）。 */
+function coerceModeDefault(
+  text: string,
+  control: "textarea" | "text" | "int" | "float" | "switch" | "image" | "link" | "select"
+): unknown {
+  if (control === "int" || control === "float") {
+    const n = Number(text);
+    return Number.isFinite(n) ? n : text;
+  }
+  return text;
+}
+
+export function WorkflowIoPreviewPanel({
+  workflowIO,
+  detailIOMap,
+  onClose,
+}: WorkflowIoPreviewPanelProps) {
   const ioApi = useMemo(() => getIOEditApi(), []);
+
+  /* null = 「通用」页签（编辑全局默认值）；字符串 = 某个模式码页签。 */
+  const [activeMode, setActiveMode] = useState<string | null>(null);
+  const [newModeDraft, setNewModeDraft] = useState<string | null>(null);
 
   /* Merge server-side enrichment with the live local state (see the DATA
    *  MERGE comment at the top of this file for the full rationale). */
@@ -53,8 +93,8 @@ export function WorkflowIoPreviewPanel({ workflowIO, detailIOMap, onClose }: Wor
         out[key] = { ...e, ...local, label: local.label ?? e.label };
       } else {
         /* No server enrichment yet (e.g. user toggled + immediately opened
-         *  preview without waiting for a refetch) — render with what we
-         *  know; controlForEntry will degrade gracefully. */
+         * preview without waiting for a refetch) — render with what we
+         * know; controlForEntry will degrade gracefully. */
         out[key] = {
           direction: local.direction,
           kind: local.kind,
@@ -67,6 +107,10 @@ export function WorkflowIoPreviewPanel({ workflowIO, detailIOMap, onClose }: Wor
     }
     return out;
   }, [workflowIO, detailIOMap]);
+
+  /* 覆盖层编辑的行：只取输入（输出没有"默认值"语义）。 */
+  const editableEntries = useMemo(() => splitWorkflowIO(previewIO).inputs, [previewIO]);
+  const modeCodes = useMemo(() => collectModeCodes(previewIO), [previewIO]);
 
   /* R94 (2026-08-17): does any widget pin carry an author override?  Drives
    *  the 「恢复默认」 button's enabled state. */
@@ -97,6 +141,70 @@ export function WorkflowIoPreviewPanel({ workflowIO, detailIOMap, onClose }: Wor
     [ioApi]
   );
 
+  /* 表单写入分流：通用页签写全局 `value`；模式页签写该模式的 defaultValue 覆盖。
+   *  模式页签只把「真正变了」的键写成覆盖项，避免一进页签就给所有参数落满覆盖。 */
+  const handleFormChange = useCallback(
+    (next: Record<string, unknown>) => {
+      if (!activeMode) {
+        setIOValues(next);
+        return;
+      }
+      const current = defaultInputValues(previewIO, activeMode);
+      for (const [key, value] of Object.entries(next)) {
+        if (current[key] === value) continue;
+        ioApi.getState().setIOModeOverride(key, activeMode, { defaultValue: value });
+      }
+    },
+    [activeMode, ioApi, previewIO, setIOValues]
+  );
+
+  const toggleModeVisibility = useCallback(
+    (key: string, visible: boolean) => {
+      if (!activeMode) return;
+      ioApi.getState().setIOModeOverride(key, activeMode, { visible });
+    },
+    [activeMode, ioApi]
+  );
+
+  const setModeDefault = useCallback(
+    (key: string, text: string, control: Parameters<typeof coerceModeDefault>[1]) => {
+      if (!activeMode) return;
+      ioApi.getState().setIOModeOverride(key, activeMode, {
+        defaultValue: text === "" ? undefined : coerceModeDefault(text, control),
+      });
+    },
+    [activeMode, ioApi]
+  );
+
+  /* 新增模式：给每个已勾选参数落一条 visible:true，新页签才会被 collectModeCodes
+   * 发现并立刻可编辑（否则空模式没有任何持久化痕迹）。 */
+  const confirmAddMode = useCallback(() => {
+    const code = newModeDraft?.trim();
+    setNewModeDraft(null);
+    if (!code || modeCodes.includes(code)) return;
+    for (const key of Object.keys(workflowIO)) {
+      ioApi.getState().setIOModeOverride(key, code, { visible: true });
+    }
+    setActiveMode(code);
+  }, [newModeDraft, modeCodes, workflowIO, ioApi]);
+
+  const removeMode = useCallback(
+    (code: string) => {
+      for (const key of Object.keys(workflowIO)) {
+        ioApi.getState().setIOModeOverride(key, code, null);
+      }
+      if (activeMode === code) setActiveMode(null);
+    },
+    [activeMode, workflowIO, ioApi]
+  );
+
+  const tabClass = (active: boolean) =>
+    `shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] transition-colors ${
+      active
+        ? "border-sky-400/50 bg-sky-400/15 text-sky-200"
+        : "border-white/8 bg-white/4 text-gray-400 hover:bg-white/8 hover:text-gray-200"
+    }`;
+
   return (
     <div className="pointer-events-none absolute right-4 top-4 z-30 flex max-h-[calc(100%-2rem)] w-[360px] flex-col">
       <div className="pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-400/30 bg-[#0a0a14]/92 shadow-2xl backdrop-blur-md">
@@ -108,7 +216,7 @@ export function WorkflowIoPreviewPanel({ workflowIO, detailIOMap, onClose }: Wor
               {Object.keys(workflowIO).length}
             </span>
           </div>
-          {hasIOOverrides && (
+          {hasIOOverrides && !activeMode && (
             <button
               type="button"
               onClick={resetIOPreviewValues}
@@ -127,6 +235,120 @@ export function WorkflowIoPreviewPanel({ workflowIO, detailIOMap, onClose }: Wor
             ✕
           </button>
         </div>
+
+        {/* ── 模式页签 ── */}
+        <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-white/6 px-3 py-1.5">
+          <button type="button" onClick={() => setActiveMode(null)} className={tabClass(activeMode === null)}>
+            通用
+          </button>
+          {modeCodes.map((code) => (
+            <span key={code} className="flex shrink-0 items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => setActiveMode(code)}
+                className={tabClass(activeMode === code)}
+              >
+                {code}
+              </button>
+              <button
+                type="button"
+                onClick={() => removeMode(code)}
+                className="rounded px-0.5 text-[10px] text-gray-500 transition-colors hover:text-red-300"
+                title={`删除模式「${code}」的全部覆盖`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {newModeDraft !== null ? (
+            <span className="flex shrink-0 items-center gap-1">
+              <input
+                autoFocus
+                value={newModeDraft}
+                onChange={(e) => setNewModeDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") confirmAddMode();
+                  if (e.key === "Escape") setNewModeDraft(null);
+                }}
+                placeholder="模式码"
+                className="w-16 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-[11px] text-gray-100 outline-none focus:border-sky-400/60"
+              />
+              <button
+                type="button"
+                onClick={confirmAddMode}
+                className="rounded bg-sky-400/20 px-1 text-[10px] text-sky-200 hover:bg-sky-400/30"
+              >
+                ✓
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setNewModeDraft("")}
+              className="shrink-0 rounded-md border border-dashed border-white/12 px-1.5 py-0.5 text-[11px] text-gray-500 transition-colors hover:border-sky-400/40 hover:text-sky-200"
+              title="新增一个模式（如 fast / hd）"
+            >
+              ＋ 模式
+            </button>
+          )}
+        </div>
+
+        {/* ── 模式覆盖层编辑（仅模式页签） ── */}
+        {activeMode && (
+          <div className="nodrag nopan max-h-[38%] shrink-0 overflow-y-auto border-b border-white/6 px-3 py-2">
+            <div className="mb-1 text-[10px] text-gray-500">
+              模式「{activeMode}」覆盖：留空 = 沿用通用默认值
+            </div>
+            <div className="space-y-1">
+              {editableEntries.map((entry) => {
+                const override = entry.modes?.[activeMode];
+                const visible = override?.visible ?? true;
+                const dv = override?.defaultValue;
+                return (
+                  <div key={entry.ioKey} className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={visible}
+                      onChange={(e) => toggleModeVisibility(entry.ioKey, e.target.checked)}
+                      title="该模式下是否显示此参数"
+                      className="h-3 w-3 shrink-0 accent-sky-400"
+                    />
+                    <span
+                      className={`w-[104px] shrink-0 truncate text-[11px] ${
+                        visible ? "text-gray-300" : "text-gray-600 line-through"
+                      }`}
+                      title={ioLabel(entry, editableEntries)}
+                    >
+                      {ioLabel(entry, editableEntries)}
+                    </span>
+                    {entry.control === "switch" ? (
+                      <input
+                        type="checkbox"
+                        checked={dv === true}
+                        onChange={(e) =>
+                          ioApi
+                            .getState()
+                            .setIOModeOverride(entry.ioKey, activeMode, {
+                              defaultValue: e.target.checked,
+                            })
+                        }
+                        className="h-3 w-3 shrink-0 accent-sky-400"
+                      />
+                    ) : (
+                      <input
+                        value={stringifyModeDefault(dv)}
+                        onChange={(e) => setModeDefault(entry.ioKey, e.target.value, entry.control)}
+                        placeholder="(通用)"
+                        className="min-w-0 flex-1 rounded border border-white/10 bg-black/40 px-1.5 py-0.5 text-[11px] text-gray-100 outline-none placeholder:text-gray-600 focus:border-sky-400/60"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="nodrag nopan flex-1 overflow-y-auto px-3 py-3 text-gray-200">
           {Object.keys(workflowIO).length === 0 ? (
             <div className="rounded-lg border border-dashed border-white/10 bg-white/2 px-3 py-4 text-center text-[11px] leading-relaxed text-gray-500">
@@ -137,8 +359,9 @@ export function WorkflowIoPreviewPanel({ workflowIO, detailIOMap, onClose }: Wor
           ) : (
             <DynamicWorkflowForm
               io={previewIO}
-              values={defaultInputValues(previewIO)}
-              onChange={setIOValues}
+              values={defaultInputValues(previewIO, activeMode)}
+              onChange={handleFormChange}
+              mode={activeMode}
               compact
               showOutputs
               onLabelChange={setIOLabel}

@@ -8,6 +8,7 @@ import type { ChangeEvent, DragEvent, RefObject } from "react";
 
 import { uploadImageFile } from "~/components/studio/project-canvas/canvas-helpers";
 import {
+  filterVisibleInMode,
   inferGroups,
   splitWorkflowIO,
   type EnrichedWidget,
@@ -67,11 +68,32 @@ export interface DynamicWorkflowFormController {
 export function useDynamicWorkflowForm(
   props: DynamicWorkflowFormProps
 ): DynamicWorkflowFormController {
-  const { io, values, onChange, onReorder } = props;
+  const { io, values, onChange, onReorder, mode } = props;
 
-  const { wireInputs, widgetInputs, inputs, outputs } = useMemo(
+  const { wireInputs, widgetInputs, outputs } = useMemo(
     () => splitWorkflowIO(io),
     [io]
+  );
+
+  /* 2026-09-03 多模式：按当前模式过滤掉 `visible === false` 的行。
+   *  只是展示层过滤——被隐藏的参数仍留在 values 里（调用方用
+   *  defaultInputValues(io, mode) 给它播种了模式默认值），所以提交给
+   *  ComfyUI 的 payload 不会因为「当前模式不显示」就缺字段。 */
+  const shownWireInputs = useMemo(
+    () => filterVisibleInMode(wireInputs, mode),
+    [wireInputs, mode]
+  );
+  const shownWidgetInputs = useMemo(
+    () => filterVisibleInMode(widgetInputs, mode),
+    [widgetInputs, mode]
+  );
+  const shownOutputs = useMemo(
+    () => filterVisibleInMode(outputs, mode),
+    [outputs, mode]
+  );
+  const inputs = useMemo(
+    () => [...shownWireInputs, ...shownWidgetInputs],
+    [shownWireInputs, shownWidgetInputs]
   );
 
   /* Coupled widget groups (dimension = width + height; video = length +
@@ -79,7 +101,7 @@ export function useDynamicWorkflowForm(
    * rendered by `GroupedControls` instead — a single dropdown switches
    * between 分别填写 and the friendly preset paradigm.  `groupedKeys` is the
    * set of ioKeys the groups consume. */
-  const groups = useMemo(() => inferGroups(widgetInputs), [widgetInputs]);
+  const groups = useMemo(() => inferGroups(shownWidgetInputs), [shownWidgetInputs]);
   const { groupedKeys } = groups;
 
   /* Port rows = wire inputs + numeric widgets (seed/steps/cfg …).  Numeric
@@ -88,20 +110,20 @@ export function useDynamicWorkflowForm(
    * in GroupedControls). */
   const portEntries = useMemo(
     () => [
-      ...wireInputs,
-      ...widgetInputs.filter(
+      ...shownWireInputs,
+      ...shownWidgetInputs.filter(
         (widgetInput) => isNumericWidget(widgetInput) && !groupedKeys.has(widgetInput.ioKey)
       ),
     ],
-    [wireInputs, widgetInputs, groupedKeys]
+    [shownWireInputs, shownWidgetInputs, groupedKeys]
   );
 
   const widgetSectionEntries = useMemo(
     () =>
-      widgetInputs.filter(
+      shownWidgetInputs.filter(
         (widgetInput) => !isNumericWidget(widgetInput) && !groupedKeys.has(widgetInput.ioKey)
       ),
-    [widgetInputs, groupedKeys]
+    [shownWidgetInputs, groupedKeys]
   );
 
   /* Drag state is deliberately component-local (not in workflow-io.ts or any
@@ -193,13 +215,13 @@ export function useDynamicWorkflowForm(
     values,
     onChange,
     inputs,
-    outputs,
-    wireInputs,
-    widgetInputs,
+    outputs: shownOutputs,
+    wireInputs: shownWireInputs,
+    widgetInputs: shownWidgetInputs,
     groups,
     portEntries,
     widgetSectionEntries,
-    isEmpty: inputs.length === 0 && outputs.length === 0,
+    isEmpty: inputs.length === 0 && shownOutputs.length === 0,
     fileRef,
     uploading,
     uploadTarget,

@@ -4,6 +4,7 @@
  * server's API-graph node shape so detail.graph consumers keep their
  * class_type/inputs accessors without any. */
 import type { ApiWorkflowNode } from "@/lib/comfyui/raw";
+import type { WorkflowIOModeOverride } from "@/lib/workflow-io-types";
 
 /* ── Types ── */
 export interface RawInputMeta {
@@ -158,6 +159,10 @@ export interface WorkflowIOParam {
    *  edits a pin's default value, cleared to restore the original default.
    *  Round-trips through GET/PATCH like the rest of `workflowIO`. */
   value?: unknown;
+  /** 2026-09-03 多模式：按模式码的覆盖层。镜像 `WorkflowIOEntry.modes`，
+   *  落在同一个 workflowIO JSON 列里（因此新增模式无需改表）。由 IO 预览面板的
+   *  「模式页签」编辑，随整体 workflowIO 一起 PATCH 落库。 */
+  modes?: Record<string, WorkflowIOModeOverride>;
 }
 
 /** A single parameter reference used to toggle IO exposure. */
