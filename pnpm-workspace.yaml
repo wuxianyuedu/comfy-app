@@ -13,13 +13,18 @@ verifyDepsBeforeRun: false
 
 # pnpm 11 默认不批准第三方包的 postinstall 构建脚本，非交互模式下存在未批准
 # 依赖时 pnpm install 会以 exit 1 失败（ERR_PNPM_IGNORED_BUILDS），并连带
-# pnpm dev 启动前的依赖自动检查一起失败。以下 5 个包为 pnpm 检出含构建脚本的
-# 全部依赖，显式批准（恢复 pnpm 11 之前的行为）；新增含构建脚本的依赖后需补充。
+# pnpm dev 启动前的依赖自动检查一起失败。以下为检出含构建脚本的依赖，显式
+# 批准（恢复 pnpm 11 之前的行为）；新增含构建脚本的依赖后需补充。
 allowBuilds:
-  "@prisma/client": true
-  "@prisma/engines": true
   "@sentry/cli": true
-  prisma: true
   unrs-resolver: true
-  # better-sqlite3 含原生模块构建脚本（node-gyp），需批准
+  # better-sqlite3 含原生模块安装脚本（有 Node 24 预编译包时走 prebuild 下载，
+  # 无需本地 MSVC；仍需批准才允许执行安装脚本）
   "better-sqlite3": true
+  # MCP SDK 与 tsx 均为纯 JS / 预编译可执行，无原生构建脚本；此处显式批准以防
+  # pnpm 11 对新依赖的 postinstall 校验（与上面策略一致）。
+  "@modelcontextprotocol/sdk": true
+  "tsx": true
+  '@prisma/client': set this to true or false
+  '@prisma/engines': set this to true or false
+  prisma: set this to true or false

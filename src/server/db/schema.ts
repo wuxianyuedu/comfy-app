@@ -431,6 +431,32 @@ export const auditLog = sqliteTable(
   ]
 );
 
+// ── 工坊 MCP 会话（AI 驱动的流水线状态，服务端持久化，与界面共享同一项目）──
+// userId 允许为空：MCP 会话通常是系统（AI）所有，不绑定登录用户。
+export const workshopSession = sqliteTable(
+  "workshopSession",
+  {
+    id: text("id").$defaultFn(() => createId()).primaryKey(),
+    userId: text("userId"),
+    title: text("title").notNull().default("未命名工坊项目"),
+    type: text("type").notNull().default("short_video"),
+    tone: text("tone").notNull().default(""),
+    logline: text("logline").notNull().default(""),
+    idea: text("idea").notNull().default(""),
+    scriptMarkdown: text("scriptMarkdown").notNull().default(""),
+    scenes: text("scenes", { mode: "json" }).notNull().default("[]"),
+    characters: text("characters", { mode: "json" }).notNull().default("[]"),
+    shots: text("shots", { mode: "json" }).notNull().default("[]"),
+    stage: text("stage").notNull().default("script"),
+    createdAt: dateNotNull("createdAt").notNull().$defaultFn(() => new Date()),
+    updatedAt: dateNotNull("updatedAt").notNull().$defaultFn(() => new Date()).$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index("workshop_session_user_idx").on(t.userId),
+    index("workshop_session_updated_idx").on(t.updatedAt),
+  ]
+);
+
 // ── 关系（仅 include 用到：task.images / filmProject.shots）────────
 export const taskRelations = relations(task, ({ many }) => ({
   images: many(taskImage),
@@ -465,6 +491,8 @@ export type LoraTrainingJob = InferSelectModel<typeof loraTrainingJob>;
 export type FilmProject = InferSelectModel<typeof filmProject>;
 export type FilmShot = InferSelectModel<typeof filmShot>;
 export type AuditLog = InferSelectModel<typeof auditLog>;
+export type WorkshopSession = InferSelectModel<typeof workshopSession>;
+export type WorkshopSessionInsert = InferInsertModel<typeof workshopSession>;
 
 export type UserInsert = InferInsertModel<typeof user>;
 export type TaskInsert = InferInsertModel<typeof task>;
