@@ -230,29 +230,10 @@ export default function WorkspacePage() {
     [navigateTo]
   );
 
-  // ── Home mode = full-page standalone ──
-  if (viewMode === "home") {
-    return (
-      <LogProvider>
-        <ToastProvider>
-          <HomePage
-            onNewProject={handleNewProject}
-            recentProjects={recentProjects}
-            onOpenProject={handleOpenProject}
-            onOpenCanvasProject={handleOpenCanvasProject}
-            activeNav="home"
-            onNavigate={handleHomeNavigate}
-            onShowAllProjects={handleShowAllProjects}
-          />
-          <VideoQueueModal open={videoQueueOpen} onClose={() => setVideoQueueOpen(false)} />
-          <BrowserStatusBar />
-          <LogPanel />
-        </ToastProvider>
-      </LogProvider>
-    );
-  }
-
-  // ── Non-home modes: shared left nav + center content ──
+  // ── Home 模式为整页独立视图；其余模式共用左侧导航 + 中央内容 ──
+  // LogProvider/ToastProvider 全页只挂载一层：此前两个分支各自包一层，home ↔
+  // 其它模式切换会反复装卸 console 包装（makeLogger 双重嵌套），是日志观察者
+  // 自身报错的结构性诱因（2026-09-03 LogProvider Console Error）。
   const renderCenter = () => {
     switch (viewMode) {
       case "works":
@@ -301,44 +282,61 @@ export default function WorkspacePage() {
   return (
     <LogProvider>
       <ToastProvider>
-        <div className="flex h-screen w-screen overflow-hidden bg-(--color-canvas) text-gray-200" style={{ fontFamily: "var(--font-sans)" }}>
-          {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
-          <AuroraBackground />
+        {viewMode === "home" ? (
+          <>
+            <HomePage
+              onNewProject={handleNewProject}
+              recentProjects={recentProjects}
+              onOpenProject={handleOpenProject}
+              onOpenCanvasProject={handleOpenCanvasProject}
+              activeNav="home"
+              onNavigate={handleHomeNavigate}
+              onShowAllProjects={handleShowAllProjects}
+            />
+            <VideoQueueModal open={videoQueueOpen} onClose={() => setVideoQueueOpen(false)} />
+          </>
+        ) : (
+          <>
+            <div className="flex h-screen w-screen overflow-hidden bg-(--color-canvas) text-gray-200" style={{ fontFamily: "var(--font-sans)" }}>
+              {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
+              <AuroraBackground />
 
-          <WorkspaceNav active={viewMode} onSelect={handleNavSelect} />
+              <WorkspaceNav active={viewMode} onSelect={handleNavSelect} />
 
-          <div className="flex min-w-0 flex-1 flex-col">
-            {renderCenter()}
-          </div>
+              <div className="flex min-w-0 flex-1 flex-col">
+                {renderCenter()}
+              </div>
 
-          <VideoQueueModal
-            open={videoQueueOpen}
-            onClose={() => setVideoQueueOpen(false)}
-            onOpenTask={(id) => {
-              setVideoQueueOpen(false);
-              // 直接跳转到作品详情页（溯源 + 执行日志）
-              router.push(`/create/${id}`);
-            }}
-          />
+              <VideoQueueModal
+                open={videoQueueOpen}
+                onClose={() => setVideoQueueOpen(false)}
+                onOpenTask={(id) => {
+                  setVideoQueueOpen(false);
+                  // 直接跳转到作品详情页（溯源 + 执行日志）
+                  router.push(`/create/${id}`);
+                }}
+              />
 
-          {/* R-ardot120 (2026-08-18): 临时隐藏「✦ AI 引导」浮动入口。
-           *  原因：调试模式下日志面板浮在画布底部,缩小后恰好遮住右下 FAB,
-           *  两块视觉冲突。保留 `agentOpen` state 与 <AgentChat /> 节点,
-           *  仅折叠按钮入口。要恢复 = 把 SHOW_AI_FAB 改回 true。 */}
-          {SHOW_AI_FAB && !agentOpen && (
-            <button
-              type="button"
-              onClick={() => setAgentOpen(true)}
-              className="fixed bottom-9 right-4 z-30 flex items-center gap-2 rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-transform hover:scale-105"
-            >
-              <span className="text-[15px]">✦</span>
-              AI 引导
-            </button>
-          )}
-          {SHOW_AI_FAB && agentOpen && (
-            <AgentChat open={agentOpen} onClose={() => setAgentOpen(false)} onApply={handleApplySpec} />
-          )}
-        </div>
+              {/* R-ardot120 (2026-08-18): 临时隐藏「✦ AI 引导」浮动入口。
+               *  原因：调试模式下日志面板浮在画布底部,缩小后恰好遮住右下 FAB,
+               *  两块视觉冲突。保留 `agentOpen` state 与 <AgentChat /> 节点,
+               *  仅折叠按钮入口。要恢复 = 把 SHOW_AI_FAB 改回 true。 */}
+              {SHOW_AI_FAB && !agentOpen && (
+                <button
+                  type="button"
+                  onClick={() => setAgentOpen(true)}
+                  className="fixed bottom-9 right-4 z-30 flex items-center gap-2 rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-transform hover:scale-105"
+                >
+                  <span className="text-[15px]">✦</span>
+                  AI 引导
+                </button>
+              )}
+              {SHOW_AI_FAB && agentOpen && (
+                <AgentChat open={agentOpen} onClose={() => setAgentOpen(false)} onApply={handleApplySpec} />
+              )}
+            </div>
+          </>
+        )}
         <BrowserStatusBar />
         <LogPanel />
       </ToastProvider>
