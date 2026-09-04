@@ -3,7 +3,7 @@
 import { ROW_STATE_PRESET } from "./constants";
 import { NodePreviewCard } from "./NodePreviewCard";
 import { ManifestSummary, ParseProgressBanner } from "./SettingsParts";
-import type { CustomNodesSettingsController } from "./useCustomNodesSettings";
+import type { CustomNodesSettingsController } from "./hooks/use-custom-nodes-settings";
 
 export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
   const {

@@ -1,6 +1,6 @@
 "use client";
 
-import type { CustomNodesSettingsController } from "./useCustomNodesSettings";
+import type { CustomNodesSettingsController } from "./hooks/use-custom-nodes-settings";
 
 // 两个页面：本地工作流（仅路径输入）vs 自定义节点（解析/清单/日志）。
 // 底部指示用项目 aurora 渐变（#A855F7 → #6366F1，见 globals.css）。每个 tab 带

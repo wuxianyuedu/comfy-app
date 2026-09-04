@@ -19,7 +19,7 @@ import {
   deriveSyncFlags,
   isTechnicalName,
   type WorkflowRow,
-} from "../WorkflowLibraryHelpers";
+} from "../workflow-library-config";
 
 export interface WorkflowLibraryDetailActions {
   use: () => void;

@@ -3,7 +3,7 @@
 
 import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import type { WorkflowRow } from "./WorkflowLibraryHelpers";
+import type { WorkflowRow } from "./workflow-library-config";
 
 /** 详情面板的三个页签 —— 数组顺序即渲染顺序。 */
 export const DETAIL_TABS = [

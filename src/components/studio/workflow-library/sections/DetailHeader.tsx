@@ -14,7 +14,7 @@ import {
 
 import { SourceTag } from "~/components/studio/ui/SourceTag";
 import { TaskTypeChip } from "~/components/studio/ui/TaskTypeChip";
-import { ago, type WorkflowRow } from "../WorkflowLibraryHelpers";
+import { ago, type WorkflowRow } from "../workflow-library-config";
 import { ActionButton } from "./DetailControls";
 
 interface DetailHeaderProps {

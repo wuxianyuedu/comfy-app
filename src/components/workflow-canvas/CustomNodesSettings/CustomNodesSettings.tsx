@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { useCustomNodesSettings } from "./useCustomNodesSettings";
+import { useCustomNodesSettings } from "./hooks/use-custom-nodes-settings";
 import { TabSwitcher } from "./TabSwitcher";
 import { WorkflowsTab } from "./WorkflowsTab";
 import { NodesTab } from "./NodesTab";
