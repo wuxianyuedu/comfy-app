@@ -2,7 +2,7 @@
  * `executor-scheduler.ts` — 队列调度与心跳（executor 的调度层）
  * ===========================================================================
  *
- * 从 executor.ts 拆出的「调度器」模块（T12 batch 4）：
+ * 从 executor.ts 拆出的「调度器」模块（batch 4）：
  *   - {@link processQueue}      出队 + 提交 ComfyUI /prompt（含 raw 路径分流）
  *   - startHeartbeat            3s 安全网心跳，防止边缘场景队列卡死
  *
@@ -38,7 +38,7 @@ export async function processQueue() {
   try {
     // raw UI-format 工作流（含 liblib 子图 wrapper）：交给 comfy-cli 做
     // UI→API 转换 + 子图展开，原生客户端 graphToPrompt，绕开 UUID class_type。
-    // R-ardot113 (2026-08-17): the previous `void executeViaComfyCli(job)`
+    // the previous `void executeViaComfyCli(job)`
     // (no .catch) was a *latent* active-slot deadlock.  If
     // `executeViaComfyCli` rejected synchronously (resolveComfyBase
     // throw, writeFile EACCES, spawn ENOENT on a missing Python
@@ -76,7 +76,7 @@ export async function processQueue() {
     // 提交前剔除 bypass / mute / 纯前端节点(Reroute/Primitive/Note)，
     // 并对连线做穿透，严格对齐 ComfyUI 真实执行语义（P1：mode/Reroute）。
     const prep = prepareGraphForExecution(job.prompt!);
-    // R-ardot65 (2026-08-15): 记下本次实际提交给 ComfyUI 的 graph（已展开、已穿透），
+    // 记下本次实际提交给 ComfyUI 的 graph（已展开、已穿透），
     // 任务完成落盘为 workflow.json 供完整复现。
     s.executedWorkflow.set(job.taskId, prep.graph);
     if (!Object.keys(prep.graph).length) {
@@ -91,7 +91,7 @@ export async function processQueue() {
           (prep.droppedInputs ? `，丢弃 ${prep.droppedInputs} 个悬空输入` : "")
       );
     }
-    // R-ardot111 (2026-08-17): explicit pre-submit log so the user
+    // explicit pre-submit log so the user
     // sees a clear "→ 提交" line right before the HTTP POST to
     // ComfyUI.  Useful when /prompt hangs or rejects — without this
     // the user only ever sees the post-submit "✓ 已接收" line, which
@@ -100,11 +100,11 @@ export async function processQueue() {
     log(job.taskId, "info", `→ 准备提交到 ComfyUI /prompt（${nodeCount} 节点）`);
     const res = await postPrompt(prep.graph, CLIENT_ID);
     if (res.error || (res.node_errors && Object.keys(res.node_errors).length)) {
-      // R-Next (2026-08-17): carry the flattened `node_errors` into the task
+      // carry the flattened `node_errors` into the task
       // so the UI can show "节点 X · 字段 Y：消息" instead of just the
       // "Workflow has N validation error(s)" summary.
       const validationErrors = extractValidationErrors(res, prep.graph);
-      // R-ardot116 (2026-08-18): mirror the raw-path branch's behaviour
+      // mirror the raw-path branch's behaviour
       // (lines 1199-1224) — surface the structured list as per-line
       // log entries so the user sees "节点 X (KSampler) · 字段 cfg：…"
       // in the log panel *before* the closing "✗ 生成失败" line, and
@@ -150,7 +150,7 @@ export async function processQueue() {
     const promptId = res.prompt_id!;
     s.promptToTask.set(promptId, job.taskId);
     await taskRepository.markRunning(job.taskId, promptId);
-    // R-ardot111 (2026-08-17): richer post-submit log so the user
+    // richer post-submit log so the user
     // can correlate the prompt_id they see in the panel with the
     // /history/{prompt_id} ComfyUI URL when investigating hangs.
     log(job.taskId, "info", `✓ ComfyUI 已接收（prompt_id: ${promptId}），等待首个 executing 事件…`);
@@ -164,7 +164,7 @@ export async function processQueue() {
   }
 }
 
-/* R-ardot113 (2026-08-17): safety-net heartbeat.  `processQueue()`
+/* safety-net heartbeat. `processQueue()`
  *  is normally driven by:
  *    (a) enqueue() right after the user clicks 生成
  *    (b) WS open  (line 181)

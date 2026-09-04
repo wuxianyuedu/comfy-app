@@ -1,6 +1,6 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from WorkflowLibrary's three filter-tab
+/** extracted from WorkflowLibrary's three filter-tab
  *  rows (source / type / model) plus the "管理模型" shortcut.
  */
 import { Icon } from "@/components/ui/icon";
@@ -58,7 +58,7 @@ export function WorkflowLibraryFilters({
         accent="violet"
       />
 
-      {/* ── Type filter (R70-3): 全部类型 / 图像 / 视频 / 音频 ── */}
+      {/* ── Type filter: 全部类型 / 图像 / 视频 / 音频 ── */}
       <FilterTabs
         tabs={
           [
@@ -73,7 +73,7 @@ export function WorkflowLibraryFilters({
         accent="sky"
       />
 
-      {/* ── 2026-08-15 模型筛选 + 标签库管理 ── */}
+      {/* ── 模型筛选 + 标签库管理 ── */}
       <FilterTabs
         tabs={[
           {

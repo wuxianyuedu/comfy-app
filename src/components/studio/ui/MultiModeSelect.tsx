@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * MultiModeSelect — 2026-08-13 v1
+ * MultiModeSelect — v1
  *
  * 一个工作流支持多种模式（multi-select chip），每个工作流卡片右上角替代
- * R70-2 的单选 DarkSelect：
+ * 的单选 DarkSelect：
  *   - 主 chip：默认 mode（紫色基调，按所在分类上色）
  *   - +N pill：附加模式弱化占位（紫底 8% + 灰字）
  *   - 点主 chip 或 +N pill 都开同一多选 popover：
@@ -13,7 +13,7 @@
  *       · 每行 = checkbox + label + code + 默认 toggle
  *       · 底部 取消 / 保存（显示已选条数）
  *
- * 同期复用 DarkSelect (R55/R56) 的 React Portal + viewport popover 算法
+ * 同期复用 DarkSelect 的 React Portal + viewport popover 算法
  *（Esc/outside-click、滚动/resize 自动重定位、右侧溢出左移）。
  *
  * R* 配套关系：modes / defaultMode 已通过 prisma 迁移持久化（SQLite 用 JSON
@@ -110,7 +110,7 @@ export function MultiModeSelect({
     prevOpenRef.current = open;
   }, [open, modes]);
 
-  // Outside-click + Escape close.  Reuses DarkSelect's exact pattern (R55).
+  // Outside-click + Escape close. Reuses DarkSelect's exact pattern.
   useEffect(() => {
     if (!open) return;
     const handler = (event: MouseEvent | KeyboardEvent) => {

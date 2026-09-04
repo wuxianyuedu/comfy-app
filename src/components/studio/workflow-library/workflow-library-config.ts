@@ -152,7 +152,7 @@ export function ago(iso: string): string {
   return `${Math.floor(h / 24)} 天前导入`;
 }
 
-/* ── 列表筛选 / 计数的纯派生（2026-09-04 从 WorkflowLibrary 视图里抽出）─────
+/* ── 列表筛选 / 计数的纯派生（从 WorkflowLibrary 视图里抽出）─────
  * 原先是组件内 4 个 useMemo（filteredWorkflows / pendingRows / sourceCounts /
  * typeCounts）。搬到这里后：规则可单测，视图只剩「取数据 → 渲染」。 */
 

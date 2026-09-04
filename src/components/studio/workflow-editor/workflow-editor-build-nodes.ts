@@ -61,7 +61,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
      *  where bl.kind === "output".  Used as a backup signal in WfNode's
      *  hasDownstream check so boundary wires keep rendering even if the
      *  server's rawOutputs[].isBoundary stamp hasn't propagated yet
-     *  (e.g. due to an older sessionStorage cache shape — 2026-08-06
+     *  (e.g. due to an older sessionStorage cache shape
      *  fix after v4 cache still masked the output handles for
      *  RandomNoise's NOISE slot).  Top-level (non-subgraph) workflows
      *  leave `detail.boundaryLinks` undefined → returns empty map. */
@@ -95,7 +95,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
 
     // Shared builder for a real ComfyUI graph node.
     //
-    // 2026-08-07 — anchor convention: the React Flow `position` is the
+    // — anchor convention: the React Flow `position` is the
     // *card's* top-left (i.e. the title bar top), and the body is painted
     // NODE_TITLE_H (=30px) *below* it.  The user wants the node BODY's
     // top to land exactly on the ComfyUI config `pos[1]` (the imported
@@ -106,7 +106,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     //
     // When `n.size` is provided we force the node box to the exact
     // ComfyUI dimensions: width = size[0], height = `size[1] + NODE_TITLE_H`
-    // (the raw `size[1]` is the BODY CONTENT height per the R49 rule —
+    // (the raw `size[1]` is the BODY CONTENT height per the rule
     // see the NODE_TITLE_H comment for the full rationale).  The body
     // content height carried in `data.size.h` is exactly `size[1]`.
     const NODE_ANCHOR_OFFSET_Y = NODE_TITLE_H;
@@ -130,7 +130,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         rawOutputs: rawMetaById[n.id]?.outputs ?? [],
         rawWidgetValues: rawMetaById[n.id]?.widgets_values ?? [],
         connectedOutputs: connectedOutputsById[n.id],
-        /* Backup source (2026-08-06 fix): stamped from detail.boundaryLinks
+        /* Backup source (fix): stamped from detail.boundaryLinks
          *  so the output Handle still mounts for nodes that don't carry
          *  the rawOutputs[].isBoundary stamp yet (e.g. cached detail
          *  shape from before the schema change).  Independent channel
@@ -139,7 +139,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         boundaryInputs: boundaryInputsByNodeId[n.id],
         flags: rawMetaById[n.id]?.flags ?? {},
         mode: rawMetaById[n.id]?.mode ?? 0,
-        /* Boundary stamps from the subgraph route (2026-08-05).  Outer
+        /* Boundary stamps from the subgraph route. Outer
          *  (top-level) workflows always leave both false — sentinel
          *  nodes only exist inside a subgraph.  The client uses these
          *  flags to draw an INPUTS / OUTPUTS wfGroup around each cluster
@@ -147,11 +147,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
          *  on the canvas. */
         isInputEndpoint: !!n.is_input_endpoint,
         isOutputEndpoint: !!n.is_output_endpoint,
-        /* LiteGraph `properties` (2026-08-09).  Fed through to WfNode so
+        /* LiteGraph `properties`. Fed through to WfNode so
          *  rgthree's `Fast Groups Bypasser` can read `matchTitle` etc.
          *  and render its runtime toggle list.  Forwarded verbatim. */
         properties: rawMetaById[n.id]?.properties ?? {},
-        /* Workflow groups (2026-08-09).  Passed to WfNode so the
+        /* Workflow groups. Passed to WfNode so the
          *  rgthree runtime body can match against them; other nodes
          *  ignore this field.  The reference is shared (not cloned) so
          *  the cost stays O(1) per node regardless of workflow size. */
@@ -163,7 +163,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     /* Subgraph wrapper node: class_type is a UUID and ComfyUI exposed
      *  inputs via proxyWidgets + a localised_name per slot.
      *
-     *  2026-08-05 evening — IO rows REMOVED from the parent chip.
+     *  evening — IO rows REMOVED from the parent chip.
      *  The parent card is now a compact "stats + drill-in CTA" chip
      *  (see WfSubgraphNode).  Drilling in (via double-click or the
      *  header expand button) loads the subgraph's inner graph where
@@ -250,7 +250,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     const noteNodes: Node[] = notes.map((note) =>
 {
       const title = extractNoteTitle(note.text, note.title);
-      /* Anchor convention (2026-08-07, same as graph nodes): the React
+      /* Anchor convention (same as graph nodes): the React
        *  Flow `position` is the card top (title-bar top), body is NODE_TITLE_H
        *  below it.  To land the BODY top on the imported `pos[1]` we SUBTRACT
        *  NODE_TITLE_H for titled notes; untitled notes render no bar so their
@@ -271,7 +271,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         data: { title, text: note.text, color: note.color },
         /* `size` in the ComfyUI/litegraph payload stores the BODY CONTENT
          *  height (the 30 px title bar is NOT included in `size[1]` per the
-         *  R49 rule — see the NODE_TITLE_H comment).  Titled notes add the
+         *  rule — see the NODE_TITLE_H comment). Titled notes add the
          *  title bar on top of the raw content size, so the React Flow box
          *  is `size[1] + NODE_TITLE_H` for titled notes.  Untitled notes
          *  render no bar so their `size[1]` is already the full height. */
@@ -289,7 +289,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
      *  this file (IO_PORT_HEIGHT / PORT_ROW_GAP / GROUP_*) so both the
      *  layout pass below and the WfIoPortNode renderer stay in sync. */
 
-    /* ── Boundary pins → wfGroup(wfIoPort …) (2026-08-06 late) ──
+    /* ── Boundary pins → wfGroup(wfIoPort …) (late) ──
      *
      *  The user asked: "子工作流的输入节点和输出参数节点不需要可用单独拖动，
      *  支持整体拖动即可，参数间的距离没必要那么大，紧凑些，再像图中那样
@@ -330,7 +330,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       connectable: false,
       style: { width: IO_PORT_WIDTH, height: IO_PORT_HEIGHT },
       data: {
-        /* Display label chain (2026-08-06 fix): the boundary pin's
+        /* Display label chain (fix): the boundary pin's
          *  `label` is the author-set business name (`FRAMES`,
          *  `IMAGE_FINAL`, `MODEL_HIGH_1st`) and is the *primary* read.
          *  Falls back to `localized` (ComfyUI's i18n) then to `name`
@@ -348,7 +348,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       },
     });
 
-    /* X-anchor for a wfIoPort child inside its rail group (2026-08-08
+    /* X-anchor for a wfIoPort child inside its rail group
      *  fixed).  Both rails now anchor the port from the wfGroup's
      *  top-right / top-left CORNER, not from the same (left) edge —
      *  the previous input layout pushed the port flush against the
@@ -403,7 +403,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
      *  bbox-anchored defaults.  `savedGroupPos` may already contain a
      *  user-moved position from a previous session — honour it.
      *
-     *  2026-08-06 (final): instead of forcing both rails into a
+     *  (final): instead of forcing both rails into a
      *  bbox-aligned vertical column, anchor each group at the raw
      *  coordinates ComfyUI stored on `boundaryPins.inputs[i].pos` /
      *  `boundaryPins.outputs[i].pos`.  These are the absolute canvas
@@ -555,7 +555,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
      *  empty → treated as "no positions" → Kahn auto-layout, which is the
      *  original behaviour for API-only workflows.
      *
-     *  2026-08-06: also guard against PARTIAL positions (count less than
+     *  also guard against PARTIAL positions (count less than
      *  realNodes.length).  This workflow can land in a state where the
      *  user has only placed a couple of nodes by hand (e.g. the workflow
      *  was imported as JSON-only and the user dragged 1-2 of them
@@ -570,7 +570,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
      *  gives a chaotic result because the auto-layout assumes a
      *  blank canvas — half-placed nodes disrupt the longest-path
      *  levels and produce a worse-looking fallback. */
-    // 2026-08-25: 单一格式（不再区分 RAW / API 视图）。节点布局优先使用
+    // 单一格式（不再区分 RAW / API 视图）。节点布局优先使用
     // detail.positions（已含 rawJson 原始位置 + 用户拖拽覆盖），不足时退回
     // Kahn 拓扑自动布局兜底。
     const kahn = computeKahnLayout(realNodes, scopeDetail.graph ?? {}, colW, rowH, padX, padY);
@@ -596,7 +596,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       return [...groupNodes, ...noteNodes, ...middleNodes, ...layoutBoundaryPins(middlePosById)];
     }
 
-    /* 2026-08-13 R78.3: hybrid — 客户端 RAW 视图的「部分 saved-positions」兜底
+    /* 3: hybrid — 客户端 RAW 视图的「部分 saved-positions」兜底
      *  当 detail.positions 数量不足以覆盖所有 realNodes（典型场景：含子图
      *  wrapper 的工作流 —— 服务端早期只提了顶层节点 pos，wrapper 内部 17 个
      *  节点 pos 漏了；现在服务端 extractPositions 已修，理论上不会再走到这里），

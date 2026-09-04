@@ -1,5 +1,5 @@
 "use client";
-/* Grouped parameter controls — entry point (T12 split).
+/* Grouped parameter controls — entry point (split).
  *
  * Two "paradigms" per group, switchable from a single dropdown
  * (StyleSwitcher):
@@ -14,7 +14,7 @@
  *
  * Split into: MultiSegmentPopover.tsx / StyleSwitcher.tsx /
  * AlignMultipleStepper.tsx / DimensionControl.tsx / VideoControl.tsx /
- * VideoField.tsx / grouped-controls-presets.ts (T12).
+ * VideoField.tsx / grouped-controls-presets.ts.
  * ───────────────────────────────────────────────────────────────────────── */
 import type { DimensionGroup, VideoGroup } from "./workflow-io";
 import { DimensionControl } from "./DimensionControl";

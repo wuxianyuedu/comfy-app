@@ -17,7 +17,10 @@
  *   R9  根目录只放工程配置,禁止再散落 .ps1 双击入口(ISSUE #29):入口一律归入
  *       tools/<分类>/;根入口的 discoverability 由 README 的入口清单承担,
  *       不靠"铺在根目录第一眼看见"
- * 违反 R1-R4、R7-R9 以退出码 1 阻断提交。
+ *   R10 注释里禁止「历史流水」:日期(2026-08-17)、改动编号(R-ardot114 / R83 /
+ *       R-Next)、任务批次号(T12-3)。这些归 git log,写进注释会随代码搬迁过期
+ *       失真(ISSUE #46 / 规范 12.4.2 / 反模式表 G4)
+ * 违反 R1-R4、R7-R10 以退出码 1 阻断提交。
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -31,6 +34,11 @@ const FORBIDDEN_SCRIPT_EXT = /\.(bat|cmd|vbs)$/i;
 const BOM_REQUIRED_DIRS = ["scripts/", "tools/"];
 // R8 只校验含非 ASCII 字符的 .ps1——纯 ASCII 脚本没有解码歧义,不强求 BOM
 const NON_ASCII = /[^\x00-\x7F]/;
+// R10 注释里的「历史流水」标记(ISSUE #46 / 规范 12.4.2)
+const HISTORY_DATE = /\d{4}-\d{2}-\d{2}/;
+const HISTORY_TAG =
+  /\bR(?:[-_][A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*|\d{1,4}(?:[-_][A-Za-z]?[A-Za-z0-9]*)?)(?:\s*\/\s*(?:\d{1,4}|[A-Za-z][A-Za-z0-9]*))*/;
+const HISTORY_TASK = /\bT\d{1,3}(?:-\d{1,3})?\b/;
 
 // Next.js App Router 保留文件名(框架强制小写,不可改名)——src/app 下豁免
 const NEXT_RESERVED = new Set([
@@ -131,6 +139,42 @@ const SCAN_EXCLUDED = [
     problems.push(
       'R9 根目录禁止 .ps1 双击入口(请放进 tools/<分类>/,启动类放 tools/start/):' + e.name,
     );
+  }
+})();
+
+// ── R10:注释里禁止「历史流水」(日期 / 改动编号 / 任务批次号) ──
+// 规范 12.4.2:作者、日期、版本流水归 git log / commit message,写进注释会随
+// 代码搬迁过期失真。本条只扫「整行都是注释」的行,不碰字符串字面量与代码。
+(function checkHistoryComments() {
+  const files = [];
+  (function walkComments(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name).split(path.sep).join('/');
+      if (e.isDirectory()) { walkComments(p); continue; }
+      if (/\.(ts|tsx)$/.test(e.name)) files.push(p);
+    }
+  })('src');
+  for (const rel of files) {
+    const lines = fs.readFileSync(rel, 'utf8').split('\n');
+    lines.forEach((l, i) => {
+      const t = l.trim();
+      const isComment =
+        t.startsWith('//') || t.startsWith('/*') || t.startsWith('*') || t.startsWith('{/*');
+      if (!isComment) return;
+      // 一行里可能同时有日期与编号,逐个报出来,便于一次改干净
+      const found = new Set();
+      for (const re of [HISTORY_DATE, HISTORY_TAG, HISTORY_TASK]) {
+        for (const m of l.matchAll(new RegExp(re.source, 'g'))) {
+          if (m[0] !== '') found.add(m[0]);
+        }
+      }
+      for (const hit of found) {
+        problems.push(
+          'R10 注释禁止历史流水(日期 / 编号 / 批次号归 git):' +
+            rel + ':' + (i + 1) + ' → ' + hit,
+        );
+      }
+    });
   }
 })();
 

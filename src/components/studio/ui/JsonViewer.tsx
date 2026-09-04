@@ -1,20 +1,20 @@
 "use client";
 
 /**
- * JsonViewer — 2026-08-11 R44 重构
+ * JsonViewer — 重构
  *
- * 之前 R39 自写的纯客户端 JSON 查看器 (660+ 行) 已有结构性问题：
+ * 之前 自写的纯客户端 JSON 查看器 (660+ 行) 已有结构性问题：
  *   - PrimitiveRow 用 `<div>` 渲染值，block-in-block 把 key-value 拆两行
  *   - 嵌套 paddingLeft 在深 indent 处把值挤到右侧 → 视觉错位
  *   - primitive string 整段渲染，没有 substring 着色 → active hit 看不出来
  *
- * R44 改用 react18-json-view 处理渲染层 (语法着色 / 容器折叠 / 长 string
+ * 改用 react18-json-view 处理渲染层 (语法着色 / 容器折叠 / 长 string
  * 折叠 / 暗黑主题 / clipboard / 多主题 + URL 识别)。我们只负责：
  *   1. 搜索 (collectHits 遍历 + 计数 + Enter/Shift+Enter/箭头/Esc)
  *   2. scroll-into-view (active hit 居中)
  *   3. DOM 后处理 (text node 内 substring 高亮 + active hit 行标 + data-jv-active-hit)
  *
- * 选 react18-json-view 的理由 (R44):
+ * 选 react18-json-view 的理由:
  *   - 0.2.10, 4 月前发布, 仍维护, React 18+ 兼容声明
  *   - 零业务依赖 + 7 主题 + CSS 变量覆盖
  *   - 我们自己的搜索/计数/跳转逻辑还是自写 (50 行 wrapper),
@@ -44,7 +44,7 @@ type JsonValue =
   | { [k: string]: JsonValue };
 
 /** 命中路径 — `{[nodeId]: {class_type, inputs, widgets_values, ...}}` 这一层
- *  对应 `["nodes", "3", "widgets_values", "2"]`。在 R44 我们用不到具体 path
+ *  对应 `["nodes", "3", "widgets_values", "2"]`。在 我们用不到具体 path
  *  做 DOM 后处理, 留作 collectHits 返回类型 + 日后扩展 (例如 toggle 行级
  *  highlight) 时使用。 */
 type Path = readonly (string | number)[];
@@ -248,7 +248,7 @@ export interface JsonViewerProps {
   data: unknown;
   /** Toolbar 副标题 (默认 "JSON") */
   title?: string;
-  /** 默认折叠深度 (R44 重新定义):
+  /** 默认折叠深度 (重新定义):
    *   - 0   → 全部展开 (top-level objects 内嵌子项也展开)
    *   - >=1 → 超 N 项的 object/array 在首次渲染时折叠 (N=20+depth*40, dense 场景下更紧凑)
    * 默认 1 (与之前的语义接近) */

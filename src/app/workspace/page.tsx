@@ -93,7 +93,7 @@ export default function WorkspacePage() {
 
   // ── Agent chat overlay ──
   const [agentOpen, setAgentOpen] = useState(false);
-  // R-ardot120 (2026-08-18): 控制「✦ AI 引导」FAB 是否渲染 —
+  // 控制「✦ AI 引导」FAB 是否渲染
   // 默认 false, 详见下方 JSX 注释。要重新启用 = 改 true。
   const SHOW_AI_FAB = false;
 
@@ -126,7 +126,7 @@ export default function WorkspacePage() {
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
   useEffect(() => {
     // One-shot sweep on home mount: remove any stale empty default-named
-    // drafts that earlier code versions (R58 + prior) left in the index.
+    // drafts that earlier code versions (+ prior) left in the index.
     // Triggers `comfyapp:canvas-store-changed` if anything was reaped, so
     // the refresh callback below will re-read `listProjects()` and the
     // home recent-projects list stays clean without a hard reload.
@@ -233,7 +233,7 @@ export default function WorkspacePage() {
   // ── Home 模式为整页独立视图；其余模式共用左侧导航 + 中央内容 ──
   // LogProvider/ToastProvider 全页只挂载一层：此前两个分支各自包一层，home ↔
   // 其它模式切换会反复装卸 console 包装（makeLogger 双重嵌套），是日志观察者
-  // 自身报错的结构性诱因（2026-09-03 LogProvider Console Error）。
+  // 自身报错的结构性诱因（LogProvider Console Error）。
   const renderCenter = () => {
     switch (viewMode) {
       case "works":
@@ -317,7 +317,7 @@ export default function WorkspacePage() {
                 }}
               />
 
-              {/* R-ardot120 (2026-08-18): 临时隐藏「✦ AI 引导」浮动入口。
+              {/* 临时隐藏「✦ AI 引导」浮动入口。
                *  原因：调试模式下日志面板浮在画布底部,缩小后恰好遮住右下 FAB,
                *  两块视觉冲突。保留 `agentOpen` state 与 <AgentChat /> 节点,
                *  仅折叠按钮入口。要恢复 = 把 SHOW_AI_FAB 改回 true。 */}

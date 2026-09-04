@@ -1,5 +1,5 @@
 "use client";
-/* Collapsed-mode handle anchors — extracted from workflow-node.tsx (T12).
+/* Collapsed-mode handle anchors — extracted from workflow-node.tsx.
  * When a node is collapsed the body is hidden but wires still need an
  * anchor.  Each side collapses to a decorative "cylinder" (a tall pill);
  * underneath it we keep the per-port <Handle> stack as tiny invisible

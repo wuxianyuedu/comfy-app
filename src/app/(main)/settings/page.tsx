@@ -3,7 +3,7 @@
 /**
  * 设置页容器（规范 17 §17.2 第④层）。
  *
- * 2026-09-04：全部 tRPC 查询、草稿状态、Ollama 探测与保存动作搬进
+ * 全部 tRPC 查询、草稿状态、Ollama 探测与保存动作搬进
  * `hooks/use-settings-page.ts`，两处裸 `fetch` 搬进 `lib/llm/ollama-client.ts`，
  * JSX 搬进 `SettingsPageView.tsx`。本文件只剩「取 controller → 传视图 →
  * 处理加载/错误/降级三个早退分支」。

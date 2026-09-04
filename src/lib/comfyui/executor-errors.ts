@@ -2,7 +2,7 @@
  * `executor-errors.ts` — ComfyUI 错误信息人性化（纯函数）
  * ===========================================================================
  *
- * 从 executor.ts 拆出的错误处理纯函数模块（T12 batch 4）：
+ * 从 executor.ts 拆出的错误处理纯函数模块（batch 4）：
  *   - {@link friendlyError}     把 ComfyUI / node 抛出的任意结构（字符串、
  *                               结构化对象、traceback 数组…）剥成可读文本
  *   - {@link buildPromptError}  把 /prompt 的 `node_errors` 拆成逐节点清单
@@ -78,7 +78,7 @@ export function friendlyError(raw: unknown): string {
  *  (field → {message}) or a top-level `message`. Surface those instead of a
  *  generic "节点配置错误" so the user can fix the actual bad value. */
 export function buildPromptError(res: PromptResult, graph: Record<string, unknown>): string {
-  // R69: previously `String(res.error)` — that collapses a structured
+  // previously `String(res.error)` — that collapses a structured
   // error object to the literal "[object Object]" and gets stored as
   // the task's error string, which then surfaces verbatim in the UI.
   // Reuse friendlyError so structured payloads (kaytool etc.) are

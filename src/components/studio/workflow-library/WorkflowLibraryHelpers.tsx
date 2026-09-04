@@ -3,11 +3,11 @@
 /**
  * WorkflowLibrary 的共享展示组件（规范 17 §17.2 第③层）。
  *
- * 2026-09-04：类型与纯派生已抽到 `workflow-library-config.ts`，本文件只留
+ * 类型与纯派生已抽到 `workflow-library-config.ts`，本文件只留
  * JSX 组件（IO 缩略图 / 根目录分组头 / 过滤页签 / 待载入卡片 / 列表容器）。
  * 组件一律纯 props 驱动，事件上抛，不发请求。
  *
- * 顺带删除了 `LibrarySourceModal`：2026-08-25（#45）详情面板改用统一
+ * 顺带删除了 `LibrarySourceModal`：（#45）详情面板改用统一
  * `SourceModal` 后它就再无消费方，却是本文件唯一的 tRPC 查询点——留着会
  * 让棘轮一直记一笔「视图内发请求」。
  */

@@ -95,7 +95,7 @@ export const taskRouter = createTRPCRouter({
   cancel: authedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      // 2026-08-30 越权修复:与 detail/openFolder/delete 一致,cancel 必须校验
+      // 越权修复:与 detail/openFolder/delete 一致,cancel 必须校验
       // 任务归属——此前任意登录用户可用任意 taskId 取消他人任务。
       const task = await taskRepository.findByIdWithImages(input.id);
       if (task?.userId !== ctx.user.id) {

@@ -13,7 +13,7 @@ export async function GET(
   const params = await ctx.params;
   const id = params.id;
 
-  // R-T3-phase4: native Route Handler — replaces the legacy `defineRoute`
+  // native Route Handler — replaces the legacy `defineRoute`
   // wrapper.  Auth contract is kept identical (401 structured envelope).
   const user = await getServerUser();
   if (!user?.id) {
@@ -30,7 +30,7 @@ export async function GET(
       const send = (obj: unknown) =>
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
 
-      /* R-ardot114 (2026-08-17): shared by the initial replay send
+      /* shared by the initial replay send
        *  below and the DB-poller below.  Both must read/write
        *  through the same variable so the poller doesn't re-fire
        *  the same status immediately after the initial send. */
@@ -44,7 +44,7 @@ export async function GET(
         .findById(id)
         .then((task) => {
           if (task) {
-            // R-Next (2026-08-17): forward structured validation errors so
+            // forward structured validation errors so
             //  consumers (CreatePanel) can render a per-field list instead of
             //  the English summary in `error`.
             send({
@@ -53,7 +53,7 @@ export async function GET(
               progress: task.progress,
               error: task.error,
               validationErrors: parseValidationErrors(task.validationErrors),
-              /* R-ardot121 (2026-08-18): forward workflowName so the
+              /* forward workflowName so the
                *  GlobalStepLogPanel task-switcher can label the entry
                *  ("<name> · STATUS") instead of a bare 14-char id. */
               workflowName: task.workflowName,
@@ -81,7 +81,7 @@ export async function GET(
         }
       });
 
-      /* R-ardot114 (2026-08-17): SSE heartbeat.  Without periodic
+      /* SSE heartbeat. Without periodic
        *  bytes the OS / load balancer / proxy can silently close the
        *  socket after 30-60s of apparent idle (common for tasks in
        *  QUEUED where no `log` event fires for minutes), and the
@@ -100,7 +100,7 @@ export async function GET(
         }
       }, 15000);
 
-      /* R-ardot114 (2026-08-17): DB truth-poller.  The runner's
+      /* DB truth-poller. The runner's
        *  in-memory `emitter` only fires for events *the runner
        *  itself produces* (progress/log/done/error).  External
        *  status changes — cancelTask() (which only wrote the DB

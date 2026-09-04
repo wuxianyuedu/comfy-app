@@ -5,7 +5,7 @@
  * (grid transparency, ruler visibility, etc.) survive page reloads and
  * apply the moment a new workflow is opened.
  *
- *  R-ardot95 (2026-08-17): three small affordances owe their home here —
+ *  three small affordances owe their home here
  *    • grid line opacity / line width / gap (the orange/dark gridlines
  *      from the screenshot were too prominent),
  *    • show/hide rulers + mini-map,
@@ -56,7 +56,7 @@ export interface CanvasSettings {
   maxZoom: number;
   minZoom: number;
 
-  /** 调试 (Debug) — R-ardot118 (2026-08-18): unified "调试模式" toggle.
+  /** 调试 (Debug) — unified "调试模式" toggle.
    *  When ON, the canvas shows a separate bottom-docked execution-log
    *  panel (GlobalStepLogPanel) and each log line carries its caller
    *  source ("file:line").  This is the single switch the user asked

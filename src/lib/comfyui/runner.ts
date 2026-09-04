@@ -1,6 +1,6 @@
 // P3: public entry for the ComfyUI runner.
 //
-// 2026-08-20 refactor: the original single-file `runner.ts` (1971 lines)
+// refactor: the original single-file `runner.ts` (1971 lines)
 // was split by responsibility into three modules plus shared state and a
 // protocol adapter:
 //

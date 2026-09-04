@@ -2,7 +2,7 @@
 
 //
 
-// P3 refactor (2026-08-20): `runner.ts` was split into enqueue / executor /
+// P3 refactor: `runner.ts` was split into enqueue / executor /
 
 // reaper.  This module holds the *singleton runtime state* and the *log
 
@@ -94,7 +94,7 @@ export type LogEntry = {
 
   msg: string;
 
-  /** R-ardot118 (2026-08-18): caller source ("file:line") captured at
+  /** caller source ("file:line") captured at
 
    *  emit time so the debug panel can show *which code path* produced
 
@@ -123,7 +123,7 @@ export type TaskEvent =
 
   | { type: "log"; entry: LogEntry }
 
-  /* R-ardot114 (2026-08-17): synthetic "state" event re-emitted
+  /* synthetic "state" event re-emitted
 
    *  from cancelTask() / finalizeFailure() paths that would
 
@@ -173,7 +173,7 @@ export type RunnerState = {
 
   lastLogPct: Map<string, number>;
 
-  /** R-ardot111 (2026-08-17): per-node completion tracking.  When
+  /** per-node completion tracking. When
 
    *  ComfyUI emits `executing` with `data.node !== null` we record the
 
@@ -187,7 +187,7 @@ export type RunnerState = {
 
   lastNodeByTask: Map<string, { node: string; classType: string; t: number }>;
 
-  /** R-ardot111 (2026-08-17): task start time (epoch ms), used to
+  /** task start time (epoch ms), used to
 
    *  emit "总耗时 Xs" at completion.  Set in enqueue(), cleared in
 
@@ -347,7 +347,7 @@ function callerLoc(): string {
 
 //
 
-// R-ardot115 (2026-08-18): the original `log()` only pushed to in-memory
+// the original `log()` only pushed to in-memory
 
 // `s.logs` and the EventEmitter.  `persistLogs()` was called only at
 
@@ -404,7 +404,7 @@ export function log(taskId: string, level: LogEntry["level"], msg: string) {
 
 
 
-// R-ardot115 (2026-08-18): per-taskId debounced DB writer.  Each task
+// per-taskId debounced DB writer. Each task
 
 // gets at most one pending write; subsequent `log()` calls within the
 
@@ -500,7 +500,7 @@ export function schedulePersistLogs(taskId: string) {
 
 export async function persistLogs(taskId: string) {
 
-  // R-ardot115 (2026-08-18): a debounced write is now racing the terminal
+  // a debounced write is now racing the terminal
 
   // `await persistLogs(taskId)` call.  Cancel the pending timers so the
 

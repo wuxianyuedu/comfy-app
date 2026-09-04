@@ -78,7 +78,7 @@ export function workflowInputsOf<T extends { name: string }>(
 
 /**
  * 从任务详情里取出要展示的提示词。
- * R-ardot60：工作流任务的 prompt 存在 params.workflowInputs[].value（name 为
+ * 工作流任务的 prompt 存在 params.workflowInputs[].value（name 为
  * text/prompt/positive）而不是 detail.prompt——以前取空就显示「—」，
  * 用户以为数据没显示全。故 prompt 为空时回落到 workflowInputs 里的同义字段，
  * 返回值为最终要展示的文本（视图不再做二次兜底）。
@@ -106,9 +106,9 @@ export function derivePrompt(detail: TaskDetail | null): {
 /**
  * 生成参数卡：seed/steps/cfg/sampler/scheduler/denoise/size。
  *
- * R-ardot63：有些工作流把 steps/cfg 等硬编码在 subgraph 的 KSampler 节点里，
+ * 有些工作流把 steps/cfg 等硬编码在 subgraph 的 KSampler 节点里，
  * 从不暴露给用户、也写不进 params——故再从 workflowHints 回填这些非随机字段。
- * R-ardot62：seed 优先用 workflowHints.seed（后端从 ComfyUI history 抽的真值），
+ * seed 优先用 workflowHints.seed（后端从 ComfyUI history 抽的真值），
  * 并在 hint 里标明来源，区分「真值 / 用户填值 / 默认值」。
  */
 export function deriveGenValues(

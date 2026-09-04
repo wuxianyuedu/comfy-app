@@ -23,10 +23,10 @@ import { useIOEditContext, IoCheckbox } from "./IOEditContext";
 import { SubgraphHeader } from "./SubgraphHeader";
 export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ data, selected }: { data: WorkflowSubgraphData; selected?: boolean }) {
   const io = useIOEditContext();
-  /* 2026-08-25: viewport zoom is NO LONGER subscribed here — see FlowNode /
+  /* viewport zoom is NO LONGER subscribed here — see FlowNode /
    *  FrostLayer: only frosted (bypass / disabled) nodes need to track zoom.
    *  Parent-graph subgraph card — mirrors WorkflowNode's two-zone layout
-   *  (2026-08-07): a purple HEADER, a TOP PINS zone that zips the
+   *  a purple HEADER, a TOP PINS zone that zips the
    *  wrapper's pure-connection input ports (left dot) with its exposed
    *  output ports (right dot) on shared 22px rows, and a WIDGET zone
    *  listing the wrapper's exposed widget inputs as LABEL | VALUE rows
@@ -36,7 +36,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
    * connection model as a regular node so wiring stays uniform. */
   /* Subgraph identity tint: purple by default, switching to bypass-pink
    *  (#ec4899) when the wrapper itself is bypassed and to grey when
-   *  muted.  Mirrors WorkflowNode's mode→color logic (2026-08-07). */
+   *  muted. Mirrors WorkflowNode's mode→color logic. */
   const nodeMode = data.mode ?? 0;
 
   /*  Subgraph wrapper uses the same REAL `backdrop-filter` via <NodeFrost>
@@ -56,7 +56,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
   const inputsList = data.inputs ?? [];
   const outputsList = data.outputs ?? [];
 
-  /* User-toggleable collapse state.  Mirrors WorkflowNode (2026-08-08): the
+  /* User-toggleable collapse state. Mirrors WorkflowNode: the
    *  left-side chevron flips between header-only chip and full body.
    *  Seed `userCollapsed` from the imported `flags.collapsed` so an
    *  initially-collapsed subgraph can still be expanded by the toggle
@@ -66,7 +66,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
   );
   const isCollapsed = userCollapsed;
 
-  /* Filter rows whose display label would be empty (2026-08-06 fix).
+  /* Filter rows whose display label would be empty (fix).
    *  ComfyUI sometimes exports sentinel / placeholder IO on subgraph
    *  wrappers — e.g. Settings.outputs[11] = `{name:"", type:"*",
    *  label:"PREVIEW"}`.  Without this filter the canvas would render
@@ -106,12 +106,12 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
    *                    (`isConnection` / `isBoundary`), mirroring
    *                    WorkflowNode's "both" row.
    *
-   * 2026-08-12 R73: split criterion changed from `widgetValue`
+   * split criterion changed from `widgetValue`
    * (never populated for wrapper nodes since the wrapper's own
    * `widgets_values[]` is empty — ComfyUI exports wrappers without
    * inlining values) to `widget` marker (always present on ComfyUI's
    * exported wrappers, and now also stamped defensively for custom
-   * wrappers by the server-side R73 pass).  This matches WorkflowNode's
+   * wrappers by the server-side pass). This matches WorkflowNode's
    * splitter and routes every exposed widget slot into the WIDGET
    * zone so the LABEL | VALUE rows render as inline widgets. */
   const connInputs = cleanedInputs.filter(
@@ -140,10 +140,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
         //  collapses below its own title bar.
         height: "auto",
         minWidth: data.size ? data.size.w : 280,
-        // R49 (2026-08-11): data.size.h is the BODY CONTENT height (size[1]).
+        // data.size.h is the BODY CONTENT height (size[1]).
         //  The WorkflowSubgraphNode outer div INCLUDES the pinned 30px title bar,
         //  so the total floor is content + title = size[1] + 30.  Mirrors
-        //  WorkflowNode's R49 fix so the card fills the React Flow box instead of
+        //  WorkflowNode's fix so the card fills the React Flow box instead of
         //  rendering short by 30px.
         minHeight: isCollapsed ? NODE_TITLE_H : (data.size ? (data.size.h ?? 0) + NODE_TITLE_H : undefined),
         // No maxWidth cap here either: ComfyUI lets the user resize the
@@ -181,7 +181,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
           cleanedOutputs.length > 0
             ? {
                 name: cleanedOutputs[0]!.out.name,
-                // 2026-08-15: forward the subgraph wrapper's output label
+                // forward the subgraph wrapper's output label
                 // (e.g. business `IMAGE_FINAL`) so it reaches the IO
                 // preview unchanged.
                 label:
@@ -193,7 +193,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
         }
       />
 
-      {/* Collapsed-mode handle anchors (2026-08-08).  Hidden when the
+      {/* Collapsed-mode handle anchors. Hidden when the
        *  subgraph chip is expanded — body sections below render
        *  instead.  Visual is the same cylinder (rounded vertical
        *  pill): one on the LEFT for wired boundary inputs, one on the
@@ -311,7 +311,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
               return (
                 <div
                   key={`subpin-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
-                  /* 2026-08-16 R-ardot71: long boundary-port labels wrap onto
+                  /* long boundary-port labels wrap onto
                    *  multiple lines instead of being clipped to 22 px.  See
                    *  the WorkflowNode inline-branch comment for full rationale. */
                   className="relative flex min-h-[22px] h-auto items-center pl-5 pr-5 py-0.5 text-[11px]"
@@ -346,7 +346,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                             name: inName,
                             kind: "param",
                             direction: "input",
-                            // 2026-08-15: forward the boundary port's
+                            // forward the boundary port's
                             // display label (already resolved into
                             // `inLabel` above) so the IO preview shows
                             // the meaningful name instead of the raw
@@ -356,7 +356,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                         />
                       )}
                       <span
-                        /* 2026-08-16 R-ardot71: drop `truncate` so a long
+                        /* drop `truncate` so a long
                          *  boundary-port label (e.g. the Settings wrapper's
                          *  `Model: True = 🟡 Safetensors | False = 🟣 GGUF`
                          *  BOOLEAN widget) wraps onto multiple lines
@@ -372,17 +372,17 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                   {outEntry && (
                     <>
                       <span
-                        /* 2026-08-16 R-ardot71: same wrap fix as the
+                        /* same wrap fix as the
                          *  boundary-input branch above. */
                         className="min-w-0 flex-1 whitespace-normal break-words text-right text-[11px] text-gray-200"
                         title={`${outDisplay} (${outType})`}
                       >
                         {outDisplay}
                       </span>
-                      {/* R-ardot28 (2026-08-14): per-PORT output checkbox removed;
+                      {/* per-PORT output checkbox removed;
                        *  workflow outputs are node-identified.  The per-node output
                        *  checkbox now lives in the subgraph node header. */}
-                      {/* R-ardot27 (2026-08-14): same as WorkflowNode — hide the
+                      {/* same as WorkflowNode — hide the
                        *  output source Handle while in IO-edit mode.  Workflow
                        *  outputs are identified by node, so the checkbox
                        *  above is enough; the right-edge port dot is visual
@@ -424,7 +424,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
             const isConn = inp.isConnection === true || inp.isBoundary === true;
             const typeCol = portColor(inp.type);
             const stringText: string = typeof v === "string" ? v : "";
-            /* R18 (parity with WorkflowNode): STRING widget detection now
+            /* (parity with WorkflowNode): STRING widget detection now
              *  uses the shared `inferIsMultiline` helper rather than
              *  the `length >= 32 || \n` heuristic.  Subgraph wrapper
              *  inputs (the wrapper-node's own exposed pins) hit this
@@ -447,11 +447,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                        *  LABEL + charCount chip on the top row, textarea
                        *  fills the remaining vertical space below.
                        *  Previous `flex-row items-start` (kept inline with
-                       *  R7-R13 WorkflowNode) had the same title-and-value-
+                       *  WorkflowNode) had the same title-and-value-
                        *  on-one-row + maxHeight-capped regression; see
                        *  the WorkflowNode branch comment for the full rationale. */
                       "group relative flex min-h-0 flex-1 flex-col gap-1.5 pl-5 pr-2 py-1.5 text-[11px]"
-                    /* 2026-08-16 R-ardot71: long widget labels wrap onto
+                    /* long widget labels wrap onto
                      *  multiple lines instead of being clipped to 22 px.
                      *  See the WorkflowNode inline-branch comment for full
                      *  rationale. */
@@ -478,7 +478,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                 {/* Workflow inputs must be UNCONNECTED — a slot already carrying a wire
                  *  (isConnection / isBoundary) gets its value from upstream, so
                  *  exposing it as a workflow input is meaningless. */}
-                {/* R74: this top-level checkbox is for COMPACT (non-STRING) widgets
+                {/* this top-level checkbox is for COMPACT (non-STRING) widgets
                  *  only.  STRING widgets render their own IoCheckbox inside the
                  *  stacked block below (L4415), so without the `!isStringWidget`
                  *  guard a STRING row would show TWO checkboxes — one orphaned at
@@ -491,7 +491,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                       name: inp.name,
                       kind: "widget",
                       direction: "input",
-                      // 2026-08-15: forward the subgraph wrapper's
+                      // forward the subgraph wrapper's
                       // widget label / zh localized_name so the IO
                       // preview shows the meaningful display name.
                       label: inp.label ?? inp.localized ?? inp.name,
@@ -505,7 +505,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                     ((inp as ComboInputMeta).comboOptions as unknown[]).length > 0 ? (
                       <>
                         <span
-                          /* 2026-08-16 R-ardot71: drop `truncate` so a long
+                          /* drop `truncate` so a long
                            *  subgraph-wrapper COMBO widget label wraps
                            *  onto multiple lines instead of being clipped
                            *  (same fix as the WorkflowNode inline branch). */
@@ -517,7 +517,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                         </span>
                         {/* Vertical 1px divider between label and value. */}
                         <span className="h-2 w-px shrink-0 bg-white/5" aria-hidden />
-                        {/* 2026-08-12: COMBO widget on the workflow canvas
+                        {/* COMBO widget on the workflow canvas
                          *  renders as a display-only DarkSelect — it shows the
                          *  currently-selected model as a dropdown shell, but
                          *  stays disabled here (editing happens in the project
@@ -537,7 +537,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                     ) : (
                       <>
                         <span
-                          /* 2026-08-16 R-ardot71: drop `truncate` so a long
+                          /* drop `truncate` so a long
                            *  subgraph-wrapper widget label wraps onto
                            *  multiple lines instead of being clipped
                            *  (same fix as the WorkflowNode inline branch). */
@@ -548,7 +548,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                           {label}
                         </span>
                         {/* Vertical 1px divider between label and value.
-                         *  2026-08-07: now a soft vertical gradient (top/bottom
+                         *  now a soft vertical gradient (top/bottom
                          *  fade to transparent) instead of a hard bar — reads as
                          *  a column hint rather than a "cut the row in half" line.
                          *  Width still 1px so it doesn't claim row real estate. */}
@@ -575,7 +575,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                   </>
                 )}
                 {/* STRING-widget textbox on subgraph wrapper.  STACKED
-                 *  BELOW the LABEL row (R17 parity with WorkflowNode).  Row is
+                 *  BELOW the LABEL row (parity with WorkflowNode). Row is
                  *  `flex-col gap-1.5 flex-1` so the label + charCount
                  *  chip occupy the top row and the textarea below fills
                  *  the remaining vertical space.  See WorkflowNode branch for
@@ -602,7 +602,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                             name: inp.name,
                             kind: "widget",
                             direction: "input",
-                            // 2026-08-15: forward the STRING widget's
+                            // forward the STRING widget's
                             // display label / zh localized_name so the
                             // IO preview shows the meaningful name
                             // instead of the bare wrapper key.
@@ -611,7 +611,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                         />
                       )}
                       <span
-                        /* 2026-08-16 R-ardot71: drop `truncate` from the
+                        /* drop `truncate` from the
                          *  subgraph STRING-stacked row label too — same
                          *  rationale as the WorkflowNode inline branch. */
                         className="shrink-0 whitespace-normal break-words text-left text-[11px]"

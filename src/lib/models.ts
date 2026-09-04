@@ -53,8 +53,8 @@ interface ScannedFile {
 /**
  * Sync the on-disk ComfyUI models into our registry.
  *
- * R-ardot41 (zero-implicit-default): only folders the user has explicitly
- * enabled in `UserModelConfig` are visited.  R-ardot45: each directory IS its
+ * (zero-implicit-default): only folders the user has explicitly
+ * enabled in `UserModelConfig` are visited. each directory IS its
  * own model type — the `Model.type` value is simply the directory name
  * verbatim (no taxonomy remapping, no per-row extra types).  A directory's
  * files are attributed only to that directory's type.
@@ -109,7 +109,7 @@ export async function syncModels(userId?: string): Promise<number> {
  * Query locally-synced model file names for the given COMBO field types, for
  * the canvas dropdown union (P4).
  *
- * R-ardot45: `folders` are directory names (which ARE the model types).  We
+ * `folders` are directory names (which ARE the model types). We
  * match enabled `UserModelConfig` rows whose `folder` is in the requested set,
  * then fetch distinct `fileName`s from `Model` where `isAvailable=true` and
  * `folder` is one of those directories.

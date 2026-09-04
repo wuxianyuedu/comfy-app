@@ -64,7 +64,7 @@ export interface IOEditActions {
   setIOValues: (next: Record<string, unknown>) => void;
   resetIOPreviewValues: () => void;
   reorderIO: (fromKey: string, beforeKey: string | null) => void;
-  /** 2026-09-03 多模式：写入 / 清除某个参数在某一模式下的覆盖项。
+  /** 多模式：写入 / 清除某个参数在某一模式下的覆盖项。
    *  `patch` 为 null 表示删除该模式的覆盖（回到「通用默认值 + 默认可见」）。
    *  与 setIOLabel / toggleIORequired 同路径持久化：下一次 PATCH 整体
    *  workflowIO 时一起落库，无需改表。 */

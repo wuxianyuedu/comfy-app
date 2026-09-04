@@ -1,6 +1,6 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from ProjectCanvas's floating toolbar
+/** extracted from ProjectCanvas's floating toolbar
  *  (fit view / export JSON / clear canvas).  Pure presentational.
  */
 import { Icon } from "@/components/ui/icon";

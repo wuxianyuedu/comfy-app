@@ -152,7 +152,7 @@ export function ShotRow({
         )}
       </div>
 
-      {/* 节点上的实时生成进度：ComfyUI 当前节点 + 百分比（2026-09-02） */}
+      {/* 节点上的实时生成进度：ComfyUI 当前节点 + 百分比 */}
       {shot.status === "running" &&
         (() => {
           const p = progressByShot?.[shot.id];

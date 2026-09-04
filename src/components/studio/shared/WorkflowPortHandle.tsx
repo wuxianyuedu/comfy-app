@@ -47,8 +47,8 @@ export function portChipStyle(type?: string): { background: string; color: strin
   return { background: "#26262E", color: "#9A9AAD" };
 }
 
-/* R-ardot53 (2026-08-15): export PortHandle — WorkflowNode outputs row
- *  (2026-08-15) 现在也要复用这个端点。要避免飘移，handle 几何参数 / 锚点
+/* export PortHandle — WorkflowNode outputs row
+ *  现在也要复用这个端点。要避免飘移，handle 几何参数 / 锚点
  *  / 描边色规则都还在这里维护。 */
 export function PortHandle({
   id,
@@ -82,14 +82,14 @@ export function PortHandle({
         border: `1px solid ${stroke}`,
         // Ardot 稿：`DROP_SHADOW` rgba(0,0,0,0.25) y4 blur4，节点下方轻投影。
         boxShadow: "0 4px 4px rgba(0,0,0,0.25)",
-        // v3 (R-ardot12): Handle 圆心必须挂在 subrow 中心才能精确对齐
+        // v3: Handle 圆心必须挂在 subrow 中心才能精确对齐
         // Ardot 稿 y=91/177/265（PortRow h=86 + PortRow3 h=33 单行结构）。
         // 父元素 (subrow) 必须 `relative`，否则会找更外层的 row wrapper，
         // 圆心落在 row 50% 而不是 subrow 50%，导致圆点偏下。
         ...(dir === "in"
           ? { left: -6, top: "50%", transform: "translateY(-50%)" }
           : { right: -6, top: "50%", transform: "translateY(-50%)" }),
-        // v4 (R-ardot16): 行高被严格固定后，Handle 圆心由 caller 用
+        // v4: 行高被严格固定后，Handle 圆心由 caller 用
         // 像素级 top 直接锁（PortRow subrow 圆心 y_in_row=14；PortRowInt
         // 单行圆心 y_in_row=16.5；OutputRow y_in_row=14）。
         ...extraStyle,

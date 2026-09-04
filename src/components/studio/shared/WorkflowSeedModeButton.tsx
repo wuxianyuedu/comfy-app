@@ -66,7 +66,7 @@ function SeedModeIcon({ value }: { value: string }) {
  *  an option calls `onPick` which the canvas layer writes back to the
  *  node's `seedModes` map.
  *
- *  Z-index fix (R-ardot73-D bug): the previous inline popover lived inside
+ *  Z-index fix (bug): the previous inline popover lived inside
  *  a React Flow node, which uses `position:absolute+transform:translate3d(...)`
  *  and therefore creates a stacking context. Even with `z-40` the popover was
  *  covered by any other node whose React Flow `zIndex` was raised (selected,

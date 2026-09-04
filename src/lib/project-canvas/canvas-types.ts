@@ -130,7 +130,7 @@ export interface CanvasNodeData {
   kind: NodeKind;
   status: "idle" | "running" | "done" | "error";
   error?: string;
-  /** R-ardot103 (2026-08-17): 0..100 generation progress surfaced by pollTask
+  /** 0..100 generation progress surfaced by pollTask
    *  from /api/tasks/[id].task.progress; consumed by ContentAssetBody's
    *  WaterFillProgress overlay while status === "running". Resets to 0 at
    *  the start of each run; cleared by leaving "running" (done/error catch
@@ -166,7 +166,7 @@ export interface CanvasNodeData {
    *  the error came from a client-side exception (no task ever started) or
    *  from `requestFailure` upstream (network/CORS/etc.). */
   errorStatus?: "FAILED" | "CANCELLED" | "ERROR" | "TIMEOUT" | null;
-  /** 2026-08-13 R83: Structured context for the error panel.
+  /** Structured context for the error panel.
    *  `request` = exact request payload that was sent to /api/generate
    *  (mirrored from pollTask().params on the failure path).
    *  `timestamp` = ISO client-side time of the failure patch.
@@ -174,7 +174,7 @@ export interface CanvasNodeData {
    *  project and survives reloads. */
   errorContext?: { request?: unknown; timestamp?: string };
 
-  /** R-Next (2026-08-17): structured ComfyUI /prompt validation errors
+  /** structured ComfyUI /prompt validation errors
    *  (flattened `node_errors`), surfaced in the canvas error panel as a
    *  precise per-field list so the user can locate the bad input. Plumbed
    *  from `pollTask().validationErrors`. */
@@ -203,7 +203,7 @@ export interface CanvasNodeData {
   workflowInputs?: Record<string, unknown>;
   /** Downstream node auto-spawned for this workflow's output (so we only create it once). */
   workflowSinkId?: string;
-  /** R-ardot86 (2026-08-16): 生图/生成视频三步级联的「模型」步骤所选模型标签名
+  /** 生图/生成视频三步级联的「模型」步骤所选模型标签名
    *  （与 WorkflowNode 的 modelFilter 同源，均来自 WorkflowModelTag 名称）。
    *  工作流按 taskType + 该标签严格匹配。仅 image/video 节点在级联流程中使用。 */
   genModelTag?: string;

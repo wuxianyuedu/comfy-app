@@ -5,7 +5,7 @@ import { type Post } from "~/server/db/schema";
 import { postRepository } from "@/lib/core/repository";
 
 export const postRouter = createTRPCRouter({
-  // R-T3-phase4 (OWASP A01): demo scaffold query no longer public — list/read
+  // (OWASP A01): demo scaffold query no longer public — list/read
   // endpoints require an authed (or local demo) user.
   getLatest: authedProcedure.query(async (): Promise<Post | null> => {
     return postRepository.getLatest();

@@ -1,5 +1,5 @@
 // 历史详情弹窗的派生规则单测：纯函数，无需 render、无需网络。
-// 这些规则原先内联在 JSX 的 IIFE 里（R-ardot60/62/63），改一行没人知道有没有回归。
+// 这些规则原先内联在 JSX 的 IIFE 里，改一行没人知道有没有回归。
 
 import { describe, expect, it } from "vitest";
 

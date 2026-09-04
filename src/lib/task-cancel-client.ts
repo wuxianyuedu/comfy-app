@@ -4,7 +4,7 @@
  * 视图零 IO，「取消失败怎么提示」只有一份说法。
  *
  * 取消是**幂等**的：服务端对不存在的 taskId 返回 404 且无副作用，因此调用方
- * 不必先确认 taskId 是否存在（R-ardot121）。
+ * 不必先确认 taskId 是否存在。
  */
 
 import { vanillaApi } from "~/trpc/vanilla";

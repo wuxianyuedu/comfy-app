@@ -84,7 +84,7 @@ export interface TaskFailure {
   /** Snapshot of the original request payload (from `prisma.task.params`)
    *  so the error UI can show "what was sent" next to "what failed". */
   params?: unknown;
-  /** R-Next (2026-08-17): structured ComfyUI /prompt validation errors
+  /** structured ComfyUI /prompt validation errors
    *  (flattened `node_errors`), so the UI can render a precise per-field
    *  list instead of parsing the English summary in `error`. */
   validationErrors?: ValidationError[];
@@ -96,7 +96,7 @@ export interface TaskFailure {
 export async function pollTask(
   taskId: string,
   timeoutMs = 25 * 60 * 1000,
-  /* R-ardot103 (2026-08-17): callback fired on every poll tick with a
+  /* callback fired on every poll tick with a
    *  clamped 0..100 progress. Optional — callers that don't care simply
    *  omit it. Wired into CanvasNode.runGenerate so the picture/movie
    *  preview can show a water-fill overlay while generation runs. */
@@ -114,7 +114,7 @@ export async function pollTask(
     }
     try {
       const task = await vanillaApi.task.detail.query({ id: taskId });
-        /* R-ardot103 (2026-08-17): surface 0..100 progress to the canvas.
+        /* surface 0..100 progress to the canvas.
          *  Previously dropped — pollTask only read status + images, so the
          *  canvas picture/image preview had no progress to show even
          *  though /api/tasks/[id] returns task.progress. */
@@ -128,14 +128,14 @@ export async function pollTask(
         }
         const st = task?.status as string | undefined;
         if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
-          // Defensive normalize (R67 + R69): `task.error` is typed `String?`
+          // Defensive normalize: `task.error` is typed `String?`
           // in Prisma but legacy rows / older code paths (e.g.
-          // buildPromptError pre-R69 used `String(res.error)`) can land
+          // buildPromptError pre-used `String(res.error)`) can land
           // the literal "[object Object]" as the stored string.  We
           // peel structured objects to JSON AND detect the literal
           // garbage-string sentinel so the UI never shows
           // `[object Object]`.  Garbage strings get replaced with the
-          // generic fallback (R69). */
+          // generic fallback. */
           const rawErr = task?.error;
           const peeled =
             typeof rawErr === "string"
@@ -160,11 +160,11 @@ export async function pollTask(
             error: isGarbage
               ? `任务 ${st}（无详细错误，请查看后端日志）`
               : trimmed,
-            /* 2026-08-13 R83: 失败也回传请求 payload 快照，前端用于在失败面板里
+            /* 失败也回传请求 payload 快照，前端用于在失败面板里
              *  展示「执行了哪些参数」。task.params 由 /api/generate route.ts
              *  写入（Prisma JSON 列）。 */
             params: task?.params ?? undefined,
-            /* R-Next (2026-08-17): carry structured validation errors from
+            /* carry structured validation errors from
              *  /api/tasks/[id].task.validationErrors into the failure result
              *  so CanvasNode can render a precise per-field list. */
             validationErrors: task?.validationErrors as unknown as ValidationError[] | undefined,

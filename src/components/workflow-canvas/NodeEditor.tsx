@@ -261,7 +261,7 @@ function FieldRow({ field, value, checkpoints, modelLists, onChange }: FieldRowP
         <div className="wf-field">
           <label className="wf-field__label">{field.label}</label>
           {/*
-           *  R-ardot92 (2026-08-17): 同样把原生 `<input type="number">` 替换为
+           *  同样把原生 `<input type="number">` 替换为
            *  NumberField（`─ value +` 左右 stepper，与 DynamicWorkflowForm
            *  Ardot 规范统一）。`field.value` 一律经 Number() 化兜底：API 残留
            *  字面量（如 "fixed"）会落回 field.min，杜绝渲染出方块字符。

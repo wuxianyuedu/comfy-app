@@ -44,7 +44,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       (level: LogLevel) =>
       (...args: unknown[]) => {
         /* 观察者绝不能成为故障源：这里曾是全页面报错的放大器
-         * （2026-09-03 Console Error 截图）。originals[level] 在多重包装/
+         * （Console Error 截图）。originals[level] 在多重包装/
          * 热更新竞态下可能不是函数——直接调用会把日志调用变成 TypeError，
          * 把业务错误（如 workflow.list 查询失败）淹没掉。守卫后 fail-open：
          * 原生 console 不可用时至少日志仍进面板。 */

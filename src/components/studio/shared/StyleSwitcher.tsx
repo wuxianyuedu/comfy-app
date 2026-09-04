@@ -1,5 +1,5 @@
 "use client";
-/* StyleSwitcher + shared atomic form primitives — extracted from GroupedControls.tsx (T12). */
+/* StyleSwitcher + shared atomic form primitives — extracted from GroupedControls.tsx. */
 import React from "react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 

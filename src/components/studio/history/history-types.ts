@@ -10,7 +10,7 @@ export interface TaskItem {
   negativePrompt?: string | null;
   params?: Record<string, unknown> | null;
   error?: string | null;
-  /** R-Next (2026-08-17): structured ComfyUI /prompt validation errors,
+  /** structured ComfyUI /prompt validation errors,
    *  present on FAILED tasks so the card can show a per-field list. */
   validationErrors?: ValidationError[] | null;
   createdAt: string;

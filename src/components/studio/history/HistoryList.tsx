@@ -11,7 +11,7 @@ import { FILTERS, type SortKey } from "./history-types";
  * 只做：取 controller → 传给视图 → 挂详情弹层；不含任何业务规则。
  */
 export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: string) => void }) {
-  /* R-ardot60 (2026-08-15): 拿掉 modal「打开完整详情 ↗」按钮后 onOpenTask 变成无用 prop,
+  /* 拿掉 modal「打开完整详情 ↗」按钮后 onOpenTask 变成无用 prop,
    *  重命名为 _onOpenTask 让 lint 沉默并保留向下兼容（父组件还在传，旧版可以仍然保留这个 prop）。
    *  用户反馈「在这里点开就显示详情，别在其他界面再显示」—— 历史 modal 是「这里」，
    *  「其他界面」是 `/create/${id}` 这条独立路由。 */

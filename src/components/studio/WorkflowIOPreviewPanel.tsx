@@ -12,7 +12,7 @@
  *  toolbar.  z-30 so it sits above the MiniMap + Controls but below the
  *  save toast.  Pointer events on the panel itself are enabled.
  *
- *  DATA MERGE (2026-08-09).  The local `workflowIO` state only carries the
+ *  DATA MERGE. The local `workflowIO` state only carries the
  *  four identity fields written by toggleIO — it does NOT have
  *  type/defaultValue/nodeTitle/multiline, those come from the server-side
  *  enrichment in `api/workflows/[id].route.ts`.  Without merging, every
@@ -21,7 +21,7 @@
  *  `detailIOMap[key]` (already enriched), and overlay the local `label`
  *  on top so an un-saved rename wins immediately.
  *
- *  2026-09-03 多模式：顶部新增「模式页签」。「通用」页签下编辑的是全局默认值
+ *  多模式：顶部新增「模式页签」。「通用」页签下编辑的是全局默认值
  *  （写 `value`）；切到某个模式码页签后，编辑的是该模式下的覆盖层
  *  （写 `modes[code] = { defaultValue, visible }`）。覆盖层就在 workflowIO 的
  *  JSON 列里，随整体 workflowIO 一起 PATCH 落库，因此新增模式无需改表。 */
@@ -112,7 +112,7 @@ export function WorkflowIoPreviewPanel({
   const editableEntries = useMemo(() => splitWorkflowIO(previewIO).inputs, [previewIO]);
   const modeCodes = useMemo(() => collectModeCodes(previewIO), [previewIO]);
 
-  /* R94 (2026-08-17): does any widget pin carry an author override?  Drives
+  /* does any widget pin carry an author override? Drives
    *  the 「恢复默认」 button's enabled state. */
   const hasIOOverrides = useMemo(
     () => Object.values(workflowIO).some((entry) => entry?.kind === "widget" && entry.value !== undefined),
@@ -365,12 +365,12 @@ export function WorkflowIoPreviewPanel({
               compact
               showOutputs
               onLabelChange={setIOLabel}
-              /* R57: 必填 / 可选 toggle.  Preview only — purely
+              /* 必填 / 可选 toggle. Preview only — purely
                *  visual; the toggle writes into the same
                *  workflowIO map that setIOLabel uses, which gets
                *  shipped to the server on next PATCH. */
               onRequiredChange={toggleIORequired}
-              /* R-ardot35: drag-to-reorder.  Only the canvas-side
+              /* drag-to-reorder. Only the canvas-side
                *  IO preview exposes this — the author is editing
                *  the workflow's IO layout here.  CreatePanel
                *  intentionally doesn't (consumers just see the

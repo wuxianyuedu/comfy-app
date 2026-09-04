@@ -9,12 +9,12 @@
  * with absolute path + size + mtime so the UI can detect "loaded but out-of-
  * date" patterns consistent with the custom-nodes manifest flow.
  *
- * Iron rule (2026-08-10 R8): these roots are NEVER written to. Only
+ * Iron rule: these roots are NEVER written to. Only
  * `fs.readdirSync` / `fs.statSync` / `fs.createReadStream` are allowed. No
  * `fs.writeFile`, `fs.rename`, `fs.rm`, `unlink`, `appendFile`, etc. —
  * violations must be caught at code review.
  *
- * R-ardot105 (2026-08-17): `scanLocalWorkflowChecksums` returns a
+ * `scanLocalWorkflowChecksums` returns a
  * `{absPath, checksum}` list sized for the route-layer's "rename-relink"
  * flow.  The checksum is the same SHA-1(first-16-hex-of-utf8-file) that
  * `importSource.checksum()` writes into `WorkflowTemplate.sourceChecksum`,
@@ -38,7 +38,7 @@ export interface LocalWorkflowFile {
   rawPath: string;
   size: number;
   mtimeMs: number;
-  /** 2026-08-10 R11: which configured LOCAL_WORKFLOWS_PATH root this file
+  /** which configured LOCAL_WORKFLOWS_PATH root this file
    *  came from. Used by the API layer to stamp a `sourceRoot` on every row
    *  so the library card can label "📂 来自哪个目录" without re-doing the
    *  prefix match on the client. Equal to the root's `rawPath` (verbatim,
@@ -98,7 +98,7 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
   const abs = resolve(rawDir);
   // Closure-set "this file came from root X" — stamped on every entry pushed
   // by `visit` so callers can show "📂 <root 短名>" without re-computing
-  // the prefix match on their end. (See R11 in the daily log.)
+  // the prefix match on their end. (See in the daily log.)
   const stampRoot = () => ({ rootRawPath: rawDir, rootAbsPath: abs });
   if (!fs.existsSync(/*turbopackIgnore: true*/ abs)) {
     return { rawPath: rawDir, absPath: abs, exists: false, files: [] };
@@ -251,7 +251,7 @@ export function scanLocalWorkflowRoots(
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * R-ardot105 (2026-08-17): rename-resilient re-link support.
+ * rename-resilient re-link support.
  *
  * Goal: when a user renames a local workflow JSON on disk, the DB still
  * holds the OLD absolute path in `WorkflowTemplate.sourcePath`.  A routine

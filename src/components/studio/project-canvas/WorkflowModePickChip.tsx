@@ -1,7 +1,7 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from WorkflowNode.tsx — mode picker chip
- *  (Dropdown 3, R-ardot36) + the canvas-transform auto-close watcher.
+/** extracted from WorkflowNode.tsx — mode picker chip
+ *  (Dropdown 3, ) + the canvas-transform auto-close watcher.
  *  Behaviour and visuals unchanged.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -17,7 +17,7 @@ interface WorkflowModePickChipProps {
   disabled?: boolean;
 }
 
-/* 2026-08-25: transform 订阅收敛（商业级性能）。
+/* transform 订阅收敛（商业级性能）。
  * 之前 ModePickChip 顶层常驻订阅 state.transform —— 画布每 pan/zoom 一次，
  * 所有工作流节点都会跟着全量重渲染，即使 99% 的节点弹层根本没打开。
  * 现在把订阅下沉到只在弹层打开时才挂载的 PopoverAutoClose：
@@ -92,7 +92,7 @@ export function WorkflowModePickChip({
         >
           {hasModes ? triggerLabel : "未选"}
         </span>
-        {/* R-ardot38: 不再显示 +N 徽章 — 弹层只列工作流实际支持的 N 个模式，
+        {/* 不再显示 +N 徽章 — 弹层只列工作流实际支持的 N 个模式，
          *  trigger 只展示当前默认，没必要再用 +N 暗示"还有几个未展示" */}
         <span
           className={`shrink-0 text-(--color-ink-muted) transition-transform ${open ? "rotate-180" : ""}`}
@@ -118,7 +118,7 @@ export function WorkflowModePickChip({
             }}
             className="rounded-xl border border-white/8 bg-(--color-card) py-1 shadow-2xl shadow-violet-500/20"
           >
-            {/* R-ardot36: 仅展示工作流 modes 数组里的 N 个，单选 + 点选即切换 */}
+            {/* 仅展示工作流 modes 数组里的 N 个，单选 + 点选即切换 */}
             {items.length === 0 ? (
               <div className="px-3 py-3 text-center text-[11px] text-(--color-ink-muted)">
                 该工作流没有声明可用模式

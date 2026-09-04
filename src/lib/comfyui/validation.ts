@@ -37,7 +37,7 @@ export interface ValidationError {
 /** Flatten ComfyUI's `node_errors` into a `ValidationError[]`.
  *  Returns `[]` when there is nothing structured to report.
  *
- *  R-ardot118 (2026-08-18): accept TWO carrier shapes, because the
+ *  accept TWO carrier shapes, because the
  *  upstream `/prompt` response and the comfy-cli envelope disagree on
  *  how `node_errors` is serialised:
  *

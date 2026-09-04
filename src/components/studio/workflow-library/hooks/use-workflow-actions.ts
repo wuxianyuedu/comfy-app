@@ -1,12 +1,12 @@
 "use client";
 
-/** 2026-08-22 P4: extracted from WorkflowLibrary's action-callback block
+/** P4: extracted from WorkflowLibrary's action-callback block
  *  (handleUpgradeConfirm / handleDelete / patchModes / patchModelTags /
  *  downloadJson / resyncWorkflow / handleLoadPending).  The hook receives
  *  the raw state setters + trpc mutations it needs and returns the stable
  *  callbacks; the component keeps only the state declarations and the JSX.
  *
- *  2026-09-04：归位 `hooks/`（规范 17 §17.2 第②层——此前它在 feature 根目录，
+ *  归位 `hooks/`（规范 17 §17.2 第②层——此前它在 feature 根目录，
  *  名字像逻辑层、位置却不是）。`setImportErr` 同步改名为 `setActionError`：
  *  它承接的是动作失败（删除 / 下载 / 同步 / 载入），不是导入面板的校验错误，
  *  按 §17.5.4 必须走「只有用户重试才清」的通道。
@@ -69,7 +69,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     [setDeleting, deleteMut, setPendingDelete, load, setActionError],
   );
 
-  /** 2026-08-13: 多模式持久化。乐观更新本地列表，失败则回滚（重新拉取列表）。 */
+  /** 多模式持久化。乐观更新本地列表，失败则回滚（重新拉取列表）。 */
   const patchModes = useCallback(
     async (id: string, modes: string[], defaultMode: string) => {
       setWorkflows((prev) =>
@@ -89,7 +89,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     [setWorkflows, updateMut, toast, load],
   );
 
-  /** 2026-08-15: 模型标签绑定持久化。乐观更新本地列表，失败回滚。 */
+  /** 模型标签绑定持久化。乐观更新本地列表，失败回滚。 */
   const patchModelTags = useCallback(
     async (id: string, names: string[]) => {
       setWorkflows((prev) =>
@@ -142,7 +142,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     [toast, setBundleBusy, utils],
   );
 
-  /** 2026-08-10 R16: re-import a local workflow's source file and refresh. */
+  /** re-import a local workflow's source file and refresh. */
   const resyncWorkflow = useCallback(
     async (id: string, name: string) => {
       setResyncBusy(id);
@@ -169,7 +169,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
   );
 
   /** Load one disk-discovered file into the DB via the single-file import
-   *  route (R12: the only supported local-import flow). */
+   *  route (the only supported local-import flow). */
   const handleLoadPending = useCallback(
     async (pending: { id: string; name: string; sourcePath: string }) => {
       setPendingLoading((state) => ({ ...state, [pending.id]: true }));

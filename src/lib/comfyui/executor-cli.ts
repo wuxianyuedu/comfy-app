@@ -2,7 +2,7 @@
  * `executor-cli.ts` — comfy-cli 执行路径（raw UI-format 工作流）
  * ===========================================================================
  *
- * 从 executor.ts 拆出的「comfy-cli 提交路径」模块（T12 batch 4）：
+ * 从 executor.ts 拆出的「comfy-cli 提交路径」模块（batch 4）：
  *   - {@link cliProcs}          正在运行的 comfy-cli 子进程表（供取消）
  *   - {@link executeViaComfyCli} raw UI-format 工作流提交 + stdout 事件收割
  *   - {@link applyRawOverrides}  把 canvas 的 workflowInputs 注入 raw json
@@ -212,7 +212,7 @@ function stripUiOnlyNodes(raw: JsonRecord): JsonRecord {
 export async function executeViaComfyCli(job: Job) {
   const s = state();
   const { taskId, rawJson, overrides } = job;
-  // R-ardot115 (2026-08-18): the entry line of the raw path so the
+  // the entry line of the raw path so the
   // user can see in the log panel exactly which method is handling
   // their task.  Before this it was silent until the first stdout
   // JSON event arrived (often 5-30s in, the Python venv boot).
@@ -244,7 +244,7 @@ export async function executeViaComfyCli(job: Job) {
   const tmpFile = path.join(tmpDir, `wf-${taskId}.json`);
   log(taskId, "info", `写入临时工作流文件：${tmpFile}`);
   await fs.writeFile(tmpFile, JSON.stringify(patched), "utf-8");
-  // R-ardot65 (2026-08-15): 记下本次实际提交给 ComfyUI 的 workflow（liblib
+  // 记下本次实际提交给 ComfyUI 的 workflow（liblib
   // subgraph 未展开格式），任务完成落盘为 workflow.json 供完整复现。
   s.executedWorkflow.set(taskId, patched);
   log(
@@ -298,7 +298,7 @@ export async function executeViaComfyCli(job: Job) {
     return;
   }
 
-  // R-ardot115 (2026-08-18): surface the literal comfy-cli command so
+  // surface the literal comfy-cli command so
   // the user (and we, on support) can reproduce the exact invocation
   // from the log panel without digging through devtools.
   log(
@@ -307,7 +307,7 @@ export async function executeViaComfyCli(job: Job) {
     `comfy-cli 执行 raw 工作流（${host}:${port}）`
   );
   log(taskId, "info", `  ${pyName} ${args.join(" ")}`);
-  // R-ardot111 (2026-08-17): explicit pre-spawn line so the user
+  // explicit pre-spawn line so the user
   // sees a "→ 启动" marker before the (potentially slow) Python
   // boot.  Without this, the first log on a raw submission was
   // "comfy-cli 执行 raw 工作流" + a long silence, which looks
@@ -342,7 +342,7 @@ export async function executeViaComfyCli(job: Job) {
     void fail(taskId, promptId ?? "", "comfy-cli 执行超时（看门狗）");
   }, CLI_TIMEOUT_MS);
 
-  // R-ardot115 (2026-08-18): flatten /prompt errors returned via
+  // flatten /prompt errors returned via
   // comfy-cli's envelope into a structured `validationErrors[]` and
   // pass them to `fail()` as the 4th arg, mirroring the API-format
   // branch at line ~1226.  comfy-cli ships the upstream /prompt
@@ -353,7 +353,7 @@ export async function executeViaComfyCli(job: Job) {
   // re-running to populate structure was a no-op (re-running the
   // SAME workflow would produce the SAME envelope with the SAME
   // unflattened payload).
-  // R-ardot118 (2026-08-18): comfy-cli wraps the upstream /prompt
+  // comfy-cli wraps the upstream /prompt
   // payload in an `envelope`. The structured `node_errors` lands at
   // several possible positions depending on the comfy-cli version:
   //   • error.details.node_errors  → LIST of records (this is what
@@ -436,7 +436,7 @@ export async function executeViaComfyCli(job: Job) {
           );
         }
       } else {
-        // Comprehensive-detection safety net (R-ardot118): the message
+        // Comprehensive-detection safety net: the message
         // says "validation error" but the deep search found no
         // structured `node_errors`.  Dump the raw envelope (truncated)
         // so a support re-run can see the real shape instead of a
@@ -471,7 +471,7 @@ export async function executeViaComfyCli(job: Job) {
       if (!line) continue;
       let ev: unknown = null;
       try { ev = JSON.parse(line); } catch {
-        // R-ardot115 (2026-08-18): surface non-JSON lines too so the
+        // surface non-JSON lines too so the
         // user can see when comfy-cli prints a Python traceback or
         // import error.  Cap to avoid flooding the panel during
         // legitimate verbose output.
@@ -492,7 +492,7 @@ export async function executeViaComfyCli(job: Job) {
         void taskRepository
           .markRunning(taskId, evt.prompt_id)
           .catch(() => undefined);
-        // R-ardot111 (2026-08-17): mirror the API-format branch's
+        // mirror the API-format branch's
         // "✓ 已接收…等待 executing" wording so the log panel shows a
         // consistent vocabulary across both submission paths.
         log(taskId, "info", `✓ comfy-cli 已提交（prompt_id: ${promptId}），等待节点执行…`);
@@ -509,7 +509,7 @@ export async function executeViaComfyCli(job: Job) {
           progress: Math.round((evt.completed / evt.total) * 100),
         });
       } else if (evt.type === "executing" || evt.type === "execution_success") {
-        // R-ardot115 (2026-08-18): forward the raw CLI events for
+        // forward the raw CLI events for
         // per-node visibility (we can't map them back to the raw
         // graph class_type here without the original UUIDs, but the
         // node id + event type alone is enough to show "something is
@@ -527,7 +527,7 @@ export async function executeViaComfyCli(job: Job) {
     }
   });
 
-  // R-ardot115 (2026-08-18): stream stderr live so Python tracebacks
+  // stream stderr live so Python tracebacks
   // appear in the panel as they happen, instead of only at close().
   let errBuf = "";
   let errLines = 0;

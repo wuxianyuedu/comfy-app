@@ -1,6 +1,6 @@
 "use client";
 
-/* 2026-08-30: extracted from CanvasNode — the collapsible error panel.
+/* extracted from CanvasNode — the collapsible error panel.
  *  Owns the errExpanded toggle state + the shouldAutoExpand / errorSuggestion
  *  derivations and renders the full panel JSX (expand/collapse, copy, retry,
  *  suggestion). The parent renders <ErrorPanel/> unconditionally; when the
@@ -46,7 +46,7 @@ export function ErrorPanel({
    *  Reset to collapsed whenever a new run starts so the next failure
    *  presents fresh without the user seeing a stale expanded state.
    *
-   *  2026-08-13 R83: when the error message contains ComfyUI's
+   *  when the error message contains ComfyUI's
    *  "Node X not found" / "OOM" / "Cannot find model" / 5xx patterns, the
    *  panel auto-expands so the user can actually see the actionable
    *  context (taskId, request payload, suggestion). */
@@ -207,11 +207,11 @@ export function ErrorPanel({
           )}
 
           {errExpanded && (() => {
-            // 2026-08-13 R83: 重做失败面板，把「执行了什么」结构化展示。
+            // 重做失败面板，把「执行了什么」结构化展示。
             //
-            // Defensive coerce (R67 + R69): `d.error` is typed `string`
+            // Defensive coerce: `d.error` is typed `string`
             // but legacy rows / older code paths may have stored the
-            // literal "[object Object]" (e.g. buildPromptError pre-R69
+            // literal "[object Object]" (e.g. buildPromptError pre-
             // used `String(res.error)`) or a structured object slipped
             // through a race.  We (1) detect the literal garbage-string
             // sentinel, (2) JSON-stringify real objects, (3) fall back
@@ -251,7 +251,7 @@ export function ErrorPanel({
 
             return (
               <div className="nodrag nopan mt-1.5 space-y-1.5">
-                {/* 0) 结构化校验错误（R-Next 2026-08-17）：精确指出哪个节点哪个字段 */}
+                {/* 0) 结构化校验错误：精确指出哪个节点哪个字段 */}
                 {(validationErrors?.length ?? 0) > 0 && (
                   <div className="rounded border border-rose-400/25 bg-rose-500/10 px-2 py-1.5">
                     <div className="mb-1 text-[10px] font-semibold text-rose-200">

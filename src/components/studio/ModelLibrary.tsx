@@ -78,7 +78,7 @@ export function ModelLibrary() {
             </div>
           </div>
         ) : (
-          // R-ardot46: compact list — each row is [type pill][filename][size].
+          // compact list — each row is [type pill][filename][size].
           // The old card grid (4 cols + 28px placeholder icon + duplicate fileName)
           // was way too heavy; an N-row gallery is way more legible for what is
           // ultimately a 1-line filename + size payload.
@@ -152,7 +152,7 @@ function FilterChip({ active, onClick, label }: { active: boolean; onClick: () =
   );
 }
 
-/* ── 模型目录配置 Modal (R-ardot43) ──
+/* ── 模型目录配置 Modal ──
  * Surfaces every ComfyUI directory the scanner can visit.  Each row's type
  * is auto-resolved from the directory name (curated lookup → fuzzy match
  * → CHECKPOINT fallback) so the user only needs to enable / disable the
@@ -297,7 +297,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
  * Single folder row.  Same shape is used for both enabled and available
  * sections — the only difference is which button is shown.  The type pill
  * shows the directory name verbatim (it IS the type); hover for an
- * explanation (R-ardot45).
+ * explanation.
  */
 function FolderConfigRow({
   row,

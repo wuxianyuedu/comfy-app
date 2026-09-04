@@ -13,14 +13,14 @@ import type { WorkflowGroupData, WorkflowIoPortData, WorkflowNoteData } from "..
 import { NODE_TITLE_H, lightenHex, hexToRgba, mixHex } from "../workflow-utils";
 
 export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({ data }: { data: WorkflowGroupData }) {
-  /* 2026-08-07: title is now a "tab" inside the top-left corner of the
+  /* title is now a "tab" inside the top-left corner of the
    *  frame (was floating ABOVE the box at `top-[-16px]` — looked detached
    *  and competed with adjacent note headers).  The tab's bg picks up
    *  the group colour at 0.12 alpha so it visually anchors to its
    *  parent frame; the body fill drops to 0.04 so internal nodes
    *  remain the visual focus.
    *
-   *  2026-08-11 (R29): user feedback — 0.12 alpha was too washed out
+   *  user feedback — 0.12 alpha was too washed out
    *  against the `#0a0a0f` canvas, "Step2 · Image size" tab barely
    *  contrasted with the surrounding wireframe and looked almost
    *  transparent.  Bumped tab to 0.30 — clearly readable while still
@@ -28,7 +28,7 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({ data }:
    *  the full WorkflowNote title bar at 0.65 mix which would feel like a
    *  separate card).
    *
-   *  2026-08-11 (R30): same complaint extended to the FRAME BODY —
+   *  same complaint extended to the FRAME BODY
    *  "红框处的背景也很透明" (top-right of group interior).  Body was
    *  at 0.04 (effectively invisible against the dark canvas grid).
    *  Bumped to 0.12 so the group's spatial boundary is visible at a
@@ -69,7 +69,7 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({ data }:
   );
 });
 
-/* ── IO boundary port node (2026-08-05 late v3) ──
+/* ── IO boundary port node (late v3) ──
  * Compact label-only rendering for nodes sitting on a subgraph's INPUTS
  * or OUTPUTS boundary (i.e. nodes whose input is fed by the -10 sentinel
  * or whose output is consumed by the -20 sentinel).  Reference image:
@@ -102,7 +102,7 @@ export const GROUP_TITLE_BAR = 24;
 /** Vertical padding at the bottom of a wfGroup. */
 export const GROUP_PAD_Y_BOTTOM = 10;
 /** Border + title-chip colour for the INPUTS / OUTPUTS wfGroups wrapping
- *  the boundary pins (2026-08-06 late).  A muted purple so the group
+ *  the boundary pins (late). A muted purple so the group
  *  frames read clearly against the dark `#0a0a0f` canvas while still
  *  staying distinct from the inner FlowNode / WorkflowSubgraphNode cards. */
 export const GROUP_RAIL_COLOR = "#a855f7";
@@ -135,7 +135,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
     : data.title;
   return (
     <div
-      /* 2026-08-06 late — input panels right-align their label so the
+      /* late — input panels right-align their label so the
        *  name hugs the right-edge handle dot, matching the user-supplied
        *  reference (`noise_seed  ●`, `noise_seed 1  ●`, ...).  Output
        *  panels stay left-aligned so their label hugs the LEFT-edge
@@ -151,7 +151,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
       }}
       title={`${hoverLabel}${data.type ? ` · ${data.type}` : ""}${valueStr ? ` · ${valueStr}` : ""}`}
     >
-      {/* Boundary-pin signal model (2026-08-06, flipped 2026-08-06 late):
+      {/* Boundary-pin signal model (flipped late):
           pins face the *centre* of the canvas so the wires run short and
           straight.  INPUT pin ("in") carries data INTO the subgraph
           (React Flow `type="source"` — it supplies the inner node's
@@ -171,7 +171,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
       ) : null}
       <span
         className="truncate font-medium"
-        /* 2026-08-07 — "letter truncation" on the boundary-pin labels: at
+        /* — "letter truncation" on the boundary-pin labels: at
          *  low canvas zoom the default browser text-rendering produces a
          *  soft, anti-aliased glyph that visually reads as a gap between
          *  characters ("s a m p l e s").  `geometricPrecision` + a tiny

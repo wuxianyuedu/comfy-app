@@ -1,6 +1,6 @@
 /**
  * Subgraph (inner workflow) parsing helpers — extracted from
- * workflow-detail.ts (T12 batch 4).
+ * workflow-detail.ts (batch 4).
  *
  * These pure functions turn a `definitions.subgraphs[uid]` definition into
  * the API graph, node metadata, boundary pins and annotations the subgraph
@@ -23,12 +23,12 @@ import {
   type RawOutputEntry,
 } from "@/lib/comfyui/workflow-detail-raw";
 
-/* IMAGE-input thumbnail preview (2026-08-10 R27, narrowed in R28).
+/* IMAGE-input thumbnail preview (narrowed in ).
  * Mirrors the parent route.  We surface the LoadImage upstream filename as
  * a synthetic `preview`-marked entry on the LoadImage node itself; we do
  * NOT propagate `imageRef` to downstream IMAGE inputs (ImageScale /
  * CLIPVisionEncode / …) since those would only show the un-scaled /
- * un-encoded upstream image — meaningless, per 2026-08-10 user feedback.
+ * un-encoded upstream image — meaningless, per user feedback.
  * Empty LoadImage uploads (widgets_values[0] missing/empty) still push
  * the synthetic entry so the body can show a 「需要上传图片」 placeholder. */
 const LOAD_IMAGE_NODE_TYPES = new Set([
@@ -66,7 +66,7 @@ export interface BoundaryLinkInfo {
  * subgraph uses to mark cross-boundary wires; we keep them out of the
  * API graph so the canvas shows them as disconnected internal ports.
  *
- * 2026-08-06: We additionally record every sentinel-bearing link in
+ * We additionally record every sentinel-bearing link in
  * `boundaryLinkInfoById` so the route response can hand the canvas
  * an exact mapping of boundary_pin_id ↔ inner_node_handle.  This
  * replaces the previous v3 strategy of flagging inner nodes as
@@ -198,7 +198,7 @@ export interface SubgraphGraphResult {
  * Walk each inner node and produce an API-style graph entry plus the
  * `nodes` array (consumed by the canvas as a flat list of ComfyGraphNode
  * entries).  Boundary endpoint nodes are stamped with
- * `is_input_endpoint` / `is_output_endpoint` (2026-08-05) so the client
+ * `is_input_endpoint` / `is_output_endpoint` so the client
  * can draw INPUTS / OUTPUTS wfGroup rectangles without re-walking the
  * link table.
  */
@@ -225,7 +225,7 @@ export function buildSubgraphGraph(
    * OUTPUT endpoint is one whose output is the sentinel `-20` target
    * (inner producer → subgraph exposed output).
    *
-   * 2026-08-06: We keep populating these for diagnostic reasons but no
+   * We keep populating these for diagnostic reasons but no
    * longer depend on them in the client.  The boundary PINS themselves
    * (defined in `sub.inputs` and `sub.outputs`) carry their own ids and
    * positions; emitting them via the new top-level `boundaryPins` field
@@ -287,10 +287,10 @@ export function buildSubgraphGraph(
         };
         if (widgetName) entry.widget = { name: widgetName };
         if (widgetValue !== undefined) entry.widgetValue = widgetValue;
-        /* R18 parity: stamp `multiline` on STRING inputs the helper flags,
+        /* parity: stamp `multiline` on STRING inputs the helper flags,
          *  so short prompt inputs don't degrade to one-line chips.
          *
-         *  2026-08-10 R28: removed the IMAGE-input `imageRef` propagation
+         *  removed the IMAGE-input `imageRef` propagation
          *  for the same reason as the parent route — downstream IMAGE
          *  consumers would only re-display the un-scaled / un-encoded
          *  upstream image, which is misleading.  Only the LoadImage
@@ -312,7 +312,7 @@ export function buildSubgraphGraph(
              *  prompt text), not a connection tuple. */
             const last = rawInputs[rawInputs.length - 1];
             if (last) last.isBoundary = true;
-            /* Mark this node as an INPUT endpoint (2026-08-05): the
+            /* Mark this node as an INPUT endpoint: the
              *  sentinel `-10` source means the value comes from the
              *  parent wrapper, so this node is the boundary consumer
              *  on the INPUTS side.  Output sentinel `-20` is rare on
@@ -354,7 +354,7 @@ export function buildSubgraphGraph(
     if (Array.isArray(rn.outputs)) {
       for (const o of rn.outputs) {
         if (!o || typeof o.name !== "string") continue;
-        /* Mark OUTPUT endpoint nodes (2026-08-05): if any link from this
+        /* Mark OUTPUT endpoint nodes: if any link from this
          *  output aims at the sentinel `-20` target (the subgraph's
          *  exposed output), then this node is an output producer — it
          *  feeds the parent wrapper's exposed output.  The client uses
@@ -396,11 +396,11 @@ export function buildSubgraphGraph(
       /* LoadImage family: synthesise a `preview: true` image entry so the
        * canvas paints the uploaded thumbnail (or 「需要上传图片」 placeholder
        * when empty) on the LoadImage node itself.  ComfyUI shows the
-       * thumbnail there, not on downstream consumers — per 2026-08-10 R28
+       * thumbnail there, not on downstream consumers — per
        * we no longer propagate imageRef downstream because the un-scaled /
        * un-encoded back-reference rendering was misleading.
        *
-       * 2026-08-10 R28: ALWAYS push for LoadImage-family, regardless of
+       * ALWAYS push for LoadImage-family, regardless of
        * whether an image is loaded.  The dedicated `preview: true` flag
        * is checked by the renderer's connEntries / widgetEntries filters
        * so this entry never lands in the port row or widget control list
@@ -440,7 +440,7 @@ export function buildSubgraphGraph(
 
   /* Build the `nodes` array (consumed by the canvas as a flat list of
    *  ComfyGraphNode entries).  We also stamp each node with
-   *  `is_input_endpoint` / `is_output_endpoint` (2026-08-05) so the
+   *  `is_input_endpoint` / `is_output_endpoint` so the
    *  client can draw INPUTS / OUTPUTS wfGroup rectangles around the
    *  two clusters without re-walking the link table. */
   const nodes: DetailNodeView[] = Object.entries(graph).map(([nodeId, n]) => {
@@ -466,7 +466,7 @@ export function buildSubgraphGraph(
       /* Exact ComfyUI box size ([w, h]) for this inner node.  Undefined
        *  when the subgraph definition carries no per-node size (rare). */
       size: sizeById[nodeId],
-      /* Boundary port details for wfIoPort rendering (2026-08-05 v3).
+      /* Boundary port details for wfIoPort rendering (v3).
        *  The client renders IO endpoint nodes as compact label-only
        *  items on the LEFT (input) / RIGHT (output) of the inner canvas.
        *  Without these fields the canvas can't show the port name and
@@ -522,7 +522,7 @@ export interface BoundaryPin {
 /**
  * Parse the subgraph's exposed IO pins (`sub.inputs` / `sub.outputs`).
  *
- * 2026-08-06: Each pin is a first-class entity with its own UUID (`id`),
+ * Each pin is a first-class entity with its own UUID (`id`),
  * slot name (`name`), type, optional human label, saved position, and one
  * or more `linkIds` (the cross-boundary wire(s) feeding into / out of an
  * inner node).  Also builds the inverse `pinIdByLinkId` map used to

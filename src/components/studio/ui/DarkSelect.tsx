@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
  * Chromium/Windows (OS-level widget).  This component renders an identical
  * visual shell but drops a fully-styled dark popover for the option list.
  *
- * 2026-08-11 (R55): widened `labels` from `Record<string, string>` to
+ * widened `labels` from `Record<string, string>` to
  * `Record<string, ReactNode>` so callers can decorate each row with
  * coloured dots / "本机" / "在线" badges etc.  Backward-compatible —
  * `string` is a valid ReactNode.
@@ -29,7 +29,7 @@ interface DarkSelectProps {
    * when the trigger is wider than this floor.  Capped to viewport with
    * automatic left-shift so it never overflows the right edge.
    *
-   * R-ardot47: when `autoFitFromOptions` is on, the *effective* minimum is
+   * when `autoFitFromOptions` is on, the *effective* minimum is
    * `max(popoverMinWidth, longestLabelChars × 8 + 56)` so long model file
    * names / workflowIO labels fit on narrow canvas nodes without each
    * caller tuning this prop.  Capped at 720 so a single absurd string
@@ -37,7 +37,7 @@ interface DarkSelectProps {
    */
   popoverMinWidth?: number;
   /**
-   * Auto-widen the popover to fit the longest option label (R-ardot47).
+   * Auto-widen the popover to fit the longest option label.
    * Only string/number labels are measured — rich ReactNode labels (e.g.
    * badges, icons) are skipped because we can't measure them without
    * rendering off-screen.  Defaults to true.
@@ -74,7 +74,7 @@ export function DarkSelect({
   });
 
   /* Close on Escape / click outside.
-   *  R-ardot49 (2026-08-15): capture-phase + click 双重兜底 — R-ardot48
+   *  capture-phase + click 双重兜底
    *  诊断结论同样适用于 DarkSelect：组件挂在项目画布节点里，React
    *  Flow Pane 在 bubble 阶段会 stopPropagation，document 永远收不到
    *  mousedown → setOpen(false) 永远跑不到 → popover 卡住。capture
@@ -121,11 +121,11 @@ export function DarkSelect({
 
   /* Recompute popover position when opening / on viewport changes.
    * Auto-flips upward if the dropdown would overflow below the viewport.
-   * 2026-08-11 (R56): popover width is `max(trigger.width, popoverMinWidth)`,
+   * popover width is `max(trigger.width, popoverMinWidth)`,
    * and the left edge is left-shifted if the wider popover would overflow
    * the right viewport edge.
    *
-   * R-ardot47: when `autoFitFromOptions` is on, the effective minimum is
+   * when `autoFitFromOptions` is on, the effective minimum is
    * widened to fit the longest *string* label so long model file names
    * don't get clipped on narrow canvas nodes.  Capped at 720. */
   const POPOVER_MAX_H = 240; // ~max-h-60 (6-7 items @ py-1.5)
@@ -211,7 +211,7 @@ export function DarkSelect({
         onKeyDown={handleKeyDown}
         className={`flex w-full items-center justify-between rounded-md border border-white/10 bg-white/3 px-2.5 py-1.5 text-[12px] text-gray-200 outline-none transition-colors focus:border-violet-500/40 ${className}`}
       >
-        {/* R55: min-w-0 + flex-1 + truncate lets rich ReactNode labels clip
+        {/* min-w-0 + flex-1 + truncate lets rich ReactNode labels clip
          *  cleanly; callers that want a right-aligned badge (e.g. "本机" /
          *  "在线") should place a `flex-1` spacer before the badge so it
          *  pushes right even under this `truncate` (nowrap) context. */}
