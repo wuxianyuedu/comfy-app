@@ -10,7 +10,7 @@ import { DynamicWorkflowForm } from "~/components/studio/shared/DynamicWorkflowF
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { JsonViewer } from "~/components/studio/ui/JsonViewer";
 import type { DetailTab } from "../workflow-library-detail-config";
-import type { WorkflowRow } from "../WorkflowLibraryHelpers";
+import type { WorkflowRow } from "../workflow-library-config";
 import { WorkflowCanvasNodePreview } from "../WorkflowCanvasNodePreview";
 
 interface DetailBodyProps {

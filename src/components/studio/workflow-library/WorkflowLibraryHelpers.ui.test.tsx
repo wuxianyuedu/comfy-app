@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { WorkflowIOMap } from "@/lib/workflow-io-types";
-import type { WorkflowRow } from "./WorkflowLibraryHelpers";
+import type { WorkflowRow } from "./workflow-library-config";
 import {
   WorkflowIOThumb,
   RootGroupHeader,

@@ -6,8 +6,10 @@
 import { Icon } from "@/components/ui/icon";
 import { FilterTabs } from "./WorkflowLibraryHelpers";
 
-export type SourceFilter = "all" | "local" | "online";
-export type TypeFilter = "all" | "image" | "video" | "audio";
+import type { SourceFilter, TypeFilter } from "./workflow-library-config";
+
+/* 筛选枚举的唯一定义在 workflow-library-config.ts（第①层），视图只 import，
+ * 避免与逻辑层各存一份枚举导致漂移。 */
 
 export interface ModelTagCount {
   id: string;

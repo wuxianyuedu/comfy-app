@@ -35,12 +35,12 @@ ui/（工具生成，界面源码）        ← 尽量不碰
 
 四层职责（同一 feature 目录内）：
 
-| 层 | 位置 / 命名 | 职责 | 禁止 |
-|---|---|---|---|
-| ① 纯配置 | `<feature>/stage-config.ts`（kebab，`.ts`） | 常量 + 派生展示数据（完成度、文案、网格）的**纯函数** | React、副作用、DOM |
-| ② 逻辑 | `<feature>/hooks/use-<feature>.ts`（kebab，`.ts`） | state、持久化、拉取、生成流程、派生进度；返回 controller 对象 | `alert` / 直接操作 DOM |
-| ③ 视图 | `<feature>/<Name>.tsx`（PascalCase） | 只收 props + 组合 `ui/` 原语渲染，事件上抛 | 自发请求、自算业务规则 |
-| ④ 容器 | `<feature>/<Feature>.tsx` | 取 controller → 传给视图 → 挂弹层 | 任何业务规则 |
+| 层       | 位置 / 命名                                        | 职责                                                          | 禁止                   |
+| -------- | -------------------------------------------------- | ------------------------------------------------------------- | ---------------------- |
+| ① 纯配置 | `<feature>/stage-config.ts`（kebab，`.ts`）        | 常量 + 派生展示数据（完成度、文案、网格）的**纯函数**         | React、副作用、DOM     |
+| ② 逻辑   | `<feature>/hooks/use-<feature>.ts`（kebab，`.ts`） | state、持久化、拉取、生成流程、派生进度；返回 controller 对象 | `alert` / 直接操作 DOM |
+| ③ 视图   | `<feature>/<Name>.tsx`（PascalCase）               | 只收 props + 组合 `ui/` 原语渲染，事件上抛                    | 自发请求、自算业务规则 |
+| ④ 容器   | `<feature>/<Feature>.tsx`                          | 取 controller → 传给视图 → 挂弹层                             | 任何业务规则           |
 
 要点：
 
@@ -62,27 +62,30 @@ ui/（工具生成，界面源码）        ← 尽量不碰
 > ② `workflow-library/WorkflowLibraryDetail`、③ `shared/DynamicWorkflowForm`、
 > ④ `workshop/ApiChannelSettings`、⑤ `studio/history/*`、
 > ⑥ `studio/project-canvas/MaterialLibraryPanel`。
-> 后续 `studio/` 下的大组件照此推进 —— **全库分批推进计划与棘轮护栏见
-> [第 17 章 UI 与逻辑分离](17-UI与逻辑分离.md)**，其中 §17.5 记录了 ④⑤⑥
-> 三处的拆分手法与踩到的坑。
+> 后续（2026-09-04）：⑦ `workflow-library/WorkflowLibrary`、
+> ⑧ `app/(main)/settings`（页面级容器：page.tsx 只剩三个早退分支，
+> 视图 `SettingsPageView.tsx` + 逻辑 `hooks/use-settings-page.ts`）。
+> **全库分批推进计划与棘轮护栏见
+> [第 17 章 UI 与逻辑分离](17-UI与逻辑分离.md)**，其中 §17.5–§17.7 记录了
+> 每一批的拆分手法与踩到的坑。
 
 **`workflow-library/WorkflowLibraryDetail`（原 399 行）**
 
-| 层 | 产物 | 内容 |
-|---|---|---|
-| ① 配置 | `workflow-library-detail-config.ts` | 页签定义、props 契约、IO 归一化、源数据派生 |
-| ② 逻辑 | `hooks/use-workflow-library-detail.ts` | 详情查询、格式/同步标志派生、页签与弹层状态、动作包装 |
-| ③ 视图 | `WorkflowLibraryDetailView.tsx` + `sections/DetailHeader.tsx`、`DetailBody.tsx`、`DetailControls.tsx` | 纯展示，动作经 `controller.actions` 上抛 |
-| ④ 容器 | `WorkflowLibraryDetail.tsx` | 取 controller → 传视图，仅 ~20 行 |
+| 层     | 产物                                                                                                  | 内容                                                  |
+| ------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| ① 配置 | `workflow-library-detail-config.ts`                                                                   | 页签定义、props 契约、IO 归一化、源数据派生           |
+| ② 逻辑 | `hooks/use-workflow-library-detail.ts`                                                                | 详情查询、格式/同步标志派生、页签与弹层状态、动作包装 |
+| ③ 视图 | `WorkflowLibraryDetailView.tsx` + `sections/DetailHeader.tsx`、`DetailBody.tsx`、`DetailControls.tsx` | 纯展示，动作经 `controller.actions` 上抛              |
+| ④ 容器 | `WorkflowLibraryDetail.tsx`                                                                           | 取 controller → 传视图，仅 ~20 行                     |
 
 **`shared/DynamicWorkflowForm`（原 958 行 UI + 逻辑混合体）**
 
-| 层 | 产物 | 内容 |
-|---|---|---|
-| ① 配置 | `dynamic-workflow-form-config.ts` | 对外 props 契约、数值行判定、类型徽章回退 |
-| ② 逻辑 | `hooks/use-dynamic-workflow-form.ts` | IO 切分/分组、行拖拽手势、图片上传、值写入 |
-| ③ 视图 | `DynamicWorkflowFormView.tsx` + `sections/WidgetInputRow.tsx`、`WidgetControl.tsx` | 纯展示，事件全部上抛 |
-| ④ 容器 | `DynamicWorkflowForm.tsx` | 取 controller → 传视图，仅 ~45 行 |
+| 层     | 产物                                                                               | 内容                                       |
+| ------ | ---------------------------------------------------------------------------------- | ------------------------------------------ |
+| ① 配置 | `dynamic-workflow-form-config.ts`                                                  | 对外 props 契约、数值行判定、类型徽章回退  |
+| ② 逻辑 | `hooks/use-dynamic-workflow-form.ts`                                               | IO 切分/分组、行拖拽手势、图片上传、值写入 |
+| ③ 视图 | `DynamicWorkflowFormView.tsx` + `sections/WidgetInputRow.tsx`、`WidgetControl.tsx` | 纯展示，事件全部上抛                       |
+| ④ 容器 | `DynamicWorkflowForm.tsx`                                                          | 取 controller → 传视图，仅 ~45 行          |
 
 两条共同要点：
 
@@ -109,13 +112,13 @@ pnpm dlx shadcn@latest add dialog form input select
 
 ### 现状核对（2026-09-02）
 
-| 所需 | 状态 |
-|------|------|
-| `zod`（schema） | ✅ 已具备 `zod@^4` |
-| `@base-ui/react` | ✅ 已具备 |
-| `react-hook-form` | ❌ 缺失 |
-| `@hookform/resolvers` | ❌ 缺失 |
-| `src/components/ui/form.tsx` | ❌ 未生成 |
+| 所需                         | 状态               |
+| ---------------------------- | ------------------ |
+| `zod`（schema）              | ✅ 已具备 `zod@^4` |
+| `@base-ui/react`             | ✅ 已具备          |
+| `react-hook-form`            | ❌ 缺失            |
+| `@hookform/resolvers`        | ❌ 缺失            |
+| `src/components/ui/form.tsx` | ❌ 未生成          |
 
 ### 一次性启用（注意 registry 阻塞）
 
@@ -135,48 +138,60 @@ pnpm dlx shadcn@latest add dialog form input select
 ### 最小范式（schema 驱动 + 自动校验）
 
 ```tsx
-"use client"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
+"use client";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
-  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
-} from "~/components/ui/form"
-import { Input } from "~/components/ui/input"
-import { Button } from "~/components/ui/button"
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "~/components/ui/form";
+import { Input } from "~/components/ui/input";
+import { Button } from "~/components/ui/button";
 
 // 1) schema 单一真相源
 const schema = z.object({
   email: z.string().email("邮箱格式不正确"),
   password: z.string().min(8, "至少 8 位"),
-})
-type LoginValues = z.infer<typeof schema>   // 前后端共用此类型
+});
+type LoginValues = z.infer<typeof schema>; // 前后端共用此类型
 
 export function LoginForm() {
   const form = useForm<LoginValues>({
     resolver: zodResolver(schema),
     defaultValues: { email: "", password: "" },
-    mode: "onBlur",                          // 校验时机：失焦校验，可改 onChange/onsubmit
-  })
+    mode: "onBlur", // 校验时机：失焦校验，可改 onChange/onsubmit
+  });
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit((v) => submit(v))} className="grid gap-3">
+      <form
+        onSubmit={form.handleSubmit((v) => submit(v))}
+        className="grid gap-3"
+      >
         <FormField
           control={form.control}
           name="email"
           render={({ field }) => (
             <FormItem>
               <FormLabel>邮箱</FormLabel>
-              <FormControl><Input {...field} /></FormControl>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
         {/* password 同理 */}
-        <Button type="submit" disabled={form.formState.isSubmitting}>登录</Button>
+        <Button type="submit" disabled={form.formState.isSubmitting}>
+          登录
+        </Button>
       </form>
     </Form>
-  )
+  );
 }
 ```
 
@@ -186,12 +201,12 @@ export function LoginForm() {
 
 ## 16.5 方案评判与备选（请给出结论）
 
-| 方案 | 类型安全 | 性能 | 与 shadcn 集成 | 本项目适配 |
-|------|---------|------|---------------|-----------|
-| **RHF + Zod + shadcn Form**（推荐） | 良（`z.infer`） | 优（非受控，少重渲染） | 官方范式，`form.tsx` 已对 base-ui 适配 | ✅ 最契合 |
-| TanStack Form | 极佳（编译期推断、无 ref） | 优 | 需手动接 shadcn | 可选，追求极致类型时评估 |
-| 受控 + `zod.safeParse` | 良 | 差（每次按键重渲染） | 无 | 仅极简小表单 |
-| Conform | 良 | 优（渐进增强） | RSC 向 | 本客户端重 SPA 不太契合 |
+| 方案                                | 类型安全                   | 性能                   | 与 shadcn 集成                         | 本项目适配               |
+| ----------------------------------- | -------------------------- | ---------------------- | -------------------------------------- | ------------------------ |
+| **RHF + Zod + shadcn Form**（推荐） | 良（`z.infer`）            | 优（非受控，少重渲染） | 官方范式，`form.tsx` 已对 base-ui 适配 | ✅ 最契合                |
+| TanStack Form                       | 极佳（编译期推断、无 ref） | 优                     | 需手动接 shadcn                        | 可选，追求极致类型时评估 |
+| 受控 + `zod.safeParse`              | 良                         | 差（每次按键重渲染）   | 无                                     | 仅极简小表单             |
+| Conform                             | 良                         | 优（渐进增强）         | RSC 向                                 | 本客户端重 SPA 不太契合  |
 
 **结论**：本项目（Next 16 + React 19 + `@base-ui/react` + shadcn `base-nova`）采用 **react-hook-form + Zod + shadcn Form** 为最佳默认：
 
