@@ -120,10 +120,13 @@ export const generateRouter = createTRPCRouter({
         }
 
         // Canvas-edited graph or API-only import.
+        // 空判定覆盖两种：graph 为 null/标量（asGraph 已归 null），或为无任何节点
+        // 的空对象 `{}` —— workflowTemplate.graph 是 NOT NULL 的 JSON 列，空模板在
+        // DB 里实际存 `{}`（非 NULL），后者才是可落库的「空工作流」形态。
         const graph =
           (data.canvasGraph!) ??
           asGraph(tpl?.graph);
-        if (!graph) {
+        if (!graph || Object.keys(graph).length === 0) {
           throw new Error("Workflow graph is empty");
         }
         try {
