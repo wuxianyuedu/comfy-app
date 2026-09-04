@@ -18,7 +18,7 @@ import type {
   WorkspaceView,
 } from "@/components/studio";
 import { WorkshopPipeline } from "@/components/workshop/WorkshopPipeline";
-import { listProjects, setActive, reapAllEmptyDrafts } from "@/components/studio/project-canvas/canvas-store";
+import { listProjects, setActive, reapAllEmptyDrafts } from "@/lib/project-canvas/canvas-store";
 
 /* ── Lazy-load view components so the initial bundle stays small ── */
 /* Only HomePage / WorkspaceNav / ToastProvider / VideoQueueModal are loaded eagerly. */

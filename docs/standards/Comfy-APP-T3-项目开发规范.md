@@ -112,10 +112,13 @@ lib（纯函数） ← 任意层
 - **UI 与逻辑分离（强制）**：视图层（`src/components/**`、`src/app/**`，Route Handler
   `src/app/api/**` 除外）**禁止新写** `fetch(`、`vanillaApi.*`、tRPC hook
   （`api.x.y.useQuery/useMutation`）——逻辑进 `<feature>/hooks/`，网络进
-  `src/lib/<domain>-client.ts`。四层范式见文档集
+  `src/lib/<domain>-client.ts`（**网络层一律放 `src/lib/`，守卫只豁免
+  `components/**/hooks/`，不放 `components/<feature>/*-api.ts`**）。
+  四层范式见文档集
   [16.2.1](16-shadcn-ui与表单校验.md#1621-落地范式controller-hook--纯展示视图)，
   全库推进计划与棘轮护栏（已接入 pre-commit 与 CI）见
-  [第 17 章](17-UI与逻辑分离.md)。
+  [第 17 章](17-UI与逻辑分离.md)。当前棘轮基线 **16 处 / 10 文件**
+  （P1–P4 已落地，104 → 16；剩余收尾项见 §17.4 批次表）。
 
 ### 4.3 样式
 
