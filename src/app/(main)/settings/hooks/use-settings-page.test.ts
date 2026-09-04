@@ -222,6 +222,41 @@ describe("useSettingsPage", () => {
     }
   });
 
+  it("启动轮询期间状态行停在 starting，不被并发探测覆盖（防 UI 跳变）", async () => {
+    /* 启动后前几轮探测都 down，模拟 ollama 冷启动窗口：轮询里探测失败
+     * 不得把状态行打回「未运行」，也不得发「检测中」抢屏幕。 */
+    probeMock.mockResolvedValue({ up: false });
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.ollamaStatus).toBe("down"));
+
+    vi.useFakeTimers();
+    try {
+      let starting: Promise<void> = Promise.resolve();
+      await act(async () => {
+        starting = result.current.startOllama();
+      });
+      expect(result.current.ollamaStatus).toBe("starting");
+
+      // 推进两轮轮询（探测都 down），状态行必须保持 starting
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(result.current.ollamaStatus).toBe("starting");
+      expect(result.current.ollamaStarting).toBe(true);
+
+      // 第 3 轮起探测 up → 状态行一次性落到 up
+      probeMock.mockResolvedValue({ up: true, models: [] });
+      await vi.advanceTimersByTimeAsync(5_000);
+      await act(async () => {
+        await starting;
+      });
+      expect(result.current.ollamaStatus).toBe("up");
+      expect(result.current.ollamaStarting).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("startOllama 失败 → flash 出可读文案（失败路径必须有出口）", async () => {
     probeMock.mockResolvedValue({ up: false });
     startMock.mockRejectedValue(new Error("spawn ENOENT"));
