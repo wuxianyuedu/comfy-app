@@ -15,8 +15,8 @@ start-desktop.ps1 — 桌面版一键自检 + 启动入口（原 run-desktop.bat
   scripts\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
 
 用法：
-  双击 <项目根>\start-desktop.ps1
-  或在终端执行：pwsh -NoProfile -ExecutionPolicy Bypass -File .\start-desktop.ps1
+  双击 <项目根>\tools\start\start-desktop.ps1
+  或在终端执行：pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\start\start-desktop.ps1
 
 前置条件：
   - 本入口需与桌面包在同一目录结构下（放项目根，桌面包在其 start-tauri*\ 下）。
@@ -31,12 +31,11 @@ param()
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# 项目根 = 本入口所在目录（双击时 cwd 可能不是它，显式切换）
-$root = $PSScriptRoot
+# tools\start\ → 项目根：上溯两级后点入公共库，再由它定位项目根。
+# 双击时 cwd 不是项目根，不能依赖它。
+. (Join-Path $PSScriptRoot "..\..\scripts\entry-common.ps1")
+$root = Get-ProjectRoot -StartDir $PSScriptRoot
 Set-Location $root
-
-# 只借用公共库的「双击场景暂停」判定，失败时别让窗口一闪而过
-. (Join-Path $root "scripts\entry-common.ps1")
 
 function Say-OK   { Write-Host "[OK]   " -NoNewline -ForegroundColor Green; Write-Host "$args" }
 function Say-Warn { Write-Host "[WARN] " -NoNewline -ForegroundColor Yellow; Write-Host "$args" }

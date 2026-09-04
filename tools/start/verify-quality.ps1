@@ -9,12 +9,12 @@ verify-quality.ps1 — 一键质量门禁（原 verify-quality.bat）
   scripts\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
 
 用法：
-  双击 <项目根>\verify-quality.ps1                全部三项
+  双击 <项目根>\tools\start\verify-quality.ps1                全部三项
   或在终端执行：
-    pwsh -File .\verify-quality.ps1
-    pwsh -File .\verify-quality.ps1 -Mode typecheck
-    pwsh -File .\verify-quality.ps1 -Mode lint
-    pwsh -File .\verify-quality.ps1 -Mode test
+    pwsh -File .\tools\start\verify-quality.ps1
+    pwsh -File .\tools\start\verify-quality.ps1 -Mode typecheck
+    pwsh -File .\tools\start\verify-quality.ps1 -Mode lint
+    pwsh -File .\tools\start\verify-quality.ps1 -Mode test
 
 依赖：本机需先装好 Node + pnpm，并已在项目根执行过 `pnpm install`。
 失败定位与「新增校验怎么补」见 scripts\quality-gate.ps1 头部注释与规范 11.12。
@@ -28,9 +28,9 @@ param(
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-. (Join-Path $PSScriptRoot "scripts\entry-common.ps1")
-
-$root = Get-ProjectRoot
+# tools\start\ → 项目根：上溯两级后点入公共库，再由它定位项目根
+. (Join-Path $PSScriptRoot "..\..\scripts\entry-common.ps1")
+$root = Get-ProjectRoot -StartDir $PSScriptRoot
 Set-Location $root
 
 if (-not (Test-Path -LiteralPath (Join-Path $root "node_modules\.bin"))) {

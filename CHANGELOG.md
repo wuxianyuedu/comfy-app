@@ -39,6 +39,12 @@
   新增 `scripts/enable-ps1-double-click.ps1` 做一次性双击关联（用户级 HKCU，免管理员）。
   **升级注意**：首次双击 `.ps1` 前需右键 `scripts/enable-ps1-double-click.ps1`
   →「使用 PowerShell 运行」，否则 Windows 默认用记事本打开脚本。
+- **双击入口归位 `tools/`，根目录只留工程配置**（ISSUE #29）：6 个启动类入口由仓库根
+  迁入 `tools/start/`（`start-web` / `start-tauri` / `start-desktop` / `run-local` /
+  `verify-quality` / `register-comfyapp-protocol`），与既有的 `tools/build/`、
+  `tools/registry/`、`tools/studio/` 按用途并列；根目录不再混排「入口」与「配置」。
+  **升级注意**：已存在的旧路径快捷方式/脚本需改指 `tools\start\`；根目录新增 `.ps1`
+  入口会被提交门禁（R9）拒绝。
 
 ### Fixed
 

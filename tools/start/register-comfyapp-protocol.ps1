@@ -9,9 +9,9 @@ register-comfyapp-protocol.ps1 — 注册 comfyapp:// 自定义 URL 协议（原
   scripts\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
 
 用法：
-  双击 <项目根>\register-comfyapp-protocol.ps1
+  双击 <项目根>\tools\start\register-comfyapp-protocol.ps1
   或在终端执行：
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\register-comfyapp-protocol.ps1
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\start\register-comfyapp-protocol.ps1
 
 实际逻辑在 scripts\install-comfyapp-helper.ps1。
 #>
@@ -21,7 +21,10 @@ param()
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-. (Join-Path $PSScriptRoot "scripts\entry-common.ps1")
+# tools\start\ → 项目根：上溯两级后点入公共库，再由它定位项目根
+. (Join-Path $PSScriptRoot "..\..\scripts\entry-common.ps1")
+$root = Get-ProjectRoot -StartDir $PSScriptRoot
+Set-Location $root
 
 Write-Host "[INFO] 正在注册 comfyapp:// 协议（HKCU，无需管理员）..." -ForegroundColor Cyan
 Write-Host ""

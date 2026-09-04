@@ -10,7 +10,7 @@
 | 范围 | 路径 | 规范章节 |
 |---|---|---|
 | 启动链路 | `start-tauri/`、`scripts/start_tauri_launcher.py`、`scripts/dev-launcher.ps1` | §1–§3 |
-| Windows 双击入口 | 根目录 `*.ps1`、`tools/<分类>/*.ps1`、`scripts/entry-common.ps1` | §8 |
+| Windows 双击入口 | `tools/<分类>/*.ps1`（启动类 `tools/start/`）、`scripts/entry-common.ps1` | §8 |
 | Tauri 壳 | `src-tauri/**`（conf.json / src / splash-assets） | §2、§7 |
 | ComfyUI 生命周期 | `src/lib/comfyui/**`（lifecycle / executor-* / reaper） | §3、§5 |
 | 工坊管线 | `src/components/workshop/**`、`src/lib/workshop/**` | §5 |
@@ -41,6 +41,10 @@
 8. **dev server 运行期间不要执行 `pnpm install`**（better-sqlite3 等原生模块（`.node`）被进程
    锁定会 EPERM 连锁失败）。
 9. **禁用 `.bat` / `.cmd` / `.vbs` 入口，Windows 入口一律 `.ps1`**（ISSUE #23 / 规范 §8）。
+   **入口放 `tools/<分类>/`，不放仓库根**（ISSUE #29 / 规范 §8.6）：启动类归
+   `tools/start/`，与 `tools/build/`、`tools/registry/`、`tools/studio/` 按用途并列；
+   根目录只留工程配置与文档。R9 在 pre-commit 强制拦截，回归测试见
+   `tests/check-file-structure.test.ts`。
    理由：cmd.exe 走系统 ANSI（GBK）代码页，中文提示与子进程 UTF-8 输出必然乱码，
    历史上被迫把入口做成「不含中文、不含逻辑」的哑壳。新增入口规则：
    - 入口只做「定位项目根 → 调用逻辑脚本 → 收尾」，逻辑下沉到 `scripts/` 或

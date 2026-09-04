@@ -8,6 +8,8 @@
  *     中文提示与子进程 UTF-8 输出必然乱码，入口被迫做成不含中文的哑壳）
  *   - R8 scripts/ tools/ 下含中文的 .ps1 必须 UTF-8 BOM（无 BOM 会被 PS 5.1
  *     按 GBK 解码，与 .bat 乱码同源）
+ *   - R9 根目录禁止散落 .ps1 双击入口（ISSUE #29）：入口归入 tools/<分类>/，
+ *     启动类归 tools/start/；根目录只留工程配置
  *
  * 为什么用子进程跑而不是 import：该脚本被 pre-commit 以 `node scripts/xxx.cjs`
  * 调用，且内部用 process.cwd() 定位扫描根；复用同一调用方式才等价于真实门禁。
@@ -65,6 +67,37 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       join(workdir, "scripts", "ok.ps1"),
       Buffer.concat([BOM, Buffer.from('Write-Host "中文提示"\n')]),
     );
+    const { code, output } = run();
+    expect(output).toContain("[structure] OK");
+    expect(code).toBe(0);
+  });
+
+  it("R9：根目录新增 .ps1 双击入口被阻断（ISSUE #29）", () => {
+    writeFileSync(
+      join(workdir, "start-web.ps1"),
+      Buffer.concat([BOM, Buffer.from('Write-Host "启动"\n')]),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("R9");
+    expect(output).toContain("start-web.ps1");
+  });
+
+  it("R9：tools/start/ 下的入口放行（入口归位不误伤）", () => {
+    mkdirSync(join(workdir, "tools", "start"), { recursive: true });
+    writeFileSync(
+      join(workdir, "tools", "start", "start-web.ps1"),
+      Buffer.concat([BOM, Buffer.from('Write-Host "启动"\n')]),
+    );
+    const { code, output } = run();
+    expect(output).toContain("[structure] OK");
+    expect(code).toBe(0);
+  });
+
+  it("R9：根目录的非 .ps1 文件不受约束（配置/文档照旧）", () => {
+    // R9 只针对双击入口，不收紧根目录的工程配置与文档
+    writeFileSync(join(workdir, "package.json"), "{}\n");
+    writeFileSync(join(workdir, "README.md"), "# demo\n");
     const { code, output } = run();
     expect(output).toContain("[structure] OK");
     expect(code).toBe(0);

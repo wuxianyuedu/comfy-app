@@ -12,8 +12,8 @@ start-tauri.ps1 — 无控制台窗口启动 Tauri 桌面壳（原 start-tauri.v
   scripts\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
 
 用法：
-  双击 <项目根>\start-tauri.ps1
-  或在终端执行：pwsh -NoProfile -ExecutionPolicy Bypass -File .\start-tauri.ps1
+  双击 <项目根>\tools\start\start-tauri.ps1
+  或在终端执行：pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\start\start-tauri.ps1
 
 等价入口：start-tauri-dev.exe（tools\build\build-launcher-dev.ps1 打包）。
 #>
@@ -23,7 +23,10 @@ param()
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-. (Join-Path $PSScriptRoot "scripts\entry-common.ps1")
+# tools\start\ → 项目根：上溯两级后点入公共库，再由它定位项目根
+. (Join-Path $PSScriptRoot "..\..\scripts\entry-common.ps1")
+$root = Get-ProjectRoot -StartDir $PSScriptRoot
+Set-Location $root
 
 Write-Host "[INFO] 正在后台启动 Tauri 桌面壳（dev 模式），请稍候弹出窗口..." -ForegroundColor Cyan
 
