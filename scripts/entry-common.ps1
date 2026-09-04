@@ -147,7 +147,7 @@ function Complete-Entry {
     Write-Host "============================================" -ForegroundColor DarkGray
     Write-Host "  执行结束，按回车键关闭窗口。" -ForegroundColor DarkGray
     Write-Host "============================================" -ForegroundColor DarkGray
-    Read-Host ""
+    Read-Host "按回车键关闭窗口"
   }
   return 0
 }
