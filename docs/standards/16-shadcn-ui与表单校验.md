@@ -59,8 +59,12 @@ ui/（工具生成，界面源码）        ← 尽量不碰
 ### 16.2.2 已落地案例
 
 > 落地顺序：① `components/workshop/WorkshopPipeline.tsx`（见 §16.2.1 开头）、
-> ② `workflow-library/WorkflowLibraryDetail`、③ `shared/DynamicWorkflowForm`。
-> 后续 `studio/` 下的大组件照此推进。
+> ② `workflow-library/WorkflowLibraryDetail`、③ `shared/DynamicWorkflowForm`、
+> ④ `workshop/ApiChannelSettings`、⑤ `studio/history/*`、
+> ⑥ `studio/project-canvas/MaterialLibraryPanel`。
+> 后续 `studio/` 下的大组件照此推进 —— **全库分批推进计划与棘轮护栏见
+> [第 17 章 UI 与逻辑分离](17-UI与逻辑分离.md)**，其中 §17.5 记录了 ④⑤⑥
+> 三处的拆分手法与踩到的坑。
 
 **`workflow-library/WorkflowLibraryDetail`（原 399 行）**
 
