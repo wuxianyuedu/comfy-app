@@ -1,99 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { AuroraBackground } from "@/components/studio/ui/AuroraBackground";
 import { Icon } from "@/components/ui/icon";
 import { folderMeta, getFolderTooltip } from "@/lib/model-types";
-import { api } from "~/trpc/react";
 
-interface ModelRow {
-  id: string;
-  name: string;
-  type: string;
-  fileName: string;
-  isAvailable: boolean;
-  fileSize?: number | null;
-  createdAt: string;
-}
+import { useModelFolderConfig } from "./hooks/use-model-folder-config";
+import { useModelLibrary } from "./hooks/use-model-library";
+import { ALL_TYPES, type FolderConfigRow as FolderConfigRowData, fmtSize } from "./model-library-config";
 
-/** Shape of a row from GET /api/models/config (subset we render). */
-interface FolderConfigRow {
-  folder: string;
-  /** The directory name IS the model type (R-ardot45). */
-  type: string;
-  label: string;
-  enabled: boolean;
-  hasConfig: boolean;
-  count: number;
-}
-
-/** Extract `e.message` from an unknown thrown value (was `(e as any)?.message`). */
-function errMsg(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m: unknown = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return fallback;
-}
-function fmtSize(n?: number | null) {
-  if (!n) return "—";
-  if (n > 1024 * 1024 * 1024) return `${(n / 1024 / 1024 / 1024).toFixed(1)} GB`;
-  if (n > 1024 * 1024) return `${(n / 1024 / 1024).toFixed(0)} MB`;
-  return `${(n / 1024).toFixed(0)} KB`;
-}
-
+/**
+ * 工作室模型库 —— 视图层（规范 17 §17.2 第③层）。
+ * 列表拉取与筛选在 hooks/use-model-library.ts，派生计算与常量在
+ * model-library-config.ts。本文件只渲染；对外导出名与 props 保持不变。
+ */
 export function ModelLibrary() {
-const [models, setModels] = useState<ModelRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<string>("ALL");
-  const [configOpen, setConfigOpen] = useState(false);
-
-  const listQ = api.model.list.useQuery();
-  const syncMut = api.model.sync.useMutation();
-
-  const loadModels = useCallback(() => {
-    setLoading(true);
-    listQ
-      .refetch()
-      .catch(() => {
-        /* refetch errors surface via the query's own error state */
-      })
-      .finally(() => setLoading(false));
-  }, [listQ]);
-
-  useEffect(() => {
-    // Sync silently on mount so the library reflects the current config
-    // without the user having to click "重新扫描" first. Defer out of the
-    // effect body (React 19 rule: no setState synchronously within an effect).
-    const t = setTimeout(() => syncMut.mutate(undefined, { onSettled: () => loadModels() }), 0);
-    return () => clearTimeout(t);
-  }, [syncMut, loadModels]);
-
-  // react-query list -> local rows state (adjusted during render, React 19
-  // pattern: no setState synchronously within an effect).
-  const [prevListData, setPrevListData] = useState(listQ.data);
-  if (listQ.data && listQ.data !== prevListData) {
-    setPrevListData(listQ.data);
-    setModels((listQ.data.models ?? []) as unknown as ModelRow[]);
-  }
-
-  const filtered = useMemo(() => {
-    return models.filter((model) =>
-{
-      if (filter !== "ALL" && model.type !== filter) return false;
-      if (q && !`${model.name} ${model.fileName}`.toLowerCase().includes(q.toLowerCase())) return false;
-      return true;
-    });
-  }, [models, q, filter]);
-
-  // Distinct types present in the data, with counts — each is a directory
-  // name (its own model type).  Drives the filter chips.
-  const typeChips = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const m of models) counts.set(m.type, (counts.get(m.type) ?? 0) + 1);
-    return Array.from(counts.entries()).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
-  }, [models]);
+  const c = useModelLibrary();
 
   return (
     <div className="h-full overflow-y-auto">
@@ -108,15 +29,15 @@ const [models, setModels] = useState<ModelRow[]>([]);
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setConfigOpen(true)}
+              onClick={() => c.setConfigOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-sm text-gray-200 transition-colors hover:border-violet-500/40 hover:text-violet-200"
             >
               <Icon name="settings" size={16} />
               模型目录配置
             </button>
             <input
-              value={q}
-              onChange={(event) => setQ(event.target.value)}
+              value={c.q}
+              onChange={(event) => c.setQ(event.target.value)}
               placeholder="搜索模型名称…"
               className="w-full rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40 sm:w-64"
             />
@@ -124,23 +45,23 @@ const [models, setModels] = useState<ModelRow[]>([]);
         </div>
 
         <div className="mb-5 flex flex-wrap gap-2">
-          <FilterChip active={filter === "ALL"} onClick={() => setFilter("ALL")} label={`全部 (${models.length})`} />
-          {typeChips.map(([t, count]) => {
+          <FilterChip active={c.filter === ALL_TYPES} onClick={() => c.setFilter(ALL_TYPES)} label={`全部 (${c.models.length})`} />
+          {c.typeChips.map(([t, count]) => {
             const meta = folderMeta(t);
             return (
               <FilterChip
                 key={t}
-                active={filter === t}
-                onClick={() => setFilter(t)}
+                active={c.filter === t}
+                onClick={() => c.setFilter(t)}
                 label={`${meta.label} (${count})`}
               />
             );
           })}
         </div>
 
-        {loading ? (
+        {c.loading ? (
           <p className="text-sm text-gray-500">加载中…</p>
-        ) : filtered.length === 0 ? (
+        ) : c.filtered.length === 0 ? (
           <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-white/8 text-gray-500">
             <div className="text-center">
               <p className="text-lg font-medium text-gray-300">模型库还没有内容</p>
@@ -148,7 +69,7 @@ const [models, setModels] = useState<ModelRow[]>([]);
                 没启用任何模型目录时这里为空。打开「模型目录配置」勾选需要扫描的目录，重新扫描后即可在此查看。
               </p>
               <button
-                onClick={() => setConfigOpen(true)}
+                onClick={() => c.setConfigOpen(true)}
                 className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-violet-500/20 px-4 py-2 text-sm font-medium text-violet-200 transition-colors hover:bg-violet-500/30"
               >
                 <Icon name="settings" size={16} />
@@ -166,9 +87,9 @@ const [models, setModels] = useState<ModelRow[]>([]);
             aria-label="模型文件列表"
             className="overflow-hidden rounded-xl border border-white/6 bg-white/1.5"
           >
-            {filtered.map((m, idx) => {
+            {c.filtered.map((m, idx) => {
               const meta = folderMeta(m.type);
-              const isLast = idx === filtered.length - 1;
+              const isLast = idx === c.filtered.length - 1;
               return (
                 <div
                   key={m.id}
@@ -206,11 +127,11 @@ const [models, setModels] = useState<ModelRow[]>([]);
         )}
       </div>
 
-      {configOpen && (
+      {c.configOpen && (
         <ModelConfigModal
           onClose={() => {
-            setConfigOpen(false);
-            syncMut.mutate(undefined, { onSettled: () => loadModels() });
+            c.setConfigOpen(false);
+            c.reload();
           }}
         />
       )}
@@ -238,101 +159,12 @@ function FilterChip({ active, onClick, label }: { active: boolean; onClick: () =
  * directory — they don't pick a type.  An "advanced" panel per row lets
  * the user add *extra* COMBO field types (e.g. expose this folder's files
  * under an additional field). */
+/**
+ * 模型目录配置弹层 —— 视图层（规范 17 §17.2 第③层）。
+ * 列表拉取、启用/停用/删除与重新扫描在 hooks/use-model-folder-config.ts。
+ */
 function ModelConfigModal({ onClose }: { onClose: () => void }) {
-  const [folders, setFolders] = useState<FolderConfigRow[]>([]);
-  const [comfyReachable, setComfyReachable] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
-  const [scanning, setScanning] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [onlyEnabled, setOnlyEnabled] = useState(false);
-
-  const configQ = api.model.configList.useQuery();
-  const saveMut = api.model.configSave.useMutation();
-  const delMut = api.model.configDelete.useMutation();
-  const syncMut = api.model.sync.useMutation();
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setErr(null);
-    try {
-      await configQ.refetch();
-    } catch {
-      setErr("网络错误");
-    } finally {
-      setLoading(false);
-    }
-  }, [configQ]);
-
-  useEffect(() => {
-    // Defer the initial load out of the effect body (React 19 rule: no
-    // setState synchronously within an effect).
-    const t = setTimeout(() => void load(), 0);
-    return () => clearTimeout(t);
-  }, [load]);
-
-  // react-query config data -> local folders state (adjusted during render,
-  // React 19 pattern).
-  const [prevCfgData, setPrevCfgData] = useState(configQ.data);
-  if (configQ.data && configQ.data !== prevCfgData) {
-    setPrevCfgData(configQ.data);
-    setFolders(configQ.data.folders ?? []);
-    setComfyReachable(Boolean(configQ.data.comfyReachable));
-  }
-
-  const runMutate = useCallback(
-    async (fn: () => Promise<unknown>) => {
-      try {
-        await fn();
-      } catch (e) {
-        setErr(errMsg(e, "网络错误"));
-      }
-      await load();
-    },
-    [load]
-  );
-
-  const handleToggle = useCallback(
-    (folder: string, enabled: boolean) =>
-      runMutate(() => saveMut.mutateAsync({ folder, enabled })),
-    [runMutate, saveMut]
-  );
-  const handleAdd = useCallback(
-    (folder: string) => runMutate(() => saveMut.mutateAsync({ folder, enabled: true })),
-    [runMutate, saveMut]
-  );
-  const handleDelete = useCallback(
-    (folder: string) => runMutate(() => delMut.mutateAsync({ folder })),
-    [runMutate, delMut]
-  );
-
-  const rescan = useCallback(async () => {
-    setScanning(true);
-    setErr(null);
-    try {
-      await syncMut.mutateAsync();
-    } catch (e) {
-      setErr(errMsg(e, "扫描失败"));
-    }
-    setScanning(false);
-    await load();
-  }, [load, syncMut]);
-
-  const enabledRows = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    return folders
-      .filter((file) => file.enabled)
-      .filter((file) => !term || `${file.folder} ${file.label}`.toLowerCase().includes(term));
-  }, [folders, q]);
-  const availableRows = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    return folders
-      .filter((file) => !file.enabled)
-      .filter((file) => !term || file.folder.toLowerCase().includes(term));
-  }, [folders, q]);
-  const visibleEnabled = onlyEnabled ? enabledRows : enabledRows;
-  const enabledCount = enabledRows.length;
-  const totalCount = folders.length;
+  const c = useModelFolderConfig();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -360,37 +192,37 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
         {/* status + scan */}
         <div className="flex items-center justify-between gap-3 border-b border-white/6 px-5 py-3">
           <div className="flex items-center gap-3 text-xs">
-            {comfyReachable ? (
-              <span className="text-emerald-300">● ComfyUI 已连接 · 共 {totalCount} 个目录</span>
+            {c.comfyReachable ? (
+              <span className="text-emerald-300">● ComfyUI 已连接 · 共 {c.totalCount} 个目录</span>
             ) : (
               <span className="text-amber-300">● ComfyUI 未连接</span>
             )}
-            <span className="text-gray-500">· 已启用 {enabledCount} 个</span>
-            {err && <span className="text-rose-300">{err}</span>}
+            <span className="text-gray-500">· 已启用 {c.enabledRows.length} 个</span>
+            {c.err && <span className="text-rose-300">{c.err}</span>}
           </div>
           <button
-            onClick={rescan}
-            disabled={scanning}
+            onClick={() => void c.rescan()}
+            disabled={c.scanning}
             className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/3 px-3 py-1.5 text-xs text-gray-200 transition-colors hover:border-violet-500/40 hover:text-violet-200 disabled:opacity-50"
           >
-            <Icon name={scanning ? "loader" : "shuffle"} size={14} className={scanning ? "animate-spin" : ""} />
-            {scanning ? "扫描中…" : "重新扫描"}
+            <Icon name={c.scanning ? "loader" : "shuffle"} size={14} className={c.scanning ? "animate-spin" : ""} />
+            {c.scanning ? "扫描中…" : "重新扫描"}
           </button>
         </div>
 
         {/* search + filter */}
         <div className="flex items-center gap-3 px-5 py-3">
           <input
-            value={q}
-            onChange={(event) => setQ(event.target.value)}
+            value={c.q}
+            onChange={(event) => c.setQ(event.target.value)}
             placeholder="搜索目录名…"
             className="flex-1 rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-sm text-gray-200 outline-none focus:border-violet-500/40"
           />
           <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-gray-400">
             <input
               type="checkbox"
-              checked={onlyEnabled}
-              onChange={(event) => setOnlyEnabled(event.target.checked)}
+              checked={c.onlyEnabled}
+              onChange={(event) => c.setOnlyEnabled(event.target.checked)}
               className="h-3.5 w-3.5 rounded border-white/20 bg-white/10 text-violet-500 focus:ring-violet-400/40"
             />
             仅显示已启用
@@ -399,57 +231,55 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
 
         {/* list */}
         <div className="flex-1 overflow-y-auto px-5 pb-5">
-          {loading ? (
+          {c.loading ? (
             <p className="text-sm text-gray-500">加载中…</p>
-          ) : totalCount === 0 ? (
+          ) : c.totalCount === 0 ? (
             <div className="grid min-h-[160px] place-items-center rounded-xl border border-dashed border-white/8 text-gray-500">
               <p className="text-sm">
-                {comfyReachable
+                {c.comfyReachable
                   ? "ComfyUI 中没有可识别的模型目录。"
                   : "未连接 ComfyUI；请先启动本地 ComfyUI。"}
               </p>
             </div>
           ) : (
             <>
-              {visibleEnabled.length > 0 && (
+              {c.enabledRows.length > 0 && (
                 <section className="mb-6">
                   <div className="mb-2 flex items-center justify-between">
                     <h3 className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                      已启用 · {visibleEnabled.length}
+                      已启用 · {c.enabledRows.length}
                     </h3>
                   </div>
                   <div className="space-y-2">
-                    {visibleEnabled.map((visibleEnabled) =>
-(
+                    {c.enabledRows.map((row) => (
                       <FolderConfigRow
-                        key={visibleEnabled.folder}
-                        row={visibleEnabled}
-                        onToggle={handleToggle}
-                        onAdd={handleAdd}
-                        onDelete={handleDelete}
+                        key={row.folder}
+                        row={row}
+                        onToggle={c.toggle}
+                        onAdd={c.add}
+                        onDelete={c.remove}
                       />
                     ))}
                   </div>
                 </section>
               )}
 
-              {!onlyEnabled && availableRows.length > 0 && (
+              {!c.onlyEnabled && c.availableRows.length > 0 && (
                 <section>
                   <div className="mb-2 flex items-center justify-between">
                     <h3 className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                      可添加 · {availableRows.length}
+                      可添加 · {c.availableRows.length}
                     </h3>
                     <p className="text-[11px] text-gray-500">点「启用」加入扫描列表</p>
                   </div>
                   <div className="space-y-2">
-                    {availableRows.map((availableRow) =>
-(
+                    {c.availableRows.map((row) => (
                       <FolderConfigRow
-                        key={availableRow.folder}
-                        row={availableRow}
-                        onToggle={handleToggle}
-                        onAdd={handleAdd}
-                        onDelete={handleDelete}
+                        key={row.folder}
+                        row={row}
+                        onToggle={c.toggle}
+                        onAdd={c.add}
+                        onDelete={c.remove}
                       />
                     ))}
                   </div>
@@ -475,7 +305,7 @@ function FolderConfigRow({
   onAdd,
   onDelete,
 }: {
-  row: FolderConfigRow;
+  row: FolderConfigRowData;
   onToggle: (folder: string, enabled: boolean) => void;
   onAdd: (folder: string) => void;
   onDelete: (folder: string) => void;
