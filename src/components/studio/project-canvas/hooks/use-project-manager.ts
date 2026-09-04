@@ -16,7 +16,7 @@
 import { useCallback, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Edge, FitViewOptions } from "@xyflow/react";
-import type { CanvasNodeType } from "./canvas-types";
+import type { CanvasNodeType } from "@/lib/project-canvas/canvas-types";
 import {
   createDraftProject,
   deleteProject,
@@ -25,8 +25,8 @@ import {
   listProjects,
   setActive,
   type CanvasProject,
-} from "./canvas-store";
-import { makeFitViewScheduler } from "./canvas-helpers";
+} from "@/lib/project-canvas/canvas-store";
+import { makeFitViewScheduler } from "@/lib/project-canvas/canvas-helpers";
 
 export interface ProjectSnapshot {
   pid: string | null;

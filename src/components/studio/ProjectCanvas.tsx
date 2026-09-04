@@ -30,11 +30,11 @@ import {
   NODE_META,
   defaultData,
   type NodeKind,
-} from "./project-canvas/canvas-types";
+} from "@/lib/project-canvas/canvas-types";
 import {
   makeFitViewScheduler,
   makeNodeId,
-} from "./project-canvas/canvas-helpers";
+} from "@/lib/project-canvas/canvas-helpers";
 import {
   createDraftProject, // new: lands on a canvas w/o polluting the index until first real change
   hydrateFromServer,
@@ -44,11 +44,11 @@ import {
   setActive,
   getActiveId,
   type CanvasProject,
-} from "./project-canvas/canvas-store";
-import { useProjectPersistence } from "./project-canvas/use-project-persistence";
-import { useProjectManager } from "./project-canvas/use-project-manager";
-import { useCanvasConnections } from "./project-canvas/use-canvas-connections";
-import { useCanvasDrop } from "./project-canvas/use-canvas-drop";
+} from "@/lib/project-canvas/canvas-store";
+import { useProjectPersistence } from "./project-canvas/hooks/use-project-persistence";
+import { useProjectManager } from "./project-canvas/hooks/use-project-manager";
+import { useCanvasConnections } from "./project-canvas/hooks/use-canvas-connections";
+import { useCanvasDrop } from "./project-canvas/hooks/use-canvas-drop";
 import { ModalDialog } from "./ui/ModalDialog";
 import { useToast } from "./ToastProvider";
 import { useMiniMapJump } from "./shared/useMiniMapJump";

@@ -29,7 +29,7 @@ import {
 import { useActiveTaskId, getNodeIdByTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
 import { ValidationErrorList } from "@/components/studio/shared/ValidationErrorList";
-import { vanillaApi } from "~/trpc/vanilla";
+import { useCancelTask } from "./hooks/use-cancel-task";
 
 /** Runtime shape of an SSE frame from /api/tasks/[id]/stream — only the
  *  fields this panel consumes.  `JSON.parse` yields `unknown`; the guards
@@ -106,7 +106,6 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   /* 弹窗宽度切换：默认 max-w-5xl，点击加宽到 max-w-7xl。 */
   const [wide, setWide] = useState(false);
   const [autoscroll, setAutoscroll] = useState(true);
-  const [cancellingFromPanel, setCancellingFromPanel] = useState(false);
 
   /* Auto-open when a new task starts while debug mode is on. */
   const prevActiveRef = useRef<string | null>(null);
@@ -123,17 +122,16 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     if (activeTaskId && !viewTaskId) setViewTaskId(activeTaskId);
   }, [activeTaskId, viewTaskId]);
 
-  /* Cancel the currently viewed task from inside the panel. */
-  const onCancelFromPanel = async () => {
-    if (!taskId || cancellingFromPanel) return;
-    setCancellingFromPanel(true);
-    try {
-      await vanillaApi.task.cancel.mutate({ id: taskId });
-    } catch (e) {
-      setError(`取消请求异常：${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setCancellingFromPanel(false);
-    }
+  /* Cancel the currently viewed task from inside the panel.
+   * 「取消中…」态与失败文案都在 useCancelTask 里（视图零 IO）。 */
+  const {
+    cancelling: cancellingFromPanel,
+    cancel: cancelFromPanel,
+  } = useCancelTask({ taskId, onFailed: setError });
+  const onCancelFromPanel = () => {
+    // 无任务时按钮本就禁用（下方 disabled），这里只是防重复点击的兜底。
+    if (!taskId) return;
+    return cancelFromPanel();
   };
 
   const esRef = useRef<EventSource | null>(null);

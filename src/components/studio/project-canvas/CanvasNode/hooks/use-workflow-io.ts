@@ -15,8 +15,8 @@ import { parseModesJson } from "@/lib/workflow-types";
 import {
   type WorkflowModesState,
   type WorkflowSourceFilter,
-} from "../WorkflowNode";
-import { type CanvasNodeData } from "../canvas-types";
+} from "@/components/studio/project-canvas/WorkflowNode";
+import { type CanvasNodeData } from "@/lib/project-canvas/canvas-types";
 import { vanillaApi } from "~/trpc/vanilla";
 
 /* ── 跨节点共享的列表请求去重(模块级 in-flight;2026-08-30 审查)──
