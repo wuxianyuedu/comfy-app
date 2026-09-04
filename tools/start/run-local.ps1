@@ -30,9 +30,9 @@ Write-Host "[INFO] 调用 PowerShell 脚本：scripts\prepare-local-run.ps1" -Fo
 Write-Host ""
 
 $code = Invoke-Entry -ScriptPath "scripts\prepare-local-run.ps1"
+Write-Host ""
 if ($code -ne 0) {
-    Write-Host ""
-    Write-Host "[ERROR] 初始化未完成，代码 $code 。请阅读上方中文提示。" -ForegroundColor Red
+    Write-Host "[ERROR] 初始化未完成，退出码 $code 。请阅读上方红色提示后处理。" -ForegroundColor Red
+    exit (Complete-Entry -ExitCode $code)
 }
-
-exit (Complete-Entry -ExitCode $code)
+exit (Complete-Entry -ExitCode $code -SuccessMessage "本地运行环境已就绪：可双击 tools\start\start-web.ps1 启动。")
