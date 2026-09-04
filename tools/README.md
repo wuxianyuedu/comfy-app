@@ -7,11 +7,15 @@
 到本目录并纳入版本控制。
 
 > **结构约定（2026-09-04 修订）**：Windows 双击入口一律 `*.ps1`，按用途归入子目录
-> （`build/` 打包类、`registry/` 团队 Registry、`studio/` 数据库工具等）；业务逻辑放在
-> `tools/scripts/*.ps1`，与 `build/` 下的入口一一对应（同名的两个文件必然一个是入口、
-> 一个是逻辑，见下方「入口 / 逻辑对照」）。入口只做三件事：定位项目根、调用逻辑脚本、
-> 透传退出码——这些公共能力收敛在 `scripts/entry-common.ps1`。所有 `.ps1` 以
-> UTF-8 with BOM 保存，避免中文乱码。后续新增入口：放 `tools/<分类>/xxx.ps1`。
+> （`start/` 启动与初始化、`build/` 打包类、`registry/` 团队 Registry、`studio/` 数据库
+> 工具等）；业务逻辑放在 `tools/scripts/*.ps1`，与 `build/` 下的入口一一对应（同名的两个
+> 文件必然一个是入口、一个是逻辑，见下方「入口 / 逻辑对照」）。入口只做三件事：定位项目根、
+> 调用逻辑脚本、透传退出码——这些公共能力收敛在 `scripts/entry-common.ps1`。所有 `.ps1`
+> 以 UTF-8 with BOM 保存，避免中文乱码。
+>
+> **后续新增入口：放 `tools/<分类>/xxx.ps1`，不要放仓库根**。根目录只保留工程配置与文档，
+> 该约束由 `scripts/check-file-structure.cjs` 的 R9 规则在 pre-commit 强制（ISSUE #29）。
+> 分类目录按用途划分，新增前先看现有目录能否容纳，不要按人名或临时用途建目录。
 >
 > **不再使用 `.bat`**：历史上入口是 `.bat`，但它走 cmd.exe（系统 ANSI/GBK 代码页），
 > 中文提示与子进程 UTF-8 输出必然乱码，被迫把入口做成「不含中文、不含逻辑」的哑壳——
@@ -25,6 +29,12 @@
 
 | 文件 | 目录 | 类别 | 用途 |
 |------|------|------|------|
+| `start/start-web.ps1` | start/ | 启动 | 控制台模式启动 Web 开发（调用 `scripts/dev-launcher.ps1`，日志可见） |
+| `start/start-tauri.ps1` | start/ | 启动 | 隐藏窗口启动 Tauri 桌面壳（dev 模式，无控制台残留） |
+| `start/start-desktop.ps1` | start/ | 启动 | 桌面版一键自检 + 启动（给拿到「即开即用桌面包」的普通用户） |
+| `start/run-local.ps1` | start/ | 初始化 | 非开发人员一键初始化：自检 node/pnpm、生成 `.env`、补齐依赖 |
+| `start/verify-quality.ps1` | start/ | 质量门禁 | 双击即跑 typecheck / lint / vitest（见规范 11.12） |
+| `start/register-comfyapp-protocol.ps1` | start/ | 一次性配置 | 注册 `comfyapp://` 协议（HKCU，免管理员） |
 | `build/build-launcher.ps1` | build/ | 启动器（通用） | 打包 `start-tauri/start-tauri.exe`（prebuilt 默认入口，秒出窗口 + dev server） |
 | `build/build-launcher-dev.ps1` | build/ | 启动器（dev） | 打包 `start-tauri-dev/start-tauri-dev.exe`（双击即走 tauri dev，Rust 热重载） |
 | `build/build-launcher-standalone.ps1` | build/ | 启动器（standalone） | 打包 `start-tauri-standalone/start-tauri-standalone.exe`（双击即走独立模式） |
@@ -55,12 +65,16 @@
 | `build/rebuild-static.ps1` | `scripts/rebuild-static.ps1` |
 | `registry/start-registry.ps1` | `scripts/start-registry.ps1` |
 | `studio/start-studio.ps1` | `studio/start-studio.logic.ps1`（本类无 `scripts/` 分层，后缀区分） |
+| `start/start-web.ps1` | `scripts/dev-launcher.ps1` |
+| `start/start-tauri.ps1` | `scripts/dev-launcher.ps1 -Tauri` |
+| `start/run-local.ps1` | `scripts/prepare-local-run.ps1` |
+| `start/verify-quality.ps1` | `scripts/quality-gate.ps1` |
+| `start/register-comfyapp-protocol.ps1` | `scripts/install-comfyapp-helper.ps1` |
+| `start/start-desktop.ps1` | —（自检逻辑内联在入口里，不另起逻辑脚本） |
 
-> 根入口同理：`start-web.ps1` / `run-local.ps1` / `verify-quality.ps1` /
-> `start-desktop.ps1` / `start-tauri.ps1` / `register-comfyapp-protocol.ps1`
-> 只做定位与收尾，逻辑分别在 `scripts/dev-launcher.ps1`、
-> `scripts/prepare-local-run.ps1`、`scripts/quality-gate.ps1`、
-> `scripts/install-comfyapp-helper.ps1` 与 `start-desktop.ps1`（自检逻辑直接内联）。
+> **启动类入口原先平铺在仓库根**（`start-web.ps1` / `run-local.ps1` …），2026-09-04
+> 归入 `start/`（ISSUE #29）：根目录只留工程配置，入口按用途与 `build/` / `registry/` /
+> `studio/` 并列。入口只做定位与收尾，逻辑一律在 `scripts/` 或 `tools/scripts/`。
 
 ## 按用途分类（dev 构建 vs standalone 构建）
 
@@ -168,12 +182,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-comfy-cli-venv
 
 想跳过自动准备、改用已有环境，设置环境变量 `COMFY_CLI_PYTHON` 指向你的 Python 解释器。
 
-### 两个启动入口对比：start-tauri.exe 与 start-tauri.ps1
+### 两个启动入口对比：start-tauri.exe 与 tools/start/start-tauri.ps1
 
 两者最终都会拉起「Next.js dev server + Tauri 桌面包壳」，但走的 `dev-launcher.ps1`
 分支不同，体验与适用场景也不同：
 
-| 维度 | `start-tauri.exe`（Prebuilt） | `start-tauri.ps1`（Tauri） |
+| 维度 | `start-tauri.exe`（Prebuilt） | `tools/start/start-tauri.ps1`（Tauri） |
 |------|-------------------------------|----------------------------|
 | 实际执行 | `dev-launcher.ps1 -Prebuilt` | `dev-launcher.ps1 -Tauri` → `pnpm tauri dev` |
 | 启动 Tauri 壳方式 | 直接运行**已编译**的 `target/release/app.exe` | `tauri dev` 现编译 Rust 壳（debug） |
@@ -187,7 +201,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-comfy-cli-venv
   （显示 Tauri 内嵌 splash 加载页），后台并行起 dev server，就绪后自动跳转应用。
   适合只改前端（src/ 下的 TS/TSX，靠 HMR 生效）；改 Rust 壳后必须重新
   `cargo build --release` 才生效。
-- **`start-tauri.ps1`（Tauri）= 开发桌面壳时用**：走 `pnpm tauri dev`，Rust 侧改完
+- **`tools/start/start-tauri.ps1`（Tauri）= 开发桌面壳时用**：走 `pnpm tauri dev`，Rust 侧改完
   自动重载，适合调壳本身逻辑（如 `lib.rs`、窗口配置）。启动慢在编译 Rust，且绕过
   了 Python launcher 的额外逻辑（单实例 / comfy-cli 自动准备不在）。
 

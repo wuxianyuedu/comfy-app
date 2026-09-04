@@ -17,8 +17,9 @@ enable-ps1-double-click.ps1 — 让 .ps1 可以「双击即运行」（一次性
 如何运行（只需一次）：
   在文件资源管理器里对本文件点**右键 →「使用 PowerShell 运行」**，或在终端执行：
     powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\enable-ps1-double-click.ps1
-  成功后，本仓库所有 .ps1 入口（start-web.ps1 / run-local.ps1 / verify-quality.ps1 /
-  start-desktop.ps1 / tools\build\*.ps1 …）即可直接双击运行。
+  成功后，本仓库所有 .ps1 入口（tools\start\ 下的 start-web / run-local /
+  verify-quality / start-desktop / start-tauri，以及 tools\build\*.ps1 …）
+  即可直接双击运行。
 
 如何撤销：
   reg delete "HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\command" /f
@@ -73,7 +74,7 @@ Say-OK "已配置：双击 .ps1 将直接运行。"
 Write-Host ""
 Write-Host "  $command" -ForegroundColor DarkGray
 Write-Host ""
-Say-Info "现在可双击项目根下的 start-web.ps1 / run-local.ps1 / verify-quality.ps1 等入口。"
+Say-Info "现在可双击 tools\start\ 下的 start-web.ps1 / run-local.ps1 / verify-quality.ps1 等入口。"
 Say-Info "撤销命令：reg delete `"HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\command`" /f"
 Write-Host ""
 Say-Warn "注意：关联后任意 .ps1 双击都会执行（含下载来的脚本），请留意来源。"

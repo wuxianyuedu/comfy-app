@@ -148,20 +148,27 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 
 | 层 | 位置 | 职责 |
 |---|---|---|
-| 入口（双击用） | 根目录 `*.ps1`、`tools/<分类>/*.ps1` | 定位项目根、打印中文提示、调用逻辑脚本、透传退出码、双击场景等待按键 |
+| 入口（双击用） | `tools/<分类>/*.ps1`（启动类 `tools/start/`、构建类 `tools/build/` 等） | 定位项目根、打印中文提示、调用逻辑脚本、透传退出码、双击场景等待按键 |
 | 逻辑 | `scripts/*.ps1`、`tools/scripts/*.ps1` | 环境检查 / 构建 / 编排 / 日志落盘 |
 | 公共库 | `scripts/entry-common.ps1` | `Get-ProjectRoot` / `Get-Pwsh` / `Invoke-Entry` / `Complete-Entry` / `Test-IsDoubleClicked` |
+
+> **根目录不再放双击入口**（ISSUE #29，2026-09-04）：6 个启动入口曾平铺在仓库根，与
+> `package.json` / `tsconfig.json` 等工程配置混排，既看不出「哪些是入口」，也让根目录
+> 随入口增长持续膨胀。现统一归入 `tools/start/`，与 `tools/build/`、`tools/registry/`、
+> `tools/studio/` 同构；根目录只保留工程配置与文档。入口的 discoverability 由 README 的
+> 入口清单承担，不靠「铺在根目录第一眼看见」。该约束由 `scripts/check-file-structure.cjs`
+> 的 R9 规则在 pre-commit 阶段强制（详见 §12.8）。
 
 入口映射（改逻辑时别改错文件）：
 
 | 入口 | 逻辑 |
 |---|---|
-| `start-web.ps1` | `scripts/dev-launcher.ps1` |
-| `start-tauri.ps1`（隐藏窗口，原 `.vbs`） | `scripts/dev-launcher.ps1 -Tauri` |
-| `run-local.ps1` | `scripts/prepare-local-run.ps1` |
-| `verify-quality.ps1` | `scripts/quality-gate.ps1` |
-| `register-comfyapp-protocol.ps1` | `scripts/install-comfyapp-helper.ps1` |
-| `start-desktop.ps1`（原 `run-desktop.bat`，自检逻辑内联） | — |
+| `tools/start/start-web.ps1` | `scripts/dev-launcher.ps1` |
+| `tools/start/start-tauri.ps1`（隐藏窗口，原 `.vbs`） | `scripts/dev-launcher.ps1 -Tauri` |
+| `tools/start/run-local.ps1` | `scripts/prepare-local-run.ps1` |
+| `tools/start/verify-quality.ps1` | `scripts/quality-gate.ps1` |
+| `tools/start/register-comfyapp-protocol.ps1` | `scripts/install-comfyapp-helper.ps1` |
+| `tools/start/start-desktop.ps1`（原 `run-desktop.bat`，自检逻辑内联） | — |
 | `tools/build/*.ps1` | `tools/scripts/*.ps1`（同名） |
 | `tools/registry/start-registry.ps1` | `tools/scripts/start-registry.ps1` |
 | `tools/studio/start-studio.ps1` | `tools/studio/start-studio.logic.ps1` |
@@ -191,7 +198,24 @@ reg delete "HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\comman
 2. 以 UTF-8 **with BOM** 保存（Windows PowerShell 5.1 读无 BOM 的脚本会把中文按
    GBK 解码——与 `.bat` 乱码同源，别在 `.ps1` 上重蹈覆辙，见 §5）；
 3. 收尾统一走 `Complete-Entry`，让「双击时暂停、终端调用时直接退出」的行为一致，
-   不再需要旧 `.bat` 的 `no-pause` 参数传递约定。
+   不再需要旧 `.bat` 的 `no-pause` 参数传递约定；
+4. **放 `tools/<分类>/`，不放仓库根**（R9，见 §8.2 与 12 章 §12.8）。新增入口前先
+   看 `tools/` 下是否已有同分类目录，没有再新建——分类目录按用途划分（start /
+   build / registry / studio），不要按人名或临时用途建目录。
+
+### 8.6 tools/ 目录分类（新增入口放哪）
+
+| 目录 | 放什么 | 现有入口 |
+|---|---|---|
+| `tools/start/` | **启动/初始化类**：起 dev server、起桌面壳、环境自检、质量门禁 | `start-web.ps1`、`start-tauri.ps1`、`start-desktop.ps1`、`run-local.ps1`、`verify-quality.ps1`、`register-comfyapp-protocol.ps1` |
+| `tools/build/` | **构建打包类**：编译壳、打启动器 exe、重建 static | `build-all.ps1`、`build-launcher*.ps1`、`build-standalone.ps1`、`build-tauri-release.ps1`、`rebuild-static.ps1` |
+| `tools/registry/` | 团队 shadcn Registry | `start-registry.ps1` |
+| `tools/studio/` | 数据库工具 | `start-studio.ps1` |
+| `tools/scripts/` | 上述入口对应的**逻辑脚本**（与入口同名不同层） | `build-*.ps1`、`start-registry.ps1`、`Log-Common.ps1` |
+
+入口与逻辑同名时靠**目录**区分（`tools/build/build-all.ps1` 是入口、
+`tools/scripts/build-all.ps1` 是逻辑）；同目录内无法同名时用后缀区分，如
+`tools/studio/start-studio.logic.ps1`。
 
 ### 8.5 排障补充：双击 .ps1 只是打开了记事本
 

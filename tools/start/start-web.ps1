@@ -6,9 +6,9 @@ start-web.ps1 — 启动 Comfy-APP Web 开发模式（控制台显示日志，�
   scripts\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。
 
 用法：
-  双击 <项目根>\start-web.ps1
-  或在终端执行：pwsh -NoProfile -ExecutionPolicy Bypass -File .\start-web.ps1
-  参数透传：pwsh -File .\start-web.ps1 -Args @()   （目前 dev-launcher 无必填参数）
+  双击 <项目根>\tools\start\start-web.ps1
+  或在终端执行：pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\start\start-web.ps1
+  参数透传：pwsh -File .\tools\start\start-web.ps1 -Args @()   （目前 dev-launcher 无必填参数）
 
 实际逻辑在 scripts\dev-launcher.ps1（见 docs/standards/launch-and-build.md §1）。
 #>
@@ -21,7 +21,10 @@ param(
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-. (Join-Path $PSScriptRoot "scripts\entry-common.ps1")
+# tools\start\ → 项目根：上溯两级后点入公共库，再由它定位项目根
+. (Join-Path $PSScriptRoot "..\..\scripts\entry-common.ps1")
+$root = Get-ProjectRoot -StartDir $PSScriptRoot
+Set-Location $root
 
 Write-Host "[INFO] 启动 Comfy-APP Web 开发模式（控制台显示日志）..." -ForegroundColor Cyan
 Write-Host "[INFO] 使用 PowerShell 脚本：scripts\dev-launcher.ps1" -ForegroundColor Cyan

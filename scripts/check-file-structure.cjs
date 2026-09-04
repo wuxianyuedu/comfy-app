@@ -14,7 +14,10 @@
  *        中文必乱码,历史上被迫做成"不含中文不含逻辑"的哑壳)
  *   R8  scripts/ tools/ 下含中文的 .ps1 必须以 UTF-8 BOM 保存(否则 PowerShell
  *       5.1 按 GBK 解码,与 .bat 乱码同源)
- * 违反 R1-R4、R7-R8 以退出码 1 阻断提交。
+ *   R9  根目录只放工程配置,禁止再散落 .ps1 双击入口(ISSUE #29):入口一律归入
+ *       tools/<分类>/;根入口的 discoverability 由 README 的入口清单承担,
+ *       不靠"铺在根目录第一眼看见"
+ * 违反 R1-R4、R7-R9 以退出码 1 阻断提交。
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -114,6 +117,22 @@ const SCAN_EXCLUDED = [
     }
   }
 })('.');
+
+// ── R9:根目录禁止散落 .ps1 双击入口(ISSUE #29) ──
+// 背景:6 个根入口(start-web/run-local/verify-quality/start-tauri/
+// start-desktop/register-comfyapp-protocol)曾平铺在仓库根,与 package.json /
+// tsconfig.json 等工程配置混排,一眼看不出"哪些是入口、哪些是配置"。现统一归入
+// tools/start/,与 tools/build/、tools/registry/、tools/studio/ 同构。
+// 这里只拦 .ps1——其它后缀的根文件(配置/文档)不受约束,避免过度收紧。
+(function checkRootEntries() {
+  for (const e of fs.readdirSync('.', { withFileTypes: true })) {
+    if (!e.isFile()) continue;
+    if (!e.name.toLowerCase().endsWith('.ps1')) continue;
+    problems.push(
+      'R9 根目录禁止 .ps1 双击入口(请放进 tools/<分类>/,启动类放 tools/start/):' + e.name,
+    );
+  }
+})();
 
 if (splitHints.length) {
   console.log("[structure] 拆分候选(仅提醒):\n  " + splitHints.join("\n  "));
