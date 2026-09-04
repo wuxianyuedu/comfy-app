@@ -6,9 +6,9 @@
 ## 快速开始
 
 ```bash
-npm run test            # 全量单测(vitest run)
-npm run test:coverage   # 覆盖率(v8,含棘轮阈值门槛)
-npm run typecheck       # tsc --noEmit
+pnpm test               # 全量单测(vitest run)
+pnpm test:coverage      # 覆盖率(v8,含棘轮阈值门槛)
+pnpm typecheck          # tsc --noEmit
 ```
 
 ## 单元测试（Vitest）
@@ -66,7 +66,7 @@ npm run typecheck       # tsc --noEmit
 
 ## 覆盖率策略（棘轮制）
 
-`npm run test:coverage` 跑 v8 覆盖率并对**已覆盖目录**设硬阈值（低于即失败）：
+`pnpm test:coverage` 跑 v8 覆盖率并对**已覆盖目录**设硬阈值（低于即失败）：
 
 | 目录 | 门槛（lines/funcs/stmts/branches） |
 |------|------|
@@ -75,6 +75,42 @@ npm run typecheck       # tsc --noEmit
 **规则**：新覆盖一个目录（测试补齐到 70%+）就把它加进 `vitest.config.ts` 的
 `thresholds` 表并抬高数字；阈值只升不降。全库整体数字（当前 ~3%，组件库为主）
 仅作参考，不设全局门槛——组件库的覆盖随功能测试逐步爬坡。
+
+## 视觉回归（Playwright screenshot）
+
+> 像素基线捕获布局/配色退化（画布、空态、弹窗、断点、深浅色），见规范
+> [11-测试与可观测性.md](standards/11-测试与可观测性.md#118-视觉回归像素基线)。
+> 方案**只此一套**（`toHaveScreenshot`），不引入 Chromatic / Vitest browser mode。
+
+### 目录与运行
+
+```bash
+# 仅视觉基线用例
+pnpm test:visual
+# 全量 E2E（含 e2e/visual，测试全量时用）
+pnpm test:e2e
+```
+
+- 用例放 `e2e/visual/*.visual.spec.ts`，命名带 `.visual` 便于 CI 单独筛选。
+- 基线 PNG 与 spec 同目录（Playwright 默认 `*-snapshots/`），**提交入库**。
+- 基线变更（合法 UI 改动）重录 + 人工 review：
+  ```bash
+  pnpm exec playwright test e2e/visual --update-snapshots
+  ```
+  重录后在 PR 描述标注「视觉基线已更新：<原因>」。失败 actual/diff 产物在
+  `test-results/`（已 gitignore）。
+
+### 确定性约束（防 flaky）
+
+- 只截**钉死内容**：不碰时间戳/动画/骨架屏/DB 驱动列表；需要时用固定数据/mock。
+- `playwright.config.ts` 已对截图统一关动画、隐藏光标、设 `threshold: 0.1`
+  吸收抗锯齿差异。
+
+### DOM 快照边界
+
+Vitest `toMatchSnapshot` **禁止新增**用于断言整棵 DOM 结构（易碎且非像素退化）。
+存量 `src/components/studio/**/__snapshots__/*.snap` 逐步按行为断言迁移，
+视觉防退化统一走本节 Playwright 基线。
 
 ## API 文档（TypeDoc）
 
@@ -88,4 +124,5 @@ npm run typecheck       # tsc --noEmit
 - [ ] `DynamicWorkflowForm` 主组件与 `CanvasNode` 主组件的行为测试（依赖 ReactFlow Provider，需 Provider 包装方案）
 - [ ] tRPC router 集成测试（需 db mock 方案）
 - [ ] Playwright 关键 E2E（登录 → 画布 → 生成链路）
+- [ ] 存量 `.snap` DOM 快照按行为断言迁移，删除整棵结构快照（见 §11.9）
 - [ ] `log-store.parseFileLogs`：`[WARNING]` 行当前回退 info 级（源码怪癖，测试已按现状断言并标注）
