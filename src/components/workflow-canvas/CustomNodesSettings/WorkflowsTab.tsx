@@ -1,6 +1,6 @@
 "use client";
 
-import type { CustomNodesSettingsController } from "./useCustomNodesSettings";
+import type { CustomNodesSettingsController } from "./hooks/use-custom-nodes-settings";
 
 export function WorkflowsTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
   const { localPathsText, setLocalPathsText, savedLocalPaths, localSaving, localSaveErr, localSavedAt, loading } = ctrl;

@@ -6,14 +6,14 @@ import {
   getCustomNodesManifest,
   type ManifestNodeRaw,
 } from "@/config/custom-nodes";
-import { deriveRowState, eqArr, nowTimeStr, pathKey, splitPaths } from "./parsing";
+import { deriveRowState, eqArr, nowTimeStr, pathKey, splitPaths } from "../parsing";
 import type {
   DiscoveredSubpkg,
   ParseProgress,
   ParseReport,
   SettingsResp,
   SummaryPkg,
-} from "./types";
+} from "../types";
 
 /** POST /api/custom-nodes 保存响应的类型视图。路由返回
  *  `{ ok, error?, paths? / localWorkflowPaths? }`；字段为 unknown，由下方守卫决定信任。 */

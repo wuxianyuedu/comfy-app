@@ -1,136 +1,23 @@
 "use client";
 
+/**
+ * WorkflowLibrary 的共享展示组件（规范 17 §17.2 第③层）。
+ *
+ * 2026-09-04：类型与纯派生已抽到 `workflow-library-config.ts`，本文件只留
+ * JSX 组件（IO 缩略图 / 根目录分组头 / 过滤页签 / 待载入卡片 / 列表容器）。
+ * 组件一律纯 props 驱动，事件上抛，不发请求。
+ *
+ * 顺带删除了 `LibrarySourceModal`：2026-08-25（#45）详情面板改用统一
+ * `SourceModal` 后它就再无消费方，却是本文件唯一的 tRPC 查询点——留着会
+ * 让棘轮一直记一笔「视图内发请求」。
+ */
+
 import React, { useMemo } from "react";
 import { Icon } from "@/components/ui/icon";
-import { SourceModal } from "../SourceModal";
-import type { WorkflowPreview as WorkflowPreviewT } from "@/lib/comfyui/workflow";
-import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 import { splitWorkflowIO, ioLabel } from "@/components/studio/shared/workflow-io";
-import { api } from "~/trpc/react";
+import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 
-export interface WorkflowRow {
-  id: string;
-  name: string;
-  taskType: string;
-  /** A workflow may declare multiple modes at once.  When
-   *  absent or empty, the UI falls back to `[taskType]` for display
-   *  (backward compatibility for older rows).  Both `modes` and
-   *  `defaultMode` are returned by GET /api/workflows (persisted to
-   *  prisma.WorkflowTemplate.modes / .defaultMode). */
-  modes?: string[];
-  /** Canonical default mode code; must be present in `modes`. Kept in sync
-   *  with `taskType` for the legacy single-value filter. */
-  defaultMode?: string | null;
-  createdAt: string;
-  paramMap?: Record<string, string> | null;
-  preview?: WorkflowPreviewT;
-  /** User-curated external IO, returned by GET /api/workflows.
-   *  Used to render the library card when no graph preview is available. */
-  workflowIO?: WorkflowIOMap;
-  /** Model tag names attached to this workflow (user-level
-   *  global tag library, e.g. ["z-image","wan2.2"]).  Returned by
-   *  GET /api/workflows.  Drives the library card chips + model filter. */
-  modelTags?: string[];
-  /** Independent booleans.  `hasApi` controls whether the
-   *  workflow is actually executable; `hasRaw` is informational and lets
-   *  the UI offer source-view / download-merged-bundle for RAW imports. */
-  hasApi?: boolean;
-  hasRaw?: boolean;
-  /** Where the executable graph came from.
-   *   - "user": the user explicitly exported API Format from ComfyUI
-   *   - "derived": auto-derived from rawJson via convertRawToApi
-   *   - null: no API at all (only RAW was imported, graph was empty)
-   *  The card and the source modal both use this to honestly label
-   *  the API badge so users aren't surprised that "我只导入了 raw"
-   *  still shows an API badge. */
-  apiOrigin?: "user" | "derived" | null;
-  /** Convenience union of the two flags: true ⇔ has an executable graph. */
-  usable?: boolean;
-  /** "raw" if the user originally imported the UI/raw format (positions
-   *  preserved).  "api" otherwise.  This is kept as a legacy hint — UI
-   *  should prefer `hasApi/hasRaw` since this single tag can't distinguish
-   *  "both" from "only RAW". */
-  format?: "raw" | "api";
-  /** Absolute path of the on-disk file the workflow was imported from.
-   *  Set by any import that touched a real file (the source-local ⤓ 载入
-   *  card, or future ad-hoc imports).  When set, the server tracks the
-   *  file and re-imports it whenever it changes on disk. */
-  sourcePath?: string | null;
-  /** Which configured LOCAL_WORKFLOWS_PATH entry (verbatim
-   *  raw path) this file lives under.  The server stamps this on every
-   *  already-imported local workflow.  Same value for all rows from the
-   *  same configured root — used by the card to label "📂 from which
-   *  directory". undefined when the file isn't matched against any root
-   *  (e.g. an older import done before LOCAL_WORKFLOWS_PATH was set). */
-  sourceRoot?: string | null;
-  /** Classification: "local" = tied to an on-disk file; "online" = pasted /
-   *  API-only import. Derived from `sourcePath` presence. */
-  source?: "local" | "online";
-  /** Manual-sync support.  `diskDirty = (diskMtimeSec >
-   *  sourceMtimeSec)` means the on-disk file changed since the last
-   *  reimport; the card then surfaces a "↻ 同步" action that POSTs to
-   *  /api/workflows/[id]/resync.  All four fields are null/false for
-   *  online rows (no sourcePath). */
-  diskDirty?: boolean;
-  diskMissing?: boolean;
-  diskMtimeSec?: number | null;
-  sourceMtimeSec?: number | null;
-  /** The server detected that the source file
-   *  was renamed on disk and automatically re-linked the row to the
-   *  new path.  `diskRenamedTo` is a human-readable "old.json → new.json"
-   *  summary; the UI flashes a one-shot toast so the user knows the
-   *  link silently moved.  null for everything else. */
-  diskRenamed?: boolean;
-  diskRenamedTo?: string | null;
-}
-
-
-/** Resolve the three independent UI booleans + apiOrigin when the server
- *  only sent the legacy single `format` tag.  Treats `format:"raw"` as
- *  "definitely has RAW, has API" — defaults `hasApi=true` because older
- *  imports always went through the raw→api converter.  New callers should
- *  pass `hasApi/hasRaw/apiOrigin` directly. */
-export function deriveFormatFlags(row: WorkflowRow): {
-  hasApi: boolean;
-  hasRaw: boolean;
-  apiOrigin: "user" | "derived" | null;
-  usable: boolean;
-} {
-  if (typeof row.hasApi === "boolean" || typeof row.hasRaw === "boolean") {
-    const hasApi = row.hasApi ?? true;
-    const hasRaw = row.hasRaw ?? row.format === "raw";
-    const apiOrigin: "user" | "derived" | null = row.apiOrigin
-      ?? (hasApi ? (hasRaw ? "derived" : "user") : null);
-    // 一个工作流只保留一种格式。可用性仅取决于是否有可执行 graph。
-    const usable = hasApi;
-    return { hasApi, hasRaw, apiOrigin, usable };
-  }
-  return {
-    hasApi: true,
-    hasRaw: row.format === "raw",
-    apiOrigin: row.format === "raw" ? "derived" : "user",
-    usable: true,
-  };
-}
-
-/* Aggregate the four manual-sync fields into UI booleans.
- *  Online rows (no sourcePath) get `dirty=false, missing=false,
- *  canResync=false`; missing-on-disk rows stay dirty=false but flag
- *  missing so the card can show "📁 文件已不存在" instead of a sync
- *  button. */
-export function deriveSyncFlags(row: WorkflowRow): {
-  dirty: boolean;
-  missing: boolean;
-  canResync: boolean;
-} {
-  const dirty = !!row.diskDirty;
-  const missing = !!row.diskMissing;
-  return { dirty, missing, canResync: dirty };
-}
-
-/* ── detectWorkflowFormat：实现已抽到 @/lib/workflow-format 供服务端复用 ──
- * Implementation lives in @/lib/workflow-format so the server-side
- * PATCH endpoint can validate the same JSON shape (drag-to-upgrade). */
+import type { WorkflowRow } from "./workflow-library-config";
 
 /* ── WorkflowIOThumb ──
  * When a workflow row has no graph preview (no API graph or no preview-built
@@ -290,79 +177,6 @@ export function RootGroupHeader({
  * TASK_TYPE_LABELS）：library card 现改用 MultiModeSelect（其内部按 mode 的 category
  * 派生 accent）。保留 getWorkflowType / normalizeTaskType 的 import——下方 useMemo
  * 过滤仍用到。 */
-
-/** ComfyUI default filenames start with a "date_slug" prefix and contain only
- *  lowercase letters / underscores / digits.  When we see such a name we
- *  render it in a slightly different style (code font + brighter color) so
- *  it's easier to read at a glance. */
-export function isTechnicalName(name: string): boolean {
-  if (!name) return false;
-  if (name.length > 38) return false; // already a descriptive name
-  return /^[a-z0-9_]+$/.test(name);
-}
-
-export function ago(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "刚刚导入";
-  if (m < 60) return `${m} 分钟前导入`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前导入`;
-  return `${Math.floor(h / 24)} 天前导入`;
-}
-
-/** Modal that shows a workflow's API / RAW source JSON with pretty-print,
- *  copy and per-file download.  The combined-bundle download reuses the same
- *  detail endpoint (and the card's `下载合并包` action).
- *
- *  Performance notes:
- *  - The previous implementation rendered a 30-100 kB JSON with
- *    `<pre>{JSON.stringify(...)}</pre>`; React had to hold the whole text
- *    node in memory, the browser had to layout/paint every line, and the
- *    text was re-stringified on every state change (tab switch, copy, etc.).
- *  - This rewrite:
- *      1. Uses a read-only `<textarea>` for the JSON: it has built-in
- *         virtualised text rendering, scroll selection, and copy support,
- *         so a 100 kB JSON opens without GC pressure.
- *      2. Memoises the pretty-printed strings for each tab so tab switches
- *         and copy clicks don't re-stringify the entire payload.
- *      3. Caps the body height so the parent backdrop never reflows. */
-/**
- * Library-side wrapper around the new reusable `SourceModal` (R40).  The
- * library is the only consumer that needs a network fetch — canvas opens
- * the modal from in-memory store data.
- *
- * 该弹窗最早是内联 <textarea> 大弹窗，后改用 JsonViewer 渲染主体，并抽出
- * 可复用的 SourceModal 供 canvas 复用（避免 fork 渲染代码）。
- * canvas could open it too without forking the rendering code. */
-export function LibrarySourceModal({
-  wf,
-  onClose,
-}: {
-  wf: { id: string; name: string };
-  onClose: () => void;
-}) {
-  const detailQ = api.workflow.detail.useQuery({ id: wf.id });
-  /* 「查看源文件」展示磁盘上的原始导入 JSON（`rawJson`），而不是
-  * /prompt 用的可执行图（`graph`）。纯 API 导入（rawJson 为 null）才回退。 */
-  const tpl = detailQ.data?.template;
-  const data = tpl
-    ? {
-        source: tpl.rawJson ?? tpl.graph,
-        name: tpl.name ?? wf.name,
-        isApiFallback: tpl.rawJson == null,
-      }
-    : null;
-
-  return (
-    <SourceModal
-      data={data}
-      loading={detailQ.isLoading}
-      error={detailQ.isError ? (detailQ.error?.message ?? "加载失败") : ""}
-      onClose={onClose}
-    />
-  );
-}
 
 /** Extracted from WorkflowLibrary.renderWorkflowCard's
  *  "local-pending" branch. Self-contained: only needs the row plus an

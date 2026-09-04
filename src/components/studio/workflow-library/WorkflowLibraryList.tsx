@@ -1,24 +1,17 @@
 "use client";
 
 import { Search, Download } from "lucide-react";
-import type { WorkflowRow } from "./WorkflowLibraryHelpers";
 import {
+  ago,
   deriveFormatFlags,
   deriveSyncFlags,
-  ago,
   isTechnicalName,
-} from "./WorkflowLibraryHelpers";
+  type PendingRow,
+  type WorkflowRow,
+} from "./workflow-library-config";
 import { WorkflowIOThumb } from "./WorkflowLibraryHelpers";
 import { TaskTypeChip } from "../ui/TaskTypeChip";
 import { SourceTag } from "../ui/SourceTag";
-
-interface PendingRow {
-  id: string;
-  name: string;
-  sourcePath: string;
-  pendingSize?: number;
-  pendingMtime?: number;
-}
 
 interface WorkflowLibraryListProps {
   workflows: WorkflowRow[];

@@ -5,20 +5,26 @@
  *  downloadJson / resyncWorkflow / handleLoadPending).  The hook receives
  *  the raw state setters + trpc mutations it needs and returns the stable
  *  callbacks; the component keeps only the state declarations and the JSX.
+ *
+ *  2026-09-04：归位 `hooks/`（规范 17 §17.2 第②层——此前它在 feature 根目录，
+ *  名字像逻辑层、位置却不是）。`setImportErr` 同步改名为 `setActionError`：
+ *  它承接的是动作失败（删除 / 下载 / 同步 / 载入），不是导入面板的校验错误，
+ *  按 §17.5.4 必须走「只有用户重试才清」的通道。
  */
 import { useCallback } from "react";
 import { type api } from "~/trpc/react";
-import { useToast } from "../ToastProvider";
-import type { WorkflowRow } from "./WorkflowLibraryHelpers";
+import { errorMessage } from "~/lib/error-message";
+import { useToast } from "../../ToastProvider";
+import type { WorkflowRow } from "../workflow-library-config";
 
 export interface UseWorkflowActionsArgs {
   setDeleting: (v: boolean) => void;
   setPendingDelete: (v: { id: string; name: string } | null) => void;
-  setImportErr: (v: string) => void;
+  setActionError: (v: string) => void;
   setBundleBusy: (v: string | null) => void;
   setResyncBusy: (v: string | null) => void;
   setPendingLoading: (
-    fn: (s: Record<string, boolean>) => Record<string, boolean>
+    fn: (s: Record<string, boolean>) => Record<string, boolean>,
   ) => void;
   setWorkflows: (fn: (prev: WorkflowRow[]) => WorkflowRow[]) => void;
   load: () => Promise<void> | void;
@@ -29,21 +35,11 @@ export interface UseWorkflowActionsArgs {
   utils: ReturnType<typeof api.useUtils>;
 }
 
-/** Extract `e.message` from an unknown thrown value, mirroring the previous
- *  `(e as any)?.message ?? fallback` semantics (empty-string message kept). */
-function errMsg(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m: unknown = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return fallback;
-}
-
 export function useWorkflowActions(args: UseWorkflowActionsArgs) {
   const {
     setDeleting,
     setPendingDelete,
-    setImportErr,
+    setActionError,
     setBundleBusy,
     setResyncBusy,
     setPendingLoading,
@@ -65,12 +61,12 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         setPendingDelete(null);
         void load();
       } catch (e) {
-        setImportErr(errMsg(e, "删除失败"));
+        setActionError(errorMessage(e, "删除失败"));
       } finally {
         setDeleting(false);
       }
     },
-    [setDeleting, deleteMut, setPendingDelete, load, setImportErr]
+    [setDeleting, deleteMut, setPendingDelete, load, setActionError],
   );
 
   /** 2026-08-13: 多模式持久化。乐观更新本地列表，失败则回滚（重新拉取列表）。 */
@@ -80,33 +76,35 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         prev.map((workflow) =>
           workflow.id === id
             ? { ...workflow, modes, defaultMode, taskType: defaultMode }
-            : workflow
-        )
+            : workflow,
+        ),
       );
       try {
         await updateMut.mutateAsync({ id, modes, defaultMode });
       } catch (e) {
-        toast.error("更新模式失败", errMsg(e, "未知错误"));
+        toast.error("更新模式失败", errorMessage(e, "未知错误"));
         void load();
       }
     },
-    [setWorkflows, updateMut, toast, load]
+    [setWorkflows, updateMut, toast, load],
   );
 
   /** 2026-08-15: 模型标签绑定持久化。乐观更新本地列表，失败回滚。 */
   const patchModelTags = useCallback(
     async (id: string, names: string[]) => {
       setWorkflows((prev) =>
-        prev.map((prev) =>(prev.id === id ? { ...prev, modelTags: names } : prev))
+        prev.map((prev) =>
+          prev.id === id ? { ...prev, modelTags: names } : prev,
+        ),
       );
       try {
         await updateMut.mutateAsync({ id, modelTags: names });
       } catch (e) {
-        toast.error("更新模型标签失败", errMsg(e, "未知错误"));
+        toast.error("更新模型标签失败", errorMessage(e, "未知错误"));
         void load();
       }
     },
-    [setWorkflows, updateMut, toast, load]
+    [setWorkflows, updateMut, toast, load],
   );
 
   /** 下载当前工作流 JSON（只有一种格式，直接下载 graph）。 */
@@ -134,17 +132,14 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         a.download = `${tpl.name ?? name}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        toast.success(
-          "已下载工作流",
-          `${tpl.name ?? name}.json`
-        );
+        toast.success("已下载工作流", `${tpl.name ?? name}.json`);
       } catch (e) {
-        toast.error("下载失败", errMsg(e, "网络错误"));
+        toast.error("下载失败", errorMessage(e, "网络错误"));
       } finally {
         setBundleBusy(null);
       }
     },
-    [toast, setBundleBusy, utils]
+    [toast, setBundleBusy, utils],
   );
 
   /** 2026-08-10 R16: re-import a local workflow's source file and refresh. */
@@ -156,7 +151,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         if (d?.missing) {
           toast.error(
             "同步失败",
-            "磁盘文件已不存在，无法同步（请检查路径或重新载入）"
+            "磁盘文件已不存在，无法同步（请检查路径或重新载入）",
           );
         } else if (d?.unchanged) {
           toast.info("磁盘文件未变化", name);
@@ -165,12 +160,12 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           await load();
         }
       } catch (e) {
-        toast.error("同步请求失败", errMsg(e, "网络错误"));
+        toast.error("同步请求失败", errorMessage(e, "网络错误"));
       } finally {
         setResyncBusy(null);
       }
     },
-    [toast, load, setResyncBusy, resyncMut]
+    [toast, load, setResyncBusy, resyncMut],
   );
 
   /** Load one disk-discovered file into the DB via the single-file import
@@ -186,7 +181,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         toast.success(`已载入「${pending.name}」`, "开始跟踪文件变化");
         void load();
       } catch (e) {
-        toast.error("载入失败", errMsg(e, "网络错误"));
+        toast.error("载入失败", errorMessage(e, "网络错误"));
       } finally {
         setPendingLoading((state) => {
           const cp = { ...state };
@@ -195,7 +190,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         });
       }
     },
-    [setPendingLoading, createMut, toast, load]
+    [setPendingLoading, createMut, toast, load],
   );
 
   return {

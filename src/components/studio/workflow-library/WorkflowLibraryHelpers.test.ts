@@ -4,11 +4,12 @@ import {
   deriveSyncFlags,
   isTechnicalName,
   ago,
-} from "./WorkflowLibraryHelpers";
-import type { WorkflowRow } from "./WorkflowLibraryHelpers";
+  type WorkflowRow,
+} from "./workflow-library-config";
 
-/* 本文件只覆盖 WorkflowLibraryHelpers.tsx 中的纯函数导出,
- * JSX 组件(WorkflowIOThumb / RootGroupHeader / FilterTabs 等)不在范围内。 */
+/* 本文件覆盖 workflow-library-config.ts 的纯函数导出（2026-09-04 从
+ * WorkflowLibraryHelpers.tsx 抽出）。JSX 组件(WorkflowIOThumb /
+ * RootGroupHeader / FilterTabs 等)见 WorkflowLibraryHelpers.ui.test.tsx。 */
 
 function makeRow(overrides: Partial<WorkflowRow> = {}): WorkflowRow {
   return {

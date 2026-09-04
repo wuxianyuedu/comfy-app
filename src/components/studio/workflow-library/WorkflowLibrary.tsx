@@ -1,21 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useToast } from "../ToastProvider";
+
 import { ModelTagManager } from "../ModelTagManager";
-import { getWorkflowType, normalizeTaskType } from "@/lib/workflow-types";
-import { api } from "~/trpc/react";
-import type { WorkflowRow } from "./WorkflowLibraryHelpers";
-import { useWorkflowActions } from "./workflow-library-actions";
-import { useWorkflowImport } from "./workflow-library-import";
-import { WorkflowImportPanel } from "../WorkflowImportPanel";
 import { DeleteWorkflowModal } from "../DeleteWorkflowModal";
+import { WorkflowImportPanel } from "../WorkflowImportPanel";
 import { WorkflowLibraryHeader } from "./WorkflowLibraryHeader";
 import { WorkflowLibraryFilters } from "./WorkflowLibraryFilters";
-import type { SourceFilter, TypeFilter } from "./WorkflowLibraryFilters";
 import { WorkflowLibraryList } from "./WorkflowLibraryList";
 import { WorkflowLibraryDetail } from "./WorkflowLibraryDetail";
+import { useWorkflowLibrary } from "./hooks/use-workflow-library";
 
 /**
  * Lazy-load the canvas editor. It is a 7k-line module; keeping it behind a
@@ -44,303 +38,121 @@ const WorkflowCanvasEditor = dynamic(
  * 2026-08-30: WorkflowLibrary 重新设计为左右分栏布局。
  * 左侧为可搜索的工作流列表，右侧为选中项的详情面板，包含画布节点预览、
  * 参数表单、源文件与操作入口。原有的卡片网格、根目录折叠等交互移除。
+ *
+ * 2026-09-04（规范 17 §17.2 第④层）：全部状态与业务规则搬进
+ * `hooks/use-workflow-library.ts`，筛选/计数的推导搬进
+ * `workflow-library-config.ts`。本文件只剩「取 controller → 传视图 → 挂弹层」。
+ * 对外 props 与导出名不变，消费方（app/workspace/page.tsx）零改动。
  */
 export function WorkflowLibrary({
   onUse,
 }: {
   onUse?: (id: string, meta?: { name: string; taskType: string }) => void;
 }) {
-  const toast = useToast();
-  const utils = api.useUtils();
-  const listQ = api.workflow.list.useQuery(undefined, {
-    refetchOnWindowFocus: false,
-    staleTime: 30_000,
-  });
-  const tagsQ = api.workflowModel.list.useQuery(undefined, {
-    refetchOnWindowFocus: false,
-    staleTime: 30_000,
-  });
-  const createMut = api.workflow.create.useMutation();
-  const updateMut = api.workflow.update.useMutation();
-  const deleteMut = api.workflow.delete.useMutation();
-  const resyncMut = api.workflow.resync.useMutation();
-  const [workflows, setWorkflows] = useState<WorkflowRow[]>([]);
-  const [q, setQ] = useState("");
-
-  // ── Source filter: all / local (file-backed) / online (pasted/API) ──
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
-  // ── Type filter: all / image / video / audio ──
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  // ── Model tag filter ──
-  const [modelFilter, setModelFilter] = useState<string>("all");
-  const modelTags = useMemo(
-    () =>
-      (tagsQ.data?.tags ?? []) as { id: string; name: string; count: number }[],
-    [tagsQ.data],
-  );
-  const [showModelManager, setShowModelManager] = useState(false);
-
-  // ── Delete confirm state ──
-  const [pendingDelete, setPendingDelete] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  // ── Canvas editor state ──
-  const [editingId, setEditingId] = useState<string | null>(null);
-
-  // ── Download / re-sync busy flags ──
-  const [bundleBusy, setBundleBusy] = useState<string | null>(null);
-  const [resyncBusy, setResyncBusy] = useState<string | null>(null);
-
-  // ── Local pending placeholders ──
-  const [localPending, setLocalPending] = useState<
-    Array<{
-      id: string;
-      name: string;
-      sourcePath: string;
-      pendingSize?: number;
-      pendingMtime?: number;
-    }>
-  >([]);
-  const [, setPendingLoading] = useState<Record<string, boolean>>({});
-
-  // ── Selection state ──
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    listQ.refetch().catch((err: unknown) => {
-      const msg =
-        err instanceof Error ? err.message : JSON.stringify(err ?? null);
-      console.warn("[WorkflowLibrary] /api/workflows fetch failed:", msg);
-    });
-  }, [listQ]);
-
-  const loadModelTags = useCallback(() => {
-    tagsQ.refetch().catch(() => undefined);
-  }, [tagsQ]);
-
-  useEffect(() => {
-    load();
-    loadModelTags();
-  }, [load, loadModelTags]);
-
-  /** Sync react-query list data into local UI state. */
-  const lastSyncedRef = useRef<string>("");
-  useEffect(() => {
-    if (!listQ.data) return;
-    const snapshot = JSON.stringify({
-      wf: listQ.data.workflows ?? [],
-      pend: listQ.data.localPending ?? [],
-    });
-    if (snapshot === lastSyncedRef.current) return;
-    lastSyncedRef.current = snapshot;
-    setWorkflows((listQ.data.workflows ?? []) as unknown as WorkflowRow[]);
-    setLocalPending(listQ.data.localPending ?? []);
-    for (const w of listQ.data.workflows ?? []) {
-      if (w.diskRenamed && w.diskRenamedTo) {
-        toast.success("已自动重新链接", w.diskRenamedTo);
-      }
-    }
-  }, [listQ.data, toast]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const onChanged = () => load();
-    window.addEventListener("comfyapp:local-workflows-path-changed", onChanged);
-    return () => {
-      window.removeEventListener(
-        "comfyapp:local-workflows-path-changed",
-        onChanged,
-      );
-    };
-  }, [load]);
-
-  // Keep selection valid when filters change.
-  const selectedRow = useMemo(
-    () => workflows.find((w) => w.id === selectedId) ?? null,
-    [workflows, selectedId],
-  );
-
-  const filteredWorkflows = useMemo(() => {
-    const bySource = workflows.filter((workflow) => {
-      const source =
-        workflow.source ?? (workflow.sourcePath ? "local" : "online");
-      return sourceFilter === "all" || source === sourceFilter;
-    });
-    const byType = bySource.filter((workflow) => {
-      if (typeFilter === "all") return true;
-      const cat = getWorkflowType(
-        normalizeTaskType(workflow.taskType ?? ""),
-      )?.category;
-      return cat === typeFilter;
-    });
-    const byModel = byType.filter((workflow) => {
-      if (modelFilter === "all") return true;
-      return workflow.modelTags?.includes(modelFilter) ?? false;
-    });
-    if (!q) return byModel;
-    const needle = q.toLowerCase();
-    return byModel.filter((workflow) =>
-      workflow.name.toLowerCase().includes(needle),
-    );
-  }, [workflows, q, sourceFilter, typeFilter, modelFilter]);
-
-  const pendingRows = useMemo(() => {
-    if (sourceFilter === "online") return [];
-    const rows = localPending.filter((p) =>
-      q ? p.name.toLowerCase().includes(q.toLowerCase()) : true,
-    );
-    return rows;
-  }, [localPending, sourceFilter, q]);
-
-  const sourceCounts = useMemo(() => {
-    const base = {
-      all: workflows.length + localPending.length,
-      local:
-        workflows.filter(
-          (workflow) =>
-            (workflow.source ?? (workflow.sourcePath ? "local" : "online")) ===
-            "local",
-        ).length + localPending.length,
-      online: workflows.filter(
-        (workflow) =>
-          (workflow.source ?? (workflow.sourcePath ? "local" : "online")) ===
-          "online",
-      ).length,
-    };
-    return base;
-  }, [workflows, localPending]);
-
-  const typeCounts = useMemo(() => {
-    const merged = [
-      ...workflows,
-      ...localPending.map(() => ({ taskType: "" }) as WorkflowRow),
-    ];
-    const base = { all: merged.length, image: 0, video: 0, audio: 0 };
-    for (const w of merged) {
-      const cat = getWorkflowType(
-        normalizeTaskType(w.taskType ?? ""),
-      )?.category;
-      if (cat === "image" || cat === "video" || cat === "audio") base[cat] += 1;
-    }
-    return base;
-  }, [workflows, localPending]);
-
-  const { handleDelete, downloadJson, resyncWorkflow, handleLoadPending } =
-    useWorkflowActions({
-      setDeleting,
-      setPendingDelete,
-      setImportErr: () => undefined,
-      setBundleBusy,
-      setResyncBusy,
-      setPendingLoading,
-      setWorkflows,
-      load,
-      updateMut,
-      deleteMut,
-      resyncMut,
-      createMut,
-      utils,
-    });
-
-  // ── Import panel ──
-  const importState = useWorkflowImport({ createMut, load });
-  const toggleImport = useCallback(
-    () => importState.setShowImport((value) => !value),
-    [importState],
-  );
-  const cancelDelete = useCallback(() => setPendingDelete(null), []);
-
-  const handleUse = useCallback(
-    (id: string, meta?: { name: string; taskType: string }) => {
-      onUse?.(id, meta);
-    },
-    [onUse],
-  );
-
-  const handleDeleteClick = useCallback(
-    (id: string, name: string) => {
-      setPendingDelete({ id, name });
-      if (selectedId === id) setSelectedId(null);
-    },
-    [selectedId],
-  );
+  const c = useWorkflowLibrary(onUse);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <WorkflowLibraryHeader onToggleImport={toggleImport} />
+      <WorkflowLibraryHeader onToggleImport={c.toggleImport} />
 
-      {importState.showImport && (
+      {c.showImport && (
         <WorkflowImportPanel
-          state={importState}
-          onClose={() => importState.setShowImport(false)}
-          onImport={importState.handleImport}
+          state={c.importState}
+          onClose={c.closeImport}
+          onImport={c.importState.handleImport}
         />
       )}
 
       <DeleteWorkflowModal
-        pendingDelete={pendingDelete}
-        deleting={deleting}
-        onConfirm={handleDelete}
-        onCancel={cancelDelete}
+        pendingDelete={c.pendingDelete}
+        deleting={c.deleting}
+        onConfirm={(id) => {
+          void c.confirmDelete(id);
+        }}
+        onCancel={c.cancelDelete}
         onBackdropClick={() => {
-          if (!deleting) setPendingDelete(null);
+          if (!c.deleting) c.cancelDelete();
         }}
       />
 
+      {/* 动作失败提示：只有用户点「重试」才消失（§17.5.4），
+       *  否则防抖期内的后台拉取一成功就会把它吞掉。 */}
+      {c.actionError && (
+        <div className="flex items-start gap-2 border-b border-red-500/25 bg-red-500/8 px-5 py-2.5 text-[12px] text-red-200">
+          <span className="font-semibold">⚠</span>
+          <span className="min-w-0 flex-1">{c.actionError}</span>
+          <button
+            type="button"
+            onClick={c.refresh}
+            className="shrink-0 rounded-md border border-red-400/30 px-2 py-0.5 text-[11px] text-red-200 transition-colors hover:bg-red-500/15"
+          >
+            重试
+          </button>
+        </div>
+      )}
+
+      {c.loadError && !c.actionError && (
+        <div className="flex items-start gap-2 border-b border-amber-500/25 bg-amber-500/8 px-5 py-2.5 text-[12px] text-amber-200">
+          <span className="font-semibold">⚠</span>
+          <span className="min-w-0 flex-1">{c.loadError}</span>
+        </div>
+      )}
+
       <WorkflowLibraryFilters
-        sourceFilter={sourceFilter}
-        onSourceFilterChange={setSourceFilter}
-        sourceCounts={sourceCounts}
-        typeFilter={typeFilter}
-        onTypeFilterChange={setTypeFilter}
-        typeCounts={typeCounts}
-        modelFilter={modelFilter}
-        onModelFilterChange={setModelFilter}
-        modelTags={modelTags}
-        onManageModels={() => setShowModelManager(true)}
+        sourceFilter={c.sourceFilter}
+        onSourceFilterChange={c.setSourceFilter}
+        sourceCounts={c.sourceCounts}
+        typeFilter={c.typeFilter}
+        onTypeFilterChange={c.setTypeFilter}
+        typeCounts={c.typeCounts}
+        modelFilter={c.modelFilter}
+        onModelFilterChange={c.setModelFilter}
+        modelTags={c.modelTags}
+        onManageModels={() => c.setShowModelManager(true)}
       />
 
       <div className="flex min-h-0 flex-1">
         <WorkflowLibraryList
-          workflows={filteredWorkflows}
-          pendingRows={pendingRows}
-          selectedId={selectedId}
-          search={q}
-          onSearchChange={setQ}
-          onSelect={setSelectedId}
-          onLoadPending={handleLoadPending}
+          workflows={c.workflows}
+          pendingRows={c.pendingRows}
+          selectedId={c.selectedId}
+          search={c.search}
+          onSearchChange={c.setSearch}
+          onSelect={c.setSelectedId}
+          onLoadPending={(pending) => {
+            void c.handleLoadPending(pending);
+          }}
         />
         <div className="flex-1">
           <WorkflowLibraryDetail
-            workflow={selectedRow}
-            onUse={handleUse}
-            onEdit={setEditingId}
-            onDelete={handleDeleteClick}
-            onDownload={downloadJson}
-            onResync={resyncWorkflow}
-            bundleBusy={bundleBusy}
-            resyncBusy={resyncBusy}
+            workflow={c.selectedRow}
+            onUse={c.handleUse}
+            onEdit={c.handleEdit}
+            onDelete={c.handleDeleteClick}
+            onDownload={(id, name) => {
+              void c.handleDownload(id, name);
+            }}
+            onResync={(id, name) => {
+              void c.handleResync(id, name);
+            }}
+            bundleBusy={c.bundleBusy}
+            resyncBusy={c.resyncBusy}
           />
         </div>
       </div>
 
       <WorkflowCanvasEditor
-        workflowId={editingId ?? ""}
-        open={!!editingId}
-        onClose={() => setEditingId(null)}
-        onSave={load}
+        workflowId={c.editingId ?? ""}
+        open={!!c.editingId}
+        onClose={() => c.setEditingId(null)}
+        onSave={c.load}
       />
 
-      {showModelManager && (
+      {c.showModelManager && (
         <ModelTagManager
-          initialTags={modelTags}
-          onChanged={() => {
-            loadModelTags();
-          }}
-          onClose={() => setShowModelManager(false)}
+          initialTags={c.modelTags}
+          onChanged={c.loadModelTags}
+          onClose={() => c.setShowModelManager(false)}
         />
       )}
     </div>
