@@ -14,9 +14,16 @@
  *   <DebugChainFooter modules={getWorkflowRenderChainModules(classType)} />
  */
 
-import { useCallback, useEffect, useState, type CSSProperties, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import { CodeBlock, extToLanguage } from "../ui/CodeBlock";
+import { fetchDebugSource } from "@/lib/debug-source-client";
 import { useDebugStore } from "./debug-store";
 
 export interface RenderChainModule {
@@ -51,7 +58,11 @@ interface SourcePayload {
   modifiedAt: string;
 }
 
-export function DebugChainFooter({ modules }: { modules: RenderChainModule[] }) {
+export function DebugChainFooter({
+  modules,
+}: {
+  modules: RenderChainModule[];
+}) {
   const debugMode = useDebugStore((state) => state.debugMode);
 
   const [openFile, setOpenFile] = useState<string | null>(null);
@@ -82,12 +93,7 @@ export function DebugChainFooter({ modules }: { modules: RenderChainModule[] }) 
     setLoadError(null);
     setLoading(true);
     try {
-      const res = await fetch(`/api/debug/source?file=${encodeURIComponent(file)}`);
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? `HTTP ${res.status}`);
-      }
-      const payload = (await res.json()) as SourcePayload;
+      const payload = await fetchDebugSource(file);
       setSource(payload);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "读取源码失败");
@@ -127,7 +133,14 @@ export function DebugChainFooter({ modules }: { modules: RenderChainModule[] }) 
   const renderGroup = (title: string, group: RenderChainModule[]) => {
     if (group.length === 0) return null;
     return (
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "center" }}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 3,
+          alignItems: "center",
+        }}
+      >
         <span
           style={{
             fontSize: 8.5,
@@ -204,7 +217,10 @@ export function DebugChainFooter({ modules }: { modules: RenderChainModule[] }) 
                   <span aria-hidden className="text-[14px] text-amber-300/90">
                     ◈
                   </span>
-                  <code className="truncate font-mono text-[12px] text-gray-200" title={openFile}>
+                  <code
+                    className="truncate font-mono text-[12px] text-gray-200"
+                    title={openFile}
+                  >
                     {openFile}
                   </code>
                 </div>
@@ -276,7 +292,7 @@ export function DebugChainFooter({ modules }: { modules: RenderChainModule[] }) 
               </div>
             </div>
           </div>,
-          document.body
+          document.body,
         )}
     </>
   );

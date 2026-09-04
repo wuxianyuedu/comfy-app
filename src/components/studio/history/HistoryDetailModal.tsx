@@ -2,7 +2,10 @@ import { Folder, X } from "lucide-react";
 
 import { MediaThumbnail } from "@/components/studio/ui/MediaThumbnail";
 import { isVideo } from "@/lib/media";
-import { vanillaApi } from "~/trpc/vanilla";
+import {
+  fetchTaskWorkflow,
+  openTaskFolder,
+} from "@/lib/history-detail-actions";
 
 import {
   deriveGenValues,
@@ -36,8 +39,8 @@ export function HistoryDetailModal({
   onClose,
 }: HistoryDetailModalProps) {
   const actions = useHistoryDetailActions({
-    openFolder: (id) => vanillaApi.task.openFolder.mutate({ id }),
-    fetchWorkflow: (id) => vanillaApi.task.workflow.query({ id }),
+    openFolder: openTaskFolder,
+    fetchWorkflow: fetchTaskWorkflow,
   });
 
   if (!detailId) return null;
@@ -45,10 +48,17 @@ export function HistoryDetailModal({
   const current = detail;
   const { showPrompt, prompt, negativePrompt } = derivePrompt(current);
   const genValues = deriveGenValues(current, workflowHints);
-  const { rows: paramRows, topLevelEntries, hasAny: hasParams } = deriveParamRows(current);
-  const firstImage = Array.isArray(current?.images) ? current.images[0] : undefined;
-  const snapSource = (current?.workflowSnapshot as { source?: string } | null | undefined)
-    ?.source;
+  const {
+    rows: paramRows,
+    topLevelEntries,
+    hasAny: hasParams,
+  } = deriveParamRows(current);
+  const firstImage = Array.isArray(current?.images)
+    ? current.images[0]
+    : undefined;
+  const snapSource = (
+    current?.workflowSnapshot as { source?: string } | null | undefined
+  )?.source;
   const sourceLabel =
     snapSource === "backfill"
       ? "历史记录回填快照"
@@ -83,7 +93,7 @@ export function HistoryDetailModal({
             </button>
             {actions.folderPopover && (
               <div
-                className="absolute right-5 top-[52px] z-10 w-[min(440px,calc(100vw-40px))] rounded-lg border border-white/10 bg-[#0f0f17] p-3 shadow-xl"
+                className="absolute top-[52px] right-5 z-10 w-[min(440px,calc(100vw-40px))] rounded-lg border border-white/10 bg-[#0f0f17] p-3 shadow-xl"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="mb-2 flex items-center justify-between">
@@ -101,18 +111,29 @@ export function HistoryDetailModal({
                 </div>
                 {actions.folderPopover.helperMissing ? (
                   <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-amber-200">
-                    未检测到 ComfyApp 助手，浏览器没有弹出「打开外部应用」确认框。
-                    请双击运行项目内 <code className="text-amber-100">scripts\install-comfyapp-helper.ps1</code>{" "}
+                    未检测到 ComfyApp
+                    助手，浏览器没有弹出「打开外部应用」确认框。
+                    请双击运行项目内{" "}
+                    <code className="text-amber-100">
+                      scripts\install-comfyapp-helper.ps1
+                    </code>{" "}
                     注册
-                    <code className="text-amber-100"> comfyapp://</code> 协议（仅本机、无需管理员），
-                    或直接 <a href="/api/helper/install" className="underline hover:text-amber-100">下载安装脚本</a>。
+                    <code className="text-amber-100"> comfyapp://</code>{" "}
+                    协议（仅本机、无需管理员）， 或直接{" "}
+                    <a
+                      href="/api/helper/install"
+                      className="underline hover:text-amber-100"
+                    >
+                      下载安装脚本
+                    </a>
+                    。
                   </div>
                 ) : (
                   <div className="mb-2 rounded border border-emerald-500/20 bg-emerald-500/6 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-emerald-200/90">
                     若浏览器弹出「是否打开外部应用」，点击「打开」即可在资源管理器中打开该目录。
                   </div>
                 )}
-                <code className="block select-all break-all rounded bg-black/40 px-2.5 py-2 text-[11px] leading-relaxed text-emerald-300">
+                <code className="block rounded bg-black/40 px-2.5 py-2 text-[11px] leading-relaxed break-all text-emerald-300 select-all">
                   {actions.folderPopover.path}
                 </code>
                 <div className="mt-2 flex flex-wrap justify-end gap-2">
@@ -179,7 +200,7 @@ export function HistoryDetailModal({
                       <a
                         href={img.localPath}
                         download
-                        className="absolute bottom-2 right-2 rounded bg-white/15 px-2 py-0.5 text-[11px] text-white opacity-0 transition-opacity hover:bg-white/25 group-hover:opacity-100"
+                        className="absolute right-2 bottom-2 rounded bg-white/15 px-2 py-0.5 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/25"
                       >
                         {isVideo(img.localPath) ? "下载视频" : "下载"}
                       </a>
@@ -192,16 +213,20 @@ export function HistoryDetailModal({
 
               {showPrompt && (
                 <div>
-                  <p className="mb-1 text-xs font-semibold text-gray-400">正向提示词</p>
-                  <p className="whitespace-pre-wrap break-words text-sm text-gray-300">
+                  <p className="mb-1 text-xs font-semibold text-gray-400">
+                    正向提示词
+                  </p>
+                  <p className="text-sm break-words whitespace-pre-wrap text-gray-300">
                     {prompt}
                   </p>
                 </div>
               )}
               {negativePrompt && (
                 <div>
-                  <p className="mb-1 text-xs font-semibold text-gray-400">反向提示词</p>
-                  <p className="whitespace-pre-wrap break-words text-sm text-gray-400">
+                  <p className="mb-1 text-xs font-semibold text-gray-400">
+                    反向提示词
+                  </p>
+                  <p className="text-sm break-words whitespace-pre-wrap text-gray-400">
                     {negativePrompt}
                   </p>
                 </div>
@@ -210,12 +235,15 @@ export function HistoryDetailModal({
               {genValues.length === 0 ? (
                 /* 空态说明：让用户一眼知道是工作流没暴露参数，不是系统 bug。 */
                 <div className="rounded-lg border border-dashed border-white/8 bg-white/2 px-3 py-2.5 text-xs text-gray-500">
-                  本任务所用工作流未暴露常见生成参数（seed/steps/cfg 等在节点硬编码默认值中）。
+                  本任务所用工作流未暴露常见生成参数（seed/steps/cfg
+                  等在节点硬编码默认值中）。
                   如需查看完整参数，请展开下方的「原始 JSON」。
                 </div>
               ) : (
                 <div>
-                  <p className="mb-1 text-xs font-semibold text-gray-400">生成参数</p>
+                  <p className="mb-1 text-xs font-semibold text-gray-400">
+                    生成参数
+                  </p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-white/6 bg-white/2 p-3 sm:grid-cols-3">
                     {genValues.map((item) => (
                       <div key={item.label} className="flex flex-col gap-0.5">
@@ -223,8 +251,9 @@ export function HistoryDetailModal({
                           <span className="shrink-0 text-[11px] text-gray-500">
                             {item.label}
                           </span>
-                          <span className="min-w-0 break-words font-mono text-[12px] text-gray-200">
-                            {typeof item.value === "string" || typeof item.value === "number"
+                          <span className="min-w-0 font-mono text-[12px] break-words text-gray-200">
+                            {typeof item.value === "string" ||
+                            typeof item.value === "number"
                               ? String(item.value)
                               : JSON.stringify(item.value)}
                           </span>
@@ -239,7 +268,8 @@ export function HistoryDetailModal({
                   </div>
                   {genValues.some((item) => item.hint) && (
                     <p className="mt-1 text-[10px] leading-relaxed text-gray-500">
-                      注：种子字段在 control_after_generate=randomize 时为默认值，非本次执行的真实种子。
+                      注：种子字段在 control_after_generate=randomize
+                      时为默认值，非本次执行的真实种子。
                     </p>
                   )}
                 </div>
@@ -253,7 +283,9 @@ export function HistoryDetailModal({
 
               {hasParams && (
                 <div>
-                  <p className="mb-1 text-xs font-semibold text-gray-400">参数</p>
+                  <p className="mb-1 text-xs font-semibold text-gray-400">
+                    参数
+                  </p>
 
                   {paramRows.length > 0 && (
                     <div className="mb-2 overflow-hidden rounded-lg border border-white/6">
@@ -261,16 +293,22 @@ export function HistoryDetailModal({
                         <tbody>
                           {paramRows.map((input, i) => (
                             <tr
-                              key={(input.nodeId ?? "?") + ":" + input.name + ":" + i}
+                              key={
+                                (input.nodeId ?? "?") +
+                                ":" +
+                                input.name +
+                                ":" +
+                                i
+                              }
                               className="border-b border-white/4 last:border-b-0"
                             >
                               <td
-                                className="w-[36%] max-w-[180px] shrink-0 truncate align-top border-r border-white/4 bg-white/2 px-2.5 py-1.5 font-mono text-violet-300"
+                                className="w-[36%] max-w-[180px] shrink-0 truncate border-r border-white/4 bg-white/2 px-2.5 py-1.5 align-top font-mono text-violet-300"
                                 title={input.name}
                               >
                                 {input.name}
                               </td>
-                              <td className="break-words px-2.5 py-1.5 text-gray-200">
+                              <td className="px-2.5 py-1.5 break-words text-gray-200">
                                 {typeof input.value === "string"
                                   ? input.value
                                   : JSON.stringify(input.value)}
@@ -284,11 +322,17 @@ export function HistoryDetailModal({
 
                   {topLevelEntries.length > 0 && (
                     <details className="rounded-lg border border-white/6 bg-black/30">
-                      <summary className="cursor-pointer select-none px-3 py-1.5 text-[11px] text-gray-500 hover:text-gray-300">
-                        原始 JSON · {topLevelEntries.length + (paramRows.length ? 1 : 0)} 个字段
+                      <summary className="cursor-pointer px-3 py-1.5 text-[11px] text-gray-500 select-none hover:text-gray-300">
+                        原始 JSON ·{" "}
+                        {topLevelEntries.length + (paramRows.length ? 1 : 0)}{" "}
+                        个字段
                       </summary>
-                      <pre className="max-w-full whitespace-pre-wrap break-all border-t border-white/6 p-3 text-[11px] text-gray-400">
-                        {JSON.stringify(Object.fromEntries(topLevelEntries), null, 2)}
+                      <pre className="max-w-full border-t border-white/6 p-3 text-[11px] break-all whitespace-pre-wrap text-gray-400">
+                        {JSON.stringify(
+                          Object.fromEntries(topLevelEntries),
+                          null,
+                          2,
+                        )}
                       </pre>
                     </details>
                   )}

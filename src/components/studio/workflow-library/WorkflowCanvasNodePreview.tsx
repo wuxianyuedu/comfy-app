@@ -13,8 +13,8 @@
  */
 
 import { useMemo, useRef, useState } from "react";
-import { vanillaApi } from "~/trpc/vanilla";
 import {
+  startLocalGenerate,
   watchTask,
   type TaskProgressNode,
 } from "@/lib/workshop/generation-client";
@@ -91,13 +91,14 @@ export function WorkflowCanvasNodePreview({
     resultUrlRef.current = null;
     setPhase({ kind: "starting" });
     try {
-      const workflowInputs = toWorkflowInputsPayload(workflowIO ?? undefined, values);
-      const res = await vanillaApi.generate.generate.mutate({
+      const workflowInputs = toWorkflowInputsPayload(
+        workflowIO ?? undefined,
+        values,
+      );
+      const taskId = await startLocalGenerate({
         workflow: workflowId,
         workflowInputs,
       });
-      const taskId = res?.taskId;
-      if (!taskId) throw new Error("任务创建失败：服务未返回 taskId");
       setPhase({ kind: "running", pct: 0 });
       await new Promise<void>((resolve) => {
         watchTask(taskId, {
@@ -111,7 +112,10 @@ export function WorkflowCanvasNodePreview({
           },
           onSettled: (r) => {
             if (r.ok) {
-              setPhase({ kind: "done", imageUrl: resultUrlRef.current ?? undefined });
+              setPhase({
+                kind: "done",
+                imageUrl: resultUrlRef.current ?? undefined,
+              });
             } else {
               setPhase({ kind: "failed", message: r.message ?? "生成失败" });
             }
@@ -173,7 +177,9 @@ export function WorkflowCanvasNodePreview({
           <div className="flex h-7 min-w-0 items-center gap-1">
             <WorkflowStaticChip>
               <span className="h-1.5 w-1.5 rounded-full bg-[#33D499]" />
-              <span className="text-[11px] font-semibold text-[#33D499]">本机</span>
+              <span className="text-[11px] font-semibold text-[#33D499]">
+                本机
+              </span>
             </WorkflowStaticChip>
             <WorkflowStaticChip className="min-w-0 flex-1">
               <span className="truncate text-[11px] font-semibold text-(--color-ink-bright)">
@@ -225,7 +231,11 @@ export function WorkflowCanvasNodePreview({
           label={running ? `生成中 ${pct}%` : "▶ 用此工作流生成"}
           disabled={!canRun}
           onClick={run}
-          title={missing.length > 0 ? `必填参数未填：${missing.join("、")}` : undefined}
+          title={
+            missing.length > 0
+              ? `必填参数未填：${missing.join("、")}`
+              : undefined
+          }
         />
       </WorkflowNodeCardShell>
 

@@ -2,8 +2,12 @@
 import React from "react";
 import { completeChat } from "@/lib/llm/browser";
 import { Icon } from "@/components/ui/icon";
-import { api } from "~/trpc/react";
 import type { LLMConfigView, LLMProviderType } from "@/lib/llm/types";
+import {
+  useLLMConfig,
+  useLLMConfigSave,
+  type LLMConfigSaveInput,
+} from "./hooks/use-llm-config";
 
 /** catch 抛出值（unknown）→ 与旧 `e?.message ?? fallback` 逐值等价的消息提取：
  *  带 string message 的对象取 message（Error 实例即此路径），其余回退。 */
@@ -33,23 +37,8 @@ export function useLLM(): LLMContextValue {
 }
 
 export function LLMProvider({ children }: { children: React.ReactNode }) {
-  const configQ = api.llm.configGet.useQuery();
-  const [config, setConfig] = React.useState<LLMConfigView | null>(null);
-  const loading = configQ.isLoading;
+  const { config, loading, refresh } = useLLMConfig();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
-
-  const refresh = React.useCallback(() => {
-    void configQ.refetch();
-  }, [configQ]);
-
-  // Seed config from the query result (adjusted during render, React 19
-  // pattern: no setState synchronously within an effect).
-  const cfg = configQ.data?.config;
-  const [prevCfg, setPrevCfg] = React.useState(cfg);
-  if (cfg !== prevCfg) {
-    setPrevCfg(cfg);
-    if (cfg) setConfig({ ...cfg, hasApiKey: !!cfg.apiKey });
-  }
 
   React.useEffect(() => {
     refresh();
@@ -71,8 +60,8 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
         <LLMSettingsModal
           initial={config}
           onClose={() => setSettingsOpen(false)}
-          onSaved={(config) => {
-            setConfig(config);
+          onSaved={() => {
+            refresh();
             setSettingsOpen(false);
           }}
         />
@@ -85,7 +74,11 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
 export function LLMStatusChip() {
   const { config, loading, openSettings } = useLLM();
   if (loading) {
-    return <span className="rounded-full bg-subtle px-2 py-0.5 text-xs text-muted-foreground">LLM…</span>;
+    return (
+      <span className="bg-subtle text-muted-foreground rounded-full px-2 py-0.5 text-xs">
+        LLM…
+      </span>
+    );
   }
   if (!config) {
     return (
@@ -101,7 +94,7 @@ export function LLMStatusChip() {
   const label = config.provider === "local" ? "本地 LLM" : "远端 API";
   return (
     <span
-      className="rounded-full bg-primary-soft px-2 py-0.5 text-xs text-primary"
+      className="bg-primary-soft text-primary rounded-full px-2 py-0.5 text-xs"
       title={`${label} · ${config.model}`}
     >
       {label} · {config.model}
@@ -117,9 +110,10 @@ export function LLMSettingsButton() {
       type="button"
       onClick={openSettings}
       title="LLM 文本生成设置"
-      className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-subtle"
+      className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-3 py-2 text-sm transition-colors"
     >
-      <Icon name="settings" size={14} className="mr-1.5 inline align-[-2px]" />LLM 设置
+      <Icon name="settings" size={14} className="mr-1.5 inline align-[-2px]" />
+      LLM 设置
     </button>
   );
 }
@@ -136,50 +130,52 @@ function LLMSettingsModal({
   onClose: () => void;
   onSaved: (c: LLMConfigView) => void;
 }) {
-  const [provider, setProvider] = React.useState<LLMProviderType>(initial?.provider ?? "local");
+  const [provider, setProvider] = React.useState<LLMProviderType>(
+    initial?.provider ?? "local",
+  );
   const [baseUrl, setBaseUrl] = React.useState(
-    initial?.baseUrl ?? "http://localhost:11434/v1"
+    initial?.baseUrl ?? "http://localhost:11434/v1",
   );
   const [model, setModel] = React.useState(initial?.model ?? "llama3.1");
   const [apiKey, setApiKey] = React.useState("");
-  const [temperature, setTemperature] = React.useState(initial?.temperature ?? 0.7);
+  const [temperature, setTemperature] = React.useState(
+    initial?.temperature ?? 0.7,
+  );
   const [maxTokens, setMaxTokens] = React.useState(initial?.maxTokens ?? 2048);
-  const [saving, setSaving] = React.useState(false);
   const [testing, setTesting] = React.useState(false);
-  const [msg, setMsg] = React.useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  const saveCfg = api.llm.configSave.useMutation();
+  const [msg, setMsg] = React.useState<{
+    kind: "ok" | "err";
+    text: string;
+  } | null>(null);
+  const { saving, save } = useLLMConfigSave();
 
   const baseUrlPlaceholder =
-    provider === "local" ? "http://localhost:11434/v1" : "https://api.openai.com/v1";
+    provider === "local"
+      ? "http://localhost:11434/v1"
+      : "https://api.openai.com/v1";
 
   function syncProviderDefaults(p: LLMProviderType) {
     setProvider(p);
-    setBaseUrl(p === "local" ? "http://localhost:11434/v1" : "https://api.openai.com/v1");
+    setBaseUrl(
+      p === "local" ? "http://localhost:11434/v1" : "https://api.openai.com/v1",
+    );
   }
 
   async function handleSave() {
-    setSaving(true);
     setMsg(null);
     try {
-      const data = await saveCfg.mutateAsync({
+      const input: LLMConfigSaveInput = {
         provider,
         baseUrl,
         model,
         apiKey: apiKey || undefined, // omit → keep existing
         temperature,
         maxTokens,
-      });
-      const cfg = data.config;
-      onSaved({
-        ...cfg,
-        hasApiKey: !!cfg.apiKey,
-        provider: cfg.provider as "local" | "remote",
-        temperatureByTask: (cfg.temperatureByTask as Record<string, number> | null | undefined) ?? undefined,
-      });
+      };
+      const cfg = await save(input);
+      onSaved(cfg);
     } catch (e: unknown) {
       setMsg({ kind: "err", text: errorMessage(e, "保存失败") });
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -208,7 +204,7 @@ function LLMSettingsModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-2xl"
+        className="border-border bg-surface w-full max-w-md rounded-2xl border p-5 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -225,7 +221,9 @@ function LLMSettingsModal({
 
         <div className="space-y-3">
           <label className="block">
-            <span className="mb-1 block text-xs text-muted-foreground">提供方</span>
+            <span className="text-muted-foreground mb-1 block text-xs">
+              提供方
+            </span>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -252,8 +250,18 @@ function LLMSettingsModal({
             </div>
           </label>
 
-          <Field label="Base URL" value={baseUrl} onChange={setBaseUrl} placeholder={baseUrlPlaceholder} />
-          <Field label="模型名" value={model} onChange={setModel} placeholder="llama3.1 / gpt-4o-mini" />
+          <Field
+            label="Base URL"
+            value={baseUrl}
+            onChange={setBaseUrl}
+            placeholder={baseUrlPlaceholder}
+          />
+          <Field
+            label="模型名"
+            value={model}
+            onChange={setModel}
+            placeholder="llama3.1 / gpt-4o-mini"
+          />
           <Field
             label={`API Key${provider === "remote" ? "（必填）" : "（本地一般留空）"}`}
             value={apiKey}
@@ -263,7 +271,7 @@ function LLMSettingsModal({
           />
 
           <label className="block">
-            <span className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+            <span className="text-muted-foreground mb-1 flex items-center justify-between text-xs">
               <span>温度（Temperature）</span>
               <span className="text-ink">{temperature.toFixed(2)}</span>
             </span>
@@ -274,17 +282,24 @@ function LLMSettingsModal({
               step={0.05}
               value={temperature}
               onChange={(event) => setTemperature(Number(event.target.value))}
-              className="w-full accent-primary"
+              className="accent-primary w-full"
             />
           </label>
 
-          <Field label="最大 Token" value={String(maxTokens)} onChange={(value) => setMaxTokens(Number(value) || 2048)} placeholder="2048" />
+          <Field
+            label="最大 Token"
+            value={String(maxTokens)}
+            onChange={(value) => setMaxTokens(Number(value) || 2048)}
+            placeholder="2048"
+          />
         </div>
 
         {msg && (
           <p
             className={`mt-3 rounded-lg px-3 py-2 text-xs ${
-              msg.kind === "ok" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+              msg.kind === "ok"
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-red-100 text-red-700"
             }`}
           >
             {msg.text}
@@ -296,7 +311,7 @@ function LLMSettingsModal({
             type="button"
             onClick={handleTest}
             disabled={testing}
-            className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-subtle disabled:opacity-40"
+            className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-3 py-2 text-sm disabled:opacity-40"
           >
             {testing ? "测试中…" : "测试连接"}
           </button>
@@ -304,15 +319,16 @@ function LLMSettingsModal({
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+            className="bg-primary flex-1 rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
           >
             {saving ? "保存中…" : "保存"}
           </button>
         </div>
 
-        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-          支持任何 OpenAI 兼容接口：本地可填 Ollama（http://localhost:11434/v1）或 LM Studio；
-          远端可填 OpenAI / DeepSeek / 通义等。API Key 仅存储于服务端，不会下发到浏览器。
+        <p className="text-muted-foreground mt-3 text-[11px] leading-relaxed">
+          支持任何 OpenAI 兼容接口：本地可填
+          Ollama（http://localhost:11434/v1）或 LM Studio； 远端可填 OpenAI /
+          DeepSeek / 通义等。API Key 仅存储于服务端，不会下发到浏览器。
         </p>
       </div>
     </div>
@@ -334,13 +350,13 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs text-muted-foreground">{label}</span>
+      <span className="text-muted-foreground mb-1 block text-xs">{label}</span>
       <input
         type={password ? "password" : "text"}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
+        className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
       />
     </label>
   );
