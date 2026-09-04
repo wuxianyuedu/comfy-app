@@ -1,9 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { Icon } from "@/components/ui/icon";
-import { api } from "~/trpc/react";
+import {
+  useWorkflowParamConfig,
+  type ParamMapValue,
+  type WorkflowNodeForConfig,
+} from "./hooks/use-workflow-param-config";
 
 /**
  * WorkflowParamConfig — 工作流节点参数暴露配置器
@@ -18,11 +22,11 @@ import { api } from "~/trpc/react";
 
 /* ── 可分配的角色定义 ── */
 export interface ParamRole {
-  key: string;           // 存储在 paramMap 中的键名
-  label: string;         // 中文显示名
-  icon: string;          // emoji 图标
-  description: string;   // 说明文字
-  color: string;         // 标签颜色（tailwind 类）
+  key: string; // 存储在 paramMap 中的键名
+  label: string; // 中文显示名
+  icon: string; // emoji 图标
+  description: string; // 说明文字
+  color: string; // 标签颜色（tailwind 类）
   /** 匹配优先级：数字越小越优先用于自动推断 */
   priority: number;
 }
@@ -94,14 +98,6 @@ export const PARAM_ROLES: ParamRole[] = [
   },
 ];
 
-export type WorkflowNodeForConfig = {
-  id: string;
-  class_type: string;
-  title: string;
-};
-
-export type ParamMapValue = Record<string, string>; // roleKey -> nodeId
-
 interface WorkflowParamConfigProps {
   workflowId: string;
   /** Initial nodes list (from graph); if omitted, will fetch from API */
@@ -121,47 +117,20 @@ export function WorkflowParamConfig({
   onSave,
   compact = false,
 }: WorkflowParamConfigProps) {
-  const [paramMap, setParamMap] = useState<ParamMapValue>(initialParamMap);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
-
-  // Fetch nodes if not provided
-  const detailQ = api.workflow.detail.useQuery(
-    { id: workflowId },
-    { enabled: !(initialNodes && initialNodes.length > 0) }
-  );
-  const fetchedNodes: WorkflowNodeForConfig[] = useMemo(
-    () => Object.entries(detailQ.data?.template.graph ?? {}).map(([id, n]) => {
-      // graph 列是 JsonValue：逐条收窄后再读 class_type / title（§5.6）。
-      const rec = typeof n === "object" && n !== null ? (n as Record<string, unknown>) : {};
-      const classType = typeof rec.class_type === "string" ? rec.class_type : "";
-      return {
-        id,
-        class_type: classType,
-        title: typeof rec.title === "string" ? rec.title : classType,
-      };
-    }),
-    [detailQ.data?.template.graph]
-  );
-
-  const displayNodes = (initialNodes && initialNodes.length > 0) ? initialNodes : fetchedNodes;
-
-  // Sync paramMap from fetched data (adjusted during render, React 19 pattern)
-  const [prevParamMapSrc, setPrevParamMapSrc] = useState<ParamMapValue | undefined>(
-    detailQ.data?.template.paramMap as ParamMapValue | undefined,
-  );
-  const paramMapSrc = detailQ.data?.template.paramMap as ParamMapValue | undefined;
-  if (paramMapSrc !== prevParamMapSrc) {
-    setPrevParamMapSrc(paramMapSrc);
-    if (paramMapSrc) setParamMap(paramMapSrc);
-  }
-
-  const [prevIsError, setPrevIsError] = useState(detailQ.isError);
-  if (detailQ.isError !== prevIsError) {
-    setPrevIsError(detailQ.isError);
-    if (detailQ.isError) setError("无法加载工作流详情");
-  }
+  const {
+    paramMap,
+    changeRole: handleRoleChange,
+    displayNodes,
+    saving,
+    saved,
+    error,
+    save: handleSave,
+  } = useWorkflowParamConfig({
+    workflowId,
+    initialNodes,
+    initialParamMap,
+    onSave,
+  });
 
   // Reverse map: nodeId -> roleKey (for showing which role a node has)
   const nodeRoleMap = useMemo(() => {
@@ -172,44 +141,13 @@ export function WorkflowParamConfig({
     return map;
   }, [paramMap]);
 
-  const handleRoleChange = useCallback((nodeId: string, roleKey: string) => {
-    setParamMap((prev) => {
-      const next = { ...prev };
-      // Remove this node from any existing role
-      for (const [k, v] of Object.entries(next)) {
-        if (v === nodeId) delete next[k];
-      }
-      // Assign new role (empty = unassign)
-      if (roleKey) {
-        next[roleKey] = nodeId;
-      }
-      return next;
-    });
-    setSaved(false);
-  }, []);
-
-  const updateWf = api.workflow.update.useMutation();
-
-  const handleSave = useCallback(async () => {
-    setSaving(true);
-    setError("");
-    try {
-      await updateWf.mutateAsync({ id: workflowId, paramMap });
-      setSaved(true);
-      onSave?.(paramMap);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (e: unknown) {
-      // 与旧 `e.message ?? "保存失败"` 等价（tRPC mutateAsync 抛出的恒为 Error 子类）。
-      setError(e instanceof Error ? e.message : "保存失败");
-    } finally {
-      setSaving(false);
-    }
-  }, [workflowId, paramMap, onSave, updateWf]);
-
   /* ── Assigned roles summary ── */
-  const assignedRoles = PARAM_ROLES.filter((PARAM_ROLES) => paramMap[PARAM_ROLES.key]);
-  const unassignedRoles = PARAM_ROLES.filter((PARAM_ROLES) => !paramMap[PARAM_ROLES.key]);
-
+  const assignedRoles = PARAM_ROLES.filter(
+    (PARAM_ROLES) => paramMap[PARAM_ROLES.key],
+  );
+  const unassignedRoles = PARAM_ROLES.filter(
+    (PARAM_ROLES) => !paramMap[PARAM_ROLES.key],
+  );
   if (!compact) {
     return (
       <div className="space-y-3 rounded-xl border border-white/6 bg-(--color-panel-deep)/70 p-4">
@@ -217,7 +155,11 @@ export function WorkflowParamConfig({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="flex items-center text-[13px] font-semibold text-(--color-ink-field)">
-              <Icon name="settings" size={14} className="mr-1.5 inline align-[-2px]" />
+              <Icon
+                name="settings"
+                size={14}
+                className="mr-1.5 inline align-[-2px]"
+              />
               参数暴露配置
             </h3>
             <p className="mt-0.5 text-[10.5px] text-(--color-ink-fainter)">
@@ -239,9 +181,8 @@ export function WorkflowParamConfig({
         {/* Assigned roles pills */}
         {assignedRoles.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
-            <span className="text-[10.5px] text-gray-500 pt-0.5">已配置：</span>
-            {assignedRoles.map((assignedRole) =>
-(
+            <span className="pt-0.5 text-[10.5px] text-gray-500">已配置：</span>
+            {assignedRoles.map((assignedRole) => (
               <span
                 key={assignedRole.key}
                 className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${assignedRole.color}`}
@@ -253,10 +194,14 @@ export function WorkflowParamConfig({
         )}
 
         {/* Node list with role selectors */}
-        <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
+        <div className="max-h-[320px] space-y-1.5 overflow-y-auto pr-1">
           {displayNodes.map((node) => {
             const currentRole = nodeRoleMap[node.id];
-            const roleDef = currentRole ? PARAM_ROLES.find((PARAM_ROLES) => PARAM_ROLES.key === currentRole) : null;
+            const roleDef = currentRole
+              ? PARAM_ROLES.find(
+                  (PARAM_ROLES) => PARAM_ROLES.key === currentRole,
+                )
+              : null;
             return (
               <div
                 key={node.id}
@@ -264,7 +209,9 @@ export function WorkflowParamConfig({
               >
                 {/* Node info */}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-medium text-(--color-ink-field)">{node.title}</p>
+                  <p className="truncate text-[12px] font-medium text-(--color-ink-field)">
+                    {node.title}
+                  </p>
                   <p className="truncate text-[10px] text-(--color-ink-fainter)">
                     {node.class_type} · {node.id.slice(0, 8)}…
                   </p>
@@ -276,13 +223,20 @@ export function WorkflowParamConfig({
                   value={currentRole ?? ""}
                   onChange={(value) => handleRoleChange(node.id, value)}
                   options={PARAM_ROLES.map((PARAM_ROLES) => PARAM_ROLES.key)}
-                  labels={Object.fromEntries(PARAM_ROLES.map((PARAM_ROLES) => [PARAM_ROLES.key, PARAM_ROLES.label]))}
+                  labels={Object.fromEntries(
+                    PARAM_ROLES.map((PARAM_ROLES) => [
+                      PARAM_ROLES.key,
+                      PARAM_ROLES.label,
+                    ]),
+                  )}
                   placeholder="— 不暴露 —"
                 />
 
                 {/* Current role badge */}
                 {roleDef && (
-                  <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] ${roleDef.color}`}>
+                  <span
+                    className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] ${roleDef.color}`}
+                  >
                     <Icon name={roleDef.icon} size={11} />
                   </span>
                 )}
@@ -297,11 +251,16 @@ export function WorkflowParamConfig({
         </div>
 
         {/* Unassigned roles hint */}
-        {unassignedRoles.length > 0 && unassignedRoles.length < PARAM_ROLES.length && (
-          <p className="text-[10px] text-gray-600">
-            未配置：{unassignedRoles.map((unassignedRole) => unassignedRole.label).join("、")}（可选）
-          </p>
-        )}
+        {unassignedRoles.length > 0 &&
+          unassignedRoles.length < PARAM_ROLES.length && (
+            <p className="text-[10px] text-gray-600">
+              未配置：
+              {unassignedRoles
+                .map((unassignedRole) => unassignedRole.label)
+                .join("、")}
+              （可选）
+            </p>
+          )}
       </div>
     );
   }
@@ -313,7 +272,9 @@ export function WorkflowParamConfig({
         <span className="text-[11px] font-medium text-gray-300">
           参数映射
           {assignedRoles.length > 0 && (
-            <span className="ml-1.5 text-violet-400">({assignedRoles.length})</span>
+            <span className="ml-1.5 text-violet-400">
+              ({assignedRoles.length})
+            </span>
           )}
         </span>
         <button
@@ -328,13 +289,19 @@ export function WorkflowParamConfig({
 
       {/* Compact: show only assigned roles + quick unassign */}
       <div className="space-y-1">
-        {assignedRoles.map((assignedRole) =>
-{
+        {assignedRoles.map((assignedRole) => {
           const nodeId = paramMap[assignedRole.key];
-          const node = displayNodes.find((displayNode) => displayNode.id === nodeId);
+          const node = displayNodes.find(
+            (displayNode) => displayNode.id === nodeId,
+          );
           return (
-            <div key={assignedRole.key} className="flex items-center justify-between gap-2">
-              <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${assignedRole.color}`}>
+            <div
+              key={assignedRole.key}
+              className="flex items-center justify-between gap-2"
+            >
+              <span
+                className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${assignedRole.color}`}
+              >
                 <Icon name={assignedRole.icon} size={11} /> {assignedRole.label}
               </span>
               <span className="min-w-0 flex-1 truncate text-[10.5px] text-gray-400">
@@ -360,15 +327,22 @@ export function WorkflowParamConfig({
             onChange={(value) => {
               if (value) {
                 const unassignedNode = displayNodes.find(
-                  (node) => !Object.values(paramMap).includes(node.id)
+                  (node) => !Object.values(paramMap).includes(node.id),
                 );
                 if (unassignedNode) {
                   handleRoleChange(unassignedNode.id, value);
                 }
               }
             }}
-            options={unassignedRoles.map((unassignedRole) => unassignedRole.key)}
-            labels={Object.fromEntries(unassignedRoles.map((unassignedRole) => [unassignedRole.key, unassignedRole.label]))}
+            options={unassignedRoles.map(
+              (unassignedRole) => unassignedRole.key,
+            )}
+            labels={Object.fromEntries(
+              unassignedRoles.map((unassignedRole) => [
+                unassignedRole.key,
+                unassignedRole.label,
+              ]),
+            )}
             placeholder="+ 映射新参数…"
           />
         </div>
