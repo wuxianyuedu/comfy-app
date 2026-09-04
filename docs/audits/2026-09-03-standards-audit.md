@@ -1,5 +1,8 @@
 # 项目规范合规审计（2026-09-03）
 
+> **关联文档**：[2026-09-03-规范审计与整改.md](./2026-09-03-规范审计与整改.md) —— 同日全仓规范审计（F1–F10，范围更广）。
+> **生命周期**：本文件追踪整改状态；所有条目闭环（✅ 或 📝 已记录）后从 `docs/audits/` 删除，不再保留（修复记录已在 git history）。
+
 > 范围：`AGENTS.md` 硬规则 + `docs/standards/launch-and-build.md`（启动/构建/进程/日志）+ `docs/standards/01–16`（架构/性能/样式/组件/类型/异步/a11y/错误/测试/反模式）。
 > 方法：静态扫描（eslint / tsc / 结构检查已全绿的前提下）+ 针对规范条目的定向 `grep` + 关键文件精读。
 > 结论：硬性流程规范整体遵守良好；发现 **3 处需立即修复的代码级违规**、若干**需分批偿还的技术债**，以及**单元测试缺口**（3 个纯函数模块无覆盖）。
@@ -55,7 +58,7 @@
 - **规范**：`scripts/check-file-structure.cjs` R1「`src` 下 `.tsx` 非 `ui/` 必须 PascalCase」（§12.6/§12.8）。
 - **后果**：结构检查门禁会阻断提交（R1）。
 - **修复**：已重命名为 `WorkflowNodeParts.tsx`；唯一导入方 `WorkflowCanvasNodePreview.tsx:36` 同步改路径。旧 kebab 文件为未跟踪孤儿，需删除后门禁即过。
-- **状态**：✅ 重命名 + 改路径已完成；⏳ 旧文件删除待本机授权（交互删除授权超时，手动 `Remove-Item src/components/studio/shared/workflow-node-parts.tsx` 即可）。
+- **状态**：✅ 已修复（2026-09-03）。重命名 `WorkflowNodeParts.tsx` + 导入方改路径；旧 kebab-case 文件已删除。
 
 ## 2. 需分批偿还的技术债（记录，建议后续专项处理）
 
@@ -95,6 +98,12 @@
 
 - **规范**：C1「单组件 600 行干 8 件事 → 拆分（阈值 200 行 / 3+ 功能）」。
 - **建议**：**不要在本轮大改**（拆分风险高、易引入回归）。列入后续重构专项，按「数组驱动 UI / 抽 hook / 抽子组件」逐步收敛。
+- **状态**：✅ 已拆分（2026-09-03/09-04）。上述 5 个组件已拆分：
+  - `ScriptMarkdownEditor` → `ScriptMarkdownEditor.parts.tsx` + 子组件抽离（提交 `dcfc9e1`）
+  - `StoryboardPlanner` / `VideoStudio` → 各自 `.parts.tsx` 拆分（提交 `dcfc9e1`）
+  - `WorkflowCanvas` → `WorkflowCanvas.parts.tsx`（提交 `dcfc9e1`）
+  - `ComfyNode` → `ComfyNodeHandles.tsx` 抽离（同批 `dcfc9e1` 跟进修复）
+  - 拆分后行数均已降至 400 以下
 
 ### D4 — 遗留死代码 `scripts/dev-launcher.js`
 - **位置**：`scripts/dev-launcher.js`（仅自引用注释，全仓无其他引用）。
@@ -122,4 +131,4 @@
 
 ## 5. 提交
 - 修复：`build-tauri-release.ps1` / `repair-imports.cjs` / `dev-launcher.ps1`。
-- 新增：`docs/audit/2026-09-03-standards-audit.md` + 3 个测试文件。
+- 新增：`docs/audits/2026-09-03-standards-audit.md` + 3 个测试文件。
