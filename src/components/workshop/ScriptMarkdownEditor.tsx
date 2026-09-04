@@ -271,6 +271,8 @@ export function ScriptMarkdownEditor({
   }, [onSave, restoreHistory]);
 
   return (
+    /* 全屏编辑弹层:底部 padding-bottom 6(24px) 为全局常驻的 BrowserStatusBar
+       (fixed bottom-0 z-[100] h-6) 让位,避免底部「取消/保存」按钮被它盖住(ISSUE #35)。 */
     <div className="fixed inset-0 z-50 flex flex-col bg-[#0a0a0f] pb-6">
       {/* Header */}
       <header className="flex h-14 items-center justify-between border-b border-[#26262e] px-5">
