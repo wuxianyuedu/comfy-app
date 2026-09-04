@@ -1,4 +1,4 @@
-/* ── Shared workflow-IO types (2026-08-09) ──
+/* ── Shared workflow-IO types ──
  *
  * Single source of truth for "what does this custom workflow accept / produce",
  * imported by BOTH client components (src/components/studio/...) and the server
@@ -20,20 +20,20 @@ export interface WorkflowIOEntry {
   defaultValue?: unknown;
   nodeTitle?: string;
   multiline?: boolean;
-  /** 2026-08-11 (R57): mark a widget-backed input as REQUIRED. */
+  /** mark a widget-backed input as REQUIRED. */
   required?: boolean;
-  /** 2026-08-12: COMBO candidate list resolved from ComfyUI /object_info. */
+  /** COMBO candidate list resolved from ComfyUI /object_info. */
   options?: string[];
-  /** 2026-08-15 R-ardot35: user-defined display order. */
+  /** user-defined display order. */
   displayOrder?: number;
-  /** 2026-08-17 R94: author override of `defaultValue`. */
+  /** author override of `defaultValue`. */
   value?: unknown;
-  /** 2026-09-03: 多模式参数覆盖层。键为模式码，值为该模式下的默认值与可见性。
+  /** 多模式参数覆盖层。键为模式码，值为该模式下的默认值与可见性。
    *  存在 workflowIO 的 JSON 列内，因此新增模式无需改表结构。 */
   modes?: Record<string, WorkflowIOModeOverride>;
 }
 
-/** 2026-09-03: 单个参数在某一个模式下的覆盖项。 */
+/** 单个参数在某一个模式下的覆盖项。 */
 export interface WorkflowIOModeOverride {
   /** 覆盖该模式下的默认值；undefined = 不覆盖，回退到通用默认值。 */
   defaultValue?: unknown;

@@ -8,7 +8,7 @@ export function StringTextarea({ value, mono, hasSize }: { value: string; mono?:
     if (!ta) return;
     if (!hasSize) {
       // Content-sized node: textarea decides its own height, capped at
-      // content.  No 96px cap (R17): a multi-line prompt must stay
+      // content. No 96px cap: a multi-line prompt must stay
       // fully visible instead of being clipped behind the row's other
       // half.  `auto` first so the browser can compute the new
       // scrollHeight after the value changes.
@@ -33,7 +33,7 @@ export function StringTextarea({ value, mono, hasSize }: { value: string; mono?:
         /* `width: 100%` claims every pixel the row's flexbox gives us.
          * `flex: 1 1 0` + `minHeight: 0` joins the row's flex chain in
          *  the hasSize path — the textarea fills the STRING row's
-         *  remaining vertical space (R17: vertical stacked).  R16 had
+         *  remaining vertical space (vertical stacked). had
          *  `maxHeight: 96` here; removed because it capped a 12-line
          *  prompt behind the row's other half and was the "内容不可
          *  自适应高度，不铺满可用空间" the user reported.

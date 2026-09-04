@@ -82,7 +82,7 @@ export function useWorkflowDetailLoader({
         ? `/api/workflows/${workflowId}/subgraph?uid=${encodeURIComponent(opts.subgraphUid)}`
         : `/api/workflows/${workflowId}`;
 
-      // 2026-08-11 R42: 维护 subgraphRawContext
+      // 维护 subgraphRawContext
       //  - drill-in (subgraphUid 有值): 缓存父 rawJson + sub uid, 供
       //    SourceModal 在 sub 视图下从父 rawJson.definitions.subgraphs[uid]
       //    切出 sub 自己的 LiteGraph json 当 RAW 渲染。
@@ -102,13 +102,13 @@ export function useWorkflowDetailLoader({
       } else {
         setSubgraphRawContext(null);
       }
-      //     architecture (2026-08-06 v2).  v3 (2026-08-06) added the
+      //     architecture (v2). v3 added the
       //     `isBoundary` stamp on rawInputs/rawOutputs so WorkflowNode knows
       //     which handles exist for boundary wires (input -10 sentinel
       //     / output -20 sentinel) — without the flag the "no wire ⇒
       //     no dot" rule hides the Handle and React Flow silently drops
       //     the matching boundary edges.
-      //     v4 (2026-08-06 late) invalidates any v3 entries cached BEFORE
+      //     v4 (late) invalidates any v3 entries cached BEFORE
       //     the server's `.next` was actually rebuilt with that change
       //     (Turbopack doesn't always hot-reload route.ts; without a
       //     cache bump the UI keeps reading pre-isBoundary data forever,
@@ -116,11 +116,11 @@ export function useWorkflowDetailLoader({
       //     On ANY further detail-shape change bump this version so
       //     stale sessionStorage entries can't mask new behaviour for
       //     5 min — remember that Ctrl+Shift+R does NOT clear
-      //     sessionStorage, only closing the tab does.  v5 (2026-08-06)
+      //     sessionStorage, only closing the tab does. v5
       //     is a defensive bump: even though the *response shape* didn't
       //     change, the runtime now reads `data.boundaryOutputs` /
       //     `data.boundaryInputs` sets — derived in initialNodes from
-      // 2026-08-06 late (v6): wfIoPort boundary pins are now wrapped
+      // late (v6): wfIoPort boundary pins are now wrapped
       //     in two wfGroup rectangles ("grp:bpin:inputs" /
       //     "grp:bpin:outputs") with parentId + extent:"parent" on the
       //     children; the layout pass reads `positions["grp:bpin:…
@@ -130,7 +130,7 @@ export function useWorkflowDetailLoader({
       //     change "didn't take".  Bumping to v6 invalidates every old
       //     wfdetail:v5:* entry so the new boundary-group render kicks
       //     in immediately on next open.
-      // 2026-08-06 (v7): the layout pass now anchors each rail at the
+      // (v7): the layout pass now anchors each rail at the
       //     raw pin.pos coords (sub.inputs[i].pos / sub.outputs[i].pos)
       //     instead of bbox-snapping every rail to the middle column's
       //     minY.  v6-cached detail already carries the raw coords (the
@@ -140,12 +140,12 @@ export function useWorkflowDetailLoader({
       //     v7 invalidates any stale sessionStorage v6 entry that
       //     matched the old layout decision so the new pin-anchored
       //     render kicks in immediately on next open.
-      // 2026-08-06 16:29 → v8: input-pin wfIoPort children now sit at
+      // 16:29 → v8: input-pin wfIoPort children now sit at
       //     `relX = 2*GROUP_PAD_X` instead of `GROUP_PAD_X`, so their
       //     right edge anchors flush to the parent wfGroup's right
       //     border.  v7 cached entries would still render with the
       //     10-px inner gap and look like nothing changed.
-      // 2026-08-06 16:50 → v9: top-level layout now requires
+      // 16:50 → v9: top-level layout now requires
       //     `Object.keys(positions).length >= realNodes.length` to
       //     take the saved-positions branch.  A partial positions
       //     snapshot (e.g. 2/114 nodes) used to make 112 nodes fall
@@ -153,7 +153,7 @@ export function useWorkflowDetailLoader({
       //     each other, producing a broken main-graph render.  v9
       //     invalidates any stale v8 entry so the new guard takes
       //     effect on next open.
-      /* 2026-08-06 终极缓存方案 R3：4 重保险
+      /* 终极缓存方案 4 重保险
        *  ① SCHEMA fingerprint：cacheKey 嵌入了「route.ts 输出字段映射」指
        *     纹，凡再加/删/改 API 返回字段，必须同步改本常量（语义注释强
        *     制显式记录 schema 变更）——比单纯 v9→v10 手敲版本号更难漏。
@@ -245,7 +245,7 @@ export function useWorkflowDetailLoader({
       }
 
       // 2) Cold path: network fetch via tRPC (POST, bypasses HTTP cache).
-      /* 2026-08-06 R3: callers may pass {bust:true} via fetchDetail so that
+      /* callers may pass {bust:true} via fetchDetail so that
        *  the server's in-memory LRU is also invalidated (matches the
        *  顶栏 🔄 强制重载按钮 contract). */
       const isBust = opts?.bust === true;
@@ -301,7 +301,7 @@ export function useWorkflowDetailLoader({
     [workflowId, pushSubgraphStack], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  /* 2026-08-06 R3 终极方案 #4: 顶栏 🔄 强制重载按钮触发的入口
+  /* 终极方案 #4: 顶栏 🔄 强制重载按钮触发的入口
    *  - 清空整个 sessionStorage（不只是 wfdetail:*，避免任何层残渣）
    *  - 提前把 latestRequestIdRef 自增一次让任何 in-flight fetch 全部失效
    *  - 重新调用 fetchDetail({bust:true})（服务器 LRU 也会被 ?_bust=1 清掉）
@@ -345,7 +345,7 @@ export function useWorkflowDetailLoader({
    *  canvas panel; clicking expand jumps straight into the inner graph. */
   const onEnterSubgraph = useCallback(
     (nodeId: string, uid: string, parentTitle: string) => {
-      /* R50 (2026-08-11): a subgraph can't run on its own — it lives
+      /* a subgraph can't run on its own — it lives
        *  inside the parent workflow and only takes data in via the
        *  parent's IO-boundary pin nodes.  Once we drill in, the IO edit
        *  affordances are meaningless (you can't `run` this subgraph to

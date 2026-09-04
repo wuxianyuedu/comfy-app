@@ -1,9 +1,9 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from WorkflowLibrary's import-panel state +
+/** extracted from WorkflowLibrary's import-panel state +
  *  JSON import / drag-and-drop logic.  The hook owns all import-panel UI
  *  state (name / modes / format / json / errors / help tip), the manual
- *  "粘贴 JSON" submit path, and the R71-1 drag-and-drop funnel that
+ *  "粘贴 JSON" submit path, and the drag-and-drop funnel that
  *  pre-fills the same panel.  The component keeps only the state object
  *  and the JSX.
  */
@@ -29,12 +29,12 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   const [importing, setImporting] = useState(false);
   const [importErr, setImportErr] = useState("");
   const [importWarn, setImportWarn] = useState<string[]>([]);
-  // 2026-08-25 (#53): the import-panel "?" help was hover-only
+  // (#53): the import-panel "?" help was hover-only
   // (pointer-events-none + group-hover).  Clicking did nothing.  Make it a
   // real toggle so a click shows/hides the explanation.
   const [showHelpTip, setShowHelpTip] = useState(false);
 
-  // 2026-08-12 R71-1: 恢复 drag-and-drop 导入（R12 当时移除 drag-drop 是
+  // 恢复 drag-and-drop 导入（当时移除 drag-drop 是
   // 因为本地工作流只能从配置路径导入；现在用户在「本地工作流」tab 把任意
   // JSON 文件拖进来 → 自动识别格式 → 弹出导入面板让用户确认 → 走现有
   // POST /api/workflows 链路入库）。
@@ -95,7 +95,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
     createMut,
   ]);
 
-  // 2026-08-12 R71-1: drag-and-drop a workflow JSON onto the list area →
+  // drag-and-drop a workflow JSON onto the list area →
   // parse → auto-detect format → pre-fill the existing import panel and
   // open it so the user can confirm name/type/format before POSTing.
   // This intentionally reuses the manual "粘贴 JSON" flow (handleImport
@@ -188,7 +188,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
     }
   }, []);
 
-  // 2026-08-12 R71-1: drag event handlers bound on the list container.
+  // drag event handlers bound on the list container.
   // onDragOver: must preventDefault to allow drop; only light up when
   // something with `Files` type is being dragged (so text-selection drags
   // don't trigger the highlight). The drag counter on onDragLeave is

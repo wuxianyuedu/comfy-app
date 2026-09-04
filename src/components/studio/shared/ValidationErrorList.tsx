@@ -1,4 +1,4 @@
-// R-Next (2026-08-17): shared renderer for ComfyUI's structured
+// shared renderer for ComfyUI's structured
 // `node_errors` (flattened into `ValidationError[]` by
 // `src/lib/comfyui/validation.ts`).  Renders a precise per-field list
 // ("节点 10（KSampler）· 字段 cfg：cfg must be a number") so the user can

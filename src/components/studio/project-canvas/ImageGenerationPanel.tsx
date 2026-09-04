@@ -11,14 +11,14 @@ import { IMAGE_WORKFLOW_TYPES, VIDEO_WORKFLOW_TYPES, normalizeTaskType } from "@
 import { setActiveTaskId } from "./activeTask";
 import { useCancelTask } from "./hooks/use-cancel-task";
 
-/* ── 生成面板（生图 / 生成视频 / 图片资产共用）· R-ardot91 (2026-08-16) ──
+/* ── 生成面板（生图 / 生成视频 / 图片资产共用）· ──
  * 抽自 CanvasNode 的 image/video 分支（原 ~1071–1287）。把「类型 → 模型 →
  * 工作流」三步级联 + DynamicWorkflowForm + 生成 CTA 整段复用为独立组件，
  * 让 picture 节点在选中时也能挂载同一套生成器（生图节点与图片资产合并为整体）。
  * 对于 image/video 仍渲染顶部 ResultCard；picture 不渲染（生成结果直接显示在
  * 节点主体 ContentAssetBody 上）。
  *
- * R-ardot118 (2026-08-18): 执行步骤日志不再显示在节点上（节点空间太小，且按
+ * 执行步骤日志不再显示在节点上（节点空间太小，且按
  * 节点单独加开关无法统一）。改为统一「调试模式」开关（设置抽屉）+ 底部独立
  * GlobalStepLogPanel 呈现。本组件在生成开始（d.taskId 就绪）时通过
  * setActiveTaskId() 把当前任务交给全局面板。后端管道（runner.log() →
@@ -57,11 +57,11 @@ export function ImageGenerationPanel({
   onGenerate,
   onReplaceResult,
 }: ImageGenerationPanelProps) {
-  /* R-ardot118 (2026-08-18): 执行步骤日志迁移到独立 GlobalStepLogPanel。
+  /* 执行步骤日志迁移到独立 GlobalStepLogPanel。
    * 本组件只负责生成交互；生成开始（d.taskId 就绪）时通过 setActiveTaskId()
    * 把当前任务交给全局面板，由其统一订阅 SSE、展示日志与结构化校验错误。 */
 
-  /* R-ardot114 (2026-08-17): stuck-task cancel affordance —— 按钮的
+  /* stuck-task cancel affordance —— 按钮的
    *  「取消中…」态与失败回滚都在 useCancelTask 里（视图零 IO）。 */
   const { cancelling, cancel: onCancel } = useCancelTask({
     taskId: d.taskId,
@@ -74,7 +74,7 @@ export function ImageGenerationPanel({
   // eslint-disable-next-line react-hooks/refs -- 渲染期把最新 props 写入 ref，供异步取消回调读取最新值（刻意模式）
   patchRef.current = patch;
 
-  /* R-ardot118 (2026-08-18): 节点拿到 taskId（生成开始）时，设为全局面板活跃
+  /* 节点拿到 taskId（生成开始）时，设为全局面板活跃
    * 任务，使 GlobalStepLogPanel 自动跟随。ImageGenerationPanel 仅在选中节点时
    * 挂载，而用户点「生成」时必然选中，故 taskId 一旦就绪即可被捕获。 */
   useEffect(() => {
@@ -83,11 +83,11 @@ export function ImageGenerationPanel({
 
   const isVideo = kind === "video";
   const typeList = isVideo ? VIDEO_WORKFLOW_TYPES : IMAGE_WORKFLOW_TYPES;
-  /* R-ardot88-c (2026-08-16): 启发式兜底分类 — R-ardot87 之前导入的旧
+  /* 启发式兜底分类 — 早期导入的旧
    *  工作流 taskType 可能为空或误判，导致「文生图」筛选下混入 I2V
    *  等其他类型。这里按 wf.name 后缀关键字补一个最可能的类型，留空
    *  让上层 drop。
-   * R-ardot89 (2026-08-16): 扩 Chinese 关键字（"图生视频"/"文生视频"/
+ * 扩 Chinese 关键字（"图生视频"/"文生视频"/
    *  "视频"）—— 全中文命名（无 I2V/T2V 等英文 marker）也能识别。 */
   const inferTypeByName = (rawName: string): string => {
     const up = (rawName ?? "").toUpperCase();
@@ -114,8 +114,8 @@ export function ImageGenerationPanel({
     if (up.includes('IMAGE')) return "T2I"; // 兜底归 T2I
     return "";
   };
-  /* R-ardot89 (2026-08-16): name 推断优先于 DB。
-   *  R-ardot87 之前，老的 inferWorkflowTypeFromGraph 把 WanVideoSampler+LoadImage
+  /* name 推断优先于 DB。
+ *  此前，老的 inferWorkflowTypeFromGraph 把 WanVideoSampler+LoadImage
    *  误判为 T2I 落库；name 现在能正确识别为 I2V，必须以 name 为准避免泄漏。 */
   const effectiveTaskType = (w: { taskType?: string | null; name?: string | null; id?: string | null }): string => {
     const fromName = inferTypeByName(w.name ?? "");
@@ -130,7 +130,7 @@ export function ImageGenerationPanel({
   );
   const typeKnown = typeOptions.some((typeOption) => typeOption.code === d.mode);
   const genTag = d.genModelTag ?? "";
-  /* R-ardot90 (2026-08-16): 模型 dropdown 列表只受「类型」影响，不受当前
+  /* 模型 dropdown 列表只受「类型」影响，不受当前
    *  已选 genModelTag 影响 —— 否则选了 z-Anime 后下拉只剩一项。 */
   const typeFilteredWorkflows = wfList.filter(
     (workflow) => effectiveTaskType(workflow) === d.mode
@@ -139,7 +139,7 @@ export function ImageGenerationPanel({
   const workflowOptions = typeFilteredWorkflows.filter((workflow) =>
     genTag ? (workflow.modelTags ?? []).includes(genTag) : true
   );
-  /* R-ardot89 (2026-08-16): 模型 dropdown 按当前选中类型过滤 —
+  /* 模型 dropdown 按当前选中类型过滤 —
    *  源必须是 typeFilteredWorkflows（与 genTag 解耦）。 */
   const availableModelTags = new Set<string>();
   for (const w of typeFilteredWorkflows) {
@@ -153,7 +153,7 @@ export function ImageGenerationPanel({
     // eslint-disable-next-line react-hooks/immutability -- seededFor 为 useRef，重选类型时清空种子标记
     seededFor.current = null;
     setWfModes(null);
-    /* R-ardot89 (2026-08-16): 切类型时若当前模型标签在新类型下没有工作流
+    /* 切类型时若当前模型标签在新类型下没有工作流
      *  也清掉，避免 DarkSelect 残留「幽灵选项」。如仍匹配则保留。 */
     const newTypeWfs = wfList.filter((wfList) => effectiveTaskType(wfList) === code);
     const newAvailTags = new Set<string>();
@@ -175,7 +175,7 @@ export function ImageGenerationPanel({
     // eslint-disable-next-line react-hooks/immutability -- 同上，重选模型标签时重置种子
     seededFor.current = null;
     setWfModes(null);
-    // R-ardot97 (2026-08-17): 该模型下若只剩 1 个工作流，就直接选它，避免
+    // 该模型下若只剩 1 个工作流，就直接选它，避免
     // 「选模型 → 再选工作流」两步。用户既然没歧义（只有 1 个），就不再让人
     // 多点一次。注意保持与显式换工作流等同的清空（workflowInputs/sinkId），
     // 并与下面 selectWorkflow 的字段集合完全一致；否则会出现「自动选的 wf
@@ -232,7 +232,7 @@ export function ImageGenerationPanel({
         />
       ) : null}
 
-      {/* 步骤 1：类型 (R-ardot88-a: chip 列改 dropdown) */}
+      {/* 步骤 1：类型（chip 列已改为 dropdown） */}
       <Field label="类型">
         {typeOptions.length ? (
           <DarkSelect
@@ -275,7 +275,7 @@ export function ImageGenerationPanel({
             )}
           </Field>
 
-          {/* 步骤 3：工作流 (R-ardot88-a: chip 列改 dropdown) */}
+          {/* 步骤 3：工作流（chip 列已改为 dropdown） */}
           <Field label="工作流">
             {workflowOptions.length ? (
               <DarkSelect
@@ -328,10 +328,10 @@ export function ImageGenerationPanel({
                   ? "↻ 重新执行"
                   : "▶ 用此工作流生成"}
             </button>
-            {/* R-ardot114 (2026-08-17): stuck-task escape hatch.  The
+            {/* stuck-task escape hatch.  The
              *  picture node used to be stuck at "生成中…" forever when
-             *  the runner raw-path held `s.active` hostage (R-ardot113
-             *  fixed the leak, but older in-flight tasks still recover
+             *  the runner raw-path held `s.active` hostage (an earlier fix
+             *  closed the leak, but older in-flight tasks still recover
              *  via this button).  Calls POST /api/tasks/{id}/cancel
              *  which marks the DB row CANCELLED + invokes
              *  runner.cancelTask() to release the active slot.  The
@@ -350,7 +350,7 @@ export function ImageGenerationPanel({
               </button>
             ) : null}
           </div>
-          {/* R-ardot118 (2026-08-18): 执行步骤日志不再在此节点内渲染——
+          {/* 执行步骤日志不再在此节点内渲染——
            * 节点空间太小，且逐节点开关无法统一。请打开「调试模式」
            * （设置抽屉）+ 底部 GlobalStepLogPanel 查看每节点执行步骤、
            * 结构化校验错误与每条日志的调用来源。 */}

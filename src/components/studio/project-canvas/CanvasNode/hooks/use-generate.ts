@@ -1,6 +1,6 @@
 "use client";
 
-/* 2026-08-30: extracted from CanvasNode — task-run logic.
+/* extracted from CanvasNode — task-run logic.
  *  Owns the mount-time reconcile effect (stale status="running" self-heal)
  *  and runGenerate (workflow branch + prompt branch, incl. poll lifecycle,
  *  downstream sink auto-spawn and picture self-import), plus retryGenerate
@@ -55,7 +55,7 @@ export interface UseGenerateArgs {
 }
 
 export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }: UseGenerateArgs) {
-  /* R-ardot121 (2026-08-18): mount-time reconcile — if the node was
+  /* mount-time reconcile — if the node was
    *  loaded with stale `status="running"` (e.g. dev server restarted
    *  while a generation was in flight, or the user closed/reopened the
    *  tab mid-run), the in-memory patch chain is gone but the DB task
@@ -113,12 +113,12 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
         patch({ error: "请先选择工作流", status: "error" });
         return;
       }
-      /* R-ardot103 (2026-08-17): also reset progress to 0 so the water-fill
+      /* also reset progress to 0 so the water-fill
        *  overlay starts from the bottom regardless of any stale value left
        *  from a previous run. pollTask's onProgress will tick it up as the
        *  backend reports task.progress. */
       patch({ status: "running", error: undefined, progress: 0 });
-      /* 2026-08-13 R83: hoist `payload` so the catch-block can also snapshot
+      /* hoist `payload` so the catch-block can also snapshot
        *  the request into errorContext.  `null` until the try-block assigns. */
       let payload: Record<string, unknown> | null = null;
       try {
@@ -135,7 +135,7 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
         };
         // Feed an upstream-generated image into this workflow (auto-chained via edge).
         if (d.inputImage) payload.inputImage = d.inputImage;
-        // 2026-08-13 项目级产出：归属到当前画布项目 + 记录参考图。
+        // 项目级产出：归属到当前画布项目 + 记录参考图。
         payload.projectId = getActiveId() ?? undefined;
         const refs = collectReferenceImages(d);
         if (refs.length) payload.referenceImages = refs;
@@ -144,7 +144,7 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
         setActiveTaskId(taskId, id);
         const result = await pollTask(taskId, undefined, (progress) => patch({ progress }));
         if (isTaskSuccess(result)) {
-          // R-ardot91 (2026-08-16): picture 节点 = 图片资产本身，生成结果直接
+          // picture 节点 = 图片资产本身，生成结果直接
           //  写回本节点 mediaPath（ContentAssetBody 据此预览），不另起下游节点。
           if (d.kind === "picture") {
             let imported: string | null = null;
@@ -234,9 +234,9 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
             error: result.error,
             taskId: result.taskId,
             errorStatus: result.status,
-            /* R-Next (2026-08-17): 结构化校验错误落节点数据，错误面板渲染逐字段列表 */
+            /* 结构化校验错误落节点数据，错误面板渲染逐字段列表 */
             validationErrors: result.validationErrors,
-            /* 2026-08-13 R83: 失败面板要展示「执行了什么」 */
+            /* 失败面板要展示「执行了什么」 */
             errorContext: {
               request: result.params ?? payload,
               timestamp: new Date().toISOString(),
@@ -260,10 +260,10 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
       patch({ error: "请输入提示词", status: "error" });
       return;
     }
-    /* R-ardot103 (2026-08-17): reset progress to 0 so the overlay starts
+    /* reset progress to 0 so the overlay starts
      *  from the bottom (same reasoning as the workflow branch above). */
     patch({ status: "running", error: undefined, progress: 0 });
-    /* 2026-08-13 R83: see workflow run above; hoist payload so catch can snapshot. */
+    /* see workflow run above; hoist payload so catch can snapshot. */
     let payload: Record<string, unknown> | null = null;
     try {
       payload = {
@@ -274,7 +274,7 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
         cfg: d.cfg,
       };
       if (d.seed.trim()) payload.seed = Number(d.seed);
-      // 2026-08-13 项目级产出：归属到当前画布项目 + 记录参考图。
+      // 项目级产出：归属到当前画布项目 + 记录参考图。
       payload.projectId = getActiveId() ?? undefined;
       const refs = collectReferenceImages(d);
       if (refs.length) payload.referenceImages = refs;
@@ -317,7 +317,7 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
           error: result.error,
           taskId: result.taskId,
           errorStatus: result.status,
-          /* R-Next (2026-08-17): 结构化校验错误落节点数据 */
+          /* 结构化校验错误落节点数据 */
           validationErrors: result.validationErrors,
           errorContext: {
             request: result.params ?? payload,
@@ -339,7 +339,7 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
 
   /* Error-panel retry: re-run the task with the payload recorded in the
    *  error context (moved verbatim from the retry button's onClick handler).
-   *  2026-08-13 R83: 直接复用上次已记录的 payload 重新跑
+   *  直接复用上次已记录的 payload 重新跑
    *  一遍（不发新 task）。这样用户在保存当前错误上下文
    *  的同时，可以一键重试而无需重新输入所有字段。 */
   const retryGenerate = async (req: unknown) => {
@@ -361,7 +361,7 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
           error: result.error,
           taskId: result.taskId,
           errorStatus: result.status,
-          /* R-Next (2026-08-17): 重试失败也带回结构化校验错误 */
+          /* 重试失败也带回结构化校验错误 */
           validationErrors: result.validationErrors,
           errorContext: {
             request: result.params ?? req,

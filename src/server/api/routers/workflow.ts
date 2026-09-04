@@ -56,7 +56,7 @@ function pendingId(absPath: string): string {
   return "pending-" + createHash("sha1").update(absPath).digest("hex").slice(0, 12);
 }
 
-/** 2026-08-28 T7: shape of the local-pending placeholder rows appended to
+/** shape of the local-pending placeholder rows appended to
  *  `list`.  Kept structurally identical to the `enriched` DB rows so the
  *  frontend `LibraryRow` merge stays friction-free. */
 interface LocalPendingRow {
@@ -598,7 +598,7 @@ export const workflowRouter = createTRPCRouter({
       // patch 为显式字段构造（不含 ...rest 展开），故 upgradeFromApi 无需在此
       // 排除——它的读取走下方 input.upgradeFromApi，解构里留着反而是死变量。
       const { id, modelTags, mergePositions, groups, notes, ...rest } = input;
-      // T7: WorkflowTemplate 无 thumb 列（旧遗留字段），保留透传不参与 DB 写入
+      // WorkflowTemplate 无 thumb 列（旧遗留字段），保留透传不参与 DB 写入
       const patch: Partial<WorkflowTemplate> & { thumb?: string } = {
         name: rest.name,
         taskType: rest.taskType,

@@ -1,6 +1,6 @@
 // Centralized model-type (directory) metadata for the Comfy-APP model library.
 //
-// Design principle (R-ardot45): **each ComfyUI model directory IS its own
+// Design principle: **each ComfyUI model directory IS its own
 // independent type.**  A directory's on-disk files belong ONLY to that
 // directory's type — there is never a case where directory X's models must be
 // attributed to another type.  Concretely, the `Model.type` value stored in
@@ -218,7 +218,7 @@ export function folderMeta(folder: string): { label: string; color: string } {
 }
 
 /**
- * Tooltip for a directory's type pill.  Explains the R-ardot45 principle:
+ * Tooltip for a directory's type pill. Explains the principle:
  * the directory name IS the type — its models are never attributed to another
  * type — and which canvas COMBO fields will list this directory's files.
  */

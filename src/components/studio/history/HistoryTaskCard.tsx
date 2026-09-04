@@ -117,7 +117,7 @@ export function HistoryTaskCard({
                   {st.failureSuggestion(task.error)}
                 </p>
               )}
-              {/* R-Next (2026-08-17): 结构化校验错误逐字段列表 */}
+              {/* 结构化校验错误逐字段列表 */}
               {task.validationErrors && task.validationErrors.length > 0 && (
                 <div className="mt-1.5 rounded border border-red-400/20 bg-black/20 px-2 py-1.5">
                   <div className="mb-1 text-[10px] font-semibold text-red-200">

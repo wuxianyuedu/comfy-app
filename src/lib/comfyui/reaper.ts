@@ -15,11 +15,11 @@ import { isComfyStarting } from "./lifecycle";
 import { state, log, persistLogs } from "./runner-state";
 import { logger } from "~/server/lib/logger";
 
-/* ── R-ardot121 (2026-08-18): DB-side QUEUED reaper ─────────────────────────
- * Symptom: after a dev-server cold restart (R-117), tasks in
+/* ── DB-side QUEUED reaper ─────────────────────────
+ * Symptom: after a dev-server cold restart, tasks in
  *   `status=QUEUED, promptId=null, finishedAt=null` linger forever —
  *   the in-memory `s.queue` is gone, the heartbeat only acts on
- *   the in-memory queue (R-ardot113 above), and no code path
+ *   the in-memory queue (above), and no code path
  *   re-claims DB-side QUEUED rows.  The user sees "加入队列后就不
  *   继续执行了".
  *
@@ -36,7 +36,7 @@ import { logger } from "~/server/lib/logger";
  */
 const REAPER_MS = 30_000;
 const STALE_MS = 30_000; // a QUEUED task older than this with no promptId is "dead"
-/* R-ardot121 RUNNING reaper: a task that DID reach ComfyUI (promptId set)
+/* RUNNING reaper: a task that DID reach ComfyUI (promptId set)
  *  but whose in-memory runner got lost (dev cold restart, crash) is stuck
  *  as RUNNING forever — the heartbeat only re-drives the in-memory queue.
  *  ComfyUI's /queue has no reference to our in-memory state either, so
@@ -55,7 +55,7 @@ const STALE_MS = 30_000; // a QUEUED task older than this with no promptId is "d
 const RUNNING_STALE_MS = 60_000;
 const RUNNING_TICK_CAP = 5;
 
-/* R-ardot121 HMR fix: under Next.js HMR the runner module is
+/* HMR fix: under Next.js HMR the runner module is
  *  re-evaluated, so a plain module-scope `let reaperHandle` is reset to
  *  null on every reload and a SECOND setInterval is created.  Multiple
  *  intervals then concurrently run reapStaleQueuedTasks() — and because
@@ -85,7 +85,7 @@ async function reapStaleQueuedTasks(): Promise<void> {
       reaperState.reaping.add(t.id);
       try {
         const ageSec = Math.round((Date.now() - t.createdAt.getTime()) / 1000);
-        /* 2026-09-02: ComfyUI 正在自动启动（lifecycle 单飞进行中）时暂不回收——
+        /* ComfyUI 正在自动启动（lifecycle 单飞进行中）时暂不回收——
          * 启动可能需要 30-120s，任务会在 WS 连上后正常出队执行。 */
         if (isComfyStarting()) {
           log(t.id, "warn", `任务在队列中等待 ComfyUI 自动启动（已 ${ageSec}s）——启动完成后自动执行`);
@@ -93,7 +93,7 @@ async function reapStaleQueuedTasks(): Promise<void> {
         }
         const reason = `任务卡在队列超过 ${ageSec}s（dev server 重启后 in-memory 队列清空，无人 re-claim）— 请重新执行`;
         log(t.id, "error", reason);
-        /* R-ardot121: emit a synthetic state → error pair so any SSE
+        /* emit a synthetic state → error pair so any SSE
          *  subscriber immediately sees the terminal failure, then mark
          *  the DB row FAILED.  No processQueue() call — there is no
          *  in-memory job for this task, and we explicitly do NOT want
@@ -123,7 +123,7 @@ async function reapStaleQueuedTasks(): Promise<void> {
   }
 }
 
-/** R-ardot121 (2026-08-18): reconcile RUNNING tasks against ComfyUI.
+/** reconcile RUNNING tasks against ComfyUI.
  *  See header comment on RUNNING_STALE_MS for the verdict matrix. */
 async function reapStaleRunningTasks(): Promise<void> {
   try {

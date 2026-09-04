@@ -1,4 +1,4 @@
-/* ── Shared workflow-IO model (2026-08-09) ──
+/* ── Shared workflow-IO model ──
  *
  * A single source of truth for "what does this custom workflow actually
  * accept / produce", used by BOTH consumers:
@@ -69,7 +69,7 @@ const VIDEO_TYPES = new Set([
  *  render as numeric steppers and COMBO-like pins like aspect_ratio still
  *  render as select/text instead of plain text.
  *
- *  2026-08-29: this fixes the "DimensionControl disappeared" regression —
+ *  this fixes the "DimensionControl disappeared" regression
  *  without it, every untyped widget falls back to "text", so width/height
  *  pairs are never grouped and the 比例+清晰度 picker never renders. */
 function inferControlFromName(e: WorkflowIOEntry): ControlKind | null {
@@ -151,7 +151,7 @@ export function numericBounds(e: WorkflowIOEntry): {
 
 /** Best display label for an exposed pin.
  *
- * Per user direction (2026-08-15): the canvas's IO editor prefers the
+ * Per user direction: the canvas's IO editor prefers the
  * `label` field so authors see `positive_prompt` / `negative_prompt`
  * instead of the bare ComfyUI key (`text` / `text_1`).  When the caller
  * also passes the full list of entries being displayed together
@@ -175,7 +175,7 @@ export function ioLabel(e: WorkflowIOEntry, allEntries?: readonly WorkflowIOEntr
   return candidate;
 }
 
-/** Per user direction (2026-08-14): the order of parameter rows is up
+/** Per user direction: the order of parameter rows is up
  *  to the consumer — each row is an independent block, dynamically shown
  *  or hidden based on which IO pins exist.  No forced ordering.  We rely
  *  on the IO map's natural insertion order (Object.entries order), which
@@ -231,7 +231,7 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
       else wireInputs.push(enriched);
     }
   }
-  /* R-ardot35 (2026-08-15): apply the user-driven displayOrder.  Absent
+  /* apply the user-driven displayOrder. Absent
    *  (undefined) → leave the IO map's natural insertion order untouched
    *  by treating it as +Infinity, so existing workflows without an order
    *  continue to render exactly as before.  Stable sort keeps the
@@ -297,7 +297,7 @@ export function outputTargetKind(
 
 /** Seed a value map from the enriched `defaultValue`s.
  *
- *  2026-09-03 多模式：传入 `mode` 时走两级回退「模式默认值 → 通用默认值」
+ *  多模式：传入 `mode` 时走两级回退「模式默认值 → 通用默认值」
  *  （`resolveEntryDefault`），未开启模式时与旧行为完全一致。
  *  注意：这里**不过滤**被隐藏的参数——它们同样需要拿到模式默认值，否则提交
  *  给 ComfyUI 的 payload 会缺字段。隐藏只影响展示层（filterVisibleInMode）。 */
@@ -309,11 +309,11 @@ export function defaultInputValues(
   const { inputs } = splitWorkflowIO(io);
   for (const entry of inputs) {
     if (entry.control === "link") continue;
-    /* R94 (2026-08-17): an author override (`value`) wins over the
+    /* an author override (`value`) wins over the
      *  graph-derived `defaultValue`, so the IO-edit preview + runtime forms
      *  seed with the custom default.  Restoring a pin clears `value` (see
      *  resetIOPreviewValues in wf-editor-inner) and falls back to
-     *  `defaultValue`.  2026-09-03: 模式默认值再压在两者之上。 */
+     *  `defaultValue`. 模式默认值再压在两者之上。 */
     const resolved = resolveEntryDefault(entry, mode);
     if (resolved !== undefined) out[entry.ioKey] = resolved;
     else if (entry.control === "switch") out[entry.ioKey] = false;
@@ -354,7 +354,7 @@ export function toWorkflowInputsPayload(
   const { inputs } = splitWorkflowIO(io);
   const payload: { nodeId: string; name: string; value: unknown }[] = [];
   for (const entry of inputs) {
-    // 2026-08-13 项目级产出：连线传入的 wire-input（link 控件）值也一并下发。
+    // 项目级产出：连线传入的 wire-input（link 控件）值也一并下发。
     // 这类 key 仅在用户真正连线时才会写进 values（reconcile 会丢弃无值的 link key），
     // 所以这里无需担心把无意义的 link 默认值发出去。
     const value = values[entry.ioKey];
@@ -365,7 +365,7 @@ export function toWorkflowInputsPayload(
 }
 
 /**
- * 2026-08-11 (R57): treat a value as "filled" for the purpose of
+ * treat a value as "filled" for the purpose of
  * required-field validation.  `undefined` / `null` / empty string / NaN
  * all count as empty; `false` (boolean switch) DOES count as filled,
  * since a switch is either explicitly on or off — there's no third state.
@@ -404,7 +404,7 @@ export function getMissingRequiredInputs(
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * R-ardot98 (2026-08-17): parameter GROUP inference.
+ * parameter GROUP inference.
  *
  * A custom workflow often exposes a tightly-coupled set of widgets that the
  * user would rather tune as one "paradigm" than as N separate boxes:
@@ -448,7 +448,7 @@ export interface VideoGroup {
 export type InferredGroup = DimensionGroup | VideoGroup;
 
 /* ── Dimension presets (比例 + 清晰度 → 宽高) ──
- * `ratio` = width / height. R-ardot104 (2026-08-17) splits `DIM_CLARITY_PRESETS`
+ * `ratio` = width / height. splits `DIM_CLARITY_PRESETS`
  * into two `kind`s:
  *   • "pixel"     — long-edge in px (1k = 1024, 2k = 2048, 4k = 4096).  The
  *                   user provides the longer side and the other side is
@@ -475,7 +475,7 @@ export const DIM_RATIO_PRESETS: { label: string; ratio: number }[] = [
   { label: "9:16 竖屏", ratio: 9 / 16 },
 ];
 
-/** R-ardot104 (2026-08-17): clarity presets now carry a `kind` field so the
+/** clarity presets now carry a `kind` field so the
  *  UI can group pixel-based (1k / 2k / 4k) and megapixel-based (1M / 2M /
  *  4M) presets in two sub-rows inside the 清晰度 segment of the
  *  MultiSegmentPopover. */
@@ -490,17 +490,17 @@ export interface DimClarityPreset {
 }
 
 export const DIM_CLARITY_PRESETS: DimClarityPreset[] = [
-  // Pixel (long edge) — R99 default
+  // Pixel (long edge) — default
   { kind: "pixel", label: "1k", longEdge: 1024 },
   { kind: "pixel", label: "2k", longEdge: 2048 },
   { kind: "pixel", label: "4k", longEdge: 4096 },
-  // Megapixel (total pixels) — R104
+  // Megapixel (total pixels)
   { kind: "megapixel", label: "1M", totalPixels: 1_000_000 },
   { kind: "megapixel", label: "2M", totalPixels: 2_000_000 },
   { kind: "megapixel", label: "4M", totalPixels: 4_000_000 },
 ];
 
-/* ── ResolutionSelector quick presets (2026-08-29) ──
+/* ── ResolutionSelector quick presets ──
  *  Some custom nodes (e.g. ResolutionSelector) don't expose raw
  *  width/height; they expose `aspect_ratio` (a COMBO whose value is a label
  *  string like "16:9 (Widescreen)") plus `megapixels` (a FLOAT where 1 ≈
@@ -551,7 +551,7 @@ export function parseRatioFromLabel(value: string): number | null {
  *                    so the rectangle honours the total-pixel budget
  *                    regardless of orientation.
  *
- *  R-ardot107 (2026-08-17) [fix #2]:
+ *  [fix #2]:
  *    The previous megapixel branch took `rawLongEdge = sqrt(totalPixels)`
  *    and used ratio only to scale the *other* side.  That produced a
  *    geometrically-16:9 rectangle whose actual pixel count was
@@ -561,7 +561,7 @@ export function parseRatioFromLabel(value: string): number | null {
  *    letting ratio enter the square root.
  *
  *  Snap to multiples of 8 (pixel kind) or a user-selectable alignment
- *  multiple (megapixel kind).  R-ardot108 (2026-08-17) made the megapixel
+ *  multiple (megapixel kind). made the megapixel
  *  snap configurable because ComfyUI video / SDXL pipelines generally
  *  expect W and H to be multiples of 64; the legacy 8-grid silently
  *  produced non-64-aligned outputs (1336×752 for 1M@16:9) that some
@@ -585,7 +585,7 @@ export function dimsForRatio(
   presetOrBase: DimClarityPreset | number,
   alignMultiple: number = DEFAULT_ALIGN_MULTIPLE
 ): { width: number; height: number } {
-  /* R-ardot108 (2026-08-17): megapixel branch honours the user
+  /* megapixel branch honours the user
    *  alignment; pixel branch keeps the legacy 8-grid. */
   const alignM = normalizeAlignMultiple(alignMultiple);
   const snapMega = (value: number) => {
@@ -622,7 +622,7 @@ export function dimsForRatio(
   return { width: snapMega(rawW), height: snapMega(rawH) };
 }
 
-/** R-ardot107 (2026-08-17): rewrite the inverse preset picker.
+/** rewrite the inverse preset picker.
  *
  *  The previous relative-error scorer had two problems:
  *   (a) [previously documented] For 16:9 the cross-kind comparison
@@ -633,7 +633,7 @@ export function dimsForRatio(
  *       `dimsForRatio("4M")` snapped to 1504×848 (= 0.51 × 4M), so even
  *       the "correct" round-trip answer was the wrong preset.
  *
- *  R-ardot108 (2026-08-17): the megapixel snap is now configurable
+ *  the megapixel snap is now configurable
  *  (`alignMultiple`, default 64).  The inverse picker must mirror the
  *  same multiple — otherwise the forward and inverse functions fall
  *  out of sync (e.g. dimsForRatio(16/9,"1M",64) → 1280×768 but
@@ -787,7 +787,7 @@ export function inferGroups(widgets: EnrichedWidget[]): {
   groupedKeys: Set<string>;
 } {
   const dimension = inferDimensionGroup(widgets);
-  /* R-ardot109 (2026-08-29): a dimension group may be either the W/H pair or
+  /* a dimension group may be either the W/H pair or
    *  the 宽高比 + 百万像素 pair, so collect whichever pins it actually holds
    *  instead of assuming `width`/`height` are present. */
   const dimKeys = new Set<string>();

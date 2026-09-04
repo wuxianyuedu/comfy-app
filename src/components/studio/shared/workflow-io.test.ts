@@ -10,7 +10,7 @@ import {
   type EnrichedWidget,
 } from "./workflow-io";
 
-/* 2026-08-29：ComfyUI 离线时保存的 workflowIO 不带 type，width/height 因此被
+/* ComfyUI 离线时保存的 workflowIO 不带 type，width/height 因此被
  * 判成 text，inferDimensionGroup 从不命中，「比例 + 清晰度」选择器整体消失。
  * 本文件锁定 type 缺失时的回退推断行为，防止该回归复发。 */
 

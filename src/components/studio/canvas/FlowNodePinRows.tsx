@@ -1,6 +1,6 @@
 "use client";
 /* TOP PINS section — pure-connection inputs paired with outputs on shared
- * rows (2026-08-06 redesign).  Extracted from workflow-node.tsx (T12).
+ * rows (redesign). Extracted from workflow-node.tsx.
  * Inputs (left target Handle) and outputs (right source Handle) are zipped
  * positionally so one 22px row holds both; the longer side's leftover keeps
  * filling trailing rows alone.  Handles are ALWAYS rendered regardless of

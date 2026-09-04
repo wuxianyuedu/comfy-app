@@ -137,7 +137,7 @@ export async function parseWorkflowContent(
     }
   }
 
-  /* R-ardot87 (2026-08-16): 不再自动推断 taskType —— 旧逻辑用
+  /* 不再自动推断 taskType —— 旧逻辑用
    * `inferWorkflowTypeFromGraph(apiGraph)` 兜底，但识别准确率不高（例如把
    * VAEEncode+LoadImage 一律判为 I2I，忽略 Inpaint 等子分支），用户更愿意
    * 手动挑。现在未传 preferredTaskType 时直接留空，由用户在 UI 里选。
@@ -220,7 +220,7 @@ export interface ReimportResult {
  * editor reflects the latest on-disk workflow.  Re-parsing is idempotent on
  * identical content, so a mtime tick without content change is harmless.
  *
- * R-ardot87 (2026-08-16): taskType 不再自动推断。重导入时若磁盘版本没带
+ * taskType 不再自动推断。重导入时若磁盘版本没带
  * taskType（旧逻辑会重新推断并覆盖用户已手动设置的值），传 `existingTaskType`
  * 透传过来 —— 用户的显式选择优先级最高。 */
 export async function reimportFromSource(tpl: {

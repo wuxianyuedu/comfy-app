@@ -11,7 +11,7 @@ export interface CanvasProject {
   id: string;
   name: string;
   updatedAt: number;
-  /** 收窄为 CanvasNodeType：workflowArdot 纯视觉节点也持久化（R-ardot59 起）。 */
+  /** 收窄为 CanvasNodeType：workflowArdot 纯视觉节点也持久化（起）。 */
   nodes: CanvasNodeType[];
   edges: Edge[];
 }
@@ -178,7 +178,7 @@ export const EMPTY_DRAFT_NAME = EMPTY_DRAFT_NAMES[0];
 
 /** True iff `name` is one of the empty-draft sentinel names.  Use this
  *  instead of hard-coding `"未命名项目"` at every reap guard, so the
- *  R65 default-name change ("未命名") and the legacy sentinel ("未命名项目")
+ *  default-name change ("未命名") and the legacy sentinel ("未命名项目")
  *  stay in sync from a single source of truth. */
 export function isEmptyDraftName(name: string | undefined | null): boolean {
   if (!name) return false;

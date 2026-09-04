@@ -113,7 +113,7 @@ export function useHistoryList(): HistoryListController {
      open 清空逻辑不再需要本地镜像 state。 */
   const detail = detailQ.isSuccess ? detailQ.data : null;
   const detailLoading = detailQ.isPending;
-  /** R-ardot63 (2026-08-15): 工作流默认值兜底 —— 来自 /api/tasks/[id] 的 workflowHints 子字段。 */
+  /** 工作流默认值兜底 —— 来自 /api/tasks/[id] 的 workflowHints 子字段。 */
   const workflowHints = detailQ.isSuccess
     ? (detailQ.data as { workflowHints?: unknown } | null | undefined)?.workflowHints ?? null
     : null;

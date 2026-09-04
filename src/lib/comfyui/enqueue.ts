@@ -24,7 +24,7 @@ export function enqueue(job: Job) {
 
   state().logs.set(job.taskId, []);
 
-  // R-ardot111 (2026-08-17): stamp the start time so we can emit a
+  // stamp the start time so we can emit a
 
   // "总耗时 Xs" line at completion, and so the client log can show
 
@@ -34,7 +34,7 @@ export function enqueue(job: Job) {
 
   log(job.taskId, "info", "任务已加入执行队列");
 
-  // R-ardot111 (2026-08-17): surface queue position + active slot
+  // surface queue position + active slot
 
   // so the user can see whether the task is waiting on a peer or
 
@@ -96,7 +96,7 @@ export async function cancelTask(taskId: string) {
 
 
 
-  /* R-ardot121 (2026-08-18): previously this required
+  /* previously this required
 
    *  `status === RUNNING || QUEUED`.  We now accept ANY non-terminal
 
@@ -106,7 +106,7 @@ export async function cancelTask(taskId: string) {
 
    *  state has been wiped (e.g. by a dev-server restart that the
 
-   *  R-ardot121 reaper hasn't yet swept).  If the task has a
+   *  reaper hasn't yet swept). If the task has a
 
    *  promptId we still try `interrupt()` to tell ComfyUI to drop
 
@@ -142,7 +142,7 @@ export async function cancelTask(taskId: string) {
 
   store.promptByTask.delete(taskId);
 
-  // R-ardot111 (2026-08-17): clean up the per-task bookkeeping we
+  // clean up the per-task bookkeeping we
 
   // added so a re-enqueue of the same taskId starts clean.
 
@@ -150,7 +150,7 @@ export async function cancelTask(taskId: string) {
 
   store.lastNodeByTask.delete(taskId);
 
-  /* R-ardot121 (2026-08-18): only release the runner's slot when we
+  /* only release the runner's slot when we
 
    *  actually held one.  DB-only tasks (no in-memory job) must NOT
 
@@ -168,7 +168,7 @@ export async function cancelTask(taskId: string) {
 
   if (hadSlot) store.active = Math.max(0, store.active - 1);
 
-  /* R-ardot114 (2026-08-17): cancel previously only updated the DB
+  /* cancel previously only updated the DB
 
    *  and the in-memory slot, never pushed anything to the SSE
 
@@ -202,7 +202,7 @@ export async function cancelTask(taskId: string) {
 
   store.emitter.emit(taskId, { type: "error", error: "用户取消" });
 
-  // R-ardot115 (2026-08-18): flush any pending debounced log writes
+  // flush any pending debounced log writes
 
   // for this task so the cancel-line + any in-flight warnings reach
 

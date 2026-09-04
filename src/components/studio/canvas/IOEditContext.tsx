@@ -78,7 +78,7 @@ export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node
   const viewerApi = useNodeJsonViewer();
   const ref = React.useRef<HTMLButtonElement | null>(null);
   const requestShow = viewerApi.requestShow;
-  /* 2026-08-22: 右上角展示「短序号」#1/#2…（按 detail.nodes 列表顺序），
+  /* 右上角展示「短序号」#1/#2…（按 detail.nodes 列表顺序），
    * 完整 nodeId 保留在 title / aria-label / data 属性中，JSON 查看器仍按完整 id 查询。 */
   const nodes = useNodeJsonViewerStore((state) => state.detail?.nodes ?? null);
   const shortLabel = React.useMemo(() => {

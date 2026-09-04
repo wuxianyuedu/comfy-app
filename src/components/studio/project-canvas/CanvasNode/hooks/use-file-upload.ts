@@ -1,6 +1,6 @@
 "use client";
 
-/* 2026-08-30: extracted from CanvasNode — file-upload plumbing.
+/* extracted from CanvasNode — file-upload plumbing.
  *  Three cohesive upload paths share this hook: the generator nodes'
  *  image input picker (fileRef + uploadTo), the content-carrier media
  *  picker (mediaRef + pickMedia/onMediaFile, incl. the write-only
@@ -70,7 +70,7 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
       patch({ error: errorMessage(err) ?? "上传失败", status: "error" });
     }
   };
-  /* R-ardot101 (2026-08-17): drag-and-drop upload on the dashed area.
+  /* drag-and-drop upload on the dashed area.
    *  Mirrors onMediaFile but takes a `File` instead of a `<input>` change
    *  event — the ContentAssetBody passes whatever the user dropped straight
    *  here.  The hidden input + pickMedia + FAB stay intact so the bottom-

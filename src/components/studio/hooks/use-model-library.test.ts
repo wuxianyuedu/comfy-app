@@ -82,8 +82,8 @@ const THREE: Row = { ...ONE, id: "m3", name: "Anime Style", type: "loras", fileN
 
 /**
  * hook 用到 api.model.*，必须挂在真实的 tRPC Provider 下。
- * 用 createElement 而不是 JSX：本文件是 `.test.ts`（R1 要求 .tsx 一律 PascalCase，
- * 而 hook 的测试伙伴文件按 R2 必须 kebab-case），带 JSX 就得改名成 `Use*Test.tsx`，
+ * 用 createElement 而不是 JSX：本文件是 `.test.ts`（要求 .tsx 一律 PascalCase，
+ * 而 hook 的测试伙伴文件按 必须 kebab-case），带 JSX 就得改名成 `Use*Test.tsx`，
  * 反而更怪。
  */
 function makeWrapper() {

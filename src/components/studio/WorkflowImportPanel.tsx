@@ -1,6 +1,6 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from WorkflowLibrary's import-panel JSX.
+/** extracted from WorkflowLibrary's import-panel JSX.
  *  Fully controlled by the parent — all panel state lives in the
  *  useWorkflowImport hook and is threaded through `state` so the
  *  drag-and-drop pre-fill path (handleDroppedFile) can populate the same

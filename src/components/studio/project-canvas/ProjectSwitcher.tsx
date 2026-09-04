@@ -1,6 +1,6 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from ProjectCanvas's top-left project
+/** extracted from ProjectCanvas's top-left project
  *  switcher (button + dropdown).  Controlled by the parent — all menu /
  *  rename state lives in useProjectManager and is threaded through props.
  */

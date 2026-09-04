@@ -1,6 +1,6 @@
 /**
  * RAW (UI-format) workflow parsing helpers — extracted from
- * workflow-detail.ts (T12 batch 4).
+ * workflow-detail.ts (batch 4).
  *
  * These pure functions turn a rawJson blob into the lookup tables the
  * detail builders need: per-node input metadata (`rawInputsById`), exact
@@ -35,7 +35,7 @@ export interface RawInputEntry {
   multiline?: boolean;
   imageRef?: { filename: string; subfolder: string; type: string };
   preview?: boolean;
-  /** R73 wrapper 解析的内部暂存字段：代理目标 (class, field)，COMBO 解析后删除 */
+  /** wrapper 解析的内部暂存字段：代理目标 (class, field)，COMBO 解析后删除 */
   __comboClass?: string;
   __comboField?: string;
   /** COMBO 候选列表（object_info 解析成功时写入，随 detail 下发） */
@@ -79,21 +79,21 @@ export interface DetailNodeView {
   connects_from?: string | null;
 }
 
-/** R82 RAW 视图数据包（从 rawJson 派生、保留 subgraph wrapper）。 */
+/** RAW 视图数据包（从 rawJson 派生、保留 subgraph wrapper）。 */
 export interface RawViewPacket {
   nodes: DetailNodeView[];
   positions: Record<string, [number, number]>;
   graph: Record<string, ApiWorkflowNode>;
 }
 
-/* IMAGE-input thumbnail preview (2026-08-10 R27, narrowed in R28).  ComfyUI's
+/* IMAGE-input thumbnail preview (narrowed in ). ComfyUI's
  * LoadImage node keeps the uploaded filename in `widgets_values[0]`; we
  * surface that as an inline preview by stamping a synthetic `preview`-marked
  * entry onto the LoadImage node itself.  We DO NOT propagate `imageRef` to
  * downstream IMAGE inputs (ImageScale / CLIPVisionEncode / …) because those
  * renderings would always show the unscaled / un-encoded upstream image
  * (just a duplicate of the LoadImage preview), which is meaningless per
- * 2026-08-10 user feedback — only the source LoadImage node should paint
+ * user feedback — only the source LoadImage node should paint
  * the thumbnail.  Empty LoadImage uploads (widgets_values[0] missing/empty)
  * still push the synthetic entry — without `imageRef` — so the renderer can
  * show a 「需要上传图片」 placeholder in the body, matching ComfyUI's empty
@@ -116,7 +116,7 @@ const LOAD_IMAGE_NODE_TYPES = new Set([
  *   - `multiline` for STRING inputs flagged by `inferIsMultiline`
  *   - a synthetic `preview` entry on LoadImage-family nodes
  *
- * Then (2026-08-12 R73) subgraph wrapper nodes get their exposed widget
+ * Then subgraph wrapper nodes get their exposed widget
  * values enriched from `properties.proxyWidgets` — the wrapper's own
  * `widgets_values[]` is empty; the actual values live in the internal
  * nodes' arrays.  COMBO candidates are resolved via /api/object_info
@@ -146,7 +146,7 @@ export async function buildRawInputs(
    *  internal whitespace).  Raw API-format `tpl.graph` drops `size`, so we
    *  pull it back from `raw.nodes` (which still carries it) keyed by id. */
   const sizeById: Record<string, [number, number]> = {};
-  /* 2026-08-29：控件顺序表（classType → 控件名数组，含 control_after_generate
+  /* 控件顺序表（classType → 控件名数组，含 control_after_generate
    * 哨兵槽）。惰性拉取 —— 只有真的遇到「inputs[] 没覆盖到的控件值」时才请求
    * object_info，避免每个工作流都白跑一次；ComfyUI 未启动时 30s 负缓存生效，
    * 拿不到表也只是退回旧逻辑，不会拖慢。 */
@@ -186,7 +186,7 @@ export async function buildRawInputs(
         if (!widgetName || widgetCounter >= rnWidgets.length) continue;
         legacyByName.set(widgetName, rnWidgets[widgetCounter]);
         /* seed / noise_seed widgets carry an implicit `control_after_generate`
-         * partner slot immediately after their own value (R94 fix). */
+         * partner slot immediately after their own value (fix). */
         const isSeedBundle =
           widgetName === "seed" ||
           widgetName === "noise_seed" ||
@@ -195,7 +195,7 @@ export async function buildRawInputs(
         widgetCounter += isSeedBundle ? 2 : 1;
       }
 
-      /* ── 顺序表配对（2026-08-29）：把整个 widgets_values 反查成「控件名 → 值」。
+      /* ── 顺序表配对：把整个 widgets_values 反查成「控件名 → 值」。
        *  ComfyUI 默认只把「转成输入」的控件写进 raw 节点的 inputs[]，其余控件的
        *  值仅存在于 widgets_values[]。仅靠 inputs[] 配对会整段漏掉它们
        *  （CLIPTextEncode 的提示词、SenseNovaU15Loader 的模型名…），节点上看
@@ -238,7 +238,7 @@ export async function buildRawInputs(
         };
         if (widgetName) entry.widget = { name: widgetName };
         if (widgetValue !== undefined) entry.widgetValue = widgetValue;
-        /* 2026-08-10 R18: stamp `multiline` on every STRING input that
+        /* stamp `multiline` on every STRING input that
          *  the upstream `inferIsMultiline` helper flags.  The helper
          *  intentionally never stamps `multiline: false` (an opt-in
          *  only flag); the renderer treats absence as "no opinion"
@@ -282,7 +282,7 @@ export async function buildRawInputs(
        * uploaded thumbnail (or a 「需要上传图片」 placeholder when empty) on
        * the LoadImage node itself, which is exactly where ComfyUI paints it.
        *
-       * 2026-08-10 R28: ALWAYS push for LoadImage-family, regardless of
+       * ALWAYS push for LoadImage-family, regardless of
        * whether an image is loaded.  The empty-image branch (widgets_values[0]
        * missing / empty) returns `imageRef: undefined` and the frontend
        * renders a placeholder.  This way the node always has its preview
@@ -310,7 +310,7 @@ export async function buildRawInputs(
     }
   }
 
-  /* 2026-08-12 R73: Subgraph wrapper widget value lookup.
+  /* Subgraph wrapper widget value lookup.
    *
    * ComfyUI's exported subgraph workflows carry a `properties.proxyWidgets`
    * array on each wrapper node that maps wrapper.inputs[i] to an internal
@@ -556,7 +556,7 @@ export function buildRawNodeMeta(raw: RawWorkflow | null): RawNodeMeta[] {
         widgets_values: Array.isArray((rn).widgets_values) ? (rn).widgets_values : [],
         outputs,
         flags,
-        /* Custom-node `properties` (2026-08-09).  Forwarded so the canvas
+        /* Custom-node `properties`. Forwarded so the canvas
          *  can replicate runtime UI driven by properties — the most
          *  prominent example is rgthree's `Fast Groups Bypasser`. */
         properties:
@@ -582,7 +582,7 @@ export function buildNodeTypeMap(raw: RawWorkflow | null): Record<string, string
   return nodeTypeById;
 }
 
-/** 2026-08-13 R82: raw 视图专用数据包。
+/** raw 视图专用数据包。
  * 存库的 `graph`（即 `detail.nodes` 的来源）在某些工作流里被「拆平」成了
  * `N:xx` 节点（例如某工作流的 flat form，而其 `_t2i` 兄弟保留 wrapper）。
  * 这种情况下画布 RAW 布局会显示 17 个被炸开的节点，而用户期望的是 5 个

@@ -66,7 +66,7 @@ export function useWorkflowPersistence({
      *  PATCH 后都是新引用），而这里只关心「换了另一份图」这一个信号。 */
     const detailId = detail?.id;
     if (!detailId) return;
-    /* 2026-08-13 R82: RAW / API 视图各有独立基线。RAW 视图按 rawView 的节点/
+    /* RAW / API 视图各有独立基线。RAW 视图按 rawView 的节点/
      *  位置快照，API 视图按 API 图的快照，互不干扰（避免 RAW 重置时误还原 API
      *  坐标，反之亦然）。 */
     const snapKey = `${detailId}`;
@@ -93,7 +93,7 @@ export function useWorkflowPersistence({
    *    id-namespace) stays intact.  Top-level view keeps the default
    *    REPLACE behaviour, which is what the previous top-level reset
    *    did and the snapshot contains the complete saved layout.
-   *  - 2026-08-06: detect a SPARSE snapshot (positions count < node
+   *  - detect a SPARSE snapshot (positions count < node
    *    count).  If the snapshot is partial, do NOT write it back to the
    *    server — that would re-poison the column and the user's next
    *    open would be just as broken.  Instead, just clear the local
@@ -137,7 +137,7 @@ export function useWorkflowPersistence({
       positions: orig ?? {},
       notes: origNotes ?? [],
     };
-    /* 2026-08-13 R82: RAW 视图的快照只含 raw-id 坐标，若用顶层默认的 REPLACE
+    /* RAW 视图的快照只含 raw-id 坐标，若用顶层默认的 REPLACE
      *  写回会清空 tpl.positions 里并存的 api-id 坐标。统一走 merge:true，只把
      *  当前视图的键写回、保留另一视图的键，避免跨视图数据损坏。 */
     payload.merge = true;
@@ -189,7 +189,7 @@ export function useWorkflowPersistence({
    *    so the canvas stays consistent (no snap-back on the next render).
    *  - Real graph nodes → write into the `positions` column via the
    *    `positions` PATCH field, likewise mirrored into local `detail`.
-   *  - Boundary-pin GROUPS (`grp:bpin:inputs|outputs`, 2026-08-06 late)
+   *  - Boundary-pin GROUPS (`grp:bpin:inputs|outputs`, late)
    *    → write the group rect into `positions` so the rail stays where the
    *    user dropped it after reload.  The children carry parentId +
    *    extent:"parent" and move automatically with the group, so we don't
@@ -208,7 +208,7 @@ export function useWorkflowPersistence({
          * re-mounts with the persisted state on the next open. */
         if (!detail) return;
         const x = Math.round(node.position.x);
-        /* Anchor inversion (2026-08-07): wfNode / wfSubgraph cards paint a
+        /* Anchor inversion: wfNode / wfSubgraph cards paint a
          *  30 px title bar ABOVE their body, so the React Flow `position.y`
          *  is the CARD (title-bar) top, and the body sits `NODE_TITLE_H`
          *  below it.  The on-disk `positions[id]` must keep the ComfyUI
@@ -243,7 +243,7 @@ export function useWorkflowPersistence({
             notes: [{ id: noteId, pos: [x, noteY] }],
           });
         } else {
-          /* 2026-08-25: 单一格式（不再区分 RAW / API 视图），图节点拖拽统一
+          /* 单一格式（不再区分 RAW / API 视图），图节点拖拽统一
            * 写回 detail.positions（覆盖 ComfyUI 原始布局）。 */
           const nodeId = node.id;
           setDetail((prev) =>
@@ -256,7 +256,7 @@ export function useWorkflowPersistence({
            *  canonical "are we inside a subgraph" signal — empty array
            *  when browsing the root workflow. */
           const payload: Record<string, unknown> = { positions: { [nodeId]: [x, y] } };
-          /* 2026-08-13 R82: RAW 视图（顶层）拖拽也走 merge:true。tpl.positions
+          /* RAW 视图（顶层）拖拽也走 merge:true。tpl.positions
            *  现在并存 api-id（来自 API 图）与 raw-id（来自 RAW 视图）两套坐标，
            *  顶层默认 REPLACE 会把另一套坐标清空。单键合并既能落盘当前节点，
            *  又保留另一视图的键。 */

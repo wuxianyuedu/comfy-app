@@ -1,5 +1,5 @@
 /* ── 工作流节点的「多模式」保存动作（第②层逻辑）───────────────────────
- * R-ardot25：模式列表与默认模式要 PATCH 回 WorkflowTemplate（后端同时把
+ * 模式列表与默认模式要 PATCH 回 WorkflowTemplate（后端同时把
  * defaultMode 同步到 taskType 列）。这段「乐观更新 + 失败回滚」原先内联在
  * CanvasNode.tsx 的 onModesChange 里，是该组件唯一的 IO 点。
  *

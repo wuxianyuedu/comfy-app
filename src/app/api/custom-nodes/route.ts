@@ -66,7 +66,7 @@ function getPaths(): string[] {
     .filter(Boolean);
 }
 
-/** 2026-08-10 R8: companion config for LOCAL_WORKFLOWS_PATH — the
+/** companion config for LOCAL_WORKFLOWS_PATH — the
  *  directory(ies) the user wants to load workflow files from. Each line
  *  (or comma-separated entry) is one absolute directory. The server NEVER
  *  writes to these; it's a pure read-only scanner (see localWorkflows.ts). */
@@ -441,7 +441,7 @@ export async function GET() {
     const c = discoverCache.get(path);
     return c && Date.now() - c.at < 5000;
   });
-  // 2026-08-10 R8: include localWorkflowPaths in both branches so the
+  // include localWorkflowPaths in both branches so the
   // settings dialog can hydrate its companion field even when there's no
   // CUSTOM_NODES_PATH configured (the cold path).
   const settings = { paths, localWorkflowPaths };
@@ -472,7 +472,7 @@ export async function GET() {
           const pkgs = await runDiscoverStreaming(parent!, send);
           discoveredByParent[parent!] = pkgs;
         }
-        // R8: ship the companion LOCAL_WORKFLOWS_PATH list down the same
+        // ship the companion LOCAL_WORKFLOWS_PATH list down the same
         // stream so the dialog can render the local-workflow scan results
         // at the same hydration point.
         send({
@@ -514,7 +514,7 @@ export async function POST(req: NextRequest) {
   const action: unknown = rec.action;
 
   if (action === "saveSettings") {
-    /* 2026-08-10 R8: support updating both knobs in one shot. Either
+    /* support updating both knobs in one shot. Either
      *  field may be absent (no-op). Empty array clears the corresponding
      *  var so the user can "unset" without hand-editing .env. */
     let wroteAny = false;

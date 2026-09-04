@@ -1,5 +1,5 @@
 "use client";
-/* Dimension (image) group control — extracted from GroupedControls.tsx (T12).
+/* Dimension (image) group control — extracted from GroupedControls.tsx.
  * Renders 比例 + 清晰度 popover on top of W/H NumberFields; preset picks
  * write the real width/height back through `setMany`. */
 import { useCallback, useMemo, useState } from "react";
@@ -93,7 +93,7 @@ function DimensionSizeControl({
   const w0 = Number(values[group.width.ioKey] ?? group.width.defaultValue ?? 1024);
   const h0 = Number(values[group.height.ioKey] ?? group.height.defaultValue ?? 1024);
 
-  /* R-ardot108 (2026-08-17): user-pinned alignment multiple for the
+  /* user-pinned alignment multiple for the
    *  megapixel clearity presets.  Persisted per-workflow so a panel
    *  for an SDXL image workflow doesn't bleed into a Wan video one.
    *  Default 64 (matches the user requirement). */
@@ -139,13 +139,13 @@ function DimensionSizeControl({
       DIM_RATIO_PRESETS[0]!
     ).label;
   }, [w0, h0]);
-  /* R-ardot104 (2026-08-17): clarity preset is now picked across both
+  /* clarity preset is now picked across both
    *  kinds ("pixel" long-edge 1k/2k/4k and "megapixel" total 1M/2M/4M) by
    *  `pickClarityPreset`.  We only need the label here (the underlying
    *  preset is rebuilt inside `applyPreset` when the user picks a new
    *  one).
    *
-   *  R-ardot107 (2026-08-17): an explicit user-picked clarity is locked
+   *  an explicit user-picked clarity is locked
    *  in `explicitClarity` so a click on, e.g., "4M" survives the next
    *  pickClarityPreset round-trip even if the snap-to-8 dims would have
    *  resolved to a different preset under the old relative scoring.
@@ -164,7 +164,7 @@ function DimensionSizeControl({
       const rp = DIM_RATIO_PRESETS.find((preset) => preset.label === rLabel) ?? DIM_RATIO_PRESETS[0];
       const cp =
         DIM_CLARITY_PRESETS.find((preset) => preset.label === cLabel) ?? DIM_CLARITY_PRESETS[0];
-      /* R-ardot108 (2026-08-17): pass the user's alignMultiple through
+      /* pass the user's alignMultiple through
        *  so megapixel presets (1M/2M/4M) snap to the chosen grid. */
       const { width, height } = dimsForRatio(rp!.ratio, cp!, alignMultiple);
       setExplicitClarity(cLabel);
@@ -173,7 +173,7 @@ function DimensionSizeControl({
     [group, setMany, alignMultiple]
   );
 
-  /* R-ardot108 (2026-08-17): changing the alignment multiple
+  /* changing the alignment multiple
    *  re-snaps the current W/H to the new grid and clears the
    *  explicit-clarity lock so the popover re-detects the closest
    *  preset (the snapped dims may now belong to a different
@@ -225,7 +225,7 @@ function DimensionSizeControl({
       {
         label: "清晰度",
         value: clarity,
-        /* R-ardot104 (2026-08-17): pixel presets carry `subgroup: "像素"`
+        /* pixel presets carry `subgroup: "像素"`
          *  and megapixel presets carry `subgroup: "百万像素"`, so the
          *  popover renders two stacked rows inside the 清晰度 section. */
         options: DIM_CLARITY_PRESETS.map((preset) => ({
@@ -241,7 +241,7 @@ function DimensionSizeControl({
 
   return (
     <div className="space-y-2.5">
-      {/* R-ardot101: 比例 + 清晰度 单段摆在 W/H 上方——既对应「预设 → 推算
+      {/* 比例 + 清晰度 单段摆在 W/H 上方——既对应「预设 → 推算
           宽高」的方向，又让下方两个 NumberField 紧挨在一起形成紧凑一行。 */}
       <div className="rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5">
         <div className="flex items-center gap-2">
@@ -254,7 +254,7 @@ function DimensionSizeControl({
               triggerContent={`${shortRatioLabel(ratio)} / ${clarity}`}
               sections={sections}
               align="right"
-              /* R-ardot108 (2026-08-17): the alignMultiple stepper
+              /* the alignMultiple stepper
                *  lives at the foot of the popover.  Defaults to 64,
                *  range [8, 128] in steps of 8, persisted per workflow. */
               footer={
@@ -302,7 +302,7 @@ function DimensionSizeControl({
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * AspectMegapixelControl (2026-08-29)
+ * AspectMegapixelControl
  *
  * For nodes like `ResolutionSelector` that expose `aspect_ratio` (COMBO of
  * label strings) + `megapixels` (FLOAT, 1 ≈ 1M total pixels) instead of raw

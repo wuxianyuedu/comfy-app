@@ -34,7 +34,7 @@ import {
   type Tab,
 } from "~/components/workshop/stage-config";
 
-/* ── 工坊项目存储层（2026-09-03：单草稿 → 多项目可切换） ──
+/* ── 工坊项目存储层（单草稿 → 多项目可切换） ──
  *
  *  索引（项目列表 + 当前项目 id）单独存一个键，每个项目的正文按 id 各存一个键。
  *  这样切换项目只读当前那份草稿，不必把全部项目正文都解析一遍。
@@ -288,7 +288,7 @@ export interface WorkshopPipelineController {
   handleApiChannelsSaved: (channels: ApiChannelsView) => void;
   dismissNotice: () => void;
   markRendered: () => void;
-  /* ── 多项目（2026-09-03）：工坊可在多个项目间切换 ── */
+  /* ── 多项目：工坊可在多个项目间切换 ── */
   projects: WorkshopProjectSummary[];
   activeProjectId: string;
   switchProject: (id: string) => void;
@@ -324,7 +324,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const [apiSettingsOpen, setApiSettingsOpen] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
 
-  // 2026-09-02: 剧本内容此前是纯内存 state（刷新即丢），且大纲默认塞了
+  // 剧本内容此前是纯内存 state（刷新即丢），且大纲默认塞了
   // 一段硬编码示例文案。现在大纲/剧本默认为空，全部内容经 localStorage
   // 草稿持久化（防抖自动保存，挂载时惰性恢复）。
   const [outline, setOutline] = React.useState(

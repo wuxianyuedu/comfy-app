@@ -60,6 +60,11 @@
      按 GBK 解码，与 `.bat` 乱码同源）；
    - R7/R8 由 `scripts/check-file-structure.cjs` 在 pre-commit 强制拦截，
      回归测试见 `tests/check-file-structure.test.ts`。
+11. **注释里禁止「历史流水」**（ISSUE #46 / 规范 §12.4.2 / 反模式表 G4）：
+    日期（`2026-08-17`）、改动编号（`R-ardot114` / `R83` / `R-Next`）、
+    任务批次号（`T12-3`）—— 这些归 `git log`，写进注释会随代码搬迁过期失真。
+    由 `scripts/check-file-structure.cjs` 的 **R10** 在 pre-commit 强制拦截，
+    回归测试见 `tests/check-file-structure.test.ts`。
 
 ## 快速排障
 

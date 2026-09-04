@@ -7,7 +7,7 @@ import { DEFAULT_CANVAS_SETTINGS } from "./canvas/WorkflowCanvasSettings";
 export const GRID_CELL = 10;
 export const GRID_MAJOR_EVERY = 10;
 export const CANVAS_BG = "#0a0a0f";
-/* 2026-08-13 R79: lowered from 0.6 → 0.30 so the grid stays visible at
+/* lowered from 0.6 → 0.30 so the grid stays visible at
  *  the fitView zoom floor (0.35) — previously the post-fit canvas came up
  *  blank in screenshots because the grid hid itself before users noticed
  *  the canvas had rendered.  With this floor below 0.35 the workspace
@@ -17,7 +17,7 @@ export const GRID_HIDE_ZOOM = 0.3;
 export function CanvasGrid({
   settings = DEFAULT_CANVAS_SETTINGS,
 }: {
-  /* R-ardot95: settings are passed in by the editor root (which owns the
+  /* settings are passed in by the editor root (which owns the
    * single useCanvasSettings() instance) instead of consumed from a
    *  context.  This keeps CanvasGrid a pure function of its props and
    *  avoids crossing any <ReactFlow> internal context boundaries. */
@@ -46,7 +46,7 @@ export function CanvasGrid({
       <Background
         id="wf-grid-minor"
         variant={BackgroundVariant.Lines}
-        /* R-ardot95: gap / lineWidth / alpha are now bound to the user's
+        /* gap / lineWidth / alpha are now bound to the user's
          *  canvas settings instead of the hard-coded 10 / 1 / 0.22.
          *  Multiplied by a zoom-fade factor so the lines stay readable
          *  at any zoom (the alpha at zoom 0.5 was previously 0). */
@@ -69,7 +69,7 @@ export function CanvasGrid({
   );
 }
 
-/* ── Canvas rulers (2026-08-07) ──
+/* ── Canvas rulers ──
  *  Tiny coordinate readout along the four edges of the canvas window
  *  so the user can read a node's world position at a glance.  Each
  *  ruler renders the *world* X / Y of every major grid line that
@@ -96,7 +96,7 @@ export function CanvasGrid({
  *      for a continuous scrub.  A press with <4px of travel counts as a click.
  *  ESC cancels the editor; empty / non-numeric input leaves zoom untouched.
  *
- *  R-ardot95 (2026-08-17): clamp bounds now read from `useCanvasSettings()`
+ *  clamp bounds now read from `useCanvasSettings()`
  *  so the chip respects the same minZoom/maxZoom the user sets in the panel. */
 export function ZoomIndicator({
   minZoom = DEFAULT_CANVAS_SETTINGS.minZoom,
@@ -208,7 +208,7 @@ export function ZoomIndicator({
 export function CanvasRulers({
   settings = DEFAULT_CANVAS_SETTINGS,
 }: {
-  /* R-ardot95: rulers can be hidden via the canvas settings panel so
+  /* rulers can be hidden via the canvas settings panel so
    *  that authors who want an unobstructed canvas (or who are working
    *  on screenshots) don't have to live with the coordinate overlay. */
   settings?: CanvasSettings;

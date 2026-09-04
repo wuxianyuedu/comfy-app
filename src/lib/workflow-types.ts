@@ -467,7 +467,7 @@ export function inferWorkflowTypeFromGraph(graph: Record<string, unknown>): stri
   return "T2I";
 }
 
-/* ── 多模式 JSON 编解码（2026-08-13）────────────────────────────
+/* ── 多模式 JSON 编解码────────────────────────────
  * SQLite 不支持 Prisma 标量数组，故 WorkflowTemplate.modes 存为
  * JSON 字符串（与 Skill.tags 同构）。下面两个函数统一在「DB 列 ↔
  * TS 数组」之间转换，并在任何畸形输入下都安全降级为空数组 / 合法

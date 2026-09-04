@@ -72,7 +72,7 @@ import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
  *  already-quantised alpha so panning/zooming only re-renders when the
  *  fade actually steps.
  *
- *  2026-08-11: user request — once the viewport is zoomed out to ≤ 60%
+ *  user request — once the viewport is zoomed out to ≤ 60%
  *  the entire grid (minor + major) is hidden.  At that scale the canvas
  *  reads as a whole-workflow map and the grid just adds clutter, so we
  *  short-circuit and render nothing.  Note `<ReactFlow>` minZoom is 0.15
@@ -140,12 +140,12 @@ function WorkflowEditorBody({
   const ioEditMode = useIOEditStore(selectIoEditMode);
   const ioPreviewOpen = useIOEditStore(selectIoPreviewOpen);
   const savePatch = useWorkflowSaveMutation();
-  /* Side-panel toggle for the IO preview (2026-08-09).  Independent of
+  /* Side-panel toggle for the IO preview.  Independent of
    *  `ioEditMode` so the author can A/B toggle before vs. after opening
    *  the panel.  Default closed — the canvas already gives a busy
    *  experience and we don't want to pile on a second floating panel
    *  before the user asks for one. */
-  /* R-ardot95 (2026-08-17): canvas-settings panel state — sits next to
+  /* canvas-settings panel state — sits next to
    *  ioPreviewOpen / viewJsonOpen as a sibling overlay opened by a gear
    *  button in the canvas chrome.  Default closed. */
   const [canvasSettingsOpen, setCanvasSettingsOpen] = useState(false);
@@ -154,7 +154,7 @@ function WorkflowEditorBody({
    *  Until `hydrated` is true we render with defaults so SSR / first
    *  paint don't briefly show saved values before the read completes. */
   const { settings: canvasSettings, update: updateCanvasSetting, reset: resetCanvasSettings, hydrated: canvasSettingsHydrated } = useCanvasSettings();
-  /* 2026-08-11 R40: 画布顶部「📋 查看 JSON」按钮 — 复用 SourceModal。
+  /* 画布顶部「📋 查看 JSON」按钮 — 复用 SourceModal。
    *  数据直接从 `detail.graph/rawJson` 读 (缓存里的磁盘已保存版本)，
    *  无需网络请求；当前未保存的画布修改不在内，文案里写明。 */
   const [viewJsonOpen, setViewJsonOpen] = useState(false);
@@ -200,7 +200,7 @@ function WorkflowEditorBody({
   const [subgraphLoading, setSubgraphLoading] = useState(false);
   const [subgraphError, setSubgraphError] = useState("");
 
-  /* 2026-08-11 R42: 子工作流「查看 JSON」要支持 RAW。
+  /* 子工作流「查看 JSON」要支持 RAW。
    *
    * 后端 `/api/workflows/:id/subgraph?uid=...` 返回的 sub-detail 只携带
    * sub 自己的 API graph (`graph`)，**不带 rawJson** —— 因为 sub 的
@@ -232,7 +232,7 @@ function WorkflowEditorBody({
     detailRef.current = detail;
   }, [detail]);
 
-  /* 2026-08-29：「查看源文件」要展示**磁盘上的原始 JSON**，而不是 /prompt 用的
+  /* 「查看源文件」要展示**磁盘上的原始 JSON**，而不是 /prompt 用的
    * 可执行图（`detail.graph`）—— 用户点这个按钮是想核对 ComfyUI 保存的源文件
    * （nodes[] / links[] / widgets_values）。所以这里取 `detail.rawJson`；
    * 只有纯 API 导入（rawJson 为 null）才回退到 graph，并标记 isApiFallback
@@ -284,11 +284,11 @@ function WorkflowEditorBody({
   const rf = useReactFlow();
   /** 已自动 fit 过的图的 key（detail.id），而非布尔——切换子图时要重新 fit。 */
   const fittedRef = useRef<string | null>(null);
-  /* R-ardot106 (2026-08-17): MiniMap → main-viewport single-click jump.
+  /* MiniMap → main-viewport single-click jump.
    *  Pairs with <MiniMap pannable zoomable onClick={onMiniMapJump} /> below. */
   const onMiniMapJump = useMiniMapJump(rf);
 
-  /* 2026-08-06 R3: monotonically-increasing token so background fetches
+  /* monotonically-increasing token so background fetches
    *  can't overwrite the current fetchDetail's commit.  Bumped inside
    *  fetchDetail; whichever invocation holds the highest number
    *  when its response arrives is the one allowed to write to state.
@@ -383,7 +383,7 @@ function WorkflowEditorBody({
   /* Hoisted raw meta + slot-name table — also referenced from the edges
    * useEffect below, so we keep them at component scope (not inside the
    * initialNodes memo). */
-  /* 2026-08-25: 单一格式，移除 RAW/API viewMode 与 apiLayoutOverrides 状态 */
+  /* 单一格式，移除 RAW/API viewMode 与 apiLayoutOverrides 状态 */
 
   /* Derived lookups: raw-node metadata map, view-scoped detail (RAW / API),
    * and per-node output-slot names. */
@@ -448,7 +448,7 @@ function WorkflowEditorBody({
     return () => cancelAnimationFrame(raf);
   }, [rf, detail?.id, fitToMiddle, nodes.length]);
 
-  /* 2026-08-25: lazy edge interactivity.  defaultEdgeOptions in the canvas
+  /* lazy edge interactivity.  defaultEdgeOptions in the canvas
    *  sets deletable/reconnectable=false so untouched edges stay inert; the
    *  first click on an edge flips BOTH flags on (idempotent afterwards), so
    *  the user can still delete / re-connect it exactly as before while the
@@ -490,7 +490,7 @@ function WorkflowEditorBody({
   });
 ;
 
-  /* IO-preview merge (2026-08-09).  IMPORTANT: this useMemo MUST sit
+  /* IO-preview merge.  IMPORTANT: this useMemo MUST sit
    *  BEFORE any early-return (loading / error below) so the hook order
    *  is stable across renders — otherwise React fires "Rendered more
    *  hooks than during the previous render" the moment the loading
@@ -590,7 +590,7 @@ function WorkflowEditorBody({
             </div>
           </div>
         )}
-        {/* IO preview side panel (2026-08-09).  Renders the same
+        {/* IO preview side panel.  Renders the same
          *  DynamicWorkflowForm that CreatePanel / the canvas workflow node
          *  consume, fed by the **live** `workflowIO` state (not the cached
          *  server-side enrichment).  This lets the author toggle a
@@ -606,7 +606,7 @@ function WorkflowEditorBody({
          *  only on the padding outside the panel (we use a single flex
          *  container, so the whole thing is interactive).
          *
-         *  DATA MERGE (2026-08-09).  The local `workflowIO` state only
+         *  DATA MERGE.  The local `workflowIO` state only
          *  carries the four identity fields written by toggleIO — it
          *  does NOT have type/defaultValue/nodeTitle/multiline, those
          *  come from the server-side enrichment in
@@ -641,7 +641,7 @@ function WorkflowEditorBody({
           点击节点查看详情 · 拖拽移动节点位置 · 滚轮缩放
         </div>
 
-        {/* R-ardot95: right-edge canvas settings drawer.  Portaled to
+        {/* right-edge canvas settings drawer.  Portaled to
          *  document.body by the panel itself so it can sit above the
          *  WorkflowCanvasEditor root overlay stack (`z-50`); rendered
          *  only when the gear button is clicked. */}
@@ -658,7 +658,7 @@ function WorkflowEditorBody({
          *  而非常驻面板，所以不与节点主体争抢画布空间，也不需要逐节点开关。 */}
         <GlobalStepLogPanel />
 
-        {/* 2026-08-11 R40: 顶部「📋 查看 JSON」触发的全屏 modal。
+        {/* 顶部「📋 查看 JSON」触发的全屏 modal。
             派生数据由 `sourceModalData` (useMemo) 给出:
               - 顶层 detail: graph/rawJson 来自 detail
               - sub 视图: graph 来自 sub-detail, rawJson 切自父

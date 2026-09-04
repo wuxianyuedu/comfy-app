@@ -1,6 +1,6 @@
 "use client";
 /* Widget inputs section — knobs only (every entry carries a widgets_values
- * slot).  Extracted from workflow-node.tsx (T12).  Pure-connection ports
+ * slot). Extracted from workflow-node.tsx. Pure-connection ports
  * live in FlowNodePinRows; this section renders the scalar/object inputs
  * with their values, including STRING multiline textareas. */
 import { Handle, Position } from "@xyflow/react";
@@ -41,14 +41,14 @@ export function FlowNodeWidgetRows({
         const typeCol = portColor(inputType);
         // Display label: zh-CN localized_name → friendly map → raw key.
         // COMBO option lists are stripped by sanitizeComboLabel; boolean
-        // toggle descriptors (rgthree Settings) stay intact (R-ardot71).
+        // toggle descriptors (rgthree Settings) stay intact.
         const meta = rawMeta[k];
         const friendlyLabel =
           sanitizeComboLabel(meta?.localized) ||
           sanitizeComboLabel(meta?.label) ||
           friendlyInputName(k);
         // STRING widgets render as a stacked block (label row + textarea)
-        // only when genuinely long / multi-line (R17/R18); short scalars
+        // only when genuinely long / multi-line; short scalars
         // ("auto", "fp16") keep the compact 22px inline row.
         const stringText = typeof v === "string" ? v : "";
         const isStringWidget =
@@ -67,7 +67,7 @@ export function FlowNodeWidgetRows({
             className={
               isStringWidget
                 ? "group relative flex min-h-0 flex-1 flex-col gap-1.5 pl-5 pr-2 py-1.5 text-[11px]"
-                // R-ardot71: min-h-[22px] h-auto lets long labels wrap.
+                // min-h-[22px] h-auto lets long labels wrap.
                 : "group relative flex min-h-[22px] h-auto items-center gap-1.5 pl-5 pr-2 py-0.5 text-[11px]"
             }
           >
@@ -92,7 +92,7 @@ export function FlowNodeWidgetRows({
 
             {isStringWidget ? (
               /* STRING stacked block — LABEL + IoCheckbox on top, textarea
-               * below claiming the remaining vertical space (R17). */
+               * below claiming the remaining vertical space. */
               <div className="flex shrink-0 items-center gap-1.5">
                 {io?.ioEditMode && !isConn && !isBoundary && (
                   <IoCheckbox
@@ -158,7 +158,7 @@ export function FlowNodeWidgetRows({
                 </>
               </div>
             )}
-            {/* STRING-widget textbox — STACKED BELOW the LABEL row (R17).
+            {/* STRING-widget textbox — STACKED BELOW the LABEL row.
              * <textarea readOnly> beats <div> + Tailwind arbitrary classes
              * (they silently drop in this subtree).  Empty value falls back
              * to a faint （空） placeholder. */}

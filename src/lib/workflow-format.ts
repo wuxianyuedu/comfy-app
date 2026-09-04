@@ -11,7 +11,7 @@
  * 客户端（拖入导入、drag-to-upgrade）和服务端（导入校验、PATCH 升级校验）
  * 都依赖这一份判定逻辑，所以放在 src/lib 而不是 WorkflowLibrary 内部。
  *
- * 2026-08-12 R76: 同时支持 drag-to-upgrade 流程（PATCH /api/workflows/[id] 用
+ * 同时支持 drag-to-upgrade 流程（PATCH /api/workflows/[id] 用
  * body.upgradeFromApi 接收真实 API JSON，覆盖现有 graph 并打 apiSource="user"）。
  */
 

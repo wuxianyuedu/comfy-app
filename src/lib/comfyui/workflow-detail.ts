@@ -8,7 +8,7 @@
  * Cache keys keep the legacy namespaces (`wf:` / `sg:`) so existing
  * server-side cache entries remain valid.
  *
- * T12 batch 4: the heavy per-format parsing was extracted into sibling
+ * batch 4: the heavy per-format parsing was extracted into sibling
  * modules — workflow-detail-combo.ts (COMBO resolvers), workflow-detail-raw.ts
  * (RAW input/output/view parsing), workflow-detail-io.ts (workflowIO
  * enrichment) and workflow-subgraph-parse.ts (subgraph link/graph/pin
@@ -133,7 +133,7 @@ export async function buildWorkflowDetailFull(
 ): Promise<WorkflowDetailFull> {
   const cacheKey = `wf:${userId}:${id}`;
 
-  /* COMBO option resolver (2026-08-12).  ComfyUI COMBO widgets
+  /* COMBO option resolver. ComfyUI COMBO widgets
    * (unet_name / clip_name / vae_name / ckpt_name …) carry NO candidate
    * list in the raw JSON — the only authoritative source is
    * /api/object_info.  The resolver fetches it once per request
@@ -146,7 +146,7 @@ export async function buildWorkflowDetailFull(
   const { comboOptionsForClassField, comboOptionsForFieldName } =
     createComboResolver();
 
-  /* 2026-08-06 R3: ?_bust=1 query flag forces the in-memory LRU to be
+  /* ?_bust=1 query flag forces the in-memory LRU to be
    *  bypassed (deleted + re-built) so the 顶栏 🔄 强制重载按钮 can pull
    *  a guaranteed-fresh serialisation from Prisma.  Without this, even
    *  cache:"no-store" on the client would still pull a 60s-stale
@@ -184,7 +184,7 @@ export async function buildWorkflowDetailFull(
       sourcePath: meta.sourcePath,
       sourceMtime: meta.sourceMtime,
       sourceChecksum: meta.sourceChecksum,
-      /* R-ardot87 (2026-08-16): 透传已存在的 taskType 让 reimport 时保留
+      /* 透传已存在的 taskType 让 reimport 时保留
        * 用户在 UI 里手动设置的值（不再被自动推断覆盖）。 */
       existingTaskType: meta.taskType ?? null,
     });
@@ -238,7 +238,7 @@ export async function buildWorkflowDetailFull(
    * tpl.positions which never change between writes), so we cache the already
    * serialized JSON string by user+id.  Repeated opens return it verbatim.
    *
-   * 2026-08-06 R3: TTL shortened from 60_000ms → 30_000ms so it locks at
+   * TTL shortened from 60_000ms → 30_000ms so it locks at
    * most 30s of staleness even if client cache:"no-store" is bypassed. */
   const detailJson = await cacheJson(cacheKey, 30_000, async () => {
   /* 存库 graph 恒为 API 格式对象（Json 列）；rawJson 收窄为 RawWorkflow 视图
@@ -289,7 +289,7 @@ export async function buildWorkflowDetailFull(
 
   /* Per-node input metadata + exact ComfyUI box sizes (see
    * workflow-detail-raw.ts buildRawInputs for the full semantics —
-   * base parser, seed 2-slot bundle, R73 proxyWidgets enrichment and
+   * base parser, seed 2-slot bundle, proxyWidgets enrichment and
    * COMBO resolution). */
   const { rawInputsById, sizeById } = await buildRawInputs(
     raw,
@@ -353,7 +353,7 @@ export async function buildWorkflowDetailFull(
     };
   });
 
-  /* 2026-08-13 R82: raw 视图专用数据包。
+  /* raw 视图专用数据包。
    * 存库的 `graph`（即 `detail.nodes` 的来源）在某些工作流里被「拆平」成了
    * `N:xx` 节点（例如某工作流的 flat form，而其 `_t2i` 兄弟保留 wrapper）。
    * 这种情况下画布 RAW 布局会显示 17 个被炸开的节点，而用户期望的是 5 个
@@ -371,7 +371,7 @@ export async function buildWorkflowDetailFull(
   const nodeTitleById: Record<string, string> = {};
   for (const n of nodes) nodeTitleById[n.id] = n.title ?? n.class_type;
 
-  /* ── workflowIO ENRICHMENT (2026-08-09) ──
+  /* ── workflowIO ENRICHMENT ──
    * The stored selection only records WHICH pin was exposed
    * (`direction` / `kind` / `nodeId` / `name`).  `kind` is a *semantic*
    * bucket ("param" | "widget" | "output") — it is NOT the ComfyUI data
@@ -422,7 +422,7 @@ export async function buildWorkflowDetailFull(
         title: typeof rec.title === "string" ? rec.title : "",
         bounding: [Number(bounds[0]) || 0, Number(bounds[1]) || 0, Number(bounds[2]) || 0, Number(bounds[3]) || 0],
         color: typeof rec.color === "string" ? rec.color : "#3b3b3b",
-        /* Group bypass state (2026-08-09).  Forwarded so rgthree's
+        /* Group bypass state. Forwarded so rgthree's
          *  `Fast Groups Bypasser` runtime UI can reflect — and toggle —
          *  the `flags.bypass` of every matched group via PATCH.  Stored
          *  on the group's `flags` object in rawJson, same place
@@ -457,7 +457,7 @@ export async function buildWorkflowDetailFull(
     });
   }
 
-  /* Independent booleans — pre-2026-08-09 the API conflated "has rawJson"
+  /* Independent booleans — pre-the API conflated "has rawJson"
    *  with "raw format" (i.e. `format:"raw"` could mean either both API+RAW
    *  OR only RAW-without-API).  These flags let the UI render the correct
    *  badge / disable the 使用 button when API is missing.  `apiOrigin` is
@@ -465,7 +465,7 @@ export async function buildWorkflowDetailFull(
    *  came from a user-initiated API export or was auto-derived from raw. */
   const detailHasApi = !!graph && Object.keys(graph).length > 0;
   const detailHasRaw = !!raw;
-  /* 2026-08-12 R76: apiSource === "user" overrides the hasRaw heuristic —
+  /* apiSource === "user" overrides the hasRaw heuristic
    *  when the user has explicitly drag-upgraded this workflow with a real
    *  API JSON, it counts as user-imported even if rawJson is also kept
    *  (rawJson is retained for viewing, graph is the real execution source). */
@@ -480,7 +480,7 @@ export async function buildWorkflowDetailFull(
     id: tpl.id,
     name: tpl.name,
     taskType: tpl.taskType,
-    /** 2026-08-13: multi-mode support. `modes` is the full set of mode codes
+    /** multi-mode support. `modes` is the full set of mode codes
      *  this workflow can run as (JSON-string column parsed here); `defaultMode`
      *  is the canonical default (kept in sync with `taskType` on write). */
     modes: parseModesJson(tpl.modes),
@@ -491,7 +491,7 @@ export async function buildWorkflowDetailFull(
      *  for API-only imports (no rawJson on disk). */
     rawJson: raw,
     nodes,
-    /** 2026-08-13 R82: RAW 视图专用节点/位置/图（保留 subgraph wrapper）。
+    /** RAW 视图专用节点/位置/图（保留 subgraph wrapper）。
      *  flat form 等工作流的存库 graph 被拆平成 N:xx，RAW 布局若只用 `nodes`
      *  会显示炸开的 17 节点；rawView 从 rawJson 重新派生，RAW 视图据此渲染
      *  原始的 5 节点（含 wrapper 紫色整卡），与 wrapper-form 兄弟一致。
@@ -599,7 +599,7 @@ export async function buildSubgraphDetail(
        *  can keep the breadcrumb accurate if it wants to re-fetch. */
       parentId: tpl.id,
       subgraphUid: uid,
-      /* 2026-08-06 boundary rail data — the client renders each pin
+      /* boundary rail data — the client renders each pin
        *  as its own wfIoPort node (label-only) in a clean LEFT /
        *  RIGHT column, and uses `boundaryLinks` to emit React Flow
        *  edges from the pin's handle to the inner node's matching

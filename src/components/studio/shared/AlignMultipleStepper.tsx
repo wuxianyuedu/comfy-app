@@ -1,12 +1,12 @@
 "use client";
-/* Megapixel alignment-multiple stepper — extracted from GroupedControls.tsx (T12). */
+/* Megapixel alignment-multiple stepper — extracted from GroupedControls.tsx. */
 import React, { useCallback } from "react";
 import {
   MIN_ALIGN_MULTIPLE,
   MAX_ALIGN_MULTIPLE,
 } from "./workflow-io";
 
-/** R-ardot108 (2026-08-17): a tight −/+ stepper for the megapixel
+/** a tight −/+ stepper for the megapixel
  *  clearity alignment multiple.  Sits at the foot of the 比例+清晰度
  *  popover, default 64, range [8, 128] in 8-step increments.  Visual
  *  shape mirrors the dark `[─ value +]` stepper used for the W/H

@@ -10,6 +10,8 @@
  *     按 GBK 解码，与 .bat 乱码同源）
  *   - R9 根目录禁止散落 .ps1 双击入口（ISSUE #29）：入口归入 tools/<分类>/，
  *     启动类归 tools/start/；根目录只留工程配置
+ *   - R10 注释里禁止「历史流水」（日期 / 改动编号 / 任务批次号，ISSUE #46）：
+ *     作者与修改日期归 git log，写进注释会随代码搬迁过期失真
  *
  * 为什么用子进程跑而不是 import：该脚本被 pre-commit 以 `node scripts/xxx.cjs`
  * 调用，且内部用 process.cwd() 定位扫描根；复用同一调用方式才等价于真实门禁。
@@ -149,5 +151,46 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     writeFileSync(join(workdir, "tools", "build", "good.ps1"), content);
     const { code } = run();
     expect(code).toBe(0);
+  });
+
+  // ── R10：注释里的「历史流水」(ISSUE #46 / 规范 12.4.2 / 反模式表 G4) ──
+  // 三类标记都是「哪一批改动留下的」，git log 天然可查，写进注释会随代码
+  // 搬迁过期失真（改过一次的代码上仍挂着三个月前的编号）。
+  describe("R10：注释里的历史流水被阻断（ISSUE #46）", () => {
+    const writeSrc = (name: string, body: string) => {
+      mkdirSync(join(workdir, "src"), { recursive: true });
+      writeFileSync(join(workdir, "src", name), body);
+    };
+
+    it("改动编号 R-ardot114 被阻断", () => {
+      writeSrc("a.ts", "// R-ardot114 (2026-08-17): SSE 心跳\nexport const a = 1;\n");
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R10");
+      expect(output).toContain("R-ardot114");
+    });
+
+    it("短编号 R83 与批次号 T12-3 被阻断", () => {
+      writeSrc("b.ts", "/* 2026-08-13 R83: 失败面板 */\n/* T12-3 抽离 */\nexport const b = 2;\n");
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R83");
+      expect(output).toContain("T12-3");
+    });
+
+    it("只写当前 Why（无日期无编号）的注释放行", () => {
+      writeSrc("c.ts", "// SSE 心跳：防止 Nginx 60s 空闲断开。\nexport const c = 3;\n");
+      const { code } = run();
+      expect(code).toBe(0);
+    });
+
+    it("代码里的日期字面量不属于注释流水，放行", () => {
+      writeSrc(
+        "d.ts",
+        'export const SINCE = "2026-08-17";\nexport const KEY = `wfdetail:R6:v2`;\n',
+      );
+      const { code } = run();
+      expect(code).toBe(0);
+    });
   });
 });

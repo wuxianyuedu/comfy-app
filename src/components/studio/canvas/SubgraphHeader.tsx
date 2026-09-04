@@ -41,7 +41,7 @@ export function SubgraphHeader({
         borderBottom: "1px solid rgba(255,255,255,0.06)",
       }}
     >
-      {/* Collapse / expand toggle (2026-08-08).  Same chevron as
+      {/* Collapse / expand toggle. Same chevron as
        *  WorkflowNode's; sits on the top-left of the header.  stopPropagation
        *  on both click and pointer-down so ReactFlow's drag handler
        *  doesn't pick it up as a node-drag start, AND so the
@@ -106,7 +106,7 @@ export function SubgraphHeader({
       >
         {title || "子工作流"}
       </span>
-      {/* R-ardot28 (2026-08-14): PER-NODE output checkbox at the subgraph
+      {/* PER-NODE output checkbox at the subgraph
        *  node's top-right.  Same rationale as WorkflowNode — outputs are identified
        *  by node, so the per-port checkbox is gone; one checkbox marks the
        *  whole node as a workflow output source. */}
@@ -118,7 +118,7 @@ export function SubgraphHeader({
             name: outputRef.name,
             kind: "output",
             direction: "output",
-            // 2026-08-15: forward the subgraph wrapper's output label
+            // forward the subgraph wrapper's output label
             // (e.g. business `IMAGE_FINAL`) so it reaches the IO
             // preview unchanged.
             label: outputRef.label,
@@ -134,7 +134,7 @@ export function SubgraphHeader({
             onEnter();
           }}
           title="展开子工作流"
-          /* 2026-08-11 (R35): bumped from h-4 w-4 (16×16) to h-6 w-6
+          /* bumped from h-4 w-4 (16×16) to h-6 w-6
            *  (24×24) — user feedback that the prior drill-in chip was
            *  too small a target on the 30px-tall title row.  24×24 is
            *  3px shy of NODE_TITLE_H so it still feels like an

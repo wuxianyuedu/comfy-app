@@ -16,7 +16,7 @@ import { errorMessage } from "@/lib/error-message";
 import { cancelTask } from "@/lib/task-cancel-client";
 
 export interface UseCancelTaskArgs {
-  /** 当前要取消的任务 id（可能还没就绪 —— 见下方 R-ardot121 注释）。 */
+  /** 当前要取消的任务 id（可能还没就绪 —— 见下方取消回调注释）。 */
   taskId?: string | null;
   /** 失败时的本地回滚，形态由调用方决定（画布节点 patch，日志面板 setError）。 */
   onFailed: (reason: string) => void;
@@ -43,7 +43,7 @@ export function useCancelTask({
   onFailedRef.current = onFailed;
 
   const cancel = useCallback(async () => {
-    /* R-ardot121 (2026-08-18): 不为「taskId 缺失」提前 return ——
+    /* 不为「taskId 缺失」提前 return ——
      *  旧实现会吞掉「patch({ status: "running" })` 到 `patch({ taskId })`
      *  这一小段窗口内的取消点击（CanvasNode 正在发请求）。/cancel 端点幂等，
      *  对不存在的 taskId 返回 404 且无副作用；缺 id 时只告诉用户没送达。 */

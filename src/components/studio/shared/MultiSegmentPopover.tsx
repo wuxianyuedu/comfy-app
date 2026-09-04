@@ -1,9 +1,9 @@
 "use client";
-/* Unified multi-section popover dropdown — extracted from GroupedControls.tsx (T12). */
+/* Unified multi-section popover dropdown — extracted from GroupedControls.tsx. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /* ─────────────────────────────────────────────────────────────────────────
- * R-ardot99 (2026-08-17) redesign: a unified multi-section popover dropdown
+ * redesign: a unified multi-section popover dropdown
  * replaces the previous "two separate DarkSelects" preset UI.  The trigger
  * collapses the current selection into a single summary chip
  * (e.g. `16:9 / 2K`) and clicking it opens a panel with one row per
@@ -47,7 +47,7 @@ export interface SegmentSection<T extends string = string> {
     value: T;
     label: string;
     render?: React.ReactNode;
-    /** R-ardot104 (2026-08-17): optional sub-group label.  When two options
+    /** optional sub-group label. When two options
      *  carry different `subgroup` strings, the section renders them in
      *  separate rows with a small uppercase label between.  Options without
      *  a subgroup default to a single unlabeled row. */
@@ -69,9 +69,9 @@ function MultiSegmentPopoverInner({
   sections: SegmentSection<string>[];
   align?: "left" | "right";
   ariaLabel?: string;
-  /** 2026-08-29: grey out + block opening while the owning form is disabled. */
+  /** grey out + block opening while the owning form is disabled. */
   disabled?: boolean;
-  /** R-ardot108 (2026-08-17): optional slot rendered below the sections
+  /** optional slot rendered below the sections
    *  inside the popover card.  Used for the megapixel alignment-multiple
    *  stepper (a continuous number control that doesn't fit the
    *  `SegmentSection` shape).  Kept generic so future use-cases (e.g.
@@ -79,7 +79,7 @@ function MultiSegmentPopoverInner({
   footer?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  /* R-ardot101 (2026-08-17): when the trigger sits near the bottom of the
+  /* when the trigger sits near the bottom of the
    *  viewport (typical for parameter forms at the bottom of a CreatePanel
    *  card), opening the panel downward clips the lower sections against the
    *  form edge.  Measure the space on toggle and flip the panel above the
@@ -168,7 +168,7 @@ function MultiSegmentPopoverInner({
   );
 }
 
-/* R-ardot107 (2026-08-17): split the inner section renderer out so the
+/* split the inner section renderer out so the
  *  (potentially heavy) subgroup grouping only re-runs when its input
  *  actually changes.  The previous inline `.map` rebuilt the Map and
  *  array on every keystroke in CreatePanel, which combined with the
@@ -243,7 +243,7 @@ const Section = React.memo(function Section({
   );
 });
 
-/* R-ardot107 (2026-08-17): the popover used to be rebuilt on every parent
+/* the popover used to be rebuilt on every parent
  *  re-render even when its `sections` array was referentially the same.
  *  Wrap in React.memo so the click-to-select path no longer pays the cost
  *  of recreating all 6 segment buttons on each CreatePanel re-render. */

@@ -1,7 +1,7 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from WorkflowNode.tsx — model-tag filter chip
- *  (Dropdown 4, 2026-08-15). Behaviour and visuals unchanged.
+/** extracted from WorkflowNode.tsx — model-tag filter chip
+ *  (Dropdown 4, ). Behaviour and visuals unchanged.
  */
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";

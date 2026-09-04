@@ -15,7 +15,7 @@ function errorMessage(e: unknown, fallback: string): string {
   return fallback;
 }
 
-// R-T3-phase4 (OWASP A04/A05): whitelist image types and cap the size so a
+// (OWASP A04/A05): whitelist image types and cap the size so a
 // malformed upload cannot write arbitrary extensions or exhaust memory.
 const ALLOWED_MIME = new Set([
   "image/png",

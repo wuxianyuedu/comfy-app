@@ -35,11 +35,11 @@ const WorkflowCanvasEditor = dynamic(
 );
 
 /**
- * 2026-08-30: WorkflowLibrary 重新设计为左右分栏布局。
+ * WorkflowLibrary 重新设计为左右分栏布局。
  * 左侧为可搜索的工作流列表，右侧为选中项的详情面板，包含画布节点预览、
  * 参数表单、源文件与操作入口。原有的卡片网格、根目录折叠等交互移除。
  *
- * 2026-09-04（规范 17 §17.2 第④层）：全部状态与业务规则搬进
+ * （规范 17 §17.2 第④层）：全部状态与业务规则搬进
  * `hooks/use-workflow-library.ts`，筛选/计数的推导搬进
  * `workflow-library-config.ts`。本文件只剩「取 controller → 传视图 → 挂弹层」。
  * 对外 props 与导出名不变，消费方（app/workspace/page.tsx）零改动。

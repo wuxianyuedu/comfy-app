@@ -1,5 +1,5 @@
 "use client";
-/* Video group field renderer — extracted from GroupedControls.tsx (T12).
+/* Video group field renderer — extracted from GroupedControls.tsx.
  * Renders one friendly field per detected sub-widget (length / aspect /
  * quality), switching between preset dropdowns and native controls. */
 import { NumberField } from "@/components/studio/ui/NumberField";

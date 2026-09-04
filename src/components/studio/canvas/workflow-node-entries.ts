@@ -1,6 +1,6 @@
 "use client";
 /* Extracted input/output row computation for FlowNode (workflow-node.tsx).
- * Split out of the 1276-line FlowNode component (T12) so the renderer only
+ * Split out of the 1276-line FlowNode component so the renderer only
  * orchestrates layout while this hook owns the entry bucketing logic. */
 import { useMemo } from "react";
 import { inferOutputTypeAll } from "../workflow-utils";
@@ -15,7 +15,7 @@ export interface FlowNodeEntries {
   connEntries: [string, unknown][];
   /** Rows that back a widgets_values slot (rawInputs[i].widget present). */
   widgetEntries: [string, unknown][];
-  /** connEntries minus names that also appear as widgets (R50 dedupe). */
+  /** connEntries minus names that also appear as widgets (dedupe). */
   uniqueConnEntries: [string, unknown][];
   uniqueWidgetEntries: [string, unknown][];
   /** Legacy combined list — kept for the overflow-handle fallback. */
@@ -59,7 +59,7 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
   }, [data.inputs, data.rawInputs]);
 
   // Split into two buckets using ComfyUI's own input definition (widget
-  // marker presence).  Skip the synthetic `preview` entries (R28) — they
+  // marker presence). Skip the synthetic `preview` entries — they
   // are body-only thumbnail slots, never input ports.
   const connEntries = allEntries.filter(([k]) => {
     const m = rawMeta[k];
@@ -69,7 +69,7 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
     const m = rawMeta[k];
     return m?.widget !== undefined && !m.preview;
   });
-  // R50: dedupe by `name` across the two buckets BEFORE layout — custom
+  // dedupe by `name` across the two buckets BEFORE layout — custom
   // nodes that combine a typed port with an inline widget (Z-Image-Base)
   // surface the same name twice; keep the widget row (live widgets_values).
   const widgetNameSet = new Set(widgetEntries.map(([k]) => k));
@@ -78,7 +78,7 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
   const orderedEntries = [...uniqueConnEntries, ...uniqueWidgetEntries];
   const visibleWidgetEntries = uniqueWidgetEntries;
 
-  // IMAGE-input inline thumbnail previews (R27, narrowed R28): only
+  // IMAGE-input inline thumbnail previews (narrowed ): only
   // LoadImage's synthetic `preview: true` entry qualifies.
   const imagePreviewEntries = useMemo(
     () => (data.rawInputs ?? []).filter((raw) => raw.preview === true),

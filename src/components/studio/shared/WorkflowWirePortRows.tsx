@@ -12,7 +12,7 @@ import { isSeedLike, SeedModeButton } from "./WorkflowSeedModeButton";
  *  button, link-only types → port only); outputs render a right-aligned name
  *  hugging the type chip + a right-straddling handle.
  *
- *  v3 (R-ardot12): Handle 从外层 row wrapper 移到 subrow 内（subrow 加
+ *  v3: Handle 从外层 row wrapper 移到 subrow 内（subrow 加
  *  `relative`），让 Handle 圆心 = subrow 50% = subrow 16h 中心 y=8（相对 row）。
  *  Ardot H-pos-in y=85 → 圆心 91 = PortRow1 y=77 + subrow 圆心 y_in_row=14 →
  *  与实测一致。字符串行（86h）= subrow 中心；数字行（33h 整行即 subrow）
@@ -27,13 +27,13 @@ export function WirePortRows({
   uploadTarget,
   seedModes,
   onSeedModeChange,
-  /** R-ardot26 (2026-08-14): 画布 workflow 节点是叶节点，不会有下游接线；
+  /** 画布 workflow 节点是叶节点，不会有下游接线；
    *  默认 false（即不展示 output 行）。CreatePanel / IO-edit 预览面板仍
    *  传 true。L583 调用处已按 `showOutputs ? outputs : []` 过滤过 props，
    *  这里再加守卫是防御 — 防止 WirePortRows 被重构/被错误复用时偷偷
    *  渲染输出行 + source handle。*/
   showOutputs = false,
-  /** R-ardot35 (2026-08-15): same drag contract as the widget rows.
+  /** same drag contract as the widget rows.
    *  Only the IO-edit preview passes these; the rest of the canvas
    *  surfaces leave them undefined and rows stay non-draggable.
    *  Spread onto the row's outer <div> so the entire row becomes
@@ -53,21 +53,21 @@ export function WirePortRows({
   pickFile: (ioKey: string) => void;
   uploading: boolean;
   uploadTarget: string | null;
-  /** R-ardot13 (2026-08-14): rendered inline on seed-like numeric rows so
+  /** rendered inline on seed-like numeric rows so
    *  users can flip control_after_generate (固定值 / 递增值 / 递减值 / 随机值)
    *  without leaving the canvas node.  Optional — non-canvas callers may
    *  omit both. */
   seedModes?: Record<string, string>;
   onSeedModeChange?: (ioKey: string, mode: string) => void;
-  /** R-ardot26: 内部 OutputRow 守卫。 false 时不渲染 outputs 段。 */
+  /** 内部 OutputRow 守卫。 false 时不渲染 outputs 段。 */
   showOutputs?: boolean;
-  /** R-ardot35: see DynamicWorkflowForm.  When provided, every port row
+  /** see DynamicWorkflowForm. When provided, every port row
    *  becomes draggable; when undefined, rows render without the
    *  draggable affordance. */
   draggingKey?: string | null;
   dragOverKey?: string | null;
   onReorder?: (fromKey: string, beforeKey: string | null) => void;
-  /** R-ardot35: callbacks so the parent can keep its `draggingKey`
+  /** callbacks so the parent can keep its `draggingKey`
    *  state in sync when a port row is the one being dragged.  Mirror
    *  the contract used by widget rows (DynamicWorkflowForm's own
    *  state).  Optional — when omitted the port-row drag still works
@@ -116,7 +116,7 @@ export function WirePortRows({
     <div className="space-y-0">
       {wireInputs.map((wireInput) =>
 {
-        /* 2026-08-15: conflict-aware — see ioLabel() in workflow-io.ts. */
+        /* conflict-aware — see ioLabel() in workflow-io.ts. */
         const label = ioLabel(wireInput, [...wireInputs, ...outputs]);
         const chipStyle = portChipStyle(wireInput.type);
         // 数值类（ComfyUI INT/FLOAT/NUMBER）→ 端口行底部用紧凑数字输入，
@@ -158,7 +158,7 @@ export function WirePortRows({
               </span>
               <div className="flex-1" />
               {/*
-               *  R-ardot92 (2026-08-17): `─ value +` 左右式 stepper 替换原生
+               *  `─ value +` 左右式 stepper 替换原生
                *  <input type="number"> 上下箭头。共享 NumberField 与 AR/CR 行
                *  已经实现的视觉规范（含按动态回弹、disabled 哑光）。
                *
@@ -281,7 +281,7 @@ export function WirePortRows({
         );
       })}
 
-      {/* R-ardot26 (2026-08-14): 双层守卫 — 画布 workflow 节点上不该
+      {/* 双层守卫 — 画布 workflow 节点上不该
        *  显示 `images` 输出行 + 紫圆点 source handle（叶节点不会被接
        *  下游）。即使 L583 props 边界过滤了 `outputs=[]`，这里再加
        *  `showOutputs` 守护未来重构不会被破坏。 */}
@@ -289,7 +289,7 @@ export function WirePortRows({
         <div>
           {outputs.map((output) =>
 {
-            /* 2026-08-15: conflict-aware — see ioLabel(). */
+            /* conflict-aware — see ioLabel(). */
             const label = ioLabel(output, [...wireInputs, ...outputs]);
             const chipStyle = portChipStyle(output.type);
             // OutputRow · h=28 严格（Ardot 3:64）。right:-6 Handle 圆心
