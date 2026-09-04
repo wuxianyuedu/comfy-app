@@ -2,13 +2,8 @@
 
 import { useCallback, useState } from "react";
 import { Icon } from "@/components/ui/icon";
-import { vanillaApi } from "~/trpc/vanilla";
 
-interface TagItem {
-  id: string;
-  name: string;
-  count: number;
-}
+import { useModelTags, type TagItem } from "./hooks/use-model-tags";
 
 interface ModelTagManagerProps {
   /** Initial tags (from the parent's cached library list). */
@@ -22,144 +17,19 @@ interface ModelTagManagerProps {
 /** Modal dialog for managing the user-level workflow model-tag library.
  *  Tags are shared across all of a user's workflows (e.g. "z-image",
  *  "wan2.2"); creating one here makes it available in every workflow card's
- *  "＋ 标签" menu and in the library's model filter. */
+ *  "＋ 标签" menu and in the library's model filter.
+ *
+ * 视图层（规范 17 §17.2 第③层）：列表合并与三个写动作在
+ * hooks/use-model-tags.ts；本文件只渲染。对外 props 与导出名保持不变。 */
 export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagManagerProps) {
-  // Seed local list with the parent's snapshot on first mount, then defer to
-  // our own /api/workflow-models fetch (refresh on mount) — the parent's
-  // snapshot can be older than ours, so we must not overwrite a fresher local
-  // list with a stale prop value.
-  /** Extract `e.message` from an unknown thrown value (was `(e as any)?.message`). */
-function errMsg(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m: unknown = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return fallback;
-}
-const [tags, setTags] = useState<TagItem[]>(initialTags);
-  const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const c = useModelTags({ initialTags, onChanged });
 
-  // Sync from props ONLY when the parent hands us a strictly bigger list —
-  // never overwrite a fresher local list with a stale prop snapshot, or
-  // newly created tags would briefly disappear between create() and refresh().
-  // Adjusted during render (React 19 pattern) instead of an effect.
-  const [prevInitialTags, setPrevInitialTags] = useState(initialTags);
-  if (initialTags !== prevInitialTags && initialTags.length > 0) {
-    setPrevInitialTags(initialTags);
-    setTags((prev) => {
-      const prevNames = new Set(prev.map((p) => p.name));
-      const newOnes = initialTags.filter((initialTag) => !prevNames.has(initialTag.name));
-      return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
-    });
-  }
-
-  const refresh = useCallback(async () => {
-    try {
-      const d = await vanillaApi.workflowModel.list.query();
-      if (Array.isArray(d.tags)) setTags(d.tags);
-    } catch {
-      /* ignore — list may be stale but the dialog stays usable */
-    }
-  }, []);
-
-  const addTag = useCallback(async () => {
-    const name = draft.trim();
-    if (!name) return;
-    setBusy(true);
-    setError("");
-    try {
-      const d = await vanillaApi.workflowModel.create.mutate({ name });
-      if (!d.tag) {
-        setError("添加失败");
-        return;
-      }
-      setDraft("");
-      await refresh();
-      onChanged();
-    } catch (e) {
-      setError(errMsg(e, "添加失败"));
-    } finally {
-      setBusy(false);
-    }
-  }, [draft, refresh, onChanged]);
-
-  const deleteTag = useCallback(
-    async (name: string, count: number) => {
-      // 二次确认：标签若仍绑定到工作流，删除会一并解除所有绑定，避免误删。
-      if (count > 0) {
-        const ok = window.confirm(
-          `该标签「${name}」已绑定 ${count} 个工作流。\n删除后这些工作流将一并解除绑定，且不可撤销。\n\n确定要继续吗？`,
-        );
-        if (!ok) return;
-      }
-      try {
-        const d = await vanillaApi.workflowModel.delete.mutate({ name });
-        if (!d.ok) {
-          setError("删除失败");
-          return;
-        }
-        await refresh();
-        onChanged();
-      } catch (e) {
-        setError(errMsg(e, "删除失败"));
-      }
-    },
-    [refresh, onChanged],
-  );
-
-  /** PATCH /api/workflow-models → rename a tag in place.  The join rows are
-   *  keyed by tag id, so every workflow that referenced the old name
-   *  automatically picks up the new name — no extra rewiring needed.
-   *  After success, locally swap the row's name in `tags` so the dialog
-   *  reflects the rename immediately without waiting for the parent's
-   *  refresh round-trip (avoids a visible "stale then snap" flicker), and
-   *  close the editor (the caller passes onCloseEdit so we can centrally
-   *  clear editingId without leaking state out of this callback's closure).
-   *  Returns true on success. */
-  const renameTag = useCallback(
-    async (oldName: string, newName: string, onCloseEdit?: () => void) => {
-      const trimmed = newName.trim();
-      if (!trimmed || trimmed === oldName) {
-        // Same name (or empty) — treat as no-op success and close the editor.
-        onCloseEdit?.();
-        return true;
-      }
-      try {
-        const d = await vanillaApi.workflowModel.rename.mutate({
-          oldName,
-          newName: trimmed,
-        });
-        if (!d.tag) {
-          setError("重命名失败");
-          return false;
-        }
-        setError("");
-        // Locally swap the row name so the dialog reflects the rename now,
-        // even before the parent's `onChanged → loadModelTags` round-trip.
-        setTags((prev) => prev.map((prev) =>(prev.name === oldName ? { ...prev, name: trimmed } : prev)));
-        await refresh();
-        onChanged();
-        onCloseEdit?.(); // close the editor AFTER state is consistent
-        return true;
-      } catch (e) {
-        setError(errMsg(e, "重命名失败"));
-        return false;
-      }
-    },
-    [refresh, onChanged],
-  );
-
-  // ── Inline-rename state ─────────────────────────────────────────────────
-  // Only one tag is editable at a time. `editingId=null` means all rows are
-  // in their default (read-only) state with a "double-click to rename" hint.
+  /* 内联重命名态是纯视觉状态（哪一行在编辑），留在视图层 */
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState("");
   const beginEdit = useCallback((id: string, currentName: string) => {
     setEditingId(id);
     setEditingDraft(currentName);
-    setError("");
   }, []);
   const cancelEdit = useCallback(() => {
     setEditingId(null);
@@ -167,9 +37,11 @@ const [tags, setTags] = useState<TagItem[]>(initialTags);
   }, []);
   const commitEdit = useCallback(
     (id: string, oldName: string) => {
-      void renameTag(oldName, editingDraft, () => cancelEdit());
+      void c.renameTag(oldName, editingDraft).then((ok) => {
+        if (ok) cancelEdit();
+      });
     },
-    [renameTag, editingDraft, cancelEdit],
+    [c, editingDraft, cancelEdit],
   );
 
   return (
@@ -206,31 +78,31 @@ const [tags, setTags] = useState<TagItem[]>(initialTags);
 
         <div className="mb-4 flex gap-2">
           <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            value={c.draft}
+            onChange={(event) => c.setDraft(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") void addTag();
+              if (event.key === "Enter") void c.addTag();
             }}
             placeholder="新增模型名，如 z-image / wan2.2"
             className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-fuchsia-500/50"
           />
           <button
             type="button"
-            onClick={() => void addTag()}
-            disabled={busy || !draft.trim()}
+            onClick={() => void c.addTag()}
+            disabled={c.busy || !c.draft.trim()}
             className="rounded-lg bg-fuchsia-500/90 px-3 py-2 text-sm font-semibold text-white hover:bg-fuchsia-500 disabled:opacity-50"
           >
-            {busy ? "…" : "添加"}
+            {c.busy ? "…" : "添加"}
           </button>
         </div>
 
-        {error && <div className="mb-3 text-xs text-red-400">{error}</div>}
+        {c.error && <div className="mb-3 text-xs text-red-400">{c.error}</div>}
 
         <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pr-1">
-          {tags.length === 0 && (
+          {c.tags.length === 0 && (
             <div className="py-6 text-center text-sm text-gray-500">还没有模型标签</div>
           )}
-          {tags.map((tag) =>
+          {c.tags.map((tag) =>
 {
             const isEditing = editingId === tag.id;
             return (
@@ -278,7 +150,7 @@ const [tags, setTags] = useState<TagItem[]>(initialTags);
                   </span>
                   <button
                     type="button"
-                    onClick={() => void deleteTag(tag.name, tag.count)}
+                    onClick={() => void c.deleteTag(tag.name, tag.count)}
                     disabled={isEditing}
                     title={tag.count > 0 ? `删除「${tag.name}」，会一并解除 ${tag.count} 个工作流的绑定` : `删除「${tag.name}」`}
                     className="rounded-md border border-transparent p-1 text-gray-400 hover:border-red-400/40 hover:bg-red-500/15 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
