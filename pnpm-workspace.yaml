@@ -30,6 +30,11 @@ allowBuilds:
   '@prisma/client': false
   '@prisma/engines': false
   prisma: false
+  # esbuild：vite/vitest 的可选优化依赖，postinstall 只是下载/校验平台二进制。
+  # pnpm 11 不批准时非交互 install 直接 exit 1（ERR_PNPM_IGNORED_BUILDS），
+  # 会让 CI 的 `pnpm install --frozen-lockfile` 装不完就挂掉；已随包提供
+  # 平台专属二进制（@esbuild/linux-x64 等），不执行脚本也能正常工作。
+  esbuild: true
   # msw: 含 postinstall；按 §7 规则新增含构建脚本的依赖需在 allowBuilds 显式批准
   msw: true
 
