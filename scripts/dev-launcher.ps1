@@ -7,6 +7,10 @@
 #   - 本次运行日志：log/dev-launcher.log（每次运行覆盖，供应用内面板实时读取）
 #   - 历史运行日志：log/YYYY-MM/dev-launcher-YYYY-MM-DD_HH-mm-ss.log（每次运行结束归档）
 #
+# 改进（2026-09-04）：启动前做 .env 前置检查——缺 .env 时 pnpm dev 会因
+#   src/env.js 校验 DATABASE_URL / BETTER_AUTH_* 未定义而报一堆 "Invalid
+#   environment variables"，用户看不出是「缺文件」。现改为启动即给出清晰提示，
+#   引导先跑 tools/start/run-local.ps1（对应 AGENTS.md 硬规则 4）。
 # 改进（2026-08-04）：启动前按端口「精准」杀掉残留的 dev server，
 #   彻底避免「旧实例占着 3000、新实例被挤到 3001、浏览器连着旧代码」的尴尬。
 # 改进（2026-08-23）：.next 缓存改为「指纹优先」策略——默认不再每次清空 .next，
@@ -537,6 +541,16 @@ $p = $null
 try {
   # ── 启动进程 ──
   $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+
+  # ── .env 前置检查 ──
+  # 缺 .env 时 pnpm dev 会因 src/env.js 校验 DATABASE_URL / BETTER_AUTH_* 未定义而
+  # 直接甩出一堆 "Invalid environment variables"，用户根本看不出是「缺文件」。
+  # 这里提前给出清晰指引（对应 AGENTS.md 硬规则 4：失败路径必须有用户可见出口）。
+  if (-not (Test-Path (Join-Path $root ".env"))) {
+    Write-Log "未检测到 .env 配置文件。" -Level ERROR
+    Write-Log "开发请先运行 tools\start\run-local.ps1 生成本地配置（幂等，不会覆盖已有 .env）。" -Level ERROR
+    throw "缺少 .env：请先双击 tools\start\run-local.ps1（或执行 scripts\prepare-local-run.ps1）完成本地初始化后再启动。"
+  }
 
   if ($Prebuilt) {
     # 2026-09-01 优化：双击后的第一件事就是拉起预编译壳，让用户立刻看到窗口。
