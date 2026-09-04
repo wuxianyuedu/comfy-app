@@ -218,6 +218,9 @@ textarea::-webkit-scrollbar {
     )
   );
 }
+.react-flow__minimap {
+  z-index: 60 !important;
+}
 .react-flow__minimap-svg {
   /* Cursor + hover affordance for click-to-jump */
   cursor: crosshair;
@@ -236,19 +239,10 @@ textarea::-webkit-scrollbar {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  /* 2026-08-25 (#55): the workspace status bar is fixed bottom-0 z-[100]
-     and overlaps the bottom-left controls.  Lift the controls (and keep
-     them in their own local z-order above the pane) so they stay clickable. */
-  bottom: 30px !important;
+  /* Controls 与画布节点层级隔离，确保在画布内容之上可点击 */
   z-index: 60 !important;
 }
 
-/* 2026-08-25 (#55): same lift for the MiniMap (bottom-right) so it isn't
-   covered by the workspace status bar either. */
-.react-flow__minimap {
-  bottom: 30px !important;
-  z-index: 60 !important;
-}
 .react-flow__controls-button {
   width: 28px !important;
   height: 28px !important;

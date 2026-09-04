@@ -91,7 +91,7 @@ export function HomePage({
 }: HomePageProps) {
   const toast = useToast();
   return (
-    <div className="relative flex h-screen w-screen overflow-hidden bg-(--color-canvas) text-gray-200" style={{ fontFamily: "var(--font-sans)" }}>
+    <div className="relative flex h-screen w-screen overflow-hidden bg-(--color-canvas) text-gray-200 pb-6" style={{ fontFamily: "var(--font-sans)" }}>
       {/* ── Aurora Background Blobs ───────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <div

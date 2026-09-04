@@ -28,7 +28,7 @@ export function BrowserStatusBar({ status = "就绪" }: BrowserStatusBarProps) {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-100 flex h-6 items-center justify-between border-t border-white/6 bg-[#0c0c12]/95 px-3 text-[11px] text-gray-500 backdrop-blur-sm"
+      className="fixed bottom-0 left-0 right-0 z-[10000] flex h-6 items-center justify-between border-t border-white/6 bg-[#0c0c12]/95 px-3 text-[11px] text-gray-500 backdrop-blur-sm"
       aria-label="浏览器地址栏"
     >
       <div className="flex min-w-0 items-center gap-1.5">
