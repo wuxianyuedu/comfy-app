@@ -2,7 +2,7 @@
  * /api/custom-nodes
  *
  * GET  → { settings: { paths }, summary, lastReport }
- * POST → { action: "saveSettings", paths: string[] }  writes CUSTOM_NODES_PATH to .env (read-only to source pkgs)
+ * POST → { action: "saveSettings" }                  deprecated: paths now derive from the ComfyUI install root
  *        { action: "parse" }                            runs the read-only AST parser, returns the per-package report
  *
  * The parser NEVER modifies anything under the configured custom_nodes paths —
@@ -12,7 +12,8 @@ import { type NextRequest, NextResponse } from "next/server";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { readEnvVar, writeEnvVar } from "@/lib/envfile";
+import { deriveComfyuiSubdir, getSettingsSync } from "@/lib/app-settings";
+import { readEnvVar } from "@/lib/envfile";
 import { requireServerUser } from "@/lib/auth-server";
 
 export const runtime = "nodejs";
@@ -58,24 +59,30 @@ function errorMessage(e: unknown, fallback: string): string {
   return fallback;
 }
 
+/** Resolve the custom-node scan roots.
+ *  主路径：设置里配置的 ComfyUI 安装根下的 `custom_nodes` 目录（自动推导）。
+ *  `.env` 的 CUSTOM_NODES_PATH 仍作为覆盖/补充项保留（向后兼容）。 */
 function getPaths(): string[] {
-  const raw = readEnvVar("CUSTOM_NODES_PATH") ?? "";
-  return raw
+  const derived = deriveComfyuiSubdir(getSettingsSync().comfyuiPath, "custom_nodes");
+  const extra = (readEnvVar("CUSTOM_NODES_PATH") ?? "")
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
+  return derived ? [derived, ...extra] : extra;
 }
 
-/** companion config for LOCAL_WORKFLOWS_PATH — the
- *  directory(ies) the user wants to load workflow files from. Each line
- *  (or comma-separated entry) is one absolute directory. The server NEVER
- *  writes to these; it's a pure read-only scanner (see localWorkflows.ts). */
+/** companion roots for the local-workflow scanner — the directory(ies)
+ *  workflow files are loaded from. 主路径：ComfyUI 安装根下的 `workflows`
+ *  目录（自动推导）；`.env` 的 LOCAL_WORKFLOWS_PATH 作为补充覆盖项保留。
+ *  The server NEVER writes to these; it's a pure read-only scanner
+ *  (see localWorkflows.ts). */
 function getLocalWorkflowPaths(): string[] {
-  const raw = readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "";
-  return raw
+  const derived = deriveComfyuiSubdir(getSettingsSync().comfyuiPath, "workflows");
+  const extra = (readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "")
     .split(/[\n,]/)
     .map((part) => part.trim())
     .filter(Boolean);
+  return derived ? [derived, ...extra] : extra;
 }
 
 /** Summarize the on-disk manifest for display. Also emits discovered subpackages
@@ -514,47 +521,14 @@ export async function POST(req: NextRequest) {
   const action: unknown = rec.action;
 
   if (action === "saveSettings") {
-    /* support updating both knobs in one shot. Either
-     *  field may be absent (no-op). Empty array clears the corresponding
-     *  var so the user can "unset" without hand-editing .env. */
-    let wroteAny = false;
-    let customNodesWritten: string[] = [];
-    const rawCustomNodesPaths: unknown = rec.customNodesPaths;
-    if (Array.isArray(rawCustomNodesPaths) || typeof rawCustomNodesPaths === "string") {
-      // Accept both shapes:
-      //   • array  — [{ "a\nb" }] needs per-element split (preserves any
-      //              "," inside a single path that the client already
-      //              pre-split on newline), so we flatMap.
-      //   • string — multi-line / comma-joined paste, single split is enough.
-      const clean = Array.isArray(rawCustomNodesPaths)
-        ? rawCustomNodesPaths.flatMap((path: unknown) => String(path).split(/[\n,]/))
-        : String(rawCustomNodesPaths).split(/[\n,]/);
-      const trimmed = clean.map((clean) => clean.trim()).filter(Boolean);
-      writeEnvVar("CUSTOM_NODES_PATH", trimmed.join(","));
-      customNodesWritten = trimmed;
-      wroteAny = true;
-    }
-    let localWritten: string[] = [];
-    const rawLocalWorkflowPaths: unknown = rec.localWorkflowPaths;
-    if (Array.isArray(rawLocalWorkflowPaths) || typeof rawLocalWorkflowPaths === "string") {
-      const clean = Array.isArray(rawLocalWorkflowPaths)
-        ? rawLocalWorkflowPaths.flatMap((path: unknown) => String(path).split(/[\n,]/))
-        : String(rawLocalWorkflowPaths).split(/[\n,]/);
-      const trimmed = clean.map((clean) => clean.trim()).filter(Boolean);
-      writeEnvVar("LOCAL_WORKFLOWS_PATH", trimmed.join(","));
-      localWritten = trimmed;
-      wroteAny = true;
-    }
-    if (!wroteAny) {
-      return NextResponse.json(
-        { ok: false, error: "saveSettings 需要 customNodesPaths / localWorkflowPaths 至少一项" },
-        { status: 400 }
-      );
-    }
+    /* ⚠ 已废弃：自定义节点 / 本地工作流目录改由设置的 ComfyUI 路径自动推导
+     *  （<comfyuiPath>/custom_nodes 与 <comfyuiPath>/workflows，见 getPaths /
+     *  getLocalWorkflowPaths）。旧客户端仍可能 PUT 这两个字段 —— 这里显式
+     *  拒绝写入 .env，防止残留配置重新挂上已从 UI 移除的输入框。 */
     return NextResponse.json({
       ok: true,
-      paths: customNodesWritten,
-      localWorkflowPaths: localWritten,
+      paths: getPaths(),
+      localWorkflowPaths: getLocalWorkflowPaths(),
     });
   }
 

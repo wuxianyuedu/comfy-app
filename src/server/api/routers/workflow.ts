@@ -11,6 +11,7 @@ import {
 } from "@/lib/core/repository";
 import { reimportFromSource, importFromLocalPath } from "@/lib/comfyui/importSource";
 import { readEnvVar } from "@/lib/envfile";
+import { deriveComfyuiSubdir, getSettingsSync } from "@/lib/app-settings";
 import {
   scanLocalWorkflowRoots,
   scanLocalWorkflowChecksums,
@@ -40,14 +41,16 @@ import {
 import { createHash } from "node:crypto";
 import path from "node:path";
 
-/** Read the user-configured LOCAL_WORKFLOWS_PATH (.env) and split it into a
- *  normalised list (one absolute directory per line, OR comma-separated). */
+/** Resolve the local-workflow scan roots.
+ *  主路径：设置里配置的 ComfyUI 安装根下的 `workflows` 目录（自动推导）。
+ *  `.env` 的 LOCAL_WORKFLOWS_PATH 仍作为覆盖项保留（向后兼容，可加扫额外目录）。 */
 function getLocalWorkflowRoots(): string[] {
-  const raw = readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "";
-  return raw
+  const derived = deriveComfyuiSubdir(getSettingsSync().comfyuiPath, "workflows");
+  const extra = (readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "")
     .split(/[\n,]/)
     .map((part) => part.trim())
     .filter(Boolean);
+  return derived ? [derived, ...extra] : extra;
 }
 
 /** Stable, deterministic placeholder id for files that exist on disk but

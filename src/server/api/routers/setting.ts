@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { getSettings, getSettingsSync, saveSettings } from "@/lib/app-settings";
-import { ensureComfyUiReady, isComfyStarting, probeComfyUi } from "@/lib/comfyui/lifecycle";
+import {
+  ensureComfyUiReady,
+  isComfyStarting,
+  probeComfyUi,
+  stopComfyUiProcess,
+} from "@/lib/comfyui/lifecycle";
 
 export const settingRouter = createTRPCRouter({
   /** GET /api/settings */
@@ -15,6 +20,7 @@ export const settingRouter = createTRPCRouter({
     .input(
       z.object({
         comfyuiUrl: z.url().optional(),
+        comfyuiPort: z.number().int().min(0).max(65535).optional(),
         trainerUrl: z
           .string()
           .refine((url) => url === "" || /^https?:\/\//.test(url))
@@ -43,6 +49,7 @@ export const settingRouter = createTRPCRouter({
       pathConfigured: !!settings.comfyuiPath,
       autoStart: settings.comfyuiAutoStart,
       path: settings.comfyuiPath,
+      port: settings.comfyuiPort,
     };
   }),
 
@@ -53,4 +60,11 @@ export const settingRouter = createTRPCRouter({
       const r = await ensureComfyUiReady({ timeoutMs: input.timeoutMs ?? 420_000 });
       return r;
     }),
+
+  /** 手动关闭 ComfyUI（设置页按钮）：杀整棵进程树。
+   *  硬规则：cmd/pnpm 外壳单杀会留下 node/python 孤儿锁端口，
+   *  Windows 必须 taskkill /T /F，POSIX 用 kill(-pid)。 */
+  comfyStop: authedProcedure.mutation(async () => {
+    return stopComfyUiProcess();
+  }),
 });

@@ -21,7 +21,8 @@ export function WorkflowLibraryHeader({
           导入本机 ComfyUI 的自定义工作流：支持「导出(API
           格式)」与「导出(工作流格式)」两种 JSON。
           <span className="ml-1 text-cyan-300/80">
-            本地工作流请在「自定义节点 / 本地工作流」中配置目录后自动载入。
+            本地工作流自动取自 设置 → 创作后端 中配置的 ComfyUI 路径下的
+            workflows 目录。
           </span>
         </p>
       </div>
