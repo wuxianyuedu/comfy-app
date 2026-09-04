@@ -200,6 +200,9 @@ function serializeValue(col: string, v: unknown): unknown {
   if (v === null || v === undefined) return v;
   if (v instanceof Date) return v.toISOString();
   if (jsonColumns.has(col)) return JSON.stringify(v);
+  // better-sqlite3（v13 / Node 24 编译）拒绝绑定 boolean，需按 schema 的
+  // INTEGER 列语义归一为 1/0（旧版 better-sqlite3 曾隐式强转 true→1）。
+  if (typeof v === "boolean") return v ? 1 : 0;
   return v;
 }
 
