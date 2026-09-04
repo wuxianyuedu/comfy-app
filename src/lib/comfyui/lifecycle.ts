@@ -97,7 +97,7 @@ function resolveLaunchPlan(installDir: string): LaunchPlan | { error: string } {
   ];
   for (const c of candidates) {
     const py = resolveInterp(c.pyDir);
-    if (py && fs.existsSync(c.main)) {
+    if (py && fs.existsSync(/*turbopackIgnore: true*/ c.main)) {
       return { cmd: py, baseArgs: ["-s", c.main], cwd: path.dirname(c.main), mainPy: c.main };
     }
   }
