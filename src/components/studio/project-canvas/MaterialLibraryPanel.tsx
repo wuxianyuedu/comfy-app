@@ -1,6 +1,5 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -19,33 +18,19 @@ import {
   X,
 } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "@/components/studio/ui/MediaThumbnail";
+import { useState } from "react";
 
-/* ── Types (mirror /api/materials 响应) ─────────────────────── */
+import { useMaterialLibrary, type MaterialScope } from "./hooks/use-material-library";
+import type { MaterialItem } from "~/lib/materials-client";
 
-interface MaterialFolder {
-  id: string;
-  name: string;
-  count: number;
-}
+/* 对外类型再导出：历史消费方从本文件 import MaterialItem，保持 API 不变。 */
+export type { MaterialItem };
 
-type MaterialKind = "image" | "video" | "audio" | "doc";
+/* ── Types ───────────────────────────────────────────────── */
 
-export interface MaterialItem {
-  id: string;
-  name: string;
-  folder: string;
-  folderName: string;
-  kind: MaterialKind;
-  url: string;
-  size: number;
-  updatedAt: string;
-  scope: string;
-}
-
-type MaterialScope = "project" | "cross";
 type DisplayMode = "grid" | "list";
 
-/* ── Helpers ───────────────────────────────────────────────── */
+/* ── Helpers（纯展示：格式化与配色，不含业务规则）──────────── */
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -54,21 +39,21 @@ function formatSize(bytes: number): string {
 }
 
 /** 分类图标底色：图片/视频/音频/文档各一套，和历史记录面板保持同一语言。 */
-const KIND_STYLE: Record<MaterialKind, string> = {
+const KIND_STYLE: Record<string, string> = {
   image: "bg-violet-500/10 text-violet-400",
   video: "bg-blue-500/10 text-blue-400",
   audio: "bg-emerald-500/10 text-emerald-400",
   doc: "bg-white/4 text-gray-400",
 };
 
-function KindIcon({ kind }: { kind: MaterialKind }) {
+function KindIcon({ kind }: { kind: string }) {
   if (kind === "image") return <ImageIcon size={18} strokeWidth={1.8} />;
   if (kind === "video") return <Video size={18} strokeWidth={1.8} />;
   if (kind === "audio") return <Music size={18} strokeWidth={1.8} />;
   return <FileText size={18} strokeWidth={1.8} />;
 }
 
-/* ── Component ─────────────────────────────────────────────── */
+/* ── Component ───────────────────────────────────────────── */
 
 interface MaterialLibraryPanelProps {
   onClose: () => void;
@@ -78,168 +63,39 @@ interface MaterialLibraryPanelProps {
   onUse?: (item: MaterialItem) => void;
 }
 
+/**
+ * 素材库面板 —— 纯展示层（规范 17 §17.2 第③层）。
+ * 状态与网络在 hooks/use-material-library.ts + lib/materials-client.ts，
+ * 本文件只渲染 + 上抛事件；对外 props 与导出名保持不变，消费方零改动。
+ */
 export function MaterialLibraryPanel({
   onClose,
   projectId,
   onUse,
 }: MaterialLibraryPanelProps) {
-  const [scope, setScope] = useState<MaterialScope>("project");
+  const c = useMaterialLibrary({ projectId });
+  /* 显示密度（网格/列表）是纯视觉偏好，与业务数据无关，留在视图层。 */
   const [display, setDisplay] = useState<DisplayMode>("grid");
-  const [search, setSearch] = useState("");
-  /** null = 停在分类列表；非空 = 进入了某个分类 */
-  const [folder, setFolder] = useState<string | null>(null);
-
-  const [folders, setFolders] = useState<MaterialFolder[]>([]);
-  const [items, setItems] = useState<MaterialItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-
-  const fileRef = useRef<HTMLInputElement>(null);
-  /** 递增触发重新拉取（上传/删除后刷新） */
-/** Read a JSON body as unknown (res.json() is untyped); mirrors the old
- *  `.catch(() => ({}))` fallback for malformed responses. */
-async function readJson(res: Response): Promise<unknown> {
-  try {
-    return await res.json();
-  } catch {
-    return {};
-  }
-}
-
-/** Pull the `error` string out of a JSON body (was `d?.error ?? …`). */
-async function extractError(body: Promise<unknown>): Promise<string | undefined> {
-  const d = await body;
-  if (typeof d === "object" && d !== null && "error" in d) {
-    const err: unknown = (d as { error?: unknown }).error;
-    if (typeof err === "string") return err;
-  }
-  return undefined;
-}
-
-/** Extract `e.message` from an unknown thrown value (was `(e as any)?.message`). */
-function errMsg(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m: unknown = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return fallback;
-}
-
-  const [reloadKey, setReloadKey] = useState(0);
-  const refresh = useCallback(() => setReloadKey((key) => key + 1), []);
-
-  /* ── 拉取素材（搜索做 250ms 防抖）── */
-  useEffect(() => {
-    let cancelled = false;
-    const q = search.trim();
-
-    const run = async () => {
-      setLoading(true);
-      setError(null);
-      const params = new URLSearchParams();
-      if (projectId) params.set("projectId", projectId);
-      params.set("scope", scope);
-      if (q) params.set("q", q);
-      else if (folder) params.set("folder", folder);
-
-      try {
-        const res = await fetch(`/api/materials?${params.toString()}`);
-        if (!res.ok) {
-          const errVal = await extractError(readJson(res));
-          throw new Error(errVal ?? `请求失败 (${res.status})`);
-        }
-        const d = await readJson(res);
-        if (cancelled) return;
-        const obj = typeof d === "object" && d !== null ? (d as Record<string, unknown>) : null;
-        const foldersRaw = obj?.folders;
-        const itemsRaw = obj?.items;
-        setFolders(Array.isArray(foldersRaw) ? (foldersRaw as MaterialFolder[]) : []);
-        setItems(Array.isArray(itemsRaw) ? (itemsRaw as MaterialItem[]) : []);
-      } catch (e) {
-        if (cancelled) return;
-        setError(errMsg(e, "读取素材库失败"));
-        setFolders([]);
-        setItems([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    const t = setTimeout(() => {
-      void run();
-    }, q ? 250 : 0);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [projectId, scope, folder, search, reloadKey]);
-
-  /* ── 上传 ── */
-  const doUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    // 分类列表页上传时默认丢进「参考素材」
-    const target = folder ?? "ref";
-    setUploading(true);
-    setError(null);
-    try {
-      for (const file of Array.from(files)) {
-        const fd = new FormData();
-        fd.append("file", file);
-        fd.append("folder", target);
-        if (projectId) fd.append("projectId", projectId);
-        else fd.append("shared", "true");
-        const res = await fetch("/api/materials", { method: "POST", body: fd });
-        if (!res.ok) {
-          const errVal = await extractError(readJson(res));
-          throw new Error(errVal ?? `上传失败 (${res.status})`);
-        }
-      }
-      refresh();
-    } catch (e) {
-      setError(errMsg(e, "上传失败"));
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  };
-
-  /* ── 删除 ── */
-  const doDelete = async (item: MaterialItem) => {
-    setError(null);
-    try {
-      const res = await fetch(`/api/materials?id=${encodeURIComponent(item.id)}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const errVal = await extractError(readJson(res));
-        throw new Error(errVal ?? `删除失败 (${res.status})`);
-      }
-      // 乐观移除，再拉一次校准计数
-      setItems((prev) => prev.filter((prev) => prev.id !== item.id));
-      refresh();
-    } catch (e) {
-      setError(errMsg(e, "删除失败"));
-    }
-  };
-
-  const searching = search.trim().length > 0;
-  /** 展示条目视图的条件：搜索中，或已进入某分类 */
-  const showItems = searching || folder !== null;
-
-  /* ── 面包屑路径段（支持多级，每段独立可点击）── */
-  const breadcrumbSegments: { label: string; key: string | null }[] = searching
-    ? [{ label: `搜索结果 · ${items.length}`, key: null }]
-    : folder
-      ? [
-          { label: "全部", key: null },
-          {
-            label: folders.find((fld) => fld.id === folder)?.name ?? folder,
-            key: folder,
-          },
-        ]
-      : [{ label: "全部", key: null }];
-
+  const {
+    scope,
+    folder,
+    search,
+    folders,
+    items,
+    loading,
+    uploading,
+    error,
+    searching,
+    showItems,
+    breadcrumbSegments,
+    fileRef,
+    setScope,
+    setSearch,
+    enterFolder,
+    upload,
+    remove,
+    refresh,
+  } = c;
   return (
     <aside className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l border-white/6 bg-(--color-panel)/98 backdrop-blur-md">
       {/* ── Header ── */}
@@ -292,7 +148,6 @@ function errMsg(e: unknown, fallback: string): string {
             type="button"
             onClick={() => {
               setScope(scopeItem.id);
-              setFolder(null);
             }}
             className={`pb-2.5 text-[13px] font-medium transition-colors ${
               scope === scopeItem.id
@@ -332,7 +187,7 @@ function errMsg(e: unknown, fallback: string): string {
           type="file"
           multiple
           className="hidden"
-          onChange={(event) => doUpload(event.target.files)}
+          onChange={(event) => void upload(event.target.files)}
         />
         <button
           type="button"
@@ -375,7 +230,7 @@ function errMsg(e: unknown, fallback: string): string {
                 /* 中间段：可点击返回该级 */
                 <button
                   type="button"
-                  onClick={() => setFolder(seg.key)}
+                  onClick={() => enterFolder(seg.key)}
                   className="text-[12px] text-gray-500 transition-colors hover:text-violet-300 hover:underline"
                 >
                   {seg.label}
@@ -388,7 +243,7 @@ function errMsg(e: unknown, fallback: string): string {
         {showItems && !searching && folder && (
           <button
             type="button"
-            onClick={() => setFolder(null)}
+            onClick={() => enterFolder(null)}
             className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-300"
           >
             <ChevronLeft size={11} strokeWidth={2.5} />
@@ -497,7 +352,7 @@ function errMsg(e: unknown, fallback: string): string {
                     )}
                     <button
                       type="button"
-                      onClick={() => doDelete(item)}
+                      onClick={() => void remove(item)}
                       className="flex h-6 w-6 items-center justify-center rounded bg-black/60 text-gray-300 backdrop-blur transition-colors hover:text-red-400"
                       title="删除"
                     >
@@ -563,7 +418,7 @@ function errMsg(e: unknown, fallback: string): string {
                     </a>
                     <button
                       type="button"
-                      onClick={() => doDelete(item)}
+                      onClick={() => void remove(item)}
                       className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/8 hover:text-red-400"
                       title="删除"
                     >
@@ -583,7 +438,7 @@ function errMsg(e: unknown, fallback: string): string {
                 <button
                   key={folder.id}
                   type="button"
-                  onClick={() => setFolder(folder.id)}
+                  onClick={() => enterFolder(folder.id)}
                   className="group flex flex-col items-center gap-2 rounded-lg border border-white/6 bg-white/2 py-4 transition-colors hover:bg-white/4 hover:border-white/10"
                 >
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-400/80">
@@ -603,7 +458,7 @@ function errMsg(e: unknown, fallback: string): string {
                 <button
                   key={folder.id}
                   type="button"
-                  onClick={() => setFolder(folder.id)}
+                  onClick={() => enterFolder(folder.id)}
                   className="group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-white/4"
                 >
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-400/80">

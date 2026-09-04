@@ -109,6 +109,13 @@ lib（纯函数） ← 任意层
   - 状态派生用 `useMemo`，依赖数组精确，禁止省略依赖（`react-hooks/exhaustive-deps`）。
 - zustand store 订阅必须**按需选择字段**：`useStore((s) => s.xxx)`，禁止无选择器订阅整个 store。
 - 副作用（事件监听、定时器）必须在 cleanup 中释放。
+- **UI 与逻辑分离（强制）**：视图层（`src/components/**`、`src/app/**`，Route Handler
+  `src/app/api/**` 除外）**禁止新写** `fetch(`、`vanillaApi.*`、tRPC hook
+  （`api.x.y.useQuery/useMutation`）——逻辑进 `<feature>/hooks/`，网络进
+  `src/lib/<domain>-client.ts`。四层范式见文档集
+  [16.2.1](16-shadcn-ui与表单校验.md#1621-落地范式controller-hook--纯展示视图)，
+  全库推进计划与棘轮护栏（已接入 pre-commit 与 CI）见
+  [第 17 章](17-UI与逻辑分离.md)。
 
 ### 4.3 样式
 

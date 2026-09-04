@@ -27,7 +27,7 @@ AIGC:
 | API 文档 | [api/index.html](api/index.html) | typedoc 自动生成（`pnpm docs`） | 自动生成 |
 | 设计规格 | [superpowers/specs/](superpowers/specs/) | 功能设计文档（如 wf-debug-mode 设计） | 归档参考 |
 
-> 本文档集成的范围为：**主规范 + standards 文档集（README + 01~15 章，共 16 篇）**。两者共同构成项目开发规范的"总纲 + 细则"双层体系，其余 docs/api、superpowers 等为配套产物。
+> 本文档集成的范围为：**主规范 + standards 文档集（README + 01~17 章，共 18 篇）**。两者共同构成项目开发规范的"总纲 + 细则"双层体系，其余 docs/api、superpowers 等为配套产物。
 
 ---
 
@@ -52,6 +52,7 @@ AIGC:
 | §3 命名规范 | [12.6.1 变量命名硬约束](standards/12-代码组织与文件结构.md#1261-变量命名硬约束对齐主规范-3)、[14.4 C8](standards/14-反模式速查表.md#144-组件) | 主规范为命名总表；文档集细化变量级硬约束（禁单字母、事件参数语义化） |
 | §4.1 TypeScript 规范 | [05 类型安全](standards/05-类型安全.md) | 主规范硬约束（strict/禁 any）；文档集展开 any/unknown/as/Zod/类型守卫 |
 | §4.2 React 组件模式 | [04 组件设计](standards/04-组件设计.md)、[1.1 状态归属](standards/01-架构与状态管理.md#11-全局高频状态禁止用-react-context) | 文档集全面展开拆分阈值、事件隔离、memo 准则 |
+| §4.2 UI/逻辑分离 | [16.2.1 四层范式](standards/16-shadcn-ui与表单校验.md#1621-落地范式controller-hook--纯展示视图)、[17 UI 与逻辑分离](standards/17-UI与逻辑分离.md) | 16 章讲单组件怎么拆；17 章讲全库分批推进与棘轮护栏（脚本已接入 pre-commit/CI） |
 | §4.3 样式规范 | [03 样式与 Tailwind](standards/03-样式与-tailwind.md) | 文档集展开 Tailwind v4 透明度、Design Token、图标规范 |
 | §4.4 UI/UX 生产级规范 | [03 样式](standards/03-样式与-tailwind.md)（Design Token）、[06 a11y](standards/06-无障碍访问-a11y.md)、[2.7 动画](standards/02-性能规范.md#27-动画用-transformopacity不动画-layout-属性) | 主规范为生产级底线；文档集逐项展开（对比度、焦点管理、晕动症） |
 | §4.5 文案与注释 | [12.4 注释规范](standards/12-代码组织与文件结构.md#124-注释规范只写当前代码的-why) | 主规范总则；文档集给"为什么型注释"示例与"不写作者/日期流水"硬约束 |
@@ -105,6 +106,8 @@ AIGC:
 | 13 | [提交与 Code Review](standards/13-提交与-code-review.md) | 提交前自查、Commit Message、PR、Review 维度、CI、LF/git-lfs、CHANGELOG 记录规范 |
 | 14 | [反模式速查表](standards/14-反模式速查表.md) | 状态/性能/样式/组件/类型/异步/a11y/Git 反模式对照 |
 | 15 | [附录](standards/15-附录.md) | 技术栈速查、组件评分、ADR、命令速查、新成员路径、疑难索引 |
+| 16 | [shadcn/ui 与表单校验](standards/16-shadcn-ui与表单校验.md) | ui/ 定位、四层范式（controller hook + 纯展示）、表单方案 |
+| 17 | [UI 与逻辑分离](standards/17-UI与逻辑分离.md) | 分离判定、棘轮护栏脚本、全库分批推进计划与落地记录 |
 
 ---
 
