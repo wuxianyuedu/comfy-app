@@ -4,7 +4,7 @@
 # start-tauri/start-tauri.exe（onedir 模式，无控制台窗口）。
 #
 # 源码路径已在下方基于 SPECPATH 计算为绝对路径，因此 pyinstaller 可从任意目录调用。
-# 直接双击 tools\build-launcher.bat 最省事（它会自动切到项目根）：
+# 直接双击 tools\build\build-launcher.ps1 最省事（它会自动切到项目根）：
 #     pyinstaller --distpath . --workpath build-launcher tools/start-tauri.spec
 #
 # 为什么用 onedir 而不是 onefile：onefile 运行时会解压到 Temp/_MEI* 临时目录，

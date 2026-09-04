@@ -92,7 +92,7 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 | `next dev` 报 `Invalid project directory ... \-p` | pnpm 11 不再剥离 `--`，字面量传给了 next | 已修复：`pnpm dev -p 3000 -H 127.0.0.1` |
 | 所有请求挂死、`tsc` 报 typescript 缺失 | Next 16.3.2 默认 `useTypeScriptCli: true`，与 typescript6 别名不兼容 | 已在 next.config.js 关闭；换回标准 typescript 包后可移除该配置 |
 | 提交时钩子报 `Class extends value undefined` | npm 11.19 在本机解析 .bin 别名链崩溃 | 钩子已改 `pnpm exec`；勿把钩子改回 npx |
-| `build-launcher.bat` 报「无法清理 start-tauri」 | 残留的提权进程（如卡死的 pyinstaller/启动器）持有 `_internal` 文件，普通权限无法终止 | 重启后重试；应急：`pyinstaller --distpath dist-new tools/start-tauri.spec` 打到新目录后手动换文件 |
+| 打包启动器时报「无法清理 start-tauri」 | 残留的提权进程（如卡死的 pyinstaller/启动器）持有 `_internal` 文件，普通权限无法终止 | 重启后重试；应急：`pyinstaller --distpath dist-new tools/start-tauri.spec` 打到新目录后手动换文件 |
 | 启动时先看到 Edge「无法访问此页面 / ERR_CONNECTION_REFUSED」（localhost 拒绝连接），之后才出现启动进度或直接黑等 | **壳编译时没带 `custom-protocol` feature**（裸 `cargo build --release`）：tauri 的 `cfg(dev)` 由该 feature 决定，不带它 = dev 模式行为——①启动页相对 URL 解析到 `build.devUrl`（http://localhost:3000/splash.html），dev server 未就绪时 WebView2 渲染错误页且永不重试（2026-09-02 定位，冷启动必现；官方 `pnpm tauri build` 会自动带该 feature，所以生产包没这问题）②资源根本没内嵌进二进制（启动页由 dev server 提供）。叠加因素：壳二进制过期（改了 src-tauri 后未重编，旧版 splash 的 `window.location.replace` 兜底把错误页顶上来）；WebView2 对导航失败也触发 on_page_load Finished，交换窗口前不校验可达性会把错误页当应用显示 | 重编壳必须带 feature：`cd src-tauri; cargo build --release --features custom-protocol`。现版壳已四重防护：splash 不再自导航、交换前 TCP 可达性校验、main 加载失败重导航循环、启动页看门狗（URL 被带走 1s 内恢复进度页） |
 | 工作流库/项目列表整页空数据，tRPC 查询 500（console 报 no such table / Could not locate bindings） | **Drizzle 迁移三重遗漏**（2026-09-03 定位）：① better-sqlite3@11 无 Node 24 预编译包、本机无 MSVC → 原生绑定缺失，所有 DB 查询崩（升级到 v12，prebuild 下载即可）② `resolveDbPath` 用 `new URL("file:./db.sqlite")` 解析 → Windows 落到盘符根 `F:\db.sqlite` 空库（真实数据在 `prisma/db.sqlite`）③ schema.ts 表名 camelCase 与 Prisma 建的 PascalCase 表不一致 | ① better-sqlite3 钉在 v12（v13 移除预编译包，本机无编译链不能升）② 路径解析统一走 `path.resolve(process.cwd(), …)`（与 drizzle-kit 同锚点）③ 表名已重命名对齐 schema.ts；**换 Node 版本或重装依赖后先跑一次 `pnpm db:studio` 确认表与数据都在** |
 | drizzle-kit push 非交互环境报 "Interactive prompts require a TTY"，或重建表时 "index xxx already exists" | push 遇到表重命名/重建差异需要交互确认；其重建路径在多次部分执行后有索引名冲突的已知缺陷 | 启动器用 `push --force`（非致命，失败仅 WARN）；手动收敛时按「清理 `__new_*` 残留表与同名索引 → 重试 push」循环；索引可安全 DROP 后由 push/schema 重建 |
@@ -115,10 +115,87 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 | 场景 | 命令 | 说明 |
 |---|---|---|
 | 只改了 Rust 壳 / 窗口配置 / 启动页 | `cd src-tauri; cargo build --release --features custom-protocol` | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期 |
-| 生产构建（standalone + 安装包） | `tools\build-standalone.bat` → `tools\build-tauri-release.bat`（或 `tools\build-all.bat`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build` |
-| 重新打包双击启动器 | `tools\build-launcher.bat` | PyInstaller onedir，产物 `start-tauri/`（gitignore） |
-| 开发者工具箱 | `tools\rebuild-static.bat` 等 / `dev-tools` | 见 `tools/README.md` |
+| 生产构建（standalone + 安装包） | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build` |
+| 重新打包双击启动器 | `tools\build\build-launcher.ps1` | PyInstaller onedir，产物 `start-tauri/`（gitignore） |
+| 开发者工具箱 | `tools\build\rebuild-static.ps1` 等 / `dev-tools` | 见 `tools/README.md` |
 
 改动 tauri.conf.json、src-tauri/src/**、splash-assets/** 之后**必须重编壳**
 （`cargo build --release --features custom-protocol`，**feature 不能省**），
 否则运行的是旧二进制（预检只会提醒，不会阻止——界面异常先想到这一条）。
+
+## 8. Windows 入口规范：一律 .ps1，禁用 .bat / .cmd / .vbs
+
+> 2026-09-04 制定（ISSUE #23）。仓库内**不再保留任何 `.bat` / `.cmd` / `.vbs` 入口**，
+> 全部改为 `.ps1`；新写入口若出现这些后缀会被 `scripts/check-file-structure.cjs`
+> 的 R7 规则在 pre-commit 阶段直接阻断。
+
+### 8.1 为什么禁用
+
+1. **中文必乱码**：`.bat` 由 cmd.exe 解释，走系统 ANSI 代码页（简体中文环境 GBK）。
+   中文字面量与子进程（pnpm / cargo / next）输出的 UTF-8 字节在 cmd 窗口与重定向
+   日志里双重失真，只有顶层一行 `chcp 65001` 救不回来（子进程输出仍按 GBK 解码）。
+2. **入口被迫变成哑壳**：为绕开乱码，历史写法是「`.bat` 里不写中文、不写逻辑，只
+   `powershell -File scripts\xxx.ps1`」。结果是本该在入口做的自检与提示全部下沉，
+   入口退化成一层没有价值的间接跳转，新增入口还要手抄一遍 `%~dp0\..\..` 路径魔法。
+3. **能力天花板低**：进程树回收、退出码透传、双击场景暂停这些需求在 `.bat` 里只能
+   靠 `%errorlevel%` + `pause` + `cmdcmdline` 取巧；`.ps1` 有 `Start-Process -Wait
+   -PassThru`、`$LASTEXITCODE`、`Get-CimInstance` 等一等公民手段。
+4. **双语言维护成本**：`.bat` 与 `.ps1` 是两套语法，改一处常忘另一处；`.vbs`
+   （原 `start-tauri.vbs`）更是第三种语言，只为实现「隐藏窗口启动」。
+
+### 8.2 现在的分层
+
+| 层 | 位置 | 职责 |
+|---|---|---|
+| 入口（双击用） | 根目录 `*.ps1`、`tools/<分类>/*.ps1` | 定位项目根、打印中文提示、调用逻辑脚本、透传退出码、双击场景等待按键 |
+| 逻辑 | `scripts/*.ps1`、`tools/scripts/*.ps1` | 环境检查 / 构建 / 编排 / 日志落盘 |
+| 公共库 | `scripts/entry-common.ps1` | `Get-ProjectRoot` / `Get-Pwsh` / `Invoke-Entry` / `Complete-Entry` / `Test-IsDoubleClicked` |
+
+入口映射（改逻辑时别改错文件）：
+
+| 入口 | 逻辑 |
+|---|---|
+| `start-web.ps1` | `scripts/dev-launcher.ps1` |
+| `start-tauri.ps1`（隐藏窗口，原 `.vbs`） | `scripts/dev-launcher.ps1 -Tauri` |
+| `run-local.ps1` | `scripts/prepare-local-run.ps1` |
+| `verify-quality.ps1` | `scripts/quality-gate.ps1` |
+| `register-comfyapp-protocol.ps1` | `scripts/install-comfyapp-helper.ps1` |
+| `start-desktop.ps1`（原 `run-desktop.bat`，自检逻辑内联） | — |
+| `tools/build/*.ps1` | `tools/scripts/*.ps1`（同名） |
+| `tools/registry/start-registry.ps1` | `tools/scripts/start-registry.ps1` |
+| `tools/studio/start-studio.ps1` | `tools/studio/start-studio.logic.ps1` |
+
+### 8.3 一次性前置：让双击真的执行 .ps1
+
+Windows 对 `.ps1` 的默认双击动作是**用记事本打开**（安全默认）。首次使用前需把
+文件关联改成「用 PowerShell 运行」，仓库提供一次性脚本（只写 `HKCU`，免管理员）：
+
+```powershell
+# 资源管理器里右键本文件 →「使用 PowerShell 运行」，或在终端执行：
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\enable-ps1-double-click.ps1
+```
+
+它写入 `HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\command`，
+撤销：
+
+```bat
+reg delete "HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\command" /f
+```
+
+> 关联生效后**任意** `.ps1` 双击都会执行（包括下载来的可疑脚本）；不希望如此就撤销。
+
+### 8.4 编写新入口的三条规则
+
+1. **入口不写业务逻辑**，只做定位 → 调用 → 收尾，逻辑下沉到 `scripts/`；
+2. 以 UTF-8 **with BOM** 保存（Windows PowerShell 5.1 读无 BOM 的脚本会把中文按
+   GBK 解码——与 `.bat` 乱码同源，别在 `.ps1` 上重蹈覆辙，见 §5）；
+3. 收尾统一走 `Complete-Entry`，让「双击时暂停、终端调用时直接退出」的行为一致，
+   不再需要旧 `.bat` 的 `no-pause` 参数传递约定。
+
+### 8.5 排障补充：双击 .ps1 只是打开了记事本
+
+| 症状 | 根因 | 对策 |
+|---|---|---|
+| 双击入口用记事本打开了脚本、没有执行 | 未做文件关联（§8.3 的一次性前置没跑） | 右键 `scripts/enable-ps1-double-click.ps1` →「使用 PowerShell 运行」 |
+| 双击闪一下就没了，看不到报错 | 入口已执行并快速退出；`.ps1` 退出后窗口随之关闭 | 入口在双击场景（父进程是 explorer）会自动暂停，见 `Complete-Entry`；若仍闪退说明脚本在收尾前抛异常，改用终端执行 `pwsh -File .\入口.ps1` 看完整输出 |
+| 终端执行提示「禁止运行脚本」 | 机器执行策略为 Restricted | `pwsh -ExecutionPolicy Bypass -File .\入口.ps1`（入口内部已自带该参数，直接双击不受影响） |

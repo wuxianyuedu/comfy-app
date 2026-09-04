@@ -12,9 +12,11 @@ function Initialize-Log {
         [Parameter(Mandatory = $true)]
         [string]$LogName
     )
-    # 关键：子进程（pnpm/cargo/next）以 UTF-8 输出中文，而 .bat 通过 Windows
-    # PowerShell 5.1 调用本脚本时，默认用系统 ANSI(GBK) 解码管道输出，导致日志
-    # 中文乱码。强制用 UTF-8 解码子进程输出；控制台输出也统一为 UTF-8。
+    # 关键：子进程（pnpm/cargo/next）以 UTF-8 输出中文，而 Windows PowerShell
+    # 5.1 在本脚本被构建入口（tools\build\*.ps1）调用时，默认用系统 ANSI(GBK)
+    # 解码管道输出，导致日志中文乱码。强制用 UTF-8 解码子进程输出；控制台输出
+    # 也统一为 UTF-8。（入口已是 .ps1，不再有 cmd.exe 代码页问题，但该解码
+    # 设置仍需保留——宿主是 5.1 时行为不变。）
     $OutputEncoding = [System.Text.Encoding]::UTF8
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
     $script:LOG_DIR = Join-Path $PROJECT_ROOT "log\tools"

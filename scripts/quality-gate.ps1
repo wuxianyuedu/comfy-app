@@ -4,7 +4,7 @@ quality-gate.ps1 - Comfy-APP-T3 local quality gate (one-click, for non-devs)
 ===============================================================================
 Runs the PR/CI hard quality gates as a repeatable one-click script, so non-devs
 don't have to memorize a long chain of pnpm commands. Invoked by the root
-verify-quality.bat. Any failing gate exits non-zero and is printed in red.
+verify-quality.ps1. Any failing gate exits non-zero and is printed in red.
 
 Usage:
   powershell -File scripts\quality-gate.ps1                all three gates

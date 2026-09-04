@@ -40,7 +40,7 @@ Log ""
 
 Log "[1.5] 同步启动页资源（prebuilt 壳只需内嵌 splash.html）"
 # prebuilt 模式的页面由 dev server（http://127.0.0.1:3000）提供，壳里只需要启动页；
-# standalone 资源（server.js / .next / Node sidecar）由 tools\build-standalone.bat 负责。
+# standalone 资源（server.js / .next / Node sidecar）由 tools\build\build-standalone.ps1 负责。
 # 过去这里在 static 缺失时会跑完整 build-desktop.mjs，而 Next standalone 的 file
 # tracing 会把整个项目（node_modules / python-venv / 各构建产物）拷进 static（实测 8GB+），
 # 随后被 cargo build 一起嵌进 app.exe —— 既拖慢构建又浪费空间。故改为只同步启动页。
@@ -81,6 +81,6 @@ Log "  构建完成"
 Log "  产物: $TAURI_DIR\target\release\app.exe"
 Log ""
 Log "  之后打包 start-tauri.exe 时，Prebuilt 模式会自动优先使用该壳。"
-Log "  如需完整发布构建，请运行 tools\build-all.bat"
+Log "  如需完整发布构建，请运行 tools\build\build-all.ps1"
 Log "=========================================================="
 Log ""
