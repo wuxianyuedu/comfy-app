@@ -125,6 +125,13 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       <span className="text-ink/80 text-sm">
                         Ollama 运行中（{c.ollamaModels.length} 个模型可用）
                       </span>
+                      <Btn
+                        onClick={() => void c.stopOllama()}
+                        disabled={c.ollamaStopping}
+                        className="ml-auto"
+                      >
+                        {c.ollamaStopping ? "关闭中…" : "关闭 Ollama"}
+                      </Btn>
                     </>
                   )}
                   {c.ollamaStatus === "down" && (
@@ -287,6 +294,23 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   : "未配置——ComfyUI 未运行时任务会失败。"}
               </p>
               <Field
+                label="ComfyUI 端口"
+                value={
+                  c.drafts.settings.comfyuiPort > 0
+                    ? String(c.drafts.settings.comfyuiPort)
+                    : ""
+                }
+                onChange={(value) =>
+                  c.patchSettings({
+                    comfyuiPort: Math.max(0, Number(value) || 0),
+                  })
+                }
+                placeholder="留空使用默认 8188"
+              />
+              <p className="text-muted-foreground -mt-2 mb-3 text-xs">
+                非 8188 端口会在启动时自动传 --port，实际运行端口以设置为准。
+              </p>
+              <Field
                 label="ComfyUI 启动参数（可选）"
                 value={c.drafts.settings.comfyuiExtraArgs}
                 onChange={(value) =>
@@ -328,13 +352,20 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       ? "ComfyUI 正在启动…"
                       : "ComfyUI 未运行"}
                 </span>
-                <Btn
-                  onClick={() => void c.startComfy()}
-                  disabled={c.saving || c.comfyStarting || c.comfyStatus?.up}
-                  className="ml-auto"
-                >
-                  {c.comfyStarting ? "启动中…" : "启动 ComfyUI"}
-                </Btn>
+                <div className="ml-auto flex items-center gap-2">
+                  <Btn
+                    onClick={() => void c.startComfy()}
+                    disabled={c.saving || c.comfyStarting || c.comfyStatus?.up}
+                  >
+                    {c.comfyStarting ? "启动中…" : "启动 ComfyUI"}
+                  </Btn>
+                  <Btn
+                    onClick={() => void c.stopComfy()}
+                    disabled={c.saving || c.comfyStopping || !c.comfyStatus?.up}
+                  >
+                    {c.comfyStopping ? "关闭中…" : "关闭 ComfyUI"}
+                  </Btn>
+                </div>
               </div>
               <Field
                 label="训练后端 URL"

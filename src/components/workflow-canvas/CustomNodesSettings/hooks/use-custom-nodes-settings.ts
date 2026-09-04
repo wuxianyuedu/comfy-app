@@ -38,7 +38,6 @@ interface SettingsStreamEvent {
   summary?: SettingsResp["summary"];
   lastReport?: ParseReport | null;
   byPath?: Record<string, SummaryPkg>;
-  settings?: { localWorkflowPaths?: string[] };
   message?: string;
 }
 
@@ -65,20 +64,12 @@ export interface ParentBlock {
 export interface CustomNodesSettingsController {
   open: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;
-  tab: "workflows" | "nodes";
-  setTab: Dispatch<SetStateAction<"workflows" | "nodes">>;
   pathsText: string;
   setPathsText: Dispatch<SetStateAction<string>>;
   savedPaths: string[];
   savedAt: string | null;
   saving: boolean;
   saveErr: string | null;
-  localPathsText: string;
-  setLocalPathsText: Dispatch<SetStateAction<string>>;
-  savedLocalPaths: string[];
-  localSavedAt: string | null;
-  localSaving: boolean;
-  localSaveErr: string | null;
   loading: boolean;
   progress: ParseProgress;
   parsing: boolean;
@@ -106,22 +97,11 @@ export interface CustomNodesSettingsController {
 
 export function useCustomNodesSettings(): CustomNodesSettingsController {
   const [open, setOpen] = useState(false);
-  // 把对话框主体拆成两个聚焦页：本地工作流（纯 textarea）与自定义节点
-  // （解析/清单/日志）不共用滚动区。默认 "workflows" —— 这是用户刚启用的新功能。
-  const [tab, setTab] = useState<"workflows" | "nodes">("workflows");
   const [pathsText, setPathsText] = useState("");
   const [savedPaths, setSavedPaths] = useState<string[]>([]);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
-  // LOCAL_WORKFLOWS_PATH 字段的独立状态：与节点路径同套编辑/保存/时间戳模式，
-  // 但各自独立，使两个区块的保存指示器互不干扰。
-  const [localPathsText, setLocalPathsText] = useState("");
-  const [savedLocalPaths, setSavedLocalPaths] = useState<string[]>([]);
-  const [localSavedAt, setLocalSavedAt] = useState<string | null>(null);
-  const [localSaving, setLocalSaving] = useState(false);
-  const [localSaveErr, setLocalSaveErr] = useState<string | null>(null);
-
   const [loading, setLoading] = useState(false);
   // 进度分两阶段，均用「包数」而非「文件数」表达（shape/字段文档见 ./types.ts 的
   // ParseProgress）：scan 阶段 discovered 增长、total 未知；hash 阶段 done/total
@@ -207,13 +187,6 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         const paths = data.settings.paths || [];
         setPathsText(paths.join("\n"));
         setSavedPaths(paths);
-        // 缓存预热分支之前只填 pathsText/savedPaths，完全忽略
-        // data.settings.localWorkflowPaths。配合「未配置」徽标以 !localSavedAt
-        // （新挂载时为 null）为键，对话框即便 .env 已设 LOCAL_WORKFLOWS_PATH 也会
-        // 显示「未配置」。这里两个字段都填，使 textarea 显示真实已存值。
-        const localPaths = data.settings.localWorkflowPaths || [];
-        setLocalPathsText(localPaths.join("\n"));
-        setSavedLocalPaths(localPaths);
         setSummary(data.summary);
         setReport(data.lastReport);
         setDiscoveredByParent(data.discoveredByParent || {});
@@ -234,9 +207,6 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       let summary: SettingsResp["summary"] = null;
       let lastReport: ParseReport | null = null;
       let byPath: Record<string, SummaryPkg> = {};
-      // summary 事件在 settings.localWorkflowPaths 下携带本地工作流路径列表
-      // （server route.ts），这里收集并在流结束时推入 React state。
-      let localWorkflowPathsArr: string[] = [];
       const discoveredByParent: Record<string, DiscoveredSubpkg[]> = {};
       const paths: string[] = [];
 
@@ -289,11 +259,6 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
             summary = ev.summary ?? null;
             lastReport = ev.lastReport ?? null;
             byPath = ev.byPath ?? {};
-            // 与缓存预热分支同样的修复：summary 事件已携带 settings.localWorkflowPaths
-            // （route.ts:414）但客户端从未取用，导致对话框始终渲染空 textarea 与
-            // 「未配置」徽标，即便 .env 已存路径。
-            const lwp = ev.settings?.localWorkflowPaths ?? [];
-            localWorkflowPathsArr = lwp;
           } else if (ev.type === "error") {
             const message =
               typeof ev.message === "string" && ev.message.length > 0
@@ -306,9 +271,6 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
       setPathsText(paths.join("\n"));
       setSavedPaths(paths);
-      // 同步本地工作流 state 与流发出的内容，镜像上面的缓存预热分支。
-      setLocalPathsText(localWorkflowPathsArr.join("\n"));
-      setSavedLocalPaths(localWorkflowPathsArr);
       setSummary(summary);
       setReport(lastReport);
       setDiscoveredByParent(discoveredByParent);
@@ -397,60 +359,6 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [pathsText, savedPaths, open, reloadFromServer]);
-
-  // LOCAL_WORKFLOWS_PATH 字段的独立自动保存：同套防抖模式，但分离 effect，使
-  // 保存/错误徽标不混淆。
-  const localSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    const live = splitPaths(localPathsText);
-    if (open && !eqArr(live, savedLocalPaths)) {
-      if (localSaveTimerRef.current) clearTimeout(localSaveTimerRef.current);
-      const saveLocalPaths = async (): Promise<void> => {
-        setLocalSaving(true);
-        setLocalSaveErr(null);
-        try {
-          const res = await fetch("/api/custom-nodes", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "saveSettings",
-              localWorkflowPaths: live,
-            }),
-          });
-          const data = (await res.json()) as SaveSettingsResp;
-          if (!res.ok || !data.ok) {
-            throw new Error(
-              typeof data.error === "string" && data.error.length > 0
-                ? data.error
-                : "保存失败"
-            );
-          }
-          setSavedLocalPaths(data.localWorkflowPaths ?? live);
-          setLocalSavedAt(nowTimeStr());
-          // 通知其他已挂载列表（如 WorkflowLibrary）重新拉取 /api/workflows，使新配置
-          // 根目录的本地待载入项立即出现。对话框自身在下方渲染实时预览；下游面板需要
-          // 手动触发。事件名带命名空间避免冲突。
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("comfyapp:local-workflows-path-changed", {
-              detail: { paths: data.localWorkflowPaths ?? live },
-            }));
-          }
-          // 这里不调 reloadFromServer —— 本地工作流列表端点自己负责本地待载入预览，
-          // 而非本对话框。
-        } catch (e) {
-          setLocalSaveErr("自动保存失败：" + String(e));
-        } finally {
-          setLocalSaving(false);
-        }
-      };
-      localSaveTimerRef.current = setTimeout(() => {
-        void saveLocalPaths();
-      }, 600);
-    }
-    return () => {
-      if (localSaveTimerRef.current) clearTimeout(localSaveTimerRef.current);
-    };
-  }, [localPathsText, savedLocalPaths, open]);
 
   async function readNdjson(
     res: Response,
@@ -612,20 +520,12 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   return {
     open,
     setOpen,
-    tab,
-    setTab,
     pathsText,
     setPathsText,
     savedPaths,
     savedAt,
     saving,
     saveErr,
-    localPathsText,
-    setLocalPathsText,
-    savedLocalPaths,
-    localSavedAt,
-    localSaving,
-    localSaveErr,
     loading,
     progress,
     parsing,

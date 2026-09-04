@@ -6,10 +6,13 @@
 // The file is created on first read with seeded defaults, so a fresh install
 // just works. It is intentionally git-ignored (local-only config).
 
-import { promises as fs, readFileSync } from "fs";
+import { promises as fs, readFileSync, existsSync, statSync } from "fs";
 import path from "path";
 
 const FILE = path.join(process.cwd(), "data", "app-settings.json");
+
+/** ComfyUI 默认端口（main.py 未传 --port 时的监听端口）。 */
+export const COMFYUI_DEFAULT_PORT = 8188;
 
 export type VideoWorkflowPref = "auto" | "txt2video" | "img2video";
 
@@ -31,7 +34,37 @@ export type AppSettings = {
   comfyuiExtraArgs: string;
   /** 提交任务发现 ComfyUI 未运行时，是否自动按 comfyuiPath 启动。 */
   comfyuiAutoStart: boolean;
+  /**
+   * ComfyUI 监听端口。留空 = 默认 8188；非默认端口会在启动时显式传
+   * `--port`，并把该端口写回 comfyuiUrl，保证「界面显示端口 = 实际端口」。
+   */
+  comfyuiPort: number;
 };
+
+/** 从 comfyuiPath 推导 ComfyUI 安装内的只读资源目录（custom_nodes / workflows）。
+ *  布局与 resolveLaunchPlan 的候选一致：资源相对「含 main.py 的 ComfyUI 源码根」。
+ * 找不到时返回 null —— 调用方自行降级（不弹错，只是没有本地工作流/节点可扫）。 */
+export function deriveComfyuiSubdir(
+  comfyuiPath: string,
+  subdir: "custom_nodes" | "workflows"
+): string | null {
+  const root = (comfyuiPath ?? "").trim();
+  if (!root) return null;
+  // 各布局的「ComfyUI 源码根」（main.py 所在目录）。
+  const candidates = [
+    root, // 便携版 / venv：main.py 直接在配置根下
+    path.join(root, "ComfyUI"), // 桌面版：ComfyUI\main.py
+  ];
+  for (const base of candidates) {
+    const dir = path.join(base, subdir);
+    try {
+      if (existsSync(dir) && statSync(dir).isDirectory()) return dir;
+    } catch {
+      /* ignore — fall through */
+    }
+  }
+  return null;
+}
 
 const DEFAULTS: AppSettings = {
   comfyuiUrl: process.env.COMFYUI_BASE ?? "http://localhost:8188",
@@ -41,6 +74,7 @@ const DEFAULTS: AppSettings = {
   comfyuiPath: process.env.COMFYUI_PATH ?? "",
   comfyuiExtraArgs: "",
   comfyuiAutoStart: true,
+  comfyuiPort: 0,
 };
 
 let cache: AppSettings | null = null;

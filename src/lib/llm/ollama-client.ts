@@ -63,3 +63,14 @@ export async function startOllama(): Promise<void> {
     throw new Error("启动 Ollama 失败，请确认已安装 Ollama 并在 PATH 中可用");
   }
 }
+
+/**
+ * 请求服务端关闭 Ollama（进程树终止）。
+ * 失败时抛带中文文案的 Error，由调用方决定展示方式。
+ */
+export async function stopOllama(): Promise<void> {
+  const res = await fetch("/api/llm/ollama-stop", { method: "POST" });
+  if (!res.ok) {
+    throw new Error("关闭 Ollama 失败，请手动结束 ollama 进程");
+  }
+}
