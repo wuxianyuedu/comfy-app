@@ -51,6 +51,10 @@ jobs:
       - name: Test
         run: pnpm run test
 
+      - name: UI/Logic separation ratchet
+        # 棘轮只许降不许升（规范 17）：新增违规失败；治理后未收紧基线也失败
+        run: node scripts/check-ui-logic-separation.cjs --strict
+
       - name: Coverage
         # 覆盖率棘轮（vitest.config.ts）：middleware/lib 目录按真实水平设硬门槛
         run: pnpm run test:coverage

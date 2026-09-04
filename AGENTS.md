@@ -14,6 +14,7 @@
 | Tauri 壳 | `src-tauri/**`（conf.json / src / splash-assets） | §2、§7 |
 | ComfyUI 生命周期 | `src/lib/comfyui/**`（lifecycle / executor-* / reaper） | §3、§5 |
 | 工坊管线 | `src/components/workshop/**`、`src/lib/workshop/**` | §5 |
+| UI/逻辑分离 | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时 | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)） |
 | 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |
 
 ## 硬规则（违反 = 提交被拒或必须回滚）
@@ -40,7 +41,12 @@
    的 `allowBuilds`，否则非交互模式 `pnpm install` 会 exit 1。
 8. **dev server 运行期间不要执行 `pnpm install`**（better-sqlite3 等原生模块（`.node`）被进程
    锁定会 EPERM 连锁失败）。
-9. **禁用 `.bat` / `.cmd` / `.vbs` 入口，Windows 入口一律 `.ps1`**（ISSUE #23 / 规范 §8）。
+9. **视图层不得新增 IO**：`src/components/**`、`src/app/**`（除 `api/`）里不允许新写
+   `fetch(`、`vanillaApi.*`、`api.x.y.useQuery/useMutation`——逻辑要进
+   `<feature>/hooks/` 或 `src/lib/<domain>-client.ts`。守卫脚本
+   `scripts/check-ui-logic-separation.cjs`（棘轮只许降不许升，已接入 pre-commit 与 CI）。
+   治理后必须 `node scripts/check-ui-logic-separation.cjs --update` 收紧基线。
+10. **禁用 `.bat` / `.cmd` / `.vbs` 入口，Windows 入口一律 `.ps1`**（ISSUE #23 / 规范 §8）。
    理由：cmd.exe 走系统 ANSI（GBK）代码页，中文提示与子进程 UTF-8 输出必然乱码，
    历史上被迫把入口做成「不含中文、不含逻辑」的哑壳。新增入口规则：
    - 入口只做「定位项目根 → 调用逻辑脚本 → 收尾」，逻辑下沉到 `scripts/` 或
