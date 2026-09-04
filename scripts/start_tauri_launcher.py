@@ -3,7 +3,8 @@
 """
 start_tauri_launcher.py — Comfy-APP 桌面壳启动器（纯 Win32 启动画面）
 
-取代了原来的 start-tauri.vbs：点击后立刻弹出一个暗色启动画面，
+取代了原来的 start-tauri.vbs（2026-09-04 起该 dev 入口改为 start-tauri.ps1）：
+点击后立刻弹出一个暗色启动画面，
 明确告知「正在启动」，避免「点了像没反应」的困惑。
 
 职责：
@@ -1633,7 +1634,7 @@ def _resolve_mode(args: dict) -> str:
 def _run_standalone(project_root: str, mutex, args) -> int:
     """独立模式：直接运行已构建的 standalone Tauri 壳（app.exe），不连 dev server。
 
-    前置：``tools\\build-standalone.bat``（``pnpm tauri build``）已把 standalone 资源
+    前置：``tools\\build\\build-standalone.ps1``（``pnpm tauri build``）已把 standalone 资源
     （server.js + .next/static + Node sidecar）组装到 app.exe 同级/资源目录。
     资源缺失时明确报错，避免静默黑屏或 Rust 侧 panic。
     """
@@ -1658,14 +1659,14 @@ def _run_standalone(project_root: str, mutex, args) -> int:
         return _cleanup_and_exit(
             1,
             f"找不到 standalone 壳：{app_exe}\n\n"
-            "请先运行 tools\\build-standalone.bat（pnpm tauri build）构建独立版本。",
+            "请先运行 tools\\build\\build-standalone.ps1（pnpm tauri build）构建独立版本。",
         )
     if not os.path.isfile(server_js) or not os.path.isfile(node_exe):
         log("standalone mode: standalone resources missing")
         return _cleanup_and_exit(
             1,
             "standalone 资源缺失（server.js / Node sidecar）。\n\n"
-            "请先运行 tools\\build-standalone.bat（pnpm tauri build）完成完整生产构建，\n"
+            "请先运行 tools\\build\\build-standalone.ps1（pnpm tauri build）完成完整生产构建，\n"
             "请勿用纯 cargo build --release（其 app.exe 不内嵌 standalone 资源）。",
         )
 

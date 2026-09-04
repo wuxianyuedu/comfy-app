@@ -1,4 +1,4 @@
-﻿# prepare-local-run.ps1 - 非开发人员本地运行引导（由 run-local.bat 调用）
+﻿# prepare-local-run.ps1 - 非开发人员本地运行引导（由入口 run-local.ps1 调用）
 # 职责：检查 node/pnpm -> 补齐 .env -> 补齐 node_modules -> 提示启动方式
 # 说明：面向普通用户，任何失败都要给出人能看懂的中文提示，不静默失败。
 
@@ -119,7 +119,7 @@ if ($needInstall) {
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
 Write-Host "  初始化完成！" -ForegroundColor Green
-Write-Host "  接下来请回到项目根目录，双击 start-web.bat 启动。" -ForegroundColor Green
+Write-Host "  接下来请回到项目根目录，双击 start-web.ps1 启动。" -ForegroundColor Green
 Write-Host "  启动后再用浏览器打开：http://localhost:3000" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
