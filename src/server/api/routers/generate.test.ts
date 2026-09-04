@@ -188,7 +188,8 @@ describe("generate.generate（自定义工作流）", () => {
   });
 
   it("边界：模板 graph/rawJson 均为空且无 canvasGraph → 'Workflow graph is empty'", async () => {
-    seedWorkflowTemplate(tdb, { id: "wf-empty", userId: "user-a", graph: null });
+    // graph 列 NOT NULL，「空图」在库里的形态就是空对象 {}
+    seedWorkflowTemplate(tdb, { id: "wf-empty", userId: "user-a", graph: {} });
     await expect(
       createCaller(makeCtx()).generate({ workflow: "wf-empty" })
     ).rejects.toThrow("Workflow graph is empty");
