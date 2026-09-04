@@ -64,7 +64,7 @@ export function AgentChat({ open, onClose, onApply }: AgentChatProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 flex h-[540px] w-[380px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-(--color-panel-deep)/95 shadow-2xl backdrop-blur-xl">
+    <div className="fixed bottom-8 right-4 z-40 flex h-[540px] w-[380px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-(--color-panel-deep)/95 shadow-2xl backdrop-blur-xl">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-white/8 px-4 py-3">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white">
