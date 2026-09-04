@@ -16,6 +16,7 @@ import { errorMessage } from "~/lib/error-message";
 import {
   probeOllama as probeOllamaClient,
   startOllama as startOllamaClient,
+  stopOllama as stopOllamaClient,
   type OllamaModel,
 } from "~/lib/llm/ollama-client";
 import { TASK_TYPES, type TaskType } from "~/lib/llm/types";
@@ -29,6 +30,8 @@ export type Settings = {
   comfyuiPath: string;
   comfyuiExtraArgs: string;
   comfyuiAutoStart: boolean;
+  /** ComfyUI 监听端口；0 = 默认 8188（启动时按需显式传 --port）。 */
+  comfyuiPort: number;
 };
 
 export type LlmConfig = {
@@ -85,9 +88,15 @@ export interface SettingsPageController {
     starting: boolean;
     base: string | null;
     pathConfigured: boolean;
+    port: number;
   } | null;
   comfyStarting: boolean;
+  comfyStopping: boolean;
   startComfy: () => Promise<void>;
+  stopComfy: () => Promise<void>;
+  /* Ollama 关闭（启动已有 startOllama） */
+  ollamaStopping: boolean;
+  stopOllama: () => Promise<void>;
   /* 保存 */
   saving: boolean;
   saveLlm: () => Promise<void>;
@@ -133,6 +142,9 @@ export function useSettingsPage(): SettingsPageController {
     refetchInterval: 15_000,
   });
   const comfyStartM = api.setting.comfyStart.useMutation();
+  const comfyStopM = api.setting.comfyStop.useMutation();
+  const [comfyStopping, setComfyStopping] = useState(false);
+  const [ollamaStopping, setOllamaStopping] = useState(false);
 
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showFlash = useCallback((kind: "ok" | "err", text: string) => {
@@ -227,6 +239,7 @@ export function useSettingsPage(): SettingsPageController {
         comfyuiPath: settingsDraft?.comfyuiPath,
         comfyuiExtraArgs: settingsDraft?.comfyuiExtraArgs,
         comfyuiAutoStart: settingsDraft?.comfyuiAutoStart,
+        comfyuiPort: settingsDraft?.comfyuiPort,
       });
       const result = await comfyStartM.mutateAsync({});
       showFlash(result.ok ? "ok" : "err", result.detail);
@@ -238,6 +251,36 @@ export function useSettingsPage(): SettingsPageController {
       setComfyStarting(false);
     }
   }, [settingsDraft, saveSetting, comfyStartM, comfyStatusQ, showFlash]);
+
+  const stopComfy = useCallback(async () => {
+    setSaving(true);
+    setComfyStopping(true);
+    try {
+      const result = await comfyStopM.mutateAsync();
+      showFlash(result.ok ? "ok" : "err", result.detail);
+      await comfyStatusQ.refetch();
+    } catch (error) {
+      showFlash("err", errorMessage(error, "关闭 ComfyUI 失败"));
+    } finally {
+      setSaving(false);
+      setComfyStopping(false);
+    }
+  }, [comfyStopM, comfyStatusQ, showFlash]);
+
+  const stopOllamaFn = useCallback(async () => {
+    setOllamaStopping(true);
+    try {
+      await stopOllamaClient();
+      // 停止后重新探测，状态行回到「未运行」
+      if (llmBaseUrl) await probeOllama(llmBaseUrl);
+      showFlash("ok", "Ollama 已关闭");
+    } catch (error) {
+      showFlash("err", errorMessage(error, "关闭 Ollama 失败"));
+      if (llmBaseUrl) await probeOllama(llmBaseUrl);
+    } finally {
+      setOllamaStopping(false);
+    }
+  }, [llmBaseUrl, probeOllama, showFlash]);
 
   /* ── 保存 ───────────────────────────────────────────────── */
   const saveLlm = useCallback(async () => {
@@ -342,10 +385,15 @@ export function useSettingsPage(): SettingsPageController {
           starting: !!comfy.starting,
           base: comfy.base ?? null,
           pathConfigured: !!comfy.pathConfigured,
+          port: comfy.port ?? 0,
         }
       : null,
     comfyStarting,
+    comfyStopping,
     startComfy,
+    stopComfy,
+    ollamaStopping,
+    stopOllama: stopOllamaFn,
     saving,
     saveLlm,
     savePrefs,

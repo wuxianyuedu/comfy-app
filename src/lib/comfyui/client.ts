@@ -60,11 +60,16 @@ async function probePort(host: string, port: number): Promise<boolean> {
 export async function resolveComfyBase(): Promise<string> {
   if (_resolvedBase) return _resolvedBase;
 
-  const raw = getSettingsSync().comfyuiUrl || (process.env.COMFYUI_BASE ?? "http://localhost:8188");
+  const settings = getSettingsSync();
+  const raw = settings.comfyuiUrl || (process.env.COMFYUI_BASE ?? "http://localhost:8188");
   let url: URL;
   try { url = new URL(raw); } catch { url = new URL("http://localhost:8188"); }
   const host = url.hostname === "localhost" ? "127.0.0.1" : url.hostname;
-  const configuredPort = parseInt(url.port) || 8188;
+  // 配置端口以设置里的 comfyuiPort 为准（设置界面维护），comfyuiUrl 端口段兜底。
+  const configuredPort =
+    settings.comfyuiPort && settings.comfyuiPort > 0
+      ? settings.comfyuiPort
+      : parseInt(url.port) || 8188;
 
   // Try configured port first
   if (await probePort(host, configuredPort)) {

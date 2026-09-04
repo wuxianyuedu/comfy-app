@@ -7,15 +7,16 @@
 // 本模块提供：
 //   - probeComfyUi()      HTTP 探测是否可达（复用 resolveComfyBase 的端口探测）
 //   - ensureComfyUiReady() 未运行且已配置 comfyuiPath 时拉起进程并等待就绪
+//   - stopComfyUiProcess() 杀掉 ComfyUI 进程树（设置页「关闭」按钮用）
 //   - isComfyStarting()   reaper 用：启动窗口期内不回收 QUEUED 任务
 //   - getComfyUiStatus()  设置页状态/按钮用
 //
 // HMR 安全：启动单飞锁与子进程句柄挂在 globalThis 上，模块重载不会重复拉起。
 
-import { spawn } from "child_process";
+import { spawn, exec } from "child_process";
 import fs from "fs";
 import path from "path";
-import { getSettingsSync } from "../app-settings";
+import { COMFYUI_DEFAULT_PORT, getSettingsSync, saveSettings } from "../app-settings";
 import { resolveComfyBase } from "./client";
 import { logger } from "~/server/lib/logger";
 
@@ -53,6 +54,43 @@ export async function probeComfyUi(timeoutMs = 2500): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * 关闭 ComfyUI：杀整棵进程树。
+ * Windows 用 `taskkill /PID <pid> /T /F`（cmd 外壳死了不杀子进程会留下
+ * python 孤儿锁住端口与日志文件）；POSIX 杀整个进程组（spawn 时未设
+ * detached，子进程与父进程同组，退而求其次单杀 + 兜底探测确认）。
+ */
+export async function stopComfyUiProcess(): Promise<{ ok: boolean; detail: string }> {
+  const child = st.child;
+  const pid = child?.pid;
+  // 本应用未拉起过进程：仍探测一次，若外部启动的 ComfyUI 在跑，报告「需手动关闭」
+  const stillUp = await probeComfyUi(1500);
+  if (!pid) {
+    return stillUp
+      ? { ok: false, detail: "ComfyUI 不是由本应用启动的，请在 ComfyUI 自己的窗口/终端中手动关闭" }
+      : { ok: true, detail: "ComfyUI 未在运行" };
+  }
+  await new Promise<void>((resolve) => {
+    if (process.platform === "win32") {
+      exec(`taskkill /PID ${pid} /T /F`, () => resolve());
+    } else {
+      try {
+        child.kill("SIGTERM");
+      } catch { /* already dead */ }
+      resolve();
+    }
+  });
+  st.child = undefined;
+  // 给进程一点退出时间，再探测确认
+  for (let i = 0; i < 5; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    if (!(await probeComfyUi(800))) {
+      return { ok: true, detail: "ComfyUI 已关闭" };
+    }
+  }
+  return { ok: false, detail: "关闭命令已发送，但 ComfyUI 仍在响应，请手动确认进程已退出" };
 }
 
 export function isComfyStarting(): boolean {
@@ -175,13 +213,27 @@ export async function ensureComfyUiReady(
       return { ok: false, base: null, detail: plan.error };
     }
 
-    // 端口取自 comfyuiUrl 配置；ComfyUI 默认 8188，非默认时显式传 --port
-    let port = 8188;
+    // 端口优先取设置里的 comfyuiPort（设置界面明确配置的监听端口），
+    // 其次兼容旧的 comfyuiUrl 端口段；都为空 = ComfyUI 默认 8188。
+    // 非默认端口显式传 --port，并把最终端口同步回 comfyuiUrl，
+    // 保证「界面配置端口 = 实际监听端口 = 客户端连接端口」三者一致。
+    let port = COMFYUI_DEFAULT_PORT;
+    if (settings.comfyuiPort && settings.comfyuiPort > 0) {
+      port = settings.comfyuiPort;
+    } else {
+      try {
+        const u = new URL(settings.comfyuiUrl);
+        port = parseInt(u.port) || COMFYUI_DEFAULT_PORT;
+      } catch { /* keep default */ }
+    }
+    const args = [...plan.baseArgs, ...(port !== COMFYUI_DEFAULT_PORT ? ["--port", String(port)] : []), ...splitArgs(settings.comfyuiExtraArgs)];
     try {
       const u = new URL(settings.comfyuiUrl);
-      port = parseInt(u.port) || 8188;
-    } catch { /* keep default */ }
-    const args = [...plan.baseArgs, ...(port !== 8188 ? ["--port", String(port)] : []), ...splitArgs(settings.comfyuiExtraArgs)];
+      if (parseInt(u.port) !== port) {
+        u.port = String(port);
+        await saveSettings({ comfyuiUrl: u.toString() });
+      }
+    } catch { /* invalid comfyuiUrl — leave as-is */ }
 
     note(`ComfyUI 未运行，按配置路径启动：${plan.cmd} ${args.join(" ")}`);
     let child: ReturnType<typeof spawn>;

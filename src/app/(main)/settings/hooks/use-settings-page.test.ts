@@ -51,6 +51,7 @@ const SETTINGS: Settings = {
   comfyuiPath: "D:/ComfyUI",
   comfyuiExtraArgs: "",
   comfyuiAutoStart: true,
+  comfyuiPort: 0,
 };
 
 const LLM: LlmConfig = {
