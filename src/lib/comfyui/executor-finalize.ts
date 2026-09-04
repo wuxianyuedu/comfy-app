@@ -2,7 +2,7 @@
  * `executor-finalize.ts` — 任务终态收口（成功下载 / 失败落库）
  * ===========================================================================
  *
- * 从 executor.ts 拆出的「终态收口」模块（T12 batch 4）：
+ * 从 executor.ts 拆出的「终态收口」模块（batch 4）：
  *   - {@link complete}         完成入口：抢终态 → completeInner → 兜底失败
  *   - {@link completeInner}    拉 history、收集产物、下载落盘、双写 DB、
  *                              写 manifest / workflow.json 快照
@@ -68,7 +68,7 @@ export async function complete(taskId: string, promptId: string) {
 async function completeInner(taskId: string, promptId: string, executedWorkflow: unknown = null) {
   const s = state();
 
-  // 2026-08-13 项目级产出：读取任务归属的项目与请求参数，决定磁盘落点 +
+  // 项目级产出：读取任务归属的项目与请求参数，决定磁盘落点 +
   // 复现元数据。projectId 为 localStorage 的 CanvasProject.id（client 侧字符串）。
   const taskRow = await taskRepository.findExecutionMeta(taskId);
   const projectId: string | null = taskRow?.projectId ?? null;
@@ -88,7 +88,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     ? `/api/generated/projects/${projectId}/${taskId}`
     : `/api/generated/${taskId}`;
 
-  // R-ardot111 (2026-08-17): explicit "拉取 history" line so the
+  // explicit "拉取 history" line so the
   // gap between "last node done" and "history is ready" is visible
   // — ComfyUI is async here (success signal lands before outputs
   // are persisted), so a hang in this window would otherwise look
@@ -118,7 +118,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     return;
   }
 
-  // R-ardot62 (2026-08-15): KSampler 的真实 seed 不在 outputs 里，藏在
+  // KSampler 的真实 seed 不在 outputs 里，藏在
   // entry.prompt[2] 里（ComfyUI 0.33.1 history 格式）。`control_after_generate=
   // randomize` 时默认值是 UI 占位，server 实际抽的 seed 在 history graph
   // `inputs.seed/noise_seed` 字段。这里抽出后优先覆盖 `reqSeed`（用户填的）
@@ -197,7 +197,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     log(taskId, "info", `保存第 ${i + 1} 段文本`);
   }
 
-  // R-ardot62 (2026-08-15): 把真 seed + 采样器元数据一起回写 Task。
+  // 把真 seed + 采样器元数据一起回写 Task。
   // priority：actualSeed (history) > reqSeed (用户填) > null。`runtime` 块独立于
   // `params.seed` 字段（用户输入），便于审计「用户填了什么 vs server 跑的是什么」。
   const taskParamsPatched: Record<string, unknown> = { ...taskParams };
@@ -217,7 +217,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     };
   }
 
-  // ── 方案 B (2026-08-15): 任务完成时双写执行快照到 DB 行 ──
+  // ── 方案 B: 任务完成时双写执行快照到 DB 行 ──
   // WorkflowTemplate 是覆盖式单行存储，模板重新导入会整体覆盖 rawJson/graph，
   // 导致历史任务无法精确复现当时实际跑的工作流。这里把本次执行实际用到的
   // workflow 一并写进 Task.workflowSnapshot，使「任务」与「模板当前版本」彻底
@@ -252,7 +252,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     }))
   );
 
-  // 2026-08-13 项目级产出：写一份可复现的 manifest，便于「按项目归档 + 一键还原」。
+  // 项目级产出：写一份可复现的 manifest，便于「按项目归档 + 一键还原」。
   const manifest = {
     taskId,
     projectId,
@@ -270,7 +270,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     .writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf-8")
     .catch(() => undefined);
 
-  // R-ardot65 (2026-08-15): 落盘本次执行实际用到的 workflow.json。种子等已在
+  // 落盘本次执行实际用到的 workflow.json。种子等已在
   // manifest.seed + TaskImage.seed 持久化，工作流模板后续改动时凭这份快照即可
   // 完整复现本次生成结果。raw 路径为 liblib subgraph 格式（未展开），api 路径为
   // 已展开 graph。
@@ -281,7 +281,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   }
 
   await persistLogs(taskId);
-  // R-ardot111 (2026-08-17): emit "总耗时 Xs" so the user can see
+  // emit "总耗时 Xs" so the user can see
   // the wall-clock duration of the whole run.  Falls back to a
   // generic note if startedAt is missing (which can happen for
   // tasks enqueued in a previous server lifetime and re-claimed on
@@ -328,7 +328,7 @@ export async function finalizeFailure(
 ) {
   const s = state();
   const friendly = friendlyError(error) || "任务失败";
-  // R-ardot111 (2026-08-17): emit total elapsed time on the failure
+  // emit total elapsed time on the failure
   // branch too, so the user knows "this task actually ran for Xs
   // before failing" rather than "it died immediately".
   const startedAt = s.startedAt.get(taskId);
@@ -344,11 +344,11 @@ export async function finalizeFailure(
   );
 
   await persistLogs(taskId);
-  // R-ardot111 (2026-08-17): clean up the per-task state we added so
+  // clean up the per-task state we added so
   // a re-enqueue of the same taskId starts from a clean slate.
   if (startedAt) s.startedAt.delete(taskId);
   s.lastNodeByTask.delete(taskId);
-  /* R-ardot116 (2026-08-18): previously finalizeFailure only emitted
+  /* previously finalizeFailure only emitted
    *  an `error` event.  The `error` event closes the SSE stream (see
    *  /api/tasks/[id]/stream/route.ts:54-59) so a `state` patch
    *  carrying structured `validationErrors` would never reach the

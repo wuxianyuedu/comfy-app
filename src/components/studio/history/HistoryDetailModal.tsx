@@ -208,7 +208,7 @@ export function HistoryDetailModal({
               )}
 
               {genValues.length === 0 ? (
-                /* R-ardot63 空态说明：让用户一眼知道是工作流没暴露参数，不是系统 bug。 */
+                /* 空态说明：让用户一眼知道是工作流没暴露参数，不是系统 bug。 */
                 <div className="rounded-lg border border-dashed border-white/8 bg-white/2 px-3 py-2.5 text-xs text-gray-500">
                   本任务所用工作流未暴露常见生成参数（seed/steps/cfg 等在节点硬编码默认值中）。
                   如需查看完整参数，请展开下方的「原始 JSON」。

@@ -27,7 +27,7 @@ export function RequiredSummary({ io }: { io: WorkflowIOMap | null }) {
   );
 }
 
-/* ── rgthree Fast Groups Bypasser integration (2026-08-09) ──
+/* ── rgthree Fast Groups Bypasser integration ──
  * rgthree's `Fast Groups Bypasser` is a utility node whose LiteGraph
  * definition carries ZERO inputs — its entire body is computed at
  * runtime by scanning the graph for groups matching the node's
@@ -103,7 +103,7 @@ export function FrontendOnlyBadge() {
 }
 
 /* NodeIdChip — right-aligned `#<nodeId>` badge inside a node's header
- *  (2026-08-10).  Tapping it opens the NodeJsonPopover pinned next to
+ *  Tapping it opens the NodeJsonPopover pinned next to
  *  the chip, showing the literal `detail.graph[nodeId]` entry.  Two
  *  variants:
  *    • "node"     — plain grey/teal text (matches the previous WorkflowNode

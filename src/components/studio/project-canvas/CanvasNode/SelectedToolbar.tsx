@@ -41,7 +41,7 @@ export function SelectedToolbar({
   );
 }
 
-/* R-ardot88-b (2026-08-16): 输出样式对齐 WorkflowNode.outputs row
+/* 输出样式对齐 WorkflowNode.outputs row
  *  — label + 右侧 typeChip（#26262E/#9A9AAD）+ PortHandle 端点。
  *  image / video / script 节点通用。当工作流未选（wfIO 为 null）时
  *  回退到节点类型的默认 label/type，确保 Handle 始终可连。 */

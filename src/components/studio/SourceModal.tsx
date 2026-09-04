@@ -5,7 +5,7 @@ import { JsonViewer } from "./ui/JsonViewer";
 /**
  * 查看源文件弹窗（只读）。
  *
- * 2026-08-29：之前这里展示的是 `detail.graph`（`/prompt` 用的可执行图，节点
+ * 之前这里展示的是 `detail.graph`（`/prompt` 用的可执行图，节点
  * 字典 `{nodeId: {class_type, inputs, ...}}`），并不是磁盘上的源文件内容 —— 用户
  * 点「查看源文件」期望看到的是 ComfyUI 保存的原始 JSON（`last_node_id` /
  * `nodes[]` / `widgets_values` …）。改为直接展示 `rawJson`；纯 API 导入（没有

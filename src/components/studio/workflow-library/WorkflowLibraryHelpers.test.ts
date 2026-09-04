@@ -7,7 +7,7 @@ import {
   type WorkflowRow,
 } from "./workflow-library-config";
 
-/* 本文件覆盖 workflow-library-config.ts 的纯函数导出（2026-09-04 从
+/* 本文件覆盖 workflow-library-config.ts 的纯函数导出（从
  * WorkflowLibraryHelpers.tsx 抽出）。JSX 组件(WorkflowIOThumb /
  * RootGroupHeader / FilterTabs 等)见 WorkflowLibraryHelpers.ui.test.tsx。 */
 

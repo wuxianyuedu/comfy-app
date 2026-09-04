@@ -1,7 +1,7 @@
 "use client";
 
 /* ── Main node component ──
- * 2026-08-30: behavior-preserving hook split. The logic clusters now live in
+ * behavior-preserving hook split. The logic clusters now live in
  * sibling modules of this directory: use-file-upload.ts (upload plumbing),
  * use-workflow-io.ts (shared lists + dynamic IO map + seeding/filter effects),
  * use-generate.ts (reconcile + runGenerate + error-panel retry) and
@@ -92,7 +92,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
   let body: React.ReactNode = null;
 
   if (d.kind === "image" || d.kind === "video") {
-    /* R-ardot91 (2026-08-16): 生图/生成视频节点本体即生成器 —— 复用
+    /* 生图/生成视频节点本体即生成器 —— 复用
      *  ImageGenerationPanel（与 picture 节点同源），渲染「类型→模型→工作流」
      *  三步级联 + 参数表单 + 生成 CTA。 */
     body = (
@@ -116,12 +116,12 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
      *  边框内 ~100% 预览（视频填满、文本 textarea 填满），空状态居中类型图标 + helper；
      *  右下 36×36 圆 FAB（类型色 #FF5CA8 粉 / #FB923C 橙 + 白色图标）触发编辑/上传。
      *  Handle 全部在本组件渲染：右侧 output（同 parent 50%）。内容区与 FAB 抽离到
-     *  ContentAssetBody 便于复用与单测。R-ardot73-D-port (2026-08-16)：输出 Handle
+     *  ContentAssetBody 便于复用与单测。输出 Handle
      *  直接骑跨在右侧边框 50% 处。 */
     const outStyle = d.kind === "text" ? PORT_STYLE.condition : PORT_STYLE.image;
     body = (
       <div className="relative -mx-3.5">
-        {/* R-ardot73-D-port: 右侧 source Handle — 与 picture 左输入 Handle 同 parent
+        {/* 右侧 source Handle — 与 picture 左输入 Handle 同 parent
          *  同 top:50%，自然共 Y；对 text 用 condition（橙）/ movie 用 image（绿）。*/}
         <Handle
           type="source"
@@ -152,7 +152,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
       </div>
     );
   } else if (d.kind === "picture") {
-    /* R-ardot91 (2026-08-16): 图片资产 = 生图节点整体。
+    /* 图片资产 = 生图节点整体。
      *  主体永远显示预览（ContentAssetBody，含左侧 inputImage + 右侧 output Handle + FAB）；
      *  仅当选中该节点时，在预览下方展开 ImageGenerationPanel（类型→模型→工作流 + 参数 +
      *  生成 CTA）—— 即生图节点的「下半部分（除标题外）」。取消选中后下半部分隐藏，但已
@@ -162,7 +162,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
     body = (
       <div className="space-y-2">
         <div className="relative -mx-3.5">
-          {/* R-ardot59: 左侧 IMAGE input Handle — 上游工作流 outputs 连入自动接收生成图，
+          {/* 左侧 IMAGE input Handle — 上游工作流 outputs 连入自动接收生成图，
            *  也可作为本节点生成时的参考/底图（runGenerate 透传 d.inputImage）。 */}
           <Handle
             type="target"
@@ -231,16 +231,16 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
   }
 
   return (
-    /* R-ardot19 (2026-08-14): 选中态边框 — Card 在 selected 时加 2px 紫色
+    /* 选中态边框 — Card 在 selected 时加 2px 紫色
        outline + 4px offset + 紫光晕投影；非选中态保持 1px border + 低调黑
        投影。transition 150ms 让用户拖动选区时视觉平滑，border 自身不变
        （避免 1px ↔ 2px 跳。Handle 骑跨设计保留——右下紫色 Handle 圆点本
        就设计在外露 +6，与 outline-offset 4 不冲突）。*/
     <div
-      /* R-ardot93-C (2026-08-17): node card width bumped 340→380 so the
+      /* node card width bumped 340→380 so the
        *  label column ("宽度"/"高度"/"步数"…) can render the full 2-char
        *  CJK label without competing with the stepper.  Combined with
-       *  R-ardot93-B (stepper capped at max-w-[180px]) the layout is
+       *  (stepper capped at max-w-[180px]) the layout is
        *  now:  [label flex-1] ……… [type chip] / [stepper ≤180]   on
        *  each workflow widget row. */
       className="relative w-[380px] rounded-[14px] border border-(--color-border-strong) bg-(--color-card) transition-[outline,box-shadow] duration-150"
@@ -294,7 +294,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
             patch({ seedModes: { ...(d.seedModes ?? {}), [ioKey]: mode } })
           }
           onModesChange={async (modes, defaultMode) => {
-            /* R-ardot25: 多模式持久化 — PATCH /api/workflows/[id] 写入
+            /* 多模式持久化 — PATCH /api/workflows/[id] 写入
              *  WorkflowTemplate.modes/defaultMode 字段；后端同时把
              *  defaultMode 同步到 taskType 列保持向后兼容。 */
             if (!d.workflowId) return;
@@ -320,7 +320,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
       ) : (
         <>
           {(() => {
-            /* R-ardot73-D-port (2026-08-16)：资产节点（text/picture/movie）
+            /* 资产节点（text/picture/movie）
              * 是「内容载体」，不参与运行态，状态徽标/关闭按钮与画布语义无关 →
              * 头部只留 NodeChip。无障碍与误删保护由 SelectedToolbar 的
              * ⌫ 按钮统一承担。*/
@@ -378,7 +378,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
         className="hidden"
         onChange={onMediaFile}
       />
-      {/* R-ardot88-b (2026-08-16): 主输出端口 + 类型标签 — 改为与 WorkflowNode.outputs
+      {/* 主输出端口 + 类型标签 — 改为与 WorkflowNode.outputs
        *  row 同款结构（label + typeChip + PortHandle）。image / video / script 通用。 */}
       {(d.kind === "image" || d.kind === "video" || d.kind === "script") && (
         <div className="border-t border-white/6">
@@ -391,17 +391,17 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
        *  (IMAGE/VHS_VIDEO…) via outputTargetKind, so the handle always matches
        *  Ardot design tokens regardless of the selected workflow's task type.
        *
-       *  R-ardot23 (2026-08-14): 用户反馈画布 workflow 节点右侧的紫色圆点
+       *  用户反馈画布 workflow 节点右侧的紫色圆点
        *  「看起来像漏出的 bug」——workflow 节点是叶节点（生成图片/视频），
        *  在 project canvas 上不会接出到下游节点，所以这个 source Handle 实
        *  际上没人连。需要让出端口的能力由画布 IO-edit modal 提供（不在节
        *  点上外挂圆点）。直接干掉这个 Handle，只在节点外侧浮层工具栏
        *  「添加输出」里有需要时显式拖出。*/}
-      {/* d.kind === "workflow" && <Handle type="source" ... /> removed (R-ardot23) */}
-      {/* content-carrier output handles (text / picture / movie) — R-ardot73-D-port
+      {/* d.kind === "workflow" && <Handle type="source" ... /> removed */}
+      {/* content-carrier output handles (text / picture / movie)
           (2026-08-16): 已上移到 body wrapper 内（与 picture input Handle 同 parent），
           保持右侧 50% 与左侧同 Y；底部不再挂 footer 行，去掉「输出 · 图像」label 与装饰点。
-       *  R-ardot88-b (2026-08-16): video 节点现在也走 OutputRowPort（同 image / script）
+       *  video 节点现在也走 OutputRowPort（同 image / script）
        *  — 与 WorkflowNode.outputs row 视觉对齐。agent / text / picture / movie 仍由各自
        *  body 内的 Handle 处理。 */}
       {/* agent: no output Handle */}

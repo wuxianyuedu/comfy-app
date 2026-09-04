@@ -1,5 +1,5 @@
 /**
- * workflowIO enrichment — extracted from workflow-detail.ts (T12 batch 4).
+ * workflowIO enrichment — extracted from workflow-detail.ts (batch 4).
  *
  * The stored selection only records WHICH pin was exposed
  * (`direction` / `kind` / `nodeId` / `name`).  `kind` is a *semantic*
@@ -70,7 +70,7 @@ export interface WorkflowIOEntry {
    *  /api/object_info.  Absent for non-COMBO pins or when ComfyUI is
    *  unreachable — consumers fall back to a plain text control. */
   options?: string[];
-  /** 2026-08-17 R94: author override of the default value, round-tripped
+  /** author override of the default value, round-tripped
    *  from the stored `workflowIORaw` so a custom default survives reload. */
   value?: unknown;
   displayOrder?: number;
@@ -101,7 +101,7 @@ export async function enrichWorkflowIO(
     /* COMBO candidate list — resolved below once we know the final `type`. */
     let options: string[] | undefined;
 
-    // Helper (2026-08-09): resolve a stored `v.nodeId` against keys that may
+    // Helper: resolve a stored `v.nodeId` against keys that may
     // be stored in EITHER of two ID families —
     //   • React Flow short ids (e.g. "9b9009e4") — what toggleIO writes
     //   • ComfyUI UUIDs (e.g. "9b9009e4-2d3d-445f-9be5-6063f465757e") — the
@@ -161,7 +161,7 @@ export async function enrichWorkflowIO(
         else if (typeof defaultValue === "string") type = "STRING";
       }
       /* COMBO candidate list: a wrapper COMBO already carries `comboOptions`
-       *  from the R73-B pass; a direct (non-wrapper) COMBO node resolves via
+       *  from the pass; a direct (non-wrapper) COMBO node resolves via
        *  its class type.  ComfyUI unreachable → options stays undefined → the
        *  form falls back to a plain text control. */
       if (type === "COMBO") {
@@ -169,7 +169,7 @@ export async function enrichWorkflowIO(
           options = ri.comboOptions;
         } else {
           const byClass = await comboOptionsForClassField(nodeTypeById[canonicalNodeId], v.name);
-          /* R-ardot73-C: wrapper nodes (esp. `comfy-core` subgraphs whose
+          /* wrapper nodes (esp. `comfy-core` subgraphs whose
            *  `properties.proxyWidgets` is absent/quarantined) can't resolve the
            *  internal class, so the class lookup above returns nothing.  Fall
            *  back to a field-name scan across object_info to recover the option
@@ -195,7 +195,7 @@ export async function enrichWorkflowIO(
         (typeof defaultValue === "string" && defaultValue.length > 40))
         ? { multiline: true }
         : {}),
-      /* R-ardot35 (2026-08-15): pass the user-defined displayOrder
+      /* pass the user-defined displayOrder
        *  through.  It was authored on a previous session via the IO-edit
        *  preview's drag-to-reorder gesture, persisted via PATCH, and now
        *  read back here so consumers can sort by it.  Coerce to number
@@ -205,7 +205,7 @@ export async function enrichWorkflowIO(
       ...(typeof v.displayOrder === "number" && Number.isFinite(v.displayOrder)
         ? { displayOrder: v.displayOrder }
         : {}),
-      /* R94 (2026-08-17): preserve any author override of the default value.
+      /* preserve any author override of the default value.
        *  `value` is stored verbatim via PATCH (the whole workflowIO object is
        *  persisted as-is) and must survive this GET rebuild so a custom
        *  default isn't silently dropped on reload. */

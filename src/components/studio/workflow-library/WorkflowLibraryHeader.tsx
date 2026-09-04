@@ -1,6 +1,6 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from WorkflowLibrary's page-header JSX
+/** extracted from WorkflowLibrary's page-header JSX
  *  (title / description / import button / node settings).  Search moved to
  *  the left list panel in the new split layout.
  */

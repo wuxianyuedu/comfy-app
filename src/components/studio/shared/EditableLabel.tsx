@@ -33,7 +33,7 @@ export function EditableLabel({
 
   if (!editable || !editing) {
     return (
-      /* R-ardot56 (2026-08-15): 字体与 outputs label 一致 — text-[12px] font-semibold
+      /* 字体与 outputs label 一致 — text-[12px] font-semibold
        *  text-(--color-ink-bright) + 'Inter' font-family，与 outputs 的 `text-[12px] font-semibold
        *  text-(--color-ink-bright) font-Inter'` 视觉严格对齐，让 inputs 与 outputs 在同一节点内
        *  拥有相同字体权重的 label。 */
@@ -93,7 +93,7 @@ export function EditableLabel({
         onClick={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
         title={title}
-        /* R-ardot56 (2026-08-15): 与展示态字体一致 — text-[12px] font-semibold
+        /* 与展示态字体一致 — text-[12px] font-semibold
          *  text-(--color-ink-bright) + 'Inter'，避免编辑切回展示态时出现字重跳变。 */
         className="nodrag nopan min-w-0 flex-1 rounded border border-violet-400/40 bg-white/6 px-1.5 py-px text-[12px] font-semibold text-(--color-ink-bright) outline-none focus:border-violet-400/70"
         style={{ fontFamily: "var(--font-sans)" }}

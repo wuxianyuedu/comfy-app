@@ -75,7 +75,7 @@ export function useDynamicWorkflowForm(
     [io]
   );
 
-  /* 2026-09-03 多模式：按当前模式过滤掉 `visible === false` 的行。
+  /* 多模式：按当前模式过滤掉 `visible === false` 的行。
    *  只是展示层过滤——被隐藏的参数仍留在 values 里（调用方用
    *  defaultInputValues(io, mode) 给它播种了模式默认值），所以提交给
    *  ComfyUI 的 payload 不会因为「当前模式不显示」就缺字段。 */

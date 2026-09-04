@@ -1,6 +1,6 @@
 "use client";
 /* FlowNode (custom ComfyUI graph node renderer) — orchestrates the node
- * card.  T12: heavy blocks split into siblings:
+ * card. heavy blocks split into siblings:
  *   - workflow-node-entries.ts      (input/output row bucketing hook)
  *   - workflow-node-palette.ts      (mode/role colour computation)
  *   - FlowNodeHeader.tsx            (title bar)
@@ -50,7 +50,7 @@ export const HEADER_TOTAL = 60;     // header (32) + #id bar (22) + small breath
 export const FlowNode = React.memo(function FlowNode({ data, selected }: { data: WorkflowNodeData; selected?: boolean }) {
   const role = PORT_ROLES.find((PORT_ROLES) => PORT_ROLES.key === data.assignedRole);
   const io = useIOEditContext();
-  /* 2026-08-25: viewport zoom is NO LONGER subscribed here — the zoom read
+  /* viewport zoom is NO LONGER subscribed here — the zoom read
    *  lives inside <FrostLayer> so only frosted nodes re-render while zooming. */
   const debugMode = useDebugStore((state) => state.debugMode);
 
@@ -92,7 +92,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
         width: hasSize ? data.size?.w : undefined,
         height: "auto",
         minWidth: hasSize ? data.size?.w : (entries.outputs.length > 0 ? 268 : 248),
-        // R49: data.size.h is BODY CONTENT height; the outer div includes
+        // data.size.h is BODY CONTENT height; the outer div includes
         // the pinned NODE_TITLE_H title bar, so the floor is content + title.
         minHeight: isCollapsed ? NODE_TITLE_H : (hasSize ? (data.size?.h ?? 0) + NODE_TITLE_H : undefined),
         // No maxWidth cap — ComfyUI lets the user resize the node box freely.
@@ -178,7 +178,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
         <RgthreeLabelBody text={data.title} properties={data.properties ?? {}} />
       )}
 
-      {/* IMAGE-input inline thumbnail preview (R27/R28) — every rawInput
+      {/* IMAGE-input inline thumbnail preview — every rawInput
        *  carrying `preview: true` (LoadImage family) gets a ComfyUI-style
        *  preview at the node-body tail. */}
       {!isCollapsed && entries.imagePreviewEntries.length > 0 && (
@@ -192,7 +192,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
       {/* Default target handle for nodes with no inputs at all —
        *  unmapped/fallback edges need somewhere to anchor.
        *
-       *  2026-08-29：这个 Handle 之前是可见的紫色圆点，但无输入的节点
+       *  这个 Handle 之前是可见的紫色圆点，但无输入的节点
        *  （各类 Loader / EmptyLatentImage …）本就没有入端口，左侧挂一颗
        *  孤零零的圆点看起来像渲染 bug。改为完全透明 + isConnectable=false：
        *  连线锚点能力保留（避免既有 fallback 边断开），视觉上不再出现。 */}
@@ -228,7 +228,7 @@ export const FlowNode = React.memo(function FlowNode({ data, selected }: { data:
           {data.properties?.frontend_only === true && <FrontendOnlyBadge />}
         </>
       )}
-      {/* 2026-08-24: 调试模式 — 非折叠时在 PackageFooter 下方渲染渲染链路
+      {/* 调试模式 — 非折叠时在 PackageFooter 下方渲染渲染链路
        *  模块标签（仅 debugMode 开启时由 DebugChainFooter 自行显示）。 */}
       {!isCollapsed && debugMode && (
         <DebugChainFooter modules={getWorkflowRenderChainModules(data.classType)} />

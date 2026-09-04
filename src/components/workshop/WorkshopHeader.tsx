@@ -15,7 +15,7 @@ interface WorkshopHeaderProps {
   pendingCategories: number;
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
-  /* ── 多项目切换（2026-09-03） ── */
+  /* ── 多项目切换 ── */
   projects: WorkshopProjectSummary[];
   activeProjectId: string;
   onSwitchProject: (id: string) => void;

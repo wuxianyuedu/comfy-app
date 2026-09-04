@@ -85,7 +85,7 @@ describe("CanvasNode（按 kind 渲染冒烟）", () => {
       screen.getByPlaceholderText("输入要喂给下游生成节点的提示词 / 参考文字…"),
     ).toBeInTheDocument();
     expect(screen.getByTitle("编辑文本")).toBeInTheDocument();
-    // R-ardot73：资产节点（text/picture/movie）头部只留 NodeChip
+    // 资产节点（text/picture/movie）头部只留 NodeChip
     expect(screen.queryByText("待开始")).not.toBeInTheDocument();
     expect(screen.queryByTitle("删除节点")).not.toBeInTheDocument();
   });
@@ -99,7 +99,7 @@ describe("CanvasNode（按 kind 渲染冒烟）", () => {
     expect(screen.getByTitle("上传图片")).toBeInTheDocument();
     // 未选中时不展开 ImageGenerationPanel
     expect(screen.queryByText("请先选择工作流")).not.toBeInTheDocument();
-    // R-ardot73-D-port：左侧 inputImage（target）+ 右侧 output（source）
+    // 左侧 inputImage（target）+ 右侧 output（source）
     const handles = container.querySelectorAll<HTMLElement>(".react-flow__handle");
     expect(handles).toHaveLength(2);
   });

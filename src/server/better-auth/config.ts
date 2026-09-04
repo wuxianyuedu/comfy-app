@@ -14,7 +14,7 @@ export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   emailAndPassword: {
     enabled: true,
-    // R-T3-phase4 (OWASP A07): enforce a real minimum password length.
+    // (OWASP A07): enforce a real minimum password length.
     minPasswordLength: 12,
     maxPasswordLength: 128,
   },
@@ -22,7 +22,7 @@ export const auth = betterAuth({
     github: {
       clientId: env.BETTER_AUTH_GITHUB_CLIENT_ID,
       clientSecret: env.BETTER_AUTH_GITHUB_CLIENT_SECRET,
-      // R-T3-phase4 (OWASP A05/A07): redirectURI removed — better-auth derives
+      // (OWASP A05/A07): redirectURI removed — better-auth derives
       // it from `baseURL`, so no hard-coded localhost in production.
     },
   },

@@ -1,5 +1,5 @@
 "use client";
-/* FlowNode header bar — extracted from workflow-node.tsx (T12).
+/* FlowNode header bar — extracted from workflow-node.tsx.
  * Collapse toggle + status dot + title + per-node IO checkbox + #id chip
  * + role badge.  Pinned to NODE_TITLE_H like ComfyUI's title bar. */
 import { colorToRgba, NODE_TITLE_H } from "../workflow-utils";

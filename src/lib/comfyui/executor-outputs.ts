@@ -2,7 +2,7 @@
  * `executor-outputs.ts` — 产物收集与运行时参数提取（纯函数）
  * ===========================================================================
  *
- * 从 executor.ts 拆出的纯函数模块（T12 batch 4），无任何外部副作用：
+ * 从 executor.ts 拆出的纯函数模块（batch 4），无任何外部副作用：
  *   - {@link collectOutputs}     从 ComfyUI history 的 outputs 中收集
  *                                images / videos / audios / others / texts
  *   - {@link extractRuntimeParams} 从 history prompt graph 抽取本次执行

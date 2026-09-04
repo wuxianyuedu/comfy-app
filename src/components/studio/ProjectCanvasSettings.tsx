@@ -1,6 +1,6 @@
 "use client";
 /**
- * Project-canvas settings — R-ardot119 (2026-08-18).
+ * Project-canvas settings —
  *
  * Lightweight right-edge drawer surfaced from a top-right gear button on
  * the **project** canvas (ProjectCanvas).  The workflow editor

@@ -1,4 +1,4 @@
-/* Shared preset constants + label helpers — extracted from GroupedControls.tsx (T12).
+/* Shared preset constants + label helpers — extracted from GroupedControls.tsx.
  * Non-component module (kebab-case per project standards). */
 import { DIM_RATIO_PRESETS } from "./workflow-io";
 

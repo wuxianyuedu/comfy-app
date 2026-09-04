@@ -25,7 +25,7 @@ export interface RawInputMeta {
    *  shape yet must mount a target Handle so the boundary wire can
    *  anchor.  See `WorkflowCanvasEditor` fatal-pitfall #5. */
   isBoundary?: boolean;
-  /** ComfyUI wrapper-node widget proxy (2026-08-06).  Set on inputs
+  /** ComfyUI wrapper-node widget proxy. Set on inputs
    *  that back an internal widget; absent on pure connections.  Used
    *  by WorkflowSubgraphNode to render a `VALUE` cell to the right of the
    *  label with the same colour rules as WorkflowNode (`valueCellColor`). */
@@ -36,7 +36,7 @@ export interface RawInputMeta {
    *  `widget` is absent (i.e. a pure connection row — the inner
    *  node's value isn't surfaced through the wrapper). */
   widgetValue?: unknown;
-  /** 2026-08-10 R18: server-stamped `multiline` flag — drives
+  /** server-stamped `multiline` flag — drives
    *  `isStringWidget` in WorkflowNode / WorkflowSubgraphNode so STRING inputs
    *  declared multiline by the upstream Python `INPUT_TYPES()` render
    *  as textareas regardless of how short the default value is.
@@ -47,12 +47,12 @@ export interface RawInputMeta {
    *  `multiline` hint, because the heuristic only flags "definitely
    *  multiline" — absence means "no opinion". */
   multiline?: boolean;
-  /** 2026-08-10 R27: when this IMAGE input is fed by a LoadImage-family
+  /** when this IMAGE input is fed by a LoadImage-family
    *  upstream node, the server resolves the upstream's uploaded filename
    *  and stamps it here so the canvas can render an inline thumbnail via
    *  the /api/images proxy.
    *
-   *  2026-08-10 R28: SCOPE NARROWED — only stamped on the synthetic
+   *  SCOPE NARROWED — only stamped on the synthetic
    *  `preview: true` entry that the server pushes for LoadImage nodes
    *  themselves; downstream IMAGE inputs (ImageScale / CLIPVisionEncode /
    *  …) no longer carry it, because showing the unscaled / un-encoded
@@ -61,7 +61,7 @@ export interface RawInputMeta {
    *  (no image uploaded), the renderer falls back to a 「需要上传图片」
    *  placeholder so the body always has its preview slot. */
   imageRef?: { filename: string; subfolder: string; type: string };
-  /** 2026-08-10 R28: marker on the synthetic LoadImage preview entry.
+  /** marker on the synthetic LoadImage preview entry.
    *  The renderer filters these out of BOTH connEntries and widgetEntries
    *  so they never paint a port-cylinder or a regular widget control —
    *  they're consumed exclusively by the dedicated <WorkflowImagePreview> tail
@@ -96,7 +96,7 @@ export interface ComfyGraphNode {
    *  output sentinel target (-20) — meaning this node sits on the
    *  OUTPUTS boundary.  Mirror of `is_input_endpoint`. */
   is_output_endpoint?: boolean;
-  /** Boundary input port details for wfIoPort rendering (2026-08-05 v3).
+  /** Boundary input port details for wfIoPort rendering (v3).
    *  Only set when `is_input_endpoint` is true.  Captured by the
    *  subgraph route from the sentinel -10 link + matching widget value. */
   boundary_input?: { name: string; type: string; value: unknown } | null;
@@ -132,7 +132,7 @@ export interface WorkflowIOParam {
    *  makes the IO summary useless.  Users can override per-pin via
    *  the IO preview panel's ✎ editor. */
   label?: string;
-  /* ── Server-enriched fields (GET /api/workflows/[id], 2026-08-09) ──
+  /* ── Server-enriched fields (GET /api/workflows/[id], ) ──
    * Absent on entries that were just toggled locally (the checkbox only
    * writes the four identity fields); the server re-derives them from
    * raw_inputs / rawNodes.outputs on the next read, so treat as optional. */
@@ -144,22 +144,22 @@ export interface WorkflowIOParam {
   nodeTitle?: string;
   /** STRING inputs that should render as a textarea rather than one-liner. */
   multiline?: boolean;
-  /** 2026-08-11 (R57): mirror field of `WorkflowIOEntry.required`.  Only
+  /** mirror field of `WorkflowIOEntry.required`. Only
    *  meaningful for `kind === "widget"` — toggled in IO-edit mode and
    *  persisted on the next PATCH. */
   required?: boolean;
-  /** R-ardot35 (2026-08-15): user-defined display order written by the
+  /** user-defined display order written by the
    *  IO-edit preview's drag-to-reorder gesture.  Mirrors
    *  `WorkflowIOEntry.displayOrder`; see workflow-io.ts for the sort
    *  contract.  Persisted to server on the same PATCH as the rest of
    *  `workflowIO`. */
   displayOrder?: number;
-  /** 2026-08-17 R94: author override of the graph-derived default.  Mirrors
+  /** author override of the graph-derived default. Mirrors
    *  `WorkflowIOEntry.value`; written by the IO-edit preview when the author
    *  edits a pin's default value, cleared to restore the original default.
    *  Round-trips through GET/PATCH like the rest of `workflowIO`. */
   value?: unknown;
-  /** 2026-09-03 多模式：按模式码的覆盖层。镜像 `WorkflowIOEntry.modes`，
+  /** 多模式：按模式码的覆盖层。镜像 `WorkflowIOEntry.modes`，
    *  落在同一个 workflowIO JSON 列里（因此新增模式无需改表）。由 IO 预览面板的
    *  「模式页签」编辑，随整体 workflowIO 一起 PATCH 落库。 */
   modes?: Record<string, WorkflowIOModeOverride>;
@@ -188,14 +188,14 @@ export interface IOEditContextValue {
    *  `workflowIO` map).  No-op when the key isn't currently in the map —
    *  labels only exist for checked pins. */
   setIOLabel: (key: string, label: string) => void;
-  /** 2026-08-11 (R57): flip the `required` flag on a checked widget input.
+  /** flip the `required` flag on a checked widget input.
    *  The flip is local-only (no IOEdit-mode state is added); it lives on
    *  the same `workflowIO[key]` record that toggleIO + setIOLabel mutate,
    *  so it shares the persistence path (next PATCH ships the full map).
    *  No-op when the key isn't currently in the map — required only makes
    *  sense for checked pins. */
   toggleIORequired: (key: string) => void;
-  /** R-ardot35 (2026-08-15): drag-to-reorder in the IO preview.  Moves
+  /** drag-to-reorder in the IO preview. Moves
    *  `fromKey` so it sits immediately before `beforeKey` in the rendered
    *  list (use `null` to send to the tail).  Renumbers the affected
    *  group's `displayOrder` and PATCHes the server inline so the
@@ -275,12 +275,12 @@ export interface WorkflowDetail {
   name: string;
   taskType: string;
   graph: Record<string, ApiWorkflowNode>;
-  /** 2026-08-11 R40: 从 `/api/workflows/:id` 返回的原始导入格式 (LiteGraph
+  /** 从 `/api/workflows/:id` 返回的原始导入格式 (LiteGraph
    *  JSON)；canvas 顶部「📋 查看 JSON」modal 直接读这里喂给 SourceModal。
    *  null 表示该工作流纯 API 导入，无原始格式。 */
   rawJson?: unknown;
   nodes: ComfyGraphNode[];
-  /** 2026-08-13 R82: RAW 视图专用数据包（从 rawJson 派生、保留 subgraph
+  /** RAW 视图专用数据包（从 rawJson 派生、保留 subgraph
    *  wrapper）。当存库 `graph` 被拆平成 N:xx 节点时，RAW 布局据此渲染原始
    *  ComfyUI 节点（含 wrapper 紫色整卡），而非炸开的 API 图。null = 无 rawJson。 */
   rawView?: {
@@ -372,7 +372,7 @@ export interface RawOutputMeta {
   /** Business label for the slot — `FRAMES` / `IMAGE_FINAL`.  Forwarded
    *  by /api/workflows/[id] from rawJson.outputs[].label so both the
    *  parent WorkflowSubgraphNode outputs strip and the inner WorkflowIoPortNode
-   *  IO rail show the same name (2026-08-06 fix). */
+   *  IO rail show the same name (fix). */
   label?: string;
   type: string;
   /** Source link ids coming out of this output (used to derive wires). */
@@ -388,7 +388,7 @@ export interface WorkflowGroup {
   title: string;
   bounding: [number, number, number, number];
   color: string;
-  /** Group bypass state (2026-08-09).  Mirrors `rawJson.groups[i].flags.bypass`
+  /** Group bypass state. Mirrors `rawJson.groups[i].flags.bypass`
    *  and is the handle used by the rgthree Fast Groups Bypasser integration:
    *  clicking a toggle in that node's body flips this field and PATCHes it
    *  back to the server.  Defaults to false on read. */
@@ -473,7 +473,7 @@ export interface WorkflowNodeData {
    *  Surfaced from raw JSON so the canvas can tint nodes by their ComfyUI
    *  status — bypass → purple, disabled → grey, normal → role/default. */
   mode?: number;
-  /** LiteGraph `properties` dict from rawJson (2026-08-09).  Used by
+  /** LiteGraph `properties` dict from rawJson. Used by
    *  custom-frontends that derive their body UI at runtime from these
    *  values — the prime example being rgthree's `Fast Groups Bypasser`
    *  which reads `matchTitle` / `matchColors` / `sort` etc. to compute
@@ -482,7 +482,7 @@ export interface WorkflowNodeData {
    *  matched groups as a runtime body.  Empty / undefined for nodes
    *  that don't carry properties. */
   properties?: Record<string, unknown>;
-  /** Workflow groups (2026-08-09).  Forwarded to WorkflowNode so the rgthree
+  /** Workflow groups. Forwarded to WorkflowNode so the rgthree
    *  Fast Groups Bypasser runtime body can match against the live
    *  group list without re-fetching.  Read-only here — toggling a
    *  group's bypass goes through `RgthreeGroupsContext.setBypass` →
@@ -524,7 +524,7 @@ export interface WorkflowIoPortData {
   connectsFrom?: string | null;
 }
 
-/* Layout constants for the boundary-pin wfIoPort cards (2026-08-06 late).
+/* Layout constants for the boundary-pin wfIoPort cards (late).
  *  The pins live inside INPUTS / OUTPUTS wfGroup rectangles and are
  *  rendered as compact label rows stacked vertically.  These three values
  *  govern the column's visual rhythm; bumping IO_PORT_HEIGHT shrinks the
@@ -534,7 +534,7 @@ export interface WorkflowIoPortData {
  *  asked for tighter spacing + a slightly wider label slot, so we moved
  *  to {160, 22, 4}.
  *
- *  2026-08-11 (R52): bumped IO_PORT_HEIGHT 22 → 24 because at 22 px the
+ *  bumped IO_PORT_HEIGHT 22 → 24 because at 22 px the
  *  React Flow node wrapper clipped the descenders of letters with
  *  downward strokes (`p`, `g`, `y`, `q`) by ~1–2 px.  The 10.5 px font's
  *  ascender + cap + descender stack fills more than 22 px once you
@@ -544,9 +544,9 @@ export interface WorkflowIoPortData {
  *  whole wfGroup only grows by 2 px × (rowCount−1) ≈ 20 px for a 10-row
  *  INPUT rail — well within the user's "紧凑" brief.
  *
- *  2026-08-11 (R53): bumped IO_PORT_HEIGHT 24 → 26 + flipped the row's
+ *  bumped IO_PORT_HEIGHT 24 → 26 + flipped the row's
  *  flex alignment from `items-center` to `items-end` with `pb-[1px]`
- *  inside WorkflowIoPortNode.  R52 gave a calculated ~7 px clearance, but in
+ *  inside WorkflowIoPortNode. gave a calculated ~7 px clearance, but in
  *  the user's screenshot the `p` / `g` descenders STILL read as partial
  *  stubs — likely a combination of (a) Windows ClearType / sub-pixel
  *  rendering at non-integer zoom levels amputating the bottom 1 px of
@@ -558,12 +558,12 @@ export interface WorkflowIoPortData {
  *  row boundary and reads as a fully formed character at every zoom
  *  level.  Net wfGroup growth ≈ 2 px × 9 = 18 px for a 10-row rail.
  *
- *  2026-08-11 (R54): the user's third screenshot still showed the
- *  descenders amputated.  The R53 / items-end trick relied on the
+ *  the user's third screenshot still showed the
+ *  descenders amputated. The -end trick relied on the
  *  descender sitting at the *baseline of the line-box*, but with
  *  `leading-none` (= line-height: 1, so line-box = 10.5 px) the Inter
  *  descender (~3 px) still lives BELOW the line-box, clipped by
- *  `style.height = IO_PORT_HEIGHT` no matter how we align.  R54
+ *  `style.height = IO_PORT_HEIGHT` no matter how we align.
  *  replaces `leading-none` with `leading-[1.4]` (= 14.7 px line-box),
  *  which now INTERNALLY contains ascender + cap + descender with
  *  margin on both sides; with `items-center` the descender lands at

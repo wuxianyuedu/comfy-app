@@ -125,7 +125,7 @@ export function useProjectManager(options: UseProjectManagerOptions) {
   const deleteCurrent = useCallback(() => {
     const { pid } = getCurrent();
     if (!pid) return;
-    // 自定义深色弹窗（R65），不用浏览器原生 confirm。
+    // 自定义深色弹窗，不用浏览器原生 confirm。
     setConfirmDelete(true);
   }, [getCurrent]);
 
@@ -189,7 +189,7 @@ export function useProjectManager(options: UseProjectManagerOptions) {
     // 用显式名字覆盖持久化（ref 尚未同步到 finalName），
     // draft-aware：空画布 + 默认名 → 回收而非落库。
     persistNow(finalName);
-    // R65: 自动重命名要让用户知道「灵感」为何变成「灵感_2」。
+    // 自动重命名要让用户知道「灵感」为何变成「灵感_2」。
     if (finalName !== baseName) {
       toast.info("已自动添加后缀", `项目名「${baseName}」已被占用，已保存为「${finalName}」。`);
     }

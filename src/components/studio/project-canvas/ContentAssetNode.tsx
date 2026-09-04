@@ -9,7 +9,7 @@ import { vanillaApi } from "~/trpc/vanilla";
 import type { CanvasNodeData } from "./canvas-types";
 
 /* 项目画布 · 内容载体节点主体（text / picture / movie）
- * 对齐 Ardot 稿 715394877779066 v2 + icon 迭代（R-ardot73-D / -D-v2 / -D-icon）：
+ * 对齐 Ardot 稿 715394877779066 v2 + icon 迭代（/ -D-v2 / -D-icon）：
  *  - 边框内 ~100% 预览区：图片/视频填满（object-cover）、文本 textarea 填满，
  *    空状态居中类型图标 + helper 文案，呼应「整个节点边框内几乎 100% 区域显示内容」。
  *  - 右下 36×36 圆 FAB（类型色填充 + 白色图标）：图片/视频=上传、文本=编辑聚焦。
@@ -30,7 +30,7 @@ export function ContentAssetBody({
   onPatch,
   onPickMedia,
   onUploadFile,
-  /* R-ardot103 (2026-08-17): progress overlay while a generation is in
+  /* progress overlay while a generation is in
    *  flight. Rendered only when status === "running"; otherwise the body
    *  falls back to the existing empty/populated preview. */
   status,
@@ -40,8 +40,8 @@ export function ContentAssetBody({
   data: CanvasNodeData;
   onPatch: (p: Partial<CanvasNodeData>) => void;
   onPickMedia: (k: "picture" | "movie") => void;
-  /* R-ardot101 (2026-08-17): drag-and-drop upload onto the dashed area.
-   *  Previously the area was a <button> with onClick={onPickMedia} (R96);
+  /* drag-and-drop upload onto the dashed area.
+   *  Previously the area was a <button> with onClick={onPickMedia};
    *  user wants the dashed area to be drop-only — file picker is now only
    *  reachable from the bottom-right FAB. */
   onUploadFile?: (file: File) => void | Promise<void>;
@@ -151,7 +151,7 @@ export function ContentAssetBody({
           />
         )
       ) : (
-        /* R-ardot101 (2026-08-17): 虚线大区改为 drop-only。
+        /* 虚线大区改为 drop-only。
          *  - 不再是 <button>，所以点击**不会**触发文件选择器（用户要的就是这点）。
          *  - 仍然需要 `nodrag nopan` + onPointerDown/onMouseDown stopPropagation，
          *    否则 React Flow v12 节点 wrapper 在 mousedown 时进入 drag-suspect
@@ -160,7 +160,7 @@ export function ContentAssetBody({
          *    （HTML5 drag-and-drop 规范要求）。
          *  - dragover 高亮 + 加深边框颜色给用户视觉反馈。
          *  文件选择器现在**只**能从右下角 FAB 触发（onPickMedia）。
-         *  R-ardot96 历史：曾用 button + nodrag 三件套做点击触发；本次反向修复。 */
+         *  历史：曾用 button + nodrag 三件套做点击触发；本次反向修复。 */
         <div
           onDrop={(event) => {
             event.preventDefault();
@@ -197,7 +197,7 @@ export function ContentAssetBody({
           </span>
         </div>
       )}
-      {/* R-ardot103 (2026-08-17): "水逐渐装满" 进度覆盖层 — 仅当 status ===
+      {/* "水逐渐装满" 进度覆盖层 — 仅当 status ===
        *  "running" 时渲染。absolute inset-0 + pointer-events-none 让它覆盖
        *  整个预览区但不拦截 FAB / 拖入 / 点击。FAB 是后渲染的兄弟节点，
        *  视觉上自然压在覆盖层之上。 */}

@@ -136,12 +136,12 @@ export function isNoteType(classType: string): boolean {
 /* ── Title bar height ──
  *  LiteGraph (and therefore ComfyUI) draws every titled node with a
  *  fixed `LiteGraph.NODE_TITLE_HEIGHT = 30` bar at the TOP of the node.
- *  2026-08-11 R49 (user rule): the serialised `size: [w, h]` in the
+ *  (user rule): the serialised `size: [w, h]` in the
  *  raw archive is the BODY CONTENT height (the 30 px title bar is NOT
  *  included in `size[1]`).  So the actual rendered node box = content
  *  height + NODE_TITLE_H = `size[1] + 30`.
  *
- *  Convention (2026-08-11, user rule):
+ *  Convention (user rule):
  *    • `data.size.h` carries the raw BODY CONTENT height = `size[1]`
  *      (NO subtraction).
  *    • The React Flow node `style.height` = `size[1] + NODE_TITLE_H`
@@ -324,10 +324,10 @@ export function renderSubgraphWidgetValue(value: unknown): string {
  *  descriptor such as `"Model: True = 🟡 Safetensors | False = 🟣 GGUF"`
  *  (rgthree Settings nodes) is *semantic*, not a list of selectable
  *  options — it tells the reader what the on/off states switch between,
- *  so it must be kept intact.  (2026-08-16 R-ardot71: the previous build
+ *  so it must be kept intact. (the previous build
  *  stripped these to a bare `Model`, which read as a truncated /
  *  incomplete label; the full descriptor now renders and wraps via the
- *  R-ardot71 CSS fix on the widget-label span.)  Plain colon-bearing
+ *  CSS fix on the widget-label span.) Plain colon-bearing
  *  sentences like "Note: keep this secret" are also kept untouched. */
 export function sanitizeComboLabel(label: string | undefined | null): string {
   if (!label) return "";
@@ -337,7 +337,7 @@ export function sanitizeComboLabel(label: string | undefined | null): string {
   /* Strip only when the tail looks like a multi-option COMBO list:
    * contains another `=` or `|` *and* is NOT a BOOLEAN descriptor
    * (`true =` / `false =` markers).  A BOOLEAN descriptor is kept so the
-   * full label reaches the layout — where the R-ardot71 CSS fix lets it
+   * full label reaches the layout — where the CSS fix lets it
    * wrap onto multiple lines instead of being clipped. */
   const isBooleanDescriptor = /\b(?:true|false)\s*=/i.test(tail);
   if (/[=|]/.test(tail) && !isBooleanDescriptor) {
@@ -429,7 +429,7 @@ export function mixHex(colorA: string, colorB: string, ratio: number): string {
  *    MODEL→purple, CLIP→yellow, LATENT→violet, etc. — so the canvas
  *    reads like a faithful ComfyUI graph. */
 
-/* 2026-08-12 R78.2: longest-path (Kahn) topological layout.  Returns a
+/* 2: longest-path (Kahn) topological layout. Returns a
  * position for EVERY real graph node (no truncation, unlike
  * `buildWorkflowPreview` which caps at 14 for the card preview).  Used
  * by both the legacy auto-layout fallback (API-only imports with no
@@ -547,7 +547,7 @@ export function buildEdges(
         targetHandle: inputName,
         animated: false,
         style: {
-          /* 2026-08-13 R79: match the WorkflowEdge crisp+glow pair (strokeWidth
+          /* match the WorkflowEdge crisp+glow pair (strokeWidth
            *  2.5, opacity 1) so even edges that fall through to React
            *  Flow's default renderer still look as strong as `wf`-typed
            *  ones.  The earlier 2/0.9 baseline was tuned for the old
@@ -560,7 +560,7 @@ export function buildEdges(
     }
   }
 
-  /* Boundary-pin wiring (2026-08-06 fix): direction matters — React Flow
+  /* Boundary-pin wiring (fix): direction matters — React Flow
    * only renders an edge when the source handle is `type="source"` and
    * the target handle is `type="target"`.  Our pin nodes expose:
    *   - input pin:  Left handle `id="in"`, type="source"

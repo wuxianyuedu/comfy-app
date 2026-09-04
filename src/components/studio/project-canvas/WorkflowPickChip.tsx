@@ -1,6 +1,6 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from WorkflowNode.tsx — workflow picker chip
+/** extracted from WorkflowNode.tsx — workflow picker chip
  *  (Dropdown 2, filtered by source/model). Behaviour and visuals unchanged.
  */
 import { useRef, useState } from "react";

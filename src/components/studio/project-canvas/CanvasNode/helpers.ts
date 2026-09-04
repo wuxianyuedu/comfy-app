@@ -1,7 +1,7 @@
 import { type CanvasNodeData } from "../canvas-types";
 import { type WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 
-/* 2026-08-13 项目级产出：从节点数据里收集「本次生成用到的参考图」，
+/* 项目级产出：从节点数据里收集「本次生成用到的参考图」，
  * 随生成请求一并落库，供元数据抽屉的参考图墙一键还原。 */
 export function collectReferenceImages(d: CanvasNodeData): string[] {
   const set = new Set<string>();
@@ -12,7 +12,7 @@ export function collectReferenceImages(d: CanvasNodeData): string[] {
   return [...set];
 }
 
-/* 2026-08-14：把画布选中的种子「生成后控制」模式（seedModes，按 ioKey 索引）
+/* 把画布选中的种子「生成后控制」模式（seedModes，按 ioKey 索引）
  * 解析成 control_after_generate 覆盖项，合并进 workflowInputs 一并下发。
  * 只有画布侧能拿到实时 IO 映射（ioKey → nodeId），所以解析必须放在前端：
  *   - API 格式图：buildCustomWorkflow 写成 node.inputs["control_after_generate"]

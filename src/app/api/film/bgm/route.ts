@@ -6,7 +6,7 @@ import { getServerUser } from "@/lib/auth-server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// R-T3-phase4 (OWASP A04/A05): whitelist audio types and cap the size.
+// (OWASP A04/A05): whitelist audio types and cap the size.
 const ALLOWED_MIME = new Set([
   "audio/mpeg",
   "audio/wav",

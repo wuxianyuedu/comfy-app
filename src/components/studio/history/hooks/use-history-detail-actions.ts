@@ -83,7 +83,7 @@ export function useHistoryDetailActions(
       try {
         const result = await deps.openFolder(taskId);
         if (result.comfyappUrl) {
-          // 本机自定义协议方案（R-ardot72）：服务端已校验目录存在且在白名单内，
+          // 本机自定义协议方案：服务端已校验目录存在且在白名单内，
           // 返回 comfyapp://open?path=... URL。这里直接导航（user-initiated 点击），
           // 浏览器弹「是否打开外部应用」确认 → OS 调起 handler 用 explorer 打开目录。
           //

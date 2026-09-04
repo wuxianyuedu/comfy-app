@@ -1,6 +1,6 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from ProjectCanvas's right-click context
+/** extracted from ProjectCanvas's right-click context
  *  menu.  Pure presentational — the caller owns `menu` state and the
  *  node-creation actions.
  */

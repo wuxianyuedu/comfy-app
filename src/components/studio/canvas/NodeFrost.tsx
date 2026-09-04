@@ -126,7 +126,7 @@ export function FrostLayer({ color, nodeMode }: { color: string | null; nodeMode
  *  the browser's native scrollable textarea, so wrapping + scroll work without
  *  any class dependency.
  *
- *  Height strategy (2026-08-10 R17, fully vertical STACKED layout):
+ *  Height strategy (fully vertical STACKED layout):
  *    • Row uses `flex-col gap-1.5 flex-1` — LABEL row on top,
  *      this container fills the remaining vertical space below.
  *    • When the node has a fixed box (`hasSize`), the textarea container's

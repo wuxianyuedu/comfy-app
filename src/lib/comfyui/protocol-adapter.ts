@@ -1,6 +1,6 @@
 // ComfyUI WS 协议适配层（Adapter）
 //
-// P3 refactor (2026-08-20): isolates *protocol differences* between the
+// P3 refactor: isolates *protocol differences* between the
 // standard ComfyUI WebSocket event stream and non-standard builds (kaytool
 // v0.28).  The executor's `handleMessage` no longer hard-codes signal
 // detection inline — it asks this adapter to classify each incoming WS

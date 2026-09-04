@@ -2,7 +2,7 @@
  * `executor-ws.ts` — WS 连接 / 消息处理 / 看门狗（executor 的通道层）
  * ===========================================================================
  *
- * 从 executor.ts 拆出的「事件通道」模块（T12 batch 4）：负责建立并维持
+ * 从 executor.ts 拆出的「事件通道」模块（batch 4）：负责建立并维持
  * ComfyUI WS 连接、统一消息分发（协议差异交给 comfyProtocol Adapter）、
  * 终态抢占（claimSettle）与活动看门狗（armWatchdog）。
  *
@@ -202,7 +202,7 @@ async function handleMessage(raw: string) {
           ? (classTypeRaw as string)
           : undefined;
     const nodeId = String(data.node);
-    // R-ardot111 (2026-08-17): remember this node so we can log its
+    // remember this node so we can log its
     // completion when ComfyUI emits the next `executing` with
     // `data.node === null`.  This turns a "▶ KSampler" line into a
     // proper "▶ KSampler → ✔ KSampler" pair.
@@ -211,7 +211,7 @@ async function handleMessage(raw: string) {
     return;
   }
 
-  // R-ardot111 (2026-08-17): when ComfyUI signals the previous node
+  // when ComfyUI signals the previous node
   // finished (executing → null node) and we have a recorded
   // lastNodeByTask entry, surface a "✔ 完成" line so the user sees
   // a per-node timeline.  Only do this for the API-format path
@@ -231,7 +231,7 @@ async function handleMessage(raw: string) {
     const max = Number(data.max ?? 1);
     const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
     await taskRepository.updateProgress(taskId, pct);
-    // 2026-09-02: progress 消息自带 node id——把节点 id / 类别名 / 步数一并
+    // progress 消息自带 node id——把节点 id / 类别名 / 步数一并
     // 发给前端，画布与管线节点才能显示「当前节点 + 百分比」而不仅是总数。
     let node: { id: string; label?: string; value: number; max: number } | undefined;
     const rawNodeId: unknown = data.node;

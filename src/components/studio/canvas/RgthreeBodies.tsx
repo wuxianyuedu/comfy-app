@@ -264,7 +264,7 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
   );
 }
 
-/** rgthree Label runtime body (2026-08-09).  rgthree's Label node has no
+/** rgthree Label runtime body. rgthree's Label node has no
  *  I/O — it paints its title (or `text` property) using the styles in
  *  `properties` (fontSize / fontFamily / fontColor / textAlign /
  *  backgroundColor / borderRadius / angle).  We render the styled text

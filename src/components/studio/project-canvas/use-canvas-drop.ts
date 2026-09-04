@@ -1,6 +1,6 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from ProjectCanvas — media drop-to-canvas
+/** extracted from ProjectCanvas — media drop-to-canvas
  *  logic.  The material-library / history panels hand files to the canvas
  *  through `placeMediaNode` (button click) or the drag-and-drop handlers.
  *

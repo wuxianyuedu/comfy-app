@@ -176,7 +176,7 @@ function isSamplerLike(node: GraphNodeLike): boolean {
  *
  * Positive/negative are no longer guessed by node id order — they follow the
  * KSampler's `positive`/`negative` conditioning links upstream to the actual
- * text-encode node (CLIPTextEncode / SDXL / Flux / T5 …). Falls back to the
+ * text-encode node (CLIPTextEncode / SDXL / Flux / …). Falls back to the
  * first two CLIPTextEncode when no sampler is present.
  */
 export function detectParamMap(graph: Record<string, unknown>): ParamMap {

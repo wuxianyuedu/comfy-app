@@ -1,5 +1,5 @@
 "use client";
-/* Video group control — extracted from GroupedControls.tsx (T12).
+/* Video group control — extracted from GroupedControls.tsx.
  * Switches between split native fields and a unified 时长 + 画质 + 比例
  * preset popover; the chosen paradigm persists per-workflow. */
 import { useState } from "react";

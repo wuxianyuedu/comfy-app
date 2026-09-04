@@ -1,6 +1,6 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from ProjectCanvas's empty-state overlays —
+/** extracted from ProjectCanvas's empty-state overlays
  *  the loading hint (shown while the initial project hydrates) and the
  *  friendly "right-click to start" guide card (shown when the canvas is
  *  genuinely empty).

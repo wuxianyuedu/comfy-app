@@ -1,6 +1,6 @@
 "use client";
 
-/** 2026-08-29 T12-3: popover primitives shared by the four workflow-node
+/** popover primitives shared by the four workflow-node
  *  filter chips — portal viewport-position calculation (up/down flip +
  *  right-edge clamp) and outside-click / Escape dismissal.
  *
@@ -48,7 +48,7 @@ export function usePopoverPosition(
       });
     };
     r();
-    /* R-ardot38: 持续 rAF 重算 —— 画布 transform 变化时 trigger 在视口里的位置
+    /* 持续 rAF 重算 —— 画布 transform 变化时 trigger 在视口里的位置
      *  会动，但 React 不重渲染 useLayoutEffect 的 deps（open/width/triggerRef
      *  都没变）。关闭 popover 时立刻 cancel，零开销。 */
     let raf = 0;
@@ -100,7 +100,7 @@ export function usePopoverDismiss(
         }
       }
     };
-    // Capture phase (R-ardot48): React Flow v12's pane handler calls
+    // Capture phase: React Flow v12's pane handler calls
     // stopPropagation in the bubble phase, which can swallow our
     // document-level `mousedown` and leave the popover stuck open when
     // the user clicks the empty canvas. Listening in capture phase runs

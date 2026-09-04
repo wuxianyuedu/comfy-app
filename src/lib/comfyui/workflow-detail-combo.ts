@@ -1,5 +1,5 @@
 /**
- * COMBO option resolvers — extracted from workflow-detail.ts (T12 batch 4).
+ * COMBO option resolvers — extracted from workflow-detail.ts (batch 4).
  *
  * ComfyUI COMBO widgets (unet_name / clip_name / vae_name / ckpt_name …)
  * carry NO candidate list in the raw JSON — the only authoritative source
@@ -47,7 +47,7 @@ export function createComboResolver(): {
   /**
    * Resolve COMBO candidate options for a wrapper widget field.
    *
-   * R-ardot40 P4: union the node-declared `object_info` candidates with the
+   * P4: union the node-declared `object_info` candidates with the
    * locally-synced model files that map to this field (e.g. `ckpt_name` →
    * CHECKPOINT files).  ComfyUI's own COMBO list is only ever the default set
    * shipped in object_info; real on-disk models the user installed are NOT

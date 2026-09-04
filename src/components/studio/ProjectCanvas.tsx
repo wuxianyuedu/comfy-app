@@ -79,7 +79,7 @@ const nodeTypes = {
   workflowArdot: WorkflowNodeArdot,
 } as const;
 
-/* 2026-08-25: MiniMap 颜色表 hoisted to a module-level Map so the
+/* MiniMap 颜色表 hoisted to a module-level Map so the
  * `nodeColor` callback can stay referentially stable — MiniMap only re-runs
  * it while painting and never re-renders because of a fresh callback
  * identity during drags / state churn. */
@@ -109,11 +109,11 @@ function CanvasInner({
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("未命名");
-  /* Confirmation dialogs (R65: replaced window.confirm with custom dialog) */
+  /* Confirmation dialogs (replaced window.confirm with custom dialog) */
   const [confirmClear, setConfirmClear] = useState(false);
   /* Canvas panel system: 素材库 / 历史记录 slide-out panels */
   const [activePanel, setActivePanel] = useState<CanvasPanelType>(null);
-  /* R-ardot119 (2026-08-18): top-right settings drawer (调试模式). The
+  /* top-right settings drawer (调试模式). The
    * workflow editor already has its own drawer for grid/ruler/zoom; the
    * project canvas only needs the debug toggle so the user can flip it
    * without first drill-in'ing. State is shared with the workflow
@@ -121,7 +121,7 @@ function CanvasInner({
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const rf = useReactFlow();
   const { screenToFlowPosition, fitView } = rf;
-  /* R-ardot106 (2026-08-17): MiniMap → main-viewport single-click jump.
+  /* MiniMap → main-viewport single-click jump.
    *  Pairs with <MiniMap pannable zoomable onClick={onMiniMapJump} /> below. */
   const onMiniMapJump = useMiniMapJump(rf);
 
@@ -140,9 +140,9 @@ function CanvasInner({
   // True until the initial project has been hydrated from storage.
   // Prevents the empty-canvas hint from flashing while content loads.
   const [hydrating, setHydrating] = useState(true);
-  /* ── 拆分（2026-08-26）：持久化三件套 → useProjectPersistence；
+  /* ── 拆分：持久化三件套 → useProjectPersistence；
    *  项目 CRUD + 下拉 UI 状态 → useProjectManager；CanvasInner 只留编排与 JSX。
-   *  T12-3（2026-08-29）：连线分派 → useCanvasConnections；媒体落地 →
+   *  连线分派 → useCanvasConnections；媒体落地 →
    *  useCanvasDrop；右键菜单 / 项目切换器 / 工具栏 / 空状态 → 独立组件。 */
   const { persistNow } = useProjectPersistence({
     projectId,
@@ -187,7 +187,7 @@ function CanvasInner({
     commitRename,
   } = projectManager;
 
-  /* 连线分派 / 媒体拖拽落地（T12-3 抽离，行为与之前完全一致）。 */
+  /* 连线分派 / 媒体拖拽落地（抽离，行为与之前完全一致）。 */
   const { onConnect, onEdgeClick } = useCanvasConnections({
     nodesRef,
     edgesRef,
@@ -241,7 +241,7 @@ function CanvasInner({
       setProjectId(proj.id);
       setProjectName(proj.name);
 
-      /* 2026-08-30: 从工作流库「使用」跳转回来时，pendingWorkflow 在挂载时就
+      /* 从工作流库「使用」跳转回来时，pendingWorkflow 在挂载时就
        * 已传入。project 加载 effect 会覆盖 nodes，因此必须在这里把新节点合并进
        * baseNodes，否则原来的独立 effect 临时放置的节点会被 setNodes(baseNodes)
        * 覆盖掉，导致用户只看到已有节点被聚焦。 */
@@ -373,7 +373,7 @@ function CanvasInner({
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
         nodeTypes={nodeTypes}
-        /* 2026-08-25: commercial-grade perf — only mount nodes/edges that
+        /* commercial-grade perf — only mount nodes/edges that
          *  intersect the viewport (same treatment as the workflow canvas).
          *  Project graphs with many workflow/material nodes previously
          *  mounted the ENTIRE graph DOM every frame; viewport culling keeps
@@ -389,7 +389,7 @@ function CanvasInner({
         defaultEdgeOptions={{
           type: "smoothstep",
           animated: true,
-          /* 2026-08-25: lazy edge interactivity — untouched edges stay
+          /* lazy edge interactivity — untouched edges stay
            *  inert (no delete/reconnect plumbing); onEdgeClick activates
            *  them on first use. */
           deletable: false,
@@ -445,7 +445,7 @@ function CanvasInner({
         />
       </ReactFlow>
 
-      {/* 2026-08-29：帧率指示器（右上角，与工作流画布一致）——节点多了之后
+      {/* 帧率指示器（右上角，与工作流画布一致）——节点多了之后
        *  拖拽会掉帧，有个实时读数就能区分「卡」和「死」。 */}
       <FpsMeter className="right-3 top-3" />
 
@@ -477,7 +477,7 @@ function CanvasInner({
         onClear={clearCanvas}
       />
 
-      {/* R-ardot119: project-canvas settings (top-right gear). Opens a
+      {/* project-canvas settings (top-right gear). Opens a
        *  right-edge drawer with the 调试模式 toggle. State is shared
        *  with the workflow editor via useDebugMode. */}
       <ProjectSettingsButton onClick={() => setProjectSettingsOpen(true)} />
@@ -504,7 +504,7 @@ function CanvasInner({
         />
       )}
 
-      {/* ── R65: replace window.confirm with custom dark-themed dialogs ── */}
+      {/* ── replace window.confirm with custom dark-themed dialogs ── */}
       <ModalDialog
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}

@@ -1,6 +1,6 @@
 "use client";
 
-/* ── stepLogCache.ts · R-ardot113 (2026-08-17) ──────────────────────────────
+/* ── stepLogCache.ts · ──────────────────────────────
  * Cross-unmount cache for the CanvasNode step-log panel state.
  *
  * Why this exists
@@ -49,7 +49,7 @@ export interface StepLogEntry {
   level: "info" | "progress" | "warn" | "error" | "success";
   msg: string;
   client?: boolean;
-  /** R-ardot118 (2026-08-18): caller source ("file:line") mirrored from
+  /** caller source ("file:line") mirrored from
    *  the server LogEntry, rendered only when the debug toggle is on. */
   src?: string;
 }
@@ -61,7 +61,7 @@ export interface StepLogPanelState {
    *  or from the SSE `state` event).  Null when the task is still
    *  running or has never been marked failed. */
   validationErrors: ValidationError[] | null;
-  /* R-ardot121 (2026-08-18): per-task metadata so the task-switcher
+  /* per-task metadata so the task-switcher
    *  dropdown can show "工作流名 · 状态" instead of a truncated id.
    *  Populated by GlobalStepLogPanel on every SSE `state` event. */
   workflowName?: string;
@@ -133,7 +133,7 @@ export function setStepLogValidationErrors(
   touch(taskId, { logs: prev.logs, validationErrors: errs });
 }
 
-/* R-ardot121 (2026-08-18): merge workflowName + status into the
+/* merge workflowName + status into the
  *  cache entry so the task-switcher dropdown can label each id
  *  with the workflow name (e.g. "image_Z-Anime-Workflow-v1 · FAILED")
  *  instead of forcing the user to read a truncated 14-char id. */

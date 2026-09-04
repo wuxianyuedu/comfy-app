@@ -4,8 +4,8 @@ import { useCallback, useLayoutEffect, useRef } from "react";
 
 /** Auto-growing textarea with width strictly locked to the parent.
  *
- *  R-ardot21 (2026-08-14): replaces the `field-sizing: content` approach
- *  used in R-ardot17/18/20. The native `field-sizing` property was supposed
+ *  replaces the `field-sizing: content` approach
+ *  used in . The native `field-sizing` property was supposed
  *  to give us auto-height while keeping `maxWidth: 100%` as a hard cap, but
  *  Chrome's implementation lets intrinsic content width overflow the parent
  *  when a real prompt's longest unbreakable line exceeds the control's inner
@@ -19,9 +19,9 @@ import { useCallback, useLayoutEffect, useRef } from "react";
  *     relies on the new `field-sizing` API;
  *   - sets `box-sizing: border-box` + `width: 100%` so the box width is
  *     strictly the parent's content box, immune to intrinsic sizing;
- *   - keeps the R-ardot18 horizontal overflow guards (pr-3 > pl-2.5,
+ *   - keeps the horizontal overflow guards (pr-3 > pl-2.5,
  *     overflowX: hidden, overflowWrap: anywhere, wordBreak: break-word);
- *   - keeps the R-ardot19 scrollbar suppression (webkit + firefox + ms).
+ *   - keeps the scrollbar suppression (webkit + firefox + ms).
  */
 export function AutoResizeTextarea({
   value,

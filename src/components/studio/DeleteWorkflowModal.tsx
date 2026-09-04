@@ -1,7 +1,7 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from WorkflowLibrary's delete-confirm modal.
- *  Keeps the Escape-to-dismiss behaviour (2026-08-12 R77) local to the
+/** extracted from WorkflowLibrary's delete-confirm modal.
+ *  Keeps the Escape-to-dismiss behaviour local to the
  *  modal: the listener is active only while the modal is mounted.
  */
 import { useEffect } from "react";
@@ -24,7 +24,7 @@ export function DeleteWorkflowModal({
   onCancel,
   onBackdropClick,
 }: DeleteWorkflowModalProps) {
-  // 2026-08-12 R77: pressing Escape dismisses the delete modal
+  // pressing Escape dismisses the delete modal
   // (matches the convention of native <dialog> elements so keyboard users
   // aren't trapped in the modal).
   useEffect(() => {

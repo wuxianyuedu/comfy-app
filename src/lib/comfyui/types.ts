@@ -53,7 +53,7 @@ export function portColor(type: string | undefined | null): string {
 
 /** Look up the right-side type label.
  *
- *  Per the 2026-08-04 pass the type column is now driven by the raw data
+ *  Per the pass the type column is now driven by the raw data
  *  itself: `portLabel(t)` returns the raw type string verbatim so users
  *  always see what ComfyUI itself reports (e.g. `COMBO` / `STRING` /
  *  `INT` / `SIGMAS`), preserving variable-name casing exactly.  An
@@ -461,7 +461,7 @@ export function inferInputTypeByName(name: string): string {
 }
 
 
-/* ── Multiline STRING detection (2026-08-10 R18) ────────────────────────────
+/* ── Multiline STRING detection ────────────────────────────
  *
  *  ComfyUI's native STRING widget is rendered as a textarea (multiline) when
  *  the upstream Python `INPUT_TYPES()` for the node sets `multiline: True`
@@ -538,7 +538,7 @@ export function inferIsMultiline(
   if (MULTILINE_NAME_HINT.test(name)) return true;
 
   /* 4. Length heuristic — a long current default is a strong signal this
-   *    slot is used as a paragraph rather than a label.  Mirrors the R6
+   *    slot is used as a paragraph rather than a label. Mirrors the
    *    threshold in `controlForEntry` (> 40 chars). */
   if (typeof defaultValue === "string" && defaultValue.length > 40) return true;
 

@@ -96,7 +96,7 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
 
   return (
     <>
-      {/* 2026-08-13 R79: outer "glow" layer so a thin 2.5px stroke still reads
+      {/* outer "glow" layer so a thin 2.5px stroke still reads
        *  as a visible wire on the dark canvas (especially for the small set of
        *  top-level edges that survive when subgraph inner nodes aren't
        *  stitched into the rendered graph).  Painted first so the crisp
@@ -118,7 +118,7 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
         style={{ ...style, strokeWidth: 2.5, opacity: 1 }}
       />
       {/* ComfyUI-style hub dot at the curve midpoint.  Slightly larger
-       *  (r=4) and brighter than R25's r=3.5 / 0.55 so it survives at low
+       *  (r=4) and brighter than 's r=3.5 / 0.55 so it survives at low
        *  zoom levels when the wire itself is just a couple of screen pixels. */}
       <circle
         cx={labelX}

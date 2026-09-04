@@ -1,5 +1,5 @@
 "use client";
-/* Extracted FlowNode colour-palette computation (workflow-node.tsx T12).
+/* Extracted FlowNode colour-palette computation (workflow-node.tsx ).
  * Pure function: node mode (LiteGraph 0/2/4) + assigned role → card
  * colours.  Behaviour identical to the pre-split inline constants. */
 import { mixHex, hexToRgba, lightenHex } from "../workflow-utils";

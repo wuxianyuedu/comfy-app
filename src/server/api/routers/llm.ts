@@ -50,7 +50,7 @@ export const llmRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const cfg = await getLLMConfig({
-        // 2026-08-30 P0:provider 收紧为 enum——垃圾值此前会静默按 local 误路由,
+        // P0:provider 收紧为 enum——垃圾值此前会静默按 local 误路由,
         // 现在输入非法直接 400(Zod),不再静默回退。
         provider: input.provider,
         model: input.model,

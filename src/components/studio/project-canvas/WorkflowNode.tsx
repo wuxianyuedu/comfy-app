@@ -11,17 +11,17 @@
  *  - 不引入结果卡 / 替换按钮（稿无，后续再补）
  *  - 端口 Handle 与稿一致：12px、描边 in #4D4D59 / out #16161C、投影、骑跨卡边
  *
- * R-ardot25 (2026-08-14): 3 个 chip 改为真正的「独立 dropdown」——之前 3 个 chip
+ * 3 个 chip 改为真正的「独立 dropdown」——之前 3 个 chip
  *  共享同一个 `open` state + 同一个 popover（点哪个都展同一个），用户体感"不是
  *  独立的"。新版每个 chip 自己控 open、自己位置、自己列表：
  *    ① SourceFilterChip（本机 / 在线 / 全部）— popover 内 3 radio
  *    ② WorkflowPickChip（受 SourceFilter 过滤的工作流列表）— popover 列名
  *    ③ ModePickChip（按当前工作流的 modes 配置多选 + 默认）— popover 完整 multi-select
- *  2026-08-15: 增加 ④ ModelFilterChip（按用户模型标签库筛选）。
+ *  增加 ④ ModelFilterChip（按用户模型标签库筛选）。
  *
  * 外壳（Card 圆角14、无 overflow-hidden 以保护 Handle 骑跨）由 CanvasNode 持有。
  *
- * 2026-08-29 T12-3: 4 个 chip 与 popover 通用逻辑已拆出：
+ * 4 个 chip 与 popover 通用逻辑已拆出：
  *  - workflow-node-popover.ts        — 定位 / 外部点击关闭基元
  *  - WorkflowSourceFilterChip.tsx    — 来源筛选 chip
  *  - WorkflowModelFilterChip.tsx     — 模型标签筛选 chip
@@ -71,13 +71,13 @@ export interface WorkflowNodeProps {
     sourcePath?: string | null;
     modelTags?: string[];
   }[];
-  /** R-ardot25: 当前工作流的 modes 配置（来自 /api/workflows/[id] 的 modes/defaultMode）。 */
+  /** 当前工作流的 modes 配置（来自 /api/workflows/[id] 的 modes/defaultMode）。 */
   workflowModes?: WorkflowModesState | null;
-  /** R-ardot25: 父级（CanvasNode）持的来源筛选 — 影响 chip2 列表。 */
+  /** 父级（CanvasNode）持的来源筛选 — 影响 chip2 列表。 */
   sourceFilter?: WorkflowSourceFilter;
-  /** 2026-08-15: 用户级模型标签库（全局），驱动 chip4 的模型筛选列表。 */
+  /** 用户级模型标签库（全局），驱动 chip4 的模型筛选列表。 */
   modelTagLib?: { id: string; name: string; count: number }[];
-  /** 2026-08-15: 画布节点会话级模型筛选值（"all" 或某标签名）。 */
+  /** 画布节点会话级模型筛选值（"all" 或某标签名）。 */
   modelFilter?: string;
   onPatch: (p: Partial<CanvasNodeData>) => void;
   onSourceFilterChange: (f: WorkflowSourceFilter) => void;
@@ -110,7 +110,7 @@ export function WorkflowNode({
 }: WorkflowNodeProps) {
   const meta = NODE_META[d.kind];
 
-  /* 2026-08-22: 右上角显示「短序号」#1/#2…（按画布节点列表顺序）。
+  /* 右上角显示「短序号」#1/#2…（按画布节点列表顺序）。
    * useStore 选择器结果不变时不触发重渲染：拖动/选中只改位置不改变 index，
    * 仅节点增删导致序号变化时才重渲染此节点。完整 id 保留在 title 中。 */
   const nodeSeq = useStore((state) => {
@@ -118,18 +118,18 @@ export function WorkflowNode({
     return idx === -1 ? null : idx + 1;
   });
 
-  /* R-ardot52 (2026-08-15): 在所有输入参数下方渲染 outputs row — 用户在
+  /* 在所有输入参数下方渲染 outputs row — 用户在
    *  IO-edit 配的 output 在画布节点上要可见。Header (h-8) 不放，回到 Ardot
    *  设计稿 v2 的「W + 标题 + 状态胶囊」三件套；outputs 单独成段放在
    *  DynamicWorkflowForm 之后、生成按钮之前。
-   *  R-ardot53 (2026-08-15): outputs 视觉与 inputs 严格对齐成「双行结构」—
+   *  outputs 视觉与 inputs 严格对齐成「双行结构」—
    *  第 1 行 labelRow（IO 紫点 + label + COMBO typeChip），第 2 行 dim 占位
    *  控件（h-28 与 inputs 控件行同高），端点 PortHandle 放最右（dir="out",
    *  right:-6）。`inputs` 一并解构出来给 ioLabel() 用作组内去重。 */
   const { inputs, outputs } = splitWorkflowIO(workflowIO);
 
-  /* R-ardot25: 按 sourceFilter 过滤 chip2 列表 — 让 chip1 真正参与决策。
-   * 2026-08-15: 叠加模型筛选 — chip4 选中的标签名必须命中工作流的 modelTags。 */
+  /* 按 sourceFilter 过滤 chip2 列表 — 让 chip1 真正参与决策。
+   * 叠加模型筛选 — chip4 选中的标签名必须命中工作流的 modelTags。 */
   const filteredList = workflowList
     .filter((workflowList) => {
       if (sourceFilter === "all") return true;
@@ -180,10 +180,10 @@ export function WorkflowNode({
       {/* 分隔线 340×1 #26262E */}
       <div className="h-px bg-(--color-border-strong)" />
 
-      {/* R-ardot83: 拆双行 — 头部窄节点挤 4 chip，按用户给优先级排。
+      {/* 拆双行 — 头部窄节点挤 4 chip，按用户给优先级排。
        *   Row 1 (高优先级，筛选类)  ① SourceFilterChip + ④ ModelFilterChip
        *   Row 2 (中优先级，配置类)  ② WorkflowPickChip (flex-1) + ③ ModePickChip
-       *  2026-08-16: 之前单行 h-11 在 ~300px 节点宽度下 WorkflowPickChip 被压
+       *  之前单行 h-11 在 ~300px 节点宽度下 WorkflowPickChip 被压
        *  截断成 "ima..."。拆行后 WorkflowPickChip 独占一行可读全名。 */}
       <div className="flex flex-col gap-1 pr-[14px] pb-1.5 pl-[14px]">
         {/* Row 1 — 高优先级筛选 chip：来源 + 模型 */}
@@ -223,7 +223,7 @@ export function WorkflowNode({
       </div>
 
       {/* 动态表单：由工作流暴露的 IO 驱动，端口 Handle 与测试节点一致骑跨卡边
-       *  R-ardot21 (2026-08-14): `showOutputs={false}` — 在画布场景下，workflow
+       *  `showOutputs={false}` — 在画布场景下，workflow
        *  节点是叶节点（生成图片/视频），不需要被 wire 到下一个节点；显示
        *  右侧紫色 images 输出 Handle 会让用户误以为是漏出的 bug（"那个
        *  圆点不要"）。CreatePanel 路径仍走 `showOutputs={true}`，不影响。 */}
@@ -239,7 +239,7 @@ export function WorkflowNode({
         onSeedModeChange={onSeedModeChange}
       />
 
-      {/* R-ardot54 (2026-08-15): outputs row — 收成单行 labelRow（label + 右侧 type chip）。
+      {/* outputs row — 收成单行 labelRow（label + 右侧 type chip）。
        *  与 inputs labelRow 视觉严格一致，端点 PortHandle 放最右（dir="out"，right:-6），
        *  style top:16 锁 label-row 中线（pt-1.5=6 + h-5/2=10 = 16px）。
        *  不再放 dim 占位控件行——outputs 是只读语义，labelRow 已经说清楚「● images | IMAGE」
@@ -247,14 +247,14 @@ export function WorkflowNode({
       {outputs.length > 0 && (
         <div className="border-t border-white/6">
           {outputs.map((output) => {
-            /* 2026-08-15: conflict-aware — 与 inputs/outputs 同 group 去重。
+            /* conflict-aware — 与 inputs/outputs 同 group 去重。
              *  即使两个 outputs 同 label（如两个 IMAGE 都叫 "image"）也回退 name。 */
             const oLabel = ioLabel(output, [...inputs, ...outputs]);
             const oType = output.type;
             return (
               <div key={output.nodeId + ":" + output.name} className="relative">
-                {/* R-ardot58 (2026-08-15): 圆点几何位置上推 2px — 用户反馈
-                 *  R-ardot57 的 `top:16`（= labelRow 中线 y=16）虽然几何计算
+                {/* 圆点几何位置上推 2px — 用户反馈
+                 *  的 `top:16`（= labelRow 中线 y=16）虽然几何计算
                  *  完美（pt-1.5=6 + h-5/2=10 = 16），但实际渲染圆点仍视觉下
                  *  偏 1-2px（React Flow Handle 自身 transform + 小圆点抗锯齿
                  *  的「向下漂移」错觉）。top:14 把圆心放到 y=14，比 chip 中线
@@ -273,7 +273,7 @@ export function WorkflowNode({
                     boxShadow: "none",
                   }}
                 />
-                {/* R-ardot56 (2026-08-15): 单行 labelRow — 与 inputs labelRow 镜像
+                {/* 单行 labelRow — 与 inputs labelRow 镜像
                  *  顺序一致 = [label | typeChip]（label 在左、type 在右）。
                  *  `justify-end` 把整组贴紧 Card 右沿；端点 PortHandle 圆心锁
                  *  labelRow 中线（pt-1.5=6 + h-5/2=10=16px），与 typeChip 上下对齐。 */}

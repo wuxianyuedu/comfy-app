@@ -264,7 +264,7 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
       out[id] = [Number(n.pos[0]) || 0, Number(n.pos[1]) || 0];
     }
   }
-  // 2026-08-13 R78.3: subgraph wrapper inner nodes (rawJson.definitions.subgraphs[uid].nodes)
+  // 3: subgraph wrapper inner nodes (rawJson.definitions.subgraphs[uid].nodes)
   // are NOT in the top-level nodes[] — but they ARE part of `detail.nodes` /
   // `detail.graph` after the wrapper is expanded (the server stitches them under
   // `<wrapperId>:<internalId>` keys).  Without this loop, wrapper expansions
@@ -274,7 +274,7 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
   // absolute positions for both top-level and sub-graph nodes), so we must
   // NOT add wrapper.pos to it.
   //
-  // 2026-08-13 R78.3 (lookup fix): `definitions.subgraphs` is keyed by
+  // 3 (lookup fix): `definitions.subgraphs` is keyed by
   // numeric index "0", "1", ... — NOT by the wrapper UUID. The wrapper
   // UUID lives inside each sub def as `sub.id`. So we have to scan all
   // entries and match by `sub.id === wrapper.type` (the wrapper's `type`
@@ -372,7 +372,7 @@ export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
   }
   try {
     const res = await fetch(`${comfyBase()}/api/object_info`, {
-      /* 2026-08-16 R-ardot73-C: ComfyUI 序列化完整 object_info（~4.7MB）在
+      /* ComfyUI 序列化完整 object_info（~4.7MB）在
        * Node 的 undici fetch 下实测需 ~5.2s 才返回，旧值 2500ms 必然超时返
        * null，导致所有依赖 object_info 的 COMBO 选项解析静默失败（下拉退化
        * 成文本框）。放宽到 20s；object_info 有 5 分钟缓存，慢请求仅 5 分钟
@@ -453,7 +453,7 @@ export function pairWidgetValues(
  *  逐类解析，否则退回内置的 {@link FALLBACK_WIDGETS}。表中每一项对应
  *  `widgets_values` 的一个下标（含 control_after_generate 哨兵槽）。
  *
- *  2026-08-29：画布之前只按 raw 节点 `inputs[]` 里的 `widget` 标记配对控件值，
+ *  画布之前只按 raw 节点 `inputs[]` 里的 `widget` 标记配对控件值，
  *  而 ComfyUI **默认不会把未「转成输入」的控件写进 inputs[]** —— 于是
  *  CLIPTextEncode 的提示词、各类 Loader 的模型名整段丢失，节点上一个参数都不显示。 */
 export async function fetchWidgetOrderTable(): Promise<Record<string, string[]>> {

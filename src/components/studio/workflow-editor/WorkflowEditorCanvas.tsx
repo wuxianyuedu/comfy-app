@@ -78,7 +78,7 @@ export function WorkflowEditorCanvas({
       onEdgeClick={onEdgeClick}
       nodeTypes={workflowNodeTypes}
       edgeTypes={workflowEdgeTypes}
-      /* 2026-08-25: commercial-grade perf — only mount nodes/edges that
+      /* commercial-grade perf — only mount nodes/edges that
        *  intersect the viewport.  The DaSiWa Wan 2.2 template ships 130
        *  nodes across a ~7000 px bbox; React Flow was previously mounting
        *  the ENTIRE graph (plus every rail IO port) and letting the
@@ -101,7 +101,7 @@ export function WorkflowEditorCanvas({
       defaultEdgeOptions={{
         type: "default",
         animated: false,
-        /* 2026-08-25: lazily activate edge interactivity.  `deletable` /
+        /* lazily activate edge interactivity. `deletable` /
          * `reconnectable` default to true, which makes React Flow attach
          * interaction plumbing to EVERY edge up front.  For 130+ node
          * graphs that is a measurable per-frame cost even though almost
@@ -112,7 +112,7 @@ export function WorkflowEditorCanvas({
         deletable: false,
         reconnectable: false,
         style: {
-          /* 2026-08-13 R79: bump opacity 0.85→1 and strokeWidth 2→2.5
+          /* bump opacity 0.85→1 and strokeWidth 2→2.5
            *  so the default `default`-typed edges look identical to
            *  `wf` edges (WorkflowEdge).  Previously the default was the
            *  silent fallback when the edge type wasn't set, leaving
@@ -133,7 +133,7 @@ export function WorkflowEditorCanvas({
         minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
         maxZoom={canvasSettingsHydrated ? canvasSettings.maxZoom : 2}
       />
-      {/* R-ardot95: gear button opens the right-side canvas settings
+      {/* gear button opens the right-side canvas settings
        *  panel (grid alpha, ruler toggle, etc.).  Sits below the zoom
        *  indicator so they don't compete for the same vertical slot;
        *  a violet dot lights up whenever the user has changed any
@@ -142,7 +142,7 @@ export function WorkflowEditorCanvas({
         hasOverrides={canvasSettingsHydrated && isCustomCanvasSettings(canvasSettings)}
         onClick={onOpenSettings}
       />
-      {/* 2026-08-29：帧率指示器 —— 大图拖拽/缩放时给用户一个「还活着」的信号。
+      {/* 帧率指示器 —— 大图拖拽/缩放时给用户一个「还活着」的信号。
        *  放在「设置」按钮下方（top-12 → top-[76px]），不与缩放/设置抢占同一格。 */}
       <FpsMeter className="right-3 top-[76px]" />
       <Controls showInteractive={false} className="!bg-(--color-panel)/90 !border-white/10 !text-gray-400 [&>button]:!bg-white/5 [&>button]:!border-white/10 [&>button]:!text-gray-400 [&>button:hover]:!bg-white/10" />

@@ -1,6 +1,6 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from WorkflowNode.tsx — source filter chip
+/** extracted from WorkflowNode.tsx — source filter chip
  *  (本机 / 在线 / 全部). Behaviour and visuals unchanged.
  */
 import { useRef, useState } from "react";

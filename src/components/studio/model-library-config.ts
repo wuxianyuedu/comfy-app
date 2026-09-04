@@ -15,7 +15,7 @@ export interface ModelRow {
 /** GET /api/models/config 返回的一行（只保留本视图渲染用到的子集）。 */
 export interface FolderConfigRow {
   folder: string;
-  /** The directory name IS the model type (R-ardot45). */
+  /** The directory name IS the model type. */
   type: string;
   label: string;
   enabled: boolean;
@@ -43,7 +43,7 @@ export function filterModels(
 
 /**
  * 按类型统计数量，按「数量降序 → 类型名字典序」排序。
- * 每个类型就是 ComfyUI 的一个目录名（R-ardot45：目录名即类型名）。
+ * 每个类型就是 ComfyUI 的一个目录名（目录名即类型名）。
  */
 export function countByType(models: ModelRow[]): Array<[string, number]> {
   const counts = new Map<string, number>();

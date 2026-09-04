@@ -168,9 +168,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                   返回上一级
                 </button>
               )}
-              {/* 2026-08-06 R3 终极方案 #4：🔄 一键强制重载缓存.
+              {/* 终极方案 #4：🔄 一键强制重载缓存.
                *   - 清 sessionStorage + 跳过 server LRU + 重置 in-flight req
-               *   - 任何 R3 之前的旧缓存条目都不会被读到，因为入口扫描删了
+               *   - 任何 之前的旧缓存条目都不会被读到，因为入口扫描删了
                *   - 任何之后人为改了 route.ts 没同步 SCHEMA_FINGERPRINT 的，
                *     schema 不匹配会直接导致 cacheKey 不命中，走冷路径 */}
               <button
@@ -220,9 +220,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* 2026-08-25: 单一格式（不再区分 RAW / API 视图），节点布局统一由
+          {/* 单一格式（不再区分 RAW / API 视图），节点布局统一由
            *  detail.positions 决定；RAW / API 切换 UI 已移除。 */}
-          {/* 2026-08-24: 调试模式 — 节点卡片叠加显示渲染链路模块标签。
+          {/* 调试模式 — 节点卡片叠加显示渲染链路模块标签。
            *  读写全局 debug-store（与项目画布共用同一开关），激活态高亮。
            *  开启后 wf-node 卡片底部渲染 DebugChainFooter。 */}
           <button
@@ -238,7 +238,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             {debugMode ? "✓ 调试中" : "调试"}
           </button>
           {error && <span className="text-xs text-red-400">{error}</span>}
-          {/* R50 (2026-08-11): the "编辑 IO" / "预览 IO" affordances are
+          {/* the "编辑 IO" / "预览 IO" affordances are
            *  scoped to the ROOT workflow only — subgraphs (子工作流) can't
            *  run independently.  The whole concept of `workflowIO` is a
            *  contract between this workflow's author and whoever calls
@@ -269,13 +269,13 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               )}
             </button>
           )}
-          {/* IO preview toggle (2026-08-09).  Sits next to "编辑 IO" so the
+          {/* IO preview toggle. Sits next to "编辑 IO" so the
            *  author can flip into edit + open the preview in one sweep.
            *  Disabled outside edit mode — preview is meaningful only when
            *  there's an IO selection to render.  When the user opens the
            *  panel but hasn't entered edit mode, auto-flip edit on too,
            *  so checkboxes remain useful alongside the preview.  Also
-           *  hidden in subgraph view (R50) — same rationale as the edit
+           *  hidden in subgraph view — same rationale as the edit
            *  toggle: a subgraph has no IO contract to preview. */}
           {subgraphStack.length === 0 && (
             <button
@@ -295,7 +295,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               {ioPreviewOpen ? "👁 关闭预览" : "👁 预览 IO"}
             </button>
           )}
-          {/* 2026-08-11 R40: 顶部直达 JSON 源码查看器。复用 WorkflowLibrary
+          {/* 顶部直达 JSON 源码查看器。复用 WorkflowLibrary
            *  的 SourceModal —— 从缓存里的 disk snapshot 拿 graph/rawJson,
            *  无需再 fetch。打开 modal 前判读 detail 是否已就绪,否则 toast 提醒。 */}
           <button

@@ -1,6 +1,6 @@
 "use client";
 
-/** 2026-08-29 T12-3: extracted from ProjectCanvas — connection chaining
+/** extracted from ProjectCanvas — connection chaining
  *  logic (routes generated output by which port/handle is connected).
  *
  *  Ref objects are threaded in from the parent because the callbacks read
@@ -123,7 +123,7 @@ export function useCanvasConnections({
     [setEdges, edgesRef, propagateFrom],
   );
 
-  /* 2026-08-25: lazy edge interactivity — untouched edges stay inert
+  /* lazy edge interactivity — untouched edges stay inert
    *  (deletable/reconnectable=false); the first click flips both flags on,
    *  after which delete-key / drag-reconnect behave exactly as before. */
   const onEdgeClick = useCallback(
