@@ -5,28 +5,10 @@
     "S2": "视图内 vanillaApi.*（应经 controller hook 暴露 action）",
     "S3": "视图内 tRPC hook（应经 controller hook 暴露数据）"
   },
-  "total": 96,
+  "total": 69,
   "files": {
-    "src/components/model/ModelLibrary.tsx": {
-      "S2": 3
-    },
-    "src/components/studio/FilmStudio.tsx": {
-      "S1": 1,
-      "S2": 7
-    },
-    "src/components/studio/ModelLibrary.tsx": {
-      "S3": 6
-    },
-    "src/components/studio/ModelTagManager.tsx": {
-      "S1": 1,
-      "S2": 4
-    },
     "src/components/studio/ProjectOutputs.tsx": {
       "S3": 1
-    },
-    "src/components/studio/TrainingStudio.tsx": {
-      "S1": 1,
-      "S2": 4
     },
     "src/components/studio/VideoQueueModal.tsx": {
       "S2": 2
