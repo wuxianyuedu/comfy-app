@@ -5,7 +5,7 @@
     "S2": "视图内 vanillaApi.*（应经 controller hook 暴露 action）",
     "S3": "视图内 tRPC hook（应经 controller hook 暴露数据）"
   },
-  "total": 42,
+  "total": 16,
   "files": {
     "src/components/studio/ProjectOutputs.tsx": {
       "S3": 1
@@ -24,46 +24,6 @@
     },
     "src/components/studio/logs/LogProvider.tsx": {
       "S1": 1
-    },
-    "src/components/studio/project-canvas/CanvasNode/CanvasNode.tsx": {
-      "S2": 1
-    },
-    "src/components/studio/project-canvas/CanvasNode/use-generate.ts": {
-      "S2": 1
-    },
-    "src/components/studio/project-canvas/CanvasNode/use-workflow-io.ts": {
-      "S2": 3
-    },
-    "src/components/studio/project-canvas/ContentAssetNode.tsx": {
-      "S2": 1
-    },
-    "src/components/studio/project-canvas/GlobalStepLogPanel.tsx": {
-      "S2": 1
-    },
-    "src/components/studio/project-canvas/HistoryPanel.tsx": {
-      "S2": 2
-    },
-    "src/components/studio/project-canvas/ImageGenerationPanel.tsx": {
-      "S2": 1
-    },
-    "src/components/studio/project-canvas/canvas-helpers.ts": {
-      "S1": 3,
-      "S2": 2
-    },
-    "src/components/studio/project-canvas/canvas-store.ts": {
-      "S2": 3
-    },
-    "src/components/studio/workflow-editor/WorkflowEditorInner.tsx": {
-      "S3": 1
-    },
-    "src/components/studio/workflow-editor/WorkflowStores.tsx": {
-      "S2": 2
-    },
-    "src/components/studio/workflow-editor/workflow-editor-detail-loader.ts": {
-      "S2": 4
-    },
-    "src/components/studio/workflow-editor/workflow-editor-persistence.ts": {
-      "S3": 1
     },
     "src/components/studio/workflow-library/WorkflowCanvasNodePreview.tsx": {
       "S2": 1

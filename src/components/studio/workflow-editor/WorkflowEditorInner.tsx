@@ -12,7 +12,6 @@ import {
 import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "@/config/custom-nodes";
 import { SourceModal } from "../SourceModal";
-import { api } from "~/trpc/react";
 import type { WorkflowDetail,
   WorkflowIOParam,
 } from "../workflow-types";
@@ -42,9 +41,10 @@ import { WorkflowEditorTopBar } from "./WorkflowEditorTopbar";
 import { WorkflowIoPreviewPanel } from "../WorkflowIOPreviewPanel";
 import { WorkflowEditorCanvas } from "./WorkflowEditorCanvas";
 import { buildInitialNodes } from "./workflow-editor-build-nodes";
-import { useWorkflowDetailLoader } from "./workflow-editor-detail-loader";
+import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
-import { useWorkflowPersistence } from "./workflow-editor-persistence";
+import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
+import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
 
 /* ── Canvas grid ──
  *  Two stacked native <Background> layers so the grid pans / zooms with
@@ -139,7 +139,7 @@ function WorkflowEditorBody({
   const workflowIO = useIOEditStore(selectWorkflowIO);
   const ioEditMode = useIOEditStore(selectIoEditMode);
   const ioPreviewOpen = useIOEditStore(selectIoPreviewOpen);
-  const savePatch = api.workflow.update.useMutation();
+  const savePatch = useWorkflowSaveMutation();
   /* Side-panel toggle for the IO preview (2026-08-09).  Independent of
    *  `ioEditMode` so the author can A/B toggle before vs. after opening
    *  the panel.  Default closed — the canvas already gives a busy

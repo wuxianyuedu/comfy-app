@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "@/components/studio/ui/MediaThumbnail";
 import { AuroraBackground } from "@/components/studio/ui/AuroraBackground";
-import { getActiveId, listProjects, type CanvasProject } from "@/components/studio/project-canvas/canvas-store";
+import { getActiveId, listProjects, type CanvasProject } from "@/lib/project-canvas/canvas-store";
 import { api } from "~/trpc/react";
 
 interface OutputImage {
