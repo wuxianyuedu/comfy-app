@@ -108,7 +108,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed bottom-5 right-5 z-100 flex w-[340px] flex-col gap-2.5">
+      <div className="pointer-events-none fixed bottom-8 right-5 z-100 flex w-[340px] flex-col gap-2.5">
         {items.map((item) =>
 {
           const st = KIND_STYLE[item.kind];
