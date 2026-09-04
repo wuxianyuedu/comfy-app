@@ -120,10 +120,11 @@ export const generateRouter = createTRPCRouter({
         }
 
         // Canvas-edited graph or API-only import.
-        const graph =
-          (data.canvasGraph!) ??
-          asGraph(tpl?.graph);
-        if (!graph) {
+        // 空对象也算空图：模板 graph 列 NOT NULL，导入失败/空导出会落 `{}`，
+        // 此时拿去构建会静默产出一个空 prompt 任务（提交到 ComfyUI 才失败，
+        // 用户侧无提示），故与 null 同等对待。
+        const graph = data.canvasGraph ?? asGraph(tpl?.graph);
+        if (!graph || Object.keys(graph).length === 0) {
           throw new Error("Workflow graph is empty");
         }
         try {

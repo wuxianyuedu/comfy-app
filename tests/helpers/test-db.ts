@@ -182,6 +182,15 @@ export interface TestDb {
 let currentSqlite: Database.Database | null = null;
 let currentDb: TestDb | null = null;
 
+/** 判定 text 列是否应还原成 Date：schema.ts 的日期列统一 text + ISO 字符串。 */
+function isDateColumn(col: string): boolean {
+  return (
+    col.endsWith("At") &&
+    col !== "sourceMtime" &&
+    col !== "sortIndex"
+  );
+}
+
 function parseRow(table: string, row: Record<string, unknown>): Row {
   const out: Row = { ...row };
   for (const [k, v] of Object.entries(out)) {
@@ -191,6 +200,14 @@ function parseRow(table: string, row: Record<string, unknown>): Row {
       } catch {
         /* 保留原值 */
       }
+    } else if (
+      // 日期列（finishedAt 等）经 repository 写回后是 ISO 字符串，旧记忆里是
+      // Date 实例：统一还原成 Date，保持 `$tables.X` 断言语义稳定。
+      typeof v === "string" &&
+      isDateColumn(k) &&
+      /^\d{4}-\d{2}-\d{2}T/.test(v)
+    ) {
+      out[k] = new Date(v);
     }
   }
   return out;
@@ -198,6 +215,9 @@ function parseRow(table: string, row: Record<string, unknown>): Row {
 
 function serializeValue(col: string, v: unknown): unknown {
   if (v === null || v === undefined) return v;
+  // better-sqlite3 只接受 number/string/bigint/buffer/null 绑定值：boolean 必须
+  // 先转 0/1（schema.ts 的 boolean 列是 integer({ mode: "boolean" })，存 0/1）。
+  if (typeof v === "boolean") return v ? 1 : 0;
   if (v instanceof Date) return v.toISOString();
   if (jsonColumns.has(col)) return JSON.stringify(v);
   // better-sqlite3（v13 / Node 24 编译）拒绝绑定 boolean，需按 schema 的

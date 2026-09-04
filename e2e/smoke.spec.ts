@@ -5,8 +5,10 @@ import { expect, test } from "@playwright/test";
  * 选择器文本均来自 src/app/login/page.tsx 与 src/components/studio/HomePage.tsx 的真实文案。
  */
 
+// @critical：规范 11.7 的 CI 门禁只跑这一类关键流程（CLI: --grep @critical）。
+// 新增冒烟用例若属于「合并前必须验证的主流程」，请带上同一个 tag。
 test.describe("登录页冒烟", () => {
-  test("渲染登录表单关键元素并支持切换注册模式", async ({ page }) => {
+  test("@critical 渲染登录表单关键元素并支持切换注册模式", async ({ page }) => {
     await page.goto("/login");
 
     // 品牌与引导文案
@@ -32,7 +34,7 @@ test.describe("登录页冒烟", () => {
 });
 
 test.describe("首页冒烟", () => {
-  test("首页重定向到 /workspace 且创作台正常渲染", async ({ page }) => {
+  test("@critical 首页重定向到 /workspace 且创作台正常渲染", async ({ page }) => {
     await page.goto("/");
 
     // src/app/page.tsx 服务端 redirect("/workspace")

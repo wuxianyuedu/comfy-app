@@ -20,7 +20,7 @@
 1. **包管理只用 pnpm**（`pnpm exec …`）。禁止 npx / npm run——npm 11.19 在本机
    解析 typescript 别名链会崩溃（`Class extends value undefined`）。
 2. **工具链钉死项不可随意改**（改动前必须读规范 §6 并在提交说明里给出理由）：
-   - `pnpm-workspace.yaml`：`minimumReleaseAge: 0`、`allowBuilds`（5 个包）、
+   - `pnpm-workspace.yaml`：`minimumReleaseAge: 0`、`allowBuilds`（6 个包）、
      `verifyDepsBeforeRun: false`
    - `next.config.js`：`experimental.useTypeScriptCli: false`
 3. **进程清理必须杀整棵树**：`taskkill /PID <pid> /T /F`。禁止 `Process.Kill()`
