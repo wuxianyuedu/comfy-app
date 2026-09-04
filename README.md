@@ -76,6 +76,7 @@ Comfy-APP-T3/
 | `public/splash.html` | 桌面壳启动加载页（编译时嵌入，由 Tauri 窗口初始显示） |
 | `register-comfyapp-protocol.bat` | 双击注册 `comfyapp://` 自定义 URL 协议（无需管理员） |
 | `start-web.bat` | 控制台模式启动 **Web 开发**（调用 `dev-launcher.ps1`，可见日志） |
+| `verify-quality.bat` | **一键质量验证**（双击即跑 typecheck/lint/vitest，给非开发人员用，见规范 11.12） |
 | `start-tauri.vbs` | 无控制台、隐藏窗口启动 **Tauri 桌面壳（dev 模式）** |
 | `CHANGELOG.md` | 变更日志 |
 
@@ -231,6 +232,9 @@ pnpm test:e2e     # Playwright e2e
 pnpm docs         # 生成 API 文档到 docs/
 pnpm db:push      # 推送 Prisma schema 到数据库
 ```
+
+非开发人员无需记上面命令，双击根目录 `verify-quality.bat` 即可一键跑质量门禁
+（typecheck / eslint 零警告 / vitest），用法与"新增校验怎么补"见 `docs/standards/11` 的 11.12。
 
 ---
 
