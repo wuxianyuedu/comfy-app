@@ -1,0 +1,74 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`WorkflowSubgraphNode > 渲染子图标题与 #id 徽标 1`] = `
+<div>
+  <div
+    class="relative flex flex-col rounded-lg border shadow-[0_6px_22px_rgba(0,0,0,0.6)]"
+    style="height: auto; min-width: 280px; border-color: rgba(124, 92, 252, 0.55); isolation: isolate; background: var(--color-node); outline: none;"
+    title="双击进入子工作流"
+  >
+    <div
+      class="flex shrink-0 items-center gap-2 rounded-t-lg px-2 text-xs"
+      style="height: 30px; background: rgb(42, 36, 74); border-bottom: 1px solid rgba(255, 255, 255, 0.06);"
+    >
+      <button
+        aria-label="折叠子图"
+        class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-white/10 hover:text-white active:bg-white/15"
+        style="pointer-events: auto;"
+        title="折叠"
+        type="button"
+      >
+        <svg
+          fill="none"
+          height="10"
+          style="transform: rotate(90deg); transition: transform 120ms ease;"
+          viewBox="0 0 10 10"
+          width="10"
+        >
+          <path
+            d="M3.5 2 L7 5 L3.5 8"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+          />
+        </svg>
+      </button>
+      <span
+        class="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded text-[9px] font-bold"
+        style="background: rgb(124, 92, 252); color: var(--color-canvas); box-shadow: 0 0 6px #7C5CFC;"
+        title="子工作流"
+      >
+        S
+      </span>
+      <span
+        class="min-w-0 flex-1 cursor-pointer truncate text-[12px] font-semibold tracking-wide hover:text-white"
+        role="button"
+        style="color: rgb(226, 226, 234);"
+        tabindex="0"
+        title="点击进入子工作流"
+      >
+        我的子图
+      </span>
+      <button
+        aria-label="查看节点 #10 的原始 JSON 数据"
+        class="nodrag nopan group inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded border border-violet-400/40 bg-violet-500/10 px-1 font-mono text-[9.5px] font-semibold uppercase tracking-wider text-violet-200 transition-colors hover:border-violet-300/70 hover:bg-violet-500/25 hover:text-violet-50 focus:outline-none focus:ring-1 focus:ring-violet-400/40"
+        data-node-id-chip="10"
+        data-variant="subgraph"
+        title="查看节点 10 在工作流 JSON 中的原始数据"
+        type="button"
+      >
+        <span
+          aria-hidden="true"
+          style="font-size: 9px; line-height: 1;"
+        >
+          🔍
+        </span>
+        <span>
+          #10
+        </span>
+      </button>
+    </div>
+  </div>
+</div>
+`;

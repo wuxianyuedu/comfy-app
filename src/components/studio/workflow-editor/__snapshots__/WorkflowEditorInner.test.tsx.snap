@@ -1,0 +1,22 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`WorkflowEditorInner > 在 ReactFlowProvider 内挂载并渲染加载态 1`] = `
+<div>
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas)"
+  >
+    <div
+      class="text-center"
+    >
+      <div
+        class="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500"
+      />
+      <p
+        class="text-sm text-gray-400"
+      >
+        加载工作流节点…
+      </p>
+    </div>
+  </div>
+</div>
+`;

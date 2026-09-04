@@ -11,7 +11,7 @@
  *    Driven entirely by the read-only AST manifest (customNodes.manifest.json).
  *
  * The custom-card layout lives in ./ComfyNodeCustom; default-node connection
- * handles live in ./comfy-node-handles (kept out of this file to stay focused).
+ * handles live in ./ComfyNodeHandles (kept out of this file to stay focused).
  */
 
 import { memo } from "react";
@@ -22,7 +22,7 @@ import { PackageFooter } from "./PackageFooter";
 import { DebugChainFooter } from "../../studio/debug/DebugChainFooter";
 import { getWorkflowCanvasRenderChain } from "../../studio/canvas/workflow-canvas-render-chain";
 import { ComfyNodeCustom } from "./ComfyNodeCustom";
-import { renderHandles } from "./comfy-node-handles";
+import { renderHandles } from "./ComfyNodeHandles";
 
 function ComfyNodeInner({ data, selected }: NodeProps) {
   const d = data as unknown as NodeData;

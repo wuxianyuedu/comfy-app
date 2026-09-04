@@ -30,7 +30,7 @@ interface MaterialFolder {
 
 type MaterialKind = "image" | "video" | "audio" | "doc";
 
-interface MaterialItem {
+export interface MaterialItem {
   id: string;
   name: string;
   folder: string;
