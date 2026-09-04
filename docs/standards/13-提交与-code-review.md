@@ -104,25 +104,42 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 
 ### 13.5 CI 门禁
 
+**唯一事实来源**：`.github/workflows/ci.yml`（2026-09-04 对齐 #7）。改门禁改这个文件，
+本文档与 [11.7](11-测试与可观测性.md#117-ci-质量门禁) 同步更新即可，不要三处各写一套。
+
 ```
-PR 合并前必须通过：
-✅ tsc --noEmit
-✅ eslint . --max-warnings 0
-✅ vitest run
-✅ playwright test（关键 E2E 流程）
+PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
+✅ pnpm install --frozen-lockfile
+✅ pnpm run typecheck            # tsc --noEmit
+✅ pnpm exec eslint . --max-warnings 0
+✅ pnpm run test                 # vitest run
+✅ pnpm run test:coverage        # 覆盖率棘轮（vitest.config.ts 的目录阈值）
+✅ pnpm run build                # SKIP_ENV_VALIDATION=1（CI 无真实密钥）
+✅ pnpm exec playwright test --grep @critical   # 只跑 @critical 关键流程
 ```
 
-**规则**：CI 失败阻断合并；**本地提交门槛已实装**——`.githooks/pre-commit`（经
-`git config core.hooksPath .githooks` 启用）依次跑：
+**规则**：
+
+- CI 失败阻断合并；**本地提交门槛已实装**——`.githooks/pre-commit`（经
+  `git config core.hooksPath .githooks` 启用）依次跑：
 
 ```
 ✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则（见 §12.8、12 §12.6）
-✅ npx tsc --noEmit
-✅ npx eslint .
+✅ pnpm exec tsc --noEmit
+✅ pnpm exec eslint .
 ```
 
-任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。
-新克隆仓库后需重设一次：`git config core.hooksPath .githooks`。
+  任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。
+  新克隆仓库后需重设一次：`git config core.hooksPath .githooks`。
+- **一律 pnpm，禁止 npm/npx**（AGENTS.md 硬规则 1）：npm 在本项目解析 typescript
+  别名链会崩溃（`Class extends value undefined`）。
+- **E2E 用 `@critical` tag 圈定关键流程**：新增冒烟用例若属于「合并前必须验证的
+  主流程」，标题带上 `@critical`；非关键用例不阻断合并。
+- **`format:check`（prettier）暂未纳入门禁**：全库基线未过 prettier，一次性格式化
+  会产生与功能无关的全文件 diff（违反 [13.7](#137-换行符与提交噪声lf)）。待基线整改
+  后单独接入，接入时同步删掉 ci.yml 里对应注释。
+- 新增含 postinstall 构建脚本的依赖，同步 `pnpm-workspace.yaml` 的 `allowBuilds`
+  （AGENTS.md 硬规则 7），否则非交互 `pnpm install` 会 exit 1。
 
 ### 13.6 分支与合并策略
 

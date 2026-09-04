@@ -1,10 +1,12 @@
 name: CI
 
 on:
+  # 本仓库默认分支是 master（不是 main）——此前写成 main，workflow 从未被触发，
+  # 门禁形同虚设。改分支保护/默认分支时必须同步这里。
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 jobs:
   quality:
@@ -13,24 +15,65 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # 不写 version：读 package.json 的 packageManager（pnpm@11.25.0）。
+          # 手写版本号迟早与 packageManager 漂移，且 pnpm 11 的项目级配置已迁移
+          # 到 pnpm-workspace.yaml（.npmrc 里的 pnpm 专属设置不再生效）。
+          run_install: false
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          node-version: 24
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        # 门禁用 pnpm（AGENTS.md 硬规则 1：npm 11 在本项目解析 typescript 别名
+        # 链会崩溃）。--frozen-lockfile 保证 CI 装的就是锁文件里的版本。
+        run: pnpm install --frozen-lockfile
 
-      - name: Generate Prisma client
-        run: npx prisma generate
+      # 说明：ORM 已由 Prisma 迁到 Drizzle（better-sqlite3），`prisma generate`
+      # 步骤已删除——它在本仓库既不存在也必然失败。
 
-      # 说明：lint / format:check 因历史代码基线不一致暂未纳入门禁，
-      # 全量整改后应恢复（npm run lint / npm run format:check）。
-      # 当前门禁：类型安全 + 单元测试。
+      # 说明：format:check（prettier）仍未纳入门禁——全库 361 个文件未过 prettier，
+      # 一次性格式化是与本次门禁对齐无关的大面积噪声 diff（且会与 §13.7 的
+      # 「禁止无关全文件变更」冲突）。待基线整改后单独接入。
 
       - name: Typecheck
-        run: npm run typecheck
+        run: pnpm run typecheck
+
+      - name: Lint
+        # 零警告门禁：与规范 11.7 / 13.5 对齐
+        run: pnpm exec eslint . --max-warnings 0
 
       - name: Test
-        run: npm test
+        run: pnpm run test
+
+      - name: Coverage
+        # 覆盖率棘轮（vitest.config.ts）：middleware/lib 目录按真实水平设硬门槛
+        run: pnpm run test:coverage
+
+      - name: Build
+        # src/env.js 在 build/dev 期校验；CI 无真实密钥，用占位值通过 schema 校验
+        env:
+          SKIP_ENV_VALIDATION: "1"
+        run: pnpm run build
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E (Playwright @critical)
+        # 只跑 @critical 关键流程（规范 11.7）；其余 E2E 不阻断合并
+        env:
+          SKIP_ENV_VALIDATION: "1"
+        run: pnpm exec playwright test --grep @critical
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

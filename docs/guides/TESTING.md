@@ -6,9 +6,9 @@
 ## 快速开始
 
 ```bash
-npm run test            # 全量单测(vitest run)
-npm run test:coverage   # 覆盖率(v8,含棘轮阈值门槛)
-npm run typecheck       # tsc --noEmit
+pnpm run test            # 全量单测(vitest run)
+pnpm run test:coverage   # 覆盖率(v8,含棘轮阈值门槛)
+pnpm run typecheck       # tsc --noEmit
 ```
 
 ## 单元测试（Vitest）
@@ -66,7 +66,7 @@ npm run typecheck       # tsc --noEmit
 
 ## 覆盖率策略（棘轮制）
 
-`npm run test:coverage` 跑 v8 覆盖率并对**已覆盖目录**设硬阈值（低于即失败）：
+`pnpm run test:coverage` 跑 v8 覆盖率并对**已覆盖目录**设硬阈值（低于即失败）：
 
 | 目录 | 门槛（lines/funcs/stmts/branches） |
 |------|------|
