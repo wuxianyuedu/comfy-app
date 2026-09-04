@@ -30,3 +30,10 @@ allowBuilds:
   '@prisma/client': false
   '@prisma/engines': false
   prisma: false
+
+# 安全修复：@esbuild-kit/core-utils 是已废弃的 esm-loader（被 tsx 替代），
+# 其 esbuild@~0.18.20 存在 GHSA-67mh-4wv8-2f99 中危漏洞（serve 功能 CORS 缺陷）。
+# 强制将其 esbuild 依赖升级到 0.25.12（与 drizzle-kit 直接依赖版本对齐），
+# esbuild JS API（transform/transformSync）跨版本保持稳定，兼容无风险。
+overrides:
+  '@esbuild-kit/core-utils>esbuild': '0.25.12'
