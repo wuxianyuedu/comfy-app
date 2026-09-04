@@ -28,6 +28,16 @@
   优先展示完整文件路径与行号，不再截断。
 - **comfy-cli 虚拟环境随启动自动准备**：`start-tauri.exe` 启动时检测
   `python-venv/comfy-cli`，缺失则后台自动创建 venv 并安装 comfy-cli，不阻塞启动。
+- **UI 与逻辑分离护栏（棘轮）**：新增 `scripts/check-ui-logic-separation.cjs`，
+  统计视图层里的 `fetch(` / `vanillaApi.*` / tRPC hook 三类 IO，违规数**只许降不许升**，
+  已接入 `pre-commit` 与 CI（治理后必须 `--update` 收紧基线）。当前基线 96 处 / 32 文件。
+  配套规范：[docs/standards/17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)
+  （含全库分批推进计划 P1–P4）。
+- **UI 与逻辑分离首批（P1）落地**：`ApiChannelSettings`、`studio/history/*`、
+  `MaterialLibraryPanel` 三个域按「配置 / 逻辑 / 视图 / 容器」四层拆开，
+  业务逻辑下沉到 `hooks/` 与 `lib/*-client.ts`，共清掉 8 处视图内 IO、
+  新增 78 个逻辑层测试；三个组件的对外 API 与视觉保持不变，消费方零改动。
+
 - **新增 `tools/` 构建脚本目录**：`build-launcher.bat` 可一键重新打包
   `start-tauri.exe`；打包配置 `start-tauri.spec` 纳入版本控制（此前被 `.gitignore`
   的 `start-tauri*.spec` 规则一并忽略，打包流程无法从仓库复现）。

@@ -1,16 +1,13 @@
 "use client";
-import React from "react";
 import { Icon } from "@/components/ui/icon";
-import type { ApiChannelKind, ApiChannelsView, ApiChannelSaveInput } from "@/lib/workshop/api-channel-shared";
 
-/** catch 抛出值（unknown）→ 消息提取：带 string message 的对象取 message，其余回退。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return fallback;
-}
+import {
+  API_CHANNEL_KIND_META,
+  API_CHANNEL_KINDS,
+  API_CHANNEL_MSG_STYLE,
+} from "./api-channel-settings-config";
+import { useApiChannelSettings } from "./hooks/use-api-channel-settings";
+import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 
 interface Props {
   initial: ApiChannelsView | null;
@@ -19,81 +16,17 @@ interface Props {
   onSaved: (channels: ApiChannelsView) => void;
 }
 
-const KIND_META: Record<ApiChannelKind, { title: string; hint: string }> = {
-  image: {
-    title: "生图 API",
-    hint: "OpenAI 兼容 images 接口（POST {baseUrl}{path}），如 https://api.openai.com/v1 + /images/generations。",
-  },
-  video: {
-    title: "视频 API",
-    hint: "视频生成端点：支持同步返回视频 URL，或提交后返回任务 ID（系统自动按 GET {baseUrl}/{taskId} 轮询）。",
-  },
-};
-
 /**
- * Configure the workshop's API 直连 channels (image / video). Same interaction
- * model as the LLM settings modal: baseUrl/apiKey stored server-side, browser
- * only ever sees a masked view.
+ * 工坊 API 直连通道设置（生图 / 视频）——纯展示层（规范 17 §17.2 第③层）。
+ * 状态与保存流程在 hooks/use-api-channel-settings.ts，网络请求在
+ * lib/workshop/api-channel-client.ts，本文件只渲染 + 上抛事件。
+ *
+ * 与 LLM 设置弹层同款交互模型：baseUrl/apiKey 存服务端，浏览器只见脱敏视图。
  */
 export function ApiChannelSettings({ initial, onClose, onSaved }: Props) {
-  const [tab, setTab] = React.useState<ApiChannelKind>("image");
-  const [draft, setDraft] = React.useState<Record<ApiChannelKind, ApiChannelSaveInput>>({
-    image: {
-      baseUrl: initial?.image.baseUrl ?? "",
-      path: initial?.image.path ?? "/images/generations",
-      model: initial?.image.model ?? "",
-    },
-    video: {
-      baseUrl: initial?.video.baseUrl ?? "",
-      path: initial?.video.path ?? "/videos/generations",
-      model: initial?.video.model ?? "",
-    },
-  });
-  const [apiKeyDraft, setApiKeyDraft] = React.useState({ image: "", video: "" });
-  const [saving, setSaving] = React.useState(false);
-  const [msg, setMsg] = React.useState<{ kind: "ok" | "err"; text: string } | null>(null);
-
+  const controller = useApiChannelSettings({ initial, onSaved });
+  const { tab, draft, apiKeyDraft, meta } = controller;
   const current = draft[tab];
-  const currentKey = apiKeyDraft[tab];
-  const meta = KIND_META[tab];
-
-  function updateTab(kind: ApiChannelKind, patch: Partial<ApiChannelSaveInput>) {
-    setDraft((prev) => ({ ...prev, [kind]: { ...prev[kind], ...patch } }));
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const payload: { image?: ApiChannelSaveInput; video?: ApiChannelSaveInput } = {};
-      const imgKey = apiKeyDraft.image.trim();
-      const vidKey = apiKeyDraft.video.trim();
-      payload.image = { ...draft.image, ...(imgKey ? { apiKey: imgKey } : {}) };
-      payload.video = { ...draft.video, ...(vidKey ? { apiKey: vidKey } : {}) };
-      const res = await fetch("/api/workshop-api/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data: unknown = await res.json();
-      if (!res.ok) {
-        const errMsg =
-          typeof data === "object" && data !== null && "error" in data
-            ? String((data).error)
-            : "保存失败";
-        throw new Error(errMsg);
-      }
-      const channels = (data as { channels?: ApiChannelsView }).channels;
-      if (channels) {
-        onSaved(channels);
-        setMsg({ kind: "ok", text: "已保存。API 通道已可用。" });
-      }
-    } catch (e: unknown) {
-      setMsg({ kind: "err", text: errorMessage(e, "保存失败") });
-    } finally {
-      setSaving(false);
-    }
-  }
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
@@ -109,19 +42,21 @@ export function ApiChannelSettings({ initial, onClose, onSaved }: Props) {
         </div>
 
         <div className="mb-3 grid grid-cols-2 gap-2">
-          {(Object.keys(KIND_META) as ApiChannelKind[]).map((kind) => (
+          {API_CHANNEL_KINDS.map((kind) => (
             <button
               key={kind}
               type="button"
-              onClick={() => setTab(kind)}
+              onClick={() => controller.setTab(kind)}
               className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
                 tab === kind
                   ? "border-primary bg-primary-soft text-primary"
                   : "border-border text-muted-foreground hover:bg-subtle"
               }`}
             >
-              {KIND_META[kind].title}
-              {initial?.[kind].configured ? " · 已配置" : " · 未配置"}
+              <ChannelTabLabel
+                title={API_CHANNEL_KIND_META[kind].title}
+                configured={initial?.[kind].configured ?? false}
+              />
             </button>
           ))}
         </div>
@@ -130,38 +65,36 @@ export function ApiChannelSettings({ initial, onClose, onSaved }: Props) {
           <Field
             label="Base URL"
             value={current.baseUrl ?? ""}
-            onChange={(v) => updateTab(tab, { baseUrl: v })}
+            onChange={(v) => controller.patchChannel(tab, { baseUrl: v })}
             placeholder="https://api.openai.com/v1"
           />
           <Field
             label="请求路径"
             value={current.path ?? ""}
-            onChange={(v) => updateTab(tab, { path: v })}
-            placeholder={tab === "image" ? "/images/generations" : "/videos/generations"}
+            onChange={(v) => controller.patchChannel(tab, { path: v })}
+            placeholder={meta.pathPlaceholder}
           />
           <Field
             label="模型名（可选）"
             value={current.model ?? ""}
-            onChange={(v) => updateTab(tab, { model: v })}
-            placeholder="gpt-image-1 / Provider 模型 ID"
+            onChange={(v) => controller.patchChannel(tab, { model: v })}
+            placeholder={meta.modelPlaceholder}
           />
           <Field
             label={`API Key${initial?.[tab].hasApiKey ? "（已保存，留空则不修改）" : ""}`}
-            value={currentKey}
-            onChange={(v) => setApiKeyDraft((prev) => ({ ...prev, [tab]: v }))}
+            value={apiKeyDraft[tab]}
+            onChange={(v) => controller.patchApiKey(tab, v)}
             placeholder="sk-..."
             password
           />
         </div>
 
         <p className="text-muted-foreground mt-3 text-[11px] leading-relaxed">{meta.hint}</p>
-        {msg && (
+        {controller.msg && (
           <p
-            className={`mt-3 rounded-lg px-3 py-2 text-xs ${
-              msg.kind === "ok" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-            }`}
+            className={`mt-3 rounded-lg px-3 py-2 text-xs ${API_CHANNEL_MSG_STYLE[controller.msg.kind]}`}
           >
-            {msg.text}
+            {controller.msg.text}
           </p>
         )}
 
@@ -175,11 +108,11 @@ export function ApiChannelSettings({ initial, onClose, onSaved }: Props) {
           </button>
           <button
             type="button"
-            onClick={handleSave}
-            disabled={saving}
+            onClick={() => void controller.save()}
+            disabled={controller.saving}
             className="bg-primary rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
           >
-            {saving ? "保存中…" : "保存"}
+            {controller.saving ? "保存中…" : "保存"}
           </button>
         </div>
 
@@ -189,6 +122,16 @@ export function ApiChannelSettings({ initial, onClose, onSaved }: Props) {
         </p>
       </div>
     </div>
+  );
+}
+
+/** 页签文案：已配置的通道追加「· 已配置」，未配置追加「· 未配置」。 */
+function ChannelTabLabel({ title, configured }: { title: string; configured: boolean }) {
+  return (
+    <>
+      {title}
+      {configured ? " · 已配置" : " · 未配置"}
+    </>
   );
 }
 
