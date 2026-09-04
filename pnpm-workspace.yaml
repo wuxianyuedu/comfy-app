@@ -30,6 +30,8 @@ allowBuilds:
   '@prisma/client': false
   '@prisma/engines': false
   prisma: false
+  # msw: 含 postinstall；按 §7 规则新增含构建脚本的依赖需在 allowBuilds 显式批准
+  msw: true
 
 # 安全修复：@esbuild-kit/core-utils 是已废弃的 esm-loader（被 tsx 替代），
 # 其 esbuild@~0.18.20 存在 GHSA-67mh-4wv8-2f99 中危漏洞（serve 功能 CORS 缺陷）。
