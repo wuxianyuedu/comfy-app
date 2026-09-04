@@ -271,7 +271,7 @@ export function ScriptMarkdownEditor({
   }, [onSave, restoreHistory]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#0a0a0f]">
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#0a0a0f] pb-6">
       {/* Header */}
       <header className="flex h-14 items-center justify-between border-b border-[#26262e] px-5">
         <div className="flex items-center gap-3">

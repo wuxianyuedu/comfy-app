@@ -504,7 +504,7 @@ function WorkflowEditorBody({
   /* Loading state */
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas)">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas) pb-6">
         <div className="text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
           <p className="text-sm text-gray-400">加载工作流节点…</p>
@@ -515,7 +515,7 @@ function WorkflowEditorBody({
 
   if (error || !detail) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas)">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas) pb-6">
         <div className="text-center">
           <p className="text-red-400">{error ?? "未知错误"}</p>
           <button
@@ -535,7 +535,7 @@ function WorkflowEditorBody({
    *  component for the full rationale.) */
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-(--color-canvas)">
+    <div className="fixed inset-0 z-50 flex flex-col bg-(--color-canvas) pb-6">
         {/* ── Top bar ── */}
         <WorkflowEditorTopBar
           onClose={onClose}
