@@ -189,18 +189,36 @@ describe("useSettingsPage", () => {
     expect(probeMock).toHaveBeenCalledTimes(callsAfterLocalProbe);
   });
 
-  it("Ollama 探测失败 → down，并暴露启动入口", async () => {
-    probeMock.mockResolvedValue({ up: false });
+  it("Ollama 探测失败 → down；启动后轮询到就绪才恢复 up", async () => {
+    /* 前 2 次探测 down（初始 + 启动后第 1 轮），第 3 次起 up——
+     * 模拟 ollama serve 冷启动期间端口未就绪、稍后才接上。 */
+    probeMock
+      .mockResolvedValueOnce({ up: false })
+      .mockResolvedValueOnce({ up: false })
+      .mockResolvedValue({ up: true, models: [] });
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await waitFor(() => expect(result.current.ollamaStatus).toBe("down"));
     expect(result.current.ollamaStarting).toBe(false);
 
-    await act(async () => {
-      await result.current.startOllama();
-    });
-    expect(startMock).toHaveBeenCalledOnce();
+    vi.useFakeTimers();
+    try {
+      let starting: Promise<void> = Promise.resolve();
+      await act(async () => {
+        starting = result.current.startOllama();
+      });
+      // 推进轮询的 2s 间隔定时器直到探测到 up（第三轮探测）
+      await vi.advanceTimersByTimeAsync(10_000);
+      await act(async () => {
+        await starting;
+      });
+      expect(startMock).toHaveBeenCalledOnce();
+      expect(result.current.ollamaStatus).toBe("up");
+      expect(result.current.ollamaStarting).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("startOllama 失败 → flash 出可读文案（失败路径必须有出口）", async () => {

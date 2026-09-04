@@ -102,6 +102,10 @@ export interface SettingsPageController {
 /** 提示条停留时长。 */
 const FLASH_MS = 3500;
 
+/** Ollama 启动就绪轮询：最多 20 次 × 2s（覆盖 ollama 冷启动的常见耗时）。 */
+const OLLAMA_START_POLL_TIMES = 20;
+const OLLAMA_START_POLL_INTERVAL_MS = 2000;
+
 /** 设置页全部状态与动作 —— 见文件头注释的分层说明。 */
 export function useSettingsPage(): SettingsPageController {
   const [section, setSection] = useState<Section>("llm");
@@ -113,6 +117,11 @@ export function useSettingsPage(): SettingsPageController {
   const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus>("checking");
   const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
   const [ollamaStarting, setOllamaStarting] = useState(false);
+  // startOllama 的轮询里要读最新状态；state 闭包会拿到旧值，用 effect 同步到 ref
+  const ollamaStatusRef = useRef<OllamaStatus>("checking");
+  useEffect(() => {
+    ollamaStatusRef.current = ollamaStatus;
+  }, [ollamaStatus]);
   const [settingsDraft, setSettingsDraft] = useState<Settings | null>(null);
   const [comfyStarting, setComfyStarting] = useState(false);
 
@@ -188,11 +197,22 @@ export function useSettingsPage(): SettingsPageController {
     setOllamaStarting(true);
     try {
       await startOllamaClient();
-      // 进程拉起需要一点时间，先等再探，避免红点闪一下又变绿
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      if (llmBaseUrl) await probeOllama(llmBaseUrl);
+      // 轮询等就绪再交回控制权：期间保持「启动中…」按钮禁用。以前 POST 完
+      // 固定睡 2s 就探一次，ollama 冷启动远不止 2s，状态行变回「未运行」、
+      // 按钮恢复可点，用户误以为失败会连点——每次点击都再拉起一个 serve
+      // 进程，多进程抢 11434 端口在 Windows 上连环弹「端口被占用」错误框。
+      for (let i = 0; i < OLLAMA_START_POLL_TIMES; i++) {
+        if (llmBaseUrl) await probeOllama(llmBaseUrl);
+        if (ollamaStatusRef.current === "up") return;
+        await new Promise((resolve) => setTimeout(resolve, OLLAMA_START_POLL_INTERVAL_MS));
+      }
+      throw new Error(
+        "Ollama 启动超时：进程可能未成功运行，请确认已安装 Ollama 并可手动执行 ollama serve",
+      );
     } catch (error) {
       showFlash("err", errorMessage(error, "启动 Ollama 失败"));
+      // 超时/失败后兜底探一次，让状态行和进程的真实情况对齐
+      if (llmBaseUrl) await probeOllama(llmBaseUrl);
     } finally {
       setOllamaStarting(false);
     }
