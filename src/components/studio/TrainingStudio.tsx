@@ -1,58 +1,20 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { NumberField } from "@/components/studio/ui/NumberField";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { vanillaApi } from "~/trpc/vanilla";
 
-type ModelOpt = { id: string; fileName: string; name: string };
-type TrainLogEntry = { t: number; level: string; msg: string };
-type TrainJob = {
-  id: string;
-  name: string;
-  baseModel: string;
-  triggerWord: string;
-  classWord: string | null;
-  datasetImages: { name: string; caption?: string }[];
-  resolution: number;
-  steps: number;
-  batchSize: number;
-  learningRate: number;
-  rankDim: number;
-  networkAlpha: number;
-  optimizer: string;
-  scheduler: string;
-  seed: number;
-  status: "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "CANCELLED";
-  progress: number;
-  outputName: string | null;
-  logs: TrainLogEntry[] | null;
-  error: string | null;
-  createdAt: string;
-};
-
-/** Extract `e.message` from an unknown thrown value (was `(e as any)?.message`). */
-function errMsg(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m: unknown = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return fallback;
-}
-const STATUS_META: Record<string, { label: string; cls: string }> = {
-  QUEUED: { label: "等待中", cls: "text-gray-300 bg-white/10" },
-  RUNNING: { label: "训练中", cls: "text-violet-300 bg-violet-500/15" },
-  DONE: { label: "已完成", cls: "text-emerald-300 bg-emerald-500/15" },
-  FAILED: { label: "失败", cls: "text-red-300 bg-red-500/15" },
-  CANCELLED: { label: "已取消", cls: "text-amber-300 bg-amber-500/15" },
-};
-
-const OPTIMIZERS = ["AdamW8bit", "AdamW", "Lion", "SGD"];
-const SCHEDULERS = ["cosine", "constant", "linear", "constant_with_warmup"];
-const RESOLUTIONS = [512, 768, 1024];
+import { useTrainingStudio } from "./hooks/use-training-studio";
+import {
+  OPTIMIZERS,
+  RESOLUTIONS,
+  SCHEDULERS,
+  buildLossGeometry,
+  statusMeta,
+} from "./training-studio-config";
 
 /* ── Layout (within WorkspaceNav parent shell) ──
   ┌─────────────────────────────────────────────────────────────┐
@@ -65,174 +27,46 @@ const RESOLUTIONS = [512, 768, 1024];
   │ · 逐图caption │  · 任务列表                  │  4 滑块 + lr    │
   │              │                               │  优化器/调度器  │
   │              │                               │  种子 + 开始    │
-  ├─────────────┴───────────────────────────────┴───────────────┤
+  ├─────────────────────────────────────────────────────────────┤
   │ Status Bar: ● ComfyUI·Kohya 就绪 · 本地算力 · 零授权          │
   └─────────────────────────────────────────────────────────────┘
 */
 
+const fieldClass =
+  "h-9 w-full rounded-lg border border-white/8 bg-white/3 px-3 text-[13px] text-(--color-ink-field) outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20";
+const labelClass = "mb-1.5 block text-[11px] font-medium text-(--color-ink-faint)";
+
+const RING_R = 36;
+const RING_C = 2 * Math.PI * RING_R;
+
+/**
+ * LoRA 训练工作室 —— 视图层（规范 17 §17.2 第③层）。
+ * 轮询、表单校验、数据集上传与任务创建在 hooks/use-training-studio.ts +
+ * lib/dataset-upload-client.ts，类型与派生计算在 training-studio-config.ts。
+ * 本文件只做渲染与上抛事件；对外导出名与组件签名保持不变，消费方零改动。
+ */
 export function TrainingStudio() {
   const router = useRouter();
-  const [checkpoints, setCheckpoints] = useState<ModelOpt[]>([]);
-  const [backendConfigured, setBackendConfigured] = useState(true);
-  const [jobs, setJobs] = useState<TrainJob[]>([]);
+  const c = useTrainingStudio();
+
+  /* 日志展开态、隐藏 file input 的引用：纯视觉/平台状态，留在视图层 */
   const [expanded, setExpanded] = useState<string | null>(null);
-
-  // ── form state ──
-  const [name, setName] = useState("");
-  const [baseModel, setBaseModel] = useState("");
-  const [triggerWord, setTriggerWord] = useState("");
-  const [classWord, setClassWord] = useState("");
-  const [dataset, setDataset] = useState<{ name: string; caption: string }[]>([]);
-  const [resolution, setResolution] = useState(512);
-  const [steps, setSteps] = useState(1500);
-  const [batchSize, setBatchSize] = useState(4);
-  const [learningRate, setLearningRate] = useState(0.0001);
-  const [rankDim, setRankDim] = useState(32);
-  const [networkAlpha, setNetworkAlpha] = useState(16);
-  const [optimizer, setOptimizer] = useState("AdamW8bit");
-  const [scheduler, setScheduler] = useState("cosine");
-  const [seed, setSeed] = useState(0);
-
-  const [uploading, setUploading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const loadModels = useCallback(() => {
-    void vanillaApi.model.list
-      .query({ type: "CHECKPOINT" })
-      .then((data) => setCheckpoints((data.models ?? []) as unknown as ModelOpt[]));
-  }, []);
-
-  const loadJobs = useCallback(() => {
-    vanillaApi.train.list
-      .query()
-      .then((data) => {
-        setJobs((data.jobs ?? []) as unknown as TrainJob[]);
-        setBackendConfigured(data.backendConfigured ?? false);
-      })
-      .catch(() => {
-        /* 轮询失败静默忽略，下一次 interval 会重试 */
-      });
-  }, []);
-
-  useEffect(() => {
-    loadModels();
-    loadJobs();
-    const t = setInterval(loadJobs, 4000);
-    return () => clearInterval(t);
-  }, [loadModels, loadJobs]);
-
-  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    if (!files.length) return;
-    setUploading(true);
-    try {
-      for (const f of files) {
-        const fd = new FormData();
-        fd.append("image", f);
-        const res = await fetch("/api/upload", { method: "POST", body: fd });
-        const d: unknown = await res.json();
-        const name =
-          typeof d === "object" && d !== null && "name" in d && typeof (d as { name?: unknown }).name === "string"
-            ? (d as { name: string }).name
-            : undefined;
-        if (name) setDataset((prev) => [...prev, { name, caption: "" }]);
-      }
-    } finally {
-      setUploading(false);
+  const onUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      await c.upload(e.target.files);
+      // 无论成功与否都复位：否则连选同一个文件第二次不会触发 change
       if (fileRef.current) fileRef.current.value = "";
-    }
-  }
-
-  // Fill any blank per-image captions with the trigger word (a common
-  // shortcut for single-concept LoRA training).
-  function fillBlankCaptions() {
-    const tw = triggerWord.trim();
-    if (!tw) return;
-    setDataset((prev) => prev.map((prev) =>({ ...prev, caption: prev.caption.trim() ? prev.caption : tw })));
-  }
-
-  async function submit() {
-    setError("");
-    if (!name.trim()) return setError("请填写任务名称");
-    if (!baseModel) return setError("请选择底模（Checkpoint）");
-    if (!triggerWord.trim()) return setError("请填写触发词");
-    if (!dataset.length) return setError("请至少上传一张数据集图片");
-
-    setSubmitting(true);
-    try {
-      await vanillaApi.train.create.mutate({
-        name: name.trim(),
-        baseModel,
-        triggerWord: triggerWord.trim(),
-        classWord: classWord.trim() || undefined,
-        datasetImages: dataset.map((dataset) =>({ name: dataset.name, caption: dataset.caption.trim() })),
-        resolution,
-        steps,
-        batchSize,
-        learningRate,
-        rankDim,
-        networkAlpha,
-        optimizer,
-        scheduler,
-        seed,
-      });
-      // reset form
-      setName("");
-      setTriggerWord("");
-      setClassWord("");
-      setDataset([]);
-      setSteps(1500);
-      setRankDim(32);
-      setNetworkAlpha(16);
-      loadJobs();
-    } catch (e) {
-      setError(errMsg(e, "创建失败"));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function cancelJob(id: string) {
-    await vanillaApi.train.cancel.mutate({ id });
-    loadJobs();
-  }
-
-  /* ── Derived monitor state ── */
-  const activeJob = useMemo(
-    () => jobs.find((job) => job.status === "RUNNING") ?? jobs.find((job) => job.status === "QUEUED") ?? jobs[0] ?? null,
-    [jobs]
+    },
+    [c],
   );
+
+  /* ── 监控卡派生（纯视觉计算）── */
+  const activeJob = c.activeJob;
   const ringProgress = activeJob ? activeJob.progress : 0;
   const ringSteps = activeJob ? Math.round((activeJob.progress / 100) * activeJob.steps) : 0;
-
-  /* ── Synthetic loss curve for the monitor card ── */
-  const lossGeo = useMemo(() => {
-    const W = 320, H = 120, pad = 12, n = 26;
-    const train: string[] = [];
-    const val: string[] = [];
-    for (let i = 0; i < n; i++) {
-      const x = i / (n - 1);
-      const base = 1.0 - 0.82 * Math.pow(x, 0.62);
-      const noise = Math.sin(i * 1.7) * 0.018 + Math.cos(i * 0.9) * 0.012;
-      const ty = Math.max(0.02, base + noise);
-      const vy = Math.max(0.04, base * 0.96 + 0.06 + noise * 0.6);
-      const px = pad + x * (W - 2 * pad);
-      const pty = H - pad - ty * (H - 2 * pad);
-      const pvy = H - pad - vy * (H - 2 * pad);
-      train.push(`${i === 0 ? "M" : "L"}${px.toFixed(1)} ${pty.toFixed(1)}`);
-      val.push(`${i === 0 ? "M" : "L"}${px.toFixed(1)} ${pvy.toFixed(1)}`);
-    }
-    return { W, H, train: train.join(" "), val: val.join(" ") };
-  }, []);
-
-  const fieldClass =
-    "h-9 w-full rounded-lg border border-white/8 bg-white/3 px-3 text-[13px] text-(--color-ink-field) outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20";
-  const labelClass = "mb-1.5 block text-[11px] font-medium text-(--color-ink-faint)";
-
-  const RING_R = 36;
-  const RING_C = 2 * Math.PI * RING_R;
+  const lossGeo = buildLossGeometry();
 
   return (
     <div
@@ -261,15 +95,15 @@ export function TrainingStudio() {
         {/* Backend status pill */}
         <div
           className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ${
-            backendConfigured ? "bg-emerald-500/12 text-emerald-300" : "bg-amber-500/12 text-amber-300"
+            c.backendConfigured ? "bg-emerald-500/12 text-emerald-300" : "bg-amber-500/12 text-amber-300"
           }`}
         >
           <span
             className={`inline-block h-[7px] w-[7px] rounded-full ${
-              backendConfigured ? "bg-emerald-400 shadow-sm shadow-emerald-400/40" : "bg-amber-400 shadow-sm shadow-amber-400/40"
+              c.backendConfigured ? "bg-emerald-400 shadow-sm shadow-emerald-400/40" : "bg-amber-400 shadow-sm shadow-amber-400/40"
             }`}
           />
-          {backendConfigured ? "训练后端已就绪" : "训练后端未配置"}
+          {c.backendConfigured ? "训练后端已就绪" : "训练后端未配置"}
         </div>
 
         <div className="flex-1" />
@@ -277,11 +111,11 @@ export function TrainingStudio() {
         {/* Primary action (mirrors the form submit) */}
         <button
           type="button"
-          onClick={submit}
-          disabled={submitting || uploading}
+          onClick={() => void c.submit()}
+          disabled={c.submitting || c.uploading}
           className="flex items-center gap-1.5 rounded-lg bg-violet-500 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-violet-400 disabled:opacity-50"
         >
-          {submitting ? "提交中…" : "开始训练"}
+          {c.submitting ? "提交中…" : "开始训练"}
         </button>
       </header>
 
@@ -293,13 +127,13 @@ export function TrainingStudio() {
           <div className="flex h-11 items-center justify-between border-b border-white/4 px-4">
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-semibold text-(--color-ink-field)">数据集</span>
-              <span className="text-[11px] text-(--color-ink-fainter)">{dataset.length} 张</span>
+              <span className="text-[11px] text-(--color-ink-fainter)">{c.dataset.length} 张</span>
             </div>
           </div>
 
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {/* Backend not configured banner */}
-            {!backendConfigured && (
+            {!c.backendConfigured && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200">
                 <p className="mb-1 font-semibold">未配置训练后端</p>
                 在「<Link href="/settings" className="underline">设置 → 偏好</Link>」中填写训练后端 URL（如 Kohya / OneTrainer / ComfyUI 训练节点的 HTTP 地址）后，即可开始真实训练。当前提交的任务会保持「等待中」。
@@ -312,7 +146,7 @@ export function TrainingStudio() {
               className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-violet-500/35 bg-violet-500/6 px-3 py-5 text-center transition-colors hover:border-violet-500/55 hover:bg-violet-500/10"
             >
               <Upload size={22} strokeWidth={1.8} color="#a78bfa" />
-              <p className="text-[12px] font-medium text-[#c4b5fd]">{uploading ? "上传中…" : "点击或拖拽上传图片"}</p>
+              <p className="text-[12px] font-medium text-[#c4b5fd]">{c.uploading ? "上传中…" : "点击或拖拽上传图片"}</p>
               <p className="text-[10px] text-(--color-ink-fainter)">建议 10–30 张同主题图片</p>
               <input
                 ref={fileRef}
@@ -325,14 +159,14 @@ export function TrainingStudio() {
             </div>
 
             {/* Per-image caption editing */}
-            {dataset.length > 0 && (
+            {c.dataset.length > 0 && (
               <>
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-medium text-(--color-ink-faint)">逐图 caption 标注</span>
                   <button
                     type="button"
-                    onClick={fillBlankCaptions}
-                    disabled={!triggerWord.trim()}
+                    onClick={c.fillBlank}
+                    disabled={!c.form.triggerWord.trim()}
                     className="text-[10px] text-violet-300 hover:underline disabled:opacity-40"
                   >
                     用触发词填充空白
@@ -340,7 +174,7 @@ export function TrainingStudio() {
                 </div>
 
                 <div className="space-y-1.5">
-                  {dataset.map((data, i) => (
+                  {c.dataset.map((data, i) => (
                     <div key={data.name} className="flex items-center gap-2 rounded-md border border-white/8 bg-white/2 p-1.5">
                       <img
                         src={`/api/file/${encodeURIComponent(data.name)}`}
@@ -350,12 +184,12 @@ export function TrainingStudio() {
                       />
                       <input
                         value={data.caption}
-                        onChange={(event) => setDataset((prev) => prev.map((item, j) => (j === i ? { ...item, caption: event.target.value } : item)))}
+                        onChange={(event) => c.setDataset((prev) => prev.map((item, j) => (j === i ? { ...item, caption: event.target.value } : item)))}
                         placeholder="图片描述，如：a photo of somecjkstyle person"
                         className="min-w-0 flex-1 rounded border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-gray-200 outline-none focus:border-violet-500/40"
                       />
                       <button
-                        onClick={() => setDataset(dataset.filter((_, j) => j !== i))}
+                        onClick={() => c.setDataset((prev) => prev.filter((_, j) => j !== i))}
                         className="shrink-0 rounded px-1.5 text-[11px] text-gray-400 hover:text-red-300"
                         aria-label="移除"
                       >
@@ -377,8 +211,8 @@ export function TrainingStudio() {
           <div className="mb-4 flex items-center gap-2">
             <span className="text-[13px] font-semibold text-(--color-ink-field)">训练监控</span>
             {activeJob && (
-              <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${(STATUS_META[activeJob.status]! ?? STATUS_META.QUEUED).cls}`}>
-                {(STATUS_META[activeJob.status]! ?? STATUS_META.QUEUED).label}
+              <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${statusMeta(activeJob.status).cls}`}>
+                {statusMeta(activeJob.status).label}
               </span>
             )}
           </div>
@@ -464,14 +298,14 @@ export function TrainingStudio() {
           {/* Job list */}
           <div className="mt-4">
             <h3 className="mb-3 text-[12px] font-medium text-(--color-ink-faint)">训练任务</h3>
-            {jobs.length === 0 ? (
+            {c.jobs.length === 0 ? (
               <div className="grid min-h-[160px] place-items-center rounded-2xl border border-dashed border-white/8 text-gray-500">
                 <p className="text-sm">还没有训练任务。在右侧配置并点击「开始训练」。</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {jobs.map((job) => {
-                  const sm = STATUS_META[job.status] ?? STATUS_META.QUEUED;
+                {c.jobs.map((job) => {
+                  const sm = statusMeta(job.status);
                   const logs = job.logs ?? [];
                   const isOpen = expanded === job.id;
                   return (
@@ -480,7 +314,7 @@ export function TrainingStudio() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <h4 className="u-title truncate">{job.name}</h4>
-                            <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${sm!.cls}`}>{sm!.label}</span>
+                            <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${sm.cls}`}>{sm.label}</span>
                           </div>
                           <p className="mt-1 text-[11px] text-gray-500">
                             {job.baseModel} · 触发词 <span className="text-violet-300">{job.triggerWord}</span> · {job.datasetImages?.length ?? 0} 张图 · {job.steps} 步
@@ -494,7 +328,7 @@ export function TrainingStudio() {
                             详情 ↗
                           </button>
                           {(job.status === "QUEUED" || job.status === "RUNNING") && (
-                            <button onClick={() => cancelJob(job.id)} className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/5">
+                            <button onClick={() => void c.cancelJob(job.id)} className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/5">
                               取消
                             </button>
                           )}
@@ -518,7 +352,7 @@ export function TrainingStudio() {
                       {job.status === "FAILED" && job.error && (
                         <p className="mt-2 text-[11px] text-red-300">✗ {job.error}</p>
                       )}
-                      {job.status === "QUEUED" && !backendConfigured && (
+                      {job.status === "QUEUED" && !c.backendConfigured && (
                         <p className="mt-2 text-[11px] text-amber-300/80">等待训练后端（未配置 LORA_TRAINER_URL）。</p>
                       )}
 
@@ -565,17 +399,17 @@ export function TrainingStudio() {
           <div className="flex-1 space-y-3.5 overflow-y-auto p-4">
             <div>
               <label className={labelClass}>任务名称</label>
-              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="如：我的水墨风格" className={fieldClass} />
+              <input value={c.form.name} onChange={(event) => c.setName(event.target.value)} placeholder="如：我的水墨风格" className={fieldClass} />
             </div>
 
             <div>
               <label className={labelClass}>底模（Checkpoint）</label>
               <DarkSelect
                 className="!bg-white/3 !border-white/8 h-9 text-[13px] text-(--color-ink-field)"
-                value={baseModel}
-                onChange={(value) => setBaseModel(value)}
-                options={checkpoints.map((checkpoint) => checkpoint.fileName)}
-                labels={Object.fromEntries(checkpoints.map((checkpoint) => [checkpoint.fileName, checkpoint.name]))}
+                value={c.form.baseModel}
+                onChange={c.setBaseModel}
+                options={c.checkpoints.map((checkpoint) => checkpoint.fileName)}
+                labels={Object.fromEntries(c.checkpoints.map((checkpoint) => [checkpoint.fileName, checkpoint.name]))}
                 placeholder="请选择…"
               />
             </div>
@@ -583,11 +417,11 @@ export function TrainingStudio() {
             <div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label className={labelClass}>触发词</label>
-                <input value={triggerWord} onChange={(event) => setTriggerWord(event.target.value)} placeholder="如：somecjkstyle" className={fieldClass} />
+                <input value={c.form.triggerWord} onChange={(event) => c.setTriggerWord(event.target.value)} placeholder="如：somecjkstyle" className={fieldClass} />
               </div>
               <div>
                 <label className={labelClass}>类别词（可选）</label>
-                <input value={classWord} onChange={(event) => setClassWord(event.target.value)} placeholder="person / style" className={fieldClass} />
+                <input value={c.form.classWord ?? ""} onChange={(event) => c.setClassWord(event.target.value)} placeholder="person / style" className={fieldClass} />
               </div>
             </div>
 
@@ -595,8 +429,8 @@ export function TrainingStudio() {
               <label className={labelClass}>分辨率</label>
               <DarkSelect
                 className="!bg-white/3 !border-white/8 h-9 text-[13px] text-(--color-ink-field)"
-                value={String(resolution)}
-                onChange={(value) => setResolution(Number(value))}
+                value={String(c.form.resolution)}
+                onChange={(value) => c.setResolution(Number(value))}
                 options={RESOLUTIONS.map(String)}
                 placeholder="选择分辨率"
               />
@@ -605,40 +439,40 @@ export function TrainingStudio() {
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="text-[11px] font-medium text-(--color-ink-faint)">训练步数</span>
-                <span className="text-[11px] font-medium text-violet-300">{steps}</span>
+                <span className="text-[11px] font-medium text-violet-300">{c.form.steps}</span>
               </div>
-              <input type="range" min={500} max={4000} step={100} value={steps} onChange={(event) => setSteps(Number(event.target.value))} className="w-full accent-violet-500" />
+              <input type="range" min={500} max={4000} step={100} value={c.form.steps} onChange={(event) => c.setSteps(Number(event.target.value))} className="w-full accent-violet-500" />
             </div>
 
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="text-[11px] font-medium text-(--color-ink-faint)">批次大小</span>
-                <span className="text-[11px] font-medium text-violet-300">{batchSize}</span>
+                <span className="text-[11px] font-medium text-violet-300">{c.form.batchSize}</span>
               </div>
-              <input type="range" min={1} max={8} value={batchSize} onChange={(event) => setBatchSize(Number(event.target.value))} className="w-full accent-violet-500" />
+              <input type="range" min={1} max={8} value={c.form.batchSize} onChange={(event) => c.setBatchSize(Number(event.target.value))} className="w-full accent-violet-500" />
             </div>
 
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="text-[11px] font-medium text-(--color-ink-faint)">LoRA 维度 (rank)</span>
-                <span className="text-[11px] font-medium text-violet-300">{rankDim}</span>
+                <span className="text-[11px] font-medium text-violet-300">{c.form.rankDim}</span>
               </div>
-              <input type="range" min={8} max={128} step={8} value={rankDim} onChange={(event) => setRankDim(Number(event.target.value))} className="w-full accent-violet-500" />
+              <input type="range" min={8} max={128} step={8} value={c.form.rankDim} onChange={(event) => c.setRankDim(Number(event.target.value))} className="w-full accent-violet-500" />
             </div>
 
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="text-[11px] font-medium text-(--color-ink-faint)">Alpha</span>
-                <span className="text-[11px] font-medium text-violet-300">{networkAlpha}</span>
+                <span className="text-[11px] font-medium text-violet-300">{c.form.networkAlpha}</span>
               </div>
-              <input type="range" min={0} max={128} step={8} value={networkAlpha} onChange={(event) => setNetworkAlpha(Number(event.target.value))} className="w-full accent-violet-500" />
+              <input type="range" min={0} max={128} step={8} value={c.form.networkAlpha} onChange={(event) => c.setNetworkAlpha(Number(event.target.value))} className="w-full accent-violet-500" />
             </div>
 
             <div>
               <label className={labelClass}>学习率</label>
               <NumberField
-                value={learningRate}
-                onChange={setLearningRate}
+                value={c.form.learningRate}
+                onChange={c.setLearningRate}
                 min={0}
                 max={1}
                 step={0.0001}
@@ -651,8 +485,8 @@ export function TrainingStudio() {
                 <label className={labelClass}>优化器</label>
                 <DarkSelect
                   className="!bg-white/3 !border-white/8 h-9 text-[13px] text-(--color-ink-field)"
-                  value={optimizer}
-                  onChange={(value) => setOptimizer(value)}
+                  value={c.form.optimizer}
+                  onChange={c.setOptimizer}
                   options={OPTIMIZERS}
                   placeholder="选择优化器"
                 />
@@ -661,8 +495,8 @@ export function TrainingStudio() {
                 <label className={labelClass}>调度器</label>
                 <DarkSelect
                   className="!bg-white/3 !border-white/8 h-9 text-[13px] text-(--color-ink-field)"
-                  value={scheduler}
-                  onChange={(value) => setScheduler(value)}
+                  value={c.form.scheduler}
+                  onChange={c.setScheduler}
                   options={SCHEDULERS}
                   placeholder="选择调度器"
                 />
@@ -671,17 +505,17 @@ export function TrainingStudio() {
 
             <div>
               <label className={labelClass}>随机种子</label>
-              <NumberField value={seed} onChange={setSeed} min={0} max={999999} step={1} />
+              <NumberField value={c.form.seed} onChange={c.setSeed} min={0} max={999999} step={1} />
             </div>
 
-            {error && <p className="text-xs text-red-400">{error}</p>}
+            {c.error && <p className="text-xs text-red-400">{c.error}</p>}
 
             <button
-              onClick={submit}
-              disabled={submitting || uploading}
+              onClick={() => void c.submit()}
+              disabled={c.submitting || c.uploading}
               className="w-full rounded-xl bg-violet-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-400 disabled:opacity-50"
             >
-              {submitting ? "提交中…" : "开始训练"}
+              {c.submitting ? "提交中…" : "开始训练"}
             </button>
             <p className="text-center text-[10px] leading-relaxed text-(--color-ink-faintest)">
               全部在本机运行 · 无需登录 · 零授权

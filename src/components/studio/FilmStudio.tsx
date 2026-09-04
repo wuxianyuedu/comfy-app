@@ -1,9 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Redo2, Undo2 } from "lucide-react";
+
+import { useFilmStudio } from "./hooks/use-film-studio";
 import { useToast } from "./ToastProvider";
-import { vanillaApi } from "~/trpc/vanilla";
+import {
+  MOCK_SHOTS,
+  MODE_LABELS,
+  STATUS_BADGE,
+  STAGE_LABEL,
+  VIDEO_CLIPS,
+  formatShotDuration,
+  type ShotListItem,
+} from "./film-studio-config";
 
 /* ── Film Studio — Updream-style Video Editor (Ardot-aligned) ─
   Dark-themed timeline-based video editing studio.
@@ -26,277 +36,28 @@ import { vanillaApi } from "~/trpc/vanilla";
   └──────────────────────────────────────────────────────────┘
 */
 
-/* ── Types (preserved from original for API compatibility) ── */
-type FilmStatus = "PARSING" | "GENERATING" | "COMPOSING" | "DONE" | "FAILED" | "CANCELLED";
-type ShotStatus = "IDLE" | "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
-type ShotMode = "txt2img" | "img2video" | "transition";
-
-interface FilmShot {
-  id: string;
-  order: number;
-  heading: string | null;
-  prompt: string;
-  status: ShotStatus;
-  progress: number;
-  videoPath: string | null;
-  duration: number | null;
-}
-
-interface Film {
-  id: string;
-  title: string;
-  script: string;
-  type: string;
-  styleSlug: string | null;
-  size: string;
-  fps: number;
-  framesPerShot: number;
-  subtitleOn: boolean;
-  bgmName: string | null;
-  status: FilmStatus;
-  progress: number;
-  finalVideo: string | null;
-  error: string | null;
-  logs: { t: number; level: string; msg: string }[] | null;
-  shots: FilmShot[];
-}
-
-/** Extract `e.message` from an unknown thrown value (was `(e as any)?.message`). */
-function errMsg(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m: unknown = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return fallback;
-}
-
-/* ── Mock Data (visual design reference) ── */
-interface ShotListItem {
-  id: string;
-  name: string;
-  duration: string;
-  mode: ShotMode;
-  status: ShotStatus;
-  selected?: boolean;
-}
-
-const MOCK_SHOTS: ShotListItem[] = [
-  {
-    id: "shot-1",
-    name: "开场 · 城市全景",
-    duration: "00:03.2",
-    mode: "txt2img",
-    status: "SUCCEEDED",
-    selected: true,
-  },
-  {
-    id: "shot-2",
-    name: "人物特写 · 走向镜头",
-    duration: "00:05.0",
-    mode: "img2video",
-    status: "RUNNING",
-  },
-  {
-    id: "shot-3",
-    name: "转场 · 溶解过渡",
-    duration: "00:01.5",
-    mode: "transition",
-    status: "IDLE",
-  },
-];
-
-interface TimelineClip {
-  id: string;
-  label: string;
-  width: number; /* px proportion */
-  colorClass: string;
-  textColorClass: string;
-}
-
-const VIDEO_CLIPS: TimelineClip[] = [
-  { id: "vc-1", label: "开场全景", width: 180, colorClass: "from-violet-600 to-indigo-600", textColorClass: "text-[#e0d4fc]" },
-  { id: "vc-2", label: "人物特写", width: 220, colorClass: "from-amber-500 to-red-500", textColorClass: "text-[#fce4c4]" },
-];
-
-const MODE_LABELS: Record<ShotMode, string> = {
-  txt2img: "文生图首帧",
-  img2video: "图生视频",
-  transition: "自动转场",
-};
-
-const STATUS_BADGE: Record<ShotStatus, { bg: string; text: string; label: string }> = {
-  IDLE: { bg: "bg-white/6", text: "text-(--color-ink-fainter)", label: "待处理" },
-  QUEUED: { bg: "bg-amber-500/15", text: "text-amber-300", label: "排队中" },
-  RUNNING: { bg: "bg-violet-500/15", text: "text-violet-300", label: "生成中" },
-  SUCCEEDED: { bg: "bg-emerald-500/15", text: "text-emerald-300", label: "完成" },
-  FAILED: { bg: "bg-rose-500/15", text: "text-rose-300", label: "失败" },
-};
-
-const STAGE_LABEL: Record<FilmStatus, string> = {
-  PARSING: "分镜解析中",
-  GENERATING: "逐镜生成视频中",
-  COMPOSING: "合成完整影片中",
-  DONE: "影片已完成",
-  FAILED: "生成失败",
-  CANCELLED: "已取消",
-};
-
-/* ── Component ── */
+/**
+ * 成片工作室 —— 视图层（规范 17 §17.2 第③层）。
+ * 成片流程、轮询与 BGM 上传在 hooks/use-film-studio.ts + lib/film/bgm-client.ts，
+ * 常量与类型在 film-studio-config.ts。本文件只做渲染与上抛事件。
+ * 对外导出名与组件签名保持不变，消费方（app/workspace/page.tsx）零改动。
+ */
 export function FilmStudio() {
-  const { success, error, info } = useToast();
+  const { info } = useToast();
+  const c = useFilmStudio();
 
-  /* ── Original business state (preserved) ── */
-  const [title] = useState("未命名成片");
-  const [script, setScript] = useState(
-    "清晨，老咖啡馆里，一位老人正在擦拭相框。阳光斜照进来，他想起年轻时的约定。门外，一个熟悉的身影出现……"
-  );
-  const [type] = useState("short_video");
-  const [styleSlug] = useState("");
-  const [size] = useState("1280x720");
-  const [fps] = useState(16);
-  const [frames] = useState(49);
-  const [subtitleOn, setSubtitleOn] = useState(true);
-  const [bgmName, setBgmName] = useState<string | null>(null);
-  const [, setSkills] = useState<{ slug: string; name: string }[]>([]);
-  const [ffmpegAvailable, setFfmpegAvailable] = useState(true);
-
-  /* ── New visual-editor state ── */
+  /* ── 时间轴编辑器状态：纯视觉、无网络副作用，故留在视图层 ── */
   const [shots, setShots] = useState<ShotListItem[]>(MOCK_SHOTS);
   const [selectedShotId, setSelectedShotId] = useState<string>("shot-1");
   const [isPlaying, setIsPlaying] = useState(false);
   const [playheadPos] = useState(180); /* px from timeline left */
 
-  /* ── Film API state (preserved) ── */
-  const [film, setFilm] = useState<Film | null>(null);
-  const [, setRecent] = useState<{ id: string; title: string; status: string }[]>([]);
-  const [loading, setLoading] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  /* ── Derived ── */
   const selectedShot = shots.find((shot) => shot.id === selectedShotId) ?? shots[0];
-  const running = film && (film.status === "GENERATING" || film.status === "COMPOSING" || film.status === "PARSING");
+  const running = c.running;
 
-  /* ── API: load skills + recent films ── */
-  const refreshMeta = useCallback(async () => {
-    try {
-      const [sData, fData] = await Promise.all([
-        vanillaApi.skill.list.query(),
-        vanillaApi.film.list.query(),
-      ]);
-      // skill.list returns `{...record, tags}` rows (index signature lost by
-      // the router spread) — read slug/name off the record view.  Values are
-      // asserted (not coerced) so malformed payloads behave exactly as before.
-      const rawList: unknown = sData.skills;
-      const list = Array.isArray(rawList) ? rawList : [];
-      setSkills(
-        list.map((raw) => {
-          const s = raw as Record<string, unknown>;
-          return { slug: s.slug as string, name: s.name as string };
-        })
-      );
-      setFfmpegAvailable(!!fData.ffmpegAvailable);
-      setRecent((fData.films ?? []));
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  useEffect(() => {
-    // Defer the initial meta fetch out of the effect body (React 19 rule:
-    // no setState synchronously within an effect).
-    const t = setTimeout(() => void refreshMeta(), 0);
-    return () => clearTimeout(t);
-  }, [refreshMeta]);
-
-  /* ── Polling (preserved) ── */
-  const stopPoll = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }, []);
-
-  const fetchDetail = useCallback(async (id: string) => {
-    // Local recursive poller — referencing `fetchDetail` itself from inside
-    // its own useCallback would make the memoisation unverifiable by the
-    // React Compiler (rh/preserve-manual-memoization); a local function
-    // keeps the same polling semantics without the self reference.
-    const poll = async (tid: string): Promise<void> => {
-      try {
-        const data = await vanillaApi.film.detail.query({ id: tid });
-        // /api/film/[id] 返回原始 Prisma FilmProject 行（status/logs/shots 比本地
-        // `Film` 视图类型更宽，shape 由路由固定）；经 unknown 收窄为 UI 视图类型。
-        const f: Film = data.film as unknown as Film;
-        setFilm(f);
-        if (f.status === "GENERATING" || f.status === "COMPOSING" || f.status === "PARSING") {
-          pollRef.current ??= setInterval(() => void poll(tid), 3000);
-        } else {
-          stopPoll();
-        }
-      } catch {
-        /* ignore */
-      }
-    };
-    await poll(id);
-  }, [stopPoll]);
-
-  useEffect(() => () => stopPoll(), [stopPoll]);
-
-  /* ── Actions (preserved) ── */
-  const handleCreate = useCallback(async () => {
-    if (!script.trim()) { error("请先输入剧本或创意"); return; }
-    setLoading(true);
-    try {
-      stopPoll();
-      const { id } = await vanillaApi.film.create.mutate({
-        title,
-        script,
-        type,
-        styleSlug: styleSlug || null,
-        size,
-        fps,
-        framesPerShot: frames,
-        subtitleOn,
-        bgmName,
-      });
-      await vanillaApi.film.start.mutate({ id });
-      await fetchDetail(id);
-      success("已启动一键成片，正在逐镜生成…");
-    } catch (e) { error(errMsg(e, "启动失败")); }
-    finally { setLoading(false); }
-  }, [script, title, type, styleSlug, size, fps, frames, subtitleOn, bgmName, stopPoll, fetchDetail, error, success]);
-
-  const handleCancel = useCallback(async () => {
-    if (!film) return;
-    await vanillaApi.film.cancel.mutate({ id: film.id });
-    stopPoll();
-    await fetchDetail(film.id);
-    info("已取消");
-  }, [film, stopPoll, fetchDetail, info]);
-
-  const handleRecompose = useCallback(async () => {
-    if (!film) return;
-    setLoading(true);
-    try { await vanillaApi.film.compose.mutate({ id: film.id }); await fetchDetail(film.id); }
-    finally { setLoading(false); }
-  }, [film, fetchDetail]);
-
-  const handleBgm = useCallback(async (file: File) => {
-    const form = new FormData(); form.append("file", file);
-    const res = await fetch("/api/film/bgm", { method: "POST", body: form });
-    if (!res.ok) { error("BGM 上传失败"); return; }
-    const d: unknown = await res.json();
-    const name =
-      typeof d === "object" && d !== null && "name" in d && typeof (d as { name?: unknown }).name === "string"
-        ? (d as { name: string }).name
-        : null;
-    setBgmName(name); success("背景音乐已上传");
-  }, [error, success]);
-
-  /* ── Visual-editor actions ── */
   const handleSelectShot = useCallback((id: string) => {
     setSelectedShotId(id);
-    setShots((prev) => prev.map((prev) =>({ ...prev, selected: prev.id === id })));
+    setShots((prev) => prev.map((prev) => ({ ...prev, selected: prev.id === id })));
   }, []);
 
   const handleAddShot = useCallback(() => {
@@ -308,7 +69,7 @@ export function FilmStudio() {
       mode: "img2video",
       status: "IDLE",
     };
-    setShots((prev) => [...prev.map((prev) =>({ ...prev, selected: false })), newShot]);
+    setShots((prev) => [...prev.map((prev) => ({ ...prev, selected: false })), newShot]);
     setSelectedShotId(newId);
   }, [shots.length]);
 
@@ -324,7 +85,7 @@ export function FilmStudio() {
     info("重做", "时间轴编辑历史功能即将上线");
   }, [info]);
 
-  /* ── Render ── */
+/* ── Render ── */
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-(--color-canvas)" style={{ fontFamily: "var(--font-sans)" }}>
       {/* ── Aurora Background Blobs ───────────────── */}
@@ -343,7 +104,7 @@ export function FilmStudio() {
       <header className="relative z-10 flex shrink-0 items-center gap-3 border-b border-white/5 bg-(--color-panel)/88 px-4 py-0 backdrop-blur-md">
         {/* Project name */}
         <div className="flex items-center gap-2">
-          <span className="u-title">{title}</span>
+          <span className="u-title">{c.title}</span>
           <span className="text-xs text-(--color-ink-fainter)">· 视频成片工作室</span>
         </div>
 
@@ -380,17 +141,17 @@ export function FilmStudio() {
         <span className="text-[11px] text-(--color-ink-faintest)">时间轴缩放</span>
         <button
           type="button"
-          onClick={handleCreate}
-          disabled={loading}
+          onClick={() => void c.create()}
+          disabled={c.loading}
           className="flex items-center gap-1.5 rounded-lg border border-violet-500/35 bg-white/3 px-3.5 py-1.5 text-xs font-semibold text-[#c4b5fd] transition-all hover:border-violet-500/55 hover:bg-violet-500/8 disabled:opacity-50"
         >
-          {loading ? "启动中…" : "导出成片"}
+          {c.loading ? "启动中…" : "导出成片"}
         </button>
 
         {/* Cancel button (when running) */}
-        {film && running && (
+        {c.film && running && (
           <button
-            onClick={handleCancel}
+            onClick={() => void c.cancel()}
             className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/6"
           >
             取消
@@ -470,7 +231,7 @@ export function FilmStudio() {
           <div className="relative mb-3 flex min-h-[320px] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-white/6 bg-[#08080c]">
             {/* Resolution hint */}
             <span className="absolute left-3 top-2.5 rounded bg-black/50 px-2 py-0.5 text-[10px] font-mono text-(--color-ink-faintest) backdrop-blur-sm">
-              {size} · {fps}fps
+              {c.size} · {c.fps}fps
             </span>
 
             {/* Play overlay */}
@@ -488,25 +249,25 @@ export function FilmStudio() {
             </button>
 
             {/* Film progress overlay (when generating) */}
-            {film && running && (
+            {c.film && running && (
               <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-sm px-4 py-2.5">
                 <div className="mb-1.5 flex items-center justify-between text-xs">
-                  <span className="font-medium text-gray-200">{STAGE_LABEL[film.status]}</span>
-                  <span className="text-gray-400">{film.progress}%</span>
+                  <span className="font-medium text-gray-200">{STAGE_LABEL[c.film.status]}</span>
+                  <span className="text-gray-400">{c.film.progress}%</span>
                 </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/8">
                   <div
                     className="h-full rounded-full bg-linear-to-r from-violet-500 to-fuchsia-500 transition-all"
-                    style={{ width: `${film.progress}%` }}
+                    style={{ width: `${c.film.progress}%` }}
                   />
                 </div>
               </div>
             )}
 
             {/* Final video player (when done) */}
-            {film?.status === "DONE" && film.finalVideo && (
+            {c.film?.status === "DONE" && c.film.finalVideo && (
               <video
-                src={film.finalVideo}
+                src={c.film.finalVideo}
                 controls
                 autoPlay
                 className="absolute inset-0 h-full w-full object-contain bg-black"
@@ -564,7 +325,7 @@ export function FilmStudio() {
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5 shrink-0">
                     <path d="M9 18V5l12-2v13M9 18a3 3 0 01-3-3H3a3 3 0 006 3z" />
                   </svg>
-                  <span className="truncate text-[9px] text-[#a78bfa]">{bgmName ?? "背景音乐 · 氛围感配乐"}</span>
+                  <span className="truncate text-[9px] text-[#a78bfa]">{c.bgmName ?? "背景音乐 · 氛围感配乐"}</span>
                 </div>
               </div>
             </div>
@@ -599,7 +360,7 @@ export function FilmStudio() {
                 min="0.5"
                 max="30"
                 value={parseFloat(selectedShot!.duration)}
-                onChange={(event) => setShots((prev) => prev.map((prev) =>prev.id === selectedShotId ? { ...prev, duration: `${Number(event.target.value).toFixed(1)}`.padStart(5, "0") } : prev))}
+                onChange={(event) => setShots((prev) => prev.map((prev) =>prev.id === selectedShotId ? { ...prev, duration: formatShotDuration(Number(event.target.value)) } : prev))}
                 className="h-9 w-full rounded-lg border border-white/8 bg-white/3 px-3 text-[13px] text-(--color-ink-field) outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
             </label>
@@ -637,8 +398,8 @@ export function FilmStudio() {
             <label className="block">
               <span className="mb-1.5 block text-[11px] text-(--color-ink-faint)">剧本 / 创意</span>
               <textarea
-                value={script}
-                onChange={(event) => setScript(event.target.value)}
+                value={c.script}
+                onChange={(event) => c.setScript(event.target.value)}
                 rows={3}
                 placeholder="支持一句话自动分镜…"
                 className="w-full resize-none rounded-lg border border-white/8 bg-white/3 px-3 py-2 text-[12px] leading-relaxed text-[#9aa0b5] outline-none placeholder:text-(--color-ink-faintest) focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
@@ -650,8 +411,8 @@ export function FilmStudio() {
               <span className="text-sm text-(--color-ink-field)">烧录字幕</span>
               <input
                 type="checkbox"
-                checked={subtitleOn}
-                onChange={(event) => setSubtitleOn(event.target.checked)}
+                checked={c.subtitleOn}
+                onChange={(event) => c.setSubtitleOn(event.target.checked)}
                 className="accent-violet-500"
               />
             </label>
@@ -662,18 +423,18 @@ export function FilmStudio() {
               <input
                 type="file"
                 accept="audio/*"
-                onChange={(event) => { const f = event.target.files?.[0]; if (f) void handleBgm(f); }}
+                onChange={(event) => { const f = event.target.files?.[0]; if (f) void c.uploadBgmFile(f); }}
                 className="w-full text-[11px] text-(--color-ink-fainter) file:mr-2 file:rounded-lg file:border-0 file:bg-violet-500/20 file:px-3 file:py-1.5 file:text-[11px] file:text-violet-300"
               />
-              {bgmName && <p className="mt-1 truncate text-[11px] text-violet-300">已选：{bgmName}</p>}
+              {c.bgmName && <p className="mt-1 truncate text-[11px] text-violet-300">已选：{c.bgmName}</p>}
             </div>
 
             {/* Error display */}
-            {film?.error && (
+            {c.film?.error && (
               <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] leading-relaxed text-rose-300">
-                {film.error}
-                {film.status === "FAILED" && film.shots.some((shot) => shot.status === "SUCCEEDED") && (
-                  <button onClick={handleRecompose} className="ml-2 underline hover:no-underline">
+                {c.film.error}
+                {c.film.status === "FAILED" && c.film.shots.some((shot) => shot.status === "SUCCEEDED") && (
+                  <button onClick={() => void c.recompose()} className="ml-2 underline hover:no-underline">
                     重新合成
                   </button>
                 )}
@@ -681,7 +442,7 @@ export function FilmStudio() {
             )}
 
             {/* FFmpeg warning */}
-            {!ffmpegAvailable && (
+            {!c.ffmpegAvailable && (
               <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-300">
                 未检测到 ffmpeg，逐镜视频仍可生成，但无法自动拼接成片。
               </p>
