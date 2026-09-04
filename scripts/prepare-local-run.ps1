@@ -18,6 +18,7 @@ function Say-Warn { Write-Host "[WARN] " -NoNewline -ForegroundColor Yellow; Wri
 function Say-Info { Write-Host "[INFO] " -NoNewline -ForegroundColor Cyan;   Write-Host "$args" }
 function Say-Err  { Write-Host "[ERROR]" -NoNewline -ForegroundColor Red;    Write-Host "$args" }
 
+try {
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "  Comfy APP (T3) 本地运行引导" -ForegroundColor Cyan
@@ -123,3 +124,12 @@ Write-Host "  接下来请双击 tools\start\start-web.ps1 启动。" -Foregroun
 Write-Host "  启动后再用浏览器打开：http://localhost:3000" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
+}
+catch {
+    Write-Host ""
+    Say-Err "本地初始化脚本出现未预期的错误（请勿关闭本窗口）：$($_.Exception.Message)"
+    Say-Err "位置：$($_.InvocationInfo.PositionMessage)"
+    Say-Info "请将上方红色错误信息截图反馈给维护者。"
+    Read-Host "按回车键关闭窗口"
+    exit 1
+}
