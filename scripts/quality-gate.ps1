@@ -90,6 +90,38 @@ function Invoke-Check {
   return $code
 }
 
+# ---- dependency-drift preflight ----
+# 拉取更新若新增/删改了依赖而未重跑 `pnpm install`，node_modules 会与 lockfile 脱节：
+# 老代码里 import 的包（如 msw）在新 node_modules 里不存在，typecheck / eslint / vitest
+# 会各自抛出一串晦涩的 "Failed to resolve import xxx"，让人误以为是自己改坏了。
+# pnpm 会把「最近一次成功安装时的 lockfile」复制到 node_modules\.pnpm\lock.yaml；
+# 与仓库根 pnpm-lock.yaml 内容不一致即判定依赖陈旧，先提示重装再跑门禁（不自动装，
+# 避免 dev server 运行中安装触发原生模块 EPERM 连锁失败，见 launch-and-build.md §5）。
+function Test-DepDrift {
+  $root = Split-Path -Parent $PSScriptRoot      # scripts\quality-gate.ps1 → 项目根
+  $nm   = Join-Path $root "node_modules"
+  if (-not (Test-Path -LiteralPath $nm)) { return $true }          # 完全没装过
+  $rootLock = Join-Path $root "pnpm-lock.yaml"
+  $instLock = Join-Path $nm ".pnpm\lock.yaml"
+  if (-not (Test-Path -LiteralPath $instLock)) { return $true }    # install 中断/残缺
+  if (-not (Test-Path -LiteralPath $rootLock)) { return $false }   # 无根 lockfile，跳过
+  $h1 = (Get-FileHash -LiteralPath $rootLock -Algorithm SHA256).Hash
+  $h2 = (Get-FileHash -LiteralPath $instLock  -Algorithm SHA256).Hash
+  return ($h1 -ne $h2)
+}
+
+if (Test-DepDrift) {
+  Write-Host ""
+  Write-Host "==> 依赖一致性预检" -ForegroundColor Cyan
+  Write-Host "  [FAIL] 依赖与 pnpm-lock.yaml 不一致（拉取更新后未重装，或上次 install 被中断）。" -ForegroundColor Red
+  Write-Host "        请先关闭所有正在运行的本项目窗口（dev server 会锁住原生模块），" -ForegroundColor Yellow
+  Write-Host "        然后在项目根目录执行：pnpm install" -ForegroundColor Yellow
+  Write-Host "        或重新双击 tools\start\run-local.ps1 让它自动补装依赖。" -ForegroundColor Yellow
+  Write-Host "        详见 docs\guides\sync-after-pull.md" -ForegroundColor Yellow
+  Write-Host ""
+  exit 1
+}
+
 # ---- run ----
 $exitCode = 0
 foreach ($b in $toRun) {
