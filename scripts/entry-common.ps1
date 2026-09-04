@@ -30,12 +30,14 @@ $ErrorActionPreference = "Stop"
 
 <#
 .SYNOPSIS
-  返回本仓库的项目根目录（入口脚本所在目录的上一级，或 tools/<分类>/ 的上两级）。
+  返回本仓库的项目根目录（tools/<分类>/ 下入口的上两级，或根入口本身所在目录）。
 .DESCRIPTION
-  支持两种布局：
-    - 根入口：<项目根>\start-web.ps1            → 根目录即 $PSScriptRoot
-    - 工具入口：<项目根>\tools\build\build-all.ps1 → 根目录是 $PSScriptRoot 的上两级
+  支持三种布局（2026-09-04 起根入口也迁入 tools/start/，见 ISSUE #29）：
+    - 工具入口：<项目根>\tools\build\build-all.ps1  → 根目录是 $PSScriptRoot 的上两级
+    - 启动入口：<项目根>\tools\start\start-web.ps1   → 同样是上两级
+    - 根入口  ：<项目根>\start-web.ps1             → 根目录即 $PSScriptRoot（历史布局）
   判定依据：目录下存在 scripts\dev-launcher.ps1（与本仓库其它探测逻辑同口径）。
+  与其按层数硬算，不如逐级上溯找标记文件——入口将来再挪位置也不用改这里。
 #>
 function Get-ProjectRoot {
   param(

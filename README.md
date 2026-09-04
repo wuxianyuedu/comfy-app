@@ -47,12 +47,23 @@ Comfy-APP-T3/
 │  ├─ entry-common.ps1      # 双击入口公共库（定位项目根 / 解析 pwsh / 透传退出码）
 │  ├─ build-desktop.mjs     # 组装 src-tauri/static（standalone + splash + sidecar）
 │  └─ install-comfyapp-helper.ps1  # 注册 comfyapp:// 协议
-├─ tools/                   # 发布构建编排（Windows .ps1 入口 + tools/scripts 逻辑）
-│  ├─ build/build-all.ps1         # 一键发布构建（release 壳 + 打包 start-tauri.exe）
-│  ├─ build/build-tauri-release.ps1  # 仅构建 release 版 Tauri 壳
-│  ├─ build/build-launcher.ps1    # 仅打包 start-tauri.exe
-│  ├─ build/rebuild-static.ps1    # 清理并重建 src-tauri/static
-│  └─ README.md             # 各构建脚本的详细对比与说明
+├─ tools/                   # 双击入口与构建编排（Windows .ps1，按用途分目录）
+│  ├─ start/                # 启动与初始化入口（双击用）
+│  │  ├─ start-web.ps1            # 控制台模式启动 Web 开发（可见日志）
+│  │  ├─ start-tauri.ps1          # 隐藏窗口启动 Tauri 桌面壳（dev 模式）
+│  │  ├─ start-desktop.ps1        # 桌面版一键自检 + 启动（给拿到桌面包的人）
+│  │  ├─ run-local.ps1            # 非开发人员一键初始化（自检/生成 .env/装依赖）
+│  │  ├─ verify-quality.ps1       # 一键质量门禁（typecheck / lint / vitest）
+│  │  └─ register-comfyapp-protocol.ps1  # 注册 comfyapp:// 协议（免管理员）
+│  ├─ build/                # 构建打包入口
+│  │  ├─ build-all.ps1            # 一键发布构建（release 壳 + 打包 start-tauri.exe）
+│  │  ├─ build-tauri-release.ps1  # 仅构建 release 版 Tauri 壳
+│  │  ├─ build-launcher.ps1       # 仅打包 start-tauri.exe
+│  │  └─ rebuild-static.ps1       # 清理并重建 src-tauri/static
+│  ├─ registry/             # 团队 shadcn Registry（start-registry.ps1）
+│  ├─ studio/               # 数据库工具（start-studio.ps1）
+│  ├─ scripts/              # 上述入口对应的逻辑脚本（与入口同名不同层）
+│  └─ README.md             # 入口/逻辑对照与各脚本的详细说明
 ├─ public/                  # 静态资源（含 splash.html 启动加载页、favicon.ico）
 ├─ docs/                    # API 文档（TypeDoc 生成，HTML）
 ├─ e2e/                     # Playwright e2e 测试
@@ -75,15 +86,12 @@ Comfy-APP-T3/
 | `vitest.config.ts` `playwright.config.ts` | 测试配置 |
 | `typedoc.json` | API 文档生成配置 |
 | `public/splash.html` | 桌面壳启动加载页（编译时嵌入，由 Tauri 窗口初始显示） |
-| `run-local.ps1` | 面向**非开发人员**的一键初始化入口（自检 node/pnpm、自动生成 `.env`、补齐依赖）；详见 `docs/guide-non-developer.md` |
-| `start-desktop.ps1` | 桌面版**一键自检 + 启动**入口（拿到即开即用桌面包后双击，自动检查并启动桌面应用）；详见 `docs/guide-non-developer.md` 第 6 节 |
-| `register-comfyapp-protocol.ps1` | 双击注册 `comfyapp://` 自定义 URL 协议（无需管理员） |
-| `start-web.ps1` | 控制台模式启动 **Web 开发**（调用 `dev-launcher.ps1`，可见日志） |
-| `verify-quality.ps1` | **一键质量验证**（双击即跑 typecheck/lint/vitest，给非开发人员用，见规范 11.12） |
-| `start-tauri.ps1` | 无控制台、隐藏窗口启动 **Tauri 桌面壳（dev 模式）** |
 | `CHANGELOG.md` | 变更日志 |
 
-> 发布版的启动入口 `start-tauri.exe` 由 `tools\build\build-launcher.ps1` 生成（位于 `start-tauri\`），不要与 dev 用的 `start-tauri.ps1` 混淆。
+> **双击入口都在 `tools/` 下**（启动类 `tools/start/`、构建类 `tools/build/`），
+> 根目录只保留工程配置与文档，见下方「双击入口速查」与 `tools/README.md`。
+
+> 发布版的启动入口 `start-tauri.exe` 由 `tools\build\build-launcher.ps1` 生成（位于 `start-tauri\`），不要与 dev 用的 `tools/start/start-tauri.ps1` 混淆。
 
 ---
 
@@ -97,15 +105,33 @@ Comfy-APP-T3/
 
 ---
 
+## 双击入口速查（Windows）
+
+所有双击入口都在 `tools/` 下按用途分目录，根目录只放工程配置。首次双击 `.ps1` 前需
+右键 `scripts/enable-ps1-double-click.ps1` →「使用 PowerShell 运行」完成一次性关联
+（Windows 默认双击 `.ps1` 是用记事本打开），详见 `docs/standards/launch-and-build.md` §8.3。
+
+| 我想… | 双击 |
+|---|---|
+| 在浏览器里开发（看得到日志） | `tools/start/start-web.ps1` |
+| 启动桌面壳（无控制台窗口） | `tools/start/start-tauri.ps1` |
+| 运行已构建好的桌面包 | `tools/start/start-desktop.ps1` |
+| 第一次在本机跑起来（自检 + 装依赖 + 生成 `.env`） | `tools/start/run-local.ps1` |
+| 跑一遍质量门禁（typecheck / lint / vitest） | `tools/start/verify-quality.ps1` |
+| 注册 `comfyapp://` 协议（任务历史「打开文件夹」） | `tools/start/register-comfyapp-protocol.ps1` |
+| 构建发行包 / 重新打包启动器 | `tools/build/*.ps1`（见 `tools/README.md`） |
+
+---
+
 ## 非开发人员快速运行
 
 不熟悉开发环境？请先阅读 **[`docs/guide-non-developer.md`](./docs/guide-non-developer.md)**，
 并按里面的图文步骤操作：
 
 - **想要独立桌面窗口**（最接近成品）→ 向开发人员要一份**即开即用桌面包**，解压后双击
-  **`start-desktop.ps1`** 即可，无需装 Node/Rust；
-- **只有源码、想先在浏览器跑起来** → 双击 **`run-local.ps1`** 自动完成初始化后，
-  双击 **`start-web.ps1`** 启动，再用浏览器打开 `http://localhost:3000`。
+  **`tools/start/start-desktop.ps1`** 即可，无需装 Node/Rust；
+- **只有源码、想先在浏览器跑起来** → 双击 **`tools/start/run-local.ps1`** 自动完成初始化后，
+  双击 **`tools/start/start-web.ps1`** 启动，再用浏览器打开 `http://localhost:3000`。
 
 两条路都无需安装 Rust、无需手工编译。
 
@@ -122,7 +148,7 @@ pnpm install
 # 2. 初始化数据库（按 prisma/schema.prisma）
 pnpm db:push
 
-# 3. 注册 comfyapp:// 协议（可选，双击根目录 register-comfyapp-protocol.ps1）
+# 3. 注册 comfyapp:// 协议（可选，双击 tools/start/register-comfyapp-protocol.ps1）
 ```
 
 ---
@@ -137,8 +163,8 @@ pnpm db:push
 | 桌面壳（预编译秒出 + 前端热重载） | 双击 `start-tauri.exe` | 默认 prebuilt 模式：用已编译的 release 壳秒出窗口，后台连 dev server，改前端即时刷新（Rust 改动需重新 `cargo build`） |
 | 桌面壳（Rust 也热重载） | 双击 `start-tauri-dev.exe` 或 `pnpm tauri dev` | 自动起 dev server + 重新编译 Rust 壳，前端/后端改动即时刷新（首次编译较慢） |
 | 桌面壳（独立运行，不连 dev server） | 双击 `start-tauri-standalone.exe`（需先 `tools\build\build-standalone.ps1`） | standalone 模式：内置 Node sidecar 运行 Next standalone server，双击即独立运行，改动需重新构建才生效 |
-| 桌面壳（无控制台入口） | 双击 `start-tauri.ps1` | 隐藏窗口启动 tauri dev 模式（等价于 `start-tauri-dev.exe`） |
-| Web 开发（可见日志） | 双击 `start-web.ps1` | 控制台打印 dev-launcher 日志 |
+| 桌面壳（无控制台入口） | 双击 `tools/start/start-tauri.ps1` | 隐藏窗口启动 tauri dev 模式（等价于 `start-tauri-dev.exe`） |
+| Web 开发（可见日志） | 双击 `tools/start/start-web.ps1` | 控制台打印 dev-launcher 日志 |
 
 > Dev 模式下窗口初始加载 `splash.html` 启动页，随后自动探测 `http://localhost:3000` 就绪并跳转应用。
 
@@ -233,7 +259,7 @@ pnpm tauri build
 | 完整安装包 | `pnpm tauri build` |
 | 清理重建前端资源 | `tools\build\rebuild-static.ps1` |
 
-更详细的脚本职责、启动入口对比（start-tauri.exe vs start-tauri.ps1）、CSP 与 standalone 模式说明，
+更详细的脚本职责、启动入口对比（start-tauri.exe vs tools/start/start-tauri.ps1）、CSP 与 standalone 模式说明，
 见 [`tools/README.md`](./tools/README.md)。
 启动方式的热更新（HMR）能力矩阵、以及重建 `src-tauri/static` 对每种方式的影响，
 见 [`docs/startup-hotreload.md`](./docs/startup-hotreload.md)。
@@ -252,7 +278,7 @@ pnpm docs         # 生成 API 文档到 docs/
 pnpm db:push      # 推送 Prisma schema 到数据库
 ```
 
-非开发人员无需记上面命令，双击根目录 `verify-quality.ps1` 即可一键跑质量门禁
+非开发人员无需记上面命令，双击根目录 `tools/start/verify-quality.ps1` 即可一键跑质量门禁
 （typecheck / eslint 零警告 / vitest），用法与"新增校验怎么补"见 `docs/standards/11` 的 11.12。
 
 ---
@@ -263,4 +289,4 @@ pnpm db:push      # 推送 Prisma schema 到数据库
   再重新跑发布构建（`build-all` 或 `build-tauri-release`）。
 - **修改 `public/splash.html` 不生效**：release 构建时 `splash.html` 已被嵌入二进制旧版本，
   需重新 `cargo build --release`（走 `tools\build\build-tauri-release.ps1` 会自动增量同步）。
-- **`comfyapp://` 链接打不开**：双击根目录 `register-comfyapp-protocol.ps1` 注册协议。
+- **`comfyapp://` 链接打不开**：双击根目录 `tools/start/register-comfyapp-protocol.ps1` 注册协议。

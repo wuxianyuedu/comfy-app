@@ -264,7 +264,7 @@ function Get-ConfigFingerprint {
   $ih = [System.Security.Cryptography.IncrementalHash]::CreateHash(
     [System.Security.Cryptography.HashAlgorithmName]::SHA256)
   # [SHA256]::ComputeHash 是 .NET 5+/PowerShell 7 才加入的静态方法；Windows PowerShell
-  # 5.1（start-tauri.ps1 在找不到 pwsh 7 时的回退路径）下 SHA256 只是抽象基类，调用静态
+  # 5.1（tools/start/start-tauri.ps1 在找不到 pwsh 7 时的回退路径）下 SHA256 只是抽象基类，调用静态
   # 方法会报 "does not contain a method named 'ComputeHash'"，导致 Get-ConfigFingerprint
   # 抛错、整个启动失败。这里统一改用 Create() 取实例再算哈希，PS 5.1 / PS 7 都能跑。
   $sha256 = [System.Security.Cryptography.SHA256]::Create()
