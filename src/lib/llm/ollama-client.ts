@@ -54,12 +54,20 @@ export async function probeOllama(baseUrl: string): Promise<OllamaProbe> {
 }
 
 /**
- * 请求服务端拉起 `ollama serve`（要求 ollama 在 PATH 中）。
- * 失败时抛带中文文案的 Error，由调用方决定展示方式。
+ * 请求服务端拉起 `ollama serve`。
+ * POST 返回 200 正常返回；返回 500 时抛出包含服务端 error 详情的 Error
+ * （如「进程秒退」「端口被占」「未找到 ollama」等——具体原因由调用方决定展示方式）。
  */
 export async function startOllama(): Promise<void> {
   const res = await fetch("/api/llm/ollama-start", { method: "POST" });
   if (!res.ok) {
-    throw new Error("启动 Ollama 失败，请确认已安装 Ollama 并在 PATH 中可用");
+    let detail = "启动 Ollama 失败，请确认已安装 Ollama 并在 PATH 中可用";
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body.error) detail = body.error;
+    } catch {
+      // ignore JSON parse failure — 用兜底文案
+    }
+    throw new Error(detail);
   }
 }
