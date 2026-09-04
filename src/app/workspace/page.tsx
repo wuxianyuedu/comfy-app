@@ -18,7 +18,7 @@ import type {
   WorkspaceView,
 } from "@/components/studio";
 import { WorkshopPipeline } from "@/components/workshop/WorkshopPipeline";
-import { listProjects, setActive, reapAllEmptyDrafts } from "@/components/studio/project-canvas/canvas-store";
+import { listProjects, setActive, reapAllEmptyDrafts } from "@/lib/project-canvas/canvas-store";
 
 /* ── Lazy-load view components so the initial bundle stays small ── */
 /* Only HomePage / WorkspaceNav / ToastProvider / VideoQueueModal are loaded eagerly. */
@@ -297,7 +297,7 @@ export default function WorkspacePage() {
           </>
         ) : (
           <>
-            <div className="flex h-screen w-screen overflow-hidden bg-(--color-canvas) text-gray-200" style={{ fontFamily: "var(--font-sans)" }}>
+            <div className="flex h-screen w-screen overflow-hidden bg-(--color-canvas) text-gray-200 pb-6" style={{ fontFamily: "var(--font-sans)" }}>
               {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
               <AuroraBackground />
 

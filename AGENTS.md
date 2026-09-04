@@ -43,7 +43,8 @@
    锁定会 EPERM 连锁失败）。
 9. **视图层不得新增 IO**：`src/components/**`、`src/app/**`（除 `api/`）里不允许新写
    `fetch(`、`vanillaApi.*`、`api.x.y.useQuery/useMutation`——逻辑要进
-   `<feature>/hooks/` 或 `src/lib/<domain>-client.ts`。守卫脚本
+   `<feature>/hooks/`，网络层一律进 `src/lib/<domain>-client.ts`（守卫只豁免
+   `hooks/` 目录，`components/<feature>/*-api.ts` 会被计为违规）。守卫脚本
    `scripts/check-ui-logic-separation.cjs`（棘轮只许降不许升，已接入 pre-commit 与 CI）。
    治理后必须 `node scripts/check-ui-logic-separation.cjs --update` 收紧基线。
 10. **禁用 `.bat` / `.cmd` / `.vbs` 入口，Windows 入口一律 `.ps1`**（ISSUE #23 / 规范 §8）。

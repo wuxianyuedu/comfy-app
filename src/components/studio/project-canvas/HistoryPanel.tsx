@@ -1,66 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, Image as ImageIcon, LayoutGrid, List, Music, Plus, RefreshCw, Video, X } from "lucide-react";
 import { MediaThumbnail } from "@/components/studio/ui/MediaThumbnail";
-import { vanillaApi } from "~/trpc/vanilla";
+import { useHistoryPanel } from "./hooks/use-history-panel";
+import {
+  FILTER_TABS,
+  KIND_STYLE,
+  STATUS_PILL,
+  isDraggableCover,
+  timeAgo,
+  titleOf,
+  type HistoryScope,
+  type TaskMediaType,
+} from "@/lib/project-canvas/history-panel-types";
 
-/* ── Types (mirror /api/tasks 响应) ─────────────────────────── */
-
-type HistoryFilter = "all" | "image" | "video" | "audio";
-type HistoryScope = "project" | "all";
-type DisplayMode = "grid" | "list";
-
-interface TaskRow {
-  id: string;
-  type: string;
-  workflowName: string;
-  status: string;
-  prompt: string;
-  createdAt: string;
-  cover: string | null;
-  mediaType: "image" | "video" | "audio";
-  projectId: string | null;
-  progress: number;
-  error: string | null;
-}
-
-/* ── Helpers ───────────────────────────────────────────────── */
-
-const STATUS_PILL: Record<string, { label: string; cls: string }> = {
-  QUEUED: { label: "排队中", cls: "bg-cyan-500/15 text-cyan-300" },
-  RUNNING: { label: "生成中", cls: "bg-violet-500/20 text-violet-300" },
-  FAILED: { label: "失败", cls: "bg-red-500/15 text-red-400" },
-  CANCELLED: { label: "已取消", cls: "bg-white/10 text-gray-400" },
-};
-
-const KIND_STYLE: Record<TaskRow["mediaType"], string> = {
-  image: "bg-violet-500/10 text-violet-400",
-  video: "bg-blue-500/10 text-blue-400",
-  audio: "bg-emerald-500/10 text-emerald-400",
-};
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "刚刚";
-  if (m < 60) return `${m} 分钟前`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d} 天前`;
-  return new Date(iso).toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
-}
-
-/** 卡片主标题：优先提示词摘要，退回工作流名，最后退回任务 id 短码。 */
-function titleOf(t: TaskRow): string {
-  const p = t.prompt?.trim();
-  if (p) return p.length > 40 ? `${p.slice(0, 40)}…` : p;
-  if (t.workflowName) return t.workflowName;
-  return t.id.slice(0, 12);
-}
-
-function KindIcon({ kind }: { kind: TaskRow["mediaType"] }) {
+function KindIcon({ kind }: { kind: TaskMediaType }) {
   if (kind === "video")
     return <Video size={16} strokeWidth={1.8} />;
   if (kind === "audio")
@@ -75,100 +29,24 @@ interface HistoryPanelProps {
   /** 当前画布项目 id；有值时默认只看本项目记录。 */
   projectId?: string | null;
   /** 把历史产出投放到画布（由 ProjectCanvas 实现建节点）。 */
-  onUse?: (task: { id: string; cover: string; mediaType: "image" | "video" | "audio" }) => void;
+  onUse?: (task: { id: string; cover: string; mediaType: TaskMediaType }) => void;
 }
 
 export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
-  const [filter, setFilter] = useState<HistoryFilter>("all");
-  const [scope, setScope] = useState<HistoryScope>(projectId ? "project" : "all");
-  const [display, setDisplay] = useState<DisplayMode>("list");
-
-  const [tasks, setTasks] = useState<TaskRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const refresh = useCallback(() => setReloadKey((key) => key + 1), []);
-
-  /** 全局是否有记录 —— 本项目为空时用来决定是否提示「查看全部」。 */
-  const [globalCount, setGlobalCount] = useState<number | null>(null);
-
-/** Extract `e.message` from an unknown thrown value (was `(e as any)?.message`). */
-function errMsg(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m: unknown = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return fallback;
-}
-
-/* ── 拉取任务 ── */
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      setLoading(true);
-      setError(null);
-      const params: { take?: number; projectId?: string; media?: "image" | "video" | "audio" } = { take: 80 };
-      if (scope === "project" && projectId) params.projectId = projectId;
-      if (filter !== "all") params.media = filter;
-      try {
-        const d = await vanillaApi.task.list.query(params);
-        if (cancelled) return;
-        setTasks((d.tasks ?? []) as unknown as TaskRow[]);
-      } catch (e) {
-        if (cancelled) return;
-        setError(errMsg(e, "读取历史记录失败"));
-        setTasks([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, scope, filter, reloadKey]);
-
-  /* ── 本项目为空时探一次全局，以便给出「查看全部」引导 ── */
-  useEffect(() => {
-    if (scope !== "project" || loading || tasks.length > 0 || globalCount !== null) return;
-    let cancelled = false;
-    vanillaApi.task.list
-      .query({ take: 1 })
-      .then((data) => {
-        if (cancelled || !data) return;
-        setGlobalCount(Array.isArray(data.tasks) ? data.tasks.length : 0);
-      })
-      .catch(() => {
-        /* 探测失败不影响主流程 */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [scope, loading, tasks.length, globalCount]);
-
-  /* ── 有任务在跑时轮询（4s），跑完自动停 ── */
-  const activeCount = tasks.filter(
-    (task) => task.status === "RUNNING" || task.status === "QUEUED"
-  ).length;
-  const refreshRef = useRef(refresh);
-  // Keep the polled callback fresh without reading/writing refs mid-render
-  // (React Compiler forbids ref access during render; the interval only ever
-  // fires after effects have run, so this is timing-equivalent).
-  useEffect(() => {
-    refreshRef.current = refresh;
-  }, [refresh]);
-  useEffect(() => {
-    if (activeCount === 0) return;
-    const timer = setInterval(() => refreshRef.current(), 4000);
-    return () => clearInterval(timer);
-  }, [activeCount]);
-
-  const filterTabs: { id: HistoryFilter; label: string }[] = [
-    { id: "all", label: "全部" },
-    { id: "image", label: "图片" },
-    { id: "video", label: "视频" },
-    { id: "audio", label: "音频" },
-  ];
+  const {
+    tasks,
+    loading,
+    error,
+    scope,
+    filter,
+    display,
+    activeCount,
+    globalCount,
+    setScope,
+    setFilter,
+    setDisplay,
+    refresh,
+  } = useHistoryPanel({ projectId });
 
   return (
     <aside className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l border-white/6 bg-(--color-panel)/98 backdrop-blur-md">
@@ -242,7 +120,7 @@ function errMsg(e: unknown, fallback: string): string {
 
       {/* ── 类型筛选（pill）── */}
       <div className="flex gap-1.5 px-4 py-3">
-        {filterTabs.map((filterTab) =>
+        {FILTER_TABS.map((filterTab) =>
 (
           <button
             key={filterTab.id}
@@ -311,7 +189,7 @@ function errMsg(e: unknown, fallback: string): string {
               return (
                 <div
                   key={task.id}
-                  draggable={!!task.cover && (task.mediaType === "image" || task.mediaType === "video")}
+                  draggable={isDraggableCover(task)}
                   onDragStart={(event) => {
                     if (!task.cover) return;
                     event.dataTransfer.setData(
@@ -325,7 +203,7 @@ function errMsg(e: unknown, fallback: string): string {
                     event.dataTransfer.effectAllowed = "copy";
                   }}
                   className={`group relative overflow-hidden rounded-lg border border-white/6 bg-white/2 ${
-                    task.cover && (task.mediaType === "image" || task.mediaType === "video")
+                    isDraggableCover(task)
                       ? "cursor-grab active:cursor-grabbing"
                       : ""
                   }`}
@@ -368,7 +246,7 @@ function errMsg(e: unknown, fallback: string): string {
               return (
                 <div
                   key={task.id}
-                  draggable={!!task.cover && (task.mediaType === "image" || task.mediaType === "video")}
+                  draggable={isDraggableCover(task)}
                   onDragStart={(event) => {
                     if (!task.cover) return;
                     event.dataTransfer.setData(
@@ -382,7 +260,7 @@ function errMsg(e: unknown, fallback: string): string {
                     event.dataTransfer.effectAllowed = "copy";
                   }}
                   className={`group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-white/4 ${
-                    task.cover && (task.mediaType === "image" || task.mediaType === "video")
+                    isDraggableCover(task)
                       ? "cursor-grab active:cursor-grabbing"
                       : ""
                   }`}

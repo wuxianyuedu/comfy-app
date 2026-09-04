@@ -1,4 +1,4 @@
-import { type CanvasNodeData } from "../canvas-types";
+import { type CanvasNodeData } from "@/lib/project-canvas/canvas-types";
 import { type WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 
 /* 项目级产出：从节点数据里收集「本次生成用到的参考图」，

@@ -12,7 +12,6 @@ import {
 import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "@/config/custom-nodes";
 import { SourceModal } from "../SourceModal";
-import { api } from "~/trpc/react";
 import type { WorkflowDetail,
   WorkflowIOParam,
 } from "../workflow-types";
@@ -42,9 +41,10 @@ import { WorkflowEditorTopBar } from "./WorkflowEditorTopbar";
 import { WorkflowIoPreviewPanel } from "../WorkflowIOPreviewPanel";
 import { WorkflowEditorCanvas } from "./WorkflowEditorCanvas";
 import { buildInitialNodes } from "./workflow-editor-build-nodes";
-import { useWorkflowDetailLoader } from "./workflow-editor-detail-loader";
+import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
-import { useWorkflowPersistence } from "./workflow-editor-persistence";
+import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
+import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
 
 /* ── Canvas grid ──
  *  Two stacked native <Background> layers so the grid pans / zooms with
@@ -139,8 +139,8 @@ function WorkflowEditorBody({
   const workflowIO = useIOEditStore(selectWorkflowIO);
   const ioEditMode = useIOEditStore(selectIoEditMode);
   const ioPreviewOpen = useIOEditStore(selectIoPreviewOpen);
-  const savePatch = api.workflow.update.useMutation();
-  /* Side-panel toggle for the IO preview. Independent of
+  const savePatch = useWorkflowSaveMutation();
+  /* Side-panel toggle for the IO preview.  Independent of
    *  `ioEditMode` so the author can A/B toggle before vs. after opening
    *  the panel.  Default closed — the canvas already gives a busy
    *  experience and we don't want to pile on a second floating panel
@@ -448,7 +448,7 @@ function WorkflowEditorBody({
     return () => cancelAnimationFrame(raf);
   }, [rf, detail?.id, fitToMiddle, nodes.length]);
 
-  /* lazy edge interactivity. defaultEdgeOptions in the canvas
+  /* lazy edge interactivity.  defaultEdgeOptions in the canvas
    *  sets deletable/reconnectable=false so untouched edges stay inert; the
    *  first click on an edge flips BOTH flags on (idempotent afterwards), so
    *  the user can still delete / re-connect it exactly as before while the
@@ -490,7 +490,7 @@ function WorkflowEditorBody({
   });
 ;
 
-  /* IO-preview merge. IMPORTANT: this useMemo MUST sit
+  /* IO-preview merge.  IMPORTANT: this useMemo MUST sit
    *  BEFORE any early-return (loading / error below) so the hook order
    *  is stable across renders — otherwise React fires "Rendered more
    *  hooks than during the previous render" the moment the loading
@@ -504,7 +504,7 @@ function WorkflowEditorBody({
   /* Loading state */
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas)">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas) pb-6">
         <div className="text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
           <p className="text-sm text-gray-400">加载工作流节点…</p>
@@ -515,7 +515,7 @@ function WorkflowEditorBody({
 
   if (error || !detail) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas)">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas) pb-6">
         <div className="text-center">
           <p className="text-red-400">{error ?? "未知错误"}</p>
           <button
@@ -535,7 +535,7 @@ function WorkflowEditorBody({
    *  component for the full rationale.) */
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-(--color-canvas)">
+    <div className="fixed inset-0 z-50 flex flex-col bg-(--color-canvas) pb-6">
         {/* ── Top bar ── */}
         <WorkflowEditorTopBar
           onClose={onClose}
@@ -590,7 +590,7 @@ function WorkflowEditorBody({
             </div>
           </div>
         )}
-        {/* IO preview side panel. Renders the same
+        {/* IO preview side panel.  Renders the same
          *  DynamicWorkflowForm that CreatePanel / the canvas workflow node
          *  consume, fed by the **live** `workflowIO` state (not the cached
          *  server-side enrichment).  This lets the author toggle a
@@ -606,7 +606,7 @@ function WorkflowEditorBody({
          *  only on the padding outside the panel (we use a single flex
          *  container, so the whole thing is interactive).
          *
-         *  DATA MERGE. The local `workflowIO` state only
+         *  DATA MERGE.  The local `workflowIO` state only
          *  carries the four identity fields written by toggleIO — it
          *  does NOT have type/defaultValue/nodeTitle/multiline, those
          *  come from the server-side enrichment in
@@ -641,7 +641,7 @@ function WorkflowEditorBody({
           点击节点查看详情 · 拖拽移动节点位置 · 滚轮缩放
         </div>
 
-        {/* right-edge canvas settings drawer. Portaled to
+        {/* right-edge canvas settings drawer.  Portaled to
          *  document.body by the panel itself so it can sit above the
          *  WorkflowCanvasEditor root overlay stack (`z-50`); rendered
          *  only when the gear button is clicked. */}

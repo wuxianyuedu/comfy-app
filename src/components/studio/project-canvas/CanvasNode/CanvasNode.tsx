@@ -16,16 +16,16 @@ import {
   type CanvasNodeData,
   type CanvasNodeType,
   NODE_META,
-} from "../canvas-types";
+} from "@/lib/project-canvas/canvas-types";
 import { Icon } from "@/components/ui/icon";
-import { vanillaApi } from "~/trpc/vanilla";
+import { useWorkflowModes } from "./hooks/use-workflow-modes";
 import { DebugChainFooter } from "../../debug/DebugChainFooter";
 import { getProjectCanvasRenderChain } from "../canvas-render-chain";
 import { NodeChip, PORT_STYLE, StatusBadge, StatusDot } from "./CanvasNodePrimitives";
 import { OutputRowPort, SelectedToolbar } from "./SelectedToolbar";
-import { useFileUpload } from "./use-file-upload";
-import { useWorkflowIo } from "./use-workflow-io";
-import { useGenerate } from "./use-generate";
+import { useFileUpload } from "./hooks/use-file-upload";
+import { useWorkflowIo } from "./hooks/use-workflow-io";
+import { useGenerate } from "./hooks/use-generate";
 import { ErrorPanel } from "./ErrorPanel";
 
 export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
@@ -76,6 +76,14 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
     setSourceFilter,
     seededFor,
   } = useWorkflowIo({ d, patch });
+
+  /* 多模式保存：乐观更新 + 失败回滚都在这个 hook 里（视图零 IO）。 */
+  const { saveModes } = useWorkflowModes({
+    workflowId: d.workflowId,
+    modes: wfModes,
+    setModes: setWfModes,
+    onFailed: (reason) => patch({ error: reason, status: "error" }),
+  });
 
   /* Task-run logic: mount-time reconcile + runGenerate + error-panel retry. */
   const { runGenerate, retryGenerate } = useGenerate({
@@ -240,7 +248,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
       /* node card width bumped 340→380 so the
        *  label column ("宽度"/"高度"/"步数"…) can render the full 2-char
        *  CJK label without competing with the stepper.  Combined with
-       *  (stepper capped at max-w-[180px]) the layout is
+ *  (stepper capped at max-w-[180px]) the layout is
        *  now:  [label flex-1] ……… [type chip] / [stepper ≤180]   on
        *  each workflow widget row. */
       className="relative w-[380px] rounded-[14px] border border-(--color-border-strong) bg-(--color-card) transition-[outline,box-shadow] duration-150"
@@ -293,29 +301,9 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
           onSeedModeChange={(ioKey, mode) =>
             patch({ seedModes: { ...(d.seedModes ?? {}), [ioKey]: mode } })
           }
-          onModesChange={async (modes, defaultMode) => {
-            /* 多模式持久化 — PATCH /api/workflows/[id] 写入
-             *  WorkflowTemplate.modes/defaultMode 字段；后端同时把
-             *  defaultMode 同步到 taskType 列保持向后兼容。 */
-            if (!d.workflowId) return;
-            setWfModes({ modes, defaultMode });
-            try {
-              await vanillaApi.workflow.update.mutate({
-                id: d.workflowId,
-                modes,
-                defaultMode,
-              });
-            } catch (err) {
-              // rollback local state to avoid zombie mode chip
-              setWfModes(wfModes);
-              patch({
-                error:
-                  (err as Error)?.message ??
-                  "保存模式失败，请重试",
-                status: "error",
-              });
-            }
-          }}
+          onModesChange={(modes, defaultMode) =>
+            saveModes({ modes, defaultMode })
+          }
         />
       ) : (
         <>
@@ -391,17 +379,17 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
        *  (IMAGE/VHS_VIDEO…) via outputTargetKind, so the handle always matches
        *  Ardot design tokens regardless of the selected workflow's task type.
        *
-       *  用户反馈画布 workflow 节点右侧的紫色圆点
+ *  用户反馈画布 workflow 节点右侧的紫色圆点
        *  「看起来像漏出的 bug」——workflow 节点是叶节点（生成图片/视频），
        *  在 project canvas 上不会接出到下游节点，所以这个 source Handle 实
        *  际上没人连。需要让出端口的能力由画布 IO-edit modal 提供（不在节
        *  点上外挂圆点）。直接干掉这个 Handle，只在节点外侧浮层工具栏
        *  「添加输出」里有需要时显式拖出。*/}
       {/* d.kind === "workflow" && <Handle type="source" ... /> removed */}
-      {/* content-carrier output handles (text / picture / movie)
+      {/* content-carrier output handles (text / picture / movie) 
           (2026-08-16): 已上移到 body wrapper 内（与 picture input Handle 同 parent），
           保持右侧 50% 与左侧同 Y；底部不再挂 footer 行，去掉「输出 · 图像」label 与装饰点。
-       *  video 节点现在也走 OutputRowPort（同 image / script）
+ *  video 节点现在也走 OutputRowPort（同 image / script）
        *  — 与 WorkflowNode.outputs row 视觉对齐。agent / text / picture / movie 仍由各自
        *  body 内的 Handle 处理。 */}
       {/* agent: no output Handle */}

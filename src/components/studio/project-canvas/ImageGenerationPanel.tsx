@@ -1,15 +1,15 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { DynamicWorkflowForm } from "@/components/studio/shared/DynamicWorkflowForm";
 import { Field, ResultCard, btnCls } from "./CanvasNode";
 import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 import type { WorkflowModesState } from "./WorkflowNode";
-import type { CanvasNodeData } from "./canvas-types";
+import type { CanvasNodeData } from "@/lib/project-canvas/canvas-types";
 import { IMAGE_WORKFLOW_TYPES, VIDEO_WORKFLOW_TYPES, normalizeTaskType } from "@/lib/workflow-types";
 import { setActiveTaskId } from "./activeTask";
-import { vanillaApi } from "~/trpc/vanilla";
+import { useCancelTask } from "./hooks/use-cancel-task";
 
 /* ── 生成面板（生图 / 生成视频 / 图片资产共用）· ──
  * 抽自 CanvasNode 的 image/video 分支（原 ~1071–1287）。把「类型 → 模型 →
@@ -61,21 +61,18 @@ export function ImageGenerationPanel({
    * 本组件只负责生成交互；生成开始（d.taskId 就绪）时通过 setActiveTaskId()
    * 把当前任务交给全局面板，由其统一订阅 SSE、展示日志与结构化校验错误。 */
 
-  /* stuck-task cancel affordance. Tracks
-   *  the in-flight POST to /api/tasks/{id}/cancel so the button can
-   *  show a non-double-clickable "× 取消中…" state and so we can
-   *  re-enable the generate button immediately if the cancel fails
-   *  (the SSE `error` path will otherwise catch it asynchronously). */
-  const [cancelling, setCancelling] = useState(false);
+  /* stuck-task cancel affordance —— 按钮的
+   *  「取消中…」态与失败回滚都在 useCancelTask 里（视图零 IO）。 */
+  const { cancelling, cancel: onCancel } = useCancelTask({
+    taskId: d.taskId,
+    onFailed: (reason) => patchRef.current({ status: "error", error: reason }),
+  });
 
-  // Keep `patch` / `d` in refs so the cancel handler (fired from an async
-  // callback) always sees the latest values without being re-created.
+  // Keep `patch` in a ref so the cancel handler (fired from an async
+  // callback) always sees the latest value without being re-created.
   const patchRef = useRef(patch);
   // eslint-disable-next-line react-hooks/refs -- 渲染期把最新 props 写入 ref，供异步取消回调读取最新值（刻意模式）
   patchRef.current = patch;
-  const dRef = useRef(d);
-  // eslint-disable-next-line react-hooks/refs -- 同上，dRef 保存最新 d 供取消回调
-  dRef.current = d;
 
   /* 节点拿到 taskId（生成开始）时，设为全局面板活跃
    * 任务，使 GlobalStepLogPanel 自动跟随。ImageGenerationPanel 仅在选中节点时
@@ -84,49 +81,13 @@ export function ImageGenerationPanel({
     if (d.taskId) setActiveTaskId(d.taskId);
   }, [d.taskId]);
 
-  /* force-cancel handler. Calls the new
-   *  POST /api/tasks/{id}/cancel endpoint, which (a) marks the DB
-   *  Task row CANCELLED and (b) invokes runner.cancelTask() —
-   *  killing any comfy-cli subprocess + releasing the active slot.
-   *  After the response the SSE `error` event (consumed by
-   *  GlobalStepLogPanel) will patch the node status to "error" via
-   *  pollTask / the cancel response.  If the request fails we still
-   *  patch locally so the button revives. */
-  const onCancel = useCallback(async () => {
-    /* do NOT bail on `!currentTaskId`
-     *  the previous early-return swallowed cancel clicks during the
-     *  brief window between `patch({ status: "running" })` and
-     *  `patch({ taskId })` (CanvasNode starts the fetch in between).
-     *  If the user clicked the cancel button, the click is evidence
-     *  enough that they want to stop the current generation; the
-     *  /cancel endpoint is idempotent and accepts "no-such-task"
-     *  (returns 404 without side-effects).  Removing the gate makes
-     *  the button responsive as soon as the user sees the running
-     *  state, even if the taskId has not yet been patched in. */
-    const currentTaskId = dRef.current.taskId;
-    setCancelling(true);
-    try {
-      if (!currentTaskId) {
-        patchRef.current({ status: "error", error: "取消请求异常：尚未生成 taskId" });
-        return;
-      }
-      await vanillaApi.task.cancel.mutate({ id: currentTaskId });
-      // 取消请求已送达，等待 GlobalStepLogPanel 的 SSE error 收尾。
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      patchRef.current({ status: "error", error: `取消请求异常：${msg}` });
-    } finally {
-      setCancelling(false);
-    }
-  }, []);
-
   const isVideo = kind === "video";
   const typeList = isVideo ? VIDEO_WORKFLOW_TYPES : IMAGE_WORKFLOW_TYPES;
-  /* 启发式兜底分类 — 之前导入的旧
+  /* 启发式兜底分类 — 早期导入的旧
    *  工作流 taskType 可能为空或误判，导致「文生图」筛选下混入 I2V
    *  等其他类型。这里按 wf.name 后缀关键字补一个最可能的类型，留空
    *  让上层 drop。
-   * 扩 Chinese 关键字（"图生视频"/"文生视频"/
+ * 扩 Chinese 关键字（"图生视频"/"文生视频"/
    *  "视频"）—— 全中文命名（无 I2V/T2V 等英文 marker）也能识别。 */
   const inferTypeByName = (rawName: string): string => {
     const up = (rawName ?? "").toUpperCase();
@@ -154,7 +115,7 @@ export function ImageGenerationPanel({
     return "";
   };
   /* name 推断优先于 DB。
-   *  之前，老的 inferWorkflowTypeFromGraph 把 WanVideoSampler+LoadImage
+ *  此前，老的 inferWorkflowTypeFromGraph 把 WanVideoSampler+LoadImage
    *  误判为 T2I 落库；name 现在能正确识别为 I2V，必须以 name 为准避免泄漏。 */
   const effectiveTaskType = (w: { taskType?: string | null; name?: string | null; id?: string | null }): string => {
     const fromName = inferTypeByName(w.name ?? "");
@@ -178,7 +139,7 @@ export function ImageGenerationPanel({
   const workflowOptions = typeFilteredWorkflows.filter((workflow) =>
     genTag ? (workflow.modelTags ?? []).includes(genTag) : true
   );
-  /* 模型 dropdown 按当前选中类型过滤
+  /* 模型 dropdown 按当前选中类型过滤 —
    *  源必须是 typeFilteredWorkflows（与 genTag 解耦）。 */
   const availableModelTags = new Set<string>();
   for (const w of typeFilteredWorkflows) {
@@ -271,7 +232,7 @@ export function ImageGenerationPanel({
         />
       ) : null}
 
-      {/* 步骤 1：类型 (chip 列改 dropdown) */}
+      {/* 步骤 1：类型（chip 列已改为 dropdown） */}
       <Field label="类型">
         {typeOptions.length ? (
           <DarkSelect
@@ -314,7 +275,7 @@ export function ImageGenerationPanel({
             )}
           </Field>
 
-          {/* 步骤 3：工作流 (chip 列改 dropdown) */}
+          {/* 步骤 3：工作流（chip 列已改为 dropdown） */}
           <Field label="工作流">
             {workflowOptions.length ? (
               <DarkSelect
@@ -367,10 +328,10 @@ export function ImageGenerationPanel({
                   ? "↻ 重新执行"
                   : "▶ 用此工作流生成"}
             </button>
-            {/* stuck-task escape hatch. The
+            {/* stuck-task escape hatch.  The
              *  picture node used to be stuck at "生成中…" forever when
-             *  the runner raw-path held `s.active` hostage
-             *  fixed the leak, but older in-flight tasks still recover
+             *  the runner raw-path held `s.active` hostage (an earlier fix
+             *  closed the leak, but older in-flight tasks still recover
              *  via this button).  Calls POST /api/tasks/{id}/cancel
              *  which marks the DB row CANCELLED + invokes
              *  runner.cancelTask() to release the active slot.  The

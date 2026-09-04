@@ -37,7 +37,7 @@ import type {
 import type { WorkflowIOModeOverride } from "~/lib/workflow-io-types";
 import { rectToAnchor } from "../workflow-utils";
 import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
-import { vanillaApi } from "~/trpc/vanilla";
+import { patchWorkflowSilently } from "@/lib/workflow-mutations";
 
 /* ───────────────────────────────────────────────────────────────────────
  *  IOEdit store
@@ -209,10 +209,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           renumbered[entryKey] = { ...entry, displayOrder: i + 1 };
         }
         /* Ship to the server (same call shape as before). */
-        vanillaApi.workflow.update.mutate({
-          id: workflowId,
-          workflowIO: renumbered,
-        }).catch(() => undefined);
+        patchWorkflowSilently({ id: workflowId, workflowIO: renumbered });
         return { workflowIO: renumbered };
       });
     },
@@ -305,10 +302,10 @@ export function createRgthreeGroupsStore(
 
     setBypass: (groupId, bypass) => {
       set((state) => ({ overrides: { ...state.overrides, [groupId]: bypass } }));
-      vanillaApi.workflow.update.mutate({
+      patchWorkflowSilently({
         id: get().workflowId,
         groups: [{ id: groupId, bypass }],
-      }).catch(() => undefined);
+      });
     },
   }));
 }

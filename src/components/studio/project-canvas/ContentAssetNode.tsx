@@ -5,8 +5,8 @@ import React from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Icon } from "@/components/ui/icon";
 import { WaterFillProgress } from "@/components/studio/ui/WaterFillProgress";
-import { vanillaApi } from "~/trpc/vanilla";
-import type { CanvasNodeData } from "./canvas-types";
+import { useContentAssetGallery } from "./hooks/use-content-asset-gallery";
+import type { CanvasNodeData } from "@/lib/project-canvas/canvas-types";
 
 /* 项目画布 · 内容载体节点主体（text / picture / movie）
  * 对齐 Ardot 稿 715394877779066 v2 + icon 迭代（/ -D-v2 / -D-icon）：
@@ -54,52 +54,12 @@ export function ContentAssetBody({
    *  drop-zone wiring share the same boolean. */
   const [isDropOver, setIsDropOver] = React.useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
-  const [taskImages, setTaskImages] = React.useState<{
-    id: string;
-    localPath: string;
-    isCover: boolean;
-  }[] | null>(null);
-  const [galleryOpen, setGalleryOpen] = React.useState(false);
-  const [galleryIndex, setGalleryIndex] = React.useState(0);
-
-  // Clear stale images when the task / kind switches to a non-picture state
-  // (adjusted during render, React 19 pattern).
-  const picCtx = `${data.taskId}|${kind}`;
-  const [prevPicCtx, setPrevPicCtx] = React.useState(picCtx);
-  if (picCtx !== prevPicCtx) {
-    setPrevPicCtx(picCtx);
-    if (!data.taskId || kind !== "picture") setTaskImages(null);
-  }
-
-  React.useEffect(() => {
-    const taskId = data.taskId;
-    if (!taskId || kind !== "picture") return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        if (cancelled) return;
-        const t = await vanillaApi.task.detail.query({ id: taskId });
-        const rawImgs = (t.images ?? []) as unknown as {
-          id?: string;
-          localPath?: string;
-          isCover?: boolean;
-        }[];
-        const imgs: { id: string; localPath: string; isCover: boolean }[] | undefined =
-          rawImgs
-            .filter((img) => !!img && typeof img.localPath === "string")
-            .map((img) => ({
-              id: img.id ?? "",
-              localPath: img.localPath!,
-              isCover: img.isCover ?? false,
-            }));
-        if (!cancelled) setTaskImages(imgs && imgs.length > 1 ? imgs : null);
-      } catch {
-        /* silently ignore — 单图模式仍正常显示 */
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [data.taskId, kind]);
-
+  /* 多图相册：数据（图片列表）+ 开关/下标都在 hook 里，视图只消费。
+   * movie / text 节点不拉（enabled=false），避免无谓请求。 */
+  const gallery = useContentAssetGallery({
+    taskId: data.taskId,
+    enabled: kind === "picture",
+  });
   if (kind === "text") {
     return (
       <div className="relative">
@@ -129,7 +89,10 @@ export function ContentAssetBody({
     ? `/api/images?filename=${encodeURIComponent(data.mediaPath)}&type=input`
     : undefined;
 
-  const imageCount = taskImages?.length ?? 0;
+  /* 相册区已在下方用 `galleryImages` 收窄过一次：JSX 回调里的 TS 不会沿
+   * 用外层的 `gallery.images &&` 判空，故先取成局部常量。 */
+  const galleryImages = gallery.images ?? [];
+  const imageCount = galleryImages.length;
 
   return (
     <div className="relative">
@@ -140,7 +103,7 @@ export function ContentAssetBody({
             src={mediaSrc}
             alt={data.mediaName ?? "参考图"}
             className="h-[260px] w-full rounded-xl border border-white/8 bg-black/20 object-cover"
-            onClick={() => { if (imageCount > 1) { setGalleryIndex(0); setGalleryOpen(true); } }}
+            onClick={() => { if (imageCount > 1) { gallery.setIndex(0); gallery.setOpen(true); } }}
             style={imageCount > 1 ? { cursor: "pointer" } : undefined}
           />
         ) : (
@@ -216,7 +179,7 @@ export function ContentAssetBody({
       {imageCount > 1 && mediaSrc && (
         <button
           type="button"
-          onClick={() => { setGalleryIndex(0); setGalleryOpen(true); }}
+          onClick={() => { gallery.setIndex(0); gallery.setOpen(true); }}
           className="absolute right-2.5 top-2.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-black/70 px-1.5 text-[10px] font-medium tabular-nums text-white/90 shadow-md backdrop-blur-sm ring-1 ring-white/10 transition-colors hover:bg-violet-500/80 hover:text-white"
           title={`查看全部 ${imageCount} 张图片`}
         >
@@ -225,10 +188,10 @@ export function ContentAssetBody({
       )}
 
       {/* ── 画廊覆盖层 ── */}
-      {galleryOpen && taskImages && taskImages.length > 0 && (
+      {gallery.open && galleryImages.length > 0 && (
         <div
           className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-          onClick={() => setGalleryOpen(false)}
+          onClick={() => gallery.setOpen(false)}
           role="dialog"
           aria-modal
           aria-label="图片画廊"
@@ -236,7 +199,7 @@ export function ContentAssetBody({
           {/* 关闭按钮 */}
           <button
             type="button"
-            onClick={(event) => { event.stopPropagation(); setGalleryOpen(false); }}
+            onClick={(event) => { event.stopPropagation(); gallery.setOpen(false); }}
             className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white"
             title="关闭"
           >
@@ -245,22 +208,22 @@ export function ContentAssetBody({
 
           {/* 主图 */}
           <img
-            src={`/api/images?filename=${encodeURIComponent(taskImages[galleryIndex]?.localPath ?? "")}&type=input`}
-            alt={`图片 ${galleryIndex + 1}/${taskImages.length}`}
+            src={`/api/images?filename=${encodeURIComponent(galleryImages[gallery.index]?.localPath ?? "")}&type=input`}
+            alt={`图片 ${gallery.index + 1}/${galleryImages.length}`}
             className="max-h-[85vh] max-w-[85vw] rounded-lg border border-white/8 object-contain shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           />
 
           {/* 左右切换 + 计数 */}
-          {taskImages.length > 1 && (
+          {galleryImages.length > 1 && (
             <>
               <button
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  setGalleryIndex((index) => (index - 1 + taskImages.length) % taskImages.length);
+                  gallery.setIndex((index) => (index - 1 + galleryImages.length) % galleryImages.length);
                 }}
-                disabled={taskImages.length <= 1}
+                disabled={galleryImages.length <= 1}
                 className="absolute left-4 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-30"
                 title="上一张"
               >
@@ -270,9 +233,9 @@ export function ContentAssetBody({
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  setGalleryIndex((index) => (index + 1) % taskImages.length);
+                  gallery.setIndex((index) => (index + 1) % galleryImages.length);
                 }}
-                disabled={taskImages.length <= 1}
+                disabled={galleryImages.length <= 1}
                 className="absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-30"
                 title="下一张"
               >
@@ -281,19 +244,19 @@ export function ContentAssetBody({
               {/* 底部计数 + 缩略条 */}
               <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3">
                 <span className="rounded-full bg-black/60 px-3 py-1 text-[11px] font-medium tabular-ns text-white/90 backdrop-blur-sm">
-                  {galleryIndex + 1} / {taskImages.length}
+                  {gallery.index + 1} / {galleryImages.length}
                 </span>
                 <div className="flex gap-1.5 overflow-hidden rounded-full bg-white/10 p-1 backdrop-blur-sm">
-                  {taskImages.map((img, i) => (
+                  {galleryImages.map((img, i) => (
                     <button
                       key={img.id}
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        setGalleryIndex(i);
+                        gallery.setIndex(i);
                       }}
                       className={`h-6 w-6 shrink-0 overflow-hidden rounded-full border-2 transition-all ${
-                        i === galleryIndex
+                        i === gallery.index
                           ? "border-violet-400 opacity-100"
                           : "border-transparent opacity-50 hover:opacity-80"
                       }`}

@@ -8,8 +8,8 @@
  *  by ContentAssetBody (onUploadFile). The hidden <input> elements stay
  *  in CanvasNode's JSX; only the refs/handlers live here. */
 import React from "react";
-import { type CanvasNodeData } from "../canvas-types";
-import { uploadImageFile, uploadMediaFile } from "../canvas-helpers";
+import { type CanvasNodeData } from "@/lib/project-canvas/canvas-types";
+import { uploadImageFile, uploadMediaFile } from "@/lib/project-canvas/canvas-api";
 
 /** catch 抛出值（unknown）→ 与旧 `err?.message ?? fallback` 逐值等价的
  *  消息提取：带 string message 的对象取 message（含空串），其余回退。 */

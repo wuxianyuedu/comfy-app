@@ -8,7 +8,7 @@
  *  hooks so the expand-state lifecycle matches the pre-extraction inline JSX
  *  exactly (state survives while hidden, resets on running/idle transitions). */
 import { useMemo, useState } from "react";
-import { type CanvasNodeData } from "../canvas-types";
+import { type CanvasNodeData } from "@/lib/project-canvas/canvas-types";
 import { ValidationErrorList } from "@/components/studio/shared/ValidationErrorList";
 import { Icon } from "@/components/ui/icon";
 import { shouldAutoExpandError, suggestForError } from "./error-suggestions";

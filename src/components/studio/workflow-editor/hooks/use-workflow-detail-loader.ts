@@ -3,7 +3,7 @@
 import { useCallback, useEffect } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { vanillaApi } from "~/trpc/vanilla";
-import type { WorkflowDetail, WorkflowIOParam } from "../workflow-types";
+import type { WorkflowDetail, WorkflowIOParam } from "@/components/studio/workflow-types";
 
 /** tRPC 查询返回的工作流详情载荷：在 WorkflowDetail 基础上，失败分支会带上
  *  `error` 字段（成功时缺省）。用它对全文件散落的 `(x as any)` 做类型收窄，

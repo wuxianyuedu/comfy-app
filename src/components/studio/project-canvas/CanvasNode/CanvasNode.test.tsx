@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import type { NodeProps } from "@xyflow/react";
 import { renderWithFlow } from "../../../../../tests/helpers/react-flow";
 import { CanvasNode } from "./CanvasNode";
-import { NODE_META, defaultData, type CanvasNodeData, type CanvasNodeType } from "../canvas-types";
+import { NODE_META, defaultData, type CanvasNodeData, type CanvasNodeType } from "@/lib/project-canvas/canvas-types";
 
 // vitest globals: false 下 RTL 不会自动 cleanup,需手动注册
 afterEach(cleanup);

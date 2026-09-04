@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Node } from "@xyflow/react";
-import { type api } from "~/trpc/react";
-import type { WorkflowDetail, WorkflowIOParam } from "../workflow-types";
-import { NODE_TITLE_H, extractNoteTitle } from "../workflow-utils";
+import type { WorkflowDetail, WorkflowIOParam } from "@/components/studio/workflow-types";
+import { NODE_TITLE_H, extractNoteTitle } from "@/components/studio/workflow-utils";
+import type { WorkflowSaver } from "./use-workflow-save";
 
 export interface WorkflowPersistenceArgs {
   workflowId: string;
@@ -16,7 +16,7 @@ export interface WorkflowPersistenceArgs {
   paramMap: Record<string, string>;
   workflowIO: Record<string, WorkflowIOParam>;
   fitToMiddle: () => void;
-  savePatch: ReturnType<typeof api.workflow.update.useMutation>;
+  savePatch: WorkflowSaver;
   onSave?: () => void;
   onClose: () => void;
   setSaving: Dispatch<SetStateAction<boolean>>;

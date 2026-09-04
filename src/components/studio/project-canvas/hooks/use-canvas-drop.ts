@@ -12,13 +12,14 @@
  */
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 import type { XYPosition } from "@xyflow/react";
-import { importOutputAsInput, makeNodeId } from "./canvas-helpers";
+import { makeNodeId } from "@/lib/project-canvas/canvas-helpers";
+import { importOutputAsInput } from "@/lib/project-canvas/canvas-api";
 import {
   defaultData,
   type CanvasNodeType,
   type NodeKind,
-} from "./canvas-types";
-import { useToast } from "../ToastProvider";
+} from "@/lib/project-canvas/canvas-types";
+import { useToast } from "@/components/studio/ToastProvider";
 
 export interface UseCanvasDropArgs {
   screenToFlowPosition: (p: XYPosition) => XYPosition;

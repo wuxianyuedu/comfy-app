@@ -42,7 +42,7 @@ import {
   splitWorkflowIO,
   ioLabel,
 } from "@/components/studio/shared/workflow-io";
-import { type CanvasNodeData, NODE_META } from "./canvas-types";
+import { type CanvasNodeData, NODE_META } from "@/lib/project-canvas/canvas-types";
 import { WorkflowSourceFilterChip } from "./WorkflowSourceFilterChip";
 import { WorkflowModelFilterChip } from "./WorkflowModelFilterChip";
 import { WorkflowPickChip } from "./WorkflowPickChip";

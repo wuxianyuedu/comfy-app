@@ -30,7 +30,8 @@
   `python-venv/comfy-cli`，缺失则后台自动创建 venv 并安装 comfy-cli，不阻塞启动。
 - **UI 与逻辑分离护栏（棘轮）**：新增 `scripts/check-ui-logic-separation.cjs`，
   统计视图层里的 `fetch(` / `vanillaApi.*` / tRPC hook 三类 IO，违规数**只许降不许升**，
-  已接入 `pre-commit` 与 CI（治理后必须 `--update` 收紧基线）。当前基线 69 处 / 29 文件。
+  已接入 `pre-commit` 与 CI（治理后必须 `--update` 收紧基线）。
+  当前基线 16 处 / 10 文件（P1–P4 已落地，104 → 16）。
   配套规范：[docs/standards/17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)
   （含全库分批推进计划 P1–P4）。
 - **UI 与逻辑分离首批（P1）落地**：`ApiChannelSettings`、`studio/history/*`、
@@ -42,6 +43,20 @@
   共清掉 27 处视图内 IO（基线 96 → 69）、新增 116 个逻辑层测试。新增
   `src/lib/error-message.ts` 收敛项目内 8 份各自实现的 `(e as any)?.message`
   兜底逻辑（空消息一律回落，避免渲染出空白提示条）。
+- **UI 与逻辑分离第四批（P4）落地**：`studio/project-canvas/*`（8072 行）与
+  `studio/workflow-editor/*`（3378 行）两个最大域完成治理，共清掉 26 处视图内 IO
+  （基线 42 → 16）、新增 103 个逻辑层测试（全量 632 → 735）。
+  关键手法是**归位优于拆分**：7 个本属逻辑层却不在 `hooks/` 下的文件靠 `git mv`
+  白拿 12 处指标（含 `workflow-editor-detail-loader.ts` → `hooks/use-workflow-detail-loader.ts`，
+  顺带修正「文件名不反映实际内容」）；`canvas-store.ts` / `canvas-types.ts` 定性为
+  逻辑层迁入 `src/lib/project-canvas/`；`canvas-helpers.ts` 劈成纯函数（154 行）
+  与 `canvas-api.ts`（228 行，收口上传 / 启动生成 / 轮询 / LLM 扩写四个请求）。
+  新增 `src/lib/workflow-mutations.ts`、`src/lib/task-cancel-client.ts`、
+  `src/lib/task-images-client.ts`。五个视图组件的对外 API 与视觉不变。
+  ⚠️ 本批**记录但未修复**一处既有缺陷：画布节点的 `mode` 存的是工作流类型 code
+  （`T2I` / `T2V`），而连线传播与生成载荷里的自动切换比的是小写（`txt2img` / `t2v`），
+  故「接上游图片后自动切图生图 / 图生视频」这条行为一直未生效——已用测试锁住现状，
+  留待独立修复（见规范 §17.9.7）。
 - **新增 `tools/` 构建脚本目录**：`build-launcher.ps1` 可一键重新打包
   `start-tauri.exe`；打包配置 `start-tauri.spec` 纳入版本控制（此前被 `.gitignore`
   的 `start-tauri*.spec` 规则一并忽略，打包流程无法从仓库复现）。
