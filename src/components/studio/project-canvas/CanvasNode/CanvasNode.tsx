@@ -16,16 +16,16 @@ import {
   type CanvasNodeData,
   type CanvasNodeType,
   NODE_META,
-} from "../canvas-types";
+} from "@/lib/project-canvas/canvas-types";
 import { Icon } from "@/components/ui/icon";
-import { vanillaApi } from "~/trpc/vanilla";
+import { useWorkflowModes } from "./hooks/use-workflow-modes";
 import { DebugChainFooter } from "../../debug/DebugChainFooter";
 import { getProjectCanvasRenderChain } from "../canvas-render-chain";
 import { NodeChip, PORT_STYLE, StatusBadge, StatusDot } from "./CanvasNodePrimitives";
 import { OutputRowPort, SelectedToolbar } from "./SelectedToolbar";
-import { useFileUpload } from "./use-file-upload";
-import { useWorkflowIo } from "./use-workflow-io";
-import { useGenerate } from "./use-generate";
+import { useFileUpload } from "./hooks/use-file-upload";
+import { useWorkflowIo } from "./hooks/use-workflow-io";
+import { useGenerate } from "./hooks/use-generate";
 import { ErrorPanel } from "./ErrorPanel";
 
 export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
@@ -76,6 +76,14 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
     setSourceFilter,
     seededFor,
   } = useWorkflowIo({ d, patch });
+
+  /* 多模式保存：乐观更新 + 失败回滚都在这个 hook 里（视图零 IO）。 */
+  const { saveModes } = useWorkflowModes({
+    workflowId: d.workflowId,
+    modes: wfModes,
+    setModes: setWfModes,
+    onFailed: (reason) => patch({ error: reason, status: "error" }),
+  });
 
   /* Task-run logic: mount-time reconcile + runGenerate + error-panel retry. */
   const { runGenerate, retryGenerate } = useGenerate({
@@ -293,29 +301,9 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
           onSeedModeChange={(ioKey, mode) =>
             patch({ seedModes: { ...(d.seedModes ?? {}), [ioKey]: mode } })
           }
-          onModesChange={async (modes, defaultMode) => {
-            /* R-ardot25: 多模式持久化 — PATCH /api/workflows/[id] 写入
-             *  WorkflowTemplate.modes/defaultMode 字段；后端同时把
-             *  defaultMode 同步到 taskType 列保持向后兼容。 */
-            if (!d.workflowId) return;
-            setWfModes({ modes, defaultMode });
-            try {
-              await vanillaApi.workflow.update.mutate({
-                id: d.workflowId,
-                modes,
-                defaultMode,
-              });
-            } catch (err) {
-              // rollback local state to avoid zombie mode chip
-              setWfModes(wfModes);
-              patch({
-                error:
-                  (err as Error)?.message ??
-                  "保存模式失败，请重试",
-                status: "error",
-              });
-            }
-          }}
+          onModesChange={(modes, defaultMode) =>
+            saveModes({ modes, defaultMode })
+          }
         />
       ) : (
         <>

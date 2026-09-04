@@ -9,7 +9,7 @@ import {
   reapAllEmptyDrafts,
   deleteProject,
   type CanvasProject,
-} from "@/components/studio/project-canvas/canvas-store";
+} from "@/lib/project-canvas/canvas-store";
 import { ModalDialog } from "@/components/studio/ui/ModalDialog";
 
 /**

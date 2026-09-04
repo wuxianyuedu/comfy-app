@@ -5,7 +5,7 @@
  *  node-creation actions.
  */
 import { Icon } from "@/components/ui/icon";
-import { NODE_META, type NodeKind } from "./canvas-types";
+import { NODE_META, type NodeKind } from "@/lib/project-canvas/canvas-types";
 
 interface CanvasContextMenuProps {
   x: number;

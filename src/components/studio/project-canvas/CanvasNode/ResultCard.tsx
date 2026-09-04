@@ -1,7 +1,7 @@
 "use client";
 
 import { Icon } from "@/components/ui/icon";
-import { NODE_META, type CanvasNodeData, type NodeKind } from "../canvas-types";
+import { NODE_META, type CanvasNodeData, type NodeKind } from "@/lib/project-canvas/canvas-types";
 import { NodeChip, StatusBadge } from "./CanvasNodePrimitives";
 
 /* ── Result preview card ──
