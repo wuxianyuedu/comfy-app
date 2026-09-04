@@ -1,7 +1,7 @@
 # Comfy-APP-T3 测试与文档
 
 > 测试分层:纯函数/store 用 node 环境,组件渲染用 jsdom;断言基于实现语义,
-> 禁止为"让测试通过"而弱化断言。最后校准:2026-08-29。
+> 禁止为"让测试通过"而弱化断言。最后校准:2026-09-04。
 
 ## 快速开始
 
@@ -30,6 +30,7 @@ npm run typecheck       # tsc --noEmit
 | Zustand store | vitest | 每用例前重置状态（`setState` 初始值或 reset）；派生字段必须通过 action 触发（直接 setState 不会重算） |
 | 组件渲染 | @testing-library/react + jsdom | `getByRole`/`getByText` 优先；交互用 `userEvent`；jest-dom 匹配器已在 `tests/setup.ts` 全局注册 |
 | hooks | renderHook（@testing-library/react） | ReactFlow 等有 Provider 依赖的需包对应 Provider，否则跳过该分支并注明 |
+| Tauri 壳冒烟 | tauri-driver / Playwright WebView（Windows），或脚本层冒烟 | 只测壳级能力：启动、custom-protocol、崩溃兜底/进程树清理、日志出口；业务/画布/数据流去 Web 层测（见规范第 11.8 节）。改动 src-tauri 需 `cargo build --release --features custom-protocol` 重编后跑 |
 
 ### 当前覆盖（231 用例 / 17 文件）
 
@@ -89,3 +90,4 @@ npm run typecheck       # tsc --noEmit
 - [ ] tRPC router 集成测试（需 db mock 方案）
 - [ ] Playwright 关键 E2E（登录 → 画布 → 生成链路）
 - [ ] `log-store.parseFileLogs`：`[WARNING]` 行当前回退 info 级（源码怪癖，测试已按现状断言并标注）
+- [ ] Tauri 壳冒烟自动化落地：先按规范第 11.8 节定壳级清单与边界，壳改动 PR 跑 `cargo build --release --features custom-protocol` 重编 + 冒烟（Windows 环境）
