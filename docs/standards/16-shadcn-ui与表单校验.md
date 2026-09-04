@@ -225,7 +225,7 @@ D:/dev/Comfy-APP-T3/registry/
 
 ### 启动本地服务（必须，shadcn CLI 不支持 `file://`）
 
-双击 `tools\start-registry.bat`（或手动）：
+双击 `tools\registry\start-registry.ps1`（或手动）：
 
 ```bash
 node D:/dev/Comfy-APP-T3/registry/serve.mjs 3874

@@ -10,11 +10,12 @@
 | 范围 | 路径 | 规范章节 |
 |---|---|---|
 | 启动链路 | `start-tauri/`、`scripts/start_tauri_launcher.py`、`scripts/dev-launcher.ps1` | §1–§3 |
+| Windows 双击入口 | 根目录 `*.ps1`、`tools/<分类>/*.ps1`、`scripts/entry-common.ps1` | §8 |
 | Tauri 壳 | `src-tauri/**`（conf.json / src / splash-assets） | §2、§7 |
 | ComfyUI 生命周期 | `src/lib/comfyui/**`（lifecycle / executor-* / reaper） | §3、§5 |
 | 工坊管线 | `src/components/workshop/**`、`src/lib/workshop/**` | §5 |
 | UI/逻辑分离 | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时 | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)） |
-| 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7 |
+| 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |
 
 ## 硬规则（违反 = 提交被拒或必须回滚）
 
@@ -45,6 +46,15 @@
    `<feature>/hooks/` 或 `src/lib/<domain>-client.ts`。守卫脚本
    `scripts/check-ui-logic-separation.cjs`（棘轮只许降不许升，已接入 pre-commit 与 CI）。
    治理后必须 `node scripts/check-ui-logic-separation.cjs --update` 收紧基线。
+10. **禁用 `.bat` / `.cmd` / `.vbs` 入口，Windows 入口一律 `.ps1`**（ISSUE #23 / 规范 §8）。
+   理由：cmd.exe 走系统 ANSI（GBK）代码页，中文提示与子进程 UTF-8 输出必然乱码，
+   历史上被迫把入口做成「不含中文、不含逻辑」的哑壳。新增入口规则：
+   - 入口只做「定位项目根 → 调用逻辑脚本 → 收尾」，逻辑下沉到 `scripts/` 或
+     `tools/scripts/`，公共能力复用 `scripts/entry-common.ps1`；
+   - 含中文的 `.ps1` 必须 **UTF-8 with BOM** 保存（无 BOM 会被 PowerShell 5.1
+     按 GBK 解码，与 `.bat` 乱码同源）；
+   - R7/R8 由 `scripts/check-file-structure.cjs` 在 pre-commit 强制拦截，
+     回归测试见 `tests/check-file-structure.test.ts`。
 
 ## 快速排障
 

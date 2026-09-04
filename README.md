@@ -44,13 +44,14 @@ Comfy-APP-T3/
 │  └─ binaries/             # Node 运行时 sidecar（node-<triple>.exe）
 ├─ scripts/                 # 启动与构建脚本（被壳/工具调用）
 │  ├─ dev-launcher.ps1      # 启动器：起 dev server / Tauri 壳 / 探测端口
+│  ├─ entry-common.ps1      # 双击入口公共库（定位项目根 / 解析 pwsh / 透传退出码）
 │  ├─ build-desktop.mjs     # 组装 src-tauri/static（standalone + splash + sidecar）
 │  └─ install-comfyapp-helper.ps1  # 注册 comfyapp:// 协议
-├─ tools/                   # 发布构建编排（Windows .bat）
-│  ├─ build-all.bat         # 一键发布构建（release 壳 + 打包 start-tauri.exe）
-│  ├─ build-tauri-release.bat  # 仅构建 release 版 Tauri 壳
-│  ├─ build-launcher.bat    # 仅打包 start-tauri.exe
-│  ├─ rebuild-static.bat    # 清理并重建 src-tauri/static
+├─ tools/                   # 发布构建编排（Windows .ps1 入口 + tools/scripts 逻辑）
+│  ├─ build/build-all.ps1         # 一键发布构建（release 壳 + 打包 start-tauri.exe）
+│  ├─ build/build-tauri-release.ps1  # 仅构建 release 版 Tauri 壳
+│  ├─ build/build-launcher.ps1    # 仅打包 start-tauri.exe
+│  ├─ build/rebuild-static.ps1    # 清理并重建 src-tauri/static
 │  └─ README.md             # 各构建脚本的详细对比与说明
 ├─ public/                  # 静态资源（含 splash.html 启动加载页、favicon.ico）
 ├─ docs/                    # API 文档（TypeDoc 生成，HTML）
@@ -74,15 +75,15 @@ Comfy-APP-T3/
 | `vitest.config.ts` `playwright.config.ts` | 测试配置 |
 | `typedoc.json` | API 文档生成配置 |
 | `public/splash.html` | 桌面壳启动加载页（编译时嵌入，由 Tauri 窗口初始显示） |
-| `run-local.bat` | 面向**非开发人员**的一键初始化入口（自检 node/pnpm、自动生成 `.env`、补齐依赖）；详见 `docs/guide-non-developer.md` |
-| `run-desktop.bat` | 桌面版**一键自检 + 启动**入口（拿到即开即用桌面包后双击，自动检查并启动桌面应用）；详见 `docs/guide-non-developer.md` 第 6 节 |
-| `register-comfyapp-protocol.bat` | 双击注册 `comfyapp://` 自定义 URL 协议（无需管理员） |
-| `start-web.bat` | 控制台模式启动 **Web 开发**（调用 `dev-launcher.ps1`，可见日志） |
-| `verify-quality.bat` | **一键质量验证**（双击即跑 typecheck/lint/vitest，给非开发人员用，见规范 11.12） |
-| `start-tauri.vbs` | 无控制台、隐藏窗口启动 **Tauri 桌面壳（dev 模式）** |
+| `run-local.ps1` | 面向**非开发人员**的一键初始化入口（自检 node/pnpm、自动生成 `.env`、补齐依赖）；详见 `docs/guide-non-developer.md` |
+| `start-desktop.ps1` | 桌面版**一键自检 + 启动**入口（拿到即开即用桌面包后双击，自动检查并启动桌面应用）；详见 `docs/guide-non-developer.md` 第 6 节 |
+| `register-comfyapp-protocol.ps1` | 双击注册 `comfyapp://` 自定义 URL 协议（无需管理员） |
+| `start-web.ps1` | 控制台模式启动 **Web 开发**（调用 `dev-launcher.ps1`，可见日志） |
+| `verify-quality.ps1` | **一键质量验证**（双击即跑 typecheck/lint/vitest，给非开发人员用，见规范 11.12） |
+| `start-tauri.ps1` | 无控制台、隐藏窗口启动 **Tauri 桌面壳（dev 模式）** |
 | `CHANGELOG.md` | 变更日志 |
 
-> 发布版的启动入口 `start-tauri.exe` 由 `tools\build-launcher.bat` 生成（位于 `start-tauri\`），不要与 dev 用的 `start-tauri.vbs` 混淆。
+> 发布版的启动入口 `start-tauri.exe` 由 `tools\build\build-launcher.ps1` 生成（位于 `start-tauri\`），不要与 dev 用的 `start-tauri.ps1` 混淆。
 
 ---
 
@@ -102,11 +103,13 @@ Comfy-APP-T3/
 并按里面的图文步骤操作：
 
 - **想要独立桌面窗口**（最接近成品）→ 向开发人员要一份**即开即用桌面包**，解压后双击
-  **`run-desktop.bat`** 即可，无需装 Node/Rust；
-- **只有源码、想先在浏览器跑起来** → 双击 **`run-local.bat`** 自动完成初始化后，
-  双击 **`start-web.bat`** 启动，再用浏览器打开 `http://localhost:3000`。
+  **`start-desktop.ps1`** 即可，无需装 Node/Rust；
+- **只有源码、想先在浏览器跑起来** → 双击 **`run-local.ps1`** 自动完成初始化后，
+  双击 **`start-web.ps1`** 启动，再用浏览器打开 `http://localhost:3000`。
 
 两条路都无需安装 Rust、无需手工编译。
+
+> 拉取团队更新后本地怎么同步依赖环境（pnpm 配置有变更时），见 [`docs/guides/sync-after-pull.md`](./docs/guides/sync-after-pull.md)。
 
 开发人员请继续阅读下方「快速上手」与「开发模式」。
 
@@ -119,7 +122,7 @@ pnpm install
 # 2. 初始化数据库（按 prisma/schema.prisma）
 pnpm db:push
 
-# 3. 注册 comfyapp:// 协议（可选，双击根目录 register-comfyapp-protocol.bat）
+# 3. 注册 comfyapp:// 协议（可选，双击根目录 register-comfyapp-protocol.ps1）
 ```
 
 ---
@@ -133,9 +136,9 @@ pnpm db:push
 | 纯前端（浏览器） | `pnpm dev` | 启动 Next dev server，访问 http://localhost:3000 |
 | 桌面壳（预编译秒出 + 前端热重载） | 双击 `start-tauri.exe` | 默认 prebuilt 模式：用已编译的 release 壳秒出窗口，后台连 dev server，改前端即时刷新（Rust 改动需重新 `cargo build`） |
 | 桌面壳（Rust 也热重载） | 双击 `start-tauri-dev.exe` 或 `pnpm tauri dev` | 自动起 dev server + 重新编译 Rust 壳，前端/后端改动即时刷新（首次编译较慢） |
-| 桌面壳（独立运行，不连 dev server） | 双击 `start-tauri-standalone.exe`（需先 `tools\build-standalone.bat`） | standalone 模式：内置 Node sidecar 运行 Next standalone server，双击即独立运行，改动需重新构建才生效 |
-| 桌面壳（无控制台 vbs） | 双击 `start-tauri.vbs` | 隐藏窗口启动 tauri dev 模式（等价于 `start-tauri-dev.exe`） |
-| Web 开发（可见日志） | 双击 `start-web.bat` | 控制台打印 dev-launcher 日志 |
+| 桌面壳（独立运行，不连 dev server） | 双击 `start-tauri-standalone.exe`（需先 `tools\build\build-standalone.ps1`） | standalone 模式：内置 Node sidecar 运行 Next standalone server，双击即独立运行，改动需重新构建才生效 |
+| 桌面壳（无控制台入口） | 双击 `start-tauri.ps1` | 隐藏窗口启动 tauri dev 模式（等价于 `start-tauri-dev.exe`） |
+| Web 开发（可见日志） | 双击 `start-web.ps1` | 控制台打印 dev-launcher 日志 |
 
 > Dev 模式下窗口初始加载 `splash.html` 启动页，随后自动探测 `http://localhost:3000` 就绪并跳转应用。
 
@@ -147,31 +150,31 @@ pnpm db:push
 
 > ⚠️ 构建依赖 `src-tauri/static` 目录（`frontendDist`）。该目录在编译时被嵌入二进制，
 > 若它**缺失或被污染**（例如被误写入整个项目副本），会导致启动黑屏。
-> 正常情况下 `build-all` 流程会自动同步资源；若曾出现异常，先跑 `tools\rebuild-static.bat` 再构建。
+> 正常情况下 `build-all` 流程会自动同步资源；若曾出现异常，先跑 `tools\build\rebuild-static.ps1` 再构建。
 
 ### 方式一：一键发布（推荐）
 
-> 说明：`tools\build-all.bat` 产出的 `start-tauri.exe` 本身就是一个「开发/预编译」启动入口——
+> 说明：`tools\build\build-all.ps1` 产出的 `start-tauri.exe` 本身就是一个「开发/预编译」启动入口——
 > 双击它会用预编译壳秒出窗口并后台连接 dev server（前端热重载），**日常开发直接双击即可**，
 > 无需先构建。它并非只能用于发布：当你需要**不依赖 dev server 的独立程序**时，才用下面的
 > 「方式三：完整安装包」（内嵌 standalone server，双击即独立运行）。
 
 ```text
-双击 tools\build-all.bat
+双击 tools\build\build-all.ps1
 ```
 
 它依次执行：
-1. `build-tauri-release.bat` → 编译 `src-tauri/target/release/app.exe`
+1. `tools\build\build-tauri-release.ps1` → 编译 `src-tauri/target/release/app.exe`
    - 若 `src-tauri/static` 不存在，会自动跑 `node scripts/build-desktop.mjs` 完整组装；
    - 已存在则仅增量同步 `splash.html` / `dev-launcher.ps1` / `index.html`。
-2. `build-launcher.bat` → 打包 `start-tauri\start-tauri.exe`
+2. `tools\build\build-launcher.ps1` → 打包 `start-tauri\start-tauri.exe`
 
 最终双击 `start-tauri\start-tauri.exe` 即可启动（自动优先使用 release 壳）。
 
 ### 方式二：仅构建 release 壳
 
 ```text
-双击 tools\build-tauri-release.bat
+双击 tools\build\build-tauri-release.ps1
 ```
 
 产物：`src-tauri/target/release/app.exe`。适合只想替换壳、再用现有 `start-tauri.exe` 启动。
@@ -187,7 +190,7 @@ pnpm tauri build
 
 ### 启动入口一览（三种独立 exe）
 
-`scripts/start_tauri_launcher.py` 是**一份源码**，由 `tools\build-launcher*.bat` 通过
+`scripts/start_tauri_launcher.py` 是**一份源码**，由 `tools\build\build-launcher*.ps1` 通过
 `LAUNCHER_NAME` 环境变量打包出三个入口 exe；运行时再按 **exe 文件名**自动选择模式
 （也可显式用参数覆盖：`--tauri-dev` / `--standalone`）：
 
@@ -195,7 +198,7 @@ pnpm tauri build
 |----------|------|------|-----------|
 | 双击 `start-tauri.exe` | prebuilt（默认） | 预编译壳秒出窗口 + 后台 dev server | 前端 HMR；Rust 需重编 |
 | 双击 `start-tauri-dev.exe` | tauri dev | 重新编译 Rust 壳 + dev server | 前端 + Rust 均热重载 |
-| 双击 `start-tauri-standalone.exe` | standalone | 内置 Node sidecar 独立运行（需先 `tools\build-standalone.bat`） | 不可（需重构建） |
+| 双击 `start-tauri-standalone.exe` | standalone | 内置 Node sidecar 独立运行（需先 `tools\build\build-standalone.ps1`） | 不可（需重构建） |
 | `pnpm tauri build` 安装包 | standalone | 以安装包形式分发的独立程序 | 不可 |
 
 > 三种方式的「哪些能热更 / 哪些不能 / 构建 `static` 对谁有影响」，见
@@ -209,7 +212,7 @@ pnpm tauri build
 ### 资源异常时清理重建
 
 ```text
-双击 tools\rebuild-static.bat
+双击 tools\build\rebuild-static.ps1
 ```
 
 删除旧的 `src-tauri/static` 并重新运行 `build-desktop.mjs`（含 `pnpm build` 生成 standalone），
@@ -223,14 +226,14 @@ pnpm tauri build
 |------|------|
 | 浏览器开发 | `pnpm dev` |
 | 桌面壳开发（热重载） | `pnpm tauri dev` 或双击 `start-tauri-dev.exe` |
-| 一键发布（壳 + launcher） | `tools\build-all.bat` |
-| 仅 release 壳 | `tools\build-tauri-release.bat` |
-| 独立模式壳（standalone） | `tools\build-standalone.bat` |
-| 独立模式启动入口 | `tools\build-launcher-standalone.bat`（打包 `start-tauri-standalone.exe`） |
+| 一键发布（壳 + launcher） | `tools\build\build-all.ps1` |
+| 仅 release 壳 | `tools\build\build-tauri-release.ps1` |
+| 独立模式壳（standalone） | `tools\build\build-standalone.ps1` |
+| 独立模式启动入口 | `tools\build\build-launcher-standalone.ps1`（打包 `start-tauri-standalone.exe`） |
 | 完整安装包 | `pnpm tauri build` |
-| 清理重建前端资源 | `tools\rebuild-static.bat` |
+| 清理重建前端资源 | `tools\build\rebuild-static.ps1` |
 
-更详细的脚本职责、启动入口对比（start-tauri.exe vs start-tauri.vbs）、CSP 与 standalone 模式说明，
+更详细的脚本职责、启动入口对比（start-tauri.exe vs start-tauri.ps1）、CSP 与 standalone 模式说明，
 见 [`tools/README.md`](./tools/README.md)。
 启动方式的热更新（HMR）能力矩阵、以及重建 `src-tauri/static` 对每种方式的影响，
 见 [`docs/startup-hotreload.md`](./docs/startup-hotreload.md)。
@@ -249,15 +252,15 @@ pnpm docs         # 生成 API 文档到 docs/
 pnpm db:push      # 推送 Prisma schema 到数据库
 ```
 
-非开发人员无需记上面命令，双击根目录 `verify-quality.bat` 即可一键跑质量门禁
+非开发人员无需记上面命令，双击根目录 `verify-quality.ps1` 即可一键跑质量门禁
 （typecheck / eslint 零警告 / vitest），用法与"新增校验怎么补"见 `docs/standards/11` 的 11.12。
 
 ---
 
 ## 常见问题
 
-- **启动黑屏**：通常是 `src-tauri/static` 缺失/被污染或前端资源未嵌入。先 `tools\rebuild-static.bat`，
+- **启动黑屏**：通常是 `src-tauri/static` 缺失/被污染或前端资源未嵌入。先 `tools\build\rebuild-static.ps1`，
   再重新跑发布构建（`build-all` 或 `build-tauri-release`）。
 - **修改 `public/splash.html` 不生效**：release 构建时 `splash.html` 已被嵌入二进制旧版本，
-  需重新 `cargo build --release`（走 `build-tauri-release.bat` 会自动增量同步）。
-- **`comfyapp://` 链接打不开**：双击根目录 `register-comfyapp-protocol.bat` 注册协议。
+  需重新 `cargo build --release`（走 `tools\build\build-tauri-release.ps1` 会自动增量同步）。
+- **`comfyapp://` 链接打不开**：双击根目录 `register-comfyapp-protocol.ps1` 注册协议。

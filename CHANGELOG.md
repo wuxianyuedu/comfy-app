@@ -38,9 +38,17 @@
   业务逻辑下沉到 `hooks/` 与 `lib/*-client.ts`，共清掉 8 处视图内 IO、
   新增 78 个逻辑层测试；三个组件的对外 API 与视觉保持不变，消费方零改动。
 
-- **新增 `tools/` 构建脚本目录**：`build-launcher.bat` 可一键重新打包
+- **新增 `tools/` 构建脚本目录**：`build-launcher.ps1` 可一键重新打包
   `start-tauri.exe`；打包配置 `start-tauri.spec` 纳入版本控制（此前被 `.gitignore`
   的 `start-tauri*.spec` 规则一并忽略，打包流程无法从仓库复现）。
+- **Windows 双击入口全部 .ps1 化，删除所有 `.bat` / `.vbs`**（ISSUE #23）：
+  `start-web.ps1` / `run-local.ps1` / `verify-quality.ps1` / `start-desktop.ps1`
+  （原 `run-desktop.bat`）/ `start-tauri.ps1`（原 `start-tauri.vbs`）/
+  `register-comfyapp-protocol.ps1` 及 `tools/**` 下 9 个入口；新增
+  `scripts/entry-common.ps1` 收敛「定位项目根 / 解析 pwsh / 透传退出码 / 双击暂停」，
+  新增 `scripts/enable-ps1-double-click.ps1` 做一次性双击关联（用户级 HKCU，免管理员）。
+  **升级注意**：首次双击 `.ps1` 前需右键 `scripts/enable-ps1-double-click.ps1`
+  →「使用 PowerShell 运行」，否则 Windows 默认用记事本打开脚本。
 
 ### Fixed
 
