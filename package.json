@@ -23,7 +23,8 @@
     "typecheck": "tsc --noEmit",
     "test:coverage": "vitest run --coverage",
     "mcp:stdio": "tsx tools/mcp-stdio.ts",
-    "mcp:http": "tsx tools/mcp-http.ts"
+    "mcp:http": "tsx tools/mcp-http.ts",
+    "test:visual": "playwright test e2e/visual"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
