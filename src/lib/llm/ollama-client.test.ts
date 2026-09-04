@@ -100,10 +100,20 @@ describe("startOllama", () => {
     expect(fetchMock.mock.calls[0]?.[1]?.method).toBe("POST");
   });
 
-  it("非 2xx → 抛带中文文案的 Error（失败路径必须有可读出口）", async () => {
+  it("非 2xx → 抛带服务端 error 详情的 Error（失败路径必须有可读出口）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(jsonRes(500, { error: "spawn ENOENT" })),
+      vi.fn().mockResolvedValue(jsonRes(500, { error: "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试" })),
+    );
+    await expect(startOllama()).rejects.toThrow(
+      "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试",
+    );
+  });
+
+  it("非 2xx 且响应无 error 字段 → 抛兜底文案", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonRes(500, {})),
     );
     await expect(startOllama()).rejects.toThrow(
       "启动 Ollama 失败，请确认已安装 Ollama 并在 PATH 中可用",
