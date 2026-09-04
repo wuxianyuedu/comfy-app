@@ -23,6 +23,7 @@ AIGC:
 | 项目开发规范（主规范 v1.0） | [Comfy-APP-T3-项目开发规范.md](standards/Comfy-APP-T3-项目开发规范.md) | 高层强制基准：技术栈选型、架构分层、命名硬约束、Git 工作流、性能总则、测试门禁、安全、文档、构建发布、疑难排查 | **强制总纲**（与文档集冲突时以主规范最新版为准） |
 | 前端工程规范文档集（standards v1.2） | [standards/README.md](standards/README.md) | 前端工程深度细则：状态管理、性能、样式、组件设计、类型安全、a11y、日志、异步、路由、错误处理、测试、代码组织、提交与 Code Review、反模式、附录 | **强制细则**（与主规范冲突时以主规范为准） |
 | 测试说明 | [TESTING.md](guides/TESTING.md) | 单测聚焦范围与测试体系说明 | 配套 |
+| 拉取更新后环境同步指南 | [guides/sync-after-pull.md](guides/sync-after-pull.md) | 远端改了 pnpm 配置/依赖后，本地拉取代码如何同步环境 | 配套 |
 | API 文档 | [api/index.html](api/index.html) | typedoc 自动生成（`pnpm docs`） | 自动生成 |
 | 设计规格 | [superpowers/specs/](superpowers/specs/) | 功能设计文档（如 wf-debug-mode 设计） | 归档参考 |
 
