@@ -74,6 +74,8 @@ Comfy-APP-T3/
 | `vitest.config.ts` `playwright.config.ts` | 测试配置 |
 | `typedoc.json` | API 文档生成配置 |
 | `public/splash.html` | 桌面壳启动加载页（编译时嵌入，由 Tauri 窗口初始显示） |
+| `run-local.bat` | 面向**非开发人员**的一键初始化入口（自检 node/pnpm、自动生成 `.env`、补齐依赖）；详见 `docs/guide-non-developer.md` |
+| `run-desktop.bat` | 桌面版**一键自检 + 启动**入口（拿到即开即用桌面包后双击，自动检查并启动桌面应用）；详见 `docs/guide-non-developer.md` 第 6 节 |
 | `register-comfyapp-protocol.bat` | 双击注册 `comfyapp://` 自定义 URL 协议（无需管理员） |
 | `start-web.bat` | 控制台模式启动 **Web 开发**（调用 `dev-launcher.ps1`，可见日志） |
 | `verify-quality.bat` | **一键质量验证**（双击即跑 typecheck/lint/vitest，给非开发人员用，见规范 11.12） |
@@ -93,6 +95,20 @@ Comfy-APP-T3/
 - （可选）**Python**：部分辅助脚本可能用到
 
 ---
+
+## 非开发人员快速运行
+
+不熟悉开发环境？请先阅读 **[`docs/guide-non-developer.md`](./docs/guide-non-developer.md)**，
+并按里面的图文步骤操作：
+
+- **想要独立桌面窗口**（最接近成品）→ 向开发人员要一份**即开即用桌面包**，解压后双击
+  **`run-desktop.bat`** 即可，无需装 Node/Rust；
+- **只有源码、想先在浏览器跑起来** → 双击 **`run-local.bat`** 自动完成初始化后，
+  双击 **`start-web.bat`** 启动，再用浏览器打开 `http://localhost:3000`。
+
+两条路都无需安装 Rust、无需手工编译。
+
+开发人员请继续阅读下方「快速上手」与「开发模式」。
 
 ## 快速上手
 
