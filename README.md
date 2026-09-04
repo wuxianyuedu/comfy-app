@@ -108,6 +108,8 @@ Comfy-APP-T3/
 
 两条路都无需安装 Rust、无需手工编译。
 
+> 拉取团队更新后本地怎么同步依赖环境（pnpm 配置有变更时），见 [`docs/guides/sync-after-pull.md`](./docs/guides/sync-after-pull.md)。
+
 开发人员请继续阅读下方「快速上手」与「开发模式」。
 
 ## 快速上手

@@ -174,6 +174,7 @@
 |------|---------------------|
 | 双击 `run-local.bat` 提示「找不到 node」 | Node.js 没装或装完没重启电脑，先完成 4.1 |
 | 双击 `run-local.bat` 报 `pnpm` 相关错误 | 可先手动重装依赖：在项目根打开终端执行 `pnpm install` 再双击启动 |
+| 团队更新了代码后启动报错 / 拉取更新后怎么同步环境 | 见 [`guides/sync-after-pull.md`](guides/sync-after-pull.md)：先关掉运行中的窗口，重双击 `run-local.bat`；报 pnpm 相关错误则删 `node_modules` 后重双击 |
 | 双击 `start-web.bat` 报「数据库/表不存在」 | 首次会自动建库；如仍异常，先双击 `run-local.bat` 补齐依赖与 `.env` 后重试 |
 | 浏览器打不开 `http://localhost:3000` | 确认 `start-web.bat` 的黑窗口还开着；首次编译较慢，多等一会再刷新 |
 | 端口被占用起不来 | 项目启动器会尝试清理 3000 端口残留进程；仍失败可重启电脑后再试 |
