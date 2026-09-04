@@ -98,3 +98,6 @@ playwright-report/
 
 # agent 工具链本地产物（IDE 会话记忆 / temp / tmp，不入版本库）
 .workbuddy/
+
+# pnpm 本地 store（本环境 store-dir 落在仓库内，不入库）
+/.pnpm-store/
