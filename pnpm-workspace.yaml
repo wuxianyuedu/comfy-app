@@ -35,6 +35,8 @@ allowBuilds:
   # 会让 CI 的 `pnpm install --frozen-lockfile` 装不完就挂掉；已随包提供
   # 平台专属二进制（@esbuild/linux-x64 等），不执行脚本也能正常工作。
   esbuild: true
+  # msw: 含 postinstall；按 §7 规则新增含构建脚本的依赖需在 allowBuilds 显式批准
+  msw: true
 
 # 安全修复：@esbuild-kit/core-utils 是已废弃的 esm-loader（被 tsx 替代），
 # 其 esbuild@~0.18.20 存在 GHSA-67mh-4wv8-2f99 中危漏洞（serve 功能 CORS 缺陷）。
