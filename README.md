@@ -141,14 +141,28 @@ Comfy-APP-T3/
 
 ## 快速上手
 
+> **开发/本地跑起来前必须先有 `.env`**：`src/env.js` 在启动时会校验
+> `DATABASE_URL` / `BETTER_AUTH_*`，缺 `.env`（或值留空）会直接报
+> `Invalid environment variables`，看不出是「缺文件」。CI / Playwright 因设了
+> `SKIP_ENV_VALIDATION` 绕开校验，所以「CI 全绿、本地起不来」的差异不会自动暴露。
+> `.env` 已被 gitignore（凭据零写入，见规范 §8），从未入库，需本地自行生成。
+
 ```bash
 # 1. 安装依赖
 pnpm install
 
-# 2. 初始化数据库（按 prisma/schema.prisma）
+# 2. 生成本地配置 .env（读取 .env.example，自动生成 BETTER_AUTH_SECRET，
+#    GitHub OAuth 用占位值；已存在则跳过，不会覆盖你的配置）
+#    —— Windows 用户也可直接双击 tools/start/run-local.ps1，它顺带做自检+装依赖
+cp .env.example .env
+#    再按需编辑：至少把 BETTER_AUTH_SECRET 换成 64 位随机 hex，
+#    GitHub OAuth 本地调试可保留占位值；DATABASE_URL 保持 file:./db.sqlite 即可
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# 3. 初始化数据库（Drizzle，按 drizzle.config.ts）
 pnpm db:push
 
-# 3. 注册 comfyapp:// 协议（可选，双击 tools/start/register-comfyapp-protocol.ps1）
+# 4. 注册 comfyapp:// 协议（可选，双击 tools/start/register-comfyapp-protocol.ps1）
 ```
 
 ---
