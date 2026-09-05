@@ -334,6 +334,82 @@ describe("useSettingsPage", () => {
     expect(result.current.drafts?.llm.temperatureByTask).toBeUndefined();
   });
 
+  it("远端模型：添加进草稿（重名/空名拒绝）；候选可移除，当前模型不可移除", async () => {
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    let out: { ok: boolean; error?: string } = { ok: false };
+    act(() => {
+      out = result.current.addRemoteModel({ name: "gpt-4o" });
+    });
+    expect(out.ok).toBe(true);
+    expect(result.current.remoteModelList.map((e) => e.name)).toEqual([
+      "qwen3:14b",
+      "gpt-4o",
+    ]);
+
+    // 重名拒绝（候选与主模型都算）
+    act(() => {
+      out = result.current.addRemoteModel({ name: " gpt-4o " });
+    });
+    expect(out.ok).toBe(false);
+    act(() => {
+      out = result.current.addRemoteModel({ name: "qwen3:14b" });
+    });
+    expect(out.ok).toBe(false);
+    // 空名拒绝
+    act(() => {
+      out = result.current.addRemoteModel({ name: "   " });
+    });
+    expect(out.ok).toBe(false);
+
+    // 移除候选；当前模型（主模型）不可移除
+    act(() => {
+      result.current.removeRemoteModel("gpt-4o");
+    });
+    expect(result.current.remoteModelList.map((e) => e.name)).toEqual([
+      "qwen3:14b",
+    ]);
+    act(() => {
+      result.current.removeRemoteModel("qwen3:14b");
+    });
+    expect(result.current.remoteModelList.map((e) => e.name)).toEqual([
+      "qwen3:14b",
+    ]);
+  });
+
+  it("远端模型：条目保留独立接口/密钥；切主模型不动条目", async () => {
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    act(() => {
+      result.current.addRemoteModel({
+        name: "gpt-4o",
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "sk-1",
+      });
+    });
+    const entry = result.current.remoteModelList.find(
+      (e) => e.name === "gpt-4o",
+    );
+    expect(entry?.baseUrl).toBe("https://api.example.com/v1");
+    expect(entry?.apiKey).toBe("sk-1");
+
+    // 切换当前模型 → 草稿的 model 变化，条目原样保留
+    act(() => {
+      result.current.patchLlm({ model: "gpt-4o" });
+    });
+    expect(result.current.drafts?.llm.model).toBe("gpt-4o");
+    expect(
+      result.current.drafts?.llm.extraModels.find((e) => e.name === "gpt-4o")
+        ?.baseUrl,
+    ).toBe("https://api.example.com/v1");
+  });
+
   it("保存 LLM 成功 → ok 提示 + 清空 API Key 输入框", async () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),

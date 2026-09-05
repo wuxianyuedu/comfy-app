@@ -6,8 +6,23 @@
 
 import { useCallback, useState } from "react";
 
-import type { LLMConfigView } from "@/lib/llm/types";
+import { type LLMConfigView } from "@/lib/llm/types";
 import { api } from "~/trpc/react";
+
+/** 候选模型条目（兼容旧字符串与新对象）→ 名字数组，供工坊切换选择。 */
+function toModelNames(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const names: string[] = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      if (item.trim() !== "") names.push(item);
+    } else if (typeof item === "object" && item !== null) {
+      const name: unknown = (item as { name?: unknown }).name;
+      if (typeof name === "string" && name.trim() !== "") names.push(name);
+    }
+  }
+  return names;
+}
 
 export interface LLMConfigController {
   /** 当前生效配置（已做 hasApiKey 收窄）；首次加载完成前为 null。 */
@@ -29,7 +44,14 @@ export function useLLMConfig(): LLMConfigController {
   const [prevCfg, setPrevCfg] = useState(cfg);
   if (cfg !== prevCfg) {
     setPrevCfg(cfg);
-    if (cfg) setConfig({ ...cfg, hasApiKey: !!cfg.apiKey });
+    if (cfg) {
+      /* 服务端的候选列表已条目化（远端条目可带独立连接参数），工坊只关心名字 */
+      setConfig({
+        ...cfg,
+        extraModels: toModelNames(cfg.extraModels),
+        hasApiKey: !!cfg.apiKey,
+      });
+    }
   }
 
   return {
@@ -65,9 +87,7 @@ export function useLLMConfigSave(): LLMConfigSaveController {
           ...cfg,
           hasApiKey: !!cfg.apiKey,
           provider: cfg.provider as "local" | "remote",
-          extraModels: Array.isArray(rawExtra)
-            ? rawExtra.filter((m): m is string => typeof m === "string")
-            : [],
+          extraModels: toModelNames(rawExtra),
           temperatureByTask:
             (cfg.temperatureByTask as
               Record<string, number> | null | undefined) ?? undefined,

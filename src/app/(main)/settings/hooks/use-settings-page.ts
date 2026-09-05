@@ -20,7 +20,13 @@ import {
   stopOllama as stopOllamaClient,
   type OllamaModel,
 } from "~/lib/llm/ollama-client";
-import { TASK_TYPES, type TaskType } from "~/lib/llm/types";
+import { probeRemoteApi, type RemoteProbeResult } from "~/lib/llm/browser";
+import {
+  normalizeExtraModels,
+  TASK_TYPES,
+  type RemoteModelEntry,
+  type TaskType,
+} from "~/lib/llm/types";
 import { api } from "~/trpc/react";
 
 export type Settings = {
@@ -39,8 +45,8 @@ export type LlmConfig = {
   provider: "local" | "remote";
   baseUrl: string;
   model: string;
-  /** 本地 Ollama 候选模型（多选）；不含 model 本身 */
-  extraModels: string[];
+  /** 候选模型（不含 model 本身）：local 为纯名字条目；remote 条目可带独立 baseUrl / apiKey */
+  extraModels: RemoteModelEntry[];
   temperature: number;
   temperatureByTask?: Record<TaskType, number>;
   maxTokens: number;
@@ -110,14 +116,23 @@ export interface SettingsPageController {
   /* 提示条 */
   flash: FlashMessage | null;
   dismissFlash: () => void;
-  /** 输入框清空 → 删掉该任务的覆盖值；有值 → 写入覆盖。 */
+  /** 输入框清空 → 删掉该任务的覆盖值（恢复该任务的推荐默认温度）；有值 → 写入覆盖。 */
   setTaskTemperature: (task: TaskType, raw: string) => void;
   /** 勾选/取消一个候选模型（本地 Ollama 多模型管理） */
   toggleExtraModel: (name: string) => void;
-  /* 候选模型自动回填（远端 API 用；本地 Ollama 直接复用 ollamaModels 探测结果） */
-  remoteModels: string[];
-  remoteModelsLoading: boolean;
-  fetchRemoteModels: () => Promise<void>;
+  /* 远端模型管理：列表 + 添加 / 移除 + 测试连接（添加只改草稿，保存时落库） */
+  remoteModelList: RemoteModelEntry[];
+  addRemoteModel: (entry: {
+    name: string;
+    baseUrl?: string;
+    apiKey?: string;
+  }) => { ok: boolean; error?: string };
+  removeRemoteModel: (name: string) => void;
+  probeRemote: (input: {
+    baseUrl?: string;
+    apiKey?: string;
+    model?: string;
+  }) => Promise<RemoteProbeResult>;
 }
 
 /** 提示条停留时长。 */
@@ -208,9 +223,10 @@ export function useSettingsPage(): SettingsPageController {
     setLlmDraft({
       ...llmConfig,
       apiKey: llmConfig.apiKey ?? null,
-      extraModels: Array.isArray(llmConfig.extraModels)
-        ? llmConfig.extraModels.filter((m) => m.trim() !== "" && m !== llmConfig.model)
-        : [],
+      /* 兼容旧纯字符串形状；主模型不在候选列表里（视图里它单独展示且始终可用） */
+      extraModels: normalizeExtraModels(llmConfig.extraModels).filter(
+        (e) => e.name !== llmConfig.model,
+      ),
       temperatureByTask: llmConfig.temperatureByTask ?? undefined,
     });
   }
@@ -388,34 +404,79 @@ export function useSettingsPage(): SettingsPageController {
     setSettingsDraft((draft) => (draft ? { ...draft, ...patch } : draft));
   }, []);
 
-  /** 勾选/取消一个候选模型（多选集 = 主模型 + 勾选项，保存进 extraModels） */
+  /** 勾选/取消一个候选模型（多选集 = 主模型 + 勾选项）。候选列表已条目化，
+   *  这里按名字做合并、再回填原条目对象，避免勾选动作丢掉远端条目的
+   *  独立 baseUrl / apiKey。 */
   const toggleExtraModel = useCallback((name: string) => {
     setLlmDraft((draft) => {
       if (!draft) return draft;
-      const next = mergeExtraModels(draft.extraModels, draft.model, name);
-      return next === draft.extraModels ? draft : { ...draft, extraModels: next };
+      const byName = new Map(draft.extraModels.map((e) => [e.name, e]));
+      const nextNames = mergeExtraModels(
+        draft.extraModels.map((e) => e.name),
+        draft.model,
+        name,
+      );
+      const next = nextNames.map((n) => byName.get(n) ?? { name: n });
+      const unchanged =
+        next.length === draft.extraModels.length &&
+        next.every((e, i) => e.name === draft.extraModels[i]?.name);
+      return unchanged ? draft : { ...draft, extraModels: next };
     });
   }, []);
 
-  /* ── 远端 API 候选模型自动回填 ──
-   * 本地 Ollama 走既有探测（ollamaModels）；远端走 /api/llm/models 代理
-   * （apiKey 在服务端，浏览器拿不到原文，不能自己请求 /models）。 */
-  const [remoteModels, setRemoteModels] = useState<string[]>([]);
-  const [remoteModelsLoading, setRemoteModelsLoading] = useState(false);
-  const fetchRemoteModels = useCallback(async () => {
-    setRemoteModelsLoading(true);
-    try {
-      const res = await fetch("/api/llm/models");
-      const body = (await res.json()) as { models?: unknown };
-      if (Array.isArray(body.models)) {
-        setRemoteModels(body.models.filter((m): m is string => typeof m === "string" && m !== ""));
+  /* ── 远端模型管理 ──
+   * 「添加 / 移除」只改草稿，点「保存 LLM 配置」才落库；测试连接走
+   * /api/llm/test 代理（apiKey 在服务端参与请求，浏览器不直接打远端）。 */
+  const addRemoteModel = useCallback(
+    (entry: { name: string; baseUrl?: string; apiKey?: string }) => {
+      if (!llmDraft) return { ok: false as const, error: "配置未就绪，请稍后重试" };
+      const name = entry.name.trim();
+      if (!name) return { ok: false as const, error: "请填写模型名称" };
+      if (name === llmDraft.model || llmDraft.extraModels.some((e) => e.name === name)) {
+        return { ok: false as const, error: `模型「${name}」已在列表中` };
       }
-    } catch {
-      // 拉取失败保持空列表 —— 视图按「拉取失败，可手动输入」降级
-    } finally {
-      setRemoteModelsLoading(false);
-    }
+      const cleaned: RemoteModelEntry = {
+        name,
+        baseUrl: entry.baseUrl?.trim() ? entry.baseUrl.trim() : null,
+        apiKey: entry.apiKey?.trim() ? entry.apiKey.trim() : null,
+      };
+      setLlmDraft((draft) =>
+        draft ? { ...draft, extraModels: [...draft.extraModels, cleaned] } : draft,
+      );
+      return { ok: true as const };
+    },
+    [llmDraft],
+  );
+
+  const removeRemoteModel = useCallback((name: string) => {
+    setLlmDraft((draft) => {
+      /* 主模型不可移除（视图对当前项也不渲染移除按钮，这里兜底） */
+      if (!draft || name === draft.model) return draft;
+      const next = draft.extraModels.filter((e) => e.name !== name);
+      return next.length === draft.extraModels.length
+        ? draft
+        : { ...draft, extraModels: next };
+    });
   }, []);
+
+  const probeRemote = useCallback(
+    async (input: { baseUrl?: string; apiKey?: string; model?: string }) =>
+      probeRemoteApi(input),
+    [],
+  );
+
+  /** 远端模型列表视图：主模型置顶（候选里有它时沿用其条目参数），其余按现序。 */
+  const remoteModelList: RemoteModelEntry[] = llmDraft
+    ? (() => {
+        const byName = new Map(llmDraft.extraModels.map((e) => [e.name, e]));
+        const head =
+          llmDraft.model.trim() !== ""
+            ? (byName.get(llmDraft.model) ?? { name: llmDraft.model })
+            : null;
+        const rest = llmDraft.extraModels.filter((e) => e.name !== llmDraft.model);
+        return head ? [head, ...rest] : rest;
+      })()
+    : [];
 
   const setTaskTemperature = useCallback(
     (task: TaskType, raw: string) => {
@@ -469,9 +530,10 @@ export function useSettingsPage(): SettingsPageController {
     patchLlm,
     patchSettings,
     toggleExtraModel,
-    remoteModels,
-    remoteModelsLoading,
-    fetchRemoteModels,
+    remoteModelList,
+    addRemoteModel,
+    removeRemoteModel,
+    probeRemote,
     llmApiKey,
     setLlmApiKey,
     ollamaStatus,

@@ -74,3 +74,49 @@ export async function completeChat({ messages, opts }: ChatArgs): Promise<string
   if (!res.ok) throw new Error(json.error ?? `LLM 请求失败 (${res.status})`);
   return json.content ?? "";
 }
+
+export interface RemoteProbeResult {
+  ok: boolean;
+  detail: string;
+  /** 服务端模型清单（/models 拉取成功时返回），供「添加模型」弹窗点选。 */
+  models?: string[];
+}
+
+/**
+ * 设置页「添加模型」弹窗：测试 OpenAI 兼容接口连通性并顺带拉取模型清单。
+ * baseUrl / apiKey 留空时由服务端回落到已保存的全局配置（「留空则用全局」语义）。
+ * 任何失败都返回 ok:false + 可读 detail，不抛异常——探测失败不是硬错误。
+ */
+export async function probeRemoteApi(
+  input: { baseUrl?: string; apiKey?: string; model?: string },
+): Promise<RemoteProbeResult> {
+  let res: Response;
+  try {
+    res = await fetch("/api/llm/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  } catch (e) {
+    return { ok: false, detail: e instanceof Error ? e.message : "网络请求失败" };
+  }
+  const json = (await res.json().catch(() => ({}))) as {
+    ok?: unknown;
+    detail?: unknown;
+    error?: unknown;
+    models?: unknown;
+  };
+  const detail =
+    typeof json.detail === "string"
+      ? json.detail
+      : typeof json.error === "string"
+        ? json.error
+        : `请求失败 (${res.status})`;
+  return {
+    ok: json.ok === true,
+    detail,
+    models: Array.isArray(json.models)
+      ? json.models.filter((m): m is string => typeof m === "string" && m !== "")
+      : undefined,
+  };
+}

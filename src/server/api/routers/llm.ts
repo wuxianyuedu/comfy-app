@@ -5,6 +5,18 @@ import { getLLMConfig, completeLLM } from "@/lib/llm/server";
 /** 合法的任务类型 key（用于温度覆盖） */
 const taskTypeKeys = ["txt2img", "img2video", "chat", "code", "creative"] as const;
 
+/** 候选模型条目：兼容旧纯名字字符串与新对象（远端条目可带独立接口 / 密钥） */
+const extraModelsSchema = z.array(
+  z.union([
+    z.string(),
+    z.object({
+      name: z.string().min(1),
+      baseUrl: z.string().nullish(),
+      apiKey: z.string().nullish(),
+    }),
+  ]),
+);
+
 export const llmRouter = createTRPCRouter({
   /** GET /api/llm/config */
   configGet: authedProcedure.query(async () => {
@@ -20,7 +32,7 @@ export const llmRouter = createTRPCRouter({
         apiKey: z.string().optional(),
         baseUrl: z.string().optional(),
         model: z.string().optional(),
-        extraModels: z.array(z.string()).optional(),
+        extraModels: extraModelsSchema.optional(),
         temperature: z.number().optional(),
         temperatureByTask: z.record(z.enum(taskTypeKeys), z.number()).optional(),
         maxTokens: z.number().optional(),

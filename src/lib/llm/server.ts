@@ -1,6 +1,7 @@
 import "server-only";
 import type { ZodType } from "zod";
 import { llmConfigRepository } from "@/lib/core/repository";
+import { normalizeExtraModels, resolveTaskTemperature } from "./types";
 import type { LLMConfig, LLMMessage, LLMRequestOptions, LLMProviderType, TaskType } from "./types";
 
 const ENV_DEFAULTS: LLMConfig = {
@@ -19,7 +20,11 @@ const ENV_DEFAULTS: LLMConfig = {
  *   2. DB singleton row (user overrides via the settings UI)
  *   3. per-request override (rarely used; the browser never sends apiKey)
  *
- * 温度解析优先级：override.taskType → override.temperature → DB.taskType → DB.temperature → ENV
+ * 温度解析优先级：override.taskType 的用户覆盖 → override.temperature →
+ * 该任务类型的推荐默认（TASK_TYPES.defaultTemperature）→ DB.temperature（全局）
+ *
+ * 模型解析：override.model 命中 extraModels 里带独立 baseUrl / apiKey 的远端
+ * 条目时，本次请求改走该条目的连接参数（未配置的继续用全局值）。
  */
 export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMConfig> {
   const cfg: LLMConfig = { ...ENV_DEFAULTS };
@@ -30,11 +35,8 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       if (row.provider) cfg.provider = row.provider as LLMProviderType;
       if (row.baseUrl) cfg.baseUrl = row.baseUrl;
       if (row.model) cfg.model = row.model;
-      // 候选模型列表(Json 字段，prisma 生成类型不含该列，先以 unknown 收窄)
-      const rawExtra = (row as Record<string, unknown>).extraModels;
-      if (Array.isArray(rawExtra)) {
-        cfg.extraModels = rawExtra.filter((m): m is string => typeof m === "string" && m.trim() !== "");
-      }
+      // 候选模型列表(Json 字段，兼容旧纯字符串与新条目对象两种形状)
+      cfg.extraModels = normalizeExtraModels((row as Record<string, unknown>).extraModels);
       if (row.apiKey) cfg.apiKey = row.apiKey;
       if (row.temperature != null) cfg.temperature = row.temperature;
       // temperatureByTask 是 Json 字段，prisma generate 后类型会自动包含；先用 any 绕过
@@ -49,13 +51,23 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
   if (override) {
     if (override.provider) cfg.provider = override.provider;
     if (override.baseUrl) cfg.baseUrl = override.baseUrl;
-    if (override.model) cfg.model = override.model;
-    // 按任务类型查找覆盖温度，没有则回退到显式 temperature 或全局默认
-    if (override.taskType && cfg.temperatureByTask?.[override.taskType] != null) {
-      cfg.temperature = cfg.temperatureByTask[override.taskType];
-    } else if (override.temperature != null) {
-      cfg.temperature = override.temperature;
+    if (override.model) {
+      cfg.model = override.model;
+      // 工坊 / 设置页按名字切换模型：命中带独立连接参数的候选条目时改走该条目
+      const entry = cfg.extraModels?.find(
+        (e) => e.name === override.model && !!(e.baseUrl ?? e.apiKey),
+      );
+      if (entry) {
+        if (entry.baseUrl) cfg.baseUrl = entry.baseUrl;
+        if (entry.apiKey) cfg.apiKey = entry.apiKey;
+      }
     }
+    cfg.temperature = resolveTaskTemperature({
+      taskType: override.taskType,
+      explicitTemperature: override.temperature,
+      overrides: cfg.temperatureByTask ?? null,
+      fallback: cfg.temperature,
+    });
     if (override.maxTokens != null) cfg.maxTokens = override.maxTokens;
   }
 

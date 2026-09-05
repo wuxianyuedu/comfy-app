@@ -5,6 +5,7 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import type { RawExtraModel } from "@/lib/llm/types";
 import { user, llmConfig, type User, type LlmConfig } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -48,7 +49,8 @@ export class LlmConfigRepository {
     provider?: string;
     baseUrl?: string;
     model?: string;
-    extraModels?: string[] | null;
+    /** 候选模型：旧纯名字字符串 / 新条目对象（远端条目可带独立 baseUrl、apiKey） */
+    extraModels?: RawExtraModel[] | null;
     apiKey?: string | null;
     temperature?: number;
     temperatureByTask?: unknown;

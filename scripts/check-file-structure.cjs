@@ -99,7 +99,7 @@ const SCAN_EXCLUDED = [
   'node_modules/', '.git/', '.next/', 'coverage/', 'generated/', 'temp/',
   'python-venv/', 'log/', 'build-launcher/', 'dist/', 'docs/',
   'playwright-report/', '.workbuddy/',
-  'src-tauri/target/', 'start-tauri/', 'start-tauri-dev/',
+  'src-tauri/target/', 'src-tauri/static/', 'start-tauri/', 'start-tauri-dev/',
   'start-tauri-standalone/', 'build-launcher-dev/', 'build-launcher-standalone/',
 ];
 (function walkScripts(dir) {
