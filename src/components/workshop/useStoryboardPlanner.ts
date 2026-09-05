@@ -306,6 +306,66 @@ export function useStoryboardPlanner(props: Props) {
     }
   }
 
+  /* ── 图片提示词：AI 润色 ──
+   * 模板拼接的 prompt 覆盖构图/角色/风格要素，但画面叙事平淡。AI 润色把
+   * 模板 prompt 作为要素清单，让模型补画面叙事、光影与镜头语言，产出更
+   * 出图的提示词；negative 同步微调。 */
+  const [polishBusyId, setPolishBusyId] = useState<string | null>(null);
+  const [polishBusyAll, setPolishBusyAll] = useState(false);
+  const [polishError, setPolishError] = useState("");
+
+  async function polishOne(shot: Shot) {
+    if (!config) {
+      openSettings();
+      return;
+    }
+    setPolishBusyId(shot.id);
+    setPolishError("");
+    try {
+      const full = await streamChat({
+        messages: [
+          {
+            role: "system",
+            content:
+              "你是 AI 绘画提示词工程师。用户给出一个分镜镜头的要素清单（构图、场景、角色、风格）。" +
+              "请把它改写为一段 60~120 词的英文画面提示词：保留全部要素，补足光影、氛围、镜头语言与画面叙事，" +
+              "用逗号分隔的短语，不要解释、不要换行以外的多余文字。只输出提示词本身。",
+          },
+          { role: "user", content: shot.prompt || shot.description || sceneFallback(shot) },
+        ],
+        opts: { temperature: 0.7 },
+      });
+      const polished = full.trim();
+      if (!polished) throw new Error("模型未返回提示词");
+      updateShot(shot.id, { prompt: polished });
+    } catch (e: unknown) {
+      setPolishError(errorMessage(e, "提示词润色失败"));
+    } finally {
+      setPolishBusyId(null);
+    }
+  }
+
+  function sceneFallback(shot: Shot): string {
+    const scene = scenes.find((sc) => sc.id === shot.sceneId);
+    return [shot.shotType, scene?.location, scene?.action].filter(Boolean).join(", ");
+  }
+
+  async function polishAll() {
+    if (!config) {
+      openSettings();
+      return;
+    }
+    setPolishBusyAll(true);
+    setPolishError("");
+    try {
+      for (const shot of shots) {
+        await polishOne(shot);
+      }
+    } finally {
+      setPolishBusyAll(false);
+    }
+  }
+
   return {
     aiBusy,
     aiProgress,
@@ -324,6 +384,11 @@ export function useStoryboardPlanner(props: Props) {
     removeShot,
     clearShots,
     handleAISplit,
+    polishBusyId,
+    polishBusyAll,
+    polishError,
+    polishOne,
+    polishAll,
     generateAll,
   };
 }

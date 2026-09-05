@@ -48,12 +48,14 @@ export class LlmConfigRepository {
     provider?: string;
     baseUrl?: string;
     model?: string;
+    extraModels?: string[] | null;
     apiKey?: string | null;
     temperature?: number;
     temperatureByTask?: unknown;
     maxTokens?: number;
   }): Promise<LlmConfig> {
     const taskJson = input.temperatureByTask ?? null;
+    const extraModelsJson = input.extraModels ?? null;
     const existing = await this.findSingleton();
     if (!existing) {
       const rows = await db
@@ -63,6 +65,7 @@ export class LlmConfigRepository {
           provider: input.provider ?? "local",
           baseUrl: input.baseUrl ?? "http://localhost:11434/v1",
           model: input.model ?? "llama3.1",
+          extraModels: extraModelsJson,
           apiKey: input.apiKey ?? null,
           temperature: input.temperature ?? 0.7,
           temperatureByTask: taskJson,
@@ -75,6 +78,7 @@ export class LlmConfigRepository {
     if (input.provider !== undefined) patch.provider = input.provider;
     if (input.baseUrl !== undefined) patch.baseUrl = input.baseUrl;
     if (input.model !== undefined) patch.model = input.model;
+    if (input.extraModels !== undefined) patch.extraModels = extraModelsJson;
     if (input.apiKey !== undefined) patch.apiKey = input.apiKey ?? null;
     if (input.temperature !== undefined) patch.temperature = input.temperature;
     if (input.temperatureByTask !== undefined) patch.temperatureByTask = taskJson;
