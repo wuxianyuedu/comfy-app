@@ -164,6 +164,11 @@ export async function ensureComfyUiReady(
       note(plan.error);
       return { ok: false, base: null, detail: plan.error };
     }
+    if (plan.hasDeps === false) {
+      note(
+        `提示：所选解释器（${plan.cmd}）的 site-packages 里没有 torch，启动大概率会失败——请检查 ComfyUI 环境`,
+      );
+    }
 
     // 端口优先取设置里的 comfyuiPort（设置界面明确配置的监听端口），
     // 其次兼容旧的 comfyuiUrl 端口段；都为空 = ComfyUI 默认 8188。
@@ -213,8 +218,26 @@ export async function ensureComfyUiReady(
     }
     st.child = child;
     appendRuntimeLog(`[spawn] pid=${child.pid} cmd=${plan.cmd} args=${JSON.stringify(args)} cwd=${plan.cwd}`);
-    child.stdout?.on("data", (d: Buffer) => appendRuntimeLog(`[out] ${d.toString().trimEnd().slice(0, 500)}`));
-    child.stderr?.on("data", (d: Buffer) => appendRuntimeLog(`[err] ${d.toString().trimEnd().slice(0, 500)}`));
+    // 最近输出留底：进程秒退时从里面提取「No module named 'X'」给出可行动的报错
+    const recentOutput: string[] = [];
+    const pushRecent = (text: string) => {
+      for (const line of text.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        recentOutput.push(trimmed);
+        while (recentOutput.length > 60) recentOutput.shift();
+      }
+    };
+    child.stdout?.on("data", (d: Buffer) => {
+      const text = d.toString().trimEnd().slice(0, 500);
+      appendRuntimeLog(`[out] ${text}`);
+      pushRecent(text);
+    });
+    child.stderr?.on("data", (d: Buffer) => {
+      const text = d.toString().trimEnd().slice(0, 500);
+      appendRuntimeLog(`[err] ${text}`);
+      pushRecent(text);
+    });
     child.on("exit", (code) => {
       note(`ComfyUI 进程退出（code=${code ?? "null"}）`);
       if (st.child === child) st.child = undefined;
@@ -223,7 +246,16 @@ export async function ensureComfyUiReady(
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       if (st.child !== child) {
-        return { ok: false, base: null, detail: "ComfyUI 进程启动后立即退出，详见 log/comfyui-runtime.log" };
+        const missingMod = /No module named '([^']+)'/.exec(
+          recentOutput.join("\n"),
+        )?.[1];
+        return {
+          ok: false,
+          base: null,
+          detail: missingMod
+            ? `ComfyUI 进程启动后立即退出：解释器缺少依赖（No module named '${missingMod}'）——请确认 comfyuiPath 指向装了依赖的环境，或为该环境安装依赖（详见 log/comfyui-runtime.log）`
+            : "ComfyUI 进程启动后立即退出，详见 log/comfyui-runtime.log",
+        };
       }
       // 用已知子进程 PID 查它实际监听的端口——不依赖端口探测猜哪个 ComfyUI
       // 是我们的实例（别的实例可能占着配置端口导致自动 +1）。

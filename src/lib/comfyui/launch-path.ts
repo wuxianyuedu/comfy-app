@@ -9,7 +9,28 @@ export type ComfyLaunchPlan = {
   baseArgs: string[];
   cwd: string;
   mainPy: string;
+  /** 所选解释器的 site-packages 里是否找到了 torch（依赖齐备的标志）。
+   *  false = 没找到——启动大概率因缺依赖秒退，调用方可据此提前提示。 */
+  hasDeps?: boolean;
 };
+
+/**
+ * 候选解释器环境是否装了 torch：依赖都在 <环境根>\Lib\site-packages
+ * （Windows 大小写不敏感）。环境根的判断：venv 布局的 python.exe 在
+ * <env>\Scripts（Windows）/ <env>\bin（POSIX），环境根是其上一级；
+ * 嵌入式 / standalone-env 的 python.exe 直接位于环境根。
+ */
+function envHasTorch(
+  pyDir: string,
+  exists: (p: string) => boolean
+): boolean {
+  const base = path.basename(pyDir).toLowerCase();
+  const envRoot =
+    base === "scripts" || base === "bin" ? path.dirname(pyDir) : pyDir;
+  return exists(
+    /*turbopackIgnore: true*/ path.join(envRoot, "Lib", "site-packages", "torch")
+  );
+}
 
 /**
  * 从 comfyuiPath 推导启动命令。
@@ -26,6 +47,11 @@ export type ComfyLaunchPlan = {
  *     把 comfyuiPath 配到实例根即可，无需精确到源码子目录。
  *   也兼容反向配置（把 comfyuiPath 指向实例内的 ComfyUI/ 源码根）——
  *   解释器会向上到父级实例根查找。
+ *
+ * 解释器选择（两段式）：在候选优先级之内，优先选 site-packages 里装有
+ * torch 的环境——依赖位置随安装方式漂移，固定优先级会选中空壳解释器
+ * （启动即 ModuleNotFoundError: No module named 'torch'）。全缺时按原
+ * 优先级返回并在 hasDeps=false 标记，由调用方提示用户。
  *
  * 解释器一律解析为 python.exe（不用 pythonw.exe——后者吞掉 stdout/stderr，
  * ComfyUI 启动出错时看不到任何日志，无法排查）。工坊/工作室只把 ComfyUI 当
@@ -85,13 +111,24 @@ export function resolveComfyLaunchPlan(
           path.join(parent, "standalone-env"), // 桌面：父级实例根（兼容配了源码根）
           src, // 极简：源码根直接带 python.exe
         ];
-    for (const pyDir of pyDirs) {
-      const py = path.join(pyDir, "python.exe");
-      if (exists(/*turbopackIgnore: true*/ py)) {
-        const mainPy = path.join(src, "main.py");
-        return { cmd: py, baseArgs: ["-s", mainPy], cwd: src, mainPy };
-      }
-    }
+    const present = pyDirs
+      .map((pyDir) => ({ pyDir, py: path.join(pyDir, "python.exe") }))
+      .filter((c) => exists(/*turbopackIgnore: true*/ c.py));
+    if (present.length === 0) continue;
+    // 两段选择：优先挑「装了 torch」的解释器——依赖装在哪个环境随安装方式
+    // 漂移（老桌面在 standalone-env，vendor / 新版桌面在 ComfyUI/.venv，便携在
+    // python_embeded），固定优先级会选中空壳解释器（No module named 'torch'
+    // 秒退）。候选里谁都缺 torch 时退回原优先级，失败走启动日志的真实报错。
+    const withDeps = present.find((c) => envHasTorch(c.pyDir, exists));
+    const chosen = withDeps ?? present[0]!;
+    const mainPy = path.join(src, "main.py");
+    return {
+      cmd: chosen.py,
+      baseArgs: ["-s", mainPy],
+      cwd: src,
+      mainPy,
+      hasDeps: !!withDeps,
+    };
   }
 
   return {

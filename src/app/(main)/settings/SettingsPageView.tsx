@@ -887,7 +887,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                 桌面版（ComfyUI Desktop）请直接配置实例根目录（含
                 ComfyUI/ 子目录与 standalone-env/），便携版配置含
                 main.py 的源码根。自动识别 python_embeded / standalone-env /
-                .venv 解释器。
+                .venv 解释器，多个环境并存时优先选用装了依赖（torch）的那个。
                 {c.comfyStatus?.pathConfigured
                   ? "已配置——ComfyUI 未运行时提交任务会自动拉起。"
                   : "未配置——ComfyUI 未运行时任务会失败。"}
