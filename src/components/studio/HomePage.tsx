@@ -91,7 +91,7 @@ export function HomePage({
 }: HomePageProps) {
   const toast = useToast();
   return (
-    <div className="relative flex h-screen w-screen overflow-hidden bg-(--color-canvas) text-gray-200 pb-6" style={{ fontFamily: "var(--font-sans)" }}>
+    <div className="relative flex h-screen w-screen overflow-hidden bg-(--color-canvas) text-(--color-ink) pb-6" style={{ fontFamily: "var(--font-sans)" }}>
       {/* ── Aurora Background Blobs ───────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <div
@@ -114,9 +114,9 @@ export function HomePage({
       {/* ── Right Area: Top Bar + Main Content ──────────── */}
       <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* ── Top Bar ── */}
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/5 bg-(--color-panel)/88 px-5 py-0 backdrop-blur-md">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-(--color-border-subtle) bg-(--color-panel)/88 px-5 py-0 backdrop-blur-md">
           {/* Search */}
-          <div className="flex max-w-[280px] flex-1 items-center gap-2.5 rounded-lg border border-white/7.000000000000001 bg-white/3 px-3 py-1.8 text-sm text-gray-500 transition-colors focus-within:border-white/13 focus-within:bg-white/5">
+          <div className="flex max-w-[280px] flex-1 items-center gap-2.5 rounded-lg border border-(--color-border) bg-(--color-subtle) px-3 py-1.8 text-sm text-(--color-ink-fainter) transition-colors focus-within:border-(--color-border-strong) focus-within:bg-(--color-surface-1)">
             <Search size={16} />
             <span className="whitespace-nowrap">搜索项目、模板或技能...</span>
           </div>
@@ -127,7 +127,7 @@ export function HomePage({
             <button
               type="button"
               onClick={() => toast.info("通知", "暂无新消息")}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-(--color-ink-muted) transition-colors hover:bg-(--color-subtle) hover:text-(--color-ink-strong)"
               aria-label="通知"
             >
               <Bell size={18} strokeWidth={1.8} />
@@ -137,7 +137,7 @@ export function HomePage({
             <button
               type="button"
               onClick={() => toast.info("账户", "点击头像可管理账号设置")}
-              className="flex items-center gap-2 rounded-lg px-1 py-0.5 transition-colors hover:bg-white/5"
+              className="flex items-center gap-2 rounded-lg px-1 py-0.5 transition-colors hover:bg-(--color-subtle)"
               title="账户"
             >
               <div className="u-avatar h-8 w-8 overflow-hidden rounded-full" />
@@ -198,14 +198,14 @@ export function HomePage({
                   key={card.id}
                   type="button"
                   onClick={() => onNavigate?.(card.id as WorkspaceView)}
-                  className="group flex flex-col items-start gap-2.5 rounded-2xl border border-white/6 bg-white/2 p-4 text-left transition-all hover:border-white/14.000000000000002 hover:bg-white/5 hover:shadow-lg hover:shadow-black/20"
+                  className="group flex flex-col items-start gap-2.5 rounded-2xl border border-(--color-border) bg-(--color-surface-1) p-4 text-left transition-all hover:border-(--color-border-strong) hover:bg-(--color-surface-2) hover:shadow-lg hover:shadow-black/10"
                 >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300 transition-colors group-hover:bg-violet-500/15">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-500 transition-colors group-hover:bg-violet-500/15">
                     {card.icon}
                   </span>
                   <div>
-                    <p className="text-sm font-medium text-gray-200">{card.label}</p>
-                    <p className="mt-0.5 text-xs text-gray-500">{card.desc}</p>
+                    <p className="text-sm font-medium text-(--color-ink-bright)">{card.label}</p>
+                    <p className="mt-0.5 text-xs text-(--color-ink-muted)">{card.desc}</p>
                   </div>
                 </button>
               ))}
@@ -218,7 +218,7 @@ export function HomePage({
                 <button
                   type="button"
                   onClick={() => onShowAllProjects?.()}
-                  className="text-xs text-(--color-ink-faint) transition-colors hover:text-gray-300"
+                  className="text-xs text-(--color-ink-faint) transition-colors hover:text-(--color-ink-strong)"
                 >
                   查看全部 →
                 </button>
@@ -229,12 +229,12 @@ export function HomePage({
                 <button
                   type="button"
                   onClick={onNewProject}
-                  className="group flex flex-col items-center justify-center gap-2.5 rounded-[16px] border border-dashed border-white/8 bg-white/1.5 py-7 transition-all hover:border-cyan-400/25 hover:bg-cyan-400/2 active:scale-[0.98]"
+                  className="group flex flex-col items-center justify-center gap-2.5 rounded-[16px] border border-dashed border-(--color-border) bg-(--color-surface-1) py-7 transition-all hover:border-cyan-400/40 hover:bg-cyan-400/5 active:scale-[0.98]"
                 >
                   <div className="flex h-[28px] w-[28px] items-center justify-center rounded-xl text-cyan-400/60 transition-colors group-hover:text-cyan-400">
                     <Plus size={24} strokeWidth={1.6} />
                   </div>
-                  <span className="text-[12.5px] font-medium text-[#7a8094] group-hover:text-cyan-400 transition-colors">
+                  <span className="text-[12.5px] font-medium text-(--color-ink-muted) group-hover:text-cyan-500 transition-colors">
                     新建画布项目
                   </span>
                 </button>
@@ -252,7 +252,7 @@ export function HomePage({
                             ? onOpenCanvasProject?.(proj.id)
                             : onOpenProject?.(proj.id)
                         }
-                        className="group flex items-start gap-3 rounded-[16px] border border-white/6 bg-white/2 p-3.5 text-left transition-all hover:border-white/12 hover:bg-white/4 active:scale-[0.98]"
+                        className="group flex items-start gap-3 rounded-[16px] border border-(--color-border) bg-(--color-surface-1) p-3.5 text-left transition-all hover:border-(--color-border-strong) hover:bg-(--color-surface-2) active:scale-[0.98]"
                       >
                         {/* Kind icon */}
                         <div
@@ -265,7 +265,7 @@ export function HomePage({
                         {/* Info */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
-                            <span className="truncate text-[13px] font-medium text-(--color-ink-field) group-hover:text-white transition-colors">
+                            <span className="truncate text-[13px] font-medium text-(--color-ink-bright) group-hover:text-(--color-ink) transition-colors">
                               {proj.name}
                             </span>
                             <span
@@ -292,7 +292,7 @@ export function HomePage({
                                   key={ti}
                                   src={thumb}
                                   alt=""
-                                  className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-white/6"
+                                  className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-(--color-border-strong)"
                                   onError={(event) => { (event.target as HTMLImageElement).style.display = "none"; }}
                                 />
                               ))}
@@ -310,7 +310,7 @@ export function HomePage({
                     return (
                       <div
                         key={kinds[index - 1]}
-                        className="flex items-start gap-3 rounded-[16px] border border-white/5 bg-white/1.5 p-3.5 opacity-50"
+                        className="flex items-start gap-3 rounded-[16px] border border-(--color-border) bg-(--color-surface-1) p-3.5 opacity-60"
                       >
                         <div
                           className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
@@ -319,9 +319,9 @@ export function HomePage({
                           {cfg.icon}
                         </div>
                         <div className="flex-1">
-                          <div className="h-3.5 w-3/4 rounded bg-white/6" />
-                          <div className="mt-2 h-3 w-1/2 rounded bg-white/4" />
-                          <div className="mt-2.5 h-10 w-10 rounded-lg bg-white/4" />
+                          <div className="h-3.5 w-3/4 rounded bg-(--color-border-strong)" />
+                          <div className="mt-2 h-3 w-1/2 rounded bg-(--color-border)" />
+                          <div className="mt-2.5 h-10 w-10 rounded-lg bg-(--color-border)" />
                         </div>
                       </div>
                     );

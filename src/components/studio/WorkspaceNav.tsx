@@ -22,7 +22,7 @@ interface WorkspaceNavProps {
  */
 export function WorkspaceNav({ active, onSelect }: WorkspaceNavProps) {
   return (
-    <nav className="flex h-full w-[64px] shrink-0 flex-col items-center gap-1 border-r border-white/6 bg-(--color-canvas)/85 py-4 backdrop-blur-sm">
+    <nav className="flex h-full w-[64px] shrink-0 flex-col items-center gap-1 border-r border-(--color-border-subtle) bg-(--color-canvas)/85 py-4 backdrop-blur-sm">
       {/* Logo / Brand mark */}
       <Link
         href="/workspace"
@@ -43,10 +43,10 @@ export function WorkspaceNav({ active, onSelect }: WorkspaceNavProps) {
             onClick={() => isEnabled && onSelect(item.id)}
             className={`group flex h-[42px] w-[42px] flex-col items-center justify-center rounded-xl transition-all ${
               isActive
-                ? "bg-white/8 text-white shadow-sm shadow-black/20"
+                ? "bg-(--color-primary)/16 text-(--color-ink-bright) shadow-sm shadow-black/5"
                 : isEnabled
-                  ? "text-gray-500 hover:bg-white/4 hover:text-gray-300"
-                  : "cursor-not-allowed text-gray-700 opacity-50"
+                  ? "text-(--color-ink-muted) hover:bg-(--color-subtle) hover:text-(--color-ink-strong)"
+                  : "cursor-not-allowed text-(--color-ink-fainter) opacity-50"
             }`}
             title={isEnabled ? item.label : `${item.label}（即将推出）`}
             aria-current={isActive ? "page" : undefined}
@@ -54,7 +54,7 @@ export function WorkspaceNav({ active, onSelect }: WorkspaceNavProps) {
             {item.icon}
             <span
               className={`mt-0.5 text-[10px] leading-none ${
-                isActive ? "text-gray-200" : isEnabled ? "text-gray-600 group-hover:text-gray-400" : "text-gray-700"
+                isActive ? "text-(--color-ink-bright)" : isEnabled ? "text-(--color-ink-fainter) group-hover:text-(--color-ink-strong)" : "text-(--color-ink-fainter)"
               }`}
             >
               {item.label}
@@ -68,7 +68,7 @@ export function WorkspaceNav({ active, onSelect }: WorkspaceNavProps) {
       {/* Settings */}
       <Link
         href="/settings"
-        className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-600 transition-colors hover:bg-white/4 hover:text-gray-400"
+        className="flex h-9 w-9 items-center justify-center rounded-xl text-(--color-ink-muted) transition-colors hover:bg-(--color-subtle) hover:text-(--color-ink-strong)"
         title="设置"
       >
         <Settings size={17} strokeWidth={1.8} />
