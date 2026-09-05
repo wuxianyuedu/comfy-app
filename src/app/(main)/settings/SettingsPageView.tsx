@@ -984,7 +984,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   id="comfyui-autostart"
                   type="checkbox"
                   className="size-4 accent-[var(--primary,#7c5cff)]"
-                  checked={c.drafts.settings.comfyuiAutoStart}
+                  checked={c.drafts.settings.comfyuiAutoStart ?? true}
                   onChange={(event) =>
                     c.patchSettings({ comfyuiAutoStart: event.target.checked })
                   }
@@ -1222,7 +1222,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     id="exit-kill-comfyui"
                     type="checkbox"
                     className="size-4 accent-[var(--primary,#7c5cff)]"
-                    checked={c.drafts.settings.exitKillComfyui}
+                    checked={c.drafts.settings.exitKillComfyui ?? true}
                     onChange={(event) =>
                       c.patchSettings({
                         exitKillComfyui: event.target.checked,
@@ -1249,7 +1249,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     id="exit-kill-ollama"
                     type="checkbox"
                     className="size-4 accent-[var(--primary,#7c5cff)]"
-                    checked={c.drafts.settings.exitKillOllama}
+                    checked={c.drafts.settings.exitKillOllama ?? true}
                     onChange={(event) =>
                       c.patchSettings({
                         exitKillOllama: event.target.checked,
