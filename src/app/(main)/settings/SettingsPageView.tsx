@@ -119,6 +119,17 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       </span>
                     </>
                   )}
+                  {c.ollamaStatus === "starting" && (
+                    <>
+                      <Loader2
+                        size={14}
+                        className="text-muted-foreground animate-spin"
+                      />
+                      <span className="text-muted-foreground text-sm">
+                        Ollama 启动中，正在等待服务就绪…
+                      </span>
+                    </>
+                  )}
                   {c.ollamaStatus === "up" && (
                     <>
                       <span className="inline-block size-2 shrink-0 rounded-full bg-emerald-400" />

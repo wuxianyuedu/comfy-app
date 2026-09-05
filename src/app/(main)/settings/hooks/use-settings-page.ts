@@ -45,7 +45,7 @@ export type LlmConfig = {
 };
 
 export type Section = "llm" | "comfyui";
-export type OllamaStatus = "checking" | "up" | "down";
+export type OllamaStatus = "checking" | "starting" | "up" | "down";
 
 export interface FlashMessage {
   kind: "ok" | "err";
@@ -112,6 +112,7 @@ export interface SettingsPageController {
 const FLASH_MS = 3500;
 
 /** Ollama 启动就绪轮询：最多 20 次 × 2s（覆盖 ollama 冷启动的常见耗时）。 */
+/** 启动流程期间状态行持有权标记的 ref 初始值（见 probeOllama 内说明）。 */
 const OLLAMA_START_POLL_TIMES = 20;
 const OLLAMA_START_POLL_INTERVAL_MS = 2000;
 
@@ -131,6 +132,10 @@ export function useSettingsPage(): SettingsPageController {
   useEffect(() => {
     ollamaStatusRef.current = ollamaStatus;
   }, [ollamaStatus]);
+  /* 启动流程期间状态行的持有权标记：launch 流程会自己落「启动中/运行中/未运行」，
+   * 期间挂载触发的探测不得覆盖状态（否则 UI 会跳变——轮询探测本身不发
+   * 「checking」+ 静默写结果，但 baseUrl 等其它 effect 仍可能并发探测）。 */
+  const ollamaStartingRef = useRef(false);
   const [settingsDraft, setSettingsDraft] = useState<Settings | null>(null);
   const [comfyStarting, setComfyStarting] = useState(false);
 
@@ -186,9 +191,10 @@ export function useSettingsPage(): SettingsPageController {
    * React Compiler 校验通过（写 `llmDraft?.baseUrl` 会被判定为「推断依赖比
    * 手写依赖更宽」，进而跳过整个组件的优化）。 */
   const llmBaseUrl = llmDraft?.baseUrl ?? "";
-  const probeOllama = useCallback(async (baseUrl: string) => {
-    setOllamaStatus("checking");
+  /** 静默探测：不发「检测中」、不与其他探测互相覆盖状态。 */
+  const probeOllamaSilent = useCallback(async (baseUrl: string) => {
     const result = await probeOllamaClient(baseUrl);
+    if (ollamaStartingRef.current) return;
     if (result.up) {
       setOllamaModels(result.models);
       setOllamaStatus("up");
@@ -197,6 +203,13 @@ export function useSettingsPage(): SettingsPageController {
     setOllamaModels([]);
     setOllamaStatus("down");
   }, []);
+
+  /** 探测并把结果落到状态行。启动流程内部轮询禁用此函数（见 probeOllamaSilent）。 */
+  const probeOllama = useCallback(async (baseUrl: string) => {
+    if (ollamaStartingRef.current) return;
+    setOllamaStatus("checking");
+    await probeOllamaSilent(baseUrl);
+  }, [probeOllamaSilent]);
 
   // baseUrl 变化或本地 provider 切换时重新探测
   useEffect(() => {
@@ -207,6 +220,8 @@ export function useSettingsPage(): SettingsPageController {
 
   const startOllama = useCallback(async () => {
     setOllamaStarting(true);
+    ollamaStartingRef.current = true;
+    setOllamaStatus("starting");
     try {
       await startOllamaClient();
       // 轮询等就绪再交回控制权：期间保持「启动中…」按钮禁用。以前 POST 完
@@ -214,8 +229,14 @@ export function useSettingsPage(): SettingsPageController {
       // 按钮恢复可点，用户误以为失败会连点——每次点击都再拉起一个 serve
       // 进程，多进程抢 11434 端口在 Windows 上连环弹「端口被占用」错误框。
       for (let i = 0; i < OLLAMA_START_POLL_TIMES; i++) {
-        if (llmBaseUrl) await probeOllama(llmBaseUrl);
-        if (ollamaStatusRef.current === "up") return;
+        if (llmBaseUrl) {
+          const result = await probeOllamaClient(llmBaseUrl);
+          if (result.up) {
+            setOllamaModels(result.models);
+            setOllamaStatus("up");
+            return;
+          }
+        }
         await new Promise((resolve) => setTimeout(resolve, OLLAMA_START_POLL_INTERVAL_MS));
       }
       throw new Error(
@@ -224,11 +245,12 @@ export function useSettingsPage(): SettingsPageController {
     } catch (error) {
       showFlash("err", errorMessage(error, "启动 Ollama 失败"));
       // 超时/失败后兜底探一次，让状态行和进程的真实情况对齐
-      if (llmBaseUrl) await probeOllama(llmBaseUrl);
+      if (llmBaseUrl) await probeOllamaSilent(llmBaseUrl);
     } finally {
       setOllamaStarting(false);
+      ollamaStartingRef.current = false;
     }
-  }, [llmBaseUrl, probeOllama, showFlash]);
+  }, [llmBaseUrl, probeOllamaSilent, showFlash]);
 
   /* ── ComfyUI 启动 ───────────────────────────────────────── */
   const startComfy = useCallback(async () => {
