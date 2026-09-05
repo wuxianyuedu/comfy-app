@@ -43,6 +43,10 @@ export type Settings = {
   comfyuiAutoStart: boolean;
   /** ComfyUI 监听端口；0 = 默认 8188（启动时按需显式传 --port）。 */
   comfyuiPort: number;
+  /** 应用退出是否连带关闭自己拉起的 ComfyUI（默认 true=连带关闭）。 */
+  exitKillComfyui: boolean;
+  /** 应用退出是否连带关闭自己拉起的 Ollama（默认 true=连带关闭）。 */
+  exitKillOllama: boolean;
 };
 
 export type LlmConfig = {
@@ -57,7 +61,7 @@ export type LlmConfig = {
   apiKey: string | null;
 };
 
-export type Section = "llm" | "comfyui" | "appearance" | "database";
+export type Section = "llm" | "comfyui" | "appearance" | "database" | "exit";
 export type OllamaStatus = "checking" | "starting" | "up" | "down";
 
 export interface FlashMessage {
@@ -857,6 +861,7 @@ export const SETTINGS_SECTIONS: { id: Section; label: string }[] = [
   { id: "llm", label: "语言模型" },
   { id: "comfyui", label: "创作后端" },
   { id: "database", label: "数据库" },
+  { id: "exit", label: "退出与后台服务" },
 ];
 
 /** 按任务温度区的任务清单 —— 视图遍历渲染，顺序即渲染顺序。 */
