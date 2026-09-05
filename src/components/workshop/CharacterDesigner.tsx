@@ -3,8 +3,16 @@ import React from "react";
 import { Trash } from "lucide-react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { Icon } from "@/components/ui/icon";
+import { AttributeMultiSelect } from "@/components/workshop/AttributeMultiSelect";
+import {
+  CHARACTER_ATTRIBUTES,
+  type AttributeOptionSet,
+} from "@/lib/workshop/character-options";
 import type { Character, StyleRef } from "@/lib/workshop/types";
-import { buildCharacterPrompt, buildCharacterNegative } from "@/lib/workshop/prompt-builder";
+import {
+  buildCharacterPrompt,
+  buildCharacterNegative,
+} from "@/lib/workshop/prompt-builder";
 import { workshopUid } from "@/lib/workshop/script-parser";
 import {
   type ExtractChannel,
@@ -58,15 +66,38 @@ function newCharacter(): Character {
     appearance: "",
     costume: "",
     personality: "",
+    temperament: "",
     styleTags: [],
     positivePrompt: "",
     negativePrompt: "",
     params: {},
   };
 }
+/** 把角色描述字符串拆成下拉选项数组（兼容中/英文逗号、顿号与空白分隔） */
+function splitAttr(text: string): string[] {
+  return text
+    .split(/[、,，，\s]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+/** 把下拉选项数组合并回角色描述字符串 */
+function joinAttr(items: string[]): string {
+  return items.join("、");
+}
 
-export function CharacterDesigner({ characters, styles, onCharactersChange, scriptMarkdown }: Props) {
-  const [tagInputs, setTagInputs] = React.useState<Record<string, string>>({});
+/** 取某属性维度的配置（服装/外貌/性格/气质/风格） */
+function attrSet(id: string): AttributeOptionSet {
+  return (
+    CHARACTER_ATTRIBUTES.find((a) => a.id === id) ?? CHARACTER_ATTRIBUTES[0]!
+  );
+}
+
+export function CharacterDesigner({
+  characters,
+  styles,
+  onCharactersChange,
+  scriptMarkdown,
+}: Props) {
   const [brief, setBrief] = React.useState("");
   const [genBusy, setGenBusy] = React.useState(false);
   const [aiBusyId, setAiBusyId] = React.useState<string | null>(null);
@@ -74,7 +105,8 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
   const { config, openSettings } = useLLM();
 
   // ── 三通道提取(工具 / 本地模型 / 配置API)+ 外部导入 ──
-  const [extractChannel, setExtractChannel] = React.useState<ExtractChannel>("tool");
+  const [extractChannel, setExtractChannel] =
+    React.useState<ExtractChannel>("tool");
   const [extractBusy, setExtractBusy] = React.useState(false);
   const [extractStatus, setExtractStatus] = React.useState("");
   const [extractError, setExtractError] = React.useState("");
@@ -88,8 +120,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
 
   function update(id: string, patch: Partial<Character>) {
     onCharactersChange(
-      characters.map((character) =>
-{
+      characters.map((character) => {
         if (character.id !== id) return character;
         const next = { ...character, ...patch };
         // Recompute prompts
@@ -98,7 +129,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
         next.negativePrompt = buildCharacterNegative(next, style);
         if (style?.defaultParams) next.params = { ...style.defaultParams };
         return next;
-      })
+      }),
     );
   }
 
@@ -191,7 +222,9 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
       return;
     }
     setExtractBusy(true);
-    setExtractStatus(extractChannel === "tool" ? "" : "正在调用模型提取角色卡…");
+    setExtractStatus(
+      extractChannel === "tool" ? "" : "正在调用模型提取角色卡…",
+    );
     setExtractError("");
     try {
       let drafts: ParsedCharacterDraft[];
@@ -199,7 +232,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
         drafts = parseCharacterEntries(script);
         if (drafts.length === 0) {
           setExtractError(
-            "工具通道未在剧本中找到「人物:/角色:」行。可检查剧本结构后重试,或切换到本地模型 / 配置API 通道。"
+            "工具通道未在剧本中找到「人物:/角色:」行。可检查剧本结构后重试,或切换到本地模型 / 配置API 通道。",
           );
           return;
         }
@@ -210,7 +243,9 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
         });
         drafts = parseExtractedCharacters(full);
         if (drafts.length === 0) {
-          setExtractError("模型未返回有效角色卡 JSON,解析失败。可重试,或改用「工具」通道。");
+          setExtractError(
+            "模型未返回有效角色卡 JSON,解析失败。可重试,或改用「工具」通道。",
+          );
           return;
         }
       }
@@ -220,10 +255,12 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
         return;
       }
       setExtractStatus(
-        `已提取 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`
+        `已提取 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`,
       );
     } catch (e: unknown) {
-      setExtractError(`${errorMessage(e, "提取失败")} 可重试,或改用「工具」通道。`);
+      setExtractError(
+        `${errorMessage(e, "提取失败")} 可重试,或改用「工具」通道。`,
+      );
     } finally {
       setExtractBusy(false);
     }
@@ -253,7 +290,7 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
         return;
       }
       setExtractStatus(
-        `已导入 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`
+        `已导入 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`,
       );
     } catch (e: unknown) {
       setExtractError(errorMessage(e, "导入失败"));
@@ -262,33 +299,18 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
     }
   }
 
-  function addTag(id: string, raw: string) {
-    const tag = raw.trim();
-    if (!tag) return;
-    const found = characters.find((character) => character.id === id);
-    if (!found) return;
-    if (found.styleTags.includes(tag)) return;
-    update(id, { styleTags: [...found.styleTags, tag] });
-    setTagInputs((prev) => ({ ...prev, [id]: "" }));
-  }
-
-  function removeTag(id: string, tag: string) {
-    const found = characters.find((character) => character.id === id);
-    if (!found) return;
-    update(id, { styleTags: found.styleTags.filter((styleTag) => styleTag !== tag) });
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="u-title">
-          角色设计 <span className="text-muted-foreground">({characters.length})</span>
+          角色设计{" "}
+          <span className="text-muted-foreground">({characters.length})</span>
         </h3>
         <div className="flex gap-2">
           <button
             type="button"
             onClick={add}
-            className="rounded-lg border border-border px-3 py-1.5 text-xs text-primary hover:bg-subtle"
+            className="border-border text-primary hover:bg-subtle rounded-lg border px-3 py-1.5 text-xs"
           >
             + 新建角色
           </button>
@@ -296,9 +318,14 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
       </div>
 
       {/* AI: generate a full character from a one-line brief */}
-      <div className="rounded-xl border border-primary-soft bg-primary-soft/30 p-3">
-        <p className="mb-2 flex items-center text-xs font-medium text-primary">
-          <Icon name="sparkles" size={13} className="mr-1 inline align-[-2px]" />用一句话生成角色
+      <div className="border-primary-soft bg-primary-soft/30 rounded-xl border p-3">
+        <p className="text-primary mb-2 flex items-center text-xs font-medium">
+          <Icon
+            name="sparkles"
+            size={13}
+            className="mr-1 inline align-[-2px]"
+          />
+          用一句话生成角色
         </p>
         <div className="flex gap-2">
           <input
@@ -308,19 +335,19 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
               if (event.key === "Enter" && !genBusy) void handleAIGenerate();
             }}
             placeholder="例如：一位穿唐装的白发剑客，气质孤傲"
-            className="flex-1 rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
+            className="border-border bg-bg focus:border-primary flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
           />
           <button
             type="button"
             onClick={handleAIGenerate}
             disabled={!brief.trim() || genBusy}
-            className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+            className="bg-primary rounded-lg px-3 py-2 text-xs font-medium text-white transition-opacity disabled:opacity-40"
           >
             {genBusy ? "生成中…" : "AI 生成"}
           </button>
         </div>
         {!config && (
-          <p className="mt-2 text-[11px] text-muted-foreground">
+          <p className="text-muted-foreground mt-2 text-[11px]">
             未配置 LLM。点右上角「LLM 设置」接入本地或远端模型后即可使用 AI。
           </p>
         )}
@@ -346,35 +373,53 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
       />
 
       {aiError && (
-        <p className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">{aiError}</p>
+        <p className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
+          {aiError}
+        </p>
       )}
 
       {characters.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
+        <div className="border-border text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">
           还没有角色。添加角色后会自动生成可送入生图的提示词。
         </div>
       ) : (
         <div className="space-y-3">
           {characters.map((character, i) => (
-            <div key={character.id} className="rounded-xl border border-border bg-surface p-4">
+            <div
+              key={character.id}
+              className="border-border bg-surface rounded-xl border p-4"
+            >
               <div className="mb-3 flex items-center gap-2">
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
+                <span className="bg-primary-soft text-primary grid h-6 w-6 place-items-center rounded-full text-xs font-semibold">
                   {i + 1}
                 </span>
                 <input
                   value={character.name}
-                  onChange={(event) => update(character.id, { name: event.target.value })}
-                  className="flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium text-ink outline-none hover:border-border focus:border-primary"
+                  onChange={(event) =>
+                    update(character.id, { name: event.target.value })
+                  }
+                  className="text-ink hover:border-border focus:border-primary flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium outline-none"
                   placeholder="角色名"
                 />
                 <button
                   type="button"
                   onClick={() => handleAICard(character)}
                   disabled={aiBusyId === character.id || genBusy}
-                  className="rounded-md border border-primary-soft px-2 py-1 text-xs text-primary transition-colors hover:bg-primary-soft disabled:opacity-40"
+                  className="border-primary-soft text-primary hover:bg-primary-soft rounded-md border px-2 py-1 text-xs transition-colors disabled:opacity-40"
                   title="用 LLM 补全外貌/服装/性格"
                 >
-                  {aiBusyId === character.id ? "…" : (<><Icon name="sparkles" size={12} className="mr-1 inline align-[-2px]" />AI 润色</>)}
+                  {aiBusyId === character.id ? (
+                    "…"
+                  ) : (
+                    <>
+                      <Icon
+                        name="sparkles"
+                        size={12}
+                        className="mr-1 inline align-[-2px]"
+                      />
+                      AI 润色
+                    </>
+                  )}
                 </button>
                 <button
                   type="button"
@@ -386,66 +431,96 @@ export function CharacterDesigner({ characters, styles, onCharactersChange, scri
                 </button>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Field label="年龄/性别" value={character.ageGender} onChange={(value) => update(character.id, { ageGender: value })} placeholder="25岁 女性" />
-                <Field label="服装" value={character.costume} onChange={(value) => update(character.id, { costume: value })} placeholder="红色风衣，牛仔裤" />
-                <Field label="外貌特征" value={character.appearance} onChange={(value) => update(character.id, { appearance: value })} placeholder="短黑发，单眼皮，清秀" />
-                <Field label="性格/气质" value={character.personality} onChange={(value) => update(character.id, { personality: value })} placeholder="冷静，坚毅" />
-              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field
+                  label="年龄/性别"
+                  value={character.ageGender}
+                  onChange={(value) =>
+                    update(character.id, { ageGender: value })
+                  }
+                  placeholder="25岁 女性"
+                />
 
-              {/* Style tags */}
-              <div className="mt-2">
-                <span className="mb-1 block text-xs text-muted-foreground">风格标签</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {character.styleTags.map((styleTag) =>
-(
-                    <span
-                      key={styleTag}
-                      className="flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-xs text-primary"
-                    >
-                      {styleTag}
-                      <button type="button" onClick={() => removeTag(character.id, styleTag)} className="hover:text-red-500">
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                  <input
-                    value={tagInputs[character.id] ?? ""}
-                    onChange={(event) => setTagInputs((prev) => ({ ...prev, [character.id]: event.target.value }))}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === ",") {
-                        event.preventDefault();
-                        addTag(character.id, tagInputs[character.id] ?? "");
-                      }
-                    }}
-                    onBlur={() => addTag(character.id, tagInputs[character.id] ?? "")}
-                    className="w-24 rounded-full border border-border bg-bg px-2 py-0.5 text-xs outline-none focus:border-primary"
-                    placeholder="输入后回车"
-                  />
-                </div>
+                {/* 服装 / 外貌特征 / 性格 / 气质 / 风格 —— 穷举式多选下拉 */}
+                <AttributeMultiSelect
+                  label={attrSet("costume").label}
+                  groups={attrSet("costume").groups}
+                  value={splitAttr(character.costume)}
+                  onChange={(items) =>
+                    update(character.id, { costume: joinAttr(items) })
+                  }
+                  placeholder="如：唐装、风衣…"
+                />
+                <AttributeMultiSelect
+                  label={attrSet("appearance").label}
+                  groups={attrSet("appearance").groups}
+                  value={splitAttr(character.appearance)}
+                  onChange={(items) =>
+                    update(character.id, { appearance: joinAttr(items) })
+                  }
+                  placeholder="如：短发、双眼皮…"
+                />
+                <AttributeMultiSelect
+                  label={attrSet("personality").label}
+                  groups={attrSet("personality").groups}
+                  value={splitAttr(character.personality)}
+                  onChange={(items) =>
+                    update(character.id, { personality: joinAttr(items) })
+                  }
+                  placeholder="如：冷静、开朗…"
+                />
+                <AttributeMultiSelect
+                  label={attrSet("temperament").label}
+                  groups={attrSet("temperament").groups}
+                  value={splitAttr(character.temperament)}
+                  onChange={(items) =>
+                    update(character.id, { temperament: joinAttr(items) })
+                  }
+                  placeholder="如：清冷孤傲、知性…"
+                />
+                <AttributeMultiSelect
+                  label={attrSet("styleTags").label}
+                  groups={attrSet("styleTags").groups}
+                  value={character.styleTags}
+                  onChange={(items) =>
+                    update(character.id, { styleTags: items })
+                  }
+                  placeholder="如：厚涂、国风…"
+                />
               </div>
 
               {/* Linked style skill */}
               <div className="mt-2">
-                <span className="mb-1 block text-xs text-muted-foreground">艺术风格（Skill）</span>
+                <span className="text-muted-foreground mb-1 block text-xs">
+                  艺术风格（Skill）
+                </span>
                 <DarkSelect
-                  className="!bg-white/3 !border-white/8 text-sm"
+                  className="!border-white/8 !bg-white/3 text-sm"
                   value={character.skillSlug ?? ""}
-                  onChange={(value) => update(character.id, { skillSlug: value || undefined })}
+                  onChange={(value) =>
+                    update(character.id, { skillSlug: value || undefined })
+                  }
                   options={styles.map((style) => style.slug)}
-                  labels={Object.fromEntries(styles.map((style) =>[style.slug, `${style.icon} ${style.name}`]))}
+                  labels={Object.fromEntries(
+                    styles.map((style) => [
+                      style.slug,
+                      `${style.icon} ${style.name}`,
+                    ]),
+                  )}
                   placeholder="不指定（使用风格标签）"
                 />
               </div>
 
               {/* Generated prompt preview */}
-              <div className="mt-3 rounded-lg bg-subtle p-3">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">生成提示词预览</p>
-                <p className="text-xs leading-relaxed text-ink/80 break-words">
+              <div className="bg-subtle mt-3 rounded-lg p-3">
+                <p className="text-muted-foreground mb-1 text-xs font-medium">
+                  生成提示词预览
+                </p>
+                <p className="text-ink/80 text-xs leading-relaxed break-words">
                   {character.positivePrompt || "填写角色信息后自动生成…"}
                 </p>
                 {character.negativePrompt && (
-                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground/70 break-words">
+                  <p className="text-muted-foreground/70 mt-2 text-xs leading-relaxed break-words">
                     <span className="font-medium">负向：</span>
                     {character.negativePrompt}
                   </p>
@@ -472,11 +547,11 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs text-muted-foreground">{label}</span>
+      <span className="text-muted-foreground mb-1 block text-xs">{label}</span>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-md border border-border bg-bg px-2 py-1.5 text-xs outline-none focus:border-primary"
+        className="border-border bg-bg focus:border-primary w-full rounded-md border px-2 py-1.5 text-xs outline-none"
         placeholder={placeholder}
       />
     </label>

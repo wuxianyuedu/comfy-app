@@ -12,8 +12,9 @@ export function buildCharacterPrompt(c: Character, style?: StyleRef): string {
     .join(", ");
   if (identity) parts.push(identity);
 
-  // Personality as mood keywords
-  if (c.personality) parts.push(`mood: ${c.personality}`);
+  // Personality / temperament as mood keywords
+  const mood = [c.personality, c.temperament].filter(Boolean).join(", ");
+  if (mood) parts.push(`mood: ${mood}`);
 
   // Style tags
   if (c.styleTags.length) parts.push(c.styleTags.join(", "));
