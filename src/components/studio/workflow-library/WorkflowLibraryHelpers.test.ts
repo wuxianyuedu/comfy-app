@@ -3,7 +3,6 @@ import {
   deriveFormatFlags,
   deriveSyncFlags,
   isTechnicalName,
-  ago,
   type WorkflowRow,
 } from "./workflow-library-config";
 
@@ -173,48 +172,3 @@ describe("isTechnicalName 技术文件名识别", () => {
   });
 });
 
-describe("ago 导入时间人性化显示", () => {
-  it("1 分钟内导入显示 刚刚导入", () => {
-    const iso = new Date(Date.now() - 30_000).toISOString();
-    expect(ago(iso)).toBe("刚刚导入");
-  });
-
-  it("未来时间戳(时钟偏差)显示 刚刚导入", () => {
-    const iso = new Date(Date.now() + 5 * 60_000).toISOString();
-    expect(ago(iso)).toBe("刚刚导入");
-  });
-
-  it("几分钟前导入", () => {
-    const iso = new Date(Date.now() - 5 * 60_000).toISOString();
-    expect(ago(iso)).toBe("5 分钟前导入");
-  });
-
-  it("59 分钟仍按分钟显示", () => {
-    const iso = new Date(Date.now() - 59 * 60_000).toISOString();
-    expect(ago(iso)).toBe("59 分钟前导入");
-  });
-
-  it("整 60 分钟折算为 1 小时", () => {
-    const iso = new Date(Date.now() - 60 * 60_000).toISOString();
-    expect(ago(iso)).toBe("1 小时前导入");
-  });
-
-  it("90 分钟折算为 1 小时(向下取整)", () => {
-    const iso = new Date(Date.now() - 90 * 60_000).toISOString();
-    expect(ago(iso)).toBe("1 小时前导入");
-  });
-
-  it("23 小时仍按小时显示,24 小时折算为 1 天", () => {
-    expect(
-      ago(new Date(Date.now() - 23 * 3_600_000).toISOString()),
-    ).toBe("23 小时前导入");
-    expect(
-      ago(new Date(Date.now() - 24 * 3_600_000).toISOString()),
-    ).toBe("1 天前导入");
-  });
-
-  it("多天前按天显示", () => {
-    const iso = new Date(Date.now() - 3 * 86_400_000).toISOString();
-    expect(ago(iso)).toBe("3 天前导入");
-  });
-});

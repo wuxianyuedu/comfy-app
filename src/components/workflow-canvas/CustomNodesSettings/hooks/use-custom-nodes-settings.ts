@@ -6,7 +6,7 @@ import {
   getCustomNodesManifest,
   type ManifestNodeRaw,
 } from "@/config/custom-nodes";
-import { deriveRowState, eqArr, nowTimeStr, pathKey, splitPaths } from "../parsing";
+import { deriveRowState, pathKey } from "../parsing";
 import type {
   DiscoveredSubpkg,
   ParseProgress,
@@ -14,15 +14,6 @@ import type {
   SettingsResp,
   SummaryPkg,
 } from "../types";
-
-/** POST /api/custom-nodes 保存响应的类型视图。路由返回
- *  `{ ok, error?, paths? / localWorkflowPaths? }`；字段为 unknown，由下方守卫决定信任。 */
-interface SaveSettingsResp {
-  ok?: unknown;
-  error?: unknown;
-  paths?: string[];
-  localWorkflowPaths?: string[];
-}
 
 /** 设置/解析进度流的一行 ndjson —— 仅本对话框消费的字段。 */
 interface SettingsStreamEvent {
@@ -64,11 +55,8 @@ export interface ParentBlock {
 export interface CustomNodesSettingsController {
   open: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;
-  pathsText: string;
-  setPathsText: Dispatch<SetStateAction<string>>;
   savedPaths: string[];
-  savedAt: string | null;
-  saving: boolean;
+  /** 目录配置相关错误（如 ComfyUI 路径未配置）。 */
   saveErr: string | null;
   loading: boolean;
   progress: ParseProgress;
@@ -97,10 +85,7 @@ export interface CustomNodesSettingsController {
 
 export function useCustomNodesSettings(): CustomNodesSettingsController {
   const [open, setOpen] = useState(false);
-  const [pathsText, setPathsText] = useState("");
   const [savedPaths, setSavedPaths] = useState<string[]>([]);
-  const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // 进度分两阶段，均用「包数」而非「文件数」表达（shape/字段文档见 ./types.ts 的
@@ -129,8 +114,6 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   // 每个 classType：节点预览卡是否展开显示端口+控件？默认折叠 —— 一个 146 节点的
   // 包会产生海量叶子，全展开会过度膨胀。
   const [nodeExpanded, setNodeExpanded] = useState<Record<string, boolean>>({});
-
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const stillParsing =
@@ -185,7 +168,6 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         // 缓存预热路径：服务端返回单个 JSON blob。
         const data = (await res.json()) as SettingsResp;
         const paths = data.settings.paths || [];
-        setPathsText(paths.join("\n"));
         setSavedPaths(paths);
         setSummary(data.summary);
         setReport(data.lastReport);
@@ -269,7 +251,6 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         }
       }
 
-      setPathsText(paths.join("\n"));
       setSavedPaths(paths);
       setSummary(summary);
       setReport(lastReport);
@@ -320,46 +301,6 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     return () => clearTimeout(timer);
   }, [report, fetchManifest]);
 
-  // 防抖自动保存：编辑 → 空闲 600ms → PUT 到 .env
-  useEffect(() => {
-    const live = splitPaths(pathsText);
-    if (open && !eqArr(live, savedPaths)) {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      const savePaths = async (): Promise<void> => {
-        setSaving(true);
-        setSaveErr(null);
-        try {
-          const res = await fetch("/api/custom-nodes", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "saveSettings", customNodesPaths: live }),
-          });
-          const data = (await res.json()) as SaveSettingsResp;
-          if (!res.ok || !data.ok) {
-            throw new Error(
-              typeof data.error === "string" && data.error.length > 0
-                ? data.error
-                : "保存失败"
-            );
-          }
-          setSavedPaths(data.paths ?? live);
-          setSavedAt(nowTimeStr());
-          await reloadFromServer(); // 在新路径下重新发现子包
-        } catch (e) {
-          setSaveErr("自动保存失败：" + String(e));
-        } finally {
-          setSaving(false);
-        }
-      };
-      saveTimerRef.current = setTimeout(() => {
-        void savePaths();
-      }, 600);
-    }
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, [pathsText, savedPaths, open, reloadFromServer]);
-
   async function readNdjson(
     res: Response,
     onDone: (report: ParseReport | null, ok: boolean) => Promise<void> | void
@@ -401,7 +342,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
   async function onParseAll() {
     if (savedPaths.length === 0) {
-      setError_("请先在上面的输入框填写至少一个目录");
+      setError_("未找到自定义节点目录 —— 请先在设置 → 创作后端 中配置 ComfyUI 安装路径");
       return;
     }
     setParsing(true);
@@ -520,11 +461,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   return {
     open,
     setOpen,
-    pathsText,
-    setPathsText,
     savedPaths,
-    savedAt,
-    saving,
     saveErr,
     loading,
     progress,

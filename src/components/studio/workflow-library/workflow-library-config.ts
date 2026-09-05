@@ -142,16 +142,6 @@ export function isTechnicalName(name: string): boolean {
   return /^[a-z0-9_]+$/.test(name);
 }
 
-export function ago(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "刚刚导入";
-  if (m < 60) return `${m} 分钟前导入`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前导入`;
-  return `${Math.floor(h / 24)} 天前导入`;
-}
-
 /* ── 列表筛选 / 计数的纯派生（从 WorkflowLibrary 视图里抽出）─────
  * 原先是组件内 4 个 useMemo（filteredWorkflows / pendingRows / sourceCounts /
  * typeCounts）。搬到这里后：规则可单测，视图只剩「取数据 → 渲染」。 */

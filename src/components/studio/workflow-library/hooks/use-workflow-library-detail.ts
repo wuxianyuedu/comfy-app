@@ -29,6 +29,20 @@ export interface WorkflowLibraryDetailActions {
   resync: () => void;
 }
 
+/** 类型 / 模型编辑器的派生数据与动作（规范 17 §17.2 第②层）。 */
+export interface MetaEditorController {
+  /** 当前生效的 mode 集合（缺省回退 [taskType]，兼容旧行）。 */
+  modes: string[];
+  defaultMode: string;
+  /** 已绑定的模型标签名。 */
+  modelTags: string[];
+  /** 全部可选模型标签。 */
+  allModelTags: { id: string; name: string; count: number }[];
+  busy: boolean;
+  patchModes: (modes: string[], defaultMode: string) => Promise<void>;
+  patchModelTags: (names: string[]) => Promise<void>;
+}
+
 export interface WorkflowLibraryDetailController {
   /** null = 左侧未选中工作流，视图据此渲染空态。 */
   workflow: WorkflowRow | null;
@@ -49,6 +63,8 @@ export interface WorkflowLibraryDetailController {
   isTechnical: boolean;
   busyDownload: boolean;
   busyResync: boolean;
+  /** 类型 / 模型编辑器（缺省空实现，调用方可安全忽略）。 */
+  metaEditor: MetaEditorController;
   actions: WorkflowLibraryDetailActions;
 }
 
@@ -57,6 +73,9 @@ export function useWorkflowLibraryDetail(
 ): WorkflowLibraryDetailController {
   const {
     workflow,
+    allModelTags = [],
+    onPatchModes,
+    onPatchModelTags,
     bundleBusy,
     resyncBusy,
     onUse,
@@ -126,8 +145,33 @@ export function useWorkflowLibraryDetail(
     [workflow, onUse, onEdit, onDelete, onDownload, onResync]
   );
 
+  const metaEditor = useMemo<MetaEditorController>(
+    () => ({
+      modes:
+        workflow?.modes && workflow.modes.length > 0
+          ? workflow.modes
+          : workflow
+            ? [workflow.taskType]
+            : [],
+      defaultMode: workflow?.defaultMode ?? workflow?.taskType ?? "",
+      modelTags: workflow?.modelTags ?? [],
+      allModelTags,
+      busy: !!workflow && (bundleBusy === workflow.id || resyncBusy === workflow.id),
+      patchModes: async (modes, defaultMode) => {
+        if (!workflow || !onPatchModes) return;
+        await onPatchModes(workflow.id, modes, defaultMode);
+      },
+      patchModelTags: async (names) => {
+        if (!workflow || !onPatchModelTags) return;
+        await onPatchModelTags(workflow.id, names);
+      },
+    }),
+    [workflow, allModelTags, bundleBusy, resyncBusy, onPatchModes, onPatchModelTags],
+  );
+
   return {
     workflow,
+    metaEditor,
     activeTab,
     setActiveTab,
     sourceOpen,

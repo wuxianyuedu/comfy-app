@@ -252,7 +252,7 @@ export function FilterTabs<T extends string>({
         ? "bg-sky-500/30 text-sky-100"
         : "bg-fuchsia-500/30 text-fuchsia-100";
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2">
+    <div className="mb-3 flex flex-wrap items-center gap-1.5">
       {tabs.map((tab) =>
 {
         const isActive = active === tab.key;
@@ -261,7 +261,7 @@ export function FilterTabs<T extends string>({
             key={tab.key}
             type="button"
             onClick={() => onChange(tab.key)}
-            className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
               isActive
                 ? activeCls
                 : "border-white/8 bg-white/2 text-gray-400 hover:border-white/20 hover:text-gray-200"
