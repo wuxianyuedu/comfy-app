@@ -277,6 +277,10 @@ export interface WorkflowDetail {
   id: string;
   name: string;
   taskType: string;
+  /** 多模式：该工作流可运行的全部模式码（模板 modes 列解析），与库详情的
+   *  「类型」同源；IO 预览面板的模式页签从这里取。子图变体缺省。 */
+  modes?: string[];
+  defaultMode?: string | null;
   graph: Record<string, ApiWorkflowNode>;
   /** 从 `/api/workflows/:id` 返回的原始导入格式 (LiteGraph
    *  JSON)；canvas 顶部「📋 查看 JSON」modal 直接读这里喂给 SourceModal。

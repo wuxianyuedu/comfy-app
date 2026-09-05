@@ -1,7 +1,9 @@
 "use client";
 
-// 单个「可编辑参数」行：标签行（可改名 / 必填切换 / 类型徽章）+ 控件行。
+// 单个「可编辑参数」行：标签行（可改名 / 必填切换 / 可见性 / 类型徽章）+ 控件行。
 // 纯展示：状态全部由外部传入，交互通过回调上抛。
+
+import { Eye, EyeOff } from "lucide-react";
 
 import { EditableLabel } from "~/components/studio/shared/EditableLabel";
 import {
@@ -32,6 +34,11 @@ interface WidgetInputRowProps {
   onPickFile: () => void;
   onLabelChange?: (label: string) => void;
   onRequiredChange?: (required: boolean) => void;
+  /** IO 编辑态：该参数在当前模式下的可见性（undefined = 不渲染 👁）。 */
+  visible?: boolean;
+  onVisibilityChange?: (visible: boolean) => void;
+  /** 当前模式下被隐藏（IO 编辑预览置灰呈现，眼睛可恢复）。 */
+  dimmed?: boolean;
   /** 挂左侧可连接端点（画布节点用），圆心骑跨卡片左缘。 */
   withHandle?: boolean;
 }
@@ -49,6 +56,9 @@ export function WidgetInputRow({
   onPickFile,
   onLabelChange,
   onRequiredChange,
+  visible,
+  onVisibilityChange,
+  dimmed = false,
   withHandle = false,
 }: WidgetInputRowProps) {
   const accent = ACCENT[entry.control];
@@ -101,6 +111,25 @@ export function WidgetInputRow({
             {entry.required ? "必填" : "可选"}
           </button>
         )}
+        {onVisibilityChange && (
+          <button
+            type="button"
+            title={
+              visible === false
+                ? "该参数在当前模式下已隐藏，点击恢复显示"
+                : "点击在当前模式下隐藏此参数"
+            }
+            onClick={() => onVisibilityChange(visible === false)}
+            onMouseDown={(ev) => ev.stopPropagation()}
+            className={`nodrag nopan shrink-0 rounded p-0.5 transition-colors ${
+              visible === false
+                ? "text-gray-600 hover:text-gray-300"
+                : "text-gray-300 hover:bg-white/8 hover:text-gray-100"
+            }`}
+          >
+            {visible === false ? <EyeOff size={11} /> : <Eye size={11} />}
+          </button>
+        )}
       </span>
       {typeChip}
     </div>
@@ -110,7 +139,7 @@ export function WidgetInputRow({
   if (entry.control === "link") {
     if (compact) {
       return (
-        <div className="relative">
+        <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
           {withHandle && (
             <PortHandle
               id={entry.ioKey}
@@ -127,7 +156,7 @@ export function WidgetInputRow({
       );
     }
     return (
-      <div className="relative">
+      <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
         {withHandle && <PortHandle id={entry.ioKey} dir="in" type={entry.type} />}
         <div className="flex items-center gap-2 rounded-md bg-(--color-canvas-deep) px-2.5 py-1.5 pl-[14px] pr-[14px]">
           <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} />
@@ -170,7 +199,7 @@ export function WidgetInputRow({
    * —— 所有标签的视觉基线对齐到第一行，控件拿到全宽。 */
   if (compact) {
     return (
-      <div className="relative">
+      <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
         {withHandle && (
           /* 圆心锁到标签行中线（pt-1.5 = 6 + h-5 / 2 = 10 = 16px）：默认的
            * top:50% 会让圆点掉在两行之间、与参数名错位。 */
@@ -190,7 +219,7 @@ export function WidgetInputRow({
   /* 宽版：标签行在上，控件紧随其后。handle 挂在行 wrapper 上，圆心才能骑跨
    * 卡片左缘 —— 放进带 padding 的子行会让圆心内缩 14px，与端口行错位。 */
   return (
-    <div className="relative">
+    <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
       {withHandle && <PortHandle id={entry.ioKey} dir="in" type={entry.type} />}
       <div className="px-[14px] pt-1.5">{labelRow}</div>
       {control}

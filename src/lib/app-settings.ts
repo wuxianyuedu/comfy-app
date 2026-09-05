@@ -41,6 +41,12 @@ export type AppSettings = {
    * （ComfyUI 由本应用拉起；远程实例可用环境变量 COMFYUI_BASE 覆盖）。
    */
   comfyuiPort: number;
+  /**
+   * 是否要求登录才能调用 REST 接口（自定义节点解析 / 素材 / 上传 /
+   * 日志 / LLM 配置等）。false（默认，本机单用户模式）= 未登录自动落到
+   * 演示用户，与 tRPC authedProcedure 的回退一致；true = 严格 401。
+   */
+  loginRequired: boolean;
 };
 
 /** 从 comfyuiPath 推导 ComfyUI 安装内的只读资源目录（custom_nodes / workflows）。
@@ -77,6 +83,7 @@ const DEFAULTS: AppSettings = {
   comfyuiExtraArgs: "",
   comfyuiAutoStart: true,
   comfyuiPort: 0,
+  loginRequired: false,
 };
 
 let cache: AppSettings | null = null;

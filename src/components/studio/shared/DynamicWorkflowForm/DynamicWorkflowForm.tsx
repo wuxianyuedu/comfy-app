@@ -33,6 +33,8 @@ export function DynamicWorkflowForm(props: DynamicWorkflowFormProps) {
       onSeedModeChange={props.onSeedModeChange}
       onLabelChange={props.onLabelChange}
       onRequiredChange={props.onRequiredChange}
+      visibilityMode={props.visibilityMode}
+      onVisibilityChange={props.onVisibilityChange}
       onReorder={props.onReorder}
     />
   );

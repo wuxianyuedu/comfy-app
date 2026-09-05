@@ -78,18 +78,21 @@ export function useDynamicWorkflowForm(
   /* 多模式：按当前模式过滤掉 `visible === false` 的行。
    *  只是展示层过滤——被隐藏的参数仍留在 values 里（调用方用
    *  defaultInputValues(io, mode) 给它播种了模式默认值），所以提交给
-   *  ComfyUI 的 payload 不会因为「当前模式不显示」就缺字段。 */
+   *  ComfyUI 的 payload 不会因为「当前模式不显示」就缺字段。
+   *  `showHiddenInMode`（IO 编辑预览）不过滤：隐藏行置灰呈现，作者靠
+   *  行内 👁 恢复显示——否则隐藏后眼睛跟着消失，永远改不回来。 */
+  const visibilityFilterMode = props.showHiddenInMode ? null : mode;
   const shownWireInputs = useMemo(
-    () => filterVisibleInMode(wireInputs, mode),
-    [wireInputs, mode]
+    () => filterVisibleInMode(wireInputs, visibilityFilterMode),
+    [wireInputs, visibilityFilterMode]
   );
   const shownWidgetInputs = useMemo(
-    () => filterVisibleInMode(widgetInputs, mode),
-    [widgetInputs, mode]
+    () => filterVisibleInMode(widgetInputs, visibilityFilterMode),
+    [widgetInputs, visibilityFilterMode]
   );
   const shownOutputs = useMemo(
-    () => filterVisibleInMode(outputs, mode),
-    [outputs, mode]
+    () => filterVisibleInMode(outputs, visibilityFilterMode),
+    [outputs, visibilityFilterMode]
   );
   const inputs = useMemo(
     () => [...shownWireInputs, ...shownWidgetInputs],

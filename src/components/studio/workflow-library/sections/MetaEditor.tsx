@@ -1,35 +1,15 @@
 "use client";
 
-// 详情面板的「类型 / 模型」编辑器：复用 MultiModeSelect（多模式）与模型标签
-// 多选 chip。纯展示 —— 写操作通过 controller 上抛，由 hook 持久化。
+// 模型标签绑定选择器：点击展开用户级标签库多选，可内联新建标签。
+// 纯展示 —— 写操作通过 controller 上抛，由 hook 持久化。
+// 触发按钮与详情头部其它操作按钮（导入画布 / 编辑 / 下载）同款式。
 
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { MultiModeSelect } from "~/components/studio/ui/MultiModeSelect";
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
 
-export function MetaEditor({ meta }: { meta: MetaEditorController }) {
-  return (
-    <div className="mt-3 flex flex-wrap items-center gap-3">
-      <div className="flex items-center gap-1.5">
-        <span className="text-[11px] text-white/40">类型</span>
-        <MultiModeSelect
-          modes={meta.modes}
-          defaultMode={meta.defaultMode}
-          hideExtraBadge
-          onChange={(modes, defaultMode) => {
-            void meta.patchModes(modes, defaultMode);
-          }}
-        />
-      </div>
-      <ModelTagPicker meta={meta} />
-    </div>
-  );
-}
-
-/** 模型标签绑定：点击展开用户级标签库多选，可内联新建标签。 */
-function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
+export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Set<string>>(() => new Set(meta.modelTags));
   const [newName, setNewName] = useState("");
@@ -80,8 +60,8 @@ function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex max-w-[260px] items-center gap-1.5 rounded-md border border-fuchsia-500/25 bg-fuchsia-500/15 px-2 py-0.5 text-[11px] font-medium text-fuchsia-200 transition-colors hover:bg-fuchsia-500/25"
-        title={label}
+        className="inline-flex max-w-[260px] items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-medium text-white/75 transition-colors hover:bg-white/[0.08] hover:text-white"
+        title={`${label}（点击管理模型标签绑定）`}
       >
         <span className="truncate">{label}</span>
         <span className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
@@ -106,7 +86,7 @@ function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
               <div className="mb-2 flex max-h-56 flex-col gap-1 overflow-y-auto">
                 {knownNames.length === 0 && (
                   <p className="px-2 py-1.5 text-[11px] leading-relaxed text-gray-500">
-                    全局标签库为空，可先在页头「管理模型」中添加，或直接在下方输入新标签（保存时自动入库）。
+                    全局标签库为空，可直接在下方输入新标签（保存时自动入库）。
                   </p>
                 )}
                 {options.map((name) => {

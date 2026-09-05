@@ -619,6 +619,16 @@ function WorkflowEditorBody({
           <WorkflowIoPreviewPanel
             workflowIO={workflowIO}
             detailIOMap={detail.workflowIO ?? null}
+            modes={detail.modes ?? []}
+            defaultMode={detail.defaultMode ?? null}
+            onModesChange={(modes, defaultMode) => {
+              /* 模式集合变更立即落库（与库详情「类型」同一存储），并同步
+               * 本地 detail 让页签即时反映。 */
+              setDetail((prev) =>
+                prev ? { ...prev, modes, defaultMode, taskType: defaultMode } : prev,
+              );
+              savePatch.mutate({ id: workflowId, modes, defaultMode, taskType: defaultMode });
+            }}
             onClose={() => setIoPreviewOpen(false)}
           />
         )}

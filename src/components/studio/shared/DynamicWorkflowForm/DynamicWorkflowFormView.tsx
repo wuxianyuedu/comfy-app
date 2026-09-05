@@ -28,6 +28,9 @@ interface DynamicWorkflowFormViewProps {
   onSeedModeChange?: (ioKey: string, mode: string) => void;
   onLabelChange?: (ioKey: string, label: string) => void;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
+  /** IO 编辑态：行内 👁 切换参数在 visibilityMode 模式下的可见性。 */
+  visibilityMode?: string | null;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
   onReorder?: (fromKey: string, beforeKey: string | null) => void;
 }
 
@@ -43,6 +46,8 @@ export function DynamicWorkflowFormView({
   onSeedModeChange,
   onLabelChange,
   onRequiredChange,
+  visibilityMode,
+  onVisibilityChange,
   onReorder,
 }: DynamicWorkflowFormViewProps) {
   if (loading) return <LoadingSkeleton />;
@@ -96,6 +101,15 @@ export function DynamicWorkflowFormView({
           ? (required: boolean) => onRequiredChange(entry.ioKey, required)
           : undefined
       }
+      visible={
+        visibilityMode ? (entry.modes?.[visibilityMode]?.visible ?? true) : undefined
+      }
+      onVisibilityChange={
+        onVisibilityChange && visibilityMode
+          ? (visible: boolean) => onVisibilityChange(entry.ioKey, visible)
+          : undefined
+      }
+      dimmed={!!visibilityMode && entry.modes?.[visibilityMode]?.visible === false}
       withHandle={withHandle}
     />
   );

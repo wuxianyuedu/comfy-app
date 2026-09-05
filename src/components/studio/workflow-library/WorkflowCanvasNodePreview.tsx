@@ -82,6 +82,19 @@ export function WorkflowCanvasNodePreview({
     () => (workflowIO ? getMissingRequiredInputs(workflowIO, values) : []),
     [workflowIO, values],
   );
+  /* 缺参提示人性化：ioKey（76::widget::text）→ 展示标签（pos text 等）。 */
+  const missingLabels = useMemo(
+    () =>
+      missing.map((ioKey) => {
+        const entry = workflowIO?.[ioKey];
+        if (!entry) return ioKey;
+        const fromInputs = splitWorkflowIO(workflowIO).inputs.find(
+          (input) => input.ioKey === ioKey,
+        );
+        return fromInputs?.label ?? fromInputs?.name ?? ioKey;
+      }),
+    [missing, workflowIO],
+  );
   const canRun = usable && !running && missing.length === 0;
   /* 与画布 WorkflowNode 同源的双行结构：inputs 由 DynamicWorkflowForm(compact)
    * 渲染（库内无 React Flow 上下文，不带端点），outputs 单独成段在表单之后。 */
@@ -238,15 +251,15 @@ export function WorkflowCanvasNodePreview({
           </div>
         </div>
 
-        {/* 动态表单：与画布同一渲染器。注意不能加 `compact`——compact 的
-         *  端口行会渲染 React Flow 的 <Handle>，需要 ReactFlowProvider
-         *  祖先，库内没有（reactflow.dev/error#001）；showOutputs=false
-         *  与画布一致，outputs 由下方 WorkflowNodeOutputsRow 呈现。 */}
+        {/* compact = 与项目画布节点完全同版的密度与结构（无「组合参数 /
+         *  可编辑参数」等分组标题），库内预览对齐画布观感。端点圆点在
+         *  非 React Flow 节点内由 PortHandle 降级为装饰。 */}
         <DynamicWorkflowForm
           io={workflowIO ?? undefined}
           values={values}
           onChange={setValues}
           showOutputs={false}
+          compact
           seedModes={seedModes}
           onSeedModeChange={
             onSeedModeChange
@@ -275,8 +288,8 @@ export function WorkflowCanvasNodePreview({
           disabled={!canRun}
           onClick={run}
           title={
-            missing.length > 0
-              ? `必填参数未填：${missing.join("、")}`
+            missingLabels.length > 0
+              ? `必填参数未填：${missingLabels.join("、")}`
               : undefined
           }
         />
@@ -325,9 +338,9 @@ export function WorkflowCanvasNodePreview({
           {phase.message}
         </div>
       )}
-      {!running && missing.length > 0 && (
+      {!running && missingLabels.length > 0 && (
         <p className="w-[380px] text-[11px] text-amber-300/80">
-          必填参数未填：{missing.join("、")}
+          必填参数未填：{missingLabels.join("、")}
         </p>
       )}
     </div>

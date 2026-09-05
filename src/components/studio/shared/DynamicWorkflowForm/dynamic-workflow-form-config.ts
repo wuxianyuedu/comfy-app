@@ -35,6 +35,13 @@ export interface DynamicWorkflowFormProps {
    *  rows that are still empty render the input with a red border to keep
    *  the author honest — the IO-edit-mode counterpart of `onLabelChange`. */
   onRequiredChange?: (ioKey: string, required: boolean) => void;
+  /** IO 编辑态：每行渲染 👁 切换「该参数在 visibilityMode 模式下是否可见」，
+   *  写入 `workflowIO[ioKey].modes[visibilityMode].visible`（按模式保留）。
+   *  visibilityMode 为空（无模式）时不渲染。 */
+  visibilityMode?: string | null;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  /** IO 编辑预览置 true：隐藏行不过滤、置灰呈现（作者靠 👁 恢复显示）。 */
+  showHiddenInMode?: boolean;
   /** Canvas-only: per-pin seed "control after generate" mode, keyed by
    *  ioKey.  Rendered as a clickable chip on seed-like int rows so the user
    *  can pick fixed / increment / decrement / random without leaving the

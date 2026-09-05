@@ -40,6 +40,13 @@ export interface WorkflowIORawEntry {
   label?: string;
   displayOrder?: number;
   value?: unknown;
+  /** IO 编辑里切换的「运行时强校验」标记 —— GET 重建时必须透传，
+   *  否则保存后重开编辑器会退回可选（历史 bug）。 */
+  required?: boolean;
+  /** seed 类参数的「控件后行为」（fixed/increment/decrement/random）。 */
+  seedMode?: string;
+  /** 多模式覆盖层（各模式的默认值与可见性）。 */
+  modes?: Record<string, unknown>;
 }
 
 export interface WorkflowIOEnrichParams {
@@ -210,6 +217,12 @@ export async function enrichWorkflowIO(
        *  persisted as-is) and must survive this GET rebuild so a custom
        *  default isn't silently dropped on reload. */
       ...(v.value !== undefined ? { value: v.value } : {}),
+      /* required / seedMode / modes 同 value 一样是作者编辑态（PATCH 原样
+       *  落库），GET 重建必须原样透传 —— 此前 required 被丢掉，导致
+       *  「改成必填 → 保存 → 重开又变回可选」。 */
+      ...(v.required !== undefined ? { required: v.required } : {}),
+      ...(v.seedMode !== undefined ? { seedMode: v.seedMode } : {}),
+      ...(v.modes !== undefined ? { modes: v.modes } : {}),
     };
   }
 

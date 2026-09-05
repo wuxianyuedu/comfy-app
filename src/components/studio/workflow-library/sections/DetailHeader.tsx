@@ -18,7 +18,7 @@ import { TaskTypeChip } from "~/components/studio/ui/TaskTypeChip";
 import { modeLabel } from "../workflow-library-config";
 import { type WorkflowRow } from "../workflow-library-config";
 import { ActionButton } from "./DetailControls";
-import { MetaEditor } from "./MetaEditor";
+import { ModelTagPicker } from "./MetaEditor";
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
 
 interface DetailHeaderProps {
@@ -136,9 +136,6 @@ export function DetailHeader({
               </span>
             )}
           </div>
-
-          {/* 类型 / 模型配置上移进头部，紧贴徽标行 */}
-          <MetaEditor meta={meta} />
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -149,6 +146,8 @@ export function DetailHeader({
             title={usable ? "把该工作流导入项目画布" : "当前工作流缺少可执行格式，无法导入"}
             disabled={!usable}
           />
+          {/* 模型标签绑定：与导入画布同款描边样式，点开多选管理 */}
+          <ModelTagPicker meta={meta} />
           <ActionButton
             onClick={onEdit}
             icon={<Edit3 className="h-3.5 w-3.5" />}
