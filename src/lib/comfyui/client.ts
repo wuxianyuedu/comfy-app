@@ -8,8 +8,14 @@
 // the resolver will probe nearby ports (+1, +2, … up to PROBE_RANGE) and use
 // the first one that responds. The discovered port is cached in-memory for the
 // session lifetime.
+//
+// 多实例场景：comfyuiPath 配置了实例根目录后，resolveComfyBase 会先在 OS
+// 进程列表确认「该路径的 main.py 是否真的在运行」，再通过 PID→监听端口
+// 定位实际端口。端口上有别的 ComfyUI 响应 ≠ 配置路径的实例在运行。
 
 import { getSettingsSync } from "../app-settings";
+import { resolveComfyLaunchPlan } from "./launch-path";
+import { findPidForMainPy, findPidListeningPort } from "./proc-detect";
 import { logger } from "~/server/lib/logger";
 
 /** How many extra ports to probe when the configured one is unreachable */
@@ -70,6 +76,33 @@ export async function resolveComfyBase(): Promise<string> {
     settings.comfyuiPort && settings.comfyuiPort > 0
       ? settings.comfyuiPort
       : parseInt(url.port) || 8188;
+
+  // comfyuiPath 已配置：先确认配置的实例在 OS 层确实在运行。
+  // 避免「端口上有任何 ComfyUI 响应 = 已在运行」的误判——可能跑着的是
+  // 另一个实例，并非用户配置路径的那个。
+  const comfyuiPath = settings.comfyuiPath?.trim();
+  if (comfyuiPath) {
+    const plan = resolveComfyLaunchPlan(comfyuiPath);
+    if (!("error" in plan)) {
+      const pid = await findPidForMainPy(plan.mainPy);
+      if (pid) {
+        const port = await findPidListeningPort(pid);
+        if (port) {
+          _resolvedBase = `http://${host}:${port}`;
+          logger.info(`[comfyui] Connected to configured instance on :${port} (pid=${pid})`);
+          return _resolvedBase;
+        }
+        // 进程在但端口未绑定（仍在启动）——不误连到别的 ComfyUI，返回 raw。
+        logger.info(`[comfyui] Configured instance (pid=${pid}) starting, port not bound yet`);
+        return raw;
+      }
+      // 配置的实例没有在运行——抛错触发自动启动（executor-ws connect 的 catch）
+      logger.warn(`[comfyui] Configured instance not running: ${plan.mainPy}`);
+      throw new Error("Configured ComfyUI instance is not running");
+    }
+    // comfyuiPath 无效（如目录不存在）——退到端口探测
+    logger.warn(`[comfyui] Invalid comfyuiPath, falling back to port probe`);
+  }
 
   // Try configured port first
   if (await probePort(host, configuredPort)) {
