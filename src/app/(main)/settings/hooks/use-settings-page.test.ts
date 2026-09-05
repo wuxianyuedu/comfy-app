@@ -526,6 +526,37 @@ describe("useSettingsPage", () => {
     expect(result.current.comfyLogActive).toBe(false);
   });
 
+  it("refreshDbStudioLog 拉取 drizzle-studio-runtime 日志（替换式）", async () => {
+    server.use(
+      http.get("*/api/logs/current", ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("source") !== "drizzle-studio-runtime") {
+          return HttpResponse.json(
+            { error: "unexpected source" },
+            { status: 400 },
+          );
+        }
+        return HttpResponse.json({
+          content:
+            "[spawn] pid=456 cmd=node.exe\ndrizzle-kit studio\n[out] Drizzle Studio is running\n",
+          size: 4096,
+          offset: 0,
+        });
+      }),
+    );
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await act(async () => {
+      await result.current.refreshDbStudioLog();
+    });
+    expect(result.current.dbStudioLogText).toContain("[spawn] pid=456");
+    expect(result.current.dbStudioLogText).toContain("Drizzle Studio is running");
+    expect(result.current.dbStudioLogActive).toBe(false);
+  });
+
   it("远端模型：编辑候选条目（改名/接口/密钥）；重名排除自身", async () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),

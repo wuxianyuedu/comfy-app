@@ -12,12 +12,17 @@ export interface FileLogSlice {
   offset: number;
 }
 
-export type LogSourceKind = "dev" | "launcher" | "comfyui-runtime";
+export type LogSourceKind =
+  | "dev"
+  | "launcher"
+  | "comfyui-runtime"
+  | "drizzle-studio-runtime";
 
 /** source 参数 → /api/logs/current 的 source 查询值。 */
 function sourceQuery(source: LogSourceKind): string {
   if (source === "dev") return "dev-launcher";
   if (source === "comfyui-runtime") return "comfyui-runtime";
+  if (source === "drizzle-studio-runtime") return "drizzle-studio-runtime";
   return "launcher";
 }
 

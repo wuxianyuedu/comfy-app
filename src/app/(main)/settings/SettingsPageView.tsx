@@ -107,6 +107,21 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
     setComfyLogFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 32);
   };
 
+  /* Drizzle Studio 启动日志的滚动跟随（同 ComfyUI 的纯视觉偏好） */
+  const dbStudioLogBoxRef = useRef<HTMLDivElement>(null);
+  const [dbStudioLogFollow, setDbStudioLogFollow] = useState(true);
+  useEffect(() => {
+    const el = dbStudioLogBoxRef.current;
+    if (el && dbStudioLogFollow) el.scrollTop = el.scrollHeight;
+  }, [c.dbStudioLogText, dbStudioLogFollow]);
+  const onDbStudioLogScroll = () => {
+    const el = dbStudioLogBoxRef.current;
+    if (!el) return;
+    setDbStudioLogFollow(
+      el.scrollHeight - el.scrollTop - el.clientHeight < 32,
+    );
+  };
+
   function openAddDialog() {
     setDialog({ mode: "add" });
     setAddForm({ baseUrl: "", apiKey: "", model: "", kind: "chat" });
@@ -1132,6 +1147,56 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   >
                     {c.dbStudioStopping ? "关闭中…" : "关闭 Drizzle Studio"}
                   </Btn>
+                </div>
+              </div>
+              {/* Drizzle Studio 启动日志：启动期间每秒跟随
+                  log/drizzle-studio-runtime.log（同 ComfyUI 的用户可见出口） */}
+              <div className="border-border bg-surface-1 mt-4 rounded-xl border">
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-ink/80 flex items-center gap-2 text-sm font-medium">
+                    启动日志（drizzle-studio-runtime.log）
+                    {c.dbStudioLogActive && (
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
+                        <span className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-400" />
+                        跟随中
+                      </span>
+                    )}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {!dbStudioLogFollow && (
+                      <button
+                        type="button"
+                        onClick={() => setDbStudioLogFollow(true)}
+                        className="bg-primary/90 hover:bg-primary rounded px-2 py-0.5 text-[11px] font-medium text-white"
+                      >
+                        恢复自动滚动
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void c.refreshDbStudioLog()}
+                      className="border-border text-muted-foreground hover:bg-subtle rounded border px-2 py-0.5 text-[11px] transition-colors"
+                    >
+                      刷新
+                    </button>
+                  </div>
+                </div>
+                <div
+                  ref={dbStudioLogBoxRef}
+                  onScroll={onDbStudioLogScroll}
+                  className="border-border/50 custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg bg-black/30 px-3 py-2 font-mono text-[11px] leading-relaxed text-gray-300"
+                >
+                  {c.dbStudioLogText ? (
+                    <span className="whitespace-pre-wrap break-all">
+                      {c.dbStudioLogText}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      暂无日志 —— 点「启动 Drizzle Studio」后这里会实时输出拉起
+                      过程（spawn 参数与 drizzle-kit 输出）；也可点「刷新」查看
+                      最近一次启动日志。
+                    </span>
+                  )}
                 </div>
               </div>
               <p className="text-muted-foreground mt-3 text-xs">
