@@ -15,6 +15,10 @@ import { useTheme } from "next-themes";
 
 import { errorMessage } from "~/lib/error-message";
 import {
+  fetchFileLogSlice,
+  type FileLogSlice,
+} from "~/lib/log-file-client";
+import {
   probeOllama as probeOllamaClient,
   startOllama as startOllamaClient,
   stopOllama as stopOllamaClient,
@@ -106,6 +110,10 @@ export interface SettingsPageController {
   comfyStopping: boolean;
   startComfy: () => Promise<void>;
   stopComfy: () => Promise<void>;
+  /* ComfyUI 启动日志（log/comfyui-runtime.log）：启动期间自动跟随，可手动刷新 */
+  comfyLogText: string;
+  comfyLogActive: boolean;
+  refreshComfyLog: () => Promise<void>;
   /* Ollama 关闭（启动已有 startOllama） */
   ollamaStopping: boolean;
   stopOllama: () => Promise<void>;
@@ -137,6 +145,21 @@ export interface SettingsPageController {
 
 /** 提示条停留时长。 */
 const FLASH_MS = 3500;
+
+/* ── ComfyUI 启动日志 ─────────────────────────────────────
+ * lifecycle.ts 会把 spawn 参数与子进程 stdout/stderr 追加进
+ * log/comfyui-runtime.log；这里在启动期间每秒跟随其尾部。 */
+const COMFY_LOG_POLL_MS = 1000;
+/** 客户端保留上限：一次超长冷启动也不至于把内存吃穿。 */
+const COMFY_LOG_MAX_CHARS = 120_000;
+/** 子进程输出里的 ANSI 控制序列与 \r（Windows 行尾）在日志面板里只添乱。 */
+const COMFY_LOG_ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\r/g;
+
+function capComfyLog(text: string): string {
+  return text.length > COMFY_LOG_MAX_CHARS
+    ? text.slice(-COMFY_LOG_MAX_CHARS)
+    : text;
+}
 
 /**
  * 合并候选模型：主模型 + 勾选的多选，按首次出现去重。
@@ -347,6 +370,54 @@ export function useSettingsPage(): SettingsPageController {
     }
   }, [comfyStopM, comfyStatusQ, showFlash]);
 
+  /* ── ComfyUI 启动日志 ─────────────────────────────────── */
+  const comfyLogOffsetRef = useRef(0);
+  const [comfyLogText, setComfyLogText] = useState("");
+  /* 启动进行中（本地动作或服务端自动拉起）即进入跟随轮询 */
+  const comfyLogActive = comfyStarting || !!comfyStatusQ.data?.starting;
+
+  const applyComfyLogSlice = useCallback(
+    (mode: "append" | "replace", slice: FileLogSlice) => {
+      const cleaned = slice.content.replace(COMFY_LOG_ANSI_RE, "");
+      setComfyLogText((prev) =>
+        capComfyLog(mode === "replace" ? cleaned : prev + cleaned),
+      );
+    },
+    [],
+  );
+
+  const pullComfyLog = useCallback(
+    async (mode: "append" | "replace") => {
+      const slice = await fetchFileLogSlice(
+        "comfyui-runtime",
+        comfyLogOffsetRef.current,
+      );
+      if (!slice) return;
+      /* 服务端回到 0 且本地游标非 0 → 日志被清空/重置，整体替换而非追加 */
+      const replace =
+        mode === "replace" ||
+        (slice.offset === 0 && comfyLogOffsetRef.current > 0);
+      comfyLogOffsetRef.current = slice.size;
+      applyComfyLogSlice(replace ? "replace" : "append", slice);
+    },
+    [applyComfyLogSlice],
+  );
+
+  useEffect(() => {
+    if (!comfyLogActive) return;
+    void pullComfyLog("append");
+    const timer = setInterval(
+      () => void pullComfyLog("append"),
+      COMFY_LOG_POLL_MS,
+    );
+    return () => clearInterval(timer);
+  }, [comfyLogActive, pullComfyLog]);
+
+  const refreshComfyLog = useCallback(async () => {
+    comfyLogOffsetRef.current = 0;
+    await pullComfyLog("replace");
+  }, [pullComfyLog]);
+
   const stopOllamaFn = useCallback(async () => {
     setOllamaStopping(true);
     try {
@@ -553,6 +624,9 @@ export function useSettingsPage(): SettingsPageController {
     comfyStopping,
     startComfy,
     stopComfy,
+    comfyLogText,
+    comfyLogActive,
+    refreshComfyLog,
     ollamaStopping,
     stopOllama: stopOllamaFn,
     saving,

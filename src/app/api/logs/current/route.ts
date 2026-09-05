@@ -6,10 +6,20 @@ const LOG_DIR = path.join(process.cwd(), "log");
 const DEFAULT_LOG_FILE = path.join(LOG_DIR, "dev-launcher.log");
 const LAUNCHER_LOG_FILE = path.join(LOG_DIR, "start-tauri-launcher.log");
 const SENTINEL_FILE = path.join(LOG_DIR, "dev-launcher-current.txt");
+const COMFYUI_RUNTIME_LOG_FILE = path.join(LOG_DIR, "comfyui-runtime.log");
+
+/**
+ * comfyui-runtime.log 是追加写、不轮转的（每次启动 ComfyUI 都往里 append），
+ * 首次打开只回尾部，避免文件积累几个月后整文件传输。
+ */
+const COMFYUI_TAIL_BYTES = 128 * 1024;
 
 function resolveCurrentLog(source = "dev-launcher"): string {
   if (source === "launcher") {
     return LAUNCHER_LOG_FILE;
+  }
+  if (source === "comfyui-runtime") {
+    return COMFYUI_RUNTIME_LOG_FILE;
   }
   try {
     const sentinel = fs.readFileSync(SENTINEL_FILE, "utf8").trim();
@@ -22,16 +32,76 @@ function resolveCurrentLog(source = "dev-launcher"): string {
   return DEFAULT_LOG_FILE;
 }
 
+/**
+ * comfyui-runtime 用字节偏移增量读取（客户端回传上次读到的 size 作为下起点）。
+ * 返回约定与 dev/launcher 分支一致：content = 自 offset 起的新增内容，
+ * size = 当前文件总字节数，offset = 本次内容起点（0 表示从头/文件不存在）。
+ * 首次打开（offset=0）且文件超过 TAIL 时只回尾部，起点对齐到下一个换行，
+ * 避免截出半行（或 UTF-8 多字节字符的半个）。
+ */
+function readComfyuiRuntimeSlice(requestedOffset: number): {
+  content: string;
+  size: number;
+  offset: number;
+} {
+  if (!fs.existsSync(/*turbopackIgnore: true*/ COMFYUI_RUNTIME_LOG_FILE)) {
+    return { content: "", size: 0, offset: 0 };
+  }
+  const stat = fs.statSync(COMFYUI_RUNTIME_LOG_FILE);
+  let start =
+    Number.isFinite(requestedOffset) && requestedOffset > 0 && requestedOffset < stat.size
+      ? requestedOffset
+      : 0;
+  if (start === 0 && stat.size > COMFYUI_TAIL_BYTES) {
+    start = stat.size - COMFYUI_TAIL_BYTES;
+  }
+  const length = stat.size - start;
+  if (length <= 0) {
+    return { content: "", size: stat.size, offset: start };
+  }
+  const buf = Buffer.alloc(length);
+  const fd = fs.openSync(/*turbopackIgnore: true*/ COMFYUI_RUNTIME_LOG_FILE, "r");
+  try {
+    fs.readSync(fd, buf, 0, length, start);
+  } finally {
+    fs.closeSync(fd);
+  }
+  let content = buf.toString("utf8");
+  if (start > 0) {
+    // 掐头到完整行（截断点可能落在行中间/多字节字符中间）
+    const nl = content.indexOf("\n");
+    content = nl >= 0 ? content.slice(nl + 1) : "";
+  }
+  return { content, size: stat.size, offset: start };
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const source = searchParams.get("source") ?? "dev-launcher";
+
+  if (source === "comfyui-runtime") {
+    try {
+      const requestedOffset = Number(searchParams.get("offset") ?? "0");
+      return NextResponse.json(readComfyuiRuntimeSlice(requestedOffset));
+    } catch (error) {
+      return NextResponse.json(
+        {
+          content: "",
+          size: 0,
+          offset: 0,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        { status: 500 },
+      );
+    }
+  }
+
   const logFile = resolveCurrentLog(source);
   try {
     if (!fs.existsSync(/*turbopackIgnore: true*/ logFile)) {
       return NextResponse.json({ content: "", size: 0, offset: 0 });
     }
 
-    const { searchParams } = new URL(request.url);
     const requestedOffset = Number(searchParams.get("offset") ?? "0");
     const content = fs.readFileSync(/*turbopackIgnore: true*/ logFile, "utf8");
 

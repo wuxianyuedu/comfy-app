@@ -11,6 +11,7 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
 import { TRPCError } from "@trpc/server";
+import { http, HttpResponse } from "msw";
 import SuperJSON from "superjson";
 import {
   afterAll,
@@ -146,9 +147,24 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 /* 默认「Ollama 运行中」：不设默认值时 vi.fn() 返回 undefined，探测回调会在
  * 上一个用例卸载后跑到，产生「Cannot read properties of undefined」的
  * unhandled rejection（表现为用例绿但文件红）。 */
+/* /api/logs/current 默认 handler：启动 ComfyUI 的用例里 hook 会开始跟随轮询
+ * comfyui-runtime 日志，没有 handler 会以 onUnhandledRequest:error 报
+ * unhandled rejection（与上面 probeMock 同源问题）。 */
 beforeEach(() => {
   probeMock.mockResolvedValue({ up: true, models: [] });
   startMock.mockResolvedValue(undefined);
+  server.use(
+    http.get("*/api/logs/current", ({ request }) => {
+      const url = new URL(request.url);
+      if (url.searchParams.get("source") !== "comfyui-runtime") {
+        return HttpResponse.json(
+          { error: "unexpected source" },
+          { status: 400 },
+        );
+      }
+      return HttpResponse.json({ content: "", size: 0, offset: 0 });
+    }),
+  );
 });
 afterEach(() => {
   cleanup();
@@ -457,6 +473,35 @@ describe("useSettingsPage", () => {
       text: "未找到 main.py",
     });
     expect(result.current.comfyStarting).toBe(false);
+  });
+
+  it("refreshComfyLog 拉取 comfyui-runtime 日志（替换式），未启动时不在跟随态", async () => {
+    server.use(
+      http.get("*/api/logs/current", ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("source") !== "comfyui-runtime") {
+          return HttpResponse.json(
+            { error: "unexpected source" },
+            { status: 400 },
+          );
+        }
+        return HttpResponse.json({
+          content: "[spawn] pid=123 cmd=python.exe\n[out] Starting ComfyUI\n",
+          size: 2048,
+          offset: 0,
+        });
+      }),
+    );
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await act(async () => {
+      await result.current.refreshComfyLog();
+    });
+    expect(result.current.comfyLogText).toContain("[spawn] pid=123");
+    expect(result.current.comfyLogActive).toBe(false);
   });
 
   it("分区切换是纯视觉状态", async () => {

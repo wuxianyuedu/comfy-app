@@ -12,7 +12,14 @@ export interface FileLogSlice {
   offset: number;
 }
 
-export type LogSourceKind = "dev" | "launcher";
+export type LogSourceKind = "dev" | "launcher" | "comfyui-runtime";
+
+/** source 参数 → /api/logs/current 的 source 查询值。 */
+function sourceQuery(source: LogSourceKind): string {
+  if (source === "dev") return "dev-launcher";
+  if (source === "comfyui-runtime") return "comfyui-runtime";
+  return "launcher";
+}
 
 /** 拉取某日志文件从 offset 起的新增内容；服务端未就绪 / 文件不存在时返回 null。 */
 export async function fetchFileLogSlice(
@@ -20,7 +27,7 @@ export async function fetchFileLogSlice(
   offset: number,
 ): Promise<FileLogSlice | null> {
   const res = await fetch(
-    `/api/logs/current?source=${source === "dev" ? "dev-launcher" : "launcher"}&offset=${offset}`,
+    `/api/logs/current?source=${sourceQuery(source)}&offset=${offset}`,
   );
   if (!res.ok) return null;
   return (await res.json()) as FileLogSlice;

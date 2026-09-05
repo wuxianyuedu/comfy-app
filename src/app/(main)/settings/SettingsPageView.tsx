@@ -8,7 +8,7 @@
  * 编辑期缓冲 —— 提交校验与网络都在逻辑层（hooks / lib client）。
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Loader2, Moon, Sun } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -61,6 +61,19 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
   } | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [addError, setAddError] = useState<string | null>(null);
+
+  /* ComfyUI 启动日志的滚动跟随是纯视觉偏好，留在视图层 */
+  const comfyLogBoxRef = useRef<HTMLDivElement>(null);
+  const [comfyLogFollow, setComfyLogFollow] = useState(true);
+  useEffect(() => {
+    const el = comfyLogBoxRef.current;
+    if (el && comfyLogFollow) el.scrollTop = el.scrollHeight;
+  }, [c.comfyLogText, comfyLogFollow]);
+  const onComfyLogScroll = () => {
+    const el = comfyLogBoxRef.current;
+    if (!el) return;
+    setComfyLogFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 32);
+  };
 
   function openAddDialog() {
     setAddForm({ baseUrl: c.drafts.llm.baseUrl, apiKey: "", model: "" });
@@ -823,6 +836,56 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   >
                     {c.comfyStopping ? "关闭中…" : "关闭 ComfyUI"}
                   </Btn>
+                </div>
+              </div>
+              {/* ComfyUI 启动日志：启动期间每秒跟随 log/comfyui-runtime.log，
+                  让「正在启动…」不再是个黑盒（硬规则 4 的用户可见出口） */}
+              <div className="border-border bg-surface-1 mb-4 rounded-xl border">
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-ink/80 flex items-center gap-2 text-sm font-medium">
+                    启动日志（comfyui-runtime.log）
+                    {c.comfyLogActive && (
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
+                        <span className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-400" />
+                        跟随中
+                      </span>
+                    )}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {!comfyLogFollow && (
+                      <button
+                        type="button"
+                        onClick={() => setComfyLogFollow(true)}
+                        className="bg-primary/90 hover:bg-primary rounded px-2 py-0.5 text-[11px] font-medium text-white"
+                      >
+                        恢复自动滚动
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void c.refreshComfyLog()}
+                      className="border-border text-muted-foreground hover:bg-subtle rounded border px-2 py-0.5 text-[11px] transition-colors"
+                    >
+                      刷新
+                    </button>
+                  </div>
+                </div>
+                <div
+                  ref={comfyLogBoxRef}
+                  onScroll={onComfyLogScroll}
+                  className="border-border/50 custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg bg-black/30 px-3 py-2 font-mono text-[11px] leading-relaxed text-gray-300"
+                >
+                  {c.comfyLogText ? (
+                    <span className="whitespace-pre-wrap break-all">
+                      {c.comfyLogText}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      暂无日志 ——
+                      点「启动 ComfyUI」后这里会实时输出拉起过程（spawn
+                      参数、模型加载与就绪状态）；也可点「刷新」查看最近一次运行日志。
+                    </span>
+                  )}
                 </div>
               </div>
               <Field
