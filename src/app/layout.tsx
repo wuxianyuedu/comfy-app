@@ -7,6 +7,10 @@ import { TRPCReactProvider } from "~/trpc/react";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { Toaster } from "~/components/ui/sonner";
 import { ThemeProvider } from "~/app/ThemeProvider";
+import { LogProvider } from "~/components/studio/logs/LogProvider";
+import { LogPanel } from "~/components/studio/logs/LogPanel";
+import { ToastProvider } from "~/components/studio";
+import { BrowserStatusBar } from "~/components/studio";
 
 export const metadata: Metadata = {
   title: "Create T3 App",
@@ -29,7 +33,17 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <ThemeProvider>
           <TooltipProvider>
-            <TRPCReactProvider>{children}</TRPCReactProvider>
+            <TRPCReactProvider>
+              {/* 底部状态栏/日志面板全局常驻：所有路由（含设置页）都可见，
+                  贴底内容需自行预留 24px（pb-6），不再逐页补挂 */}
+              <LogProvider>
+                <ToastProvider>
+                  {children}
+                  <LogPanel />
+                  <BrowserStatusBar />
+                </ToastProvider>
+              </LogProvider>
+            </TRPCReactProvider>
             <Toaster />
           </TooltipProvider>
         </ThemeProvider>

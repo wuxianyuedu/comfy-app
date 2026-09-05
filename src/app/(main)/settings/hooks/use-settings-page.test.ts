@@ -8,7 +8,7 @@
 
 import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
 import { TRPCError } from "@trpc/server";
 import SuperJSON from "superjson";
@@ -58,6 +58,7 @@ const LLM: LlmConfig = {
   provider: "local",
   baseUrl: "http://localhost:11434/v1",
   model: "qwen3:14b",
+  extraModels: [],
   temperature: 0.7,
   maxTokens: 2048,
   apiKey: null,
@@ -121,8 +122,8 @@ const mockRouter = t.router({
 
 const server = setupTrpcServer(mockRouter);
 
-function makeWrapper() {
-  const qc = createTestQueryClient();
+function makeWrapper(queryClient?: QueryClient) {
+  const qc = queryClient ?? createTestQueryClient();
   const client = api.createClient({
     links: [
       httpBatchStreamLink({
@@ -165,6 +166,40 @@ describe("useSettingsPage", () => {
     await waitFor(() => expect(result.current.drafts).not.toBeNull());
     expect(result.current.drafts?.llm.model).toBe("qwen3:14b");
     expect(result.current.drafts?.settings.comfyuiPath).toBe("D:/ComfyUI");
+  });
+
+  /* 回归 ISSUE #59：设置界面「打开 → 关闭 → 再打开」会显示「配置数据未就绪」。
+   * 根因：播种只比对「数据引用是否变化」，关闭再打开时 QueryClient 命中缓存，
+   * 挂载首帧 llmConfig/settingsData 即就绪，prev 初值被缓存命中 → 分支永不触发，
+   * 草稿一直为空 → 容器落到降级 UI。这里在同一（带缓存的）QueryClient 上先挂载、
+   * 卸载、再挂载，验证第二次挂载后草稿仍会播种而非落空。 */
+  it("关闭再打开命中缓存后，草稿仍会被播种（不落到未就绪降级）", async () => {
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, staleTime: 0, gcTime: 60_000 },
+        mutations: { retry: false },
+      },
+    });
+    // 第一次打开：查询完成并播种
+    const first = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(qc),
+    });
+    await waitFor(() => expect(first.result.current.drafts).not.toBeNull());
+    // 关闭（卸载），缓存保留
+    first.unmount();
+
+    // 再打开：QueryClient 仍在，query 命中缓存，首帧即就绪
+    const second = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(qc),
+    });
+    await waitFor(() => expect(second.result.current.drafts).not.toBeNull());
+    expect(second.result.current.drafts?.llm.model).toBe("qwen3:14b");
+    expect(second.result.current.drafts?.settings.comfyuiPath).toBe(
+      "D:/ComfyUI",
+    );
+    // 不该进入降级/加载兜底
+    expect(second.result.current.isInitialLoad).toBe(false);
+    expect(second.result.current.hasError).toBe(false);
   });
 
   it("本地 provider 时探测 Ollama；切到远端后不再探测", async () => {

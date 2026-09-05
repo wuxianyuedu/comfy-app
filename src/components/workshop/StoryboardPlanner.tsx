@@ -25,6 +25,11 @@ export function StoryboardPlanner(props: Props) {
     handleAISplit,
     clearShots,
     generateAll,
+    polishBusyId,
+    polishBusyAll,
+    polishError,
+    polishOne,
+    polishAll,
   } = planner;
 
   const idleCount = shots.filter((shot) => shot.status === "idle" || shot.status === "failed").length;
@@ -62,13 +67,29 @@ export function StoryboardPlanner(props: Props) {
             )}
           </button>
           {shots.length > 0 && (
-            <button
-              type="button"
-              onClick={clearShots}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-subtle"
-            >
-              清空
-            </button>
+            <>
+              <button
+                type="button"
+                title="用模型把模板提示词润色为更有画面感的生图提示词"
+                onClick={() => void polishAll()}
+                disabled={polishBusyAll || polishBusyId != null || aiBusy}
+                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+              >
+                {polishBusyAll ? "润色中…" : (
+                  <>
+                    <Icon name="sparkles" size={13} className="mr-1 inline align-[-2px]" />
+                    AI 润色提示词
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={clearShots}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-subtle"
+              >
+                清空
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -106,6 +127,12 @@ export function StoryboardPlanner(props: Props) {
         </div>
       )}
 
+      {polishError && (
+        <div className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
+          {polishError}
+        </div>
+      )}
+
       {(aiProgress || aiError) && (
         <div
           className={`rounded-lg px-3 py-2 text-xs ${
@@ -136,6 +163,8 @@ export function StoryboardPlanner(props: Props) {
               styles={styles}
               progressByShot={progressByShot}
               generating={generating}
+              polishBusy={polishBusyId === shot.id}
+              onPolish={() => void polishOne(shot)}
               onUpdate={planner.updateShot}
               onRemove={planner.removeShot}
               onGenerate={onGenerate}

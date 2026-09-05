@@ -39,6 +39,8 @@ export type LlmConfig = {
   provider: "local" | "remote";
   baseUrl: string;
   model: string;
+  /** 本地 Ollama 候选模型（多选）；不含 model 本身 */
+  extraModels: string[];
   temperature: number;
   temperatureByTask?: Record<TaskType, number>;
   maxTokens: number;
@@ -110,10 +112,32 @@ export interface SettingsPageController {
   dismissFlash: () => void;
   /** 输入框清空 → 删掉该任务的覆盖值；有值 → 写入覆盖。 */
   setTaskTemperature: (task: TaskType, raw: string) => void;
+  /** 勾选/取消一个候选模型（本地 Ollama 多模型管理） */
+  toggleExtraModel: (name: string) => void;
+  /* 候选模型自动回填（远端 API 用；本地 Ollama 直接复用 ollamaModels 探测结果） */
+  remoteModels: string[];
+  remoteModelsLoading: boolean;
+  fetchRemoteModels: () => Promise<void>;
 }
 
 /** 提示条停留时长。 */
 const FLASH_MS = 3500;
+
+/**
+ * 合并候选模型：主模型 + 勾选的多选，按首次出现去重。
+ * 主模型永远在列（本地 Ollama 当前生效模型）；查询结果相同时返回原引用，
+ * 避免「主模型切换 → 勾选列表重算」引发受控组件输入抖动。
+ */
+function mergeExtraModels(current: string[], model: string, toggled: string): string[] {
+  const next = model.trim() !== "" ? [model, ...current.filter((m) => m !== model)] : [...current];
+  if (!toggled.trim()) return next;
+  if (next.includes(toggled)) {
+    // 取消勾选：主模型不可移除
+    if (toggled === model) return next;
+    return next.filter((m) => m !== toggled);
+  }
+  return [...next, toggled];
+}
 
 /** Ollama 启动就绪轮询：最多 20 次 × 2s（覆盖 ollama 冷启动的常见耗时）。 */
 /** 启动流程期间状态行持有权标记的 ref 初始值（见 probeOllama 内说明）。 */
@@ -174,21 +198,29 @@ export function useSettingsPage(): SettingsPageController {
    * 比 useEffect 少一次多余渲染，也不会闪旧值。 */
   const llmConfig = llmQ.data?.config ?? null;
   const [prevLlmConfig, setPrevLlmConfig] = useState(llmConfig);
-  if (llmConfig !== prevLlmConfig) {
-    setPrevLlmConfig(llmConfig);
-    if (llmConfig) {
-      setLlmDraft({
-        ...llmConfig,
-        apiKey: llmConfig.apiKey ?? null,
-        temperatureByTask: llmConfig.temperatureByTask ?? undefined,
-      });
-    }
+  /* 播种条件：数据引用变化（保存后 refetch 回写）时重新播种；或数据已就绪
+   * 而草稿仍为空（含首次挂载即命中 tRPC 缓存的场景）时播种。若只用引用对比，
+   * 关闭再打开时 prev 初值被缓存命中，分支永不触发，草稿一直为空，页面
+   * 会落到「配置数据未就绪」。 */
+  const llmChanged = llmConfig !== prevLlmConfig;
+  if (llmChanged) setPrevLlmConfig(llmConfig);
+  if (llmConfig && (llmChanged || !llmDraft)) {
+    setLlmDraft({
+      ...llmConfig,
+      apiKey: llmConfig.apiKey ?? null,
+      extraModels: Array.isArray(llmConfig.extraModels)
+        ? llmConfig.extraModels.filter((m) => m.trim() !== "" && m !== llmConfig.model)
+        : [],
+      temperatureByTask: llmConfig.temperatureByTask ?? undefined,
+    });
   }
   const settingsData = settingsQ.data?.settings ?? null;
   const [prevSettingsData, setPrevSettingsData] = useState(settingsData);
-  if (settingsData !== prevSettingsData) {
-    setPrevSettingsData(settingsData);
-    if (settingsData) setSettingsDraft(settingsData);
+  /* 同 llm 播种：缓存命中 / refetch 两种情形都要能落到草稿，避免落到降级 UI。 */
+  const settingsChanged = settingsData !== prevSettingsData;
+  if (settingsChanged) setPrevSettingsData(settingsData);
+  if (settingsData && (settingsChanged || !settingsDraft)) {
+    setSettingsDraft(settingsData);
   }
 
   /* ── Ollama 探测 ───────────────────────────────────────── */
@@ -356,6 +388,35 @@ export function useSettingsPage(): SettingsPageController {
     setSettingsDraft((draft) => (draft ? { ...draft, ...patch } : draft));
   }, []);
 
+  /** 勾选/取消一个候选模型（多选集 = 主模型 + 勾选项，保存进 extraModels） */
+  const toggleExtraModel = useCallback((name: string) => {
+    setLlmDraft((draft) => {
+      if (!draft) return draft;
+      const next = mergeExtraModels(draft.extraModels, draft.model, name);
+      return next === draft.extraModels ? draft : { ...draft, extraModels: next };
+    });
+  }, []);
+
+  /* ── 远端 API 候选模型自动回填 ──
+   * 本地 Ollama 走既有探测（ollamaModels）；远端走 /api/llm/models 代理
+   * （apiKey 在服务端，浏览器拿不到原文，不能自己请求 /models）。 */
+  const [remoteModels, setRemoteModels] = useState<string[]>([]);
+  const [remoteModelsLoading, setRemoteModelsLoading] = useState(false);
+  const fetchRemoteModels = useCallback(async () => {
+    setRemoteModelsLoading(true);
+    try {
+      const res = await fetch("/api/llm/models");
+      const body = (await res.json()) as { models?: unknown };
+      if (Array.isArray(body.models)) {
+        setRemoteModels(body.models.filter((m): m is string => typeof m === "string" && m !== ""));
+      }
+    } catch {
+      // 拉取失败保持空列表 —— 视图按「拉取失败，可手动输入」降级
+    } finally {
+      setRemoteModelsLoading(false);
+    }
+  }, []);
+
   const setTaskTemperature = useCallback(
     (task: TaskType, raw: string) => {
       if (!llmDraft) return;
@@ -407,6 +468,10 @@ export function useSettingsPage(): SettingsPageController {
         : null,
     patchLlm,
     patchSettings,
+    toggleExtraModel,
+    remoteModels,
+    remoteModelsLoading,
+    fetchRemoteModels,
     llmApiKey,
     setLlmApiKey,
     ollamaStatus,

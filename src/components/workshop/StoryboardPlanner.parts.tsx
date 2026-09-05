@@ -38,6 +38,8 @@ export function ShotRow({
   styles,
   progressByShot,
   generating,
+  polishBusy,
+  onPolish,
   onUpdate,
   onRemove,
   onGenerate,
@@ -47,6 +49,9 @@ export function ShotRow({
   styles: StyleRef[];
   progressByShot?: ShotProgress;
   generating: boolean;
+  /** 该镜头的 AI 提示词润色进行中 */
+  polishBusy?: boolean;
+  onPolish?: () => void;
   onUpdate: (id: string, patch: Partial<Shot>) => void;
   onRemove: (id: string) => void;
   onGenerate: (shot: Shot) => void;
@@ -141,7 +146,20 @@ export function ShotRow({
 
       {/* Prompt preview */}
       <div className="mt-3 rounded-lg bg-subtle p-3">
-        <p className="mb-1 text-xs font-medium text-muted-foreground">生图提示词</p>
+        <p className="mb-1 flex items-center justify-between text-xs font-medium text-muted-foreground">
+          生图提示词
+          {onPolish && (
+            <button
+              type="button"
+              onClick={onPolish}
+              disabled={polishBusy}
+              title="用模型润色为更有画面感的提示词"
+              className="rounded px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/10 disabled:opacity-40"
+            >
+              {polishBusy ? "润色中…" : "✨ AI 润色"}
+            </button>
+          )}
+        </p>
         <p className="text-xs leading-relaxed text-ink/80 break-words">
           {shot.prompt || "填写描述后自动生成…"}
         </p>
