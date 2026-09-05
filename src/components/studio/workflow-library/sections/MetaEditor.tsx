@@ -6,14 +6,8 @@
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { ALL_WORKFLOW_TYPES } from "@/lib/workflow-types";
 import { MultiModeSelect } from "~/components/studio/ui/MultiModeSelect";
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
-
-/** 模式码 → 中文标签（未知码原样显示，兼容历史自定义值）。 */
-function modeLabel(code: string): string {
-  return ALL_WORKFLOW_TYPES.find((type) => type.code === code)?.label ?? code;
-}
 
 export function MetaEditor({ meta }: { meta: MetaEditorController }) {
   return (
@@ -30,36 +24,6 @@ export function MetaEditor({ meta }: { meta: MetaEditorController }) {
         />
       </div>
       <ModelTagPicker meta={meta} />
-    </div>
-  );
-}
-
-/** 全部已选模式的 chips，渲染在类型 / 模型行的上方 —— 替代下拉框右侧的
- *  「+N」徽标，让多模式一眼可见；默认模式加描边高亮。 */
-export function ModeChips({ meta }: { meta: MetaEditorController }) {
-  if (meta.modes.length === 0) return null;
-  return (
-    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-      {meta.modes.map((code) => {
-        const isDefault = code === meta.defaultMode;
-        return (
-          <button
-            key={code}
-            type="button"
-            title={isDefault ? "默认模式" : "点击设为默认模式"}
-            onClick={() => {
-              if (!isDefault) void meta.patchModes(meta.modes, code);
-            }}
-            className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors ${
-              isDefault
-                ? "bg-violet-500/15 text-violet-300 ring-1 ring-inset ring-violet-500/25"
-                : "bg-white/4 text-gray-400 hover:bg-violet-500/10 hover:text-violet-200"
-            }`}
-          >
-            {modeLabel(code)}
-          </button>
-        );
-      })}
     </div>
   );
 }

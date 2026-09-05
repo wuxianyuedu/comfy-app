@@ -103,16 +103,12 @@ export function WorkflowIoPreviewPanel({
         out[key] = { ...e, ...local, label: local.label ?? e.label };
       } else {
         /* No server enrichment yet (e.g. user toggled + immediately opened
-         * preview without waiting for a refetch) — render with what we
-         * know; controlForEntry will degrade gracefully. */
-        out[key] = {
-          direction: local.direction,
-          kind: local.kind,
-          nodeId: local.nodeId,
-          name: local.name,
-          label: local.label,
-          type: local.type ?? "*",
-        };
+         *  preview without waiting for a refetch). IMPORTANT: spread the
+         *  whole local entry — it already carries the author's un-saved
+         *  `value` / `required` / `seedMode` / `modes` edits, and listing
+         *  only the identity fields here silently DROPPED them, which made
+         *  freshly-toggled pins look un-editable (数值/必填改了又弹回). */
+        out[key] = { ...local, type: local.type ?? "*" };
       }
     }
     return out;
@@ -121,6 +117,19 @@ export function WorkflowIoPreviewPanel({
   /* 覆盖层编辑的行：只取输入（输出没有"默认值"语义）。 */
   const editableEntries = useMemo(() => splitWorkflowIO(previewIO).inputs, [previewIO]);
   const modeCodes = useMemo(() => collectModeCodes(previewIO), [previewIO]);
+
+  /* seed 类参数的「控件后行为」：从条目派生 + 写回 entry.seedMode。 */
+  const seedModes = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const entry of editableEntries) {
+      if (entry.seedMode) map[entry.ioKey] = entry.seedMode;
+    }
+    return map;
+  }, [editableEntries]);
+  const setIOSeedMode = useCallback(
+    (ioKey: string, mode: string) => ioApi.getState().setIOSeedMode(ioKey, mode),
+    [ioApi],
+  );
 
   /* does any widget pin carry an author override? Drives
    *  the 「恢复默认」 button's enabled state. */
@@ -220,7 +229,7 @@ export function WorkflowIoPreviewPanel({
     }`;
 
   return (
-    <div className="pointer-events-none absolute right-4 top-4 z-30 flex max-h-[calc(100%-2rem)] w-[360px] flex-col">
+    <div className="pointer-events-none absolute right-4 top-4 bottom-4 z-30 flex w-[360px] flex-col">
       <div className="pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-400/30 bg-[#0a0a14]/92 shadow-2xl backdrop-blur-md">
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/6 px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
@@ -373,6 +382,8 @@ export function WorkflowIoPreviewPanel({
               mode={activeMode}
               compact
               showOutputs
+              seedModes={seedModes}
+              onSeedModeChange={setIOSeedMode}
               onLabelChange={setIOLabel}
               /* 必填 / 可选 toggle. Preview only — purely
                *  visual; the toggle writes into the same

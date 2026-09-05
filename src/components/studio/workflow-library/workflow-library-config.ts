@@ -256,3 +256,8 @@ export function countByType(
   }
   return counts;
 }
+
+/** 模式码 → 中文标签（标准任务类型）；未知码原样显示，兼容历史自定义值。 */
+export function modeLabel(code: string): string {
+  return getWorkflowType(code)?.label ?? code;
+}

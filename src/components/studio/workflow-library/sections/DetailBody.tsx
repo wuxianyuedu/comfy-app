@@ -21,6 +21,12 @@ interface DetailBodyProps {
   sourceData: SourceModalData | null;
   usable: boolean;
   onEdit: () => void;
+  /** 多模式工作流的模式切换（画布预览节点的类型 chip 可点选默认模式）。 */
+  meta?: {
+    modes: string[];
+    defaultMode: string;
+    onModeChange: (code: string) => void;
+  };
 }
 
 export function DetailBody({
@@ -31,6 +37,7 @@ export function DetailBody({
   sourceData,
   usable,
   onEdit,
+  meta,
 }: DetailBodyProps) {
   return (
     <>
@@ -62,6 +69,9 @@ export function DetailBody({
               taskType={workflow.taskType}
               workflowIO={workflowIO}
               usable={usable}
+              modes={meta?.modes}
+              defaultMode={meta?.defaultMode}
+              onModeChange={meta?.onModeChange}
             />
           </div>
         </div>

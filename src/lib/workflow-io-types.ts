@@ -28,6 +28,9 @@ export interface WorkflowIOEntry {
   displayOrder?: number;
   /** author override of `defaultValue`. */
   value?: unknown;
+  /** seed 类参数的「控件后行为」（fixed / increment / decrement / random），
+   *  与 ComfyUI 的 control_after_generate 对应；仅 seed 类 widget 有意义。 */
+  seedMode?: string;
   /** 多模式参数覆盖层。键为模式码，值为该模式下的默认值与可见性。
    *  存在 workflowIO 的 JSON 列内，因此新增模式无需改表结构。 */
   modes?: Record<string, WorkflowIOModeOverride>;

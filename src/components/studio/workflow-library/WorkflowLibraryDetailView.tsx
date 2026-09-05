@@ -11,7 +11,6 @@ import { DETAIL_TABS } from "./workflow-library-detail-config";
 import { TabButton } from "./sections/DetailControls";
 import { DetailBody } from "./sections/DetailBody";
 import { DetailHeader } from "./sections/DetailHeader";
-import { MetaEditor, ModeChips } from "./sections/MetaEditor";
 
 export function WorkflowLibraryDetailView({
   controller,
@@ -66,10 +65,8 @@ export function WorkflowLibraryDetailView({
         onDelete={actions.remove}
         onOpenSource={openSource}
         onUse={actions.use}
+        meta={metaEditor}
       />
-
-      <ModeChips meta={metaEditor} />
-      <MetaEditor meta={metaEditor} />
 
       <div className="flex border-b border-white/6 px-5">
         {DETAIL_TABS.map((tab) => (
@@ -92,6 +89,13 @@ export function WorkflowLibraryDetailView({
           sourceData={sourceData}
           usable={usable}
           onEdit={actions.edit}
+          meta={{
+            modes: metaEditor.modes,
+            defaultMode: metaEditor.defaultMode,
+            onModeChange: (code) => {
+              void metaEditor.patchModes(metaEditor.modes, code);
+            },
+          }}
         />
       </div>
 

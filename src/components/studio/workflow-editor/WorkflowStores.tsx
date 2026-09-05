@@ -62,6 +62,8 @@ export interface IOEditActions {
   setIOLabel: (key: string, label: string) => void;
   toggleIORequired: (key: string) => void;
   setIOValues: (next: Record<string, unknown>) => void;
+  /** seed 类参数的「控件后行为」（fixed / increment / decrement / random）。 */
+  setIOSeedMode: (key: string, mode: string) => void;
   resetIOPreviewValues: () => void;
   reorderIO: (fromKey: string, beforeKey: string | null) => void;
   /** 多模式：写入 / 清除某个参数在某一模式下的覆盖项。
@@ -155,6 +157,14 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           changed = true;
         }
         return changed ? { workflowIO: nextMap } : {};
+      }),
+
+    setIOSeedMode: (key, mode) =>
+      set((state) => {
+        const cur = state.workflowIO[key];
+        if (cur?.kind !== "widget") return {};
+        if (cur.seedMode === mode) return {};
+        return { workflowIO: { ...state.workflowIO, [key]: { ...cur, seedMode: mode } } };
       }),
 
     resetIOPreviewValues: () =>

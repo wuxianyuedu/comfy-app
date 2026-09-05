@@ -18,6 +18,7 @@ import {
   watchTask,
   type TaskProgressNode,
 } from "@/lib/workshop/generation-client";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import { DynamicWorkflowForm } from "../shared/DynamicWorkflowForm";
 import {
   getMissingRequiredInputs,
@@ -25,6 +26,7 @@ import {
   toWorkflowInputsPayload,
   type WorkflowIOMap,
 } from "../shared/workflow-io";
+import { modeLabel } from "./workflow-library-config";
 import {
   WorkflowNodeActionButton,
   WorkflowNodeCardShell,
@@ -48,6 +50,10 @@ interface Props {
   taskType: string;
   workflowIO: WorkflowIOMap | null;
   usable: boolean;
+  /** 多模式工作流：提供时第二行右侧的类型 chip 变成模式切换下拉。 */
+  modes?: string[];
+  defaultMode?: string;
+  onModeChange?: (code: string) => void;
 }
 
 export function WorkflowCanvasNodePreview({
@@ -56,6 +62,9 @@ export function WorkflowCanvasNodePreview({
   taskType,
   workflowIO,
   usable,
+  modes,
+  defaultMode,
+  onModeChange,
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -192,11 +201,24 @@ export function WorkflowCanvasNodePreview({
                 {workflowName}
               </span>
             </WorkflowStaticChip>
-            <WorkflowStaticChip>
-              <span className="text-[11px] font-medium text-(--color-ink-bright)">
-                {taskType || "—"}
-              </span>
-            </WorkflowStaticChip>
+            {modes && modes.length > 1 && onModeChange ? (
+              /* 多模式：类型 chip 变成模式切换下拉（与工作流库「类型」同码表） */
+              <DarkSelect
+                value={defaultMode ?? taskType}
+                onChange={(code) => onModeChange(code)}
+                options={modes}
+                labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
+                popoverMinWidth={150}
+                autoFitFromOptions={false}
+                className="!bg-transparent !border-white/15 shrink-0 text-[11px]"
+              />
+            ) : (
+              <WorkflowStaticChip>
+                <span className="text-[11px] font-medium text-(--color-ink-bright)">
+                  {modeLabel(taskType) || "—"}
+                </span>
+              </WorkflowStaticChip>
+            )}
           </div>
         </div>
 

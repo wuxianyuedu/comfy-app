@@ -1,6 +1,7 @@
 "use client";
 /* Unified multi-section popover dropdown — extracted from GroupedControls.tsx. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * redesign: a unified multi-section popover dropdown
@@ -79,20 +80,40 @@ function MultiSegmentPopoverInner({
   footer?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  /* when the trigger sits near the bottom of the
-   *  viewport (typical for parameter forms at the bottom of a CreatePanel
-   *  card), opening the panel downward clips the lower sections against the
-   *  form edge.  Measure the space on toggle and flip the panel above the
-   *  trigger when there isn't enough room below.  Threshold 360 covers the
-   *  dimension panel (比例 + 清晰度) and the video panel (时长 + 画质 + 比例)
-   *  with padding. */
-  const [openAbove, setOpenAbove] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  /* portal + fixed 定位：面板可能出现在 overflow 容器里（IO 预览面板、
+   *  滚动表单），absolute 定位会被裁掉。挂在 body 上按触发器 rect 摆位，
+   *  触发器下方空间不足时自动翻到上方。 */
+  const [pos, setPos] = useState({ left: 0, top: 0, width: 280 });
+
+  const reposition = useCallback(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const width = Math.max(280, Math.min(rect.width, 420));
+    const margin = 8;
+    let left = align === "right" ? rect.right - width : rect.left;
+    left = Math.max(margin, Math.min(left, window.innerWidth - margin - width));
+    const popHeight = popRef.current?.offsetHeight ?? 420;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const above = spaceBelow < Math.min(420, popHeight + 12) && rect.top > spaceBelow;
+    const top = above
+      ? Math.max(margin, rect.top - popHeight - 6)
+      : Math.min(window.innerHeight - margin - popHeight, rect.bottom + 6);
+    setPos({ left, top, width });
+  }, [align]);
 
   useEffect(() => {
     if (!open) return;
     const onMouseDown = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        wrapRef.current &&
+        !wrapRef.current.contains(target) &&
+        popRef.current &&
+        !popRef.current.contains(target)
+      ) {
         setOpen(false);
       }
     };
@@ -100,27 +121,35 @@ function MultiSegmentPopoverInner({
      *  mousedown 不够：React Flow 画布可能吞掉点击事件，而键盘导航会触发
      *  focus 移动但不会触发 mousedown。 */
     const onFocusIn = (e: FocusEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inWrap = wrapRef.current?.contains(target);
+      const inPop = popRef.current?.contains(target);
+      if (!inWrap && !inPop) {
         setOpen(false);
       }
     };
     document.addEventListener("mousedown", onMouseDown);
     document.addEventListener("focusin", onFocusIn);
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
     return () => {
       document.removeEventListener("mousedown", onMouseDown);
       document.removeEventListener("focusin", onFocusIn);
+      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
     };
-  }, [open]);
+  }, [open, reposition]);
 
   const handleToggle = () => {
     if (disabled) return;
-    if (!open && wrapRef.current && typeof window !== "undefined") {
-      const rect = wrapRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      setOpenAbove(spaceBelow < 360);
-    }
     setOpen((open) => !open);
   };
+
+  /* 打开后测量实际高度再校正一次位置（above 分支依赖真实高度）。 */
+  useEffect(() => {
+    if (!open) return;
+    reposition();
+  }, [open, reposition]);
 
   return (
     <div ref={wrapRef} className="relative">
@@ -148,22 +177,31 @@ function MultiSegmentPopoverInner({
           <path d="M2 4l3 3 3-5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
-      {open && (
-        <div
-          role="listbox"
-          className={`absolute z-50 min-w-[260px] rounded-xl bg-[#14141C]/95 p-3 shadow-2xl shadow-black/50 ring-1 ring-white/8 backdrop-blur-md ${
-            openAbove ? "bottom-full mb-1.5" : "top-full mt-1.5"
-          } ${
-            align === "right" ? "right-0" : "left-0"
-          }`}
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          {sections.map((section, i) => (
-            <Section key={section.label + ":" + (section.value ?? "")} section={section} first={i === 0} />
-          ))}
-          {footer ? <div className="mt-3 border-t border-white/6 pt-3">{footer}</div> : null}
-        </div>
-      )}
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={popRef}
+            role="listbox"
+            style={{
+              position: "fixed",
+              left: pos.left,
+              top: pos.top,
+              width: pos.width,
+              maxHeight: "min(60vh, 460px)",
+              overflowY: "auto",
+              zIndex: 9999,
+            }}
+            className="rounded-xl bg-[#14141C]/95 p-3 shadow-2xl shadow-black/50 ring-1 ring-white/8 backdrop-blur-md"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            {sections.map((section, i) => (
+              <Section key={section.label + ":" + (section.value ?? "")} section={section} first={i === 0} />
+            ))}
+            {footer ? <div className="mt-3 border-t border-white/6 pt-3">{footer}</div> : null}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

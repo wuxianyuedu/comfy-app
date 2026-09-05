@@ -89,6 +89,8 @@ export function MultiModeSelect({
   const [activeTab, setActiveTab] = useState<WorkflowCategory>("image");
   // Draft state inside the popover — only flushed on save.
   const [draft, setDraft] = useState<Set<string>>(new Set(modes));
+  /** 弹窗内的默认模式草稿（必须 ∈ draft），保存时一并落库。 */
+  const [draftDefault, setDraftDefault] = useState<string>(defaultMode);
   const [query, setQuery] = useState("");
   const [pos, setPos] = useState<{ left: number; top: number; width: number }>({
     left: 0,
@@ -106,13 +108,14 @@ export function MultiModeSelect({
   useEffect(() => {
     if (open && !prevOpenRef.current) {
       setDraft(new Set(modes));
+      setDraftDefault(defaultMode);
       setQuery("");
       // Open on the category of the first selected mode (falls back to image).
       const firstSelected = ALL_WORKFLOW_TYPES.find((type) => modes.includes(type.code));
       setActiveTab(firstSelected?.category ?? "image");
     }
     prevOpenRef.current = open;
-  }, [open, modes]);
+  }, [open, modes, defaultMode]);
 
   // Outside-click + Escape close. Reuses DarkSelect's exact pattern.
   useEffect(() => {
@@ -199,11 +202,12 @@ export function MultiModeSelect({
 
   const handleSave = useCallback(() => {
     const arr = Array.from(draft);
-    // 默认模式 = 第一个被选中的模式（defaultMode ⊆ modes 的约束由后端校验）。
-    const def = arr[0] ?? "";
+    // 默认模式取弹窗内的草稿；草稿被取消勾选时回退到第一个选中项，
+    // 保证 defaultMode ⊆ modes 的约束成立。
+    const def = arr.includes(draftDefault) ? draftDefault : (arr[0] ?? "");
     onChange(arr, def);
     setOpen(false);
-  }, [draft, onChange]);
+  }, [draft, draftDefault, onChange]);
 
   const handleCancel = useCallback(() => setOpen(false), []);
 
@@ -376,11 +380,15 @@ export function MultiModeSelect({
                 }
                 return items.map((item) => {
                   const isSelected = draft.has(item.code);
+                  const isDraftDefault = draftDefault === item.code;
                   return (
                     <div
                       key={item.code}
-                      role="button"
-                      tabIndex={0}
+                      className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors ${
+                        isSelected
+                          ? "bg-violet-500/10 text-violet-100"
+                          : "text-gray-300 hover:bg-white/4"
+                      }`}
                       onClick={() => toggle(item.code)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
@@ -388,11 +396,9 @@ export function MultiModeSelect({
                           toggle(item.code);
                         }
                       }}
-                      className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors ${
-                        isSelected
-                          ? "bg-violet-500/10 text-violet-100"
-                          : "text-gray-300 hover:bg-white/4"
-                      }`}
+                      tabIndex={0}
+                      role="checkbox"
+                      aria-checked={isSelected}
                     >
                       {/* checkbox: 每个被选中的模式都显示勾选标记 */}
                       <span
@@ -422,6 +428,23 @@ export function MultiModeSelect({
                       <span className="flex-1 truncate text-[13px] font-medium">
                         {item.label}
                       </span>
+                      {/* 默认模式标记：点星星把该模式设为默认（未选中会顺带勾上） */}
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (!draft.has(item.code)) toggle(item.code);
+                          setDraftDefault(item.code);
+                        }}
+                        title={isDraftDefault ? "当前默认模式" : "设为默认模式"}
+                        className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-medium transition-colors ${
+                          isDraftDefault
+                            ? "bg-violet-500/25 text-violet-200"
+                            : "text-gray-500 hover:bg-white/8 hover:text-gray-300"
+                        }`}
+                      >
+                        {isDraftDefault ? "★ 默认" : "☆ 默认"}
+                      </button>
                       <span
                         className={`shrink-0 text-[11px] ${CATEGORY_TEXT[activeTab]} opacity-60`}
                       >

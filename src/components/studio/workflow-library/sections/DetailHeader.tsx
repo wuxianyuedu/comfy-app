@@ -1,21 +1,25 @@
 "use client";
 
-// 详情面板头部：标题 + 元信息 chip 行 + 操作按钮组 + 主 CTA。纯展示。
+// 详情面板头部：标题 + 元信息 chip 行 + 类型/模型编辑器 + 操作按钮组。
+// 纯展示；「导入画布」与右上角按钮同款式。
 
+import { useState } from "react";
 import {
-  AlertTriangle,
   Download,
   Edit3,
   FileJson,
-  Play,
+  Plus,
   RefreshCw,
   Trash2,
 } from "lucide-react";
 
 import { SourceTag } from "~/components/studio/ui/SourceTag";
 import { TaskTypeChip } from "~/components/studio/ui/TaskTypeChip";
+import { modeLabel } from "../workflow-library-config";
 import { type WorkflowRow } from "../workflow-library-config";
 import { ActionButton } from "./DetailControls";
+import { MetaEditor } from "./MetaEditor";
+import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
 
 interface DetailHeaderProps {
   workflow: WorkflowRow;
@@ -25,6 +29,8 @@ interface DetailHeaderProps {
   isTechnical: boolean;
   busyDownload: boolean;
   busyResync: boolean;
+  /** 类型 / 模型编辑器（含多模式与模型标签），渲染在头部内。 */
+  meta: MetaEditorController;
   onEdit: () => void;
   onResync: () => void;
   onDownload: () => void;
@@ -41,6 +47,7 @@ export function DetailHeader({
   isTechnical,
   busyDownload,
   busyResync,
+  meta,
   onEdit,
   onResync,
   onDownload,
@@ -48,6 +55,11 @@ export function DetailHeader({
   onOpenSource,
   onUse,
 }: DetailHeaderProps) {
+  /* 多模式时点击顶部模式徽标展开全部模式的小提示（问题：模式重复罗列，
+   * 收敛到顶部一处）。 */
+  const [showAllModes, setShowAllModes] = useState(false);
+  const modes = workflow.modes ?? [];
+
   return (
     <div className="border-b border-white/6 px-5 py-4">
       <div className="flex items-start justify-between gap-4">
@@ -62,7 +74,40 @@ export function DetailHeader({
             {workflow.name}
           </h2>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <TaskTypeChip taskType={workflow.taskType} />
+            <span className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  if (modes.length > 1) setShowAllModes((value) => !value);
+                }}
+                disabled={modes.length <= 1}
+                title={
+                  modes.length > 1
+                    ? "该工作流支持多种模式，点击查看全部"
+                    : (modes[0] ? `${modeLabel(modes[0])}（${modes[0]}）` : undefined)
+                }
+                className={modes.length > 1 ? "cursor-pointer" : "cursor-default"}
+              >
+                <TaskTypeChip taskType={workflow.taskType} />
+              </button>
+              {showAllModes && modes.length > 1 && (
+                <div className="absolute left-0 top-full z-50 mt-1 flex min-w-[140px] flex-col gap-0.5 rounded-lg border border-white/10 bg-[#15151C] p-1.5 shadow-xl">
+                  {modes.map((code) => (
+                    <span
+                      key={code}
+                      className={`rounded px-2 py-0.5 text-[11px] ${
+                        code === workflow.defaultMode
+                          ? "bg-violet-500/15 text-violet-200"
+                          : "text-gray-400"
+                      }`}
+                    >
+                      {modeLabel(code)}
+                      {code === workflow.defaultMode ? "（默认）" : ""}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </span>
             <SourceTag source={workflow.source} />
             {(workflow.modelTags ?? []).map((tag) => (
               <span
@@ -91,9 +136,19 @@ export function DetailHeader({
               </span>
             )}
           </div>
+
+          {/* 类型 / 模型配置上移进头部，紧贴徽标行 */}
+          <MetaEditor meta={meta} />
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <ActionButton
+            onClick={onUse}
+            icon={<Plus className="h-3.5 w-3.5" />}
+            label="导入画布"
+            title={usable ? "把该工作流导入项目画布" : "当前工作流缺少可执行格式，无法导入"}
+            disabled={!usable}
+          />
           <ActionButton
             onClick={onEdit}
             icon={<Edit3 className="h-3.5 w-3.5" />}
@@ -128,28 +183,6 @@ export function DetailHeader({
             variant="danger"
           />
         </div>
-      </div>
-
-      {/* 主 CTA */}
-      <div className="mt-4 flex items-center gap-3">
-        <button
-          type="button"
-          disabled={!usable}
-          onClick={onUse}
-          className={[
-            "btn-gradient inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-medium text-white shadow-lg shadow-violet-500/20 transition-all",
-            !usable ? "opacity-40" : "hover:shadow-violet-500/30",
-          ].join(" ")}
-        >
-          <Play className="h-4 w-4 fill-current" />
-          用此工作流生成
-        </button>
-        {!usable && (
-          <span className="flex items-center gap-1 text-[11px] text-red-300/80">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            当前工作流缺少可执行格式，无法生成
-          </span>
-        )}
       </div>
     </div>
   );

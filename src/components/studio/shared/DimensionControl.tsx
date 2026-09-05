@@ -418,32 +418,37 @@ function AspectMegapixelControl({
     return hit?.label ?? `${currentMp}M`;
   }, [currentMp]);
 
-  /* ── 倍数段：跟比例 / 像素并列写进同一个 popover ──
-   *  候选项优先用工作流自己的 options（COMBO 型），否则给常用的放大倍数；
-   *  当前值不在候选里时动态补上，保证反显高亮不丢。 */
+  /* ── 倍数段：像素倍数（对齐网格），跟比例 / 像素并列写进同一个 popover ──
+   *  语义是「宽高像素取该值的倍数」（如 8 → 尺寸是 8 的倍数），不是缩放
+   *  系数。候选项优先用工作流自己的 options，否则给常用网格 8/16/32/64/128
+   *  （与 AlignMultipleStepper 的范围一致）；当前值不在候选里时动态补上。 */
   const currentMultiple = useMemo(() => {
-    if (!multiple) return 1;
+    if (!multiple) return 8;
     const raw = values[multiple.ioKey];
     const n = typeof raw === "number" ? raw : Number(raw);
-    return Number.isFinite(n) ? n : (typeof multiple.defaultValue === "number" ? multiple.defaultValue : 1);
+    return Number.isFinite(n) && n > 0
+      ? n
+      : typeof multiple.defaultValue === "number" && multiple.defaultValue > 0
+        ? multiple.defaultValue
+        : 8;
   }, [multiple, values]);
 
   const multipleOptions = useMemo((): { value: number; label: string }[] => {
     const source =
       multiple && Array.isArray(multiple.options) && multiple.options.length > 0
         ? multiple.options
-        : ["1", "1.25", "1.5", "2", "2.5", "3", "4"];
+        : ["8", "16", "32", "64", "128"];
     const parsed = source
       .map((item) => Number(item))
       .filter((n) => Number.isFinite(n) && n > 0);
-    if (multiple && !parsed.some((n) => Math.abs(n - currentMultiple) < 0.001)) {
+    if (multiple && !parsed.some((n) => n === currentMultiple)) {
       parsed.push(currentMultiple);
       parsed.sort((a, b) => a - b);
     }
-    return parsed.map((n) => ({ value: n, label: `${n}x` }));
+    return parsed.map((n) => ({ value: n, label: String(n) }));
   }, [multiple, currentMultiple]);
 
-  const multipleLabel = useMemo(() => `${currentMultiple}x`, [currentMultiple]);
+  const multipleLabel = useMemo(() => String(currentMultiple), [currentMultiple]);
 
   /* Preserve the workflow's own spelling when the user only changes the
    * megapixel count — writing a preset string into a node that spells the
