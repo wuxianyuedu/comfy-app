@@ -3,15 +3,17 @@
 // 工坊中间列：按当前阶段分发内容。
 // 纯展示 + 事件上抛：这里不持有任何业务规则，数据来自 controller。
 
+import React from "react";
 import { Button } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
-import { Textarea } from "~/components/ui/textarea";
+import { markdownToHtml } from "@/lib/comfyui/markdown";
 import type { WorkshopPipelineController } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { CharacterDesigner } from "~/components/workshop/CharacterDesigner";
 import { FinalComposer } from "~/components/workshop/FinalComposer";
 import { LLMStatusChip } from "~/components/workshop/LLMContext";
 import { ScriptGenerator } from "~/components/workshop/ScriptGenerator";
 import { ScriptMarkdownEditor } from "~/components/workshop/ScriptMarkdownEditor";
+import { SCROLLBAR_VISIBLE_CLASSES } from "~/components/workshop/ScriptMarkdownEditor.parts";
 import { ShotStudio } from "~/components/workshop/ShotStudio";
 import { StageHint } from "~/components/workshop/StageHint";
 import { StoryboardPlanner } from "~/components/workshop/StoryboardPlanner";
@@ -33,7 +35,6 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     gridShots,
     meta,
     setMeta,
-    outline,
     scriptMarkdown,
     setScriptMarkdown,
     scenes,
@@ -51,17 +52,10 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     clipDoneCount,
     generating,
     shotProgress,
-    draftSavedAt,
-    editingOutline,
-    draftOutline,
     isScriptEditorOpen,
     notice,
     rendered,
     generateShot,
-    beginOutlineEdit,
-    cancelOutlineEdit,
-    saveOutline,
-    setDraftOutline,
     openScriptEditor,
     closeScriptEditor,
     saveScriptEditor,
@@ -69,6 +63,21 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     markRendered,
     dismissNotice,
   } = controller;
+
+  /* 本地剧本文件导入：读取 .md / .txt 内容并写入 scriptMarkdown */
+  const scriptFileRef = React.useRef<HTMLInputElement>(null);
+  const handleScriptImport = React.useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (file) {
+        const text = await file.text();
+        if (text.trim()) setScriptMarkdown(text);
+      }
+      // 允许重复选择同一文件
+      event.target.value = "";
+    },
+    [setScriptMarkdown],
+  );
 
   return (
     <div className="min-w-0">
@@ -101,93 +110,92 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Script ── */}
       {tab === "script" && (
         <>
-          <section className="border-border bg-surface rounded-2xl border p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-ink text-[13px] font-semibold">故事大纲</span>
-              <div className="flex items-center gap-2">
-                {draftSavedAt && !editingOutline && (
-                  <span
-                    className="text-[10px] text-muted-foreground"
-                    title="剧本内容自动保存在本机浏览器，刷新/重启后仍在"
-                  >
-                    已自动保存{" "}
-                    {draftSavedAt.toLocaleTimeString("zh-CN", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                )}
-                {!editingOutline ? (
+          {scriptMarkdown.trim() ? (
+            /* ── 已有剧本内容：直接展示 ── */
+            <section className="border-border bg-surface rounded-2xl border p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-ink text-[14px] font-semibold">剧本内容</h3>
+                <div className="flex items-center gap-2">
+                  {scenes.length > 0 && (
+                    <span className="text-muted-foreground rounded-lg bg-white/4 px-3 py-1 text-[11px]">
+                      场景 {scenes.length}
+                    </span>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"
-                    onClick={beginOutlineEdit}
-                    className="text-ink rounded-lg bg-white/4 px-4 py-1.5 text-xs font-medium hover:bg-white/8"
+                    onClick={openScriptEditor}
+                    className="btn-gradient rounded-lg px-4 py-1.5 text-[11px] font-medium text-white shadow-lg shadow-purple-900/20"
                   >
-                    编辑
+                    编辑剧本
                   </Button>
-                ) : (
-                  <>
+                </div>
+              </div>
+              <div
+                className={`${SCROLLBAR_VISIBLE_CLASSES} bg-bg max-h-[480px] rounded-xl p-4 text-[13px] leading-7 text-[#d4d4d8]`}
+                dangerouslySetInnerHTML={{
+                  __html: markdownToHtml(scriptMarkdown),
+                }}
+              />
+            </section>
+          ) : (
+            <>
+              {/* ── 暂无剧本：提供新建/导入入口 ── */}
+              <section className="border-border bg-surface rounded-2xl border p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-ink text-[14px] font-semibold">
+                      新建剧本
+                    </h3>
+                    <p className="text-muted-foreground mt-1 text-[11.5px]">
+                      可直接编写 markdown 剧本，或导入本地 .md / .txt 文件。
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <Button
                       type="button"
                       variant="ghost"
-                      onClick={cancelOutlineEdit}
+                      onClick={() => scriptFileRef.current?.click()}
                       className="text-ink rounded-lg bg-white/4 px-4 py-1.5 text-xs font-medium hover:bg-white/8"
                     >
-                      取消
+                      导入剧本
                     </Button>
                     <Button
                       type="button"
                       variant="ghost"
-                      onClick={saveOutline}
-                      className="bg-primary/12 text-primary hover:bg-primary/18 rounded-lg px-4 py-1.5 text-[11px]"
+                      onClick={openScriptEditor}
+                      className="btn-gradient rounded-lg px-4 py-1.5 text-[11px] font-medium text-white shadow-lg shadow-purple-900/20"
                     >
-                      保存
+                      新建剧本
                     </Button>
-                  </>
-                )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={openScriptEditor}
-                  className="btn-gradient rounded-lg px-4 py-1.5 text-[11px] font-medium text-white shadow-lg shadow-purple-900/20"
-                >
-                  编辑剧本
-                </Button>
-              </div>
-            </div>
-            {editingOutline ? (
-              <Textarea
-                value={draftOutline}
-                onChange={(event) => setDraftOutline(event.target.value)}
-                rows={4}
-                className="border-border bg-bg text-ink ring-primary/30 min-h-24 w-full resize-none rounded-xl p-3 text-[12.5px] leading-relaxed transition outline-none focus:border-primary/50 focus:ring-2"
-                placeholder="输入故事大纲……"
-              />
-            ) : outline ? (
-              <p className="text-muted-foreground text-[12.5px] leading-relaxed">
-                {outline}
-              </p>
-            ) : (
-              <p className="text-muted-foreground/60 text-[12.5px] leading-relaxed italic">
-                暂无大纲——点击「编辑」输入故事大纲，或在下方用一句话梗概 /
-                智能辅助结构化开始。
-              </p>
-            )}
-          </section>
+                    <input
+                      ref={scriptFileRef}
+                      type="file"
+                      accept=".md,.txt"
+                      className="hidden"
+                      onChange={handleScriptImport}
+                    />
+                  </div>
+                </div>
+              </section>
 
-          <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-ink text-[14px] font-semibold">剧本工具</h3>
-              <LLMStatusChip />
-            </div>
-            <ScriptGenerator
-              meta={meta}
-              scenes={scenes}
-              onMetaChange={setMeta}
-              onScenesChange={setScenes}
-            />
-          </section>
+              {/* ── 剧本工具（智能辅助）── */}
+              <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-ink text-[14px] font-semibold">
+                    剧本工具
+                  </h3>
+                  <LLMStatusChip />
+                </div>
+                <ScriptGenerator
+                  meta={meta}
+                  scenes={scenes}
+                  onMetaChange={setMeta}
+                  onScenesChange={setScenes}
+                />
+              </section>
+            </>
+          )}
         </>
       )}
 
@@ -198,7 +206,9 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
           )}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
-            <h3 className="text-ink mb-3 text-[14px] font-semibold">角色工具</h3>
+            <h3 className="text-ink mb-3 text-[14px] font-semibold">
+              角色工具
+            </h3>
             <CharacterDesigner
               characters={characters}
               styles={styles}
@@ -243,7 +253,9 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
 
           <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-ink text-[13px] font-semibold">分镜脚本</span>
+              <span className="text-ink text-[13px] font-semibold">
+                分镜脚本
+              </span>
               <span className="bg-primary/12 text-primary rounded-lg px-4 py-1.5 text-[11px]">
                 {gridShots.length} 镜
               </span>
@@ -272,7 +284,9 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
           </section>
 
           <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
-            <h3 className="text-ink mb-3 text-[14px] font-semibold">分镜工具</h3>
+            <h3 className="text-ink mb-3 text-[14px] font-semibold">
+              分镜工具
+            </h3>
             <StoryboardPlanner
               scenes={scenes}
               characters={characters}

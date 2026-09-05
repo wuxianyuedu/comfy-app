@@ -36,8 +36,8 @@ export const SCENE_PLACEHOLDERS = [
 
 export const STAGE_TITLES: Record<Tab, { title: string; desc: string }> = {
   script: {
-    title: "剧本 · 故事大纲",
-    desc: "从一句话梗概出发，自动派生角色、场景与分镜脚本，并贯穿到生图 / 视频全流程。",
+    title: "剧本",
+    desc: "编写或导入完整剧本，为后续角色提取、分镜规划与全流程生成提供基础。",
   },
   character: {
     title: "角色卡 · 角色设计",
@@ -104,7 +104,9 @@ export function stageSubtitle(
   if (ratios[id] >= 1) return "已完成";
   switch (id) {
     case "character":
-      return ctx.characterCount > 0 ? `已建 ${ctx.characterCount} 个` : "待开始";
+      return ctx.characterCount > 0
+        ? `已建 ${ctx.characterCount} 个`
+        : "待开始";
     case "storyboard":
       return ctx.shotCount > 0 ? `${ctx.shotCount} 镜` : "待开始";
     case "shots":
