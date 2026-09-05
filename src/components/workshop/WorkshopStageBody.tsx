@@ -2,23 +2,64 @@
 
 // 工坊中间列：按当前阶段分发内容。
 // 纯展示 + 事件上抛：这里不持有任何业务规则，数据来自 controller。
+//
+// 性能治理：把各 stage 的重型子组件改为按 stage 懒加载，仅在对应 tab
+// 激活时拉进模块图。Turbopack 的模块图被切成独立小块后，保存枢纽文件或
+// 单个 stage 组件时，热更新的重编范围不再横跨整条工坊链路。
 
 import React from "react";
 import { Button } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
 import { markdownToHtml } from "@/lib/comfyui/markdown";
 import type { WorkshopPipelineController } from "~/components/workshop/hooks/use-workshop-pipeline";
-import { CharacterDesigner } from "~/components/workshop/CharacterDesigner";
-import { FinalComposer } from "~/components/workshop/FinalComposer";
 import { LLMStatusChip } from "~/components/workshop/LLMContext";
-import { ScriptGenerator } from "~/components/workshop/ScriptGenerator";
-import { ScriptMarkdownEditor } from "~/components/workshop/ScriptMarkdownEditor";
 import { SCROLLBAR_VISIBLE_CLASSES } from "~/components/workshop/ScriptMarkdownEditor.parts";
-import { ShotStudio } from "~/components/workshop/ShotStudio";
 import { StageHint } from "~/components/workshop/StageHint";
-import { StoryboardPlanner } from "~/components/workshop/StoryboardPlanner";
-import { VideoStudio } from "~/components/workshop/VideoStudio";
 import { STAGE_DEFS } from "~/components/workshop/stage-config";
+
+// ── 各 stage 组件按需懒加载（named-export → default 包装）──
+const LazyCharacterDesigner = React.lazy(() =>
+  import("~/components/workshop/CharacterDesigner").then((m) => ({
+    default: m.CharacterDesigner,
+  })),
+);
+const LazyScriptGenerator = React.lazy(() =>
+  import("~/components/workshop/ScriptGenerator").then((m) => ({
+    default: m.ScriptGenerator,
+  })),
+);
+const LazyScriptMarkdownEditor = React.lazy(() =>
+  import("~/components/workshop/ScriptMarkdownEditor").then((m) => ({
+    default: m.ScriptMarkdownEditor,
+  })),
+);
+const LazyStoryboardPlanner = React.lazy(() =>
+  import("~/components/workshop/StoryboardPlanner").then((m) => ({
+    default: m.StoryboardPlanner,
+  })),
+);
+const LazyShotStudio = React.lazy(() =>
+  import("~/components/workshop/ShotStudio").then((m) => ({
+    default: m.ShotStudio,
+  })),
+);
+const LazyVideoStudio = React.lazy(() =>
+  import("~/components/workshop/VideoStudio").then((m) => ({
+    default: m.VideoStudio,
+  })),
+);
+const LazyFinalComposer = React.lazy(() =>
+  import("~/components/workshop/FinalComposer").then((m) => ({
+    default: m.FinalComposer,
+  })),
+);
+
+/** 懒加载占位：保留版面高度，避免 stage 切换瞬间塌陷。 */
+function StageFallback() {
+  return (
+    <div className="border-border bg-surface animate-pulse min-h-[260px] rounded-2xl border p-5" />
+  );
+}
 
 interface WorkshopStageBodyProps {
   controller: WorkshopPipelineController;
@@ -187,12 +228,14 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                   </h3>
                   <LLMStatusChip />
                 </div>
-                <ScriptGenerator
-                  meta={meta}
-                  scenes={scenes}
-                  onMetaChange={setMeta}
-                  onScenesChange={setScenes}
-                />
+                <React.Suspense fallback={<StageFallback />}>
+                  <LazyScriptGenerator
+                    meta={meta}
+                    scenes={scenes}
+                    onMetaChange={setMeta}
+                    onScenesChange={setScenes}
+                  />
+                </React.Suspense>
               </section>
             </>
           )}
@@ -209,12 +252,14 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             <h3 className="text-ink mb-3 text-[14px] font-semibold">
               角色工具
             </h3>
-            <CharacterDesigner
-              characters={characters}
-              styles={styles}
-              onCharactersChange={setCharacters}
-              scriptMarkdown={scriptMarkdown}
-            />
+            <React.Suspense fallback={<StageFallback />}>
+              <LazyCharacterDesigner
+                characters={characters}
+                styles={styles}
+                onCharactersChange={setCharacters}
+                scriptMarkdown={scriptMarkdown}
+              />
+            </React.Suspense>
           </section>
         </>
       )}
@@ -287,18 +332,20 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             <h3 className="text-ink mb-3 text-[14px] font-semibold">
               分镜工具
             </h3>
-            <StoryboardPlanner
-              scenes={scenes}
-              characters={characters}
-              styles={styles}
-              shots={shots}
-              onShotsChange={setShots}
-              onGenerate={generateShot}
-              generating={generating}
-              progressByShot={shotProgress}
-              scriptMarkdown={scriptMarkdown}
-              onCharactersChange={setCharacters}
-            />
+            <React.Suspense fallback={<StageFallback />}>
+              <LazyStoryboardPlanner
+                scenes={scenes}
+                characters={characters}
+                styles={styles}
+                shots={shots}
+                onShotsChange={setShots}
+                onGenerate={generateShot}
+                generating={generating}
+                progressByShot={shotProgress}
+                scriptMarkdown={scriptMarkdown}
+                onCharactersChange={setCharacters}
+              />
+            </React.Suspense>
           </section>
         </>
       )}
@@ -316,19 +363,21 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 图 {imageDoneCount}/{shots.length}
               </span>
             </div>
-            <ShotStudio
-              shots={shots}
-              scenes={scenes}
-              characters={characters}
-              styles={styles}
-              checkpoints={checkpoints}
-              checkpoint={checkpoint}
-              onCheckpointChange={setCheckpoint}
-              apiChannels={apiChannels}
-              onOpenApiSettings={openApiSettings}
-              onShotsChange={setShots}
-              onNextStage={() => setTab("video")}
-            />
+            <React.Suspense fallback={<StageFallback />}>
+              <LazyShotStudio
+                shots={shots}
+                scenes={scenes}
+                characters={characters}
+                styles={styles}
+                checkpoints={checkpoints}
+                checkpoint={checkpoint}
+                onCheckpointChange={setCheckpoint}
+                apiChannels={apiChannels}
+                onOpenApiSettings={openApiSettings}
+                onShotsChange={setShots}
+                onNextStage={() => setTab("video")}
+              />
+            </React.Suspense>
           </section>
         </>
       )}
@@ -346,17 +395,19 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 片段 {clipDoneCount}/{shots.length}
               </span>
             </div>
-            <VideoStudio
-              shots={shots}
-              checkpoints={checkpoints}
-              checkpoint={checkpoint}
-              onCheckpointChange={setCheckpoint}
-              apiChannels={apiChannels}
-              onOpenApiSettings={openApiSettings}
-              onShotsChange={setShots}
-              onPrevStage={() => setTab("shots")}
-              onNextStage={() => setTab("render")}
-            />
+            <React.Suspense fallback={<StageFallback />}>
+              <LazyVideoStudio
+                shots={shots}
+                checkpoints={checkpoints}
+                checkpoint={checkpoint}
+                onCheckpointChange={setCheckpoint}
+                apiChannels={apiChannels}
+                onOpenApiSettings={openApiSettings}
+                onShotsChange={setShots}
+                onPrevStage={() => setTab("shots")}
+                onNextStage={() => setTab("render")}
+              />
+            </React.Suspense>
           </section>
         </>
       )}
@@ -368,26 +419,30 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
           )}
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
-            <FinalComposer
-              shots={shots}
-              title={meta.title || "未命名项目"}
-              onShotsChange={setShots}
-              rendered={rendered}
-              onRendered={markRendered}
-            />
+            <React.Suspense fallback={<StageFallback />}>
+              <LazyFinalComposer
+                shots={shots}
+                title={meta.title || "未命名项目"}
+                onShotsChange={setShots}
+                rendered={rendered}
+                onRendered={markRendered}
+              />
+            </React.Suspense>
           </section>
         </>
       )}
 
       {/* Full-screen markdown script editor */}
       {isScriptEditorOpen && (
-        <ScriptMarkdownEditor
-          title={meta.title || "编辑剧本"}
-          value={scriptMarkdown}
-          onChange={setScriptMarkdown}
-          onSave={saveScriptEditor}
-          onCancel={closeScriptEditor}
-        />
+        <React.Suspense fallback={<StageFallback />}>
+          <LazyScriptMarkdownEditor
+            title={meta.title || "编辑剧本"}
+            value={scriptMarkdown}
+            onChange={setScriptMarkdown}
+            onSave={saveScriptEditor}
+            onCancel={closeScriptEditor}
+          />
+        </React.Suspense>
       )}
     </div>
   );
