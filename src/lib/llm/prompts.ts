@@ -1,38 +1,11 @@
 import type { ProjectMeta, Scene, ShotType } from "@/lib/workshop/types";
+import { PROJECT_TYPE_LABELS } from "@/lib/workshop/types";
 import type { LLMMessage } from "./types";
 import { extractJson, extractJsonArray } from "./parse";
 
 // ─────────────────────────────────────────────────────────────
 // Script generation
 // ─────────────────────────────────────────────────────────────
-export const SCRIPT_SYSTEM = `你是一位专业影视编剧助手。用户会提供项目信息（类型、基调、梗概）和一段灵感或粗稿。请将其扩展为结构化的分镜脚本。
-要求：
-- 只输出严格的 JSON 数组，不要任何额外文字、解释或代码围栏。
-- 每个元素是场景对象：{ "heading": "场景标题", "location": "地点", "time": "时间", "action": "画面/动作描述（2-4句，具象、可视觉化）", "dialogue": "关键台词或旁白（可空字符串）", "shotCount": 该场景建议镜头数(整数1-6) }
-- 场景数量根据素材合理拆分为 2-6 个，开头-发展-高潮结构清晰。
-- 全程使用中文，人物与动作要具体、可拍。`;
-
-export function buildScriptMessages(meta: Pick<ProjectMeta, "type" | "tone" | "logline">, idea: string): LLMMessage[] {
-  const user = `项目类型：${meta.type}
-基调/情绪：${meta.tone || "未指定"}
-一句话梗概：${meta.logline || "无"}
-灵感/粗稿：
-${idea}`;
-  return [
-    { role: "system", content: SCRIPT_SYSTEM },
-    { role: "user", content: user },
-  ];
-}
-
-export interface RawScene {
-  heading: string;
-  location?: string;
-  time?: string;
-  action: string;
-  dialogue?: string;
-  shotCount?: number;
-}
-
 /** 将未知值安全转字符串：字符串原样返回，对象 JSON 序列化，避免 [object Object]。 */
 function asText(v: unknown, fallback = ""): string {
   if (typeof v === "string") return v;
@@ -44,31 +17,57 @@ function asText(v: unknown, fallback = ""): string {
   return fallback;
 }
 
-export function parseScriptScenes(text: string): RawScene[] {
-  const data = extractJsonArray(text);
-  return data.map((datum) =>
-{
+/** 剧本工具「AI 生成剧本」系统提示:直接产出剧本 Markdown(不再是 JSON 场景数组)。 */
+export const SCRIPT_MD_SYSTEM = `你是一位专业影视编剧助手。用户会提供项目信息（类型、基调、梗概）和一段灵感或粗稿。请直接写出一份完整的剧本 Markdown。
+要求：
+- 只输出剧本 Markdown 正文，不要任何解释、前言或代码围栏。
+- 用「## 场景N · 地点（时间）」作为场景标题（内/外景可写在标题里）。
+- 动作/画面描述用「Δ 」开头逐条列出；台词/旁白用「V1 角色名: 台词」格式（V 后为镜内序号）。
+- 剧本篇幅与场景数量随素材合理展开（一般 2-6 个场景），开头-发展-高潮结构清晰。
+- 全程使用中文，人物与动作要具体、可拍。`;
 
-    const obj = (datum ?? {}) as Record<string, unknown>;
+export function buildScriptMarkdownMessages(
+  meta: Pick<ProjectMeta, "type" | "tone" | "logline">,
+  idea: string
+): LLMMessage[] {
+  const user = `项目类型：${meta.type}
+基调/情绪：${meta.tone || "未指定"}
+一句话梗概：${meta.logline || "无"}
+灵感/粗稿：
+${idea}`;
+  return [
+    { role: "system", content: SCRIPT_MD_SYSTEM },
+    { role: "user", content: user },
+  ];
+}
 
-    return {
-
-      heading: asText(obj.heading, "未命名场景"),
-
-      location: asText(obj.location),
-
-      time: asText(obj.time),
-
-      action: asText(obj.action, ""),
-
-      dialogue: asText(obj.dialogue),
-
-      shotCount: Math.min(6, Math.max(1, Number(obj.shotCount) || 2)),
-
-    };
-
-  });
-
+/** 模板生成（离线）：把灵感/粗稿按固定模板拼成可编辑的剧本骨架，不调用模型。 */
+export function buildScriptTemplate(
+  meta: Pick<ProjectMeta, "type" | "tone" | "logline">,
+  idea: string
+): string {
+  const metaLines = [
+    meta.tone?.trim() ? `- 基调：${meta.tone.trim()}` : "",
+    meta.type ? `- 类型：${PROJECT_TYPE_LABELS[meta.type] ?? meta.type}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return [
+    `# 剧本草稿`,
+    metaLines,
+    "",
+    idea.trim(),
+    "",
+    "## 场景1 · 未命名地点（未定时间）",
+    "（待补充：内/外景、地点与时间）",
+    "",
+    "Δ （在此描述第一个画面/动作）",
+    "",
+    "V1 角色名: （在此填写台词或旁白）",
+  ]
+    .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+    .join("\n")
+    .trim();
 }
 
 // ─────────────────────────────────────────────────────────────

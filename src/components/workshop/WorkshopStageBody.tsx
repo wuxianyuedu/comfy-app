@@ -79,7 +79,6 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     scriptMarkdown,
     setScriptMarkdown,
     scenes,
-    setScenes,
     characters,
     setCharacters,
     shots,
@@ -231,9 +230,8 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 <React.Suspense fallback={<StageFallback />}>
                   <LazyScriptGenerator
                     meta={meta}
-                    scenes={scenes}
                     onMetaChange={setMeta}
-                    onScenesChange={setScenes}
+                    onScriptChange={setScriptMarkdown}
                   />
                 </React.Suspense>
               </section>
