@@ -6,6 +6,7 @@ import { Geist } from "next/font/google";
 import { TRPCReactProvider } from "~/trpc/react";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { Toaster } from "~/components/ui/sonner";
+import { ThemeProvider } from "~/app/ThemeProvider";
 import { LogProvider } from "~/components/studio/logs/LogProvider";
 import { LogPanel } from "~/components/studio/logs/LogPanel";
 import { ToastProvider } from "~/components/studio";
@@ -26,22 +27,26 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-CN" className={`${geist.variable}`}>
+    /* suppressHydrationWarning：主题 class 由 next-themes 内联脚本在首帧前
+     * 依据 localStorage 写入，需跳过 SSR 与客户端对 <html> 属性的水合告警。 */
+    <html lang="zh-CN" className={`${geist.variable}`} suppressHydrationWarning>
       <body className="font-sans antialiased">
-        <TooltipProvider>
-          <TRPCReactProvider>
-            {/* 底部状态栏/日志面板全局常驻：所有路由（含设置页）都可见，
-                贴底内容需自行预留 24px（pb-6），不再逐页补挂 */}
-            <LogProvider>
-              <ToastProvider>
-                {children}
-                <LogPanel />
-                <BrowserStatusBar />
-              </ToastProvider>
-            </LogProvider>
-          </TRPCReactProvider>
-          <Toaster />
-        </TooltipProvider>
+        <ThemeProvider>
+          <TooltipProvider>
+            <TRPCReactProvider>
+              {/* 底部状态栏/日志面板全局常驻：所有路由（含设置页）都可见，
+                  贴底内容需自行预留 24px（pb-6），不再逐页补挂 */}
+              <LogProvider>
+                <ToastProvider>
+                  {children}
+                  <LogPanel />
+                  <BrowserStatusBar />
+                </ToastProvider>
+              </LogProvider>
+            </TRPCReactProvider>
+            <Toaster />
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
