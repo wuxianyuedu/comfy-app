@@ -318,7 +318,9 @@ export function useWorkflowLibrary(
     actionError,
     loadError: listQ.error
       ? `工作流列表加载失败：${errorMessage(listQ.error, "未知错误")}`
-      : null,
+      : tagsQ.error
+        ? `模型标签库加载失败：${errorMessage(tagsQ.error, "未知错误")}`
+        : null,
     load,
     refresh,
     loadModelTags,

@@ -103,6 +103,11 @@ function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
                 绑定模型标签（{draft.size}）
               </p>
               <div className="mb-2 flex max-h-56 flex-col gap-1 overflow-y-auto">
+                {knownNames.length === 0 && (
+                  <p className="px-2 py-1.5 text-[11px] leading-relaxed text-gray-500">
+                    全局标签库为空，可先在页头「管理模型」中添加，或直接在下方输入新标签（保存时自动入库）。
+                  </p>
+                )}
                 {options.map((name) => {
                   const selected = draft.has(name);
                   return (
@@ -129,11 +134,6 @@ function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
                     </button>
                   );
                 })}
-                {options.length === 0 && (
-                  <p className="px-2 py-3 text-center text-xs text-gray-500">
-                    标签库为空，先在下方新增一个
-                  </p>
-                )}
               </div>
               <div className="mb-2 flex gap-1.5">
                 <input
