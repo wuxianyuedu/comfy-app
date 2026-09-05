@@ -7,11 +7,7 @@ import {
   VideoQueueModal,
   HomePage,
   WorkspaceNav,
-  ToastProvider,
   AuroraBackground,
-  BrowserStatusBar,
-  LogProvider,
-  LogPanel,
 } from "@/components/studio";
 import type {
   RecentProject,
@@ -280,9 +276,9 @@ export default function WorkspacePage() {
   };
 
   return (
-    <LogProvider>
-      <ToastProvider>
-        {viewMode === "home" ? (
+    <>
+      {/* 日志/Toast Provider 与底部状态栏已全局挂载（根布局），此处不再重复包裹 */}
+      {viewMode === "home" ? (
           <>
             <HomePage
               onNewProject={handleNewProject}
@@ -337,9 +333,6 @@ export default function WorkspacePage() {
             </div>
           </>
         )}
-        <BrowserStatusBar />
-        <LogPanel />
-      </ToastProvider>
-    </LogProvider>
+    </>
   );
 }

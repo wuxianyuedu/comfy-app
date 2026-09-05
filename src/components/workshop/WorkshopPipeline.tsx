@@ -22,7 +22,7 @@ export function WorkshopPipeline() {
 
   return (
     <LLMProvider>
-      <div className="dark bg-bg text-ink min-h-screen w-full">
+      <div className="dark bg-bg text-ink min-h-screen w-full pb-6">
         <WorkshopHeader
           title={controller.meta.title}
           progressPct={controller.progressPct}
