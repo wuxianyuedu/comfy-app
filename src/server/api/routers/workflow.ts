@@ -601,11 +601,10 @@ export const workflowRouter = createTRPCRouter({
       // patch 为显式字段构造（不含 ...rest 展开），故 upgradeFromApi 无需在此
       // 排除——它的读取走下方 input.upgradeFromApi，解构里留着反而是死变量。
       const { id, modelTags, mergePositions, groups, notes, ...rest } = input;
-      // WorkflowTemplate 无 thumb 列（旧遗留字段），保留透传不参与 DB 写入
-      const patch: Partial<WorkflowTemplate> & { thumb?: string } = {
+      // WorkflowTemplate 无 thumb 列（旧遗留字段，留在 rest 不透传进 set()）
+      const patch: Partial<WorkflowTemplate> = {
         name: rest.name,
         taskType: rest.taskType,
-        thumb: rest.thumb,
         defaultMode: rest.defaultMode,
         graph: rest.graph,
         rawJson: rest.rawJson,
@@ -679,7 +678,13 @@ export const workflowRouter = createTRPCRouter({
         }
       }
 
-      const template = await workflowTemplateRepository.update(id, patch);
+      // drizzle 的 set() 遇到全 undefined 的 patch 会抛 "No values to set"——
+      // 仅更新模型标签（modelTags-only）的请求不携带任何模板列，必须跳过
+      // 行更新、直接进入下方标签关联写入（此前「更新模型标签失败」的根因）。
+      const hasColumnPatch = Object.values(patch).some((v) => v !== undefined);
+      const template = hasColumnPatch
+        ? await workflowTemplateRepository.update(id, patch)
+        : existing;
 
       // modelTags: user-level global tag library → relation set
       if (modelTags !== undefined) {

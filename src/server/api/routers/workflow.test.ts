@@ -314,6 +314,25 @@ describe("workflow.update", () => {
     expect(tdb.$tables.workflowModelTags).toHaveLength(1);
   });
 
+  it("仅 modelTags 更新：跳过模板列写入（drizzle 空 patch 抛 No values to set），标签关系照常落库", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "wf-2",
+      userId: "user-a",
+      name: "Keep",
+      taskType: "T2I",
+    });
+    const res = await createCaller(makeCtx()).update({
+      id: "wf-2",
+      modelTags: ["z-image", "SD3.5"],
+    });
+    expect(res.template.name).toBe("Keep");
+    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-2")!;
+    expect(row.modelTags).toEqual([
+      expect.objectContaining({ name: "z-image", userId: "user-a" }),
+      expect.objectContaining({ name: "SD3.5", userId: "user-a" }),
+    ]);
+  });
+
   it("不存在 / 他人模板 → NOT_FOUND", async () => {
     seedUser(tdb, { id: "user-b", email: "b@test.dev" });
     seedWorkflowTemplate(tdb, { id: "wf-b", userId: "user-b" });

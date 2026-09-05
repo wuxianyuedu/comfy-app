@@ -55,7 +55,7 @@ export function DetailBody({
               在编辑器中打开
             </button>
           </div>
-          <div className="flex min-h-0 flex-1 justify-center overflow-y-auto py-3">
+          <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-2 py-4">
             <WorkflowCanvasNodePreview
               workflowId={workflow.id}
               workflowName={workflow.name}

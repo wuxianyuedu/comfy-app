@@ -136,11 +136,10 @@ export function WorkflowCanvasNodePreview({
     phase.kind === "running" && phase.node?.label ? phase.node.label : null;
 
   return (
-    <div className="flex min-h-[420px] flex-col items-center gap-3 rounded-2xl border border-white/8 bg-[#0B0B10] p-6">
-      <p className="self-start text-xs font-medium text-white/60">
-        画布样式预览（与项目画布节点一致，可直接运行调试）
-      </p>
-
+    /* 容器只做布局：边框/标题/背景由 DetailBody 的页签面板负责（此前在这里
+     * 又包了一层同款边框 + 重复标题，出现「面板套面板」）。卡片宽 380，
+     * 进度/结果/错误行与其对齐。 */
+    <div className="flex w-full flex-col items-center gap-3">
       {/* ── 画布同款节点卡片：唯一视觉源在 shared/workflow-node-parts ── */}
       <WorkflowNodeCardShell>
         <WorkflowNodeHeader
@@ -241,7 +240,7 @@ export function WorkflowCanvasNodePreview({
 
       {/* 进度条（running 时） */}
       {phase.kind === "running" && (
-        <div className="w-[340px]" aria-live="polite">
+        <div className="w-[380px]" aria-live="polite">
           <div className="mb-1 flex items-center justify-between text-[11px] text-white/60">
             <span>
               {nodeLabel ? `正在执行 ${nodeLabel}` : "正在执行工作流"}
@@ -266,7 +265,7 @@ export function WorkflowCanvasNodePreview({
 
       {/* 运行结果图 */}
       {resultUrl && (
-        <div className="w-[340px]">
+        <div className="w-[380px]">
           <p className="mb-1 text-[11px] text-white/50">运行结果</p>
           <img
             src={resultUrl}
@@ -278,12 +277,12 @@ export function WorkflowCanvasNodePreview({
 
       {/* 错误 / 必填提示 */}
       {phase.kind === "failed" && (
-        <div className="w-[340px] rounded-lg border border-red-500/20 bg-red-500/8 px-3 py-2 text-[11px] leading-relaxed text-red-300">
+        <div className="w-[380px] rounded-lg border border-red-500/20 bg-red-500/8 px-3 py-2 text-[11px] leading-relaxed text-red-300">
           {phase.message}
         </div>
       )}
       {!running && missing.length > 0 && (
-        <p className="w-[340px] text-[11px] text-amber-300/80">
+        <p className="w-[380px] text-[11px] text-amber-300/80">
           必填参数未填：{missing.join("、")}
         </p>
       )}
