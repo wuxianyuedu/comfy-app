@@ -50,7 +50,7 @@ export function WorkflowLibraryList({
       </div>
 
       {/* 列表：已载入工作流排在前 */}
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto px-1.5 py-1.5">
         {workflows.length === 0 && pendingRows.length === 0 ? (
           <div className="py-10 text-center text-xs text-white/35">
             未找到匹配的工作流
@@ -129,13 +129,14 @@ function WorkflowListItem({
         type="button"
         onClick={onClick}
         className={[
-          "w-full rounded-lg border p-2.5 text-left transition-all",
+          "w-full rounded-lg border px-2 py-1.5 text-left transition-all",
           selected
             ? "border-violet-500/40 bg-linear-to-br from-violet-500/15 to-fuchsia-500/10 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.15)]"
             : "border-transparent bg-white/[0.02] hover:border-white/8 hover:bg-white/[0.05]",
         ].join(" ")}
       >
-        <div className="mb-1.5 flex items-start justify-between gap-2">
+        {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}
+        <div className="flex items-center gap-1.5">
           <span
             className={[
               "min-w-0 flex-1 truncate text-[12px] leading-tight font-medium",
@@ -145,40 +146,40 @@ function WorkflowListItem({
           >
             {workflow.name}
           </span>
-          <span className="ml-auto flex w-fit shrink-0">
-            <SourceTag source={workflow.source} />
-          </span>
-        </div>
-
-        <div className="mb-2 flex flex-wrap items-center gap-1.5">
-          <TaskTypeChip taskType={workflow.taskType} />
-          {workflow.modelTags?.slice(0, 2).map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full border border-white/8 bg-white/[0.04] px-1.5 py-0.5 text-[9px] text-white/55"
-            >
-              {tag}
-            </span>
-          ))}
-          {(workflow.modelTags?.length ?? 0) > 2 && (
-            <span className="text-[9px] text-white/35">
-              +{(workflow.modelTags?.length ?? 0) - 2}
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-1.5">
           {!usable && (
-            <span className="rounded bg-red-500/12 px-1 py-px text-[9px] text-red-300">
+            <span className="shrink-0 rounded bg-red-500/12 px-1 py-px text-[9px] text-red-300">
               不可执行
             </span>
           )}
           {canResync && (
-            <span className="rounded bg-amber-500/12 px-1 py-px text-[9px] text-amber-300">
+            <span className="shrink-0 rounded bg-amber-500/12 px-1 py-px text-[9px] text-amber-300">
               {missing ? "已丢失" : "有更新"}
             </span>
           )}
+          <span className="shrink-0">
+            <SourceTag source={workflow.source} />
+          </span>
         </div>
+
+        {(workflow.taskType || (workflow.modelTags?.length ?? 0) > 0) && (
+          <div className="mt-1 flex items-center gap-1.5">
+            <TaskTypeChip taskType={workflow.taskType} />
+            {workflow.modelTags?.slice(0, 2).map((tag) => (
+              <span
+                key={tag}
+                className="max-w-[72px] truncate rounded-full border border-white/8 bg-white/[0.04] px-1.5 py-0.5 text-[9px] text-white/55"
+                title={tag}
+              >
+                {tag}
+              </span>
+            ))}
+            {(workflow.modelTags?.length ?? 0) > 2 && (
+              <span className="shrink-0 text-[9px] text-white/35">
+                +{(workflow.modelTags?.length ?? 0) - 2}
+              </span>
+            )}
+          </div>
+        )}
       </button>
     </li>
   );
