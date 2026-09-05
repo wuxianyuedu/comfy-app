@@ -52,7 +52,6 @@ const DEFAULT_META: ProjectMeta = {
 /** 自动保存的工坊状态（恢复时逐字段校验类型，损坏则按全新状态继续）。 */
 interface WorkshopDraft {
   meta: ProjectMeta;
-  outline: string;
   scriptMarkdown: string;
   scenes: Scene[];
   characters: Character[];
@@ -74,7 +73,6 @@ interface WorkshopProjectsIndex {
 function emptyDraft(): WorkshopDraft {
   return {
     meta: DEFAULT_META,
-    outline: "",
     scriptMarkdown: "",
     scenes: [],
     characters: [],
@@ -98,7 +96,6 @@ function parseDraft(raw: string | null): WorkshopDraft {
     const draft = JSON.parse(raw) as Partial<WorkshopDraft>;
     return {
       meta: draft.meta ?? DEFAULT_META,
-      outline: typeof draft.outline === "string" ? draft.outline : "",
       scriptMarkdown:
         typeof draft.scriptMarkdown === "string" ? draft.scriptMarkdown : "",
       scenes: Array.isArray(draft.scenes) ? draft.scenes : [],
@@ -124,7 +121,10 @@ function readDraft(id: string): WorkshopDraft {
 function writeDraft(id: string, draft: WorkshopDraft): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(draftKeyFor(id), JSON.stringify({ v: 1, ...draft }));
+    window.localStorage.setItem(
+      draftKeyFor(id),
+      JSON.stringify({ v: 1, ...draft }),
+    );
   } catch {
     /* 存储满 / 隐私模式：静默失败，不影响编辑 */
   }
@@ -158,7 +158,9 @@ function loadProjectsIndex(): WorkshopProjectsIndex {
     const raw = window.localStorage.getItem(PROJECTS_INDEX_KEY);
     if (!raw) {
       /* 首次升级：旧单草稿收编成项目 #1 —— 老用户不会丢内容。 */
-      return freshIndex(parseDraft(window.localStorage.getItem(LEGACY_DRAFT_KEY)));
+      return freshIndex(
+        parseDraft(window.localStorage.getItem(LEGACY_DRAFT_KEY)),
+      );
     }
     const parsed = JSON.parse(raw) as Partial<WorkshopProjectsIndex>;
     const items = Array.isArray(parsed.items) ? parsed.items : [];
@@ -245,7 +247,6 @@ export interface WorkshopPipelineController {
   // ── 数据
   meta: ProjectMeta;
   setMeta: React.Dispatch<React.SetStateAction<ProjectMeta>>;
-  outline: string;
   scriptMarkdown: string;
   setScriptMarkdown: (value: string) => void;
   scenes: Scene[];
@@ -266,9 +267,6 @@ export interface WorkshopPipelineController {
   // ── 交互态
   generating: boolean;
   shotProgress: ShotProgressMap;
-  draftSavedAt: Date | null;
-  editingOutline: boolean;
-  draftOutline: string;
   isScriptEditorOpen: boolean;
   apiSettingsOpen: boolean;
   /** 需要引起用户注意的失败/阻断文案（替代 alert，由视图决定怎么渲染）。 */
@@ -276,10 +274,6 @@ export interface WorkshopPipelineController {
 
   // ── 动作
   generateShot: (shot: Shot) => Promise<void>;
-  beginOutlineEdit: () => void;
-  cancelOutlineEdit: () => void;
-  saveOutline: () => void;
-  setDraftOutline: (value: string) => void;
   openScriptEditor: () => void;
   closeScriptEditor: () => void;
   saveScriptEditor: () => void;
@@ -319,29 +313,22 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const [generating, setGenerating] = React.useState(false);
   const [shotProgress, setShotProgress] = React.useState<ShotProgressMap>({});
   const [rendered, setRendered] = React.useState(false);
-  const [apiChannels, setApiChannels] =
-    React.useState<ApiChannelsView | null>(null);
+  const [apiChannels, setApiChannels] = React.useState<ApiChannelsView | null>(
+    null,
+  );
   const [apiSettingsOpen, setApiSettingsOpen] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
 
-  // 剧本内容此前是纯内存 state（刷新即丢），且大纲默认塞了
-  // 一段硬编码示例文案。现在大纲/剧本默认为空，全部内容经 localStorage
-  // 草稿持久化（防抖自动保存，挂载时惰性恢复）。
-  const [outline, setOutline] = React.useState(
-    () => loadWorkshopDraftOnce()?.outline ?? "",
-  );
+  // 剧本内容默认为空，全部内容经 localStorage 草稿持久化
+  // （防抖自动保存，挂载时惰性恢复）。
   const [scriptMarkdown, setScriptMarkdown] = React.useState(
     () => loadWorkshopDraftOnce()?.scriptMarkdown ?? "",
   );
   const [isScriptEditorOpen, setIsScriptEditorOpen] = React.useState(false);
-  const [editingOutline, setEditingOutline] = React.useState(false);
-  const [draftOutline, setDraftOutline] = React.useState("");
-  const [draftSavedAt, setDraftSavedAt] = React.useState<Date | null>(null);
 
   /* ── 多项目：索引与当前项目 id ── */
-  const [projectsIndex, setProjectsIndex] = React.useState<WorkshopProjectsIndex>(
-    () => loadProjectsOnce(),
-  );
+  const [projectsIndex, setProjectsIndex] =
+    React.useState<WorkshopProjectsIndex>(() => loadProjectsOnce());
   const [activeProjectId, setActiveProjectId] = React.useState<string>(
     () => loadProjectsOnce().activeId,
   );
@@ -350,14 +337,13 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const currentDraft = React.useCallback(
     (): WorkshopDraft => ({
       meta,
-      outline,
       scriptMarkdown,
       scenes,
       characters,
       shots,
       checkpoint,
     }),
-    [meta, outline, scriptMarkdown, scenes, characters, shots, checkpoint],
+    [meta, scriptMarkdown, scenes, characters, shots, checkpoint],
   );
 
   /** 把一份草稿灌进所有受管 state（切换 / 删除项目后接手时调用）。 */
@@ -367,7 +353,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     setCharacters(draft.characters);
     setShots(draft.shots);
     setCheckpoint(draft.checkpoint);
-    setOutline(draft.outline);
     setScriptMarkdown(draft.scriptMarkdown);
   }, []);
 
@@ -493,7 +478,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   React.useEffect(() => {
     const timer = setTimeout(() => {
       writeDraft(activeProjectId, currentDraft());
-      setDraftSavedAt(new Date());
     }, 600);
     return () => clearTimeout(timer);
   }, [activeProjectId, currentDraft]);
@@ -567,14 +551,19 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         };
         const taskId = await startLocalGenerate(input);
         setShots((prev) =>
-          prev.map((item) => (item.id === shot.id ? { ...item, taskId } : item)),
+          prev.map((item) =>
+            item.id === shot.id ? { ...item, taskId } : item,
+          ),
         );
         await new Promise<void>((resolve) => {
           watchTask(taskId, {
             onProgress: (pct, node) => {
               setShotProgress((prev) => ({
                 ...prev,
-                [shot.id]: { pct, ...(node?.label ? { label: node.label } : {}) },
+                [shot.id]: {
+                  pct,
+                  ...(node?.label ? { label: node.label } : {}),
+                },
               }));
             },
             onOutput: (out) => {
@@ -657,20 +646,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const { title: stageTitle, desc: stageDesc } = STAGE_TITLES[tab];
   const stageIndex = STAGE_DEFS.findIndex((stage) => stage.id === tab) + 1;
 
-  const beginOutlineEdit = React.useCallback(() => {
-    setDraftOutline(outline);
-    setEditingOutline(true);
-  }, [outline]);
-
-  const cancelOutlineEdit = React.useCallback(() => {
-    setEditingOutline(false);
-  }, []);
-
-  const saveOutline = React.useCallback(() => {
-    setOutline(draftOutline);
-    setEditingOutline(false);
-  }, [draftOutline]);
-
   const openScriptEditor = React.useCallback(() => {
     setIsScriptEditorOpen(true);
   }, []);
@@ -685,7 +660,10 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   }, [scriptMarkdown]);
 
   const openApiSettings = React.useCallback(() => setApiSettingsOpen(true), []);
-  const closeApiSettings = React.useCallback(() => setApiSettingsOpen(false), []);
+  const closeApiSettings = React.useCallback(
+    () => setApiSettingsOpen(false),
+    [],
+  );
 
   const handleApiChannelsSaved = React.useCallback(
     (channels: ApiChannelsView) => {
@@ -714,7 +692,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
 
     meta,
     setMeta,
-    outline,
     scriptMarkdown,
     setScriptMarkdown,
     scenes,
@@ -734,18 +711,11 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
 
     generating,
     shotProgress,
-    draftSavedAt,
-    editingOutline,
-    draftOutline,
     isScriptEditorOpen,
     apiSettingsOpen,
     notice,
 
     generateShot,
-    beginOutlineEdit,
-    cancelOutlineEdit,
-    saveOutline,
-    setDraftOutline,
     openScriptEditor,
     closeScriptEditor,
     saveScriptEditor,
