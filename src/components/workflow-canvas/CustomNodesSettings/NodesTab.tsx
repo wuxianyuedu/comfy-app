@@ -7,16 +7,12 @@ import type { CustomNodesSettingsController } from "./hooks/use-custom-nodes-set
 
 export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
   const {
-    pathsText,
-    setPathsText,
-    saving,
     saveErr,
     onParseAll,
     summary,
     loading,
     progress,
     savedPaths,
-    savedAt,
     parsing,
     totalAcrossParents,
     parentBlocks,
@@ -33,11 +29,11 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
   } = ctrl;
   return (
     <>
-      {/* 自定义节点目录（CUSTOM_NODES_PATH）—— 原始 section */}
+      {/* 节点目录只读展示：由设置的 ComfyUI 路径自动推导，不再支持手动配置 */}
       <section className="mb-4 rounded-xl border border-border bg-bg p-4">
         <div className="mb-2 flex items-center justify-between">
           <label className="block text-sm font-medium text-ink">
-            自定义节点目录（CUSTOM_NODES_PATH）
+            自定义节点目录
           </label>
           <span
             className="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
@@ -47,25 +43,28 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
             🔒 只读
           </span>
         </div>
-        <p className="mb-2 text-xs text-muted-foreground">
-          每行一个目录（也可英文逗号分隔）。支持相对（项目根）或绝对路径。解析器只读取这些目录、绝不修改其中任何文件。
-        </p>
-        <textarea
-          value={pathsText}
-          onChange={(event) => setPathsText(event.target.value)}
-          rows={Math.max(2, Math.min(savedPaths.length || 2, 6))}
-          placeholder={"scripts/fixtures/sample_custom_nodes\nD:/ComfyUI/custom_nodes"}
-          className="mb-2 w-full resize-none rounded-lg border border-border bg-surface p-3 font-mono text-xs text-ink outline-none placeholder:text-gray-500 focus:border-primary"
-        />
-        <div className="mb-4 flex items-center justify-between text-xs">
+        {savedPaths.length > 0 ? (
+          <div className="space-y-1">
+            {savedPaths.map((path) => (
+              <div
+                key={path}
+                className="truncate rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-ink"
+                title={path}
+              >
+                {path}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            未找到自定义节点目录 —— 请先在 设置 → 创作后端 中配置 ComfyUI
+            安装路径，目录会自动推导为{" "}
+            <code className="font-mono">&lt;comfyuiPath&gt;/custom_nodes</code>。
+          </p>
+        )}
+        <div className="mt-3 flex items-center justify-between text-xs">
           <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-            {saving && (
-              <span className="flex items-center gap-1.5 text-primary">
-                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
-                自动保存中…
-              </span>
-            )}
-            {!saving && saveErr && <span className="text-red-400">⚠ {saveErr}</span>}
+            {saveErr && <span className="text-red-400">⚠ {saveErr}</span>}
             {/* Directory overview chips — show totals + outdated count when any subpackage is detected. */}
             {totalAcrossParents.total > 0 && (
               <>
@@ -90,17 +89,11 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                 )}
               </>
             )}
-            {!saving && !saveErr && loading && (
+            {!saveErr && loading && (
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <span className="inline-block h-2 w-2 animate-spin rounded-full border border-muted border-t-transparent" />
                 加载中…
               </span>
-            )}
-            {!saving && !saveErr && !loading && savedAt && totalAcrossParents.total === 0 && (
-              <span className="text-emerald-400">✓ 已自动保存 {savedAt}</span>
-            )}
-            {!saving && !saveErr && !loading && !savedAt && totalAcrossParents.total === 0 && (
-              <span>未配置 — 上面输入至少一个目录</span>
             )}
           </div>
           <button
@@ -143,7 +136,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
         </div>
         {savedPaths.length === 0 && !loading && (
           <div className="rounded-lg border border-dashed border-border bg-bg/50 p-4 text-center text-xs text-muted-foreground">
-            上面输入至少一个目录后，会自动发现其下的节点包。
+            配置 ComfyUI 安装路径后，会自动发现其下的节点包。
           </div>
         )}
         <div className="space-y-2">

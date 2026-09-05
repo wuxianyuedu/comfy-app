@@ -14,17 +14,9 @@ export function WorkflowLibraryHeader({
   onToggleImport,
 }: WorkflowLibraryHeaderProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/6 px-5 py-4">
-      <div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/6 px-5 py-2.5">
+      <div className="flex items-center gap-2">
         <h1 className="font-title text-lg font-bold text-gray-100">工作流库</h1>
-        <p className="mt-0.5 text-xs text-gray-500">
-          导入本机 ComfyUI 的自定义工作流：支持「导出(API
-          格式)」与「导出(工作流格式)」两种 JSON。
-          <span className="ml-1 text-cyan-300/80">
-            本地工作流自动取自 设置 → 创作后端 中配置的 ComfyUI 路径下的
-            workflows 目录。
-          </span>
-        </p>
       </div>
       <div className="flex items-center gap-2">
         <button

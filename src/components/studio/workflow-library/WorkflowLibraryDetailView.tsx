@@ -11,6 +11,7 @@ import { DETAIL_TABS } from "./workflow-library-detail-config";
 import { TabButton } from "./sections/DetailControls";
 import { DetailBody } from "./sections/DetailBody";
 import { DetailHeader } from "./sections/DetailHeader";
+import { MetaEditor } from "./sections/MetaEditor";
 
 export function WorkflowLibraryDetailView({
   controller,
@@ -19,6 +20,7 @@ export function WorkflowLibraryDetailView({
 }) {
   const {
     workflow,
+    metaEditor,
     activeTab,
     setActiveTab,
     sourceOpen,
@@ -65,6 +67,8 @@ export function WorkflowLibraryDetailView({
         onOpenSource={openSource}
         onUse={actions.use}
       />
+
+      <MetaEditor meta={metaEditor} />
 
       <div className="flex border-b border-white/6 px-5">
         {DETAIL_TABS.map((tab) => (

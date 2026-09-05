@@ -2,14 +2,12 @@
 
 import { Search, Download } from "lucide-react";
 import {
-  ago,
   deriveFormatFlags,
   deriveSyncFlags,
   isTechnicalName,
   type PendingRow,
   type WorkflowRow,
 } from "./workflow-library-config";
-import { WorkflowIOThumb } from "./WorkflowLibraryHelpers";
 import { TaskTypeChip } from "../ui/TaskTypeChip";
 import { SourceTag } from "../ui/SourceTag";
 
@@ -140,14 +138,16 @@ function WorkflowListItem({
         <div className="mb-1.5 flex items-start justify-between gap-2">
           <span
             className={[
-              "truncate text-[12px] leading-tight font-medium",
+              "min-w-0 flex-1 truncate text-[12px] leading-tight font-medium",
               isTech ? "font-mono text-white/70" : "text-white/90",
             ].join(" ")}
             title={workflow.name}
           >
             {workflow.name}
           </span>
-          <SourceTag source={workflow.source} />
+          <span className="ml-auto flex w-fit shrink-0">
+            <SourceTag source={workflow.source} />
+          </span>
         </div>
 
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -167,23 +167,17 @@ function WorkflowListItem({
           )}
         </div>
 
-        <div className="flex items-center justify-between">
-          <WorkflowIOThumb io={workflow.workflowIO} />
-          <div className="flex items-center gap-1.5">
-            {!usable && (
-              <span className="rounded bg-red-500/12 px-1 py-px text-[9px] text-red-300">
-                不可执行
-              </span>
-            )}
-            {canResync && (
-              <span className="rounded bg-amber-500/12 px-1 py-px text-[9px] text-amber-300">
-                {missing ? "已丢失" : "有更新"}
-              </span>
-            )}
-            <span className="text-[9px] text-white/30">
-              {ago(workflow.createdAt)}
+        <div className="flex items-center justify-end gap-1.5">
+          {!usable && (
+            <span className="rounded bg-red-500/12 px-1 py-px text-[9px] text-red-300">
+              不可执行
             </span>
-          </div>
+          )}
+          {canResync && (
+            <span className="rounded bg-amber-500/12 px-1 py-px text-[9px] text-amber-300">
+              {missing ? "已丢失" : "有更新"}
+            </span>
+          )}
         </div>
       </button>
     </li>
