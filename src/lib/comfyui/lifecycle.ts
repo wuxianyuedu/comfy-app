@@ -19,19 +19,13 @@ import path from "path";
 import { COMFYUI_DEFAULT_PORT, getSettingsSync, saveSettings } from "../app-settings";
 import { resolveComfyBase } from "./client";
 import { logger } from "~/server/lib/logger";
+import { resolveComfyLaunchPlan } from "./launch-path";
 
 export type ComfyUiStatus = {
   up: boolean;
   base: string | null;
   starting: boolean;
   pid?: number;
-};
-
-type LaunchPlan = {
-  cmd: string;
-  baseArgs: string[];
-  cwd: string;
-  mainPy: string;
 };
 
 type EnsureResult = { ok: boolean; base: string | null; detail: string };
@@ -106,49 +100,6 @@ export function getComfyUiStatus(): ComfyUiStatus {
   };
 }
 
-/**
- * 从 comfyuiPath 推导启动命令。支持三种常见布局（详见 app-settings 的注释），
- * 命中不了返回可读的错误信息而不是裸异常。
- */
-/**
- * 选择解释器：一律用 python.exe，保留控制台窗口，能实时看到 ComfyUI 的打印输出。
- * 绝不用 pythonw.exe——它会彻底吞掉 stdout/stderr，出问题时看不到任何日志，难以排查。
- * 工坊/工作室只把 ComfyUI 当后端服务（python.exe + main.py 起的是 server，不是桌面版 GUI）。
- */
-function resolveInterp(dir: string): string | null {
-  const p = path.join(dir, "python.exe");
-  return fs.existsSync(p) ? p : null;
-}
-
-function resolveLaunchPlan(installDir: string): LaunchPlan | { error: string } {
-  const root = path.resolve(installDir);
-  const candidates: Array<{ pyDir: string; main: string }> = [
-    { pyDir: path.join(root, "python_embeded"), main: path.join(root, "main.py") },
-    // ComfyUI Desktop 的 vendor 构建：uv 在 ComfyUI/.venv 里装依赖（含 torch），
-    // 必须用这个解释器。standalone-env 只是基础解释器（site-packages 是空的，
-    // 直接用它必报 No module named 'torch'）。所以 vendor venv 必须排在 standalone-env 之前。
-    { pyDir: path.join(root, "ComfyUI", ".venv", "Scripts"), main: path.join(root, "ComfyUI", "main.py") },
-    { pyDir: path.join(root, ".venv", "Scripts"), main: path.join(root, "main.py") },
-    { pyDir: path.join(root, "venv", "Scripts"), main: path.join(root, "main.py") },
-    // 最后兜底：桌面版基础解释器（无 torch，仅当以上都缺失时才用——多半会启动失败）
-    { pyDir: path.join(root, "standalone-env"), main: path.join(root, "ComfyUI", "main.py") },
-  ];
-  for (const c of candidates) {
-    const py = resolveInterp(c.pyDir);
-    if (py && fs.existsSync(/*turbopackIgnore: true*/ c.main)) {
-      return { cmd: py, baseArgs: ["-s", c.main], cwd: path.dirname(c.main), mainPy: c.main };
-    }
-  }
-  if (!fs.existsSync(root)) {
-    return { error: `ComfyUI 路径不存在：${root}（请在设置页检查）` };
-  }
-  return {
-    error:
-      `在 ${root} 下找不到可启动的 ComfyUI（需要 main.py + python）。` +
-      "支持：python_embeded\\python.exe + main.py（便携版）、standalone-env\\python.exe + ComfyUI\\main.py（桌面版）、.venv\\Scripts\\python.exe + main.py。",
-  };
-}
-
 /** 把 extraArgs 字符串切成参数数组（支持双引号包裹含空格的路径）。 */
 function splitArgs(s: string): string[] {
   const out: string[] = [];
@@ -207,7 +158,7 @@ export async function ensureComfyUiReady(
     };
   }
   st.starting = (async () => {
-    const plan = resolveLaunchPlan(settings.comfyuiPath);
+    const plan = resolveComfyLaunchPlan(settings.comfyuiPath);
     if ("error" in plan) {
       note(plan.error);
       return { ok: false, base: null, detail: plan.error };
