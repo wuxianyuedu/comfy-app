@@ -7,6 +7,14 @@ import {
   probeComfyUi,
   stopComfyUiProcess,
 } from "@/lib/comfyui/lifecycle";
+import {
+  ensureDrizzleStudioUp,
+  isDrizzleStudioStarting,
+  openDrizzleStudio,
+  probeDrizzleStudio,
+  stopDrizzleStudio,
+  DRIZZLE_STUDIO_DEFAULT_PORT,
+} from "@/lib/drizzle-studio/lifecycle";
 
 export const settingRouter = createTRPCRouter({
   /** GET /api/settings */
@@ -66,5 +74,27 @@ export const settingRouter = createTRPCRouter({
    *  Windows 必须 taskkill /T /F，POSIX 用 kill(-pid)。 */
   comfyStop: authedProcedure.mutation(async () => {
     return stopComfyUiProcess();
+  }),
+
+  /** Drizzle Studio 运行状态（设置页「数据库」分区） */
+  dbStudioStatus: authedProcedure.query(async () => {
+    const port = DRIZZLE_STUDIO_DEFAULT_PORT;
+    const up = await probeDrizzleStudio(port);
+    return { up, port, starting: isDrizzleStudioStarting() };
+  }),
+
+  /** 启动 Drizzle Studio（设置页按钮）：未运行时解析 drizzle-kit 并拉起等待就绪 */
+  dbStudioStart: authedProcedure.mutation(async () => {
+    return ensureDrizzleStudioUp();
+  }),
+
+  /** 关闭 Drizzle Studio（设置页按钮）：杀整棵进程树 */
+  dbStudioStop: authedProcedure.mutation(async () => {
+    return stopDrizzleStudio();
+  }),
+
+  /** 用系统默认浏览器打开 Drizzle Studio 回连地址 */
+  dbStudioOpen: authedProcedure.mutation(async () => {
+    return openDrizzleStudio();
   }),
 });

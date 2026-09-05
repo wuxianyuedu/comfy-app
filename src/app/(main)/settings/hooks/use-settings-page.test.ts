@@ -98,6 +98,29 @@ const mockRouter = t.router({
     comfyStart: t.procedure.mutation(
       () => behavior.comfyStart ?? { ok: true, detail: "已启动" },
     ),
+    comfyStop: t.procedure.mutation(() => ({
+      ok: true,
+      detail: "已关闭",
+    })),
+    /* Drizzle Studio：新增分区拉起的 status 查询与动作，均需有 mock handler，
+     * 否则 onUnhandledRequest:error 会让渲染整个 hook 的用例全挂 */
+    dbStudioStatus: t.procedure.query(() => ({
+      up: false,
+      starting: false,
+      port: 4983,
+    })),
+    dbStudioStart: t.procedure.mutation(() => ({
+      ok: true,
+      detail: "已启动",
+    })),
+    dbStudioStop: t.procedure.mutation(() => ({
+      ok: true,
+      detail: "已关闭",
+    })),
+    dbStudioOpen: t.procedure.mutation(() => ({
+      ok: true,
+      detail: "已打开",
+    })),
   }),
   llm: t.router({
     configGet: t.procedure.query(() => {
