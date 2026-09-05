@@ -154,6 +154,7 @@ describe("workshop orchestrator 全流程", () => {
         appearance: "短发",
         costume: "",
         personality: "活泼",
+        temperament: "",
         styleTags: [],
         positivePrompt: "",
         negativePrompt: "",

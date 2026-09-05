@@ -26,6 +26,7 @@ export interface ParsedCharacterDraft {
   appearance: string;
   costume: string;
   personality: string;
+  temperament: string;
   styleTags: string[];
   /** 角色卡 JSON 导入时可携带;工具解析产生的草稿为 undefined */
   skillSlug?: string;
@@ -143,7 +144,7 @@ function parseCharacterEntry(raw: string): ParsedCharacterDraft | null {
     .trim();
   if (!name || name.length > 20) return null;
   rest = rest.replace(/^[\s\-—–:：.。、,，]+/, "").trim();
-  return { name, ageGender, appearance: rest, costume: "", personality: "", styleTags: [] };
+  return { name, ageGender, appearance: rest, costume: "", personality: "", temperament: "", styleTags: [] };
 }
 
 /** 在 text 中出现的已知角色名(保持传入顺序,去重) */
@@ -382,6 +383,7 @@ export function parseExtractedCharacters(text: string): ParsedCharacterDraft[] {
       appearance: asStr(item.appearance),
       costume: asStr(item.costume),
       personality: asStr(item.personality),
+      temperament: asStr(item.temperament),
       styleTags,
     });
   }
@@ -461,6 +463,7 @@ export function parseImportedCharacterCards(raw: string): ParsedCharacterDraft[]
       appearance: asStr(item.appearance),
       costume: asStr(item.costume),
       personality: asStr(item.personality),
+      temperament: asStr(item.temperament),
       styleTags,
       skillSlug: skillSlug || undefined,
       params: isRecord(item.params) ? item.params : undefined,
@@ -501,6 +504,7 @@ export function mergeCharacterDrafts(
       appearance: draft.appearance,
       costume: draft.costume,
       personality: draft.personality,
+      temperament: draft.temperament,
       styleTags: [...draft.styleTags],
       skillSlug: draft.skillSlug,
       positivePrompt: "",

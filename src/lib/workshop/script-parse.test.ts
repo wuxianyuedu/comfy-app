@@ -48,6 +48,7 @@ function makeCharacter(overrides: Partial<Character> = {}): Character {
     appearance: "",
     costume: "",
     personality: "",
+    temperament: "",
     styleTags: [],
     positivePrompt: "",
     negativePrompt: "",
@@ -261,8 +262,8 @@ describe("mergeCharacterDrafts 草稿并入角色列表", () => {
     const res = mergeCharacterDrafts(
       existing,
       [
-        { name: "小满", ageGender: "", appearance: "", costume: "", personality: "", styleTags: [] },
-        { name: "阿声", ageGender: "", appearance: "复古收音机", costume: "", personality: "神秘", styleTags: ["厚涂"] },
+        { name: "小满", ageGender: "", appearance: "", costume: "", personality: "", temperament: "", styleTags: [] },
+        { name: "阿声", ageGender: "", appearance: "复古收音机", costume: "", personality: "神秘", temperament: "", styleTags: ["厚涂"] },
       ],
       STYLES
     );
