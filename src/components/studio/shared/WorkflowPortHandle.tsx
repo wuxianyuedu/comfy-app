@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, useNodeId } from "@xyflow/react";
 
 /* ── Workflow-canvas endpoint styling (compact canvas mode) ──
  * Port colours per the landed design spec: STRING/INT → neutral grey,
@@ -64,36 +64,47 @@ export function PortHandle({
    *  overridden here. */
   style?: React.CSSProperties;
 }) {
+  /* React Flow 的 <Handle> 只能在自定义 Node 内渲染——它内部靠 useNodeId
+   * 取宿主节点 id，拿不到就抛 error#010（"No node id found"）。IO 预览
+   * 面板、工作流库预览这类「非节点」表面复用同一套行组件时没有该上下文，
+   * 此时退化为几何完全一致的装饰圆点（预览不可连线，视觉不变）。 */
+  const nodeId = useNodeId();
   const color = portColorFor(type);
   // Ardot v2：输入端点描边 `#4D4D59`（卡片/页面底色上都可读），
   // 输出端点描边用卡片底色 `#16161C` 形成「半圆在外/半圆在内」观感。
   const stroke = dir === "out" ? "#16161C" : PORT_STROKE;
+  const dotStyle: React.CSSProperties = {
+    position: "absolute",
+    width: 12,
+    height: 12,
+    borderRadius: 9999,
+    background: color,
+    border: `1px solid ${stroke}`,
+    // Ardot 稿：`DROP_SHADOW` rgba(0,0,0,0.25) y4 blur4，节点下方轻投影。
+    boxShadow: "0 4px 4px rgba(0,0,0,0.25)",
+    // v3: Handle 圆心必须挂在 subrow 中心才能精确对齐
+    // Ardot 稿 y=91/177/265（PortRow h=86 + PortRow3 h=33 单行结构）。
+    // 父元素 (subrow) 必须 `relative`，否则会找更外层的 row wrapper，
+    // 圆心落在 row 50% 而不是 subrow 50%，导致圆点偏下。
+    ...(dir === "in"
+      ? { left: -6, top: "50%", transform: "translateY(-50%)" }
+      : { right: -6, top: "50%", transform: "translateY(-50%)" }),
+    // v4: 行高被严格固定后，Handle 圆心由 caller 用
+    // 像素级 top 直接锁（PortRow subrow 圆心 y_in_row=14；PortRowInt
+    // 单行圆心 y_in_row=16.5；OutputRow y_in_row=14）。
+    ...extraStyle,
+  };
+
+  if (!nodeId) {
+    return <span aria-hidden style={dotStyle} />;
+  }
+
   return (
     <Handle
       type={dir === "in" ? "target" : "source"}
       position={dir === "in" ? Position.Left : Position.Right}
       id={id}
-      style={{
-        position: "absolute",
-        width: 12,
-        height: 12,
-        borderRadius: 9999,
-        background: color,
-        border: `1px solid ${stroke}`,
-        // Ardot 稿：`DROP_SHADOW` rgba(0,0,0,0.25) y4 blur4，节点下方轻投影。
-        boxShadow: "0 4px 4px rgba(0,0,0,0.25)",
-        // v3: Handle 圆心必须挂在 subrow 中心才能精确对齐
-        // Ardot 稿 y=91/177/265（PortRow h=86 + PortRow3 h=33 单行结构）。
-        // 父元素 (subrow) 必须 `relative`，否则会找更外层的 row wrapper，
-        // 圆心落在 row 50% 而不是 subrow 50%，导致圆点偏下。
-        ...(dir === "in"
-          ? { left: -6, top: "50%", transform: "translateY(-50%)" }
-          : { right: -6, top: "50%", transform: "translateY(-50%)" }),
-        // v4: 行高被严格固定后，Handle 圆心由 caller 用
-        // 像素级 top 直接锁（PortRow subrow 圆心 y_in_row=14；PortRowInt
-        // 单行圆心 y_in_row=16.5；OutputRow y_in_row=14）。
-        ...extraStyle,
-      }}
+      style={dotStyle}
     />
   );
 }
