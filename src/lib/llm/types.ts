@@ -20,6 +20,8 @@ export interface LLMConfig {
   /** OpenAI-compatible base URL, e.g. http://localhost:11434/v1 or https://api.openai.com/v1 */
   baseUrl: string;
   model: string;
+  /** 本地 Ollama 的候选模型名（设置页可配置多个）；仅 local 提供方使用 */
+  extraModels?: string[] | null;
   /** Only used by remote providers; never returned to the browser. */
   apiKey?: string | null;
   /** 全局默认温度（fallback） */
@@ -34,6 +36,8 @@ export interface LLMConfigView {
   provider: LLMProviderType;
   baseUrl: string;
   model: string;
+  /** 本地 Ollama 的候选模型名（脱敏视图同步下发，供工坊内切换） */
+  extraModels?: string[] | null;
   temperature: number;
   temperatureByTask?: Record<TaskType, number> | null;
   maxTokens: number;
@@ -44,6 +48,16 @@ export interface LLMMessage {
   role: "system" | "user" | "assistant";
   content: string;
 }
+
+/** 工坊阶段的 key —— 供按阶段挑选模型 / 提示各阶段能力 */
+export const WORKSHOP_STAGES = [
+  { id: "script", label: "剧本" },
+  { id: "character", label: "角色卡" },
+  { id: "storyboard", label: "分镜" },
+  { id: "prompt", label: "图片提示词" },
+] as const;
+
+export type WorkshopStage = (typeof WORKSHOP_STAGES)[number]["id"];
 
 export interface LLMRequestOptions {
   provider?: LLMProviderType;

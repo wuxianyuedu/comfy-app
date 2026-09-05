@@ -7,6 +7,7 @@ const ENV_DEFAULTS: LLMConfig = {
   provider: (process.env.LLM_PROVIDER as LLMProviderType) || "local",
   baseUrl: process.env.LLM_BASE_URL ?? "http://localhost:11434/v1",
   model: process.env.LLM_MODEL ?? "llama3.1",
+  extraModels: null,
   apiKey: process.env.LLM_API_KEY ?? null,
   temperature: Number(process.env.LLM_TEMPERATURE ?? 0.7),
   maxTokens: Number(process.env.LLM_MAX_TOKENS ?? 2048),
@@ -29,6 +30,11 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       if (row.provider) cfg.provider = row.provider as LLMProviderType;
       if (row.baseUrl) cfg.baseUrl = row.baseUrl;
       if (row.model) cfg.model = row.model;
+      // 候选模型列表(Json 字段，prisma 生成类型不含该列，先以 unknown 收窄)
+      const rawExtra = (row as Record<string, unknown>).extraModels;
+      if (Array.isArray(rawExtra)) {
+        cfg.extraModels = rawExtra.filter((m): m is string => typeof m === "string" && m.trim() !== "");
+      }
       if (row.apiKey) cfg.apiKey = row.apiKey;
       if (row.temperature != null) cfg.temperature = row.temperature;
       // temperatureByTask 是 Json 字段，prisma generate 后类型会自动包含；先用 any 绕过

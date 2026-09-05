@@ -40,12 +40,8 @@ export function useLLMConfig(): LLMConfigController {
 }
 
 export interface LLMConfigSaveInput {
-  provider: "local" | "remote";
-  baseUrl: string;
+  /** 工坊弹窗只切模型；其余字段省略 → 服务端保持原值不变 */
   model: string;
-  apiKey?: string;
-  temperature: number;
-  maxTokens: number;
 }
 
 export interface LLMConfigSaveController {
@@ -64,10 +60,14 @@ export function useLLMConfigSave(): LLMConfigSaveController {
       try {
         const data = await saveCfg.mutateAsync(input);
         const cfg = data.config;
+        const rawExtra: unknown = (cfg as Record<string, unknown>).extraModels;
         return {
           ...cfg,
           hasApiKey: !!cfg.apiKey,
           provider: cfg.provider as "local" | "remote",
+          extraModels: Array.isArray(rawExtra)
+            ? rawExtra.filter((m): m is string => typeof m === "string")
+            : [],
           temperatureByTask:
             (cfg.temperatureByTask as
               Record<string, number> | null | undefined) ?? undefined,
