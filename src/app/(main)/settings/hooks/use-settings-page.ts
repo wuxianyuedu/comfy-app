@@ -193,24 +193,29 @@ export function useSettingsPage(): SettingsPageController {
    * 比 useEffect 少一次多余渲染，也不会闪旧值。 */
   const llmConfig = llmQ.data?.config ?? null;
   const [prevLlmConfig, setPrevLlmConfig] = useState(llmConfig);
-  if (llmConfig !== prevLlmConfig) {
-    setPrevLlmConfig(llmConfig);
-    if (llmConfig) {
-      setLlmDraft({
-        ...llmConfig,
-        apiKey: llmConfig.apiKey ?? null,
-        extraModels: Array.isArray(llmConfig.extraModels)
-          ? llmConfig.extraModels.filter((m) => m.trim() !== "" && m !== llmConfig.model)
-          : [],
-        temperatureByTask: llmConfig.temperatureByTask ?? undefined,
-      });
-    }
+  /* 播种条件：数据引用变化（保存后 refetch 回写）时重新播种；或数据已就绪
+   * 而草稿仍为空（含首次挂载即命中 tRPC 缓存的场景）时播种。若只用引用对比，
+   * 关闭再打开时 prev 初值被缓存命中，分支永不触发，草稿一直为空，页面
+   * 会落到「配置数据未就绪」。 */
+  const llmChanged = llmConfig !== prevLlmConfig;
+  if (llmChanged) setPrevLlmConfig(llmConfig);
+  if (llmConfig && (llmChanged || !llmDraft)) {
+    setLlmDraft({
+      ...llmConfig,
+      apiKey: llmConfig.apiKey ?? null,
+      extraModels: Array.isArray(llmConfig.extraModels)
+        ? llmConfig.extraModels.filter((m) => m.trim() !== "" && m !== llmConfig.model)
+        : [],
+      temperatureByTask: llmConfig.temperatureByTask ?? undefined,
+    });
   }
   const settingsData = settingsQ.data?.settings ?? null;
   const [prevSettingsData, setPrevSettingsData] = useState(settingsData);
-  if (settingsData !== prevSettingsData) {
-    setPrevSettingsData(settingsData);
-    if (settingsData) setSettingsDraft(settingsData);
+  /* 同 llm 播种：缓存命中 / refetch 两种情形都要能落到草稿，避免落到降级 UI。 */
+  const settingsChanged = settingsData !== prevSettingsData;
+  if (settingsChanged) setPrevSettingsData(settingsData);
+  if (settingsData && (settingsChanged || !settingsDraft)) {
+    setSettingsDraft(settingsData);
   }
 
   /* ── Ollama 探测 ───────────────────────────────────────── */
