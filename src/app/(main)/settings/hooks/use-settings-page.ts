@@ -126,6 +126,10 @@ export interface SettingsPageController {
   comfyLogText: string;
   comfyLogActive: boolean;
   refreshComfyLog: () => Promise<void>;
+  /* Drizzle Studio 启动日志（log/drizzle-studio-runtime.log）：同 ComfyUI，可跟随/刷新 */
+  dbStudioLogText: string;
+  dbStudioLogActive: boolean;
+  refreshDbStudioLog: () => Promise<void>;
   /* Ollama 关闭（启动已有 startOllama） */
   ollamaStopping: boolean;
   stopOllama: () => Promise<void>;
@@ -492,6 +496,55 @@ export function useSettingsPage(): SettingsPageController {
     await pullComfyLog("replace");
   }, [pullComfyLog]);
 
+  /* ── Drizzle Studio 启动日志 ────────────────────────────
+   * drizzle-studio/lifecycle.ts 会把 spawn 参数与子进程 stdout/stderr 追加进
+   * log/drizzle-studio-runtime.log；这里在启动期间每秒跟随尾部（同 ComfyUI）。 */
+  const dbStudioLogOffsetRef = useRef(0);
+  const [dbStudioLogText, setDbStudioLogText] = useState("");
+  const dbStudioLogActive =
+    dbStudioStarting || !!dbStudioStatusQ.data?.starting;
+
+  const applyDbStudioLogSlice = useCallback(
+    (mode: "append" | "replace", slice: FileLogSlice) => {
+      const cleaned = slice.content.replace(COMFY_LOG_ANSI_RE, "");
+      setDbStudioLogText((prev) =>
+        capComfyLog(mode === "replace" ? cleaned : prev + cleaned),
+      );
+    },
+    [],
+  );
+
+  const pullDbStudioLog = useCallback(
+    async (mode: "append" | "replace") => {
+      const slice = await fetchFileLogSlice(
+        "drizzle-studio-runtime",
+        dbStudioLogOffsetRef.current,
+      );
+      if (!slice) return;
+      const replace =
+        mode === "replace" ||
+        (slice.offset === 0 && dbStudioLogOffsetRef.current > 0);
+      dbStudioLogOffsetRef.current = slice.size;
+      applyDbStudioLogSlice(replace ? "replace" : "append", slice);
+    },
+    [applyDbStudioLogSlice],
+  );
+
+  useEffect(() => {
+    if (!dbStudioLogActive) return;
+    void pullDbStudioLog("append");
+    const timer = setInterval(
+      () => void pullDbStudioLog("append"),
+      COMFY_LOG_POLL_MS,
+    );
+    return () => clearInterval(timer);
+  }, [dbStudioLogActive, pullDbStudioLog]);
+
+  const refreshDbStudioLog = useCallback(async () => {
+    dbStudioLogOffsetRef.current = 0;
+    await pullDbStudioLog("replace");
+  }, [pullDbStudioLog]);
+
   const stopOllamaFn = useCallback(async () => {
     setOllamaStopping(true);
     try {
@@ -784,6 +837,9 @@ export function useSettingsPage(): SettingsPageController {
     comfyLogText,
     comfyLogActive,
     refreshComfyLog,
+    dbStudioLogText,
+    dbStudioLogActive,
+    refreshDbStudioLog,
     ollamaStopping,
     stopOllama: stopOllamaFn,
     saving,
