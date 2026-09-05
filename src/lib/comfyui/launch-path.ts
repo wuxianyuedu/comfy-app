@@ -54,20 +54,37 @@ export function resolveComfyLaunchPlan(
     };
   }
 
+  // 检测是否为 ComfyUI Desktop 实例根（含 .comfyui-desktop-* 或 manifest.json）。
+  // Desktop 实例的 canonical 运行时是 standalone-env；源码内若有 .venv 只是
+  // 附带残留，不应优先于 standalone-env。
+  const isDesktopInstance =
+    exists(/*turbopackIgnore: true*/ path.join(root, ".comfyui-desktop-2")) ||
+    exists(/*turbopackIgnore: true*/ path.join(root, "manifest.json"));
+
   // 对每个源码根枚举候选解释器目录。
-  // 优先级：python_embeded（便携）→ .venv/venv（源码内 venv/vendor）→
-  // standalone-env（桌面实例根）——保持原实现 vendor-venv 优先于 standalone-env。
+  // Desktop 实例：standalone-env 优先（ComfyUI 的官方运行时）。
+  // 非 Desktop：python_embeded（便携）→ .venv/venv（源码内）→ standalone-env。
   for (const src of sourceRoots) {
     const parent = path.dirname(src); // 桌面版场景下 = 实例根
-    const pyDirs = [
-      path.join(src, "python_embeded"), // 便携：源码根内
-      path.join(root, "python_embeded"), // 便携：便携根（main.py 在 ComfyUI/ 子目录）
-      path.join(src, ".venv", "Scripts"), // venv/vendor：源码根内（含 torch）
-      path.join(src, "venv", "Scripts"), // venv：源码根内
-      path.join(root, "standalone-env"), // 桌面：实例根
-      path.join(parent, "standalone-env"), // 桌面：父级实例根（兼容配了源码根）
-      src, // 极简：源码根直接带 python.exe
-    ];
+    const pyDirs = isDesktopInstance
+      ? [
+          path.join(root, "standalone-env"), // 桌面：实例根的官方运行时
+          path.join(parent, "standalone-env"), // 桌面：父级实例根（兼容配了源码根）
+          path.join(src, ".venv", "Scripts"), // 兜底：源码内 venv
+          path.join(src, "venv", "Scripts"), // 兜底：源码内 venv
+          path.join(src, "python_embeded"), // 便携兜底
+          path.join(root, "python_embeded"),
+          src, // 极简：源码根直接带 python.exe
+        ]
+      : [
+          path.join(src, "python_embeded"), // 便携：源码根内
+          path.join(root, "python_embeded"), // 便携：便携根（main.py 在 ComfyUI/ 子目录）
+          path.join(src, ".venv", "Scripts"), // venv/vendor：源码根内（含 torch）
+          path.join(src, "venv", "Scripts"), // venv：源码根内
+          path.join(root, "standalone-env"), // 桌面：实例根
+          path.join(parent, "standalone-env"), // 桌面：父级实例根（兼容配了源码根）
+          src, // 极简：源码根直接带 python.exe
+        ];
     for (const pyDir of pyDirs) {
       const py = path.join(pyDir, "python.exe");
       if (exists(/*turbopackIgnore: true*/ py)) {
