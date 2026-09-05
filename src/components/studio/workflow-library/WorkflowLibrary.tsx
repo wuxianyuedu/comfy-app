@@ -6,7 +6,6 @@ import { ModelTagManager } from "../ModelTagManager";
 import { DeleteWorkflowModal } from "../DeleteWorkflowModal";
 import { WorkflowImportPanel } from "../WorkflowImportPanel";
 import { WorkflowLibraryHeader } from "./WorkflowLibraryHeader";
-import { WorkflowLibraryFilters } from "./WorkflowLibraryFilters";
 import { WorkflowLibraryList } from "./WorkflowLibraryList";
 import { WorkflowLibraryDetail } from "./WorkflowLibraryDetail";
 import { useWorkflowLibrary } from "./hooks/use-workflow-library";
@@ -53,7 +52,19 @@ export function WorkflowLibrary({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <WorkflowLibraryHeader onToggleImport={c.toggleImport} />
+      <WorkflowLibraryHeader
+        onToggleImport={c.toggleImport}
+        sourceFilter={c.sourceFilter}
+        onSourceFilterChange={c.setSourceFilter}
+        sourceCounts={c.sourceCounts}
+        typeFilter={c.typeFilter}
+        onTypeFilterChange={c.setTypeFilter}
+        typeCounts={c.typeCounts}
+        modelFilter={c.modelFilter}
+        onModelFilterChange={c.setModelFilter}
+        modelTags={c.modelTags}
+        onManageModels={() => c.setShowModelManager(true)}
+      />
 
       {c.showImport && (
         <WorkflowImportPanel
@@ -98,19 +109,6 @@ export function WorkflowLibrary({
         </div>
       )}
 
-      <WorkflowLibraryFilters
-        sourceFilter={c.sourceFilter}
-        onSourceFilterChange={c.setSourceFilter}
-        sourceCounts={c.sourceCounts}
-        typeFilter={c.typeFilter}
-        onTypeFilterChange={c.setTypeFilter}
-        typeCounts={c.typeCounts}
-        modelFilter={c.modelFilter}
-        onModelFilterChange={c.setModelFilter}
-        modelTags={c.modelTags}
-        onManageModels={() => c.setShowModelManager(true)}
-      />
-
       <div className="flex min-h-0 flex-1">
         <WorkflowLibraryList
           workflows={c.workflows}
@@ -126,6 +124,9 @@ export function WorkflowLibrary({
         <div className="flex-1">
           <WorkflowLibraryDetail
             workflow={c.selectedRow}
+            allModelTags={c.modelTags}
+            onPatchModes={c.patchModes}
+            onPatchModelTags={c.patchModelTags}
             onUse={c.handleUse}
             onEdit={c.handleEdit}
             onDelete={c.handleDeleteClick}
