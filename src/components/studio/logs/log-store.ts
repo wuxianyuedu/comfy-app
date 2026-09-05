@@ -154,15 +154,30 @@ export function captureLocation(): string | undefined {
 }
 
 /**
- * 过滤 React Query 内部查询日志（如 `%c << query #488 %cworkflowModel.list`）。
- * 这些日志会在 tRPC 组件重渲染时大量产生，淹没业务日志；但它们对业务排错
- * 没有价值，因此直接丢弃。
+ * 过滤 tRPC loggerLink / React Query 内部追踪日志。
+ *
+ * tRPC 客户端在 dev 模式通过 loggerLink 把每次调用打成 console 日志，形如
+ * `%c<< mutation #43 %cworkflow.update` 或 `%c>> query #1 ...`。这些日志随
+ * 组件重渲染与保存操作大量产生，会淹没真正的业务日志；但 LoggerLink 对网络排错
+ * 本身有价值（保留在 console），只是不写进日志面板。因此这里仅做面板侧丢弃。
+ *
+ * 同时兜底 tRPC 在 mutation 落库/重排后重新包装的塌缩形态（形如
+ * `[[ << mutation #43 ]workflow.update {}`），它会被 React devtools 以
+ * "Console Error" 形式从 LogProvider 转发帧抛到面板，同样属于无害框架噪音。
  */
 export function isReactQueryLog(args: unknown[]): boolean {
-  if (args.length < 2) return false;
-  const first = args[0];
-  if (typeof first !== "string") return false;
-  return /^\s*%c\s*(<<|>>)\s*query\s+#\d+/i.test(first);
+  if (args.length === 0) return false;
+  // 标准形态：tRPC loggerLink 的格式串 + 逐帧样式参数，args[0] 即为追踪签名。
+  // 真实追踪至少两个参数（格式串 + 样式），单参数的不是追踪，避免误吞业务文案。
+  if (args.length >= 2) {
+    const first = args[0];
+    if (typeof first === "string" && /^\s*%c\s*(?:<<|>>)\s*(?:query|mutation)\s*#\d+/i.test(first)) return true;
+  }
+  // 塌缩/重包装形态：loggerLink 的 %c 样式与逐帧参数被 React devtools 吞并，
+  // 合并成带 "[[" 前缀的单串（形如 `[[ << mutation #43 ]workflow.update {}`），
+  // 并经由 LogProvider 转发帧以 "Console Error" 冒到面板。同属无害框架噪音。
+  const text = serialize(args);
+  return /^[\s\[]*(?:<<|>>)\s*(?:query|mutation)\s*#\d+/i.test(text);
 }
 
 /**
