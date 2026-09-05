@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
+import { getExitPolicy } from "@/lib/app-settings";
+import { spawnManaged } from "@/lib/process-launch";
 import { spawn } from "node:child_process";
 
 export const runtime = "nodejs";
@@ -85,8 +87,38 @@ async function ollamaServiceRunning(): Promise<boolean> {
   }
 }
 
-/** spawn 的 Promise 包装——观察进程是否在 SPAWN_GRACE_MS 内秒退。 */
-function spawnOllamaServe(exe: string): Promise<{ ok: boolean; detail: string }> {
+/**
+ * 拉起 ollama serve。
+ * 退出策略：exitKillOllama=true（默认）→ bound，Ollama 挂应用进程树，应用退出
+ * 连带关闭（Windows 上仍沿用非 detached，避免弹独立 cmd 窗口）；false →
+ * keepAlive，脱离进程树保活，下次打开应用直接复用。开关同样只在「拉起时」生效。
+ * keepAlive 路径没有直连 child 可观察秒退（真实子进程是 Start-Process/已
+ * unref 的孤儿），只做「拉起命令已执行」，就绪与否交给前端按端口轮询。
+ */
+function spawnOllamaServe(
+  exe: string,
+  keepAlive: boolean,
+): Promise<{ ok: boolean; detail: string }> {
+  if (keepAlive) {
+    const launched = spawnManaged({
+      command: exe,
+      args: ["serve"],
+      windowsHide: true,
+      mode: "keepAlive",
+    });
+    if (launched.error) {
+      const msg = launched.error;
+      const hint =
+        /enoent|not find|cannot find/i.test(msg) || msg.includes("EACCES")
+          ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
+          : msg;
+      return Promise.resolve({ ok: false, detail: `启动 Ollama 失败：${hint}` });
+    }
+    return Promise.resolve({
+      ok: true,
+      detail: "Ollama 启动命令已执行（保活模式），正在等待服务就绪",
+    });
+  }
   return new Promise((resolve) => {
     const isWindows = process.platform === "win32";
     const child = spawn(exe, ["serve"], {
@@ -183,7 +215,9 @@ export async function POST(_req: NextRequest) {
 
   try {
     const ollama = await resolveOllamaExe();
-    const result = await spawnOllamaServe(ollama);
+    // 退出策略决定拉起方式：false（保活）时脱离进程树，应用退出不连带关闭。
+    const keepAlive = getExitPolicy().exitKillOllama === false;
+    const result = await spawnOllamaServe(ollama, keepAlive);
 
     if (result.ok) {
       return NextResponse.json({ ok: true, detail: result.detail });

@@ -16,11 +16,12 @@
 import { spawn, exec } from "child_process";
 import fs from "fs";
 import path from "path";
-import { COMFYUI_DEFAULT_PORT, getSettingsSync } from "../app-settings";
+import { COMFYUI_DEFAULT_PORT, getExitPolicy, getSettingsSync } from "../app-settings";
 import { resolveComfyBase } from "./client";
 import { logger } from "~/server/lib/logger";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { findPidListeningPort } from "./proc-detect";
+import { spawnManaged } from "../process-launch";
 
 export type ComfyUiStatus = {
   up: boolean;
@@ -198,7 +199,63 @@ export async function ensureComfyUiReady(
     }
     const args = [...plan.baseArgs, ...(port !== COMFYUI_DEFAULT_PORT ? ["--port", String(port)] : []), ...splitArgs(settings.comfyuiExtraArgs)];
 
-    note(`ComfyUI 未运行，按配置路径启动：${plan.cmd} ${args.join(" ")}`);
+    // 退出策略决定拉起方式：exitKillComfyui=true（默认）→ bound，ComfyUI 挂
+    // 在应用进程树内，应用退出连带关闭；false → keepAlive，脱离进程树保活，
+    // 下次打开应用直接复用。注意开关只在「拉起时」生效（桌面壳退出是
+    // taskkill /T /F 杀整树，退出那一刻没有机会再决定）。
+    const policy = getExitPolicy();
+    const keepAlive = policy.exitKillComfyui === false;
+    note(`ComfyUI 未运行，按配置路径启动：${plan.cmd} ${args.join(" ")}${keepAlive ? "（保活模式：应用退出后不关闭）" : ""}`);
+
+    const deadline = opts.timeoutMs != null ? Date.now() + opts.timeoutMs : null;
+    const stdioEnv = {
+      ...process.env,
+      PYTHONIOENCODING: "utf-8",
+      PYTHONUTF8: "1",
+    };
+    if (keepAlive) {
+      // 保活：脱离进程树。没有直连 stdio/exit，就绪与否靠端口探测轮询。
+      const launched = spawnManaged({
+        command: plan.cmd,
+        args,
+        cwd: plan.cwd,
+        env: stdioEnv,
+        mode: "keepAlive",
+      });
+      if (launched.error) {
+        const detail = `启动 ComfyUI 失败：${launched.error}`;
+        note(detail);
+        return { ok: false, base: null, detail };
+      }
+      st.stopRequested = false;
+      appendRuntimeLog(
+        `[keepAlive-spawn] cmd=${plan.cmd} args=${JSON.stringify(args)} cwd=${plan.cwd}`,
+      );
+      /* 保活路径不设 st.child（真实子进程不是我们能可靠持有/杀掉的——Windows
+       * 上是 Start-Process 的孙进程，POSIX 上虽能拿到 pid 但已 unref）。
+       * 「关闭 ComfyUI」与「进程秒退」都不再走 child 判断，只靠端口探测。 */
+      while (true) {
+        if (st.stopRequested) {
+          const detail = "已手动关闭 ComfyUI，停止等待启动";
+          note(detail);
+          return { ok: false, base: null, detail };
+        }
+        // 端口可达即视为就绪（保活实例无法用「本进程 PID 监听端口」去锁定，
+        // 用 /system_stats 实探，避免把同机另一个 ComfyUI 误认成本次拉起的）。
+        const upBase = await probeComfyUi(2000);
+        if (upBase) {
+          note(`ComfyUI 已就绪（保活）：${upBase}`);
+          return { ok: true, base: upBase, detail: "ComfyUI 已启动并就绪（保活模式）" };
+        }
+        if (deadline !== null && Date.now() >= deadline) break;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      const detail = `ComfyUI 启动超过 ${Math.round((opts.timeoutMs ?? 0) / 1000)}s 仍未就绪，继续留在后台观察；详见 log/comfyui-runtime.log`;
+      note(detail);
+      return { ok: false, base: null, detail };
+    }
+
+    // ── bound 模式（默认，随应用退出关闭）：沿用直连 spawn + stdio 日志 ──
     let child: ReturnType<typeof spawn>;
     try {
       child = spawn(plan.cmd, args, {
@@ -211,11 +268,7 @@ export async function ensureComfyUiReady(
         // 节点 print 含 emoji 等非 GBK 字符会抛 UnicodeEncodeError 导致进程
         // 崩溃（exit=1）。PYTHONIOENCODING 覆盖 stdout/stderr 编码，
         // PYTHONUTF8 启用 Python 3.7+ UTF-8 模式。
-        env: {
-          ...process.env,
-          PYTHONIOENCODING: "utf-8",
-          PYTHONUTF8: "1",
-        },
+        env: stdioEnv,
       });
     } catch (e) {
       const detail = `启动 ComfyUI 失败：${e instanceof Error ? e.message : String(e)}`;
@@ -253,7 +306,6 @@ export async function ensureComfyUiReady(
     /* 等待循环：deadline 为 null（设置页手动启动）时不设硬超时，一直等到
      * 就绪、进程退出或用户手动关闭；显式传 timeoutMs 的调用方（任务自动
      * 启动）到点后照旧放弃本次等待。 */
-    const deadline = opts.timeoutMs != null ? Date.now() + opts.timeoutMs : null;
     while (true) {
       /* 用户点了「关闭 ComfyUI」→ 退出循环（child 也会随之消失）。放在
        * child 判断之前，避免把主动关闭误报成「进程启动后立即退出」。 */

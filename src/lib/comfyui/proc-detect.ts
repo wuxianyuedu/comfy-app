@@ -129,3 +129,33 @@ export async function findPortForMainPy(
   if (!pid) return null;
   return findPidListeningPort(pid);
 }
+
+/** 指定 PID 的进程是否仍存活。保活（keepAlive）路径没有直连的 child 可听
+ *  exit 事件，就绪/存活判断退化到 OS 层轮询：Windows 用 `tasklist /FI
+ *  "PID eq <pid>"` 看是否仍有匹配行；POSIX 用 `kill -0 <pid>`（0 号信号只
+ *  探存活不动手）。探测失败一律按「不在」处理，避免误以为还活着。 */
+export async function isPidAlive(
+  pid: number,
+  timeoutMs = 3000,
+): Promise<boolean> {
+  if (!pid || pid <= 0) return false;
+  try {
+    if (process.platform === "win32") {
+      const out = await execFileP(
+        "tasklist",
+        ["/FI", `PID eq ${pid}`, "/NH"],
+        timeoutMs,
+      );
+      // /NH 去表头后仍活着会输出一行含 PID 的记录；纯表头或「无任务」说明已退。
+      return new RegExp(`\\b${pid}\\b`).test(out);
+    }
+    // POSIX：kill -0 只做存活探测。
+    return await new Promise((resolve) => {
+      execFile("kill", ["-0", String(pid)], { timeout: timeoutMs }, (err) =>
+        resolve(err === null),
+      );
+    });
+  } catch {
+    return false;
+  }
+}
