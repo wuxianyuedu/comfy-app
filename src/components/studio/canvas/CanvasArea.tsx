@@ -120,12 +120,12 @@ export function CanvasArea({
       {/* ── Context Menu ── */}
       {menu && (
         <div
-          className="fixed z-9999 min-w-[200px] rounded-xl border border-white/10 bg-[#1a1a24] py-1.5 shadow-2xl shadow-black/50 backdrop-blur-md"
+          className="fixed z-9999 min-w-[200px] rounded-xl border border-(--color-border-strong) bg-(--color-panel) py-1.5 shadow-2xl shadow-black/20 backdrop-blur-md"
           style={{ left: menu.x, top: menu.y }}
         >
           {contextItems.map((item) =>
             item.divider ? (
-              <div key={item.id} className="my-1 h-px bg-white/6" />
+              <div key={item.id} className="my-1 h-px bg-(--color-border-strong)" />
             ) : (
               <button
                 key={item.id}
@@ -134,13 +134,13 @@ export function CanvasArea({
                 onClick={() => handleAction(item.id)}
                 className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors ${
                   item.disabled
-                    ? "cursor-not-allowed text-gray-600"
+                    ? "cursor-not-allowed text-(--color-ink-fainter)"
                     : item.danger
                     ? "text-red-400 hover:bg-red-500/10"
-                    : "text-gray-300 hover:bg-white/8"
+                    : "text-(--color-ink-strong) hover:bg-(--color-subtle)"
                 }`}
               >
-                <span className="shrink-0 text-gray-500">{item.icon}</span>
+                <span className="shrink-0 text-(--color-ink-fainter)">{item.icon}</span>
                 {item.label}
               </button>
             )
@@ -150,7 +150,7 @@ export function CanvasArea({
 
       {/* ── Bottom Toolbar ── */}
       <div className="absolute bottom-3 left-1/2 z-50 -translate-x-1/2">
-        <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-[#1a1a24]/90 px-1.5 py-1 shadow-lg shadow-black/30 backdrop-blur-md">
+        <div className="flex items-center gap-0.5 rounded-xl border border-(--color-border-strong) bg-(--color-panel)/95 px-1.5 py-1 shadow-lg shadow-black/10 backdrop-blur-md">
           {/* Send / Run button */}
           <ToolbarButton
             title="执行"
@@ -168,7 +168,7 @@ export function CanvasArea({
           </ToolbarButton>
 
           {/* Zoom level */}
-          <span className="min-w-[48px] text-center text-xs text-gray-400 tabular-nums">
+          <span className="min-w-[48px] text-center text-xs text-(--color-ink-muted) tabular-nums">
             {zoom}%
           </span>
 
@@ -213,8 +213,8 @@ export function CanvasArea({
           onClick={() => onMinimapToggle?.(!minimapVisible)}
           className={`absolute bottom-3 left-3 z-40 flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs transition-colors ${
             minimapVisible
-              ? "border-violet-500/30 bg-violet-500/10 text-violet-300"
-              : "border-white/10 bg-[#1a1a24]/80 text-gray-500 hover:text-gray-300"
+              ? "border-violet-500/30 bg-violet-500/10 text-(--color-ink-strong)"
+              : "border-(--color-border-strong) bg-(--color-panel)/85 text-(--color-ink-fainter) hover:text-(--color-ink-strong)"
           } backdrop-blur-sm`}
         >
           <LayoutGrid size={12} />
@@ -245,8 +245,8 @@ function ToolbarButton({
       title={title}
       className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition-colors ${
         active
-          ? "bg-white/10 text-white hover:bg-white/15"
-          : "text-gray-400 hover:bg-white/6 hover:text-gray-200"
+          ? "bg-(--color-primary)/12 text-(--color-ink-bright) hover:bg-(--color-primary)/18"
+          : "text-(--color-ink-muted) hover:bg-(--color-subtle) hover:text-(--color-ink-strong)"
       }`}
     >
       {children}
@@ -255,7 +255,7 @@ function ToolbarButton({
 }
 
 function ToolbarDivider() {
-  return <div className="mx-0.5 h-4 w-px bg-white/10" />;
+  return <div className="mx-0.5 h-4 w-px bg-(--color-border-strong)" />;
 }
 
 /* ── Menu Icons ──────────────────────────────────────── */

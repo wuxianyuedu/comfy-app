@@ -24,34 +24,35 @@
   --color-ink: #1a1a1f;
   --color-muted: #6b6b76;
 
-  /* Fixed dark UI (canvas / node / editor surfaces) — T11
-     These components are always dark regardless of the app theme,
-     so they must NOT be overridden in `.dark`. */
-  --color-canvas: #0a0a0f; /* 画布/工作区背景 */
-  --color-canvas-deep: #0f0f14; /* 输入控件/深面板底 */
-  --color-panel: #14141a; /* 面板/顶栏/浮层 */
-  --color-panel-deep: #0f0f16; /* 侧栏/页脚 */
-  --color-card: #16161c; /* 卡片/下拉浮层 */
-  --color-node: #16161e; /* 节点表面/option */
-  --color-node-accent: #1e1a2e; /* 节点强调底 */
-  --color-border-strong: #26262e; /* 强边框/分隔线 */
-  --color-ink-bright: #ededf2; /* 主文字（亮） */
-  --color-ink-field: #e5e7eb; /* 输入控件文字 */
-  --color-ink-strong: #e4e4e7; /* 连接高亮文字 */
-  --color-ink-soft: #c9c9d6; /* 次级文字 */
-  --color-ink-subtle: #d4d4d8; /* 次级文字 2 */
-  --color-ink-muted: #9a9aad; /* 弱文字 */
-  --color-ink-faint: #8b90a8; /* 标签/更弱文字 */
-  --color-ink-fainter: #6b7088; /* 辅助说明文字 */
-  --color-ink-faintest: #5a5f73; /* 极弱文字 */
-  --color-ink-icon: #6e6e80; /* 折叠箭头/图标弱文字 */
-  --color-ink-placeholder: #5a5a6b; /* placeholder */
-  --color-info: #5bc6ff; /* 信息/链接强调 */
-  --color-success: #5be3c4; /* 成功/薄荷强调 */
-  --color-success-strong: #10b981; /* 成功绿 */
-  --color-warning: #f59e0b; /* 警告 */
-  --color-amber: #ffb553; /* 琥珀强调（workshop 徽章/按钮） */
-  --color-accent-soft: #ff8ac4; /* accent 浅色 */
+  /* Immersive / editor surfaces (canvas / node / editor) — T11.
+     Theme-aware: these default to LIGHT (the :root value Tailwind emits
+     from @theme) and are overridden to DARK inside `.dark`. They must be
+     kept in sync with the corresponding `.dark { … }` block below. */
+  --color-canvas: #f6f7f9; /* 画布/工作区背景 (light default) */
+  --color-canvas-deep: #eef0f4; /* 输入控件/深面板底 (light default) */
+  --color-panel: #ffffff; /* 面板/顶栏/浮层 (light default) */
+  --color-panel-deep: #f0f1f5; /* 侧栏/页脚 (light default) */
+  --color-card: #ffffff; /* 卡片/下拉浮层 (light default) */
+  --color-node: #ffffff; /* 节点表面/option (light default) */
+  --color-node-accent: #f2eeff; /* 节点强调底 (light default) */
+  --color-border-strong: #d6d8dd; /* 强边框/分隔线 (light default) */
+  --color-ink-bright: #18181b; /* 主文字 (light default) */
+  --color-ink-field: #27272a; /* 输入控件文字 (light default) */
+  --color-ink-strong: #3f3f46; /* 连接高亮文字 (light default) */
+  --color-ink-soft: #52525b; /* 次级文字 (light default) */
+  --color-ink-subtle: #3f3f46; /* 次级文字 2 (light default) */
+  --color-ink-muted: #6b6b76; /* 弱文字 (light default) */
+  --color-ink-faint: #71717a; /* 标签/更弱文字 (light default) */
+  --color-ink-fainter: #a1a1aa; /* 辅助说明文字 (light default) */
+  --color-ink-faintest: #b6b6bf; /* 极弱文字 (light default) */
+  --color-ink-icon: #8e8e98; /* 折叠箭头/图标弱文字 (light default) */
+  --color-ink-placeholder: #a1a1aa; /* placeholder (light default) */
+  --color-info: #2563eb; /* 信息/链接强调 (light default) */
+  --color-success: #0ea472; /* 成功/薄荷强调 (light default) */
+  --color-success-strong: #10b981; /* 成功绿 (light default) */
+  --color-warning: #d97706; /* 警告 (light default) */
+  --color-amber: #d97706; /* 琥珀强调（workshop 徽章/按钮）(light default) */
+  --color-accent-soft: #ec4899; /* accent (light default) */
 
   /* Layout */
   --panel-right-width: 360px;
@@ -89,6 +90,32 @@
   --color-ink: #ededf2;
   --color-muted: #9a9aad;
   --color-primary-soft: #221c3a;
+  /* ── immersive / editor surface overrides (see T11 @theme block) ── */
+  --color-canvas: #0a0a0f; /* 画布/工作区背景 */
+  --color-canvas-deep: #0f0f14; /* 输入控件/深面板底 */
+  --color-panel: #14141a; /* 面板/顶栏/浮层 */
+  --color-panel-deep: #0f0f16; /* 侧栏/页脚 */
+  --color-card: #16161c; /* 卡片/下拉浮层 */
+  --color-node: #16161e; /* 节点表面/option */
+  --color-node-accent: #1e1a2e; /* 节点强调底 */
+  --color-border-strong: #26262e; /* 强边框/分隔线 */
+  --color-ink-bright: #ededf2; /* 主文字 */
+  --color-ink-field: #e5e7eb; /* 输入控件文字 */
+  --color-ink-strong: #e4e4e7; /* 连接高亮文字 */
+  --color-ink-soft: #c9c9d6; /* 次级文字 */
+  --color-ink-subtle: #d4d4d8; /* 次级文字 2 */
+  --color-ink-muted: #9a9aad; /* 弱文字 */
+  --color-ink-faint: #8b90a8; /* 标签/更弱文字 */
+  --color-ink-fainter: #6b7088; /* 辅助说明文字 */
+  --color-ink-faintest: #5a5f73; /* 极弱文字 */
+  --color-ink-icon: #6e6e80; /* 折叠箭头/图标弱文字 */
+  --color-ink-placeholder: #5a5a6b; /* placeholder */
+  --color-info: #5bc6ff; /* 信息/链接强调 */
+  --color-success: #5be3c4; /* 成功/薄荷强调 */
+  --color-success-strong: #10b981; /* 成功绿 */
+  --color-warning: #f59e0b; /* 警告 */
+  --color-amber: #ffb553; /* 琥珀强调 */
+  --color-accent-soft: #ff8ac4; /* accent */
   /* ── shadcn 语义 token 映射到项目品牌色板（全面接管主题） ── */
   --background: #0a0a0f;
   --foreground: #ededf2;
@@ -127,6 +154,14 @@
    color-scheme: dark makes browser-rendered <select> dropdowns,
    <option> items, and other native controls use the OS dark theme
    instead of glaring white backgrounds. */
+select {
+  color-scheme: light;
+}
+select option {
+  background-color: #ffffff;
+  color: #27272a;
+  padding: 4px 8px;
+}
 .dark select {
   color-scheme: dark;
 }
@@ -143,15 +178,21 @@
 
 html,
 body {
-  /* 2026-08-25: force a dark base so the window never flashes WHITE while
-     the Tauri webview is resized (the OS repaints the freshly-exposed area
-     before the page reflows).  `.dark` still toggles the component-level
-     design tokens below; this only guarantees the root surface is dark. */
-  background-color: #0a0a0f;
+  /* Root surface follows the active theme (--color-bg is two-state). While the
+     Tauri webview is being resized the freshly-exposed area is repainted by
+     this background before the page reflows, so keeping it theme-aware (dark
+     under `.dark`) prevents a white flash without forcing dark in light mode. */
+  background-color: var(--color-bg);
   color: var(--color-ink);
-  color-scheme: dark;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+:root {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
 }
 
 /* Fill the viewport even before the app's root containers mount, so a
