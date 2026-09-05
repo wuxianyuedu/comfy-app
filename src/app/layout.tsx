@@ -9,8 +9,8 @@ import { Toaster } from "~/components/ui/sonner";
 import { ThemeProvider } from "~/app/ThemeProvider";
 import { LogProvider } from "~/components/studio/logs/LogProvider";
 import { LogPanel } from "~/components/studio/logs/LogPanel";
-import { ToastProvider } from "~/components/studio";
-import { BrowserStatusBar } from "~/components/studio";
+import { ToastProvider } from "~/components/studio/ToastProvider";
+import { BrowserStatusBar } from "~/components/studio/BrowserStatusBar";
 
 export const metadata: Metadata = {
   title: "Create T3 App",
