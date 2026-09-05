@@ -79,7 +79,10 @@ export function WorkflowIoPreviewPanel({
   detailIOMap,
   onClose,
 }: WorkflowIoPreviewPanelProps) {
-  const ioApi = useMemo(() => getIOEditApi(), []);
+  /* getIOEditApi 内部调 useContext，只能在组件顶层调用——此前包在 useMemo
+   * 里属于 Hook 套 Hook，React 19 每次渲染都会报 rules-of-hooks 错误。
+   * context 持有的 StoreApi 引用按编辑器实例稳定，无需 memo。 */
+  const ioApi = getIOEditApi();
 
   /* null = 「通用」页签（编辑全局默认值）；字符串 = 某个模式码页签。 */
   const [activeMode, setActiveMode] = useState<string | null>(null);
