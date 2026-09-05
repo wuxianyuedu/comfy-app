@@ -80,7 +80,9 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         ),
       );
       try {
-        await updateMut.mutateAsync({ id, modes, defaultMode });
+        // taskType 与 defaultMode 一并回写：服务端仅在显式传入时才更新该列，
+        // 缺了它 DB 的 taskType 会与本地乐观更新的值漂移（旧 type 筛选失准）。
+        await updateMut.mutateAsync({ id, modes, defaultMode, taskType: defaultMode });
       } catch (e) {
         toast.error("更新模式失败", errorMessage(e, "未知错误"));
         void load();
@@ -93,8 +95,8 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
   const patchModelTags = useCallback(
     async (id: string, names: string[]) => {
       setWorkflows((prev) =>
-        prev.map((prev) =>
-          prev.id === id ? { ...prev, modelTags: names } : prev,
+        prev.map((workflow) =>
+          workflow.id === id ? { ...workflow, modelTags: names } : workflow,
         ),
       );
       try {
