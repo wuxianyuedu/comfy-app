@@ -38,6 +38,7 @@ export interface Character {
   appearance: string; // 外貌特征
   costume: string; // 服装
   personality: string; // 性格
+  temperament: string; // 气质
   styleTags: string[]; // free style keywords (e.g. ["皮克斯", "厚涂"])
   skillSlug?: string; // linked Skill for art style
   positivePrompt: string; // generated ComfyUI positive prompt
