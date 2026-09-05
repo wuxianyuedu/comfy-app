@@ -432,15 +432,16 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
           {c.section === "comfyui" && (
             <Card title="创作后端（ComfyUI）">
               <Field
-                label="ComfyUI 路径（安装根目录，含 main.py）"
+                label="ComfyUI 路径（源码根或桌面版实例根）"
                 value={c.drafts.settings.comfyuiPath}
                 onChange={(value) => c.patchSettings({ comfyuiPath: value })}
-                placeholder="例如 D:\\ComfyUI 或 D:\\Comfy-Desktop\\ComfyUI-Installs\\ComfyUI"
+                placeholder="例如 D:\\ComfyUI 或 D:\\Comfy-Desktop\\ComfyUI-Installs\\ComfyUI2"
               />
               <p className="text-muted-foreground -mt-2 mb-3 text-xs">
-                支持：便携版（python_embeded\\python.exe +
-                main.py）、桌面版（standalone-env +
-                ComfyUI\\main.py）、venv（.venv + main.py）。
+                桌面版（ComfyUI Desktop）请直接配置实例根目录（含
+                ComfyUI/ 子目录与 standalone-env/），便携版配置含
+                main.py 的源码根。自动识别 python_embeded / standalone-env /
+                .venv 解释器。
                 {c.comfyStatus?.pathConfigured
                   ? "已配置——ComfyUI 未运行时提交任务会自动拉起。"
                   : "未配置——ComfyUI 未运行时任务会失败。"}

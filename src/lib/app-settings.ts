@@ -22,10 +22,12 @@ export type AppSettings = {
   defaultVideoWorkflow: VideoWorkflowPref;
   comfyLorasDir: string;
   /**
-   * ComfyUI 安装目录（包含 main.py 的安装根）。
-   * 支持三种布局，启动时自动识别：
+   * ComfyUI 安装目录。
+   * comfyuiPath 语义（配置的目录可以不是源码根本身）：
    *   - 便携版：<path>\python_embeded\python.exe + <path>\main.py
-   *   - 桌面版/standalone：<path>\standalone-env\python.exe + <path>\ComfyUI\main.py
+   *   - 桌面版：配置「实例根」（如 ComfyUI-Installs\ComfyUI2）——
+   *     <path>\standalone-env\python.exe + <path>\ComfyUI\main.py
+   *     也可直接配置实例内的 ComfyUI/ 源码根，解释器会向上查找。
    *   - venv：<path>\.venv\Scripts\python.exe + <path>\main.py
    * 配置后任务执行前若 ComfyUI 未运行会自动拉起（comfyuiAutoStart）。
    */
@@ -42,7 +44,8 @@ export type AppSettings = {
 };
 
 /** 从 comfyuiPath 推导 ComfyUI 安装内的只读资源目录（custom_nodes / workflows）。
- *  布局与 resolveLaunchPlan 的候选一致：资源相对「含 main.py 的 ComfyUI 源码根」。
+ *  兼容「comfyuiPath = 源码根」与「comfyuiPath = 桌面实例根（main.py 在
+ *  ComfyUI/ 子目录）」两种配置：两处都查 custom_nodes / workflows 所在位置。
  * 找不到时返回 null —— 调用方自行降级（不弹错，只是没有本地工作流/节点可扫）。 */
 export function deriveComfyuiSubdir(
   comfyuiPath: string,
