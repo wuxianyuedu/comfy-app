@@ -3,19 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Trash, X } from "lucide-react";
 import { MediaThumbnail } from "./ui/MediaThumbnail";
-import { isVideo } from "@/lib/media";
 import { Icon } from "@/components/ui/icon";
-import { vanillaApi } from "~/trpc/vanilla";
-import type { RouterInputs, RouterOutputs } from "~/trpc/react";
-
-/** Wire type of the generate mutation input (was `as any`). */
-type GenerateInput = RouterInputs["generate"]["generate"];
-/** One row of task.list.  The route's mapper no longer carries the legacy
- *  `images` array (it always reads undefined today) — kept optional here so
- *  the existing lookup keeps its exact runtime behaviour. */
-type TaskListItem = RouterOutputs["task"]["list"]["tasks"][number] & {
-  images?: { localPath: string }[];
-};
+import {
+  fetchVideoTasks,
+  submitGeneration,
+  type VideoTask,
+} from "@/lib/video-queue-client";
 
 /* ── Video Queue Modal — wired to real VIDEO tasks ──
   Fetches the user's VIDEO-type tasks from /api/tasks (filtered), shows live
@@ -23,16 +16,10 @@ type TaskListItem = RouterOutputs["task"]["list"]["tasks"][number] & {
   lets the user batch-submit new clips, and open a clip's result/result detail.
 */
 
-interface VideoTask {
-  id: string;
-  status: string;
-  prompt: string;
-  workflowName: string;
-  video?: string | null; // local path of the produced video (if any)
-  error?: string | null;
-}
-
-const STATUS_META: Record<string, { icon: string; label: string; cls: string }> = {
+const STATUS_META: Record<
+  string,
+  { icon: string; label: string; cls: string }
+> = {
   QUEUED: { icon: "hourglass", label: "排队中", cls: "text-gray-500" },
   RUNNING: { icon: "zap", label: "生成中", cls: "text-amber-400" },
   SUCCEEDED: { icon: "check", label: "已完成", cls: "text-emerald-400" },
@@ -49,12 +36,19 @@ export interface VideoQueueModalProps {
   onOpenTask?: (taskId: string) => void;
 }
 
-export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: VideoQueueModalProps) {
+export function VideoQueueModal({
+  open,
+  onClose,
+  draftItems = [],
+  onOpenTask,
+}: VideoQueueModalProps) {
   const [tasks, setTasks] = useState<VideoTask[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [draft, setDraft] = useState<{ prompt: string; params?: Record<string, unknown> }[]>([]);
+  const [draft, setDraft] = useState<
+    { prompt: string; params?: Record<string, unknown> }[]
+  >([]);
   const [tab, setTab] = useState<"queue" | "draft">("queue");
   const submittedRef = useRef(false);
 
@@ -62,18 +56,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
     if (!open) return;
     setLoading(true);
     try {
-      const data = await vanillaApi.task.list.query({ take: 200 });
-      const all: TaskListItem[] = data.tasks ?? [];
-      const videos: VideoTask[] = all
-        .filter((task) => task.type === "VIDEO")
-        .map((task) => ({
-          id: task.id,
-          status: task.status,
-          prompt: task.prompt,
-          workflowName: task.workflowName,
-          video: (task.images ?? []).find((im) => isVideo(im.localPath))?.localPath ?? null,
-          error: task.error ?? null,
-        }));
+      const videos = await fetchVideoTasks();
       setTasks(videos);
     } catch {
       setError("加载队列失败");
@@ -100,7 +83,11 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
   // (adjusted during render, React 19 pattern).
   const [prevSeedOpen, setPrevSeedOpen] = useState(open);
   const [prevSeedDraftItems, setPrevSeedDraftItems] = useState(draftItems);
-  if ((open !== prevSeedOpen || draftItems !== prevSeedDraftItems) && open && draftItems.length) {
+  if (
+    (open !== prevSeedOpen || draftItems !== prevSeedDraftItems) &&
+    open &&
+    draftItems.length
+  ) {
     setPrevSeedOpen(open);
     setPrevSeedDraftItems(draftItems);
     setDraft(draftItems);
@@ -116,10 +103,7 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
       let ok = 0;
       for (const it of items) {
         try {
-          const d = await vanillaApi.generate.generate.mutate({
-            ...it.params,
-            prompt: it.prompt,
-          } as GenerateInput);
+          const d = await submitGeneration(it.params, it.prompt);
           if (d.taskId) ok++;
         } catch {
           /* skip failed item */
@@ -141,7 +125,9 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
 
   if (!open) return null;
 
-  const runningCount = tasks.filter((task) => task.status === "RUNNING" || task.status === "QUEUED").length;
+  const runningCount = tasks.filter(
+    (task) => task.status === "RUNNING" || task.status === "QUEUED",
+  ).length;
 
   return (
     <div className="fixed inset-0 z-9998 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -170,7 +156,9 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                 type="button"
                 onClick={() => setTab("queue")}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  tab === "queue" ? "bg-white/10 text-gray-100" : "text-gray-500 hover:text-gray-300"
+                  tab === "queue"
+                    ? "bg-white/10 text-gray-100"
+                    : "text-gray-500 hover:text-gray-300"
                 }`}
               >
                 生成队列
@@ -179,13 +167,20 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                 type="button"
                 onClick={() => setTab("draft")}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  tab === "draft" ? "bg-white/10 text-gray-100" : "text-gray-500 hover:text-gray-300"
+                  tab === "draft"
+                    ? "bg-white/10 text-gray-100"
+                    : "text-gray-500 hover:text-gray-300"
                 }`}
               >
                 批量提交（{draft.length}）
               </button>
             </div>
-            <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-300" aria-label="关闭">
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-gray-500 hover:text-gray-300"
+              aria-label="关闭"
+            >
               <X size={16} />
             </button>
           </div>
@@ -196,7 +191,9 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
           {tab === "queue" ? (
             <div className="space-y-3">
               {loading && tasks.length === 0 ? (
-                <p className="py-10 text-center text-xs text-gray-600">加载中…</p>
+                <p className="py-10 text-center text-xs text-gray-600">
+                  加载中…
+                </p>
               ) : tasks.length === 0 ? (
                 <p className="py-10 text-center text-xs text-gray-600">
                   暂无视频生成任务。切到「批量提交」添加分镜，或在创作台「视频」模式直接生成。
@@ -217,13 +214,21 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                             className="h-full w-full object-cover"
                           />
                         ) : (
-                          <Icon name="film" size={18} className="text-gray-500" />
+                          <Icon
+                            name="film"
+                            size={18}
+                            className="text-gray-500"
+                          />
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="mb-0.5 flex items-center gap-2">
-                          <span className="font-mono text-xs text-violet-300">V{String(index + 1).padStart(2, "0")}</span>
-                          <span className={`inline-flex items-center gap-1 text-xs ${meta!.cls}`}>
+                          <span className="font-mono text-xs text-violet-300">
+                            V{String(index + 1).padStart(2, "0")}
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 text-xs ${meta!.cls}`}
+                          >
                             <Icon name={meta!.icon} size={13} />
                             {meta!.label}
                           </span>
@@ -234,9 +239,16 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                         >
                           {task.prompt || "（无提示词）"}
                         </p>
-                        <p className="mt-0.5 truncate font-mono text-[10px] text-gray-600">{task.workflowName}</p>
+                        <p className="mt-0.5 truncate font-mono text-[10px] text-gray-600">
+                          {task.workflowName}
+                        </p>
                         {task.status === "FAILED" && task.error && (
-                          <p className="mt-0.5 truncate text-[10px] text-red-400" title={task.error}>{task.error}</p>
+                          <p
+                            className="mt-0.5 truncate text-[10px] text-red-400"
+                            title={task.error}
+                          >
+                            {task.error}
+                          </p>
                         )}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
@@ -261,7 +273,9 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                   );
                 })
               )}
-              {error && <p className="text-center text-xs text-red-400">{error}</p>}
+              {error && (
+                <p className="text-center text-xs text-red-400">{error}</p>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -271,12 +285,23 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                 </p>
               ) : (
                 draft.map((draftItem, index) => (
-                  <div key={`draft-${index}`} className="flex items-start gap-2 rounded-xl border border-white/6 bg-white/2 p-3">
-                    <span className="mt-1 font-mono text-xs text-violet-300">V{String(index + 1).padStart(2, "0")}</span>
+                  <div
+                    key={`draft-${index}`}
+                    className="flex items-start gap-2 rounded-xl border border-white/6 bg-white/2 p-3"
+                  >
+                    <span className="mt-1 font-mono text-xs text-violet-300">
+                      V{String(index + 1).padStart(2, "0")}
+                    </span>
                     <textarea
                       value={draftItem.prompt}
                       onChange={(event) =>
-                        setDraft((arr) => arr.map((item, idx) => (idx === index ? { ...item, prompt: event.target.value } : item)))
+                        setDraft((arr) =>
+                          arr.map((item, idx) =>
+                            idx === index
+                              ? { ...item, prompt: event.target.value }
+                              : item,
+                          ),
+                        )
                       }
                       rows={2}
                       placeholder="分镜提示词，含镜头运动描述…"
@@ -284,7 +309,9 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                     />
                     <button
                       type="button"
-                      onClick={() => setDraft((arr) => arr.filter((_, j) => j !== index))}
+                      onClick={() =>
+                        setDraft((arr) => arr.filter((_, j) => j !== index))
+                      }
                       className="mt-1 text-gray-500 transition-colors hover:text-red-400"
                       aria-label="删除"
                     >
@@ -310,8 +337,14 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                     const file = event.target.files?.[0];
                     if (!file) return;
                     const text = await file.text();
-                    const lines = text.split(/\r?\n/).map((segment) => segment.trim()).filter(Boolean);
-                    setDraft((arr) => [...arr, ...lines.map((prompt) => ({ prompt }))]);
+                    const lines = text
+                      .split(/\r?\n/)
+                      .map((segment) => segment.trim())
+                      .filter(Boolean);
+                    setDraft((arr) => [
+                      ...arr,
+                      ...lines.map((prompt) => ({ prompt })),
+                    ]);
                   }}
                   id="vq-import"
                 />
@@ -323,7 +356,9 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
                 </label>
               </div>
 
-              {error && <p className="text-center text-xs text-red-400">{error}</p>}
+              {error && (
+                <p className="text-center text-xs text-red-400">{error}</p>
+              )}
             </div>
           )}
         </div>
@@ -331,14 +366,21 @@ export function VideoQueueModal({ open, onClose, draftItems = [], onOpenTask }: 
         {/* Footer */}
         {tab === "draft" && (
           <div className="flex items-center justify-between border-t border-white/6 px-5 py-3.5">
-            <span className="text-[11px] text-gray-500">提交后将进入「生成队列」并实时刷新</span>
+            <span className="text-[11px] text-gray-500">
+              提交后将进入「生成队列」并实时刷新
+            </span>
             <button
               type="button"
               onClick={submitDrafts}
-              disabled={submitting || draft.filter((draft) => draft.prompt.trim()).length === 0}
+              disabled={
+                submitting ||
+                draft.filter((draft) => draft.prompt.trim()).length === 0
+              }
               className="rounded-lg bg-violet-500 px-5 py-2 text-xs font-medium text-white transition-opacity hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-30"
             >
-              {submitting ? "提交中…" : `开始生成（${draft.filter((draft) => draft.prompt.trim()).length}）`}
+              {submitting
+                ? "提交中…"
+                : `开始生成（${draft.filter((draft) => draft.prompt.trim()).length}）`}
             </button>
           </div>
         )}

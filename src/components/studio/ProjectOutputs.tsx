@@ -4,36 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "@/components/studio/ui/MediaThumbnail";
 import { AuroraBackground } from "@/components/studio/ui/AuroraBackground";
-import { getActiveId, listProjects, type CanvasProject } from "@/lib/project-canvas/canvas-store";
-import { api } from "~/trpc/react";
-
-interface OutputImage {
-  id: string;
-  localPath: string;
-  mediaType: string;
-  seed: string | null;
-  width: number | null;
-  height: number | null;
-  isCover: boolean;
-}
-
-interface OutputItem {
-  id: string;
-  type: string;
-  status: string;
-  workflowName: string | null;
-  prompt: string | null;
-  negativePrompt: string | null;
-  seed: string | null;
-  size: string | null;
-  sampler: string | null;
-  steps: number | null;
-  cfg: number | null;
-  checkpoint: string | null;
-  referenceImages: string[];
-  createdAt: string;
-  images: OutputImage[];
-}
+import {
+  getActiveId,
+  listProjects,
+  type CanvasProject,
+} from "@/lib/project-canvas/canvas-store";
+import {
+  type ProjectOutputImage,
+  useProjectOutputs,
+} from "./hooks/use-project-outputs";
 
 const TYPE_CHIP: Record<string, string> = {
   TXT2IMG: "文生图",
@@ -58,7 +37,7 @@ function refSrc(v: string): string {
   return `/api/images?filename=${encodeURIComponent(v)}&type=input`;
 }
 
-function taskCover(images: OutputImage[]): OutputImage | null {
+function taskCover(images: ProjectOutputImage[]): ProjectOutputImage | null {
   const img = images.find((image) => image.mediaType === "image");
   if (img) return img;
   return images[0] ?? null;
@@ -92,24 +71,24 @@ export function ProjectOutputs() {
     };
     sync();
     window.addEventListener("comfyapp:canvas-store-changed", sync);
-    return () => window.removeEventListener("comfyapp:canvas-store-changed", sync);
+    return () =>
+      window.removeEventListener("comfyapp:canvas-store-changed", sync);
   }, [refreshProjects]);
 
-  const outputsQ = api.project.outputs.useQuery(
-    { projectId: projectId ?? "" },
-    { enabled: !!projectId }
-  );
-  const outputs = (outputsQ.data?.outputs ?? []).map((output) => ({ ...output, createdAt: String(output.createdAt) })) as OutputItem[];
-  const loading = outputsQ.isLoading;
+  const {
+    outputs,
+    loading,
+    refetch: refetchOutputs,
+  } = useProjectOutputs(projectId);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === projectId) ?? null,
-    [projects, projectId]
+    [projects, projectId],
   );
 
   const selected = useMemo(
     () => outputs.find((output) => output.id === selectedId) ?? null,
-    [outputs, selectedId]
+    [outputs, selectedId],
   );
 
   // 封面：最新产出里最有代表性的图（优先图像，其次视频首帧）。
@@ -139,16 +118,19 @@ export function ProjectOutputs() {
         checkpoint: selected.checkpoint,
         referenceImages: selected.referenceImages,
         createdAt: selected.createdAt,
-        files: selected.images.map((image) =>({          localPath: image.localPath,
+        files: selected.images.map((image) => ({
+          localPath: image.localPath,
           mediaType: image.mediaType,
           seed: image.seed,
           width: image.width,
           height: image.height,
         })),
-        savePath: projectId ? `public/generated/projects/${projectId}/${selected.id}/` : "",
+        savePath: projectId
+          ? `public/generated/projects/${projectId}/${selected.id}/`
+          : "",
       },
       null,
-      2
+      2,
     );
   }, [selected, projectId]);
 
@@ -159,7 +141,7 @@ export function ProjectOutputs() {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       },
-      () => undefined
+      () => undefined,
     );
   }, [metaJson]);
 
@@ -180,7 +162,9 @@ export function ProjectOutputs() {
         <AuroraBackground />
         <div className="mx-auto grid min-h-[60vh] max-w-[1100px] place-items-center px-6 text-center">
           <div>
-            <p className="text-lg font-medium text-gray-300">还没有打开任何画布项目</p>
+            <p className="text-lg font-medium text-gray-300">
+              还没有打开任何画布项目
+            </p>
             <p className="mt-2 text-sm text-gray-500">
               请先在「画布」中创建或打开一个项目，生成结果会自动归档到项目目录并在这里展示。
             </p>
@@ -210,15 +194,18 @@ export function ProjectOutputs() {
               onChange={(event) => setProjectId(event.target.value)}
               className="rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-xs text-gray-300 outline-none focus:border-violet-500/40"
             >
-              {projects.map((project) =>
-(
-                <option key={project.id} value={project.id} className="bg-(--color-node)">
+              {projects.map((project) => (
+                <option
+                  key={project.id}
+                  value={project.id}
+                  className="bg-(--color-node)"
+                >
                   {project.name ?? "未命名项目"}
                 </option>
               ))}
             </select>
             <button
-              onClick={() => outputsQ.refetch()}
+              onClick={refetchOutputs}
               className="rounded-lg border border-white/10 px-3 py-2 text-xs text-gray-400 hover:text-gray-200"
             >
               ↻ 刷新
@@ -246,7 +233,7 @@ export function ProjectOutputs() {
             <span className="rounded-md bg-violet-500/90 px-2 py-0.5 text-[11px] font-semibold text-white">
               封面
             </span>
-            <p className="mt-1.5 font-title text-lg font-bold text-white drop-shadow">
+            <p className="font-title mt-1.5 text-lg font-bold text-white drop-shadow">
               {activeProject?.name ?? "未命名项目"} · 创作合集
             </p>
           </div>
@@ -259,13 +246,14 @@ export function ProjectOutputs() {
           <div className="grid min-h-[280px] place-items-center rounded-2xl border border-dashed border-white/8 text-gray-500">
             <div className="text-center">
               <p className="text-lg font-medium text-gray-300">还没有产出</p>
-              <p className="mt-1 text-sm">在画布里跑一次生成，结果会自动归档到本项目目录。</p>
+              <p className="mt-1 text-sm">
+                在画布里跑一次生成，结果会自动归档到本项目目录。
+              </p>
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {outputs.map((output) =>
-{
+            {outputs.map((output) => {
               const c = taskCover(output.images);
               const isVideoOut = c?.mediaType === "video";
               const st = STATUS_CHIP[output.status] ?? STATUS_CHIP.QUEUED;
@@ -278,7 +266,7 @@ export function ProjectOutputs() {
                   className={`group relative overflow-hidden rounded-2xl border text-left transition-all hover:shadow-lg hover:shadow-black/30 ${
                     active
                       ? "border-violet-400/70 ring-1 ring-violet-400/40"
-                      : "border-white/6 hover:border-white/14.000000000000002"
+                      : "hover:border-white/14.000000000000002 border-white/6"
                   } bg-white/2`}
                 >
                   <div className="relative aspect-square w-full bg-[#111118]">
@@ -297,26 +285,37 @@ export function ProjectOutputs() {
                     )}
 
                     {isVideoOut && (
-                      <span className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2 ring-white/90">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="white" aria-hidden>
+                      <span className="absolute top-1/2 left-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2 ring-white/90">
+                        <svg
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="white"
+                          aria-hidden
+                        >
                           <path d="M6 4 L16 10 L6 16 Z" />
                         </svg>
                       </span>
                     )}
                     {isVideoOut && (
-                      <span className="absolute right-2 top-2 rounded-md bg-fuchsia-500/90 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                      <span className="absolute top-2 right-2 rounded-md bg-fuchsia-500/90 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                         视频
                       </span>
                     )}
-                    <span className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${st!.cls}`}>
+                    <span
+                      className={`absolute top-2 left-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${st!.cls}`}
+                    >
                       {st!.label}
                     </span>
                   </div>
                   <div className="p-3">
                     <p className="line-clamp-1 text-xs font-medium text-gray-300">
-                      {TYPE_CHIP[output.type] ?? output.type} · {output.seed ?? "—"}
+                      {TYPE_CHIP[output.type] ?? output.type} ·{" "}
+                      {output.seed ?? "—"}
                     </p>
-                    <p className="mt-1 text-[11px] text-gray-600">{timeAgo(output.createdAt)}</p>
+                    <p className="mt-1 text-[11px] text-gray-600">
+                      {timeAgo(output.createdAt)}
+                    </p>
                   </div>
                 </button>
               );
@@ -332,7 +331,7 @@ export function ProjectOutputs() {
             className="fixed inset-0 z-80 bg-black/50"
             onClick={() => setSelectedId(null)}
           />
-          <aside className="fixed right-0 top-0 z-90 flex h-full w-[380px] max-w-[90vw] flex-col overflow-hidden border-l border-white/10 bg-(--color-node) shadow-2xl">
+          <aside className="fixed top-0 right-0 z-90 flex h-full w-[380px] max-w-[90vw] flex-col overflow-hidden border-l border-white/10 bg-(--color-node) shadow-2xl">
             {/* head */}
             <div className="flex items-center justify-between border-b border-white/6 px-5 py-3">
               <div className="flex items-center gap-2">
@@ -355,7 +354,9 @@ export function ProjectOutputs() {
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
               {/* reference images */}
               <section>
-                <p className="mb-2 text-xs font-semibold text-gray-400">参考图</p>
+                <p className="mb-2 text-xs font-semibold text-gray-400">
+                  参考图
+                </p>
                 {selected.referenceImages.length ? (
                   <div className="grid grid-cols-4 gap-2">
                     {selected.referenceImages.map((image, index) => (
@@ -363,7 +364,7 @@ export function ProjectOutputs() {
                         key={image}
                         className="aspect-square overflow-hidden rounded-lg border border-white/6 bg-(--color-panel-deep)"
                       >
-                        { }
+                        {}
                         <img
                           src={refSrc(image)}
                           alt={`参考图 ${index + 1}`}
@@ -373,7 +374,9 @@ export function ProjectOutputs() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[11px] text-gray-600">本次生成无参考图（纯文生图）。</p>
+                  <p className="text-[11px] text-gray-600">
+                    本次生成无参考图（纯文生图）。
+                  </p>
                 )}
                 <p className="mt-1.5 text-[10.5px] text-gray-600">
                   参考图随产出一起保存到项目目录，复现时可一键还原。
@@ -383,15 +386,19 @@ export function ProjectOutputs() {
               {/* prompts */}
               <section className="space-y-2">
                 <div>
-                  <p className="mb-1 text-xs font-semibold text-gray-400">正向提示词</p>
-                  <div className="max-h-28 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/6 bg-white/2 p-2.5 text-[12px] leading-relaxed text-gray-300">
+                  <p className="mb-1 text-xs font-semibold text-gray-400">
+                    正向提示词
+                  </p>
+                  <div className="max-h-28 overflow-y-auto rounded-lg border border-white/6 bg-white/2 p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap text-gray-300">
                     {selected.prompt ?? "—"}
                   </div>
                 </div>
                 {selected.negativePrompt && (
                   <div>
-                    <p className="mb-1 text-xs font-semibold text-gray-400">反向提示词</p>
-                    <div className="max-h-24 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/6 bg-white/2 p-2.5 text-[12px] leading-relaxed text-gray-400">
+                    <p className="mb-1 text-xs font-semibold text-gray-400">
+                      反向提示词
+                    </p>
+                    <div className="max-h-24 overflow-y-auto rounded-lg border border-white/6 bg-white/2 p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap text-gray-400">
                       {selected.negativePrompt}
                     </div>
                   </div>
@@ -406,7 +413,10 @@ export function ProjectOutputs() {
                     ["Seed", selected.seed ?? "—"],
                     ["模型", selected.checkpoint ?? "—"],
                     ["采样器", selected.sampler ?? "—"],
-                    ["步数", selected.steps != null ? String(selected.steps) : "—"],
+                    [
+                      "步数",
+                      selected.steps != null ? String(selected.steps) : "—",
+                    ],
                     ["CFG", selected.cfg != null ? String(selected.cfg) : "—"],
                     ["尺寸", selected.size ?? "—"],
                     ["时间", timeAgo(selected.createdAt)],

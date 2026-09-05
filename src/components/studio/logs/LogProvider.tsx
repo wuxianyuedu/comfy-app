@@ -2,6 +2,8 @@
 
 import React, { useEffect, useRef } from "react";
 
+import { fetchFileLogSlice } from "@/lib/log-file-client";
+
 import {
   type LogLevel,
   type LogStoreState,
@@ -43,26 +45,13 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     const makeLogger =
       (level: LogLevel) =>
       (...args: unknown[]) => {
-        /* 观察者绝不能成为故障源：这里曾是全页面报错的放大器
-         * （Console Error 截图）。originals[level] 在多重包装/
-         * 热更新竞态下可能不是函数——直接调用会把日志调用变成 TypeError，
-         * 把业务错误（如 workflow.list 查询失败）淹没掉。守卫后 fail-open：
-         * 原生 console 不可用时至少日志仍进面板。 */
         const original = originals[level];
         if (typeof original === "function") {
           original(...args);
         }
         if (isReactQueryLog(args) || isNoisyFrameworkLog(args)) return;
-        /* 同步捕获调用点与序列化参数：调用栈只在当前 tick 有效，而参数
-         * 可能在日志入库前就被调用方改写。 */
         const location = captureLocation();
         const message = serialize(args);
-        /* 延迟入库：React Flow 等第三方库会在 render 期间打日志（例如
-         *  EdgeWrapper 校验 edge 时 console.warn）。同步调用 addEntry 会在
-         *  渲染另一个组件的过程中更新 BrowserStatusBar / LogPanel，触发
-         *  React 的 "Cannot update a component while rendering a different
-         *  component" 报错。排到微任务，等本次渲染提交后再写入 store。
-         *  微任务按入队顺序执行，日志先后顺序保持不变。 */
         queueMicrotask(() => {
           addEntry({
             level,
@@ -132,16 +121,11 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     const pollSource = async (source: "dev" | "launcher") => {
       try {
         const offset = offsetsRef.current[source];
-        const res = await fetch(
-          `/api/logs/current?source=${source === "dev" ? "dev-launcher" : "launcher"}&offset=${offset}`,
+        const data = await fetchFileLogSlice(
+          source === "dev" ? "dev" : "launcher",
+          offset,
         );
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          content: string;
-          size: number;
-          offset: number;
-        };
-        if (!mounted || !data.content) return;
+        if (!data || !mounted || !data.content) return;
 
         // 文件被重置（新运行）时 offset 会回 0；此时丢弃旧 offset，完整重读
         if (data.offset === 0 && offsetsRef.current[source] > 0) {
