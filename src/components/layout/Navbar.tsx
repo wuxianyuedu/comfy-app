@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useTheme } from "next-themes";
 import { Menu, Moon, Sun, Zap } from "lucide-react";
 
 const NAV = [
@@ -29,7 +30,8 @@ function MenuIcon() {
 
 export function Navbar() {
   const pathname = usePathname();
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+  const { theme, setTheme } = useTheme();
+  const dark = theme === "dark";
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Close the mobile menu on route change（render 阶段同步，避免 effect 级联渲染）。
@@ -40,35 +42,35 @@ export function Navbar() {
   }
 
   function toggleTheme() {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    try {
-      localStorage.setItem("theme", next ? "dark" : "light");
-    } catch {
-      /* localStorage unavailable (privacy mode / quota) — theme still applies this session */
-    }
+    /* 主题由 next-themes 统一管理（自动持久化 + 首帧前应用，避免闪烁）。
+       切换只需翻转 html 上的 .dark（attribute="class" 由 Provider 完成）。 */
+    setTheme(dark ? "light" : "dark");
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur">
+    <header className="border-border bg-bg/80 sticky top-0 z-40 border-b backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center gap-6 px-4 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-2 font-semibold">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-white">
+          <span className="bg-primary grid h-8 w-8 place-items-center rounded-lg text-white">
             <BoltIcon />
           </span>
-          <span className="text-lg tracking-tight">Comfy<span className="text-primary">APP</span></span>
+          <span className="text-lg tracking-tight">
+            Comfy<span className="text-primary">APP</span>
+          </span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
           {NAV.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + "/");
+            const active =
+              pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  active ? "bg-primary-soft text-primary" : "text-muted-foreground hover:bg-subtle hover:text-ink"
+                  active
+                    ? "bg-primary-soft text-primary"
+                    : "text-muted-foreground hover:bg-subtle hover:text-ink"
                 }`}
               >
                 {item.label}
@@ -81,7 +83,7 @@ export function Navbar() {
           <button
             onClick={toggleTheme}
             aria-label="切换主题"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:text-ink"
+            className="border-border text-muted-foreground hover:text-ink grid h-9 w-9 place-items-center rounded-lg border transition-colors"
           >
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>
@@ -90,14 +92,14 @@ export function Navbar() {
           <button
             onClick={() => setMobileOpen((value) => !value)}
             aria-label="打开菜单"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:text-ink md:hidden"
+            className="border-border text-muted-foreground hover:text-ink grid h-9 w-9 place-items-center rounded-lg border transition-colors md:hidden"
           >
             <MenuIcon />
           </button>
 
           <Link
             href="/login"
-            className="hidden rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-hover md:inline-block"
+            className="bg-primary hover:bg-primary-hover hidden rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors md:inline-block"
           >
             登录
           </Link>
@@ -106,16 +108,19 @@ export function Navbar() {
 
       {/* Mobile dropdown */}
       {mobileOpen && (
-        <div className="border-t border-border md:hidden">
+        <div className="border-border border-t md:hidden">
           <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-1 px-4 py-3 sm:px-6 lg:px-8">
             {NAV.map((item) => {
-              const active = pathname === item.href || pathname.startsWith(item.href + "/");
+              const active =
+                pathname === item.href || pathname.startsWith(item.href + "/");
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                    active ? "bg-primary-soft text-primary" : "text-muted-foreground hover:bg-subtle hover:text-ink"
+                    active
+                      ? "bg-primary-soft text-primary"
+                      : "text-muted-foreground hover:bg-subtle hover:text-ink"
                   }`}
                 >
                   {item.label}
@@ -124,13 +129,13 @@ export function Navbar() {
             })}
             <Link
               href="/settings"
-              className="rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-subtle hover:text-ink"
+              className="text-muted-foreground hover:bg-subtle hover:text-ink rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
             >
               设置
             </Link>
             <Link
               href="/login"
-              className="mt-1 rounded-lg bg-primary px-3 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-primary-hover"
+              className="bg-primary hover:bg-primary-hover mt-1 rounded-lg px-3 py-2.5 text-center text-sm font-semibold text-white transition-colors"
             >
               登录 / 注册
             </Link>

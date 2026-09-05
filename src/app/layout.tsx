@@ -6,6 +6,7 @@ import { Geist } from "next/font/google";
 import { TRPCReactProvider } from "~/trpc/react";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { Toaster } from "~/components/ui/sonner";
+import { ThemeProvider } from "~/app/ThemeProvider";
 
 export const metadata: Metadata = {
   title: "Create T3 App",
@@ -22,12 +23,16 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-CN" className={`${geist.variable}`}>
+    /* suppressHydrationWarning：主题 class 由 next-themes 内联脚本在首帧前
+     * 依据 localStorage 写入，需跳过 SSR 与客户端对 <html> 属性的水合告警。 */
+    <html lang="zh-CN" className={`${geist.variable}`} suppressHydrationWarning>
       <body className="font-sans antialiased">
-        <TooltipProvider>
-          <TRPCReactProvider>{children}</TRPCReactProvider>
-          <Toaster />
-        </TooltipProvider>
+        <ThemeProvider>
+          <TooltipProvider>
+            <TRPCReactProvider>{children}</TRPCReactProvider>
+            <Toaster />
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

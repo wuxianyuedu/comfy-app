@@ -8,7 +8,7 @@
  */
 
 import { useState } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Moon, Sun } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
@@ -34,7 +34,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
   const [showTaskTemps, setShowTaskTemps] = useState(false);
 
   return (
-    <div className="dark h-[calc(100vh-var(--toolbar-height,48px))] overflow-y-auto bg-(--color-canvas)">
+    <div className="bg-bg h-[calc(100vh-var(--toolbar-height,48px))] overflow-y-auto">
       {/* Header bar */}
       <div className="border-border flex items-center gap-3 border-b px-6 py-4">
         <button
@@ -72,12 +72,69 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
             <div
               className={`mb-4 rounded-lg border px-4 py-2 text-sm ${
                 c.flash.kind === "ok"
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                  : "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
               }`}
             >
               {c.flash.text}
             </div>
+          )}
+
+          {/* ═══ Appearance Section ═══ */}
+          {c.section === "appearance" && (
+            <Card title="外观主题">
+              <p className="text-muted-foreground mb-4 text-sm">
+                选择应用的主题外观：深色（Dark）或浅色（Light）。切换即时生效并自动保存，
+                也可通过顶部导航栏的太阳/月亮按钮随时切换。
+              </p>
+              <div
+                role="radiogroup"
+                aria-label="主题外观"
+                className="grid max-w-md grid-cols-2 gap-3"
+              >
+                {(
+                  [
+                    {
+                      value: "dark",
+                      label: "深色",
+                      Icon: Moon,
+                      hint: "适合低光环境",
+                    },
+                    {
+                      value: "light",
+                      label: "浅色",
+                      Icon: Sun,
+                      hint: "明亮、高对比",
+                    },
+                  ] as const
+                ).map(({ value, label, Icon, hint }) => {
+                  const active = c.theme === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => c.setTheme(value)}
+                      className={`flex flex-col items-start gap-1.5 rounded-xl border p-4 text-left transition-colors ${
+                        active
+                          ? "border-primary bg-primary-soft text-ink"
+                          : "border-border bg-surface-1 text-muted-foreground hover:border-border-strong hover:text-ink"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-semibold">
+                        <Icon
+                          size={18}
+                          className={active ? "text-primary" : ""}
+                        />
+                        {label}
+                      </span>
+                      <span className="text-xs opacity-80">{hint}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
           )}
 
           {/* ═══ LLM Section ═══ */}
@@ -85,7 +142,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
             <Card title="语言模型（LLM）">
               <div className="mb-4 flex gap-2">
                 <DarkSelect
-                  className="text-ink !bg-white/5 text-sm"
+                  className="text-ink !bg-surface-2 text-sm"
                   value={c.drafts.llm.provider}
                   onChange={(value) =>
                     c.patchLlm({ provider: value as LlmConfig["provider"] })
@@ -107,7 +164,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
 
               {/* Ollama status row */}
               {c.drafts.llm.provider === "local" && (
-                <div className="border-border mb-4 flex items-center gap-3 rounded-lg border bg-white/3 px-3 py-2.5">
+                <div className="border-border bg-surface-1 mb-4 flex items-center gap-3 rounded-lg border px-3 py-2.5">
                   {c.ollamaStatus === "checking" && (
                     <>
                       <Loader2
@@ -174,7 +231,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     onChange={(event) =>
                       c.patchLlm({ model: event.target.value })
                     }
-                    className="border-border text-ink focus:border-primary w-full rounded-lg border bg-white/5 px-3 py-2 text-sm outline-none"
+                    className="border-border text-ink focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
                   >
                     {c.ollamaModels.map((model) => (
                       <option key={model.name} value={model.name}>
@@ -225,7 +282,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
               </div>
 
               {/* 按任务类型配置温度 */}
-              <div className="border-border mb-4 rounded-xl border bg-white/[0.02] p-4">
+              <div className="border-border bg-surface-1 mb-4 rounded-xl border p-4">
                 <button
                   type="button"
                   onClick={() => setShowTaskTemps((v) => !v)}
@@ -245,7 +302,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       return (
                         <div
                           key={key}
-                          className="border-border/50 flex items-center gap-3 rounded-lg border bg-white/[0.02] px-3 py-2.5"
+                          className="border-border/50 bg-surface-1 flex items-center gap-3 rounded-lg border px-3 py-2.5"
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
@@ -272,7 +329,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                             onChange={(event) =>
                               c.setTaskTemperature(key, event.target.value)
                             }
-                            className="border-border text-ink focus:border-primary placeholder:text-muted-foreground/50 w-24 rounded-lg border bg-white/5 px-2 py-1.5 text-right text-sm outline-none"
+                            className="border-border text-ink focus:border-primary placeholder:text-muted-foreground/50 bg-surface-2 w-24 rounded-lg border px-2 py-1.5 text-right text-sm outline-none"
                           />
                         </div>
                       );
@@ -346,7 +403,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   提交任务时 ComfyUI 未运行则自动启动
                 </label>
               </div>
-              <div className="border-border mb-4 flex items-center gap-3 rounded-lg border bg-white/3 px-3 py-2">
+              <div className="border-border bg-surface-1 mb-4 flex items-center gap-3 rounded-lg border px-3 py-2">
                 <span
                   className={`inline-block size-2 shrink-0 rounded-full ${
                     c.comfyStatus?.up
@@ -411,7 +468,7 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-border rounded-2xl border bg-white/3 p-5 backdrop-blur">
+    <section className="border-border bg-surface-1 rounded-2xl border p-5 backdrop-blur">
       <h2 className="text-ink mb-4 text-base font-semibold">{title}</h2>
       {children}
     </section>
@@ -441,7 +498,7 @@ function Field({
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary w-full rounded-lg border bg-white/5 px-3 py-2 text-sm outline-none"
+        className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
       />
     </div>
   );

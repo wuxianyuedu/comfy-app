@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTheme } from "next-themes";
 
 import { errorMessage } from "~/lib/error-message";
 import {
@@ -44,7 +45,7 @@ export type LlmConfig = {
   apiKey: string | null;
 };
 
-export type Section = "llm" | "comfyui";
+export type Section = "llm" | "comfyui" | "appearance";
 export type OllamaStatus = "checking" | "starting" | "up" | "down";
 
 export interface FlashMessage {
@@ -62,6 +63,9 @@ export interface SettingsPageController {
   /** 侧边栏当前分区（纯视觉偏好，但影响渲染哪个表单，故由逻辑层持有）。 */
   section: Section;
   setSection: (section: Section) => void;
+  /* 外观主题：Light / Dark（持久化偏好，统一走 next-themes）。 */
+  theme: "light" | "dark";
+  setTheme: (theme: "light" | "dark") => void;
   /* 加载 / 错误 */
   isInitialLoad: boolean;
   hasError: boolean;
@@ -119,6 +123,7 @@ const OLLAMA_START_POLL_INTERVAL_MS = 2000;
 /** 设置页全部状态与动作 —— 见文件头注释的分层说明。 */
 export function useSettingsPage(): SettingsPageController {
   const [section, setSection] = useState<Section>("llm");
+  const { theme, setTheme } = useTheme();
   const [flash, setFlash] = useState<FlashMessage | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -205,11 +210,14 @@ export function useSettingsPage(): SettingsPageController {
   }, []);
 
   /** 探测并把结果落到状态行。启动流程内部轮询禁用此函数（见 probeOllamaSilent）。 */
-  const probeOllama = useCallback(async (baseUrl: string) => {
-    if (ollamaStartingRef.current) return;
-    setOllamaStatus("checking");
-    await probeOllamaSilent(baseUrl);
-  }, [probeOllamaSilent]);
+  const probeOllama = useCallback(
+    async (baseUrl: string) => {
+      if (ollamaStartingRef.current) return;
+      setOllamaStatus("checking");
+      await probeOllamaSilent(baseUrl);
+    },
+    [probeOllamaSilent],
+  );
 
   // baseUrl 变化或本地 provider 切换时重新探测
   useEffect(() => {
@@ -237,7 +245,9 @@ export function useSettingsPage(): SettingsPageController {
             return;
           }
         }
-        await new Promise((resolve) => setTimeout(resolve, OLLAMA_START_POLL_INTERVAL_MS));
+        await new Promise((resolve) =>
+          setTimeout(resolve, OLLAMA_START_POLL_INTERVAL_MS),
+        );
       }
       throw new Error(
         "Ollama 启动超时：进程可能未成功运行，请确认已安装 Ollama 并可手动执行 ollama serve",
@@ -385,6 +395,8 @@ export function useSettingsPage(): SettingsPageController {
   return {
     section,
     setSection,
+    theme: theme === "light" ? "light" : "dark",
+    setTheme: (value: "light" | "dark") => setTheme(value),
     isInitialLoad: isInitialLoad && !settingsQ.data && !llmQ.data && !hasError,
     hasError: hasError && !settingsData && !llmConfig,
     errorText,
@@ -427,6 +439,7 @@ export function useSettingsPage(): SettingsPageController {
 
 /** 侧边栏分区 —— 纯配置，视图直接消费。 */
 export const SETTINGS_SECTIONS: { id: Section; label: string }[] = [
+  { id: "appearance", label: "外观" },
   { id: "llm", label: "语言模型" },
   { id: "comfyui", label: "创作后端" },
 ];
