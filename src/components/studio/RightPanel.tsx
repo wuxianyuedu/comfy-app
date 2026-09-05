@@ -47,7 +47,7 @@ export function RightPanel({
 
   if (compact) {
     return (
-      <aside className="flex w-12 shrink-0 flex-col items-center gap-1 border-l border-white/6 bg-(--color-panel)/98 py-3 backdrop-blur-md">
+      <aside className="flex w-12 shrink-0 flex-col items-center gap-1 border-l border-(--color-border-subtle) bg-(--color-panel)/98 py-3 backdrop-blur-md">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -55,8 +55,8 @@ export function RightPanel({
             onClick={() => onTabChange?.(tab.id)}
             className={`flex h-9 w-9 items-center justify-center rounded-lg text-xs transition-colors ${
               tab.id === activeTab
-                ? "bg-violet-500/15 text-violet-300"
-                : "text-gray-500 hover:bg-white/6 hover:text-gray-300"
+                ? "bg-violet-500/15 text-(--color-ink-strong)"
+                : "text-(--color-ink-muted) hover:bg-(--color-subtle) hover:text-(--color-ink-strong)"
             }`}
             title={tab.label}
           >
@@ -68,9 +68,9 @@ export function RightPanel({
   }
 
   return (
-    <aside className="flex w-[360px] max-w-[45vw] shrink-0 flex-col overflow-hidden border-l border-white/6 bg-(--color-panel)/98 backdrop-blur-md">
+    <aside className="flex w-[360px] max-w-[45vw] shrink-0 flex-col overflow-hidden border-l border-(--color-border-subtle) bg-(--color-panel)/98 backdrop-blur-md">
       {/* Header */}
-      <header className="flex shrink-0 items-center justify-between border-b border-white/6 px-4 py-3">
+      <header className="flex shrink-0 items-center justify-between border-b border-(--color-border-subtle) px-4 py-3">
         <div className="flex items-center gap-2">
           <h2 className="u-title">
             {title ?? currentLabel}
@@ -80,7 +80,7 @@ export function RightPanel({
       </header>
 
       {/* Tab bar */}
-      <nav className="flex shrink-0 gap-0.5 border-b border-white/6 px-3 pt-2">
+      <nav className="flex shrink-0 gap-0.5 border-b border-(--color-border-subtle) px-3 pt-2">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -88,8 +88,8 @@ export function RightPanel({
             onClick={() => onTabChange?.(tab.id)}
             className={`rounded-t-lg px-3 pb-2 text-xs font-medium transition-colors ${
               tab.id === activeTab
-                ? "border-b-2 border-violet-400 text-violet-300"
-                : "text-gray-500 hover:text-gray-300"
+                ? "border-b-2 border-violet-500 text-(--color-ink-bright)"
+                : "text-(--color-ink-muted) hover:text-(--color-ink-strong)"
             }`}
           >
             {tab.label}
@@ -100,7 +100,7 @@ export function RightPanel({
       {/* Content */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {children[activeTab] ?? (
-          <div className="flex h-full items-center justify-center text-sm text-gray-600">
+          <div className="flex h-full items-center justify-center text-sm text-(--color-ink-fainter)">
             无内容
           </div>
         )}
