@@ -128,13 +128,24 @@ export interface SettingsPageController {
   setTaskTemperature: (task: TaskType, raw: string) => void;
   /** 勾选/取消一个候选模型（本地 Ollama 多模型管理） */
   toggleExtraModel: (name: string) => void;
-  /* 远端模型管理：列表 + 添加 / 移除 + 测试连接（添加只改草稿，保存时落库） */
+  /* 远端模型管理：列表 + 添加 / 编辑 / 移除 + 测试连接（改动只进草稿，保存时落库） */
   remoteModelList: RemoteModelEntry[];
   addRemoteModel: (entry: {
     name: string;
     baseUrl?: string;
     apiKey?: string;
   }) => { ok: boolean; error?: string };
+  /** 编辑既有条目：name 定位原条目（含「当前模型」行）；重名校验排除自身。
+   *  patch.baseUrl = null / clearApiKey = true 表示清掉独立配置、跟随全局。 */
+  updateRemoteModel: (
+    name: string,
+    patch: {
+      name?: string;
+      baseUrl?: string | null;
+      apiKey?: string;
+      clearApiKey?: boolean;
+    },
+  ) => { ok: boolean; error?: string };
   removeRemoteModel: (name: string) => void;
   probeRemote: (input: {
     baseUrl?: string;
@@ -530,6 +541,65 @@ export function useSettingsPage(): SettingsPageController {
     });
   }, []);
 
+  /** 编辑既有条目。目标可以是候选条目，也可以是「当前模型」行——后者可能
+   *  只是裸名字（不在 extraModels 里），此时把编辑结果作为条目补进候选，
+   *  独立接口 / 密钥才有地方落；改当前模型的名字要同步改 draft.model。 */
+  const updateRemoteModel = useCallback(
+    (
+      name: string,
+      patch: {
+        name?: string;
+        baseUrl?: string | null;
+        apiKey?: string;
+        clearApiKey?: boolean;
+      },
+    ) => {
+      if (!llmDraft) return { ok: false as const, error: "配置未就绪，请稍后重试" };
+      const nextName = (patch.name ?? name).trim();
+      if (!nextName) return { ok: false as const, error: "请填写模型名称" };
+      const isCurrent = llmDraft.model === name;
+      const existing = llmDraft.extraModels.find((e) => e.name === name);
+      if (!isCurrent && !existing) {
+        return { ok: false as const, error: `模型「${name}」不存在，请刷新后重试` };
+      }
+      if (nextName !== name) {
+        const duplicate =
+          nextName === llmDraft.model ||
+          llmDraft.extraModels.some((e) => e.name === nextName);
+        if (duplicate) {
+          return { ok: false as const, error: `模型「${nextName}」已在列表中` };
+        }
+      }
+      const updated: RemoteModelEntry = {
+        name: nextName,
+        baseUrl:
+          patch.baseUrl === undefined
+            ? (existing?.baseUrl ?? null)
+            : patch.baseUrl,
+        apiKey: patch.clearApiKey
+          ? null
+          : patch.apiKey?.trim()
+            ? patch.apiKey.trim()
+            : (existing?.apiKey ?? null),
+      };
+      setLlmDraft((draft) => {
+        if (!draft) return draft;
+        const wasCurrent = draft.model === name;
+        const existsInExtra = draft.extraModels.some((e) => e.name === name);
+        const extraModels = existsInExtra
+          ? draft.extraModels.map((e) => (e.name === name ? updated : e))
+          : [...draft.extraModels, updated];
+        return {
+          ...draft,
+          model: wasCurrent ? nextName : draft.model,
+          extraModels,
+        };
+      });
+      return { ok: true as const };
+    },
+    [llmDraft],
+  );
+
   const probeRemote = useCallback(
     async (input: { baseUrl?: string; apiKey?: string; model?: string }) =>
       probeRemoteApi(input),
@@ -603,6 +673,7 @@ export function useSettingsPage(): SettingsPageController {
     toggleExtraModel,
     remoteModelList,
     addRemoteModel,
+    updateRemoteModel,
     removeRemoteModel,
     probeRemote,
     llmApiKey,

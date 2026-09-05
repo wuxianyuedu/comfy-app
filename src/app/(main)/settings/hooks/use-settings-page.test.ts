@@ -504,6 +504,99 @@ describe("useSettingsPage", () => {
     expect(result.current.comfyLogActive).toBe(false);
   });
 
+  it("远端模型：编辑候选条目（改名/接口/密钥）；重名排除自身", async () => {
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    act(() => {
+      result.current.addRemoteModel({ name: "gpt-4o", apiKey: "sk-1" });
+    });
+    let out: { ok: boolean; error?: string } = { ok: false };
+    act(() => {
+      out = result.current.updateRemoteModel("gpt-4o", {
+        name: "gpt-4o-2024",
+        baseUrl: "https://api.example.com/v1",
+      });
+    });
+    expect(out.ok).toBe(true);
+    const renamed = result.current.remoteModelList.find(
+      (e) => e.name === "gpt-4o-2024",
+    );
+    expect(renamed?.baseUrl).toBe("https://api.example.com/v1");
+    /* 未提供 apiKey → 保留原值 */
+    expect(renamed?.apiKey).toBe("sk-1");
+    expect(
+      result.current.remoteModelList.some((e) => e.name === "gpt-4o"),
+    ).toBe(false);
+
+    // 改名撞主模型 / 撞其他候选 → 拒绝
+    act(() => {
+      out = result.current.updateRemoteModel("gpt-4o-2024", {
+        name: "qwen3:14b",
+      });
+    });
+    expect(out.ok).toBe(false);
+    act(() => {
+      result.current.addRemoteModel({ name: "claude" });
+    });
+    act(() => {
+      out = result.current.updateRemoteModel("claude", {
+        name: "gpt-4o-2024",
+      });
+    });
+    expect(out.ok).toBe(false);
+
+    // 清除独立密钥 → 跟随全局
+    act(() => {
+      out = result.current.updateRemoteModel("gpt-4o-2024", {
+        clearApiKey: true,
+      });
+    });
+    expect(out.ok).toBe(true);
+    expect(
+      result.current.remoteModelList.find((e) => e.name === "gpt-4o-2024")
+        ?.apiKey,
+    ).toBeNull();
+  });
+
+  it("远端模型：编辑「当前模型」行（候选里无条目）→ 条目补进候选，改名同步主模型", async () => {
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    // 初始列表 = [qwen3:14b]（主模型行，候选里无条目）
+    let out: { ok: boolean; error?: string } = { ok: false };
+    act(() => {
+      out = result.current.updateRemoteModel("qwen3:14b", {
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "sk-main",
+      });
+    });
+    expect(out.ok).toBe(true);
+    expect(result.current.drafts?.llm.model).toBe("qwen3:14b");
+    const entry = result.current.remoteModelList[0];
+    expect(entry?.baseUrl).toBe("https://api.example.com/v1");
+    expect(entry?.apiKey).toBe("sk-main");
+    expect(result.current.drafts?.llm.extraModels).toContainEqual(
+      expect.objectContaining({ name: "qwen3:14b", apiKey: "sk-main" }),
+    );
+
+    // 改当前模型名 → draft.model 同步，条目一并改名
+    act(() => {
+      out = result.current.updateRemoteModel("qwen3:14b", {
+        name: "qwen3:32b",
+      });
+    });
+    expect(out.ok).toBe(true);
+    expect(result.current.drafts?.llm.model).toBe("qwen3:32b");
+    expect(
+      result.current.remoteModelList.map((e) => e.name),
+    ).toContain("qwen3:32b");
+  });
+
   it("分区切换是纯视觉状态", async () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),

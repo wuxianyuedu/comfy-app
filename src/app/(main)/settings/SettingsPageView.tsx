@@ -13,7 +13,7 @@ import { ArrowLeft, Loader2, Moon, Sun } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import type { TaskType } from "~/lib/llm/types";
+import type { RemoteModelEntry, TaskType } from "~/lib/llm/types";
 import type {
   LlmConfig,
   SettingsPageController,
@@ -23,6 +23,13 @@ import {
   SETTINGS_SECTIONS,
   TEMPERATURE_TASKS,
 } from "./hooks/use-settings-page";
+
+/** 添加 / 编辑模型弹窗的表单草稿。 */
+interface ModelDialogForm {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
 
 /** `drafts` 非空由容器保证（`if (!c.drafts)` 早退），这里用交集类型表达，
  *  视图内不必逐处判空。 */
@@ -50,10 +57,19 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
       return next;
     });
 
-  /* 「添加模型」弹窗：表单草稿、测试连接的进行态与结果、可点选的服务端模型清单。
-   * 提交校验（重名拒绝等）在 controller.addRemoteModel，这里只管交互状态。 */
-  const [addOpen, setAddOpen] = useState(false);
-  const [addForm, setAddForm] = useState({ baseUrl: "", apiKey: "", model: "" });
+  /* 「添加 / 编辑模型」弹窗：表单草稿、测试连接的进行态与结果、可点选的
+   * 服务端模型清单。提交校验（重名拒绝等）在 controller，这里只管交互状态。
+   * API Key 输入遵循「留空不改」：编辑时输入新值才覆盖，也可显式清除改用全局。 */
+  const [dialog, setDialog] = useState<
+    | { mode: "add" }
+    | { mode: "edit"; original: string; entry: RemoteModelEntry }
+    | null
+  >(null);
+  const [addForm, setAddForm] = useState<ModelDialogForm>({
+    baseUrl: "",
+    apiKey: "",
+    model: "",
+  });
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<{
     kind: "ok" | "err";
@@ -61,6 +77,14 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
   } | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [addError, setAddError] = useState<string | null>(null);
+  const [clearKey, setClearKey] = useState(false);
+  /* 列表行的就地测试（按条目自身的接口地址 / 密钥），同一时间只测一行 */
+  const [rowTesting, setRowTesting] = useState<string | null>(null);
+  const [rowTestMsg, setRowTestMsg] = useState<{
+    name: string;
+    kind: "ok" | "err";
+    text: string;
+  } | null>(null);
 
   /* ComfyUI 启动日志的滚动跟随是纯视觉偏好，留在视图层 */
   const comfyLogBoxRef = useRef<HTMLDivElement>(null);
@@ -76,20 +100,34 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
   };
 
   function openAddDialog() {
-    setAddForm({ baseUrl: c.drafts.llm.baseUrl, apiKey: "", model: "" });
+    setDialog({ mode: "add" });
+    setAddForm({ baseUrl: "", apiKey: "", model: "" });
+    setClearKey(false);
     setTestMsg(null);
     setSuggestions([]);
     setAddError(null);
-    setAddOpen(true);
+  }
+
+  function openEditDialog(entry: RemoteModelEntry) {
+    setDialog({ mode: "edit", original: entry.name, entry });
+    setAddForm({ baseUrl: entry.baseUrl ?? "", apiKey: "", model: entry.name });
+    setClearKey(false);
+    setTestMsg(null);
+    setSuggestions([]);
+    setAddError(null);
   }
 
   async function handleTestConnection() {
     setTesting(true);
     setTestMsg(null);
     try {
+      /* 编辑态 API Key 留空 = 沿用该条目已保存的密钥去测（「留空不改」） */
+      const savedKey =
+        dialog?.mode === "edit" ? dialog.entry.apiKey : undefined;
+      const typedKey = addForm.apiKey.trim();
       const out = await c.probeRemote({
         baseUrl: addForm.baseUrl.trim() || undefined,
-        apiKey: addForm.apiKey.trim() || undefined,
+        apiKey: typedKey ? typedKey : (savedKey ?? undefined),
         model: addForm.model.trim() || undefined,
       });
       setTestMsg({ kind: out.ok ? "ok" : "err", text: out.detail });
@@ -99,21 +137,54 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
     }
   }
 
-  function handleAdd() {
+  async function handleRowTest(entry: RemoteModelEntry) {
+    setRowTesting(entry.name);
+    setRowTestMsg(null);
+    try {
+      const out = await c.probeRemote({
+        baseUrl: entry.baseUrl ?? undefined,
+        apiKey: entry.apiKey ?? undefined,
+        model: entry.name,
+      });
+      setRowTestMsg({
+        name: entry.name,
+        kind: out.ok ? "ok" : "err",
+        text: out.detail,
+      });
+    } finally {
+      setRowTesting(null);
+    }
+  }
+
+  function handleDialogSubmit() {
     setAddError(null);
     const baseUrl = addForm.baseUrl.trim();
+    if (dialog?.mode === "edit") {
+      const result = c.updateRemoteModel(dialog.original, {
+        name: addForm.model,
+        /* 空串 = 清掉独立接口（跟随全局） */
+        baseUrl: baseUrl ? baseUrl : null,
+        apiKey: addForm.apiKey.trim() ? addForm.apiKey.trim() : undefined,
+        clearApiKey: clearKey && !addForm.apiKey.trim(),
+      });
+      if (!result.ok) {
+        setAddError(result.error ?? "保存失败");
+        return;
+      }
+      setDialog(null);
+      return;
+    }
     const result = c.addRemoteModel({
       name: addForm.model,
-      /* 与全局一致（或留空）就不落条目字段，调用时跟随全局连接设置 */
-      baseUrl:
-        baseUrl && baseUrl !== c.drafts.llm.baseUrl ? baseUrl : undefined,
+      /* 留空不落条目字段 → 跟随已保存的全局连接配置 */
+      baseUrl: baseUrl || undefined,
       apiKey: addForm.apiKey.trim() ? addForm.apiKey.trim() : undefined,
     });
     if (!result.ok) {
       setAddError(result.error ?? "添加失败");
       return;
     }
-    setAddOpen(false);
+    setDialog(null);
   }
 
   return (
@@ -239,12 +310,15 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                 />
               </div>
 
-              <Field
-                label="Base URL"
-                value={c.drafts.llm.baseUrl}
-                onChange={(value) => c.patchLlm({ baseUrl: value })}
-                placeholder="http://localhost:11434/v1"
-              />
+              {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
+              {c.drafts.llm.provider === "local" && (
+                <Field
+                  label="Base URL"
+                  value={c.drafts.llm.baseUrl}
+                  onChange={(value) => c.patchLlm({ baseUrl: value })}
+                  placeholder="http://localhost:11434/v1"
+                />
+              )}
 
               {/* Ollama status row */}
               {c.drafts.llm.provider === "local" && (
@@ -369,20 +443,8 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                 />
               ) : (
                 <>
-                  <Field
-                    label="API Key"
-                    value={
-                      c.llmApiKey || (!!c.drafts.llm.apiKey ? "••••••••" : "")
-                    }
-                    onChange={c.setLlmApiKey}
-                    type="password"
-                    placeholder={
-                      !!c.drafts.llm.apiKey
-                        ? "已设置，留空不改"
-                        : "远程提供商必填"
-                    }
-                  />
-                  {/* 已配置模型列表：主模型置顶；添加走「添加模型」弹窗，保存时落库 */}
+                  {/* 已配置模型列表：主模型置顶；连接参数由条目各自携带，
+                      添加 / 编辑走弹窗，保存时落库 */}
                   <div className="border-border bg-surface-1 mb-4 rounded-xl border p-4">
                     <div className="mb-3 flex items-center justify-between">
                       <span className="text-ink/80 text-sm font-medium">
@@ -442,11 +504,31 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                                   </span>
                                 )}
                               </button>
-                              {isCurrent ? (
+                              {isCurrent && (
                                 <span className="text-primary shrink-0 text-[10px] font-medium">
                                   当前
                                 </span>
-                              ) : (
+                              )}
+                              <button
+                                type="button"
+                                title="按该条目的接口地址与密钥测试连接"
+                                onClick={() => void handleRowTest(entry)}
+                                disabled={rowTesting !== null}
+                                className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors disabled:opacity-40"
+                              >
+                                {rowTesting === entry.name
+                                  ? "测试中…"
+                                  : "测试"}
+                              </button>
+                              <button
+                                type="button"
+                                title="编辑接口地址 / 密钥 / 名称"
+                                onClick={() => openEditDialog(entry)}
+                                className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors"
+                              >
+                                编辑
+                              </button>
+                              {!isCurrent && (
                                 <button
                                   type="button"
                                   title="移除该模型"
@@ -469,8 +551,19 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                         API Key 后可先测试连接）。
                       </p>
                     )}
+                    {rowTestMsg && (
+                      <p
+                        className={`mt-2 rounded-lg px-3 py-2 text-[11px] ${
+                          rowTestMsg.kind === "ok"
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                            : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
+                        }`}
+                      >
+                        「{rowTestMsg.name}」：{rowTestMsg.text}
+                      </p>
+                    )}
                     <p className="text-muted-foreground mt-2.5 text-[11px] leading-relaxed">
-                      点击模型设为当前生效，工坊内也可随时切换；带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走上方全局连接设置。改动需点下方「保存
+                      点击模型设为当前生效，工坊内也可随时切换；「测试」按该条目的接口地址与密钥探测连通性；带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。改动需点下方「保存
                       LLM 配置」生效。
                     </p>
                   </div>
@@ -595,22 +688,25 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
               </Btn>
             </Card>
 
-            {/* 「添加模型」弹窗（远端提供方）：接口地址 / API Key 可留空回落全局，
-                测试连接成功后顺带展示服务端模型清单供点选。 */}
-            {c.drafts.llm.provider === "remote" && addOpen && (
+            {/* 「添加 / 编辑模型」弹窗（远端提供方）：接口地址 / API Key 可留空
+                回落全局；编辑态密钥「留空不改」，可显式清除。测试连接成功后
+                顺带展示服务端模型清单供点选。 */}
+            {c.drafts.llm.provider === "remote" && dialog && (
               <div
                 className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
-                onClick={() => setAddOpen(false)}
+                onClick={() => setDialog(null)}
               >
                 <div
                   className="border-border bg-surface w-full max-w-md rounded-2xl border p-5 shadow-2xl"
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div className="mb-4 flex items-center justify-between">
-                    <h3 className="u-title">添加模型</h3>
+                    <h3 className="u-title">
+                      {dialog.mode === "edit" ? "编辑模型" : "添加模型"}
+                    </h3>
                     <button
                       type="button"
-                      onClick={() => setAddOpen(false)}
+                      onClick={() => setDialog(null)}
                       className="text-muted-foreground hover:text-ink"
                       aria-label="关闭"
                     >
@@ -645,7 +741,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-1 w-full rounded-lg border px-3 py-2 text-sm outline-none"
                   />
                   <p className="text-muted-foreground mb-3 text-[11px]">
-                    留空则使用上方全局 Base URL
+                    留空则跟随已保存的全局接口地址
                   </p>
 
                   <label className="text-ink/80 mb-1.5 block text-sm font-medium">
@@ -655,10 +751,16 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     <input
                       type="password"
                       value={addForm.apiKey}
-                      onChange={(event) =>
-                        setAddForm({ ...addForm, apiKey: event.target.value })
+                      onChange={(event) => {
+                        setAddForm({ ...addForm, apiKey: event.target.value });
+                        /* 输入新密钥即撤销「清除」标记 */
+                        if (event.target.value) setClearKey(false);
+                      }}
+                      placeholder={
+                        dialog?.mode === "edit" && dialog.entry.apiKey
+                          ? "已设置独立密钥，留空保持不变"
+                          : "留空则使用全局 API Key"
                       }
-                      placeholder="留空则使用全局 API Key"
                       className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
                     />
                     <button
@@ -670,6 +772,32 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       {testing ? "测试中…" : "测试连接"}
                     </button>
                   </div>
+                  {dialog?.mode === "edit" && dialog.entry.apiKey && (
+                    <p className="text-muted-foreground mb-1 text-[11px]">
+                      {clearKey ? (
+                        <>
+                          将清除独立密钥、改用全局 API Key。
+                          <button
+                            type="button"
+                            onClick={() => setClearKey(false)}
+                            className="text-primary mx-1 underline underline-offset-2"
+                          >
+                            撤销
+                          </button>
+                        </>
+                      ) : (
+                        !addForm.apiKey && (
+                          <button
+                            type="button"
+                            onClick={() => setClearKey(true)}
+                            className="text-primary underline underline-offset-2"
+                          >
+                            清除独立密钥，改用全局
+                          </button>
+                        )
+                      )}
+                    </p>
+                  )}
                   {testMsg && (
                     <p
                       className={`mb-3 rounded-lg px-3 py-2 text-xs ${
@@ -726,18 +854,18 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   <div className="mt-4 flex justify-end gap-2">
                     <button
                       type="button"
-                      onClick={() => setAddOpen(false)}
+                      onClick={() => setDialog(null)}
                       className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-4 py-2 text-sm transition-colors"
                     >
                       取消
                     </button>
                     <button
                       type="button"
-                      onClick={handleAdd}
+                      onClick={handleDialogSubmit}
                       disabled={!addForm.model.trim()}
                       className="bg-primary hover:bg-primary-hover rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50"
                     >
-                      添加
+                      {dialog.mode === "edit" ? "保存" : "添加"}
                     </button>
                   </div>
                 </div>
