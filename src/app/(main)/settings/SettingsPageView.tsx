@@ -167,7 +167,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
               c.ollamaModels.length > 0 ? (
                 <div className="mb-3">
                   <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-                    模型
+                    当前模型
                   </label>
                   <select
                     value={c.drafts.llm.model}
@@ -182,6 +182,40 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       </option>
                     ))}
                   </select>
+                  {c.ollamaModels.length > 1 && (
+                    <>
+                      <label className="text-ink/80 mt-3 mb-1.5 block text-sm font-medium">
+                        工坊候选模型（可多选）
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {c.ollamaModels.map((model) => {
+                          const checked =
+                            model.name === c.drafts.llm.model ||
+                            c.drafts.llm.extraModels.includes(model.name);
+                          return (
+                            <button
+                              key={model.name}
+                              type="button"
+                              title={
+                                model.name === c.drafts.llm.model
+                                  ? "当前模型（始终可用）"
+                                  : "勾选后工坊各阶段可直接切换"
+                              }
+                              onClick={() => c.toggleExtraModel(model.name)}
+                              className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+                                checked
+                                  ? "border-primary bg-primary/15 text-primary"
+                                  : "border-border text-muted-foreground hover:bg-white/5"
+                              }`}
+                            >
+                              {checked ? "✓ " : ""}
+                              {model.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 <Field
@@ -193,19 +227,69 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
               )}
 
               {c.drafts.llm.provider === "remote" && (
-                <Field
-                  label="API Key"
-                  value={
-                    c.llmApiKey || (!!c.drafts.llm.apiKey ? "••••••••" : "")
-                  }
-                  onChange={c.setLlmApiKey}
-                  type="password"
-                  placeholder={
-                    !!c.drafts.llm.apiKey
-                      ? "已设置，留空不改"
-                      : "远程提供商必填"
-                  }
-                />
+                <>
+                  <Field
+                    label="API Key"
+                    value={
+                      c.llmApiKey || (!!c.drafts.llm.apiKey ? "••••••••" : "")
+                    }
+                    onChange={c.setLlmApiKey}
+                    type="password"
+                    placeholder={
+                      !!c.drafts.llm.apiKey
+                        ? "已设置，留空不改"
+                        : "远程提供商必填"
+                    }
+                  />
+                  <div className="mb-3">
+                    <div className="text-ink/80 mb-1.5 flex items-center gap-2 text-sm font-medium">
+                      远端模型（可多选，供工坊切换）
+                      <button
+                        type="button"
+                        onClick={() => void c.fetchRemoteModels()}
+                        disabled={c.remoteModelsLoading}
+                        className="border-border text-muted-foreground hover:bg-subtle rounded border px-2 py-0.5 text-[11px] disabled:opacity-40"
+                      >
+                        {c.remoteModelsLoading ? "拉取中…" : "拉取模型列表"}
+                      </button>
+                    </div>
+                    {c.remoteModels.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {c.remoteModels.map((name) => {
+                          const checked =
+                            name === c.drafts.llm.model ||
+                            c.drafts.llm.extraModels.includes(name);
+                          return (
+                            <button
+                              key={name}
+                              type="button"
+                              title={
+                                name === c.drafts.llm.model
+                                  ? "当前模型（始终可用）"
+                                  : "勾选后工坊各阶段可直接切换"
+                              }
+                              onClick={() => c.toggleExtraModel(name)}
+                              className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+                                checked
+                                  ? "border-primary bg-primary/15 text-primary"
+                                  : "border-border text-muted-foreground hover:bg-white/5"
+                              }`}
+                            >
+                              {checked ? "✓ " : ""}
+                              {name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-[11px]">
+                        {c.remoteModelsLoading
+                          ? "正在拉取模型列表…"
+                          : "未拉取到模型列表 —— 可在保存 Base URL / API Key 后重试；不影响手动使用（工坊直接用下方当前模型）。"}
+                      </p>
+                    )}
+                  </div>
+                </>
               )}
               <div className="mb-4 grid grid-cols-2 gap-3">
                 <Field

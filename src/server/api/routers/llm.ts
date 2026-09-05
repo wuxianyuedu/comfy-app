@@ -20,6 +20,7 @@ export const llmRouter = createTRPCRouter({
         apiKey: z.string().optional(),
         baseUrl: z.string().optional(),
         model: z.string().optional(),
+        extraModels: z.array(z.string()).optional(),
         temperature: z.number().optional(),
         temperatureByTask: z.record(z.enum(taskTypeKeys), z.number()).optional(),
         maxTokens: z.number().optional(),

@@ -58,6 +58,7 @@ const LLM: LlmConfig = {
   provider: "local",
   baseUrl: "http://localhost:11434/v1",
   model: "qwen3:14b",
+  extraModels: [],
   temperature: 0.7,
   maxTokens: 2048,
   apiKey: null,
