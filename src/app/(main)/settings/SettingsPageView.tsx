@@ -34,7 +34,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
   const [showTaskTemps, setShowTaskTemps] = useState(false);
 
   return (
-    <div className="dark h-[calc(100vh-var(--toolbar-height,48px))] overflow-y-auto bg-(--color-canvas)">
+    <div className="dark h-[calc(100vh-var(--toolbar-height,48px))] overflow-y-auto bg-(--color-canvas) pb-6">
       {/* Header bar */}
       <div className="border-border flex items-center gap-3 border-b px-6 py-4">
         <button
