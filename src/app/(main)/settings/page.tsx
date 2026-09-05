@@ -18,7 +18,7 @@ export default function SettingsPage() {
   // 仅在首次加载且无数据时显示 loading；若 query 已结束但数据为空或出错则放行渲染
   if (c.isInitialLoad) {
     return (
-      <div className="dark text-muted-foreground grid h-[calc(100vh-var(--toolbar-height,48px))] place-items-center bg-(--color-canvas) pb-6">
+      <div className="text-muted-foreground bg-bg grid h-[calc(100vh-var(--toolbar-height,48px))] place-items-center pb-6">
         加载中…
       </div>
     );
@@ -26,7 +26,7 @@ export default function SettingsPage() {
 
   if (c.hasError) {
     return (
-      <div className="dark grid h-[calc(100vh-var(--toolbar-height,48px))] place-items-center bg-(--color-canvas) p-6 text-center">
+      <div className="bg-bg grid h-[calc(100vh-var(--toolbar-height,48px))] place-items-center p-6 text-center">
         <p className="text-rose-400">加载设置失败，请刷新重试</p>
         <p className="text-muted-foreground mt-2 text-xs">{c.errorText}</p>
         <button
@@ -42,7 +42,7 @@ export default function SettingsPage() {
   // 此时草稿应已就绪；若仍为空则显示降级 UI（不应触发，但满足 TypeScript）
   if (!c.drafts) {
     return (
-      <div className="dark text-muted-foreground grid h-[calc(100vh-var(--toolbar-height,48px))] place-items-center bg-(--color-canvas) pb-6">
+      <div className="text-muted-foreground bg-bg grid h-[calc(100vh-var(--toolbar-height,48px))] place-items-center pb-6">
         配置数据未就绪
       </div>
     );
