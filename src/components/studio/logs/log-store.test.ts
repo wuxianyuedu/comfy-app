@@ -437,6 +437,24 @@ describe("isReactQueryLog React Query 内部日志识别", () => {
   it("不满足 query #N 模式的 %c 日志返回 false", () => {
     expect(isReactQueryLog(["%c styled output", "color:red"])).toBe(false);
   });
+
+  it("匹配 mutation 方向（tRPC loggerLink 标准形态）", () => {
+    expect(
+      isReactQueryLog(["%c << mutation #43 %cworkflow.update", "color:red"]),
+    ).toBe(true);
+    expect(isReactQueryLog(["%c >> mutation #7 %cfoo.bar", "x"])).toBe(true);
+  });
+
+  it("匹配塌缩/重包装形态（React devtools 合并单串）", () => {
+    expect(isReactQueryLog(["[[ << mutation #43 ]workflow.update {}"])).toBe(true);
+    expect(isReactQueryLog(["[ >> query #2 ]workflow.list"])).toBe(true);
+    expect(isReactQueryLog(["[<< mutation #1 x"])).toBe(true);
+  });
+
+  it("不误吞含类似文案的普通业务日志", () => {
+    expect(isReactQueryLog(["user typed >> mutation #3 note"])).toBe(false);
+    expect(isReactQueryLog(["business log about query result"])).toBe(false);
+  });
 });
 
 /* ── parseFileLogs ────────────────────────────────────────── */
