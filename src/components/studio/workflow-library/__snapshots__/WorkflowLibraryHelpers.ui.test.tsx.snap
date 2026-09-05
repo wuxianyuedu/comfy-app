@@ -3,10 +3,10 @@
 exports[`FilterTabs > 渲染所有 tab 与计数徽标,激活项可识别 1`] = `
 <div>
   <div
-    class="mb-4 flex flex-wrap items-center gap-2"
+    class="mb-3 flex flex-wrap items-center gap-1.5"
   >
     <button
-      class="flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors border-violet-500/60 bg-violet-500/15 text-violet-200"
+      class="flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors border-violet-500/60 bg-violet-500/15 text-violet-200"
       type="button"
     >
       全部
@@ -17,7 +17,7 @@ exports[`FilterTabs > 渲染所有 tab 与计数徽标,激活项可识别 1`] = 
       </span>
     </button>
     <button
-      class="flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors border-white/8 bg-white/2 text-gray-400 hover:border-white/20 hover:text-gray-200"
+      class="flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors border-white/8 bg-white/2 text-gray-400 hover:border-white/20 hover:text-gray-200"
       type="button"
     >
       API

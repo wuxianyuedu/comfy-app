@@ -16,6 +16,12 @@ export type DetailTab = (typeof DETAIL_TABS)[number]["key"];
 
 export interface WorkflowLibraryDetailProps {
   workflow: WorkflowRow | null;
+  /** 用户级全局模型标签库（用于类型/模型编辑器）。 */
+  allModelTags?: { id: string; name: string; count: number }[];
+  /** 持久化类型（modes + defaultMode）。 */
+  onPatchModes?: (id: string, modes: string[], defaultMode: string) => Promise<void>;
+  /** 持久化模型标签绑定。 */
+  onPatchModelTags?: (id: string, names: string[]) => Promise<void>;
   onUse: (id: string, meta?: { name: string; taskType: string }) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string, name: string) => void;

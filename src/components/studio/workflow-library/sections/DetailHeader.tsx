@@ -14,7 +14,7 @@ import {
 
 import { SourceTag } from "~/components/studio/ui/SourceTag";
 import { TaskTypeChip } from "~/components/studio/ui/TaskTypeChip";
-import { ago, type WorkflowRow } from "../workflow-library-config";
+import { type WorkflowRow } from "../workflow-library-config";
 import { ActionButton } from "./DetailControls";
 
 interface DetailHeaderProps {
@@ -91,7 +91,6 @@ export function DetailHeader({
               </span>
             )}
           </div>
-          <p className="mt-2 text-[11px] text-white/35">{ago(workflow.createdAt)}</p>
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">

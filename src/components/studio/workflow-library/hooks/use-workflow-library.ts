@@ -87,6 +87,10 @@ export interface WorkflowLibraryController {
   /** 模型标签变更后重新拉取（标签管理弹层关闭时由视图调用）。 */
   loadModelTags: () => void;
   handleUse: (id: string, meta?: { name: string; taskType: string }) => void;
+  /** 持久化工作流类型（modes + defaultMode，defaultMode 回写 taskType）。 */
+  patchModes: (id: string, modes: string[], defaultMode: string) => Promise<void>;
+  /** 持久化模型标签绑定。 */
+  patchModelTags: (id: string, names: string[]) => Promise<void>;
   handleDeleteClick: (id: string, name: string) => void;
   handleDownload: (id: string, name: string) => Promise<void>;
   handleResync: (id: string, name: string) => Promise<void>;
@@ -324,5 +328,7 @@ export function useWorkflowLibrary(
     handleResync: actions.resyncWorkflow,
     handleLoadPending: actions.handleLoadPending,
     handleEdit,
+    patchModes: actions.patchModes,
+    patchModelTags: actions.patchModelTags,
   };
 }
