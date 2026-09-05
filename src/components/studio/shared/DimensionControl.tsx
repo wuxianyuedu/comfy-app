@@ -28,8 +28,44 @@ import { Field } from "./StyleSwitcher";
 
 /** Dimension group narrowed to its W/H form (the classic 比例+清晰度 picker). */
 type SizeGroup = DimensionGroup & { width: EnrichedWidget; height: EnrichedWidget };
-/** Dimension group narrowed to its 宽高比 + 百万像素 form (ResolutionSelector). */
-type AspectMegaGroup = DimensionGroup & { aspect: EnrichedWidget; megapixels: EnrichedWidget };
+/** Dimension group narrowed to its 宽高比 + 百万像素 (+ 倍数) form (ResolutionSelector). */
+type AspectMegaGroup = DimensionGroup & {
+  aspect: EnrichedWidget;
+  megapixels: EnrichedWidget;
+  multiple?: EnrichedWidget;
+};
+
+/** 组合参数的必填/可选切换：grouped 行替代了各自的独立参数行，原来的
+ *  必填/可选徽标会跟着消失 —— 在组合卡内按 pin 补回。仅编辑态传入回调时渲染。 */
+function RequiredChips({
+  pins,
+  onRequiredChange,
+}: {
+  pins: (EnrichedWidget | undefined)[];
+  onRequiredChange?: (ioKey: string, required: boolean) => void;
+}) {
+  const live = pins.filter((pin): pin is EnrichedWidget => !!pin);
+  if (!onRequiredChange || live.length === 0) return null;
+  return (
+    <div className="flex items-center justify-end gap-1">
+      {live.map((pin) => (
+        <button
+          key={pin.ioKey}
+          type="button"
+          onClick={() => onRequiredChange(pin.ioKey, !pin.required)}
+          title={pin.required ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"}
+          className={`rounded px-1.5 py-px text-[10px] font-medium transition-colors ${
+            pin.required
+              ? "border border-red-400/40 bg-red-500/15 text-red-300 hover:bg-red-500/25"
+              : "border border-white/8 bg-white/2 text-gray-500 hover:bg-white/6 hover:text-gray-300"
+          }`}
+        >
+          {`${pin.required ? "必填" : "可选"} ${pin.label ?? pin.name}`}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /** Entry point: dispatch on which paradigm the workflow exposes.
  *
@@ -42,6 +78,7 @@ function DimensionControl({
   setMany,
   disabled,
   workflowId,
+  onRequiredChange,
 }: {
   group: DimensionGroup;
   values: Record<string, unknown>;
@@ -49,6 +86,7 @@ function DimensionControl({
   setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
   workflowId?: string;
+  onRequiredChange?: (ioKey: string, required: boolean) => void;
 }) {
   if (group.width && group.height) {
     return (
@@ -59,6 +97,7 @@ function DimensionControl({
         setMany={setMany}
         disabled={disabled}
         workflowId={workflowId}
+        onRequiredChange={onRequiredChange}
       />
     );
   }
@@ -69,6 +108,7 @@ function DimensionControl({
         values={values}
         setMany={setMany}
         disabled={disabled}
+        onRequiredChange={onRequiredChange}
       />
     );
   }
@@ -82,6 +122,7 @@ function DimensionSizeControl({
   setMany,
   disabled,
   workflowId,
+  onRequiredChange,
 }: {
   group: SizeGroup;
   values: Record<string, unknown>;
@@ -89,6 +130,7 @@ function DimensionSizeControl({
   setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
   workflowId?: string;
+  onRequiredChange?: (ioKey: string, required: boolean) => void;
 }) {
   const w0 = Number(values[group.width.ioKey] ?? group.width.defaultValue ?? 1024);
   const h0 = Number(values[group.height.ioKey] ?? group.height.defaultValue ?? 1024);
@@ -267,6 +309,10 @@ function DimensionSizeControl({
             />
           </div>
         </div>
+        <RequiredChips
+          pins={[group.width, group.height]}
+          onRequiredChange={onRequiredChange}
+        />
       </div>
 
       {/* Width + Height — always visible, styled like any other node parameter
@@ -319,13 +365,15 @@ function AspectMegapixelControl({
   values,
   setMany,
   disabled,
+  onRequiredChange,
 }: {
   group: AspectMegaGroup;
   values: Record<string, unknown>;
   setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
+  onRequiredChange?: (ioKey: string, required: boolean) => void;
 }) {
-  const { aspect, megapixels } = group;
+  const { aspect, megapixels, multiple } = group;
 
   const rawAspect = values[aspect.ioKey];
   /* Only primitives are safe to stringify — an object value would render as
@@ -370,14 +418,47 @@ function AspectMegapixelControl({
     return hit?.label ?? `${currentMp}M`;
   }, [currentMp]);
 
+  /* ── 倍数段：跟比例 / 像素并列写进同一个 popover ──
+   *  候选项优先用工作流自己的 options（COMBO 型），否则给常用的放大倍数；
+   *  当前值不在候选里时动态补上，保证反显高亮不丢。 */
+  const currentMultiple = useMemo(() => {
+    if (!multiple) return 1;
+    const raw = values[multiple.ioKey];
+    const n = typeof raw === "number" ? raw : Number(raw);
+    return Number.isFinite(n) ? n : (typeof multiple.defaultValue === "number" ? multiple.defaultValue : 1);
+  }, [multiple, values]);
+
+  const multipleOptions = useMemo((): { value: number; label: string }[] => {
+    const source =
+      multiple && Array.isArray(multiple.options) && multiple.options.length > 0
+        ? multiple.options
+        : ["1", "1.25", "1.5", "2", "2.5", "3", "4"];
+    const parsed = source
+      .map((item) => Number(item))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (multiple && !parsed.some((n) => Math.abs(n - currentMultiple) < 0.001)) {
+      parsed.push(currentMultiple);
+      parsed.sort((a, b) => a - b);
+    }
+    return parsed.map((n) => ({ value: n, label: `${n}x` }));
+  }, [multiple, currentMultiple]);
+
+  const multipleLabel = useMemo(() => `${currentMultiple}x`, [currentMultiple]);
+
   /* Preserve the workflow's own spelling when the user only changes the
    * megapixel count — writing a preset string into a node that spells the
    * option differently would silently blank the pin. */
   const apply = useCallback(
-    (nextAspect: string, nextMp: number) => {
-      setMany({ [aspect.ioKey]: nextAspect, [megapixels.ioKey]: nextMp });
+    (nextAspect: string, nextMp: number, nextMultiple?: number) => {
+      setMany({
+        [aspect.ioKey]: nextAspect,
+        [megapixels.ioKey]: nextMp,
+        ...(multiple && nextMultiple !== undefined
+          ? { [multiple.ioKey]: nextMultiple }
+          : {}),
+      });
     },
-    [aspect.ioKey, megapixels.ioKey, setMany]
+    [aspect.ioKey, megapixels.ioKey, multiple, setMany]
   );
 
   const sections: SegmentSection<string>[] = useMemo(
@@ -405,8 +486,29 @@ function AspectMegapixelControl({
           apply(activeAspect?.value ?? currentAspect ?? ASPECT_RATIO_LABEL_PRESETS[0]!.value, preset.value);
         },
       },
+      ...(multiple
+        ? [
+            {
+              label: "倍数",
+              value: multipleLabel,
+              options: multipleOptions.map((option) => ({
+                value: String(option.value),
+                label: option.label,
+              })),
+              onChange: (label: string) => {
+                const hit = multipleOptions.find((option) => option.label === label);
+                if (!hit) return;
+                apply(
+                  activeAspect?.value ?? currentAspect ?? ASPECT_RATIO_LABEL_PRESETS[0]!.value,
+                  currentMp,
+                  hit.value,
+                );
+              },
+            } satisfies SegmentSection<string>,
+          ]
+        : []),
     ],
-    [aspectOptions, activeAspect, currentAspect, currentMp, mpLabel, apply]
+    [aspectOptions, activeAspect, currentAspect, currentMp, mpLabel, apply, multiple, multipleLabel, multipleOptions]
   );
 
   return (
@@ -414,18 +516,22 @@ function AspectMegapixelControl({
       <div className="rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5">
         <div className="flex items-center gap-2">
           <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-(--color-accent)">
-            比例 + 像素
+            比例 + 像素{multiple ? " + 倍数" : ""}
           </span>
           <div className="min-w-0 flex-1">
             <MultiSegmentPopover
-              ariaLabel="选择比例与像素"
-              triggerContent={`${activeAspect?.label ?? "自定义"} / ${mpLabel}`}
+              ariaLabel={multiple ? "选择比例、像素与倍数" : "选择比例与像素"}
+              triggerContent={`${activeAspect?.label ?? "自定义"} / ${mpLabel}${multiple ? ` / ${multipleLabel}` : ""}`}
               sections={sections}
               align="right"
               disabled={disabled}
             />
           </div>
         </div>
+        <RequiredChips
+          pins={[aspect, megapixels, multiple]}
+          onRequiredChange={onRequiredChange}
+        />
       </div>
     </div>
   );

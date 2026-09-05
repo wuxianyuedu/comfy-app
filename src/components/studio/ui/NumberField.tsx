@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 
 /**
@@ -10,6 +10,10 @@ import { Minus, Plus } from "lucide-react";
  *   - wrong colors in dark theme
  *   - hover-triggered value changes (the spinner buttons are too easy to hit)
  *   - no visual indication of min/max bounds
+ *
+ * 输入用「草稿态」：聚焦期间的击键保存在本地 draft 里原样回显（受控 value 的
+ * clamp 回写会在输入中途把 "0." / 清空 / 小于 step 的值瞬间顶回去，等于
+ * 没法打字）；blur 或点 +/- 时才把草稿 clamp 成合法值提交。
  */
 interface NumberFieldProps {
   /** Current numeric value */
@@ -40,6 +44,8 @@ export function NumberField({
   className,
   disabled = false,
 }: NumberFieldProps) {
+  const [draft, setDraft] = useState<string | null>(null);
+
   const fmt = useCallback(
     (v: number) => (decimalPlaces > 0 ? v.toFixed(decimalPlaces) : String(v)),
     [decimalPlaces]
@@ -53,14 +59,22 @@ export function NumberField({
     [min, max, step]
   );
 
-  const decr = useCallback(
-    () => onChange(clamp(value - step)),
-    [value, step, clamp, onChange]
+  const commitText = useCallback(
+    (text: string) => {
+      const n = parseFloat(text);
+      if (!isNaN(n)) onChange(clamp(n));
+    },
+    [clamp, onChange]
   );
-  const incr = useCallback(
-    () => onChange(clamp(value + step)),
-    [value, step, clamp, onChange]
-  );
+
+  const decr = useCallback(() => {
+    setDraft(null);
+    onChange(clamp(value - step));
+  }, [value, step, clamp, onChange]);
+  const incr = useCallback(() => {
+    setDraft(null);
+    onChange(clamp(value + step));
+  }, [value, step, clamp, onChange]);
 
   return (
     <div
@@ -80,16 +94,25 @@ export function NumberField({
       <input
         type="text"
         inputMode="decimal"
-        value={fmt(value)}
+        value={draft ?? fmt(value)}
         onChange={(event) => {
-          const n = parseFloat(event.target.value);
+          const text = event.target.value;
+          setDraft(text);
+          /* 合法前缀实时上抛（clamp 只影响提交值，不打断击键回显） */
+          const n = parseFloat(text);
           if (!isNaN(n)) onChange(clamp(n));
         }}
-        onBlur={(event) => {
-          // Re-format on blur for consistent display
-          const n = parseFloat(event.target.value);
-          if (!isNaN(n)) onChange(clamp(n));
-          else (event.target).value = fmt(value);
+        onBlur={() => {
+          if (draft !== null) {
+            commitText(draft);
+            setDraft(null);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            (event.target as HTMLInputElement).blur();
+          }
         }}
         disabled={disabled}
         className="min-w-[36px] h-[24px] flex-1 bg-transparent py-0 text-center text-xs font-mono text-gray-200 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40"

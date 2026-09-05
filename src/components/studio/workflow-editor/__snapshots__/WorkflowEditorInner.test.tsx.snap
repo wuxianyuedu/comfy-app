@@ -18,5 +18,8 @@ exports[`WorkflowEditorInner > 在 ReactFlowProvider 内挂载并渲染加载态
       </p>
     </div>
   </div>
+  <div
+    class="pointer-events-none fixed bottom-8 right-5 z-100 flex w-[340px] flex-col gap-2.5"
+  />
 </div>
 `;

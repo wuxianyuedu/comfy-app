@@ -22,7 +22,6 @@ import {
   useCanvasSettings,
   CanvasSettingsPanel,
 } from "../canvas/WorkflowCanvasSettings";
-import { GlobalStepLogPanel } from "../project-canvas/GlobalStepLogPanel";
 import {
   WFStoresProvider,
   getIOEditApi,
@@ -654,9 +653,8 @@ function WorkflowEditorBody({
           />
         )}
 
-        {/* 执行日志入口：整块由画布「日志面板」开关控制，且日志以弹窗呈现
-         *  而非常驻面板，所以不与节点主体争抢画布空间，也不需要逐节点开关。 */}
-        <GlobalStepLogPanel />
+        {/* 工作流编辑画布是纯配置界面（不存在执行），不再挂执行日志入口；
+         *  执行期的日志仍由项目画布的 GlobalStepLogPanel 承担。 */}
 
         {/* 顶部「📋 查看 JSON」触发的全屏 modal。
             派生数据由 `sourceModalData` (useMemo) 给出:

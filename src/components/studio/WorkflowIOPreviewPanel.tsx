@@ -36,9 +36,16 @@ import {
   splitWorkflowIO,
   type WorkflowIOMap,
 } from "@/components/studio/shared/workflow-io";
+import { ALL_WORKFLOW_TYPES } from "@/lib/workflow-types";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import type { WorkflowIOParam } from "./workflow-types";
 import { RequiredSummary } from "./RequiredSummary";
 import { getIOEditApi } from "./workflow-editor/WorkflowStores";
+
+/** 模式码 → 中文标签（标准任务类型）；非标准码原样显示，兼容历史自定义值。 */
+function modeLabel(code: string): string {
+  return ALL_WORKFLOW_TYPES.find((type) => type.code === code)?.label ?? code;
+}
 
 export interface WorkflowIoPreviewPanelProps {
   workflowIO: Record<string, WorkflowIOParam>;
@@ -76,7 +83,7 @@ export function WorkflowIoPreviewPanel({
 
   /* null = 「通用」页签（编辑全局默认值）；字符串 = 某个模式码页签。 */
   const [activeMode, setActiveMode] = useState<string | null>(null);
-  const [newModeDraft, setNewModeDraft] = useState<string | null>(null);
+  const [addingMode, setAddingMode] = useState(false);
 
   /* Merge server-side enrichment with the live local state (see the DATA
    *  MERGE comment at the top of this file for the full rationale). */
@@ -177,16 +184,20 @@ export function WorkflowIoPreviewPanel({
   );
 
   /* 新增模式：给每个已勾选参数落一条 visible:true，新页签才会被 collectModeCodes
-   * 发现并立刻可编辑（否则空模式没有任何持久化痕迹）。 */
-  const confirmAddMode = useCallback(() => {
-    const code = newModeDraft?.trim();
-    setNewModeDraft(null);
-    if (!code || modeCodes.includes(code)) return;
-    for (const key of Object.keys(workflowIO)) {
-      ioApi.getState().setIOModeOverride(key, code, { visible: true });
-    }
-    setActiveMode(code);
-  }, [newModeDraft, modeCodes, workflowIO, ioApi]);
+   * 发现并立刻可编辑（否则空模式没有任何持久化痕迹）。
+   * 模式码固定用标准任务类型（文生图/图生图…），与工作流库的「类型」同源。 */
+  const confirmAddMode = useCallback(
+    (code: string) => {
+      setAddingMode(false);
+      const trimmed = code.trim();
+      if (!trimmed || modeCodes.includes(trimmed)) return;
+      for (const key of Object.keys(workflowIO)) {
+        ioApi.getState().setIOModeOverride(key, trimmed, { visible: true });
+      }
+      setActiveMode(trimmed);
+    },
+    [modeCodes, workflowIO, ioApi],
+  );
 
   const removeMode = useCallback(
     (code: string) => {
@@ -246,47 +257,42 @@ export function WorkflowIoPreviewPanel({
               <button
                 type="button"
                 onClick={() => setActiveMode(code)}
+                title={code}
                 className={tabClass(activeMode === code)}
               >
-                {code}
+                {modeLabel(code)}
               </button>
               <button
                 type="button"
                 onClick={() => removeMode(code)}
                 className="rounded px-0.5 text-[10px] text-gray-500 transition-colors hover:text-red-300"
-                title={`删除模式「${code}」的全部覆盖`}
+                title={`删除模式「${modeLabel(code)}」的全部覆盖`}
               >
                 ×
               </button>
             </span>
           ))}
-          {newModeDraft !== null ? (
-            <span className="flex shrink-0 items-center gap-1">
-              <input
-                autoFocus
-                value={newModeDraft}
-                onChange={(e) => setNewModeDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") confirmAddMode();
-                  if (e.key === "Escape") setNewModeDraft(null);
-                }}
-                placeholder="模式码"
-                className="w-16 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-[11px] text-gray-100 outline-none focus:border-sky-400/60"
-              />
-              <button
-                type="button"
-                onClick={confirmAddMode}
-                className="rounded bg-sky-400/20 px-1 text-[10px] text-sky-200 hover:bg-sky-400/30"
-              >
-                ✓
-              </button>
-            </span>
+          {addingMode ? (
+            <DarkSelect
+              className="w-[150px] text-[11px]"
+              value=""
+              onChange={(code) => confirmAddMode(code)}
+              options={ALL_WORKFLOW_TYPES.map((type) => type.code).filter(
+                (code) => !modeCodes.includes(code),
+              )}
+              labels={Object.fromEntries(
+                ALL_WORKFLOW_TYPES.map((type) => [type.code, `${type.label}（${type.code}）`]),
+              )}
+              placeholder="选择模式"
+              popoverMinWidth={200}
+              autoFitFromOptions={false}
+            />
           ) : (
             <button
               type="button"
-              onClick={() => setNewModeDraft("")}
+              onClick={() => setAddingMode(true)}
               className="shrink-0 rounded-md border border-dashed border-white/12 px-1.5 py-0.5 text-[11px] text-gray-500 transition-colors hover:border-sky-400/40 hover:text-sky-200"
-              title="新增一个模式（如 fast / hd）"
+              title="新增一个模式（文生图 / 图生图 / …）"
             >
               ＋ 模式
             </button>
@@ -297,7 +303,7 @@ export function WorkflowIoPreviewPanel({
         {activeMode && (
           <div className="nodrag nopan max-h-[38%] shrink-0 overflow-y-auto border-b border-white/6 px-3 py-2">
             <div className="mb-1 text-[10px] text-gray-500">
-              模式「{activeMode}」覆盖：留空 = 沿用通用默认值
+              模式「{modeLabel(activeMode)}」覆盖：留空 = 沿用通用默认值
             </div>
             <div className="space-y-1">
               {editableEntries.map((entry) => {

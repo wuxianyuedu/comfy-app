@@ -30,7 +30,9 @@ export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelT
       .select({
         id: workflowModelTag.id,
         name: workflowModelTag.name,
-        count: count(),
+        /* count(列) 而非 count(*)：LEFT JOIN 未命中时 COUNT(*) 会把那行
+         * NULL 计成 1，导致每个未绑定标签都显示「1 个工作流」。 */
+        count: count(workflowModelTagToWorkflowTemplate.workflowModelTag),
       })
       .from(workflowModelTag)
       .leftJoin(

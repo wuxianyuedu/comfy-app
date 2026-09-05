@@ -67,6 +67,9 @@ interface MultiModeSelectProps {
   onChange: (modes: string[], defaultMode: string) => void;
   className?: string;
   disabled?: boolean;
+  /** 隐藏右侧的「+N」徽标：调用方（如详情页）自行把全部模式列在上方，
+   *  徽标就成了冗余。popover 仍可从主 chip 打开。 */
+  hideExtraBadge?: boolean;
 }
 
 const POPOVER_MAX_H = 360;
@@ -79,6 +82,7 @@ export function MultiModeSelect({
   onChange,
   className = "",
   disabled = false,
+  hideExtraBadge = false,
 }: MultiModeSelectProps) {
   const [open, setOpen] = useState(false);
   // Which category tab is currently shown in the popover (图像/视频/音频).
@@ -270,7 +274,7 @@ export function MultiModeSelect({
       </button>
 
       {/* +N pill — clicking also opens the popover (same triggerRef) */}
-      {plusN > 0 && (
+      {plusN > 0 && !hideExtraBadge && (
         <button
           type="button"
           onClick={(event) => {

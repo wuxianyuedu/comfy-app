@@ -28,6 +28,7 @@ export function GroupedControls({
   workflowId,
   compact,
   disabled,
+  onRequiredChange,
 }: {
   dimension: DimensionGroup | null;
   video: VideoGroup | null;
@@ -36,6 +37,8 @@ export function GroupedControls({
   workflowId?: string;
   compact?: boolean;
   disabled?: boolean;
+  /** 编辑态：组合行替代了独立参数行，把必填/可选切换透传进组合卡。 */
+  onRequiredChange?: (ioKey: string, required: boolean) => void;
 }) {
   if (!dimension && !video) return null;
   const count = (dimension ? 1 : 0) + (video ? 1 : 0);
@@ -66,6 +69,7 @@ export function GroupedControls({
             setMany={setMany}
             disabled={disabled}
             workflowId={workflowId}
+            onRequiredChange={onRequiredChange}
           />
         )}
         {video && (

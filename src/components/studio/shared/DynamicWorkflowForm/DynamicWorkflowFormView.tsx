@@ -156,6 +156,7 @@ export function DynamicWorkflowFormView({
           workflowId={workflowId}
           compact={compact}
           disabled={disabled}
+          onRequiredChange={onRequiredChange}
         />
       )}
 

@@ -5,6 +5,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { Node } from "@xyflow/react";
 import type { WorkflowDetail, WorkflowIOParam } from "@/components/studio/workflow-types";
 import { NODE_TITLE_H, extractNoteTitle } from "@/components/studio/workflow-utils";
+import { useToast } from "../../ToastProvider";
 import type { WorkflowSaver } from "./use-workflow-save";
 
 export interface WorkflowPersistenceArgs {
@@ -38,10 +39,10 @@ export function useWorkflowPersistence({
   fitToMiddle,
   savePatch,
   onSave,
-  onClose,
   setSaving,
   setError,
 }: WorkflowPersistenceArgs) {
+  const toast = useToast();
   /* Snapshot the original layout for the current view (keyed by
    *  detail.id) the FIRST time we see each workflow / subgraph.  The
    *  "重置布局" (reset layout) button restores these so users can undo
@@ -175,13 +176,15 @@ export function useWorkflowPersistence({
         workflowIO,
       });
       onSave?.();
-      onClose();
+      /* 保存后停留在当前工作流界面（不再 onClose 退出）——用户保存 IO /
+       * 布局后通常还要继续调整；成功与否由 toast 反馈。 */
+      toast.success("已保存", "画布修改与 IO 配置已落库，可继续编辑");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "保存失败");
     } finally {
       setSaving(false);
     }
-  }, [workflowId, paramMap, workflowIO, onSave, onClose, savePatch, setError, setSaving]);
+  }, [workflowId, paramMap, workflowIO, onSave, savePatch, setError, setSaving, toast]);
 
   /* Persist a node's position after the user finishes dragging it.
    *  - Note nodes (`note:<id>`) → write back into rawJson.nodes[i].pos via

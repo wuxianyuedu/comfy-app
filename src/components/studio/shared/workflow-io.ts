@@ -435,6 +435,9 @@ export interface DimensionGroup {
    *  that writes directly into the two exposed widgets. */
   aspect?: EnrichedWidget;
   megapixels?: EnrichedWidget;
+  /** 倍数（upscale multiple）—— 存在时并入「比例 + 像素」popover 的
+   *  第三段，而不是散落成独立数字框。 */
+  multiple?: EnrichedWidget;
 }
 
 export interface VideoGroup {
@@ -701,6 +704,13 @@ function isDimMegapixels(e: EnrichedWidget): boolean {
   if (label.includes("百万像素") || label.includes("像素")) return true;
   return false;
 }
+function isDimMultiple(e: EnrichedWidget): boolean {
+  const name = (e.name || "").toLowerCase();
+  const label = e.label ?? "";
+  if (/multiple|upscale_factor|upscale_by|upscale_amount/.test(name)) return true;
+  if (label.includes("倍数") || label.includes("倍率")) return true;
+  return false;
+}
 function isVideoLength(e: EnrichedWidget): boolean {
   const searchText = `${e.name} ${e.label ?? ""}`.toLowerCase();
   return /length|duration|时长|帧数|frames|seconds|秒/.test(searchText);
@@ -750,11 +760,19 @@ export function inferDimensionGroup(widgets: EnrichedWidget[]): DimensionGroup |
     const aspect = aspectWidgets[0]!;
     const megapixels = mpWidgets[0]!;
     if (aspect.ioKey === megapixels.ioKey) return null;
+    /* 倍数（可选伴随）：存在时并入组合 popover 的第三段。 */
+    const multiple = widgets.find(
+      (w) =>
+        w.ioKey !== aspect.ioKey &&
+        w.ioKey !== megapixels.ioKey &&
+        isDimMultiple(w)
+    );
     return {
       kind: "dimension",
-      groupId: `aspect-mp:${aspect.ioKey}|${megapixels.ioKey}`,
+      groupId: `aspect-mp:${aspect.ioKey}|${megapixels.ioKey}${multiple ? `|${multiple.ioKey}` : ""}`,
       aspect,
       megapixels,
+      multiple,
     };
   }
 
@@ -796,6 +814,7 @@ export function inferGroups(widgets: EnrichedWidget[]): {
     if (dimension.height) dimKeys.add(dimension.height.ioKey);
     if (dimension.aspect) dimKeys.add(dimension.aspect.ioKey);
     if (dimension.megapixels) dimKeys.add(dimension.megapixels.ioKey);
+    if (dimension.multiple) dimKeys.add(dimension.multiple.ioKey);
   }
   const rest = widgets.filter((widget) => !dimKeys.has(widget.ioKey));
   const video = inferVideoGroup(rest);

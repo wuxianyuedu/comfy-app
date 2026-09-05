@@ -41,6 +41,7 @@ vi.mock("~/trpc/react", () => ({
   },
 }));
 
+import { ToastProvider } from "../ToastProvider";
 import { WorkflowEditorInner } from "./WorkflowEditorInner";
 
 afterEach(cleanup);
@@ -49,7 +50,9 @@ describe("WorkflowEditorInner", () => {
   it("在 ReactFlowProvider 内挂载并渲染加载态", () => {
     const { container } = render(
       <ReactFlowProvider>
-        <WorkflowEditorInner workflowId="wf-test" onClose={vi.fn()} />
+        <ToastProvider>
+          <WorkflowEditorInner workflowId="wf-test" onClose={vi.fn()} />
+        </ToastProvider>
       </ReactFlowProvider>,
     );
 
