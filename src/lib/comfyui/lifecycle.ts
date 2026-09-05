@@ -34,11 +34,25 @@ type EnsureResult = { ok: boolean; base: string | null; detail: string };
 type LifecycleGlobal = {
   child?: ReturnType<typeof spawn>;
   starting?: Promise<EnsureResult>;
+  /** 用户点了「关闭 ComfyUI」：启动等待循环见到它就中止，不再报「秒退」。 */
+  stopRequested?: boolean;
 };
 const G_KEY = "__comfyLifecycle_v1";
 const g = globalThis as unknown as Record<string, LifecycleGlobal | undefined>;
 const st: LifecycleGlobal = g[G_KEY] ?? {};
 g[G_KEY] = st;
+
+/** 任务自动启动路径的等待上限：到点后放弃本次等待，WS 层稍后重试时会
+ *  重新拉起（单飞锁已释放）。设置页手动启动不设上限（见 ensureComfyUiReady）。 */
+export const COMFYUI_AUTOSTART_TIMEOUT_MS = 420_000;
+
+/** 本地时间戳（YYYY-MM-DD HH:mm:ss）：runtime 日志是给本机用户看的，
+ *  toISOString 的 UTC 在 +8 时区会凭空差出 8 小时。 */
+function localTimestamp(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
 
 /** 探测 ComfyUI 是否可达；成功返回实际可用的 base（可能带端口偏移）。 */
 export async function probeComfyUi(timeoutMs = 2500): Promise<string | null> {
@@ -58,6 +72,9 @@ export async function probeComfyUi(timeoutMs = 2500): Promise<string | null> {
  * detached，子进程与父进程同组，退而求其次单杀 + 兜底探测确认）。
  */
 export async function stopComfyUiProcess(): Promise<{ ok: boolean; detail: string }> {
+  // 无论有没有本应用拉起的子进程，都先落「用户要求停止」标记：若此刻正有
+  // 一个启动等待在跑，等待循环会以「已手动关闭」收尾，而不是误报「进程秒退」。
+  st.stopRequested = true;
   const child = st.child;
   const pid = child?.pid;
   // 本应用未拉起过进程：仍探测一次，若外部启动的 ComfyUI 在跑，报告「需手动关闭」
@@ -114,7 +131,7 @@ function appendRuntimeLog(line: string): void {
   try {
     const dir = path.join(process.cwd(), "log");
     fs.mkdirSync(dir, { recursive: true });
-    fs.appendFileSync(path.join(dir, "comfyui-runtime.log"), `${new Date().toISOString()} ${line}\n`, "utf-8");
+    fs.appendFileSync(path.join(dir, "comfyui-runtime.log"), `${localTimestamp()} ${line}\n`, "utf-8");
   } catch {
     /* 日志失败不影响主流程 */
   }
@@ -123,14 +140,16 @@ function appendRuntimeLog(line: string): void {
 /**
  * 确保 ComfyUI 可用：可达则直接返回；不可达且配置了路径 + 自动启动时，
  * 拉起进程并轮询等待就绪。单飞锁保证并发任务/WS 重连只触发一次启动。
+ *
+ * 等待时长：`opts.timeoutMs` 缺省（undefined / null）= **不设硬超时**，一直
+ * 等到就绪或进程退出——冷加载（重安装 / CUDA 初始化）慢起来没有准数，固定
+ * 上限会在 ComfyUI 随后就绪时误报「启动超时」。设置页手动启动走无限等待
+ * （实时日志可见、可随时手动关闭中止）；任务自动启动路径必须显式传
+ * `COMFYUI_AUTOSTART_TIMEOUT_MS`，否则 reaper 的启动窗口会被无限拉长。
  */
 export async function ensureComfyUiReady(
-  opts: { timeoutMs?: number; onLog?: (msg: string) => void } = {}
+  opts: { timeoutMs?: number | null; onLog?: (msg: string) => void } = {}
 ): Promise<EnsureResult> {
-  // 冷启动（尤其带大量自定义节点 / CUDA 初始化的重安装）从拉起到绑定端口常需
-  // 3-7 分钟；180s 太短会让应用在 ComfyUI 仍在加载时就误报「超时未就绪」，
-  // 用户看到的就是「一直黑屏 / 打不开页面」。默认放宽到 7 分钟。
-  const timeoutMs = opts.timeoutMs ?? 420_000;
   const note = (msg: string) => {
     logger.info(`[comfyui-lifecycle] ${msg}`);
     opts.onLog?.(msg);
@@ -217,6 +236,7 @@ export async function ensureComfyUiReady(
       return { ok: false, base: null, detail };
     }
     st.child = child;
+    st.stopRequested = false;
     appendRuntimeLog(`[spawn] pid=${child.pid} cmd=${plan.cmd} args=${JSON.stringify(args)} cwd=${plan.cwd}`);
     // 最近输出留底：进程秒退时从里面提取「No module named 'X'」给出可行动的报错
     const recentOutput: string[] = [];
@@ -243,8 +263,18 @@ export async function ensureComfyUiReady(
       if (st.child === child) st.child = undefined;
     });
 
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
+    /* 等待循环：deadline 为 null（设置页手动启动）时不设硬超时，一直等到
+     * 就绪、进程退出或用户手动关闭；显式传 timeoutMs 的调用方（任务自动
+     * 启动）到点后照旧放弃本次等待。 */
+    const deadline = opts.timeoutMs != null ? Date.now() + opts.timeoutMs : null;
+    while (true) {
+      /* 用户点了「关闭 ComfyUI」→ 退出循环（child 也会随之消失）。放在
+       * child 判断之前，避免把主动关闭误报成「进程启动后立即退出」。 */
+      if (st.stopRequested) {
+        const detail = "已手动关闭 ComfyUI，停止等待启动";
+        note(detail);
+        return { ok: false, base: null, detail };
+      }
       if (st.child !== child) {
         const missingMod = /No module named '([^']+)'/.exec(
           recentOutput.join("\n"),
@@ -277,9 +307,10 @@ export async function ensureComfyUiReady(
           /* HTTP 探测失败——进程在但 /system_stats 还没响应，继续等 */
         }
       }
+      if (deadline !== null && Date.now() >= deadline) break;
       await new Promise((r) => setTimeout(r, 2000));
     }
-    const detail = `ComfyUI 启动超过 ${Math.round(timeoutMs / 1000)}s 仍未就绪，详见 log/comfyui-runtime.log`;
+    const detail = `ComfyUI 启动超过 ${Math.round((opts.timeoutMs ?? 0) / 1000)}s 仍未就绪，继续留在后台观察；详见 log/comfyui-runtime.log`;
     note(detail);
     return { ok: false, base: null, detail };
   })();

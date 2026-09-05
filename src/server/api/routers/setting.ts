@@ -53,11 +53,13 @@ export const settingRouter = createTRPCRouter({
     };
   }),
 
-  /** 手动启动 ComfyUI（设置页按钮）：未运行时按配置路径拉起并等待就绪 */
+  /** 手动启动 ComfyUI（设置页按钮）：未运行时按配置路径拉起并等待就绪。
+   *  不传 timeoutMs = 不设硬超时——冷加载慢没有准数，误报「启动超时」时
+   *  ComfyUI 随后就绪了；用户看得到实时启动日志，可随时手动关闭中止。 */
   comfyStart: authedProcedure
     .input(z.object({ timeoutMs: z.number().int().min(5000).max(600000).optional() }))
     .mutation(async ({ input }) => {
-      const r = await ensureComfyUiReady({ timeoutMs: input.timeoutMs ?? 420_000 });
+      const r = await ensureComfyUiReady({ timeoutMs: input.timeoutMs });
       return r;
     }),
 
