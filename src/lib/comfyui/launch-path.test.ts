@@ -94,6 +94,25 @@ describe("resolveComfyLaunchPlan", () => {
     expect(plan.cmd).toBe(path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"));
   });
 
+  it("桌面版 Desktop 实例（.comfyui-desktop-2 标记）：standalone-env 优先于 .venv", () => {
+    const root = path.normalize("/comfy/instances/ComfyUI2");
+    const fsSet = fakeFs(
+      root,
+      path.join(root, ".comfyui-desktop-2"),
+      path.join(root, "manifest.json"),
+      path.join(root, "ComfyUI", "main.py"),
+      path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"),
+      path.join(root, "standalone-env", "python.exe")
+    );
+    const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
+
+    expect(plan).not.toHaveProperty("error");
+    if ("error" in plan) return;
+    // Desktop 实例 canonical 运行时是 standalone-env，即使源码内 .venv 存在也优先
+    expect(plan.cmd).toBe(path.join(root, "standalone-env", "python.exe"));
+    expect(plan.mainPy).toBe(path.join(root, "ComfyUI", "main.py"));
+  });
+
   it("路径不存在：返回错误", () => {
     const plan = resolveComfyLaunchPlan("/not/exist", makeExists(fakeFs()));
     expect(plan).toHaveProperty("error");

@@ -20,6 +20,7 @@ import { COMFYUI_DEFAULT_PORT, getSettingsSync, saveSettings } from "../app-sett
 import { resolveComfyBase } from "./client";
 import { logger } from "~/server/lib/logger";
 import { resolveComfyLaunchPlan } from "./launch-path";
+import { findPidListeningPort } from "./proc-detect";
 
 export type ComfyUiStatus = {
   up: boolean;
@@ -195,6 +196,15 @@ export async function ensureComfyUiReady(
         // 不隐藏控制台：python.exe 会弹出一个窗口，实时显示 ComfyUI 的启动/打印输出，
         // 方便排查问题（请勿改回 windowsHide: true，否则看不到日志）。
         windowsHide: false,
+        // 强制 Python UTF-8 模式：中文 Windows（GBK/CP936 代码页）上，自定义
+        // 节点 print 含 emoji 等非 GBK 字符会抛 UnicodeEncodeError 导致进程
+        // 崩溃（exit=1）。PYTHONIOENCODING 覆盖 stdout/stderr 编码，
+        // PYTHONUTF8 启用 Python 3.7+ UTF-8 模式。
+        env: {
+          ...process.env,
+          PYTHONIOENCODING: "utf-8",
+          PYTHONUTF8: "1",
+        },
       });
     } catch (e) {
       const detail = `启动 ComfyUI 失败：${e instanceof Error ? e.message : String(e)}`;
@@ -215,10 +225,25 @@ export async function ensureComfyUiReady(
       if (st.child !== child) {
         return { ok: false, base: null, detail: "ComfyUI 进程启动后立即退出，详见 log/comfyui-runtime.log" };
       }
-      const base = await probeComfyUi(2000);
-      if (base) {
-        note(`ComfyUI 已就绪：${base}`);
-        return { ok: true, base, detail: "ComfyUI 已启动并就绪" };
+      // 用已知子进程 PID 查它实际监听的端口——不依赖端口探测猜哪个 ComfyUI
+      // 是我们的实例（别的实例可能占着配置端口导致自动 +1）。
+      // 用「特定 PID 的监听端口 + /system_stats 响应」双重确认，避免把同网段
+      // 上另一个 ComfyUI 实例误认作刚启动的配置实例。
+      const childPid = child.pid;
+      const listenPort = childPid ? await findPidListeningPort(childPid) : null;
+      if (listenPort) {
+        const base = `http://127.0.0.1:${listenPort}`;
+        try {
+          const r = await fetch(`${base}/system_stats`, {
+            signal: AbortSignal.timeout(2000),
+          });
+          if (r.ok) {
+            note(`ComfyUI 已就绪：${base}`);
+            return { ok: true, base, detail: "ComfyUI 已启动并就绪" };
+          }
+        } catch {
+          /* HTTP 探测失败——进程在但 /system_stats 还没响应，继续等 */
+        }
       }
       await new Promise((r) => setTimeout(r, 2000));
     }
