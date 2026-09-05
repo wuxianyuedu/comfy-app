@@ -1033,6 +1033,68 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
               </Btn>
             </Card>
           )}
+
+          {/* ═══ 数据库（Drizzle Studio）Section ═══ */}
+          {c.section === "database" && (
+            <Card title="数据库（Drizzle Studio）">
+              <p className="text-muted-foreground mb-3 text-sm">
+                可视化浏览本地 SQLite 数据库（schema / 表数据 / 运行 SQL）。
+                Drizzle Studio 的界面托管在官方远端页面
+                （local.drizzle.studio），本地只起一个回连端口；点「打开查看」
+                会用你的系统默认浏览器打开它。
+              </p>
+              <div className="border-border bg-surface-1 flex items-center gap-3 rounded-lg border px-3 py-2">
+                <span
+                  className={`inline-block size-2 shrink-0 rounded-full ${
+                    c.dbStudioStatus?.up
+                      ? "bg-emerald-400"
+                      : c.dbStudioStatus?.starting || c.dbStudioStarting
+                        ? "bg-amber-400"
+                        : "bg-rose-400"
+                  }`}
+                />
+                <span className="text-ink/80 text-sm">
+                  {c.dbStudioStatus?.up
+                    ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port ?? 4983}）`
+                    : c.dbStudioStarting || c.dbStudioStatus?.starting
+                      ? "Drizzle Studio 正在启动…"
+                      : "Drizzle Studio 未运行"}
+                </span>
+                <div className="ml-auto flex items-center gap-2">
+                  <Btn
+                    onClick={() => void c.openDbStudio()}
+                    disabled={
+                      c.saving || c.dbStudioOpening || !c.dbStudioStatus?.up
+                    }
+                  >
+                    {c.dbStudioOpening ? "打开中…" : "打开查看"}
+                  </Btn>
+                  <Btn
+                    onClick={() => void c.startDbStudio()}
+                    disabled={
+                      c.saving || c.dbStudioStarting || c.dbStudioStatus?.up
+                    }
+                  >
+                    {c.dbStudioStarting ? "启动中…" : "启动 Drizzle Studio"}
+                  </Btn>
+                  <Btn
+                    onClick={() => void c.stopDbStudio()}
+                    disabled={
+                      c.saving || c.dbStudioStopping || !c.dbStudioStatus?.up
+                    }
+                  >
+                    {c.dbStudioStopping ? "关闭中…" : "关闭 Drizzle Studio"}
+                  </Btn>
+                </div>
+              </div>
+              <p className="text-muted-foreground mt-3 text-xs">
+                说明：Drizzle Studio 需要本机开发依赖
+                （node_modules 里的 drizzle-kit）。双击桌面壳的开发模式可用；
+                若当前是不可携带完整 node_modules 的 standalone 打包，启动时会
+                提示未找到 drizzle-kit。
+              </p>
+            </Card>
+          )}
         </div>
       </div>
     </div>

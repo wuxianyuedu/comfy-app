@@ -57,7 +57,7 @@ export type LlmConfig = {
   apiKey: string | null;
 };
 
-export type Section = "llm" | "comfyui" | "appearance";
+export type Section = "llm" | "comfyui" | "appearance" | "database";
 export type OllamaStatus = "checking" | "starting" | "up" | "down";
 
 export interface FlashMessage {
@@ -110,6 +110,18 @@ export interface SettingsPageController {
   comfyStopping: boolean;
   startComfy: () => Promise<void>;
   stopComfy: () => Promise<void>;
+  /* Drizzle Studio（本地数据库可视化）：状态 + 启动/关闭/打开查看 */
+  dbStudioStatus: {
+    up: boolean;
+    starting: boolean;
+    port: number;
+  } | null;
+  dbStudioStarting: boolean;
+  dbStudioStopping: boolean;
+  dbStudioOpening: boolean;
+  startDbStudio: () => Promise<void>;
+  stopDbStudio: () => Promise<void>;
+  openDbStudio: () => Promise<void>;
   /* ComfyUI 启动日志（log/comfyui-runtime.log）：启动期间自动跟随，可手动刷新 */
   comfyLogText: string;
   comfyLogActive: boolean;
@@ -227,6 +239,16 @@ export function useSettingsPage(): SettingsPageController {
   const comfyStartM = api.setting.comfyStart.useMutation();
   const comfyStopM = api.setting.comfyStop.useMutation();
   const [comfyStopping, setComfyStopping] = useState(false);
+  /* Drizzle Studio：状态查询 + 启动/关闭/打开动作 */
+  const dbStudioStatusQ = api.setting.dbStudioStatus.useQuery(undefined, {
+    refetchInterval: 15_000,
+  });
+  const dbStudioStartM = api.setting.dbStudioStart.useMutation();
+  const dbStudioStopM = api.setting.dbStudioStop.useMutation();
+  const dbStudioOpenM = api.setting.dbStudioOpen.useMutation();
+  const [dbStudioStarting, setDbStudioStarting] = useState(false);
+  const [dbStudioStopping, setDbStudioStopping] = useState(false);
+  const [dbStudioOpening, setDbStudioOpening] = useState(false);
   const [ollamaStopping, setOllamaStopping] = useState(false);
 
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -380,6 +402,45 @@ export function useSettingsPage(): SettingsPageController {
       setComfyStopping(false);
     }
   }, [comfyStopM, comfyStatusQ, showFlash]);
+
+  /* ── Drizzle Studio 启动 / 关闭 / 打开 ─────────────────── */
+  const startDbStudio = useCallback(async () => {
+    setDbStudioStarting(true);
+    try {
+      const result = await dbStudioStartM.mutateAsync();
+      showFlash(result.ok ? "ok" : "err", result.detail);
+      await dbStudioStatusQ.refetch();
+    } catch (error) {
+      showFlash("err", errorMessage(error, "启动 Drizzle Studio 失败"));
+    } finally {
+      setDbStudioStarting(false);
+    }
+  }, [dbStudioStartM, dbStudioStatusQ, showFlash]);
+
+  const stopDbStudio = useCallback(async () => {
+    setDbStudioStopping(true);
+    try {
+      const result = await dbStudioStopM.mutateAsync();
+      showFlash(result.ok ? "ok" : "err", result.detail);
+      await dbStudioStatusQ.refetch();
+    } catch (error) {
+      showFlash("err", errorMessage(error, "关闭 Drizzle Studio 失败"));
+    } finally {
+      setDbStudioStopping(false);
+    }
+  }, [dbStudioStopM, dbStudioStatusQ, showFlash]);
+
+  const openDbStudio = useCallback(async () => {
+    setDbStudioOpening(true);
+    try {
+      const result = await dbStudioOpenM.mutateAsync();
+      showFlash(result.ok ? "ok" : "err", result.detail);
+    } catch (error) {
+      showFlash("err", errorMessage(error, "打开 Drizzle Studio 失败"));
+    } finally {
+      setDbStudioOpening(false);
+    }
+  }, [dbStudioOpenM, showFlash]);
 
   /* ── ComfyUI 启动日志 ─────────────────────────────────── */
   const comfyLogOffsetRef = useRef(0);
@@ -654,6 +715,7 @@ export function useSettingsPage(): SettingsPageController {
   }, [settingsQ, llmQ]);
 
   const comfy = comfyStatusQ.data;
+  const dbStudio = dbStudioStatusQ.data;
 
   return {
     section,
@@ -695,6 +757,19 @@ export function useSettingsPage(): SettingsPageController {
     comfyStopping,
     startComfy,
     stopComfy,
+    dbStudioStatus: dbStudio
+      ? {
+          up: !!dbStudio.up,
+          starting: !!dbStudio.starting,
+          port: dbStudio.port ?? 4983,
+        }
+      : null,
+    dbStudioStarting,
+    dbStudioStopping,
+    dbStudioOpening,
+    startDbStudio,
+    stopDbStudio,
+    openDbStudio,
     comfyLogText,
     comfyLogActive,
     refreshComfyLog,
@@ -714,6 +789,7 @@ export const SETTINGS_SECTIONS: { id: Section; label: string }[] = [
   { id: "appearance", label: "外观" },
   { id: "llm", label: "语言模型" },
   { id: "comfyui", label: "创作后端" },
+  { id: "database", label: "数据库" },
 ];
 
 /** 按任务温度区的任务清单 —— 视图遍历渲染，顺序即渲染顺序。 */
