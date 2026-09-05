@@ -69,7 +69,7 @@ export function WorkshopStudio() {
   const [meta, setMeta] = React.useState<ProjectMeta>(
     emptyProject("short_video"),
   );
-  const [scenes, setScenes] = React.useState<Scene[]>([]);
+  const [scenes] = React.useState<Scene[]>([]);
   const [characters, setCharacters] = React.useState<Character[]>([]);
   const [shots, setShots] = React.useState<Shot[]>([]);
   const [styles, setStyles] = React.useState<StyleRef[]>([]);
@@ -245,9 +245,10 @@ export function WorkshopStudio() {
             {tab === "script" && (
               <ScriptGenerator
                 meta={meta}
-                scenes={scenes}
                 onMetaChange={setMeta}
-                onScenesChange={setScenes}
+                onScriptChange={(markdown) =>
+                  setMeta({ ...meta, scriptMarkdown: markdown })
+                }
               />
             )}
             {tab === "character" && (
