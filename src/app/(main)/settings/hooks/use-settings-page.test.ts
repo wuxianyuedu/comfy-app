@@ -52,6 +52,8 @@ const SETTINGS: Settings = {
   comfyuiExtraArgs: "",
   comfyuiAutoStart: true,
   comfyuiPort: 0,
+  exitKillComfyui: true,
+  exitKillOllama: true,
 };
 
 const LLM: LlmConfig = {

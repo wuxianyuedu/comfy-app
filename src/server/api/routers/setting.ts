@@ -37,6 +37,8 @@ export const settingRouter = createTRPCRouter({
         comfyuiPath: z.string().optional(),
         comfyuiExtraArgs: z.string().optional(),
         comfyuiAutoStart: z.boolean().optional(),
+        exitKillComfyui: z.boolean().optional(),
+        exitKillOllama: z.boolean().optional(),
       })
     )
     .mutation(async ({ input }) => {
