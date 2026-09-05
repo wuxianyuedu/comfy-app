@@ -19,7 +19,6 @@ export const settingRouter = createTRPCRouter({
   save: authedProcedure
     .input(
       z.object({
-        comfyuiUrl: z.url().optional(),
         comfyuiPort: z.number().int().min(0).max(65535).optional(),
         trainerUrl: z
           .string()

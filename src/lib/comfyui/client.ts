@@ -67,11 +67,16 @@ export async function resolveComfyBase(): Promise<string> {
   if (_resolvedBase) return _resolvedBase;
 
   const settings = getSettingsSync();
-  const raw = settings.comfyuiUrl || (process.env.COMFYUI_BASE ?? "http://localhost:8188");
+  // 连接地址固定本机（ComfyUI 由本应用按 comfyuiPath 拉起）；远程实例用
+  // 环境变量 COMFYUI_BASE 覆盖。端口以 comfyuiPort 为准（默认 8188）。
   let url: URL;
-  try { url = new URL(raw); } catch { url = new URL("http://localhost:8188"); }
+  try {
+    url = new URL(
+      process.env.COMFYUI_BASE ??
+        `http://127.0.0.1:${settings.comfyuiPort && settings.comfyuiPort > 0 ? settings.comfyuiPort : 8188}`,
+    );
+  } catch { url = new URL("http://127.0.0.1:8188"); }
   const host = url.hostname === "localhost" ? "127.0.0.1" : url.hostname;
-  // 配置端口以设置里的 comfyuiPort 为准（设置界面维护），comfyuiUrl 端口段兜底。
   const configuredPort =
     settings.comfyuiPort && settings.comfyuiPort > 0
       ? settings.comfyuiPort
@@ -92,9 +97,9 @@ export async function resolveComfyBase(): Promise<string> {
           logger.info(`[comfyui] Connected to configured instance on :${port} (pid=${pid})`);
           return _resolvedBase;
         }
-        // 进程在但端口未绑定（仍在启动）——不误连到别的 ComfyUI，返回 raw。
+        // 进程在但端口未绑定（仍在启动）——不误连到别的 ComfyUI，返回配置地址。
         logger.info(`[comfyui] Configured instance (pid=${pid}) starting, port not bound yet`);
-        return raw;
+        return `http://${host}:${configuredPort}`;
       }
       // 配置的实例没有在运行——抛错触发自动启动（executor-ws connect 的 catch）
       logger.warn(`[comfyui] Configured instance not running: ${plan.mainPy}`);
@@ -137,7 +142,7 @@ export async function resolveComfyBase(): Promise<string> {
   logger.error(
     `[comfyui] Cannot reach ComfyUI on :${configuredPort} or any of [${Array.from({length: PROBE_RANGE}, (_, i) => configuredPort + i + 1).join(", ")}]`
   );
-  return raw;
+  return `http://${host}:${configuredPort}`;
 }
 
 /**
@@ -146,7 +151,11 @@ export async function resolveComfyBase(): Promise<string> {
  * For mutations (upload/prompt), prefer resolveComfyBase().
  */
 export function comfyBase(): string {
-  const raw = _resolvedBase ?? getSettingsSync().comfyuiUrl ?? process.env.COMFYUI_BASE ?? "http://localhost:8188";
+  if (_resolvedBase) return forceIpv4Host(_resolvedBase);
+  const settings = getSettingsSync();
+  const port =
+    settings.comfyuiPort && settings.comfyuiPort > 0 ? settings.comfyuiPort : 8188;
+  const raw = process.env.COMFYUI_BASE ?? `http://127.0.0.1:${port}`;
   return forceIpv4Host(raw);
 }
 

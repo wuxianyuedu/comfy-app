@@ -109,6 +109,20 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     [setWorkflows, updateMut, toast, load],
   );
 
+  /** 整体落库 workflowIO（详情预览里改 seed「控件后行为」等参数级配置）。
+   *  成功后失效 detail 缓存，预览面板按富化后的数据重渲染。 */
+  const patchWorkflowIO = useCallback(
+    async (id: string, workflowIO: Record<string, unknown>) => {
+      try {
+        await updateMut.mutateAsync({ id, workflowIO });
+        await utils.workflow.detail.invalidate({ id });
+      } catch (e) {
+        toast.error("更新参数配置失败", errorMessage(e, "未知错误"));
+      }
+    },
+    [updateMut, utils, toast],
+  );
+
   /** 下载当前工作流 JSON（只有一种格式，直接下载 graph）。 */
   const downloadJson = useCallback(
     async (id: string, name: string) => {
@@ -199,6 +213,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     handleDelete,
     patchModes,
     patchModelTags,
+    patchWorkflowIO,
     downloadJson,
     resyncWorkflow,
     handleLoadPending,

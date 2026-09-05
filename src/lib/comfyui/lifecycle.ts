@@ -16,7 +16,7 @@
 import { spawn, exec } from "child_process";
 import fs from "fs";
 import path from "path";
-import { COMFYUI_DEFAULT_PORT, getSettingsSync, saveSettings } from "../app-settings";
+import { COMFYUI_DEFAULT_PORT, getSettingsSync } from "../app-settings";
 import { resolveComfyBase } from "./client";
 import { logger } from "~/server/lib/logger";
 import { resolveComfyLaunchPlan } from "./launch-path";
@@ -189,27 +189,14 @@ export async function ensureComfyUiReady(
       );
     }
 
-    // 端口优先取设置里的 comfyuiPort（设置界面明确配置的监听端口），
-    // 其次兼容旧的 comfyuiUrl 端口段；都为空 = ComfyUI 默认 8188。
-    // 非默认端口显式传 --port，并把最终端口同步回 comfyuiUrl，
-    // 保证「界面配置端口 = 实际监听端口 = 客户端连接端口」三者一致。
+    // 端口取设置里的 comfyuiPort（设置界面明确配置的监听端口），留空 =
+    // ComfyUI 默认 8188。非默认端口显式传 --port，保证「界面配置端口 =
+    // 实际监听端口 = 客户端连接端口」三者一致。
     let port = COMFYUI_DEFAULT_PORT;
     if (settings.comfyuiPort && settings.comfyuiPort > 0) {
       port = settings.comfyuiPort;
-    } else {
-      try {
-        const u = new URL(settings.comfyuiUrl);
-        port = parseInt(u.port) || COMFYUI_DEFAULT_PORT;
-      } catch { /* keep default */ }
     }
     const args = [...plan.baseArgs, ...(port !== COMFYUI_DEFAULT_PORT ? ["--port", String(port)] : []), ...splitArgs(settings.comfyuiExtraArgs)];
-    try {
-      const u = new URL(settings.comfyuiUrl);
-      if (parseInt(u.port) !== port) {
-        u.port = String(port);
-        await saveSettings({ comfyuiUrl: u.toString() });
-      }
-    } catch { /* invalid comfyuiUrl — leave as-is */ }
 
     note(`ComfyUI 未运行，按配置路径启动：${plan.cmd} ${args.join(" ")}`);
     let child: ReturnType<typeof spawn>;

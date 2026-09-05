@@ -45,7 +45,6 @@ const probeMock = vi.mocked(probeOllama);
 const startMock = vi.mocked(startOllama);
 
 const SETTINGS: Settings = {
-  comfyuiUrl: "http://localhost:8188",
   trainerUrl: "",
   defaultVideoWorkflow: "auto",
   comfyLorasDir: "",

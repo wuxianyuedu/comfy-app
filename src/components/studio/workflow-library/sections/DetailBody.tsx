@@ -27,6 +27,8 @@ interface DetailBodyProps {
     defaultMode: string;
     onModeChange: (code: string) => void;
   };
+  /** seed 类参数的「控件后行为」持久化（画布预览节点与 IO 编辑一致）。 */
+  onSeedModeChange?: (ioKey: string, mode: string) => void;
 }
 
 export function DetailBody({
@@ -38,6 +40,7 @@ export function DetailBody({
   usable,
   onEdit,
   meta,
+  onSeedModeChange,
 }: DetailBodyProps) {
   return (
     <>
@@ -72,6 +75,7 @@ export function DetailBody({
               modes={meta?.modes}
               defaultMode={meta?.defaultMode}
               onModeChange={meta?.onModeChange}
+              onSeedModeChange={onSeedModeChange}
             />
           </div>
         </div>

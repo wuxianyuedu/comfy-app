@@ -13,6 +13,7 @@ const extraModelsSchema = z.array(
       name: z.string().min(1),
       baseUrl: z.string().nullish(),
       apiKey: z.string().nullish(),
+      kind: z.enum(["chat", "image", "video"]).nullish(),
     }),
   ]),
 );

@@ -22,6 +22,8 @@ export interface WorkflowLibraryDetailProps {
   onPatchModes?: (id: string, modes: string[], defaultMode: string) => Promise<void>;
   /** 持久化模型标签绑定。 */
   onPatchModelTags?: (id: string, names: string[]) => Promise<void>;
+  /** 整体落库 workflowIO（预览面板的 seed「控件后行为」等参数级配置）。 */
+  onPatchWorkflowIO?: (id: string, workflowIO: Record<string, unknown>) => Promise<void>;
   onUse: (id: string, meta?: { name: string; taskType: string }) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string, name: string) => void;

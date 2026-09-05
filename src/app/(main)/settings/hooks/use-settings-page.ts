@@ -29,12 +29,12 @@ import {
   normalizeExtraModels,
   TASK_TYPES,
   type RemoteModelEntry,
+  type RemoteModelKind,
   type TaskType,
 } from "~/lib/llm/types";
 import { api } from "~/trpc/react";
 
 export type Settings = {
-  comfyuiUrl: string;
   trainerUrl: string;
   defaultVideoWorkflow: "auto" | "txt2video" | "img2video";
   comfyLorasDir: string;
@@ -134,6 +134,7 @@ export interface SettingsPageController {
     name: string;
     baseUrl?: string;
     apiKey?: string;
+    kind?: RemoteModelKind;
   }) => { ok: boolean; error?: string };
   /** 编辑既有条目：name 定位原条目（含「当前模型」行）；重名校验排除自身。
    *  patch.baseUrl = null / clearApiKey = true 表示清掉独立配置、跟随全局。 */
@@ -144,6 +145,7 @@ export interface SettingsPageController {
       baseUrl?: string | null;
       apiKey?: string;
       clearApiKey?: boolean;
+      kind?: RemoteModelKind | null;
     },
   ) => { ok: boolean; error?: string };
   removeRemoteModel: (name: string) => void;
@@ -510,7 +512,12 @@ export function useSettingsPage(): SettingsPageController {
    * 「添加 / 移除」只改草稿，点「保存 LLM 配置」才落库；测试连接走
    * /api/llm/test 代理（apiKey 在服务端参与请求，浏览器不直接打远端）。 */
   const addRemoteModel = useCallback(
-    (entry: { name: string; baseUrl?: string; apiKey?: string }) => {
+    (entry: {
+      name: string;
+      baseUrl?: string;
+      apiKey?: string;
+      kind?: RemoteModelKind;
+    }) => {
       if (!llmDraft) return { ok: false as const, error: "配置未就绪，请稍后重试" };
       const name = entry.name.trim();
       if (!name) return { ok: false as const, error: "请填写模型名称" };
@@ -521,6 +528,7 @@ export function useSettingsPage(): SettingsPageController {
         name,
         baseUrl: entry.baseUrl?.trim() ? entry.baseUrl.trim() : null,
         apiKey: entry.apiKey?.trim() ? entry.apiKey.trim() : null,
+        kind: entry.kind ?? null,
       };
       setLlmDraft((draft) =>
         draft ? { ...draft, extraModels: [...draft.extraModels, cleaned] } : draft,
@@ -552,6 +560,7 @@ export function useSettingsPage(): SettingsPageController {
         baseUrl?: string | null;
         apiKey?: string;
         clearApiKey?: boolean;
+        kind?: RemoteModelKind | null;
       },
     ) => {
       if (!llmDraft) return { ok: false as const, error: "配置未就绪，请稍后重试" };
@@ -581,6 +590,8 @@ export function useSettingsPage(): SettingsPageController {
           : patch.apiKey?.trim()
             ? patch.apiKey.trim()
             : (existing?.apiKey ?? null),
+        kind:
+          patch.kind === undefined ? (existing?.kind ?? null) : patch.kind,
       };
       setLlmDraft((draft) => {
         if (!draft) return draft;

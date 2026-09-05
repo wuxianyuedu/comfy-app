@@ -61,20 +61,22 @@ describe("resolveTaskTemperature", () => {
 describe("normalizeExtraModels", () => {
   it("旧数据（纯名字字符串）归一化为条目，丢弃空白项", () => {
     expect(normalizeExtraModels(["gpt-4o", "  ", "claude-3"])).toEqual([
-      { name: "gpt-4o", baseUrl: null, apiKey: null },
-      { name: "claude-3", baseUrl: null, apiKey: null },
+      { name: "gpt-4o", baseUrl: null, apiKey: null, kind: null },
+      { name: "claude-3", baseUrl: null, apiKey: null, kind: null },
     ]);
   });
 
-  it("新数据（条目对象）保留独立 baseUrl / apiKey；空白值归一为 null", () => {
+  it("新数据（条目对象）保留独立 baseUrl / apiKey / kind；空白值归一为 null", () => {
     expect(
       normalizeExtraModels([
-        { name: "gpt-4o", baseUrl: "https://api.example.com/v1", apiKey: "sk-1" },
+        { name: "gpt-4o", baseUrl: "https://api.example.com/v1", apiKey: "sk-1", kind: "chat" },
         { name: "qwen", baseUrl: "   ", apiKey: "" },
+        { name: "bad-kind", kind: "audio" },
       ]),
     ).toEqual([
-      { name: "gpt-4o", baseUrl: "https://api.example.com/v1", apiKey: "sk-1" },
-      { name: "qwen", baseUrl: null, apiKey: null },
+      { name: "gpt-4o", baseUrl: "https://api.example.com/v1", apiKey: "sk-1", kind: "chat" },
+      { name: "qwen", baseUrl: null, apiKey: null, kind: null },
+      { name: "bad-kind", baseUrl: null, apiKey: null, kind: null },
     ]);
   });
 

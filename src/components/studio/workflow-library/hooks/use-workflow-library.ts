@@ -91,6 +91,8 @@ export interface WorkflowLibraryController {
   patchModes: (id: string, modes: string[], defaultMode: string) => Promise<void>;
   /** 持久化模型标签绑定。 */
   patchModelTags: (id: string, names: string[]) => Promise<void>;
+  /** 整体落库 workflowIO（详情预览的 seed「控件后行为」等参数级配置）。 */
+  patchWorkflowIO: (id: string, workflowIO: Record<string, unknown>) => Promise<void>;
   handleDeleteClick: (id: string, name: string) => void;
   handleDownload: (id: string, name: string) => Promise<void>;
   handleResync: (id: string, name: string) => Promise<void>;
@@ -332,5 +334,6 @@ export function useWorkflowLibrary(
     handleEdit,
     patchModes: actions.patchModes,
     patchModelTags: actions.patchModelTags,
+    patchWorkflowIO: actions.patchWorkflowIO,
   };
 }

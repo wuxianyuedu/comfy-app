@@ -166,7 +166,20 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
       if (!isStream) {
         // 缓存预热路径：服务端返回单个 JSON blob。
-        const data = (await res.json()) as SettingsResp;
+        const data = (await res.json()) as SettingsResp & {
+          error?: { message?: string } | string;
+        };
+        /* 401 / 500 等错误响应没有 settings —— 原代码直接炸
+         * `Cannot read properties of undefined (reading 'paths')`，
+         * 真实原因被掩盖。这里读出服务端给的可读信息。 */
+        if (!data.settings) {
+          const err = data.error;
+          const detail =
+            typeof err === "string"
+              ? err
+              : (err?.message ?? `HTTP ${res.status}`);
+          throw new Error(detail || `读取配置失败（HTTP ${res.status}）`);
+        }
         const paths = data.settings.paths || [];
         setSavedPaths(paths);
         setSummary(data.summary);

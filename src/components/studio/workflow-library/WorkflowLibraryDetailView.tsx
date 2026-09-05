@@ -96,6 +96,9 @@ export function WorkflowLibraryDetailView({
               void metaEditor.patchModes(metaEditor.modes, code);
             },
           }}
+          onSeedModeChange={(ioKey, mode) => {
+            void metaEditor.patchSeedMode(ioKey, mode);
+          }}
         />
       </div>
 

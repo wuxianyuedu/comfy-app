@@ -17,11 +17,22 @@ export const TASK_TYPES = {
 
 export type TaskType = keyof typeof TASK_TYPES;
 
+/** 远端模型的用途：对话（语言模型）/ 图片 / 视频。当前仅对话参与运行时，
+ *  图片 / 视频模型先落配置，供后续远程生图 / 生视频接入。 */
+export const REMOTE_MODEL_KINDS = ["chat", "image", "video"] as const;
+export type RemoteModelKind = (typeof REMOTE_MODEL_KINDS)[number];
+export const REMOTE_MODEL_KIND_LABELS: Record<RemoteModelKind, string> = {
+  chat: "对话",
+  image: "图片",
+  video: "视频",
+};
+
 /** 远端候选模型条目：baseUrl / apiKey 缺省（或 null）时回落到全局连接参数。 */
 export interface RemoteModelEntry {
   name: string;
   baseUrl?: string | null;
   apiKey?: string | null;
+  kind?: RemoteModelKind | null;
 }
 
 /** extraModels 的原始存储 / 传输形状：旧数据是纯名字字符串，新数据是条目对象。 */
@@ -31,19 +42,22 @@ export type RawExtraModel = string | RemoteModelEntry;
 export function normalizeExtraModels(raw: unknown): RemoteModelEntry[] {
   if (!Array.isArray(raw)) return [];
   const out: RemoteModelEntry[] = [];
+  const kinds: readonly string[] = REMOTE_MODEL_KINDS;
   for (const item of raw) {
     if (typeof item === "string") {
-      if (item.trim() !== "") out.push({ name: item, baseUrl: null, apiKey: null });
+      if (item.trim() !== "") out.push({ name: item, baseUrl: null, apiKey: null, kind: null });
       continue;
     }
     if (typeof item !== "object" || item === null) continue;
     const rec = item as Record<string, unknown>;
     const name = typeof rec.name === "string" ? rec.name.trim() : "";
     if (name === "") continue;
+    const kind: unknown = rec.kind;
     out.push({
       name,
       baseUrl: typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== "" ? rec.baseUrl : null,
       apiKey: typeof rec.apiKey === "string" && rec.apiKey.trim() !== "" ? rec.apiKey : null,
+      kind: typeof kind === "string" && kinds.includes(kind) ? (kind as RemoteModelKind) : null,
     });
   }
   return out;

@@ -26,6 +26,7 @@ import {
   toWorkflowInputsPayload,
   type WorkflowIOMap,
 } from "../shared/workflow-io";
+import { seedModeOverrides } from "@/components/studio/project-canvas/CanvasNode/helpers";
 import { modeLabel } from "./workflow-library-config";
 import {
   WorkflowNodeActionButton,
@@ -54,6 +55,8 @@ interface Props {
   modes?: string[];
   defaultMode?: string;
   onModeChange?: (code: string) => void;
+  /** seed 类参数「控件后行为」的持久化回调（与 IO 编辑一致）。 */
+  onSeedModeChange?: (ioKey: string, mode: string) => void;
 }
 
 export function WorkflowCanvasNodePreview({
@@ -65,6 +68,7 @@ export function WorkflowCanvasNodePreview({
   modes,
   defaultMode,
   onModeChange,
+  onSeedModeChange,
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -82,6 +86,15 @@ export function WorkflowCanvasNodePreview({
   /* 与画布 WorkflowNode 同源的双行结构：inputs 由 DynamicWorkflowForm(compact)
    * 渲染（库内无 React Flow 上下文，不带端点），outputs 单独成段在表单之后。 */
   const { inputs, outputs } = splitWorkflowIO(workflowIO);
+
+  /* seed 类参数的「控件后行为」：从 workflowIO 条目派生（与 IO 编辑同一存储）。 */
+  const seedModes = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const [ioKey, entry] of Object.entries(workflowIO ?? {})) {
+      if (entry?.seedMode) map[ioKey] = entry.seedMode;
+    }
+    return map;
+  }, [workflowIO]);
 
   const statusLabel =
     phase.kind === "running"
@@ -104,9 +117,12 @@ export function WorkflowCanvasNodePreview({
         workflowIO ?? undefined,
         values,
       );
+      /* seed「控件后行为」与画布运行同源：条目上配置了 seedMode 的参数
+       * 附加 control_after_generate 输入，后端按 fixed/randomize 等处理。 */
+      const cagInputs = seedModeOverrides(workflowIO ?? null, seedModes);
       const taskId = await startLocalGenerate({
         workflow: workflowId,
-        workflowInputs,
+        workflowInputs: [...workflowInputs, ...cagInputs],
       });
       setPhase({ kind: "running", pct: 0 });
       await new Promise<void>((resolve) => {
@@ -231,6 +247,12 @@ export function WorkflowCanvasNodePreview({
           values={values}
           onChange={setValues}
           showOutputs={false}
+          seedModes={seedModes}
+          onSeedModeChange={
+            onSeedModeChange
+              ? (ioKey: string, mode: string) => onSeedModeChange(ioKey, mode)
+              : undefined
+          }
           workflowId={workflowId}
         />
 

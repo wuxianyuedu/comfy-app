@@ -13,9 +13,14 @@ import { ArrowLeft, Loader2, Moon, Sun } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import type { RemoteModelEntry, TaskType } from "~/lib/llm/types";
+import {
+  REMOTE_MODEL_KINDS,
+  REMOTE_MODEL_KIND_LABELS,
+  type RemoteModelEntry,
+  type RemoteModelKind,
+  type TaskType,
+} from "~/lib/llm/types";
 import type {
-  LlmConfig,
   SettingsPageController,
   SettingsPageDrafts,
 } from "./hooks/use-settings-page";
@@ -29,6 +34,8 @@ interface ModelDialogForm {
   baseUrl: string;
   apiKey: string;
   model: string;
+  /** 用途：对话（默认）/ 图片 / 视频——图片 / 视频模型先落配置，供远程生成接入。 */
+  kind: RemoteModelKind;
 }
 
 /** `drafts` 非空由容器保证（`if (!c.drafts)` 早退），这里用交集类型表达，
@@ -69,6 +76,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
     baseUrl: "",
     apiKey: "",
     model: "",
+    kind: "chat",
   });
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<{
@@ -101,7 +109,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
 
   function openAddDialog() {
     setDialog({ mode: "add" });
-    setAddForm({ baseUrl: "", apiKey: "", model: "" });
+    setAddForm({ baseUrl: "", apiKey: "", model: "", kind: "chat" });
     setClearKey(false);
     setTestMsg(null);
     setSuggestions([]);
@@ -110,7 +118,12 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
 
   function openEditDialog(entry: RemoteModelEntry) {
     setDialog({ mode: "edit", original: entry.name, entry });
-    setAddForm({ baseUrl: entry.baseUrl ?? "", apiKey: "", model: entry.name });
+    setAddForm({
+      baseUrl: entry.baseUrl ?? "",
+      apiKey: "",
+      model: entry.name,
+      kind: entry.kind ?? "chat",
+    });
     setClearKey(false);
     setTestMsg(null);
     setSuggestions([]);
@@ -166,6 +179,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
         baseUrl: baseUrl ? baseUrl : null,
         apiKey: addForm.apiKey.trim() ? addForm.apiKey.trim() : undefined,
         clearApiKey: clearKey && !addForm.apiKey.trim(),
+        kind: addForm.kind,
       });
       if (!result.ok) {
         setAddError(result.error ?? "保存失败");
@@ -179,6 +193,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
       /* 留空不落条目字段 → 跟随已保存的全局连接配置 */
       baseUrl: baseUrl || undefined,
       apiKey: addForm.apiKey.trim() ? addForm.apiKey.trim() : undefined,
+      kind: addForm.kind,
     });
     if (!result.ok) {
       setAddError(result.error ?? "添加失败");
@@ -295,19 +310,31 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
           {c.section === "llm" && (
             <>
             <Card title="语言模型（LLM）">
-              <div className="mb-4 flex gap-2">
-                <DarkSelect
-                  className="text-ink !bg-surface-2 text-sm"
-                  value={c.drafts.llm.provider}
-                  onChange={(value) =>
-                    c.patchLlm({ provider: value as LlmConfig["provider"] })
-                  }
-                  options={["local", "remote"]}
-                  labels={{
-                    local: "本地（Ollama）",
-                    remote: "远程（OpenAI 兼容）",
-                  }}
-                />
+              {/* 提供方页签：本地 / 远程分开配置；页签即切换（草稿态，保存落库），
+                  「启用中」标记运行时实际使用的提供方 */}
+              <div className="mb-4 flex items-center gap-2">
+                {(["local", "remote"] as const).map((p) => {
+                  const paneActive = c.drafts.llm.provider === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => c.patchLlm({ provider: p })}
+                      className={`rounded-lg border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                        paneActive
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:bg-subtle hover:text-ink"
+                      }`}
+                    >
+                      {p === "local" ? "本地模型（Ollama）" : "远程模型（OpenAI 兼容）"}
+                      {paneActive && (
+                        <span className="ml-1.5 rounded-full bg-emerald-500/15 px-1.5 py-px text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                          启用中
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
@@ -501,6 +528,11 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                                 {entry.apiKey && (
                                   <span className="text-muted-foreground ml-1.5 text-[10px]">
                                     独立密钥
+                                  </span>
+                                )}
+                                {entry.kind && entry.kind !== "chat" && (
+                                  <span className="text-muted-foreground ml-1.5 text-[10px]">
+                                    {REMOTE_MODEL_KIND_LABELS[entry.kind]}模型
                                   </span>
                                 )}
                               </button>
@@ -724,6 +756,21 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     options={["custom"]}
                     labels={{ custom: "◇ 自定义" }}
                     disabled
+                    popoverMinWidth={160}
+                    autoFitFromOptions={false}
+                  />
+
+                  <label className="text-ink/80 mb-1.5 block text-sm font-medium">
+                    用途
+                  </label>
+                  <DarkSelect
+                    className="mb-3 text-sm"
+                    value={addForm.kind}
+                    onChange={(kind) =>
+                      setAddForm((f) => ({ ...f, kind: kind as RemoteModelKind }))
+                    }
+                    options={[...REMOTE_MODEL_KINDS]}
+                    labels={REMOTE_MODEL_KIND_LABELS}
                     popoverMinWidth={160}
                     autoFitFromOptions={false}
                   />

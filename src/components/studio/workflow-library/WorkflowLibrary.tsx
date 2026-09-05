@@ -127,6 +127,7 @@ export function WorkflowLibrary({
             allModelTags={c.modelTags}
             onPatchModes={c.patchModes}
             onPatchModelTags={c.patchModelTags}
+            onPatchWorkflowIO={c.patchWorkflowIO}
             onUse={c.handleUse}
             onEdit={c.handleEdit}
             onDelete={c.handleDeleteClick}

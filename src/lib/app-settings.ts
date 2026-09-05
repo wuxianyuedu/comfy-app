@@ -17,7 +17,6 @@ export const COMFYUI_DEFAULT_PORT = 8188;
 export type VideoWorkflowPref = "auto" | "txt2video" | "img2video";
 
 export type AppSettings = {
-  comfyuiUrl: string;
   trainerUrl: string;
   defaultVideoWorkflow: VideoWorkflowPref;
   comfyLorasDir: string;
@@ -27,7 +26,7 @@ export type AppSettings = {
    *   - 便携版：<path>\python_embeded\python.exe + <path>\main.py
    *   - 桌面版：配置「实例根」（如 ComfyUI-Installs\ComfyUI2）——
    *     <path>\standalone-env\python.exe + <path>\ComfyUI\main.py
-   *     也可直接配置实例内的 ComfyUI/ 源码根，解释器会向上查找。
+     *     也可直接配置实例内的 ComfyUI/ 源码根，解释器会向上查找。
    *   - venv：<path>\.venv\Scripts\python.exe + <path>\main.py
    * 配置后任务执行前若 ComfyUI 未运行会自动拉起（comfyuiAutoStart）。
    */
@@ -38,7 +37,8 @@ export type AppSettings = {
   comfyuiAutoStart: boolean;
   /**
    * ComfyUI 监听端口。留空 = 默认 8188；非默认端口会在启动时显式传
-   * `--port`，并把该端口写回 comfyuiUrl，保证「界面显示端口 = 实际端口」。
+   * `--port`，保证「界面显示端口 = 实际端口」。连接地址固定 127.0.0.1
+   * （ComfyUI 由本应用拉起；远程实例可用环境变量 COMFYUI_BASE 覆盖）。
    */
   comfyuiPort: number;
 };
@@ -70,7 +70,6 @@ export function deriveComfyuiSubdir(
 }
 
 const DEFAULTS: AppSettings = {
-  comfyuiUrl: process.env.COMFYUI_BASE ?? "http://localhost:8188",
   trainerUrl: process.env.LORA_TRAINER_URL ?? "",
   defaultVideoWorkflow: "auto",
   comfyLorasDir: process.env.COMFY_LORAS_DIR ?? "",
@@ -87,7 +86,11 @@ export function getSettingsSync(): AppSettings {
   if (cache) return cache;
   try {
     const raw = readFileSync(FILE, "utf-8");
-    cache = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<AppSettings>) };
+    const parsed = JSON.parse(raw) as Partial<AppSettings> & { comfyuiUrl?: string };
+    /* comfyuiUrl 已废弃（ComfyUI 由本应用拉起，连接地址固定 127.0.0.1:端口）；
+     * 从旧文件里剥掉，下次保存时彻底从磁盘消失。 */
+    delete parsed.comfyuiUrl;
+    cache = { ...DEFAULTS, ...parsed };
   } catch {
     cache = { ...DEFAULTS };
   }

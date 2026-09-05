@@ -428,6 +428,21 @@ export async function GET() {
     );
   }
 
+  /* 整个只读探测包进 try/catch：此前任何一处抛错（如目录状态读取失败）会让
+   * Next 返回不带 settings 的错误体，前端直接崩在
+   * `Cannot read properties of undefined (reading 'paths')`，
+   * 真实原因反而看不到。现在错误以 { error } JSON 返回，前端可读展示。 */
+  try {
+    return await buildGetResponse();
+  } catch (e) {
+    return NextResponse.json(
+      { error: { code: "custom_nodes.read_failed", message: errorMessage(e, "读取配置失败") } },
+      { status: 500 }
+    );
+  }
+}
+
+async function buildGetResponse(): Promise<Response> {
   const paths = getPaths();
   const localWorkflowPaths = getLocalWorkflowPaths();
   const summary = readManifestSummary();
