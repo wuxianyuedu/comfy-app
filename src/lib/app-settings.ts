@@ -47,6 +47,17 @@ export type AppSettings = {
    * 演示用户，与 tRPC authedProcedure 的回退一致；true = 严格 401。
    */
   loginRequired: boolean;
+  /**
+   * 应用进程退出时是否连带关闭自己拉起的 ComfyUI（进程保活开关，默认 true）。
+   * 语义：桌面壳退出是 taskkill /T /F 杀整棵进程树，被杀进程没有任何清理
+   * 机会，所以这个开关不是「退出时再决定」，而是「拉起时决定是否脱离进程树」。
+   * true = ComfyUI 挂在应用进程树内，应用退出连带关闭；false = 脱离进程树
+   * 保活，下次打开应用直接复用。仅对本应用拉起的实例生效（外部启动的不归它管）。
+   * 改动会在「下一次拉起」生效。
+   */
+  exitKillComfyui: boolean;
+  /** 同 exitKillComfyui，作用于应用拉起的 Ollama serve 进程。 */
+  exitKillOllama: boolean;
 };
 
 /** 从 comfyuiPath 推导 ComfyUI 安装内的只读资源目录（custom_nodes / workflows）。
@@ -84,6 +95,8 @@ const DEFAULTS: AppSettings = {
   comfyuiAutoStart: true,
   comfyuiPort: 0,
   loginRequired: false,
+  exitKillComfyui: true,
+  exitKillOllama: true,
 };
 
 let cache: AppSettings | null = null;
@@ -115,4 +128,24 @@ export async function saveSettings(partial: Partial<AppSettings>): Promise<AppSe
   await fs.mkdir(path.dirname(FILE), { recursive: true });
   await fs.writeFile(FILE, JSON.stringify(next, null, 2), "utf-8");
   return next;
+}
+
+/** 退出策略：应用进程退出时是否连带关闭自己拉起的后台服务。 */
+export type ExitPolicy = {
+  /** true = 应用退出连带关闭 ComfyUI（默认，保持历史行为）；false = ComfyUI 保活。 */
+  exitKillComfyui: boolean;
+  /** true = 应用退出连带关闭 Ollama（默认）；false = Ollama 保活。 */
+  exitKillOllama: boolean;
+};
+
+/** 取退出策略（应用拉起的后台服务在退出时的关停语义）。
+ *  基于当前设置的 exitKillComfyui / exitKillOllama 投影成策略结构，
+ *  调用方（ComfyUI lifecycle / Ollama 启动路由）据此在「拉起时」决定是走
+ *  bound（随应用退出）还是 keepAlive（保活）。 */
+export function getExitPolicy(): ExitPolicy {
+  const s = getSettingsSync();
+  return {
+    exitKillComfyui: s.exitKillComfyui ?? true,
+    exitKillOllama: s.exitKillOllama ?? true,
+  };
 }
