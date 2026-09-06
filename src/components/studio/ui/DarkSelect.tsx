@@ -242,12 +242,11 @@ export function DarkSelect({
         aria-expanded={open}
         aria-haspopup="listbox"
         disabled={disabled}
-        onClick={() =>
-          setOpen((value) => {
-            emitOpenChange(!value);
-            return !value;
-          })
-        }
+        onClick={() => {
+          const nextOpen = !open;
+          setOpen(nextOpen);
+          emitOpenChange(nextOpen);
+        }}
         onKeyDown={handleKeyDown}
         className={`flex w-full items-center justify-between rounded-md border border-(--color-border) bg-(--color-subtle) px-2.5 py-1.5 text-[12px] text-(--color-ink-bright) outline-none transition-colors focus:border-violet-500/40 ${className}`}
       >
