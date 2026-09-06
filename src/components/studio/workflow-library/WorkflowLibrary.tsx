@@ -26,7 +26,7 @@ const WorkflowCanvasEditor = dynamic(
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-bg)">
         <div className="text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
-          <p className="text-sm text-gray-400">加载工作流编辑器…</p>
+          <p className="text-sm text-(--color-ink-faint)">加载工作流编辑器…</p>
         </div>
       </div>
     ),
@@ -89,13 +89,13 @@ export function WorkflowLibrary({
       {/* 动作失败提示：只有用户点「重试」才消失（§17.5.4），
        *  否则防抖期内的后台拉取一成功就会把它吞掉。 */}
       {c.actionError && (
-        <div className="flex items-start gap-2 border-b border-red-500/25 bg-red-500/8 px-5 py-2.5 text-[12px] text-red-200">
+        <div className="flex items-start gap-2 border-b border-red-500/25 bg-red-500/8 px-5 py-2.5 text-[12px] text-red-600">
           <span className="font-semibold">⚠</span>
           <span className="min-w-0 flex-1">{c.actionError}</span>
           <button
             type="button"
             onClick={c.refresh}
-            className="shrink-0 rounded-md border border-red-400/30 px-2 py-0.5 text-[11px] text-red-200 transition-colors hover:bg-red-500/15"
+            className="shrink-0 rounded-md border border-red-400/30 px-2 py-0.5 text-[11px] text-red-600 transition-colors hover:bg-red-500/15"
           >
             重试
           </button>
@@ -103,7 +103,7 @@ export function WorkflowLibrary({
       )}
 
       {c.loadError && !c.actionError && (
-        <div className="flex items-start gap-2 border-b border-amber-500/25 bg-amber-500/8 px-5 py-2.5 text-[12px] text-amber-200">
+        <div className="flex items-start gap-2 border-b border-amber-500/25 bg-amber-500/8 px-5 py-2.5 text-[12px] text-amber-600">
           <span className="font-semibold">⚠</span>
           <span className="min-w-0 flex-1">{c.loadError}</span>
         </div>

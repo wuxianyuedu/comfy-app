@@ -249,14 +249,14 @@ export function DarkSelect({
           })
         }
         onKeyDown={handleKeyDown}
-        className={`flex w-full items-center justify-between rounded-md border border-white/10 bg-white/3 px-2.5 py-1.5 text-[12px] text-gray-200 outline-none transition-colors focus:border-violet-500/40 ${className}`}
+        className={`flex w-full items-center justify-between rounded-md border border-(--color-border) bg-(--color-subtle) px-2.5 py-1.5 text-[12px] text-(--color-ink-bright) outline-none transition-colors focus:border-violet-500/40 ${className}`}
       >
         {/* min-w-0 + flex-1 + truncate lets rich ReactNode labels clip
          *  cleanly; callers that want a right-aligned badge (e.g. "本机" /
          *  "在线") should place a `flex-1` spacer before the badge so it
          *  pushes right even under this `truncate` (nowrap) context. */}
         <span className="flex min-w-0 flex-1 items-center truncate">{label}</span>
-        <svg className={`ml-2 shrink-0 text-gray-500 transition-transform ${open ? "rotate-180" : ""}`} width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <svg className={`ml-2 shrink-0 text-(--color-ink-muted) transition-transform ${open ? "rotate-180" : ""}`} width="12" height="12" viewBox="0 0 12 12" fill="none">
           <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       </button>
@@ -277,7 +277,7 @@ export function DarkSelect({
               width: pos.width,
               zIndex: 9999,
             }}
-            className="max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-(--color-card) py-1 shadow-lg shadow-black/40"
+            className="max-h-60 overflow-y-auto rounded-lg border border-(--color-border) bg-(--color-card) py-1 shadow-lg shadow-black/40"
           >
             {options.map((opt, i) => (
               <li
@@ -288,10 +288,10 @@ export function DarkSelect({
                 onClick={() => pick(opt)}
                 className={`flex items-center gap-1.5 cursor-pointer truncate px-2.5 py-1 text-[12px] transition-colors ${
                   value === opt
-                    ? "bg-violet-500/20 font-medium text-violet-200"
+                    ? "bg-violet-500/20 font-medium text-violet-600"
                     : i === highlighted
-                      ? "bg-white/6 text-gray-200"
-                      : "text-gray-400 hover:bg-white/4 hover:text-gray-200"
+                      ? "bg-(--color-surface-2) text-(--color-ink-bright)"
+                      : "text-(--color-ink-faint) hover:bg-(--color-subtle) hover:text-(--color-ink-bright)"
                 }`}
               >
                 {labels?.[opt] ?? opt}

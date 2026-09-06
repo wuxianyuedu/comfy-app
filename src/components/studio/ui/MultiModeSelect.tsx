@@ -43,9 +43,9 @@ const CATEGORY_PILL: Record<WorkflowCategory, string> = {
   audio: "bg-amber-500/15 ring-1 ring-inset ring-amber-500/25",
 };
 const CATEGORY_TEXT: Record<WorkflowCategory, string> = {
-  image: "text-violet-300",
-  video: "text-sky-300",
-  audio: "text-amber-300",
+  image: "text-violet-600",
+  video: "text-sky-600",
+  audio: "text-amber-600",
 };
 const CATEGORY_LABEL: Record<WorkflowCategory, string> = {
   image: "图像",
@@ -286,7 +286,7 @@ export function MultiModeSelect({
             if (!disabled) setOpen(true);
           }}
           title={`还有 ${plusN} 种其他模式，点击管理`}
-          className="inline-flex items-center rounded-md bg-violet-500/8 px-1.5 py-0.5 text-[11px] font-medium text-gray-400 transition-colors hover:bg-violet-500/18 hover:text-violet-200"
+          className="inline-flex items-center rounded-md bg-violet-500/8 px-1.5 py-0.5 text-[11px] font-medium text-(--color-ink-faint) transition-colors hover:bg-violet-500/18 hover:text-violet-600"
         >
           +{plusN}
         </button>
@@ -306,10 +306,10 @@ export function MultiModeSelect({
               width: pos.width,
               zIndex: 9999,
             }}
-            className="rounded-xl border border-white/8 bg-(--color-card) shadow-2xl shadow-violet-500/20"
+            className="rounded-xl border border-(--color-border) bg-(--color-card) shadow-2xl shadow-violet-500/20"
           >
             {/* search */}
-            <div className="border-b border-white/6 p-2">
+            <div className="border-b border-(--color-border-subtle) p-2">
               <input
                 autoFocus
                 type="text"
@@ -322,12 +322,12 @@ export function MultiModeSelect({
                     handleSave();
                   }
                 }}
-                className="w-full rounded-md bg-white/4 px-2.5 py-1.5 text-sm text-gray-200 placeholder-gray-500 outline-none transition-colors focus:bg-white/6 focus:ring-1 focus:ring-violet-500/30"
+                className="w-full rounded-md bg-(--color-subtle) px-2.5 py-1.5 text-sm text-(--color-ink-bright) placeholder-gray-500 outline-none transition-colors focus:bg-(--color-surface-2) focus:ring-1 focus:ring-violet-500/30"
               />
             </div>
 
             {/* tabs — switchable 图像 / 视频 / 音频 */}
-            <div className="flex items-center gap-1 border-b border-white/6 px-2 pt-2">
+            <div className="flex items-center gap-1 border-b border-(--color-border-subtle) px-2 pt-2">
               {(
                 ["image", "video", "audio"] as WorkflowCategory[]
               ).map((cat) => {
@@ -342,8 +342,8 @@ export function MultiModeSelect({
                     onClick={() => setActiveTab(cat)}
                     className={`relative flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold transition-colors ${
                       isActive
-                        ? `${CATEGORY_TEXT[cat]} bg-white/6`
-                        : "text-gray-500 hover:text-gray-300"
+                        ? `${CATEGORY_TEXT[cat]} bg-(--color-surface-2)`
+                        : "text-(--color-ink-muted) hover:text-(--color-ink-strong)"
                     }`}
                   >
                     {CATEGORY_LABEL[cat]}
@@ -371,7 +371,7 @@ export function MultiModeSelect({
                 const items = grouped[activeTab] ?? [];
                 if (items.length === 0) {
                   return (
-                    <div className="px-3 py-4 text-center text-xs text-gray-500">
+                    <div className="px-3 py-4 text-center text-xs text-(--color-ink-muted)">
                       {query.trim()
                         ? "没有匹配的模式"
                         : `${CATEGORY_LABEL[activeTab]}暂无模式`}
@@ -386,8 +386,8 @@ export function MultiModeSelect({
                       key={item.code}
                       className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors ${
                         isSelected
-                          ? "bg-violet-500/10 text-violet-100"
-                          : "text-gray-300 hover:bg-white/4"
+                          ? "bg-violet-500/10 text-violet-600"
+                          : "text-(--color-ink-strong) hover:bg-(--color-subtle)"
                       }`}
                       onClick={() => toggle(item.code)}
                       onKeyDown={(event) => {
@@ -405,7 +405,7 @@ export function MultiModeSelect({
                         className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
                           isSelected
                             ? "border-violet-500/60 bg-violet-500/30"
-                            : "border-white/18 bg-white/2"
+                            : "border-(--color-border-strong) bg-(--color-card)"
                         }`}
                       >
                         {isSelected && (
@@ -439,8 +439,8 @@ export function MultiModeSelect({
                         title={isDraftDefault ? "当前默认模式" : "设为默认模式"}
                         className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-medium transition-colors ${
                           isDraftDefault
-                            ? "bg-violet-500/25 text-violet-200"
-                            : "text-gray-500 hover:bg-white/8 hover:text-gray-300"
+                            ? "bg-violet-500/25 text-violet-600"
+                            : "text-(--color-ink-muted) hover:bg-(--color-surface-2) hover:text-(--color-ink-strong)"
                         }`}
                       >
                         {isDraftDefault ? "★ 默认" : "☆ 默认"}
@@ -457,11 +457,11 @@ export function MultiModeSelect({
             </div>
 
             {/* footer */}
-            <div className="flex items-center gap-2 border-t border-white/6 p-2">
+            <div className="flex items-center gap-2 border-t border-(--color-border-subtle) p-2">
               <button
                 type="button"
                 onClick={handleCancel}
-                className="flex-1 rounded-md bg-white/4 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:bg-white/8"
+                className="flex-1 rounded-md bg-(--color-subtle) px-3 py-1.5 text-sm text-(--color-ink-strong) transition-colors hover:bg-(--color-surface-2)"
               >
                 取消
               </button>
@@ -469,7 +469,7 @@ export function MultiModeSelect({
                 type="button"
                 onClick={handleSave}
                 disabled={draft.size === 0}
-                className="flex-1 rounded-md bg-violet-500/90 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-white/6 disabled:text-gray-500"
+                className="flex-1 rounded-md bg-violet-500/90 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-(--color-surface-2) disabled:text-(--color-ink-muted)"
               >
                 保存（{draft.size}）
               </button>

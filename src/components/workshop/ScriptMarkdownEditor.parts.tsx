@@ -24,7 +24,7 @@ import {
 import type { OutlineItem } from "./script-markdown-utils";
 
 export const SCROLLBAR_VISIBLE_CLASSES =
-  "overflow-y-auto [&::-webkit-scrollbar]:h-2.5! [&::-webkit-scrollbar]:w-2.5! [&::-webkit-scrollbar-track]:bg-transparent! [&::-webkit-scrollbar-thumb]:rounded-full! [&::-webkit-scrollbar-thumb]:bg-[#3a3a4a]! [&::-webkit-scrollbar-thumb:hover]:bg-[#52526a]!";
+  "overflow-y-auto [&::-webkit-scrollbar]:h-2.5! [&::-webkit-scrollbar]:w-2.5! [&::-webkit-scrollbar-track]:bg-transparent! [&::-webkit-scrollbar-thumb]:rounded-full! [&::-webkit-scrollbar-thumb]:bg-(--color-border-strong)! [&::-webkit-scrollbar-thumb:hover]:bg-(--color-ink-muted)!";
 
 /* ── Toolbar primitives ── */
 export function ToolbarButton({
@@ -41,7 +41,7 @@ export function ToolbarButton({
       type="button"
       onClick={onClick}
       title={title}
-      className="grid h-8 w-8 place-items-center rounded-lg text-[#9a9aad] transition-colors hover:bg-white/5 hover:text-[#ededf2]"
+      className="grid h-8 w-8 place-items-center rounded-lg text-(--color-ink-muted) transition-colors hover:bg-(--color-subtle) hover:text-(--color-ink-bright)"
     >
       {children}
     </button>
@@ -53,7 +53,7 @@ export function ToolbarGroup({ children }: { children: ReactNode }) {
 }
 
 export function ToolbarDivider() {
-  return <div className="mx-2 h-5 w-px bg-[#26262e]" />;
+  return <div className="mx-2 h-5 w-px bg-(--color-border)" />;
 }
 
 /* ── Full toolbar(标题 / 行内样式 / 列表引用 / 媒体 / 撤销重做 / 预览) ── */
@@ -79,7 +79,7 @@ export function EditorToolbar({
   onTogglePreview: () => void;
 }) {
   return (
-    <div className="flex items-center gap-1 border-b border-[#26262e] bg-[#0f0f14] px-4 py-2">
+    <div className="flex items-center gap-1 border-b border-(--color-border) bg-(--color-panel) px-4 py-2">
       <ToolbarGroup>
         <ToolbarButton onClick={() => insertAtLineStart("#")} title="标题 1">
           <Heading1 size={18} />
@@ -154,7 +154,7 @@ export function EditorToolbar({
       <div className="ml-auto flex items-center gap-2">
         <button
           onClick={onTogglePreview}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-[#9a9aad] transition-colors hover:bg-white/5 hover:text-[#ededf2]"
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-(--color-ink-muted) transition-colors hover:bg-(--color-subtle) hover:text-(--color-ink-bright)"
         >
           {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
           {showPreview ? "返回编辑" : "预览"}
@@ -173,12 +173,12 @@ export function OutlineSidebar({
   onJump: (line: number) => void;
 }) {
   return (
-    <aside className="w-64 shrink-0 overflow-y-auto border-r border-[#26262e] bg-[#0f0f14] p-4">
-      <h3 className="mb-3 text-xs font-semibold tracking-wider text-[#6b7088] uppercase">
+    <aside className="w-64 shrink-0 overflow-y-auto border-r border-(--color-border) bg-(--color-panel) p-4">
+      <h3 className="mb-3 text-xs font-semibold tracking-wider text-(--color-ink-fainter) uppercase">
         目录大纲
       </h3>
       {outline.length === 0 ? (
-        <p className="text-xs leading-relaxed text-[#5a5f73]">
+        <p className="text-xs leading-relaxed text-(--color-ink-faintest)">
           使用 # / ## / ### 添加标题后，此处自动生成目录。
         </p>
       ) : (
@@ -187,12 +187,12 @@ export function OutlineSidebar({
             <button
               key={`${item.line}-${index}`}
               onClick={() => onJump(item.line)}
-              className={`block w-full truncate rounded-md px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-white/5 hover:text-[#ededf2] ${
+              className={`block w-full truncate rounded-md px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-(--color-subtle) hover:text-(--color-ink-bright) ${
                 item.level === 1
-                  ? "font-medium text-[#c9c9d6]"
+                  ? "font-medium text-(--color-ink-strong)"
                   : item.level === 2
-                    ? "pl-5 text-[#9a9aad]"
-                    : "pl-8 text-[#8b90a8]"
+                    ? "pl-5 text-(--color-ink-muted)"
+                    : "pl-8 text-(--color-ink-faint)"
               }`}
               title={item.text}
             >
@@ -229,7 +229,7 @@ export function EditorBody({
     <main className="relative flex min-w-0 flex-1 flex-col">
       {showPreview ? (
         <div
-          className={`${SCROLLBAR_VISIBLE_CLASSES} min-h-0 flex-1 bg-[#0a0a0f] p-6 text-[13px] leading-7 text-[#d4d4d8]`}
+          className={`${SCROLLBAR_VISIBLE_CLASSES} min-h-0 flex-1 bg-(--color-canvas) p-6 text-[13px] leading-7 text-(--color-ink)`}
           dangerouslySetInnerHTML={{ __html: previewHtml }}
         />
       ) : (
@@ -258,7 +258,7 @@ export function EditorBody({
           }}
           spellCheck={false}
           placeholder="# 剧本标题\n\n## 第一场\n\n（在此处编写完整剧本……）"
-          className={`${SCROLLBAR_VISIBLE_CLASSES} min-h-0 flex-1 resize-none bg-[#0a0a0f] p-6 font-mono text-[13px] leading-7 text-[#e5e7eb] outline-none placeholder:text-[#5a5a6b]`}
+          className={`${SCROLLBAR_VISIBLE_CLASSES} min-h-0 flex-1 resize-none bg-(--color-canvas) p-6 font-mono text-[13px] leading-7 text-(--color-ink-bright) outline-none placeholder:text-(--color-ink-fainter)`}
           style={{ tabSize: 2 }}
         />
       )}

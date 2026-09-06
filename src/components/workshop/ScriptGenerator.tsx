@@ -86,7 +86,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
           <label className="block">
             <span className="mb-1 block text-xs text-muted-foreground">类型</span>
             <DarkSelect
-              className="!bg-white/3 !border-white/8 text-sm"
+              className="!bg-(--color-subtle) !border-(--color-border) text-sm"
               value={meta.type}
               onChange={(value) => onMetaChange({ ...meta, type: value as ProjectType })}
               options={PROJECT_TYPES}

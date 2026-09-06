@@ -18,7 +18,7 @@ export interface StatusStyle {
 export const STATUS_STYLE: Record<string, StatusStyle> = {
   QUEUED: {
     label: "排队中",
-    pillCls: "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 border-dashed",
+    pillCls: "bg-cyan-500/15 text-cyan-600 border border-cyan-500/30 border-dashed",
     accentCls: "border-l-cyan-500",
     cardBorderCls: "border-cyan-500/30 border-dashed",
     isActive: true,
@@ -26,7 +26,7 @@ export const STATUS_STYLE: Record<string, StatusStyle> = {
   },
   RUNNING: {
     label: "生成中",
-    pillCls: "bg-violet-500/20 text-violet-300",
+    pillCls: "bg-violet-500/20 text-violet-600",
     accentCls: "border-l-violet-500",
     cardBorderCls: "border-violet-500/30",
     isActive: true,
@@ -36,7 +36,7 @@ export const STATUS_STYLE: Record<string, StatusStyle> = {
     label: "已完成",
     pillCls: "bg-emerald-500/15 text-emerald-400",
     accentCls: "border-l-emerald-500",
-    cardBorderCls: "border-white/6",
+    cardBorderCls: "border-(--color-border-subtle)",
     isActive: false,
     showProgress: false,
   },
@@ -51,9 +51,9 @@ export const STATUS_STYLE: Record<string, StatusStyle> = {
   },
   CANCELLED: {
     label: "已取消",
-    pillCls: "bg-white/10 text-gray-400",
+    pillCls: "bg-(--color-surface-2) text-(--color-ink-faint)",
     accentCls: "border-l-gray-500",
-    cardBorderCls: "border-white/6",
+    cardBorderCls: "border-(--color-border-subtle)",
     isActive: false,
     showProgress: false,
   },

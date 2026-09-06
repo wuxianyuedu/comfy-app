@@ -53,7 +53,7 @@ export function WorkflowIOThumb({ io }: { io: WorkflowIOMap | null | undefined }
           </span>
         ))}
         {hiddenIn > 0 && (
-          <span className="text-[10px] text-gray-500">+{hiddenIn}</span>
+          <span className="text-[10px] text-(--color-ink-muted)">+{hiddenIn}</span>
         )}
       </div>
       <div className="flex h-3 flex-1 items-center">
@@ -71,7 +71,7 @@ export function WorkflowIOThumb({ io }: { io: WorkflowIOMap | null | undefined }
           </span>
         ))}
         {hiddenOut > 0 && (
-          <span className="text-[10px] text-gray-500">+{hiddenOut}</span>
+          <span className="text-[10px] text-(--color-ink-muted)">+{hiddenOut}</span>
         )}
       </div>
     </div>
@@ -109,12 +109,12 @@ export function RootGroupHeader({
       type="button"
       onClick={onToggle}
       aria-expanded={!collapsed}
-      className="group/root flex w-full items-center gap-2.5 rounded-xl border border-white/6 bg-white/2 px-3 py-2 text-left transition-colors hover:border-cyan-400/30 hover:bg-white/4"
+      className="group/root flex w-full items-center gap-2.5 rounded-xl border border-(--color-border-subtle) bg-(--color-card) px-3 py-2 text-left transition-colors hover:border-cyan-400/30 hover:bg-(--color-subtle)"
     >
       <span
         className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] font-bold transition-transform ${
           collapsed ? "" : "rotate-90"
-        } bg-white/6 text-gray-300`}
+        } bg-(--color-surface-2) text-(--color-ink-strong)`}
         aria-hidden
       >
         ▶
@@ -125,7 +125,7 @@ export function RootGroupHeader({
       <span className="flex min-w-0 flex-1 flex-col">
         <span
           className={`truncate font-mono text-[12px] ${
-            rawPath ? "text-gray-200" : "text-amber-300"
+            rawPath ? "text-(--color-ink-bright)" : "text-amber-600"
           }`}
           title={display}
         >
@@ -137,8 +137,8 @@ export function RootGroupHeader({
               error
                 ? "text-red-400"
                 : exists === false
-                  ? "text-amber-300"
-                  : "text-gray-500"
+                  ? "text-amber-600"
+                  : "text-(--color-ink-muted)"
             }`}
           >
             <span
@@ -162,8 +162,8 @@ export function RootGroupHeader({
       <span
         className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${
           collapsed
-            ? "bg-white/5 text-gray-400"
-            : "bg-cyan-500/15 text-cyan-300"
+            ? "bg-(--color-subtle) text-(--color-ink-faint)"
+            : "bg-cyan-500/15 text-cyan-600"
         }`}
         title={collapsed ? "已折叠，点击展开" : "已展开，点击折叠"}
       >
@@ -193,15 +193,15 @@ export function PendingWorkflowCard({
   return (
     <div
       key={w.id}
-      className="group flex flex-col rounded-2xl border border-dashed border-cyan-400/25 bg-white/1.5 p-4"
+      className="group flex flex-col rounded-2xl border border-dashed border-cyan-400/25 bg-(--color-card) p-4"
     >
       <h3
-        className="break-words text-sm font-semibold leading-snug text-gray-100"
+        className="break-words text-sm font-semibold leading-snug text-(--color-ink)"
         title={w.name}
       >
         {w.name}
       </h3>
-      <p className="mt-0.5 text-[10.5px] text-cyan-300/80">
+      <p className="mt-0.5 text-[10.5px] text-cyan-600/80">
         未载入 ·{" "}
         {w.pendingSize ? `${(w.pendingSize / 1024).toFixed(1)} KB` : ""}
       </p>
@@ -215,7 +215,7 @@ export function PendingWorkflowCard({
         {isLoading ? "载入中…" : "⤓ 载入"}
       </button>
       <p
-        className="mt-1.5 break-all font-mono text-[10px] leading-snug text-gray-500"
+        className="mt-1.5 break-all font-mono text-[10px] leading-snug text-(--color-ink-muted)"
         title={w.sourcePath ?? undefined}
       >
         {w.sourcePath}
@@ -241,16 +241,16 @@ export function FilterTabs<T extends string>({
 }) {
   const activeCls =
     accent === "violet"
-      ? "border-violet-500/60 bg-violet-500/15 text-violet-200"
+      ? "border-violet-500/60 bg-violet-500/15 text-violet-600"
       : accent === "sky"
-        ? "border-sky-500/60 bg-sky-500/15 text-sky-200"
-        : "border-fuchsia-500/60 bg-fuchsia-500/15 text-fuchsia-200";
+        ? "border-sky-500/60 bg-sky-500/15 text-sky-600"
+        : "border-fuchsia-500/60 bg-fuchsia-500/15 text-fuchsia-600";
   const badgeCls =
     accent === "violet"
-      ? "bg-violet-500/30 text-violet-100"
+      ? "bg-violet-500/30 text-violet-600"
       : accent === "sky"
-        ? "bg-sky-500/30 text-sky-100"
-        : "bg-fuchsia-500/30 text-fuchsia-100";
+        ? "bg-sky-500/30 text-sky-600"
+        : "bg-fuchsia-500/30 text-fuchsia-600";
   return (
     <div className="mb-3 flex flex-wrap items-center gap-1.5">
       {tabs.map((tab) =>
@@ -264,13 +264,13 @@ export function FilterTabs<T extends string>({
             className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
               isActive
                 ? activeCls
-                : "border-white/8 bg-white/2 text-gray-400 hover:border-white/20 hover:text-gray-200"
+                : "border-(--color-border) bg-(--color-card) text-(--color-ink-faint) hover:border-(--color-border-strong) hover:text-(--color-ink-bright)"
             }`}
           >
             {tab.label}
             <span
               className={`rounded-full px-1.5 text-[11px] tabular-nums ${
-                isActive ? badgeCls : "bg-white/10 text-gray-400"
+                isActive ? badgeCls : "bg-(--color-surface-2) text-(--color-ink-faint)"
               }`}
             >
               {tab.count}
@@ -335,12 +335,12 @@ export function WorkflowListBody<TRow extends { id: string } = WorkflowRow>({
       onDrop={onListDrop}
     >
       {dropErr && (
-        <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/8 px-3 py-2 text-sm text-red-200">
+        <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/8 px-3 py-2 text-sm text-red-600">
           <span className="font-semibold">⚠</span>
           <span>{dropErr}</span>
           <button
             type="button"
-            className="ml-auto text-xs text-red-300/70 hover:text-red-100"
+            className="ml-auto text-xs text-red-600/70 hover:text-red-600"
             onClick={() => setDropErr(null)}
           >
             ✕
@@ -354,24 +354,24 @@ export function WorkflowListBody<TRow extends { id: string } = WorkflowRow>({
           className={`mb-3 flex items-center gap-3 rounded-xl border border-dashed px-4 py-2.5 transition-colors ${
             dragActive
               ? "border-cyan-400/80 bg-cyan-500/8 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.12)]"
-              : "border-white/8 bg-white/2 hover:border-white/16"
+              : "border-(--color-border) bg-(--color-card) hover:border-(--color-border-strong)"
           }`}
         >
           <div
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-              dragActive ? "bg-cyan-500/15 text-cyan-300" : "bg-white/4 text-gray-500"
+              dragActive ? "bg-cyan-500/15 text-cyan-600" : "bg-(--color-subtle) text-(--color-ink-muted)"
             }`}
           >
             <Icon name="upload" size={16} />
           </div>
           <div className="min-w-0 flex-1">
             <div
-              className={`truncate text-sm font-medium ${dragActive ? "text-cyan-100" : "text-gray-300"}`}
+              className={`truncate text-sm font-medium ${dragActive ? "text-cyan-600" : "text-(--color-ink-strong)"}`}
             >
               {dragActive ? "松开鼠标即可导入工作流" : "把工作流 JSON 拖到这里快速导入"}
             </div>
             <div
-              className={`truncate text-[11px] ${dragActive ? "text-cyan-200/70" : "text-gray-500"}`}
+              className={`truncate text-[11px] ${dragActive ? "text-cyan-600/70" : "text-(--color-ink-muted)"}`}
             >
               {dragActive
                 ? "支持 ComfyUI 导出（API 格式）/（工作流格式）· 单文件 ≤ 5 MB"
@@ -381,21 +381,21 @@ export function WorkflowListBody<TRow extends { id: string } = WorkflowRow>({
         </div>
       )}
       {loading && filtered.length === 0 ? (
-        <div className="grid min-h-[220px] place-items-center rounded-2xl text-gray-400">
+        <div className="grid min-h-[220px] place-items-center rounded-2xl text-(--color-ink-faint)">
           <div className="flex flex-col items-center gap-3">
             <Icon
               name="loader"
               size={44}
-              className="animate-spin text-cyan-300/90"
+              className="animate-spin text-cyan-600/90"
             />
-            <span className="text-sm text-gray-400">加载中…</span>
+            <span className="text-sm text-(--color-ink-faint)">加载中…</span>
           </div>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="grid min-h-[220px] place-items-center rounded-2xl border border-dashed border-white/8 text-gray-500">
+        <div className="grid min-h-[220px] place-items-center rounded-2xl border border-dashed border-(--color-border) text-(--color-ink-muted)">
           <div className="text-center">
-            <Icon name="files" size={32} className="mx-auto mb-2 text-violet-300/70" />
-            <p className="text-base font-medium text-gray-300">暂无工作流</p>
+            <Icon name="files" size={32} className="mx-auto mb-2 text-violet-600/70" />
+            <p className="text-base font-medium text-(--color-ink-strong)">暂无工作流</p>
             <p className="mt-1 text-xs">
               配置本地工作流目录后会显示 ⤓ 未载入 卡片；或向上拖入 JSON 导入。
             </p>
@@ -409,7 +409,7 @@ export function WorkflowListBody<TRow extends { id: string } = WorkflowRow>({
       <div className="space-y-6">
         {groupedByRoot.length > 1 && (
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-gray-500">
+            <span className="text-[11px] text-(--color-ink-muted)">
               已配置 {groupedByRoot.length} 个目录 · 共{" "}
               {groupedByRoot.reduce((total, bucket) => total + bucket.rows.length, 0)} 个工作流
             </span>
@@ -417,7 +417,7 @@ export function WorkflowListBody<TRow extends { id: string } = WorkflowRow>({
               <button
                 type="button"
                 onClick={expandAllRoots}
-                className="text-[11px] text-gray-400 transition-colors hover:text-cyan-300"
+                className="text-[11px] text-(--color-ink-faint) transition-colors hover:text-cyan-600"
               >
                 全部展开
               </button>

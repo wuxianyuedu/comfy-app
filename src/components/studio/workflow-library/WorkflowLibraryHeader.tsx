@@ -39,8 +39,8 @@ export function WorkflowLibraryHeader({
   onManageModels,
 }: WorkflowLibraryHeaderProps) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/6 px-5 py-2.5">
-      <h1 className="font-title text-lg font-bold text-gray-100">工作流库</h1>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-(--color-border-subtle) px-5 py-2.5">
+      <h1 className="font-title text-lg font-bold text-(--color-ink)">工作流库</h1>
 
       {/* 紧凑筛选下拉：紧跟标题右侧 */}
       <WorkflowLibraryFilters

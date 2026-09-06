@@ -187,7 +187,7 @@ export function WorkshopStudio() {
 
   return (
     <LLMProvider>
-      <div className="dark px-4 py-6 sm:px-8">
+      <div className="px-4 py-6 sm:px-8">
         {/* Header */}
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -283,7 +283,7 @@ export function WorkshopStudio() {
                   大模型（Checkpoint）
                 </span>
                 <DarkSelect
-                  className="!border-white/8 !bg-white/3 text-sm"
+                  className="!border-(--color-border) !bg-(--color-subtle) text-sm"
                   value={checkpoint}
                   onChange={(value) => setCheckpoint(value)}
                   options={checkpoints}
