@@ -287,3 +287,54 @@ export async function interrupt(): Promise<void> {
   const base = await resolveComfyBase();
   await fetch(`${base}/api/interrupt`, { method: "POST" });
 }
+
+/* ── /system_stats ──────────────────────────────────────────────────────
+ * ComfyUI 系统状态：返回 GPU（devices）与系统内存（system）容量与占用，
+ * 底部状态栏据此显示显存/内存占用；进程离线时返回 null（调用方降级展示）。 */
+/** 折叠成状态栏关心的聚合视图，保留原始字段便于扩展 */
+export interface ComfySystemStats {
+  online: boolean;
+  /** GPU 型号（取第一块）；无 GPU 时为 undefined */
+  gpuName?: string;
+  /** 显存占用（字节） */
+  vramUsed: number;
+  /** 显存总量（字节） */
+  vramTotal: number;
+  /** 系统内存占用（字节） */
+  ramUsed: number;
+  /** 系统内存总量（字节） */
+  ramTotal: number;
+}
+
+/** 拉取 ComfyUI `/system_stats` 并折叠成状态栏需要的聚合字段。
+ *  服务不可达 / 解析失败时返回 null，由调用方决定降级展示。 */
+export async function getSystemStats(): Promise<ComfySystemStats | null> {
+  try {
+    const res = await fetch(`${comfyBase()}/system_stats`, {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      system?: { ram_total?: number; ram_free?: number };
+      devices?: Array<{
+        name?: string;
+        type?: string;
+        vram_total?: number;
+        vram_used?: number;
+      }>;
+    };
+    const dev = Array.isArray(data.devices) ? data.devices[0] : undefined;
+    const ramTotal = data.system?.ram_total ?? 0;
+    const ramFree = data.system?.ram_free ?? 0;
+    return {
+      online: true,
+      gpuName: dev?.name ?? (dev?.type === "cpu" ? "CPU" : undefined),
+      vramUsed: dev?.vram_used ?? 0,
+      vramTotal: dev?.vram_total ?? 0,
+      ramUsed: ramTotal > 0 ? Math.max(0, ramTotal - ramFree) : 0,
+      ramTotal,
+    };
+  } catch {
+    return null;
+  }
+}
