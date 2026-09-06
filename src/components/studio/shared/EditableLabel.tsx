@@ -42,22 +42,26 @@ export function EditableLabel({
         style={{ fontFamily: "var(--font-sans)" }}
         title={title}
       >
-        <span className="min-w-0 flex-1 truncate">{label}</span>
-        {editable && (
+        {editable ? (
+          /* 需求：直接点击变量名称即可进入改名，不再依赖 ✎ 小按钮。
+           * editable 时整个名称是可交互的文本按钮（点击进入编辑态）。 */
           <button
             type="button"
-            aria-label="编辑名称"
-            title="编辑名称"
+            aria-label="点击重命名"
             onClick={(event) => {
               event.stopPropagation();
               setDraft(label);
               setEditing(true);
             }}
             onMouseDown={(event) => event.stopPropagation()}
-            className="shrink-0 text-[10px] text-gray-500 opacity-30 transition-opacity hover:opacity-100 group-hover:opacity-70"
+            onDoubleClick={(event) => event.stopPropagation()}
+            className="nodrag nopan min-w-0 flex-1 cursor-text truncate text-left text-[12px] font-semibold text-(--color-ink-bright) transition-colors hover:text-(--color-ink-strong)"
+            style={{ fontFamily: "var(--font-sans)" }}
           >
-            ✎
+            {label}
           </button>
+        ) : (
+          <span className="min-w-0 flex-1 truncate">{label}</span>
         )}
       </span>
     );
@@ -73,7 +77,9 @@ export function EditableLabel({
   };
 
   return (
-    <span className="flex min-w-0 flex-1 items-center gap-1">
+    /* 编辑态输入框不铺满整行（不再用 flex-1 抢占），给同一行的
+     * 「必填 / 可见」等操作按钮留出稳定空间 —— 输入编辑区域过长会把它们挤出可视区。 */
+    <span className="flex min-w-0 items-center gap-1">
       <input
         ref={inputRef}
         type="text"
@@ -92,13 +98,14 @@ export function EditableLabel({
         }}
         onClick={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
+        onDoubleClick={(event) => event.stopPropagation()}
         title={title}
         /* 与展示态字体一致 — text-[12px] font-semibold
-         *  text-(--color-ink-bright) + 'Inter'，避免编辑切回展示态时出现字重跳变。 */
-        className="nodrag nopan min-w-0 flex-1 rounded border border-violet-400/40 bg-white/6 px-1.5 py-px text-[12px] font-semibold text-(--color-ink-bright) outline-none focus:border-violet-400/70"
+         *  text-(--color-ink-bright) + 'Inter'，避免编辑切回展示态时出现字重跳变。
+         * 宽度给到一个合理的可输入长度，并允许收缩，绝不侵占同一行的操作按钮。 */
+        className="nodrag nopan min-w-0 w-48 max-w-full shrink rounded border border-violet-400/40 bg-white/6 px-1.5 py-px text-[12px] font-semibold text-(--color-ink-bright) outline-none focus:border-violet-400/70"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </span>
   );
 }
-
