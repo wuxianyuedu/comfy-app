@@ -15,7 +15,10 @@
 
 import { getSettingsSync } from "../app-settings";
 import { resolveComfyLaunchPlan } from "./launch-path";
-import { findPidForMainPy, findPidListeningPort } from "./proc-detect";
+import {
+  findPidForMainPyDetailed,
+  findPidListeningPort,
+} from "./proc-detect";
 import { logger } from "~/server/lib/logger";
 
 /** How many extra ports to probe when the configured one is unreachable */
@@ -93,21 +96,33 @@ export async function resolveComfyBase(): Promise<string> {
   if (comfyuiPath) {
     const plan = resolveComfyLaunchPlan(comfyuiPath);
     if (!("error" in plan)) {
-      const pid = await findPidForMainPy(plan.mainPy);
-      if (pid) {
-        const port = await findPidListeningPort(pid);
+      const lookup = await findPidForMainPyDetailed(plan.mainPy);
+      if (lookup.pid) {
+        const port = await findPidListeningPort(lookup.pid);
         if (port) {
           _resolvedBase = `http://${host}:${port}`;
-          logger.info(`[comfyui] Connected to configured instance on :${port} (pid=${pid})`);
+          logger.info(`[comfyui] Connected to configured instance on :${port} (pid=${lookup.pid})`);
           return _resolvedBase;
         }
         // 进程在但端口未绑定（仍在启动）——不误连到别的 ComfyUI，返回配置地址。
-        logger.info(`[comfyui] Configured instance (pid=${pid}) starting, port not bound yet`);
+        logger.info(`[comfyui] Configured instance (pid=${lookup.pid}) starting, port not bound yet`);
         return `http://${host}:${configuredPort}`;
       }
-      // 配置的实例没有在运行——抛错触发自动启动（executor-ws connect 的 catch）
-      logger.warn(`[comfyui] Configured instance not running: ${plan.mainPy}`);
-      throw new Error("Configured ComfyUI instance is not running");
+      // 进程查询失败（超时/高负载）≠ 实例未运行：结果不可信，此时不能抛错，
+      // 否则正在运行的实例会被状态探测误报为「未运行」（ISSUE #114：启动
+      // 成功后状态行回退「未运行」，但点「打开查看」又能打开）。
+      // 退回端口探测：先试配置端口，再试 +1..+N（下方公共路径）。若配置
+      // 端口上有 ComfyUI 响应，几乎总是本实例（另一实例占端口的场景在
+      // 查询成功分支已覆盖）。
+      if (lookup.failed) {
+        logger.warn(
+          `[comfyui] Process lookup failed (timeout/busy?) for ${plan.mainPy}, falling back to port probe`,
+        );
+      } else {
+        // 配置的实例确认没有在运行——抛错触发自动启动（executor-ws connect 的 catch）
+        logger.warn(`[comfyui] Configured instance not running: ${plan.mainPy}`);
+        throw new Error("Configured ComfyUI instance is not running");
+      }
     }
     // comfyuiPath 无效（如目录不存在）——退到端口探测
     logger.warn(`[comfyui] Invalid comfyuiPath, falling back to port probe`);

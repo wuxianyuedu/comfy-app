@@ -27,6 +27,26 @@ function execFileP(
   });
 }
 
+/** execFileP 的结果区分版：ok=false 表示命令本身失败（超时 / 无法启动 / 非零退出），
+ *  此时输出不可信——调用方不得把「没查到」当作「进程不存在」的证据。 */
+async function execFilePTried(
+  cmd: string,
+  args: string[],
+  timeoutMs = 3000,
+): Promise<{ ok: boolean; out: string }> {
+  return new Promise((resolve) => {
+    execFile(
+      cmd,
+      args,
+      { timeout: timeoutMs, windowsHide: true },
+      (err, stdout) => {
+        if (err) resolve({ ok: false, out: "" });
+        else resolve({ ok: true, out: stdout.toString() });
+      },
+    );
+  });
+}
+
 /** 从进程命令行中查找是否包含指定 main.py 路径的进程。 */
 export async function isMainPyProcessRunning(mainPy: string): Promise<boolean> {
   const pid = await findPidForMainPy(mainPy);
@@ -38,7 +58,31 @@ export async function isMainPyProcessRunning(mainPy: string): Promise<boolean> {
  * 返回 null 表示没有匹配的进程。
  */
 export async function findPidForMainPy(mainPy: string): Promise<number | null> {
-  if (!mainPy) return null;
+  return (await findPidForMainPyDetailed(mainPy)).pid;
+}
+
+export type PidLookup = {
+  /** 命中的进程 PID；未命中为 null。 */
+  pid: number | null;
+  /** 查询本身失败（超时 / powershell 无法启动等）：结果不可信，
+   *  「pid=null」不能作为「进程不存在」的证据。 */
+  failed: boolean;
+};
+
+/**
+ * findPidForMainPy 的区分版：把「确认不存在」（failed=false, pid=null）与
+ * 「查询失败」（failed=true）分开。
+ *
+ * 背景：execFileP 把 execFile 错误（含 10s 超时）静默成空串，上层只看到
+ * 「没找到进程」。ComfyUI 启动初期机器高负载（CUDA 初始化 / 大量 IO）时
+ * PowerShell 查询很容易超时，把正在启动的实例误判成「没有在运行」，
+ * probeComfyUi 随之整体跳过 HTTP 探测——设置页状态行显示「未运行」，
+ * 但进程和端口都活着（ISSUE #114：点「打开查看」后状态回退）。
+ */
+export async function findPidForMainPyDetailed(
+  mainPy: string,
+): Promise<PidLookup> {
+  if (!mainPy) return { pid: null, failed: false };
   // 规范化路径用于命令行匹配（Windows 大小写不敏感）
   const normalized = mainPy.replace(/[\\/]+/g, "/").toLowerCase();
 
@@ -56,28 +100,30 @@ export async function findPidForMainPy(mainPy: string): Promise<number | null> {
         `Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ` +
         `Where-Object { $_.Name -like 'python*' -and $_.CommandLine -and $_.CommandLine.ToLower().Replace([string][char]92,'/').Contains('${safeMain}') } | ` +
         `Select-Object -First 1 -ExpandProperty ProcessId`;
-      const out = await execFileP(
+      const { ok, out } = await execFilePTried(
         "powershell.exe",
         ["-NoProfile", "-NonInteractive", "-Command", ps],
         10_000,
       );
+      if (!ok) return { pid: null, failed: true };
       const pid = parseInt(out.trim().split(/\r?\n/)[0] ?? "", 10);
-      return isNaN(pid) ? null : pid;
+      return { pid: isNaN(pid) ? null : pid, failed: false };
     } else {
       // POSIX：ps 输出包含 main.py 的行 → 提取 PID
-      const out = await execFileP("ps", ["-eo", "pid,args"]);
+      const { ok, out } = await execFilePTried("ps", ["-eo", "pid,args"]);
+      if (!ok) return { pid: null, failed: true };
       for (const line of out.split("\n")) {
         const ll = line.toLowerCase();
         if (ll.includes(normalized)) {
           const pidStr = line.trim().split(/\s+/)[0];
           const pid = parseInt(pidStr ?? "", 10);
-          if (!isNaN(pid)) return pid;
+          if (!isNaN(pid)) return { pid, failed: false };
         }
       }
-      return null;
+      return { pid: null, failed: false };
     }
   } catch {
-    return null;
+    return { pid: null, failed: true };
   }
 }
 
