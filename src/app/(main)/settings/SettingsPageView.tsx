@@ -13,6 +13,7 @@ import { ArrowLeft, Loader2, Moon, Sun } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
+import type { AnsiSegment, AnsiStyleKey } from "~/lib/log-ansi";
 import {
   REMOTE_MODEL_KINDS,
   REMOTE_MODEL_KIND_LABELS,
@@ -1100,8 +1101,8 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   className="border-border/50 custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg bg-black/30 px-3 py-2 font-mono text-[11px] leading-relaxed text-gray-300"
                 >
                   {c.comfyLogText ? (
-                    <span className="whitespace-pre-wrap break-all">
-                      {c.comfyLogText}
+                    <span className="break-all whitespace-pre-wrap">
+                      <AnsiLogText segments={c.comfyLogSegments} />
                     </span>
                   ) : (
                     <span className="text-muted-foreground">
@@ -1222,8 +1223,8 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   className="border-border/50 custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg bg-black/30 px-3 py-2 font-mono text-[11px] leading-relaxed text-gray-300"
                 >
                   {c.dbStudioLogText ? (
-                    <span className="whitespace-pre-wrap break-all">
-                      {c.dbStudioLogText}
+                    <span className="break-all whitespace-pre-wrap">
+                      <AnsiLogText segments={c.dbStudioLogSegments} />
                     </span>
                   ) : (
                     <span className="text-muted-foreground">
@@ -1324,6 +1325,60 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ── 启动日志 ANSI 颜色渲染 ─────────────────────────────────
+ * 纯映射：lib/log-ansi 解析出的样式键 → tailwind class，无业务逻辑。
+ * 未知样式键回退默认色，保证新增键不会渲染成透明文本。 */
+const ANSI_STYLE_CLASS: Record<AnsiStyleKey, string> = {
+  bold: "font-bold",
+  dim: "opacity-60",
+  italic: "italic",
+  underline: "underline",
+  red: "text-red-400",
+  green: "text-green-400",
+  yellow: "text-yellow-300",
+  blue: "text-blue-400",
+  magenta: "text-fuchsia-400",
+  cyan: "text-cyan-300",
+  white: "text-white",
+  gray: "text-gray-500",
+  "red-bright": "text-red-300",
+  "green-bright": "text-green-300",
+  "yellow-bright": "text-yellow-200",
+  "blue-bright": "text-blue-300",
+  "magenta-bright": "text-fuchsia-300",
+  "cyan-bright": "text-cyan-200",
+  "white-bright": "text-white",
+  "red-bg": "bg-red-900/60",
+  "green-bg": "bg-green-900/60",
+  "yellow-bg": "bg-yellow-800/60",
+  "blue-bg": "bg-blue-900/60",
+  "magenta-bg": "bg-fuchsia-900/60",
+  "cyan-bg": "bg-cyan-900/60",
+  "white-bg": "bg-gray-600/60",
+};
+
+function AnsiLogText({ segments }: { segments: AnsiSegment[] }) {
+  return (
+    <>
+      {segments.map((seg, i) =>
+        seg.styles && seg.styles.length > 0 ? (
+          <span
+            key={i}
+            className={seg.styles
+              .map((style) => ANSI_STYLE_CLASS[style])
+              .filter(Boolean)
+              .join(" ")}
+          >
+            {seg.text}
+          </span>
+        ) : (
+          <span key={i}>{seg.text}</span>
+        ),
+      )}
+    </>
   );
 }
 

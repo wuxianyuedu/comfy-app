@@ -14,10 +14,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 
 import { errorMessage } from "~/lib/error-message";
-import {
-  fetchFileLogSlice,
-  type FileLogSlice,
-} from "~/lib/log-file-client";
+import { parseAnsiSegments, type AnsiSegment } from "~/lib/log-ansi";
+import { fetchFileLogSlice, type FileLogSlice } from "~/lib/log-file-client";
 import {
   probeOllama as probeOllamaClient,
   startOllama as startOllamaClient,
@@ -134,10 +132,12 @@ export interface SettingsPageController {
   openDbStudio: () => Promise<void>;
   /* ComfyUI 启动日志（log/comfyui-runtime.log）：启动期间自动跟随，可手动刷新 */
   comfyLogText: string;
+  comfyLogSegments: AnsiSegment[];
   comfyLogActive: boolean;
   refreshComfyLog: () => Promise<void>;
   /* Drizzle Studio 启动日志（log/drizzle-studio-runtime.log）：同 ComfyUI，可跟随/刷新 */
   dbStudioLogText: string;
+  dbStudioLogSegments: AnsiSegment[];
   dbStudioLogActive: boolean;
   refreshDbStudioLog: () => Promise<void>;
   /* Ollama 关闭（启动已有 startOllama） */
@@ -191,8 +191,8 @@ const FLASH_MS = 3500;
 const COMFY_LOG_POLL_MS = 1000;
 /** 客户端保留上限：一次超长冷启动也不至于把内存吃穿。 */
 const COMFY_LOG_MAX_CHARS = 120_000;
-/** 子进程输出里的 ANSI 控制序列与 \r（Windows 行尾）在日志面板里只添乱。 */
-const COMFY_LOG_ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\r/g;
+/** \r（Windows 行尾）在日志面板里只添乱；SGR 颜色序列保留给视图层渲染。 */
+const COMFY_LOG_CR_RE = /\r/g;
 
 function capComfyLog(text: string): string {
   return text.length > COMFY_LOG_MAX_CHARS
@@ -205,8 +205,15 @@ function capComfyLog(text: string): string {
  * 主模型永远在列（本地 Ollama 当前生效模型）；查询结果相同时返回原引用，
  * 避免「主模型切换 → 勾选列表重算」引发受控组件输入抖动。
  */
-function mergeExtraModels(current: string[], model: string, toggled: string): string[] {
-  const next = model.trim() !== "" ? [model, ...current.filter((m) => m !== model)] : [...current];
+function mergeExtraModels(
+  current: string[],
+  model: string,
+  toggled: string,
+): string[] {
+  const next =
+    model.trim() !== ""
+      ? [model, ...current.filter((m) => m !== model)]
+      : [...current];
   if (!toggled.trim()) return next;
   if (next.includes(toggled)) {
     // 取消勾选：主模型不可移除
@@ -469,15 +476,22 @@ export function useSettingsPage(): SettingsPageController {
   /* ── ComfyUI 启动日志 ─────────────────────────────────── */
   const comfyLogOffsetRef = useRef(0);
   const [comfyLogText, setComfyLogText] = useState("");
+  /* SGR 颜色序列解析成片段，视图层按样式渲染（Issue：启动日志显示颜色） */
+  const [comfyLogSegments, setComfyLogSegments] = useState<AnsiSegment[]>([]);
   /* 启动进行中（本地动作或服务端自动拉起）即进入跟随轮询 */
   const comfyLogActive = comfyStarting || !!comfyStatusQ.data?.starting;
 
   const applyComfyLogSlice = useCallback(
     (mode: "append" | "replace", slice: FileLogSlice) => {
-      const cleaned = slice.content.replace(COMFY_LOG_ANSI_RE, "");
+      const cleaned = slice.content.replace(COMFY_LOG_CR_RE, "");
       setComfyLogText((prev) =>
         capComfyLog(mode === "replace" ? cleaned : prev + cleaned),
       );
+      setComfyLogSegments((prev) => {
+        const incoming = parseAnsiSegments(cleaned);
+        const merged = mode === "replace" ? incoming : [...prev, ...incoming];
+        return merged.length > 4000 ? merged.slice(-4000) : merged;
+      });
     },
     [],
   );
@@ -519,15 +533,23 @@ export function useSettingsPage(): SettingsPageController {
    * log/drizzle-studio-runtime.log；这里在启动期间每秒跟随尾部（同 ComfyUI）。 */
   const dbStudioLogOffsetRef = useRef(0);
   const [dbStudioLogText, setDbStudioLogText] = useState("");
+  const [dbStudioLogSegments, setDbStudioLogSegments] = useState<AnsiSegment[]>(
+    [],
+  );
   const dbStudioLogActive =
     dbStudioStarting || !!dbStudioStatusQ.data?.starting;
 
   const applyDbStudioLogSlice = useCallback(
     (mode: "append" | "replace", slice: FileLogSlice) => {
-      const cleaned = slice.content.replace(COMFY_LOG_ANSI_RE, "");
+      const cleaned = slice.content.replace(COMFY_LOG_CR_RE, "");
       setDbStudioLogText((prev) =>
         capComfyLog(mode === "replace" ? cleaned : prev + cleaned),
       );
+      setDbStudioLogSegments((prev) => {
+        const incoming = parseAnsiSegments(cleaned);
+        const merged = mode === "replace" ? incoming : [...prev, ...incoming];
+        return merged.length > 4000 ? merged.slice(-4000) : merged;
+      });
     },
     [],
   );
@@ -650,10 +672,14 @@ export function useSettingsPage(): SettingsPageController {
       apiKey?: string;
       kind?: RemoteModelKind;
     }) => {
-      if (!llmDraft) return { ok: false as const, error: "配置未就绪，请稍后重试" };
+      if (!llmDraft)
+        return { ok: false as const, error: "配置未就绪，请稍后重试" };
       const name = entry.name.trim();
       if (!name) return { ok: false as const, error: "请填写模型名称" };
-      if (name === llmDraft.model || llmDraft.extraModels.some((e) => e.name === name)) {
+      if (
+        name === llmDraft.model ||
+        llmDraft.extraModels.some((e) => e.name === name)
+      ) {
         return { ok: false as const, error: `模型「${name}」已在列表中` };
       }
       const cleaned: RemoteModelEntry = {
@@ -663,7 +689,9 @@ export function useSettingsPage(): SettingsPageController {
         kind: entry.kind ?? null,
       };
       setLlmDraft((draft) =>
-        draft ? { ...draft, extraModels: [...draft.extraModels, cleaned] } : draft,
+        draft
+          ? { ...draft, extraModels: [...draft.extraModels, cleaned] }
+          : draft,
       );
       return { ok: true as const };
     },
@@ -702,13 +730,17 @@ export function useSettingsPage(): SettingsPageController {
         kind?: RemoteModelKind | null;
       },
     ) => {
-      if (!llmDraft) return { ok: false as const, error: "配置未就绪，请稍后重试" };
+      if (!llmDraft)
+        return { ok: false as const, error: "配置未就绪，请稍后重试" };
       const nextName = (patch.name ?? name).trim();
       if (!nextName) return { ok: false as const, error: "请填写模型名称" };
       const isCurrent = llmDraft.model === name;
       const existing = llmDraft.extraModels.find((e) => e.name === name);
       if (!isCurrent && !existing) {
-        return { ok: false as const, error: `模型「${name}」不存在，请刷新后重试` };
+        return {
+          ok: false as const,
+          error: `模型「${name}」不存在，请刷新后重试`,
+        };
       }
       if (nextName !== name) {
         const duplicate =
@@ -729,8 +761,7 @@ export function useSettingsPage(): SettingsPageController {
           : patch.apiKey?.trim()
             ? patch.apiKey.trim()
             : (existing?.apiKey ?? null),
-        kind:
-          patch.kind === undefined ? (existing?.kind ?? null) : patch.kind,
+        kind: patch.kind === undefined ? (existing?.kind ?? null) : patch.kind,
       };
       setLlmDraft((draft) => {
         if (!draft) return draft;
@@ -764,7 +795,9 @@ export function useSettingsPage(): SettingsPageController {
           llmDraft.model.trim() !== ""
             ? (byName.get(llmDraft.model) ?? { name: llmDraft.model })
             : null;
-        const rest = llmDraft.extraModels.filter((e) => e.name !== llmDraft.model);
+        const rest = llmDraft.extraModels.filter(
+          (e) => e.name !== llmDraft.model,
+        );
         return head ? [head, ...rest] : rest;
       })()
     : [];
@@ -860,9 +893,11 @@ export function useSettingsPage(): SettingsPageController {
     stopDbStudio,
     openDbStudio,
     comfyLogText,
+    comfyLogSegments,
     comfyLogActive,
     refreshComfyLog,
     dbStudioLogText,
+    dbStudioLogSegments,
     dbStudioLogActive,
     refreshDbStudioLog,
     ollamaStopping,
