@@ -214,9 +214,10 @@ function loadProjectsOnce(): WorkshopProjectsIndex {
 }
 let workshopDraftCache: WorkshopDraft | null | undefined;
 function loadWorkshopDraftOnce(): WorkshopDraft | null {
-  if (workshopDraftCache === undefined) {
-    workshopDraftCache = readDraft(loadProjectsOnce().activeId);
-  }
+  /* invalidateDraftCache() 卸载/切项目时把缓存置 null 标记“需从 localStorage 重读”。
+   * 这里须用 ??=（null / undefined 都重读），若原先 === undefined 的判空，置 null 后的
+   * 重挂载会跳过重读直接返回 null → 剧本内容恢复成空（切页签即丢）。 */
+  workshopDraftCache ??= readDraft(loadProjectsOnce().activeId);
   return workshopDraftCache;
 }
 
