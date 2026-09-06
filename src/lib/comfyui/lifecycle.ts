@@ -20,8 +20,8 @@ import { COMFYUI_DEFAULT_PORT, getExitPolicy, getSettingsSync } from "../app-set
 import { resolveComfyBase } from "./client";
 import { logger } from "~/server/lib/logger";
 import { resolveComfyLaunchPlan } from "./launch-path";
-import { findPidListeningPort } from "./proc-detect";
-import { spawnManaged } from "../process-launch";
+import { findPidForMainPy, findPidListeningPort } from "./proc-detect";
+import { spawnManaged, waitForDetachMediator } from "../process-launch";
 
 export type ComfyUiStatus = {
   up: boolean;
@@ -46,6 +46,12 @@ g[G_KEY] = st;
 /** 任务自动启动路径的等待上限：到点后放弃本次等待，WS 层稍后重试时会
  *  重新拉起（单飞锁已释放）。设置页手动启动不设上限（见 ensureComfyUiReady）。 */
 export const COMFYUI_AUTOSTART_TIMEOUT_MS = 420_000;
+
+/** 保活启动的进程存在性检查：宽限期（解释器冷启动也要时间）后才首次检查，
+ *  之后限频复查 —— 防止把「正在启动」误判为「没起来」，也避免每轮轮询
+ *  都扫一次进程表。 */
+const COMFY_KEEPALIVE_GRACE_MS = 15_000;
+const COMFY_KEEPALIVE_PROCESS_CHECK_INTERVAL_MS = 5_000;
 
 /** 本地时间戳（YYYY-MM-DD HH:mm:ss）：runtime 日志是给本机用户看的，
  *  toISOString 的 UTC 在 +8 时区会凭空差出 8 小时。 */
@@ -222,8 +228,8 @@ export async function ensureComfyUiReady(
         env: stdioEnv,
         mode: "keepAlive",
       });
-      if (launched.error) {
-        const detail = `启动 ComfyUI 失败：${launched.error}`;
+      if (!launched.child || launched.error) {
+        const detail = `启动 ComfyUI 失败：${launched.error ?? "未知错误"}`;
         note(detail);
         return { ok: false, base: null, detail };
       }
@@ -231,6 +237,20 @@ export async function ensureComfyUiReady(
       appendRuntimeLog(
         `[keepAlive-spawn] cmd=${plan.cmd} args=${JSON.stringify(args)} cwd=${plan.cwd}`,
       );
+      /* 中介 powershell「立即」退出；Start-Process 参数被拒等拉起失败都发生在
+       * 中介里（目标进程根本没被拉起）。等它退出并带出 stderr，失败立刻报错
+       * 返回 —— 否则会跌进下面无 deadline 的端口轮询，把「启动中…」挂死。 */
+      const mediator = await waitForDetachMediator(launched.child);
+      if (mediator.code !== null && mediator.code !== 0) {
+        const detail = `启动 ComfyUI 失败（保活拉起被拒）：${
+          mediator.stderr.trim() || `powershell 退出码 ${mediator.code}`
+        }`;
+        note(detail);
+        return { ok: false, base: null, detail };
+      }
+      const spawnAt = Date.now();
+      let everSeenProcess = false;
+      let lastProcessCheckAt = 0;
       /* 保活路径不设 st.child（真实子进程不是我们能可靠持有/杀掉的——Windows
        * 上是 Start-Process 的孙进程，POSIX 上虽能拿到 pid 但已 unref）。
        * 「关闭 ComfyUI」与「进程秒退」都不再走 child 判断，只靠端口探测。 */
@@ -246,6 +266,27 @@ export async function ensureComfyUiReady(
         if (upBase) {
           note(`ComfyUI 已就绪（保活）：${upBase}`);
           return { ok: true, base: upBase, detail: "ComfyUI 已启动并就绪（保活模式）" };
+        }
+        /* 失败兜底出口：宽限期后仍看不到运行 main.py 的进程（或见过但已消失）
+         * → 目标进程没起来 / 秒退。手动启动没有 deadline，没有这个出口
+         * 「启动中…」会永远挂住。进程表扫描有成本，限频执行。 */
+        const now = Date.now();
+        if (
+          now - spawnAt > COMFY_KEEPALIVE_GRACE_MS &&
+          now - lastProcessCheckAt > COMFY_KEEPALIVE_PROCESS_CHECK_INTERVAL_MS
+        ) {
+          lastProcessCheckAt = now;
+          if (await findPidForMainPy(plan.mainPy)) {
+            everSeenProcess = true;
+          } else {
+            const common =
+              "详见 log/comfyui-runtime.log；也可暂时勾选「关闭应用时连带关闭 ComfyUI」改用直连启动，获得实时日志定位问题。";
+            const detail = everSeenProcess
+              ? `ComfyUI 启动失败：保活进程已退出（秒退）。${common}`
+              : `ComfyUI 启动失败：保活拉起后进程未出现。${common}`;
+            note(detail);
+            return { ok: false, base: null, detail };
+          }
         }
         if (deadline !== null && Date.now() >= deadline) break;
         await new Promise((r) => setTimeout(r, 2000));

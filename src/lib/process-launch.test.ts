@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   escapePwshSingle,
-  buildPwshArgumentList,
+  buildStartProcessArgumentList,
   decodePowerShellOutput,
 } from "./process-launch";
 
@@ -24,19 +24,30 @@ describe("escapePwshSingle", () => {
   });
 });
 
-describe("buildPwshArgumentList", () => {
-  it("逐参用单引号包裹并用空格连接", () => {
-    expect(buildPwshArgumentList(["serve", "--port", "8188"])).toBe(
-      "'serve' '--port' '8188'",
+describe("buildStartProcessArgumentList", () => {
+  it("多参数整体写成一个 @() 数组字面量（裸排会被 PS5.1 当位置参数拒绝）", () => {
+    expect(buildStartProcessArgumentList(["-s", "D:\\x\\main.py"])).toBe(
+      `@('"-s"','"D:\\x\\main.py"')`,
     );
   });
 
-  it("含注入片段参数被安全包裹", () => {
-    expect(buildPwshArgumentList(["a'; rm -rf /"])).toBe("'a''; rm -rf /'");
+  it("含空格的参数由元素自带双引号，拼接后不会被拆分", () => {
+    const out = buildStartProcessArgumentList([
+      "--input-directory",
+      "D:/a b/input",
+    ]);
+    expect(out).toBe(`@('"--input-directory"','"D:/a b/input"')`);
+    expect(out).toContain('"D:/a b/input"');
   });
 
-  it("空数组返回空串", () => {
-    expect(buildPwshArgumentList([])).toBe("");
+  it("参数值里的双引号按 Windows 命令行约定转义", () => {
+    expect(buildStartProcessArgumentList(['a"; rm -rf /'])).toBe(
+      `@('"a\\"; rm -rf /"')`,
+    );
+  });
+
+  it("空数组返回空数组字面量", () => {
+    expect(buildStartProcessArgumentList([])).toBe("@()");
   });
 });
 

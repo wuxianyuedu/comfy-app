@@ -14,10 +14,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 
 import { errorMessage } from "~/lib/error-message";
-import {
-  fetchFileLogSlice,
-  type FileLogSlice,
-} from "~/lib/log-file-client";
+import { parseAnsiSegments, type AnsiSegment } from "~/lib/log-ansi";
+import { fetchFileLogSlice, type FileLogSlice } from "~/lib/log-file-client";
 import {
   probeOllama as probeOllamaClient,
   startOllama as startOllamaClient,
@@ -61,7 +59,13 @@ export type LlmConfig = {
   apiKey: string | null;
 };
 
-export type Section = "llm" | "comfyui" | "appearance" | "database" | "exit";
+export type Section =
+  | "appearance"
+  | "llmLocal"
+  | "llmRemote"
+  | "comfyui"
+  | "database"
+  | "exit";
 export type OllamaStatus = "checking" | "starting" | "up" | "down";
 
 export interface FlashMessage {
@@ -128,14 +132,17 @@ export interface SettingsPageController {
   openDbStudio: () => Promise<void>;
   /* ComfyUI 启动日志（log/comfyui-runtime.log）：启动期间自动跟随，可手动刷新 */
   comfyLogText: string;
+  comfyLogSegments: AnsiSegment[];
   comfyLogActive: boolean;
   refreshComfyLog: () => Promise<void>;
   /* Drizzle Studio 启动日志（log/drizzle-studio-runtime.log）：同 ComfyUI，可跟随/刷新 */
   dbStudioLogText: string;
+  dbStudioLogSegments: AnsiSegment[];
   dbStudioLogActive: boolean;
   refreshDbStudioLog: () => Promise<void>;
   /* Ollama 启动日志（log/ollama-runtime.log）：同 ComfyUI，可跟随/刷新 */
   ollamaLogText: string;
+  ollamaLogSegments: AnsiSegment[];
   ollamaLogActive: boolean;
   refreshOllamaLog: () => Promise<void>;
   /* Ollama 关闭（启动已有 startOllama） */
@@ -189,8 +196,8 @@ const FLASH_MS = 3500;
 const COMFY_LOG_POLL_MS = 1000;
 /** 客户端保留上限：一次超长冷启动也不至于把内存吃穿。 */
 const COMFY_LOG_MAX_CHARS = 120_000;
-/** 子进程输出里的 ANSI 控制序列与 \r（Windows 行尾）在日志面板里只添乱。 */
-const COMFY_LOG_ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\r/g;
+/** \r（Windows 行尾）在日志面板里只添乱；SGR 颜色序列保留给视图层渲染。 */
+const COMFY_LOG_CR_RE = /\r/g;
 
 function capComfyLog(text: string): string {
   return text.length > COMFY_LOG_MAX_CHARS
@@ -203,8 +210,15 @@ function capComfyLog(text: string): string {
  * 主模型永远在列（本地 Ollama 当前生效模型）；查询结果相同时返回原引用，
  * 避免「主模型切换 → 勾选列表重算」引发受控组件输入抖动。
  */
-function mergeExtraModels(current: string[], model: string, toggled: string): string[] {
-  const next = model.trim() !== "" ? [model, ...current.filter((m) => m !== model)] : [...current];
+function mergeExtraModels(
+  current: string[],
+  model: string,
+  toggled: string,
+): string[] {
+  const next =
+    model.trim() !== ""
+      ? [model, ...current.filter((m) => m !== model)]
+      : [...current];
   if (!toggled.trim()) return next;
   if (next.includes(toggled)) {
     // 取消勾选：主模型不可移除
@@ -221,7 +235,7 @@ const OLLAMA_START_POLL_INTERVAL_MS = 2000;
 
 /** 设置页全部状态与动作 —— 见文件头注释的分层说明。 */
 export function useSettingsPage(): SettingsPageController {
-  const [section, setSection] = useState<Section>("llm");
+  const [section, setSection] = useState<Section>("llmLocal");
   const { theme, setTheme } = useTheme();
   const [flash, setFlash] = useState<FlashMessage | null>(null);
   const [saving, setSaving] = useState(false);
@@ -247,15 +261,23 @@ export function useSettingsPage(): SettingsPageController {
   const llmQ = api.llm.configGet.useQuery();
   const saveSetting = api.setting.save.useMutation();
   const saveLlmCfg = api.llm.configSave.useMutation();
+  /* ComfyUI / Drizzle Studio 状态探测延后到首屏两份配置就绪后再发：
+   * comfyStatus 在 ComfyUI 未运行时要对连续端口段做超时探测（秒级），
+   * 同挂载触发会被 httpBatchLink 并进首屏同一批请求，而批量响应不分块
+   * 流式返回 —— 首屏只需要的 get/configGet 会被迫等整批结束，页面
+   * 多停在加载态数秒。 */
+  const statusQueriesEnabled = !!settingsQ.data && !!llmQ.data;
   const comfyStatusQ = api.setting.comfyStatus.useQuery(undefined, {
     refetchInterval: 15_000,
+    enabled: statusQueriesEnabled,
   });
   const comfyStartM = api.setting.comfyStart.useMutation();
   const comfyStopM = api.setting.comfyStop.useMutation();
   const [comfyStopping, setComfyStopping] = useState(false);
-  /* Drizzle Studio：状态查询 + 启动/关闭/打开动作 */
+  /* Drizzle Studio：状态查询 + 启动/关闭/打开动作（enabled 门控同 comfyStatus） */
   const dbStudioStatusQ = api.setting.dbStudioStatus.useQuery(undefined, {
     refetchInterval: 15_000,
+    enabled: statusQueriesEnabled,
   });
   const dbStudioStartM = api.setting.dbStudioStart.useMutation();
   const dbStudioStopM = api.setting.dbStudioStop.useMutation();
@@ -459,15 +481,22 @@ export function useSettingsPage(): SettingsPageController {
   /* ── ComfyUI 启动日志 ─────────────────────────────────── */
   const comfyLogOffsetRef = useRef(0);
   const [comfyLogText, setComfyLogText] = useState("");
+  /* SGR 颜色序列解析成片段，视图层按样式渲染（Issue：启动日志显示颜色） */
+  const [comfyLogSegments, setComfyLogSegments] = useState<AnsiSegment[]>([]);
   /* 启动进行中（本地动作或服务端自动拉起）即进入跟随轮询 */
   const comfyLogActive = comfyStarting || !!comfyStatusQ.data?.starting;
 
   const applyComfyLogSlice = useCallback(
     (mode: "append" | "replace", slice: FileLogSlice) => {
-      const cleaned = slice.content.replace(COMFY_LOG_ANSI_RE, "");
+      const cleaned = slice.content.replace(COMFY_LOG_CR_RE, "");
       setComfyLogText((prev) =>
         capComfyLog(mode === "replace" ? cleaned : prev + cleaned),
       );
+      setComfyLogSegments((prev) => {
+        const incoming = parseAnsiSegments(cleaned);
+        const merged = mode === "replace" ? incoming : [...prev, ...incoming];
+        return merged.length > 4000 ? merged.slice(-4000) : merged;
+      });
     },
     [],
   );
@@ -509,15 +538,23 @@ export function useSettingsPage(): SettingsPageController {
    * log/drizzle-studio-runtime.log；这里在启动期间每秒跟随尾部（同 ComfyUI）。 */
   const dbStudioLogOffsetRef = useRef(0);
   const [dbStudioLogText, setDbStudioLogText] = useState("");
+  const [dbStudioLogSegments, setDbStudioLogSegments] = useState<AnsiSegment[]>(
+    [],
+  );
   const dbStudioLogActive =
     dbStudioStarting || !!dbStudioStatusQ.data?.starting;
 
   const applyDbStudioLogSlice = useCallback(
     (mode: "append" | "replace", slice: FileLogSlice) => {
-      const cleaned = slice.content.replace(COMFY_LOG_ANSI_RE, "");
+      const cleaned = slice.content.replace(COMFY_LOG_CR_RE, "");
       setDbStudioLogText((prev) =>
         capComfyLog(mode === "replace" ? cleaned : prev + cleaned),
       );
+      setDbStudioLogSegments((prev) => {
+        const incoming = parseAnsiSegments(cleaned);
+        const merged = mode === "replace" ? incoming : [...prev, ...incoming];
+        return merged.length > 4000 ? merged.slice(-4000) : merged;
+      });
     },
     [],
   );
@@ -558,14 +595,21 @@ export function useSettingsPage(): SettingsPageController {
    * log/ollama-runtime.log；这里在启动期间每秒跟随尾部（同 ComfyUI/Drizzle）。 */
   const ollamaLogOffsetRef = useRef(0);
   const [ollamaLogText, setOllamaLogText] = useState("");
+  /* SGR 颜色序列解析成片段，视图层按样式渲染（同 ComfyUI / Drizzle Studio） */
+  const [ollamaLogSegments, setOllamaLogSegments] = useState<AnsiSegment[]>([]);
   const ollamaLogActive = ollamaStarting || ollamaStatus === "starting";
 
   const applyOllamaLogSlice = useCallback(
     (mode: "append" | "replace", slice: FileLogSlice) => {
-      const cleaned = slice.content.replace(COMFY_LOG_ANSI_RE, "");
+      const cleaned = slice.content.replace(COMFY_LOG_CR_RE, "");
       setOllamaLogText((prev) =>
         capComfyLog(mode === "replace" ? cleaned : prev + cleaned),
       );
+      setOllamaLogSegments((prev) => {
+        const incoming = parseAnsiSegments(cleaned);
+        const merged = mode === "replace" ? incoming : [...prev, ...incoming];
+        return merged.length > 4000 ? merged.slice(-4000) : merged;
+      });
     },
     [],
   );
@@ -688,10 +732,14 @@ export function useSettingsPage(): SettingsPageController {
       apiKey?: string;
       kind?: RemoteModelKind;
     }) => {
-      if (!llmDraft) return { ok: false as const, error: "配置未就绪，请稍后重试" };
+      if (!llmDraft)
+        return { ok: false as const, error: "配置未就绪，请稍后重试" };
       const name = entry.name.trim();
       if (!name) return { ok: false as const, error: "请填写模型名称" };
-      if (name === llmDraft.model || llmDraft.extraModels.some((e) => e.name === name)) {
+      if (
+        name === llmDraft.model ||
+        llmDraft.extraModels.some((e) => e.name === name)
+      ) {
         return { ok: false as const, error: `模型「${name}」已在列表中` };
       }
       const cleaned: RemoteModelEntry = {
@@ -701,7 +749,9 @@ export function useSettingsPage(): SettingsPageController {
         kind: entry.kind ?? null,
       };
       setLlmDraft((draft) =>
-        draft ? { ...draft, extraModels: [...draft.extraModels, cleaned] } : draft,
+        draft
+          ? { ...draft, extraModels: [...draft.extraModels, cleaned] }
+          : draft,
       );
       return { ok: true as const };
     },
@@ -710,12 +760,19 @@ export function useSettingsPage(): SettingsPageController {
 
   const removeRemoteModel = useCallback((name: string) => {
     setLlmDraft((draft) => {
-      /* 主模型不可移除（视图对当前项也不渲染移除按钮，这里兜底） */
-      if (!draft || name === draft.model) return draft;
+      if (!draft) return draft;
+      /* 当前生效条目也可删除：删的是当前模型时，把生效位顺延给剩余第一个
+       * 候选（没有剩余则清空）——LLM 调用在用户补选模型前会失败，属预期。 */
+      const removingCurrent = name === draft.model;
       const next = draft.extraModels.filter((e) => e.name !== name);
-      return next.length === draft.extraModels.length
-        ? draft
-        : { ...draft, extraModels: next };
+      const unchanged =
+        !removingCurrent && next.length === draft.extraModels.length;
+      if (unchanged) return draft;
+      return {
+        ...draft,
+        model: removingCurrent ? (next[0]?.name ?? "") : draft.model,
+        extraModels: next,
+      };
     });
   }, []);
 
@@ -733,13 +790,17 @@ export function useSettingsPage(): SettingsPageController {
         kind?: RemoteModelKind | null;
       },
     ) => {
-      if (!llmDraft) return { ok: false as const, error: "配置未就绪，请稍后重试" };
+      if (!llmDraft)
+        return { ok: false as const, error: "配置未就绪，请稍后重试" };
       const nextName = (patch.name ?? name).trim();
       if (!nextName) return { ok: false as const, error: "请填写模型名称" };
       const isCurrent = llmDraft.model === name;
       const existing = llmDraft.extraModels.find((e) => e.name === name);
       if (!isCurrent && !existing) {
-        return { ok: false as const, error: `模型「${name}」不存在，请刷新后重试` };
+        return {
+          ok: false as const,
+          error: `模型「${name}」不存在，请刷新后重试`,
+        };
       }
       if (nextName !== name) {
         const duplicate =
@@ -760,8 +821,7 @@ export function useSettingsPage(): SettingsPageController {
           : patch.apiKey?.trim()
             ? patch.apiKey.trim()
             : (existing?.apiKey ?? null),
-        kind:
-          patch.kind === undefined ? (existing?.kind ?? null) : patch.kind,
+        kind: patch.kind === undefined ? (existing?.kind ?? null) : patch.kind,
       };
       setLlmDraft((draft) => {
         if (!draft) return draft;
@@ -795,7 +855,9 @@ export function useSettingsPage(): SettingsPageController {
           llmDraft.model.trim() !== ""
             ? (byName.get(llmDraft.model) ?? { name: llmDraft.model })
             : null;
-        const rest = llmDraft.extraModels.filter((e) => e.name !== llmDraft.model);
+        const rest = llmDraft.extraModels.filter(
+          (e) => e.name !== llmDraft.model,
+        );
         return head ? [head, ...rest] : rest;
       })()
     : [];
@@ -891,12 +953,15 @@ export function useSettingsPage(): SettingsPageController {
     stopDbStudio,
     openDbStudio,
     comfyLogText,
+    comfyLogSegments,
     comfyLogActive,
     refreshComfyLog,
     dbStudioLogText,
+    dbStudioLogSegments,
     dbStudioLogActive,
     refreshDbStudioLog,
     ollamaLogText,
+    ollamaLogSegments,
     ollamaLogActive,
     refreshOllamaLog,
     ollamaStopping,
@@ -910,10 +975,11 @@ export function useSettingsPage(): SettingsPageController {
   };
 }
 
-/** 侧边栏分区 —— 纯配置，视图直接消费。 */
+/** 侧边栏分区 —— 纯配置，视图直接消费。本地 / 远程模型各自独立成页。 */
 export const SETTINGS_SECTIONS: { id: Section; label: string }[] = [
   { id: "appearance", label: "外观" },
-  { id: "llm", label: "语言模型" },
+  { id: "llmLocal", label: "本地模型" },
+  { id: "llmRemote", label: "远程模型" },
   { id: "comfyui", label: "创作后端" },
   { id: "database", label: "数据库" },
   { id: "exit", label: "退出与后台服务" },

@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
 import { getExitPolicy } from "@/lib/app-settings";
-import { spawnManaged } from "@/lib/process-launch";
+import { spawnManaged, waitForDetachMediator } from "@/lib/process-launch";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -118,7 +118,7 @@ async function ollamaServiceRunning(): Promise<boolean> {
  * keepAlive 路径没有直连 child 可观察秒退（真实子进程是 Start-Process/已
  * unref 的孤儿），只做「拉起命令已执行」，就绪与否交给前端按端口轮询。
  */
-function spawnOllamaServe(
+async function spawnOllamaServe(
   exe: string,
   keepAlive: boolean,
 ): Promise<{ ok: boolean; detail: string }> {
@@ -130,14 +130,25 @@ function spawnOllamaServe(
       windowsHide: true,
       mode: "keepAlive",
     });
-    if (launched.error) {
-      const msg = launched.error;
+    if (!launched.child || launched.error) {
+      const msg = launched.error ?? "未知错误";
       const hint =
         /enoent|not find|cannot find/i.test(msg) || msg.includes("EACCES")
           ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
           : msg;
       appendOllamaLog(`[err] 启动失败：${hint}`);
       return Promise.resolve({ ok: false, detail: `启动 Ollama 失败：${hint}` });
+    }
+    /* Start-Process 参数被拒等拉起失败发生在 powershell 中介里，目标进程
+     * 根本不会出现；等中介退出并带出 stderr，立刻给用户可行动的报错。 */
+    const mediator = await waitForDetachMediator(launched.child);
+    if (mediator.code !== null && mediator.code !== 0) {
+      return Promise.resolve({
+        ok: false,
+        detail: `启动 Ollama 失败（保活拉起被拒）：${
+          mediator.stderr.trim() || `powershell 退出码 ${mediator.code}`
+        }`,
+      });
     }
     return Promise.resolve({
       ok: true,

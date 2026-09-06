@@ -79,10 +79,12 @@ export const settingRouter = createTRPCRouter({
     return stopComfyUiProcess();
   }),
 
-  /** Drizzle Studio 运行状态（设置页「数据库」分区） */
+  /** Drizzle Studio 运行状态（设置页「数据库」分区）。
+   *  探测失败按「未运行」降级返回而非抛错——状态查询挂了会把三个按钮
+   *  全部禁成不可点（#92），宁可显示未运行让用户能点「启动」。 */
   dbStudioStatus: authedProcedure.query(async () => {
     const port = DRIZZLE_STUDIO_DEFAULT_PORT;
-    const up = await probeDrizzleStudio(port);
+    const up = await probeDrizzleStudio(port).catch(() => false);
     return { up, port, starting: isDrizzleStudioStarting() };
   }),
 
