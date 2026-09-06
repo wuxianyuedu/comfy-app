@@ -245,12 +245,17 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
   async function runUsageTest() {
     if (!usageTest || usageTest.running) return;
     setUsageTest({ ...usageTest, running: true, result: null });
+    /* 弹窗留空 → 用草稿条目里的密钥（未保存的条目也有）：
+     * 只靠服务端按名字查已保存配置，会漏掉「加了条目还没点保存」的情况，
+     * 表现为 401 未提供令牌。（空串显式回落，不能用 ?? —— ?? 不处理空串） */
+    const typedKey = usageTest.apiKey.trim();
     const out = await c.testModelUsage({
       kind: usageTest.kind,
       name: usageTest.entry.name,
       baseUrl: usageTest.baseUrl.trim(),
       path: usageTest.path.trim(),
-      apiKey: usageTest.apiKey.trim() || undefined,
+      apiKey:
+        typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
       prompt: usageTest.prompt,
       size: usageTest.size.trim() || undefined,
       extraJson: usageTest.extraJson.trim() || undefined,
@@ -1073,7 +1078,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       onChange={(event) =>
                         setUsageTest({ ...usageTest, apiKey: event.target.value })
                       }
-                      placeholder="留空则使用该条目已保存的密钥（再回落全局）"
+                      placeholder="留空 = 用该条目的密钥（含未保存草稿），再回落全局"
                       className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
                     />
 
