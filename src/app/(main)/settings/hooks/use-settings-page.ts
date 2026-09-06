@@ -484,12 +484,15 @@ export function useSettingsPage(): SettingsPageController {
     try {
       const result = await comfyOpenM.mutateAsync();
       showFlash(result.ok ? "ok" : "err", result.detail);
+      // 打开动作本身包含一次服务端探测；无论成败都刷新状态行，
+      // 修正探测抖动（如进程查询超时）造成的「未运行」显示。
+      await comfyStatusQ.refetch();
     } catch (error) {
       showFlash("err", errorMessage(error, "打开 ComfyUI 失败"));
     } finally {
       setComfyOpening(false);
     }
-  }, [comfyOpenM, showFlash]);
+  }, [comfyOpenM, comfyStatusQ, showFlash]);
 
   /* ── Drizzle Studio 启动 / 关闭 / 打开 ─────────────────── */
   const startDbStudio = useCallback(async () => {
