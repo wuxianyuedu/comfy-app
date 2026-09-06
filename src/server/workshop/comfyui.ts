@@ -123,6 +123,16 @@ export async function uploadComfyImage(buffer: Buffer, filename: string): Promis
   return data.name;
 }
 
+/** 解析某工坊会话（项目）的产出目录：data/workshop-outputs/{safeSessionId}。
+ *  sessionId 为空时退回公共根目录（兼容无项目历史调用）。 */
+export function outputDirForSession(sessionId?: string): string {
+  if (sessionId) {
+    const safe = sessionId.replace(/[^\w.-]/g, "_");
+    return path.join(OUTPUT_DIR, safe);
+  }
+  return OUTPUT_DIR;
+}
+
 /** 把远程 URL / data URL 归一为可上传的 Buffer。 */
 export async function fetchToBuffer(ref: string): Promise<Buffer> {
   if (ref.startsWith("data:")) {
@@ -208,10 +218,13 @@ export interface ComfyRunResult {
 }
 
 /**
- * 提交工作流、轮询历史、取回输出并落盘到 data/workshop-outputs。
+ * 提交工作流、轮询历史、取回输出并落盘到 data/workshop-outputs[/{sessionId}]。
  * 返回 file:// 绝对路径数组（图片来自 images，视频来自 gifs）。
  */
-export async function runComfyWorkflow(workflow: unknown): Promise<ComfyRunResult> {
+export async function runComfyWorkflow(
+  workflow: unknown,
+  opts?: { sessionId?: string },
+): Promise<ComfyRunResult> {
   const posted = await postComfyPrompt(workflow);
   const promptId = posted.prompt_id;
   if (!promptId) throw new Error(`ComfyUI 未返回 prompt_id：${JSON.stringify(posted)}`);
@@ -230,14 +243,15 @@ export async function runComfyWorkflow(workflow: unknown): Promise<ComfyRunResul
   const entry = history[promptId] as { outputs?: Record<string, unknown> } | undefined;
   const outputs = entry?.outputs ?? {};
   const files: string[] = [];
-  await fs.mkdir(OUTPUT_DIR, { recursive: true });
+  const outDir = outputDirForSession(opts?.sessionId);
+  await fs.mkdir(outDir, { recursive: true });
   for (const nodeOut of Object.values(outputs)) {
     const rec = nodeOut as { images?: Array<{ filename: string; subfolder: string; type: string }>; gifs?: Array<{ filename: string; subfolder: string; type: string }> };
     const items = [...(rec.images ?? []), ...(rec.gifs ?? [])];
     for (const item of items) {
       const buf = await getComfyView(item.filename, item.subfolder, item.type);
       const outName = `comfy-${promptId}-${files.length}-${item.filename}`;
-      const outPath = path.join(OUTPUT_DIR, outName.replace(/[^\w.-]/g, "_"));
+      const outPath = path.join(outDir, outName.replace(/[^\w.-]/g, "_"));
       await fs.writeFile(outPath, buf);
       files.push(`file://${outPath}`);
     }
@@ -253,12 +267,13 @@ export async function generateImageViaComfyUI(input: {
   prompt: string;
   negative?: string;
   size?: string;
+  sessionId?: string;
 }): Promise<string> {
   const settings = loadSettings();
   const workflow = settings.imageWorkflow
     ? substitutePlaceholders(settings.imageWorkflow, { prompt: input.prompt, negative: input.negative })
     : buildTxt2ImgWorkflow({ prompt: input.prompt, negative: input.negative, size: input.size });
-  const { files } = await runComfyWorkflow(workflow);
+  const { files } = await runComfyWorkflow(workflow, { sessionId: input.sessionId });
   return files[0] ?? "";
 }
 
@@ -271,6 +286,7 @@ export async function submitVideoViaComfyUI(input: {
   prompt: string;
   negative?: string;
   imageDataUrl?: string;
+  sessionId?: string;
 }): Promise<{ url?: string }> {
   const settings = loadSettings();
   if (!settings.videoWorkflow) {
@@ -288,6 +304,6 @@ export async function submitVideoViaComfyUI(input: {
     negative: input.negative,
     image,
   });
-  const { files } = await runComfyWorkflow(workflow);
+  const { files } = await runComfyWorkflow(workflow, { sessionId: input.sessionId });
   return { url: files[0] };
 }
