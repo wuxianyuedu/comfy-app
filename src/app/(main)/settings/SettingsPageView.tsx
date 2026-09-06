@@ -1123,27 +1123,28 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       : "Drizzle Studio 未运行"}
                 </span>
                 <div className="ml-auto flex items-center gap-2">
+                  {/* 按钮只看自身动作的在途状态（dbStudioStarting/Stopping/
+                      Opening），不看全局 saving——saving 是保存偏好/ComfyUI
+                      等共享标志，卡住时曾把三个按钮一起锁死（#92）。
+                      状态查询失败（dbStudioStatus 为 null）时按「未运行」
+                      处理：启动按钮仍可点，用户不会整组被禁用。 */}
                   <Btn
                     onClick={() => void c.openDbStudio()}
-                    disabled={
-                      c.saving || c.dbStudioOpening || !c.dbStudioStatus?.up
-                    }
+                    disabled={c.dbStudioOpening || c.dbStudioStarting || !c.dbStudioStatus?.up}
                   >
                     {c.dbStudioOpening ? "打开中…" : "打开查看"}
                   </Btn>
                   <Btn
                     onClick={() => void c.startDbStudio()}
                     disabled={
-                      c.saving || c.dbStudioStarting || c.dbStudioStatus?.up
+                      c.dbStudioStarting || c.dbStudioStatus?.up === true
                     }
                   >
                     {c.dbStudioStarting ? "启动中…" : "启动 Drizzle Studio"}
                   </Btn>
                   <Btn
                     onClick={() => void c.stopDbStudio()}
-                    disabled={
-                      c.saving || c.dbStudioStopping || !c.dbStudioStatus?.up
-                    }
+                    disabled={c.dbStudioStopping || !c.dbStudioStatus?.up}
                   >
                     {c.dbStudioStopping ? "关闭中…" : "关闭 Drizzle Studio"}
                   </Btn>
