@@ -48,7 +48,7 @@ const TYPE_LABELS: Record<TypeFilter, string> = {
 /** 计数徽标（ DarkSelect 的 labels 支持 ReactNode）。 */
 function CountBadge({ count }: { count: number }) {
   return (
-    <span className="ml-2 shrink-0 rounded-full bg-white/10 px-1.5 text-[11px] tabular-nums text-gray-400">
+    <span className="ml-2 shrink-0 rounded-full bg-(--color-surface-2) px-1.5 text-[11px] tabular-nums text-(--color-ink-faint)">
       {count}
     </span>
   );
@@ -157,7 +157,7 @@ export function WorkflowLibraryFilters({
       <button
         type="button"
         onClick={onManageModels}
-        className="flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-white/5"
+        className="flex items-center gap-1.5 rounded-full border border-(--color-border-strong) px-3 py-1.5 text-xs font-medium text-(--color-ink-strong) transition-colors hover:bg-(--color-subtle)"
         title="管理模型标签库"
       >
         <Icon name="tag" className="h-3.5 w-3.5" />

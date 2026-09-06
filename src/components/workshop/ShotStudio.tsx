@@ -223,7 +223,7 @@ export function ShotStudio({
         <button
           type="button"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-lg bg-white/4 px-3 py-1.5 text-xs hover:bg-white/8"
+          className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-lg bg-(--color-subtle) px-3 py-1.5 text-xs hover:bg-(--color-surface-2)"
         >
           <Icon name="settings" size={12} />
           API 通道设置
@@ -256,7 +256,7 @@ export function ShotStudio({
         <button
           type="button"
           onClick={onNextStage}
-          className="text-ink rounded-lg bg-white/4 px-3 py-1.5 text-xs font-medium hover:bg-white/8"
+          className="text-ink rounded-lg bg-(--color-subtle) px-3 py-1.5 text-xs font-medium hover:bg-(--color-surface-2)"
         >
           下一阶段 →
         </button>

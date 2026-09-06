@@ -109,7 +109,7 @@ export function WorkshopHeader({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="text-ink hover:bg-primary/10 flex max-w-[240px] items-center gap-2 rounded-lg border border-white/10 bg-white/4 px-3 py-1.5 transition-colors"
+            className="text-ink hover:bg-primary/10 flex max-w-[240px] items-center gap-2 rounded-lg border border-(--color-border) bg-(--color-subtle) px-3 py-1.5 transition-colors"
             title="切换 / 新建 / 重命名项目"
           >
             <span className="truncate text-[13px] font-medium">{title}</span>
@@ -122,7 +122,7 @@ export function WorkshopHeader({
           </button>
 
           {open && (
-            <div className="absolute left-0 top-full z-50 mt-1.5 w-[280px] overflow-hidden rounded-xl border border-white/10 bg-[#0f0f18]/98 shadow-2xl backdrop-blur-md">
+            <div className="absolute left-0 top-full z-50 mt-1.5 w-[280px] overflow-hidden rounded-xl border border-(--color-border) bg-(--color-panel)/98 shadow-2xl backdrop-blur-md">
               <div className="max-h-[280px] overflow-y-auto py-1">
                 {projects.map((p) => {
                   const active = p.id === activeProjectId;
@@ -130,7 +130,7 @@ export function WorkshopHeader({
                   return (
                     <div
                       key={p.id}
-                      className="group flex items-center gap-1 px-2 py-1.5 hover:bg-white/6"
+                      className="group flex items-center gap-1 px-2 py-1.5 hover:bg-(--color-surface-2)"
                     >
                       {pendingDelete === p.id ? (
                         <div className="flex w-full items-center gap-2">
@@ -143,14 +143,14 @@ export function WorkshopHeader({
                               onDeleteProject(p.id);
                               setPendingDelete(null);
                             }}
-                            className="rounded bg-red-500/20 px-1.5 py-0.5 text-[11px] text-red-300 hover:bg-red-500/30"
+                            className="rounded bg-red-500/20 px-1.5 py-0.5 text-[11px] text-red-600 hover:bg-red-500/30"
                           >
                             删除
                           </button>
                           <button
                             type="button"
                             onClick={() => setPendingDelete(null)}
-                            className="rounded bg-white/8 px-1.5 py-0.5 text-[11px] text-gray-300 hover:bg-white/14"
+                            className="rounded bg-(--color-surface-2) px-1.5 py-0.5 text-[11px] text-(--color-ink-strong) hover:bg-(--color-subtle)"
                           >
                             取消
                           </button>
@@ -165,7 +165,7 @@ export function WorkshopHeader({
                             if (e.key === "Escape") setEditingId(null);
                           }}
                           onBlur={() => commitRename(p.id)}
-                          className="w-full rounded border border-white/12 bg-black/40 px-2 py-1 text-[13px] text-gray-100 outline-none focus:border-violet-400/60"
+                          className="w-full rounded border border-(--color-border-strong) bg-black/40 px-2 py-1 text-[13px] text-(--color-ink) outline-none focus:border-violet-400/60"
                         />
                       ) : (
                         <>
@@ -180,7 +180,7 @@ export function WorkshopHeader({
                           >
                             <span
                               className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                                active ? "bg-primary" : "bg-white/25"
+                                active ? "bg-primary" : "bg-(--color-border-strong)"
                               }`}
                             />
                             <span
@@ -197,7 +197,7 @@ export function WorkshopHeader({
                               setDraftTitle(shown);
                               setEditingId(p.id);
                             }}
-                            className="text-muted-foreground shrink-0 rounded px-1 text-[11px] opacity-0 transition-opacity hover:text-gray-200 group-hover:opacity-100"
+                            className="text-muted-foreground shrink-0 rounded px-1 text-[11px] opacity-0 transition-opacity hover:text-(--color-ink-bright) group-hover:opacity-100"
                             title="重命名项目"
                           >
                             ✎
@@ -206,7 +206,7 @@ export function WorkshopHeader({
                             <button
                               type="button"
                               onClick={() => setPendingDelete(p.id)}
-                              className="shrink-0 rounded px-1 text-[11px] text-gray-500 opacity-0 transition-opacity hover:text-red-300 group-hover:opacity-100"
+                              className="shrink-0 rounded px-1 text-[11px] text-(--color-ink-muted) opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
                               title="删除项目"
                             >
                               🗑
@@ -219,7 +219,7 @@ export function WorkshopHeader({
                 })}
               </div>
 
-              <div className="border-t border-white/8 p-1">
+              <div className="border-t border-(--color-border) p-1">
                 {creating ? (
                   <input
                     autoFocus
@@ -233,7 +233,7 @@ export function WorkshopHeader({
                       }
                     }}
                     placeholder="新项目名称（回车确认）"
-                    className="w-full rounded border border-white/12 bg-black/40 px-2 py-1 text-[13px] text-gray-100 outline-none placeholder:text-gray-600 focus:border-violet-400/60"
+                    className="w-full rounded border border-(--color-border-strong) bg-black/40 px-2 py-1 text-[13px] text-(--color-ink) outline-none placeholder:text-(--color-ink-fainter) focus:border-violet-400/60"
                   />
                 ) : (
                   <button
@@ -243,7 +243,7 @@ export function WorkshopHeader({
                       setCreating(true);
                       setEditingId(null);
                     }}
-                    className="text-muted-foreground hover:text-ink w-full rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-white/6"
+                    className="text-muted-foreground hover:text-ink w-full rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-(--color-surface-2)"
                   >
                     ＋ 新建项目
                   </button>
@@ -277,7 +277,7 @@ export function WorkshopHeader({
           variant="ghost"
           size="xs"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground hover:text-ink gap-1 rounded-full bg-white/4 px-3 py-1.5 text-xs hover:bg-white/8"
+          className="text-muted-foreground hover:text-ink gap-1 rounded-full bg-(--color-subtle) px-3 py-1.5 text-xs hover:bg-(--color-surface-2)"
           title="配置生图 / 视频 API 直连通道"
         >
           <Icon name="settings" size={13} />

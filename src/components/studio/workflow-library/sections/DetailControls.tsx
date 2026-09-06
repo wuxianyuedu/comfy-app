@@ -28,8 +28,8 @@ export function ActionButton({
       className={[
         "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors",
         variant === "danger"
-          ? "border-red-500/20 bg-red-500/8 text-red-300 hover:bg-red-500/15 disabled:opacity-40"
-          : "border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08] hover:text-white disabled:opacity-40",
+          ? "border-red-500/20 bg-red-500/8 text-red-600 hover:bg-red-500/15 disabled:opacity-40"
+          : "border-(--color-border) bg-(--color-subtle) text-(--color-ink-strong) hover:bg-(--color-surface-2) hover:text-(--color-ink-bright) disabled:opacity-40",
       ].join(" ")}
     >
       {icon}
@@ -53,7 +53,7 @@ export function TabButton({
       onClick={onClick}
       className={[
         "relative px-3 py-2.5 text-[12px] font-medium transition-colors",
-        active ? "text-white" : "text-white/45 hover:text-white/75",
+        active ? "text-(--color-ink-bright)" : "text-(--color-ink-fainter) hover:text-(--color-ink-strong)",
       ].join(" ")}
     >
       {children}
