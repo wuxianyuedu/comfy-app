@@ -45,6 +45,18 @@ interface DarkSelectProps {
    * rendering off-screen.  Defaults to true.
    */
   autoFitFromOptions?: boolean;
+  /**
+   * Optional footer rendered at the bottom of the popover (outside the
+   * scrollable option list) — used for group empty-state hints that must
+   * stay visible regardless of how many options exist.
+   */
+  footer?: React.ReactNode;
+  /**
+   * Called when the popover opens/closes. The open state lives inside the
+   * component; callers use this to lazily load options right as the list
+   * becomes visible.
+   */
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function DarkSelect({
@@ -57,6 +69,8 @@ export function DarkSelect({
   className = "",
   popoverMinWidth = 480,
   autoFitFromOptions = true,
+  footer,
+  onOpenChange,
 }: DarkSelectProps) {
   /* a11y：role="combobox" 必须能通过 aria-controls 指向它控制的 listbox，
    *  否则读屏软件无法把触发按钮与选项列表关联起来。useId 保证同一页面上
@@ -85,10 +99,11 @@ export function DarkSelect({
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent && e.key === "Escape") { setOpen(false); return; }
+      if (e instanceof KeyboardEvent && e.key === "Escape") { setOpen(false); onOpenChange?.(false); return; }
       if (e instanceof MouseEvent) {
         if (ref.current?.contains(e.target as Node) || listRef.current?.contains(e.target as Node)) return;
         setOpen(false);
+        onOpenChange?.(false);
       }
     };
     document.addEventListener("mousedown", handler, true);
@@ -99,7 +114,7 @@ export function DarkSelect({
       document.removeEventListener("click", handler, true);
       document.removeEventListener("keydown", handler);
     };
-  }, [open]);
+  }, [open, onOpenChange]);
 
   /* Reset highlight when opening (adjusted during render, React 19 pattern) */
   const [prevOpen, setPrevOpen] = useState(open);
@@ -183,7 +198,7 @@ export function DarkSelect({
     };
   }, [open, effectiveMinWidth]);
 
-  const pick = useCallback((v: string) => { onChange(v); setOpen(false); }, [onChange]);
+  const pick = useCallback((v: string) => { onChange(v); setOpen(false); onOpenChange?.(false); }, [onChange, onOpenChange]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((value) => !value); return; }
@@ -209,7 +224,12 @@ export function DarkSelect({
         aria-expanded={open}
         aria-haspopup="listbox"
         disabled={disabled}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() =>
+          setOpen((value) => {
+            onOpenChange?.(!value);
+            return !value;
+          })
+        }
         onKeyDown={handleKeyDown}
         className={`flex w-full items-center justify-between rounded-md border border-white/10 bg-white/3 px-2.5 py-1.5 text-[12px] text-gray-200 outline-none transition-colors focus:border-violet-500/40 ${className}`}
       >
@@ -260,6 +280,22 @@ export function DarkSelect({
               </li>
             ))}
           </ul>,
+          document.body
+        )}
+      {open && footer &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              left: pos.left,
+              top: pos.placement === "down" ? pos.top + 240 : pos.top - 32,
+              width: pos.width,
+              zIndex: 9999,
+            }}
+          >
+            {footer}
+          </div>,
           document.body
         )}
     </div>
