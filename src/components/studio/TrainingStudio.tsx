@@ -45,7 +45,12 @@ const RING_C = 2 * Math.PI * RING_R;
  * lib/dataset-upload-client.ts，类型与派生计算在 training-studio-config.ts。
  * 本文件只做渲染与上抛事件；对外导出名与组件签名保持不变，消费方零改动。
  */
-export function TrainingStudio() {
+export interface TrainingStudioProps {
+  /** workspace 内触发设置 overlay；缺省时保留 Link 跳转行为。 */
+  onOpenSettings?: () => void;
+}
+
+export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
   const router = useRouter();
   const c = useTrainingStudio();
 
@@ -136,7 +141,11 @@ export function TrainingStudio() {
             {!c.backendConfigured && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200">
                 <p className="mb-1 font-semibold">未配置训练后端</p>
-                在「<Link href="/settings" className="underline">设置 → 偏好</Link>」中填写训练后端 URL（如 Kohya / OneTrainer / ComfyUI 训练节点的 HTTP 地址）后，即可开始真实训练。当前提交的任务会保持「等待中」。
+                {onOpenSettings ? (
+                  <>在「<button type="button" onClick={onOpenSettings} className="underline hover:opacity-80">设置 → 偏好</button>」中填写训练后端 URL（如 Kohya / OneTrainer / ComfyUI 训练节点的 HTTP 地址）后，即可开始真实训练。当前提交的任务会保持「等待中」。</>
+                ) : (
+                  <>在「<Link href="/settings" className="underline">设置 → 偏好</Link>」中填写训练后端 URL（如 Kohya / OneTrainer / ComfyUI 训练节点的 HTTP 地址）后，即可开始真实训练。当前提交的任务会保持「等待中」。</>
+                )}
               </div>
             )}
 

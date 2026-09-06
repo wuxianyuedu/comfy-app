@@ -18,6 +18,11 @@ import { listProjects, setActive, reapAllEmptyDrafts } from "@/lib/project-canva
 
 /* ── Lazy-load view components so the initial bundle stays small ── */
 /* Only HomePage / WorkspaceNav / ToastProvider / VideoQueueModal are loaded eagerly. */
+const SettingsOverlay = dynamic(
+  () => import("@/components/settings/SettingsOverlay").then((mod) => mod.SettingsOverlay),
+  { ssr: false }
+);
+
 const WorksGallery = dynamic(
   () => import("@/components/studio").then((mod) => mod.WorksGallery),
   { ssr: false }
@@ -140,6 +145,13 @@ export default function WorkspacePage() {
 
   // ── Video queue modal ──
   const [videoQueueOpen, setVideoQueueOpen] = useState(false);
+
+  // ── Settings overlay ──
+  // 设置以 overlay 形式打开（而非跳转 /settings 独立路由），保持 workspace
+  // 组件树常驻——关闭设置后当前视图的选中项/编辑内容原样保留。
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
 
   // ── Canvas: when true, the canvas opens a brand-new named project
   const [canvasSeedNew, setCanvasSeedNew] = useState(false);
@@ -287,7 +299,7 @@ export default function WorkspacePage() {
         return <HistoryList onOpenTask={handleOpenProject} />;
 
       case "train":
-        return <TrainingStudio />;
+        return <TrainingStudio onOpenSettings={openSettings} />;
 
       case "canvas":
         return (
@@ -333,6 +345,7 @@ export default function WorkspacePage() {
               activeNav="home"
               onNavigate={handleHomeNavigate}
               onShowAllProjects={handleShowAllProjects}
+              onOpenSettings={openSettings}
             />
             <VideoQueueModal open={videoQueueOpen} onClose={() => setVideoQueueOpen(false)} />
           </>
@@ -342,7 +355,11 @@ export default function WorkspacePage() {
               {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
               <AuroraBackground />
 
-              <WorkspaceNav active={viewMode} onSelect={handleNavSelect} />
+              <WorkspaceNav
+                active={viewMode}
+                onSelect={handleNavSelect}
+                onOpenSettings={openSettings}
+              />
 
               <div className="flex min-w-0 flex-1 flex-col">
                 {renderCenter()}
@@ -378,6 +395,9 @@ export default function WorkspacePage() {
             </div>
           </>
         )}
+
+      {/* 设置 overlay：仅打开时挂载。置于最顶层，不卸载下方 workspace 组件树。 */}
+      {settingsOpen && <SettingsOverlay onClose={closeSettings} />}
     </>
   );
 }
