@@ -236,7 +236,7 @@ export async function generateImage(id: string, input: GenerateImageInput) {
     throw new Error("generateImage 需要有效的 shotId 或 characterId");
   }
   if (channel === "comfyui") {
-    const url = await generateImageViaComfyUI({ prompt, negative, size: input.size });
+    const url = await generateImageViaComfyUI({ prompt, negative, size: input.size, sessionId: id });
     if (shot) {
       shot.imageUrl = url;
       shot.status = "done";
@@ -282,6 +282,7 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
       prompt: input.prompt ?? shot.description,
       negative: input.negative ?? shot.negativePrompt,
       imageDataUrl,
+      sessionId: id,
     });
     if (r.url) {
       shot.clipUrl = r.url;
