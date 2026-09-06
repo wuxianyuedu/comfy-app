@@ -1307,30 +1307,47 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   className={`inline-block size-2 shrink-0 rounded-full ${
                     c.comfyStatus?.up
                       ? "bg-emerald-400"
-                      : c.comfyStatus?.starting
+                      : c.comfyStopping || c.comfyStatus?.stopping
                         ? "bg-amber-400"
-                        : "bg-rose-400"
+                        : c.comfyStatus?.starting
+                          ? "bg-amber-400"
+                          : "bg-rose-400"
                   }`}
                 />
                 <span className="text-ink/80 text-sm">
                   {c.comfyStatus?.up
                     ? `ComfyUI 运行中${c.comfyStatus.base ? `（${c.comfyStatus.base}）` : ""}`
-                    : c.comfyStarting || c.comfyStatus?.starting
-                      ? "ComfyUI 正在启动…"
-                      : "ComfyUI 未运行"}
+                    : c.comfyStopping || c.comfyStatus?.stopping
+                      ? "ComfyUI 关闭中…"
+                      : c.comfyStarting || c.comfyStatus?.starting
+                        ? "ComfyUI 正在启动…"
+                        : "ComfyUI 未运行"}
                 </span>
                 <div className="ml-auto flex items-center gap-2">
                   <Btn
                     onClick={() => void c.startComfy()}
-                    disabled={c.saving || c.comfyStarting || c.comfyStatus?.up}
+                    disabled={
+                      c.saving ||
+                      c.comfyStarting ||
+                      c.comfyStopping ||
+                      !!c.comfyStatus?.stopping ||
+                      !!c.comfyStatus?.up
+                    }
                   >
                     {c.comfyStarting ? "启动中…" : "启动 ComfyUI"}
                   </Btn>
                   <Btn
                     onClick={() => void c.stopComfy()}
-                    disabled={c.saving || c.comfyStopping || !c.comfyStatus?.up}
+                    disabled={
+                      c.saving ||
+                      c.comfyStopping ||
+                      !!c.comfyStatus?.stopping ||
+                      !c.comfyStatus?.up
+                    }
                   >
-                    {c.comfyStopping ? "关闭中…" : "关闭 ComfyUI"}
+                    {c.comfyStopping || c.comfyStatus?.stopping
+                      ? "关闭中…"
+                      : "关闭 ComfyUI"}
                   </Btn>
                 </div>
               </div>

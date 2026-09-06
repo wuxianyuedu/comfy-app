@@ -28,6 +28,8 @@ export type ComfyUiStatus = {
   up: boolean;
   base: string | null;
   starting: boolean;
+  /** 用户点了「关闭 ComfyUI」且进程树尚未确认退出：设置页据此保持「关闭中…」。 */
+  stopping: boolean;
   pid?: number;
 };
 
@@ -38,6 +40,9 @@ type LifecycleGlobal = {
   starting?: Promise<EnsureResult>;
   /** 用户点了「关闭 ComfyUI」：启动等待循环见到它就中止，不再报「秒退」。 */
   stopRequested?: boolean;
+  /** 「关闭中」窗口的开始时刻（毫秒）：设置页在窗口内显示关闭进行态，
+   *  进程树确认退出后清零。 */
+  stoppingAt?: number;
 };
 const G_KEY = "__comfyLifecycle_v1";
 const g = globalThis as unknown as Record<string, LifecycleGlobal | undefined>;
@@ -47,6 +52,12 @@ g[G_KEY] = st;
 /** 任务自动启动路径的等待上限：到点后放弃本次等待，WS 层稍后重试时会
  *  重新拉起（单飞锁已释放）。设置页手动启动不设上限（见 ensureComfyUiReady）。 */
 export const COMFYUI_AUTOSTART_TIMEOUT_MS = 420_000;
+
+/** 「关闭中」标记的兜底时限：正常关闭在 2.5s 内出结果（stopComfyUiProcess
+ *  最多等 5×500ms），窗口拉到 30s 只为兜住「命令已发出但进程僵住」的长尾。
+ *  过窗后状态回到探测结果驱动，不会永久卡在「关闭中…」（React 状态不可
+ *  跨挂载存活，刷新后丢失——见 ISSUE #103）。 */
+export const COMFY_STOPPING_WINDOW_MS = 30_000;
 
 /** 保活启动的进程存在性检查：宽限期（解释器冷启动也要时间）后才首次检查，
  *  之后限频复查 —— 防止把「正在启动」误判为「没起来」，也避免每轮轮询
@@ -110,6 +121,8 @@ export async function stopComfyUiProcess(): Promise<{ ok: boolean; detail: strin
     if (pid) child = undefined; // 无句柄，仅用定位到的 PID
   }
   if (!pid) {
+    // 目标已经不在了：立刻清「关闭中」标记，不留无意义的进行态窗口。
+    if (!stillUp && !st.starting) st.stoppingAt = undefined;
     return stillUp
       ? { ok: false, detail: "ComfyUI 在运行但不是本应用（配置路径）启动的，请在 ComfyUI 自己的窗口/终端中手动关闭" }
       : { ok: true, detail: "ComfyUI 未在运行" };
@@ -141,6 +154,7 @@ export async function stopComfyUiProcess(): Promise<{ ok: boolean; detail: strin
     await new Promise((r) => setTimeout(r, 500));
     if (!(await probeComfyUi(800))) {
       appendRuntimeLog("[stop] ComfyUI 已关闭");
+      clearComfyStopping();
       return { ok: true, detail: "ComfyUI 已关闭" };
     }
   }
@@ -152,11 +166,23 @@ export function isComfyStarting(): boolean {
   return !!st.starting;
 }
 
+/** 「关闭中」窗口是否仍然生效（见 COMFY_STOPPING_WINDOW_MS）。 */
+export function isComfyStopping(): boolean {
+  if (!st.stoppingAt) return false;
+  return Date.now() - st.stoppingAt < COMFY_STOPPING_WINDOW_MS;
+}
+
+/** 清掉「关闭中」标记：进程树已确认退出 / 用户重新点了启动。 */
+function clearComfyStopping(): void {
+  st.stoppingAt = undefined;
+}
+
 export function getComfyUiStatus(): ComfyUiStatus {
   return {
     up: false,
     base: null,
     starting: isComfyStarting(),
+    stopping: isComfyStopping(),
     pid: st.child?.pid,
   };
 }
@@ -266,6 +292,7 @@ export async function ensureComfyUiReady(
         return { ok: false, base: null, detail };
       }
       st.stopRequested = false;
+      clearComfyStopping();
       appendRuntimeLog(
         `[keepAlive-spawn] cmd=${plan.cmd} args=${JSON.stringify(args)} cwd=${plan.cwd}`,
       );
@@ -350,6 +377,7 @@ export async function ensureComfyUiReady(
     }
     st.child = child;
     st.stopRequested = false;
+    clearComfyStopping();
     appendRuntimeLog(`[spawn] pid=${child.pid} cmd=${plan.cmd} args=${JSON.stringify(args)} cwd=${plan.cwd}`);
     // 最近输出留底：进程秒退时从里面提取「No module named 'X'」给出可行动的报错
     const recentOutput: string[] = [];
