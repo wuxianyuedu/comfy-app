@@ -482,6 +482,29 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     return () => clearTimeout(timer);
   }, [activeProjectId, currentDraft]);
 
+  /* 卸载兜底保存 —— 工坊常作为 workspace 的一个页签渲染，切走其它页签时本组件
+   * 会被卸载。若只靠上面的 600ms 防抖，用户在编辑/导入剧本后立刻切走，卸载时
+   * 定时器被 clear 掉还来不及落盘；更关键的是模块级草稿缓存(workshopDraftCache)
+   * 只在首次挂载读一次，重挂载时会读到首挂载那份旧缓存草稿，而不是刚写进
+   * localStorage 的新内容 —— 两处叠加正是「切页签后剧本内容丢失」的根因。
+   * 卸载时：立即把最新草稿落盘 + 让模块级缓存失效，下次挂载重新读 localStorage。
+   * ref 在每次渲染后同步最新值，卸载 cleanup 经 ref 取值，避免闭包捕获旧草稿。 */
+  const activeProjectRef = React.useRef(activeProjectId);
+  const latestDraftRef = React.useRef<WorkshopDraft>(currentDraft());
+  React.useEffect(() => {
+    activeProjectRef.current = activeProjectId;
+    latestDraftRef.current = currentDraft();
+  });
+
+  React.useEffect(() => {
+    return () => {
+      writeDraft(activeProjectRef.current, latestDraftRef.current);
+      invalidateDraftCache();
+    };
+    // 仅在卸载时执行一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   React.useEffect(() => {
     fetch("/api/skills")
       .then((res) => res.json())
