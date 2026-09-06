@@ -6,6 +6,7 @@ import {
   isMediaField,
   videoModeHidesMedia,
   videoModeMissingHint,
+  isModeValueBroken,
 } from "./usage-test-config";
 
 describe("usageFieldsToJson", () => {
@@ -104,9 +105,9 @@ describe("videoModeMissingHint", () => {
 describe("videoModeHidesMedia / isMediaField", () => {
   it("mode=text 时隐藏媒体字段，其它 mode 不隐藏", () => {
     expect(videoModeHidesMedia([{ key: "mode", value: "text" }])).toBe(true);
-    expect(
-      videoModeHidesMedia([{ key: "mode", value: "keyframe" }]),
-    ).toBe(false);
+    expect(videoModeHidesMedia([{ key: "mode", value: "keyframe" }])).toBe(
+      false,
+    );
     expect(videoModeHidesMedia([])).toBe(false);
   });
 
@@ -121,5 +122,33 @@ describe("videoModeHidesMedia / isMediaField", () => {
     expect(isMediaField("last_frame")).toBe(true);
     expect(isMediaField("seed")).toBe(false);
     expect(isMediaField("")).toBe(false);
+  });
+});
+
+describe("isModeValueBroken / rescue 场景", () => {
+  it("mode 被图片 URL / data URL / 空值覆盖时判定为损坏", () => {
+    expect(isModeValueBroken("")).toBe(true);
+    expect(
+      isModeValueBroken(
+        "https://cnb.cool/moon-read/comfy-app-t3/-/imgs/issues/xxx.png",
+      ),
+    ).toBe(true);
+    expect(
+      isModeValueBroken("data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="),
+    ).toBe(true);
+    expect(isModeValueBroken("   ")).toBe(true);
+  });
+
+  it("正常模式值不被误判（含大小写与自定义值）", () => {
+    expect(isModeValueBroken("text")).toBe(false);
+    expect(isModeValueBroken("keyframe")).toBe(false);
+    expect(isModeValueBroken("reference")).toBe(false);
+    expect(isModeValueBroken(" TEXT ")).toBe(false);
+    expect(isModeValueBroken("v2f_text")).toBe(false);
+  });
+
+  it("mode 被覆盖为超长杂值时判定为损坏", () => {
+    expect(isModeValueBroken("x".repeat(65))).toBe(true);
+    expect(isModeValueBroken("x".repeat(64))).toBe(false);
   });
 });
