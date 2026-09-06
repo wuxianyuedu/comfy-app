@@ -30,14 +30,12 @@ import type {
   StyleRef,
 } from "~/lib/workshop/types";
 import {
-  buildGridShots,
   buildMissingSummary,
   computeProgressPct,
   computeStageRatios,
   stagePrereq,
   STAGE_DEFS,
   STAGE_TITLES,
-  type GridShot,
   type MissingItem,
   type StageRatios,
   type StageViewContext,
@@ -279,7 +277,6 @@ export interface WorkshopPipelineController {
   prereq: { text: string; go: Tab } | null;
   pendingCategories: number;
   viewContext: StageViewContext;
-  gridShots: GridShot[];
   missing: MissingItem[];
 
   // ── 数据
@@ -770,7 +767,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     ],
   );
 
-  const gridShots = React.useMemo(() => buildGridShots(scenes), [scenes]);
   const missing = React.useMemo(
     () => buildMissingSummary(viewContext),
     [viewContext],
@@ -826,7 +822,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     prereq,
     pendingCategories,
     viewContext,
-    gridShots,
     missing,
 
     meta,
