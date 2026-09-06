@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS workflowModelTag_workflowTemplate (
 );
 CREATE TABLE IF NOT EXISTS llmConfig (
   id TEXT PRIMARY KEY, provider TEXT NOT NULL DEFAULT 'local', baseUrl TEXT NOT NULL DEFAULT 'http://localhost:11434/v1',
-  model TEXT NOT NULL DEFAULT 'llama3.1', apiKey TEXT, temperature REAL NOT NULL DEFAULT 0.7,
+  model TEXT NOT NULL DEFAULT '', apiKey TEXT, temperature REAL NOT NULL DEFAULT 0.7,
   temperatureByTask TEXT, maxTokens INTEGER NOT NULL DEFAULT 2048, updatedAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS skill (

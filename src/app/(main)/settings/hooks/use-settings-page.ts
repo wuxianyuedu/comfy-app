@@ -373,9 +373,20 @@ export function useSettingsPage(): SettingsPageController {
     [probeOllamaSilent],
   );
 
-  // baseUrl 变化或本地 provider 切换时重新探测
+  // baseUrl 变化或本地 provider 切换时重新探测。
+  // 只有「本地 provider + 已填 baseUrl」才有得探测；否则说明当前没有可探测的
+  // Ollama（provider 是远端、或还没填地址），若仍停留在初始/遗留的 checking
+  // 态，状态行会一直「检测 Ollama 服务…」转圈永不结束——这里落定为 down。
   useEffect(() => {
-    if (llmDraft?.provider !== "local" || !llmBaseUrl) return;
+    if (llmDraft?.provider !== "local" || !llmBaseUrl) {
+      // 没有可探测的 Ollama（provider 是远端、或还没填地址）：若仍停留在
+      // 初始/遗留的 checking 态，状态行会一直「检测 Ollama 服务…」转圈永不
+      // 结束——这里 defer 一次把它落定为 down（不落在同步 effect 体里）。
+      const settle = setTimeout(() => {
+        setOllamaStatus((prev) => (prev === "checking" ? "down" : prev));
+      }, 0);
+      return () => clearTimeout(settle);
+    }
     const timer = setTimeout(() => void probeOllama(llmBaseUrl), 0);
     return () => clearTimeout(timer);
   }, [llmDraft?.provider, llmBaseUrl, probeOllama]);

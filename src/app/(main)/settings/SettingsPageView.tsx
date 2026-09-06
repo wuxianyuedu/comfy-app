@@ -675,7 +675,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   label="模型"
                   value={c.drafts.llm.model}
                   onChange={(value) => c.patchLlm({ model: value })}
-                  placeholder="llama3.1 或 qwen3:14b"
+                  placeholder="请填写要使用的模型名，如 qwen3:14b"
                 />
               )}
 

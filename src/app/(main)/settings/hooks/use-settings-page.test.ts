@@ -275,6 +275,21 @@ describe("useSettingsPage", () => {
     expect(probeMock).toHaveBeenCalledTimes(callsAfterLocalProbe);
   });
 
+  /* 回归 ISSUE #99：保存的 provider 是 remote（或没填 baseUrl）时，本地模型页
+   * 没有任何可探测的 Ollama —— 若状态停留在初始的 checking，状态行会一直
+   * 「检测 Ollama 服务…」转圈永不结束。这里断言它会落定为 down 而非卡住。 */
+  it("provider 为远端时不会停在 checking，状态落定为 down", async () => {
+    behavior.llm = { ...LLM, provider: "remote" };
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    const baseline = probeMock.mock.calls.length;
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await waitFor(() => expect(result.current.ollamaStatus).toBe("down"));
+    // 远端 provider 不该触发本地 Ollama 探测
+    expect(probeMock).toHaveBeenCalledTimes(baseline);
+  });
+
   it("Ollama 探测失败 → down；启动后轮询到就绪才恢复 up", async () => {
     /* 前 2 次探测 down（初始 + 启动后第 1 轮），第 3 次起 up——
      * 模拟 ollama serve 冷启动期间端口未就绪、稍后才接上。 */

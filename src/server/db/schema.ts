@@ -297,7 +297,7 @@ export const llmConfig = sqliteTable("llmConfig", {
   id: text("id").primaryKey(), // "singleton"
   provider: text("provider").notNull().default("local"),
   baseUrl: text("baseUrl").notNull().default("http://localhost:11434/v1"),
-  model: text("model").notNull().default("llama3.1"),
+  model: text("model").notNull().default(""),
   /** 本地 Ollama 的候选模型名（JSON 字符串数组）：设置页可勾选多个，供工坊切换使用 */
   extraModels: text("extraModels", { mode: "json" }),
   apiKey: text("apiKey"),
