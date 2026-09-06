@@ -127,3 +127,23 @@ export function isModeValueBroken(value: string): boolean {
 export function sanitizeModeValue(value: string): string {
   return isModeValueBroken(value) ? "text" : value;
 }
+
+/** 「额外字段」一键预设：固定名称的常用字段，避免手输拼错 / 反复键入。
+ *  key → 界面按钮文案说明；点对应「＋」即自动补一行该字段名的行。
+ *  视频 reference / keyframe 必用的 images / first_frame 等都在列，命中即加。 */
+export const USAGE_FIELD_PRESETS: ReadonlyArray<{
+  key: string;
+  hint: string;
+}> = [
+  { key: "seed", hint: "随机种子" },
+  { key: "duration", hint: "时长(秒)" },
+  { key: "images", hint: "参考图 / 输入图列表" },
+  { key: "first_frame", hint: "首帧图片" },
+  { key: "last_frame", hint: "尾帧图片" },
+  { key: "audios", hint: "参考音频" },
+];
+
+/** 判断某个固定名是否已被作为字段行加入（避免一键预设时重复堆空行）。 */
+export function hasUsageFieldKey(fields: UsageField[], key: string): boolean {
+  return fields.some((f) => f.key.trim() === key.trim());
+}
