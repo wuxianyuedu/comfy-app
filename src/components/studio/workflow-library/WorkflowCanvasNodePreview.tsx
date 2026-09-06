@@ -13,9 +13,11 @@
  */
 
 import { useMemo, useRef, useState } from "react";
+import { FileText } from "lucide-react";
 import {
   startLocalGenerate,
   watchTask,
+  type TaskLogEntry,
   type TaskProgressNode,
 } from "@/lib/workshop/generation-client";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
@@ -59,6 +61,37 @@ interface Props {
   onSeedModeChange?: (ioKey: string, mode: string) => void;
 }
 
+/* ── 执行日志行样式：与项目画布 GlobalStepLogPanel 同款 ────────────────
+ * 级别徽章配色 / 时间格式与画布执行日志面板完全一致，保证工作流库里
+ * 「就地运行」看到的日志与项目画布观感统一。 */
+type LogLevel = TaskLogEntry["level"];
+const LOG_LEVEL_STYLES: Record<LogLevel, string> = {
+  error: "bg-rose-500/15 text-rose-400 border-rose-500/20",
+  warn: "bg-amber-500/15 text-amber-400 border-amber-500/20",
+  success: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+  progress: "bg-violet-500/15 text-violet-400 border-violet-500/20",
+  info: "bg-cyan-500/15 text-cyan-400 border-cyan-500/20",
+};
+function logLevelBadge(level: LogLevel): string {
+  switch (level) {
+    case "error": return "ERROR";
+    case "warn": return "WARN";
+    case "success": return "OK";
+    case "progress": return "PROG";
+    default: return "INFO";
+  }
+}
+/* 与应用日志同款，带毫秒。 */
+function fmtLogTime(t: number): string {
+  return new Date(t).toLocaleTimeString("zh-CN", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    fractionalSecondDigits: 3,
+  });
+}
+
 export function WorkflowCanvasNodePreview({
   workflowId,
   workflowName,
@@ -76,6 +109,13 @@ export function WorkflowCanvasNodePreview({
   // onOutput 与 onSettled 都来自同一 SSE 闭包，state 读取会拿到渲染期旧值——
   // 用 ref 保证 onSettled 能看到 onOutput 刚写入的结果图。
   const resultUrlRef = useRef<string | null>(null);
+  /* 就地运行的工作流执行步骤日志（SSE `log` 帧累积），与项目画布执行日志同款。
+   * 用 ref 在 onSettled/onLog 异步闭包里读「本次是否成功」不会干扰日志累积。 */
+  const [logs, setLogs] = useState<TaskLogEntry[]>([]);
+  /* 执行日志折叠展开态；运行中自动展开，结束后可手动收起。 */
+  const [logOpen, setLogOpen] = useState(false);
+  /* 当前运行是否已结束（用于展开提示文案与折叠按钮显隐）。 */
+  const [logDone, setLogDone] = useState(false);
 
   const running = phase.kind === "running" || phase.kind === "starting";
   const missing = useMemo(
@@ -124,6 +164,9 @@ export function WorkflowCanvasNodePreview({
     if (!canRun) return;
     setResultUrl(null);
     resultUrlRef.current = null;
+    setLogs([]);
+    setLogDone(false);
+    setLogOpen(true);
     setPhase({ kind: "starting" });
     try {
       const workflowInputs = toWorkflowInputsPayload(
@@ -142,6 +185,7 @@ export function WorkflowCanvasNodePreview({
         watchTask(taskId, {
           onProgress: (pct, node: TaskProgressNode | undefined) =>
             setPhase({ kind: "running", pct, ...(node ? { node } : {}) }),
+          onLog: (entry) => setLogs((prev) => [...prev, entry]),
           onOutput: (out) => {
             if (out.kind === "image" && out.url) {
               resultUrlRef.current = out.url;
@@ -157,6 +201,7 @@ export function WorkflowCanvasNodePreview({
             } else {
               setPhase({ kind: "failed", message: r.message ?? "生成失败" });
             }
+            setLogDone(true);
             resolve();
           },
         });
@@ -166,6 +211,7 @@ export function WorkflowCanvasNodePreview({
         kind: "failed",
         message: e instanceof Error ? e.message : String(e),
       });
+      setLogDone(true);
     }
   }
 
@@ -342,6 +388,59 @@ export function WorkflowCanvasNodePreview({
         <p className="w-[380px] text-[11px] text-amber-300/80">
           必填参数未填：{missingLabels.join("、")}
         </p>
+      )}
+
+      {/* 执行步骤日志 —— 与项目画布执行日志同款行样式（时间 + 级别徽章 + 消息）。
+       *  就地运行期间自动展开；结束后可手动收起/保留审查。 */}
+      {logs.length > 0 && (
+        <div className="w-[380px] overflow-hidden rounded-xl border border-white/8 bg-[#0B0B10]">
+          <button
+            type="button"
+            onClick={() => setLogOpen((o) => !o)}
+            title={logOpen ? "收起执行日志" : "展开执行日志"}
+            className="flex w-full items-center justify-between gap-2 border-b border-white/6 bg-white/2 px-3 py-2 text-left"
+          >
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-white/70">
+              <FileText size={12} className="shrink-0 text-violet-400" />
+              执行日志
+              {!logDone && (
+                <span className="ml-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
+              )}
+            </span>
+            <span className="flex items-center gap-2 text-[10.5px] text-white/40">
+              <span>{logs.length} 条</span>
+              <span
+                className={`inline-block transition-transform ${
+                  logOpen ? "rotate-180" : ""
+                }`}
+              >
+                ▾
+              </span>
+            </span>
+          </button>
+          {logOpen && (
+            <div className="custom-scrollbar max-h-56 overflow-y-auto bg-[#0d0d14]/60">
+              {logs.map((log, index) => (
+                <div
+                  key={`${log.t}:${index}`}
+                  data-testid="wflib-log-line"
+                  data-level={log.level}
+                  className="flex items-start gap-2 border-b border-white/3 px-3 py-1 font-mono text-[11.5px] leading-snug hover:bg-white/2"
+                >
+                  <span className="shrink-0 text-gray-500">{fmtLogTime(log.t)}</span>
+                  <span
+                    className={`shrink-0 rounded border px-1 py-px text-[10px] font-medium uppercase ${LOG_LEVEL_STYLES[log.level]}`}
+                  >
+                    {logLevelBadge(log.level)}
+                  </span>
+                  <span className="min-w-0 flex-1 break-words text-gray-300">
+                    {log.msg}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

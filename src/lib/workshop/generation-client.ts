@@ -35,12 +35,41 @@ export interface TaskProgressNode {
   max: number;
 }
 
+/** 一条执行步骤日志（对应项目画布 /api/tasks/:id/stream 的 `log` 帧），
+ *  字段与后端 LogEntry 一致。工作流库就地运行也据此展示「执行日志」。 */
+export interface TaskLogEntry {
+  t: number;
+  level: "info" | "progress" | "warn" | "error" | "success";
+  msg: string;
+  src?: string;
+}
+
 export interface TaskWatchHandlers {
   onProgress?: (progress: number, node?: TaskProgressNode) => void;
+  /** 每条执行步骤日志（SSE `log` 帧）。供调用方累积展示。 */
+  onLog?: (entry: TaskLogEntry) => void;
   /** Fired for each saved output file as the task completes. */
   onOutput?: (output: SavedOutput) => void;
   /** Called exactly once when the task reaches a terminal state. */
   onSettled: (result: { ok: boolean; message?: string }) => void;
+}
+
+/** Narrow an unknown SSE `log` frame payload to TaskLogEntry, or null. */
+function narrowLogEntry(raw: unknown): TaskLogEntry | null {
+  if (!isRecord(raw)) return null;
+  const t = raw.t;
+  const level = raw.level;
+  const msg = raw.msg;
+  if (typeof t !== "number" || typeof msg !== "string") return null;
+  const validLevels = ["info", "progress", "warn", "error", "success"] as const;
+  const lv = validLevels.find((v) => v === level) ?? null;
+  if (!lv) return null;
+  return {
+    t,
+    level: lv,
+    msg,
+    ...(typeof raw.src === "string" && raw.src ? { src: raw.src } : {}),
+  };
 }
 
 /**
@@ -94,6 +123,11 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
             );
           }
         }
+        return;
+      }
+      if (type === "log") {
+        const entry = narrowLogEntry(msg.entry);
+        if (entry) h.onLog?.(entry);
         return;
       }
       if (type === "done") {
