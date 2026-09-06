@@ -102,7 +102,8 @@ export async function stopComfyUiProcess(): Promise<{ ok: boolean; detail: strin
   //    覆盖 keepAlive（保活实例无 st.child）与「应用退出重启后接管上一会话
   //    保活实例」两种场景（globalThis 状态已被新进程清空）。
   let child = st.child;
-  let pid = child?.pid;
+  // findPidForMainPy 以 null 表示「未找到」，与 child?.pid 的 undefined 归一
+  let pid: number | null = child?.pid ?? null;
   const stillUp = await probeComfyUi(1500);
   if (!pid && stillUp && !("error" in plan)) {
     pid = await findPidForMainPy(plan.mainPy);
