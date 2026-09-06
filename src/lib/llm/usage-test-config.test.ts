@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  USAGE_FIELD_PRESETS,
   defaultVideoFields,
+  hasUsageFieldKey,
   usageFieldsToJson,
   looksLikeImage,
   isMediaField,
@@ -150,5 +152,27 @@ describe("isModeValueBroken / rescue 场景", () => {
   it("mode 被覆盖为超长杂值时判定为损坏", () => {
     expect(isModeValueBroken("x".repeat(65))).toBe(true);
     expect(isModeValueBroken("x".repeat(64))).toBe(false);
+  });
+});
+
+describe("USAGE_FIELD_PRESETS / hasUsageFieldKey", () => {
+  it("预设集合包含固定名称字段，供一键添加", () => {
+    const keys = USAGE_FIELD_PRESETS.map((p) => p.key);
+    expect(keys).toContain("images");
+    expect(keys).toContain("first_frame");
+    expect(keys).toContain("seed");
+    expect(new Set(keys).size).toBe(keys.length); // key 不重复
+  });
+
+  it("hasUsageFieldKey 命中同名已存在的字段行（含首尾空白）", () => {
+    expect(
+      hasUsageFieldKey([{ key: "mode", value: "text" }], "mode"),
+    ).toBe(true);
+    expect(
+      hasUsageFieldKey([{ key: " images ", value: "https://a/x.png" }], "images"),
+    ).toBe(true);
+    expect(hasUsageFieldKey([{ key: "mode", value: "text" }], "images")).toBe(
+      false,
+    );
   });
 });
