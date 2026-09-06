@@ -134,7 +134,7 @@ export function ExtractModelSelect({
         labels={labels}
         footer={
           localPlaceholder || remotePlaceholder ? (
-            <div className="max-h-32 overflow-y-auto border-t border-white/8 px-3 py-2">
+            <div className="max-h-32 overflow-y-auto border-t border-(--color-border) px-3 py-2">
               {localPlaceholder && (
                 <p className="text-muted-foreground py-0.5 text-[11px] leading-relaxed">
                   {localPlaceholder}
@@ -150,7 +150,7 @@ export function ExtractModelSelect({
         }
         onOpenChange={handleOpenChange}
         placeholder="选择提取方式"
-        className="!bg-white/3 !border-white/8 text-xs"
+        className="!bg-(--color-subtle) !border-(--color-border) text-xs"
         popoverMinWidth={280}
         autoFitFromOptions={false}
       />

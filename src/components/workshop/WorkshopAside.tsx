@@ -124,7 +124,7 @@ export function WorkshopAside({
           type="button"
           variant="ghost"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground mt-3 w-full rounded-lg bg-white/4 py-2.5 text-xs hover:bg-white/8"
+          className="text-muted-foreground mt-3 w-full rounded-lg bg-(--color-subtle) py-2.5 text-xs hover:bg-(--color-surface-2)"
         >
           配置 API 直连通道
         </Button>
@@ -142,7 +142,7 @@ export function WorkshopAside({
               <span className="text-ink flex-1 truncate text-[12.5px]">
                 {name}
               </span>
-              <span className="text-faint rounded-md bg-white/4 px-2 py-1 text-[10.5px]">
+              <span className="text-faint rounded-md bg-(--color-subtle) px-2 py-1 text-[10.5px]">
                 {tag}
               </span>
             </div>
@@ -151,7 +151,7 @@ export function WorkshopAside({
         <Button
           type="button"
           variant="ghost"
-          className="text-muted-foreground mt-3 w-full rounded-lg bg-white/4 py-2.5 text-xs hover:bg-white/8"
+          className="text-muted-foreground mt-3 w-full rounded-lg bg-(--color-subtle) py-2.5 text-xs hover:bg-(--color-surface-2)"
         >
           + 导入素材
         </Button>

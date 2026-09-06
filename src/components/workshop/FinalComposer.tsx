@@ -173,7 +173,7 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
             <button
               type="button"
               onClick={stopPlayback}
-              className="text-ink rounded-xl bg-white/4 px-4 py-2 text-xs font-semibold hover:bg-white/8"
+              className="text-ink rounded-xl bg-(--color-subtle) px-4 py-2 text-xs font-semibold hover:bg-(--color-surface-2)"
             >
               停止
             </button>
@@ -275,7 +275,7 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
                 <label className="block">
                   <span className="text-muted-foreground mb-0.5 block text-[10px]">转场</span>
                   <DarkSelect
-                    className="!bg-white/3 !border-white/8 text-xs"
+                    className="!bg-(--color-subtle) !border-(--color-border) text-xs"
                     value={shot.transition ?? "cut"}
                     onChange={(value) => updateShot(shot.id, { transition: value as Transition })}
                     options={TRANSITIONS}
@@ -286,7 +286,7 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
                 <label className="block">
                   <span className="text-muted-foreground mb-0.5 block text-[10px]">运动</span>
                   <DarkSelect
-                    className="!bg-white/3 !border-white/8 text-xs"
+                    className="!bg-(--color-subtle) !border-(--color-border) text-xs"
                     value={shot.motion ?? "medium"}
                     onChange={(value) => updateShot(shot.id, { motion: value as MotionLevel })}
                     options={MOTIONS}

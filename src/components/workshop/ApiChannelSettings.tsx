@@ -102,7 +102,7 @@ export function ApiChannelSettings({ initial, onClose, onSaved }: Props) {
           <button
             type="button"
             onClick={onClose}
-            className="text-ink rounded-lg bg-white/4 px-4 py-2 text-sm hover:bg-white/8"
+            className="text-ink rounded-lg bg-(--color-subtle) px-4 py-2 text-sm hover:bg-(--color-surface-2)"
           >
             关闭
           </button>
