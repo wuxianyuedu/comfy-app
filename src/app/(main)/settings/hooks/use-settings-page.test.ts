@@ -568,6 +568,37 @@ describe("useSettingsPage", () => {
     expect(result.current.dbStudioLogActive).toBe(false);
   });
 
+  it("refreshOllamaLog 拉取 ollama-runtime 日志（替换式），未启动时不在跟随态", async () => {
+    server.use(
+      http.get("*/api/logs/current", ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("source") !== "ollama-runtime") {
+          return HttpResponse.json(
+            { error: "unexpected source" },
+            { status: 400 },
+          );
+        }
+        return HttpResponse.json({
+          content:
+            "[spawn] pid=789 cmd=ollama.exe args=[\"serve\"]\n[out] starting ollama serve\n[state] Ollama 已关闭\n",
+          size: 4096,
+          offset: 0,
+        });
+      }),
+    );
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await act(async () => {
+      await result.current.refreshOllamaLog();
+    });
+    expect(result.current.ollamaLogText).toContain("[spawn] pid=789");
+    expect(result.current.ollamaLogText).toContain("starting ollama serve");
+    expect(result.current.ollamaLogActive).toBe(false);
+  });
+
   it("dbStudioStatus 查询失败 → dbStudioStatus 为 null，启动动作仍可用（#92 回归）", async () => {
     behavior = { dbStudioStatusError: "探测崩溃" };
     const { result } = renderHook(() => useSettingsPage(), {
@@ -603,6 +634,7 @@ describe("useSettingsPage", () => {
     expect(result.current.saving).toBe(false);
     expect(result.current.dbStudioStarting).toBe(false);
   });
+
 
   it("远端模型：编辑候选条目（改名/接口/密钥）；重名排除自身", async () => {
     const { result } = renderHook(() => useSettingsPage(), {

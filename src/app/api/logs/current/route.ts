@@ -8,6 +8,7 @@ const LAUNCHER_LOG_FILE = path.join(LOG_DIR, "start-tauri-launcher.log");
 const SENTINEL_FILE = path.join(LOG_DIR, "dev-launcher-current.txt");
 const COMFYUI_RUNTIME_LOG_FILE = path.join(LOG_DIR, "comfyui-runtime.log");
 const DRIZZLE_STUDIO_RUNTIME_LOG_FILE = path.join(LOG_DIR, "drizzle-studio-runtime.log");
+const OLLAMA_RUNTIME_LOG_FILE = path.join(LOG_DIR, "ollama-runtime.log");
 
 /**
  * comfyui-runtime.log / drizzle-studio-runtime.log 是追加写、不轮转的（每次
@@ -81,13 +82,15 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const source = searchParams.get("source") ?? "dev-launcher";
 
-  if (source === "comfyui-runtime" || source === "drizzle-studio-runtime") {
+  if (source === "comfyui-runtime" || source === "drizzle-studio-runtime" || source === "ollama-runtime") {
     try {
       const requestedOffset = Number(searchParams.get("offset") ?? "0");
       const logFile =
         source === "drizzle-studio-runtime"
           ? DRIZZLE_STUDIO_RUNTIME_LOG_FILE
-          : COMFYUI_RUNTIME_LOG_FILE;
+          : source === "ollama-runtime"
+            ? OLLAMA_RUNTIME_LOG_FILE
+            : COMFYUI_RUNTIME_LOG_FILE;
       return NextResponse.json(readRuntimeSlice(logFile, requestedOffset));
     } catch (error) {
       return NextResponse.json(

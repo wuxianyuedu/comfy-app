@@ -140,6 +140,11 @@ export interface SettingsPageController {
   dbStudioLogSegments: AnsiSegment[];
   dbStudioLogActive: boolean;
   refreshDbStudioLog: () => Promise<void>;
+  /* Ollama 启动日志（log/ollama-runtime.log）：同 ComfyUI，可跟随/刷新 */
+  ollamaLogText: string;
+  ollamaLogSegments: AnsiSegment[];
+  ollamaLogActive: boolean;
+  refreshOllamaLog: () => Promise<void>;
   /* Ollama 关闭（启动已有 startOllama） */
   ollamaStopping: boolean;
   stopOllama: () => Promise<void>;
@@ -585,6 +590,61 @@ export function useSettingsPage(): SettingsPageController {
     await pullDbStudioLog("replace");
   }, [pullDbStudioLog]);
 
+  /* ── Ollama 启动日志 ─────────────────────────────────────
+   * ollama-start/route.ts 会把 spawn 参数与子进程 stdout/stderr 追加进
+   * log/ollama-runtime.log；这里在启动期间每秒跟随尾部（同 ComfyUI/Drizzle）。 */
+  const ollamaLogOffsetRef = useRef(0);
+  const [ollamaLogText, setOllamaLogText] = useState("");
+  /* SGR 颜色序列解析成片段，视图层按样式渲染（同 ComfyUI / Drizzle Studio） */
+  const [ollamaLogSegments, setOllamaLogSegments] = useState<AnsiSegment[]>([]);
+  const ollamaLogActive = ollamaStarting || ollamaStatus === "starting";
+
+  const applyOllamaLogSlice = useCallback(
+    (mode: "append" | "replace", slice: FileLogSlice) => {
+      const cleaned = slice.content.replace(COMFY_LOG_CR_RE, "");
+      setOllamaLogText((prev) =>
+        capComfyLog(mode === "replace" ? cleaned : prev + cleaned),
+      );
+      setOllamaLogSegments((prev) => {
+        const incoming = parseAnsiSegments(cleaned);
+        const merged = mode === "replace" ? incoming : [...prev, ...incoming];
+        return merged.length > 4000 ? merged.slice(-4000) : merged;
+      });
+    },
+    [],
+  );
+
+  const pullOllamaLog = useCallback(
+    async (mode: "append" | "replace") => {
+      const slice = await fetchFileLogSlice(
+        "ollama-runtime",
+        ollamaLogOffsetRef.current,
+      );
+      if (!slice) return;
+      const replace =
+        mode === "replace" ||
+        (slice.offset === 0 && ollamaLogOffsetRef.current > 0);
+      ollamaLogOffsetRef.current = slice.size;
+      applyOllamaLogSlice(replace ? "replace" : "append", slice);
+    },
+    [applyOllamaLogSlice],
+  );
+
+  useEffect(() => {
+    if (!ollamaLogActive) return;
+    void pullOllamaLog("append");
+    const timer = setInterval(
+      () => void pullOllamaLog("append"),
+      COMFY_LOG_POLL_MS,
+    );
+    return () => clearInterval(timer);
+  }, [ollamaLogActive, pullOllamaLog]);
+
+  const refreshOllamaLog = useCallback(async () => {
+    ollamaLogOffsetRef.current = 0;
+    await pullOllamaLog("replace");
+  }, [pullOllamaLog]);
+
   const stopOllamaFn = useCallback(async () => {
     setOllamaStopping(true);
     try {
@@ -900,6 +960,10 @@ export function useSettingsPage(): SettingsPageController {
     dbStudioLogSegments,
     dbStudioLogActive,
     refreshDbStudioLog,
+    ollamaLogText,
+    ollamaLogSegments,
+    ollamaLogActive,
+    refreshOllamaLog,
     ollamaStopping,
     stopOllama: stopOllamaFn,
     saving,

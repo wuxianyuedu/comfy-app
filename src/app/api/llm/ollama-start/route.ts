@@ -3,6 +3,8 @@ import { getServerUser } from "@/lib/auth-server";
 import { getExitPolicy } from "@/lib/app-settings";
 import { spawnManaged, waitForDetachMediator } from "@/lib/process-launch";
 import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +19,9 @@ const PROBE_TIMEOUT_MS = 2000;
  *  「进程秒退（端口被占/未安装/路径错误）」。 */
 const SPAWN_GRACE_MS = 1000;
 
+/** 运行时日志文件名（log/ollama-runtime.log），由设置页日志面板读取。 */
+const OLLAMA_RUNTIME_LOG = path.join(process.cwd(), "log", "ollama-runtime.log");
+
 /**
  * Ollama 启动互斥锁，挂在 globalThis 而不是模块顶层——
  * Next.js dev 模式 HMR 会重置模块变量，让并发 POST 各自 spawn。
@@ -25,6 +30,24 @@ const G_KEY = "__ollamaServeSpawnLock_v2";
 const g = globalThis as unknown as Record<string, { starting: boolean } | undefined>;
 const st: { starting: boolean } = g[G_KEY] ?? { starting: false };
 g[G_KEY] = st;
+
+/** 本地时间戳（YYYY-MM-DD HH:mm:ss）：runtime 日志是给本机用户看的，
+ *  toISOString 的 UTC 在 +8 时区会凭空差出 8 小时。 */
+function localTimestamp(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/** 追加一行到 ollama-runtime.log（失败不影响主流程）。 */
+function appendOllamaLog(line: string): void {
+  try {
+    fs.mkdirSync(path.dirname(OLLAMA_RUNTIME_LOG), { recursive: true });
+    fs.appendFileSync(OLLAMA_RUNTIME_LOG, `${localTimestamp()} ${line}\n`, "utf-8");
+  } catch {
+    /* 日志失败不影响主流程 */
+  }
+}
 
 /** 探测 Ollama 是否已就绪（HTTP 200 = 服务在监听）。 */
 async function probeOllamaPort(): Promise<boolean> {
@@ -100,6 +123,7 @@ async function spawnOllamaServe(
   keepAlive: boolean,
 ): Promise<{ ok: boolean; detail: string }> {
   if (keepAlive) {
+    appendOllamaLog(`[keepAlive-spawn] cmd=${exe} args=${JSON.stringify(["serve"])}`);
     const launched = spawnManaged({
       command: exe,
       args: ["serve"],
@@ -112,6 +136,7 @@ async function spawnOllamaServe(
         /enoent|not find|cannot find/i.test(msg) || msg.includes("EACCES")
           ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
           : msg;
+      appendOllamaLog(`[err] 启动失败：${hint}`);
       return Promise.resolve({ ok: false, detail: `启动 Ollama 失败：${hint}` });
     }
     /* Start-Process 参数被拒等拉起失败发生在 powershell 中介里，目标进程
@@ -138,10 +163,23 @@ async function spawnOllamaServe(
       // 继承父进程（无控制台的 Tauri sidecar）的进程上下文，不会弹窗。
       // POSIX: 需要 detached 防子进程随父进程 SIGHUP 退出。
       detached: !isWindows,
-      stdio: "ignore",
+      // 用 pipe 捕获 stdout/stderr → 写入 ollama-runtime.log，供设置页日志面板读取。
+      stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
       shell: false, // 直接执行二进制，不经 cmd.exe（防 Windows cmd 窗口）
     });
+    appendOllamaLog(`[spawn] pid=${child.pid ?? "unknown"} cmd=${exe} args=${JSON.stringify(["serve"])}`);
+
+    // Ollama 输出（serve 的 stdout/stderr）——截断每行避免日志文件膨胀
+    child.stdout?.on("data", (d: Buffer) => {
+      const text = d.toString("utf8").trimEnd().slice(0, 500);
+      if (text) appendOllamaLog(`[out] ${text}`);
+    });
+    child.stderr?.on("data", (d: Buffer) => {
+      const text = d.toString("utf8").trimEnd().slice(0, 500);
+      if (text) appendOllamaLog(`[err] ${text}`);
+    });
+
     let settled = false;
 
     const done = (ok: boolean, detail: string) => {
@@ -163,11 +201,13 @@ async function spawnOllamaServe(
         /enoent|not find|cannot find/i.test(msg) || msg.includes("EACCES")
           ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
           : msg;
+      appendOllamaLog(`[err] spawn error：${hint}`);
       done(false, `启动 Ollama 失败：${hint}`);
     });
 
     // 进程在观察期内退出 = 启动秒退（端口被占 / 配置错误 / 安装不完整）
     child.on("exit", (code, signal) => {
+      appendOllamaLog(`[exit] code=${code ?? "null"} signal=${signal ?? "none"}`);
       done(
         false,
         `Ollama 进程启动后立即退出（code=${code ?? "null"}, signal=${signal ?? "none"}）。` +
@@ -198,12 +238,14 @@ export async function GET(_req: NextRequest) {
  *    （Windows 不用 detached 避免弹独立 cmd 窗口；POSIX 用 detached
  *    防子进程随父进程退出）
  * 5. 观察 1s 确认进程存活；秒退则返回错误信息
+ * 6. 启动过程与 stdout/stderr 写入 log/ollama-runtime.log（设置页可查看）
  */
 export async function POST(_req: NextRequest) {
   await getServerUser();
 
   // ── 已在运行就直接返回 ──
   if (await probeOllamaPort()) {
+    appendOllamaLog("[state] Ollama 已在运行，跳过启动");
     return NextResponse.json({
       ok: true, alreadyRunning: true, detail: "Ollama 已在运行",
     });
@@ -211,6 +253,7 @@ export async function POST(_req: NextRequest) {
 
   // ── Windows 服务已在管理 Ollama → 不需要重复拉起 ──
   if (await ollamaServiceRunning()) {
+    appendOllamaLog("[state] Ollama 已注册为 Windows 服务并在后台运行");
     return NextResponse.json({
       ok: true, alreadyRunning: true, detail: "Ollama 服务已在后台运行",
     });
@@ -228,6 +271,9 @@ export async function POST(_req: NextRequest) {
     const ollama = await resolveOllamaExe();
     // 退出策略决定拉起方式：false（保活）时脱离进程树，应用退出不连带关闭。
     const keepAlive = getExitPolicy().exitKillOllama === false;
+    appendOllamaLog(
+      `[action] 启动 Ollama：exe=${ollama} keepAlive=${keepAlive}${keepAlive ? "（保活模式：应用退出后不关闭）" : ""}`,
+    );
     const result = await spawnOllamaServe(ollama, keepAlive);
 
     if (result.ok) {
@@ -240,6 +286,7 @@ export async function POST(_req: NextRequest) {
       /enoent|not find|cannot find/i.test(msg) || msg.includes("EACCES")
         ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
         : msg;
+    appendOllamaLog(`[err] 启动失败：${hint}`);
     return NextResponse.json({ error: `启动 Ollama 失败：${hint}` }, { status: 500 });
   } finally {
     st.starting = false;
