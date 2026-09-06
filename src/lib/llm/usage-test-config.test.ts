@@ -3,6 +3,8 @@ import {
   defaultVideoFields,
   usageFieldsToJson,
   looksLikeImage,
+  isMediaField,
+  videoModeHidesMedia,
   videoModeMissingHint,
 } from "./usage-test-config";
 
@@ -96,5 +98,28 @@ describe("videoModeMissingHint", () => {
       ]),
     ).toBeNull();
     expect(videoModeMissingHint([])).toBeNull();
+  });
+});
+
+describe("videoModeHidesMedia / isMediaField", () => {
+  it("mode=text 时隐藏媒体字段，其它 mode 不隐藏", () => {
+    expect(videoModeHidesMedia([{ key: "mode", value: "text" }])).toBe(true);
+    expect(
+      videoModeHidesMedia([{ key: "mode", value: "keyframe" }]),
+    ).toBe(false);
+    expect(videoModeHidesMedia([])).toBe(false);
+  });
+
+  it("mode 取值大小写不敏感（界面允许手改任意值）", () => {
+    expect(videoModeHidesMedia([{ key: "mode", value: " TEXT " }])).toBe(true);
+  });
+
+  it("isMediaField 命中媒体字段集合（含首尾空白）", () => {
+    expect(isMediaField("first_frame")).toBe(true);
+    expect(isMediaField(" images ")).toBe(true);
+    expect(isMediaField("audios")).toBe(true);
+    expect(isMediaField("last_frame")).toBe(true);
+    expect(isMediaField("seed")).toBe(false);
+    expect(isMediaField("")).toBe(false);
   });
 });

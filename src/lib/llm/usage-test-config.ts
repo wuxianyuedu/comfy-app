@@ -29,16 +29,44 @@ export function defaultVideoFields(): UsageField[] {
   return [{ key: "mode", value: "text" }];
 }
 
+
+/** 视频请求里承载媒体（图片/音频）的字段名集合。mode=text 不允许携带它们
+ *（Agnes 等提供方会以 invalid mode 拒绝），选中 text 时这些行应隐藏/删除。 */
+export const VIDEO_MEDIA_FIELD_KEYS = [
+  "first_frame",
+  "last_frame",
+  "images",
+  "audios",
+] as const;
+
+/** 视频 mode=text 时是否应隐藏媒体字段行：text 只靠提示词生成，
+ *  带媒体字段会被提供方拒绝（invalid mode）。 */
+export function videoModeHidesMedia(fields: UsageField[]): boolean {
+  const mode =
+    fields.find((f) => f.key.trim() === "mode")?.value.trim().toLowerCase() ?? "";
+  return mode === "text";
+}
+
+/** 判断某行是不是媒体行：字段名命中媒体字段集合（first_frame / images 等）。 */
+export function isMediaField(key: string): boolean {
+  return (VIDEO_MEDIA_FIELD_KEYS as readonly string[]).includes(key.trim());
+}
+
+/** 媒体字段对图片地址的公网可达要求说明（Agnes 等要求其服务可拉取该 URL，
+ *  本地 data URL 无法满足——需填公网图片地址）。 */
+export const MEDIA_URL_NOTICE =
+  "图片地址需提供方可公网访问（http(s) 开头）；本地 data URL 仅适合支持内联图片的接口。";
+
 /** 视频请求缺媒体字段时（mode 与已填字段明显不匹配）给出的人文提示。
  *  仅做「该传什么」的引导，不做硬校验——各家接口规则不一，以服务端报错为准。 */
 export function videoModeMissingHint(fields: UsageField[]): string | null {
   const mode = fields.find((f) => f.key.trim() === "mode")?.value.trim() ?? "";
   const keys = new Set(fields.map((f) => f.key.trim()));
   if (mode === "keyframe" && !keys.has("first_frame") && !keys.has("last_frame")) {
-    return "mode=keyframe 需要 first_frame（或 last_frame）图片：添加一行字段名 first_frame，点「图片」上传或粘贴图片地址。";
+    return "mode=keyframe 需要 first_frame（或 last_frame）图片：添加一行字段名 first_frame，填公网可访问的图片地址（http(s) 开头），或点「上传」选本地图片。";
   }
   if (mode === "reference" && !keys.has("images") && !keys.has("audios")) {
-    return "mode=reference 需要 images（或 audios）：添加一行字段名 images，值填图片地址（多张可用 JSON 数组写法 [\"…\",\"…\"]）。";
+    return "mode=reference 需要 images（或 audios）：添加一行字段名 images，值填公网可访问的图片地址（多张可用 JSON 数组写法 [\"…\",\"…\"]）。";
   }
   if (mode === "text") {
     const forbidden = ["first_frame", "last_frame", "images", "audios"].filter((k) =>
