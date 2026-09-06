@@ -459,6 +459,33 @@ export const workshopSession = sqliteTable(
   ]
 );
 
+// ── 工坊前端项目草稿的服务端镜像（防丢持久化）──────────────────
+// 工坊界面编辑的剧本/角色/分镜/镜头草稿默认只落在浏览器 localStorage，
+// 清缓存 / 隐私模式 / webview 存储重置即丢。此表把每个前端项目
+// （id 即前端生成的 wsp_* 项目 id）按行落库到本地 db.sqlite，
+// 启动时由 drizzle-kit push 自动建表（与 workshopSession 并列，互不污染）。
+export const workshopDraft = sqliteTable(
+  "workshopDraft",
+  {
+    id: text("id").primaryKey(), // = 前端项目 id（wsp_*），应用启动后稳定不变
+    userId: text("userId"),
+    title: text("title").notNull().default("未命名工坊项目"),
+    type: text("type").notNull().default("short_video"),
+    tone: text("tone").notNull().default(""),
+    logline: text("logline").notNull().default(""),
+    scriptMarkdown: text("scriptMarkdown").notNull().default(""),
+    scenes: text("scenes", { mode: "json" }).notNull().default("[]"),
+    characters: text("characters", { mode: "json" }).notNull().default("[]"),
+    shots: text("shots", { mode: "json" }).notNull().default("[]"),
+    checkpoint: text("checkpoint").notNull().default(""),
+    createdAt: dateNotNull("createdAt").notNull().$defaultFn(() => new Date()),
+    updatedAt: dateNotNull("updatedAt").notNull().$defaultFn(() => new Date()).$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index("workshop_draft_user_updated_idx").on(t.userId, t.updatedAt),
+  ]
+);
+
 // ── 关系（仅 include 用到：task.images / filmProject.shots）────────
 export const taskRelations = relations(task, ({ many }) => ({
   images: many(taskImage),
@@ -495,6 +522,9 @@ export type FilmShot = InferSelectModel<typeof filmShot>;
 export type AuditLog = InferSelectModel<typeof auditLog>;
 export type WorkshopSession = InferSelectModel<typeof workshopSession>;
 export type WorkshopSessionInsert = InferInsertModel<typeof workshopSession>;
+
+export type WorkshopDraft = InferSelectModel<typeof workshopDraft>;
+export type WorkshopDraftInsert = InferInsertModel<typeof workshopDraft>;
 
 export type UserInsert = InferInsertModel<typeof user>;
 export type TaskInsert = InferInsertModel<typeof task>;
