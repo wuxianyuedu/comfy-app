@@ -55,13 +55,52 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, detail: "接口地址为空，请先填写或保存 Base URL" });
   }
 
+  /** 剥掉末段资源路径（/images、/videos 等）得到上一层 base。
+   *  用户按「完整端点减动作」的习惯填 base（如 …/v1/images），而
+   *  GET {base}/models 只在 /v1 层存在 —— 404 时自动回退一层再试。 */
+  function parentBase(url: string): string | null {
+    try {
+      const u = new URL(url);
+      const segs = u.pathname.split("/").filter(Boolean);
+      if (segs.length === 0) return null;
+      const last = segs[segs.length - 1]?.toLowerCase() ?? "";
+      if (
+        !["images", "videos", "chat", "completions", "embeddings", "audio", "moderations"].includes(
+          last,
+        )
+      ) {
+        return null;
+      }
+      segs.pop();
+      u.pathname = segs.length > 0 ? `/${segs.join("/")}` : "/";
+      return u.toString().replace(/\/$/, "");
+    } catch {
+      return null;
+    }
+  }
+
   try {
     const headers: Record<string, string> = {};
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-    const res = await fetch(`${baseUrl.replace(/\/$/, "")}/models`, {
-      headers,
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-    });
+    const probe = (base: string) =>
+      fetch(`${base.replace(/\/$/, "")}/models`, {
+        headers,
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      });
+
+    let probedBase = baseUrl;
+    let res = await probe(baseUrl);
+    /* 404/405 = 路径不存在（鉴权问题会原样透出，不重试） */
+    if ((res.status === 404 || res.status === 405)) {
+      const parent = parentBase(baseUrl);
+      if (parent) {
+        const parentRes = await probe(parent);
+        if (parentRes.ok) {
+          probedBase = parent;
+          res = parentRes;
+        }
+      }
+    }
     if (!res.ok) {
       const snippet = (await res.text().catch(() => "")).slice(0, 200);
       return NextResponse.json({
@@ -78,6 +117,9 @@ export async function POST(req: NextRequest) {
           .filter((n) => n !== "")
       : [];
     let detail = `连接成功，服务端共 ${models.length} 个模型`;
+    if (probedBase !== baseUrl) {
+      detail += `（探测已回退到 ${probedBase}/models —— 填写的接口地址含资源子路径）`;
+    }
     if (model !== "" && !models.includes(model)) {
       detail = `连接成功，但「${model}」不在服务端模型列表中，请确认名称是否正确`;
     }
