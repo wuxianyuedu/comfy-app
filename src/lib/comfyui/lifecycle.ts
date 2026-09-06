@@ -20,6 +20,7 @@ import { COMFYUI_DEFAULT_PORT, getExitPolicy, getSettingsSync } from "../app-set
 import { resolveComfyBase } from "./client";
 import { logger } from "~/server/lib/logger";
 import { resolveComfyLaunchPlan } from "./launch-path";
+import { resolveEffectiveLaunch } from "./desktop-instance";
 import { findPidForMainPy, findPidListeningPort } from "./proc-detect";
 import { spawnManaged, waitForDetachMediator } from "../process-launch";
 
@@ -160,15 +161,6 @@ export function getComfyUiStatus(): ComfyUiStatus {
   };
 }
 
-/** 把 extraArgs 字符串切成参数数组（支持双引号包裹含空格的路径）。 */
-function splitArgs(s: string): string[] {
-  const out: string[] = [];
-  const re = /"([^"]*)"|(\S+)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(s))) out.push(m[1] ?? m[2] ?? "");
-  return out;
-}
-
 function appendRuntimeLog(line: string): void {
   try {
     const dir = path.join(process.cwd(), "log");
@@ -231,14 +223,18 @@ export async function ensureComfyUiReady(
       );
     }
 
-    // 端口取设置里的 comfyuiPort（设置界面明确配置的监听端口），留空 =
-    // ComfyUI 默认 8188。非默认端口显式传 --port，保证「界面配置端口 =
-    // 实际监听端口 = 客户端连接端口」三者一致。
+    // 有效端口/额外参数：桌面实例读 Comfy Desktop 元数据（launchArgs→headless
+    // 映射），便携/venv 走设置里的 comfyuiPort / comfyuiExtraArgs。非默认端口
+    // 显式传 --port，保证「界面显示端口 = 实际监听端口」一致。
+    const eff = await resolveEffectiveLaunch({
+      comfyuiPath: settings.comfyuiPath,
+      comfyuiPort: settings.comfyuiPort ?? 0,
+      comfyuiExtraArgs: settings.comfyuiExtraArgs ?? "",
+    });
     let port = COMFYUI_DEFAULT_PORT;
-    if (settings.comfyuiPort && settings.comfyuiPort > 0) {
-      port = settings.comfyuiPort;
-    }
-    const args = [...plan.baseArgs, ...(port !== COMFYUI_DEFAULT_PORT ? ["--port", String(port)] : []), ...splitArgs(settings.comfyuiExtraArgs)];
+    if (eff.port && eff.port > 0) port = eff.port;
+    const args = [...plan.baseArgs, ...(port !== COMFYUI_DEFAULT_PORT ? ["--port", String(port)] : []), ...eff.extraArgs];
+    const desktopEnv = eff.envVars;
 
     // 退出策略决定拉起方式：exitKillComfyui=true（默认）→ bound，ComfyUI 挂
     // 在应用进程树内，应用退出连带关闭；false → keepAlive，脱离进程树保活，
@@ -251,6 +247,7 @@ export async function ensureComfyUiReady(
     const deadline = opts.timeoutMs != null ? Date.now() + opts.timeoutMs : null;
     const stdioEnv = {
       ...process.env,
+      ...desktopEnv,
       PYTHONIOENCODING: "utf-8",
       PYTHONUTF8: "1",
     };
