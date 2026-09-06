@@ -7,6 +7,7 @@ import {
   probeComfyUi,
   stopComfyUiProcess,
 } from "@/lib/comfyui/lifecycle";
+import { classifyComfyInstall } from "@/lib/comfyui/instance-kind";
 import {
   ensureDrizzleStudioUp,
   isDrizzleStudioStarting,
@@ -51,6 +52,16 @@ export const settingRouter = createTRPCRouter({
   comfyStatus: authedProcedure.query(async () => {
     const settings = getSettingsSync();
     const base = await probeComfyUi(2000);
+    // 形态识别：配置好路径后返回 桌面版/便携版/venv，供设置页展示徽标并按形态
+    // 决定是否隐藏 端口/启动参数 输入（桌面版由 Comfy Desktop 元数据决定）。
+    let instanceType: "desktop" | "portable" | "venv" | "unknown" | null = null;
+    let desktopManaged = false;
+    if (settings.comfyuiPath?.trim()) {
+      const c = classifyComfyInstall(settings.comfyuiPath);
+      instanceType = c.kind === "unknown" ? null : c.kind;
+      // desktopManaged = 桌面实例且能读到实例 ID（端口/参数走元数据，非手填）。
+      desktopManaged = c.kind === "desktop" && !!c.instanceIdFile;
+    }
     return {
       up: !!base,
       base,
@@ -59,6 +70,8 @@ export const settingRouter = createTRPCRouter({
       autoStart: settings.comfyuiAutoStart,
       path: settings.comfyuiPath,
       port: settings.comfyuiPort,
+      instanceType,
+      desktopManaged,
     };
   }),
 

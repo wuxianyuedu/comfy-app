@@ -34,6 +34,17 @@ import {
   TEMPERATURE_TASKS,
 } from "./hooks/use-settings-page";
 
+/** 安装形态 → 设置页徽标文案。 */
+const INSTANCE_KIND_LABEL: Record<
+  "desktop" | "portable" | "venv" | "unknown",
+  string
+> = {
+  desktop: "桌面版（ComfyUI Desktop）",
+  portable: "便携版",
+  venv: "venv",
+  unknown: "未知安装",
+};
+
 /** 添加 / 编辑模型弹窗的表单草稿。 */
 interface ModelDialogForm {
   baseUrl: string;
@@ -88,6 +99,10 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
       delete next[task];
       return next;
     });
+
+  /* ComfyUI 安装形态（由 comfyStatus 派生，供路径徽标 + 是否隐藏 端口/启动参数）。 */
+  const comfyInstanceType = c.comfyStatus?.instanceType ?? null;
+  const comfyDesktopManaged = !!c.comfyStatus?.desktopManaged;
 
   /* 「添加 / 编辑模型」弹窗：表单草稿、测试连接的进行态与结果、可点选的
    * 服务端模型清单。提交校验（重名拒绝等）在 controller，这里只管交互状态。
@@ -1220,31 +1235,54 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   ? "已配置——ComfyUI 未运行时提交任务会自动拉起。"
                   : "未配置——ComfyUI 未运行时任务会失败。"}
               </p>
-              <Field
-                label="ComfyUI 端口"
-                value={
-                  c.drafts.settings.comfyuiPort > 0
-                    ? String(c.drafts.settings.comfyuiPort)
-                    : ""
-                }
-                onChange={(value) =>
-                  c.patchSettings({
-                    comfyuiPort: Math.max(0, Number(value) || 0),
-                  })
-                }
-                placeholder="留空使用默认 8188"
-              />
-              <p className="text-muted-foreground -mt-2 mb-3 text-xs">
-                非 8188 端口会在启动时自动传 --port，实际运行端口以设置为准。
-              </p>
-              <Field
-                label="ComfyUI 启动参数（可选）"
-                value={c.drafts.settings.comfyuiExtraArgs}
-                onChange={(value) =>
-                  c.patchSettings({ comfyuiExtraArgs: value })
-                }
-                placeholder="例如 --input-directory D:\\ComfyUI-Shared\\input"
-              />
+              {comfyInstanceType && (
+                <div className="-mt-2 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                  <span className="text-muted-foreground">安装形态</span>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      comfyDesktopManaged
+                        ? "bg-[var(--primary,#7c5cff)]/15 text-[var(--primary,#7c5cff)]"
+                        : "bg-subtle text-ink/70"
+                    }`}
+                  >
+                    {INSTANCE_KIND_LABEL[comfyInstanceType]}
+                  </span>
+                  {comfyDesktopManaged && (
+                    <span className="text-muted-foreground">
+                      端口与启动参数由 Comfy Desktop 实例元数据决定，无需在此配置。
+                    </span>
+                  )}
+                </div>
+              )}
+              {!comfyDesktopManaged && (
+                <>
+                  <Field
+                    label="ComfyUI 端口"
+                    value={
+                      c.drafts.settings.comfyuiPort > 0
+                        ? String(c.drafts.settings.comfyuiPort)
+                        : ""
+                    }
+                    onChange={(value) =>
+                      c.patchSettings({
+                        comfyuiPort: Math.max(0, Number(value) || 0),
+                      })
+                    }
+                    placeholder="留空使用默认 8188"
+                  />
+                  <p className="text-muted-foreground -mt-2 mb-3 text-xs">
+                    非 8188 端口会在启动时自动传 --port，实际运行端口以设置为准。
+                  </p>
+                  <Field
+                    label="ComfyUI 启动参数（可选）"
+                    value={c.drafts.settings.comfyuiExtraArgs}
+                    onChange={(value) =>
+                      c.patchSettings({ comfyuiExtraArgs: value })
+                    }
+                    placeholder="例如 --input-directory D:\\ComfyUI-Shared\\input"
+                  />
+                </>
+              )}
               <div className="mb-4 flex items-center gap-2">
                 <input
                   id="comfyui-autostart"
