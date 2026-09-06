@@ -251,7 +251,9 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
       apiKey: "",
       prompt: preset.prompt,
       size: kind === "image" ? "1024x1024" : "",
-      extraJson: "",
+      /* 视频接口普遍必填 mode（如 Agnes：text / keyframe / reference），
+       * 预填成可见可改的 JSON，避免首次执行就 400。 */
+      extraJson: kind === "video" ? '{\n  "mode": "text"\n}' : "",
       running: false,
       result: null,
     });
@@ -1132,7 +1134,11 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-1 w-full resize-y rounded-lg border px-3 py-2 font-mono text-xs outline-none"
                     />
                     <p className="text-muted-foreground mb-3 text-[11px]">
-                      逐键合并进请求体，可覆盖默认字段（如 seed / duration / size）。
+                      逐键合并进请求体，可覆盖默认字段（如 seed / duration /
+                      size）
+                      {usageTest.kind === "video" &&
+                        "。视频接口通常必填 mode（text / keyframe / reference），已预填 text"}
+                      。
                     </p>
 
                     {(usageTest.kind === "image" || usageTest.kind === "video") && (

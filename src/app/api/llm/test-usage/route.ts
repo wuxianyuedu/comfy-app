@@ -235,29 +235,44 @@ export async function POST(req: NextRequest) {
       });
     }
     const pollBase = `${base}${pathDir(path)}`;
+    // 任务查询地址按提供方习惯有两种形状都试：
+    //   ① REST 风格：{base}{pathDir}/{taskId}（如 /v1/videos/{id}）
+    //   ② Agnes 系：{origin}/agnesapi?video_id={id}&model_name={model}
+    let agnesPollUrl: string | null = null;
+    try {
+      agnesPollUrl = `${new URL(base).origin}/agnesapi?video_id=${encodeURIComponent(taskId)}&model_name=${encodeURIComponent(model)}`;
+    } catch {
+      agnesPollUrl = null;
+    }
+    const pollUrls = [
+      `${pollBase}/${taskId.replace(/^\/+/, "")}`,
+      ...(agnesPollUrl ? [agnesPollUrl] : []),
+    ];
     const deadline = Date.now() + VIDEO_POLL_TOTAL_MS;
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, VIDEO_POLL_INTERVAL_MS));
-      let pollPayload: unknown = null;
-      try {
-        const pollRes = await fetch(`${pollBase}/${taskId.replace(/^\/+/, "")}`, {
-          headers,
-          signal: AbortSignal.timeout(30_000),
-        });
-        pollPayload = await pollRes.json().catch(() => null);
-        if (pollRes.ok) {
-          const url = extractMediaUrl(pollPayload);
-          if (url) {
-            return NextResponse.json({
-              ok: true,
-              detail: "生成成功",
-              videoUrl: url,
-              elapsedMs: Date.now() - startedAt,
-            });
+      for (const pollUrl of pollUrls) {
+        let pollPayload: unknown = null;
+        try {
+          const pollRes = await fetch(pollUrl, {
+            headers,
+            signal: AbortSignal.timeout(30_000),
+          });
+          pollPayload = await pollRes.json().catch(() => null);
+          if (pollRes.ok) {
+            const url = extractMediaUrl(pollPayload);
+            if (url) {
+              return NextResponse.json({
+                ok: true,
+                detail: "生成成功",
+                videoUrl: url,
+                elapsedMs: Date.now() - startedAt,
+              });
+            }
           }
+        } catch {
+          // 单个地址 / 单次轮询失败不终止 —— 换下一个地址或等下一轮
         }
-      } catch {
-        // 单次轮询失败不终止 —— 网关抖动常见，继续等下一轮
       }
     }
     return NextResponse.json({
