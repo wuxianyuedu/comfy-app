@@ -78,6 +78,8 @@ export interface HomePageProps {
   onNavigate?: (view: WorkspaceView) => void;
   /** Switch to the "项目" (works) tab to show all projects */
   onShowAllProjects?: () => void;
+  /** Open the settings overlay (keep workspace tree alive). */
+  onOpenSettings?: () => void;
 }
 
 export function HomePage({
@@ -88,6 +90,7 @@ export function HomePage({
   activeNav = "home",
   onNavigate,
   onShowAllProjects,
+  onOpenSettings,
 }: HomePageProps) {
   const toast = useToast();
   return (
@@ -109,7 +112,11 @@ export function HomePage({
       </div>
 
       {/* ── Left Sidebar Navigation ───────────────── */}
-      <WorkspaceNav active={activeNav} onSelect={(id) => onNavigate?.(id)} />
+      <WorkspaceNav
+        active={activeNav}
+        onSelect={(id) => onNavigate?.(id)}
+        onOpenSettings={onOpenSettings}
+      />
 
       {/* ── Right Area: Top Bar + Main Content ──────────── */}
       <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">

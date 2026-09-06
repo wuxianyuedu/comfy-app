@@ -107,7 +107,17 @@ export type ReadySettingsPageController = SettingsPageController & {
   drafts: SettingsPageDrafts;
 };
 
-export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
+export function SettingsPageView({
+  c,
+  onClose,
+  className = "h-[calc(100vh-var(--toolbar-height,48px))]",
+}: {
+  c: ReadySettingsPageController;
+  /** overlay 模式下由调用方传入关闭回调；独立路由下缺省用 router.back()。 */
+  onClose?: () => void;
+  /** 自定义根容器 class（overlay 模式传 h-full 等覆盖高度）。 */
+  className?: string;
+}) {
   const router = useRouter();
   /* 「按任务温度」的展开态是纯视觉偏好（无副作用、不入库），按 §17.2 留在视图层。
    * 本地 Ollama 下它是温度的主配置区，默认展开。 */
@@ -508,11 +518,11 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
   }
 
   return (
-    <div className="bg-bg flex h-[calc(100vh-var(--toolbar-height,48px))] flex-col overflow-hidden">
+    <div className={`bg-bg flex flex-col overflow-hidden ${className}`}>
       {/* Header bar */}
       <div className="border-border flex items-center gap-3 border-b px-6 py-4">
         <button
-          onClick={() => router.back()}
+          onClick={onClose ?? (() => router.back())}
           className="text-muted-foreground hover:bg-subtle hover:text-ink flex h-9 w-9 items-center justify-center rounded-lg transition-colors"
           title="返回"
         >
