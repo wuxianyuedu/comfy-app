@@ -44,11 +44,22 @@ export function escapePwshSingle(s: string): string {
 }
 
 /**
- * 把一坨参数拼成 PowerShell -ArgumentList 可用的字面量串。
- * 每个参数用单引号包裹并按 PowerShell 转义规则处理，防注入与含空格路径被拆分。
+ * Start-Process -ArgumentList 的单个元素：值里自带双引号。
+ * Start-Process 把数组元素用空格拼进子进程命令行时**不会自己加引号**，
+ * 含空格的参数必须由元素自带引号才不会被拆分。
  */
-export function buildPwshArgumentList(args: string[]): string {
-  return args.map(escapePwshSingle).join(" ");
+function toStartProcessElement(arg: string): string {
+  return escapePwshSingle(`"${arg.replace(/"/g, '\\"')}"`);
+}
+
+/**
+ * Start-Process -ArgumentList 的数组字面量 @('…','…')。
+ * 必须整体写成一个数组：裸排多个引号串会被 Windows PowerShell 5.1 当成
+ * 多个位置参数导致绑定失败（实测报「找不到接受实际参数 … 的位置形式参数」，
+ * Start-Process 完全不执行，目标进程根本不会被拉起）。
+ */
+export function buildStartProcessArgumentList(args: string[]): string {
+  return `@(${args.map(toStartProcessElement).join(",")})`;
 }
 
 /**
@@ -69,6 +80,43 @@ export function decodePowerShellOutput(buf: Buffer): string {
     }
   }
   return buf.toString("utf8");
+}
+
+/** 等 Windows keepAlive 的 powershell 中介退出并收集其 stderr。 */
+export interface DetachMediatorOutcome {
+  /** 中介退出码；超时未退出为 null（调用方按「未知，继续外部探测」处理）。 */
+  code: number | null;
+  stderr: string;
+}
+
+/**
+ * 等 Windows keepAlive 的 powershell 中介退出，带出它的 stderr。
+ * Start-Process 参数被拒等拉起失败都发生在中介里（目标进程完全没被拉起、
+ * 也没有任何子进程可探测），不读中介就只能靠端口轮询无限等待。
+ * 只对 Windows 中介进程使用；POSIX 的 keepAlive child 是真实长驻进程。
+ */
+export function waitForDetachMediator(
+  child: ChildProcess,
+  timeoutMs = 5000,
+): Promise<DetachMediatorOutcome> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    let settled = false;
+    const finish = (code: number | null) => {
+      if (settled) return;
+      settled = true;
+      resolve({
+        code,
+        stderr: decodePowerShellOutput(Buffer.concat(chunks)),
+      });
+    };
+    child.stderr?.on("data", (d: Buffer) => chunks.push(d));
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      finish(code ?? -1);
+    });
+  });
 }
 
 /**
@@ -112,19 +160,20 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
     }
   }
 
-  // Windows keepAlive：powershell Start-Process 中介
+  // Windows keepAlive：powershell Start-Process 中介。stderr 用 pipe 带出
+  // （调用方经 waitForDetachMediator 读），拉起被拒时才有可行动的报错。
   const cwdArg = opts.cwd
     ? ` -WorkingDirectory ${escapePwshSingle(opts.cwd)}`
     : "";
   const ps =
     `Start-Process -FilePath ${escapePwshSingle(command)}` +
-    ` -ArgumentList ${buildPwshArgumentList(args)}` +
+    ` -ArgumentList ${buildStartProcessArgumentList(args)}` +
     ` -WindowStyle Hidden${cwdArg}; exit`;
   try {
     const mediator = spawn(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", ps],
-      { windowsHide: true, stdio: "ignore" },
+      { windowsHide: true, stdio: ["ignore", "ignore", "pipe"] },
     );
     mediator.unref();
     // 中介是立即退出的 powershell；返回它仅供调用方持有引用，pid 不代表目标。
