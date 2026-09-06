@@ -1,29 +1,27 @@
 "use client";
 
 import React from "react";
-import { Icon } from "@/components/ui/icon";
+import {
+  ExtractModelSelect,
+  parseChannelOption,
+} from "@/components/workshop/ExtractModelSelect";
 
-/** 提取通道:①工具(内置规则) ②本地模型(provider=local) ③配置API(provider=remote) */
-export type ExtractChannel = "tool" | "local" | "remote";
-
-const CHANNELS: { value: ExtractChannel; label: string; title: string }[] = [
-  { value: "tool", label: "工具", title: "内置规则解析剧本结构,不调用模型" },
-  { value: "local", label: "本地模型", title: "走 LLM provider=local(Ollama / LM Studio)" },
-  { value: "remote", label: "配置 API", title: "走 LLM provider=remote(OpenAI 兼容)" },
-];
+/** @deprecated 兼容既有 import：通道类型已迁至 ExtractModelSelect */
+export type { ExtractChannel } from "@/components/workshop/ExtractModelSelect";
 
 interface ExtractToolbarProps {
-  channel: ExtractChannel;
-  onChannelChange: (channel: ExtractChannel) => void;
-  /** 提取按钮文案,如「从剧本提取角色」 */
-  extractLabel: string;
+  /** 区块标题，如「从剧本提取角色」 */
+  title: string;
+  /** 完整下拉选项值（tool | local::<model> | remote::<model>） */
+  channelValue: string;
+  onChannelValueChange: (value: string) => void;
   onExtract: () => void;
   /** 外部导入文件回调(.md/.txt/.json) */
   onImportFile: (file: File) => void;
   importAccept?: string;
   busy: boolean;
-  /** 进行态提示(按钮与状态行共用) */
-  busyText?: string;
+  /** 实时提取过程（本地/远端通道时流式回传的模型输出） */
+  progressText?: string;
   /** 成功/结果提示 */
   statusText?: string;
   errorText?: string;
@@ -32,16 +30,17 @@ interface ExtractToolbarProps {
   extractDisabledReason?: string;
 }
 
-/** 剧本提取工具条:通道三选一 + 从剧本提取 + 外部导入,含进行态/结果/错误展示 */
+/** 剧本提取区块：分组模型下拉（工具/本地/远端）+ 提取按钮 + 外部导入。
+ *  选完模型点「提取」即开始；模型通道的提取过程实时展示在下方。 */
 export function ExtractToolbar({
-  channel,
-  onChannelChange,
-  extractLabel,
+  title,
+  channelValue,
+  onChannelValueChange,
   onExtract,
   onImportFile,
   importAccept = ".md,.txt,.json",
   busy,
-  busyText,
+  progressText,
   statusText,
   errorText,
   extractDisabled = false,
@@ -51,28 +50,13 @@ export function ExtractToolbar({
 
   return (
     <div className="rounded-xl border border-primary-soft bg-primary-soft/30 p-3">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
+      <div className="mb-2 flex items-center gap-2">
         <span className="flex items-center text-xs font-medium text-primary">
-          <Icon name="sparkles" size={13} className="mr-1 inline align-[-2px]" />
-          剧本提取
+          {title}
         </span>
-        <div className="flex overflow-hidden rounded-lg border border-border" role="group" aria-label="提取通道">
-          {CHANNELS.map((ch) => (
-            <button
-              key={ch.value}
-              type="button"
-              title={ch.title}
-              onClick={() => onChannelChange(ch.value)}
-              className={`px-2.5 py-1 text-xs transition-colors ${
-                channel === ch.value ? "bg-primary text-white" : "bg-bg text-muted-foreground hover:text-ink"
-              }`}
-            >
-              {ch.label}
-            </button>
-          ))}
-        </div>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <ExtractModelSelect value={channelValue} onChange={onChannelValueChange} />
         <button
           type="button"
           onClick={onExtract}
@@ -80,7 +64,7 @@ export function ExtractToolbar({
           title={extractDisabled ? extractDisabledReason : undefined}
           className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
         >
-          {busy ? (busyText ?? "提取中…") : extractLabel}
+          {busy ? "提取中…" : "提取"}
         </button>
         <button
           type="button"
@@ -103,7 +87,17 @@ export function ExtractToolbar({
           }}
         />
       </div>
-      {busy && busyText && <p className="mt-2 text-xs text-primary">{busyText}</p>}
+      {/* 提取过程：模型通道的流式输出（可折叠的原文预览） */}
+      {busy && progressText && (
+        <details className="mt-2 rounded-lg bg-bg/60 px-3 py-2" open>
+          <summary className="cursor-pointer select-none text-[11px] text-primary">
+            提取过程
+          </summary>
+          <pre className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-all text-[11px] leading-relaxed text-muted-foreground">
+            {progressText}
+          </pre>
+        </details>
+      )}
       {statusText && !errorText && <p className="mt-2 text-xs text-primary">{statusText}</p>}
       {errorText && <p className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">{errorText}</p>}
       {extractDisabled && !busy && !errorText && (
@@ -112,3 +106,6 @@ export function ExtractToolbar({
     </div>
   );
 }
+
+/** 供调用方把选项值还原为通道（保留导出避免散落解析逻辑） */
+export { parseChannelOption };

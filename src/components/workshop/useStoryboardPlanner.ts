@@ -24,6 +24,7 @@ import {
 } from "@/lib/workshop/script-parse";
 import type { ShotEntry } from "@/lib/workshop/script-parse";
 import type { ExtractChannel } from "@/components/workshop/ExtractToolbar";
+import { parseChannelOption } from "@/components/workshop/ExtractToolbar";
 import { useLLM } from "@/components/workshop/LLMContext";
 import { streamChat } from "@/lib/llm/browser";
 import { buildStoryboardMessages, parseStoryboard } from "@/lib/llm/prompts";
@@ -88,10 +89,14 @@ export function useStoryboardPlanner(props: Props) {
   const [aiError, setAiError] = useState("");
   const { config, openSettings } = useLLM();
 
-  // ── 三通道提取(工具 / 本地模型 / 配置API)+ 外部导入 ──
-  const [extractChannel, setExtractChannel] = useState<ExtractChannel>("tool");
+  // ── 三通道提取(工具 / 本地模型 / 远端API)+ 外部导入 ──
+  // 下拉选项值（tool | local::<model> | remote::<model>），通道与模型一并保存
+  const [extractChannelValue, setExtractChannelValue] = useState("tool");
+  const extractChannel = parseChannelOption(extractChannelValue).channel;
   const [extractBusy, setExtractBusy] = useState(false);
   const [extractStatus, setExtractStatus] = useState("");
+  /** 模型通道的实时提取过程（流式 token 累积） */
+  const [extractProgress, setExtractProgress] = useState("");
   const [extractError, setExtractError] = useState("");
 
   const hasScript = !!scriptMarkdown?.trim();
@@ -116,6 +121,7 @@ export function useStoryboardPlanner(props: Props) {
       return;
     }
     setExtractBusy(true);
+    setExtractProgress("");
     setExtractStatus(extractChannel === "tool" ? "" : "正在调用模型提取分镜…");
     setExtractError("");
     try {
@@ -132,7 +138,11 @@ export function useStoryboardPlanner(props: Props) {
       } else {
         const full = await streamChat({
           messages: buildExtractShotsMessages(script, knownNames),
-          opts: { provider: channelProvider(extractChannel) },
+          opts: {
+            provider: channelProvider(extractChannel),
+            model: parseChannelOption(extractChannelValue).model,
+          },
+          onToken: (token) => setExtractProgress((prev) => prev + token),
         });
         entries = parseExtractedShots(full);
         if (entries.length === 0) {
@@ -371,9 +381,11 @@ export function useStoryboardPlanner(props: Props) {
     aiProgress,
     aiError,
     config,
+    extractChannelValue,
+    setExtractChannelValue,
     extractChannel,
-    setExtractChannel,
     extractBusy,
+    extractProgress,
     extractStatus,
     extractError,
     hasScript,

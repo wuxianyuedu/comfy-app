@@ -13,9 +13,10 @@ export function StoryboardPlanner(props: Props) {
     aiProgress,
     aiError,
     config,
-    extractChannel,
-    setExtractChannel,
+    extractChannelValue,
+    setExtractChannelValue,
     extractBusy,
+    extractProgress,
     extractStatus,
     extractError,
     hasScript,
@@ -102,11 +103,11 @@ export function StoryboardPlanner(props: Props) {
         </div>
       </div>
 
-      {/* 三通道提取 + 外部导入 */}
+      {/* 从剧本提取分镜：分组下拉（工具/本地/远端）+ 提取 */}
       <ExtractToolbar
-        channel={extractChannel}
-        onChannelChange={setExtractChannel}
-        extractLabel="从剧本提取分镜"
+        title="从剧本提取分镜"
+        channelValue={extractChannelValue}
+        onChannelValueChange={setExtractChannelValue}
         onExtract={() => {
           void handleExtract();
         }}
@@ -114,7 +115,7 @@ export function StoryboardPlanner(props: Props) {
           void handleImportFile(file);
         }}
         busy={extractBusy}
-        busyText="提取中…"
+        progressText={extractProgress}
         statusText={extractStatus}
         errorText={extractError}
         extractDisabled={!hasScript}
