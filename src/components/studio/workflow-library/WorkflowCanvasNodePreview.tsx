@@ -8,18 +8,29 @@
  * 并支持就地运行（generate.generate → SSE 任务流）：进度、结果图、错误全部
  * 内联展示，方便不进画布就调试工作流。
  *
+ * 执行日志走全屏弹窗（WorkflowRunLogModal，与项目画布执行日志面板同款），
+ * 不再挂在节点下方。运行态/日志由 workflow-run-store 托管：关闭窗口（组件
+ * 卸载）再打开，生成中状态与日志依然可见（SSE 重连由服务端回放补齐历史）。
+ *
  * 与画布的差异：这里是单节点静态环境（无连线），wire 类输入以表单控件呈现，
  * 值为空时不下发、由 ComfyUI 侧工作流自带默认值兜底。
  */
 
-import { useMemo, useRef, useState } from "react";
-import { FileText } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   startLocalGenerate,
   watchTask,
-  type TaskLogEntry,
   type TaskProgressNode,
 } from "@/lib/workshop/generation-client";
+import {
+  appendWorkflowRunLog,
+  getWorkflowRunStoreSnapshot,
+  getWorkflowRun,
+  latestRunForWorkflow,
+  patchWorkflowRun,
+  registerWorkflowRun,
+  subscribeWorkflowRunStore,
+} from "@/lib/workflow-run-store";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import { DynamicWorkflowForm } from "../shared/DynamicWorkflowForm";
 import {
@@ -30,6 +41,7 @@ import {
 } from "../shared/workflow-io";
 import { seedModeOverrides } from "@/components/studio/project-canvas/CanvasNode/helpers";
 import { modeLabel } from "./workflow-library-config";
+import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import {
   WorkflowNodeActionButton,
   WorkflowNodeCardShell,
@@ -61,37 +73,6 @@ interface Props {
   onSeedModeChange?: (ioKey: string, mode: string) => void;
 }
 
-/* ── 执行日志行样式：与项目画布 GlobalStepLogPanel 同款 ────────────────
- * 级别徽章配色 / 时间格式与画布执行日志面板完全一致，保证工作流库里
- * 「就地运行」看到的日志与项目画布观感统一。 */
-type LogLevel = TaskLogEntry["level"];
-const LOG_LEVEL_STYLES: Record<LogLevel, string> = {
-  error: "bg-rose-500/15 text-rose-400 border-rose-500/20",
-  warn: "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  success: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-  progress: "bg-violet-500/15 text-violet-400 border-violet-500/20",
-  info: "bg-cyan-500/15 text-cyan-400 border-cyan-500/20",
-};
-function logLevelBadge(level: LogLevel): string {
-  switch (level) {
-    case "error": return "ERROR";
-    case "warn": return "WARN";
-    case "success": return "OK";
-    case "progress": return "PROG";
-    default: return "INFO";
-  }
-}
-/* 与应用日志同款，带毫秒。 */
-function fmtLogTime(t: number): string {
-  return new Date(t).toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    fractionalSecondDigits: 3,
-  });
-}
-
 export function WorkflowCanvasNodePreview({
   workflowId,
   workflowName,
@@ -109,13 +90,57 @@ export function WorkflowCanvasNodePreview({
   // onOutput 与 onSettled 都来自同一 SSE 闭包，state 读取会拿到渲染期旧值——
   // 用 ref 保证 onSettled 能看到 onOutput 刚写入的结果图。
   const resultUrlRef = useRef<string | null>(null);
-  /* 就地运行的工作流执行步骤日志（SSE `log` 帧累积），与项目画布执行日志同款。
-   * 用 ref 在 onSettled/onLog 异步闭包里读「本次是否成功」不会干扰日志累积。 */
-  const [logs, setLogs] = useState<TaskLogEntry[]>([]);
-  /* 执行日志折叠展开态；运行中自动展开，结束后可手动收起。 */
+  /* 当前运行对应的 taskId；挂到 store 后窗口关闭再打开仍能恢复。 */
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  /* 全屏执行日志弹窗开关。 */
   const [logOpen, setLogOpen] = useState(false);
-  /* 当前运行是否已结束（用于展开提示文案与折叠按钮显隐）。 */
-  const [logDone, setLogDone] = useState(false);
+  const [viewTaskId, setViewTaskId] = useState<string | null>(null);
+
+  /* 重开窗口恢复：若 store 里有本工作流仍在运行的登记，恢复「生成中」视角。
+   * 恢复走惰性初始化（useState 的初始化函数在挂载时读 store），避免 effect
+   * 里同步 setState 的级联渲染。 */
+  const storeSnapshot = useSyncExternalStore(
+    subscribeWorkflowRunStore,
+    getWorkflowRunStoreSnapshot,
+    getWorkflowRunStoreSnapshot,
+  );
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (resumedRef.current) return;
+    resumedRef.current = true;
+    if (phase.kind !== "idle" || activeTaskId) return;
+    const resume = latestRunForWorkflow(workflowId);
+    if (resume && (resume.status === "running" || !resume.status)) {
+      // 不自动弹全屏日志（避免打断用户）；由用户点「执行日志」查看。
+      void watchTask(resume.taskId, {
+        onProgress: (pct, node: TaskProgressNode | undefined) =>
+          setPhase({ kind: "running", pct, ...(node ? { node } : {}) }),
+        onLog: (entry) => {
+          appendWorkflowRunLog(resume.taskId, entry);
+        },
+        onOutput: (out) => {
+          if (out.kind === "image" && out.url) {
+            resultUrlRef.current = out.url;
+            setResultUrl(out.url);
+            patchWorkflowRun(resume.taskId, { resultUrl: out.url });
+          }
+        },
+        onSettled: (r) => {
+          if (r.ok) {
+            setPhase({ kind: "done", imageUrl: resultUrlRef.current ?? undefined });
+            patchWorkflowRun(resume.taskId, { status: "done" });
+          } else {
+            setPhase({ kind: "failed", message: r.message ?? "生成失败" });
+            patchWorkflowRun(resume.taskId, {
+              status: "failed",
+              errorMessage: r.message ?? "生成失败",
+            });
+          }
+        },
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载/回到本工作流时恢复一次
+  }, [workflowId]);
 
   const running = phase.kind === "running" || phase.kind === "starting";
   const missing = useMemo(
@@ -164,9 +189,6 @@ export function WorkflowCanvasNodePreview({
     if (!canRun) return;
     setResultUrl(null);
     resultUrlRef.current = null;
-    setLogs([]);
-    setLogDone(false);
-    setLogOpen(true);
     setPhase({ kind: "starting" });
     try {
       const workflowInputs = toWorkflowInputsPayload(
@@ -181,15 +203,30 @@ export function WorkflowCanvasNodePreview({
         workflowInputs: [...workflowInputs, ...cagInputs],
       });
       setPhase({ kind: "running", pct: 0 });
+      setActiveTaskId(taskId);
+      setViewTaskId(taskId);
+      /* 登记 + 自动弹出全屏执行日志（与项目画布运行开始即弹日志面板同款）。 */
+      registerWorkflowRun({
+        taskId,
+        workflowId,
+        workflowName,
+        taskType,
+        startedAt: Date.now(),
+        status: "running",
+      });
+      setLogOpen(true);
       await new Promise<void>((resolve) => {
         watchTask(taskId, {
           onProgress: (pct, node: TaskProgressNode | undefined) =>
             setPhase({ kind: "running", pct, ...(node ? { node } : {}) }),
-          onLog: (entry) => setLogs((prev) => [...prev, entry]),
+          onLog: (entry) => {
+            appendWorkflowRunLog(taskId, entry);
+          },
           onOutput: (out) => {
             if (out.kind === "image" && out.url) {
               resultUrlRef.current = out.url;
               setResultUrl(out.url);
+              patchWorkflowRun(taskId, { resultUrl: out.url });
             }
           },
           onSettled: (r) => {
@@ -198,10 +235,14 @@ export function WorkflowCanvasNodePreview({
                 kind: "done",
                 imageUrl: resultUrlRef.current ?? undefined,
               });
+              patchWorkflowRun(taskId, { status: "done" });
             } else {
               setPhase({ kind: "failed", message: r.message ?? "生成失败" });
+              patchWorkflowRun(taskId, {
+                status: "failed",
+                errorMessage: r.message ?? "生成失败",
+              });
             }
-            setLogDone(true);
             resolve();
           },
         });
@@ -211,13 +252,15 @@ export function WorkflowCanvasNodePreview({
         kind: "failed",
         message: e instanceof Error ? e.message : String(e),
       });
-      setLogDone(true);
     }
   }
 
   const pct = phase.kind === "running" ? phase.pct : 0;
   const nodeLabel =
     phase.kind === "running" && phase.node?.label ? phase.node.label : null;
+  /* 节点卡片下方的「执行日志」入口：有任一运行记录即显示（跨窗口存活）。 */
+  const hasRuns = storeSnapshot.runs.length > 0;
+  const activeRun = activeTaskId ? getWorkflowRun(activeTaskId) : null;
 
   return (
     /* 容器只做布局：边框/标题/背景由 DetailBody 的页签面板负责（此前在这里
@@ -233,13 +276,11 @@ export function WorkflowCanvasNodePreview({
               <span
                 className={[
                   "h-1.5 w-1.5 rounded-full",
-                  phase.kind === "running" || phase.kind === "starting"
-                    ? "animate-pulse bg-amber-300"
-                    : phase.kind === "done"
-                      ? "bg-emerald-400"
-                      : phase.kind === "failed"
-                        ? "bg-rose-400"
-                        : "bg-(--color-primary)",
+                  running ? "animate-pulse bg-amber-300" : phase.kind === "done"
+                    ? "bg-emerald-400"
+                    : phase.kind === "failed"
+                      ? "bg-rose-400"
+                      : "bg-(--color-primary)",
                 ].join(" ")}
               />
               <span
@@ -390,58 +431,45 @@ export function WorkflowCanvasNodePreview({
         </p>
       )}
 
-      {/* 执行步骤日志 —— 与项目画布执行日志同款行样式（时间 + 级别徽章 + 消息）。
-       *  就地运行期间自动展开；结束后可手动收起/保留审查。 */}
-      {logs.length > 0 && (
-        <div className="w-[380px] overflow-hidden rounded-xl border border-white/8 bg-[#0B0B10]">
-          <button
-            type="button"
-            onClick={() => setLogOpen((o) => !o)}
-            title={logOpen ? "收起执行日志" : "展开执行日志"}
-            className="flex w-full items-center justify-between gap-2 border-b border-white/6 bg-white/2 px-3 py-2 text-left"
-          >
-            <span className="flex items-center gap-1.5 text-[11px] font-medium text-white/70">
-              <FileText size={12} className="shrink-0 text-violet-400" />
-              执行日志
-              {!logDone && (
-                <span className="ml-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
-              )}
-            </span>
-            <span className="flex items-center gap-2 text-[10.5px] text-white/40">
-              <span>{logs.length} 条</span>
-              <span
-                className={`inline-block transition-transform ${
-                  logOpen ? "rotate-180" : ""
-                }`}
-              >
-                ▾
-              </span>
-            </span>
-          </button>
-          {logOpen && (
-            <div className="custom-scrollbar max-h-56 overflow-y-auto bg-[#0d0d14]/60">
-              {logs.map((log, index) => (
-                <div
-                  key={`${log.t}:${index}`}
-                  data-testid="wflib-log-line"
-                  data-level={log.level}
-                  className="flex items-start gap-2 border-b border-white/3 px-3 py-1 font-mono text-[11.5px] leading-snug hover:bg-white/2"
-                >
-                  <span className="shrink-0 text-gray-500">{fmtLogTime(log.t)}</span>
-                  <span
-                    className={`shrink-0 rounded border px-1 py-px text-[10px] font-medium uppercase ${LOG_LEVEL_STYLES[log.level]}`}
-                  >
-                    {logLevelBadge(log.level)}
-                  </span>
-                  <span className="min-w-0 flex-1 break-words text-gray-300">
-                    {log.msg}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* 执行日志入口：点击打开全屏日志弹窗（与项目画布执行日志面板同款）。
+       *  有运行记录即显示（跨窗口存活），运行中带呼吸点提示。 */}
+      {hasRuns && (
+        <button
+          type="button"
+          onClick={() => {
+            if (!viewTaskId && activeTaskId) setViewTaskId(activeTaskId);
+            setLogOpen(true);
+          }}
+          data-testid="wflib-log-open"
+          className="flex w-[380px] items-center justify-between rounded-xl border border-white/8 bg-[#0B0B10] px-3 py-2 text-left transition-colors hover:border-white/20"
+          title="打开执行日志"
+        >
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-white/70">
+            执行日志
+            {running && (
+              <span className="ml-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
+            )}
+          </span>
+          <span className="text-[10.5px] text-white/40">
+            {activeRun
+              ? activeRun.status === "done"
+                ? "上次已完成"
+                : activeRun.status === "failed"
+                  ? "上次已失败"
+                  : "生成中…"
+              : `${storeSnapshot.runs.length} 次运行`}
+            <span className="ml-2">›</span>
+          </span>
+        </button>
       )}
+
+      {/* 全屏执行日志弹窗：与项目画布 GlobalStepLogPanel 同款交互。 */}
+      <WorkflowRunLogModal
+        open={logOpen}
+        viewTaskId={viewTaskId}
+        onViewTaskIdChange={setViewTaskId}
+        onClose={() => setLogOpen(false)}
+      />
     </div>
   );
 }
