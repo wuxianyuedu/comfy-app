@@ -77,38 +77,73 @@ export async function probeComfyUi(timeoutMs = 2500): Promise<string | null> {
  * Windows 用 `taskkill /PID <pid> /T /F`（cmd 外壳死了不杀子进程会留下
  * python 孤儿锁住端口与日志文件）；POSIX 杀整个进程组（spawn 时未设
  * detached，子进程与父进程同组，退而求其次单杀 + 兜底探测确认）。
+ *
+ * 两种来源都能关：
+ *   - bound（默认）：本进程持着子进程句柄 st.child，直接以其 PID 杀树；
+ *   - keepAlive / 重启后接管：本进程没有 st.child（保活实例是 Start-Process
+ *     中介拉起的孙进程 / 上一会话遗留的孤儿），改按配置路径的 main.py 在
+ *     OS 进程表里定位 PID 再杀树——否则用户点「关闭」只会得到
+ *     「不是本应用启动的」而永远关不掉上一会话保活下来的 ComfyUI（ISSUE #100）。
  */
 export async function stopComfyUiProcess(): Promise<{ ok: boolean; detail: string }> {
   // 无论有没有本应用拉起的子进程，都先落「用户要求停止」标记：若此刻正有
   // 一个启动等待在跑，等待循环会以「已手动关闭」收尾，而不是误报「进程秒退」。
   st.stopRequested = true;
-  const child = st.child;
-  const pid = child?.pid;
-  // 本应用未拉起过进程：仍探测一次，若外部启动的 ComfyUI 在跑，报告「需手动关闭」
+
+  // 解析出本应用应负责的 main.py 路径：bound / keepAlive / 重启后接管，
+  // 「该关哪个进程」统一由配置路径决定，不依赖是否还握着子进程句柄。
+  const settings = getSettingsSync();
+  const plan = settings.comfyuiPath
+    ? resolveComfyLaunchPlan(settings.comfyuiPath)
+    : { error: "未配置 comfyuiPath" };
+
+  // 1) 握着 bound 子进程句柄 → 以其 PID 为准（最可靠，不猜）。
+  // 2) 没握句柄但 ComfyUI 仍在跑 → 到 OS 进程表按 main.py 定位 PID，
+  //    覆盖 keepAlive（保活实例无 st.child）与「应用退出重启后接管上一会话
+  //    保活实例」两种场景（globalThis 状态已被新进程清空）。
+  let child = st.child;
+  let pid = child?.pid;
   const stillUp = await probeComfyUi(1500);
+  if (!pid && stillUp && !("error" in plan)) {
+    pid = await findPidForMainPy(plan.mainPy);
+    if (pid) child = undefined; // 无句柄，仅用定位到的 PID
+  }
   if (!pid) {
     return stillUp
-      ? { ok: false, detail: "ComfyUI 不是由本应用启动的，请在 ComfyUI 自己的窗口/终端中手动关闭" }
+      ? { ok: false, detail: "ComfyUI 在运行但不是本应用（配置路径）启动的，请在 ComfyUI 自己的窗口/终端中手动关闭" }
       : { ok: true, detail: "ComfyUI 未在运行" };
   }
+
+  const kind = child ? "bound 子进程" : "按配置路径定位到的进程";
+  appendRuntimeLog(`[stop] 用户要求关闭 ComfyUI，目标：${kind}（pid=${pid}）`);
   await new Promise<void>((resolve) => {
     if (process.platform === "win32") {
       exec(`taskkill /PID ${pid} /T /F`, () => resolve());
     } else {
-      try {
-        child.kill("SIGTERM");
-      } catch { /* already dead */ }
+      if (child) {
+        try {
+          child.kill("SIGTERM");
+        } catch { /* already dead */ }
+      } else {
+        // 无句柄（keepAlive / 接管场景）：进程已脱离本进程组，只能单杀 PID，
+        // 兜底交给下面的「仍未响应」提示让用户手动确认。
+        try {
+          process.kill(pid, "SIGTERM");
+        } catch { /* already dead */ }
+      }
       resolve();
     }
   });
-  st.child = undefined;
+  if (st.child === child) st.child = undefined;
   // 给进程一点退出时间，再探测确认
   for (let i = 0; i < 5; i++) {
     await new Promise((r) => setTimeout(r, 500));
     if (!(await probeComfyUi(800))) {
+      appendRuntimeLog("[stop] ComfyUI 已关闭");
       return { ok: true, detail: "ComfyUI 已关闭" };
     }
   }
+  appendRuntimeLog("[stop] 关闭命令已发送，但 ComfyUI 仍在响应");
   return { ok: false, detail: "关闭命令已发送，但 ComfyUI 仍在响应，请手动确认进程已退出" };
 }
 
