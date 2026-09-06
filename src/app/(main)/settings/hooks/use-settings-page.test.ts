@@ -384,7 +384,7 @@ describe("useSettingsPage", () => {
     expect(result.current.drafts?.llm.temperatureByTask).toBeUndefined();
   });
 
-  it("远端模型：添加进草稿（重名/空名拒绝）；候选可移除；生效模型字段不受清单管理", async () => {
+  it("远端模型：添加/移除即时落库（重名/空名拒绝）；生效模型字段不受清单管理", async () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
@@ -394,27 +394,32 @@ describe("useSettingsPage", () => {
     expect(result.current.remoteModelList.map((e) => e.name)).toEqual([]);
 
     let out: { ok: boolean; error?: string } = { ok: false };
-    act(() => {
-      out = result.current.addRemoteModel({ name: "gpt-4o" });
+    await act(async () => {
+      out = await result.current.addRemoteModel({ name: "gpt-4o" });
     });
     expect(out.ok).toBe(true);
     expect(result.current.remoteModelList.map((e) => e.name)).toEqual([
       "gpt-4o",
     ]);
+    // 即时落库成功有提示条
+    expect(result.current.flash).toEqual({
+      kind: "ok",
+      text: "LLM 配置已保存",
+    });
 
-    // 重名拒绝（候选）；空名拒绝
-    act(() => {
-      out = result.current.addRemoteModel({ name: " gpt-4o " });
+    // 重名拒绝（候选）；空名拒绝 —— 校验失败不触发保存
+    await act(async () => {
+      out = await result.current.addRemoteModel({ name: " gpt-4o " });
     });
     expect(out.ok).toBe(false);
-    act(() => {
-      out = result.current.addRemoteModel({ name: "   " });
+    await act(async () => {
+      out = await result.current.addRemoteModel({ name: "   " });
     });
     expect(out.ok).toBe(false);
 
     // 与生效模型同名也可加入候选（「当前生效」概念已移出设置页）
-    act(() => {
-      out = result.current.addRemoteModel({ name: "qwen3:14b" });
+    await act(async () => {
+      out = await result.current.addRemoteModel({ name: "qwen3:14b" });
     });
     expect(out.ok).toBe(true);
     expect(result.current.remoteModelList.map((e) => e.name)).toEqual([
@@ -422,19 +427,37 @@ describe("useSettingsPage", () => {
       "qwen3:14b",
     ]);
 
-    // 移除只动清单，不碰生效模型字段（运行时在工坊切换）
-    act(() => {
-      result.current.removeRemoteModel("gpt-4o");
+    // 移除即时落库，只动清单不碰生效模型字段（运行时在工坊切换）
+    await act(async () => {
+      out = await result.current.removeRemoteModel("gpt-4o");
     });
+    expect(out.ok).toBe(true);
     expect(result.current.remoteModelList.map((e) => e.name)).toEqual([
       "qwen3:14b",
     ]);
-    act(() => {
-      result.current.removeRemoteModel("qwen3:14b");
+    await act(async () => {
+      out = await result.current.removeRemoteModel("qwen3:14b");
     });
+    expect(out.ok).toBe(true);
     expect(result.current.remoteModelList.map((e) => e.name)).toEqual([]);
     /* 生效模型字段保留原值 —— 它归工坊运行时管理 */
     expect(result.current.drafts?.llm.model).toBe("qwen3:14b");
+  });
+
+  it("远端模型：落库失败 → ok:false + 错误提示条", async () => {
+    behavior = { saveLlmError: "磁盘只读" };
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    let out: { ok: boolean; error?: string } = { ok: false };
+    await act(async () => {
+      out = await result.current.addRemoteModel({ name: "gpt-4o" });
+    });
+    expect(out.ok).toBe(false);
+    expect(out.error).toBe("磁盘只读");
+    expect(result.current.flash).toEqual({ kind: "err", text: "磁盘只读" });
   });
 
   it("远端模型：条目保留独立接口/密钥；切主模型不动条目", async () => {
@@ -443,8 +466,8 @@ describe("useSettingsPage", () => {
     });
     await waitFor(() => expect(result.current.drafts).not.toBeNull());
 
-    act(() => {
-      result.current.addRemoteModel({
+    await act(async () => {
+      await result.current.addRemoteModel({
         name: "gpt-4o",
         baseUrl: "https://api.example.com/v1",
         apiKey: "sk-1",
@@ -650,12 +673,12 @@ describe("useSettingsPage", () => {
     });
     await waitFor(() => expect(result.current.drafts).not.toBeNull());
 
-    act(() => {
-      result.current.addRemoteModel({ name: "gpt-4o", apiKey: "sk-1" });
+    await act(async () => {
+      await result.current.addRemoteModel({ name: "gpt-4o", apiKey: "sk-1" });
     });
     let out: { ok: boolean; error?: string } = { ok: false };
-    act(() => {
-      out = result.current.updateRemoteModel("gpt-4o", {
+    await act(async () => {
+      out = await result.current.updateRemoteModel("gpt-4o", {
         name: "gpt-4o-2024",
         baseUrl: "https://api.example.com/v1",
       });
@@ -672,25 +695,25 @@ describe("useSettingsPage", () => {
     ).toBe(false);
 
     // 改名撞其他候选 → 拒绝；撞生效模型名不拒绝（生效模型不在清单管理范围）
-    act(() => {
-      out = result.current.updateRemoteModel("gpt-4o-2024", {
+    await act(async () => {
+      out = await result.current.updateRemoteModel("gpt-4o-2024", {
         name: "qwen3:14b",
       });
     });
     expect(out.ok).toBe(true);
-    act(() => {
-      result.current.addRemoteModel({ name: "claude" });
+    await act(async () => {
+      await result.current.addRemoteModel({ name: "claude" });
     });
-    act(() => {
-      out = result.current.updateRemoteModel("claude", {
+    await act(async () => {
+      out = await result.current.updateRemoteModel("claude", {
         name: "qwen3:14b",
       });
     });
     expect(out.ok).toBe(false);
 
     // 清除独立密钥 → 跟随全局
-    act(() => {
-      out = result.current.updateRemoteModel("qwen3:14b", {
+    await act(async () => {
+      out = await result.current.updateRemoteModel("qwen3:14b", {
         clearApiKey: true,
       });
     });
@@ -709,24 +732,24 @@ describe("useSettingsPage", () => {
 
     // llm.model 初始 = "qwen3:14b"，候选为空 —— 不再虚拟「当前模型」行可编辑
     let out: { ok: boolean; error?: string } = { ok: false };
-    act(() => {
-      out = result.current.updateRemoteModel("qwen3:14b", {
+    await act(async () => {
+      out = await result.current.updateRemoteModel("qwen3:14b", {
         baseUrl: "https://api.example.com/v1",
       });
     });
     expect(out.ok).toBe(false);
 
     // 加入与生效模型同名的条目后，改名时同步生效模型字段
-    act(() => {
-      out = result.current.addRemoteModel({
+    await act(async () => {
+      out = await result.current.addRemoteModel({
         name: "qwen3:14b",
         baseUrl: "https://api.example.com/v1",
         apiKey: "sk-main",
       });
     });
     expect(out.ok).toBe(true);
-    act(() => {
-      out = result.current.updateRemoteModel("qwen3:14b", {
+    await act(async () => {
+      out = await result.current.updateRemoteModel("qwen3:14b", {
         name: "qwen3:32b",
       });
     });

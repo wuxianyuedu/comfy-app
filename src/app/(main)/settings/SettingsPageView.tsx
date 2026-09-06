@@ -263,11 +263,13 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
     setUsageTest((prev) => (prev ? { ...prev, running: false, result: out } : prev));
   }
 
-  function handleDialogSubmit() {
+  /** 添加 / 编辑提交即落库（远端模型清单已无单独的保存按钮）；
+   *  失败时弹窗留在原地展示错误。 */
+  async function handleDialogSubmit() {
     setAddError(null);
     const baseUrl = addForm.baseUrl.trim();
     if (dialog?.mode === "edit") {
-      const result = c.updateRemoteModel(dialog.original, {
+      const result = await c.updateRemoteModel(dialog.original, {
         name: addForm.model,
         /* 空串 = 清掉独立接口（跟随全局） */
         baseUrl: baseUrl ? baseUrl : null,
@@ -282,7 +284,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
       setDialog(null);
       return;
     }
-    const result = c.addRemoteModel({
+    const result = await c.addRemoteModel({
       name: addForm.model,
       /* 留空不落条目字段 → 跟随已保存的全局连接配置 */
       baseUrl: baseUrl || undefined,
@@ -357,8 +359,8 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   </button>
                   <button
                     type="button"
-                    title="移除该模型"
-                    onClick={() => c.removeRemoteModel(entry.name)}
+                    title="移除该模型（即时保存）"
+                    onClick={() => void c.removeRemoteModel(entry.name)}
                     className="text-muted-foreground hover:text-rose-500 shrink-0"
                   >
                     ✕
@@ -800,21 +802,8 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                 )}
 
                 <p className="text-muted-foreground mb-4 text-[11px] leading-relaxed">
-                  此页只维护模型清单：「测试」按该条目的配置发起一次真实调用（参数可在弹窗内自定义）；带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。实际使用哪个模型在工坊运行界面选择。改动需点下方「保存
-                  LLM 配置」生效。
+                  此页只维护模型清单，添加 / 编辑 / 移除都会<strong className="text-ink/80">即时保存</strong>：「测试」按该条目的配置发起一次真实调用（参数可在弹窗内自定义）；带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。实际使用哪个模型在工坊运行界面选择。
                 </p>
-
-                <Field
-                  label="最大 Token"
-                  value={String(c.drafts.llm.maxTokens)}
-                  onChange={(value) =>
-                    c.patchLlm({ maxTokens: Number(value) || 0 })
-                  }
-                />
-
-                <Btn onClick={() => void c.saveLlm()} disabled={c.saving}>
-                  保存 LLM 配置
-                </Btn>
               </Card>
 
               {/* 「添加 / 编辑模型」弹窗：接口地址 / API Key 可留空回落全局；
@@ -1005,11 +994,15 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       </button>
                       <button
                         type="button"
-                        onClick={handleDialogSubmit}
-                        disabled={!addForm.model.trim()}
+                        onClick={() => void handleDialogSubmit()}
+                        disabled={c.saving || !addForm.model.trim()}
                         className="bg-primary hover:bg-primary-hover rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50"
                       >
-                        {dialog.mode === "edit" ? "保存" : "添加"}
+                        {c.saving
+                          ? "保存中…"
+                          : dialog.mode === "edit"
+                            ? "保存"
+                            : "添加并保存"}
                       </button>
                     </div>
                   </div>

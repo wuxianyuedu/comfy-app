@@ -164,14 +164,15 @@ export interface SettingsPageController {
   setTaskTemperature: (task: TaskType, raw: string) => void;
   /** 勾选/取消一个候选模型（本地 Ollama 多模型管理） */
   toggleExtraModel: (name: string) => void;
-  /* 远端模型管理：列表 + 添加 / 编辑 / 移除 + 测试连接（改动只进草稿，保存时落库） */
+  /* 远端模型管理：列表 + 添加 / 编辑 / 移除 + 测试。增删改即时落库
+   * （无需单独的保存按钮），返回本次保存结果供弹窗留在原地报错。 */
   remoteModelList: RemoteModelEntry[];
   addRemoteModel: (entry: {
     name: string;
     baseUrl?: string;
     apiKey?: string;
     kind?: RemoteModelKind;
-  }) => { ok: boolean; error?: string };
+  }) => Promise<{ ok: boolean; error?: string }>;
   /** 编辑既有条目（只作用于已配置条目）；重名校验排除自身，改名时若生效
    *  模型引用旧名会同步更新。
    *  patch.baseUrl = null / clearApiKey = true 表示清掉独立配置、跟随全局。 */
@@ -184,8 +185,8 @@ export interface SettingsPageController {
       clearApiKey?: boolean;
       kind?: RemoteModelKind | null;
     },
-  ) => { ok: boolean; error?: string };
-  removeRemoteModel: (name: string) => void;
+  ) => Promise<{ ok: boolean; error?: string }>;
+  removeRemoteModel: (name: string) => Promise<{ ok: boolean; error?: string }>;
   probeRemote: (input: {
     baseUrl?: string;
     apiKey?: string;
@@ -669,23 +670,35 @@ export function useSettingsPage(): SettingsPageController {
   }, [llmBaseUrl, probeOllama, showFlash]);
 
   /* ── 保存 ───────────────────────────────────────────────── */
+  /** 把给定草稿落库。远程模型的添加 / 编辑 / 移除即时保存也走这里；
+   *  apiKey 是「留空不改」语义：llmApiKey 为空就不传。 */
+  const persistLlmDraft = useCallback(
+    async (draft: LlmConfig): Promise<{ ok: boolean; error?: string }> => {
+      setSaving(true);
+      try {
+        await saveLlmCfg.mutateAsync({
+          ...draft,
+          apiKey: llmApiKey || undefined,
+        });
+        showFlash("ok", "LLM 配置已保存");
+        if (llmApiKey) setLlmApiKey("");
+        await llmQ.refetch();
+        return { ok: true };
+      } catch (error) {
+        const msg = errorMessage(error, "保存失败");
+        showFlash("err", msg);
+        return { ok: false, error: msg };
+      } finally {
+        setSaving(false);
+      }
+    },
+    [llmApiKey, saveLlmCfg, llmQ, showFlash],
+  );
+
   const saveLlm = useCallback(async () => {
     if (!llmDraft) return;
-    setSaving(true);
-    try {
-      await saveLlmCfg.mutateAsync({
-        ...llmDraft,
-        apiKey: llmApiKey || undefined,
-      });
-      showFlash("ok", "LLM 配置已保存");
-      if (llmApiKey) setLlmApiKey("");
-      await llmQ.refetch();
-    } catch (error) {
-      showFlash("err", errorMessage(error, "保存失败"));
-    } finally {
-      setSaving(false);
-    }
-  }, [llmDraft, llmApiKey, saveLlmCfg, llmQ, showFlash]);
+    await persistLlmDraft(llmDraft);
+  }, [llmDraft, persistLlmDraft]);
 
   const savePrefs = useCallback(async () => {
     if (!settingsDraft) return;
@@ -732,22 +745,22 @@ export function useSettingsPage(): SettingsPageController {
 
   /* ── 远端模型管理 ──
    * 设置页只做「配置」：条目的增删改 + 测试连接，不区分「当前生效」——
-   * 实际用哪个模型由工坊运行时切换（configSave.model）。改动只进草稿，
-   * 保存时落库；测试连接走 /api/llm/test 代理（apiKey 在服务端参与请求，
-   * 浏览器不直接打远端）。 */
+   * 实际用哪个模型由工坊运行时切换（configSave.model）。
+   * 增删改即时落库（无需再点保存按钮），失败时提示条给出可读错误。
+   * 连通性 / 实际调用测试走服务端代理（apiKey 不直接打远端）。 */
   const addRemoteModel = useCallback(
-    (entry: {
+    async (entry: {
       name: string;
       baseUrl?: string;
       apiKey?: string;
       kind?: RemoteModelKind;
-    }) => {
+    }): Promise<{ ok: boolean; error?: string }> => {
       if (!llmDraft)
-        return { ok: false as const, error: "配置未就绪，请稍后重试" };
+        return { ok: false, error: "配置未就绪，请稍后重试" };
       const name = entry.name.trim();
-      if (!name) return { ok: false as const, error: "请填写模型名称" };
+      if (!name) return { ok: false, error: "请填写模型名称" };
       if (llmDraft.extraModels.some((e) => e.name === name)) {
-        return { ok: false as const, error: `模型「${name}」已在列表中` };
+        return { ok: false, error: `模型「${name}」已在列表中` };
       }
       const cleaned: RemoteModelEntry = {
         name,
@@ -755,30 +768,33 @@ export function useSettingsPage(): SettingsPageController {
         apiKey: entry.apiKey?.trim() ? entry.apiKey.trim() : null,
         kind: entry.kind ?? null,
       };
-      setLlmDraft((draft) =>
-        draft
-          ? { ...draft, extraModels: [...draft.extraModels, cleaned] }
-          : draft,
-      );
-      return { ok: true as const };
+      const nextDraft = {
+        ...llmDraft,
+        extraModels: [...llmDraft.extraModels, cleaned],
+      };
+      setLlmDraft(nextDraft);
+      return persistLlmDraft(nextDraft);
     },
-    [llmDraft],
+    [llmDraft, persistLlmDraft],
   );
 
-  const removeRemoteModel = useCallback((name: string) => {
-    setLlmDraft((draft) => {
-      if (!draft) return draft;
-      const next = draft.extraModels.filter((e) => e.name !== name);
-      return next.length === draft.extraModels.length
-        ? draft
-        : { ...draft, extraModels: next };
-    });
-  }, []);
+  const removeRemoteModel = useCallback(
+    async (name: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!llmDraft)
+        return { ok: false, error: "配置未就绪，请稍后重试" };
+      const next = llmDraft.extraModels.filter((e) => e.name !== name);
+      if (next.length === llmDraft.extraModels.length) return { ok: true };
+      const nextDraft = { ...llmDraft, extraModels: next };
+      setLlmDraft(nextDraft);
+      return persistLlmDraft(nextDraft);
+    },
+    [llmDraft, persistLlmDraft],
+  );
 
   /** 编辑既有条目（只作用于已配置条目）；改名时若当前生效模型引用的是旧名，
    *  同步改 draft.model —— 工坊按名字引用模型，不同步会指向不存在的名字。 */
   const updateRemoteModel = useCallback(
-    (
+    async (
       name: string,
       patch: {
         name?: string;
@@ -787,23 +803,20 @@ export function useSettingsPage(): SettingsPageController {
         clearApiKey?: boolean;
         kind?: RemoteModelKind | null;
       },
-    ) => {
+    ): Promise<{ ok: boolean; error?: string }> => {
       if (!llmDraft)
-        return { ok: false as const, error: "配置未就绪，请稍后重试" };
+        return { ok: false, error: "配置未就绪，请稍后重试" };
       const nextName = (patch.name ?? name).trim();
-      if (!nextName) return { ok: false as const, error: "请填写模型名称" };
+      if (!nextName) return { ok: false, error: "请填写模型名称" };
       const existing = llmDraft.extraModels.find((e) => e.name === name);
       if (!existing) {
-        return {
-          ok: false as const,
-          error: `模型「${name}」不存在，请刷新后重试`,
-        };
+        return { ok: false, error: `模型「${name}」不存在，请刷新后重试` };
       }
       if (
         nextName !== name &&
         llmDraft.extraModels.some((e) => e.name === nextName)
       ) {
-        return { ok: false as const, error: `模型「${nextName}」已在列表中` };
+        return { ok: false, error: `模型「${nextName}」已在列表中` };
       }
       const updated: RemoteModelEntry = {
         name: nextName,
@@ -818,19 +831,17 @@ export function useSettingsPage(): SettingsPageController {
             : (existing?.apiKey ?? null),
         kind: patch.kind === undefined ? (existing?.kind ?? null) : patch.kind,
       };
-      setLlmDraft((draft) => {
-        if (!draft) return draft;
-        return {
-          ...draft,
-          model: draft.model === name ? nextName : draft.model,
-          extraModels: draft.extraModels.map((e) =>
-            e.name === name ? updated : e,
-          ),
-        };
-      });
-      return { ok: true as const };
+      const nextDraft = {
+        ...llmDraft,
+        model: llmDraft.model === name ? nextName : llmDraft.model,
+        extraModels: llmDraft.extraModels.map((e) =>
+          e.name === name ? updated : e,
+        ),
+      };
+      setLlmDraft(nextDraft);
+      return persistLlmDraft(nextDraft);
     },
-    [llmDraft],
+    [llmDraft, persistLlmDraft],
   );
 
   const probeRemote = useCallback(
