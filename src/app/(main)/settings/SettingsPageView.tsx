@@ -394,7 +394,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
   }
 
   return (
-    <div className="bg-bg h-[calc(100vh-var(--toolbar-height,48px))] overflow-y-auto pb-6">
+    <div className="bg-bg flex h-[calc(100vh-var(--toolbar-height,48px))] flex-col overflow-hidden">
       {/* Header bar */}
       <div className="border-border flex items-center gap-3 border-b px-6 py-4">
         <button
@@ -407,7 +407,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
         <h1 className="text-ink text-lg font-semibold">设置</h1>
       </div>
 
-      <div className="mx-auto flex max-w-[1100px] gap-6 px-6 py-6">
+      <div className="mx-auto flex min-h-0 w-full max-w-[1100px] flex-1 gap-6 px-6 pt-6">
         {/* Left sidebar */}
         <nav className="w-48 shrink-0 space-y-1">
           {SETTINGS_SECTIONS.map((item) => (
@@ -427,7 +427,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
         </nav>
 
         {/* Content area */}
-        <div className="min-w-0 flex-1">
+        <div className="custom-scrollbar min-w-0 flex-1 overflow-y-auto pb-6">
           {c.flash && (
             <div
               className={`mb-4 rounded-lg border px-4 py-2 text-sm ${

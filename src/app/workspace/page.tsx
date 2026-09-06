@@ -59,6 +59,38 @@ const ProjectCanvas = dynamic(
 
 /* ── Workspace Page — Updream-style full-screen editor ── */
 
+/* 离开 /workspace 到其它顶层路由（如 /settings）再返回时，Next.js 会重新
+ * 挂载本页面组件导致 viewMode 重置回 home。用 sessionStorage 保存最近一次
+ * 视图，组件重新挂载时据此恢复，避免「设置打开→关闭后回到默认界面」。
+ * 仅在导航离开 /workspace 时才触发恢复（cleanup 只在本页面被卸载时执行）。 */
+const WS_VIEW_KEY = "comfyapp:workspace-view-v1";
+
+const WORKSPACE_VIEWS: WorkspaceView[] = [
+  "home",
+  "canvas",
+  "models",
+  "works",
+  "workshop",
+  "history",
+  "train",
+  "film",
+  "workflows",
+  "outputs",
+];
+
+function readLastView(): WorkspaceView {
+  if (typeof window === "undefined") return "home";
+  const raw = sessionStorage.getItem(WS_VIEW_KEY);
+  if (!raw) return "home";
+  const view = WORKSPACE_VIEWS.find((v) => v === raw);
+  return view ?? "home";
+}
+
+function writeLastView(view: WorkspaceView): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(WS_VIEW_KEY, view);
+}
+
 function ago(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
@@ -74,6 +106,18 @@ export default function WorkspacePage() {
 
   // ── Layout state ──
   const [viewMode, setViewMode] = useState<WorkspaceView>("home");
+
+  /* 从 sessionStorage 恢复离开 workspace 前（如跳去 /settings）的视图。
+   * 不能把 readLastView 放进 useState 初始值——SSR 阶段 window 不可用返回 home，
+   * hydration 不会重新执行 initializer，sessionStorage 恢复就永远不生效。 */
+  useEffect(() => {
+    const saved = readLastView();
+    if (saved !== "home") {
+      // 跳过 hydration 窗口后恢复视图，避免对 SSR 渲染树造成级联 setState。
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setViewMode(saved);
+    }
+  }, []);
   // View history stack for smart back-navigation (avoids jumping straight to home)
   const [, setViewHistory] = useState<WorkspaceView[]>(["home"]);
 
@@ -85,6 +129,7 @@ export default function WorkspacePage() {
       return [...prev, view];
     });
     setViewMode(view);
+    writeLastView(view);
   }, []);
 
   // ── Agent chat overlay ──
