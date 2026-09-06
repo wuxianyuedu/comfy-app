@@ -279,13 +279,20 @@ export async function ensureComfyUiReady(
       PYTHONUTF8: "1",
     };
     if (keepAlive) {
-      // 保活：脱离进程树。没有直连 stdio/exit，就绪与否靠端口探测轮询。
+      // 保活：脱离进程树。没有直连 stdio/exit，但把 stdout/stderr 重定向到
+      // 按次命名的文件里，等待循环会增量跟随进 comfyui-runtime.log ——
+      // 保活模式下「启动日志」面板不再空白，完整输出也留得下文件。
+      const kaStamp = localTimestamp().replace(/[: ]/g, "-");
+      const kaOutLog = path.join(process.cwd(), "log", `comfyui-keepalive-${kaStamp}.out.log`);
+      const kaErrLog = path.join(process.cwd(), "log", `comfyui-keepalive-${kaStamp}.err.log`);
       const launched = spawnManaged({
         command: plan.cmd,
         args,
         cwd: plan.cwd,
         env: stdioEnv,
         mode: "keepAlive",
+        redirectStdoutFile: kaOutLog,
+        redirectStderrFile: kaErrLog,
       });
       if (!launched.child || launched.error) {
         const detail = `启动 ComfyUI 失败：${launched.error ?? "未知错误"}`;
@@ -296,6 +303,9 @@ export async function ensureComfyUiReady(
       clearComfyStopping();
       appendRuntimeLog(
         `[keepAlive-spawn] cmd=${plan.cmd} args=${JSON.stringify(args)} cwd=${plan.cwd}`,
+      );
+      appendRuntimeLog(
+        `[keepAlive-spawn] 完整输出重定向：${kaOutLog} 与 ${kaErrLog}`,
       );
       /* 中介 powershell「立即」退出；Start-Process 参数被拒等拉起失败都发生在
        * 中介里（目标进程根本没被拉起）。等它退出并带出 stderr，失败立刻报错
@@ -310,7 +320,30 @@ export async function ensureComfyUiReady(
       }
       const spawnAt = Date.now();
       let everSeenProcess = false;
+      let missCount = 0;
       let lastProcessCheckAt = 0;
+      /* 重定向文件的增量跟随游标：把新字节按行带进 comfyui-runtime.log */
+      const kaOffsets = { out: 0, err: 0 };
+      const tailKeepAliveLog = (file: string, key: "out" | "err") => {
+        try {
+          if (!fs.existsSync(file)) return;
+          const stat = fs.statSync(file);
+          if (stat.size < kaOffsets[key]) kaOffsets[key] = 0; // 文件被重置
+          if (stat.size <= kaOffsets[key]) return;
+          const len = stat.size - kaOffsets[key];
+          const buf = Buffer.alloc(len);
+          const fd = fs.openSync(file, "r");
+          fs.readSync(fd, buf, 0, len, kaOffsets[key]);
+          fs.closeSync(fd);
+          kaOffsets[key] = stat.size;
+          for (const line of buf.toString("utf-8").split(/\r?\n/)) {
+            const trimmed = line.trimEnd();
+            if (trimmed.trim()) appendRuntimeLog(`[${key}] ${trimmed.slice(0, 500)}`);
+          }
+        } catch {
+          /* 文件尚未创建 / 读取抖动：下一轮再试 */
+        }
+      };
       /* 保活路径不设 st.child（真实子进程不是我们能可靠持有/杀掉的——Windows
        * 上是 Start-Process 的孙进程，POSIX 上虽能拿到 pid 但已 unref）。
        * 「关闭 ComfyUI」与「进程秒退」都不再走 child 判断，只靠端口探测。 */
@@ -320,6 +353,8 @@ export async function ensureComfyUiReady(
           note(detail);
           return { ok: false, base: null, detail };
         }
+        tailKeepAliveLog(kaOutLog, "out");
+        tailKeepAliveLog(kaErrLog, "err");
         // 端口可达即视为就绪（保活实例无法用「本进程 PID 监听端口」去锁定，
         // 用 /system_stats 实探，避免把同机另一个 ComfyUI 误认成本次拉起的）。
         const upBase = await probeComfyUi(2000);
@@ -327,9 +362,9 @@ export async function ensureComfyUiReady(
           note(`ComfyUI 已就绪（保活）：${upBase}`);
           return { ok: true, base: upBase, detail: "ComfyUI 已启动并就绪（保活模式）" };
         }
-        /* 失败兜底出口：宽限期后仍看不到运行 main.py 的进程（或见过但已消失）
-         * → 目标进程没起来 / 秒退。手动启动没有 deadline，没有这个出口
-         * 「启动中…」会永远挂住。进程表扫描有成本，限频执行。 */
+        /* 失败兜底出口：宽限期后按限频检查进程表，**连续 2 次**都找不到运行
+         * main.py 的进程才判死 —— 单次查询在冷启动高负载下可能超时误报
+         * （进程其实活着），此前误报过「秒退」。 */
         const now = Date.now();
         if (
           now - spawnAt > COMFY_KEEPALIVE_GRACE_MS &&
@@ -338,14 +373,18 @@ export async function ensureComfyUiReady(
           lastProcessCheckAt = now;
           if (await findPidForMainPy(plan.mainPy)) {
             everSeenProcess = true;
+            missCount = 0;
           } else {
-            const common =
-              "详见 log/comfyui-runtime.log；也可暂时勾选「关闭应用时连带关闭 ComfyUI」改用直连启动，获得实时日志定位问题。";
-            const detail = everSeenProcess
-              ? `ComfyUI 启动失败：保活进程已退出（秒退）。${common}`
-              : `ComfyUI 启动失败：保活拉起后进程未出现。${common}`;
-            note(detail);
-            return { ok: false, base: null, detail };
+            missCount += 1;
+            if (missCount >= 2) {
+              const common =
+                "详见 log/comfyui-runtime.log；也可暂时勾选「关闭应用时连带关闭 ComfyUI」改用直连启动，获得实时日志定位问题。";
+              const detail = everSeenProcess
+                ? `ComfyUI 启动失败：保活进程已退出。${common}`
+                : `ComfyUI 启动失败：保活拉起后进程未出现。${common}`;
+              note(detail);
+              return { ok: false, base: null, detail };
+            }
           }
         }
         if (deadline !== null && Date.now() >= deadline) break;

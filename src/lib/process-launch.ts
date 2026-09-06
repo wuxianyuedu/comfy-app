@@ -19,6 +19,7 @@
 // 变乱码，这里提供 decodePowerShellOutput() 收尾。
 
 import { spawn, type ChildProcess } from "child_process";
+import { closeSync, openSync } from "fs";
 
 /** 拉起方式：bound = 随应用进程树一起结束；keepAlive = 脱离进程树保活。 */
 export type DetachMode = "bound" | "keepAlive";
@@ -36,6 +37,12 @@ export interface ManagedSpawnOptions {
   mode: DetachMode;
   /** spawn 找不到可执行文件时是否静默吞掉（默认 false）。 */
   ignoreMissing?: boolean;
+  /** keepAlive 专用：把子进程 stdout / stderr 重定向到这两个按次命名的文件
+   *  （脱离进程树的进程没有管道可读，落文件才能保住启动日志）。
+   *  Windows 经 Start-Process -RedirectStandardOutput/-Error；POSIX 直接把
+   *  文件描述符交给 stdio。两文件必须不同路径。 */
+  redirectStdoutFile?: string;
+  redirectStderrFile?: string;
 }
 
 /** 把单个参数安全地包进 PowerShell 单引号（' 转义为 ''）。 */
@@ -147,13 +154,25 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
   // ── keepAlive ─────────────────────────────────────────────
   if (process.platform !== "win32") {
     try {
+      // 有重定向文件时把文件描述符直接交给 stdio（脱离进程树后依然落盘），
+      // 父进程侧的副本用完即关。
+      let outFd: number | undefined;
+      let errFd: number | undefined;
+      let stdio: ("ignore" | number)[] = ["ignore", "ignore", "ignore"];
+      if (opts.redirectStdoutFile && opts.redirectStderrFile) {
+        outFd = openSync(opts.redirectStdoutFile, "w");
+        errFd = openSync(opts.redirectStderrFile, "w");
+        stdio = ["ignore", outFd, errFd];
+      }
       const child = spawn(command, args, {
         cwd: opts.cwd,
         env: opts.env,
         detached: true,
-        stdio: "ignore",
+        stdio,
       });
       child.unref();
+      if (outFd !== undefined) closeSync(outFd);
+      if (errFd !== undefined) closeSync(errFd);
       return { child };
     } catch (e) {
       return { error: e instanceof Error ? e.message : String(e) };
@@ -165,10 +184,15 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
   const cwdArg = opts.cwd
     ? ` -WorkingDirectory ${escapePwshSingle(opts.cwd)}`
     : "";
+  const redirectArg =
+    opts.redirectStdoutFile && opts.redirectStderrFile
+      ? ` -RedirectStandardOutput ${escapePwshSingle(opts.redirectStdoutFile)}` +
+        ` -RedirectStandardError ${escapePwshSingle(opts.redirectStderrFile)}`
+      : "";
   const ps =
     `Start-Process -FilePath ${escapePwshSingle(command)}` +
     ` -ArgumentList ${buildStartProcessArgumentList(args)}` +
-    ` -WindowStyle Hidden${cwdArg}; exit`;
+    ` -WindowStyle Hidden${redirectArg}${cwdArg}; exit`;
   try {
     const mediator = spawn(
       "powershell.exe",

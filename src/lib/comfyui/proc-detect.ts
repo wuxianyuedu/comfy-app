@@ -44,16 +44,22 @@ export async function findPidForMainPy(mainPy: string): Promise<number | null> {
 
   try {
     if (process.platform === "win32") {
-      // 用 PowerShell 查询命令行含目标路径的进程（转义单引号防注入）
+      // 用 PowerShell 查询命令行含目标路径的进程（转义单引号防注入）。
+      // 两个坑（都实测踩过）：
+      //  ① 整条命令只能出现单引号 —— execFile argv → PS -Command 的引号转义
+      //     链路会把内嵌双引号变形（-Filter "Name LIKE …" 恒空匹配）；
+      //  ② 字面反斜杠在引号链路里会被吞（'\\' 到 PS 手里剩几个不可控），
+      //     Replace 的反斜杠用 [char]92 运行时构造，路径分隔符归一才生效。
+      // Name 过滤放 Where 里做（枚举成本 ~2.5s，超时给足 10s）。
       const safeMain = normalized.replace(/'/g, "''");
       const ps =
         `Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ` +
-        `Where-Object { $_.CommandLine -and $_.CommandLine.ToLower().Replace('\\\\','/').Contains('${safeMain}') } | ` +
+        `Where-Object { $_.Name -like 'python*' -and $_.CommandLine -and $_.CommandLine.ToLower().Replace([string][char]92,'/').Contains('${safeMain}') } | ` +
         `Select-Object -First 1 -ExpandProperty ProcessId`;
       const out = await execFileP(
         "powershell.exe",
         ["-NoProfile", "-NonInteractive", "-Command", ps],
-        4000,
+        10_000,
       );
       const pid = parseInt(out.trim().split(/\r?\n/)[0] ?? "", 10);
       return isNaN(pid) ? null : pid;
