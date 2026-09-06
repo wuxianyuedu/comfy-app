@@ -5,6 +5,7 @@ import {
   ensureComfyUiReady,
   isComfyStarting,
   isComfyStopping,
+  openComfyUi,
   probeComfyUi,
   stopComfyUiProcess,
 } from "@/lib/comfyui/lifecycle";
@@ -94,6 +95,11 @@ export const settingRouter = createTRPCRouter({
    *  Windows 必须 taskkill /T /F，POSIX 用 kill(-pid)。 */
   comfyStop: authedProcedure.mutation(async () => {
     return stopComfyUiProcess();
+  }),
+
+  /** 用系统默认浏览器打开运行中的 ComfyUI（设置页「打开查看」按钮） */
+  comfyOpen: authedProcedure.mutation(async () => {
+    return openComfyUi();
   }),
 
   /** Drizzle Studio 运行状态（设置页「数据库」分区）。

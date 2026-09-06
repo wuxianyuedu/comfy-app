@@ -8,6 +8,7 @@
 //   - probeComfyUi()      HTTP 探测是否可达（复用 resolveComfyBase 的端口探测）
 //   - ensureComfyUiReady() 未运行且已配置 comfyuiPath 时拉起进程并等待就绪
 //   - stopComfyUiProcess() 杀掉 ComfyUI 进程树（设置页「关闭」按钮用）
+//   - openComfyUi()        用系统默认浏览器打开运行中的 ComfyUI 网页界面
 //   - isComfyStarting()   reaper 用：启动窗口期内不回收 QUEUED 任务
 //   - getComfyUiStatus()  设置页状态/按钮用
 //
@@ -23,6 +24,7 @@ import { resolveComfyLaunchPlan } from "./launch-path";
 import { resolveEffectiveLaunch } from "./desktop-instance";
 import { findPidForMainPy, findPidListeningPort } from "./proc-detect";
 import { spawnManaged, waitForDetachMediator } from "../process-launch";
+import { openUrlInBrowser } from "~/lib/open-in-browser";
 
 export type ComfyUiStatus = {
   up: boolean;
@@ -500,4 +502,25 @@ export async function ensureComfyUiReady(
   } finally {
     st.starting = undefined;
   }
+}
+
+/**
+ * 用系统默认浏览器打开运行中的 ComfyUI 网页界面。
+ * 等价于桌面壳里 tauri-plugin-opener 的「拉起系统浏览器」效果，但走 Node
+ * 服务端命令（start / open / xdg-open），不需要动 Rust、不需重编壳。
+ * 返回 ok=false 时 detail 给出可行动的提示。
+ */
+export async function openComfyUi(): Promise<{ ok: boolean; detail: string }> {
+  const base = await probeComfyUi(2000);
+  if (!base) {
+    return {
+      ok: false,
+      detail: "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看",
+    };
+  }
+  const r = await openUrlInBrowser(base);
+  if (r.ok) {
+    return { ok: true, detail: `已用系统默认浏览器打开 ComfyUI（${base}）` };
+  }
+  return r;
 }
