@@ -123,6 +123,21 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
     );
   };
 
+  /* Ollama 启动日志的滚动跟随（同 ComfyUI / Drizzle Studio 的纯视觉偏好） */
+  const ollamaLogBoxRef = useRef<HTMLDivElement>(null);
+  const [ollamaLogFollow, setOllamaLogFollow] = useState(true);
+  useEffect(() => {
+    const el = ollamaLogBoxRef.current;
+    if (el && ollamaLogFollow) el.scrollTop = el.scrollHeight;
+  }, [c.ollamaLogText, ollamaLogFollow]);
+  const onOllamaLogScroll = () => {
+    const el = ollamaLogBoxRef.current;
+    if (!el) return;
+    setOllamaLogFollow(
+      el.scrollHeight - el.scrollTop - el.clientHeight < 32,
+    );
+  };
+
   function openAddDialog(kind: RemoteModelKind = "chat") {
     setDialog({ mode: "add" });
     setAddForm({ baseUrl: "", apiKey: "", model: "", kind });
@@ -535,6 +550,60 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   </>
                 )}
               </div>
+
+              {/* Ollama 启动日志：启动期间每秒跟随 log/ollama-runtime.log，
+                  让「启动中…」不再是黑盒（同 ComfyUI / Drizzle Studio 的用户
+                  可见出口）。 */}
+
+                <div className="border-border bg-surface-1 mb-4 rounded-xl border">
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-ink/80 flex items-center gap-2 text-sm font-medium">
+                      启动日志（ollama-runtime.log）
+                      {c.ollamaLogActive && (
+                        <span className="inline-flex items-center gap-1.5 text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
+                          <span className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-400" />
+                          跟随中
+                        </span>
+                      )}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {!ollamaLogFollow && (
+                        <button
+                          type="button"
+                          onClick={() => setOllamaLogFollow(true)}
+                          className="bg-primary/90 hover:bg-primary rounded px-2 py-0.5 text-[11px] font-medium text-white"
+                        >
+                          恢复自动滚动
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void c.refreshOllamaLog()}
+                        className="border-border text-muted-foreground hover:bg-subtle rounded border px-2 py-0.5 text-[11px] transition-colors"
+                      >
+                        刷新
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    ref={ollamaLogBoxRef}
+                    onScroll={onOllamaLogScroll}
+                    className="border-border/50 custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg bg-black/30 px-3 py-2 font-mono text-[11px] leading-relaxed text-gray-300"
+                  >
+                    {c.ollamaLogText ? (
+                      <span className="break-all whitespace-pre-wrap">
+                        <AnsiLogText segments={c.ollamaLogSegments} />
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        暂无日志 ——
+                        点「启动 Ollama」后这里会实时输出拉起过程（spawn
+                        参数、启动输出与退出状态）；也可点「刷新」查看
+                        最近一次运行日志。
+                      </span>
+                    )}
+                  </div>
+                </div>
 
               {/* Model area — 探测到模型时用下拉 + 候选多选；否则退化为手填 */}
               {c.ollamaStatus === "up" && c.ollamaModels.length > 0 ? (
