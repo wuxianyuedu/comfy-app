@@ -98,6 +98,17 @@ export function useStoryboardPlanner(props: Props) {
   /** 模型通道的实时提取过程（流式 token 累积） */
   const [extractProgress, setExtractProgress] = useState("");
   const [extractError, setExtractError] = useState("");
+  /** 模型清单刷新序号：设置弹窗保存后递增，让下拉重新拉取清单。
+   *  渲染期对比 config 引用（React 19 派生态写法）：config 每次保存后
+   *  是新对象，计数随之递增；初始 null→有值那次不计数（首次无需重拉）。 */
+  const [extractRefreshKey, setExtractRefreshKey] = useState(0);
+  const [prevCfg, setPrevCfg] = useState(config);
+  if (config && config !== prevCfg) {
+    setPrevCfg(config);
+    setExtractRefreshKey((n) => n + 1);
+  } else if (!config && prevCfg) {
+    setPrevCfg(null);
+  }
 
   const hasScript = !!scriptMarkdown?.trim();
   const knownNames = characters.map((character) => character.name).filter(Boolean);
@@ -388,6 +399,7 @@ export function useStoryboardPlanner(props: Props) {
     extractProgress,
     extractStatus,
     extractError,
+    extractRefreshKey,
     hasScript,
     handleExtract,
     handleImportFile,
