@@ -384,11 +384,14 @@ describe("useSettingsPage", () => {
     expect(result.current.drafts?.llm.temperatureByTask).toBeUndefined();
   });
 
-  it("远端模型：添加进草稿（重名/空名拒绝）；候选可移除，当前模型不可移除", async () => {
+  it("远端模型：添加进草稿（重名/空名拒绝）；候选可移除；生效模型字段不受清单管理", async () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    // 设置页只做配置：初始清单 = 候选条目（不含「当前模型」虚拟行）
+    expect(result.current.remoteModelList.map((e) => e.name)).toEqual([]);
 
     let out: { ok: boolean; error?: string } = { ok: false };
     act(() => {
@@ -396,26 +399,30 @@ describe("useSettingsPage", () => {
     });
     expect(out.ok).toBe(true);
     expect(result.current.remoteModelList.map((e) => e.name)).toEqual([
-      "qwen3:14b",
       "gpt-4o",
     ]);
 
-    // 重名拒绝（候选与主模型都算）
+    // 重名拒绝（候选）；空名拒绝
     act(() => {
       out = result.current.addRemoteModel({ name: " gpt-4o " });
     });
     expect(out.ok).toBe(false);
     act(() => {
-      out = result.current.addRemoteModel({ name: "qwen3:14b" });
-    });
-    expect(out.ok).toBe(false);
-    // 空名拒绝
-    act(() => {
       out = result.current.addRemoteModel({ name: "   " });
     });
     expect(out.ok).toBe(false);
 
-    // 移除候选；当前生效条目也可删除 —— 生效位顺延给剩余第一个候选
+    // 与生效模型同名也可加入候选（「当前生效」概念已移出设置页）
+    act(() => {
+      out = result.current.addRemoteModel({ name: "qwen3:14b" });
+    });
+    expect(out.ok).toBe(true);
+    expect(result.current.remoteModelList.map((e) => e.name)).toEqual([
+      "gpt-4o",
+      "qwen3:14b",
+    ]);
+
+    // 移除只动清单，不碰生效模型字段（运行时在工坊切换）
     act(() => {
       result.current.removeRemoteModel("gpt-4o");
     });
@@ -426,7 +433,8 @@ describe("useSettingsPage", () => {
       result.current.removeRemoteModel("qwen3:14b");
     });
     expect(result.current.remoteModelList.map((e) => e.name)).toEqual([]);
-    expect(result.current.drafts?.llm.model).toBe("");
+    /* 生效模型字段保留原值 —— 它归工坊运行时管理 */
+    expect(result.current.drafts?.llm.model).toBe("qwen3:14b");
   });
 
   it("远端模型：条目保留独立接口/密钥；切主模型不动条目", async () => {
@@ -663,60 +671,60 @@ describe("useSettingsPage", () => {
       result.current.remoteModelList.some((e) => e.name === "gpt-4o"),
     ).toBe(false);
 
-    // 改名撞主模型 / 撞其他候选 → 拒绝
+    // 改名撞其他候选 → 拒绝；撞生效模型名不拒绝（生效模型不在清单管理范围）
     act(() => {
       out = result.current.updateRemoteModel("gpt-4o-2024", {
         name: "qwen3:14b",
       });
     });
-    expect(out.ok).toBe(false);
+    expect(out.ok).toBe(true);
     act(() => {
       result.current.addRemoteModel({ name: "claude" });
     });
     act(() => {
       out = result.current.updateRemoteModel("claude", {
-        name: "gpt-4o-2024",
+        name: "qwen3:14b",
       });
     });
     expect(out.ok).toBe(false);
 
     // 清除独立密钥 → 跟随全局
     act(() => {
-      out = result.current.updateRemoteModel("gpt-4o-2024", {
+      out = result.current.updateRemoteModel("qwen3:14b", {
         clearApiKey: true,
       });
     });
     expect(out.ok).toBe(true);
     expect(
-      result.current.remoteModelList.find((e) => e.name === "gpt-4o-2024")
+      result.current.remoteModelList.find((e) => e.name === "qwen3:14b")
         ?.apiKey,
     ).toBeNull();
   });
 
-  it("远端模型：编辑「当前模型」行（候选里无条目）→ 条目补进候选，改名同步主模型", async () => {
+  it("远端模型：编辑未配置条目被拒；改名同步生效模型字段", async () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await waitFor(() => expect(result.current.drafts).not.toBeNull());
 
-    // 初始列表 = [qwen3:14b]（主模型行，候选里无条目）
+    // llm.model 初始 = "qwen3:14b"，候选为空 —— 不再虚拟「当前模型」行可编辑
     let out: { ok: boolean; error?: string } = { ok: false };
     act(() => {
       out = result.current.updateRemoteModel("qwen3:14b", {
+        baseUrl: "https://api.example.com/v1",
+      });
+    });
+    expect(out.ok).toBe(false);
+
+    // 加入与生效模型同名的条目后，改名时同步生效模型字段
+    act(() => {
+      out = result.current.addRemoteModel({
+        name: "qwen3:14b",
         baseUrl: "https://api.example.com/v1",
         apiKey: "sk-main",
       });
     });
     expect(out.ok).toBe(true);
-    expect(result.current.drafts?.llm.model).toBe("qwen3:14b");
-    const entry = result.current.remoteModelList[0];
-    expect(entry?.baseUrl).toBe("https://api.example.com/v1");
-    expect(entry?.apiKey).toBe("sk-main");
-    expect(result.current.drafts?.llm.extraModels).toContainEqual(
-      expect.objectContaining({ name: "qwen3:14b", apiKey: "sk-main" }),
-    );
-
-    // 改当前模型名 → draft.model 同步，条目一并改名
     act(() => {
       out = result.current.updateRemoteModel("qwen3:14b", {
         name: "qwen3:32b",
@@ -724,9 +732,7 @@ describe("useSettingsPage", () => {
     });
     expect(out.ok).toBe(true);
     expect(result.current.drafts?.llm.model).toBe("qwen3:32b");
-    expect(
-      result.current.remoteModelList.map((e) => e.name),
-    ).toContain("qwen3:32b");
+    expect(result.current.drafts?.llm.extraModels[0]?.name).toBe("qwen3:32b");
   });
 
   it("分区切换是纯视觉状态", async () => {

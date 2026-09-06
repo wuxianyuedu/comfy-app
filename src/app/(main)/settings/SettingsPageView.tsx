@@ -293,35 +293,13 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
         {entries.length > 0 ? (
           <div className="space-y-1.5">
             {entries.map((entry) => {
-              const isCurrent = entry.name === c.drafts.llm.model;
               return (
                 <div
                   key={entry.name}
-                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                    isCurrent
-                      ? "border-primary bg-primary-soft"
-                      : "border-border"
-                  }`}
+                  className="border-border flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
                 >
-                  <button
-                    type="button"
-                    onClick={() => c.patchLlm({ model: entry.name })}
-                    title={
-                      isCurrent
-                        ? "当前生效模型"
-                        : "点击设为当前生效"
-                    }
-                    className="min-w-0 flex-1 truncate text-left"
-                  >
-                    <span
-                      className={
-                        isCurrent
-                          ? "text-primary font-medium"
-                          : "text-ink"
-                      }
-                    >
-                      {entry.name}
-                    </span>
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="text-ink">{entry.name}</span>
                     {entry.baseUrl && (
                       <span className="text-muted-foreground ml-2 text-[10px]">
                         独立接口
@@ -332,12 +310,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                         独立密钥
                       </span>
                     )}
-                  </button>
-                  {isCurrent && (
-                    <span className="text-primary shrink-0 text-[10px] font-medium">
-                      当前
-                    </span>
-                  )}
+                  </span>
                   <button
                     type="button"
                     title="按该条目的接口地址与密钥测试连接"
@@ -359,11 +332,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   </button>
                   <button
                     type="button"
-                    title={
-                      isCurrent
-                        ? "移除该模型（当前生效将顺延给剩余候选）"
-                        : "移除该模型"
-                    }
+                    title="移除该模型"
                     onClick={() => c.removeRemoteModel(entry.name)}
                     className="text-muted-foreground hover:text-rose-500 shrink-0"
                   >
@@ -822,7 +791,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                 )}
 
                 <p className="text-muted-foreground mb-4 text-[11px] leading-relaxed">
-                  点击模型设为当前生效，工坊内也可随时切换；「测试」按该条目的接口地址与密钥探测连通性；带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。改动需点下方「保存
+                  此页只维护模型清单：「测试」按该条目的接口地址与密钥探测连通性；带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。实际使用哪个模型在工坊运行界面选择。改动需点下方「保存
                   LLM 配置」生效。
                 </p>
 

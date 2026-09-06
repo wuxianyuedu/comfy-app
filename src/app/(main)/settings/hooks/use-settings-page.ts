@@ -167,7 +167,8 @@ export interface SettingsPageController {
     apiKey?: string;
     kind?: RemoteModelKind;
   }) => { ok: boolean; error?: string };
-  /** 编辑既有条目：name 定位原条目（含「当前模型」行）；重名校验排除自身。
+  /** 编辑既有条目（只作用于已配置条目）；重名校验排除自身，改名时若生效
+   *  模型引用旧名会同步更新。
    *  patch.baseUrl = null / clearApiKey = true 表示清掉独立配置、跟随全局。 */
   updateRemoteModel: (
     name: string,
@@ -723,8 +724,10 @@ export function useSettingsPage(): SettingsPageController {
   }, []);
 
   /* ── 远端模型管理 ──
-   * 「添加 / 移除」只改草稿，点「保存 LLM 配置」才落库；测试连接走
-   * /api/llm/test 代理（apiKey 在服务端参与请求，浏览器不直接打远端）。 */
+   * 设置页只做「配置」：条目的增删改 + 测试连接，不区分「当前生效」——
+   * 实际用哪个模型由工坊运行时切换（configSave.model）。改动只进草稿，
+   * 保存时落库；测试连接走 /api/llm/test 代理（apiKey 在服务端参与请求，
+   * 浏览器不直接打远端）。 */
   const addRemoteModel = useCallback(
     (entry: {
       name: string;
@@ -736,10 +739,7 @@ export function useSettingsPage(): SettingsPageController {
         return { ok: false as const, error: "配置未就绪，请稍后重试" };
       const name = entry.name.trim();
       if (!name) return { ok: false as const, error: "请填写模型名称" };
-      if (
-        name === llmDraft.model ||
-        llmDraft.extraModels.some((e) => e.name === name)
-      ) {
+      if (llmDraft.extraModels.some((e) => e.name === name)) {
         return { ok: false as const, error: `模型「${name}」已在列表中` };
       }
       const cleaned: RemoteModelEntry = {
@@ -761,24 +761,15 @@ export function useSettingsPage(): SettingsPageController {
   const removeRemoteModel = useCallback((name: string) => {
     setLlmDraft((draft) => {
       if (!draft) return draft;
-      /* 当前生效条目也可删除：删的是当前模型时，把生效位顺延给剩余第一个
-       * 候选（没有剩余则清空）——LLM 调用在用户补选模型前会失败，属预期。 */
-      const removingCurrent = name === draft.model;
       const next = draft.extraModels.filter((e) => e.name !== name);
-      const unchanged =
-        !removingCurrent && next.length === draft.extraModels.length;
-      if (unchanged) return draft;
-      return {
-        ...draft,
-        model: removingCurrent ? (next[0]?.name ?? "") : draft.model,
-        extraModels: next,
-      };
+      return next.length === draft.extraModels.length
+        ? draft
+        : { ...draft, extraModels: next };
     });
   }, []);
 
-  /** 编辑既有条目。目标可以是候选条目，也可以是「当前模型」行——后者可能
-   *  只是裸名字（不在 extraModels 里），此时把编辑结果作为条目补进候选，
-   *  独立接口 / 密钥才有地方落；改当前模型的名字要同步改 draft.model。 */
+  /** 编辑既有条目（只作用于已配置条目）；改名时若当前生效模型引用的是旧名，
+   *  同步改 draft.model —— 工坊按名字引用模型，不同步会指向不存在的名字。 */
   const updateRemoteModel = useCallback(
     (
       name: string,
@@ -794,21 +785,18 @@ export function useSettingsPage(): SettingsPageController {
         return { ok: false as const, error: "配置未就绪，请稍后重试" };
       const nextName = (patch.name ?? name).trim();
       if (!nextName) return { ok: false as const, error: "请填写模型名称" };
-      const isCurrent = llmDraft.model === name;
       const existing = llmDraft.extraModels.find((e) => e.name === name);
-      if (!isCurrent && !existing) {
+      if (!existing) {
         return {
           ok: false as const,
           error: `模型「${name}」不存在，请刷新后重试`,
         };
       }
-      if (nextName !== name) {
-        const duplicate =
-          nextName === llmDraft.model ||
-          llmDraft.extraModels.some((e) => e.name === nextName);
-        if (duplicate) {
-          return { ok: false as const, error: `模型「${nextName}」已在列表中` };
-        }
+      if (
+        nextName !== name &&
+        llmDraft.extraModels.some((e) => e.name === nextName)
+      ) {
+        return { ok: false as const, error: `模型「${nextName}」已在列表中` };
       }
       const updated: RemoteModelEntry = {
         name: nextName,
@@ -825,15 +813,12 @@ export function useSettingsPage(): SettingsPageController {
       };
       setLlmDraft((draft) => {
         if (!draft) return draft;
-        const wasCurrent = draft.model === name;
-        const existsInExtra = draft.extraModels.some((e) => e.name === name);
-        const extraModels = existsInExtra
-          ? draft.extraModels.map((e) => (e.name === name ? updated : e))
-          : [...draft.extraModels, updated];
         return {
           ...draft,
-          model: wasCurrent ? nextName : draft.model,
-          extraModels,
+          model: draft.model === name ? nextName : draft.model,
+          extraModels: draft.extraModels.map((e) =>
+            e.name === name ? updated : e,
+          ),
         };
       });
       return { ok: true as const };
@@ -847,20 +832,9 @@ export function useSettingsPage(): SettingsPageController {
     [],
   );
 
-  /** 远端模型列表视图：主模型置顶（候选里有它时沿用其条目参数），其余按现序。 */
-  const remoteModelList: RemoteModelEntry[] = llmDraft
-    ? (() => {
-        const byName = new Map(llmDraft.extraModels.map((e) => [e.name, e]));
-        const head =
-          llmDraft.model.trim() !== ""
-            ? (byName.get(llmDraft.model) ?? { name: llmDraft.model })
-            : null;
-        const rest = llmDraft.extraModels.filter(
-          (e) => e.name !== llmDraft.model,
-        );
-        return head ? [head, ...rest] : rest;
-      })()
-    : [];
+  /** 远端候选模型列表（配置视图，按保存顺序）——设置页不区分「当前生效」，
+   *  用哪个模型由工坊运行时切换。 */
+  const remoteModelList: RemoteModelEntry[] = llmDraft?.extraModels ?? [];
 
   const setTaskTemperature = useCallback(
     (task: TaskType, raw: string) => {
