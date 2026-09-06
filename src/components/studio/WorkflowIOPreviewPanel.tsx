@@ -254,7 +254,7 @@ export function WorkflowIoPreviewPanel({
             <div className="rounded-lg border border-dashed border-white/10 bg-white/2 px-3 py-4 text-center text-[11px] leading-relaxed text-gray-500">
               尚未勾选任何 IO。
               <br />
-              在画布上勾选参数后，这里会同步出现对应的表单行；每个名称旁的 ✎ 可点击重命名。
+              在画布上勾选参数后，这里会同步出现对应的表单行；点击变量名称即可就地重命名。
             </div>
           ) : modes.length === 0 ? (
             <div className="rounded-lg border border-dashed border-amber-400/30 bg-amber-400/5 px-3 py-4 text-center text-[11px] leading-relaxed text-amber-200/80">
@@ -295,9 +295,7 @@ export function WorkflowIoPreviewPanel({
           )}
         </div>
         <div className="shrink-0 border-t border-white/6 px-3 py-1.5 text-[10px] text-gray-500">
-          <span className="opacity-80">点击任意名称旁的</span>
-          <span className="mx-1 inline-block rounded bg-white/8 px-1 font-mono text-[10px] text-gray-300">✎</span>
-          <span className="opacity-80">可重命名；👁 按当前模式保留可见性；「必填 / 可选」切换是否在运行时强校验。</span>
+          <span className="opacity-80">点击变量名称即可重命名；👁 按当前模式保留可见性；「必填 / 可选」切换是否在运行时强校验。</span>
           <RequiredSummary io={previewIO} />
         </div>
       </div>
