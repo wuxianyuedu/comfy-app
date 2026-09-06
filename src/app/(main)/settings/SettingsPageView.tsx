@@ -22,6 +22,10 @@ import {
   type TaskType,
 } from "~/lib/llm/types";
 import type {
+  UsageTestKind,
+  UsageTestResult,
+} from "~/lib/llm/usage-test-client";
+import type {
   SettingsPageController,
   SettingsPageDrafts,
 } from "./hooks/use-settings-page";
@@ -38,6 +42,26 @@ interface ModelDialogForm {
   /** 用途：对话（默认）/ 图片 / 视频——图片 / 视频模型先落配置，供远程生成接入。 */
   kind: RemoteModelKind;
 }
+
+/** 「实际使用」测试弹窗的状态：参数可自定义，结果按用途渲染。 */
+interface UsageTestDialogState {
+  kind: UsageTestKind;
+  entry: RemoteModelEntry;
+  baseUrl: string;
+  path: string;
+  apiKey: string;
+  prompt: string;
+  size: string;
+  extraJson: string;
+  running: boolean;
+  result: UsageTestResult | null;
+}
+
+const USAGE_TEST_KIND_LABELS: Record<UsageTestKind, string> = {
+  chat: "文本",
+  image: "图片",
+  video: "视频",
+};
 
 /** `drafts` 非空由容器保证（`if (!c.drafts)` 早退），这里用交集类型表达，
  *  视图内不必逐处判空。 */
@@ -87,13 +111,11 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [addError, setAddError] = useState<string | null>(null);
   const [clearKey, setClearKey] = useState(false);
-  /* 列表行的就地测试（按条目自身的接口地址 / 密钥），同一时间只测一行 */
-  const [rowTesting, setRowTesting] = useState<string | null>(null);
-  const [rowTestMsg, setRowTestMsg] = useState<{
-    name: string;
-    kind: "ok" | "err";
-    text: string;
-  } | null>(null);
+
+  /* 每个模型条目的「实际使用」测试弹窗：按用途预填端点路径与提示词，
+   * 路径 / 提示词 / 尺寸 / 额外参数（JSON）均可自定义输入。
+   * 图片 / 视频会真实调用生成接口，消耗提供方额度 —— 弹窗内有预告。 */
+  const [usageTest, setUsageTest] = useState<UsageTestDialogState | null>(null);
 
   /* ComfyUI 启动日志的滚动跟随是纯视觉偏好，留在视图层 */
   const comfyLogBoxRef = useRef<HTMLDivElement>(null);
@@ -181,23 +203,59 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
     }
   }
 
-  async function handleRowTest(entry: RemoteModelEntry) {
-    setRowTesting(entry.name);
-    setRowTestMsg(null);
-    try {
-      const out = await c.probeRemote({
-        baseUrl: entry.baseUrl ?? undefined,
-        apiKey: entry.apiKey ?? undefined,
-        model: entry.name,
-      });
-      setRowTestMsg({
-        name: entry.name,
-        kind: out.ok ? "ok" : "err",
-        text: out.detail,
-      });
-    } finally {
-      setRowTesting(null);
-    }
+  /** 打开「实际使用」测试弹窗：按用途预填端点路径与提示词；
+   *  base 已含资源子路径（如 …/v1/images）时路径只补动作段。 */
+  function openUsageTest(kind: UsageTestKind, entry: RemoteModelEntry) {
+    const base = entry.baseUrl ?? "";
+    const defaults: Record<UsageTestKind, { path: string; prompt: string }> = {
+      chat: {
+        path: "/chat/completions",
+        prompt: "用一句话介绍你自己",
+      },
+      image: {
+        path: "/images/generations",
+        prompt: "一只戴宇航员头盔的柴犬，写实风格，高清",
+      },
+      video: {
+        path: "/videos/generations",
+        prompt: "一只柴犬在草地上奔跑，阳光明媚，电影感",
+      },
+    };
+    const preset = defaults[kind];
+    const path =
+      kind === "image" && /\/images$/i.test(base)
+        ? "/generations"
+        : kind === "video" && /\/videos$/i.test(base)
+          ? ""
+          : preset.path;
+    setUsageTest({
+      kind,
+      entry,
+      baseUrl: base,
+      path,
+      apiKey: "",
+      prompt: preset.prompt,
+      size: kind === "image" ? "1024x1024" : "",
+      extraJson: "",
+      running: false,
+      result: null,
+    });
+  }
+
+  async function runUsageTest() {
+    if (!usageTest || usageTest.running) return;
+    setUsageTest({ ...usageTest, running: true, result: null });
+    const out = await c.testModelUsage({
+      kind: usageTest.kind,
+      name: usageTest.entry.name,
+      baseUrl: usageTest.baseUrl.trim(),
+      path: usageTest.path.trim(),
+      apiKey: usageTest.apiKey.trim() || undefined,
+      prompt: usageTest.prompt,
+      size: usageTest.size.trim() || undefined,
+      extraJson: usageTest.extraJson.trim() || undefined,
+    });
+    setUsageTest((prev) => (prev ? { ...prev, running: false, result: out } : prev));
   }
 
   function handleDialogSubmit() {
@@ -278,14 +336,11 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   </span>
                   <button
                     type="button"
-                    title="按该条目的接口地址与密钥测试连接"
-                    onClick={() => void handleRowTest(entry)}
-                    disabled={rowTesting !== null}
-                    className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors disabled:opacity-40"
+                    title="按实际用法发起一次真实调用（参数可在弹窗内自定义）"
+                    onClick={() => openUsageTest(kind, entry)}
+                    className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors"
                   >
-                    {rowTesting === entry.name
-                      ? "测试中…"
-                      : "测试"}
+                    测试
                   </button>
                   <button
                     type="button"
@@ -739,20 +794,8 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   "还没有视频模型 —— 点击「添加模型」加入视频生成 API 使用的模型。",
                 )}
 
-                {rowTestMsg && (
-                  <p
-                    className={`mb-4 rounded-lg px-3 py-2 text-[11px] ${
-                      rowTestMsg.kind === "ok"
-                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                        : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
-                    }`}
-                  >
-                    「{rowTestMsg.name}」：{rowTestMsg.text}
-                  </p>
-                )}
-
                 <p className="text-muted-foreground mb-4 text-[11px] leading-relaxed">
-                  此页只维护模型清单：「测试」按该条目的接口地址与密钥探测连通性；带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。实际使用哪个模型在工坊运行界面选择。改动需点下方「保存
+                  此页只维护模型清单：「测试」按该条目的配置发起一次真实调用（参数可在弹窗内自定义）；带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。实际使用哪个模型在工坊运行界面选择。改动需点下方「保存
                   LLM 配置」生效。
                 </p>
 
@@ -962,6 +1005,197 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                         className="bg-primary hover:bg-primary-hover rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50"
                       >
                         {dialog.mode === "edit" ? "保存" : "添加"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 「实际使用」测试弹窗：按用途真实调用一次（chat / 生图 / 生视频），
+                  路径 / 提示词 / 尺寸 / 额外参数均可自定义输入。 */}
+              {usageTest && (
+                <div
+                  className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
+                  onClick={() => setUsageTest(null)}
+                >
+                  <div
+                    className="border-border bg-surface max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border p-5 shadow-2xl"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="u-title">
+                        实际调用测试 · {USAGE_TEST_KIND_LABELS[usageTest.kind]}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setUsageTest(null)}
+                        className="text-muted-foreground hover:text-ink"
+                        aria-label="关闭"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <label className="text-ink/80 mb-1.5 block text-sm font-medium">
+                      接口地址
+                    </label>
+                    <input
+                      type="text"
+                      value={usageTest.baseUrl}
+                      onChange={(event) =>
+                        setUsageTest({ ...usageTest, baseUrl: event.target.value })
+                      }
+                      placeholder="https://api.example.com/v1"
+                      className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                    />
+
+                    <label className="text-ink/80 mb-1.5 block text-sm font-medium">
+                      端点路径
+                    </label>
+                    <input
+                      type="text"
+                      value={usageTest.path}
+                      onChange={(event) =>
+                        setUsageTest({ ...usageTest, path: event.target.value })
+                      }
+                      placeholder={
+                        usageTest.kind === "video" ? "留空 = 就是上面的地址" : "/images/generations"
+                      }
+                      className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                    />
+
+                    <label className="text-ink/80 mb-1.5 block text-sm font-medium">
+                      API Key
+                    </label>
+                    <input
+                      type="password"
+                      value={usageTest.apiKey}
+                      onChange={(event) =>
+                        setUsageTest({ ...usageTest, apiKey: event.target.value })
+                      }
+                      placeholder="留空则使用该条目已保存的密钥（再回落全局）"
+                      className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                    />
+
+                    <label className="text-ink/80 mb-1.5 block text-sm font-medium">
+                      提示词
+                    </label>
+                    <textarea
+                      value={usageTest.prompt}
+                      onChange={(event) =>
+                        setUsageTest({ ...usageTest, prompt: event.target.value })
+                      }
+                      rows={2}
+                      className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none"
+                    />
+
+                    {usageTest.kind === "image" && (
+                      <>
+                        <label className="text-ink/80 mb-1.5 block text-sm font-medium">
+                          尺寸
+                        </label>
+                        <input
+                          type="text"
+                          value={usageTest.size}
+                          onChange={(event) =>
+                            setUsageTest({ ...usageTest, size: event.target.value })
+                          }
+                          placeholder="1024x1024"
+                          className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                        />
+                      </>
+                    )}
+
+                    <label className="text-ink/80 mb-1.5 block text-sm font-medium">
+                      额外参数（JSON 对象，可选）
+                    </label>
+                    <textarea
+                      value={usageTest.extraJson}
+                      onChange={(event) =>
+                        setUsageTest({ ...usageTest, extraJson: event.target.value })
+                      }
+                      rows={2}
+                      placeholder={'{"seed": 42}'}
+                      className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-1 w-full resize-y rounded-lg border px-3 py-2 font-mono text-xs outline-none"
+                    />
+                    <p className="text-muted-foreground mb-3 text-[11px]">
+                      逐键合并进请求体，可覆盖默认字段（如 seed / duration / size）。
+                    </p>
+
+                    {(usageTest.kind === "image" || usageTest.kind === "video") && (
+                      <p className="mb-3 rounded-lg bg-amber-100 px-3 py-2 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                        ⚠ 会真实调用生成接口并消耗提供方额度。
+                      </p>
+                    )}
+
+                    {usageTest.running && (
+                      <p className="text-muted-foreground mb-3 flex items-center gap-2 text-xs">
+                        <Loader2 size={13} className="animate-spin" />
+                        正在按实际用法调用…
+                      </p>
+                    )}
+
+                    {usageTest.result && !usageTest.running && (
+                      <div className="mb-3">
+                        {usageTest.result.ok ? (
+                          <>
+                            <p className="mb-2 rounded-lg bg-emerald-100 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                              {usageTest.result.detail}
+                              {usageTest.result.elapsedMs != null &&
+                                ` · 耗时 ${(usageTest.result.elapsedMs / 1000).toFixed(1)}s`}
+                            </p>
+                            {usageTest.result.chatText && (
+                              <p className="border-border/50 bg-surface-1 max-h-40 overflow-y-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">
+                                {usageTest.result.chatText}
+                              </p>
+                            )}
+                            {usageTest.result.imageUrl && (
+                              <img
+                                src={usageTest.result.imageUrl}
+                                alt="生成结果"
+                                className="max-h-56 w-full rounded-lg border border-border/50"
+                              />
+                            )}
+                            {usageTest.result.videoUrl && (
+                              <a
+                                href={usageTest.result.videoUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-primary break-all text-xs underline underline-offset-2"
+                              >
+                                打开生成的视频
+                              </a>
+                            )}
+                            {usageTest.result.pending && usageTest.result.taskId && (
+                              <p className="text-muted-foreground text-xs">
+                                任务 ID：{usageTest.result.taskId}
+                                —— 稍后可在提供方后台查看结果。
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="rounded-lg bg-red-100 px-3 py-2 text-xs break-all text-red-700 dark:bg-red-500/10 dark:text-red-300">
+                            {usageTest.result.detail}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setUsageTest(null)}
+                        className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-4 py-2 text-sm transition-colors"
+                      >
+                        关闭
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void runUsageTest()}
+                        disabled={usageTest.running || !usageTest.prompt.trim()}
+                        className="bg-primary hover:bg-primary-hover rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50"
+                      >
+                        {usageTest.running ? "调用中…" : "执行测试"}
                       </button>
                     </div>
                   </div>

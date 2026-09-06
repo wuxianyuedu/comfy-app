@@ -24,6 +24,11 @@ import {
 } from "~/lib/llm/ollama-client";
 import { probeRemoteApi, type RemoteProbeResult } from "~/lib/llm/browser";
 import {
+  testModelUsage,
+  type UsageTestInput,
+  type UsageTestResult,
+} from "~/lib/llm/usage-test-client";
+import {
   normalizeExtraModels,
   TASK_TYPES,
   type RemoteModelEntry,
@@ -186,6 +191,8 @@ export interface SettingsPageController {
     apiKey?: string;
     model?: string;
   }) => Promise<RemoteProbeResult>;
+  /** 按用途发起一次真实调用（图片 / 视频会真实生成、消耗额度） */
+  testModelUsage: (input: UsageTestInput) => Promise<UsageTestResult>;
 }
 
 /** 提示条停留时长。 */
@@ -832,6 +839,13 @@ export function useSettingsPage(): SettingsPageController {
     [],
   );
 
+  /** 模型「实际使用」测试（chat / 生图 / 生视频各一次真实调用）。
+   *  网络封装在 lib/llm/usage-test-client，密钥解析在服务端完成。 */
+  const testModelUsageFn = useCallback(
+    async (input: UsageTestInput) => testModelUsage(input),
+    [],
+  );
+
   /** 远端候选模型列表（配置视图，按保存顺序）——设置页不区分「当前生效」，
    *  用哪个模型由工坊运行时切换。 */
   const remoteModelList: RemoteModelEntry[] = llmDraft?.extraModels ?? [];
@@ -894,6 +908,7 @@ export function useSettingsPage(): SettingsPageController {
     updateRemoteModel,
     removeRemoteModel,
     probeRemote,
+    testModelUsage: testModelUsageFn,
     llmApiKey,
     setLlmApiKey,
     ollamaStatus,
