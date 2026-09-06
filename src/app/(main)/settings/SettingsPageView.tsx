@@ -27,6 +27,7 @@ import {
   VIDEO_MODE_PRESETS,
   defaultVideoFields,
   isMediaField,
+  isModeValueBroken,
   usageFieldsToJson,
   looksLikeImage,
   videoModeHidesMedia,
@@ -181,9 +182,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
   const onDbStudioLogScroll = () => {
     const el = dbStudioLogBoxRef.current;
     if (!el) return;
-    setDbStudioLogFollow(
-      el.scrollHeight - el.scrollTop - el.clientHeight < 32,
-    );
+    setDbStudioLogFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 32);
   };
 
   /* Ollama 启动日志的滚动跟随（同 ComfyUI / Drizzle Studio 的纯视觉偏好） */
@@ -196,9 +195,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
   const onOllamaLogScroll = () => {
     const el = ollamaLogBoxRef.current;
     if (!el) return;
-    setOllamaLogFollow(
-      el.scrollHeight - el.scrollTop - el.clientHeight < 32,
-    );
+    setOllamaLogFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 32);
   };
 
   function openAddDialog(kind: RemoteModelKind = "chat") {
@@ -304,10 +301,11 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
       size: usageTest.size.trim() || undefined,
       /* 由结构化字段行生成请求体 JSON（替代原先手填整段 JSON）；
        * 视频且 mode=text 时媒体字段已被界面隐藏，这里同样排除，避免 invalid mode */
-      extraJson:
-        usageFieldsToJson(usageFieldsToSend(usageTest)) || undefined,
+      extraJson: usageFieldsToJson(usageFieldsToSend(usageTest)) || undefined,
     });
-    setUsageTest((prev) => (prev ? { ...prev, running: false, result: out } : prev));
+    setUsageTest((prev) =>
+      prev ? { ...prev, running: false, result: out } : prev,
+    );
   }
 
   /* ── 「额外字段」行编辑器：增删改某一行 / 把某行设为图片 / 应用 mode 预设。
@@ -345,15 +343,20 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
     }
   }
   /** 随请求发送的字段行：视频 mode=text 时媒体字段已被隐藏（不渲染也不发送），
- *  其余场景原样保留。过滤逻辑读 usage-test-config 的纯函数，视图不重复实现。 */
-  function usageFieldsToSend(state: NonNullable<typeof usageTest>): UsageField[] {
-    const hideMedia = state.kind === "video" && videoModeHidesMedia(state.fields);
+   *  其余场景原样保留。过滤逻辑读 usage-test-config 的纯函数，视图不重复实现。 */
+  function usageFieldsToSend(
+    state: NonNullable<typeof usageTest>,
+  ): UsageField[] {
+    const hideMedia =
+      state.kind === "video" && videoModeHidesMedia(state.fields);
     return hideMedia
       ? state.fields.filter((f) => !isMediaField(f.key))
       : state.fields;
   }
 
-  /** 设置视频 mode 快捷值：已有 mode 行则改其值，否则在末尾追加一行。 */
+  /** 设置视频 mode 快捷值：已有 mode 行则改其值，否则在末尾追加一行。
+   *  若引用图从未落到媒体行（images / first_frame / audios）——例如被误
+   *  填进了 mode 行或首行默认值——先把它搬移过去再设 mode，避免丢图。 */
   function setVideoMode(mode: string) {
     setUsageTest((prev) => {
       if (!prev) return prev;
@@ -364,7 +367,30 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
         );
         return { ...prev, fields };
       }
-      return { ...prev, fields: [...prev.fields, { key: "mode", value: mode }] };
+      return {
+        ...prev,
+        fields: [...prev.fields, { key: "mode", value: mode }],
+      };
+    });
+  }
+
+  /** mode 行被图片覆盖时的自愈：把图片搬到 images 行（没有则新建），
+   *  mode 值复位为 text——图片不丢、mode 可见可改。 */
+  function rescueMediaFromMode(index: number, url: string) {
+    setUsageTest((prev) => {
+      if (!prev) return prev;
+      const fields = prev.fields.map((f, i) =>
+        i === index ? { ...f, value: "text" } : f,
+      );
+      const emptyImgRow = fields.findIndex(
+        (f) => f.key.trim() === "images" && f.value.trim() === "",
+      );
+      if (emptyImgRow >= 0) {
+        fields[emptyImgRow] = { key: "images", value: url };
+      } else {
+        fields.push({ key: "images", value: url });
+      }
+      return { ...prev, fields };
     });
   }
 
@@ -466,7 +492,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     type="button"
                     title="移除该模型（即时保存）"
                     onClick={() => void c.removeRemoteModel(entry.name)}
-                    className="text-muted-foreground hover:text-rose-500 shrink-0"
+                    className="text-muted-foreground shrink-0 hover:text-rose-500"
                   >
                     ✕
                   </button>
@@ -654,55 +680,55 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   让「启动中…」不再是黑盒（同 ComfyUI / Drizzle Studio 的用户
                   可见出口）。 */}
 
-                <div className="border-border bg-surface-1 mb-4 rounded-xl border">
-                  <div className="flex items-center justify-between px-3 py-2">
-                    <span className="text-ink/80 flex items-center gap-2 text-sm font-medium">
-                      启动日志（ollama-runtime.log）
-                      {c.ollamaLogActive && (
-                        <span className="inline-flex items-center gap-1.5 text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
-                          <span className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-400" />
-                          跟随中
-                        </span>
-                      )}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      {!ollamaLogFollow && (
-                        <button
-                          type="button"
-                          onClick={() => setOllamaLogFollow(true)}
-                          className="bg-primary/90 hover:bg-primary rounded px-2 py-0.5 text-[11px] font-medium text-white"
-                        >
-                          恢复自动滚动
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => void c.refreshOllamaLog()}
-                        className="border-border text-muted-foreground hover:bg-subtle rounded border px-2 py-0.5 text-[11px] transition-colors"
-                      >
-                        刷新
-                      </button>
-                    </div>
-                  </div>
-                  <div
-                    ref={ollamaLogBoxRef}
-                    onScroll={onOllamaLogScroll}
-                    className="border-border/50 custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg bg-black/30 px-3 py-2 font-mono text-[11px] leading-relaxed text-gray-300"
-                  >
-                    {c.ollamaLogText ? (
-                      <span className="break-all whitespace-pre-wrap">
-                        <AnsiLogText segments={c.ollamaLogSegments} />
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">
-                        暂无日志 ——
-                        点「启动 Ollama」后这里会实时输出拉起过程（spawn
-                        参数、启动输出与退出状态）；也可点「刷新」查看
-                        最近一次运行日志。
+              <div className="border-border bg-surface-1 mb-4 rounded-xl border">
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-ink/80 flex items-center gap-2 text-sm font-medium">
+                    启动日志（ollama-runtime.log）
+                    {c.ollamaLogActive && (
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
+                        <span className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-400" />
+                        跟随中
                       </span>
                     )}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {!ollamaLogFollow && (
+                      <button
+                        type="button"
+                        onClick={() => setOllamaLogFollow(true)}
+                        className="bg-primary/90 hover:bg-primary rounded px-2 py-0.5 text-[11px] font-medium text-white"
+                      >
+                        恢复自动滚动
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void c.refreshOllamaLog()}
+                      className="border-border text-muted-foreground hover:bg-subtle rounded border px-2 py-0.5 text-[11px] transition-colors"
+                    >
+                      刷新
+                    </button>
                   </div>
                 </div>
+                <div
+                  ref={ollamaLogBoxRef}
+                  onScroll={onOllamaLogScroll}
+                  className="border-border/50 custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg bg-black/30 px-3 py-2 font-mono text-[11px] leading-relaxed text-gray-300"
+                >
+                  {c.ollamaLogText ? (
+                    <span className="break-all whitespace-pre-wrap">
+                      <AnsiLogText segments={c.ollamaLogSegments} />
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      暂无日志 —— 点「启动
+                      Ollama」后这里会实时输出拉起过程（spawn
+                      参数、启动输出与退出状态）；也可点「刷新」查看
+                      最近一次运行日志。
+                    </span>
+                  )}
+                </div>
+              </div>
 
               {/* Model area — 探测到模型时用下拉 + 候选多选；否则退化为手填 */}
               {c.ollamaStatus === "up" && c.ollamaModels.length > 0 ? (
@@ -807,16 +833,13 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                 {showTaskTemps && (
                   <div className="space-y-3">
                     {TEMPERATURE_TASKS.map(([key, meta]) => {
-                      const override =
-                        c.drafts.llm.temperatureByTask?.[key];
+                      const override = c.drafts.llm.temperatureByTask?.[key];
                       const isOverridden =
                         override !== undefined && override !== null;
                       const shown =
                         taskTempEdits[key] ??
                         String(
-                          isOverridden
-                            ? override
-                            : meta.defaultTemperature,
+                          isOverridden ? override : meta.defaultTemperature,
                         );
                       return (
                         <div
@@ -863,10 +886,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                             value={shown}
                             onChange={(event) => {
                               setTaskEdit(key, event.target.value);
-                              c.setTaskTemperature(
-                                key,
-                                event.target.value,
-                              );
+                              c.setTaskTemperature(key, event.target.value);
                             }}
                             onBlur={() => clearTaskEdit(key)}
                             className="border-border text-ink focus:border-primary bg-surface-2 w-24 rounded-lg border px-2 py-1.5 text-right text-sm outline-none"
@@ -907,7 +927,9 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                 )}
 
                 <p className="text-muted-foreground mb-4 text-[11px] leading-relaxed">
-                  此页只维护模型清单，添加 / 编辑 / 移除都会<strong className="text-ink/80">即时保存</strong>：「测试」按该条目的配置发起一次真实调用（参数可在弹窗内自定义）；带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。实际使用哪个模型在工坊运行界面选择。
+                  此页只维护模型清单，添加 / 编辑 / 移除都会
+                  <strong className="text-ink/80">即时保存</strong>
+                  ：「测试」按该条目的配置发起一次真实调用（参数可在弹窗内自定义）；带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。实际使用哪个模型在工坊运行界面选择。
                 </p>
               </Card>
 
@@ -958,7 +980,10 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       className="mb-3 text-sm"
                       value={addForm.kind}
                       onChange={(kind) =>
-                        setAddForm((f) => ({ ...f, kind: kind as RemoteModelKind }))
+                        setAddForm((f) => ({
+                          ...f,
+                          kind: kind as RemoteModelKind,
+                        }))
                       }
                       options={[...REMOTE_MODEL_KINDS]}
                       labels={REMOTE_MODEL_KIND_LABELS}
@@ -990,7 +1015,10 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                         type="password"
                         value={addForm.apiKey}
                         onChange={(event) => {
-                          setAddForm({ ...addForm, apiKey: event.target.value });
+                          setAddForm({
+                            ...addForm,
+                            apiKey: event.target.value,
+                          });
                           /* 输入新密钥即撤销「清除」标记 */
                           if (event.target.value) setClearKey(false);
                         }}
@@ -1148,7 +1176,10 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     <textarea
                       value={usageTest.prompt}
                       onChange={(event) =>
-                        setUsageTest({ ...usageTest, prompt: event.target.value })
+                        setUsageTest({
+                          ...usageTest,
+                          prompt: event.target.value,
+                        })
                       }
                       rows={2}
                       className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none"
@@ -1163,7 +1194,10 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                           type="text"
                           value={usageTest.size}
                           onChange={(event) =>
-                            setUsageTest({ ...usageTest, size: event.target.value })
+                            setUsageTest({
+                              ...usageTest,
+                              size: event.target.value,
+                            })
                           }
                           placeholder="1024x1024"
                           className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
@@ -1180,7 +1214,10 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                           type="text"
                           value={usageTest.size}
                           onChange={(event) =>
-                            setUsageTest({ ...usageTest, size: event.target.value })
+                            setUsageTest({
+                              ...usageTest,
+                              size: event.target.value,
+                            })
                           }
                           placeholder="如 720P（Agnes Flash 固定值）或 1280x704"
                           className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
@@ -1192,8 +1229,9 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       请求体额外字段
                     </label>
                     <p className="text-muted-foreground -mt-1 mb-2 text-[11px]">
-                      每个字段用「字段名 + 值」两格填，替代原先手填整段 JSON；值可为
-                      文本 / 数字 / 图片（点「上传」选本地图片，或点「链接」直接粘贴公网图片地址）。
+                      每个字段用「字段名 + 值」两格填，替代原先手填整段
+                      JSON；值可为 文本 / 数字 /
+                      图片（点「上传」选本地图片，或点「链接」直接粘贴公网图片地址）。
                       数值自动按数字 / 布尔解析（如 seed 填 42 即数字）。
                     </p>
                     {usageTest.kind !== "chat" && (
@@ -1209,9 +1247,12 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                           {VIDEO_MODE_PRESETS.map((m) => {
+                            const modeValue = usageTest.fields.find(
+                              (f) => f.key === "mode",
+                            )?.value;
                             const active =
-                              usageTest.fields.find((f) => f.key === "mode")
-                                ?.value === m;
+                              modeValue?.trim() === m &&
+                              !isModeValueBroken(modeValue ?? "");
                             return (
                               <button
                                 key={m}
@@ -1240,6 +1281,36 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                             </p>
                           ) : null;
                         })}
+                        {usageTest.fields.map((f) => {
+                          if (f.key !== "mode" || !isModeValueBroken(f.value))
+                            return null;
+                          const i = usageTest.fields.indexOf(f);
+                          return (
+                            <div
+                              key="mode-broken"
+                              className="mt-1 rounded-lg border border-dashed border-amber-400/60 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+                            >
+                              <p>
+                                ⚠ mode 的值被图片/链接覆盖了——这正是「reference
+                                选中消失」和 400 invalid mode
+                                的原因。点下方按钮把图搬到 images
+                                行，或直接把输入框改回 text / keyframe /
+                                reference。
+                              </p>
+                              {looksLikeImage(f.value) && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    rescueMediaFromMode(i, f.value.trim())
+                                  }
+                                  className="mt-1 rounded border border-amber-400/60 px-2 py-0.5 text-[11px] hover:bg-amber-500/10"
+                                >
+                                  把这张图搬到 images 行，mode 复位为 text
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
                         {videoModeMissingHint(usageTest.fields) && (
                           <p className="mt-1 rounded-lg border border-dashed border-amber-400/60 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
                             ⚠ {videoModeMissingHint(usageTest.fields)}
@@ -1249,9 +1320,9 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     )}
 
                     {usageTest.fields.length === 0 && (
-                      <p className="text-muted-foreground mb-2 rounded-lg border border-dashed border-border px-3 py-3 text-center text-[11px]">
-                        还没有额外字段。点下方「添加字段」可按需补
-                        seed / duration / first_frame 等。
+                      <p className="text-muted-foreground border-border mb-2 rounded-lg border border-dashed px-3 py-3 text-center text-[11px]">
+                        还没有额外字段。点下方「添加字段」可按需补 seed /
+                        duration / first_frame 等。
                       </p>
                     )}
 
@@ -1259,73 +1330,94 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       {usageFieldsToSend(usageTest).map((f) => {
                         const i = usageTest.fields.indexOf(f);
                         return (
-                        <div key={`${f.key}-${i}`} className="flex flex-col gap-1.5">
-                          <div className="flex gap-1.5">
-                            <input
-                              type="text"
-                              value={f.key}
-                              onChange={(event) =>
-                                patchField(i, { key: event.target.value })
-                              }
-                              placeholder="字段名（如 seed / first_frame）"
-                              className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-2/5 min-w-0 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
-                            />
-                            <input
-                              type="text"
-                              value={f.value}
-                              onChange={(event) =>
-                                patchField(i, { value: event.target.value })
-                              }
-                              placeholder={
-                                f.key === "mode"
-                                  ? "text / keyframe / reference 或自定义"
-                                  : looksLikeImage(f.value)
-                                    ? "已设为图片，可粘贴新的图片地址覆盖"
-                                    : "值：文本 / 数字 / 图片地址"
-                              }
-                              className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full min-w-0 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
-                            />
-                            <label
-                              className="text-muted-foreground hover:text-ink border-border hover:bg-subtle flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border px-2 text-[11px] transition-colors"
-                              title="本地上传一张图片作为该字段的值（自动转 data URL）"
-                            >
-                              上传
+                          <div
+                            key={`${f.key}-${i}`}
+                            className="flex flex-col gap-1.5"
+                          >
+                            <div className="flex gap-1.5">
                               <input
-                                type="file"
-                                accept="image/png,image/jpeg,image/webp,image/gif"
-                                className="hidden"
+                                type="text"
+                                value={f.key}
                                 onChange={(event) =>
-                                  void pickFieldImage(i, event.target.files?.[0])
+                                  patchField(i, { key: event.target.value })
                                 }
+                                placeholder="字段名（如 seed / first_frame）"
+                                className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-2/5 min-w-0 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
                               />
-                            </label>
-                            {!(usageTest.kind === "video" && isMediaField(f.key)) && (
+                              <input
+                                type="text"
+                                value={f.value}
+                                onChange={(event) =>
+                                  patchField(i, { value: event.target.value })
+                                }
+                                placeholder={
+                                  f.key === "mode"
+                                    ? "模式名：text / keyframe / reference（图片请添加 images 行）"
+                                    : looksLikeImage(f.value)
+                                      ? "已设为图片，可粘贴新的图片地址覆盖"
+                                      : "值：文本 / 数字 / 图片地址"
+                                }
+                                className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full min-w-0 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
+                              />
+                              {f.key === "mode" ? (
+                                <span
+                                  className="text-muted-foreground/40 border-border/40 shrink-0 cursor-not-allowed rounded-lg border px-2 py-1.5 text-[11px]"
+                                  title="mode 是模式名（text / keyframe / reference），不能填图片；先添加 images / first_frame 行再传图"
+                                >
+                                  上传
+                                </span>
+                              ) : (
+                                <label
+                                  className="text-muted-foreground hover:text-ink border-border hover:bg-subtle flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border px-2 text-[11px] transition-colors"
+                                  title="本地上传一张图片作为该字段的值（自动转 data URL）"
+                                >
+                                  上传
+                                  <input
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/webp,image/gif"
+                                    className="hidden"
+                                    onChange={(event) =>
+                                      void pickFieldImage(
+                                        i,
+                                        event.target.files?.[0],
+                                      )
+                                    }
+                                  />
+                                </label>
+                              )}
+                              {!(
+                                usageTest.kind === "video" &&
+                                isMediaField(f.key)
+                              ) &&
+                                f.key !== "mode" && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      patchField(i, { value: "https://" })
+                                    }
+                                    className="text-muted-foreground hover:text-ink border-border hover:bg-subtle shrink-0 rounded-lg border px-2 text-[11px] transition-colors"
+                                    title="填入公网图片地址占位，直接改成你的图片 URL 即可"
+                                  >
+                                    链接
+                                  </button>
+                                )}
                               <button
                                 type="button"
-                                onClick={() => patchField(i, { value: "https://" })}
-                                className="text-muted-foreground hover:text-ink border-border hover:bg-subtle shrink-0 rounded-lg border px-2 text-[11px] transition-colors"
-                                title="填入公网图片地址占位，直接改成你的图片 URL 即可"
+                                onClick={() => removeField(i)}
+                                className="text-muted-foreground shrink-0 px-1 text-sm hover:text-red-400"
+                                aria-label="删除该字段"
                               >
-                                链接
+                                ✕
                               </button>
+                            </div>
+                            {looksLikeImage(f.value) && (
+                              <img
+                                src={f.value}
+                                alt="字段图片预览"
+                                className="border-border/60 max-h-24 w-fit rounded-md border"
+                              />
                             )}
-                            <button
-                              type="button"
-                              onClick={() => removeField(i)}
-                              className="text-muted-foreground hover:text-red-400 shrink-0 px-1 text-sm"
-                              aria-label="删除该字段"
-                            >
-                              ✕
-                            </button>
                           </div>
-                          {looksLikeImage(f.value) && (
-                            <img
-                              src={f.value}
-                              alt="字段图片预览"
-                              className="max-h-24 w-fit rounded-md border border-border/60"
-                            />
-                          )}
-                        </div>
                         );
                       })}
                     </div>
@@ -1333,12 +1425,13 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     <button
                       type="button"
                       onClick={() => addField()}
-                      className="text-muted-foreground hover:text-ink mb-3 rounded-lg border border-dashed border-border px-3 py-1.5 text-xs transition-colors"
+                      className="text-muted-foreground hover:text-ink border-border mb-3 rounded-lg border border-dashed px-3 py-1.5 text-xs transition-colors"
                     >
                       ＋ 添加字段
                     </button>
 
-                    {(usageTest.kind === "image" || usageTest.kind === "video") && (
+                    {(usageTest.kind === "image" ||
+                      usageTest.kind === "video") && (
                       <p className="mb-3 rounded-lg bg-amber-100 px-3 py-2 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
                         ⚠ 会真实调用生成接口并消耗提供方额度。
                       </p>
@@ -1369,7 +1462,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                               <img
                                 src={usageTest.result.imageUrl}
                                 alt="生成结果"
-                                className="max-h-56 w-full rounded-lg border border-border/50"
+                                className="border-border/50 max-h-56 w-full rounded-lg border"
                               />
                             )}
                             {usageTest.result.videoUrl && (
@@ -1377,17 +1470,18 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                                 href={usageTest.result.videoUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-primary break-all text-xs underline underline-offset-2"
+                                className="text-primary text-xs break-all underline underline-offset-2"
                               >
                                 打开生成的视频
                               </a>
                             )}
-                            {usageTest.result.pending && usageTest.result.taskId && (
-                              <p className="text-muted-foreground text-xs">
-                                任务 ID：{usageTest.result.taskId}
-                                —— 稍后可在提供方后台查看结果。
-                              </p>
-                            )}
+                            {usageTest.result.pending &&
+                              usageTest.result.taskId && (
+                                <p className="text-muted-foreground text-xs">
+                                  任务 ID：{usageTest.result.taskId}
+                                  —— 稍后可在提供方后台查看结果。
+                                </p>
+                              )}
                           </>
                         ) : (
                           <p className="rounded-lg bg-red-100 px-3 py-2 text-xs break-all text-red-700 dark:bg-red-500/10 dark:text-red-300">
@@ -1430,10 +1524,10 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                 placeholder="例如 D:\\ComfyUI 或 D:\\Comfy-Desktop\\ComfyUI-Installs\\ComfyUI2"
               />
               <p className="text-muted-foreground -mt-2 mb-3 text-xs">
-                桌面版（ComfyUI Desktop）请直接配置实例根目录（含
-                ComfyUI/ 子目录与 standalone-env/），便携版配置含
-                main.py 的源码根。自动识别 python_embeded / standalone-env /
-                .venv 解释器，多个环境并存时优先选用装了依赖（torch）的那个。
+                桌面版（ComfyUI Desktop）请直接配置实例根目录（含 ComfyUI/
+                子目录与 standalone-env/），便携版配置含 main.py
+                的源码根。自动识别 python_embeded / standalone-env / .venv
+                解释器，多个环境并存时优先选用装了依赖（torch）的那个。
                 {c.comfyStatus?.pathConfigured
                   ? "已配置——ComfyUI 未运行时提交任务会自动拉起。"
                   : "未配置——ComfyUI 未运行时任务会失败。"}
@@ -1452,7 +1546,8 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                   </span>
                   {comfyDesktopManaged && (
                     <span className="text-muted-foreground">
-                      端口与启动参数由 Comfy Desktop 实例元数据决定，无需在此配置。
+                      端口与启动参数由 Comfy Desktop
+                      实例元数据决定，无需在此配置。
                     </span>
                   )}
                 </div>
@@ -1474,7 +1569,8 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     placeholder="留空使用默认 8188"
                   />
                   <p className="text-muted-foreground -mt-2 mb-3 text-xs">
-                    非 8188 端口会在启动时自动传 --port，实际运行端口以设置为准。
+                    非 8188 端口会在启动时自动传
+                    --port，实际运行端口以设置为准。
                   </p>
                   <Field
                     label="ComfyUI 启动参数（可选）"
@@ -1603,8 +1699,8 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     </span>
                   ) : (
                     <span className="text-muted-foreground">
-                      暂无日志 ——
-                      点「启动 ComfyUI」后这里会实时输出拉起过程（spawn
+                      暂无日志 —— 点「启动
+                      ComfyUI」后这里会实时输出拉起过程（spawn
                       参数、模型加载与就绪状态）；也可点「刷新」查看最近一次运行日志。
                     </span>
                   )}
@@ -1662,7 +1758,11 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       处理：启动按钮仍可点，用户不会整组被禁用。 */}
                   <Btn
                     onClick={() => void c.openDbStudio()}
-                    disabled={c.dbStudioOpening || c.dbStudioStarting || !c.dbStudioStatus?.up}
+                    disabled={
+                      c.dbStudioOpening ||
+                      c.dbStudioStarting ||
+                      !c.dbStudioStatus?.up
+                    }
                   >
                     {c.dbStudioOpening ? "打开中…" : "打开查看"}
                   </Btn>
@@ -1733,10 +1833,10 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                 </div>
               </div>
               <p className="text-muted-foreground mt-3 text-xs">
-                说明：Drizzle Studio 需要本机开发依赖
-                （node_modules 里的 drizzle-kit）。双击桌面壳的开发模式可用；
-                若当前是不可携带完整 node_modules 的 standalone 打包，启动时会
-                提示未找到 drizzle-kit。
+                说明：Drizzle Studio 需要本机开发依赖 （node_modules 里的
+                drizzle-kit）。双击桌面壳的开发模式可用； 若当前是不可携带完整
+                node_modules 的 standalone 打包，启动时会 提示未找到
+                drizzle-kit。
               </p>
             </Card>
           )}
@@ -1744,10 +1844,11 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
           {c.section === "exit" && (
             <Card title="退出与后台服务">
               <p className="text-muted-foreground mb-4 text-sm">
-                桌面壳退出时会对应用进程树执行整树强制关闭
-                （taskkill /T /F，被强杀的进程没有清理机会），因此这些开关是
+                桌面壳退出时会对应用进程树执行整树强制关闭 （taskkill /T
+                /F，被强杀的进程没有清理机会），因此这些开关是
                 「拉起时」决定后台服务是否脱离进程树，不是退出那一刻再选。
-                改动后<strong className="text-ink/80">下一次拉起才生效</strong>。
+                改动后<strong className="text-ink/80">下一次拉起才生效</strong>
+                。
               </p>
               <div className="mb-4">
                 <div className="flex items-center gap-2">

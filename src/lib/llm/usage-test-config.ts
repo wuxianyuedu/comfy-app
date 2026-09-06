@@ -29,7 +29,6 @@ export function defaultVideoFields(): UsageField[] {
   return [{ key: "mode", value: "text" }];
 }
 
-
 /** 视频请求里承载媒体（图片/音频）的字段名集合。mode=text 不允许携带它们
  *（Agnes 等提供方会以 invalid mode 拒绝），选中 text 时这些行应隐藏/删除。 */
 export const VIDEO_MEDIA_FIELD_KEYS = [
@@ -43,7 +42,10 @@ export const VIDEO_MEDIA_FIELD_KEYS = [
  *  带媒体字段会被提供方拒绝（invalid mode）。 */
 export function videoModeHidesMedia(fields: UsageField[]): boolean {
   const mode =
-    fields.find((f) => f.key.trim() === "mode")?.value.trim().toLowerCase() ?? "";
+    fields
+      .find((f) => f.key.trim() === "mode")
+      ?.value.trim()
+      .toLowerCase() ?? "";
   return mode === "text";
 }
 
@@ -62,15 +64,19 @@ export const MEDIA_URL_NOTICE =
 export function videoModeMissingHint(fields: UsageField[]): string | null {
   const mode = fields.find((f) => f.key.trim() === "mode")?.value.trim() ?? "";
   const keys = new Set(fields.map((f) => f.key.trim()));
-  if (mode === "keyframe" && !keys.has("first_frame") && !keys.has("last_frame")) {
+  if (
+    mode === "keyframe" &&
+    !keys.has("first_frame") &&
+    !keys.has("last_frame")
+  ) {
     return "mode=keyframe 需要 first_frame（或 last_frame）图片：添加一行字段名 first_frame，填公网可访问的图片地址（http(s) 开头），或点「上传」选本地图片。";
   }
   if (mode === "reference" && !keys.has("images") && !keys.has("audios")) {
-    return "mode=reference 需要 images（或 audios）：添加一行字段名 images，值填公网可访问的图片地址（多张可用 JSON 数组写法 [\"…\",\"…\"]）。";
+    return 'mode=reference 需要 images（或 audios）：添加一行字段名 images，值填公网可访问的图片地址（多张可用 JSON 数组写法 ["…","…"]）。';
   }
   if (mode === "text") {
-    const forbidden = ["first_frame", "last_frame", "images", "audios"].filter((k) =>
-      keys.has(k),
+    const forbidden = ["first_frame", "last_frame", "images", "audios"].filter(
+      (k) => keys.has(k),
     );
     if (forbidden.length > 0) {
       return `mode=text 不能携带媒体字段（${forbidden.join(" / ")}）：请删掉这些行，或把 mode 改成 keyframe / reference。`;
@@ -106,4 +112,18 @@ export function looksLikeImage(value: string): boolean {
     /^data:image\//i.test(v) ||
     /^(https?:\/\/).+\.(png|jpe?g|webp|gif|avif|bmp)([?#].*)?$/i.test(v)
   );
+}
+
+/** mode 字段是否已被破坏：值为空，或看起来像图片地址/过长的杂值——
+ *  典型场景是用户误在 mode 行上传/粘贴了参考图，把 text / keyframe /
+ *  reference 覆盖成了图片，导致提交 400 invalid mode。 */
+export function isModeValueBroken(value: string): boolean {
+  const v = value.trim();
+  return v === "" || looksLikeImage(v) || v.length > 64;
+}
+
+/** mode 值自愈：值被图片/杂值覆盖时回落到 text（可见且可再改），
+ *  其余原样返回。仅修复值本身，不动用户其它字段行。 */
+export function sanitizeModeValue(value: string): string {
+  return isModeValueBroken(value) ? "text" : value;
 }
