@@ -1,8 +1,6 @@
 // 工坊管线的阶段定义与派生展示数据。
 // 纯数据 + 纯函数（无 React、无副作用）：hook 负责算完下发，视图组件直接消费。
 
-import type { Scene } from "~/lib/workshop/types";
-
 /** 全部阶段始终可进入 — 顺序仅是推荐流(自动预填沿此方向推进)。 */
 export const STAGE_DEFS = [
   { id: "script", label: "剧本" },
@@ -14,25 +12,6 @@ export const STAGE_DEFS = [
 ] as const;
 
 export type Tab = (typeof STAGE_DEFS)[number]["id"];
-
-export const SCENE_PLACEHOLDERS = [
-  "天台初遇",
-  "旧收音机",
-  "未来声音",
-  "旧城区夜",
-  "神秘电波",
-  "记忆闪回",
-  "城市拆除",
-  "时间裂缝",
-  "十年之后",
-  "拯救计划",
-  "天台对峙",
-  "真相揭露",
-  "最后广播",
-  "城市黎明",
-  "新的开始",
-  "尾声字幕",
-];
 
 export const STAGE_TITLES: Record<Tab, { title: string; desc: string }> = {
   script: {
@@ -168,37 +147,6 @@ export function stagePrereq(
     default:
       return null;
   }
-}
-
-const GRID_SIZE = 16;
-/** 网格每 4 格一组循环状态色（设计稿的占位视觉，非真实镜头状态）。 */
-const GRID_ROW_STATUS = ["done", "pending", "running", "draft"] as const;
-const STATUS_COLORS: Record<(typeof GRID_ROW_STATUS)[number], string> = {
-  done: "#7C5CFC",
-  pending: "#5CA8FF",
-  running: "#FFB553",
-  draft: "#9A9AAD",
-};
-
-export interface GridShot {
-  idx: number;
-  heading: string;
-  status: (typeof GRID_ROW_STATUS)[number];
-  color: string;
-}
-
-export function buildGridShots(scenes: Scene[]): GridShot[] {
-  const grid: GridShot[] = [];
-  for (let idx = 0; idx < GRID_SIZE; idx++) {
-    const scene = scenes[idx];
-    const status = GRID_ROW_STATUS[Math.floor(idx / 4)] ?? "draft";
-    const heading =
-      scene?.heading?.replace(/^场景\d+\s*·\s*/, "") ??
-      SCENE_PLACEHOLDERS[idx] ??
-      "";
-    grid.push({ idx, heading, status, color: STATUS_COLORS[status] });
-  }
-  return grid;
 }
 
 export interface MissingItem {
