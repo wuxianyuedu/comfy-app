@@ -12,6 +12,16 @@ import {
   watchTask,
   type GenerateInput,
 } from "~/lib/workshop/generation-client";
+import {
+  fetchServerDraft,
+  fetchServerDraftList,
+  pushServerDraft,
+  deleteServerDraft,
+} from "~/lib/workshop/draft-sync-client";
+import {
+  draftHasContent,
+  type WorkshopDraftDto,
+} from "~/lib/workshop/draft-sync-shared";
 import type {
   Character,
   ProjectMeta,
@@ -79,6 +89,28 @@ function emptyDraft(): WorkshopDraft {
     shots: [],
     checkpoint: "",
   };
+}
+
+/** 服务端 DTO → 内部草稿（字段完全同构，显式构造避免隐式 cast 告警）。 */
+function dtoToDraft(dto: WorkshopDraftDto): WorkshopDraft {
+  return {
+    meta: dto.meta,
+    scriptMarkdown: dto.scriptMarkdown ?? "",
+    scenes: dto.scenes ?? [],
+    characters: dto.characters ?? [],
+    shots: dto.shots ?? [],
+    checkpoint: dto.checkpoint ?? "",
+  };
+}
+
+/** 内部草稿是否为「空」——仅空时才值得用服务端镜像覆盖（避免覆盖进行中的编辑）。 */
+function draftIsEmpty(draft: WorkshopDraft): boolean {
+  return (
+    !draft.scriptMarkdown &&
+    draft.scenes.length === 0 &&
+    draft.characters.length === 0 &&
+    draft.shots.length === 0
+  );
 }
 
 function draftKeyFor(id: string): string {
@@ -187,6 +219,11 @@ function loadWorkshopDraftOnce(): WorkshopDraft | null {
   }
   return workshopDraftCache;
 }
+
+/** 本浏览器会话内已做过一次「服务端镜像回填」的项目集合（避免热重挂载反复拉取）。 */
+const serverRecoveredIds = new Set<string>();
+/** 是否已把服务端项目列表并回本地索引（会话级只做一次）。 */
+let serverListRecovered = false;
 
 /** /api/skills 返回 payload：用于在 fetch 边界收窄，消除 any 散落。 */
 type SkillsApiResponse = {
@@ -356,6 +393,14 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     setScriptMarkdown(draft.scriptMarkdown);
   }, []);
 
+  /* 最新项目 id / 草稿的 ref：供卸载兜底与异步服务端回填读取最新值（避免闭包捕获陈旧 state）。 */
+  const activeProjectRef = React.useRef(activeProjectId);
+  const latestDraftRef = React.useRef<WorkshopDraft>(currentDraft());
+  React.useEffect(() => {
+    activeProjectRef.current = activeProjectId;
+    latestDraftRef.current = currentDraft();
+  });
+
   /** 切换 / 增删项目后：让模块级缓存失效，避免组件重挂载时读回旧的当前项目。 */
   const invalidateDraftCache = () => {
     workshopDraftCache = null;
@@ -376,8 +421,11 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const switchProject = React.useCallback(
     (id: string) => {
       if (id === activeProjectId) return;
-      /* 先把当前内容同步落盘：否则防抖中的定时器醒来会把旧内容写到新项目上。 */
-      writeDraft(activeProjectId, currentDraft());
+      /* 先把当前内容同步落盘（localStorage + 服务端）：否则防抖中的定时器醒来会把
+       * 旧内容写到新项目上，且切走前最后一改若未及服务端可能在崩溃时丢失。 */
+      const outgoing = currentDraft();
+      writeDraft(activeProjectId, outgoing);
+      void pushServerDraft(activeProjectId, outgoing);
       const next: WorkshopProjectsIndex = {
         activeId: id,
         items: snapshotActiveInto(projectsIndex.items),
@@ -386,7 +434,21 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       setProjectsIndex(next);
       setActiveProjectId(id);
       invalidateDraftCache();
-      applyDraft(readDraft(id));
+      const localDraft = readDraft(id);
+      applyDraft(localDraft);
+      /* 目标项目本地为空但服务端有镜像（例如清缓存后重建的项目）→ 异步回填。 */
+      if (draftIsEmpty(localDraft) && !serverRecoveredIds.has(id)) {
+        serverRecoveredIds.add(id);
+        void fetchServerDraft(id).then((serverDraft) => {
+          if (serverDraft && draftHasContent(serverDraft)) {
+            const draft = dtoToDraft(serverDraft);
+            writeDraft(id, draft);
+            workshopDraftCache = draft;
+            // 仅当仍停留在该项目时才应用，避免把用户刚切走后的内容覆盖。
+            if (activeProjectRef.current === id) applyDraft(draft);
+          }
+        });
+      }
     },
     [
       activeProjectId,
@@ -399,7 +461,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
 
   const createProject = React.useCallback(
     (title?: string) => {
-      writeDraft(activeProjectId, currentDraft());
+      const outgoing = currentDraft();
+      writeDraft(activeProjectId, outgoing);
+      void pushServerDraft(activeProjectId, outgoing);
       const id = newProjectId();
       const trimmed = title?.trim();
       const projectTitle =
@@ -465,6 +529,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       } catch {
         /* 隐私模式下可能直接抛错，忽略 */
       }
+      void deleteServerDraft(id);
       const next: WorkshopProjectsIndex = { activeId, items };
       saveProjectsIndex(next);
       setProjectsIndex(next);
@@ -477,7 +542,10 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
    * 因此这里不需要动 React state，也就不会自触发形成回环。 */
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      writeDraft(activeProjectId, currentDraft());
+      const draft = currentDraft();
+      // localStorage 为即时缓存；同时写穿一份到本地 db.sqlite（防缓存被清丢失）。
+      writeDraft(activeProjectId, draft);
+      void pushServerDraft(activeProjectId, draft);
     }, 600);
     return () => clearTimeout(timer);
   }, [activeProjectId, currentDraft]);
@@ -489,19 +557,66 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
    * localStorage 的新内容 —— 两处叠加正是「切页签后剧本内容丢失」的根因。
    * 卸载时：立即把最新草稿落盘 + 让模块级缓存失效，下次挂载重新读 localStorage。
    * ref 在每次渲染后同步最新值，卸载 cleanup 经 ref 取值，避免闭包捕获旧草稿。 */
-  const activeProjectRef = React.useRef(activeProjectId);
-  const latestDraftRef = React.useRef<WorkshopDraft>(currentDraft());
-  React.useEffect(() => {
-    activeProjectRef.current = activeProjectId;
-    latestDraftRef.current = currentDraft();
-  });
-
   React.useEffect(() => {
     return () => {
-      writeDraft(activeProjectRef.current, latestDraftRef.current);
+      const draft = latestDraftRef.current;
+      writeDraft(activeProjectRef.current, draft);
+      void pushServerDraft(activeProjectRef.current, draft);
       invalidateDraftCache();
     };
     // 仅在卸载时执行一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* 挂载回填：把服务端 db.sqlite 里的项目镜像找回来，防 localStorage 被清后丢内容。
+   * 只做两件事，都不覆盖用户进行中的编辑：
+   *  1) 本地索引缺的云端项目补进索引（清空 localStorage 后仍能找到旧项目）；
+   *  2) 当前项目本地为空但云端有内容时，用云端内容恢复当前项目。
+   * 同会话只执行一次（热重挂载由上面的卸载兜底保存保住了 localStorage）。 */
+  React.useEffect(() => {
+    void (async () => {
+      const activeId = activeProjectRef.current;
+      try {
+        const summaries = await fetchServerDraftList();
+        if (summaries.length > 0 && !serverListRecovered) {
+          serverListRecovered = true;
+          setProjectsIndex((prev) => {
+            const known = new Set(prev.items.map((i) => i.id));
+            const missing = summaries.filter((d) => !known.has(d.id));
+            if (missing.length === 0) return prev;
+            const items = [
+              ...prev.items,
+              ...missing.map((d) => ({
+                id: d.id,
+                title: d.title,
+                updatedAt: d.updatedAt,
+              })),
+            ];
+            const next: WorkshopProjectsIndex = { activeId: prev.activeId, items };
+            saveProjectsIndex(next);
+            projectsCache = next;
+            return next;
+          });
+        }
+      } catch {
+        /* 服务不可用：保持纯本地 */
+      }
+
+      if (serverRecoveredIds.has(activeId)) return;
+      serverRecoveredIds.add(activeId);
+
+      const localEmpty = draftIsEmpty(latestDraftRef.current);
+      if (!localEmpty) return;
+      const serverDraft = await fetchServerDraft(activeId);
+      if (serverDraft && draftHasContent(serverDraft)) {
+        const draft = dtoToDraft(serverDraft);
+        writeDraft(activeId, draft);
+        applyDraft(draft);
+        // 让模块级草稿缓存也指向恢复后的内容，避免再次重挂载读到旧空草稿。
+        workshopDraftCache = draft;
+      }
+    })();
+    // 仅首挂载执行一次；闭包读取经 ref / 函数式 set，避免陈旧 state
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
