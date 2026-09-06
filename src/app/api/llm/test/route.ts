@@ -90,8 +90,11 @@ export async function POST(req: NextRequest) {
 
     let probedBase = baseUrl;
     let res = await probe(baseUrl);
-    /* 404/405 = 路径不存在（鉴权问题会原样透出，不重试） */
-    if ((res.status === 404 || res.status === 405)) {
+    /* 404/405 = 路径不存在；400 也回退 —— 资源型网关会把 {base}/models 当成
+     * 业务请求处理（如 Agnes 视频接口把 models 当 task_id 查询，返回
+     * 400 task_not_exist），而不是标准的「路径不存在」。鉴权问题（401/403）
+     * 原样透出，不重试。 */
+    if ([400, 404, 405].includes(res.status)) {
       const parent = parentBase(baseUrl);
       if (parent) {
         const parentRes = await probe(parent);
