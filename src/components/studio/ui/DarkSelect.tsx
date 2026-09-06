@@ -72,6 +72,17 @@ export function DarkSelect({
   footer,
   onOpenChange,
 }: DarkSelectProps) {
+  /* 用 ref 持有最新的 onOpenChange，effect deps 不依赖函数引用：
+   * 调用方每次渲染传入的新箭头函数不会导致 effect 反复重建。 */
+  const onOpenChangeRef = useRef(onOpenChange);
+  useEffect(() => {
+    onOpenChangeRef.current = onOpenChange;
+  });
+
+  /** 归一化关闭回调：onOpenChange 未传时静默。 */
+  const emitOpenChange = useCallback((next: boolean) => {
+    onOpenChangeRef.current?.(next);
+  }, []);
   /* a11y：role="combobox" 必须能通过 aria-controls 指向它控制的 listbox，
    *  否则读屏软件无法把触发按钮与选项列表关联起来。useId 保证同一页面上
    *  多个 DarkSelect 实例不会撞 id。 */
@@ -99,11 +110,11 @@ export function DarkSelect({
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent && e.key === "Escape") { setOpen(false); onOpenChange?.(false); return; }
+      if (e instanceof KeyboardEvent && e.key === "Escape") { setOpen(false); emitOpenChange(false); return; }
       if (e instanceof MouseEvent) {
         if (ref.current?.contains(e.target as Node) || listRef.current?.contains(e.target as Node)) return;
         setOpen(false);
-        onOpenChange?.(false);
+        emitOpenChange(false);
       }
     };
     document.addEventListener("mousedown", handler, true);
@@ -114,7 +125,7 @@ export function DarkSelect({
       document.removeEventListener("click", handler, true);
       document.removeEventListener("keydown", handler);
     };
-  }, [open, onOpenChange]);
+  }, [open, emitOpenChange]);
 
   /* Reset highlight when opening (adjusted during render, React 19 pattern) */
   const [prevOpen, setPrevOpen] = useState(open);
@@ -198,7 +209,14 @@ export function DarkSelect({
     };
   }, [open, effectiveMinWidth]);
 
-  const pick = useCallback((v: string) => { onChange(v); setOpen(false); onOpenChange?.(false); }, [onChange, onOpenChange]);
+  const pick = useCallback(
+    (v: string) => {
+      onChange(v);
+      setOpen(false);
+      emitOpenChange(false);
+    },
+    [onChange, emitOpenChange],
+  );
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((value) => !value); return; }
@@ -226,7 +244,7 @@ export function DarkSelect({
         disabled={disabled}
         onClick={() =>
           setOpen((value) => {
-            onOpenChange?.(!value);
+            emitOpenChange(!value);
             return !value;
           })
         }

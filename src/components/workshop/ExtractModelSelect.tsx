@@ -85,6 +85,13 @@ export function ExtractModelSelect({
     setPending(false);
   }, []);
 
+  const handleOpenChange = React.useCallback(
+    (opening: boolean) => {
+      if (opening) void load();
+    },
+    [load],
+  );
+
   if (refreshKey !== loaded) {
     setLoaded(refreshKey);
     setGroup(EMPTY_GROUP);
@@ -141,9 +148,7 @@ export function ExtractModelSelect({
             </div>
           ) : null
         }
-        onOpenChange={(opening) => {
-          if (opening) void load();
-        }}
+        onOpenChange={handleOpenChange}
         placeholder="选择提取方式"
         className="!bg-white/3 !border-white/8 text-xs"
         popoverMinWidth={280}
