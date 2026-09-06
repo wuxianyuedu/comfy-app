@@ -243,15 +243,23 @@ export function useSettingsPage(): SettingsPageController {
   const llmQ = api.llm.configGet.useQuery();
   const saveSetting = api.setting.save.useMutation();
   const saveLlmCfg = api.llm.configSave.useMutation();
+  /* ComfyUI / Drizzle Studio 状态探测延后到首屏两份配置就绪后再发：
+   * comfyStatus 在 ComfyUI 未运行时要对连续端口段做超时探测（秒级），
+   * 同挂载触发会被 httpBatchLink 并进首屏同一批请求，而批量响应不分块
+   * 流式返回 —— 首屏只需要的 get/configGet 会被迫等整批结束，页面
+   * 多停在加载态数秒。 */
+  const statusQueriesEnabled = !!settingsQ.data && !!llmQ.data;
   const comfyStatusQ = api.setting.comfyStatus.useQuery(undefined, {
     refetchInterval: 15_000,
+    enabled: statusQueriesEnabled,
   });
   const comfyStartM = api.setting.comfyStart.useMutation();
   const comfyStopM = api.setting.comfyStop.useMutation();
   const [comfyStopping, setComfyStopping] = useState(false);
-  /* Drizzle Studio：状态查询 + 启动/关闭/打开动作 */
+  /* Drizzle Studio：状态查询 + 启动/关闭/打开动作（enabled 门控同 comfyStatus） */
   const dbStudioStatusQ = api.setting.dbStudioStatus.useQuery(undefined, {
     refetchInterval: 15_000,
+    enabled: statusQueriesEnabled,
   });
   const dbStudioStartM = api.setting.dbStudioStart.useMutation();
   const dbStudioStopM = api.setting.dbStudioStop.useMutation();

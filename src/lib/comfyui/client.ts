@@ -47,11 +47,15 @@ function forceIpv4Host(raw: string): string {
   }
 }
 
-/** Probe a single port — returns true if ComfyUI responds */
+/** Probe a single port — returns true if ComfyUI responds
+ *
+ * 超时按环回地址给 300ms：真实监听中的 ComfyUI 应答 /system_stats 是毫秒级，
+ * 800ms 只会拉长「未运行」场景的空扫（配置端口 +1..+5 共 6 次探测，
+ * ComfyUI 未运行时 resolveComfyBase 每次都要付完全部超时）。 */
 async function probePort(host: string, port: number): Promise<boolean> {
   try {
     const res = await fetch(`http://${host}:${port}/system_stats`, {
-      signal: AbortSignal.timeout(800),
+      signal: AbortSignal.timeout(300),
     });
     return res.ok;
   } catch {

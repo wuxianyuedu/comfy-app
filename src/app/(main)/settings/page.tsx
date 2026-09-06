@@ -9,6 +9,8 @@
  * 处理加载/错误/降级三个早退分支」。
  */
 
+import { PageLoading } from "~/components/ui/page-loading";
+
 import { SettingsPageView } from "./SettingsPageView";
 import { useSettingsPage } from "./hooks/use-settings-page";
 
@@ -18,9 +20,7 @@ export default function SettingsPage() {
   // 仅在首次加载且无数据时显示 loading；若 query 已结束但数据为空或出错则放行渲染
   if (c.isInitialLoad) {
     return (
-      <div className="text-muted-foreground bg-bg grid h-[calc(100vh-var(--toolbar-height,48px))] place-items-center pb-6">
-        加载中…
-      </div>
+      <PageLoading className="bg-bg h-[calc(100vh-var(--toolbar-height,48px))] pb-6" />
     );
   }
 
