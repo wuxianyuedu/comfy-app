@@ -51,6 +51,7 @@ build_log*.txt
 
 # generated & temp
 /generated/
+/public/generated/
 /temp/
 /temp/comfy-cli/
 
