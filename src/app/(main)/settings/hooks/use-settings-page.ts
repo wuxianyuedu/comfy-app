@@ -115,6 +115,8 @@ export interface SettingsPageController {
   comfyStatus: {
     up: boolean;
     starting: boolean;
+    /** 服务端「关闭中」窗口（globalThis 计时，可跨设置页挂载存活）：见 ISSUE #103 */
+    stopping: boolean;
     base: string | null;
     pathConfigured: boolean;
     port: number;
@@ -268,6 +270,11 @@ export function useSettingsPage(): SettingsPageController {
    * 期间挂载触发的探测不得覆盖状态（否则 UI 会跳变——轮询探测本身不发
    * 「checking」+ 静默写结果，但 baseUrl 等其它 effect 仍可能并发探测）。 */
   const ollamaStartingRef = useRef(false);
+  /* 「关闭中」持锁标记：stopOllama 进行中禁止探测覆盖状态。Ollama 的关闭
+   * 动作（taskkill + 等端口释放）最长可挂 5s，期间 useEffect 触发的探测
+   * 会把状态行抢回「未运行」并重开「关闭 Ollama」按钮（同 #103 的
+   * 「操作后状态被覆盖」族问题）。 */
+  const ollamaStoppingRef = useRef(false);
   const [settingsDraft, setSettingsDraft] = useState<Settings | null>(null);
   const [comfyStarting, setComfyStarting] = useState(false);
 
@@ -353,7 +360,7 @@ export function useSettingsPage(): SettingsPageController {
   /** 静默探测：不发「检测中」、不与其他探测互相覆盖状态。 */
   const probeOllamaSilent = useCallback(async (baseUrl: string) => {
     const result = await probeOllamaClient(baseUrl);
-    if (ollamaStartingRef.current) return;
+    if (ollamaStartingRef.current || ollamaStoppingRef.current) return;
     if (result.up) {
       setOllamaModels(result.models);
       setOllamaStatus("up");
@@ -366,7 +373,7 @@ export function useSettingsPage(): SettingsPageController {
   /** 探测并把结果落到状态行。启动流程内部轮询禁用此函数（见 probeOllamaSilent）。 */
   const probeOllama = useCallback(
     async (baseUrl: string) => {
-      if (ollamaStartingRef.current) return;
+      if (ollamaStartingRef.current || ollamaStoppingRef.current) return;
       setOllamaStatus("checking");
       await probeOllamaSilent(baseUrl);
     },
@@ -672,6 +679,7 @@ export function useSettingsPage(): SettingsPageController {
 
   const stopOllamaFn = useCallback(async () => {
     setOllamaStopping(true);
+    ollamaStoppingRef.current = true;
     try {
       await stopOllamaClient();
       // 停止后重新探测，状态行回到「未运行」
@@ -682,6 +690,7 @@ export function useSettingsPage(): SettingsPageController {
       if (llmBaseUrl) await probeOllama(llmBaseUrl);
     } finally {
       setOllamaStopping(false);
+      ollamaStoppingRef.current = false;
     }
   }, [llmBaseUrl, probeOllama, showFlash]);
 
@@ -946,6 +955,7 @@ export function useSettingsPage(): SettingsPageController {
       ? {
           up: !!comfy.up,
           starting: !!comfy.starting,
+          stopping: !!comfy.stopping,
           base: comfy.base ?? null,
           pathConfigured: !!comfy.pathConfigured,
           port: comfy.port ?? 0,
