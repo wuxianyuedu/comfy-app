@@ -4,6 +4,7 @@ import {
   usageFieldsToJson,
   looksLikeImage,
   isMediaField,
+  isMediaArrayField,
   videoModeHidesMedia,
   videoModeMissingHint,
   isModeValueBroken,
@@ -150,5 +151,62 @@ describe("isModeValueBroken / rescue 场景", () => {
   it("mode 被覆盖为超长杂值时判定为损坏", () => {
     expect(isModeValueBroken("x".repeat(65))).toBe(true);
     expect(isModeValueBroken("x".repeat(64))).toBe(false);
+  });
+});
+
+describe("数组媒体字段（images / audios）", () => {
+  it("单张裸 URL 自动包成数组，避免服务端期望 []string 却收到 string", () => {
+    const json = usageFieldsToJson([
+      { key: "images", value: "https://cdn.example.com/a.png" },
+    ]);
+    expect(JSON.parse(json)).toEqual({
+      images: ["https://cdn.example.com/a.png"],
+    });
+  });
+
+  it("多张裸 URL 用逗号分隔自动拆成数组", () => {
+    const json = usageFieldsToJson([
+      {
+        key: "images",
+        value: "https://a.example/1.png, https://b.example/2.jpg",
+      },
+    ]);
+    expect(JSON.parse(json)).toEqual({
+      images: ["https://a.example/1.png", "https://b.example/2.jpg"],
+    });
+  });
+
+  it("带引号的单个字符串（合法 JSON）也包成数组", () => {
+    const json = usageFieldsToJson([
+      { key: "images", value: '"https://cdn.example.com/a.png"' },
+    ]);
+    expect(JSON.parse(json)).toEqual({
+      images: ["https://cdn.example.com/a.png"],
+    });
+  });
+
+  it("已是 JSON 数组时原样保留（不重复包裹）", () => {
+    const json = usageFieldsToJson([
+      { key: "audios", value: '["https://a.example/1.mp3"]' },
+    ]);
+    expect(JSON.parse(json)).toEqual({
+      audios: ["https://a.example/1.mp3"],
+    });
+  });
+
+  it("非数组字段不受影响（first_frame 仍是单个字符串）", () => {
+    const json = usageFieldsToJson([
+      { key: "first_frame", value: "https://example.com/a.png" },
+    ]);
+    expect(JSON.parse(json)).toEqual({
+      first_frame: "https://example.com/a.png",
+    });
+  });
+
+  it("isMediaArrayField 只命中 images / audios", () => {
+    expect(isMediaArrayField("images")).toBe(true);
+    expect(isMediaArrayField(" audios ")).toBe(true);
+    expect(isMediaArrayField("first_frame")).toBe(false);
+    expect(isMediaArrayField("mode")).toBe(false);
   });
 });

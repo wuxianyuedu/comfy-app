@@ -26,6 +26,7 @@ import {
   VIDEO_MODE_HINT,
   VIDEO_MODE_PRESETS,
   defaultVideoFields,
+  isMediaArrayField,
   isMediaField,
   isModeValueBroken,
   usageFieldsToJson,
@@ -1365,7 +1366,9 @@ export function SettingsPageView({
                                     ? "模式名：text / keyframe / reference（图片请添加 images 行）"
                                     : looksLikeImage(f.value)
                                       ? "已设为图片，可粘贴新的图片地址覆盖"
-                                      : "值：文本 / 数字 / 图片地址"
+                                      : isMediaArrayField(f.key)
+                                        ? "值：一张或多张图片 URL（多张用逗号分隔，如 a,b）"
+                                        : "值：文本 / 数字 / 图片地址"
                                 }
                                 className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full min-w-0 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
                               />
