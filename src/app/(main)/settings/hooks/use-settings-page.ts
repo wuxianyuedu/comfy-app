@@ -118,6 +118,11 @@ export interface SettingsPageController {
     base: string | null;
     pathConfigured: boolean;
     port: number;
+    /** 安装形态：桌面版/便携版/venv；未配置路径或无路径时为 null。 */
+    instanceType: "desktop" | "portable" | "venv" | "unknown" | null;
+    /** 桌面实例且能读到实例 ID → 端口/参数由 Comfy Desktop 元数据决定，
+     *  设置页据此隐藏 端口/启动参数 输入。 */
+    desktopManaged: boolean;
   } | null;
   comfyStarting: boolean;
   comfyStopping: boolean;
@@ -922,6 +927,8 @@ export function useSettingsPage(): SettingsPageController {
           base: comfy.base ?? null,
           pathConfigured: !!comfy.pathConfigured,
           port: comfy.port ?? 0,
+          instanceType: comfy.instanceType ?? null,
+          desktopManaged: !!comfy.desktopManaged,
         }
       : null,
     comfyStarting,
