@@ -61,7 +61,13 @@ export type LlmConfig = {
   apiKey: string | null;
 };
 
-export type Section = "llm" | "comfyui" | "appearance" | "database" | "exit";
+export type Section =
+  | "appearance"
+  | "llmLocal"
+  | "llmRemote"
+  | "comfyui"
+  | "database"
+  | "exit";
 export type OllamaStatus = "checking" | "starting" | "up" | "down";
 
 export interface FlashMessage {
@@ -217,7 +223,7 @@ const OLLAMA_START_POLL_INTERVAL_MS = 2000;
 
 /** 设置页全部状态与动作 —— 见文件头注释的分层说明。 */
 export function useSettingsPage(): SettingsPageController {
-  const [section, setSection] = useState<Section>("llm");
+  const [section, setSection] = useState<Section>("llmLocal");
   const { theme, setTheme } = useTheme();
   const [flash, setFlash] = useState<FlashMessage | null>(null);
   const [saving, setSaving] = useState(false);
@@ -666,12 +672,19 @@ export function useSettingsPage(): SettingsPageController {
 
   const removeRemoteModel = useCallback((name: string) => {
     setLlmDraft((draft) => {
-      /* 主模型不可移除（视图对当前项也不渲染移除按钮，这里兜底） */
-      if (!draft || name === draft.model) return draft;
+      if (!draft) return draft;
+      /* 当前生效条目也可删除：删的是当前模型时，把生效位顺延给剩余第一个
+       * 候选（没有剩余则清空）——LLM 调用在用户补选模型前会失败，属预期。 */
+      const removingCurrent = name === draft.model;
       const next = draft.extraModels.filter((e) => e.name !== name);
-      return next.length === draft.extraModels.length
-        ? draft
-        : { ...draft, extraModels: next };
+      const unchanged =
+        !removingCurrent && next.length === draft.extraModels.length;
+      if (unchanged) return draft;
+      return {
+        ...draft,
+        model: removingCurrent ? (next[0]?.name ?? "") : draft.model,
+        extraModels: next,
+      };
     });
   }, []);
 
@@ -863,10 +876,11 @@ export function useSettingsPage(): SettingsPageController {
   };
 }
 
-/** 侧边栏分区 —— 纯配置，视图直接消费。 */
+/** 侧边栏分区 —— 纯配置，视图直接消费。本地 / 远程模型各自独立成页。 */
 export const SETTINGS_SECTIONS: { id: Section; label: string }[] = [
   { id: "appearance", label: "外观" },
-  { id: "llm", label: "语言模型" },
+  { id: "llmLocal", label: "本地模型" },
+  { id: "llmRemote", label: "远程模型" },
   { id: "comfyui", label: "创作后端" },
   { id: "database", label: "数据库" },
   { id: "exit", label: "退出与后台服务" },
