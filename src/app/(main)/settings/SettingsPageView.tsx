@@ -118,12 +118,14 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
   const onDbStudioLogScroll = () => {
     const el = dbStudioLogBoxRef.current;
     if (!el) return;
-    setDbStudioLogFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 32);
+    setDbStudioLogFollow(
+      el.scrollHeight - el.scrollTop - el.clientHeight < 32,
+    );
   };
 
-  function openAddDialog() {
+  function openAddDialog(kind: RemoteModelKind = "chat") {
     setDialog({ mode: "add" });
-    setAddForm({ baseUrl: "", apiKey: "", model: "", kind: "chat" });
+    setAddForm({ baseUrl: "", apiKey: "", model: "", kind });
     setClearKey(false);
     setTestMsg(null);
     setSuggestions([]);
@@ -214,6 +216,153 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
       return;
     }
     setDialog(null);
+  }
+
+  /* 运行时提供方状态行：本地 / 远程两页各一个，「启用中」标记草稿里当前
+   * 生效的提供方；另一页提供「切换」按钮（仍是草稿态，保存落库）。 */
+  function providerEnableRow(provider: "local" | "remote") {
+    const active = c.drafts.llm.provider === provider;
+    const name = provider === "local" ? "本地 Ollama" : "远程 API（OpenAI 兼容）";
+    return (
+      <div className="border-border bg-surface-1 mb-4 flex items-center gap-3 rounded-lg border px-3 py-2.5">
+        <span className="text-ink/80 shrink-0 text-sm">运行时提供方</span>
+        {active ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block size-2 shrink-0 rounded-full bg-emerald-400" />
+            <span className="text-ink/80 text-sm">{name}</span>
+            <span className="rounded-full bg-emerald-500/15 px-1.5 py-px text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+              启用中
+            </span>
+          </span>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => c.patchLlm({ provider })}
+              title="保存 LLM 配置后生效"
+              className="border-border text-muted-foreground hover:bg-subtle hover:text-ink rounded-lg border px-2.5 py-1 text-xs transition-colors"
+            >
+              切换为{name}
+            </button>
+            <span className="text-muted-foreground text-[11px]">
+              两页共用一份草稿，改动需点「保存 LLM 配置」
+            </span>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  /* 远程模型按用途分组展示（文本 / 图片 / 视频）；kind 缺省的历史条目
+   * 按文本模型归组。行内不再重复用途标签 —— 分组本身就是用途。 */
+  function remoteModelGroup(
+    kind: RemoteModelKind,
+    title: string,
+    emptyHint: string,
+  ) {
+    const entries = c.remoteModelList.filter(
+      (entry) => (entry.kind ?? "chat") === kind,
+    );
+    return (
+      <div className="border-border bg-surface-1 mb-4 rounded-xl border p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-ink/80 text-sm font-medium">{title}</span>
+          <button
+            type="button"
+            onClick={() => openAddDialog(kind)}
+            className="bg-primary hover:bg-primary-hover rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+          >
+            ＋ 添加模型
+          </button>
+        </div>
+        {entries.length > 0 ? (
+          <div className="space-y-1.5">
+            {entries.map((entry) => {
+              const isCurrent = entry.name === c.drafts.llm.model;
+              return (
+                <div
+                  key={entry.name}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    isCurrent
+                      ? "border-primary bg-primary-soft"
+                      : "border-border"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => c.patchLlm({ model: entry.name })}
+                    title={
+                      isCurrent
+                        ? "当前生效模型"
+                        : "点击设为当前生效"
+                    }
+                    className="min-w-0 flex-1 truncate text-left"
+                  >
+                    <span
+                      className={
+                        isCurrent
+                          ? "text-primary font-medium"
+                          : "text-ink"
+                      }
+                    >
+                      {entry.name}
+                    </span>
+                    {entry.baseUrl && (
+                      <span className="text-muted-foreground ml-2 text-[10px]">
+                        独立接口
+                      </span>
+                    )}
+                    {entry.apiKey && (
+                      <span className="text-muted-foreground ml-1.5 text-[10px]">
+                        独立密钥
+                      </span>
+                    )}
+                  </button>
+                  {isCurrent && (
+                    <span className="text-primary shrink-0 text-[10px] font-medium">
+                      当前
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    title="按该条目的接口地址与密钥测试连接"
+                    onClick={() => void handleRowTest(entry)}
+                    disabled={rowTesting !== null}
+                    className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors disabled:opacity-40"
+                  >
+                    {rowTesting === entry.name
+                      ? "测试中…"
+                      : "测试"}
+                  </button>
+                  <button
+                    type="button"
+                    title="编辑接口地址 / 密钥 / 名称"
+                    onClick={() => openEditDialog(entry)}
+                    className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors"
+                  >
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    title={
+                      isCurrent
+                        ? "移除该模型（当前生效将顺延给剩余候选）"
+                        : "移除该模型"
+                    }
+                    onClick={() => c.removeRemoteModel(entry.name)}
+                    className="text-muted-foreground hover:text-rose-500 shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-xs">{emptyHint}</p>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -320,422 +469,311 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
             </Card>
           )}
 
-          {/* ═══ LLM Section ═══ */}
-          {c.section === "llm" && (
-            <>
-              <Card title="语言模型（LLM）">
-                {/* 提供方页签：本地 / 远程分开配置；页签即切换（草稿态，保存落库），
-                  「启用中」标记运行时实际使用的提供方 */}
-                <div className="mb-4 flex items-center gap-2">
-                  {(["local", "remote"] as const).map((p) => {
-                    const paneActive = c.drafts.llm.provider === p;
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => c.patchLlm({ provider: p })}
-                        className={`rounded-lg border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                          paneActive
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border text-muted-foreground hover:bg-subtle hover:text-ink"
-                        }`}
-                      >
-                        {p === "local"
-                          ? "本地模型（Ollama）"
-                          : "远程模型（OpenAI 兼容）"}
-                        {paneActive && (
-                          <span className="ml-1.5 rounded-full bg-emerald-500/15 px-1.5 py-px text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                            启用中
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+          {/* ═══ 本地模型（Ollama）Section ═══ */}
+          {c.section === "llmLocal" && (
+            <Card title="本地模型（Ollama）">
+              {providerEnableRow("local")}
 
-                {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
-                {c.drafts.llm.provider === "local" && (
-                  <Field
-                    label="Base URL"
-                    value={c.drafts.llm.baseUrl}
-                    onChange={(value) => c.patchLlm({ baseUrl: value })}
-                    placeholder="http://localhost:11434/v1"
-                  />
-                )}
+              {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
+              <Field
+                label="Base URL"
+                value={c.drafts.llm.baseUrl}
+                onChange={(value) => c.patchLlm({ baseUrl: value })}
+                placeholder="http://localhost:11434/v1"
+              />
 
-                {/* Ollama status row */}
-                {c.drafts.llm.provider === "local" && (
-                  <div className="border-border bg-surface-1 mb-4 flex items-center gap-3 rounded-lg border px-3 py-2.5">
-                    {c.ollamaStatus === "checking" && (
-                      <>
-                        <Loader2
-                          size={14}
-                          className="text-muted-foreground animate-spin"
-                        />
-                        <span className="text-muted-foreground text-sm">
-                          检测 Ollama 服务…
-                        </span>
-                      </>
-                    )}
-                    {c.ollamaStatus === "starting" && (
-                      <>
-                        <Loader2
-                          size={14}
-                          className="text-muted-foreground animate-spin"
-                        />
-                        <span className="text-muted-foreground text-sm">
-                          Ollama 启动中，正在等待服务就绪…
-                        </span>
-                      </>
-                    )}
-                    {c.ollamaStatus === "up" && (
-                      <>
-                        <span className="inline-block size-2 shrink-0 rounded-full bg-emerald-400" />
-                        <span className="text-ink/80 text-sm">
-                          Ollama 运行中（{c.ollamaModels.length} 个模型可用）
-                        </span>
-                        <Btn
-                          onClick={() => void c.stopOllama()}
-                          disabled={c.ollamaStopping}
-                          className="ml-auto"
-                        >
-                          {c.ollamaStopping ? "关闭中…" : "关闭 Ollama"}
-                        </Btn>
-                      </>
-                    )}
-                    {c.ollamaStatus === "down" && (
-                      <>
-                        <span className="inline-block size-2 shrink-0 rounded-full bg-rose-400" />
-                        <span className="text-ink/80 text-sm">
-                          Ollama 未运行
-                        </span>
-                        <Btn
-                          onClick={() => void c.startOllama()}
-                          disabled={c.ollamaStarting}
-                          className="ml-auto"
-                        >
-                          {c.ollamaStarting ? "启动中…" : "启动 Ollama"}
-                        </Btn>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* Model area — local: Ollama 探测下拉；remote: 已配置模型列表 + 添加模型 */}
-                {c.drafts.llm.provider === "local" &&
-                c.ollamaStatus === "up" &&
-                c.ollamaModels.length > 0 ? (
-                  <div className="mb-3">
-                    <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-                      当前模型
-                    </label>
-                    <select
-                      value={c.drafts.llm.model}
-                      onChange={(event) =>
-                        c.patchLlm({ model: event.target.value })
-                      }
-                      className="border-border text-ink focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-                    >
-                      {c.ollamaModels.map((model) => (
-                        <option key={model.name} value={model.name}>
-                          {model.name}
-                        </option>
-                      ))}
-                    </select>
-                    {c.ollamaModels.length > 1 && (
-                      <>
-                        <label className="text-ink/80 mt-3 mb-1.5 block text-sm font-medium">
-                          工坊候选模型（可多选）
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                          {c.ollamaModels.map((model) => {
-                            const checked =
-                              model.name === c.drafts.llm.model ||
-                              c.drafts.llm.extraModels.some(
-                                (e) => e.name === model.name,
-                              );
-                            return (
-                              <button
-                                key={model.name}
-                                type="button"
-                                title={
-                                  model.name === c.drafts.llm.model
-                                    ? "当前模型（始终可用）"
-                                    : "勾选后工坊各阶段可直接切换"
-                                }
-                                onClick={() => c.toggleExtraModel(model.name)}
-                                className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
-                                  checked
-                                    ? "border-primary bg-primary/15 text-primary"
-                                    : "border-border text-muted-foreground hover:bg-white/5"
-                                }`}
-                              >
-                                {checked ? "✓ " : ""}
-                                {model.name}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ) : c.drafts.llm.provider === "local" ? (
-                  <Field
-                    label="模型"
-                    value={c.drafts.llm.model}
-                    onChange={(value) => c.patchLlm({ model: value })}
-                    placeholder="llama3.1 或 qwen3:14b"
-                  />
-                ) : (
+              {/* Ollama status row */}
+              <div className="border-border bg-surface-1 mb-4 flex items-center gap-3 rounded-lg border px-3 py-2.5">
+                {c.ollamaStatus === "checking" && (
                   <>
-                    {/* 已配置模型列表：主模型置顶；连接参数由条目各自携带，
-                      添加 / 编辑走弹窗，保存时落库 */}
-                    <div className="border-border bg-surface-1 mb-4 rounded-xl border p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <span className="text-ink/80 text-sm font-medium">
-                          已配置模型
-                        </span>
-                        <button
-                          type="button"
-                          onClick={openAddDialog}
-                          className="bg-primary hover:bg-primary-hover rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors"
-                        >
-                          ＋ 添加模型
-                        </button>
-                      </div>
-                      {c.remoteModelList.length > 0 ? (
-                        <div className="space-y-1.5">
-                          {c.remoteModelList.map((entry) => {
-                            const isCurrent = entry.name === c.drafts.llm.model;
-                            return (
-                              <div
-                                key={entry.name}
-                                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                                  isCurrent
-                                    ? "border-primary bg-primary-soft"
-                                    : "border-border"
-                                }`}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    c.patchLlm({ model: entry.name })
-                                  }
-                                  title={
-                                    isCurrent
-                                      ? "当前生效模型"
-                                      : "点击设为当前生效"
-                                  }
-                                  className="min-w-0 flex-1 truncate text-left"
-                                >
-                                  <span
-                                    className={
-                                      isCurrent
-                                        ? "text-primary font-medium"
-                                        : "text-ink"
-                                    }
-                                  >
-                                    {entry.name}
-                                  </span>
-                                  {entry.baseUrl && (
-                                    <span className="text-muted-foreground ml-2 text-[10px]">
-                                      独立接口
-                                    </span>
-                                  )}
-                                  {entry.apiKey && (
-                                    <span className="text-muted-foreground ml-1.5 text-[10px]">
-                                      独立密钥
-                                    </span>
-                                  )}
-                                  {entry.kind && entry.kind !== "chat" && (
-                                    <span className="text-muted-foreground ml-1.5 text-[10px]">
-                                      {REMOTE_MODEL_KIND_LABELS[entry.kind]}模型
-                                    </span>
-                                  )}
-                                </button>
-                                {isCurrent && (
-                                  <span className="text-primary shrink-0 text-[10px] font-medium">
-                                    当前
-                                  </span>
-                                )}
-                                <button
-                                  type="button"
-                                  title="按该条目的接口地址与密钥测试连接"
-                                  onClick={() => void handleRowTest(entry)}
-                                  disabled={rowTesting !== null}
-                                  className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors disabled:opacity-40"
-                                >
-                                  {rowTesting === entry.name
-                                    ? "测试中…"
-                                    : "测试"}
-                                </button>
-                                <button
-                                  type="button"
-                                  title="编辑接口地址 / 密钥 / 名称"
-                                  onClick={() => openEditDialog(entry)}
-                                  className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors"
-                                >
-                                  编辑
-                                </button>
-                                {!isCurrent && (
-                                  <button
-                                    type="button"
-                                    title="移除该模型"
-                                    onClick={() =>
-                                      c.removeRemoteModel(entry.name)
-                                    }
-                                    className="text-muted-foreground shrink-0 hover:text-rose-500"
-                                  >
-                                    ✕
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground text-xs">
-                          还没有模型 ——
-                          点击「添加模型」把要用的模型加进来（填写接口地址与 API
-                          Key 后可先测试连接）。
-                        </p>
-                      )}
-                      {rowTestMsg && (
-                        <p
-                          className={`mt-2 rounded-lg px-3 py-2 text-[11px] ${
-                            rowTestMsg.kind === "ok"
-                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                              : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
-                          }`}
-                        >
-                          「{rowTestMsg.name}」：{rowTestMsg.text}
-                        </p>
-                      )}
-                      <p className="text-muted-foreground mt-2.5 text-[11px] leading-relaxed">
-                        点击模型设为当前生效，工坊内也可随时切换；「测试」按该条目的接口地址与密钥探测连通性；带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。改动需点下方「保存
-                        LLM 配置」生效。
-                      </p>
-                    </div>
+                    <Loader2
+                      size={14}
+                      className="text-muted-foreground animate-spin"
+                    />
+                    <span className="text-muted-foreground text-sm">
+                      检测 Ollama 服务…
+                    </span>
                   </>
                 )}
-
-                <div className="mb-4 grid grid-cols-2 gap-3">
-                  {c.drafts.llm.provider === "local" && (
-                    <Field
-                      label="全局默认温度"
-                      value={String(c.drafts.llm.temperature)}
-                      onChange={(value) =>
-                        c.patchLlm({ temperature: Number(value) || 0 })
-                      }
+                {c.ollamaStatus === "starting" && (
+                  <>
+                    <Loader2
+                      size={14}
+                      className="text-muted-foreground animate-spin"
                     />
-                  )}
-                  <Field
-                    label="最大 Token"
-                    value={String(c.drafts.llm.maxTokens)}
-                    onChange={(value) =>
-                      c.patchLlm({ maxTokens: Number(value) || 0 })
-                    }
-                  />
-                </div>
-
-                {/* 按任务类型配置温度 —— 仅本地 Ollama 展示；远端调用同样按这套
-                  推荐默认取温度，但不在此暴露配置项 */}
-                {c.drafts.llm.provider === "local" && (
-                  <div className="border-border bg-surface-1 mb-4 rounded-xl border p-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowTaskTemps((v) => !v)}
-                      className="text-ink/80 hover:text-ink mb-3 flex w-full items-center justify-between text-sm font-medium"
+                    <span className="text-muted-foreground text-sm">
+                      Ollama 启动中，正在等待服务就绪…
+                    </span>
+                  </>
+                )}
+                {c.ollamaStatus === "up" && (
+                  <>
+                    <span className="inline-block size-2 shrink-0 rounded-full bg-emerald-400" />
+                    <span className="text-ink/80 text-sm">
+                      Ollama 运行中（{c.ollamaModels.length} 个模型可用）
+                    </span>
+                    <Btn
+                      onClick={() => void c.stopOllama()}
+                      disabled={c.ollamaStopping}
+                      className="ml-auto"
                     >
-                      <span>
-                        按任务类型配置温度
-                        <span className="text-muted-foreground ml-2 text-[11px] font-normal">
-                          未覆盖的任务按推荐默认生效
-                        </span>
-                      </span>
-                      <span className="text-muted-foreground">
-                        {showTaskTemps ? "▾" : "▸"}
-                      </span>
-                    </button>
-                    {showTaskTemps && (
-                      <div className="space-y-3">
-                        {TEMPERATURE_TASKS.map(([key, meta]) => {
-                          const override =
-                            c.drafts.llm.temperatureByTask?.[key];
-                          const isOverridden =
-                            override !== undefined && override !== null;
-                          const shown =
-                            taskTempEdits[key] ??
-                            String(
-                              isOverridden ? override : meta.defaultTemperature,
+                      {c.ollamaStopping ? "关闭中…" : "关闭 Ollama"}
+                    </Btn>
+                  </>
+                )}
+                {c.ollamaStatus === "down" && (
+                  <>
+                    <span className="inline-block size-2 shrink-0 rounded-full bg-rose-400" />
+                    <span className="text-ink/80 text-sm">Ollama 未运行</span>
+                    <Btn
+                      onClick={() => void c.startOllama()}
+                      disabled={c.ollamaStarting}
+                      className="ml-auto"
+                    >
+                      {c.ollamaStarting ? "启动中…" : "启动 Ollama"}
+                    </Btn>
+                  </>
+                )}
+              </div>
+
+              {/* Model area — 探测到模型时用下拉 + 候选多选；否则退化为手填 */}
+              {c.ollamaStatus === "up" && c.ollamaModels.length > 0 ? (
+                <div className="mb-3">
+                  <label className="text-ink/80 mb-1.5 block text-sm font-medium">
+                    当前模型
+                  </label>
+                  <select
+                    value={c.drafts.llm.model}
+                    onChange={(event) =>
+                      c.patchLlm({ model: event.target.value })
+                    }
+                    className="border-border text-ink focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                  >
+                    {c.ollamaModels.map((model) => (
+                      <option key={model.name} value={model.name}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
+                  {c.ollamaModels.length > 1 && (
+                    <>
+                      <label className="text-ink/80 mt-3 mb-1.5 block text-sm font-medium">
+                        工坊候选模型（可多选）
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {c.ollamaModels.map((model) => {
+                          const checked =
+                            model.name === c.drafts.llm.model ||
+                            c.drafts.llm.extraModels.some(
+                              (e) => e.name === model.name,
                             );
                           return (
-                            <div
-                              key={key}
-                              className="border-border/50 bg-surface-1 flex items-center gap-3 rounded-lg border px-3 py-2.5"
+                            <button
+                              key={model.name}
+                              type="button"
+                              title={
+                                model.name === c.drafts.llm.model
+                                  ? "当前模型（始终可用）"
+                                  : "勾选后工坊各阶段可直接切换"
+                              }
+                              onClick={() => c.toggleExtraModel(model.name)}
+                              className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+                                checked
+                                  ? "border-primary bg-primary/15 text-primary"
+                                  : "border-border text-muted-foreground hover:bg-white/5"
+                              }`}
                             >
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-ink text-sm font-medium">
-                                    {meta.label}
-                                  </span>
-                                  {isOverridden ? (
-                                    <span className="bg-primary/15 text-primary rounded-full px-1.5 py-0.5 text-[10px] font-medium">
-                                      已覆盖
-                                    </span>
-                                  ) : (
-                                    <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                                      推荐
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-muted-foreground text-[11px]">
-                                  {meta.desc}（推荐 {meta.hint}）
-                                </p>
-                              </div>
-                              {isOverridden && (
-                                <button
-                                  type="button"
-                                  title="恢复推荐默认"
-                                  onClick={() => {
-                                    clearTaskEdit(key);
-                                    c.setTaskTemperature(key, "");
-                                  }}
-                                  className="border-border text-muted-foreground hover:bg-subtle rounded border px-1.5 py-0.5 text-[11px]"
-                                >
-                                  ↺
-                                </button>
-                              )}
-                              <input
-                                type="number"
-                                step={0.05}
-                                min={0}
-                                max={2}
-                                value={shown}
-                                onChange={(event) => {
-                                  setTaskEdit(key, event.target.value);
-                                  c.setTaskTemperature(key, event.target.value);
-                                }}
-                                onBlur={() => clearTaskEdit(key)}
-                                className="border-border text-ink focus:border-primary bg-surface-2 w-24 rounded-lg border px-2 py-1.5 text-right text-sm outline-none"
-                              />
-                            </div>
+                              {checked ? "✓ " : ""}
+                              {model.name}
+                            </button>
                           );
                         })}
                       </div>
-                    )}
+                    </>
+                  )}
+                </div>
+              ) : (
+                <Field
+                  label="模型"
+                  value={c.drafts.llm.model}
+                  onChange={(value) => c.patchLlm({ model: value })}
+                  placeholder="llama3.1 或 qwen3:14b"
+                />
+              )}
+
+              <div className="mb-4 grid grid-cols-2 gap-3">
+                <Field
+                  label="全局默认温度"
+                  value={String(c.drafts.llm.temperature)}
+                  onChange={(value) =>
+                    c.patchLlm({ temperature: Number(value) || 0 })
+                  }
+                />
+                <Field
+                  label="最大 Token"
+                  value={String(c.drafts.llm.maxTokens)}
+                  onChange={(value) =>
+                    c.patchLlm({ maxTokens: Number(value) || 0 })
+                  }
+                />
+              </div>
+
+              {/* 按任务类型配置温度 —— 远端调用同样按这套推荐默认取温度，
+                  但不在此暴露配置项 */}
+              <div className="border-border bg-surface-1 mb-4 rounded-xl border p-4">
+                <button
+                  type="button"
+                  onClick={() => setShowTaskTemps((v) => !v)}
+                  className="text-ink/80 hover:text-ink mb-3 flex w-full items-center justify-between text-sm font-medium"
+                >
+                  <span>
+                    按任务类型配置温度
+                    <span className="text-muted-foreground ml-2 text-[11px] font-normal">
+                      未覆盖的任务按推荐默认生效
+                    </span>
+                  </span>
+                  <span className="text-muted-foreground">
+                    {showTaskTemps ? "▾" : "▸"}
+                  </span>
+                </button>
+                {showTaskTemps && (
+                  <div className="space-y-3">
+                    {TEMPERATURE_TASKS.map(([key, meta]) => {
+                      const override =
+                        c.drafts.llm.temperatureByTask?.[key];
+                      const isOverridden =
+                        override !== undefined && override !== null;
+                      const shown =
+                        taskTempEdits[key] ??
+                        String(
+                          isOverridden
+                            ? override
+                            : meta.defaultTemperature,
+                        );
+                      return (
+                        <div
+                          key={key}
+                          className="border-border/50 bg-surface-1 flex items-center gap-3 rounded-lg border px-3 py-2.5"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-ink text-sm font-medium">
+                                {meta.label}
+                              </span>
+                              {isOverridden ? (
+                                <span className="bg-primary/15 text-primary rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+                                  已覆盖
+                                </span>
+                              ) : (
+                                <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                                  推荐
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-muted-foreground text-[11px]">
+                              {meta.desc}（推荐 {meta.hint}）
+                            </p>
+                          </div>
+                          {isOverridden && (
+                            <button
+                              type="button"
+                              title="恢复推荐默认"
+                              onClick={() => {
+                                clearTaskEdit(key);
+                                c.setTaskTemperature(key, "");
+                              }}
+                              className="border-border text-muted-foreground hover:bg-subtle rounded border px-1.5 py-0.5 text-[11px]"
+                            >
+                              ↺
+                            </button>
+                          )}
+                          <input
+                            type="number"
+                            step={0.05}
+                            min={0}
+                            max={2}
+                            value={shown}
+                            onChange={(event) => {
+                              setTaskEdit(key, event.target.value);
+                              c.setTaskTemperature(
+                                key,
+                                event.target.value,
+                              );
+                            }}
+                            onBlur={() => clearTaskEdit(key)}
+                            className="border-border text-ink focus:border-primary bg-surface-2 w-24 rounded-lg border px-2 py-1.5 text-right text-sm outline-none"
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
+              </div>
+
+              <Btn onClick={() => void c.saveLlm()} disabled={c.saving}>
+                保存 LLM 配置
+              </Btn>
+            </Card>
+          )}
+
+          {/* ═══ 远程模型（OpenAI 兼容）Section ═══ */}
+          {c.section === "llmRemote" && (
+            <>
+              <Card title="远程模型（OpenAI 兼容）">
+                {providerEnableRow("remote")}
+
+                {/* 模型按用途分组：文本（对话）/ 图片 / 视频；kind 缺省的
+                    历史条目按文本模型归组，添加时按组预选用途 */}
+                {remoteModelGroup(
+                  "chat",
+                  "文本模型",
+                  "还没有文本模型 —— 点击「添加模型」加入对话 / 写作调用的模型。",
+                )}
+                {remoteModelGroup(
+                  "image",
+                  "图片模型",
+                  "还没有图片模型 —— 点击「添加模型」加入生图 API 使用的模型。",
+                )}
+                {remoteModelGroup(
+                  "video",
+                  "视频模型",
+                  "还没有视频模型 —— 点击「添加模型」加入视频生成 API 使用的模型。",
+                )}
+
+                {rowTestMsg && (
+                  <p
+                    className={`mb-4 rounded-lg px-3 py-2 text-[11px] ${
+                      rowTestMsg.kind === "ok"
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                        : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
+                    }`}
+                  >
+                    「{rowTestMsg.name}」：{rowTestMsg.text}
+                  </p>
+                )}
+
+                <p className="text-muted-foreground mb-4 text-[11px] leading-relaxed">
+                  点击模型设为当前生效，工坊内也可随时切换；「测试」按该条目的接口地址与密钥探测连通性；带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。改动需点下方「保存
+                  LLM 配置」生效。
+                </p>
+
+                <Field
+                  label="最大 Token"
+                  value={String(c.drafts.llm.maxTokens)}
+                  onChange={(value) =>
+                    c.patchLlm({ maxTokens: Number(value) || 0 })
+                  }
+                />
 
                 <Btn onClick={() => void c.saveLlm()} disabled={c.saving}>
                   保存 LLM 配置
                 </Btn>
               </Card>
 
-              {/* 「添加 / 编辑模型」弹窗（远端提供方）：接口地址 / API Key 可留空
-                回落全局；编辑态密钥「留空不改」，可显式清除。测试连接成功后
-                顺带展示服务端模型清单供点选。 */}
-              {c.drafts.llm.provider === "remote" && dialog && (
+              {/* 「添加 / 编辑模型」弹窗：接口地址 / API Key 可留空回落全局；
+                  编辑态密钥「留空不改」，可显式清除。测试连接成功后顺带展示
+                  服务端模型清单供点选。 */}
+              {dialog && (
                 <div
                   className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
                   onClick={() => setDialog(null)}
@@ -779,10 +817,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       className="mb-3 text-sm"
                       value={addForm.kind}
                       onChange={(kind) =>
-                        setAddForm((f) => ({
-                          ...f,
-                          kind: kind as RemoteModelKind,
-                        }))
+                        setAddForm((f) => ({ ...f, kind: kind as RemoteModelKind }))
                       }
                       options={[...REMOTE_MODEL_KINDS]}
                       labels={REMOTE_MODEL_KIND_LABELS}
@@ -814,10 +849,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                         type="password"
                         value={addForm.apiKey}
                         onChange={(event) => {
-                          setAddForm({
-                            ...addForm,
-                            apiKey: event.target.value,
-                          });
+                          setAddForm({ ...addForm, apiKey: event.target.value });
                           /* 输入新密钥即撤销「清除」标记 */
                           if (event.target.value) setClearKey(false);
                         }}
@@ -949,10 +981,10 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                 placeholder="例如 D:\\ComfyUI 或 D:\\Comfy-Desktop\\ComfyUI-Installs\\ComfyUI2"
               />
               <p className="text-muted-foreground -mt-2 mb-3 text-xs">
-                桌面版（ComfyUI Desktop）请直接配置实例根目录（含 ComfyUI/
-                子目录与 standalone-env/），便携版配置含 main.py
-                的源码根。自动识别 python_embeded / standalone-env / .venv
-                解释器，多个环境并存时优先选用装了依赖（torch）的那个。
+                桌面版（ComfyUI Desktop）请直接配置实例根目录（含
+                ComfyUI/ 子目录与 standalone-env/），便携版配置含
+                main.py 的源码根。自动识别 python_embeded / standalone-env /
+                .venv 解释器，多个环境并存时优先选用装了依赖（torch）的那个。
                 {c.comfyStatus?.pathConfigured
                   ? "已配置——ComfyUI 未运行时提交任务会自动拉起。"
                   : "未配置——ComfyUI 未运行时任务会失败。"}
@@ -1074,8 +1106,8 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     </span>
                   ) : (
                     <span className="text-muted-foreground">
-                      暂无日志 —— 点「启动
-                      ComfyUI」后这里会实时输出拉起过程（spawn
+                      暂无日志 ——
+                      点「启动 ComfyUI」后这里会实时输出拉起过程（spawn
                       参数、模型加载与就绪状态）；也可点「刷新」查看最近一次运行日志。
                     </span>
                   )}
@@ -1203,10 +1235,10 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                 </div>
               </div>
               <p className="text-muted-foreground mt-3 text-xs">
-                说明：Drizzle Studio 需要本机开发依赖 （node_modules 里的
-                drizzle-kit）。双击桌面壳的开发模式可用； 若当前是不可携带完整
-                node_modules 的 standalone 打包，启动时会 提示未找到
-                drizzle-kit。
+                说明：Drizzle Studio 需要本机开发依赖
+                （node_modules 里的 drizzle-kit）。双击桌面壳的开发模式可用；
+                若当前是不可携带完整 node_modules 的 standalone 打包，启动时会
+                提示未找到 drizzle-kit。
               </p>
             </Card>
           )}
@@ -1214,11 +1246,10 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
           {c.section === "exit" && (
             <Card title="退出与后台服务">
               <p className="text-muted-foreground mb-4 text-sm">
-                桌面壳退出时会对应用进程树执行整树强制关闭 （taskkill /T
-                /F，被强杀的进程没有清理机会），因此这些开关是
+                桌面壳退出时会对应用进程树执行整树强制关闭
+                （taskkill /T /F，被强杀的进程没有清理机会），因此这些开关是
                 「拉起时」决定后台服务是否脱离进程树，不是退出那一刻再选。
-                改动后<strong className="text-ink/80">下一次拉起才生效</strong>
-                。
+                改动后<strong className="text-ink/80">下一次拉起才生效</strong>。
               </p>
               <div className="mb-4">
                 <div className="flex items-center gap-2">

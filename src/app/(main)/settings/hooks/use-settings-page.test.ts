@@ -405,7 +405,7 @@ describe("useSettingsPage", () => {
     });
     expect(out.ok).toBe(false);
 
-    // 移除候选；当前模型（主模型）不可移除
+    // 移除候选；当前生效条目也可删除 —— 生效位顺延给剩余第一个候选
     act(() => {
       result.current.removeRemoteModel("gpt-4o");
     });
@@ -415,9 +415,8 @@ describe("useSettingsPage", () => {
     act(() => {
       result.current.removeRemoteModel("qwen3:14b");
     });
-    expect(result.current.remoteModelList.map((e) => e.name)).toEqual([
-      "qwen3:14b",
-    ]);
+    expect(result.current.remoteModelList.map((e) => e.name)).toEqual([]);
+    expect(result.current.drafts?.llm.model).toBe("");
   });
 
   it("远端模型：条目保留独立接口/密钥；切主模型不动条目", async () => {
@@ -658,7 +657,7 @@ describe("useSettingsPage", () => {
     });
     await waitFor(() => expect(result.current.drafts).not.toBeNull());
 
-    expect(result.current.section).toBe("llm");
+    expect(result.current.section).toBe("llmLocal");
     act(() => result.current.setSection("comfyui"));
     expect(result.current.section).toBe("comfyui");
   });
