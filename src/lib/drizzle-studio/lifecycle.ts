@@ -115,6 +115,32 @@ function appendRuntimeLog(line: string): void {
   }
 }
 
+/** 会话边界横幅（与 comfyui/lifecycle.ts 同模式）：多次启动累积的
+ *  drizzle-studio-runtime.log 靠它分清会话边界。 */
+function appendSessionBanner(kind: "start" | "end", title: string): void {
+  try {
+    const dir = path.join(process.cwd(), "log");
+    fs.mkdirSync(dir, { recursive: true });
+    const bar = "─".repeat(72);
+    const color = kind === "start" ? "\x1b[1;32m" : "\x1b[1;33m";
+    const reset = "\x1b[0m";
+    const banner = [
+      "",
+      `${color}${bar}${reset}`,
+      `${color}  ${title}${reset}`,
+      `${color}${bar}${reset}`,
+      "",
+    ].join("\n");
+    fs.appendFileSync(
+      path.join(dir, "drizzle-studio-runtime.log"),
+      banner + "\n",
+      "utf-8",
+    );
+  } catch {
+    /* 日志失败不影响主流程 */
+  }
+}
+
 /** 确保 studio 本地端口就绪：可达则直接返回；否则按解析出的 drizzle-kit 拉起。 */
 export async function ensureDrizzleStudioUp(
   opts: {
@@ -155,6 +181,7 @@ export async function ensureDrizzleStudioUp(
     // 含 node_modules 的项目根，保证它能解析自身传递依赖。
     const nodeExe = process.execPath;
     const args = [bin, "studio", "--port", String(port), "--host", "127.0.0.1"];
+    appendSessionBanner("start", `▶ Drizzle Studio 启动会话  ${localTimestamp()}`);
     note(`Drizzle Studio 未运行，按解析路径启动：${nodeExe} ${args.join(" ")}`);
     let child: ReturnType<typeof spawn>;
     try {
@@ -192,6 +219,7 @@ export async function ensureDrizzleStudioUp(
       pushRecent(text);
     });
     child.on("exit", (code) => {
+      appendSessionBanner("end", `■ Drizzle Studio 进程已退出（code=${code ?? "null"}）`);
       note(`Drizzle Studio 进程退出（code=${code ?? "null"}）`);
       if (st.child === child) st.child = undefined;
     });

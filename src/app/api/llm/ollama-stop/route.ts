@@ -33,6 +33,26 @@ function appendOllamaLog(line: string): void {
   }
 }
 
+/** 会话边界横幅（与 ollama-start 同模式）：区分多次启动累积日志。 */
+function appendOllamaBanner(kind: "start" | "end", title: string): void {
+  try {
+    fs.mkdirSync(path.dirname(OLLAMA_RUNTIME_LOG), { recursive: true });
+    const bar = "─".repeat(72);
+    const color = kind === "start" ? "\x1b[1;32m" : "\x1b[1;33m";
+    const reset = "\x1b[0m";
+    const banner = [
+      "",
+      `${color}${bar}${reset}`,
+      `${color}  ${title}${reset}`,
+      `${color}${bar}${reset}`,
+      "",
+    ].join("\n");
+    fs.appendFileSync(OLLAMA_RUNTIME_LOG, banner + "\n", "utf-8");
+  } catch {
+    /* 日志失败不影响主流程 */
+  }
+}
+
 async function ollamaUp(): Promise<boolean> {
   return fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/version`, {
     signal: AbortSignal.timeout(2000),
@@ -78,6 +98,7 @@ export async function POST(_req: NextRequest) {
   // 等端口真正释放（最多 5s），给界面状态行一个确定的结果
   for (let i = 0; i < 10; i++) {
     if (!(await ollamaUp())) {
+      appendOllamaBanner("end", "■ Ollama 已手动关闭");
       appendOllamaLog("[state] Ollama 已关闭");
       return NextResponse.json({ ok: true, detail: "Ollama 已关闭" });
     }
