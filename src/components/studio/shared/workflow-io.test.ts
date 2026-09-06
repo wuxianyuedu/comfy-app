@@ -155,3 +155,43 @@ describe("parseRatioFromLabel", () => {
     expect(parseRatioFromLabel("")).toBeNull();
   });
 });
+
+describe("splitWorkflowIO — promoteLegacyParams（IO 编辑预览）", () => {
+  /* legacy "param"（旧版顶行 / 子图边界勾选遗留）默认仍归 wireInputs；
+   * 预览开启提升后，带可编辑控件的 param 归入 widgetInputs，纯 link
+   * 端口（MODEL/CLIP…）保持 wire 行——否则预览行渲染不出必填/👁。 */
+  const legacyParam = (name: string, type?: string): WorkflowIOEntry => ({
+    direction: "input",
+    kind: "param",
+    nodeId: "7",
+    name,
+    ...(type ? { type } : {}),
+  });
+
+  it("默认关闭：param 保持 wire 行", () => {
+    const map: WorkflowIOMap = { "7::param::seed": legacyParam("seed", "INT") };
+    const { wireInputs, widgetInputs } = splitWorkflowIO(map);
+    expect(wireInputs).toHaveLength(1);
+    expect(widgetInputs).toHaveLength(0);
+  });
+
+  it("开启提升：INT 类 param（seed）归入 widgetInputs", () => {
+    const map: WorkflowIOMap = { "7::param::seed": legacyParam("seed", "INT") };
+    const { wireInputs, widgetInputs } = splitWorkflowIO(map, {
+      promoteLegacyParams: true,
+    });
+    expect(widgetInputs).toHaveLength(1);
+    expect(widgetInputs[0]?.control).toBe("int");
+    expect(wireInputs).toHaveLength(0);
+  });
+
+  it("开启提升：纯 link 端口（MODEL）不提升", () => {
+    const map: WorkflowIOMap = { "7::param::model": legacyParam("model", "MODEL") };
+    const { wireInputs, widgetInputs } = splitWorkflowIO(map, {
+      promoteLegacyParams: true,
+    });
+    expect(widgetInputs).toHaveLength(0);
+    expect(wireInputs).toHaveLength(1);
+    expect(wireInputs[0]?.control).toBe("link");
+  });
+});
