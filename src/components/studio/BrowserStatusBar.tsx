@@ -5,6 +5,7 @@ import { FileText, Lock } from "lucide-react";
 import { useLogPanel } from "./logs/LogProvider";
 import { fpsTone, useFps } from "./hooks/use-fps";
 import { useComfyStats } from "./hooks/use-comfy-stats";
+import { fmtBytes } from "~/lib/format-bytes";
 
 /* ── Tauri window bottom status bar ─────────────────────────
    显示当前浏览器地址 + 系统资源（显存/内存）+ 实时帧率 + ComfyUI 连接状态。
@@ -88,19 +89,31 @@ export function BrowserStatusBar() {
           <span className="text-gray-400">FPS</span>
         </span>
 
-        {/* 显存占用（来自 ComfyUI） */}
+        {/* 显存占用：具体数值 + 百分比（来自 ComfyUI /system_stats） */}
         {online && vramPct !== null && (
-          <span className="hidden items-center gap-1 text-gray-400 tabular-nums sm:flex">
+          <span
+            className="hidden items-center gap-1 text-gray-400 tabular-nums sm:flex"
+            title="显存占用（GPU 专用显存）"
+          >
             <span className="text-gray-500">显存</span>
-            <span className="text-gray-200">{vramPct}%</span>
+            <span className="text-gray-200">
+              {fmtBytes(stats?.vramUsed) ?? "—"}/{fmtBytes(stats?.vramTotal) ?? "—"}
+            </span>
+            <span className="text-gray-600">({vramPct}%)</span>
           </span>
         )}
 
-        {/* 内存占用 */}
+        {/* 内存占用：具体数值 + 百分比 */}
         {online && ramPct !== null && (
-          <span className="hidden items-center gap-1 text-gray-400 tabular-nums sm:flex">
+          <span
+            className="hidden items-center gap-1 text-gray-400 tabular-nums sm:flex"
+            title="系统内存占用"
+          >
             <span className="text-gray-500">内存</span>
-            <span className="text-gray-200">{ramPct}%</span>
+            <span className="text-gray-200">
+              {fmtBytes(stats?.ramUsed) ?? "—"}/{fmtBytes(stats?.ramTotal) ?? "—"}
+            </span>
+            <span className="text-gray-600">({ramPct}%)</span>
           </span>
         )}
 
