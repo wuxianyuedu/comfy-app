@@ -73,9 +73,10 @@ function newCharacter(): Character {
     params: {},
   };
 }
-/** 把角色描述字符串拆成下拉选项数组（兼容中/英文逗号、顿号与空白分隔） */
-function splitAttr(text: string): string[] {
-  return text
+/** 把角色描述字符串拆成下拉选项数组（兼容中/英文逗号、顿号与空白分隔）。
+ *  旧项目里保存的角色可能缺新字段（如 temperament），入参按可缺失兜底。 */
+function splitAttr(text: string | undefined | null): string[] {
+  return (text ?? "")
     .split(/[、,，，\s]+/)
     .map((x) => x.trim())
     .filter(Boolean);
@@ -481,7 +482,7 @@ export function CharacterDesigner({
                 <AttributeMultiSelect
                   label={attrSet("styleTags").label}
                   groups={attrSet("styleTags").groups}
-                  value={character.styleTags}
+                  value={character.styleTags ?? []}
                   onChange={(items) =>
                     update(character.id, { styleTags: items })
                   }
