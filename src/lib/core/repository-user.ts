@@ -66,7 +66,7 @@ export class LlmConfigRepository {
           id: "singleton",
           provider: input.provider ?? "local",
           baseUrl: input.baseUrl ?? "http://localhost:11434/v1",
-          model: input.model ?? "llama3.1",
+          model: input.model ?? "",
           extraModels: extraModelsJson,
           apiKey: input.apiKey ?? null,
           temperature: input.temperature ?? 0.7,

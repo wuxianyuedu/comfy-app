@@ -17,7 +17,7 @@ export interface WorkshopLLMConfig {
 function envDefaults(): WorkshopLLMConfig {
   return {
     baseUrl: process.env.LLM_BASE_URL ?? "http://localhost:11434/v1",
-    model: process.env.LLM_MODEL ?? "llama3.1",
+    model: process.env.LLM_MODEL ?? "",
     apiKey: process.env.LLM_API_KEY ?? null,
     temperature: Number(process.env.LLM_TEMPERATURE ?? 0.7),
     maxTokens: Number(process.env.LLM_MAX_TOKENS ?? 2048),
@@ -54,6 +54,11 @@ export async function completeWorkshopLLM(
   cfg: WorkshopLLMConfig,
   messages: LLMMessage[],
 ): Promise<string> {
+  if (!cfg.model?.trim()) {
+    throw new Error(
+      "尚未配置生效模型：请先在「设置 → 本地模型/远程模型」中选择或填写要使用的模型名",
+    );
+  }
   let res: Response;
   try {
     res = await fetch(`${cfg.baseUrl}/chat/completions`, {
