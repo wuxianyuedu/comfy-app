@@ -21,6 +21,13 @@ import {
   type RemoteModelKind,
   type TaskType,
 } from "~/lib/llm/types";
+import {
+  VIDEO_MODE_HINT,
+  VIDEO_MODE_PRESETS,
+  usageFieldsToJson,
+  looksLikeImage,
+  type UsageField,
+} from "~/lib/llm/usage-test-config";
 import type {
   UsageTestKind,
   UsageTestResult,
@@ -63,9 +70,23 @@ interface UsageTestDialogState {
   apiKey: string;
   prompt: string;
   size: string;
-  extraJson: string;
+  /** 请求体额外字段（结构化编辑，替代原先手填整段 JSON）。 */
+  fields: UsageField[];
   running: boolean;
   result: UsageTestResult | null;
+}
+
+/** 读取本地图片文件为 data URL，供图片字段上传（不回服务端，纯前端转码）。 */
+function readImageAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      /* readAsDataURL 的结果必是字符串（data:image/...） */
+      resolve(typeof reader.result === "string" ? reader.result : "");
+    };
+    reader.onerror = () => reject(new Error("读取图片失败"));
+    reader.readAsDataURL(file);
+  });
 }
 
 const USAGE_TEST_KIND_LABELS: Record<UsageTestKind, string> = {
@@ -251,9 +272,10 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
       apiKey: "",
       prompt: preset.prompt,
       size: kind === "image" ? "1024x1024" : "",
-      /* 视频接口普遍必填 mode（如 Agnes：text / keyframe / reference），
-       * 预填成可见可改的 JSON，避免首次执行就 400。 */
-      extraJson: kind === "video" ? '{\n  "mode": "text"\n}' : "",
+      /* 视频接口普遍必填 mode（如 Agnes：text / keyframe / reference）。
+       * 这里直接给一行可见、可改的 mode 字段，替代原先手填整段 JSON；
+       * 改成 keyframe 再补一行 first_frame 图即可走首帧模式。 */
+      fields: kind === "video" ? [{ key: "mode", value: "text" }] : [],
       running: false,
       result: null,
     });
@@ -275,9 +297,59 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
         typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
       prompt: usageTest.prompt,
       size: usageTest.size.trim() || undefined,
-      extraJson: usageTest.extraJson.trim() || undefined,
+      /* 由结构化字段行生成请求体 JSON（替代原先手填整段 JSON） */
+      extraJson: usageFieldsToJson(usageTest.fields) || undefined,
     });
     setUsageTest((prev) => (prev ? { ...prev, running: false, result: out } : prev));
+  }
+
+  /* ── 「额外字段」行编辑器：增删改某一行 / 把某行设为图片 / 应用 mode 预设。
+   *  纯视图交互，不入库；随弹窗关闭即丢弃。 */
+  function patchField(index: number, patch: Partial<UsageField>) {
+    setUsageTest((prev) => {
+      if (!prev) return prev;
+      const fields = prev.fields.map((f, i) =>
+        i === index ? { ...f, ...patch } : f,
+      );
+      return { ...prev, fields };
+    });
+  }
+  function addField(key = "") {
+    setUsageTest((prev) =>
+      prev ? { ...prev, fields: [...prev.fields, { key, value: "" }] } : prev,
+    );
+  }
+  function removeField(index: number) {
+    setUsageTest((prev) =>
+      prev
+        ? { ...prev, fields: prev.fields.filter((_, i) => i !== index) }
+        : prev,
+    );
+  }
+  async function pickFieldImage(index: number, file: File | undefined) {
+    if (!file) return;
+    try {
+      const dataUrl = await readImageAsDataUrl(file);
+      patchField(index, { value: dataUrl });
+    } catch (err) {
+      patchField(index, {
+        value: `读取图片失败：${err instanceof Error ? err.message : "未知错误"}`,
+      });
+    }
+  }
+  /** 设置视频 mode 快捷值：已有 mode 行则改其值，否则在末尾追加一行。 */
+  function setVideoMode(mode: string) {
+    setUsageTest((prev) => {
+      if (!prev) return prev;
+      const idx = prev.fields.findIndex((f) => f.key === "mode");
+      if (idx >= 0) {
+        const fields = prev.fields.map((f, i) =>
+          i === idx ? { ...f, value: mode } : f,
+        );
+        return { ...prev, fields };
+      }
+      return { ...prev, fields: [...prev.fields, { key: "mode", value: mode }] };
+    });
   }
 
   /** 添加 / 编辑提交即落库（远端模型清单已无单独的保存按钮）；
@@ -1122,24 +1194,131 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     )}
 
                     <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-                      额外参数（JSON 对象，可选）
+                      请求体额外字段
                     </label>
-                    <textarea
-                      value={usageTest.extraJson}
-                      onChange={(event) =>
-                        setUsageTest({ ...usageTest, extraJson: event.target.value })
-                      }
-                      rows={2}
-                      placeholder={'{"seed": 42}'}
-                      className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-1 w-full resize-y rounded-lg border px-3 py-2 font-mono text-xs outline-none"
-                    />
-                    <p className="text-muted-foreground mb-3 text-[11px]">
-                      逐键合并进请求体，可覆盖默认字段（如 seed / duration /
-                      size）
-                      {usageTest.kind === "video" &&
-                        "。视频接口通常必填 mode（text / keyframe / reference），已预填 text"}
-                      。
+                    <p className="text-muted-foreground -mt-1 mb-2 text-[11px]">
+                      每个字段用「字段名 + 值」两格填，替代原先手填整段 JSON；值可为
+                      文本 / 数字 / 图片（本地上传自动转 data URL，或填远端图片地址）。
+                      数值自动按数字 / 布尔解析（如 seed 填 42 即数字）。
                     </p>
+
+                    {usageTest.kind === "video" && (
+                      <div className="mb-2">
+                        <p className="text-ink/70 mb-1 text-xs font-medium">
+                          mode 快捷选择（仍可手改任意值）
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {VIDEO_MODE_PRESETS.map((m) => {
+                            const active =
+                              usageTest.fields.find((f) => f.key === "mode")
+                                ?.value === m;
+                            return (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() => setVideoMode(m)}
+                                className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                                  active
+                                    ? "border-[var(--primary,#7c5cff)] bg-[var(--primary,#7c5cff)]/15 text-[var(--primary,#7c5cff)]"
+                                    : "border-border text-muted-foreground hover:bg-subtle"
+                                }`}
+                              >
+                                {m}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {usageTest.fields.map((f) => {
+                          if (f.key !== "mode") return null;
+                          const hint = VIDEO_MODE_HINT[f.value.trim()];
+                          return hint ? (
+                            <p
+                              key="mode-hint"
+                              className="text-muted-foreground mt-1 text-[11px]"
+                            >
+                              {hint}
+                            </p>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+
+                    {usageTest.fields.length === 0 && (
+                      <p className="text-muted-foreground mb-2 rounded-lg border border-dashed border-border px-3 py-3 text-center text-[11px]">
+                        还没有额外字段。点下方「添加字段」可按需补
+                        seed / duration / first_frame 等。
+                      </p>
+                    )}
+
+                    <div className="mb-2 flex flex-col gap-2">
+                      {usageTest.fields.map((f, i) => (
+                        <div key={`${f.key}-${i}`} className="flex flex-col gap-1.5">
+                          <div className="flex gap-1.5">
+                            <input
+                              type="text"
+                              value={f.key}
+                              onChange={(event) =>
+                                patchField(i, { key: event.target.value })
+                              }
+                              placeholder="字段名（如 seed / first_frame）"
+                              className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-2/5 min-w-0 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
+                            />
+                            <input
+                              type="text"
+                              value={f.value}
+                              onChange={(event) =>
+                                patchField(i, { value: event.target.value })
+                              }
+                              placeholder={
+                                f.key === "mode"
+                                  ? "text / keyframe / reference 或自定义"
+                                  : looksLikeImage(f.value)
+                                    ? "已设为图片，可粘贴新的图片地址覆盖"
+                                    : "值：文本 / 数字 / 图片地址"
+                              }
+                              className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full min-w-0 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
+                            />
+                            <label
+                              className="text-muted-foreground hover:text-ink border-border hover:bg-subtle flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border px-2 text-[11px] transition-colors"
+                              title="本地上传一张图片作为该字段的值（自动转 data URL）"
+                            >
+                              图片
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp,image/gif"
+                                className="hidden"
+                                onChange={(event) =>
+                                  void pickFieldImage(i, event.target.files?.[0])
+                                }
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => removeField(i)}
+                              className="text-muted-foreground hover:text-red-400 shrink-0 px-1 text-sm"
+                              aria-label="删除该字段"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          {looksLikeImage(f.value) && (
+                            <img
+                              src={f.value}
+                              alt="字段图片预览"
+                              className="max-h-24 w-fit rounded-md border border-border/60"
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => addField()}
+                      className="text-muted-foreground hover:text-ink mb-3 rounded-lg border border-dashed border-border px-3 py-1.5 text-xs transition-colors"
+                    >
+                      ＋ 添加字段
+                    </button>
 
                     {(usageTest.kind === "image" || usageTest.kind === "video") && (
                       <p className="mb-3 rounded-lg bg-amber-100 px-3 py-2 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
