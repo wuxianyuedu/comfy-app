@@ -132,8 +132,10 @@ export interface SettingsPageController {
   } | null;
   comfyStarting: boolean;
   comfyStopping: boolean;
+  comfyOpening: boolean;
   startComfy: () => Promise<void>;
   stopComfy: () => Promise<void>;
+  openComfy: () => Promise<void>;
   /* Drizzle Studio（本地数据库可视化）：状态 + 启动/关闭/打开查看 */
   dbStudioStatus: {
     up: boolean;
@@ -298,7 +300,9 @@ export function useSettingsPage(): SettingsPageController {
   });
   const comfyStartM = api.setting.comfyStart.useMutation();
   const comfyStopM = api.setting.comfyStop.useMutation();
+  const comfyOpenM = api.setting.comfyOpen.useMutation();
   const [comfyStopping, setComfyStopping] = useState(false);
+  const [comfyOpening, setComfyOpening] = useState(false);
   /* Drizzle Studio：状态查询 + 启动/关闭/打开动作（enabled 门控同 comfyStatus） */
   const dbStudioStatusQ = api.setting.dbStudioStatus.useQuery(undefined, {
     refetchInterval: 15_000,
@@ -474,6 +478,18 @@ export function useSettingsPage(): SettingsPageController {
       setComfyStopping(false);
     }
   }, [comfyStopM, comfyStatusQ, showFlash]);
+
+  const openComfy = useCallback(async () => {
+    setComfyOpening(true);
+    try {
+      const result = await comfyOpenM.mutateAsync();
+      showFlash(result.ok ? "ok" : "err", result.detail);
+    } catch (error) {
+      showFlash("err", errorMessage(error, "打开 ComfyUI 失败"));
+    } finally {
+      setComfyOpening(false);
+    }
+  }, [comfyOpenM, showFlash]);
 
   /* ── Drizzle Studio 启动 / 关闭 / 打开 ─────────────────── */
   const startDbStudio = useCallback(async () => {
@@ -970,8 +986,10 @@ export function useSettingsPage(): SettingsPageController {
       : null,
     comfyStarting,
     comfyStopping,
+    comfyOpening,
     startComfy,
     stopComfy,
+    openComfy,
     dbStudioStatus: dbStudio
       ? {
           up: !!dbStudio.up,
