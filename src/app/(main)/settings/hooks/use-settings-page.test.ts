@@ -105,6 +105,10 @@ const mockRouter = t.router({
       ok: true,
       detail: "已关闭",
     })),
+    comfyOpen: t.procedure.mutation(() => ({
+      ok: true,
+      detail: "已用系统默认浏览器打开 ComfyUI",
+    })),
     /* Drizzle Studio：新增分区拉起的 status 查询与动作，均需有 mock handler，
      * 否则 onUnhandledRequest:error 会让渲染整个 hook 的用例全挂 */
     dbStudioStatus: t.procedure.query(() => {

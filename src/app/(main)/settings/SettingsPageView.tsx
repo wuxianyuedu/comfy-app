@@ -1328,6 +1328,14 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                         : "ComfyUI 未运行"}
                 </span>
                 <div className="ml-auto flex items-center gap-2">
+                  {/* 打开运行中的 ComfyUI 网页界面到系统默认浏览器（同 Drizzle
+                      Studio 的「打开查看」语义，走 Node 端命令，不改 Rust） */}
+                  <Btn
+                    onClick={() => void c.openComfy()}
+                    disabled={c.comfyOpening || !c.comfyStatus?.up}
+                  >
+                    {c.comfyOpening ? "打开中…" : "打开查看"}
+                  </Btn>
                   <Btn
                     onClick={() => void c.startComfy()}
                     disabled={
