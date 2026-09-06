@@ -309,7 +309,7 @@ export async function interrupt(): Promise<void> {
 /** 折叠成状态栏关心的聚合视图，保留原始字段便于扩展 */
 export interface ComfySystemStats {
   online: boolean;
-  /** GPU 型号（取第一块）；无 GPU 时为 undefined */
+  /** GPU 型号（取第一块可用 GPU）；无 GPU 时为 undefined */
   gpuName?: string;
   /** 显存占用（字节） */
   vramUsed: number;
@@ -321,8 +321,30 @@ export interface ComfySystemStats {
   ramTotal: number;
 }
 
+/** 从 `/system_stats.devices` 中挑出真正在用的 GPU。
+ *  ComfyUI 的 devices 首项未必是 GPU——CPU/纯 CPU 后端会把 type="cpu" 设备排前，
+ *  其 vram_* 恒为 0，直接取 devices[0] 会让显存占用恒读成 0%。这里先过滤出
+ *  显存容量 >0 的 GPU，取不到才回退到首项（调用方据此判定纯 CPU 并隐藏占用条）。 */
+interface ComfyDevice {
+  name?: string;
+  type?: string;
+  vram_total?: number;
+  vram_used?: number;
+  vram_free?: number;
+}
+
+function pickGpu(devices: ComfyDevice[] | undefined): ComfyDevice | undefined {
+  if (!Array.isArray(devices) || devices.length === 0) return undefined;
+  return (
+    devices.find((d) => d.type !== "cpu" && (d.vram_total ?? 0) > 0) ??
+    devices[0]
+  );
+}
+
 /** 拉取 ComfyUI `/system_stats` 并折叠成状态栏需要的聚合字段。
- *  服务不可达 / 解析失败时返回 null，由调用方决定降级展示。 */
+ *  服务不可达 / 解析失败时返回 null，由调用方决定降级展示。
+ *  显存占用优先用 vram_used；个别后端不填充该字段（恒 0），此时用
+ *  vram_total - vram_free 兜底推导，与内存侧 ram_total - ram_free 的做法一致。 */
 export async function getSystemStats(): Promise<ComfySystemStats | null> {
   try {
     const res = await fetch(`${comfyBase()}/system_stats`, {
@@ -331,21 +353,21 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
     if (!res.ok) return null;
     const data = (await res.json()) as {
       system?: { ram_total?: number; ram_free?: number };
-      devices?: Array<{
-        name?: string;
-        type?: string;
-        vram_total?: number;
-        vram_used?: number;
-      }>;
+      devices?: ComfyDevice[];
     };
-    const dev = Array.isArray(data.devices) ? data.devices[0] : undefined;
+    const dev = pickGpu(data.devices);
+    const vramTotal = dev?.vram_total ?? 0;
+    const vramUsed =
+      (dev?.vram_used && dev.vram_used > 0
+        ? dev.vram_used
+        : (dev?.vram_total ?? 0) - (dev?.vram_free ?? 0)) ?? 0;
     const ramTotal = data.system?.ram_total ?? 0;
     const ramFree = data.system?.ram_free ?? 0;
     return {
       online: true,
       gpuName: dev?.name ?? (dev?.type === "cpu" ? "CPU" : undefined),
-      vramUsed: dev?.vram_used ?? 0,
-      vramTotal: dev?.vram_total ?? 0,
+      vramUsed: vramTotal > 0 ? Math.max(0, Math.min(vramUsed, vramTotal)) : 0,
+      vramTotal,
       ramUsed: ramTotal > 0 ? Math.max(0, ramTotal - ramFree) : 0,
       ramTotal,
     };
