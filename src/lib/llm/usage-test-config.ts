@@ -72,7 +72,7 @@ export function videoModeMissingHint(fields: UsageField[]): string | null {
     return "mode=keyframe 需要 first_frame（或 last_frame）图片：添加一行字段名 first_frame，填公网可访问的图片地址（http(s) 开头），或点「上传」选本地图片。";
   }
   if (mode === "reference" && !keys.has("images") && !keys.has("audios")) {
-    return 'mode=reference 需要 images（或 audios）：添加一行字段名 images，值填公网可访问的图片地址（多张可用 JSON 数组写法 ["…","…"]）。';
+    return 'mode=reference 需要 images（或 audios）：添加一行字段名 images，值填公网可访问的图片地址（http(s) 开头）；单张直接贴 URL 即可，多张用逗号分隔或 JSON 数组写法 ["…","…"]。';
   }
   if (mode === "text") {
     const forbidden = ["first_frame", "last_frame", "images", "audios"].filter(
@@ -85,20 +85,47 @@ export function videoModeMissingHint(fields: UsageField[]): string | null {
   return null;
 }
 
+/** 服务端按「数组」接收的媒体字段（可携带多张参考图/音频）。这类字段常被用户
+ *  贴成一张裸 URL 字符串，而服务端期望 []string——不包成数组就会 400
+ *  （cannot unmarshal string into []string）。 */
+export const MEDIA_ARRAY_FIELD_KEYS = ["images", "audios"] as const;
+
+/** 判断字段是不是数组型媒体字段（命中 images / audios 等，含首尾空白）。 */
+export function isMediaArrayField(key: string): boolean {
+  return (MEDIA_ARRAY_FIELD_KEYS as readonly string[]).includes(key.trim());
+}
+
 /** 把结构化字段行转成请求体的 JSON 对象字符串（服务器按 JSON 对象逐键合并）。
  * 值若本身是 JSON 字面量（数字 / 布尔 / 数组 / 对象 / null）则原样解析，
- * 否则按字符串处理——这样 seed=42 是数字、图片 data-URL 是字符串都对。 */
+ * 否则按字符串处理——这样 seed=42 是数字、图片 data-URL 是字符串都对。
+ * 特例：images / audios 这类数组媒体字段，若拿到的是单个 URL 字符串（裸地址
+ *  或带引号的 "…"）会自动包成数组，避免服务端期望 []string 却收到 string 而 400。 */
 export function usageFieldsToJson(fields: UsageField[]): string {
   const out: Record<string, unknown> = {};
   for (const f of fields) {
     const key = f.key.trim();
     const value = f.value.trim();
     if (!key || value === "") continue;
+    let parsed: unknown;
+    let isLiteral = false;
     try {
-      const parsed: unknown = JSON.parse(value);
-      out[key] = parsed;
+      parsed = JSON.parse(value);
+      isLiteral = true;
     } catch {
-      out[key] = value; // 非 JSON 字面量 → 当作字符串
+      /* 非合法 JSON 字面量（如裸图片 URL / 普通文本） */
+    }
+    if (isLiteral) {
+      out[key] = parsed;
+      // 数组媒体字段：合法 JSON 却是单个字符串（用户可能写了带引号的 "url"）
+      // → 包成数组，避免服务端期望 []string 却收到 string 而 400。
+      if (isMediaArrayField(key) && typeof parsed === "string") {
+        out[key] = [parsed];
+      }
+    } else if (isMediaArrayField(key)) {
+      // 数组媒体字段：用户贴的裸 URL（逗号分隔可多张）→ 拆成字符串数组。
+      out[key] = value.split(",").map((u) => u.trim()).filter(Boolean);
+    } else {
+      out[key] = value; // 其余字段按字符串保留（如 first_frame 单图）
     }
   }
   return Object.keys(out).length ? JSON.stringify(out, null, 2) : "";
