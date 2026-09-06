@@ -1139,47 +1139,9 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       </button>
                     </div>
 
-                    <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-                      接口地址
-                    </label>
-                    <input
-                      type="text"
-                      value={usageTest.baseUrl}
-                      onChange={(event) =>
-                        setUsageTest({ ...usageTest, baseUrl: event.target.value })
-                      }
-                      placeholder="https://api.example.com/v1"
-                      className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-                    />
-
-                    <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-                      端点路径
-                    </label>
-                    <input
-                      type="text"
-                      value={usageTest.path}
-                      onChange={(event) =>
-                        setUsageTest({ ...usageTest, path: event.target.value })
-                      }
-                      placeholder={
-                        usageTest.kind === "video" ? "留空 = 就是上面的地址" : "/images/generations"
-                      }
-                      className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-                    />
-
-                    <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-                      API Key
-                    </label>
-                    <input
-                      type="password"
-                      value={usageTest.apiKey}
-                      onChange={(event) =>
-                        setUsageTest({ ...usageTest, apiKey: event.target.value })
-                      }
-                      placeholder="留空 = 用该条目的密钥（含未保存草稿），再回落全局"
-                      className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-                    />
-
+                    {/* 接口地址 / 端点路径 / API Key 不再展示：
+                        弹窗打开时按条目配置预填（openUsageTest），API Key 留空
+                        即回落条目密钥——高级定制仍可在模型编辑弹窗里改。 */}
                     <label className="text-ink/80 mb-1.5 block text-sm font-medium">
                       提示词
                     </label>
