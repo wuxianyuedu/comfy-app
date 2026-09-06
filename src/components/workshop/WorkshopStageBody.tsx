@@ -73,7 +73,6 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     stageTitle,
     stageDesc,
     prereq,
-    gridShots,
     meta,
     setMeta,
     scriptMarkdown,
@@ -268,63 +267,16 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
           {prereq && (
             <StageHint text={prereq.text} onGo={() => setTab(prereq.go)} />
           )}
-          <div className="mt-4 flex gap-3">
-            <Button
-              type="button"
-              onClick={() => setTab("storyboard")}
-              className="h-auto rounded-xl px-6 py-3 text-[13px] font-semibold"
-            >
-              从剧本生成 16 镜
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setTab("script")}
-              className="text-ink h-auto rounded-xl bg-(--color-subtle) px-6 py-3 text-[13px] font-semibold hover:bg-(--color-surface-2)"
-            >
-              导入剧本
-            </Button>
+          <div className="mt-4 flex justify-end">
             <Button
               type="button"
               variant="ghost"
               onClick={() => setTab("shots")}
-              className="text-ink ml-auto h-auto rounded-xl bg-(--color-subtle) px-6 py-3 text-[13px] font-semibold hover:bg-(--color-surface-2)"
+              className="text-ink h-auto rounded-xl bg-(--color-subtle) px-6 py-3 text-[13px] font-semibold hover:bg-(--color-surface-2)"
             >
               下一阶段 →
             </Button>
           </div>
-
-          <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-ink text-[13px] font-semibold">
-                分镜脚本
-              </span>
-              <span className="bg-primary/12 text-primary rounded-lg px-4 py-1.5 text-[11px]">
-                {gridShots.length} 镜
-              </span>
-            </div>
-            <div className="grid grid-cols-4 gap-4">
-              {gridShots.map((gridShot) => (
-                <div
-                  key={gridShot.idx}
-                  className="bg-elevated relative h-[86px] rounded-[11px] p-3"
-                >
-                  <span
-                    className="absolute top-3 right-3 h-2 w-2 rounded-full"
-                    style={{ background: gridShot.color }}
-                  />
-                  <div className="text-muted-foreground truncate pr-6 text-[10.5px]">
-                    {gridShot.heading}
-                  </div>
-                  <div className="text-ink mt-5 text-xs font-medium">
-                    镜 {String(gridShot.idx + 1).padStart(2, "0")}
-                  </div>
-                  <div className="absolute top-1/2 right-2 h-11 w-[54px] -translate-y-1/2 rounded-md bg-(--color-subtle)" />
-                  <div className="absolute top-1/2 right-[22px] h-4 w-4 -translate-y-1/2 rounded-full bg-(--color-surface-2)" />
-                </div>
-              ))}
-            </div>
-          </section>
 
           <section className="border-border bg-surface mt-5 rounded-2xl border p-5">
             <h3 className="text-ink mb-3 text-[14px] font-semibold">
