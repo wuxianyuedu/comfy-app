@@ -14,7 +14,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 
 import { errorMessage } from "~/lib/error-message";
-import { parseAnsiSegments, type AnsiSegment } from "~/lib/log-ansi";
+import {
+  parseAnsiSegments,
+  parseOllamaLogText,
+  type AnsiSegment,
+} from "~/lib/log-ansi";
 import { fetchFileLogSlice, type FileLogSlice } from "~/lib/log-file-client";
 import {
   probeOllama as probeOllamaClient,
@@ -638,7 +642,8 @@ export function useSettingsPage(): SettingsPageController {
         capComfyLog(mode === "replace" ? cleaned : prev + cleaned),
       );
       setOllamaLogSegments((prev) => {
-        const incoming = parseAnsiSegments(cleaned);
+        /* Ollama 落盘的是 logrus 纯文本（无 ANSI 码），按 level= 语义上色 */
+        const incoming = parseOllamaLogText(cleaned);
         const merged = mode === "replace" ? incoming : [...prev, ...incoming];
         return merged.length > 4000 ? merged.slice(-4000) : merged;
       });

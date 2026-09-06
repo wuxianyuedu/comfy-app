@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parseAnsiSegments, stripAnsi } from "./log-ansi";
+import {
+  parseAnsiSegments,
+  parseOllamaLogText,
+  stripAnsi,
+} from "./log-ansi";
 
 describe("stripAnsi", () => {
   it("剥掉 SGR 颜色序列与 \\r，保留正文", () => {
@@ -69,5 +73,34 @@ describe("parseAnsiSegments", () => {
 
   it("空文本返回空数组", () => {
     expect(parseAnsiSegments("")).toEqual([]);
+  });
+});
+
+describe("parseOllamaLogText（logrus 纯文本语义上色）", () => {
+  it("level=INFO 行：时间戳前缀调暗、level 绿色、正文默认", () => {
+    const segments = parseOllamaLogText(
+      "[2026-09-06 14:27:22] [err] time=2026-09-06T14:27:22+08:00 level=INFO source=routes.go:2008 msg=\"Listening on 127.0.0.1:11434\"",
+    );
+    const dim = segments.find((s) => s.styles?.includes("dim"));
+    expect(dim?.text).toContain("[2026-09-06 14:27:22]");
+    const green = segments.find((s) => s.styles?.includes("green"));
+    expect(green?.text).toBe("level=INFO");
+    expect(segments.some((s) => s.text.includes("Listening on"))).toBe(true);
+  });
+
+  it("level=ERROR 行标红；无 level= 的行走原样解析", () => {
+    const segments = parseOllamaLogText(
+      '[err] level=ERROR msg="boom"\nplain line without level',
+    );
+    expect(segments.find((s) => s.styles?.includes("red"))?.text).toBe(
+      "level=ERROR",
+    );
+    expect(segments.some((s) => s.text.includes("plain line"))).toBe(true);
+  });
+
+  it("level=WARN 黄色；行间保留换行", () => {
+    const segments = parseOllamaLogText('level=WARN msg="a"\nlevel=WARN msg="b"');
+    expect(segments.filter((s) => s.styles?.includes("yellow"))).toHaveLength(2);
+    expect(segments.filter((s) => s.text === "\n")).toHaveLength(1);
   });
 });

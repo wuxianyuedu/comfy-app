@@ -219,3 +219,54 @@ function applySgr(
   }
   set(next);
 }
+
+/* ── Ollama（logrus 纯文本）行的语义上色 ───────────────────────────
+ * ollama-runtime.log 里是 logrus 的文本格式：重定向到文件（非 TTY）时
+ * logrus 不输出任何 ANSI 码，面板按上面的 SGR 解析渲染出来就是一色灰。
+ * 这里按行内 level= 字段语义上色：时间戳与写入前缀调暗，level 着
+ * INFO 绿 / WARN 黄 / ERROR、FATAL 红 / DEBUG、TRACE 灰。 */
+
+const LOGRUS_LEVEL_RE = /\blevel=(INFO|WARN|ERROR|FATAL|DEBUG|TRACE)\b/;
+const LOGRUS_LEVEL_STYLE: Record<string, AnsiStyleKey> = {
+  INFO: "green",
+  WARN: "yellow",
+  ERROR: "red",
+  FATAL: "red",
+  DEBUG: "gray",
+  TRACE: "gray",
+};
+/** 行首的 runtime 写入前缀（[时间戳] [流]）与 logrus time=… 字段，统一调暗 */
+const LOGRUS_DIM_PREFIX_RE = /^(\[[^\]]*\]\s*)*(time=\S+\s+)?/;
+
+/** 单行 logrus 文本 → 带样式片段；行内没有 level= 字段时返回 null（交回 ANSI 解析）。 */
+export function colorizeLogrusLine(line: string): AnsiSegment[] | null {
+  const matched = LOGRUS_LEVEL_RE.exec(line);
+  if (!matched) return null;
+  const levelToken = `level=${matched[1]}`;
+  const levelIdx = line.indexOf(levelToken);
+  const head = line.slice(0, levelIdx);
+  const segments: AnsiSegment[] = [];
+  const dimLen = LOGRUS_DIM_PREFIX_RE.exec(head)?.[0].length ?? 0;
+  if (dimLen > 0) segments.push({ text: head.slice(0, dimLen), styles: ["dim"] });
+  if (head.length > dimLen) segments.push({ text: head.slice(dimLen) });
+  segments.push({
+    text: levelToken,
+    styles: [LOGRUS_LEVEL_STYLE[matched[1] ?? "INFO"] ?? "green"],
+  });
+  const tail = line.slice(levelIdx + levelToken.length);
+  if (tail) segments.push({ text: tail });
+  return segments;
+}
+
+/** Ollama 启动日志整段文本 → 片段：含 level= 的行走 logrus 语义上色，
+ *  其余行（spawn 参数、空行等）走原 ANSI 解析。 */
+export function parseOllamaLogText(text: string): AnsiSegment[] {
+  const lines = text.split("\n");
+  const segments: AnsiSegment[] = [];
+  lines.forEach((line, index) => {
+    const colored = colorizeLogrusLine(line);
+    segments.push(...(colored ?? parseAnsiSegments(line)));
+    if (index < lines.length - 1) segments.push({ text: "\n" });
+  });
+  return segments;
+}
