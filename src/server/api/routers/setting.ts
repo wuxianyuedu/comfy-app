@@ -4,6 +4,7 @@ import { getSettings, getSettingsSync, saveSettings } from "@/lib/app-settings";
 import {
   ensureComfyUiReady,
   isComfyStarting,
+  isComfyStopping,
   probeComfyUi,
   stopComfyUiProcess,
 } from "@/lib/comfyui/lifecycle";
@@ -66,6 +67,9 @@ export const settingRouter = createTRPCRouter({
       up: !!base,
       base,
       starting: isComfyStarting(),
+      // 「关闭中」窗口（服务端 globalThis 计时）：状态行/按钮据此保持关闭进行态，
+      // 替代无法跨挂载存活的 React 本地 state（ISSUE #103）。
+      stopping: isComfyStopping(),
       pathConfigured: !!settings.comfyuiPath,
       autoStart: settings.comfyuiAutoStart,
       path: settings.comfyuiPath,
