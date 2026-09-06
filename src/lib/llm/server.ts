@@ -7,7 +7,7 @@ import type { LLMConfig, LLMMessage, LLMRequestOptions, LLMProviderType, TaskTyp
 const ENV_DEFAULTS: LLMConfig = {
   provider: (process.env.LLM_PROVIDER as LLMProviderType) || "local",
   baseUrl: process.env.LLM_BASE_URL ?? "http://localhost:11434/v1",
-  model: process.env.LLM_MODEL ?? "llama3.1",
+  model: process.env.LLM_MODEL ?? "",
   extraModels: null,
   apiKey: process.env.LLM_API_KEY ?? null,
   temperature: Number(process.env.LLM_TEMPERATURE ?? 0.7),
@@ -82,8 +82,18 @@ function headersFor(cfg: LLMConfig): Record<string, string> {
   return h;
 }
 
+/** 模型未配置（空）时给调用方的统一出口文案 —— 不再兜底默认模型，
+ *  避免用空的 model 打到后端拿一个「model not found」的含糊错误。 */
+const ERR_MODEL_UNCONFIGURED =
+  "尚未配置生效模型：请先在「设置 → 本地模型/远程模型」中选择或填写要使用的模型名";
+
+function assertModelConfigured(cfg: LLMConfig): void {
+  if (!cfg.model?.trim()) throw new Error(ERR_MODEL_UNCONFIGURED);
+}
+
 /** One-shot (non-streaming) completion. */
 export async function completeLLM(cfg: LLMConfig, messages: LLMMessage[]): Promise<string> {
+  assertModelConfigured(cfg);
   const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
     method: "POST",
     headers: headersFor(cfg),
@@ -117,6 +127,7 @@ export async function streamLLM(
   messages: LLMMessage[],
   onToken: (token: string) => void
 ): Promise<string> {
+  assertModelConfigured(cfg);
   const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
     method: "POST",
     headers: headersFor(cfg),
@@ -179,6 +190,7 @@ export async function completeLLMStructured<T>(
   messages: LLMMessage[],
   schema: ZodType<T>,
 ): Promise<T> {
+  assertModelConfigured(cfg);
   const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
     method: "POST",
     headers: headersFor(cfg),
