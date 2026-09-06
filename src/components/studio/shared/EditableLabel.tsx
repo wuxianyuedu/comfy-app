@@ -102,8 +102,9 @@ export function EditableLabel({
         title={title}
         /* 与展示态字体一致 — text-[12px] font-semibold
          *  text-(--color-ink-bright) + 'Inter'，避免编辑切回展示态时出现字重跳变。
-         * 宽度给到一个合理的可输入长度，并允许收缩，绝不侵占同一行的操作按钮。 */
-        className="nodrag nopan min-w-0 w-48 max-w-full shrink rounded border border-violet-400/40 bg-white/6 px-1.5 py-px text-[12px] font-semibold text-(--color-ink-bright) outline-none focus:border-violet-400/70"
+         * 宽度收紧到 w-32（seed 等短名称够用），并允许收缩，绝不侵占同一行
+         * 的「必填 / 👁 可见」操作按钮——太宽会把它们挤出可视区。 */
+        className="nodrag nopan min-w-0 w-32 max-w-full shrink rounded border border-violet-400/40 bg-white/6 px-1.5 py-px text-[12px] font-semibold text-(--color-ink-bright) outline-none focus:border-violet-400/70"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </span>

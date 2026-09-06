@@ -170,7 +170,7 @@ export function WorkflowIoPreviewPanel({
     }`;
 
   return (
-    <div className="pointer-events-none absolute right-4 top-4 bottom-4 z-30 flex w-[440px] flex-col">
+    <div className="pointer-events-none absolute right-4 top-4 bottom-4 z-30 flex w-[520px] flex-col">
       <div className="pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-400/30 bg-[#0a0a14]/92 shadow-2xl backdrop-blur-md">
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/6 px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
