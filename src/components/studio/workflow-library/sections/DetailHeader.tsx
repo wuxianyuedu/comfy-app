@@ -61,13 +61,13 @@ export function DetailHeader({
   const modes = workflow.modes ?? [];
 
   return (
-    <div className="border-b border-white/6 px-5 py-4">
+    <div className="border-b border-(--color-border-subtle) px-5 py-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h2
             className={[
               "truncate text-lg font-semibold",
-              isTechnical ? "font-mono text-white/80" : "text-white",
+              isTechnical ? "font-mono text-(--color-ink-strong)" : "text-(--color-ink)",
             ].join(" ")}
             title={workflow.name}
           >
@@ -91,14 +91,14 @@ export function DetailHeader({
                 <TaskTypeChip taskType={workflow.taskType} />
               </button>
               {showAllModes && modes.length > 1 && (
-                <div className="absolute left-0 top-full z-50 mt-1 flex min-w-[140px] flex-col gap-0.5 rounded-lg border border-white/10 bg-[#15151C] p-1.5 shadow-xl">
+                <div className="absolute left-0 top-full z-50 mt-1 flex min-w-[140px] flex-col gap-0.5 rounded-lg border border-(--color-border) bg-(--color-panel) p-1.5 shadow-xl">
                   {modes.map((code) => (
                     <span
                       key={code}
                       className={`rounded px-2 py-0.5 text-[11px] ${
                         code === workflow.defaultMode
-                          ? "bg-violet-500/15 text-violet-200"
-                          : "text-gray-400"
+                          ? "bg-violet-500/15 text-violet-600"
+                          : "text-(--color-ink-faint)"
                       }`}
                     >
                       {modeLabel(code)}
@@ -112,14 +112,14 @@ export function DetailHeader({
             {(workflow.modelTags ?? []).map((tag) => (
               <span
                 key={tag}
-                className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-white/60"
+                className="rounded-full border border-(--color-border) bg-(--color-subtle) px-2 py-0.5 text-[10px] text-(--color-ink-faint)"
               >
                 {tag}
               </span>
             ))}
             {/* 缺少可执行图时提前标注，而不是等用户点了「生成」才报错。 */}
             {!usable && (
-              <span className="rounded bg-red-500/12 px-1.5 py-0.5 text-[10px] text-red-300">
+              <span className="rounded bg-red-500/12 px-1.5 py-0.5 text-[10px] text-red-600">
                 不可执行
               </span>
             )}
@@ -128,8 +128,8 @@ export function DetailHeader({
                 className={[
                   "rounded px-1.5 py-0.5 text-[10px]",
                   missing
-                    ? "bg-red-500/12 text-red-300"
-                    : "bg-amber-500/12 text-amber-300",
+                    ? "bg-red-500/12 text-red-600"
+                    : "bg-amber-500/12 text-amber-600",
                 ].join(" ")}
               >
                 {missing ? "磁盘文件已丢失" : "磁盘文件有更新"}

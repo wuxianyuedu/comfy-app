@@ -353,15 +353,15 @@ export function JsonViewer({
   const collapseThreshold = initialCollapsedDepth >= 1 ? 30 + initialCollapsedDepth * 40 : 1e9;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#0c0a14]">
+    <div className="flex h-full min-h-0 flex-col bg-(--color-panel-deep)">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b border-white/8 bg-[#12101c] px-3 py-1.5 text-xs">
-        <span className="font-medium text-zinc-300">{title}</span>
+      <div className="flex items-center gap-2 border-b border-(--color-border) bg-(--color-panel) px-3 py-1.5 text-xs">
+        <span className="font-medium text-(--color-ink-bright)">{title}</span>
         <span className="flex-1" />
         <button
           type="button"
           onClick={copy}
-          className="rounded border border-white/10 px-2 py-0.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+          className="rounded border border-(--color-border) px-2 py-0.5 text-(--color-ink-muted) hover:bg-(--color-subtle) hover:text-(--color-ink-bright)"
           title="把当前 JSON 复制到剪贴板"
         >
           {copied ? "已复制" : "复制"}
@@ -369,8 +369,8 @@ export function JsonViewer({
       </div>
 
       {/* 搜索条 */}
-      <div className="flex items-center gap-2 border-b border-white/6 px-3 py-1.5 text-xs">
-        <Icon name="search" size={14} className="shrink-0 text-zinc-500" />
+      <div className="flex items-center gap-2 border-b border-(--color-border-subtle) px-3 py-1.5 text-xs">
+        <Icon name="search" size={14} className="shrink-0 text-(--color-ink-fainter)" />
         <input
           ref={searchRef}
           type="text"
@@ -378,10 +378,10 @@ export function JsonViewer({
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={onSearchKey}
           placeholder="搜索 key / string / number / bool / null…（⌘F / Ctrl+F）"
-          className="flex-1 rounded border border-white/10 bg-black/30 px-2 py-0.5 font-mono text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-400/60"
+          className="flex-1 rounded border border-(--color-border) bg-black/30 px-2 py-0.5 font-mono text-(--color-ink-bright) outline-none placeholder:text-(--color-ink-faintest) focus:border-violet-400/60"
         />
         {query && (
-          <span className="font-mono text-zinc-400">
+          <span className="font-mono text-(--color-ink-muted)">
             {hits.length === 0 ? "0 / 0" : `${hitIndex + 1} / ${hits.length}`}
           </span>
         )}
@@ -391,27 +391,27 @@ export function JsonViewer({
               type="button"
               onClick={() => nextHit(-1)}
               disabled={hits.length === 0}
-              className="rounded border border-white/10 px-2 py-0.5 text-zinc-400 hover:bg-white/5 disabled:opacity-30"
+              className="rounded border border-(--color-border) px-2 py-0.5 text-(--color-ink-muted) hover:bg-(--color-subtle) disabled:opacity-30"
               title="上一个 (Shift+Enter)"
             >
-              <Icon name="chevronup" size={14} className="text-zinc-400" />
+              <Icon name="chevronup" size={14} className="text-(--color-ink-muted)" />
             </button>
             <button
               type="button"
               onClick={() => nextHit(1)}
               disabled={hits.length === 0}
-              className="rounded border border-white/10 px-2 py-0.5 text-zinc-400 hover:bg-white/5 disabled:opacity-30"
+              className="rounded border border-(--color-border) px-2 py-0.5 text-(--color-ink-muted) hover:bg-(--color-subtle) disabled:opacity-30"
               title="下一个 (Enter)"
             >
-              <Icon name="chevrondown" size={14} className="text-zinc-400" />
+              <Icon name="chevrondown" size={14} className="text-(--color-ink-muted)" />
             </button>
             <button
               type="button"
               onClick={() => setQuery("")}
-              className="rounded border border-white/10 px-2 py-0.5 text-zinc-400 hover:bg-white/5"
+              className="rounded border border-(--color-border) px-2 py-0.5 text-(--color-ink-muted) hover:bg-(--color-subtle)"
               title="清空 (Esc)"
             >
-              <Icon name="close" size={14} className="text-zinc-400" />
+              <Icon name="close" size={14} className="text-(--color-ink-muted)" />
             </button>
           </>
         )}
@@ -424,7 +424,7 @@ export function JsonViewer({
         data-testid="json-viewer-body"
       >
         {data === undefined ? (
-          <span className="text-zinc-500">(empty)</span>
+          <span className="text-(--color-ink-fainter)">(empty)</span>
         ) : (
           <JsonView
             src={data}

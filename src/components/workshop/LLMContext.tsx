@@ -265,7 +265,7 @@ function LLMSettingsModal({
               >
                 <span
                   className={`inline-block size-2 shrink-0 rounded-full ${
-                    activeModel === name ? "bg-primary" : "bg-white/20"
+                    activeModel === name ? "bg-primary" : "bg-(--color-surface-2)"
                   }`}
                 />
                 <span className="flex-1 truncate">{name}</span>

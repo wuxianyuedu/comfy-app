@@ -60,7 +60,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex max-w-[260px] items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-medium text-white/75 transition-colors hover:bg-white/[0.08] hover:text-white"
+        className="inline-flex max-w-[260px] items-center gap-1.5 rounded-lg border border-(--color-border) bg-(--color-subtle) px-2.5 py-1.5 text-[11px] font-medium text-(--color-ink-strong) transition-colors hover:bg-(--color-surface-2) hover:text-(--color-ink)"
         title={`${label}（点击管理模型标签绑定）`}
       >
         <span className="truncate">{label}</span>
@@ -79,13 +79,13 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
               if (event.target === event.currentTarget) setOpen(false);
             }}
           >
-            <div className="w-80 rounded-xl border border-white/10 bg-[#1b1b24] p-3 shadow-2xl">
-              <p className="mb-2 text-xs font-medium text-gray-200">
+            <div className="w-80 rounded-xl border border-(--color-border) bg-(--color-card) p-3 shadow-2xl">
+              <p className="mb-2 text-xs font-medium text-(--color-ink-bright)">
                 绑定模型标签（{draft.size}）
               </p>
               <div className="mb-2 flex max-h-56 flex-col gap-1 overflow-y-auto">
                 {knownNames.length === 0 && (
-                  <p className="px-2 py-1.5 text-[11px] leading-relaxed text-gray-500">
+                  <p className="px-2 py-1.5 text-[11px] leading-relaxed text-(--color-ink-muted)">
                     全局标签库为空，可直接在下方输入新标签（保存时自动入库）。
                   </p>
                 )}
@@ -98,15 +98,15 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
                       onClick={() => toggle(name)}
                       className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
                         selected
-                          ? "bg-fuchsia-500/15 text-fuchsia-100"
-                          : "text-gray-300 hover:bg-white/5"
+                          ? "bg-fuchsia-500/15 text-fuchsia-600"
+                          : "text-(--color-ink-strong) hover:bg-(--color-subtle)"
                       }`}
                     >
                       <span
                         className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
                           selected
                             ? "border-fuchsia-400/60 bg-fuchsia-500/40"
-                            : "border-white/20 bg-white/5"
+                            : "border-(--color-border-strong) bg-(--color-subtle)"
                         }`}
                       >
                         {selected && "✓"}
@@ -131,14 +131,14 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
                     }
                   }}
                   placeholder="新增标签，如 z-image"
-                  className="h-7 min-w-0 flex-1 rounded-md border border-white/10 bg-white/5 px-2 text-xs text-gray-200 placeholder:text-gray-500 focus:border-fuchsia-400/40 focus:outline-none"
+                  className="h-7 min-w-0 flex-1 rounded-md border border-(--color-border) bg-(--color-subtle) px-2 text-xs text-(--color-ink-bright) placeholder:text-(--color-ink-muted) focus:border-fuchsia-400/40 focus:outline-none"
                 />
               </div>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="flex-1 rounded-md bg-white/5 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10"
+                  className="flex-1 rounded-md bg-(--color-subtle) px-3 py-1.5 text-xs text-(--color-ink-strong) transition-colors hover:bg-(--color-surface-2)"
                 >
                   取消
                 </button>

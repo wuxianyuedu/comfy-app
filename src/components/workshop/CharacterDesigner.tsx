@@ -518,7 +518,7 @@ export function CharacterDesigner({
                   艺术风格（Skill）
                 </span>
                 <DarkSelect
-                  className="!border-white/8 !bg-white/3 text-sm"
+                  className="!border-(--color-border) !bg-(--color-subtle) text-sm"
                   value={character.skillSlug ?? ""}
                   onChange={(value) =>
                     update(character.id, { skillSlug: value || undefined })
