@@ -49,6 +49,26 @@ function appendOllamaLog(line: string): void {
   }
 }
 
+/** 会话边界横幅（与 comfyui/drizzle-studio 同模式）：区分多次启动累积日志。 */
+function appendOllamaBanner(kind: "start" | "end", title: string): void {
+  try {
+    fs.mkdirSync(path.dirname(OLLAMA_RUNTIME_LOG), { recursive: true });
+    const bar = "─".repeat(72);
+    const color = kind === "start" ? "\x1b[1;32m" : "\x1b[1;33m";
+    const reset = "\x1b[0m";
+    const banner = [
+      "",
+      `${color}${bar}${reset}`,
+      `${color}  ${title}${reset}`,
+      `${color}${bar}${reset}`,
+      "",
+    ].join("\n");
+    fs.appendFileSync(OLLAMA_RUNTIME_LOG, banner + "\n", "utf-8");
+  } catch {
+    /* 日志失败不影响主流程 */
+  }
+}
+
 /** 探测 Ollama 是否已就绪（HTTP 200 = 服务在监听）。 */
 async function probeOllamaPort(): Promise<boolean> {
   try {
@@ -207,6 +227,7 @@ async function spawnOllamaServe(
 
     // 进程在观察期内退出 = 启动秒退（端口被占 / 配置错误 / 安装不完整）
     child.on("exit", (code, signal) => {
+      appendOllamaBanner("end", `■ Ollama 进程已退出（code=${code ?? "null"}）`);
       appendOllamaLog(`[exit] code=${code ?? "null"} signal=${signal ?? "none"}`);
       done(
         false,
@@ -271,6 +292,7 @@ export async function POST(_req: NextRequest) {
     const ollama = await resolveOllamaExe();
     // 退出策略决定拉起方式：false（保活）时脱离进程树，应用退出不连带关闭。
     const keepAlive = getExitPolicy().exitKillOllama === false;
+    appendOllamaBanner("start", `▶ Ollama 启动会话  ${localTimestamp()}`);
     appendOllamaLog(
       `[action] 启动 Ollama：exe=${ollama} keepAlive=${keepAlive}${keepAlive ? "（保活模式：应用退出后不关闭）" : ""}`,
     );

@@ -157,6 +157,9 @@ export async function stopComfyUiProcess(): Promise<{ ok: boolean; detail: strin
     await new Promise((r) => setTimeout(r, 500));
     if (!(await probeComfyUi(800))) {
       appendRuntimeLog("[stop] ComfyUI 已关闭");
+      // 非 bound（keepAlive / 接管场景）没有 child.on("exit") 会落会话结束
+      // 横幅——这里补一条，保持「每次会话都有 start/end 分隔」的一致性。
+      if (!child) appendSessionBanner("end", "■ ComfyUI 已手动关闭");
       clearComfyStopping();
       return { ok: true, detail: "ComfyUI 已关闭" };
     }
@@ -195,6 +198,35 @@ function appendRuntimeLog(line: string): void {
     const dir = path.join(process.cwd(), "log");
     fs.mkdirSync(dir, { recursive: true });
     fs.appendFileSync(path.join(dir, "comfyui-runtime.log"), `${localTimestamp()} ${line}\n`, "utf-8");
+  } catch {
+    /* 日志失败不影响主流程 */
+  }
+}
+
+/**
+ * 在 comfyui-runtime.log 写一条会话边界横幅。
+ * comfyui-runtime.log 是追加不轮转的，多次启动的日志会一直累积——新一次
+ * 启动的 `[spawn]`/`[out]` 行接在上次启动结尾后面，日志面板里难以分辨
+ * 会话边界。此函数用 box 字符 + ANSI 亮色（面板解析后渲染成高亮）划出
+ * 清晰的会话分隔线。
+ * @param kind start（绿）= 新会话开始；end（黄）= 会话结束
+ * @param title 横幅中间的信息行（含时间戳/exit code 等）
+ */
+function appendSessionBanner(kind: "start" | "end", title: string): void {
+  try {
+    const dir = path.join(process.cwd(), "log");
+    fs.mkdirSync(dir, { recursive: true });
+    const bar = "─".repeat(72);
+    const color = kind === "start" ? "\x1b[1;32m" : "\x1b[1;33m"; // 亮绿 / 亮黄
+    const reset = "\x1b[0m";
+    const banner = [
+      "",
+      `${color}${bar}${reset}`,
+      `${color}  ${title}${reset}`,
+      `${color}${bar}${reset}`,
+      "",
+    ].join("\n");
+    fs.appendFileSync(path.join(dir, "comfyui-runtime.log"), banner + "\n", "utf-8");
   } catch {
     /* 日志失败不影响主流程 */
   }
@@ -271,6 +303,9 @@ export async function ensureComfyUiReady(
     // taskkill /T /F 杀整树，退出那一刻没有机会再决定）。
     const policy = getExitPolicy();
     const keepAlive = policy.exitKillComfyui === false;
+    // 每次启动先在日志里落一条明显的会话分隔横幅（ANSI 亮绿），
+    // 让日志面板能一眼分清「上次启动的结尾」和「这次启动的开头」。
+    appendSessionBanner("start", `▶ ComfyUI 启动会话  ${localTimestamp()}`);
     note(`ComfyUI 未运行，按配置路径启动：${plan.cmd} ${args.join(" ")}${keepAlive ? "（保活模式：应用退出后不关闭）" : ""}`);
 
     const deadline = opts.timeoutMs != null ? Date.now() + opts.timeoutMs : null;
@@ -379,6 +414,8 @@ export async function ensureComfyUiReady(
           } else {
             missCount += 1;
             if (missCount >= 2) {
+              // 保活进程已消失：落一条会话结束横幅，标记该会话终点。
+              appendSessionBanner("end", "■ ComfyUI 保活进程已退出");
               const common =
                 "详见 log/comfyui-runtime.log；也可暂时勾选「关闭应用时连带关闭 ComfyUI」改用直连启动，获得实时日志定位问题。";
               const detail = everSeenProcess
@@ -442,6 +479,9 @@ export async function ensureComfyUiReady(
       pushRecent(text);
     });
     child.on("exit", (code) => {
+      // 会话结束横幅（ANSI 亮黄）：无论自然退出还是用户手动关闭，
+      // 都在日志里明确划上会话终点，方便区分前后两次启动。
+      appendSessionBanner("end", `■ ComfyUI 进程已退出（code=${code ?? "null"}）`);
       note(`ComfyUI 进程退出（code=${code ?? "null"}）`);
       if (st.child === child) st.child = undefined;
     });
