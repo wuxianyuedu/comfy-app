@@ -92,13 +92,21 @@ export function resolveDrizzleKitBin(
   return null;
 }
 
+/** 本地时间戳（YYYY-MM-DD HH:mm:ss）：runtime 日志是给本机用户看的，
+ *  toISOString 的 UTC 在 +8 时区会凭空差出 8 小时（同 comfyui/lifecycle.ts）。 */
+function localTimestamp(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
 function appendRuntimeLog(line: string): void {
   try {
     const dir = path.join(process.cwd(), "log");
     fs.mkdirSync(dir, { recursive: true });
     fs.appendFileSync(
       path.join(dir, "drizzle-studio-runtime.log"),
-      `${new Date().toISOString()} ${line}\n`,
+      `${localTimestamp()} ${line}\n`,
       "utf-8",
     );
   } catch {
