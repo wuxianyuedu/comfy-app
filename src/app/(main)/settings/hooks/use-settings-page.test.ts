@@ -73,6 +73,8 @@ interface Behavior {
   saveLlmError?: string;
   saveSettingsError?: string;
   comfyStart?: { ok: boolean; detail: string };
+  dbStudioStatusError?: string;
+  dbStudioUp?: boolean;
 }
 
 let behavior: Behavior = {};
@@ -105,11 +107,19 @@ const mockRouter = t.router({
     })),
     /* Drizzle Studio：新增分区拉起的 status 查询与动作，均需有 mock handler，
      * 否则 onUnhandledRequest:error 会让渲染整个 hook 的用例全挂 */
-    dbStudioStatus: t.procedure.query(() => ({
-      up: false,
-      starting: false,
-      port: 4983,
-    })),
+    dbStudioStatus: t.procedure.query(() => {
+      if (behavior.dbStudioStatusError) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: behavior.dbStudioStatusError,
+        });
+      }
+      return {
+        up: behavior.dbStudioUp ?? false,
+        starting: false,
+        port: 4983,
+      };
+    }),
     dbStudioStart: t.procedure.mutation(() => ({
       ok: true,
       detail: "已启动",
@@ -556,6 +566,42 @@ describe("useSettingsPage", () => {
     expect(result.current.dbStudioLogText).toContain("[spawn] pid=456");
     expect(result.current.dbStudioLogText).toContain("Drizzle Studio is running");
     expect(result.current.dbStudioLogActive).toBe(false);
+  });
+
+  it("dbStudioStatus 查询失败 → dbStudioStatus 为 null，启动动作仍可用（#92 回归）", async () => {
+    behavior = { dbStudioStatusError: "探测崩溃" };
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await waitFor(() =>
+      expect(result.current.dbStudioStatus).toBeNull(),
+    );
+    /* 状态降级为 null（等同「未运行」）：启动不被锁死，可正常发起 */
+    await act(async () => {
+      await result.current.startDbStudio();
+    });
+    expect(result.current.flash).toEqual({
+      kind: "ok",
+      text: "已启动",
+    });
+    expect(result.current.dbStudioStarting).toBe(false);
+  });
+
+  it("db studio 三个动作不依赖全局 saving：startDbStudio 前后 saving 不被置位（#92 回归）", async () => {
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    expect(result.current.saving).toBe(false);
+    await act(async () => {
+      await result.current.startDbStudio();
+    });
+    /* 启动完成后 saving 仍为 false——db studio 动作不该动共享 saving 标志 */
+    expect(result.current.saving).toBe(false);
+    expect(result.current.dbStudioStarting).toBe(false);
   });
 
   it("远端模型：编辑候选条目（改名/接口/密钥）；重名排除自身", async () => {
