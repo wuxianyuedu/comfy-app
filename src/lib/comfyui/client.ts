@@ -20,6 +20,7 @@ import {
   findPidListeningPort,
 } from "./proc-detect";
 import { logger } from "~/server/lib/logger";
+import { getGpuVramUsedPhysical } from "./gpu-vram";
 
 /** How many extra ports to probe when the configured one is unreachable */
 const PROBE_RANGE = 5;
@@ -343,8 +344,13 @@ function pickGpu(devices: ComfyDevice[] | undefined): ComfyDevice | undefined {
 
 /** 拉取 ComfyUI `/system_stats` 并折叠成状态栏需要的聚合字段。
  *  服务不可达 / 解析失败时返回 null，由调用方决定降级展示。
- *  显存占用优先用 vram_used；个别后端不填充该字段（恒 0），此时用
- *  vram_total - vram_free 兜底推导，与内存侧 ram_total - ram_free 的做法一致。 */
+ *  显存占用的口径选择（ISSUE #121）：
+ *  - 首选 nvidia-smi 的物理专用显存占用——与 Windows 任务管理器「专用 GPU
+ *    内存」同口径。CUDA 口径（vram_total - vram_free）在 WDDM 下会把被驱动
+ *    分页到共享 GPU 内存的分配也计入，数值远大于物理专用显存占用。
+ *  - nvidia-smi 不可用（无 N 卡/超时）时回退 CUDA 口径：优先 vram_used，
+ *    个别后端不填充该字段（恒 0），再用 vram_total - vram_free 兜底推导，
+ *    与内存侧 ram_total - ram_free 的做法一致。 */
 export async function getSystemStats(): Promise<ComfySystemStats | null> {
   try {
     const res = await fetch(`${comfyBase()}/system_stats`, {
@@ -357,10 +363,14 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
     };
     const dev = pickGpu(data.devices);
     const vramTotal = dev?.vram_total ?? 0;
-    const vramUsed =
+    const cudaUsed =
       (dev?.vram_used && dev.vram_used > 0
         ? dev.vram_used
         : (dev?.vram_total ?? 0) - (dev?.vram_free ?? 0)) ?? 0;
+    // 远端实例（COMFYUI_BASE 指向非本机）时本机 nvidia-smi 读的是本地 GPU，
+    // 数值无关，禁用物理口径回退 CUDA。
+    const isLocal = /^(127\.|\[::1\]|localhost$)/.test(new URL(comfyBase()).hostname);
+    const vramUsed = isLocal ? ((await getGpuVramUsedPhysical()) ?? cudaUsed) : cudaUsed;
     const ramTotal = data.system?.ram_total ?? 0;
     const ramFree = data.system?.ram_free ?? 0;
     return {
