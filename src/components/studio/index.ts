@@ -58,7 +58,6 @@ export type { ModalDialogProps } from "./ui/ModalDialog";
 export { AuroraBackground } from "./ui/AuroraBackground";
 
 export { BrowserStatusBar } from "./BrowserStatusBar";
-export type { BrowserStatusBarProps } from "./BrowserStatusBar";
 
 export { LogProvider, useLogPanel } from "./logs/LogProvider";
 export { LogPanel } from "./logs/LogPanel";
