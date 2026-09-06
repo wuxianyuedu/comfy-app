@@ -24,8 +24,10 @@ import {
 import {
   VIDEO_MODE_HINT,
   VIDEO_MODE_PRESETS,
+  defaultVideoFields,
   usageFieldsToJson,
   looksLikeImage,
+  videoModeMissingHint,
   type UsageField,
 } from "~/lib/llm/usage-test-config";
 import type {
@@ -271,11 +273,11 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
       path,
       apiKey: "",
       prompt: preset.prompt,
-      size: kind === "image" ? "1024x1024" : "",
+      size: "",
       /* 视频接口普遍必填 mode（如 Agnes：text / keyframe / reference）。
        * 这里直接给一行可见、可改的 mode 字段，替代原先手填整段 JSON；
        * 改成 keyframe 再补一行 first_frame 图即可走首帧模式。 */
-      fields: kind === "video" ? [{ key: "mode", value: "text" }] : [],
+      fields: kind === "video" ? defaultVideoFields() : [],
       running: false,
       result: null,
     });
@@ -1193,6 +1195,23 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                       </>
                     )}
 
+                    {usageTest.kind === "video" && (
+                      <>
+                        <label className="text-ink/80 mb-1.5 block text-sm font-medium">
+                          尺寸（可选，留空 = 不传）
+                        </label>
+                        <input
+                          type="text"
+                          value={usageTest.size}
+                          onChange={(event) =>
+                            setUsageTest({ ...usageTest, size: event.target.value })
+                          }
+                          placeholder="如 720P（Agnes Flash 固定值）或 1280x704"
+                          className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                        />
+                      </>
+                    )}
+
                     <label className="text-ink/80 mb-1.5 block text-sm font-medium">
                       请求体额外字段
                     </label>
@@ -1240,6 +1259,11 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                             </p>
                           ) : null;
                         })}
+                        {videoModeMissingHint(usageTest.fields) && (
+                          <p className="mt-1 rounded-lg border border-dashed border-amber-400/60 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                            ⚠ {videoModeMissingHint(usageTest.fields)}
+                          </p>
+                        )}
                       </div>
                     )}
 

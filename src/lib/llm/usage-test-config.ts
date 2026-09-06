@@ -15,11 +15,41 @@ export interface UsageField {
  * 仅为快捷选项——选中后仍可在输入框里自由改，适配其它模型的其它取值。 */
 export const VIDEO_MODE_PRESETS = ["text", "keyframe", "reference"] as const;
 
+/** 各 mode 的取值要求与所需媒体字段说明（按 Agnes 文档措辞归纳，
+ *  其它模型若取值不同可直接手改，不写死）。 */
 export const VIDEO_MODE_HINT: Record<string, string> = {
-  text: "文生视频：仅靠提示词生成",
-  keyframe: "首帧图生视频：额外传入首帧图 first_frame",
-  reference: "参考图驱动：额外传入参考图 reference_image",
+  text: "文生视频：仅靠提示词生成，不能带 first_frame / images 等媒体字段",
+  keyframe: "首帧/尾帧控制：需额外传入 first_frame（或 last_frame）图片",
+  reference: "参考图/音频驱动：需额外传入 images 或 audios 至少一类",
 };
+
+/** 视频「请求体额外字段」的预填模板：mode 是大多数视频接口的必填项，
+ *  一打开弹窗就可见可改，避免首次执行就因缺 mode 被 400。 */
+export function defaultVideoFields(): UsageField[] {
+  return [{ key: "mode", value: "text" }];
+}
+
+/** 视频请求缺媒体字段时（mode 与已填字段明显不匹配）给出的人文提示。
+ *  仅做「该传什么」的引导，不做硬校验——各家接口规则不一，以服务端报错为准。 */
+export function videoModeMissingHint(fields: UsageField[]): string | null {
+  const mode = fields.find((f) => f.key.trim() === "mode")?.value.trim() ?? "";
+  const keys = new Set(fields.map((f) => f.key.trim()));
+  if (mode === "keyframe" && !keys.has("first_frame") && !keys.has("last_frame")) {
+    return "mode=keyframe 需要 first_frame（或 last_frame）图片：添加一行字段名 first_frame，点「图片」上传或粘贴图片地址。";
+  }
+  if (mode === "reference" && !keys.has("images") && !keys.has("audios")) {
+    return "mode=reference 需要 images（或 audios）：添加一行字段名 images，值填图片地址（多张可用 JSON 数组写法 [\"…\",\"…\"]）。";
+  }
+  if (mode === "text") {
+    const forbidden = ["first_frame", "last_frame", "images", "audios"].filter((k) =>
+      keys.has(k),
+    );
+    if (forbidden.length > 0) {
+      return `mode=text 不能携带媒体字段（${forbidden.join(" / ")}）：请删掉这些行，或把 mode 改成 keyframe / reference。`;
+    }
+  }
+  return null;
+}
 
 /** 把结构化字段行转成请求体的 JSON 对象字符串（服务器按 JSON 对象逐键合并）。
  * 值若本身是 JSON 字面量（数字 / 布尔 / 数组 / 对象 / null）则原样解析，

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  defaultVideoFields,
   usageFieldsToJson,
   looksLikeImage,
+  videoModeMissingHint,
 } from "./usage-test-config";
 
 describe("usageFieldsToJson", () => {
@@ -13,13 +15,19 @@ describe("usageFieldsToJson", () => {
     expect(JSON.parse(json)).toEqual({ mode: "text", seed: 42 });
   });
 
-  it("值是 JSON 字面量时按字面量类型解析（数字 / 布尔 / 对象）", () => {
+  it("值是 JSON 字面量时按字面量类型解析（数字 / 布尔 / 数组）", () => {
     const json = usageFieldsToJson([
       { key: "seed", value: "42" },
       { key: "enhance", value: "true" },
       { key: "duration", value: "5" },
+      { key: "images", value: '["https://a.example/x.png"]' },
     ]);
-    expect(JSON.parse(json)).toEqual({ seed: 42, enhance: true, duration: 5 });
+    expect(JSON.parse(json)).toEqual({
+      seed: 42,
+      enhance: true,
+      duration: 5,
+      images: ["https://a.example/x.png"],
+    });
   });
 
   it("非 JSON 字面量的文本原样按字符串保留（如图片 data URL）", () => {
@@ -51,5 +59,42 @@ describe("looksLikeImage", () => {
     expect(looksLikeImage("https://cdn.example.com/video.mp4")).toBe(false);
     expect(looksLikeImage("一只柴犬")).toBe(false);
     expect(looksLikeImage("")).toBe(false);
+  });
+});
+
+describe("defaultVideoFields", () => {
+  it("视频弹窗预填一行可改的 mode 字段", () => {
+    expect(defaultVideoFields()).toEqual([{ key: "mode", value: "text" }]);
+  });
+});
+
+describe("videoModeMissingHint", () => {
+  it("keyframe 缺 first_frame / last_frame 时给出引导", () => {
+    const hint = videoModeMissingHint([{ key: "mode", value: "keyframe" }]);
+    expect(hint).toContain("first_frame");
+  });
+
+  it("reference 缺 images / audios 时给出引导", () => {
+    const hint = videoModeMissingHint([{ key: "mode", value: "reference" }]);
+    expect(hint).toContain("images");
+  });
+
+  it("text 带媒体字段时提示不匹配（对应 invalid mode 报错的常见成因）", () => {
+    const hint = videoModeMissingHint([
+      { key: "mode", value: "text" },
+      { key: "first_frame", value: "https://example.com/a.png" },
+    ]);
+    expect(hint).toContain("first_frame");
+  });
+
+  it("字段齐全或纯 text 时不提示", () => {
+    expect(videoModeMissingHint([{ key: "mode", value: "text" }])).toBeNull();
+    expect(
+      videoModeMissingHint([
+        { key: "mode", value: "keyframe" },
+        { key: "first_frame", value: "data:image/png;base64,AA" },
+      ]),
+    ).toBeNull();
+    expect(videoModeMissingHint([])).toBeNull();
   });
 });
