@@ -80,7 +80,7 @@ export function ShotRow({
         <label className="block">
           <span className="mb-1 block text-xs text-muted-foreground">景别</span>
           <DarkSelect
-            className="!bg-white/3 !border-white/8 text-xs"
+            className="!bg-(--color-subtle) !border-(--color-border) text-xs"
             value={shot.shotType}
             onChange={(value) => onUpdate(shot.id, { shotType: value as ShotType })}
             options={SHOT_TYPES}
@@ -93,7 +93,7 @@ export function ShotRow({
         <label className="block">
           <span className="mb-1 block text-xs text-muted-foreground">风格 Skill</span>
           <DarkSelect
-            className="!bg-white/3 !border-white/8 text-xs"
+            className="!bg-(--color-subtle) !border-(--color-border) text-xs"
             value={shot.skillSlug ?? ""}
             onChange={(value) => onUpdate(shot.id, { skillSlug: value || undefined })}
             options={styles.map((style) => style.slug)}

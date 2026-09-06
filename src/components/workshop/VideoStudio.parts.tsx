@@ -78,7 +78,7 @@ export function ChannelSwitch({
         <button
           type="button"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-lg bg-white/4 px-3 py-1.5 text-xs hover:bg-white/8"
+          className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-lg bg-(--color-subtle) px-3 py-1.5 text-xs hover:bg-(--color-surface-2)"
         >
           <Icon name="settings" size={12} />
           API 通道设置
@@ -103,7 +103,7 @@ export function ChannelSwitch({
         <label className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">帧率</span>
           <DarkSelect
-            className="!bg-white/3 !border-white/8 text-xs"
+            className="!bg-(--color-subtle) !border-(--color-border) text-xs"
             value={String(fps)}
             onChange={(v) => onFpsChange(Number(v) || 16)}
             options={FPS_OPTIONS}
@@ -121,7 +121,7 @@ export function ChannelSwitch({
         <button
           type="button"
           onClick={onNextStage}
-          className="text-ink rounded-lg bg-white/4 px-3 py-1.5 text-xs font-medium hover:bg-white/8"
+          className="text-ink rounded-lg bg-(--color-subtle) px-3 py-1.5 text-xs font-medium hover:bg-(--color-surface-2)"
         >
           去合成 →
         </button>
@@ -237,7 +237,7 @@ export function ShotCard({
             <label className="flex items-center gap-1 text-[11px]">
               <span className="text-muted-foreground">运动</span>
               <DarkSelect
-                className="!bg-white/3 !border-white/8 text-[11px]"
+                className="!bg-(--color-subtle) !border-(--color-border) text-[11px]"
                 value={shot.motion ?? "medium"}
                 onChange={(v) => onPatch({ motion: v as MotionLevel })}
                 options={MOTIONS}

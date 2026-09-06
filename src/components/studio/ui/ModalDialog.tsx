@@ -10,7 +10,7 @@
  *
  * Visual language matches the global design tokens:
  *   - backdrop:  bg-black/65 + backdrop-blur-sm
- *   - card:      bg-[#1b1b22]/95, ring-1 ring-white/6
+ *   - card:      bg-(--color-panel)/95, ring-1 ring-white/6
  *                + border border-violet-500/20 (info) /
  *                border-red-500/30 + glow (danger variant)
  *   - spacing:   p-6, gap-4, rounded-2xl
@@ -110,7 +110,7 @@ export function ModalDialog({
     ? "bg-red-500/90 hover:bg-red-500 focus-visible:ring-red-400/60 text-white shadow-sm shadow-red-950/40"
     : "bg-violet-500/90 hover:bg-violet-500 focus-visible:ring-violet-400/60 text-white shadow-sm shadow-violet-950/40";
   const cancelClass =
-    "bg-white/4 hover:bg-white/8 focus-visible:ring-white/30 text-gray-300";
+    "bg-(--color-subtle) hover:bg-(--color-surface-2) focus-visible:ring-white/30 text-(--color-ink-strong)";
 
   return createPortal(
     <div
@@ -122,7 +122,7 @@ export function ModalDialog({
     >
       <div
         onClick={stop}
-        className={`relative w-full max-w-[420px] overflow-hidden rounded-2xl border bg-[#1b1b22]/95 p-6 ring-1 backdrop-blur-md ${ringClass}`}
+        className={`relative w-full max-w-[420px] overflow-hidden rounded-2xl border bg-(--color-panel)/95 p-6 ring-1 backdrop-blur-md ${ringClass}`}
       >
         {/* Soft accent wash — sets the mood without dominating */}
         <div
@@ -145,12 +145,12 @@ export function ModalDialog({
           <div className="min-w-0 flex-1">
             <h2
               id={titleId}
-              className="text-[15px] font-semibold leading-tight text-gray-100"
+              className="text-[15px] font-semibold leading-tight text-(--color-ink)"
             >
               {title}
             </h2>
             {description && (
-              <div className="mt-1.5 whitespace-pre-line text-[13px] leading-relaxed text-gray-400">
+              <div className="mt-1.5 whitespace-pre-line text-[13px] leading-relaxed text-(--color-ink-faint)">
                 {description}
               </div>
             )}

@@ -23,9 +23,11 @@ import {
 } from "~/lib/llm/types";
 import {
   MEDIA_URL_NOTICE,
+  USAGE_FIELD_PRESETS,
   VIDEO_MODE_HINT,
   VIDEO_MODE_PRESETS,
   defaultVideoFields,
+  hasUsageFieldKey,
   isMediaArrayField,
   isMediaField,
   isModeValueBroken,
@@ -333,6 +335,15 @@ export function SettingsPageView({
   function addField(key = "") {
     setUsageTest((prev) =>
       prev ? { ...prev, fields: [...prev.fields, { key, value: "" }] } : prev,
+    );
+  }
+  /** 一键添加固定名称字段（images / first_frame / seed 等预设）：
+   *  已存在同名行则不重复加，避免堆出无用的空行。 */
+  function addPresetField(key: string) {
+    setUsageTest((prev) =>
+      prev && !hasUsageFieldKey(prev.fields, key)
+        ? { ...prev, fields: [...prev.fields, { key, value: "" }] }
+        : prev,
     );
   }
   function removeField(index: number) {
@@ -1342,7 +1353,7 @@ export function SettingsPageView({
                         const i = usageTest.fields.indexOf(f);
                         return (
                           <div
-                            key={`${f.key}-${i}`}
+                            key={i}
                             className="flex flex-col gap-1.5"
                           >
                             <div className="flex gap-1.5">
@@ -1442,6 +1453,44 @@ export function SettingsPageView({
                     >
                       ＋ 添加字段
                     </button>
+
+                    {(usageTest.kind === "image" ||
+                      usageTest.kind === "video") && (
+                      <div className="mb-3">
+                        <p className="text-muted-foreground mb-1.5 text-[11px]">
+                          固定名称字段可一键添加，无需手输拼错
+                          （images / first_frame / seed 等）：
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {USAGE_FIELD_PRESETS.map((preset) => {
+                            const already = hasUsageFieldKey(
+                              usageTest.fields,
+                              preset.key,
+                            );
+                            return (
+                              <button
+                                key={preset.key}
+                                type="button"
+                                onClick={() => addPresetField(preset.key)}
+                                title={
+                                  already
+                                    ? `已有 ${preset.key} 字段行，直接改那行即可`
+                                    : preset.hint
+                                }
+                                className={`rounded-full border px-2 py-1 text-[11px] transition-colors ${
+                                  already
+                                    ? "text-primary border-[var(--primary,#7c5cff)]/50 bg-[var(--primary,#7c5cff)]/5"
+                                    : "text-muted-foreground hover:text-ink border-border hover:bg-subtle"
+                                }`}
+                              >
+                                ＋ {preset.key}
+                                {already ? " ✓" : ""}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     {(usageTest.kind === "image" ||
                       usageTest.kind === "video") && (

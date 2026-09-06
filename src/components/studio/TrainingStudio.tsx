@@ -33,7 +33,7 @@ import {
 */
 
 const fieldClass =
-  "h-9 w-full rounded-lg border border-white/8 bg-white/3 px-3 text-[13px] text-(--color-ink-field) outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20";
+  "h-9 w-full rounded-lg border border-(--color-border) bg-(--color-subtle) px-3 text-[13px] text-(--color-ink-field) outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20";
 const labelClass = "mb-1.5 block text-[11px] font-medium text-(--color-ink-faint)";
 
 const RING_R = 36;
@@ -81,17 +81,17 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
       {/* ── Aurora Background Blobs ───────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <div
-          className="absolute right-[-10%] top-[-20%] h-[70%] w-[55%] rounded-full opacity-50 mix-blend-screen"
+          className="absolute right-[-10%] top-[-20%] h-[70%] w-[55%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
           style={{ background: "radial-gradient(circle, rgba(139,92,246,0.40) 0%, rgba(139,92,246,0) 70%)" }}
         />
         <div
-          className="absolute left-[-15%] bottom-[15%] h-[55%] w-[45%] rounded-full opacity-50 mix-blend-screen"
+          className="absolute left-[-15%] bottom-[15%] h-[55%] w-[45%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
           style={{ background: "radial-gradient(circle, rgba(34,211,238,0.26) 0%, rgba(34,211,238,0) 70%)" }}
         />
       </div>
 
       {/* ── Top Toolbar ───────────────────────────── */}
-      <header className="relative z-10 flex h-12 shrink-0 items-center gap-3 border-b border-white/5 bg-(--color-panel)/88 px-4 backdrop-blur-md">
+      <header className="relative z-10 flex h-12 shrink-0 items-center gap-3 border-b border-(--color-border-subtle) bg-(--color-panel)/88 px-4 backdrop-blur-md">
         <div className="flex items-center gap-2">
           <span className="u-title">LoRA 训练工作室</span>
           <span className="text-xs text-(--color-ink-fainter)">· 炼丹</span>
@@ -100,7 +100,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
         {/* Backend status pill */}
         <div
           className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ${
-            c.backendConfigured ? "bg-emerald-500/12 text-emerald-300" : "bg-amber-500/12 text-amber-300"
+            c.backendConfigured ? "bg-emerald-500/12 text-emerald-600" : "bg-amber-500/12 text-amber-600"
           }`}
         >
           <span
@@ -128,8 +128,8 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
       <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
 
         {/* ═══ Left: Dataset Panel (300px) ═══ */}
-        <aside className="flex w-[300px] shrink-0 flex-col border-r border-white/4 bg-(--color-panel-deep)/85 backdrop-blur-sm">
-          <div className="flex h-11 items-center justify-between border-b border-white/4 px-4">
+        <aside className="flex w-[300px] shrink-0 flex-col border-r border-(--color-border-subtle) bg-(--color-panel-deep)/85 backdrop-blur-sm">
+          <div className="flex h-11 items-center justify-between border-b border-(--color-border-subtle) px-4">
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-semibold text-(--color-ink-field)">数据集</span>
               <span className="text-[11px] text-(--color-ink-fainter)">{c.dataset.length} 张</span>
@@ -139,7 +139,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {/* Backend not configured banner */}
             {!c.backendConfigured && (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200">
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-600">
                 <p className="mb-1 font-semibold">未配置训练后端</p>
                 {onOpenSettings ? (
                   <>在「<button type="button" onClick={onOpenSettings} className="underline hover:opacity-80">设置 → 偏好</button>」中填写训练后端 URL（如 Kohya / OneTrainer / ComfyUI 训练节点的 HTTP 地址）后，即可开始真实训练。当前提交的任务会保持「等待中」。</>
@@ -155,7 +155,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-violet-500/35 bg-violet-500/6 px-3 py-5 text-center transition-colors hover:border-violet-500/55 hover:bg-violet-500/10"
             >
               <Upload size={22} strokeWidth={1.8} color="#a78bfa" />
-              <p className="text-[12px] font-medium text-[#c4b5fd]">{c.uploading ? "上传中…" : "点击或拖拽上传图片"}</p>
+              <p className="text-[12px] font-medium text-violet-500">{c.uploading ? "上传中…" : "点击或拖拽上传图片"}</p>
               <p className="text-[10px] text-(--color-ink-fainter)">建议 10–30 张同主题图片</p>
               <input
                 ref={fileRef}
@@ -176,7 +176,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                     type="button"
                     onClick={c.fillBlank}
                     disabled={!c.form.triggerWord.trim()}
-                    className="text-[10px] text-violet-300 hover:underline disabled:opacity-40"
+                    className="text-[10px] text-violet-600 hover:underline disabled:opacity-40"
                   >
                     用触发词填充空白
                   </button>
@@ -184,7 +184,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
 
                 <div className="space-y-1.5">
                   {c.dataset.map((data, i) => (
-                    <div key={data.name} className="flex items-center gap-2 rounded-md border border-white/8 bg-white/2 p-1.5">
+                    <div key={data.name} className="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-card) p-1.5">
                       <img
                         src={`/api/file/${encodeURIComponent(data.name)}`}
                         alt={data.name}
@@ -195,11 +195,11 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                         value={data.caption}
                         onChange={(event) => c.setDataset((prev) => prev.map((item, j) => (j === i ? { ...item, caption: event.target.value } : item)))}
                         placeholder="图片描述，如：a photo of somecjkstyle person"
-                        className="min-w-0 flex-1 rounded border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-gray-200 outline-none focus:border-violet-500/40"
+                        className="min-w-0 flex-1 rounded border border-(--color-border) bg-black/20 px-2 py-1 text-[11px] text-(--color-ink-bright) outline-none focus:border-violet-500/40"
                       />
                       <button
                         onClick={() => c.setDataset((prev) => prev.filter((_, j) => j !== i))}
-                        className="shrink-0 rounded px-1.5 text-[11px] text-gray-400 hover:text-red-300"
+                        className="shrink-0 rounded px-1.5 text-[11px] text-(--color-ink-faint) hover:text-red-600"
                         aria-label="移除"
                       >
                         ✕
@@ -227,7 +227,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
           </div>
 
           {/* Progress ring + metrics card */}
-          <div className="rounded-2xl border border-white/6 bg-white/2 p-4">
+          <div className="rounded-2xl border border-(--color-border-subtle) bg-(--color-card) p-4">
             <div className="flex items-center gap-5">
               {/* Ring */}
               <div className="relative shrink-0" style={{ width: 96, height: 96 }}>
@@ -267,7 +267,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                 </div>
                 <div>
                   <p className="text-[10px] text-(--color-ink-fainter)">触发词</p>
-                  <p className="truncate text-[13px] font-medium text-violet-300">{activeJob?.triggerWord ?? "—"}</p>
+                  <p className="truncate text-[13px] font-medium text-violet-600">{activeJob?.triggerWord ?? "—"}</p>
                 </div>
                 <div className="col-span-2 min-w-0">
                   <p className="text-[10px] text-(--color-ink-fainter)">底模</p>
@@ -277,7 +277,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             </div>
 
             {/* Progress bar */}
-            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-(--color-surface-2)">
               <div
                 className="h-full rounded-full bg-linear-to-r from-violet-500 to-cyan-400 transition-all"
                 style={{ width: `${ringProgress}%` }}
@@ -286,7 +286,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
           </div>
 
           {/* Loss curve card */}
-          <div className="mt-4 rounded-2xl border border-white/6 bg-white/2 p-4">
+          <div className="mt-4 rounded-2xl border border-(--color-border-subtle) bg-(--color-card) p-4">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-[12px] font-medium text-(--color-ink-field)">Loss 曲线</span>
               <div className="flex items-center gap-3 text-[10px] text-(--color-ink-fainter)">
@@ -308,7 +308,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
           <div className="mt-4">
             <h3 className="mb-3 text-[12px] font-medium text-(--color-ink-faint)">训练任务</h3>
             {c.jobs.length === 0 ? (
-              <div className="grid min-h-[160px] place-items-center rounded-2xl border border-dashed border-white/8 text-gray-500">
+              <div className="grid min-h-[160px] place-items-center rounded-2xl border border-dashed border-(--color-border) text-(--color-ink-muted)">
                 <p className="text-sm">还没有训练任务。在右侧配置并点击「开始训练」。</p>
               </div>
             ) : (
@@ -318,57 +318,57 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                   const logs = job.logs ?? [];
                   const isOpen = expanded === job.id;
                   return (
-                    <div key={job.id} className="rounded-2xl border border-white/6 bg-white/2 p-4">
+                    <div key={job.id} className="rounded-2xl border border-(--color-border-subtle) bg-(--color-card) p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <h4 className="u-title truncate">{job.name}</h4>
                             <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${sm.cls}`}>{sm.label}</span>
                           </div>
-                          <p className="mt-1 text-[11px] text-gray-500">
-                            {job.baseModel} · 触发词 <span className="text-violet-300">{job.triggerWord}</span> · {job.datasetImages?.length ?? 0} 张图 · {job.steps} 步
+                          <p className="mt-1 text-[11px] text-(--color-ink-muted)">
+                            {job.baseModel} · 触发词 <span className="text-violet-600">{job.triggerWord}</span> · {job.datasetImages?.length ?? 0} 张图 · {job.steps} 步
                           </p>
                         </div>
                         <div className="flex shrink-0 gap-2">
                           <button
                             onClick={() => router.push(`/train/${job.id}`)}
-                            className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[11px] text-violet-200 hover:bg-violet-500/20"
+                            className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[11px] text-violet-600 hover:bg-violet-500/20"
                           >
                             详情 ↗
                           </button>
                           {(job.status === "QUEUED" || job.status === "RUNNING") && (
-                            <button onClick={() => void c.cancelJob(job.id)} className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/5">
+                            <button onClick={() => void c.cancelJob(job.id)} className="rounded-lg border border-(--color-border) px-2.5 py-1 text-[11px] text-(--color-ink-strong) hover:bg-(--color-subtle)">
                               取消
                             </button>
                           )}
-                          <button onClick={() => setExpanded(isOpen ? null : job.id)} className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/5">
+                          <button onClick={() => setExpanded(isOpen ? null : job.id)} className="rounded-lg border border-(--color-border) px-2.5 py-1 text-[11px] text-(--color-ink-strong) hover:bg-(--color-subtle)">
                             {isOpen ? "收起" : "日志"}
                           </button>
                         </div>
                       </div>
 
                       {(job.status === "RUNNING" || job.status === "QUEUED") && (
-                        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-(--color-surface-2)">
                           <div className="h-full rounded-full bg-linear-to-r from-violet-500 to-cyan-400 transition-all" style={{ width: `${job.progress}%` }} />
                         </div>
                       )}
 
                       {job.status === "DONE" && job.outputName && (
-                        <p className="mt-2 text-[11px] text-emerald-300">
+                        <p className="mt-2 text-[11px] text-emerald-600">
                           ✓ 已产出 LoRA：<span className="font-mono">{job.outputName}</span> · 已加入模型库，可在创作台 LoRA 中选择使用。
                         </p>
                       )}
                       {job.status === "FAILED" && job.error && (
-                        <p className="mt-2 text-[11px] text-red-300">✗ {job.error}</p>
+                        <p className="mt-2 text-[11px] text-red-600">✗ {job.error}</p>
                       )}
                       {job.status === "QUEUED" && !c.backendConfigured && (
-                        <p className="mt-2 text-[11px] text-amber-300/80">等待训练后端（未配置 LORA_TRAINER_URL）。</p>
+                        <p className="mt-2 text-[11px] text-amber-600/80">等待训练后端（未配置 LORA_TRAINER_URL）。</p>
                       )}
 
                       {isOpen && (
-                        <div className="mt-3 rounded-lg border border-white/6 bg-black/30 p-2.5 font-mono text-[11px] leading-relaxed">
+                        <div className="mt-3 rounded-lg border border-(--color-border-subtle) bg-black/30 p-2.5 font-mono text-[11px] leading-relaxed">
                           {logs.length === 0 ? (
-                            <p className="text-gray-600">暂无日志</p>
+                            <p className="text-(--color-ink-fainter)">暂无日志</p>
                           ) : (
                             logs.map((log, i) => (
                               <div
@@ -381,8 +381,8 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                                     : log.level === "warn"
                                     ? "text-amber-400"
                                     : log.level === "progress"
-                                    ? "text-violet-300"
-                                    : "text-gray-400"
+                                    ? "text-violet-600"
+                                    : "text-(--color-ink-faint)"
                                 }
                               >
                                 {log.msg}
@@ -400,8 +400,8 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
         </main>
 
         {/* ═══ Right: Hyperparameters (320px) ═══ */}
-        <aside className="flex w-[320px] shrink-0 flex-col border-l border-white/4 bg-(--color-panel-deep)/85 backdrop-blur-sm">
-          <div className="flex h-11 items-center border-b border-white/4 px-4">
+        <aside className="flex w-[320px] shrink-0 flex-col border-l border-(--color-border-subtle) bg-(--color-panel-deep)/85 backdrop-blur-sm">
+          <div className="flex h-11 items-center border-b border-(--color-border-subtle) px-4">
             <span className="text-[13px] font-semibold text-(--color-ink-field)">超参数</span>
           </div>
 
@@ -414,7 +414,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             <div>
               <label className={labelClass}>底模（Checkpoint）</label>
               <DarkSelect
-                className="!bg-white/3 !border-white/8 h-9 text-[13px] text-(--color-ink-field)"
+                className="!bg-(--color-subtle) !border-(--color-border) h-9 text-[13px] text-(--color-ink-field)"
                 value={c.form.baseModel}
                 onChange={c.setBaseModel}
                 options={c.checkpoints.map((checkpoint) => checkpoint.fileName)}
@@ -437,7 +437,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             <div>
               <label className={labelClass}>分辨率</label>
               <DarkSelect
-                className="!bg-white/3 !border-white/8 h-9 text-[13px] text-(--color-ink-field)"
+                className="!bg-(--color-subtle) !border-(--color-border) h-9 text-[13px] text-(--color-ink-field)"
                 value={String(c.form.resolution)}
                 onChange={(value) => c.setResolution(Number(value))}
                 options={RESOLUTIONS.map(String)}
@@ -448,7 +448,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="text-[11px] font-medium text-(--color-ink-faint)">训练步数</span>
-                <span className="text-[11px] font-medium text-violet-300">{c.form.steps}</span>
+                <span className="text-[11px] font-medium text-violet-600">{c.form.steps}</span>
               </div>
               <input type="range" min={500} max={4000} step={100} value={c.form.steps} onChange={(event) => c.setSteps(Number(event.target.value))} className="w-full accent-violet-500" />
             </div>
@@ -456,7 +456,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="text-[11px] font-medium text-(--color-ink-faint)">批次大小</span>
-                <span className="text-[11px] font-medium text-violet-300">{c.form.batchSize}</span>
+                <span className="text-[11px] font-medium text-violet-600">{c.form.batchSize}</span>
               </div>
               <input type="range" min={1} max={8} value={c.form.batchSize} onChange={(event) => c.setBatchSize(Number(event.target.value))} className="w-full accent-violet-500" />
             </div>
@@ -464,7 +464,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="text-[11px] font-medium text-(--color-ink-faint)">LoRA 维度 (rank)</span>
-                <span className="text-[11px] font-medium text-violet-300">{c.form.rankDim}</span>
+                <span className="text-[11px] font-medium text-violet-600">{c.form.rankDim}</span>
               </div>
               <input type="range" min={8} max={128} step={8} value={c.form.rankDim} onChange={(event) => c.setRankDim(Number(event.target.value))} className="w-full accent-violet-500" />
             </div>
@@ -472,7 +472,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="text-[11px] font-medium text-(--color-ink-faint)">Alpha</span>
-                <span className="text-[11px] font-medium text-violet-300">{c.form.networkAlpha}</span>
+                <span className="text-[11px] font-medium text-violet-600">{c.form.networkAlpha}</span>
               </div>
               <input type="range" min={0} max={128} step={8} value={c.form.networkAlpha} onChange={(event) => c.setNetworkAlpha(Number(event.target.value))} className="w-full accent-violet-500" />
             </div>
@@ -493,7 +493,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               <div>
                 <label className={labelClass}>优化器</label>
                 <DarkSelect
-                  className="!bg-white/3 !border-white/8 h-9 text-[13px] text-(--color-ink-field)"
+                  className="!bg-(--color-subtle) !border-(--color-border) h-9 text-[13px] text-(--color-ink-field)"
                   value={c.form.optimizer}
                   onChange={c.setOptimizer}
                   options={OPTIMIZERS}
@@ -503,7 +503,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               <div>
                 <label className={labelClass}>调度器</label>
                 <DarkSelect
-                  className="!bg-white/3 !border-white/8 h-9 text-[13px] text-(--color-ink-field)"
+                  className="!bg-(--color-subtle) !border-(--color-border) h-9 text-[13px] text-(--color-ink-field)"
                   value={c.form.scheduler}
                   onChange={c.setScheduler}
                   options={SCHEDULERS}
@@ -534,9 +534,9 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
       </div>
 
       {/* ── Status Bar ────────────────────────────── */}
-      <footer className="relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t border-white/4 bg-(--color-panel-deep)/95 backdrop-blur-sm">
+      <footer className="relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t border-(--color-border-subtle) bg-(--color-panel-deep)/95 backdrop-blur-sm">
         <span className="inline-block h-[7px] w-[7px] rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/40" />
-        <span className="text-[11px] text-[#6b788f]">
+        <span className="text-[11px] text-(--color-ink-muted)">
           ComfyUI·Kohya 就绪 · 本地算力 · 零授权
         </span>
       </footer>

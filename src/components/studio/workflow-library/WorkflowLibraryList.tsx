@@ -34,17 +34,17 @@ export function WorkflowLibraryList({
   onLoadPending,
 }: WorkflowLibraryListProps) {
   return (
-    <div className="flex h-full w-80 flex-col border-r border-white/6 bg-[#0B0B10]">
+    <div className="flex h-full w-80 flex-col border-r border-(--color-border-subtle) bg-(--color-panel-deep)">
       {/* 搜索栏 */}
-      <div className="border-b border-white/6 p-3">
+      <div className="border-b border-(--color-border-subtle) p-3">
         <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-white/30" />
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-(--color-ink-fainter)" />
           <input
             type="text"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="搜索工作流名称…"
-            className="h-8 w-full rounded-lg border border-white/8 bg-white/[0.03] pr-3 pl-8 text-xs text-white/90 placeholder:text-white/25 focus:border-violet-500/40 focus:bg-white/[0.05] focus:outline-none"
+            className="h-8 w-full rounded-lg border border-(--color-border) bg-(--color-subtle) pr-3 pl-8 text-xs text-(--color-ink-bright) placeholder:text-(--color-ink-fainter) focus:border-violet-500/40 focus:bg-(--color-subtle) focus:outline-none"
           />
         </div>
       </div>
@@ -52,7 +52,7 @@ export function WorkflowLibraryList({
       {/* 列表：已载入工作流排在前 */}
       <div className="flex-1 overflow-y-auto px-1.5 py-1.5">
         {workflows.length === 0 && pendingRows.length === 0 ? (
-          <div className="py-10 text-center text-xs text-white/35">
+          <div className="py-10 text-center text-xs text-(--color-ink-fainter)">
             未找到匹配的工作流
           </div>
         ) : (
@@ -71,7 +71,7 @@ export function WorkflowLibraryList({
         {/* 未载入的本地工作流排在已载入之后 */}
         {pendingRows.length > 0 && (
           <div className="mb-3 mt-3 rounded-xl border border-dashed border-cyan-500/25 bg-cyan-500/[0.04] p-2.5">
-            <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-cyan-300/80">
+            <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-cyan-600/80">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400" />
               未载入的本地工作流
             </p>
@@ -81,15 +81,15 @@ export function WorkflowLibraryList({
                   <button
                     type="button"
                     onClick={() => onLoadPending?.(pending)}
-                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-white/6 bg-white/[0.03] px-2.5 py-2 text-left transition-colors hover:border-cyan-500/30 hover:bg-cyan-500/10"
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-(--color-border-subtle) bg-(--color-subtle) px-2.5 py-2 text-left transition-colors hover:border-cyan-500/30 hover:bg-cyan-500/10"
                   >
                     <span
-                      className="truncate text-[11px] text-white/75"
+                      className="truncate text-[11px] text-(--color-ink-strong)"
                       title={pending.name}
                     >
                       {pending.name}
                     </span>
-                    <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] text-cyan-300">
+                    <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] text-cyan-600">
                       <Download className="h-3 w-3" />
                       载入
                     </span>
@@ -102,7 +102,7 @@ export function WorkflowLibraryList({
       </div>
 
       {/* 底部计数 */}
-      <div className="border-t border-white/6 px-3 py-2 text-[10px] text-white/30">
+      <div className="border-t border-(--color-border-subtle) px-3 py-2 text-[10px] text-(--color-ink-fainter)">
         共 {workflows.length + pendingRows.length} 个工作流
         {pendingRows.length > 0 ? `（${pendingRows.length} 个未载入）` : ""}
       </div>
@@ -132,7 +132,7 @@ function WorkflowListItem({
           "w-full rounded-lg border px-2 py-1.5 text-left transition-all",
           selected
             ? "border-violet-500/40 bg-linear-to-br from-violet-500/15 to-fuchsia-500/10 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.15)]"
-            : "border-transparent bg-white/[0.02] hover:border-white/8 hover:bg-white/[0.05]",
+            : "border-transparent bg-(--color-subtle) hover:border-(--color-border) hover:bg-(--color-subtle)",
         ].join(" ")}
       >
         {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}
@@ -140,19 +140,19 @@ function WorkflowListItem({
           <span
             className={[
               "min-w-0 flex-1 truncate text-[12px] leading-tight font-medium",
-              isTech ? "font-mono text-white/70" : "text-white/90",
+              isTech ? "font-mono text-(--color-ink-strong)" : "text-(--color-ink-bright)",
             ].join(" ")}
             title={workflow.name}
           >
             {workflow.name}
           </span>
           {!usable && (
-            <span className="shrink-0 rounded bg-red-500/12 px-1 py-px text-[9px] text-red-300">
+            <span className="shrink-0 rounded bg-red-500/12 px-1 py-px text-[9px] text-red-600">
               不可执行
             </span>
           )}
           {canResync && (
-            <span className="shrink-0 rounded bg-amber-500/12 px-1 py-px text-[9px] text-amber-300">
+            <span className="shrink-0 rounded bg-amber-500/12 px-1 py-px text-[9px] text-amber-600">
               {missing ? "已丢失" : "有更新"}
             </span>
           )}
@@ -167,14 +167,14 @@ function WorkflowListItem({
             {workflow.modelTags?.slice(0, 2).map((tag) => (
               <span
                 key={tag}
-                className="max-w-[72px] truncate rounded-full border border-white/8 bg-white/[0.04] px-1.5 py-0.5 text-[9px] text-white/55"
+                className="max-w-[72px] truncate rounded-full border border-(--color-border) bg-(--color-subtle) px-1.5 py-0.5 text-[9px] text-(--color-ink-faint)"
                 title={tag}
               >
                 {tag}
               </span>
             ))}
             {(workflow.modelTags?.length ?? 0) > 2 && (
-              <span className="shrink-0 text-[9px] text-white/35">
+              <span className="shrink-0 text-[9px] text-(--color-ink-fainter)">
                 +{(workflow.modelTags?.length ?? 0) - 2}
               </span>
             )}
