@@ -233,41 +233,6 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
     setDialog(null);
   }
 
-  /* 运行时提供方状态行：本地 / 远程两页各一个，「启用中」标记草稿里当前
-   * 生效的提供方；另一页提供「切换」按钮（仍是草稿态，保存落库）。 */
-  function providerEnableRow(provider: "local" | "remote") {
-    const active = c.drafts.llm.provider === provider;
-    const name = provider === "local" ? "本地 Ollama" : "远程 API（OpenAI 兼容）";
-    return (
-      <div className="border-border bg-surface-1 mb-4 flex items-center gap-3 rounded-lg border px-3 py-2.5">
-        <span className="text-ink/80 shrink-0 text-sm">运行时提供方</span>
-        {active ? (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block size-2 shrink-0 rounded-full bg-emerald-400" />
-            <span className="text-ink/80 text-sm">{name}</span>
-            <span className="rounded-full bg-emerald-500/15 px-1.5 py-px text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-              启用中
-            </span>
-          </span>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => c.patchLlm({ provider })}
-              title="保存 LLM 配置后生效"
-              className="border-border text-muted-foreground hover:bg-subtle hover:text-ink rounded-lg border px-2.5 py-1 text-xs transition-colors"
-            >
-              切换为{name}
-            </button>
-            <span className="text-muted-foreground text-[11px]">
-              两页共用一份草稿，改动需点「保存 LLM 配置」
-            </span>
-          </>
-        )}
-      </div>
-    );
-  }
-
   /* 远程模型按用途分组展示（文本 / 图片 / 视频）；kind 缺省的历史条目
    * 按文本模型归组。行内不再重复用途标签 —— 分组本身就是用途。 */
   function remoteModelGroup(
@@ -456,8 +421,6 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
           {/* ═══ 本地模型（Ollama）Section ═══ */}
           {c.section === "llmLocal" && (
             <Card title="本地模型（Ollama）">
-              {providerEnableRow("local")}
-
               {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
               <Field
                 label="Base URL"
@@ -758,8 +721,6 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
           {c.section === "llmRemote" && (
             <>
               <Card title="远程模型（OpenAI 兼容）">
-                {providerEnableRow("remote")}
-
                 {/* 模型按用途分组：文本（对话）/ 图片 / 视频；kind 缺省的
                     历史条目按文本模型归组，添加时按组预选用途 */}
                 {remoteModelGroup(

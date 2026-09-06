@@ -128,6 +128,10 @@ function LLMSettingsModal({
 }) {
   /** 弹窗内的模型选择草稿：null = 未改动（保存时不动主配置） */
   const [draftModel, setDraftModel] = React.useState<string | null>(null);
+  /** 提供方草稿：null = 未改动。本地 / 远程的切换从设置页挪到运行界面。 */
+  const [draftProvider, setDraftProvider] = React.useState<
+    "local" | "remote" | null
+  >(null);
   const [testing, setTesting] = React.useState(false);
   const [msg, setMsg] = React.useState<{
     kind: "ok" | "err";
@@ -135,7 +139,7 @@ function LLMSettingsModal({
   } | null>(null);
   const { saving, save } = useLLMConfigSave();
 
-  const provider = initial?.provider ?? "local";
+  const provider = draftProvider ?? initial?.provider ?? "local";
   const baseUrl = initial?.baseUrl ?? "";
   const activeModel = draftModel ?? initial?.model ?? "";
   /* 候选列表 = 已配置的 extraModels + 当前生效模型（保证至少一项可选） */
@@ -147,13 +151,16 @@ function LLMSettingsModal({
   }, [initial]);
 
   async function handleSave() {
-    if (draftModel == null) {
+    if (draftModel == null && draftProvider == null) {
       onClose();
       return;
     }
     setMsg(null);
     try {
-      const cfg = await save({ model: draftModel });
+      const cfg = await save({
+        model: draftModel ?? initial?.model ?? "",
+        provider: draftProvider ?? undefined,
+      });
       onSaved(cfg);
     } catch (e: unknown) {
       setMsg({ kind: "err", text: errorMessage(e, "保存失败") });
@@ -206,7 +213,7 @@ function LLMSettingsModal({
 
         <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
           工坊按当前生效的模型调用全链路（剧本 → 角色卡 → 分镜 →
-          图片提示词）。需要增删模型、切换本地 / 远端、调温度等，请到
+          图片提示词）。需要增删模型、调温度等，请到
           <button
             type="button"
             onClick={onClose}
@@ -216,6 +223,32 @@ function LLMSettingsModal({
           </button>
           页配置。
         </p>
+
+        {/* 提供方切换：本地 / 远程的启用从设置页挪到运行界面（与选模型同处） */}
+        <div className="mb-3">
+          <span className="text-ink/80 mb-1.5 block text-sm font-medium">
+            提供方
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            {(["local", "remote"] as const).map((p) => {
+              const active = provider === p;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setDraftProvider(p)}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                    active
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-subtle hover:text-ink"
+                  }`}
+                >
+                  {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {candidates.length > 0 ? (
           <div className="space-y-1.5">
@@ -272,10 +305,14 @@ function LLMSettingsModal({
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving || draftModel == null}
+            disabled={saving || (draftModel == null && draftProvider == null)}
             className="bg-primary flex-1 rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
           >
-            {saving ? "保存中…" : draftModel == null ? "使用当前模型" : "切换到此模型"}
+            {saving
+              ? "保存中…"
+              : draftModel == null && draftProvider == null
+                ? "使用当前配置"
+                : "保存并生效"}
           </button>
         </div>
       </div>

@@ -62,8 +62,9 @@ export function useLLMConfig(): LLMConfigController {
 }
 
 export interface LLMConfigSaveInput {
-  /** 工坊弹窗只切模型；其余字段省略 → 服务端保持原值不变 */
+  /** 工坊弹窗切模型与提供方；其余字段省略 → 服务端保持原值不变 */
   model: string;
+  provider?: "local" | "remote";
 }
 
 export interface LLMConfigSaveController {
