@@ -22,11 +22,14 @@ import {
   type TaskType,
 } from "~/lib/llm/types";
 import {
+  MEDIA_URL_NOTICE,
   VIDEO_MODE_HINT,
   VIDEO_MODE_PRESETS,
   defaultVideoFields,
+  isMediaField,
   usageFieldsToJson,
   looksLikeImage,
+  videoModeHidesMedia,
   videoModeMissingHint,
   type UsageField,
 } from "~/lib/llm/usage-test-config";
@@ -299,8 +302,10 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
         typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
       prompt: usageTest.prompt,
       size: usageTest.size.trim() || undefined,
-      /* 由结构化字段行生成请求体 JSON（替代原先手填整段 JSON） */
-      extraJson: usageFieldsToJson(usageTest.fields) || undefined,
+      /* 由结构化字段行生成请求体 JSON（替代原先手填整段 JSON）；
+       * 视频且 mode=text 时媒体字段已被界面隐藏，这里同样排除，避免 invalid mode */
+      extraJson:
+        usageFieldsToJson(usageFieldsToSend(usageTest)) || undefined,
     });
     setUsageTest((prev) => (prev ? { ...prev, running: false, result: out } : prev));
   }
@@ -339,6 +344,15 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
       });
     }
   }
+  /** 随请求发送的字段行：视频 mode=text 时媒体字段已被隐藏（不渲染也不发送），
+ *  其余场景原样保留。过滤逻辑读 usage-test-config 的纯函数，视图不重复实现。 */
+  function usageFieldsToSend(state: NonNullable<typeof usageTest>): UsageField[] {
+    const hideMedia = state.kind === "video" && videoModeHidesMedia(state.fields);
+    return hideMedia
+      ? state.fields.filter((f) => !isMediaField(f.key))
+      : state.fields;
+  }
+
   /** 设置视频 mode 快捷值：已有 mode 行则改其值，否则在末尾追加一行。 */
   function setVideoMode(mode: string) {
     setUsageTest((prev) => {
@@ -1217,9 +1231,14 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     </label>
                     <p className="text-muted-foreground -mt-1 mb-2 text-[11px]">
                       每个字段用「字段名 + 值」两格填，替代原先手填整段 JSON；值可为
-                      文本 / 数字 / 图片（本地上传自动转 data URL，或填远端图片地址）。
+                      文本 / 数字 / 图片（点「上传」选本地图片，或点「链接」直接粘贴公网图片地址）。
                       数值自动按数字 / 布尔解析（如 seed 填 42 即数字）。
                     </p>
+                    {usageTest.kind !== "chat" && (
+                      <p className="text-muted-foreground -mt-1 mb-2 text-[11px]">
+                        ⚠ {MEDIA_URL_NOTICE}
+                      </p>
+                    )}
 
                     {usageTest.kind === "video" && (
                       <div className="mb-2">
@@ -1275,7 +1294,9 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                     )}
 
                     <div className="mb-2 flex flex-col gap-2">
-                      {usageTest.fields.map((f, i) => (
+                      {usageFieldsToSend(usageTest).map((f) => {
+                        const i = usageTest.fields.indexOf(f);
+                        return (
                         <div key={`${f.key}-${i}`} className="flex flex-col gap-1.5">
                           <div className="flex gap-1.5">
                             <input
@@ -1306,7 +1327,7 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                               className="text-muted-foreground hover:text-ink border-border hover:bg-subtle flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border px-2 text-[11px] transition-colors"
                               title="本地上传一张图片作为该字段的值（自动转 data URL）"
                             >
-                              图片
+                              上传
                               <input
                                 type="file"
                                 accept="image/png,image/jpeg,image/webp,image/gif"
@@ -1316,6 +1337,16 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                                 }
                               />
                             </label>
+                            {!(usageTest.kind === "video" && isMediaField(f.key)) && (
+                              <button
+                                type="button"
+                                onClick={() => patchField(i, { value: "https://" })}
+                                className="text-muted-foreground hover:text-ink border-border hover:bg-subtle shrink-0 rounded-lg border px-2 text-[11px] transition-colors"
+                                title="填入公网图片地址占位，直接改成你的图片 URL 即可"
+                              >
+                                链接
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => removeField(i)}
@@ -1333,7 +1364,8 @@ export function SettingsPageView({ c }: { c: ReadySettingsPageController }) {
                             />
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <button
