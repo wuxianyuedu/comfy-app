@@ -8,6 +8,7 @@ export interface ComfyStatsPayload {
   online: boolean;
   gpuName?: string;
   vramUsed: number;
+  vramFree: number;
   vramTotal: number;
   ramUsed: number;
   ramTotal: number;
@@ -23,6 +24,7 @@ export async function fetchComfyStats(): Promise<ComfyStatsPayload> {
       return {
         online: false,
         vramUsed: 0,
+        vramFree: 0,
         vramTotal: 0,
         ramUsed: 0,
         ramTotal: 0,
@@ -32,6 +34,7 @@ export async function fetchComfyStats(): Promise<ComfyStatsPayload> {
     return {
       online: false,
       vramUsed: 0,
+      vramFree: 0,
       vramTotal: 0,
       ramUsed: 0,
       ramTotal: 0,
