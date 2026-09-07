@@ -102,6 +102,12 @@ export function CharacterDesigner({
 }: Props) {
   const [brief, setBrief] = React.useState("");
   const [genBusy, setGenBusy] = React.useState(false);
+  /** 一句话生成角色：流式原始输出（执行日志） */
+  const [genProgress, setGenProgress] = React.useState("");
+  /** 一句话生成角色：成功/状态提示 */
+  const [genStatus, setGenStatus] = React.useState("");
+  /** 一句话生成角色：独立错误信息（不与 AI 润色混用） */
+  const [genError, setGenError] = React.useState("");
   const [aiBusyId, setAiBusyId] = React.useState<string | null>(null);
   const [aiError, setAiError] = React.useState("");
   const { config, openSettings } = useLLM();
@@ -153,11 +159,15 @@ export function CharacterDesigner({
       return;
     }
     setGenBusy(true);
-    setAiError("");
+    setGenProgress("");
+    setGenStatus("");
+    setGenError("");
+    const modelLabel =
+      config.provider === "local" ? "本地" : "远端";
     try {
       const full = await streamChat({
         messages: buildCharacterFromBriefMessages(brief),
-        /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
+        onToken: (token) => setGenProgress((prev) => prev + token),
       });
       const r = parseCharacterFull(full);
       const character = newCharacter();
@@ -171,8 +181,11 @@ export function CharacterDesigner({
       character.negativePrompt = buildCharacterNegative(character, style);
       onCharactersChange([...characters, character]);
       setBrief("");
+      setGenStatus(
+        `已用 ${modelLabel} · ${config.model} 生成角色「${r.name}」`,
+      );
     } catch (e: unknown) {
-      setAiError(errorMessage(e, "AI 生成失败"));
+      setGenError(errorMessage(e, "AI 生成失败"));
     } finally {
       setGenBusy(false);
     }
@@ -328,16 +341,27 @@ export function CharacterDesigner({
         </div>
       </div>
 
-      {/* AI: generate a full character from a one-line brief */}
+      {/* 用一句话生成角色：独立区块 + 独立执行日志 */}
       <div className="border-primary-soft bg-primary-soft/30 rounded-xl border p-3">
-        <p className="text-primary mb-2 flex items-center text-xs font-medium">
-          <Icon
-            name="sparkles"
-            size={13}
-            className="mr-1 inline align-[-2px]"
-          />
-          用一句话生成角色
-        </p>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-primary flex items-center text-xs font-medium">
+            <Icon
+              name="sparkles"
+              size={13}
+              className="mr-1 inline align-[-2px]"
+            />
+            用一句话生成角色
+          </p>
+          {config && (
+            <span
+              className="text-muted-foreground text-[11px]"
+              title="AI 生成使用当前生效的 LLM 配置"
+            >
+              当前：{config.provider === "local" ? "本地" : "远端"} ·{" "}
+              {config.model || "未选模型"}
+            </span>
+          )}
+        </div>
         <div className="flex gap-2">
           <input
             value={brief}
@@ -362,6 +386,38 @@ export function CharacterDesigner({
             未配置 LLM。点右上角「LLM 设置」接入本地或远端模型后即可使用 AI。
           </p>
         )}
+        {/* 一句话生成角色的执行日志（模型调用过程/原文/成功/失败，独立展示不与提取区混杂） */}
+        {(genBusy || genProgress || genStatus || genError) && (
+          <div className="mt-2">
+            {genBusy && (
+              <p className="text-xs text-primary">
+                {genProgress
+                  ? "正在生成角色…"
+                  : `正在调用 ${config?.provider === "local" ? "本地" : "远端"} · ${
+                      config?.model ?? "当前配置"
+                    } 生成角色…`}
+              </p>
+            )}
+            {genBusy && genProgress && (
+              <details className="rounded-lg bg-bg/60 px-3 py-2" open>
+                <summary className="cursor-pointer select-none text-[11px] text-primary">
+                  生成过程
+                </summary>
+                <pre className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-all text-[11px] leading-relaxed text-muted-foreground">
+                  {genProgress}
+                </pre>
+              </details>
+            )}
+            {genStatus && !genError && (
+              <p className="mt-1 text-xs text-primary">{genStatus}</p>
+            )}
+            {genError && (
+              <p className="mt-1 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
+                {genError}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 从剧本提取角色：独立区块，分组下拉（工具/本地/远端）+ 提取 */}
@@ -383,6 +439,7 @@ export function CharacterDesigner({
         extractDisabledReason="未获取到剧本文本(在「剧本」阶段编写后可提取)。仍可用「外部导入」载入角色卡 JSON 或人物清单。"
       />
 
+      {/* AI 润色失败提示：放在角色列表上方，与一句话生成区错误分离 */}
       {aiError && (
         <p className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
           {aiError}

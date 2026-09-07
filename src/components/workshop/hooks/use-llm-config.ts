@@ -6,10 +6,21 @@
 
 import { useCallback, useState } from "react";
 
-import { splitExtraModels, type LLMConfigView } from "@/lib/llm/types";
+import {
+  splitExtraModels,
+  type LLMConfigView,
+  type RemoteModelKind,
+} from "@/lib/llm/types";
 import { api } from "~/trpc/react";
 
-/** 候选模型条目（兼容旧字符串与新对象）→ 名字数组，供工坊切换选择。 */
+/** 判断远端模型是否为文本生成(对话)可用类型。
+ *  kind 缺省(null)的历史条目按 chat 处理——与设置页 `kind ?? "chat"` 归组一致。 */
+function isChatModel(kind: RemoteModelKind | null | undefined): boolean {
+  return kind == null || kind === "chat";
+}
+
+/** 候选模型条目（兼容旧字符串与新对象）→ 名字数组，供工坊切换选择。
+ *  远端条目仅收文本生成(chat)类型；图片/视频模型不参与工坊文本链路。 */
 function toModelNames(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   const names: string[] = [];
@@ -17,8 +28,16 @@ function toModelNames(raw: unknown): string[] {
     if (typeof item === "string") {
       if (item.trim() !== "") names.push(item);
     } else if (typeof item === "object" && item !== null) {
-      const name: unknown = (item as { name?: unknown }).name;
-      if (typeof name === "string" && name.trim() !== "") names.push(name);
+      const rec = item as { name?: unknown; kind?: unknown };
+      const name = typeof rec.name === "string" ? rec.name.trim() : "";
+      if (name === "") continue;
+      const kind =
+        typeof rec.kind === "string" &&
+        ["chat", "image", "video"].includes(rec.kind)
+          ? (rec.kind as RemoteModelKind)
+          : null;
+      if (!isChatModel(kind)) continue;
+      names.push(name);
     }
   }
   return names;
@@ -29,7 +48,7 @@ export interface LLMConfigController {
   config: LLMConfigView | null;
   /** 静态配置下的本地候选模型名（本地 Ollama，无 apiKey）。 */
   localModels: string[];
-  /** 静态配置下的远端独立模型名（存 remoteModel 表）。 */
+  /** 静态配置下的远端独立模型名（存 remoteModel 表，仅 chat 文本生成类型）。 */
   remoteModels: string[];
   loading: boolean;
   refresh: () => void;
@@ -57,16 +76,26 @@ export function useLLMConfig(): LLMConfigController {
   if (cfg && (cfg !== prevCfg || !config)) {
     setPrevCfg(cfg);
     /* 服务端的候选列表已条目化（本地=字符串、远端=带独立连接参数的对象），
-       工坊下拉据此把「本地 / 远端」两组静态分开。 */
+       工坊下拉据此把「本地 / 远端」两组静态分开。
+       注意：远端候选仅取 chat 类型——图片/视频模型不能执行文本生成。 */
     const p = splitExtraModels(cfg.extraModels);
-    const remoteNames = p.remoteEntries.map((e) => e.name);
-    /* 兜底：当前生效主模型不在候选里时，按 provider 归入对应组，保证下拉总能选它。 */
+    /* 远端候选只收 chat（或 kind 缺省按 chat 处理）的模型。 */
+    const remoteNames = p.remoteEntries
+      .filter((e) => isChatModel(e.kind))
+      .map((e) => e.name);
+    /* 本地 Ollama 模型均通过 chat/completions 调用，天然可做文本任务。 */
     const local = p.localNames.slice();
     const remote = remoteNames.slice();
     const model = cfg.model?.trim() ?? "";
+    /* 兜底：当前生效主模型不在候选里时，按 provider 归入对应组，保证下拉总能选它。
+       明确是远端 image/video 类型的主模型不收入文本候选（避免误选到生成任务）。 */
     if (model && !local.includes(model) && !remote.includes(model)) {
-      if (cfg.provider === "remote") remote.push(model);
-      else local.push(model);
+      const entry = p.remoteEntries.find((e) => e.name === model);
+      if (cfg.provider === "remote") {
+        if (!entry || isChatModel(entry.kind)) remote.push(model);
+      } else {
+        local.push(model);
+      }
     }
     setSplit({ local, remote });
     setConfig({
