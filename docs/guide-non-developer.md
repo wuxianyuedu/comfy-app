@@ -77,6 +77,7 @@
 它会自动帮你：
 - ✅ 检查 `node` 是否装好（没装会提示你先装，见 4.1）；
 - ✅ 检查 `pnpm` 是否可用，缺失时用 Node 自带的 `corepack` 自动开启；
+- ✅ 检查 pnpm 版本是否与项目要求一致（`package.json` 的 `packageManager`），不一致时自动用 corepack 切换到正确版本；
 - ✅ 检查依赖是否已安装，未安装则自动执行 `pnpm install`（会下载较久，**别关窗口**）；
 - ✅ 自动从 `.env.example` 生成一份 `.env`（已存在则跳过，不会覆盖你的配置）；
 - ✅ 最后提示你接下来双击 `tools/start/start-web.ps1`。
@@ -175,6 +176,7 @@
 | 双击 `tools/start/run-local.ps1` 提示「找不到 node」 | Node.js 没装或装完没重启电脑，先完成 4.1 |
 | 双击 `tools/start/run-local.ps1` 报 `pnpm` 相关错误 | 可先手动重装依赖：在项目根打开终端执行 `pnpm install` 再双击启动 |
 | 团队更新了代码后启动报错 / 拉取更新后怎么同步环境 | 见 [`guides/sync-after-pull.md`](guides/sync-after-pull.md)：先关掉运行中的窗口，重双击 `tools/start/run-local.ps1`；报 pnpm 相关错误则删 `node_modules` 后重双击 |
+| 启动时提示「pnpm 版本不匹配 / pnpm 有更新」 | 启动器会自动检测并在必要时用 corepack 对齐，**通常无需手动操作**；若自动对齐失败，窗口/日志会给出提示，手动执行一次 `corepack enable && corepack prepare pnpm@11.25.0 --activate`（版本号以提示为准）即可 |
 | 双击 `tools/start/start-web.ps1` 报「数据库/表不存在」 | 首次会自动建库；如仍异常，先双击 `tools/start/run-local.ps1` 补齐依赖与 `.env` 后重试 |
 | 浏览器打不开 `http://localhost:3000` | 确认 `tools/start/start-web.ps1` 的控制台窗口还开着；首次编译较慢，多等一会再刷新 |
 | 端口被占用起不来 | 项目启动器会尝试清理 3000 端口残留进程；仍失败可重启电脑后再试 |
