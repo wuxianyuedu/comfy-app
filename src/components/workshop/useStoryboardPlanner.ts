@@ -9,9 +9,13 @@
  * 行为与原组件内联实现逐值一致。
  */
 
-import { useState, type SetStateAction } from "react";
+import { useState } from "react";
 import type { Shot, Scene, Character, StyleRef } from "@/lib/workshop/types";
-import { buildShotPrompt, buildShotNegative, mergeParams } from "@/lib/workshop/prompt-builder";
+import {
+  buildShotPrompt,
+  buildShotNegative,
+  mergeParams,
+} from "@/lib/workshop/prompt-builder";
 import { workshopUid } from "@/lib/workshop/script-parser";
 import {
   buildExtractShotsMessages,
@@ -26,11 +30,15 @@ import type { ShotEntry } from "@/lib/workshop/script-parse";
 import type { ExtractChannel } from "@/components/workshop/ExtractToolbar";
 import { parseChannelOption } from "@/components/workshop/ExtractToolbar";
 import { useLLM } from "@/components/workshop/LLMContext";
+import {
+  useExtractSession,
+  type ExtractSession,
+  type ExtractSessionActions,
+} from "@/components/workshop/hooks/use-workshop-pipeline";
 import { streamChat } from "@/lib/llm/browser";
 import {
   formatRequestMessages,
   makeExtractLog,
-  type ExtractLogEntry,
 } from "@/lib/workshop/extraction-log";
 import { buildStoryboardMessages, parseStoryboard } from "@/lib/llm/prompts";
 
@@ -66,6 +74,9 @@ export interface Props {
   scriptMarkdown?: string;
   /** 分镜阶段导入角色卡 JSON 时的角色写入口(可选,未接入时仅提示) */
   onCharactersChange?: (c: Character[]) => void;
+  /** 分镜「从剧本提取」会话(busy/progress/日志)已收归 controller，经 props 注入；
+   *  未注入(遗留/独立使用)时退化为本 hook 局部会话。 */
+  extract?: { session: ExtractSession; actions: ExtractSessionActions };
 }
 
 /** 条目 → 既有 Shot 结构(场景/角色关联与提示词重算复用既有链路) */
@@ -73,12 +84,17 @@ function recompute(
   shot: Shot,
   scene: Scene | undefined,
   chars: Character[],
-  style?: StyleRef
+  style?: StyleRef,
 ): Shot {
   const prompt = buildShotPrompt(shot, scene, chars, style);
   const neg = buildShotNegative(chars, style);
   const params = mergeParams(style, undefined);
-  return { ...shot, prompt, negativePrompt: neg, params: { ...shot.params, ...params } };
+  return {
+    ...shot,
+    prompt,
+    negativePrompt: neg,
+    params: { ...shot.params, ...params },
+  };
 }
 
 /** 通道 → LLM provider(工具通道不调用模型;本地/远端复用既有 /api/llm 链路) */
@@ -86,36 +102,18 @@ function channelProvider(channel: ExtractChannel): "local" | "remote" {
   return channel === "local" ? "local" : "remote";
 }
 
-// ── 会话内「从剧本提取」状态缓存 ────────────────────────────────
-// 提取是异步流程；切走页签组件卸载但已发起的 async 不中断。仅把状态放在组件
-// 局部 state，卸载后即丢失——重挂载时「提取中…」按钮和过程提示都不在了。
-// 因此把提取的 通道/忙闲/过程/状态/错误/执行日志 统一做会话级模块缓存：
-//   ① 每个 setter 都「先同步写缓存、再 setState」；
-//   ② 卸载期间后台回调（成功/失败）仍经 setter 把缓存写成正确终态；
-//   ③ 重挂载从缓存初始化 → 切回页签看到保留中的「提取中…」与最终结果。
-// 对齐仓库既有模块级缓存惯例（use-workshop-pipeline 的 workshopDraftCache）。
-// 在把提取逻辑整体收归工坊 controller 层之前，以最小改动满足跨页签保留诉求。
-let storyboardLogCache: ExtractLogEntry[] = [];
-
-/** 分镜「从剧本提取」的界面状态（执行日志另见 storyboardLogCache） */
-interface StoryboardExtractCache {
-  channelValue: string;
-  busy: boolean;
-  status: string;
-  progress: string;
-  error: string;
-}
-let storyboardExtractCache: StoryboardExtractCache = {
-  channelValue: "tool",
-  busy: false,
-  status: "",
-  progress: "",
-  error: "",
-};
-
 export function useStoryboardPlanner(props: Props) {
-  const { scriptMarkdown, scenes, characters, styles, shots, onShotsChange, onGenerate, onCharactersChange } =
-    props;
+  const {
+    scriptMarkdown,
+    scenes,
+    characters,
+    styles,
+    shots,
+    onShotsChange,
+    onGenerate,
+    onCharactersChange,
+    extract,
+  } = props;
   const [aiBusy, setAiBusy] = useState(false);
   const [aiProgress, setAiProgress] = useState("");
   const [aiError, setAiError] = useState("");
@@ -123,147 +121,137 @@ export function useStoryboardPlanner(props: Props) {
 
   // ── 三通道提取(工具 / 本地模型 / 远端API)+ 外部导入 ──
   // 下拉选项值（tool | local::<model> | remote::<model>），通道与模型一并保存。
-  // 通道/忙闲/过程/状态/错误从模块缓存初始化；对外 setter 均「同步写缓存后再
-  // setState」（见顶部 StoryboardExtractCache 说明），后台回调在卸载后仍能写回。
-  const [extractChannelValue, setExtractChannelValueRaw] = useState(() => storyboardExtractCache.channelValue);
+  // 提取的 通道/忙闲/过程/状态/错误/执行日志 已收归工坊 controller(storyboardExtract)
+  // 并经 props.extract 注入：展示读 session，写入走 actions。controller 跨阶段页签
+  // 常驻，提取中切页签再切回状态不丢，无需模块级缓存。遗留/独立使用(未注入)时
+  // 退化为本 hook 局部会话。
+  const localExtract = useExtractSession("tool");
+  const { session: extractSession, actions: extractActions } = extract ?? {
+    session: localExtract[0],
+    actions: localExtract[1],
+  };
+  const {
+    channelValue: extractChannelValue,
+    busy: extractBusy,
+    status: extractStatus,
+    progress: extractProgress,
+    error: extractError,
+    log: extractionLog,
+  } = extractSession;
   const extractChannel = parseChannelOption(extractChannelValue).channel;
-  const [extractBusy, setExtractBusyRaw] = useState(() => storyboardExtractCache.busy);
-  const [extractStatus, setExtractStatusRaw] = useState(() => storyboardExtractCache.status);
-  /** 模型通道的实时提取过程（流式 token 累积） */
-  const [extractProgress, setExtractProgressRaw] = useState(() => storyboardExtractCache.progress);
-  const [extractError, setExtractErrorRaw] = useState(() => storyboardExtractCache.error);
-  /** 本次提取的结构化执行日志（输入/输出/结果/错误），跑完不清空。
-   *  setExtractionLog 包装器同步写模块缓存，切页签卸载再挂载仍能恢复。 */
-  const [extractionLog, setExtractionLogState] = useState<ExtractLogEntry[]>(() => storyboardLogCache);
-  const setExtractionLog = (updater: SetStateAction<ExtractLogEntry[]>) => {
-    // 同步写缓存再 setState，与提取字段缓存一致：卸载期间后台写日志也生效。
-    const next = typeof updater === "function" ? updater(storyboardLogCache) : updater;
-    storyboardLogCache = next;
-    setExtractionLogState(next);
-  };
-
-  // 提取状态写缓存：以缓存对象为准算 next 并**立即**同步写缓存，再 setState。
-  // 组件卸载后 React 不再派发 state updater，只有同步写缓存才能让仍在后台的
-  // async 把正确终态(完成/失败/累积过程)留到下次挂载。
-  const setExtractChannelValue = (value: SetStateAction<string>) => {
-    const next = typeof value === "function" ? value(storyboardExtractCache.channelValue) : value;
-    storyboardExtractCache = { ...storyboardExtractCache, channelValue: next };
-    setExtractChannelValueRaw(next);
-  };
-  const setExtractBusy = (value: boolean) => {
-    storyboardExtractCache = { ...storyboardExtractCache, busy: value };
-    setExtractBusyRaw(value);
-  };
-  const setExtractStatus = (value: SetStateAction<string>) => {
-    const next = typeof value === "function" ? value(storyboardExtractCache.status) : value;
-    storyboardExtractCache = { ...storyboardExtractCache, status: next };
-    setExtractStatusRaw(next);
-  };
-  const setExtractProgress = (value: SetStateAction<string>) => {
-    const next = typeof value === "function" ? value(storyboardExtractCache.progress) : value;
-    storyboardExtractCache = { ...storyboardExtractCache, progress: next };
-    setExtractProgressRaw(next);
-  };
-  const setExtractError = (value: SetStateAction<string>) => {
-    const next = typeof value === "function" ? value(storyboardExtractCache.error) : value;
-    storyboardExtractCache = { ...storyboardExtractCache, error: next };
-    setExtractErrorRaw(next);
+  const {
+    patch: setExtractState,
+    appendProgress: setExtractAppendProgress,
+    appendLog,
+    setLog,
+  } = extractActions;
+  /** 视图层改下拉通道：写回 controller 会话 */
+  const setExtractChannelValue = (value: string) => {
+    setExtractState({ channelValue: value });
   };
 
   const hasScript = !!scriptMarkdown?.trim();
-  const knownNames = characters.map((character) => character.name).filter(Boolean);
+  const knownNames = characters
+    .map((character) => character.name)
+    .filter(Boolean);
 
   /** 条目 → 既有 Shot 结构(场景/角色关联与提示词重算复用既有链路) */
   function appendShots(entries: ShotEntry[]) {
-    const built = buildShotsFromEntries(entries, shots.length, scenes, characters);
+    const built = buildShotsFromEntries(
+      entries,
+      shots.length,
+      scenes,
+      characters,
+    );
     onShotsChange([...shots, ...built]);
-    setExtractStatus(`已提取 ${built.length} 个镜头`);
+    setExtractState({ status: `已提取 ${built.length} 个镜头` });
   }
 
   /** 三通道提取入口:工具=确定性拆分;本地/API=LLM 输出 JSON,失败降级提示 */
   async function handleExtract() {
     const script = (scriptMarkdown ?? "").trim();
     if (!script) {
-      setExtractError("未获取到剧本文本,请先在「剧本」阶段编写或编辑剧本");
+      setExtractState({
+        error: "未获取到剧本文本,请先在「剧本」阶段编写或编辑剧本",
+      });
       return;
     }
     if (extractChannel !== "tool" && !config) {
       openSettings();
       return;
     }
-    setExtractBusy(true);
-    setExtractProgress("");
-    setExtractStatus(extractChannel === "tool" ? "" : "正在调用模型提取分镜…");
-    setExtractError("");
+    setExtractState({
+      busy: true,
+      progress: "",
+      status: extractChannel === "tool" ? "" : "正在调用模型提取分镜…",
+      error: "",
+    });
     // 新一次提取：重置日志为仅含 init 一条，展示本次输入→输出→结果链路。
-    storyboardLogCache = [
+    setLog([
       makeExtractLog(
         "init",
         `使用 ${extractChannel === "tool" ? "内置规则" : extractChannel === "local" ? "本地模型" : "远端模型"} ${extractChannel === "tool" ? "" : parseChannelOption(extractChannelValue).model || ""}从剧本提取分镜`,
       ),
-    ];
-    setExtractionLogState(storyboardLogCache);
+    ]);
     try {
       let entries: ShotEntry[];
       if (extractChannel === "tool") {
         const drafts = parseShotDrafts(script, knownNames);
         if (drafts.length === 0) {
-          setExtractError(
-            "工具通道未在剧本中找到场景标题(如「1-1 场景 外 地点(时间)」)或 Δ动作 / Vx台词 行。可检查剧本结构后重试,或切换到本地模型 / 配置API 通道。"
-          );
+          setExtractState({
+            error:
+              "工具通道未在剧本中找到场景标题(如「1-1 场景 外 地点(时间)」)或 Δ动作 / Vx台词 行。可检查剧本结构后重试,或切换到本地模型 / 配置API 通道。",
+          });
           return;
         }
         entries = drafts.map(draftToShotEntry);
       } else {
         const requestMessages = buildExtractShotsMessages(script, knownNames);
-        setExtractionLog((prev) => [
-          ...prev,
+        appendLog(
           makeExtractLog(
             "request",
             `向模型发送请求（provider=${channelProvider(extractChannel)}, model=${parseChannelOption(extractChannelValue).model || "默认"}）`,
             formatRequestMessages(requestMessages),
           ),
-        ]);
+        );
         const full = await streamChat({
           messages: requestMessages,
           opts: {
             provider: channelProvider(extractChannel),
             model: parseChannelOption(extractChannelValue).model,
           },
-          onToken: (token) => setExtractProgress((prev) => prev + token),
+          onToken: (token) => setExtractAppendProgress(token),
         });
-        setExtractionLog((prev) => [
-          ...prev,
-          makeExtractLog("output", "模型返回完成，正在解析…", full),
-        ]);
+        appendLog(makeExtractLog("output", "模型返回完成，正在解析…", full));
         entries = parseExtractedShots(full);
         if (entries.length === 0) {
-          setExtractionLog((prev) => [
-            ...prev,
+          appendLog(
             makeExtractLog("error", "模型未返回有效分镜 JSON，解析失败"),
-          ]);
-          setExtractError("模型未返回有效分镜 JSON,解析失败。可重试,或改用「工具」通道。");
+          );
+          setExtractState({
+            error:
+              "模型未返回有效分镜 JSON,解析失败。可重试,或改用「工具」通道。",
+          });
           return;
         }
       }
-      setExtractionLog((prev) => [...prev, makeExtractLog("result", `解析出 ${entries.length} 个分镜，准备写入`)]);
+      appendLog(
+        makeExtractLog("result", `解析出 ${entries.length} 个分镜，准备写入`),
+      );
       appendShots(entries);
     } catch (e: unknown) {
-      setExtractionLog((prev) => [
-        ...prev,
-        makeExtractLog("error", errorMessage(e, "提取失败")),
-      ]);
-      setExtractError(`${errorMessage(e, "提取失败")} 可重试,或改用「工具」通道。`);
+      appendLog(makeExtractLog("error", errorMessage(e, "提取失败")));
+      setExtractState({
+        error: `${errorMessage(e, "提取失败")} 可重试,或改用「工具」通道。`,
+      });
     } finally {
-      setExtractBusy(false);
+      setExtractState({ busy: false });
     }
   }
 
   /** 外部导入:分镜脚本 markdown 走工具解析器;JSON 支持分镜数组与角色卡文件 */
   async function handleImportFile(file: File) {
-    setExtractBusy(true);
-    setExtractStatus("");
-    setExtractError("");
+    setExtractState({ busy: true, status: "", error: "" });
     try {
       const text = await file.text();
       const trimmed = text.trim();
@@ -276,20 +264,24 @@ export function useStoryboardPlanner(props: Props) {
           // 非分镜 JSON:尝试按角色卡文件导入(写入角色列表)
           const cards = parseImportedCharacterCards(trimmed);
           if (!onCharactersChange) {
-            throw new Error("这是角色卡文件,但当前页面未接入角色写入,请到「角色卡」阶段导入");
+            throw new Error(
+              "这是角色卡文件,但当前页面未接入角色写入,请到「角色卡」阶段导入",
+            );
           }
           const res = mergeCharacterDrafts(characters, cards, styles);
           if (res.added === 0) {
             throw new Error("角色卡均已存在或无有效内容,未新增");
           }
           onCharactersChange(res.list);
-          setExtractStatus(
-            `已从文件导入 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`
-          );
+          setExtractState({
+            status: `已从文件导入 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`,
+          });
           return;
         }
         if (entries.length === 0) {
-          throw new Error("JSON 中未解析出任何镜头(需含 sceneHeading 或 description 字段)");
+          throw new Error(
+            "JSON 中未解析出任何镜头(需含 sceneHeading 或 description 字段)",
+          );
         }
         appendShots(entries);
         return;
@@ -297,14 +289,14 @@ export function useStoryboardPlanner(props: Props) {
       const drafts = parseShotDrafts(trimmed, knownNames);
       if (drafts.length === 0) {
         throw new Error(
-          "未在文件中找到场景标题(如「1-1 场景 外 地点(时间)」)或 Δ动作 / Vx台词 行"
+          "未在文件中找到场景标题(如「1-1 场景 外 地点(时间)」)或 Δ动作 / Vx台词 行",
         );
       }
       appendShots(drafts.map(draftToShotEntry));
     } catch (e: unknown) {
-      setExtractError(errorMessage(e, "导入失败"));
+      setExtractState({ error: errorMessage(e, "导入失败") });
     } finally {
-      setExtractBusy(false);
+      setExtractState({ busy: false });
     }
   }
 
@@ -343,10 +335,12 @@ export function useStoryboardPlanner(props: Props) {
         if (shot.id !== id) return shot;
         const next = { ...shot, ...patch };
         const scene = scenes.find((sc) => sc.id === next.sceneId);
-        const chars = characters.filter((character) => next.characterIds.includes(character.id));
+        const chars = characters.filter((character) =>
+          next.characterIds.includes(character.id),
+        );
         const style = styles.find((st) => st.slug === next.skillSlug);
         return recompute(next, scene, chars, style);
-      })
+      }),
     );
   }
 
@@ -370,7 +364,9 @@ export function useStoryboardPlanner(props: Props) {
     try {
       const built: Shot[] = [];
       let n = shots.length;
-      const charNames = characters.map((character) => character.name).filter(Boolean);
+      const charNames = characters
+        .map((character) => character.name)
+        .filter(Boolean);
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
         setAiProgress(`正在拆镜 ${i + 1}/${scenes.length} · ${scene!.heading}`);
@@ -382,7 +378,10 @@ export function useStoryboardPlanner(props: Props) {
         raws.forEach((raw) => {
           n += 1;
           const charIds = characters
-            .filter((character) => character.name && raw.characterNames.includes(character.name))
+            .filter(
+              (character) =>
+                character.name && raw.characterNames.includes(character.name),
+            )
             .map((character) => character.id);
           const shot: Shot = {
             id: workshopUid("shot"),
@@ -397,7 +396,9 @@ export function useStoryboardPlanner(props: Props) {
             params: {},
             status: "idle",
           };
-          const linkedChars = characters.filter((character) => charIds.includes(character.id));
+          const linkedChars = characters.filter((character) =>
+            charIds.includes(character.id),
+          );
           built.push(recompute(shot, scene, linkedChars, undefined));
         });
       }
@@ -411,7 +412,9 @@ export function useStoryboardPlanner(props: Props) {
   }
 
   async function generateAll() {
-    const pending = shots.filter((shot) => shot.status === "idle" || shot.status === "failed");
+    const pending = shots.filter(
+      (shot) => shot.status === "idle" || shot.status === "failed",
+    );
     for (const shot of pending) {
       await onGenerate(shot);
     }
@@ -442,7 +445,10 @@ export function useStoryboardPlanner(props: Props) {
               "请把它改写为一段 60~120 词的英文画面提示词：保留全部要素，补足光影、氛围、镜头语言与画面叙事，" +
               "用逗号分隔的短语，不要解释、不要换行以外的多余文字。只输出提示词本身。",
           },
-          { role: "user", content: shot.prompt || shot.description || sceneFallback(shot) },
+          {
+            role: "user",
+            content: shot.prompt || shot.description || sceneFallback(shot),
+          },
         ],
         opts: { temperature: 0.7 },
       });
@@ -458,7 +464,9 @@ export function useStoryboardPlanner(props: Props) {
 
   function sceneFallback(shot: Shot): string {
     const scene = scenes.find((sc) => sc.id === shot.sceneId);
-    return [shot.shotType, scene?.location, scene?.action].filter(Boolean).join(", ");
+    return [shot.shotType, scene?.location, scene?.action]
+      .filter(Boolean)
+      .join(", ");
   }
 
   async function polishAll() {
