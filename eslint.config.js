@@ -5,19 +5,46 @@ import boundaries from "eslint-plugin-boundaries";
 
 export default tseslint.config(
   {
+    // ── 全局忽略：与 .gitignore 同步的产物 / 临时 / 第三方 store 目录 ──
+    // 维护约定：凡在 .gitignore 里新增忽略的产物/临时目录，若可能落 .ts/.tsx/.js
+    // 等代码文件（或目录物理存在、含海量 JS），必须同步补进此处，否则 `pnpm lint`
+    // （eslint .）会把目录内临时文件也扫进去误报、拖慢甚至 walk 崩溃。
     ignores: [
+      // 框架构建产物
       ".next",
-      // 构建产物与生成代码：无需 lint
+      "out/",
+      "coverage/",
+      "dist/",
+      // 生成代码（根级与 src/public 下）
       "generated/**",
-      "src-tauri/static/**",
+      "public/generated/",
+      "src/generated/",
+      // Next/Tauri 静态产物
+      "src-tauri/static/",
+      // 运行时临时目录与本地工具产物
       "temp/**",
       "python-venv/**",
+      "dev-tools/",
+      "log/",
+      "run/",
+      "__pycache__/",
+      // node_modules 之外的依赖副本 / pnpm store（eslint 只硬忽略 node_modules 本体）
+      "node_modules.old/",
+      ".pnpm-store/",
       // PyInstaller onedir 产物（start-tauri/、start-tauri-standalone/ 等）：
       // 目录被清理后 eslint 9 默认会 walk 全部目录，humanfs 遇到不存在目录会 ENOENT 崩溃，显式忽略避免
       "start-tauri*/",
       "build-launcher*/",
+      // 测试产物
+      "test-results/",
+      "playwright-report/",
+      // agent 工具链本地产物（索引 / IDE 会话，可能含代码拷贝）
+      ".codegraph/",
+      ".zvec-grep/",
+      ".workbuddy/",
     ],
   },
+
   // eslint-config-next@16 已改为扁平（flat）配置，直接导出配置数组。
   // 旧写法用 FlatCompat.extends() 去加载它会触发 config-validator 对含
   // 插件/函数的扁平对象做 JSON 序列化，从而 TypeError: Converting circular
