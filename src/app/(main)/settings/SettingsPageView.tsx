@@ -32,7 +32,7 @@ import {
   isMediaField,
   isModeValueBroken,
   usageFieldsToJson,
-  looksLikeImage,
+  isPreviewableUrl,
   videoModeHidesMedia,
   videoModeMissingHint,
   usageTestDraftKey,
@@ -1431,7 +1431,7 @@ export function SettingsPageView({
                                 行，或直接把输入框改回 text / keyframe /
                                 reference。
                               </p>
-                              {looksLikeImage(f.value) && (
+                              {isPreviewableUrl(f.value) && (
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -1484,7 +1484,7 @@ export function SettingsPageView({
                                 placeholder={
                                   f.key === "mode"
                                     ? "模式名：text / keyframe / reference（图片请添加 images 行）"
-                                    : looksLikeImage(f.value)
+                                    : isPreviewableUrl(f.value)
                                       ? "已设为图片，可粘贴新的图片地址覆盖"
                                       : isMediaArrayField(f.key)
                                         ? "值：一张或多张图片 URL（多张用逗号分隔，如 a,b）"
@@ -1543,12 +1543,8 @@ export function SettingsPageView({
                                 ✕
                               </button>
                             </div>
-                            {looksLikeImage(f.value) && (
-                              <img
-                                src={f.value}
-                                alt="字段图片预览"
-                                className="border-border/60 max-h-24 w-fit rounded-md border"
-                              />
+                            {isPreviewableUrl(f.value) && (
+                              <FieldImagePreview src={f.value} />
                             )}
                           </div>
                         );
@@ -2233,3 +2229,26 @@ function Btn({
     </button>
   );
 }
+
+/* 图片预览：值是可尝试 URL（http(s)/data:image）才渲染 <img>；加载失败
+ *（防盗链 / 需要登录态 / 不是图片 / 网络问题）时降级成一行说明，而不是
+ * 破图占位或完全空白——用 isPreviewableUrl 放开入口，交由 onError 兜底。 */
+function FieldImagePreview({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <p className="text-muted-foreground/70 max-h-24 overflow-hidden rounded-md border border-dashed px-2 py-1 text-[11px] leading-relaxed">
+        该地址无法作为图片预览（可能被防盗链、需登录，或非图片地址）。点击行内「链接」替换，或用「上传」选本地图片。
+      </p>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt="字段图片预览"
+      onError={() => setFailed(true)}
+      className="border-border/60 max-h-24 w-fit rounded-md border"
+    />
+  );
+}
+
