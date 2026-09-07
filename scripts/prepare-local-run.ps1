@@ -27,7 +27,7 @@ Write-Host "项目目录：$root"
 Write-Host ""
 
 # ── 1) 检查 node ──────────────────────────────────────────────
-Write-Host "---------- [1/4] 检查 Node.js ----------" -ForegroundColor White
+Write-Host "---------- [1/5] 检查 Node.js ----------" -ForegroundColor White
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) {
     Say-Err "未检测到 Node.js。"
@@ -39,7 +39,7 @@ Say-OK "Node.js 版本：$(& node -v)"
 
 # ── 2) 检查 / 开启 pnpm（corepack）────────────────────────────
 Write-Host ""
-Write-Host "---------- [2/4] 检查 pnpm ----------" -ForegroundColor White
+Write-Host "---------- [2/5] 检查 pnpm ----------" -ForegroundColor White
 $pnpm = Get-Command pnpm -ErrorAction SilentlyContinue
 if (-not $pnpm) {
     Say-Warn "未检测到 pnpm，尝试用 Node 自带的 corepack 开启..."
@@ -62,9 +62,53 @@ if ($pnpm) {
     exit 1
 }
 
-# ── 3) 生成 .env（已存在则跳过）───────────────────────────────
+# ── 3) 版本一致性检查：pnpm 是否与 package.json 的 packageManager 对齐 ──
 Write-Host ""
-Write-Host "---------- [3/4] 生成本地配置 .env ----------" -ForegroundColor White
+Write-Host "---------- [3/5] 检查 pnpm 版本 ----------" -ForegroundColor White
+$expectedPnpm = ""
+try {
+    $pkgContent = Get-Content -Raw -Path (Join-Path $root "package.json")
+    $pkgJson = $pkgContent | ConvertFrom-Json
+    if ($pkgJson.packageManager -and $pkgJson.packageManager -match '^pnpm@(\S+)$') {
+        $expectedPnpm = $Matches[1]
+    }
+} catch {
+    Say-Warn "解析 package.json 的 packageManager 字段失败：$($_.Exception.Message)"
+}
+
+if ($expectedPnpm) {
+    $actualPnpm = ""
+    try { $actualPnpm = (& pnpm -v 2>$null | Select-Object -First 1) } catch { }
+    if ($null -eq $actualPnpm) { $actualPnpm = "" }
+    $actualPnpm = $actualPnpm.ToString().Trim()
+    $actualClean = $actualPnpm.TrimStart('v')
+    $expectedClean = $expectedPnpm.TrimStart('v')
+    if ($actualClean -eq $expectedClean) {
+        Say-OK "pnpm 版本与项目要求一致（$actualPnpm）。"
+    } else {
+        Say-Warn "pnpm 版本不一致：本机 $actualPnpm，项目 package.json 要求 pnpm@$expectedPnpm。"
+        Say-Info "尝试用 Node 自带 corepack 自动对齐..."
+        try {
+            & corepack enable
+            & corepack prepare "pnpm@$expectedPnpm" --activate
+            if ($LASTEXITCODE -eq 0) {
+                Say-OK "已自动切换到 pnpm@$expectedPnpm。"
+            } else {
+                Say-Err "corepack 自动切换失败（exit=$LASTEXITCODE）。"
+                Say-Info "请手动在终端执行：corepack enable && corepack prepare pnpm@$expectedPnpm --activate"
+                Read-Host "按回车键继续（不阻断初始化，但可能后续报错）"
+            }
+        } catch {
+            Say-Warn "corepack 切换异常：$($_.Exception.Message)。可忽略，若后续 pnpm install 报错再手动处理。"
+        }
+    }
+} else {
+    Say-Info "package.json 未声明 pnpm 版本要求，跳过版本比对。"
+}
+
+# ── 4) 生成 .env（已存在则跳过）───────────────────────────────
+Write-Host ""
+Write-Host "---------- [4/5] 生成本地配置 .env ----------" -ForegroundColor White
 $envFile = Join-Path $root ".env"
 if (Test-Path $envFile) {
     Say-OK "已存在 .env，跳过生成（不覆盖你的配置）。"
@@ -92,9 +136,9 @@ if (Test-Path $envFile) {
     }
 }
 
-# ── 4) 检查 / 安装依赖 node_modules ───────────────────────────
+# ── 5) 检查 / 安装依赖 node_modules ───────────────────────────
 Write-Host ""
-Write-Host "---------- [4/4] 检查项目依赖 ----------" -ForegroundColor White
+Write-Host "---------- [5/5] 检查项目依赖 ----------" -ForegroundColor White
 # 只探测"装没装"会漏掉"装的是旧 lockfile"的情况：拉取新增依赖后没重装，依赖是
 # 残缺的，但 .modules.yaml 与 next.cmd 都在 → 被当成"已就绪"而跳过安装。
 # 追加"lockfile 漂移"判定：pnpm 会把最近一次成功安装的 lockfile 复制到
