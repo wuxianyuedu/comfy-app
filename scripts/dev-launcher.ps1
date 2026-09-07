@@ -371,6 +371,57 @@ function Sync-NextCache {
   }
 }
 
+# ── 预检 0.4：工具链门禁（Tauri 壳弹出前）──
+# 双击 start-tauri.exe 时，python 启动器会在 Tauri 主窗口出现前持续监控
+# dev-launcher 是否提前退出，一旦提前退出就弹 MessageBox（人类可见出口）。
+# 因此在拉起预编译壳「之前」先做一次只读门禁：若 pnpm 工具链已经坏到连命令
+# 都跑不起来（corepack 切换缓存损坏等），此时弹壳也起不来服务，应立刻 throw
+# 让启动器弹窗告知根因与修复步骤，而不是先弹出黑窗口再在 splash 里慢慢报错。
+# 注意：此处只做「致命快检」，不做 install 自愈/版本对齐（那是窗口出现后
+# Test-PnpmVersion / Test-DevDependencies 的职责，避免门禁拖慢健康环境的秒出）。
+function Test-ToolchainGate {
+  # 1) pnpm 命令可用性：corepack shim 存在但切换版本缓存损坏（.tools\pnpm\<ver>\bin
+  #    缺失）时，pnpm -v 会报 "Failed to switch pnpm to ... ENOENT"，命令不可用。
+  #    这是最致命的环境损坏——install / dev 全依赖它。
+  $pnpmCmd = Get-Command pnpm -ErrorAction SilentlyContinue
+  if (-not $pnpmCmd) {
+    Write-Log "工具链门禁：未找到 pnpm 命令（需 corepack enable）" -Level ERROR
+    throw "未找到 pnpm 命令：请先执行 corepack enable（或运行 tools\start\run-local.ps1）后重启应用。"
+  }
+  $probeErr = ""
+  try {
+    $probe = & pnpm -v 2>&1
+    $probeExit = $LASTEXITCODE
+    $probeLines = @($probe | ForEach-Object { $_.ToString() })
+    if ($probeExit -ne 0 -or -not ($probeLines | Where-Object { $_ -match '[0-9]+\.[0-9]+' })) {
+      $probeErr = (($probeLines | Where-Object {
+        $_ -match "Failed to switch|ENOENT|not found|无法|不是内部或外部|ERR_|No such file"
+      } | Select-Object -First 3) -join " ").Trim()
+      if (-not $probeErr) { $probeErr = ($probeLines -join " ").Trim() }
+    }
+  } catch {
+    $probeErr = "调用 pnpm 抛异常：$($_.Exception.Message)"
+  }
+  if ($probeErr) {
+    $fatal = "pnpm 工具链损坏：pnpm 命令无法运行"
+    if ($probeErr) { $fatal += "`n  原始报错：$probeErr" }
+    $fatal += "`n疑似 corepack 切换版本时本地缓存损坏（.tools\pnpm\<ver>\bin 缺失）。"
+    $fatal += "`n修复：corepack enable && corepack prepare pnpm@<project版本> --activate，再重启应用。"
+    Write-Log $fatal -Level ERROR
+    throw $fatal
+  }
+  Write-Log "工具链门禁：pnpm 命令可用" -Level OK
+
+  # 2) node_modules 是否「完全未安装」：连 .modules.yaml 都不存在 = 依赖从没装好，
+  #    弹壳后 dev server 必然起不来。此处不自动 install（避免门禁阻塞），直接引导。
+  if (-not (Test-Path -LiteralPath (Join-Path $root "node_modules\.modules.yaml"))) {
+    $fatal = "node_modules 缺失或不完整（找不到 node_modules\.modules.yaml）：依赖尚未正确安装。"
+    $fatal += "`n请运行 tools\start\run-local.ps1（或 scripts\prepare-local-run.ps1）完成依赖安装后再启动。"
+    Write-Log $fatal -Level ERROR
+    throw $fatal
+  }
+}
+
 # ── 预检 0.5：pnpm 版本一致性检查 ──
 # package.json 的 packageManager 字段声明了本项目所需的 pnpm 版本（如
 # pnpm@11.25.0）。若本机 pnpm 版本不匹配（常见于拉取代码后团队升级了 pnpm
@@ -401,21 +452,51 @@ function Test-PnpmVersion {
   }
 
   # 获取本机实际 pnpm 版本
+  # pnpm 命令存在但可能跑不起来：corepack 管理的 pnpm 在切换版本时若本地缓存
+  # 损坏（如 .tools\pnpm\<ver>\bin 缺失），会报 "Failed to switch pnpm to
+  # pnpm@<ver> ... ENOENT"，pnpm 完全不可用。此时继续往下走，pnpm install / dev
+  # 会连锁失败，用户却只看到一堆看不懂的报错找不到根因。因此在预检阶段就把这种
+  # 工具链损坏拦下：能读到版本号 = 命令可用（才继续走版本一致性 WARN 逻辑）；
+  # 读不到版本号 = 命令本身坏了 = 致命，直接报错给修复指引。
   $actual = ""
+  $pnpmErr = ""
   try {
     $pnpmCmd = Get-Command pnpm -ErrorAction SilentlyContinue
     if (-not $pnpmCmd) {
       Write-Log "未找到 pnpm 命令，请先执行 corepack enable（或 docs/guide-non-developer.md 4.2 双击 run-local.ps1）" -Level WARN
       return
     }
-    $actual = ((& pnpm -v 2>$null | Select-Object -First 1).Trim())
+    # 用 2>&1 合并捕获 stderr：$ErrorActionPreference=Stop 下原生命令写 stderr 会
+    # 直接抛异常打断探测，且 2>$null 会把真正有用的错误文本丢掉。合并后统一转
+    # 字符串，既能读到版本号也能读到 corepack 切换失败的原始报错。
+    $pnpmRaw = & pnpm -v 2>&1
+    $pnpmExit = $LASTEXITCODE
+    $pnpmLines = @($pnpmRaw | ForEach-Object { $_.ToString() })
+    $actual = (($pnpmLines | Select-Object -First 1).Trim())
+    if ($pnpmExit -ne 0) {
+      # 版本号可能带 v 前缀或换行噪声，取首个像版本的行兜底
+      $verLine = $pnpmLines | Where-Object { $_ -match '[0-9]+\.[0-9]+' } | Select-Object -First 1
+      if ($verLine) { $actual = $verLine.Trim() }
+    }
+    $pnpmErr = (($pnpmLines | Where-Object {
+      $_ -match "Failed to switch|ENOENT|not found|无法|不是内部或外部|ERR_|No such file"
+    } | Select-Object -First 3) -join " ").Trim()
   } catch {
-    Write-Log "获取 pnpm 版本失败：$($_.Exception.Message)" -Level WARN
-    return
+    $pnpmErr = "调用 pnpm 抛异常：$($_.Exception.Message)"
   }
   if (-not $actual) {
-    Write-Log "无法获取 pnpm 版本，跳过一致性检查" -Level WARN
-    return
+    # 命令在 PATH 上但跑不出版本号：典型是 corepack 切换版本缓存损坏。
+    # 这是致命工具链问题，不是可跳过的 WARN——不修它 install/dev 一定失败。
+    $fatal = "pnpm 工具链不可用：无法获取 pnpm 版本号（疑似 corepack 切换缓存损坏）"
+    if ($pnpmErr) { $fatal += "`n  原始报错：$pnpmErr" }
+    $fatal += "`n修复步骤："
+    $fatal += "`n  1) corepack enable"
+    $fatal += "`n  2) corepack prepare pnpm@$expected --activate   （会重建缓存，需联网一次）"
+    $fatal += "`n  3) pnpm -v   应能输出版本号"
+    $fatal += "`n仍不行则删除损坏的 corepack 缓存目录后重装 Node/pnpm，再重启应用。"
+    $fatal += "`n详见 docs/guides/sync-after-pull.md。"
+    Write-Log $fatal -Level ERROR
+    throw $fatal
   }
 
   # 比较版本：忽略可能的 v 前缀
@@ -470,17 +551,44 @@ function Test-PnpmVersion {
 
 # ── 预检 1：node_modules 健康检查 ──
 # pnpm 策略拒装 / 中断安装会留下「目录存在但不可用」的残缺依赖（缺
-# .modules.yaml 或 .bin/next）。直接启动 dev server 会 180 秒空等或触发
-# pnpm 的依赖状态检查失败。不健康时执行一次显式 pnpm install（CI 模式
-# 无交互），失败则立即报错并展示日志尾部，而不是空等。
+# .modules.yaml、缺 .bin/next，或关键依赖目录被清空）。直接启动 dev server 会
+# 180 秒空等或触发 pnpm 的依赖状态检查失败。不健康时执行一次显式 pnpm install
+# （CI 模式无交互），失败则立即报错并展示日志尾部，而不是空等。
+
+# 检查 node_modules 下关键依赖目录是否「存在且非空」。pnpm 中断安装会留下
+# 「目录在但内容空」的残缺（典型：typescript / @typescript/native 空目录 → tsc
+# 垫片找不到入口，typecheck/build 崩）。这些是本仓库工具链与构建的硬依赖。
+# 返回坏掉的相对路径列表（空数组 = 健康）。
+function Get-BrokenKeyDeps {
+  $broken = @()
+  foreach ($rel in @("typescript", "@typescript/native", "next")) {
+    $dir = Join-Path $root ("node_modules\" + $rel)
+    if (-not (Test-Path -LiteralPath $dir)) {
+      $broken += $rel
+      continue
+    }
+    # pnpm 布局下顶层目录可能是指向 .pnpm store 的 symlink/junction：只要
+    # 链接目标里能看到内容即算健康；空目录 / 悬空链接（目标缺失）都算坏。
+    $files = @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue)
+    if ($files.Count -eq 0) { $broken += $rel }
+  }
+  return ,$broken
+}
+
 function Test-DevDependencies {
   $nextBin = Join-Path $root "node_modules\.bin\next*"
   $modulesYaml = Join-Path $root "node_modules\.modules.yaml"
-  if ((Test-Path $modulesYaml) -and ((Get-ChildItem $nextBin -ErrorAction SilentlyContinue))) {
-    Write-Log "node_modules 预检通过（.modules.yaml 与 .bin/next 存在）" -Level INFO
+  $brokenDeps = @(Get-BrokenKeyDeps)
+  if ((Test-Path $modulesYaml) -and ((Get-ChildItem $nextBin -ErrorAction SilentlyContinue)) -and ($brokenDeps.Count -eq 0)) {
+    Write-Log "node_modules 预检通过（.modules.yaml、.bin/next 与关键依赖目录均正常）" -Level INFO
     return
   }
-  Write-Log "node_modules 不完整（缺 .modules.yaml 或 .bin/next），执行显式 pnpm install..." -Level WARN
+
+  $why = @()
+  if (-not (Test-Path $modulesYaml)) { $why += "缺 .modules.yaml" }
+  if (-not (Get-ChildItem $nextBin -ErrorAction SilentlyContinue)) { $why += "缺 .bin/next" }
+  foreach ($d in $brokenDeps) { $why += "关键依赖目录 node_modules/$d 为空或缺失" }
+  Write-Log ("node_modules 不完整（{0}），执行显式 pnpm install..." -f ($why -join "；")) -Level WARN
   $env:CI = "true"
   $installOut = Join-Path $logDir "pnpm-install-stdout.log"
   $installErr = Join-Path $logDir "pnpm-install-stderr.log"
@@ -500,8 +608,13 @@ function Test-DevDependencies {
   if ($installProc.ExitCode -ne 0) {
     throw "pnpm install 失败（exit=$($installProc.ExitCode)）。最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $installOut 与 $installErr）"
   }
-  if (-not (Test-Path $modulesYaml)) {
-    throw "pnpm install 退出码 0 但 node_modules 仍不完整（缺 .modules.yaml），请检查 $installOut"
+  # 复查：install 成功但仍缺结构 / 关键目录仍空 → 明确报错而不是静默通过
+  $brokenDeps2 = @(Get-BrokenKeyDeps)
+  $postMsg = @()
+  if (-not (Test-Path $modulesYaml)) { $postMsg += "缺 .modules.yaml" }
+  foreach ($d in $brokenDeps2) { $postMsg += "node_modules/$d 仍为空或缺失" }
+  if ($postMsg.Count -gt 0) {
+    throw ("pnpm install 退出码 0 但 node_modules 仍异常（{0}），请检查 $installOut" -f ($postMsg -join "；"))
   }
   Write-Log "pnpm install 完成，node_modules 预检通过" -Level OK
 }
@@ -662,6 +775,11 @@ try {
     if (-not (Test-Path $tauriExe)) {
       throw "找不到预编译 Tauri 壳：src-tauri\target\release\app.exe（或 debug）。请先执行 cargo build 或 pnpm tauri build。"
     }
+    # 0.4 工具链门禁：在弹出 Tauri 壳之前先确认 pnpm / node_modules 没坏到不可用。
+    # 命中致命损坏 → throw → dev-launcher 提前退出 → python 启动器在窗口出现前
+    # 弹 MessageBox 告知根因（人类可见出口），而不是先弹黑窗口再慢慢报错。
+    Test-ToolchainGate
+
     Test-ShellFreshness -ShellExe $tauriExe
 
     # 1. 清理上次运行残留的同项目 Tauri 壳：启动器上次失败退出时不带清理，
