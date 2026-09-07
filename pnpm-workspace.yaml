@@ -44,3 +44,11 @@ allowBuilds:
 # esbuild JS API（transform/transformSync）跨版本保持稳定，兼容无风险。
 overrides:
   '@esbuild-kit/core-utils>esbuild': '0.25.12'
+  # 安全修复：deepmerge-ts@7.1.5 存在 CVE-2026-40345（合并递归对象图时栈溢出），
+  # 由 prisma 工具链（@better-auth/prisma-adapter 的可选 peer）传递引入。
+  # 本项目实际使用 Drizzle/sqlite，schema 已删、从不 import prisma，prisma 系仅为
+  # better-auth 捆绑各 adapter 时声明的可选 peer（autoInstallPeers 自动安装导致）。
+  # 将其覆盖为不可解析版本，pnpm 对可选 peer 解析失败即跳过，从而彻底移除
+  # prisma/@prisma/client 子树及 deepmerge-ts，避免携带 CVE 的依赖进入锁文件。
+  '@better-auth/prisma-adapter>prisma': '0.0.0-nonexistent'
+  '@better-auth/prisma-adapter>@prisma/client': '0.0.0-nonexistent'
