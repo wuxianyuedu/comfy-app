@@ -23,7 +23,7 @@ function narrowMessages(raw: AgentChatRequest["messages"]): LLMMessage[] {
     .filter((m) => m && typeof m === "object")
     .map((m) => {
       const role = m.role;
-      if (role !== "assistant" && role !== "user" && role !== "system" && role !== "tool") {
+      if (role !== "assistant" && role !== "user" && role !== "tool") {
         return null;
       }
       const msg: LLMMessage = {

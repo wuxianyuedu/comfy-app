@@ -42,7 +42,7 @@ function makeMockContext() {
 
 describe("resolveAgentTool — get_project_state", () => {
   it("返回项目状态摘要", async () => {
-    const { state, handlers } = makeMockContext();
+    const { handlers } = makeMockContext();
     const tool = resolveAgentTool("get_project_state", "{}", handlers);
     expect(tool.toolName).toBe("get_project_state");
     const result = await tool.execute();

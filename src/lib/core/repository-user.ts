@@ -48,9 +48,9 @@ export class UserRepository {
 function decryptRow(row: LlmConfig): LlmConfig {
   const apiKey = decryptSecret(row.apiKey);
   const extraModels = Array.isArray(row.extraModels)
-    ? row.extraModels.map((item) => {
+    ? row.extraModels.map((item: RawExtraModel) => {
         if (typeof item === "object" && item !== null && "apiKey" in item) {
-          const rec = { ...(item as Record<string, unknown>) };
+          const rec = { ...item };
           if (typeof rec.apiKey === "string") {
             rec.apiKey = decryptSecret(rec.apiKey);
           }

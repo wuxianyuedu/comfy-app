@@ -83,7 +83,6 @@ export function normalizeAgentMessages(raw: unknown): AgentMessage[] {
     const role = rec.role;
     const content = typeof rec.content === "string" ? rec.content : "";
     if (role === "user" || role === "assistant") {
-      const base = { content } as AgentMessage & { tool_calls?: AgentToolCall[] };
       if (role === "assistant") {
         const calls = parseToolCalls(rec.tool_calls);
         out.push(calls.length > 0 ? { role, content, tool_calls: calls } : { role, content });

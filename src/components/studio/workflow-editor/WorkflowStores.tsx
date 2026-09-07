@@ -155,7 +155,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         let changed = false;
         for (const [ioKey, value] of Object.entries(next)) {
           const cur = nextMap[ioKey];
-          if (!cur || cur.kind !== "widget") continue;
+          if (cur?.kind !== "widget") continue;
           nextMap[ioKey] = { ...cur, value };
           changed = true;
         }
@@ -165,7 +165,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     setIOSeedMode: (key, mode) =>
       set((state) => {
         const cur = state.workflowIO[key];
-        if (!cur || cur.kind !== "widget") return {};
+        if (cur?.kind !== "widget") return {};
         if (cur.seedMode === mode) return {};
         return { workflowIO: { ...state.workflowIO, [key]: { ...cur, seedMode: mode } } };
       }),
@@ -175,7 +175,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         const nextMap: Record<string, WorkflowIOParam> = {};
         let changed = false;
         for (const [entryKey, entry] of Object.entries(state.workflowIO)) {
-          if (entry && entry.kind === "widget" && entry.value !== undefined) {
+          if (entry?.kind === "widget" && entry.value !== undefined) {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars -- value 仅在本分支被剔除（widget 的运行时值不持久化到 IO 配置）
             const { value, ...rest } = entry;
             nextMap[entryKey] = rest;

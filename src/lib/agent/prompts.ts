@@ -89,7 +89,7 @@ export function parseJsonInstruction(text: string): Record<string, unknown> | nu
   const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
   const body = (fence ? fence[1]! : trimmed).trim();
   try {
-    const obj = JSON.parse(body);
+    const obj: unknown = JSON.parse(body);
     // 只接受纯对象；数组 / 标量 / null 视为不可用。
     return typeof obj === "object" && obj !== null && !Array.isArray(obj)
       ? (obj as Record<string, unknown>)
@@ -100,7 +100,7 @@ export function parseJsonInstruction(text: string): Record<string, unknown> | nu
     const end = body.lastIndexOf("}");
     if (start >= 0 && end > start) {
       try {
-        const obj = JSON.parse(body.slice(start, end + 1));
+        const obj: unknown = JSON.parse(body.slice(start, end + 1));
         return typeof obj === "object" && obj !== null && !Array.isArray(obj)
           ? (obj as Record<string, unknown>)
           : null;

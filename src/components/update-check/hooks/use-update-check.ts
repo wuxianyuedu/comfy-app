@@ -33,7 +33,11 @@ export function useUpdateCheck(opts: UpdateCheckHookOptions = {}): {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const wasDirtyRef = useRef(false);
   const onDirtyRef = useRef(onDirty);
-  onDirtyRef.current = onDirty;
+  // ref 须在 effect 里同步：渲染期写 ref 会被 react-hooks/refs 判为
+  // 「渲染期访问 ref」，且并发渲染下可能写到被丢弃的那次渲染上。
+  useEffect(() => {
+    onDirtyRef.current = onDirty;
+  }, [onDirty]);
 
   const checkNow = useCallback(async (): Promise<boolean> => {
     setChecking(true);

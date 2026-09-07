@@ -371,21 +371,19 @@ export async function completeLLMTools(
   const msg = json.choices?.[0]?.message;
   const content = msg?.content ?? "";
   const rawCalls = msg?.tool_calls ?? [];
-  const toolCalls = rawCalls
-    .filter(
-      (call) =>
-        call?.id &&
-        call.function?.name &&
-        typeof call.function.arguments === "string",
-    )
-    .map((call) => ({
-      id: call!.id!,
-      type: "function" as const,
-      function: {
-        name: call!.function!.name!,
-        arguments: call!.function!.arguments!,
+  // 逐条显式判空（而非 filter 后依赖类型收窄）：不同 TS 版本对
+  // filter 回调的类型谓词推断不一致，显式守卫在两种版本下都能收窄。
+  const toolCalls = rawCalls.flatMap((call) => {
+    const fn = call?.function;
+    if (!call?.id || !fn?.name || typeof fn.arguments !== "string") return [];
+    return [
+      {
+        id: call.id,
+        type: "function" as const,
+        function: { name: fn.name, arguments: fn.arguments },
       },
-    }));
+    ];
+  });
 
   return { content, toolCalls };
 }

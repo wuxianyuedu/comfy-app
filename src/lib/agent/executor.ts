@@ -27,7 +27,7 @@ export interface ResolvedAgentTool {
 /** 安全解析 JSON 参数串为对象。 */
 function safeParseJson(json: string): Record<string, unknown> {
   try {
-    const obj = JSON.parse(json);
+    const obj: unknown = JSON.parse(json);
     return typeof obj === "object" && obj !== null
       ? (obj as Record<string, unknown>)
       : {};
@@ -68,7 +68,7 @@ function parseCharactersFromJson(
   const end = body.lastIndexOf("]");
   if (end <= start) return [];
   try {
-    const arr = JSON.parse(body.slice(start, end + 1));
+    const arr: unknown = JSON.parse(body.slice(start, end + 1));
     if (!Array.isArray(arr)) return [];
     return arr
       .filter((item) => typeof item === "object" && item !== null)
@@ -98,7 +98,7 @@ function parseCharacterFull(
   const end = body.lastIndexOf("}");
   if (end <= start) return null;
   try {
-    const obj = JSON.parse(body.slice(start, end + 1));
+    const obj: unknown = JSON.parse(body.slice(start, end + 1));
     if (typeof obj !== "object" || obj === null) return null;
     const rec = obj as Record<string, unknown>;
     return {
@@ -126,7 +126,7 @@ function parseShotsFromJson(
   const end = body.lastIndexOf("]");
   if (end <= start) return [];
   try {
-    const arr = JSON.parse(body.slice(start, end + 1));
+    const arr: unknown = JSON.parse(body.slice(start, end + 1));
     if (!Array.isArray(arr)) return [];
     return arr
       .filter((item) => typeof item === "object" && item !== null)
@@ -194,7 +194,7 @@ export function resolveAgentTool(
     }
 
     case "set_project_meta": {
-      const args = safeParseJson(argsJson) as Record<string, unknown>;
+      const args = safeParseJson(argsJson);
       const patch: Partial<WorkshopDraftDto["meta"]> = {};
       if (typeof args.title === "string") patch.title = args.title;
       if (typeof args.tone === "string") patch.tone = args.tone;
@@ -225,11 +225,15 @@ export function resolveAgentTool(
     }
 
     case "generate_script": {
-      const args = safeParseJson(argsJson) as Record<string, unknown>;
+      const args = safeParseJson(argsJson);
+      // 非字符串参数只接受标量，对象走 toString 只会得到 "[object Object]"
+      const rawIdea: unknown = args.idea;
       const idea =
-        typeof args.idea === "string"
-          ? args.idea
-          : (args.idea ?? "").toString();
+        typeof rawIdea === "string" ||
+        typeof rawIdea === "number" ||
+        typeof rawIdea === "boolean"
+          ? String(rawIdea)
+          : "";
       return {
         toolName: name,
         summary: `生成剧本（创意：${idea.slice(0, 80)}…）`,
@@ -261,7 +265,7 @@ export function resolveAgentTool(
     }
 
     case "edit_script": {
-      const args = safeParseJson(argsJson) as Record<string, unknown>;
+      const args = safeParseJson(argsJson);
       const instruction =
         typeof args.instruction === "string" ? args.instruction : "";
       const currentScript = hd.getScriptMarkdown();
@@ -331,17 +335,33 @@ ${script.slice(0, 8000)}`,
           const existing = hd.getCharacters();
           const names = new Set(existing.map((c) => c.name));
           const newOnes = chars.filter((c) => !names.has(c.name));
-          hd.setCharacters([...existing, ...newOnes]);
+          // 模型只给名字/外貌等文本字段，补齐 Character 的其余必填字段
+          // （与 add_character 一致），否则写进 draft 的是残缺角色卡。
+          const { workshopUid } = await import("@/lib/workshop/script-parser");
+          const created = newOnes.map((c) => ({
+            id: workshopUid("char"),
+            name: c.name,
+            ageGender: "",
+            appearance: c.appearance ?? "",
+            costume: c.costume ?? "",
+            personality: c.personality ?? "",
+            temperament: "",
+            styleTags: [],
+            positivePrompt: "",
+            negativePrompt: "",
+            params: {},
+          }));
+          hd.setCharacters([...existing, ...created]);
           return {
             ok: true,
-            summary: `已提取 ${newOnes.length} 个角色（当前共 ${existing.length + newOnes.length} 个）`,
+            summary: `已提取 ${created.length} 个角色（当前共 ${existing.length + created.length} 个）`,
           };
         },
       };
     }
 
     case "add_character": {
-      const args = safeParseJson(argsJson) as Record<string, unknown>;
+      const args = safeParseJson(argsJson);
       const charName = typeof args.name === "string" ? args.name : "";
       const desc =
         typeof args.description === "string" ? args.description : "";
@@ -459,7 +479,7 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
         argSummary,
         execute: async () => ({
           ok: false,
-          summary: `未识别的工具名称「${name}」`,
+          summary: `未知工具「${name}」`,
         }),
       };
   }

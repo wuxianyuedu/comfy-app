@@ -77,9 +77,9 @@ export function useDynamicWorkflowForm(
    *  CreatePanel / 画布 workflow 节点等运行期只读表单不带这些回调，数值行
    *  仍保持原有紧凑端口行 + SeedMode 的布局。 */
   const isAuthoringEdit = !!(
-    props.onRequiredChange ||
-    props.onLabelChange ||
-    props.onVisibilityChange ||
+    props.onRequiredChange ??
+    props.onLabelChange ??
+    props.onVisibilityChange ??
     onReorder
   );
 

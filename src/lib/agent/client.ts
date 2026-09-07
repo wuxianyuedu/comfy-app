@@ -47,8 +47,7 @@ function parseAgentResponse(data: unknown): AgentChatResponse {
       .map((call) => ({
         id: call.id as string,
         name: call.name as string,
-        arguments:
-          typeof call.arguments === "string" ? (call.arguments as string) : "{}",
+        arguments: typeof call.arguments === "string" ? call.arguments : "{}",
       }));
   }
   if (data.done === true) result.done = true;

@@ -679,7 +679,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       invalidateDraftCache();
     };
     // 仅在卸载时执行一次
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* 挂载回填：把服务端 db.sqlite 里的项目镜像找回来，防 localStorage 被清后丢内容。

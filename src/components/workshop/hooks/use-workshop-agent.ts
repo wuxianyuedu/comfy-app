@@ -33,7 +33,7 @@ export type AgentPanelMessage =
   | { id: string; role: "tool-run"; run: AgentToolRun };
 
 /** 工坊 Agent 需要调用 controller 的操作（由 WorkshopPipeline 注入）。 */
-export interface WorkshopAgentToolHandlers extends AgentToolHandlers {}
+export type WorkshopAgentToolHandlers = AgentToolHandlers;
 
 /** Agent hook 返回给视图的 controller。 */
 export interface WorkshopAgentController {
@@ -73,7 +73,11 @@ export function useWorkshopAgent(
   const [toolRuns, setToolRuns] = React.useState<AgentToolRun[]>([]);
 
   const handlersRef = React.useRef(handlers);
-  handlersRef.current = handlers;
+  // 与 messagesRef 同理：ref 同步放进 effect，渲染期写 ref 会触发
+  // react-hooks/refs，且并发渲染下可能落到被丢弃的那次渲染上。
+  React.useEffect(() => {
+    handlersRef.current = handlers;
+  }, [handlers]);
 
   const messagesRef = React.useRef<AgentPanelMessage[]>([]);
   React.useEffect(() => {
@@ -164,7 +168,7 @@ export function useWorkshopAgent(
     const wireOf = (): AgentMessageLike[] =>
       [...messagesRef.current, userMsg]
         .filter((m) => m.role !== "tool-run")
-        .map((m) => ({ role: m.role, content: m.content }) as AgentMessageLike);
+        .map((m) => ({ role: m.role, content: m.content }));
 
     try {
       let currentMessages: AgentMessageLike[] = wireOf();

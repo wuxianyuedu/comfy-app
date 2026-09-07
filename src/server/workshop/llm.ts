@@ -77,8 +77,8 @@ export async function completeWorkshopLLM(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const cause =
-      e instanceof TypeError && (e as { cause?: unknown }).cause instanceof Error
-        ? String(((e as { cause?: Error }).cause as Error).message)
+      e instanceof TypeError && e.cause instanceof Error
+        ? String(e.cause.message)
         : "";
     const reach = /ECONNREFUSED|ECONNRESET/.test(cause) || /fetch failed/i.test(msg);
     throw new Error(
