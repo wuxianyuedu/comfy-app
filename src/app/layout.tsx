@@ -11,6 +11,7 @@ import { LogProvider } from "~/components/studio/logs/LogProvider";
 import { LogPanel } from "~/components/studio/logs/LogPanel";
 import { ToastProvider } from "~/components/studio/ToastProvider";
 import { BrowserStatusBar } from "~/components/studio/BrowserStatusBar";
+import { UpdateCheckProvider } from "~/components/update-check/UpdateCheckProvider";
 
 export const metadata: Metadata = {
   title: "Create T3 App",
@@ -41,6 +42,9 @@ export default function RootLayout({
                   {children}
                   <LogPanel />
                   <BrowserStatusBar />
+                  {/* 运行期「本地更新需重启」检测：轮询 + Ctrl+Shift+U 手动，
+                      挂一次即可，自身渲染空节点、用应用内 toast 提示 */}
+                  <UpdateCheckProvider />
                 </ToastProvider>
               </LogProvider>
             </TRPCReactProvider>

@@ -50,6 +50,7 @@ import {
   SETTINGS_SECTIONS,
   TEMPERATURE_TASKS,
 } from "./hooks/use-settings-page";
+import { useUpdateCheckStore } from "@/components/update-check/update-check-store";
 
 /** 安装形态 → 设置页徽标文案。 */
 const INSTANCE_KIND_LABEL: Record<
@@ -170,6 +171,24 @@ export function SettingsPageView({
   className?: string;
 }) {
   const router = useRouter();
+
+  /* 本地更新检测：开关/脏态/进行中共享 store（Provider 在根布局水合与持久化），
+   * 这里订阅做受控展示；「立即检测」调用 store 注册的手动实现（Ctrl+Shift+U 同）。 */
+  const updateCheckEnabled = useUpdateCheckStore((s) => s.enabled);
+  const dirty = useUpdateCheckStore((s) => s.dirty);
+  const checking = useUpdateCheckStore((s) => s.checking);
+  const [manualStatus, setManualStatus] = useState<string | null>(null);
+  const handleManualCheck = async () => {
+    setManualStatus("检测中…");
+    const impl = useUpdateCheckStore.getState().manualImpl;
+    const ran = impl ? await impl() : false;
+    if (!ran) {
+      setManualStatus("检测服务未就绪，稍后再试");
+      return;
+    }
+    const st = useUpdateCheckStore.getState();
+    setManualStatus(st.dirty ? "存在需重启的改动" : "未检测到需重启的改动");
+  };
   /* 「按任务温度」的展开态是纯视觉偏好（无副作用、不入库），按 §17.2 留在视图层。
    * 本地 Ollama 下它是温度的主配置区，默认展开。 */
   const [showTaskTemps, setShowTaskTemps] = useState(true);
@@ -767,6 +786,54 @@ export function SettingsPageView({
                     </button>
                   );
                 })}
+              </div>
+            </Card>
+          )}
+
+          {/* ═══ 本地更新检测（纯前端偏好：不写入后端设置，存 localStorage）═══ */}
+          {c.section === "appearance" && (
+            <Card title="本地更新检测">
+              <p className="text-muted-foreground mb-4 text-sm">
+                桌面壳开着时，本地源码由 dev server 自动热更（无需提示）。仅当
+                <strong className="text-ink/80">改完当前窗口不生效、得重启</strong>
+                的文件（Rust 源码 / tauri.conf.json / splash.html —— 需重编壳；
+                .env / pnpm 配置 / package.json —— 需重启应用）在运行期被改动时，
+                应用内 toast 提示。按 Ctrl+Shift+U 可随时手动检测一次。
+              </p>
+              <div className="mb-3 flex items-center gap-2">
+                <input
+                  id="local-update-check-enabled"
+                  type="checkbox"
+                  className="size-4 accent-[var(--primary,#7c5cff)]"
+                  checked={updateCheckEnabled}
+                  onChange={(event) =>
+                    useUpdateCheckStore.getState().setEnabled(event.target.checked)
+                  }
+                />
+                <label
+                  htmlFor="local-update-check-enabled"
+                  className="text-ink/80 text-sm"
+                >
+                  开启运行期「本地更新需重启」检测
+                </label>
+              </div>
+              <div className="border-border bg-surface-1 mb-3 flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 text-sm">
+                <button
+                  type="button"
+                  onClick={() => void handleManualCheck()}
+                  className="text-primary hover:text-primary-hover inline-flex items-center gap-1.5 font-medium disabled:opacity-50"
+                  disabled={checking}
+                >
+                  {checking ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <ArrowLeft size={14} className="rotate-90" />
+                  )}
+                  立即检测本地更新
+                </button>
+                <span className="text-muted-foreground text-xs">
+                  {manualStatus ?? (dirty ? "存在需重启的改动" : "未检测到需重启的改动")}
+                </span>
               </div>
             </Card>
           )}
