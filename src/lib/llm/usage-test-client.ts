@@ -50,6 +50,24 @@ export async function testModelUsage(
     body: JSON.stringify(input),
   });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  return parseUsageTestResult(res, json);
+}
+
+/** 「继续等待」异步视频任务的入参：复用该条目的连接参数 + 已提交的任务 ID。
+ *  与 UsageTestInput 的区别是只查既有任务，不再提交，绝不重复扣费。 */
+export interface UsageTaskQueryInput {
+  name: string;
+  baseUrl: string;
+  path: string;
+  apiKey?: string;
+  taskId: string;
+}
+
+/** 解析单个 tRPC/fetch 结果对象为 UsageTestResult 的公共收尾。 */
+function parseUsageTestResult(
+  res: Response,
+  json: Record<string, unknown>,
+): UsageTestResult {
   const str = (k: string): string | undefined => {
     const v: unknown = json[k];
     return typeof v === "string" ? v : undefined;
@@ -65,4 +83,18 @@ export async function testModelUsage(
     elapsedMs: typeof json.elapsedMs === "number" ? json.elapsedMs : undefined,
     savedPath: str("savedPath"),
   };
+}
+
+/** 对已提交的异步视频任务再等一轮：产物就绪则返回 videoUrl（并落盘本地），
+ *  否则仍 pending 返回，供调用方继续提供「继续等待」入口。 */
+export async function queryUsageTask(
+  input: UsageTaskQueryInput,
+): Promise<UsageTestResult> {
+  const res = await fetch("/api/llm/test-usage/query", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  return parseUsageTestResult(res, json);
 }

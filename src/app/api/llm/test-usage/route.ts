@@ -1,5 +1,3 @@
-import { promises as fs } from "fs";
-import path from "path";
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
 import { getLLMConfig } from "@/lib/llm/server";
@@ -9,32 +7,18 @@ import {
   extractRemoteTaskId,
 } from "@/lib/workshop/api-channel-shared";
 import {
-  mediaDefaultExt,
-  mediaExtensionFromUrl,
-} from "~/lib/llm/usage-test-config";
+  VIDEO_POLL_TOTAL_MS,
+  pollRemoteVideoTask,
+  saveMediaToLocalTemp,
+} from "~/lib/llm/video-task-util";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/**
- * POST /api/llm/test-usage —— 按模型的实际用法发起一次真实调用。
- *
- * 与 /api/llm/test（连通性探测，GET /models）不同：这里按用途真的调
- * chat / 生图 / 生视频端点，验证「照实际用法能用」。图片 / 视频会真实
- * 生成、消耗提供方额度，由调用方（测试弹窗）向用户预告。
- *
- * 密钥解析（服务端完成，浏览器不接触明文）：弹窗里输入的 apiKey →
- * 该条目已保存的独立密钥 → 全局 apiKey。
- * 「额外参数」是 JSON 对象，逐键合并进请求体，可覆盖默认字段 ——
- * 支撑「针对每个参数自定义输入内容」。
- *
- * 失败一律 200 + { ok:false, detail }，前端按 detail 展示降级文案。
- */
-
+/* chat / 生图 / 生视频的单次调用超时（生视频提交后若走任务制则由 video-task-util
+ * 轮询取回，不受此上限约束，见 VIDEO_POLL_TOTAL_MS）。 */
 const CHAT_TIMEOUT_MS = 60_000;
 const MEDIA_TIMEOUT_MS = 180_000;
-const VIDEO_POLL_TOTAL_MS = 90_000;
-const VIDEO_POLL_INTERVAL_MS = 5_000;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
@@ -54,65 +38,12 @@ function strField(rec: Record<string, unknown>, key: string): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
-/** 端点路径的目录部分（/videos/generations → /videos），用于任务轮询拼接。 */
-function pathDir(path: string): string {
-  const idx = path.lastIndexOf("/");
-  return idx <= 0 ? "" : path.slice(0, idx);
-}
-
 /** 取第一个非空白字符串（空串视为未填，继续向后回落）。 */
 function firstNonEmpty(...vals: Array<string | null | undefined>): string {
   for (const v of vals) {
     if (typeof v === "string" && v.trim() !== "") return v;
   }
   return "";
-}
-
-/** 本地 temp 产物根目录（process.cwd()/temp/usage-test，与 /log 同级）。 */
-function localTempRoot(): string {
-  return path.join(process.cwd(), "temp", "usage-test");
-}
-
-/** 模型名 → 目录名：剥分隔符 / .. 与文件系统特殊字符，避免路径穿越。 */
-function safeModelDir(name: string): string {
-  const s = name.trim().split(/[\\/]/).pop() ?? "";
-  const cleaned = s.replace(/[\x00-\x1f<>:"|?*]/g, "_").slice(0, 80);
-  return cleaned || "unnamed";
-}
-
-/** 把生成的图片 / 视频下载到本地 temp 子目录，返回绝对路径。
- *  产出的内容本地落盘一份（不是只给远端 URL）——桌面端用户能直接在本地
- *  temp 里找到 / 用系统打开。失败不抛错：本地保存只是增强，拿不到就忽略。 */
-async function saveMediaToLocalTemp(
-  kind: "image" | "video",
-  modelName: string,
-  url: string,
-): Promise<string | null> {
-  try {
-    const dir = path.join(localTempRoot(), safeModelDir(modelName));
-    await fs.mkdir(dir, { recursive: true });
-    const fallback = mediaDefaultExt(kind);
-    const ext = mediaExtensionFromUrl(url, fallback);
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const fileName = `usage-${kind}-${stamp}.${ext}`;
-    const dest = path.join(dir, fileName);
-    if (url.startsWith("data:")) {
-      const base64 = url.includes(",") ? (url.split(",")[1] ?? "") : "";
-      await fs.writeFile(dest, Buffer.from(base64, "base64"));
-    } else {
-      const res = await fetch(url, {
-        signal: AbortSignal.timeout(120_000),
-        headers: { Accept: "*/*" },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length === 0) throw new Error("空文件");
-      await fs.writeFile(dest, buf);
-    }
-    return dest;
-  } catch {
-    return null;
-  }
 }
 
 export async function POST(req: NextRequest) {
@@ -307,52 +238,20 @@ export async function POST(req: NextRequest) {
         detail: `响应中未找到视频 URL 或任务 ID：${JSON.stringify(payload).slice(0, 240)}`,
       });
     }
-    const pollBase = `${base}${pathDir(path)}`;
-    // 任务查询地址按提供方习惯有两种形状都试：
-    //   ① REST 风格：{base}{pathDir}/{taskId}（如 /v1/videos/{id}）
-    //   ② Agnes 系：{origin}/agnesapi?video_id={id}&model_name={model}
-    let agnesPollUrl: string | null = null;
-    try {
-      agnesPollUrl = `${new URL(base).origin}/agnesapi?video_id=${encodeURIComponent(taskId)}&model_name=${encodeURIComponent(model)}`;
-    } catch {
-      agnesPollUrl = null;
-    }
-    const pollUrls = [
-      `${pollBase}/${taskId.replace(/^\/+/, "")}`,
-      ...(agnesPollUrl ? [agnesPollUrl] : []),
-    ];
-    const deadline = Date.now() + VIDEO_POLL_TOTAL_MS;
-    while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, VIDEO_POLL_INTERVAL_MS));
-      for (const pollUrl of pollUrls) {
-        let pollPayload: unknown = null;
-        try {
-          const pollRes = await fetch(pollUrl, {
-            headers,
-            signal: AbortSignal.timeout(30_000),
-          });
-          pollPayload = await pollRes.json().catch(() => null);
-          if (pollRes.ok) {
-            const url = extractMediaUrl(pollPayload);
-            if (url) {
-              const savedPath = await saveMediaToLocalTemp("video", name, url);
-              return NextResponse.json({
-                ok: true,
-                detail: "生成成功",
-                videoUrl: url,
-                savedPath,
-                elapsedMs: Date.now() - startedAt,
-              });
-            }
-          }
-        } catch {
-          // 单个地址 / 单次轮询失败不终止 —— 换下一个地址或等下一轮
-        }
-      }
+    const doneUrl = await pollRemoteVideoTask(base, path, model, taskId, headers);
+    if (doneUrl) {
+      const savedPath = await saveMediaToLocalTemp("video", name, doneUrl);
+      return NextResponse.json({
+        ok: true,
+        detail: "生成成功",
+        videoUrl: doneUrl,
+        savedPath,
+        elapsedMs: Date.now() - startedAt,
+      });
     }
     return NextResponse.json({
       ok: true,
-      detail: `任务已提交且仍在生成中（已等待 ${Math.round(VIDEO_POLL_TOTAL_MS / 1000)}s）`,
+      detail: `任务已提交且仍在生成中（已等待 ${Math.round(VIDEO_POLL_TOTAL_MS / 1000)}s）。视频生成通常需要数十秒到几分钟，可点击「继续等待」再次查询，无需重新提交。`,
       taskId,
       pending: true,
       elapsedMs: Date.now() - startedAt,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   USAGE_FIELD_PRESETS,
+  buildVideoPollUrls,
   defaultVideoFields,
   hasUsageFieldKey,
   usageFieldsToJson,
@@ -304,5 +305,44 @@ describe("mediaDefaultExt", () => {
     expect(mediaDefaultExt("video")).toBe("mp4");
     expect(mediaDefaultExt("image")).toBe("png");
     expect(mediaDefaultExt("chat")).toBe("png");
+  });
+});
+
+
+describe("buildVideoPollUrls", () => {
+  it("REST 风格：任务 ID 拼在端点目录后", () => {
+    const { rest, agnes } = buildVideoPollUrls(
+      "https://api.example.com/v1",
+      "/videos/generations",
+      "vid-x",
+      "task_123",
+    );
+    expect(rest).toBe("https://api.example.com/v1/videos/task_123");
+    expect(agnes).toBe(
+      "https://api.example.com/agnesapi?video_id=task_123&model_name=vid-x",
+    );
+  });
+
+  it("对已有查询参数 / 特殊字符的任务 ID 做 URL 编码（agnes 形状）", () => {
+    const { rest, agnes } = buildVideoPollUrls(
+      "https://h.example",
+      "/v1/videos/generations",
+      "m&y=model",
+      "id with space",
+    );
+    expect(rest).toBe("https://h.example/v1/videos/id with space");
+    expect(agnes).toContain(
+      "video_id=id%20with%20space&model_name=m%26y%3Dmodel",
+    );
+  });
+
+  it("baseUrl 尾斜杠与 path 首斜杠不产生双斜杠", () => {
+    const { rest } = buildVideoPollUrls(
+      "https://api.example.com/v1/",
+      "/videos/generations",
+      "vid",
+      "task_1",
+    );
+    expect(rest).toBe("https://api.example.com/v1/videos/task_1");
   });
 });
