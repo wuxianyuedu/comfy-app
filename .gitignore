@@ -85,9 +85,6 @@ playwright-report/
 /src-tauri/static/
 /src-tauri/binaries/
 
-# 依赖修复过程中的旧副本（pnpm 策略拒装导致的残缺 node_modules 备份）
-/node_modules.old/
-
 # 本机应用设置（含 ComfyUI 路径等，local-only）
 /data/
 
