@@ -2,7 +2,7 @@ import "server-only";
 import type { ZodType } from "zod";
 import { llmConfigRepository, remoteModelRepository } from "@/lib/core/repository";
 import { resolveTaskTemperature, splitExtraModels, foldRemoteToLocal, isLoopbackBaseUrl } from "./types";
-import type { LLMConfig, LLMMessage, LLMRequestOptions, LLMProviderType, RemoteModelEntry, RemoteModelKind, TaskType } from "./types";
+import type { LLMConfig, LLMMessage, LLMRequestOptions, LLMProviderType, RemoteModelEntry, RemoteModelKind, TaskType, LLMTool } from "./types";
 
 const ENV_DEFAULTS: LLMConfig = {
   provider: (process.env.LLM_PROVIDER as LLMProviderType) || "local",
@@ -324,4 +324,68 @@ export async function completeLLMStructured<T>(
     throw new Error("LLM 返回非 JSON，无法解析结构化结果");
   }
   return schema.parse(parsed);
+}
+
+/**
+ * Tools 协议补全：调用带 tools 的 /chat/completions 并返回完整的
+ * assistant message（可能含 tool_calls 或纯文本 content）。
+ * 兼容 OpenAI / Ollama / LM Studio / vLLM —— 它们都实现 OpenAI 的
+ * `tools` 参数与 tool_calls 回包结构。
+ */
+export interface CompleteToolsResult {
+  content: string;
+  toolCalls: Array<{
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
+  }>;
+}
+
+export async function completeLLMTools(
+  cfg: LLMConfig,
+  messages: LLMMessage[],
+  tools: LLMTool[],
+): Promise<CompleteToolsResult> {
+  assertModelConfigured(cfg);
+  const res = await upstreamChat(cfg, {
+    model: cfg.model,
+    messages,
+    temperature: cfg.temperature,
+    max_tokens: cfg.maxTokens,
+    stream: false,
+    tools,
+  });
+
+  const json = (await res.json()) as {
+    choices?: Array<{
+      message?: {
+        content?: string | null;
+        tool_calls?: Array<{
+          id?: string;
+          type?: string;
+          function?: { name?: string; arguments?: string };
+        }>;
+      };
+    }>;
+  };
+  const msg = json.choices?.[0]?.message;
+  const content = msg?.content ?? "";
+  const rawCalls = msg?.tool_calls ?? [];
+  const toolCalls = rawCalls
+    .filter(
+      (call) =>
+        call?.id &&
+        call.function?.name &&
+        typeof call.function.arguments === "string",
+    )
+    .map((call) => ({
+      id: call!.id!,
+      type: "function" as const,
+      function: {
+        name: call!.function!.name!,
+        arguments: call!.function!.arguments!,
+      },
+    }));
+
+  return { content, toolCalls };
 }
