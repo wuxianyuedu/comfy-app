@@ -1,3 +1,5 @@
+import { promises as fs } from "fs";
+import path from "path";
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
 import { getLLMConfig } from "@/lib/llm/server";
@@ -6,6 +8,10 @@ import {
   extractMediaUrl,
   extractRemoteTaskId,
 } from "@/lib/workshop/api-channel-shared";
+import {
+  mediaDefaultExt,
+  mediaExtensionFromUrl,
+} from "~/lib/llm/usage-test-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,6 +68,53 @@ function firstNonEmpty(...vals: Array<string | null | undefined>): string {
   return "";
 }
 
+/** 本地 temp 产物根目录（process.cwd()/temp/usage-test，与 /log 同级）。 */
+function localTempRoot(): string {
+  return path.join(process.cwd(), "temp", "usage-test");
+}
+
+/** 模型名 → 目录名：剥分隔符 / .. 与文件系统特殊字符，避免路径穿越。 */
+function safeModelDir(name: string): string {
+  const s = name.trim().split(/[\\/]/).pop() ?? "";
+  const cleaned = s.replace(/[\x00-\x1f<>:"|?*]/g, "_").slice(0, 80);
+  return cleaned || "unnamed";
+}
+
+/** 把生成的图片 / 视频下载到本地 temp 子目录，返回绝对路径。
+ *  产出的内容本地落盘一份（不是只给远端 URL）——桌面端用户能直接在本地
+ *  temp 里找到 / 用系统打开。失败不抛错：本地保存只是增强，拿不到就忽略。 */
+async function saveMediaToLocalTemp(
+  kind: "image" | "video",
+  modelName: string,
+  url: string,
+): Promise<string | null> {
+  try {
+    const dir = path.join(localTempRoot(), safeModelDir(modelName));
+    await fs.mkdir(dir, { recursive: true });
+    const fallback = mediaDefaultExt(kind);
+    const ext = mediaExtensionFromUrl(url, fallback);
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const fileName = `usage-${kind}-${stamp}.${ext}`;
+    const dest = path.join(dir, fileName);
+    if (url.startsWith("data:")) {
+      const base64 = url.includes(",") ? (url.split(",")[1] ?? "") : "";
+      await fs.writeFile(dest, Buffer.from(base64, "base64"));
+    } else {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(120_000),
+        headers: { Accept: "*/*" },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length === 0) throw new Error("空文件");
+      await fs.writeFile(dest, buf);
+    }
+    return dest;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   await getServerUser();
 
@@ -78,7 +131,10 @@ export async function POST(req: NextRequest) {
   if (path !== "" && !path.startsWith("/")) path = `/${path}`;
 
   if (!["chat", "image", "video"].includes(kind)) {
-    return NextResponse.json({ ok: false, detail: `未知用途：${kind || "(空)"}` });
+    return NextResponse.json({
+      ok: false,
+      detail: `未知用途：${kind || "(空)"}`,
+    });
   }
   if (!name) {
     return NextResponse.json({ ok: false, detail: "缺少模型名" });
@@ -118,7 +174,9 @@ export async function POST(req: NextRequest) {
 
   const base = baseUrl.replace(/\/+$/, "");
   const endpoint = `${base}${path}`;
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
   const startedAt = Date.now();
@@ -139,11 +197,15 @@ export async function POST(req: NextRequest) {
         const detail = isRecord(payload)
           ? JSON.stringify(payload).slice(0, 240)
           : `HTTP ${res.status}`;
-        return NextResponse.json({ ok: false, detail: `HTTP ${res.status}：${detail}` });
+        return NextResponse.json({
+          ok: false,
+          detail: `HTTP ${res.status}：${detail}`,
+        });
       }
       const choices: unknown = payload.choices;
       const first: unknown = Array.isArray(choices) ? choices[0] : undefined;
-      const message = isRecord(first) && isRecord(first.message) ? first.message : null;
+      const message =
+        isRecord(first) && isRecord(first.message) ? first.message : null;
       const content: unknown = message?.content;
       const text =
         typeof content === "string"
@@ -187,7 +249,10 @@ export async function POST(req: NextRequest) {
         const detail = isRecord(payload)
           ? JSON.stringify(payload).slice(0, 240)
           : `HTTP ${res.status}`;
-        return NextResponse.json({ ok: false, detail: `HTTP ${res.status}：${detail}` });
+        return NextResponse.json({
+          ok: false,
+          detail: `HTTP ${res.status}：${detail}`,
+        });
       }
       const url = extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
       if (!url) {
@@ -196,10 +261,13 @@ export async function POST(req: NextRequest) {
           detail: `调用成功但未解析到图片 URL / b64 数据：${JSON.stringify(payload).slice(0, 240)}`,
         });
       }
+      /* 产出的图片落到本地 temp 子目录一份（不是只给远端 URL） */
+      const savedPath = await saveMediaToLocalTemp("image", name, url);
       return NextResponse.json({
         ok: true,
         detail: "生成成功",
         imageUrl: url,
+        savedPath,
         elapsedMs: Date.now() - startedAt,
       });
     }
@@ -216,14 +284,19 @@ export async function POST(req: NextRequest) {
       const detail = isRecord(payload)
         ? JSON.stringify(payload).slice(0, 240)
         : `HTTP ${res.status}`;
-      return NextResponse.json({ ok: false, detail: `HTTP ${res.status}：${detail}` });
+      return NextResponse.json({
+        ok: false,
+        detail: `HTTP ${res.status}：${detail}`,
+      });
     }
     const directUrl = extractMediaUrl(payload);
     if (directUrl) {
+      const savedPath = await saveMediaToLocalTemp("video", name, directUrl);
       return NextResponse.json({
         ok: true,
         detail: "生成成功",
         videoUrl: directUrl,
+        savedPath,
         elapsedMs: Date.now() - startedAt,
       });
     }
@@ -262,10 +335,12 @@ export async function POST(req: NextRequest) {
           if (pollRes.ok) {
             const url = extractMediaUrl(pollPayload);
             if (url) {
+              const savedPath = await saveMediaToLocalTemp("video", name, url);
               return NextResponse.json({
                 ok: true,
                 detail: "生成成功",
                 videoUrl: url,
+                savedPath,
                 elapsedMs: Date.now() - startedAt,
               });
             }

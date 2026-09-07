@@ -35,6 +35,7 @@ import {
   looksLikeImage,
   videoModeHidesMedia,
   videoModeMissingHint,
+  usageTestDraftKey,
   type UsageField,
 } from "~/lib/llm/usage-test-config";
 import type {
@@ -83,6 +84,51 @@ interface UsageTestDialogState {
   fields: UsageField[];
   running: boolean;
   result: UsageTestResult | null;
+}
+
+/** 每个条目「实际使用」测试弹窗的草稿快照：不含运行时 running / entry 引用，
+ *  只保留「重开可恢复」的填写内容与最近一次执行结果 / 状态。
+ *  关闭弹窗不丢内容（ISSUE #107）：重开同一 kind + 条目的弹窗时据此恢复。 */
+interface UsageTestDialogSnapshot {
+  kind: UsageTestKind;
+  name: string;
+  baseUrl: string;
+  path: string;
+  apiKey: string;
+  prompt: string;
+  size: string;
+  fields: UsageField[];
+  result: UsageTestResult | null;
+}
+
+/** 模块级草稿仓库：键 = usageTestDraftKey(kind, name)。
+ *  放在模块作用域而非组件 state，是为了「关闭弹窗」也能保留——
+ *  关闭只把组件内的 usageTest 置 null，仓库里的快照仍在，重开即恢复。 */
+const usageTestDrafts = new Map<string, UsageTestDialogSnapshot>();
+
+/** 把当前弹窗状态压成可恢复的快照存进仓库。running 恒不存：关闭再重开不应
+ *  误认为「还在跑」，最近一次执行的结果在 result 里体现即可。 */
+function rememberUsageTestDraft(state: UsageTestDialogState): void {
+  const key = usageTestDraftKey(state.kind, state.entry.name);
+  usageTestDrafts.set(key, {
+    kind: state.kind,
+    name: state.entry.name,
+    baseUrl: state.baseUrl,
+    path: state.path,
+    apiKey: state.apiKey,
+    prompt: state.prompt,
+    size: state.size,
+    fields: state.fields.map((f) => ({ ...f })),
+    result: state.result,
+  });
+}
+
+/** 若存在对应草稿快照则返回，否则返回 null（调用方按默认值新建弹窗）。 */
+function restoreUsageTestDraft(
+  kind: UsageTestKind,
+  name: string,
+): UsageTestDialogSnapshot | null {
+  return usageTestDrafts.get(usageTestDraftKey(kind, name)) ?? null;
 }
 
 /** 读取本地图片文件为 data URL，供图片字段上传（不回服务端，纯前端转码）。 */
@@ -171,6 +217,11 @@ export function SettingsPageView({
    * 路径 / 提示词 / 尺寸 / 额外参数（JSON）均可自定义输入。
    * 图片 / 视频会真实调用生成接口，消耗提供方额度 —— 弹窗内有预告。 */
   const [usageTest, setUsageTest] = useState<UsageTestDialogState | null>(null);
+  /* 弹窗打开期间每次状态变化都存入草稿仓库：这样无论点关闭 / ✕ / 点遮罩，
+   * 关闭后的下次重开都能从仓库恢复已填内容与最近一次执行结果。 */
+  useEffect(() => {
+    if (usageTest) rememberUsageTestDraft(usageTest);
+  }, [usageTest]);
 
   /* ComfyUI 启动日志的滚动跟随是纯视觉偏好，留在视图层 */
   const comfyLogBoxRef = useRef<HTMLDivElement>(null);
@@ -279,20 +330,29 @@ export function SettingsPageView({
         : kind === "video" && /\/videos$/i.test(base)
           ? ""
           : preset.path;
+    /* 若该 kind + 条目此前打开过并填过内容（含上次执行结果 / 状态），
+     * 关闭后重开时恢复，而不是回到默认预填——内容不因关闭而丢。 */
+    const prev = restoreUsageTestDraft(kind, entry.name);
     setUsageTest({
       kind,
       entry,
-      baseUrl: base,
-      path,
-      apiKey: "",
-      prompt: preset.prompt,
-      size: "",
+      baseUrl: prev?.baseUrl ?? base,
+      path: prev?.path ?? path,
+      apiKey: prev?.apiKey ?? "",
+      prompt: prev?.prompt ?? preset.prompt,
+      size: prev?.size ?? "",
       /* 视频接口普遍必填 mode（如 Agnes：text / keyframe / reference）。
        * 这里直接给一行可见、可改的 mode 字段，替代原先手填整段 JSON；
        * 改成 keyframe 再补一行 first_frame 图即可走首帧模式。 */
-      fields: kind === "video" ? defaultVideoFields() : [],
+      fields:
+        prev?.fields && prev.fields.length > 0
+          ? prev.fields.map((f) => ({ ...f }))
+          : kind === "video"
+            ? defaultVideoFields()
+            : [],
+      /* 关闭再重开不延续「运行中」——从草稿恢复的是已填内容 + 最近一次结果 */
       running: false,
-      result: null,
+      result: prev?.result ?? null,
     });
   }
 
@@ -780,9 +840,7 @@ export function SettingsPageView({
                         {c.ollamaModels.map((model) => {
                           const checked =
                             model.name === c.drafts.llm.model ||
-                            c.drafts.llm.localCandidates.includes(
-                              model.name,
-                            );
+                            c.drafts.llm.localCandidates.includes(model.name);
                           return (
                             <button
                               key={model.name}
@@ -1352,10 +1410,7 @@ export function SettingsPageView({
                       {usageFieldsToSend(usageTest).map((f) => {
                         const i = usageTest.fields.indexOf(f);
                         return (
-                          <div
-                            key={i}
-                            className="flex flex-col gap-1.5"
-                          >
+                          <div key={i} className="flex flex-col gap-1.5">
                             <div className="flex gap-1.5">
                               <input
                                 type="text"
@@ -1458,8 +1513,8 @@ export function SettingsPageView({
                       usageTest.kind === "video") && (
                       <div className="mb-3">
                         <p className="text-muted-foreground mb-1.5 text-[11px]">
-                          固定名称字段可一键添加，无需手输拼错
-                          （images / first_frame / seed 等）：
+                          固定名称字段可一键添加，无需手输拼错 （images /
+                          first_frame / seed 等）：
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                           {USAGE_FIELD_PRESETS.map((preset) => {
@@ -1540,6 +1595,17 @@ export function SettingsPageView({
                               >
                                 打开生成的视频
                               </button>
+                            )}
+                            {usageTest.result.savedPath && (
+                              <p
+                                className="border-border/50 bg-surface-1 text-muted-foreground mt-2 rounded-lg border px-3 py-2 text-[11px] break-all"
+                                title="本次产出的内容已在本地 temp 子目录保存一份"
+                              >
+                                已保存到本地：
+                                <span className="font-mono">
+                                  {usageTest.result.savedPath}
+                                </span>
+                              </p>
                             )}
                             {usageTest.result.pending &&
                               usageTest.result.taskId && (
