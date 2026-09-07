@@ -1,8 +1,18 @@
 "use client";
 /* Extracted small presentational chips — originally inside WorkflowCanvasEditor.tsx. */
 import { useMemo } from "react";
-import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
-export function RequiredSummary({ io }: { io: WorkflowIOMap | null }) {
+import {
+  resolveEntryRequired,
+  type WorkflowIOMap,
+} from "@/components/studio/shared/workflow-io";
+export function RequiredSummary({
+  io,
+  mode,
+}: {
+  io: WorkflowIOMap | null;
+  /** 多模式：传入当前模式码时按该模式解析 required（显示该模式必填数）。 */
+  mode?: string | null;
+}) {
   const counts = useMemo(() => {
     let required = 0;
     let optional = 0;
@@ -10,11 +20,11 @@ export function RequiredSummary({ io }: { io: WorkflowIOMap | null }) {
     for (const e of Object.values(io)) {
       if (e?.direction !== "input") continue;
       if (e.kind !== "widget") continue;
-      if (e.required) required++;
+      if (resolveEntryRequired(e, mode)) required++;
       else optional++;
     }
     return { required, optional };
-  }, [io]);
+  }, [io, mode]);
   return (
     <span className="ml-2 inline-flex items-center gap-1.5">
       <span className="rounded border border-red-400/40 bg-red-500/15 px-1.5 py-px font-mono text-[10px] text-red-300">
