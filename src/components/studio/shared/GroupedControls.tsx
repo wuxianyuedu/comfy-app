@@ -29,6 +29,9 @@ export function GroupedControls({
   compact,
   disabled,
   onRequiredChange,
+  mode,
+  visibilityMode,
+  onVisibilityChange,
 }: {
   dimension: DimensionGroup | null;
   video: VideoGroup | null;
@@ -39,6 +42,11 @@ export function GroupedControls({
   disabled?: boolean;
   /** 编辑态：组合行替代了独立参数行，把必填/可选切换透传进组合卡。 */
   onRequiredChange?: (ioKey: string, required: boolean) => void;
+  /** 多模式作者态：透传给组合卡按该模式解析必填/可见性（与独立参数行一致）。 */
+  mode?: string | null;
+  /** IO 编辑态：行内 👁 切换参数在 visibilityMode 模式下的可见性。 */
+  visibilityMode?: string | null;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
 }) {
   if (!dimension && !video) return null;
   const count = (dimension ? 1 : 0) + (video ? 1 : 0);
@@ -70,6 +78,9 @@ export function GroupedControls({
             disabled={disabled}
             workflowId={workflowId}
             onRequiredChange={onRequiredChange}
+            mode={mode}
+            visibilityMode={visibilityMode}
+            onVisibilityChange={onVisibilityChange}
           />
         )}
         {video && (
