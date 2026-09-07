@@ -24,6 +24,7 @@ import { DynamicWorkflowForm } from "@/components/studio/shared/DynamicWorkflowF
 import {
   collectModeCodes,
   defaultInputValues,
+  resolveEntrySeedMode,
   splitWorkflowIO,
   type WorkflowIOMap,
 } from "@/components/studio/shared/workflow-io";
@@ -111,9 +112,25 @@ export function WorkflowIoPreviewPanel({
     (key: string, label: string) => ioApi.getState().setIOLabel(key, label),
     [ioApi]
   );
-  const toggleIORequired = useCallback(
-    (key: string) => ioApi.getState().toggleIORequired(key),
-    [ioApi]
+  /* 「必填 / 可选」切换：按当前模式写入覆盖（modes[mode].required）。
+   *  仅 widget 输入可调必填（与服务端富化迁移语义一致）。 */
+  const setRequiredForMode = useCallback(
+    (key: string, required: boolean) => {
+      if (!effectiveMode) return;
+      if (workflowIO[key]?.kind !== "widget") return;
+      ioApi.getState().setIOModeOverride(key, effectiveMode, { required });
+    },
+    [effectiveMode, workflowIO, ioApi]
+  );
+
+  /* seed「控件后行为」（固定值 / 递增 / 递减 / 随机）：按当前模式写入覆盖
+   * （modes[mode].seedMode），使不同模式可有独立的 seed 行为。 */
+  const setSeedModeForMode = useCallback(
+    (key: string, seedBehavior: string) => {
+      if (!effectiveMode) return;
+      ioApi.getState().setIOModeOverride(key, effectiveMode, { seedMode: seedBehavior });
+    },
+    [effectiveMode, ioApi]
   );
   const reorderIO = useCallback(
     (fromKey: string, beforeKey: string | null) =>
@@ -274,16 +291,15 @@ export function WorkflowIoPreviewPanel({
                 seedModes={(() => {
                   const map: Record<string, string> = {};
                   for (const entry of editableEntries) {
-                    if (entry.seedMode) map[entry.ioKey] = entry.seedMode;
+                    const resolved = resolveEntrySeedMode(entry, effectiveMode);
+                    if (resolved) map[entry.ioKey] = resolved;
                   }
                   return map;
                 })()}
-                onSeedModeChange={(ioKey, mode) =>
-                  ioApi.getState().setIOSeedMode(ioKey, mode)
-                }
+                onSeedModeChange={setSeedModeForMode}
                 onLabelChange={setIOLabel}
-                /* 必填 / 可选 toggle：写进 workflowIO 条目，随整体 PATCH 落库。 */
-                onRequiredChange={toggleIORequired}
+                /* 必填 / 可选 toggle：按当前模式写覆盖（modes[mode].required）。 */
+                onRequiredChange={setRequiredForMode}
                 /* 每行 👁：该参数在当前模式下是否可见（按模式分别保留）。 */
                 visibilityMode={effectiveMode}
                 onVisibilityChange={toggleModeVisibility}
@@ -296,7 +312,7 @@ export function WorkflowIoPreviewPanel({
         </div>
         <div className="shrink-0 border-t border-white/6 px-3 py-1.5 text-[10px] text-gray-500">
           <span className="opacity-80">点击变量名称即可重命名；👁 按当前模式保留可见性；「必填 / 可选」切换是否在运行时强校验。</span>
-          <RequiredSummary io={previewIO} />
+          <RequiredSummary io={previewIO} mode={effectiveMode} />
         </div>
       </div>
     </div>

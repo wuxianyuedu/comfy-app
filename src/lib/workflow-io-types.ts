@@ -42,6 +42,11 @@ export interface WorkflowIOModeOverride {
   defaultValue?: unknown;
   /** 该模式下是否显示此参数；undefined = 显示（默认可见）。 */
   visible?: boolean;
+  /** 该模式下是否标记为必填；undefined = 不覆盖，回退到条目级 required。 */
+  required?: boolean;
+  /** 该模式下 seed 类参数的「控件后行为」（fixed / increment / decrement /
+   *  random）；undefined = 不覆盖，回退到条目级 seedMode。 */
+  seedMode?: string;
 }
 
 export type WorkflowIOMap = Record<string, WorkflowIOEntry>;
@@ -73,6 +78,39 @@ export function resolveEntryDefault(
   }
   if (entry.value !== undefined) return entry.value;
   return entry.defaultValue;
+}
+
+/** 参数 required 的两级回退：模式覆盖值 → 条目级 required。
+ *
+ *  与 resolveEntryDefault 同语义——模式覆盖只写在 modes[mode].required，
+ *  未设置该字段的模式回退到条目级（工作流库/画布等未传 mode 的消费方
+ *  仍按旧行为读取 entry.required）。未开启模式（mode 为空）时只读条目级。 */
+export function resolveEntryRequired(
+  entry: WorkflowIOEntry | undefined | null,
+  mode?: string | null
+): boolean | undefined {
+  if (!entry || typeof entry !== "object") return undefined;
+  if (mode) {
+    const modeRequired = entry.modes?.[mode]?.required;
+    if (modeRequired !== undefined) return modeRequired;
+  }
+  return entry.required;
+}
+
+/** 参数 seedMode 的两级回退：模式覆盖值 → 条目级 seedMode。
+ *
+ *  与 resolveEntryRequired 同语义，按模式解析「控件后行为」，
+ *  undefined = 该参数不是 seed / 该模式无覆盖，回退条目级 seedMode。 */
+export function resolveEntrySeedMode(
+  entry: WorkflowIOEntry | undefined | null,
+  mode?: string | null
+): string | undefined {
+  if (!entry || typeof entry !== "object") return undefined;
+  if (mode) {
+    const modeSeed = entry.modes?.[mode]?.seedMode;
+    if (modeSeed !== undefined) return modeSeed;
+  }
+  return entry.seedMode;
 }
 
 /** 收集整张 IO 表里出现过的全部模式码（去重、保持稳定顺序）。 */

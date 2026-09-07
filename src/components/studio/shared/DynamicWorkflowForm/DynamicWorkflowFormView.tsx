@@ -7,7 +7,11 @@ import type { ReactNode } from "react";
 
 import { GroupedControls } from "~/components/studio/shared/GroupedControls";
 import { WirePortRows } from "~/components/studio/shared/WorkflowFormControls";
-import type { EnrichedWidget } from "~/components/studio/shared/workflow-io";
+import {
+  resolveEntryRequired,
+  resolveEntrySeedMode,
+  type EnrichedWidget,
+} from "~/components/studio/shared/workflow-io";
 import type { DynamicWorkflowFormController } from "./hooks/use-dynamic-workflow-form";
 import { SectionHeader } from "./SectionHeader";
 import { EmptyStateHint } from "./sections/EmptyStateHint";
@@ -30,6 +34,10 @@ interface DynamicWorkflowFormViewProps {
   onRequiredChange?: (ioKey: string, required: boolean) => void;
   /** IO 编辑态：行内 👁 切换参数在 visibilityMode 模式下的可见性。 */
   visibilityMode?: string | null;
+  /** 多模式：当前模式码。传入后 renderRow 按该模式解析 required / seedMode
+   *  （resolveEntryRequired / resolveEntrySeedMode），使行内「必填/可选」与
+   *  seed 递增递减显示的是该模式的覆盖值。不传 = 按条目全局值（兼容旧场景）。 */
+  mode?: string | null;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
   onReorder?: (fromKey: string, beforeKey: string | null) => void;
 }
@@ -49,6 +57,7 @@ export function DynamicWorkflowFormView({
   visibilityMode,
   onVisibilityChange,
   onReorder,
+  mode,
 }: DynamicWorkflowFormViewProps) {
   if (loading) return <LoadingSkeleton />;
   if (controller.isEmpty) return <EmptyStateHint emptyHint={emptyHint} />;
@@ -78,10 +87,21 @@ export function DynamicWorkflowFormView({
   /* ioLabel() 需要全量 pin 才能在标签撞名时回退到原始 name。 */
   const allPins = [...inputs, ...outputs];
 
-  const renderRow = (entry: EnrichedWidget, withHandle: boolean) => (
+  const renderRow = (entry: EnrichedWidget, withHandle: boolean) => {
+    /* 多模式：行内「必填 / 可选」与 seed「控件后行为」按当前 mode 解析，
+     *  显示模式覆盖值而非条目全局值。mode 为空时 rowEntry === entry（旧行为）。 */
+    const rowEntry: EnrichedWidget =
+      mode && (entry.modes?.[mode]?.required !== undefined || entry.modes?.[mode]?.seedMode !== undefined)
+        ? {
+            ...entry,
+            required: resolveEntryRequired(entry, mode),
+            seedMode: resolveEntrySeedMode(entry, mode),
+          }
+        : entry;
+    return (
     <WidgetInputRow
-      key={entry.ioKey}
-      entry={entry}
+      key={rowEntry.ioKey}
+      entry={rowEntry}
       allPins={allPins}
       value={values[entry.ioKey]}
       compact={compact}
@@ -109,10 +129,11 @@ export function DynamicWorkflowFormView({
           ? (visible: boolean) => onVisibilityChange(entry.ioKey, visible)
           : undefined
       }
-      dimmed={!!visibilityMode && entry.modes?.[visibilityMode]?.visible === false}
+      dimmed={!!visibilityMode && rowEntry.modes?.[visibilityMode]?.visible === false}
       withHandle={withHandle}
     />
-  );
+    );
+  };
 
   return (
     <div className={compact ? "space-y-0" : "space-y-3"}>

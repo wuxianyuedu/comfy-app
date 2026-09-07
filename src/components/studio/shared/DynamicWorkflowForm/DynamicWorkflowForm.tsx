@@ -36,6 +36,7 @@ export function DynamicWorkflowForm(props: DynamicWorkflowFormProps) {
       visibilityMode={props.visibilityMode}
       onVisibilityChange={props.onVisibilityChange}
       onReorder={props.onReorder}
+      mode={props.mode}
     />
   );
 }
