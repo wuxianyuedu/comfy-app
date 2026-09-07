@@ -18,6 +18,7 @@ import {
   stopDrizzleStudio,
   DRIZZLE_STUDIO_DEFAULT_PORT,
 } from "@/lib/drizzle-studio/lifecycle";
+import { openUrlInBrowser } from "@/lib/open-in-browser";
 
 export const settingRouter = createTRPCRouter({
   /** GET /api/settings */
@@ -125,4 +126,11 @@ export const settingRouter = createTRPCRouter({
   dbStudioOpen: authedProcedure.mutation(async () => {
     return openDrizzleStudio();
   }),
+
+  /** 用系统默认浏览器打开任意 http(s) 地址（桌面壳内 target=_blank 外链
+   *  打不开，须走 Node 端系统浏览器命令，与「打开查看」语义一致）。
+   *  用于生成结果的视频/图片等远程资源在默认浏览器里打开播放。 */
+  openExternal: authedProcedure
+    .input(z.object({ url: z.string().url() }))
+    .mutation(async ({ input }) => openUrlInBrowser(input.url)),
 });
