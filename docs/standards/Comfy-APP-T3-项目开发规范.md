@@ -64,7 +64,7 @@ lib（纯函数） ← 任意层
 - schema 变更走 `prisma migrate dev` 生成迁移；生产部署走 `prisma migrate deploy`。
 - 查询热点（外键、过滤列）必须建立索引：`@@index` / `@@unique`。
 - **禁止 N+1**：repository 层循环内调用 `prisma.findMany` 必须改为批量查询 + 内存映射。
-- 敏感字段（密码哈希、token）禁止 select 到客户端；`bcryptjs` 哈希仅在服务端使用。
+- 敏感字段（密码哈希、token）禁止 select 到客户端；密码哈希由 better-auth 内置在服务端处理。
 
 ### 2.4 better-auth 会话
 
