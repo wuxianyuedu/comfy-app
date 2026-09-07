@@ -371,6 +371,103 @@ function Sync-NextCache {
   }
 }
 
+# ── 预检 0.5：pnpm 版本一致性检查 ──
+# package.json 的 packageManager 字段声明了本项目所需的 pnpm 版本（如
+# pnpm@11.25.0）。若本机 pnpm 版本不匹配（常见于拉取代码后团队升级了 pnpm
+# 版本，或本机直接安装的全局 pnpm 而非 corepack 管理），会影响 pnpm install
+# 与 dev 脚本的执行语义。此函数在启动前比对两者：
+#   - 一致 → OK，无需处理（corepack 管理的 pnpm 会自动跟随 packageManager）；
+#   - 不一致 → 若 corepack 可用则自动 prepare+activate 切换，成功 OK；
+#     失败仅 WARN 并透出到启动页（不阻断启动，避免装好依赖却被版本提示卡住）。
+function Test-PnpmVersion {
+  $pkgPath = Join-Path $root "package.json"
+  if (-not (Test-Path -LiteralPath $pkgPath)) {
+    Write-Log "未找到 package.json，跳过 pnpm 版本检查" -Level INFO
+    return
+  }
+  $expected = ""
+  try {
+    $pkg = Get-Content -Raw -LiteralPath $pkgPath | ConvertFrom-Json
+    if ($pkg.packageManager -and $pkg.packageManager -match '^pnpm@(\S+)$') {
+      $expected = $Matches[1]
+    }
+  } catch {
+    Write-Log "解析 package.json 的 packageManager 失败：$($_.Exception.Message)" -Level WARN
+    return
+  }
+  if (-not $expected) {
+    Write-Log "package.json 未声明 packageManager 的 pnpm 版本，跳过一致性检查" -Level INFO
+    return
+  }
+
+  # 获取本机实际 pnpm 版本
+  $actual = ""
+  try {
+    $pnpmCmd = Get-Command pnpm -ErrorAction SilentlyContinue
+    if (-not $pnpmCmd) {
+      Write-Log "未找到 pnpm 命令，请先执行 corepack enable（或 docs/guide-non-developer.md 4.2 双击 run-local.ps1）" -Level WARN
+      return
+    }
+    $actual = ((& pnpm -v 2>$null | Select-Object -First 1).Trim())
+  } catch {
+    Write-Log "获取 pnpm 版本失败：$($_.Exception.Message)" -Level WARN
+    return
+  }
+  if (-not $actual) {
+    Write-Log "无法获取 pnpm 版本，跳过一致性检查" -Level WARN
+    return
+  }
+
+  # 比较版本：忽略可能的 v 前缀
+  $actualClean = $actual.TrimStart('v')
+  $expectedClean = $expected.TrimStart('v')
+  if ($actualClean -eq $expectedClean) {
+    Write-Log ("pnpm 版本匹配：{0}（packageManager: pnpm@{1}）" -f $actual, $expected) -Level OK
+    return
+  }
+
+  Write-Log ("pnpm 版本不匹配：本机 {0}，package.json 要求 {1}" -f $actual, $expected) -Level WARN
+
+  # 尝试用 corepack 自动对齐
+  $corepackCmd = Get-Command corepack -ErrorAction SilentlyContinue
+  if ($corepackCmd) {
+    Write-Log "检测到 corepack，尝试自动切换到要求的 pnpm 版本..." -Level STEP
+    $cpLog = Join-Path $logDir "corepack-prepare.log"
+    try {
+      # corepack prepare 会下载对应版本并激活为默认（需联网一次）
+      $res = & corepack prepare "pnpm@$expected" --activate 2>&1
+      $cpCode = $LASTEXITCODE
+      if ($res) { Add-Content -LiteralPath $cpLog -Value (($res | Out-String).Trim()) -Encoding utf8 -ErrorAction SilentlyContinue }
+      if ($cpCode -eq 0) {
+        # 对齐后重新验证
+        $newVer = ((& pnpm -v 2>$null | Select-Object -First 1).Trim()).TrimStart('v')
+        if ($newVer -eq $expectedClean) {
+          Write-Log ("corepack 已自动切换 pnpm 至 {0}" -f $newVer) -Level OK
+          return
+        }
+        Write-Log ("corepack prepare 执行后 pnpm 仍为 {0}，切换可能未生效" -f $newVer) -Level WARN
+      } else {
+        Write-Log ("corepack prepare 失败（exit=$cpCode），详见 $cpLog" -Level WARN)
+      }
+    } catch {
+      Write-Log "corepack 自动切换异常：$($_.Exception.Message)" -Level WARN
+    }
+  } else {
+    Write-Log "未检测到 corepack（npm 自带），无法自动切换 pnpm 版本" -Level WARN
+  }
+
+  # 自动对齐失败：给出手动指引（不阻断启动）
+  Write-Log "手动对齐方法（参考 docs/guides/sync-after-pull.md）：" -Level WARN
+  Write-Log "  corepack enable && corepack prepare pnpm@$expected --activate" -Level WARN
+  # 透出到启动页 banner（复用 stale_shell 字段——splash.html 读取它做可见提醒）
+  $pnpmTip = ("pnpm 版本不匹配（本机 {0}，项目要求 {1}）；请执行 corepack enable && corepack prepare pnpm@{2} --activate 后重启应用" -f $actual, $expected, $expected)
+  if ($script:ShellStaleMsg) {
+    $script:ShellStaleMsg = $script:ShellStaleMsg + "；" + $pnpmTip
+  } else {
+    $script:ShellStaleMsg = $pnpmTip
+  }
+}
+
 # ── 预检 1：node_modules 健康检查 ──
 # pnpm 策略拒装 / 中断安装会留下「目录存在但不可用」的残缺依赖（缺
 # .modules.yaml 或 .bin/next）。直接启动 dev server 会 180 秒空等或触发
@@ -595,6 +692,7 @@ try {
     Reset-DevPorts
     Write-LaunchStatus -Phase "cache" -Progress 0.12 -Message "端口已就绪，处理编译缓存与依赖预检…"
     Sync-NextCache
+    Test-PnpmVersion
     Test-DevDependencies
     Write-LaunchStatus -Phase "dev-server-starting" -Progress 0.2 -Message "正在启动本地服务（Next.js dev server）…"
 
@@ -663,6 +761,7 @@ try {
   } else {
     Reset-DevPorts
     Sync-NextCache
+    Test-PnpmVersion
     Test-DevDependencies
     Sync-DatabaseSchema
     $h = New-JobObject
