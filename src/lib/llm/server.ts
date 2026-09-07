@@ -1,7 +1,7 @@
 import "server-only";
 import type { ZodType } from "zod";
 import { llmConfigRepository, remoteModelRepository } from "@/lib/core/repository";
-import { resolveTaskTemperature, splitExtraModels } from "./types";
+import { resolveTaskTemperature, splitExtraModels, foldRemoteToLocal, isLoopbackBaseUrl } from "./types";
 import type { LLMConfig, LLMMessage, LLMRequestOptions, LLMProviderType, RemoteModelEntry, RemoteModelKind, TaskType } from "./types";
 
 const ENV_DEFAULTS: LLMConfig = {
@@ -102,9 +102,13 @@ export async function ensureRemoteStorageMigrated(): Promise<void> {
   if (!Array.isArray(raw)) return;
   const split = splitExtraModels(raw);
   if (split.remoteEntries.length === 0) return; // 无遗留远端条目，无需迁移
-  await remoteModelRepository.replaceAll(split.remoteEntries);
+  // 迁移前先做本地/远端归并：历史对象形态里指向本机回环、且不带 apiKey 的条目是
+  // 「误存的本地 ollama」，应折回本地候选，绝不能搬进 remoteModel 表当远端 —— 否则
+  // 工坊下拉会把本机 ollama 挂成「远端」小标。
+  const folded = foldRemoteToLocal(split.remoteEntries, split.localNames, row.baseUrl);
+  await remoteModelRepository.replaceAll(folded.remoteEntries);
   await llmConfigRepository.upsertSingleton({
-    extraModels: split.localNames,
+    extraModels: folded.localNames,
   });
 }
 
@@ -122,16 +126,21 @@ export async function getConfigForClient() {
   if (row) {
     const split = splitExtraModels((row as Record<string, unknown>).extraModels);
     const remoteRows = await remoteModelRepository.list();
-    extra = [
-      ...split.localNames,
-      ...remoteRows.map((r) => ({
-        name: r.name,
-        baseUrl: r.baseUrl,
-        apiKey: r.apiKey,
-        kind: (r.kind as RemoteModelKind) ?? null,
-      })),
-      ...split.remoteEntries,
-    ];
+    const tableEntries: RemoteModelEntry[] = remoteRows.map((r) => ({
+      name: r.name,
+      baseUrl: r.baseUrl,
+      apiKey: r.apiKey,
+      kind: (r.kind as RemoteModelKind) ?? null,
+    }));
+    // 读取层兜底归并：即便 remoteModel 表里还残留误存的本地 ollama（本地回环 +
+    // 无 apiKey，历史迁移/误配置带入），也折回本地候选字符串下发 —— 工坊下拉与设置页
+    // 因此不会再把它挂「远端」小标。
+    const folded = foldRemoteToLocal(
+      [...tableEntries, ...split.remoteEntries],
+      split.localNames,
+      row.baseUrl,
+    );
+    extra = [...folded.localNames, ...folded.remoteEntries];
   }
   return { ...cfg, extraModels: extra };
 }
@@ -145,11 +154,6 @@ function headersFor(cfg: LLMConfig): Record<string, string> {
 }
 
 
-/** 判断目标服务是否为本地回环（localhost / 127.x / [::1]） */
-function isLoopback(url: string): boolean {
-  return /^(https?:\/\/)?(localhost|127\.|\[::1\])/i.test(url.trim());
-}
-
 /** 把 Node fetch 的网络层 TypeError（如 `fetch failed`）翻译成可操作的人话。
  *  历史 bug：Ollama 未启动 / 远端不可达时，用户只看到一句 `fetch failed`，
  *  既不知道是连不上本地 Ollama 还是远端 Key 无效，也没提示怎么处理。 */
@@ -157,9 +161,12 @@ function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
   if (!(e instanceof TypeError)) return e instanceof Error ? e.message : "网络请求失败";
   const cause = (e as { cause?: unknown }).cause;
   const causeMsg =
-    cause instanceof Error ? String(cause.message) : cause ? String(cause) : "";
+    cause instanceof Error ? String(cause.message)
+      : cause != null
+        ? typeof cause === "string" ? cause : JSON.stringify(cause) ?? ""
+        : "";
   const base = cfg.baseUrl.replace(/\/$/, "");
-  const local = cfg.provider === "local" || isLoopback(base);
+  const local = cfg.provider === "local" || isLoopbackBaseUrl(base);
   // 常见 Node undici 底层错误码
   if (/ECONNREFUSED|ECONNRESET/.test(causeMsg)) {
     return local

@@ -5,6 +5,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   extraModelName,
+  foldRemoteToLocal,
+  isLoopbackBaseUrl,
+  isMisplacedLocalOllama,
   normalizeExtraModels,
   resolveTaskTemperature,
   TASK_TYPES,
@@ -91,5 +94,88 @@ describe("extraModelName", () => {
   it("兼容字符串与条目对象两种形状", () => {
     expect(extraModelName("gpt-4o")).toBe("gpt-4o");
     expect(extraModelName({ name: "gpt-4o", apiKey: "sk" })).toBe("gpt-4o");
+  });
+});
+
+describe("isLoopbackBaseUrl", () => {
+  it("识别 localhost / 127.x / [::1] 回环地址", () => {
+    expect(isLoopbackBaseUrl("http://localhost:11434/v1")).toBe(true);
+    expect(isLoopbackBaseUrl("http://127.0.0.1:11434")).toBe(true);
+    expect(isLoopbackBaseUrl("localhost:11434")).toBe(true);
+    expect(isLoopbackBaseUrl("https://[::1]:8080/v1")).toBe(true);
+  });
+  it("非回环地址 / 空串判否", () => {
+    expect(isLoopbackBaseUrl("https://api.openai.com/v1")).toBe(false);
+    expect(isLoopbackBaseUrl("https://192.168.1.10/v1")).toBe(false);
+    expect(isLoopbackBaseUrl("")).toBe(false);
+    expect(isLoopbackBaseUrl(null as unknown as string)).toBe(false);
+  });
+});
+
+describe("isMisplacedLocalOllama", () => {
+  it("无 apiKey 且指向本机回环 → 判定为误存的本地 ollama", () => {
+    expect(
+      isMisplacedLocalOllama(
+        { baseUrl: "http://localhost:11434/v1", apiKey: null },
+        "http://localhost:11434/v1",
+      ),
+    ).toBe(true);
+  });
+  it("无 apiKey、baseUrl 空 → 回落到全局 llmConfig.baseUrl 判定", () => {
+    expect(
+      isMisplacedLocalOllama(
+        { baseUrl: null, apiKey: null },
+        "http://localhost:11434/v1",
+      ),
+    ).toBe(true);
+    expect(
+      isMisplacedLocalOllama(
+        { baseUrl: null, apiKey: null },
+        "https://api.openai.com/v1",
+      ),
+    ).toBe(false);
+  });
+  it("带独立 apiKey 或指向非回环地址 → 真远端，不判为本地", () => {
+    expect(
+      isMisplacedLocalOllama(
+        { baseUrl: "https://x/v1", apiKey: "sk-1" },
+        "http://localhost:11434/v1",
+      ),
+    ).toBe(false);
+    expect(
+      isMisplacedLocalOllama(
+        { baseUrl: "https://huggingface-infer/v1", apiKey: null },
+        "http://localhost:11434/v1",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("foldRemoteToLocal", () => {
+  it("误存的本地 ollama 折回本地候选；真远端保留在远端组", () => {
+    const folded = foldRemoteToLocal(
+      [
+        { name: "qwen3:14b", baseUrl: "http://localhost:11434/v1", apiKey: null, kind: "chat" },
+        { name: "llama3", baseUrl: null, apiKey: null, kind: null },
+        { name: "gpt-4o", baseUrl: "https://api.openai.com/v1", apiKey: "sk-1", kind: "chat" },
+      ],
+      ["qwen2.5"],
+      "http://localhost:11434/v1",
+    );
+    // 本机回环且无密钥的 ollama → 进本地候选（并去重，不重复已有本地候选）
+    expect(folded.localNames).toContain("qwen3:14b");
+    expect(folded.localNames).toContain("llama3");
+    // 真远端（带密钥、非回环）→ 仍留在远端组
+    expect(folded.remoteEntries.map((e) => e.name)).toEqual(["gpt-4o"]);
+  });
+
+  it("已有同名本地候选时不重复追加", () => {
+    const folded = foldRemoteToLocal(
+      [{ name: "qwen3:14b", baseUrl: "http://localhost:11434/v1", apiKey: null, kind: "chat" }],
+      ["qwen3:14b"],
+      "http://localhost:11434/v1",
+    );
+    expect(folded.localNames.filter((n) => n === "qwen3:14b").length).toBe(1);
+    expect(folded.remoteEntries).toEqual([]);
   });
 });
