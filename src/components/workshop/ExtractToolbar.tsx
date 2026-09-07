@@ -28,8 +28,6 @@ interface ExtractToolbarProps {
   /** 无剧本文本等情况下禁用提取(导入仍可用) */
   extractDisabled?: boolean;
   extractDisabledReason?: string;
-  /** 递增时让下拉重新拉取本地/远端模型清单（设置保存后） */
-  refreshKey?: number;
 }
 
 /** 剧本提取区块：分组模型下拉（工具/本地/远端）+ 提取按钮 + 外部导入。
@@ -47,7 +45,6 @@ export function ExtractToolbar({
   errorText,
   extractDisabled = false,
   extractDisabledReason,
-  refreshKey = 0,
 }: ExtractToolbarProps) {
   const fileRef = React.useRef<HTMLInputElement>(null);
 
@@ -59,7 +56,7 @@ export function ExtractToolbar({
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <ExtractModelSelect value={channelValue} onChange={onChannelValueChange} refreshKey={refreshKey} />
+        <ExtractModelSelect value={channelValue} onChange={onChannelValueChange} />
         <button
           type="button"
           onClick={onExtract}
