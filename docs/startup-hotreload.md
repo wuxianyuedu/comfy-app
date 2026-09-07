@@ -87,3 +87,31 @@
 > 才生效——它们共享同一份源码。
 
 `tools\` 目录按用途归类（dev 构建 vs standalone 构建）见 [`../tools/README.md`](../tools/README.md)。
+
+---
+
+## 6. 运行期「本地更新需重启」检测
+
+`start-tauri.exe`（prebuilt）开着、且 dev server 在跑时，前端源码 `src/` 的改动由
+dev server HMR 自动生效，无需打扰；但上表第 2 列那批「**改完当前窗口不生效、得重启**」
+的文件不会热更。为让用户第一时间知道「本地更新了但当前界面是旧的」，前端在运行期
+轮询 `/api/update-check`：
+
+| 检测分组 | 覆盖文件 | 需用户动作 |
+|---|---|---|
+| 重编壳（`recompile`） | `src-tauri/**`、`tauri.conf.json`、`public/splash.html` | `tools\build\build-tauri-release.ps1` 重编壳后重启 |
+| 重启应用（`restart`） | `.env`、`pnpm-workspace.yaml`、`package.json`、`pnpm-lock.yaml` | 重启应用 / dev server |
+
+机制与范围：
+- **基线**：`/api/update-check` 首次被请求时把上述文件扫描成模块级基线（近似 dev
+  server 启动时刻），之后每次 GET 与当前状态比对，回报「哪一组、具体哪些文件」在
+  运行期被改过。dev server 重启后基线自然重置，重启后不再误报。
+- **触发**：运行时轮询（默认开启，可关）+ 快捷键 `Ctrl+Shift+U` 手动检测一次。
+- **形态**：应用内 toast（走项目 `ToastProvider`），安静、不抢焦点，不做系统级弹窗。
+- **开关**：设置页「外观主题 → 本地更新检测」卡片，纯前端偏好，存 `localStorage`。
+- **实现**：后端路由 `src/app/api/update-check/route.ts`；前端网络收口
+  `src/lib/update-check-client.ts`；控制器
+  `src/components/update-check/hooks/use-update-check.ts`；挂载
+  `src/components/update-check/UpdateCheckProvider.tsx`（根布局挂一次）。
+- 递归扫描 `src-tauri` 时跳过 `target` / `node_modules` / `.next`，重编壳产生的产物
+  不会误触发。
