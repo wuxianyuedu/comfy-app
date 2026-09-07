@@ -55,6 +55,8 @@ pnpm install
 本仓库钉死 `pnpm@11.25.0`。若 `pnpm -v` 版本不一致或命令报错，用 Node 自带的
 corepack 对齐（corepack 会读取 `package.json` 的 `packageManager` 字段自动切换）：
 
+> **启动器已自动处理**：从 2026-09 起，`tools/start/start-tauri.ps1`、`tools/start/start-web.ps1`、`tools/start/run-local.ps1` 启动时都会自动检测 pnpm 实际版本与 `package.json` 声明是否一致；不一致时若 corepack 可用会先自动 `corepack prepare` 对齐，失败才需要你手动执行下面的命令。
+
 ```powershell
 corepack enable
 corepack prepare pnpm@11.25.0 --activate
@@ -67,13 +69,13 @@ corepack prepare pnpm@11.25.0 --activate
 你不需要敲上面的命令，按顺序做即可：
 
 1. **拉取更新后，先关掉所有正在运行的本项目窗口**（黑色命令行窗口、应用窗口），
-   然后**双击一次 `run-local.bat`**。它会自动补装缺失的依赖。
+   然后**双击一次 `run-local.ps1`**。它会自动补装缺失的依赖。
 2. 如果之后启动报 pnpm / 依赖相关的错误：
-   删除项目文件夹里的 `node_modules` 文件夹，再重新双击 `run-local.bat`
+   删除项目文件夹里的 `node_modules` 文件夹，再重新双击 `run-local.ps1`
    （它检测到依赖缺失后会自动完整重装）。
 3. 仍失败：把 `log\` 目录发给团队（见 `docs/guide-non-developer.md` 第 8 节）。
 
-> 原理说明：`run-local.bat` 只在 `node_modules` 不完整时才重装，因此拉取新代码后
+> 原理说明：`run-local.ps1` 只在 `node_modules` 不完整时才重装，因此拉取新代码后
 > 它可能「看起来正常但跳过了安装」；一旦新配置与旧 `node_modules` 不兼容，
 > 按上面第 2 步删掉重装即可。
 
@@ -87,5 +89,5 @@ corepack prepare pnpm@11.25.0 --activate
 | 拉取后 `pnpm-workspace.yaml` / `pnpm-lock.yaml` 有变更 | `pnpm install` |
 | install 报 `ERR_PNPM_IGNORED_BUILDS` / 年龄门槛错误 | 删除 `node_modules` 后重新 `pnpm install` |
 | pnpm 版本与仓库要求（11.25.0）不一致 | `corepack enable` + `corepack prepare pnpm@11.25.0 --activate` |
-| 双击脚本用户，拉取后启动报依赖错误 | 删 `node_modules`，重双击 `run-local.bat` |
+| 双击脚本用户，拉取后启动报依赖错误 | 删 `node_modules`，重双击 `run-local.ps1` |
 | dev server 正在运行 | 先关掉再装依赖（原生模块会被进程锁住，装到一半会 EPERM 失败） |

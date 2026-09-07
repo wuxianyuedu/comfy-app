@@ -37,14 +37,19 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 1. **残留壳清理**：按命令行匹配终止上次运行遗留的同项目 app.exe（防窗口叠加）。
 2. **端口清理**：杀掉 3000/3001/3002 的监听进程（防挤到 3001 连旧代码）。
 3. **缓存指纹**：next.config/tsconfig/package.json/lockfile 指纹变化才清 .next。
-4. **node_modules 健康检查**：`.modules.yaml` 与 `.bin/next` 缺失即视为残缺
+4. **pnpm 版本一致性检查**：比对 `package.json` 的 `packageManager` 声明版本与
+   `pnpm -v` 实际版本。一致则跳过；不一致且 corepack 可用时自动
+   `corepack prepare pnpm@<期望版本> --activate` 对齐（需联网一次），成功 OK；
+   自动对齐失败仅 WARN 并透出到启动页（复用 stale_shell 字段，不阻断启动）。
+   手动对齐指引：`corepack enable && corepack prepare pnpm@<期望版本> --activate`。
+5. **node_modules 健康检查**：`.modules.yaml` 与 `.bin/next` 缺失即视为残缺
    （pnpm 策略拒装/中断安装的典型残留），显式跑一次 `pnpm install`（CI 模式），
    失败立刻报错带日志尾部。日志：`log/pnpm-install-stdout/stderr.log`。
-5. **壳时效提醒**：app.exe 比 tauri.conf.json / src\*.rs / splash-assets 旧时
+6. **壳时效提醒**：app.exe 比 tauri.conf.json / src\*.rs / splash-assets 旧时
    WARN 提醒重编（`cd src-tauri; cargo build --release --features custom-protocol`）。
    窗口配置与启动页是编译期内嵌的，只改源码不重编壳 = 跑旧逻辑（黑屏问题的
    直接来源）。
-6. **数据库 schema 同步（Drizzle）**：依赖预检后执行 `pnpm exec drizzle-kit push`，
+7. **数据库 schema 同步（Drizzle）**：依赖预检后执行 `pnpm exec drizzle-kit push`，
    以 ALTER 方式把 `src/server/db/schema.ts` 的表结构增量同步进 `db.sqlite`
    （保留现有数据）。改用 Drizzle 后不再有「运行时必须重新 prisma generate 一个
    庞大 client + DLL 被锁」的步骤；改了 schema 后双击启动即可自动生效。失败仅
