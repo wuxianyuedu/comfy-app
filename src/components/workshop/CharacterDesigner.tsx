@@ -64,13 +64,33 @@ function looksLikeJson(text: string): boolean {
   return text.startsWith("{") || text.startsWith("[");
 }
 
-// ── 会话内提取执行日志缓存 ──────────────────────────────────────
-// 提取日志是组件局部 state；切走页签组件卸载后 state 丢失。
-// 用模块级缓存兜住，重挂载时恢复，让「提取角色卡 → 切页签 → 切回」
-// 之后仍能看到上次提取的执行记录（黑盒透明化不随卸载丢历史）。
-// 对齐仓库既有模块级缓存惯例（见 use-workshop-pipeline 的
-// workshopDraftCache / projectsCache）。开始新一次提取时重置。
+// ── 会话内「从剧本提取」状态缓存 ────────────────────────────────
+// 提取是异步流程；切走页签组件会卸载，但已发起的 async 不中断。仅把状态放在
+// 组件局部 state，卸载后即丢失——重挂载时「提取中…」按钮和过程提示都不在了。
+// 因此把提取的 通道/忙闲/过程/状态/错误/执行日志 统一做会话级模块缓存：
+//   ① 每个 setter 都「先写缓存、再更新 state」；
+//   ② 卸载期间后台回调（成功/失败）仍经 setter 把缓存写成正确终态；
+//   ③ 重挂载从缓存初始化 → 切回页签看到保留中的「提取中…」与最终结果。
+// 日志缓存与对齐仓库既有模块级缓存惯例（见 use-workshop-pipeline 的
+// workshopDraftCache / projectsCache）。在把提取逻辑整体收归工坊 controller
+// 层之前，以最小改动满足「提取状态跨页签保留」的诉求。
 let characterLogCache: ExtractLogEntry[] = [];
+
+/** 角色卡「从剧本提取」的界面状态（执行日志另见 characterLogCache） */
+interface CharacterExtractCache {
+  channelValue: string;
+  busy: boolean;
+  status: string;
+  progress: string;
+  error: string;
+}
+let characterExtractCache: CharacterExtractCache = {
+  channelValue: "tool",
+  busy: false,
+  status: "",
+  progress: "",
+  error: "",
+};
 
 function newCharacter(): Character {
   return {
@@ -126,14 +146,26 @@ export function CharacterDesigner({
   const { config, openSettings } = useLLM();
 
   // ── 三通道提取(工具 / 本地模型 / 远端API)+ 外部导入 ──
-  // 下拉选项值（tool | local::<model> | remote::<model>），通道与模型一并保存
-  const [extractChannelValue, setExtractChannelValue] = React.useState("tool");
+  // 下拉选项值（tool | local::<model> | remote::<model>），通道与模型一并保存。
+  // 通道/忙闲/过程/状态/错误都从模块缓存初始化，setter 均「写缓存后再 setState」，
+  // 保证切页签卸载期间后台回调仍能写回缓存（见顶部 CharacterExtractCache 说明）。
+  const [extractChannelValue, setExtractChannelValueState] = React.useState(
+    () => characterExtractCache.channelValue,
+  );
   const extractChannel = parseChannelOption(extractChannelValue).channel;
-  const [extractBusy, setExtractBusy] = React.useState(false);
-  const [extractStatus, setExtractStatus] = React.useState("");
+  const [extractBusy, setExtractBusyState] = React.useState(
+    () => characterExtractCache.busy,
+  );
+  const [extractStatus, setExtractStatusState] = React.useState(
+    () => characterExtractCache.status,
+  );
   /** 模型通道的实时提取过程（流式 token 累积） */
-  const [extractProgress, setExtractProgress] = React.useState("");
-  const [extractError, setExtractError] = React.useState("");
+  const [extractProgress, setExtractProgressState] = React.useState(
+    () => characterExtractCache.progress,
+  );
+  const [extractError, setExtractErrorState] = React.useState(
+    () => characterExtractCache.error,
+  );
   /** 本次提取的结构化执行日志（输入/输出/结果/错误），跑完不清空。
    *  setExtractionLog 包装器在更新 React state 时同步写模块缓存，
    *  切页签卸载再挂载仍能恢复历史（对齐仓库模块级缓存惯例）。 */
@@ -142,11 +174,65 @@ export function CharacterDesigner({
   >(() => characterLogCache);
   const setExtractionLog = React.useCallback(
     (updater: React.SetStateAction<ExtractLogEntry[]>) => {
-      setExtractionLogState((prev) => {
-        const next = typeof updater === "function" ? updater(prev) : updater;
-        characterLogCache = next;
-        return next;
-      });
+      // 同步写缓存再 setState，与提取字段缓存一致：卸载期间后台写日志也生效。
+      const next =
+        typeof updater === "function"
+          ? updater(characterLogCache)
+          : updater;
+      characterLogCache = next;
+      setExtractionLogState(next);
+    },
+    [],
+  );
+
+  // 提取字段的会话缓存 setter：以缓存对象为准算 next 并同步写缓存后再 setState。
+  // 组件卸载后 React 不再派发 state updater，只有同步写缓存才能让仍在后台的
+  // async 把正确终态(完成/失败/累积过程)留到下次挂载。
+  const cacheChannelValue = React.useCallback(
+    (value: React.SetStateAction<string>) => {
+      const next =
+        typeof value === "function"
+          ? value(characterExtractCache.channelValue)
+          : value;
+      characterExtractCache = { ...characterExtractCache, channelValue: next };
+      setExtractChannelValueState(next);
+    },
+    [],
+  );
+  const cacheBusy = React.useCallback((value: boolean) => {
+    characterExtractCache = { ...characterExtractCache, busy: value };
+    setExtractBusyState(value);
+  }, []);
+  const cacheStatus = React.useCallback(
+    (value: React.SetStateAction<string>) => {
+      const next =
+        typeof value === "function"
+          ? value(characterExtractCache.status)
+          : value;
+      characterExtractCache = { ...characterExtractCache, status: next };
+      setExtractStatusState(next);
+    },
+    [],
+  );
+  const cacheProgress = React.useCallback(
+    (value: React.SetStateAction<string>) => {
+      const next =
+        typeof value === "function"
+          ? value(characterExtractCache.progress)
+          : value;
+      characterExtractCache = { ...characterExtractCache, progress: next };
+      setExtractProgressState(next);
+    },
+    [],
+  );
+  const cacheError = React.useCallback(
+    (value: React.SetStateAction<string>) => {
+      const next =
+        typeof value === "function"
+          ? value(characterExtractCache.error)
+          : value;
+      characterExtractCache = { ...characterExtractCache, error: next };
+      setExtractErrorState(next);
     },
     [],
   );
@@ -261,19 +347,19 @@ export function CharacterDesigner({
   async function handleExtract() {
     const script = (scriptMarkdown ?? "").trim();
     if (!script) {
-      setExtractError("未获取到剧本文本,请先在「剧本」阶段编写或编辑剧本");
+      cacheError("未获取到剧本文本,请先在「剧本」阶段编写或编辑剧本");
       return;
     }
     if (extractChannel !== "tool" && !config) {
       openSettings();
       return;
     }
-    setExtractBusy(true);
-    setExtractProgress("");
-    setExtractStatus(
+    cacheBusy(true);
+    cacheProgress("");
+    cacheStatus(
       extractChannel === "tool" ? "" : "正在调用模型提取角色卡…",
     );
-    setExtractError("");
+    cacheError("");
     // 新一次提取：重置日志为仅含 init 一条（上次执行记录随组件保留在面板里，
     // 此处只清空面板以展示本次的输入→输出→结果链路）。
     characterLogCache = [
@@ -288,7 +374,7 @@ export function CharacterDesigner({
       if (extractChannel === "tool") {
         drafts = parseCharacterEntries(script);
         if (drafts.length === 0) {
-          setExtractError(
+          cacheError(
             "工具通道未在剧本中找到「人物:/角色:」行。可检查剧本结构后重试,或切换到本地模型 / 配置API 通道。",
           );
           return;
@@ -309,7 +395,7 @@ export function CharacterDesigner({
             provider: channelProvider(extractChannel),
             model: parseChannelOption(extractChannelValue).model,
           },
-          onToken: (token) => setExtractProgress((prev) => prev + token),
+          onToken: (token) => cacheProgress((prev) => prev + token),
         });
         setExtractionLog((prev) => [
           ...prev,
@@ -321,7 +407,7 @@ export function CharacterDesigner({
             ...prev,
             makeExtractLog("error", "模型未返回有效角色卡 JSON，解析失败"),
           ]);
-          setExtractError(
+          cacheError(
             "模型未返回有效角色卡 JSON,解析失败。可重试,或改用「工具」通道。",
           );
           return;
@@ -338,10 +424,10 @@ export function CharacterDesigner({
             ),
       ]);
       if (res.added === 0 && res.skipped > 0) {
-        setExtractError("剧本中的角色均已存在,未新增角色卡");
+        cacheError("剧本中的角色均已存在,未新增角色卡");
         return;
       }
-      setExtractStatus(
+      cacheStatus(
         `已提取 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`,
       );
     } catch (e: unknown) {
@@ -349,19 +435,19 @@ export function CharacterDesigner({
         ...prev,
         makeExtractLog("error", errorMessage(e, "提取失败")),
       ]);
-      setExtractError(
+      cacheError(
         `${errorMessage(e, "提取失败")} 可重试,或改用「工具」通道。`,
       );
     } finally {
-      setExtractBusy(false);
+      cacheBusy(false);
     }
   }
 
   /** 外部导入:角色卡 JSON 按既有 Character 字段解析;markdown 走工具解析器 */
   async function handleImportFile(file: File) {
-    setExtractBusy(true);
-    setExtractStatus("");
-    setExtractError("");
+    cacheBusy(true);
+    cacheStatus("");
+    cacheError("");
     try {
       const text = await file.text();
       const trimmed = text.trim();
@@ -377,16 +463,16 @@ export function CharacterDesigner({
       }
       const res = mergeCharacterDrafts(characters, drafts, styles);
       if (res.added === 0 && res.skipped > 0) {
-        setExtractError("导入的角色均与现有角色重名,未新增");
+        cacheError("导入的角色均与现有角色重名,未新增");
         return;
       }
-      setExtractStatus(
+      cacheStatus(
         `已导入 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`,
       );
     } catch (e: unknown) {
-      setExtractError(errorMessage(e, "导入失败"));
+      cacheError(errorMessage(e, "导入失败"));
     } finally {
-      setExtractBusy(false);
+      cacheBusy(false);
     }
   }
 
@@ -491,7 +577,7 @@ export function CharacterDesigner({
       <ExtractToolbar
         title="从剧本提取角色"
         channelValue={extractChannelValue}
-        onChannelValueChange={setExtractChannelValue}
+        onChannelValueChange={cacheChannelValue}
         onExtract={() => {
           void handleExtract();
         }}

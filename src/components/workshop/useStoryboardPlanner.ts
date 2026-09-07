@@ -86,10 +86,32 @@ function channelProvider(channel: ExtractChannel): "local" | "remote" {
   return channel === "local" ? "local" : "remote";
 }
 
-// ── 会话内提取执行日志缓存 ──────────────────────────────────────
-// 对齐仓库模块级缓存惯例（use-workshop-pipeline 的 workshopDraftCache）：
-// 分镜提取日志经模块缓存兜底，切页签卸载再挂载仍能恢复历史。
+// ── 会话内「从剧本提取」状态缓存 ────────────────────────────────
+// 提取是异步流程；切走页签组件卸载但已发起的 async 不中断。仅把状态放在组件
+// 局部 state，卸载后即丢失——重挂载时「提取中…」按钮和过程提示都不在了。
+// 因此把提取的 通道/忙闲/过程/状态/错误/执行日志 统一做会话级模块缓存：
+//   ① 每个 setter 都「先同步写缓存、再 setState」；
+//   ② 卸载期间后台回调（成功/失败）仍经 setter 把缓存写成正确终态；
+//   ③ 重挂载从缓存初始化 → 切回页签看到保留中的「提取中…」与最终结果。
+// 对齐仓库既有模块级缓存惯例（use-workshop-pipeline 的 workshopDraftCache）。
+// 在把提取逻辑整体收归工坊 controller 层之前，以最小改动满足跨页签保留诉求。
 let storyboardLogCache: ExtractLogEntry[] = [];
+
+/** 分镜「从剧本提取」的界面状态（执行日志另见 storyboardLogCache） */
+interface StoryboardExtractCache {
+  channelValue: string;
+  busy: boolean;
+  status: string;
+  progress: string;
+  error: string;
+}
+let storyboardExtractCache: StoryboardExtractCache = {
+  channelValue: "tool",
+  busy: false,
+  status: "",
+  progress: "",
+  error: "",
+};
 
 export function useStoryboardPlanner(props: Props) {
   const { scriptMarkdown, scenes, characters, styles, shots, onShotsChange, onGenerate, onCharactersChange } =
@@ -100,23 +122,52 @@ export function useStoryboardPlanner(props: Props) {
   const { config, openSettings } = useLLM();
 
   // ── 三通道提取(工具 / 本地模型 / 远端API)+ 外部导入 ──
-  // 下拉选项值（tool | local::<model> | remote::<model>），通道与模型一并保存
-  const [extractChannelValue, setExtractChannelValue] = useState("tool");
+  // 下拉选项值（tool | local::<model> | remote::<model>），通道与模型一并保存。
+  // 通道/忙闲/过程/状态/错误从模块缓存初始化；对外 setter 均「同步写缓存后再
+  // setState」（见顶部 StoryboardExtractCache 说明），后台回调在卸载后仍能写回。
+  const [extractChannelValue, setExtractChannelValueRaw] = useState(() => storyboardExtractCache.channelValue);
   const extractChannel = parseChannelOption(extractChannelValue).channel;
-  const [extractBusy, setExtractBusy] = useState(false);
-  const [extractStatus, setExtractStatus] = useState("");
+  const [extractBusy, setExtractBusyRaw] = useState(() => storyboardExtractCache.busy);
+  const [extractStatus, setExtractStatusRaw] = useState(() => storyboardExtractCache.status);
   /** 模型通道的实时提取过程（流式 token 累积） */
-  const [extractProgress, setExtractProgress] = useState("");
-  const [extractError, setExtractError] = useState("");
+  const [extractProgress, setExtractProgressRaw] = useState(() => storyboardExtractCache.progress);
+  const [extractError, setExtractErrorRaw] = useState(() => storyboardExtractCache.error);
   /** 本次提取的结构化执行日志（输入/输出/结果/错误），跑完不清空。
    *  setExtractionLog 包装器同步写模块缓存，切页签卸载再挂载仍能恢复。 */
   const [extractionLog, setExtractionLogState] = useState<ExtractLogEntry[]>(() => storyboardLogCache);
   const setExtractionLog = (updater: SetStateAction<ExtractLogEntry[]>) => {
-    setExtractionLogState((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      storyboardLogCache = next;
-      return next;
-    });
+    // 同步写缓存再 setState，与提取字段缓存一致：卸载期间后台写日志也生效。
+    const next = typeof updater === "function" ? updater(storyboardLogCache) : updater;
+    storyboardLogCache = next;
+    setExtractionLogState(next);
+  };
+
+  // 提取状态写缓存：以缓存对象为准算 next 并**立即**同步写缓存，再 setState。
+  // 组件卸载后 React 不再派发 state updater，只有同步写缓存才能让仍在后台的
+  // async 把正确终态(完成/失败/累积过程)留到下次挂载。
+  const setExtractChannelValue = (value: SetStateAction<string>) => {
+    const next = typeof value === "function" ? value(storyboardExtractCache.channelValue) : value;
+    storyboardExtractCache = { ...storyboardExtractCache, channelValue: next };
+    setExtractChannelValueRaw(next);
+  };
+  const setExtractBusy = (value: boolean) => {
+    storyboardExtractCache = { ...storyboardExtractCache, busy: value };
+    setExtractBusyRaw(value);
+  };
+  const setExtractStatus = (value: SetStateAction<string>) => {
+    const next = typeof value === "function" ? value(storyboardExtractCache.status) : value;
+    storyboardExtractCache = { ...storyboardExtractCache, status: next };
+    setExtractStatusRaw(next);
+  };
+  const setExtractProgress = (value: SetStateAction<string>) => {
+    const next = typeof value === "function" ? value(storyboardExtractCache.progress) : value;
+    storyboardExtractCache = { ...storyboardExtractCache, progress: next };
+    setExtractProgressRaw(next);
+  };
+  const setExtractError = (value: SetStateAction<string>) => {
+    const next = typeof value === "function" ? value(storyboardExtractCache.error) : value;
+    storyboardExtractCache = { ...storyboardExtractCache, error: next };
+    setExtractErrorRaw(next);
   };
 
   const hasScript = !!scriptMarkdown?.trim();
