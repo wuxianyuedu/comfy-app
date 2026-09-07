@@ -91,6 +91,16 @@ export function DarkSelect({
   const ref = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const [highlighted, setHighlighted] = useState(-1);
+  /* footer 紧贴选项列表渲染：测量实际列表高度（选项不足时远小于 240），
+   * 替代旧的固定 +240 偏移——那会在短列表与 footer 之间留出一大段空白。 */
+  const footerRef = useRef<HTMLDivElement>(null);
+  const [listHeight, setListHeight] = useState(0);
+  const [footerHeight, setFooterHeight] = useState(0);
+  useLayoutEffect(() => {
+    if (!open) return;
+    setListHeight(listRef.current?.offsetHeight ?? 0);
+    setFooterHeight(footerRef.current?.offsetHeight ?? 0);
+  }, [open, options, footer]);
   /* Popover position (fixed, in viewport coords). Computed from the trigger
    * button's bounding rect so the dropdown escapes any parent overflow. */
   const [pos, setPos] = useState<{ left: number; top: number; width: number; placement: "down" | "up" }>({
@@ -303,10 +313,13 @@ export function DarkSelect({
         typeof document !== "undefined" &&
         createPortal(
           <div
+            ref={footerRef}
             style={{
               position: "fixed",
               left: pos.left,
-              top: pos.placement === "down" ? pos.top + 240 : pos.top - 32,
+              top: pos.placement === "down"
+                ? pos.top + Math.min(listHeight, POPOVER_MAX_H) + 4
+                : pos.top - footerHeight - 4,
               width: pos.width,
               zIndex: 9999,
             }}
