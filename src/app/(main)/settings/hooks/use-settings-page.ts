@@ -33,7 +33,7 @@ import {
   type UsageTestResult,
 } from "~/lib/llm/usage-test-client";
 import {
-  normalizeExtraModels,
+  splitExtraModels,
   TASK_TYPES,
   type RemoteModelEntry,
   type RemoteModelKind,
@@ -60,7 +60,9 @@ export type LlmConfig = {
   provider: "local" | "remote";
   baseUrl: string;
   model: string;
-  /** 候选模型（不含 model 本身）：local 为纯名字条目；remote 条目可带独立 baseUrl / apiKey */
+  /** 本地 Ollama 启用的候选模型名（纯名字，无 apiKey）—— option C 与远端分开。 */
+  localCandidates: string[];
+  /** 远端独立模型条目（可带独立 baseUrl / apiKey）—— option C 存 remoteModel 表。 */
   extraModels: RemoteModelEntry[];
   temperature: number;
   temperatureByTask?: Record<TaskType, number>;
@@ -341,13 +343,13 @@ export function useSettingsPage(): SettingsPageController {
   const llmChanged = llmConfig !== prevLlmConfig;
   if (llmChanged) setPrevLlmConfig(llmConfig);
   if (llmConfig && (llmChanged || !llmDraft)) {
+    const split = splitExtraModels(llmConfig.extraModels);
     setLlmDraft({
       ...llmConfig,
       apiKey: llmConfig.apiKey ?? null,
-      /* 兼容旧纯字符串形状；主模型不在候选列表里（视图里它单独展示且始终可用） */
-      extraModels: normalizeExtraModels(llmConfig.extraModels).filter(
-        (e) => e.name !== llmConfig.model,
-      ),
+      /* 本地候选（字符串）与远端独立模型（对象）从同一下发清单里拆开存，互不混写 */
+      localCandidates: split.localNames.filter((n) => n !== llmConfig.model),
+      extraModels: split.remoteEntries.filter((e) => e.name !== llmConfig.model),
       temperatureByTask: llmConfig.temperatureByTask ?? undefined,
     });
   }
@@ -725,9 +727,21 @@ export function useSettingsPage(): SettingsPageController {
     async (draft: LlmConfig): Promise<{ ok: boolean; error?: string }> => {
       setSaving(true);
       try {
+        // option C：把「本地候选(字符串) + 远端独立模型(对象)」合并成一整份清单
+        // 发给 configSave，由服务端按「字符串 vs 对象」各自写回 llmConfig / remoteModel 表。
+        const payloadExtra: Array<string | RemoteModelEntry> = [
+          ...draft.localCandidates,
+          ...draft.extraModels,
+        ];
         await saveLlmCfg.mutateAsync({
-          ...draft,
+          provider: draft.provider,
           apiKey: llmApiKey || undefined,
+          baseUrl: draft.baseUrl,
+          model: draft.model,
+          extraModels: payloadExtra,
+          temperature: draft.temperature,
+          temperatureByTask: draft.temperatureByTask,
+          maxTokens: draft.maxTokens,
         });
         showFlash("ok", "LLM 配置已保存");
         if (llmApiKey) setLlmApiKey("");
@@ -772,23 +786,21 @@ export function useSettingsPage(): SettingsPageController {
     setSettingsDraft((draft) => (draft ? { ...draft, ...patch } : draft));
   }, []);
 
-  /** 勾选/取消一个候选模型（多选集 = 主模型 + 勾选项）。候选列表已条目化，
-   *  这里按名字做合并、再回填原条目对象，避免勾选动作丢掉远端条目的
-   *  独立 baseUrl / apiKey。 */
+  /** 勾选/取消一个本地候选模型（多选集 = 主模型 + 勾选项）。
+   *  option C：本地候选只存名字（字符串、无 apiKey），与远端独立模型(extraModels)
+   *  彻底分开，不写进 remoteModel。 */
   const toggleExtraModel = useCallback((name: string) => {
     setLlmDraft((draft) => {
       if (!draft) return draft;
-      const byName = new Map(draft.extraModels.map((e) => [e.name, e]));
       const nextNames = mergeExtraModels(
-        draft.extraModels.map((e) => e.name),
+        draft.localCandidates,
         draft.model,
         name,
       );
-      const next = nextNames.map((n) => byName.get(n) ?? { name: n });
       const unchanged =
-        next.length === draft.extraModels.length &&
-        next.every((e, i) => e.name === draft.extraModels[i]?.name);
-      return unchanged ? draft : { ...draft, extraModels: next };
+        nextNames.length === draft.localCandidates.length &&
+        nextNames.every((n, i) => n === draft.localCandidates[i]);
+      return unchanged ? draft : { ...draft, localCandidates: nextNames };
     });
   }, []);
 
