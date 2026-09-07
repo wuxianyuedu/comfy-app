@@ -10,6 +10,7 @@ import {
   videoModeHidesMedia,
   videoModeMissingHint,
   isModeValueBroken,
+  isPreviewableUrl,
 } from "./usage-test-config";
 
 describe("usageFieldsToJson", () => {
@@ -54,6 +55,31 @@ describe("usageFieldsToJson", () => {
         { key: "a", value: "  " },
       ]),
     ).toBe("");
+  });
+});
+
+describe("isPreviewableUrl", () => {
+  it("http(s) 与 data:image 一律可尝试预览，即使路径无图片扩展名", () => {
+    // Bing / 云存储等 CDN 图片地址常无扩展名，looksLikeImage 会漏判，
+    // 但预览入口应放开：能加载就显示，加载失败由 onError 兜底。
+    expect(
+      isPreviewableUrl(
+        "https://ts1.tc.mm.bing.net/th/id/R-C.df954332469ba562a496acc5c1e778a6?rik=0&pid=ImgRaw",
+      ),
+    ).toBe(true);
+    expect(isPreviewableUrl("https://cdn.example.com/signed/id12345")).toBe(
+      true,
+    );
+    expect(isPreviewableUrl("https://cdn.example.com/ff.png")).toBe(true);
+    expect(isPreviewableUrl("data:image/png;base64,AAAA")).toBe(true);
+    expect(isPreviewableUrl("data:image/webp;base64,xx")).toBe(true);
+  });
+  it("非 URL / 空值不算可预览", () => {
+    expect(isPreviewableUrl("42")).toBe(false);
+    expect(isPreviewableUrl("text/keyframe")).toBe(false);
+    expect(isPreviewableUrl("一只柴犬")).toBe(false);
+    expect(isPreviewableUrl("")).toBe(false);
+    expect(isPreviewableUrl("   ")).toBe(false);
   });
 });
 
