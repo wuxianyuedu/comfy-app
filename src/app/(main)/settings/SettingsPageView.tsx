@@ -780,8 +780,8 @@ export function SettingsPageView({
                         {c.ollamaModels.map((model) => {
                           const checked =
                             model.name === c.drafts.llm.model ||
-                            c.drafts.llm.extraModels.some(
-                              (e) => e.name === model.name,
+                            c.drafts.llm.localCandidates.includes(
+                              model.name,
                             );
                           return (
                             <button
