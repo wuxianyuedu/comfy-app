@@ -17,6 +17,10 @@ function errorMessage(e: unknown, fallback: string): string {
 
 interface LLMContextValue {
   config: LLMConfigView | null;
+  /** 静态配置下的本地候选模型名（工坊下拉「本地」组读它，不实时探测）。 */
+  localModels: string[];
+  /** 静态配置下的远端独立模型名（工坊下拉「远端」组读它，不实时探测）。 */
+  remoteModels: string[];
   loading: boolean;
   settingsOpen: boolean;
   openSettings: () => void;
@@ -33,7 +37,7 @@ export function useLLM(): LLMContextValue {
 }
 
 export function LLMProvider({ children }: { children: React.ReactNode }) {
-  const { config, loading, refresh } = useLLMConfig();
+  const { config, localModels, remoteModels, loading, refresh } = useLLMConfig();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -42,6 +46,8 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
 
   const value: LLMContextValue = {
     config,
+    localModels,
+    remoteModels,
     loading,
     settingsOpen,
     openSettings: () => setSettingsOpen(true),

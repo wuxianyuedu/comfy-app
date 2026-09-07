@@ -115,17 +115,6 @@ export function CharacterDesigner({
   /** 模型通道的实时提取过程（流式 token 累积） */
   const [extractProgress, setExtractProgress] = React.useState("");
   const [extractError, setExtractError] = React.useState("");
-  /** 模型清单刷新序号：设置弹窗保存后递增，让下拉重新拉取清单。
-   *  渲染期对比 config 引用（React 19 派生态写法）：config 每次保存后
-   *  是新对象，计数随之递增；初始 null→有值那次不计数（首次无需重拉）。 */
-  const [extractRefreshKey, setExtractRefreshKey] = React.useState(0);
-  const [prevCfg, setPrevCfg] = React.useState(config);
-  if (config && config !== prevCfg) {
-    setPrevCfg(config);
-    setExtractRefreshKey((n) => n + 1);
-  } else if (!config && prevCfg) {
-    setPrevCfg(null);
-  }
 
   const hasScript = !!scriptMarkdown?.trim();
 
@@ -391,7 +380,6 @@ export function CharacterDesigner({
         statusText={extractStatus}
         errorText={extractError}
         extractDisabled={!hasScript}
-        refreshKey={extractRefreshKey}
         extractDisabledReason="未获取到剧本文本(在「剧本」阶段编写后可提取)。仍可用「外部导入」载入角色卡 JSON 或人物清单。"
       />
 
