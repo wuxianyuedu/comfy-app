@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
-import { getLLMConfig } from "@/lib/llm/server";
+import { describeFetchFailure, getLLMConfig } from "@/lib/llm/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,22 +12,15 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-/** 提取错误信息，等价原 `e?.message ?? fallback`（catch 变量为 unknown 后的窄化版）。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const msg: unknown = e.message;
-    if (typeof msg === "string") return msg;
-  }
-  return fallback;
-}
-
 /**
- * GET /api/llm/models?provider=local|remote —— 拉取候选模型清单。
+ * GET /api/llm/models?provider=local|remote[&model=<name>] —— 拉取候选模型清单。
  *
  * - local：优先 GET {本地 base 剥掉 /v1}/api/tags（Ollama 形状），
  *   失败回落 GET {base}/models（LM Studio / vLLM 等 OpenAI 兼容端点）。
- * - remote：按已保存的远端 baseUrl / apiKey GET {base}/models。
+ * - remote：默认按已保存的全局远端 baseUrl / apiKey GET {base}/models；
+ *   若带 model 参数且该远端条目配了独立 baseUrl/apiKey，则用该条目自己的
+ *   连接参数探测——避免「工坊选了独立配置的远端模型，却拿全局 Base URL
+ *   去探导致误报 fetch failed」这类误导提示。
  *
  * 探测失败不是硬错误：一律 200 + { ok:false, detail }，前端在对应分组里
  * 展示降级文案而不是让整页报错。
@@ -36,7 +29,14 @@ export async function GET(req: NextRequest) {
   await getServerUser();
 
   const provider = req.nextUrl.searchParams.get("provider") === "remote" ? "remote" : "local";
-  const cfg = await getLLMConfig({ provider });
+  const rawModel = req.nextUrl.searchParams.get("model");
+  const model = typeof rawModel === "string" && rawModel.trim() !== "" ? rawModel.trim() : "";
+  // 仅远端探测按所选模型解析独立连接参数；本地候选没有独立 baseUrl，传 model
+  // 反而可能误命中同名的远端条目，故本地一律不带 model。
+  const cfg = await getLLMConfig({
+    provider,
+    model: provider === "remote" && model ? model : undefined,
+  });
 
   if (!cfg.baseUrl) {
     return NextResponse.json({
@@ -104,6 +104,12 @@ export async function GET(req: NextRequest) {
       : [];
     return NextResponse.json({ ok: true, models, detail: `共 ${models.length} 个模型` });
   } catch (e) {
-    return NextResponse.json({ ok: false, models: [], detail: errorMessage(e, "连接失败") });
+    // 网络层 TypeError（如 fetch failed / ECONNREFUSED）翻译成可操作的人话，
+    // 避免用户在工坊只看到一句生硬的 `fetch failed`。
+    return NextResponse.json({
+      ok: false,
+      models: [],
+      detail: describeFetchFailure(e, cfg),
+    });
   }
 }
