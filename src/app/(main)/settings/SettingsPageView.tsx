@@ -83,6 +83,8 @@ interface UsageTestDialogState {
   /** 请求体额外字段（结构化编辑，替代原先手填整段 JSON）。 */
   fields: UsageField[];
   running: boolean;
+  /** 是否正在「继续等待」一个已提交的异步视频任务（区别于首次提交的 running） */
+  querying: boolean;
   result: UsageTestResult | null;
 }
 
@@ -384,6 +386,7 @@ export function SettingsPageView({
             : [],
       /* 关闭再重开不延续「运行中」——从草稿恢复的是已填内容 + 最近一次结果 */
       running: false,
+      querying: false,
       result: prev?.result ?? null,
     });
   }
@@ -409,7 +412,28 @@ export function SettingsPageView({
       extraJson: usageFieldsToJson(usageFieldsToSend(usageTest)) || undefined,
     });
     setUsageTest((prev) =>
-      prev ? { ...prev, running: false, result: out } : prev,
+      prev ? { ...prev, running: false, querying: false, result: out } : prev,
+    );
+  }
+
+  /** 对已提交但仍在生成的异步视频任务「继续等待」一轮（同一条目连接参数 +
+   *  上次返回的 taskId）。只查既有任务，不重新提交、不重复扣费。 */
+  async function continueUsageWait() {
+    if (!usageTest || usageTest.querying) return;
+    const taskId = usageTest.result?.taskId;
+    if (!taskId) return;
+    setUsageTest({ ...usageTest, querying: true });
+    const typedKey = usageTest.apiKey.trim();
+    const out = await c.queryUsageTask({
+      name: usageTest.entry.name,
+      baseUrl: usageTest.baseUrl.trim(),
+      path: usageTest.path.trim(),
+      apiKey:
+        typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
+      taskId,
+    });
+    setUsageTest((prev) =>
+      prev ? { ...prev, querying: false, result: out } : prev,
     );
   }
 
@@ -1611,6 +1635,13 @@ export function SettingsPageView({
                       </p>
                     )}
 
+                    {usageTest.querying && !usageTest.running && (
+                      <p className="mb-3 flex items-center gap-2 rounded-lg bg-sky-100 px-3 py-2 text-xs text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
+                        <Loader2 size={13} className="animate-spin" />
+                        正在继续等待视频生成完成…（不会重复提交）
+                      </p>
+                    )}
+
                     {usageTest.result && !usageTest.running && (
                       <div className="mb-3">
                         {usageTest.result.ok ? (
@@ -1658,11 +1689,32 @@ export function SettingsPageView({
                               </p>
                             )}
                             {usageTest.result.pending &&
-                              usageTest.result.taskId && (
-                                <p className="text-muted-foreground text-xs">
-                                  任务 ID：{usageTest.result.taskId}
-                                  —— 稍后可在提供方后台查看结果。
-                                </p>
+                              usageTest.result.taskId &&
+                              !usageTest.querying && (
+                                <div className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                                  <p className="font-medium">
+                                    ⏳ 视频仍在生成中（不是失败），已提交到提供方，
+                                    生成通常需数十秒到几分钟。
+                                  </p>
+                                  <p className="text-muted-foreground mt-1 break-all">
+                                    任务 ID：{usageTest.result.taskId}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => void continueUsageWait()}
+                                    disabled={usageTest.querying}
+                                    className="bg-amber-500 hover:bg-amber-600 mt-2 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors disabled:opacity-60"
+                                  >
+                                    {usageTest.querying ? (
+                                      <>
+                                        <Loader2 size={12} className="animate-spin" />
+                                        等待中…
+                                      </>
+                                    ) : (
+                                      "继续等待并获取结果"
+                                    )}
+                                  </button>
+                                </div>
                               )}
                           </>
                         ) : (
@@ -1684,10 +1736,18 @@ export function SettingsPageView({
                       <button
                         type="button"
                         onClick={() => void runUsageTest()}
-                        disabled={usageTest.running || !usageTest.prompt.trim()}
+                        disabled={
+                          usageTest.running ||
+                          usageTest.querying ||
+                          !usageTest.prompt.trim()
+                        }
                         className="bg-primary hover:bg-primary-hover rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50"
                       >
-                        {usageTest.running ? "调用中…" : "执行测试"}
+                        {usageTest.querying
+                          ? "等待中…"
+                          : usageTest.running
+                            ? "调用中…"
+                            : "执行测试"}
                       </button>
                     </div>
                   </div>

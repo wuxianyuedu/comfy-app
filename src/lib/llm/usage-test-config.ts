@@ -136,7 +136,7 @@ export function usageFieldsToJson(fields: UsageField[]): string {
 
 /** 判断某行值是否值得尝试做「图片预览」：data:image 或 http(s) 地址。
  *  与 looksLikeImage 不同——后者要求路径带图片扩展名才返回 true，会漏掉大量
- *  真实存在但「无扩展名」的 CDN 图片地址（如 Bing 缩略图 R-C.<hash>、云存储
+ *  真实存在但「无扩展名」的 CDN 图片地址（如 Bing 缩略图、云存储
  *  签名 URL 等，其响应 content-type 是 image/jpeg 但路径没有 .jpg）。而一个
  *  地址究竟是不是可解码图片，只有浏览器真正加载后才知道，因此预览入口放开到
  *  「是 URL 就尝试」，交由 <img onError> 兜底优雅降级。 */
@@ -231,4 +231,43 @@ export function mediaExtensionFromUrl(
 /** 根据用途取默认产物扩展名（图片 png，视频 mp4）。 */
 export function mediaDefaultExt(kind: string): "png" | "mp4" {
   return kind === "video" ? "mp4" : "png";
+}
+
+/** 远端任务（如异步视频）状态查询地址（http 可达）。任务制接口提交后返回任务
+ *  ID，需轮询某个查询端点取回最终产物。不同提供方习惯不同，返回两个候选形状：
+ *  ① REST 风格 {base}{pathDir}/{taskId}（如 /v1/videos/{id}）
+ *  ② Agnes 系 {origin}/agnesapi?video_id={id}&model_name={model}
+ *  由调用方逐个尝试，读到媒体 URL 即视为完成。纯字符串拼装，可单测。 */
+export interface VideoPollUrl {
+  /** REST 风格：任务 ID 直接拼在端点目录后 */
+  rest: string;
+  /** Agnes 系带签名查询串；origin 解析失败时为 null（跳过该候选） */
+  agnes: string | null;
+}
+
+/** 端点路径的目录部分（/videos/generations → /videos），用于任务轮询拼接。 */
+export function videoEndpointDir(path: string): string {
+  const idx = path.lastIndexOf("/");
+  return idx <= 0 ? "" : path.slice(0, idx);
+}
+
+/** 构造远端视频任务的状态查询候选 URL（纯函数，服务端提交 / 继续查询共用）。 */
+export function buildVideoPollUrls(
+  baseUrl: string,
+  path: string,
+  model: string,
+  taskId: string,
+): VideoPollUrl {
+  const base = baseUrl.replace(/\/+$/, "");
+  const dir = videoEndpointDir(path);
+  let agnes: string | null = null;
+  try {
+    agnes = `${new URL(base).origin}/agnesapi?video_id=${encodeURIComponent(taskId)}&model_name=${encodeURIComponent(model)}`;
+  } catch {
+    agnes = null;
+  }
+  return {
+    rest: `${base}${dir}/${taskId.replace(/^\/+/, "")}`,
+    agnes,
+  };
 }

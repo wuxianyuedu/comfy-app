@@ -28,7 +28,9 @@ import {
 } from "~/lib/llm/ollama-client";
 import { probeRemoteApi, type RemoteProbeResult } from "~/lib/llm/browser";
 import {
+  queryUsageTask,
   testModelUsage,
+  type UsageTaskQueryInput,
   type UsageTestInput,
   type UsageTestResult,
 } from "~/lib/llm/usage-test-client";
@@ -211,6 +213,8 @@ export interface SettingsPageController {
   }) => Promise<RemoteProbeResult>;
   /** 按用途发起一次真实调用（图片 / 视频会真实生成、消耗额度） */
   testModelUsage: (input: UsageTestInput) => Promise<UsageTestResult>;
+  /** 对已提交但仍在生成的异步视频任务「继续等待」一轮：只查既有任务，不重复提交扣费 */
+  queryUsageTask: (input: UsageTaskQueryInput) => Promise<UsageTestResult>;
 }
 
 /** 提示条停留时长。 */
@@ -936,6 +940,13 @@ export function useSettingsPage(): SettingsPageController {
     [],
   );
 
+  /** 「继续等待」已提交的异步视频任务（同一条目连接参数 + taskId，只查不重交）。
+   *  网络封装在 lib/llm/usage-test-client，密钥解析在服务端完成。 */
+  const queryUsageTaskFn = useCallback(
+    async (input: UsageTaskQueryInput) => queryUsageTask(input),
+    [],
+  );
+
   /** 远端候选模型列表（配置视图，按保存顺序）——设置页不区分「当前生效」，
    *  用哪个模型由工坊运行时切换。 */
   const remoteModelList: RemoteModelEntry[] = llmDraft?.extraModels ?? [];
@@ -999,6 +1010,7 @@ export function useSettingsPage(): SettingsPageController {
     removeRemoteModel,
     probeRemote,
     testModelUsage: testModelUsageFn,
+    queryUsageTask: queryUsageTaskFn,
     llmApiKey,
     setLlmApiKey,
     ollamaStatus,
