@@ -223,14 +223,60 @@ describe("USAGE_FIELD_PRESETS / hasUsageFieldKey", () => {
   });
 
   it("hasUsageFieldKey 命中同名已存在的字段行（含首尾空白）", () => {
+    expect(hasUsageFieldKey([{ key: "mode", value: "text" }], "mode")).toBe(
+      true,
+    );
     expect(
-      hasUsageFieldKey([{ key: "mode", value: "text" }], "mode"),
-    ).toBe(true);
-    expect(
-      hasUsageFieldKey([{ key: " images ", value: "https://a/x.png" }], "images"),
+      hasUsageFieldKey(
+        [{ key: " images ", value: "https://a/x.png" }],
+        "images",
+      ),
     ).toBe(true);
     expect(hasUsageFieldKey([{ key: "mode", value: "text" }], "images")).toBe(
       false,
     );
+  });
+});
+
+import {
+  usageTestDraftKey,
+  mediaExtensionFromUrl,
+  mediaDefaultExt,
+} from "./usage-test-config";
+
+describe("usageTestDraftKey", () => {
+  it("把 kind 与条目名拼成稳定键", () => {
+    expect(usageTestDraftKey("video", "Agnes 视频")).toBe("video::Agnes 视频");
+    expect(usageTestDraftKey("image", "a").startsWith("image::")).toBe(true);
+  });
+});
+
+describe("mediaExtensionFromUrl", () => {
+  it("http(s) 地址取路径扩展名", () => {
+    expect(mediaExtensionFromUrl("https://x.com/a/out.png", "mp4")).toBe("png");
+    expect(mediaExtensionFromUrl("https://x.com/v.mp4?token=1", "png")).toBe(
+      "mp4",
+    );
+    expect(mediaExtensionFromUrl("https://x.com/out", "mp4")).toBe("mp4");
+  });
+  it("data:image 按 mime 取扩展名", () => {
+    expect(mediaExtensionFromUrl("data:image/jpeg;base64,xx", "png")).toBe(
+      "jpg",
+    );
+    expect(mediaExtensionFromUrl("data:image/webp;base64,xx", "png")).toBe(
+      "webp",
+    );
+  });
+  it("无法识别时回落到默认扩展名", () => {
+    expect(mediaExtensionFromUrl("", "png")).toBe("png");
+    expect(mediaExtensionFromUrl("随便", "png")).toBe("png");
+  });
+});
+
+describe("mediaDefaultExt", () => {
+  it("按用途给默认扩展名", () => {
+    expect(mediaDefaultExt("video")).toBe("mp4");
+    expect(mediaDefaultExt("image")).toBe("png");
+    expect(mediaDefaultExt("chat")).toBe("png");
   });
 });
