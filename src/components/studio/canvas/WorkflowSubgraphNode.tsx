@@ -160,11 +160,6 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
         outline: selected ? "2px solid rgba(56,189,248,0.9)" : "none",
         outlineOffset: selected ? "2px" : undefined,
       }}
-      onDoubleClick={(event) => {
-        event.stopPropagation();
-        data.onEnter?.();
-      }}
-      title="双击进入子工作流"
     >
       {accent && nodeMode !== 0 && <FrostLayer color={accent} nodeMode={nodeMode} />}
       {/* Header — purple accent (subgraph identity).  Same NODE_TITLE_H as
