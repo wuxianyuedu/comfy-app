@@ -2,6 +2,7 @@
 // 不依赖 @/lib/llm/server（后者 import "server-only" 会在纯 Node 抛错）。
 // 从环境变量读取默认值，并可被 `llmConfig` 表里的用户设置覆盖（与界面
 // 设置 UI 共享同一张表，复用 workshopDb 读取，不触碰 `~/env`）。
+import { decryptSecret } from "@/lib/llm/secrets";
 import type { LLMMessage } from "@/lib/llm/types";
 import { llmConfig } from "@/server/db/schema";
 import { workshopDb } from "./db";
@@ -33,7 +34,7 @@ export async function getWorkshopLLMConfig(): Promise<WorkshopLLMConfig> {
     if (row) {
       if (row.baseUrl) cfg.baseUrl = row.baseUrl;
       if (row.model) cfg.model = row.model;
-      if (row.apiKey) cfg.apiKey = row.apiKey;
+      if (row.apiKey) cfg.apiKey = decryptSecret(row.apiKey);
       if (row.temperature != null) cfg.temperature = row.temperature;
       if (row.maxTokens != null) cfg.maxTokens = row.maxTokens;
     }
@@ -74,11 +75,25 @@ export async function completeWorkshopLLM(
       signal: AbortSignal.timeout(180_000),
     });
   } catch (e) {
-    throw new Error(`LLM 请求失败: ${e instanceof Error ? e.message : String(e)}`);
+    const msg = e instanceof Error ? e.message : String(e);
+    const cause =
+      e instanceof TypeError && (e as { cause?: unknown }).cause instanceof Error
+        ? String(((e as { cause?: Error }).cause as Error).message)
+        : "";
+    const reach = /ECONNREFUSED|ECONNRESET/.test(cause) || /fetch failed/i.test(msg);
+    throw new Error(
+      reach
+        ? `连不上 LLM 服务（${cfg.baseUrl}）：请确认本地服务已启动或 Base URL 正确（${cause || "连接被拒绝"}）。`
+        : `LLM 请求失败：${msg}`,
+    );
   }
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`LLM 请求失败 (${res.status}): ${detail.slice(0, 200)}`);
+    const hint =
+      res.status === 401 || res.status === 403
+        ? "（API Key 无效或未授权）"
+        : "";
+    throw new Error(`LLM 请求失败 (${res.status})${hint}${detail.trim() ? `：${detail.slice(0, 200)}` : ""}`);
   }
   const json = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
