@@ -156,42 +156,36 @@ describe("parseRatioFromLabel", () => {
   });
 });
 
-describe("splitWorkflowIO — promoteLegacyParams（IO 编辑预览）", () => {
-  /* legacy "param"（旧版顶行 / 子图边界勾选遗留）默认仍归 wireInputs；
-   * 预览开启提升后，带可编辑控件的 param 归入 widgetInputs，纯 link
-   * 端口（MODEL/CLIP…）保持 wire 行——否则预览行渲染不出必填/👁。 */
-  const legacyParam = (name: string, type?: string): WorkflowIOEntry => ({
+describe("splitWorkflowIO — kind 决定分组，客户端无 legacy 特判", () => {
+  /* 服务端 enrichment（workflow-detail-io.ts）自动把带可编辑控件的旧
+   * kind:"param" 迁移为 "widget"，客户端 splitWorkflowIO 只按 kind 分组，
+   * 不再需要 promoteLegacyParams 之类的兼容逻辑。 */
+  const entry = (kind: string, name: string, type?: string): WorkflowIOEntry => ({
     direction: "input",
-    kind: "param",
+    kind,
     nodeId: "7",
     name,
     ...(type ? { type } : {}),
   });
 
-  it("默认关闭：param 保持 wire 行", () => {
-    const map: WorkflowIOMap = { "7::param::seed": legacyParam("seed", "INT") };
+  it("kind=param 一律归 wireInputs（连线端口行）", () => {
+    const map: WorkflowIOMap = {
+      "7::param::seed": entry("param", "seed", "INT"),
+      "7::param::model": entry("param", "model", "MODEL"),
+    };
     const { wireInputs, widgetInputs } = splitWorkflowIO(map);
-    expect(wireInputs).toHaveLength(1);
+    expect(wireInputs).toHaveLength(2);
     expect(widgetInputs).toHaveLength(0);
   });
 
-  it("开启提升：INT 类 param（seed）归入 widgetInputs", () => {
-    const map: WorkflowIOMap = { "7::param::seed": legacyParam("seed", "INT") };
-    const { wireInputs, widgetInputs } = splitWorkflowIO(map, {
-      promoteLegacyParams: true,
-    });
-    expect(widgetInputs).toHaveLength(1);
+  it("kind=widget 一律归 widgetInputs", () => {
+    const map: WorkflowIOMap = {
+      "7::widget::seed": entry("widget", "seed", "INT"),
+      "7::widget::prompt": entry("widget", "prompt", "STRING"),
+    };
+    const { wireInputs, widgetInputs } = splitWorkflowIO(map);
+    expect(widgetInputs).toHaveLength(2);
     expect(widgetInputs[0]?.control).toBe("int");
     expect(wireInputs).toHaveLength(0);
-  });
-
-  it("开启提升：纯 link 端口（MODEL）不提升", () => {
-    const map: WorkflowIOMap = { "7::param::model": legacyParam("model", "MODEL") };
-    const { wireInputs, widgetInputs } = splitWorkflowIO(map, {
-      promoteLegacyParams: true,
-    });
-    expect(widgetInputs).toHaveLength(0);
-    expect(wireInputs).toHaveLength(1);
-    expect(wireInputs[0]?.control).toBe("link");
   });
 });

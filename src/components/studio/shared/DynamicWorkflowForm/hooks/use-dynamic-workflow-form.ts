@@ -72,13 +72,8 @@ export function useDynamicWorkflowForm(
 
   const { wireInputs, widgetInputs, outputs } = useMemo(
     () =>
-      splitWorkflowIO(io, {
-        /* IO 编辑预览（showHiddenInMode）才提升 legacy "param" 行 —— 让
-         * seed 这类历史参数行也渲染「必填 / 可选」与 👁。其他消费方
-         * （CreatePanel / 画布节点）保持原切分不变。 */
-        promoteLegacyParams: props.showHiddenInMode === true,
-      }),
-    [io, props.showHiddenInMode]
+      splitWorkflowIO(io),
+    [io]
   );
 
   /* 多模式：按当前模式过滤掉 `visible === false` 的行。
