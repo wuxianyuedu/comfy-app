@@ -123,7 +123,10 @@ export function usageFieldsToJson(fields: UsageField[]): string {
       }
     } else if (isMediaArrayField(key)) {
       // 数组媒体字段：用户贴的裸 URL（逗号分隔可多张）→ 拆成字符串数组。
-      out[key] = value.split(",").map((u) => u.trim()).filter(Boolean);
+      out[key] = value
+        .split(",")
+        .map((u) => u.trim())
+        .filter(Boolean);
     } else {
       out[key] = value; // 其余字段按字符串保留（如 first_frame 单图）
     }
@@ -173,4 +176,47 @@ export const USAGE_FIELD_PRESETS: ReadonlyArray<{
 /** 判断某个固定名是否已被作为字段行加入（避免一键预设时重复堆空行）。 */
 export function hasUsageFieldKey(fields: UsageField[], key: string): boolean {
   return fields.some((f) => f.key.trim() === key.trim());
+}
+
+/* ── 弹窗草稿保留 + 产物本地落盘的文件名/扩展名推断（纯函数） ── */
+
+/** 每个模型条目的测试弹窗草稿稳定键：kind + 条目名。
+ * 用于「关闭弹窗后重新打开时恢复上次填写内容 / 状态 / 执行流程」。 */
+export function usageTestDraftKey(kind: string, name: string): string {
+  return `${kind}::${name}`;
+}
+
+/** 从产物 URL 推断合理的文件扩展名（供存到本地 temp 用）。
+ *  远程 http(s) 地址按路径扩展名取；data:image/xxx 按 mime 取；
+ *  其它一律回落默认扩展名（图片 png / 视频 mp4）。返回不含点的扩展名。 */
+export function mediaExtensionFromUrl(
+  url: string,
+  fallback: "png" | "mp4",
+): string {
+  const u = url.trim();
+  if (u.startsWith("data:image/")) {
+    const m = /^data:image\/([a-zA-Z0-9.+-]+)/.exec(u);
+    if (m?.[1]) {
+      const ext = m[1]
+        .toLowerCase()
+        .replace("jpeg", "jpg")
+        .replace("svg+xml", "svg");
+      if (/^[a-z0-9]{1,8}$/.test(ext)) return ext;
+    }
+    return fallback;
+  }
+  if (/^https?:\/\//i.test(u)) {
+    const pathPart = u.split(/[?#]/)[0] ?? "";
+    const dot = pathPart.lastIndexOf(".");
+    if (dot >= 0 && dot < pathPart.length - 1) {
+      const ext = pathPart.slice(dot + 1).toLowerCase();
+      if (/^[a-z0-9]{1,8}$/.test(ext)) return ext;
+    }
+  }
+  return fallback;
+}
+
+/** 根据用途取默认产物扩展名（图片 png，视频 mp4）。 */
+export function mediaDefaultExt(kind: string): "png" | "mp4" {
+  return kind === "video" ? "mp4" : "png";
 }

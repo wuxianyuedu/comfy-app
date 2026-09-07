@@ -37,6 +37,8 @@ export interface UsageTestResult {
   pending?: boolean;
   /** 真实调用耗时（毫秒） */
   elapsedMs?: number;
+  /** 产物已下载并保存到的本地 temp 子目录绝对路径（可为空 = 未落盘成功） */
+  savedPath?: string;
 }
 
 export async function testModelUsage(
@@ -61,5 +63,6 @@ export async function testModelUsage(
     taskId: str("taskId"),
     pending: json.pending === true,
     elapsedMs: typeof json.elapsedMs === "number" ? json.elapsedMs : undefined,
+    savedPath: str("savedPath"),
   };
 }
