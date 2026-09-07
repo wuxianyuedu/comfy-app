@@ -109,6 +109,49 @@ export function splitExtraModels(raw: unknown): ExtraModelSplit {
 }
 
 /**
+ * 判断目标服务是否为本地回环（localhost / 127.x / [::1]）—— 本地 Ollama 等
+ * 回环服务；真远端模型不会用回环地址访问。与服务端 describeFetchFailure 的判定一致。
+ */
+export function isLoopbackBaseUrl(url: string): boolean {
+  return /^(https?:\/\/)?(localhost|127\.|\[::1\])/i.test(String(url ?? "").trim());
+}
+
+/** 判定一个「远端条目」是否为误存的本地 ollama。
+ *  本地 ollama 候选不带 apiKey，且接口指向本地回环；真远端独立模型必有独立密钥，
+ *  或指向非回环地址（否则无法从本机之外访问）。option C 前历史版本把本地 ollama
+ *  候选也存成对象、或迁移把这类条目整体搬进了 remoteModel 表，导致本机 ollama 在
+ *  工坊下拉 / 设置页被当「远端」挂小标。命中该判定的条目应归入本地候选而非远端组。
+ *  入参 baseUrl 为空的条目回落到全局 llmConfig.baseUrl 参与判定。 */
+export function isMisplacedLocalOllama(
+  e: { apiKey?: string | null; baseUrl?: string | null },
+  llmBaseUrl: string | null | undefined,
+): boolean {
+  if (e.apiKey) return false; // 带独立密钥 = 真远端
+  const effective = e.baseUrl?.trim() ? e.baseUrl : (llmBaseUrl ?? "");
+  return isLoopbackBaseUrl(effective);
+}
+
+/** 把「远端条目堆 + 本地候选名」按上面判定归并成本/远端两组：
+ *  误存的本地 ollama 折回本地候选名，真远端条目保留。调用点据此重建下发给客户端的
+ *  候选清单（字符串=本地、对象=远端），也让设置页保存时能把误存条目顺带清出远端表。 */
+export function foldRemoteToLocal(
+  remoteEntries: RemoteModelEntry[],
+  localNames: string[],
+  llmBaseUrl: string | null | undefined,
+): ExtraModelSplit {
+  const locals = localNames.slice();
+  const remotes: RemoteModelEntry[] = [];
+  for (const e of remoteEntries) {
+    if (isMisplacedLocalOllama(e, llmBaseUrl)) {
+      if (!locals.includes(e.name)) locals.push(e.name);
+    } else {
+      remotes.push(e);
+    }
+  }
+  return { localNames: locals, remoteEntries: remotes };
+}
+
+/**
  * 任务温度解析（设置覆盖与推荐默认的唯一裁决点）：
  *   该任务的用户覆盖值 → 调用方显式指定的温度 → 该任务推荐默认 → 全局默认。
  */
