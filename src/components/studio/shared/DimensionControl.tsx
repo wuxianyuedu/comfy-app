@@ -14,6 +14,8 @@ import {
   ASPECT_RATIO_LABEL_PRESETS,
   MEGAPIXEL_VALUE_PRESETS,
   parseRatioFromLabel,
+  resolveEntryRequired,
+  isVisibleInMode,
   type DimensionGroup,
   type EnrichedWidget,
 } from "./workflow-io";
@@ -25,6 +27,7 @@ import {
   type SegmentSection,
 } from "./MultiSegmentPopover";
 import { Field } from "./StyleSwitcher";
+import { Eye, EyeOff } from "lucide-react";
 
 /** Dimension group narrowed to its W/H form (the classic 比例+清晰度 picker). */
 type SizeGroup = DimensionGroup & { width: EnrichedWidget; height: EnrichedWidget };
@@ -35,34 +38,91 @@ type AspectMegaGroup = DimensionGroup & {
   multiple?: EnrichedWidget;
 };
 
-/** 组合参数的必填/可选切换：grouped 行替代了各自的独立参数行，原来的
- *  必填/可选徽标会跟着消失 —— 在组合卡内按 pin 补回。仅编辑态传入回调时渲染。 */
+/** 组合参数子 pin 的必填 / 显隐控制：grouped 行替代了各自的独立参数行，
+ *  原来的必填/可选徽标与 👁 会跟着消失 —— 在组合卡内按 pin 补回。
+ *  仅编辑态（IO 预览多模式作者态）传入回调时渲染。
+ *
+ *  required / visible 都按当前 mode 解析（resolveEntryRequired /
+ *  isVisibleInMode）：IO 预览在模式页签下把必填/显隐写进 `modes[mode]`
+ *  覆盖层，这里必须读同源回读，否则点完按钮 UI 不回读、看起来像“无法切换”
+ *  （历史根因：原实现直读条目级 `pin.required`，与模式级写入错层）。 */
 function RequiredChips({
   pins,
   onRequiredChange,
+  mode,
+  visibilityMode,
+  onVisibilityChange,
 }: {
   pins: (EnrichedWidget | undefined)[];
   onRequiredChange?: (ioKey: string, required: boolean) => void;
+  /** 多模式作者态：按该模式解析必填（未设模式覆盖时回退条目级）。 */
+  mode?: string | null;
+  /** IO 编辑态：按该模式解析可见性（undefined 不渲染 👁）。 */
+  visibilityMode?: string | null;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
 }) {
   const live = pins.filter((pin): pin is EnrichedWidget => !!pin);
-  if (!onRequiredChange || live.length === 0) return null;
+  const showAny =
+    !!onRequiredChange || (!!onVisibilityChange && !!visibilityMode);
+  if (!showAny || live.length === 0) return null;
   return (
-    <div className="flex items-center justify-end gap-1">
-      {live.map((pin) => (
-        <button
-          key={pin.ioKey}
-          type="button"
-          onClick={() => onRequiredChange(pin.ioKey, !pin.required)}
-          title={pin.required ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"}
-          className={`rounded px-1.5 py-px text-[10px] font-medium transition-colors ${
-            pin.required
-              ? "border border-red-400/40 bg-red-500/15 text-red-300 hover:bg-red-500/25"
-              : "border border-white/8 bg-white/2 text-gray-500 hover:bg-white/6 hover:text-gray-300"
-          }`}
-        >
-          {`${pin.required ? "必填" : "可选"} ${pin.label ?? pin.name}`}
-        </button>
-      ))}
+    <div className="flex flex-wrap items-center justify-end gap-1 pt-1">
+      {live.map((pin) => {
+        const required = !!resolveEntryRequired(pin, mode);
+        const visible =
+          visibilityMode == null ? true : isVisibleInMode(pin, visibilityMode);
+        return (
+          <span
+            key={pin.ioKey}
+            className="flex items-center gap-1 rounded border border-white/6 bg-black/20 px-1.5 py-0.5"
+            data-dimension-pin={pin.ioKey}
+          >
+            <span
+              className="max-w-[80px] truncate text-[10px] text-(--color-ink-soft)"
+              title={pin.label ?? pin.name}
+            >
+              {pin.label ?? pin.name}
+            </span>
+            {onRequiredChange && (
+              <button
+                type="button"
+                onClick={() => onRequiredChange(pin.ioKey, !required)}
+                title={
+                  required
+                    ? "已标记为必填，点击切换为可选"
+                    : "点击将其标记为必填"
+                }
+                className={`nodrag nopan rounded px-1.5 py-px text-[10px] font-medium transition-colors ${
+                  required
+                    ? "border border-red-400/40 bg-red-500/15 text-red-300 hover:bg-red-500/25"
+                    : "border border-white/8 bg-white/2 text-gray-500 hover:bg-white/6 hover:text-gray-300"
+                }`}
+              >
+                {required ? "必填" : "可选"}
+              </button>
+            )}
+            {onVisibilityChange && visibilityMode && (
+              <button
+                type="button"
+                title={
+                  visible
+                    ? "该参数在当前模式下已可见，点击隐藏"
+                    : "该参数在当前模式下已隐藏，点击恢复显示"
+                }
+                onClick={() => onVisibilityChange(pin.ioKey, !visible)}
+                onMouseDown={(ev) => ev.stopPropagation()}
+                className={`nodrag nopan rounded p-0.5 transition-colors ${
+                  visible
+                    ? "text-gray-300 hover:bg-white/8 hover:text-gray-100"
+                    : "text-gray-600 hover:bg-white/8 hover:text-gray-200"
+                }`}
+              >
+                {visible ? <Eye size={11} /> : <EyeOff size={11} />}
+              </button>
+            )}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -79,6 +139,9 @@ function DimensionControl({
   disabled,
   workflowId,
   onRequiredChange,
+  mode,
+  visibilityMode,
+  onVisibilityChange,
 }: {
   group: DimensionGroup;
   values: Record<string, unknown>;
@@ -87,6 +150,11 @@ function DimensionControl({
   disabled?: boolean;
   workflowId?: string;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
+  /** 多模式作者态：按该模式解析必填。 */
+  mode?: string | null;
+  /** IO 编辑态：按该模式解析可见性。 */
+  visibilityMode?: string | null;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
 }) {
   if (group.width && group.height) {
     return (
@@ -98,6 +166,9 @@ function DimensionControl({
         disabled={disabled}
         workflowId={workflowId}
         onRequiredChange={onRequiredChange}
+        mode={mode}
+        visibilityMode={visibilityMode}
+        onVisibilityChange={onVisibilityChange}
       />
     );
   }
@@ -109,6 +180,9 @@ function DimensionControl({
         setMany={setMany}
         disabled={disabled}
         onRequiredChange={onRequiredChange}
+        mode={mode}
+        visibilityMode={visibilityMode}
+        onVisibilityChange={onVisibilityChange}
       />
     );
   }
@@ -123,6 +197,9 @@ function DimensionSizeControl({
   disabled,
   workflowId,
   onRequiredChange,
+  mode,
+  visibilityMode,
+  onVisibilityChange,
 }: {
   group: SizeGroup;
   values: Record<string, unknown>;
@@ -131,6 +208,9 @@ function DimensionSizeControl({
   disabled?: boolean;
   workflowId?: string;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
+  mode?: string | null;
+  visibilityMode?: string | null;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
 }) {
   const w0 = Number(values[group.width.ioKey] ?? group.width.defaultValue ?? 1024);
   const h0 = Number(values[group.height.ioKey] ?? group.height.defaultValue ?? 1024);
@@ -312,6 +392,9 @@ function DimensionSizeControl({
         <RequiredChips
           pins={[group.width, group.height]}
           onRequiredChange={onRequiredChange}
+          mode={mode}
+          visibilityMode={visibilityMode}
+          onVisibilityChange={onVisibilityChange}
         />
       </div>
 
@@ -366,12 +449,18 @@ function AspectMegapixelControl({
   setMany,
   disabled,
   onRequiredChange,
+  mode,
+  visibilityMode,
+  onVisibilityChange,
 }: {
   group: AspectMegaGroup;
   values: Record<string, unknown>;
   setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
+  mode?: string | null;
+  visibilityMode?: string | null;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
 }) {
   const { aspect, megapixels, multiple } = group;
 
@@ -536,6 +625,9 @@ function AspectMegapixelControl({
         <RequiredChips
           pins={[aspect, megapixels, multiple]}
           onRequiredChange={onRequiredChange}
+          mode={mode}
+          visibilityMode={visibilityMode}
+          onVisibilityChange={onVisibilityChange}
         />
       </div>
     </div>

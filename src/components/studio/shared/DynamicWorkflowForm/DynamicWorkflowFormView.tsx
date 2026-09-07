@@ -192,6 +192,9 @@ export function DynamicWorkflowFormView({
           compact={compact}
           disabled={disabled}
           onRequiredChange={onRequiredChange}
+          mode={mode}
+          visibilityMode={visibilityMode}
+          onVisibilityChange={onVisibilityChange}
         />
       )}
 
