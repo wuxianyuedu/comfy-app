@@ -86,23 +86,13 @@ export function SubgraphHeader({
       >
         S
       </span>
+      {/* 展开入口只保留右上角的 ExternalLink 钻入按钮——标题点击与
+       *  回车聚焦不再触发进入子工作流（见 WorkflowSubgraphNode 双击移除
+       *  同一决策），避免用户误触。标题保持纯文本，禁止选中。 */}
       <span
-        role="button"
-        tabIndex={0}
-        onClick={(event) => {
-          event.stopPropagation();
-          onEnter?.();
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            event.stopPropagation();
-            onEnter?.();
-          }
-        }}
-        className="min-w-0 flex-1 cursor-pointer truncate text-[12px] font-semibold tracking-wide hover:text-white"
+        className="min-w-0 flex-1 select-none truncate text-[12px] font-semibold tracking-wide"
         style={{ color: "#E2E2EA" }}
-        title="点击进入子工作流"
+        title={title || "子工作流"}
       >
         {title || "子工作流"}
       </span>
