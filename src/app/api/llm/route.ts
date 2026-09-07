@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getLLMConfig, completeLLM, streamLLM } from "@/lib/llm/server";
+import { getLLMConfig, completeLLM, completeLLMTools, streamLLM } from "@/lib/llm/server";
 import { requireServerUser } from "@/lib/auth-server";
 import { TASK_TYPES, type LLMMessage, type LLMRequestOptions, type LLMProviderType, type TaskType } from "@/lib/llm/types";
 
@@ -29,13 +29,19 @@ const BodySchema = {
     const rawMessages: unknown[] = rec.messages;
     const messages: LLMMessage[] = rawMessages.map((m: unknown) => {
       // 逐元素断言为最小形状;null/undefined 元素在属性访问处抛 TypeError → 400,与原 any 版一致。
-      const entry = m as { role?: unknown; content?: unknown };
+      const entry = m as { role?: unknown; content?: unknown; tool_calls?: unknown; tool_call_id?: unknown };
       // 用 unknown 局部变量承接 `??` 结果,避免 String() 落在真值窄化后的 `{}` 类型上。
       const rawContent: unknown = entry.content ?? "";
-      return {
-        role: entry.role === "assistant" ? "assistant" : entry.role === "user" ? "user" : "system",
-        content: String(rawContent),
-      };
+      const role = entry.role === "assistant" ? "assistant" : entry.role === "user" ? "user" : entry.role === "tool" ? "tool" : "system";
+      const base: LLMMessage = { role, content: String(rawContent) };
+      // 透传 tool_calls（assistant 消息带）与 tool_call_id（tool 消息带）
+      if (role === "assistant" && Array.isArray(entry.tool_calls)) {
+        base.tool_calls = entry.tool_calls as LLMMessage["tool_calls"];
+      }
+      if (role === "tool" && typeof entry.tool_call_id === "string") {
+        base.tool_call_id = entry.tool_call_id;
+      }
+      return base;
     });
     const opts: LLMRequestOptions = {};
     // 原 `as any` 透传:非 "local"/"remote" 的值继续透传给 getLLMConfig(按非 remote 处理),
@@ -49,6 +55,9 @@ const BodySchema = {
     if (typeof rec.maxTokens === "number") opts.maxTokens = rec.maxTokens;
     if (typeof rec.taskType === "string" && rec.taskType in TASK_TYPES) {
       opts.taskType = rec.taskType as TaskType;
+    }
+    if (Array.isArray(rec.tools)) {
+      opts.tools = rec.tools as NonNullable<typeof opts.tools>;
     }
     return { messages, stream: rec.stream === true, opts };
   },
@@ -76,6 +85,11 @@ export async function POST(req: NextRequest) {
   // ── Non-streaming ──
   if (!parsed.stream) {
     try {
+      // 带 tools 参数时走工具调用链路，返回 tool_calls（Agent 场景）
+      if (parsed.opts.tools?.length) {
+        const result = await completeLLMTools(cfg, parsed.messages, parsed.opts.tools);
+        return NextResponse.json({ content: result.content, tool_calls: result.toolCalls });
+      }
       const content = await completeLLM(cfg, parsed.messages);
       return NextResponse.json({ content });
     } catch (e) {
