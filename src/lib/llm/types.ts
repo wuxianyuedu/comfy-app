@@ -198,9 +198,37 @@ export interface LLMConfigView {
 }
 
 export interface LLMMessage {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: string;
+  /** 仅 role === "assistant" 时可能出现：携带 tool_calls 的消息回灌。 */
+  tool_calls?: Array<{
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
+  }>;
+  /** 仅 role === "tool" 时需要：标识对应哪个 tool_call。 */
+  tool_call_id?: string;
 }
+/** OpenAI function calling 工具定义（OpenAI 兼容 /chat/completions 的 tools 参数）。 */
+export interface LLMTool {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters?: Record<string, unknown>;
+  };
+}
+
+/** OpenAI 兼容响应中的 tool_call 条目。 */
+export interface LLMToolCall {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
 
 /** 工坊阶段的 key —— 供按阶段挑选模型 / 提示各阶段能力 */
 export const WORKSHOP_STAGES = [
@@ -220,4 +248,6 @@ export interface LLMRequestOptions {
   maxTokens?: number;
   /** 调用方指定的任务类型，用于查找 temperatureByTask 覆盖 */
   taskType?: TaskType;
+  /** OpenAI 兼容 function calling 的工具列表（可选，Agent 指挥用）。 */
+  tools?: LLMTool[];
 }
