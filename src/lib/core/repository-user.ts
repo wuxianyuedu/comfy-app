@@ -14,8 +14,9 @@ import {
   encryptSecret,
 } from "@/lib/llm/secrets";
 import type { RawExtraModel } from "@/lib/llm/types";
-import { user, llmConfig, type User, type LlmConfig } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
+import { user, llmConfig, remoteModel, type User, type LlmConfig, type RemoteModel } from "~/server/db/schema";
+import { eq, inArray } from "drizzle-orm";
+import type { RemoteModelKind } from "@/lib/llm/types";
 
 export class UserRepository {
   async findByEmail(email: string): Promise<User | null> {
@@ -141,5 +142,79 @@ export class LlmConfigRepository {
   }
 }
 
+// ── 远端独立模型仓储（option C：远端模型独立成表，不与本地 ollama 候选混存）──
+export class RemoteModelRepository {
+  /** 全部远端模型，按创建先后排序（配置视图稳定顺序）。 */
+  async list(): Promise<RemoteModel[]> {
+    const rows = await db
+      .select()
+      .from(remoteModel)
+      .orderBy(remoteModel.createdAt);
+    return rows;
+  }
+
+  /** 按名查找单个远端模型；不存在返回 null。 */
+  async findByName(name: string): Promise<RemoteModel | null> {
+    const rows = await db
+      .select()
+      .from(remoteModel)
+      .where(eq(remoteModel.name, name))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  /**
+   * 以给定条目列表为远端模型的最终态做全量同步（去重键=name）：
+   *   已存在 name → 更新 baseUrl/apiKey/kind；新 name → 插入；
+   *   库里存在但本次未给出 → 删除。
+   * 设置页保存整份远端清单时调用，保证服务端只认这一份真相。
+   */
+  async replaceAll(entries: Array<{
+    name: string;
+    baseUrl?: string | null;
+    apiKey?: string | null;
+    kind?: RemoteModelKind | null;
+  }>): Promise<RemoteModel[]> {
+    const seen = new Set<string>();
+    const cleaned: Array<{
+      name: string;
+      baseUrl: string | null;
+      apiKey: string | null;
+      kind: string;
+    }> = [];
+    for (const e of entries) {
+      const name = e.name.trim();
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      cleaned.push({
+        name,
+        baseUrl: e.baseUrl?.trim() ? e.baseUrl.trim() : null,
+        apiKey: e.apiKey?.trim() ? e.apiKey.trim() : null,
+        kind: e.kind ?? "chat",
+      });
+    }
+    const rows = await this.list();
+    const removed = rows.filter((r) => !seen.has(r.name));
+    if (removed.length > 0) {
+      await db
+        .delete(remoteModel)
+        .where(inArray(remoteModel.name, removed.map((r) => r.name)));
+    }
+    for (const e of cleaned) {
+      const existing = rows.find((r) => r.name === e.name);
+      if (existing) {
+        await db
+          .update(remoteModel)
+          .set({ baseUrl: e.baseUrl, apiKey: e.apiKey, kind: e.kind })
+          .where(eq(remoteModel.id, existing.id));
+      } else {
+        await db.insert(remoteModel).values(e);
+      }
+    }
+    return this.list();
+  }
+}
+
 export const userRepository = new UserRepository();
 export const llmConfigRepository = new LlmConfigRepository();
+export const remoteModelRepository = new RemoteModelRepository();

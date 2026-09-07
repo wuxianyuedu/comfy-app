@@ -68,6 +68,46 @@ export function extraModelName(entry: RawExtraModel): string {
   return typeof entry === "string" ? entry : entry.name;
 }
 
+/** option C 的拆分结果：本地 ollama 候选（纯名字，无 apiKey）与远端独立模型分开。 */
+export interface ExtraModelSplit {
+  /** 本地 Ollama 候选模型名（无 apiKey）。 */
+  localNames: string[];
+  /** 远端独立模型条目（可带独立 baseUrl / apiKey）。 */
+  remoteEntries: RemoteModelEntry[];
+}
+
+/**
+ * 把 DB / 请求里的候选列表按「类型」拆成本地与远端两堆：
+ *   字符串 → 本地候选名；对象 → 远端条目。
+ * 用于设置页保存时的写入分派与工坊分组下拉的静态来源。
+ */
+export function splitExtraModels(raw: unknown): ExtraModelSplit {
+  const localNames: string[] = [];
+  const remoteEntries: RemoteModelEntry[] = [];
+  if (!Array.isArray(raw)) return { localNames, remoteEntries };
+  for (const item of raw) {
+    if (typeof item === "string") {
+      const n = item.trim();
+      if (n !== "" && !localNames.includes(n)) localNames.push(n);
+      continue;
+    }
+    if (typeof item !== "object" || item === null) continue;
+    const rec = item as Record<string, unknown>;
+    const name = typeof rec.name === "string" ? rec.name.trim() : "";
+    if (name === "") continue;
+    if (remoteEntries.some((e) => e.name === name)) continue;
+    const kind: unknown = rec.kind;
+    remoteEntries.push({
+      name,
+      baseUrl: typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== "" ? rec.baseUrl : null,
+      apiKey: typeof rec.apiKey === "string" && rec.apiKey.trim() !== "" ? rec.apiKey : null,
+      kind: typeof kind === "string" && REMOTE_MODEL_KINDS.includes(kind as RemoteModelKind)
+        ? (kind as RemoteModelKind) : null,
+    });
+  }
+  return { localNames, remoteEntries };
+}
+
 /**
  * 任务温度解析（设置覆盖与推荐默认的唯一裁决点）：
  *   该任务的用户覆盖值 → 调用方显式指定的温度 → 该任务推荐默认 → 全局默认。
