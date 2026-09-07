@@ -70,6 +70,19 @@ export function useDynamicWorkflowForm(
 ): DynamicWorkflowFormController {
   const { io, values, onChange, onReorder, mode } = props;
 
+  /* IO-edit 作者态：行内提供了「必填 / 可选」切换或 👁 可见性等编辑回调。
+   *  此时数值类参数（seed/steps/cfg…）也要渲染成完整参数行，让作者能在
+   *  预览里调它们的必填与可见——否则它们被按端口行版式压缩成单行，那套版式
+   *  从不渲染必填/👁，作者永远碰不到（seed 挤没的历史根因）。
+   *  CreatePanel / 画布 workflow 节点等运行期只读表单不带这些回调，数值行
+   *  仍保持原有紧凑端口行 + SeedMode 的布局。 */
+  const isAuthoringEdit = !!(
+    props.onRequiredChange ||
+    props.onLabelChange ||
+    props.onVisibilityChange ||
+    onReorder
+  );
+
   const { wireInputs, widgetInputs, outputs } = useMemo(
     () =>
       splitWorkflowIO(io),
@@ -111,23 +124,30 @@ export function useDynamicWorkflowForm(
   /* Port rows = wire inputs + numeric widgets (seed/steps/cfg …).  Numeric
    * widgets join them to inherit the connectable single-line layout.
    * Grouped pins are excluded so they never render twice (once here, once
-   * in GroupedControls). */
+   * in GroupedControls).
+   *   IO-edit 作者态（isAuthoringEdit）下数值 widget 不再并入端口行——改由
+   *   widgetSectionEntries 渲染成完整参数行，否则必填/👁 无从编辑。 */
   const portEntries = useMemo(
     () => [
       ...shownWireInputs,
       ...shownWidgetInputs.filter(
-        (widgetInput) => isNumericWidget(widgetInput) && !groupedKeys.has(widgetInput.ioKey)
+        (widgetInput) =>
+          isNumericWidget(widgetInput) &&
+          !groupedKeys.has(widgetInput.ioKey) &&
+          !isAuthoringEdit
       ),
     ],
-    [shownWireInputs, shownWidgetInputs, groupedKeys]
+    [shownWireInputs, shownWidgetInputs, groupedKeys, isAuthoringEdit]
   );
 
   const widgetSectionEntries = useMemo(
     () =>
       shownWidgetInputs.filter(
-        (widgetInput) => !isNumericWidget(widgetInput) && !groupedKeys.has(widgetInput.ioKey)
+        (widgetInput) =>
+          !groupedKeys.has(widgetInput.ioKey) &&
+          (isAuthoringEdit || !isNumericWidget(widgetInput))
       ),
-    [shownWidgetInputs, groupedKeys]
+    [shownWidgetInputs, groupedKeys, isAuthoringEdit]
   );
 
   /* Drag state is deliberately component-local (not in workflow-io.ts or any
