@@ -42,6 +42,8 @@ import {
   type Tab,
 } from "~/components/workshop/stage-config";
 
+import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
+
 /* ── 工坊项目存储层（单草稿 → 多项目可切换） ──
  *
  *  索引（项目列表 + 当前项目 id）单独存一个键，每个项目的正文按 id 各存一个键。
@@ -265,6 +267,55 @@ function errorMessage(error: unknown, fallback: string): string {
 /** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别）。 */
 export type ShotProgressMap = Record<string, { pct: number; label?: string }>;
 
+/** 工坊「从剧本提取」/工具类会话的界面状态。
+ *
+ *  角色卡 / 分镜的提取是长耗时异步流程：切走页签只卸载 stage 组件，
+ *  controller 仍常驻，故把 busy/progress/status/error/channel/执行日志统一
+ *  收在 controller 层 —— 提取中切页签再切回，进度与日志不丢（取代原先
+ *  散落在各组件里的会话级模块缓存）。
+ */
+export interface ExtractSession {
+  /** 模型下拉完整选项值（tool | local::<model> | remote::<model>） */
+  channelValue: string;
+  busy: boolean;
+  /** 成功 / 结果提示文案 */
+  status: string;
+  /** 模型通道的实时流式提取过程（token 累积） */
+  progress: string;
+  error: string;
+  /** 结构化执行日志（输入/输出/结果/错误），跑完仍保留展示 */
+  log: ExtractLogEntry[];
+}
+
+/** 提取会话更新动作：patch 更新普通字段，appendLog / resetLog 维护日志。
+ *  阶段组件卸载期间后台 async 仍可调用（controller 常驻），故能跨页签续传。 */
+export interface ExtractSessionActions {
+  /** 合并更新普通字段（通道 / busy / status / progress / error） */
+  patch: (
+    p:
+      | Partial<
+          Pick<
+            ExtractSession,
+            "channelValue" | "busy" | "status" | "progress" | "error"
+          >
+        >
+      | ((
+          prev: ExtractSession,
+        ) => Partial<
+          Pick<
+            ExtractSession,
+            "channelValue" | "busy" | "status" | "progress" | "error"
+          >
+        >),
+  ) => void;
+  /** 向实时 process 追加一段文本（流式 token 累积用） */
+  appendProgress: (text: string) => void;
+  /** 追加一条结构化执行日志 */
+  appendLog: (entry: ExtractLogEntry) => void;
+  /** 以给定数组整体替换执行日志（新一次提取重置时用） */
+  setLog: (entries: ExtractLogEntry[]) => void;
+}
+
 export interface WorkshopPipelineController {
   // ── 阶段
   tab: Tab;
@@ -307,6 +358,12 @@ export interface WorkshopPipelineController {
   /** 需要引起用户注意的失败/阻断文案（替代 alert，由视图决定怎么渲染）。 */
   notice: string | null;
 
+  // ── 提取会话（角色卡 / 分镜）：busy / progress / 日志 收归 controller ──
+  characterExtract: ExtractSession;
+  characterExtractActions: ExtractSessionActions;
+  storyboardExtract: ExtractSession;
+  storyboardExtractActions: ExtractSessionActions;
+
   // ── 动作
   generateShot: (shot: Shot) => Promise<void>;
   openScriptEditor: () => void;
@@ -324,6 +381,58 @@ export interface WorkshopPipelineController {
   createProject: (title?: string) => void;
   renameProject: (id: string, title: string) => void;
   deleteProject: (id: string) => void;
+}
+
+/** 创建一个收在 controller 的提取会话（state + 稳定动作）。
+ *  在工坊控制器内调用两次（角色卡 / 分镜），动作经 useCallback 保持稳定，
+ *  即使阶段组件卸载期间后台 async 仍能安全调用更新。 */
+export function useExtractSession(
+  defaultChannel: string,
+): [ExtractSession, ExtractSessionActions] {
+  const [session, setSession] = React.useState<ExtractSession>(() => ({
+    channelValue: defaultChannel,
+    busy: false,
+    status: "",
+    progress: "",
+    error: "",
+    log: [],
+  }));
+  const patch = React.useCallback(
+    (
+      p:
+        | Partial<
+            Pick<
+              ExtractSession,
+              "channelValue" | "busy" | "status" | "progress" | "error"
+            >
+          >
+        | ((
+            prev: ExtractSession,
+          ) => Partial<
+            Pick<
+              ExtractSession,
+              "channelValue" | "busy" | "status" | "progress" | "error"
+            >
+          >),
+    ) =>
+      setSession((prev) => ({
+        ...prev,
+        ...(typeof p === "function" ? p(prev) : p),
+      })),
+    [],
+  );
+  const appendProgress = React.useCallback((text: string) => {
+    setSession((prev) => ({ ...prev, progress: prev.progress + text }));
+  }, []);
+  const appendLog = React.useCallback(
+    (entry: ExtractLogEntry) =>
+      setSession((prev) => ({ ...prev, log: [...prev.log, entry] })),
+    [],
+  );
+  const setLog = React.useCallback((entries: ExtractLogEntry[]) => {
+    setSession((prev) => ({ ...prev, log: entries }));
+  }, []);
+  return [session, { patch, appendProgress, appendLog, setLog }];
 }
 
 export function useWorkshopPipeline(): WorkshopPipelineController {
@@ -353,6 +462,11 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   );
   const [apiSettingsOpen, setApiSettingsOpen] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
+
+  // ── 提取会话收归 controller：切页签卸载只丢 stage 组件，此处常驻 ──
+  const [characterExtract, characterExtractActions] = useExtractSession("tool");
+  const [storyboardExtract, storyboardExtractActions] =
+    useExtractSession("tool");
 
   // 剧本内容默认为空，全部内容经 localStorage 草稿持久化
   // （防抖自动保存，挂载时惰性恢复）。
@@ -855,6 +969,11 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     isScriptEditorOpen,
     apiSettingsOpen,
     notice,
+
+    characterExtract,
+    characterExtractActions,
+    storyboardExtract,
+    storyboardExtractActions,
 
     generateShot,
     openScriptEditor,
