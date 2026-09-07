@@ -50,32 +50,30 @@ export function useLLMConfig(): LLMConfigController {
   // query 结果 → 本地状态（渲染期调整，React 19 模式，见 §17.2 hook 范式）。
   const cfg = configQ.data?.config;
   const [prevCfg, setPrevCfg] = useState(cfg);
-  if (cfg !== prevCfg) {
+  /* 播种条件：数据引用变化时重新播种；或数据已就绪而 derived config 仍未
+   * 落定（首帧即命中 tRPC 缓存的场景）时播种。若只用引用对比，热重挂时
+   * prevCfg 初值被缓存命中、cfg===prevCfg 永不成立，分支不触发——本地/远端
+   * 候选与 config 就一直为空（下拉只剩「工具」一项）。与设置页播种同源守卫。 */
+  if (cfg && (cfg !== prevCfg || !config)) {
     setPrevCfg(cfg);
-    if (cfg) {
-      /* 服务端的候选列表已条目化（本地=字符串、远端=带独立连接参数的对象），
-         工坊下拉据此把「本地 / 远端」两组静态分开。 */
-      const p = splitExtraModels(cfg.extraModels);
-      const remoteNames = p.remoteEntries.map((e) => e.name);
-      /* 兜底：当前生效主模型不在候选里时，按 provider 归入对应组，保证下拉总能选它。 */
-      const local = p.localNames.slice();
-      const remote = remoteNames.slice();
-      const model = cfg.model?.trim() ?? "";
-      if (
-        model &&
-        !local.includes(model) &&
-        !remote.includes(model)
-      ) {
-        if (cfg.provider === "remote") remote.push(model);
-        else local.push(model);
-      }
-      setSplit({ local, remote });
-      setConfig({
-        ...cfg,
-        extraModels: toModelNames(cfg.extraModels),
-        hasApiKey: !!cfg.apiKey,
-      });
+    /* 服务端的候选列表已条目化（本地=字符串、远端=带独立连接参数的对象），
+       工坊下拉据此把「本地 / 远端」两组静态分开。 */
+    const p = splitExtraModels(cfg.extraModels);
+    const remoteNames = p.remoteEntries.map((e) => e.name);
+    /* 兜底：当前生效主模型不在候选里时，按 provider 归入对应组，保证下拉总能选它。 */
+    const local = p.localNames.slice();
+    const remote = remoteNames.slice();
+    const model = cfg.model?.trim() ?? "";
+    if (model && !local.includes(model) && !remote.includes(model)) {
+      if (cfg.provider === "remote") remote.push(model);
+      else local.push(model);
     }
+    setSplit({ local, remote });
+    setConfig({
+      ...cfg,
+      extraModels: toModelNames(cfg.extraModels),
+      hasApiKey: !!cfg.apiKey,
+    });
   }
 
   return {
