@@ -47,7 +47,7 @@ describe("enrichWorkflowIO — legacy param 自迁移", () => {
         }
       )
     );
-    const entry = result["7::widget::seed"];
+    const entry = result["7::widget::seed"]!;
     expect(entry).toBeDefined();
     expect(entry.kind).toBe("widget");
     expect(entry.type).toBe("INT");
@@ -74,7 +74,7 @@ describe("enrichWorkflowIO — legacy param 自迁移", () => {
         }
       )
     );
-    const entry = result["7::widget::steps"];
+    const entry = result["7::widget::steps"]!;
     expect(entry).toBeDefined();
     expect(entry.kind).toBe("widget");
     expect(entry.type).toBe("INT");
@@ -105,7 +105,7 @@ describe("enrichWorkflowIO — legacy param 自迁移", () => {
         }
       )
     );
-    const entry = result["7::param::model"];
+    const entry = result["7::param::model"]!;
     expect(entry).toBeDefined();
     expect(entry.kind).toBe("param");
     expect(result["7::widget::model"]).toBeUndefined();
@@ -122,7 +122,7 @@ describe("enrichWorkflowIO — legacy param 自迁移", () => {
         },
       })
     );
-    const entry = result["7::output::image"];
+    const entry = result["7::output::image"]!;
     expect(entry).toBeDefined();
     expect(entry.kind).toBe("output");
   });
@@ -146,7 +146,7 @@ describe("enrichWorkflowIO — legacy param 自迁移", () => {
         },
       })
     );
-    const entry = result["7::widget::seed"];
+    const entry = result["7::widget::seed"]!;
     expect(entry).toBeDefined();
     expect(entry.kind).toBe("widget");
     expect(entry.label).toBe("新标签");

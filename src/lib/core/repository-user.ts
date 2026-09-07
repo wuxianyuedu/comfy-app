@@ -71,9 +71,10 @@ function encryptInput(
   const encExtra = extraModels
     ? extraModels.map((item) => {
         if (typeof item === "object" && item !== null && "apiKey" in item) {
-          const rec = { ...(item as Record<string, unknown>) };
-          rec.apiKey = encryptSecret(typeof rec.apiKey === "string" ? rec.apiKey : null);
-          return rec as RawExtraModel;
+          return {
+            ...item,
+            apiKey: encryptSecret(typeof item.apiKey === "string" ? item.apiKey : null),
+          };
         }
         return item;
       })
