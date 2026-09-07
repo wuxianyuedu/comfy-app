@@ -447,7 +447,7 @@ function Test-PnpmVersion {
         }
         Write-Log ("corepack prepare 执行后 pnpm 仍为 {0}，切换可能未生效" -f $newVer) -Level WARN
       } else {
-        Write-Log ("corepack prepare 失败（exit=$cpCode），详见 $cpLog" -Level WARN)
+        Write-Log ("corepack prepare 失败（exit=$cpCode），详见 $cpLog") -Level WARN
       }
     } catch {
       Write-Log "corepack 自动切换异常：$($_.Exception.Message)" -Level WARN
