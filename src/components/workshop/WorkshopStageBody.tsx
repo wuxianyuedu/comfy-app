@@ -57,7 +57,7 @@ const LazyFinalComposer = React.lazy(() =>
 /** 懒加载占位：保留版面高度，避免 stage 切换瞬间塌陷。 */
 function StageFallback() {
   return (
-    <div className="border-border bg-surface animate-pulse min-h-[260px] rounded-2xl border p-5" />
+    <div className="border-border bg-surface min-h-[260px] animate-pulse rounded-2xl border p-5" />
   );
 }
 
@@ -91,6 +91,10 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     clipDoneCount,
     generating,
     shotProgress,
+    characterExtract,
+    characterExtractActions,
+    storyboardExtract,
+    storyboardExtractActions,
     isScriptEditorOpen,
     notice,
     rendered,
@@ -255,6 +259,10 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 styles={styles}
                 onCharactersChange={setCharacters}
                 scriptMarkdown={scriptMarkdown}
+                extract={{
+                  session: characterExtract,
+                  actions: characterExtractActions,
+                }}
               />
             </React.Suspense>
           </section>
@@ -294,6 +302,10 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 progressByShot={shotProgress}
                 scriptMarkdown={scriptMarkdown}
                 onCharactersChange={setCharacters}
+                extract={{
+                  session: storyboardExtract,
+                  actions: storyboardExtractActions,
+                }}
               />
             </React.Suspense>
           </section>
