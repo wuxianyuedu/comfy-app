@@ -89,17 +89,17 @@ export function BrowserStatusBar() {
           <span className="text-gray-400">FPS</span>
         </span>
 
-        {/* 显存占用：具体数值 + 百分比（来自 ComfyUI /system_stats） */}
+        {/* 显存剩余可用 + 总量 + 占用百分比（来自 ComfyUI /system_stats 的 vram_free） */}
         {online && vramPct !== null && (
           <span
             className="hidden items-center gap-1 text-gray-400 tabular-nums sm:flex"
-            title="显存占用（GPU 专用显存）"
+            title="显存剩余可用 / 总量（占用 = 总量 − 可用）"
           >
             <span className="text-gray-500">显存</span>
             <span className="text-gray-200">
-              {fmtBytes(stats?.vramUsed) ?? "—"}/{fmtBytes(stats?.vramTotal) ?? "—"}
+              {fmtBytes(stats?.vramFree) ?? "—"}/{fmtBytes(stats?.vramTotal) ?? "—"}
             </span>
-            <span className="text-gray-600">({vramPct}%)</span>
+            <span className="text-gray-600">({vramPct}% 已用)</span>
           </span>
         )}
 
