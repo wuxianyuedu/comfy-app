@@ -31,6 +31,47 @@ import {
 
 const MULTILINE_HINT = /(prompt|text|caption|描述|提示)/i;
 
+/** ComfyUI types that are pure wire-only connection ports — never user-editable. */
+const LINK_ONLY = new Set([
+  "MODEL",
+  "CLIP",
+  "VAE",
+  "CONDITIONING",
+  "LATENT",
+  "CONTROL_NET",
+  "SAMPLER",
+  "SIGMAS",
+  "GUIDER",
+  "NOISE",
+  "CLIP_VISION",
+  "STYLE_MODEL",
+  "UPSCALE_MODEL",
+]);
+
+/** Non-wire ComfyUI types that are user-editable widgets or uploads. */
+const EDITABLE_TYPES = new Set([
+  "IMAGE",
+  "MASK",
+  "BOOLEAN",
+  "BOOL",
+  "INT",
+  "FLOAT",
+  "NUMBER",
+  "COMBO",
+  "STRING",
+]);
+
+/** Decide whether a legacy "param" entry actually carries an editable widget.
+ *  Used to auto-migrate stale workflowIO data (pre widget/param distinction)
+ *  so consumers don't need client-side promoteLegacyParams workarounds. */
+function hasEditableControl(type: string, defaultValue: unknown): boolean {
+  const t = (type ?? "*").toUpperCase();
+  if (LINK_ONLY.has(t)) return false;
+  if (EDITABLE_TYPES.has(t) || t === "*") return true;
+  /* Unknown custom node type: editable only if it already holds a scalar. */
+  return typeof defaultValue === "string" || typeof defaultValue === "number";
+}
+
 /** 存库 workflowIO 列的单条记录（PATCH 原样落库的「哪根 pin 被暴露」）。 */
 export interface WorkflowIORawEntry {
   direction: "input" | "output";
@@ -105,6 +146,11 @@ export async function enrichWorkflowIO(
     let type = "*";
     let defaultValue: unknown = undefined;
     let label = v.label;
+    /* 输出 kind 与输出 key：初始为存储值；输入方向的 legacy "param" 若经
+     *  迁移判定为可编辑控件则在此覆盖为 "widget"。key 同步改写为
+     *  `${nodeId}::widget::${name}`，让画布 widget 行的勾选框能正确命中。 */
+    let resolvedKind: string = v.kind;
+    let resolvedKey: string = ioKey;
     /* COMBO candidate list — resolved below once we know the final `type`. */
     let options: string[] | undefined;
 
@@ -149,6 +195,10 @@ export async function enrichWorkflowIO(
       }
     } else {
       const ri = (rawInputsById[canonicalNodeId] ?? []).find((raw) => raw.name === v.name);
+      /* 判断该输入是否 widget-backed：raw input 带 widget 标记即确定是
+       *  控件行（即使 type 恰好是 INT/IMAGE 等可能既连线又可编辑的类型）。
+       *  找不到 raw input 时回退到 type 推断。 */
+      const isWidgetBacked = !!ri?.widget;
       if (ri) {
         type = ri.type || "*";
         label = label ?? ri.label ?? ri.localized ?? ri.name;
@@ -166,6 +216,17 @@ export async function enrichWorkflowIO(
         else if (typeof defaultValue === "number")
           type = Number.isInteger(defaultValue) ? "INT" : "FLOAT";
         else if (typeof defaultValue === "string") type = "STRING";
+      }
+      /* legacy param 自迁移：旧版勾选路径把所有暴露 pin 都写成 kind:"param"，
+       *  未区分可编辑 widget。raw input 确认 widget-backed，或（找不到
+       *  raw 时）type 推断可编辑 → 升级 kind 与 key 为 "widget"，让所有
+       *  消费方（IO 预览 / CreatePanel / 画布节点）一致地按参数行处理，
+       *  画布 widget 行勾选框也能正确命中。
+       *  注意：只改本次响应，不触碰入参 workflowIORaw（那可能被其他调用
+       *  方共享）。PATCH 时客户端会带着已修正的 kind + key 整体回写。 */
+      if (v.kind === "param" && (isWidgetBacked || hasEditableControl(type, defaultValue))) {
+        resolvedKind = "widget";
+        resolvedKey = `${v.nodeId}::widget::${v.name}`;
       }
       /* COMBO candidate list: a wrapper COMBO already carries `comboOptions`
        *  from the pass; a direct (non-wrapper) COMBO node resolves via
@@ -186,9 +247,16 @@ export async function enrichWorkflowIO(
       }
     }
 
-    workflowIO[ioKey] = {
+    /* 去重：如果 migrated 后的 key 已经存在（数据库里同时存了正确的
+     *  widget 条目和 legacy param 条目），跳过本次写入——正确的条目
+     *  应优先保留。 */
+    if (workflowIO[resolvedKey] && resolvedKey !== ioKey) {
+      continue;
+    }
+
+    workflowIO[resolvedKey] = {
       direction: v.direction,
-      kind: v.kind,
+      kind: resolvedKind,
       nodeId: String(v.nodeId),
       name: v.name,
       label: label ?? v.name,

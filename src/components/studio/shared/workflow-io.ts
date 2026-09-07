@@ -202,12 +202,7 @@ export function ioLabel(e: WorkflowIOEntry, allEntries?: readonly WorkflowIOEntr
  *  `inputs` is kept as a flat concatenation of wireInputs + widgetInputs
  *  so consumers that don't yet distinguish the two groups keep working. */
 export function splitWorkflowIO(
-  io: WorkflowIOMap | undefined | null,
-  /* promoteLegacyParams：IO 编辑预览专用 —— 历史 "param" 条目只要带可编辑
-   * 控件（controlForEntry 非 "link"）就归入 widgetInputs，让预览行渲染出
-   * 「必填 / 可选」与 👁 切换。否则这些行走 WirePortRows 端口行版式，
-   * 该版式从不渲染必填/可见切换，作者永远调不了它们（seed 被挤没的根因）。 */
-  options?: { promoteLegacyParams?: boolean }
+  io: WorkflowIOMap | undefined | null
 ): {
   /** Inputs that have no widget — must be wired from another node's output.
    *  In ComfyUI these are the "typed-only" ports (positive_prompt, MODEL,
@@ -231,17 +226,13 @@ export function splitWorkflowIO(
       const enriched = { ...entry, ioKey, control: controlForEntry(entry) };
       /* `kind === "widget"` is the signal the canvas-side toggle wrote
        *  when the user checked a node's editable parameter.  Anything
-       *  else (legacy "param", missing/unknown) is treated as wire-only
-       *  — matches the canvas rendering where these rows render the
-       *  🔌 chip via `controlForEntry` → "link". */
+       *  else (kind !== "widget") is treated as wire-only — matches the
+       *  canvas rendering where these rows render the 🔌 chip via
+       *  `controlForEntry` → "link".  Legacy "param" 数据由服务端
+       *  enrichment 自动迁移为 "widget"（见 workflow-detail-io.ts），
+       *  客户端无需再为旧数据做 promote 特判。 */
       if (entry.kind === "widget") widgetInputs.push(enriched);
-      else if (
-        options?.promoteLegacyParams &&
-        enriched.control !== "link"
-      ) {
-        /* legacy "param" + 可编辑控件 → 按参数行渲染（见函数头注释）。 */
-        widgetInputs.push(enriched);
-      } else wireInputs.push(enriched);
+      else wireInputs.push(enriched);
     }
   }
   /* apply the user-driven displayOrder. Absent
