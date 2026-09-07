@@ -17,12 +17,20 @@ import {
   collectModeCodes,
   isVisibleInMode,
   resolveEntryDefault,
+  resolveEntryRequired,
+  resolveEntrySeedMode,
   type WorkflowIOEntry,
   type WorkflowIOMap,
   type WorkflowIOModeOverride,
 } from "~/lib/workflow-io-types";
 export type { WorkflowIOEntry, WorkflowIOMap, WorkflowIOModeOverride };
-export { collectModeCodes, isVisibleInMode, resolveEntryDefault };
+export {
+  collectModeCodes,
+  isVisibleInMode,
+  resolveEntryDefault,
+  resolveEntryRequired,
+  resolveEntrySeedMode,
+};
 
 /** Which control a dynamic form should render for a given entry. */
 export type ControlKind =
@@ -393,14 +401,15 @@ export function isInputFilled(value: unknown): boolean {
  */
 export function getMissingRequiredInputs(
   io: WorkflowIOMap | undefined | null,
-  values: Record<string, unknown>
+  values: Record<string, unknown>,
+  mode?: string | null
 ): string[] {
   if (!io) return [];
   const out: string[] = [];
   for (const [key, entry] of Object.entries(io)) {
     if (!entry || typeof entry !== "object") continue;
     if (entry.direction !== "input") continue;
-    if (!entry.required) continue;
+    if (!resolveEntryRequired(entry, mode)) continue;
     if (entry.kind !== "widget") continue;
     if (!isInputFilled(values[key])) out.push(key);
   }

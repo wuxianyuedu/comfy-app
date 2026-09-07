@@ -34,7 +34,9 @@ import {
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import { DynamicWorkflowForm } from "../shared/DynamicWorkflowForm";
 import {
+  defaultInputValues,
   getMissingRequiredInputs,
+  resolveEntrySeedMode,
   splitWorkflowIO,
   toWorkflowInputsPayload,
   type WorkflowIOMap,
@@ -96,6 +98,20 @@ export function WorkflowCanvasNodePreview({
   const [logOpen, setLogOpen] = useState(false);
   const [viewTaskId, setViewTaskId] = useState<string | null>(null);
 
+  /* 模式默认值播种：workflow 或 defaultMode 变化时，用该模式（或默认模式）的
+   *  两级默认值（模式覆盖 -> 作者 value -> 图内 defaultValue）回填表单，使
+   *  「画布样式预览」初始即展示该模式下配置的默认值。不强制（io 尚未就绪 /
+   *  defaultMode 空时跳过），用户后续可自由覆盖。 */
+  const seedRef = useRef<string | null>(null);
+  const activeSeedKey = `${workflowId ?? ""}|${defaultMode ?? ""}`;
+  useEffect(() => {
+    if (!workflowIO) return;
+    if (seedRef.current === activeSeedKey) return;
+    seedRef.current = activeSeedKey;
+    setValues(defaultInputValues(workflowIO, defaultMode ?? null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在 workflow/模式变化时播种一次
+  }, [workflowIO, workflowId, defaultMode]);
+
   /* 重开窗口恢复：若 store 里有本工作流仍在运行的登记，恢复「生成中」视角。
    * 恢复走惰性初始化（useState 的初始化函数在挂载时读 store），避免 effect
    * 里同步 setState 的级联渲染。 */
@@ -144,8 +160,9 @@ export function WorkflowCanvasNodePreview({
 
   const running = phase.kind === "running" || phase.kind === "starting";
   const missing = useMemo(
-    () => (workflowIO ? getMissingRequiredInputs(workflowIO, values) : []),
-    [workflowIO, values],
+    () =>
+      workflowIO ? getMissingRequiredInputs(workflowIO, values, defaultMode ?? null) : [],
+    [workflowIO, values, defaultMode],
   );
   /* 缺参提示人性化：ioKey（76::widget::text）→ 展示标签（pos text 等）。 */
   const missingLabels = useMemo(
@@ -165,14 +182,16 @@ export function WorkflowCanvasNodePreview({
    * 渲染（库内无 React Flow 上下文，不带端点），outputs 单独成段在表单之后。 */
   const { inputs, outputs } = splitWorkflowIO(workflowIO);
 
-  /* seed 类参数的「控件后行为」：从 workflowIO 条目派生（与 IO 编辑同一存储）。 */
+  /* seed 类参数的「控件后行为」：按当前模式解析（模式覆盖优先，回退条目全局）。
+   *  defaultMode 空时与旧行为一致，只读条目全局 seedMode。 */
   const seedModes = useMemo(() => {
     const map: Record<string, string> = {};
     for (const [ioKey, entry] of Object.entries(workflowIO ?? {})) {
-      if (entry?.seedMode) map[ioKey] = entry.seedMode;
+      const resolved = resolveEntrySeedMode(entry, defaultMode);
+      if (resolved) map[ioKey] = resolved;
     }
     return map;
-  }, [workflowIO]);
+  }, [workflowIO, defaultMode]);
 
   const statusLabel =
     phase.kind === "running"
@@ -347,6 +366,7 @@ export function WorkflowCanvasNodePreview({
           onChange={setValues}
           showOutputs={false}
           compact
+          mode={defaultMode}
           seedModes={seedModes}
           onSeedModeChange={
             onSeedModeChange
