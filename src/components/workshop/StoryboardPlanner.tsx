@@ -19,6 +19,7 @@ export function StoryboardPlanner(props: Props) {
     extractProgress,
     extractStatus,
     extractError,
+    extractionLog,
     hasScript,
     handleExtract,
     handleImportFile,
@@ -118,6 +119,7 @@ export function StoryboardPlanner(props: Props) {
         progressText={extractProgress}
         statusText={extractStatus}
         errorText={extractError}
+        executionLog={extractionLog}
         extractDisabled={!hasScript}
         extractDisabledReason="未获取到剧本文本(在「剧本」阶段编写后可提取)。仍可用「外部导入」载入分镜脚本或角色卡文件。"
       />

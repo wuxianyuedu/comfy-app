@@ -5,9 +5,45 @@ import {
   ExtractModelSelect,
   parseChannelOption,
 } from "@/components/workshop/ExtractModelSelect";
+import type { ExtractLogEntry } from "@/lib/workshop/extraction-log";
 
 /** @deprecated 兼容既有 import：通道类型已迁至 ExtractModelSelect */
 export type { ExtractChannel } from "@/components/workshop/ExtractModelSelect";
+
+/** 提取执行日志的展示样式（按日志类型区分色块，不随组件卸载清空）。 */
+function logBadge(kind: ExtractLogEntry["kind"]): string {
+  switch (kind) {
+    case "init":
+      return "bg-primary-soft text-primary";
+    case "request":
+      return "bg-indigo-100 text-indigo-700";
+    case "output":
+      return "bg-emerald-100 text-emerald-700";
+    case "result":
+      return "bg-emerald-100 text-emerald-700";
+    case "skipped":
+      return "bg-amber-100 text-amber-700";
+    case "error":
+      return "bg-red-100 text-red-700";
+  }
+}
+
+function logBadgeLabel(kind: ExtractLogEntry["kind"]): string {
+  switch (kind) {
+    case "init":
+      return "开始";
+    case "request":
+      return "模型输入";
+    case "output":
+      return "模型输出";
+    case "result":
+      return "完成";
+    case "skipped":
+      return "跳过";
+    case "error":
+      return "错误";
+  }
+}
 
 interface ExtractToolbarProps {
   /** 区块标题，如「从剧本提取角色」 */
@@ -25,6 +61,8 @@ interface ExtractToolbarProps {
   /** 成功/结果提示 */
   statusText?: string;
   errorText?: string;
+  /** 本次提取的结构化执行日志（模型输入/输出/结果/错误），跑完仍展示 */
+  executionLog?: ExtractLogEntry[];
   /** 无剧本文本等情况下禁用提取(导入仍可用) */
   extractDisabled?: boolean;
   extractDisabledReason?: string;
@@ -43,26 +81,30 @@ export function ExtractToolbar({
   progressText,
   statusText,
   errorText,
+  executionLog,
   extractDisabled = false,
   extractDisabledReason,
 }: ExtractToolbarProps) {
   const fileRef = React.useRef<HTMLInputElement>(null);
 
   return (
-    <div className="rounded-xl border border-primary-soft bg-primary-soft/30 p-3">
+    <div className="border-primary-soft bg-primary-soft/30 rounded-xl border p-3">
       <div className="mb-2 flex items-center gap-2">
-        <span className="flex items-center text-xs font-medium text-primary">
+        <span className="text-primary flex items-center text-xs font-medium">
           {title}
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <ExtractModelSelect value={channelValue} onChange={onChannelValueChange} />
+        <ExtractModelSelect
+          value={channelValue}
+          onChange={onChannelValueChange}
+        />
         <button
           type="button"
           onClick={onExtract}
           disabled={busy || extractDisabled}
           title={extractDisabled ? extractDisabledReason : undefined}
-          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+          className="bg-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
         >
           {busy ? "提取中…" : "提取"}
         </button>
@@ -70,7 +112,7 @@ export function ExtractToolbar({
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={busy}
-          className="rounded-lg border border-border px-3 py-1.5 text-xs text-primary transition-colors hover:bg-subtle disabled:opacity-40"
+          className="border-border text-primary hover:bg-subtle rounded-lg border px-3 py-1.5 text-xs transition-colors disabled:opacity-40"
         >
           外部导入
         </button>
@@ -87,21 +129,69 @@ export function ExtractToolbar({
           }}
         />
       </div>
-      {/* 提取过程：模型通道的流式输出（可折叠的原文预览） */}
+      {/* 实时流式输出（提取中单独展示，便于跟随 token 累积） */}
       {busy && progressText && (
-        <details className="mt-2 rounded-lg bg-bg/60 px-3 py-2" open>
-          <summary className="cursor-pointer select-none text-[11px] text-primary">
+        <details className="bg-bg/60 mt-2 rounded-lg px-3 py-2" open>
+          <summary className="text-primary cursor-pointer text-[11px] select-none">
             提取过程
           </summary>
-          <pre className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-all text-[11px] leading-relaxed text-muted-foreground">
+          <pre className="text-muted-foreground mt-1 max-h-40 overflow-y-auto text-[11px] leading-relaxed break-all whitespace-pre-wrap">
             {progressText}
           </pre>
         </details>
       )}
-      {statusText && !errorText && <p className="mt-2 text-xs text-primary">{statusText}</p>}
-      {errorText && <p className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">{errorText}</p>}
+      {statusText && !errorText && (
+        <p className="text-primary mt-2 text-xs">{statusText}</p>
+      )}
+      {errorText && (
+        <p className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
+          {errorText}
+        </p>
+      )}
       {extractDisabled && !busy && !errorText && (
-        <p className="mt-2 text-[11px] text-muted-foreground">{extractDisabledReason ?? "从剧本提取暂不可用"}</p>
+        <p className="text-muted-foreground mt-2 text-[11px]">
+          {extractDisabledReason ?? "从剧本提取暂不可用"}
+        </p>
+      )}
+
+      {/* 结构化执行日志：完整记录一次提取从发起→输入→输出→结果的每一步，
+         无论是否还在 busy 都保留展示，方便追溯模型到底做了什么（黑盒透明化）。 */}
+      {executionLog && executionLog.length > 0 && (
+        <details
+          className="border-border bg-bg/40 mt-2 rounded-lg border px-3 py-2"
+          open={busy}
+        >
+          <summary className="text-primary cursor-pointer text-[11px] font-medium select-none">
+            执行日志（{executionLog.length} 条）
+          </summary>
+          <ul className="mt-2 space-y-2">
+            {executionLog.map((entry, i) => (
+              <li
+                key={`${entry.ts}-${i}`}
+                className="bg-surface rounded-lg px-2.5 py-2"
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${logBadge(entry.kind)}`}
+                  >
+                    {logBadgeLabel(entry.kind)}
+                  </span>
+                  <span className="text-muted-foreground min-w-0 flex-1 truncate text-[11px] leading-relaxed">
+                    {entry.summary}
+                  </span>
+                  <span className="text-muted-foreground/60 shrink-0 text-[10px]">
+                    {new Date(entry.ts).toLocaleTimeString()}
+                  </span>
+                </div>
+                {entry.detail && (
+                  <pre className="bg-bg/70 text-ink-subtle mt-1.5 max-h-32 overflow-y-auto rounded px-2 py-1.5 text-[10.5px] leading-relaxed break-all whitespace-pre-wrap">
+                    {entry.detail}
+                  </pre>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );
