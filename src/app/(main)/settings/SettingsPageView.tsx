@@ -223,6 +223,14 @@ export function SettingsPageView({
     if (usageTest) rememberUsageTestDraft(usageTest);
   }, [usageTest]);
 
+  /* 每个模型条目的「测试连接」进行态与结果：只存当前正在探测的那个条目，
+   * 点击即按该条目自身配置探测连通性（独立接口/密钥，缺省回落全局），不耗生成额度。 */
+  const [rowProbe, setRowProbe] = useState<{
+    name: string;
+    running: boolean;
+    msg: { kind: "ok" | "err"; text: string } | null;
+  } | null>(null);
+
   /* ComfyUI 启动日志的滚动跟随是纯视觉偏好，留在视图层 */
   const comfyLogBoxRef = useRef<HTMLDivElement>(null);
   const [comfyLogFollow, setComfyLogFollow] = useState(true);
@@ -302,6 +310,30 @@ export function SettingsPageView({
       setSuggestions(out.ok && out.models ? out.models.slice(0, 40) : []);
     } finally {
       setTesting(false);
+    }
+  }
+  /** 按某条模型条目自身配置探测连通性（「测试连接」）。
+   *  探测只验证接口地址 / 密钥是否可达、可列出模型，不发起生成调用、不耗额度；
+   *  结果内联展示在该条目下方。独立接口 / 独立密钥缺省时回落已保存的全局连接配置。 */
+  async function runEntryConnectionTest(entry: RemoteModelEntry) {
+    if (rowProbe?.running && rowProbe.name === entry.name) return;
+    setRowProbe({ name: entry.name, running: true, msg: null });
+    try {
+      const out = await c.probeRemote({
+        baseUrl: entry.baseUrl ?? undefined,
+        apiKey: entry.apiKey ?? undefined,
+      });
+      setRowProbe({
+        name: entry.name,
+        running: false,
+        msg: { kind: out.ok ? "ok" : "err", text: out.detail },
+      });
+    } catch {
+      setRowProbe({
+        name: entry.name,
+        running: false,
+        msg: { kind: "err", text: "连接测试失败，请检查接口地址与网络" },
+      });
     }
   }
 
@@ -536,48 +568,70 @@ export function SettingsPageView({
         {entries.length > 0 ? (
           <div className="space-y-1.5">
             {entries.map((entry) => {
+              const thisProbe = rowProbe?.name === entry.name ? rowProbe : null;
+              const rowMsg = thisProbe ? thisProbe.msg : null;
               return (
-                <div
-                  key={entry.name}
-                  className="border-border flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
-                >
-                  <span className="min-w-0 flex-1 truncate">
-                    <span className="text-ink">{entry.name}</span>
-                    {entry.baseUrl && (
-                      <span className="text-muted-foreground ml-2 text-[10px]">
-                        独立接口
-                      </span>
-                    )}
-                    {entry.apiKey && (
-                      <span className="text-muted-foreground ml-1.5 text-[10px]">
-                        独立密钥
-                      </span>
-                    )}
-                  </span>
-                  <button
-                    type="button"
-                    title="按实际用法发起一次真实调用（参数可在弹窗内自定义）"
-                    onClick={() => openUsageTest(kind, entry)}
-                    className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors"
-                  >
-                    测试
-                  </button>
-                  <button
-                    type="button"
-                    title="编辑接口地址 / 密钥 / 名称"
-                    onClick={() => openEditDialog(entry)}
-                    className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors"
-                  >
-                    编辑
-                  </button>
-                  <button
-                    type="button"
-                    title="移除该模型（即时保存）"
-                    onClick={() => void c.removeRemoteModel(entry.name)}
-                    className="text-muted-foreground shrink-0 hover:text-rose-500"
-                  >
-                    ✕
-                  </button>
+                <div key={entry.name} className="space-y-1">
+                  <div className="border-border flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="text-ink">{entry.name}</span>
+                      {entry.baseUrl && (
+                        <span className="text-muted-foreground ml-2 text-[10px]">
+                          独立接口
+                        </span>
+                      )}
+                      {entry.apiKey && (
+                        <span className="text-muted-foreground ml-1.5 text-[10px]">
+                          独立密钥
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      title="按该条目配置探测接口连通性（不生成、不耗额度）"
+                      onClick={() => void runEntryConnectionTest(entry)}
+                      className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors"
+                    >
+                      {thisProbe?.running
+                        ? "连接测试中…"
+                        : "测试连接"}
+                    </button>
+                    <button
+                      type="button"
+                      title="按实际用法发起一次真实生成调用（参数可在弹窗内自定义）"
+                      onClick={() => openUsageTest(kind, entry)}
+                      className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors"
+                    >
+                      测试生成
+                    </button>
+                    <button
+                      type="button"
+                      title="编辑接口地址 / 密钥 / 名称"
+                      onClick={() => openEditDialog(entry)}
+                      className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors"
+                    >
+                      编辑
+                    </button>
+                    <button
+                      type="button"
+                      title="移除该模型（即时保存）"
+                      onClick={() => void c.removeRemoteModel(entry.name)}
+                      className="text-muted-foreground shrink-0 hover:text-rose-500"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  {rowMsg && (
+                    <div
+                      className={`ml-1 mr-1 rounded border px-2 py-1 text-[11px] ${
+                        rowMsg.kind === "ok"
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                          : "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                      }`}
+                    >
+                      {rowMsg.text}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1009,7 +1063,7 @@ export function SettingsPageView({
                 <p className="text-muted-foreground mb-4 text-[11px] leading-relaxed">
                   此页只维护模型清单，添加 / 编辑 / 移除都会
                   <strong className="text-ink/80">即时保存</strong>
-                  ：「测试」按该条目的配置发起一次真实调用（参数可在弹窗内自定义）；带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。实际使用哪个模型在工坊运行界面选择。
+                  ：「测试连接」按该条目自身配置探测接口连通性（不生成、不耗额度）；「测试生成」按实际用法发起一次真实调用（参数可在弹窗内自定义，图片 / 视频会消耗额度）。带「独立接口／独立密钥」的模型调用时使用条目内配置，其余走已保存的全局连接配置。实际使用哪个模型在工坊运行界面选择。
                 </p>
               </Card>
 
