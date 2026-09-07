@@ -85,20 +85,30 @@ export function WidgetInputRow({
    * 强调圆点与必填切换只在 IO-edit 模式出现（CreatePanel / 画布节点隐藏）。 */
   const labelRow = (
     <div className="flex h-5 items-center justify-between gap-2.5">
+      {/* 标签区：圆点 + EditableLabel 占满左侧 flex-1 区域，长标签可截断。 */}
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         {onRequiredChange && (
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} />
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ background: accent }}
+          />
         )}
         <EditableLabel
           label={label}
           title={`${entry.nodeTitle ?? ""} · ${entry.name}`}
           onChange={onLabelChange}
         />
+      </span>
+      {/* 操作区：「必填 / 👁」与类型徽章始终固定在行右侧 —— 与编辑态与否无关，
+          避免一进入改名输入态按钮就跑到输入框旁边。 */}
+      <span className="flex shrink-0 items-center gap-1.5">
         {onRequiredChange && (
           <button
             type="button"
             title={
-              entry.required ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"
+              entry.required
+                ? "已标记为必填，点击切换为可选"
+                : "点击将其标记为必填"
             }
             onClick={() => onRequiredChange(!entry.required)}
             onMouseDown={(ev) => ev.stopPropagation()}
@@ -130,8 +140,8 @@ export function WidgetInputRow({
             {visible === false ? <EyeOff size={11} /> : <Eye size={11} />}
           </button>
         )}
+        {typeChip}
       </span>
-      {typeChip}
     </div>
   );
 
@@ -157,9 +167,14 @@ export function WidgetInputRow({
     }
     return (
       <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
-        {withHandle && <PortHandle id={entry.ioKey} dir="in" type={entry.type} />}
-        <div className="flex items-center gap-2 rounded-md bg-(--color-canvas-deep) px-2.5 py-1.5 pl-[14px] pr-[14px]">
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} />
+        {withHandle && (
+          <PortHandle id={entry.ioKey} dir="in" type={entry.type} />
+        )}
+        <div className="flex items-center gap-2 rounded-md bg-(--color-canvas-deep) px-2.5 py-1.5 pr-[14px] pl-[14px]">
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ background: accent }}
+          />
           <span className="min-w-0 flex-1 truncate text-[11px] text-(--color-ink-soft)">
             {label}
           </span>

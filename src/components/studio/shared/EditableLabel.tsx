@@ -77,9 +77,10 @@ export function EditableLabel({
   };
 
   return (
-    /* 编辑态输入框不铺满整行（不再用 flex-1 抢占），给同一行的
-     * 「必填 / 可见」等操作按钮留出稳定空间 —— 输入编辑区域过长会把它们挤出可视区。 */
-    <span className="flex min-w-0 items-center gap-1">
+    /* 编辑态外层容器保持 flex-1，与展示态一致——行内「必填 / 👁 / 类型徽章」
+     * 已由 WidgetInputRow 放到独立右侧收缩区，不再依赖本输入框的宽度去让位。
+     * 输入框自身仍为固定 w-32，编辑时只占标签行左侧。 */
+    <span className="flex min-w-0 flex-1 items-center gap-1">
       <input
         ref={inputRef}
         type="text"
@@ -101,10 +102,8 @@ export function EditableLabel({
         onDoubleClick={(event) => event.stopPropagation()}
         title={title}
         /* 与展示态字体一致 — text-[12px] font-semibold
-         *  text-(--color-ink-bright) + 'Inter'，避免编辑切回展示态时出现字重跳变。
-         * 宽度收紧到 w-32（seed 等短名称够用），并允许收缩，绝不侵占同一行
-         * 的「必填 / 👁 可见」操作按钮——太宽会把它们挤出可视区。 */
-        className="nodrag nopan min-w-0 w-32 max-w-full shrink rounded border border-violet-400/40 bg-white/6 px-1.5 py-px text-[12px] font-semibold text-(--color-ink-bright) outline-none focus:border-violet-400/70"
+         *  text-(--color-ink-bright) + 'Inter'，避免编辑切回展示态时出现字重跳变。 */
+        className="nodrag nopan w-32 max-w-full min-w-0 shrink rounded border border-violet-400/40 bg-white/6 px-1.5 py-px text-[12px] font-semibold text-(--color-ink-bright) outline-none focus:border-violet-400/70"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </span>
