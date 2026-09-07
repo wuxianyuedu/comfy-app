@@ -298,7 +298,8 @@ export const llmConfig = sqliteTable("llmConfig", {
   provider: text("provider").notNull().default("local"),
   baseUrl: text("baseUrl").notNull().default("http://localhost:11434/v1"),
   model: text("model").notNull().default(""),
-  /** 本地 Ollama 的候选模型名（JSON 字符串数组）：设置页可勾选多个，供工坊切换使用 */
+  /** 本地 Ollama 候选模型名（JSON，纯名字字符串数组）：设置页可勾选多个，
+   *  供工坊本地组切换使用。本地模型不持有 apiKey；远端独立模型见 remoteModel 表。 */
   extraModels: text("extraModels", { mode: "json" }),
   apiKey: text("apiKey"),
   temperature: real("temperature").notNull().default(0.7),
@@ -306,6 +307,32 @@ export const llmConfig = sqliteTable("llmConfig", {
   maxTokens: integer("maxTokens").notNull().default(2048),
   updatedAt: dateNotNull("updatedAt").notNull().$defaultFn(() => new Date()).$onUpdate(() => new Date()),
 });
+
+/**
+ * 远端独立模型表（option C：与本地 Ollama 候选彻底分开存放）。
+ * 设置页配置的「远端模型」落这里，不再与本地候选混在 llmConfig.extraModels。
+ * 每个条目可带独立 baseUrl / apiKey —— apiKey 仅远端模型才有，本地模型没有。
+ */
+export const remoteModel = sqliteTable(
+  "remoteModel",
+  {
+    id: cuid(),
+    /** 模型名，唯一（同名重复添加会被唯一索引拒绝） */
+    name: text("name").notNull(),
+    /** 独立接口地址；空 = 跟随 llmConfig.baseUrl（远端全局默认） */
+    baseUrl: text("baseUrl"),
+    /** 独立密钥；仅远端模型持有。密文(enc:v1:...)或历史明文。 */
+    apiKey: text("apiKey"),
+    /** 用途：chat / image / video */
+    kind: text("kind").notNull().default("chat"),
+    createdAt: dateNotNull("createdAt").notNull().$defaultFn(() => new Date()),
+    updatedAt: dateNotNull("updatedAt").notNull().$defaultFn(() => new Date()).$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("remoteModel_name_uniq").on(t.name),
+    index("remoteModel_kind_idx").on(t.kind),
+  ]
+);
 
 export const skill = sqliteTable(
   "skill",
@@ -515,6 +542,8 @@ export type TaskImage = InferSelectModel<typeof taskImage>;
 export type WorkflowTemplate = InferSelectModel<typeof workflowTemplate>;
 export type WorkflowModelTag = InferSelectModel<typeof workflowModelTag>;
 export type LlmConfig = InferSelectModel<typeof llmConfig>;
+export type RemoteModel = InferSelectModel<typeof remoteModel>;
+export type RemoteModelInsert = InferInsertModel<typeof remoteModel>;
 export type Skill = InferSelectModel<typeof skill>;
 export type LoraTrainingJob = InferSelectModel<typeof loraTrainingJob>;
 export type FilmProject = InferSelectModel<typeof filmProject>;

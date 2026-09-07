@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { getLLMConfig, completeLLM } from "@/lib/llm/server";
+import { getLLMConfig, completeLLM, ensureRemoteStorageMigrated, getConfigForClient } from "@/lib/llm/server";
+import { splitExtraModels } from "@/lib/llm/types";
 
 /** 合法的任务类型 key（用于温度覆盖） */
 const taskTypeKeys = ["txt2img", "img2video", "chat", "code", "creative"] as const;
@@ -21,7 +22,8 @@ const extraModelsSchema = z.array(
 export const llmRouter = createTRPCRouter({
   /** GET /api/llm/config */
   configGet: authedProcedure.query(async () => {
-    const cfg = await getLLMConfig();
+    await ensureRemoteStorageMigrated();
+    const cfg = await getConfigForClient();
     return { config: cfg };
   }),
 
@@ -33,6 +35,7 @@ export const llmRouter = createTRPCRouter({
         apiKey: z.string().optional(),
         baseUrl: z.string().optional(),
         model: z.string().optional(),
+        /** 候选清单：字符串=本地 ollama 候选；对象=远端独立模型（写入 remoteModel 表） */
         extraModels: extraModelsSchema.optional(),
         temperature: z.number().optional(),
         temperatureByTask: z.record(z.enum(taskTypeKeys), z.number()).optional(),
@@ -40,8 +43,22 @@ export const llmRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input }) => {
-      const { llmConfigRepository } = await import("@/lib/core/repository");
-      const config = await llmConfigRepository.upsertSingleton(input);
+      const { llmConfigRepository, remoteModelRepository } = await import("@/lib/core/repository");
+      await ensureRemoteStorageMigrated();
+      // option C：远端模型与本地候选分开存。把提交的候选清单按类型拆分：
+      //   字符串 → llmConfig.extraModels（本地候选，无 apiKey）
+      //   对象   → remoteModel 表（远端独立模型）
+      const split = splitExtraModels(input.extraModels);
+      if (input.extraModels !== undefined) {
+        await remoteModelRepository.replaceAll(split.remoteEntries);
+      }
+      const config = await llmConfigRepository.upsertSingleton({
+        ...input,
+        // 本地候选只写名字字符串（无 extraModels 输入时保持原值）；远端条目已落
+        // remoteModel 表，llmConfig 不再承载远端对象，避免两类混存。
+        extraModels:
+          input.extraModels !== undefined ? split.localNames : undefined,
+      });
       return { config };
     }),
 
