@@ -60,7 +60,12 @@ export function ExtractModelSelect({
     if (probeStarted.current[selKey]) return;
     probeStarted.current[selKey] = true;
     let cancelled = false;
-    const probe = channel === "local" ? fetchLocalModels : fetchRemoteModels;
+    // 远端探测带上当前选中的模型名：该模型若配了独立 baseUrl/apiKey，
+    // 服务端会用它探测（而不是拿全局 Base URL 探，避免误报 fetch failed）。
+    const probe =
+      channel === "local"
+        ? () => fetchLocalModels()
+        : () => fetchRemoteModels(model);
     void probe().then((res) => {
       if (cancelled) return;
       setAvailByKey((prev) => ({
@@ -73,7 +78,7 @@ export function ExtractModelSelect({
     return () => {
       cancelled = true;
     };
-  }, [selKey, channel]);
+  }, [selKey, channel, model]);
 
   const options = React.useMemo(() => {
     const list = [TOOL_OPTION];

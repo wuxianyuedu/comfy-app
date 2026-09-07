@@ -5,6 +5,10 @@
  *   - 远端：GET /api/llm/models?provider=remote —— 服务端按已保存 baseUrl/apiKey
  *     拉 OpenAI 兼容 /models（无密钥时返回可解释的 unavailable，不抛错）
  * 两类失败都不抛异常：探测失败只是下拉里少一组，不该打断页面。
+ *
+ * 远端探测可带 model 参数：命中的远端模型条目若配了独立 baseUrl/apiKey，
+ * 服务端就用它（而不是全局 Base URL）去探测——保证「配置都对却报 fetch
+ * failed」这类误导提示不再出现。不带 model 时回落全局远端连接。
  */
 
 export interface RemoteModelCatalog {
@@ -13,9 +17,13 @@ export interface RemoteModelCatalog {
   detail: string;
 }
 
-async function getModels(provider: "local" | "remote"): Promise<RemoteModelCatalog> {
+async function getModels(
+  provider: "local" | "remote",
+  model?: string,
+): Promise<RemoteModelCatalog> {
+  const modelQ = provider === "remote" && model ? `&model=${encodeURIComponent(model)}` : "";
   try {
-    const res = await fetch(`/api/llm/models?provider=${provider}`, {
+    const res = await fetch(`/api/llm/models?provider=${provider}${modelQ}`, {
       signal: AbortSignal.timeout(8000),
     });
     const json = (await res.json().catch(() => ({}))) as {
@@ -43,6 +51,6 @@ export function fetchLocalModels(): Promise<RemoteModelCatalog> {
   return getModels("local");
 }
 
-export function fetchRemoteModels(): Promise<RemoteModelCatalog> {
-  return getModels("remote");
+export function fetchRemoteModels(model?: string): Promise<RemoteModelCatalog> {
+  return getModels("remote", model);
 }

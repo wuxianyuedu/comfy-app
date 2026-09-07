@@ -157,7 +157,7 @@ function headersFor(cfg: LLMConfig): Record<string, string> {
 /** 把 Node fetch 的网络层 TypeError（如 `fetch failed`）翻译成可操作的人话。
  *  历史 bug：Ollama 未启动 / 远端不可达时，用户只看到一句 `fetch failed`，
  *  既不知道是连不上本地 Ollama 还是远端 Key 无效，也没提示怎么处理。 */
-function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
+export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
   if (!(e instanceof TypeError)) return e instanceof Error ? e.message : "网络请求失败";
   const cause = (e as { cause?: unknown }).cause;
   const causeMsg =
