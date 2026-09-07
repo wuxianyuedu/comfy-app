@@ -29,6 +29,7 @@ export interface ComfyStatsController {
 const OFFLINE: ComfyStatsPayload = {
   online: false,
   vramUsed: 0,
+  vramFree: 0,
   vramTotal: 0,
   ramUsed: 0,
   ramTotal: 0,
