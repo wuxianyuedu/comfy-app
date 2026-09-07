@@ -134,6 +134,18 @@ export function usageFieldsToJson(fields: UsageField[]): string {
   return Object.keys(out).length ? JSON.stringify(out, null, 2) : "";
 }
 
+/** 判断某行值是否值得尝试做「图片预览」：data:image 或 http(s) 地址。
+ *  与 looksLikeImage 不同——后者要求路径带图片扩展名才返回 true，会漏掉大量
+ *  真实存在但「无扩展名」的 CDN 图片地址（如 Bing 缩略图 R-C.<hash>、云存储
+ *  签名 URL 等，其响应 content-type 是 image/jpeg 但路径没有 .jpg）。而一个
+ *  地址究竟是不是可解码图片，只有浏览器真正加载后才知道，因此预览入口放开到
+ *  「是 URL 就尝试」，交由 <img onError> 兜底优雅降级。 */
+export function isPreviewableUrl(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  return /^data:image\//i.test(v) || /^https?:\/\//i.test(v);
+}
+
 /** 判断某行值是否可当作图片预览（data:image 或 http(s) 图片地址）。 */
 export function looksLikeImage(value: string): boolean {
   const v = value.trim();
