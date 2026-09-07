@@ -150,6 +150,8 @@ export interface SettingsPageController {
   startDbStudio: () => Promise<void>;
   stopDbStudio: () => Promise<void>;
   openDbStudio: () => Promise<void>;
+  /** 用系统默认浏览器打开生成的远程资源（视频等），桌面壳内替代 target=_blank */
+  openExternalUrl: (url: string) => Promise<void>;
   /* ComfyUI 启动日志（log/comfyui-runtime.log）：启动期间自动跟随，可手动刷新 */
   comfyLogText: string;
   comfyLogSegments: AnsiSegment[];
@@ -313,6 +315,7 @@ export function useSettingsPage(): SettingsPageController {
   const dbStudioStartM = api.setting.dbStudioStart.useMutation();
   const dbStudioStopM = api.setting.dbStudioStop.useMutation();
   const dbStudioOpenM = api.setting.dbStudioOpen.useMutation();
+  const openExternalM = api.setting.openExternal.useMutation();
   const [dbStudioStarting, setDbStudioStarting] = useState(false);
   const [dbStudioStopping, setDbStudioStopping] = useState(false);
   const [dbStudioOpening, setDbStudioOpening] = useState(false);
@@ -534,6 +537,21 @@ export function useSettingsPage(): SettingsPageController {
       setDbStudioOpening(false);
     }
   }, [dbStudioOpenM, showFlash]);
+
+  /** 用系统默认浏览器打开生成的远程资源（视频 / 公网图片等）。
+   *  桌面壳内 target=_blank 外链打不开，统一走服务端 openExternal。 */
+  const openExternalUrl = useCallback(async (url: string) => {
+    if (!url) {
+      showFlash("err", "没有可打开的资源地址");
+      return;
+    }
+    try {
+      const result = await openExternalM.mutateAsync({ url });
+      showFlash(result.ok ? "ok" : "err", result.detail);
+    } catch (error) {
+      showFlash("err", errorMessage(error, "打开资源失败"));
+    }
+  }, [openExternalM, showFlash]);
 
   /* ── ComfyUI 启动日志 ─────────────────────────────────── */
   const comfyLogOffsetRef = useRef(0);
@@ -1018,6 +1036,7 @@ export function useSettingsPage(): SettingsPageController {
     startDbStudio,
     stopDbStudio,
     openDbStudio,
+    openExternalUrl,
     comfyLogText,
     comfyLogSegments,
     comfyLogActive,
