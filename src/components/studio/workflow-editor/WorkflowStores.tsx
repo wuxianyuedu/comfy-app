@@ -35,19 +35,9 @@ import type {
   NodeJsonViewerContextValue,
 } from "../workflow-types";
 import type { WorkflowIOModeOverride } from "~/lib/workflow-io-types";
-import { controlForEntry } from "../shared/workflow-io";
 import { rectToAnchor } from "../workflow-utils";
 import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
 import { patchWorkflowSilently } from "@/lib/workflow-mutations";
-
-/** 可调参条目：本代画布勾选写入的 widget，或带可编辑控件的 legacy
- *  "param"（子图边界 / 旧版顶行勾选遗留）。纯 link 端口不算。 */
-function isTunableEntry(e: WorkflowIOParam | undefined | null): boolean {
-  if (!e) return false;
-  if (e.kind === "widget") return true;
-  if (e.kind !== "param") return false;
-  return controlForEntry(e) !== "link";
-}
 
 /* ───────────────────────────────────────────────────────────────────────
  *  IOEdit store
@@ -135,10 +125,10 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
       set((state) => {
         const cur = state.workflowIO[key];
         if (!cur) return {};
-        /* widget 是本代画布勾选写入的；legacy "param"（子图边界 / 旧版
-         * 顶行勾选）只要带可编辑控件同样可调 —— 否则预览里的「必填」点击
-         * 会被这里静默吞掉。纯 link 端口（MODEL/CLIP…）仍不可调。 */
-        if (!isTunableEntry(cur)) return {};
+        /* 只有本代画布勾选写入的 widget 条目可调「必填」；param（连线端口）
+         *  与 output 不可调。legacy "param" 数据已由服务端 enrichment 统一
+         *  迁移为 widget，无需客户端特判。 */
+        if (cur.kind !== "widget") return {};
         return { workflowIO: { ...state.workflowIO, [key]: { ...cur, required: !cur.required } } };
       }),
 
@@ -165,7 +155,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         let changed = false;
         for (const [ioKey, value] of Object.entries(next)) {
           const cur = nextMap[ioKey];
-          if (!cur || !isTunableEntry(cur)) continue;
+          if (!cur || cur.kind !== "widget") continue;
           nextMap[ioKey] = { ...cur, value };
           changed = true;
         }
@@ -175,7 +165,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     setIOSeedMode: (key, mode) =>
       set((state) => {
         const cur = state.workflowIO[key];
-        if (!cur || !isTunableEntry(cur)) return {};
+        if (!cur || cur.kind !== "widget") return {};
         if (cur.seedMode === mode) return {};
         return { workflowIO: { ...state.workflowIO, [key]: { ...cur, seedMode: mode } } };
       }),
@@ -185,7 +175,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         const nextMap: Record<string, WorkflowIOParam> = {};
         let changed = false;
         for (const [entryKey, entry] of Object.entries(state.workflowIO)) {
-          if (entry && isTunableEntry(entry) && entry.value !== undefined) {
+          if (entry && entry.kind === "widget" && entry.value !== undefined) {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars -- value 仅在本分支被剔除（widget 的运行时值不持久化到 IO 配置）
             const { value, ...rest } = entry;
             nextMap[entryKey] = rest;
@@ -205,7 +195,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         if (!fromEntry) return {};
         const groupOf = (e: WorkflowIOParam): "wire" | "widget" | "output" => {
           if (e.direction === "output") return "output";
-          return isTunableEntry(e) ? "widget" : "wire";
+          return e.kind === "widget" ? "widget" : "wire";
         };
         const movingGroup = groupOf(fromEntry);
         const ordered = Object.entries(prev)
