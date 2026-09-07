@@ -9,7 +9,7 @@
  * 行为与原组件内联实现逐值一致。
  */
 
-import { useState } from "react";
+import { useState, type SetStateAction } from "react";
 import type { Shot, Scene, Character, StyleRef } from "@/lib/workshop/types";
 import { buildShotPrompt, buildShotNegative, mergeParams } from "@/lib/workshop/prompt-builder";
 import { workshopUid } from "@/lib/workshop/script-parser";
@@ -27,6 +27,11 @@ import type { ExtractChannel } from "@/components/workshop/ExtractToolbar";
 import { parseChannelOption } from "@/components/workshop/ExtractToolbar";
 import { useLLM } from "@/components/workshop/LLMContext";
 import { streamChat } from "@/lib/llm/browser";
+import {
+  formatRequestMessages,
+  makeExtractLog,
+  type ExtractLogEntry,
+} from "@/lib/workshop/extraction-log";
 import { buildStoryboardMessages, parseStoryboard } from "@/lib/llm/prompts";
 
 /** catch 抛出值（unknown）→ 与旧 `e?.message ?? fallback` 逐值等价的消息提取：
@@ -81,6 +86,11 @@ function channelProvider(channel: ExtractChannel): "local" | "remote" {
   return channel === "local" ? "local" : "remote";
 }
 
+// ── 会话内提取执行日志缓存 ──────────────────────────────────────
+// 对齐仓库模块级缓存惯例（use-workshop-pipeline 的 workshopDraftCache）：
+// 分镜提取日志经模块缓存兜底，切页签卸载再挂载仍能恢复历史。
+let storyboardLogCache: ExtractLogEntry[] = [];
+
 export function useStoryboardPlanner(props: Props) {
   const { scriptMarkdown, scenes, characters, styles, shots, onShotsChange, onGenerate, onCharactersChange } =
     props;
@@ -98,6 +108,16 @@ export function useStoryboardPlanner(props: Props) {
   /** 模型通道的实时提取过程（流式 token 累积） */
   const [extractProgress, setExtractProgress] = useState("");
   const [extractError, setExtractError] = useState("");
+  /** 本次提取的结构化执行日志（输入/输出/结果/错误），跑完不清空。
+   *  setExtractionLog 包装器同步写模块缓存，切页签卸载再挂载仍能恢复。 */
+  const [extractionLog, setExtractionLogState] = useState<ExtractLogEntry[]>(() => storyboardLogCache);
+  const setExtractionLog = (updater: SetStateAction<ExtractLogEntry[]>) => {
+    setExtractionLogState((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      storyboardLogCache = next;
+      return next;
+    });
+  };
 
   const hasScript = !!scriptMarkdown?.trim();
   const knownNames = characters.map((character) => character.name).filter(Boolean);
@@ -124,6 +144,14 @@ export function useStoryboardPlanner(props: Props) {
     setExtractProgress("");
     setExtractStatus(extractChannel === "tool" ? "" : "正在调用模型提取分镜…");
     setExtractError("");
+    // 新一次提取：重置日志为仅含 init 一条，展示本次输入→输出→结果链路。
+    storyboardLogCache = [
+      makeExtractLog(
+        "init",
+        `使用 ${extractChannel === "tool" ? "内置规则" : extractChannel === "local" ? "本地模型" : "远端模型"} ${extractChannel === "tool" ? "" : parseChannelOption(extractChannelValue).model || ""}从剧本提取分镜`,
+      ),
+    ];
+    setExtractionLogState(storyboardLogCache);
     try {
       let entries: ShotEntry[];
       if (extractChannel === "tool") {
@@ -136,22 +164,44 @@ export function useStoryboardPlanner(props: Props) {
         }
         entries = drafts.map(draftToShotEntry);
       } else {
+        const requestMessages = buildExtractShotsMessages(script, knownNames);
+        setExtractionLog((prev) => [
+          ...prev,
+          makeExtractLog(
+            "request",
+            `向模型发送请求（provider=${channelProvider(extractChannel)}, model=${parseChannelOption(extractChannelValue).model || "默认"}）`,
+            formatRequestMessages(requestMessages),
+          ),
+        ]);
         const full = await streamChat({
-          messages: buildExtractShotsMessages(script, knownNames),
+          messages: requestMessages,
           opts: {
             provider: channelProvider(extractChannel),
             model: parseChannelOption(extractChannelValue).model,
           },
           onToken: (token) => setExtractProgress((prev) => prev + token),
         });
+        setExtractionLog((prev) => [
+          ...prev,
+          makeExtractLog("output", "模型返回完成，正在解析…", full),
+        ]);
         entries = parseExtractedShots(full);
         if (entries.length === 0) {
+          setExtractionLog((prev) => [
+            ...prev,
+            makeExtractLog("error", "模型未返回有效分镜 JSON，解析失败"),
+          ]);
           setExtractError("模型未返回有效分镜 JSON,解析失败。可重试,或改用「工具」通道。");
           return;
         }
       }
+      setExtractionLog((prev) => [...prev, makeExtractLog("result", `解析出 ${entries.length} 个分镜，准备写入`)]);
       appendShots(entries);
     } catch (e: unknown) {
+      setExtractionLog((prev) => [
+        ...prev,
+        makeExtractLog("error", errorMessage(e, "提取失败")),
+      ]);
       setExtractError(`${errorMessage(e, "提取失败")} 可重试,或改用「工具」通道。`);
     } finally {
       setExtractBusy(false);
@@ -388,6 +438,7 @@ export function useStoryboardPlanner(props: Props) {
     extractProgress,
     extractStatus,
     extractError,
+    extractionLog,
     hasScript,
     handleExtract,
     handleImportFile,

@@ -28,6 +28,11 @@ import {
 } from "@/lib/workshop/script-parse";
 import type { ParsedCharacterDraft } from "@/lib/workshop/script-parse";
 import { useLLM } from "@/components/workshop/LLMContext";
+import {
+  formatRequestMessages,
+  makeExtractLog,
+  type ExtractLogEntry,
+} from "@/lib/workshop/extraction-log";
 import { streamChat } from "@/lib/llm/browser";
 import {
   buildCharacterMessages,
@@ -58,6 +63,14 @@ interface Props {
 function looksLikeJson(text: string): boolean {
   return text.startsWith("{") || text.startsWith("[");
 }
+
+// ── 会话内提取执行日志缓存 ──────────────────────────────────────
+// 提取日志是组件局部 state；切走页签组件卸载后 state 丢失。
+// 用模块级缓存兜住，重挂载时恢复，让「提取角色卡 → 切页签 → 切回」
+// 之后仍能看到上次提取的执行记录（黑盒透明化不随卸载丢历史）。
+// 对齐仓库既有模块级缓存惯例（见 use-workshop-pipeline 的
+// workshopDraftCache / projectsCache）。开始新一次提取时重置。
+let characterLogCache: ExtractLogEntry[] = [];
 
 function newCharacter(): Character {
   return {
@@ -115,6 +128,22 @@ export function CharacterDesigner({
   /** 模型通道的实时提取过程（流式 token 累积） */
   const [extractProgress, setExtractProgress] = React.useState("");
   const [extractError, setExtractError] = React.useState("");
+  /** 本次提取的结构化执行日志（输入/输出/结果/错误），跑完不清空。
+   *  setExtractionLog 包装器在更新 React state 时同步写模块缓存，
+   *  切页签卸载再挂载仍能恢复历史（对齐仓库模块级缓存惯例）。 */
+  const [extractionLog, setExtractionLogState] = React.useState<
+    ExtractLogEntry[]
+  >(() => characterLogCache);
+  const setExtractionLog = React.useCallback(
+    (updater: React.SetStateAction<ExtractLogEntry[]>) => {
+      setExtractionLogState((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        characterLogCache = next;
+        return next;
+      });
+    },
+    [],
+  );
 
   const hasScript = !!scriptMarkdown?.trim();
 
@@ -232,6 +261,15 @@ export function CharacterDesigner({
       extractChannel === "tool" ? "" : "正在调用模型提取角色卡…",
     );
     setExtractError("");
+    // 新一次提取：重置日志为仅含 init 一条（上次执行记录随组件保留在面板里，
+    // 此处只清空面板以展示本次的输入→输出→结果链路）。
+    characterLogCache = [
+      makeExtractLog(
+        "init",
+        `使用 ${extractChannel === "tool" ? "内置规则" : extractChannel === "local" ? "本地模型" : "远端模型"} ${extractChannel === "tool" ? "" : parseChannelOption(extractChannelValue).model || ""}从剧本提取角色`,
+      ),
+    ];
+    setExtractionLogState(characterLogCache);
     try {
       let drafts: ParsedCharacterDraft[];
       if (extractChannel === "tool") {
@@ -243,17 +281,33 @@ export function CharacterDesigner({
           return;
         }
       } else {
+        const requestMessages = buildExtractCharactersMessages(script);
+        setExtractionLog((prev) => [
+          ...prev,
+          makeExtractLog(
+            "request",
+            `向模型发送请求（provider=${channelProvider(extractChannel)}, model=${parseChannelOption(extractChannelValue).model || "默认"}）`,
+            formatRequestMessages(requestMessages),
+          ),
+        ]);
         const full = await streamChat({
-          messages: buildExtractCharactersMessages(script),
+          messages: requestMessages,
           opts: {
             provider: channelProvider(extractChannel),
             model: parseChannelOption(extractChannelValue).model,
           },
-          onToken: (token) =>
-            setExtractProgress((prev) => prev + token),
+          onToken: (token) => setExtractProgress((prev) => prev + token),
         });
+        setExtractionLog((prev) => [
+          ...prev,
+          makeExtractLog("output", "模型返回完成，正在解析…", full),
+        ]);
         drafts = parseExtractedCharacters(full);
         if (drafts.length === 0) {
+          setExtractionLog((prev) => [
+            ...prev,
+            makeExtractLog("error", "模型未返回有效角色卡 JSON，解析失败"),
+          ]);
           setExtractError(
             "模型未返回有效角色卡 JSON,解析失败。可重试,或改用「工具」通道。",
           );
@@ -261,6 +315,15 @@ export function CharacterDesigner({
         }
       }
       const res = mergeCharacterDrafts(characters, drafts, styles);
+      setExtractionLog((prev) => [
+        ...prev,
+        res.added === 0 && res.skipped > 0
+          ? makeExtractLog("skipped", "剧本中的角色均已存在，未新增角色卡")
+          : makeExtractLog(
+              "result",
+              `已提取 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`,
+            ),
+      ]);
       if (res.added === 0 && res.skipped > 0) {
         setExtractError("剧本中的角色均已存在,未新增角色卡");
         return;
@@ -269,6 +332,10 @@ export function CharacterDesigner({
         `已提取 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`,
       );
     } catch (e: unknown) {
+      setExtractionLog((prev) => [
+        ...prev,
+        makeExtractLog("error", errorMessage(e, "提取失败")),
+      ]);
       setExtractError(
         `${errorMessage(e, "提取失败")} 可重试,或改用「工具」通道。`,
       );
@@ -379,6 +446,7 @@ export function CharacterDesigner({
         progressText={extractProgress}
         statusText={extractStatus}
         errorText={extractError}
+        executionLog={extractionLog}
         extractDisabled={!hasScript}
         extractDisabledReason="未获取到剧本文本(在「剧本」阶段编写后可提取)。仍可用「外部导入」载入角色卡 JSON 或人物清单。"
       />
