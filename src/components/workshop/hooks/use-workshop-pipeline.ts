@@ -394,9 +394,11 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   /* 最新项目 id / 草稿的 ref：供卸载兜底与异步服务端回填读取最新值（避免闭包捕获陈旧 state）。 */
   const activeProjectRef = React.useRef(activeProjectId);
   const latestDraftRef = React.useRef<WorkshopDraft>(currentDraft());
+  const projectsIndexRef = React.useRef(projectsIndex);
   React.useEffect(() => {
     activeProjectRef.current = activeProjectId;
     latestDraftRef.current = currentDraft();
+    projectsIndexRef.current = projectsIndex;
   });
 
   /** 切换 / 增删项目后：让模块级缓存失效，避免组件重挂载时读回旧的当前项目。 */
@@ -578,23 +580,28 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         const summaries = await fetchServerDraftList();
         if (summaries.length > 0 && !serverListRecovered) {
           serverListRecovered = true;
-          setProjectsIndex((prev) => {
-            const known = new Set(prev.items.map((i) => i.id));
-            const missing = summaries.filter((d) => !known.has(d.id));
-            if (missing.length === 0) return prev;
-            const items = [
-              ...prev.items,
-              ...missing.map((d) => ({
-                id: d.id,
-                title: d.title,
-                updatedAt: d.updatedAt,
-              })),
-            ];
-            const next: WorkshopProjectsIndex = { activeId: prev.activeId, items };
+          // 基于最新已提交的索引(经 ref 读,避免闭包陈旧 state)做纯合并,
+          // 副作用(落盘/缓存)留在 setState 之外——updater 必须是纯函数,
+          // 渲染期写 localStorage / 外部缓存会触发 "update during render" 告警。
+          const prev = projectsIndexRef.current;
+          const known = new Set(prev.items.map((i) => i.id));
+          const missing = summaries.filter((d) => !known.has(d.id));
+          if (missing.length > 0) {
+            const next: WorkshopProjectsIndex = {
+              activeId: prev.activeId,
+              items: [
+                ...prev.items,
+                ...missing.map((d) => ({
+                  id: d.id,
+                  title: d.title,
+                  updatedAt: d.updatedAt,
+                })),
+              ],
+            };
             saveProjectsIndex(next);
             projectsCache = next;
-            return next;
-          });
+            setProjectsIndex(next);
+          }
         }
       } catch {
         /* 服务不可用：保持纯本地 */
