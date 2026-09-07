@@ -82,6 +82,65 @@ function headersFor(cfg: LLMConfig): Record<string, string> {
   return h;
 }
 
+
+/** 判断目标服务是否为本地回环（localhost / 127.x / [::1]） */
+function isLoopback(url: string): boolean {
+  return /^(https?:\/\/)?(localhost|127\.|\[::1\])/i.test(url.trim());
+}
+
+/** 把 Node fetch 的网络层 TypeError（如 `fetch failed`）翻译成可操作的人话。
+ *  历史 bug：Ollama 未启动 / 远端不可达时，用户只看到一句 `fetch failed`，
+ *  既不知道是连不上本地 Ollama 还是远端 Key 无效，也没提示怎么处理。 */
+function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
+  if (!(e instanceof TypeError)) return e instanceof Error ? e.message : "网络请求失败";
+  const cause = (e as { cause?: unknown }).cause;
+  const causeMsg =
+    cause instanceof Error ? String(cause.message) : cause ? String(cause) : "";
+  const base = cfg.baseUrl.replace(/\/$/, "");
+  const local = cfg.provider === "local" || isLoopback(base);
+  // 常见 Node undici 底层错误码
+  if (/ECONNREFUSED|ECONNRESET/.test(causeMsg)) {
+    return local
+      ? `连不上本地服务（${base}）：连接被拒绝。请确认本地 ${cfg.model ? "Ollama/LM Studio" : "模型服务"} 已启动，或检查 Base URL 端口是否正确。`
+      : `连不上远端服务（${base}）：连接被拒绝。请检查网络、Base URL 是否正确，或服务是否在运行。`;
+  }
+  if (/ENOTFOUND|getaddrinfo|DNS|EAI_AGAIN/.test(causeMsg)) {
+    return `域名解析失败（${base}）：地址不存在或网络未连通，请检查 Base URL 与网络。`;
+  }
+  if (/ETIMEDOUT|timeout|timed out/i.test(causeMsg)) {
+    return `连接超时（${base}）：服务无响应。本地请确认 Ollama 已启动；远端请检查网络与接口可达性。`;
+  }
+  if (local) {
+    return `调用本地模型失败（${base}）：${causeMsg || "无法连接"}。请确认本地 Ollama/LM Studio 已启动且已拉取模型 ${cfg.model || ""}。`;
+  }
+  return `调用远端模型失败（${base}）：${causeMsg || e.message}。请检查 Base URL / API Key / 网络。`;
+}
+
+/** 统一的上游 /chat/completions 请求：网络层失败给出可读原因，HTTP 非 2xx 带状态码与响应片段。 */
+async function upstreamChat(cfg: LLMConfig, body: Record<string, unknown>): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: headersFor(cfg),
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    throw new Error(describeFetchFailure(e, cfg));
+  }
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    // 401/403 大概率是 Key 无效 / 未授权 —— 给个更明确的提示，而不是只给状态码。
+    const hint =
+      res.status === 401 || res.status === 403
+        ? "（API Key 无效或未授权，请检查后重试）"
+        : "";
+    const snippet = detail.trim() ? `：${detail.slice(0, 200)}` : "";
+    throw new Error(`LLM 请求失败 (${res.status})${hint}${snippet}`);
+  }
+  return res;
+}
+
 /** 模型未配置（空）时给调用方的统一出口文案 —— 不再兜底默认模型，
  *  避免用空的 model 打到后端拿一个「model not found」的含糊错误。 */
 const ERR_MODEL_UNCONFIGURED =
@@ -94,22 +153,13 @@ function assertModelConfigured(cfg: LLMConfig): void {
 /** One-shot (non-streaming) completion. */
 export async function completeLLM(cfg: LLMConfig, messages: LLMMessage[]): Promise<string> {
   assertModelConfigured(cfg);
-  const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: headersFor(cfg),
-    body: JSON.stringify({
-      model: cfg.model,
-      messages,
-      temperature: cfg.temperature,
-      max_tokens: cfg.maxTokens,
-      stream: false,
-    }),
+  const res = await upstreamChat(cfg, {
+    model: cfg.model,
+    messages,
+    temperature: cfg.temperature,
+    max_tokens: cfg.maxTokens,
+    stream: false,
   });
-
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`LLM 请求失败 (${res.status}): ${detail.slice(0, 200)}`);
-  }
 
   const json = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
@@ -128,21 +178,15 @@ export async function streamLLM(
   onToken: (token: string) => void
 ): Promise<string> {
   assertModelConfigured(cfg);
-  const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: headersFor(cfg),
-    body: JSON.stringify({
-      model: cfg.model,
-      messages,
-      temperature: cfg.temperature,
-      max_tokens: cfg.maxTokens,
-      stream: true,
-    }),
+  const res = await upstreamChat(cfg, {
+    model: cfg.model,
+    messages,
+    temperature: cfg.temperature,
+    max_tokens: cfg.maxTokens,
+    stream: true,
   });
-
-  if (!res.ok || !res.body) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`LLM 请求失败 (${res.status}): ${detail.slice(0, 200)}`);
+  if (!res.body) {
+    throw new Error("LLM 服务未返回数据流，请重试");
   }
 
   const reader = res.body.getReader();
@@ -191,23 +235,14 @@ export async function completeLLMStructured<T>(
   schema: ZodType<T>,
 ): Promise<T> {
   assertModelConfigured(cfg);
-  const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: headersFor(cfg),
-    body: JSON.stringify({
-      model: cfg.model,
-      messages,
-      temperature: cfg.temperature,
-      max_tokens: cfg.maxTokens,
-      stream: false,
-      response_format: { type: "json_object" },
-    }),
+  const res = await upstreamChat(cfg, {
+    model: cfg.model,
+    messages,
+    temperature: cfg.temperature,
+    max_tokens: cfg.maxTokens,
+    stream: false,
+    response_format: { type: "json_object" },
   });
-
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`LLM 请求失败 (${res.status}): ${detail.slice(0, 200)}`);
-  }
 
   const json = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
