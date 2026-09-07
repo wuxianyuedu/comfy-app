@@ -10,6 +10,12 @@ import {
   type GenerateInput,
 } from "@/lib/workshop/generation-client";
 import type { ApiChannelsView } from "@/lib/workshop/api-channel-shared";
+import {
+  parseShotSize,
+  shotSizeToParam,
+  type ShotSizeState,
+} from "./shot-size-config";
+import { ShotSizePicker } from "./ShotSizePicker";
 
 /** catch 抛出值（unknown）→ 消息提取：带 string message 的对象取 message，其余回退。 */
 function errorMessage(e: unknown, fallback: string): string {
@@ -68,6 +74,11 @@ export function ShotStudio({
   onNextStage,
 }: Props) {
   const [channel, setChannel] = React.useState<Channel>("local");
+  /** 全镜头共用的「比例 + 像素 + 对齐」尺寸三段状态（issue #145 需求 3）。
+   *  初值取第一条镜头已带的 WxH 参数反解，历史尺寸不丢。 */
+  const [shotSize, setShotSize] = React.useState<ShotSizeState>(() =>
+    parseShotSize(shots[0]?.params.size ?? undefined),
+  );
   const [progress, setProgress] = React.useState<Record<string, number>>({});
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [batchRunning, setBatchRunning] = React.useState(false);
@@ -160,7 +171,9 @@ export function ShotStudio({
           cfg: numParam(shot.params.cfg, 7),
           sampler: strParam(shot.params.sampler, "euler_ancestral"),
           scheduler: strParam(shot.params.scheduler, "normal"),
-          size: strParam(shot.params.size, "832x1216"),
+          size: shot.params.size !== undefined && shot.params.size !== ""
+            ? strParam(shot.params.size, shotSizeToParam(shotSize))
+            : shotSizeToParam(shotSize),
           count: 1,
         };
         const taskId = await startLocalGenerate(input);
@@ -170,7 +183,9 @@ export function ShotStudio({
         const url = await apiGenerateImage({
           prompt: shot.prompt,
           negative: shot.negativePrompt || undefined,
-          size: strParam(shot.params.size, "832x1216"),
+          size: shot.params.size !== undefined && shot.params.size !== ""
+            ? strParam(shot.params.size, shotSizeToParam(shotSize))
+            : shotSizeToParam(shotSize),
         });
         patchShot(shot.id, { status: "done", imageUrl: url });
       }
@@ -228,6 +243,10 @@ export function ShotStudio({
           <Icon name="settings" size={12} />
           API 通道设置
         </button>
+        <label className="flex items-center gap-2 text-xs">
+          <span className="text-muted-foreground">尺寸</span>
+          <ShotSizePicker value={shotSize} onChange={setShotSize} disabled={batchRunning} />
+        </label>
         {channel === "local" && checkpoints.length > 0 && (
           <label className="ml-auto flex items-center gap-2 text-xs">
             <span className="text-muted-foreground">Checkpoint</span>
