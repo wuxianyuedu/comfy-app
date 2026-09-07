@@ -4,7 +4,8 @@
 //   1. 草稿从查询播种（且新的查询结果会重新播种）；
 //   2. Ollama 探测触发时机（仅本地 provider + baseUrl 变化时）；
 //   3. 按任务温度的合并规则（清空 = 删 key，而不是写 undefined）；
-//   4. 三条失败路径都走 flash 提示（硬规则 4：失败必须有用户可见出口）。
+//   4. 失败路径都走 flash 提示（硬规则 4：失败必须有用户可见出口）；
+//   5. openExternalUrl 把生成结果交给系统默认浏览器打开（桌面壳替代外链）。
 
 import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
@@ -136,6 +137,10 @@ const mockRouter = t.router({
     dbStudioOpen: t.procedure.mutation(() => ({
       ok: true,
       detail: "已打开",
+    })),
+    openExternal: t.procedure.mutation(() => ({
+      ok: true,
+      detail: "已用系统默认浏览器打开",
     })),
   }),
   llm: t.router({
@@ -787,5 +792,35 @@ describe("useSettingsPage", () => {
     expect(result.current.section).toBe("llmLocal");
     act(() => result.current.setSection("comfyui"));
     expect(result.current.section).toBe("comfyui");
+  });
+
+  it("openExternalUrl 打开生成的远程资源 → ok 提示（桌面壳外链替代）", async () => {
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await act(async () => {
+      await result.current.openExternalUrl("https://example.com/video.mp4");
+    });
+    expect(result.current.flash).toEqual({
+      kind: "ok",
+      text: "已用系统默认浏览器打开",
+    });
+  });
+
+  it("openExternalUrl 空地址 → err 提示且不发起调用", async () => {
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await act(async () => {
+      await result.current.openExternalUrl("");
+    });
+    expect(result.current.flash).toEqual({
+      kind: "err",
+      text: "没有可打开的资源地址",
+    });
   });
 });

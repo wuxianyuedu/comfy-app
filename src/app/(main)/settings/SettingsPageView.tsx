@@ -1528,14 +1528,18 @@ export function SettingsPageView({
                               />
                             )}
                             {usageTest.result.videoUrl && (
-                              <a
-                                href={usageTest.result.videoUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-primary text-xs break-all underline underline-offset-2"
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void c.openExternalUrl(
+                                    usageTest.result?.videoUrl ?? "",
+                                  )
+                                }
+                                className="text-primary hover:text-primary-hover inline-flex items-center gap-1 text-xs font-medium underline-offset-2 hover:underline"
+                                title="在系统默认浏览器中打开生成的视频"
                               >
                                 打开生成的视频
-                              </a>
+                              </button>
                             )}
                             {usageTest.result.pending &&
                               usageTest.result.taskId && (
