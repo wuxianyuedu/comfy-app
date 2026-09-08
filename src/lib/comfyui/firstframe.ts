@@ -7,7 +7,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { taskRepository } from "@/lib/core/repository";
 import { buildAndValidate } from "./workflow";
-import { enqueue, subscribe } from "./runner";
+import { enqueue, subscribe } from "./enqueue";
 import { uploadImage } from "./client";
 
 export async function synthesizeFirstFrame(opts: {
