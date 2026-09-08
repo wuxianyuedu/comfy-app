@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // 项目画布的本地索引（localStorage）+ 服务端镜像策略单测。
 // 覆盖三条容易回归的规则：
-//   1. 空草稿名哨兵（"未命名" / 旧版 "未命名项目"）决定要不要被回收；
+//   1. 空草稿名哨兵（当前默认名 "未命名"）决定要不要被回收；
 //   2. 被用户命名过的空画布**不能**被回收（用户刻意保存的空灵感板）；
 //   3. findNextAvailableName 在 base 本身以 "_<n>" 结尾时不会死循环。
 
@@ -60,10 +60,10 @@ afterEach(() => {
 });
 
 describe("空草稿名哨兵", () => {
-  it("当前默认名与旧版默认名都算空草稿（升级后旧数据仍能被回收）", () => {
-    expect(EMPTY_DRAFT_NAMES).toEqual(["未命名", "未命名项目"]);
+  it("当前默认名算空草稿（可回收）；旧版 legacy 默认名不再识别", () => {
+    expect(EMPTY_DRAFT_NAMES).toEqual(["未命名"]);
     expect(isEmptyDraftName("未命名")).toBe(true);
-    expect(isEmptyDraftName("未命名项目")).toBe(true);
+    expect(isEmptyDraftName("未命名项目")).toBe(false);
   });
 
   it("用户命名过的空画布不算空草稿", () => {
@@ -80,9 +80,10 @@ describe("reapEmptyProject", () => {
     expect(listProjects()).toHaveLength(0);
   });
 
-  it("旧版默认名同样被回收", () => {
+  it("旧版 legacy 默认名不再被回收（仅当前默认名是哨兵）", () => {
     seed([{ id: "p1", name: "未命名项目", updatedAt: 1, nodes: [], edges: [] }]);
-    expect(reapEmptyProject("p1")).toBe(true);
+    expect(reapEmptyProject("p1")).toBe(false);
+    expect(listProjects()).toHaveLength(1);
   });
 
   it("已被用户命名的空画布不被回收（刻意保存的空白板）", () => {
@@ -108,8 +109,9 @@ describe("reapAllEmptyDrafts", () => {
       { id: "p2", name: "我的项目", updatedAt: 2, nodes: [], edges: [] },
       { id: "p3", name: "未命名项目", updatedAt: 1, nodes: [], edges: [] },
     ]);
-    expect(reapAllEmptyDrafts()).toBe(2);
-    expect(listProjects().map((p) => p.id)).toEqual(["p2"]);
+    // p1 当前哨兵被清；p3 legacy 名已不识别，保留
+    expect(reapAllEmptyDrafts()).toBe(1);
+    expect(listProjects().map((p) => p.id)).toEqual(["p2", "p3"]);
   });
 
   it("没有可清理项时不写 localStorage（避免无谓的 changed 事件）", () => {

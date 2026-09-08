@@ -26,15 +26,10 @@ describe("workflow-types taxonomy", () => {
   });
 
   it("getWorkflowType 按 code 精确命中", () => {
-
     const type = getWorkflowType(IMAGE_WORKFLOW_TYPES[0]!.code);
-
     expect(type?.code).toBe(IMAGE_WORKFLOW_TYPES[0]!.code);
-
     expect(getWorkflowType("no-such-code")).toBeUndefined();
-
   });
-
 
   it("getWorkflowTypesByCategory 只返回该分类", () => {
     const imgs = getWorkflowTypesByCategory("image");
@@ -44,17 +39,30 @@ describe("workflow-types taxonomy", () => {
 });
 
 describe("normalizeTaskType", () => {
-  it("trim + 大写后按别名映射", () => {
-    // 实现语义：trim().toUpperCase() 后查 LEGACY_TYPE_ALIASES，命中返回规范 code
-    expect(normalizeTaskType("  TXT2IMG ")).toBe("T2I");
-    expect(normalizeTaskType("  txt2img ")).toBe("T2I");
+  it("规范 code 输入大小写不敏感归一到规范大小写", () => {
+    // 规范 code 为全大写（T2I / I2V …）或混合大小写（Inpaint / Upscale）
+    expect(normalizeTaskType("  T2I ")).toBe("T2I");
+    expect(normalizeTaskType("t2i")).toBe("T2I");
+    expect(normalizeTaskType("i2v")).toBe("I2V");
+    expect(normalizeTaskType("inpaint")).toBe("Inpaint");
+    expect(normalizeTaskType("INPAINT")).toBe("Inpaint");
+    expect(normalizeTaskType("upscale")).toBe("Upscale");
+  });
+
+  it("历史旧别名不再被映射（放弃存量兼容，按自定义值透传）", () => {
+    // 已删除 TXT2IMG→T2I 等 legacy 映射；旧码不再规整到规范 code
+    expect(normalizeTaskType("TXT2IMG")).toBe("TXT2IMG");
+    expect(normalizeTaskType("  txt2img ")).toBe("txt2img");
+    expect(normalizeTaskType("IMG2IMG")).toBe("IMG2IMG");
   });
 
   it("空值原样返回（无回退）", () => {
     expect(normalizeTaskType("")).toBe("");
+    expect(normalizeTaskType("   ")).toBe("");
   });
 
-  it("未知类型保持原样", () => {
+  it("未知/自定义类型 trim 后原样透传", () => {
     expect(normalizeTaskType("custom-xyz")).toBe("custom-xyz");
+    expect(normalizeTaskType("  custom-xyz ")).toBe("custom-xyz");
   });
 });

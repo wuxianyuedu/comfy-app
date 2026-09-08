@@ -20,14 +20,14 @@ function makeParams(
   };
 }
 
-describe("enrichWorkflowIO — legacy param 自迁移", () => {
-  it("widget-backed param（raw input 带 widget 标记）迁移为 widget，key 同步改写", async () => {
+describe("enrichWorkflowIO — 存储 kind 透传（新格式）", () => {
+  it("widget 条目保持 widget，并补全 type/defaultValue", async () => {
     const result = await enrichWorkflowIO(
       makeParams(
         {
-          "7::param::seed": {
+          "7::widget::seed": {
             direction: "input",
-            kind: "param",
+            kind: "widget",
             nodeId: "7",
             name: "seed",
           },
@@ -51,37 +51,11 @@ describe("enrichWorkflowIO — legacy param 自迁移", () => {
     expect(entry).toBeDefined();
     expect(entry.kind).toBe("widget");
     expect(entry.type).toBe("INT");
-    expect(result["7::param::seed"]).toBeUndefined();
+    expect(entry.defaultValue).toBe(42);
   });
 
-  it("type 可编辑但无 raw input 的 param 迁移为 widget", async () => {
-    const result = await enrichWorkflowIO(
-      makeParams(
-        {
-          "7::param::steps": {
-            direction: "input",
-            kind: "param",
-            nodeId: "7",
-            name: "steps",
-          },
-        },
-        {
-          graph: {
-            "7": {
-              inputs: { steps: 20 },
-            },
-          },
-        }
-      )
-    );
-    const entry = result["7::widget::steps"]!;
-    expect(entry).toBeDefined();
-    expect(entry.kind).toBe("widget");
-    expect(entry.type).toBe("INT");
-    expect(result["7::param::steps"]).toBeUndefined();
-  });
-
-  it("link 类型 param（MODEL）不迁移，保持 param", async () => {
+  it("param（wire 端口）条目不被擅自升级为 widget，保持 param", async () => {
+    // 新格式下 param 即 wire-only 端口；enrichment 不再做旧数据迁移
     const result = await enrichWorkflowIO(
       makeParams(
         {
@@ -111,7 +85,31 @@ describe("enrichWorkflowIO — legacy param 自迁移", () => {
     expect(result["7::widget::model"]).toBeUndefined();
   });
 
-  it("output 方向条目不受迁移影响", async () => {
+  it("API-only 图回退：按 graph 字面量补 default/type，kind 仍透传", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "7::widget::steps": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "7",
+            name: "steps",
+          },
+        },
+        {
+          graph: {
+            "7": { inputs: { steps: 20 } },
+          },
+        }
+      )
+    );
+    const entry = result["7::widget::steps"]!;
+    expect(entry.kind).toBe("widget");
+    expect(entry.type).toBe("INT");
+    expect(entry.defaultValue).toBe(20);
+  });
+
+  it("output 方向条目不受影响", async () => {
     const result = await enrichWorkflowIO(
       makeParams({
         "7::output::image": {
@@ -127,29 +125,25 @@ describe("enrichWorkflowIO — legacy param 自迁移", () => {
     expect(entry.kind).toBe("output");
   });
 
-  it("已存在正确 widget 条目时不去重覆盖（保留后到者数据）", async () => {
+  it("同 node 不同 kind 的条目各自独立落 key，互不覆盖", async () => {
     const result = await enrichWorkflowIO(
       makeParams({
-        "7::param::seed": {
+        "7::param::model": {
           direction: "input",
           kind: "param",
           nodeId: "7",
-          name: "seed",
-          label: "旧标签",
+          name: "model",
         },
         "7::widget::seed": {
           direction: "input",
           kind: "widget",
           nodeId: "7",
           name: "seed",
-          label: "新标签",
         },
       })
     );
-    const entry = result["7::widget::seed"]!;
-    expect(entry).toBeDefined();
-    expect(entry.kind).toBe("widget");
-    expect(entry.label).toBe("新标签");
+    expect(result["7::param::model"]?.kind).toBe("param");
+    expect(result["7::widget::seed"]?.kind).toBe("widget");
   });
 });
 
