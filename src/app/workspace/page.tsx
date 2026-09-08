@@ -47,10 +47,6 @@ const WorkflowLibrary = dynamic(
   () => import("@/components/studio").then((mod) => mod.WorkflowLibrary),
   { ssr: false }
 );
-const AgentChat = dynamic(
-  () => import("@/components/studio").then((mod) => mod.AgentChat),
-  { ssr: false }
-);
 
 /* Lazy-load the heavier canvas/film editors (ReactFlow etc.) on the client. */
 const FilmStudio = dynamic(
@@ -137,12 +133,6 @@ export default function WorkspacePage() {
     writeLastView(view);
   }, []);
 
-  // ── Agent chat overlay ──
-  const [agentOpen, setAgentOpen] = useState(false);
-  // 控制「✦ AI 引导」FAB 是否渲染
-  // 默认 false, 详见下方 JSX 注释。要重新启用 = 改 true。
-  const SHOW_AI_FAB = false;
-
   // ── Video queue modal ──
   const [videoQueueOpen, setVideoQueueOpen] = useState(false);
 
@@ -218,11 +208,6 @@ export default function WorkspacePage() {
   const handleNavSelect = useCallback((id: WorkspaceView) => {
     navigateTo(id);
   }, [navigateTo]);
-
-  // AI 引导入口已隐藏，保留 onApply 兼容占位。
-  const handleApplySpec = useCallback(() => {
-    // no-op: 创作台移除后，AI 引导暂未接入新流程。
-  }, []);
 
   const handleNewProject = useCallback(() => {
     // Opening "新建项目" drops the user into a fresh, named canvas project
@@ -375,23 +360,6 @@ export default function WorkspacePage() {
                 }}
               />
 
-              {/* 临时隐藏「✦ AI 引导」浮动入口。
-               *  原因：调试模式下日志面板浮在画布底部,缩小后恰好遮住右下 FAB,
-               *  两块视觉冲突。保留 `agentOpen` state 与 <AgentChat /> 节点,
-               *  仅折叠按钮入口。要恢复 = 把 SHOW_AI_FAB 改回 true。 */}
-              {SHOW_AI_FAB && !agentOpen && (
-                <button
-                  type="button"
-                  onClick={() => setAgentOpen(true)}
-                  className="fixed bottom-9 right-4 z-30 flex items-center gap-2 rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-transform hover:scale-105"
-                >
-                  <span className="text-[15px]">✦</span>
-                  AI 引导
-                </button>
-              )}
-              {SHOW_AI_FAB && agentOpen && (
-                <AgentChat open={agentOpen} onClose={() => setAgentOpen(false)} onApply={handleApplySpec} />
-              )}
             </div>
           </>
         )}

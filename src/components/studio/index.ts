@@ -1,9 +1,6 @@
 export { CanvasArea } from "./canvas/CanvasArea";
 export type { CanvasAreaProps, ContextMenuItem } from "./canvas/CanvasArea";
 
-export { AgentPanel } from "./AgentPanel";
-export type { AgentPanelProps, AgentTask } from "./AgentPanel";
-
 export { VideoQueueModal } from "./VideoQueueModal";
 export type { VideoQueueModalProps } from "./VideoQueueModal";
 
@@ -48,6 +45,3 @@ export { LogPanel } from "./logs/LogPanel";
 
 export { NumberField } from "./ui/NumberField";
 export { DarkSelect } from "./ui/DarkSelect";
-
-export { AgentChat } from "./AgentChat";
-export type { AgentChatProps } from "./AgentChat";
