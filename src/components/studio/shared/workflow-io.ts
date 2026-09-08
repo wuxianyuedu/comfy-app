@@ -236,9 +236,8 @@ export function splitWorkflowIO(
        *  when the user checked a node's editable parameter.  Anything
        *  else (kind !== "widget") is treated as wire-only — matches the
        *  canvas rendering where these rows render the 🔌 chip via
-       *  `controlForEntry` → "link".  Legacy "param" 数据由服务端
-       *  enrichment 自动迁移为 "widget"（见 workflow-detail-io.ts），
-       *  客户端无需再为旧数据做 promote 特判。 */
+       *  `controlForEntry` → "link".  存储自新格式起即正确区分
+       *  widget / param,客户端直接按 kind 分流,无需任何旧数据特判。 */
       if (entry.kind === "widget") widgetInputs.push(enriched);
       else wireInputs.push(enriched);
     }

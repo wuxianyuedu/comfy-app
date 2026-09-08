@@ -132,8 +132,8 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         const cur = state.workflowIO[key];
         if (!cur) return {};
         /* 只有本代画布勾选写入的 widget 条目可调「必填」；param（连线端口）
-         *  与 output 不可调。legacy "param" 数据已由服务端 enrichment 统一
-         *  迁移为 widget，无需客户端特判。 */
+         *  与 output 不可调。存储自新格式起即正确区分 kind，此处直接以
+         *  kind !== "widget" 拦截即可，无需旧数据特判。 */
         if (cur.kind !== "widget") return {};
         return { workflowIO: { ...state.workflowIO, [key]: { ...cur, required: !cur.required } } };
       }),

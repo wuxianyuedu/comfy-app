@@ -167,22 +167,17 @@ export async function hydrateFromServer(): Promise<void> {
 /** Default name used for freshly-created draft projects.  Used as a
  *  sentinel by `reapEmptyProject`: a project is considered an empty
  *  draft (and safe to reap) iff it has zero nodes/edges AND its name
- *  matches one of these literals.  User-named empty projects (where the
- *  user intentionally saved an empty canvas) are NOT reaped.
- *
- *  Both "未命名" (current default) and "未命名项目" (legacy default) are
- *  treated as sentinel names so projects created by older versions still
- *  get reaped correctly on upgrade. */
-export const EMPTY_DRAFT_NAMES = ["未命名", "未命名项目"] as const;
+ *  matches this literal.  User-named empty projects (where the user
+ *  intentionally saved an empty canvas) are NOT reaped. */
+export const EMPTY_DRAFT_NAMES = ["未命名"] as const;
 export const EMPTY_DRAFT_NAME = EMPTY_DRAFT_NAMES[0];
 
-/** True iff `name` is one of the empty-draft sentinel names.  Use this
- *  instead of hard-coding `"未命名项目"` at every reap guard, so the
- *  default-name change ("未命名") and the legacy sentinel ("未命名项目")
- *  stay in sync from a single source of truth. */
+/** True iff `name` is the empty-draft sentinel name.  Use this instead of
+ *  hard-coding `"未命名"` at every reap guard, so the default name stays
+ *  in sync from a single source of truth. */
 export function isEmptyDraftName(name: string | undefined | null): boolean {
   if (!name) return false;
-  return (EMPTY_DRAFT_NAMES as readonly string[]).includes(name);
+  return name === EMPTY_DRAFT_NAME;
 }
 
 /**
@@ -315,8 +310,7 @@ export function reapEmptyProject(pid: string): boolean {
   const all = safeParse<CanvasProject[]>(localStorage.getItem(INDEX_KEY), []);
   const p = all.find((all) => all.id === pid);
   if (!p) return false;
-  // Recognize both current ("未命名") and legacy ("未命名项目") sentinels
-  if (!(EMPTY_DRAFT_NAMES as readonly string[]).includes(p.name)) return false;
+  if (p.name !== EMPTY_DRAFT_NAME) return false;
   if ((p.nodes?.length ?? 0) > 0 || (p.edges?.length ?? 0) > 0) return false;
   deleteProject(pid);
   return true;
@@ -333,7 +327,7 @@ export function reapAllEmptyDrafts(): number {
   const all = safeParse<CanvasProject[]>(localStorage.getItem(INDEX_KEY), []);
   const survivors = all.filter(
     (project) =>
-      !(EMPTY_DRAFT_NAMES as readonly string[]).includes(project.name) ||
+      project.name !== EMPTY_DRAFT_NAME ||
       (project.nodes?.length ?? 0) > 0 ||
       (project.edges?.length ?? 0) > 0
   );
