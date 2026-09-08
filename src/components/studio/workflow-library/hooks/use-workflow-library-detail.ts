@@ -104,7 +104,22 @@ export function useWorkflowLibraryDetail(
 
   const template = detailQuery.data?.template;
 
-  const workflowIO = useMemo(() => normalizeWorkflowIO(template?.workflowIO), [template]);
+  /* 富化 IO：workflow.detail 直读 DB 列 —— 没有 COMBO 候选表，模式默认值
+   * 也可能是旧候选表时代写入的脏值（如简写 "16:9"），照原样渲染，用户
+   * 无论怎么选提交的都是服务器不认的值。detailFull 走服务端富化（候选
+   * 表解析 + 存量清洗），这里取它的 workflowIO 覆盖原始列；rawJson /
+   * graph 等仍用轻量 template，patchSeedMode 也继续以原始列为底稿。 */
+  const enrichedQuery = api.workflow.detailFull.useQuery(
+    { id: workflow?.id ?? "" },
+    { enabled: !!workflow }
+  );
+
+  const workflowIO = useMemo(
+    () =>
+      normalizeWorkflowIO(enrichedQuery.data?.workflowIO) ??
+      normalizeWorkflowIO(template?.workflowIO),
+    [enrichedQuery.data, template]
+  );
 
   const sourceData = useMemo(
     () => (workflow ? buildSourceData(workflow, template) : null),
