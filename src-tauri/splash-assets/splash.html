@@ -277,8 +277,16 @@
       return false;
     }
 
+    // 进度条只进不退：launcher 写状态文件与 splash 自身探测是两条并行的更新来源，
+    // 探测成功瞬间状态文件里可能还是旧文案（下秒才刷新），若直接覆盖会来回跳。
+    // 错误态不受此限制：失败提示必须始终能透出，避免被高进度挡住。
+    let maxProgress = 0;
+
     function updateUI(progress, phase, message, error, elapsed) {
-      const pct = Math.round(Math.max(0, Math.min(1, progress || 0)) * 100);
+      const raw = Math.max(0, Math.min(1, progress || 0));
+      if (raw < maxProgress && !error) return;
+      maxProgress = raw;
+      const pct = Math.round(raw * 100);
       bar.style.width = `${pct}%`;
       percentEl.textContent = `${pct}%`;
 
