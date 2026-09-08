@@ -12,7 +12,7 @@
  *   • executor-outputs.ts   — collectOutputs / extractRuntimeParams（纯函数）
  *   • executor-errors.ts    — friendlyError / buildPromptError（纯函数）
  *
- * 对外导出（enqueue.ts / runner.ts 依赖的符号）全部保留：
+ * 对外导出（enqueue.ts 依赖的符号）全部保留：
  *   connect / processQueue / cliProcs / collectOutputs /
  *   extractRuntimeParams / friendlyError / applyRawOverrides / RuntimeParams
  *

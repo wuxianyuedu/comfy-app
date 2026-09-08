@@ -1,13 +1,13 @@
 // P3 reaper: orphan task reclamation for the ComfyUI runner.
 //
-// Extracted from `runner.ts` (1971 → split).  This module owns the two
+// Split out of the legacy single-file `runner.ts`.  This module owns the two
 // DB-side sweepers:
 //   • reapStaleQueuedTasks()  — QUEUED > 30s with no promptId → FAILED
 //   • reapStaleRunningTasks() — RUNNING orphans reconciled against
 //     ComfyUI /history + /queue → SUCCEEDED / FAILED
 // It starts itself as a module side-effect (guarded by a globalThis key so
-// Next.js HMR can never create a second interval).  `runner.ts` imports this
-// module so a cold start launches the reaper alongside the executor.
+// Next.js HMR can never create a second interval).  enqueue.ts imports this
+// module as a side effect, so a server that enqueues/subscribes launches the
 
 import { taskRepository } from "../core/repository";
 import { resolveComfyBase } from "./client";

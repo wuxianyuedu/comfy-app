@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
 import { taskRepository } from "@/lib/core/repository";
-import { subscribe, type TaskEvent } from "@/lib/comfyui/runner";
+import { subscribe } from "@/lib/comfyui/enqueue";
+import type { TaskEvent } from "@/lib/comfyui/runner-state";
 import { parseValidationErrors } from "@/lib/comfyui/validation";
 
 export const runtime = "nodejs";

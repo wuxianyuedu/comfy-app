@@ -18,7 +18,7 @@ import {
 } from "@/lib/core/repository";
 import { buildAndValidate } from "@/lib/comfyui/workflow";
 import { getWorkflow } from "@/lib/comfyui/_meta";
-import { enqueue, cancelTask } from "@/lib/comfyui/runner";
+import { enqueue, cancelTask } from "@/lib/comfyui/enqueue";
 import { synthesizeFirstFrame } from "@/lib/comfyui/firstframe";
 import { getSettingsSync } from "@/lib/app-settings";
 import { parseIdeaToScenes } from "@/lib/workshop/script-parser";
