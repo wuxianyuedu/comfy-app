@@ -277,7 +277,7 @@ export function WorkflowRunLogModal({
                   >
                     {levelLabel(log.level)}
                   </span>
-                  <span className="min-w-0 flex-1 break-words text-(--color-ink-strong)">
+                  <span className="min-w-0 flex-1 break-words whitespace-pre-wrap text-(--color-ink-strong)">
                     {log.msg}
                   </span>
                   {log.src && (
