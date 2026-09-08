@@ -408,22 +408,22 @@ export const VALID_TASK_TYPE_CODES = new Set<string>(
   ALL_WORKFLOW_TYPES.map((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code)
 );
 
-/** 兼容旧值映射（旧代码用的 TXT2IMG → T2I 等） */
-export const LEGACY_TYPE_ALIASES: Record<string, string> = {
-  TXT2IMG: "T2I",
-  IMG2IMG: "I2I",
-  INPAINT: "Inpaint",
-  VIDEO: "T2V",
-  UPSCALE: "Upscale",
-  TXT2VIDEO: "T2V",
-  IMG2VIDEO: "I2V",
-  FLFVIDEO: "FLF2V",
-};
+/** 大小写不敏感匹配用的规范 code 表（lower → 规范 code）。
+ *  规范 code 本身区分大小写（如 Inpaint / Upscale 为混合大小写），
+ *  故以 toLowerCase 作键，命中时回写规范 code，保留规范大小写。 */
+const CODE_BY_LOWER = new Map<string, string>(
+  ALL_WORKFLOW_TYPES.map((def) => [def.code.toLowerCase(), def.code])
+);
 
-/** 将可能 legacy 的值标准化为标准 code */
+/** 将用户/前端输入的任务类型码归一到规范 code（大小写不敏感）。
+ *
+ *  数据自始即使用规范 code 写入，此函数不再承担历史旧值（TXT2IMG 等）的
+ *  映射兼容——只把输入统一成规范大小写；非规范的自定义类型按原样透传。
+ */
 export function normalizeTaskType(raw: string): string {
-  const upper = raw.trim().toUpperCase();
-  return LEGACY_TYPE_ALIASES[upper] ?? raw;
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+  return CODE_BY_LOWER.get(trimmed.toLowerCase()) ?? trimmed;
 }
 
 /** 根据图中节点自动推断工作流类型 */
