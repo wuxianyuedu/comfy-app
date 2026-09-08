@@ -529,8 +529,13 @@ export async function executeViaComfyCli(job: Job) {
 
   // stream stderr live so Python tracebacks
   // appear in the panel as they happen, instead of only at close().
+  // 行数上限 60（真实 traceback 一般 < 40 行）；click/Python 的
+  // DeprecationWarning 噪声不占额度、计数后由 close 汇总，避免把真正的
+  // 错误堆栈挤出面板。单行截断放宽到 400 字符（traceback 的路径很长）。
+  // errBuf 始终完整累积，close 时的 tail 汇总不受行数上限影响。
   let errBuf = "";
   let errLines = 0;
+  let noisyWarningLines = 0;
   child.stderr?.setEncoding("utf-8");
   child.stderr?.on("data", (d: string) => {
     errBuf += d;
@@ -538,12 +543,16 @@ export async function executeViaComfyCli(job: Job) {
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
+      if (/DeprecationWarning|SyntaxWarning: invalid escape sequence/i.test(trimmed)) {
+        noisyWarningLines++;
+        continue;
+      }
       errLines++;
-      if (errLines <= 30) {
-        const t = trimmed.length > 240 ? trimmed.slice(0, 240) + "…" : trimmed;
+      if (errLines <= 60) {
+        const t = trimmed.length > 400 ? trimmed.slice(0, 400) + "…" : trimmed;
         log(taskId, "warn", `[comfy-cli stderr] ${t}`);
-      } else if (errLines === 31) {
-        log(taskId, "warn", `[comfy-cli stderr] …后续错误行已省略（查看后端日志）`);
+      } else if (errLines === 61) {
+        log(taskId, "warn", `[comfy-cli stderr] …后续行已省略（完整内容在进程退出汇总）`);
       }
     }
   });
@@ -553,6 +562,13 @@ export async function executeViaComfyCli(job: Job) {
     cliProcs.delete(taskId);
     if (settled) return;
     settled = true;
+    if (noisyWarningLines > 0) {
+      log(
+        taskId,
+        "warn",
+        `[comfy-cli stderr] 另有 ${noisyWarningLines} 行 Python Deprecation/Syntax 警告（第三方库噪声，与执行结果无关）已省略`
+      );
+    }
     const tail = errBuf.trim().split("\n").slice(-12).join("\n");
     log(
       taskId,

@@ -35,6 +35,18 @@ export async function processQueue() {
   if (!job) return;
   s.active += 1;
 
+  /* 完整输入参数入日志：任务日志是复现与排障的唯一现场（dev server 重启
+   * 后内存队列出清，落库的日志行是唯一遗留），把本次提交的 workflowInputs
+   * 全量打进日志——执行日志面板与历史回放都能看到当时到底填了什么。 */
+  if (job.overrides?.length) {
+    log(
+      job.taskId,
+      "info",
+      `输入参数（workflowInputs，${job.overrides.length} 项）：\n` +
+        JSON.stringify(job.overrides, null, 2)
+    );
+  }
+
   try {
     // raw UI-format 工作流（含 liblib 子图 wrapper）：交给 comfy-cli 做
     // UI→API 转换 + 子图展开，原生客户端 graphToPrompt，绕开 UUID class_type。
