@@ -79,6 +79,11 @@
 
 ### Fixed
 
+- **应用日志不再把框架自身日志伪报成业务位置**：过滤 Next.js dev 自身的
+  `[Fast Refresh] done in …ms` 提示（保留在浏览器 console，降为 debug），并让
+  位置列只展示能映射回项目源码（`.ts/.tsx`）的调用点。此前这类框架输出会带着
+  一串看不懂的编译 chunk 路径（如 `src/00vplg9./.js:1879`）混入面板，
+  误导用户以为那是某段业务代码打印的。
 - **comfy-cli 启动报错更友好**：`executeViaComfyCli` 在 spawn 前检查 Python 解释器
   是否存在；缺失时给出明确的安装命令或 `COMFY_CLI_PYTHON` 环境变量覆盖方式，
   不再把原始 `ENOENT` 抛给用户。
