@@ -53,5 +53,22 @@ fn sync_splash_html() {
 
 fn main() {
   sync_splash_html();
-  tauri_build::build()
+
+  // 自 Tauri 2.11 起，远程源（web server 承载的 main 窗加载 http://127.0.0.1:*）
+  // 调用应用自建命令一律走 ACL，即使未配置 AppManifest 也会被强制解析并默认拒绝
+  // （tauri 变更 fix#15266，见 launch-and-build.md §5 症状表）。
+  // 这里声明全部应用命令，让 tauri-build 按 allow-<snake_case> 自动生成权限条目，
+  // 供 capabilities 按窗口/来源授权（splash 本地命令 + main 远程 open_comfyui_window）。
+  tauri_build::try_build(
+    tauri_build::Attributes::new().app_manifest(
+      tauri_build::AppManifest::new().commands(&[
+        "get_launch_status",
+        "get_app_url",
+        "get_launch_log",
+        "navigate_to_app",
+        "open_comfyui_window",
+      ]),
+    ),
+  )
+  .expect("tauri build failed");
 }
