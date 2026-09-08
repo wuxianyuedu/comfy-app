@@ -12,6 +12,7 @@ import { LogPanel } from "~/components/studio/logs/LogPanel";
 import { ToastProvider } from "~/components/studio/ToastProvider";
 import { BrowserStatusBar } from "~/components/studio/BrowserStatusBar";
 import { UpdateCheckProvider } from "~/components/update-check/UpdateCheckProvider";
+import { MessageCenterPanel } from "~/components/message-center/MessageCenterPanel";
 
 export const metadata: Metadata = {
   title: "Create T3 App",
@@ -42,6 +43,8 @@ export default function RootLayout({
                   {children}
                   <LogPanel />
                   <BrowserStatusBar />
+                  {/* 消息中心全屏面板：由状态栏铃铛按钮切换 open；空态时不渲染 */}
+                  <MessageCenterPanel />
                   {/* 运行期「本地更新需重启」检测：轮询 + Ctrl+Shift+U 手动，
                       挂一次即可，自身渲染空节点、用应用内 toast 提示 */}
                   <UpdateCheckProvider />
