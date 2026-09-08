@@ -61,6 +61,8 @@ const FILTER_LABELS: { label: string; value: Level | "all" }[] = [
 ];
 
 export interface WorkflowRunLogModalProps {
+  /** 所属工作流：日志只展示当前工作流的运行（切换工作流独立显示）。 */
+  workflowId: string;
   /** 当前要查看的运行（受控：节点卡片点击时上抛）。 */
   viewTaskId: string | null;
   onViewTaskIdChange: (taskId: string | null) => void;
@@ -69,20 +71,29 @@ export interface WorkflowRunLogModalProps {
 }
 
 export function WorkflowRunLogModal({
+  workflowId,
   viewTaskId,
   onViewTaskIdChange,
   open,
   onClose,
 }: WorkflowRunLogModalProps) {
   const snapshot = useSyncExternalStoreShim();
-  const runs = snapshot.runs;
+  /* 只取当前工作流自己的运行（新→旧），避免把别的工作流的日志串进来。 */
+  const runs = useMemo(
+    () => snapshot.runs.filter((r) => r.workflowId === workflowId),
+    [snapshot.runs, workflowId],
+  );
 
-  /* 未显式选择时看最近一次运行。 */
+  /* 未显式选择 / 指向了别的工作流的运行 → 落到当前工作流最近一次。 */
   useEffect(() => {
-    if (!viewTaskId && snapshot.activeTaskId) {
-      onViewTaskIdChange(snapshot.activeTaskId);
+    const current = viewTaskId
+      ? runs.some((r) => r.taskId === viewTaskId)
+      : false;
+    const latest = runs[0];
+    if (!current && latest) {
+      onViewTaskIdChange(latest.taskId);
     }
-  }, [viewTaskId, snapshot.activeTaskId, onViewTaskIdChange]);
+  }, [viewTaskId, runs, onViewTaskIdChange]);
 
   const run: WorkflowRunMeta | null = useMemo(
     () => (viewTaskId ? runs.find((r) => r.taskId === viewTaskId) ?? null : null),
@@ -145,9 +156,11 @@ export function WorkflowRunLogModal({
                 {run.workflowName}
               </span>
             )}
-            <span className={`rounded-full px-1.5 py-px text-[10px] font-medium ${statusClass}`}>
-              {statusLabel}
-            </span>
+            {run && (
+              <span className={`rounded-full px-1.5 py-px text-[10px] font-medium ${statusClass}`}>
+                {statusLabel}
+              </span>
+            )}
           </div>
 
           <div className="flex shrink-0 items-center gap-2">

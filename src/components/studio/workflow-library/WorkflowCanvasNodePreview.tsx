@@ -25,7 +25,6 @@ import {
 import {
   appendWorkflowRunLog,
   getWorkflowRunStoreSnapshot,
-  getWorkflowRun,
   latestRunForWorkflow,
   patchWorkflowRun,
   registerWorkflowRun,
@@ -276,9 +275,13 @@ export function WorkflowCanvasNodePreview({
   const pct = phase.kind === "running" ? phase.pct : 0;
   const nodeLabel =
     phase.kind === "running" && phase.node?.label ? phase.node.label : null;
-  /* 节点卡片下方的「执行日志」入口：有任一运行记录即显示（跨窗口存活）。 */
-  const hasRuns = storeSnapshot.runs.length > 0;
-  const activeRun = activeTaskId ? getWorkflowRun(activeTaskId) : null;
+  /* 运行态/日志按「当前工作流」隔离：切到哪个工作流就展示哪个工作流的运行，
+   * 不再把别的工作流的运行串到本节点上。currentRuns 取本工作流记录（新→旧）。 */
+  const currentRuns = storeSnapshot.runs.filter(
+    (r) => r.workflowId === workflowId,
+  );
+  const hasRuns = currentRuns.length > 0;
+  const activeRun = currentRuns[0] ?? null;
 
   return (
     /* 容器只做布局：边框/标题/背景由 DetailBody 的页签面板负责（此前在这里
@@ -456,7 +459,8 @@ export function WorkflowCanvasNodePreview({
         <button
           type="button"
           onClick={() => {
-            if (!viewTaskId && activeTaskId) setViewTaskId(activeTaskId);
+            /* 打开日志默认定位到本工作流最近一次运行（切到的工作流独立展示）。 */
+            if (!viewTaskId && activeRun) setViewTaskId(activeRun.taskId);
             setLogOpen(true);
           }}
           data-testid="wflib-log-open"
@@ -476,7 +480,7 @@ export function WorkflowCanvasNodePreview({
                 : activeRun.status === "failed"
                   ? "上次已失败"
                   : "生成中…"
-              : `${storeSnapshot.runs.length} 次运行`}
+              : `${currentRuns.length} 次运行`}
             <span className="ml-2">›</span>
           </span>
         </button>
@@ -485,6 +489,7 @@ export function WorkflowCanvasNodePreview({
       {/* 全屏执行日志弹窗：与项目画布 GlobalStepLogPanel 同款交互。 */}
       <WorkflowRunLogModal
         open={logOpen}
+        workflowId={workflowId}
         viewTaskId={viewTaskId}
         onViewTaskIdChange={setViewTaskId}
         onClose={() => setLogOpen(false)}
