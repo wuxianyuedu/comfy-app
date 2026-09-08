@@ -1,11 +1,18 @@
 // P3 enqueue: public-facing queue / subscription / logs / cancel API for the
 // ComfyUI runner.
 //
-// Extracted from `runner.ts` (1971 → split).  This module owns the *public
-// entry points* used by API routes / orchestrators; the actual WS execution
-// machinery lives in executor.ts, and orphan reaping lives in reaper.ts.
-// `runner.ts` re-exports everything for backward compatibility.
+// Split out of the legacy single-file `runner.ts`.  This module owns the
+// *public entry points* used by API routes / orchestrators; the actual WS
+// execution machinery lives in executor.ts, and orphan reaping lives in
+// reaper.ts.
+//
+// Reaper cold-start: importing this module pulls in `./reaper` as a side
+// effect so a server that enqueues/subscribes always launches the orphan
+// sweepers (QUEUED/RUNNING reconciliation).  Every API/orchestrator that
+// needs enqueue/subscribe/cancelTask imports from here, so deleting the old
+// `runner.ts` shim keeps the reaper on the boot path.
 
+import "./reaper"; // module side-effect: launch the reaper sweeps
 import { interrupt } from "./client";
 import { state, log, persistLogs, MAX_CONCURRENCY } from "./runner-state";
 import type { Job, TaskEvent, LogEntry } from "./runner-state";

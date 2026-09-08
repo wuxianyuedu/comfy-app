@@ -7,7 +7,7 @@ import {
   type ParamMap,
 } from "@/lib/comfyui/workflow";
 import { getWorkflow } from "@/lib/comfyui/_meta";
-import { enqueue } from "@/lib/comfyui/runner";
+import { enqueue } from "@/lib/comfyui/enqueue";
 
 /** ComfyUI API-format graph(Export (API Format)):nodeId → node。
  *  最小精确形状:buildCustomWorkflow 只对节点整体深拷贝并回填 inputs,
