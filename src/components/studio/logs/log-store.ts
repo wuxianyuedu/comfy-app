@@ -79,7 +79,13 @@ export function serialize(args: unknown[]): string {
 /**
  * 从调用栈中定位真正的业务调用方。
  * 拦截 console.* 时，栈顶是 log-store 自己的包装函数，需要跳过；
- * 再跳过 React / Next.js / Tauri 等框架帧，返回第一个业务代码位置。
+ * 再跳过 React / Next.js / Tauri 等框架/编译产物帧，返回第一个**能映射回项目源码**
+ * 的业务位置（即以 .ts/.tsx 结尾的 source-map 帧）。
+ *
+ * 只认 source-map 帧的原因：Next/webpack/Turbopack 在 dev 期把用户代码 source-map 到
+ * `.tsx/.ts`；而框架自身的 console 输出来自被压缩/哈希的编译 chunk（形如
+ * `src/00vplg9./.js:1879`）。这类位置对用户没有可读含义——它们并非业务代码打印的。
+ * 与其展示一串看不出由来的哈希 chunk 路径，不如不展示（返回 undefined，行上不出现位置列）。
  */
 export function captureLocation(): string | undefined {
   try {
@@ -89,6 +95,8 @@ export function captureLocation(): string | undefined {
     const loggerSelfRe = /log-(?:store|provider)\.(tsx|ts|jsx|js)/;
     const frameworkRe =
       /node_modules|react-dom|react\.production|react\.development|next\/(?:dist|server|client)|@tauri-apps|scheduler|webpack[\/](?:runtime|bootstrap)|\[native code\]/i;
+    // 项目源码以 TS 编写；dev 期只有映射回 .ts/.tsx 的帧才算"可读业务位置"。
+    const sourceRe = /\.(?:tsx?|mts|cts)$/i;
 
     const lines = stack.split("\n");
     for (let pass = 0; pass < 2; pass++) {
@@ -130,19 +138,18 @@ export function captureLocation(): string | undefined {
           path = path.replace(/_/g, "/");
         }
 
-        if (
-          pass === 1 &&
-          (path.includes("node_modules") || path.endsWith(".js"))
-        ) {
-          // 兜底帧来自 node_modules/chunks，只保留文件名
-          path = path.replace(/^.*\//, "");
-        }
-
         // 取 /src/ 之后的路径作为最简可读形式
         const srcIdx = path.indexOf("/src/");
         if (srcIdx !== -1) path = path.slice(srcIdx + 1);
 
-        if (path && /^\d+$/.test(lineNo) && !/^\d+$/.test(path)) {
+        // 只展示能映射回项目源码（.ts/.tsx 系）的位置；编译 chunk（.js/.mjs）或
+        // 框架内部帧看不懂也无需展示——继续向下找真正的业务帧，找不到就返回 undefined。
+        if (
+          path &&
+          sourceRe.test(path) &&
+          /^\d+$/.test(lineNo) &&
+          !/^\d+$/.test(path)
+        ) {
           return `${path}:${lineNo}`;
         }
       }
@@ -191,6 +198,19 @@ export function isNoisyFrameworkLog(args: unknown[]): boolean {
   return /IPC custom protocol failed|Tauri will now use the postMessage interface/i.test(
     text,
   );
+}
+
+/**
+ * 过滤 Next.js dev 自身的开发提示，避免它们以"业务 info 日志"身份进面板。
+ * 典型例子：热更新完成时 Next dev 在浏览器 console 打印 `[Fast Refresh] done in
+ * XXXXms`，它来自框架的 dev chunk（source-map 只到压缩后的哈希模块，形如
+ * `src/00vplg9./.js`），并非任何业务代码打印，也没有可读的调用位置。
+ * 与其它框架噪音一致：保留在浏览器 console（降为 debug），只不入面板。
+ */
+export function isNextDevNoise(args: unknown[]): boolean {
+  if (args.length === 0) return false;
+  const text = serialize(args);
+  return /\[Fast\s*Refresh\]\s*(?:done|finished)?.*\d+\s*ms/i.test(text);
 }
 
 function isSameDay(a: Date, b: Date): boolean {

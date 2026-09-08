@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   useLogStore,
   serialize,
+  isNextDevNoise,
   isReactQueryLog,
   parseFileLogs,
   captureLocation,
@@ -454,6 +455,27 @@ describe("isReactQueryLog React Query 内部日志识别", () => {
   it("不误吞含类似文案的普通业务日志", () => {
     expect(isReactQueryLog(["user typed >> mutation #3 note"])).toBe(false);
     expect(isReactQueryLog(["business log about query result"])).toBe(false);
+  });
+});
+
+/* ── isNextDevNoise ───────────────────────────────────────── */
+
+describe("isNextDevNoise Next.js dev 提示识别", () => {
+  it("识别 Fast Refresh 完成提示（不带样式参数）", () => {
+    expect(isNextDevNoise(["[Fast Refresh] done in 7612ms"])).toBe(true);
+    expect(isNextDevNoise(["[Fast refresh] finished in 1ms"])).toBe(true);
+  });
+
+  it("识别带 %c 样式参数的多参数形态", () => {
+    expect(
+      isNextDevNoise(["[Fast Refresh] done in 120ms", "color:#555"]),
+    ).toBe(true);
+  });
+
+  it("普通业务日志返回 false", () => {
+    expect(isNextDevNoise(["完成加载，耗时 12ms"])).toBe(false);
+    expect(isNextDevNoise(["refresh token 已更新"])).toBe(false);
+    expect(isNextDevNoise([])).toBe(false);
   });
 });
 
