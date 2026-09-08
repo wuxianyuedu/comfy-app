@@ -66,7 +66,10 @@ export function DetailBody({
             </button>
           </div>
           <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-2 py-4">
+            {/* key=workflow.id：切换左侧工作流时重建预览，避免上一工作流的
+                运行结果/状态/表单残留（详情区复用的是同一 DOM 位置）。 */}
             <WorkflowCanvasNodePreview
+              key={workflow.id}
               workflowId={workflow.id}
               workflowName={workflow.name}
               taskType={workflow.taskType}
