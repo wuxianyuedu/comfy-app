@@ -122,6 +122,13 @@ export function applyRawOverrides(
     if (ov.name === "control_after_generate") {
       const seedSlot = seedWidgetSlot(node);
       if (seedSlot < 0) continue;
+      // Only write the seed's control mode when this node actually keeps a
+      // `control_after_generate` sentinel slot right after the seed.  A
+      // subgraph wrapper that exposes an inner seed without exposing its
+      // randomization (ComfyUI quarantines it when the subgraph has no input
+      // pin for it) has no such slot — `seedSlot + 1` would otherwise
+      // overwrite the following real widget (e.g. the diffusion model name).
+      if (!hasSeedControlSlot(node)) continue;
       if (!Array.isArray(node.widgets_values)) node.widgets_values = [];
       node.widgets_values[seedSlot + 1] = ov.value;
       continue;
@@ -153,6 +160,34 @@ function seedWidgetSlot(node: RawUiNode): number {
     slot++;
   }
   return -1;
+}
+
+/** Number of widget-bearing inputs (each occupies exactly one slot in
+ *  `widgets_values` unless a seed's `control_after_generate` sentinel adds
+ *  an extra slot — see {@link hasSeedControlSlot}). */
+function widgetInputCount(node: RawUiNode): number {
+  const inputs = node?.inputs ?? [];
+  let count = 0;
+  for (const inp of inputs) {
+    if (inp?.widget) count++;
+  }
+  return count;
+}
+
+/** Whether this UI node serializes a `control_after_generate` sentinel slot
+ *  after its seed widget.  ComfyUI only emits that slot when the seed is a
+ *  *real* INT widget on a node that carries randomization (KSampler etc.).
+ *  Subgraph wrapper nodes that merely *expose* an inner seed do NOT keep a
+ *  control slot in their own `widgets_values` — the slot right after the seed
+ *  there belongs to the next exposed widget (e.g. a model COMBO), so writing
+ *  `seedSlot + 1` would clobber it.  When the exposed seed's randomization was
+ *  quarantined out (ComfyUI `proxyWidgetErrorQuarantine`), we must not write. */
+function hasSeedControlSlot(node: RawUiNode): boolean {
+  if (!Array.isArray(node?.widgets_values)) return false;
+  // A sentinel slot only exists when `widgets_values` holds one more entry than
+  // the widget-bearing inputs (older ComfyUI didn't serialize the sentinel, so
+  // equal length means seed+1 is a real widget too).
+  return node.widgets_values.length > widgetInputCount(node);
 }
 
 /** Read a string field off an unknown payload（非 string → undefined）。 */
