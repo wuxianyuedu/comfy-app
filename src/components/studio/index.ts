@@ -28,8 +28,6 @@ export { ProjectCanvas } from "./ProjectCanvas";
 
 export { HistoryList } from "./history/HistoryList";
 
-export { WorkshopStudio } from "./WorkshopStudio";
-
 export { ToastProvider, useToast } from "./ToastProvider";
 export type { ToastItem } from "./ToastProvider";
 
