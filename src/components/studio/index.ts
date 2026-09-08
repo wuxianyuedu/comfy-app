@@ -1,19 +1,3 @@
-// Updream-style UI components — barrel export
-export { AppShell } from "./AppShell";
-export type { AppShellProps } from "./AppShell";
-
-export { TopBar } from "./TopBar";
-export type { TopBarProps } from "./TopBar";
-
-export { LeftToolbar } from "./LeftToolbar";
-export type { LeftToolbarProps, ToolItem } from "./LeftToolbar";
-
-export { RightPanel } from "./RightPanel";
-export type { RightPanelProps, RightPanelTab } from "./RightPanel";
-
-export { BottomBar } from "./BottomBar";
-export type { BottomBarProps } from "./BottomBar";
-
 export { CanvasArea } from "./canvas/CanvasArea";
 export type { CanvasAreaProps, ContextMenuItem } from "./canvas/CanvasArea";
 
