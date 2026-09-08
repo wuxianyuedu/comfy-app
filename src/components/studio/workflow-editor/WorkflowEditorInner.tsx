@@ -623,11 +623,25 @@ function WorkflowEditorBody({
             defaultMode={detail.defaultMode ?? null}
             onModesChange={(modes, defaultMode) => {
               /* 模式集合变更立即落库（与库详情「类型」同一存储），并同步
-               * 本地 detail 让页签即时反映。 */
+               * 本地 detail 让页签即时反映。被移除的模式在各 IO 条目上的
+               * 覆盖层（modes[mode]）必须一并摘掉——页签栏只跟 modes 走，
+               * 留下的无主覆盖会一直随 workflowIO 落库往返；清理结果随同
+               * 一 PATCH 落库。 */
+              const removedModes = (detail.modes ?? []).filter((m) => !modes.includes(m));
+              const cleanedIO =
+                removedModes.length > 0
+                  ? ioApi.getState().purgeModeOverrides(removedModes)
+                  : null;
               setDetail((prev) =>
                 prev ? { ...prev, modes, defaultMode, taskType: defaultMode } : prev,
               );
-              savePatch.mutate({ id: workflowId, modes, defaultMode, taskType: defaultMode });
+              savePatch.mutate({
+                id: workflowId,
+                modes,
+                defaultMode,
+                taskType: defaultMode,
+                ...(cleanedIO ? { workflowIO: cleanedIO } : {}),
+              });
             }}
             onClose={() => setIoPreviewOpen(false)}
           />

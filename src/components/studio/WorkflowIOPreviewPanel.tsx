@@ -22,7 +22,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { DynamicWorkflowForm } from "@/components/studio/shared/DynamicWorkflowForm";
 import {
-  collectModeCodes,
   defaultInputValues,
   resolveEntrySeedMode,
   splitWorkflowIO,
@@ -93,12 +92,6 @@ export function WorkflowIoPreviewPanel({
   }, [workflowIO, detailIOMap]);
 
   const editableEntries = useMemo(() => splitWorkflowIO(previewIO).inputs, [previewIO]);
-  /* 兜底：历史数据里可能存在不在工作流 modes 里的遗留模式码覆盖——
-   * 列出来供删除，但不进入主编辑页签（页签只跟工作流 modes 走）。 */
-  const legacyModeCodes = useMemo(
-    () => collectModeCodes(previewIO).filter((code) => !modes.includes(code)),
-    [previewIO, modes],
-  );
 
   /* 当前模式是否落过覆盖（驱动「恢复默认」按钮）。 */
   const hasModeOverrides = useMemo(
@@ -170,15 +163,6 @@ export function WorkflowIoPreviewPanel({
     }
   }, [effectiveMode, workflowIO, ioApi]);
 
-  const removeLegacyMode = useCallback(
-    (code: string) => {
-      for (const key of Object.keys(workflowIO)) {
-        ioApi.getState().setIOModeOverride(key, code, null);
-      }
-    },
-    [workflowIO, ioApi]
-  );
-
   const tabClass = (active: boolean) =>
     `shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] transition-colors ${
       active
@@ -242,18 +226,6 @@ export function WorkflowIoPreviewPanel({
                   ×
                 </button>
               )}
-            </span>
-          ))}
-          {legacyModeCodes.map((code) => (
-            <span key={code} className="flex shrink-0 items-center gap-0.5">
-              <button
-                type="button"
-                onClick={() => removeLegacyMode(code)}
-                className="rounded-md border border-dashed border-amber-400/30 bg-amber-400/5 px-1.5 py-0.5 text-[11px] text-amber-300/80 transition-colors hover:text-red-300"
-                title={`历史遗留模式「${code}」（不在工作流模式中）——点击清除其覆盖`}
-              >
-                {code} ×
-              </button>
             </span>
           ))}
           <span className="ml-auto shrink-0">

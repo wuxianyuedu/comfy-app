@@ -75,6 +75,12 @@ export interface IOEditActions {
     mode: string,
     patch: WorkflowIOModeOverride | null
   ) => void;
+  /** 批量摘掉所有 IO 条目上给定模式码的覆盖层（modes[mode]）。
+   *  模式从工作流 `modes` 列移除后，条目里的覆盖必须跟着清掉，否则这些
+   *  无主覆盖会一直跟着 workflowIO 落库往返（页签栏不再显示，纯脏数据）。
+   *  返回清理后的 workflowIO 映射；没有任何覆盖命中时返回 null，调用方
+   *  据此决定是否需要把清理结果落库。 */
+  purgeModeOverrides: (codes: string[]) => Record<string, WorkflowIOParam> | null;
 }
 export type IOEditStore = IOEditState & IOEditActions;
 
@@ -148,6 +154,33 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           Object.keys(modes).length > 0 ? { ...cur, modes } : { ...cur, modes: undefined };
         return { workflowIO: { ...state.workflowIO, [key]: nextEntry } };
       }),
+
+    purgeModeOverrides: (codes) => {
+      let cleaned: Record<string, WorkflowIOParam> | null = null;
+      set((state) => {
+        const hit = codes.filter((code) =>
+          Object.values(state.workflowIO).some(
+            (entry) => entry?.modes != null && code in entry.modes
+          )
+        );
+        if (hit.length === 0) return {};
+        const next: Record<string, WorkflowIOParam> = {};
+        for (const [key, entry] of Object.entries(state.workflowIO)) {
+          const modes = entry?.modes;
+          if (!modes || !hit.some((code) => code in modes)) {
+            next[key] = entry;
+            continue;
+          }
+          const rest = { ...modes };
+          for (const code of hit) delete rest[code];
+          /* 与 setIOModeOverride 的落库形态一致：modes 全空时摘掉字段。 */
+          next[key] = { ...entry, modes: Object.keys(rest).length > 0 ? rest : undefined };
+        }
+        cleaned = next;
+        return { workflowIO: next };
+      });
+      return cleaned;
+    },
 
     setIOValues: (next) =>
       set((state) => {
