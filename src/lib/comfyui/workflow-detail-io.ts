@@ -28,6 +28,7 @@ import {
   type RawInputEntry,
   type RawNodeMeta,
 } from "@/lib/comfyui/workflow-detail-raw";
+import { type WorkflowIOModeOverride } from "~/lib/workflow-io-types";
 
 const MULTILINE_HINT = /(prompt|text|caption|描述|提示)/i;
 
@@ -44,8 +45,10 @@ export interface WorkflowIORawEntry {
   required?: boolean;
   /** seed 类参数的「控件后行为」（fixed/increment/decrement/random）。 */
   seedMode?: string;
-  /** 多模式覆盖层（各模式的默认值与可见性）。 */
-  modes?: Record<string, unknown>;
+  /** 多模式覆盖层（各模式的默认值与可见性），PATCH 原样落库。
+   *  类型与客户端 WorkflowIOModeOverride 同源（workflow-io-types）——
+   *  两端的 workflowIO 载荷经 tRPC 直传，必须逐字段兼容。 */
+  modes?: Record<string, WorkflowIOModeOverride>;
 }
 
 export interface WorkflowIOEnrichParams {
@@ -60,6 +63,40 @@ export interface WorkflowIOEnrichParams {
     field: string
   ) => Promise<string[] | undefined>;
   comboOptionsForFieldName: (field: string) => Promise<string[] | undefined>;
+}
+
+/** 从 "16:9 (Widescreen)" / "16:9" 抽宽高比；抽不出返回 null。 */
+function optionRatio(label: string): number | null {
+  const m = /(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)/.exec(label);
+  if (!m) return null;
+  const w = Number(m[1]);
+  const h = Number(m[2]);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || h === 0) return null;
+  return w / h;
+}
+
+/**
+ * 把存量作者值对齐到服务器候选表：值合法原样返回；非法则按宽高比数值
+ * （"16:9" → "16:9 (Widescreen)"）→ 前缀包含就近纠正；仍匹配不上返回
+ * undefined（调用方丢弃该覆盖，回退合法 defaultValue）。候选表缺失
+ * （ComfyUI 离线）时不动——此时无从判定合法性，交由表单原样编辑。
+ */
+function reconcileOptionValue(value: unknown, options: string[] | undefined): unknown {
+  if (!options || options.length === 0) return value;
+  if (typeof value !== "string" || value === "" || options.includes(value)) return value;
+  const ratio = optionRatio(value);
+  if (ratio !== null) {
+    const byRatio = options.find((option) => {
+      const candidate = optionRatio(option);
+      return candidate !== null && Math.abs(candidate - ratio) < 1e-6;
+    });
+    if (byRatio) return byRatio;
+  }
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  const target = norm(value);
+  return options.find(
+    (option) => norm(option).startsWith(target) || target.startsWith(norm(option))
+  );
 }
 
 export interface WorkflowIOEntry {
@@ -77,9 +114,19 @@ export interface WorkflowIOEntry {
    *  unreachable — consumers fall back to a plain text control. */
   options?: string[];
   /** author override of the default value, round-tripped
-   *  from the stored `workflowIORaw` so a custom default survives reload. */
+   *  from the stored `workflowIORaw` so a custom default survives reload.
+   *  COMBO 条目上会先经存量清洗（对齐服务器候选表）。 */
   value?: unknown;
   displayOrder?: number;
+  /** IO 编辑里切换的「运行时强校验」标记 —— PATCH 原样落库，GET 透传。 */
+  required?: boolean;
+  /** seed 类参数的「控件后行为」（fixed/increment/decrement/random）。 */
+  seedMode?: string;
+  /** 多模式覆盖层（各模式的默认值与可见性）。GET 重建时经存量清洗：
+   *  非法 defaultValue 对齐服务器候选表或被丢弃。类型与客户端
+   *  WorkflowIOModeOverride 同源（workflow-io-types），两端的
+   *  workflowIO 载荷经 tRPC 直传，必须逐字段兼容。 */
+  modes?: Record<string, WorkflowIOModeOverride>;
 }
 
 /** Enrich the stored IO selection into a self-describing record (see the
@@ -190,6 +237,43 @@ export async function enrichWorkflowIO(
 
 
 
+    /* 存量清洗：作者覆盖值 / 模式默认值可能是在候选表缺失或过期时写入的
+     *  （如简写 "16:9"），不在服务器候选表里——照原样展示，用户再怎么选
+     *  提交的仍是脏值。这里在 GET 重建时就地对齐（见 reconcileOptionValue），
+     *  保证 UI 显示与提交的候选值与服务器一致。不回写入参（可能被共享），
+     *  清洗只作用于本次响应；用户保存后 PATCH 自然落库清洗结果。 */
+    const cleanedValue = reconcileOptionValue(v.value, options);
+    let cleanedModes: Record<string, WorkflowIOModeOverride> | undefined;
+    if (v.modes != null && typeof v.modes === "object" && options && options.length > 0) {
+      let touched = false;
+      const next: Record<string, WorkflowIOModeOverride> = {};
+      for (const [mode, override] of Object.entries(v.modes)) {
+        if (override == null || typeof override !== "object") {
+          /* 畸形覆盖（PATCH 原样落库可能带 null/标量）：原样透传不清洗。 */
+          next[mode] = override ?? {};
+          continue;
+        }
+        const ov: WorkflowIOModeOverride = { ...override };
+        if (ov.defaultValue === undefined) {
+          next[mode] = ov;
+          continue;
+        }
+        const fixed = reconcileOptionValue(ov.defaultValue, options);
+        if (fixed === ov.defaultValue) {
+          next[mode] = ov;
+          continue;
+        }
+        touched = true;
+        if (fixed === undefined) {
+          delete ov.defaultValue;
+          if (Object.keys(ov).length > 0) next[mode] = ov;
+          continue;
+        }
+        next[mode] = { ...ov, defaultValue: fixed };
+      }
+      if (touched) cleanedModes = next;
+    }
+
     workflowIO[ioKey] = {
       direction: v.direction,
       kind: v.kind,
@@ -219,14 +303,16 @@ export async function enrichWorkflowIO(
       /* preserve any author override of the default value.
        *  `value` is stored verbatim via PATCH (the whole workflowIO object is
        *  persisted as-is) and must survive this GET rebuild so a custom
-       *  default isn't silently dropped on reload. */
-      ...(v.value !== undefined ? { value: v.value } : {}),
+       *  default isn't silently dropped on reload.  清洗结果见上方存量清洗：
+       *  非法值被就地纠正；匹配不上时 cleanedValue 为 undefined → 不输出
+       *  value，条目回退到图内合法 defaultValue。 */
+      ...(v.value !== undefined ? { value: cleanedValue } : {}),
       /* required / seedMode / modes 同 value 一样是作者编辑态（PATCH 原样
        *  落库），GET 重建必须原样透传 —— 此前 required 被丢掉，导致
-       *  「改成必填 → 保存 → 重开又变回可选」。 */
+       *  「改成必填 → 保存 → 重开又变回可选」。modes 走存量清洗。 */
       ...(v.required !== undefined ? { required: v.required } : {}),
       ...(v.seedMode !== undefined ? { seedMode: v.seedMode } : {}),
-      ...(v.modes !== undefined ? { modes: v.modes } : {}),
+      ...(v.modes !== undefined ? { modes: cleanedModes ?? v.modes } : {}),
     };
   }
 

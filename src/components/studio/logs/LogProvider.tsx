@@ -45,11 +45,18 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     const makeLogger =
       (level: LogLevel) =>
       (...args: unknown[]) => {
+        /* 已识别的框架噪声（React Query / tRPC 往返日志等）不写日志面板。
+         * 它们通常由库打到 console.error，即便被过滤也会触发 Next dev
+         * overlay 的「Console Error」浮层（看似崩溃实为噪声），因此连带
+         * 把输出级别降级为 debug——devtools 的 Verbose 仍可见，便于排查。 */
+        if (isReactQueryLog(args) || isNoisyFrameworkLog(args)) {
+          originals.debug(...args);
+          return;
+        }
         const original = originals[level];
         if (typeof original === "function") {
           original(...args);
         }
-        if (isReactQueryLog(args) || isNoisyFrameworkLog(args)) return;
         const location = captureLocation();
         const message = serialize(args);
         queueMicrotask(() => {

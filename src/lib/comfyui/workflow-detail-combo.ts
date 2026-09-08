@@ -14,14 +14,31 @@ import { fetchObjectInfo } from "@/lib/comfyui/raw";
 import { localModelFileNames } from "@/lib/models";
 import { modelFoldersForField } from "@/lib/model-types";
 
-/** Candidate-list extraction from an object_info spec tuple:
- *  `[["option-a", "option-b"], {...extra}]` → string list. */
+/** Candidate-list extraction from an object_info spec tuple.
+ *  旧形态：`[["option-a", "option-b"], {...extra}]`（head 即选项数组）。
+ *  新形态（ComfyUI V3 combo，0.13+ 实测）：`["COMBO", {options:[...]}, ...]`
+ *  —— head 是类型名字符串，候选挂在第二元素对象的 `options` 字段。
+ *  只认这两种；其它类型（FLOAT/INT/STRING 的 spec）返回 undefined。
+ *  若只认旧形态，新版服务器的 COMBO 会解析失败，按 class 的候选查询
+ *  整体落空，退到 field-name 全库 union——把其它节点同名字段的选项
+ *  混进候选表（如 aspect_ratio 混出简写 "16:9"），用户照着选就会提交
+ *  服务器不认的值。 */
 const comboOptionsFromSpec = (spec: unknown): string[] | undefined => {
   if (!Array.isArray(spec)) return undefined;
   const head: unknown = spec[0];
-  if (!Array.isArray(head)) return undefined;
-  const opts = head.filter((x): x is string => typeof x === "string");
-  return opts.length ? opts : undefined;
+  if (Array.isArray(head)) {
+    const opts = head.filter((x): x is string => typeof x === "string");
+    return opts.length ? opts : undefined;
+  }
+  const extra: unknown = spec[1];
+  if (extra != null && typeof extra === "object") {
+    const opts = (extra as Record<string, unknown>).options;
+    if (Array.isArray(opts)) {
+      const list = opts.filter((x): x is string => typeof x === "string");
+      return list.length ? list : undefined;
+    }
+  }
+  return undefined;
 };
 
 /** Factory that returns a fresh COMBO resolver closure.

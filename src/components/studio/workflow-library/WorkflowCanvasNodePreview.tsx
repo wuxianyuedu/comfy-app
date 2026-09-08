@@ -224,7 +224,7 @@ export function WorkflowCanvasNodePreview({
       setPhase({ kind: "running", pct: 0 });
       setActiveTaskId(taskId);
       setViewTaskId(taskId);
-      /* 登记 + 自动弹出全屏执行日志（与项目画布运行开始即弹日志面板同款）。 */
+      /* 登记运行记录；日志弹窗不再自动打开，由用户点「执行日志」查看。 */
       registerWorkflowRun({
         taskId,
         workflowId,
@@ -233,7 +233,6 @@ export function WorkflowCanvasNodePreview({
         startedAt: Date.now(),
         status: "running",
       });
-      setLogOpen(true);
       await new Promise<void>((resolve) => {
         watchTask(taskId, {
           onProgress: (pct, node: TaskProgressNode | undefined) =>

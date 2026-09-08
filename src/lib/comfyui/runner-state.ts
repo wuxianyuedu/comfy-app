@@ -2,15 +2,15 @@
 
 //
 
-// P3 refactor: `runner.ts` was split into enqueue / executor /
+// Split of the legacy single-file `runner.ts` into enqueue / executor /
 
 // reaper.  This module holds the *singleton runtime state* and the *log
 
-// infrastructure* that all three sub-modules (and the public runner entry)
+// infrastructure* that those sub-modules share.  It is NOT a public API
 
-// share.  It is NOT a public API surface — external code imports the runner
+// surface — external code imports the public entry points from enqueue.ts.
 
-// only.
+//
 
 
 
