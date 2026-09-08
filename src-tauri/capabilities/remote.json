@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/remote-schema.json",
+  "identifier": "remote-loopback",
+  "description": "allows the loopback-hosted app content (dev / standalone / ComfyUI) to invoke the app's own shell commands (e.g. open_comfyui_window)",
+  "windows": [
+    "main"
+  ],
+  "remote": {
+    "urls": [
+      "http://127.0.0.1:*",
+      "http://localhost:*"
+    ]
+  },
+  "permissions": [
+    "core:default",
+    "default"
+  ]
+}
