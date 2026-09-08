@@ -583,7 +583,14 @@ function Get-BrokenKeyDeps {
     } catch { }
     if (-not $hasContent) { $broken += $rel }
   }
-  return ,$broken
+  # 返回数组时禁止用 `return ,$broken`（unary comma 防展开）：当依赖健康、
+  # $broken 为空数组 @() 时，`,@()` 会向外输出"一个空数组"这个单对象，调用方
+  # `@(Get-BrokenKeyDeps)` 收集后得到 @(@())——.Count 恒为 1 而非 0，健康环境
+  # 会被永远误判成有坏依赖 → 触发显式 pnpm install，install 又因依赖本就完好
+  # 返回 "Already up to date"（exit 0）无法自愈，二次复查仍误报抛错，Tauri 壳
+  # 启动被中断。直接 `return $broken`：空数组不产生任何输出，`@(...)` 得 0 项；
+  # 非空则元素正常展开，foreach/.Count 语义均正确。
+  return $broken
 }
 
 function Test-DevDependencies {
