@@ -10,6 +10,7 @@
 import { useCallback, useEffect } from "react";
 
 import { useToast } from "~/components/studio/ToastProvider";
+import { useMessageCenterStore } from "~/components/message-center/message-center-store";
 import { useUpdateCheckStore } from "./update-check-store";
 import { useUpdateCheck } from "./hooks/use-update-check";
 
@@ -34,6 +35,16 @@ function summaryOf(groups: { key: string; label: string; files?: string[] }[]): 
     })
     .join("；");
 }
+/** 生成全屏消息正文：逐组列出改动的文件清单（比 toast 概要更全）。 */
+function bodyOf(groups: { key: string; label: string; hint?: string; files?: string[] }[]): string {
+  const parts = groups.map((g) => {
+    const head = `${g.label}${g.hint ? `（${g.hint}）` : ""}`;
+    const files = g.files && g.files.length > 0 ? `
+  · ${g.files.join("\n  · ")}` : "";
+    return `${head}${files}`;
+  });
+  return `检测到需重启应用才生效的本地改动：\n\n${parts.join("\n")}\n\n请重启应用以让改动生效。`;
+}
 
 export function UpdateCheckProvider() {
   const toast = useToast();
@@ -44,6 +55,12 @@ export function UpdateCheckProvider() {
     onDirty: useCallback(
       (groups) => {
         toast.info("检测到本地更新", `${summaryOf(groups)}。需重启应用才生效。`);
+        // 同步收进消息中心，未读计数 +1，避免 toast 一闪而过无处回看
+        useMessageCenterStore.getState().push({
+          kind: "update",
+          title: "检测到本地更新，需重启应用",
+          body: bodyOf(groups),
+        });
       },
       [toast],
     ),

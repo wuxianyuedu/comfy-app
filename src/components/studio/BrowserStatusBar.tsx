@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { FileText, Lock } from "lucide-react";
 import { useLogPanel } from "./logs/LogProvider";
+import { MessageCenterButton } from "~/components/message-center/MessageCenterButton";
 import { fpsTone, useFps } from "./hooks/use-fps";
 import { useComfyStats } from "./hooks/use-comfy-stats";
 import { useDevServerLiveness } from "./hooks/use-dev-server-liveness";
@@ -129,6 +130,9 @@ export function BrowserStatusBar() {
             <span className="text-gray-600">({ramPct}%)</span>
           </span>
         )}
+
+        {/* 消息中心：系统级提示（本地更新需重启等）的收件箱，未读有数量，点开全屏查看 */}
+        <MessageCenterButton />
 
         <button
           type="button"
