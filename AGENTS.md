@@ -94,10 +94,11 @@
 ## 快速排障
 
 遇到启动/生成问题，先查规范文档 **§5 症状 → 根因对照表**（本项目全部历史
-事故都在里面），再按 **§4 日志布局** 的顺序看日志：
-`log/start-tauri-launcher.log` → `log/dev-launcher-stderr.log` →
-`log/dev-launcher.log` → `log/nextjs-stderr-<ts>.log` →
-`log/comfyui-runtime.log`。
+事故都在里面），再按 **§4 日志布局** 的顺序看日志（log/ 按子系统分区：
+`launcher/`、`nextjs/`、`services/`、`tools/`、`archive/`）：
+`log/launcher/start-tauri-launcher.log` → `log/launcher/dev-launcher-stderr.log` →
+`log/launcher/dev-launcher.log` → `log/nextjs/nextjs-stderr-<ts>.log` →
+`log/services/comfyui-runtime.log`。
 
 ## 维护约定
 

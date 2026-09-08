@@ -20,6 +20,7 @@ import fs from "fs";
 import path from "path";
 import { logger } from "~/server/lib/logger";
 import { openUrlInBrowser } from "~/lib/open-in-browser";
+import { DRIZZLE_STUDIO_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log-paths";
 
 /** drizzle-kit studio 默认监听端口。 */
 export const DRIZZLE_STUDIO_DEFAULT_PORT = 4983;
@@ -103,10 +104,9 @@ function localTimestamp(): string {
 
 function appendRuntimeLog(line: string): void {
   try {
-    const dir = path.join(process.cwd(), "log");
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
     fs.appendFileSync(
-      path.join(dir, "drizzle-studio-runtime.log"),
+      DRIZZLE_STUDIO_RUNTIME_LOG,
       `${localTimestamp()} ${line}\n`,
       "utf-8",
     );
@@ -119,8 +119,7 @@ function appendRuntimeLog(line: string): void {
  *  drizzle-studio-runtime.log 靠它分清会话边界。 */
 function appendSessionBanner(kind: "start" | "end", title: string): void {
   try {
-    const dir = path.join(process.cwd(), "log");
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
     const bar = "─".repeat(72);
     const color = kind === "start" ? "\x1b[1;32m" : "\x1b[1;33m";
     const reset = "\x1b[0m";
@@ -132,7 +131,7 @@ function appendSessionBanner(kind: "start" | "end", title: string): void {
       "",
     ].join("\n");
     fs.appendFileSync(
-      path.join(dir, "drizzle-studio-runtime.log"),
+      DRIZZLE_STUDIO_RUNTIME_LOG,
       banner + "\n",
       "utf-8",
     );
@@ -235,8 +234,8 @@ export async function ensureDrizzleStudioUp(
           ok: false,
           port,
           detail: modErr
-            ? `Drizzle Studio 启动后立即退出：缺少依赖（${modErr[1] ?? modErr[2]}）——请确认已安装 drizzle-kit（pnpm install），详见 log/drizzle-studio-runtime.log`
-            : "Drizzle Studio 进程启动后立即退出，详见 log/drizzle-studio-runtime.log",
+            ? `Drizzle Studio 启动后立即退出：缺少依赖（${modErr[1] ?? modErr[2]}）——请确认已安装 drizzle-kit（pnpm install），详见 log/services/drizzle-studio-runtime.log`
+            : "Drizzle Studio 进程启动后立即退出，详见 log/services/drizzle-studio-runtime.log",
         };
       }
       if (await probeDrizzleStudio(port)) {
@@ -251,7 +250,7 @@ export async function ensureDrizzleStudioUp(
     return {
       ok: false,
       port,
-      detail: `Drizzle Studio 启动超时（${Math.round(timeoutMs / 1000)}s 未就绪），详见 log/drizzle-studio-runtime.log`,
+      detail: `Drizzle Studio 启动超时（${Math.round(timeoutMs / 1000)}s 未就绪），详见 log/services/drizzle-studio-runtime.log`,
     };
   })().finally(() => {
     st.starting = undefined;

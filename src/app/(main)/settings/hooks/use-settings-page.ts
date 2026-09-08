@@ -155,17 +155,17 @@ export interface SettingsPageController {
   openDbStudio: () => Promise<void>;
   /** 用系统默认浏览器打开生成的远程资源（视频等），桌面壳内替代 target=_blank */
   openExternalUrl: (url: string) => Promise<void>;
-  /* ComfyUI 启动日志（log/comfyui-runtime.log）：启动期间自动跟随，可手动刷新 */
+  /* ComfyUI 启动日志（log/services/comfyui-runtime.log）：启动期间自动跟随，可手动刷新 */
   comfyLogText: string;
   comfyLogSegments: AnsiSegment[];
   comfyLogActive: boolean;
   refreshComfyLog: () => Promise<void>;
-  /* Drizzle Studio 启动日志（log/drizzle-studio-runtime.log）：同 ComfyUI，可跟随/刷新 */
+  /* Drizzle Studio 启动日志（log/services/drizzle-studio-runtime.log）：同 ComfyUI，可跟随/刷新 */
   dbStudioLogText: string;
   dbStudioLogSegments: AnsiSegment[];
   dbStudioLogActive: boolean;
   refreshDbStudioLog: () => Promise<void>;
-  /* Ollama 启动日志（log/ollama-runtime.log）：同 ComfyUI，可跟随/刷新 */
+  /* Ollama 启动日志（log/services/ollama-runtime.log）：同 ComfyUI，可跟随/刷新 */
   ollamaLogText: string;
   ollamaLogSegments: AnsiSegment[];
   ollamaLogActive: boolean;
@@ -223,7 +223,7 @@ const FLASH_MS = 3500;
 
 /* ── ComfyUI 启动日志 ─────────────────────────────────────
  * lifecycle.ts 会把 spawn 参数与子进程 stdout/stderr 追加进
- * log/comfyui-runtime.log；这里在启动期间每秒跟随其尾部。 */
+ * log/services/comfyui-runtime.log；这里在启动期间每秒跟随其尾部。 */
 const COMFY_LOG_POLL_MS = 1000;
 /** 客户端保留上限：一次超长冷启动也不至于把内存吃穿。 */
 const COMFY_LOG_MAX_CHARS = 120_000;
@@ -628,7 +628,7 @@ export function useSettingsPage(): SettingsPageController {
 
   /* ── Drizzle Studio 启动日志 ────────────────────────────
    * drizzle-studio/lifecycle.ts 会把 spawn 参数与子进程 stdout/stderr 追加进
-   * log/drizzle-studio-runtime.log；这里在启动期间每秒跟随尾部（同 ComfyUI）。 */
+   * log/services/drizzle-studio-runtime.log；这里在启动期间每秒跟随尾部（同 ComfyUI）。 */
   const dbStudioLogOffsetRef = useRef(0);
   const [dbStudioLogText, setDbStudioLogText] = useState("");
   const [dbStudioLogSegments, setDbStudioLogSegments] = useState<AnsiSegment[]>(
@@ -685,7 +685,7 @@ export function useSettingsPage(): SettingsPageController {
 
   /* ── Ollama 启动日志 ─────────────────────────────────────
    * ollama-start/route.ts 会把 spawn 参数与子进程 stdout/stderr 追加进
-   * log/ollama-runtime.log；这里在启动期间每秒跟随尾部（同 ComfyUI/Drizzle）。 */
+   * log/services/ollama-runtime.log；这里在启动期间每秒跟随尾部（同 ComfyUI/Drizzle）。 */
   const ollamaLogOffsetRef = useRef(0);
   const [ollamaLogText, setOllamaLogText] = useState("");
   /* SGR 颜色序列解析成片段，视图层按样式渲染（同 ComfyUI / Drizzle Studio） */
