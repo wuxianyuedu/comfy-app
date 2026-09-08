@@ -6,7 +6,11 @@ use std::process::Command;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use tauri::Manager;
+use tauri::{Manager, Wry};
+
+// ── 官方 first-party 插件 ──
+use tauri_plugin_single_instance as single_instance;
+use tauri_plugin_window_state::StateFlags as WindowStateFlags;
 
 // 生产模式 sidecar（Next standalone server）PID，应用退出时回收
 #[cfg(not(debug_assertions))]
@@ -60,13 +64,13 @@ fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, String
 #[tauri::command]
 fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
   let url = state.app_url();
-  eprintln!("[ComfyAPP] navigate_to_app called with url: {}", url);
+  log::info!("[ComfyAPP] navigate_to_app called with url: {}", url);
   let parsed: tauri::Url = url.parse().map_err(|e| format!("非法 URL {}: {}", url, e))?;
   if let Some(win) = app_handle.get_webview_window("main") {
     win
       .navigate(parsed)
       .map_err(|e| format!("导航失败: {:?}", e))?;
-    eprintln!("[ComfyAPP] navigate_to_app: navigation dispatched");
+    log::info!("[ComfyAPP] navigate_to_app: navigation dispatched");
   } else {
     return Err("找不到应用窗口 main".to_string());
   }
@@ -162,7 +166,7 @@ fn spawn_renavigate(handle: tauri::AppHandle, url: tauri::Url) {
     return;
   }
   std::thread::spawn(move || {
-    eprintln!("[ComfyAPP] 应用地址在交换窗口时不可达，进入重导航循环：{}", url);
+    log::warn!("[ComfyAPP] 应用地址在交换窗口时不可达，进入重导航循环：{}", url);
     for _ in 0..90 {
       std::thread::sleep(Duration::from_secs(2));
       // 启动页已关闭（安全网强制交换 / 用户退出）则无需再重试
@@ -256,6 +260,15 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
       sections.push(format!("─ 错误输出（dev-launcher-stderr.log）─\n{}", tail));
     }
   }
+  // 壳自持日志（release 落 log/shell/shell.log；dev 由 launcher 重定向 stderr，
+  // 不产生此文件）。启动期壳的导航/看门狗/侧车诊断都经 log:: 打到这份文件，
+  // 正式版壳脱离 launcher（standalone 双击）崩溃时仍有可查日志。
+  let shell_log = std::path::Path::new(&root).join("log").join("shell").join("shell.log");
+  if let Some(tail) = tail_log_file(&shell_log, 8 * 1024, 120) {
+    if !tail.trim().is_empty() {
+      sections.push(format!("─ 壳日志（log/shell/shell.log）─\n{}", tail));
+    }
+  }
   if sections.is_empty() {
     return Ok("（暂无日志：启动器尚未写入输出）".to_string());
   }
@@ -296,7 +309,7 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error
     // 启动 Next dev server，壳只需加载 COMFYAPP_DEV_URL 即可），避免「直接
     // cargo build --release（未跑 beforeBuildCommand）」导致壳启动即 panic。
     if let Ok(dev_url) = std::env::var("COMFYAPP_DEV_URL") {
-      eprintln!("[ComfyAPP] standalone server.js 缺失，回退到 dev URL: {}", dev_url);
+      log::warn!("[ComfyAPP] standalone server.js 缺失，回退到 dev URL: {}", dev_url);
       if let Some(state) = app.try_state::<AppState>() {
         state.set_app_url(dev_url);
       }
@@ -340,7 +353,7 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
   let parsed = match url.parse::<tauri::Url>() {
     Ok(u) => u,
     Err(e) => {
-      eprintln!("[ComfyAPP] 应用地址非法 {}：{}", url, e);
+      log::warn!("[ComfyAPP] 应用地址非法 {}：{}", url, e);
       return;
     }
   };
@@ -367,7 +380,7 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
       }
       std::thread::sleep(Duration::from_millis(500));
     }
-    eprintln!("[ComfyAPP] 等待应用地址就绪超时：{}", url);
+    log::warn!("[ComfyAPP] 等待应用地址就绪超时：{}", url);
   });
 }
 
@@ -400,6 +413,75 @@ fn resolve_project_root() -> String {
   String::new()
 }
 
+/// 日志插件：开发模式走 stdout（launcher 已把 stderr 重定向进
+/// log/launcher/dev-launcher-stderr.log）；生产模式额外落一份壳自持日志到
+/// <项目根>/log/shell/（standalone 双击无 launcher 重定向时的兜底落盘，见
+/// launch-and-build.md §4 日志布局：按子系统分区，新增 shell 子系统）。
+#[cfg(not(debug_assertions))]
+fn build_log_plugin(project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
+  // 保留 stdout/stderr：launcher 下壳 stderr 被重定向进 dev-launcher-stderr.log；
+  // release（windows_subsystem）下无控制台，写 stderr 无害。生产模式另落一份
+  // 壳自持日志到 <项目根>/log/shell/shell.log——standalone 双击无 launcher 重定向，
+  // 壳若在 launcher 之外崩溃仍有日志可查（launch-and-build.md §4：按子系统分区）。
+  // 插件自带 KeepOne 轮转，避免文件无限增长。
+  let mut targets = vec![
+    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
+  ];
+  if !project_root.is_empty() {
+    let shell_log_dir = std::path::Path::new(project_root).join("log").join("shell");
+    targets.push(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
+      path: shell_log_dir,
+      file_name: Some("shell.log".to_string()),
+    }));
+  }
+  tauri_plugin_log::Builder::new()
+    .level(log::LevelFilter::Info)
+    .targets(targets)
+    .build()
+}
+
+#[cfg(debug_assertions)]
+fn build_log_plugin(_project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
+  // dev 模式：壳日志由 launcher 把 stderr 重定向进 log/launcher/，无需壳自持文件。
+  tauri_plugin_log::Builder::new()
+    .level(log::LevelFilter::Info)
+    .targets([
+      tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+      tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
+    ])
+    .build()
+}
+
+/// 窗口状态持久化：记忆 main / comfyui 窗口的位置、尺寸与最大化，重启后还原。
+/// 刻意排除 VISIBLE——本壳的 main 窗由「启动页 → 导航 → 交换」流程控制显隐，
+/// 交给插件自动 show 会破坏隐藏待命语义（见 run() 里对 main 的 visible(false)）。
+/// splash 只做进度展示，无记忆需求，deny 掉。
+fn build_window_state_plugin() -> tauri::plugin::TauriPlugin<Wry> {
+  tauri_plugin_window_state::Builder::default()
+    .with_denylist(&["splash"])
+    .with_state_flags(
+      WindowStateFlags::SIZE | WindowStateFlags::POSITION | WindowStateFlags::MAXIMIZED,
+    )
+    .build()
+}
+
+/// 壳层单实例保护：launcher（CreateMutexW）只保护「双击启动」这一层；当
+/// app.exe 被直接拉起（standalone 双击、launcher 已退而壳还活着）时仍可能
+/// 叠加窗口。把单实例下沉到壳进程，二次实例由插件杀掉并在回调里把主窗口带到前台。
+fn build_single_instance_plugin() -> tauri::plugin::TauriPlugin<Wry> {
+  single_instance::init(|app, _args, _cwd| {
+    // 应用仍在启动期（splash 还开着、main 尚未交换）时不做前台抢占，
+    // 否则会把尚在 about:blank 的隐藏主窗顶出来，破坏启动页流程。
+    if app.get_webview_window("splash").is_none() {
+      if let Some(main) = app.get_webview_window("main") {
+        let _ = main.show();
+        let _ = main.set_focus();
+      }
+    }
+  })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let project_root = resolve_project_root();
@@ -408,7 +490,12 @@ pub fn run() {
   let app_url = std::env::var("COMFYAPP_DEV_URL")
     .unwrap_or_else(|_| "http://localhost:3000/workspace".to_string());
 
+  let log_plugin = build_log_plugin(&project_root);
+
   let app = tauri::Builder::default()
+    .plugin(build_window_state_plugin())
+    .plugin(build_single_instance_plugin())
+    .plugin(log_plugin)
     .manage(AppState::new(project_root, app_url))
     .invoke_handler(tauri::generate_handler![get_launch_status, navigate_to_app, get_app_url, get_launch_log, open_comfyui_window])
     .setup(|app| {
@@ -433,7 +520,7 @@ pub fn run() {
         .on_page_load(move |_win, payload| {
           if payload.event() == tauri::webview::PageLoadEvent::Finished {
             let url = payload.url().as_str();
-            eprintln!("[ComfyAPP] main window Finished: {}", url);
+            log::info!("[ComfyAPP] main window Finished: {}", url);
             // 忽略初始 about:blank / 空 URL / 内部错误页，只有在真正导航到应用 URL（http/https）
             // 后才交换窗口，避免主窗口提前显示在黑屏的 about:blank 上。
             if url.is_empty()
@@ -442,16 +529,16 @@ pub fn run() {
               || url.starts_with("https://tauri.localhost")
               || (!url.starts_with("http://") && !url.starts_with("https://"))
             {
-              eprintln!("[ComfyAPP] ignoring initial/non-app page load");
+              log::debug!("[ComfyAPP] ignoring initial/non-app page load");
               return;
             }
-            eprintln!("[ComfyAPP] app page loaded, swapping windows");
+            log::info!("[ComfyAPP] app page loaded, swapping windows");
             // 导航失败（连接被拒/服务又挂掉）时 WebView2 也会以 http URL 触发
             // Finished，页面内容是内嵌的 Edge「无法访问此页面」错误页——历史上
             // 它曾被当成「应用加载完成」直接顶给用户。交换前用 TCP 可达性做
             // 二次校验：不可达就不交换，交给重导航循环，保持启动页可见。
             if !url_reachable(payload.url()) {
-              eprintln!("[ComfyAPP] swap aborted, app url unreachable: {}", url);
+              log::warn!("[ComfyAPP] swap aborted, app url unreachable: {}", url);
               spawn_renavigate(app_handle_for_page.clone(), payload.url().clone());
               return;
             }
@@ -495,10 +582,10 @@ pub fn run() {
             std::thread::sleep(Duration::from_millis(100));
           }
           let Some(splash_url) = base else {
-            eprintln!("[ComfyAPP] splash watchdog: base url not seen in 5s, giving up");
+            log::warn!("[ComfyAPP] splash watchdog: base url not seen in 5s, giving up");
             return;
           };
-          eprintln!("[ComfyAPP] splash watchdog: base url {}", splash_url);
+          log::info!("[ComfyAPP] splash watchdog: base url {}", splash_url);
           for _ in 0..300 {
             std::thread::sleep(Duration::from_millis(1000));
             let Some(s) = handle.get_webview_window("splash") else { return };
@@ -508,21 +595,13 @@ pub fn run() {
             };
             if drifted {
               let cur = s.url().map(|u| u.to_string()).unwrap_or_default();
-              eprintln!("[ComfyAPP] splash watchdog: url drifted to {}, restoring", cur);
+              log::warn!("[ComfyAPP] splash watchdog: url drifted to {}, restoring", cur);
               let _ = s.navigate(splash_url.clone());
             }
           }
         });
       }
 
-      #[cfg(debug_assertions)]
-      {
-        app.handle().plugin(
-          tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
-            .build(),
-        )?;
-      }
       #[cfg(not(debug_assertions))]
       {
         let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
@@ -532,7 +611,7 @@ pub fn run() {
         } else {
           // prebuilt / tauri / 未指定：壳直接加载 COMFYAPP_DEV_URL（由
           // dev-launcher.ps1 起 dev server），不启动 standalone sidecar。
-          eprintln!(
+          log::info!(
             "[ComfyAPP] launch mode={:?}，跳过 standalone sidecar，使用 dev URL",
             launch_mode
           );
@@ -542,12 +621,12 @@ pub fn run() {
         // 老版本 app.exe 未嵌入 splash.html，窗口会 404 黑屏且无法自动跳转，
         // 这里检测不到启动页就直接等应用地址就绪后导航，避免永久黑屏。
         let has_splash = app.asset_resolver().get("splash.html".to_string()).is_some();
-        eprintln!("[ComfyAPP] splash.html embedded: {}", has_splash);
+        log::info!("[ComfyAPP] splash.html embedded: {}", has_splash);
         if !has_splash {
           if let Some(state) = app.try_state::<AppState>() {
             let url = state.app_url();
             if !url.is_empty() {
-              eprintln!("[ComfyAPP] splash.html 未嵌入，启动页不可用，就绪后直接导航到 {}", url);
+              log::warn!("[ComfyAPP] splash.html 未嵌入，启动页不可用，就绪后直接导航到 {}", url);
               navigate_when_ready(app.handle().clone(), url);
             }
           }
