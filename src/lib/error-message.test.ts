@@ -27,3 +27,30 @@ describe("errorMessage", () => {
     expect(errorMessage(0, "兜底")).toBe("兜底");
   });
 });
+
+describe("网络层报错翻译", () => {
+  it("JSON 解析失败翻译成可读文案（ISSUE #220 设置页报错原文）", () => {
+    const e = new Error(
+      `Unexpected token '<', "<!DOCTYPE "...is not valid JSON`,
+    );
+    expect(errorMessage(e, "加载失败")).toBe(
+      "服务返回了非预期内容（通常是应用服务正在重启或未就绪），请稍候重试",
+    );
+  });
+
+  it("Failed to fetch 翻译成网络提示", () => {
+    expect(errorMessage(new TypeError("Failed to fetch"), "兜底")).toBe(
+      "网络请求失败，请检查应用服务是否正在运行",
+    );
+  });
+
+  it("普通业务错误不受翻译影响，原样返回", () => {
+    expect(errorMessage(new Error("模型名称已存在"), "兜底")).toBe(
+      "模型名称已存在",
+    );
+  });
+
+  it("翻译命中但配合空串仍走兜底", () => {
+    expect(errorMessage(new Error(""), "兜底")).toBe("兜底");
+  });
+});
