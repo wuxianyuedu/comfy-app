@@ -563,14 +563,25 @@ function Get-BrokenKeyDeps {
   $broken = @()
   foreach ($rel in @("typescript", "@typescript/native", "next")) {
     $dir = Join-Path $root ("node_modules\" + $rel)
-    if (-not (Test-Path -LiteralPath $dir)) {
+    # pnpm 布局下顶层依赖目录是指向 .pnpm store 的 symlink/junction。不能直接
+    # 用 Get-ChildItem -LiteralPath 判空：pwsh 对这类 reparse point 的枚举跨版本
+    # 不一致，健康安装（目标有内容）也可能被误判成 0 项 → 假阳性让 pnpm install
+    # 反复"已是最新"后仍报残缺（见 ISSUE #196）。改为：先解析出链接目标的真实
+    # 绝对路径，再对真实目录用 .NET 枚举判非空（junction/symlink 在 Win32 层透明
+    # 跟随，稳定）。空目录 / 悬空链接（目标缺失）/ 目录不存在都算坏。
+    $resolved = ""
+    try {
+      $resolved = (Resolve-Path -LiteralPath $dir -ErrorAction Stop).ProviderPath
+    } catch { }
+    if (-not $resolved -or -not (Test-Path -LiteralPath $resolved -PathType Container)) {
       $broken += $rel
       continue
     }
-    # pnpm 布局下顶层目录可能是指向 .pnpm store 的 symlink/junction：只要
-    # 链接目标里能看到内容即算健康；空目录 / 悬空链接（目标缺失）都算坏。
-    $files = @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue)
-    if ($files.Count -eq 0) { $broken += $rel }
+    $hasContent = $false
+    try {
+      $hasContent = [System.IO.Directory]::EnumerateFileSystemEntries($resolved).GetEnumerator().MoveNext()
+    } catch { }
+    if (-not $hasContent) { $broken += $rel }
   }
   return ,$broken
 }
