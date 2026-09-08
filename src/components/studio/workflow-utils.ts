@@ -512,6 +512,15 @@ export function buildEdges(
   const nodesById: Record<string, ComfyGraphNode> = {};
   for (const node of detail.nodes) nodesById[node.id] = node;
 
+  /* Per-node raw outputs[] — the same source FlowNode falls back to when a
+   * class isn't in the static `inferOutputTypeAll` table.  Kept as a map so
+   * the per-edge lookup below stays O(1). */
+  const rawOutById = new Map<string, RawOutputMeta[]>();
+  for (const rawNode of detail.rawNodes ?? []) {
+    if (!rawNode?.id) continue;
+    rawOutById.set(rawNode.id, Array.isArray(rawNode.outputs) ? rawNode.outputs : []);
+  }
+
   const edges: Edge[] = [];
   let i = 0;
   for (const [nodeId, raw] of Object.entries(detail.graph ?? {})) {
@@ -531,14 +540,21 @@ export function buildEdges(
       const stroke = portColor(type);
       // Pin to the precise output handle when we know its name; otherwise
       // fall back to the generic hidden "out" handle every node exposes.
-      // For unknown custom nodes the inferred slot→name table (built by
-      // inferSourceOutNames) fills in names like `width` / `height` that
-      // both `inferOutputTypeAll` and `raw.outputs[]` miss.
       const slotNames = outSlotNameById?.[srcId];
       const staticNames = Object.keys(inferOutputTypeAll(srcClass ?? ""));
+      const rawOuts = rawOutById.get(srcId) ?? [];
+      /* 只有当源节点真的会渲染输出端口（静态表 或 raw outputs 命中）时，
+       * 才能把边 pin 到 "out:<name>"。自定义节点两者皆空时画布一个输出
+       * 端口都不渲染，`inferSourceOutNames` 从下游输入键反推出的名字
+       * （如 width / height）在画布上并不存在，写进 sourceHandle 会让
+       * React Flow 找不到 handle 而丢弃整条边并打 error#008 警告。
+       * 这类边回落到每个节点都挂的通用 "out" handle。 */
       let outName: string | null = null;
-      if (slotNames && srcSlot < slotNames.length) outName = slotNames[srcSlot]!;
-      else if (srcSlot < staticNames.length) outName = staticNames[srcSlot]!;
+      if (staticNames.length > 0 || rawOuts.length > 0) {
+        if (slotNames && srcSlot < slotNames.length) outName = slotNames[srcSlot]!;
+        else if (srcSlot < staticNames.length) outName = staticNames[srcSlot]!;
+        else if (srcSlot < rawOuts.length) outName = rawOuts[srcSlot]!.name ?? null;
+      }
       edges.push({
         id: `e-${srcId}-${nodeId}-${inputName}-${i++}`,
         source: srcId,
