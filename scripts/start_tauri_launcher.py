@@ -135,14 +135,14 @@ APP_TITLE = "Comfy APP"
 APP_WINDOW_TITLE = "Comfy APP"
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  日志（辅助排查，写入项目根目录 log/start-tauri-launcher.log）
+#  日志（辅助排查，写入项目根目录 log/launcher/start-tauri-launcher.log）
 # ═══════════════════════════════════════════════════════════════════════════════
 _log_file: object | None = None
 _log_lock = threading.Lock()
 
 
 def _ensure_log_dir(project_root: str) -> str:
-    log_dir = os.path.join(project_root, "log")
+    log_dir = os.path.join(project_root, "log", "launcher")
     try:
         os.makedirs(log_dir, exist_ok=True)
     except OSError:
@@ -468,8 +468,8 @@ def _resolve_dev_log_path(project_root: str) -> str:
 
     通过 sentinel 文件定位本次运行的真实日志路径。
     """
-    default = os.path.join(project_root, "log", "dev-launcher.log")
-    sentinel = os.path.join(project_root, "log", "dev-launcher-current.txt")
+    default = os.path.join(project_root, "log", "launcher", "dev-launcher.log")
+    sentinel = os.path.join(project_root, "log", "launcher", "dev-launcher-current.txt")
     try:
         with open(sentinel, "r", encoding="utf-8") as f:
             path = f.read().strip()
@@ -505,7 +505,7 @@ def _build_failure_message(project_root: str, detail: str) -> str:
     """
     dev_log = _resolve_dev_log_path(project_root)
     tail_dev = _read_log_tail(dev_log, 20)
-    tail_err = _read_log_tail(os.path.join(project_root, "log", "dev-launcher-stderr.log"), 15)
+    tail_err = _read_log_tail(os.path.join(project_root, "log", "launcher", "dev-launcher-stderr.log"), 15)
     parts = [f"应用启动失败：{detail}"]
     if tail_err:
         parts.append("— 启动器错误输出（dev-launcher-stderr.log）—\n" + tail_err)
@@ -514,7 +514,7 @@ def _build_failure_message(project_root: str, detail: str) -> str:
     parts.append(
         "详细日志：\n"
         f"  {dev_log}\n"
-        f"  {os.path.join(project_root, 'log', 'dev-launcher-stderr.log')}"
+        f"  {os.path.join(project_root, 'log', 'launcher', 'dev-launcher-stderr.log')}"
     )
     return "\n\n".join(parts)
 
@@ -1342,8 +1342,8 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
     # 启动 PowerShell 隐藏窗口；stdin 也关闭避免句柄泄漏
     # stdout/stderr 重定向到文件，方便排查「提前退出但无日志」的问题。
     try:
-        out_path = os.path.join(project_root, "log", "dev-launcher-stdout.log")
-        err_path = os.path.join(project_root, "log", "dev-launcher-stderr.log")
+        out_path = os.path.join(project_root, "log", "launcher", "dev-launcher-stdout.log")
+        err_path = os.path.join(project_root, "log", "launcher", "dev-launcher-stderr.log")
         for p in (out_path, err_path):
             try:
                 with open(p, "w", encoding="utf-8") as f:
@@ -1390,7 +1390,7 @@ def monitor(proc: "subprocess.Popen[str] | None", splash: SplashWindow):
             if proc is not None and proc.poll() is not None:
                 exit_code = proc.returncode
                 log(f"dev-launcher process exited early with code {exit_code}")
-                splash.set_error("启动进程已退出，请检查 log/dev-launcher.log")
+                splash.set_error("启动进程已退出，请检查 log/launcher/dev-launcher.log")
                 splash.close_later(5000, terminate=False)
                 return
             time.sleep(0.5)
@@ -1528,7 +1528,7 @@ def _monitor_headless(
                 _write_status(
                     project_root,
                     "error",
-                    message="启动进程已退出，请检查 log/dev-launcher.log",
+                    message="启动进程已退出，请检查 log/launcher/dev-launcher.log",
                     error=True,
                     elapsed=elapsed(),
                 )
@@ -1855,7 +1855,7 @@ if __name__ == "__main__":
             user32.MessageBoxW(
                 0,
                 f"启动器遇到未预期错误：\n{exc}\n\n"
-                f"详细日志请查看 log/start-tauri-launcher.log",
+                f"详细日志请查看 log/launcher/start-tauri-launcher.log",
                 f"{APP_TITLE} 启动器",
                 MB_ICONERROR | MB_OK,
             )

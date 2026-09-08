@@ -4,6 +4,7 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs";
 import path from "node:path";
+import { OLLAMA_RUNTIME_LOG } from "@/lib/log-paths";
 
 const execAsync = promisify(exec);
 
@@ -12,9 +13,6 @@ export const dynamic = "force-dynamic";
 
 /** Ollama 默认端口；与 ollama-start 路由保持一致。 */
 const OLLAMA_PORT = 11434;
-
-/** 运行时日志文件名（log/ollama-runtime.log），由设置页日志面板读取。 */
-const OLLAMA_RUNTIME_LOG = path.join(process.cwd(), "log", "ollama-runtime.log");
 
 /** 本地时间戳（YYYY-MM-DD HH:mm:ss）：runtime 日志是给本机用户看的。 */
 function localTimestamp(): string {
