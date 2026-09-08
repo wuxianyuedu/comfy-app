@@ -5,6 +5,7 @@ import { FileText, Lock } from "lucide-react";
 import { useLogPanel } from "./logs/LogProvider";
 import { fpsTone, useFps } from "./hooks/use-fps";
 import { useComfyStats } from "./hooks/use-comfy-stats";
+import { useDevServerLiveness } from "./hooks/use-dev-server-liveness";
 import { fmtBytes } from "~/lib/format-bytes";
 
 /* ── Tauri window bottom status bar ─────────────────────────
@@ -31,6 +32,17 @@ function pct(used: number, total: number): number | null {
   return Math.min(100, Math.round((used / total) * 100));
 }
 
+/** HH:mm:ss（重启标记的时间展示）。 */
+function fmtClock(t: number | null): string {
+  if (t === null) return "—";
+  return new Date(t).toLocaleTimeString("zh-CN", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
 const fpsTextColor: Record<string, string> = {
   ok: "text-emerald-300",
   warn: "text-amber-300",
@@ -53,6 +65,7 @@ export function BrowserStatusBar() {
 
   const fps = useFps();
   const { stats, online } = useComfyStats();
+  const { restarting: serverRestarting, lastRestartAt } = useDevServerLiveness();
 
   const tone = fpsTone(fps);
   const vramPct = online
@@ -134,6 +147,28 @@ export function BrowserStatusBar() {
             </span>
           )}
         </button>
+
+        {/* dev server 重启标记：重启中高亮告警（进行中任务会随进程丢失，
+         *  恢复后需重新执行）；恢复后弱化展示最近一次重启时间。 */}
+        {serverRestarting ? (
+          <span
+            className="flex items-center gap-1 text-amber-300"
+            title={`dev server 自 ${fmtClock(lastRestartAt)} 起重启，进行中任务已丢失，恢复后请重新执行`}
+          >
+            <span
+              aria-hidden
+              className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]"
+            />
+            <span className="hidden sm:inline">后端重启中 · {fmtClock(lastRestartAt)}</span>
+          </span>
+        ) : lastRestartAt !== null ? (
+          <span
+            className="hidden items-center gap-1 text-gray-600 sm:flex"
+            title={`dev server 最近一次重启于 ${fmtClock(lastRestartAt)}，当时进行中的任务已丢失`}
+          >
+            上次重启 {fmtClock(lastRestartAt)}
+          </span>
+        ) : null}
 
         {/* ComfyUI 连接状态（替代原写死的「就绪」） */}
         <span
