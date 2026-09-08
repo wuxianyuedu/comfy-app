@@ -9,7 +9,11 @@
  * 处理加载/错误/降级三个早退分支」。
  */
 
+import { useState } from "react";
+import { ChevronDown, ChevronRight, Copy } from "lucide-react";
+
 import { PageLoading } from "~/components/ui/page-loading";
+import { useLogPanel } from "~/components/studio/logs/LogProvider";
 
 import { SettingsPageView } from "./SettingsPageView";
 import { useSettingsPage } from "./hooks/use-settings-page";
@@ -25,18 +29,7 @@ export default function SettingsPage() {
   }
 
   if (c.hasError) {
-    return (
-      <div className="bg-bg grid h-[calc(100vh-var(--toolbar-height,48px))] place-items-center p-6 text-center">
-        <p className="text-rose-400">加载设置失败，请刷新重试</p>
-        <p className="text-muted-foreground mt-2 text-xs">{c.errorText}</p>
-        <button
-          onClick={c.retry}
-          className="bg-primary mt-4 rounded-lg px-4 py-2 text-sm text-white"
-        >
-          重试
-        </button>
-      </div>
-    );
+    return <SettingsLoadError errorText={c.errorText} onRetry={c.retry} />;
   }
 
   // 此时草稿应已就绪；若仍为空则显示降级 UI（不应触发，但满足 TypeScript）
@@ -50,4 +43,88 @@ export default function SettingsPage() {
 
   /* `drafts` 在上一步已收窄为非空 —— 视图据此免判空。 */
   return <SettingsPageView c={{ ...c, drafts: c.drafts }} />;
+}
+
+
+/* ── 设置页加载失败降级视图 ──────────────────────────────────────────────
+ * 此前只有一行被截断的错误文案，原始报错（如 tRPC 拿到 HTML 的
+ * "Unexpected token '<'"）既看不全也没有任何出口，问题无从排查（#220）。
+ * 现在：完整错误可展开、可复制；并提示打开日志面板（Ctrl+Shift+L）看
+ * 全局错误与启动日志——错误本身也已由 LogProvider 的全局钩子收进面板。 */
+function SettingsLoadError({
+  errorText,
+  onRetry,
+}: {
+  errorText: string;
+  onRetry: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const togglePanel = useLogPanel((s) => s.toggleOpen);
+
+  const copyError = async () => {
+    try {
+      await navigator.clipboard.writeText(errorText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // 剪贴板不可用（非安全上下文等）时静默失败，用户仍可展开后手动选择复制
+    }
+  };
+
+  return (
+    <div className="bg-bg grid h-[calc(100vh-var(--toolbar-height,48px))] place-items-center overflow-y-auto p-6">
+      <div className="w-full max-w-xl text-center">
+        <p className="text-rose-400">加载设置失败，请刷新重试</p>
+        <p className="text-muted-foreground mt-2 truncate text-xs" title={errorText}>
+          {errorText}
+        </p>
+        <div className="mt-3 flex items-center justify-center gap-2">
+          <button
+            onClick={onRetry}
+            className="bg-primary hover:bg-primary-hover rounded-lg px-4 py-2 text-sm text-white"
+          >
+            重试
+          </button>
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="border-border text-muted-foreground hover:bg-subtle inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs"
+            aria-expanded={expanded}
+          >
+            {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            完整错误
+          </button>
+          <button
+            onClick={() => void copyError()}
+            className="border-border text-muted-foreground hover:bg-subtle inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs"
+          >
+            <Copy size={13} />
+            {copied ? "已复制" : "复制"}
+          </button>
+        </div>
+        {expanded && (
+          <pre className="border-border bg-surface-1 custom-scrollbar mt-3 max-h-64 overflow-auto rounded-lg border p-3 text-left font-mono text-[11px] break-all whitespace-pre-wrap">
+            {errorText}
+          </pre>
+        )}
+        <div className="text-muted-foreground mt-4 space-y-1 text-xs">
+          <p>
+            本次失败已写入日志面板（按{" "}
+            <kbd className="border-border rounded border px-1 font-mono">Ctrl+Shift+L</kbd>{" "}
+            打开，筛选「错误」可快速定位）。
+          </p>
+          <p>
+            若反复出现，多为应用服务正在重启或未就绪；日志面板里也可查看启动日志
+            （dev-launcher / nextjs 输出）确认服务状态。
+          </p>
+          <button
+            onClick={togglePanel}
+            className="text-primary hover:text-primary-hover mt-1 underline-offset-2 hover:underline"
+          >
+            打开日志面板查看
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

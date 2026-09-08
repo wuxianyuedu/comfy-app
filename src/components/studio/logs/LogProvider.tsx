@@ -26,6 +26,40 @@ export function useLogPanel<T>(selector: (state: LogStoreState) => T): T {
   return useLogStore(selector);
 }
 
+/* ── 全局未捕获错误进面板（规范 07：操作出问题在日志里要能看到）──────────
+ * window.onerror / unhandledrejection 此前没有任何钩子：页面级异常
+ * （如设置页 tRPC 拿到 HTML 报 "Unexpected token '<'"）只会出现在浏览器
+ * devtools，用户反馈问题时日志面板一片空白。这里统一捕获进面板
+ * （source: "system"），与既有 console 拦截、Tauri 事件两条来源并列。
+ * 只序列化、不再调用 addEntry 外的 store 动作，保证监听器自身零副作用。 */
+
+/** unknown 抛值 → 可读文本（Error 带堆栈；对象取 message；其余 JSON/String 兜底）。 */
+export function describeGlobalError(reason: unknown): string {
+  if (reason instanceof Error) return `${reason.name}: ${reason.message}\n${reason.stack ?? ""}`;
+  if (typeof reason === "string") return reason;
+  if (
+    typeof reason === "object" &&
+    reason !== null &&
+    "message" in reason &&
+    typeof (reason as { message?: unknown }).message === "string"
+  ) {
+    return (reason as { message: string }).message;
+  }
+  try {
+    return JSON.stringify(reason, null, 2) ?? String(reason);
+  } catch {
+    return String(reason);
+  }
+}
+
+/** unhandledrejection 的 reason → 可读文本；字符串场景补一句说明（纯 reject("x") 无堆栈可查）。 */
+export function describeUnhandledRejection(reason: unknown): string {
+  if (typeof reason === "string") {
+    return `${reason}（未提供错误对象，仅有此信息）`;
+  }
+  return describeGlobalError(reason);
+}
+
 export function LogProvider({ children }: { children: React.ReactNode }) {
   const addEntry = useLogStore((s) => s.addEntry);
   const appendFileLogs = useLogStore((s) => s.appendFileLogs);
@@ -121,6 +155,27 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
 
     void setup();
     return () => unlisten?.();
+  }, [addEntry]);
+
+  // ── Global uncaught errors & unhandled rejections → panel (source: "system") ──
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const onError = (event: ErrorEvent) => {
+      const message = describeGlobalError(event.error ?? event.message);
+      addEntry({ level: "error", message, source: "system" });
+    };
+    const onRejection = (event: PromiseRejectionEvent) => {
+      const message = describeUnhandledRejection(event.reason);
+      addEntry({ level: "error", message, source: "system" });
+    };
+
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
   }, [addEntry]);
 
   // ── Load launcher log files: startup logs + ongoing dev-server output ──
