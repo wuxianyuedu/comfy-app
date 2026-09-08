@@ -79,6 +79,14 @@
 
 ### Fixed
 
+- **修复提交 raw 子图工作流时「生成后控制」误写坏模型名**：comfy-cli 路径给
+  子图 wrapper 节点（如 z_image 等 `class_type` 为 UUID 的模板）的种子设
+  「生成后控制 = 随机值」时，会把 `randomize` 写进种子后面的下一个真实控件
+  （扩散模型名 COMBO）槽位，导致提交后模型名变成 `randomize`、整单无法运行。
+  现改为仅当该节点确在 `widgets_values` 里携带 seed 的 `control_after_generate`
+  哨兵槽时才写入（普通 KSampler 仍正常随机/固定），子图 wrapper 未暴露该控制时
+  不再覆盖相邻控件，模型名得以保留。
+
 - **应用日志不再把框架自身日志伪报成业务位置**：过滤 Next.js dev 自身的
   `[Fast Refresh] done in …ms` 提示（保留在浏览器 console，降为 debug），并让
   位置列只展示能映射回项目源码（`.ts/.tsx`）的调用点。此前这类框架输出会带着
