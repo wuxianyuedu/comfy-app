@@ -226,7 +226,7 @@ fn tail_log_file(path: &std::path::Path, max_bytes: usize, max_lines: usize) -> 
 
 /// 启动页「查看日志」面板的数据源：返回本次启动的编排日志尾部。
 /// dev-launcher.ps1 的日志在文件被占用时会回退改名，以 sentinel
-/// log/dev-launcher-current.txt 指向的真实文件为准；附带 stderr 尾部，
+/// log/launcher/dev-launcher-current.txt 指向的真实文件为准；附带 stderr 尾部，
 /// 启动卡住时用户能直接在启动页看到「执行到哪一步 / 卡在哪里」。
 #[tauri::command]
 fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
@@ -234,7 +234,7 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   if root.is_empty() {
     return Err("COMFYAPP_PROJECT_ROOT not set".to_string());
   }
-  let log_dir = std::path::Path::new(&root).join("log");
+  let log_dir = std::path::Path::new(&root).join("log").join("launcher");
   let mut sections: Vec<String> = Vec::new();
 
   let dev_log = std::fs::read_to_string(log_dir.join("dev-launcher-current.txt"))

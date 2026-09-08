@@ -903,7 +903,7 @@ export function SettingsPageView({
                 )}
               </div>
 
-              {/* Ollama 启动日志：启动期间每秒跟随 log/ollama-runtime.log，
+              {/* Ollama 启动日志：启动期间每秒跟随 log/services/ollama-runtime.log，
                   让「启动中…」不再是黑盒（同 ComfyUI / Drizzle Studio 的用户
                   可见出口）。 */}
 
@@ -1965,7 +1965,7 @@ export function SettingsPageView({
                   </Btn>
                 </div>
               </div>
-              {/* ComfyUI 启动日志：启动期间每秒跟随 log/comfyui-runtime.log，
+              {/* ComfyUI 启动日志：启动期间每秒跟随 log/services/comfyui-runtime.log，
                   让「正在启动…」不再是个黑盒（硬规则 4 的用户可见出口） */}
               <div className="border-border bg-surface-1 mb-4 rounded-xl border">
                 <div className="flex items-center justify-between px-3 py-2">
@@ -2092,7 +2092,7 @@ export function SettingsPageView({
                 </div>
               </div>
               {/* Drizzle Studio 启动日志：启动期间每秒跟随
-                  log/drizzle-studio-runtime.log（同 ComfyUI 的用户可见出口） */}
+                  log/services/drizzle-studio-runtime.log（同 ComfyUI 的用户可见出口） */}
               <div className="border-border bg-surface-1 mt-4 rounded-xl border">
                 <div className="flex items-center justify-between px-3 py-2">
                   <span className="text-ink/80 flex items-center gap-2 text-sm font-medium">

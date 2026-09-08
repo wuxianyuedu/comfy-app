@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
 import { getExitPolicy } from "@/lib/app-settings";
 import { spawnManaged, waitForDetachMediator } from "@/lib/process-launch";
+import { OLLAMA_RUNTIME_LOG } from "@/lib/log-paths";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -18,9 +19,6 @@ const PROBE_TIMEOUT_MS = 2000;
 /** spawn 后观察进程存活的最短时间（毫秒）——用于区分「启动成功」与
  *  「进程秒退（端口被占/未安装/路径错误）」。 */
 const SPAWN_GRACE_MS = 1000;
-
-/** 运行时日志文件名（log/ollama-runtime.log），由设置页日志面板读取。 */
-const OLLAMA_RUNTIME_LOG = path.join(process.cwd(), "log", "ollama-runtime.log");
 
 /**
  * Ollama 启动互斥锁，挂在 globalThis 而不是模块顶层——
@@ -259,7 +257,7 @@ export async function GET(_req: NextRequest) {
  *    （Windows 不用 detached 避免弹独立 cmd 窗口；POSIX 用 detached
  *    防子进程随父进程退出）
  * 5. 观察 1s 确认进程存活；秒退则返回错误信息
- * 6. 启动过程与 stdout/stderr 写入 log/ollama-runtime.log（设置页可查看）
+ * 6. 启动过程与 stdout/stderr 写入 log/services/ollama-runtime.log（设置页可查看）
  */
 export async function POST(_req: NextRequest) {
   await getServerUser();

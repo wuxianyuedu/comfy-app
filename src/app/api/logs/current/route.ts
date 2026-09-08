@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
-import path from "node:path";
+import {
+  COMFYUI_RUNTIME_LOG,
+  DEV_LAUNCHER_CURRENT_SENTINEL,
+  DEV_LAUNCHER_LOG,
+  DRIZZLE_STUDIO_RUNTIME_LOG,
+  OLLAMA_RUNTIME_LOG,
+  START_TAURI_LAUNCHER_LOG,
+} from "@/lib/log-paths";
 
-const LOG_DIR = path.join(process.cwd(), "log");
-const DEFAULT_LOG_FILE = path.join(LOG_DIR, "dev-launcher.log");
-const LAUNCHER_LOG_FILE = path.join(LOG_DIR, "start-tauri-launcher.log");
-const SENTINEL_FILE = path.join(LOG_DIR, "dev-launcher-current.txt");
-const COMFYUI_RUNTIME_LOG_FILE = path.join(LOG_DIR, "comfyui-runtime.log");
-const DRIZZLE_STUDIO_RUNTIME_LOG_FILE = path.join(LOG_DIR, "drizzle-studio-runtime.log");
-const OLLAMA_RUNTIME_LOG_FILE = path.join(LOG_DIR, "ollama-runtime.log");
+const DEFAULT_LOG_FILE = DEV_LAUNCHER_LOG;
+const LAUNCHER_LOG_FILE = START_TAURI_LAUNCHER_LOG;
+const SENTINEL_FILE = DEV_LAUNCHER_CURRENT_SENTINEL;
+const COMFYUI_RUNTIME_LOG_FILE = COMFYUI_RUNTIME_LOG;
+const DRIZZLE_STUDIO_RUNTIME_LOG_FILE = DRIZZLE_STUDIO_RUNTIME_LOG;
+const OLLAMA_RUNTIME_LOG_FILE = OLLAMA_RUNTIME_LOG;
 
 /**
  * comfyui-runtime.log / drizzle-studio-runtime.log 是追加写、不轮转的（每次
