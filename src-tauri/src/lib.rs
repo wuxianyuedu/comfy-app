@@ -100,6 +100,40 @@ fn get_app_url(state: tauri::State<'_, AppState>) -> String {
   state.app_url()
 }
 
+/// 桌面壳内打开 ComfyUI：把运行中的 ComfyUI 网页界面放进 Tauri 壳的独立
+/// 窗口（label="comfyui"）里打开，而不是拉起系统浏览器——相当于一个常驻的
+/// 「壳内子页签」。已有该窗口则聚焦，地址变化（重启后端口偏移）时重新导航；
+/// 否则新建。仅当检测到运行在 Tauri 壳内时前端才调用本命令；浏览器 / dev
+/// 模式继续走 Node 端 openUrlInBrowser（见 open-in-browser.ts）。
+#[tauri::command]
+fn open_comfyui_window(app: tauri::AppHandle, url: String) -> Result<String, String> {
+  let parsed: tauri::Url = url
+    .parse()
+    .map_err(|_| format!("非法 ComfyUI 地址：{}", url))?;
+  if !matches!(parsed.scheme(), "http" | "https") {
+    return Err(format!("仅支持 http(s) 地址：{}", url));
+  }
+  // 已有窗口：聚焦；目标地址变化则重新导航（重启可能换端口）。
+  if let Some(win) = app.get_webview_window("comfyui") {
+    let current = win.url().map(|u| u.to_string()).unwrap_or_default();
+    if current != url {
+      let _ = win.navigate(parsed.clone());
+    }
+    let _ = win.show();
+    let _ = win.set_focus();
+    return Ok(format!("已在壳内打开 ComfyUI（{}）", url));
+  }
+  tauri::WebviewWindowBuilder::new(&app, "comfyui", tauri::WebviewUrl::External(parsed))
+    .title("ComfyUI")
+    .inner_size(1280.0, 800.0)
+    .min_inner_size(900.0, 600.0)
+    .center()
+    .resizable(true)
+    .build()
+    .map_err(|e| format!("打开 ComfyUI 窗口失败：{:?}", e))?;
+  Ok(format!("已在壳内打开 ComfyUI（{}）", url))
+}
+
 /// 目标 URL 的 host:port 当前能否建立 TCP 连接。
 /// 交换窗口前的二次校验依据：WebView2 对「导航失败」（连接被拒/超时）同样会
 /// 触发 on_page_load(Finished)，页面内嵌 Edge 错误页且 URL 仍是 http://，
@@ -376,7 +410,7 @@ pub fn run() {
 
   let app = tauri::Builder::default()
     .manage(AppState::new(project_root, app_url))
-    .invoke_handler(tauri::generate_handler![get_launch_status, navigate_to_app, get_app_url, get_launch_log])
+    .invoke_handler(tauri::generate_handler![get_launch_status, navigate_to_app, get_app_url, get_launch_log, open_comfyui_window])
     .setup(|app| {
       // ── 方向 B：启动页与「应用」窗口分离 ──
       // 配置里的 splash 窗口（label="splash"）仅显示启动进度，可见。
