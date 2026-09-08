@@ -1930,8 +1930,8 @@ export function SettingsPageView({
                         : "ComfyUI 未运行"}
                 </span>
                 <div className="ml-auto flex items-center gap-2">
-                  {/* 打开运行中的 ComfyUI 网页界面到系统默认浏览器（同 Drizzle
-                      Studio 的「打开查看」语义，走 Node 端命令，不改 Rust） */}
+                  {/* 打开运行中的 ComfyUI 界面：桌面壳内开一个独立「子页签」窗口
+                      （Rust open_comfyui_window）；浏览器/dev 模式回退到系统浏览器。 */}
                   <Btn
                     onClick={() => void c.openComfy()}
                     disabled={c.comfyOpening || !c.comfyStatus?.up}

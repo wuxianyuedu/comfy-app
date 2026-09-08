@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 
 import { errorMessage } from "~/lib/error-message";
+import { isDesktopShell, openUrlInShell } from "~/lib/desktop-shell-client";
 import {
   parseAnsiSegments,
   parseOllamaLogText,
@@ -491,10 +492,23 @@ export function useSettingsPage(): SettingsPageController {
   const openComfy = useCallback(async () => {
     setComfyOpening(true);
     try {
-      const result = await comfyOpenM.mutateAsync();
-      showFlash(result.ok ? "ok" : "err", result.detail);
-      // 打开动作本身包含一次服务端探测；无论成败都刷新状态行，
-      // 修正探测抖动（如进程查询超时）造成的「未运行」显示。
+      const base = comfyStatusQ.data?.base ?? null;
+      if (isDesktopShell()) {
+        // 桌面壳内：优先在壳里开一个「子页签」窗口（Rust open_comfyui_window），
+        // 不再拉起系统浏览器；无壳/未运行则走浏览器兜底（见 else 分支）。
+        if (!base) {
+          showFlash("err", "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看");
+          await comfyStatusQ.refetch();
+          return;
+        }
+        const result = await openUrlInShell(base);
+        showFlash(result.ok ? "ok" : "err", result.detail);
+      } else {
+        // 浏览器 / dev 模式：没有可开窗的壳，走服务端命令用系统浏览器打开。
+        const result = await comfyOpenM.mutateAsync();
+        showFlash(result.ok ? "ok" : "err", result.detail);
+      }
+      // 无论成败都刷新状态行，修正探测抖动（如进程查询超时）造成的「未运行」显示。
       await comfyStatusQ.refetch();
     } catch (error) {
       showFlash("err", errorMessage(error, "打开 ComfyUI 失败"));
