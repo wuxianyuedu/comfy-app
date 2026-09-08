@@ -8,6 +8,7 @@ import {
   type LogLevel,
   type LogStoreState,
   captureLocation,
+  isNextDevNoise,
   isNoisyFrameworkLog,
   isReactQueryLog,
   parseFileLogs,
@@ -49,7 +50,11 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
          * 它们通常由库打到 console.error，即便被过滤也会触发 Next dev
          * overlay 的「Console Error」浮层（看似崩溃实为噪声），因此连带
          * 把输出级别降级为 debug——devtools 的 Verbose 仍可见，便于排查。 */
-        if (isReactQueryLog(args) || isNoisyFrameworkLog(args)) {
+        if (
+          isReactQueryLog(args) ||
+          isNoisyFrameworkLog(args) ||
+          isNextDevNoise(args)
+        ) {
           originals.debug(...args);
           return;
         }
