@@ -91,7 +91,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const activeTaskId = useActiveTaskId();
 
   /* Modal open state — the switch only reveals the trigger button;
-   * clicking it (or starting a new task) opens the modal. */
+   * clicking it opens the modal.  新任务开始不再自动弹窗，避免打断画布
+   * 操作；日志仍由本面板托管，用户随时可点「执行日志」进入查看。 */
   const [open, setOpen] = useState(false);
 
   const [viewTaskId, setViewTaskId] = useState<string | null>(null);
@@ -106,15 +107,6 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   /* 弹窗宽度切换：默认 max-w-5xl，点击加宽到 max-w-7xl。 */
   const [wide, setWide] = useState(false);
   const [autoscroll, setAutoscroll] = useState(true);
-
-  /* Auto-open when a new task starts while debug mode is on. */
-  const prevActiveRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (activeTaskId && activeTaskId !== prevActiveRef.current && debugMode) {
-      setOpen(true);
-    }
-    prevActiveRef.current = activeTaskId ?? null;
-  }, [activeTaskId, debugMode]);
 
   /* Reset view to the active task when none is explicitly pinned. */
   const taskId = viewTaskId ?? activeTaskId;

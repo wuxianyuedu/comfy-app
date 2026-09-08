@@ -90,15 +90,18 @@ export function WidgetControl({
     case "float": {
       const bounds = numericBounds(entry);
       const isSeed = compact && isSeedLike(entry);
+      /* 「随机值」模式：数值由 ComfyUI 每次生成时随机化，锁定编辑并展示
+       * -1（ComfyUI 约定 seed=-1 即随机）。切回其它模式恢复原值。 */
+      const randomSeed = isSeed && seedMode === "random";
       const stepper = (
         <NumberField
-          value={typeof value === "number" ? value : Number(value) || bounds.min}
+          value={randomSeed ? -1 : typeof value === "number" ? value : Number(value) || bounds.min}
           onChange={onValueChange}
           min={bounds.min}
           max={bounds.max}
           step={bounds.step}
           decimalPlaces={entry.control === "float" ? bounds.decimalPlaces : 0}
-          disabled={disabled}
+          disabled={disabled || randomSeed}
         />
       );
       const seedButton = isSeed ? (
