@@ -297,14 +297,14 @@ describe("workflow.update", () => {
     const res = await createCaller(makeCtx()).update({
       id: "wf-1",
       name: "Renamed",
-      taskType: "txt2img",
+      taskType: "t2i",
       positions: { "1": [1, 2] },
       mergePositions: true,
       modelTags: ["SDXL"],
     });
     expect(res.template.name).toBe("Renamed");
     const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-1")!;
-    expect(row.taskType).toBe("T2I"); // normalizeTaskType("txt2img") → "T2I"
+    expect(row.taskType).toBe("T2I"); // normalizeTaskType("t2i") → 规范大写 "T2I"
     expect(row.positions).toEqual({ "5": [0, 0], "1": [1, 2] }); // merge 不清空另一命名空间
     const rawJson = row.rawJson as { nodes: Array<{ pos?: unknown }> };
     expect(rawJson.nodes[0]?.pos).toEqual([1, 2]);
