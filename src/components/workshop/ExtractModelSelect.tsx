@@ -39,9 +39,12 @@ const TOOL_OPTION = "tool";
 export function ExtractModelSelect({
   value,
   onChange,
+  allowTool = true,
 }: {
   value: string;
   onChange: (value: string) => void;
+  /** 是否提供「工具」通道（仅纯规则解析场景需要；LLM 生成场景传 false） */
+  allowTool?: boolean;
 }) {
   const { localModels, remoteModels } = useLLM();
   const { channel, model } = parseChannelOption(value);
@@ -81,20 +84,20 @@ export function ExtractModelSelect({
   }, [selKey, channel, model]);
 
   const options = React.useMemo(() => {
-    const list = [TOOL_OPTION];
+    const list: string[] = allowTool ? [TOOL_OPTION] : [];
     for (const m of localModels) list.push(`local::${m}`);
     for (const m of remoteModels) list.push(`remote::${m}`);
     return list;
-  }, [localModels, remoteModels]);
+  }, [allowTool, localModels, remoteModels]);
 
   const labels = React.useMemo(() => {
-    const map: Record<string, React.ReactNode> = {
-      [TOOL_OPTION]: "工具 · 内置规则解析（不调用模型）",
-    };
+    const map: Record<string, React.ReactNode> = allowTool
+      ? { [TOOL_OPTION]: "工具 · 内置规则解析（不调用模型）" }
+      : {};
     for (const m of localModels) map[`local::${m}`] = optionLabel(m, "本地");
     for (const m of remoteModels) map[`remote::${m}`] = optionLabel(m, "远端");
     return map;
-  }, [localModels, remoteModels]);
+  }, [allowTool, localModels, remoteModels]);
 
   /* 内联可用性提示（放在下拉触发钮下方，关闭后仍可见）。
    * 只有当前选中是本地 / 远端模型时才展示：校验中 → 结果（可达 / 原因）。 */

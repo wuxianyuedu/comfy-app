@@ -19,6 +19,7 @@ import {
   ExtractToolbar,
   parseChannelOption,
 } from "@/components/workshop/ExtractToolbar";
+import { ExtractModelSelect } from "@/components/workshop/ExtractModelSelect";
 import {
   buildExtractCharactersMessages,
   mergeCharacterDrafts,
@@ -121,9 +122,33 @@ export function CharacterDesigner({
   const [genStatus, setGenStatus] = React.useState("");
   /** 一句话生成角色：独立错误信息（不与 AI 润色混用） */
   const [genError, setGenError] = React.useState("");
+  /** 一句话生成角色：独立选择的 本地/远端模型（<下拉值> 为 "local::<m>" 或 "remote::<m>"；
+   *  空串 = 未手动选择，沿用全局 config 的 provider/model）。 */
+  const [genSel, setGenSel] = React.useState("");
   const [aiBusyId, setAiBusyId] = React.useState<string | null>(null);
   const [aiError, setAiError] = React.useState("");
   const { config, openSettings } = useLLM();
+
+  /** 一句话生成实际生效的 provider/model：
+   *  手动在区块内选择过（genSel 非空）即用它；否则沿用全局 config。 */
+  const genEffective = React.useMemo(() => {
+    if (genSel) {
+      // genSel 只可能来自不带「工具」通道的下拉（local/remote），不会是 tool
+      const parsed = parseChannelOption(genSel);
+      return {
+        provider: parsed.channel === "tool" ? "local" : parsed.channel,
+        model: parsed.model,
+      };
+    }
+    return {
+      provider: config?.provider ?? "local",
+      model: config?.model ?? "",
+    };
+  }, [genSel, config]);
+  /** 下拉展示值：未手动选时跟随全局 config，保证选中态与生效模型一致。 */
+  const genSelectValue =
+    genSel ||
+    (config?.model ? `${config.provider}::${config.model}` : "");
 
   // ── 三通道提取(工具 / 本地模型 / 远端API)+ 外部导入 ──
   // 提取的 通道/忙闲/过程/状态/错误/执行日志 已收归工坊 controller（characterExtract）
@@ -187,14 +212,19 @@ export function CharacterDesigner({
       openSettings();
       return;
     }
+    // 一句话生成可独立于全局配置选 本地/远端 模型：genSel 为空则沿用全局 config。
+    const provider = genEffective.provider;
+    const model = genEffective.model;
     setGenBusy(true);
     setGenProgress("");
     setGenStatus("");
     setGenError("");
-    const modelLabel = config.provider === "local" ? "本地" : "远端";
+    const modelLabel = provider === "local" ? "本地" : "远端";
     try {
       const full = await streamChat({
         messages: buildCharacterFromBriefMessages(brief),
+        // 显式 provider+model：命中所选模型独立连接参数时改走该参数（与「从剧本提取」一致）
+        opts: model ? { provider, model } : undefined,
         onToken: (token) => setGenProgress((prev) => prev + token),
       });
       const r = parseCharacterFull(full);
@@ -209,9 +239,7 @@ export function CharacterDesigner({
       character.negativePrompt = buildCharacterNegative(character, style);
       onCharactersChange([...characters, character]);
       setBrief("");
-      setGenStatus(
-        `已用 ${modelLabel} · ${config.model} 生成角色「${r.name}」`,
-      );
+      setGenStatus(`已用 ${modelLabel} · ${model} 生成角色「${r.name}」`);
     } catch (e: unknown) {
       setGenError(errorMessage(e, "AI 生成失败"));
     } finally {
@@ -337,6 +365,8 @@ export function CharacterDesigner({
         cacheExtractPatch({ error: "剧本中的角色均已存在,未新增角色卡" });
         return;
       }
+      // 把并入后的角色列表回写到父级（controller）状态，否则列表不刷新、提取结果只留在日志里
+      onCharactersChange(res.list);
       cacheExtractPatch({
         status: `已提取 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`,
       });
@@ -371,6 +401,8 @@ export function CharacterDesigner({
         cacheExtractPatch({ error: "导入的角色均与现有角色重名,未新增" });
         return;
       }
+      // 把并入后的角色列表回写到父级（controller）状态，否则导入后列表不刷新
+      onCharactersChange(res.list);
       cacheExtractPatch({
         status: `已导入 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`,
       });
@@ -410,17 +442,13 @@ export function CharacterDesigner({
             />
             用一句话生成角色
           </p>
-          {config && (
-            <span
-              className="text-muted-foreground text-[11px]"
-              title="AI 生成使用当前生效的 LLM 配置"
-            >
-              当前：{config.provider === "local" ? "本地" : "远端"} ·{" "}
-              {config.model || "未选模型"}
-            </span>
-          )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <ExtractModelSelect
+            value={genSelectValue}
+            onChange={setGenSel}
+            allowTool={false}
+          />
           <input
             value={brief}
             onChange={(event) => setBrief(event.target.value)}
@@ -439,6 +467,12 @@ export function CharacterDesigner({
             {genBusy ? "生成中…" : "AI 生成"}
           </button>
         </div>
+        {config && !genSel && (
+          <p className="text-muted-foreground mt-2 text-[11px]">
+            未手动选择模型时，沿用全局配置（当前：{config.provider === "local" ? "本地" : "远端"} ·{" "}
+            {config.model || "未选模型"}）。点下拉可切换本次生成的 本地/远端 模型。
+          </p>
+        )}
         {!config && (
           <p className="text-muted-foreground mt-2 text-[11px]">
             未配置 LLM。点右上角「LLM 设置」接入本地或远端模型后即可使用 AI。
@@ -451,8 +485,8 @@ export function CharacterDesigner({
               <p className="text-primary text-xs">
                 {genProgress
                   ? "正在生成角色…"
-                  : `正在调用 ${config?.provider === "local" ? "本地" : "远端"} · ${
-                      config?.model ?? "当前配置"
+                  : `正在调用 ${genEffective.provider === "local" ? "本地" : "远端"} · ${
+                      genEffective.model || "当前配置"
                     } 生成角色…`}
               </p>
             )}
