@@ -12,7 +12,7 @@ executor-cli.ts 固定使用 <项目根>/python-venv/comfy-cli 下的 Python 解
 幂等：venv 已存在且 comfy_cli 可导入时直接返回，不重复安装。
 
 产物：
-  日志   log/comfy-cli-setup.log
+  日志   log/tools/comfy-cli-setup.log
   状态   run/comfy-cli-setup.json   （{ phase, message, done, error, updated_at }）
 #>
 param()
@@ -20,7 +20,7 @@ param()
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$LogDir      = Join-Path $ProjectRoot "log"
+$LogDir      = Join-Path $ProjectRoot "log\tools"
 $RunDir      = Join-Path $ProjectRoot "run"
 $LogFile     = Join-Path $LogDir "comfy-cli-setup.log"
 $StatusFile  = Join-Path $RunDir "comfy-cli-setup.json"
@@ -172,7 +172,7 @@ if (-not (Test-Path $VenvPy)) {
   }
 
   if (-not (Invoke-Step -Label "创建虚拟环境" -FilePath $basePy -Arguments $venvArgs -TimeoutSec 300)) {
-    Write-Status -Phase "error" -Message "创建虚拟环境失败，详见 log/comfy-cli-setup.log" -Failed $true
+    Write-Status -Phase "error" -Message "创建虚拟环境失败，详见 log/tools/comfy-cli-setup.log" -Failed $true
     exit 1
   }
 }
@@ -180,12 +180,12 @@ if (-not (Test-Path $VenvPy)) {
 Write-Status -Phase "pip" -Message "正在安装 comfy-cli（首次较慢）…"
 
 if (-not (Invoke-Step -Label "升级 pip" -FilePath $VenvPy -Arguments @("-m", "pip", "install", "--upgrade", "pip") -TimeoutSec 600)) {
-  Write-Status -Phase "error" -Message "升级 pip 失败，详见 log/comfy-cli-setup.log" -Failed $true
+  Write-Status -Phase "error" -Message "升级 pip 失败，详见 log/tools/comfy-cli-setup.log" -Failed $true
   exit 1
 }
 
 if (-not (Invoke-Step -Label "安装 comfy-cli" -FilePath $VenvPy -Arguments @("-m", "pip", "install", "comfy-cli") -TimeoutSec 1800)) {
-  Write-Status -Phase "error" -Message "安装 comfy-cli 失败，详见 log/comfy-cli-setup.log" -Failed $true
+  Write-Status -Phase "error" -Message "安装 comfy-cli 失败，详见 log/tools/comfy-cli-setup.log" -Failed $true
   exit 1
 }
 

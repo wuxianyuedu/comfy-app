@@ -25,6 +25,7 @@ import { resolveEffectiveLaunch } from "./desktop-instance";
 import { findPidForMainPy, findPidListeningPort } from "./proc-detect";
 import { spawnManaged, waitForDetachMediator } from "../process-launch";
 import { openUrlInBrowser } from "~/lib/open-in-browser";
+import { COMFYUI_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log-paths";
 
 export type ComfyUiStatus = {
   up: boolean;
@@ -195,9 +196,8 @@ export function getComfyUiStatus(): ComfyUiStatus {
 
 function appendRuntimeLog(line: string): void {
   try {
-    const dir = path.join(process.cwd(), "log");
-    fs.mkdirSync(dir, { recursive: true });
-    fs.appendFileSync(path.join(dir, "comfyui-runtime.log"), `${localTimestamp()} ${line}\n`, "utf-8");
+    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
+    fs.appendFileSync(COMFYUI_RUNTIME_LOG, `${localTimestamp()} ${line}\n`, "utf-8");
   } catch {
     /* 日志失败不影响主流程 */
   }
@@ -214,8 +214,7 @@ function appendRuntimeLog(line: string): void {
  */
 function appendSessionBanner(kind: "start" | "end", title: string): void {
   try {
-    const dir = path.join(process.cwd(), "log");
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
     const bar = "─".repeat(72);
     const color = kind === "start" ? "\x1b[1;32m" : "\x1b[1;33m"; // 亮绿 / 亮黄
     const reset = "\x1b[0m";
@@ -226,7 +225,7 @@ function appendSessionBanner(kind: "start" | "end", title: string): void {
       `${color}${bar}${reset}`,
       "",
     ].join("\n");
-    fs.appendFileSync(path.join(dir, "comfyui-runtime.log"), banner + "\n", "utf-8");
+    fs.appendFileSync(COMFYUI_RUNTIME_LOG, banner + "\n", "utf-8");
   } catch {
     /* 日志失败不影响主流程 */
   }
@@ -320,8 +319,8 @@ export async function ensureComfyUiReady(
       // 按次命名的文件里，等待循环会增量跟随进 comfyui-runtime.log ——
       // 保活模式下「启动日志」面板不再空白，完整输出也留得下文件。
       const kaStamp = localTimestamp().replace(/[: ]/g, "-");
-      const kaOutLog = path.join(process.cwd(), "log", `comfyui-keepalive-${kaStamp}.out.log`);
-      const kaErrLog = path.join(process.cwd(), "log", `comfyui-keepalive-${kaStamp}.err.log`);
+      const kaOutLog = path.join(SERVICES_LOG_DIR, `comfyui-keepalive-${kaStamp}.out.log`);
+      const kaErrLog = path.join(SERVICES_LOG_DIR, `comfyui-keepalive-${kaStamp}.err.log`);
       const launched = spawnManaged({
         command: plan.cmd,
         args,
@@ -417,7 +416,7 @@ export async function ensureComfyUiReady(
               // 保活进程已消失：落一条会话结束横幅，标记该会话终点。
               appendSessionBanner("end", "■ ComfyUI 保活进程已退出");
               const common =
-                "详见 log/comfyui-runtime.log；也可暂时勾选「关闭应用时连带关闭 ComfyUI」改用直连启动，获得实时日志定位问题。";
+                "详见 log/services/comfyui-runtime.log；也可暂时勾选「关闭应用时连带关闭 ComfyUI」改用直连启动，获得实时日志定位问题。";
               const detail = everSeenProcess
                 ? `ComfyUI 启动失败：保活进程已退出。${common}`
                 : `ComfyUI 启动失败：保活拉起后进程未出现。${common}`;
@@ -429,7 +428,7 @@ export async function ensureComfyUiReady(
         if (deadline !== null && Date.now() >= deadline) break;
         await new Promise((r) => setTimeout(r, 2000));
       }
-      const detail = `ComfyUI 启动超过 ${Math.round((opts.timeoutMs ?? 0) / 1000)}s 仍未就绪，继续留在后台观察；详见 log/comfyui-runtime.log`;
+      const detail = `ComfyUI 启动超过 ${Math.round((opts.timeoutMs ?? 0) / 1000)}s 仍未就绪，继续留在后台观察；详见 log/services/comfyui-runtime.log`;
       note(detail);
       return { ok: false, base: null, detail };
     }
@@ -505,8 +504,8 @@ export async function ensureComfyUiReady(
           ok: false,
           base: null,
           detail: missingMod
-            ? `ComfyUI 进程启动后立即退出：解释器缺少依赖（No module named '${missingMod}'）——请确认 comfyuiPath 指向装了依赖的环境，或为该环境安装依赖（详见 log/comfyui-runtime.log）`
-            : "ComfyUI 进程启动后立即退出，详见 log/comfyui-runtime.log",
+            ? `ComfyUI 进程启动后立即退出：解释器缺少依赖（No module named '${missingMod}'）——请确认 comfyuiPath 指向装了依赖的环境，或为该环境安装依赖（详见 log/services/comfyui-runtime.log）`
+            : "ComfyUI 进程启动后立即退出，详见 log/services/comfyui-runtime.log",
         };
       }
       // 用已知子进程 PID 查它实际监听的端口——不依赖端口探测猜哪个 ComfyUI
@@ -532,7 +531,7 @@ export async function ensureComfyUiReady(
       if (deadline !== null && Date.now() >= deadline) break;
       await new Promise((r) => setTimeout(r, 2000));
     }
-    const detail = `ComfyUI 启动超过 ${Math.round((opts.timeoutMs ?? 0) / 1000)}s 仍未就绪，继续留在后台观察；详见 log/comfyui-runtime.log`;
+    const detail = `ComfyUI 启动超过 ${Math.round((opts.timeoutMs ?? 0) / 1000)}s 仍未就绪，继续留在后台观察；详见 log/services/comfyui-runtime.log`;
     note(detail);
     return { ok: false, base: null, detail };
   })();

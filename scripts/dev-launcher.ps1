@@ -4,8 +4,8 @@
 #       设置失败（Win32 错误 87），仅 WARN 兜底、不依赖其生效。
 # 用法：pwsh -ExecutionPolicy Bypass -File scripts\dev-launcher.ps1 [-Tauri]
 # 日志：
-#   - 本次运行日志：log/dev-launcher.log（每次运行覆盖，供应用内面板实时读取）
-#   - 历史运行日志：log/YYYY-MM/dev-launcher-YYYY-MM-DD_HH-mm-ss.log（每次运行结束归档）
+#   - 本次运行日志：log/launcher/dev-launcher.log（每次运行覆盖，供应用内面板实时读取）
+#   - 历史运行日志：log/archive/YYYY-MM/dev-launcher-YYYY-MM-DD_HH-mm-ss.log（每次运行结束归档）
 #
 # 改进（2026-09-04）：启动前做 .env 前置检查——缺 .env 时 pnpm dev 会因
 #   src/env.js 校验 DATABASE_URL / BETTER_AUTH_* 未定义而报一堆 "Invalid
@@ -57,18 +57,30 @@ if (Get-Variable -Name PSStyle -ErrorAction SilentlyContinue) {
 }
 
 # ── 日志目录与文件 ──
-$logDir = Join-Path $PSScriptRoot "..\log"
-if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+# log/ 分区布局（总表见 docs/standards/launch-and-build.md §4）：
+#   log/launcher/  双击启动链路：python 启动器 + 本脚本的编排与预检输出
+#   log/nextjs/    Next dev server 原始输出（按次命名，保留 5 份）
+#   log/services/  常驻服务运行时日志（comfyui / drizzle-studio / ollama）
+#   log/tools/     构建与工具脚本日志（Log-Common.ps1 / setup 脚本）
+#   log/archive/   本脚本的历史归档（按年月分目录）
+$logRoot = Join-Path $PSScriptRoot "..\log"
+if (-not (Test-Path $logRoot)) { New-Item -ItemType Directory -Path $logRoot -Force | Out-Null }
+$launcherLogDir = Join-Path $logRoot "launcher"
+$nextjsLogDir = Join-Path $logRoot "nextjs"
+$archiveBaseDir = Join-Path $logRoot "archive"
+foreach ($d in @($launcherLogDir, $nextjsLogDir, $archiveBaseDir)) {
+  if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
+}
 
 # 按年月分子目录，每次运行一个带时分秒的历史日志文件
 $now = Get-Date
 $yearMonth = $now.ToString("yyyy-MM")
-$monthDir = Join-Path $logDir $yearMonth
+$monthDir = Join-Path $archiveBaseDir $yearMonth
 if (-not (Test-Path $monthDir)) { New-Item -ItemType Directory -Path $monthDir -Force | Out-Null }
 
 $runTimestamp = $now.ToString("yyyy-MM-dd_HH-mm-ss")
 $runLog = Join-Path $monthDir ("dev-launcher-" + $runTimestamp + ".log")
-$currentLog = Join-Path $logDir "dev-launcher.log"
+$currentLog = Join-Path $launcherLogDir "dev-launcher.log"
 
 # 本次运行日志：覆盖清空，作为实时读取源
 # 若旧实例崩溃未退出，Start-Transcript 仍持有 dev-launcher.log 句柄，会导致
@@ -101,7 +113,7 @@ function Clear-CurrentLog {
 }
 $currentLog = Clear-CurrentLog -Path $currentLog
 # 让 Python 启动器和应用内日志面板能实时定位到本次运行的实际日志文件
-Set-Content -Path (Join-Path $logDir "dev-launcher-current.txt") -Value $currentLog -Encoding utf8 -Force
+Set-Content -Path (Join-Path $launcherLogDir "dev-launcher-current.txt") -Value $currentLog -Encoding utf8 -Force
 
 # 历史运行文件：写入开始标记
 $runStartMarker = "===== 运行开始 {0} =====" -f ($now.ToString("yyyy-MM-dd HH:mm:ss"))
@@ -113,7 +125,7 @@ Start-Transcript -Path $currentLog -Force -ErrorAction SilentlyContinue | Out-Nu
 # ── 日志输出：统一 [时间] [级别] 格式，颜色分级 ──
 #   级别：STEP（步骤进度/青）、OK（成功/绿）、WARN（警告/黄）、ERROR（错误/红）、INFO（详情/灰）
 #   颜色用 ANSI 转义序列直接写进输出流（而非 -ForegroundColor），这样
-#   Start-Transcript 会把颜色码也记录到 log/dev-launcher.log，应用内面板用
+#   Start-Transcript 会把颜色码也记录到 log/launcher/dev-launcher.log，应用内面板用
 #   ANSI 解析器原样还原多色日志。
 #
 #   2026-09-02 修复：PowerShell Start-Transcript 会缓冲输出、仅在 Stop-Transcript
@@ -513,7 +525,7 @@ function Test-PnpmVersion {
   $corepackCmd = Get-Command corepack -ErrorAction SilentlyContinue
   if ($corepackCmd) {
     Write-Log "检测到 corepack，尝试自动切换到要求的 pnpm 版本..." -Level STEP
-    $cpLog = Join-Path $logDir "corepack-prepare.log"
+    $cpLog = Join-Path $launcherLogDir "corepack-prepare.log"
     try {
       # corepack prepare 会下载对应版本并激活为默认（需联网一次）
       $res = & corepack prepare "pnpm@$expected" --activate 2>&1
@@ -608,8 +620,8 @@ function Test-DevDependencies {
   foreach ($d in $brokenDeps) { $why += "关键依赖目录 node_modules/$d 为空或缺失" }
   Write-Log ("node_modules 不完整（{0}），执行显式 pnpm install..." -f ($why -join "；")) -Level WARN
   $env:CI = "true"
-  $installOut = Join-Path $logDir "pnpm-install-stdout.log"
-  $installErr = Join-Path $logDir "pnpm-install-stderr.log"
+  $installOut = Join-Path $launcherLogDir "pnpm-install-stdout.log"
+  $installErr = Join-Path $launcherLogDir "pnpm-install-stderr.log"
   $psiInstall = New-Object System.Diagnostics.ProcessStartInfo
   $psiInstall.FileName = "cmd.exe"
   $psiInstall.Arguments = "/c pnpm install > `"$installOut`" 2> `"$installErr`""
@@ -681,8 +693,8 @@ function Test-ShellFreshness {
 # drizzle-kit push --force；若遇缺列（no such column）会自动 ALTER 补列后重试。
 # 这样旧库 push 失败无需手动 ALTER。失败时仍只告警、不阻断启动，避免卡死。
 function Sync-DatabaseSchema {
-  $schemaOut = Join-Path $logDir "drizzle-push-stdout.log"
-  $schemaErr = Join-Path $logDir "drizzle-push-stderr.log"
+  $schemaOut = Join-Path $launcherLogDir "drizzle-push-stdout.log"
+  $schemaErr = Join-Path $launcherLogDir "drizzle-push-stderr.log"
   $psiSchema = New-Object System.Diagnostics.ProcessStartInfo
   $psiSchema.FileName = "cmd.exe"
     $psiSchema.Arguments = "/c node scripts/heal-db.cjs > `"$schemaOut`" 2> `"$schemaErr`""
@@ -838,16 +850,16 @@ try {
     $psiDev = New-Object System.Diagnostics.ProcessStartInfo
     $psiDev.FileName = "cmd.exe"
     # 项目使用 pnpm；固定 -H 127.0.0.1 避免 Windows 把 localhost 解析到 ::1（IPv6）
-    # 导致 127.0.0.1 健康检查失败。输出重定向到 log/ 方便排查「启动但不响应」。
+    # 导致 127.0.0.1 健康检查失败。输出重定向到 log/nextjs/ 方便排查「启动但不响应」。
     # 2026-09-01 修复：重定向文件名带本次运行时间戳。此前固定为 nextjs-stdout.log，
     # 上次运行的残留进程（如挂死的 pnpm install）仍握着该文件句柄时，cmd 的「>」
     # 重定向会因「文件被占用」打开失败 → cmd 瞬间退出 exit=1 且不产生任何输出，
     # 表现为「Next.js dev server 提前退出（exit=1）」却查不到原因。
-    $nextOut = Join-Path $logDir ("nextjs-stdout-{0}.log" -f $runTimestamp)
-    $nextErr = Join-Path $logDir ("nextjs-stderr-{0}.log" -f $runTimestamp)
+    $nextOut = Join-Path $nextjsLogDir ("nextjs-stdout-{0}.log" -f $runTimestamp)
+    $nextErr = Join-Path $nextjsLogDir ("nextjs-stderr-{0}.log" -f $runTimestamp)
     # 只保留最近 5 次的输出文件，避免 log 目录无限堆积
     foreach ($prefix in @("nextjs-stdout-", "nextjs-stderr-")) {
-      Get-ChildItem $logDir -File -Filter "$prefix*.log" -ErrorAction SilentlyContinue |
+      Get-ChildItem $nextjsLogDir -File -Filter "$prefix*.log" -ErrorAction SilentlyContinue |
         Sort-Object Name -Descending | Select-Object -Skip 5 |
         Remove-Item -Force -ErrorAction SilentlyContinue
     }
