@@ -256,7 +256,7 @@ cargo build --release
 
 - **缺 `server.js` 时**：release 壳会自动**回退到 dev URL 模式**——`dev-launcher.ps1`
   的 `-Prebuilt` 分支已经起了 Next dev server，壳只需加载 `COMFYAPP_DEV_URL`
-  （`http://127.0.0.1:3000/workspace`）即可，不会因资源缺失而 panic 退窗。
+  （`http://127.0.0.1:3100/workspace`）即可，不会因资源缺失而 panic 退窗。
   这是开发 / 快速预览的推荐路径：双击 `start-tauri.exe` 即秒弹窗口，前端由 dev server 提供。
 - **要做真正「独立分发」**（壳自带 Next standalone server、连 dev server 都不需要、
   启动最快）：必须执行完整生产构建，让 `beforeBuildCommand` 组装好资源：

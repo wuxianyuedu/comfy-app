@@ -110,7 +110,7 @@ TOOLS = [
         "pwsh",
         "scripts/dev-launcher.ps1",
         (),
-        "仅启动 Next.js dev（localhost:3000）",
+        "仅启动 Next.js dev（localhost:3100）",
         long_running=True,
     ),
     Tool(

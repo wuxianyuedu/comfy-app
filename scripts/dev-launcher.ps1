@@ -12,7 +12,7 @@
 #   environment variables"，用户看不出是「缺文件」。现改为启动即给出清晰提示，
 #   引导先跑 tools/start/run-local.ps1（对应 AGENTS.md 硬规则 4）。
 # 改进（2026-08-04）：启动前按端口「精准」杀掉残留的 dev server，
-#   彻底避免「旧实例占着 3000、新实例被挤到 3001、浏览器连着旧代码」的尴尬。
+#   彻底避免「旧实例占着 3100、新实例被挤到 3101、浏览器连着旧代码」的尴尬。
 # 改进（2026-08-23）：.next 缓存改为「指纹优先」策略——默认不再每次清空 .next，
 #   而是计算关键配置指纹（next.config.js / tsconfig.json / package.json /
 #   pnpm-lock.yaml 内容 hash），与 .next\config-fingerprint 记录值比对：
@@ -32,7 +32,7 @@
 #     - SKIP_CLEAN=1  强制跳过清理（无论指纹如何都保留缓存，最快启动）
 #     - FORCE_CLEAN=1 强制清理（无论指纹如何都清空 .next 全量重编译）
 #     - NO_OPEN=1     不自动打开浏览器
-#   启动 Ready 后会自动打开/聚焦浏览器 http://localhost:3000：
+#   启动 Ready 后会自动打开/聚焦浏览器 http://localhost:3100：
 #     - 普通重启：Next 的 HMR 会自动重载已有标签页，无需手动硬刷；
 #     - 默认启动会带缓存破坏参数开新标签页，避免旧的 stale chunk 残留。
 #   若浏览器已有 Comfy-APP 旧标签页，请顺手关掉（sessionStorage 缓存按 tab
@@ -206,7 +206,7 @@ function Write-LaunchStatus {
       elapsed    = $elapsed
       ready      = $false
       error      = [bool]$IsError
-      app_url    = "http://127.0.0.1:3000/workspace"
+      app_url    = "http://127.0.0.1:3100/workspace"
       stale_shell = $script:ShellStaleMsg
       updated_at = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss")
     }
@@ -237,9 +237,9 @@ function Ensure-SplashResource {
 }
 
 # ── 启动前清理：按端口精准杀掉残留 dev server（不误伤其它 node 进程）──
-#     只杀真正占用 3000/3001/3002 的进程，不影响你后台跑的其它程序。
+#     只杀真正占用 3100/3101/3102 的进程，不影响你后台跑的其它程序。
 # ── 读取 .env 中的端口配置 ──
-# 端口统一由 .env 的 COMFYAPP_PORT 控制（默认 3000），避免与其他应用端口冲突。
+# 端口统一由 .env 的 COMFYAPP_PORT 控制（默认 3100），避免与其他应用端口冲突。
 # 逐行解析 KEY= 且兼容带双引号的值；该函数供启动链路各脚本复用。
 function Get-DotEnvValue($path, $key) {
   if (-not (Test-Path $path)) { return $null }
@@ -269,7 +269,7 @@ function Stop-ProcessOnPort($port) {
         }
       } catch { }
     }
-    # 等端口真正释放，避免 next 启动时又抢到 3001（缩短到 200ms，降低启动等待）
+    # 等端口真正释放，避免 next 启动时又抢到 3101（缩短到 200ms，降低启动等待）
     Start-Sleep -Milliseconds 200
   } catch { }
 }
@@ -808,15 +808,15 @@ try {
     throw "缺少 .env：请先双击 tools\start\run-local.ps1（或执行 scripts\prepare-local-run.ps1）完成本地初始化后再启动。"
   }
 
-  # ── 端口统一配置：读取 .env 的 COMFYAPP_PORT（默认 3000） ──
-  # 端口冲突时改 .env 一处即可（如 COMFYAPP_PORT="3100"），本脚本与 Tauri 壳、
+  # ── 端口统一配置：读取 .env 的 COMFYAPP_PORT（默认 3100） ──
+  # 端口冲突时改 .env 一处即可（如 COMFYAPP_PORT="3200"），本脚本与 Tauri 壳、
   # 前端 tRPC 客户端会一致读取该端口；下一次启动即生效。
   $portRaw = Get-DotEnvValue -Path (Join-Path $root ".env") -Key "COMFYAPP_PORT"
-  if (-not $portRaw) { $portRaw = "3000" }
+  if (-not $portRaw) { $portRaw = "3100" }
   $parsedPort = 0
   if (-not [int]::TryParse($portRaw, [ref]$parsedPort) -or $parsedPort -lt 1 -or $parsedPort -gt 65535) {
-    Write-Log "COMFYAPP_PORT 的值不合法，已回退到默认端口 3000。" -Level WARN
-    $script:appPort = 3000
+    Write-Log "COMFYAPP_PORT 的值不合法，已回退到默认端口 3100。" -Level WARN
+    $script:appPort = 3100
   } else {
     $script:appPort = $parsedPort
   }
@@ -955,7 +955,7 @@ try {
       # Tauri 桌面壳：tauri CLI 会先跑 beforeDevCommand（node scripts/dev.mjs，读取
       # .env 的 COMFYAPP_PORT）再弹桌面窗口；整棵进程树都在本 Job Object 内，关闭窗口自动全清。
       # 同时注入 COMFYAPP_DEV_URL / COMFYAPP_PORT，让壳 run() 导航到 .env 配置的端口，
-      # 避免端口冲突时壳仍跳回 3000。
+      # 避免端口冲突时壳仍跳回 3100。
       $psi.Environment["COMFYAPP_DEV_URL"] = "http://127.0.0.1:$($script:appPort)/workspace"
       $psi.Environment["COMFYAPP_PORT"] = "$($script:appPort)"
       $psi.Arguments = "/c pnpm tauri dev"
@@ -1060,7 +1060,7 @@ try {
     if (-not $devProc.HasExited) {
       Write-Log "Tauri 已退出，正在终止 dev server..." -Level STEP
       # 用 taskkill /T 杀整棵进程树：Process.Kill() 只杀 cmd.exe 本身，
-      # 其下的 pnpm/node 子进程会残留并继续占用 3000 端口。
+      # 其下的 pnpm/node 子进程会残留并继续占用 3100 端口。
       try { taskkill /PID $devProc.Id /T /F 2>&1 | Out-Null } catch {}
       try { $devProc.WaitForExit(5000) } catch {}
     }

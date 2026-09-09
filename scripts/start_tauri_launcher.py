@@ -247,7 +247,7 @@ def get_project_root() -> str:
 def _window_process_name(hwnd: HWND) -> str:
     """返回窗口所属进程的 exe 文件名（小写），失败返回空串。
 
-    用于窗口识别防误判：浏览器打开 localhost:3000 时标签页标题同样是
+    用于窗口识别防误判：浏览器打开 localhost:3100 时标签页标题同样是
     "Comfy APP"，仅按标题子串匹配会把浏览器窗口误认成 Tauri 壳，
     导致双击启动器只聚焦浏览器就退出、应用根本没启动。
     """
@@ -520,8 +520,8 @@ def _build_failure_message(project_root: str, detail: str) -> str:
 
 
 def _read_app_port(project_root: str) -> int:
-    """读取 .env 中 COMFYAPP_PORT，未配置或非法时回退 3000。"""
-    default = 3000
+    """读取 .env 中 COMFYAPP_PORT，未配置或非法时回退 3100。"""
+    default = 3100
     try:
         env_path = os.path.join(project_root, ".env")
         with open(env_path, "r", encoding="utf-8") as f:
