@@ -66,7 +66,7 @@ export interface AppConfig {
   readonly comfyuiBaseUrl: string;
   /** 本机 ComfyUI 的 WebSocket 地址（由 baseUrl 推导）。 */
   readonly comfyuiWsUrl: string;
-  /** 开发服务监听端口（默认 3002，避开被 WorkBuddy 占用的 3000）。 */
+  /** 开发服务监听端口（默认 3002）。 */
   readonly port: number;
   /** 特性开关。 */
   readonly features: FeatureFlags;
