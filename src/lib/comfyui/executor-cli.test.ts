@@ -125,3 +125,195 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
     expect(node.widgets_values).toEqual(["hello"]);
   });
 });
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * 子图 wrapper 的覆盖必须同步到内层节点（ISSUE #267）
+ *
+ * 现象：提示词/种子在 UI 上下发了，comfy-cli 也正常提交，但每次生成的都是
+ * 工作流里存的那一张图（与提示词无关）。根因：comfy-cli 把子图展开成
+ * `wrapperId:innerId` 后，读的是**内层节点**的 `widgets_values`；wrapper 上
+ * 的 `widgets_values` 只是宿主值，只有较新的 comfy-cli（≥ 1.20 的
+ * promoted-widget 回写）才会把它应用回去。只写 wrapper 不写内层，覆盖在
+ * 转换阶段被内层默认值整段盖掉。
+ * ───────────────────────────────────────────────────────────────────────── */
+
+/** 真实 liblib 子图模板的最小复刻：wrapper 76（UUID class_type）+ 内层
+ *  KSampler 69 / CLIPTextEncode 67，边界连线从哨兵节点 -10 出发。 */
+function liblibSubgraphFixture() {
+  return {
+    nodes: [
+      {
+        id: 76,
+        type: "9b9009e4-2d3d-445f-9be5-6063f465757e",
+        inputs: [
+          { name: "text", type: "STRING", widget: { name: "text" } },
+          { name: "text_1", type: "STRING", widget: { name: "text_1" } },
+          { name: "width_1", type: "INT", widget: { name: "width_1" } },
+          { name: "height_1", type: "INT", widget: { name: "height_1" } },
+          { name: "steps_1", type: "INT", widget: { name: "steps_1" } },
+          { name: "cfg_1", type: "FLOAT", widget: { name: "cfg_1" } },
+          { name: "seed", type: "INT", widget: { name: "seed" } },
+          { name: "unet_name_1", type: "COMBO", widget: { name: "unet_name_1" } },
+          { name: "clip_name_1", type: "COMBO", widget: { name: "clip_name_1" } },
+          { name: "vae_name_1", type: "COMBO", widget: { name: "vae_name_1" } },
+        ],
+        widgets_values: [
+          "旧提示词（工作流里存的）",
+          "negative",
+          1024,
+          1024,
+          25,
+          4,
+          276260017540259,
+          "z_image_int8_convrot.safetensors",
+          "qwen_3_4b.safetensors",
+          "ae.safetensors",
+        ],
+        properties: {
+          proxyWidgetErrorQuarantine: [
+            {
+              originalEntry: ["69", "control_after_generate"],
+              reason: "missingSubgraphInput",
+            },
+          ],
+        },
+      },
+    ],
+    links: [],
+    definitions: {
+      subgraphs: [
+        {
+          id: "9b9009e4-2d3d-445f-9be5-6063f465757e",
+          name: "Text to Image",
+          inputs: [
+            { id: "p1", name: "text", type: "STRING", linkIds: [108] },
+            { id: "p2", name: "text_1", type: "STRING", linkIds: [125] },
+            { id: "p3", name: "width_1", type: "INT", linkIds: [126] },
+            { id: "p4", name: "height_1", type: "INT", linkIds: [127] },
+            { id: "p5", name: "steps_1", type: "INT", linkIds: [128] },
+            { id: "p6", name: "cfg_1", type: "FLOAT", linkIds: [129] },
+            { id: "p7", name: "seed", type: "INT", linkIds: [130] },
+            { id: "p8", name: "unet_name_1", type: "COMBO", linkIds: [131] },
+            { id: "p9", name: "clip_name_1", type: "COMBO", linkIds: [132] },
+            { id: "p10", name: "vae_name_1", type: "COMBO", linkIds: [133] },
+          ],
+          outputs: [{ id: "o1", name: "IMAGE", type: "IMAGE", linkIds: [79] }],
+          nodes: [
+            {
+              id: 67,
+              type: "CLIPTextEncode",
+              inputs: [
+                { name: "clip", type: "CLIP", link: 78 },
+                { name: "text", type: "STRING", widget: { name: "text" }, link: 108 },
+              ],
+              widgets_values: ["旧提示词（工作流里存的）"],
+            },
+            {
+              id: 69,
+              type: "KSampler",
+              inputs: [
+                { name: "model", type: "MODEL", link: 74 },
+                { name: "positive", type: "CONDITIONING", link: 75 },
+                { name: "negative", type: "CONDITIONING", link: 83 },
+                { name: "latent_image", type: "LATENT", link: 145 },
+                { name: "seed", type: "INT", widget: { name: "seed" }, link: 130 },
+                { name: "steps", type: "INT", widget: { name: "steps" }, link: 128 },
+                { name: "cfg", type: "FLOAT", widget: { name: "cfg" }, link: 129 },
+                {
+                  name: "sampler_name",
+                  type: "COMBO",
+                  widget: { name: "sampler_name" },
+                  link: null,
+                },
+                {
+                  name: "scheduler",
+                  type: "COMBO",
+                  widget: { name: "scheduler" },
+                  link: null,
+                },
+                { name: "denoise", type: "FLOAT", widget: { name: "denoise" }, link: null },
+              ],
+              widgets_values: [276260017540259, "randomize", 25, 4, "res_multistep", "simple", 1],
+            },
+          ],
+          links: [
+            { id: 108, origin_id: -10, origin_slot: 0, target_id: 67, target_slot: 1, type: "STRING" },
+            { id: 130, origin_id: -10, origin_slot: 6, target_id: 69, target_slot: 4, type: "INT" },
+            { id: 145, origin_id: 68, origin_slot: 0, target_id: 69, target_slot: 3, type: "LATENT" },
+          ],
+        },
+      ],
+    },
+  };
+}
+
+type FixtureResult = {
+  nodes: { id: number; widgets_values: unknown[] }[];
+  definitions: {
+    subgraphs: {
+      nodes: { id: number; widgets_values: unknown[] }[];
+    }[];
+  };
+};
+
+describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () => {
+  it("提示词覆盖要写进内层 CLIPTextEncode（不只是 wrapper）", () => {
+    const raw = applyRawOverrides(liblibSubgraphFixture(), [
+      { nodeId: "76", name: "text", value: "3只小猫在喝山泉" },
+    ]) as unknown as FixtureResult;
+
+    const wrapper = raw.nodes.find((n) => n.id === 76)!;
+    const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 67)!;
+    expect(wrapper.widgets_values[0]).toBe("3只小猫在喝山泉");
+    // 关键断言：内层节点的值必须同步，否则 comfy-cli 展开子图后仍用旧提示词
+    expect(inner.widgets_values[0]).toBe("3只小猫在喝山泉");
+  });
+
+  it("seed 覆盖要写进内层 KSampler 的 seed 槽（跳过 control 哨兵）", () => {
+    const raw = applyRawOverrides(liblibSubgraphFixture(), [
+      { nodeId: "76", name: "seed", value: 12345 },
+    ]) as unknown as FixtureResult;
+
+    const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 69)!;
+    // KSampler widgets_values = [seed, control, steps, cfg, sampler, scheduler, denoise]
+    expect(inner.widgets_values[0]).toBe(12345);
+    // 哨兵槽与后续控件不能被写坏
+    expect(inner.widgets_values[1]).toBe("randomize");
+    expect(inner.widgets_values[2]).toBe(25);
+    expect(inner.widgets_values[4]).toBe("res_multistep");
+  });
+
+  it("randomize 兜底生成的随机种子同样要落到内层 KSampler", () => {
+    const raw = applyRawOverrides(liblibSubgraphFixture(), [
+      { nodeId: "76", name: "control_after_generate", value: "randomize" },
+    ]) as unknown as FixtureResult;
+
+    const wrapper = raw.nodes.find((n) => n.id === 76)!;
+    const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 69)!;
+    const minted = wrapper.widgets_values[6];
+    expect(typeof minted).toBe("number");
+    expect(minted).not.toBe(276260017540259);
+    expect(inner.widgets_values[0]).toBe(minted);
+  });
+
+  it("非子图节点不受影响（顶层普通节点仍只改自己）", () => {
+    const raw = applyRawOverrides(
+      {
+        nodes: [
+          {
+            id: 5,
+            type: "CLIPTextEncode",
+            inputs: [
+              { name: "clip", type: "CLIP", link: 1 },
+              { name: "text", type: "STRING", widget: { name: "text" }, link: null },
+            ],
+            widgets_values: ["old"],
+          },
+        ],
+        links: [],
+      },
+      [{ nodeId: "5", name: "text", value: "new" }]
+    ) as { nodes: { id: number; widgets_values: unknown[] }[] };
+    expect(raw.nodes[0]!.widgets_values[0]).toBe("new");
+  });
+});
