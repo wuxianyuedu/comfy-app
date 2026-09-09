@@ -272,8 +272,8 @@ log/
 | 入口 | 逻辑 |
 |---|---|
 | `tools/start/start-web.ps1` | `scripts/dev-launcher.ps1` |
-| `tools/start/start-tauri.ps1`（隐藏窗口，prebuilt，等价 `{{shell.exe.prebuilt}}`） | `scripts/dev-launcher.ps1 -Prebuilt` |
-| `tools/start/start-tauri-dev.ps1`（隐藏窗口，tauri dev，原 `start-tauri.ps1`） | `scripts/dev-launcher.ps1 -Tauri` |
+| `tools/start/start-tauri.ps1` | 直接启动 `start-tauri\{{shell.exe.prebuilt}}`（prebuilt，见 `scripts/start_tauri_launcher.py`） |
+| `tools/start/start-tauri-dev.ps1`（隐藏窗口，原 `.vbs`） | `scripts/dev-launcher.ps1 -Tauri` |
 | `tools/start/run-local.ps1` | `scripts/prepare-local-run.ps1` |
 | `tools/start/verify-quality.ps1` | `scripts/quality-gate.ps1` |
 | `tools/start/sync-lint.ps1` | `scripts/sync-lint.ps1` |

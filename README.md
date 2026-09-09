@@ -50,8 +50,8 @@ Comfy-APP-T3/
 ├─ tools/                   # 双击入口与构建编排（Windows .ps1，按用途分目录）
 │  ├─ start/                # 启动与初始化入口（双击用）
 │  │  ├─ start-web.ps1            # 控制台模式启动 Web 开发（可见日志）
-│  │  ├─ start-tauri.ps1          # 隐藏窗口启动 Tauri 桌面壳（prebuilt 模式，窗口秒出）
-│  │  ├─ start-tauri-dev.ps1     # 隐藏窗口启动 Tauri 桌面壳（tauri dev，Rust 热重载）
+│  │  ├─ start-tauri.ps1          # 直接启动 start-tauri\start-tauri.exe（prebuilt 秒出）
+│  │  ├─ start-tauri-dev.ps1        # 隐藏窗口启动 Tauri 壳（dev / tauri dev，Rust 热重载）
 │  │  ├─ start-desktop.ps1        # 桌面版一键自检 + 启动（给拿到桌面包的人）
 │  │  ├─ run-local.ps1            # 非开发人员一键初始化（自检/生成 .env/装依赖）
 │  │  ├─ verify-quality.ps1       # 一键质量门禁（typecheck / lint / vitest）
@@ -93,7 +93,8 @@ Comfy-APP-T3/
 > **双击入口都在 `tools/` 下**（启动类 `tools/start/`、构建类 `tools/build/`），
 > 根目录只保留工程配置与文档，见下方「双击入口速查」与 `tools/README.md`。
 
-> 发布版的启动入口 `start-tauri.exe` 由 `tools\build\build-launcher.ps1` 生成（位于 `start-tauri\`）；`tools/start/start-tauri.ps1` 与其同为 prebuilt 模式（隐藏窗口无 splash），`tools/start/start-tauri-dev.ps1` 才是 dev（tauri dev）入口。
+> `tools/start/start-tauri.ps1` 直接启动打包好的 `start-tauri\start-tauri.exe`（prebuilt，秒出窗口）；
+> dev/tauri dev 模式的入口是 `tools/start/start-tauri-dev.ps1`。
 
 ---
 
@@ -116,8 +117,8 @@ Comfy-APP-T3/
 | 我想… | 双击 |
 |---|---|
 | 在浏览器里开发（看得到日志） | `tools/start/start-web.ps1` |
-| 启动桌面壳（无控制台窗口，prebuilt 秒出） | `tools/start/start-tauri.ps1` |
-| 启动桌面壳（无控制台窗口，tauri dev 热重载） | `tools/start/start-tauri-dev.ps1` |
+| 启动桌面壳（prebuilt，秒出窗口） | `tools/start/start-tauri.ps1`（等价于双击 `start-tauri.exe`） |
+| 启动桌面壳（dev，Rust 热重载） | `tools/start/start-tauri-dev.ps1` |
 | 运行已构建好的桌面包 | `tools/start/start-desktop.ps1` |
 | 第一次在本机跑起来（自检 + 装依赖 + 生成 `.env`） | `tools/start/run-local.ps1` |
 | 跑一遍质量门禁（typecheck / lint / vitest） | `tools/start/verify-quality.ps1` |
@@ -181,8 +182,8 @@ pnpm db:push
 | 桌面壳（预编译秒出 + 前端热重载） | 双击 `start-tauri.exe` | 默认 prebuilt 模式：用已编译的 release 壳秒出窗口，后台连 dev server，改前端即时刷新（Rust 改动需重新 `cargo build`） |
 | 桌面壳（Rust 也热重载） | 双击 `start-tauri-dev.exe` 或 `pnpm tauri dev` | 自动起 dev server + 重新编译 Rust 壳，前端/后端改动即时刷新（首次编译较慢） |
 | 桌面壳（独立运行，不连 dev server） | 双击 `start-tauri-standalone.exe`（需先 `tools\build\build-standalone.ps1`） | standalone 模式：内置 Node sidecar 运行 Next standalone server，双击即独立运行，改动需重新构建才生效 |
-| 桌面壳（无控制台入口，prebuilt 秒出） | 双击 `tools/start/start-tauri.ps1` | 隐藏窗口启动 prebuilt 模式（等价于 `start-tauri.exe`） |
-| 桌面壳（无控制台入口，tauri dev 热重载） | 双击 `tools/start/start-tauri-dev.ps1` | 隐藏窗口启动 tauri dev 模式（等价于 `start-tauri-dev.exe`） |
+| 桌面壳（prebuilt，无控制台入口） | 双击 `tools/start/start-tauri.ps1` | 直接启动 `start-tauri\start-tauri.exe`（等价于 prebuilt，秒出窗口） |
+| 桌面壳（dev，Rust 热重载） | 双击 `tools/start/start-tauri-dev.ps1` | 隐藏窗口启动 tauri dev 模式（等价于 `start-tauri-dev.exe`） |
 | Web 开发（可见日志） | 双击 `tools/start/start-web.ps1` | 控制台打印 dev-launcher 日志 |
 
 > Dev 模式下窗口初始加载 `splash.html` 启动页，随后自动探测 `http://localhost:3100` 就绪并跳转应用。
@@ -278,7 +279,7 @@ pnpm tauri build
 | 完整安装包 | `pnpm tauri build` |
 | 清理重建前端资源 | `tools\build\rebuild-static.ps1` |
 
-更详细的脚本职责、启动入口对比（start-tauri.exe vs tools/start/start-tauri.ps1）、CSP 与 standalone 模式说明，
+更详细的脚本职责、启动入口对比（start-tauri.ps1 / start-tauri-dev.ps1 / start-tauri.exe）、CSP 与 standalone 模式说明，
 见 [`tools/README.md`](./tools/README.md)。
 启动方式的热更新（HMR）能力矩阵、以及重建 `src-tauri/static` 对每种方式的影响，
 见 [`docs/startup-hotreload.md`](./docs/startup-hotreload.md)。
