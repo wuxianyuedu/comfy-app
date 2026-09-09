@@ -87,10 +87,20 @@ export async function connect(): Promise<void> {
     // ComfyUI 不可达：若配置了安装路径 + 自动启动，则按需拉起并等待就绪。
     // 队列任务在 WS 未 OPEN 时不会出队，此前只能等 reaper 30s 判死；
     // 现在启动成功后下一次重连即可打开 WS，任务恢复正常执行。
-    // ensureComfyUiReady 自带单飞锁 + 探测快路径，反复调用安全。
     // 这里必须带超时上限：无限等待会让 isComfyStarting 一直为真，
     // reaper 的「启动窗口期跳过回收」被无限拉长，队列任务永远卡住。
-    void ensureComfyUiReady({ timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS }).catch((err: unknown) => {
+    // 把自动启动的每步进度实时写进排队任务的日志，让用户看到「未运行 → 启动中 →
+    // 已就绪」而非一直只有「等待日志…」。ensureComfyUiReady 自带单飞锁 + 探测快路径，
+    // 反复调用安全。
+    void ensureComfyUiReady({
+      timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS,
+      // 启动进度透传：当前所有排队任务共用同一份进度文案。
+      onLog: (msg) => {
+        for (const job of s.queue) {
+          log(job.taskId, "info", `[ComfyUI 启动] ${msg}`);
+        }
+      },
+    }).catch((err: unknown) => {
       logger.warn(
         `[comfyui] 自动启动失败：${err instanceof Error ? err.message : String(err)}`
       );
@@ -122,6 +132,9 @@ export async function connect(): Promise<void> {
     opened = true;
     s.connecting = false;
     s.reconnectAttempts = 0;
+    // WS 就绪：清掉排队期写入的「等待连接」提示标记，避免下次断线重连时
+    // 同一任务被 wsWaitLogged 挡住而无法重新提示。
+    s.wsWaitLogged.clear();
     void processQueue();
   });
   ws.on("message", (data) => void handleMessage((data as Buffer).toString()));
