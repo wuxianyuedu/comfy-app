@@ -82,6 +82,10 @@ export function BrowserStatusBar() {
   const vramPct = online
     ? pct(stats?.vramUsed ?? 0, stats?.vramTotal ?? 0)
     : null;
+  // nvidia-smi 物理专用显存口径（对齐任务管理器），查询失败则为 null 隐藏
+  const smiVramPct = online
+    ? pct(stats?.smiVramUsed ?? 0, stats?.smiVramTotal ?? 0)
+    : null;
   const ramPct = online ? pct(stats?.ramUsed ?? 0, stats?.ramTotal ?? 0) : null;
 
   return (
@@ -116,17 +120,33 @@ export function BrowserStatusBar() {
           <span className="text-gray-400">FPS</span>
         </span>
 
-        {/* 显存剩余可用 + 总量 + 占用百分比（来自 ComfyUI /system_stats 的 vram_free） */}
-        {online && vramPct !== null && (
+        {/* 显存（nvidia-smi 物理专用显存口径，对齐任务管理器「专用 GPU 内存」）。
+            用户反馈 ComfyUI 的 CUDA 口径有时不准确，故同时显示两种口径做对照。 */}
+        {online && smiVramPct !== null && (
           <span
             className="hidden items-center gap-1 text-gray-400 tabular-nums sm:flex"
-            title="显存剩余可用 / 总量（占用 = 总量 − 可用）"
+            title="nvidia-smi 物理专用显存（与任务管理器「专用 GPU 内存」同口径）"
           >
             <span className="text-gray-500">显存</span>
             <span className="text-gray-200">
-              {fmtBytes(stats?.vramFree) ?? "—"}/{fmtBytes(stats?.vramTotal) ?? "—"}
+              {fmtBytes(stats?.smiVramUsed ?? 0) ?? "—"}/{fmtBytes(stats?.smiVramTotal ?? 0) ?? "—"}
             </span>
-            <span className="text-gray-600">({vramPct}% 已用)</span>
+            <span className="text-gray-600">({smiVramPct}%)</span>
+          </span>
+        )}
+
+        {/* 显存（ComfyUI CUDA 逻辑口径）：vram_free 语义是「剩余可用」，
+            已用 = 总量 − 剩用，与内存侧推导一致。 */}
+        {online && vramPct !== null && (
+          <span
+            className="hidden items-center gap-1 text-gray-400 tabular-nums sm:flex"
+            title="ComfyUI 上报的 CUDA 口径（显存剩余可用/总量，已用 = 总量 − 剩用）"
+          >
+            <span className="text-gray-500">显存·ComfyUI</span>
+            <span className="text-gray-200">
+              {fmtBytes(stats?.vramUsed ?? 0) ?? "—"}/{fmtBytes(stats?.vramTotal ?? 0) ?? "—"}
+            </span>
+            <span className="text-gray-600">({vramPct}%)</span>
           </span>
         )}
 

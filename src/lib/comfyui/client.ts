@@ -19,6 +19,7 @@ import {
   findPidForMainPyDetailed,
   findPidListeningPort,
 } from "./proc-detect";
+import { queryNvidiaVram } from "./gpu-vram";
 import { logger } from "~/server/lib/logger";
 
 /** How many extra ports to probe when the configured one is unreachable */
@@ -317,6 +318,10 @@ export interface ComfySystemStats {
   vramTotal: number;
   /** 显存剩余可用（字节）：ComfyUI 上报的 vram_free 原值 */
   vramFree: number;
+  /** nvidia-smi 物理专用显存占用（字节）；不适用/查询失败为 undefined */
+  smiVramUsed?: number;
+  /** nvidia-smi 物理专用显存总量（字节）；不适用/查询失败为 undefined */
+  smiVramTotal?: number;
   /** 系统内存占用（字节） */
   ramUsed: number;
   /** 系统内存总量（字节） */
@@ -345,8 +350,9 @@ function pickGpu(devices: ComfyDevice[] | undefined): ComfyDevice | undefined {
 
 /** 拉取 ComfyUI `/system_stats` 并折叠成状态栏需要的聚合字段。
  *  服务不可达 / 解析失败时返回 null，由调用方决定降级展示。
- *  显存口径：vram_free 是「还有多少可用」，已用 = vram_total - vram_free
- *  （CUDA 口径，与内存侧 ram_total - ram_free 的推导一致）。
+ *  显存双口径：vram_free 是「还有多少可用」，已用 = vram_total - vram_free
+ *  （ComfyUI CUDA 逻辑口径，与内存侧 ram_total - ram_free 推导一致）。nvidia-smi
+ *  额外上报物理专用显存（smiVram*，取本机首块 GPU），供与任务管理器对照。
  *  上游个别后端不填充 vram_used（恒 0），不作为占用来源。 */
 export async function getSystemStats(): Promise<ComfySystemStats | null> {
   try {
@@ -367,12 +373,19 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
     const vramUsed = vramTotal - vramFree;
     const ramTotal = data.system?.ram_total ?? 0;
     const ramFree = data.system?.ram_free ?? 0;
+    // 并行查 nvidia-smi 物理专用显存：nvidia-smi 反映本机物理 GPU，与
+    // ComfyUI 的 CUDA 逻辑口径并列展示供对照。查询失败 / 非 NVIDIA 卡
+    // 返回 null，不影响 ComfyUI 主数据与在线状态。
+    const smi = await queryNvidiaVram();
     return {
       online: true,
       gpuName: dev?.name ?? (dev?.type === "cpu" ? "CPU" : undefined),
       vramUsed,
       vramFree,
       vramTotal,
+      smiVramUsed: smi?.usedMiB != null ? smi.usedMiB * 1024 * 1024 : undefined,
+      smiVramTotal:
+        smi?.totalMiB != null ? smi.totalMiB * 1024 * 1024 : undefined,
       ramUsed: ramTotal > 0 ? Math.max(0, ramTotal - ramFree) : 0,
       ramTotal,
     };
