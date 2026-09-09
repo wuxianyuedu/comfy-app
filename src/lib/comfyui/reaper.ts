@@ -131,9 +131,17 @@ async function reapStaleRunningTasks(): Promise<void> {
     const stale = await taskRepository.listStaleRunning(cutoff, RUNNING_TICK_CAP);
     if (stale.length === 0) return;
     const base = await resolveComfyBase();
+    const s = state();
     for (const t of stale) {
       if (!t.promptId) continue;
       if (reaperState.reaping.has(t.id)) continue;
+      /* 若该 prompt 仍被当前 dev server 进程的 in-memory runner 监控
+       * （comfy-cli / WS 正在等待结果，`promptToTask` 中仍有映射），说明
+       * 进程并未真正重启、任务仍在正常执行，reaper 不应插手 —— 正常监控
+       * 路径会负责收口。只有 dev server 真正冷重启（内存状态丢失、无人再
+       * 认领该 prompt）时才交给本 reaper 对账，避免误判正在执行的任务为
+       * FAILED orphan。 */
+      if (s.promptToTask.get(t.promptId) === t.id) continue;
       reaperState.reaping.add(t.id);
       try {
         const url = `${base}/history/${encodeURIComponent(t.promptId)}`;
@@ -194,7 +202,7 @@ async function reapStaleRunningTasks(): Promise<void> {
         }
         const finalStatus = verdict === "succeeded" ? "SUCCEEDED" : "FAILED";
         log(t.id, verdict === "succeeded" ? "success" : "error", reason);
-        const s = state();
+        /* 复用函数顶层的 s，避免嵌套块内重复声明触发 no-shadow。 */
         s.emitter.emit(t.id, {
           type: "state",
           status: finalStatus,
