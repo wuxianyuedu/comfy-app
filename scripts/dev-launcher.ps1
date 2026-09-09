@@ -238,6 +238,21 @@ function Ensure-SplashResource {
 
 # ── 启动前清理：按端口精准杀掉残留 dev server（不误伤其它 node 进程）──
 #     只杀真正占用 3000/3001/3002 的进程，不影响你后台跑的其它程序。
+# ── 读取 .env 中的端口配置 ──
+# 端口统一由 .env 的 COMFYAPP_PORT 控制（默认 3000），避免与其他应用端口冲突。
+# 逐行解析 KEY= 且兼容带双引号的值；该函数供启动链路各脚本复用。
+function Get-DotEnvValue($path, $key) {
+  if (-not (Test-Path $path)) { return $null }
+  $line = Get-Content -LiteralPath $path -Encoding UTF8 | Where-Object {
+    $_ -match "^\s*$([regex]::Escape($key))\s*="
+  } | Select-Object -First 1
+  if (-not $line) { return $null }
+  $val = ($line -split "=", 2)[1].Trim()
+  if ($val.StartsWith('"') -and $val.EndsWith('"')) { $val = $val.Substring(1, $val.Length - 2) }
+  if ($val.StartsWith("'") -and $val.EndsWith("'")) { $val = $val.Substring(1, $val.Length - 2) }
+  return $val
+}
+
 function Stop-ProcessOnPort($port) {
   try {
     $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
@@ -260,9 +275,10 @@ function Stop-ProcessOnPort($port) {
 }
 
 function Reset-DevPorts {
-  Write-Log "检查端口占用（3000/3001/3002）..." -Level STEP
-  foreach ($port in @(3000, 3001, 3002)) { Stop-ProcessOnPort $port }
-  Write-Log "端口已就绪，将启动全新实例于 3000" -Level OK
+  $scanPorts = @($script:appPort, ($script:appPort + 1), ($script:appPort + 2))
+  Write-Log ("检查端口占用（{0}）..." -f ($scanPorts -join "/")) -Level STEP
+  foreach ($port in $scanPorts) { Stop-ProcessOnPort $port }
+  Write-Log ("端口已就绪，将启动全新实例于 {0}" -f $script:appPort) -Level OK
 }
 
 # ── .next 缓存策略：基于「关键配置指纹」决定是否全量重编译 ──
@@ -792,6 +808,20 @@ try {
     throw "缺少 .env：请先双击 tools\start\run-local.ps1（或执行 scripts\prepare-local-run.ps1）完成本地初始化后再启动。"
   }
 
+  # ── 端口统一配置：读取 .env 的 COMFYAPP_PORT（默认 3000） ──
+  # 端口冲突时改 .env 一处即可（如 COMFYAPP_PORT="3100"），本脚本与 Tauri 壳、
+  # 前端 tRPC 客户端会一致读取该端口；下一次启动即生效。
+  $portRaw = Get-DotEnvValue -Path (Join-Path $root ".env") -Key "COMFYAPP_PORT"
+  if (-not $portRaw) { $portRaw = "3000" }
+  $parsedPort = 0
+  if (-not [int]::TryParse($portRaw, [ref]$parsedPort) -or $parsedPort -lt 1 -or $parsedPort -gt 65535) {
+    Write-Log "COMFYAPP_PORT 的值不合法，已回退到默认端口 3000。" -Level WARN
+    $script:appPort = 3000
+  } else {
+    $script:appPort = $parsedPort
+  }
+  Write-Log ("使用端口 {0}（来自 .env 的 COMFYAPP_PORT）" -f $script:appPort) -Level INFO
+
   if ($Prebuilt) {
     # 2026-09-01 优化：双击后的第一件事就是拉起预编译壳，让用户立刻看到窗口。
     # 旧流程在弹窗之前还要依次做端口清理 / 缓存指纹 / Add-Type 编译 C#（Job Object），
@@ -828,7 +858,8 @@ try {
     $psiTauri.WorkingDirectory = $root
     $psiTauri.UseShellExecute = $false
     $psiTauri.Environment["COMFYAPP_PROJECT_ROOT"] = $root
-    $psiTauri.Environment["COMFYAPP_DEV_URL"] = "http://127.0.0.1:3000/workspace"
+    $psiTauri.Environment["COMFYAPP_DEV_URL"] = "http://127.0.0.1:$($script:appPort)/workspace"
+    $psiTauri.Environment["COMFYAPP_PORT"] = "$($script:appPort)"
     $tauriProc = [System.Diagnostics.Process]::Start($psiTauri)
     Write-Log ("预编译 Tauri 壳已启动（PID: {0}）：{1}" -f $tauriProc.Id, $tauriExe) -Level OK
     Write-Log "Tauri 桌面壳已启动，正在启动本地服务…" -Level STEP
@@ -865,7 +896,7 @@ try {
     }
     # pnpm 11 不再剥离「--」，会把它原样传给脚本；next dev 收到字面量「--」后把
     # -p 当成目录参数报「Invalid project directory」。因此直接跟参数，不写「--」。
-    $psiDev.Arguments = "/c pnpm dev -p 3000 -H 127.0.0.1 > `"$nextOut`" 2> `"$nextErr`""
+    $psiDev.Arguments = "/c pnpm dev -p $($script:appPort) -H 127.0.0.1 > `"$nextOut`" 2> `"$nextErr`""
     $psiDev.WorkingDirectory = $root
     $psiDev.UseShellExecute = $false
     $psiDev.CreateNoWindow = $true
@@ -879,7 +910,7 @@ try {
     Sync-DatabaseSchema
 
     # 4. 等服务 Ready（避免 Tauri 导航时看到 ERR_CONNECTION_REFUSED）
-    Write-Log "等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
+    Write-Log "等待本地服务就绪（http://127.0.0.1:$($script:appPort)）..." -Level STEP
     $ready = $false
     for ($i = 0; $i -lt 180; $i++) {
       # 若进程已提前退出，直接报失败并输出其 stderr/stdout 尾部，避免空等 180 秒
@@ -889,19 +920,19 @@ try {
         throw "Next.js dev server 提前退出（exit=$($devProc.ExitCode)）。最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $nextOut 与 $nextErr）"
       }
       try {
-        $r = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 1 -UseBasicParsing -ErrorAction SilentlyContinue
+        $r = Invoke-WebRequest -Uri "http://127.0.0.1:$($script:appPort)" -TimeoutSec 1 -UseBasicParsing -ErrorAction SilentlyContinue
         if ($r.StatusCode -eq 200) { $ready = $true; break }
       } catch { }
       # 每秒刷新启动页进度（python 启动器已提前退出，真实进度由本脚本接管）
       Write-LaunchStatus -Phase "dev-server-starting" `
         -Progress (0.25 + [math]::Min(0.6, $i * 0.6 / 180.0)) `
-        -Message ("正在等待本地服务就绪（http://127.0.0.1:3000，第 {0}s）…" -f $i)
+        -Message ("正在等待本地服务就绪（http://127.0.0.1:$($script:appPort)，第 {0}s）…" -f $i)
       Start-Sleep -Seconds 1
     }
     if (-not $ready) {
       $errTail = Get-OutputTail -Path $nextErr
       $outTail = Get-OutputTail -Path $nextOut
-      throw "180 秒内未检测到 http://127.0.0.1:3000 服务就绪。Next.js 最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $nextOut 与 $nextErr）"
+      throw "180 秒内未检测到 http://127.0.0.1:$($script:appPort) 服务就绪。Next.js 最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $nextOut 与 $nextErr）"
     }
     Write-Log "服务器已就绪，桌面壳正在加载应用…" -Level OK
     Write-LaunchStatus -Phase "dev-server-ready" -Progress 0.85 -Message "本地服务已就绪，桌面壳正在加载应用…"
@@ -919,16 +950,20 @@ try {
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = "cmd.exe"
+    $psi.UseShellExecute = $false
     if ($Tauri) {
-      # Tauri 桌面壳：tauri CLI 会先跑 beforeDevCommand（pnpm dev）再弹桌面窗口；
-      # 整棵进程树都在本 Job Object 内，关闭窗口自动全清
+      # Tauri 桌面壳：tauri CLI 会先跑 beforeDevCommand（node scripts/dev.mjs，读取
+      # .env 的 COMFYAPP_PORT）再弹桌面窗口；整棵进程树都在本 Job Object 内，关闭窗口自动全清。
+      # 同时注入 COMFYAPP_DEV_URL / COMFYAPP_PORT，让壳 run() 导航到 .env 配置的端口，
+      # 避免端口冲突时壳仍跳回 3000。
+      $psi.Environment["COMFYAPP_DEV_URL"] = "http://127.0.0.1:$($script:appPort)/workspace"
+      $psi.Environment["COMFYAPP_PORT"] = "$($script:appPort)"
       $psi.Arguments = "/c pnpm tauri dev"
     } else {
-      # Web 模式：显式 -p 3000，端口已在上一步清干净，保证新实例一定落在 3000
-      $psi.Arguments = "/c pnpm dev -p 3000"
+      # Web 模式：显式 -p $appPort，端口已在上一步清干净，保证新实例一定落在指定端口
+      $psi.Arguments = "/c pnpm dev -p $($script:appPort)"
     }
     $psi.WorkingDirectory = (Get-Location).Path
-    $psi.UseShellExecute = $false
     $p = [System.Diagnostics.Process]::Start($psi)
     Write-Log ("开发服务器进程已启动（PID: {0}）" -f $p.Id) -Level OK
 
@@ -943,21 +978,21 @@ try {
       "模式   : 预编译 Tauri 壳（服务就绪后弹出）",
       "dev    : PID $($devProc.Id)",
       "tauri  : PID $($tauriProc.Id)",
-      "地址   : http://127.0.0.1:3000",
+      "地址   : http://127.0.0.1:$($script:appPort)",
       "停止   : 关闭桌面窗口（自动清理全部子进程）"
     )
   } elseif ($Tauri) {
     Show-Summary -Title "Comfy-APP 桌面壳（Tauri）已启动" -Lines @(
       "模式   : Tauri 桌面壳",
       "PID    : $($p.Id)",
-      "地址   : http://localhost:3000",
+      "地址   : http://localhost:$($script:appPort)",
       "停止   : 关闭桌面窗口或结束本进程（自动清理全部子进程）"
     )
   } else {
     Show-Summary -Title "Comfy-APP 开发服务器已启动" -Lines @(
       "模式   : Web 开发服务器（Next.js + Turbopack）",
       "PID    : $($p.Id)",
-      "地址   : http://localhost:3000",
+      "地址   : http://localhost:$($script:appPort)",
       "停止   : 关闭此窗口（自动清理全部子进程）"
     )
   }
@@ -974,11 +1009,11 @@ try {
   #     - Tauri：tauri dev 自己编译/启动 dev server 并弹出桌面窗口，无需浏览器。
   if ($Tauri) {
     Write-Log "Tauri 模式：等待 tauri dev 编译并弹出桌面窗口..." -Level STEP
-    Write-Log "等待本地服务就绪（http://127.0.0.1:3000）..." -Level STEP
+    Write-Log "等待本地服务就绪（http://127.0.0.1:$($script:appPort)）..." -Level STEP
     $ready = $false
     for ($i = 0; $i -lt 180; $i++) {
       try {
-        $r = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 1 -UseBasicParsing -ErrorAction SilentlyContinue
+        $r = Invoke-WebRequest -Uri "http://127.0.0.1:$($script:appPort)" -TimeoutSec 1 -UseBasicParsing -ErrorAction SilentlyContinue
         if ($r.StatusCode -eq 200) { $ready = $true; break }
       } catch { }
       Start-Sleep -Seconds 1
@@ -989,11 +1024,11 @@ try {
       Write-Log "180 秒内未检测到服务就绪，Tauri 仍在编译中，请稍候" -Level WARN
     }
   } elseif (-not $Prebuilt -and $env:NO_OPEN -ne "1") {
-    Write-Log "等待服务器就绪（http://127.0.0.1:3000）..." -Level STEP
+    Write-Log "等待服务器就绪（http://127.0.0.1:$($script:appPort)）..." -Level STEP
     $ready = $false
     for ($i = 0; $i -lt 90; $i++) {
       try {
-        $r = Invoke-WebRequest -Uri "http://127.0.0.1:3000" -TimeoutSec 1 -UseBasicParsing -ErrorAction SilentlyContinue
+        $r = Invoke-WebRequest -Uri "http://127.0.0.1:$($script:appPort)" -TimeoutSec 1 -UseBasicParsing -ErrorAction SilentlyContinue
         if ($r.StatusCode -eq 200) { $ready = $true; break }
       } catch { }
       Start-Sleep -Seconds 1
@@ -1001,16 +1036,16 @@ try {
     if ($ready) {
       if ($env:SKIP_CLEAN -eq "1") {
         # 用户明确跳过清理：尝试复用现有标签页（Next HMR 会自动重载）
-        $url = "http://localhost:3000"
+        $url = "http://localhost:$($script:appPort)"
         Write-Log "服务器已就绪，复用现有标签页（Next HMR 自动重载）" -Level OK
       } else {
         # 默认路径：带缓存破坏参数开新标签页，避免旧 chunk + 旧 sessionStorage 残留
-        $url = "http://localhost:3000/?__fresh=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+        $url = "http://localhost:$($script:appPort)/?__fresh=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
         Write-Log "服务器已就绪，打开全新标签页（带缓存破坏参数）" -Level OK
       }
       try { Start-Process $url -ErrorAction SilentlyContinue } catch { }
     } else {
-      Write-Log "90 秒内未就绪，请手动打开 http://localhost:3000" -Level WARN
+      Write-Log "90 秒内未就绪，请手动打开 http://localhost:$($script:appPort)" -Level WARN
     }
   }
 
