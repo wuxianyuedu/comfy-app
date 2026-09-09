@@ -3,7 +3,7 @@
 """
 start_tauri_launcher.py — Comfy-APP 桌面壳启动器（纯 Win32 启动画面）
 
-取代了原来的 start-tauri.vbs（2026-09-04 起该 dev 入口改为 tools/start/start-tauri.ps1）：
+取代了原来的 start-tauri.vbs（dev 入口为 tools/start/start-tauri-dev.ps1，prebuilt 入口为 tools/start/start-tauri.ps1）：
 点击后立刻弹出一个暗色启动画面，
 明确告知「正在启动」，避免「点了像没反应」的困惑。
 
