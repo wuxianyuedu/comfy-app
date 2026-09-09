@@ -1,0 +1,168 @@
+<!-- ⚠️ 本文件为自动生成产物（`pnpm doc:render`），请勿手改。
+编辑态文档（单一事实 + 占位符）见：`docs/standards/03-样式与-tailwind.md`。改动请回源文件，再重新生成。 -->
+
+## 3. 样式与 Tailwind
+
+> 本项目使用 Tailwind CSS v4（`@theme` 配置）+ 少量 CSS 变量。样式规则的目标是：一致性、可维护性、暗色模式可切换。
+
+### 3.1 Tailwind v4 规范类名写法
+
+v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 遗留写法，编辑器（suggestCanonicalClasses）会持续提示改写：
+
+```tsx
+// ❌ 旧写法：方括号 alpha 值
+"hover:bg-white/[0.06]"
+
+// ✅ 正确：任意百分比直接写（v4 canonical，编译为 color-mix 6%）
+"hover:bg-white/6"
+```
+
+同类规范写法迁移还有四组（历史存量已由 `scripts/tw4-canonical-codemod.cjs` 清零，新代码禁止旧写法）：
+
+```tsx
+// 渐变更名：
+"bg-linear-to-br"               // ✅ v4
+"bg-gradient-to-br"             // ❌ v3 旧名
+
+// CSS 变量任意值有专用简写：
+"w-(--panel-right-width)"       // ✅ v4
+"w-[var(--panel-right-width)]"  // ❌ v3 写法
+
+// 负值：负号移入括号内（前缀负号是 v3 形式）：
+"top-[-20%]"                    // ✅ v4
+"-top-[20%]"                    // ❌ v3 写法
+
+// 纯整数任意值用裸数字（z / order / duration 等数值工具类同理）：
+"z-99"                          // ✅ v4
+"z-[99]"                        // ❌ 多余括号
+```
+
+**规则**：透明度一律 `/百分比`（小数合法，如 `/1.5`——tailwindcss 内部正是以 `parseFloat(alpha)*100` 做规范化的）。
+
+### 3.2 避免魔法字符串：提取到主题/Design Token
+
+```tsx
+// ❌ 错误：魔法透明度值散落各处
+"bg-white/4 hover:bg-white/8 border-white/6"
+
+// ✅ 方案 A：@theme 扩展语义色（Tailwind v4 用 CSS 配置，见 src/app/globals.css）
+// @theme { --color-surface-1: rgba(255,255,255,0.04); }
+// 组件里用 bg-surface-1 引用，禁止直接写 bg-white/4 散落各处
+
+// ✅ 方案 B：用 cva 管理变体（推荐用于复用按钮/面板）
+import { cva } from "class-variance-authority";
+const panelVariants = cva(
+  "rounded-2xl border transition-colors",
+  {
+    variants: {
+      tone: {
+        default: "bg-white/2 border-white/6",
+        active:  "bg-violet-500/10 border-violet-500/30",
+      },
+    },
+    defaultVariants: { tone: "default" },
+  }
+);
+```
+
+### 3.3 Tooltip 必须加 z-index
+
+```tsx
+// ❌ 错误：tooltip 可能被右侧内容覆盖
+<span className="absolute left-full ml-2 ...">
+
+// ✅ 正确
+<span className="absolute left-full z-50 ml-2 ...">
+```
+
+### 3.4 图标统一用 lucide-react
+
+```tsx
+// ❌ 错误：内联 SVG 导致视觉噪音、风格不一致（strokeWidth 有的是 1.8 有的是 2）
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+  <path d="..." />
+</svg>
+
+// ✅ 正确：统一图标库（tree-shakeable、风格一致）
+import { Home, Zap, FolderOpen, Search, X } from "lucide-react";
+<Home size={20} strokeWidth={1.8} />
+```
+
+**数据驱动的图标名**（API 返回字符串 key、配置项/数据模型选图标）走中央解析组件，不直接 import：
+
+```tsx
+// ✅ 动态 key：中央 Icon 组件（src/components/ui/Icon.tsx，内部已带 aria-hidden）
+import { Icon } from "@/components/ui/icon";
+<Icon name="plus" size={16} strokeWidth={2} />
+```
+
+新增图标时先在 `Icon.tsx` 的 lucide import 与 `ICON_MAP` 各加一行再使用；静态图标直接 import lucide，动态/可序列化 key 一律走 `<Icon name>`。
+
+**例外**：项目品牌图标、复杂插画、需要精细控制的装饰性 SVG（如 Aurora 极光晕）可保留内联 SVG/组件。
+
+### 3.5 CSS 注入用静态文件，不用 JS 动态注入
+
+```tsx
+// ❌ 可接受但不推荐：模块级变量防重复注入，代码分割后可能失效
+let INJECTED = false;
+if (!INJECTED) { document.head.appendChild(style); }
+
+// ✅ 正确：放到 globals.css 或独立 .css 文件 import
+import "@/styles/json-viewer.css";
+```
+
+**AuroraBackground 模式**：极光装饰光晕作为可复用装饰组件集中管理（`AuroraBackground.tsx`），不要在多个页面内联重复相同的 radial-gradient 块。
+
+### 3.6 暗色模式与 CSS 变量
+
+```css
+/* ✅ 语义化 token，暗/亮模式切换只改 token 值 */
+:root {
+  --color-surface-0: #0a0a0f;
+  --color-surface-1: rgba(255,255,255,0.02);
+  --color-ink: #e5e7eb;
+  --color-ink-muted: #8b90a8;
+}
+```
+
+- 组件样式只引用 `var(--color-*)`，不直接写死 `#0a0a0f` 之类的色值（极光等装饰性渐变除外）。
+- 新增颜色前先检查是否已有语义 token 可复用；没有再在 `@theme` 中扩展。
+
+### 3.7 装饰性元素可访问性与性能
+
+```tsx
+// ✅ 装饰背景/光晕：pointer-events-none + aria-hidden
+<div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+  <div className="absolute ... rounded-full mix-blend-screen" style={{ background: "radial-gradient(...)" }} />
+</div>
+```
+
+- `pointer-events-none`：防止光晕/背景拦截画布点击、拖拽。
+- `aria-hidden`：对屏幕阅读器隐藏纯装饰元素。
+- `fixed + -z-10`：装饰层不参与文档流，不引发重排。
+
+### 3.8 响应式断点覆盖
+
+```tsx
+// ✅ 关键布局至少覆盖 sm/md/lg 三档
+<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+```
+
+**规则**：画布/编辑器类页面默认桌面优先（`lg:` 为主）；公开落地页/文档页必须移动优先（`sm:` 起步）。所有 `absolute` 定位的浮层（抽屉、popover、tooltip）需测试在 ≤1280px 视口下不溢出。
+
+### 3.9 布局类名顺序约定（可读性）
+
+```tsx
+// ✅ 推荐顺序：定位 → 盒模型 → 排版 → 颜色 → 交互/状态 → 工具
+className="
+  absolute top-3 left-1/2 -translate-x-1/2 z-50  /* 定位 */
+  flex items-center gap-0.5                        /* 盒模型/布局 */
+  rounded-xl border border-white/10 bg-[#1a1a24]/90 /* 颜色 */
+  px-1.5 py-1 shadow-lg backdrop-blur-md          /* 视觉 */
+  hover:bg-white/[0.08] focus:outline-none         /* 交互 */
+"
+```
+
+不强制工具化排序，但保持同类属性相邻，便于多人协作时 diff 可读。
+
+---
