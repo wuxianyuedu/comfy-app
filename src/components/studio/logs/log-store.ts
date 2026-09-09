@@ -242,6 +242,8 @@ const LOG_LINE_RE =
   /^\[(\d{2}):(\d{2}):(\d{2})\]\s*\[(STEP|OK|INFO|WARN|ERROR|DEBUG)\]\s*(.*)$/;
 const LAUNCHER_LOG_RE =
   /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]\s*(.*)$/;
+const APP_RUNTIME_LOG_RE =
+  /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]\s*\[(INFO|WARN|ERROR|DEBUG)\]\s*(?:\[([^\]]+)\]\s*)?(.*)$/;
 
 function parseLogLevel(level: string): LogLevel {
   switch (level.toLowerCase()) {
@@ -276,6 +278,28 @@ export function parseFileLogs(text: string, baseDate?: Date): LogEntry[] {
         time: d.getTime(),
         level: parseLogLevel(lv ?? "INFO"),
         message: msg ?? "",
+        source: "system",
+      });
+      continue;
+    }
+    const am = APP_RUNTIME_LOG_RE.exec(line);
+    if (am) {
+      const [, year, month, day, hh, mm, ss, ms, lv, ns, msg] = am;
+      const d = new Date(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        Number(hh),
+        Number(mm),
+        Number(ss),
+        Number(ms),
+      );
+      const nsTag = ns ? `[${ns}] ` : "";
+      entries.push({
+        id: nextId(),
+        time: d.getTime(),
+        level: parseLogLevel(lv ?? "INFO"),
+        message: nsTag + (msg ?? ""),
         source: "system",
       });
       continue;

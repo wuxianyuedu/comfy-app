@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
+import { createAppRuntimeLogger } from "@/lib/app-runtime-log";
+
+const generateRuntimeLog = createAppRuntimeLogger("generate");
 import { taskRepository, workflowTemplateRepository } from "@/lib/core/repository";
 import {
   buildAndValidate,
@@ -116,6 +119,7 @@ export const generateRouter = createTRPCRouter({
             rawJson: tpl.rawJson,
             overrides: data.workflowInputs,
           });
+          generateRuntimeLog.info(`生成任务已入队 ${task.id}`, { type: taskType, workflow: workflowName });
           return { taskId: task.id };
         }
 
