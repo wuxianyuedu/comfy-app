@@ -133,7 +133,7 @@ Comfy-APP-T3/
 - **想要独立桌面窗口**（最接近成品）→ 向开发人员要一份**即开即用桌面包**，解压后双击
   **`tools/start/start-desktop.ps1`** 即可，无需装 Node/Rust；
 - **只有源码、想先在浏览器跑起来** → 双击 **`tools/start/run-local.ps1`** 自动完成初始化后，
-  双击 **`tools/start/start-web.ps1`** 启动，再用浏览器打开 `http://localhost:3000`。
+  双击 **`tools/start/start-web.ps1`** 启动，再用浏览器打开 `http://localhost:3100`。
 
 两条路都无需安装 Rust、无需手工编译。
 
@@ -175,14 +175,14 @@ pnpm db:push
 
 | 方式 | 命令 / 入口 | 说明 |
 |------|------------|------|
-| 纯前端（浏览器） | `pnpm dev` | 启动 Next dev server，访问 http://localhost:3000 |
+| 纯前端（浏览器） | `pnpm dev` | 启动 Next dev server，访问 http://localhost:3100 |
 | 桌面壳（预编译秒出 + 前端热重载） | 双击 `start-tauri.exe` | 默认 prebuilt 模式：用已编译的 release 壳秒出窗口，后台连 dev server，改前端即时刷新（Rust 改动需重新 `cargo build`） |
 | 桌面壳（Rust 也热重载） | 双击 `start-tauri-dev.exe` 或 `pnpm tauri dev` | 自动起 dev server + 重新编译 Rust 壳，前端/后端改动即时刷新（首次编译较慢） |
 | 桌面壳（独立运行，不连 dev server） | 双击 `start-tauri-standalone.exe`（需先 `tools\build\build-standalone.ps1`） | standalone 模式：内置 Node sidecar 运行 Next standalone server，双击即独立运行，改动需重新构建才生效 |
 | 桌面壳（无控制台入口） | 双击 `tools/start/start-tauri.ps1` | 隐藏窗口启动 tauri dev 模式（等价于 `start-tauri-dev.exe`） |
 | Web 开发（可见日志） | 双击 `tools/start/start-web.ps1` | 控制台打印 dev-launcher 日志 |
 
-> Dev 模式下窗口初始加载 `splash.html` 启动页，随后自动探测 `http://localhost:3000` 就绪并跳转应用。
+> Dev 模式下窗口初始加载 `splash.html` 启动页，随后自动探测 `http://localhost:3100` 就绪并跳转应用。
 
 ---
 

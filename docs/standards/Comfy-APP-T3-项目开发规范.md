@@ -27,7 +27,7 @@
 | 桌面壳 | Tauri 2 | 套壳 WebView2 |
 | 日志 | pino + pino-pretty | 服务端结构化日志 |
 
-**开发端口**：dev server `localhost:3000`；本地 ComfyUI `:8188`。
+**开发端口**：dev server `localhost:3100`；本地 ComfyUI `:8188`。
 
 ---
 
@@ -364,7 +364,7 @@ CHANGELOG 写**对外差异**。完整细则见
 
 ```bash
 pnpm install        # postinstall 自动 prisma generate
-pnpm dev            # 开发（Turbopack localhost:3000）
+pnpm dev            # 开发（Turbopack localhost:3100）
 pnpm build && pnpm start   # 生产预览
 ```
 

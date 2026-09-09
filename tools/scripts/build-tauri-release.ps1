@@ -39,7 +39,7 @@ Log "  rustc : $(rustc --version 2>&1)"
 Log ""
 
 Log "[1.5] 同步启动页资源（prebuilt 壳只需内嵌 splash.html）"
-# prebuilt 模式的页面由 dev server（http://127.0.0.1:3000）提供，壳里只需要启动页；
+# prebuilt 模式的页面由 dev server（http://127.0.0.1:3100）提供，壳里只需要启动页；
 # standalone 资源（server.js / .next / Node sidecar）由 tools\build\build-standalone.ps1 负责。
 # 过去这里在 static 缺失时会跑完整 build-desktop.mjs，而 Next standalone 的 file
 # tracing 会把整个项目（node_modules / python-venv / 各构建产物）拷进 static（实测 8GB+），

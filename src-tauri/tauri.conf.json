@@ -5,7 +5,7 @@
   "identifier": "com.comfyapp.desktop",
   "build": {
     "frontendDist": "../src-tauri/splash-assets",
-    "devUrl": "http://localhost:3000",
+    "devUrl": "http://localhost:3100",
     "beforeDevCommand": "node scripts/dev.mjs",
     "beforeBuildCommand": "node scripts/build-desktop.mjs"
   },
