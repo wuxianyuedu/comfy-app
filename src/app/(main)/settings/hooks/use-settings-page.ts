@@ -49,6 +49,7 @@ import {
   type TaskType,
 } from "~/lib/llm/types";
 import { api } from "~/trpc/react";
+import { createAppRuntimeLogger } from "~/lib/app-runtime-log";
 
 export type Settings = {
   trainerUrl: string;
@@ -247,6 +248,9 @@ export interface SettingsPageController {
 
 /** 提示条停留时长。 */
 const FLASH_MS = 3500;
+
+/** 设置加载失败走面板可见的 app-runtime 通道（规范 07 §7.11）。 */
+const settingsRuntimeLog = createAppRuntimeLogger("settings");
 
 /* ── ComfyUI 启动日志 ─────────────────────────────────────
  * lifecycle.ts 会把 spawn 参数与子进程 stdout/stderr 追加进
@@ -1079,6 +1083,19 @@ export function useSettingsPage(): SettingsPageController {
   const errorText = hasError
     ? errorMessage(settingsQ.error ?? llmQ.error, "未知错误")
     : "";
+
+  /* 加载失败落 app-runtime 错误日志（面板轮询 source=app-runtime 可见）。
+   * 查询失败只体现在降级 UI，不经过 console / unhandledrejection，全局
+   * 错误钩子收不到——不主动补记的话，用户遇到失败时面板里什么也没有。
+   * 同一错误文案只记一次（ref 去重；重试后仍是同一错误不刷屏）。 */
+  const loggedErrorRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!hasError || errorText === loggedErrorRef.current) return;
+    loggedErrorRef.current = errorText;
+    settingsRuntimeLog.error(`设置加载失败 ${errorText}`, {
+      query: settingsQ.isError ? "setting.get" : "llm.configGet",
+    });
+  }, [hasError, errorText, settingsQ.isError]);
 
   const retry = useCallback(() => {
     void settingsQ.refetch();
