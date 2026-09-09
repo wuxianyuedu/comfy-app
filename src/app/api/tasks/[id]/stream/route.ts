@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
 import { taskRepository } from "@/lib/core/repository";
-import { subscribe } from "@/lib/comfyui/enqueue";
+import { getLogs, subscribe } from "@/lib/comfyui/enqueue";
 import type { TaskEvent } from "@/lib/comfyui/runner-state";
 import { parseValidationErrors } from "@/lib/comfyui/validation";
 
@@ -63,7 +63,16 @@ export async function GET(
             lastSent.progress = task.progress ?? 0;
             // logs 是 Prisma Json 列(运行时为 LogEntry[];send 收 unknown,无需断言)。
             const existing: unknown[] = Array.isArray(task.logs) ? task.logs : [];
-            existing.forEach((entry) => send({ type: "log", entry }));
+            // 优先回放 runner 内存日志（state().logs），它是每次 log() 写入的完整
+            // 现场、也是持久化到 DB 的源，恒为 DB 日志的超集。enqueue()/processQueue()
+            // 在 startGenerate 返回前、前端 EventSource 尚未订阅时就会输出
+            // 「任务已加入执行队列」「输入参数（workflowInputs，N 项）」等行；这些行
+            // 落库走 200ms 防抖，若 SSE 在防抖窗口内连接，只读 DB 会漏掉它们，
+            // 表现为「第二次执行（WS 已开，processQueue 同步发日志）没有显示执行参数」。
+            // 这里改读内存日志兜底：内存为空（如服务器重启）时回落 DB 日志。
+            const inMemory = getLogs(id);
+            const replaySrc = inMemory.length > 0 ? inMemory : existing;
+            replaySrc.forEach((entry) => send({ type: "log", entry }));
           }
         })
         .catch(() => {
