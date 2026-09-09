@@ -45,6 +45,19 @@
 | `shell.app.exe` | `{{shell.app.exe}}` | 编译出的 Tauri 壳 exe | `scripts/dev-launcher.ps1` 指向的 `src-tauri/target/release/app.exe` | 读 `dev-launcher.ps1` 中 `app.exe` 文件名与路径 |
 | `shell.splash` | `{{shell.splash}}` | 启动页文件名 | `src-tauri/tauri.conf.json` 的 `windows[0].url` | 读 `windows[0].url` 值（`splash.html`） |
 
+### 1.4 独立单值端口（非 dev 端口族）
+
+> 与 dev 端口的「端口族 + 语义清晰」不同，这类端口是**独立语义**，文档里用语义化
+> 占位符替代裸值（与 `shell.*` 类一致），doc:render 替换成真实值。
+>
+> **注**：Workshop MCP HTTP 服务端口（`tools/mcp-http.ts` 的 `MCP_HTTP_PORT ?? 3001`）
+> **未纳入**校验——它与 dev 回落端口 `3001` 同号，文档中出现 `3001` 时脚本无法区分
+> 是 dev 回落还是 MCP 端口，占位符/核对均会误报，故不做校验，避免制造噪音。
+
+| key | placeholder | meaning（可读语义） | source（权威定义文件） | extract |
+|---|---|---|---|---|
+| `registry.port` | `{{registry.port}}` | shadcn 本地团队 Registry 服务端口 | `tools/scripts/start-registry.ps1` 的 `$Port` | 读 `$Port` 值（`3874`） |
+
 ---
 
 ## 2. 路径类引用（文件 / 目录路径）
@@ -70,14 +83,22 @@
 
 ---
 
-## 3. 校验范围（试点）
+## 3. 校验范围
 
-> 当前 `pnpm doc:check` 只校验试点文档，避免一次性大面积改造：
+> `pnpm doc:check` 校验纳入 SCOPED_DOCS 的文档集合。已分两批纳入：
+>
+> **试点（启动链路类）**：
 > - `docs/standards/launch-and-build.md`
 > - `docs/startup-hotreload.md`
 > - `docs/guide-non-developer.md`
 >
-> 试点跑通后，再把其余文档逐步纳入（更改本表 `scope` 即可）。文档删除或新增路径
+> **扩展（含值类引用的其余文档）**：
+> - `docs/standards/Comfy-APP-T3-项目开发规范.md`
+> - `docs/standards/16-shadcn-ui与表单校验.md`
+>
+> 后续可继续把其余含「值类」（端口/exe 名独立值）或机器可核对引用的文档逐步纳入
+> （更改 `scripts/doc-facts.cjs` 的 `SCOPED_DOCS` 与登记表即可）。纯**路径类**引用
+> 已在第 2 节说明保留原样、由脚本核对文件存在，不依赖文档纳入。文档删除或新增路径
 > 时，同步维护本表与 `docs/README.md` 的文档体系索引。
 
 
