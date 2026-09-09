@@ -84,6 +84,8 @@
   `@formkit/auto-animate`，切换「时间倒序 / 时间正序」、切换状态筛选、删除任务时，
   卡片以 FLIP 位移 + 淡入淡出平滑换位，不再生硬跳变。仅用 `transform`/`opacity`
   合成器属性，符合规范 §2.7（不触发整树 layout 重排）。
+  该过渡**不再受系统「减弱动态效果」开关影响**：开启 `disrespectUserMotionPreference`，
+  在系统开启减弱动画时仍保留 250ms 的适量过渡动画（产品决策：允许适量动画而非完全禁用）。
 
 ### Fixed
 
