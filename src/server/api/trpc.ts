@@ -18,6 +18,9 @@ import { db } from "~/server/db";
 import { userRepository } from "@/lib/core";
 import { checkRateLimit } from "~/server/api/middleware/rate-limit";
 import { logger } from "~/server/lib/logger";
+import { createAppRuntimeLogger } from "@/lib/app-runtime-log";
+
+const trpcRuntimeLog = createAppRuntimeLogger("trpc");
 
 export interface TRPCUser {
   id: string;
@@ -86,15 +89,18 @@ export const createTRPCRouter = t.router;
 /**
  * Middleware for timing procedure execution.
  */
-const timingMiddleware = t.middleware(async ({ next, path }) => {
+const timingMiddleware = t.middleware(async ({ next, path, type }) => {
   const start = Date.now();
   if (t._config.isDev) {
     const waitMs = Math.floor(Math.random() * 400) + 100;
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
   const result = await next();
-  const end = Date.now();
-  logger.debug({ path, durationMs: end - start }, "trpc_timing");
+  const durationMs = Date.now() - start;
+  logger.debug({ path, durationMs, type }, "trpc_timing");
+  // 应用运行操作日志：每次 tRPC 调用（query/mutation）都进面板可见的
+  // app-runtime 通道，解决「中间操作看不到」问题。
+  trpcRuntimeLog.info(`${path} ${durationMs}ms`, { type });
   return result;
 });
 
