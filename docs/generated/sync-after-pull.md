@@ -58,7 +58,7 @@ pnpm install
 本仓库钉死 `pnpm@11.25.0`。若 `pnpm -v` 版本不一致或命令报错，用 Node 自带的
 corepack 对齐（corepack 会读取 `package.json` 的 `packageManager` 字段自动切换）：
 
-> **启动器已自动处理**：从 2026-09 起，`tools/start/start-tauri.ps1`、`tools/start/start-web.ps1`、`tools/start/run-local.ps1` 启动时都会自动检测 pnpm 实际版本与 `package.json` 声明是否一致；不一致时若 corepack 可用会先自动 `corepack prepare` 对齐，失败才需要你手动执行下面的命令。
+> **启动器已自动处理**：从 2026-09 起，`tools/start/start-tauri.ps1`、`tools/start/start-tauri-dev.ps1`、`tools/start/start-web.ps1`、`tools/start/run-local.ps1` 启动时都会自动检测 pnpm 实际版本与 `package.json` 声明是否一致；不一致时若 corepack 可用会先自动 `corepack prepare` 对齐，失败才需要你手动执行下面的命令。
 
 ```powershell
 corepack enable

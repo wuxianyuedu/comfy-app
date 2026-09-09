@@ -272,7 +272,8 @@ log/
 | 入口 | 逻辑 |
 |---|---|
 | `tools/start/start-web.ps1` | `scripts/dev-launcher.ps1` |
-| `tools/start/start-tauri.ps1`（隐藏窗口，原 `.vbs`） | `scripts/dev-launcher.ps1 -Tauri` |
+| `tools/start/start-tauri.ps1`（隐藏窗口，prebuilt，等价 `{{shell.exe.prebuilt}}`） | `scripts/dev-launcher.ps1 -Prebuilt` |
+| `tools/start/start-tauri-dev.ps1`（隐藏窗口，tauri dev，原 `start-tauri.ps1`） | `scripts/dev-launcher.ps1 -Tauri` |
 | `tools/start/run-local.ps1` | `scripts/prepare-local-run.ps1` |
 | `tools/start/verify-quality.ps1` | `scripts/quality-gate.ps1` |
 | `tools/start/sync-lint.ps1` | `scripts/sync-lint.ps1` |
@@ -316,7 +317,7 @@ reg delete "HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\comman
 
 | 目录 | 放什么 | 现有入口 |
 |---|---|---|
-| `tools/start/` | **启动/初始化类**：起 dev server、起桌面壳、环境自检、质量门禁 | `start-web.ps1`、`start-tauri.ps1`、`start-desktop.ps1`、`run-local.ps1`、`verify-quality.ps1`、`sync-lint.ps1`、`register-comfyapp-protocol.ps1` |
+| `tools/start/` | **启动/初始化类**：起 dev server、起桌面壳、环境自检、质量门禁 | `start-web.ps1`、`start-tauri.ps1`、`start-tauri-dev.ps1`、`start-desktop.ps1`、`run-local.ps1`、`verify-quality.ps1`、`sync-lint.ps1`、`register-comfyapp-protocol.ps1` |
 | `tools/build/` | **构建打包类**：编译壳、打启动器 exe、重建 static | `build-all.ps1`、`build-launcher*.ps1`、`build-standalone.ps1`、`build-tauri-release.ps1`、`rebuild-static.ps1` |
 | `tools/registry/` | 团队 shadcn Registry | `start-registry.ps1` |
 | `tools/studio/` | 数据库工具 | `start-studio.ps1` |
