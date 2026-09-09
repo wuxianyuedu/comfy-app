@@ -45,6 +45,17 @@
 | `shell.app.exe` | `{{shell.app.exe}}` | 编译出的 Tauri 壳 exe | `scripts/dev-launcher.ps1` 指向的 `src-tauri/target/release/app.exe` | 读 `dev-launcher.ps1` 中 `app.exe` 文件名与路径 |
 | `shell.splash` | `{{shell.splash}}` | 启动页文件名 | `src-tauri/tauri.conf.json` 的 `windows[0].url` | 读 `windows[0].url` 值（`splash.html`） |
 
+### 1.4 MCP HTTP 端口
+
+> MCP HTTP 服务与 dev server 分属不同用途，端口号必须**避开 dev 回落族**（`[COMFYAPP_PORT, +1, +2]`，
+> 默认 `3000/3001/3002`），否则脚本（如 `scripts/sync-lint.ps1` 的端口监听检测、doc:check 的
+> dev 端口族核对）会把 MCP 监听误判成 dev server 实例。因此 MCP 默认端口刻意取在 dev 回落族之外，
+> 且具体值由 `tools/mcp-http.ts` 单一权威定义，可通过环境变量 `MCP_HTTP_PORT` 覆盖。
+
+| key | 文档形态（保留直观值） | meaning（可读语义） | source（权威定义文件） | extract |
+|---|---|---|---|---|
+| `mcp.http.port` | `:4300` | MCP HTTP(Streamable) 服务监听端口 | `tools/mcp-http.ts` 的 `process.env.MCP_HTTP_PORT ?? 4300` | 读 `mcp-http.ts` 中的默认端口 |
+
 ---
 
 ## 2. 路径类引用（文件 / 目录路径）

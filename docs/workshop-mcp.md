@@ -32,7 +32,7 @@ pnpm db:push            # 或 pnpm exec drizzle-kit push --force
 # stdio：供外部 AI 客户端连接（如 Claude Desktop 的 mcpServers 配置）
 pnpm mcp:stdio
 
-# HTTP：独立服务，默认 http://localhost:3001/mcp（Streamable，无状态）
+# HTTP：独立服务，默认 http://localhost:4300/mcp（Streamable，无状态）
 pnpm mcp:http
 ```
 

@@ -67,6 +67,14 @@ function extractSplash() {
   return win.url;
 }
 
+function extractMcpHttpPort() {
+  // MCP HTTP 端口权威定义为 tools/mcp-http.ts 的默认值（可被 MCP_HTTP_PORT 覆盖）。
+  const t = readText("tools/mcp-http.ts");
+  const m = t.match(/MCP_HTTP_PORT\s*\?\?\s*(\d+)/);
+  if (!m) throw new Error("无法从 tools/mcp-http.ts 提取 MCP HTTP 端口");
+  return m[1];
+}
+
 // --------------------------------------------------------------------------
 // FACTS：机器可读事实定义（与 docs/reference-facts.md 的 key 一一对应）
 //   placeholder 类：文档用占位符替代裸值，doc:check 发现裸值即报错，
@@ -85,6 +93,7 @@ const FACTS = [
   { key: "dev.host", kind: "verify", extract: () => extractDevHostPort().host },
   { key: "dev.port", kind: "verify", extract: () => String(extractDevHostPort().port) },
   { key: "dev.port.fallback", kind: "verify", extract: extractFallbackPorts },
+  { key: "mcp.http.port", kind: "verify", extract: extractMcpHttpPort },
   // 路径类：核对文件存在
   { key: "path.tauri.conf", kind: "path", source: "src-tauri/tauri.conf.json" },
   { key: "path.lib.rs", kind: "path", source: "src-tauri/src/lib.rs" },
@@ -114,4 +123,5 @@ module.exports = {
   extractLauncherExe,
   extractLauncherExeByName,
   extractSplash,
+  extractMcpHttpPort,
 };
