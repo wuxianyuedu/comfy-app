@@ -15,6 +15,8 @@
 
 - **工作流编辑 IO 后，库里的参数默认值会跟着刷新（ISSUE #288）**：在画布编辑器的 IO 预览里改了参数默认值并保存，回到工作流库时，「画布节点」与「参数配置」两个页签里未被改动的参数会显示新默认值，你已经手动改过的参数则保持你填的值不变。此前服务端详情缓存与客户端查询都没有随保存失效，回到库界面仍显示旧默认值。
 
+- **设置页「启动 ComfyUI」按钮状态同步（ISSUE #296）**：ComfyUI 被自动启动（提交任务时未运行触发自动拉起）期间，设置页原本仍显示可点击的「启动 ComfyUI」按钮，与状态行「正在启动…」不一致。现该按钮在服务端启动进行时同步禁用并显示「启动中…」，避免用户在自动启动窗口期内重复触发启动。
+
 - **修复设置页 / 工作区打开即整页报错（“An unexpected Turbopack error occurred”）**：客户端逻辑层误把 Node-only 的 `app-runtime-log` 模块（顶层 `import node:fs`）引入客户端 bundle，Turbopack 编译 `/(main)/settings` 与 `/workspace` 时报 `does not support external modules (request: node:fs)` 导致页面 500（回归，由提交 29d8b1d 引入）。现客户端补记 `app-runtime` 日志改走服务端写入通道（新增 `POST /api/logs/app-runtime` + `postAppRuntimeLog()`），设置页加载失败的日志仍能落到应用日志面板，页面恢复正常。
 
 ### Added
