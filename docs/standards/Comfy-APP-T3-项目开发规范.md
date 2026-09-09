@@ -6,6 +6,11 @@
 
 ---
 
+> **占位符约定**：本文中 `{{...}}` 形式的占位符代表文档引用的真实值（如可执行文件名、地址、端口），
+> 真实值由 `pnpm doc:check` 运行时从源码/配置动态提取并核对。占位符语义见
+> [`docs/reference-facts.md`](../reference-facts.md)。改动上游源码后可运行
+> `pnpm doc:check` 检查本文是否有值未同步。
+
 ## 1. 项目总览与技术栈
 
 | 维度 | 选型 | 说明 |
@@ -22,7 +27,7 @@
 | 桌面壳 | Tauri 2 | 套壳 WebView2 |
 | 日志 | pino + pino-pretty | 服务端结构化日志 |
 
-**开发端口**：dev server `:3000`；本地 ComfyUI `:8188`。
+**开发端口**：dev server `localhost:3000`；本地 ComfyUI `:8188`。
 
 ---
 
@@ -359,7 +364,7 @@ CHANGELOG 写**对外差异**。完整细则见
 
 ```bash
 pnpm install        # postinstall 自动 prisma generate
-pnpm dev            # 开发（Turbopack :3000）
+pnpm dev            # 开发（Turbopack localhost:3000）
 pnpm build && pnpm start   # 生产预览
 ```
 
