@@ -7,8 +7,8 @@
 到本目录并纳入版本控制。
 
 > **结构约定（2026-09-04 修订）**：Windows 双击入口一律 `*.ps1`，按用途归入子目录
-> （`start/` 启动与初始化、`build/` 打包类、`registry/` 团队 Registry、`studio/` 数据库
-> 工具等）；业务逻辑放在 `tools/scripts/*.ps1`，与 `build/` 下的入口一一对应（同名的两个
+> （`start/` 启动与初始化、`build/` 打包类、`docs/` 文档工具、`registry/` 团队 Registry、
+> `studio/` 数据库工具等）；业务逻辑放在 `tools/scripts/*.ps1`，与 `build/` 下的入口一一对应（同名的两个
 > 文件必然一个是入口、一个是逻辑，见下方「入口 / 逻辑对照」）。入口只做三件事：定位项目根、
 > 调用逻辑脚本、透传退出码——这些公共能力收敛在 `scripts/entry-common.ps1`。所有 `.ps1`
 > 以 UTF-8 with BOM 保存，避免中文乱码。
@@ -43,6 +43,7 @@
 | `build/build-standalone.ps1` | build/ | 壳（standalone 用） | 完整生产构建独立壳：`pnpm tauri build --no-bundle`，产出不连 dev server 的可分发壳 |
 | `build/build-all.ps1` | build/ | 一键编排 | 构建 release 壳 + 打包 `start-tauri.exe` |
 | `build/rebuild-static.ps1` | build/ | 资源 | 清理并重建 `src-tauri/static`（standalone / 嵌入资源来源） |
+| `docs/generate-docs.ps1` | docs/ | 文档 | 一键生成原文文档：`pnpm doc:check` 校验一致性 + `pnpm doc:render` 生成 `docs/generated/`（逻辑在 `scripts/generate-docs.ps1`） |
 | `registry/start-registry.ps1` | registry/ | 团队 Registry | 启动本地 shadcn Registry HTTP 服务（`D:/dev/Comfy-APP-T3/registry`，供 `shadcn add @comfy-app-t3/*`） |
 | `start-tauri.spec` | (根) | 打包配置 | PyInstaller（onedir）；入口名由环境变量 `LAUNCHER_NAME` 决定，一份 spec 服务三个入口 |
 | `README.md` | (根) | 文档 | 本文件 |
@@ -71,6 +72,7 @@
 | `start/run-local.ps1` | `scripts/prepare-local-run.ps1` |
 | `start/verify-quality.ps1` | `scripts/quality-gate.ps1` |
 | `start/sync-lint.ps1` | `scripts/sync-lint.ps1` |
+| `docs/generate-docs.ps1` | `scripts/generate-docs.ps1` |
 | `start/register-comfyapp-protocol.ps1` | `scripts/install-comfyapp-helper.ps1` |
 | `start/start-desktop.ps1` | —（自检逻辑内联在入口里，不另起逻辑脚本） |
 
