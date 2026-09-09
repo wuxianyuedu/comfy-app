@@ -412,3 +412,20 @@ pnpm build && pnpm start   # 生产预览
 - 工作区文件批量转为 LF：读取文件字节流，将 `\r\n` 替换为 `\n` 后写回（Python 脚本即可，注意二进制读写避免编码损坏）。
 - 提交时使用 `git -c core.autocrlf=false add <file>` 让 LF 原样入库，避免 autocrlf 的 clean 过滤再次改写换行；`core.autocrlf=true` 时 clean 会把 CRLF 转 LF 入库、checkout 又转回 CRLF，造成工作区与 index 反复不一致。
 - 提交前必须复查 `git diff HEAD~1 HEAD --numstat`，确认换行统一为 LF 后无异常噪声混入。
+
+### 11.3 Linux/CI 装依赖失败（better-sqlite3 原生模块缺编译工具链）
+
+**现象**：Linux/CI 环境执行 `pnpm install` 时，better-sqlite3（Drizzle 的 sqlite 驱动）
+的安装脚本走 `node-gyp rebuild` 编译，若构建机缺 `make`/`gcc`/`g++`（未装 `build-essential`）
+则依赖安装阶段直接失败。
+
+**判定**：报错指向 node-gyp / 编译失败，且能确认缺 make/gcc/g++；这**不是代码或依赖问题**，
+仅代表构建机缺编译工具链。
+
+**处理**：
+- 在跑 `pnpm install` 前先装编译工具链：Ubuntu/Debian 用 `apt-get install -y build-essential`，
+  Arch 用 `base-devel`。
+- better-sqlite3@13 内置各平台 prebuild 二进制，装好工具链后通常命中 prebuild 无需本地编译，
+  编译脚本仅兜底；此步骤是低成本保险，保证 CI 任意情况都能装完依赖。
+- CI 已在 `.github/workflows/ci.yml` 的依赖安装前显式安装该工具链；详见
+  [15.6](standards/15-附录.md#156-疑难排查记录随问题归档对齐主规范-11) 对应条目。
