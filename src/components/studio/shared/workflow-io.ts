@@ -353,6 +353,45 @@ export function reconcileInputValues(
 }
 
 /**
+ * 默认值刷新（保覆盖）：把新播种出来的默认值并回当前表单值。
+ *
+ * 语义（ISSUE #288）：IO 编辑里改了默认值后回到工作流库，**未被用户覆盖**的
+ * 参数要跟着刷新到新默认值；**已被用户改过**的参数保持用户填的值。
+ *
+ * 「有没有被覆盖」只能靠 `当前值 === 上次播种的默认值` 判定——表单值本身不带
+ * 来源标记。因此 `baseline` 必须是上一次真正播种下去的那张默认值表：若改用
+ * 「按当前 IO 现算一份默认值」当基准，作者刚改的默认值会被误判成用户覆盖，
+ * 界面永远刷不到新值（这正是本 issue 要修的现象）。
+ *
+ * @param current  当前表单值
+ * @param baseline 上一次播种下去的默认值表（首次播种传 null → 直接全量采用）
+ * @param fresh    按最新 IO 播种出来的默认值表
+ * @returns 合并后的新值表；没有任何键需要变更时返回 null（调用方可跳过 setState）
+ */
+export function mergeRefreshedDefaults(
+  current: Record<string, unknown>,
+  baseline: Record<string, unknown>,
+  fresh: Record<string, unknown>
+): Record<string, unknown> | null {
+  const out: Record<string, unknown> = {};
+  let changed = false;
+  for (const key of Object.keys(fresh)) {
+    /* 基线里没有的键 = 新暴露的 pin（作者刚勾选），按「未覆盖」处理，
+     * 直接采用默认值，否则它会以 undefined 留在表单里。 */
+    const inBaseline = Object.prototype.hasOwnProperty.call(baseline, key);
+    const untouched = !inBaseline || (key in current && current[key] === baseline[key]);
+    out[key] = untouched ? fresh[key] : current[key];
+    if (out[key] !== current[key]) changed = true;
+  }
+  /* 被摘掉的 pin（取消勾选 / 工作流重新导入后消失）：值表里不再保留，
+   * 否则它会随 payload 发给一个已经不存在的输入。 */
+  for (const key of Object.keys(current)) {
+    if (!(key in out)) changed = true;
+  }
+  return changed ? out : null;
+}
+
+/**
  * Turn the flat `{ ioKey: value }` map into the wire payload consumed by
  * /api/generate → buildCustomWorkflow, i.e. explicit (nodeId, name, value)
  * triples.  Keys are re-resolved against the live IO map so a renamed /

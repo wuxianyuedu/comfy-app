@@ -35,6 +35,7 @@ import { DynamicWorkflowForm } from "../shared/DynamicWorkflowForm";
 import {
   defaultInputValues,
   getMissingRequiredInputs,
+  mergeRefreshedDefaults,
   resolveEntrySeedMode,
   splitWorkflowIO,
   toWorkflowInputsPayload,
@@ -102,13 +103,33 @@ export function WorkflowCanvasNodePreview({
    *  「画布样式预览」初始即展示该模式下配置的默认值。不强制（io 尚未就绪 /
    *  defaultMode 空时跳过），用户后续可自由覆盖。 */
   const seedRef = useRef<string | null>(null);
+  /* 上一次播种下去的默认值表 —— 判断「用户有没有改过这一格」的基线（见
+   *  mergeRefreshedDefaults）。它必须始终是「播种时的那一份」，所以只在播种
+   * 处写入，其余时候连引用都不能动。 */
+  const baselineRef = useRef<Record<string, unknown>>({});
+  /* 播种键同时含 workflowId 与 defaultMode：换工作流 / 换模式都会落到下面的
+   * 「整表重播」分支。这一步是必须的——若只按 mode 判定，上一个工作流的
+   * 用户覆盖值会被当成新工作流的覆盖值保留下来（ioKey 恰好同名时）。 */
   const activeSeedKey = `${workflowId ?? ""}|${defaultMode ?? ""}`;
   useEffect(() => {
     if (!workflowIO) return;
-    if (seedRef.current === activeSeedKey) return;
+    const fresh = defaultInputValues(workflowIO, defaultMode ?? null);
+    if (seedRef.current === activeSeedKey) {
+      /* 同一个工作流 + 同一个模式，IO 变了 = 作者在编辑器里改了默认值。
+       *  此时不能整表覆盖（会吃掉用户已填的覆盖值），只把「仍等于旧默认值」
+       *  的那一格刷新到新默认值；用户改过的格子原样保留。 */
+      setValues((current) => {
+        const merged = mergeRefreshedDefaults(current, baselineRef.current, fresh);
+        return merged ?? current;
+      });
+      baselineRef.current = fresh;
+      return;
+    }
+    /* 首次播种 / 换工作流 / 换模式：整表采用新默认值，清掉上一份残留。 */
     seedRef.current = activeSeedKey;
-    setValues(defaultInputValues(workflowIO, defaultMode ?? null));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在 workflow/模式变化时播种一次
+    baselineRef.current = fresh;
+    setValues(fresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在 workflow/模式变化时整表播种，IO 变化走上面的保覆盖刷新
   }, [workflowIO, workflowId, defaultMode]);
 
   /* 重开窗口恢复：若 store 里有本工作流仍在运行的登记，恢复「生成中」视角。

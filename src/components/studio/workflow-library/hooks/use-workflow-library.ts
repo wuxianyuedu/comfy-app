@@ -98,6 +98,8 @@ export interface WorkflowLibraryController {
   handleResync: (id: string, name: string) => Promise<void>;
   handleLoadPending: (pending: PendingRow) => Promise<void>;
   handleEdit: (id: string) => void;
+  /** 关闭画布编辑器：清 editingId 并失效该工作流的详情缓存（ISSUE #288）。 */
+  handleEditorClose: () => void;
 }
 
 /** 列表数据与全部交互状态 —— 见文件头注释的分层说明。 */
@@ -285,6 +287,19 @@ export function useWorkflowLibrary(
 
   const handleEdit = useCallback((id: string) => setEditingId(id), []);
 
+  /* 关闭编辑器时失效该工作流的详情缓存。IO 编辑里改了默认值 / 覆盖层后，
+   * 库详情（画布预览 + 参数配置）必须重拉富化 IO 才能看到新默认值；
+   * react-query 的 staleTime 会让已挂载的库详情继续吃旧数据，回到库界面
+   * 就表现为「默认值没更新」（ISSUE #288）。两种写入路径都覆盖：
+   * 点「保存」落库的 workflowIO，以及排序等静默写。 */
+  const handleEditorClose = useCallback(() => {
+    const id = editingId;
+    setEditingId(null);
+    if (!id) return;
+    void utils.workflow.detail.invalidate({ id });
+    void utils.workflow.detailFull.invalidate({ id });
+  }, [editingId, utils]);
+
   return {
     workflows: filteredWorkflows,
     pendingRows,
@@ -332,6 +347,7 @@ export function useWorkflowLibrary(
     handleResync: actions.resyncWorkflow,
     handleLoadPending: actions.handleLoadPending,
     handleEdit,
+    handleEditorClose,
     patchModes: actions.patchModes,
     patchModelTags: actions.patchModelTags,
     patchWorkflowIO: actions.patchWorkflowIO,

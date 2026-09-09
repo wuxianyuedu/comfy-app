@@ -115,7 +115,10 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     async (id: string, workflowIO: Record<string, unknown>) => {
       try {
         await updateMut.mutateAsync({ id, workflowIO });
+        /* detailFull 才是预览表单的数据源（它带服务端富化的 defaultValue），
+         * 只失效 detail 的话富化 IO 的缓存查询不会重拉 → 默认值不刷新。 */
         await utils.workflow.detail.invalidate({ id });
+        await utils.workflow.detailFull.invalidate({ id });
       } catch (e) {
         toast.error("更新参数配置失败", errorMessage(e, "未知错误"));
       }
