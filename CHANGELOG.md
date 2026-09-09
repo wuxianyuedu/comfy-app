@@ -81,6 +81,15 @@
 
 ### Fixed
 
+- **修复 dev server 重启后 reaper 误判正在执行的任务为失败**：dev server
+  「重启中」标记源于前端对 `/api/comfy/stats` 的存活探测（网络层短暂失败即告警），
+  进程未必真的重启。此前 reaper 仅凭任务 `createdAt` 超过 60s 且 ComfyUI
+  `/history`/`/queue` 均无该 prompt 就判定为 orphan FAILED，会误伤仍在被
+  comfy-cli / WS 正常监控执行的任务（用户会遇到「任务在跑却被报『重启后无人监控』」）。
+  现在 reaper 在对账前先确认该 prompt 是否仍被当前进程的 in-memory runner 监控
+  （`promptToTask` 中有映射）；仍有监控者则跳过，交给正常收口路径——只有真正
+  冷重启（内存状态丢失、无人认领）的任务才交给 reaper 对账。
+
 - **修复提交 raw 子图工作流时「生成后控制」误写坏模型名**：comfy-cli 路径给
   子图 wrapper 节点（如 z_image 等 `class_type` 为 UUID 的模板）的种子设
   「生成后控制 = 随机值」时，会把 `randomize` 写进种子后面的下一个真实控件
