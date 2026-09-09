@@ -11,8 +11,9 @@
 
 import { taskRepository } from "../core/repository";
 import { resolveComfyBase } from "./client";
+import { cliProcs } from "./executor-cli";
 import { isComfyStarting } from "./lifecycle";
-import { state, log, persistLogs } from "./runner-state";
+import { state, log, persistLogs, type RunnerState } from "./runner-state";
 import { logger } from "~/server/lib/logger";
 
 /* ── DB-side QUEUED reaper ─────────────────────────
@@ -25,14 +26,28 @@ import { logger } from "~/server/lib/logger";
  *
  * Two layers of fix:
  *   (a) reapStaleQueuedTasks() — runs on module load + every 30s
- *       afterwards.  Any task that has been QUEUED for > STALE_MS
- *       without a `promptId` is marked FAILED with a clear reason
- *       so the user can see the explanation in the log panel and
- *       re-run.  Tasks WITH a promptId are ComfyUI's responsibility
- *       (it's in ComfyUI's queue, not ours), so we leave them alone.
+ *       afterwards.  An *orphaned* task that has been QUEUED for
+ *       > STALE_MS without a `promptId` AND has no in-memory footprint
+ *       in the current process (dev cold restart wiped the runner) is
+ *       marked FAILED with a clear reason so the user can see the
+ *       explanation in the log panel and re-run.  Tasks WITH a promptId
+ *       are ComfyUI's responsibility (it's in ComfyUI's queue, not
+ *       ours), so we leave them alone.
  *   (b) cancelTask() now also handles the DB-only state (no in-memory
  *       entry) so the user has an escape hatch even before the
  *       30s reaper tick fires.
+ *
+ *  IMPORTANT scope note: the QUEUED reaper must ONLY reap tasks that are
+ *  truly orphaned (dev cold restart wiped the in-memory runner).  A task
+ *  that the *current* process is still actively handling must be left
+ *  alone — even if its DB row is `QUEUED, promptId=null`.  The raw
+ *  UI-format path (@see executeViaComfyCli) does NOT mark the task
+ *  RUNNING / write the promptId until the spawned comfy-cli process has
+ *  converted the workflow and POSTed it to ComfyUI.  That window can
+ *  exceed STALE_MS on a slow Python boot / model load, so without an
+ *  in-memory claim check the reaper would wrongly kill a healthy
+ *  in-flight task ("任务卡在队列超过 Ns…无人 re-claim").  The check
+ *  below mirrors the RUNNING reaper's `promptToTask` guard.
  */
 const REAPER_MS = 30_000;
 const STALE_MS = 30_000; // a QUEUED task older than this with no promptId is "dead"
@@ -71,11 +86,40 @@ interface ReaperGlobal {
 const rg = globalThis as unknown as Record<string, ReaperGlobal | undefined>;
 const reaperState: ReaperGlobal = rg[REAPER_GLOBAL] ?? { handle: null, reaping: new Set() };
 rg[REAPER_GLOBAL] = reaperState;
+/**
+ * Pure in-memory claim check: is `taskId` still owned by the CURRENT dev
+ * server process (as opposed to a true orphan left behind by a cold
+ * restart)?  A QUEUED task can legitimately be mid-flight with NO promptId
+ * written yet — the raw UI-format path (@see executeViaComfyCli) only calls
+ * `markRunning` once the spawned comfy-cli process echoes back a
+ * `prompt_id`.  During that (possibly >STALE_MS) window the DB row is still
+ * `QUEUED, promptId=null`, so a naive reaper would wrongly kill it.
+ *
+ * Signals, cheapest first:
+ *   (a) still waiting in `s.queue`  → about to be de-queued;
+ *   (b) a comfy-cli child process is driving it (cliProcs) → raw path is
+ *       mid-flight, promptId not yet echoed;
+ *   (c) executedWorkflow already recorded → raw path started.
+ * Any true orphan (cold restart wiped the in-memory runner) has none of
+ * these set.  Mirrors the RUNNING reaper's `promptToTask` guard.
+ */
+export function isTaskClaimedInProcess(
+  s: Pick<RunnerState, "queue" | "executedWorkflow">,
+  hasCliProc: (taskId: string) => boolean,
+  taskId: string
+): boolean {
+  return (
+    s.queue.some((job) => job.taskId === taskId) ||
+    hasCliProc(taskId) ||
+    s.executedWorkflow.has(taskId)
+  );
+}
 
 async function reapStaleQueuedTasks(): Promise<void> {
   try {
     const cutoff = new Date(Date.now() - STALE_MS);
     const stale = await taskRepository.listStaleQueued(cutoff, 20);
+    const s = state();
     for (const t of stale) {
       /* In-process guard: if another (concurrent) reaper tick already
        *  claimed this task, skip to avoid duplicate FAILED logs.  The
@@ -85,6 +129,14 @@ async function reapStaleQueuedTasks(): Promise<void> {
       reaperState.reaping.add(t.id);
       try {
         const ageSec = Math.round((Date.now() - t.createdAt.getTime()) / 1000);
+        /* In-memory claim guard: if the current process still owns this
+         *  task, it is NOT an orphan — leave it for the normal executor
+         *  path to finalise.  Only a task with no in-memory footprint
+         *  (dev cold restart) is a true orphan. */
+        if (isTaskClaimedInProcess(s, (id) => cliProcs.has(id), t.id)) {
+          log(t.id, "warn", `任务仍在当前进程的执行链中（已 ${ageSec}s），跳过 reaper 回收——等待 prompt_id 回传`);
+          continue;
+        }
         /* ComfyUI 正在自动启动（lifecycle 单飞进行中）时暂不回收——
          * 启动可能需要 30-120s，任务会在 WS 连上后正常出队执行。 */
         if (isComfyStarting()) {
@@ -98,7 +150,6 @@ async function reapStaleQueuedTasks(): Promise<void> {
          *  the DB row FAILED.  No processQueue() call — there is no
          *  in-memory job for this task, and we explicitly do NOT want
          *  to re-enqueue an unknown workflow. */
-        const s = state();
         s.emitter.emit(t.id, {
           type: "state",
           status: "FAILED",
