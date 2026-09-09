@@ -88,20 +88,38 @@ export const createTRPCRouter = t.router;
 
 /**
  * Middleware for timing procedure execution.
+ *
+ * 面板可见日志只在「出问题」时才写：调用失败或耗时超过阈值视为问题。
+ * 正常成功的调用仅走 pino `logger.debug`（落在 nextjs 文件日志，方便诊断），
+ * 不写入面板可见的 app-runtime 通道，避免每条 query/mutation 都在面板累积成几千条噪音。
  */
+const SLOW_QUERY_THRESHOLD_MS = 1000;
+
 const timingMiddleware = t.middleware(async ({ next, path, type }) => {
   const start = Date.now();
   if (t._config.isDev) {
     const waitMs = Math.floor(Math.random() * 400) + 100;
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
-  const result = await next();
-  const durationMs = Date.now() - start;
-  logger.debug({ path, durationMs, type }, "trpc_timing");
-  // 应用运行操作日志：每次 tRPC 调用（query/mutation）都进面板可见的
-  // app-runtime 通道，解决「中间操作看不到」问题。
-  trpcRuntimeLog.info(`${path} ${durationMs}ms`, { type });
-  return result;
+  try {
+    const result = await next();
+    const durationMs = Date.now() - start;
+    logger.debug({ path, durationMs, type }, "trpc_timing");
+    // 仅当调用明显变慢（预期外的慢）才在面板给一条 warn，正常调用不打扰用户。
+    if (durationMs >= SLOW_QUERY_THRESHOLD_MS) {
+      trpcRuntimeLog.warn(`${path} ${durationMs}ms`, { type });
+    }
+    return result;
+  } catch (cause) {
+    const durationMs = Date.now() - start;
+    logger.debug({ path, durationMs, type }, "trpc_timing");
+    // 调用抛错 = 出问题：在面板可见通道记一条 error，便于用户当场定位。
+    trpcRuntimeLog.error(`${path} 失败 ${durationMs}ms`, {
+      type,
+      error: cause instanceof Error ? cause.message : String(cause),
+    });
+    throw cause;
+  }
 });
 
 /**
