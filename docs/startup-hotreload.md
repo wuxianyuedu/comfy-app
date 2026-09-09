@@ -17,7 +17,7 @@
 
 | 启动方式 | 入口 | 模式 | 实际加载的内容 | 是否需要编译 Rust | 热更新能力 |
 |----------|------|------|----------------|------------------|------------|
-| **prebuilt（默认）** | 双击 `{{shell.exe.prebuilt}}` / `tools/start/start-tauri.ps1` | **dev（开发态，固定）** | 秒出窗口并连 dev server（`dev-launcher.ps1` 起 `pnpm dev`）。launcher 通过 `COMFYAPP_LAUNCH_MODE=prebuilt` 显式告知 Rust 壳走 `COMFYAPP_DEV_URL`，**不再依赖 `resource_dir()` 探测**——`{{shell.exe.prebuilt}}` 恒为开发态，与是否跑过 `pnpm tauri build` 无关 | 否（壳已就绪；`{{shell.exe.prebuilt}}` 自动起 dev server） | 前端源码可 HMR；Rust/配置改动需重新 `cargo build --release --features custom-protocol` |
+| **prebuilt（默认）** | 双击 `{{shell.exe.prebuilt}}` | **dev（开发态，固定）** | 秒出窗口并连 dev server（`dev-launcher.ps1` 起 `pnpm dev`）。launcher 通过 `COMFYAPP_LAUNCH_MODE=prebuilt` 显式告知 Rust 壳走 `COMFYAPP_DEV_URL`，**不再依赖 `resource_dir()` 探测**——`{{shell.exe.prebuilt}}` 恒为开发态，与是否跑过 `pnpm tauri build` 无关 | 否（壳已就绪；`{{shell.exe.prebuilt}}` 自动起 dev server） | 前端源码可 HMR；Rust/配置改动需重新 `cargo build --release --features custom-protocol` |
 | **tauri dev** | 双击 `{{shell.exe.dev}}` / `{{shell.exe.prebuilt}} --tauri-dev` / `tools/start/start-tauri-dev.ps1` / `pnpm tauri dev` | tauri dev | `cargo` 重新编译 Rust 壳 + 起 dev server，前端/后端同源 | 是（增量编译，首次较慢） | 前端 **和** Rust 均热重载 |
 | **standalone 安装包** | `pnpm tauri build` 产出的安装包 | standalone | `beforeBuildCommand` 组装 `src-tauri/static`（standalone `server.js` + `.next/static` + Node sidecar）；打包后 `resource_dir()=resources` 根、`server.js` 在根 ⇒ 壳以 Node sidecar 运行内嵌 server，**不依赖 dev server** | 是（cargo release + 打包） | 全部不可热更新（除非重新构建发布包） |
 
@@ -70,7 +70,7 @@
 ## 5. 三种启动方式各有一个独立 exe（已实现）
 
 原痛点：`--tauri-dev` 带参数在「双击 / 发给他人」场景不便；dev 入口原本只有 `.vbs`
-（dev 入口为 `tools/start/start-tauri-dev.ps1`，prebuilt 入口为 `tools/start/start-tauri.ps1`；双击关联见 `scripts\enable-ps1-double-click.ps1`）。
+（2026-09-04 起该入口改为 `tools/start/start-tauri-dev.ps1`，双击关联见 `scripts\enable-ps1-double-click.ps1`）。
 现已实现**一份 launcher 源码打包出三个独立 exe**，双击即用、无需记参数：
 
 | 启动方式 | 独立 exe 入口 | 打包脚本 | 双击即用 |
