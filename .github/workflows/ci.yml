@@ -29,6 +29,15 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Install build toolchain
+        # better-sqlite3（Drizzle 的 sqlite 驱动）的原生模块安装脚本会走
+        # node-gyp rebuild；ubuntu-latest 默认不含完整编译工具链，缺
+        # make/gcc/g++ 会让 `pnpm install --frozen-lockfile` 在依赖安装阶段
+        # 直接失败（此前 Linux 环境踩过此坑）。此处显式安装 build-essential。
+        # 即使 better-sqlite3 命中内置 prebuild 二进制，此步骤也仅是兜底开销，
+        # 保证 CI 在任何情况下都能正常装完依赖。
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
       - name: Install dependencies
         # 门禁用 pnpm（AGENTS.md 硬规则 1：npm 11 在本项目解析 typescript 别名
         # 链会崩溃）。--frozen-lockfile 保证 CI 装的就是锁文件里的版本。
