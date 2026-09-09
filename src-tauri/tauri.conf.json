@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../src-tauri/splash-assets",
     "devUrl": "http://localhost:3000",
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "node scripts/dev.mjs",
     "beforeBuildCommand": "node scripts/build-desktop.mjs"
   },
   "app": {
