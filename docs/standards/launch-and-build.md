@@ -30,6 +30,26 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 - **Rust 壳**只负责窗口与导航，不启动任何进程（dev 模式）；
 - 任何一层失败都必须有人类可见的出口（弹窗/窗口内提示），禁止只写文件。
 
+### 1.1 端口统一配置（COMFYAPP_PORT）
+
+应用端口**不做硬编码**，统一由 `.env` 的 `COMFYAPP_PORT` 控制（默认 `3000`）。
+当端口与其他应用冲突时，改 `.env` 一处、重启应用即可，无需改代码。各层读取来源：
+
+| 层 | 读取方式 |
+|---|---|
+| dev-launcher.ps1 | 启动时解析 `.env` 的 `COMFYAPP_PORT`，用于 `pnpm dev -p`、健康检查、端口清理、`COMFYAPP_DEV_URL` |
+| start_tauri_launcher.py | `_read_app_port()` 解析 `.env`，用于 `COMFYAPP_DEV_URL` 与 launch-status 的 `app_url` |
+| Rust 壳（lib.rs） | `default_dev_url()` 读 `COMFYAPP_PORT` 环境变量（fallback 时用） |
+| tauri.conf.json | `beforeDevCommand: node scripts/dev.mjs`，读 `.env` 端口后启动 next dev |
+| 前端 tRPC | `process.env.COMFYAPP_PORT ?? process.env.PORT ?? 3000` |
+
+> 取值合法性：1~65535；非法或缺失时统一回退 3000，并在启动日志中 WARN 提示。
+>
+> **推荐经 `start-tauri.ps1` / `start-tauri.exe`（launcher）启动**：launcher 会把
+> `COMFYAPP_DEV_URL` / `COMFYAPP_PORT` 注入壳进程，`tauri.conf.json` 的静态 `devUrl`
+> 仅作为兜底，不参与主导航。若绕过 launcher 直接 `pnpm tauri dev` 且改了端口，
+> 需同步修改 `src-tauri/tauri.conf.json` 的 `build.devUrl` 指向新端口。
+
 ## 2. 启动预检（dev-launcher.ps1，新增于 2026-09-02）
 
 预检分两段：**工具链门禁**（`Test-ToolchainGate`）在预编译壳弹出**之前**执行，只做只读致命快检——命中即 throw，让 python 启动器在 Tauri 窗口出现前弹 MessageBox 告知根因（双击 exe 场景下窗口未现即弹窗）；**完整依赖预检**在壳窗口出现之后执行（见 §1：窗口秒出后再由 splash 展示进度）。

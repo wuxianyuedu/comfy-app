@@ -519,6 +519,24 @@ def _build_failure_message(project_root: str, detail: str) -> str:
     return "\n\n".join(parts)
 
 
+def _read_app_port(project_root: str) -> int:
+    """读取 .env 中 COMFYAPP_PORT，未配置或非法时回退 3000。"""
+    default = 3000
+    try:
+        env_path = os.path.join(project_root, ".env")
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("COMFYAPP_PORT="):
+                    val = line.split("=", 1)[1].strip().strip("'\"")
+                    port = int(val)
+                    if 1 <= port <= 65535:
+                        return port
+    except (OSError, ValueError):
+        pass
+    return default
+
+
 def _write_status(
     project_root: str,
     phase: str,
@@ -527,12 +545,14 @@ def _write_status(
     ready: bool = False,
     error: bool = False,
     elapsed: float = 0.0,
-    app_url: str = "http://127.0.0.1:3000/workspace",
+    app_url: str | None = None,
 ) -> None:
     """把当前启动状态写入 <project_root>/run/launch-status.json。
 
     Tauri 内嵌启动页通过调用 Rust command 读取该文件并展示进度。
     """
+    if app_url is None:
+        app_url = "http://127.0.0.1:%d/workspace" % _read_app_port(project_root)
     try:
         info = LAUNCH_PHASES.get(phase, LAUNCH_PHASES["initial"])
         payload = {
@@ -1777,7 +1797,7 @@ def main(argv: list[str] | None = None) -> int:
     # 2026-08-29：用 127.0.0.1 替代 localhost，避免部分 Windows 把 localhost 优先
     # 解析到 ::1（IPv6）而 Next.js dev server 监听在 IPv4，导致 ERR_CONNECTION_REFUSED。
     os.environ["COMFYAPP_PROJECT_ROOT"] = project_root
-    os.environ["COMFYAPP_DEV_URL"] = "http://127.0.0.1:3000/workspace"
+    os.environ["COMFYAPP_DEV_URL"] = "http://127.0.0.1:%d/workspace" % _read_app_port(project_root)
 
     # 检测 comfy-cli 虚拟环境；缺失则后台触发安装（不阻塞启动）
     ensure_comfy_cli_venv(project_root)

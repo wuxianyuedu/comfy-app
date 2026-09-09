@@ -181,7 +181,14 @@ Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
 Write-Host "  初始化完成！" -ForegroundColor Green
 Write-Host "  接下来请双击 tools\start\start-web.ps1 启动。" -ForegroundColor Green
-Write-Host "  启动后再用浏览器打开：http://localhost:3000" -ForegroundColor Green
+# 端口由 .env 的 COMFYAPP_PORT 控制（默认 3000），此处读取后提示真实地址
+$showedPort = "3000"
+$portLine = Get-Content -LiteralPath $envFile -Encoding UTF8 | Where-Object { $_ -match "^\s*COMFYAPP_PORT\s*=" } | Select-Object -First 1
+if ($portLine) {
+  $pv = (($portLine -split "=", 2)[1]).Trim().Trim('"').Trim("'")
+  if ($pv -match "^[0-9]+$") { $showedPort = $pv }
+}
+Write-Host "  启动后再用浏览器打开：http://localhost:$showedPort" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
 }
