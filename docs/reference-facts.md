@@ -47,19 +47,23 @@
 
 ### 1.4 独立单值端口（非 dev 端口族）
 
-> 与 dev 端口的「端口族 + 语义清晰」不同，这类端口是**独立语义**，文档里用语义化
-> 占位符替代裸值（与 `shell.*` 类一致），doc:render 替换成真实值。
+> 与 dev 端口的「端口族 + 语义清晰」不同，这类端口是**独立语义**，文档里用语义化占位符
+> 替代裸值（与 `shell.*` 类一致），doc:render 替换成真实值。
 >
-> **关于同号端口的处理**：Workshop MCP HTTP 服务端口（`tools/mcp-http.ts` 的
-> `MCP_HTTP_PORT ?? 3001`）与 dev 回落端口同号 `3001`，ComfyUI 生态端口 `8188` 也非本项目
-> 单一事实。若作为全局占位符会导致其它文档（dev 回落 `3001`、生态 `8188`）被误报，故用
-> **`onlyDocs` 限定**——`mcp.http.port` / `comfyui.port` 仅在 `docs/workshop-mcp.md`
-> 内校验裸值，不影响其它文档。因此这二者**仍纳入校验**，仅限 Workshop MCP 文档上下文。
+> **MCP 端口约束**：MCP HTTP 服务与 dev server 分属不同用途，端口号必须**避开 dev 回落族**
+> （`[COMFYAPP_PORT, +1, +2]`，默认 `3000/3001/3002`），否则脚本（如 `scripts/sync-lint.ps1` 的
+> 端口监听检测、doc:check 的 dev 端口族核对）会把 MCP 监听误判成 dev server 实例。因此 MCP
+> 默认端口刻意取在 dev 回落族之外，具体值由 `tools/mcp-http.ts` 单一权威定义，可通过环境变量
+> `MCP_HTTP_PORT` 覆盖（默认 `4300`）。
+>
+> **同号与范围限定**：MCP 端口 `4300` 已避开 dev 回落族，ComfyUI 生态端口 `8188` 非本项目
+> 单一事实。为明确语义并避免跨文档误判，这二者均用占位符并经 **`onlyDocs` 限定**——仅在
+> `docs/workshop-mcp.md` 内校验，不影响其它文档。
 
 | key | placeholder | meaning（可读语义） | source（权威定义文件） | extract |
 |---|---|---|---|---|
 | `registry.port` | `{{registry.port}}` | shadcn 本地团队 Registry 服务端口 | `tools/scripts/start-registry.ps1` 的 `$Port` | 读 `$Port` 值（`3874`） |
-| `mcp.http.port` | `{{mcp.http.port}}` | Workshop MCP HTTP 服务端口 | `tools/mcp-http.ts` 的 `MCP_HTTP_PORT ?? 3001` | 读 `MCP_HTTP_PORT` 默认值（`3001`）；仅 `docs/workshop-mcp.md` 校验 |
+| `mcp.http.port` | `{{mcp.http.port}}` | Workshop MCP HTTP 服务端口 | `tools/mcp-http.ts` 的 `MCP_HTTP_PORT ?? 4300` | 读 `MCP_HTTP_PORT` 默认值（`4300`）；仅 `docs/workshop-mcp.md` 校验 |
 | `comfyui.port` | `{{comfyui.port}}` | ComfyUI 默认监听端口 | `src/lib/comfyui/client.ts` 的 `settings.comfyuiPort … : 8188` 默认分支 | 读默认分支值（`8188`）；仅 `docs/workshop-mcp.md` 校验 |
 
 ---

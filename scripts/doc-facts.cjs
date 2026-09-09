@@ -80,7 +80,7 @@ function extractRegistryPort() {
   return m[1];
 }
 function extractMcpHttpPort() {
-  // Workshop MCP HTTP 服务端口，权威源 tools/mcp-http.ts 的 MCP_HTTP_PORT ?? 3001。
+  // Workshop MCP HTTP 服务端口，权威源 tools/mcp-http.ts 的 MCP_HTTP_PORT ?? 4300。
   const t = readText("tools/mcp-http.ts");
   const m = t.match(/MCP_HTTP_PORT\s*\?\?\s*(\d+)/);
   if (!m) throw new Error("无法从 tools/mcp-http.ts 提取 MCP_HTTP_PORT 默认值");
@@ -92,6 +92,7 @@ function extractComfyUIPort() {
   const t = readText("src/lib/comfyui/client.ts");
   const m = t.match(/settings\.comfyuiPort\s*&&\s*settings\.comfyuiPort\s*>\s*0\s*\?\s*settings\.comfyuiPort\s*:\s*(\d+)/);
   if (!m) throw new Error("无法从 src/lib/comfyui/client.ts 提取 ComfyUI 默认端口");
+
   return m[1];
 }
 
@@ -111,17 +112,15 @@ const FACTS = [
   { key: "shell.splash", placeholder: "{{shell.splash}}", kind: "placeholder", extract: extractSplash },
   // 核对类：文档保留直观值，脚本核对权威源当前端口族
   { key: "dev.host", kind: "verify", extract: () => extractDevHostPort().host },
-  // dev 端口族仅对描述 dev 启动链路的文档校验；workshop-mcp.md 的 3001 是 MCP HTTP
+  // dev 端口族仅对描述 dev 启动链路的文档校验；workshop-mcp.md 的 4300 是 MCP HTTP
   // 端口（非 dev 回落），若参与 verify 会误判「缺 dev 主端口 3000」，故排除该文档。
   { key: "dev.port", kind: "verify", extract: () => String(extractDevHostPort().port), excludeDocs: ["docs/workshop-mcp.md"] },
   { key: "dev.port.fallback", kind: "verify", extract: extractFallbackPorts, excludeDocs: ["docs/workshop-mcp.md"] },
-  // 独立单值端口（非 dev 端口族）。此前 MCP 3001 因与 dev 回落端口同号而被排除
-  // （占位符/verify 无法区分语义）；现按「独立单值 + 仅限特定文档上下文」纳入，
-  // 用占位符替代裸值，规避与 dev 端口族的同号误报（占位符不匹配 host:port 裸值）。
+  // 独立单值端口（非 dev 端口族）。workshop-mcp.md 的端口（MCP 4300 / ComfyUI 8188）
+  // 属独立语义，用占位符替代裸值，doc:render 替换成真实值。
   { key: "registry.port", placeholder: "{{registry.port}}", kind: "placeholder", extract: extractRegistryPort },
-  // MCP / ComfyUI 端口是「独立单值」，但其裸值与 dev 回落端口（3001）或 ComfyUI 生态端口
-  // （8188）同名，若作为全局 placeholder 会在其它文档（dev 回落 3001、生态 8188）误报。
-  // 故用 onlyDocs 限定——仅在校验 workshop-mcp.md 时生效，避免跨文档误判。
+  // MCP / ComfyUI 端口是「独立单值」；MCP 默认端口已取在 dev 回落族之外（4300），
+  // 但为明确语义仍用占位符，并限定仅在 workshop-mcp.md 校验避免跨文档误判。
   { key: "mcp.http.port", placeholder: "{{mcp.http.port}}", kind: "placeholder", extract: extractMcpHttpPort, onlyDocs: ["docs/workshop-mcp.md"] },
   { key: "comfyui.port", placeholder: "{{comfyui.port}}", kind: "placeholder", extract: extractComfyUIPort, onlyDocs: ["docs/workshop-mcp.md"] },
   // 路径类：核对文件存在
@@ -154,4 +153,5 @@ module.exports = {
   extractLauncherExeByName,
   extractSplash,
   extractRegistryPort,
+  extractMcpHttpPort,
 };

@@ -1,5 +1,5 @@
 // ── Workshop MCP：HTTP(Streamable) transport 入口 ─────────────
-// 独立 Node HTTP 服务，暴露 Streamable MCP 端点（默认 http://localhost:3001/mcp），
+// 独立 Node HTTP 服务，暴露 Streamable MCP 端点（默认 http://localhost:4300/mcp），
 // 供应用内 agent 或支持 HTTP MCP 的客户端连接。与 stdio 共用同一份工具定义。
 //
 // 采用无状态模式（sessionIdGenerator: undefined + enableJsonResponse），
@@ -9,7 +9,7 @@ import http from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { buildWorkshopMcpServer } from "@/server/mcp/workshop-mcp";
 
-const PORT = Number(process.env.MCP_HTTP_PORT ?? 3001);
+const PORT = Number(process.env.MCP_HTTP_PORT ?? 4300);
 const ENDPOINT = process.env.MCP_HTTP_PATH ?? "/mcp";
 
 const httpServer = http.createServer((req, res) => {
