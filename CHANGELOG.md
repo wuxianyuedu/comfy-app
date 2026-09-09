@@ -11,6 +11,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **修复设置页 / 工作区打开即整页报错（“An unexpected Turbopack error occurred”）**：客户端逻辑层误把 Node-only 的 `app-runtime-log` 模块（顶层 `import node:fs`）引入客户端 bundle，Turbopack 编译 `/(main)/settings` 与 `/workspace` 时报 `does not support external modules (request: node:fs)` 导致页面 500（回归，由提交 29d8b1d 引入）。现客户端补记 `app-runtime` 日志改走服务端写入通道（新增 `POST /api/logs/app-runtime` + `postAppRuntimeLog()`），设置页加载失败的日志仍能落到应用日志面板，页面恢复正常。
+
 ### Added
 
 - **应用端口可配置**：本地开发/桌面壳端口改为通过 `.env` 的 `COMFYAPP_PORT` 统一配置（默认 3000），启动器、Tauri 壳、前端 tRPC 客户端会一致读取；当端口与其他应用冲突时，改一处 `.env` 重启即可，无需改代码。

@@ -41,3 +41,38 @@ export async function fetchFileLogSlice(
   if (!res.ok) return null;
   return (await res.json()) as FileLogSlice;
 }
+
+/* ── 应用运行日志写入（客户端 → 服务端）──────────────────────────────
+ * `src/lib/app-runtime-log.ts` 是 Node-only 模块（顶层 import node:fs），
+ * 客户端逻辑层（如设置页）需要把「静默失败」补记进 app-runtime.log 供日志
+ * 面板轮询展示时，必须经 `POST /api/logs/app-runtime` 转交服务端写入，而非
+ * 直接 import 该 Node 模块（否则 Turbopack 会把 node:fs 静态打进客户端
+ * bundle，编译报 “does not support external modules”，见 ISSUE #282）。
+ *
+ * 调用方只负责把「级别 + 消息 + 字段」交给网络层；写入失败静默忽略，
+ * 绝不阻塞业务主流程（对齐 service 端 logger 的失败不落盘的契约）。
+ */
+
+/** 客户端可安全传给服务端的日志级别。 */
+export type AppLogClientLevel = "info" | "warn" | "error";
+
+/**
+ * 经服务端把一条日志写入 app-runtime.log（命名空间限定在 settings/app）。
+ * 失败静默返回，不抛错。
+ */
+export async function postAppRuntimeLog(
+  ns: "settings" | "app",
+  level: AppLogClientLevel,
+  msg: string,
+  fields?: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await fetch("/api/logs/app-runtime", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ns, level, msg, fields }),
+    });
+  } catch {
+    // 网络/服务端写入失败绝不阻塞业务主流程
+  }
+}
