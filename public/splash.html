@@ -354,12 +354,18 @@
       if (status) {
         updateUI(status.progress || 0, status.phase, status.message, status.error, status.elapsed);
         // 壳过期提醒（dev-launcher 预检写入 launch-status.json 的 stale_shell）
+        // 常驻语义：一旦出现过就保持可见（window.staleShown 锁存），不再随
+        // 后续轮询反复显示/隐藏——状态文件里的 stale_shell 消失（如字段
+        // 被部分写入）也不闪没，直到本启动页生命周期结束。
         const banner = document.getElementById('stale-banner');
         if (banner) {
           if (status.stale_shell) {
-            banner.textContent = '⚠ ' + status.stale_shell;
+            if (!window.staleShown) {
+              window.staleShown = true;
+              banner.textContent = '⚠ ' + status.stale_shell;
+            }
             banner.style.display = 'block';
-          } else {
+          } else if (!window.staleShown) {
             banner.style.display = 'none';
           }
         }

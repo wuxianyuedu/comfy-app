@@ -245,6 +245,42 @@ const LAUNCHER_LOG_RE =
 const APP_RUNTIME_LOG_RE =
   /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]\s*\[(INFO|WARN|ERROR|DEBUG)\]\s*(?:\[([^\]]+)\]\s*)?(.*)$/;
 
+/**
+ * 过滤常规 tRPC/RPC 调用计时日志（#294）。
+ *
+ * 形如 `[rpc] setting.dbStudioStatus 155ms {"type":"query"}` / `[trpc] generate.generate
+ * 25ms {"type":"query"}` 的行来自 tRPC 中间件的调用计时（历史上每次 query/mutation
+ * 都写一条），正常调用每几秒就刷一整屏，把真正的业务/警告日志冲走。
+ * 「有问题的调用」（失败 error、超过慢查询阈值的 warn）必须保留——它们的消息
+ * 带「失败」字样或级别本身是 warn/error，不会命中这里的"常规 info 计时"判定。
+ */
+export function isRoutineRpcTimingLog(args: unknown[]): boolean {
+  if (args.length === 0) return false;
+  const text = serialize(args);
+  const body = text
+    .trim()
+    .replace(/^\[[^\]]*\]\s*/, "")
+    .replace(/^(?:[a-z]+\]?|\])\s*/i, "");
+  return /^\S+\s+\d+ms(\s*\{.*\})?$/i.test(body);
+}
+
+/** 文件转录行（app-runtime / launcher）侧的同规则过滤：返回 true 表示不进面板。 */
+export function isRoutineRpcTimingLine(line: string): boolean {
+  const m = APP_RUNTIME_LOG_RE.exec(line);
+  const text = m ? (m[10] ?? "") : line;
+  const level = m ? (m[8] ?? "").toUpperCase() : "";
+  // 失败 / 慢查询（error/warn 级别）永远保留
+  if (level === "WARN" || level === "ERROR") return false;
+  // 行格式两种来源：app-runtime 行的 text 已被 APP_RUNTIME_LOG_RE 拆掉 [ns]
+  // 前缀；launcher 转录整行原文可能带 [rpc] / rpc] 前缀。先剥前缀再测正文。
+  const body = text
+    .trim()
+    .replace(/^\[[^\]]*\]\s*/, "")
+    .replace(/^(?:[a-z]+\]?|\])\s*/i, "");
+  return /^\S+\s+\d+ms(\s*\{.*\})?$/i.test(body);
+}
+
+
 function parseLogLevel(level: string): LogLevel {
   switch (level.toLowerCase()) {
     case "error":
@@ -278,6 +314,9 @@ export function parseFileLogs(text: string, baseDate?: Date): LogEntry[] {
     // transcript, so the [HH:mm:ss] [LEVEL] regex still matches cleanly.
     const line = rawLine.replace(/\r$/, "").replace(/\x1b\[[0-9;:]*m/g, "");
     if (!line.trim()) continue;
+    // 常规 tRPC/RPC 调用计时行（如 `[rpc] xxx 155ms {"type":"query"}`）不进面板：
+    // 正常调用高频产生会刷屏（#294）；失败/慢查询（error/warn 级别）仍保留。
+    if (isRoutineRpcTimingLine(line)) continue;
     const m = LOG_LINE_RE.exec(line);
     if (m) {
       const [, hh, mm, ss, lv, msg] = m;
@@ -407,10 +446,14 @@ export interface LogStoreState {
   search: string;
   isOpen: boolean;
   counts: Record<LogLevel | "all", number>;
+  /** 翻页：当前页（1 起，倒序查看，1 = 最新一页）与每页条数（#294）。 */
+  page: number;
+  pageSize: number;
   addEntry: (entry: Omit<LogEntry, "id" | "time">) => void;
   appendFileLogs: (entries: LogEntry[]) => void;
   setFilter: (f: LogFilter) => void;
   setSearch: (s: string) => void;
+  setPage: (page: number) => void;
   setIsOpen: (open: boolean) => void;
   toggleOpen: () => void;
   clear: () => void;
@@ -433,6 +476,8 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   search: "",
   isOpen: false,
   counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
+  page: 1,
+  pageSize: 2000,
 
   addEntry: (entry) =>
     set((state) => {
@@ -452,6 +497,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   setSearch: (s) =>
     set((state) => ({ search: s, filteredLogs: computeFiltered(state.logs, state.filter, s) })),
 
+  setPage: (page) => set({ page: Math.max(1, page) }),
   setIsOpen: (open) => set({ isOpen: open }),
   toggleOpen: () => set((state) => ({ isOpen: !state.isOpen })),
 
