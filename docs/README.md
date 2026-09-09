@@ -26,6 +26,7 @@ AIGC:
 | 拉取更新后环境同步指南 | [guides/sync-after-pull.md](guides/sync-after-pull.md) | 远端改了 pnpm 配置/依赖后，本地拉取代码如何同步环境 | 配套 |
 | API 文档 | [api/index.html](api/index.html) | typedoc 自动生成（`pnpm docs`） | 自动生成 |
 | 设计规格 | [superpowers/specs/](superpowers/specs/) | 功能设计文档（如 wf-debug-mode 设计） | 归档参考 |
+| 生成文档（原文） | [generated/](generated/) | 由 `pnpm doc:render` 从编辑文档自动生成，占位符已替换成真实值，供直接阅读；禁止手改 | 自动生成 |
 | 文档引用事实登记表 | [reference-facts.md](reference-facts.md) | 文档里硬编码值/路径的单一事实映射：占位符语义 + 权威来源 + 提取规则；由 `pnpm doc:check` 动态核对 | 配套 |
 | 审计整改报告 | [audits/](audits/) | 规范/代码审计发现的整改跟踪（逐项记录违规、规则、严重度与状态） | 过程跟踪（闭环后删除） |
 
