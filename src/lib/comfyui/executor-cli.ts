@@ -22,173 +22,16 @@ import { resolveComfyBase } from "./client";
 import { extractValidationErrors } from "./validation";
 import type { ValidationError } from "./validation";
 import { state, log } from "./runner-state";
-import type { Job, RawWorkflowOverride } from "./runner-state";
+import type { Job } from "./runner-state";
 import { complete, fail } from "./executor-finalize";
+import { applyRawOverrides, type JsonRecord } from "./raw-overrides";
+
+// 保持 executor.ts barrel 的 `applyRawOverrides` 导出不变
+//（纯逻辑已抽到 ./raw-overrides，这里仅透传）。
+export { applyRawOverrides };
 
 export const cliProcs = new Map<string, ChildProcess>();
 const CLI_TIMEOUT_MS = 25 * 60 * 1000;
-
-/** 任意 JSON 对象的宽松视图（外部输入的中间层窄化用）。 */
-type JsonRecord = Record<string, unknown>;
-
-/**
- * Raw UI-format（LiteGraph）节点输入槽的最小结构视图 —— 字段随节点类型
- * 漂移，只取本模块读写（`name` / `widget`）的部分，其余原样保留。
- */
-export type RawUiNodeInput = {
-  name?: unknown;
-  widget?: unknown;
-};
-
-/**
- * Raw UI-format（LiteGraph）节点的最小结构视图 —— 只取注入
- * `widgets_values` 所需的字段（`id` / `inputs` / `widgets_values`）。
- */
-export type RawUiNode = {
-  id?: unknown;
-  inputs?: RawUiNodeInput[];
-  widgets_values?: unknown[];
-};
-
-/** Map an API-format node id (e.g. "76:67") or top-level id to the raw UI node. */
-function resolveRawNode(raw: JsonRecord, nodeId: string): RawUiNode | null {
-  const defs = raw.definitions;
-  const subs =
-    defs != null && typeof defs === "object" ? (defs as JsonRecord).subgraphs : undefined;
-  const subList: unknown[] = Array.isArray(subs)
-    ? subs
-    : subs != null && typeof subs === "object"
-      ? Object.values(subs)
-      : [];
-  const findInNodes = (nodes: unknown, id: string): RawUiNode | null => {
-    if (!Array.isArray(nodes)) return null;
-    for (const x of nodes) {
-      if (x != null && typeof x === "object" && String((x as JsonRecord).id) === id) {
-        return x as RawUiNode;
-      }
-    }
-    return null;
-  };
-  if (nodeId.includes(":")) {
-    const internalId = nodeId.split(":").pop()!;
-    for (const sg of subList) {
-      const nodes =
-        sg != null && typeof sg === "object" ? (sg as JsonRecord).nodes : undefined;
-      const n = findInNodes(nodes, internalId);
-      if (n) return n;
-    }
-    return null;
-  }
-  const top = findInNodes(raw.nodes, nodeId);
-  if (top) return top;
-  for (const sg of subList) {
-    const nodes =
-      sg != null && typeof sg === "object" ? (sg as JsonRecord).nodes : undefined;
-    const n = findInNodes(nodes, nodeId);
-    if (n) return n;
-  }
-  return null;
-}
-
-/** Index of a named widget input within a UI node's `widgets_values` array. */
-function widgetSlot(node: RawUiNode, name: string): number {
-  const inputs = node?.inputs ?? [];
-  let slot = 0;
-  for (const inp of inputs) {
-    if (inp?.widget) {
-      if (inp.name === name) return slot;
-      slot++;
-    }
-  }
-  return -1;
-}
-
-/** Best-effort injection of canvas `workflowInputs` into the raw UI json. */
-export function applyRawOverrides(
-  rawJson: unknown,
-  overrides?: RawWorkflowOverride[]
-): JsonRecord {
-  if (!overrides?.length) return rawJson as JsonRecord;
-  const raw = JSON.parse(JSON.stringify(rawJson)) as JsonRecord;
-  for (const ov of overrides) {
-    if (!ov?.nodeId || ov.value === undefined) continue;
-    const node = resolveRawNode(raw, ov.nodeId);
-    if (!node) continue;
-
-    // Seed "control after generate" is NOT a named widget in raw UI format — it
-    // is serialized as the widgets_values slot immediately after the seed widget.
-    // Resolve the seed widget slot and target slot+1. (API-format graphs instead
-    // carry a real `control_after_generate` input, handled by the name branch.)
-    if (ov.name === "control_after_generate") {
-      const seedSlot = seedWidgetSlot(node);
-      if (seedSlot < 0) continue;
-      // Only write the seed's control mode when this node actually keeps a
-      // `control_after_generate` sentinel slot right after the seed.  A
-      // subgraph wrapper that exposes an inner seed without exposing its
-      // randomization (ComfyUI quarantines it when the subgraph has no input
-      // pin for it) has no such slot — `seedSlot + 1` would otherwise
-      // overwrite the following real widget (e.g. the diffusion model name).
-      if (!hasSeedControlSlot(node)) continue;
-      if (!Array.isArray(node.widgets_values)) node.widgets_values = [];
-      node.widgets_values[seedSlot + 1] = ov.value;
-      continue;
-    }
-
-    const slot = widgetSlot(node, ov.name);
-    if (slot < 0) continue;
-    if (!Array.isArray(node.widgets_values)) node.widgets_values = [];
-    node.widgets_values[slot] = ov.value;
-  }
-  return raw;
-}
-
-/** Index of the seed-type widget within a UI node's `widgets_values` array.
- *  Returns -1 when the node has no seed-like widget. */
-function seedWidgetSlot(node: RawUiNode): number {
-  const inputs = node?.inputs ?? [];
-  let slot = 0;
-  for (const inp of inputs) {
-    if (!inp?.widget) continue;
-    const w = inp.widget;
-    const wname =
-      typeof w === "string"
-        ? w
-        : w != null && typeof w === "object"
-          ? (w as JsonRecord).name ?? inp.name
-          : inp.name;
-    if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) return slot;
-    slot++;
-  }
-  return -1;
-}
-
-/** Number of widget-bearing inputs (each occupies exactly one slot in
- *  `widgets_values` unless a seed's `control_after_generate` sentinel adds
- *  an extra slot — see {@link hasSeedControlSlot}). */
-function widgetInputCount(node: RawUiNode): number {
-  const inputs = node?.inputs ?? [];
-  let count = 0;
-  for (const inp of inputs) {
-    if (inp?.widget) count++;
-  }
-  return count;
-}
-
-/** Whether this UI node serializes a `control_after_generate` sentinel slot
- *  after its seed widget.  ComfyUI only emits that slot when the seed is a
- *  *real* INT widget on a node that carries randomization (KSampler etc.).
- *  Subgraph wrapper nodes that merely *expose* an inner seed do NOT keep a
- *  control slot in their own `widgets_values` — the slot right after the seed
- *  there belongs to the next exposed widget (e.g. a model COMBO), so writing
- *  `seedSlot + 1` would clobber it.  When the exposed seed's randomization was
- *  quarantined out (ComfyUI `proxyWidgetErrorQuarantine`), we must not write. */
-function hasSeedControlSlot(node: RawUiNode): boolean {
-  if (!Array.isArray(node?.widgets_values)) return false;
-  // A sentinel slot only exists when `widgets_values` holds one more entry than
-  // the widget-bearing inputs (older ComfyUI didn't serialize the sentinel, so
-  // equal length means seed+1 is a real widget too).
-  return node.widgets_values.length > widgetInputCount(node);
-}
 
 /** Read a string field off an unknown payload（非 string → undefined）。 */
 function strField(o: unknown, key: string): string | undefined {
@@ -223,7 +66,9 @@ function stripUiOnlyNodes(raw: JsonRecord): JsonRecord {
     if (type && UI_ONLY_NODE_TYPES.has(type)) {
       const rawId = node.id;
       const id =
-        typeof rawId === "string" || typeof rawId === "number" ? String(rawId) : undefined;
+        typeof rawId === "string" || typeof rawId === "number"
+          ? String(rawId)
+          : undefined;
       if (id) removedIds.add(id);
       continue;
     }
@@ -259,18 +104,24 @@ export async function executeViaComfyCli(job: Job) {
     const u = new URL(base);
     host = u.hostname === "localhost" ? "127.0.0.1" : u.hostname;
     port = parseInt(u.port) || 8188;
-  } catch { /* keep defaults */ }
+  } catch {
+    /* keep defaults */
+  }
   log(taskId, "info", `ComfyUI 目标：${host}:${port}（${base}）`);
 
   let patched = applyRawOverrides(rawJson, overrides);
-  const nodeCountBefore = Array.isArray(patched.nodes) ? patched.nodes.length : 0;
+  const nodeCountBefore = Array.isArray(patched.nodes)
+    ? patched.nodes.length
+    : 0;
   patched = stripUiOnlyNodes(patched);
-  const nodeCountAfter = Array.isArray(patched.nodes) ? patched.nodes.length : 0;
+  const nodeCountAfter = Array.isArray(patched.nodes)
+    ? patched.nodes.length
+    : 0;
   if (nodeCountAfter !== nodeCountBefore) {
     log(
       taskId,
       "info",
-      `已剔除 ${nodeCountBefore - nodeCountAfter} 个纯 UI 控制节点（无后端实现），避免 comfy-cli 校验失败`
+      `已剔除 ${nodeCountBefore - nodeCountAfter} 个纯 UI 控制节点（无后端实现），避免 comfy-cli 校验失败`,
     );
   }
   /* 临时工作流文件统一放到项目根目录 temp/comfy-cli/，便于清理和跨平台管理。 */
@@ -285,7 +136,7 @@ export async function executeViaComfyCli(job: Job) {
   log(
     taskId,
     "info",
-    `工作流文件就绪（${Object.keys(patched?.nodes ?? {}).length || Object.keys(patched).length} 节点）`
+    `工作流文件就绪（${Object.keys(patched?.nodes ?? {}).length || Object.keys(patched).length} 节点）`,
   );
 
   const binDir = process.platform === "win32" ? "Scripts" : "bin";
@@ -297,18 +148,26 @@ export async function executeViaComfyCli(job: Job) {
     "python-venv",
     "comfy-cli",
     binDir,
-    pyName
+    pyName,
   );
   const py = process.env.COMFY_CLI_PYTHON ?? defaultPy;
   const args = [
-    "-m", "comfy_cli", "run",
-    "--workflow", tmpFile,
-    "--json", "--wait",
-    "--where", "local",
-    "--host", host,
-    "--port", String(port),
+    "-m",
+    "comfy_cli",
+    "run",
+    "--workflow",
+    tmpFile,
+    "--json",
+    "--wait",
+    "--where",
+    "local",
+    "--host",
+    host,
+    "--port",
+    String(port),
     "--no-notify",
-    "--timeout", "600",
+    "--timeout",
+    "600",
   ];
 
   // 提前检查 Python 解释器是否存在，避免把原始 ENOENT 抛给用户
@@ -336,11 +195,7 @@ export async function executeViaComfyCli(job: Job) {
   // surface the literal comfy-cli command so
   // the user (and we, on support) can reproduce the exact invocation
   // from the log panel without digging through devtools.
-  log(
-    taskId,
-    "info",
-    `comfy-cli 执行 raw 工作流（${host}:${port}）`
-  );
+  log(taskId, "info", `comfy-cli 执行 raw 工作流（${host}:${port}）`);
   log(taskId, "info", `  ${pyName} ${args.join(" ")}`);
   // explicit pre-spawn line so the user
   // sees a "→ 启动" marker before the (potentially slow) Python
@@ -350,7 +205,11 @@ export async function executeViaComfyCli(job: Job) {
   log(taskId, "info", `→ 启动 comfy-cli 进程（raw UI-format → API 转换）`);
   s.emitter.emit(taskId, {
     type: "log",
-    entry: { t: Date.now(), level: "info", msg: "已使用 comfy-cli 提交 raw 工作流" },
+    entry: {
+      t: Date.now(),
+      level: "info",
+      msg: "已使用 comfy-cli 提交 raw 工作流",
+    },
   });
 
   let promptId: string | null = null;
@@ -366,13 +225,17 @@ export async function executeViaComfyCli(job: Job) {
   log(
     taskId,
     "info",
-    `comfy-cli 进程已启动（pid=${child.pid ?? "?"}，等待 stdout…）`
+    `comfy-cli 进程已启动（pid=${child.pid ?? "?"}，等待 stdout…）`,
   );
 
   const guard = setTimeout(() => {
     if (settled) return;
     settled = true;
-    try { child.kill("SIGKILL"); } catch { /* ignore */ }
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      /* ignore */
+    }
     cliProcs.delete(taskId);
     void fail(taskId, promptId ?? "", "comfy-cli 执行超时（看门狗）");
   }, CLI_TIMEOUT_MS);
@@ -421,13 +284,16 @@ export async function executeViaComfyCli(job: Job) {
         return ne;
       }
       for (const v of Object.values(node)) {
-        if (v && typeof v === "object") stack.push({ node: v as JsonRecord, d: d + 1 });
+        if (v && typeof v === "object")
+          stack.push({ node: v as JsonRecord, d: d + 1 });
       }
     }
     return undefined;
   };
 
-  const extractEnvelopeValidationErrors = (env: unknown): ValidationError[] | undefined => {
+  const extractEnvelopeValidationErrors = (
+    env: unknown,
+  ): ValidationError[] | undefined => {
     const carrier = findNodeErrorsCarrier(env);
     if (!carrier) return undefined;
     return extractValidationErrors(carrier, patched);
@@ -441,9 +307,14 @@ export async function executeViaComfyCli(job: Job) {
     if (ok) {
       void complete(taskId, promptId ?? "");
     } else {
-      const err = env != null && typeof env === "object" ? (env as JsonRecord).error : undefined;
+      const err =
+        env != null && typeof env === "object"
+          ? (env as JsonRecord).error
+          : undefined;
       const msg =
-        (strField(err, "message") ?? strField(err, "hint")) ?? "comfy-cli 执行失败";
+        strField(err, "message") ??
+        strField(err, "hint") ??
+        "comfy-cli 执行失败";
       const validationErrors = extractEnvelopeValidationErrors(env);
       if (validationErrors?.length) {
         // Mirror the API-format branch's behaviour: surface the
@@ -452,7 +323,7 @@ export async function executeViaComfyCli(job: Job) {
         log(
           taskId,
           "error",
-          `✗ comfy-cli 报 ${validationErrors.length} 条校验错误（见上方红框）`
+          `✗ comfy-cli 报 ${validationErrors.length} 条校验错误（见上方红框）`,
         );
         validationErrors.slice(0, 12).forEach((ve) => {
           log(
@@ -460,14 +331,14 @@ export async function executeViaComfyCli(job: Job) {
             "error",
             `  · 节点 ${ve.nodeId}${ve.classType ? ` (${ve.classType})` : ""}` +
               (ve.field ? ` · 字段 ${ve.field}` : "") +
-              `：${ve.message}`
+              `：${ve.message}`,
           );
         });
         if (validationErrors.length > 12) {
           log(
             taskId,
             "error",
-            `  …还有 ${validationErrors.length - 12} 条（请查看红框/重新执行工作流查看完整清单）`
+            `  …还有 ${validationErrors.length - 12} 条（请查看红框/重新执行工作流查看完整清单）`,
           );
         }
       } else {
@@ -477,13 +348,16 @@ export async function executeViaComfyCli(job: Job) {
         // so a support re-run can see the real shape instead of a
         // silent "Workflow has N validation error(s)" line.
         const rawMsg = typeof msg === "string" ? msg : "";
-        if (/validation error/i.test(rawMsg) || strField(err, "code") === "prompt_rejected") {
+        if (
+          /validation error/i.test(rawMsg) ||
+          strField(err, "code") === "prompt_rejected"
+        ) {
           try {
             const dump = JSON.stringify(env).slice(0, 900);
             log(
               taskId,
               "warn",
-              `⚠ 未从 comfy-cli envelope 解析出结构化校验错误，原始 envelope（截断）：${dump}`
+              `⚠ 未从 comfy-cli envelope 解析出结构化校验错误，原始 envelope（截断）：${dump}`,
             );
           } catch {
             /* stringify can throw on circular refs — ignore */
@@ -505,7 +379,9 @@ export async function executeViaComfyCli(job: Job) {
       buf = buf.slice(idx + 1);
       if (!line) continue;
       let ev: unknown = null;
-      try { ev = JSON.parse(line); } catch {
+      try {
+        ev = JSON.parse(line);
+      } catch {
         // surface non-JSON lines too so the
         // user can see when comfy-cli prints a Python traceback or
         // import error.  Cap to avoid flooding the panel during
@@ -515,13 +391,21 @@ export async function executeViaComfyCli(job: Job) {
           const trimmed = line.length > 240 ? line.slice(0, 240) + "…" : line;
           log(taskId, "info", `[comfy-cli stdout] ${trimmed}`);
         } else if (nonJsonLines === 21) {
-          log(taskId, "info", `[comfy-cli stdout] …后续非 JSON 行已省略（查看后端日志）`);
+          log(
+            taskId,
+            "info",
+            `[comfy-cli stdout] …后续非 JSON 行已省略（查看后端日志）`,
+          );
         }
         continue;
       }
       if (!ev || typeof ev !== "object") continue;
       const evt = ev as JsonRecord;
-      if (evt.type === "queued" && typeof evt.prompt_id === "string" && evt.prompt_id) {
+      if (
+        evt.type === "queued" &&
+        typeof evt.prompt_id === "string" &&
+        evt.prompt_id
+      ) {
         promptId = evt.prompt_id;
         s.promptToTask.set(evt.prompt_id, taskId);
         void taskRepository
@@ -530,7 +414,11 @@ export async function executeViaComfyCli(job: Job) {
         // mirror the API-format branch's
         // "✓ 已接收…等待 executing" wording so the log panel shows a
         // consistent vocabulary across both submission paths.
-        log(taskId, "info", `✓ comfy-cli 已提交（prompt_id: ${promptId}），等待节点执行…`);
+        log(
+          taskId,
+          "info",
+          `✓ comfy-cli 已提交（prompt_id: ${promptId}），等待节点执行…`,
+        );
       } else if (evt.type === "envelope") {
         finish(Boolean(evt.ok), ev);
       } else if (
@@ -550,13 +438,15 @@ export async function executeViaComfyCli(job: Job) {
         // node id + event type alone is enough to show "something is
         // running").
         // 断言仅为类型收口（运行时擦除）：模板插值与原 any 行为逐值一致。
-        const node = (evt.node ?? (evt.data as JsonRecord | null | undefined)?.node ?? "?") as string;
+        const node = (evt.node ??
+          (evt.data as JsonRecord | null | undefined)?.node ??
+          "?") as string;
         log(
           taskId,
           "info",
           evt.type === "execution_success"
             ? `✓ comfy-cli 节点 [${node}] 执行完成`
-            : `▶ comfy-cli 节点 [${node}] 开始执行`
+            : `▶ comfy-cli 节点 [${node}] 开始执行`,
         );
       }
     }
@@ -578,7 +468,11 @@ export async function executeViaComfyCli(job: Job) {
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
-      if (/DeprecationWarning|SyntaxWarning: invalid escape sequence/i.test(trimmed)) {
+      if (
+        /DeprecationWarning|SyntaxWarning: invalid escape sequence/i.test(
+          trimmed,
+        )
+      ) {
         noisyWarningLines++;
         continue;
       }
@@ -587,7 +481,11 @@ export async function executeViaComfyCli(job: Job) {
         const t = trimmed.length > 400 ? trimmed.slice(0, 400) + "…" : trimmed;
         log(taskId, "warn", `[comfy-cli stderr] ${t}`);
       } else if (errLines === 61) {
-        log(taskId, "warn", `[comfy-cli stderr] …后续行已省略（完整内容在进程退出汇总）`);
+        log(
+          taskId,
+          "warn",
+          `[comfy-cli stderr] …后续行已省略（完整内容在进程退出汇总）`,
+        );
       }
     }
   });
@@ -601,16 +499,20 @@ export async function executeViaComfyCli(job: Job) {
       log(
         taskId,
         "warn",
-        `[comfy-cli stderr] 另有 ${noisyWarningLines} 行 Python Deprecation/Syntax 警告（第三方库噪声，与执行结果无关）已省略`
+        `[comfy-cli stderr] 另有 ${noisyWarningLines} 行 Python Deprecation/Syntax 警告（第三方库噪声，与执行结果无关）已省略`,
       );
     }
     const tail = errBuf.trim().split("\n").slice(-12).join("\n");
     log(
       taskId,
       "error",
-      `comfy-cli 进程已退出（code=${code}），未收到 envelope 事件`
+      `comfy-cli 进程已退出（code=${code}），未收到 envelope 事件`,
     );
-    void fail(taskId, promptId ?? "", `comfy-cli 异常退出（code=${code}）\n${tail || "(无 stderr)"}`);
+    void fail(
+      taskId,
+      promptId ?? "",
+      `comfy-cli 异常退出（code=${code}）\n${tail || "(无 stderr)"}`,
+    );
   });
 
   child.on("error", (err) => {
