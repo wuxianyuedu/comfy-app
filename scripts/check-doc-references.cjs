@@ -60,6 +60,21 @@ function checkVerify(text, docPath, f) {
         );
       }
     }
+    if (kind === "mcp.http.port") {
+      // 仅当文档确实出现了 MCP 端口时才核对一致性；MCP 与 dev 端口族碰撞会
+      // 让端口清理/监听检测把 MCP 误判成 dev server 实例——这是该 fact 的防回归点。
+      const mcpPort = Number(f.extract());
+      const docPorts = extractDocHostPorts(text);
+      if (!docPorts.includes(mcpPort)) return; // 本文档未引用 MCP 端口，跳过
+      const { port } = extractDevHostPort();
+      const candidates = extractFallbackPorts().map(Number);
+      const devFam = new Set([port, ...candidates]);
+      if (devFam.has(mcpPort)) {
+        problems.push(
+          `[${docPath}] MCP HTTP 端口 ${mcpPort} 与 dev 端口族 ${[port, ...candidates].join("/")} 冲突，会将 MCP 监听误判成 dev server。请为 MCP 换独立端口。`
+        );
+      }
+    }
   } catch (e) {
     problems.push(`[${docPath}] 无法核对 ${f.key}（${e.message}）`);
   }
