@@ -15,17 +15,17 @@
 
 > 这一类是文档里最容易过期、跨文档复用的**值**。分两种处理方式：
 > - **占位符类**（`shell.*`）：文档里用占位符 `{{...}}` 替代裸值，脚本发现裸值即报错。
-> - **直观值核对类**（`dev.*` 端口/地址）：文档保留 `localhost:3000` 这种直观形态
+> - **直观值核对类**（`dev.*` 端口/地址）：文档保留 `localhost:3100` 这种直观形态
 >   （可读性最佳），脚本从权威源提取当前值，发现文档值与权威不符即报错。
 > `key` 是语义标识；`placeholder` 是占位符文本（占位符类才有）；`source` 是权威定义文件；`extract` 是脚本读取真实值的方式。
 
-### 1.1 开发端口与地址（直观值核对类，保留 localhost:3000 原文）
+### 1.1 开发端口与地址（直观值核对类，保留 localhost:3100 原文）
 
 | key | 文档形态（保留直观值） | meaning（可读语义） | source（权威定义文件） | extract |
 |---|---|---|---|---|
 | `dev.host` | `localhost` / `127.0.0.1` | dev server 监听主机 | `src-tauri/tauri.conf.json` 的 `build.devUrl`；`scripts/dev-launcher.ps1` 的 `-H` 参数 | 从 `devUrl` 的 host 段提取；核对 `dev-launcher.ps1` 用 `127.0.0.1` |
-| `dev.port` | `:3000` | dev server 主端口 | `src-tauri/tauri.conf.json` 的 `build.devUrl`；`scripts/dev-launcher.ps1` 的 `-p 3000` | 从 `devUrl` 的 port 段提取，与 `dev-launcher.ps1` 的 `-p 3000` 交叉核对 |
-| `dev.port.fallback` | `:3001` `:3002` | 端口被占时的回落候选 | `scripts/dev-launcher.ps1` 的端口清理列表 | 读 `dev-launcher.ps1` 中端口清理列表 `3000/3001/3002` |
+| `dev.port` | `:3100` | dev server 主端口 | `src-tauri/tauri.conf.json` 的 `build.devUrl`；`scripts/dev-launcher.ps1` 的 `-p 3100` | 从 `devUrl` 的 port 段提取，与 `dev-launcher.ps1` 的 `-p 3100` 交叉核对 |
+| `dev.port.fallback` | `:3101` `:3102` | 端口被占时的回落候选 | `scripts/dev-launcher.ps1` 的端口清理列表 | 读 `dev-launcher.ps1` 中端口清理列表 `3100/3101/3102` |
 
 ### 1.2 启动器（launcher）可执行文件
 
@@ -51,7 +51,7 @@
 > 替代裸值（与 `shell.*` 类一致），doc:render 替换成真实值。
 >
 > **MCP 端口约束**：MCP HTTP 服务与 dev server 分属不同用途，端口号必须**避开 dev 回落族**
-> （`[COMFYAPP_PORT, +1, +2]`，默认 `3000/3001/3002`），否则脚本（如 `scripts/sync-lint.ps1` 的
+> （`[COMFYAPP_PORT, +1, +2]`，默认 `3100/3101/3102`），否则脚本（如 `scripts/sync-lint.ps1` 的
 > 端口监听检测、doc:check 的 dev 端口族核对）会把 MCP 监听误判成 dev server 实例。因此 MCP
 > 默认端口刻意取在 dev 回落族之外，具体值由 `tools/mcp-http.ts` 单一权威定义，可通过环境变量
 > `MCP_HTTP_PORT` 覆盖（默认 `4300`）。

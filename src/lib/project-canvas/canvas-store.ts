@@ -55,7 +55,7 @@ export function getProject(id: string): CanvasProject | null {
  * flaky network / server never blocks the local-first UI.  Called from
  * `upsertProject` on every meaningful mutation, so the server copy stays
  * in sync across ports / devices (localStorage alone is per-origin and
- * silently loses data when you switch ports, e.g. 3000 → 3002).
+ * silently loses data when you switch ports, e.g. 3100 → 3102).
  */
 async function persistProjectToServer(p: CanvasProject): Promise<void> {
   if (typeof window === "undefined") return;

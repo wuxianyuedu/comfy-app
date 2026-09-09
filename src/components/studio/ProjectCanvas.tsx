@@ -224,7 +224,7 @@ function CanvasInner({
     loadedRef.current = true;
     void (async () => {
       // Reconcile server-side projects into localStorage BEFORE we read the
-      // active project, so a port-switch (3000↔3002) / device never loses
+      // active project, so a port-switch (3100↔3102) / device never loses
       // canvas data that was persisted to the DB.
       await hydrateFromServer();
       reapAllEmptyDrafts(); // one-shot cleanup of pre-fix pollution

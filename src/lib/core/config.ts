@@ -66,7 +66,7 @@ export interface AppConfig {
   readonly comfyuiBaseUrl: string;
   /** 本机 ComfyUI 的 WebSocket 地址（由 baseUrl 推导）。 */
   readonly comfyuiWsUrl: string;
-  /** 应用开发服务监听端口，取值来自 .env 的 COMFYAPP_PORT（默认 3000）。 */
+  /** 应用开发服务监听端口，取值来自 .env 的 COMFYAPP_PORT（默认 3100）。 */
   readonly port: number;
   /** 特性开关。 */
   readonly features: FeatureFlags;
@@ -103,7 +103,7 @@ const configSchema = z.object({
     .string()
     .url()
     .default("http://127.0.0.1:8188"),
-  port: z.coerce.number().int().positive().max(65535).default(3000),
+  port: z.coerce.number().int().positive().max(65535).default(3100),
   reaperEnabled: z.coerce.boolean().default(true),
   debugModeDefault: z.coerce.boolean().default(false),
 });

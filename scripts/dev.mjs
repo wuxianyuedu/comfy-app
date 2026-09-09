@@ -10,19 +10,19 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-// 从 .env 读端口（与 src/env.js 同目录约定），未配置或非法时回退 3000
+// 从 .env 读端口（与 src/env.js 同目录约定），未配置或非法时回退 3100
 function readPort() {
   try {
     const envRaw = readFileSync(path.join(root, ".env"), "utf8");
     const line = envRaw.split(/\r?\n/).find((l) => /^\s*COMFYAPP_PORT\s*=/.test(l));
-    if (!line) return 3000;
+    if (!line) return 3100;
     const val = line.split("=", 2)[1].trim().replace(/^["']|["']$/g, "");
     const port = Number.parseInt(val, 10);
     if (Number.isInteger(port) && port >= 1 && port <= 65535) return port;
   } catch {
     // .env 缺失或不可读时用默认端口
   }
-  return 3000;
+  return 3100;
 }
 
 const port = readPort();

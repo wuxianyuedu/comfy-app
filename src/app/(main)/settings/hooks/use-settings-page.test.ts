@@ -173,7 +173,7 @@ function makeWrapper(queryClient?: QueryClient) {
     links: [
       httpBatchStreamLink({
         transformer: SuperJSON,
-        url: "http://localhost:3000/api/trpc",
+        url: "http://localhost:3100/api/trpc",
       }),
     ],
   });

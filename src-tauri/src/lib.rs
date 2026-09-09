@@ -45,10 +45,10 @@ impl AppState {
   }
 }
 
-/// 默认开发 URL：优先读 COMFYAPP_PORT 环境变量（默认 3000），
-/// 与 .env 的 COMFYAPP_PORT、启动器 -p 参数保持一致，避免端口冲突时壳仍跳 3000。
+/// 默认开发 URL：优先读 COMFYAPP_PORT 环境变量（默认 3100），
+/// 与 .env 的 COMFYAPP_PORT、启动器 -p 参数保持一致，避免端口冲突时壳仍跳 3100。
 fn default_dev_url(host: &str) -> String {
-  let port = std::env::var("COMFYAPP_PORT").unwrap_or_else(|_| "3000".to_string());
+  let port = std::env::var("COMFYAPP_PORT").unwrap_or_else(|_| "3100".to_string());
   format!("http://{}:{}/workspace", host, port)
 }
 

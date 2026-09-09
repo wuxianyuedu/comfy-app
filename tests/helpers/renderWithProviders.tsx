@@ -24,7 +24,7 @@ import { httpBatchStreamLink } from "@trpc/client";
 import SuperJSON from "superjson";
 import { api } from "~/trpc/react";
 
-const BASE_URL = "http://localhost:3000";
+const BASE_URL = "http://localhost:3100";
 
 /** 建隔离 QueryClient：禁重试、即时 gc，保证错误/缓存可控。 */
 export function createTestQueryClient(): QueryClient {
