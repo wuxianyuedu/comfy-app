@@ -89,6 +89,8 @@
 
 ### Fixed
 
+- **修复子图工作流种子选「随机值」仍生成同一张图**：raw 子图（liblib 模板，`class_type` 为 UUID）wrapper 只暴露内层 seed、却未暴露其随机化控制（ComfyUI 将其隔离进 `proxyWidgetErrorQuarantine`），`widgets_values` 里没有 `control_after_generate` 哨兵槽，前端下发 `randomize` 覆盖被跳过、种子保持固定值。现改为：这类节点哨兵槽缺失时，若请求的是「随机值」，回退为在提交前直接生成一颗随机种子写入 seed 槽，保证每次生成的图不同；普通 KSampler 仍走哨兵槽写入随机化模式，行为不变。
+
 - **dev server 重启标记改为「真正重启时间」并排除误报**：原来的右下角重启标记
   把「探测失败」当成重启信号，显示器关闭 / 浏览器后台节流 / 瞬时断网都会导致
   网络探测失败而被误报成「后端重启」。现改用进程启动标识（bootId）作为真正
