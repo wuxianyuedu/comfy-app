@@ -16,6 +16,11 @@ import { useTheme } from "next-themes";
 import { errorMessage } from "~/lib/error-message";
 import { isDesktopShell, openUrlInShell } from "~/lib/desktop-shell-client";
 import {
+  checkAppUpdate as checkAppUpdateClient,
+  downloadAndInstallUpdate,
+  relaunchApp as relaunchAppClient,
+} from "~/lib/app-update-client";
+import {
   parseAnsiSegments,
   parseOllamaLogText,
   type AnsiSegment,
@@ -75,6 +80,7 @@ export type LlmConfig = {
 
 export type Section =
   | "appearance"
+  | "appUpdate"
   | "llmLocal"
   | "llmRemote"
   | "comfyui"
@@ -216,6 +222,26 @@ export interface SettingsPageController {
   testModelUsage: (input: UsageTestInput) => Promise<UsageTestResult>;
   /** 对已提交但仍在生成的异步视频任务「继续等待」一轮：只查既有任务，不重复提交扣费 */
   queryUsageTask: (input: UsageTaskQueryInput) => Promise<UsageTestResult>;
+  /* 应用自更新（Tauri updater + process）：检测 / 下载安装 / 重启 */
+  appUpdate: {
+    /** 是否在桌面壳内（决定「检测更新」是否可用）。 */
+    inShell: boolean;
+    /** 一次操作的进行态；idle 表示空闲。 */
+    busy: "idle" | "checking" | "installing";
+    /** 最近一次检测是否发现可用更新。 */
+    available: boolean;
+    /** 可用的远端版本号（available 时非空）。 */
+    version: string | null;
+    /** 当前本地版本号（可用时从检测结果读取）。 */
+    currentVersion: string | null;
+    /** 最近一次检测/安装的可读结果或提示。 */
+    message: string | null;
+    /** 下载进度（bytes，total 可能为空），installing 时非空。 */
+    progress: { downloaded: number; total?: number } | null;
+  };
+  checkAppUpdate: () => Promise<void>;
+  installAppUpdate: () => Promise<void>;
+  relaunchApp: () => Promise<void>;
 }
 
 /** 提示条停留时长。 */
@@ -270,6 +296,20 @@ export function useSettingsPage(): SettingsPageController {
   const { theme, setTheme } = useTheme();
   const [flash, setFlash] = useState<FlashMessage | null>(null);
   const [saving, setSaving] = useState(false);
+
+  /* 应用自更新：检测 / 下载安装的进行态与结果。运算放 lib/app-update-client，
+   * 这里只记 UI 需要的暂态（夹在壳交互与视图中层）。 */
+  const [appUpdateBusy, setAppUpdateBusy] = useState<
+    "idle" | "checking" | "installing"
+  >("idle");
+  const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
+  const [appUpdateVersion, setAppUpdateVersion] = useState<string | null>(null);
+  const [appUpdateCurrent, setAppUpdateCurrent] = useState<string | null>(null);
+  const [appUpdateMessage, setAppUpdateMessage] = useState<string | null>(null);
+  const [appUpdateProgress, setAppUpdateProgress] = useState<{
+    downloaded: number;
+    total?: number;
+  } | null>(null);
 
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmDraft, setLlmDraft] = useState<LlmConfig | null>(null);
@@ -570,6 +610,42 @@ export function useSettingsPage(): SettingsPageController {
       showFlash("err", errorMessage(error, "打开资源失败"));
     }
   }, [openExternalM, showFlash]);
+
+  /* ── 应用自更新（Tauri updater + process）──────────────── */
+  const checkAppUpdate = useCallback(async () => {
+    if (appUpdateBusy !== "idle") return;
+    setAppUpdateBusy("checking");
+    setAppUpdateMessage(null);
+    const result = await checkAppUpdateClient();
+    setAppUpdateBusy("idle");
+    setAppUpdateAvailable(result.available);
+    setAppUpdateVersion(result.update?.version ?? null);
+    setAppUpdateCurrent(result.update?.currentVersion ?? null);
+    setAppUpdateMessage(result.detail);
+  }, [appUpdateBusy]);
+
+  const installAppUpdate = useCallback(async () => {
+    if (appUpdateBusy !== "idle") return;
+    setAppUpdateBusy("installing");
+    setAppUpdateMessage(null);
+    setAppUpdateProgress({ downloaded: 0 });
+    const result = await downloadAndInstallUpdate((downloaded, total) => {
+      setAppUpdateProgress({ downloaded, total });
+    });
+    setAppUpdateBusy("idle");
+    setAppUpdateProgress(null);
+    // 安装成功后应用通常会退出重启；失败时把可读错误透给用户。
+    setAppUpdateMessage(
+      result.triggered ? "更新已安装，应用即将重启…" : result.detail,
+    );
+  }, [appUpdateBusy]);
+
+  const relaunchApp = useCallback(async () => {
+    const result = await relaunchAppClient();
+    if (!result.ok) {
+      setAppUpdateMessage(result.detail);
+    }
+  }, []);
 
   /* ── ComfyUI 启动日志 ─────────────────────────────────── */
   const comfyLogOffsetRef = useRef(0);
@@ -1083,12 +1159,25 @@ export function useSettingsPage(): SettingsPageController {
     flash,
     dismissFlash: useCallback(() => setFlash(null), []),
     setTaskTemperature,
+    appUpdate: {
+      inShell: isDesktopShell(),
+      busy: appUpdateBusy,
+      available: appUpdateAvailable,
+      version: appUpdateVersion,
+      currentVersion: appUpdateCurrent,
+      message: appUpdateMessage,
+      progress: appUpdateProgress,
+    },
+    checkAppUpdate,
+    installAppUpdate,
+    relaunchApp,
   };
 }
 
 /** 侧边栏分区 —— 纯配置，视图直接消费。本地 / 远程模型各自独立成页。 */
 export const SETTINGS_SECTIONS: { id: Section; label: string }[] = [
   { id: "appearance", label: "外观" },
+  { id: "appUpdate", label: "应用更新" },
   { id: "llmLocal", label: "本地模型" },
   { id: "llmRemote", label: "远程模型" },
   { id: "comfyui", label: "创作后端" },

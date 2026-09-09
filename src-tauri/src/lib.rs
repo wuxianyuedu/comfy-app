@@ -9,6 +9,7 @@ use std::time::Duration;
 use tauri::{Manager, Wry};
 
 // ── 官方 first-party 插件 ──
+use tauri_plugin_process;
 use tauri_plugin_single_instance as single_instance;
 use tauri_plugin_window_state::StateFlags as WindowStateFlags;
 
@@ -496,6 +497,12 @@ pub fn run() {
     .plugin(build_window_state_plugin())
     .plugin(build_single_instance_plugin())
     .plugin(log_plugin)
+    // 应用自更新：设置页「检测更新 / 更新并重启」入口（见 app-update-client.ts）。
+    // 更新源与签名公钥在 tauri.conf.json 的 plugins.updater 配置；无有效端点时
+    // check() 会返回无更新，前端据此降级提示。
+    .plugin(tauri_plugin_updater::Builder::new().build())
+    // 进程重启：更新安装完成后调 relaunch 使新版本生效；也供「重启应用」按钮用。
+    .plugin(tauri_plugin_process::init())
     .manage(AppState::new(project_root, app_url))
     .invoke_handler(tauri::generate_handler![get_launch_status, navigate_to_app, get_app_url, get_launch_log, open_comfyui_window])
     .setup(|app| {
