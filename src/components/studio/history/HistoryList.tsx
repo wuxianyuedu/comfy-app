@@ -1,10 +1,56 @@
 "use client";
 
+import { useAutoAnimate } from "@formkit/auto-animate/react";
+
 import { HistoryDetailModal } from "./HistoryDetailModal";
 import { HistoryTaskCard } from "./HistoryTaskCard";
 import { AuroraBackground } from "@/components/studio/ui/AuroraBackground";
 import { useHistoryList } from "./hooks/use-history-list";
-import { FILTERS, type SortKey } from "./history-types";
+import { FILTERS, type SortKey, type TaskItem } from "./history-types";
+
+/**
+ * 单个日期分组下的任务卡片列表。
+ * 独立成组件以便用 useAutoAnimate 给「增 / 删 / 排序换位」的条目级重排做平滑过渡，
+ * 同时不把 hook 放进 map 循环（hooks 规则）。纯展示，无业务规则（规范 17 §17.2 第③层）。
+ */
+function HistoryGroupTaskList({
+  items,
+  progressMap,
+  retryingId,
+  onOpenDetail,
+  onCancel,
+  onRetry,
+  onRemove,
+}: {
+  items: TaskItem[];
+  progressMap: Record<string, number>;
+  retryingId: string | null;
+  onOpenDetail: (id: string) => void;
+  onCancel: (id: string) => void;
+  onRetry: (task: TaskItem) => void;
+  onRemove: (id: string) => void;
+}) {
+  // 仅用 transform/opacity 的 FLIP 位移与淡入淡出（规范 §2.7），不动画
+  // width/height/left/top/margin 等触发整树 layout 重排的属性。
+  const [listRef] = useAutoAnimate<HTMLDivElement>({ duration: 250, easing: "ease-out" });
+
+  return (
+    <div className="space-y-3" ref={listRef}>
+      {items.map((task) => (
+        <HistoryTaskCard
+          key={task.id}
+          task={task}
+          progress={progressMap[task.id] ?? 0}
+          retrying={retryingId === task.id}
+          onOpenDetail={onOpenDetail}
+          onCancel={onCancel}
+          onRetry={onRetry}
+          onRemove={onRemove}
+        />
+      ))}
+    </div>
+  );
+}
 
 /**
  * 历史记录面板 —— 容器（规范 17 §17.2 第④层）。
@@ -107,20 +153,15 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                 </div>
 
                 {/* ── 任务列表 ── */}
-                <div className="space-y-3">
-                  {group.items.map((task) => (
-                    <HistoryTaskCard
-                      key={task.id}
-                      task={task}
-                      progress={c.progressMap[task.id] ?? 0}
-                      retrying={c.retryingId === task.id}
-                      onOpenDetail={c.openDetail}
-                      onCancel={c.cancel}
-                      onRetry={c.retry}
-                      onRemove={c.remove}
-                    />
-                  ))}
-                </div>
+                <HistoryGroupTaskList
+                  items={group.items}
+                  progressMap={c.progressMap}
+                  retryingId={c.retryingId}
+                  onOpenDetail={c.openDetail}
+                  onCancel={c.cancel}
+                  onRetry={c.retry}
+                  onRemove={c.remove}
+                />
               </section>
             ))}
 
