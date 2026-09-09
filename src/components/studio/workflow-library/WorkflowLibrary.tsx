@@ -146,7 +146,7 @@ export function WorkflowLibrary({
       <WorkflowCanvasEditor
         workflowId={c.editingId ?? ""}
         open={!!c.editingId}
-        onClose={() => c.setEditingId(null)}
+        onClose={c.handleEditorClose}
         onSave={c.load}
       />
 
