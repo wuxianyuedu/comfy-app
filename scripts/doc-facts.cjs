@@ -21,6 +21,7 @@ const SCOPED_DOCS = [
   "docs/guide-non-developer.md",
   "docs/standards/Comfy-APP-T3-项目开发规范.md",
   "docs/standards/16-shadcn-ui与表单校验.md",
+  "docs/workshop-mcp.md",
 ];
 
 function readJson(p) { return JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8")); }
@@ -79,10 +80,19 @@ function extractRegistryPort() {
   return m[1];
 }
 function extractMcpHttpPort() {
-  // MCP HTTP 端口权威定义为 tools/mcp-http.ts 的默认值（可被 MCP_HTTP_PORT 覆盖）。
+  // Workshop MCP HTTP 服务端口，权威源 tools/mcp-http.ts 的 MCP_HTTP_PORT ?? 4300。
   const t = readText("tools/mcp-http.ts");
   const m = t.match(/MCP_HTTP_PORT\s*\?\?\s*(\d+)/);
-  if (!m) throw new Error("无法从 tools/mcp-http.ts 提取 MCP HTTP 端口");
+  if (!m) throw new Error("无法从 tools/mcp-http.ts 提取 MCP_HTTP_PORT 默认值");
+  return m[1];
+}
+function extractComfyUIPort() {
+  // ComfyUI 默认监听端口，权威源 src/lib/comfyui/client.ts 的
+  // `settings.comfyuiPort ... ? settings.comfyuiPort : 8188` 默认分支。
+  const t = readText("src/lib/comfyui/client.ts");
+  const m = t.match(/settings\.comfyuiPort\s*&&\s*settings\.comfyuiPort\s*>\s*0\s*\?\s*settings\.comfyuiPort\s*:\s*(\d+)/);
+  if (!m) throw new Error("无法从 src/lib/comfyui/client.ts 提取 ComfyUI 默认端口");
+
   return m[1];
 }
 
@@ -102,14 +112,17 @@ const FACTS = [
   { key: "shell.splash", placeholder: "{{shell.splash}}", kind: "placeholder", extract: extractSplash },
   // 核对类：文档保留直观值，脚本核对权威源当前端口族
   { key: "dev.host", kind: "verify", extract: () => extractDevHostPort().host },
-  { key: "dev.port", kind: "verify", extract: () => String(extractDevHostPort().port) },
-  { key: "dev.port.fallback", kind: "verify", extract: extractFallbackPorts },
-  // 独立单值端口（非 dev 端口族，与 dev 无同号冲突）：
-  // - registry.port（placeholder 类）：文档用语义化占位符替代裸值。
-  // - mcp.http.port（verify 类）：MCP 端口刻意取在 dev 回落族之外（默认 4300），
-  //   文档保留直观值，脚本核对与 dev 端口族不冲突。
+  // dev 端口族仅对描述 dev 启动链路的文档校验；workshop-mcp.md 的 4300 是 MCP HTTP
+  // 端口（非 dev 回落），若参与 verify 会误判「缺 dev 主端口 3000」，故排除该文档。
+  { key: "dev.port", kind: "verify", extract: () => String(extractDevHostPort().port), excludeDocs: ["docs/workshop-mcp.md"] },
+  { key: "dev.port.fallback", kind: "verify", extract: extractFallbackPorts, excludeDocs: ["docs/workshop-mcp.md"] },
+  // 独立单值端口（非 dev 端口族）。workshop-mcp.md 的端口（MCP 4300 / ComfyUI 8188）
+  // 属独立语义，用占位符替代裸值，doc:render 替换成真实值。
   { key: "registry.port", placeholder: "{{registry.port}}", kind: "placeholder", extract: extractRegistryPort },
-  { key: "mcp.http.port", kind: "verify", extract: extractMcpHttpPort },
+  // MCP / ComfyUI 端口是「独立单值」；MCP 默认端口已取在 dev 回落族之外（4300），
+  // 但为明确语义仍用占位符，并限定仅在 workshop-mcp.md 校验避免跨文档误判。
+  { key: "mcp.http.port", placeholder: "{{mcp.http.port}}", kind: "placeholder", extract: extractMcpHttpPort, onlyDocs: ["docs/workshop-mcp.md"] },
+  { key: "comfyui.port", placeholder: "{{comfyui.port}}", kind: "placeholder", extract: extractComfyUIPort, onlyDocs: ["docs/workshop-mcp.md"] },
   // 路径类：核对文件存在
   { key: "path.tauri.conf", kind: "path", source: "src-tauri/tauri.conf.json" },
   { key: "path.lib.rs", kind: "path", source: "src-tauri/src/lib.rs" },

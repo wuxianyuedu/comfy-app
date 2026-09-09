@@ -4,6 +4,11 @@
 同一份工具定义同时提供 **stdio** 与 **HTTP(Streamable)** 两种 transport，可由外部 AI
 客户端（Claude Desktop / Cline 等）或应用内 agent 连接。
 
+> **占位符约定**：本文中 `{{...}}` 形式的占位符代表文档引用的真实值（如端口），
+> 真实值由 `pnpm doc:check` 运行时从源码/配置动态提取并核对。占位符语义见
+> [`docs/reference-facts.md`](./reference-facts.md)。改动上游源码后可运行
+> `pnpm doc:check` 检查本文是否有值未同步。
+
 ## 架构
 
 - `src/server/mcp/workshop-mcp.ts` — `buildWorkshopMcpServer()`：注册全部工坊工具的
@@ -32,7 +37,7 @@ pnpm db:push            # 或 pnpm exec drizzle-kit push --force
 # stdio：供外部 AI 客户端连接（如 Claude Desktop 的 mcpServers 配置）
 pnpm mcp:stdio
 
-# HTTP：独立服务，默认 http://localhost:4300/mcp（Streamable，无状态）
+# HTTP：独立服务，默认 http://localhost:{{mcp.http.port}}/mcp（Streamable，无状态）
 pnpm mcp:http
 ```
 
@@ -85,4 +90,4 @@ Claude Desktop 示例（`claude_desktop_config.json`）：
   仅图片镜头以静帧占位，统一缩放 1280x720）合成为 mp4。
 - 会话持久化在 `workshopSession` 表，与界面共享同一项目（界面侧接入待后续）。
 - 本地 ComfyUI 必须**正在运行**（启动器会自动拉起；或手动启动），MCP 进程通过
-  `COMFYUI_BASE`（默认 `http://127.0.0.1:8188`，带端口探测）连接。
+  `COMFYUI_BASE`（默认 `http://127.0.0.1:{{comfyui.port}}`，带端口探测）连接。
