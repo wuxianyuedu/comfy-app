@@ -152,18 +152,20 @@ export function BrowserStatusBar() {
           )}
         </button>
 
-        {/* dev server 重启标记：重启中高亮告警（进行中任务会随进程丢失，
-         *  恢复后需重新执行）；恢复后弱化展示最近一次重启时间。 */}
+        {/* dev server 重启标记：仅当检测到**真正**重启（bootId 变化）才展示。
+         *  重启瞬间高亮告警（进行中任务随进程丢失，恢复后需重新执行）；
+         *  随后弱化展示最近一次真正重启时间。显示器关闭/瞬时断网等探测
+         *  波动不被当成重启，不再误报。 */}
         {serverRestarting ? (
           <span
             className="flex items-center gap-1 text-amber-300"
-            title={`dev server 自 ${fmtClock(lastRestartAt)} 起重启，进行中任务已丢失，恢复后请重新执行`}
+            title={`dev server 于 ${fmtClock(lastRestartAt)} 重启，当时进行中的任务已丢失，请重新执行`}
           >
             <span
               aria-hidden
               className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]"
             />
-            <span className="hidden sm:inline">后端重启中 · {fmtClock(lastRestartAt)}</span>
+            <span className="hidden sm:inline">后端已重启 · {fmtClock(lastRestartAt)}</span>
           </span>
         ) : lastRestartAt !== null ? (
           <span
