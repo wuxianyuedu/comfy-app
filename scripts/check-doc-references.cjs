@@ -65,10 +65,17 @@ function checkVerify(text, docPath, f) {
   }
 }
 
+function shouldApplyFactToDoc(f, docPath) {
+  if (f.onlyDocs && !f.onlyDocs.includes(docPath)) return false;
+  if (f.excludeDocs && f.excludeDocs.includes(docPath)) return false;
+  return true;
+}
+
 function checkDoc(docPath) {
   if (!exists(docPath)) { problems.push(`试点文档不存在：${docPath}`); return; }
   const text = readText(docPath);
   for (const f of FACTS) {
+    if (!shouldApplyFactToDoc(f, docPath)) continue; // 事实声明了适用文档范围，未命中则跳过
     if (f.kind === "placeholder") {
       let realValue;
       try { realValue = f.extract(); } catch (e) { problems.push(`[${docPath}] 无法提取 ${f.key}（${e.message}）`); continue; }

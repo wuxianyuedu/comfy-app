@@ -50,13 +50,17 @@
 > 与 dev 端口的「端口族 + 语义清晰」不同，这类端口是**独立语义**，文档里用语义化
 > 占位符替代裸值（与 `shell.*` 类一致），doc:render 替换成真实值。
 >
-> **注**：Workshop MCP HTTP 服务端口（`tools/mcp-http.ts` 的 `MCP_HTTP_PORT ?? 3001`）
-> **未纳入**校验——它与 dev 回落端口 `3001` 同号，文档中出现 `3001` 时脚本无法区分
-> 是 dev 回落还是 MCP 端口，占位符/核对均会误报，故不做校验，避免制造噪音。
+> **关于同号端口的处理**：Workshop MCP HTTP 服务端口（`tools/mcp-http.ts` 的
+> `MCP_HTTP_PORT ?? 3001`）与 dev 回落端口同号 `3001`，ComfyUI 生态端口 `8188` 也非本项目
+> 单一事实。若作为全局占位符会导致其它文档（dev 回落 `3001`、生态 `8188`）被误报，故用
+> **`onlyDocs` 限定**——`mcp.http.port` / `comfyui.port` 仅在 `docs/workshop-mcp.md`
+> 内校验裸值，不影响其它文档。因此这二者**仍纳入校验**，仅限 Workshop MCP 文档上下文。
 
 | key | placeholder | meaning（可读语义） | source（权威定义文件） | extract |
 |---|---|---|---|---|
 | `registry.port` | `{{registry.port}}` | shadcn 本地团队 Registry 服务端口 | `tools/scripts/start-registry.ps1` 的 `$Port` | 读 `$Port` 值（`3874`） |
+| `mcp.http.port` | `{{mcp.http.port}}` | Workshop MCP HTTP 服务端口 | `tools/mcp-http.ts` 的 `MCP_HTTP_PORT ?? 3001` | 读 `MCP_HTTP_PORT` 默认值（`3001`）；仅 `docs/workshop-mcp.md` 校验 |
+| `comfyui.port` | `{{comfyui.port}}` | ComfyUI 默认监听端口 | `src/lib/comfyui/client.ts` 的 `settings.comfyuiPort … : 8188` 默认分支 | 读默认分支值（`8188`）；仅 `docs/workshop-mcp.md` 校验 |
 
 ---
 
@@ -95,6 +99,7 @@
 > **扩展（含值类引用的其余文档）**：
 > - `docs/standards/Comfy-APP-T3-项目开发规范.md`
 > - `docs/standards/16-shadcn-ui与表单校验.md`
+> - `docs/workshop-mcp.md`（MCP HTTP 端口 / ComfyUI 端口，经 `onlyDocs` 限定仅在本篇校验）
 >
 > 后续可继续把其余含「值类」（端口/exe 名独立值）或机器可核对引用的文档逐步纳入
 > （更改 `scripts/doc-facts.cjs` 的 `SCOPED_DOCS` 与登记表即可）。纯**路径类**引用
