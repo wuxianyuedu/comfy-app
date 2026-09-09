@@ -580,6 +580,26 @@ describe("parseFileLogs 文件日志解析", () => {
     expect(parseFileLogs("")).toEqual([]);
   });
 
+  it("Fast Refresh rebuilding 沾染错误级别标记时按 info 落板", () => {
+    const base = new Date(2026, 8, 15);
+    const entries = parseFileLogs(
+      "[2026-09-15 18:23:09.404] [INFO] [Fast Refresh] rebuilding [ERROR] leftover",
+      base,
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.level).toBe("info");
+    expect(entries[0]?.message).toBe("[Fast Refresh] rebuilding [ERROR] leftover");
+  });
+
+  it("Fast Refresh rebuilding 不带级别标记时保持 info", () => {
+    const base = new Date(2026, 8, 15);
+    const entries = parseFileLogs(
+      "[2026-09-15 18:23:09.404] [INFO] [Fast Refresh] rebuilding",
+      base,
+    );
+    expect(entries.map((e) => e.level)).toEqual(["info"]);
+  });
+
   it("解析 app-runtime 行（日期时间 + LEVEL + 命名空间 + 消息）并带级别", () => {
     const base = new Date(2026, 8, 15);
     const entries = parseFileLogs(

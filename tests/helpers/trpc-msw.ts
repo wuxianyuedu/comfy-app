@@ -49,6 +49,10 @@ async function forward(req: Request, router: AnyRouter): Promise<Response> {
  */
 export function setupTrpcServer(router: AnyRouter) {
   return setupServer(
-    http.all(`${ENDPOINT}/*`, async ({ request }) => forward(request, router)),
+    // path 不带 host 前缀时，msw 对「绝对 URL 请求」不匹配（连 * 通配段也
+    // 不生效），测试 client 的 httpBatchStreamLink 打的是完整
+    // http://localhost:3100/api/trpc/...。`*` + `/api/trpc/*` 拼出的
+    // `*/api/trpc/*` 与 host 无关，换端口/主机名都不用跟着改。
+    http.all(`*${ENDPOINT}/*`, async ({ request }) => forward(request, router)),
   );
 }

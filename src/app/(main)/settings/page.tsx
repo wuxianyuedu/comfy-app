@@ -70,7 +70,7 @@ export default function SettingsPage() {
  * 现在：完整错误可展开、可复制；并提示打开日志面板（Ctrl+Shift+L）看
  * 全局错误与启动日志——错误本身也已由 LogProvider 的全局钩子收进面板。
  * 渲染在「设置外壳」内容区：去掉整屏高度，仅居中于内容区，随外壳滚动。 */
-function SettingsLoadError({
+export function SettingsLoadError({
   errorText,
   onRetry,
 }: {

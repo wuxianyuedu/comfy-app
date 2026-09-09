@@ -89,6 +89,20 @@
 
 ### Fixed
 
+- **遇到错误时「应用日志」面板不再一片空白**：三类此前面板收不到的失败现已落盘可见
+  —— ① 设置页 tRPC 查询失败只体现在降级 UI、不经过 console/unhandledrejection，
+  现由逻辑层主动补记 app-runtime 错误日志（同一错误只记一次）；
+  ② 设置弹层（工作区内打开设置）失败视图与独立设置页共用同一套可读降级
+  （完整错误可展开/复制 + 日志面板指引），并保留「返回工作区」；
+  ③ 启动/开发转录里的 `[Fast Refresh] rebuilding` 沾染上一条编译错误的级别标记时
+  不再被解析成 error（热更新进行中 ≠ 应用出错）。
+
+- **修复前端集成测试（MSW）整批失败**：`setupTrpcServer` 的拦截路径不含 host 前缀，
+  msw 对「绝对 URL 请求」（测试 client 的 `httpBatchStreamLink` 打的正是
+  `http://localhost:3100/api/trpc/...`）不匹配，use-settings-page / 集成自检 /
+  模型库等 7 个文件共 78 个用例在 master 上就已失败。改为 `*/api/trpc/*`
+  （与 host 无关，换端口不用跟着改）后全部恢复。
+
 - **修复子图工作流种子选「随机值」仍生成同一张图**：raw 子图（liblib 模板，`class_type` 为 UUID）wrapper 只暴露内层 seed、却未暴露其随机化控制（ComfyUI 将其隔离进 `proxyWidgetErrorQuarantine`），`widgets_values` 里没有 `control_after_generate` 哨兵槽，前端下发 `randomize` 覆盖被跳过、种子保持固定值。现改为：这类节点哨兵槽缺失时，若请求的是「随机值」，回退为在提交前直接生成一颗随机种子写入 seed 槽，保证每次生成的图不同；普通 KSampler 仍走哨兵槽写入随机化模式，行为不变。
 
 - **dev server 重启标记改为「真正重启时间」并排除误报**：原来的右下角重启标记
