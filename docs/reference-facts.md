@@ -96,6 +96,8 @@
 >   （SCOPED_DOCS），防止编辑态被裸值侵蚀后生成文档误当编辑文档。
 > - **何时重新生成**：改动编辑文档或上游源码真实值后，运行 pnpm doc:render 刷新
 >   docs/generated/。生成文档随源码一起提交，读者可直接查看原文。
+> - **可执行工具**：`tools/docs/generate-docs.ps1` 是傻瓜式入口（双击即跑
+>   `doc:check` + `doc:render`），逻辑在 `scripts/generate-docs.ps1`。
 ## 4. 维护规则
 
 1. **改源码/配置里的真实值**：只改源码那一处，跑 `pnpm doc:check` 由脚本自动
