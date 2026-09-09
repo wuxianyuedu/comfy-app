@@ -66,7 +66,7 @@ export interface AppConfig {
   readonly comfyuiBaseUrl: string;
   /** 本机 ComfyUI 的 WebSocket 地址（由 baseUrl 推导）。 */
   readonly comfyuiWsUrl: string;
-  /** 开发服务监听端口（默认 3002）。 */
+  /** 应用开发服务监听端口，取值来自 .env 的 COMFYAPP_PORT（默认 3000）。 */
   readonly port: number;
   /** 特性开关。 */
   readonly features: FeatureFlags;
@@ -83,7 +83,7 @@ function readRawEnv(): Record<string, unknown> {
     logLevel: env.LOG_LEVEL,
     databaseUrl: env.DATABASE_URL,
     comfyuiBaseUrl: env.COMFYUI_BASE_URL,
-    port: env.PORT,
+    port: env.COMFYAPP_PORT,
     reaperEnabled: env.REAPER_ENABLED,
     debugModeDefault: env.DEBUG_MODE_DEFAULT,
   };
@@ -103,7 +103,7 @@ const configSchema = z.object({
     .string()
     .url()
     .default("http://127.0.0.1:8188"),
-  port: z.coerce.number().int().positive().max(65535).default(3002),
+  port: z.coerce.number().int().positive().max(65535).default(3000),
   reaperEnabled: z.coerce.boolean().default(true),
   debugModeDefault: z.coerce.boolean().default(false),
 });
