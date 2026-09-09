@@ -172,6 +172,12 @@ log/
 |---|---|---|
 | 只改了 Rust 壳 / 窗口配置 / 启动页 | `cd src-tauri; cargo build --release --features custom-protocol` | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期 |
 | 生产构建（standalone + 安装包） | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build` |
+| 前端/standalone 体积分析 | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`） |
+  `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认
+  `next build` 走 Turbopack 不受影响；因此分析时强制 `--webpack`。产物
+  `.next/analyze/client.html` / `nodejs.html` / `edge.html`，并监听
+  `http://127.0.0.1:8888` 可视化报告。`output: standalone` 以 webpack 构建时同样生效，
+  可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。 |
 | 重新打包双击启动器 | `tools\build\build-launcher.ps1` | PyInstaller onedir，产物 `start-tauri/`（gitignore） |
 | 开发者工具箱 | `tools\build\rebuild-static.ps1` 等 / `dev-tools` | 见 `tools/README.md` |
 

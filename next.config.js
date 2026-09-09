@@ -4,6 +4,7 @@
  */
 import "./src/env.js";
 import path from "node:path";
+import withBundleAnalyzer from "@next/bundle-analyzer";
 
 /** @type {import("next").NextConfig} */
 const config = {
@@ -112,4 +113,15 @@ const config = {
   },
 };
 
-export default config;
+// ── @next/bundle-analyzer（可选体积分析）────────────────────────────
+// 仅当 ANALYZE=true 时启用（先跑 `pnpm analyze`，由 scripts/analyze-bundle.mjs 注入该变量）。
+// 注意：@next/bundle-analyzer 挂在 webpack 上，Turbopack 不支持；因此分析时
+// 必须强制走 webpack（analyze 脚本内 `next build --webpack`），默认
+// `next build`（Turbopack）不受影响。构建完成后输出可视化报告到
+// .next/analyze/*.html（client / nodejs / edge 三份），并监听
+// http://127.0.0.1:8888 供浏览器查看。
+const withBundleAnalyzerConfig = withBundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+});
+
+export default withBundleAnalyzerConfig(config);
