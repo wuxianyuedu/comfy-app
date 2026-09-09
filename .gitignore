@@ -99,3 +99,9 @@ playwright-report/
 
 # pnpm 本地 store（本环境 store-dir 落在仓库内，不入库）
 /.pnpm-store/
+
+# Tauri 构建产物（本地 cargo build / build-desktop.mjs 后生成，不入库）
+# Cargo.lock 由每次构建自动更新（依赖图内嵌 sha/时间戳），保持当前入库版本不动
+/src-tauri/Cargo.lock
+# build.rs 声明 AppManifest 命令后由 tauri-build 自动生成的 ACL 权限文件
+/src-tauri/permissions/
