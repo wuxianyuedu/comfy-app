@@ -1,0 +1,91 @@
+# 文档引用事实登记表（单一事实映射）
+
+> 本文将「文档里散落的具体值」收敛为一份**稳定映射**：每个值用一个语义化
+> 占位符表示，并声明它的**权威定义文件**与**提取规则**。
+>
+> **关键设计**：本登记表**不存值本身**——真实值由校验脚本
+> `scripts/check-doc-references.cjs` 在运行 `pnpm doc:check` 时**直接从权威源
+> 动态提取**。源码 / 配置才是唯一事实，本表只声明「某占位符代表哪一种值、去哪
+> 个文件读」，因此不存在「登记表抄错值」的第二事实问题。改源码 → 跑
+> `pnpm doc:check` → 文档里未同步的占位符会立刻报错。
+
+---
+
+## 1. 值类引用（端口 / 地址 / 可执行文件名）
+
+> 这一类是文档里最容易过期、跨文档复用的**值**。分两种处理方式：
+> - **占位符类**（`shell.*`）：文档里用占位符 `{{...}}` 替代裸值，脚本发现裸值即报错。
+> - **直观值核对类**（`dev.*` 端口/地址）：文档保留 `localhost:3000` 这种直观形态
+>   （可读性最佳），脚本从权威源提取当前值，发现文档值与权威不符即报错。
+> `key` 是语义标识；`placeholder` 是占位符文本（占位符类才有）；`source` 是权威定义文件；`extract` 是脚本读取真实值的方式。
+
+### 1.1 开发端口与地址（直观值核对类，保留 localhost:3000 原文）
+
+| key | 文档形态（保留直观值） | meaning（可读语义） | source（权威定义文件） | extract |
+|---|---|---|---|---|
+| `dev.host` | `localhost` / `127.0.0.1` | dev server 监听主机 | `src-tauri/tauri.conf.json` 的 `build.devUrl`；`scripts/dev-launcher.ps1` 的 `-H` 参数 | 从 `devUrl` 的 host 段提取；核对 `dev-launcher.ps1` 用 `127.0.0.1` |
+| `dev.port` | `:3000` | dev server 主端口 | `src-tauri/tauri.conf.json` 的 `build.devUrl`；`scripts/dev-launcher.ps1` 的 `-p 3000` | 从 `devUrl` 的 port 段提取，与 `dev-launcher.ps1` 的 `-p 3000` 交叉核对 |
+| `dev.port.fallback` | `:3001` `:3002` | 端口被占时的回落候选 | `scripts/dev-launcher.ps1` 的端口清理列表 | 读 `dev-launcher.ps1` 中端口清理列表 `3000/3001/3002` |
+
+### 1.2 启动器（launcher）可执行文件
+
+> 三个 exe 由同一份 `tools/start-tauri.spec` 打包，靠 `LAUNCHER_NAME` 区分。
+> 权威定义点是 `tools/scripts/build-launcher*.ps1` 注入的 `LAUNCHER_NAME` 值。
+
+| key | placeholder | meaning（可读语义） | source（权威定义文件） | extract |
+|---|---|---|---|---|
+| `shell.exe.prebuilt` | `{{shell.exe.prebuilt}}` | prebuilt 启动器 exe | `tools/scripts/build-launcher.ps1` 的 `$env:LAUNCHER_NAME` | 读 `LAUNCHER_NAME` 值，产物为 `start-tauri.exe` |
+| `shell.exe.dev` | `{{shell.exe.dev}}` | tauri dev 启动器 exe | `tools/scripts/build-launcher-dev.ps1` 的 `$env:LAUNCHER_NAME` | 同上，产物为 `start-tauri-dev.exe` |
+| `shell.exe.standalone` | `{{shell.exe.standalone}}` | standalone 启动器 exe | `tools/scripts/build-launcher-standalone.ps1` 的 `$env:LAUNCHER_NAME` | 同上，产物为 `start-tauri-standalone.exe` |
+
+### 1.3 Rust 壳目标文件
+
+| key | placeholder | meaning（可读语义） | source（权威定义文件） | extract |
+|---|---|---|---|---|
+| `shell.app.exe` | `{{shell.app.exe}}` | 编译出的 Tauri 壳 exe | `scripts/dev-launcher.ps1` 指向的 `src-tauri/target/release/app.exe` | 读 `dev-launcher.ps1` 中 `app.exe` 文件名与路径 |
+| `shell.splash` | `{{shell.splash}}` | 启动页文件名 | `src-tauri/tauri.conf.json` 的 `windows[0].url` | 读 `windows[0].url` 值（`splash.html`） |
+
+---
+
+## 2. 路径类引用（文件 / 目录路径）
+
+> 这一类是「文件名 / 路径」本身，出现在文档里是为了让读者知道去哪个文件看。
+> 改为占位符反而会**严重伤害可读性**（读者看不懂占位符是哪条路径），且文件
+> 重命名/移动属小概率事件。因此**保留原样**，由脚本核对「路径指向的文件确实存在、
+> 且位于正确目录」——防止文档写了个不存在的路径（比裸值过期更隐蔽的错误）。
+> 新增/移动文件后跑 `pnpm doc:check` 即可发现文档路径失效。
+
+| key | 语义 | 权威路径（应存在） | 说明 |
+|---|---|---|---|
+| `path.tauri.conf` | Tauri 配置 | `src-tauri/tauri.conf.json` | 窗口与构建配置 |
+| `path.lib.rs` | Rust 壳入口 | `src-tauri/src/lib.rs` | 窗口逻辑 / 端口协调 |
+| `path.dev-launcher` | 启动编排脚本 | `scripts/dev-launcher.ps1` | 唯一进程编排者 |
+| `path.start-launcher-py` | Python 启动器 | `scripts/start_tauri_launcher.py` | PyInstaller 打包来源 |
+| `path.spec` | PyInstaller spec | `tools/start-tauri.spec` | 三个 exe 共用的打包定义 |
+| `path.build-launcher` | 打包预编译 exe 脚本 | `tools/scripts/build-launcher.ps1` | prebuilt 入口 |
+| `path.build-desktop` | static 组装脚本 | `scripts/build-desktop.mjs` | 产出 `src-tauri/static` |
+| `path.rebuild-static` | 重建 static 入口 | `tools/build/rebuild-static.ps1` | 入口薄壳（逻辑在 tools/scripts/） |
+| `path.build-tauri-release` | 重编壳 + 打包 | `tools/build/build-tauri-release.ps1` | 重编壳入口 |
+| `path.nvmrc` | Node 版本 | `.nvmrc` | Node LTS 约定 |
+
+---
+
+## 3. 校验范围（试点）
+
+> 当前 `pnpm doc:check` 只校验试点文档，避免一次性大面积改造：
+> - `docs/standards/launch-and-build.md`
+> - `docs/startup-hotreload.md`
+> - `docs/guide-non-developer.md`
+>
+> 试点跑通后，再把其余文档逐步纳入（更改本表 `scope` 即可）。文档删除或新增路径
+> 时，同步维护本表与 `docs/README.md` 的文档体系索引。
+
+## 4. 维护规则
+
+1. **改源码/配置里的真实值**：只改源码那一处，跑 `pnpm doc:check` 由脚本自动
+   发现文档未同步处，按提示更新占位符（占位符本身不变，变的是它代表的值）。
+2. **新增可复用值**：先在本表加一行 `key / placeholder / source / extract`，
+   再在文档用占位符替代裸值。
+3. **占位符要可读**：`placeholder` 用语义化命名（如 `{{dev.port}}`、`{{shell.exe.prebuilt}}`），
+   禁止 `{{x1}}` 这类晦涩代号；表内 `meaning` 列给出人类可读解释。
+4. **本表不存值**：禁止在本表硬编码真实值（那是第二事实）。值只在源码，由脚本提取。
