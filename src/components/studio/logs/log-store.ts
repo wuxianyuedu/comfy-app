@@ -259,6 +259,16 @@ function parseLogLevel(level: string): LogLevel {
   }
 }
 
+/**
+ * 匹配 Next.js dev 的 `[Fast Refresh] rebuilding` 转录行。
+ * 它由框架打进 launcher/dev 转录（无业务含义），但行内常携带上一条编译
+ * 错误的级别标记（形如 `[INFO] [Fast Refresh] rebuilding [ERROR] ...`），
+ * 按级别正则会整行落成 error——看起来像应用出错，实际只是热更新进行中。
+ * 与 isNextDevNoise（浏览器 console 侧过滤）互补：这条处理文件转录侧。
+ */
+const FAST_REFRESH_REBUILD_RE =
+  /\[Fast\s*Refresh\]\s*rebuilding(?:\s*\[(?:ERROR|WARN|DEBUG)\])?/i;
+
 export function parseFileLogs(text: string, baseDate?: Date): LogEntry[] {
   const now = Date.now();
   const today = baseDate ?? new Date();
@@ -295,11 +305,15 @@ export function parseFileLogs(text: string, baseDate?: Date): LogEntry[] {
         Number(ms),
       );
       const nsTag = ns ? `[${ns}] ` : "";
+      const msgText = nsTag + (msg ?? "");
       entries.push({
         id: nextId(),
         time: d.getTime(),
-        level: parseLogLevel(lv ?? "INFO"),
-        message: nsTag + (msg ?? ""),
+        // Fast Refresh 进行中若沾染上一条错误的级别标记，按 info 落板
+        level: FAST_REFRESH_REBUILD_RE.test(msgText)
+          ? "info"
+          : parseLogLevel(lv ?? "INFO"),
+        message: msgText,
         source: "system",
       });
       continue;

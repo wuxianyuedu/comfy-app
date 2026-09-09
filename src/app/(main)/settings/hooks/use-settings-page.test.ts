@@ -42,6 +42,27 @@ vi.mock("~/lib/llm/ollama-client", () => ({
   startOllama: vi.fn(),
 }));
 
+vi.mock("~/lib/app-runtime-log", () => {
+  const calls: Array<{ level: string; msg: string; fields?: unknown }> = [];
+  const makeLogger = () => ({
+    info: (msg: string, fields?: unknown) => void calls.push({ level: "info", msg, fields }),
+    warn: (msg: string, fields?: unknown) => void calls.push({ level: "warn", msg, fields }),
+    error: (msg: string, fields?: unknown) => void calls.push({ level: "error", msg, fields }),
+    debug: (msg: string, fields?: unknown) => void calls.push({ level: "debug", msg, fields }),
+    child: () => makeLogger(),
+  });
+  return {
+    createAppRuntimeLogger: () => makeLogger(),
+    __runtimeLogCalls: calls,
+  };
+});
+// vi.mock 工厂额外导出的调用记录（仅测试可见，真实模块没有该导出）。
+const runtimeLogCalls = (
+  (await import("~/lib/app-runtime-log")) as unknown as {
+    __runtimeLogCalls: Array<{ level: string; msg: string; fields?: unknown }>;
+  }
+).__runtimeLogCalls;
+
 const probeMock = vi.mocked(probeOllama);
 const startMock = vi.mocked(startOllama);
 
@@ -365,6 +386,41 @@ describe("useSettingsPage", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  /* 回归 #273：设置加载失败只体现在降级 UI，不经过 console/unhandledrejection，
+   * 日志面板里什么也没有。现在失败会主动落 app-runtime 错误日志（面板轮询可见）。 */
+  it("查询失败时把错误落 app-runtime 日志且同一错误只记一次", async () => {
+    behavior.llmError = "数据库被锁";
+    (runtimeLogCalls as unknown as unknown[]).length = 0;
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() =>
+      expect(
+        (runtimeLogCalls as unknown as Array<{ level: string }>).some(
+          (c) => c.level === "error",
+        ),
+      ).toBe(true),
+    );
+    // hasError 是「两份数据都没拿到时的兜底」：llm 失败但 settings 已播种 →
+    // 不落降级 UI（与生产语义一致），但错误日志必须已补记。
+    expect(result.current.drafts).toBeNull();
+    expect(result.current.errorText).toContain("数据库被锁");
+    const errors = (runtimeLogCalls as unknown as Array<{ level: string; msg: string }>).filter(
+      (c) => c.level === "error",
+    );
+    expect(errors.length).toBe(1);
+    expect(errors[0]?.msg).toContain("数据库被锁");
+
+    // 重试后失败不变 → 不重复记
+    await act(async () => {
+      result.current.retry();
+    });
+    const errorsAfter = (runtimeLogCalls as unknown as Array<{ level: string; msg: string }>).filter(
+      (c) => c.level === "error",
+    );
+    expect(errorsAfter.length).toBe(1);
   });
 
   it("startOllama 失败 → flash 出可读文案（失败路径必须有出口）", async () => {

@@ -12,6 +12,7 @@
 
 import { useSettingsPage } from "~/app/(main)/settings/hooks/use-settings-page";
 import { SettingsPageView } from "~/app/(main)/settings/SettingsPageView";
+import { SettingsLoadError } from "~/app/(main)/settings/page";
 import { SettingsShell } from "~/components/settings/SettingsShell";
 import { PageLoading } from "~/components/ui/page-loading";
 
@@ -45,25 +46,16 @@ export function SettingsOverlay({ onClose }: SettingsOverlayProps) {
     return (
       <div className="bg-bg fixed inset-0 z-50">
         <SettingsShell {...frame}>
-          <div className="grid min-h-[60vh] place-items-center p-6 text-center">
-            <div>
-              <p className="text-rose-400">加载设置失败，请刷新重试</p>
-              <p className="text-muted-foreground mt-2 text-xs">
-                {c.errorText}
-              </p>
-              <button
-                onClick={c.retry}
-                className="bg-primary mt-4 rounded-lg px-4 py-2 text-sm text-white"
-              >
-                重试
-              </button>
-              <button
-                onClick={onClose}
-                className="text-muted-foreground mt-3 block w-full text-sm underline"
-              >
-                返回工作区
-              </button>
-            </div>
+          {/* 与独立路由 /settings 共用同一套降级视图：错误可展开/复制、
+              引导打开日志面板（面板与文件日志都收了这条失败）。 */}
+          <div className="relative">
+            <SettingsLoadError errorText={c.errorText} onRetry={c.retry} />
+            <button
+              onClick={onClose}
+              className="text-muted-foreground hover:text-foreground absolute bottom-6 left-1/2 -translate-x-1/2 text-sm underline"
+            >
+              返回工作区
+            </button>
           </div>
         </SettingsShell>
       </div>
