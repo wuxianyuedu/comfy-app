@@ -15,91 +15,10 @@
  *   - kind 'path'：文档保留路径原文，脚本核对路径指向的文件确实存在。
  *
  * 接入方式：`pnpm doc:check` 手动命令，不接 pre-commit（避免过度打扰提交）。
- * 人类可读映射见 docs/reference-facts.md；本文件 FACTS 与其 key 一一对应。
+ * 人类可读映射见 docs/reference-facts.md；FACTS 与提取逻辑见 scripts/doc-facts.cjs
+ * （本脚本与 doc:render 共用，避免第二事实）。
  */
-const fs = require("node:fs");
-const path = require("node:path");
-
-const ROOT = path.resolve(__dirname, "..");
-
-const SCOPED_DOCS = [
-  "docs/standards/launch-and-build.md",
-  "docs/startup-hotreload.md",
-  "docs/guide-non-developer.md",
-];
-
-function readJson(p) { return JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8")); }
-function readText(p) { return fs.readFileSync(path.join(ROOT, p), "utf8"); }
-function exists(p) { return fs.existsSync(path.join(ROOT, p)); }
-function splitHostPort(url) {
-  const m = url.match(/\/\/([^:/]+):(\d+)/);
-  if (!m) throw new Error(`无法从 URL 提取 host:port: ${url}`);
-  return { host: m[1], port: Number(m[2]) };
-}
-
-// ---- 权威值提取（运行时从源码/配置动态读取） ----
-function extractDevHostPort() {
-  const conf = readJson("src-tauri/tauri.conf.json");
-  const { host, port } = splitHostPort(conf.build.devUrl);
-  const launcher = readText("scripts/dev-launcher.ps1");
-  const pMatch = launcher.match(/-p\s+(\d+)/);
-  const launcherPort = pMatch ? Number(pMatch[1]) : null;
-  if (launcherPort !== port) {
-    throw new Error(`端口权威源冲突：tauri.conf.json devUrl=${port} 但 dev-launcher.ps1 -p=${launcherPort}`);
-  }
-  return { host, port };
-}
-function extractFallbackPorts() {
-  const launcher = readText("scripts/dev-launcher.ps1");
-  const m = launcher.match(/foreach \(\$port in @\(([^)]+)\)\)/);
-  if (!m) throw new Error("无法从 dev-launcher.ps1 提取端口清理列表");
-  const { port: mainPort } = extractDevHostPort();
-  return m[1].split(",").map((s) => Number(s.trim()))
-    .filter((n) => !Number.isNaN(n) && n > 0 && n !== mainPort).map(String);
-}
-function extractLauncherExe() {
-  const spec = readText("tools/start-tauri.spec");
-  const m = spec.match(/os\.environ\.get\(\s*['"]LAUNCHER_NAME['"]\s*,\s*['"]([^'"]+)['"]\s*\)/);
-  return `${(m ? m[1] : "start-tauri")}.exe`;
-}
-function extractLauncherExeByName(ps1) {
-  const t = readText(ps1);
-  const m = t.match(/\$env:LAUNCHER_NAME\s*=\s*["']([^"']+)["']/);
-  if (!m) throw new Error(`无法从 ${ps1} 提取 LAUNCHER_NAME`);
-  return `${m[1]}.exe`;
-}
-function extractSplash() {
-  const conf = readJson("src-tauri/tauri.conf.json");
-  const win = conf.app.windows.find((w) => w.label === "splash") || conf.app.windows[0];
-  return win.url;
-}
-
-// --------------------------------------------------------------------------
-// FACTS：机器可读事实定义（与 docs/reference-facts.md 的 key 一一对应）
-// --------------------------------------------------------------------------
-const FACTS = [
-  // 占位符类：文档用占位符替代裸值
-  { key: "shell.exe.prebuilt", placeholder: "{{shell.exe.prebuilt}}", kind: "placeholder", extract: extractLauncherExe },
-  { key: "shell.exe.dev", placeholder: "{{shell.exe.dev}}", kind: "placeholder", extract: () => extractLauncherExeByName("tools/scripts/build-launcher-dev.ps1") },
-  { key: "shell.exe.standalone", placeholder: "{{shell.exe.standalone}}", kind: "placeholder", extract: () => extractLauncherExeByName("tools/scripts/build-launcher-standalone.ps1") },
-  { key: "shell.app.exe", placeholder: "{{shell.app.exe}}", kind: "placeholder", extract: () => "app.exe" },
-  { key: "shell.splash", placeholder: "{{shell.splash}}", kind: "placeholder", extract: extractSplash },
-  // 核对类：文档保留直观值，脚本核对权威源当前端口族
-  { key: "dev.host", kind: "verify", extract: () => extractDevHostPort().host },
-  { key: "dev.port", kind: "verify", extract: () => String(extractDevHostPort().port) },
-  { key: "dev.port.fallback", kind: "verify", extract: extractFallbackPorts },
-  // 路径类：核对文件存在
-  { key: "path.tauri.conf", kind: "path", source: "src-tauri/tauri.conf.json" },
-  { key: "path.lib.rs", kind: "path", source: "src-tauri/src/lib.rs" },
-  { key: "path.dev-launcher", kind: "path", source: "scripts/dev-launcher.ps1" },
-  { key: "path.start-launcher-py", kind: "path", source: "scripts/start_tauri_launcher.py" },
-  { key: "path.spec", kind: "path", source: "tools/start-tauri.spec" },
-  { key: "path.build-launcher", kind: "path", source: "tools/scripts/build-launcher.ps1" },
-  { key: "path.build-desktop", kind: "path", source: "scripts/build-desktop.mjs" },
-  { key: "path.rebuild-static", kind: "path", source: "tools/build/rebuild-static.ps1" },
-  { key: "path.build-tauri-release", kind: "path", source: "tools/build/build-tauri-release.ps1" },
-  { key: "path.nvmrc", kind: "path", source: ".nvmrc" },
-];
+const { SCOPED_DOCS, FACTS, readText, exists, extractDevHostPort, extractFallbackPorts } = require("./doc-facts.cjs");
 
 const problems = [];
 
