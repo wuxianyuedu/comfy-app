@@ -78,6 +78,13 @@ function extractRegistryPort() {
   if (!m) throw new Error("无法从 tools/scripts/start-registry.ps1 提取 Port");
   return m[1];
 }
+function extractMcpHttpPort() {
+  // MCP HTTP 端口权威定义为 tools/mcp-http.ts 的默认值（可被 MCP_HTTP_PORT 覆盖）。
+  const t = readText("tools/mcp-http.ts");
+  const m = t.match(/MCP_HTTP_PORT\s*\?\?\s*(\d+)/);
+  if (!m) throw new Error("无法从 tools/mcp-http.ts 提取 MCP HTTP 端口");
+  return m[1];
+}
 
 // --------------------------------------------------------------------------
 // FACTS：机器可读事实定义（与 docs/reference-facts.md 的 key 一一对应）
@@ -97,9 +104,12 @@ const FACTS = [
   { key: "dev.host", kind: "verify", extract: () => extractDevHostPort().host },
   { key: "dev.port", kind: "verify", extract: () => String(extractDevHostPort().port) },
   { key: "dev.port.fallback", kind: "verify", extract: extractFallbackPorts },
-  // 独立单值端口（非 dev 端口族，与 dev 无同号冲突）：文档用语义化占位符替代裸值。
-  // 注：MCP HTTP 服务端口（3001）未纳入——它与 dev 回落端口 3001 同号，占位符/verify 均无法区分语义，故不校验。
+  // 独立单值端口（非 dev 端口族，与 dev 无同号冲突）：
+  // - registry.port（placeholder 类）：文档用语义化占位符替代裸值。
+  // - mcp.http.port（verify 类）：MCP 端口刻意取在 dev 回落族之外（默认 4300），
+  //   文档保留直观值，脚本核对与 dev 端口族不冲突。
   { key: "registry.port", placeholder: "{{registry.port}}", kind: "placeholder", extract: extractRegistryPort },
+  { key: "mcp.http.port", kind: "verify", extract: extractMcpHttpPort },
   // 路径类：核对文件存在
   { key: "path.tauri.conf", kind: "path", source: "src-tauri/tauri.conf.json" },
   { key: "path.lib.rs", kind: "path", source: "src-tauri/src/lib.rs" },
@@ -130,4 +140,5 @@ module.exports = {
   extractLauncherExeByName,
   extractSplash,
   extractRegistryPort,
+  extractMcpHttpPort,
 };

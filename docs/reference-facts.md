@@ -47,16 +47,20 @@
 
 ### 1.4 独立单值端口（非 dev 端口族）
 
-> 与 dev 端口的「端口族 + 语义清晰」不同，这类端口是**独立语义**，文档里用语义化
-> 占位符替代裸值（与 `shell.*` 类一致），doc:render 替换成真实值。
+> 与 dev 端口的「端口族 + 语义清晰」不同，这类端口是**独立语义**：
+> - `registry.port`（placeholder 类）文档用语义化占位符替代裸值，doc:render 替换成真实值；
+> - `mcp.http.port`（verify 类）文档保留直观值，脚本核对权威源当前值。
 >
-> **注**：Workshop MCP HTTP 服务端口（`tools/mcp-http.ts` 的 `MCP_HTTP_PORT ?? 3001`）
-> **未纳入**校验——它与 dev 回落端口 `3001` 同号，文档中出现 `3001` 时脚本无法区分
-> 是 dev 回落还是 MCP 端口，占位符/核对均会误报，故不做校验，避免制造噪音。
+> **MCP 端口约束**：MCP HTTP 服务与 dev server 分属不同用途，端口号必须**避开 dev 回落族**
+> （`[COMFYAPP_PORT, +1, +2]`，默认 `3000/3001/3002`），否则脚本（如 `scripts/sync-lint.ps1` 的
+> 端口监听检测、doc:check 的 dev 端口族核对）会把 MCP 监听误判成 dev server 实例。因此 MCP
+> 默认端口刻意取在 dev 回落族之外，具体值由 `tools/mcp-http.ts` 单一权威定义，可通过环境变量
+> `MCP_HTTP_PORT` 覆盖。
 
-| key | placeholder | meaning（可读语义） | source（权威定义文件） | extract |
-|---|---|---|---|---|
-| `registry.port` | `{{registry.port}}` | shadcn 本地团队 Registry 服务端口 | `tools/scripts/start-registry.ps1` 的 `$Port` | 读 `$Port` 值（`3874`） |
+| key | 文档形态（保留直观值） | placeholder | meaning（可读语义） | source（权威定义文件） | extract |
+|---|---|---|---|---|---|
+| `registry.port` | — | `{{registry.port}}` | shadcn 本地团队 Registry 服务端口 | `tools/scripts/start-registry.ps1` 的 `$Port` | 读 `$Port` 值（`3874`） |
+| `mcp.http.port` | `:4300` | — | MCP HTTP(Streamable) 服务监听端口 | `tools/mcp-http.ts` 的 `process.env.MCP_HTTP_PORT ?? 4300` | 读 `mcp-http.ts` 中的默认端口 |
 
 ---
 
