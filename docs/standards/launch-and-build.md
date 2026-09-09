@@ -51,7 +51,7 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 
 > 取值合法性：1~65535；非法或缺失时统一回退 3000，并在启动日志中 WARN 提示。
 >
-> **推荐经 `start-tauri.ps1` / `start-tauri.exe`（launcher）启动**：launcher 会把
+> **推荐经 `start-tauri.ps1` / `{{shell.exe.prebuilt}}`（launcher）启动**：launcher 会把
 > `COMFYAPP_DEV_URL` / `COMFYAPP_PORT` 注入壳进程，`tauri.conf.json` 的静态 `devUrl`
 > 仅作为兜底，不参与主导航。若绕过 launcher 直接 `pnpm tauri dev` 且改了端口，
 > 需同步修改 `src-tauri/tauri.conf.json` 的 `build.devUrl` 指向新端口。
