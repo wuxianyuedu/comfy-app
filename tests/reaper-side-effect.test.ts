@@ -51,8 +51,12 @@ describe("ComfyUI reaper 副作用启动路径回归", () => {
       join(process.cwd(), "src", "lib", "comfyui", "reaper.ts"),
       "utf8"
     );
-    // reaper 不含 `export ...` 顶层导出,只能靠副作用 import 触发;
-    // 若有导出则本护栏前提失效,提示需改为断言「reaper 的启动函数被调用」。
-    expect(src).not.toMatch(/^export\b/m);
+    // reaper 的启动必须靠模块自副作用(self-start),不能依赖某个具名导出被
+    // 调用方遗漏——这是本护栏的前提。它虽导出纯函数 `isTaskClaimedInProcess`
+    // (供 reaper.test.ts 单测其认领逻辑),但那不影响孤儿回收的副作用启动:
+    // 真正保证启动路径的是 `startReaper()` 在模块顶层被调用。若有人删掉该自
+    // 启动调用或把侧副作用收进具名导出,此断言会先红,提示把副作用留在模块
+    // 加载路径上。
+    expect(src).toMatch(/^startReaper\(\);/m);
   });
 });
