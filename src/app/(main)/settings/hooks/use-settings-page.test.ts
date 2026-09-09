@@ -31,6 +31,7 @@ import { setupTrpcServer } from "../../../../../tests/helpers/trpc-msw";
 import { api } from "~/trpc/react";
 import { probeOllama, startOllama } from "~/lib/llm/ollama-client";
 
+
 import {
   useSettingsPage,
   type LlmConfig,
@@ -42,27 +43,55 @@ vi.mock("~/lib/llm/ollama-client", () => ({
   startOllama: vi.fn(),
 }));
 
-vi.mock("~/lib/app-runtime-log", () => {
-  const calls: Array<{ level: string; msg: string; fields?: unknown }> = [];
-  const makeLogger = () => ({
-    info: (msg: string, fields?: unknown) => void calls.push({ level: "info", msg, fields }),
-    warn: (msg: string, fields?: unknown) => void calls.push({ level: "warn", msg, fields }),
-    error: (msg: string, fields?: unknown) => void calls.push({ level: "error", msg, fields }),
-    debug: (msg: string, fields?: unknown) => void calls.push({ level: "debug", msg, fields }),
-    child: () => makeLogger(),
-  });
+// 客户端逻辑层现经 `postAppRuntimeLog`（走 `/api/logs/app-runtime`）把失败补记到
+// app-runtime 日志，不再直接 import Node-only 的 `app-runtime-log`（见 ISSUE #282）。
+// 测试保留 `fetchFileLogSlice` 真实实现（经 MSW 返回日志），只 spy `postAppRuntimeLog`
+// 并记录调用参数。`runtimeLogCalls` 须用 vi.hoisted 定义，供工厂在提升后引用。
+// 客户端逻辑层现经 `postAppRuntimeLog`（走 `/api/logs/app-runtime`）把失败补记到
+// app-runtime 日志，不再直接 import Node-only 的 `app-runtime-log`（见 ISSUE #282）。
+// 测试通过 `vi.importActual` 保留 `fetchFileLogSlice` 真实实现（经 MSW 返回日志），
+// 只 spy `postAppRuntimeLog` 并记录调用参数。
+const { postAppRuntimeLogMock, runtimeLogCalls } = vi.hoisted(() => {
+  const calls: Array<{
+    ns: string;
+    level: string;
+    msg: string;
+    fields?: unknown;
+  }> = [];
   return {
-    createAppRuntimeLogger: () => makeLogger(),
-    __runtimeLogCalls: calls,
+    postAppRuntimeLogMock: vi.fn(
+      (
+        ns: string,
+        level: string,
+        msg: string,
+        fields?: unknown,
+      ): Promise<void> => {
+        calls.push({ ns, level, msg, fields });
+        return Promise.resolve();
+      },
+    ),
+    runtimeLogCalls: calls,
   };
 });
-// vi.mock 工厂额外导出的调用记录（仅测试可见，真实模块没有该导出）。
-const runtimeLogCalls = (
-  (await import("~/lib/app-runtime-log")) as unknown as {
-    __runtimeLogCalls: Array<{ level: string; msg: string; fields?: unknown }>;
-  }
-).__runtimeLogCalls;
-
+vi.mock("~/lib/log-file-client", () => {
+  // fetchFileLogSlice 复刻真实实现（走全局 fetch，由 MSW 拦截返回日志内容）。
+  // 之所以不引用 importOriginal：真实实现只是对 /api/logs/current 的一次 fetch，
+  // 这里等价转发，避免 vitest 别名解析与模块类型在工厂内部的告警。
+  const fetchFileLogSlice = vi.fn(
+    async (
+      source: string,
+      offset: number,
+    ): Promise<{ content: string; size: number; offset: number } | null> => {
+      const res = await fetch(`/api/logs/current?source=${source}&offset=${offset}`);
+      if (!res.ok) return null;
+      return (await res.json()) as { content: string; size: number; offset: number };
+    },
+  );
+  return {
+    fetchFileLogSlice,
+    postAppRuntimeLog: postAppRuntimeLogMock,
+  };
+});
 const probeMock = vi.mocked(probeOllama);
 const startMock = vi.mocked(startOllama);
 
@@ -216,6 +245,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
  * comfyui-runtime 日志，没有 handler 会以 onUnhandledRequest:error 报
  * unhandled rejection（与上面 probeMock 同源问题）。 */
 beforeEach(() => {
+  runtimeLogCalls.length = 0;
   probeMock.mockResolvedValue({ up: true, models: [] });
   startMock.mockResolvedValue(undefined);
   server.use(
