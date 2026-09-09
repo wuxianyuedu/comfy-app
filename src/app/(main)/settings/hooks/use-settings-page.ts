@@ -14,7 +14,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 
 import { errorMessage } from "~/lib/error-message";
-import { isDesktopShell, openUrlInShell } from "~/lib/desktop-shell-client";
+import { isDesktopShell } from "~/lib/desktop-shell-client";
+import { useShellTabs } from "~/lib/shell-tabs-store";
 import {
   checkAppUpdate as checkAppUpdateClient,
   downloadAndInstallUpdate,
@@ -541,8 +542,17 @@ export function useSettingsPage(): SettingsPageController {
           await comfyStatusQ.refetch();
           return;
         }
-        const result = await openUrlInShell(base);
-        showFlash(result.ok ? "ok" : "err", result.detail);
+        // 桌面壳内：在同一个主窗口里开一个「ComfyUI」页签（iframe 内嵌），
+        // 替代此前会弹出空白独立窗口的 open_comfyui_window 方案。
+        // 用稳定 id 打开 ComfyUI 页签：重启后端口偏移（base 变化）时
+        // 复用同一页签并刷新地址，而不是叠出重复页签。
+        useShellTabs.getState().openTab({
+          id: "comfyui",
+          label: "ComfyUI",
+          url: base,
+          closable: true,
+        });
+        showFlash("ok", `已在页签中打开 ComfyUI（${base}）`);
       } else {
         // 浏览器 / dev 模式：没有可开窗的壳，走服务端命令用系统浏览器打开。
         const result = await comfyOpenM.mutateAsync();
