@@ -45,16 +45,22 @@
 | `shell.app.exe` | `{{shell.app.exe}}` | 编译出的 Tauri 壳 exe | `scripts/dev-launcher.ps1` 指向的 `src-tauri/target/release/app.exe` | 读 `dev-launcher.ps1` 中 `app.exe` 文件名与路径 |
 | `shell.splash` | `{{shell.splash}}` | 启动页文件名 | `src-tauri/tauri.conf.json` 的 `windows[0].url` | 读 `windows[0].url` 值（`splash.html`） |
 
-### 1.4 MCP HTTP 端口
+### 1.4 独立单值端口（非 dev 端口族）
 
-> MCP HTTP 服务与 dev server 分属不同用途，端口号必须**避开 dev 回落族**（`[COMFYAPP_PORT, +1, +2]`，
-> 默认 `3000/3001/3002`），否则脚本（如 `scripts/sync-lint.ps1` 的端口监听检测、doc:check 的
-> dev 端口族核对）会把 MCP 监听误判成 dev server 实例。因此 MCP 默认端口刻意取在 dev 回落族之外，
-> 且具体值由 `tools/mcp-http.ts` 单一权威定义，可通过环境变量 `MCP_HTTP_PORT` 覆盖。
+> 与 dev 端口的「端口族 + 语义清晰」不同，这类端口是**独立语义**：
+> - `registry.port`（placeholder 类）文档用语义化占位符替代裸值，doc:render 替换成真实值；
+> - `mcp.http.port`（verify 类）文档保留直观值，脚本核对权威源当前值。
+>
+> **MCP 端口约束**：MCP HTTP 服务与 dev server 分属不同用途，端口号必须**避开 dev 回落族**
+> （`[COMFYAPP_PORT, +1, +2]`，默认 `3000/3001/3002`），否则脚本（如 `scripts/sync-lint.ps1` 的
+> 端口监听检测、doc:check 的 dev 端口族核对）会把 MCP 监听误判成 dev server 实例。因此 MCP
+> 默认端口刻意取在 dev 回落族之外，具体值由 `tools/mcp-http.ts` 单一权威定义，可通过环境变量
+> `MCP_HTTP_PORT` 覆盖。
 
-| key | 文档形态（保留直观值） | meaning（可读语义） | source（权威定义文件） | extract |
-|---|---|---|---|---|
-| `mcp.http.port` | `:4300` | MCP HTTP(Streamable) 服务监听端口 | `tools/mcp-http.ts` 的 `process.env.MCP_HTTP_PORT ?? 4300` | 读 `mcp-http.ts` 中的默认端口 |
+| key | 文档形态（保留直观值） | placeholder | meaning（可读语义） | source（权威定义文件） | extract |
+|---|---|---|---|---|---|
+| `registry.port` | — | `{{registry.port}}` | shadcn 本地团队 Registry 服务端口 | `tools/scripts/start-registry.ps1` 的 `$Port` | 读 `$Port` 值（`3874`） |
+| `mcp.http.port` | `:4300` | — | MCP HTTP(Streamable) 服务监听端口 | `tools/mcp-http.ts` 的 `process.env.MCP_HTTP_PORT ?? 4300` | 读 `mcp-http.ts` 中的默认端口 |
 
 ---
 
@@ -81,14 +87,22 @@
 
 ---
 
-## 3. 校验范围（试点）
+## 3. 校验范围
 
-> 当前 `pnpm doc:check` 只校验试点文档，避免一次性大面积改造：
+> `pnpm doc:check` 校验纳入 SCOPED_DOCS 的文档集合。已分两批纳入：
+>
+> **试点（启动链路类）**：
 > - `docs/standards/launch-and-build.md`
 > - `docs/startup-hotreload.md`
 > - `docs/guide-non-developer.md`
 >
-> 试点跑通后，再把其余文档逐步纳入（更改本表 `scope` 即可）。文档删除或新增路径
+> **扩展（含值类引用的其余文档）**：
+> - `docs/standards/Comfy-APP-T3-项目开发规范.md`
+> - `docs/standards/16-shadcn-ui与表单校验.md`
+>
+> 后续可继续把其余含「值类」（端口/exe 名独立值）或机器可核对引用的文档逐步纳入
+> （更改 `scripts/doc-facts.cjs` 的 `SCOPED_DOCS` 与登记表即可）。纯**路径类**引用
+> 已在第 2 节说明保留原样、由脚本核对文件存在，不依赖文档纳入。文档删除或新增路径
 > 时，同步维护本表与 `docs/README.md` 的文档体系索引。
 
 

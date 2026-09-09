@@ -13,11 +13,14 @@ const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
 
-// 试点文档（被占位符校验/替换的文档集合）
+// 纳入「单一事实引用校验」的文档集合（编辑态用占位符/核对，生成态 doc:render 出原文）。
+// 试点：启动链路类 3 篇。扩展：纳入含值类引用的其余文档。
 const SCOPED_DOCS = [
   "docs/standards/launch-and-build.md",
   "docs/startup-hotreload.md",
   "docs/guide-non-developer.md",
+  "docs/standards/Comfy-APP-T3-项目开发规范.md",
+  "docs/standards/16-shadcn-ui与表单校验.md",
 ];
 
 function readJson(p) { return JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8")); }
@@ -67,6 +70,14 @@ function extractSplash() {
   return win.url;
 }
 
+// ---- 扩展：项目自身"值类"端口（独立单值，非 dev 端口族） ----
+function extractRegistryPort() {
+  // shadcn 团队 Registry 服务端口，权威源 tools/scripts/start-registry.ps1 的 $Port = <n>。
+  const t = readText("tools/scripts/start-registry.ps1");
+  const m = t.match(/\$Port\s*=\s*(\d+)/);
+  if (!m) throw new Error("无法从 tools/scripts/start-registry.ps1 提取 Port");
+  return m[1];
+}
 function extractMcpHttpPort() {
   // MCP HTTP 端口权威定义为 tools/mcp-http.ts 的默认值（可被 MCP_HTTP_PORT 覆盖）。
   const t = readText("tools/mcp-http.ts");
@@ -93,6 +104,11 @@ const FACTS = [
   { key: "dev.host", kind: "verify", extract: () => extractDevHostPort().host },
   { key: "dev.port", kind: "verify", extract: () => String(extractDevHostPort().port) },
   { key: "dev.port.fallback", kind: "verify", extract: extractFallbackPorts },
+  // 独立单值端口（非 dev 端口族，与 dev 无同号冲突）：
+  // - registry.port（placeholder 类）：文档用语义化占位符替代裸值。
+  // - mcp.http.port（verify 类）：MCP 端口刻意取在 dev 回落族之外（默认 4300），
+  //   文档保留直观值，脚本核对与 dev 端口族不冲突。
+  { key: "registry.port", placeholder: "{{registry.port}}", kind: "placeholder", extract: extractRegistryPort },
   { key: "mcp.http.port", kind: "verify", extract: extractMcpHttpPort },
   // 路径类：核对文件存在
   { key: "path.tauri.conf", kind: "path", source: "src-tauri/tauri.conf.json" },
@@ -123,5 +139,6 @@ module.exports = {
   extractLauncherExe,
   extractLauncherExeByName,
   extractSplash,
+  extractRegistryPort,
   extractMcpHttpPort,
 };

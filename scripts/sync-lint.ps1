@@ -17,7 +17,7 @@ Usage:
   - 拉取更新后若远端改了 pnpm 相关配置/依赖，node_modules 会与 lockfile 脱节，
     eslint 会抛 "Failed to resolve import xxx" 这类误导读到「以为改坏了代码」。
   - 因此这里先执行一次非交互 pnpm install（CI=true）让依赖对齐，再跑 lint。
-  - 注意：若 dev server（3000 端口）正在运行，pnpm install 可能因 better-sqlite3
+  - 注意：若 dev server（.env 的 COMFYAPP_PORT，默认 3000）正在运行，pnpm install 可能因 better-sqlite3
     等原生模块被进程锁定而 EPERM。此时先打印提示，仍尝试安装；失败则明确给出
     「先关闭本项目窗口再重试」的指引（见 docs/standards/launch-and-build.md §3/§5）。
 #>
@@ -57,9 +57,19 @@ function Test-PortListening {
     return ($null -ne $conn)
   } catch { return $false }
 }
-$devRunning = (Test-PortListening 3000) -or (Test-PortListening 3001) -or (Test-PortListening 3002)
+# 应用端口统一由 .env 的 COMFYAPP_PORT 控制（默认 3000）；此处探测该端口及相邻
+# 两个端口是否被监听，用于在 pnpm install 前提示可能因原生模块被锁而 EPERM。
+$appPort = 3000
+$portLine = Get-Content -LiteralPath (Join-Path $root ".env") -Encoding UTF8 -ErrorAction SilentlyContinue |
+  Where-Object { $_ -match "^\s*COMFYAPP_PORT\s*=" } | Select-Object -First 1
+if ($portLine) {
+  $pv = (($portLine -split "=", 2)[1]).Trim().Trim('"').Trim("'")
+  $pvInt = 0
+  if ([int]::TryParse($pv, [ref]$pvInt) -and $pvInt -ge 1 -and $pvInt -le 65535) { $appPort = $pvInt }
+}
+$devRunning = (Test-PortListening $appPort) -or (Test-PortListening ($appPort + 1)) -or (Test-PortListening ($appPort + 2))
 if ($devRunning) {
-    Say-Warn "检测到本项目 dev server 可能仍在运行（3000/3001/3002 端口被监听）。"
+    Say-Warn "检测到本项目 dev server 可能仍在运行（$appPort/$($appPort+1)/$($appPort+2) 端口被监听）。"
     Say-Warn "pnpm install 可能因 better-sqlite3 等原生模块被进程锁定而失败（EPERM）。"
     Say-Warn "若下方安装报错，请先关闭所有本项目窗口，再重新双击本脚本。"
 }
