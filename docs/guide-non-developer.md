@@ -7,6 +7,11 @@
 
 ---
 
+> **占位符约定**：本文中 `{{...}}` 形式的占位符代表文档引用的真实值（如可执行文件名、地址），
+> 真实值由 `pnpm doc:check` 运行时从源码/配置动态提取并核对。占位符语义见
+> [`docs/reference-facts.md`](reference-facts.md)。
+
+
 ## 1. 一句话结论
 
 **普通用户请走「浏览器模式」**：它只需要装 2 个软件（Node.js + pnpm），
@@ -125,14 +130,14 @@
 | **即开即用桌面包**（完整构建好的成品目录） | 由开发人员产出、可直接双击的成品 | ✅ 解压后双击 `tools/start/start-desktop.ps1`（或对应 exe）即可 |
 
 > 判断口诀：桌面包目录里有没有 **`scripts\dev-launcher.ps1`** 和桌面启动器
-> （`start-tauri\start-tauri.exe`，或独立版 `start-tauri-standalone\start-tauri-standalone.exe`）？
+> （`start-tauri\{{shell.exe.prebuilt}}`，或独立版 `start-tauri-standalone\{{shell.exe.standalone}}`）？
 > **有 = 成品，双击就能用**；没有 = 源码，只能走上面的浏览器模式。
 
 > ⚠️ 关于「免装环境」的一句话说清楚：
 > 桌面启动器分两种——
 > - **独立版（standalone，推荐给非开发人员）**：把前端静态资源 + Node 运行时都内嵌好，
 >   运行时不连 dev server，**真正免装任何开发环境**。
-> - **prebuilt 版（默认 `start-tauri\start-tauri.exe`）**：运行时会启动一个 Node dev server，
+> - **prebuilt 版（默认 `start-tauri\{{shell.exe.prebuilt}}`）**：运行时会启动一个 Node dev server，
 >   因此**仍需本机装有 Node/pnpm**，更适合开发人员日常用。
 >
 > 给非开发人员分发时，**请务必分发独立版**，否则对方仍会被要求装 Node。要最省事，直接用下方
@@ -158,7 +163,7 @@
 4. 关掉主窗口即退出（日志保留在 `log\` 目录，方便出问题时发给团队）。
 
 > 不想用 `tools/start/start-desktop.ps1`，也可直接双击桌面包里的启动器 exe（独立版为
-> `start-tauri-standalone\start-tauri-standalone.exe`）。
+> `start-tauri-standalone\{{shell.exe.standalone}}`）。
 
 ### 6.4 桌面包没运行起来怎么办
 

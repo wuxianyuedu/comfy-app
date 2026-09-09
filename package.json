@@ -25,7 +25,8 @@
     "test:coverage": "vitest run --coverage",
     "mcp:stdio": "tsx tools/mcp-stdio.ts",
     "mcp:http": "tsx tools/mcp-http.ts",
-    "test:visual": "playwright test e2e/visual"
+    "test:visual": "playwright test e2e/visual",
+    "doc:check": "node scripts/check-doc-references.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
