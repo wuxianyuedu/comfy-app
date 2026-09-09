@@ -24,7 +24,7 @@ import {
   toStringValue,
   type ApiWorkflowNode,
 } from "@/lib/comfyui/raw";
-import { cacheJson, cacheDel, cachePeek } from "@/lib/server-cache";
+import { cacheJson, cacheDel, cacheDelPrefix, cachePeek } from "@/lib/server-cache";
 import { parseModesJson } from "@/lib/workflow-types";
 import { createComboResolver } from "@/lib/comfyui/workflow-detail-combo";
 import {
@@ -125,6 +125,15 @@ export interface WorkflowDetailFull {
   boundaryLinks?: BoundaryLink[];
 }
 
+
+/** 丢弃某个工作流已缓存的详情（顶层 + 它的全部子图视图）。
+ *
+ *  PATCH 之后必须调用：服务端详情缓存 TTL 30s，不主动清的话客户端就算重新
+ *  拉 `detailFull` 也会拿回改动前的富化 IO，界面看起来像「改了没生效」。 */
+export function invalidateWorkflowDetailCache(userId: string, id: string): void {
+  cacheDel(`wf:${userId}:${id}`);
+  cacheDelPrefix(`sg:${userId}:${id}:`);
+}
 
 export async function buildWorkflowDetailFull(
   userId: string,

@@ -21,6 +21,7 @@ import { buildWorkflowPreview, detectParamMap } from "@/lib/comfyui/workflow";
 import {
   buildWorkflowDetailFull,
   buildSubgraphDetail,
+  invalidateWorkflowDetailCache,
 } from "@/lib/comfyui/workflow-detail";
 import {
   detectFormat,
@@ -695,6 +696,11 @@ export const workflowRouter = createTRPCRouter({
         }
         await workflowTemplateRepository.setModelTags(id, tagIds);
       }
+
+      /* 服务端详情缓存必须在返回前清掉：它缓存的是富化后的 workflowIO，
+       * TTL 30s。不清的话工作流库即使重新拉 detailFull 也会拿回旧默认值，
+       * 表现为「IO 编辑里改了默认值，回库里还是旧的」。 */
+      invalidateWorkflowDetailCache(ctx.user.id, id);
 
       return { template };
     }),

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   controlForEntry,
+  mergeRefreshedDefaults,
   splitWorkflowIO,
   inferDimensionGroup,
   inferGroups,
@@ -187,5 +188,66 @@ describe("splitWorkflowIO — kind 决定分组，客户端无 legacy 特判", (
     expect(widgetInputs).toHaveLength(2);
     expect(widgetInputs[0]?.control).toBe("int");
     expect(wireInputs).toHaveLength(0);
+  });
+});
+
+describe("mergeRefreshedDefaults — IO 默认值刷新（保覆盖，ISSUE #288）", () => {
+  /* 返回 null 表示「一个键都不用改，沿用当前值」——调用方据此跳过 setState。
+   * 测试统一过一遍 resolve，断言的是最终落在表单里的值。 */
+  const resolve = (
+    current: Record<string, unknown>,
+    baseline: Record<string, unknown>,
+    fresh: Record<string, unknown>,
+  ) => mergeRefreshedDefaults(current, baseline, fresh) ?? current;
+
+  it("未覆盖的参数跟着新默认值刷新", () => {
+    expect(resolve({ steps: 20 }, { steps: 20 }, { steps: 30 })).toEqual({
+      steps: 30,
+    });
+  });
+
+  it("用户已覆盖的参数保持用户的值", () => {
+    expect(mergeRefreshedDefaults({ steps: 8 }, { steps: 20 }, { steps: 30 })).toBeNull();
+    expect(resolve({ steps: 8 }, { steps: 20 }, { steps: 30 })).toEqual({ steps: 8 });
+  });
+
+  it("同一张表里混合覆盖与未覆盖 —— 各自按自己的语义处理", () => {
+    const current = { steps: 8, cfg: 7, prompt: "旧提示词" };
+    const baseline = { steps: 20, cfg: 7, prompt: "旧提示词" };
+    const fresh = { steps: 30, cfg: 9, prompt: "新提示词" };
+    expect(resolve(current, baseline, fresh)).toEqual({
+      steps: 8, // 用户改成 8，保持
+      cfg: 9, // 未覆盖，刷新
+      prompt: "新提示词", // 未覆盖，刷新
+    });
+  });
+
+  it("用户把值改回默认值时仍判定为未覆盖（按值比较的固有取舍）", () => {
+    expect(
+      mergeRefreshedDefaults({ steps: 20 }, { steps: 20 }, { steps: 30 }),
+    ).toEqual({ steps: 30 });
+  });
+
+  it("新暴露的 pin（基线里没有）直接采用默认值", () => {
+    expect(resolve({}, {}, { seed: 42 })).toEqual({ seed: 42 });
+  });
+
+  it("被取消勾选的 pin 从值表里摘掉", () => {
+    expect(
+      resolve({ steps: 8, gone: 1 }, { steps: 20, gone: 1 }, { steps: 20 }),
+    ).toEqual({ steps: 8 });
+  });
+
+  it("没有任何键需要变更时返回 null（调用方跳过 setState）", () => {
+    expect(
+      mergeRefreshedDefaults({ steps: 8 }, { steps: 20 }, { steps: 20 }),
+    ).toBeNull();
+  });
+
+  it("值未被改动时不触发无谓更新", () => {
+    const shared = { url: "a.png" };
+    expect(
+      mergeRefreshedDefaults({ img: shared }, { img: shared }, { img: shared }),
+    ).toBeNull();
   });
 });
