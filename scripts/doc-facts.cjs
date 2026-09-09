@@ -12,18 +12,41 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-
 // 纳入「单一事实引用校验」的文档集合（编辑态用占位符/核对，生成态 doc:render 出原文）。
-// 试点：启动链路类 3 篇。扩展：纳入含值类引用的其余文档。
+// 范围：standards 规范正文（01~17 章）+ guides 规范指南 + 启动链路/含值类文档，全量纳入。
+
 const SCOPED_DOCS = [
+  // 试点：启动链路类（首批纳入）
   "docs/standards/launch-and-build.md",
   "docs/startup-hotreload.md",
   "docs/guide-non-developer.md",
+  // 扩展：含值类引用的文档
   "docs/standards/Comfy-APP-T3-项目开发规范.md",
   "docs/standards/16-shadcn-ui与表单校验.md",
   "docs/workshop-mcp.md",
+  // 全量：standards 规范正文（01~17 章，除已纳入的 16）
+  "docs/standards/01-架构与状态管理.md",
+  "docs/standards/02-性能规范.md",
+  "docs/standards/03-样式与-tailwind.md",
+  "docs/standards/04-组件设计.md",
+  "docs/standards/05-类型安全.md",
+  "docs/standards/06-无障碍访问-a11y.md",
+  "docs/standards/07-日志系统.md",
+  "docs/standards/08-异步与副作用.md",
+  "docs/standards/09-路由与导航.md",
+  "docs/standards/10-错误处理与降级.md",
+  "docs/standards/11-测试与可观测性.md",
+  "docs/standards/12-代码组织与文件结构.md",
+  "docs/standards/13-提交与-code-review.md",
+  "docs/standards/14-反模式速查表.md",
+  "docs/standards/15-附录.md",
+  "docs/standards/17-UI与逻辑分离.md",
+  // 全量：guides 规范指南（不含 reviews 评审归档、api 自动生成、superpowers 设计归档、audits 过程文件）
+  "docs/guides/DEV-QUERIES.md",
+  "docs/guides/PRODUCTION-GAPS.md",
+  "docs/guides/TESTING.md",
+  "docs/guides/sync-after-pull.md",
 ];
-
 function readJson(p) { return JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8")); }
 function readText(p) { return fs.readFileSync(path.join(ROOT, p), "utf8"); }
 function exists(p) { return fs.existsSync(path.join(ROOT, p)); }

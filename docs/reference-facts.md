@@ -93,23 +93,27 @@
 
 ## 3. 校验范围
 
-> `pnpm doc:check` 校验纳入 SCOPED_DOCS 的文档集合。已分两批纳入：
+> `pnpm doc:check` 校验纳入 SCOPED_DOCS 的文档集合，现已**全量纳入** `docs/standards/`
+> 规范正文（01~17 章）与 `docs/guides/` 规范指南，连同启动链路/含值类文档共 26 篇：
 >
-> **试点（启动链路类）**：
-> - `docs/standards/launch-and-build.md`
-> - `docs/startup-hotreload.md`
-> - `docs/guide-non-developer.md`
+> - **启动链路类**：`docs/standards/launch-and-build.md`、`docs/startup-hotreload.md`、
+>   `docs/guide-non-developer.md`
+> - **含值类引用的文档**：`docs/standards/Comfy-APP-T3-项目开发规范.md`、
+>   `docs/standards/16-shadcn-ui与表单校验.md`、`docs/workshop-mcp.md`
+>   （MCP HTTP 端口 / ComfyUI 端口，经 `onlyDocs` 限定仅在本篇校验）
+> - **standards 规范正文**：`01`~`17` 章其余各篇（含路径/规范描述）
+> - **guides 规范指南**：`DEV-QUERIES.md`、`PRODUCTION-GAPS.md`、`TESTING.md`、
+>   `sync-after-pull.md`
 >
-> **扩展（含值类引用的其余文档）**：
-> - `docs/standards/Comfy-APP-T3-项目开发规范.md`
-> - `docs/standards/16-shadcn-ui与表单校验.md`
-> - `docs/workshop-mcp.md`（MCP HTTP 端口 / ComfyUI 端口，经 `onlyDocs` 限定仅在本篇校验）
+> **不纳入**：`docs/standards/README.md`（文档集索引）、`docs/guides/reviews/`
+> （评审归档）、`docs/audits/`（过程文件）、`docs/api/`（TypeDoc 自动生成）、
+> `docs/superpowers/`（设计归档）、`docs/generated/`（本体系自动生成产物）。
 >
-> 后续可继续把其余含「值类」（端口/exe 名独立值）或机器可核对引用的文档逐步纳入
-> （更改 `scripts/doc-facts.cjs` 的 `SCOPED_DOCS` 与登记表即可）。纯**路径类**引用
-> 已在第 2 节说明保留原样、由脚本核对文件存在，不依赖文档纳入。文档删除或新增路径
-> 时，同步维护本表与 `docs/README.md` 的文档体系索引。
-
+> 这些文档以**路径类引用与规范描述**为主，不含值类裸值。值类引用由登记表 FACTS
+> 动态核对；关键基础设施路径由第 2 节 path 类 FACTS 核对存在性。文档正文的细粒度
+> 路径（如 `src/env.ts`）因大量为**占位、否定性说明、目录约定示例**，不自动扫描，
+> 以免误报；如需将某个具体路径纳入存在性核对，按第 4 节把它补登为 `path` 类 FACTS
+> 即可。文档删除或新增路径时，同步维护本表与 `docs/README.md` 的文档体系索引。
 
 ## 3.5 编辑文档与生成文档（双文档机制）
 
