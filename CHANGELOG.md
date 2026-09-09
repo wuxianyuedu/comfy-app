@@ -113,6 +113,8 @@
 
 - **修复子图工作流种子选「随机值」仍生成同一张图**：raw 子图（liblib 模板，`class_type` 为 UUID）wrapper 只暴露内层 seed、却未暴露其随机化控制（ComfyUI 将其隔离进 `proxyWidgetErrorQuarantine`），`widgets_values` 里没有 `control_after_generate` 哨兵槽，前端下发 `randomize` 覆盖被跳过、种子保持固定值。现改为：这类节点哨兵槽缺失时，若请求的是「随机值」，回退为在提交前直接生成一颗随机种子写入 seed 槽，保证每次生成的图不同；普通 KSampler 仍走哨兵槽写入随机化模式，行为不变。
 
+- **修复子图（liblib）工作流「换了提示词 / 种子仍生成同一张图」**：raw 子图 wrapper 上的 `widgets_values` 只是**宿主值**，comfy-cli 把子图展开成 `wrapperId:innerId` 后真正被采样器读到的是**内层节点**的 `widgets_values`。此前 `applyRawOverrides` 只写 wrapper，而「把宿主值回写进内层」是 comfy-cli 1.20 才有的 promoted-widget 回写逻辑，老版本（1.17~1.19）会在转换阶段用内层默认值整段盖掉覆盖 —— 于是提示词、种子、步数等入参全部失效，每次都跑工作流里存的那张图（日志里的「真实执行 seed」恒等于内层 KSampler 的默认值）。现改为：落在子图 wrapper 上的覆盖项按 ComfyUI 前端的映射规则（`sub.inputs[i].linkIds` → 起点为 `-10` 的边界连线 → 内层 `target_id`/`target_slot`）同步写进内层节点，seed 的 `control_after_generate` 哨兵槽与「随机值」兜底生成的随机种子同样同步；普通（非子图）节点行为不变，comfy-cli 新旧版本下覆盖都生效。
+
 - **dev server 重启标记改为「真正重启时间」并排除误报**：原来的右下角重启标记
   把「探测失败」当成重启信号，显示器关闭 / 浏览器后台节流 / 瞬时断网都会导致
   网络探测失败而被误报成「后端重启」。现改用进程启动标识（bootId）作为真正
