@@ -3,6 +3,11 @@
 > 本章目标：明确 shadcn/ui 在本项目的定位与分工边界，并给出表单方案的**推荐实现与备选评判**。
 > 配套脚本/钩子：`.githooks/pre-commit`（结构检查，见 §12.6/§12.8 的 kebab 硬规则）。
 
+> **占位符约定**：本文中 `{{...}}` 形式的占位符代表文档引用的真实值（如可执行文件名、地址、端口），
+> 真实值由 `pnpm doc:check` 运行时从源码/配置动态提取并核对。占位符语义见
+> [`docs/reference-facts.md`](../reference-facts.md)。改动上游源码后可运行
+> `pnpm doc:check` 检查本文是否有值未同步。
+
 ## 16.1 定位：ui/ 是你"拥有"的组件库，不是 npm 依赖
 
 shadcn 的本质是**把组件源码复制进仓库**，而非引入一个版本锁死的 npm 包。因此：
@@ -243,15 +248,15 @@ D:/dev/Comfy-APP-T3/registry/
 双击 `tools\registry\start-registry.ps1`（或手动）：
 
 ```bash
-node D:/dev/Comfy-APP-T3/registry/serve.mjs 3874
-# → http://127.0.0.1:3874   （前台运行；关掉终端即停；端口占用会提示已在运行）
+node D:/dev/Comfy-APP-T3/registry/serve.mjs {{registry.port}}
+# → http://127.0.0.1:{{registry.port}}   （前台运行；关掉终端即停；端口占用会提示已在运行）
 ```
 
 ### 项目侧注册（`components.json` 已配）
 
 ```json
 "registries": {
-  "@comfy-app-t3": "http://127.0.0.1:3874/r/{name}.json"
+  "@comfy-app-t3": "http://127.0.0.1:{{registry.port}}/r/{name}.json"
 }
 ```
 
@@ -272,7 +277,7 @@ shadcn add @comfy-app-t3/form @comfy-app-t3/select
 - **手动**：复制源码到 `r/<name>.json` 的 `files[].content`（`target` 指定落地 `src/components/ui/<name>.tsx`），并在 `index.json` + `r/registry.json` 的 `items` 登记 `name`/`type: registry:ui`/`title`/`description`/`dependencies`/`registryDependencies`。
 - 服务已在跑则立即生效，无需重启。
 
-> 注意：`components.json` 指向的是本地 dev 服务 `127.0.0.1:3874`，仅本机/团队内网可用；若要对外共享，把 `registry/` 推到任意可 HTTP 访问的位置并改 URL 即可。
+> 注意：`components.json` 指向的是本地 dev 服务 `127.0.0.1:{{registry.port}}`，仅本机/团队内网可用；若要对外共享，把 `registry/` 推到任意可 HTTP 访问的位置并改 URL 即可。
 
 **何时换 TanStack Form**：当表单出现"超复杂动态字段 + 极致类型推导"需求（如字段级条件联动、嵌套数组的严格推断），TanStack Form 的 headless + 编译期类型推断更省心（无 `Controller`/`ref` 心智负担）。其余情况保持 RHF + Zod。
 
