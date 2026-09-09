@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { getSettings, getSettingsSync, saveSettings } from "@/lib/app-settings";
 import {
+  clearComfyManualStop,
   ensureComfyUiReady,
   isComfyStarting,
   isComfyStopping,
@@ -47,6 +48,9 @@ export const settingRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       await saveSettings(input);
+      // 用户显式（重新）开启自动启动 = 授权自动拉起：清掉上次「手动关闭
+      // 后不自动启动」的闩锁，让自动启动恢复生效（ISSUE #290）。
+      if (input.comfyuiAutoStart === true) clearComfyManualStop();
       const settings = await getSettings();
       return { settings };
     }),
@@ -87,7 +91,9 @@ export const settingRouter = createTRPCRouter({
   comfyStart: authedProcedure
     .input(z.object({ timeoutMs: z.number().int().min(5000).max(600000).optional() }))
     .mutation(async ({ input }) => {
-      const r = await ensureComfyUiReady({ timeoutMs: input.timeoutMs });
+      // 手动启动＝用户明确要求拉起：manual:true 会先清掉「手动关闭后不自动
+      // 启动」闩锁，确保这次手动启动不被上次手动关闭拦住（ISSUE #290）。
+      const r = await ensureComfyUiReady({ timeoutMs: input.timeoutMs, manual: true });
       return r;
     }),
 

@@ -46,6 +46,10 @@ type LifecycleGlobal = {
   /** 「关闭中」窗口的开始时刻（毫秒）：设置页在窗口内显示关闭进行态，
    *  进程树确认退出后清零。 */
   stoppingAt?: number;
+  /** 用户手动点了「关闭 ComfyUI」：此后自动启动路径（WS 重连 / 状态轮询触发的
+   *  ensureComfyUiReady）不再自动拉起，直到用户手动点「启动 ComfyUI」或
+   *  重新开启自动启动。解决「关闭后切个页签 ComfyUI 又被重连循环拉起」的困惑。 */
+  manualStop?: boolean;
 };
 const G_KEY = "__comfyLifecycle_v1";
 const g = globalThis as unknown as Record<string, LifecycleGlobal | undefined>;
@@ -104,6 +108,9 @@ export async function stopComfyUiProcess(): Promise<{ ok: boolean; detail: strin
   // 无论有没有本应用拉起的子进程，都先落「用户要求停止」标记：若此刻正有
   // 一个启动等待在跑，等待循环会以「已手动关闭」收尾，而不是误报「进程秒退」。
   st.stopRequested = true;
+  // 手动关闭是一次明确的用户意图：落「手动关闭后不自动启动」闩锁，杜绝
+  // WS 重连循环 / 状态轮询在用户切页签时又把 ComfyUI 悄悄拉起（见 ISSUE #290）。
+  st.manualStop = true;
 
   // 解析出本应用应负责的 main.py 路径：bound / keepAlive / 重启后接管，
   // 「该关哪个进程」统一由配置路径决定，不依赖是否还握着子进程句柄。
@@ -184,6 +191,12 @@ function clearComfyStopping(): void {
   st.stoppingAt = undefined;
 }
 
+/** 清掉「手动关闭后不自动启动」闩锁：用户重新开启了自动启动（设置保存）时调用，
+ *  让自动启动恢复生效。 */
+export function clearComfyManualStop(): void {
+  st.manualStop = false;
+}
+
 export function getComfyUiStatus(): ComfyUiStatus {
   return {
     up: false,
@@ -242,7 +255,7 @@ function appendSessionBanner(kind: "start" | "end", title: string): void {
  * `COMFYUI_AUTOSTART_TIMEOUT_MS`，否则 reaper 的启动窗口会被无限拉长。
  */
 export async function ensureComfyUiReady(
-  opts: { timeoutMs?: number | null; onLog?: (msg: string) => void } = {}
+  opts: { timeoutMs?: number | null; onLog?: (msg: string) => void; manual?: boolean } = {}
 ): Promise<EnsureResult> {
   const note = (msg: string) => {
     logger.info(`[comfyui-lifecycle] ${msg}`);
@@ -258,6 +271,22 @@ export async function ensureComfyUiReady(
   if (st.starting) {
     note("ComfyUI 正在启动中，等待就绪…");
     return st.starting;
+  }
+
+  // 手动启动＝用户明确要求拉起：先清掉「手动关闭后不自动启动」闩锁，
+  // 否则上次手动关闭的小尾巴会把这次明确启动也拦住。
+  if (opts.manual) st.manualStop = false;
+
+  // 非手动来源（WS 重连 / 状态轮询触发的自动启动）此刻若用户刚手动关闭过
+  // ComfyUI，就尊重其意图、不再自动拉起 —— 否则切个页签 ComfyUI 又被
+  // 重连循环悄悄重启（ISSUE #290）。
+  if (!opts.manual && st.manualStop) {
+    note("ComfyUI 已被用户手动关闭，跳过自动启动");
+    return {
+      ok: false,
+      base: null,
+      detail: "ComfyUI 已被手动关闭，未自动开始启动——如需启动请到 设置 → 创作后端 点「启动 ComfyUI」",
+    };
   }
 
   const settings = getSettingsSync();
