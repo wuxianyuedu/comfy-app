@@ -10,6 +10,8 @@ export interface ComfyStatsPayload {
   vramUsed: number;
   vramFree: number;
   vramTotal: number;
+  smiVramUsed?: number;
+  smiVramTotal?: number;
   ramUsed: number;
   ramTotal: number;
 }
