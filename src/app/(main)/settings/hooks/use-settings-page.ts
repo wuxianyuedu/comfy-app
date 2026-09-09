@@ -26,7 +26,11 @@ import {
   parseOllamaLogText,
   type AnsiSegment,
 } from "~/lib/log-ansi";
-import { fetchFileLogSlice, type FileLogSlice } from "~/lib/log-file-client";
+import {
+  fetchFileLogSlice,
+  postAppRuntimeLog,
+  type FileLogSlice,
+} from "~/lib/log-file-client";
 import {
   probeOllama as probeOllamaClient,
   startOllama as startOllamaClient,
@@ -49,7 +53,6 @@ import {
   type TaskType,
 } from "~/lib/llm/types";
 import { api } from "~/trpc/react";
-import { createAppRuntimeLogger } from "~/lib/app-runtime-log";
 
 export type Settings = {
   trainerUrl: string;
@@ -248,9 +251,6 @@ export interface SettingsPageController {
 
 /** 提示条停留时长。 */
 const FLASH_MS = 3500;
-
-/** 设置加载失败走面板可见的 app-runtime 通道（规范 07 §7.11）。 */
-const settingsRuntimeLog = createAppRuntimeLogger("settings");
 
 /* ── ComfyUI 启动日志 ─────────────────────────────────────
  * lifecycle.ts 会把 spawn 参数与子进程 stdout/stderr 追加进
@@ -1092,7 +1092,7 @@ export function useSettingsPage(): SettingsPageController {
   useEffect(() => {
     if (!hasError || errorText === loggedErrorRef.current) return;
     loggedErrorRef.current = errorText;
-    settingsRuntimeLog.error(`设置加载失败 ${errorText}`, {
+    void postAppRuntimeLog("settings", "error", `设置加载失败 ${errorText}`, {
       query: settingsQ.isError ? "setting.get" : "llm.configGet",
     });
   }, [hasError, errorText, settingsQ.isError]);
