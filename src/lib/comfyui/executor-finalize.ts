@@ -23,6 +23,9 @@ import { friendlyError } from "./executor-errors";
 import { claimSettle, fetchHistoryEntry, type ComfyHistoryEntry } from "./executor-ws";
 import { processQueue } from "./executor-scheduler";
 import { state, log, persistLogs } from "./runner-state";
+import { createAppRuntimeLogger } from "@/lib/app-runtime-log";
+
+const taskRuntimeLog = createAppRuntimeLogger("task");
 import type { ValidationError } from "./validation";
 
 /** ComfyUI `status.messages` 条目是 `[type, payload?]` 元组，payload 形状随
@@ -281,6 +284,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   }
 
   await persistLogs(taskId);
+  taskRuntimeLog.info(`任务完成 ${taskId}`, { outputs: saved.length });
   // emit "总耗时 Xs" so the user can see
   // the wall-clock duration of the whole run.  Falls back to a
   // generic note if startedAt is missing (which can happen for
@@ -344,6 +348,7 @@ export async function finalizeFailure(
   );
 
   await persistLogs(taskId);
+  taskRuntimeLog.error(`任务失败 ${taskId}: ${friendly}`);
   // clean up the per-task state we added so
   // a re-enqueue of the same taskId starts from a clean slate.
   if (startedAt) s.startedAt.delete(taskId);
