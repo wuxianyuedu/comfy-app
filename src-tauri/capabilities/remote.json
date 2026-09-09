@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/remote-schema.json",
   "identifier": "remote-loopback",
-  "description": "allows the loopback-hosted app content (dev / standalone) in the main window to invoke the app's shell commands over a remote origin (e.g. open_comfyui_window). App commands are only reachable from a remote origin when both declared in the AppManifest (build.rs) and granted here via their auto-generated allow-* permission.",
+  "description": "allows the loopback-hosted app content (dev / standalone) in the main window to invoke the app's shell commands over a remote origin (e.g. open_comfyui_window) plus the updater/process plugin commands (check / downloadAndInstall / restart) needed by the settings 「应用更新」section. App commands are only reachable from a remote origin when both declared in the AppManifest (build.rs) and granted here via their auto-generated allow-* permission.",
   "windows": [
     "main"
   ],
@@ -13,6 +13,8 @@
   },
   "permissions": [
     "core:default",
-    "allow-open-comfyui-window"
+    "allow-open-comfyui-window",
+    "updater:default",
+    "process:default"
   ]
 }

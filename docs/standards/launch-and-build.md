@@ -175,6 +175,25 @@ log/
 | 重新打包双击启动器 | `tools\build\build-launcher.ps1` | PyInstaller onedir，产物 `start-tauri/`（gitignore） |
 | 开发者工具箱 | `tools\build\rebuild-static.ps1` 等 / `dev-tools` | 见 `tools/README.md` |
 
+#### 应用自更新（tauri-plugin-updater / tauri-plugin-process）
+
+> 2026 接入（ISSUE #232）：设置页「应用更新」区可检测新版本、下载安装并重启。
+> `tauri-plugin-updater` 的检测/下载/安装命令与 `tauri-plugin-process` 的重启命令
+> 已在 `src-tauri/Cargo.toml` 注册、`src-tauri/src/lib.rs` 挂载，并在
+> `src-tauri/capabilities/remote.json` 授予远程源 `updater:default`、`process:default`。
+
+接入业务更新源需三步（否则「检测更新」只会提示未配置更新源）：
+
+1. 生成签名密钥对：`pnpm tauri signer generate -w ~/.tauri/comfyapp.key`
+   （私钥留作 CI 签名，公钥输出内容随 `-w` 到终端）。
+2. 把公钥填入 `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey`；
+   按更新宿主（GitHub Releases / 业务后端）填 `plugins.updater.endpoints`。
+3. 发布更新时用私钥对产物签名；`bundle.createUpdaterArtifacts` 置 `true`
+   才会让 `pnpm tauri build` 产出 `.sig` 签名与更新元数据（当前未开启，
+   因尚未配置公钥——避免无公钥时打包报错）。
+
+> 更新产物与签名、更新服务端部署不在本仓库范围内，属发布运维配置。
+
 改动 tauri.conf.json、src-tauri/src/**、splash-assets/** 之后**必须重编壳**
 （`cargo build --release --features custom-protocol`，**feature 不能省**），
 否则运行的是旧二进制（预检只会提醒，不会阻止——界面异常先想到这一条）。
