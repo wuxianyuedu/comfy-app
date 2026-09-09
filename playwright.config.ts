@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 /**
  * Playwright E2E 配置（AGENTS 硬规则：本仓库只用 pnpm，webServer 用 `pnpm dev`）。
- * - webServer: 起 Next dev server（3000 端口），测试前自动等待就绪
+ * - webServer: 起 Next dev server（3100 端口），测试前自动等待就绪
  *   （pnpm 而非 npm：AGENTS.md 硬规则 1，npm/npx 在本仓库解析 typescript 别名
  *   链会崩溃）
  * - testDir:   ./e2e
@@ -31,7 +31,7 @@ export default defineConfig({
     },
   },
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: "http://localhost:3100",
     trace: "on-first-retry",
     locale: "zh-CN",
   },
@@ -46,7 +46,7 @@ export default defineConfig({
     // 冷启动远超 180s 的等待窗口，会让冒烟/视觉用例集体超时。CI 门禁已先跑
     // `pnpm build`，这里只需起服务。本地开发仍用 dev（热更新、无需先构建）。
     command: process.env.CI ? "pnpm start" : "pnpm dev",
-    url: "http://localhost:3000",
+    url: "http://localhost:3100",
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
     // Next 16 默认读 .env / .env.production：CI 无真实密钥，跳过 env.js 校验

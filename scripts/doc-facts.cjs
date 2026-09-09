@@ -37,7 +37,7 @@ function splitHostPort(url) {
 function extractDevHostPort() {
   const conf = readJson("src-tauri/tauri.conf.json");
   const { host, port } = splitHostPort(conf.build.devUrl);
-  // 端口演进：dev-launcher.ps1 现已从 .env 的 COMFYAPP_PORT 读取（默认 3000），
+  // 端口演进：dev-launcher.ps1 现已从 .env 的 COMFYAPP_PORT 读取（默认 3100），
   // 仓库内唯一权威源是 tauri.conf.json 的 build.devUrl。交叉核对提交的
   // .env.example 里 COMFYAPP_PORT 是否与 devUrl 一致（.env 为本地可覆盖变体）。
   if (exists(".env.example")) {
@@ -113,7 +113,7 @@ const FACTS = [
   // 核对类：文档保留直观值，脚本核对权威源当前端口族
   { key: "dev.host", kind: "verify", extract: () => extractDevHostPort().host },
   // dev 端口族仅对描述 dev 启动链路的文档校验；workshop-mcp.md 的 4300 是 MCP HTTP
-  // 端口（非 dev 回落），若参与 verify 会误判「缺 dev 主端口 3000」，故排除该文档。
+  // 端口（非 dev 回落），若参与 verify 会误判「缺 dev 主端口 3100」，故排除该文档。
   { key: "dev.port", kind: "verify", extract: () => String(extractDevHostPort().port), excludeDocs: ["docs/workshop-mcp.md"] },
   { key: "dev.port.fallback", kind: "verify", extract: extractFallbackPorts, excludeDocs: ["docs/workshop-mcp.md"] },
   // 独立单值端口（非 dev 端口族）。workshop-mcp.md 的端口（MCP 4300 / ComfyUI 8188）

@@ -54,7 +54,7 @@ const mockRouter = t.router({
 type MockRouter = typeof mockRouter;
 
 const server = setupTrpcServer(mockRouter);
-const BASE = "http://localhost:3000/api/trpc";
+const BASE = "http://localhost:3100/api/trpc";
 
 const localApi = createTRPCReact<MockRouter>();
 const localTrpcClient = localApi.createClient({

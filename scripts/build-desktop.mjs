@@ -125,7 +125,7 @@ if (existsSync(join(root, "public"))) {
 }
 
 // 启动页：Tauri 窗口初始 URL 为 splash.html（tauri.conf.json windows[0].url）。
-// public/splash.html 在 Next.js dev 模式下由 localhost:3000/splash.html 服务；
+// public/splash.html 在 Next.js dev 模式下由 localhost:3100/splash.html 服务；
 // 生产构建时把它复制到 static 根，让 Tauri 内置服务器直接提供。
 const splashSrc = join(root, "public", "splash.html");
 if (existsSync(splashSrc)) {
