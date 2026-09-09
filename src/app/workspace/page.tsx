@@ -14,6 +14,7 @@ import type {
   WorkspaceView,
 } from "@/components/studio";
 import { WorkshopPipeline } from "@/components/workshop/WorkshopPipeline";
+import { ShellTabs } from "@/components/studio/ShellTabs";
 import { listProjects, setActive, reapAllEmptyDrafts } from "@/lib/project-canvas/canvas-store";
 
 /* ── Lazy-load view components so the initial bundle stays small ── */
@@ -318,7 +319,8 @@ export default function WorkspacePage() {
   };
 
   return (
-    <>
+    <ShellTabs>
+      <>
       {/* 日志/Toast Provider 与底部状态栏已全局挂载（根布局），此处不再重复包裹 */}
       {viewMode === "home" ? (
           <>
@@ -336,7 +338,7 @@ export default function WorkspacePage() {
           </>
         ) : (
           <>
-            <div className="flex h-screen w-screen overflow-hidden bg-(--color-canvas) text-(--color-ink) pb-6" style={{ fontFamily: "var(--font-sans)" }}>
+            <div className="flex h-full w-full overflow-hidden bg-(--color-canvas) text-(--color-ink)" style={{ fontFamily: "var(--font-sans)" }}>
               {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
               <AuroraBackground />
 
@@ -366,6 +368,7 @@ export default function WorkspacePage() {
 
       {/* 设置 overlay：仅打开时挂载。置于最顶层，不卸载下方 workspace 组件树。 */}
       {settingsOpen && <SettingsOverlay onClose={closeSettings} />}
-    </>
+      </>
+    </ShellTabs>
   );
 }
