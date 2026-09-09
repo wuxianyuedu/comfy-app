@@ -49,3 +49,6 @@ export const DRIZZLE_STUDIO_RUNTIME_LOG = path.join(
 );
 /** Ollama 运行时日志。 */
 export const OLLAMA_RUNTIME_LOG = path.join(SERVICES_LOG_DIR, "ollama-runtime.log");
+
+/** 应用运行期业务操作日志（tRPC 调用/生成/任务/工作流增删改等），供「应用日志」面板轮询。 */
+export const APP_RUNTIME_LOG = path.join(SERVICES_LOG_DIR, "app-runtime.log");

@@ -7,6 +7,7 @@ import {
   DRIZZLE_STUDIO_RUNTIME_LOG,
   OLLAMA_RUNTIME_LOG,
   START_TAURI_LAUNCHER_LOG,
+  APP_RUNTIME_LOG,
 } from "@/lib/log-paths";
 
 const DEFAULT_LOG_FILE = DEV_LAUNCHER_LOG;
@@ -15,6 +16,7 @@ const SENTINEL_FILE = DEV_LAUNCHER_CURRENT_SENTINEL;
 const COMFYUI_RUNTIME_LOG_FILE = COMFYUI_RUNTIME_LOG;
 const DRIZZLE_STUDIO_RUNTIME_LOG_FILE = DRIZZLE_STUDIO_RUNTIME_LOG;
 const OLLAMA_RUNTIME_LOG_FILE = OLLAMA_RUNTIME_LOG;
+const APP_RUNTIME_LOG_FILE = APP_RUNTIME_LOG;
 
 /**
  * comfyui-runtime.log / drizzle-studio-runtime.log 是追加写、不轮转的（每次
@@ -88,7 +90,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const source = searchParams.get("source") ?? "dev-launcher";
 
-  if (source === "comfyui-runtime" || source === "drizzle-studio-runtime" || source === "ollama-runtime") {
+  if (source === "comfyui-runtime" || source === "drizzle-studio-runtime" || source === "ollama-runtime" || source === "app-runtime") {
     try {
       const requestedOffset = Number(searchParams.get("offset") ?? "0");
       const logFile =
@@ -96,7 +98,9 @@ export async function GET(request: Request) {
           ? DRIZZLE_STUDIO_RUNTIME_LOG_FILE
           : source === "ollama-runtime"
             ? OLLAMA_RUNTIME_LOG_FILE
-            : COMFYUI_RUNTIME_LOG_FILE;
+            : source === "app-runtime"
+              ? APP_RUNTIME_LOG_FILE
+              : COMFYUI_RUNTIME_LOG_FILE;
       return NextResponse.json(readRuntimeSlice(logFile, requestedOffset));
     } catch (error) {
       return NextResponse.json(

@@ -103,11 +103,13 @@ describe("appendFileLogs 批量追加", () => {
 
   it("批量追加后 counts 与 filteredLogs 一并重算", () => {
     useLogStore.setState({ search: "启动" });
-    useLogStore.getState().appendFileLogs([
-      makeEntry({ id: "m1", message: "启动完成" }),
-      makeEntry({ id: "m2", message: "其他消息" }),
-      makeEntry({ id: "m3", level: "error", message: "启动失败" }),
-    ]);
+    useLogStore
+      .getState()
+      .appendFileLogs([
+        makeEntry({ id: "m1", message: "启动完成" }),
+        makeEntry({ id: "m2", message: "其他消息" }),
+        makeEntry({ id: "m3", level: "error", message: "启动失败" }),
+      ]);
     const { counts, filteredLogs } = useLogStore.getState();
     expect(counts).toEqual({ all: 3, debug: 0, info: 2, warn: 0, error: 1 });
     expect(idsOf(filteredLogs)).toEqual(["m1", "m3"]);
@@ -186,8 +188,18 @@ describe("computeFiltered 级别过滤与搜索", () => {
         source: "console",
         location: "src/app/api/run.ts:42",
       }),
-      makeEntry({ id: "e2", level: "error", message: "Kernel Boom", source: "tauri" }),
-      makeEntry({ id: "e3", level: "warn", message: "启动检查完成", source: "system" }),
+      makeEntry({
+        id: "e2",
+        level: "error",
+        message: "Kernel Boom",
+        source: "tauri",
+      }),
+      makeEntry({
+        id: "e3",
+        level: "warn",
+        message: "启动检查完成",
+        source: "system",
+      }),
       makeEntry({
         id: "e4",
         level: "debug",
@@ -220,7 +232,10 @@ describe("computeFiltered 级别过滤与搜索", () => {
   it("搜索匹配 message 且不区分大小写", () => {
     seedFixture();
     useLogStore.getState().setSearch("KERNEL");
-    expect(idsOf(useLogStore.getState().filteredLogs).sort()).toEqual(["e1", "e2"]);
+    expect(idsOf(useLogStore.getState().filteredLogs).sort()).toEqual([
+      "e1",
+      "e2",
+    ]);
   });
 
   it("搜索匹配 location 字段", () => {
@@ -276,7 +291,9 @@ describe("computeFiltered 级别过滤与搜索", () => {
 
 describe("setFilter / setSearch 派生正确性", () => {
   it("setFilter 只更新 filter 与 filteredLogs,不动 logs 与 counts", () => {
-    useLogStore.getState().appendFileLogs([makeEntry({ id: "a", level: "warn" })]);
+    useLogStore
+      .getState()
+      .appendFileLogs([makeEntry({ id: "a", level: "warn" })]);
     useLogStore.getState().setFilter("warn");
     const { filter, logs, counts, filteredLogs } = useLogStore.getState();
     expect(filter).toBe("warn");
@@ -286,7 +303,9 @@ describe("setFilter / setSearch 派生正确性", () => {
   });
 
   it("setSearch 更新 search 并保留已有 filter", () => {
-    useLogStore.getState().appendFileLogs([makeEntry({ id: "a", message: "hello" })]);
+    useLogStore
+      .getState()
+      .appendFileLogs([makeEntry({ id: "a", message: "hello" })]);
     const s = useLogStore.getState();
     s.setFilter("info");
     s.setSearch("hello");
@@ -297,11 +316,13 @@ describe("setFilter / setSearch 派生正确性", () => {
   });
 
   it("先 setSearch 后 setFilter 时两个条件叠加生效", () => {
-    useLogStore.getState().appendFileLogs([
-      makeEntry({ id: "a", level: "warn", message: "alpha" }),
-      makeEntry({ id: "b", level: "error", message: "alpha beta" }),
-      makeEntry({ id: "c", level: "warn", message: "gamma" }),
-    ]);
+    useLogStore
+      .getState()
+      .appendFileLogs([
+        makeEntry({ id: "a", level: "warn", message: "alpha" }),
+        makeEntry({ id: "b", level: "error", message: "alpha beta" }),
+        makeEntry({ id: "c", level: "warn", message: "gamma" }),
+      ]);
     const s = useLogStore.getState();
     s.setSearch("alpha");
     s.setFilter("warn");
@@ -315,7 +336,10 @@ describe("clear 清空动作", () => {
   it("clear 清空 logs / counts / filteredLogs", () => {
     useLogStore
       .getState()
-      .appendFileLogs([makeEntry({ id: "a" }), makeEntry({ id: "b", level: "error" })]);
+      .appendFileLogs([
+        makeEntry({ id: "a" }),
+        makeEntry({ id: "b", level: "error" }),
+      ]);
     useLogStore.getState().clear();
     const { logs, counts, filteredLogs } = useLogStore.getState();
     expect(logs).toEqual([]);
@@ -447,7 +471,9 @@ describe("isReactQueryLog React Query 内部日志识别", () => {
   });
 
   it("匹配塌缩/重包装形态（React devtools 合并单串）", () => {
-    expect(isReactQueryLog(["[[ << mutation #43 ]workflow.update {}"])).toBe(true);
+    expect(isReactQueryLog(["[[ << mutation #43 ]workflow.update {}"])).toBe(
+      true,
+    );
     expect(isReactQueryLog(["[ >> query #2 ]workflow.list"])).toBe(true);
     expect(isReactQueryLog(["[<< mutation #1 x"])).toBe(true);
   });
@@ -467,9 +493,9 @@ describe("isNextDevNoise Next.js dev 提示识别", () => {
   });
 
   it("识别带 %c 样式参数的多参数形态", () => {
-    expect(
-      isNextDevNoise(["[Fast Refresh] done in 120ms", "color:#555"]),
-    ).toBe(true);
+    expect(isNextDevNoise(["[Fast Refresh] done in 120ms", "color:#555"])).toBe(
+      true,
+    );
   });
 
   it("普通业务日志返回 false", () => {
@@ -495,12 +521,20 @@ describe("parseFileLogs 文件日志解析", () => {
   it("ERROR/WARN/INFO/DEBUG 级别正确归一化", () => {
     const base = new Date(2026, 7, 15);
     const entries = parseFileLogs(
-      ["[01:00:00] [ERROR] e", "[01:00:01] [WARN] w", "[01:00:02] [INFO] i", "[01:00:03] [DEBUG] d"].join(
-        "\n",
-      ),
+      [
+        "[01:00:00] [ERROR] e",
+        "[01:00:01] [WARN] w",
+        "[01:00:02] [INFO] i",
+        "[01:00:03] [DEBUG] d",
+      ].join("\n"),
       base,
     );
-    expect(entries.map((e) => e.level)).toEqual(["error", "warn", "info", "debug"]);
+    expect(entries.map((e) => e.level)).toEqual([
+      "error",
+      "warn",
+      "info",
+      "debug",
+    ]);
   });
 
   it("STEP/OK 归一化为 info", () => {
@@ -544,6 +578,57 @@ describe("parseFileLogs 文件日志解析", () => {
 
   it("空文本返回空数组", () => {
     expect(parseFileLogs("")).toEqual([]);
+  });
+
+  it("解析 app-runtime 行（日期时间 + LEVEL + 命名空间 + 消息）并带级别", () => {
+    const base = new Date(2026, 8, 15);
+    const entries = parseFileLogs(
+      "[2026-09-15 10:20:30.123] [ERROR] [task] 任务失败 abc {id:1}",
+      base,
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.level).toBe("error");
+    expect(entries[0]?.message).toBe("[task] 任务失败 abc {id:1}");
+    const t = entries[0]?.time;
+    const d = new Date(t ?? 0);
+    expect(d.getFullYear()).toBe(2026);
+    expect(d.getMonth()).toBe(8);
+    expect(d.getDate()).toBe(15);
+    expect(d.getHours()).toBe(10);
+    expect(d.getMinutes()).toBe(20);
+    expect(d.getSeconds()).toBe(30);
+  });
+
+  it("app-runtime 行无命名空间时消息不加命名空间前缀", () => {
+    const base = new Date(2026, 8, 15);
+    const entries = parseFileLogs(
+      "[2026-09-15 10:20:30.123] [INFO] plain",
+      base,
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.level).toBe("info");
+    expect(entries[0]?.message).toBe("plain");
+  });
+
+  it("app-runtime 行带命名空间时消息带 [ns] 前缀", () => {
+    const base = new Date(2026, 8, 15);
+    const entries = parseFileLogs(
+      "[2026-09-15 10:20:30.123] [WARN] [trpc] generate.generate 25ms",
+      base,
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.level).toBe("warn");
+    expect(entries[0]?.message).toBe("[trpc] generate.generate 25ms");
+  });
+
+  it("app-runtime 行优先于 launcher 行解析（带 LEVEL 时不被降级为 info）", () => {
+    const base = new Date(2026, 8, 15);
+    const entries = parseFileLogs(
+      "[2026-09-15 10:20:30.123] [ERROR] [task] boom",
+      base,
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.level).toBe("error");
   });
 });
 

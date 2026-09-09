@@ -179,23 +179,27 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
   }, [addEntry]);
 
   // ── Load launcher log files: startup logs + ongoing dev-server output ──
-  const offsetsRef = useRef({ dev: 0, launcher: 0 });
+  // 轮询来源：launcher（启动链路）、dev（dev-launcher 实时输出）、
+  // app-runtime（应用运行期业务操作日志，见 src/lib/app-runtime-log.ts）。
+  const offsetsRef = useRef<Partial<Record<"dev" | "launcher" | "app-runtime", number>>>({
+    dev: 0,
+    launcher: 0,
+    "app-runtime": 0,
+  });
   useEffect(() => {
     if (typeof window === "undefined") return;
     let mounted = true;
     const POLL_MS = 2000;
 
-    const pollSource = async (source: "dev" | "launcher") => {
+    const sources = ["launcher", "dev", "app-runtime"] as const;
+    const pollSource = async (source: (typeof sources)[number]) => {
       try {
-        const offset = offsetsRef.current[source];
-        const data = await fetchFileLogSlice(
-          source === "dev" ? "dev" : "launcher",
-          offset,
-        );
+        const offset = offsetsRef.current[source] ?? 0;
+        const data = await fetchFileLogSlice(source, offset);
         if (!data || !mounted || !data.content) return;
 
         // 文件被重置（新运行）时 offset 会回 0；此时丢弃旧 offset，完整重读
-        if (data.offset === 0 && offsetsRef.current[source] > 0) {
+        if (data.offset === 0 && (offsetsRef.current[source] ?? 0) > 0) {
           offsetsRef.current[source] = 0;
         }
 
@@ -210,8 +214,9 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     };
 
     const poll = async () => {
-      await pollSource("launcher");
-      await pollSource("dev");
+      for (const source of sources) {
+        await pollSource(source);
+      }
     };
 
     void poll();
