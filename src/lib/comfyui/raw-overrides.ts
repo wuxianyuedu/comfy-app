@@ -9,6 +9,11 @@
  * {@link applyRawOverrides}，把前端下发的 `(nodeId, name, value)` 覆盖项写进
  * raw 节点的 `widgets_values`。
  *
+ * 子图（subgraph）wrapper 的覆盖项会额外同步到内层节点：wrapper 只是把内层
+ * 控件「提升」出来的宿主，真正参与 UI→API 转换的是内层节点的
+ * `widgets_values`（comfy-cli 展开子图后读的是内层值），只改 wrapper 不改内层
+ * 会让覆盖在转换阶段被内层默认值覆盖回去。
+ *
  * @module comfyui/raw-overrides
  */
 
@@ -33,10 +38,12 @@ export type RawUiNodeInput = {
 
 /**
  * Raw UI-format（LiteGraph）节点的最小结构视图 —— 只取注入
- * `widgets_values` 所需的字段（`id` / `inputs` / `widgets_values`）。
+ * `widgets_values` 所需的字段（`id` / `inputs` / `widgets_values`）；
+ * `type` 用于判断该节点是否为子图 wrapper（`class_type` 为子图 UUID）。
  */
 export type RawUiNode = {
   id?: unknown;
+  type?: unknown;
   inputs?: RawUiNodeInput[];
   widgets_values?: unknown[];
 };
@@ -125,6 +132,25 @@ function seedWidgetSlot(node: RawUiNode): number {
   return -1;
 }
 
+/** Name of the seed-type widget input on a UI node (null when it has none). */
+function seedWidgetName(node: RawUiNode): string | null {
+  const inputs = node?.inputs ?? [];
+  for (const inp of inputs) {
+    if (!inp?.widget) continue;
+    const w = inp.widget;
+    const wname =
+      typeof w === "string"
+        ? w
+        : w != null && typeof w === "object"
+          ? ((w as JsonRecord).name ?? inp.name)
+          : inp.name;
+    if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) {
+      return typeof inp.name === "string" ? inp.name : String(wname);
+    }
+  }
+  return null;
+}
+
 /** Number of widget-bearing inputs (each occupies exactly one slot in
  *  `widgets_values` unless a seed's `control_after_generate` sentinel adds
  *  an extra slot — see {@link hasSeedControlSlot}). */
@@ -159,6 +185,181 @@ function randomSeed(): number {
   return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 }
 
+/** Sentinel ids ComfyUI uses inside a subgraph definition for the synthetic
+ *  boundary nodes: `-10` is the input rail, `-20` the output rail.  A link whose
+ *  origin is `-10` means "this inner input is fed by an exposed subgraph pin",
+ *  which is exactly how ComfyUI marks a promoted (host-owned) widget. */
+const SUBGRAPH_INPUT_NODE_ID = -10;
+
+/** Minimal view of one entry of a subgraph definition's `inputs[]` pin list. */
+type SubgraphPin = {
+  name?: unknown;
+  linkIds?: unknown;
+};
+
+/** Minimal view of one interior link object of a subgraph definition
+ *  (`{ id, origin_id, origin_slot, target_id, target_slot, type }`). */
+type SubgraphLink = {
+  id?: unknown;
+  origin_id?: unknown;
+  target_id?: unknown;
+  target_slot?: unknown;
+};
+
+/** Minimal view of a subgraph definition (`definitions.subgraphs[uid]`). */
+type RawSubgraph = {
+  id?: unknown;
+  nodes?: unknown;
+  links?: unknown;
+  inputs?: unknown;
+};
+
+/** Collect every subgraph definition, keyed by its UUID (`sub.id`). */
+function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
+  const out = new Map<string, RawSubgraph>();
+  const defs = raw.definitions;
+  const subs =
+    defs != null && typeof defs === "object"
+      ? (defs as JsonRecord).subgraphs
+      : undefined;
+  const list: unknown[] = Array.isArray(subs)
+    ? subs
+    : subs != null && typeof subs === "object"
+      ? Object.values(subs)
+      : [];
+  for (const sg of list) {
+    if (sg == null || typeof sg !== "object") continue;
+    const sub = sg as RawSubgraph;
+    const uid = typeof sub.id === "string" ? sub.id : undefined;
+    if (uid) out.set(uid, sub);
+  }
+  return out;
+}
+
+/**
+ * 把落在子图 wrapper 上的覆盖项同步到内层节点。
+ *
+ * 背景：ComfyUI 的子图 wrapper 只保存**宿主值**（`widgets_values` 按「第 i 个
+ * 提升到控件的子图输入」位置排列），内层节点保存的是**默认/上游值**。comfy-cli
+ * 做 UI→API 转换时会把子图展开成 `wrapperId:innerId`，而展开过程中内层节点的
+ * `widgets_values` 才是节点入参的来源；wrapper 的宿主值只在转换器的
+ * promoted-widget 回写阶段（comfy-cli ≥ 1.20）被应用。只改 wrapper 不改内层，
+ * 在老版本 comfy-cli 上覆盖会被内层默认值整段盖掉。
+ *
+ * 映射规则与 ComfyUI 前端一致（`SubgraphNode._resolveInputWidget`）：子图定义
+ * 的 `inputs[i]` 取其 `linkIds` 中第一条「起点是 `-10`（输入轨）」的边界连线，
+ * 该连线的 `target_id` / `target_slot` 即内层节点与其入参槽位；外层 wrapper 的
+ * `inputs[]` 与定义 `inputs[]` 按**名字**对齐（顺序可能不同）。
+ */
+function applySubgraphInteriorOverrides(
+  raw: JsonRecord,
+  wrapper: RawUiNode,
+  wrapperId: string,
+  entries: { name: string; value: unknown }[]
+): void {
+  const classType = typeof wrapper.type === "string" ? wrapper.type : undefined;
+  if (!classType) return;
+  const sub = subgraphDefs(raw).get(classType);
+  if (!sub) return;
+
+  const innerNodes = Array.isArray(sub.nodes) ? sub.nodes : [];
+  const innerById = new Map<string, RawUiNode>();
+  for (const n of innerNodes) {
+    if (n == null || typeof n !== "object") continue;
+    const node = n as RawUiNode;
+    if (node.id == null) continue;
+    if (typeof node.id !== "string" && typeof node.id !== "number") continue;
+    innerById.set(String(node.id), node);
+  }
+
+  const linksById = new Map<string, SubgraphLink>();
+  for (const l of Array.isArray(sub.links) ? sub.links : []) {
+    if (l == null || typeof l !== "object") continue;
+    const link = l as SubgraphLink;
+    if (typeof link.id !== "string" && typeof link.id !== "number") continue;
+    linksById.set(String(link.id), link);
+  }
+
+  /* 外层 wrapper 输入槽 → 子图定义输入名（按 wrapper.inputs[] 的名字查） */
+  const defInputNameByWrapperName = new Map<string, string>();
+  const defInputs = Array.isArray(sub.inputs) ? sub.inputs : [];
+  const defNames = new Set<string>();
+  for (const i of defInputs) {
+    if (i == null || typeof i !== "object") continue;
+    const pin = i as SubgraphPin;
+    if (typeof pin.name === "string") defNames.add(pin.name);
+  }
+  for (const inp of wrapper.inputs ?? []) {
+    if (typeof inp?.name !== "string") continue;
+    if (defNames.has(inp.name)) defInputNameByWrapperName.set(inp.name, inp.name);
+  }
+
+  /* 子图定义输入名 → 内层 (nodeId, slot) */
+  const targetByName = new Map<string, { nodeId: string; slot: number }>();
+  for (const i of defInputs) {
+    if (i == null || typeof i !== "object") continue;
+    const pin = i as SubgraphPin;
+    if (typeof pin.name !== "string") continue;
+    for (const lid of Array.isArray(pin.linkIds) ? pin.linkIds : []) {
+      if (typeof lid !== "string" && typeof lid !== "number") continue;
+      const link = linksById.get(String(lid));
+      if (!link) continue;
+      if (Number(link.origin_id) !== SUBGRAPH_INPUT_NODE_ID) continue;
+      if (
+        typeof link.target_id !== "string" &&
+        typeof link.target_id !== "number"
+      )
+        continue;
+      const tid = String(link.target_id);
+      const slot = Number(link.target_slot);
+      if (!innerById.has(tid) || !Number.isFinite(slot)) continue;
+      targetByName.set(pin.name, { nodeId: tid, slot: Math.trunc(slot) });
+      break;
+    }
+  }
+
+  for (const { name, value } of entries) {
+    const defName = defInputNameByWrapperName.get(name);
+    if (defName === undefined) continue;
+    const target = targetByName.get(defName);
+    if (!target) continue;
+    const inner = innerById.get(target.nodeId);
+    if (!inner) continue;
+    const slot = mapInputSlotToWidgetSlot(inner, target.slot);
+    if (slot < 0) continue;
+    if (!Array.isArray(inner.widgets_values)) continue;
+    inner.widgets_values[slot] = value;
+  }
+  void wrapperId;
+}
+
+/**
+ * 把内层节点的**输入槽位下标**换算成 `widgets_values` 下标。
+ * 只有带 `widget` 标记的入参才占 `widgets_values` 的格子，且 seed / noise_seed
+ * 会多占一格（`control_after_generate` 哨兵），与
+ * {@link seedWidgetSlot} / {@link widgetSlot} 的计数规则一致。
+ */
+function mapInputSlotToWidgetSlot(node: RawUiNode, inputIndex: number): number {
+  const inputs = node?.inputs ?? [];
+  let slot = 0;
+  for (let i = 0; i < inputs.length; i++) {
+    const inp = inputs[i];
+    if (!inp?.widget) continue;
+    // 目标槽位的值格就是当前游标；seed 的 control 哨兵只把它**之后**的
+    // 控件整体推后一格，所以哨兵的额外 +1 必须在返回游标之后才累加。
+    if (i === inputIndex) return slot;
+    slot++;
+    const wname =
+      typeof inp.widget === "string"
+        ? inp.widget
+        : inp.widget != null && typeof inp.widget === "object"
+          ? ((inp.widget as JsonRecord).name ?? inp.name)
+          : inp.name;
+    if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) slot++;
+  }
+  return -1;
+}
+
 /** Best-effort injection of canvas `workflowInputs` into the raw UI json. */
 export function applyRawOverrides(
   rawJson: unknown,
@@ -166,6 +367,8 @@ export function applyRawOverrides(
 ): JsonRecord {
   if (!overrides?.length) return rawJson as JsonRecord;
   const raw = JSON.parse(JSON.stringify(rawJson)) as JsonRecord;
+  /* 已落到节点上的覆盖项，循环结束后统一同步子图内层（见文件末尾）。 */
+  const pendingByNode = new Map<string, { name: string; value: unknown }[]>();
   for (const ov of overrides) {
     if (!ov?.nodeId || ov.value === undefined) continue;
     const node = resolveRawNode(raw, ov.nodeId);
@@ -193,7 +396,14 @@ export function applyRawOverrides(
         // the seed fixed — the requested randomize mode would be dropped.
         // Fall back to minting a fresh random seed here so the exposed seed
         // still varies per run.
-        node.widgets_values[seedSlot] = randomSeed();
+        const minted = randomSeed();
+        node.widgets_values[seedSlot] = minted;
+        // 同步写进内层节点：comfy-cli 展开子图后真正被采样器读到的是内层
+        // widgets_values，只改 wrapper 的话这次随机种子同样会被内层默认值盖掉。
+        pendingByNode.set(ov.nodeId, [
+          ...(pendingByNode.get(ov.nodeId) ?? []),
+          { name: seedWidgetName(node) ?? "seed", value: minted },
+        ]);
       }
       continue;
     }
@@ -202,6 +412,20 @@ export function applyRawOverrides(
     if (slot < 0) continue;
     if (!Array.isArray(node.widgets_values)) node.widgets_values = [];
     node.widgets_values[slot] = ov.value;
+    pendingByNode.set(ov.nodeId, [
+      ...(pendingByNode.get(ov.nodeId) ?? []),
+      { name: ov.name, value: ov.value },
+    ]);
+  }
+
+  /* 子图 wrapper：把覆盖同步到内层节点。wrapper 存的是宿主值，而 comfy-cli
+   * 展开子图后读的是内层节点的 widgets_values —— 只改 wrapper，在
+   * 「转换器不回写宿主值」的 comfy-cli 版本上覆盖会被内层默认值整段盖掉
+   * （提示词/种子等入参全部失效，每次都跑工作流里存的那张图）。 */
+  for (const [nodeId, entries] of pendingByNode) {
+    const node = resolveRawNode(raw, nodeId);
+    if (!node) continue;
+    applySubgraphInteriorOverrides(raw, node, nodeId, entries);
   }
   return raw;
 }
