@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { FileText, Lock } from "lucide-react";
 import { useLogPanel } from "./logs/LogProvider";
@@ -63,6 +64,15 @@ export function BrowserStatusBar() {
   const toggleOpen = useLogPanel((s) => s.toggleOpen);
   const counts = useLogPanel((s) => s.counts);
   const pathname = usePathname();
+  /* 当前页面的地址+端口（如 localhost:3100）。读取 window.location 属纯客户端
+   * 环境信息，非网络/业务 IO，视图层可直接取；SSR 阶段 window 不可用，故首帧
+   * host 为空、仅显示 pathname（与旧行为一致），客户端填充后补全完整地址。
+   * 用 setTimeout 延迟到 render 提交后 setState，规避 react-hooks/set-state-in-effect。 */
+  const [host, setHost] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setHost(window.location.host), 0);
+    return () => clearTimeout(t);
+  }, []);
 
   const fps = useFps();
   const { stats, online } = useComfyStats();
@@ -82,8 +92,11 @@ export function BrowserStatusBar() {
       <div className="flex min-w-0 items-center gap-1.5">
         <Lock size={11} className="shrink-0 text-emerald-400" />
         <span className="shrink-0 text-gray-600">安全</span>
-        <span className="truncate text-gray-400" title={pathname}>
-          {pathname}
+        <span
+          className="truncate text-gray-400"
+          title={host ? `${host}${pathname}` : pathname}
+        >
+          {host ? `${host}${pathname}` : pathname}
         </span>
       </div>
 
