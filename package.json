@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "@formkit/auto-animate": "^0.10.0",
     "@hookform/resolvers": "^5.9.1",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@paralleldrive/cuid2": "^2.2.2",
@@ -71,6 +72,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
+    "@next/bundle-analyzer": "^16.3.4",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.0.15",
     "@tauri-apps/cli": "^2.11.4",
@@ -100,8 +102,7 @@
     "typedoc": "^0.28.20",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-eslint": "^8.69.0",
-    "vitest": "^4.1.11",
-    "@next/bundle-analyzer": "^16.3.4"
+    "vitest": "^4.1.11"
   },
   "ct3aMetadata": {
     "initVersion": "7.40.0"
