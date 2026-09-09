@@ -34,6 +34,13 @@
     }
     .card {
       width: min(520px, calc(100vw - 48px));
+      transition: width 0.2s ease;
+    }
+    /* 展开日志时加宽卡片，让单行日志尽量不折行（共用面板外观，仅覆盖宽度） */
+    .card.wide {
+      width: min(960px, calc(100vw - 48px));
+    }
+    .card, .card.wide {
       /* 不用半透明 + backdrop-filter：WebView2 在某些显卡/驱动下会把这层渲染成
          透明或黑块，导致启动页只剩窗口底色。改用不透明面板保证可见。 */
       background: #151320;
@@ -147,8 +154,9 @@
       font-size: 11px;
       line-height: 1.5;
       color: var(--muted);
-      white-space: pre-wrap;
-      word-break: break-all;
+      /* 一行一条日志：超宽横向滚动，不再把短行折成两行 */
+      white-space: pre;
+      overflow-x: auto;
       /* 日志内容允许选中复制，便于把启动卡住的现场发给协作者 */
       user-select: text;
     }
@@ -330,6 +338,8 @@
       logVisible = !logVisible;
       logPanel.style.display = logVisible ? 'block' : 'none';
       logBtn.textContent = logVisible ? '隐藏日志' : '查看日志';
+      // 展开日志时加宽卡片，给日志行更多横向空间
+      document.querySelector('.card').classList.toggle('wide', logVisible);
       if (logVisible) {
         fetchLog();
         logTimer = setInterval(fetchLog, 800);
