@@ -11,6 +11,7 @@ function Test-Command {
 }
 
 . "$PSScriptRoot\Log-Common.ps1"
+. "$PSScriptRoot\Build-Guard.ps1"
 Initialize-Log "build-standalone.log"
 
 Log "=========================================================="
@@ -35,18 +36,34 @@ if (-not (Test-Command pnpm)) {
     exit 1
 }
 
-Log "[1/2] 环境检查"
+Log "[1/3] 环境检查"
 Log "  cargo : $(cargo --version 2>&1)"
 Log "  rustc : $(rustc --version 2>&1)"
 Log "  pnpm  : $(pnpm --version 2>&1)"
 Log ""
 
-Log "[2/2] 开始 tauri build --no-bundle（首次耗时较长：pnpm build + cargo build + 资源拷贝）..."
+Log "[2/3] 前置检查：目标壳是否仍在运行"
+# 与 build-tauri-release 同因：tauri build 覆盖 target\release\app.exe 时，被
+# 运行中的桌面壳占用会在编译收尾报「拒绝访问 (os error 5)」。这里在耗时最长的
+# pnpm build 之前拦下，避免白跑。
+if ((Assert-ShellNotRunning -ProjectRoot $PROJECT_ROOT -Purpose "standalone 构建") -ne 0) {
+    Open-Log
+    exit 1
+}
+Log "  未发现正在运行的桌面壳，继续。"
+Log ""
+
+Log "[3/3] 开始 tauri build --no-bundle（首次耗时较长：pnpm build + cargo build + 资源拷贝）..."
 Invoke-Logged "pnpm tauri build --no-bundle"
 $buildErr = $script:LAST_INVOKE_CODE
 if ($buildErr -ne 0) {
     Log ""
     Log "[错误] 独立模式构建失败（exit=$buildErr），已用记事本打开日志：$LOG"
+    if ((Get-RunningShellProcess -ProjectRoot $PROJECT_ROOT).Count -gt 0) {
+        Log ""
+        Log "  注意：日志中若出现「failed to remove file ... app.exe / 拒绝访问 (os error 5)」，"
+        Log "        说明桌面壳在构建期间被打开了。关闭桌面窗口后重跑本构建即可。"
+    }
     Open-Log
     exit 1
 }

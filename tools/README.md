@@ -50,6 +50,8 @@
 | `README.md` | (根) | 文档 | 本文件 |
 | `studio/start-studio.ps1` | studio/ | 数据库 | 启动 Drizzle Studio（逻辑在 `studio/start-studio.logic.ps1`） |
 | `scripts/` | scripts/ | 逻辑脚本 | `build/*.ps1` 入口对应的 PowerShell 实现：环境检查 / 打包 / 日志都在这里 |
+| `scripts/Log-Common.ps1` | scripts/ | 公共库 | 构建脚本的统一日志输出（`Log` / `Invoke-Logged` / `Open-Log`，落 `log/tools/*.log`） |
+| `scripts/Build-Guard.ps1` | scripts/ | 公共库 | 构建前置守卫：编译前检测 `target\{release,debug}\app.exe` 是否仍在运行（被占用的壳会让 cargo 覆盖产物时报 `os error 5`，且要等整轮编译走完才失败），命中即中止并给处置提示 |
 | `../scripts/entry-common.ps1` | (根 scripts) | 公共库 | 入口通用能力：定位项目根 / 解析 pwsh 宿主 / 透传退出码 / 双击场景暂停 |
 | `../scripts/enable-ps1-double-click.ps1` | (根 scripts) | 一次性配置 | 关联「双击 .ps1 = 运行」（用户级 HKCU，免管理员） |
 
@@ -232,6 +234,10 @@ dev server + Tauri 桌面包壳」，但走的模式不同：
 - 已安装 Rust 工具链（`cargo` / `rustc`，推荐通过 https://rustup.rs/ 安装）；
 - Windows 上需 Visual Studio Build Tools（含「使用 C++ 的桌面开发」工作负载），
   否则 `cargo build` 会因缺少 MSVC 链接器失败。
+- **桌面壳要处于关闭状态**：`app.exe` 还在运行时 Windows 不允许替换它，
+  cargo 会在编译收尾报 `failed to remove file ... app.exe / 拒绝访问 (os error 5)`，
+  白白浪费整轮编译。构建脚本已用 `tools/scripts/Build-Guard.ps1` 在编译前拦下，
+  窗口关掉再重跑即可（别用任务管理器单杀壳，Next dev server 子进程会残留占端口）。
 
 ### 执行
 

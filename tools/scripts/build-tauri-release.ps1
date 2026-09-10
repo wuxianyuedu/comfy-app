@@ -11,6 +11,7 @@ function Test-Command {
 }
 
 . "$PSScriptRoot\Log-Common.ps1"
+. "$PSScriptRoot\Build-Guard.ps1"
 Initialize-Log "build-tauri-release.log"
 
 $TAURI_DIR = Join-Path $PROJECT_ROOT "src-tauri"
@@ -33,12 +34,22 @@ if (-not (Test-Command rustc)) {
     exit 1
 }
 
-Log "[1/2] 环境检查"
+Log "[1/4] 环境检查"
 Log "  cargo : $(cargo --version 2>&1)"
 Log "  rustc : $(rustc --version 2>&1)"
 Log ""
 
-Log "[1.5] 同步启动页资源（prebuilt 壳只需内嵌 splash.html）"
+Log "[2/4] 前置检查：目标壳是否仍在运行"
+# cargo 链接前会删除旧的 target\release\app.exe，被上一轮启动的桌面壳占用时
+# 会在编译收尾阶段报「拒绝访问 (os error 5)」。提前拦下，省掉整轮编译。
+if ((Assert-ShellNotRunning -ProjectRoot $PROJECT_ROOT -Purpose "构建 release 壳") -ne 0) {
+    Open-Log
+    exit 1
+}
+Log "  未发现正在运行的桌面壳，继续。"
+Log ""
+
+Log "[3/4] 同步启动页资源（prebuilt 壳只需内嵌 splash.html）"
 # prebuilt 模式的页面由 dev server（http://127.0.0.1:3100）提供，壳里只需要启动页；
 # standalone 资源（server.js / .next / Node sidecar）由 tools\build\build-standalone.ps1 负责。
 # 过去这里在 static 缺失时会跑完整 build-desktop.mjs，而 Next standalone 的 file
@@ -61,7 +72,7 @@ if (Test-Path $devLauncher) {
 }
 Log ""
 
-Log "[2/2] 开始构建 release Tauri 壳（首次耗时较长，可能 5-15 分钟）..."
+Log "[4/4] 开始构建 release Tauri 壳（首次耗时较长，可能 5-15 分钟）..."
 Push-Location $TAURI_DIR
 # 必须带 --features custom-protocol（见 docs/standards/launch-and-build.md §5/§7）：
 # 不带则 dev/prebuilt 模式下启动页导航到 devUrl 且资源不内嵌 → 黑屏 / Edge 错误页。
@@ -71,6 +82,11 @@ Pop-Location
 if ($buildErr -ne 0) {
     Log ""
     Log "[错误] 构建失败（exit=$buildErr），已用记事本打开日志：$LOG"
+    if ((Get-RunningShellProcess -ProjectRoot $PROJECT_ROOT).Count -gt 0) {
+        Log ""
+        Log "  注意：日志中若出现「failed to remove file ... app.exe / 拒绝访问 (os error 5)」，"
+        Log "        说明桌面壳在构建期间被打开了。关闭桌面窗口后重跑本构建即可。"
+    }
     Open-Log
     exit 1
 }
