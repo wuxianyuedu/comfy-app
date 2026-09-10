@@ -138,11 +138,17 @@ export interface SettingsPageController {
   comfyStatus: {
     up: boolean;
     starting: boolean;
+    /** 服务端探测仍在进行 / 事实不可信：状态行显示「检测中…」而不是「未运行」，
+     *  避免外部已启动的实例被先误报一次未运行（ISSUE #339）。 */
+    probing: boolean;
     /** 服务端「关闭中」窗口（globalThis 计时，可跨设置页挂载存活）：见 ISSUE #103 */
     stopping: boolean;
     base: string | null;
     pathConfigured: boolean;
     port: number;
+    /** 进程用什么起的（中文短语）：只有端口监听在、HTTP 未就绪时也非空，
+     *  状态行据此提示「接口未就绪，可能仍在启动」。 */
+    via: string | null;
     /** 安装形态：桌面版/便携版/venv；未配置路径或无路径时为 null。 */
     instanceType: "desktop" | "portable" | "venv" | "unknown" | null;
     /** 桌面实例且能读到实例 ID → 端口/参数由 Comfy Desktop 元数据决定，
@@ -351,8 +357,13 @@ export function useSettingsPage(): SettingsPageController {
    * 流式返回 —— 首屏只需要的 get/configGet 会被迫等整批结束，页面
    * 多停在加载态数秒。 */
   const statusQueriesEnabled = !!settingsQ.data && !!llmQ.data;
+  /* 轮询间隔：默认 5s（外部/命令行启动的 ComfyUI 能被及时认出来）；窗口聚焦
+   * 时隔更短，让「切回设置页」几乎立刻看到真实状态（ISSUE #339 的「打开界面
+   * 要等一会才显示在运行」）。服务端有进程级快照 + HTTP 探测兜底，间隔收紧
+   * 不会把压力转成卡顿。 */
   const comfyStatusQ = api.setting.comfyStatus.useQuery(undefined, {
-    refetchInterval: 15_000,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: false,
     enabled: statusQueriesEnabled,
   });
   const comfyStartM = api.setting.comfyStart.useMutation();
@@ -540,7 +551,11 @@ export function useSettingsPage(): SettingsPageController {
   const openComfy = useCallback(async () => {
     setComfyOpening(true);
     try {
-      const base = comfyStatusQ.data?.base ?? null;
+      /* 点「打开查看」前先要一份新鲜状态：用户此刻的意图就是「打开我在运行的
+       * 实例」，拿几秒前的旧结论会直接报「未在运行」并把按钮禁用掉（ISSUE #339
+       * 里「外部已经启动了，界面却打不开」的观感来源）。 */
+      const fresh = await comfyStatusQ.refetch();
+      const base = fresh.data?.base ?? comfyStatusQ.data?.base ?? null;
       if (isDesktopShell()) {
         // 桌面壳内：优先在壳里开一个「子页签」窗口（Rust open_comfyui_window），
         // 不再拉起系统浏览器；无壳/未运行则走浏览器兜底（见 else 分支）。
@@ -1177,10 +1192,12 @@ export function useSettingsPage(): SettingsPageController {
       ? {
           up: !!comfy.up,
           starting: !!comfy.starting,
+          probing: !!comfy.probing,
           stopping: !!comfy.stopping,
           base: comfy.base ?? null,
           pathConfigured: !!comfy.pathConfigured,
           port: comfy.port ?? 0,
+          via: comfy.via ?? null,
           instanceType: comfy.instanceType ?? null,
           desktopManaged: !!comfy.desktopManaged,
         }

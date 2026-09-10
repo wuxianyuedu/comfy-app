@@ -13,6 +13,8 @@
 
 ### Fixed
 
+- **设置页 ComfyUI 状态不再「外部明明起着却显示未运行 / 要等几秒才跳」（ISSUE #339）**：此前状态行只看一次 HTTP 探测，而该探测在配置了路径时会先要求「命令行含 `main.py` 的进程」存在——Comfy Desktop 的实例由 `uv` 启动，命令行里没有 `main.py`，于是外部已经跑起来的 ComfyUI 也被判成「未运行」；探测本身还要现付一遍进程表查询（冷启动高负载下可到 10s 超时）与 6 次端口扫描，状态行先渲染「未运行」再跳到「运行中」；前端又每 15s 才问一次。现在状态改由「进程级快照 + HTTP 探测」合并判定：本应用拉起的进程、配置路径的实例、`comfy-cli` 登记的启动器、以及 `pythonw`/`python` 起的任意 ComfyUI 都能被认出来，进程在跑但接口还没就绪会如实显示「正在启动…」而不是「未运行」，事实拿不准时显示「检测中…」也不会误报未运行；快照带秒级缓存与并发去重，查询不再卡顿；设置页轮询收紧到 5s（切回页面立即取最新），「打开查看」会先取一份新鲜状态再打开。
+
 - **ComfyUI 启动失败后不再反复自动重试（ISSUE #335）**：此前「ComfyUI 保活进程已退出」这类明确失败只返回一次错误，WS 重连循环仍会每 15s 重新讨要启动——同一段失败日志与「启动失败」横幅被反复刷进执行日志与 `comfyui-runtime.log`，无谓地重复拉起进程，用户也看不到「已经不再重试」的收口。现在一次自动启动以明确失败收尾后即落「不再自动重试」闩锁：后续自动路径（WS 重连 / 状态轮询）直接回报上次失败原因并跳过重试，执行日志明确写出「已停止自动重试…修好环境或到 设置 → 创作后端 点『启动 ComfyUI』即可恢复」。三个恢复出口都会清掉闩锁——手动点「启动 ComfyUI」、重新开启自动启动、或修改「安装路径 / 启动参数」（修好了失败成因就该重新尝试）。
 - **`/login` 与 `/workspace` 打开即整页 500（应用完全打不开）**：`src/lib/log-session-scope.ts` 顶层 `import fs from "node:fs"`，而客户端组件 `LogProvider.tsx`（`"use client"`）只是想要它的纯函数 `clampLogTime`。Turbopack 编译浏览器 chunk 时把 `node:fs` 整图形入，报 `the chunking context does not support external modules (request: node:fs)` 并让 endpoint 编译失败——`pnpm build` 失败、dev 下两个页面都 500，用户看到的就是「打不开」。现按「纯逻辑 / IO」分层：`log-session-scope.ts` 只留纯函数（客户端与服务端共用），读文件 mtime 的 `fileMtimeMs` 移入 Node-only 的 `log-session-scope.server.ts`，只有服务端路由 `GET /api/logs/current` 引用它。同时新增静态门禁 `tests/client-bundle-node-builtins.test.ts`：从所有 `"use client"` 入口遍历 import 图（`import type` 编译期擦除、不算），一旦出现「客户端可达且顶层 import Node 内建」的模块即失败并给出完整引用链，同类问题提交阶段就能挡住，不必等到整页 500。
 
