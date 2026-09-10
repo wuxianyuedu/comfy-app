@@ -18,13 +18,69 @@ afterEach(() => {
   taskListQuery.mockReset();
 });
 
+/** 一条合法的行（Zod 校验通过所需的最小字段）。 */
+function row(over: Partial<HistoryTaskRow> = {}): HistoryTaskRow {
+  return {
+    id: "t-1",
+    type: "image",
+    workflowName: "wf",
+    status: "SUCCEEDED",
+    prompt: "一只猫",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    cover: null,
+    mediaType: "image",
+    projectId: "p-1",
+    progress: 100,
+    error: null,
+    ...over,
+  };
+}
+
 describe("fetchHistoryTasks", () => {
-  it("原样透传查询参数并返回 tasks", async () => {
-    const rows = [{ id: "t-1" }] as unknown as HistoryTaskRow[];
-    taskListQuery.mockResolvedValue({ tasks: rows });
+  it("透传查询参数，并按契约校验后返回行", async () => {
+    taskListQuery.mockResolvedValue({ tasks: [row()] });
     const out = await fetchHistoryTasks({ take: 80, projectId: "p-1", media: "video" });
     expect(taskListQuery).toHaveBeenCalledWith({ take: 80, projectId: "p-1", media: "video" });
-    expect(out).toBe(rows);
+    // 不再「原样透传」：行经 Zod 校验后返回（缺字段会被补齐默认值）
+    expect(out).toEqual([row()]);
+  });
+
+  it("行缺可选字段 → 按默认值补齐（不把 undefined 漏给下游）", async () => {
+    // 只给最小必填：id / createdAt。其余由 schema 的 default 补齐。
+    taskListQuery.mockResolvedValue({
+      tasks: [{ id: "t-9", createdAt: "2026-01-01T00:00:00.000Z" }],
+    });
+    const out = await fetchHistoryTasks({ take: 10 });
+    expect(out).toEqual([
+      expect.objectContaining({
+        id: "t-9",
+        mediaType: "image",
+        progress: 0,
+        prompt: "",
+        error: null,
+      }),
+    ]);
+  });
+
+  it("非法行被丢弃而不是硬塞（类型说有 prompt，实际可能是 undefined）", async () => {
+    taskListQuery.mockResolvedValue({
+      tasks: [
+        row({ id: "good" }),
+        { id: 123 }, // id 不是字符串 → 非法
+        null,
+        "not-an-object",
+      ],
+    });
+    const out = await fetchHistoryTasks({ take: 10 });
+    expect(out.map((r) => r.id)).toEqual(["good"]);
+  });
+
+  it("mediaType 非法值 → 该行被丢弃（枚举是硬约束，不静默兜底）", async () => {
+    taskListQuery.mockResolvedValue({
+      tasks: [row({ id: "ok" }), { ...row({ id: "bad" }), mediaType: "hologram" }],
+    });
+    const out = await fetchHistoryTasks({ take: 10 });
+    expect(out.map((r) => r.id)).toEqual(["ok"]);
   });
 
   it("tasks 缺失 → 空数组（视图按空态渲染，不做额外判空）", async () => {
