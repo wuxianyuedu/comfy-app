@@ -16,7 +16,7 @@
  * 复用同一调用方式才等价于真实校验（脚本内部用 __dirname 定位仓库根）。
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -143,5 +143,80 @@ describe("主规范「开发端口」行（comfyui.port 第二引用点）", () 
     expect(docText("docs/generated/Comfy-APP-T3-项目开发规范.md")).toContain(
       ":8188`",
     );
+  });
+});
+
+describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () => {
+  /* 守卫的目的：让「新增规范文档忘了登记 → doc:check 静默跳过它」变成硬错误。
+   * 此前 `doc:check` 只校验 SCOPED_DOCS 里列出的文档，未登记的新文档写死
+   * 过期端口也没人报错——「全量纳管」只是人工承诺。 */
+
+  type ScopeMod = {
+    SCOPED_DOCS: string[];
+    SCOPED_DOC_DIRS: string[];
+    SCOPED_DOC_EXEMPTIONS: Record<string, string>;
+  };
+
+  async function loadScope(): Promise<ScopeMod> {
+    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as ScopeMod;
+    return mod;
+  }
+
+  it("仓库当前不存在「未登记也未豁免」的规范文档（守卫基线为绿）", async () => {
+    const { SCOPED_DOCS, SCOPED_DOC_DIRS, SCOPED_DOC_EXEMPTIONS } = await loadScope();
+    expect(SCOPED_DOC_DIRS.length).toBeGreaterThan(0);
+    const scoped = new Set(SCOPED_DOCS);
+    const { readdirSync, statSync } = await import("node:fs");
+
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(join(REPO_ROOT, dir))) {
+        const rel = `${dir}/${name}`;
+        if (statSync(join(REPO_ROOT, rel)).isDirectory()) {
+          walk(rel);
+          continue;
+        }
+        if (!name.endsWith(".md")) continue;
+        if (!scoped.has(rel) && !(rel in SCOPED_DOC_EXEMPTIONS)) offenders.push(rel);
+      }
+    };
+    SCOPED_DOC_DIRS.forEach(walk);
+    expect(offenders).toEqual([]);
+  });
+
+  it("新增一个未登记的规范文档 → doc:check 失败并点名该文件", () => {
+    const temp = join(REPO_ROOT, "docs", "standards", "99-temp-unregistered.md");
+    writeFileSync(temp, "# 临时未登记文档\n\n端口 localhost:9999\n", "utf8");
+    try {
+      const { code, output } = runCheck();
+      expect(code).not.toBe(0);
+      expect(output).toContain("99-temp-unregistered.md");
+      expect(output).toContain("SCOPED_DOCS");
+      expect(output).toContain("豁免名单");
+    } finally {
+      rmSync(temp, { force: true });
+    }
+  });
+
+  it("豁免名单每一条都必须写理由：空理由 = 报错（豁免要可核验，不能沉默跳过）", async () => {
+    const { SCOPED_DOC_EXEMPTIONS } = await loadScope();
+    for (const [, reason] of Object.entries(SCOPED_DOC_EXEMPTIONS)) {
+      expect(reason.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it("豁免名单里的条目必须指向实际存在的文件（过期条目应删除）", async () => {
+    const { SCOPED_DOC_EXEMPTIONS } = await loadScope();
+    for (const rel of Object.keys(SCOPED_DOC_EXEMPTIONS)) {
+      expect(existsSync(join(REPO_ROOT, rel)), `${rel} 不存在`).toBe(true);
+    }
+  });
+
+  it("守卫已接入 main 流程（不是定义了却没人调用）", () => {
+    const script = readFileSync(CHECK, "utf8");
+    expect(script).toContain("checkScopeCoverage()");
+    // 必须被 main 调用，而不是只在文件里存在
+    const mainBody = script.slice(script.indexOf("function main()"));
+    expect(mainBody).toContain("checkScopeCoverage()");
   });
 });

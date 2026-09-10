@@ -161,12 +161,38 @@ const FACTS = [
   { key: "path.nvmrc", kind: "path", source: ".nvmrc" },
 ];
 
-// 生成文档输出目录（相对 ROOT）
+/* ── 校验范围守卫（ISSUE #316）─────────────────────────────────────────
+ * `doc:check` 只校验 SCOPED_DOCS 里的文档。**未登记的文档会被静默跳过**——
+ * 文档里写死过期值也没人报错，于是「全量纳管」只是人工承诺，不是机器事实。
+ * 以下两张表把这件事变成可判定的：
+ *   - 规范文档目录：新文件默认**必须在 SCOPED_DOCS 里**，否则报错；
+ *   - 豁免名单：确实不该纳入校验的文档，必须**显式列在这里并写清理由**，
+ *     不允许靠「没登记」沉默跳过。
+ * 新增文档时的动作因此只有两种：登记进 SCOPED_DOCS，或写进豁免名单附理由。
+ */
+
+/** 规范文档目录：其中的 .md 默认全部纳入校验。 */
+const SCOPED_DOC_DIRS = ["docs/standards", "docs/guides"];
+
+/**
+ * 豁免名单：不纳入 doc:check 的规范目录文档，key 为相对路径，value 为理由。
+ * 每一条都必须是「纳入会造成误报或本就非规范正文」这类可核验的理由。
+ */
+const SCOPED_DOC_EXEMPTIONS = {
+  // 文档集索引：只有导航与关系说明，不含值类裸值或可失效的路径引用。
+  "docs/standards/README.md": "文档集索引（导航与章节映射），不含被校验的值类引用",
+  // 评审归档：记录一次性的审查结论与处置，历史快照，不随源码演进。
+  "docs/guides/reviews/2026-08-30-canvasnode-review.md": "代码审查归档，历史快照，不随源码演进",
+};
+
+/** 生成文档输出目录（相对 ROOT） */
 const GENERATED_DOCS_DIR = "docs/generated";
 
 module.exports = {
   ROOT,
   SCOPED_DOCS,
+  SCOPED_DOC_DIRS,
+  SCOPED_DOC_EXEMPTIONS,
   FACTS,
   GENERATED_DOCS_DIR,
   readJson,
