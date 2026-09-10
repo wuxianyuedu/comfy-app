@@ -1,7 +1,12 @@
 "use client";
 
 import { PortHandle } from "@/components/studio/shared/DynamicWorkflowForm";
-import { ioLabel, splitWorkflowIO, type WorkflowIOMap } from "@/components/studio/shared/workflow-io";
+import {
+  ioLabel,
+  splitWorkflowIO,
+  typeDisplay,
+  type WorkflowIOMap,
+} from "@/components/studio/shared/workflow-io";
 
 /* ── Floating toolbar shown only when the node is selected ──
  *  Matches the landed design spec: a compact pill above the node with
@@ -94,7 +99,7 @@ export function OutputRowPort({
             color: "var(--color-ink-muted)",
           }}
         >
-          {outType}
+          {typeDisplay(outType)}
         </span>
       </div>
       <div className="pb-2" />
