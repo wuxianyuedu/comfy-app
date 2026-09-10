@@ -325,10 +325,14 @@ const LogRow = memo(function LogRow({
           {entry.location}
         </button>
       )}
-      {entry.source !== "console" && (
-        <span className="shrink-0 text-[11px] text-gray-600">
-          {entry.source}
-        </span>
+      {entry.origin ? (
+        <span className="shrink-0 text-[11px] text-gray-600">{entry.origin}</span>
+      ) : (
+        entry.source !== "console" && (
+          <span className="shrink-0 text-[11px] text-gray-600">
+            {entry.source}
+          </span>
+        )
       )}
     </div>
   );

@@ -146,9 +146,30 @@ log/
 | `log/services/comfyui-runtime.log` | Next server（src/lib/comfyui/lifecycle.ts） | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间；每次启动/停止前会写一条 **ANSI 亮色会话横幅**（`▶`/`■` box 分隔线），使多次启动累积的日志能一眼分清会话边界；设置页「创作后端 → 启动日志」面板经 `GET /api/logs/current?source=comfyui-runtime` 实时跟随。手动启动不设硬超时（冷加载慢不误报，可手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长） | 追加不轮转；接口首次打开只回尾部 128KB |
 | `log/services/comfyui-keepalive-<ts>.out/.err.log` | dev-launcher 保活中介（Start-Process 重定向） | 保活模式下 ComfyUI 的完整原始输出，等待循环增量跟随进 runtime.log | 按次命名，不自动清理 |
 | `log/services/drizzle-studio-runtime.log` `log/services/ollama-runtime.log` | Next server（对应 lifecycle / api 路由） | Drizzle Studio / Ollama 拉起与子进程输出，设置页日志面板跟随（同 comfyui-runtime 模式） | 追加不轮转 |
-| `log/services/app-runtime.log` | Next server（src/lib/app-runtime-log.ts） | **应用运行期业务操作日志**：tRPC 中间件每次调用（path+duration+type）+ 生成任务入队/完成/失败等里程碑，`[日期时间] [LEVEL] [ns] msg` 本地时区行格式；仅记事件/耗时/类型，不外泄 prompt/PII；应用内「应用日志」面板经 `GET /api/logs/current?source=app-runtime` 实时轮询（规范 07 §7.11） | 追加不轮转 |
+| `log/services/app-runtime.log` | Next server（src/lib/app-runtime-log.ts） | **应用运行期业务操作日志**：tRPC 中间件每次调用（path+duration+type）+ 生成任务入队/完成/失败等里程碑，`[日期时间] [LEVEL] [ns] msg` 本地时区行格式；仅记事件/耗时/类型，不外泄 prompt/PII；应用内「应用日志」面板经 `GET /api/logs/current?source=app-runtime` 实时轮询（规范 07 §7.11）。**面板只显示本次运行**：本文件追加不轮转，服务端在轮询响应里带回「会话起点」（dev-launcher.log 的 mtime），面板据此丢弃早于起点的历史行（`src/lib/log-session-scope.ts`，见 §4.1） | 追加不轮转 |
 | `log/tools/*.log` | tools/scripts（Log-Common.ps1）与 setup 脚本 | 构建/打包/工具运行日志（build-tauri-release、build-standalone、build-launcher、rebuild-static、comfy-cli-setup 等） | 每次运行覆盖 |
 | `log/archive/<yyyy-MM>/dev-launcher-<ts>.log` | dev-launcher.ps1 | 历史归档 | 无限累积，定期清理 |
+
+### 4.1 面板「只显示本次运行」的会话边界
+
+`log/services/` 下的 runtime 日志（comfyui / drizzle-studio / ollama）与
+`app-runtime.log` 都是**追加不轮转**的：上一次、上上一次运行的内容全留在文件里。
+「应用日志」面板若照单全收，用户打开面板看到的一屏里混着历史运行的行，分不清
+哪条属于本次启动。会话边界由三处配合划定：
+
+| 环节 | 位置 | 职责 |
+|---|---|---|
+| 粒度起点 | `dev-launcher.log` 的 mtime | 双击链路每次运行都覆盖重建该文件，mtime 即本次启动时刻；读不到（非双击链路）时面板退化为不做截断，多显示几条历史也好过凭空丢掉本次日志 |
+| 起点下发 | `GET /api/logs/current` 的 `sessionStart` 字段 | 追加写来源的分支在每次响应里带回起点，客户端无需额外请求 |
+| 行级截断 | `src/lib/log-session-scope.ts` + `log-store.ts` 的 `dropStaleEntries` | 行时刻早于起点即判为历史并丢弃；`setSessionStart` 幂等，页面重载不会把起点往后推 |
+
+时间戳只能回答「文件有没有在本次运行期间被写过」，回答不了「本次内容从第几个
+字节开始」，因此**不做字节级跳过**——线格式自带毫秒时间戳，按行比较即可精确切分。
+面板每行右侧标注来源（`dev` / `launcher` / `app-runtime`），便于对照文件排查。
+
+> 服务页「创作后端 → 启动日志」「数据库工具 → 启动日志」跟随的是
+> comfyui-runtime / drizzle-studio-runtime，**不在**该机制覆盖范围内：它们是
+> 单个服务的会话视图，靠会话横幅（`▶`/`■`）区分边界，由用户主动点「刷新」。
 
 排障顺序：`log/launcher/start-tauri-launcher.log`（双击层发生了什么）→
 `log/launcher/dev-launcher-stderr.log`（pwsh/壳层报错）→

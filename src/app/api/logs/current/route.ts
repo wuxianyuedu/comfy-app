@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
+import { fileMtimeMs, resolveSessionStart } from "@/lib/log-session-scope";
 import {
   COMFYUI_RUNTIME_LOG,
   DEV_LAUNCHER_CURRENT_SENTINEL,
@@ -23,6 +24,30 @@ const APP_RUNTIME_LOG_FILE = APP_RUNTIME_LOG;
  * 启动都往里 append），首次打开只回尾部，避免文件积累几个月后整文件传输。
  */
 const COMFYUI_TAIL_BYTES = 128 * 1024;
+
+/**
+ * 越过 offset 之后向后对齐到完整行，丢弃半行。
+ * 文件被追加、进程被强杀都可能把最后一行截成半行，面板按行解析会显示乱码。
+ */
+function skipPartialLine(content: string): string {
+  const nl = content.indexOf("\n");
+  return nl >= 0 ? content.slice(nl + 1) : "";
+}
+
+/**
+ * 本次运行在追加写日志文件里的**起点时刻**。
+ *
+ * 追加写日志（app-runtime / 常驻服务 runtime）与 dev-launcher.log 的关系只有
+ * 一条可用：本运行开始时 dev-launcher.log 被覆盖重建，mtime 即本次启动时刻。
+ * 面板据此把早于该时刻的行挡在外面（`dropStaleEntries`），本端点负责把它
+ * 一并回给客户端，避免客户端为一次轮询多发一个请求。
+ *
+ * 读不到锚点（非双击链路启动）时返回 null：客户端退化为不做时间线截断，
+ * 多显示几条历史行也好过凭空丢掉本次日志。
+ */
+function sessionStartMs(): number | null {
+  return resolveSessionStart(fileMtimeMs(DEV_LAUNCHER_LOG));
+}
 
 function resolveCurrentLog(source = "dev-launcher"): string {
   if (source === "launcher") {
@@ -50,7 +75,10 @@ function resolveCurrentLog(source = "dev-launcher"): string {
  * 首次打开（offset=0）且文件超过 TAIL 时只回尾部，起点对齐到下一个换行，
  * 避免截出半行（或 UTF-8 多字节字符的半个）。
  */
-function readRuntimeSlice(logFile: string, requestedOffset: number): {
+function readRuntimeSlice(
+  logFile: string,
+  requestedOffset: number,
+): {
   content: string;
   size: number;
   offset: number;
@@ -59,10 +87,11 @@ function readRuntimeSlice(logFile: string, requestedOffset: number): {
     return { content: "", size: 0, offset: 0 };
   }
   const stat = fs.statSync(logFile);
-  let start =
+  const knownOffset =
     Number.isFinite(requestedOffset) && requestedOffset > 0 && requestedOffset < stat.size
       ? requestedOffset
       : 0;
+  let start = knownOffset;
   if (start === 0 && stat.size > COMFYUI_TAIL_BYTES) {
     start = stat.size - COMFYUI_TAIL_BYTES;
   }
@@ -78,10 +107,9 @@ function readRuntimeSlice(logFile: string, requestedOffset: number): {
     fs.closeSync(fd);
   }
   let content = buf.toString("utf8");
-  if (start > 0) {
-    // 掐头到完整行（截断点可能落在行中间/多字节字符中间）
-    const nl = content.indexOf("\n");
-    content = nl >= 0 ? content.slice(nl + 1) : "";
+  /* 掐头到完整行：只有真正截断（跳过尾部滑动窗口）时才有半行要丢 */
+  if (start > knownOffset) {
+    content = skipPartialLine(content);
   }
   return { content, size: stat.size, offset: start };
 }
@@ -101,7 +129,8 @@ export async function GET(request: Request) {
             : source === "app-runtime"
               ? APP_RUNTIME_LOG_FILE
               : COMFYUI_RUNTIME_LOG_FILE;
-      return NextResponse.json(readRuntimeSlice(logFile, requestedOffset));
+      const slice = readRuntimeSlice(logFile, requestedOffset);
+      return NextResponse.json({ ...slice, sessionStart: sessionStartMs() });
     } catch (error) {
       return NextResponse.json(
         {
