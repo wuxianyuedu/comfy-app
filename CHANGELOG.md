@@ -13,6 +13,8 @@
 
 ### Fixed
 
+- **`/login` 与 `/workspace` 打开即整页 500（应用完全打不开）**：`src/lib/log-session-scope.ts` 顶层 `import fs from "node:fs"`，而客户端组件 `LogProvider.tsx`（`"use client"`）只是想要它的纯函数 `clampLogTime`。Turbopack 编译浏览器 chunk 时把 `node:fs` 整图形入，报 `the chunking context does not support external modules (request: node:fs)` 并让 endpoint 编译失败——`pnpm build` 失败、dev 下两个页面都 500，用户看到的就是「打不开」。现按「纯逻辑 / IO」分层：`log-session-scope.ts` 只留纯函数（客户端与服务端共用），读文件 mtime 的 `fileMtimeMs` 移入 Node-only 的 `log-session-scope.server.ts`，只有服务端路由 `GET /api/logs/current` 引用它。同时新增静态门禁 `tests/client-bundle-node-builtins.test.ts`：从所有 `"use client"` 入口遍历 import 图（`import type` 编译期擦除、不算），一旦出现「客户端可达且顶层 import Node 内建」的模块即失败并给出完整引用链，同类问题提交阶段就能挡住，不必等到整页 500。
+
 - **应用日志面板只显示本次运行的内容（ISSUE #308）**：`log/services/` 下的运行日志（`app-runtime` / ComfyUI / Drizzle Studio / Ollama）都是追加不轮转的，此前每次打开面板都会把上一次、上上一次启动积累的行一起读进来，一屏日志里混着好几次运行的内容，分不清哪条属于刚刚发生的操作。现在面板按「会话起点」（本次启动时刻）丢弃更早的历史行：起点取自双击链路的启动日志时间戳，随轮询响应下发；面板每行右侧也标出具体来源（`dev` / `launcher` / `app-runtime`），便于对照 `log/` 下的文件排查。设置页「创作后端」「数据库工具」的启动日志不受影响，仍是单个服务的会话视图。
 
 - **设置打开失败时不再只剩一句「配置数据未就绪」死角（ISSUE #304）**：此前只在「两份配置都没拿到」时才显示错误视图——当 `setting.get` 成功、`llm.configGet` 失败（如库表缺失），失败为真却两份草稿都不齐，界面既不显示错误、也没有重试按钮与日志指引，只留下没有原因的「配置数据未就绪」把用户冻住。现「任一查询失败且草稿未就绪」即落错误降级视图，给出可读原因、重试、完整错误与日志面板入口；兜底态同样给可操作出口。
