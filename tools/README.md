@@ -234,6 +234,7 @@ dev server + Tauri 桌面包壳」，但走的模式不同：
 - 已安装 Rust 工具链（`cargo` / `rustc`，推荐通过 https://rustup.rs/ 安装）；
 - Windows 上需 Visual Studio Build Tools（含「使用 C++ 的桌面开发」工作负载），
   否则 `cargo build` 会因缺少 MSVC 链接器失败。
+- **别让桌面壳变成无主进程**：启动器先于壳退出（关掉启动器窗口 / python 监控线程结束）时，已经弹出的 `app.exe` 会继续运行。启动链路已三层治理：①启动前按 exe 真实路径回收上一轮残留的壳；②壳 PID 落 `log/launcher/tauri-shell.pid`，python 启动器在监控退出/异常/超时路径对仍存活的壳执行 `taskkill /PID <pid> /T /F` 补刀；③正常关窗仍由 `dev-launcher.ps1` 的进程树回收负责。排查时看 `log/launcher/` 下这一条「发现上次残留的桌面壳（PID …）」与 `[ComfyAPP]` 诊断行。
 - **桌面壳要处于关闭状态**：`app.exe` 还在运行时 Windows 不允许替换它，
   cargo 会在编译收尾报 `failed to remove file ... app.exe / 拒绝访问 (os error 5)`，
   白白浪费整轮编译。构建脚本已用 `tools/scripts/Build-Guard.ps1` 在编译前拦下，

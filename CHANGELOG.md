@@ -13,6 +13,8 @@
 
 ### Fixed
 
+- **桌面窗口关了以后不会再留下无主的 `app.exe` 进程（ISSUE #301）**：此前启动器在壳还活着时退出（用户直接关掉启动器窗口 / 拉起它的 python 进程先结束），没人回收已经弹出的桌面壳——窗口没了进程还在，占着内存、锁住 `target\release\app.exe`（下次编译又报「拒绝访问」），只能手工 `taskkill /IM app.exe /T /F`。现三层治理：①启动前按进程 exe 真实路径（`src-tauri\target\{release,debug}\app.exe`，而非命令行，预编译壳的命令行里不含项目根路径，旧判据会漏判）回收上一轮遗留的壳；②python 启动器把本次拉起的壳 PID 落盘（`log/launcher/tauri-shell.pid`），监控线程在 dev-launcher 已退出/异常/超时时检查该壳是否仍存活，存活即 `taskkill /PID <pid> /T /F` 补刀后清掉 PID 文件；③正常路径关闭桌面窗口仍由 dev-launcher 的 `WaitForExit` + 进程树回收负责，不变。
+
 - **构建 release 壳不再因桌面壳还开着而白跑一轮编译（ISSUE #301）**：上一次启动的桌面窗口没关闭时，`cargo build --release` 会在编译收尾阶段报 `failed to remove file ... app.exe / 拒绝访问 (os error 5)`——要等整轮 Rust 编译走完才失败，且错误本身看不出根因。现在构建脚本（`tools\build\build-tauri-release.ps1` / `build-standalone.ps1`）会在编译开始前检测运行中的桌面壳，命中即中止并提示关闭窗口（或 `taskkill /IM app.exe /T /F`）后重跑；失败路径也会补一句「壳被打开」的排查提示。
 
 - **工作流库执行任务时能看清排队/启动状态，失败不再只显示「等待日志…」与「任务连接中断」（ISSUE #295）**：此前任务入队后若 ComfyUI 的 WebSocket 尚未就绪（未运行 / 自动启动中 / 连不上），进程会在队列里静默等待，前端执行日志只能看到「等待日志…」；任务若在 SSE 订阅建立前就已终态，回放顺序是「先终态 state、后日志」，前端一收到终态就关闭了连接，后面的失败原因日志被丢弃，只剩下笼统的「任务连接中断」。现改为：

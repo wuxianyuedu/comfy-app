@@ -437,6 +437,45 @@ def _safe_remove(path: str) -> None:
         pass
 
 
+def _shell_pid_file(project_root: str) -> str:
+    """记录本次启动器拉起的桌面壳 PID（由 dev-launcher.ps1 写入）。
+
+    dev-launcher.ps1 只负责在壳退出时回收它；而「启动器 / 监控线程先退出、壳还活着」
+    这条路径没人善后——最典型的是用户直接关掉启动器窗口后，app.exe 变成无主的常驻
+    进程：桌面窗口没了，进程还在，下次编译还会锁住 target\release\app.exe。
+    """
+    return os.path.join(project_root, "log", "launcher", "tauri-shell.pid")
+
+
+def _kill_shell_from_pid_file(project_root: str) -> None:
+    """回收本次启动器拉起的桌面壳（整棵进程树）。
+
+    只在 dev-launcher.ps1 已退出、壳仍在运行的兜底路径调用：此时脚本自身的
+    WaitForExit + taskkill 兜底都没机会跑，必须由启动器补刀。PID 取不到 /
+    不是数字 / 进程已退出都直接返回，不做任何猜测性击杀。
+    """
+    path = _shell_pid_file(project_root)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            pid = int(f.read().strip())
+    except Exception:
+        return
+    finally:
+        _safe_remove(path)
+    if not _is_pid_alive(pid):
+        return
+    log(f"shell process {pid} still alive after dev-launcher exit, killing process tree")
+    try:
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    except Exception as exc:
+        log(f"kill shell process failed: {exc}")
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  启动状态文件（供 Tauri 内嵌启动页读取）
@@ -1554,6 +1593,7 @@ def _monitor_headless(
                 )
                 # 失败必须有人类可见的出口：历史版本只写 30 秒后自删的状态
                 # 文件，用户看到的是「双击没反应」。弹窗展示日志尾部。
+                _kill_shell_from_pid_file(project_root)
                 _fatal_box(
                     _build_failure_message(
                         project_root,
@@ -1565,6 +1605,10 @@ def _monitor_headless(
             time.sleep(0.5)
 
         log("headless monitor deadline reached (240s)")
+        if proc is not None and proc.poll() is not None:
+            # 正常收尾路径：dev-launcher 已退出（用户关掉桌面窗口），回收壳 PID 文件；
+            # 壳若仍活着说明它脱离了启动器，同样补刀。
+            _kill_shell_from_pid_file(project_root)
         if find_tauri_window(exact=True):
             _write_status(
                 project_root,
@@ -1589,6 +1633,7 @@ def _monitor_headless(
             error=True,
             elapsed=elapsed(),
         )
+        _kill_shell_from_pid_file(project_root)
         _fatal_box(_build_failure_message(project_root, f"启动器监控异常：{exc}"))
         return 1
     return 0

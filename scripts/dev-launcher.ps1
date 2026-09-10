@@ -671,6 +671,45 @@ function Test-DevDependencies {
   Write-Log "pnpm install 完成，node_modules 预检通过" -Level OK
 }
 
+# ── 预检 1.6：启动前清理残留的桌面壳（识别 + 回收）──
+# 判据是「进程可执行文件的真实路径落在本仓库 src-tauri\target\{release,debug}」。
+# 不能按进程名或命令行判断：预编译壳由本脚本用 ProcessStartInfo（UseShellExecute=false）
+# 启动，命令行里不含项目根路径，`CommandLine -like "*$root*"` 会漏判——启动前清理
+# 残留壳、构建前置守卫因此统一走真实路径。
+function Test-ProjectShellPath {
+  param([string]$Path, [string]$Root)
+  if (-not $Path) { return $false }
+  foreach ($profile in @("release", "debug")) {
+    $expected = [System.IO.Path]::GetFullPath((Join-Path $Root ("src-tauri\target\" + $profile + "\app.exe")))
+    if ($Path.Equals($expected, [System.StringComparison]::OrdinalIgnoreCase)) { return $true }
+  }
+  return $false
+}
+
+function Get-RunningProjectShell {
+  param([Parameter(Mandatory = $true)][string]$Root)
+  $result = @()
+  foreach ($p in @(Get-CimInstance Win32_Process -Filter "Name='app.exe'" -ErrorAction SilentlyContinue)) {
+    $exePath = ""
+    try { $exePath = [string]$p.ExecutablePath } catch { }
+    if (Test-ProjectShellPath -Path $exePath -Root $Root) {
+      $result += [pscustomobject]@{ Id = $p.ProcessId; Path = $exePath }
+    }
+  }
+  return $result
+}
+
+# 启动前回收上一次运行残留的桌面壳：启动器在壳还活着时退出（失败兜底 / python 监控
+# 线程先退出）就没人回收它，下次启动会多出一个卡在启动页的窗口。必须 taskkill /T /F
+# 回收整棵进程树（禁止单杀，见规范 §3）。
+function Stop-StaleProjectShell {
+  param([Parameter(Mandatory = $true)][string]$Root)
+  foreach ($p in @(Get-RunningProjectShell -Root $Root)) {
+    Write-Log ("发现上次残留的桌面壳（PID {0}），正在终止..." -f $p.Id) -Level WARN
+    try { taskkill /PID $p.Id /T /F 2>&1 | Out-Null } catch { }
+  }
+}
+
 # ── 预检 2：桌面壳过期提醒 ──
 # app.exe 是编译产物，tauri.conf.json（窗口配置编译期内嵌）/ src\*.rs /
 # splash-assets（frontendDist 编译期嵌入）都比它新时，本次运行的仍是旧壳，
@@ -872,12 +911,7 @@ try {
 
     # 1. 清理上次运行残留的同项目 Tauri 壳：启动器上次失败退出时不带清理，
     #    会留下卡在启动页的僵尸窗口，下次启动出现两个窗口叠在一起。
-    Get-CimInstance Win32_Process -Filter "Name='app.exe'" -ErrorAction SilentlyContinue |
-      Where-Object { $_.CommandLine -like "*$root*" } |
-      ForEach-Object {
-        Write-Log ("发现上次残留的 Tauri 壳（PID {0}），正在终止..." -f $_.ProcessId) -Level WARN
-        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-      }
+    Stop-StaleProjectShell -Root $root
 
     # 2. 确保 Tauri 内置启动页资源就位（tauri://localhost/splash.html），随后立刻弹窗
     Ensure-SplashResource
@@ -890,6 +924,12 @@ try {
     $psiTauri.Environment["COMFYAPP_PORT"] = "$($script:appPort)"
     $tauriProc = [System.Diagnostics.Process]::Start($psiTauri)
     Write-Log ("预编译 Tauri 壳已启动（PID: {0}）：{1}" -f $tauriProc.Id, $tauriExe) -Level OK
+    # 记录本次拉起的壳 PID：python 启动器的监控线程一旦先于壳退出（用户关掉
+    # 启动器控制台 / 拉起它的 python 崩溃），兜底回收才有对象可杀，否则 app.exe
+    # 会脱离启动器继续运行（窗口没了进程还在）。
+    try {
+      Set-Content -Path (Join-Path $launcherLogDir "tauri-shell.pid") -Value $tauriProc.Id -Encoding ascii -Force
+    } catch { }
     Write-Log "Tauri 桌面壳已启动，正在启动本地服务…" -Level STEP
     Write-LaunchStatus -Phase "port-check" -Progress 0.05 -Message "桌面壳已启动，正在检查端口占用…"
 
