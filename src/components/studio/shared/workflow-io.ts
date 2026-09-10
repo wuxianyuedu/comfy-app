@@ -60,7 +60,14 @@ const LINK_ONLY = new Set([
   "UPSCALE_MODEL",
 ]);
 
-const IMAGE_TYPES = new Set(["IMAGE", "MASK"]);
+/** Types that mean "an image is fed in as a FILE", not as a wire.
+ *
+ *  `IMAGE` / `MASK` are ComfyUI's data types; `IMAGEUPLOAD` is the widget
+ *  type ComfyUI's own frontend stamps on the file-picker slot (`LoadImage`'s
+ *  `upload`, video helpers' first-frame pickers, …).  Both must render the
+ *  upload control — otherwise the only way to feed an image is a wire, and a
+ *  file-picker pin the author deliberately exposed shows up as a dead row. */
+const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);
 
 /** Output types that should spawn a *video* node downstream. */
 const VIDEO_TYPES = new Set([
@@ -99,11 +106,37 @@ function inferControlFromName(e: WorkflowIOEntry): ControlKind | null {
   return null;
 }
 
+/** Pin NAMES that mean "pick a local file" on custom nodes which declare their
+ *  upload slot with a non-standard type (e.g. `upload` typed as `STRING`).
+ *
+ *  Deliberately name-only: ComfyUI's `LoadImage` ships `image` (COMBO, the
+ *  uploaded filename) plus `upload` (IMAGEUPLOAD, the picker).  A bare
+ *  `image` name must NOT become an upload button — it is the *result* slot. */
+export function isUploadPinName(e: { name?: string }): boolean {
+  return /upload|file_?picker/.test((e.name ?? "").toLowerCase());
+}
+
+/** Honest type chip text for a pin.
+ *
+ *  User rule: 「type 是什么就显示什么类型」—— 徽章必须打印 pin 真实声明的
+ *  ComfyUI 类型（`IMAGEUPLOAD` / `MASK` / `INT` …）。当元数据里根本没有类型
+ *  （ComfyUI 离线时保存的 IO）才回退到控件推导出的类型，绝不把 `COMBO` 之类
+ *  已有类型改写成别的名义（那会让「STRING 的行显示 INT」这类错位无从解释）。 */
+export function typeDisplay(type: string | undefined, fallback = "*"): string {
+  const t = (type ?? "").trim().toUpperCase();
+  return t.length > 0 ? t : fallback;
+}
+
 /** Decide the control to render for one exposed input. */
 export function controlForEntry(e: WorkflowIOEntry): ControlKind {
   const type = (e.type ?? "*").toUpperCase();
   if (LINK_ONLY.has(type)) return "link";
   if (IMAGE_TYPES.has(type)) return "image";
+  /* 上传位按 pin 名兜底：自定义节点常把「选择文件上传」槽声明成 STRING
+   *  （甚至不带类型），只看 type 会把这一整行退化成文本框 —— 用户勾了
+   *  `upload` 却只能手动敲文件名。声明成 STRING 的上传位没有别的语义，
+   *  直接给上传控件；`image` 这类结果槽不在此列（见 isUploadPinName）。 */
+  if (isUploadPinName(e)) return "image";
   if (type === "BOOLEAN" || type === "BOOL") return "switch";
   if (type === "INT") return "int";
   if (type === "FLOAT" || type === "NUMBER") return "float";
@@ -129,9 +162,11 @@ export function controlForEntry(e: WorkflowIOEntry): ControlKind {
     if (inferred) return inferred;
     return "text";
   }
-  /* Unknown custom-node type: if it already holds a scalar we can still
-   * edit it as text; otherwise treat it as a wire. */
+  /* 已声明但未在白名单里的类型（自定义节点的 `AUDIO` / `VIDEO` / 厂商私有
+   *  枚举…）：只要控件位带着标量就仍以文本可编辑，避免整行退化成「只接受
+   *  连线」的哑端口 —— 那是「用户勾了却改不了」的观感来源。 */
   if (typeof e.defaultValue === "string" || typeof e.defaultValue === "number") return "text";
+  /* Truly untypable pin (no scalar, no upload semantics) → a wire. */
   return "link";
 }
 

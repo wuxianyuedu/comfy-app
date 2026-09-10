@@ -41,6 +41,7 @@ import {
   type WorkflowIOMap,
   splitWorkflowIO,
   ioLabel,
+  typeDisplay,
 } from "@/components/studio/shared/workflow-io";
 import { type CanvasNodeData, NODE_META } from "@/lib/project-canvas/canvas-types";
 import { WorkflowSourceFilterChip } from "./WorkflowSourceFilterChip";
@@ -293,7 +294,7 @@ export function WorkflowNode({
                       color: "var(--color-ink-muted)",
                     }}
                   >
-                    {oType}
+                    {typeDisplay(oType)}
                   </span>
                 </div>
                 {/* 下沿留 pb-2 让节点呼吸——与 inputs controlRow 末端的 pb-1.5 保持视觉等距 */}
