@@ -76,6 +76,9 @@ export function WorkshopPipeline() {
             checkpoints={controller.checkpoints}
             checkpoint={controller.checkpoint}
             onCheckpointChange={controller.setCheckpoint}
+            workflowOptions={controller.workflowOptions}
+            workflowId={controller.workflowId}
+            onWorkflowChange={controller.setWorkflowId}
             apiChannels={controller.apiChannels}
             onOpenApiSettings={controller.openApiSettings}
             characterCount={controller.characters.length}
