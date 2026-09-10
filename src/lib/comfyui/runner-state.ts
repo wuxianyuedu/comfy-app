@@ -215,6 +215,11 @@ export type RunnerState = {
 
   executedWorkflow: Map<string, unknown>;
 
+  /** 已向排队任务写入过「等待 ComfyUI 连接/启动」提示的 taskId 集合。
+   *  防止心跳每 3s 触发 processQueue（WS 未 OPEN 时提前返回）对同一任务反复刷同一行。
+   *  任务真正出队 / WS 打开后清除，以便下次重连窗口能重新提示。 */
+  wsWaitLogged: Set<string>;
+
 };
 
 
@@ -264,6 +269,8 @@ export function state(): RunnerState {
       wsPathIndex: 0,
 
       executedWorkflow: new Map(),
+
+      wsWaitLogged: new Set(),
 
     };
 
