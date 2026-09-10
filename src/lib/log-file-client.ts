@@ -10,6 +10,11 @@ export interface FileLogSlice {
   content: string;
   size: number;
   offset: number;
+  /**
+   * 本次运行的开始时刻（毫秒）；仅追加写来源（app-runtime / 常驻服务）返回，
+   * null = 读不到锚点（非双击链路启动），面板此时不做时间线截断。
+   */
+  sessionStart?: number | null;
 }
 
 export type LogSourceKind =

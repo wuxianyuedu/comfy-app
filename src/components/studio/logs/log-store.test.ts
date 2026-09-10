@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   useLogStore,
+  dropStaleEntries,
   serialize,
   isNextDevNoise,
   isReactQueryLog,
@@ -35,6 +36,7 @@ function resetStore() {
     search: "",
     isOpen: false,
     counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
+    sessionStart: null,
   });
 }
 
@@ -123,6 +125,78 @@ describe("appendFileLogs 批量追加", () => {
     const { logs, counts } = useLogStore.getState();
     expect(idsOf(logs)).toEqual(["keep"]);
     expect(counts.all).toBe(1);
+  });
+});
+
+/* ── 会话边界：面板只显示本次运行 ─────────────────────────── */
+
+describe("dropStaleEntries 丢弃上一次运行的残留行", () => {
+  const cutoff = 1_700_000_000_000;
+
+  it("行时刻早于会话起点即判为历史", () => {
+    const entries = [
+      makeEntry({ id: "old", time: cutoff - 60_000 }),
+      makeEntry({ id: "new", time: cutoff + 1_000 }),
+    ];
+    expect(idsOf(dropStaleEntries(entries, cutoff))).toEqual(["new"]);
+  });
+
+  it("起点未知（null）时不做时间线截断", () => {
+    const entries = [makeEntry({ id: "any", time: cutoff - 60_000 })];
+    expect(idsOf(dropStaleEntries(entries, null))).toEqual(["any"]);
+  });
+});
+
+describe("appendFileLogs 按会话起点过滤", () => {
+  const cutoff = 1_700_000_000_000;
+
+  it("未设会话起点时全部收下", () => {
+    useLogStore
+      .getState()
+      .appendFileLogs([makeEntry({ id: "old", time: cutoff - 60_000 })]);
+    expect(idsOf(useLogStore.getState().logs)).toEqual(["old"]);
+  });
+
+  it("设了会话起点后历史行进不了面板", () => {
+    useLogStore.getState().setSessionStart(cutoff);
+    useLogStore.getState().appendFileLogs([
+      makeEntry({ id: "old", time: cutoff - 60_000 }),
+      makeEntry({ id: "new", time: cutoff + 5_000 }),
+    ]);
+    expect(idsOf(useLogStore.getState().logs)).toEqual(["new"]);
+  });
+
+  it("全部是历史行时面板不新增任何条目", () => {
+    useLogStore.getState().setSessionStart(cutoff);
+    useLogStore
+      .getState()
+      .appendFileLogs([makeEntry({ id: "old", time: cutoff - 1 })]);
+    expect(idsOf(useLogStore.getState().logs)).toEqual([]);
+  });
+});
+
+describe("setSessionStart 收拢迟到的时间线", () => {
+  it("会话起点比首帧晚到时清掉已混入的历史行", () => {
+    const cutoff = 1_700_000_000_000;
+    useLogStore.setState({
+      logs: [
+        makeEntry({ id: "old", time: cutoff - 60_000 }),
+        makeEntry({ id: "new", time: cutoff + 1_000 }),
+      ],
+    });
+    useLogStore.getState().setSessionStart(cutoff);
+    const { logs, counts, sessionStart } = useLogStore.getState();
+    expect(idsOf(logs)).toEqual(["new"]);
+    expect(counts.all).toBe(1);
+    expect(sessionStart).toBe(cutoff);
+  });
+
+  it("重复设置同一个起点是幂等的", () => {
+    const cutoff = 1_700_000_000_000;
+    useLogStore.setState({ logs: [makeEntry({ id: "new", time: cutoff + 1 })] });
+    useLogStore.getState().setSessionStart(cutoff);
+    useLogStore.getState().setSessionStart(cutoff);
+    expect(idsOf(useLogStore.getState().logs)).toEqual(["new"]);
   });
 });
 

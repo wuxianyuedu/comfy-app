@@ -21,6 +21,8 @@ export interface LogEntry {
   message: string;
   /** Where the log came from */
   source: "console" | "tauri" | "system";
+  /** 文件来源：dev-launcher / app-runtime 的文件行带此标记（仅面板内显示，不参与过滤） */
+  origin?: "dev" | "launcher" | "app-runtime";
   /** Caller location (file:line) for console logs */
   location?: string;
 }
@@ -305,7 +307,11 @@ function parseLogLevel(level: string): LogLevel {
 const FAST_REFRESH_REBUILD_RE =
   /\[Fast\s*Refresh\]\s*rebuilding(?:\s*\[(?:ERROR|WARN|DEBUG)\])?/i;
 
-export function parseFileLogs(text: string, baseDate?: Date): LogEntry[] {
+export function parseFileLogs(
+  text: string,
+  baseDate?: Date,
+  origin?: LogEntry["origin"],
+): LogEntry[] {
   const now = Date.now();
   const today = baseDate ?? new Date();
   const entries: LogEntry[] = [];
@@ -328,6 +334,7 @@ export function parseFileLogs(text: string, baseDate?: Date): LogEntry[] {
         level: parseLogLevel(lv ?? "INFO"),
         message: msg ?? "",
         source: "system",
+        ...(origin ? { origin } : {}),
       });
       continue;
     }
@@ -354,6 +361,7 @@ export function parseFileLogs(text: string, baseDate?: Date): LogEntry[] {
           : parseLogLevel(lv ?? "INFO"),
         message: msgText,
         source: "system",
+        ...(origin ? { origin } : {}),
       });
       continue;
     }
@@ -375,6 +383,7 @@ export function parseFileLogs(text: string, baseDate?: Date): LogEntry[] {
         level: "info",
         message: msg ?? "",
         source: "system",
+        ...(origin ? { origin } : {}),
       });
       continue;
     }
@@ -384,6 +393,7 @@ export function parseFileLogs(text: string, baseDate?: Date): LogEntry[] {
       level: "info",
       message: line,
       source: "system",
+      ...(origin ? { origin } : {}),
     });
   }
   return entries;
@@ -449,8 +459,14 @@ export interface LogStoreState {
   /** 翻页：当前页（1 起，倒序查看，1 = 最新一页）与每页条数（#294）。 */
   page: number;
   pageSize: number;
+  /**
+   * 本次运行的开始时间（毫秒）；null = 未知（非 launcher 启动）。
+   * 面板只显示本次运行：行时刻早于它即上一次运行的残留（见 dropStaleEntries）。
+   */
+  sessionStart: number | null;
   addEntry: (entry: Omit<LogEntry, "id" | "time">) => void;
   appendFileLogs: (entries: LogEntry[]) => void;
+  setSessionStart: (sessionStart: number | null) => void;
   setFilter: (f: LogFilter) => void;
   setSearch: (s: string) => void;
   setPage: (page: number) => void;
@@ -459,6 +475,20 @@ export interface LogStoreState {
   clear: () => void;
   copyAll: () => Promise<void>;
   download: () => void;
+}
+
+/**
+ * 会话起点过滤：丢掉「上一次运行」残留的行。
+ *
+ * 追加写日志（如 app-runtime）里混着历史运行的内容，行格式只记时刻、不记
+ * 是哪一次运行写的；行时刻早于会话起点即判为历史。
+ * 读不出时刻的裸文本行（`time` 取解析当时的时刻）天然不会早于起点，保留。
+ *
+ * @param cutoffMs 会话起点（毫秒）；null/undefined = 不启用该过滤
+ */
+export function dropStaleEntries(entries: LogEntry[], cutoffMs: number | null | undefined): LogEntry[] {
+  if (cutoffMs === null || cutoffMs === undefined) return entries;
+  return entries.filter((entry) => entry.time >= cutoffMs);
 }
 
 function derive(logs: LogEntry[], filter: LogFilter, search: string) {
@@ -478,6 +508,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
   page: 1,
   pageSize: 2000,
+  sessionStart: null,
 
   addEntry: (entry) =>
     set((state) => {
@@ -487,8 +518,17 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
 
   appendFileLogs: (entries) =>
     set((state) => {
-      const logs = [...state.logs, ...entries].slice(-MAX_LOG_ENTRIES);
+      const fresh = dropStaleEntries(entries, state.sessionStart);
+      const logs = [...state.logs, ...fresh].slice(-MAX_LOG_ENTRIES);
       return derive(logs, state.filter, state.search);
+    }),
+
+  /* 会话起点到达得比首次轮询晚时，时间线里可能已经混进了上次运行的行：
+   * 一次性收拢到底。应用运行中的 mtime 不会后移，因此这是幂等操作。 */
+  setSessionStart: (sessionStart) =>
+    set((state) => {
+      const logs = dropStaleEntries(state.logs, sessionStart);
+      return { sessionStart, ...derive(logs, state.filter, state.search) };
     }),
 
   setFilter: (f) =>
