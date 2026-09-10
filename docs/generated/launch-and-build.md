@@ -143,9 +143,30 @@ log/
 | `log/services/comfyui-runtime.log` | Next server（src/lib/comfyui/lifecycle.ts） | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间；每次启动/停止前会写一条 **ANSI 亮色会话横幅**（`▶`/`■` box 分隔线），使多次启动累积的日志能一眼分清会话边界；设置页「创作后端 → 启动日志」面板经 `GET /api/logs/current?source=comfyui-runtime` 实时跟随。手动启动不设硬超时（冷加载慢不误报，可手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长） | 追加不轮转；接口首次打开只回尾部 128KB |
 | `log/services/comfyui-keepalive-<ts>.out/.err.log` | dev-launcher 保活中介（Start-Process 重定向） | 保活模式下 ComfyUI 的完整原始输出，等待循环增量跟随进 runtime.log | 按次命名，不自动清理 |
 | `log/services/drizzle-studio-runtime.log` `log/services/ollama-runtime.log` | Next server（对应 lifecycle / api 路由） | Drizzle Studio / Ollama 拉起与子进程输出，设置页日志面板跟随（同 comfyui-runtime 模式） | 追加不轮转 |
-| `log/services/app-runtime.log` | Next server（src/lib/app-runtime-log.ts） | **应用运行期业务操作日志**：tRPC 中间件每次调用（path+duration+type）+ 生成任务入队/完成/失败等里程碑，`[日期时间] [LEVEL] [ns] msg` 本地时区行格式；仅记事件/耗时/类型，不外泄 prompt/PII；应用内「应用日志」面板经 `GET /api/logs/current?source=app-runtime` 实时轮询（规范 07 §7.11） | 追加不轮转 |
+| `log/services/app-runtime.log` | Next server（src/lib/app-runtime-log.ts） | **应用运行期业务操作日志**：tRPC 中间件每次调用（path+duration+type）+ 生成任务入队/完成/失败等里程碑，`[日期时间] [LEVEL] [ns] msg` 本地时区行格式；仅记事件/耗时/类型，不外泄 prompt/PII；应用内「应用日志」面板经 `GET /api/logs/current?source=app-runtime` 实时轮询（规范 07 §7.11）。**面板只显示本次运行**：本文件追加不轮转，服务端在轮询响应里带回「会话起点」（dev-launcher.log 的 mtime），面板据此丢弃早于起点的历史行（`src/lib/log-session-scope.ts`，见 §4.1） | 追加不轮转 |
 | `log/tools/*.log` | tools/scripts（Log-Common.ps1）与 setup 脚本 | 构建/打包/工具运行日志（build-tauri-release、build-standalone、build-launcher、rebuild-static、comfy-cli-setup 等） | 每次运行覆盖 |
 | `log/archive/<yyyy-MM>/dev-launcher-<ts>.log` | dev-launcher.ps1 | 历史归档 | 无限累积，定期清理 |
+
+### 4.1 面板「只显示本次运行」的会话边界
+
+`log/services/` 下的 runtime 日志（comfyui / drizzle-studio / ollama）与
+`app-runtime.log` 都是**追加不轮转**的：上一次、上上一次运行的内容全留在文件里。
+「应用日志」面板若照单全收，用户打开面板看到的一屏里混着历史运行的行，分不清
+哪条属于本次启动。会话边界由三处配合划定：
+
+| 环节 | 位置 | 职责 |
+|---|---|---|
+| 粒度起点 | `dev-launcher.log` 的 mtime | 双击链路每次运行都覆盖重建该文件，mtime 即本次启动时刻；读不到（非双击链路）时面板退化为不做截断，多显示几条历史也好过凭空丢掉本次日志 |
+| 起点下发 | `GET /api/logs/current` 的 `sessionStart` 字段 | 追加写来源的分支在每次响应里带回起点，客户端无需额外请求 |
+| 行级截断 | `src/lib/log-session-scope.ts` + `log-store.ts` 的 `dropStaleEntries` | 行时刻早于起点即判为历史并丢弃；`setSessionStart` 幂等，页面重载不会把起点往后推 |
+
+时间戳只能回答「文件有没有在本次运行期间被写过」，回答不了「本次内容从第几个
+字节开始」，因此**不做字节级跳过**——线格式自带毫秒时间戳，按行比较即可精确切分。
+面板每行右侧标注来源（`dev` / `launcher` / `app-runtime`），便于对照文件排查。
+
+> 服务页「创作后端 → 启动日志」「数据库工具 → 启动日志」跟随的是
+> comfyui-runtime / drizzle-studio-runtime，**不在**该机制覆盖范围内：它们是
+> 单个服务的会话视图，靠会话横幅（`▶`/`■`）区分边界，由用户主动点「刷新」。
 
 排障顺序：`log/launcher/start-tauri-launcher.log`（双击层发生了什么）→
 `log/launcher/dev-launcher-stderr.log`（pwsh/壳层报错）→
@@ -173,6 +194,7 @@ log/
 | 桌面窗口已经关了，`app.exe` 进程还在（只能手工 `taskkill /IM app.exe /T /F`） | **启动器先于壳退出，壳成了无主进程**：壳由 dev-launcher.ps1 拉起，正常路径以「壳退出」为锚点回收；但用户关掉启动器窗口 / python 监控线程结束时 dev-launcher 的 `WaitForExit` 与 taskkill 兜底都没机会跑。旧实现的「残留壳清理」还按 `CommandLine -like "*<项目根>*"` 筛选，而预编译壳经 `ProcessStartInfo(UseShellExecute=false)` 启动、命令行里不含项目根路径 → 既漏判残留，也让残留壳锁住 `target\release\app.exe`（连带 §5「os error 5」那条） | 已三层治理（2026-09-06 定位）：①启动前按 **exe 真实路径**回收残留壳；②壳拉起后 PID 落 `log/launcher/tauri-shell.pid`，python 启动器在监控退出/异常/超时时对仍存活的 PID 执行 `taskkill /PID <pid> /T /F` 后删除该文件；③正常关窗仍走 dev-launcher 的进程树回收。见 §3 |
 | 打包启动器时报「无法清理 start-tauri」 | 残留的提权进程（如卡死的 pyinstaller/启动器）持有 `_internal` 文件，普通权限无法终止 | 重启后重试；应急：`pyinstaller --distpath dist-new tools/start-tauri.spec` 打到新目录后手动换文件 |
 | 启动时先看到 Edge「无法访问此页面 / ERR_CONNECTION_REFUSED」（localhost 拒绝连接），之后才出现启动进度或直接黑等 | **壳编译时没带 `custom-protocol` feature**（裸 `cargo build --release`）：tauri 的 `cfg(dev)` 由该 feature 决定，不带它 = dev 模式行为——①启动页相对 URL 解析到 `build.devUrl`（http://localhost:3100/splash.html），dev server 未就绪时 WebView2 渲染错误页且永不重试（2026-09-02 定位，冷启动必现；官方 `pnpm tauri build` 会自动带该 feature，所以生产包没这问题）②资源根本没内嵌进二进制（启动页由 dev server 提供）。叠加因素：壳二进制过期（改了 src-tauri 后未重编，旧版 splash 的 `window.location.replace` 兜底把错误页顶上来）；WebView2 对导航失败也触发 on_page_load Finished，交换窗口前不校验可达性会把错误页当应用显示 | 重编壳必须带 feature：`cd src-tauri; cargo build --release --features custom-protocol`。现版壳已四重防护：splash 不再自导航、交换前 TCP 可达性校验、main 加载失败重导航循环、启动页看门狗（URL 被带走 1s 内恢复进度页） |
+| 打开设置失败，页面只剩一句「配置数据未就绪」（没有原因、没有重试、日志面板里也找不到对应失败） | **判据取错**（ISSUE #304）：设置页有两个查询（`setting.get` / `llm.configGet`），降级视图此前只在「两份数据都没拿到」时才触发。当一份成功、一份失败（如 `llm` 相关表缺失 → `no such table: llmConfig`）时，草稿两份都不齐却又不满足该条件，容器一路落到兜底文案。叠加两个观测缺陷：①补记日志的 `query` 字段写死成 `setting.get`，与实际失败的查询对不上；②只记翻译后的可读文案（`signal is aborted without reason` 被译成「请求被中断，请稍候重试」），服务端原文丢失，用户按提示反复等重启永远修不好 | 已修：`hasError = 任一查询失败 且 草稿未就绪`（一份成功一份失败也落错误视图）；日志按实际失败查询记全名称，并把原始报错（tRPC `code` / 服务端 `message` / `cause` / 堆栈首行）写入 `raw` 字段；`errorMessage` 优先取 `shape.message` 的服务端原文，不让传输层包装文案盖掉根因。见 07 §7.12.1 |
 | 工作流库/项目列表整页空数据，tRPC 查询 500（console 报 no such table / Could not locate bindings） | **Drizzle 迁移三重遗漏**（2026-09-03 定位）：① better-sqlite3@11 无 Node 24 预编译包、本机无 MSVC → 原生绑定缺失，所有 DB 查询崩（升级到 v12，prebuild 下载即可）② `resolveDbPath` 用 `new URL("file:./db.sqlite")` 解析 → Windows 落到盘符根 `F:\db.sqlite` 空库（真实数据在 `prisma/db.sqlite`）③ schema.ts 表名 camelCase 与 Prisma 建的 PascalCase 表不一致 | ① better-sqlite3 钉在 v12（v13 移除预编译包，本机无编译链不能升）② 路径解析统一走 `path.resolve(process.cwd(), …)`（与 drizzle-kit 同锚点）③ 表名已重命名对齐 schema.ts；**换 Node 版本或重装依赖后先跑一次 `pnpm db:studio` 确认表与数据都在** |
 | `pnpm run build` 卡在 Collecting page data 阶段并报 turbopack 全项目追踪告警（提示围绕 src/server/db.ts / api/health、以及 src/lib/comfyui/lifecycle.ts） | 若干动态文件访问点缺 turbopackIgnore 注解，turbopack 无法静态追踪 → 退化为「整个项目全量追踪」（standalone 会塞进全仓库 >8GB）。命中点：db.ts resolveDbPath 里 path.resolve(process.cwd(), raw)、lifecycle.ts 循环里 fs.existsSync(c.main) | 沿用仓库既有惯例给动态访问加 /*turbopackIgnore: true*/（同 envfile.ts / debug/source/route.ts / localWorkflows.ts），让 turbopack 放弃追踪该动态路径 |
 | drizzle-kit push 非交互环境报 "Interactive prompts require a TTY"，或重建表时 "index xxx already exists" | push 遇到表重命名/重建差异需要交互确认；其重建路径在多次部分执行后有索引名冲突的已知缺陷 | 启动器用 `push --force`（非致命，失败仅 WARN）；手动收敛时按「清理 `__new_*` 残留表与同名索引 → 重试 push」循环；索引可安全 DROP 后由 push/schema 重建 |
@@ -185,6 +207,7 @@ log/
 
 | 任务报「任务卡在队列超过 Ns（…无人 re-claim）」——但这次 ComfyUI 明明在运行、comfy-cli 进程已启动 | **raw UI-format（liblib 子图）路径的误判**：任务经 `executeViaComfyCli` 提交，但直到 comfy-cli 子进程回传 `prompt_id` 前，DB 行保持 `QUEUED / promptId=null`。comfy-cli 的 Python 启动 + 工作流转换 + POST /prompt 可能超过 reaper 的 30s 阈值（STALE_MS），于是 `reapStaleQueuedTasks` 把这个健康在飞的任务误判为孤儿并标记 FAILED。日志特征：`✓ comfy-cli 进程已启动` 之后立刻出现 `任务卡在队列超过 Ns` | 已修：`reapStaleQueuedTasks` 增加 in-memory 认领保护 `isTaskClaimedInProcess`——任务若仍被当前进程认领（还在 `s.queue` / 有 comfy-cli 子进程 `cliProcs` / `executedWorkflow` 已记录），则不回收，交给正常执行路径收口；只有 cold restart 后无任何 in-memory 足迹的才判孤儿。回归测试见 `src/lib/comfyui/reaper.test.ts` |
 
+| ComfyUI 启动失败（如「保活进程已退出」）后仍被一直自动重试，执行日志与 `comfyui-runtime.log` 里同一条失败被反复刷、进程被无谓地重复拉起 | **自动启动没有「失败即停」的出口**（ISSUE #335）：`ensureComfyUiReady` 只把失败返回给这一次调用方，WS 重连循环（退避到 15s）仍每轮重新讨要启动；路径没配好 / 环境缺依赖 / 保活进程拉起来就退这类失败重试并不能自愈 | 已修：一次自动启动以**明确失败**收尾即落 `autoStartFailed` 闩锁，非手动来源（WS 重连 / 状态轮询）后续直接回报上次失败详情并跳过重试，不再 spawn、不再刷日志；被闩锁抑制时 WS 层也不再安排重连（否则只是每 15s 空转一轮）。清闩锁的出口：手动点「启动 ComfyUI」（`manual:true`）、重新开启自动启动（`clearComfyManualStop`）、或修改「安装路径 / 启动参数」（`setting.save`） |
 | 保活（keepAlive）模式下 ComfyUI 启动日志面板空白（只有 spawn 行）；或启动中报「保活进程已退出」但 ComfyUI 后来其实起来了 | 四个因素叠加（2026-09-06 定位）：① Start-Process 拉起的进程没有 stdio 管道，日志无处可去；② 进程存在性查询（Get-CimInstance 全量枚举 ~3.4s，贴近 4s 超时）在冷启动高负载下超时被当「进程不在」；③ 查询里内嵌双引号（-Filter "Name LIKE…"）经 execFile argv → PS -Command 的引号转义链路变形，恒空匹配（进程活着也查不到）；④ 字面反斜杠 Replace 在同一链路里被吞，路径分隔符归一失效 | 已修：Start-Process 把 stdout/stderr 重定向到按次命名的 `log/services/comfyui-keepalive-<时间>.out/.err.log`，等待循环增量跟随进 runtime.log；进程查询改纯单引号 + `[char]92` 运行时构造反斜杠 + Where 内 Name 过滤 + 10s 超时；判死需**连续 2 次**查询都找不到进程 | 重启应用生效；完整启动输出在重定向文件里可整段查看 |
 
 | 启动时 `dev-launcher.ps1` 报 `ParserError: Unexpected token '-Level'`（定位到 corepack prepare 分支的 Write-Log 行），启动中断 | Write-Log 调用里把命名参数 `-Level WARN` 误写进了字符串括号内：`Write-Log ("…" -Level WARN)`，PowerShell 把它解析成对字符串的无效操作符而报语法错（2026-09-07 定位，仅当 pnpm 版本不一致且 corepack prepare 失败触发） | 已修：右括号移到字符串后：`Write-Log ("…") -Level WARN`，让 `-Level` 成为命名参数。排查同类错误：`grep -nE '\("[^"]*" -Level' *.ps1` |

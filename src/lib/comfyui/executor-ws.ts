@@ -37,6 +37,7 @@ import { complete, fail } from "./executor-finalize";
 import {
   COMFYUI_AUTOSTART_TIMEOUT_MS,
   ensureComfyUiReady,
+  isComfyAutoStartSuppressed,
 } from "./lifecycle";
 import { processQueue } from "./executor-scheduler";
 
@@ -130,7 +131,13 @@ export async function connect(): Promise<void> {
           if (r.ok) {
             logToQueuedTasks("ComfyUI 已就绪，继续执行工作流…", "success");
           } else {
-            logToQueuedTasks(`ComfyUI 自动启动失败：${r.detail}`, "error");
+            // 失败已经由 lifecycle 落了「不再自动重试」闩锁（ISSUE #335）：
+            // 这里除了报告失败，还要把「为什么不再重试、怎么恢复」讲清楚，
+            // 否则用户只看到一条错误，等不到重试也不知道该怎么办。
+            logToQueuedTasks(
+              `ComfyUI 自动启动失败：${r.detail}\n已停止自动重试（避免反复刷同一条错误）；修好环境或到 设置 → 创作后端 点「启动 ComfyUI」即可恢复。`,
+              "error",
+            );
           }
         })
         .catch((err: unknown) => {
@@ -142,12 +149,16 @@ export async function connect(): Promise<void> {
             "error",
           );
         });
-    } else {
+    } else if (!isComfyAutoStartSuppressed()) {
       // 自动启动已在单飞中进行：仅维持调用以保 isComfyStarting 为真，
       // 不再重复挂日志回调（否则启动完成会向队列刷多条「已就绪」）。
       void ensureComfyUiReady({ timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS });
     }
-    scheduleReconnect();
+    // 自动启动已被闩锁抑制（启动失败 / 用户手动关闭）时不重连：重连只会每
+    // 15s 走一遍「探测失败 → 讨要启动 → 被闩锁拦下」的空转（ISSUE #335）。
+    // 真正需要重连时机由用户动作带回（手动启动成功会写 st.child / 端口可达），
+    // 而 status 轮询与后续 enqueue 会再次触发 connect()。
+    if (!isComfyAutoStartSuppressed()) scheduleReconnect();
     return;
   }
   // await 期间可能已有别的调用建好了连接

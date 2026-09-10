@@ -41,6 +41,7 @@ import {
   stopComfyUiProcess,
   ensureComfyUiReady,
   clearComfyManualStop,
+  clearComfyAutoStartFailure,
 } from "./lifecycle";
 import { getSettingsSync } from "../app-settings";
 
@@ -87,5 +88,78 @@ describe("手动关闭 ComfyUI 后抑制自动启动（ISSUE #290）", () => {
 
     // 既然闩锁已清，应落到「未开启自动启动」而非「已被手动关闭」。
     expect(r.detail).toContain("未开启自动启动");
+  });
+});
+
+describe("自动启动失败后停止重试（ISSUE #335）", () => {
+  /* 模拟一次「明确失败」的自动启动：保活拉起后进程未出现 → 等待循环判死。
+   * spawnManaged 返回「已拉起」但进程表查不到 main.py（findPidForMainPy 返回
+   * null），宽限期后连续两次找不到即判为「进程未出现」。 */
+  /* 造一次「明确失败」的自动启动：让 launch plan 解析失败（路径不存在）。
+   * 这是与「保活进程已退出」同类、且不依赖 15s 宽限期的可复现失败——
+   * 二者都走 note + { ok:false, detail } 的同一条收口路径。 */
+  const runFailingAutoStart = async () => {
+    const { resolveComfyLaunchPlan } = await import("./launch-path");
+    const { spawnManaged } = await import("../process-launch");
+    vi.mocked(spawnManaged).mockClear();
+    vi.mocked(resolveComfyLaunchPlan).mockReturnValue({
+      error: "ComfyUI 路径不存在：/nope（请在设置页检查）",
+    });
+    vi.mocked(getSettingsSync).mockReturnValue(autoStartSettings as never);
+    return ensureComfyUiReady({ timeoutMs: 5_000 });
+  };
+
+  it("失败后自动路径不再拉起进程，直接回报上次失败详情", async () => {
+    const first = await runFailingAutoStart();
+    expect(first.ok).toBe(false);
+    expect(first.detail).toContain("路径不存在");
+
+    const { spawnManaged } = await import("../process-launch");
+    vi.mocked(spawnManaged).mockClear();
+
+    const second = await ensureComfyUiReady({});
+    expect(second.ok).toBe(false);
+    // 原样回报上次的失败原因，而不是泛泛的「已跳过」
+    expect(second.detail).toBe(first.detail);
+    // 关键：没有再 spawn 一次（否则就是「一直自动重试」）
+    expect(vi.mocked(spawnManaged)).not.toHaveBeenCalled();
+  });
+
+  it("手动启动（manual:true）清失败闩锁，放行走设置检查", async () => {
+    await runFailingAutoStart();
+    vi.mocked(getSettingsSync).mockReturnValue({
+      ...autoStartSettings,
+      comfyuiAutoStart: false,
+    } as never);
+
+    const r = await ensureComfyUiReady({ manual: true });
+    // 闩锁已清 → 不被「上次失败」拦下，落到「未开启自动启动」
+    expect(r.detail).toContain("未开启自动启动");
+  });
+
+  it("clearComfyManualStop（重新开启自动启动）同时清失败闩锁", async () => {
+    await runFailingAutoStart();
+    clearComfyManualStop();
+    vi.mocked(getSettingsSync).mockReturnValue({
+      ...autoStartSettings,
+      comfyuiAutoStart: false,
+    } as never);
+
+    const r = await ensureComfyUiReady({});
+    expect(r.detail).toContain("未开启自动启动");
+  });
+
+  it("clearComfyAutoStartFailure 清闩锁后，自动路径重新尝试启动", async () => {
+    await runFailingAutoStart();
+    clearComfyAutoStartFailure();
+
+    const { resolveComfyLaunchPlan } = await import("./launch-path");
+    vi.mocked(resolveComfyLaunchPlan).mockReturnValue({
+      error: "ComfyUI 路径不存在：/nope（请在设置页检查）",
+    });
+
+    const r = await ensureComfyUiReady({});
+    // 闩锁已清 → 不被拦，重新走到 plan 解析并再次失败
+    expect(r.detail).toContain("路径不存在");
   });
 });
