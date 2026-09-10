@@ -19,6 +19,8 @@
 
 - **修复设置页 / 工作区打开即整页报错（“An unexpected Turbopack error occurred”）**：客户端逻辑层误把 Node-only 的 `app-runtime-log` 模块（顶层 `import node:fs`）引入客户端 bundle，Turbopack 编译 `/(main)/settings` 与 `/workspace` 时报 `does not support external modules (request: node:fs)` 导致页面 500（回归，由提交 29d8b1d 引入）。现客户端补记 `app-runtime` 日志改走服务端写入通道（新增 `POST /api/logs/app-runtime` + `postAppRuntimeLog()`），设置页加载失败的日志仍能落到应用日志面板，页面恢复正常。
 
+- **工作流库执行工作流时，ComfyUI 未运行会明确提示「正在自动启动」并自动继续（ISSUE #295）**：从工作流库「就地运行」工作流（或画布节点生成）时，若 ComfyUI 未启动且设置了「执行任务时未运行则自动启动」，此前任务只会停在队列 0% 且日志面板看不到任何说明，用户误以为「任务连接中断」。现在任务执行日志会依次提示「ComfyUI 未运行，正在自动启动…」「ComfyUI 启动：…（启动进度）」以及启动完成后的「ComfyUI 已就绪，继续执行工作流…」；若自动启动失败也会把失败原因写进日志面板，便于定位。ComfyUI 启动完成后任务自动继续执行，无需手动干预。
+
 ### Added
 
 - **底部状态栏显存双口径显示**：显存占用同时展示 `nvidia-smi` 物理专用显存（与任务管理器「专用 GPU 内存」同口径）与 ComfyUI 上报的 CUDA 逻辑口径，两者并列便于对照（ComfyUI 的 CUDA 口径在 WDDM 下有时与任务管理器数值不一致）。`nvidia-smi` 查询失败 / 非 NVIDIA 卡时自动隐藏该项，仅保留 ComfyUI 口径。
