@@ -35,6 +35,8 @@
 
 ### Added
 
+- **comfy-cli 会在启动时自动检查并升级到最新版**：项目内的 comfy-cli（`python-venv\comfy-cli`）此前只在虚拟环境缺失时被自动安装，装过一次后就再没人管——停在旧版时，子图（liblib）工作流的提示词/种子/步数覆盖会整段失效（promoted-widget 回填是 1.20 才有的逻辑），而界面上看不出任何异常。现每次启动都后台比对已装版本与 PyPI 最新版，落后即自动 `pip install --upgrade`（默认 24 小时才联网检查一次，离线或 PyPI 不可达只记日志、保持已安装版本，绝不阻断启动）。想立即检查可直接执行 `scripts\setup-comfy-cli-venv.ps1 -Force`，过程见 `log/tools/comfy-cli-setup.log`。
+
 - **底部状态栏显存双口径显示**：显存占用同时展示 `nvidia-smi` 物理专用显存（与任务管理器「专用 GPU 内存」同口径）与 ComfyUI 上报的 CUDA 逻辑口径，两者并列便于对照（ComfyUI 的 CUDA 口径在 WDDM 下有时与任务管理器数值不一致）。`nvidia-smi` 查询失败 / 非 NVIDIA 卡时自动隐藏该项，仅保留 ComfyUI 口径。
 
 - **应用端口可配置**：本地开发/桌面壳端口改为通过 `.env` 的 `COMFYAPP_PORT` 统一配置（默认 3000），启动器、Tauri 壳、前端 tRPC 客户端会一致读取；当端口与其他应用冲突时，改一处 `.env` 重启即可，无需改代码。

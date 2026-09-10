@@ -56,6 +56,31 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 > 仅作为兜底，不参与主导航。若绕过 launcher 直接 `pnpm tauri dev` 且改了端口，
 > 需同步修改 `src-tauri/tauri.conf.json` 的 `build.devUrl` 指向新端口。
 
+### 1.2 comfy-cli 运行环境（python 启动器层，后台兜底）
+
+raw UI-format（liblib 子图）工作流由 `src/lib/comfyui/executor-cli.ts` 交给项目内的
+comfy-cli 做 UI→API 转换，解释器固定为 `<项目根>\python-venv\comfy-cli\Scripts\python.exe`。
+`start_tauri_launcher.py` 的 `ensure_comfy_cli_venv()` **每次启动都后台触发一次**
+`scripts/setup-comfy-cli-venv.ps1`（不阻塞启动，独立进程组），判断逻辑全部在脚本里：
+
+| 环境状态 | 动作 |
+|---|---|
+| venv 缺失 / `comfy_cli` 不可导入 | 建 venv → 升 pip → 装 comfy-cli |
+| 已就绪，版本落后 PyPI | `pip install --upgrade comfy-cli`，状态写 `phase=upgrade` |
+| 已就绪且已是最新 | 只记日志，零副作用 |
+
+硬约束（改这条链路前必读）：
+
+1. **启动器侧不要早退**：venv 存在也必须触发脚本，否则 venv 一旦建好就再也不会升级，
+   用户会长期停在有缺陷的旧版本上（1.17~1.19 的子图覆盖失效即此类）。
+2. **版本检查必须节流**：默认 24h 一次（状态落 `run/comfy-cli-upgrade-check.json`，
+   `{ last_check_at, installed, latest }`），手工执行用 `-Force` 跳过节流。启动是高频动作，
+   不节流等于每次启动都联网问 PyPI。
+3. **查不到最新版 / 升级失败都不得阻断启动**：离线是常态，venv 仍可用旧版本；
+   降级路径要有日志（`log/tools/comfy-cli-setup.log`）与状态 message 出口。
+4. 日志与状态文件沿用 §4 布局：`log/tools/comfy-cli-setup.log`、
+   `run/comfy-cli-setup.json`（`{ phase, message, done, error, updated_at }`）。
+
 ## 2. 启动预检（dev-launcher.ps1，新增于 2026-09-02）
 
 预检分两段：**工具链门禁**（`Test-ToolchainGate`）在预编译壳弹出**之前**执行，只做只读致命快检——命中即 throw，让 python 启动器在 Tauri 窗口出现前弹 MessageBox 告知根因（双击 exe 场景下窗口未现即弹窗）；**完整依赖预检**在壳窗口出现之后执行（见 §1：窗口秒出后再由 splash 展示进度）。
@@ -185,7 +210,7 @@ log/
 | `nextjs-stderr-<ts>.log` 被同一条 **Edge 编译噪声刷屏**（同一段文本重复数万行、可到数十 MB，去重后仅几十行唯一内容），真实的运行报错（Failed to fetch / ECONNREFUSED / JSON 解析错等）全被淹没看不见 | **Edge instrumentation 包被静态拉进 Node-only 模块**：`src/sentry.edge.config.ts` 顶层 `import { env } from "~/env"` 把整个 `src/env.js` 并进 Edge 包。env.js 虽已用 `NEXT_RUNTIME !== "edge"` 做了**运行期**守卫，但 Turbopack 编译 Edge 包时是静态把整个模块图并进去，`node:fs` / `node:path` / `node:url` 仍被静态分析识别为「Edge 不支持的内置模块」→ 每次编译都报 `⚠ ./src/env.js … not supported in the Edge Runtime` + `Ecmascript file had an error`，import trace `src/env.js → src/sentry.edge.config.ts → src/instrumentation.ts`，Edge instrumentation 编译卡进无限重试/重编循环把 stderr 刷满（2026-09-08 定位）。只加运行守卫挡不住静态打包追踪 | 已修：`src/sentry.edge.config.ts` 不再 import `~/env`，Edge 只需要 `SENTRY_DSN` 与 `NODE_ENV`，直接读 `process.env.SENTRY_DSN` / `process.env.NODE_ENV`（沿用该文件「未配置即 no-op」风格），env.js 彻底不进 Edge 包，噪声消失。server 端 config（sentry.server.config.ts）仍可用 `~/env` |
 | 设置页 / 工作区等页面打开即报 **“An unexpected Turbopack error occurred”**（浏览器 overlay），`next dev` 终端输出 `FATAL: An unexpected Turbopack error occurred: Failed to write app endpoint /(main)/settings/page`，`Caused by: the chunking context … does not support external modules (request: node:fs)`，且非编译型报错而是整页 500 | **客户端组件链顶层 import 了 Node-only 模块**：`app-runtime-log.ts` 顶层 `import fs from "node:fs"` / `node:path`（Node 专用），却被客户端 hook `use-settings-page.ts`（`"use client"`）顶层 `import { createAppRuntimeLogger }` 引用。Turbopack 编译**浏览器** chunk 时把该模块整图形入，`node:fs` 被识别为「浏览器不支持的 external module」→ 编译该 endpoint 失败，页面 500（2026-09-09 定位，ISSUE #282 回归，由提交 29d8b1d 引入——客户端为补记 `app-runtime` 日志直接 import 了 Node 日志模块）。与 §5 上一条 Edge 噪声同源：都是「Node-only 模块被错误打包进非 Node 运行时图形」。`/*turbopackIgnore*/` 只能豁免动态访问点，**挡不住顶层 `import` 的静态打包** | 已修：客户端逻辑层不得直接 import `app-runtime-log`（Node-only）。改为经服务端写入通道——新增 `POST /api/logs/app-runtime`（route.ts 用 `createAppRuntimeLogger` 落 `log/services/app-runtime.log`，白名单 ns 与 level、截断超长消息），客户端网络层 `src/lib/log-file-client.ts` 新增 `postAppRuntimeLog()`，`use-settings-page.ts` 在 `hasError` 分支 `void postAppRuntimeLog("settings","error",msg,fields)` 取代直接 logger 调用。规范 07 §7.12 新增「客户端补记 app-runtime 必须走服务端通道」的约定 |
 | 任务报「任务卡在队列超过 Ns（…无人 re-claim）」 | ComfyUI 未运行：WS 连不上 → `processQueue` 不出队 → reaper 30s 判死 | 已加自动启动：配置 `comfyuiPath`（设置 → 创作后端）后任务执行前自动拉起 ComfyUI 并等待就绪；reaper 在启动窗口期跳过回收。也可在设置页手动点「启动 ComfyUI」。启动日志：`log/services/comfyui-runtime.log` |
-| 子图（liblib）工作流每次生成的都是同一张图，且与提示词无关；日志里「真实执行 seed」恒等于工作流里存的那个默认值 | **覆盖只写到了子图 wrapper，没写进内层节点**：raw 子图 wrapper 的 `widgets_values` 只是**宿主值**；comfy-cli 把子图展开成 `wrapperId:innerId` 后，UI→API 转换读的是**内层节点**的 `widgets_values`。而「把宿主值回写进内层」（promoted-widget overlay）是 comfy-cli **1.20** 才有的逻辑，1.17~1.19 会用内层默认值整段盖掉 → 提示词/种子/步数全部失效。日志特征：`输入参数（workflowInputs，N 项）` 里值正确，但 `真实执行 seed = <工作流默认值>` 恒定不变；把临时工作流文件直接拖进 ComfyUI 跑也是同一张图 | 已修：`applyRawOverrides` 对子图 wrapper 的覆盖项按 ComfyUI 前端的映射规则（`sub.inputs[i].linkIds` → 起点为 `-10` 的边界连线 → 内层 `target_id` / `target_slot`）同步写进内层节点，seed 的 `control_after_generate` 哨兵槽与「随机值」兜底生成的随机种子同样同步。回归测试见 `src/lib/comfyui/executor-cli.test.ts`（`applyRawOverrides — 子图 wrapper 覆盖同步到内层节点`）。另注：comfy-cli 版本可用 `python-venv/comfy-cli/Scripts/python.exe -m comfy_cli --version` 确认，1.20 起两条路径都生效 |
+| 子图（liblib）工作流每次生成的都是同一张图，且与提示词无关；日志里「真实执行 seed」恒等于工作流里存的那个默认值 | **覆盖只写到了子图 wrapper，没写进内层节点**：raw 子图 wrapper 的 `widgets_values` 只是**宿主值**；comfy-cli 把子图展开成 `wrapperId:innerId` 后，UI→API 转换读的是**内层节点**的 `widgets_values`。而「把宿主值回写进内层」（promoted-widget overlay）是 comfy-cli **1.20** 才有的逻辑，1.17~1.19 会用内层默认值整段盖掉 → 提示词/种子/步数全部失效。日志特征：`输入参数（workflowInputs，N 项）` 里值正确，但 `真实执行 seed = <工作流默认值>` 恒定不变；把临时工作流文件直接拖进 ComfyUI 跑也是同一张图 | 已修：`applyRawOverrides` 对子图 wrapper 的覆盖项按 ComfyUI 前端的映射规则（`sub.inputs[i].linkIds` → 起点为 `-10` 的边界连线 → 内层 `target_id` / `target_slot`）同步写进内层节点，seed 的 `control_after_generate` 哨兵槽与「随机值」兜底生成的随机种子同样同步。回归测试见 `src/lib/comfyui/executor-cli.test.ts`（`applyRawOverrides — 子图 wrapper 覆盖同步到内层节点`）。另注：comfy-cli 版本可用 `python-venv/comfy-cli/Scripts/python.exe -m comfy_cli --version` 确认，1.20 起两条路径都生效；版本比对与升级已由启动时后台的 `scripts/setup-comfy-cli-venv.ps1` 自动完成（见 §1.2），仍停在旧版时查 `log/tools/comfy-cli-setup.log`（离线 / PyPI 不可达会跳过升级，需手工 `-Force` 重试） |
 
 | 任务报「任务卡在队列超过 Ns（…无人 re-claim）」——但这次 ComfyUI 明明在运行、comfy-cli 进程已启动 | **raw UI-format（liblib 子图）路径的误判**：任务经 `executeViaComfyCli` 提交，但直到 comfy-cli 子进程回传 `prompt_id` 前，DB 行保持 `QUEUED / promptId=null`。comfy-cli 的 Python 启动 + 工作流转换 + POST /prompt 可能超过 reaper 的 30s 阈值（STALE_MS），于是 `reapStaleQueuedTasks` 把这个健康在飞的任务误判为孤儿并标记 FAILED。日志特征：`✓ comfy-cli 进程已启动` 之后立刻出现 `任务卡在队列超过 Ns` | 已修：`reapStaleQueuedTasks` 增加 in-memory 认领保护 `isTaskClaimedInProcess`——任务若仍被当前进程认领（还在 `s.queue` / 有 comfy-cli 子进程 `cliProcs` / `executedWorkflow` 已记录），则不回收，交给正常执行路径收口；只有 cold restart 后无任何 in-memory 足迹的才判孤儿。回归测试见 `src/lib/comfyui/reaper.test.ts` |
 

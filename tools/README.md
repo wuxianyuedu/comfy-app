@@ -164,28 +164,36 @@ comfy-cli 做 UI→API 转换，它固定使用：
 <项目根>\python-venv\comfy-cli\Scripts\python.exe
 ```
 
-该路径缺失时提交任务会直接 `spawn ... ENOENT`，用户无从下手。因此启动器在启动时兜底：
+该路径缺失时提交任务会直接 `spawn ... ENOENT`，用户无从下手；版本过旧时子图
+wrapper 的覆盖不生效（提示词/种子整段失效，1.20 才修）。因此启动器**每次启动**
+都后台触发一次 `scripts/setup-comfy-cli-venv.ps1`，由脚本统一决定做什么：
 
-- **已存在** → 只写一行日志，零额外开销；
-- **缺失** → 以独立进程后台触发 `scripts/setup-comfy-cli-venv.ps1`：
+- **venv 缺失 / `comfy_cli` 不可导入** → 安装：
   1. `python -m venv python-venv\comfy-cli`
   2. `python-venv\comfy-cli\Scripts\python.exe -m pip install --upgrade pip`
   3. `python-venv\comfy-cli\Scripts\python.exe -m pip install comfy-cli`
+- **已就绪** → 版本检查：比对已装版本与 PyPI 最新版，落后才
+  `pip install --upgrade comfy-cli`；已是最新则只记一行日志。
+
+版本检查**默认 24 小时才联网一次**（状态见 `run/comfy-cli-upgrade-check.json`），
+避免每次启动都打扰 PyPI；离线 / PyPI 不可达或升级失败只记日志并保持已安装版本——
+venv 仍可用，不阻断启动。
 
 安装耗时数分钟，**不阻塞启动**；进程独立（`start_new_session=True`），launcher 在
-Tauri 窗口出现后退出也不会中断安装。脚本幂等，已装好则直接返回。
+Tauri 窗口出现后退出也不会中断安装。
 
 排查产物：
 
 | 路径 | 内容 |
 |------|------|
-| `log/comfy-cli-setup.log` | 安装过程日志 |
+| `log/tools/comfy-cli-setup.log` | 安装/升级过程日志 |
 | `run/comfy-cli-setup.json` | 安装状态 `{ phase, message, done, error, updated_at }` |
+| `run/comfy-cli-upgrade-check.json` | 升级检查节流 `{ last_check_at, installed, latest }` |
 
-手动触发一次（不必等启动）：
+手动触发一次（不必等启动，加 `-Force` 跳过 24h 节流立即检查）：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-comfy-cli-venv.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-comfy-cli-venv.ps1 -Force
 ```
 
 想跳过自动准备、改用已有环境，设置环境变量 `COMFY_CLI_PYTHON` 指向你的 Python 解释器。

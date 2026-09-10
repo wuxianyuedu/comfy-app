@@ -9,13 +9,20 @@ executor-cli.ts 固定使用 <项目根>/python-venv/comfy-cli 下的 Python 解
 该 venv 不存在时 spawn 会直接 ENOENT，用户只看到一串 spawn 报错，无从下手。
 本脚本把「建 venv → 升 pip → 装 comfy-cli」固化下来，首次启动自动完成。
 
-幂等：venv 已存在且 comfy_cli 可导入时直接返回，不重复安装。
+幂等：venv 已存在且 comfy_cli 可导入时不重装；已就绪的 venv 走「版本检查 →
+需要则升级」，默认每 24h 才联网查一次最新版（避免每次启动都打扰 PyPI），
+-Force 可跳过节流立即检查。拿不到最新版本信息（离线 / PyPI 不可达）或升级
+失败都只记日志并保持已安装版本——venv 仍可用，不阻断启动。
 
 产物：
   日志   log/tools/comfy-cli-setup.log
   状态   run/comfy-cli-setup.json   （{ phase, message, done, error, updated_at }）
+  节流   run/comfy-cli-upgrade-check.json （{ last_check_at, installed, latest }）
 #>
-param()
+param(
+  # 跳过 24h 节流，立即检查并升级（手工执行时用）
+  [switch]$Force
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -26,6 +33,10 @@ $LogFile     = Join-Path $LogDir "comfy-cli-setup.log"
 $StatusFile  = Join-Path $RunDir "comfy-cli-setup.json"
 $VenvDir     = Join-Path $ProjectRoot "python-venv\comfy-cli"
 $VenvPy      = Join-Path $VenvDir "Scripts\python.exe"
+$UpgradeStateFile = Join-Path $RunDir "comfy-cli-upgrade-check.json"
+
+# 最新版检查的最小间隔（小时）：启动是高频动作，没必要每次都联网问 PyPI
+$UpgradeCheckIntervalHours = 24
 
 # ── 日志 / 状态 ──────────────────────────────────────────────────────────────
 function Write-Log {
@@ -71,7 +82,7 @@ function Write-Status {
 }
 
 # ── 子进程执行（异步读取输出，避免 RedirectStandardOutput 缓冲区死锁）────────
-function Invoke-Step {
+function Invoke-Process {
   param(
     [string]$Label,
     [string]$FilePath,
@@ -107,12 +118,30 @@ function Invoke-Step {
   if ($outText) { Write-Log "INFO" ($outText.Trim()) }
   if ($errText) { Write-Log "WARN" ($errText.Trim()) }
 
+  $ok = $true
   if ($proc.ExitCode -ne 0) {
     Write-Log "ERROR" "$Label 失败（exit=$($proc.ExitCode)）"
-    return $false
+    $ok = $false
+  } else {
+    Write-Log "OK" "$Label 完成"
   }
-  Write-Log "OK" "$Label 完成"
-  return $true
+  return [pscustomobject]@{
+    Ok       = $ok
+    ExitCode = $proc.ExitCode
+    StdOut   = $outText
+    StdErr   = $errText
+  }
+}
+
+function Invoke-Step {
+  param(
+    [string]$Label,
+    [string]$FilePath,
+    [string[]]$Arguments,
+    [int]$TimeoutSec = 900
+  )
+
+  return (Invoke-Process -Label $Label -FilePath $FilePath -Arguments $Arguments -TimeoutSec $TimeoutSec).Ok
 }
 
 # ── 检测 comfy_cli 是否可用 ──────────────────────────────────────────────────
@@ -140,12 +169,130 @@ function Test-ComfyCliInstalled {
   }
 }
 
+# ── 版本查询 ─────────────────────────────────────────────────────────────────
+function Get-InstalledComfyCliVersion {
+  $r = Invoke-Process -Label "读取已安装的 comfy-cli 版本" -FilePath $VenvPy `
+    -Arguments @("-m", "pip", "show", "comfy-cli") -TimeoutSec 120
+  if (-not $r.Ok) { return $null }
+  foreach ($line in ($r.StdOut -split "`r?`n")) {
+    if ($line -match '^Version:\s*(\S+)') { return $Matches[1] }
+  }
+  return $null
+}
+
+function Get-LatestComfyCliVersion {
+  $r = Invoke-Process -Label "查询 comfy-cli 最新版本" -FilePath $VenvPy `
+    -Arguments @("-m", "pip", "index", "versions", "comfy-cli") -TimeoutSec 180
+  if (-not $r.Ok) {
+    # 离线 / PyPI 不可达是常态而非故障：保持已安装版本，不阻断启动
+    Write-Log "WARN" "查询 comfy-cli 最新版本失败，跳过升级检查（离线或 PyPI 不可达）"
+    return $null
+  }
+  foreach ($line in ($r.StdOut -split "`r?`n")) {
+    if ($line -match '^comfy-cli\s*\(([^)]+)\)') { return $Matches[1] }
+  }
+  return $null
+}
+
+function Compare-Version {
+  param([string]$Left, [string]$Right)
+  try {
+    $l = [version]$Left
+    $r = [version]$Right
+    if ($l -lt $r) { return -1 }
+    if ($l -eq $r) { return 0 }
+    return 1
+  } catch {
+    return [string]::CompareOrdinal($Left, $Right)
+  }
+}
+
+# ── 升级检查节流（避免每次启动都联网问 PyPI）────────────────────────────────
+function Read-UpgradeState {
+  if (-not (Test-Path $UpgradeStateFile)) { return $null }
+  try {
+    return (Get-Content -LiteralPath $UpgradeStateFile -Raw -Encoding UTF8 | ConvertFrom-Json)
+  } catch {
+    return $null
+  }
+}
+
+function Save-UpgradeState {
+  param([string]$Installed, [string]$Latest)
+  try {
+    if (-not (Test-Path $RunDir)) {
+      New-Item -ItemType Directory -Path $RunDir -Force | Out-Null
+    }
+    $payload = @{
+      last_check_at = (Get-Date -Format "o")
+      installed     = $Installed
+      latest        = $Latest
+    } | ConvertTo-Json -Compress
+    [System.IO.File]::WriteAllText(
+      $UpgradeStateFile,
+      $payload,
+      [System.Text.UTF8Encoding]::new($false)
+    )
+  } catch {
+    # 节流状态写失败不影响主流程
+  }
+}
+
+function Test-UpgradeCheckDue {
+  if ($Force) { return $true }
+  $state = Read-UpgradeState
+  if (-not $state -or -not $state.last_check_at) { return $true }
+  try {
+    $last = [datetime]::Parse($state.last_check_at)
+    return (((Get-Date) - $last).TotalHours -ge $UpgradeCheckIntervalHours)
+  } catch {
+    return $true
+  }
+}
+
 # ── 主流程 ───────────────────────────────────────────────────────────────────
 Write-Log "INFO" "=== comfy-cli 环境检查开始 ==="
 
 if ((Test-Path $VenvPy) -and (Test-ComfyCliInstalled)) {
-  Write-Log "OK" "comfy-cli 环境已就绪：$VenvPy"
-  Write-Status -Phase "done" -Message "comfy-cli 环境已就绪" -Done $true
+  $installed = Get-InstalledComfyCliVersion
+  Write-Log "INFO" "comfy-cli 环境已就绪：$VenvPy（v$installed）"
+
+  if (-not (Test-UpgradeCheckDue)) {
+    Write-Log "OK" "距上次升级检查不足 ${UpgradeCheckIntervalHours}h，跳过（立即检查：加 -Force）"
+    Write-Status -Phase "done" -Message "comfy-cli 环境已就绪（v$installed）" -Done $true
+    exit 0
+  }
+
+  $latest = Get-LatestComfyCliVersion
+  if (-not $latest) {
+    Write-Log "WARN" "未取到最新版本，保持已安装版本 $installed"
+    Write-Status -Phase "done" -Message "comfy-cli 环境已就绪（v$installed）" -Done $true
+    exit 0
+  }
+
+  if ((Compare-Version -Left $installed -Right $latest) -ge 0) {
+    Write-Log "OK" "comfy-cli 已是最新版（$installed）"
+    Save-UpgradeState -Installed $installed -Latest $latest
+    Write-Status -Phase "done" -Message "comfy-cli 环境已就绪（v$installed）" -Done $true
+    exit 0
+  }
+
+  Write-Log "WARN" "comfy-cli 有新版本：$installed → $latest，开始升级"
+  Write-Status -Phase "upgrade" -Message "正在升级 comfy-cli（$installed → $latest）…"
+
+  if (Invoke-Step -Label "升级 comfy-cli" -FilePath $VenvPy `
+      -Arguments @("-m", "pip", "install", "--upgrade", "comfy-cli") -TimeoutSec 1800) {
+    $after = Get-InstalledComfyCliVersion
+    Write-Log "OK" "comfy-cli 升级完成：$installed → $after"
+    Save-UpgradeState -Installed $after -Latest $latest
+    Write-Status -Phase "done" -Message "comfy-cli 已升级至 v$after" -Done $true
+    exit 0
+  }
+
+  # 升级失败不阻断：venv 仍在，旧版本可继续工作，下次启动再试
+  Write-Log "ERROR" "comfy-cli 升级失败，继续使用已安装版本 $installed"
+  Save-UpgradeState -Installed $installed -Latest $latest
+  Write-Status -Phase "done" -Message "comfy-cli 升级失败，继续使用 v$installed（详见日志）" -Done $true
   exit 0
 }
 
@@ -188,6 +335,9 @@ if (-not (Invoke-Step -Label "安装 comfy-cli" -FilePath $VenvPy -Arguments @("
   Write-Status -Phase "error" -Message "安装 comfy-cli 失败，详见 log/tools/comfy-cli-setup.log" -Failed $true
   exit 1
 }
+
+# 刚装上的就是最新版，记录一次检查时间，避免下次启动立刻再查一遍
+Save-UpgradeState -Installed (Get-InstalledComfyCliVersion) -Latest ""
 
 Write-Log "OK" "comfy-cli 环境已就绪：$VenvPy"
 Write-Status -Phase "done" -Message "comfy-cli 环境已就绪" -Done $true

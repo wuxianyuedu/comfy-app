@@ -1329,32 +1329,33 @@ def _comfy_cli_venv_python(project_root: str) -> str:
 
 
 def ensure_comfy_cli_venv(project_root: str) -> None:
-    """启动时检测 comfy-cli 虚拟环境；缺失则后台触发安装。
+    """启动时确保 comfy-cli 虚拟环境就绪（缺失则安装，落后则升级）。
 
     raw UI-format（liblib 子图）工作流由 executor-cli.ts 交给项目内的
     comfy-cli venv 做 UI→API 转换；venv 缺失时提交任务会直接 spawn ENOENT，
-    用户无从下手。这里在启动时兜底：
-      - 已存在 → 仅记一行日志，零额外开销；
-      - 缺失   → 以独立进程后台执行 setup-comfy-cli-venv.ps1。
-    安装可能耗时数分钟，不能阻塞启动；独立进程组保证 launcher 在 Tauri 窗口
-    出现后退出时安装不会被中断。
+    comfy-cli 过旧时子图 wrapper 的覆盖不生效（提示词/种子整段失效）。
+    因此每次启动都后台触发一次 setup-comfy-cli-venv.ps1，由它统一决定：
+      - venv 缺失 / comfy_cli 不可导入 → 建 venv + 安装；
+      - 已就绪 → 按节流窗口（默认 24h）联网比版本，落后才升级。
+    判断逻辑只放在脚本里，这里不做早退，否则 venv 一旦建好就再也不会升级。
+    安装/升级可能耗时数分钟，不能阻塞启动；独立进程组保证 launcher 在 Tauri
+    窗口出现后退出时安装不会被中断。
     """
     venv_py = _comfy_cli_venv_python(project_root)
-    if os.path.isfile(venv_py):
-        log(f"comfy-cli venv present: {venv_py}")
-        return
-
     setup_ps1 = os.path.join(project_root, "scripts", "setup-comfy-cli-venv.ps1")
     if not os.path.isfile(setup_ps1):
-        log(f"comfy-cli venv missing but setup script not found: {setup_ps1}")
+        log(f"comfy-cli setup script not found: {setup_ps1}")
         return
 
     shell = shutil.which("pwsh") or shutil.which("powershell")
     if not shell:
-        log("comfy-cli venv missing but no powershell found, skipping bootstrap")
+        log("no powershell found, skipping comfy-cli venv ensure")
         return
 
-    log(f"comfy-cli venv missing ({venv_py}), bootstrapping via {setup_ps1}")
+    if os.path.isfile(venv_py):
+        log(f"comfy-cli venv present ({venv_py}), delegating upgrade check to {setup_ps1}")
+    else:
+        log(f"comfy-cli venv missing ({venv_py}), bootstrapping via {setup_ps1}")
     try:
         subprocess.Popen(
             [shell, "-NoProfile", "-ExecutionPolicy", "Bypass",
