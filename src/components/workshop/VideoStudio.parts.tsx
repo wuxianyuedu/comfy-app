@@ -24,6 +24,7 @@ export function ChannelSwitch({
   checkpoints,
   checkpoint,
   onCheckpointChange,
+  workflowSelected,
   fps,
   onFpsChange,
   batchRunning,
@@ -39,6 +40,8 @@ export function ChannelSwitch({
   checkpoints: string[];
   checkpoint: string;
   onCheckpointChange: (name: string) => void;
+  /** 是否选定了工作流库的视频工作流（选定后走封装口径，不再要求 Checkpoint）。 */
+  workflowSelected: boolean;
   fps: number;
   onFpsChange: (fps: number) => void;
   batchRunning: boolean;
@@ -83,7 +86,8 @@ export function ChannelSwitch({
           <Icon name="settings" size={12} />
           API 通道设置
         </button>
-        {channel === "local" && checkpoints.length > 0 && (
+        {/* 选定工作流库工作流后模型由工作流自带，不再要求先选 Checkpoint。 */}
+        {channel === "local" && !workflowSelected && checkpoints.length > 0 && (
           <label className="ml-auto flex items-center gap-2 text-xs">
             <span className="text-muted-foreground">Checkpoint(可选)</span>
             <select
@@ -130,7 +134,9 @@ export function ChannelSwitch({
       {/* Channel-specific gating hints (gentle, stage stays usable) */}
       {channel === "local" && (
         <div className="text-muted-foreground rounded-lg bg-subtle px-3 py-2 text-xs">
-          本地通道使用 ComfyUI 的 img2video / txt2video 工作流(WAN);已生成的镜头图会自动上传为首帧。无画面镜头将回退为文生视频。
+          {workflowSelected
+            ? "本地通道使用右侧「生成资源」里选定的视频工作流；工坊只暴露 提示词 / 尺寸 / 首帧，其余参数（步数、采样器、时长…）一律取工作流默认值。已生成的镜头图会自动上传为首帧。"
+            : "本地通道使用 ComfyUI 的 img2video / txt2video 工作流(WAN);已生成的镜头图会自动上传为首帧。无画面镜头将回退为文生视频。可在右侧「生成资源」改选工作流库的视频工作流。"}
         </div>
       )}
       {channel === "api" && !apiReady && (

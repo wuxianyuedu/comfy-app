@@ -18,6 +18,9 @@ import {
 } from "./api-channel-shared";
 import {
   buildEncapsulatedInputs,
+  isVideoMode,
+  modeUsesFirstFrame,
+  modeUsesLastFrame,
   type WorkshopExposedValues,
 } from "./workflow-encapsulation";
 
@@ -31,11 +34,50 @@ export async function startLocalGenerate(input: GenerateInput): Promise<string> 
   return res.taskId;
 }
 
+/** 工坊里可选的生成模式：先把工作流按「内容类别（图 / 视频）」分栏，
+ *  再在栏内按具体模式（文生图 / 图生图 / 文生视频 / 图生视频…）分类。
+ *  工坊按当前阶段只展示对应类别下的工作流。 */
+export type WorkshopWorkflowCategory = "image" | "video";
+
 /** 工作流库里的一个可选工作流（工坊「生成资源」下拉用）。 */
 export interface WorkshopWorkflowOption {
   id: string;
   name: string;
   taskType?: string;
+  /** 服务端富化的内容类别（image / video / audio；未知按 image 处理）。 */
+  category: WorkshopWorkflowCategory;
+  /** 该工作流可跑的全部模式码（taskType 常是其中的默认模式）。 */
+  modes: string[];
+}
+
+/** 工作流列表项 → 工坊选项；字段缺失/异常时给出安全缺省。
+ *
+ *  类别优先取服务端富化的 typeCategory（由 taskType 在类型体系里查到），
+ *  查不到则退到「模式码是否视频」。 */
+function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption | null {
+  const id = row.id;
+  const name = row.name;
+  if (typeof id !== "string" || typeof name !== "string") return null;
+  const taskType = typeof row.taskType === "string" ? row.taskType : undefined;
+  const modes = Array.isArray(row.modes)
+    ? row.modes.filter((mode): mode is string => typeof mode === "string")
+    : [];
+  const declared = row.typeCategory;
+  const category: WorkshopWorkflowCategory =
+    declared === "video"
+      ? "video"
+      : declared === "image"
+        ? "image"
+        : isVideoMode(taskType) || modes.some((mode) => isVideoMode(mode))
+          ? "video"
+          : "image";
+  return {
+    id,
+    name,
+    ...(taskType !== undefined ? { taskType } : {}),
+    category,
+    modes,
+  };
 }
 
 /** 拉取工作流列表，供工坊选择「用哪个工作流库工作流生成」。 */
@@ -46,42 +88,62 @@ export async function fetchWorkshopWorkflows(): Promise<WorkshopWorkflowOption[]
   const out: WorkshopWorkflowOption[] = [];
   for (const row of rows) {
     if (!isRecord(row)) continue;
-    const id = row.id;
-    const name = row.name;
-    if (typeof id !== "string" || typeof name !== "string") continue;
-    out.push({
-      id,
-      name,
-      ...(typeof row.taskType === "string" ? { taskType: row.taskType } : {}),
-    });
+    const option = toWorkflowOption(row);
+    if (option) out.push(option);
   }
   return out;
 }
 
+/** 一次封装结果 + 该工作流在库里的模式信息（供调用方按模式做提示/校验）。 */
+export interface LibraryWorkflowBuildResult {
+  input: GenerateInput;
+  unmatched: (keyof WorkshopExposedValues)[];
+  /** 本次实际使用的模式码（服务端默认模式，缺省回退 taskType / modes[0]）。 */
+  mode: string | null;
+  /** 该工作流可跑的全部模式码。 */
+  modes: string[];
+  /** 本次生成会用到首帧 / 尾帧图（按模式判定，供调用方决定要不要预传图）。 */
+  usesFirstFrame: boolean;
+  usesLastFrame: boolean;
+}
+
 /** 用选定的工作流库工作流封装一次生成请求。
  *
- *  ISSUE #145：工坊对外只暴露「提示词 / 尺寸 / 参考图」，其余 IO 参数一律用
- *  工作流里的默认值。这里拉取工作流详情（含 enrich 过的 workflowIO），交给
- *  `buildEncapsulatedInputs` 组装成 `workflowInputs` 三元组。
+ *  ISSUE #145：工坊对外只暴露「提示词 / 尺寸 / 参考图(首帧)」，其余 IO 参数
+ *  一律用工作流里的默认值。这里拉取工作流详情（含 enrich 过的 workflowIO），
+ *  交给 `buildEncapsulatedInputs` 按工作流的模式码组装成 `workflowInputs`
+ *  三元组 —— 文生 / 图生两类模式的对外参数口径不同，模式码决定了首帧要不要下发。
  *
  *  返回的 input 可直接交给 `startLocalGenerate`；工作流没有对应 pin 的字段会
  *  出现在 `unmatched` 里（由调用方决定是否提示用户）。 */
 export async function buildLibraryWorkflowInput(
   workflowId: string,
   values: WorkshopExposedValues
-): Promise<{ input: GenerateInput; unmatched: (keyof WorkshopExposedValues)[] }> {
+): Promise<LibraryWorkflowBuildResult> {
   const detail = await vanillaApi.workflow.detailFull.query({ id: workflowId });
   const io = detail?.workflowIO ?? null;
-  const mode = detail?.defaultMode ?? null;
+  const modes = Array.isArray(detail?.modes)
+    ? detail.modes.filter((mode): mode is string => typeof mode === "string")
+    : [];
+  const mode = detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null;
   const { workflowInputs, unmatched } = buildEncapsulatedInputs(io, mode, values);
   const input: GenerateInput = {
     workflow: workflowId,
     ...(values.prompt !== undefined ? { prompt: values.prompt } : {}),
     ...(values.negativePrompt !== undefined ? { negative: values.negativePrompt } : {}),
     ...(values.size !== undefined ? { size: values.size } : {}),
+    ...(values.firstFrame !== undefined ? { firstFrame: values.firstFrame } : {}),
+    ...(values.lastFrame !== undefined ? { lastFrame: values.lastFrame } : {}),
     ...(workflowInputs.length > 0 ? { workflowInputs } : {}),
   };
-  return { input, unmatched };
+  return {
+    input,
+    unmatched,
+    mode,
+    modes,
+    usesFirstFrame: modeUsesFirstFrame(mode),
+    usesLastFrame: modeUsesLastFrame(mode),
+  };
 }
 
 /** 进度事件附带的节点级信息（ComfyUI progress 消息里的当前节点与步数）。 */

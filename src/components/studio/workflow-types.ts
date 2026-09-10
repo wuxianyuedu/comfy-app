@@ -166,6 +166,11 @@ export interface WorkflowIOParam {
    *  落在同一个 workflowIO JSON 列里（因此新增模式无需改表）。由 IO 预览面板的
    *  「模式页签」编辑，随整体 workflowIO 一起 PATCH 落库。 */
   modes?: Record<string, WorkflowIOModeOverride>;
+  /** 拥有该 pin 的节点类名（"LoadImage" / "KSampler" …），服务端富化字段。
+   *  工坊封装要靠它区分参考图槽位（首帧 / 尾帧 / 普通参考图）—— 只看 pin 名
+   *  分不出三张 LoadImage 里哪张是首帧。本地新勾选的 pin 没有此字段，
+   *  服务端下次读取时补上。 */
+  classType?: string;
 }
 
 /** A single parameter reference used to toggle IO exposure. */

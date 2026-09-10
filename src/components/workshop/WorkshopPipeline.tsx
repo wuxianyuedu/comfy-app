@@ -79,6 +79,8 @@ export function WorkshopPipeline() {
             workflowOptions={controller.workflowOptions}
             workflowId={controller.workflowId}
             onWorkflowChange={controller.setWorkflowId}
+            videoWorkflowId={controller.videoWorkflowId}
+            onVideoWorkflowChange={controller.setVideoWorkflowId}
             apiChannels={controller.apiChannels}
             onOpenApiSettings={controller.openApiSettings}
             characterCount={controller.characters.length}
