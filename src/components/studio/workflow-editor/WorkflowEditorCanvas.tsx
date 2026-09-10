@@ -141,7 +141,10 @@ export function WorkflowEditorCanvas({
         hasOverrides={canvasSettingsHydrated && isCustomCanvasSettings(canvasSettings)}
         onClick={onOpenSettings}
       />
-      <Controls showInteractive={false} className="!bg-(--color-panel)/90 !border-white/10 !text-gray-400 [&>button]:!bg-white/5 [&>button]:!border-white/10 [&>button]:!text-gray-400 [&>button:hover]:!bg-white/10" />
+      {/* Controls / MiniMap 的配色由 globals.css 的 `.react-flow__controls*`
+          / `.react-flow__minimap*` token 规则统一负责（画布与项目画布共用），
+          组件侧不再叠加写死的暗色覆盖类。 */}
+      <Controls showInteractive={false} />
       {canvasSettings.showMiniMap && (
         <MiniMap
           pannable
@@ -149,8 +152,10 @@ export function WorkflowEditorCanvas({
           ariaLabel="小地图：拖动或点击切换主画布焦点"
           onClick={onMiniMapJump}
           nodeColor={miniMapNodeColor}
-          maskColor="rgba(0,0,0,0.78)"
-          className="!bg-(--color-panel)/90 !border-white/10"
+          /* maskColor 是「小地图里非视口区域」的遮罩：必须跟随主题。
+             写死 rgba(0,0,0,0.78) 时 Light 下整张缩略图被压成一块黑，
+             与浅色画布割裂。改为引用 token——浅色用浅遮罩、深色保持近黑。 */
+          maskColor="var(--color-canvas-minimap-mask)"
         />
       )}
     </ReactFlow>
