@@ -39,13 +39,16 @@ export function FlowNodeWidgetRows({
         // edgeType paths live in the top pins section).
         const inputType = inferInputType(data.classType, k, v);
         const typeCol = portColor(inputType);
-        // Display label: zh-CN localized_name → friendly map → raw key.
-        // COMBO option lists are stripped by sanitizeComboLabel; boolean
-        // toggle descriptors (rgthree Settings) stay intact.
+        // Display label: 工作流 JSON 里作者写的 label（英文业务名）优先于
+        // ComfyUI 的 zh-CN localized_name —— 与该 pin 在 IO 列表 / 运行期
+        // 表单里的取法保持一致（label → localized → name）。localized_name
+        // 是通用词（"图像"），排前面会让同一节点上多个 pin 长得一模一样。
+        // COMBO 候选串由 sanitizeComboLabel 剥掉；BOOLEAN 描述串（rgthree
+        // Settings）保留。
         const meta = rawMeta[k];
         const friendlyLabel =
-          sanitizeComboLabel(meta?.localized) ||
           sanitizeComboLabel(meta?.label) ||
+          sanitizeComboLabel(meta?.localized) ||
           friendlyInputName(k);
         // STRING widgets render as a stacked block (label row + textarea)
         // only when genuinely long / multi-line; short scalars
