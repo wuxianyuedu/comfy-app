@@ -127,6 +127,13 @@ export interface WorkflowIOEntry {
    *  WorkflowIOModeOverride 同源（workflow-io-types），两端的
    *  workflowIO 载荷经 tRPC 直传，必须逐字段兼容。 */
   modes?: Record<string, WorkflowIOModeOverride>;
+  /** 拥有该 pin 的节点类名（如 "LoadImage" / "KSampler"）。
+   *
+   *  只有 pin 名（"image" / "text"）不足以判定语义：多张参考图时哪张是首帧、
+   *  哪张是尾帧，靠的是产出节点型别。工坊封装（workflow-encapsulation）据它
+   *  把参考图槽位区分成「首帧 / 尾帧 / 普通参考图」。rawJson + graph 都拿不到
+   *  类名时（畸形导出）返回 undefined，消费方按「普通参考图」降级。 */
+  classType?: string;
 }
 
 /** Enrich the stored IO selection into a self-describing record (see the
@@ -278,6 +285,18 @@ export async function enrichWorkflowIO(
       if (touched) cleanedModes = next;
     }
 
+    /* 节点类名：raw 导出优先（它才是 ComfyUI 里真实的 class），
+     *  API-only 导入退到存库 graph 的 class_type。两者都没有就不下发。 */
+    const graphClassType = asRecord(graph[canonicalNodeId])?.class_type;
+    /* raw 导出的类名是空串时也算「没有」—— 不能让它把 graph 里的真类名吃掉。 */
+    const rawClassType = nodeTypeById[canonicalNodeId];
+    const classType =
+      rawClassType !== undefined && rawClassType !== ""
+        ? rawClassType
+        : typeof graphClassType === "string" && graphClassType !== ""
+          ? graphClassType
+          : undefined;
+
     workflowIO[ioKey] = {
       direction: v.direction,
       kind: v.kind,
@@ -287,6 +306,7 @@ export async function enrichWorkflowIO(
       type,
       ...(defaultValue !== undefined ? { defaultValue } : {}),
       ...(options ? { options } : {}),
+      ...(classType !== undefined ? { classType } : {}),
       nodeTitle: nodeTitleById[canonicalNodeId] ?? nodeTitleById[String(v.nodeId)],
       ...(type === "STRING" &&
       (MULTILINE_HINT.test(v.name) ||

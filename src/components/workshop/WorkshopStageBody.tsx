@@ -87,6 +87,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     checkpoint,
     setCheckpoint,
     workflowId,
+    videoWorkflowId,
     apiChannels,
     imageDoneCount,
     clipDoneCount,
@@ -365,6 +366,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 checkpoints={checkpoints}
                 checkpoint={checkpoint}
                 onCheckpointChange={setCheckpoint}
+                workflowId={videoWorkflowId}
                 apiChannels={apiChannels}
                 onOpenApiSettings={openApiSettings}
                 onShotsChange={setShots}

@@ -27,6 +27,11 @@ import { getActiveId } from "@/lib/project-canvas/canvas-store";
 import { setActiveTaskId } from "@/components/studio/project-canvas/activeTask";
 import { vanillaApi } from "~/trpc/vanilla";
 import { collectReferenceImages, seedModeOverrides } from "@/components/studio/project-canvas/CanvasNode/helpers";
+import {
+  applyParamMapping,
+  buildParamEntries,
+  parseParamMapping,
+} from "@/lib/workflow-param-mapping";
 
 /** catch 抛出值（unknown）→ 与旧 `e?.message ?? String(e)` 逐值等价的错误文案：
  *  带 string message 的对象取 message（Error 实例即此路径），其余走 String(v)
@@ -49,12 +54,14 @@ export interface UseGenerateArgs {
   d: CanvasNodeData;
   patch: (p: Partial<CanvasNodeData>) => void;
   wfIO: WorkflowIOMap | null;
+  /** 作者在工作流库配的「对外参数 → 节点端口」映射（paramMap.source）。 */
+  wfParamMap?: Record<string, unknown> | null;
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   getNode: (id: string) => Node | undefined;
 }
 
-export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }: UseGenerateArgs) {
+export function useGenerate({ id, d, patch, wfIO, wfParamMap, setNodes, setEdges, getNode }: UseGenerateArgs) {
   /* mount-time reconcile — if the node was
    *  loaded with stale `status="running"` (e.g. dev server restarted
    *  while a generation was in flight, or the user closed/reopened the
@@ -122,7 +129,21 @@ export function useGenerate({ id, d, patch, wfIO, setNodes, setEdges, getNode }:
        *  the request into errorContext.  `null` until the try-block assigns. */
       let payload: Record<string, unknown> | null = null;
       try {
-        const baseInputs = toWorkflowInputsPayload(wfIO ?? undefined, d.workflowInputs ?? {});
+        /* 有映射表时按「对外参数 → 目标端口」解析：连了线的对外口只覆盖它连到
+         *  的那个端口（不把该节点别的默认值也塞进去），没连线的对外口仍按默认值
+         *  兜底 —— 这正是「自动映射 = 默认连线状态，可在此基础上编辑」的运行期语义。 */
+        const mapped = wfIO
+          ? applyParamMapping({
+              io: wfIO,
+              entries: buildParamEntries(wfIO),
+              mapping: parseParamMapping(wfParamMap ?? d.paramMap),
+              values: d.workflowInputs ?? {},
+            })
+          : null;
+        const baseInputs =
+          mapped && mapped.inputs.length > 0
+            ? mapped.inputs
+            : toWorkflowInputsPayload(wfIO ?? undefined, d.workflowInputs ?? {});
         const cagInputs = seedModeOverrides(wfIO ?? null, d.seedModes);
         payload = {
           workflow: d.workflowId,

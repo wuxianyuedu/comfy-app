@@ -13,6 +13,17 @@
  *      pin 上，其余 pin 用 `resolveEntryDefault` 播种，产出可直接下发给
  *      `generate.generate` 的 `workflowInputs` 三元组。
  *
+ * 视频生成用的是同一套封装，只是对外表达不同（ISSUE #145 后续）：
+ *   · 文生视频 —— 提示词 + 尺寸/时长；
+ *   · 图生视频 —— 首帧参考图 + 提示词 + 尺寸/时长；
+ *   · 首尾帧视频 —— 首帧 + 尾帧 + 提示词。
+ * 差别在于「参考图落在哪个 pin」。ComfyUI 工作流里可能有三个 `LoadImage`
+ * （首帧 / 尾帧 / 普通参考图），只看 pin 名分不出来，故引入 `VideoPinRole`
+ * 与 `classifyVideoPin`：先按产出节点类名（LoadImageFirstFrame /
+ * LoadImageLastFrame / LoadImage）判角色，再按 pin 名兜底，最后才回落到
+ * 通用的「参考图」分类。视频模式码（taskType / modes）单独由 `isVideoMode`
+ * 判定，不从内容类别码反推。
+ *
  * 无 React、无 IO（规范 §17.2 第②层），因此可直接单测。
  */
 
@@ -31,17 +42,40 @@ export type WorkshopPinClass =
   | "size-aspect"
   | "size-megapixels"
   | "reference-image"
+  | "first-frame"
+  | "last-frame"
   | "internal";
 
-/** 工坊这一次生成要落下去的对外参数（全部可选）。 */
+/** 镜头视频生成各模式在封装口径下对外暴露的角色。 */
+export type VideoPinRole =
+  | "prompt"
+  | "negative"
+  | "size-width"
+  | "size-height"
+  | "first-frame"
+  | "last-frame"
+  | "reference-image"
+  | "frames"
+  | "fps"
+  | "internal";
+
+/** 工坊这一次生成要落下去的对外参数（全部可选）。
+ *
+ *  视频模式与生图模式共用同一个入口，只是用到的字段不同：
+ *  文生视频只给 prompt / size，图生视频额外给 firstFrame，首尾帧再给 lastFrame。 */
 export interface WorkshopExposedValues {
   prompt?: string;
   negativePrompt?: string;
   /** "宽x高"（如 "832x1216"）。有 width/height pin 时按 W/H 落，
    *  只有 aspect/megapixels pin 时自行换算。 */
   size?: string;
-  /** 参考图文件名（已上传到 ComfyUI 输入目录）。 */
+  /** 参考图文件名（已上传到 ComfyUI 输入目录）。
+   *  按顺序填进工作流里的图片槽位；视频模式下首帧槽优先拿第一张。 */
   referenceImages?: string[];
+  /** 视频：首帧文件名。缺省时回退到 referenceImages[0]。 */
+  firstFrame?: string;
+  /** 视频：尾帧文件名（首尾帧工作流用）。 */
+  lastFrame?: string;
 }
 
 /** 一次封装的结果。 */
@@ -92,6 +126,62 @@ function isPromptPin(e: WorkflowIOEntry): boolean {
   return false;
 }
 
+/* ── 视频侧：按模式把 IO 归类到「首帧 / 尾帧 / 参考图 / 时长」 ── */
+
+/** 产出「首帧」的节点类名（WAN / LTX 系各家命名不一致，用前缀+包含匹配）。 */
+function isFirstFrameClass(classType: string): boolean {
+  return /^(comfyui[-_ ]?)?loadimage.*first|^loadimage.*start_?frame|first_?frame|start_?frame/i.test(
+    classType
+  );
+}
+
+/** 产出「尾帧」的节点类名。 */
+function isLastFrameClass(classType: string): boolean {
+  return /^(comfyui[-_ ]?)?loadimage.*last|last_?frame|end_?frame/i.test(classType);
+}
+
+function isFramesPin(e: WorkflowIOEntry): boolean {
+  const text = searchText(e);
+  /* 先排除「每秒帧数」，它是 fps 不是时长。 */
+  if (/fps|帧率|每秒帧/.test(text)) return false;
+  return /(^|[^a-z])frames?([^a-z]|$)|length|duration|num_?frames|视频帧|帧数|时长|秒数/.test(text);
+}
+
+function isFpsPin(e: WorkflowIOEntry): boolean {
+  return /fps|frame_?rate|帧率|每秒帧/.test(searchText(e));
+}
+
+/** 按产出节点类名 + pin 名判定一个图片槽位在视频模式下的角色。
+ *
+ *  判定顺序即优先级：类名（ComfyUI 里真实存在的「FirstFrame / LastFrame 上传
+ *  节点」最权威）→ pin 名 / 标签（作者写了「首帧」这类业务名）→ 普通参考图。 */
+export function classifyVideoPin(e: WorkflowIOEntry): VideoPinRole {
+  if (e?.direction !== "input") return "internal";
+  if (e.kind !== "widget") return "internal";
+  const classType = (e.classType ?? "").trim();
+  const text = searchText(e);
+
+  if (isImagePin(e)) {
+    if (isLastFrameClass(classType) || /last_?frame|尾帧|结束帧|末帧/.test(text)) {
+      return "last-frame";
+    }
+    if (isFirstFrameClass(classType) || /first_?frame|首帧|起始帧|初始帧/.test(text)) {
+      return "first-frame";
+    }
+    /* 泛化的图片加载节点（LoadImage / ImageLoader）：只声明了「一张图」，
+     *  既可能是首帧也可能是参考图 —— 归到 reference-image，由调用方按模式
+     *  决定要不要把首帧写进它（图生视频里它就是首帧）。 */
+    return "reference-image";
+  }
+  if (isNegativePin(e)) return "negative";
+  if (isWidthPin(e)) return "size-width";
+  if (isHeightPin(e)) return "size-height";
+  if (isFpsPin(e)) return "fps";
+  if (isFramesPin(e)) return "frames";
+  if (isPromptPin(e)) return "prompt";
+  return "internal";
+}
+
 function isWidthPin(e: WorkflowIOEntry): boolean {
   const text = searchText(e);
   /* 用 `_` 也是词内字符：ComfyUI 常见 `base_width` / `width_2` 这类命名，
@@ -123,7 +213,7 @@ export function classifyWorkshopPin(e: WorkflowIOEntry): WorkshopPinClass {
   if (e?.direction !== "input") return "internal";
   // 连线型端口（MODEL / CLIP / LATENT…）没有可填的标量，不对外。
   if (e.kind !== "widget") return "internal";
-  if (isImagePin(e)) return "reference-image";
+  if (isImagePin(e)) return classifyVideoPin(e) as WorkshopPinClass;
   if (isNegativePin(e)) return "negative";
   if (isWidthPin(e)) return "size-width";
   if (isHeightPin(e)) return "size-height";
@@ -131,6 +221,33 @@ export function classifyWorkshopPin(e: WorkflowIOEntry): WorkshopPinClass {
   if (isAspectPin(e)) return "size-aspect";
   if (isPromptPin(e)) return "prompt";
   return "internal";
+}
+
+/* ── 视频模式判定 ──
+ *
+ * 工坊的视频通道有两个模式：文生视频（无首帧）与图生视频（有首帧）。
+ * 模式码就是工作流库的 taskType / modes（T2V / I2V / TI2V / FLF2V / FL2V /
+ * S2V …）。判定刻意只看这套码，不看工作流的 taskType 之上再包一层「内容分类」
+ * （image/video）—— 那层分类是工作流库的展示维度，不是生成模式的判据。 */
+
+/** 视频类模式码（前缀式，兼容 T2V / TI2V / FLF2V / FMF2V / S2V / V2V …）。 */
+const VIDEO_MODE_RE = /^(t2v|i2v|ti2v|flf2v|fl2v|fmf2v|v2v|r2v|rv2v|vi2v|mv2v|vrc2v|ads2v|s2v|ia2v|a2v)$/i;
+
+/** 该模式码是否属于视频生成。 */
+export function isVideoMode(code: string | null | undefined): boolean {
+  return typeof code === "string" && VIDEO_MODE_RE.test(code.trim());
+}
+
+/** 该模式是否自带首帧图（图生视频 / 图文生视频 / 首尾帧）。 */
+export function modeUsesFirstFrame(code: string | null | undefined): boolean {
+  if (typeof code !== "string") return false;
+  return /^(i2v|ti2v|flf2v|fl2v|fmf2v|r2v|s2v|ia2v)$/i.test(code.trim());
+}
+
+/** 该模式是否需要尾帧图（首尾帧视频）。 */
+export function modeUsesLastFrame(code: string | null | undefined): boolean {
+  if (typeof code !== "string") return false;
+  return /^(flf2v|fl2v|fmf2v)$/i.test(code.trim());
 }
 
 /** 解析 "832x1216" → {width,height}；无法识别返回 null。 */
@@ -192,10 +309,21 @@ export function buildEncapsulatedInputs(
 
   const classified = classifyAll(io);
   const dims = parseSizeParam(values.size);
-  const refImage = values.referenceImages?.[0];
+  const refs = values.referenceImages ?? [];
+  const refImage = refs[0];
+  const firstFrame = values.firstFrame ?? refImage;
+  const lastFrame = values.lastFrame;
+
+  /** 参考图槽位按出现顺序分给 inputImages（首帧槽优先拿第一张）。
+   *  多张图/多个槽时按序号一一对应，多出来的槽不再硬塞。 */
+  const slotIndex = { value: 0 };
+  const nextReference = (): string | undefined => {
+    const out = refs[slotIndex.value];
+    slotIndex.value += 1;
+    return out;
+  };
 
   const userValueFor = (
-    key: string,
     cls: WorkshopPinClass
   ): { matched: boolean; value: unknown } => {
     switch (cls) {
@@ -207,8 +335,12 @@ export function buildEncapsulatedInputs(
         return { matched: dims !== null, value: dims?.width };
       case "size-height":
         return { matched: dims !== null, value: dims?.height };
+      case "first-frame":
+        return { matched: firstFrame !== undefined, value: firstFrame };
+      case "last-frame":
+        return { matched: lastFrame !== undefined, value: lastFrame };
       case "reference-image":
-        return { matched: refImage !== undefined, value: refImage };
+        return { matched: refImage !== undefined, value: nextReference() };
       /* aspect / megapixels 没有从 "WxH" 直接可落的值——工坊的 size 是像素，
        * 这两种 pin 只能靠默认值。列为对外分类仅为让 UI 知道它们被纳入了
        * 尺寸语义，实际值仍走默认值，故 matched 恒 false。 */
@@ -224,7 +356,7 @@ export function buildEncapsulatedInputs(
     const cls = classified.get(key) ?? "internal";
     if (cls !== "internal") {
       exposed[key] = cls;
-      const { matched, value } = userValueFor(key, cls);
+      const { matched, value } = userValueFor(cls);
       // 用户给了值就用用户值；否则与内部参数一样回退默认值。
       const finalValue =
         matched && value !== undefined ? value : resolveEntryDefault(entry, mode);
@@ -247,8 +379,13 @@ export function buildEncapsulatedInputs(
     unmatched.push("negativePrompt");
   if (dims && !pickFirst(classified, "size-width") && !pickFirst(classified, "size-height"))
     unmatched.push("size");
-  if (refImage !== undefined && !pickFirst(classified, "reference-image"))
-    unmatched.push("referenceImages");
+  /* 参考图：首帧槽（含普通参考图槽）都没有，才算没落下去。
+   * 首尾帧工作流的 referenceImages[0] 会落到首帧槽，不该报 unmatched。 */
+  const hasImageSlot =
+    pickFirst(classified, "reference-image") ?? pickFirst(classified, "first-frame");
+  if (refImage !== undefined && !hasImageSlot) unmatched.push("referenceImages");
+  if (lastFrame !== undefined && !pickFirst(classified, "last-frame"))
+    unmatched.push("lastFrame");
 
   return { workflowInputs, exposed, internalKeys, unmatched };
 }

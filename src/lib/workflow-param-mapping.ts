@@ -1,0 +1,422 @@
+/* ── 对外参数 → 工作流节点参数的「映射」模型 ──
+ *
+ * ISSUE #145 把工作流库里的自定义工作流封装成"只对外暴露提示词/尺寸/参考图"。
+ * 但对外参数（工坊侧）与工作流内部真正的 pin 之间，需要一个**作者可编辑**的
+ * 对应关系：同一个「提示词」对外口，可能落在 CLIPTextEncode.text、也可能落在
+ * 自定义节点的 prompt 槽；「尺寸」可能是一对 width/height，也可能是一个
+ * resolution_preset。
+ *
+ * 本模块只做三件纯事（无 React、无 IO，规范 §17.2 第②层）：
+ *   1. `buildParamEntries`  把服务端富化的 workflowIO 归并成「按节点分组的对外
+ *      参数条目」——同一节点上的多个 pin 是**同一个对外参数**（提示词 = 一个
+ *      节点的一个参数），而不是两行；
+ *   2. `autoMapEntries`     给每个对外参数条目**自动**挑一个目标端口（默认连线
+ *      状态）。判定顺序即优先级，与工坊封装（workflow-encapsulation）同口径；
+ *   3. `applyParamMapping`  把映射落到运行时载荷上：确定性的 `workflowInputs`
+ *      三元组 + 端口级自动映射（paramMap 的 source 键）。
+ *
+ * 映射的落库位置：沿用既有的 `paramMap` JSON 列，另开 `source.<nodeId>.<port>`
+ * 命名空间（值 = ioKey），**不动 DB schema**。`auto` = 作者没手工改过、跟随
+ * 自动映射（当作默认连线状态）；`manual` = 作者手工连的线，优先级更高。
+ */
+
+import {
+  resolveEntryDefault,
+  type WorkflowIOEntry,
+  type WorkflowIOMap,
+} from "~/lib/workflow-io-types";
+
+/* ── 对外参数分类 ──
+ * 与工坊封装的 WorkshopPinClass 子集 + `other`（尺寸/参考图/提示词之外，
+ * 作者自行勾选的对外输入，例如 steps / cfg / 种子）。 */
+export type ParamClass =
+  | "prompt"
+  | "negative"
+  | "size-width"
+  | "size-height"
+  | "size-aspect"
+  | "size-megapixels"
+  | "reference-image"
+  | "first-frame"
+  | "last-frame"
+  | "other";
+
+/** 一个「对外参数」（= 一个节点上被暴露的一类输入，可能含多个端口）。 */
+export interface ParamEntry {
+  /** 稳定键：按节点 + 分类聚合，直接作为连线源句柄 id。 */
+  id: string;
+  nodeId: string;
+  nodeTitle: string;
+  cls: ParamClass;
+  /** 展示名：作者写的 label 优先，其次已有对外名，最后回落到分类默认名。 */
+  label: string;
+  /** 已有的对外名（工坊 / 画布动态表单里用的名字）。 */
+  exposedName: string;
+  type: string;
+  /** 该对外口包含的端口（ioKey 保持 workflowIO 的原始键）。 */
+  pins: { ioKey: string; name: string; type: string; defaultValue: unknown }[];
+}
+
+/** 分类默认名（作者未改名时用来填充「对外参数名」列）。 */
+const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
+  prompt: "提示词",
+  negative: "负面提示词",
+  "size-width": "宽度",
+  "size-height": "高度",
+  "size-aspect": "宽高比",
+  "size-megapixels": "像素量",
+  "reference-image": "参考图",
+  "first-frame": "首帧",
+  "last-frame": "尾帧",
+  other: "参数",
+};
+
+function searchText(e: WorkflowIOEntry): string {
+  return `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
+}
+
+const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);
+
+/* ── 分类判定 ──
+ * 顺序即优先级：负面先于正向，首/尾帧先于普通参考图，尺寸类先于提示词
+ * （避免 "width" 之类被泛化的文本启发式抢走）。与工坊封装同口径。 */
+const FIRST_FRAME_HINT = /first[_\s-]?frame|首帧|起始帧|第一帧|image_?1|start_?image/;
+const LAST_FRAME_HINT = /last[_\s-]?frame|尾帧|结束帧|末帧|image_?2|end_?image/;
+
+function isImagePin(e: WorkflowIOEntry): boolean {
+  const type = (e.type ?? "").toUpperCase();
+  if (IMAGE_TYPES.has(type)) return true;
+  return /upload|image|参考图|首帧|尾帧|first_?frame|last_?frame/.test(searchText(e));
+}
+
+/** 导出给工坊封装复用：把已有对外条目的分类映射到 ParamClass。 */
+export function classifyPin(e: WorkflowIOEntry): ParamClass {
+  if (e?.direction !== "input" || e.kind !== "widget") return "other";
+  const text = searchText(e);
+  if (isImagePin(e)) {
+    if (LAST_FRAME_HINT.test(text)) return "last-frame";
+    if (FIRST_FRAME_HINT.test(text)) return "first-frame";
+    return "reference-image";
+  }
+  if (/negative|负向|负面|反向/.test(text)) return "negative";
+  /* 尺寸名必须"干净"——`prompt_width_of_thing` 这类把 width 当词根的名字不算
+   * 尺寸口（真实工作流里 width/height 从不带其它业务词）。 */
+  if (/^(width|base_width|w|宽度|横向)$/.test(text.trim()) || /宽度|横向/.test(text)) {
+    return "size-width";
+  }
+  if (/^(height|base_height|h|高度|纵向)$/.test(text.trim()) || /高度|纵向/.test(text)) {
+    return "size-height";
+  }
+  if (/aspect_?ratio|宽高比|纵横比|比例/.test(text)) return "size-aspect";
+  if (/megapixel|百万像素|\b像素\b/.test(text)) return "size-megapixels";
+  if (/prompt|提示词|描述词|描述/.test(text)) return "prompt";
+  /* 无类型但默认值很长（>40 字符）的文本一般是提示词框 —— 与工作流库的控件
+   * 推导启发式（workflow-encapsulation / workflow-detail-io）保持一致，
+   * 否则 CLIPTextEncode 的 `text` 这类"名字不含 prompt"的口会被判成普通参数。 */
+  if (
+    (e.type ?? "").toUpperCase() === "STRING" &&
+    typeof e.defaultValue === "string" &&
+    e.defaultValue.length > 40
+  ) {
+    return "prompt";
+  }
+  return "other";
+}
+
+/** 该分类是否可与同一节点的同分类端口归并为一个对外参数。 */
+function classKey(cls: ParamClass, nodeId: string): string {
+  return `${nodeId}|${cls}`;
+}
+
+/** 把 IO 条目按「节点 + 分类」聚合成对外参数条目（稳定顺序）。 */
+export function buildParamEntries(
+  io: WorkflowIOMap | null | undefined,
+  labels?: Record<string, string>
+): ParamEntry[] {
+  const byNode = new Map<
+    string,
+    { entry: ParamEntry; order: number }
+  >();
+  let order = 0;
+  for (const [ioKey, raw] of Object.entries(io ?? {})) {
+    const entry = raw as WorkflowIOEntry | undefined;
+    if (entry?.direction !== "input" || entry.kind !== "widget") continue;
+    const cls = classifyPin(entry);
+    const key = classKey(cls, entry.nodeId);
+    const pin = {
+      ioKey,
+      name: entry.name,
+      type: entry.type ?? "*",
+      defaultValue: entry.defaultValue,
+    };
+    const existing = byNode.get(key);
+    if (existing) {
+      existing.entry.pins.push(pin);
+      if (entry.displayOrder !== undefined) existing.order = Math.min(existing.order, order);
+      continue;
+    }
+    const override = labels?.[ioKey];
+    byNode.set(key, {
+      order,
+      entry: {
+        id: key,
+        nodeId: entry.nodeId,
+        nodeTitle: entry.nodeTitle ?? "",
+        cls,
+        label: override ?? entry.label ?? CLASS_FALLBACK_LABEL[cls],
+        exposedName: entry.label ?? entry.name,
+        type: entry.type ?? "*",
+        pins: [pin],
+      },
+    });
+    order += 1;
+  }
+  return [...byNode.values()]
+    .sort((a, b) => a.order - b.order)
+    .map((item) => item.entry);
+}
+
+/* ── 自动映射 ──
+ * 每个对外参数条目自动挑一个目标端口。工坊封装的启发式只认「提示词 / 尺寸 /
+ * 参考图」三样，这里补齐「其他」分类：优先落在**该节点上已有默认值**的标量口
+ * （作者勾出来就是想让它可调），否则退回该节点上第一个标量口。 */
+const AUTO_MAPPABLE: Record<ParamClass, (e: WorkflowIOEntry) => boolean> = {
+  prompt: (e) => /prompt|提示词|描述词/i.test(searchText(e)),
+  negative: (e) => /negative|负向|负面|反向/i.test(searchText(e)),
+  "size-width": (e) => /^(width|base_width|w|宽度|横向)$/.test(searchText(e).trim()),
+  "size-height": (e) => /^(height|base_height|h|高度|纵向)$/.test(searchText(e).trim()),
+  "size-aspect": (e) => /aspect_?ratio|宽高比|纵横比|比例/.test(searchText(e)),
+  "size-megapixels": (e) => /megapixel|百万像素|\b像素\b/.test(searchText(e)),
+  "reference-image": (e) => isImagePin(e),
+  "first-frame": (e) => isImagePin(e),
+  "last-frame": (e) => isImagePin(e),
+  "other": () => true,
+};
+
+/** 一个端口是否可直接接标量值（连线型端口不可作为对外参数的落点）。 */
+function isScalarPin(i: { type: string }): boolean {
+  const t = (i.type ?? "").toUpperCase();
+  if (!t || t === "*") return true;
+  return !new Set([
+    "MODEL", "CLIP", "VAE", "CONDITIONING", "LATENT", "CONTROL_NET",
+    "SAMPLER", "SIGMAS", "GUIDER", "NOISE", "CLIP_VISION", "STYLE_MODEL",
+    "UPSCALE_MODEL",
+  ]).has(t);
+}
+
+/** 自动映射：每个对外参数 → 目标端口（默认连线状态，可被手工覆盖）。 */
+export function autoMapEntries(
+  entries: readonly ParamEntry[],
+  io: WorkflowIOMap | null | undefined
+): Record<string, string | null> {
+  const map: Record<string, string | null> = {};
+  for (const entry of entries) {
+    let chosen: string | null = null;
+    const predicate = AUTO_MAPPABLE[entry.cls];
+    for (const pin of entry.pins) {
+      const raw = io?.[pin.ioKey];
+      if (!raw || !isScalarPin(pin)) continue;
+      if (predicate(raw)) {
+        chosen = pin.ioKey;
+        break;
+      }
+    }
+    /* 分类启发式没命中（脚本/自定义工作流的 pin 名不按套路来）时，退回到
+     * 「该节点上第一个已有默认值的标量口」——默认连线状态仍然可用，
+     * 而不是空着让作者从零手工连。 */
+    if (!chosen) {
+      const withDefault = entry.pins.find((pin) => {
+        const raw = io?.[pin.ioKey];
+        return raw && isScalarPin(pin) && resolveEntryDefault(raw, null) !== undefined;
+      });
+      chosen = (withDefault ?? entry.pins.find(isScalarPin))?.ioKey ?? null;
+    }
+    map[entry.id] = chosen;
+  }
+  return map;
+}
+
+/* ── 映射的应用（运行期） ── */
+
+/** 逐模式映射：模式码 → (对外参数 id → 目标 ioKey)。空对象 = 各模式用同一张图。 */
+export type ParamMappingByMode = Record<string, Record<string, string | null>>;
+
+export interface ParamMapping {
+  /** 作者手工连的线（优先级高于自动映射）。 */
+  manual?: Record<string, string | null>;
+  /** 按模式的覆盖（作者在某模式下改了连线）。 */
+  manualByMode?: ParamMappingByMode;
+  /** 作者改过的「对外参数名」（ioKey → 名字）。 */
+  labels?: Record<string, string>;
+}
+
+/** 解析某一模式下生效的「对外参数 id → 目标 ioKey」表。 */
+export function resolveMapping(
+  entries: readonly ParamEntry[],
+  io: WorkflowIOMap | null | undefined,
+  mapping: ParamMapping | null | undefined,
+  mode?: string | null
+): Record<string, string | null> {
+  const auto = autoMapEntries(entries, io);
+  const out: Record<string, string | null> = { ...auto };
+  const manual = {
+    ...(mapping?.manual ?? {}),
+    ...(mode ? (mapping?.manualByMode?.[mode] ?? {}) : {}),
+  };
+  for (const entry of entries) {
+    if (Object.prototype.hasOwnProperty.call(manual, entry.id)) {
+      out[entry.id] = manual[entry.id] ?? null;
+    }
+  }
+  return out;
+}
+
+/** 从持久化的 `paramMap` 反序列化映射：只认 `source` 命名空间下的字符串值，
+ *  畸形数据（null / 数字 / 嵌套对象）一律丢弃——画布容不下脏数据。
+ *  各模式覆盖保存在 `source.<mode>.<entryId>`（与端口键天然区分）。 */
+export function parseParamMapping(paramMap: unknown): ParamMapping {
+  const out: ParamMapping = { manual: {}, manualByMode: {}, labels: {} };
+  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) return out;
+  const sourceRaw = (paramMap as Record<string, unknown>).source;
+  if (!sourceRaw || typeof sourceRaw !== "object" || Array.isArray(sourceRaw)) return out;
+  for (const [key, value] of Object.entries(sourceRaw as Record<string, unknown>)) {
+    if (typeof value === "string") {
+      out.manual![key] = value;
+      continue;
+    }
+    /* 显式的 null = 作者把这条线断开了，属于合法状态，必须保留。 */
+    if (value === null) {
+      out.manual![key] = null;
+      continue;
+    }
+    if (typeof value === "object" && !Array.isArray(value)) {
+      const byMode: Record<string, string | null> = {};
+      for (const [mode, target] of Object.entries(value as Record<string, unknown>)) {
+        if (typeof target === "string") byMode[mode] = target;
+        else if (target === null) byMode[mode] = null;
+      }
+      if (Object.keys(byMode).length > 0) out.manualByMode![key] = byMode;
+    }
+    /* 其余（数字 / 数组）是脏数据，丢弃。 */
+  }
+  return out;
+}
+
+/** 把映射序列化回 `paramMap` 可落库的形状（只写 source 命名空间，其余键原样保留）。 */
+export function serializeParamMapping(
+  mapping: ParamMapping,
+  paramMap: Record<string, unknown>
+): Record<string, unknown> {
+  const source: Record<string, unknown> = {};
+  for (const [id, target] of Object.entries(mapping.manual ?? {})) {
+    if (target !== undefined) source[id] = target;
+  }
+  for (const [id, byMode] of Object.entries(mapping.manualByMode ?? {})) {
+    const next: Record<string, string> = {};
+    for (const [mode, target] of Object.entries(byMode)) {
+      if (typeof target === "string") next[mode] = target;
+    }
+    if (Object.keys(next).length > 0) source[id] = next;
+  }
+  return { ...paramMap, source };
+}
+
+/** 从已有的 workflowIO 反查某个端口的对外参数 id（用于把旧数据接进新模型）。 */
+export function entryIdForPin(
+  io: WorkflowIOMap | null | undefined,
+  ioKey: string
+): string | null {
+  const raw = io?.[ioKey];
+  if (!raw) return null;
+  return classKey(classifyPin(raw), raw.nodeId);
+}
+
+/** 目标端口 → 源节点 id 的覆盖表（落库到 paramMap.source）。
+ *  消费方（后端 buildCustomWorkflow）据此把「该端口的实参来自哪个对外参数」
+ *  解析出来，从而不覆盖工作流图上原有的连线。null 表示作者显式断开了这条线。 */
+export function buildSourceOverrides(
+  entries: readonly ParamEntry[],
+  io: WorkflowIOMap | null | undefined,
+  mapping: ParamMapping | null | undefined,
+  mode?: string | null
+): Record<string, string | null> {
+  const resolved = resolveMapping(entries, io, mapping, mode);
+  const out: Record<string, string | null> = {};
+  for (const entry of entries) {
+    if (!Object.prototype.hasOwnProperty.call(resolved, entry.id)) continue;
+    out[entry.id] = resolved[entry.id] ?? null;
+  }
+  return out;
+}
+
+export interface MappedInput {
+  nodeId: string;
+  name: string;
+  value: unknown;
+}
+
+/** 把映射落到运行时载荷：对外值 → `workflowInputs` 三元组。
+ *
+ *  · 有映射：只覆盖被映射的那个口（作者显式画的线说了算，避免把整节点默认值
+ *    硬塞进去盖掉图内其它逻辑）；
+ *  · 没映射（未连线）：该节点全部标量口按默认值兜底 —— 与旧
+ *    `toWorkflowInputsPayload` 的「暴露 pin 全量下发」行为等价，
+ *    按节点聚类后不会重复下发；用户已显式给值的对外口不参与兜底。 */
+export function applyParamMapping(args: {
+  io: WorkflowIOMap | null | undefined;
+  entries: readonly ParamEntry[];
+  mapping: ParamMapping | null | undefined;
+  values: Record<string, unknown>;
+  mode?: string | null;
+}): { inputs: MappedInput[]; unmatched: string[] } {
+  const { io, entries, mapping, values, mode } = args;
+  const resolved = resolveMapping(entries, io, mapping, mode);
+  /* 作者手工连了线的对外口（含"手工断开"）与纯自动映射要分开对待：
+   *   · 手工：用户值只落到那个端口，该节点其余端口不再兜底（作者的线说了算）；
+   *   · 自动（默认连线状态）：与"没连线"同义 —— 用户值落自动挑中的端口，
+   *     其余端口照旧默认值兜底，语义等价于旧的「暴露 pin 全量下发」。 */
+  const manual = {
+    ...(mapping?.manual ?? {}),
+    ...(mode ? (mapping?.manualByMode?.[mode] ?? {}) : {}),
+  };
+  const isManualTarget = (id: string) =>
+    Object.prototype.hasOwnProperty.call(manual, id);
+  const inputs: MappedInput[] = [];
+  const unmatched: string[] = [];
+  const seen = new Set<string>();
+
+  const push = (ioKey: string, value: unknown) => {
+    if (value === undefined || seen.has(ioKey)) return;
+    const raw = io?.[ioKey];
+    if (!raw) return;
+    seen.add(ioKey);
+    inputs.push({ nodeId: raw.nodeId, name: raw.name, value });
+  };
+
+  /* ① 用户给了值的对外参数：落到它连着的那个端口。没连线（或作者显式断开）
+   *    → 如实记进 unmatched，绝不凭空挑一个端口顶上去。 */
+  for (const entry of entries) {
+    const supplied = values[entry.id];
+    if (supplied === undefined) continue;
+    const target = resolved[entry.id];
+    if (target && io?.[target]) {
+      push(target, supplied);
+      continue;
+    }
+    unmatched.push(entry.id);
+  }
+
+  /* ② 未连线/仅自动映射的对外参数：按默认值兜底（「用户不改就用工作流默认值」）。
+   *    手工连了线的口跳过 —— 用户值已经写在那个端口上，再塞默认值只会打架。 */
+  for (const entry of entries) {
+    if (isManualTarget(entry.id)) continue;
+    for (const pin of entry.pins) {
+      const raw = io?.[pin.ioKey];
+      if (!raw || !isScalarPin(pin)) continue;
+      const fallback = resolveEntryDefault(raw, mode);
+      if (fallback !== undefined) push(pin.ioKey, fallback);
+    }
+  }
+
+  return { inputs, unmatched };
+}

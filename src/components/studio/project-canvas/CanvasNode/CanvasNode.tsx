@@ -70,6 +70,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
     setModelFilter,
     wfIO,
     wfIOLoading,
+    wfParamMap,
     wfModes,
     setWfModes,
     sourceFilter,
@@ -91,6 +92,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
     d,
     patch,
     wfIO,
+    wfParamMap,
     setNodes,
     setEdges,
     getNode,
@@ -294,6 +296,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
               workflowName: wf?.name,
               workflowTaskType: wf?.taskType,
               workflowInputs: {},
+              paramMap: undefined,
               workflowSinkId: undefined,
             });
           }}

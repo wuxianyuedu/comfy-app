@@ -4,6 +4,7 @@ import type { Shot } from "@/lib/workshop/types";
 import {
   apiPollVideo,
   apiSubmitVideo,
+  buildLibraryWorkflowInput,
   prepareLocalInputImage,
   startLocalGenerate,
   watchTask,
@@ -27,6 +28,9 @@ interface Props {
   checkpoints: string[];
   checkpoint: string;
   onCheckpointChange: (name: string) => void;
+  /** 选定的视频工作流 id；空串 = 内置 img2video / txt2video。
+   *  非空时按封装口径只暴露 提示词 / 尺寸 / 首帧，其余参数用工作流默认值。 */
+  workflowId: string;
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
   onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>;
@@ -48,6 +52,7 @@ export function VideoStudio({
   checkpoints,
   checkpoint,
   onCheckpointChange,
+  workflowId,
   apiChannels,
   onOpenApiSettings,
   onShotsChange,
@@ -140,15 +145,26 @@ export function VideoStudio({
         const inputImage = shot.imageUrl
           ? await prepareLocalInputImage(shot.imageUrl)
           : undefined;
-        const input: GenerateInput = {
-          workflow: inputImage ? "img2video" : "txt2video",
-          prompt,
-          negative: shot.negativePrompt || undefined,
-          checkpoint: checkpoint || undefined,
-          frames,
-          fps,
-          ...(inputImage ? { inputImage } : {}),
-        };
+        /* 选定工作流库工作流时，按封装口径只暴露 提示词 / 尺寸 / 首帧，
+         * 其余参数用工作流默认值；否则用内置 img2video / txt2video。
+         * 帧数/时长这类「内部参数」由工作流默认值给出，工坊不再逐个填。 */
+        const input: GenerateInput = workflowId
+          ? (
+              await buildLibraryWorkflowInput(workflowId, {
+                prompt,
+                negativePrompt: shot.negativePrompt || undefined,
+                ...(inputImage ? { firstFrame: inputImage } : {}),
+              })
+            ).input
+          : {
+              workflow: inputImage ? "img2video" : "txt2video",
+              prompt,
+              negative: shot.negativePrompt || undefined,
+              checkpoint: checkpoint || undefined,
+              frames,
+              fps,
+              ...(inputImage ? { inputImage } : {}),
+            };
         const taskId = await startLocalGenerate(input);
         await runLocalTask(shot.id, taskId);
       } else {
@@ -191,6 +207,7 @@ export function VideoStudio({
         checkpoints={checkpoints}
         checkpoint={checkpoint}
         onCheckpointChange={onCheckpointChange}
+        workflowSelected={!!workflowId}
         fps={fps}
         onFpsChange={setFps}
         batchRunning={batchRunning}

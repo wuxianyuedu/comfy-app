@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   buildEncapsulatedInputs,
+  classifyVideoPin,
   classifyWorkshopPin,
+  isVideoMode,
+  modeUsesFirstFrame,
+  modeUsesLastFrame,
   parseSizeParam,
   type WorkshopPinClass,
 } from "./workflow-encapsulation";
@@ -181,6 +185,68 @@ describe("classifyWorkshopPin", () => {
   });
 });
 
+/* ── 视频侧：模式判定 ─────────────────────────────────────── */
+
+describe("视频模式判定", () => {
+  it("视频模式码前缀命中，图类模式码不命中", () => {
+    for (const code of ["T2V", "I2V", "TI2V", "FLF2V", "FL2V", "S2V", "V2V"]) {
+      expect(isVideoMode(code)).toBe(true);
+    }
+    for (const code of ["T2I", "I2I", "Inpaint", "Upscale", "", null, undefined]) {
+      expect(isVideoMode(code)).toBe(false);
+    }
+  });
+
+  it("自带首帧的模式只有 I2V 家族", () => {
+    for (const code of ["I2V", "ti2v", "FLF2V", "S2V"]) {
+      expect(modeUsesFirstFrame(code)).toBe(true);
+    }
+    expect(modeUsesFirstFrame("T2V")).toBe(false);
+    expect(modeUsesFirstFrame(null)).toBe(false);
+  });
+
+  it("需要尾帧的只有首尾帧家族", () => {
+    expect(modeUsesLastFrame("FLF2V")).toBe(true);
+    expect(modeUsesLastFrame("FMF2V")).toBe(true);
+    expect(modeUsesLastFrame("I2V")).toBe(false);
+  });
+});
+
+/* ── classifyVideoPin ────────────────────────────────────── */
+
+describe("classifyVideoPin", () => {
+  const pin = (over: Partial<WorkflowIOEntry>): WorkflowIOEntry => ({
+    direction: "input",
+    kind: "widget",
+    nodeId: "1",
+    name: "image",
+    ...over,
+  });
+
+  it("按产出节点类名区分首帧 / 尾帧（pin 名都叫 image）", () => {
+    expect(classifyVideoPin(pin({ classType: "LoadImageFirstFrame" }))).toBe("first-frame");
+    expect(classifyVideoPin(pin({ classType: "LoadImageLastFrame" }))).toBe("last-frame");
+    expect(classifyVideoPin(pin({ classType: "LoadImage" }))).toBe("reference-image");
+  });
+
+  it("节点类名认不出时按 pin 名 / 标签兜底", () => {
+    expect(classifyVideoPin(pin({ name: "first_frame" }))).toBe("first-frame");
+    expect(classifyVideoPin(pin({ name: "image", label: "尾帧图" }))).toBe("last-frame");
+  });
+
+  it("时长与帧率分开归类（帧率不是帧数）", () => {
+    expect(classifyVideoPin(pin({ name: "frames", type: "INT" }))).toBe("frames");
+    expect(classifyVideoPin(pin({ name: "length", type: "INT" }))).toBe("frames");
+    expect(classifyVideoPin(pin({ name: "fps", type: "INT" }))).toBe("fps");
+    expect(classifyVideoPin(pin({ name: "frame_rate", type: "INT" }))).toBe("fps");
+  });
+
+  it("连线型端口与输出不对外", () => {
+    expect(classifyVideoPin(pin({ kind: "param", type: "MODEL" }))).toBe("internal");
+    expect(classifyVideoPin(pin({ direction: "output" }))).toBe("internal");
+  });
+});
+
 /* ── parseSizeParam ──────────────────────────────────────── */
 
 describe("parseSizeParam", () => {
@@ -301,5 +367,126 @@ describe("buildEncapsulatedInputs", () => {
     };
     const res = buildEncapsulatedInputs(io, null, {});
     expect(res.workflowInputs).toEqual([]);
+  });
+});
+
+/* ── 视频封装（按模式） ───────────────────────────────────── */
+
+/** 一个典型的图生视频工作流：首帧上传 + 尾帧上传（可选）+ 提示词 + 时长。 */
+const VIDEO_IO: WorkflowIOMap = {
+  prompt: {
+    direction: "input",
+    kind: "widget",
+    nodeId: "1",
+    name: "text",
+    label: "positive_prompt",
+    type: "STRING",
+    multiline: true,
+    defaultValue: "a running cat",
+  },
+  firstFrame: {
+    direction: "input",
+    kind: "widget",
+    nodeId: "20",
+    name: "image",
+    type: "IMAGEUPLOAD",
+    classType: "LoadImageFirstFrame",
+    defaultValue: "",
+  },
+  lastFrame: {
+    direction: "input",
+    kind: "widget",
+    nodeId: "21",
+    name: "image",
+    type: "IMAGEUPLOAD",
+    classType: "LoadImageLastFrame",
+    defaultValue: "",
+  },
+  frames: {
+    direction: "input",
+    kind: "widget",
+    nodeId: "30",
+    name: "length",
+    type: "INT",
+    defaultValue: 81,
+  },
+  steps: {
+    direction: "input",
+    kind: "widget",
+    nodeId: "31",
+    name: "steps",
+    type: "INT",
+    defaultValue: 25,
+  },
+};
+
+describe("buildEncapsulatedInputs — 视频模式", () => {
+  it("首帧落到首帧槽，时长仍走工作流默认值", () => {
+    const res = buildEncapsulatedInputs(VIDEO_IO, "I2V", {
+      prompt: "a bird",
+      firstFrame: "frame.png",
+    });
+    expect(res.exposed.firstFrame).toBe("first-frame");
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "20",
+      name: "image",
+      value: "frame.png",
+    });
+    // 时长/步数不是对外参数 —— 用工作流默认值。
+    expect(valueOf(res.workflowInputs, "length")).toBe(81);
+    expect(valueOf(res.workflowInputs, "steps")).toBe(25);
+    expect(res.exposed.lastFrame).toBe("last-frame");
+  });
+
+  it("首尾帧模式：尾帧落到尾帧槽，首帧不串到尾帧", () => {
+    const res = buildEncapsulatedInputs(VIDEO_IO, "FLF2V", {
+      firstFrame: "a.png",
+      lastFrame: "b.png",
+    });
+    expect(res.workflowInputs).toContainEqual({ nodeId: "20", name: "image", value: "a.png" });
+    expect(res.workflowInputs).toContainEqual({ nodeId: "21", name: "image", value: "b.png" });
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("referenceImages 的第一张落到首帧槽（工坊视频把镜头图当首帧传）", () => {
+    const res = buildEncapsulatedInputs(VIDEO_IO, "I2V", {
+      referenceImages: ["shot.png"],
+    });
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "20",
+      name: "image",
+      value: "shot.png",
+    });
+    expect(res.unmatched).not.toContain("referenceImages");
+  });
+
+  it("工作流没有尾帧槽时如实上报 lastFrame 落不下去", () => {
+    const io: WorkflowIOMap = {
+      firstFrame: VIDEO_IO.firstFrame!,
+      prompt: VIDEO_IO.prompt!,
+    };
+    const res = buildEncapsulatedInputs(io, "I2V", {
+      firstFrame: "a.png",
+      lastFrame: "b.png",
+    });
+    expect(res.unmatched).toContain("lastFrame");
+  });
+
+  it("模式默认值按模式解析（文生 / 图生存不同的时长）", () => {
+    const io: WorkflowIOMap = {
+      ...VIDEO_IO,
+      frames: {
+        ...VIDEO_IO.frames!,
+        modes: { T2V: { defaultValue: 49 }, I2V: { defaultValue: 81 } },
+      },
+    };
+    expect(valueOf(buildEncapsulatedInputs(io, "T2V", {}).workflowInputs, "length")).toBe(49);
+    expect(valueOf(buildEncapsulatedInputs(io, "I2V", {}).workflowInputs, "length")).toBe(81);
+  });
+
+  it("文生视频：没有参考图时也是合法请求（提示词 + 默认参数）", () => {
+    const res = buildEncapsulatedInputs(VIDEO_IO, "T2V", { prompt: "a sunset" });
+    expect(valueOf(res.workflowInputs, "text")).toBe("a sunset");
+    expect(res.unmatched).toEqual([]);
   });
 });

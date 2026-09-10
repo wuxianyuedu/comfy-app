@@ -12,18 +12,85 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
-import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
+import type {
+  WorkshopWorkflowCategory,
+  WorkshopWorkflowOption,
+} from "~/lib/workshop/generation-client";
 import type { MissingItem } from "~/components/workshop/stage-config";
+
+/** 「工作流库」里某一类别（图 / 视频）的可选工作流下拉。
+ *
+ *  按类别分栏：生图阶段只列 image 工作流，视频阶段只列 video 工作流，
+ *  避免把 txt2img 混进视频下拉（两类工作流的对外参数口径不同）。
+ *  选定后工坊只暴露 提示词 / 尺寸 / 参考图(首帧)，其余参数用工作流默认值。 */
+function WorkshopWorkflowSelect({
+  label,
+  builtinLabel,
+  builtinPlaceholder,
+  category,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  builtinLabel: string;
+  builtinPlaceholder: string;
+  category: WorkshopWorkflowCategory;
+  options: WorkshopWorkflowOption[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const scoped = options.filter((option) => option.category === category);
+  return (
+    <label className="mt-3 block">
+      <span className="text-muted-foreground mb-1 block text-[11px]">
+        {label}
+      </span>
+      <Select
+        value={value || "__builtin__"}
+        onValueChange={(next) =>
+          onChange(next === "__builtin__" ? "" : (next ?? ""))
+        }
+      >
+        <SelectTrigger
+          size="sm"
+          className="border-border bg-bg text-ink w-full text-xs"
+        >
+          <SelectValue placeholder={builtinPlaceholder} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__builtin__">{builtinLabel}</SelectItem>
+          {scoped.map((option) => (
+            <SelectItem key={option.id} value={option.id}>
+              {option.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {scoped.length === 0 && (
+        <span className="text-faint mt-1 block text-[10.5px]">
+          工作流库里还没有
+          {category === "video" ? "视频" : "生图"}
+          类工作流（可在工作室的「工作流库」导入）。
+        </span>
+      )}
+    </label>
+  );
+}
 
 interface WorkshopAsideProps {
   missing: MissingItem[];
   checkpoints: string[];
   checkpoint: string;
   onCheckpointChange: (value: string) => void;
-  /** 工作流库里的可选工作流（ISSUE #145）；空 id = 内置 txt2img。 */
+  /** 工作流库里的可选工作流（ISSUE #145）；空 id = 内置 txt2img。
+   *  按内容类别分栏：面板只列出当前阶段对应的那一栏。 */
   workflowOptions: WorkshopWorkflowOption[];
   workflowId: string;
   onWorkflowChange: (value: string) => void;
+  /** 视频通道选定的工作流 id；空串 = 内置 img2video / txt2video。 */
+  videoWorkflowId: string;
+  onVideoWorkflowChange: (value: string) => void;
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
   characterCount: number;
@@ -40,6 +107,8 @@ export function WorkshopAside({
   workflowOptions,
   workflowId,
   onWorkflowChange,
+  videoWorkflowId,
+  onVideoWorkflowChange,
   apiChannels,
   onOpenApiSettings,
   characterCount,
@@ -128,33 +197,24 @@ export function WorkshopAside({
             </SelectContent>
           </Select>
         </label>
-        <label className="mt-3 block">
-          <span className="text-muted-foreground mb-1 block text-[11px]">
-            生成工作流（工作流库）
-          </span>
-          {/* 选定工作流后，工坊只暴露 提示词 / 尺寸 / 参考图，其余参数用工作流默认值 */}
-          <Select
-            value={workflowId || "__builtin__"}
-            onValueChange={(value) =>
-              onWorkflowChange(value === "__builtin__" ? "" : (value ?? ""))
-            }
-          >
-            <SelectTrigger
-              size="sm"
-              className="border-border bg-bg text-ink w-full text-xs"
-            >
-              <SelectValue placeholder="内置 txt2img…" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__builtin__">内置 txt2img（默认）</SelectItem>
-              {workflowOptions.map((wf) => (
-                <SelectItem key={wf.id} value={wf.id}>
-                  {wf.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
+        <WorkshopWorkflowSelect
+          label="生图工作流（工作流库）"
+          builtinLabel="内置 txt2img（默认）"
+          builtinPlaceholder="内置 txt2img…"
+          category="image"
+          options={workflowOptions}
+          value={workflowId}
+          onChange={onWorkflowChange}
+        />
+        <WorkshopWorkflowSelect
+          label="视频工作流（工作流库）"
+          builtinLabel="内置 img2video / txt2video（默认）"
+          builtinPlaceholder="内置视频工作流…"
+          category="video"
+          options={workflowOptions}
+          value={videoWorkflowId}
+          onChange={onVideoWorkflowChange}
+        />
         <Button
           type="button"
           variant="ghost"

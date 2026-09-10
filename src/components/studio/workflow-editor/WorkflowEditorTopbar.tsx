@@ -32,6 +32,9 @@ export interface WorkflowEditorTopBarProps {
   handleSave: () => void;
   saving: boolean;
   error: string;
+  /** 对外参数映射栏是否展开。 */
+  paramPanelOpen?: boolean;
+  onToggleParamPanel?: () => void;
 }
 
 export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
@@ -48,6 +51,8 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   handleSave,
   saving,
   error,
+  paramPanelOpen = false,
+  onToggleParamPanel,
 }: WorkflowEditorTopBarProps) {
   const ioApi = getIOEditApi();
   const workflowIO = useIOEditStore(selectWorkflowIO);
@@ -267,6 +272,24 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                   {Object.keys(workflowIO).length}
                 </span>
               )}
+            </button>
+          )}
+          {/* 对外参数映射：把勾选出来的 IO 按节点归并成「对外参数」，
+           *  显示它与节点端口的连线（自动映射 = 默认连线状态，可编辑）。
+           *  与 IO 编辑同源，故同样只在顶层工作流显示。 */}
+          {subgraphStack.length === 0 && (
+            <button
+              type="button"
+              onClick={onToggleParamPanel}
+              disabled={!paramPanelOpen && Object.keys(workflowIO).length === 0}
+              className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
+                paramPanelOpen
+                  ? "border-violet-400/60 bg-violet-400/20 text-violet-100 hover:bg-violet-400/30"
+                  : "border-white/15 bg-white/5 text-gray-200 hover:bg-white/10 disabled:opacity-40"
+              }`}
+              title="把对外暴露的参数与工作流节点参数连线（自动映射即为默认连线状态，可在此基础上编辑）"
+            >
+              {paramPanelOpen ? "🔗 收起参数映射" : "🔗 参数映射"}
             </button>
           )}
           {/* IO preview toggle. Sits next to "编辑 IO" so the
