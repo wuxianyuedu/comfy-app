@@ -23,7 +23,7 @@ import {
   writeFileSync,
   copyFileSync,
 } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -32,6 +32,9 @@ const SCRIPT = join(process.cwd(), "scripts", "check-file-structure.cjs");
 // 构建前置守卫：断言它真的能认出「路径落在本仓库 src-tauri\target\ 下的 app.exe」，
 // 而不是把同名的无关进程（如别处的 app.exe）当成目标壳误杀。
 const GUARD = join(process.cwd(), "tools", "scripts", "Build-Guard.ps1");
+// 启动链路的残留壳治理：dev-launcher.ps1 的 Get-RunningProjectShell / Stop-StaleProjectShell
+// 与构建守卫共用「exe 真实路径落在本仓库 target 下」这条判据。
+const LAUNCHER = join(process.cwd(), "scripts", "dev-launcher.ps1");
 const BOM = Buffer.from([0xef, 0xbb, 0xbf]);
 
 let workdir = "";
@@ -166,7 +169,10 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     };
 
     it("改动编号 R-ardot114 被阻断", () => {
-      writeSrc("a.ts", "// R-ardot114 (2026-08-17): SSE 心跳\nexport const a = 1;\n");
+      writeSrc(
+        "a.ts",
+        "// R-ardot114 (2026-08-17): SSE 心跳\nexport const a = 1;\n",
+      );
       const { code, output } = run();
       expect(code).toBe(1);
       expect(output).toContain("R10");
@@ -174,7 +180,10 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     });
 
     it("短编号 R83 与批次号 T12-3 被阻断", () => {
-      writeSrc("b.ts", "/* 2026-08-13 R83: 失败面板 */\n/* T12-3 抽离 */\nexport const b = 2;\n");
+      writeSrc(
+        "b.ts",
+        "/* 2026-08-13 R83: 失败面板 */\n/* T12-3 抽离 */\nexport const b = 2;\n",
+      );
       const { code, output } = run();
       expect(code).toBe(1);
       expect(output).toContain("R83");
@@ -182,7 +191,10 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     });
 
     it("只写当前 Why（无日期无编号）的注释放行", () => {
-      writeSrc("c.ts", "// SSE 心跳：防止 Nginx 60s 空闲断开。\nexport const c = 3;\n");
+      writeSrc(
+        "c.ts",
+        "// SSE 心跳：防止 Nginx 60s 空闲断开。\nexport const c = 3;\n",
+      );
       const { code } = run();
       expect(code).toBe(0);
     });
@@ -225,10 +237,14 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
   })();
 
   const runGuard = (script: string): string =>
-    execFileSync(psExe, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    execFileSync(
+      psExe,
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+      {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
 
   // 打桩 Get-CimInstance：守卫只依赖它拿进程列表，替换后即可在任意平台喂造数据。
   const guardScript = (procsJson: string): string => `
@@ -251,7 +267,11 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
   it.skipIf(!psExe)("命中本仓库 target 下的运行中壳", () => {
     const root = process.cwd();
     const json = JSON.stringify([
-      { Id: 111, Path: join(root, "src-tauri", "target", "release", "app.exe"), Cmd: "" },
+      {
+        Id: 111,
+        Path: join(root, "src-tauri", "target", "release", "app.exe"),
+        Cmd: "",
+      },
       { Id: 222, Path: "D:\\other\\app.exe", Cmd: "" },
       { Id: 333, Path: "", Cmd: `other ${root} unrelated` },
     ]);
@@ -278,5 +298,103 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
   it.skipIf(!psExe)("没有任何壳进程时返回 0 项", () => {
     const out = runGuard(guardScript(JSON.stringify([])));
     expect(out).toContain("HITS=0");
+  });
+});
+
+describe("dev-launcher.ps1（桌面壳残留治理）", () => {
+  /**
+   * 锁住「启动前残壳回收」与「构建前置守卫」共用同一条判据：进程 exe 的可执行文件
+   * 路径落在本仓库 src-tauri\target\{release,debug}。旧实现按命令行（CommandLine -like
+   * "*<项目根>*"）筛选，而预编译壳是 dev-launcher 用 ProcessStartInfo（UseShellExecute
+   * =false）拉起的，命令行里不含项目根路径 → 残壳漏判、且下一次编译仍被它锁住产物。
+   */
+  const psExe = (() => {
+    for (const candidate of ["powershell", "pwsh"]) {
+      try {
+        execFileSync(candidate, ["-NoProfile", "-Command", "exit 0"], {
+          stdio: "ignore",
+        });
+        return candidate;
+      } catch {
+        // 试下一个候选
+      }
+    }
+    return "";
+  })();
+
+  // 注意：verdict 走 stdout（Write-Output），回收动作走 stderr（[Console]::Error）。
+  // PowerShell 7 里 Write-Host 的「信息流」会与管道重定向（2>&1）交互，导致紧随其后的
+  // Write-Output 被吞掉——用 stderr 记录动作，断言才稳定。
+  const runLauncher = (script: string): string => {
+    const proc = spawnSync(
+      psExe,
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+      { encoding: "utf8" },
+    );
+    return `${proc.stdout ?? ""}${proc.stderr ?? ""}`;
+  };
+
+  // 打桩 Get-CimInstance（进程枚举）与 taskkill（回收动作）：只断言「认哪些进程、
+  // 对认出来的发了什么 kill」，不真的动本机进程。
+  const launcherScript = (procsJson: string): string => `
+$ErrorActionPreference = "Stop"
+function Log { param([string]$Msg) Write-Output $Msg }
+function Write-Log { param([string]$Message, [string]$Level = "INFO") [Console]::Error.WriteLine("[$Level] " + $Message) }
+function Get-CimInstance {
+  param([string]$ClassName, [string]$Filter)
+  $rows = '${procsJson}' | ConvertFrom-Json
+  foreach ($r in $rows) {
+    [pscustomobject]@{ ProcessId = $r.Id; ExecutablePath = $r.Path; CommandLine = $r.Cmd }
+  }
+}
+function taskkill { param([Parameter(ValueFromRemainingArguments = $true)]$Args) [Console]::Error.WriteLine("KILL " + ($Args -join " ")) }
+$statements = [System.Management.Automation.Language.Parser]::ParseFile("${LAUNCHER}", [ref]$null, [ref]$null).FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)
+$block = $statements | Where-Object { $_.Name -in @("Test-ProjectShellPath", "Get-RunningProjectShell", "Stop-StaleProjectShell") }
+Invoke-Expression (($block | ForEach-Object { $_.Extent.Text }) -join "\`n")
+$root = "${process.cwd()}"
+$hits = @(Get-RunningProjectShell -Root $root)
+Write-Output ("HITS=" + $hits.Count)
+foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
+Stop-StaleProjectShell -Root $root
+`;
+
+  it.skipIf(!psExe)(
+    "残留判定按 exe 真实路径：本仓库 target 下的壳命中，别处的同名进程不命中",
+    () => {
+      const root = process.cwd();
+      const json = JSON.stringify([
+        {
+          Id: 501,
+          Path: join(root, "src-tauri", "target", "release", "app.exe"),
+          Cmd: "",
+        },
+        { Id: 502, Path: "D:\\other\\app.exe", Cmd: `legacy ${root} app.exe` },
+        { Id: 503, Path: "", Cmd: "" },
+      ]);
+      const out = runLauncher(launcherScript(json));
+      expect(out).toContain("HITS=1");
+      expect(out).toContain("HIT=501");
+      expect(out).not.toContain("HIT=502");
+      expect(out).toContain("KILL /PID 501 /T /F");
+    },
+  );
+
+  it.skipIf(!psExe)("回收残留壳必须杀整棵进程树（/T /F），不得单杀", () => {
+    const root = process.cwd();
+    const json = JSON.stringify([
+      {
+        Id: 601,
+        Path: join(root, "src-tauri", "target", "debug", "APP.EXE"),
+        Cmd: "",
+      },
+    ]);
+    const out = runLauncher(launcherScript(json));
+    expect(out).toContain("KILL /PID 601 /T /F");
+  });
+
+  it.skipIf(!psExe)("没有残壳时不产生任何 kill", () => {
+    const out = runLauncher(launcherScript(JSON.stringify([])));
+    expect(out).toContain("HITS=0");
+    expect(out).not.toContain("KILL ");
   });
 });
