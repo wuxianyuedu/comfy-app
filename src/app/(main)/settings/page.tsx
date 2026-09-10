@@ -48,13 +48,16 @@ export default function SettingsPage() {
     );
   }
 
-  // 此时草稿应已就绪；若仍为空则内容区显示降级 UI（不应触发，但满足 TypeScript）
+  /* 兜底：既没在加载、也没失败，草稿却仍为空。正常流程不可达（查询成功必然
+   * 播种草稿），真出现说明状态机漏了一个分支——给出**可操作**的出口（重试 +
+   * 日志面板），而不是一句没有下文的「配置数据未就绪」冻住用户。 */
   if (!c.drafts) {
     return (
       <SettingsShell {...frame}>
-        <div className="text-muted-foreground grid min-h-[60vh] place-items-center pb-6">
-          配置数据未就绪
-        </div>
+        <SettingsLoadError
+          errorText="配置数据未就绪（查询已结束但未返回可用配置）"
+          onRetry={c.retry}
+        />
       </SettingsShell>
     );
   }
@@ -81,6 +84,9 @@ export function SettingsLoadError({
   const [copied, setCopied] = useState(false);
   const togglePanel = useLogPanel((s) => s.toggleOpen);
 
+  /* 复制的是用户看到的这段可读文案（`errorText` 也已优先取服务端原文）；
+   * 原始报错（tRPC code / 服务端 message / 堆栈首行）另见日志面板的同条记录
+   * —— 视图不再手拼第二份原文，避免两处措辞漂移。 */
   const copyError = async () => {
     try {
       await navigator.clipboard.writeText(errorText);
@@ -133,8 +139,9 @@ export function SettingsLoadError({
             打开，筛选「错误」可快速定位）。
           </p>
           <p>
-            若反复出现，多为应用服务正在重启或未就绪；日志面板里也可查看启动日志
-            （dev-launcher / nextjs 输出）确认服务状态。
+            若反复出现，先看日志面板里这条错误：启动阶段（应用服务未就绪 / 正在重启）
+            和运行阶段的读取失败（如数据库表 / 字段缺失）都可能是原因——只当“服务在
+            重启”处理会漏掉后者，重试也不会好。
           </p>
           <button
             onClick={togglePanel}

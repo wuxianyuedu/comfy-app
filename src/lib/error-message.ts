@@ -23,7 +23,8 @@ const NETWORK_ERROR_TRANSLATIONS: [RegExp, string][] = [
   ],
   [/Failed to fetch|NetworkError|Load failed/i, "网络请求失败，请检查应用服务是否正在运行"],
   [/fetch failed|ECONNREFUSED|ECONNRESET|socket hang up/i, "连接被拒绝或中断，应用服务可能尚未就绪"],
-  [/aborted|AbortError|timeout|ETIMEDOUT/i, "请求超时或被中断，请稍候重试"],
+  [/signal is aborted without reason|AbortError/i, "请求被中断，应用服务可能正在重启，请稍候重试"],
+  [/aborted|timeout|ETIMEDOUT/i, "请求超时或被中断，请稍候重试"],
 ];
 
 /** 把网络层原始报错翻译成可读文案；无法识别时返回 null（走原 message）。 */
@@ -34,13 +35,107 @@ function translateNetworkError(message: string): string | null {
   return null;
 }
 
+/**
+ * 传输层「包装式」文案的特征：它描述的是**传输过程**，不含业务/服务端信息。
+ *
+ * tRPC 客户端在批量流式链路上失败时，顶层 `message` 常是这类通用文案
+ * （如 `signal is aborted without reason`——React Query 重试时中止上一轮请求
+ * 所致），而**真正的原因**在 `shape.message`（服务端 procedure 抛出的原文，
+ * 如 `no such table: llmConfig`）。只看顶层就会把「库里没有这张表」误报成
+ * 「请求被中断」，用户按提示去等重启自然永远修不好。
+ */
+const TRANSPORT_WRAPPER_RE =
+  /signal is aborted without reason|^AbortError|aborted without reason|The operation was aborted/i;
+
+/**
+ * 从 tRPC 错误对象里取「最贴近根因」的文案。
+ *
+ * 优先级：服务端原始 message（`shape.message`，与顶层不同且非空时）→
+ * 顶层 message。顶层只是传输层包装时才让位给服务端原文。
+ */
+function pickUnderlyingMessage(e: object): string | null {
+  const top = (e as { message?: unknown }).message;
+  const topStr = typeof top === "string" && top.length > 0 ? top : null;
+  const shape = (e as { shape?: { message?: unknown } }).shape;
+  const shapeStr =
+    shape && typeof shape.message === "string" && shape.message.length > 0
+      ? shape.message
+      : null;
+  // 服务端原文更能说明问题；与顶层重复时不必替换。
+  if (shapeStr && shapeStr !== topStr) return shapeStr;
+  return topStr;
+}
+
 /** 从 unknown 抛值里取出 message；取不到（或非字符串、空串）则用 fallback。 */
 export function errorMessage(e: unknown, fallback: string): string {
   if (typeof e === "object" && e !== null && "message" in e) {
-    const m: unknown = (e as { message?: unknown }).message;
-    if (typeof m === "string" && m.length > 0) {
-      return translateNetworkError(m) ?? m;
+    const underlying = pickUnderlyingMessage(e);
+    if (underlying) {
+      /* 顶层是传输层包装且服务端另有原文 → 直接用原文（它是根因描述）。 */
+      if (
+        underlying !== (e as { message?: unknown }).message &&
+        !TRANSPORT_WRAPPER_RE.test(underlying)
+      ) {
+        return underlying;
+      }
+      return translateNetworkError(underlying) ?? underlying;
     }
   }
   return fallback;
+}
+
+/**
+ * 从 unknown 抛值里取出**原始**报错详情（给日志/「完整错误」区用，不翻译）。
+ *
+ * 与 {@link errorMessage} 的分工：`errorMessage` 产出**给人看**的可读文案
+ * （把「Unexpected token '<'」这类无信息量的原文换成人话），本函数产出
+ * **给排查用**的原文——tRPC 的 `code` / 服务端 `message` / stack 首行。
+ * 两者都落进 app-runtime 日志：前者进消息，后者进 `raw` 字段。没有它时，
+ * 面板里只剩翻译后的文案，服务端真实报错（如 `no such table: xxx`）丢失。
+ *
+ * 长度设上限：stack 可达数百行，落盘只需能定位的头几行。
+ */
+export function rawErrorDetail(e: unknown, maxLen = 600): string {
+  if (e === null || e === undefined) return "";
+  const parts: string[] = [];
+  if (typeof e === "string") {
+    parts.push(e);
+  } else if (typeof e === "object") {
+    const obj = e as {
+      name?: unknown;
+      message?: unknown;
+      code?: unknown;
+      data?: { code?: unknown; httpStatus?: unknown };
+      cause?: unknown;
+      stack?: unknown;
+      shape?: { message?: unknown; code?: unknown };
+    };
+    if (typeof obj.name === "string" && obj.name) parts.push(obj.name);
+    const message =
+      typeof obj.message === "string" && obj.message ? obj.message : null;
+    if (message) parts.push(message);
+    // tRPC 客户端错误把 code / httpStatus 放在 data 里；服务端 shape 里也有 code。
+    const code =
+      typeof obj.data?.code === "string"
+        ? obj.data.code
+        : typeof obj.shape?.code === "string"
+          ? obj.shape.code
+          : typeof obj.code === "string"
+            ? obj.code
+            : null;
+    if (code) parts.push(`code=${code}`);
+    if (typeof obj.data?.httpStatus === "number") {
+      parts.push(`http=${obj.data.httpStatus}`);
+    }
+    // cause 常携带被包装的底层错误（AbortError / TypeError 等）。
+    if (obj.cause instanceof Error && obj.cause.message) {
+      parts.push(`cause=${obj.cause.name}: ${obj.cause.message}`);
+    }
+    if (typeof obj.stack === "string" && obj.stack) {
+      const head = obj.stack.split("\n").slice(0, 3).join(" | ");
+      if (head && !message?.includes(head)) parts.push(head);
+    }
+  }
+  const text = parts.join(" — ");
+  return text.length > maxLen ? `${text.slice(0, maxLen)}…` : text;
 }

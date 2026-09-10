@@ -121,6 +121,8 @@ const LLM: LlmConfig = {
 interface Behavior {
   settings?: Settings;
   llm?: LlmConfig;
+  /** setting.get 失败时抛出的文案（模拟服务端报错）。 */
+  settingsError?: string;
   llmError?: string;
   saveLlmError?: string;
   saveSettingsError?: string;
@@ -134,7 +136,15 @@ let behavior: Behavior = {};
 const t = createTestTRPC();
 const mockRouter = t.router({
   setting: t.router({
-    get: t.procedure.query(() => ({ settings: behavior.settings ?? SETTINGS })),
+    get: t.procedure.query(() => {
+      if (behavior.settingsError) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: behavior.settingsError,
+        });
+      }
+      return { settings: behavior.settings ?? SETTINGS };
+    }),
     save: t.procedure.mutation(() => {
       if (behavior.saveSettingsError) {
         throw new TRPCError({
@@ -433,9 +443,11 @@ describe("useSettingsPage", () => {
         ),
       ).toBe(true),
     );
-    // hasError 是「两份数据都没拿到时的兜底」：llm 失败但 settings 已播种 →
-    // 不落降级 UI（与生产语义一致），但错误日志必须已补记。
+    /* llm.configGet 失败、setting.get 成功 → 草稿仍为空（一份都不齐），
+     * 必须落降级 UI 拿到重试与日志出口，而不是 「配置数据未就绪」死角
+     * （见下方 ISSUE #304 的专项回归）。 */
     expect(result.current.drafts).toBeNull();
+    expect(result.current.hasError).toBe(true);
     expect(result.current.errorText).toContain("数据库被锁");
     const errors = (runtimeLogCalls as unknown as Array<{ level: string; msg: string }>).filter(
       (c) => c.level === "error",
@@ -451,6 +463,85 @@ describe("useSettingsPage", () => {
       (c) => c.level === "error",
     );
     expect(errorsAfter.length).toBe(1);
+  });
+
+  /* 回归 ISSUE #304：截图中「打开设置失败」，但用户看到的是一句
+   * 「配置数据未就绪」——没有原因、没有重试、也没有日志指引，被冻在死角。
+   *
+   * 根因：`hasError` 此前判的是「两份数据都为空」，而 setting.get 成功、
+   * llm.configGet 失败时草稿仍为空却又不满足该条件；同时 `isInitialLoad`
+   * 也因「有一份数据」为假 → 容器一路落到 `!drafts` 的兜底文案。
+   *
+   * 现在 hasError = 「任一查询失败 且 草稿未就绪」，该边界落错误降级视图。 */
+  it("一半查询失败且草稿未就绪 → 落错误视图而非「配置数据未就绪」死角", async () => {
+    behavior.llmError = "no such table: llmConfig";
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.hasError).toBe(true));
+
+    // setting.get 成功、llm.configGet 失败
+    expect(result.current.drafts).toBeNull();
+    // 兜底文案不可达：既不是加载中，也不是「未就绪且没失败」
+    expect(result.current.isInitialLoad).toBe(false);
+    expect(result.current.notReady).toBe(false);
+    // 错误视图有可读原因 + 重试出口
+    expect(result.current.errorText).toContain("no such table: llmConfig");
+    expect(typeof result.current.retry).toBe("function");
+  });
+
+  /* 回归 ISSUE #304：补记日志时把原始报错（tRPC code / 服务端原文 / 堆栈首行）
+   * 一并落盘。此前只记翻译后的可读文案，服务端真实报错在面板里彻底丢失，
+   * 拿着「请求被中断」的提示无从排查。 */
+  it("补记 app-runtime 时带上原始报错（raw 字段）", async () => {
+    behavior.llmError = "no such table: llmConfig";
+    (runtimeLogCalls as unknown as unknown[]).length = 0;
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.hasError).toBe(true));
+    await waitFor(() =>
+      expect(
+        (runtimeLogCalls as unknown as Array<{ level: string }>).some(
+          (c) => c.level === "error",
+        ),
+      ).toBe(true),
+    );
+
+    const entry = (
+      runtimeLogCalls as unknown as Array<{
+        level: string;
+        fields?: { query?: string; raw?: string };
+      }>
+    ).find((c) => c.level === "error");
+    expect(entry?.fields?.query).toBe("llm.configGet");
+    // raw 是「给排查用」的原文，应含服务端报错本身
+    expect(entry?.fields?.raw).toContain("no such table: llmConfig");
+  });
+
+  /* 回归 ISSUE #304：两个查询同批失败时，日志字段要把**两个**查询名都记上，
+   * 否则只看得到其中一条，另一条的失败在面板里无从对应。 */
+  it("两个查询都失败时，日志字段记全两条查询名", async () => {
+    behavior.llmError = "llm 炸了";
+    behavior.settingsError = "settings 炸了";
+    (runtimeLogCalls as unknown as unknown[]).length = 0;
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.hasError).toBe(true));
+    await waitFor(() =>
+      expect(
+        (runtimeLogCalls as unknown as Array<{ level: string }>).some(
+          (c) => c.level === "error",
+        ),
+      ).toBe(true),
+    );
+
+    const entry = (
+      runtimeLogCalls as unknown as Array<{ level: string; fields?: { query?: string } }>
+    ).find((c) => c.level === "error");
+    expect(entry?.fields?.query).toContain("setting.get");
+    expect(entry?.fields?.query).toContain("llm.configGet");
   });
 
   it("startOllama 失败 → flash 出可读文案（失败路径必须有出口）", async () => {
