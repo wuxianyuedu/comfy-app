@@ -30,6 +30,7 @@
      kept in sync with the corresponding `.dark { … }` block below. */
   --color-canvas: #f6f7f9; /* 画布/工作区背景 (light default) */
   --color-canvas-deep: #eef0f4; /* 输入控件/深面板底 (light default) */
+  --color-canvas-minimap-mask: rgb(0 0 0 / 0.12); /* 小地图非视口遮罩 (light default) */
   --color-panel: #ffffff; /* 面板/顶栏/浮层 (light default) */
   --color-panel-deep: #f0f1f5; /* 侧栏/页脚 (light default) */
   --color-card: #ffffff; /* 卡片/下拉浮层 (light default) */
@@ -93,6 +94,7 @@
   /* ── immersive / editor surface overrides (see T11 @theme block) ── */
   --color-canvas: #0a0a0f; /* 画布/工作区背景 */
   --color-canvas-deep: #0f0f14; /* 输入控件/深面板底 */
+  --color-canvas-minimap-mask: rgb(0 0 0 / 0.78); /* 小地图非视口遮罩 */
   --color-panel: #14141a; /* 面板/顶栏/浮层 */
   --color-panel-deep: #0f0f16; /* 侧栏/页脚 */
   --color-card: #16161c; /* 卡片/下拉浮层 */
@@ -150,24 +152,61 @@
   --sidebar-ring: #7c5cfc;
 }
 
-/* ── Native form control dark styling ──
-   color-scheme: dark makes browser-rendered <select> dropdowns,
-   <option> items, and other native controls use the OS dark theme
-   instead of glaring white backgrounds. */
+/* ═══════════════════════════════════════════════════════════════════
+   固定暗色清单（Fixed-dark inventory）
+   ═══════════════════════════════════════════════════════════════════
+   口径：本应用默认是「随主题走」——所有表面都应引用语义 token
+   （`--color-canvas*` / `--color-node*` / `--color-panel*` / `--color-ink-*`），
+   Light / Dark 两态各自取值。下面这份清单是**例外**：这些位置无论主题
+   是什么都保持暗色，属于有意设计，不是遗漏。
+
+   新增表面时的判据（两条都满足才可进本清单）：
+     1. 该表面是「内容视图内的极小面积叠层」（浮在画布/预览之上的一小块
+        说明或装饰），不是页面/面板/控件这类结构性表面；
+     2. 换成浅色后会破坏其**承载对象**的可读性——例如叠在图片/视频预览
+        上的文字，浅底会让它和内容混在一起。
+
+   不满足第 1、2 条的一律走 token，**不得**进本清单。已知的反例（曾经
+   被误当作固定暗色，现已 token 化，勿回退）：
+     · ReactFlow 缩放控件 `.react-flow__controls-button`
+       → `--color-node` / `--color-border-strong` / `--color-ink-muted`
+     · MiniMap 非视口遮罩 `maskColor`
+       → `--color-canvas-minimap-mask`
+     · 原生 `<select>` / `<option>` 与滚动条
+       → `color-scheme` + `--color-node` / `--color-ink-field`
+
+   当前条目（共 2 条，逐条给出理由）：
+   ───────────────────────────────────────────────────────────────────
+   1. 画布底部操作提示气泡（WorkflowEditorInner 内 `bg-black/60`）
+      理由：它直接叠在画布网格与节点之上，属于「内容视图内的极小面积
+      叠层」（满足判据 1）；画布本身在 Light 下是浅灰，气泡若也用浅底，
+      与网格线/浅色节点糊在一起，提示文字反而读不出来（满足判据 2）。
+      注：气泡内文字用 `text-gray-400`，与暗底对比度 4.6:1，达 WCAG AA 正文口径。
+
+   2. 画布加载遮罩（WorkflowEditorInner 内 `bg-black/20` 子工作流加载态）
+      理由：与条目 1 同源——叠在画布内容上的半透明压暗层，作用是「把底下
+      的内容压下去、让中间那块加载卡片浮起来」。它必须比被压的对象更暗，
+      换浅色会让「压暗」这件事反向失效（满足判据 1、2）。
+
+   维护：本清单与 `docs/standards/03-样式与-tailwind.md` §3.6 的口径必须
+   一致；增删条目时两处同步改，并在 PR 描述里说明理由。
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── 原生表单控件与滚动条（跟随主题）──
+   浏览器原生控件不吃 Tailwind 类名，只能在这里统一。
+   `color-scheme` 决定 <select> 下拉、<option>、滚动条等由 OS 渲染的部分
+   用亮色还是暗色皮肤；`option` 的背景/文字则显式引用 token。
+   口径：原生控件**不**属于「固定暗色」——它必须跟随主题，
+   否则 Light 下会冒出白底黑字/黑底黑字的裂色。 */
 select {
   color-scheme: light;
-}
-select option {
-  background-color: #ffffff;
-  color: #27272a;
-  padding: 4px 8px;
 }
 .dark select {
   color-scheme: dark;
 }
-.dark select option {
-  background-color: #1e1e26;
-  color: #ededf2;
+select option {
+  background-color: var(--color-node);
+  color: var(--color-ink-field);
   padding: 4px 8px;
 }
 
@@ -272,8 +311,13 @@ textarea::-webkit-scrollbar {
   border-radius: 6px;
 }
 
-/* ── ReactFlow Controls: dark-aurora theme (all canvases) ──
-   Override default light buttons so zoom/fit controls match #0a0a0f canvas. */
+/* ── ReactFlow Controls: theme-aware (all canvases) ──
+   Controls 是浮在画布上的**控件**，不是画布背景：它必须跟随主题。
+   此前这里按固定暗色写死（#0d0818 / fill #9a9aad），Light 主题下按钮
+   仍是暗底 + 暗字（fill 落在自身暗底上），缩放/适配/锁定的图标几乎不可见。
+   改为引用语义 token 后，Light 得到浅底深图标、Dark 保持原有深底浅图标。
+   注意：`.react-flow__controls-button` 的图标是 SVG `fill`（不是 color），
+   所以用 `fill: var(--color-*)` 而非 `currentColor`。 */
 .react-flow__controls {
   display: flex !important;
   gap: 2px !important;
@@ -287,19 +331,23 @@ textarea::-webkit-scrollbar {
 .react-flow__controls-button {
   width: 28px !important;
   height: 28px !important;
-  background: #0d0818 !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: var(--color-node) !important;
+  border: 1px solid var(--color-border-strong) !important;
   border-radius: 6px !important;
-  fill: #9a9aad !important; /* --color-muted */
+  fill: var(--color-ink-muted) !important;
   transition:
     background 0.15s,
     fill 0.15s,
     border-color 0.15s;
 }
 .react-flow__controls-button:hover {
-  background: #1a1030 !important;
-  border-color: rgba(124, 92, 252, 0.3) !important; /* primary tint */
-  fill: #ededf2 !important; /* --color-ink */
+  background: var(--color-node-accent) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--color-primary) 45%,
+    var(--color-border-strong)
+  ) !important;
+  fill: var(--color-ink-bright) !important;
 }
 
 /* ───────────────────────────────────────────────────────────
@@ -487,11 +535,11 @@ textarea::-webkit-scrollbar {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--color-border-strong);
   border-radius: 4px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--color-ink-icon);
 }
 
 @theme inline {
@@ -582,4 +630,493 @@ textarea::-webkit-scrollbar {
   html {
     @apply font-sans;
   }
+}
+/* ═══════════════════════════════════════════════════════════════════
+   工作流画布表面（canvas / 底部编辑器 / 浮层）
+   ───────────────────────────────────────────────────────────────────
+   原 `src/components/workflow-canvas/canvas.css` 文件头写着 “Dark theme”，
+   33 处裸 hex + 16 处 `rgba(255,255,255,*)` 白系叠层把整套画布表面钉死在
+   暗色上：Light 主题切过去，画布/编辑器/浮层仍是黑的。
+   本段是按语义 token 逐条改写后的结果，Dark 观感保持不变（token 在 `.dark`
+   下取回原来的值），Light 下则跟随主题。
+
+   维护约定：本段出现的色值一律走 `var(--color-*)`；确需固定暗色的表面
+   必须登记在上方「固定暗色清单」并写明理由。
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── 画布容器：视口 + 底部编辑器 ── */
+.workflow-canvas {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 520px;
+  background: var(--color-canvas);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.workflow-canvas__viewport {
+  flex: 1;
+  min-height: 360px;
+  position: relative;
+}
+
+.workflow-canvas__editor {
+  height: 260px;
+  min-height: 200px;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+/* ReactFlow 默认网格底 —— 跟随画布 token */
+.workflow-canvas .react-flow__background {
+  background-color: var(--color-canvas) !important;
+}
+
+.workflow-canvas .react-flow__minimap {
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.workflow-canvas .react-flow__minimap:hover {
+  opacity: 1;
+}
+
+.workflow-canvas .react-flow__controls {
+  display: flex;
+  gap: 2px;
+}
+.workflow-canvas .react-flow__controls-button {
+  width: 28px !important;
+  height: 28px !important;
+  background: var(--color-node) !important;
+  border: 1px solid var(--color-border-strong) !important;
+  border-radius: 6px !important;
+  fill: var(--color-ink-muted) !important;
+}
+.workflow-canvas .react-flow__controls-button:hover {
+  background: var(--color-node-accent) !important;
+  fill: var(--color-ink-bright) !important;
+}
+
+/* 连线：品牌紫是主题无关的品牌色，保持不变 */
+.workflow-canvas .react-flow__connection-line {
+  stroke: var(--color-primary);
+  stroke-width: 2;
+}
+
+/* 框选：primary 半透明，两态皆可读 */
+.workflow-canvas .react-flow__selection {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+/* ── 画布浮动工具栏（底部居中）── */
+.wf-toolbar {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--color-panel) 92%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  z-index: 100;
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--color-bg) 50%, transparent);
+}
+
+.wf-toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.wf-toolbar__btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-ink-bright);
+  border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+.wf-toolbar__btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.wf-toolbar__btn--primary {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-hover),
+    var(--color-primary)
+  );
+  border: none;
+  color: #fff;
+  box-shadow: 0 4px 14px
+    color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+.wf-toolbar__btn--primary:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 6px 20px
+    color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+
+.wf-toolbar__sep {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
+}
+
+/* ── 添加节点菜单 ── */
+.wf-add-menu {
+  position: absolute;
+  top: 52px;
+  left: 12px;
+  width: 280px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--color-panel) 97%, transparent);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  z-index: 200;
+  box-shadow: 0 16px 48px color-mix(in srgb, var(--color-bg) 60%, transparent);
+  animation: wf-fade-in 0.15s ease-out;
+}
+
+@keyframes wf-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wf-add-menu__header {
+  padding: 10px 14px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-ink-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.wf-add-menu__group-label {
+  padding: 8px 14px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.wf-add-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 14px;
+  font-size: 12px;
+  color: var(--color-ink-soft);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background 0.1s;
+  text-align: left;
+}
+.wf-add-menu__item:hover {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+.wf-add-menu__item-type {
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--color-ink-muted);
+  font-family: var(--font-mono);
+}
+
+/* ── 导出弹窗 ── */
+.wf-export-modal {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--color-bg) 60%, transparent);
+  z-index: 300;
+  backdrop-filter: blur(4px);
+}
+.wf-export-modal__card {
+  width: min(560px, 90vw);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: 0 24px 64px
+    color-mix(in srgb, var(--color-bg) 60%, transparent);
+}
+.wf-export-modal__card h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-ink-bright);
+  margin-bottom: 4px;
+}
+
+/* ── 底部节点参数编辑器 ── */
+.wf-editor {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-panel-deep);
+  overflow-y: auto;
+}
+.wf-editor--empty {
+  justify-content: center;
+}
+
+.wf-editor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.wf-editor__tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 18px 0;
+  flex-shrink: 0;
+}
+.wf-editor__tab {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.wf-editor__tab:hover,
+.wf-editor__tab.active {
+  color: var(--color-ink-soft);
+  border-bottom-color: var(--color-primary);
+}
+
+.wf-editor__fields {
+  flex: 1;
+  padding: 10px 18px;
+  overflow-y: auto;
+}
+
+.wf-editor__group-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-primary);
+  margin: 10px 0 6px;
+}
+.wf-editor__group:first-child .wf-editor__group-label {
+  margin-top: 0;
+}
+
+.wf-editor__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 18px;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+/* ── 参数行 ── */
+.wf-field {
+  margin-bottom: 10px;
+}
+.wf-field__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  /* --color-ink-muted（而非 --color-ink-faint）：编辑器底色是
+     --color-panel-deep，Light 下 faint(#71717a) 只有 4.28:1，不达 AA 正文；
+     muted(#6b6b76) 为 4.66:1，两态均过线。 */
+  color: var(--color-ink-muted);
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+}
+
+.wf-field input[type="text"],
+.wf-field input[type="number"],
+.wf-field select,
+.wf-field textarea {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--color-ink-field);
+  background: var(--color-canvas-deep);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+}
+.wf-field input:focus,
+.wf-field select:focus,
+.wf-field textarea:focus {
+  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+.wf-field input::placeholder,
+.wf-field textarea::placeholder {
+  /* 用 ink-muted 而非 ink-placeholder：Light 下 placeholder token(#a1a1aa)
+     叠在 --color-canvas-deep 上只有 2.25:1，远低于 AA；muted 为 4.61:1。 */
+  color: var(--color-ink-muted);
+}
+
+.wf-field textarea {
+  resize: vertical;
+  min-height: 56px;
+  line-height: 1.6;
+}
+
+.wf-field select {
+  cursor: pointer;
+  appearance: none;
+  /* 下拉箭头是 data-URI SVG，无法引用 CSS 变量；改用 CSS 三角避免色值写死 */
+  background-image: none;
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+  position: relative;
+}
+.wf-field select option {
+  background: var(--color-node);
+  color: var(--color-ink-field);
+}
+
+.wf-field--text textarea {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* 开关 */
+.wf-field--toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.wf-toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+.wf-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.wf-toggle__slider {
+  position: absolute;
+  inset: 0;
+  background: var(--color-border-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.wf-toggle__slider::before {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  top: 2px;
+  background: var(--color-bg);
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.wf-toggle input:checked + .wf-toggle__slider {
+  background: var(--color-primary);
+}
+.wf-toggle input:checked + .wf-toggle__slider::before {
+  transform: translateX(16px);
+}
+
+/* 图片上传字段 */
+.wf-image-btn {
+  width: 100%;
+  padding: 16px;
+  font-size: 12px;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+  border: 1px dashed
+    color-mix(in srgb, var(--color-primary) 25%, transparent);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.wf-image-btn:hover {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border-style: solid;
+}
+.wf-image-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--color-canvas-deep);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--color-ink-muted);
+}
+.wf-image-preview button {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 10px;
+  /* 危险的「移除」动作：用固定 rose 语义色，两态皆可读 */
+  color: #fb7185;
+  background: rgb(251 113 133 / 0.1);
+  border: 1px solid rgb(251 113 133 / 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* ── 滚动条 ── */
+.wf-editor::-webkit-scrollbar,
+.wf-add-menu::-webkit-scrollbar {
+  width: 5px;
+}
+.wf-editor::-webkit-scrollbar-track,
+.wf-add-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.wf-editor::-webkit-scrollbar-thumb,
+.wf-add-menu::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 3px;
+}
+.wf-editor::-webkit-scrollbar-thumb:hover,
+.wf-add-menu::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-icon);
 }
