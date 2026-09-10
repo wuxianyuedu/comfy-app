@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { getSettings, getSettingsSync, saveSettings } from "@/lib/app-settings";
 import {
+  clearComfyAutoStartFailure,
   clearComfyManualStop,
   ensureComfyUiReady,
   isComfyStarting,
@@ -51,6 +52,12 @@ export const settingRouter = createTRPCRouter({
       // 用户显式（重新）开启自动启动 = 授权自动拉起：清掉上次「手动关闭
       // 后不自动启动」的闩锁，让自动启动恢复生效（ISSUE #290）。
       if (input.comfyuiAutoStart === true) clearComfyManualStop();
+      // 改「安装路径 / 启动参数」是把上次「启动失败」的成因改掉了：清掉
+      // 「失败后不再重试」的闩锁，让自动启动重新尝试（否则用户修好了路径，
+      // 却因为老闩锁一直不重试，还得再手动点一次启动）（ISSUE #335）。
+      if (input.comfyuiPath !== undefined || input.comfyuiExtraArgs !== undefined) {
+        clearComfyAutoStartFailure();
+      }
       const settings = await getSettings();
       return { settings };
     }),
