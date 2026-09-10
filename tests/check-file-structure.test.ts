@@ -29,6 +29,9 @@ import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const SCRIPT = join(process.cwd(), "scripts", "check-file-structure.cjs");
+// 构建前置守卫：断言它真的能认出「路径落在本仓库 src-tauri\target\ 下的 app.exe」，
+// 而不是把同名的无关进程（如别处的 app.exe）当成目标壳误杀。
+const GUARD = join(process.cwd(), "tools", "scripts", "Build-Guard.ps1");
 const BOM = Buffer.from([0xef, 0xbb, 0xbf]);
 
 let workdir = "";
@@ -192,5 +195,88 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       const { code } = run();
       expect(code).toBe(0);
     });
+  });
+});
+
+describe("Build-Guard.ps1（构建前置守卫）", () => {
+  /**
+   * 复现并锁住「cargo 覆盖 target\release\app.exe 时拒绝访问 (os error 5)」这条
+   * 已知故障路径（规范 §5）：壳还在跑 → 覆盖被拒 → 整轮编译白跑。
+   * 守卫的判据是「进程 exe 路径落在本仓库 src-tauri\target\{release,debug}\」，
+   * 因此这里用 PowerShell 打桩 Get-CimInstance，喂两类进程验证筛选：
+   *   - 本仓库 target 下的 app.exe（含大小写/相对段差异）→ 必须命中
+   *   - 别处路径的 app.exe、命令行恰好含项目根但路径在外的 app.exe → 必须不命中
+   */
+  // Windows PowerShell 5.1 与 PowerShell 7 都可用；非 Windows 平台（Linux CI）没有
+  // powershell，相关用例跳过，规则本身由 scripts/check-file-structure.cjs 与
+  // 本文件其它用例覆盖。
+  const psExe = (() => {
+    for (const candidate of ["powershell", "pwsh"]) {
+      try {
+        execFileSync(candidate, ["-NoProfile", "-Command", "exit 0"], {
+          stdio: "ignore",
+        });
+        return candidate;
+      } catch {
+        // 试下一个候选
+      }
+    }
+    return "";
+  })();
+
+  const runGuard = (script: string): string =>
+    execFileSync(psExe, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+  // 打桩 Get-CimInstance：守卫只依赖它拿进程列表，替换后即可在任意平台喂造数据。
+  const guardScript = (procsJson: string): string => `
+$ErrorActionPreference = "Stop"
+function Log { param([string]$Msg) Write-Output $Msg }
+function Get-CimInstance {
+  param([string]$ClassName, [string]$Filter)
+  $rows = '${procsJson}' | ConvertFrom-Json
+  foreach ($r in $rows) {
+    [pscustomobject]@{ ProcessId = $r.Id; ExecutablePath = $r.Path; CommandLine = $r.Cmd }
+  }
+}
+. "${GUARD}"
+$root = "${process.cwd()}"
+$hits = @(Get-RunningShellProcess -ProjectRoot $root)
+Write-Output ("HITS=" + $hits.Count)
+foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
+`;
+
+  it.skipIf(!psExe)("命中本仓库 target 下的运行中壳", () => {
+    const root = process.cwd();
+    const json = JSON.stringify([
+      { Id: 111, Path: join(root, "src-tauri", "target", "release", "app.exe"), Cmd: "" },
+      { Id: 222, Path: "D:\\other\\app.exe", Cmd: "" },
+      { Id: 333, Path: "", Cmd: `other ${root} unrelated` },
+    ]);
+    const out = runGuard(guardScript(json));
+    expect(out).toContain("HITS=2");
+    expect(out).toContain("HIT=111");
+    expect(out).toContain("HIT=333");
+  });
+
+  it.skipIf(!psExe)("路径大小写不同也算命中", () => {
+    const root = process.cwd();
+    const json = JSON.stringify([
+      {
+        Id: 444,
+        Path: join(root, "SRC-TAURI", "Target", "Release", "APP.EXE"),
+        Cmd: "",
+      },
+    ]);
+    const out = runGuard(guardScript(json));
+    expect(out).toContain("HITS=1");
+    expect(out).toContain("HIT=444");
+  });
+
+  it.skipIf(!psExe)("没有任何壳进程时返回 0 项", () => {
+    const out = runGuard(guardScript(JSON.stringify([])));
+    expect(out).toContain("HITS=0");
   });
 });
