@@ -218,6 +218,9 @@ export interface StrictCanvasNodeData {
 
   // workflow node (user-uploaded ComfyUI workflow)
   workflowId?: string;
+  /** 该工作流的「对外参数 → 节点端口」映射（paramMap.source）。
+   *  运行期据此决定用户值落到哪个端口；未连线仍走默认值兜底。 */
+  paramMap?: Record<string, unknown>;
   workflowName?: string;
   workflowTaskType?: string;
   /** Dynamic form values keyed by ioKey (`${nodeId}::${kind}::${name}`), driven by the workflow's exposed IO. */

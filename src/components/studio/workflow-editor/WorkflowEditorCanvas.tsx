@@ -7,12 +7,14 @@
  *  viewport in a useEffect to enforce a minimum zoom of 0.35. */
 "use client";
 
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ReactFlow, Controls, MiniMap,
   type Node, type Edge,
   type OnNodesChange, type OnEdgesChange,
 } from "@xyflow/react";
+import { ParamSourceRail, ParamWireLayer, type ParamWire } from "./ParamWireLayer";
+import { ParamTargetSync } from "./ParamTargetSync";
 import { CanvasGrid, ZoomIndicator, CanvasRulers } from "../WorkflowCanvasDecorations";
 import {
   CanvasSettingsButton,
@@ -45,6 +47,13 @@ export interface WorkflowEditorCanvasProps {
   /** Lazily activates deletable/reconnectable for a clicked edge (see
    *  defaultEdgeOptions below). */
   onEdgeClick?: (event: React.MouseEvent, edge: Edge) => void;
+  /** 对外参数 → 节点端口的连线（映射图）。缺省 = 不画。 */
+  paramWires?: ParamWire[];
+  /** 当前选中的对外参数 id（高亮其连线）。 */
+  activeParamId?: string | null;
+  onPickParam?: (id: string | null) => void;
+  /** 从对外参数拖到节点端口 → 建立映射连线。 */
+  onConnectParam?: (id: string, targetNodeId: string, slot: string) => void;
 }
 
 export function WorkflowEditorCanvas({
@@ -58,10 +67,27 @@ export function WorkflowEditorCanvas({
   onMiniMapJump,
   onOpenSettings,
   onEdgeClick,
+  paramWires,
+  activeParamId,
+  onPickParam,
+  onConnectParam,
 }: WorkflowEditorCanvasProps) {
   /* Stable identity → colour lookup for the MiniMap.  Depends on nothing
    *  (role colours are static), so MiniMap never re-renders due to a fresh
    *  callback reference while nodes are dragged. */
+  /* 源节点 Portal 的宿主：React Flow 的视口容器（随 pan/zoom 变换），
+   * 因此源节点天然跟着画布一起移动。首帧布局前拿不到，用 state 触发一次重渲。 */
+  /* 源节点 Portal 的宿主：React Flow 的视口容器（随 pan/zoom 变换）。
+   * 用 requestAnimationFrame 的**回调**取（而不是在 effect 体里同步 setState），
+   * 首帧布局完成后再挂载源节点。 */
+  const [viewportEl, setViewportEl] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setViewportEl(document.querySelector<HTMLElement>(".react-flow__viewport"));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   const miniMapNodeColor = useCallback((node: Node) => {
     const d = node.data as WorkflowNodeData | undefined;
     return (d?.assignedRole ? ROLE_COLOR_BY_KEY.get(d.assignedRole) : undefined) ?? "#333";
@@ -124,6 +150,29 @@ export function WorkflowEditorCanvas({
     >
       {/* Grid background — 20px cells with a heavier rule every
        *  10 cells.  See <CanvasGrid> above. */}
+      {/* 对外参数 → 目标端口的连线（映射图）。
+       *  画在原有图边之下：映射是「配置层」，不该压住工作流本身的执行拓扑。
+       *  端点用自绘 SVG（而不是 React Flow 的 <Handle>），因为绝大多数目标端口
+       *  在节点卡片上并不渲染 Handle（未连线 = 无圆点），没有可锚定的 DOM。 */}
+      {paramWires && paramWires.length > 0 && (
+        <ParamTargetSync wires={paramWires} />
+      )}
+      {paramWires && paramWires.length > 0 && (
+        <ParamSourceRail
+          wires={paramWires}
+          portalTarget={viewportEl}
+          activeId={activeParamId ?? null}
+          onPick={onPickParam ?? (() => undefined)}
+          onConnect={onConnectParam ?? (() => undefined)}
+        />
+      )}
+      {paramWires && paramWires.length > 0 && (
+        <ParamWireLayer
+          wires={paramWires}
+          activeId={activeParamId ?? null}
+          onPick={onPickParam}
+        />
+      )}
       <CanvasGrid settings={canvasSettings} />
       {/* Coordinate rulers along the four edges — show the world
        *  X / Y of every visible major line.  See <CanvasRulers>. */}

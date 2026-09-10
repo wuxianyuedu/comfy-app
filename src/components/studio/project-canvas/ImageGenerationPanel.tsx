@@ -168,6 +168,7 @@ export function ImageGenerationPanel({
       workflowName: undefined,
       workflowTaskType: undefined,
       workflowInputs: {},
+      paramMap: undefined,
       workflowSinkId: undefined,
     });
   };
@@ -192,6 +193,7 @@ export function ImageGenerationPanel({
         workflowName: onlyWf.name,
         workflowTaskType: onlyWf.taskType ?? undefined,
         workflowInputs: {},
+        paramMap: undefined,
         workflowSinkId: undefined,
       });
     } else {
@@ -201,6 +203,7 @@ export function ImageGenerationPanel({
         workflowName: undefined,
         workflowTaskType: undefined,
         workflowInputs: {},
+        paramMap: undefined,
         workflowSinkId: undefined,
       });
     }
@@ -214,6 +217,7 @@ export function ImageGenerationPanel({
       workflowName: wf?.name,
       workflowTaskType: wf?.taskType ?? undefined,
       workflowInputs: {},
+      paramMap: undefined,
       workflowSinkId: undefined,
     });
   };

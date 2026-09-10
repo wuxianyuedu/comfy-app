@@ -70,9 +70,13 @@ interface WorkshopDraft {
   characters: Character[];
   shots: Shot[];
   checkpoint: string;
-  /** 工坊选定用来生成的「工作流库工作流」id（ISSUE #145）。
+  /** 工坊「生图」阶段选定用来生成的「工作流库工作流」id（ISSUE #145）。
    *  空串 = 用内置 txt2img 工作流。仅本地持久化（服务端镜像不含此字段）。 */
   workflowId: string;
+  /** 工坊「视频」阶段选定的「工作流库工作流」id。
+   *  空串 = 用内置 img2video / txt2video。字段与生图分开 —— 两类工作流的
+   *  对外参数口径不同（生图无首帧、视频有），共用一个 id 会互相串味。 */
+  videoWorkflowId: string;
 }
 
 /** 项目摘要：切换器只需要这几个字段，正文按 id 另读。 */
@@ -95,6 +99,7 @@ function emptyDraft(): WorkshopDraft {
     shots: [],
     checkpoint: "",
     workflowId: "",
+    videoWorkflowId: "",
   };
 }
 
@@ -108,6 +113,7 @@ function dtoToDraft(dto: WorkshopDraftDto): WorkshopDraft {
     shots: dto.shots ?? [],
     checkpoint: dto.checkpoint ?? "",
     workflowId: "",
+    videoWorkflowId: "",
   };
 }
 
@@ -143,6 +149,8 @@ function parseDraft(raw: string | null): WorkshopDraft {
       shots: Array.isArray(draft.shots) ? draft.shots : [],
       checkpoint: typeof draft.checkpoint === "string" ? draft.checkpoint : "",
       workflowId: typeof draft.workflowId === "string" ? draft.workflowId : "",
+      videoWorkflowId:
+        typeof draft.videoWorkflowId === "string" ? draft.videoWorkflowId : "",
     };
   } catch {
     return emptyDraft();
@@ -356,9 +364,12 @@ export interface WorkshopPipelineController {
   setCheckpoint: (value: string) => void;
   /** 工作流库里的可选工作流（ISSUE #145）。 */
   workflowOptions: WorkshopWorkflowOption[];
-  /** 选定的工作流 id；空串 = 内置 txt2img。 */
+  /** 生图阶段选定的工作流 id；空串 = 内置 txt2img。 */
   workflowId: string;
   setWorkflowId: (value: string) => void;
+  /** 视频阶段选定的工作流 id；空串 = 内置 img2video / txt2video。 */
+  videoWorkflowId: string;
+  setVideoWorkflowId: (value: string) => void;
   apiChannels: ApiChannelsView | null;
   imageDoneCount: number;
   clipDoneCount: number;
@@ -473,6 +484,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const [workflowId, setWorkflowId] = React.useState(
     () => loadWorkshopDraftOnce()?.workflowId ?? "",
   );
+  const [videoWorkflowId, setVideoWorkflowId] = React.useState(
+    () => loadWorkshopDraftOnce()?.videoWorkflowId ?? "",
+  );
   const [generating, setGenerating] = React.useState(false);
   const [shotProgress, setShotProgress] = React.useState<ShotProgressMap>({});
   const [rendered, setRendered] = React.useState(false);
@@ -511,8 +525,18 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       shots,
       checkpoint,
       workflowId,
+      videoWorkflowId,
     }),
-    [meta, scriptMarkdown, scenes, characters, shots, checkpoint, workflowId],
+    [
+      meta,
+      scriptMarkdown,
+      scenes,
+      characters,
+      shots,
+      checkpoint,
+      workflowId,
+      videoWorkflowId,
+    ],
   );
 
   /** 把一份草稿灌进所有受管 state（切换 / 删除项目后接手时调用）。 */
@@ -523,6 +547,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     setShots(draft.shots);
     setCheckpoint(draft.checkpoint);
     setWorkflowId(draft.workflowId ?? "");
+    setVideoWorkflowId(draft.videoWorkflowId ?? "");
     setScriptMarkdown(draft.scriptMarkdown);
   }, []);
 
@@ -1003,6 +1028,8 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     workflowOptions,
     workflowId,
     setWorkflowId,
+    videoWorkflowId,
+    setVideoWorkflowId,
     apiChannels,
     imageDoneCount,
     clipDoneCount,

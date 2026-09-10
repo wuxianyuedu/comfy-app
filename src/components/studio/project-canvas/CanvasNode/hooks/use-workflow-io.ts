@@ -100,6 +100,9 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
    *  multi-mode config (modes[] + defaultMode) so chip3 can render
    *  按该工作流配置的动态模式列表. */
   const [wfModes, setWfModes] = useState<WorkflowModesState | null>(null);
+  /* 对外参数 → 节点端口的连线（作者在工作流库里配的映射，落在 paramMap.source）。
+   * 运行期据此决定「哪个端口收用户值」，未连线的对外参数仍走默认值兜底。 */
+  const [wfParamMap, setWfParamMap] = useState<Record<string, unknown> | null>(null);
   /* 会话级「本机 / 在线 / 全部」来源筛选 — 只在画布节点组件
    *  内部 React state 持有，不写 patch（不污染 d，避免 React Flow 重渲）。
    *  默认「全部」，用户切换后只在当前节点 lifespan 内生效。 */
@@ -112,6 +115,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     setPrevIoKey(ioKey);
     setWfIO(null);
     setWfModes(null);
+    setWfParamMap(null);
     setWfIOLoading(false);
   }
   useEffect(() => {
@@ -126,6 +130,11 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           const tpl = dd.template;
           if (!alive || !tpl) return;
           setWfIO((tpl.workflowIO as WorkflowIOMap) ?? null);
+          const paramMap = (tpl.paramMap as Record<string, unknown>) ?? null;
+          setWfParamMap(paramMap);
+          /* 一并写进节点数据：运行期（use-generate）不能依赖 hook 的异步
+           *  状态，映射必须随节点一起持久化，否则刷新后运行会丢掉手工线。 */
+          patch({ paramMap: paramMap ?? undefined });
           /* 模式一致性：库卡片对 `taskType` 有 fallback（仅写
            *  taskType 没声明 modes[] 的旧工作流也能展示单模式 chip），画布
            *  也走完全相同的 fallback 避免「库显示文生图 / 画布显示未选」
@@ -159,6 +168,10 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
       alive = false;
       clearTimeout(t);
     };
+    /* patch 是把映射写回节点的唯一通道；它由 CanvasNode 的 useCallback(id,
+     * setNodes) 定义，本 hook 里只需在 workflow 变化时用一次，故显式忽略其
+     * 依赖（与下方 seededFor / 筛选 effect 同口径）。 */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d.kind, d.workflowId]);
 
   /* Seed the dynamic form with the workflow's default values once IO loads, so
@@ -203,6 +216,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           workflowName: undefined,
           workflowTaskType: undefined,
           workflowInputs: {},
+          paramMap: undefined,
           workflowSinkId: undefined,
         });
       }
@@ -219,6 +233,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     setModelFilter,
     wfIO,
     wfIOLoading,
+    wfParamMap,
     wfModes,
     setWfModes,
     sourceFilter,

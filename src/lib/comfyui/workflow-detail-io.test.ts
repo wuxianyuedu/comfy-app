@@ -246,3 +246,58 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
     expect(result["94::widget::aspect_ratio"]!.value).toBe("16:9");
   });
 });
+
+describe("enrichWorkflowIO — classType（产出节点类名）", () => {
+  it("raw 导出的节点类名优先下发（工坊靠它区分首帧 / 尾帧槽）", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "20::widget::image": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "20",
+            name: "image",
+          },
+        },
+        {
+          // raw 侧类名（buildNodeTypeMap）与存库 graph 的 class_type 同时存在时，
+          // 取 raw 的 —— 它才是 ComfyUI 里真实的 class。
+          nodeTypeById: { "20": "LoadImageFirstFrame" },
+          graph: { "20": { class_type: "LoadImage", inputs: {} } },
+        }
+      )
+    );
+    expect(result["20::widget::image"]!.classType).toBe("LoadImageFirstFrame");
+  });
+
+  it("API-only 导入（无 rawJson）退到 graph 的 class_type", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "21::widget::image": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "21",
+            name: "image",
+          },
+        },
+        { graph: { "21": { class_type: "LoadImageLastFrame", inputs: {} } } }
+      )
+    );
+    expect(result["21::widget::image"]!.classType).toBe("LoadImageLastFrame");
+  });
+
+  it("两处都拿不到类名时不下发该字段（消费方按普通参考图降级）", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams({
+        "22::widget::image": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "22",
+          name: "image",
+        },
+      })
+    );
+    expect(result["22::widget::image"]!.classType).toBeUndefined();
+  });
+});

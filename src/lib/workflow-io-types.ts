@@ -34,6 +34,11 @@ export interface WorkflowIOEntry {
   /** 多模式参数覆盖层。键为模式码，值为该模式下的默认值与可见性。
    *  存在 workflowIO 的 JSON 列内，因此新增模式无需改表结构。 */
   modes?: Record<string, WorkflowIOModeOverride>;
+  /** 拥有该 pin 的节点类名（"LoadImage" / "KSampler" / "LoadImageFirstFrame"…），
+   *  服务端富化字段（raw 导出优先，API-only 导入退到存库 graph 的 class_type）。
+   *  工坊封装要按它区分参考图槽位（首帧 / 尾帧 / 普通参考图）——多个 LoadImage
+   *  的 pin 名都叫 `image`，只看名字分不出哪张是首帧。 */
+  classType?: string;
 }
 
 /** 单个参数在某一个模式下的覆盖项。 */
