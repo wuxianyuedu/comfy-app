@@ -220,3 +220,74 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
     expect(mainBody).toContain("checkScopeCoverage()");
   });
 });
+
+describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm）", () => {
+  /* 目的：文档里的 npm run / npx 不会编译报错，只会静静过期——复核全靠人肉逐行读。
+   * 该守卫把「SCOPED_DOCS 里出现可执行 npm/npx 命令」变成硬错误，
+   * 同时放行**说明性引用**（写出「改为/修正/pnpm」等纠正词的上下文）。 */
+
+  it("已接入 main 流程（不是定义了却没人调用）", () => {
+    const script = readFileSync(CHECK, "utf8");
+    expect(script).toContain("function checkLedgerCommands()");
+    const mainBody = script.slice(script.indexOf("function main()"));
+    expect(mainBody).toContain("checkLedgerCommands()");
+  });
+
+  it("台账里不再有可执行的 npm run / npx 命令", () => {
+    for (const doc of [
+      "docs/guides/PRODUCTION-GAPS.md",
+      "docs/guides/DEV-QUERIES.md",
+      "docs/guides/TESTING.md",
+    ]) {
+      const lines = docText(doc).split("\n");
+      lines.forEach((line, i) => {
+        if (!/(^|[\s`(（])(npm\s+run|npx)\b/.test(line)) return;
+        expect(
+          /改为|修正|修正为|pnpm|禁止|违反|原记录|不要用|应使用/.test(line),
+          `${doc}:${i + 1} 出现 npm/npx 可执行命令且未标注为说明：${line.trim()}`,
+        ).toBe(true);
+      });
+    }
+  });
+
+  /* 用一个**已登记**的文档做探针：临时改写它的内容、跑校验、再还原。
+   * 不能新建临时文件——那会先被「校验范围守卫」拦下（未登记），
+   * 测不到本守卫，得到假绿。 */
+  function withRegisteredDocProbe(appended: string): { code: number; output: string } {
+    const probe = "docs/guides/DEV-QUERIES.md";
+    const original = readFileSync(join(REPO_ROOT, probe), "utf8");
+    writeFileSync(join(REPO_ROOT, probe), `${original}\n${appended}\n`, "utf8");
+    try {
+      return runCheck();
+    } finally {
+      writeFileSync(join(REPO_ROOT, probe), original, "utf8");
+    }
+  }
+
+  it("把 npm 命令写进已登记的文档 → doc:check 失败并给出改法", () => {
+    const { code, output } = withRegisteredDocProbe("```bash\nnpm run test:e2e\n```");
+    expect(code).not.toBe(0);
+    expect(output).toContain("DEV-QUERIES.md");
+    expect(output).toContain("硬规则 1");
+    expect(output).toContain("pnpm");
+  });
+
+  it("npx 同样被拦下", () => {
+    const { code, output } = withRegisteredDocProbe("```bash\nnpx tsc --noEmit\n```");
+    expect(code).not.toBe(0);
+    expect(output).toContain("npx");
+  });
+
+  it("说明性引用被放行（描述规则本身不算违规）", () => {
+    const { code } = withRegisteredDocProbe(
+      "命令类：`npm run` 一律改为 `pnpm`（AGENTS 硬规则 1）。",
+    );
+    expect(code).toBe(0);
+  });
+
+  it("当前仓库台账已无存量违规（守卫基线为绿）", () => {
+    const { code, output } = runCheck();
+    expect(code).toBe(0);
+    expect(output).toContain("[doc:check] ✓");
+  });
+});
