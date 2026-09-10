@@ -36,8 +36,10 @@
 - [x] 未使用/单规则可修的 eslint-disable 头清理(5355a2b)。
 - [ ] 34 个 lint warning 清零(alt-text/no-img-element/exhaustive-deps/
       unused-vars;exhaustive-deps 已有三分类文档,按类处置)。
-- [ ] `DynamicWorkflowForm`(958)与 `CustomNodesSettings` 主组件(1116)
-      进一步拆分(结构性提醒由 pre-commit 持续输出)。
+- [x] `DynamicWorkflowForm` 已拆为四层(容器 44 + 视图 249 + hook 261 + 纯函数
+      105),并补齐逻辑层行为测试(30 用例:行归属、多模式可见性、拖拽重排、
+      图片上传、默认值刷新口径,见 ISSUE #319)。`CustomNodesSettings` 同批拆分
+      与测试见 ISSUE #318。
 - [ ] `components/model/model-library.tsx` 与 `studio/ModelLibrary.tsx`
       语义撞车——确认两者职责或合并。
 
