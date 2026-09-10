@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from "react";
 
 import { fetchFileLogSlice } from "@/lib/log-file-client";
+import { clampLogTime } from "@/lib/log-session-scope";
 
 import {
   type LogLevel,
@@ -183,11 +184,17 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
   // ── Load launcher log files: startup logs + ongoing dev-server output ──
   // 轮询来源：launcher（启动链路）、dev（dev-launcher 实时输出）、
   // app-runtime（应用运行期业务操作日志，见 src/lib/app-runtime-log.ts）。
+  //
+  // 面板只显示「本次运行」：三个来源里只有 dev（dev-launcher.log）每次启动被
+  // 覆盖重建，app-runtime 是追加不轮转的——上一次、上上一次运行的行会随首帧
+  // 的整文件重读混进来。服务端在轮询响应里带回会话起点，这里用行时刻裁掉
+  // （见 log-store 的 dropStaleEntries 与 src/lib/log-session-scope.ts）。
   const offsetsRef = useRef<Partial<Record<"dev" | "launcher" | "app-runtime", number>>>({
     dev: 0,
     launcher: 0,
     "app-runtime": 0,
   });
+  const setSessionStart = useLogStore((s) => s.setSessionStart);
   useEffect(() => {
     if (typeof window === "undefined") return;
     let mounted = true;
@@ -198,16 +205,27 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       try {
         const offset = offsetsRef.current[source] ?? 0;
         const data = await fetchFileLogSlice(source, offset);
-        if (!data || !mounted || !data.content) return;
+        if (!data || !mounted) return;
+
+        /* 裸文本行（读不到时间戳）按解析当时的时刻落板；钳到本地当前时刻，
+         * 保证面板时间线不会被未来的时间戳顶穿。 */
+        const entries = parseFileLogs(data.content).map((entry) => ({
+          ...entry,
+          time: clampLogTime(entry.time, Date.now()),
+          origin: source,
+        }));
+        /* 时间线截断的判据要比首帧条目先就位，否则历史行会先落板再被清掉，
+         * 用户能观察到一次闪现。 */
+        if (typeof data.sessionStart === "number") {
+          setSessionStart(data.sessionStart);
+        }
+        if (entries.length > 0) {
+          appendFileLogs(entries);
+        }
 
         // 文件被重置（新运行）时 offset 会回 0；此时丢弃旧 offset，完整重读
         if (data.offset === 0 && (offsetsRef.current[source] ?? 0) > 0) {
           offsetsRef.current[source] = 0;
-        }
-
-        const entries = parseFileLogs(data.content);
-        if (entries.length > 0) {
-          appendFileLogs(entries);
         }
         offsetsRef.current[source] = data.size;
       } catch {
@@ -229,7 +247,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       clearInterval(id);
     };
-  }, [appendFileLogs]);
+  }, [appendFileLogs, setSessionStart]);
 
   // ── Keyboard shortcut: Ctrl+Shift+L ──
   useEffect(() => {
