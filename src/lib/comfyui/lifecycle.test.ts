@@ -176,7 +176,7 @@ describe("自动启动失败后停止重试（ISSUE #335）", () => {
 describe("getComfyUiStatus — 状态三态组合", () => {
   it("未启动任何流程时：up/starting/stopping 均为 false，pid 为 undefined", async () => {
     const { getComfyUiStatus } = await import("./lifecycle");
-    const s = getComfyUiStatus();
+    const s = await getComfyUiStatus();
     expect(s.up).toBe(false);
     expect(s.base).toBeNull();
     expect(s.starting).toBe(false);
@@ -211,11 +211,11 @@ describe("getComfyUiStatus — 状态三态组合", () => {
     const pending = ensureComfyUiReady({ manual: true, timeoutMs: 250 });
     // 等一拍让 st.starting 落位。
     await new Promise((r) => setTimeout(r, 60));
-    expect(getComfyUiStatus().starting).toBe(true);
+    expect((await getComfyUiStatus()).starting).toBe(true);
     const r = await pending;
     expect(r.ok).toBe(false);
     // 收尾后单飞锁释放：下一次调用能重新开始（不会永久卡在「启动中」）。
-    expect(getComfyUiStatus().starting).toBe(false);
+    expect((await getComfyUiStatus()).starting).toBe(false);
     vi.mocked(getExitPolicy).mockReturnValue({ exitKillComfyui: true } as never);
   });
 

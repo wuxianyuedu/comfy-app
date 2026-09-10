@@ -1963,26 +1963,37 @@ export function SettingsPageView({
                   ? "bg-emerald-400"
                   : c.comfyStopping || c.comfyStatus?.stopping
                     ? "bg-amber-400"
-                    : c.comfyStatus?.starting
+                    : c.comfyStarting || c.comfyStatus?.starting
                       ? "bg-amber-400"
-                      : "bg-rose-400"
+                      : c.comfyStatus?.probing
+                        ? "bg-sky-400"
+                        : "bg-rose-400"
               }`}
             />
             <span className="text-ink/80 text-sm">
               {c.comfyStatus?.up
-                ? `ComfyUI 运行中${c.comfyStatus.base ? `（${c.comfyStatus.base}）` : ""}`
+                ? `ComfyUI 运行中${c.comfyStatus.base ? `（${c.comfyStatus.base}）` : ""}${
+                    c.comfyStatus.via ? `·${c.comfyStatus.via}` : ""
+                  }`
                 : c.comfyStopping || c.comfyStatus?.stopping
                   ? "ComfyUI 关闭中…"
                   : c.comfyStarting || c.comfyStatus?.starting
                     ? "ComfyUI 正在启动…"
-                    : "ComfyUI 未运行"}
+                    : c.comfyStatus?.probing
+                      ? "ComfyUI 状态检测中…"
+                      : "ComfyUI 未运行"}
             </span>
             <div className="ml-auto flex items-center gap-2">
               {/* 打开运行中的 ComfyUI 界面：桌面壳内在同一主窗口开一个「页签」
                       （iframe 内嵌）；浏览器/dev 模式回退到系统浏览器。 */}
               <Btn
                 onClick={() => void c.openComfy()}
-                disabled={c.comfyOpening || !c.comfyStatus?.up}
+                /* 只在「明确未运行」时禁用：探测进行中（probing）也允许点一下，
+                   openComfy 会先取一份新鲜状态再打开（ISSUE #339）。 */
+                disabled={
+                  c.comfyOpening ||
+                  (!c.comfyStatus?.up && !c.comfyStatus?.probing)
+                }
               >
                 {c.comfyOpening ? "打开中…" : "打开查看"}
               </Btn>
