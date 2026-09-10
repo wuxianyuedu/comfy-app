@@ -145,7 +145,9 @@ const FACTS = [
   // MCP / ComfyUI 端口是「独立单值」；MCP 默认端口已取在 dev 回落族之外（4300），
   // 但为明确语义仍用占位符，并限定仅在 workshop-mcp.md 校验避免跨文档误判。
   { key: "mcp.http.port", placeholder: "{{mcp.http.port}}", kind: "placeholder", extract: extractMcpHttpPort, onlyDocs: ["docs/workshop-mcp.md"] },
-  { key: "comfyui.port", placeholder: "{{comfyui.port}}", kind: "placeholder", extract: extractComfyUIPort, onlyDocs: ["docs/workshop-mcp.md"] },
+  // otherDocs：该值在别的文档里的「引用点」不是无括号端口形态（如主规范的
+  //          `localhost:3100` / `:8188` 并列行），须在另一套文档里也防裸值回潮。
+  { key: "comfyui.port", placeholder: "{{comfyui.port}}", kind: "placeholder", extract: extractComfyUIPort, onlyDocs: ["docs/workshop-mcp.md"], otherDocs: ["docs/standards/Comfy-APP-T3-项目开发规范.md"] },
   // 路径类：核对文件存在
   { key: "path.tauri.conf", kind: "path", source: "src-tauri/tauri.conf.json" },
   { key: "path.lib.rs", kind: "path", source: "src-tauri/src/lib.rs" },
