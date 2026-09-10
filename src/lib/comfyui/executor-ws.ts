@@ -31,6 +31,7 @@ import {
   RECONNECT_BASE_MS,
   RECONNECT_MAX_MS,
   WS_PATHS,
+  type LogEntry,
 } from "./runner-state";
 import { complete, fail } from "./executor-finalize";
 import {
@@ -38,6 +39,10 @@ import {
   ensureComfyUiReady,
 } from "./lifecycle";
 import { processQueue } from "./executor-scheduler";
+
+/* 自动启动状态提示的防重复标记：仅在 WS 真正打开后复位，
+   避免重连循环对同一段启动反复刷「未运行，正在自动启动」。 */
+let comfyDownNotified = false;
 
 function nodeLabel(classType?: string): string {
   const map: Record<string, string> = {
@@ -68,6 +73,20 @@ export type ComfyHistoryEntry = {
 };
 
 /**
+ * 把一条执行日志同时打到当前队列里所有等待任务上。
+ *
+ * ComfyUI 未运行触发自动启动时，队列任务（工作流库「就地运行」/ 画布节点）
+ * 都停在 QUEUED 等待 WS 打开；这条消息让它们在执行日志面板里明确看到
+ * 「ComfyUI 未运行，正在自动启动…」「已就绪，继续执行」，而不是只显示
+ * 无信息的「任务已加入执行队列」并长时间卡在 0%（用户会误以为任务连接中断）。
+ */
+function logToQueuedTasks(msg: string, level: LogEntry["level"] = "info"): void {
+  for (const job of state().queue) {
+    log(job.taskId, level, msg);
+  }
+}
+
+/**
  * 建立事件通道。
  *
  * ⚠️ 这里必须走 `resolveComfyBase()` 而不是同步的配置值：ComfyUI 端口被占用时
@@ -89,22 +108,45 @@ export async function connect(): Promise<void> {
     // 现在启动成功后下一次重连即可打开 WS，任务恢复正常执行。
     // 这里必须带超时上限：无限等待会让 isComfyStarting 一直为真，
     // reaper 的「启动窗口期跳过回收」被无限拉长，队列任务永远卡住。
-    // 把自动启动的每步进度实时写进排队任务的日志，让用户看到「未运行 → 启动中 →
-    // 已就绪」而非一直只有「等待日志…」。ensureComfyUiReady 自带单飞锁 + 探测快路径，
-    // 反复调用安全。
-    void ensureComfyUiReady({
-      timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS,
-      // 启动进度透传：当前所有排队任务共用同一份进度文案。
-      onLog: (msg) => {
-        for (const job of s.queue) {
-          log(job.taskId, "info", `[ComfyUI 启动] ${msg}`);
-        }
-      },
-    }).catch((err: unknown) => {
-      logger.warn(
-        `[comfyui] 自动启动失败：${err instanceof Error ? err.message : String(err)}`
-      );
-    });
+    //
+    // 把自动启动的状态实时同步给排队任务：未运行→启动中→就绪/失败 都写进
+    // 各自执行日志面板，用户能看到「ComfyUI 未运行，正在自动启动…」并在
+    // 启动完成后看到「已就绪，继续执行工作流」，而不是 0% 干等或误报
+    // 「任务连接中断」。
+    //
+    // 只挂一次 then/catch 与 onLog：single-flight 令后续重连调用返回同一个
+    // promise，若每次都挂 then，启动完成时会向队列重复刷「已就绪」多遍。
+    if (!comfyDownNotified) {
+      comfyDownNotified = true;
+      logToQueuedTasks("ComfyUI 未运行，正在自动启动…", "warn");
+      logToQueuedTasks("启动完成后将自动继续执行当前工作流，请稍候", "info");
+      void ensureComfyUiReady({
+        timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS,
+        // onLog 在单飞中被首次调用捕获；启动进程内的每一步 note 都会经这里
+        // 写进队列任务的日志面板。
+        onLog: (msg) => logToQueuedTasks(`ComfyUI 启动：${msg}`),
+      })
+        .then((r) => {
+          if (r.ok) {
+            logToQueuedTasks("ComfyUI 已就绪，继续执行工作流…", "success");
+          } else {
+            logToQueuedTasks(`ComfyUI 自动启动失败：${r.detail}`, "error");
+          }
+        })
+        .catch((err: unknown) => {
+          logger.warn(
+            `[comfyui] 自动启动失败：${err instanceof Error ? err.message : String(err)}`
+          );
+          logToQueuedTasks(
+            `ComfyUI 自动启动失败：${err instanceof Error ? err.message : String(err)}`,
+            "error",
+          );
+        });
+    } else {
+      // 自动启动已在单飞中进行：仅维持调用以保 isComfyStarting 为真，
+      // 不再重复挂日志回调（否则启动完成会向队列刷多条「已就绪」）。
+      void ensureComfyUiReady({ timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS });
+    }
     scheduleReconnect();
     return;
   }
@@ -133,8 +175,10 @@ export async function connect(): Promise<void> {
     s.connecting = false;
     s.reconnectAttempts = 0;
     // WS 就绪：清掉排队期写入的「等待连接」提示标记，避免下次断线重连时
-    // 同一任务被 wsWaitLogged 挡住而无法重新提示。
+    // 同一任务被 wsWaitLogged 挡住而无法重新提示；同时复位自动启动提示标记，
+    // 供本次连接断开后的重新提示使用。
     s.wsWaitLogged.clear();
+    comfyDownNotified = false;
     void processQueue();
   });
   ws.on("message", (data) => void handleMessage((data as Buffer).toString()));
