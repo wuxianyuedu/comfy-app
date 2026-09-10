@@ -2,6 +2,8 @@
 
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Download,
   FileText,
@@ -333,17 +335,21 @@ const LogRow = memo(function LogRow({
 });
 
 export function LogPanel() {
-  const { filteredLogs, filter, search, isOpen, counts } = useLogPanel(
-    useShallow((state) => ({
-      filteredLogs: state.filteredLogs,
-      filter: state.filter,
-      search: state.search,
-      isOpen: state.isOpen,
-      counts: state.counts,
-    })),
-  );
+  const { filteredLogs, filter, search, isOpen, counts, page, pageSize } =
+    useLogPanel(
+      useShallow((state) => ({
+        filteredLogs: state.filteredLogs,
+        filter: state.filter,
+        search: state.search,
+        isOpen: state.isOpen,
+        counts: state.counts,
+        page: state.page,
+        pageSize: state.pageSize,
+      })),
+    );
   const setFilter = useLogPanel((state) => state.setFilter);
   const setSearch = useLogPanel((state) => state.setSearch);
+  const setPage = useLogPanel((state) => state.setPage);
   const setIsOpen = useLogPanel((state) => state.setIsOpen);
   const clear = useLogPanel((state) => state.clear);
   const copyAll = useLogPanel((state) => state.copyAll);
@@ -356,14 +362,15 @@ export function LogPanel() {
   const prevCountRef = useRef(filteredLogs.length);
 
   // Auto-scroll to bottom when new logs arrive, unless user scrolled up.
+  // 翻页后（不在第 1 页）不自动滚动：用户正在阅读历史页，滚动会打断阅读位置。
   useEffect(() => {
     const el = bodyRef.current;
     if (!el || !isOpen) return;
-    if (filteredLogs.length > prevCountRef.current && autoScroll) {
+    if (page === 1 && filteredLogs.length > prevCountRef.current && autoScroll) {
       el.scrollTop = el.scrollHeight;
     }
     prevCountRef.current = filteredLogs.length;
-  }, [filteredLogs.length, isOpen, autoScroll]);
+  }, [filteredLogs.length, isOpen, autoScroll, page]);
 
   const onScroll = () => {
     const el = bodyRef.current;
@@ -374,9 +381,23 @@ export function LogPanel() {
 
   const errorCount = useMemo(() => counts.error, [counts.error]);
 
-  if (!isOpen) return null;
-
+  // ── 翻页（#294）：一次只渲染一页（默认 2000 条/页），按时间倒序分页——
+  // 第 1 页是最新的一段，往前翻看更早的日志。总页数按当前过滤结果计算，
+  // 页码超界时钳到最后一页（日志被清空/过滤变少时自动回正）。
   const total = filteredLogs.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageLogs = useMemo(() => {
+    const end = total - (safePage - 1) * pageSize;
+    const start = Math.max(0, end - pageSize);
+    return filteredLogs.slice(start, end);
+  }, [filteredLogs, safePage, pageSize, total]);
+  const effectivePage = Math.min(page, totalPages);
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage, setPage]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-99 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -508,17 +529,17 @@ export function LogPanel() {
             </div>
           ) : (
             <div className="flex flex-col">
-              {filteredLogs.map((entry) => (
+              {pageLogs.map((entry) => (
                 <LogRow key={entry.id} entry={entry} wrap={wrap} />
               ))}
             </div>
           )}
         </div>
 
-        {/* Footer / count */}
+        {/* Footer / count + 翻页（#294：每页 2000 条，倒序分页，第 1 页最新） */}
         <div className="flex h-9 shrink-0 items-center justify-between border-t border-white/8 bg-white/2 px-4 text-[12px] text-gray-500">
           <span>
-            显示 {filteredLogs.length} / 总计 {counts.all} 条
+            本页 {pageLogs.length} / 共 {total} 条（面板总计 {counts.all} 条）
           </span>
           <span className="flex items-center gap-3">
             {!autoScroll && (
@@ -534,7 +555,38 @@ export function LogPanel() {
                 恢复自动滚动
               </button>
             )}
-            <span>保留全部日志</span>
+            <span className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPage(effectivePage + 1)}
+                disabled={effectivePage >= totalPages}
+                title="更早的一页"
+                className="rounded-md p-1 text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className="tabular-nums">
+                第 {effectivePage} / {totalPages} 页（每页 {pageSize} 条）
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage(effectivePage - 1)}
+                disabled={effectivePage <= 1}
+                title="更新的一页"
+                className="rounded-md p-1 text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <ChevronRight size={14} />
+              </button>
+              {effectivePage > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setPage(1)}
+                  className="rounded-md bg-violet-500/90 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-violet-500"
+                >
+                  回到最新
+                </button>
+              )}
+            </span>
           </span>
         </div>
       </div>
