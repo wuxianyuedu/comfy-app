@@ -168,6 +168,7 @@ log/
 | `next dev` 报 `Invalid project directory ... \-p` | pnpm 11 不再剥离 `--`，字面量传给了 next | 已修复：`pnpm dev -p 3100 -H 127.0.0.1` |
 | 所有请求挂死、`tsc` 报 typescript 缺失 | Next 16.3.2 默认 `useTypeScriptCli: true`，与 typescript6 别名不兼容 | 已在 next.config.js 关闭；换回标准 typescript 包后可移除该配置 |
 | 提交时钩子报 `Class extends value undefined` | npm 11.19 在本机解析 .bin 别名链崩溃 | 钩子已改 `pnpm exec`；勿把钩子改回 npx |
+| 构建 release 壳在编译收尾报 `error: failed to remove file ...\target\release\{{shell.app.exe}}` / `Caused by: 拒绝访问。 (os error 5)` | 上一次启动的桌面壳（{{shell.app.exe}}）还开着：cargo 覆盖产物前会先删除旧 exe，Windows 不允许替换运行中进程的可执行文件。等待整个 Rust 编译（可能十几分钟）走完才失败，报错本身也看不出「壳还在跑」（2026-09-06 定位） | 不要用任务管理器单杀壳（其 Next dev server 子进程会残留占端口，见 §3）：正常关闭桌面窗口即可（壳退出时会自行 `taskkill /T` 回收 sidecar 进程树），无响应时用 `taskkill /IM {{shell.app.exe}} /T /F`。已由 `tools/scripts/Build-Guard.ps1` 把这类占用提到编译**之前**拦截，并在失败时追加提示（见 §7） |
 | 打包启动器时报「无法清理 start-tauri」 | 残留的提权进程（如卡死的 pyinstaller/启动器）持有 `_internal` 文件，普通权限无法终止 | 重启后重试；应急：`pyinstaller --distpath dist-new tools/start-tauri.spec` 打到新目录后手动换文件 |
 | 启动时先看到 Edge「无法访问此页面 / ERR_CONNECTION_REFUSED」（localhost 拒绝连接），之后才出现启动进度或直接黑等 | **壳编译时没带 `custom-protocol` feature**（裸 `cargo build --release`）：tauri 的 `cfg(dev)` 由该 feature 决定，不带它 = dev 模式行为——①启动页相对 URL 解析到 `build.devUrl`（http://localhost:3100/{{shell.splash}}），dev server 未就绪时 WebView2 渲染错误页且永不重试（2026-09-02 定位，冷启动必现；官方 `pnpm tauri build` 会自动带该 feature，所以生产包没这问题）②资源根本没内嵌进二进制（启动页由 dev server 提供）。叠加因素：壳二进制过期（改了 src-tauri 后未重编，旧版 splash 的 `window.location.replace` 兜底把错误页顶上来）；WebView2 对导航失败也触发 on_page_load Finished，交换窗口前不校验可达性会把错误页当应用显示 | 重编壳必须带 feature：`cd src-tauri; cargo build --release --features custom-protocol`。现版壳已四重防护：splash 不再自导航、交换前 TCP 可达性校验、main 加载失败重导航循环、启动页看门狗（URL 被带走 1s 内恢复进度页） |
 | 工作流库/项目列表整页空数据，tRPC 查询 500（console 报 no such table / Could not locate bindings） | **Drizzle 迁移三重遗漏**（2026-09-03 定位）：① better-sqlite3@11 无 Node 24 预编译包、本机无 MSVC → 原生绑定缺失，所有 DB 查询崩（升级到 v12，prebuild 下载即可）② `resolveDbPath` 用 `new URL("file:./db.sqlite")` 解析 → Windows 落到盘符根 `F:\db.sqlite` 空库（真实数据在 `prisma/db.sqlite`）③ schema.ts 表名 camelCase 与 Prisma 建的 PascalCase 表不一致 | ① better-sqlite3 钉在 v12（v13 移除预编译包，本机无编译链不能升）② 路径解析统一走 `path.resolve(process.cwd(), …)`（与 drizzle-kit 同锚点）③ 表名已重命名对齐 schema.ts；**换 Node 版本或重装依赖后先跑一次 `pnpm db:studio` 确认表与数据都在** |
@@ -212,6 +213,26 @@ log/
   可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。 |
 | 重新打包双击启动器 | `tools\build\build-launcher.ps1` | PyInstaller onedir，产物 `start-tauri/`（gitignore） |
 | 开发者工具箱 | `tools\build\rebuild-static.ps1` 等 / `dev-tools` | 见 `tools/README.md` |
+
+### 7.1 构建前置检查：目标壳不得在运行（`tools/scripts/Build-Guard.ps1`）
+
+`build-tauri-release.ps1` / `build-standalone.ps1` 在动手前 dot-source
+`tools/scripts/Build-Guard.ps1`，调用 `Assert-ShellNotRunning` 检查
+`src-tauri\target\{release,debug}\{{shell.app.exe}}` 是否正被运行中的桌面壳占用：
+
+- **命中即中止**（exit 1，日志给处置提示），不让整轮编译走到链接收尾才报
+  `os error 5`（见 §5 对应行）；
+- **判据是进程可执行文件的真实路径**，而不是进程名或命令行。预编译壳由
+  `dev-launcher.ps1` 用 `ProcessStartInfo` 启动，`UseShellExecute=false` 时命令行里
+  不含项目根路径——`dev-launcher.ps1` 清理残留壳用的 `CommandLine -like "*$root*"`
+  因此并不可靠，这里不能照抄。`ExecutablePath` 取不到时退回命令行匹配（宁可多提示
+  一次，也不要漏判后白跑构建）；
+- 需要无人值守时用 `-AutoCloseShell` 自动 `taskkill /PID <pid> /T /F` 回收（**禁止**
+  单杀，见 §3），回收失败仍返回 1。
+
+回归测试：`tests/check-file-structure.test.ts` 的「Build-Guard.ps1（构建前置守卫）」
+用例用 PowerShell 打桩 `Get-CimInstance` 喂造数据，锁住「本仓库 target 下的 exe 命中 /
+别处同名进程不命中 / 路径大小写差异命中」三条规则（非 Windows 平台自动跳过）。
 
 #### 应用自更新（tauri-plugin-updater / tauri-plugin-process）
 
