@@ -188,6 +188,7 @@ function Get-OutputTail {
 # ConvertTo-Json 转成 \uXXXX 转义。
 $script:LaunchStart = $null
 $script:ShellStaleMsg = $null
+$script:PnpmMismatchMsg = $null
 
 function Write-LaunchStatus {
   param(
@@ -208,6 +209,7 @@ function Write-LaunchStatus {
       error      = [bool]$IsError
       app_url    = "http://127.0.0.1:3100/workspace"
       stale_shell = $script:ShellStaleMsg
+      pnpm_mismatch = $script:PnpmMismatchMsg
       updated_at = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss")
     }
     $dir = Join-Path $PSScriptRoot "..\run"
@@ -568,13 +570,17 @@ function Test-PnpmVersion {
   # 自动对齐失败：给出手动指引（不阻断启动）
   Write-Log "手动对齐方法（参考 docs/guides/sync-after-pull.md）：" -Level WARN
   Write-Log "  corepack enable && corepack prepare pnpm@$expected --activate" -Level WARN
-  # 透出到启动页 banner（复用 stale_shell 字段——splash.html 读取它做可见提醒）
+  # 透出到启动页 banner（stale_shell 字段——splash.html 读取它做可见提醒），
+  # 同时独立记录一份供 launch-status.json 的 pnpm_mismatch 字段使用。
   $pnpmTip = ("pnpm 版本不匹配（本机 {0}，项目要求 {1}）；请执行 corepack enable && corepack prepare pnpm@{2} --activate 后重启应用" -f $actual, $expected, $expected)
+  $script:PnpmMismatchMsg = $pnpmTip
   if ($script:ShellStaleMsg) {
     $script:ShellStaleMsg = $script:ShellStaleMsg + "；" + $pnpmTip
   } else {
     $script:ShellStaleMsg = $pnpmTip
   }
+  # 同步补录进 app-runtime 面板日志（对齐「警告要能显示在启动日志中」的要求）
+  Write-ShellStaleRuntimeLog
 }
 
 # ── 预检 1：node_modules 健康检查 ──
@@ -693,12 +699,34 @@ function Test-ShellFreshness {
   if ($newestPath) {
     Write-Log ("桌面壳（app.exe，{0:yyyy-MM-dd HH:mm}）比源码/配置旧（{1}，{2:yyyy-MM-dd HH:mm}），本次运行旧版界面逻辑。" -f $exeTime, (Split-Path $newestPath -Leaf), $newest) -Level WARN
     Write-Log "如遇黑屏/资源缺失/行为不符，请先执行：cd src-tauri; cargo build --release --features custom-protocol" -Level WARN
-    # 透出到启动页的可见提醒（launch-status.json 的 stale_shell 字段）
+    # 透出到启动页的可见提醒（launch-status.json 的 stale_shell 字段），
+    # 同步记入应用日志面板可见的 app-runtime 通道（log/services/app-runtime.log）。
     $script:ShellStaleMsg = "正在运行旧版桌面壳（app.exe 编译于 {0:MM-dd HH:mm}，源码此后有改动），界面可能不是最新逻辑；建议重编：cd src-tauri && cargo build --release --features custom-protocol" -f $exeTime
+    Write-ShellStaleRuntimeLog
   } else {
     Write-Log "桌面壳与源码/配置时间戳一致（预检通过）" -Level INFO
     $script:ShellStaleMsg = $null
   }
+}
+
+# 把「旧版桌面壳 / pnpm 版本不匹配」提醒同步补录进 app-runtime 面板日志
+# （log/services/app-runtime.log，应用日志面板轮询展示）。此刻 dev server 尚未
+# 启动，无法走 /api/logs/app-runtime 写入端点，直接按面板可解析的行格式
+# [YYYY-MM-DD HH:mm:ss.mmm] [LEVEL] [ns] msg 追加写（与 src/lib/app-runtime-log.ts
+# 同一格式）。失败静默：提醒落不进面板不影响启动。
+function Write-ShellStaleRuntimeLog {
+  try {
+    if ($script:ShellStaleMsg) {
+      $servicesDir = Join-Path $logRoot "services"
+      if (-not (Test-Path -LiteralPath $servicesDir)) {
+        New-Item -ItemType Directory -Path $servicesDir -Force | Out-Null
+      }
+      $runtimeLog = Join-Path $servicesDir "app-runtime.log"
+      $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
+      $line = "[$ts] [WARN] [launcher] $($script:ShellStaleMsg)"
+      Add-Content -LiteralPath $runtimeLog -Value $line -Encoding utf8 -ErrorAction SilentlyContinue
+    }
+  } catch { }
 }
 
 # ── 预检 1.5：数据库 schema 同步（Drizzle）──

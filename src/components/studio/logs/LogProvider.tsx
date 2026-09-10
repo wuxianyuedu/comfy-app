@@ -11,6 +11,7 @@ import {
   isNextDevNoise,
   isNoisyFrameworkLog,
   isReactQueryLog,
+  isRoutineRpcTimingLog,
   parseFileLogs,
   serialize,
   useLogStore,
@@ -86,6 +87,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
          * 把输出级别降级为 debug——devtools 的 Verbose 仍可见，便于排查。 */
         if (
           isReactQueryLog(args) ||
+          isRoutineRpcTimingLog(args) ||
           isNoisyFrameworkLog(args) ||
           isNextDevNoise(args)
         ) {

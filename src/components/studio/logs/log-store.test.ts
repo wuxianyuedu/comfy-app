@@ -4,6 +4,8 @@ import {
   serialize,
   isNextDevNoise,
   isReactQueryLog,
+  isRoutineRpcTimingLog,
+  isRoutineRpcTimingLine,
   parseFileLogs,
   captureLocation,
 } from "./log-store";
@@ -502,6 +504,44 @@ describe("isNextDevNoise Next.js dev 提示识别", () => {
     expect(isNextDevNoise(["完成加载，耗时 12ms"])).toBe(false);
     expect(isNextDevNoise(["refresh token 已更新"])).toBe(false);
     expect(isNextDevNoise([])).toBe(false);
+  });
+});
+
+describe("isRoutineRpcTimingLog 常规 tRPC 调用计时识别（#294）", () => {
+  it("识别 [rpc]/[trpc] 命名空间的 info 计时行", () => {
+    expect(
+      isRoutineRpcTimingLog(['[rpc] setting.dbStudioStatus 155ms {"type":"query"}']),
+    ).toBe(true);
+    expect(isRoutineRpcTimingLog(["[trpc] generate.generate 25ms"])).toBe(true);
+    expect(isRoutineRpcTimingLog(["rpc] setting.get 12ms"])).toBe(true);
+  });
+
+  it("业务日志与告警不误吞", () => {
+    expect(isRoutineRpcTimingLog(["设置加载失败 未知错误"])).toBe(false);
+    expect(isRoutineRpcTimingLog(["[task] 任务完成 abc"])).toBe(false);
+    expect(isRoutineRpcTimingLog([])).toBe(false);
+  });
+});
+
+describe("isRoutineRpcTimingLine 文件行侧过滤（#294）", () => {
+  it("app-runtime 常规 INFO 计时行返回 true（不进面板）", () => {
+    expect(
+      isRoutineRpcTimingLine(
+        '[2026-09-15 10:20:30.123] [INFO] [rpc] setting.dbStudioStatus 155ms {"type":"query"}',
+      ),
+    ).toBe(true);
+  });
+
+  it("WARN 级别的慢查询行保留（返回 false）", () => {
+    expect(
+      isRoutineRpcTimingLine(
+        "[2026-09-15 10:20:30.123] [WARN] [trpc] generate.generate 1500ms",
+      ),
+    ).toBe(false);
+  });
+
+  it("非 rpc 业务行保留", () => {
+    expect(isRoutineRpcTimingLine("普通业务输出")).toBe(false);
   });
 });
 
