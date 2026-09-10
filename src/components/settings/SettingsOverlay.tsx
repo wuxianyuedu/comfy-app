@@ -66,8 +66,18 @@ export function SettingsOverlay({ onClose }: SettingsOverlayProps) {
     return (
       <div className="bg-bg fixed inset-0 z-50">
         <SettingsShell {...frame}>
-          <div className="text-muted-foreground grid min-h-[60vh] place-items-center pb-6">
-            配置数据未就绪
+          {/* 同独立路由：兜底也要有「重试 + 日志面板」出口，不给死胡同文案 */}
+          <div className="relative">
+            <SettingsLoadError
+              errorText="配置数据未就绪（查询已结束但未返回可用配置）"
+              onRetry={c.retry}
+            />
+            <button
+              onClick={onClose}
+              className="text-muted-foreground hover:text-foreground absolute bottom-6 left-1/2 -translate-x-1/2 text-sm underline"
+            >
+              返回工作区
+            </button>
           </div>
         </SettingsShell>
       </div>
