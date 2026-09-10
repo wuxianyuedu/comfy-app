@@ -105,6 +105,9 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 - Job Object 的 `KILL_ON_JOB_CLOSE` 标志在本机设置失败（Win32 错误 87，
   标准调用亦然，疑似系统构建/安全软件拦截），启动器会 WARN 并依赖自身
   兜底清理。**不要**假设 Job 标志生效。
+- 桌面壳（app.exe）的生命周期必须有人兜底：壳由 dev-launcher.ps1 拉起，正常路径以「壳退出」为锚点回收；**启动器先退出（用户关掉启动器窗口 / python 监控线程结束）时壳会变成无主常驻进程**（窗口没了、进程还在，锁住 `target\release\app.exe`）。因此：
+  - dev-launcher.ps1 启动前按「exe 真实路径落在本仓库 `src-tauri\target\{release,debug}`」回收残留壳（**不要**按 `CommandLine -like` 判断：预编译壳经 `ProcessStartInfo(UseShellExecute=false)` 启动，命令行里不含项目根路径，会漏判）；
+  - 壳拉起后把 PID 写入 `log/launcher/tauri-shell.pid`，python 启动器的监控线程在 dev-launcher 退出/异常/超时路径检查该 PID，仍存活就 `taskkill /PID <pid> /T /F` 补刀并删除 PID 文件。
 - pnpm 已关闭 `verifyDepsBeforeRun`（见 §6）：任何 pnpm 命令都不会隐式
   补跑 install。dev server 运行期间不要手动跑 `pnpm install`
   （better-sqlite3 等原生模块被进程锁定，install 会 EPERM）。
@@ -133,12 +136,14 @@ log/
 | `log/launcher/start-tauri-launcher.log` | python 启动器 | 双击→pwsh→窗口检测的链路日志 | 超过 512KB 轮转，保留 5 份 |
 | `log/launcher/pnpm-install-stdout/stderr.log` | dev-launcher.ps1（依赖预检） | 自动补装依赖的原始输出 | 每次触发覆盖 |
 | `log/launcher/drizzle-push-stdout/stderr.log` | dev-launcher.ps1（schema 同步） | drizzle-kit push / heal-db 的原始输出 | 每次启动覆盖 |
+| `log/launcher/tauri-shell.pid` | dev-launcher.ps1 写 / python 启动器读+删 | 本次拉起的桌面壳 PID；启动器先退出时靠它对仍存活的壳做 `taskkill /T /F` 兜底回收（见 §3） | 每次启动覆盖，兜底回收后删除 |
 | `run/launch-status.json` | python 启动器 | 结构化启动进度，splash 页展示；launcher 退出 30s 后自删 | — |
 | 启动页「查看日志」面板 | splash 前端轮询 `get_launch_log` | dev-launcher.log（经 sentinel 定位）+ dev-launcher-stderr.log + log/shell/shell.log（release）的尾部（去 ANSI、限长），启动页实时看执行到哪一步 | — |
 | `.next/dev/logs/next-development.log` | Next dev server | dev server 内部日志（含锁冲突提示） | Next 自管 |
 | `log/services/comfyui-runtime.log` | Next server（src/lib/comfyui/lifecycle.ts） | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间；每次启动/停止前会写一条 **ANSI 亮色会话横幅**（`▶`/`■` box 分隔线），使多次启动累积的日志能一眼分清会话边界；设置页「创作后端 → 启动日志」面板经 `GET /api/logs/current?source=comfyui-runtime` 实时跟随。手动启动不设硬超时（冷加载慢不误报，可手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长） | 追加不轮转；接口首次打开只回尾部 128KB |
 | `log/services/comfyui-keepalive-<ts>.out/.err.log` | dev-launcher 保活中介（Start-Process 重定向） | 保活模式下 ComfyUI 的完整原始输出，等待循环增量跟随进 runtime.log | 按次命名，不自动清理 |
 | `log/services/drizzle-studio-runtime.log` `log/services/ollama-runtime.log` | Next server（对应 lifecycle / api 路由） | Drizzle Studio / Ollama 拉起与子进程输出，设置页日志面板跟随（同 comfyui-runtime 模式） | 追加不轮转 |
+| `log/services/app-runtime.log` | Next server（src/lib/app-runtime-log.ts） | **应用运行期业务操作日志**：tRPC 中间件每次调用（path+duration+type）+ 生成任务入队/完成/失败等里程碑，`[日期时间] [LEVEL] [ns] msg` 本地时区行格式；仅记事件/耗时/类型，不外泄 prompt/PII；应用内「应用日志」面板经 `GET /api/logs/current?source=app-runtime` 实时轮询（规范 07 §7.11） | 追加不轮转 |
 | `log/tools/*.log` | tools/scripts（Log-Common.ps1）与 setup 脚本 | 构建/打包/工具运行日志（build-tauri-release、build-standalone、build-launcher、rebuild-static、comfy-cli-setup 等） | 每次运行覆盖 |
 | `log/archive/<yyyy-MM>/dev-launcher-<ts>.log` | dev-launcher.ps1 | 历史归档 | 无限累积，定期清理 |
 
@@ -164,6 +169,8 @@ log/
 | `next dev` 报 `Invalid project directory ... \-p` | pnpm 11 不再剥离 `--`，字面量传给了 next | 已修复：`pnpm dev -p 3100 -H 127.0.0.1` |
 | 所有请求挂死、`tsc` 报 typescript 缺失 | Next 16.3.2 默认 `useTypeScriptCli: true`，与 typescript6 别名不兼容 | 已在 next.config.js 关闭；换回标准 typescript 包后可移除该配置 |
 | 提交时钩子报 `Class extends value undefined` | npm 11.19 在本机解析 .bin 别名链崩溃 | 钩子已改 `pnpm exec`；勿把钩子改回 npx |
+| 构建 release 壳在编译收尾报 `error: failed to remove file ...\target\release\app.exe` / `Caused by: 拒绝访问。 (os error 5)` | 上一次启动的桌面壳（app.exe）还开着：cargo 覆盖产物前会先删除旧 exe，Windows 不允许替换运行中进程的可执行文件。等待整个 Rust 编译（可能十几分钟）走完才失败，报错本身也看不出「壳还在跑」（2026-09-06 定位） | 不要用任务管理器单杀壳（其 Next dev server 子进程会残留占端口，见 §3）：正常关闭桌面窗口即可（壳退出时会自行 `taskkill /T` 回收 sidecar 进程树），无响应时用 `taskkill /IM app.exe /T /F`。已由 `tools/scripts/Build-Guard.ps1` 把这类占用提到编译**之前**拦截，并在失败时追加提示（见 §7） |
+| 桌面窗口已经关了，`app.exe` 进程还在（只能手工 `taskkill /IM app.exe /T /F`） | **启动器先于壳退出，壳成了无主进程**：壳由 dev-launcher.ps1 拉起，正常路径以「壳退出」为锚点回收；但用户关掉启动器窗口 / python 监控线程结束时 dev-launcher 的 `WaitForExit` 与 taskkill 兜底都没机会跑。旧实现的「残留壳清理」还按 `CommandLine -like "*<项目根>*"` 筛选，而预编译壳经 `ProcessStartInfo(UseShellExecute=false)` 启动、命令行里不含项目根路径 → 既漏判残留，也让残留壳锁住 `target\release\app.exe`（连带 §5「os error 5」那条） | 已三层治理（2026-09-06 定位）：①启动前按 **exe 真实路径**回收残留壳；②壳拉起后 PID 落 `log/launcher/tauri-shell.pid`，python 启动器在监控退出/异常/超时时对仍存活的 PID 执行 `taskkill /PID <pid> /T /F` 后删除该文件；③正常关窗仍走 dev-launcher 的进程树回收。见 §3 |
 | 打包启动器时报「无法清理 start-tauri」 | 残留的提权进程（如卡死的 pyinstaller/启动器）持有 `_internal` 文件，普通权限无法终止 | 重启后重试；应急：`pyinstaller --distpath dist-new tools/start-tauri.spec` 打到新目录后手动换文件 |
 | 启动时先看到 Edge「无法访问此页面 / ERR_CONNECTION_REFUSED」（localhost 拒绝连接），之后才出现启动进度或直接黑等 | **壳编译时没带 `custom-protocol` feature**（裸 `cargo build --release`）：tauri 的 `cfg(dev)` 由该 feature 决定，不带它 = dev 模式行为——①启动页相对 URL 解析到 `build.devUrl`（http://localhost:3100/splash.html），dev server 未就绪时 WebView2 渲染错误页且永不重试（2026-09-02 定位，冷启动必现；官方 `pnpm tauri build` 会自动带该 feature，所以生产包没这问题）②资源根本没内嵌进二进制（启动页由 dev server 提供）。叠加因素：壳二进制过期（改了 src-tauri 后未重编，旧版 splash 的 `window.location.replace` 兜底把错误页顶上来）；WebView2 对导航失败也触发 on_page_load Finished，交换窗口前不校验可达性会把错误页当应用显示 | 重编壳必须带 feature：`cd src-tauri; cargo build --release --features custom-protocol`。现版壳已四重防护：splash 不再自导航、交换前 TCP 可达性校验、main 加载失败重导航循环、启动页看门狗（URL 被带走 1s 内恢复进度页） |
 | 工作流库/项目列表整页空数据，tRPC 查询 500（console 报 no such table / Could not locate bindings） | **Drizzle 迁移三重遗漏**（2026-09-03 定位）：① better-sqlite3@11 无 Node 24 预编译包、本机无 MSVC → 原生绑定缺失，所有 DB 查询崩（升级到 v12，prebuild 下载即可）② `resolveDbPath` 用 `new URL("file:./db.sqlite")` 解析 → Windows 落到盘符根 `F:\db.sqlite` 空库（真实数据在 `prisma/db.sqlite`）③ schema.ts 表名 camelCase 与 Prisma 建的 PascalCase 表不一致 | ① better-sqlite3 钉在 v12（v13 移除预编译包，本机无编译链不能升）② 路径解析统一走 `path.resolve(process.cwd(), …)`（与 drizzle-kit 同锚点）③ 表名已重命名对齐 schema.ts；**换 Node 版本或重装依赖后先跑一次 `pnpm db:studio` 确认表与数据都在** |
@@ -172,12 +179,17 @@ log/
 | 设置/工坊/模型等 `(main)` 路由组页面整组 404（应用内「页面走丢了」），应用日志面板恒为空（全部 0 条）；同会话根级路由 `/workspace`、`/login` 正常且该坏状态持续整场 | Turbopack dev 会话级路由组失效（上游 vercel/next.js#97897 同类，偶发于某次 `next dev` 启动，2026-09-06 定位，Next 16.3.2）：坏会话内 `(main)` 组路由不进编译直接 404；日志面板轮询的 `/api/logs/current` 在同会话同样拿不到数据 → 面板全空。与代码无关（源码与 `.next` 编译产物均完好） | 关闭桌面窗口重启应用即恢复（dev server 重建路由表）；重启无效再删 `.next` 重启。持续跟进上游修复，修复后可移除本条 |
 
 | `nextjs-stderr-<ts>.log` 被同一条 **Edge 编译噪声刷屏**（同一段文本重复数万行、可到数十 MB，去重后仅几十行唯一内容），真实的运行报错（Failed to fetch / ECONNREFUSED / JSON 解析错等）全被淹没看不见 | **Edge instrumentation 包被静态拉进 Node-only 模块**：`src/sentry.edge.config.ts` 顶层 `import { env } from "~/env"` 把整个 `src/env.js` 并进 Edge 包。env.js 虽已用 `NEXT_RUNTIME !== "edge"` 做了**运行期**守卫，但 Turbopack 编译 Edge 包时是静态把整个模块图并进去，`node:fs` / `node:path` / `node:url` 仍被静态分析识别为「Edge 不支持的内置模块」→ 每次编译都报 `⚠ ./src/env.js … not supported in the Edge Runtime` + `Ecmascript file had an error`，import trace `src/env.js → src/sentry.edge.config.ts → src/instrumentation.ts`，Edge instrumentation 编译卡进无限重试/重编循环把 stderr 刷满（2026-09-08 定位）。只加运行守卫挡不住静态打包追踪 | 已修：`src/sentry.edge.config.ts` 不再 import `~/env`，Edge 只需要 `SENTRY_DSN` 与 `NODE_ENV`，直接读 `process.env.SENTRY_DSN` / `process.env.NODE_ENV`（沿用该文件「未配置即 no-op」风格），env.js 彻底不进 Edge 包，噪声消失。server 端 config（sentry.server.config.ts）仍可用 `~/env` |
+| 设置页 / 工作区等页面打开即报 **“An unexpected Turbopack error occurred”**（浏览器 overlay），`next dev` 终端输出 `FATAL: An unexpected Turbopack error occurred: Failed to write app endpoint /(main)/settings/page`，`Caused by: the chunking context … does not support external modules (request: node:fs)`，且非编译型报错而是整页 500 | **客户端组件链顶层 import 了 Node-only 模块**：`app-runtime-log.ts` 顶层 `import fs from "node:fs"` / `node:path`（Node 专用），却被客户端 hook `use-settings-page.ts`（`"use client"`）顶层 `import { createAppRuntimeLogger }` 引用。Turbopack 编译**浏览器** chunk 时把该模块整图形入，`node:fs` 被识别为「浏览器不支持的 external module」→ 编译该 endpoint 失败，页面 500（2026-09-09 定位，ISSUE #282 回归，由提交 29d8b1d 引入——客户端为补记 `app-runtime` 日志直接 import 了 Node 日志模块）。与 §5 上一条 Edge 噪声同源：都是「Node-only 模块被错误打包进非 Node 运行时图形」。`/*turbopackIgnore*/` 只能豁免动态访问点，**挡不住顶层 `import` 的静态打包** | 已修：客户端逻辑层不得直接 import `app-runtime-log`（Node-only）。改为经服务端写入通道——新增 `POST /api/logs/app-runtime`（route.ts 用 `createAppRuntimeLogger` 落 `log/services/app-runtime.log`，白名单 ns 与 level、截断超长消息），客户端网络层 `src/lib/log-file-client.ts` 新增 `postAppRuntimeLog()`，`use-settings-page.ts` 在 `hasError` 分支 `void postAppRuntimeLog("settings","error",msg,fields)` 取代直接 logger 调用。规范 07 §7.12 新增「客户端补记 app-runtime 必须走服务端通道」的约定 |
 | 任务报「任务卡在队列超过 Ns（…无人 re-claim）」 | ComfyUI 未运行：WS 连不上 → `processQueue` 不出队 → reaper 30s 判死 | 已加自动启动：配置 `comfyuiPath`（设置 → 创作后端）后任务执行前自动拉起 ComfyUI 并等待就绪；reaper 在启动窗口期跳过回收。也可在设置页手动点「启动 ComfyUI」。启动日志：`log/services/comfyui-runtime.log` |
+| 子图（liblib）工作流每次生成的都是同一张图，且与提示词无关；日志里「真实执行 seed」恒等于工作流里存的那个默认值 | **覆盖只写到了子图 wrapper，没写进内层节点**：raw 子图 wrapper 的 `widgets_values` 只是**宿主值**；comfy-cli 把子图展开成 `wrapperId:innerId` 后，UI→API 转换读的是**内层节点**的 `widgets_values`。而「把宿主值回写进内层」（promoted-widget overlay）是 comfy-cli **1.20** 才有的逻辑，1.17~1.19 会用内层默认值整段盖掉 → 提示词/种子/步数全部失效。日志特征：`输入参数（workflowInputs，N 项）` 里值正确，但 `真实执行 seed = <工作流默认值>` 恒定不变；把临时工作流文件直接拖进 ComfyUI 跑也是同一张图 | 已修：`applyRawOverrides` 对子图 wrapper 的覆盖项按 ComfyUI 前端的映射规则（`sub.inputs[i].linkIds` → 起点为 `-10` 的边界连线 → 内层 `target_id` / `target_slot`）同步写进内层节点，seed 的 `control_after_generate` 哨兵槽与「随机值」兜底生成的随机种子同样同步。回归测试见 `src/lib/comfyui/executor-cli.test.ts`（`applyRawOverrides — 子图 wrapper 覆盖同步到内层节点`）。另注：comfy-cli 版本可用 `python-venv/comfy-cli/Scripts/python.exe -m comfy_cli --version` 确认，1.20 起两条路径都生效 |
+
+| 任务报「任务卡在队列超过 Ns（…无人 re-claim）」——但这次 ComfyUI 明明在运行、comfy-cli 进程已启动 | **raw UI-format（liblib 子图）路径的误判**：任务经 `executeViaComfyCli` 提交，但直到 comfy-cli 子进程回传 `prompt_id` 前，DB 行保持 `QUEUED / promptId=null`。comfy-cli 的 Python 启动 + 工作流转换 + POST /prompt 可能超过 reaper 的 30s 阈值（STALE_MS），于是 `reapStaleQueuedTasks` 把这个健康在飞的任务误判为孤儿并标记 FAILED。日志特征：`✓ comfy-cli 进程已启动` 之后立刻出现 `任务卡在队列超过 Ns` | 已修：`reapStaleQueuedTasks` 增加 in-memory 认领保护 `isTaskClaimedInProcess`——任务若仍被当前进程认领（还在 `s.queue` / 有 comfy-cli 子进程 `cliProcs` / `executedWorkflow` 已记录），则不回收，交给正常执行路径收口；只有 cold restart 后无任何 in-memory 足迹的才判孤儿。回归测试见 `src/lib/comfyui/reaper.test.ts` |
 
 | 保活（keepAlive）模式下 ComfyUI 启动日志面板空白（只有 spawn 行）；或启动中报「保活进程已退出」但 ComfyUI 后来其实起来了 | 四个因素叠加（2026-09-06 定位）：① Start-Process 拉起的进程没有 stdio 管道，日志无处可去；② 进程存在性查询（Get-CimInstance 全量枚举 ~3.4s，贴近 4s 超时）在冷启动高负载下超时被当「进程不在」；③ 查询里内嵌双引号（-Filter "Name LIKE…"）经 execFile argv → PS -Command 的引号转义链路变形，恒空匹配（进程活着也查不到）；④ 字面反斜杠 Replace 在同一链路里被吞，路径分隔符归一失效 | 已修：Start-Process 把 stdout/stderr 重定向到按次命名的 `log/services/comfyui-keepalive-<时间>.out/.err.log`，等待循环增量跟随进 runtime.log；进程查询改纯单引号 + `[char]92` 运行时构造反斜杠 + Where 内 Name 过滤 + 10s 超时；判死需**连续 2 次**查询都找不到进程 | 重启应用生效；完整启动输出在重定向文件里可整段查看 |
 
 | 启动时 `dev-launcher.ps1` 报 `ParserError: Unexpected token '-Level'`（定位到 corepack prepare 分支的 Write-Log 行），启动中断 | Write-Log 调用里把命名参数 `-Level WARN` 误写进了字符串括号内：`Write-Log ("…" -Level WARN)`，PowerShell 把它解析成对字符串的无效操作符而报语法错（2026-09-07 定位，仅当 pnpm 版本不一致且 corepack prepare 失败触发） | 已修：右括号移到字符串后：`Write-Log ("…") -Level WARN`，让 `-Level` 成为命名参数。排查同类错误：`grep -nE '\("[^"]*" -Level' *.ps1` |
 | 壳内打开 ComfyUI 报「Command open_comfyui_window not allowed by ACL」（壳已重编、命令已注册、`remote.json` 已加 `core:default` 仍如此） | 根因在 Tauri 2.11 起的安全变更（tauri fix#15266，随 2.11.0 合入）：远程源调用**应用自建命令**一律强制走 ACL，**必须先在 build.rs 用 `AppManifest::commands` 声明命令**（生成 `allow-<command>` 权限条目），否则即便 `remote.json` 的 permissions 有 `core:default` 也无法命中应用命令 → 无授权被拒。`core:default` 只放行 core 插件命令，不含应用自建命令。附带影响：一旦启用 AppManifest，本地 splash 的自建命令（get_launch_status/get_app_url/get_launch_log/navigate_to_app）也随之受 ACL 管控，需补 splash 的本地授权能力 | 三处配合：①`build.rs` 改 `tauri_build::try_build(Attributes::new().app_manifest(AppManifest::new().commands(&[...全部5条命令])))`；②`capabilities/remote.json` permissions 追加应用命令授权 `allow-open-comfyui-window`（main 远程窗）；③新增 `capabilities/splash.json` 给 splash 窗授 `allow-get-launch-status`/`allow-get-app-url`/`allow-get-launch-log`/`allow-navigate-to-app`（本地命令，防 AppManifest 打开后 splash 也被拦）。改壳层配置/构建脚本，须重编：`cd src-tauri; cargo build --release --features custom-protocol` |
+| 设置页「打开查看 ComfyUI」弹出独立第 2 窗口且空白、无法关闭 | 旧方案用 Rust `open_comfyui_window` 在壳内另开一个 `comfyui` WebviewWindow；用户反馈这违背「像文件管理器多页签」的预期，且独立窗口可能空白/难关闭 | 已改为**同一主窗口内的应用级页签**：`shell-tabs-store` 管理页签，`ShellTabs` 在窗口顶部渲染页签栏，ComfyUI 以 iframe 内嵌为主应用页签并行内容（CSS 显隐切换，主应用组件树保持挂载不丢态）。配套：①`tauri.conf.json` CSP 增加 `frame-src 'self' http://127.0.0.1:* http://localhost:*` 放行本地 ComfyUI 被 iframe 内嵌；②设置页 `openComfy` 桌面壳分支改为 `useShellTabs.openTab` 打开 ComfyUI 页签，不再调用 `open_comfyui_window`；③浏览器/dev 模式仍走系统浏览器兜底。注：若 ComfyUI 自身设置 `X-Frame-Options`/CSP `frame-ancestors` 拒绝嵌套，页签会空白——此时可回退到独立窗口（Rust `open_comfyui_window` 保留）或让 ComfyUI 放行 frame |
 ## 6. 工具链钉死项（改之前必须理解原因）
 
 | 位置 | 配置 | 原因 |
@@ -203,6 +215,26 @@ log/
   可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。 |
 | 重新打包双击启动器 | `tools\build\build-launcher.ps1` | PyInstaller onedir，产物 `start-tauri/`（gitignore） |
 | 开发者工具箱 | `tools\build\rebuild-static.ps1` 等 / `dev-tools` | 见 `tools/README.md` |
+
+### 7.1 构建前置检查：目标壳不得在运行（`tools/scripts/Build-Guard.ps1`）
+
+`build-tauri-release.ps1` / `build-standalone.ps1` 在动手前 dot-source
+`tools/scripts/Build-Guard.ps1`，调用 `Assert-ShellNotRunning` 检查
+`src-tauri\target\{release,debug}\app.exe` 是否正被运行中的桌面壳占用：
+
+- **命中即中止**（exit 1，日志给处置提示），不让整轮编译走到链接收尾才报
+  `os error 5`（见 §5 对应行）；
+- **判据是进程可执行文件的真实路径**，而不是进程名或命令行。预编译壳由
+  `dev-launcher.ps1` 用 `ProcessStartInfo` 启动，`UseShellExecute=false` 时命令行里
+  不含项目根路径——`dev-launcher.ps1` 清理残留壳用的 `CommandLine -like "*$root*"`
+  因此并不可靠，这里不能照抄。`ExecutablePath` 取不到时退回命令行匹配（宁可多提示
+  一次，也不要漏判后白跑构建）；
+- 需要无人值守时用 `-AutoCloseShell` 自动 `taskkill /PID <pid> /T /F` 回收（**禁止**
+  单杀，见 §3），回收失败仍返回 1。
+
+回归测试：`tests/check-file-structure.test.ts` 的「Build-Guard.ps1（构建前置守卫）」
+用例用 PowerShell 打桩 `Get-CimInstance` 喂造数据，锁住「本仓库 target 下的 exe 命中 /
+别处同名进程不命中 / 路径大小写差异命中」三条规则（非 Windows 平台自动跳过）。
 
 #### 应用自更新（tauri-plugin-updater / tauri-plugin-process）
 
@@ -267,8 +299,8 @@ log/
 | 入口 | 逻辑 |
 |---|---|
 | `tools/start/start-web.ps1` | `scripts/dev-launcher.ps1` |
-| `tools/start/start-tauri.ps1`（隐藏窗口，prebuilt，等价 `start-tauri.exe`） | `scripts/dev-launcher.ps1 -Prebuilt` |
-| `tools/start/start-tauri-dev.ps1`（隐藏窗口，tauri dev，原 `start-tauri.ps1`） | `scripts/dev-launcher.ps1 -Tauri` |
+| `tools/start/start-tauri.ps1` | 直接启动 `start-tauri\start-tauri.exe`（prebuilt，见 `scripts/start_tauri_launcher.py`） |
+| `tools/start/start-tauri-dev.ps1`（隐藏窗口，原 `.vbs`） | `scripts/dev-launcher.ps1 -Tauri` |
 | `tools/start/run-local.ps1` | `scripts/prepare-local-run.ps1` |
 | `tools/start/verify-quality.ps1` | `scripts/quality-gate.ps1` |
 | `tools/start/sync-lint.ps1` | `scripts/sync-lint.ps1` |
