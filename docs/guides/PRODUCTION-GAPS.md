@@ -17,7 +17,10 @@
 - [x] ReactFlow Provider 包装方案落地(tests/helpers/react-flow.tsx)+
       CanvasNode/FlowNode 渲染冒烟与折叠交互(7 用例)。表单/生成链路的深度
       行为测试(fetch/poll 生命周期)仍开放。
-- [ ] `CustomNodesSettings` 主组件(1116 行)拆分后行为测试。
+- [x] `CustomNodesSettings` 主组件拆分后行为测试:组件已按四层范式拆为容器 73 +
+      视图 379 + hook 503 + 纯函数模块,并补齐逻辑层行为测试
+      (`hooks/use-custom-nodes-settings.test.ts`,17 用例:失败路径必须有可见出口、
+      打开才请求、解析收尾时序、派生分组计数)。
 - [x] Playwright 框架 + 冒烟 E2E(e2e/smoke.spec.ts:login 渲染/Tab 切换、/ 重定向 workspace;`npm run test:e2e`)。
 - [ ] 覆盖率棘轮抬升:`src/lib/comfyui/**` 入榜(executor 家族已类型化,
       补 70%+ 用例后设阈值)。
@@ -36,8 +39,8 @@
 - [x] 未使用/单规则可修的 eslint-disable 头清理(5355a2b)。
 - [ ] 34 个 lint warning 清零(alt-text/no-img-element/exhaustive-deps/
       unused-vars;exhaustive-deps 已有三分类文档,按类处置)。
-- [ ] `DynamicWorkflowForm`(958)与 `CustomNodesSettings` 主组件(1116)
-      进一步拆分(结构性提醒由 pre-commit 持续输出)。
+- [x] `CustomNodesSettings` 主组件进一步拆分(见 P1 对应条目,容器 73 行)。
+- [ ] `DynamicWorkflowForm`(958)进一步拆分(由 ISSUE #319 承接)。
 - [ ] `components/model/model-library.tsx` 与 `studio/ModelLibrary.tsx`
       语义撞车——确认两者职责或合并。
 
