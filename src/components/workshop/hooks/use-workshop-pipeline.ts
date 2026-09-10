@@ -7,10 +7,13 @@ import React from "react";
 
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import {
+  buildLibraryWorkflowInput,
   fetchApiChannels,
+  fetchWorkshopWorkflows,
   startLocalGenerate,
   watchTask,
   type GenerateInput,
+  type WorkshopWorkflowOption,
 } from "~/lib/workshop/generation-client";
 import {
   fetchServerDraft,
@@ -67,6 +70,9 @@ interface WorkshopDraft {
   characters: Character[];
   shots: Shot[];
   checkpoint: string;
+  /** 工坊选定用来生成的「工作流库工作流」id（ISSUE #145）。
+   *  空串 = 用内置 txt2img 工作流。仅本地持久化（服务端镜像不含此字段）。 */
+  workflowId: string;
 }
 
 /** 项目摘要：切换器只需要这几个字段，正文按 id 另读。 */
@@ -88,6 +94,7 @@ function emptyDraft(): WorkshopDraft {
     characters: [],
     shots: [],
     checkpoint: "",
+    workflowId: "",
   };
 }
 
@@ -100,6 +107,7 @@ function dtoToDraft(dto: WorkshopDraftDto): WorkshopDraft {
     characters: dto.characters ?? [],
     shots: dto.shots ?? [],
     checkpoint: dto.checkpoint ?? "",
+    workflowId: "",
   };
 }
 
@@ -134,6 +142,7 @@ function parseDraft(raw: string | null): WorkshopDraft {
       characters: Array.isArray(draft.characters) ? draft.characters : [],
       shots: Array.isArray(draft.shots) ? draft.shots : [],
       checkpoint: typeof draft.checkpoint === "string" ? draft.checkpoint : "",
+      workflowId: typeof draft.workflowId === "string" ? draft.workflowId : "",
     };
   } catch {
     return emptyDraft();
@@ -345,6 +354,11 @@ export interface WorkshopPipelineController {
   checkpoints: string[];
   checkpoint: string;
   setCheckpoint: (value: string) => void;
+  /** 工作流库里的可选工作流（ISSUE #145）。 */
+  workflowOptions: WorkshopWorkflowOption[];
+  /** 选定的工作流 id；空串 = 内置 txt2img。 */
+  workflowId: string;
+  setWorkflowId: (value: string) => void;
   apiChannels: ApiChannelsView | null;
   imageDoneCount: number;
   clipDoneCount: number;
@@ -454,6 +468,11 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const [checkpoint, setCheckpoint] = React.useState(
     () => loadWorkshopDraftOnce()?.checkpoint ?? "",
   );
+  /* 工坊可用的工作流库工作流 + 当前选择（ISSUE #145）。空 id = 内置 txt2img。 */
+  const [workflowOptions, setWorkflowOptions] = React.useState<WorkshopWorkflowOption[]>([]);
+  const [workflowId, setWorkflowId] = React.useState(
+    () => loadWorkshopDraftOnce()?.workflowId ?? "",
+  );
   const [generating, setGenerating] = React.useState(false);
   const [shotProgress, setShotProgress] = React.useState<ShotProgressMap>({});
   const [rendered, setRendered] = React.useState(false);
@@ -491,8 +510,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       characters,
       shots,
       checkpoint,
+      workflowId,
     }),
-    [meta, scriptMarkdown, scenes, characters, shots, checkpoint],
+    [meta, scriptMarkdown, scenes, characters, shots, checkpoint, workflowId],
   );
 
   /** 把一份草稿灌进所有受管 state（切换 / 删除项目后接手时调用）。 */
@@ -502,6 +522,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     setCharacters(draft.characters);
     setShots(draft.shots);
     setCheckpoint(draft.checkpoint);
+    setWorkflowId(draft.workflowId ?? "");
     setScriptMarkdown(draft.scriptMarkdown);
   }, []);
 
@@ -766,6 +787,8 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       .catch(() => undefined);
     // API 直连通道(生图/视频)的脱敏配置视图;失败按未配置处理。
     void fetchApiChannels().then(setApiChannels);
+    // 工作流库列表：工坊「生成资源」里可选择用哪个工作流生成（ISSUE #145）。
+    void fetchWorkshopWorkflows().then(setWorkflowOptions).catch(() => undefined);
   }, []);
 
   /** 提示条自动消失，避免需要用户手动关闭的瞬时噪声。 */
@@ -780,10 +803,40 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
    * 走与画布一致的本地 ComfyUI 链路(tRPC generate → SSE 任务流),
    * 结果回写 Shot.imageUrl / status,镜头生图阶段自动继承。
    */
+  /** 单镜生成请求的封装：选了工作流库工作流时按 ISSUE #145 只暴露
+   *  提示词 / 尺寸 / 参考图（其余走工作流默认值），否则用内置 txt2img。 */
+  const buildShotInput = React.useCallback(
+    async (shot: Shot): Promise<GenerateInput> => {
+      const size = paramString(shot.params.size, "832x1216");
+      if (workflowId) {
+        const { input } = await buildLibraryWorkflowInput(workflowId, {
+          prompt: shot.prompt,
+          negativePrompt: shot.negativePrompt || undefined,
+          size,
+        });
+        return input;
+      }
+      return {
+        workflow: "txt2img",
+        prompt: shot.prompt,
+        negative: shot.negativePrompt || undefined,
+        checkpoint,
+        steps: Math.round(paramNumber(shot.params.steps, 28)),
+        cfg: paramNumber(shot.params.cfg, 7),
+        sampler: paramString(shot.params.sampler, "euler_ancestral"),
+        scheduler: paramString(shot.params.scheduler, "normal"),
+        size,
+        count: 1,
+      };
+    },
+    [workflowId, checkpoint],
+  );
+
   const generateShot = React.useCallback(
     async (shot: Shot) => {
-      if (!checkpoint) {
-        setNotice("请先在右侧「生成资源」选择一个本地 Checkpoint");
+      // 内置工作流需要 Checkpoint；选定工作流库工作流时模型由工作流自带。
+      if (!workflowId && !checkpoint) {
+        setNotice("请先在右侧「生成资源」选择一个本地 Checkpoint 或一个工作流");
         return;
       }
       setGenerating(true);
@@ -793,18 +846,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         ),
       );
       try {
-        const input: GenerateInput = {
-          workflow: "txt2img",
-          prompt: shot.prompt,
-          negative: shot.negativePrompt || undefined,
-          checkpoint,
-          steps: Math.round(paramNumber(shot.params.steps, 28)),
-          cfg: paramNumber(shot.params.cfg, 7),
-          sampler: paramString(shot.params.sampler, "euler_ancestral"),
-          scheduler: paramString(shot.params.scheduler, "normal"),
-          size: paramString(shot.params.size, "832x1216"),
-          count: 1,
-        };
+        const input = await buildShotInput(shot);
         const taskId = await startLocalGenerate(input);
         setShots((prev) =>
           prev.map((item) =>
@@ -861,7 +903,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         setGenerating(false);
       }
     },
-    [checkpoint],
+    [checkpoint, workflowId, buildShotInput],
   );
 
   const imageDoneCount = shots.filter((item) => !!item.imageUrl).length;
@@ -958,6 +1000,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     checkpoints,
     checkpoint,
     setCheckpoint,
+    workflowOptions,
+    workflowId,
+    setWorkflowId,
     apiChannels,
     imageDoneCount,
     clipDoneCount,

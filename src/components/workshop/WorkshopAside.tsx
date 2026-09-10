@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
+import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 import type { MissingItem } from "~/components/workshop/stage-config";
 
 interface WorkshopAsideProps {
@@ -19,6 +20,10 @@ interface WorkshopAsideProps {
   checkpoints: string[];
   checkpoint: string;
   onCheckpointChange: (value: string) => void;
+  /** 工作流库里的可选工作流（ISSUE #145）；空 id = 内置 txt2img。 */
+  workflowOptions: WorkshopWorkflowOption[];
+  workflowId: string;
+  onWorkflowChange: (value: string) => void;
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
   characterCount: number;
@@ -32,6 +37,9 @@ export function WorkshopAside({
   checkpoints,
   checkpoint,
   onCheckpointChange,
+  workflowOptions,
+  workflowId,
+  onWorkflowChange,
   apiChannels,
   onOpenApiSettings,
   characterCount,
@@ -115,6 +123,33 @@ export function WorkshopAside({
               {checkpoints.map((name) => (
                 <SelectItem key={name} value={name}>
                   {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+        <label className="mt-3 block">
+          <span className="text-muted-foreground mb-1 block text-[11px]">
+            生成工作流（工作流库）
+          </span>
+          {/* 选定工作流后，工坊只暴露 提示词 / 尺寸 / 参考图，其余参数用工作流默认值 */}
+          <Select
+            value={workflowId || "__builtin__"}
+            onValueChange={(value) =>
+              onWorkflowChange(value === "__builtin__" ? "" : (value ?? ""))
+            }
+          >
+            <SelectTrigger
+              size="sm"
+              className="border-border bg-bg text-ink w-full text-xs"
+            >
+              <SelectValue placeholder="内置 txt2img…" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__builtin__">内置 txt2img（默认）</SelectItem>
+              {workflowOptions.map((wf) => (
+                <SelectItem key={wf.id} value={wf.id}>
+                  {wf.name}
                 </SelectItem>
               ))}
             </SelectContent>

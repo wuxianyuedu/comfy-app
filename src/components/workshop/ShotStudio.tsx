@@ -5,6 +5,7 @@ import type { Character, Scene, Shot, StyleRef } from "@/lib/workshop/types";
 import { buildShotNegative, buildShotPrompt } from "@/lib/workshop/prompt-builder";
 import {
   apiGenerateImage,
+  buildLibraryWorkflowInput,
   startLocalGenerate,
   watchTask,
   type GenerateInput,
@@ -43,6 +44,8 @@ interface Props {
   checkpoints: string[];
   checkpoint: string;
   onCheckpointChange: (name: string) => void;
+  /** 选定的工作流库工作流 id；空串 = 内置 txt2img（ISSUE #145）。 */
+  workflowId: string;
   /** Masked API channel config; image channel gate comes from here. */
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
@@ -68,6 +71,7 @@ export function ShotStudio({
   checkpoints,
   checkpoint,
   onCheckpointChange,
+  workflowId,
   apiChannels,
   onOpenApiSettings,
   onShotsChange,
@@ -162,20 +166,32 @@ export function ShotStudio({
     patchShot(shot.id, { status: "running" });
     try {
       if (channel === "local") {
-        const input: GenerateInput = {
-          workflow: "txt2img",
-          prompt: shot.prompt,
-          negative: shot.negativePrompt || undefined,
-          checkpoint: checkpoint || undefined,
-          steps: Math.round(numParam(shot.params.steps, 28)),
-          cfg: numParam(shot.params.cfg, 7),
-          sampler: strParam(shot.params.sampler, "euler_ancestral"),
-          scheduler: strParam(shot.params.scheduler, "normal"),
-          size: shot.params.size !== undefined && shot.params.size !== ""
+        const size =
+          shot.params.size !== undefined && shot.params.size !== ""
             ? strParam(shot.params.size, shotSizeToParam(shotSize))
-            : shotSizeToParam(shotSize),
-          count: 1,
-        };
+            : shotSizeToParam(shotSize);
+        /* 选定工作流库工作流时，按 ISSUE #145 只暴露 提示词 / 尺寸 / 参考图，
+         * 其余参数用工作流默认值；否则用内置 txt2img。 */
+        const input: GenerateInput = workflowId
+          ? (
+              await buildLibraryWorkflowInput(workflowId, {
+                prompt: shot.prompt,
+                negativePrompt: shot.negativePrompt || undefined,
+                size,
+              })
+            ).input
+          : {
+              workflow: "txt2img",
+              prompt: shot.prompt,
+              negative: shot.negativePrompt || undefined,
+              checkpoint: checkpoint || undefined,
+              steps: Math.round(numParam(shot.params.steps, 28)),
+              cfg: numParam(shot.params.cfg, 7),
+              sampler: strParam(shot.params.sampler, "euler_ancestral"),
+              scheduler: strParam(shot.params.scheduler, "normal"),
+              size,
+              count: 1,
+            };
         const taskId = await startLocalGenerate(input);
         patchShot(shot.id, { taskId, status: "running" });
         await runLocalTask(shot.id, taskId);

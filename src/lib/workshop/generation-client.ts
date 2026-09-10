@@ -16,6 +16,10 @@ import {
   type ApiChannelsView,
   type SavedOutput,
 } from "./api-channel-shared";
+import {
+  buildEncapsulatedInputs,
+  type WorkshopExposedValues,
+} from "./workflow-encapsulation";
 
 /** tRPC wire contract for the local (ComfyUI) generate mutation. */
 export type GenerateInput = RouterInputs["generate"]["generate"];
@@ -25,6 +29,59 @@ export async function startLocalGenerate(input: GenerateInput): Promise<string> 
   const res = await vanillaApi.generate.generate.mutate(input);
   if (!res?.taskId) throw new Error("本地生成任务创建失败");
   return res.taskId;
+}
+
+/** 工作流库里的一个可选工作流（工坊「生成资源」下拉用）。 */
+export interface WorkshopWorkflowOption {
+  id: string;
+  name: string;
+  taskType?: string;
+}
+
+/** 拉取工作流列表，供工坊选择「用哪个工作流库工作流生成」。 */
+export async function fetchWorkshopWorkflows(): Promise<WorkshopWorkflowOption[]> {
+  const res = await vanillaApi.workflow.list.query({});
+  const rows: unknown = res;
+  if (!Array.isArray(rows)) return [];
+  const out: WorkshopWorkflowOption[] = [];
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const id = row.id;
+    const name = row.name;
+    if (typeof id !== "string" || typeof name !== "string") continue;
+    out.push({
+      id,
+      name,
+      ...(typeof row.taskType === "string" ? { taskType: row.taskType } : {}),
+    });
+  }
+  return out;
+}
+
+/** 用选定的工作流库工作流封装一次生成请求。
+ *
+ *  ISSUE #145：工坊对外只暴露「提示词 / 尺寸 / 参考图」，其余 IO 参数一律用
+ *  工作流里的默认值。这里拉取工作流详情（含 enrich 过的 workflowIO），交给
+ *  `buildEncapsulatedInputs` 组装成 `workflowInputs` 三元组。
+ *
+ *  返回的 input 可直接交给 `startLocalGenerate`；工作流没有对应 pin 的字段会
+ *  出现在 `unmatched` 里（由调用方决定是否提示用户）。 */
+export async function buildLibraryWorkflowInput(
+  workflowId: string,
+  values: WorkshopExposedValues
+): Promise<{ input: GenerateInput; unmatched: (keyof WorkshopExposedValues)[] }> {
+  const detail = await vanillaApi.workflow.detailFull.query({ id: workflowId });
+  const io = detail?.workflowIO ?? null;
+  const mode = detail?.defaultMode ?? null;
+  const { workflowInputs, unmatched } = buildEncapsulatedInputs(io, mode, values);
+  const input: GenerateInput = {
+    workflow: workflowId,
+    ...(values.prompt !== undefined ? { prompt: values.prompt } : {}),
+    ...(values.negativePrompt !== undefined ? { negative: values.negativePrompt } : {}),
+    ...(values.size !== undefined ? { size: values.size } : {}),
+    ...(workflowInputs.length > 0 ? { workflowInputs } : {}),
+  };
+  return { input, unmatched };
 }
 
 /** 进度事件附带的节点级信息（ComfyUI progress 消息里的当前节点与步数）。 */
