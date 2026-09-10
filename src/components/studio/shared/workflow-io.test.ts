@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   controlForEntry,
+  isUploadPinName,
   mergeRefreshedDefaults,
   splitWorkflowIO,
   inferDimensionGroup,
   inferGroups,
   parseRatioFromLabel,
+  typeDisplay,
   type WorkflowIOMap,
   type WorkflowIOEntry,
   type EnrichedWidget,
@@ -249,5 +251,58 @@ describe("mergeRefreshedDefaults — IO 默认值刷新（保覆盖，ISSUE #288
     expect(
       mergeRefreshedDefaults({ img: shared }, { img: shared }, { img: shared }),
     ).toBeNull();
+  });
+});
+
+describe("controlForEntry — 图片上传位（IMAGEUPLOAD / IMAGE / MASK）", () => {
+  it("IMAGEUPLOAD 就是上传控件，不再退化成纯文本", () => {
+    expect(controlForEntry(pin("upload", "选择文件上传", "IMAGEUPLOAD"))).toBe("image");
+  });
+
+  it("IMAGE / MASK 仍渲染上传控件", () => {
+    expect(controlForEntry(pin("image", "图像", "IMAGE"))).toBe("image");
+    expect(controlForEntry(pin("mask", "遮罩", "MASK"))).toBe("image");
+  });
+
+  it("上传位声明成 STRING 时按 pin 名兜底为上传控件", () => {
+    expect(controlForEntry(pin("upload", "选择文件上传", "STRING"))).toBe("image");
+  });
+
+  it("结果槽 pin 名 `image` 不会因兜底变成上传按钮", () => {
+    /* LoadImage 的 `image` 是上传结果（COMBO 文件名），上传按钮属于 `upload`。 */
+    expect(controlForEntry(pin("image", "图像", "COMBO"))).toBe("text");
+  });
+
+  it("厂商自定义类型带标量时仍可编辑，不退化成只接受连线", () => {
+    expect(
+      controlForEntry({ ...pin("audio_file", "音频文件", "AUDIOFILE"), defaultValue: "" })
+    ).toBe("text");
+  });
+});
+
+describe("isUploadPinName", () => {
+  it("命中 upload / filePicker 命名", () => {
+    expect(isUploadPinName({ name: "upload" })).toBe(true);
+    expect(isUploadPinName({ name: "first_frame_upload" })).toBe(true);
+    expect(isUploadPinName({ name: "filePicker" })).toBe(true);
+  });
+
+  it("普通参数名不命中", () => {
+    expect(isUploadPinName({ name: "image" })).toBe(false);
+    expect(isUploadPinName({ name: "text" })).toBe(false);
+  });
+});
+
+describe("typeDisplay — type 是什么就显示什么", () => {
+  it("声明的类型原样大写展示（含 IMAGEUPLOAD 这类自定义类型）", () => {
+    expect(typeDisplay("IMAGEUPLOAD")).toBe("IMAGEUPLOAD");
+    expect(typeDisplay("combo")).toBe("COMBO");
+    expect(typeDisplay("MASK")).toBe("MASK");
+  });
+
+  it("没有类型时才回退", () => {
+    expect(typeDisplay(undefined, "STRING")).toBe("STRING");
+    expect(typeDisplay("", "INT")).toBe("INT");
+    expect(typeDisplay(undefined)).toBe("*");
   });
 });

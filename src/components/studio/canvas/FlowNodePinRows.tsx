@@ -41,13 +41,13 @@ export function FlowNodePinRows({
           const outType = outEntry?.[1];
 
           // Input side — colour by declared slot type, label via the same
-          // zh-CN / label / friendly fallback chain the widget rows use.
+          // label / zh-CN / friendly chain the widget rows use（作者 label 优先）。
           const inMeta = inName ? rawMeta[inName] : undefined;
           const inType = inMeta?.type ?? "*";
           const inCol = portColor(inType);
           const inLabel = inName
-            ? sanitizeComboLabel(inMeta?.localized) ||
-              sanitizeComboLabel(inMeta?.label) ||
+            ? sanitizeComboLabel(inMeta?.label) ||
+              sanitizeComboLabel(inMeta?.localized) ||
               friendlyInputName(inName)
             : "";
 

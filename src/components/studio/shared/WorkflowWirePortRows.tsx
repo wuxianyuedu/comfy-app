@@ -1,9 +1,15 @@
 "use client";
 
 import React from "react";
-import { ioLabel, numericBounds, type ControlKind, type WorkflowIOEntry } from "./workflow-io";
+import {
+  ioLabel,
+  numericBounds,
+  typeDisplay,
+  type ControlKind,
+  type WorkflowIOEntry,
+} from "./workflow-io";
 import { NumberField } from "@/components/studio/ui/NumberField";
-import { PortHandle, normalizeTypeChip, portChipStyle } from "./WorkflowPortHandle";
+import { PortHandle, portChipStyle } from "./WorkflowPortHandle";
 import { AutoResizeTextarea } from "./WorkflowFormTextarea";
 import { isSeedLike, SeedModeButton } from "./WorkflowSeedModeButton";
 
@@ -188,7 +194,7 @@ export function WirePortRows({
                 className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
                 style={{ fontFamily: "var(--font-sans)", ...chipStyle }}
               >
-                {normalizeTypeChip(wireInput.type, wireInput.control === "float" ? "FLOAT" : "INT")}
+                {typeDisplay(wireInput.type, wireInput.control === "float" ? "FLOAT" : "INT")}
               </span>
             </div>
           );
@@ -234,7 +240,7 @@ export function WirePortRows({
                   className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
                   style={{ fontFamily: "var(--font-sans)", ...chipStyle }}
                 >
-                  {wireInput.type}
+                  {typeDisplay(wireInput.type)}
                 </span>
               </div>
               {/* control 区 fill 剩余空间（= row 高度 - pt-1.5 - subrow-16 -
@@ -321,7 +327,7 @@ export function WirePortRows({
                   className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
                   style={{ fontFamily: "var(--font-sans)", ...chipStyle }}
                 >
-                  {normalizeTypeChip(output.type)}
+                  {typeDisplay(output.type)}
                 </span>
               </div>
             );
