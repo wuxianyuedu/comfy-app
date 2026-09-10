@@ -1,6 +1,5 @@
-import fs from "node:fs";
-
 /* ── 日志会话边界（面板只显示「本次运行」）────────────────────────────
+ *
  * 面板轮询的三个来源里，`dev`（log/launcher/dev-launcher.log）每次运行都
  * 覆盖重建，天然只有本次；而 `app-runtime` 是**追加不轮转**的，文件会一直
  * 累积历史运行的内容。于是「应用日志」面板首次打开、以及上次运行的日志文件
@@ -18,6 +17,23 @@ import fs from "node:fs";
  *
  * 锚点用 `log/launcher/dev-launcher.log` 的 mtime：双击链路每次运行都覆盖
  * 重建它，mtime 即本次启动时刻；页面重载不会改变它，因此同一次运行里起点稳定。
+ *
+ * ── 为什么本模块**不得** import `node:fs`（重要）───────────────────────
+ * `LogProvider.tsx` 是客户端组件（"use client"），它只是要一个纯函数
+ * `clampLogTime`。若本模块顶层 `import fs from "node:fs"`，Turbopack 编译
+ * 浏览器 chunk 时会把 `node:fs` 整图形入，报
+ * `the chunking context does not support external modules (request: node:fs)`
+ * 并让整个 endpoint 编译失败——**`/login` 与 `/workspace` 都会 500**，
+ * 应用完全打不开。
+ *
+ * 这与 `app-runtime-log.ts` 的历史回归（ISSUE #282 / §7.12）同源：Node-only
+ * 模块被静态打包进浏览器图。因此这里做**分层**：
+ *   - 本文件只放纯函数（同时服务客户端与服务端）；
+ *   - 读文件 mtime 这类 IO 归 `log-session-scope.server.ts`（Node-only）。
+ * 客户端与服务端都只 import 本文件，IO 只在服务端路由里 import 后者。
+ *
+ * 同理，注释里的 `node:fs` 也必须写成不可被静态分析识别为 import 的形式——
+ * 上面对它的提及是文字说明，不是 import 语句。
  */
 
 /**
@@ -33,18 +49,6 @@ export function resolveSessionStart(
 ): number | null {
   if (explicitStartMs !== null) return explicitStartMs;
   return anchorMtimeMs;
-}
-
-/**
- * 读取文件 mtime（毫秒）；不存在/不可读返回 null。
- * 调用方负责拼路径——本模块留在 `src/lib`（逻辑层），不做路径解析。
- */
-export function fileMtimeMs(file: string): number | null {
-  try {
-    return fs.statSync(/*turbopackIgnore: true*/ file).mtimeMs;
-  } catch {
-    return null;
-  }
 }
 
 /** 把时间戳钳进 [0, now]：读不到时间的边界行不该污染面板时间线。 */

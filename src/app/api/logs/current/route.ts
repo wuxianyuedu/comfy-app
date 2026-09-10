@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
-import { fileMtimeMs, resolveSessionStart } from "@/lib/log-session-scope";
+import { resolveSessionStart } from "@/lib/log-session-scope";
+import { fileMtimeMs } from "@/lib/log-session-scope.server";
 import {
   COMFYUI_RUNTIME_LOG,
   DEV_LAUNCHER_CURRENT_SENTINEL,
