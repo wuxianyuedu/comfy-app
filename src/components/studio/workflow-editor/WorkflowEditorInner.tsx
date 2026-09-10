@@ -36,6 +36,9 @@ import {
   createNodeJsonViewerStore,
 } from "./WorkflowStores";
 
+import { useParamMapping } from "./hooks/use-param-mapping";
+import { ParamMappingPanel } from "./ParamMappingPanel";
+import type { ParamWire } from "./ParamWireLayer";
 import { WorkflowEditorTopBar } from "./WorkflowEditorTopbar";
 import { WorkflowIoPreviewPanel } from "../WorkflowIOPreviewPanel";
 import { WorkflowEditorCanvas } from "./WorkflowEditorCanvas";
@@ -148,6 +151,9 @@ function WorkflowEditorBody({
    *  ioPreviewOpen / viewJsonOpen as a sibling overlay opened by a gear
    *  button in the canvas chrome.  Default closed. */
   const [canvasSettingsOpen, setCanvasSettingsOpen] = useState(false);
+  /* 「对外参数」映射栏开关。打开后画布左侧出现参数列表，参数与节点端口之间
+   *  画出映射连线（自动映射 = 默认连线状态，作者可在此基础上改）。 */
+  const [paramPanelOpen, setParamPanelOpen] = useState(false);
   /* The settings hook owns a single localStorage-backed settings object
    *  that drives CanvasGrid / CanvasRulers / ZoomIndicator / MiniMap.
    *  Until `hydrated` is true we render with defaults so SSR / first
@@ -472,6 +478,32 @@ function WorkflowEditorBody({
     setEdges(buildEdges(scopeDetail, initialNodes, outSlotNameById));
   }, [initialNodes, scopeDetail, outSlotNameById, setNodes, setEdges]);
 
+  /* 对外参数映射：把 workflowIO 归并成「按节点分组的对外参数」，给出默认自动
+   *  映射，并允许作者在左侧栏与画布之间手工连线（默认连线状态可编辑）。 */
+  const mapping = useParamMapping({
+    workflowId,
+    io: detail?.workflowIO ?? null,
+    mode: detail?.defaultMode ?? null,
+    paramMap,
+  });
+  /* 映射连线（画布可视化）：每个对外参数一条，目标端口来自已解析的映射表。 */
+  const paramWires = useMemo<ParamWire[]>(() => {
+    if (!paramPanelOpen) return [];
+    return mapping.entries.map((entry) => {
+      const ioKey = mapping.resolved[entry.id] ?? null;
+      const pin = ioKey ? entry.pins.find((item) => item.ioKey === ioKey) : undefined;
+      return {
+        sourceId: entry.id,
+        sourceNodeId: entry.nodeId,
+        sourceLabel: entry.label,
+        targetNodeId: pin ? (detail?.workflowIO?.[ioKey ?? ""]?.nodeId ?? entry.nodeId) : entry.nodeId,
+        targetSlot: pin?.name ?? null,
+        manual: mapping.isManual(entry.id),
+        color: "",
+      };
+    });
+  }, [paramPanelOpen, mapping, detail]);
+
   const { resetLayout, handleSave, onNodeDragStop } = useWorkflowPersistence({
     workflowId,
     detail,
@@ -479,6 +511,7 @@ function WorkflowEditorBody({
     scopeDetail,
     setNodes,
     paramMap,
+    paramMapping: mapping.mapping,
     workflowIO,
     fitToMiddle,
     savePatch,
@@ -550,6 +583,8 @@ function WorkflowEditorBody({
           handleSave={handleSave}
           saving={saving}
           error={error}
+          paramPanelOpen={paramPanelOpen}
+          onToggleParamPanel={() => setParamPanelOpen((open) => !open)}
         />
 
       {/* ── Canvas ── */}
@@ -615,6 +650,9 @@ function WorkflowEditorBody({
          *  scalar).  Solution: for each key in the local state, prefer
          *  `detail.workflowIO[key]` (already enriched), and overlay the
          *  local `label` on top so an un-saved rename wins immediately. */}
+        {paramPanelOpen && (
+          <ParamMappingPanel mapping={mapping} onClose={() => setParamPanelOpen(false)} />
+        )}
         {ioPreviewOpen && (
           <WorkflowIoPreviewPanel
             workflowIO={workflowIO}
@@ -657,6 +695,19 @@ function WorkflowEditorBody({
           onMiniMapJump={onMiniMapJump}
           onOpenSettings={() => setCanvasSettingsOpen(true)}
           onEdgeClick={onEdgeClick}
+          paramWires={paramWires}
+          activeParamId={mapping.selectedId}
+          onPickParam={mapping.setSelectedId}
+          onConnectParam={(id, targetNodeId, slot) => {
+            /* 目标端口 ioKey 由「节点 id + 端口名」还原（workflowIO 的键就是
+             * `${nodeId}::${kind}::${name}`）。找不到说明该端口没被暴露——
+             * 映射只允许连到已暴露的对外参数口，避免作者连出一条运行时
+             * 无人读取的线。 */
+            const target = Object.entries(detail?.workflowIO ?? {}).find(
+              ([, entry]) => entry.nodeId === targetNodeId && entry.name === slot
+            )?.[0];
+            if (target) mapping.connect(id, target);
+          }}
         />
 
         {/* Floating instruction tooltip */}        {/* Floating instruction tooltip */}
