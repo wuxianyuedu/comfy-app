@@ -26,6 +26,18 @@ import { findPidForMainPy, findPidListeningPort } from "./proc-detect";
 import { spawnManaged, waitForDetachMediator } from "../process-launch";
 import { openUrlInBrowser } from "~/lib/open-in-browser";
 import { COMFYUI_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log-paths";
+import {
+  buildEarlyExitDetail,
+  buildSpawnArgs,
+  decideEnsureLaunch,
+  decideStop,
+  decideStopOutcome,
+  isKeepAliveDead,
+  isWithinStoppingWindow,
+  resolveLaunchPolicy,
+  shouldCheckKeepAliveProcess,
+  shouldClearStoppingOnStopMiss,
+} from "./lifecycle-derive";
 
 export type ComfyUiStatus = {
   up: boolean;
@@ -139,15 +151,19 @@ export async function stopComfyUiProcess(): Promise<{ ok: boolean; detail: strin
     pid = await findPidForMainPy(plan.mainPy);
     if (pid) child = undefined; // 无句柄，仅用定位到的 PID
   }
-  if (!pid) {
+  const stopDecision = decideStop({ hasChild: !!child, pid, stillUp: !!stillUp });
+  if (stopDecision.kind !== "kill") {
     // 目标已经不在了：立刻清「关闭中」标记，不留无意义的进行态窗口。
-    if (!stillUp && !st.starting) st.stoppingAt = undefined;
-    return stillUp
+    if (shouldClearStoppingOnStopMiss({ stillUp: !!stillUp, starting: isComfyStarting() })) {
+      st.stoppingAt = undefined;
+    }
+    return stopDecision.kind === "foreign-running"
       ? { ok: false, detail: "ComfyUI 在运行但不是本应用（配置路径）启动的，请在 ComfyUI 自己的窗口/终端中手动关闭" }
       : { ok: true, detail: "ComfyUI 未在运行" };
   }
+  pid = stopDecision.pid;
 
-  const kind = child ? "bound 子进程" : "按配置路径定位到的进程";
+  const kind = stopDecision.kindLabel;
   appendRuntimeLog(`[stop] 用户要求关闭 ComfyUI，目标：${kind}（pid=${pid}）`);
   await new Promise<void>((resolve) => {
     if (process.platform === "win32") {
@@ -168,20 +184,26 @@ export async function stopComfyUiProcess(): Promise<{ ok: boolean; detail: strin
     }
   });
   if (st.child === child) st.child = undefined;
-  // 给进程一点退出时间，再探测确认
+  // 给进程一点退出时间，再探测确认。每轮结果都收集起来，由纯函数给出结论
+  // （«最后一轮是否仍可达» 即「关了没有」），避免把判据散在循环与收尾两处。
+  const stopProbes: (string | null)[] = [];
   for (let i = 0; i < 5; i++) {
     await new Promise((r) => setTimeout(r, 500));
-    if (!(await probeComfyUi(800))) {
-      appendRuntimeLog("[stop] ComfyUI 已关闭");
-      // 非 bound（keepAlive / 接管场景）没有 child.on("exit") 会落会话结束
-      // 横幅——这里补一条，保持「每次会话都有 start/end 分隔」的一致性。
-      if (!child) appendSessionBanner("end", "■ ComfyUI 已手动关闭");
-      clearComfyStopping();
-      return { ok: true, detail: "ComfyUI 已关闭" };
-    }
+    const probe = await probeComfyUi(800);
+    stopProbes.push(probe);
+    if (!probe) break;
+  }
+  const outcome = decideStopOutcome(stopProbes);
+  if (outcome.ok) {
+    appendRuntimeLog("[stop] ComfyUI 已关闭");
+    // 非 bound（keepAlive / 接管场景）没有 child.on("exit") 会落会话结束
+    // 横幅——这里补一条，保持「每次会话都有 start/end 分隔」的一致性。
+    if (!child) appendSessionBanner("end", "■ ComfyUI 已手动关闭");
+    clearComfyStopping();
+    return outcome;
   }
   appendRuntimeLog("[stop] 关闭命令已发送，但 ComfyUI 仍在响应");
-  return { ok: false, detail: "关闭命令已发送，但 ComfyUI 仍在响应，请手动确认进程已退出" };
+  return outcome;
 }
 
 export function isComfyStarting(): boolean {
@@ -197,8 +219,11 @@ export function isComfyAutoStartSuppressed(): boolean {
 
 /** 「关闭中」窗口是否仍然生效（见 COMFY_STOPPING_WINDOW_MS）。 */
 export function isComfyStopping(): boolean {
-  if (!st.stoppingAt) return false;
-  return Date.now() - st.stoppingAt < COMFY_STOPPING_WINDOW_MS;
+  return isWithinStoppingWindow({
+    stoppingAt: st.stoppingAt,
+    nowMs: Date.now(),
+    windowMs: COMFY_STOPPING_WINDOW_MS,
+  });
 }
 
 /** 清掉「关闭中」标记：进程树已确认退出 / 用户重新点了启动。 */
@@ -310,23 +335,15 @@ export async function ensureComfyUiReady(
     clearComfyAutoStartFailure();
   }
 
-  // 非手动来源（WS 重连 / 状态轮询触发的自动启动）此刻若用户刚手动关闭过
-  // ComfyUI，就尊重其意图、不再自动拉起 —— 否则切个页签 ComfyUI 又被
-  // 重连循环悄悄重启（ISSUE #290）。
-  if (!opts.manual && st.manualStop) {
-    note("ComfyUI 已被用户手动关闭，跳过自动启动");
-    return {
-      ok: false,
-      base: null,
-      detail: "ComfyUI 已被手动关闭，未自动开始启动——如需启动请到 设置 → 创作后端 点「启动 ComfyUI」",
-    };
-  }
-
   // 非手动来源在「上一次自动启动已明确失败」后不再自动重试（ISSUE #335）：
   // 路径没配好 / 环境缺依赖 / 保活进程拉起来就退这类失败，重试只会把同一段
   // 错误反复刷进队列与 runtime 日志，并不能自愈。原样回报上次的失败详情，
   // 让用户知道「为什么这次没重试」，并给出可行动的出口（手动启动 / 改配置 /
   // 重新开启自动启动都会清掉闩锁）。
+  //
+  // 放在判决表之前：这里要的是「原样回报上次的失败详情」，而判决表只认识
+  // 「有没有闩锁」——把「上次失败因为保活进程已退出」这类可行动的原因换成
+  // 一句泛泛的「未开启自动启动」，用户会对着错误的原因改设置。
   if (!opts.manual && st.autoStartFailed) {
     const last = st.autoStartFailureDetail ?? "未知原因";
     note(`上次自动启动已失败，跳过自动重试：${last}`);
@@ -334,10 +351,33 @@ export async function ensureComfyUiReady(
   }
 
   const settings = getSettingsSync();
-  if (!settings.comfyuiAutoStart) {
+  /* 判决表（顺序即优先级）抽在 lifecycle-derive 的 decideEnsureLaunch 里：
+   * 已在运行 → 手动启动优先于闩锁 → 自动来源遇闩锁让路（ISSUE #290）→
+   * 未开自动启动 / 未配路径给可行动提示。这里只负责把事实喂进去、把结论
+   * 翻成用户文案；「上次自动启动已失败」的闩锁在判决表之前单独拦下
+   * （ISSUE #335，需要原样回报失败原因），故没有并入判决表。 */
+  const decision = decideEnsureLaunch({
+    upBase,
+    manual: !!opts.manual,
+    manualStop: !!st.manualStop,
+    autoStart: !!settings.comfyuiAutoStart,
+    comfyuiPath: settings.comfyuiPath ?? "",
+  });
+  if (decision.kind === "already-up") {
+    return { ok: true, base: decision.base, detail: "ComfyUI 已在运行" };
+  }
+  if (decision.kind === "skip-manual-stop") {
+    note("ComfyUI 已被用户手动关闭，跳过自动启动");
+    return {
+      ok: false,
+      base: null,
+      detail: "ComfyUI 已被手动关闭，未自动开始启动——如需启动请到 设置 → 创作后端 点「启动 ComfyUI」",
+    };
+  }
+  if (decision.kind === "skip-autostart-off") {
     return { ok: false, base: null, detail: "ComfyUI 未运行，且未开启自动启动（设置页可开启）" };
   }
-  if (!settings.comfyuiPath) {
+  if (decision.kind === "skip-no-path") {
     return {
       ok: false,
       base: null,
@@ -364,17 +404,19 @@ export async function ensureComfyUiReady(
       comfyuiPort: settings.comfyuiPort ?? 0,
       comfyuiExtraArgs: settings.comfyuiExtraArgs ?? "",
     });
-    let port = COMFYUI_DEFAULT_PORT;
-    if (eff.port && eff.port > 0) port = eff.port;
-    const args = [...plan.baseArgs, ...(port !== COMFYUI_DEFAULT_PORT ? ["--port", String(port)] : []), ...eff.extraArgs];
+    const args = buildSpawnArgs({
+      baseArgs: plan.baseArgs,
+      effectivePort: eff.port,
+      defaultPort: COMFYUI_DEFAULT_PORT,
+      extraArgs: eff.extraArgs,
+    });
     const desktopEnv = eff.envVars;
 
     // 退出策略决定拉起方式：exitKillComfyui=true（默认）→ bound，ComfyUI 挂
     // 在应用进程树内，应用退出连带关闭；false → keepAlive，脱离进程树保活，
     // 下次打开应用直接复用。注意开关只在「拉起时」生效（桌面壳退出是
     // taskkill /T /F 杀整树，退出那一刻没有机会再决定）。
-    const policy = getExitPolicy();
-    const keepAlive = policy.exitKillComfyui === false;
+    const keepAlive = resolveLaunchPolicy(getExitPolicy().exitKillComfyui) === "keepAlive";
     // 每次启动先在日志里落一条明显的会话分隔横幅（ANSI 亮绿），
     // 让日志面板能一眼分清「上次启动的结尾」和「这次启动的开头」。
     appendSessionBanner("start", `▶ ComfyUI 启动会话  ${localTimestamp()}`);
@@ -476,8 +518,12 @@ export async function ensureComfyUiReady(
          * （进程其实活着），此前误报过「秒退」。 */
         const now = Date.now();
         if (
-          now - spawnAt > COMFY_KEEPALIVE_GRACE_MS &&
-          now - lastProcessCheckAt > COMFY_KEEPALIVE_PROCESS_CHECK_INTERVAL_MS
+          shouldCheckKeepAliveProcess({
+            sinceSpawnMs: now - spawnAt,
+            sinceLastCheckMs: now - lastProcessCheckAt,
+            graceMs: COMFY_KEEPALIVE_GRACE_MS,
+            intervalMs: COMFY_KEEPALIVE_PROCESS_CHECK_INTERVAL_MS,
+          })
         ) {
           lastProcessCheckAt = now;
           if (await findPidForMainPy(plan.mainPy)) {
@@ -485,7 +531,7 @@ export async function ensureComfyUiReady(
             missCount = 0;
           } else {
             missCount += 1;
-            if (missCount >= 2) {
+            if (isKeepAliveDead(missCount)) {
               // 保活进程已消失：落一条会话结束横幅，标记该会话终点。
               appendSessionBanner("end", "■ ComfyUI 保活进程已退出");
               const common =
@@ -570,16 +616,7 @@ export async function ensureComfyUiReady(
         return { ok: false, base: null, detail };
       }
       if (st.child !== child) {
-        const missingMod = /No module named '([^']+)'/.exec(
-          recentOutput.join("\n"),
-        )?.[1];
-        return {
-          ok: false,
-          base: null,
-          detail: missingMod
-            ? `ComfyUI 进程启动后立即退出：解释器缺少依赖（No module named '${missingMod}'）——请确认 comfyuiPath 指向装了依赖的环境，或为该环境安装依赖（详见 log/services/comfyui-runtime.log）`
-            : "ComfyUI 进程启动后立即退出，详见 log/services/comfyui-runtime.log",
-        };
+        return { ok: false, base: null, detail: buildEarlyExitDetail(recentOutput) };
       }
       // 用已知子进程 PID 查它实际监听的端口——不依赖端口探测猜哪个 ComfyUI
       // 是我们的实例（别的实例可能占着配置端口导致自动 +1）。
