@@ -45,6 +45,20 @@ export default defineConfig({
           statements: 45,
           branches: 30,
         },
+        // reaper 与队列调度的判决矩阵（ISSUE #315）：sweeper 的「跳过/回收/不动」
+        // 与调度器的排队提示/槽位释放规则按实测值设门槛，只升不降。
+        "src/lib/comfyui/reaper.ts": {
+          lines: 70,
+          functions: 70,
+          statements: 70,
+          branches: 60,
+        },
+        "src/lib/comfyui/executor-scheduler.ts": {
+          lines: 70,
+          functions: 70,
+          statements: 70,
+          branches: 50,
+        },
       },
     },
   },
