@@ -24,6 +24,7 @@ import { resolveComfyLaunchPlan } from "./launch-path";
 import { resolveEffectiveLaunch } from "./desktop-instance";
 import { findPidForMainPy, findPidListeningPort } from "./proc-detect";
 import { spawnManaged, waitForDetachMediator } from "../process-launch";
+import { getComfyRuntimeSnapshot, resetComfyRuntimeSnapshot } from "./status";
 import { openUrlInBrowser } from "~/lib/open-in-browser";
 import { COMFYUI_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log-paths";
 import {
@@ -45,7 +46,14 @@ export type ComfyUiStatus = {
   starting: boolean;
   /** 用户点了「关闭 ComfyUI」且进程树尚未确认退出：设置页据此保持「关闭中…」。 */
   stopping: boolean;
+  /** 本次判定的探测是否仍在进行：UI 据此显示「检测中…」而不是先报「未运行」
+   *  再跳「运行中」（外部已启动 ComfyUI 时尤其明显，ISSUE #339）。 */
+  probing: boolean;
   pid?: number;
+  /** 进程级快照定位到的端口（HTTP 未就绪时也可能有值，供「正在启动」提示）。 */
+  port?: number | null;
+  /** 该实例是用什么起的（中文短语，如「配置路径的实例」）——状态行提示用。 */
+  via?: string | null;
 };
 
 type EnsureResult = { ok: boolean; base: string | null; detail: string };
@@ -194,6 +202,8 @@ export async function stopComfyUiProcess(): Promise<{ ok: boolean; detail: strin
     if (!probe) break;
   }
   const outcome = decideStopOutcome(stopProbes);
+  // 进程树刚被改动过：快照必须失效，否则状态行会继续沿用关闭前的结论。
+  resetComfyRuntimeSnapshot();
   if (outcome.ok) {
     appendRuntimeLog("[stop] ComfyUI 已关闭");
     // 非 bound（keepAlive / 接管场景）没有 child.on("exit") 会落会话结束
@@ -252,13 +262,73 @@ function isTerminalAutoStartFailure(detail: string): boolean {
   return /启动失败|立即退出|未配置|未开启自动启动|手动关闭/.test(detail);
 }
 
-export function getComfyUiStatus(): ComfyUiStatus {
+/**
+ * 设置页状态：进程级快照（优先）+ HTTP 探测（判定「能不能立刻用」）合并成一条结论。
+ *
+ * 判定顺序（每一条都能单独解释一次真实误报，见 ISSUE #339）：
+ *   1. `probeComfyUi()` 通了 → 运行中，用它返回的真实 base（可能带端口偏移）；
+ *   2. 没通但有活着且已绑定端口的 ComfyUI 进程 → 运行中，base 用进程实际监听
+ *      端口拼出来（ComfyUI 起来后 `/system_stats` 短暂不可用也不该报「未运行」）；
+ *   3. 没通、进程在但端口未绑定 → 「启动中」：外部实例正在加载模型时如实显示；
+ *   4. 都没有 → 未运行。
+ *
+ * 探测失败（`unverified`，如 PowerShell 超时）且 HTTP 也没通时**不**直接下
+ * 「未运行」的结论，而是把 `probing` 置真：宁可多显示一次「检测中…」，也不要
+ * 把正在启动的实例误报成未运行（这正是用户看到的状态来回跳）。
+ */
+export async function getComfyUiStatus(): Promise<ComfyUiStatus> {
+  const starting = isComfyStarting();
+  const stopping = isComfyStopping();
+  const snap = await getComfyRuntimeSnapshot();
+  const probe = await probeComfyUi(1500);
+  if (probe) {
+    return {
+      up: true,
+      base: probe,
+      starting,
+      stopping,
+      probing: false,
+      pid: snap.pid ?? st.child?.pid,
+      port: snap.port ?? null,
+      via: snap.via,
+    };
+  }
+  const port = snap.port ?? null;
+  if (snap.running && port) {
+    return {
+      up: true,
+      base: `http://127.0.0.1:${port}`,
+      starting,
+      stopping,
+      probing: false,
+      pid: snap.pid ?? undefined,
+      port,
+      via: snap.via,
+    };
+  }
+  if (snap.running) {
+    // 进程活着但端口还没绑定：正在启动（不是「未运行」）。
+    return {
+      up: false,
+      base: null,
+      starting: true,
+      stopping,
+      probing: false,
+      pid: snap.pid ?? undefined,
+      port: null,
+      via: snap.via,
+    };
+  }
   return {
     up: false,
     base: null,
-    starting: isComfyStarting(),
-    stopping: isComfyStopping(),
+    starting,
+    stopping,
+    // 事实不可信（进程表查询超时）：本次不下结论，UI 显示「检测中…」。
+    probing: snap.unverified && !starting,
     pid: st.child?.pid,
+    port: null,
+    via: null,
   };
 }
 
@@ -317,6 +387,10 @@ export async function ensureComfyUiReady(
     opts.onLog?.(msg);
     appendRuntimeLog(msg);
   };
+
+  // 用户明确要求拉起 → 状态快照必然过期（进程树即将变化），先失效，
+  // 让紧随其后的状态查询看到启动后的新事实而不是旧结论。
+  if (opts.manual) resetComfyRuntimeSnapshot();
 
   // 快路径：已经在运行（探测可能有端口偏移，返回真实 base）
   const upBase = await probeComfyUi();
