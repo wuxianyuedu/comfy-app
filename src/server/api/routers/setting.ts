@@ -2,12 +2,11 @@ import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { getSettings, getSettingsSync, saveSettings } from "@/lib/app-settings";
 import {
+  clearComfyAutoStartFailure,
   clearComfyManualStop,
   ensureComfyUiReady,
-  isComfyStarting,
-  isComfyStopping,
+  getComfyUiStatus,
   openComfyUi,
-  probeComfyUi,
   stopComfyUiProcess,
 } from "@/lib/comfyui/lifecycle";
 import { classifyComfyInstall } from "@/lib/comfyui/instance-kind";
@@ -51,6 +50,12 @@ export const settingRouter = createTRPCRouter({
       // 用户显式（重新）开启自动启动 = 授权自动拉起：清掉上次「手动关闭
       // 后不自动启动」的闩锁，让自动启动恢复生效（ISSUE #290）。
       if (input.comfyuiAutoStart === true) clearComfyManualStop();
+      // 改「安装路径 / 启动参数」是把上次「启动失败」的成因改掉了：清掉
+      // 「失败后不再重试」的闩锁，让自动启动重新尝试（否则用户修好了路径，
+      // 却因为老闩锁一直不重试，还得再手动点一次启动）（ISSUE #335）。
+      if (input.comfyuiPath !== undefined || input.comfyuiExtraArgs !== undefined) {
+        clearComfyAutoStartFailure();
+      }
       const settings = await getSettings();
       return { settings };
     }),
@@ -58,7 +63,11 @@ export const settingRouter = createTRPCRouter({
   /** ComfyUI 运行状态（设置页状态行 / 启动按钮旁） */
   comfyStatus: authedProcedure.query(async () => {
     const settings = getSettingsSync();
-    const base = await probeComfyUi(2000);
+    /* 状态结论统一由 getComfyUiStatus 给出（进程级快照 + HTTP 探测合并）：
+     * 只看 HTTP 探测会把「外部已启动但接口未就绪」的实例误报成未运行，并让
+     * 状态行先落到「未运行」再跳「运行中」（ISSUE #339）。 */
+    const status = await getComfyUiStatus();
+    const base = status.base;
     // 形态识别：配置好路径后返回 桌面版/便携版/venv，供设置页展示徽标并按形态
     // 决定是否隐藏 端口/启动参数 输入（桌面版由 Comfy Desktop 元数据决定）。
     let instanceType: "desktop" | "portable" | "venv" | "unknown" | null = null;
@@ -70,16 +79,23 @@ export const settingRouter = createTRPCRouter({
       desktopManaged = c.kind === "desktop" && !!c.instanceIdFile;
     }
     return {
-      up: !!base,
+      up: status.up,
       base,
-      starting: isComfyStarting(),
+      // 「启动中」也包含「进程在但端口未绑定」（外部实例正在加载）：状态行据此
+      // 显示启动中而不是未运行。
+      starting: status.starting,
+      // 探测仍在进行/事实不可信：UI 显示「检测中…」，不要先报「未运行」。
+      probing: status.probing,
       // 「关闭中」窗口（服务端 globalThis 计时）：状态行/按钮据此保持关闭进行态，
       // 替代无法跨挂载存活的 React 本地 state（ISSUE #103）。
-      stopping: isComfyStopping(),
+      stopping: status.stopping,
+      /* 进程级快照补充信息：命中但 HTTP 未就绪时端口仍有值，状态行可提示
+       * 「端口监听中」；via 说明这个实例是怎么起来的（排查「不是我起的」）。 */
+      port: status.port ?? settings.comfyuiPort,
+      via: status.via ?? null,
       pathConfigured: !!settings.comfyuiPath,
       autoStart: settings.comfyuiAutoStart,
       path: settings.comfyuiPath,
-      port: settings.comfyuiPort,
       instanceType,
       desktopManaged,
     };

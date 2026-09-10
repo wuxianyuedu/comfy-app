@@ -7,7 +7,7 @@
  * 失败一律「抛出带中文文案的 Error」，由调用方（hook）决定提示形态。
  */
 
-import type { ValidationError } from "@/lib/comfyui/validation";
+import { parseValidationErrorsJson, type ValidationError } from "@/lib/comfyui/validation";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs } from "~/trpc/react";
 
@@ -167,7 +167,10 @@ export async function pollTask(
             /* carry structured validation errors from
              *  /api/tasks/[id].task.validationErrors into the failure result
              *  so CanvasNode can render a precise per-field list. */
-            validationErrors: task?.validationErrors as unknown as ValidationError[] | undefined,
+            /* validationErrors 存在 Prisma Json 列里，类型上是 unknown——
+             *  直接 `as ValidationError[]` 只是假保险（列里存了别的东西时
+             *  会在渲染期炸）。按 §05「API 响应一律 Zod 校验」收口成真校验。 */
+            validationErrors: parseValidationErrorsJson(task?.validationErrors),
           };
         }
     } catch {

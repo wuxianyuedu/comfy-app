@@ -57,14 +57,16 @@
 > `MCP_HTTP_PORT` 覆盖（默认 `4300`）。
 >
 > **同号与范围限定**：MCP 端口 `4300` 已避开 dev 回落族，ComfyUI 生态端口 `8188` 非本项目
-> 单一事实。为明确语义并避免跨文档误判，这二者均用占位符并经 **`onlyDocs` 限定**——仅在
-> `docs/workshop-mcp.md` 内校验，不影响其它文档。
+> 单一事实。为明确语义并避免跨文档误判，这二者均用占位符并经 **`onlyDocs` 限定**——仅在该
+> 事实声明的文档组内校验，不影响其它文档。`docs/standards/Comfy-APP-T3-项目开发规范.md` 的
+> 「开发端口」行是**同一值的第二引用点**，经 `otherDocs` 并入同一事实（而非把它挪出校验范围），
+> 故 `comfyui.port` 的校验范围为 `onlyDocs ∪ otherDocs`。
 
 | key | placeholder | meaning（可读语义） | source（权威定义文件） | extract |
 |---|---|---|---|---|
 | `registry.port` | `{{registry.port}}` | shadcn 本地团队 Registry 服务端口 | `tools/scripts/start-registry.ps1` 的 `$Port` | 读 `$Port` 值（`3874`） |
 | `mcp.http.port` | `{{mcp.http.port}}` | Workshop MCP HTTP 服务端口 | `tools/mcp-http.ts` 的 `MCP_HTTP_PORT ?? 4300` | 读 `MCP_HTTP_PORT` 默认值（`4300`）；仅 `docs/workshop-mcp.md` 校验 |
-| `comfyui.port` | `{{comfyui.port}}` | ComfyUI 默认监听端口 | `src/lib/comfyui/client.ts` 的 `settings.comfyuiPort … : 8188` 默认分支 | 读默认分支值（`8188`）；仅 `docs/workshop-mcp.md` 校验 |
+| `comfyui.port` | `{{comfyui.port}}` | ComfyUI 默认监听端口 | `src/lib/comfyui/client.ts` 的 `settings.comfyuiPort … : 8188` 默认分支 | 读默认分支值（`8188`）；校验范围 = `onlyDocs`（`docs/workshop-mcp.md`）+ `otherDocs`（主规范「开发端口」行） |
 
 ---
 
@@ -93,27 +95,51 @@
 
 ## 3. 校验范围
 
-> `pnpm doc:check` 校验纳入 SCOPED_DOCS 的文档集合，现已**全量纳入** `docs/standards/`
-> 规范正文（01~17 章）与 `docs/guides/` 规范指南，连同启动链路/含值类文档共 26 篇：
+> `pnpm doc:check` 校验纳入 `SCOPED_DOCS` 的文档集合，现已**全量纳入** `docs/standards/`
+> 规范正文（01~17 章）与 `docs/guides/` 规范指南，连同启动链路/含值类文档共 26 篇
+> （「全量」由 §3.1 的校验范围守卫机器判定：新增规范文档未登记即报错，不再靠人记得）：
 >
 > - **启动链路类**：`docs/standards/launch-and-build.md`、`docs/startup-hotreload.md`、
 >   `docs/guide-non-developer.md`
 > - **含值类引用的文档**：`docs/standards/Comfy-APP-T3-项目开发规范.md`、
 >   `docs/standards/16-shadcn-ui与表单校验.md`、`docs/workshop-mcp.md`
->   （MCP HTTP 端口 / ComfyUI 端口，经 `onlyDocs` 限定仅在本篇校验）
+>   （MCP HTTP 端口经 `onlyDocs` 仅在 workshop-mcp 校验；ComfyUI 端口经 `onlyDocs` +
+>   `otherDocs` 在 workshop-mcp 与主规范「开发端口」行校验）
 > - **standards 规范正文**：`01`~`17` 章其余各篇（含路径/规范描述）
 > - **guides 规范指南**：`DEV-QUERIES.md`、`PRODUCTION-GAPS.md`、`TESTING.md`、
 >   `sync-after-pull.md`
 >
-> **不纳入**：`docs/standards/README.md`（文档集索引）、`docs/guides/reviews/`
-> （评审归档）、`docs/audits/`（过程文件）、`docs/api/`（TypeDoc 自动生成）、
+> **不纳入**：`docs/audits/`（过程文件）、`docs/api/`（TypeDoc 自动生成）、
 > `docs/superpowers/`（设计归档）、`docs/generated/`（本体系自动生成产物）。
+> 规范目录（`docs/standards/`、`docs/guides/`）里**不纳入**的只有两条，且都在
+> 脚本的豁免名单里**显式声明并附理由**：`docs/standards/README.md`（文档集索引，
+> 只有导航与章节映射）、`docs/guides/reviews/2026-08-30-canvasnode-review.md`
+> （代码审查归档，历史快照）。
 >
 > 这些文档以**路径类引用与规范描述**为主，不含值类裸值。值类引用由登记表 FACTS
 > 动态核对；关键基础设施路径由第 2 节 path 类 FACTS 核对存在性。文档正文的细粒度
 > 路径（如 `src/env.ts`）因大量为**占位、否定性说明、目录约定示例**，不自动扫描，
 > 以免误报；如需将某个具体路径纳入存在性核对，按第 4 节把它补登为 `path` 类 FACTS
 > 即可。文档删除或新增路径时，同步维护本表与 `docs/README.md` 的文档体系索引。
+
+### 3.1 校验范围守卫（新增文档必须二选一）
+
+> 「全量纳管」此前是人工承诺：`doc:check` 只校验 `SCOPED_DOCS` 里列出的文档，
+> **未登记的新文档会被静默跳过**——里面写死过期端口也不会报错。现在由脚本硬性
+> 判定，不再依赖人记得登记。
+
+`pnpm doc:check` 会遍历 `docs/standards/` 与 `docs/guides/` 下的每个 `.md`：
+
+| 情形 | 结果 |
+|---|---|
+| 在 `SCOPED_DOCS` 里 | 正常参与校验（防裸值 / 核对端口 / 核对路径存在） |
+| 在 `SCOPED_DOC_EXEMPTIONS` 里（`scripts/doc-facts.cjs`，**必须附理由**） | 跳过校验 |
+| 两者都不在 | **报错**，点名文件并提示登记或豁免 |
+
+豁免名单本身也受校验：理由为空、或指向的文件已不存在 → 同样报错，防止名单
+变成过期条目的垃圾桶。新增 / 删除 / 重命名规范文档时，按上表二选一即可。
+
+回归测试见 `tests/check-doc-references.test.ts` 的「校验范围守卫」用例组。
 
 ## 3.5 编辑文档与生成文档（双文档机制）
 
@@ -138,6 +164,10 @@
    发现文档未同步处，按提示更新占位符（占位符本身不变，变的是它代表的值）。
 2. **新增可复用值**：先在本表加一行 `key / placeholder / source / extract`，
    再在文档用占位符替代裸值。
+   同一值在**多篇文档**出现且原文形态不同（如 ComfyUI 端口在 workshop-mcp 里是
+   无括号 `:8188`、在主规范里是 `localhost:3100` / `:8188` 并列行）时：
+   用 `onlyDocs` 声明主适用文档组 + `otherDocs` 追加其余引用点，**不要把引用点
+   挪出校验范围**——挪出去等于放弃防回潮，下次改端口这两处就静默过期。
 3. **占位符要可读**：`placeholder` 用语义化命名（如 `{{dev.port}}`、`{{shell.exe.prebuilt}}`），
    禁止 `{{x1}}` 这类晦涩代号；表内 `meaning` 列给出人类可读解释。
 4. **本表不存值**：禁止在本表硬编码真实值（那是第二事实）。值只在源码，由脚本提取。

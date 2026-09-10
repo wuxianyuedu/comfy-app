@@ -13,6 +13,14 @@
 
 ### Fixed
 
+- **设置页 ComfyUI 状态不再「外部明明起着却显示未运行 / 要等几秒才跳」（ISSUE #339）**：此前状态行只看一次 HTTP 探测，而该探测在配置了路径时会先要求「命令行含 `main.py` 的进程」存在——Comfy Desktop 的实例由 `uv` 启动，命令行里没有 `main.py`，于是外部已经跑起来的 ComfyUI 也被判成「未运行」；探测本身还要现付一遍进程表查询（冷启动高负载下可到 10s 超时）与 6 次端口扫描，状态行先渲染「未运行」再跳到「运行中」；前端又每 15s 才问一次。现在状态改由「进程级快照 + HTTP 探测」合并判定：本应用拉起的进程、配置路径的实例、`comfy-cli` 登记的启动器、以及 `pythonw`/`python` 起的任意 ComfyUI 都能被认出来，进程在跑但接口还没就绪会如实显示「正在启动…」而不是「未运行」，事实拿不准时显示「检测中…」也不会误报未运行；快照带秒级缓存与并发去重，查询不再卡顿；设置页轮询收紧到 5s（切回页面立即取最新），「打开查看」会先取一份新鲜状态再打开。
+
+- **ComfyUI 启动失败后不再反复自动重试（ISSUE #335）**：此前「ComfyUI 保活进程已退出」这类明确失败只返回一次错误，WS 重连循环仍会每 15s 重新讨要启动——同一段失败日志与「启动失败」横幅被反复刷进执行日志与 `comfyui-runtime.log`，无谓地重复拉起进程，用户也看不到「已经不再重试」的收口。现在一次自动启动以明确失败收尾后即落「不再自动重试」闩锁：后续自动路径（WS 重连 / 状态轮询）直接回报上次失败原因并跳过重试，执行日志明确写出「已停止自动重试…修好环境或到 设置 → 创作后端 点『启动 ComfyUI』即可恢复」。三个恢复出口都会清掉闩锁——手动点「启动 ComfyUI」、重新开启自动启动、或修改「安装路径 / 启动参数」（修好了失败成因就该重新尝试）。
+- **`/login` 与 `/workspace` 打开即整页 500（应用完全打不开）**：`src/lib/log-session-scope.ts` 顶层 `import fs from "node:fs"`，而客户端组件 `LogProvider.tsx`（`"use client"`）只是想要它的纯函数 `clampLogTime`。Turbopack 编译浏览器 chunk 时把 `node:fs` 整图形入，报 `the chunking context does not support external modules (request: node:fs)` 并让 endpoint 编译失败——`pnpm build` 失败、dev 下两个页面都 500，用户看到的就是「打不开」。现按「纯逻辑 / IO」分层：`log-session-scope.ts` 只留纯函数（客户端与服务端共用），读文件 mtime 的 `fileMtimeMs` 移入 Node-only 的 `log-session-scope.server.ts`，只有服务端路由 `GET /api/logs/current` 引用它。同时新增静态门禁 `tests/client-bundle-node-builtins.test.ts`：从所有 `"use client"` 入口遍历 import 图（`import type` 编译期擦除、不算），一旦出现「客户端可达且顶层 import Node 内建」的模块即失败并给出完整引用链，同类问题提交阶段就能挡住，不必等到整页 500。
+
+- **工作流里能真正选择图片上传，标签与类型徽章也不再被「改名」（ISSUE #311）**：此前把 `LoadImage` 的「选择文件上传」槽（ComfyUI frontend 类型 `IMAGEUPLOAD`）勾成对外参数后，工作流（画布节点 / 工作流库）里只看到一行只能手动敲文件名的文本框——因为控件分派只看 `IMAGE` / `MASK`，`IMAGEUPLOAD` 落到兜底分支；同一 pin 的显示名也被拿去当类型显示，且类型徽章会把 `IMAGEUPLOAD` 这类自定义类型强行改成 `INT`/`STRING`。现：①`IMAGEUPLOAD` 与按 `upload` / `filePicker` 命名的槽一律渲染上传控件（选文件 → 上传到 ComfyUI 输入目录 → 回填文件名，与图片节点同一条链路）；②标签优先打印工作流里作者写的 `label`（如「choose 1st frame to upload」），其次才是 ComfyUI 的通用 `localized_name`（如「图像」）；③类型徽章如实打印 pin 声明的类型（`IMAGEUPLOAD` / `MASK` / 自定义类型都原样显示），仅在元数据完全没有类型时才回退到控件隐含类型。
+- **应用日志面板只显示本次运行的内容（ISSUE #308）**：`log/services/` 下的运行日志（`app-runtime` / ComfyUI / Drizzle Studio / Ollama）都是追加不轮转的，此前每次打开面板都会把上一次、上上一次启动积累的行一起读进来，一屏日志里混着好几次运行的内容，分不清哪条属于刚刚发生的操作。现在面板按「会话起点」（本次启动时刻）丢弃更早的历史行：起点取自双击链路的启动日志时间戳，随轮询响应下发；面板每行右侧也标出具体来源（`dev` / `launcher` / `app-runtime`），便于对照 `log/` 下的文件排查。设置页「创作后端」「数据库工具」的启动日志不受影响，仍是单个服务的会话视图。
+
 - **设置打开失败时不再只剩一句「配置数据未就绪」死角（ISSUE #304）**：此前只在「两份配置都没拿到」时才显示错误视图——当 `setting.get` 成功、`llm.configGet` 失败（如库表缺失），失败为真却两份草稿都不齐，界面既不显示错误、也没有重试按钮与日志指引，只留下没有原因的「配置数据未就绪」把用户冻住。现「任一查询失败且草稿未就绪」即落错误降级视图，给出可读原因、重试、完整错误与日志面板入口；兜底态同样给可操作出口。
 
 - **设置加载失败的日志不再报错查询名与丢失服务端原文（ISSUE #304）**：补记到应用日志面板的那条错误，查询名字段此前恒显示 `setting.get`（无论实际失败的是哪个查询），且只记翻译后的可读文案——服务端真实报错（如 `no such table: llmConfig`）在面板里彻底丢失，用户拿着「请求被中断，请稍候重试」无从排查。现按实际失败的查询记全名称，并把原始报错（tRPC `code` / 服务端 `message` / `cause` / 堆栈首行）一并写入日志的 `raw` 字段。
@@ -34,6 +42,10 @@
 - **修复设置页 / 工作区打开即整页报错（“An unexpected Turbopack error occurred”）**：客户端逻辑层误把 Node-only 的 `app-runtime-log` 模块（顶层 `import node:fs`）引入客户端 bundle，Turbopack 编译 `/(main)/settings` 与 `/workspace` 时报 `does not support external modules (request: node:fs)` 导致页面 500（回归，由提交 29d8b1d 引入）。现客户端补记 `app-runtime` 日志改走服务端写入通道（新增 `POST /api/logs/app-runtime` + `postAppRuntimeLog()`），设置页加载失败的日志仍能落到应用日志面板，页面恢复正常。
 
 ### Added
+
+- **底部状态栏的「就绪」有了明确含义（ISSUE #121 / #324）**：右下角原本是一个写死的「就绪 + 绿点」——从不变化、也没有任何判据，用户看不懂它代表什么。现在改为由真实状态驱动的三态指示：**已就绪**（已连上 ComfyUI 且能实时读到显存/内存，可以提交任务）、**连接中**（已连上但首个采样还没回来）、**未连接**（ComfyUI 未运行）。判据只有一条，见 `src/lib/comfy-readiness.ts`；悬停提示里写明「就绪不代表队列空闲」——队列空只是「现在没事干」，不是「后端可用」。
+
+- **状态栏显存/内存不可用时给出可见说明**：ComfyUI 未运行时显存/内存占用条不再无声消失，改为显示一行「ComfyUI 未运行，显存/内存暂不可用」，用户能看到「为什么没有数字」。
 
 - **comfy-cli 会在启动时自动检查并升级到最新版**：项目内的 comfy-cli（`python-venv\comfy-cli`）此前只在虚拟环境缺失时被自动安装，装过一次后就再没人管——停在旧版时，子图（liblib）工作流的提示词/种子/步数覆盖会整段失效（promoted-widget 回填是 1.20 才有的逻辑），而界面上看不出任何异常。现每次启动都后台比对已装版本与 PyPI 最新版，落后即自动 `pip install --upgrade`（默认 24 小时才联网检查一次，离线或 PyPI 不可达只记日志、保持已安装版本，绝不阻断启动）。想立即检查可直接执行 `scripts\setup-comfy-cli-venv.ps1 -Force`，过程见 `log/tools/comfy-cli-setup.log`。
 

@@ -1,4 +1,9 @@
-/* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing --
+ * 理由（规范 §11.7 三分类法 · 第 3 类「伪建议」）：本文件比较的都是**服务端
+ * 反序列化产物**（manifest / 发现结果），空串与 undefined 在此处同义（都表示
+ * 「没有值」）。`??` 会把空串当成「有值」而放行，改动语义 —— 例如
+ * `path.replace(...) || ""` 改 `??` 后，空串不再被兜底。因此 `||` 是刻意的
+ * 语义选择，不是疏忽。 */
 /* Pure helpers for the CustomNodesSettings dialog: path normalisation, row
  * state derivation, path-list parsing and misc formatting. No hooks, no JSX —
  * moved verbatim from the original single-file CustomNodesSettings.tsx. */

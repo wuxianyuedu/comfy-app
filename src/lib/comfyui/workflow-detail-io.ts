@@ -200,6 +200,10 @@ export async function enrichWorkflowIO(
       const ri = (rawInputsById[canonicalNodeId] ?? []).find((raw) => raw.name === v.name);
       if (ri) {
         type = ri.type || "*";
+        /* 用户改过的 label 优先，其次工作流里作者写的 label（英文业务名，
+         *  如 "choose 1st frame to upload"），最后才回退到 ComfyUI 的
+         *  zh-CN localized_name。顺序刻意如此：localized_name 人人相同
+         *  （"图像"），把作者 label 排在它后面会让不同 pin 长得一模一样。 */
         label = label ?? ri.label ?? ri.localized ?? ri.name;
         if (ri.widgetValue !== undefined) defaultValue = ri.widgetValue;
       }
