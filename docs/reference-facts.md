@@ -95,8 +95,9 @@
 
 ## 3. 校验范围
 
-> `pnpm doc:check` 校验纳入 SCOPED_DOCS 的文档集合，现已**全量纳入** `docs/standards/`
-> 规范正文（01~17 章）与 `docs/guides/` 规范指南，连同启动链路/含值类文档共 26 篇：
+> `pnpm doc:check` 校验纳入 `SCOPED_DOCS` 的文档集合，现已**全量纳入** `docs/standards/`
+> 规范正文（01~17 章）与 `docs/guides/` 规范指南，连同启动链路/含值类文档共 26 篇
+> （「全量」由 §3.1 的校验范围守卫机器判定：新增规范文档未登记即报错，不再靠人记得）：
 >
 > - **启动链路类**：`docs/standards/launch-and-build.md`、`docs/startup-hotreload.md`、
 >   `docs/guide-non-developer.md`
@@ -108,15 +109,37 @@
 > - **guides 规范指南**：`DEV-QUERIES.md`、`PRODUCTION-GAPS.md`、`TESTING.md`、
 >   `sync-after-pull.md`
 >
-> **不纳入**：`docs/standards/README.md`（文档集索引）、`docs/guides/reviews/`
-> （评审归档）、`docs/audits/`（过程文件）、`docs/api/`（TypeDoc 自动生成）、
+> **不纳入**：`docs/audits/`（过程文件）、`docs/api/`（TypeDoc 自动生成）、
 > `docs/superpowers/`（设计归档）、`docs/generated/`（本体系自动生成产物）。
+> 规范目录（`docs/standards/`、`docs/guides/`）里**不纳入**的只有两条，且都在
+> 脚本的豁免名单里**显式声明并附理由**：`docs/standards/README.md`（文档集索引，
+> 只有导航与章节映射）、`docs/guides/reviews/2026-08-30-canvasnode-review.md`
+> （代码审查归档，历史快照）。
 >
 > 这些文档以**路径类引用与规范描述**为主，不含值类裸值。值类引用由登记表 FACTS
 > 动态核对；关键基础设施路径由第 2 节 path 类 FACTS 核对存在性。文档正文的细粒度
 > 路径（如 `src/env.ts`）因大量为**占位、否定性说明、目录约定示例**，不自动扫描，
 > 以免误报；如需将某个具体路径纳入存在性核对，按第 4 节把它补登为 `path` 类 FACTS
 > 即可。文档删除或新增路径时，同步维护本表与 `docs/README.md` 的文档体系索引。
+
+### 3.1 校验范围守卫（新增文档必须二选一）
+
+> 「全量纳管」此前是人工承诺：`doc:check` 只校验 `SCOPED_DOCS` 里列出的文档，
+> **未登记的新文档会被静默跳过**——里面写死过期端口也不会报错。现在由脚本硬性
+> 判定，不再依赖人记得登记。
+
+`pnpm doc:check` 会遍历 `docs/standards/` 与 `docs/guides/` 下的每个 `.md`：
+
+| 情形 | 结果 |
+|---|---|
+| 在 `SCOPED_DOCS` 里 | 正常参与校验（防裸值 / 核对端口 / 核对路径存在） |
+| 在 `SCOPED_DOC_EXEMPTIONS` 里（`scripts/doc-facts.cjs`，**必须附理由**） | 跳过校验 |
+| 两者都不在 | **报错**，点名文件并提示登记或豁免 |
+
+豁免名单本身也受校验：理由为空、或指向的文件已不存在 → 同样报错，防止名单
+变成过期条目的垃圾桶。新增 / 删除 / 重命名规范文档时，按上表二选一即可。
+
+回归测试见 `tests/check-doc-references.test.ts` 的「校验范围守卫」用例组。
 
 ## 3.5 编辑文档与生成文档（双文档机制）
 
