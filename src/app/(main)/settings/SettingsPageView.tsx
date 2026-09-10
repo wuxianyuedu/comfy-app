@@ -1993,10 +1993,11 @@ export function SettingsPageView({
                   c.comfyStarting ||
                   c.comfyStopping ||
                   !!c.comfyStatus?.stopping ||
+                  !!c.comfyStatus?.starting ||
                   !!c.comfyStatus?.up
                 }
               >
-                {c.comfyStarting ? "启动中…" : "启动 ComfyUI"}
+                {c.comfyStarting || c.comfyStatus?.starting ? "启动中…" : "启动 ComfyUI"}
               </Btn>
               <Btn
                 onClick={() => void c.stopComfy()}
