@@ -24,8 +24,11 @@
 
 ## P2 — 架构路线图(见 reviews/2026-08-30-canvasnode-review.md)
 
-- [ ] `canvas-types.ts` 收窄 `CanvasNodeData` 索引签名,消除 `as unknown as`
-      双断言与 `as never`(类型化战役已把 any 清零,这是最后一步)。
+- [x] `canvas-types.ts` 收窄 `CanvasNodeData` 索引签名(ISSUE #320):拆成
+      `StrictCanvasNodeData`(业务代码用,拼错字段名编译报错) +
+      `CanvasNodeData = Strict & Record<string, unknown>`(仅 ReactFlow 类型参数
+      位置)+ `asCanvasNodeData()` 单点收口;画布链路 `as unknown as` / `as never`
+      清零;两处 Prisma Json 边界改为 Zod 校验。
 - [ ] `errorSuggestion` 正则规则表外置为数据。
 - [ ] 注册表触发式采纳:下次新增节点 kind 时按
       reviews/2026-08-30-canvasnode-review.md 第二节执行顺序走。
