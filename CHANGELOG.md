@@ -13,6 +13,12 @@
 
 ### Fixed
 
+- **设置打开失败时不再只剩一句「配置数据未就绪」死角（ISSUE #304）**：此前只在「两份配置都没拿到」时才显示错误视图——当 `setting.get` 成功、`llm.configGet` 失败（如库表缺失），失败为真却两份草稿都不齐，界面既不显示错误、也没有重试按钮与日志指引，只留下没有原因的「配置数据未就绪」把用户冻住。现「任一查询失败且草稿未就绪」即落错误降级视图，给出可读原因、重试、完整错误与日志面板入口；兜底态同样给可操作出口。
+
+- **设置加载失败的日志不再报错查询名与丢失服务端原文（ISSUE #304）**：补记到应用日志面板的那条错误，查询名字段此前恒显示 `setting.get`（无论实际失败的是哪个查询），且只记翻译后的可读文案——服务端真实报错（如 `no such table: llmConfig`）在面板里彻底丢失，用户拿着「请求被中断，请稍候重试」无从排查。现按实际失败的查询记全名称，并把原始报错（tRPC `code` / 服务端 `message` / `cause` / 堆栈首行）一并写入日志的 `raw` 字段。
+
+- **tRPC 失败不再被传输层包装文案掩盖根因（ISSUE #304）**：批量流式链路失败时，顶层错误文案常是 `signal is aborted without reason`（React Query 重试时中止上一轮请求所致），而真正的服务端报错在 `shape.message` 里。此前取值只看顶层，把「库里没有这张表」误报成「请求被中断，应用服务可能正在重启」，用户按提示反复等重启永远修不好。现在服务端原文优先，并对该类中断给出更贴合实际的可读提示。
+
 - **桌面窗口关了以后不会再留下无主的 `app.exe` 进程（ISSUE #301）**：此前启动器在壳还活着时退出（用户直接关掉启动器窗口 / 拉起它的 python 进程先结束），没人回收已经弹出的桌面壳——窗口没了进程还在，占着内存、锁住 `target\release\app.exe`（下次编译又报「拒绝访问」），只能手工 `taskkill /IM app.exe /T /F`。现三层治理：①启动前按进程 exe 真实路径（`src-tauri\target\{release,debug}\app.exe`，而非命令行，预编译壳的命令行里不含项目根路径，旧判据会漏判）回收上一轮遗留的壳；②python 启动器把本次拉起的壳 PID 落盘（`log/launcher/tauri-shell.pid`），监控线程在 dev-launcher 已退出/异常/超时时检查该壳是否仍存活，存活即 `taskkill /PID <pid> /T /F` 补刀后清掉 PID 文件；③正常路径关闭桌面窗口仍由 dev-launcher 的 `WaitForExit` + 进程树回收负责，不变。
 
 - **构建 release 壳不再因桌面壳还开着而白跑一轮编译（ISSUE #301）**：上一次启动的桌面窗口没关闭时，`cargo build --release` 会在编译收尾阶段报 `failed to remove file ... app.exe / 拒绝访问 (os error 5)`——要等整轮 Rust 编译走完才失败，且错误本身看不出根因。现在构建脚本（`tools\build\build-tauri-release.ps1` / `build-standalone.ps1`）会在编译开始前检测运行中的桌面壳，命中即中止并提示关闭窗口（或 `taskkill /IM app.exe /T /F`）后重跑；失败路径也会补一句「壳被打开」的排查提示。

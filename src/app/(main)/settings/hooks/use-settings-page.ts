@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 
-import { errorMessage } from "~/lib/error-message";
+import { errorMessage, rawErrorDetail } from "~/lib/error-message";
 import { isDesktopShell } from "~/lib/desktop-shell-client";
 import { useShellTabs } from "~/lib/shell-tabs-store";
 import {
@@ -113,8 +113,11 @@ export interface SettingsPageController {
   setTheme: (theme: "light" | "dark") => void;
   /* 加载 / 错误 */
   isInitialLoad: boolean;
+  /** 加载失败**且**两份草稿都没就绪 —— 容器据此渲染错误降级视图。 */
   hasError: boolean;
-  /** 任一查询出错且两份数据都没拿到时的兜底文案。 */
+  /** 加载未失败、也没在加载，但草稿仍未就绪（理论上不可达，视图兜底用）。 */
+  notReady: boolean;
+  /** 失败时给用户看的人话文案（原文见日志的 `raw` 字段）。 */
   errorText: string;
   retry: () => void;
   /** 两份草稿；为 null 表示查询还没回来 —— 容器据此走降级 UI，
@@ -1077,12 +1080,37 @@ export function useSettingsPage(): SettingsPageController {
     [llmDraft, patchLlm],
   );
 
-  const hasError = !!settingsQ.isError || !!llmQ.isError;
+  /* ── 加载失败判定 ────────────────────────────────────────────
+   * 「任一查询失败」与「两份配置都没拿到」是两件事。此前 `hasError` 只按
+   * 「两份数据都为空」判定，于是「setting.get 成功、llm.configGet 失败」时：
+   * 失败为真、草稿却仍为空 → 既不满足 hasError、也不满足 isInitialLoad，
+   * 容器一路落到那句没有重试、没有原因、也没有日志指引的「配置数据未就绪」，
+   * 用户被冻在死胡同里（正是 ISSUE #304 截图的现象）。
+   * 现在把两个语义拆开：
+   *   - `queryFailed`：任一查询 isError（错误视图与补记日志的判据）；
+   *   - `hasError`：queryFailed **且** 草稿未就绪（容器据此走降级视图）。
+   * 「一半成功一半失败」时草稿同样为空，因此也会落到错误视图，拿到重试与
+   * 日志出口，而不是死角文案。 */
+  const queryFailed = !!settingsQ.isError || !!llmQ.isError;
   const isInitialLoad = settingsQ.isLoading || llmQ.isLoading;
 
-  const errorText = hasError
-    ? errorMessage(settingsQ.error ?? llmQ.error, "未知错误")
+  /* 多查询同批失败时，优先展示「更靠近根因」的那条：两份都没拿到时按
+   * settings → llm 顺序取第一条非空错误（都是 undefined 时交 fallback）。 */
+  const failedError =
+    (settingsQ.isError ? settingsQ.error : undefined) ??
+    (llmQ.isError ? llmQ.error : undefined);
+
+  const errorText = queryFailed
+    ? errorMessage(failedError, "未知错误")
     : "";
+
+  /* 失败涉及的查询名（给面板日志的字段用；两个都失败时都记上）。 */
+  const failedQueries = [
+    settingsQ.isError ? "setting.get" : null,
+    llmQ.isError ? "llm.configGet" : null,
+  ]
+    .filter((name): name is string => name !== null)
+    .join(",");
 
   /* 加载失败落 app-runtime 错误日志（面板轮询 source=app-runtime 可见）。
    * 查询失败只体现在降级 UI，不经过 console / unhandledrejection，全局
@@ -1090,12 +1118,15 @@ export function useSettingsPage(): SettingsPageController {
    * 同一错误文案只记一次（ref 去重；重试后仍是同一错误不刷屏）。 */
   const loggedErrorRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!hasError || errorText === loggedErrorRef.current) return;
+    if (!queryFailed || errorText === loggedErrorRef.current) return;
     loggedErrorRef.current = errorText;
     void postAppRuntimeLog("settings", "error", `设置加载失败 ${errorText}`, {
-      query: settingsQ.isError ? "setting.get" : "llm.configGet",
+      query: failedQueries,
+      /* 原始报错（含 tRPC code / 服务端 message / stack 首行）一并落盘：
+       * 面板展示的是翻译后的可读文案，原文留在日志里供排查。 */
+      raw: rawErrorDetail(failedError),
     });
-  }, [hasError, errorText, settingsQ.isError]);
+  }, [queryFailed, errorText, failedQueries, failedError]);
 
   const retry = useCallback(() => {
     void settingsQ.refetch();
@@ -1105,19 +1136,27 @@ export function useSettingsPage(): SettingsPageController {
   const comfy = comfyStatusQ.data;
   const dbStudio = dbStudioStatusQ.data;
 
+  /* 两份草稿齐了才算「可渲染表单」；只有一份时仍走错误/加载态，避免
+   * 半份草稿导致视图里到处判空。 */
+  const drafts =
+    llmDraft && settingsDraft
+      ? { llm: llmDraft, settings: settingsDraft }
+      : null;
+
   return {
     section,
     setSection,
     theme: theme === "light" ? "light" : "dark",
     setTheme: (value: "light" | "dark") => setTheme(value),
-    isInitialLoad: isInitialLoad && !settingsQ.data && !llmQ.data && !hasError,
-    hasError: hasError && !settingsData && !llmConfig,
+    isInitialLoad:
+      isInitialLoad && !queryFailed && !settingsQ.data && !llmQ.data,
+    hasError: queryFailed && !drafts,
+    /* 既没在加载、也没失败，草稿却仍为空——正常状态机不可达。视图据此给
+     * 可操作出口（重试 + 日志面板），不再渲染冻住用户的死胡同文案。 */
+    notReady: !drafts && !queryFailed && !isInitialLoad,
     errorText,
     retry,
-    drafts:
-      llmDraft && settingsDraft
-        ? { llm: llmDraft, settings: settingsDraft }
-        : null,
+    drafts,
     patchLlm,
     patchSettings,
     toggleExtraModel,
