@@ -62,6 +62,14 @@ type LifecycleGlobal = {
    *  ensureComfyUiReady）不再自动拉起，直到用户手动点「启动 ComfyUI」或
    *  重新开启自动启动。解决「关闭后切个页签 ComfyUI 又被重连循环拉起」的困惑。 */
   manualStop?: boolean;
+  /** 一次自动启动以「明确的失败」收尾（保活进程已退出 / 拉起后进程未出现 /
+   *  秒退等）：此后自动启动路径不再反复重试，直到用户手动点「启动 ComfyUI」
+   *  或重新开启自动启动。解决「启动失败后一直自动重试」——重试只是把同一段
+   *  失败日志与同一条错误横幅刷进队列，徒增噪声与无谓的进程拉起。 */
+  autoStartFailed?: boolean;
+  /** 最近一次自动启动失败的 detail：重试被拦时原样回报，让队列任务仍能看到
+   *  「上次为什么失败」，而不是只收到一句泛泛的「已跳过」。 */
+  autoStartFailureDetail?: string;
 };
 const G_KEY = "__comfyLifecycle_v1";
 const g = globalThis as unknown as Record<string, LifecycleGlobal | undefined>;
@@ -202,6 +210,13 @@ export function isComfyStarting(): boolean {
   return !!st.starting;
 }
 
+/** 自动启动是否已被闩锁抑制（用户手动关闭过 / 上次自动启动已失败）。
+ *  WS 层据此决定「还要不要继续安排重连」——被抑制时重连只是空转
+ *  （每轮都是探测失败 → 讨要启动 → 被拦下），徒增日志与请求（ISSUE #335）。 */
+export function isComfyAutoStartSuppressed(): boolean {
+  return !!st.manualStop || !!st.autoStartFailed;
+}
+
 /** 「关闭中」窗口是否仍然生效（见 COMFY_STOPPING_WINDOW_MS）。 */
 export function isComfyStopping(): boolean {
   return isWithinStoppingWindow({
@@ -216,10 +231,25 @@ function clearComfyStopping(): void {
   st.stoppingAt = undefined;
 }
 
-/** 清掉「手动关闭后不自动启动」闩锁：用户重新开启了自动启动（设置保存）时调用，
- *  让自动启动恢复生效。 */
+/** 清掉「自动启动抑制」闩锁：用户重新开启了自动启动（设置保存）时调用，
+ *  让自动启动恢复生效。两把闩锁同清——「手动关闭」与「启动失败」都属
+ *  「自动路径先不要再动」的用户/环境信号，重新开启自动启动即等于重新授权。 */
 export function clearComfyManualStop(): void {
   st.manualStop = false;
+  clearComfyAutoStartFailure();
+}
+
+/** 清掉「自动启动失败后不重试」闩锁：用户手动点「启动 ComfyUI」时调用，
+ *  让自动启动路径重新获得重试机会（用户明确要求拉起 = 重新授权）。 */
+export function clearComfyAutoStartFailure(): void {
+  st.autoStartFailed = false;
+  st.autoStartFailureDetail = undefined;
+}
+
+/** 该次 ensureComfyUiReady 是否属于「值得拦下后续重试」的明确失败：
+ *  环境/路径/配置/进程秒退这类失败重试无意义，只会在日志里刷同样的错。 */
+function isTerminalAutoStartFailure(detail: string): boolean {
+  return /启动失败|立即退出|未配置|未开启自动启动|手动关闭/.test(detail);
 }
 
 export function getComfyUiStatus(): ComfyUiStatus {
@@ -298,15 +328,34 @@ export async function ensureComfyUiReady(
     return st.starting;
   }
 
-  // 手动启动＝用户明确要求拉起：先清掉「手动关闭后不自动启动」闩锁，
-  // 否则上次手动关闭的小尾巴会把这次明确启动也拦住。
-  if (opts.manual) st.manualStop = false;
+  // 手动启动＝用户明确要求拉起：先清掉两把「自动路径先别动」闩锁，否则上次
+  // 手动关闭 / 上次启动失败的小尾巴会把这次明确启动也拦住。
+  if (opts.manual) {
+    st.manualStop = false;
+    clearComfyAutoStartFailure();
+  }
+
+  // 非手动来源在「上一次自动启动已明确失败」后不再自动重试（ISSUE #335）：
+  // 路径没配好 / 环境缺依赖 / 保活进程拉起来就退这类失败，重试只会把同一段
+  // 错误反复刷进队列与 runtime 日志，并不能自愈。原样回报上次的失败详情，
+  // 让用户知道「为什么这次没重试」，并给出可行动的出口（手动启动 / 改配置 /
+  // 重新开启自动启动都会清掉闩锁）。
+  //
+  // 放在判决表之前：这里要的是「原样回报上次的失败详情」，而判决表只认识
+  // 「有没有闩锁」——把「上次失败因为保活进程已退出」这类可行动的原因换成
+  // 一句泛泛的「未开启自动启动」，用户会对着错误的原因改设置。
+  if (!opts.manual && st.autoStartFailed) {
+    const last = st.autoStartFailureDetail ?? "未知原因";
+    note(`上次自动启动已失败，跳过自动重试：${last}`);
+    return { ok: false, base: null, detail: last };
+  }
 
   const settings = getSettingsSync();
   /* 判决表（顺序即优先级）抽在 lifecycle-derive 的 decideEnsureLaunch 里：
    * 已在运行 → 手动启动优先于闩锁 → 自动来源遇闩锁让路（ISSUE #290）→
    * 未开自动启动 / 未配路径给可行动提示。这里只负责把事实喂进去、把结论
-   * 翻成用户文案。 */
+   * 翻成用户文案；「上次自动启动已失败」的闩锁在判决表之前单独拦下
+   * （ISSUE #335，需要原样回报失败原因），故没有并入判决表。 */
   const decision = decideEnsureLaunch({
     upBase,
     manual: !!opts.manual,
@@ -598,7 +647,16 @@ export async function ensureComfyUiReady(
   })();
 
   try {
-    return await st.starting;
+    const r = await st.starting;
+    /* 自动启动失败后落闩锁：后续 WS 重连 / 状态轮询触发的自动启动不再重试，
+     * 直到用户手动启动或重新开启自动启动（ISSUE #335）。只对「明确失败」落锁
+     * （见 isTerminalAutoStartFailure）——「已经在运行」「未开启自动启动」这类
+     * 结果不该把后续重试永久钉死。手动启动自己不算自动启动，不落锁。 */
+    if (!opts.manual && !r.ok && isTerminalAutoStartFailure(r.detail)) {
+      st.autoStartFailed = true;
+      st.autoStartFailureDetail = r.detail;
+    }
+    return r;
   } finally {
     st.starting = undefined;
   }
