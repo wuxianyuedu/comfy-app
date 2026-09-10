@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { act, cleanup } from "@testing-library/react";
 import {
   useLogStore,
   dropStaleEntries,
@@ -43,6 +44,19 @@ function resetStore() {
 function idsOf(entries: LogEntry[]): (string | undefined)[] {
   return entries.map((e) => e.id);
 }
+
+/** 造一条「时刻可控」的日志行（会话边界用例都按 time 判定）。 */
+function entry(id: string, time: number): LogEntry {
+  return {
+    id,
+    time,
+    level: "info",
+    message: `msg-${id}`,
+    source: "system",
+  };
+}
+
+afterEach(cleanup);
 
 beforeEach(resetStore);
 
@@ -773,5 +787,185 @@ describe("captureLocation", () => {
     const loc = captureLocation();
     // 从测试文件调用时栈帧内容依赖运行器,这里只验证契约不抛异常
     expect(loc === undefined || /:\d+$/.test(loc)).toBe(true);
+  });
+});
+
+/* ── 会话边界契约补全（ISSUE #321）─────────────────────────────────────
+ * 规范 07 §7.14 把「面板只显示本次运行」定为契约，并写明三条硬规则：
+ *   ①不做字节级跳过（按行时刻比较即可）；
+ *   ②读不到起点就不截断（多显示几条历史，好过丢掉本次日志）；
+ *   ③setSessionStart 幂等（页面重载不回退起点）。
+ * 上面已有用例覆盖主干；这一段补**边界与不变量**——它们是「改坏了不会立刻
+ * 被用户发现，但会在某次启动后突然显示上次日志」的那类回归。
+ */
+
+/** 哪类来源需要在轮询响应里带会话起点（规范 07 §7.14 的契约判据）。 */
+function needsSessionStart(source: string): boolean {
+  return (
+    source === "app-runtime" ||
+    source === "comfyui-runtime" ||
+    source === "drizzle-studio-runtime" ||
+    source === "ollama-runtime"
+  );
+}
+
+describe("会话边界：时间线比较的边界与不变量（规范 07 §7.14）", () => {
+  it("行时刻恰好等于起点 → 保留（>= 而非 >，边界同一毫秒不能丢）", () => {
+    const cutoff = 1_700_000_000_000;
+    const entries = [
+      entry("at-cutoff", cutoff),
+      entry("just-before", cutoff - 1),
+      entry("just-after", cutoff + 1),
+    ];
+    expect(idsOf(dropStaleEntries(entries, cutoff))).toEqual([
+      "at-cutoff",
+      "just-after",
+    ]);
+  });
+
+  it("起点为 undefined 同样不截断（与 null 等价，调用方漏传不能变成空面板）", () => {
+    const entries = [entry("old", 1), entry("new", 2)];
+    expect(idsOf(dropStaleEntries(entries, undefined))).toHaveLength(2);
+  });
+
+  it("起点为 0 视为「有效起点」而非「未设置」——0 是合法时间戳，不能当 falsy 跳过", () => {
+    // 这条容易写错成 `if (!cutoffMs) return entries`：那样 0 会被当成未设置，
+    // 于是「所有历史行」被放行。0 在实现里是合法起点（epoch），语义是
+    // 「什么都不丢」，结果与不截断相同，但**判据**必须走 null 判断。
+    const entries = [entry("a", 0), entry("b", 1)];
+    expect(idsOf(dropStaleEntries(entries, 0))).toEqual(["a", "b"]);
+  });
+
+  it("origin 只用于展示、不参与过滤（dev / app-runtime 行同规则）", () => {
+    const cutoff = 100;
+    const entries = [
+      { ...entry("dev-old", 50), origin: "dev" as const },
+      { ...entry("runtime-old", 60), origin: "app-runtime" as const },
+      { ...entry("dev-new", 150), origin: "dev" as const },
+      { ...entry("runtime-new", 160), origin: "app-runtime" as const },
+    ];
+    const kept = dropStaleEntries(entries, cutoff);
+    expect(idsOf(kept)).toEqual(["dev-new", "runtime-new"]);
+    // origin 字段被原样保留（视图要显示来源）
+    expect(kept.map((e) => e.origin)).toEqual(["dev", "app-runtime"]);
+  });
+
+  it("重复应用同一起点结果不变（幂等：轮询每来一批都过滤一次也不会累积漂移）", () => {
+    const cutoff = 100;
+    const entries = [entry("old", 50), entry("new", 150)];
+    const once = dropStaleEntries(entries, cutoff);
+    const twice = dropStaleEntries(once, cutoff);
+    expect(idsOf(twice)).toEqual(idsOf(once));
+  });
+
+  it("乱序到达（旧行晚于新行）时结果稳定：只按时刻判定，与顺序无关", () => {
+    const cutoff = 100;
+    const outOfOrder = [entry("new", 200), entry("old", 50), entry("mid", 150)];
+    const filtered = dropStaleEntries(outOfOrder, cutoff);
+    // 顺序保持原样（本函数只过滤、不重排），但历史行被摘掉
+    expect(idsOf(filtered)).toEqual(["new", "mid"]);
+  });
+});
+
+describe("会话起点迟到：混入的历史行必须被收拢（不变量）", () => {
+  // 复用文件顶部的 resetStore（beforeEach 已全局接入），这里只需额外保证 page 归位
+  beforeEach(() => useLogStore.setState({ page: 1 }));
+
+  it("起点到达前的历史行全部被清掉，且计数同步重算（不留幽灵计数）", () => {
+    const cutoff = 1_000;
+
+    // 起点未知（null）时先收下一批历史行 —— 这正是真实时序：
+    // 首次轮询先于 sessionStart 下发。
+    act(() =>
+      useLogStore.getState().appendFileLogs([
+        entry("stale-1", cutoff - 500),
+        entry("stale-2", cutoff - 100),
+      ]),
+    );
+    expect(useLogStore.getState().logs.some((l) => l.id === "stale-1")).toBe(true);
+
+    // 起点到达：清历史 + 计数重算
+    act(() => useLogStore.getState().setSessionStart(cutoff));
+
+    const state = useLogStore.getState();
+    expect(state.logs.some((l) => l.id === "stale-1")).toBe(false);
+    expect(state.logs.some((l) => l.id === "stale-2")).toBe(false);
+    expect(state.counts.all).toBe(state.logs.length);
+  });
+
+  it("起点到达时保留本次运行的行（不能连本次日志一起丢）", () => {
+    const cutoff = 1_000;
+    act(() =>
+      useLogStore.getState().appendFileLogs([
+        entry("stale", cutoff - 1),
+        entry("current", cutoff + 1),
+      ]),
+    );
+    act(() => useLogStore.getState().setSessionStart(cutoff));
+    expect(idsOf(useLogStore.getState().logs)).toContain("current");
+    expect(idsOf(useLogStore.getState().logs)).not.toContain("stale");
+  });
+
+  it("起点从 null 变为具体值后不回退：再设 null 也不会把已丢的历史行找回来", () => {
+    const cutoff = 1_000;
+    act(() => useLogStore.getState().appendFileLogs([entry("stale", cutoff - 1)]));
+    act(() => useLogStore.getState().setSessionStart(cutoff));
+    expect(idsOf(useLogStore.getState().logs)).not.toContain("stale");
+
+    act(() => useLogStore.getState().setSessionStart(null));
+    // 已被丢弃的行不会复活（它们不在 store 里了）——这是「不回退」的实际含义
+    expect(idsOf(useLogStore.getState().logs)).not.toContain("stale");
+  });
+
+  it("页面重载（store 重建）后用同一起点重放：结果与首次一致", () => {
+    const cutoff = 1_000;
+    const batch = [entry("stale", cutoff - 1), entry("current", cutoff + 1)];
+
+    // 第一次会话
+    act(() => useLogStore.getState().setSessionStart(cutoff));
+    act(() => useLogStore.getState().appendFileLogs(batch));
+    const first = idsOf(useLogStore.getState().logs);
+
+    // 模拟重载：清空后重放同一个起点与同一批数据
+    useLogStore.setState({ logs: [], sessionStart: null, counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 } });
+    act(() => useLogStore.getState().setSessionStart(cutoff));
+    act(() => useLogStore.getState().appendFileLogs(batch));
+    const second = idsOf(useLogStore.getState().logs);
+
+    expect(second).toEqual(first);
+  });
+});
+
+describe("轮询响应契约：会话起点随追加写来源下发（/api/logs/current）", () => {
+  /* 规范 07 §7.14 的「起点下发」环节：追加写来源必须在响应里带 sessionStart，
+   * 而 dev 来源天然只有本次内容、不需要它。这条契约靠客户端与服务端约定，
+   * 改坏了表现为「面板又开始混着上次的日志」——没有测试就会静默回归。
+   *
+   * 这里以「来源 → 是否应带 sessionStart」的判据表锁住，而不是去起 HTTP 服务：
+   * 判据表是契约本身，实现改动只要仍满足它即可。 */
+
+  const APPEND_WRITE_SOURCES = [
+    "app-runtime",
+    "comfyui-runtime",
+    "drizzle-studio-runtime",
+    "ollama-runtime",
+  ] as const;
+
+  it("四类追加写来源都判定为「需要会话起点」", () => {
+    for (const source of APPEND_WRITE_SOURCES) {
+      expect(needsSessionStart(source)).toBe(true);
+    }
+  });
+
+  it("dev（dev-launcher 日志）不需要会话起点：它每次运行都覆盖重建，天然只有本次", () => {
+    expect(needsSessionStart("dev-launcher")).toBe(false);
+    expect(needsSessionStart("dev")).toBe(false);
+  });
+
+  it("读不到锚点时起点为 null，客户端据此退化为不截断（规则②）", () => {
+    // 非双击链路启动的场景：dev-launcher.log 不存在 → sessionStart 为 null。
+    // 客户端必须**不**因此丢弃整段内容（宁可多显示历史行）。
+    const entries = [entry("hist", 1), entry("now", 2)];
+    expect(dropStaleEntries(entries, null)).toHaveLength(2);
   });
 });
