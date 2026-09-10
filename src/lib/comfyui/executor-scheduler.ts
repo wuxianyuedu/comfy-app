@@ -28,6 +28,19 @@ export async function processQueue() {
   const s = state();
   if (s.active >= MAX_CONCURRENCY) return;
   if (s.ws?.readyState !== WebSocket.OPEN) {
+    // WS 尚未就绪：任务会留在队列里等 connect() 重连成功后再出队。此前这段
+    // 等待对用户完全不可见——前端只见「等待日志…」，不知是 ComfyUI 未运行、
+    // 自动启动中，还是连不上。这里给每个排队任务写一条一次性提示（wsWaitLogged
+    // 防心跳每 3s 刷屏），让用户看到任务在等什么。
+    for (const job of s.queue) {
+      if (s.wsWaitLogged.has(job.taskId)) continue;
+      s.wsWaitLogged.add(job.taskId);
+      log(
+        job.taskId,
+        "warn",
+        "⏳ 等待 ComfyUI WebSocket 连接就绪；若 ComfyUI 未运行且已开启自动启动，将自动拉起并在此后继续执行…",
+      );
+    }
     void connect();
     return;
   }

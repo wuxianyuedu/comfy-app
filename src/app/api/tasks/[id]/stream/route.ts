@@ -45,6 +45,22 @@ export async function GET(
         .findById(id)
         .then((task) => {
           if (task) {
+            // logs 是 Prisma Json 列(运行时为 LogEntry[];send 收 unknown,无需断言)。
+            const existing: unknown[] = Array.isArray(task.logs) ? task.logs : [];
+            // 优先回放 runner 内存日志（state().logs），它是每次 log() 写入的完整
+            // 现场、也是持久化到 DB 的源，恒为 DB 日志的超集。enqueue()/processQueue()
+            // 在 startGenerate 返回前、前端 EventSource 尚未订阅时就会输出
+            // 「任务已加入执行队列」「输入参数（workflowInputs，N 项）」等行；这些行
+            // 落库走 200ms 防抖，若 SSE 在防抖窗口内连接，只读 DB 会漏掉它们，
+            // 表现为「第二次执行（WS 已开，processQueue 同步发日志）没有显示执行参数」。
+            // 这里改读内存日志兜底：内存为空（如服务器重启）时回落 DB 日志。
+            const inMemory = getLogs(id);
+            const replaySrc = inMemory.length > 0 ? inMemory : existing;
+            // 回放顺序必须「先日志、后终态 state」：前端 watchTask 在处理 state 的
+            // 终态（FAILED/CANCELLED/ERROR）分支时会立即 settle 并关闭 EventSource，
+            // 若把 state 排在日志前面，后续 log 帧会被丢弃，用户只看到「等待日志…」
+            // 而看不到失败原因（任务在 SSE 建立前就已终态时必现）。
+            replaySrc.forEach((entry) => send({ type: "log", entry }));
             // forward structured validation errors so
             //  consumers (CreatePanel) can render a per-field list instead of
             //  the English summary in `error`.
@@ -61,18 +77,6 @@ export async function GET(
             });
             lastSent.status = task.status;
             lastSent.progress = task.progress ?? 0;
-            // logs 是 Prisma Json 列(运行时为 LogEntry[];send 收 unknown,无需断言)。
-            const existing: unknown[] = Array.isArray(task.logs) ? task.logs : [];
-            // 优先回放 runner 内存日志（state().logs），它是每次 log() 写入的完整
-            // 现场、也是持久化到 DB 的源，恒为 DB 日志的超集。enqueue()/processQueue()
-            // 在 startGenerate 返回前、前端 EventSource 尚未订阅时就会输出
-            // 「任务已加入执行队列」「输入参数（workflowInputs，N 项）」等行；这些行
-            // 落库走 200ms 防抖，若 SSE 在防抖窗口内连接，只读 DB 会漏掉它们，
-            // 表现为「第二次执行（WS 已开，processQueue 同步发日志）没有显示执行参数」。
-            // 这里改读内存日志兜底：内存为空（如服务器重启）时回落 DB 日志。
-            const inMemory = getLogs(id);
-            const replaySrc = inMemory.length > 0 ? inMemory : existing;
-            replaySrc.forEach((entry) => send({ type: "log", entry }));
           }
         })
         .catch(() => {
