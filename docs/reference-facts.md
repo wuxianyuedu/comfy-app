@@ -57,14 +57,16 @@
 > `MCP_HTTP_PORT` 覆盖（默认 `4300`）。
 >
 > **同号与范围限定**：MCP 端口 `4300` 已避开 dev 回落族，ComfyUI 生态端口 `8188` 非本项目
-> 单一事实。为明确语义并避免跨文档误判，这二者均用占位符并经 **`onlyDocs` 限定**——仅在
-> `docs/workshop-mcp.md` 内校验，不影响其它文档。
+> 单一事实。为明确语义并避免跨文档误判，这二者均用占位符并经 **`onlyDocs` 限定**——仅在该
+> 事实声明的文档组内校验，不影响其它文档。`docs/standards/Comfy-APP-T3-项目开发规范.md` 的
+> 「开发端口」行是**同一值的第二引用点**，经 `otherDocs` 并入同一事实（而非把它挪出校验范围），
+> 故 `comfyui.port` 的校验范围为 `onlyDocs ∪ otherDocs`。
 
 | key | placeholder | meaning（可读语义） | source（权威定义文件） | extract |
 |---|---|---|---|---|
 | `registry.port` | `{{registry.port}}` | shadcn 本地团队 Registry 服务端口 | `tools/scripts/start-registry.ps1` 的 `$Port` | 读 `$Port` 值（`3874`） |
 | `mcp.http.port` | `{{mcp.http.port}}` | Workshop MCP HTTP 服务端口 | `tools/mcp-http.ts` 的 `MCP_HTTP_PORT ?? 4300` | 读 `MCP_HTTP_PORT` 默认值（`4300`）；仅 `docs/workshop-mcp.md` 校验 |
-| `comfyui.port` | `{{comfyui.port}}` | ComfyUI 默认监听端口 | `src/lib/comfyui/client.ts` 的 `settings.comfyuiPort … : 8188` 默认分支 | 读默认分支值（`8188`）；仅 `docs/workshop-mcp.md` 校验 |
+| `comfyui.port` | `{{comfyui.port}}` | ComfyUI 默认监听端口 | `src/lib/comfyui/client.ts` 的 `settings.comfyuiPort … : 8188` 默认分支 | 读默认分支值（`8188`）；校验范围 = `onlyDocs`（`docs/workshop-mcp.md`）+ `otherDocs`（主规范「开发端口」行） |
 
 ---
 
@@ -100,7 +102,8 @@
 >   `docs/guide-non-developer.md`
 > - **含值类引用的文档**：`docs/standards/Comfy-APP-T3-项目开发规范.md`、
 >   `docs/standards/16-shadcn-ui与表单校验.md`、`docs/workshop-mcp.md`
->   （MCP HTTP 端口 / ComfyUI 端口，经 `onlyDocs` 限定仅在本篇校验）
+>   （MCP HTTP 端口经 `onlyDocs` 仅在 workshop-mcp 校验；ComfyUI 端口经 `onlyDocs` +
+>   `otherDocs` 在 workshop-mcp 与主规范「开发端口」行校验）
 > - **standards 规范正文**：`01`~`17` 章其余各篇（含路径/规范描述）
 > - **guides 规范指南**：`DEV-QUERIES.md`、`PRODUCTION-GAPS.md`、`TESTING.md`、
 >   `sync-after-pull.md`
@@ -138,6 +141,10 @@
    发现文档未同步处，按提示更新占位符（占位符本身不变，变的是它代表的值）。
 2. **新增可复用值**：先在本表加一行 `key / placeholder / source / extract`，
    再在文档用占位符替代裸值。
+   同一值在**多篇文档**出现且原文形态不同（如 ComfyUI 端口在 workshop-mcp 里是
+   无括号 `:8188`、在主规范里是 `localhost:3100` / `:8188` 并列行）时：
+   用 `onlyDocs` 声明主适用文档组 + `otherDocs` 追加其余引用点，**不要把引用点
+   挪出校验范围**——挪出去等于放弃防回潮，下次改端口这两处就静默过期。
 3. **占位符要可读**：`placeholder` 用语义化命名（如 `{{dev.port}}`、`{{shell.exe.prebuilt}}`），
    禁止 `{{x1}}` 这类晦涩代号；表内 `meaning` 列给出人类可读解释。
 4. **本表不存值**：禁止在本表硬编码真实值（那是第二事实）。值只在源码，由脚本提取。
