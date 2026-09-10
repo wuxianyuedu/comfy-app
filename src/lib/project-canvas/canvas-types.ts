@@ -126,7 +126,28 @@ export function getModelPreset(kind: NodeKind, modelId?: string): ModelPreset | 
   return list.find((item) => item.id === modelId) ?? list[0] ?? null;
 }
 
-export interface CanvasNodeData {
+/**
+ * 画布逻辑节点的**严格字段声明**（不含索引签名）。
+ *
+ * 为什么拆成「严格声明 + 兼容类型」两层（ISSUE #320）：
+ *
+ * ReactFlow 的 `Node<T>` 要求 `T extends Record<string, unknown>`，所以交给
+ * ReactFlow 的数据类型必须带索引签名。但索引签名会让**字段名写错也编译通过**
+ * （`d.promt` 被解析成 `unknown`）——顶层类型检查里那层「保险」是假的：
+ * 过去 14 个画布文件全靠它蒙混，拼错字段名要到运行时才炸。
+ *
+ * 因此拆开：
+ *   - `StrictCanvasNodeData`（本接口）：**所有画布业务代码用这个**。字段少写、
+ *     名字拼错、类型用错都会在 tsc 阶段报错（含 "Did you mean" 提示）。
+ *   - `CanvasNodeData`（下方 `type`）：仅用于**交给 ReactFlow 类型参数**的位置
+ *     （`Node<CanvasNodeData, …>` / `CanvasNodeType`）。它 = 严格声明 +
+ *     `Record<string, unknown>` 兼容面。
+ *   - 需要在 ReactFlow 与业务之间搬运数据时，走 `asCanvasNodeData()` 收口
+ *     （单点断言，替代散落的 `as unknown as`）。
+ *
+ * 不使用「裸索引签名放在声明体里 + 靠人自觉」：那正是本次要修掉的状态。
+ */
+export interface StrictCanvasNodeData {
   kind: NodeKind;
   status: "idle" | "running" | "done" | "error";
   error?: string;
@@ -223,10 +244,28 @@ export interface CanvasNodeData {
   /** Discriminator: picture → image, movie → video. */
   mediaKind?: "image" | "video";
 
-  // ReactFlow node data must be a plain record
-  [key: string]: unknown;
 }
 
+/** ReactFlow 要求 `data` 可索引；这是**唯一**允许挂索引签名的地方。 */
+export type CanvasNodeData = StrictCanvasNodeData & Record<string, unknown>;
+
+/**
+ * 把 ReactFlow 上的 `node.data`（兼容面）收口成严格声明。
+ *
+ * 为什么需要它：`Node<CanvasNodeData>` 的 `data` 类型仍是宽索引面，直接读
+ * `node.data.prompt` 会得到 `unknown`。过去各文件用 `as unknown as NodeData`
+ * 各自绕开——断言散落、改字段无人发现。这里集中一处收口：
+ *   - 输入是运行时真实数据（ReactFlow 给的对象），断言在此是**唯一**的；
+ *   - 输出是严格类型，下游字段访问全部受类型检查保护。
+ *
+ * 收口不做运行时校验（画布数据由本应用写入、结构自持），因此单点断言是
+ * 恰当的成本——继续保留零散断言才是问题。
+ */
+export function asCanvasNodeData(data: unknown): StrictCanvasNodeData {
+  return data as StrictCanvasNodeData;
+}
+
+/** ReactFlow 节点联合：逻辑节点（canvasNode）与纯视觉节点（workflowArdot）。 */
 export type CanvasNodeType =
   | Node<CanvasNodeData, "canvasNode">
   | Node<Record<string, never>, "workflowArdot">;

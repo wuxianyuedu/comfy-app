@@ -17,15 +17,26 @@
 - [x] ReactFlow Provider 包装方案落地(tests/helpers/react-flow.tsx)+
       CanvasNode/FlowNode 渲染冒烟与折叠交互(7 用例)。表单/生成链路的深度
       行为测试(fetch/poll 生命周期)仍开放。
-- [ ] `CustomNodesSettings` 主组件(1116 行)拆分后行为测试。
+- [x] `CustomNodesSettings` 主组件拆分后行为测试:组件已按四层范式拆为容器 73 +
+      视图 379 + hook 503 + 纯函数模块,并补齐逻辑层行为测试
+      (`hooks/use-custom-nodes-settings.test.ts`,17 用例:失败路径必须有可见出口、
+      打开才请求、解析收尾时序、派生分组计数)。
 - [x] Playwright 框架 + 冒烟 E2E(e2e/smoke.spec.ts:login 渲染/Tab 切换、/ 重定向 workspace;`npm run test:e2e`)。
-- [ ] 覆盖率棘轮抬升:`src/lib/comfyui/**` 入榜(executor 家族已类型化,
-      补 70%+ 用例后设阈值)。
+- [x] 覆盖率棘轮抬升:`src/lib/comfyui/**` 两批模块相继入榜,判断规则与
+      调度判决被逐条断言:
+      - `lifecycle.ts` 的判决表抽到纯函数模块 `lifecycle-derive.ts`(90% 硬门槛),
+        `lifecycle.ts` 本体按实测值设门槛(45/60/45 + 分支 30);
+      - 两条 sweeper(`reaper.ts` 70/60)与调度器(`executor-scheduler.ts` 70/50)
+        的判决矩阵测试落地后按实测值设门槛。
+      新增 `comfyui/**` 模块的测试后,按同样方式把各自门槛加进 §11.7 棘轮表。
 
 ## P2 — 架构路线图(见 reviews/2026-08-30-canvasnode-review.md)
 
-- [ ] `canvas-types.ts` 收窄 `CanvasNodeData` 索引签名,消除 `as unknown as`
-      双断言与 `as never`(类型化战役已把 any 清零,这是最后一步)。
+- [x] `canvas-types.ts` 收窄 `CanvasNodeData` 索引签名(ISSUE #320):拆成
+      `StrictCanvasNodeData`(业务代码用,拼错字段名编译报错) +
+      `CanvasNodeData = Strict & Record<string, unknown>`(仅 ReactFlow 类型参数
+      位置)+ `asCanvasNodeData()` 单点收口;画布链路 `as unknown as` / `as never`
+      清零;两处 Prisma Json 边界改为 Zod 校验。
 - [ ] `errorSuggestion` 正则规则表外置为数据。
 - [ ] 注册表触发式采纳:下次新增节点 kind 时按
       reviews/2026-08-30-canvasnode-review.md 第二节执行顺序走。
@@ -40,8 +51,11 @@
       对齐为零警告口径(ISSUE #322);剩余行内 disable 全部带可核验理由
       (exhaustive-deps 按三分类法逐条判定,prefer-nullish 属「伪建议」类:
       空串在服务端反序列化产物里表示「没有值」,`??` 会改语义)。
-- [ ] `DynamicWorkflowForm`(958)与 `CustomNodesSettings` 主组件(1116)
-      进一步拆分(结构性提醒由 pre-commit 持续输出)。
+- [x] `CustomNodesSettings` 主组件进一步拆分(见 P1 对应条目,容器 73 行)。
+- [x] `DynamicWorkflowForm` 已拆为四层(容器 44 + 视图 249 + hook 261 + 纯函数
+      105),并补齐逻辑层行为测试(30 用例:行归属、多模式可见性、拖拽重排、
+      图片上传、默认值刷新口径,见 ISSUE #319)。`CustomNodesSettings` 同批拆分
+      与测试见 ISSUE #318。
 - [ ] `components/model/model-library.tsx` 与 `studio/ModelLibrary.tsx`
       语义撞车——确认两者职责或合并。
 

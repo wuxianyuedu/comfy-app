@@ -18,7 +18,19 @@
  * 人类可读映射见 docs/reference-facts.md；FACTS 与提取逻辑见 scripts/doc-facts.cjs
  * （本脚本与 doc:render 共用，避免第二事实）。
  */
-const { SCOPED_DOCS, FACTS, readText, exists, extractDevHostPort, extractFallbackPorts } = require("./doc-facts.cjs");
+const fs = require("node:fs");
+const path = require("node:path");
+const {
+  ROOT,
+  SCOPED_DOCS,
+  SCOPED_DOC_DIRS,
+  SCOPED_DOC_EXEMPTIONS,
+  FACTS,
+  readText,
+  exists,
+  extractDevHostPort,
+  extractFallbackPorts,
+} = require("./doc-facts.cjs");
 
 const problems = [];
 
@@ -28,6 +40,53 @@ function checkFactKeysMatchDocs() {
   for (const f of FACTS) if (!md.includes(f.key)) problems.push(`登记表缺少事实 key：${f.key}`);
   const mdKeys = [...md.matchAll(/\| `([a-z][a-z0-9_.]+)` \|/g)].map((m) => m[1]);
   for (const k of mdKeys) if (!FACTS.some((f) => f.key === k)) problems.push(`登记表有多余/脚本未支持 key：${k}`);
+}
+
+/* ── 校验范围守卫（ISSUE #316）─────────────────────────────────────────
+ * 目的：让「新增规范文档忘了登记 → 静默不校验」这件事变成硬错误。
+ *
+ * 判定：遍历 SCOPED_DOC_DIRS 下的每个 .md，
+ *   - 在 SCOPED_DOCS 里 → 正常校验；
+ *   - 在 SCOPED_DOC_EXEMPTIONS 里 → 跳过（但必须附了理由）；
+ *   - 两者都不在 → 报错，提示「登记进 SCOPED_DOCS」或「写进豁免名单并附理由」。
+ * 同时校验豁免名单本身：理由为空、或指向不存在的文件 → 也算问题（防止名单
+ * 变成张贴过期条目的垃圾桶）。
+ */
+function checkScopeCoverage() {
+  const scoped = new Set(SCOPED_DOCS);
+  for (const dir of SCOPED_DOC_DIRS) {
+    const absDir = path.join(ROOT, dir);
+    if (!fs.existsSync(absDir)) {
+      problems.push(`校验范围守卫：目录不存在 ${dir}（SCOPED_DOC_DIRS 需与仓库结构一致）`);
+      continue;
+    }
+    const walk = (abs) => {
+      for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
+        const full = path.join(abs, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+          continue;
+        }
+        if (!entry.name.endsWith(".md")) continue;
+        const rel = path.relative(ROOT, full).split(path.sep).join("/");
+        if (scoped.has(rel) || rel in SCOPED_DOC_EXEMPTIONS) continue;
+        problems.push(
+          `校验范围守卫：${rel} 既未登记进 SCOPED_DOCS、也不在豁免名单里——` +
+            `新增规范文档必须二选一（登记则参与校验；豁免则须在 scripts/doc-facts.cjs 的 ` +
+            `SCOPED_DOC_EXEMPTIONS 里写明理由），不允许静默跳过。见 docs/reference-facts.md §3。`
+        );
+      }
+    };
+    walk(absDir);
+  }
+  for (const [rel, reason] of Object.entries(SCOPED_DOC_EXEMPTIONS)) {
+    if (!reason || !reason.trim()) {
+      problems.push(`校验范围守卫：豁免名单条目 ${rel} 没有写理由（豁免必须可核验）`);
+    }
+    if (!exists(rel)) {
+      problems.push(`校验范围守卫：豁免名单条目 ${rel} 指向的文件不存在——过期条目应删除`);
+    }
+  }
 }
 
 function bareValueOccurs(text, value) {
@@ -119,6 +178,7 @@ function checkPaths() {
 
 function main() {
   checkFactKeysMatchDocs();
+  checkScopeCoverage();
   checkPaths();
   for (const doc of SCOPED_DOCS) checkDoc(doc);
 

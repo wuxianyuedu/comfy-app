@@ -16,7 +16,7 @@
  */
 
 import React from "react";
-import { ioLabel } from "@/components/studio/shared/workflow-io";
+import { ioLabel, typeDisplay } from "@/components/studio/shared/workflow-io";
 import type { WorkflowIOEntry } from "@/components/studio/shared/workflow-io";
 
 /** 卡片外壳：与 CanvasNode 持有的外壳完全一致（无 overflow-hidden，
@@ -178,7 +178,7 @@ export function WorkflowNodeOutputsRow({
             color: "var(--color-ink-muted)",
           }}
         >
-          {oType}
+          {typeDisplay(oType)}
         </span>
       </div>
       <div className="pb-2" />

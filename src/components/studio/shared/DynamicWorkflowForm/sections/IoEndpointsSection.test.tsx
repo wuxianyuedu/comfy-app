@@ -113,7 +113,7 @@ describe("IoEndpointsSection", () => {
     expect(screen.getByTitle("· IMAGE_FINAL")).toBeInTheDocument();
   });
 
-  it("白名单外的输出类型回退为 INT(normalizeTypeChip fallback)", () => {
+  it("自定义输出类型原样展示(type 是什么就显示什么)", () => {
     render(
       <IoEndpointsSection
         wireInputs={[]}
@@ -122,7 +122,30 @@ describe("IoEndpointsSection", () => {
         showOutputs
       />,
     );
-    expect(screen.getByText("INT")).toBeInTheDocument();
+    /* LATENT / IMAGEUPLOAD 这类不在常用白名单里的类型也必须如实打印——
+     * 回退成 INT 会让用户看到的类型与工作流定义对不上。 */
+    expect(screen.getByText("LATENT")).toBeInTheDocument();
+  });
+
+  it("IMAGEUPLOAD 上传位 chip 如实展示 IMAGEUPLOAD", () => {
+    render(
+      <IoEndpointsSection
+        wireInputs={[
+          wireInput({
+            ioKey: "23::widget::upload",
+            name: "upload",
+            label: "选择文件上传",
+            type: "IMAGEUPLOAD",
+            control: "image",
+            kind: "widget",
+          }),
+        ]}
+        inputs={[]}
+        outputs={[]}
+        showOutputs={false}
+      />,
+    );
+    expect(screen.getByText("IMAGEUPLOAD")).toBeInTheDocument();
   });
 
   it("同时有 wire 输入与 outputs 且 showOutputs 时渲染两者间的分隔线", () => {

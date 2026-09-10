@@ -6,12 +6,10 @@
 import { Eye, EyeOff } from "lucide-react";
 
 import { EditableLabel } from "~/components/studio/shared/EditableLabel";
-import {
-  normalizeTypeChip,
-  PortHandle,
-} from "~/components/studio/shared/WorkflowFormControls";
+import { PortHandle } from "~/components/studio/shared/WorkflowFormControls";
 import {
   ioLabel,
+  typeDisplay,
   type EnrichedWidget,
   type WorkflowIOEntry,
 } from "~/components/studio/shared/workflow-io";
@@ -64,9 +62,10 @@ export function WidgetInputRow({
   const accent = ACCENT[entry.control];
   const label = ioLabel(entry, allPins);
 
-  /* 类型徽章统一走 normalizeTypeChip：ComfyUI 的 control_after_generate
-   * 枚举（"fixed" / "randomize" …）会在 API-only 富化时漏进来，直接打印
-   * 原始 type 会让数值行显示成字符串。 */
+  /* 类型徽章：打印 pin 真实声明的类型（用户规则「type 是什么就显示什么类型」），
+   * 仅当 IO 未富化到 type 时才回退到控件推导出的名义类型 —— 对照组是
+   * normalizeTypeChip 的白名单回退：那会把自定义节点的 IMAGEUPLOAD 之类
+   * 悄悄改成 INT/STRING，用户看到的类型与工作流里的定义对不上。 */
   const typeChip = (
     <span
       className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
@@ -76,7 +75,7 @@ export function WidgetInputRow({
         color: "var(--color-ink-muted)",
       }}
     >
-      {normalizeTypeChip(entry.type, controlTypeFallback(entry.control))}
+      {typeDisplay(entry.type, controlTypeFallback(entry.control))}
     </span>
   );
 
@@ -178,8 +177,8 @@ export function WidgetInputRow({
           <span className="min-w-0 flex-1 truncate text-[11px] text-(--color-ink-soft)">
             {label}
           </span>
-          {/* 这里刻意打印原始 type：MODEL / CLIP / LATENT 等不在
-              normalizeTypeChip 的白名单内，回退成 "*" 会丢信息。 */}
+          {/* link 行同样打印 pin 真实声明的类型：MODEL / CLIP / LATENT /
+              IMAGEUPLOAD 等自定义类型一律原样展示，不回退成 "*"。 */}
           <span
             className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
             style={{
@@ -188,7 +187,7 @@ export function WidgetInputRow({
               color: "var(--color-ink-muted)",
             }}
           >
-            {entry.type}
+            {typeDisplay(entry.type)}
           </span>
         </div>
       </div>

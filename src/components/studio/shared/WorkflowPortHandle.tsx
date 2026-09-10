@@ -34,10 +34,35 @@ function portColorFor(type?: string): string {
  *  to JS-type inference.  Any non-{INT,FLOAT,NUMBER} type on a row the
  *  caller already classified as numeric (compact WirePortRows path)
  *  is coerced to INT so the chip is honest about the row's edit semantics. */
+/** Types the chip treats as known ComfyUI data types.  Any other declared type
+ *  (custom-node `IMAGEUPLOAD`, vendor enums, …) is ALSO rendered verbatim —
+ *  user rule:「type 是什么就显示什么类型」.  `fallback` only kicks in when the
+ *  metadata carries no type at all (ComfyUI was offline during IO curation),
+ *  where the caller passes the type implied by the control it renders. */
+const KNOWN_CHIP_TYPES = new Set([
+  "INT",
+  "FLOAT",
+  "NUMBER",
+  "STRING",
+  "BOOLEAN",
+  "BOOL",
+  "COMBO",
+  "IMAGE",
+  "MASK",
+  "VIDEO",
+  "AUDIO",
+  "IMAGEUPLOAD",
+  "*",
+]);
+
 export function normalizeTypeChip(raw: string | undefined, fallback = "INT"): string {
-  const t = (raw ?? "").toUpperCase();
-  if (t === "INT" || t === "FLOAT" || t === "NUMBER" || t === "STRING" || t === "BOOLEAN" || t === "BOOL" || t === "COMBO" || t === "IMAGE" || t === "MASK" || t === "VIDEO" || t === "AUDIO" || t === "*") return t;
-  return fallback;
+  const rawTrimmed = (raw ?? "").trim();
+  const t = rawTrimmed.toUpperCase();
+  if (t.length === 0) return fallback;
+  if (KNOWN_CHIP_TYPES.has(t)) return t;
+  /* 未在白名单里的自定义类型：只有明显非类型值的脏数据（如 control_after_generate
+   *  漏进来的 "fixed" / "randomize" 小写枚举）才回退，其余原样展示。 */
+  return rawTrimmed === t ? fallback : t;
 }
 
 export function portChipStyle(type?: string): { background: string; color: string; border?: string } {

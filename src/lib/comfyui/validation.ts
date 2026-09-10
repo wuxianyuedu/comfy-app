@@ -23,6 +23,31 @@
 // types + a pure parser — no prisma / fs / server-only imports — so it is
 // safe to import from both the runner (server) and React components (client).
 
+import { z } from "zod";
+
+/* validationErrors 经 Prisma Json 列往返（服务端写入 → 客户端读取），
+ * 所以读取侧**必须**重新校验：Json 列在类型上是 `unknown`，直接
+ * `as ValidationError[]` 是假保险——列里存了别的东西（旧版本格式、被手改、
+ * 写入 bug）时下游会以「看起来是数组、元素却缺字段」的形态炸在渲染里。
+ * 这里给出契约 schema，供读取侧收口（写作侧已由 ValidationError 类型约束）。 */
+const validationErrorSchema = z.object({
+  nodeId: z.string(),
+  classType: z.string(),
+  field: z.string(),
+  message: z.string(),
+});
+
+/** 校验并收窄 Prisma Json 列里的 validationErrors；不合法返回 undefined。 */
+export function parseValidationErrorsJson(raw: unknown): ValidationError[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: ValidationError[] = [];
+  for (const item of raw) {
+    const parsed = validationErrorSchema.safeParse(item);
+    if (parsed.success) out.push(parsed.data);
+  }
+  return out.length ? out : undefined;
+}
+
 export interface ValidationError {
   /** ComfyUI node id, as a string (matches graph keys). */
   nodeId: string;
