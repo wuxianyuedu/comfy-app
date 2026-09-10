@@ -34,8 +34,12 @@
 
 - [x] 文件级 `no-explicit-any` 头 59 → 0(895f99c 等)。
 - [x] 未使用/单规则可修的 eslint-disable 头清理(5355a2b)。
-- [ ] 34 个 lint warning 清零(alt-text/no-img-element/exhaustive-deps/
-      unused-vars;exhaustive-deps 已有三分类文档,按类处置)。
+- [x] lint warning 清零:全库 `eslint . --max-warnings 0` 退出码 0(零错误
+      零警告)。**本地 pre-commit 此前只判「无 error」而 CI 判零警告,口径不一致
+      ——warning 能在本地进历史、到 CI 才被拦下(复核返工)。**已把 pre-commit
+      对齐为零警告口径(ISSUE #322);剩余行内 disable 全部带可核验理由
+      (exhaustive-deps 按三分类法逐条判定,prefer-nullish 属「伪建议」类:
+      空串在服务端反序列化产物里表示「没有值」,`??` 会改语义)。
 - [ ] `DynamicWorkflowForm`(958)与 `CustomNodesSettings` 主组件(1116)
       进一步拆分(结构性提醒由 pre-commit 持续输出)。
 - [ ] `components/model/model-library.tsx` 与 `studio/ModelLibrary.tsx`
