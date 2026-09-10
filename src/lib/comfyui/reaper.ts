@@ -115,7 +115,9 @@ export function isTaskClaimedInProcess(
   );
 }
 
-async function reapStaleQueuedTasks(): Promise<void> {
+/** 导出以便判决矩阵被直接测试（ISSUE #315）：两条 sweeper 的规则是本模块
+ *  唯一的价值，30s 定时器只是它们的调用者。生产调用方不变。 */
+export async function reapStaleQueuedTasks(): Promise<void> {
   try {
     const cutoff = new Date(Date.now() - STALE_MS);
     const stale = await taskRepository.listStaleQueued(cutoff, 20);
@@ -176,7 +178,8 @@ async function reapStaleQueuedTasks(): Promise<void> {
 
 /** reconcile RUNNING tasks against ComfyUI.
  *  See header comment on RUNNING_STALE_MS for the verdict matrix. */
-async function reapStaleRunningTasks(): Promise<void> {
+/** 同上：RUNNING 对账判决矩阵的测试入口。 */
+export async function reapStaleRunningTasks(): Promise<void> {
   try {
     const cutoff = new Date(Date.now() - RUNNING_STALE_MS);
     const stale = await taskRepository.listStaleRunning(cutoff, RUNNING_TICK_CAP);

@@ -19,8 +19,13 @@
       行为测试(fetch/poll 生命周期)仍开放。
 - [ ] `CustomNodesSettings` 主组件(1116 行)拆分后行为测试。
 - [x] Playwright 框架 + 冒烟 E2E(e2e/smoke.spec.ts:login 渲染/Tab 切换、/ 重定向 workspace;`npm run test:e2e`)。
-- [ ] 覆盖率棘轮抬升:`src/lib/comfyui/**` 入榜(executor 家族已类型化,
-      补 70%+ 用例后设阈值)。
+- [x] 覆盖率棘轮抬升:`src/lib/comfyui/**` 两批模块相继入榜,判断规则与
+      调度判决被逐条断言:
+      - `lifecycle.ts` 的判决表抽到纯函数模块 `lifecycle-derive.ts`(90% 硬门槛),
+        `lifecycle.ts` 本体按实测值设门槛(45/60/45 + 分支 30);
+      - 两条 sweeper(`reaper.ts` 70/60)与调度器(`executor-scheduler.ts` 70/50)
+        的判决矩阵测试落地后按实测值设门槛。
+      新增 `comfyui/**` 模块的测试后,按同样方式把各自门槛加进 §11.7 棘轮表。
 
 ## P2 — 架构路线图(见 reviews/2026-08-30-canvasnode-review.md)
 

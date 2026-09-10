@@ -1,5 +1,9 @@
-import { ioLabel, type EnrichedWidget, type WorkflowIOEntry } from "../../workflow-io";
-import { normalizeTypeChip } from "../../WorkflowFormControls";
+import {
+  ioLabel,
+  typeDisplay,
+  type EnrichedWidget,
+  type WorkflowIOEntry,
+} from "../../workflow-io";
 import { SectionHeader } from "../SectionHeader";
 
 interface IoEndpointsSectionProps {
@@ -36,7 +40,10 @@ export function IoEndpointsSection({ wireInputs, inputs, outputs, showOutputs }:
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-(--color-info)" />
                 {label}
-                <span className="font-mono text-[9px] opacity-70">{wireInput.type}</span>
+                {/* chip 打印 pin 真实类型（含 IMAGEUPLOAD 等自定义类型）。 */}
+                <span className="font-mono text-[9px] opacity-70">
+                  {typeDisplay(wireInput.type)}
+                </span>
               </span>
             );
           })}
@@ -62,7 +69,7 @@ export function IoEndpointsSection({ wireInputs, inputs, outputs, showOutputs }:
                 <span className="h-1.5 w-1.5 rounded-full bg-(--color-success)" />
                 {/* conflict-aware：同上，撞名时回退到原始 name。 */}
                 {ioLabel(output, [...inputs, ...outputs])}
-                <span className="font-mono text-[9px] opacity-70">{normalizeTypeChip(output.type)}</span>
+                <span className="font-mono text-[9px] opacity-70">{typeDisplay(output.type)}</span>
               </span>
             ))}
           </div>
