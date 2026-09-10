@@ -30,6 +30,21 @@ export default defineConfig({
           statements: 75,
           branches: 70,
         },
+        // comfyui 执行链路的地基（ISSUE #314）：lifecycle 的探测/拉起/停止
+        // 判决表抽到 lifecycle-derive 后可直接断言，目录整体随测试增长上调，
+        // 只升不降（规范 11.7 的覆盖率棘轮口径）。
+        "src/lib/comfyui/lifecycle-derive.ts": {
+          lines: 90,
+          functions: 90,
+          statements: 90,
+          branches: 90,
+        },
+        "src/lib/comfyui/lifecycle.ts": {
+          lines: 45,
+          functions: 60,
+          statements: 45,
+          branches: 30,
+        },
       },
     },
   },
