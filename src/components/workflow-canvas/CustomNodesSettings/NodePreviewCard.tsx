@@ -1,4 +1,8 @@
-/* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing --
+ * 理由（规范 §11.7 三分类法 · 第 3 类「伪建议」）：本组件展示的字段来自
+ * manifest / 发现结果（服务端反序列化产物），那里的**空串是「没有值」的正常
+ * 表示**。`??` 只在 null/undefined 时兜底，会把空串原样渲染成空白控件；
+ * `||` 才是本场景的正确语义。与 parsing.ts 同一判断。 */
 "use client";
 
 import { colorFor, type ManifestNodeRaw } from "@/config/custom-nodes";
