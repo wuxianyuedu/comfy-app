@@ -12,7 +12,7 @@
 | 2 | runGenerate 巨闭包每 render 重建,应 useCallback | **部分成立但不值得做。** 函数引用确实每次重建,但其闭包依赖(`d`、`wfIO`、`seededFor`…)每次 patch 都变,useCallback 的依赖数组同样每次失效——引用稳定性在不把数据流迁入 store 前无法达成。且消费方 `ImageGenerationPanel`/`ContentAssetBody` 未 memo,父渲染时它们本就重渲。| **归入路线图**(store 化后才有意义),见下 |
 | 3 | patch 每次 render 都是新的,应 useCallback | **采纳。** 零风险纯稳定化:`useCallback([id, setNodes])`,ReactFlow setter 恒定,选中态切换等无关重渲染时 patch 引用稳定。| ✅ 已落地 |
 | 4 | wfList/modelTagLib 每节点各自拉取,20 节点 = 40 次相同请求 | **采纳,是最实质的性能问题。** 已改为模块级 in-flight 去重:并发挂载共享同一 Promise(2 次请求),**刻意不做 TTL 缓存**——新建工作流后,后挂载节点必须看到最新列表,TTL 会把变更挡在过期数据外。| ✅ 已落地 |
-| 5 | as 断言泛滥(`as unknown as`/`as never`) | **成立,归入路线图。** 根因是 `CanvasNodeData` 索引签名过宽 + 后端字段结构与前端类型有缝;收窄需要动 `canvas-types.ts` 并梳理后端契约,超出本次行为保持式清理的范围。| 路线图 |
+| 5 | as 断言泛滥(`as unknown as`/`as never`) | **成立,归入路线图。** 根因是 `CanvasNodeData` 索引签名过宽 + 后端字段结构与前端类型有缝;收窄需要动 `canvas-types.ts` 并梳理后端契约,超出本次行为保持式清理的范围。| ✅ 已落地(ISSUE #320):拆 `StrictCanvasNodeData` + ReactFlow 兼容类型 + `asCanvasNodeData()` 收口;画布链路断言清零,两处 Prisma Json 边界改 Zod 校验 |
 | 6 | errorSuggestion IIFE 每 render 跑正则,应 useMemo | **采纳(低成本)。** progress 高频更新期间同一 `d.error` 会反复跑 5 组正则;`useMemo([d.error])` 消除。| ✅ 已落地 |
 | 7 | reconcile effect 在 taskId 变化时不会取消前一个请求,可能双 patch | **驳回。** `cancelled` 标志的清理函数在**任何依赖变化时**都会先执行(React effect 语义),in-flight 回调被 `if (cancelled) return` 双重守卫(await 前后各一次),结果必被丢弃。网络请求本身未 abort 但无副作用。| 保留原样 |
 
@@ -29,7 +29,7 @@
 
 - `runGenerate`/`patch`/`wfIO` 迁入组件级作用域 store(同 `workflow-stores.tsx`
   的 createStore 工厂模式),届时 runGenerate 才能获得真正稳定的引用;
-- `canvas-types.ts` 收窄 `CanvasNodeData` 索引签名,消除 `as unknown as` 双断言;
+- ~~`canvas-types.ts` 收窄 `CanvasNodeData` 索引签名,消除 `as unknown as` 双断言~~ ✅ ISSUE #320;
 - `errorSuggestion` 的正则规则表外置为数据(便于新增错误形态)。
 
 ## 二、注册表方案(Strategy/Registry)评审(同日追加)
