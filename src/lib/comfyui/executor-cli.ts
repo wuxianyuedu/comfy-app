@@ -30,7 +30,22 @@ import { applyRawOverrides, type JsonRecord } from "./raw-overrides";
 //（纯逻辑已抽到 ./raw-overrides，这里仅透传）。
 export { applyRawOverrides };
 
-export const cliProcs = new Map<string, ChildProcess>();
+/* HMR 安全：comfy-cli 子进程表必须挂在 globalThis 上。
+ *
+ * 它是 QUEUED reaper 判定「任务是否仍被本进程认领」的三个信号之一
+ * （见 reaper.ts 的 isTaskClaimedInProcess）。模块级 `new Map()` 在
+ * Next.js/Turbopack 重新求值该模块时会得到一个**空 Map**，而另一个
+ * 模块实例里正在跑的 comfy-cli 子进程句柄仍留在旧 Map 上——reaper 于是
+ * 看不到在飞任务，把健康任务误判为孤儿并标 FAILED（原始路径的 DB 行在
+ * comfy-cli 回传 prompt_id 前一直是 QUEUED/promptId=null）。
+ * 同族单例（runner-state / reaper 定时器 / lifecycle 启动锁）都已挂在
+ * globalThis 上，这里补齐最后一个漏网项。 */
+const CLI_PROCS_GLOBAL = "__comfyCliProcs_v1";
+const globalRef = globalThis as unknown as Record<string, Map<string, ChildProcess> | undefined>;
+export const cliProcs: Map<string, ChildProcess> =
+  globalRef[CLI_PROCS_GLOBAL] ?? new Map<string, ChildProcess>();
+globalRef[CLI_PROCS_GLOBAL] = cliProcs;
+
 const CLI_TIMEOUT_MS = 25 * 60 * 1000;
 
 /** Read a string field off an unknown payload（非 string → undefined）。 */
