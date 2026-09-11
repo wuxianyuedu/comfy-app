@@ -40,6 +40,7 @@ import {
   startWindowDrag,
   toggleMaximizeWindow,
 } from "~/lib/window-controls-client";
+import { useStartupForeground } from "./hooks/use-startup-foreground";
 
 interface TitleBarTabsProps {
   tabs: ShellTab[];
@@ -144,6 +145,10 @@ export function TitleBarTabs({
   onClose,
 }: TitleBarTabsProps) {
   const [maximized, setMaximized] = useState(false);
+
+  // 启动完成后的前台归属：默认只在任务栏显示（不打断用户正在看的内容），
+  // 仅当本次是「用户再次唤起已运行的实例」时才把自己顶到前台。
+  useStartupForeground();
 
   // 初始与「窗口尺寸变化」时同步最大化状态（尺寸变化覆盖最大化/还原/拖拽边缘）。
   useEffect(() => {
