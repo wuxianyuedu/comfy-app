@@ -7,6 +7,9 @@ import {
   TITLE_BAR_HEIGHT_VAR,
   TITLE_BAR_TOP_CLASS,
   fullScreenLayerClass,
+  OVERLAY_POSITION_CLASS,
+  blocksTitleBar,
+  overlayClass,
 } from "./full-screen-layer";
 
 describe("全屏视图层定位（ISSUE #310 回归）", () => {
@@ -53,5 +56,54 @@ describe("fullScreenLayerClass", () => {
     expect(fullScreenLayerClass("z-50", "")).toBe(
       `${FULL_SCREEN_LAYER_CLASS} z-50`,
     );
+  });
+});
+
+describe("浮层让位判据（ISSUE #310 弹窗类回归）", () => {
+  it("模态弹窗也要让出标题行：顶部 top-title-bar + bottom-0", () => {
+    // 弹窗只浮在内容区之上，不必铺满；但顶部同样不能让掉 ——
+    // 否则页签与右上角的窗口按钮会被整条盖住。
+    expect(OVERLAY_POSITION_CLASS.modal).toContain(TITLE_BAR_TOP_CLASS);
+    expect(OVERLAY_POSITION_CLASS.modal).toContain("bottom-0");
+    expect(OVERLAY_POSITION_CLASS.modal).not.toContain("inset-0");
+  });
+
+  it("全屏视图与模态弹窗同源取让位量", () => {
+    expect(OVERLAY_POSITION_CLASS.full).toBe(FULL_SCREEN_LAYER_CLASS);
+    expect(OVERLAY_POSITION_CLASS.full).toContain(TITLE_BAR_TOP_CLASS);
+  });
+
+  it("overlayClass 拼接定位 + 其余 class，且不产生重复空格", () => {
+    expect(overlayClass("modal", "z-50 flex items-center bg-black/60")).toBe(
+      `${OVERLAY_POSITION_CLASS.modal} z-50 flex items-center bg-black/60`,
+    );
+    expect(overlayClass("modal")).toBe(OVERLAY_POSITION_CLASS.modal);
+  });
+});
+
+describe("blocksTitleBar：门禁用的「盖标题行」判定", () => {
+  it("认出会让位的写法", () => {
+    expect(blocksTitleBar(FULL_SCREEN_LAYER_CLASS)).toBe(false);
+    expect(blocksTitleBar(OVERLAY_POSITION_CLASS.modal)).toBe(false);
+    // 让位后再加 z-index / 居中布局，仍属合规
+    expect(blocksTitleBar(overlayClass("modal", "z-50 flex items-center"))).toBe(false);
+  });
+
+  it("认出会让位的旧写法 fixed inset-0", () => {
+    expect(blocksTitleBar("fixed inset-0 z-99 flex items-center justify-center")).toBe(true);
+    expect(blocksTitleBar("fixed inset-0")).toBe(true);
+    expect(blocksTitleBar("  fixed   inset-0   z-50  ")).toBe(true);
+  });
+
+  it("不误伤非顶层浮层：absolute / 局部定位 / 另一套尺寸", () => {
+    // 只铺自己的定位祖先，够不到标题行
+    expect(blocksTitleBar("absolute inset-0 pointer-events-none")).toBe(false);
+    // 底层 app shell 的固定元素（如底部状态栏）不在选择器内
+    expect(blocksTitleBar("fixed bottom-0 left-0 right-0 z-40")).toBe(false);
+    // 另给偏移的写法不是这两个词紧邻出现
+    expect(blocksTitleBar("fixed top-2 inset-0")).toBe(false);
+    expect(blocksTitleBar("fixed inset-x-0 top-0")).toBe(false);
+    // 非 fixed 开头
+    expect(blocksTitleBar("grid h-[85vh] inset-0")).toBe(false);
   });
 });

@@ -6,6 +6,7 @@
  */
 import { Icon } from "@/components/ui/icon";
 import { NODE_META, type NodeKind } from "@/lib/project-canvas/canvas-types";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 interface CanvasContextMenuProps {
   x: number;
@@ -26,7 +27,7 @@ export function CanvasContextMenu({
   return (
     <>
       <div
-        className="fixed inset-0 z-40"
+        className={overlayClass("modal", "z-40")}
         onClick={onClose}
         onContextMenu={(event) => {
           event.preventDefault();

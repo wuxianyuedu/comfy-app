@@ -259,6 +259,27 @@ test.describe("应用页签与全屏视图 @critical", () => {
    * 这里在浏览器形态（`InAppTabStrip`，无原生标题行可让位）下断言：
    * 打开设置后，页签栏仍在视口内可见、且未被设置层覆盖。
    */
+  /**
+   * 复用「顶部命中页签栏」的判定：浮层若盖住标题行，elementFromPoint
+   * 会返回浮层自己的子节点。
+   */
+  async function expectTopHitsTabStrip(page: Page) {
+    const tablist = page.getByRole("tablist", { name: "应用页签" });
+    await expect(tablist).toBeVisible();
+    const tabBox = await tablist.boundingBox();
+    expect(tabBox).not.toBeNull();
+    const box = tabBox ?? { x: 0, y: 0, width: 0, height: 0 };
+    expect(box.height).toBeGreaterThan(0);
+    const hitTest = await page.evaluate(
+      ({ x, y }) => {
+        const el = document.elementFromPoint(x, y);
+        return el ? Boolean(el.closest('[role="tablist"]')) : false;
+      },
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+    );
+    expect(hitTest).toBe(true);
+  }
+
   test("@critical 打开设置后应用页签仍可见可点", async ({ page }) => {
     await stubBackend(page);
     await page.goto("/workspace");
@@ -275,21 +296,32 @@ test.describe("应用页签与全屏视图 @critical", () => {
     });
 
     // 关键断言：页签栏仍在、且没有被设置层盖住（顶部元素仍是页签）。
-    await expect(tablist).toBeVisible();
-    const tabBox = await tablist.boundingBox();
-    expect(tabBox).not.toBeNull();
-    const box = tabBox ?? { x: 0, y: 0, width: 0, height: 0 };
-    expect(box.height).toBeGreaterThan(0);
+    await expectTopHitsTabStrip(page);
+  });
 
-    // 点顶部中心位置，落到的元素必须仍在页签栏内 —— 若设置层盖住了标题行，
-    // elementFromPoint 会返回设置层的子节点。
-    const hitTest = await page.evaluate(
-      ({ x, y }) => {
-        const el = document.elementFromPoint(x, y);
-        return el ? Boolean(el.closest('[role="tablist"]')) : false;
-      },
-      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
-    );
-    expect(hitTest).toBe(true);
+  /**
+   * 同一处回归的**第二形态**：居中弹窗（应用日志、执行日志、任务详情…）。
+   * 首轮修复只改了「全屏视图」，弹窗类仍是 `fixed inset-0`，于是打开应用日志
+   * 后页签与右上角的关闭按钮照样被挡住。这条把弹窗形态钉进 E2E。
+   */
+  test("@critical 打开应用日志面板后应用页签仍可见可点", async ({ page }) => {
+    await stubBackend(page);
+    await page.route("**/api/logs/current**", async (route: Route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ lines: [], sessionStart: Date.now() }),
+      });
+    });
+
+    await page.goto("/workspace");
+    await expectTopHitsTabStrip(page);
+
+    // 入口在底部状态栏：只有 title 属性，没有可读文本。
+    await page.getByTitle(/^日志面板/).click();
+    // 面板标题：确认弹窗真的打开了（而不是入口没接上）。
+    await expect(page.getByText("应用日志", { exact: true }).first()).toBeVisible();
+
+    await expectTopHitsTabStrip(page);
   });
 });

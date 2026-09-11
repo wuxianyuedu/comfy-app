@@ -52,3 +52,57 @@ export function fullScreenLayerClass(zClass: string, extra = ""): string {
   const parts = [FULL_SCREEN_LAYER_CLASS, zClass.trim(), extra.trim()];
   return parts.filter(Boolean).join(" ");
 }
+
+/* ── 标题行让位（title-bar clearance）────────────────────────────────
+ * 与「全屏视图」的区别：全屏视图铺满**整块内容区**，必须让位；
+ * 而「模态弹窗 / dismiss 遮罩 / 抽屉」只是浮在内容区之上的一层，
+ * 只要顶部不让掉标题行，就既不挡页签、也不挡右上角的窗口按钮。
+ *
+ * 与全屏视图同源的失效模式：这两类浮层此前都写作 `fixed inset-0`
+ * ，于是打开后页签与窗口按钮整条被盖住（ISSUE #310 的同一处回归，
+ * 第一次只改了全屏视图，弹窗类漏改）。本模块把「顶部必须让位」变成
+ * 可被门禁拦下来的机器判据，避免再靠人肉逐个文件翻。
+ */
+
+/** 需要让出标题行的浮层形态。 */
+export type OverlayKind = "full" | "modal";
+
+/** 各形态对应的定位工具类：全屏铺满内容区，模态浮在其上仍需让位顶部。 */
+export const OVERLAY_POSITION_CLASS: Record<OverlayKind, string> = {
+  full: FULL_SCREEN_LAYER_CLASS,
+  modal: `fixed ${TITLE_BAR_TOP_CLASS} inset-x-0 bottom-0`,
+};
+
+/**
+ * 拼出浮层的定位 class 串（位置 + 形态自身的布局 class）。
+ *
+ * @param kind  浮层形态（`full` 全屏视图 / `modal` 模态弹窗、抽屉、遮罩）
+ * @param extra 该浮层自身的布局 class（`z-50` / `flex items-center` / `bg-black/60`）
+ */
+export function overlayClass(kind: OverlayKind, extra = ""): string {
+  const parts = [OVERLAY_POSITION_CLASS[kind], extra.trim()];
+  return parts.filter(Boolean).join(" ");
+}
+
+/** 让位前的写法：铺满整个视口，必然盖掉标题行里的页签与窗口按钮。 */
+export const TITLE_BAR_BLOCKING_CLASS = "fixed inset-0";
+
+/**
+ * 顶层浮层的判定：`fixed inset-0` 开头的 class 串。
+ *
+ * 「顶层」= 只有定位（`fixed`）与铺满（`inset-0`）两类声明、其后接的仍是
+ * class 单词（z-index / flex / 颜色…），不含 `absolute` / `relative` 等
+ * 局部定位，也不含 `size-*` / `w-*` 这类「另给尺寸」的写法。
+ *
+ * 为什么要把「固定元素 = 顶层浮层」划在 `src/components/**`、`src/app/**`：
+ * 底层 app shell 的 fixed 元素（如状态栏 `bottom-0`）不在选择器内；
+ * 非 fixed 的 `inset-0` 只铺自己的定位祖先，不受标题行约束。
+ *
+ * @param className 组件上的完整 class 串（模板串请传拼好的结果）
+ */
+export function blocksTitleBar(className: string): boolean {
+  const normalized = className.replace(/\s+/g, " ").trim();
+  if (!normalized.startsWith(TITLE_BAR_BLOCKING_CLASS)) return false;
+  const rest = normalized.slice(TITLE_BAR_BLOCKING_CLASS.length);
+  return rest === "" || rest.startsWith(" ");
+}

@@ -27,6 +27,7 @@
 import React, { useCallback, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Info, LoaderCircle, TriangleAlert } from "lucide-react";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 export interface ModalDialogProps {
   open: boolean;
@@ -118,7 +119,7 @@ export function ModalDialog({
       aria-modal="true"
       aria-labelledby={titleId}
       onClick={onClose}
-      className="fixed inset-0 z-200 flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm"
+      className={overlayClass("modal", "z-200 flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm")}
     >
       <div
         onClick={stop}

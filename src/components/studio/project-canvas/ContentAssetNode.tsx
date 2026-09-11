@@ -7,6 +7,7 @@ import { Icon } from "@/components/ui/icon";
 import { WaterFillProgress } from "@/components/studio/ui/WaterFillProgress";
 import { useContentAssetGallery } from "./hooks/use-content-asset-gallery";
 import type { CanvasNodeData } from "@/lib/project-canvas/canvas-types";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 /* 项目画布 · 内容载体节点主体（text / picture / movie）
  * 对齐 Ardot 稿 715394877779066 v2 + icon 迭代（/ -D-v2 / -D-icon）：
@@ -190,7 +191,7 @@ export function ContentAssetBody({
       {/* ── 画廊覆盖层 ── */}
       {gallery.open && galleryImages.length > 0 && (
         <div
-          className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          className={overlayClass("modal", "z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm")}
           onClick={() => gallery.setOpen(false)}
           role="dialog"
           aria-modal

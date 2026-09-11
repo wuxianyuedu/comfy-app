@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo } from "react";
 import { JsonViewer } from "./ui/JsonViewer";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 /**
  * 查看源文件弹窗（只读）。
@@ -60,7 +61,7 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className={overlayClass("modal", "z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm")}
       onClick={onClose}
     >
       <div

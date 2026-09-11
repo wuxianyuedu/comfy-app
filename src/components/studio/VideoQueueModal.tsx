@@ -9,6 +9,7 @@ import {
   submitGeneration,
   type VideoTask,
 } from "@/lib/video-queue-client";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 /* ── Video Queue Modal — wired to real VIDEO tasks ──
   Fetches the user's VIDEO-type tasks from /api/tasks (filtered), shows live
@@ -130,7 +131,7 @@ export function VideoQueueModal({
   ).length;
 
   return (
-    <div className="fixed inset-0 z-9998 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div className={overlayClass("modal", "z-9998 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm")}>
       <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-(--color-node) shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/6 px-5 py-3.5">

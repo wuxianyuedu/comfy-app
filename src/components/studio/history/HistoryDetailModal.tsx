@@ -14,6 +14,7 @@ import {
 } from "./history-detail-derive";
 import { useHistoryDetailActions } from "./hooks/use-history-detail-actions";
 import type { TaskDetail } from "./history-types";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 interface HistoryDetailModalProps {
   detailId: string | null;
@@ -68,7 +69,7 @@ export function HistoryDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-90 flex items-center justify-center bg-black/80 p-4 sm:p-6"
+      className={overlayClass("modal", "z-90 flex items-center justify-center bg-black/80 p-4 sm:p-6")}
       onClick={onClose}
     >
       <div
