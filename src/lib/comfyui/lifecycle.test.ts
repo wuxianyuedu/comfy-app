@@ -8,14 +8,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 /* Mock 掉 lifecycle 的副作用依赖：避免测试触碰真实 spawn / fs / DB / ComfyUI。
  *  probeComfyUi 由 resolveComfyBase 兜底：resolveComfyBase 抛错 → probeComfyUi 返回 null。
  *  stopComfyUiProcess 只需走到「pid 未定位到 → 返回未在运行」分支即可把 manualStop 置上。
- *  lifecycle 的全局状态挂在 globalThis（HMR 单例），跨用例会持久累积；
- *  每个用例都先 stopComfyUiProcess 落闩锁，再按自身场景断言，故不额外清 state。 */
+ *  lifecycle 的全局状态挂在 globalThis（HMR 单例），跨用例会持久累积：
+ *  「闩锁」类用例靠每例先 stopComfyUiProcess 落闩锁自证；
+ *  状态结论另有 10s TTL 缓存（ISSUE #346），**必须每例清掉**——否则前一个用例
+ *  留下的结论会被后一个用例当成「当下事实」读到（判据类用例就是这么被污染的）。 */
 vi.mock("../app-settings", () => ({
   COMFYUI_DEFAULT_PORT: 8188,
   getExitPolicy: vi.fn().mockReturnValue({ exitKillComfyui: true }),
   getSettingsSync: vi.fn(),
 }));
-vi.mock("./client", () => ({ resolveComfyBase: vi.fn().mockRejectedValue(new Error("not running")) }));
+/* probeComfyBase 是「此刻哪个地址应答」的唯一判据，故在本文件里做成可编排的
+ * 探针：默认「都不可达」，需要时由用例改成「某个端口应答」。真去 mock fetch
+ * 没用——本模块已被整体 mock，探针必须跟着换成桩。 */
+vi.mock("./client", () => ({
+  probeComfyBase: vi.fn().mockResolvedValue(null),
+  resolveComfyBase: vi.fn().mockRejectedValue(new Error("not running")),
+  resetComfyBase: vi.fn(),
+}));
 vi.mock("./launch-path", () => ({
   resolveComfyLaunchPlan: vi.fn().mockReturnValue({
     cmd: "python",
@@ -28,6 +37,7 @@ vi.mock("./desktop-instance", () => ({ resolveEffectiveLaunch: vi.fn().mockResol
 vi.mock("./proc-detect", () => ({
   findPidForMainPy: vi.fn().mockResolvedValue(null),
   findPidListeningPort: vi.fn().mockResolvedValue(null),
+  findPidForMainPyDetailed: vi.fn().mockResolvedValue({ pid: null, failed: false }),
 }));
 vi.mock("../process-launch", () => ({
   spawnManaged: vi.fn(),
@@ -48,7 +58,7 @@ import {
   clearComfyManualStop,
   clearComfyAutoStartFailure,
 } from "./lifecycle";
-import { findPidForMainPy } from "./proc-detect";
+import { findPidForMainPy, findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { getSettingsSync } from "../app-settings";
 
 const autoStartSettings = {
@@ -60,6 +70,9 @@ const autoStartSettings = {
 
 beforeEach(() => {
   vi.mocked(getSettingsSync).mockReturnValue(autoStartSettings as never);
+  /* 状态结论缓存（ISSUE #346）是跨用例共享的进程级单例：每例先丢掉旧结论，
+   * 后面各例的断言才是在断言「当下判定」，而不是上一例的残留。 */
+  resetComfyUiStatus();
 });
 
 describe("手动关闭 ComfyUI 后抑制自动启动（ISSUE #290）", () => {
@@ -219,6 +232,35 @@ describe("getComfyUiStatus — 状态三态组合", () => {
     // 收尾后单飞锁释放：下一次调用能重新开始（不会永久卡在「启动中」）。
     expect((await getComfyUiStatus()).starting).toBe(false);
     vi.mocked(getExitPolicy).mockReturnValue({ exitKillComfyui: true } as never);
+  });
+
+  /* ISSUE #344：ComfyUI 早就启动了，设置页却一直显示「启动中」。
+   * 两条判据缺陷叠加：① `resolveComfyBase` 在配置了路径、进程表又查不到
+   * `main.py`（Comfy Desktop 的实例由 standalone-env 启动）时抛错，
+   * `probeComfyUi` 连一次 HTTP 都没发出去；② 「进程在、端口未绑定」的快照
+   * 被缓存住，端口随后出现也不会重新查事实。 */
+  it("进程表查不到 main.py、但配置端口上有实例应答 → 报「运行中」而不是「启动中」", async () => {
+    const { getComfyUiStatus } = await import("./lifecycle");
+    const { resetComfyRuntimeSnapshot } = await import("./status");
+    const { resetComfyBase } = await import("./client");
+    resetComfyBase();
+    resetComfyRuntimeSnapshot();
+    // Desktop 实例：命令行里没有 main.py，进程表命中不了。
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: null, failed: false });
+    vi.mocked(findPidListeningPort).mockResolvedValue(null);
+    // 关键：配置端口上实例是真的在应答（旧实现会因进程表落空而根本不去探）。
+    const { probeComfyBase } = await import("./client");
+    vi.mocked(probeComfyBase).mockResolvedValue("http://127.0.0.1:8188");
+
+    const s = await getComfyUiStatus();
+    expect(vi.mocked(probeComfyBase)).toHaveBeenCalled();
+    expect(s.up).toBe(true);
+    expect(s.base).toBe("http://127.0.0.1:8188");
+    expect(s.starting).toBe(false);
+
+    vi.mocked(probeComfyBase).mockResolvedValue(null);
+    resetComfyBase();
+    resetComfyRuntimeSnapshot();
   });
 
   it("手动关闭后 stopping 在窗口内为 true、窗口过期后回 false", async () => {
