@@ -22,6 +22,8 @@ interface DetailBodyProps {
   activeTab: DetailTab;
   isLoading: boolean;
   workflowIO: WorkflowIOMap | null;
+  /** 模板 paramMap（对外参数映射连线），画布预览据此画参数卡片与连线。 */
+  paramMap: Record<string, unknown>;
   sourceData: SourceModalData | null;
   usable: boolean;
   onEdit: () => void;
@@ -40,6 +42,7 @@ export function DetailBody({
   activeTab,
   isLoading,
   workflowIO,
+  paramMap,
   sourceData,
   usable,
   onEdit,
@@ -69,7 +72,10 @@ export function DetailBody({
               在编辑器中打开
             </button>
           </div>
-          <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-2 py-4">
+          {/* 画布预览：左侧留出对外参数卡片列的固定 gutter（卡片列 + 走线
+              间距，约 300px），宿主卡片居中偏右；不够宽时横向可滚动。
+              容器必须有真实高度，否则映射层的 DOM 测量拿不到行位置。 */}
+          <div className="flex min-h-0 flex-1 justify-center overflow-auto px-2 py-4 pl-[300px]">
             {/* key=workflow.id：切换左侧工作流时重建预览，避免上一工作流的
                 运行结果/状态/表单残留（详情区复用的是同一 DOM 位置）。 */}
             <WorkflowCanvasNodePreview
@@ -78,6 +84,7 @@ export function DetailBody({
               workflowName={workflow.name}
               taskType={workflow.taskType}
               workflowIO={workflowIO}
+              paramMap={paramMap}
               usable={usable}
               modes={meta?.modes}
               defaultMode={meta?.defaultMode}

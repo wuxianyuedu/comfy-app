@@ -32,6 +32,17 @@ vi.mock("../WorkflowRunLogModal", () => ({ WorkflowRunLogModal: () => null }));
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { WorkflowCanvasNodePreview } from "./WorkflowCanvasNodePreview";
 
+/* 预览卡片现在挂在 React Flow 画布上（ISSUE #355），React Flow 挂载时会自行
+ * 测量容器尺寸 —— jsdom 没有 ResizeObserver，需要这个桩。 */
+vi.stubGlobal(
+  "ResizeObserver",
+  class {
+    observe = vi.fn();
+    unobserve = vi.fn();
+    disconnect = vi.fn();
+  }
+);
+
 afterEach(cleanup);
 
 /** steps=20 / cfg=7 两个 widget 参数。 */

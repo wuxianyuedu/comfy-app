@@ -16,7 +16,14 @@
  * 值为空时不下发、由 ComfyUI 侧工作流自带默认值兜底。
  */
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   startLocalGenerate,
   watchTask,
@@ -44,6 +51,11 @@ import {
 import { seedModeOverrides } from "@/components/studio/project-canvas/CanvasNode/helpers";
 import { modeLabel } from "./workflow-library-config";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
+import { WorkflowParamMapLayer } from "./WorkflowParamMapLayer";
+import {
+  deriveLibraryCanvas,
+  resolveManualEntryIds,
+} from "./workflow-library-canvas-config";
 import {
   WorkflowNodeActionButton,
   WorkflowNodeCardShell,
@@ -66,6 +78,8 @@ interface Props {
   workflowName: string;
   taskType: string;
   workflowIO: WorkflowIOMap | null;
+  /** 模板 paramMap（含 `source.mode:<模式>` 的对外参数映射连线）。 */
+  paramMap?: Record<string, unknown>;
   usable: boolean;
   /** 多模式工作流：提供时第二行右侧的类型 chip 变成模式切换下拉。 */
   modes?: string[];
@@ -80,6 +94,7 @@ export function WorkflowCanvasNodePreview({
   workflowName,
   taskType,
   workflowIO,
+  paramMap,
   usable,
   modes,
   defaultMode,
@@ -304,6 +319,24 @@ export function WorkflowCanvasNodePreview({
   const currentRuns = storeSnapshot.runs.filter(
     (r) => r.workflowId === workflowId,
   );
+
+  /* ── 对外参数映射层（只读）──
+   * 卡片左侧一列「对外参数卡片」+ 连到宿主卡片端口行的贝塞尔线。连线的数据源
+   * 与编辑器同一份（buildParamEntries / resolveMapping），端点按 DOM 上被映射
+   * 到的那一行量出（表单行带 data-io-key，组合参数退到 data-dimension-pins）。 */
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const paramCanvas = useMemo(
+    () => deriveLibraryCanvas({ io: workflowIO, paramMap, mode: defaultMode ?? null }),
+    [workflowIO, paramMap, defaultMode],
+  );
+  const manualEntryIds = useMemo(
+    () => resolveManualEntryIds(paramMap, defaultMode ?? null),
+    [paramMap, defaultMode],
+  );
+  const isParamManual = useCallback(
+    (entryId: string) => manualEntryIds.has(entryId),
+    [manualEntryIds],
+  );
   const hasRuns = currentRuns.length > 0;
   const activeRun = currentRuns[0] ?? null;
 
@@ -313,6 +346,8 @@ export function WorkflowCanvasNodePreview({
      * 进度/结果/错误行与其对齐。 */
     <div className="flex w-full flex-col items-center gap-3">
       {/* ── 画布同款节点卡片：唯一视觉源在 shared/workflow-node-parts ── */}
+      {/* 宿主卡片容器（hostRef）：对外参数映射层叠在其上，连线按容器坐标量。 */}
+      <div ref={hostRef} className="relative">
       <WorkflowNodeCardShell>
         <WorkflowNodeHeader
           title={workflowName}
@@ -429,6 +464,14 @@ export function WorkflowCanvasNodePreview({
           }
         />
       </WorkflowNodeCardShell>
+        {/* 对外参数映射层（只读）：卡片列 + 连到端口行的线 */}
+        <WorkflowParamMapLayer
+          entries={paramCanvas.entries}
+          resolved={paramCanvas.resolved}
+          isManual={isParamManual}
+          hostRef={hostRef}
+        />
+      </div>
 
       {/* 进度条（running 时） */}
       {phase.kind === "running" && (
