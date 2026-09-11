@@ -52,3 +52,19 @@ export const OLLAMA_RUNTIME_LOG = path.join(SERVICES_LOG_DIR, "ollama-runtime.lo
 
 /** 应用运行期业务操作日志（tRPC 调用/生成/任务/工作流增删改等），供「应用日志」面板轮询。 */
 export const APP_RUNTIME_LOG = path.join(SERVICES_LOG_DIR, "app-runtime.log");
+
+/**
+ * 「应用服务输出」转录文件（面板可见通道）的前缀与全局匹配式。
+ *
+ * 应用服务（Next dev server）的 stdout / stderr 由
+ * `src/lib/capture-streams.server.ts` 额外转录一份到 `nextjs-panel-*.log`，
+ * 供「应用日志」面板轮询展示——此前首屏编译错误 / Turbopack FATAL / 未捕获的
+ * 服务端异常只落在 nextjs-stdout|stderr 文件里，面板完全看不到（ISSUE #360）。
+ *
+ * 文件按进程启动标识命名（每次运行一份），与 dev-launcher 清理
+ * `nextjs-stdout-*` / `nextjs-stderr-*` 的口径一致：保留最近 5 份。
+ */
+export const NEXTJS_PANEL_LOG_PREFIX = "nextjs-panel-";
+
+/** 匹配本次（或任意一次）运行的应用服务转录文件。 */
+export const NEXTJS_PANEL_LOG_GLOB = `${NEXTJS_PANEL_LOG_PREFIX}*.log`;

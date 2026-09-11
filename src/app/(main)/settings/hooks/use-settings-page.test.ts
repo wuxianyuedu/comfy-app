@@ -256,6 +256,9 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
  * unhandled rejection（与上面 probeMock 同源问题）。 */
 beforeEach(() => {
   runtimeLogCalls.length = 0;
+  /* 兜底缓存（sessionStorage 快照）跨用例共享同一个 jsdom —— 不清会把上一个
+   * 用例的成功配置带进来，让「无兜底 → 整页降级」的用例失去意义。 */
+  sessionStorage.clear();
   probeMock.mockResolvedValue({ up: true, models: [] });
   startMock.mockResolvedValue(undefined);
   server.use(
@@ -443,11 +446,12 @@ describe("useSettingsPage", () => {
         ),
       ).toBe(true),
     );
-    /* llm.configGet 失败、setting.get 成功 → 草稿仍为空（一份都不齐），
-     * 必须落降级 UI 拿到重试与日志出口，而不是 「配置数据未就绪」死角
-     * （见下方 ISSUE #304 的专项回归）。 */
+    /* llm.configGet 失败、setting.get 成功 → 草稿仍为空（一份都不齐）。
+     * 本次运行没有成功读过的配置 → 没有兜底可用，必须落整页降级 UI 拿到重试与
+     * 日志出口，而不是 「配置数据未就绪」死角（见下方 ISSUE #304 的专项回归）。 */
     expect(result.current.drafts).toBeNull();
     expect(result.current.hasError).toBe(true);
+    expect(result.current.serveState).toBeNull();
     expect(result.current.errorText).toContain("数据库被锁");
     const errors = (runtimeLogCalls as unknown as Array<{ level: string; msg: string }>).filter(
       (c) => c.level === "error",
@@ -480,7 +484,7 @@ describe("useSettingsPage", () => {
     });
     await waitFor(() => expect(result.current.hasError).toBe(true));
 
-    // setting.get 成功、llm.configGet 失败
+    // setting.get 成功、llm.configGet 失败；本次运行没有读成过 → 无兜底
     expect(result.current.drafts).toBeNull();
     // 兜底文案不可达：既不是加载中，也不是「未就绪且没失败」
     expect(result.current.isInitialLoad).toBe(false);
@@ -488,6 +492,40 @@ describe("useSettingsPage", () => {
     // 错误视图有可读原因 + 重试出口
     expect(result.current.errorText).toContain("no such table: llmConfig");
     expect(typeof result.current.retry).toBe("function");
+  });
+
+  /* 回归 ISSUE #360：设置页「经常出现」的那类失败，其实只是**服务端一侧的读**
+   * 偶发失败（应用服务重启窗口 / 数据库迁移中），而界面本来完全能用。
+   *
+   * 判据：只要这次会话里成功读到过配置（或上次运行留下了快照），失败就不该把整页
+   * 换成错误视图 —— 用兜底草稿继续渲染，失败原因走非阻塞的 serveState 提示条。 */
+  it("读取失败但有兜底草稿 → 正常渲染 + serveState 提示，不再整页降级", async () => {
+    /* 先让一份查询成功读到配置（播种 lastGood 缓存）。 */
+    const first = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(first.result.current.drafts).not.toBeNull());
+    const cached = first.result.current.drafts;
+    expect(cached).not.toBeNull();
+    first.unmount();
+
+    /* 缓存已写入 sessionStorage（跨整页刷新可用），但本次会话的内存 ref 已随
+     * 卸载消失 —— 这正是「刷新后立刻遇到失败」的真实路径。 */
+    behavior = { llmError: "no such table: llmConfig" };
+    const second = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(second.result.current.drafts).not.toBeNull());
+    // 界面可用：不是整页错误、也不是「未就绪」死角
+    expect(second.result.current.hasError).toBe(false);
+    expect(second.result.current.notReady).toBe(false);
+    // 失败原因仍然可见（非阻塞提示条），且带重试出口
+    expect(second.result.current.serveState?.errorText).toContain(
+      "no such table: llmConfig",
+    );
+    expect(second.result.current.drafts?.settings.comfyuiPath).toBe("D:/ComfyUI");
+    expect(typeof second.result.current.retry).toBe("function");
   });
 
   /* 回归 ISSUE #304：补记日志时把原始报错（tRPC code / 服务端原文 / 堆栈首行）
