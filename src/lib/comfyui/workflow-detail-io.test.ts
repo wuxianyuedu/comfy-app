@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { enrichWorkflowIO } from "./workflow-detail-io";
 import type { WorkflowIOEnrichParams } from "./workflow-detail-io";
+import { buildRawInputs } from "./workflow-detail-raw";
+import type { RawWorkflow } from "./raw";
 
 /** Minimal valid params; individual tests override the fields they need. */
 function makeParams(
@@ -488,5 +490,177 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
     );
     expect(result["1::widget::seed"]!.label).toBe("随机种子");
     expect(result["1::widget::seed"]!.defaultValue).toBe(7);
+  });
+
+  it("proxyWidgets 缺失（被导出隔离）时，仍按本层作者 label 清掉存量别名", async () => {
+    /* 真实工作流形状：`properties.proxyWidgets` 因导出缺失被 ComfyUI 隔离
+     *  （`proxyWidgetErrorQuarantine`），proxyField 无从解析，但 wrapper 本层
+     *  inputs[] 仍带作者写的 label（"Seed"），槽位名是别名 value_1。
+     *  存量库里勾选时把别名写进了 label——不能让别名把作者名压回去。 */
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "9::widget::value_1": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "9",
+            name: "value_1",
+            label: "value_1",
+          },
+        },
+        {
+          rawInputsById: {
+            "9": [
+              {
+                name: "value_1",
+                label: "Seed",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "value_1" },
+                widgetValue: 42,
+              },
+            ],
+          },
+          graph: { "9": { class_type: WRAPPER, inputs: {} } },
+          nodeTypeById: { "9": WRAPPER },
+        }
+      )
+    );
+    expect(result["9::widget::value_1"]!.label).toBe("Seed");
+    expect(result["9::widget::value_1"]!.type).toBe("INT");
+    expect(result["9::widget::value_1"]!.defaultValue).toBe(42);
+  });
+
+  it("proxyWidgets 缺失时，作者手写的非别名 label 不受影响", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "9::widget::value_1": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "9",
+            name: "value_1",
+            label: "我的种子",
+          },
+        },
+        {
+          rawInputsById: {
+            "9": [
+              {
+                name: "value_1",
+                label: "Seed",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "value_1" },
+                widgetValue: 42,
+              },
+            ],
+          },
+          graph: { "9": { class_type: WRAPPER, inputs: {} } },
+          nodeTypeById: { "9": WRAPPER },
+        }
+      )
+    );
+    expect(result["9::widget::value_1"]!.label).toBe("我的种子");
+  });
+
+  it("非封装节点（普通节点）label 与 pin 名相同仍原样保留", async () => {
+    /* 别名清洗只对 class_type 是 UUID 的封装节点生效——普通节点的 pin 名
+     *  就是真名（`seed`），不存在「槽位别名」这个概念。 */
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "7::widget::seed": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "7",
+            name: "seed",
+            label: "seed",
+          },
+        },
+        {
+          rawInputsById: {
+            "7": [
+              {
+                name: "seed",
+                label: "Seed",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "seed" },
+                widgetValue: 42,
+              },
+            ],
+          },
+          graph: { "7": { class_type: "KSampler", inputs: {} } },
+          nodeTypeById: { "7": "KSampler" },
+        }
+      )
+    );
+    expect(result["7::widget::seed"]!.label).toBe("seed");
+  });
+});
+
+describe("enrichWorkflowIO — 真实封装节点工作流的端到端取名（ISSUE #349 回归）", () => {
+  /* 复刻 issue #349 附件的真实形状：wrapper 节点 class_type 是子图 UUID，
+   *  `properties.proxyWidgets` 因导出缺失被隔离（只有 proxyWidgetErrorQuarantine），
+   *  槽位名是 ComfyUI 自动编号的别名 value_1，作者 label 写在本层 inputs[] 上
+   *  （"Seed" / "Seconds"）。存量库里的 label 已被别名污染。
+   *  这条链路要保证 buildRawInputs → enrichWorkflowIO 后仍取到 "Seed"。 */
+  const WRAPPER_UUID = "e0940f57-80b2-480e-8a38-36968dc1763d";
+
+  it("buildRawInputs + enrichWorkflowIO：别名槽位取到作者 label", async () => {
+    const raw = {
+      nodes: [
+        {
+          id: 1512,
+          type: WRAPPER_UUID,
+          inputs: [
+            { name: "image", label: "image_first_frame", type: "IMAGE", link: 4418 },
+            {
+              name: "enabled",
+              label: "WAN22: True = Safetensors",
+              type: "BOOLEAN",
+              widget: { name: "enabled" },
+              link: null,
+            },
+            { name: "value_1", label: "Seed", type: "INT", widget: { name: "value_1" }, link: null },
+            {
+              name: "value_2",
+              label: "Seconds",
+              type: "INT",
+              widget: { name: "value_2" },
+              link: null,
+            },
+          ],
+          outputs: [],
+          properties: { cnr_id: "comfy-core", ver: "0.14.1" },
+          widgets_values: [],
+        },
+      ],
+      links: [],
+      definitions: { subgraphs: [] },
+    } as unknown as RawWorkflow;
+
+    const { rawInputsById } = await buildRawInputs(raw, async () => undefined);
+    const io = await enrichWorkflowIO(
+      makeParams(
+        {
+          "1512::widget::value_1": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "1512",
+            name: "value_1",
+            label: "value_1",
+          },
+        },
+        {
+          rawInputsById,
+          graph: { "1512": { class_type: WRAPPER_UUID, inputs: {} } },
+          nodeTypeById: { "1512": WRAPPER_UUID },
+        }
+      )
+    );
+    expect(io["1512::widget::value_1"]!.label).toBe("Seed");
+    expect(io["1512::widget::value_1"]!.type).toBe("INT");
   });
 });

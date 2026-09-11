@@ -35,9 +35,20 @@ export function resolveExposedLabel(
   fallbackName: string
 ): string {
   const localLabel = sanitizeComboLabel(local?.label);
-  if (localLabel) return localLabel;
-  if (enriched) return sanitizeComboLabel(ioLabel(enriched)) || fallbackName;
-  return fallbackName;
+  const enrichedLabel = enriched ? sanitizeComboLabel(ioLabel(enriched)) : "";
+  /* 存量别名：勾选那一刻写进本地 label 的是「画布显示名」。修复前封装节点
+   *  的显示名恰好是 ComfyUI 自动编号的槽位别名（`value_1`），于是本地 label
+   *  里躺着一串机器生成的名字。它等于原始 pin 名、且与服务端富化名不同时，
+   *  视为「没重命名过」——取富化名（作者 label → 内部字段 → 本层 label），
+   *  否则用户重开工作流仍会看到旧的 `value_1` 把修复后的名字压回去
+   *  （ISSUE #349）。作者手写的名字几乎不可能与机器别名逐字相同，不会误伤。 */
+  if (localLabel) {
+    const isStaleAlias =
+      localLabel === fallbackName && enrichedLabel !== "" && enrichedLabel !== localLabel;
+    if (!isStaleAlias) return localLabel;
+  }
+  if (enrichedLabel) return enrichedLabel;
+  return localLabel || fallbackName;
 }
 
 /** 把本地勾选态与服务端富化条目合并成 IO 编辑面板用的条目：

@@ -226,11 +226,29 @@ export async function enrichWorkflowIO(
         const f = ri.proxyField;
         /* 存量数据：勾选那一刻会把「画布显示名」写进 label。修复前封装节点
          *  的显示名就是别名（value_1），库存 label 里于是躺着一串机器生成的
-         *  名字，它并不是作者的命名，不该把内部字段的业务名压掉。只在封装
-         *  节点（有 proxyField）且 label 恰好等于别名槽位名时视为未命名——
-         *  作者手写的名字几乎不可能与机器别名逐字相同，因此不会误伤；普通
-         *  节点没有这一分支，行为与旧版逐值等价。 */
-        const staleAlias = f !== undefined && label !== undefined && label === ri.name;
+         *  名字，它并不是作者的命名，不该把内部字段的业务名压掉。label 恰好
+         *  等于别名槽位名（`ri.name`）时视为未命名——作者手写的名字几乎不可能
+         *  与机器别名逐字相同，因此不会误伤；普通节点没有这一分支，行为与旧版
+         *  逐值等价。
+         *
+         *  别名判定不能只看 proxyField：`properties.proxyWidgets` 会因导出缺
+         *  失被 ComfyUI 隔离（`proxyWidgetErrorQuarantine`），此时 proxyField
+         *  为空，但 wrapper 本层 inputs[] 仍带作者写的 label（"Seed"）。只按
+         *  proxyField 判定会让这类工作流的存量别名永远清不掉（ISSUE #349）。
+         *  故以「class_type 是 UUID 的封装节点」为准，只要本层还找得到与槽位
+         *  名不同的作者 label/localized，就认得出这是一串机器别名。 */
+        const graphClassForWrapper = asRecord(graph[canonicalNodeId])?.class_type;
+        const isWrapperNode = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(
+          nodeTypeById[canonicalNodeId] ??
+            (typeof graphClassForWrapper === "string" ? graphClassForWrapper : "")
+        );
+        const hasAuthorSlotName =
+          (ri.label !== undefined && ri.label !== ri.name) ||
+          (ri.localized !== undefined && ri.localized !== ri.name);
+        const staleAlias =
+          label !== undefined &&
+          label === ri.name &&
+          (f !== undefined || (isWrapperNode && hasAuthorSlotName));
         label =
           (staleAlias ? undefined : label) ??
           f?.label ??
