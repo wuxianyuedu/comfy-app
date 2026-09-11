@@ -58,6 +58,9 @@ export interface WorkflowLibraryDetailController {
   isLoading: boolean;
   errorMessage: string | undefined;
   workflowIO: WorkflowIOMap | null;
+  /** 模板 paramMap（`source.mode:<模式>` 的对外参数落点），画布节点页签据此
+   *  标出每个对外参数与它落到的那一行。 */
+  paramMap: Record<string, unknown>;
   sourceData: SourceModalData | null;
   /** 有可执行图 —— 决定主 CTA 是否可点。 */
   usable: boolean;
@@ -142,6 +145,15 @@ export function useWorkflowLibraryDetail(
     () => (workflow ? buildSourceData(workflow, template) : null),
     [workflow, template]
   );
+
+  /* paramMap 只有「画布节点」页签的对外参数标注用得上：以轻量 template 为底
+   * 稿（它直读 DB 列，没有富化改写），缺省空对象。 */
+  const paramMap = useMemo<Record<string, unknown>>(() => {
+    const raw = template?.paramMap;
+    return raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  }, [template]);
 
   const formatFlags = useMemo(
     () =>
@@ -230,6 +242,7 @@ export function useWorkflowLibraryDetail(
     isLoading: isDetailLoading,
     errorMessage: detailQuery.error?.message,
     workflowIO,
+    paramMap,
     sourceData,
     usable: formatFlags.usable,
     canResync: syncFlags.canResync,
