@@ -89,6 +89,19 @@ describe("勾选 IO 不在画布上新增节点", () => {
     expect(code).not.toContain("resolveManualEntryIds");
   });
 
+  it("工作流库详情不留「对外参数卡片列」的孤儿占位", () => {
+    /* 卡片列撤掉后，详情里那条约 300px 的左侧 gutter 曾留下来：卡片层已经
+     * 不画了，占位还在 —— 表现就是用户看到的「卡片没看到、左边空出块区域」。
+     * 这里锁住这条 gutter 不回来（容器只负责居中，不做单侧留白）。 */
+    const body = readFileSync(
+      path.join(LIBRARY_DIR, "sections/DetailBody.tsx"),
+      "utf8"
+    );
+    const code = stripComments(body);
+    expect(code).not.toMatch(/pl-\[\d+px\]/);
+    expect(code).toContain("flex min-h-0 flex-1 justify-center overflow-auto");
+  });
+
   it("对外参数模块不再导出画布几何（节点 id / 卡片尺寸）", () => {
     const lib = readFileSync(path.resolve(__dirname, "../../../lib/workflow-param-mapping.ts"), "utf8");
     const code = stripComments(lib);

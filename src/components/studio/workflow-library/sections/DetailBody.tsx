@@ -69,10 +69,11 @@ export function DetailBody({
               在编辑器中打开
             </button>
           </div>
-          {/* 画布预览：左侧留出对外参数卡片列的固定 gutter（卡片列 + 走线
-              间距，约 300px），宿主卡片居中偏右；不够宽时横向可滚动。
-              容器必须有真实高度，否则映射层的 DOM 测量拿不到行位置。 */}
-          <div className="flex min-h-0 flex-1 justify-center overflow-auto px-2 py-4 pl-[300px]">
+          {/* 画布预览：只画工作流自身的图 + 一张宿主运行卡片，卡片居中。
+              这里曾为「对外参数卡片列」留过一条左侧 gutter，参数卡片刻画已整体
+              移除（勾选 IO 不再在画布上新增节点/连线），gutter 随之撤掉——
+              留着只会让卡片偏右、左边空出一块。 */}
+          <div className="flex min-h-0 flex-1 justify-center overflow-auto px-2 py-4">
             {/* key=workflow.id：切换左侧工作流时重建预览，避免上一工作流的
                 运行结果/状态/表单残留（详情区复用的是同一 DOM 位置）。 */}
             <WorkflowCanvasNodePreview
