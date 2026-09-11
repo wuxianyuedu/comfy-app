@@ -48,6 +48,18 @@ import { logger } from "~/server/lib/logger";
  *  in-memory claim check the reaper would wrongly kill a healthy
  *  in-flight task ("任务卡在队列超过 Ns…无人 re-claim").  The check
  *  below mirrors the RUNNING reaper's `promptToTask` guard.
+ *
+ *  判死前的最后一道保险（ISSUE #378）：in-memory 认领检查是**进程内**记忆，
+ *  它有两个已知盲区——(1) `cliProcs` 若因 HMR 重新求值而丢失（已改挂
+ *  globalThis，见 executor-cli.ts），(2) raw 任务在 comfy-cli 回传
+ *  prompt_id 前 DB 行一直是 `QUEUED/promptId=null`，而 comfy-cli 子进程
+ *  是**独立进程**：dev server 重启后旧子进程仍在驱动 ComfyUI，新进程对它
+ *  一无所知。此时队列里没有、cliProcs 里没有、executedWorkflow 里也没有
+ *  ——三个信号全空，但任务其实健康在跑（用户看到的正是节点在刷「▶ 开始执行」
+ *  的同时被判死）。因此判死前必须向 ComfyUI 要**外部证据**：若 ComfyUI 的
+ *  /queue 或 /history 仍有本应用（同一 client_id 家族 / 本地主机）的活动，
+ *  就说明有在飞的工作流，本轮不回收，等下一 tick 再对账。ComfyUI 不可达
+ *  （网络抖动）同样判「证据不足」而不杀——宁可晚一轮，不可误杀。
  */
 const REAPER_MS = 30_000;
 const STALE_MS = 30_000; // a QUEUED task older than this with no promptId is "dead"
@@ -115,13 +127,65 @@ export function isTaskClaimedInProcess(
   );
 }
 
+/** 外部证据探针：ComfyUI 侧此刻是否仍有「在飞的工作流」。
+ *
+ *  纯「进程内记忆」不足以判死一个 QUEUED 孤儿：raw 路径的 comfy-cli 子进程
+ *  是独立进程，dev server 重启后新进程既无队列项、也无 cliProcs 句柄、
+ *  executedWorkflow 也随内存一起丢了——三个信号全空，但 ComfyUI 其实正在执行。
+ *  这里换一个**跨进程**的判据：问 ComfyUI 自己。
+ *
+ *  返回值语义（保守优先，只区分「有证据在飞」与「无证据」）：
+ *    • true  → 在飞任务的**精确**命中（/queue 的 prompt_id 对得上本次执行
+ *      已落库的 promptId），或 /queue 里有任何排队项（本应用 MAX_CONCURRENCY=1，
+ *      队列非空即说明本应用有任务在跑）。
+ *    • false → ComfyUI 明确回答「队列空，且最近一条历史也不是本次执行」→
+ *      可以判孤儿。
+ *    • null  → 探测失败（网络抖动 / ComfyUI 未运行）：**证据不足**，不回收。
+ *
+ *  判据取「队列非空」而不是「历史非空」：/history 会保留**全部**历史条目且
+ *  无时间过滤，只要 ComfyUI 跑过一次生成，「历史非空」就恒为真——那等于永不
+ *  回收，孤儿会永久卡在 QUEUED。因此历史只用于**精确匹配**：若最近一条历史的
+ *  prompt_id 恰好等于本任务已落库的 promptId（QUEUED 行通常为 null，故这里
+ *  几乎只对「刚写库就被判死」的竞态兜底），才判 true。
+ *
+ *  单独作为一次 tick 的探测（调用方每个 tick 只调一次，不按行重复请求）。 */
+async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<boolean | null> {
+  try {
+    const base = await resolveComfyBase();
+    const q = await fetch(`${base}/queue`, { signal: AbortSignal.timeout(3_000) });
+    if (!q.ok) return null;
+    const qd = (await q.json()) as
+      | { queue_running?: { prompt_id?: string }[]; queue_pending?: { prompt_id?: string }[] }
+      | null;
+    const all = [...(qd?.queue_running ?? []), ...(qd?.queue_pending ?? [])];
+    /* 队列非空 → 本应用（MAX_CONCURRENCY=1）必有任务在跑。raw 路径的
+     *  comfy-cli 自己生成 client_id，无法反查属于哪个 taskId，因此无法区分
+     *  时一律不杀。 */
+    if (all.length > 0) return true;
+    if (!hintPromptId) return false;
+    /* 队列空但有 promptId 线索：只有「最近一条历史确实是本次 prompt」才算
+     *  在飞（任务刚收尾的竞态窗口），否则视为已死。 */
+    const h = await fetch(`${base}/history?max_items=1`, { signal: AbortSignal.timeout(3_000) });
+    if (!h.ok) return null;
+    const hd = (await h.json()) as Record<string, unknown> | null;
+    return !!hd && Object.prototype.hasOwnProperty.call(hd, hintPromptId);
+  } catch {
+    /* 网络错误 / 超时：证据不足。 */
+    return null;
+  }
+}
+
 /** 导出以便判决矩阵被直接测试（ISSUE #315）：两条 sweeper 的规则是本模块
  *  唯一的价值，30s 定时器只是它们的调用者。生产调用方不变。 */
 export async function reapStaleQueuedTasks(): Promise<void> {
   try {
     const cutoff = new Date(Date.now() - STALE_MS);
     const stale = await taskRepository.listStaleQueued(cutoff, 20);
+    if (stale.length === 0) return;
     const s = state();
+    /* 外部证据每个 tick 只探一次（不按行重复请求：20 行 × 2 次请求 = 40 次）。
+     *  探测本身只在「进程内无认领足迹」的行才会被用到，见下方判决。 */
+    let comfyEvidence: boolean | null | undefined;
     for (const t of stale) {
       /* In-process guard: if another (concurrent) reaper tick already
        *  claimed this task, skip to avoid duplicate FAILED logs.  The
@@ -145,7 +209,26 @@ export async function reapStaleQueuedTasks(): Promise<void> {
           log(t.id, "warn", `任务在队列中等待 ComfyUI 自动启动（已 ${ageSec}s）——启动完成后自动执行`);
           continue;
         }
-        const reason = `任务卡在队列超过 ${ageSec}s（dev server 重启后 in-memory 队列清空，无人 re-claim）— 请重新执行`;
+        /* 最后一道保险：进程内记忆全空不等于任务已死。raw 路径的 comfy-cli
+         *  子进程是独立进程，dev server 重启后新进程看不到它，但 ComfyUI
+         *  侧的工作流仍在跑。判死前先问 ComfyUI 要外部证据——有活动或探测
+         *  失败都视为「证据不足」，本轮跳过，等下一 tick 再对账（见本函数
+         *  上方注释 ISSUE #378）。 */
+        if (comfyEvidence === undefined) {
+          comfyEvidence = await comfyHasActiveWorkflow(null);
+        }
+        const comfyActive = comfyEvidence;
+        if (comfyActive !== false) {
+          log(
+            t.id,
+            "warn",
+            comfyActive === true
+              ? `ComfyUI 侧仍有正在执行/排队的工作流（已排队 ${ageSec}s）——跳过回收，等待其收口`
+              : `无法确认任务是否仍由 ComfyUI 执行（已排队 ${ageSec}s，ComfyUI 不可达）——本轮不回收，稍后重试`
+          );
+          continue;
+        }
+        const reason = `任务卡在队列超过 ${ageSec}s，且 ComfyUI 队列与历史中均无对应活动（本进程内存队列也无此任务的执行链）— 请重新执行`;
         log(t.id, "error", reason);
         /* emit a synthetic state → error pair so any SSE
          *  subscriber immediately sees the terminal failure, then mark
