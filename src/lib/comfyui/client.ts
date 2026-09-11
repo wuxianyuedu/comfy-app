@@ -209,6 +209,24 @@ async function probeBaseOnce(base: string): Promise<string | null> {
   }
 }
 
+/** 直接探一个已知端口，**不做**任何进程表查询 / 端口扫描。
+ *
+ * 给「进程级快照已经定位到实例与端口」的调用方用（设置页状态判定）：
+ * 那种情况下 `probeComfyBase()` 是绕远路——它会先 `resolveComfyBase()`，
+ * 而后者在配置了路径时又要查一遍进程表（PowerShell 枚举 `Win32_Process`，
+ * 本机 ~2.5s），再决定探哪个地址，等于把已经拿到的事实重新推一遍。
+ * 直接探快照给出的端口既省掉这段重复 IO，也比「按配置端口 + 偏移扫描」
+ * 更准：快照里的端口就是该 PID 实际监听的端口（ISSUE #339 残留延迟）。 */
+export async function probeComfyAtPort(port: number): Promise<string | null> {
+  if (!Number.isInteger(port) || port <= 0) return null;
+  /* `COMFYUI_BASE` 指向的是远端实例（不是本机进程），此时「快照给出的本机监听
+   * 端口」与要连的地址根本不是一回事——把远端主机的端口换成本机端口会直接
+   * 探错地方。这种情况下返回 null，交给调用方走通用探测（它会尊重
+   * COMFYUI_BASE）。 */
+  if (process.env.COMFYUI_BASE) return null;
+  return probeBaseOnce(`http://127.0.0.1:${port}`);
+}
+
 /**
  * Synchronous version — returns cached value or raw config (no probing).
  * Use this for non-critical reads where latency matters more than accuracy.

@@ -22,6 +22,9 @@ vi.mock("../app-settings", () => ({
  * 没用——本模块已被整体 mock，探针必须跟着换成桩。 */
 vi.mock("./client", () => ({
   probeComfyBase: vi.fn().mockResolvedValue(null),
+  /* 直连端口的探测（快照已定位到进程+端口时走这条）：默认「探不通」，
+   * 需要时由用例改成「该端口应答」。 */
+  probeComfyAtPort: vi.fn().mockResolvedValue(null),
   resolveComfyBase: vi.fn().mockRejectedValue(new Error("not running")),
   resetComfyBase: vi.fn(),
 }));
@@ -260,6 +263,63 @@ describe("getComfyUiStatus — 状态三态组合", () => {
 
     vi.mocked(probeComfyBase).mockResolvedValue(null);
     resetComfyBase();
+    resetComfyRuntimeSnapshot();
+  });
+
+  /* ISSUE #339 残留延迟：ComfyUI 已经启动时，设置页首屏仍要等一会才显示
+   * 「运行中」。根因是状态判定的两路事实（进程表快照 / HTTP 探测）被串行 await，
+   * 且探测还要绕经 resolveComfyBase 再查一遍进程表——等待被叠成 N 倍。 */
+  it("快照已定位进程+端口 → 直连该端口探测，不再绕通用探测重查进程表", async () => {
+    const { getComfyUiStatus } = await import("./lifecycle");
+    const { resetComfyRuntimeSnapshot } = await import("./status");
+    const { probeComfyAtPort, probeComfyBase } = await import("./client");
+    resetComfyUiStatus();
+    resetComfyRuntimeSnapshot();
+    // 快照命中：配置路径的实例在跑，监听 8188。
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: 4242, failed: false });
+    vi.mocked(findPidListeningPort).mockResolvedValue(8188);
+    vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:8188");
+    /* mock 的调用历史跨用例共享（文件级），所以断言「本次没调用」要看**增量**。 */
+    const baseCallsBefore = vi.mocked(probeComfyBase).mock.calls.length;
+
+    const s = await getComfyUiStatus({ force: true });
+
+    // 结论来自直连端口的那次探测。
+    expect(vi.mocked(probeComfyAtPort)).toHaveBeenCalledWith(8188);
+    expect(s.up).toBe(true);
+    expect(s.base).toBe("http://127.0.0.1:8188");
+    // 关键断言：通用探测**本次一次都没被调用**——它底下会再查一遍进程表
+    // （PowerShell 枚举，本机 ~2.5s），而这时事实已经拿到了。这正是
+    // 「ComfyUI 已经在跑，打开设置页还要等一会」里被白等掉的那段。
+    expect(vi.mocked(probeComfyBase).mock.calls.length).toBe(baseCallsBefore);
+
+    vi.mocked(probeComfyAtPort).mockResolvedValue(null);
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: null, failed: false });
+    vi.mocked(findPidListeningPort).mockResolvedValue(null);
+    resetComfyUiStatus();
+    resetComfyRuntimeSnapshot();
+  });
+
+  it("直连端口探不通时退回通用探测的结论（不误报运行中）", async () => {
+    const { getComfyUiStatus } = await import("./lifecycle");
+    const { resetComfyRuntimeSnapshot } = await import("./status");
+    const { probeComfyAtPort, probeComfyBase } = await import("./client");
+    resetComfyUiStatus();
+    resetComfyRuntimeSnapshot();
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: 4242, failed: false });
+    vi.mocked(findPidListeningPort).mockResolvedValue(8188);
+    // 端口上暂时没应答（实例正在加载），通用探测会从别的地址发现它。
+    vi.mocked(probeComfyAtPort).mockResolvedValue(null);
+    vi.mocked(probeComfyBase).mockResolvedValue("http://127.0.0.1:8189");
+
+    const s = await getComfyUiStatus({ force: true });
+    expect(s.up).toBe(true);
+    expect(s.base).toBe("http://127.0.0.1:8189");
+
+    vi.mocked(probeComfyBase).mockResolvedValue(null);
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: null, failed: false });
+    vi.mocked(findPidListeningPort).mockResolvedValue(null);
+    resetComfyUiStatus();
     resetComfyRuntimeSnapshot();
   });
 
