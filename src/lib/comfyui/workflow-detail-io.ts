@@ -40,6 +40,10 @@ export interface WorkflowIORawEntry {
   label?: string;
   displayOrder?: number;
   value?: unknown;
+  /** 宿主（外层封装）节点 id —— 勾选点在子工作流内部时写入，与 `nodeId`
+   *  （内部节点 id）一起在运行期拼成 comfy-cli 展开后的 `host:inner` 形式。
+   *  顶层勾选的条目没有本字段，PATCH / GET 原样往返。 */
+  hostNodeId?: string;
   /** IO 编辑里切换的「运行时强校验」标记 —— GET 重建时必须透传，
    *  否则保存后重开编辑器会退回可选（历史 bug）。 */
   required?: boolean;
@@ -139,6 +143,9 @@ export interface WorkflowIOEntry {
    *  把参考图槽位区分成「首帧 / 尾帧 / 普通参考图」。rawJson + graph 都拿不到
    *  类名时（畸形导出）返回 undefined，消费方按「普通参考图」降级。 */
   classType?: string;
+  /** 宿主（外层封装）节点 id —— 勾选点在子工作流内部时写入，运行期据它把
+   *  `nodeId`（内部节点）还原成 comfy-cli 展开后的 `host:inner` 拼接 id。 */
+  hostNodeId?: string;
 }
 
 /** Enrich the stored IO selection into a self-describing record (see the
@@ -403,6 +410,9 @@ export async function enrichWorkflowIO(
       ...(v.required !== undefined ? { required: v.required } : {}),
       ...(v.seedMode !== undefined ? { seedMode: v.seedMode } : {}),
       ...(v.modes !== undefined ? { modes: cleanedModes ?? v.modes } : {}),
+      /* 宿主（外层封装）节点 id 纯透传 —— 它只在「下钻到子图内部」勾选时写入，
+       *  运行期靠它把内部节点 id 还原成 comfy-cli 展开后的 `host:inner`。 */
+      ...(v.hostNodeId !== undefined ? { hostNodeId: v.hostNodeId } : {}),
     };
   }
 

@@ -423,6 +423,25 @@ export interface MappedInput {
   value: unknown;
 }
 
+/** 运行期节点 id：库内 `nodeId` 是「勾选所在视图的节点 id」。
+ *
+ *  · 顶层勾选：`nodeId` 就是顶层节点 id（`4`），原样下发；
+ *  · 子图内部勾选：`nodeId` 是内部节点 id（`1670`），而 comfy-cli 展开子图后
+ *    真实节点 id 是宿主 id + 内部 id 的拼接（`4:1670`）——此时用落库的
+ *    `hostNodeId` 拼出 `host:inner`。
+ *
+ *  之所以要把宿主 id 一起存下来，而不是运行期「拿裸 id 去所有子图定义里扫
+ *  一遍」：后者在同名内部 id 或子图定义缺失时会静默失效（表现为「改了参数
+ *  没生效」），拼出来的 id 才是确定性事实。 */
+export function runtimeNodeId(entry: {
+  nodeId: string;
+  hostNodeId?: string;
+}): string {
+  /* 已经是拼接形式（旧数据或嵌套场景已带冒号）→ 不重复拼。 */
+  if (entry.nodeId.includes(":") || !entry.hostNodeId) return entry.nodeId;
+  return `${entry.hostNodeId}:${entry.nodeId}`;
+}
+
 /** 把映射落到运行时载荷：对外值 → `workflowInputs` 三元组。
  *
  *  · 有映射：只覆盖被映射的那个口（作者显式画的线说了算，避免把整节点默认值
@@ -453,7 +472,7 @@ export function applyParamMapping(args: {
     const raw = io?.[ioKey];
     if (!raw) return;
     seen.add(ioKey);
-    inputs.push({ nodeId: raw.nodeId, name: raw.name, value });
+    inputs.push({ nodeId: runtimeNodeId(raw), name: raw.name, value });
   };
 
   /* ① 用户给了值的对外参数：落到它连着的那个端口。没连线（或作者显式断开）

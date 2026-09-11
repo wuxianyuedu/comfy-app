@@ -24,15 +24,26 @@ export interface BuildParamEdgesCtx {
   resolved: Record<string, string | null>;
   /** 某个条目在当前模式下是否作者画过线。 */
   isManual: (entryId: string) => boolean;
+  /** 已经渲染出来的卡片 id（`pio:<条目 id>`）集合。
+   *
+   *  连线的 source 必须是真实存在的卡片，否则 React Flow 会画出一条
+   *  「指向不存在节点」的悬空线 —— 视觉上就是工作流图上多出一个没来历的
+   *  线头/节点。当前视图里找得到宿主节点、卡片才渲染得出来（子图内部节点的
+   *  nodeId 在顶层画布上不存在，`buildParamNodes` 会跳过它）；本闸门与卡片
+   *  渲染同口径，缺省时不做限制（纯函数老调用方行为不变）。 */
+  renderedCardIds?: ReadonlySet<string>;
 }
 
 export function buildParamEdges(ctx: BuildParamEdgesCtx): Edge[] {
-  const { entries, resolved, isManual } = ctx;
+  const { entries, resolved, isManual, renderedCardIds } = ctx;
   const out: Edge[] = [];
   for (const entry of entries) {
     const target = resolved[entry.id];
     /* 未连线 / 显式断开 → 不画线（卡片悬空既说明「没连上」，也不误导）。 */
     if (!target) continue;
+    /* 卡片不存在（宿主节点不在当前视图里）→ 同样不画线：
+     *  没有 source 节点的线是画布上那个「多出来的节点」。 */
+    if (renderedCardIds && !renderedCardIds.has(paramNodeId(entry.id))) continue;
     const manual = isManual(entry.id);
     out.push({
       id: `pe-${entry.id}`,

@@ -110,6 +110,10 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
               nodeId: ref.nodeId,
               name: ref.name,
               label: ref.label,
+              /* 下钻到子图内部勾选时，画布把「从哪一层钻进来」的宿主节点 id 一并
+               * 带上：内部节点 id（`1670`）在顶层画布上不存在，运行期 comfy-cli
+               * 展开后的 id 是 `4:1670`，两个 id 都存下来才能确定性还原。 */
+              ...(ref.hostNodeId ? { hostNodeId: ref.hostNodeId } : {}),
             },
           },
         };

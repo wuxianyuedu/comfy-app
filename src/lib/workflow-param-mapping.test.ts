@@ -14,6 +14,7 @@ import {
   paramNodeId,
   parseParamMapping,
   resolveMapping,
+  runtimeNodeId,
   serializeParamMapping,
 } from "~/lib/workflow-param-mapping";
 
@@ -315,5 +316,41 @@ describe("buildSourceOverrides", () => {
     const io: WorkflowIOMap = { "5::widget::width": pin("5", "width", { type: "INT" }) };
     const overrides = buildSourceOverrides(buildParamEntries(io), io, null);
     expect(overrides["5|size-width"]).toBe("5::widget::width");
+  });
+});
+
+describe("runtimeNodeId — 运行期节点 id 还原", () => {
+  it("顶层勾选原样下发", () => {
+    expect(runtimeNodeId({ nodeId: "24" })).toBe("24");
+  });
+
+  it("子图内部勾选用宿主 id 拼成 comfy-cli 展开后的 `host:inner`", () => {
+    expect(runtimeNodeId({ nodeId: "1670", hostNodeId: "4" })).toBe("4:1670");
+    expect(runtimeNodeId({ nodeId: "1670", hostNodeId: "4:5" })).toBe("4:5:1670");
+  });
+
+  it("已经是拼接形式（旧数据）时不重复拼", () => {
+    expect(runtimeNodeId({ nodeId: "4:1670", hostNodeId: "4" })).toBe("4:1670");
+  });
+});
+
+describe("applyParamMapping — 子图内部条目的运行期节点 id", () => {
+  const innerIo: WorkflowIOMap = {
+    "1670::widget::value": pin("1670", "value", {
+      type: "INT",
+      defaultValue: 1,
+      hostNodeId: "4",
+    }),
+  };
+
+  it("值下发时带上宿主前缀，运行期才能落到 `4:1670`", () => {
+    const entries = buildParamEntries(innerIo);
+    const { inputs } = applyParamMapping({
+      io: innerIo,
+      entries,
+      mapping: null,
+      values: { "1670|other": 33 },
+    });
+    expect(inputs).toEqual([{ nodeId: "4:1670", name: "value", value: 33 }]);
   });
 });

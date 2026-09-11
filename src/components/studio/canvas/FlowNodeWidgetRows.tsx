@@ -101,7 +101,13 @@ export function FlowNodeWidgetRows({
                 {io?.ioEditMode && !isConn && !isBoundary && (
                   <IoCheckbox
                     io={io}
-                    ioRef={{ nodeId: data.nodeId, name: k, kind: "widget", direction: "input" }}
+                    ioRef={{
+                      nodeId: data.nodeId,
+                      hostNodeId: data.hostNodeId,
+                      name: k,
+                      kind: "widget",
+                      direction: "input",
+                    }}
                   />
                 )}
                 <span
@@ -121,6 +127,7 @@ export function FlowNodeWidgetRows({
                     io={io}
                     ioRef={{
                       nodeId: data.nodeId,
+                      hostNodeId: data.hostNodeId,
                       name: k,
                       kind: "widget",
                       direction: "input",

@@ -345,6 +345,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                           io={io}
                           ioRef={{
                             nodeId: String(data.nodeId),
+                            hostNodeId: data.hostNodeId,
                             name: inName,
                             kind: "param",
                             direction: "input",
@@ -490,6 +491,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                     io={io}
                     ioRef={{
                       nodeId: String(data.nodeId),
+                      hostNodeId: data.hostNodeId,
                       name: inp.name,
                       kind: "widget",
                       direction: "input",
@@ -601,6 +603,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                           io={io}
                           ioRef={{
                             nodeId: String(data.nodeId),
+                            hostNodeId: data.hostNodeId,
                             name: inp.name,
                             kind: "widget",
                             direction: "input",

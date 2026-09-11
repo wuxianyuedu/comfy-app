@@ -93,6 +93,7 @@ export function FlowNodePinRows({
                       io={io}
                       ioRef={{
                         nodeId: data.nodeId,
+                        hostNodeId: data.hostNodeId,
                         name: inName ?? "",
                         kind: "param",
                         direction: "input",
