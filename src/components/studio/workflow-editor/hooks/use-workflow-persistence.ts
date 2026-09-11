@@ -4,10 +4,6 @@ import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Node } from "@xyflow/react";
 import type { WorkflowDetail, WorkflowIOParam } from "@/components/studio/workflow-types";
-import {
-  serializeParamMapping,
-  type ParamMapping,
-} from "@/lib/workflow-param-mapping";
 import { NODE_TITLE_H, extractNoteTitle } from "@/components/studio/workflow-utils";
 import { useToast } from "../../ToastProvider";
 import type { WorkflowSaver } from "./use-workflow-save";
@@ -19,8 +15,6 @@ export interface WorkflowPersistenceArgs {
   scopeDetail: WorkflowDetail | null;
   setNodes: Dispatch<SetStateAction<Node[]>>;
   paramMap: Record<string, string>;
-  /** 对外参数连线的落库快照（paramMap.source），保存时并入 paramMap。 */
-  paramMapping: ParamMapping;
   workflowIO: Record<string, WorkflowIOParam>;
   fitToMiddle: () => void;
   savePatch: WorkflowSaver;
@@ -41,7 +35,6 @@ export function useWorkflowPersistence({
   scopeDetail,
   setNodes,
   paramMap,
-  paramMapping,
   workflowIO,
   fitToMiddle,
   savePatch,
@@ -177,11 +170,9 @@ export function useWorkflowPersistence({
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      /* 映射落在 paramMap 的 `source` 命名空间（沿用既有 JSON 列，不动 DB
-       *  schema）；整体提交，其余键原样透传。 */
       await savePatch.mutateAsync({
         id: workflowId,
-        paramMap: serializeParamMapping(paramMapping, paramMap),
+        paramMap,
         workflowIO,
       });
       onSave?.();
@@ -193,7 +184,7 @@ export function useWorkflowPersistence({
     } finally {
       setSaving(false);
     }
-  }, [workflowId, paramMap, paramMapping, workflowIO, onSave, savePatch, setError, setSaving, toast]);
+  }, [workflowId, paramMap, workflowIO, onSave, savePatch, setError, setSaving, toast]);
 
   /* Persist a node's position after the user finishes dragging it.
    *  - Note nodes (`note:<id>`) → write back into rawJson.nodes[i].pos via

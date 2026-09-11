@@ -238,6 +238,9 @@ export function autoMapEntries(
 
 /* ── 映射的应用（运行期） ── */
 
+/** `source` 命名空间里按模式存放手工线时的键前缀（`mode:T2I`）。 */
+export const MODE_KEY_PREFIX = "mode:";
+
 /** 逐模式映射：模式码 → (对外参数 id → 目标 ioKey)。空对象 = 各模式用同一张图。 */
 export type ParamMappingByMode = Record<string, Record<string, string | null>>;
 
@@ -250,7 +253,12 @@ export interface ParamMapping {
   labels?: Record<string, string>;
 }
 
-/** 解析某一模式下生效的「对外参数 id → 目标 ioKey」表。 */
+/** 解析某一模式下生效的「对外参数 id → 目标 ioKey」表。
+ *
+ *  优先级：该模式的手工线 > 与模式无关的手工线 > 自动映射（默认连线状态）。
+ *  `manualByMode` 的形状是 `{ [entryId]: { [mode]: ioKey | null } }` —— 按
+ *  **条目**归拢，与落库的 `source.<entryId>.<mode>` 一一对应；按模式查一次
+ *  即得该模式下所有被手工改过的线。 */
 export function resolveMapping(
   entries: readonly ParamEntry[],
   io: WorkflowIOMap | null | undefined,
@@ -259,10 +267,14 @@ export function resolveMapping(
 ): Record<string, string | null> {
   const auto = autoMapEntries(entries, io);
   const out: Record<string, string | null> = { ...auto };
-  const manual = {
-    ...(mapping?.manual ?? {}),
-    ...(mode ? (mapping?.manualByMode?.[mode] ?? {}) : {}),
-  };
+  const manual: Record<string, string | null> = { ...(mapping?.manual ?? {}) };
+  if (mode) {
+    for (const [entryId, byMode] of Object.entries(mapping?.manualByMode ?? {})) {
+      if (Object.prototype.hasOwnProperty.call(byMode, mode)) {
+        manual[entryId] = byMode[mode] ?? null;
+      }
+    }
+  }
   for (const entry of entries) {
     if (Object.prototype.hasOwnProperty.call(manual, entry.id)) {
       out[entry.id] = manual[entry.id] ?? null;
@@ -271,15 +283,54 @@ export function resolveMapping(
   return out;
 }
 
-/** 从持久化的 `paramMap` 反序列化映射：只认 `source` 命名空间下的字符串值，
- *  畸形数据（null / 数字 / 嵌套对象）一律丢弃——画布容不下脏数据。
- *  各模式覆盖保存在 `source.<mode>.<entryId>`（与端口键天然区分）。 */
+/** 某个对外参数当前生效的手工线（模式线优先，其次通用线）；没有手工线返回
+ *  `undefined`。`null` 表示作者显式断开，必须与「没有手工线」区分开。 */
+export function manualTargetFor(
+  mapping: ParamMapping | null | undefined,
+  entryId: string,
+  mode?: string | null
+): string | null | undefined {
+  if (mode && mapping?.manualByMode?.[entryId] &&
+      Object.prototype.hasOwnProperty.call(mapping.manualByMode[entryId], mode)) {
+    return mapping.manualByMode[entryId][mode] ?? null;
+  }
+  if (mapping?.manual && Object.prototype.hasOwnProperty.call(mapping.manual, entryId)) {
+    return mapping.manual[entryId] ?? null;
+  }
+  return undefined;
+}
+
+/** 从持久化的 `paramMap` 反序列化映射。
+ *
+ *  `source` 命名空间下并存两种键（与 serializeParamMapping 一一对应）：
+ *   · `<entryId> = "ioKey" | null`             —— 与模式无关的手工线；
+ *   · `mode:<mode> = { <entryId>: ioKey|null }` —— 按模式的手工线。
+ *  两者的键空间必须分开：曾经按模式覆盖直接挂在 entryId 下，与通用线同名互踩，
+ *  落库后通用线被整条覆盖、刷新即丢。
+ *
+ *  畸形数据（数字 / 数组 / 非对象模式表）一律丢弃——画布容不下脏数据。 */
 export function parseParamMapping(paramMap: unknown): ParamMapping {
   const out: ParamMapping = { manual: {}, manualByMode: {}, labels: {} };
   if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) return out;
   const sourceRaw = (paramMap as Record<string, unknown>).source;
   if (!sourceRaw || typeof sourceRaw !== "object" || Array.isArray(sourceRaw)) return out;
   for (const [key, value] of Object.entries(sourceRaw as Record<string, unknown>)) {
+    /* 按模式的表：键前缀为 `mode:`，值是「条目 id → 目标 ioKey」。 */
+    if (key.startsWith(MODE_KEY_PREFIX)) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      const mode = key.slice(MODE_KEY_PREFIX.length);
+      if (!mode) continue;
+      const byEntry: Record<string, string | null> = {};
+      for (const [entryId, target] of Object.entries(value as Record<string, unknown>)) {
+        if (typeof target === "string") byEntry[entryId] = target;
+        else if (target === null) byEntry[entryId] = null;
+      }
+      for (const [entryId, target] of Object.entries(byEntry)) {
+        const bucket = (out.manualByMode![entryId] ??= {});
+        bucket[mode] = target;
+      }
+      continue;
+    }
     if (typeof value === "string") {
       out.manual![key] = value;
       continue;
@@ -287,22 +338,17 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
     /* 显式的 null = 作者把这条线断开了，属于合法状态，必须保留。 */
     if (value === null) {
       out.manual![key] = null;
-      continue;
     }
-    if (typeof value === "object" && !Array.isArray(value)) {
-      const byMode: Record<string, string | null> = {};
-      for (const [mode, target] of Object.entries(value as Record<string, unknown>)) {
-        if (typeof target === "string") byMode[mode] = target;
-        else if (target === null) byMode[mode] = null;
-      }
-      if (Object.keys(byMode).length > 0) out.manualByMode![key] = byMode;
-    }
-    /* 其余（数字 / 数组）是脏数据，丢弃。 */
+    /* 其余（数字 / 数组 / 无前缀的嵌套对象）是脏数据，丢弃。 */
   }
   return out;
 }
 
-/** 把映射序列化回 `paramMap` 可落库的形状（只写 source 命名空间，其余键原样保留）。 */
+/** 把映射序列化回 `paramMap` 可落库的形状。
+ *
+ *  通用手工线写 `source.<entryId>`；按模式的手工线按模式归拢写
+ *  `source.mode:<mode> = { <entryId>: ioKey | null }`（两种键空间分开，
+ *  同名条目在两个模式下各有一份线时不会互相覆盖）。其余键原样保留。 */
 export function serializeParamMapping(
   mapping: ParamMapping,
   paramMap: Record<string, unknown>
@@ -311,12 +357,16 @@ export function serializeParamMapping(
   for (const [id, target] of Object.entries(mapping.manual ?? {})) {
     if (target !== undefined) source[id] = target;
   }
-  for (const [id, byMode] of Object.entries(mapping.manualByMode ?? {})) {
-    const next: Record<string, string> = {};
-    for (const [mode, target] of Object.entries(byMode)) {
-      if (typeof target === "string") next[mode] = target;
+  const byMode: Record<string, Record<string, string | null>> = {};
+  for (const [id, modes] of Object.entries(mapping.manualByMode ?? {})) {
+    for (const [mode, target] of Object.entries(modes)) {
+      /* null（该模式下显式断开）必须一起落库，否则刷新后会被自动映射复活。 */
+      if (typeof target !== "string" && target !== null) continue;
+      (byMode[mode] ??= {})[id] = target;
     }
-    if (Object.keys(next).length > 0) source[id] = next;
+  }
+  for (const [mode, targets] of Object.entries(byMode)) {
+    if (Object.keys(targets).length > 0) source[`${MODE_KEY_PREFIX}${mode}`] = targets;
   }
   return { ...paramMap, source };
 }
@@ -375,12 +425,7 @@ export function applyParamMapping(args: {
    *   · 手工：用户值只落到那个端口，该节点其余端口不再兜底（作者的线说了算）；
    *   · 自动（默认连线状态）：与"没连线"同义 —— 用户值落自动挑中的端口，
    *     其余端口照旧默认值兜底，语义等价于旧的「暴露 pin 全量下发」。 */
-  const manual = {
-    ...(mapping?.manual ?? {}),
-    ...(mode ? (mapping?.manualByMode?.[mode] ?? {}) : {}),
-  };
-  const isManualTarget = (id: string) =>
-    Object.prototype.hasOwnProperty.call(manual, id);
+  const isManualTarget = (id: string) => manualTargetFor(mapping, id, mode) !== undefined;
   const inputs: MappedInput[] = [];
   const unmatched: string[] = [];
   const seen = new Set<string>();

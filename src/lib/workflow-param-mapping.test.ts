@@ -126,10 +126,29 @@ describe("resolveMapping — 手工线优先于自动映射", () => {
 
   it("按模式的手工线只在该模式下生效", () => {
     const entries = buildParamEntries(io);
-    const mapping = { manualByMode: { I2I: { [entries[0]!.id]: "5::widget::resolution" } } };
+    const mapping = { manualByMode: { [entries[0]!.id]: { I2I: "5::widget::resolution" } } };
     expect(resolveMapping(entries, io, mapping, "I2I")[entries[0]!.id]).toBe(
       "5::widget::resolution"
     );
+    expect(resolveMapping(entries, io, mapping, "T2I")[entries[0]!.id]).toBe("5::widget::width");
+  });
+
+  it("按模式的手工线与通用线可并存，模式线优先", () => {
+    const entries = buildParamEntries(io);
+    const mapping = {
+      manual: { [entries[0]!.id]: "5::widget::width" },
+      manualByMode: { [entries[0]!.id]: { I2I: "5::widget::resolution" } },
+    };
+    expect(resolveMapping(entries, io, mapping, "I2I")[entries[0]!.id]).toBe(
+      "5::widget::resolution"
+    );
+    expect(resolveMapping(entries, io, mapping, "T2I")[entries[0]!.id]).toBe("5::widget::width");
+  });
+
+  it("某模式显式断开时该模式回落为「未连线」，其它模式不受影响", () => {
+    const entries = buildParamEntries(io);
+    const mapping = { manualByMode: { [entries[0]!.id]: { I2I: null } } };
+    expect(resolveMapping(entries, io, mapping, "I2I")[entries[0]!.id]).toBeNull();
     expect(resolveMapping(entries, io, mapping, "T2I")[entries[0]!.id]).toBe("5::widget::width");
   });
 
@@ -144,26 +163,59 @@ describe("parseParamMapping / serializeParamMapping", () => {
   it("往返：只写 source 命名空间，其余键原样保留", () => {
     const mapping = {
       manual: { "5|size-width": "5::widget::width" },
-      manualByMode: { I2I: { "5|size-width": "5::widget::resolution" } },
+      manualByMode: { "5|size-width": { I2I: "5::widget::resolution" } },
     };
     const merged = serializeParamMapping(mapping, { positiveNode: "9" });
     expect(merged.positiveNode).toBe("9");
+    /* 通用线与模式线分键存放：同名条目在两个键空间各有一份，互不覆盖。 */
+    expect(merged.source).toEqual({
+      "5|size-width": "5::widget::width",
+      "mode:I2I": { "5|size-width": "5::widget::resolution" },
+    });
     const parsed = parseParamMapping(merged);
     expect(parsed.manual).toEqual({ "5|size-width": "5::widget::width" });
     expect(parsed.manualByMode).toEqual({
-      I2I: { "5|size-width": "5::widget::resolution" },
+      "5|size-width": { I2I: "5::widget::resolution" },
     });
+    /* 往返之后 resolveMapping 必须仍然认得出来（曾经这里丢了按模式的线）。 */
+    const entries = buildParamEntries({
+      "5::widget::width": pin("5", "width", { type: "INT", defaultValue: 512 }),
+      "5::widget::resolution": pin("5", "resolution", { type: "COMBO" }),
+    });
+    const ioForRoundTrip: WorkflowIOMap = {
+      "5::widget::width": pin("5", "width", { type: "INT", defaultValue: 512 }),
+      "5::widget::resolution": pin("5", "resolution", { type: "COMBO" }),
+    };
+    expect(resolveMapping(entries, ioForRoundTrip, parsed, "I2I")["5|size-width"]).toBe(
+      "5::widget::resolution"
+    );
   });
 
   it("畸形数据一律丢弃", () => {
     const parsed = parseParamMapping({
-      source: { good: "ok", bad: 123, nested: null, deep: { M1: "ok", M2: 5 } },
+      source: {
+        good: "ok",
+        bad: 123,
+        nested: null,
+        /* 无 `mode:` 前缀的嵌套对象不是模式表 —— 丢弃（曾经被当成模式表读）。 */
+        deep: { M1: "ok", M2: 5 },
+        "mode:": { any: "x" },
+        "mode:T2I": { a: "ok", b: null, c: 5 },
+      },
     });
     expect(parsed.manual).toEqual({ good: "ok", nested: null });
-    /* 模式覆盖里的 5（数字）不是合法目标，整键丢弃；null 合法（= 该模式断开）。 */
-    expect(parsed.manualByMode).toEqual({ deep: { M1: "ok" } });
+    /* 模式表里的 5（数字）不是合法目标，丢弃；null 合法（= 该模式断开）。 */
+    expect(parsed.manualByMode).toEqual({ a: { T2I: "ok" }, b: { T2I: null } });
     expect(parseParamMapping(null).manual).toEqual({});
     expect(parseParamMapping([1, 2]).manual).toEqual({});
+  });
+
+  it("某模式显式断开（null）能往返保存", () => {
+    const merged = serializeParamMapping(
+      { manualByMode: { "5|size-width": { I2I: null } } },
+      {}
+    );
+    expect(parseParamMapping(merged).manualByMode).toEqual({ "5|size-width": { I2I: null } });
   });
 });
 
