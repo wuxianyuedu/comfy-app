@@ -15,7 +15,14 @@ vi.mock("../app-settings", () => ({
   getExitPolicy: vi.fn().mockReturnValue({ exitKillComfyui: true }),
   getSettingsSync: vi.fn(),
 }));
-vi.mock("./client", () => ({ resolveComfyBase: vi.fn().mockRejectedValue(new Error("not running")) }));
+/* probeComfyBase 是「此刻哪个地址应答」的唯一判据，故在本文件里做成可编排的
+ * 探针：默认「都不可达」，需要时由用例改成「某个端口应答」。真去 mock fetch
+ * 没用——本模块已被整体 mock，探针必须跟着换成桩。 */
+vi.mock("./client", () => ({
+  probeComfyBase: vi.fn().mockResolvedValue(null),
+  resolveComfyBase: vi.fn().mockRejectedValue(new Error("not running")),
+  resetComfyBase: vi.fn(),
+}));
 vi.mock("./launch-path", () => ({
   resolveComfyLaunchPlan: vi.fn().mockReturnValue({
     cmd: "python",
@@ -28,6 +35,7 @@ vi.mock("./desktop-instance", () => ({ resolveEffectiveLaunch: vi.fn().mockResol
 vi.mock("./proc-detect", () => ({
   findPidForMainPy: vi.fn().mockResolvedValue(null),
   findPidListeningPort: vi.fn().mockResolvedValue(null),
+  findPidForMainPyDetailed: vi.fn().mockResolvedValue({ pid: null, failed: false }),
 }));
 vi.mock("../process-launch", () => ({
   spawnManaged: vi.fn(),
@@ -46,7 +54,7 @@ import {
   clearComfyManualStop,
   clearComfyAutoStartFailure,
 } from "./lifecycle";
-import { findPidForMainPy } from "./proc-detect";
+import { findPidForMainPy, findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { getSettingsSync } from "../app-settings";
 
 const autoStartSettings = {
@@ -217,6 +225,35 @@ describe("getComfyUiStatus — 状态三态组合", () => {
     // 收尾后单飞锁释放：下一次调用能重新开始（不会永久卡在「启动中」）。
     expect((await getComfyUiStatus()).starting).toBe(false);
     vi.mocked(getExitPolicy).mockReturnValue({ exitKillComfyui: true } as never);
+  });
+
+  /* ISSUE #344：ComfyUI 早就启动了，设置页却一直显示「启动中」。
+   * 两条判据缺陷叠加：① `resolveComfyBase` 在配置了路径、进程表又查不到
+   * `main.py`（Comfy Desktop 的实例由 standalone-env 启动）时抛错，
+   * `probeComfyUi` 连一次 HTTP 都没发出去；② 「进程在、端口未绑定」的快照
+   * 被缓存住，端口随后出现也不会重新查事实。 */
+  it("进程表查不到 main.py、但配置端口上有实例应答 → 报「运行中」而不是「启动中」", async () => {
+    const { getComfyUiStatus } = await import("./lifecycle");
+    const { resetComfyRuntimeSnapshot } = await import("./status");
+    const { resetComfyBase } = await import("./client");
+    resetComfyBase();
+    resetComfyRuntimeSnapshot();
+    // Desktop 实例：命令行里没有 main.py，进程表命中不了。
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: null, failed: false });
+    vi.mocked(findPidListeningPort).mockResolvedValue(null);
+    // 关键：配置端口上实例是真的在应答（旧实现会因进程表落空而根本不去探）。
+    const { probeComfyBase } = await import("./client");
+    vi.mocked(probeComfyBase).mockResolvedValue("http://127.0.0.1:8188");
+
+    const s = await getComfyUiStatus();
+    expect(vi.mocked(probeComfyBase)).toHaveBeenCalled();
+    expect(s.up).toBe(true);
+    expect(s.base).toBe("http://127.0.0.1:8188");
+    expect(s.starting).toBe(false);
+
+    vi.mocked(probeComfyBase).mockResolvedValue(null);
+    resetComfyBase();
+    resetComfyRuntimeSnapshot();
   });
 
   it("手动关闭后 stopping 在窗口内为 true、窗口过期后回 false", async () => {
