@@ -62,7 +62,13 @@ export interface LogEntry {
 export type LogFilter = LogLevel | "all";
 
 /** 面板可筛选的来源（`all` = 全部）。 */
-export type LogOriginFilter = LogEntry["origin"] | "all";
+export type LogOriginFilter = NonNullable<LogEntry["origin"]> | "all";
+
+/** 单一级别的计数表（`all` = 该范围内全部级别）。 */
+export type LogLevelCounts = Record<LogLevel | "all", number>;
+
+/** 来源 × 级别的二维计数表（`all` 键为全部来源汇总，见 computeOriginCounts）。 */
+export type LogOriginCounts = Record<LogOriginFilter, LogLevelCounts>;
 
 let entryId = 0;
 function nextId() {
@@ -558,18 +564,57 @@ function formatForClipboard(entries: LogEntry[]): string {
     .join("\n");
 }
 
-function computeCounts(logs: LogEntry[]): Record<LogLevel | "all", number> {
-  const base: Record<LogLevel | "all", number> = {
-    all: logs.length,
-    debug: 0,
-    info: 0,
-    warn: 0,
-    error: 0,
-  };
+function zeroCounts(): LogLevelCounts {
+  return { all: 0, debug: 0, info: 0, warn: 0, error: 0 };
+}
+
+function computeCounts(logs: LogEntry[]): LogLevelCounts {
+  const base = zeroCounts();
+  base.all = logs.length;
   for (const entry of logs) {
     base[entry.level]++;
   }
   return base;
+}
+
+/**
+ * 来源 × 级别的二维计数表（`all` = 全部来源）。
+ *
+ * 面板此前**只有一个总数**：级别筛选行上的数字是全部来源的合计，来源下拉里
+ * 只有名字没有数。于是「看着警告有 974 条，切到启动器却什么都没有」——
+ * 那 974 条全在别处，而界面没有任何地方能看出来（ISSUE #360 的第二张图）。
+ *
+ * 契约：
+ * - **key 是筛选值本身**：`"all"` + 四个级别，与 `LogFilter` 一一对应，视图直接
+ *   `countsByOrigin[origin][level]` 取值，不需要在视图里再换算；
+ * - **逐来源独立**：`countsByOrigin.launcher.warn` 只数 `origin === "launcher"`
+ *   的行，`countsByOrigin.all` 才是全量；
+ * - **不带搜索词**：与级别行的既有口径一致（搜索是「找具体内容」的独立动作，
+ *   把它并进计数会让用户在输入框里每敲一个字母就看到数字跳动）。
+ */
+export function computeOriginCounts(
+  logs: LogEntry[],
+): LogOriginCounts {
+  const table: LogOriginCounts = {
+    all: zeroCounts(),
+    dev: zeroCounts(),
+    launcher: zeroCounts(),
+    app: zeroCounts(),
+    "app-runtime": zeroCounts(),
+  };
+
+  for (const entry of logs) {
+    table.all.all += 1;
+    table.all[entry.level] += 1;
+    /* 无 origin 的行（console 拦截 / Tauri 事件 / 全局错误）只计入 all——
+     * 它们本来就不属于任何文件来源，来源下拉里的「全部来源」才是它们的家。 */
+    if (!entry.origin) continue;
+    const bucket = table[entry.origin];
+    if (!bucket) continue;
+    bucket.all += 1;
+    bucket[entry.level] += 1;
+  }
+  return table;
 }
 
 function computeFiltered(
@@ -610,7 +655,12 @@ export interface LogStoreState {
   origin: LogOriginFilter;
   search: string;
   isOpen: boolean;
-  counts: Record<LogLevel | "all", number>;
+  counts: LogLevelCounts;
+  /**
+   * 每个来源各自的级别计数（含 `all` 汇总）：面板在级别按钮与来源下拉上各显示
+   * 一份，用户不必先切来源才知道那边有几个警告（见 computeOriginCounts）。
+   */
+  countsByOrigin: LogOriginCounts;
   /** 翻页：当前页（1 起，倒序查看，1 = 最新一页）与每页条数。 */
   page: number;
   pageSize: number;
@@ -675,6 +725,7 @@ function derive(
   return {
     logs,
     counts: computeCounts(logs),
+    countsByOrigin: computeOriginCounts(logs),
     filteredLogs: computeFiltered(logs, filter, search, origin),
     revision,
   };
@@ -688,6 +739,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   search: "",
   isOpen: false,
   counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
+  countsByOrigin: computeOriginCounts([]),
   page: 1,
   pageSize: LOG_PAGE_SIZE,
   sessionStart: null,
