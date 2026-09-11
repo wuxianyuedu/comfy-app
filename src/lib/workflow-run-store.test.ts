@@ -8,6 +8,7 @@ import {
   latestActiveWorkflowRun,
   latestRunForWorkflow,
   listWorkflowRuns,
+  failWorkflowRun,
   patchWorkflowRun,
   registerWorkflowRun,
 } from "./workflow-run-store";
@@ -123,6 +124,46 @@ describe("workflow-run-store", () => {
     const s3 = getWorkflowRunStoreSnapshot();
     expect(s3).not.toBe(s1);
     expect(s3.activeTaskId).toBe("a");
+  });
+
+  it("failWorkflowRun 同时写横幅原因与一条 error 日志行（ISSUE #378）", () => {
+    registerWorkflowRun({
+      taskId: "t1",
+      workflowId: "wf1",
+      workflowName: "n",
+      taskType: "t",
+      startedAt: 1,
+    });
+    appendWorkflowRunLog("t1", { t: 100, level: "info", msg: "开始执行" });
+    expect(appendWorkflowRunLog("t1", { t: 100, level: "info", msg: "开始执行" })).toHaveLength(1);
+
+    failWorkflowRun("t1", "未找到生成结果");
+
+    const meta = getWorkflowRun("t1");
+    expect(meta?.status).toBe("failed");
+    expect(meta?.errorMessage).toBe("未找到生成结果");
+    const logs = meta?.logs ?? [];
+    const last = logs[logs.length - 1];
+    expect(last?.level).toBe("error");
+    expect(last?.msg).toContain("未找到生成结果");
+  });
+
+  it("failWorkflowRun 末行已是同因错误时不重复追加", () => {
+    registerWorkflowRun({
+      taskId: "t1",
+      workflowId: "wf1",
+      workflowName: "n",
+      taskType: "t",
+      startedAt: 1,
+    });
+    appendWorkflowRunLog("t1", { t: 100, level: "error", msg: "✗ 生成失败：未找到生成结果" });
+    failWorkflowRun("t1", "未找到生成结果");
+    expect(getWorkflowRun("t1")?.logs).toHaveLength(1);
+  });
+
+  it("failWorkflowRun 对未登记的 taskId 静默无操作", () => {
+    expect(() => failWorkflowRun("missing", "boom")).not.toThrow();
+    expect(getWorkflowRun("missing")).toBeNull();
   });
 
   it("localStorage 写穿：清空后重 hydrate 不再恢复（clear 移除存储）", () => {

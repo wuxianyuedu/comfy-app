@@ -22,7 +22,7 @@ import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
 import { friendlyError } from "./executor-errors";
 import { claimSettle, fetchHistoryEntry, type ComfyHistoryEntry } from "./executor-ws";
 import { processQueue } from "./executor-scheduler";
-import { state, log, persistLogs } from "./runner-state";
+import { state, log, persistLogs, claimFinalize } from "./runner-state";
 import { createAppRuntimeLogger } from "@/lib/app-runtime-log";
 
 const taskRuntimeLog = createAppRuntimeLogger("task");
@@ -234,6 +234,15 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
         }
       : undefined;
 
+  /* 与 finalizeFailure 共用同一把「DB 终态一次写入」锁：若 reaper 已把
+   *  这条任务判过终态，就不再覆盖，避免「执行日志说成功、应用日志说失败」
+   *  这类矛盾（反之亦然）。 */
+  if (!claimFinalize(taskId)) {
+    log(taskId, "warn", "跳过重复收口：终态已由其它路径落库（本次结果：成功）");
+    s.active = Math.max(0, s.active - 1);
+    void processQueue();
+    return;
+  }
   await taskRepository.finalizeSuccess(taskId, {
     resultImages: saved,
     params: taskParamsPatched,
@@ -332,6 +341,17 @@ export async function finalizeFailure(
 ) {
   const s = state();
   const friendly = friendlyError(error) || "任务失败";
+  /* 一次性落库锁：同一任务可能被 executor（complete/fail 的异常分支）、
+   *  看门狗、reaper 多条路径同时尝试收口。首个写入者落库 + 写日志，其余
+   *  直接跳过——否则后写入的原因会覆盖先写入的，SSE（执行日志）与
+   *  DB / 应用日志就会显示两个互相矛盾的失败原因。 */
+  if (!claimFinalize(taskId)) {
+    log(taskId, "warn", `跳过重复收口：终态已由其它路径落库（本次原因：${friendly}）`);
+    /* 仍需释放活跃槽位并推进队列，否则重复收口会把队列卡死。 */
+    s.active = Math.max(0, s.active - 1);
+    void processQueue();
+    return;
+  }
   // emit total elapsed time on the failure
   // branch too, so the user knows "this task actually ran for Xs
   // before failing" rather than "it died immediately".
@@ -353,6 +373,10 @@ export async function finalizeFailure(
   // a re-enqueue of the same taskId starts from a clean slate.
   if (startedAt) s.startedAt.delete(taskId);
   s.lastNodeByTask.delete(taskId);
+  /* executedWorkflow 只在 complete() 成功分支清过，失败分支一直留着——
+   * 既泄漏内存，又让「已执行过就永远算被本进程认领」把 reaper 的孤儿回收
+   * 永久挡住。失败收口同样清掉。 */
+  s.executedWorkflow.delete(taskId);
   /* previously finalizeFailure only emitted
    *  an `error` event.  The `error` event closes the SSE stream (see
    *  /api/tasks/[id]/stream/route.ts:54-59) so a `state` patch

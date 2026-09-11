@@ -21,10 +21,17 @@ vi.mock("~/server/lib/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn() 
 
 import { isTaskClaimedInProcess } from "./reaper";
 
-function fakeState(overrides: Partial<{ queue: Job[]; executedWorkflow: Map<string, unknown> }>) {
+function fakeState(
+  overrides: Partial<{
+    queue: Job[];
+    executedWorkflow: Map<string, unknown>;
+    settled: Set<string>;
+  }>
+) {
   return {
     queue: overrides.queue ?? [],
     executedWorkflow: overrides.executedWorkflow ?? new Map<string, unknown>(),
+    settled: overrides.settled ?? new Set<string>(),
   };
 }
 

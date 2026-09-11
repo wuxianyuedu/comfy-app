@@ -82,6 +82,7 @@ function resetRunnerState() {
   s.promptByTask.clear();
   s.startedAt.clear();
   s.settled.clear();
+  s.finalized.clear();
   s.wsWaitLogged.clear();
   s.lastNodeByTask.clear();
   vi.mocked(cliProcs).clear();
@@ -186,6 +187,38 @@ describe("QUEUED reaper 判决矩阵", () => {
 
     await reaper.reapStaleQueuedTasks!();
 
+    expect(repoMock("finalizeFailure")).toHaveBeenCalledTimes(1);
+  });
+
+  it("终态已被本进程认领（s.settled）→ 跳过回收，避免二次写终态（ISSUE #378）", async () => {
+    const reaper = await loadReaper();
+    repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-settled")]);
+    /* 模拟 executor 已抢先收口：任务不在 queue / cliProcs / executedWorkflow，
+     *  但终态已被认领（例如 complete() 正在收尾）。 */
+    state().settled.add("t-settled");
+
+    await reaper.reapStaleQueuedTasks!();
+
+    /* 认领保护命中 → 既不写库也不推「卡在队列」原因（该原因若推出去，就会和
+     *  executor 稍后写入的真实原因在「执行日志 / 应用日志」两处互相矛盾）。 */
+    expect(repoMock("finalizeFailure")).not.toHaveBeenCalled();
+    expect(logsOf("t-settled").some((m) => m.includes("卡在队列"))).toBe(false);
+    expect(logsOf("t-settled").some((m) => m.includes("仍在当前进程的执行链中"))).toBe(true);
+  });
+
+  it("真孤儿被回收后 s.finalized 落锁 → 同进程再次 tick 不再重复写库", async () => {
+    const reaper = await loadReaper();
+    repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-once")]);
+
+    await reaper.reapStaleQueuedTasks!();
+    expect(repoMock("finalizeFailure")).toHaveBeenCalledTimes(1);
+    expect(state().finalized.has("t-once")).toBe(true);
+
+    /* 清掉 in-memory 认领痕迹以外的状态，让第二 tick 仍能「看见」这条
+     *  陈旧 DB 行；此时 finalized 锁应当挡住第二次落库。 */
+    state().settled.clear();
+    state().logs.clear();
+    await reaper.reapStaleQueuedTasks!();
     expect(repoMock("finalizeFailure")).toHaveBeenCalledTimes(1);
   });
 
@@ -301,6 +334,18 @@ describe("RUNNING reaper 判决矩阵", () => {
     await reaper.reapStaleRunningTasks!();
 
     expect(repoMock("finalizeFromReaper")).not.toHaveBeenCalled();
+  });
+
+  it("终态已落库（s.finalized）→ RUNNING 对账跳过，不覆盖已有失败原因", async () => {
+    const reaper = await loadReaper();
+    repoMock("listStaleRunning").mockResolvedValue([runningRow("t-done", "p-9")]);
+    mockFetchOnce({ history: json({ "p-9": { status: { completed: true } } }) });
+    state().finalized.add("t-done");
+
+    await reaper.reapStaleRunningTasks!();
+
+    expect(repoMock("finalizeFromReaper")).not.toHaveBeenCalled();
+    expect(logsOf("t-done").some((m) => m.includes("终态已落库"))).toBe(true);
   });
 
   it("没有行需要处理时不去探测 ComfyUI（不做无谓的网络请求）", async () => {

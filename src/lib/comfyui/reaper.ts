@@ -13,7 +13,7 @@ import { taskRepository } from "../core/repository";
 import { resolveComfyBase } from "./client";
 import { cliProcs } from "./executor-cli";
 import { isComfyStarting } from "./lifecycle";
-import { state, log, persistLogs, type RunnerState } from "./runner-state";
+import { state, log, persistLogs, claimFinalize, type RunnerState } from "./runner-state";
 import { logger } from "~/server/lib/logger";
 
 /* ── DB-side QUEUED reaper ─────────────────────────
@@ -104,15 +104,42 @@ rg[REAPER_GLOBAL] = reaperState;
  * these set.  Mirrors the RUNNING reaper's `promptToTask` guard.
  */
 export function isTaskClaimedInProcess(
-  s: Pick<RunnerState, "queue" | "executedWorkflow">,
+  s: Pick<RunnerState, "queue" | "executedWorkflow" | "settled">,
   hasCliProc: (taskId: string) => boolean,
   taskId: string
 ): boolean {
   return (
     s.queue.some((job) => job.taskId === taskId) ||
     hasCliProc(taskId) ||
-    s.executedWorkflow.has(taskId)
+    s.executedWorkflow.has(taskId) ||
+    /* `settled` 是 reaper 与正常执行路径共享的「终态已认领」集合
+     *  (@see claimSettle)。命中的任务已被本进程的 executor/看门狗收口，
+     *  或已被上一次 reaper tick 收口——两种情况下都不该再被回收，否则
+     *  同一个任务会被写两次终态（一条原因进 SSE、另一条进 DB / 应用日志），
+     *  用户在「执行日志」与「应用日志」看到互相矛盾的两个失败原因。 */
+    s.settled.has(taskId)
   );
+}
+
+/* reaper 与正常执行路径（executor / 看门狗）必须共享同一套「终态认领」语义。
+ *  executor 侧用 `claimSettle()`（s.settled + 清看门狗定时器）。这里刻意不再
+ *  从 executor-ws 反向 import —— 那会给 enqueue → reaper → executor-ws 这条
+ *  既有单向链加上回边，纯粹为了一个 3 行的判断不值得。语义逐字对齐：
+ *  已在 settled → 认领失败；否则加入 settled 并清掉看门狗定时器。
+ *
+ *  为什么必须共享：reaper 判 FAILED 与 executor 判 SUCCEEDED/FAILED 是两个
+ *  独立写入者。若双方对同一 taskId 各写一次，SSE 订阅者先收到 reaper 的原因
+ *  （「任务卡在队列超过 Ns…」），随后 DB / 应用日志又被 executor 的原因覆盖
+ *  （「未找到生成结果」），用户就会看到「执行日志」与「应用日志」互相矛盾——
+ *  这正是本次要修的跨次运行失败原因不一致。加锁后谁先认领谁赢，两处一致。 */
+function claimTerminal(taskId: string): boolean {
+  const s = state();
+  if (s.settled.has(taskId)) return false;
+  s.settled.add(taskId);
+  const t = s.timers.get(taskId);
+  if (t) clearTimeout(t);
+  s.timers.delete(taskId);
+  return true;
 }
 
 /** 导出以便判决矩阵被直接测试（ISSUE #315）：两条 sweeper 的规则是本模块
@@ -143,6 +170,19 @@ export async function reapStaleQueuedTasks(): Promise<void> {
          * 启动可能需要 30-120s，任务会在 WS 连上后正常出队执行。 */
         if (isComfyStarting()) {
           log(t.id, "warn", `任务在队列中等待 ComfyUI 自动启动（已 ${ageSec}s）——启动完成后自动执行`);
+          continue;
+        }
+        /* 先抢终态：executor 若同时也在收口这个任务，谁先认领谁赢。
+         *  抢不到说明本进程（或上一次 tick）已经判过终态——直接跳过，
+         *  避免同一任务写出两个互相矛盾的失败原因。 */
+        if (!claimTerminal(t.id)) {
+          log(t.id, "warn", `reaper 跳过：任务终态已被本进程认领（已 ${ageSec}s）`);
+          continue;
+        }
+        /* 与 executor 共享「DB 终态一次写入」锁：executor 已经落库过就
+         *  不再写第二条原因，保证执行日志 / 应用日志 / DB 三者一致。 */
+        if (!claimFinalize(t.id)) {
+          log(t.id, "warn", `reaper 跳过：任务终态已落库（已 ${ageSec}s）`);
           continue;
         }
         const reason = `任务卡在队列超过 ${ageSec}s（dev server 重启后 in-memory 队列清空，无人 re-claim）— 请重新执行`;
@@ -252,6 +292,16 @@ export async function reapStaleRunningTasks(): Promise<void> {
         }
         if (verdict === "unknown") {
           log(t.id, "warn", `reaper(running): ${reason}`);
+          continue;
+        }
+        /* 与 QUEUED reaper 同一把锁：执行路径若已认领终态就跳过，
+         *  保证「执行日志」与「应用日志 / DB」里的失败原因出自同一次收口。 */
+        if (!claimTerminal(t.id)) {
+          log(t.id, "warn", "reaper(running) 跳过：任务终态已被本进程认领");
+          continue;
+        }
+        if (!claimFinalize(t.id)) {
+          log(t.id, "warn", "reaper(running) 跳过：任务终态已落库");
           continue;
         }
         const finalStatus = verdict === "succeeded" ? "SUCCEEDED" : "FAILED";
