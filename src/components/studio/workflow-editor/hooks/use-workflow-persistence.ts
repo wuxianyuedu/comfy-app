@@ -5,6 +5,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { Node } from "@xyflow/react";
 import type { WorkflowDetail, WorkflowIOParam } from "@/components/studio/workflow-types";
 import { NODE_TITLE_H, extractNoteTitle } from "@/components/studio/workflow-utils";
+import { MODE_KEY_PREFIX } from "@/lib/workflow-param-mapping";
 import { useToast } from "../../ToastProvider";
 import type { WorkflowSaver } from "./use-workflow-save";
 
@@ -14,7 +15,7 @@ export interface WorkflowPersistenceArgs {
   setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
   scopeDetail: WorkflowDetail | null;
   setNodes: Dispatch<SetStateAction<Node[]>>;
-  paramMap: Record<string, string>;
+  paramMap: Record<string, unknown>;
   workflowIO: Record<string, WorkflowIOParam>;
   fitToMiddle: () => void;
   savePatch: WorkflowSaver;
@@ -151,7 +152,9 @@ export function useWorkflowPersistence({
     requestAnimationFrame(() => requestAnimationFrame(() => fitToMiddle()));
   }, [detail, setDetail, workflowId, scopeDetail, fitToMiddle, savePatch]);
 
-  /* Re-sync nodes when paramMap changes (update assignedRole badges) */
+  /* Re-sync nodes when paramMap changes (update assignedRole badges). 取角色时
+   *  跳过 `mode:` 前缀的按模式连线表 —— 它的值不是节点 id，命中会把整张模式
+   *  表当成某个节点的角色名。 */
   useEffect(() => {
     if (!detail) return;
     setNodes((nds) =>
@@ -160,7 +163,9 @@ export function useWorkflowPersistence({
         data: {
           ...node.data,
           assignedRole:
-            Object.entries(paramMap).find(([, nid]) => nid === node.data.nodeId)?.[0] ?? null,
+            Object.entries(paramMap).find(
+              ([key, value]) => value === node.data.nodeId && !key.startsWith(MODE_KEY_PREFIX)
+            )?.[0] ?? null,
         },
       }))
     );

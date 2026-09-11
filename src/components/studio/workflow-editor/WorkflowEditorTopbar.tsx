@@ -29,6 +29,12 @@ export interface WorkflowEditorTopBarProps {
   forceReloadDetail: () => void;
   setViewJsonOpen: React.Dispatch<React.SetStateAction<boolean>>;
   resetLayout: () => void;
+  /** 对外的「恢复默认参数映射」：清掉当前模式下作者画过的全部连线。 */
+  resetParamWiring: () => void;
+  /** 当前模式下是否有作者画过的连线（没有则按钮禁用）。 */
+  hasParamWiring: boolean;
+  /** 当前模式（无模式 = 禁止连线，按钮禁用并说明原因）。 */
+  wiringMode: string | null;
   handleSave: () => void;
   saving: boolean;
   error: string;
@@ -45,6 +51,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   forceReloadDetail,
   setViewJsonOpen,
   resetLayout,
+  resetParamWiring,
+  hasParamWiring,
+  wiringMode,
   handleSave,
   saving,
   error,
@@ -320,6 +329,21 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             title="把所有节点恢复到进入工作流时的原始位置（撤销全部手动拖动）"
           >
             重置布局
+          </button>
+          <button
+            type="button"
+            onClick={resetParamWiring}
+            disabled={!wiringMode || !hasParamWiring}
+            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-gray-200 transition-colors hover:bg-white/10 disabled:opacity-40"
+            title={
+              !wiringMode
+                ? "该工作流未声明模式，参数映射的连线必须归属一个模式"
+                : hasParamWiring
+                  ? "把「对外参数 → 节点端口」的连线全部恢复成自动探测的默认连线"
+                  : "当前模式下没有改过的连线"
+            }
+          >
+            ↺ 恢复默认映射
           </button>
           <button
             type="button"

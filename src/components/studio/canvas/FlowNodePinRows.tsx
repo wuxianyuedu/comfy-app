@@ -74,7 +74,9 @@ export function FlowNodePinRows({
                     type="target"
                     position={Position.Left}
                     id={inName}
-                    isConnectable={false}
+                    /* 可连接：编辑器里「对外参数节点」的线要落到这一行（端口）。
+                     * 连上 / 断开都由映射层负责，工作流图本身不因此改动。 */
+                    isConnectable
                     className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
                     style={{
                       left: 5,

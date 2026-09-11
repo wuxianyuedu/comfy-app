@@ -31,7 +31,7 @@ export interface WorkflowDetailLoaderArgs {
   setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
   setLoading: Dispatch<SetStateAction<boolean>>;
   setError: Dispatch<SetStateAction<string>>;
-  setParamMap: Dispatch<SetStateAction<Record<string, string>>>;
+  setParamMap: Dispatch<SetStateAction<Record<string, unknown>>>;
   setWorkflowIO: (
     updater:
       | Record<string, WorkflowIOParam>

@@ -9,6 +9,7 @@ import { renderMarkdown } from "@/lib/comfyui/markdown";
 import { WorkflowEdge } from "@/components/studio/canvas/WorkflowEdge";
 import { FlowNode } from "../canvas/WorkflowNode";
 import { WorkflowSubgraphNode } from "../canvas/WorkflowSubgraphNode";
+import { WorkflowParamNode } from "./WorkflowParamNode";
 import type { WorkflowGroupData, WorkflowIoPortData, WorkflowNoteData } from "../workflow-types";
 import { NODE_TITLE_H, lightenHex, hexToRgba, mixHex } from "../workflow-utils";
 
@@ -294,7 +295,7 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: {
  * (e.g. "正面提示词") and a widget name (English, e.g. "text").  This
  * component renders them as a compact form-like node so the user can see
  * what's inside without expanding the subgraph. */
-export const workflowNodeTypes = { wfNode: FlowNode, wfNote: WorkflowNoteNode, wfGroup: WorkflowGroupNode, wfSubgraph: WorkflowSubgraphNode, wfIoPort: WorkflowIoPortNode };
+export const workflowNodeTypes = { wfNode: FlowNode, wfNote: WorkflowNoteNode, wfGroup: WorkflowGroupNode, wfSubgraph: WorkflowSubgraphNode, wfIoPort: WorkflowIoPortNode, wfParam: WorkflowParamNode };
 // Custom edge renderer — rounder bezier (curvature 0.85) + ComfyUI-style
 // white hub dot at the curve midpoint.  Defined at module scope so React
 // Flow doesn't re-register edgeTypes on every render.
