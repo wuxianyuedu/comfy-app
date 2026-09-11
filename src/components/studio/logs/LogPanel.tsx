@@ -42,6 +42,10 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { useLogPanel } from "./LogProvider";
+import {
+  LOG_PANEL_OVERLAY_Z_CLASS,
+  LOG_PANEL_POPUP_Z_CLASS,
+} from "./log-panel-layers";
 import { overlayClass } from "~/lib/full-screen-layer";
 import {
   LEVEL_BADGE_STYLES,
@@ -385,9 +389,21 @@ function OriginSelect({
           {(selected) => ORIGIN_TEXT[asOriginFilter(selected)]}
         </SelectValue>
       </SelectTrigger>
+      {/* 弹层必须盖在日志面板之上：面板遮罩是 `z-99`（见本文件底部 overlayClass
+          的 z 参数），而 Select 的定位层默认只有 `z-50`——弹层照常画出来，却整块
+          压在遮罩底下**收不到指针事件**。用户读到的现象就是「点了下拉看不到菜单」
+          与「没法切换来源」，来源筛选因此形同失效（ISSUE #262）。
+          层级给在定位层（positionerClassName）而不是 Popup：Popup 的 z 只在
+          定位层建立的 stacking context 内部比较，改它越不出这一层。 */}
       {/* `w-(--anchor-width)` 会把弹层压到扳机那么宽，四列数字直接挤成一团；
-          这里放开宽度，让弹层按内容（四个定宽列）撑开。 */}
-      <SelectContent className="w-auto min-w-max rounded-lg border border-white/8 bg-[#15141f] p-0 text-gray-300">
+          这里放开宽度，让弹层按内容（四个定宽列）撑开。
+          注意 `w-auto` / `min-w-max` 的**级联顺序**：两者都比 `w-(--anchor-width)`
+          后出现，因此最终生效的是内容宽度（这正是这里要的效果）；反过来若把
+          `w-auto` 去掉，弹层会被压到扳机的 90px，四列数字挤成一团。 */}
+      <SelectContent
+        positionerClassName={LOG_PANEL_POPUP_Z_CLASS}
+        className="w-auto min-w-max rounded-lg border border-white/8 bg-[#15141f] p-0 text-gray-300"
+      >
         {/* 列标题：把「数字是什么」写在一次，行内就不必每格重复「信息 / 警告」 */}
         <div
           aria-hidden
@@ -549,7 +565,12 @@ export function LogPanel() {
   if (!isOpen) return null;
 
   return (
-    <div className={overlayClass("modal", "z-99 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm")}>
+    <div
+      className={overlayClass(
+        "modal",
+        `${LOG_PANEL_OVERLAY_Z_CLASS} flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm`,
+      )}
+    >
       <div
         className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-6xl"} flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60`}
       >
@@ -560,28 +581,29 @@ export function LogPanel() {
             <span className="text-[15px] font-semibold text-gray-100">
               应用日志
             </span>
-            {/* 标题旁的常驻汇总：现在看的是哪个来源、共多少条、其中多少警告与
-                错误。此前只显示错误数，警告再多也看不见——正是用户反馈的
-                「看着警告很多、切过去却是空的」（ISSUE #360）。
-                文案用「<来源> · <条数>」而不是把标签也逐项写全：同一句话在
-                左边筛选行里已经按列排好，这里重复一遍只会白占一条横向空间
-                （标题行本来就挤），剩下的信息放在 title 里备用。 */}
-            <span
-              className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-gray-400"
-              title={`当前来源「${ORIGIN_TEXT[origin ?? "all"]}」共 ${originCounts.all} 条 · 信息 ${originCounts.info} · 警告 ${originCounts.warn} · 错误 ${originCounts.error}`}
-            >
-              {`${ORIGIN_TEXT[origin ?? "all"]} · ${originCounts.all}`}
+            {/* 不再在这里复述「来源 · 条数 · 警告 · 错误」：同一组数字已经在右边
+                的来源下拉（当前来源）与左边的级别按钮上各有一份，第三份既不增加
+                信息量，又把本该留给标题的横向空间挤掉——用户反馈的「红框中两部分
+                重复了」就是这个（ISSUE #262）。
+                这里只留在**下面几处都看不见**时才需要的那一条：当前来源下的
+                警告 / 错误里有问题时给个徽标提醒，全为零则完全不渲染。 */}
+            {originCounts.warn > 0 || originCounts.error > 0 ? (
               <span
-                className={`tabular-nums ${originCounts.warn > 0 ? "text-amber-300" : "text-gray-600"}`}
+                className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-gray-400"
+                title={`当前来源「${ORIGIN_TEXT[origin ?? "all"]}」共 ${originCounts.all} 条 · 信息 ${originCounts.info} · 警告 ${originCounts.warn} · 错误 ${originCounts.error}`}
               >
-                {` · 警告 ${originCounts.warn}`}
+                <span
+                  className={`tabular-nums ${originCounts.warn > 0 ? "text-amber-300" : "text-gray-600"}`}
+                >
+                  {`警告 ${originCounts.warn}`}
+                </span>
+                <span
+                  className={`tabular-nums ${originCounts.error > 0 ? "text-rose-300" : "text-gray-600"}`}
+                >
+                  {` · 错误 ${originCounts.error}`}
+                </span>
               </span>
-              <span
-                className={`tabular-nums ${originCounts.error > 0 ? "text-rose-300" : "text-gray-600"}`}
-              >
-                {` · 错误 ${originCounts.error}`}
-              </span>
-            </span>
+            ) : null}
           </div>
 
           {/* Level filters：数字是**当前来源**下的计数，与右边来源下拉同口径。
