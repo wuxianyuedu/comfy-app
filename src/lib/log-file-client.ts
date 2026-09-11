@@ -3,12 +3,15 @@
  * 此前这段 fetch 直接写在 LogProvider.tsx（视图）里——它是该文件唯一的裸 fetch，
  * 收口到这里后视图只关心「每次轮询读到的内容与游标」。
  *
- * 约定：返回的 offset 是服务端累计字节数，客户端用它做增量拉取游标。
+ * 约定：返回的 `size` 是文件当前总字节数，客户端用它做增量拉取游标；
+ * `offset` 是**本次返回内容的起点**（服务端在需要重读整文件时会把它回落到 0）。
  */
 
 export interface FileLogSlice {
   content: string;
+  /** 文件当前总字节数（下一轮增量读取的游标）。 */
   size: number;
+  /** 本次返回内容在文件中的起点。 */
   offset: number;
   /**
    * 本次运行的开始时刻（毫秒）；仅追加写来源（app-runtime / 常驻服务）返回，
@@ -28,11 +31,7 @@ export type LogSourceKind =
 /** source 参数 → /api/logs/current 的 source 查询值。 */
 function sourceQuery(source: LogSourceKind): string {
   if (source === "dev") return "dev-launcher";
-  if (source === "comfyui-runtime") return "comfyui-runtime";
-  if (source === "drizzle-studio-runtime") return "drizzle-studio-runtime";
-  if (source === "ollama-runtime") return "ollama-runtime";
-  if (source === "app-runtime") return "app-runtime";
-  return "launcher";
+  return source;
 }
 
 /** 拉取某日志文件从 offset 起的新增内容；服务端未就绪 / 文件不存在时返回 null。 */
@@ -45,6 +44,29 @@ export async function fetchFileLogSlice(
   );
   if (!res.ok) return null;
   return (await res.json()) as FileLogSlice;
+}
+
+/** 列出 log/ 下的归档日志文件（供「历史日志」选择）。 */
+export interface LogFileInfo {
+  name: string;
+  relativePath: string;
+  mtimeMs: number;
+  size: number;
+}
+
+export async function fetchLogFileList(): Promise<LogFileInfo[]> {
+  const res = await fetch("/api/logs/list");
+  if (!res.ok) return [];
+  const data = (await res.json()) as { files?: LogFileInfo[] };
+  return data.files ?? [];
+}
+
+/** 读取某个归档日志文件的全量内容（路径由 /api/logs/list 给出，服务端做越界校验）。 */
+export async function fetchLogFileContent(relativePath: string): Promise<string | null> {
+  const res = await fetch(`/api/logs/history?file=${encodeURIComponent(relativePath)}`);
+  if (!res.ok) return null;
+  const data = (await res.json()) as { content?: string };
+  return data.content ?? null;
 }
 
 /* ── 应用运行日志写入（客户端 → 服务端）──────────────────────────────

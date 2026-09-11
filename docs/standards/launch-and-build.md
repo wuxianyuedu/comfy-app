@@ -168,7 +168,7 @@ log/
 | `run/launch-status.json` | python 启动器 | 结构化启动进度，splash 页展示；launcher 退出 30s 后自删 | — |
 | 启动页「查看日志」面板 | splash 前端轮询 `get_launch_log` | dev-launcher.log（经 sentinel 定位）+ dev-launcher-stderr.log + log/shell/shell.log（release）的尾部（去 ANSI、限长），启动页实时看执行到哪一步 | — |
 | `.next/dev/logs/next-development.log` | Next dev server | dev server 内部日志（含锁冲突提示） | Next 自管 |
-| `log/services/comfyui-runtime.log` | Next server（src/lib/comfyui/lifecycle.ts） | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间；每次启动/停止前会写一条 **ANSI 亮色会话横幅**（`▶`/`■` box 分隔线），使多次启动累积的日志能一眼分清会话边界；设置页「创作后端 → 启动日志」面板经 `GET /api/logs/current?source=comfyui-runtime` 实时跟随。手动启动不设硬超时（冷加载慢不误报，可手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长） | 追加不轮转；接口首次打开只回尾部 128KB |
+| `log/services/comfyui-runtime.log` | Next server（src/lib/comfyui/lifecycle.ts） | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间；每次启动/停止前会写一条 **ANSI 亮色会话横幅**（`▶`/`■` box 分隔线），使多次启动累积的日志能一眼分清会话边界；设置页「创作后端 → 启动日志」面板经 `GET /api/logs/current?source=comfyui-runtime` 实时跟随。手动启动不设硬超时（冷加载慢不误报，可手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长） | 追加不轮转；接口首次打开只回尾部窗口（1MB，按行对齐，见 §4.1） |
 | `log/services/comfyui-keepalive-<ts>.out/.err.log` | dev-launcher 保活中介（Start-Process 重定向） | 保活模式下 ComfyUI 的完整原始输出，等待循环增量跟随进 runtime.log | 按次命名，不自动清理 |
 | `log/services/drizzle-studio-runtime.log` `log/services/ollama-runtime.log` | Next server（对应 lifecycle / api 路由） | Drizzle Studio / Ollama 拉起与子进程输出，设置页日志面板跟随（同 comfyui-runtime 模式） | 追加不轮转 |
 | `log/services/app-runtime.log` | Next server（src/lib/app-runtime-log.ts） | **应用运行期业务操作日志**：tRPC 中间件每次调用（path+duration+type）+ 生成任务入队/完成/失败等里程碑，`[日期时间] [LEVEL] [ns] msg` 本地时区行格式；仅记事件/耗时/类型，不外泄 prompt/PII；应用内「应用日志」面板经 `GET /api/logs/current?source=app-runtime` 实时轮询（规范 07 §7.11）。**面板只显示本次运行**：本文件追加不轮转，服务端在轮询响应里带回「会话起点」（dev-launcher.log 的 mtime），面板据此丢弃早于起点的历史行（`src/lib/log-session-scope.ts`，见 §4.1） | 追加不轮转 |
@@ -191,6 +191,12 @@ log/
 时间戳只能回答「文件有没有在本次运行期间被写过」，回答不了「本次内容从第几个
 字节开始」，因此**不做字节级跳过**——线格式自带毫秒时间戳，按行比较即可精确切分。
 面板每行右侧标注来源（`dev` / `launcher` / `app-runtime`），便于对照文件排查。
+
+**读取窗口**（`GET /api/logs/current` 的尾部窗口）：追加写文件积累数月后可能是
+几十 MB，首帧只回尾部一段。窗口 1MB（约 7000~12000 行）且**按行对齐**——起点被
+截断时跳过第一个半行。窗口太窄会让面板「越读越旧、时间线从中间开始」，这条踩过
+一次（ISSUE #262），回归用例见 `src/app/api/logs/current/route.test.ts`。
+合并后的时间线口径（按时刻排序、跨来源去重）见规范 07 §7.17。
 
 > 服务页「创作后端 → 启动日志」「数据库工具 → 启动日志」跟随的是
 > comfyui-runtime / drizzle-studio-runtime，**不在**该机制覆盖范围内：它们是
