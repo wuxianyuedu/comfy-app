@@ -29,6 +29,7 @@
  */
 import React, { useCallback, useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
 
 export interface CanvasSettings {
   /** 网格 (Grid) */
@@ -215,10 +216,7 @@ export function CanvasSettingsPanel({
   }, [onClose]);
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex justify-end"
-      role="presentation"
-    >
+    <FullScreenLayer zClass="z-50" className="flex justify-end" role="presentation">
       {/* Click-to-dismiss scrim.  Stays interactive so a click outside
        *  feels like clicking "the background of the drawer", not a
        *  floating dim layer. */}
@@ -359,7 +357,7 @@ export function CanvasSettingsPanel({
           </button>
         </div>
       </aside>
-    </div>,
+    </FullScreenLayer>,
     document.body,
   );
 }

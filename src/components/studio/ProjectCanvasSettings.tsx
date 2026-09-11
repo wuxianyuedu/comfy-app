@@ -19,6 +19,7 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useDebugMode } from "./canvas/WorkflowCanvasSettings";
 import { useDebugStore } from "./debug/debug-store";
+import { FullScreenLayer } from "./fullscreen/FullScreenLayer";
 
 /* ── Toggle (inline, mirrors CanvasSettingsPanel's ToggleRow look) ── */
 function ToggleRow({
@@ -87,7 +88,7 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex justify-end" role="presentation">
+    <FullScreenLayer zClass="z-50" className="flex justify-end" role="presentation">
       {/* Click-to-dismiss scrim */}
       <button
         type="button"
@@ -149,7 +150,7 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
           <span>设置保存在本浏览器</span>
         </div>
       </aside>
-    </div>,
+    </FullScreenLayer>,
     document.body
   );
 }

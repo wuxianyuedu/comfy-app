@@ -3,7 +3,7 @@
 exports[`WorkflowEditorInner > 在 ReactFlowProvider 内挂载并渲染加载态 1`] = `
 <div>
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas) pb-6"
+    class="fixed top-title-bar right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-(--color-canvas) pb-6"
   >
     <div
       class="text-center"

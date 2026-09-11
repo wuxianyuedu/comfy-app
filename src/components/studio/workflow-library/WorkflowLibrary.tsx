@@ -9,6 +9,7 @@ import { WorkflowLibraryHeader } from "./WorkflowLibraryHeader";
 import { WorkflowLibraryList } from "./WorkflowLibraryList";
 import { WorkflowLibraryDetail } from "./WorkflowLibraryDetail";
 import { useWorkflowLibrary } from "./hooks/use-workflow-library";
+import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
 
 /**
  * Lazy-load the canvas editor. It is a 7k-line module; keeping it behind a
@@ -23,12 +24,15 @@ const WorkflowCanvasEditor = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-bg)">
+      <FullScreenLayer
+        zClass="z-50"
+        className="flex items-center justify-center bg-(--color-bg)"
+      >
         <div className="text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
           <p className="text-sm text-(--color-ink-faint)">加载工作流编辑器…</p>
         </div>
-      </div>
+      </FullScreenLayer>
     ),
   },
 );

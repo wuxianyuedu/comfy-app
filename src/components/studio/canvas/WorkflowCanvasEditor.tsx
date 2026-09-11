@@ -11,6 +11,7 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 
 import { WorkflowEditorInner } from "../workflow-editor/WorkflowEditorInner";
+import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
 
 /* 编辑器渲染期异常兜底：全屏降级 UI。此前编辑器没有任何错误边界，
  * 一旦 WorkflowEditorInner 渲染抛错（如子工作流数据形状异常），React
@@ -26,7 +27,10 @@ function EditorCrashFallback({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center bg-(--color-canvas)">
+    <FullScreenLayer
+      zClass="z-60"
+      className="flex items-center justify-center bg-(--color-canvas)"
+    >
       <div className="w-[min(560px,90vw)] rounded-2xl border border-red-500/25 bg-red-500/5 p-6">
         <p className="text-sm font-semibold text-red-400">编辑器渲染出错</p>
         <p className="mt-2 break-all text-xs leading-relaxed text-gray-400">
@@ -40,7 +44,7 @@ function EditorCrashFallback({
           返回工作流库
         </button>
       </div>
-    </div>
+    </FullScreenLayer>
   );
 }
 

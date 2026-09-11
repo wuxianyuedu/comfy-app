@@ -1,0 +1,54 @@
+/**
+ * 全屏视图层（full-screen layer）的样式判据。
+ *
+ * 为什么独立成模块：一件「全屏视图该铺到哪儿」的样式是「删掉 JSX 还能跑的
+ * 判据」，按规范 17 §17.2 归第①层（配置 / 纯派生），可脱离 React 单测；
+ * 视图层只消费返回值。
+ *
+ * 背景（ISSUE #310 回归）：页签搬到窗口标题行后，应用内的「全屏视图」
+ * （设置、工作流编辑器、脚本编辑器、消息中心…）仍按 `fixed inset-0` 铺满
+ * 整个视口，把标题行里的页签整条盖住——用户打开这些视图后**再也看不到、
+ * 也切不回其它页签**，只能先关掉当前视图。
+ *
+ * 约束：标题行是应用级 chrome，任何视图都不应该盖掉它。全屏视图的
+ * 「全屏」应理解为「铺满标题行下方的内容区」，而不是「铺满整个窗口」。
+ * 因此统一用 `top-title-bar right-0 bottom-0 left-0` 让出标题行，
+ * 而不是 `inset-0`。
+ */
+
+/**
+ * 标题行（页签栏）高度对应的 CSS 变量名；定义在 `globals.css` 的 `@theme`。
+ *
+ * 为什么带 `--spacing-` 前缀：tailwind v4 按命名空间决定能生成哪些工具类，
+ * 自定义名（如 `--title-bar-height`）不会生成任何间距类；只有
+ * `--spacing-<name>` 才会产出 `top-<name>` / `h-<name>` / `p-<name>`。
+ */
+export const TITLE_BAR_HEIGHT_VAR = "--spacing-title-bar";
+
+/** 标题行（页签栏）高度的工具类名：`top-title-bar` = `top: var(--spacing-title-bar)`。 */
+export const TITLE_BAR_TOP_CLASS = "top-title-bar";
+
+/** 标题行高度工具类：`h-title-bar`，TitleBarTabs / InAppTabStrip 用。 */
+export const TITLE_BAR_HEIGHT_CLASS = "h-title-bar";
+
+/** 标题行的高度值（`2.25rem` = 36px），供测试与派生计算引用。 */
+export const TITLE_BAR_HEIGHT_REM = "2.25rem";
+
+/**
+ * 全屏视图层的定位 class：让出标题行，铺满其下方的内容区。
+ *
+ * 用四边定位而不是 `inset-x-0 top-title-bar`：后者依赖 `bottom` 默认 `auto`
+ * 而靠内容高度撑开，全屏视图恰恰要「被拉伸到内容区高度」，必须显式 `bottom-0`。
+ */
+export const FULL_SCREEN_LAYER_CLASS = `fixed ${TITLE_BAR_TOP_CLASS} right-0 bottom-0 left-0`;
+
+/**
+ * 拼出全屏视图层的完整 class 串（定位 + z-index + 视图自身布局）。
+ *
+ * @param zClass  z-index 工具类（各视图层级不同，如 `z-50` / `z-10020`）
+ * @param extra   该视图自身的布局 class（`flex flex-col` / `bg-bg` 等）
+ */
+export function fullScreenLayerClass(zClass: string, extra = ""): string {
+  const parts = [FULL_SCREEN_LAYER_CLASS, zClass.trim(), extra.trim()];
+  return parts.filter(Boolean).join(" ");
+}
