@@ -43,7 +43,8 @@ import { buildInitialNodes } from "./workflow-editor-build-nodes";
 import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
 import { useParamMapping } from "./hooks/use-param-mapping";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
-import { enrichFromViewNodes } from "./io-exposure";
+import { enrichFromViewNodes, type ExposedAliasBase } from "./io-exposure";
+import { ioLabel, type WorkflowIOEntry } from "../shared/workflow-io";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
 import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
 import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
@@ -397,18 +398,30 @@ function WorkflowEditorBody({
     return enrichFromViewNodes(scopeDetail?.nodes);
   }, [detail, scopeDetail]);
 
-  /* 富化下发的「原始槽位名」基准（ioKey → pin 名）同步进 IOEdit store。
+  /* 富化下发的别名判定基准同步进 IOEdit store。
    *
    *  本地 `workflowIO` 里存的是勾选那一刻写进去的显示名，其中一部分是修复前
    *  固化的机器名（`value_1` / `image`）。判定「本地这一串该不该让位给富化名」
-   *  需要这份基准；缺了它，任何一次写入（切换 seed 的随机值/固定值、改必填、
-   *  改值）都会把旧名字当作作者命名落库，显示名随即退回 `value_1`
-   *  （ISSUE #349 的复现路径）。 */
+   *  需要同一份事实源（服务端富化 / 视图就地派生）给出的三样东西：
+   *    · `name`          原始槽位名；
+   *    · `enrichedLabel` 富化链现在的显示名 —— 与槽位名不同就说明本层确实有
+   *                      作者命名，本地存着别名时该让位；
+   *    · `slotLabel`     本层槽位上作者写的业务名（富化链够不着，但足以证明
+   *                      本层有作者命名）。
+   *  缺了这份基准，任何一次写入（切换 seed 的随机值/固定值、改必填、改值）
+   *  都会把旧名字当作作者命名落库，显示名随即退回 `value_1`（ISSUE #349）。 */
   useEffect(() => {
-    const base: Record<string, string> = {};
-    for (const [key, entry] of Object.entries<{ name?: unknown }>(ioDetailMap ?? {})) {
+    const base: Record<string, ExposedAliasBase> = {};
+    for (const [key, entry] of Object.entries<WorkflowIOEntry>(ioDetailMap ?? {})) {
       const name = entry?.name;
-      if (typeof name === "string" && name) base[key] = name;
+      if (typeof name !== "string" || !name) continue;
+      const enrichedLabel = ioLabel(entry);
+      const slotLabel = entry?.slotLabel;
+      base[key] = {
+        name,
+        ...(enrichedLabel ? { enrichedLabel } : {}),
+        ...(slotLabel ? { slotLabel } : {}),
+      };
     }
     ioApi.getState().setAliasBase(base);
   }, [ioDetailMap, ioApi]);

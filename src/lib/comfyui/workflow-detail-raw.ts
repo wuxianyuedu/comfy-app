@@ -131,6 +131,48 @@ const LOAD_IMAGE_NODE_TYPES = new Set([
  * nodes' arrays.  COMBO candidates are resolved via /api/object_info
  * (single fetch per resolver, cached) and stamped as `comboOptions`.
  */
+/** 唯一定位一个代理目标 —— 空白槽位与跳过的目标不会互相顶掉。 */
+function proxyKey(target: [string, string]): string {
+  return `${target[0]}\u0000${target[1]}`;
+}
+
+/** 解析 wrapper 节点的 `properties.proxyWidgets`（暴露槽位 → 内部字段映射）。
+ *
+ *  两种导出形态都要认，它们出现在不同 ComfyUI 版本的工作流里：
+ *    · 数组：`[[内部节点id, 字段名], …]`，下标即第 N 个暴露的 widget 槽位
+ *      （纯端口不占位）；
+ *    · 对象：`{ "槽位名": [内部节点id, 字段名], … }`（部分导出把键一并写下来）。
+ *  对象形态的键就是槽位名，可以直接当第一判据用；数组形态只有位置。
+ *
+ *  一个都解析不出来时返回空数组 —— 调用方据此跳过该 wrapper（保持旧行为：
+ *  没有映射就不猜，宁可只显示别名，也不把别的槽位的字段名安到这一行）。 */
+function collectProxyWidgetPairs(
+  raw: unknown
+): { slot?: string; target: [string, string] }[] {
+  const pairs: { slot?: string; target: [string, string] }[] = [];
+  const asTarget = (pair: unknown): [string, string] | null => {
+    if (!Array.isArray(pair) || pair.length < 2) return null;
+    if (pair[0] === undefined || pair[0] === null || pair[1] === undefined || pair[1] === null) {
+      return null;
+    }
+    return [String(pair[0]), String(pair[1])];
+  };
+  if (Array.isArray(raw)) {
+    for (const pair of raw) {
+      const target = asTarget(pair);
+      if (target) pairs.push({ target });
+    }
+    return pairs;
+  }
+  if (raw && typeof raw === "object") {
+    for (const [slot, value] of Object.entries(raw as Record<string, unknown>)) {
+      const target = asTarget(value);
+      if (target) pairs.push({ slot, target });
+    }
+  }
+  return pairs;
+}
+
 export async function buildRawInputs(
   raw: RawWorkflow | null,
   comboOptionsForClassField: (
@@ -435,12 +477,17 @@ export async function buildRawInputs(
       if (!resolved) continue;
       const internalById = internalByIdByKey.get(resolved.key);
       if (!internalById) continue;
-      const proxyWidgets: Array<[string, string]> = Array.isArray(rn.properties?.proxyWidgets)
-        ? (rn.properties.proxyWidgets as unknown[])
-            .filter((p): p is [unknown, unknown] => Array.isArray(p) && p.length === 2)
-            .map((pair) => [String(pair[0]), String(pair[1])])
-        : [];
-      if (proxyWidgets.length === 0) continue;
+      /* proxyWidgets 的键形态有两种：官方是 `[[内部节点id, 字段名]]`，也有导出
+       *  写成 `{ 槽位名: [内部节点id, 字段名] }`。两种都读，否则这类工作流会被
+       *  整段跳过 —— 别名清不掉、内部字段名也取不到（ISSUE #349）。 */
+      const proxyPairs = collectProxyWidgetPairs(rn.properties?.proxyWidgets);
+      const byName = new Map<string, [string, string]>();
+      const ordered: Array<[string, string]> = [];
+      for (const pair of proxyPairs) {
+        if (pair.slot !== undefined && !byName.has(pair.slot)) byName.set(pair.slot, pair.target);
+        ordered.push(pair.target);
+      }
+      if (ordered.length === 0) continue;
 
       const subNodeType =
         typeof resolved.def?.name === "string" && resolved.def.name.trim()
@@ -458,14 +505,21 @@ export async function buildRawInputs(
        *  row, and the trailing widget inputs fall off the end of the array
        *  and render as blank placeholder cells. */
       let widgetSlot = 0;
+      /* 已被位置序消费过的 (内部节点, 字段) 对 —— 防重复匹配串台。 */
+      const usedProxyTargets = new Set<string>();
       const updatedList = existingList.map((entry) => {
         /* Only enrich inputs that ALREADY have a widget marker (i.e.
          *  they're exposed widget slots, not pure-connection ports).
          *  Pure ports correctly stay in connInputs on the client side. */
         if (!entry.widget) return entry;
-        const proxy = proxyWidgets[widgetSlot];
+        /* 首选按槽位名匹配：`value_1` 直取自己的目标，比位置更抗得住导出差异。
+         *  名字对不上（命名不是 value_N 的私有导出）时退回位置序。 */
+        const proxy = byName.get(entry.name) ?? ordered[widgetSlot];
         widgetSlot += 1;
-        if (!proxy) return entry;
+        /* 位置序只能全表唯一地成立：一旦拿到的目标已被别的槽位占用，说明顺序
+         *  不可信 —— 宁可给空，也不把别的槽位的字段名安到这一行上。 */
+        if (!proxy || usedProxyTargets.has(proxyKey(proxy))) return entry;
+        usedProxyTargets.add(proxyKey(proxy));
         const [internalNodeId, fieldName] = proxy;
         const internalNode = internalById.get(internalNodeId);
         const updated: RawInputEntry = { ...entry };
