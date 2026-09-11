@@ -7,11 +7,11 @@ import { useLogPanel } from "./logs/LogProvider";
 import { MessageCenterButton } from "~/components/message-center/MessageCenterButton";
 import { fpsTone, useFps } from "./hooks/use-fps";
 import { useComfyReadiness } from "./hooks/use-comfy-readiness";
-import { useDevServerLiveness } from "./hooks/use-dev-server-liveness";
+import { useDevServerStatus } from "./hooks/use-dev-server-status";
 import { fmtBytes } from "~/lib/format-bytes";
 
 /* ── Tauri window bottom status bar ─────────────────────────
-   显示当前浏览器地址 + 系统资源（显存/内存）+ 实时帧率 + ComfyUI 连接状态。
+   显示当前浏览器地址 + 系统资源（显存/内存）+ 实时帧率 + 应用服务状态。
 
    设计要点：
    1. 资源占用来自 ComfyUI `/system_stats`（服务端经 `/api/comfy/stats` 代理，
@@ -19,9 +19,11 @@ import { fmtBytes } from "~/lib/format-bytes";
       离线时隐藏占用条并给出可见降级提示，不静默消失。
    2. FPS 由全局 useFps 提供，取代原先画布内的 FpsMeter 悬浮层——画布不再
       各自叠加一块，改由状态栏统一展示。
-   3. 右下角原本写死的「就绪 + 绿点」含义不明（从不变化、无任何依据），
-      现由 deriveComfyReadiness 给出单一事实定义：已连接且指标可读 = 已就绪；
-      队列空闲不参与判据（详见 src/lib/comfy-readiness.ts 的 Why 注释）。
+   3. 右侧那一格显示**应用服务（dev server）**状态，不再是 ComfyUI 的连接态。
+      ComfyUI 是可选后端：没装 / 没开 / 没配路径时它一律「未连接」，而这一格
+      读起来像「应用坏了」；反过来应用服务真挂了（页面白屏、查询全失败）时
+      旧状态栏一个字也不说。「显存/内存不可用」本身就是 ComfyUI 没启动的表现，
+      信息重复且误导，故改判据（详见 src/lib/dev-server-status.ts 的 Why 注释）。
 
    规范 08 §8.4 禁止 monkey-patch history——同步 setState 会在第三方库的
    useInsertionEffect 阶段触发报错。改用 Next.js usePathname()：路由变化
@@ -71,10 +73,8 @@ export function BrowserStatusBar() {
   }, []);
 
   const fps = useFps();
-  const { readiness, cudaVram, smiVram, ram, degradedNote } =
-    useComfyReadiness();
-  const { restarting: serverRestarting, lastRestartAt } =
-    useDevServerLiveness();
+  const { cudaVram, smiVram, ram, degradedNote } = useComfyReadiness();
+  const devServer = useDevServerStatus();
 
   const tone = fpsTone(fps);
 
@@ -188,56 +188,37 @@ export function BrowserStatusBar() {
           )}
         </button>
 
-        {/* dev server 重启标记：仅当检测到**真正**重启（bootId 变化）才展示。
-         *  重启瞬间高亮告警（进行中任务随进程丢失，恢复后需重新执行）；
-         *  随后弱化展示最近一次真正重启时间。显示器关闭/瞬时断网等探测
-         *  波动不被当成重启，不再误报。 */}
-        {serverRestarting ? (
-          <span
-            className="flex items-center gap-1 text-amber-300"
-            title={`dev server 于 ${fmtClock(lastRestartAt)} 重启，当时进行中的任务已丢失，请重新执行`}
-          >
-            <span
-              aria-hidden
-              className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]"
-            />
-            <span className="hidden sm:inline">
-              后端已重启 · {fmtClock(lastRestartAt)}
-            </span>
-          </span>
-        ) : lastRestartAt !== null ? (
-          <span
-            className="hidden items-center gap-1 text-gray-600 sm:flex"
-            title={`dev server 最近一次重启于 ${fmtClock(lastRestartAt)}，当时进行中的任务已丢失`}
-          >
-            上次重启 {fmtClock(lastRestartAt)}
-          </span>
-        ) : null}
-
-        {/* ComfyUI 就绪指示（替代原写死的「就绪」）：
-            语义单一事实在 deriveComfyReadiness，此处只渲染其文案与色调。 */}
+        {/* 应用服务（dev server）状态：这一格回答「应用服务此刻能不能应答」，
+         *  与 ComfyUI 是否运行无关（判据见 ~/lib/dev-server-status）。
+         *  重启后的「任务已丢失」提示不另占一格，并进这条的文案里，
+         *  避免状态栏为同一件事叠两处标记。 */}
         <span
           className={`flex items-center gap-1 ${
-            readiness.state === "ready"
+            devServer.state === "online"
               ? "text-emerald-300"
-              : readiness.state === "connecting"
+              : devServer.state === "starting"
                 ? "text-gray-400"
-                : "text-gray-500"
+                : "text-rose-300"
           }`}
-          title={readiness.title}
-          aria-label={`ComfyUI ${readiness.label}`}
-          data-readiness={readiness.state}
+          title={devServer.title}
+          aria-label={devServer.label}
+          data-dev-server={devServer.state}
         >
           <span
             className={`inline-block h-1.5 w-1.5 rounded-full ${
-              readiness.state === "ready"
+              devServer.state === "online"
                 ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
-                : readiness.state === "connecting"
+                : devServer.state === "starting"
                   ? "animate-pulse bg-gray-400"
-                  : "bg-gray-500"
+                  : "bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.8)]"
             }`}
           />
-          <span className="hidden sm:inline">{readiness.label}</span>
+          <span className="hidden sm:inline">{devServer.label}</span>
+          {devServer.lastRestartAt !== null && devServer.state === "online" && (
+            <span className="hidden text-gray-500 lg:inline">
+              · {fmtClock(devServer.lastRestartAt)}
+            </span>
+          )}
         </span>
       </div>
     </div>

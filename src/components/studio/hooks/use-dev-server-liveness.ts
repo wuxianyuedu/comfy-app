@@ -42,6 +42,11 @@ export interface DevServerLiveness {
   restarting: boolean;
   /** 最近一次**真正**重启的时刻；本浏览器会话无记录时为 null。 */
   lastRestartAt: number | null;
+  /** 最近一次探测成功（进程可达）。首帧（尚未探过）为 false。 */
+  probeOk: boolean;
+  /** 本会话是否曾成功探到过该进程：用于把「还没探通」与「曾经通、现在断」
+   *  区分开——只有后者才是「应用服务已断开」。 */
+  everOnline: boolean;
 }
 
 function readSessionNumber(key: string): number | null {
@@ -97,6 +102,10 @@ export function useDevServerLiveness(): DevServerLiveness {
    * 持久化的上次重启时间在首次探测完成后补读。 */
   const [restarting, setRestarting] = useState(false);
   const [lastRestartAt, setLastRestartAt] = useState<number | null>(null);
+  /* 连通性：视图（状态栏）据此显示「应用服务运行中 / 已断开」。
+   * 初值 false 表示「还没探过」，不代表故障——判据里由 everOnline 区分。 */
+  const [probeOk, setProbeOk] = useState(false);
+  const [everOnline, setEverOnline] = useState(false);
 
   /* 上次已知 bootId（对比基准）。ref 而非 state：探测回调里读取即可，
    * 无需触发渲染。初值置 null：SSR 阶段读不到 sessionStorage（也不应与
@@ -118,6 +127,10 @@ export function useDevServerLiveness(): DevServerLiveness {
       lastBootIdRef.current ??= readSessionString(LAST_BOOT_ID_KEY);
       const result = await probeBootId();
       if (stopped) return;
+
+      /* 连通性先落：无论后续是否判定重启，视图都要知道此刻进程可不可达。 */
+      setProbeOk(result.ok);
+      if (result.ok) setEverOnline(true);
 
       if (result.ok) {
         const bootId = result.bootId;
@@ -161,5 +174,5 @@ export function useDevServerLiveness(): DevServerLiveness {
     };
   }, []);
 
-  return { restarting, lastRestartAt };
+  return { restarting, lastRestartAt, probeOk, everOnline };
 }

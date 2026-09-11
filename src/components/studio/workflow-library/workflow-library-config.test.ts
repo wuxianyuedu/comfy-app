@@ -1,148 +1,174 @@
-// 工作流库筛选 / 计数的纯派生单测（规范 17 §17.2 第①层）。
-// 这些规则原先是 WorkflowLibrary.tsx 里的 4 个 useMemo，只能靠渲染组件才能测；
-// 抽成纯函数后，「本地/在线归类」「模型标签筛选」「待载入项的计数归属」
-// 这些容易回归的边界可以直接断言。
-
-import { describe, expect, it } from "vitest";
-
+import { describe, it, expect } from "vitest";
 import {
-  countBySource,
-  countByType,
-  filterPending,
-  filterWorkflows,
-  type PendingRow,
+  deriveFormatFlags,
+  deriveSyncFlags,
+  isTechnicalName,
   type WorkflowRow,
 } from "./workflow-library-config";
 
-function row(overrides: Partial<WorkflowRow> = {}): WorkflowRow {
+/* 覆盖 workflow-library-config.ts 的纯函数导出（原先从
+ * WorkflowLibraryHelpers.tsx 抽出；该文件已随列表容器重构一并删除——
+ * 其中的 JSX 组件全仓库已无消费方，见该文件尾部的删除说明）。 */
+
+function makeRow(overrides: Partial<WorkflowRow> = {}): WorkflowRow {
   return {
     id: "wf-1",
     name: "demo",
-    taskType: "T2I",
+    taskType: "t2i",
     createdAt: "2026-08-01T00:00:00.000Z",
     ...overrides,
   };
 }
 
-function pending(overrides: Partial<PendingRow> = {}): PendingRow {
-  return {
-    id: "p-1",
-    name: "pending.json",
-    sourcePath: "D:/x/pending.json",
-    ...overrides,
-  };
-}
-
-const ALL = { source: "all", type: "all", model: "all", search: "" } as const;
-
-describe("filterWorkflows 三级筛选", () => {
-  const rows = [
-    row({
-      id: "1",
-      name: "Alpha",
-      sourcePath: "D:/a.json",
-      modelTags: ["flux"],
-    }),
-    row({ id: "2", name: "Beta", taskType: "I2V", modelTags: ["wan"] }),
-    row({ id: "3", name: "gamma", taskType: "T2V" }),
-  ];
-
-  it("不过滤时原样返回", () => {
-    expect(filterWorkflows(rows, ALL)).toHaveLength(3);
+describe("deriveFormatFlags 格式标志推导", () => {
+  it("新字段齐全时透传 hasApi/hasRaw/apiOrigin", () => {
+    expect(
+      deriveFormatFlags(makeRow({ hasApi: true, hasRaw: false, apiOrigin: "user" })),
+    ).toEqual({ hasApi: true, hasRaw: false, apiOrigin: "user", usable: true });
   });
 
-  it("source 缺失时按 sourcePath 有无归类为 local / online", () => {
-    expect(
-      filterWorkflows(rows, { ...ALL, source: "local" }).map((r) => r.id),
-    ).toEqual(["1"]);
-    expect(
-      filterWorkflows(rows, { ...ALL, source: "online" }).map((r) => r.id),
-    ).toEqual(["2", "3"]);
+  it("hasApi=false 时 usable=false 且未给 apiOrigin 时推断为 null", () => {
+    expect(deriveFormatFlags(makeRow({ hasApi: false, hasRaw: true }))).toEqual({
+      hasApi: false,
+      hasRaw: true,
+      apiOrigin: null,
+      usable: false,
+    });
   });
 
-  it("source 字段优先于 sourcePath 推断", () => {
-    const mixed = [row({ id: "x", sourcePath: "D:/a.json", source: "online" })];
-    expect(filterWorkflows(mixed, { ...ALL, source: "local" })).toEqual([]);
-    expect(filterWorkflows(mixed, { ...ALL, source: "online" })).toHaveLength(
-      1,
-    );
+  it("同时有 API 与 RAW 且未给 apiOrigin 时推断为 derived", () => {
+    expect(deriveFormatFlags(makeRow({ hasApi: true, hasRaw: true }))).toEqual({
+      hasApi: true,
+      hasRaw: true,
+      apiOrigin: "derived",
+      usable: true,
+    });
   });
 
-  it("type 按 taskType 归一化后的分类匹配（I2V/T2V 都属 video）", () => {
-    expect(
-      filterWorkflows(rows, { ...ALL, type: "video" }).map((r) => r.id),
-    ).toEqual(["2", "3"]);
-    expect(
-      filterWorkflows(rows, { ...ALL, type: "image" }).map((r) => r.id),
-    ).toEqual(["1"]);
-    expect(filterWorkflows(rows, { ...ALL, type: "audio" })).toEqual([]);
+  it("仅有 API 且未给 apiOrigin 时推断为 user", () => {
+    expect(deriveFormatFlags(makeRow({ hasApi: true, hasRaw: false }))).toEqual({
+      hasApi: true,
+      hasRaw: false,
+      apiOrigin: "user",
+      usable: true,
+    });
   });
 
-  it("model 按 modelTags 包含匹配，未打标签的一律落选", () => {
+  it("hasApi 显式 false 但给了 apiOrigin 时保留给定值", () => {
     expect(
-      filterWorkflows(rows, { ...ALL, model: "flux" }).map((r) => r.id),
-    ).toEqual(["1"]);
-    expect(
-      filterWorkflows(rows, { ...ALL, model: "wan" }).map((r) => r.id),
-    ).toEqual(["2"]);
+      deriveFormatFlags(makeRow({ hasApi: false, hasRaw: true, apiOrigin: "user" })),
+    ).toEqual({ hasApi: false, hasRaw: true, apiOrigin: "user", usable: false });
   });
 
-  it("search 不区分大小写，且先过前三级筛选", () => {
-    expect(
-      filterWorkflows(rows, { ...ALL, search: "GAM" }).map((r) => r.id),
-    ).toEqual(["3"]);
-    expect(
-      filterWorkflows(rows, { ...ALL, type: "image", search: "gamma" }),
-    ).toEqual([]);
+  it("缺省的一侧按规则回填:hasApi 默认 true,hasRaw 按 format 推断", () => {
+    // 只给 hasApi=false → hasRaw 回填自 format:"raw"
+    expect(deriveFormatFlags(makeRow({ hasApi: false, format: "raw" }))).toEqual({
+      hasApi: false,
+      hasRaw: true,
+      apiOrigin: null,
+      usable: false,
+    });
+    // 只给 hasRaw=true → hasApi 回填 true
+    expect(deriveFormatFlags(makeRow({ hasRaw: true }))).toEqual({
+      hasApi: true,
+      hasRaw: true,
+      apiOrigin: "derived",
+      usable: true,
+    });
   });
 
-  it("search 只含空格时视为空（避免误删全部）", () => {
-    expect(filterWorkflows(rows, { ...ALL, search: "   " })).toHaveLength(3);
+  it("仅传 legacy format=raw 时视为有 RAW、可执行、来源 derived", () => {
+    expect(deriveFormatFlags(makeRow({ format: "raw" }))).toEqual({
+      hasApi: true,
+      hasRaw: true,
+      apiOrigin: "derived",
+      usable: true,
+    });
+  });
+
+  it("仅传 legacy format=api 时 hasRaw=false 且来源 user", () => {
+    expect(deriveFormatFlags(makeRow({ format: "api" }))).toEqual({
+      hasApi: true,
+      hasRaw: false,
+      apiOrigin: "user",
+      usable: true,
+    });
+  });
+
+  it("无任何格式信息时默认可执行且来源 user", () => {
+    expect(deriveFormatFlags(makeRow())).toEqual({
+      hasApi: true,
+      hasRaw: false,
+      apiOrigin: "user",
+      usable: true,
+    });
+  });
+
+  it("新旧字段混用时显式 hasRaw 优先于 legacy format", () => {
+    expect(
+      deriveFormatFlags(makeRow({ format: "raw", hasApi: true, hasRaw: false })),
+    ).toEqual({ hasApi: true, hasRaw: false, apiOrigin: "user", usable: true });
   });
 });
 
-describe("filterPending 待载入项", () => {
-  const rows = [
-    pending({ id: "p-1", name: "A.json" }),
-    pending({ id: "p-2", name: "b.json" }),
-  ];
-
-  it("source=online 时不该出现本地待载入项", () => {
-    expect(filterPending(rows, { source: "online", search: "" })).toEqual([]);
+describe("deriveSyncFlags 手动同步标志聚合", () => {
+  it("在线行(无磁盘信息)为干净且不可同步", () => {
+    expect(deriveSyncFlags(makeRow())).toEqual({
+      dirty: false,
+      missing: false,
+      canResync: false,
+    });
   });
 
-  it("按名称子串过滤且不区分大小写", () => {
+  it("磁盘文件有更新(diskDirty)时 dirty 且可 resync", () => {
+    expect(deriveSyncFlags(makeRow({ diskDirty: true }))).toEqual({
+      dirty: true,
+      missing: false,
+      canResync: true,
+    });
+  });
+
+  it("磁盘文件丢失(diskMissing)时标记 missing 但不可 resync", () => {
+    expect(deriveSyncFlags(makeRow({ diskMissing: true }))).toEqual({
+      dirty: false,
+      missing: true,
+      canResync: false,
+    });
+  });
+
+  it("同时 dirty 与 missing 时 canResync 跟随 dirty", () => {
     expect(
-      filterPending(rows, { source: "all", search: "b" }).map((r) => r.id),
-    ).toEqual(["p-2"]);
-    expect(
-      filterPending(rows, { source: "local", search: "A.JSON" }).map(
-        (r) => r.id,
-      ),
-    ).toEqual(["p-1"]);
+      deriveSyncFlags(makeRow({ diskDirty: true, diskMissing: true })),
+    ).toEqual({ dirty: true, missing: true, canResync: true });
+  });
+
+  it("diskDirty 为 undefined 等 falsy 值时视为 false", () => {
+    const flags = deriveSyncFlags(makeRow({ diskDirty: undefined }));
+    expect(flags.dirty).toBe(false);
+    expect(flags.canResync).toBe(false);
   });
 });
 
-describe("countBySource 来源计数", () => {
-  it("待载入项计入 all 与 local，不计入 online", () => {
-    const counts = countBySource(
-      [row({ id: "1", sourcePath: "D:/a.json" }), row({ id: "2" })],
-      [pending()],
-    );
-    expect(counts).toEqual({ all: 3, local: 2, online: 1 });
+describe("isTechnicalName 技术文件名识别", () => {
+  it("空串返回 false", () => {
+    expect(isTechnicalName("")).toBe(false);
+  });
+
+  it("小写字母/数字/下划线组合返回 true", () => {
+    expect(isTechnicalName("my_model_v2")).toBe(true);
+    expect(isTechnicalName("123")).toBe(true);
+  });
+
+  it("含大写、空格、连字符或点的名称返回 false", () => {
+    expect(isTechnicalName("MyModel")).toBe(false);
+    expect(isTechnicalName("my model")).toBe(false);
+    expect(isTechnicalName("my-model")).toBe(false);
+    expect(isTechnicalName("model.json")).toBe(false);
+  });
+
+  it("长度 38 以内且全小写视为技术名,超过 38 视为描述性名称", () => {
+    expect(isTechnicalName("a".repeat(38))).toBe(true);
+    expect(isTechnicalName("a".repeat(39))).toBe(false);
   });
 });
 
-describe("countByType 类型计数", () => {
-  it("待载入项没有 taskType，只进 all 不进具体分类", () => {
-    const counts = countByType(
-      [
-        row({ id: "1", taskType: "T2I" }),
-        row({ id: "2", taskType: "I2V" }),
-        row({ id: "3", taskType: "T2V" }),
-      ],
-      [pending(), pending({ id: "p-2" })],
-    );
-    expect(counts).toEqual({ all: 5, image: 1, video: 2, audio: 0 });
-  });
-});
