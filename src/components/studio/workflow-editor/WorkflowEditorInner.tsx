@@ -49,6 +49,7 @@ import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
 import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
+import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
 
 /* ── Canvas grid ──
  *  Two stacked native <Background> layers so the grid pans / zooms with
@@ -545,18 +546,24 @@ function WorkflowEditorBody({
   /* Loading state */
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas) pb-6">
+      <FullScreenLayer
+        zClass="z-50"
+        className="flex items-center justify-center bg-(--color-canvas) pb-6"
+      >
         <div className="text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
           <p className="text-sm text-gray-400">加载工作流节点…</p>
         </div>
-      </div>
+      </FullScreenLayer>
     );
   }
 
   if (error || !detail) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--color-canvas) pb-6">
+      <FullScreenLayer
+        zClass="z-50"
+        className="flex items-center justify-center bg-(--color-canvas) pb-6"
+      >
         <div className="text-center">
           <p className="text-red-400">{error ?? "未知错误"}</p>
           <button
@@ -567,12 +574,15 @@ function WorkflowEditorBody({
             返回
           </button>
         </div>
-      </div>
+      </FullScreenLayer>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-(--color-canvas) pb-6">
+    <FullScreenLayer
+      zClass="z-50"
+      className="flex flex-col bg-(--color-canvas) pb-6"
+    >
         {/* ── Top bar ── */}
         <WorkflowEditorTopBar
           onClose={onClose}
@@ -749,7 +759,7 @@ function WorkflowEditorBody({
           />
         )}
       </div>
-    </div>
+    </FullScreenLayer>
   );
 }
 
