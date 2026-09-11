@@ -69,6 +69,12 @@ export interface DynamicWorkflowFormProps {
    *  `defaultInputValues(io, mode)` 播种，走「模式默认值 → 通用默认值」
    *  两级回退。不传（null/undefined）= 不分模式，与旧行为一致。 */
   mode?: string | null;
+  /** 上传失败时把可读原因交给调用方渲染（「正在启动 ComfyUI…」「启动超时…」）。
+   *  上传位没有自己的错误区，只记 console 的话用户看不到失败原因，
+   *  也拿不到「去设置页手动启动」这条出口（ISSUE #345）。 */
+  onUploadError?: (message: string) => void;
+  /** 上传被 ComfyUI 未就绪挡住、正在等待启动时回调一次，供调用方显示进行态。 */
+  onUploadProgress?: (message: string) => void;
 }
 
 /** ComfyUI types that render as connectable port rows instead of generic
