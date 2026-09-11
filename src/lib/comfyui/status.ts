@@ -22,6 +22,14 @@
 //
 // 与 `probeComfyUi`（lifecycle）的分工：那个是「能不能立刻用它」的严格判据
 // （HTTP 必须通），本模块是「进程在不在」的快速判据。设置页两者都看。
+//
+// 判据链（任一级命中即「在跑」，逐级放宽）：
+//   ① bound 子进程（本进程亲手拉起，PID 直接可信）；
+//   ② 配置路径的 main.py（进程命令行匹配）；
+//   ③ setup 登记的启动器 / 配置路径的解释器候选；
+//   ④ 环境反查：`standalone-env\pyvenv.cfg` 的 home/executable 与 uv 托管
+//      目录下的解释器（Comfy Desktop 由 uv 起、解释器常不在实例根，
+//      见 env-python.ts）。
 
 import fs from "fs";
 import path from "path";
@@ -29,6 +37,7 @@ import { getSettingsSync } from "../app-settings";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
+import { collectComfyPythonCandidates } from "./env-python";
 import { logger } from "~/server/lib/logger";
 
 /** 进程/端口事实的快照：拿不到就都为空。 */
@@ -44,7 +53,8 @@ export type ComfyRuntimeSnapshot = {
   /** 进程表查询本身是否失败（超时/无权限）：结果不可信，不得当作「没在跑」。 */
   unverified: boolean;
   /** 事实来源：bound=本进程持有的子进程；process=配置路径进程表命中；
-   *  launcher=setup 登记启动器；any=进程表里任意解释器起的 ComfyUI。 */
+   *  launcher=setup 登记启动器；any=按环境反查（pyvenv.cfg / uv 托管解释器）
+   *  出来的解释器进程。 */
   source: "bound" | "process" | "launcher" | "any" | null;
 };
 
@@ -180,6 +190,12 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   const comfyuiPath = settings.comfyuiPath?.trim() ?? "";
   if (!comfyuiPath) return emptySnapshot();
 
+  // 查询失败≠没在跑（高负载 / 冷启动时 PowerShell 常超时）：如实记下来，
+  // 最终没命中任何判据时标 unverified，绝不在这里下「未运行」的结论。
+  // 注意不能在这里提前 return——「这一条查不到」恰恰是第 3、4 级存在的理由
+  // （Comfy Desktop 由 uv 起，main.py 那一路必然落空）。
+  let lookupFailed = false;
+
   // 2) 配置路径的 main.py：进程表命中即「在跑」（即使 HTTP 还没就绪）。
   const plan = resolveComfyLaunchPlan(comfyuiPath);
   if (!("error" in plan)) {
@@ -194,11 +210,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
         source: "process",
       };
     }
-    if (lookup.failed) {
-      // 查询失败≠没在跑（高负载 / 冷启动时 PowerShell 常超时）。如实标注不可信，
-      // 由调用方决定是否退回 HTTP 探测，绝不在这里下「未运行」的结论。
-      return { ...emptySnapshot(), unverified: true };
-    }
+    if (lookup.failed) lookupFailed = true;
   }
 
   // 3) 启动器形态：Comfy Desktop 的 standalone-env 由 uv 启动，命令行里没有
@@ -212,7 +224,17 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
       candidates.push({ cmd, via: "配置路径的解释器" });
     }
   }
-  let lookupFailed = false;
+  // 4) 环境反查兜底：Comfy Desktop 的 standalone-env 常由 uv 的托管解释器
+  //    创建（解释器落在 `%LOCALAPPDATA%\uv\python\cpython-*`），步骤 3 按
+  //    「实例根下的解释器路径」查表必然落空。这里顺着 `standalone-env\pyvenv.cfg`
+  //    的 home/executable 找到真正在跑的解释器，再补一遍 uv 托管目录
+  //    （见 env-python.ts）。命中即 source=any，仍不等 HTTP。
+  for (const c of collectComfyPythonCandidates(
+    classify.instanceRoot ?? comfyuiPath,
+  )) {
+    candidates.push({ cmd: c.exe, via: c.via });
+  }
+
   for (const c of candidates) {
     const lookup = await findPidForMainPyDetailed(c.cmd);
     if (lookup.failed) lookupFailed = true;
@@ -223,12 +245,20 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
         port: await findPidListeningPort(lookup.pid),
         via: c.via,
         unverified: false,
-        source: c.via === "setup 中登记的启动器" ? "launcher" : "process",
+        source: snapshotSourceFor(c.via),
       };
     }
   }
 
   return { ...emptySnapshot(), unverified: lookupFailed };
+}
+
+/** 候选来路 → 快照来源标记（供诊断区分「配置路径命中」与「反查命中」）。 */
+function snapshotSourceFor(via: string): ComfyRuntimeSnapshot["source"] {
+  if (via === "setup 中登记的启动器") return "launcher";
+  if (via === "配置路径的解释器") return "process";
+  // pyvenv.cfg / uv 托管解释器：都是「按环境反查」出来的解释器，即 any。
+  return "any";
 }
 
 /**

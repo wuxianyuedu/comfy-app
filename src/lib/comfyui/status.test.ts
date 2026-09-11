@@ -21,6 +21,7 @@ vi.mock("./proc-detect", () => ({
   findPidForMainPyDetailed: vi.fn(),
   findPidListeningPort: vi.fn(),
 }));
+vi.mock("./env-python", () => ({ collectComfyPythonCandidates: vi.fn() }));
 vi.mock("~/server/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -38,6 +39,7 @@ import { getSettingsSync } from "../app-settings";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
+import { collectComfyPythonCandidates } from "./env-python";
 
 const plan = {
   cmd: "C:\\Comfy\\python_embeded\\python.exe",
@@ -59,6 +61,7 @@ beforeEach(() => {
   } as never);
   vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: null, failed: false });
   vi.mocked(findPidListeningPort).mockResolvedValue(null);
+  vi.mocked(collectComfyPythonCandidates).mockReturnValue([]);
   // 快照挂在 globalThis（HMR 单例）+ mock 调用历史都是跨用例共享的：
   // 逐用例重置，否则「未调用」类断言会被上一个用例的调用污染。
   vi.clearAllMocks();
@@ -119,6 +122,60 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
     expect(snap.running).toBe(true);
     expect(snap.source).toBe("launcher");
     expect(snap.via).toContain("启动器");
+  });
+
+  it("第 5 级：按 standalone-env 的 pyvenv.cfg 反查出解释器进程（Desktop / uv 起法）", async () => {
+    // 配置路径的 main.py、setup 登记启动器、实例根解释器候选**全部落空**，
+    // 只有环境反查给出的 uv 托管解释器命中——这正是 ISSUE #344 里
+    // 「外部实例在跑、状态行却压着不动」的那类实例。
+    const uvExe =
+      "C:\\Users\\me\\AppData\\Local\\uv\\python\\cpython-3.12.8\\python.exe";
+    vi.mocked(collectComfyPythonCandidates).mockReturnValue([
+      { exe: uvExe, via: "standalone-env 的 pyvenv.cfg" },
+    ]);
+    vi.mocked(findPidForMainPyDetailed).mockImplementation(
+      async (needle: string) =>
+        needle.includes("uv\\python")
+          ? { pid: 888, failed: false }
+          : { pid: null, failed: false },
+    );
+    vi.mocked(findPidListeningPort).mockResolvedValue(8188);
+
+    const snap = await getComfyRuntimeSnapshot({ force: true });
+    expect(snap.running).toBe(true);
+    expect(snap.source).toBe("any");
+    expect(snap.pid).toBe(888);
+    expect(snap.via).toContain("pyvenv.cfg");
+    expect(collectComfyPythonCandidates).toHaveBeenCalled();
+  });
+
+  it("第 5 级也要在「配置路径的 main.py 查询失败」时照常兜底", async () => {
+    // main.py 那次查询超时（unverified）不能提前 return：反查命中仍应报在跑。
+    vi.mocked(findPidForMainPyDetailed).mockImplementation(
+      async (needle: string) =>
+        needle.includes("uv.exe")
+          ? { pid: 999, failed: false }
+          : { pid: null, failed: true },
+    );
+    vi.mocked(collectComfyPythonCandidates).mockReturnValue([
+      { exe: "C:\\uv\\uv.exe", via: "uv 托管的解释器" },
+    ]);
+    vi.mocked(findPidListeningPort).mockResolvedValue(8190);
+
+    const snap = await getComfyRuntimeSnapshot({ force: true });
+    expect(snap.running).toBe(true);
+    expect(snap.source).toBe("any");
+    expect(snap.unverified).toBe(false);
+  });
+
+  it("反查候选全部落空且查询都成功 → 未运行（不误报在跑）", async () => {
+    vi.mocked(collectComfyPythonCandidates).mockReturnValue([
+      { exe: "C:\\uv\\python.exe", via: "uv 托管的解释器" },
+    ]);
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: null, failed: false });
+    const snap = await getComfyRuntimeSnapshot({ force: true });
+    expect(snap.running).toBe(false);
+    expect(snap.unverified).toBe(false);
   });
 
   it("本进程 bound 子进程优先：不经任何进程表查询即判定在跑", async () => {
