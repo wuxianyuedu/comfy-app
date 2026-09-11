@@ -28,6 +28,7 @@ export function WorkflowLibraryDetailView({
     isLoading,
     errorMessage,
     workflowIO,
+    paramMap,
     sourceData,
     usable,
     canResync,
@@ -86,6 +87,7 @@ export function WorkflowLibraryDetailView({
           activeTab={activeTab}
           isLoading={isLoading}
           workflowIO={workflowIO}
+          paramMap={paramMap}
           sourceData={sourceData}
           usable={usable}
           onEdit={actions.edit}
