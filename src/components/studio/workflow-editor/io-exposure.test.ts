@@ -35,6 +35,27 @@ describe("resolveExposedLabel — 暴露条目的显示名回退链", () => {
     expect(resolveExposedLabel({ label: "   " }, undefined, "value_1")).toBe("value_1");
   });
 
+  it("存量别名 label（等于 pin 名）让位给富化的作者名", () => {
+    /* 勾选那一刻写进本地 label 的是画布显示名；修复前封装节点的显示名恰好
+     *  是槽位别名 value_1。服务端已能按本层作者 label 修好富化名（"Seed"），
+     *  本地那串机器名不能把它压回去（ISSUE #349）。 */
+    expect(resolveExposedLabel({ label: "value_1" }, enriched({ label: "Seed" }), "value_1")).toBe(
+      "Seed"
+    );
+  });
+
+  it("本地 label 与 pin 名相同但富化名也相同（真的是这个名字）时原样保留", () => {
+    expect(resolveExposedLabel({ label: "value_1" }, enriched({ label: "value_1" }), "value_1")).toBe(
+      "value_1"
+    );
+  });
+
+  it("本地作者手写的名字（非别名）依旧最高优先", () => {
+    expect(resolveExposedLabel({ label: "我的种子" }, enriched({ label: "Seed" }), "value_1")).toBe(
+      "我的种子"
+    );
+  });
+
   it("与画布同款清洗：剥掉 COMBO 候选串，两处显示完全一致", () => {
     expect(
       resolveExposedLabel({ label: "模型: A = B | C = D" }, undefined, "model")
