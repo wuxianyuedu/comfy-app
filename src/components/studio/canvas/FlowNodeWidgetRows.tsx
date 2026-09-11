@@ -74,24 +74,25 @@ export function FlowNodeWidgetRows({
                 : "group relative flex min-h-[22px] h-auto items-center gap-1.5 pl-5 pr-2 py-0.5 text-[11px]"
             }
           >
-            {isConn || isBoundary ? (
-              // The Handle IS the dot.  left:5 compensates ReactFlow's
-              // translate(50%,-50%) so the dot's centre lands on the node
-              // edge.  Unconnected widget rows get NO dot.
-              <Handle
-                type="target"
-                position={Position.Left}
-                id={k}
-                isConnectable={false}
-                className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
-                style={{
-                  left: 5,
-                  background: typeCol,
-                  boxShadow: `0 0 6px ${typeCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
-                }}
-                title={`${k} (${inputType})`}
-              />
-            ) : null}
+            {/* 每行都挂一个 target Handle，映射线（对外参数 → 本行）才有锚点：
+                React Flow 找不到 handle 会丢弃整条边并打 error#008。未连线的行
+                端点保持**完全透明** —— 直接可见的紫点曾经被当成渲染 bug，所以
+                这里沿用「没连线就不显示圆点」的观感，只保留连线能力。 */}
+            <Handle
+              type="target"
+              position={Position.Left}
+              id={k}
+              isConnectable
+              className="!h-2.5 !w-2.5 !rounded-full !border"
+              style={{
+                left: 5,
+                background: typeCol,
+                opacity: isConn || isBoundary ? 1 : 0,
+                boxShadow: isConn || isBoundary ? `0 0 6px ${typeCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)` : undefined,
+                borderColor: isConn || isBoundary ? "var(--color-canvas)" : "transparent",
+              }}
+              title={`${k} (${inputType})`}
+            />
 
             {isStringWidget ? (
               /* STRING stacked block — LABEL + IoCheckbox on top, textarea

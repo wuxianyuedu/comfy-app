@@ -22,8 +22,6 @@ interface DetailBodyProps {
   activeTab: DetailTab;
   isLoading: boolean;
   workflowIO: WorkflowIOMap | null;
-  /** 模板 paramMap（含 `source` 命名空间下的参数映射连线）。 */
-  paramMap: Record<string, unknown>;
   sourceData: SourceModalData | null;
   usable: boolean;
   onEdit: () => void;
@@ -42,7 +40,6 @@ export function DetailBody({
   activeTab,
   isLoading,
   workflowIO,
-  paramMap,
   sourceData,
   usable,
   onEdit,
@@ -81,7 +78,6 @@ export function DetailBody({
               workflowName={workflow.name}
               taskType={workflow.taskType}
               workflowIO={workflowIO}
-              paramMap={paramMap}
               usable={usable}
               modes={meta?.modes}
               defaultMode={meta?.defaultMode}

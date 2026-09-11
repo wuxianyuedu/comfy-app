@@ -13,11 +13,16 @@
  *   2. `autoMapEntries`     给每个对外参数条目**自动**挑一个目标端口（默认连线
  *      状态）。判定顺序即优先级，与工坊封装（workflow-encapsulation）同口径；
  *   3. `applyParamMapping`  把映射落到运行时载荷上：确定性的 `workflowInputs`
- *      三元组 + 端口级自动映射（paramMap 的 source 键）。
+ *      三元组 + 端口级自动映射。
  *
- * 映射的落库位置：沿用既有的 `paramMap` JSON 列，另开 `source.<nodeId>.<port>`
- * 命名空间（值 = ioKey），**不动 DB schema**。`auto` = 作者没手工改过、跟随
- * 自动映射（当作默认连线状态）；`manual` = 作者手工连的线，优先级更高。
+ * 落库位置：沿用既有的 `paramMap` JSON 列，`source` 命名空间下**只按模式**存放
+ * 作者画的线，键写作 `source.mode:<模式>`（值 = `{ <entryId>: ioKey | null }`，
+ * `null` = 作者显式断开）。不新增表结构。
+ *
+ * 为什么没有「与模式无关的手工线」：连线是作者在某个模式下的画布上画的，
+ * 不存在脱离模式的语境；留一个通用层只会让「这条线到底哪个模式在生效」变成
+ * 需要推理的问题，两套键空间互相覆盖也正是丢线的历史根因。因此没有选中模式
+ * 时**禁止连线**，每条手工线都归属一个模式。
  */
 
 import {
@@ -245,36 +250,34 @@ export const MODE_KEY_PREFIX = "mode:";
 export type ParamMappingByMode = Record<string, Record<string, string | null>>;
 
 export interface ParamMapping {
-  /** 作者手工连的线（优先级高于自动映射）。 */
-  manual?: Record<string, string | null>;
-  /** 按模式的覆盖（作者在某模式下改了连线）。 */
+  /** 作者画的线，按模式分开（`{ [mode]: { [entryId]: ioKey | null } }`）。 */
   manualByMode?: ParamMappingByMode;
+  /** 服务端富化时算出的**默认连线状态**（`entryId → ioKey`）。
+   *
+   *  它不是持久化字段，也不参与序列化：读取时由 `buildParamEntries` +
+   *  `autoMapEntries` 现算一份填进来。存在的意义是让「解析 / 应用 / 展示」
+   *  三处共用同一份自动映射结果 —— 自动映射依赖 workflowIO，而后者由调用方
+   *  单独持有，统一在这里收口可以避免各层各算一遍、算出不一致的默认线。 */
+  auto?: Record<string, string | null>;
   /** 作者改过的「对外参数名」（ioKey → 名字）。 */
   labels?: Record<string, string>;
 }
 
 /** 解析某一模式下生效的「对外参数 id → 目标 ioKey」表。
  *
- *  优先级：该模式的手工线 > 与模式无关的手工线 > 自动映射（默认连线状态）。
- *  `manualByMode` 的形状是 `{ [entryId]: { [mode]: ioKey | null } }` —— 按
- *  **条目**归拢，与落库的 `source.<entryId>.<mode>` 一一对应；按模式查一次
- *  即得该模式下所有被手工改过的线。 */
+ *  优先级：该模式作者画的线（含显式 `null` = 断开） > 默认连线状态（自动映射）。
+ *  `manualByMode` 的形状是 `{ [mode]: { [entryId]: ioKey | null } }` —— 按
+ *  **模式**归拢，与落库的 `source.mode:<模式>` 一一对应；查一次即得该模式下
+ *  所有被作者改过的线。 */
 export function resolveMapping(
   entries: readonly ParamEntry[],
   io: WorkflowIOMap | null | undefined,
   mapping: ParamMapping | null | undefined,
   mode?: string | null
 ): Record<string, string | null> {
-  const auto = autoMapEntries(entries, io);
+  const auto = mapping?.auto ?? autoMapEntries(entries, io);
   const out: Record<string, string | null> = { ...auto };
-  const manual: Record<string, string | null> = { ...(mapping?.manual ?? {}) };
-  if (mode) {
-    for (const [entryId, byMode] of Object.entries(mapping?.manualByMode ?? {})) {
-      if (Object.prototype.hasOwnProperty.call(byMode, mode)) {
-        manual[entryId] = byMode[mode] ?? null;
-      }
-    }
-  }
+  const manual: Record<string, string | null> = mode ? (mapping?.manualByMode?.[mode] ?? {}) : {};
   for (const entry of entries) {
     if (Object.prototype.hasOwnProperty.call(manual, entry.id)) {
       out[entry.id] = manual[entry.id] ?? null;
@@ -283,92 +286,107 @@ export function resolveMapping(
   return out;
 }
 
-/** 某个对外参数当前生效的手工线（模式线优先，其次通用线）；没有手工线返回
- *  `undefined`。`null` 表示作者显式断开，必须与「没有手工线」区分开。 */
+/** 某个对外参数在指定模式下作者画的线；没有则返回 `undefined`。
+ *  `null` 表示作者显式断开，必须与「没有手工线」区分开。
+ *  没有模式时一律返回 `undefined` —— 不存在脱离模式的手工线（见文件头注释）。 */
 export function manualTargetFor(
   mapping: ParamMapping | null | undefined,
   entryId: string,
   mode?: string | null
 ): string | null | undefined {
-  if (mode && mapping?.manualByMode?.[entryId] &&
-      Object.prototype.hasOwnProperty.call(mapping.manualByMode[entryId], mode)) {
-    return mapping.manualByMode[entryId][mode] ?? null;
-  }
-  if (mapping?.manual && Object.prototype.hasOwnProperty.call(mapping.manual, entryId)) {
-    return mapping.manual[entryId] ?? null;
+  if (!mode) return undefined;
+  const byEntry = mapping?.manualByMode?.[mode];
+  if (byEntry && Object.prototype.hasOwnProperty.call(byEntry, entryId)) {
+    return byEntry[entryId] ?? null;
   }
   return undefined;
 }
 
 /** 从持久化的 `paramMap` 反序列化映射。
  *
- *  `source` 命名空间下并存两种键（与 serializeParamMapping 一一对应）：
- *   · `<entryId> = "ioKey" | null`             —— 与模式无关的手工线；
- *   · `mode:<mode> = { <entryId>: ioKey|null }` —— 按模式的手工线。
- *  两者的键空间必须分开：曾经按模式覆盖直接挂在 entryId 下，与通用线同名互踩，
- *  落库后通用线被整条覆盖、刷新即丢。
+ *  只认 `source.mode:<模式> = { <entryId>: ioKey | null }` 这一种形状（与
+ *  serializeParamMapping 一一对应）。没有 `mode:` 前缀的键（通用手工线的历史
+ *  形状，如 `source.<entryId>`）一律**丢弃**：那些无模式的线在新模型里没有
+ *  生效语境，留着只会让「这条线哪个模式用」无从判定。
  *
- *  畸形数据（数字 / 数组 / 非对象模式表）一律丢弃——画布容不下脏数据。 */
+ *  畸形数据（数字 / 数组 / 非对象模式表）同样丢弃——画布容不下脏数据。 */
 export function parseParamMapping(paramMap: unknown): ParamMapping {
-  const out: ParamMapping = { manual: {}, manualByMode: {}, labels: {} };
+  const out: ParamMapping = { manualByMode: {}, labels: {} };
   if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) return out;
   const sourceRaw = (paramMap as Record<string, unknown>).source;
   if (!sourceRaw || typeof sourceRaw !== "object" || Array.isArray(sourceRaw)) return out;
   for (const [key, value] of Object.entries(sourceRaw as Record<string, unknown>)) {
-    /* 按模式的表：键前缀为 `mode:`，值是「条目 id → 目标 ioKey」。 */
-    if (key.startsWith(MODE_KEY_PREFIX)) {
-      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
-      const mode = key.slice(MODE_KEY_PREFIX.length);
-      if (!mode) continue;
-      const byEntry: Record<string, string | null> = {};
-      for (const [entryId, target] of Object.entries(value as Record<string, unknown>)) {
-        if (typeof target === "string") byEntry[entryId] = target;
-        else if (target === null) byEntry[entryId] = null;
-      }
-      for (const [entryId, target] of Object.entries(byEntry)) {
-        const bucket = (out.manualByMode![entryId] ??= {});
-        bucket[mode] = target;
-      }
-      continue;
+    if (!key.startsWith(MODE_KEY_PREFIX)) continue;
+    const mode = key.slice(MODE_KEY_PREFIX.length);
+    if (!mode) continue;
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const byEntry: Record<string, string | null> = {};
+    for (const [entryId, target] of Object.entries(value as Record<string, unknown>)) {
+      if (typeof target === "string") byEntry[entryId] = target;
+      /* 显式的 null = 作者把这条线断开了，属于合法状态。 */
+      else if (target === null) byEntry[entryId] = null;
     }
-    if (typeof value === "string") {
-      out.manual![key] = value;
-      continue;
-    }
-    /* 显式的 null = 作者把这条线断开了，属于合法状态，必须保留。 */
-    if (value === null) {
-      out.manual![key] = null;
-    }
-    /* 其余（数字 / 数组 / 无前缀的嵌套对象）是脏数据，丢弃。 */
+    if (Object.keys(byEntry).length > 0) out.manualByMode![mode] = byEntry;
   }
   return out;
 }
 
 /** 把映射序列化回 `paramMap` 可落库的形状。
  *
- *  通用手工线写 `source.<entryId>`；按模式的手工线按模式归拢写
- *  `source.mode:<mode> = { <entryId>: ioKey | null }`（两种键空间分开，
- *  同名条目在两个模式下各有一份线时不会互相覆盖）。其余键原样保留。 */
+ *  按模式归拢写 `source.mode:<模式> = { <entryId>: ioKey | null }`；`null`
+ *  表示该模式下作者显式断开，必须一起落库，否则刷新后会被自动映射复活。
+ *  `source` 之外的键原样保留（paramMap 里还有 positiveNode 等其它命名空间）。 */
 export function serializeParamMapping(
   mapping: ParamMapping,
   paramMap: Record<string, unknown>
 ): Record<string, unknown> {
   const source: Record<string, unknown> = {};
-  for (const [id, target] of Object.entries(mapping.manual ?? {})) {
-    if (target !== undefined) source[id] = target;
-  }
-  const byMode: Record<string, Record<string, string | null>> = {};
-  for (const [id, modes] of Object.entries(mapping.manualByMode ?? {})) {
-    for (const [mode, target] of Object.entries(modes)) {
-      /* null（该模式下显式断开）必须一起落库，否则刷新后会被自动映射复活。 */
+  for (const [mode, byEntry] of Object.entries(mapping.manualByMode ?? {})) {
+    const targets: Record<string, string | null> = {};
+    for (const [id, target] of Object.entries(byEntry ?? {})) {
       if (typeof target !== "string" && target !== null) continue;
-      (byMode[mode] ??= {})[id] = target;
+      targets[id] = target;
     }
-  }
-  for (const [mode, targets] of Object.entries(byMode)) {
     if (Object.keys(targets).length > 0) source[`${MODE_KEY_PREFIX}${mode}`] = targets;
   }
   return { ...paramMap, source };
+}
+
+/* ── 默认连线状态的判定（画布上的「恢复默认」与默认线） ── */
+
+/** 某个对外参数在指定模式下**是否还是默认连线状态**（作者没画过线）。
+ *
+ *  用于画布节点上的「恢复默认」：只该在作者改过线时可用，否则按钮点了没变化。 */
+export function isDefaultMapping(
+  mapping: ParamMapping | null | undefined,
+  entryId: string,
+  mode?: string | null
+): boolean {
+  return manualTargetFor(mapping, entryId, mode) === undefined;
+}
+
+/** 该模式下是否有任何对外参数被作者改过线（画布级的「恢复默认」开关依据）。 */
+export function hasManualWiring(
+  mapping: ParamMapping | null | undefined,
+  mode?: string | null
+): boolean {
+  if (!mode) return false;
+  return Object.keys(mapping?.manualByMode?.[mode] ?? {}).length > 0;
+}
+
+/** 清掉指定模式下作者画的全部线，其余模式原样保留。
+ *  落库后 `source.mode:<模式>` 整条消失，该模式的每个对外参数回到默认连线状态。 */
+export function clearModeWiring(
+  mapping: ParamMapping | null | undefined,
+  mode?: string | null
+): ParamMapping {
+  const out: ParamMapping = {
+    manualByMode: { ...(mapping?.manualByMode ?? {}) },
+    labels: { ...(mapping?.labels ?? {}) },
+  };
+  if (out.auto) out.auto = mapping?.auto;
+  if (mode) delete out.manualByMode![mode];
+  return out;
 }
 
 /** 从已有的 workflowIO 反查某个端口的对外参数 id（用于把旧数据接进新模型）。 */
@@ -425,7 +443,7 @@ export function applyParamMapping(args: {
    *   · 手工：用户值只落到那个端口，该节点其余端口不再兜底（作者的线说了算）；
    *   · 自动（默认连线状态）：与"没连线"同义 —— 用户值落自动挑中的端口，
    *     其余端口照旧默认值兜底，语义等价于旧的「暴露 pin 全量下发」。 */
-  const isManualTarget = (id: string) => manualTargetFor(mapping, id, mode) !== undefined;
+  const isManualTarget = (id: string) => !isDefaultMapping(mapping, id, mode);
   const inputs: MappedInput[] = [];
   const unmatched: string[] = [];
   const seen = new Set<string>();
@@ -465,3 +483,86 @@ export function applyParamMapping(args: {
 
   return { inputs, unmatched };
 }
+
+/* ── 画布上的「对外参数节点」（纯派生，无 React / 无 IO） ──
+ *
+ * 映射在编辑器画布上表现为一个个**真实节点**：每个对外参数一个卡片，卡片右侧
+ * 一个输出端点，作者把它拖到宿主节点的端口上即完成连线。节点位置按宿主节点
+ * 的位置在左侧成列排布 —— 位置是**派生**的，不落库：作者拖不动这些卡片（要挪
+ * 就挪宿主节点），也就不会出现「换了台机器打开发现卡片飘到天边」。
+ *
+ * 这里只算几何与 id，视图（React Flow 节点）由编辑器组装。
+ */
+
+/** 对外参数节点 id 前缀（与 ComfyUI 数字节点 id / note: / grp: 等命名空间隔离）。 */
+export const PARAM_NODE_PREFIX = "pio:";
+
+/** 对外参数节点 id。条目的 nodeId 可能是 "5" 这类纯数字，直接当 React Flow
+ *  节点 id 会与宿主节点撞名，必须加前缀。 */
+export function paramNodeId(entryId: string): string {
+  return `${PARAM_NODE_PREFIX}${entryId}`;
+}
+
+/** 从节点 id 反解对外参数条目 id；不是对外参数节点时返回 null。 */
+export function entryIdFromParamNodeId(nodeId: string): string | null {
+  return nodeId.startsWith(PARAM_NODE_PREFIX)
+    ? nodeId.slice(PARAM_NODE_PREFIX.length)
+    : null;
+}
+
+/** 对外参数卡片的几何（宽度与端口行高必须与渲染组件一致，否则连线锚点会歪）。 */
+export const PARAM_NODE_WIDTH = 208;
+/** 卡片头（标题）+ 尾部提示的行高。 */
+export const PARAM_NODE_HEADER_H = 26;
+export const PARAM_NODE_ROW_H = 22;
+export const PARAM_NODE_PAD_Y = 8;
+
+/** 卡片高度：头部 + 每个端口一行 + 上下留白（至少留一行，空条目也画得出端点）。 */
+export function paramNodeHeight(entry: ParamEntry): number {
+  return PARAM_NODE_HEADER_H + Math.max(1, entry.pins.length) * PARAM_NODE_ROW_H + PARAM_NODE_PAD_Y;
+}
+
+/** 卡片列与宿主节点左缘之间的水平距离（留出走线的空间）。 */
+export const GROUP_OFFSET_X = 260;
+
+/** 卡片列间距（换列时的横向步长）。 */
+export const PARAM_NODE_COLUMN_W = PARAM_NODE_WIDTH + 28;
+
+/** 每张卡片之间的纵向留白。 */
+export const PARAM_NODE_GAP = 10;
+
+/** 同一宿主节点上每列最多堆几张卡片，超出换列（否则纵向无限延伸）。 */
+const PARAM_NODES_PER_COLUMN = 6;
+
+/** 由宿主节点的画布位置 + 条目顺序算出卡片位置。
+ *
+ *  位置是**派生**的：宿主节点挪到哪，卡片列就跟到哪（作者拖不动卡片本身）。
+ *  宿主节点没有位置（`hostPosById` 缺这项）时跳过 —— 交由视图兜底，不产出
+ *  NaN 坐标。同一宿主节点上的多张卡片纵向依次排开，超过一列容量换到左边一列。 */
+export function placeParamNodes(
+  entries: readonly ParamEntry[],
+  hostPosById: Record<string, { x: number; y: number } | undefined>
+): Record<string, { x: number; y: number }> {
+  const out: Record<string, { x: number; y: number }> = {};
+  const cursorByNode: Record<string, number> = {};
+  const columnByNode: Record<string, number> = {};
+  for (const entry of entries) {
+    const host = hostPosById[entry.nodeId];
+    if (!host) continue;
+    const column = columnByNode[entry.nodeId] ?? 0;
+    const rowY = cursorByNode[entry.nodeId] ?? 0;
+    out[paramNodeId(entry.id)] = {
+      x: host.x - GROUP_OFFSET_X - column * PARAM_NODE_COLUMN_W,
+      y: host.y + rowY,
+    };
+    const nextRow = rowY + paramNodeHeight(entry) + PARAM_NODE_GAP;
+    if (nextRow > PARAM_NODES_PER_COLUMN * (PARAM_NODE_HEADER_H + PARAM_NODE_ROW_H + PARAM_NODE_GAP)) {
+      columnByNode[entry.nodeId] = column + 1;
+      cursorByNode[entry.nodeId] = 0;
+    } else {
+      cursorByNode[entry.nodeId] = nextRow;
+    }
+  }
+  return out;
+}
+

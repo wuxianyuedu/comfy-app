@@ -57,10 +57,6 @@ export interface WorkflowLibraryDetailController {
   isLoading: boolean;
   errorMessage: string | undefined;
   workflowIO: WorkflowIOMap | null;
-  /** 模板 `paramMap` 原始列 —— 「对外参数 → 节点端口」的连线映射存在
-   *  `paramMap.source` 命名空间下（见 ~/lib/workflow-param-mapping）。
-   *  画布节点据此展示作者配好的映射。 */
-  paramMap: Record<string, unknown>;
   sourceData: SourceModalData | null;
   /** 有可执行图 —— 决定主 CTA 是否可点。 */
   usable: boolean;
@@ -217,7 +213,6 @@ export function useWorkflowLibraryDetail(
     isLoading: detailQuery.isLoading,
     errorMessage: detailQuery.error?.message,
     workflowIO,
-    paramMap: (template?.paramMap ?? {}) as Record<string, unknown>,
     sourceData,
     usable: formatFlags.usable,
     canResync: syncFlags.canResync,

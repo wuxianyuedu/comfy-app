@@ -43,8 +43,6 @@ import {
 } from "../shared/workflow-io";
 import { seedModeOverrides } from "@/components/studio/project-canvas/CanvasNode/helpers";
 import { modeLabel } from "./workflow-library-config";
-import { useParamMappingSummary } from "./hooks/use-param-mapping-summary";
-import { WorkflowParamMappingSummary } from "./WorkflowParamMappingSummary";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import {
   WorkflowNodeActionButton,
@@ -68,8 +66,6 @@ interface Props {
   workflowName: string;
   taskType: string;
   workflowIO: WorkflowIOMap | null;
-  /** 模板 paramMap（`source` 命名空间 = 对外参数 → 节点端口的连线映射）。 */
-  paramMap?: Record<string, unknown>;
   usable: boolean;
   /** 多模式工作流：提供时第二行右侧的类型 chip 变成模式切换下拉。 */
   modes?: string[];
@@ -84,7 +80,6 @@ export function WorkflowCanvasNodePreview({
   workflowName,
   taskType,
   workflowIO,
-  paramMap,
   usable,
   modes,
   defaultMode,
@@ -209,15 +204,6 @@ export function WorkflowCanvasNodePreview({
   /* 与画布 WorkflowNode 同源的双行结构：inputs 由 DynamicWorkflowForm(compact)
    * 渲染（库内无 React Flow 上下文，不带端点），outputs 单独成段在表单之后。 */
   const { inputs, outputs } = splitWorkflowIO(workflowIO);
-
-  /* 对外参数映射：同一个模型（~/lib/workflow-param-mapping）在库内按只读口径
-   *  展示 —— 每张映射卡对应编辑器里的一个对外参数，标出它连到哪个节点端口。
-   *  行尾徽标让「这一行现在被哪个对外参数占着」与表单逐行对齐。 */
-  const mappingSummary = useParamMappingSummary({
-    io: workflowIO,
-    paramMap,
-    mode: defaultMode ?? null,
-  });
 
   /* seed 类参数的「控件后行为」：按当前模式解析（模式覆盖优先，回退条目全局）。
    *  defaultMode 空时与旧行为一致，只读条目全局 seedMode。 */
@@ -416,24 +402,7 @@ export function WorkflowCanvasNodePreview({
           workflowId={workflowId}
           onUploadProgress={(message) => setUploadNotice(message)}
           onUploadError={(message) => setUploadNotice(message)}
-          rowTrailing={(entry) => {
-            const mapped = mappingSummary.byPort[entry.ioKey];
-            if (!mapped) return null;
-            return (
-              <span
-                className="inline-flex shrink-0 items-center gap-1 rounded-[3px] border border-violet-400/30 bg-violet-500/10 px-1 py-px text-[9.5px] font-medium text-violet-500"
-                title={`该参数是工作流对外参数「${mapped.entry.label}」的落点`}
-              >
-                <span className="h-1 w-1 rounded-full bg-violet-400" />
-                {mapped.entry.label}
-              </span>
-            );
-          }}
         />
-
-        {/* 对外参数映射（与编辑器同源）：默认连线状态 + 作者手工改过的线。
-            库内只读展示，改连线仍在工作流编辑器的画布上完成。 */}
-        <WorkflowParamMappingSummary rows={mappingSummary.rows} />
 
         {/* outputs 行：与画布 outputs labelRow 镜像同构（库内无端点） */}
         {outputs.length > 0 && (
