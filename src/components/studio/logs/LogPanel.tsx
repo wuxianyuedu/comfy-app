@@ -46,7 +46,8 @@ const FILTER_LABELS: { label: string; value: LogFilter }[] = [
  * 业务日志挤掉。分开看是最直接的「让日志有意义」手段。 */
 const ORIGIN_LABELS: { label: string; value: LogOriginFilter }[] = [
   { label: "全部来源", value: "all" },
-  { label: "应用", value: "app-runtime" },
+  { label: "应用运行", value: "app-runtime" },
+  { label: "应用服务", value: "app" },
   { label: "启动", value: "dev" },
   { label: "启动器", value: "launcher" },
 ];
@@ -198,6 +199,8 @@ const LogRow = memo(function LogRow({
 const ORIGIN_TEXT: Record<string, string> = {
   all: "全部来源",
   "app-runtime": "应用运行",
+  /** 应用服务自身输出（Next dev server 的 stdout/stderr 转录）。 */
+  app: "应用服务",
   dev: "开发服务",
   launcher: "启动器",
 };
@@ -217,19 +220,29 @@ function pageSummary(
 }
 
 export function LogPanel() {
-  const { filteredLogs, filter, origin, search, isOpen, counts, page, pageSize } =
-    useLogPanel(
-      useShallow((state) => ({
-        filteredLogs: state.filteredLogs,
-        filter: state.filter,
-        origin: state.origin,
-        search: state.search,
-        isOpen: state.isOpen,
-        counts: state.counts,
-        page: state.page,
-        pageSize: state.pageSize,
-      })),
-    );
+  const {
+    filteredLogs,
+    filter,
+    origin,
+    search,
+    isOpen,
+    counts,
+    page,
+    pageSize,
+    bootId,
+  } = useLogPanel(
+    useShallow((state) => ({
+      filteredLogs: state.filteredLogs,
+      filter: state.filter,
+      origin: state.origin,
+      search: state.search,
+      isOpen: state.isOpen,
+      counts: state.counts,
+      page: state.page,
+      pageSize: state.pageSize,
+      bootId: state.bootId,
+    })),
+  );
   const revision = useLogPanel((state) => state.revision);
   const setFilter = useLogPanel((state) => state.setFilter);
   const setOrigin = useLogPanel((state) => state.setOrigin);
@@ -456,7 +469,19 @@ export function LogPanel() {
             面板保留最近 MAX_LOG_ENTRIES 条（内存上限，防止长跑吃满内存），
             但**显示**按 200 条/页翻，用户不会再被「两千条封顶」挡住视线。 */}
         <div className="flex h-9 shrink-0 items-center justify-between border-t border-white/8 bg-white/2 px-4 text-[12px] text-gray-500">
-          <span>{pageSummary(safePage, totalPages, pageSize, total, counts.all)}</span>
+          <span className="flex items-center gap-2">
+            <span>{pageSummary(safePage, totalPages, pageSize, total, counts.all)}</span>
+            {/* 服务端进程标识：用户报障时能说清「日志来自哪个应用服务进程」，
+                也让面板在服务真重启后能自证（时间线已重置）。 */}
+            {bootId && (
+              <span
+                className="shrink-0 rounded border border-white/8 px-1.5 py-px text-[11px] text-gray-500"
+                title={`应用服务进程标识：${bootId}（重启后会变化，面板据此重置时间线）`}
+              >
+                服务 {bootId.split(":").slice(-2).join(":")}
+              </span>
+            )}
+          </span>
           <span className="flex items-center gap-3">
             {shouldPin && (
               <button

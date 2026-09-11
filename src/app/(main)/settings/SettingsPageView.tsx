@@ -699,6 +699,25 @@ export function SettingsPageView({
         </div>
       )}
 
+      {/* 读取失败但界面可用（有兜底草稿）：非阻塞提示条 + 重试出口。
+          整页错误视图只留给「连兜底都没有」的场景——应用服务刚重启时把整个
+          设置页换成错误页，对用户没有任何好处（ISSUE #360）。 */}
+      {c.serveState && (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-700 dark:text-amber-300">
+          <span className="min-w-0 flex-1 break-words">
+            本次未能读取最新配置，界面显示的是上一次成功读取的内容：
+            {c.serveState.errorText}
+          </span>
+          <button
+            type="button"
+            onClick={c.retry}
+            className="border-amber-500/40 hover:bg-amber-500/15 shrink-0 rounded border px-2 py-0.5 text-xs transition-colors"
+          >
+            重新读取
+          </button>
+        </div>
+      )}
+
       {/* ═══ Appearance Section ═══ */}
       {c.section === "appearance" && (
         <Card title="外观主题">

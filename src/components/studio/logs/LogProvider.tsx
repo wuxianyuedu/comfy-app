@@ -66,12 +66,16 @@ export function describeUnhandledRejection(reason: unknown): string {
  * 面板轮询的日志来源与顺序。顺序即请求顺序，也决定同一批轮询的入库先后。
  *
  * - `dev` / `launcher`：启动链路（dev-launcher.log / start-tauri-launcher.log）；
+ * - `app`：**应用服务自身输出**（Next dev server 的 stdout / stderr 转录，
+ *   见 `src/lib/capture-streams.server.ts`）——首屏编译错误、Turbopack FATAL、
+ *   未捕获的服务端异常都在这里，此前不在任何被轮询的文件里，导致「应用服务
+ *   没起来」时面板一片空白（ISSUE #360）；
  * - `app-runtime`：应用运行期业务操作（见 src/lib/app-runtime-log.ts）。
  *
- * 三路的行都带写入时刻，合并后由 `mergeTimeline` 按时刻排序，因此到达顺序
+ * 四路的行都带写入时刻，合并后由 `mergeTimeline` 按时刻排序，因此到达顺序
  * 不影响面板的时间序（ISSUE #262）。
  */
-const POLL_SOURCES = ["launcher", "dev", "app-runtime"] as const;
+const POLL_SOURCES = ["launcher", "dev", "app", "app-runtime"] as const;
 type PollSource = (typeof POLL_SOURCES)[number];
 
 /** 轮询间隔：日志「实时感」与请求量的折中（对齐规范 07 §7.8 的增量轮询）。 */
@@ -214,9 +218,19 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
   const offsetsRef = useRef<Partial<Record<PollSource, number>>>({
     dev: 0,
     launcher: 0,
+    app: 0,
     "app-runtime": 0,
   });
   const setSessionStart = useLogStore((s) => s.setSessionStart);
+  const setBootId = useLogStore((s) => s.setBootId);
+  /* 上一轮看到的服务端进程标识：带上它再问，服务端才能在「换个进程回答」时
+   * 回报真实重启（见 /api/logs/current 的 bootId/mismatch）。 */
+  const bootIdRef = useRef<string>("");
+  /* 拉不到日志 = 应用服务本身不可达（接口 5xx / 网络层失败）。这不是「本次
+   * 运行没有日志」，而是「面板的数据源断了」——必须说出来，否则用户看到空白
+   * 面板会以为「日志里什么也没有」，正是 ISSUE #360 里最难排查的那种空白。
+   * 只在**状态翻转**时写一条（不刷屏），恢复后再翻转回正常。 */
+  const unreachableRef = useRef(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
     let mounted = true;
@@ -224,8 +238,24 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     const pollSource = async (source: PollSource) => {
       try {
         const offset = offsetsRef.current[source] ?? 0;
-        const data = await fetchFileLogSlice(source, offset);
+        const data = await fetchFileLogSlice(source, offset, bootIdRef.current);
         if (!data || !mounted) return;
+
+        /* 服务端进程换过了（真重启 / 另一实例接管端口）：时间线里已有的行属于
+         * 上一个进程，与本次会话没有可比性。清空时间线、重置全部游标，本轮从
+         * 头读——否则两个进程的输出会混成一条线，用户看到的「重启后什么都没
+         * 有」正是这种污染的另一种表现（ISSUE #360）。 */
+        let forceReread = false;
+        if (typeof data.bootId === "string" && data.bootId !== "") {
+          if (bootIdRef.current !== "" && data.bootId !== bootIdRef.current) {
+            forceReread = true;
+            for (const key of POLL_SOURCES) offsetsRef.current[key] = 0;
+          }
+          bootIdRef.current = data.bootId;
+          setBootId(data.bootId);
+        }
+        if (data.mismatch) forceReread = true;
+        if (forceReread) offsetsRef.current[source] = 0;
 
         /* 裸文本行（读不到时间戳）按解析当时的时刻落板；钳到本地当前时刻，
          * 保证面板时间线不会被未来的时间戳顶穿。 */
@@ -246,8 +276,28 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
          * 下一轮从它之后继续读。`data.offset === 0`（服务端要求重读整文件）
          * 时同样落到 size，避免下一轮再从头读一遍。 */
         offsetsRef.current[source] = data.size;
+        if (unreachableRef.current) {
+          unreachableRef.current = false;
+          addEntry({
+            level: "info",
+            message: `日志面板已恢复与「应用服务」的连接，继续接收 ${POLL_SOURCES.length} 路日志。`,
+            source: "system",
+          });
+        }
       } catch {
-        // 开发服务器尚未就绪或日志文件不存在时静默忽略
+        /* 网络层失败：应用服务不可达（还在编译 / 已退出 / 端口被别人占用）。
+         * 只记一次，避免每 2s 轮询刷屏；恢复时上面再记一条。 */
+        if (!unreachableRef.current) {
+          unreachableRef.current = true;
+          addEntry({
+            level: "warn",
+            message:
+              "日志面板暂时读不到日志：应用服务（Next dev server）当前不可达。" +
+              "常见原因：还在首屏编译、进程已退出、或端口被别的实例占用。" +
+              "请先确认应用能正常打开；启动相关的日志见「启动器」来源与 log/launcher/。",
+            source: "system",
+          });
+        }
       }
     };
 
@@ -265,7 +315,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       clearInterval(id);
     };
-  }, [appendFileLogs, setSessionStart]);
+  }, [addEntry, appendFileLogs, setSessionStart, setBootId]);
 
   // ── Keyboard shortcut: Ctrl+Shift+L ──
   useEffect(() => {

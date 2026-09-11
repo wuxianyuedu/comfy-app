@@ -122,3 +122,57 @@ describe("GET /api/logs/current 无新增时的快速路径", () => {
     expect(second.offset).toBe(first.size);
   });
 });
+
+/* ── 服务端进程标识（ISSUE #360）──────────────────────────────
+ * 面板此前无从判断「响应来自哪个应用服务进程」：应用服务重启前后，用户既看不到
+ * 重启这件事，也说不出自己连的是哪个进程。这里把两条契约钉住：
+ *   1. 每个响应都带 `bootId`（同一进程内恒定）；
+ *   2. 客户端带上一轮的 bootId 时，若与当前不一致即标 `mismatch`，且**从头上读**
+ *      （不能拿旧进程的游标去切新文件）。
+ */
+describe("GET /api/logs/current — 服务端进程标识", () => {
+  async function readWithBoot(source: string, offset: number, bootId?: string) {
+    const query = new URLSearchParams({ source, offset: String(offset) });
+    if (bootId !== undefined) query.set("bootId", bootId);
+    const res = await GET(
+      new Request(`http://localhost/api/logs/current?${query.toString()}`),
+    );
+    return (await res.json()) as {
+      content: string;
+      size: number;
+      offset: number;
+      bootId?: string;
+      mismatch?: boolean;
+    };
+  }
+
+  it("每个响应都带 bootId，且同一进程内恒定", async () => {
+    writeLines(3);
+    const a = await readWithBoot("app-runtime", 0);
+    const b = await readWithBoot("app-runtime", a.size);
+    expect(a.bootId).toBeTruthy();
+    expect(a.bootId).toBe(b.bootId);
+    // 未带客户端标识时不存在「不一致」
+    expect(a.mismatch).toBe(false);
+  });
+
+  it("客户端标识与当前进程一致 → 正常增量（不重读）", async () => {
+    writeLines(3);
+    const first = await readWithBoot("app-runtime", 0);
+    writeLines(2, 100);
+    const second = await readWithBoot("app-runtime", first.size, first.bootId);
+    expect(second.mismatch).toBe(false);
+    expect(second.content).toContain("任务里程碑 100");
+    // 增量：不该把前 3 行再读一次
+    expect(second.content).not.toContain("任务里程碑 0");
+  });
+
+  it("客户端标识与当前进程不一致 → mismatch 且从头上读", async () => {
+    writeLines(3);
+    const data = await readWithBoot("app-runtime", 999, "dev-boot:旧进程:1");
+    expect(data.mismatch).toBe(true);
+    // 从头上读：旧进程的游标不能用来切本次同名的文件
+    expect(data.offset).toBe(0);
+    expect(data.content.split("\n").filter(Boolean)).toHaveLength(3);
+  });
+});

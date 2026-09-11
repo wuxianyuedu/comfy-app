@@ -18,11 +18,19 @@ export interface FileLogSlice {
    * null = 读不到锚点（非双击链路启动），面板此时不做时间线截断。
    */
   sessionStart?: number | null;
+  /**
+   * 服务端进程标识。客户端存下它，下一轮带上比对；不一致即「应用服务真重启过」，
+   * 面板据此重置时间线与游标（否则重启前后的行会混成一条线）。
+   */
+  bootId?: string;
+  /** true = 本轮请求带的服务进程标识与响应不一致（详见 route.ts）。 */
+  mismatch?: boolean;
 }
 
 export type LogSourceKind =
   | "dev"
   | "launcher"
+  | "app"
   | "comfyui-runtime"
   | "drizzle-studio-runtime"
   | "ollama-runtime"
@@ -34,13 +42,20 @@ function sourceQuery(source: LogSourceKind): string {
   return source;
 }
 
-/** 拉取某日志文件从 offset 起的新增内容；服务端未就绪 / 文件不存在时返回 null。 */
+/**
+ * 拉取某日志文件从 offset 起的新增内容；服务端未就绪 / 文件不存在时返回 null。
+ *
+ * `bootId` 是上一轮响应的服务端进程标识：带上它，服务端才能在「换个进程回答」
+ * 时告诉我们真实发生过重启（响应里的 `mismatch`），面板据此重置时间线。
+ */
 export async function fetchFileLogSlice(
   source: LogSourceKind,
   offset: number,
+  bootId?: string,
 ): Promise<FileLogSlice | null> {
+  const boot = bootId ? `&bootId=${encodeURIComponent(bootId)}` : "";
   const res = await fetch(
-    `/api/logs/current?source=${sourceQuery(source)}&offset=${offset}`,
+    `/api/logs/current?source=${sourceQuery(source)}&offset=${offset}${boot}`,
   );
   if (!res.ok) return null;
   return (await res.json()) as FileLogSlice;
