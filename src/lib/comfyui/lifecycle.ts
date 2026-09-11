@@ -18,7 +18,7 @@ import { spawn, exec } from "child_process";
 import fs from "fs";
 import path from "path";
 import { COMFYUI_DEFAULT_PORT, getExitPolicy, getSettingsSync } from "../app-settings";
-import { probeComfyBase } from "./client";
+import { probeComfyBase, probeComfyAtPort } from "./client";
 import { logger } from "~/server/lib/logger";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { resolveEffectiveLaunch } from "./desktop-instance";
@@ -351,18 +351,46 @@ function withTransientFlags(status: ComfyUiStatus): ComfyUiStatus {
   return { ...status, starting, stopping };
 }
 
+/* 状态判定 = 快照（进程在不在）+ HTTP 探测（接口通不通），但**先快照后探测**，
+ * 且快照命中端口时不再走那条「重问一遍进程表」的通用探测。
+ *
+ * 为什么这个顺序是关键的（ISSUE #339 的残留延迟）：`probeComfyUi()` 底下要
+ * `resolveComfyBase()`，而后者在配置了路径时会**再查一遍进程表**才决定探哪个
+ * 地址——它不认快照刚拿到的事实，于是同一件事被问两遍，第二遍还是最贵的那个
+ * （PowerShell 枚举 `Win32_Process`，本机 ~2.5s，超时 10s）。串起来就是
+ * 「ComfyUI 明明已经在跑，打开设置页还要等一会才显示运行中」。
+ *
+ * 现在的路径：
+ *   · 快照命中「进程 + 端口」→ 直接探那个端口（一条 HTTP，毫秒级）。
+ *     这是「外部已经启动 ComfyUI」的主场景，也是用户抱怨的那条。
+ *   · 快照拿不到端口（进程没找到 / 端口未绑定 / 只有 bound 判定）→ 才退回
+ *     通用探测；那条路要负责「配置端口 / 环境变量 / 偏移端口」的发现，是
+ *     快照覆盖不到的场景。
+ *
+ * 不把通用探测与快照**强行并发**：它自己也要查进程表，与快照的候选查询并发
+ * 会在冷启动高负载的机器上同时拉起更多 PowerShell 枚举——那正是当初「进程表
+ * 查询超时」的成因。快照内部已经把「同一件事的几种问法」并发了（见 status.ts），
+ * 那批并发是必要且有界的，这里不再叠一层。 */
 async function computeComfyUiStatus(): Promise<ComfyUiStatus> {
   const starting = isComfyStarting();
   const stopping = isComfyStopping();
   const snap = await getComfyRuntimeSnapshot();
-  const probe = await probeComfyUi(1500);
+  /* 快照已定位到实例的监听端口 → 直连它，不再绕 `resolveComfyBase()`。
+   * 探不通（实例刚起、/system_stats 还没就绪）时退回通用探测的结论——那可能
+   * 从「配置端口 / 偏移端口」上发现同一个实例（快照的端口是 PID 的监听端口，
+   * 正常情况下两者一致，退回只是兜底）。 */
+  const probe = snap.running && snap.port
+    ? (await probeComfyAtPort(snap.port)) ?? (await probeComfyUi(1500))
+    : await probeComfyUi(1500);
   /* 「启动中」是唯一会自动翻页的结论（进程在、端口还没绑定 → 下一秒端口就出来了），
    * 所以它是唯一必须**当场复核**的结论：拿到的快照说还在启动、HTTP 也没通时，
    * 丢掉这份（可能刚过期的）快照重新取一次事实再判，避免把 5s 轮询里的两次
    * 采样都押在同一份陈旧快照上、让状态行停在「ComfyUI 正在启动…」（ISSUE #344）。 */
   if (!probe && snap.running && snap.port === null) {
-    const refreshed = await getComfyRuntimeSnapshot({ force: true });
-    const reprobe = await probeComfyUi(1500);
+    const [refreshed, reprobe] = await Promise.all([
+      getComfyRuntimeSnapshot({ force: true }),
+      probeComfyUi(1500),
+    ]);
     return buildComfyUiStatus({ starting, stopping, snap: refreshed, probe: reprobe });
   }
   return buildComfyUiStatus({ starting, stopping, snap, probe });
