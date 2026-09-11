@@ -1,4 +1,5 @@
 import { describe, expect, it, afterEach } from "vitest";
+import { readFile } from "node:fs/promises";
 import { Writable } from "node:stream";
 import { createPinoLogger, REDACT_PATHS } from "~/server/lib/logger";
 
@@ -175,5 +176,45 @@ describe("日志不落 PII / prompt 原文（§11.5 埋点纪律扩展到日志�
     const parsed = JSON.parse(raw) as { email: string; phone: string };
     expect(parsed.email).toBe("[Redacted]");
     expect(parsed.phone).toBe("[Redacted]");
+  });
+});
+
+/* ── ERROR 级镜像进「应用日志」面板（ISSUE #360）─────────────────
+ * 面板只轮询 launcher / dev-launcher / app-runtime；pino 的输出落在 nextjs 文件与
+ * stdout，服务端 ERROR 因此在面板里完全不可见——用户遇到「操作失败但日志空的」
+ * 时无从排查。这里把镜像契约钉住：ERROR 一定进 app-runtime，INFO 一定不进
+ * （否则高频调用把真正的问题挤出视野）。 */
+describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
+  async function readAppRuntimeLog(): Promise<string> {
+    const { APP_RUNTIME_LOG } = await import("~/lib/log-paths");
+    try {
+      return await readFile(APP_RUNTIME_LOG, "utf8");
+    } catch {
+      return "";
+    }
+  }
+
+  it("logger.error 会额外写一条 ERROR 进 app-runtime 日志", async () => {
+    const before = await readAppRuntimeLog();
+    const { dest } = capture();
+    const log = createPinoLogger({ destination: dest });
+    log.error({ err: new Error("no such table: llmConfig") }, "trpc_error");
+    await flush();
+
+    const after = await readAppRuntimeLog();
+    const added = after.slice(before.length);
+    expect(added).toContain("[ERROR]");
+    expect(added).toContain("no such table: llmConfig");
+  });
+
+  it("logger.info 不写面板（高频调用不刷屏）", async () => {
+    const before = await readAppRuntimeLog();
+    const { dest } = capture();
+    const log = createPinoLogger({ destination: dest });
+    log.info({ path: "setting.get" }, "trpc_timing");
+    await flush();
+
+    const after = await readAppRuntimeLog();
+    expect(after.slice(before.length)).toBe("");
   });
 });

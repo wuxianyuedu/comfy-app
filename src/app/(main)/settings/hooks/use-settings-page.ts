@@ -83,6 +83,27 @@ export type LlmConfig = {
   apiKey: string | null;
 };
 
+/**
+ * 服务端下发的 LLM 配置形状（`llm.configGet` 的出口）。
+ *
+ * 与草稿 {@link LlmConfig} 的唯一差别在 `extraModels`：下发的是「本地候选字符串 +
+ * 远端条目对象」的混合清单（保存时按类型各自写回），而草稿在播种时就拆成了
+ * `localCandidates` 与 `extraModels` 两栏。因此「读取兜底缓存」按本类型存。
+ */
+export type QueryLlmConfig = Omit<
+  LlmConfig,
+  "extraModels" | "localCandidates" | "temperatureByTask" | "apiKey"
+> & {
+  /** 服务端出口的 apiKey 可选（未配置时为 undefined 而非 null）。 */
+  apiKey?: string | null;
+  /** 混合清单：字符串 = 本地候选，对象 = 远端独立模型。 */
+  extraModels: Array<string | RemoteModelEntry>;
+  /** 服务端可能下发 null（表示「未配置覆盖」），草稿层归一为 undefined。 */
+  temperatureByTask?: Record<TaskType, number> | null;
+  /** 下发形状不含该栏（它是草稿侧拆出来的），容错为可选。 */
+  localCandidates?: string[];
+};
+
 export type Section =
   | "appearance"
   | "appUpdate"
@@ -120,6 +141,15 @@ export interface SettingsPageController {
   /** 失败时给用户看的人话文案（原文见日志的 `raw` 字段）。 */
   errorText: string;
   retry: () => void;
+  /**
+   * 「读不到 / 刚保存的配置」类失败的**可续用**状态（ISSUE #360）：
+   * 草稿已由缓存兜底播种，界面可用，只是当次刷新失败——视图据此在顶部渲染一条
+   * **非阻塞**提示条（含重试），而不是把整页换成错误视图。
+   *
+   * 与 `hasError` 的分工：`hasError` = 失败 **且** 连兜底草稿都没有（真的没法用）；
+   * `serveState` = 有兜底草稿时的「降级但可用」。两者互斥。
+   */
+  serveState: { errorText: string } | null;
   /** 两份草稿；为 null 表示查询还没回来 —— 容器据此走降级 UI，
    *  收窄后传给视图的 controller 里它就是非空的。 */
   drafts: SettingsPageDrafts | null;
@@ -261,6 +291,45 @@ export interface SettingsPageController {
 /** 提示条停留时长。 */
 const FLASH_MS = 3500;
 
+/* ── 配置读取的兜底缓存（ISSUE #360）──────────────────────────────────────
+ * 设置页的两份读（`setting.get` / `llm.configGet`）是服务端最脆弱的两跳：前者走
+ * SQLite，后者还要先跑 remote storage 迁移。应用服务刚重启 / 正在编译 / 数据库
+ * 迁移的那几秒里，查询会失败——此前整页被换成「加载设置失败」，而界面本来能用。
+ *
+ * 兜底值 = 「最后一次成功读到的配置」：
+ *   - 本会话内：`lastGood` 状态（内存，最权威，含用户刚保存的草稿）；
+ *   - 跨刷新/重开：sessionStorage 里的一份快照（`readSettingsCache`）。
+ *
+ * 只放**配置**，不放密钥类输入态（API Key 输入框始终从空开始）。写失败
+ * （隐私模式 / 配额）静默忽略：缓存是锦上添花，绝不影响主流程。
+ */
+const SETTINGS_CACHE_KEY = "settingsPage.lastGoodConfig.v1";
+
+function readSettingsCache(): { llm?: QueryLlmConfig; settings?: Settings } {
+  try {
+    const raw = sessionStorage.getItem(SETTINGS_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as {
+      llm?: QueryLlmConfig;
+      settings?: Settings;
+    };
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSettingsCache(value: {
+  llm?: QueryLlmConfig;
+  settings?: Settings;
+}): void {
+  try {
+    sessionStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(value));
+  } catch {
+    /* 隐私模式 / 配额超限：放弃持久化，兜底退化为「仅本次会话有效」 */
+  }
+}
+
 /* ── ComfyUI 启动日志 ─────────────────────────────────────
  * lifecycle.ts 会把 spawn 参数与子进程 stdout/stderr 追加进
  * log/services/comfyui-runtime.log；这里在启动期间每秒跟随其尾部。 */
@@ -349,6 +418,27 @@ export function useSettingsPage(): SettingsPageController {
 
   const settingsQ = api.setting.get.useQuery();
   const llmQ = api.llm.configGet.useQuery();
+  /* 这两份查询的「最后一次成功结果」：读取失败时用它兜底播种草稿。
+   *
+   * 为什么必须兜底（ISSUE #360）：设置页此前把「一次刷新失败」当成「整页不可用」，
+   * 直接把界面换成错误视图。而这两份配置恰恰是**服务端最脆弱的两个读**——`setting.get`
+   * 走 SQLite，`llm.configGet` 还要先跑一次 remote storage 迁移。应用服务刚重启、
+   * 编译中、或数据库正在迁移的那几秒里，用户看到的是一整页「加载设置失败」，
+   * 而界面本来完全能用（草稿来自上一次成功的读取）。用户的原话就是「设置这边经常
+   * 出现这个问题」。
+   *
+   * 兜底只在「真的有过成功结果」时生效：没有历史结果（首次启动就失败）仍走全页
+   * 降级——那时界面确实无从渲染，给错误视图是诚实的。 */
+  /* 缓存的是**服务端下发的形状**（`extraModels` 是「字符串 | 对象」的混合清单，
+   * 与草稿里的 `LlmConfig` 不同——后者已拆分）。这里按查询返回类型收，播种时再拆。
+   *
+   * 用 state 而非 ref：下面的播种与「失败兜底」都在渲染期读它，而 React 19 的
+   * `react-hooks/refs` 规则禁止渲染期读写 ref（ref 的变化不参与渲染，读了会拿到
+   * 陈旧值）。state 的首值从 sessionStorage 取，天然支持「刷新后立刻失败」的场景。 */
+  const [lastGood, setLastGood] = useState<{
+    llm?: QueryLlmConfig;
+    settings?: Settings;
+  }>(() => (typeof globalThis === "undefined" ? {} : readSettingsCache()));
   const saveSetting = api.setting.save.useMutation();
   const saveLlmCfg = api.llm.configSave.useMutation();
   /* ComfyUI / Drizzle Studio 状态探测延后到首屏两份配置就绪后再发：
@@ -402,6 +492,12 @@ export function useSettingsPage(): SettingsPageController {
    * 「渲染期对比上一次引用 → setState」是 React 官方推荐的 derived-state 写法，
    * 比 useEffect 少一次多余渲染，也不会闪旧值。 */
   const llmConfig = llmQ.data?.config ?? null;
+  /* 每次拿到成功结果就更新缓存（供下次打开/下次失败时兜底）。与下面的播种同属
+   * 「从查询结果派生草稿」的一步（渲染期对比上一次引用 → setState 是 React 官方
+   * 推荐的 derived-state 写法，比 useEffect 少一次多余渲染）。 */
+  if (llmConfig && lastGood.llm !== llmConfig) {
+    setLastGood((prev) => ({ ...prev, llm: llmConfig }));
+  }
   const [prevLlmConfig, setPrevLlmConfig] = useState(llmConfig);
   /* 播种条件：数据引用变化（保存后 refetch 回写）时重新播种；或数据已就绪
    * 而草稿仍为空（含首次挂载即命中 tRPC 缓存的场景）时播种。若只用引用对比，
@@ -421,12 +517,41 @@ export function useSettingsPage(): SettingsPageController {
     });
   }
   const settingsData = settingsQ.data?.settings ?? null;
+  if (settingsData && lastGood.settings !== settingsData) {
+    setLastGood((prev) => ({ ...prev, settings: settingsData }));
+  }
   const [prevSettingsData, setPrevSettingsData] = useState(settingsData);
   /* 同 llm 播种：缓存命中 / refetch 两种情形都要能落到草稿，避免落到降级 UI。 */
   const settingsChanged = settingsData !== prevSettingsData;
   if (settingsChanged) setPrevSettingsData(settingsData);
   if (settingsData && (settingsChanged || !settingsDraft)) {
     setSettingsDraft(settingsData);
+  }
+
+  /* ── 读取失败时的兜底播种（ISSUE #360）─────────────────────────
+   * 查询真的失败（不是还在加载）而草稿仍为空时，用「最后一次成功结果」（本次
+   * 会话内存里的，或上次运行留在 sessionStorage 的）把草稿播回来——界面立刻可用，
+   * 失败原因通过 `serveState` 以非阻塞提示条呈现（见下方 return）。
+   *
+   * 只在失败时兜底：正在加载（首帧）不播种，避免先闪一份旧值再跳到真实值。 */
+  if (llmDraft === null && llmQ.isError && lastGood.llm) {
+    const cached = lastGood.llm;
+    const split = splitExtraModels(cached.extraModels);
+    setLlmDraft({
+      ...cached,
+      apiKey: cached.apiKey ?? null,
+      localCandidates: split.localNames.filter((n) => n !== cached.model),
+      extraModels: split.remoteEntries.filter((e) => e.name !== cached.model),
+      temperatureByTask: cached.temperatureByTask ?? undefined,
+    });
+  }
+  if (settingsDraft === null && settingsQ.isError && lastGood.settings) {
+    setSettingsDraft(lastGood.settings);
+  }
+  /* 快照写回 sessionStorage：跨整页刷新（dev server 重启会让页面重新加载）后
+   * 仍能兜底。只在确有内容时写，避免把空对象盖掉上一份有效快照。 */
+  if (lastGood.llm ?? lastGood.settings) {
+    writeSettingsCache(lastGood);
   }
 
   /* ── Ollama 探测 ───────────────────────────────────────── */
@@ -1171,6 +1296,9 @@ export function useSettingsPage(): SettingsPageController {
     notReady: !drafts && !queryFailed && !isInitialLoad,
     errorText,
     retry,
+    /* 有草稿可用时，失败不再等价于「打不开」：界面照常渲染，只把原因放在一条
+     * 非阻塞提示里。用户真正被冻住的场景（草稿也没有）仍走 hasError 全页降级。 */
+    serveState: queryFailed && drafts ? { errorText } : null,
     drafts,
     patchLlm,
     patchSettings,

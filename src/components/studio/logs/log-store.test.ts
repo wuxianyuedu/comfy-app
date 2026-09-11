@@ -49,6 +49,7 @@ function resetStore() {
     isOpen: false,
     counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
     sessionStart: null,
+    bootId: null,
     page: 1,
     revision: 0,
     viewRevision: 0,
@@ -1348,5 +1349,61 @@ describe("setOrigin 按来源筛选", () => {
     act(() => useLogStore.getState().setPage(2));
     act(() => useLogStore.getState().setOrigin("app-runtime"));
     expect(useLogStore.getState().page).toBe(1);
+  });
+});
+
+/* ── 服务端进程标识（ISSUE #360）──────────────────────────────
+ * 面板此前无法回答「这条日志来自哪个应用服务进程」，于是「应用服务没起来」时
+ * 用户既看不到日志、也说不出自己连的是谁。bootId 同时承担展示与「真重启后
+ * 重置时间线」两件事。 */
+describe("log store — 服务端进程标识与会话边界", () => {
+  beforeEach(() => resetStore());
+
+  it("首次写入 bootId 不清空时间线（只是记录，不是重启）", () => {
+    act(() => {
+      useLogStore.getState().appendFileLogs([
+        makeEntry({ time: 1_700_000_000_000, origin: "app" }),
+      ]);
+    });
+    expect(useLogStore.getState().logs).toHaveLength(1);
+
+    act(() => useLogStore.getState().setBootId("dev-boot:1:a"));
+    expect(useLogStore.getState().bootId).toBe("dev-boot:1:a");
+    // 首次记录不是重启：既有行保留
+    expect(useLogStore.getState().logs).toHaveLength(1);
+  });
+
+  it("bootId 变化 = 换了进程：清空时间线并重置分页", () => {
+    act(() => {
+      useLogStore.getState().setBootId("dev-boot:1:a");
+      useLogStore.getState().appendFileLogs([
+        makeEntry({ time: 1_700_000_000_000, origin: "app" }),
+        makeEntry({ time: 1_700_000_001_000, origin: "app" }),
+      ]);
+    });
+    expect(useLogStore.getState().logs).toHaveLength(2);
+    act(() => useLogStore.getState().setPage(3));
+    expect(useLogStore.getState().page).toBe(3);
+
+    act(() => useLogStore.getState().setBootId("dev-boot:2:b"));
+    const state = useLogStore.getState();
+    expect(state.bootId).toBe("dev-boot:2:b");
+    /* 旧进程的行与本次会话没有可比性，必须清掉；否则重启前后输出混成一条线 */
+    expect(state.logs).toHaveLength(0);
+    expect(state.page).toBe(1);
+  });
+
+  it("同一 bootId 重复写入是幂等的（轮询每 2s 都会带一次）", () => {
+    act(() => {
+      useLogStore.getState().setBootId("dev-boot:1:a");
+      useLogStore.getState().appendFileLogs([
+        makeEntry({ time: 1_700_000_000_000 }),
+      ]);
+    });
+    const before = useLogStore.getState();
+    act(() => useLogStore.getState().setBootId("dev-boot:1:a"));
+    const after = useLogStore.getState();
+    expect(after.logs).toBe(before.logs);
+    expect(after.revision).toBe(before.revision);
   });
 });

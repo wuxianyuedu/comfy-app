@@ -314,17 +314,29 @@
 
     async function fetchLog() {
       const data = await invoke('get_launch_log');
-      if (typeof data === 'string') {
+      if (typeof data === 'string' && data) {
         logFailCount = 0;
         renderLog(data);
       } else {
         logFailCount++;
-        // 连续拿不到日志（壳版本过旧 / IPC 不可用 / 日志尚未产生）时给出指引
+        /* 连续拿不到日志要能区分两种成因，否则用户看到空面板不知道该做什么：
+         *   - 壳版本过旧 / IPC 不可用（拿不到数据）→ 提示重编壳；
+         *   - 日志确实还没产生（启动第一步就卡住）→ 提示看状态文件与磁盘日志。 */
         if (logFailCount === 4 && !logPre.dataset.raw) {
-          renderLog('（暂无日志：启动器尚未写入输出；若持续为空请重编桌面壳：cd src-tauri && cargo build --release）');
+          renderLog(
+            '（暂时读不到日志。）\n' +
+              '若启动器刚启动，日志可能还没写入：稍等几秒后本面板会自动刷新。\n' +
+              '持续为空时按顺序看这两处：\n' +
+              '  1) 启动状态文件 run/launch-status.json（记录执行到哪一步、什么阶段失败）\n' +
+              '  2) log/launcher/dev-launcher.log 与 log/launcher/dev-launcher-stderr.log\n' +
+              '若两处都取不到（命令不可用）→ 桌面壳版本过旧，重编：cd src-tauri && cargo build --release --features custom-protocol',
+          );
         }
       }
     }
+
+    /* 先预热一次：用户点开「查看日志」时面板立刻有内容，而不是空白几十毫秒。 */
+    fetchLog();
 
     logBtn.addEventListener('click', () => {
       logVisible = !logVisible;
@@ -371,8 +383,21 @@
         }
       } else {
         // 没有状态文件时显示等待动画，进度按时间平滑增长但不要满 100%
+        const secs = Math.floor(ticks / 4);
         const fakeProgress = Math.min(0.9, ticks / 480); // 约 2 分钟到 90%
-        updateUI(fakeProgress, 'dev-server-starting', `正在等待本地服务就绪：${appUrl}（${fmtTime(Math.floor(ticks / 4))}）`, false, Math.floor(ticks / 4));
+        /* 久等而无进度时，把「怎么自查」写进同一条消息——启动页是用户此刻唯一
+         * 能看到的界面，只显示一个转圈的秒数等于让人干等（ISSUE #360）。 */
+        const hint =
+          secs > 90
+            ? '· 等待超过 90 秒，可点「查看日志」，或看启动状态文件 run/launch-status.json'
+            : '· 可随时点「查看日志」看执行到哪一步';
+        updateUI(
+          fakeProgress,
+          'dev-server-starting',
+          `正在等待本地服务就绪：${appUrl}（已用 ${fmtTime(secs)}）${hint}`,
+          false,
+          secs,
+        );
       }
 
       // 2. 自主探测后端可响应后，请 Rust 侧把隐藏的应用窗口导航到应用地址。

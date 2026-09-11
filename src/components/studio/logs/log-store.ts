@@ -45,8 +45,8 @@ export interface LogEntry {
   message: string;
   /** Where the log came from（console / tauri / system）。 */
   source: "console" | "tauri" | "system";
-  /** 文件来源：dev-launcher / launcher / app-runtime 的文件行带此标记。 */
-  origin?: "dev" | "launcher" | "app-runtime";
+  /** 文件来源：dev-launcher / launcher / 应用服务输出 / app-runtime 的文件行带此标记。 */
+  origin?: "dev" | "launcher" | "app" | "app-runtime";
   /** Caller location (file:line) for console logs */
   location?: string;
   /**
@@ -620,6 +620,15 @@ export interface LogStoreState {
    */
   sessionStart: number | null;
   /**
+   * 当前提供日志的服务端进程标识（bootId）。
+   *
+   * 它回答的是「这条日志是哪个应用服务进程写的」：进程重启（或另一实例接管
+   * 端口）后 bootId 变化，面板据此**清空时间线并重读**，而不是把两个进程的
+   * 输出混成一条线。面板页脚展示它，用户报障时能说清自己连的是哪个进程
+   * （ISSUE #360：「应用服务为什么没启动」现场没有任何可引用的标识）。
+   */
+  bootId: string | null;
+  /**
    * 生成 `logs` 切片的生成号（每次时间线变化 +1）。
    *
    * 它是「store 有没有新日志」的判据，而不是时间线末条 seq：时间线按时刻排序，
@@ -642,6 +651,8 @@ export interface LogStoreState {
   addEntry: (entry: Omit<LogEntry, "id" | "time" | "seq">) => void;
   appendFileLogs: (entries: LogEntry[]) => void;
   setSessionStart: (sessionStart: number | null) => void;
+  /** 记录当前服务端进程标识；变化时清掉时间线（跨进程的行不可比）。 */
+  setBootId: (bootId: string | null) => void;
   setFilter: (f: LogFilter) => void;
   setOrigin: (o: LogOriginFilter) => void;
   setSearch: (s: string) => void;
@@ -680,6 +691,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   page: 1,
   pageSize: LOG_PAGE_SIZE,
   sessionStart: null,
+  bootId: null,
   revision: 0,
   viewRevision: 0,
   viewLength: 0,
@@ -724,6 +736,26 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
           state.origin,
           changed ? state.revision + 1 : state.revision,
         ),
+      };
+    }),
+
+  /* 服务端进程标识变化 = 真的换了进程。旧时间线里的行属于上一个进程，与本次
+   * 会话没有可比性（且新进程会从头写自己的日志文件），一次性清干净并重置游标；
+   * 页脚随后会显示新的标识。 */
+  setBootId: (bootId) =>
+    set((state) => {
+      if (state.bootId === bootId) return {};
+      const changed = state.bootId !== null && state.bootId !== bootId;
+      return {
+        bootId,
+        ...(changed
+          ? {
+              ...derive([], state.filter, state.search, state.origin, state.revision + 1),
+              page: 1,
+              viewRevision: state.revision + 1,
+              viewLength: 0,
+            }
+          : {}),
       };
     }),
 
