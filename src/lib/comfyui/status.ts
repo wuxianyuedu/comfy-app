@@ -52,6 +52,14 @@ export type ComfyRuntimeSnapshot = {
  *  并发查询」的重复 IO，不做长 TTL——外部实例刚起来时最多等这么久被认出来。 */
 export const COMFY_SNAPSHOT_TTL_MS = 1_500;
 
+/** 未绑定端口的快照（「进程在、接口还没就绪」）的缓存时长：比普通 TTL 更短。
+ *
+ *  这类快照的含义是「正在启动」，而正在启动的下一步就是绑定端口——状态行
+ *  必须尽快翻成「运行中」。若沿用 1.5s TTL，设置页的 5s 轮询有相当概率连着
+ *  两次都命中同一份「端口未绑定」缓存，用户看到的就是「明明起来了还显示
+ *  启动中」（ISSUE #344）。 */
+export const COMFY_UNBOUND_PORT_TTL_MS = 0;
+
 type SnapshotGlobal = {
   cached?: { at: number; snap: ComfyRuntimeSnapshot };
   inflight?: Promise<ComfyRuntimeSnapshot>;
@@ -61,6 +69,21 @@ const G_KEY = "__comfyRuntimeSnapshot_v1";
 const g = globalThis as unknown as Record<string, SnapshotGlobal | undefined>;
 const st: SnapshotGlobal = g[G_KEY] ?? {};
 g[G_KEY] = st;
+
+/** 该快照是否属于「正在启动」：进程在跑、但监听端口还没出现。
+ *  这种结论到期极快（见 COMFY_UNBOUND_PORT_TTL_MS），否则会把状态行按在
+ *  「启动中」上不动。 */
+function isUnboundPortSnapshot(snap: ComfyRuntimeSnapshot): boolean {
+  return snap.running && snap.port === null;
+}
+
+/** 该快照在 `now` 时刻是否已过有效期。 */
+function isStale(snap: ComfyRuntimeSnapshot, at: number, now: number): boolean {
+  const ttl = isUnboundPortSnapshot(snap)
+    ? COMFY_UNBOUND_PORT_TTL_MS
+    : COMFY_SNAPSHOT_TTL_MS;
+  return now - at >= ttl;
+}
 
 /** 不带快照的空结果。 */
 function emptySnapshot(): ComfyRuntimeSnapshot {
@@ -219,7 +242,7 @@ export async function getComfyRuntimeSnapshot(
   opts: { force?: boolean } = {},
 ): Promise<ComfyRuntimeSnapshot> {
   const now = Date.now();
-  if (!opts.force && st.cached && now - st.cached.at < COMFY_SNAPSHOT_TTL_MS) {
+  if (!opts.force && st.cached && !isStale(st.cached.snap, st.cached.at, now)) {
     return st.cached.snap;
   }
   if (st.inflight) return st.inflight;

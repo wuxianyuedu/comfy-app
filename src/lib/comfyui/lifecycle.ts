@@ -5,7 +5,7 @@
 // 在队列里挂 30 秒后被 reaper 判死。此前用户只能自己去手动启动 ComfyUI。
 //
 // 本模块提供：
-//   - probeComfyUi()      HTTP 探测是否可达（复用 resolveComfyBase 的端口探测）
+//   - probeComfyUi()      HTTP 探测是否可达（按次探测，不写会话缓存）
 //   - ensureComfyUiReady() 未运行且已配置 comfyuiPath 时拉起进程并等待就绪
 //   - stopComfyUiProcess() 杀掉 ComfyUI 进程树（设置页「关闭」按钮用）
 //   - openComfyUi()        用系统默认浏览器打开运行中的 ComfyUI 网页界面
@@ -18,13 +18,17 @@ import { spawn, exec } from "child_process";
 import fs from "fs";
 import path from "path";
 import { COMFYUI_DEFAULT_PORT, getExitPolicy, getSettingsSync } from "../app-settings";
-import { resolveComfyBase } from "./client";
+import { probeComfyBase } from "./client";
 import { logger } from "~/server/lib/logger";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { resolveEffectiveLaunch } from "./desktop-instance";
 import { findPidForMainPy, findPidListeningPort } from "./proc-detect";
 import { spawnManaged, waitForDetachMediator } from "../process-launch";
-import { getComfyRuntimeSnapshot, resetComfyRuntimeSnapshot } from "./status";
+import {
+  getComfyRuntimeSnapshot,
+  resetComfyRuntimeSnapshot,
+  type ComfyRuntimeSnapshot,
+} from "./status";
 import { openUrlInBrowser } from "~/lib/open-in-browser";
 import { COMFYUI_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log-paths";
 import {
@@ -108,15 +112,18 @@ function localTimestamp(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-/** 探测 ComfyUI 是否可达；成功返回实际可用的 base（可能带端口偏移）。 */
-export async function probeComfyUi(timeoutMs = 2500): Promise<string | null> {
-  try {
-    const base = await resolveComfyBase();
-    const r = await fetch(`${base}/system_stats`, { signal: AbortSignal.timeout(timeoutMs) });
-    return r.ok ? base : null;
-  } catch {
-    return null;
-  }
+/** 探测 ComfyUI 是否可达；成功返回实际可用的 base（可能带端口偏移）。
+ *
+ * 走 `probeComfyBase()`（按次探测）而不是 `resolveComfyBase()`：后者是带会话
+ * 粘性的结论，一次「进程在、端口还没绑定」的探测会把配置地址缓存住，
+ * ComfyUI 随后就绪时这里仍然返回 null —— 设置页的状态行就永远停在「正在启动…」
+ * 翻不成「运行中」（ISSUE #344）。本函数只回答「此刻能不能用」，不该改会话结论。
+ *
+ * 超时统一由 `probeComfyBase()` 的 1.5s 决定（环回地址上真实监听的 ComfyUI
+ * 应答是毫秒级，够用且能压住「未运行」时反复空扫的开销）；调用方传的
+ * `timeoutMs` 保留在签名里只因多处按「探测预算」语义在传，不再单独生效。 */
+export async function probeComfyUi(_timeoutMs = 2500): Promise<string | null> {
+  return probeComfyBase();
 }
 
 /**
@@ -281,6 +288,26 @@ export async function getComfyUiStatus(): Promise<ComfyUiStatus> {
   const stopping = isComfyStopping();
   const snap = await getComfyRuntimeSnapshot();
   const probe = await probeComfyUi(1500);
+  /* 「启动中」是唯一会自动翻页的结论（进程在、端口还没绑定 → 下一秒端口就出来了），
+   * 所以它是唯一必须**当场复核**的结论：拿到的快照说还在启动、HTTP 也没通时，
+   * 丢掉这份（可能刚过期的）快照重新取一次事实再判，避免把 5s 轮询里的两次
+   * 采样都押在同一份陈旧快照上、让状态行停在「ComfyUI 正在启动…」（ISSUE #344）。 */
+  if (!probe && snap.running && snap.port === null) {
+    const refreshed = await getComfyRuntimeSnapshot({ force: true });
+    const reprobe = await probeComfyUi(1500);
+    return buildComfyUiStatus({ starting, stopping, snap: refreshed, probe: reprobe });
+  }
+  return buildComfyUiStatus({ starting, stopping, snap, probe });
+}
+
+/** 把「进程级快照 + HTTP 探测」两份事实翻成一条状态结论（纯组装，无 IO）。 */
+function buildComfyUiStatus(facts: {
+  starting: boolean;
+  stopping: boolean;
+  snap: ComfyRuntimeSnapshot;
+  probe: string | null;
+}): ComfyUiStatus {
+  const { starting, stopping, snap, probe } = facts;
   if (probe) {
     return {
       up: true,
