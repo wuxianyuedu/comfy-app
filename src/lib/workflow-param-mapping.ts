@@ -405,6 +405,48 @@ export function entryIdForPin(
   return classKey(classifyPin(raw), raw.nodeId);
 }
 
+/** 映射落点（`resolved` 的值，= ioKey）→ 画布渲染侧那条端口的 **React Flow
+ *  handle id**。
+ *
+ *  两个键空间必须分清（ISSUE #374）：
+ *   · ioKey（`<nodeId>::<kind>::<name>`）是 workflowIO 的字典键，运行期
+ *     `io[target]` 回查靠它，落库的 `paramMap.source.mode:<模式>` 也存它；
+ *   · handle id 是节点卡片上 `<Handle id=…>` 的 DOM id，画布渲染统一取
+ *     **pin 名**（= `WorkflowIOEntry.name`）。
+ *  谁拿错一方都查不到：React Flow 在 `handleBounds` 里找不到边引用的 id 时，
+ *  会丢弃整条边并逐条打 error#008（用户看到的是「线画不出来」）；拿端口名去
+ *  查条目表则必然落空，表现为手势被静默拒绝。
+ *
+ *  `ioKey` 末尾的 `name` 段不保证可切分（pin 名本身可能含 `::`），所以一律
+ *  经 `io` 反查 `entry.name`，而不是对字符串做 split。查不到（条目已被移除 /
+ *  io 未就绪）时返回 null，调用方据此不画线。 */
+export function handleIdForIoKey(
+  io: WorkflowIOMap | null | undefined,
+  ioKey: string | null | undefined
+): string | null {
+  if (!ioKey) return null;
+  const name = io?.[ioKey]?.name;
+  return typeof name === "string" && name.length > 0 ? name : null;
+}
+
+/** `handleIdForIoKey` 的逆：某个节点上的 **handle id（pin 名）** → ioKey。
+ *
+ *  画布手势拿到的 `connection.targetHandle` 是渲染侧的 pin 名，而落库与运行期
+ *  都用 ioKey，写入前必须翻回来（ISSUE #374）。同名端口取**第一个**命中的
+ *  ioKey（`buildParamEntries` 已按 nodeId 聚类，同节点同名 pin 属于异常数据，
+ *  任取其一都可稳定复现）。 */
+export function ioKeyForHandle(
+  io: WorkflowIOMap | null | undefined,
+  nodeId: string,
+  handleId: string | null | undefined
+): string | null {
+  if (!nodeId || !handleId) return null;
+  for (const [ioKey, entry] of Object.entries(io ?? {})) {
+    if (entry?.nodeId === nodeId && entry.name === handleId) return ioKey;
+  }
+  return null;
+}
+
 /** 目标端口 → 源节点 id 的覆盖表（落库到 paramMap.source）。
  *  消费方（后端 buildCustomWorkflow）据此把「该端口的实参来自哪个对外参数」
  *  解析出来，从而不覆盖工作流图上原有的连线。null 表示作者显式断开了这条线。 */
