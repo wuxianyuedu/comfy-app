@@ -154,7 +154,10 @@ export function WidgetInputRow({
   if (entry.control === "link") {
     if (compact) {
       return (
-        <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
+        <div
+          className={`relative ${dimmed ? "opacity-50" : ""}`}
+          data-io-key={entry.ioKey}
+        >
           {withHandle && (
             <PortHandle
               id={entry.ioKey}
@@ -219,7 +222,11 @@ export function WidgetInputRow({
    * —— 所有标签的视觉基线对齐到第一行，控件拿到全宽。 */
   if (compact) {
     return (
-      <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
+      <div
+        className={`relative ${dimmed ? "opacity-50" : ""}`}
+        /* 行锚点：库画布的映射连线需要量出这一行的位置（ioKey 即端口名）。 */
+        data-io-key={entry.ioKey}
+      >
         {withHandle && (
           /* 圆心锁到标签行中线（pt-1.5 = 6 + h-5 / 2 = 10 = 16px）：默认的
            * top:50% 会让圆点掉在两行之间、与参数名错位。 */

@@ -362,7 +362,12 @@ function DimensionSizeControl({
   );
 
   return (
-    <div className="space-y-2.5">
+    <div
+      className="space-y-2.5"
+      /* 组合参数整体作为一个可锚定的目标：宽/高由同一个控件录入，单个端口没有
+       * 独立行，映射连线只能连到这个控件上（工作流库画布按此量端点）。 */
+      data-dimension-pins={`${group.width.ioKey},${group.height.ioKey}`}
+    >
       {/* 比例 + 清晰度 单段摆在 W/H 上方——既对应「预设 → 推算
           宽高」的方向，又让下方两个 NumberField 紧挨在一起形成紧凑一行。 */}
       <div className="rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5">
@@ -606,7 +611,13 @@ function AspectMegapixelControl({
   );
 
   return (
-    <div className="space-y-2.5">
+    <div
+      className="space-y-2.5"
+      /* 同上：比例/像素/倍数由同一控件录入，整块作为可锚定目标。 */
+      data-dimension-pins={[group.aspect?.ioKey, group.megapixels?.ioKey]
+        .filter(Boolean)
+        .join(",")}
+    >
       <div className="rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5">
         <div className="flex items-center gap-2">
           <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-(--color-accent)">
