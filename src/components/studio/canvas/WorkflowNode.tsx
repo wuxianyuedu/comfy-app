@@ -47,7 +47,13 @@ export const HEADER_TOTAL = 60;     // header (32) + #id bar (22) + small breath
  *  pins every Handle to its row's `top: 50%` automatically.  The constants
  *  are kept around as a reference for any future layout work.) */
 
-export const FlowNode = React.memo(function FlowNode({ data, selected }: { data: WorkflowNodeData; selected?: boolean }) {
+export const FlowNode = React.memo(function FlowNode({
+  data,
+  selected,
+}: {
+  data: WorkflowNodeData;
+  selected?: boolean;
+}) {
   const role = PORT_ROLES.find((PORT_ROLES) => PORT_ROLES.key === data.assignedRole);
   const io = useIOEditContext();
   /* viewport zoom is NO LONGER subscribed here — the zoom read

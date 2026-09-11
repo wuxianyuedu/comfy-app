@@ -4,6 +4,7 @@
  *  useMemo (see buildInitialNodes usage in wf-editor-inner.tsx). */
 import type { Node } from "@xyflow/react";
 import { friendlyNodeTitle } from "@/lib/comfyui/node-titles";
+import { MODE_KEY_PREFIX } from "@/lib/workflow-param-mapping";
 import type {
   RawInputMeta, ComfyGraphNode, WorkflowDetail, WorkflowNodeData,
 } from "../workflow-types";
@@ -31,7 +32,7 @@ export interface BuildInitialNodesCtx {
   scopeDetail: WorkflowDetail | null;
   rawMetaById: Record<string, RawNodeMeta>;
   outSlotNameById: Record<string, string[]>;
-  paramMap: Record<string, string>;
+  paramMap: Record<string, unknown>;
   onEnterSubgraph?: (id: string, classType: string, title: string) => void;
 }
 
@@ -125,7 +126,10 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         title: n.title,
         inputs: graphById[n.id]?.inputs ?? {},
         inputSources: buildInputSources(graphById[n.id]?.inputs, nodesById),
-        assignedRole: Object.entries(paramMap).find(([, nid]) => nid === n.id)?.[0] ?? null,
+        assignedRole:
+          Object.entries(paramMap).find(
+            ([key, value]) => value === n.id && !key.startsWith(MODE_KEY_PREFIX)
+          )?.[0] ?? null,
         rawInputs: n.raw_inputs ?? [],
         rawOutputs: rawMetaById[n.id]?.outputs ?? [],
         rawWidgetValues: rawMetaById[n.id]?.widgets_values ?? [],

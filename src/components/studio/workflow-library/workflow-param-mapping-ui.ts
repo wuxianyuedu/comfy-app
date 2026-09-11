@@ -1,10 +1,8 @@
-// 工作流库里「对外参数 ↔ 节点参数」映射的标签与判定（纯配置 + 纯函数）。
+// 对外参数映射在视图层的标签与配色（纯配置 + 纯函数）。
 //
-// 映射本身的模型（聚类 / 自动映射 / 校验 / 序列化）与状态编排在
-// `~/lib/workflow-param-mapping` 与 `~/components/studio/workflow-editor/hooks/use-param-mapping`；
-// 本文件只负责把 `ParamEntry.cls` 翻译成面向作者的中文名与配色，并给出
-// 「节点端口 → 对外参数卡片」的对应关系 —— 详情面板「画布节点」页签要靠它
-// 把表单里的每个参数行挂到对应的映射卡片上。
+// 映射本身的模型（聚类 / 默认连线状态 / 校验 / 序列化 / 画布几何）在
+// `~/lib/workflow-param-mapping`；本文件只负责把 `ParamEntry.cls` 翻译成面向
+// 作者的中文名与配色，供画布上的「对外参数节点」与 IO 预览面板复用。
 //
 // 无 React、无副作用（规范 §17.2 第①层）。
 
@@ -50,24 +48,4 @@ export function paramClassStyle(cls: string): ParamClassStyle {
     label: PARAM_CLASS_LABEL[key] ?? PARAM_CLASS_LABEL.other,
     color: PARAM_CLASS_COLOR[key] ?? PARAM_CLASS_COLOR.other,
   };
-}
-
-/** 目标端口（ioKey）→ 它所属的对外参数条目 id。
- *
- *  同一个对外参数（= 一个节点上的一类输入）可能含多个端口（宽 + 高、首帧 + 尾帧），
- *  这几行共享同一张映射卡片，所以反查表按端口逐条登记、值都是同一个条目 id。
- *  `resolved` 是解析后的「条目 id → 目标 ioKey」表（自动映射叠加手工线）。 */
-export function buildPortOwners(
-  entries: readonly { id: string; pins: { ioKey: string }[] }[],
-  resolved: Record<string, string | null>
-): Record<string, string> {
-  const owners: Record<string, string> = {};
-  for (const entry of entries) {
-    const target = resolved[entry.id];
-    if (!target) continue;
-    for (const pin of entry.pins) {
-      if (pin.ioKey === target) owners[pin.ioKey] = entry.id;
-    }
-  }
-  return owners;
 }

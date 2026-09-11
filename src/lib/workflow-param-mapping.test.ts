@@ -7,6 +7,11 @@ import {
   buildParamEntries,
   buildSourceOverrides,
   classifyPin,
+  clearModeWiring,
+  entryIdFromParamNodeId,
+  hasManualWiring,
+  isDefaultMapping,
+  paramNodeId,
   parseParamMapping,
   resolveMapping,
   serializeParamMapping,
@@ -104,118 +109,136 @@ describe("autoMapEntries", () => {
   });
 });
 
-describe("resolveMapping — 手工线优先于自动映射", () => {
+describe("resolveMapping — 作者画的线优先于默认连线状态", () => {
   const io: WorkflowIOMap = {
     "5::widget::width": pin("5", "width", { type: "INT", defaultValue: 512 }),
     "5::widget::resolution": pin("5", "resolution", { type: "COMBO" }),
   };
+  const entries = buildParamEntries(io);
+  const entryId = entries[0]!.id;
 
-  it("默认（无手工线）用自动映射", () => {
-    const entries = buildParamEntries(io);
-    const resolved = resolveMapping(entries, io, null);
-    expect(resolved[entries[0]!.id]).toBe("5::widget::width");
+  it("没有作者画的线时用默认连线状态（自动映射）", () => {
+    expect(resolveMapping(entries, io, null, "T2I")[entryId]).toBe("5::widget::width");
   });
 
-  it("手工线覆盖自动映射", () => {
-    const entries = buildParamEntries(io);
-    const resolved = resolveMapping(entries, io, {
-      manual: { [entries[0]!.id]: "5::widget::resolution" },
-    });
-    expect(resolved[entries[0]!.id]).toBe("5::widget::resolution");
+  it("作者画的线覆盖默认连线状态", () => {
+    const mapping = { manualByMode: { T2I: { [entryId]: "5::widget::resolution" } } };
+    expect(resolveMapping(entries, io, mapping, "T2I")[entryId]).toBe("5::widget::resolution");
+    /* 另一个模式回到默认连线状态 —— 线是按模式分开的。 */
+    expect(resolveMapping(entries, io, mapping, "I2I")[entryId]).toBe("5::widget::width");
   });
 
-  it("按模式的手工线只在该模式下生效", () => {
-    const entries = buildParamEntries(io);
-    const mapping = { manualByMode: { [entries[0]!.id]: { I2I: "5::widget::resolution" } } };
-    expect(resolveMapping(entries, io, mapping, "I2I")[entries[0]!.id]).toBe(
-      "5::widget::resolution"
-    );
-    expect(resolveMapping(entries, io, mapping, "T2I")[entries[0]!.id]).toBe("5::widget::width");
+  it("没有模式时一律用默认连线状态（不存在脱离模式的线）", () => {
+    const mapping = { manualByMode: { T2I: { [entryId]: "5::widget::resolution" } } };
+    expect(resolveMapping(entries, io, mapping, null)[entryId]).toBe("5::widget::width");
   });
 
-  it("按模式的手工线与通用线可并存，模式线优先", () => {
-    const entries = buildParamEntries(io);
+  it("某模式下显式断开 → 该模式「未连线」，其它模式不受影响", () => {
+    const mapping = { manualByMode: { I2I: { [entryId]: null } } };
+    expect(resolveMapping(entries, io, mapping, "I2I")[entryId]).toBeNull();
+    expect(resolveMapping(entries, io, mapping, "T2I")[entryId]).toBe("5::widget::width");
+  });
+
+  it("mapping.auto 可以显式带入默认连线状态（避免各层各算一遍）", () => {
+    const resolved = resolveMapping(entries, null, { auto: { [entryId]: "5::widget::width" } }, "T2I");
+    expect(resolved[entryId]).toBe("5::widget::width");
+  });
+});
+
+describe("默认连线状态的判定与恢复默认", () => {
+  const io: WorkflowIOMap = {
+    "5::widget::width": pin("5", "width", { type: "INT", defaultValue: 512 }),
+  };
+  const entryId = buildParamEntries(io)[0]!.id;
+
+  it("isDefaultMapping：没有该模式的线才是默认", () => {
+    const mapping = { manualByMode: { T2I: { [entryId]: "5::widget::width" } } };
+    expect(isDefaultMapping(mapping, entryId, "T2I")).toBe(false);
+    expect(isDefaultMapping(mapping, entryId, "I2I")).toBe(true);
+    /* 没有模式 = 不承认任何线 = 永远是默认。 */
+    expect(isDefaultMapping(mapping, entryId, null)).toBe(true);
+    expect(isDefaultMapping(null, entryId, "T2I")).toBe(true);
+  });
+
+  it("hasManualWiring：按模式统计作者改过的线", () => {
+    const mapping = { manualByMode: { T2I: { [entryId]: null } } };
+    expect(hasManualWiring(mapping, "T2I")).toBe(true);
+    expect(hasManualWiring(mapping, "I2I")).toBe(false);
+    expect(hasManualWiring(mapping, null)).toBe(false);
+  });
+
+  it("clearModeWiring：整模式清空，其余模式原样保留", () => {
     const mapping = {
-      manual: { [entries[0]!.id]: "5::widget::width" },
-      manualByMode: { [entries[0]!.id]: { I2I: "5::widget::resolution" } },
+      manualByMode: { T2I: { a: "x" }, I2I: { a: "y" } },
+      labels: { k: "名字" },
     };
-    expect(resolveMapping(entries, io, mapping, "I2I")[entries[0]!.id]).toBe(
-      "5::widget::resolution"
-    );
-    expect(resolveMapping(entries, io, mapping, "T2I")[entries[0]!.id]).toBe("5::widget::width");
+    const cleared = clearModeWiring(mapping, "T2I");
+    expect(cleared.manualByMode).toEqual({ I2I: { a: "y" } });
+    expect(cleared.labels).toEqual({ k: "名字" });
+    /* 不改原对象。 */
+    expect(mapping.manualByMode.T2I).toEqual({ a: "x" });
   });
+});
 
-  it("某模式显式断开时该模式回落为「未连线」，其它模式不受影响", () => {
-    const entries = buildParamEntries(io);
-    const mapping = { manualByMode: { [entries[0]!.id]: { I2I: null } } };
-    expect(resolveMapping(entries, io, mapping, "I2I")[entries[0]!.id]).toBeNull();
-    expect(resolveMapping(entries, io, mapping, "T2I")[entries[0]!.id]).toBe("5::widget::width");
-  });
-
-  it("null 表示作者显式断开这条线", () => {
-    const entries = buildParamEntries(io);
-    const resolved = resolveMapping(entries, io, { manual: { [entries[0]!.id]: null } });
-    expect(resolved[entries[0]!.id]).toBeNull();
+describe("画布节点 id 与几何", () => {
+  it("paramNodeId / entryIdFromParamNodeId 互为反函数", () => {
+    expect(paramNodeId("5|size-width")).toBe("pio:5|size-width");
+    expect(entryIdFromParamNodeId("pio:5|size-width")).toBe("5|size-width");
+    expect(entryIdFromParamNodeId("5")).toBeNull();
+    expect(entryIdFromParamNodeId("note:1")).toBeNull();
   });
 });
 
 describe("parseParamMapping / serializeParamMapping", () => {
   it("往返：只写 source 命名空间，其余键原样保留", () => {
-    const mapping = {
-      manual: { "5|size-width": "5::widget::width" },
-      manualByMode: { "5|size-width": { I2I: "5::widget::resolution" } },
-    };
+    const mapping = { manualByMode: { I2I: { "5|size-width": "5::widget::resolution" } } };
     const merged = serializeParamMapping(mapping, { positiveNode: "9" });
     expect(merged.positiveNode).toBe("9");
-    /* 通用线与模式线分键存放：同名条目在两个键空间各有一份，互不覆盖。 */
     expect(merged.source).toEqual({
-      "5|size-width": "5::widget::width",
       "mode:I2I": { "5|size-width": "5::widget::resolution" },
     });
     const parsed = parseParamMapping(merged);
-    expect(parsed.manual).toEqual({ "5|size-width": "5::widget::width" });
-    expect(parsed.manualByMode).toEqual({
-      "5|size-width": { I2I: "5::widget::resolution" },
-    });
+    expect(parsed.manualByMode).toEqual({ I2I: { "5|size-width": "5::widget::resolution" } });
     /* 往返之后 resolveMapping 必须仍然认得出来（曾经这里丢了按模式的线）。 */
-    const entries = buildParamEntries({
-      "5::widget::width": pin("5", "width", { type: "INT", defaultValue: 512 }),
-      "5::widget::resolution": pin("5", "resolution", { type: "COMBO" }),
-    });
-    const ioForRoundTrip: WorkflowIOMap = {
+    const io: WorkflowIOMap = {
       "5::widget::width": pin("5", "width", { type: "INT", defaultValue: 512 }),
       "5::widget::resolution": pin("5", "resolution", { type: "COMBO" }),
     };
-    expect(resolveMapping(entries, ioForRoundTrip, parsed, "I2I")["5|size-width"]).toBe(
+    const entries = buildParamEntries(io);
+    expect(resolveMapping(entries, io, parsed, "I2I")["5|size-width"]).toBe(
       "5::widget::resolution"
     );
   });
 
-  it("畸形数据一律丢弃", () => {
+  it("没有 `mode:` 前缀的键一律丢弃（通用手工线已取消）", () => {
     const parsed = parseParamMapping({
       source: {
-        good: "ok",
+        /* 历史形状的通用手工线 —— 没有生效语境，丢弃。 */
+        "5|size-width": "5::widget::resolution",
+        "5|other": null,
         bad: 123,
-        nested: null,
-        /* 无 `mode:` 前缀的嵌套对象不是模式表 —— 丢弃（曾经被当成模式表读）。 */
-        deep: { M1: "ok", M2: 5 },
+        deep: { M1: "ok" },
         "mode:": { any: "x" },
         "mode:T2I": { a: "ok", b: null, c: 5 },
       },
     });
-    expect(parsed.manual).toEqual({ good: "ok", nested: null });
-    /* 模式表里的 5（数字）不是合法目标，丢弃；null 合法（= 该模式断开）。 */
-    expect(parsed.manualByMode).toEqual({ a: { T2I: "ok" }, b: { T2I: null } });
-    expect(parseParamMapping(null).manual).toEqual({});
-    expect(parseParamMapping([1, 2]).manual).toEqual({});
+    expect(parsed.manualByMode).toEqual({ T2I: { a: "ok", b: null } });
+    expect(parseParamMapping(null).manualByMode).toEqual({});
+    expect(parseParamMapping([1, 2]).manualByMode).toEqual({});
+    expect(parseParamMapping({ source: [1, 2] }).manualByMode).toEqual({});
   });
 
   it("某模式显式断开（null）能往返保存", () => {
     const merged = serializeParamMapping(
-      { manualByMode: { "5|size-width": { I2I: null } } },
+      { manualByMode: { I2I: { "5|size-width": null } } },
       {}
     );
-    expect(parseParamMapping(merged).manualByMode).toEqual({ "5|size-width": { I2I: null } });
+    expect(parseParamMapping(merged).manualByMode).toEqual({ I2I: { "5|size-width": null } });
+  });
+
+  it("空模式表不落库", () => {
+    const merged = serializeParamMapping({ manualByMode: { I2I: {} } }, {});
+    expect(merged.source).toEqual({});
   });
 });
 
@@ -226,46 +249,53 @@ describe("applyParamMapping — 运行期落值", () => {
     "9::widget::text": pin("9", "text", { defaultValue: "built-in" }),
   };
 
-  it("手工连线的对外参数：用户值只落到被连的端口，该节点其余默认值不掺进来", () => {
+  it("作者画过线的对外参数：用户值只落到被连的端口，该节点其余默认值不掺进来", () => {
     const entries = buildParamEntries(io);
     const { inputs } = applyParamMapping({
       io,
       entries,
-      mapping: { manual: { "5|size-width": "5::widget::width", "5|other": null } },
+      mapping: { manualByMode: { T2I: { "5|size-width": "5::widget::width", "5|other": null } } },
       values: { "5|size-width": 1024 },
+      mode: "T2I",
     });
     expect(inputs.find((item) => item.name === "width")?.value).toBe(1024);
-    /* 「5|other」也手工连过（断成 null），故该节点其余端口不再兜底。 */
+    /* 「5|other」也画过线（断成 null），故该节点其余端口不再兜底。 */
     expect(inputs.some((item) => item.name === "steps")).toBe(false);
   });
 
-  it("未连线的对外参数：按默认值兜底", () => {
+  it("没有线的对外参数：按默认值兜底", () => {
     const entries = buildParamEntries(io);
-    const { inputs } = applyParamMapping({
-      io,
-      entries,
-      mapping: null,
-      values: {},
-    });
+    const { inputs } = applyParamMapping({ io, entries, mapping: null, values: {} });
     expect(inputs.find((item) => item.name === "text")?.value).toBe("built-in");
     expect(inputs.find((item) => item.name === "steps")?.value).toBe(20);
   });
 
-  it("手工断开（null）的对外参数：用户值被如实记进 unmatched，不凭空落端口", () => {
+  it("显式断开（null）的对外参数：用户值如实录进 unmatched，不凭空落端口", () => {
     const entries = buildParamEntries(io);
-    const sizeEntry = entries.find((entry) => entry.id === "5|size-width")!;
     const { inputs, unmatched } = applyParamMapping({
       io,
       entries,
-      mapping: { manual: { [sizeEntry.id]: null, "5|other": null } },
+      mapping: { manualByMode: { T2I: { "5|size-width": null, "5|other": null } } },
       values: { "5|size-width": 1024 },
+      mode: "T2I",
     });
     expect(unmatched).toContain("5|size-width");
-    /* 「5|other」也手工断开了，所以不兜底；width 只有对手工线断开的节点才会回落默认值。 */
     expect(inputs.find((item) => item.name === "width")).toBeUndefined();
   });
 
-  it("与旧行为对齐：无人手工连线时，默认值兜底 =「每个暴露 pin 都下发」", () => {
+  it("另一模式的线不影响本模式（模式线只在该模式生效）", () => {
+    const entries = buildParamEntries(io);
+    const { inputs } = applyParamMapping({
+      io,
+      entries,
+      mapping: { manualByMode: { I2I: { "5|size-width": null, "5|other": null } } },
+      values: { "5|size-width": 1024 },
+      mode: "T2I",
+    });
+    expect(inputs.find((item) => item.name === "width")?.value).toBe(1024);
+  });
+
+  it("与旧行为对齐：全默认连线状态下的默认值兜底 =「每个暴露 pin 都下发」", () => {
     const { inputs } = applyParamMapping({
       io,
       entries: buildParamEntries(io),
