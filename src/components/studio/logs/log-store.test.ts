@@ -17,6 +17,7 @@ import {
   MAX_LOG_ENTRIES,
   LOG_PAGE_SIZE,
   captureLocation,
+  computeOriginCounts,
 } from "./log-store";
 import type { LogEntry } from "./log-store";
 
@@ -48,6 +49,7 @@ function resetStore() {
     search: "",
     isOpen: false,
     counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
+    countsByOrigin: computeOriginCounts([]),
     sessionStart: null,
     bootId: null,
     page: 1,
@@ -96,6 +98,89 @@ function entry(id: string, time: number): LogEntry {
 afterEach(cleanup);
 
 beforeEach(resetStore);
+
+/* ── 来源 × 级别计数（#360）────────────────────────────────── */
+
+/**
+ * 用户反馈的原话是「看着警告有很多，切换过去结果显示是空的，这一类型就没有
+ * 警告」。根因是面板只有**一个总数**：级别行的数字是全部来源的合计，来源下拉
+ * 里只有名字没有数——没有任何地方能看出「那 900 多条警告其实都在应用服务里」。
+ *
+ * 这组用例锁住修法：计数必须**逐来源独立**，且带 `all` 汇总。
+ */
+describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
+  it("逐来源独立计数，all 是全部来源的汇总", () => {
+    const table = computeOriginCounts([
+      makeEntry({ origin: "launcher", level: "info" }),
+      makeEntry({ origin: "launcher", level: "warn" }),
+      makeEntry({ origin: "app", level: "warn" }),
+      makeEntry({ origin: "app", level: "warn" }),
+      makeEntry({ origin: "app", level: "error" }),
+      makeEntry({ origin: "dev", level: "info" }),
+    ]);
+
+    expect(table.launcher).toEqual({ all: 2, debug: 0, info: 1, warn: 1, error: 0 });
+    expect(table.app).toEqual({ all: 3, debug: 0, info: 0, warn: 2, error: 1 });
+    expect(table.dev).toEqual({ all: 1, debug: 0, info: 1, warn: 0, error: 0 });
+    expect(table["app-runtime"]).toEqual({ all: 0, debug: 0, info: 0, warn: 0, error: 0 });
+    expect(table.all).toEqual({ all: 6, debug: 0, info: 2, warn: 3, error: 1 });
+  });
+
+  it("无来源的行（console 拦截 / Tauri 事件 / 全局错误）只计入 all", () => {
+    const table = computeOriginCounts([
+      makeEntry({ level: "error" }),
+      makeEntry({ level: "warn" }),
+      makeEntry({ origin: "app", level: "warn" }),
+    ]);
+
+    expect(table.all).toEqual({ all: 3, debug: 0, info: 0, warn: 2, error: 1 });
+    for (const origin of ["dev", "launcher", "app", "app-runtime"] as const) {
+      expect(table[origin].all).toBe(origin === "app" ? 1 : 0);
+    }
+  });
+
+  it("「某一来源没警告」必须是真 0，而不是继承了全局数", () => {
+    const table = computeOriginCounts([
+      makeEntry({ origin: "app", level: "warn" }),
+      makeEntry({ origin: "app", level: "warn" }),
+      makeEntry({ origin: "launcher", level: "info" }),
+    ]);
+
+    /* 全局有 2 条警告，但启动器那条来源里一条都没有——切过去就是空列表，
+     * 这正是用户看到的「看着警告很多、切过去是空的」。界面据此把 0 显示出来，
+     * 用户就不会以为日志丢了。 */
+    expect(table.all.warn).toBe(2);
+    expect(table.launcher.warn).toBe(0);
+    expect(table.launcher.all).toBe(1);
+  });
+
+  it("空时间线的表是完整的全零结构（视图可直接索引）", () => {
+    expect(computeOriginCounts([])).toEqual({
+      all: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
+      dev: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
+      launcher: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
+      app: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
+      "app-runtime": { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
+    });
+  });
+
+  it("store 在每次时间线变化后重算二维计数", () => {
+    act(() =>
+      useLogStore.getState().appendFileLogs([
+        makeEntry({ origin: "app", level: "error" }),
+        makeEntry({ origin: "launcher", level: "warn" }),
+      ]),
+    );
+    const state = useLogStore.getState();
+    expect(state.countsByOrigin.all).toEqual({ all: 2, debug: 0, info: 0, warn: 1, error: 1 });
+    expect(state.countsByOrigin.app.error).toBe(1);
+    expect(state.countsByOrigin.launcher.error).toBe(0);
+
+    act(() => useLogStore.getState().clear());
+    expect(useLogStore.getState().countsByOrigin.all.all).toBe(0);
+    expect(useLogStore.getState().countsByOrigin.app.all).toBe(0);
+  });
+});
 
 /* ── addEntry ─────────────────────────────────────────────── */
 
