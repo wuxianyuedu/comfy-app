@@ -67,6 +67,8 @@ fn main() {
         "get_launch_log",
         "navigate_to_app",
         "open_comfyui_window",
+        "activate_main_window",
+        "should_activate_on_launch",
       ]),
     ),
   )

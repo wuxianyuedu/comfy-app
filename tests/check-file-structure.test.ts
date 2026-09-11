@@ -398,3 +398,81 @@ Stop-StaleProjectShell -Root $root
     expect(out).not.toContain("KILL ");
   });
 });
+
+describe("启动链路「不抢前台」判据（python 启动器）", () => {
+  /**
+   * 应用启动要几十秒，用户很可能切去别的窗口干活；加载完成若是照直把窗口顶到
+   * 最前面，正在看的内容就被打断。判据收敛在 start_tauri_launcher.py 的
+   * decide_foreground：只有「前台本来就是本应用」「用户刚点的启动（前台是
+   * explorer / 启动器自身）」「显式冷启动」才允许自动给前台，其余一律留在任务栏
+   * 并用任务栏闪烁提示（Rust 壳侧 show_main_window_without_focus 执行）。
+   *
+   * Win32 前台窗口在 Linux CI 上取不到，因此按本文件里 PowerShell 桩件的同一套路：
+   * 把函数源码从启动器里抽出来、打桩 _window_process_name 后直接断言判决表，
+   * 锁住「默认不抢前台」这条用户可感知行为。
+   */
+  const LAUNCHER_PY = join(process.cwd(), "scripts", "start_tauri_launcher.py");
+  const python = (() => {
+    for (const candidate of ["python3", "python"]) {
+      try {
+        execFileSync(candidate, ["-c", "import sys; sys.exit(0)"], {
+          stdio: "ignore",
+        });
+        return candidate;
+      } catch {
+        // 试下一个候选
+      }
+    }
+    return "";
+  })();
+
+  /** 抽 decide_foreground / foreground_window_process 的源码，打桩后跑一次判决。 */
+  const decide = (call: string, foregroundProcess: string): string => {
+    const script = `
+import ast, json, sys
+
+src = open(${JSON.stringify(LAUNCHER_PY)}, encoding="utf-8").read()
+tree = ast.parse(src)
+wanted = {"decide_foreground", "foreground_window_process"}
+blocks = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in wanted]
+namespace = {}
+exec(compile(ast.Module(body=blocks, type_ignores=[]), "<stub>", "exec"), namespace)
+
+messages = []
+namespace["log"] = lambda msg: messages.append(str(msg))
+namespace["foreground_window_process"] = lambda: ${JSON.stringify(foregroundProcess)}
+
+verdict = namespace["decide_foreground"](${call})
+print("RESULT=" + json.dumps(verdict))
+print("LOG=" + " | ".join(messages))
+`;
+    const proc = spawnSync(python, ["-c", script], { encoding: "utf8" });
+    return `${proc.stdout ?? ""}${proc.stderr ?? ""}`;
+  };
+
+  it.skipIf(!python)("用户切走了（前台是别的应用）时不自动抢前台", () => {
+    const out = decide("", "notepad.exe");
+    expect(out).toContain("RESULT=false");
+    expect(out).toContain("foreground denied");
+  });
+
+  it.skipIf(!python)("用户刚点的启动（前台是资源管理器）允许给前台", () => {
+    expect(decide("", "explorer.exe")).toContain("RESULT=true");
+  });
+
+  it.skipIf(!python)("前台本来就是本应用（重启 / 更新后重启）允许给前台", () => {
+    expect(decide("", "app.exe")).toContain("RESULT=true");
+  });
+
+  it.skipIf(!python)("脚本 / 终端冷启动允许给前台", () => {
+    expect(decide("cold_start=True", "pwsh.exe")).toContain("RESULT=true");
+  });
+
+  it.skipIf(!python)("已有实例被唤起（重复启动）允许给前台", () => {
+    expect(decide("already_running=True", "pwsh.exe")).toContain("RESULT=true");
+  });
+
+  it.skipIf(!python)("双击入口自身的进程（打包后的 start-tauri.exe）也算用户点击", () => {
+    expect(decide("", "start-tauri.exe")).toContain("RESULT=true");
+  });
+});

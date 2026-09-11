@@ -39,8 +39,12 @@
 #   隔离，缓存键版本虽已升到 v2 永久作废旧缓存，但关掉旧 tab 是最直观的保险）。
 
 param(
-  [switch]$Tauri,    # 传 -Tauri 时启动 Tauri 桌面壳（pnpm tauri dev），完整 Rust 热重载但启动慢
-  [switch]$Prebuilt  # 传 -Prebuilt 时直接启动预编译的 Tauri 壳（窗口秒出），后台再启动 next dev
+  [switch]$Tauri,      # 传 -Tauri 时启动 Tauri 桌面壳（pnpm tauri dev），完整 Rust 热重载但启动慢
+  [switch]$Prebuilt,   # 传 -Prebuilt 时直接启动预编译的 Tauri 壳（窗口秒出），后台再启动 next dev
+  # 传 -ColdStart 表示本次是脚本 / 终端拉起（不是「点了就去忙别的」路径）：应用加载
+  # 完成后允许直接给前台。双击链路不传，由 python 启动器按「前台是不是本应用」自行判断，
+  # 结果经 COMFYAPP_FOREGROUND 注入（见 docs/standards/launch-and-build.md §1）。
+  [switch]$ColdStart
 )
 
 $ErrorActionPreference = "Stop"
@@ -922,6 +926,15 @@ try {
     $psiTauri.Environment["COMFYAPP_PROJECT_ROOT"] = $root
     $psiTauri.Environment["COMFYAPP_DEV_URL"] = "http://127.0.0.1:$($script:appPort)/workspace"
     $psiTauri.Environment["COMFYAPP_PORT"] = "$($script:appPort)"
+    # 未显式指定时，则按调用方（python 启动器 / 直接跑脚本）的意图决定：脚本直跑
+    # 视为冷启动（用户在终端里等结果），双击链路由启动器的判断结果传进来。
+    if (-not $psiTauri.Environment.ContainsKey("COMFYAPP_FOREGROUND")) {
+      if ($env:COMFYAPP_FOREGROUND) {
+        $psiTauri.Environment["COMFYAPP_FOREGROUND"] = $env:COMFYAPP_FOREGROUND
+      } else {
+        $psiTauri.Environment["COMFYAPP_FOREGROUND"] = if ($ColdStart) { "1" } else { "0" }
+      }
+    }
     $tauriProc = [System.Diagnostics.Process]::Start($psiTauri)
     Write-Log ("预编译 Tauri 壳已启动（PID: {0}）：{1}" -f $tauriProc.Id, $tauriExe) -Level OK
     # 记录本次拉起的壳 PID：python 启动器的监控线程一旦先于壳退出（用户关掉
