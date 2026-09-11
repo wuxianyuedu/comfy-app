@@ -16,6 +16,7 @@ import { useTheme } from "next-themes";
 import { errorMessage, rawErrorDetail } from "~/lib/error-message";
 import { isDesktopShell } from "~/lib/desktop-shell-client";
 import { useShellTabs } from "~/lib/shell-tabs-store";
+import { openComfyTab } from "~/lib/comfy-tab-client";
 import {
   checkAppUpdate as checkAppUpdateClient,
   downloadAndInstallUpdate,
@@ -681,30 +682,35 @@ export function useSettingsPage(): SettingsPageController {
        * 里「外部已经启动了，界面却打不开」的观感来源）。 */
       const fresh = await comfyStatusQ.refetch();
       const base = fresh.data?.base ?? comfyStatusQ.data?.base ?? null;
-      if (isDesktopShell()) {
-        // 桌面壳内：优先在壳里开一个「子页签」窗口（Rust open_comfyui_window），
-        // 不再拉起系统浏览器；无壳/未运行则走浏览器兜底（见 else 分支）。
-        if (!base) {
-          showFlash("err", "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看");
-          await comfyStatusQ.refetch();
-          return;
-        }
-        // 桌面壳内：在同一个主窗口里开一个「ComfyUI」页签（iframe 内嵌），
-        // 替代此前会弹出空白独立窗口的 open_comfyui_window 方案。
+      if (!base) {
+        showFlash("err", "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看");
+        await comfyStatusQ.refetch();
+        return;
+      }
+      /* 去哪打开由服务端探测结论决定（ISSUE #310 三次回归）：ComfyUI 会发
+       * `X-Frame-Options: DENY`，而它与本应用不同源（端口不同即跨源），
+       * iframe 内嵌必然被拒绝 —— 页签会打开，但里面只有一张浏览器的
+       * 「已阻止此内容」错误页。宿主页自身判不出这件事（跨源读不到响应头，
+       * 事件也不带原因），所以判据在 `comfyEmbeddable`，由 `openComfyTab`
+       * 落成「内嵌页签 / 壳内独立窗口 / 系统浏览器」三档。 */
+      const decision = await openComfyTab(base, window.location.origin);
+      if (decision.embedUrl) {
         // 用稳定 id 打开 ComfyUI 页签：重启后端口偏移（base 变化）时
         // 复用同一页签并刷新地址，而不是叠出重复页签。
         useShellTabs.getState().openTab({
           id: "comfyui",
           label: "ComfyUI",
-          url: base,
+          url: decision.embedUrl,
           closable: true,
         });
-        showFlash("ok", `已在页签中打开 ComfyUI（${base}）`);
-      } else {
-        // 浏览器 / dev 模式：没有可开窗的壳，走服务端命令用系统浏览器打开。
+      } else if (decision.target === "browser") {
+        // 不可嵌且没有可开窗的壳时，交给服务端用系统浏览器兜底。
         const result = await comfyOpenM.mutateAsync();
         showFlash(result.ok ? "ok" : "err", result.detail);
+        await comfyStatusQ.refetch();
+        return;
       }
+      showFlash("ok", decision.detail);
       // 无论成败都刷新状态行，修正探测抖动（如进程查询超时）造成的「未运行」显示。
       await comfyStatusQ.refetch();
     } catch (error) {
