@@ -68,8 +68,11 @@ describe("IOEditStore 写入时清掉存量机器名", () => {
   function storeWithSeed() {
     const store = createIOEditStore("wf");
     store.getState().toggleIO(seedEntry);
-    /* 富化下发「该条目现在的原始槽位名是 value_1」。 */
-    store.getState().setAliasBase({ "4::widget::value_1": "value_1" });
+    /* 富化下发基准：「该条目现在的原始槽位名是 value_1」，且富化链现在给出的
+     *  显示名是作者名 `Seed`。 */
+    store.getState().setAliasBase({
+      "4::widget::value_1": { name: "value_1", enrichedLabel: "Seed" },
+    });
     return store;
   }
 
@@ -98,9 +101,56 @@ describe("IOEditStore 写入时清掉存量机器名", () => {
 
   it("setAliasBase 内容不变时保持同一引用，避免渲染回路", () => {
     const store = createIOEditStore("wf");
-    store.getState().setAliasBase({ a: "seed" });
+    store.getState().setAliasBase({ a: { name: "seed" } });
     const first = store.getState().aliasBaseByKey;
-    store.getState().setAliasBase({ a: "seed" });
+    store.getState().setAliasBase({ a: { name: "seed" } });
     expect(store.getState().aliasBaseByKey).toBe(first);
+  });
+
+  it("基准对象逐键等价时也算「没变」（值对象每帧重建，不能浅比引用）", () => {
+    const store = createIOEditStore("wf");
+    store.getState().setAliasBase({ a: { name: "seed", slotLabel: "Seed" } });
+    const first = store.getState().aliasBaseByKey;
+    store.getState().setAliasBase({ a: { name: "seed", slotLabel: "Seed" } });
+    expect(store.getState().aliasBaseByKey).toBe(first);
+  });
+
+  it("槽位名与本地名逐字相同的别名同样清得掉（ISSUE #349 的复现路径）", () => {
+    /* 用户看到的 `value_1` 就是槽位名本身：修复前「本地名 === 槽位名」这条判据
+     *  对它恒成立，等于没判，条目被当成作者命名留下；一切换 seed 行为，写入再把
+     *  它固化回库，显示名随即退回 value_1。 */
+    const store = createIOEditStore("wf");
+    store
+      .getState()
+      .toggleIO({ nodeId: "4", name: "value_1", kind: "widget", direction: "input", label: "value_1" });
+    store.getState().setAliasBase({
+      "4::widget::value_1": { name: "value_1", enrichedLabel: "随机种", slotLabel: "Seed" },
+    });
+    store.getState().setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "random" });
+    const entry = store.getState().workflowIO["4::widget::value_1"]!;
+    expect(entry.label).toBeUndefined();
+    expect(entry.modes?.i2v?.seedMode).toBe("random");
+  });
+
+  it("本层有作者业务名但富化名也停在别名时，同样清得掉", () => {
+    const store = createIOEditStore("wf");
+    store
+      .getState()
+      .toggleIO({ nodeId: "4", name: "value_1", kind: "widget", direction: "input", label: "value_1" });
+    store.getState().setAliasBase({
+      "4::widget::value_1": { name: "value_1", enrichedLabel: "value_1", slotLabel: "Seed" },
+    });
+    store.getState().setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "fixed" });
+    expect(store.getState().workflowIO["4::widget::value_1"]!.label).toBeUndefined();
+  });
+
+  it("富化两个来源都只有别名时不动本地值（无从判定）", () => {
+    const store = createIOEditStore("wf");
+    store
+      .getState()
+      .toggleIO({ nodeId: "4", name: "value_1", kind: "widget", direction: "input", label: "value_1" });
+    store.getState().setAliasBase({ "4::widget::value_1": { name: "value_1", enrichedLabel: "value_1" } });
+    store.getState().setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "fixed" });
+    expect(store.getState().workflowIO["4::widget::value_1"]!.label).toBe("value_1");
   });
 });

@@ -146,6 +146,13 @@ export interface WorkflowIOEntry {
   /** 宿主（外层封装）节点 id —— 勾选点在子工作流内部时写入，运行期据它把
    *  `nodeId`（内部节点）还原成 comfy-cli 展开后的 `host:inner` 拼接 id。 */
   hostNodeId?: string;
+  /** 本层槽位上**作者写的**业务名（`label`，且与槽位名不同才有值）。
+   *
+   *  富化链把它排在 `localized` 之后（通用翻译会盖住它），但它是判定
+   *  「本地存的那串是不是机器生成的槽位名」的第二判据：富化名恰好停在槽位名
+   *  （`value_1`）时，仅凭显示的 label 无从判断本层有没有作者命名，而这里能。
+   *  没有它，同名条目在写入时会被当成作者命名固化回库（ISSUE #349）。 */
+  slotLabel?: string;
 }
 
 /** Enrich the stored IO selection into a self-describing record (see the
@@ -171,6 +178,8 @@ export async function enrichWorkflowIO(
     let type = "*";
     let defaultValue: unknown = undefined;
     let label = v.label;
+    /* 本层槽位上的作者业务名（判定机器别名的第二判据），见 WorkflowIOEntry。 */
+    let slotLabel: string | undefined;
     /* kind 与 key 直接透传存储值。存储自新格式起即正确区分
      *  widget(可编辑控件) / param(wire 端口) / output,不再做旧数据迁移。 */
 
@@ -272,6 +281,19 @@ export async function enrichWorkflowIO(
          *  判定：label 恰好等于本层槽位名，且本层/内部确实带一个不同的作者
          *  业务名。作者把参数重命名成与 pin 名逐字相同（且 raw 里另有一个
          *  业务名）的概率极低，因此不会误伤。 */
+        /* 本层作者名（下发给客户端做别名判定，见 WorkflowIOEntry.slotLabel）：
+         *  与 `authorFacingName` 同源取值，但只在真能解析到**非别名**的业务名
+         *  时才算数 —— 内部字段名（proxyField）也足以说明业务语义，故按
+         *  f.label → f.localized → ri.label → f.field 取第一个不同于槽位名的值。 */
+        const candidateSlotLabel =
+          f?.label ??
+          (f?.localized !== ri.name ? f?.localized : undefined) ??
+          authorSlotLabel ??
+          (f?.field !== ri.name ? f?.field : undefined);
+        if (candidateSlotLabel !== undefined && candidateSlotLabel !== ri.name) {
+          slotLabel = candidateSlotLabel;
+        }
+
         const staleAlias =
           label !== undefined &&
           label === ri.name &&
@@ -413,6 +435,9 @@ export async function enrichWorkflowIO(
       /* 宿主（外层封装）节点 id 纯透传 —— 它只在「下钻到子图内部」勾选时写入，
        *  运行期靠它把内部节点 id 还原成 comfy-cli 展开后的 `host:inner`。 */
       ...(v.hostNodeId !== undefined ? { hostNodeId: v.hostNodeId } : {}),
+      /* 本层作者名：只在真的与槽位名不同时下发，避免给「label 就是 pin 名」
+       *  的普通节点塞一份无信息量的副本。 */
+      ...(slotLabel !== undefined ? { slotLabel } : {}),
     };
   }
 

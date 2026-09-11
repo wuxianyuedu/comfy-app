@@ -49,10 +49,25 @@ describe("resolveExposedLabel — 暴露条目的显示名回退链", () => {
     );
   });
 
-  it("本地 label 与 pin 名相同但富化名也相同（真的是这个名字）时原样保留", () => {
+  it("本地 label 与 pin 名相同且富化名也是同一串（无从判定）时原样保留", () => {
     expect(resolveExposedLabel({ label: "value_1" }, enriched({ label: "value_1" }), "value_1")).toBe(
       "value_1"
     );
+    expect(resolveExposedLabel({ label: "value_1" }, undefined, "value_1")).toBe("value_1");
+  });
+
+  it("富化名是别名时，本层作者名（slotLabel）也能把存量别名顶掉", () => {
+    /* 作者名写在 wrapper 本层槽位上（`{ name: "value_1", label: "Seed" }`），
+     *  但富化链里通用翻译排在前，显示名停在别名 —— 只有 slotLabel 能作证本层
+     *  确实有作者命名（ISSUE #349）。 */
+    expect(
+      resolveExposedLabel(
+        { label: "value_1" },
+        enriched({ label: "value_1", slotLabel: "Seed" }),
+        "value_1"
+      )
+    ).toBe("value_1");
+    expect(isStaleExposedAlias("value_1", "value_1", "value_1", "Seed")).toBe(true);
   });
 
   it("本地作者手写的名字（非别名）依旧最高优先", () => {
@@ -133,9 +148,38 @@ describe("enrichFromViewNodes — 子图内层视图的就地富化兜底", () =
 
 
 describe("isStaleExposedAlias — 本地存的名字是不是机器生成的槽位名", () => {
-  it("本地名等于富化下发的槽位名 → 是别名", () => {
-    expect(isStaleExposedAlias("value_1", "value_1")).toBe(true);
-    expect(isStaleExposedAlias("image", "image")).toBe(true);
+  it("基准里只有槽位名（富化名也停在别名）时不判定，宁可留着旧值", () => {
+    /* 无从区分「作者真把参数命名成 value_1」与「勾选时固化了别名」——
+     *  没有第二个来源就不动手，避免清掉作者命名。 */
+    expect(isStaleExposedAlias("value_1", "value_1")).toBe(false);
+    expect(isStaleExposedAlias("image", "image")).toBe(false);
+  });
+
+  it("富化名与槽位名不同、本地存的正是别名 → 是别名（ISSUE #349 的复现路径）", () => {
+    /* 富化现在给出的显示名是 `Seed` / `Last Frame Image`，本地那串 `value_1` /
+     *  `image` 是修复前勾选写进去的机器名，必须让位 —— 否则任何一次写入
+     *  （切 seed 行为、改必填、改值）都会把它重新当作者命名固化回库。 */
+    expect(isStaleExposedAlias("value_1", "value_1", "Seed")).toBe(true);
+    expect(isStaleExposedAlias("image", "image", "Last Frame Image")).toBe(true);
+  });
+
+  it("本地名已经是富化名 → 不是别名，不动", () => {
+    expect(isStaleExposedAlias("Seed", "value_1", "Seed")).toBe(false);
+  });
+
+  it("富化名仍是别名，但本层槽位另有一个作者业务名 → 本地存的别名让位", () => {
+    expect(isStaleExposedAlias("value_1", "value_1", "value_1", "Seed")).toBe(true);
+    expect(isStaleExposedAlias("value_1", "value_1", "value_1", "value_1")).toBe(false);
+  });
+
+  it("作者手写的名字永不让位", () => {
+    expect(isStaleExposedAlias("我的种子", "value_1", "Seed")).toBe(false);
+    expect(isStaleExposedAlias("我的种子", "value_1", "value_1", "Seed")).toBe(false);
+  });
+
+  it("基准缺失（富化还没到）时一律不判定", () => {
+    expect(isStaleExposedAlias("value_1", undefined, "Seed")).toBe(false);
+    expect(isStaleExposedAlias(undefined, "value_1", "Seed")).toBe(false);
   });
 
   it("本地名是被解析好的显示名（seed）→ 不是别名", () => {
