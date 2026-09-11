@@ -28,6 +28,18 @@ export function useLogPanel<T>(selector: (state: LogStoreState) => T): T {
   return useLogStore(selector);
 }
 
+/**
+ * 「停在历史页时又新来了多少条日志」——历史页新增提示的判据。
+ *
+ * 计数放在 store 而不是面板里：它由「翻页」与「新日志入库」两个动作共同决定，
+ * 是**状态**不是渲染期能算出来的派生量（渲染期读 ref 会被 react-hooks 规则拦下，
+ * 在 effect 里同步 setState 又会级联渲染）。放在 store 里两者都避免。
+ */
+export function selectNewLogCount(state: LogStoreState): number {
+  if (state.page === 1) return 0;
+  return state.logs.filter((entry) => entry.seq > state.viewSeq).length;
+}
+
 /* ── 全局未捕获错误进面板（规范 07：操作出问题在日志里要能看到）──────────
  * window.onerror / unhandledrejection 此前没有任何钩子：页面级异常
  * （如设置页 tRPC 拿到 HTML 报 "Unexpected token '<'"）只会出现在浏览器

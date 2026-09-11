@@ -25,6 +25,19 @@ export interface LogEntry {
   origin?: "dev" | "launcher" | "app-runtime";
   /** Caller location (file:line) for console logs */
   location?: string;
+  /**
+   * 入库顺序（严格递增）。面板按它排序、并据它判断「有没有比当前页更新的日志」。
+   *
+   * 为什么不按 `time` 排：文件转录行带的是**文件写入时刻**，而它在轮询响应里
+   * 是分批到达的——三路轮询（launcher / dev / app-runtime）并发，`app-runtime`
+   * 那一路要等两个 IO 响应，于是它的旧时刻行会晚于 dev 的新时刻行入库。面板
+   * 此前直接 `[...state.logs, ...fresh]` 按到达顺序堆叠，时间线排序只能靠
+   * DOM 里恰好有序，一旦乱序，用户看到的就是「新增日志不见了」（其实被插在
+   * 中间，视线之外）——ISSUE #346。
+   *
+   * `time` 仍是**展示**时刻（行内时间戳），`seq` 只服务排序与「有无新内容」判定。
+   */
+  seq: number;
 }
 
 export type LogFilter = LogLevel | "all";
@@ -36,6 +49,20 @@ let entryId = 0;
 function nextId() {
   entryId = (entryId + 1) % 1_000_000;
   return `${Date.now().toString(36)}-${entryId.toString(36)}`;
+}
+
+/**
+ * 入库顺序计数器（进程内单调递增，不随清空 / 过滤重置）。
+ *
+ * 它只回答「谁先进的面板」——排序与「有没有比当前页更新的日志」都靠它，
+ * 不依赖各来源自带的时间戳（三路轮询并发到达，时间戳顺序与到达顺序无关）。
+ * 放在模块级而非 store state 里：`clear()` / 重载后仍要保持单调，否则清空
+ * 后新日志的 seq 会退回旧值，被当成「历史行」排到前面。
+ */
+let entrySeq = 0;
+function nextSeq() {
+  entrySeq += 1;
+  return entrySeq;
 }
 
 function serializeOne(a: unknown): string {
@@ -315,6 +342,14 @@ export function parseFileLogs(
   const now = Date.now();
   const today = baseDate ?? new Date();
   const entries: LogEntry[] = [];
+  /* 解析顺序即入库顺序：seq 在解析期分配，批次之间自然衔接（appendFileLogs
+   * 还会再归一化一次，见那里的说明）。 */
+  let seq = nextSeq();
+  const push = (
+    entry: Omit<LogEntry, "seq">,
+  ) => {
+    entries.push({ ...entry, seq: seq++ });
+  };
   for (const rawLine of text.split("\n")) {
     // Strip ANSI SGR (e.g. \x1b[36m) that the launcher now writes into the
     // transcript, so the [HH:mm:ss] [LEVEL] regex still matches cleanly.
@@ -328,7 +363,7 @@ export function parseFileLogs(
       const [, hh, mm, ss, lv, msg] = m;
       const d = new Date(today);
       d.setHours(Number(hh ?? "0"), Number(mm ?? "0"), Number(ss ?? "0"), 0);
-      entries.push({
+      push({
         id: nextId(),
         time: d.getTime(),
         level: parseLogLevel(lv ?? "INFO"),
@@ -352,7 +387,7 @@ export function parseFileLogs(
       );
       const nsTag = ns ? `[${ns}] ` : "";
       const msgText = nsTag + (msg ?? "");
-      entries.push({
+      push({
         id: nextId(),
         time: d.getTime(),
         // Fast Refresh 进行中若沾染上一条错误的级别标记，按 info 落板
@@ -377,7 +412,7 @@ export function parseFileLogs(
         Number(ss),
         Number(ms),
       );
-      entries.push({
+      push({
         id: nextId(),
         time: d.getTime(),
         level: "info",
@@ -387,7 +422,7 @@ export function parseFileLogs(
       });
       continue;
     }
-    entries.push({
+    push({
       id: nextId(),
       time: now,
       level: "info",
@@ -441,6 +476,7 @@ function computeFiltered(
 function welcomeEntry(): LogEntry {
   return {
     id: nextId(),
+    seq: nextSeq(),
     time: Date.now(),
     level: "info",
     message:
@@ -464,7 +500,15 @@ export interface LogStoreState {
    * 面板只显示本次运行：行时刻早于它即上一次运行的残留（见 dropStaleEntries）。
    */
   sessionStart: number | null;
-  addEntry: (entry: Omit<LogEntry, "id" | "time">) => void;
+  /**
+   * 「已读水位」：翻到历史页那一刻的末条 `seq`。
+   *
+   * 面板据此算出「停在历史页期间又新来了多少条日志」并在页脚提示——历史页的
+   * 内容不会因为新日志而改变，没有这条提示，用户看到的就是「计数在涨、面板不
+   * 动」（ISSUE #346）。回到第 1 页即视为已读，水位推到当前末条。
+   */
+  viewSeq: number;
+  addEntry: (entry: Omit<LogEntry, "id" | "time" | "seq">) => void;
   appendFileLogs: (entries: LogEntry[]) => void;
   setSessionStart: (sessionStart: number | null) => void;
   setFilter: (f: LogFilter) => void;
@@ -491,6 +535,31 @@ export function dropStaleEntries(entries: LogEntry[], cutoffMs: number | null | 
   return entries.filter((entry) => entry.time >= cutoffMs);
 }
 
+/**
+ * 把一批新条目并进面板时间线，按 **入库顺序（seq）** 排列。
+ *
+ * 三路轮询（launcher / dev / app-runtime）并发到达，而转录行带的是**文件写入
+ * 时刻**——后到的批次里可能有更早时刻的行（app-runtime 那一路要多等两个 IO
+ * 响应）。此前直接 `[...logs, ...fresh]` 按到达顺序追加，时间戳顺序与数组顺序
+ * 就可能不一致：面板看起来「停在原地」，新增的行其实被插进了中间（滚动位置
+ * 之外），用户读到的是「新增日志怎么不见了」（ISSUE #346）。
+ *
+ * 快路径：绝大多数批次本来就是单调的（`fresh` 的 seq 全都大于现有末条），
+ * 直接 push 免掉排序；只有真正乱序时才按 seq 稳定排序。
+ */
+/** 时间线末条的入库顺序（空面板为 0）——「已读水位」与「有无新内容」都用它。 */
+export function lastSeqOf(logs: LogEntry[]): number {
+  return logs[logs.length - 1]?.seq ?? 0;
+}
+
+export function appendSorted(current: LogEntry[], fresh: LogEntry[]): LogEntry[] {
+  if (fresh.length === 0) return current;
+  if (current.length === 0) return fresh;
+  const last = current[current.length - 1]!;
+  if (fresh[0]!.seq > last.seq) return [...current, ...fresh];
+  return [...current, ...fresh].sort((a, b) => a.seq - b.seq);
+}
+
 function derive(logs: LogEntry[], filter: LogFilter, search: string) {
   return {
     logs,
@@ -509,17 +578,30 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   page: 1,
   pageSize: 2000,
   sessionStart: null,
+  viewSeq: 0,
 
   addEntry: (entry) =>
     set((state) => {
-      const full: LogEntry = { ...entry, id: nextId(), time: Date.now() };
-      return derive([...state.logs, full].slice(-MAX_LOG_ENTRIES), state.filter, state.search);
+      const full: LogEntry = {
+        ...entry,
+        id: nextId(),
+        seq: nextSeq(),
+        time: Date.now(),
+      };
+      return derive(
+        appendSorted(state.logs, [full]).slice(-MAX_LOG_ENTRIES),
+        state.filter,
+        state.search,
+      );
     }),
 
   appendFileLogs: (entries) =>
     set((state) => {
       const fresh = dropStaleEntries(entries, state.sessionStart);
-      const logs = [...state.logs, ...fresh].slice(-MAX_LOG_ENTRIES);
+      /* 空批次直接原样返回：计数/过滤结果不变（setState 浅合并，不覆盖
+       * counts），与「追加空数组时状态保持不变」的既有契约一致。 */
+      if (fresh.length === 0) return { logs: state.logs };
+      const logs = appendSorted(state.logs, fresh).slice(-MAX_LOG_ENTRIES);
       return derive(logs, state.filter, state.search);
     }),
 
@@ -537,12 +619,22 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   setSearch: (s) =>
     set((state) => ({ search: s, filteredLogs: computeFiltered(state.logs, state.filter, s) })),
 
-  setPage: (page) => set({ page: Math.max(1, page) }),
+  /* 翻页时更新「已读水位」：进入历史页 → 记下当前末条 seq（此后新增的才算
+   * 「新来的」）；回到第 1 页 → 推到末条（已读）。 */
+  setPage: (page) =>
+    set((state) => ({
+      page: Math.max(1, page),
+      viewSeq: lastSeqOf(state.logs),
+    })),
   setIsOpen: (open) => set({ isOpen: open }),
   toggleOpen: () => set((state) => ({ isOpen: !state.isOpen })),
 
   clear: () =>
-    set((state) => derive([], state.filter, state.search)),
+    set((state) => ({
+      ...derive([], state.filter, state.search),
+      /* 清空后「已读水位」归零：新日志的 seq 仍大于它，能正确算作新内容。 */
+      viewSeq: 0,
+    })),
 
   copyAll: async () => {
     const text = formatForClipboard(get().logs);

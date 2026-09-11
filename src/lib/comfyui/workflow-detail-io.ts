@@ -204,14 +204,41 @@ export async function enrichWorkflowIO(
         label = label ?? out.label ?? out.localized ?? out.name;
       }
     } else {
-      const ri = (rawInputsById[canonicalNodeId] ?? []).find((raw) => raw.name === v.name);
+      /* 先按槽位名精确匹配；封装节点上匹配不到时（勾选点在子图内层视图
+       *  按下的是内部字段名，而 wrapper 这一层只有别名槽位），退回按
+       *  proxyField.field 匹配同一个暴露口。顺序不能反：一个 wrapper 上
+       *  可能有多个别名槽位指向同一内部字段名，精确匹配才是第一语义。 */
+      const inputEntries = rawInputsById[canonicalNodeId] ?? [];
+      const ri =
+        inputEntries.find((raw) => raw.name === v.name) ??
+        inputEntries.find((raw) => raw.proxyField?.field === v.name);
       if (ri) {
         type = ri.type || "*";
-        /* 用户改过的 label 优先，其次工作流里作者写的 label（英文业务名，
-         *  如 "choose 1st frame to upload"），最后才回退到 ComfyUI 的
-         *  zh-CN localized_name。顺序刻意如此：localized_name 人人相同
-         *  （"图像"），把作者 label 排在它后面会让不同 pin 长得一模一样。 */
-        label = label ?? ri.label ?? ri.localized ?? ri.name;
+        /* 子工作流封装节点（class_type 是 UUID）的暴露口要特殊处理：
+         *  wrapper 本层槽位名是 ComfyUI 为 proxyWidgets 自动编号的别名
+         *  （`value_1`），业务语义在内部节点上。按 `name` 回查只会拿到别名，
+         *  标签于是退化成 `value_1`——与画布上作者认得的业务名（`seed`）
+         *  对不上（ISSUE #349）。内部真实字段（proxyField，由 proxyWidgets
+         *  解析）在该别名之前取值，别名只在内部信息全无时兜底。
+         *
+         *  非封装节点没有 proxyField，行为与旧版逐值等价：作者 label →
+         *  localized → pin 名。 */
+        const f = ri.proxyField;
+        /* 存量数据：勾选那一刻会把「画布显示名」写进 label。修复前封装节点
+         *  的显示名就是别名（value_1），库存 label 里于是躺着一串机器生成的
+         *  名字，它并不是作者的命名，不该把内部字段的业务名压掉。只在封装
+         *  节点（有 proxyField）且 label 恰好等于别名槽位名时视为未命名——
+         *  作者手写的名字几乎不可能与机器别名逐字相同，因此不会误伤；普通
+         *  节点没有这一分支，行为与旧版逐值等价。 */
+        const staleAlias = f !== undefined && label !== undefined && label === ri.name;
+        label =
+          (staleAlias ? undefined : label) ??
+          f?.label ??
+          f?.localized ??
+          ri.label ??
+          ri.localized ??
+          f?.field ??
+          ri.name;
         if (ri.widgetValue !== undefined) defaultValue = ri.widgetValue;
       }
       /* API-only imports carry no rawJson → rawInputsById is empty.  Fall

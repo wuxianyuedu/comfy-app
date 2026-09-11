@@ -36,6 +36,8 @@ import {
   publicProcedure,
   authedProcedure,
   rateLimitedProcedure,
+  recordSlowQuery,
+  resetSlowQueryBuckets,
 } from "~/server/api/trpc";
 import { checkRateLimit } from "~/server/api/middleware/rate-limit";
 import { getTestDb, seedUser, type Row } from "../../../tests/helpers/test-db";
@@ -130,5 +132,35 @@ describe("rateLimitedProcedure 限流分支", () => {
       code: "TOO_MANY_REQUESTS",
     });
     await expect(callerB.sensitive()).resolves.toMatchObject({ ok: true });
+  });
+});
+
+// ─────────────────────────── 慢查询 warn 的聚合（ISSUE #346）───────────────────────────
+
+describe("recordSlowQuery：同一路径在一个窗口内只写首条 + 一条汇总（#346）", () => {
+  beforeEach(() => {
+    resetSlowQueryBuckets();
+  });
+
+  it("同窗口内重复的慢查询只返回首条，其余不写行（不刷屏）", () => {
+    const first = recordSlowQuery("setting.comfyStatus", 10_457, "query", 1_000);
+    expect(first).toBe("setting.comfyStatus 10457ms");
+    for (let i = 0; i < 9; i++) {
+      expect(recordSlowQuery("setting.comfyStatus", 10_500, "query", 1_000 + i)).toBe(null);
+    }
+  });
+
+  it("窗口过期后写一条带累计次数的汇总行，并开启新窗口", () => {
+    recordSlowQuery("setting.comfyStatus", 10_457, "query", 1_000);
+    recordSlowQuery("setting.comfyStatus", 10_457, "query", 2_000);
+    recordSlowQuery("setting.comfyStatus", 10_457, "query", 3_000);
+    const summary = recordSlowQuery("setting.comfyStatus", 11_000, "query", 200_000);
+    expect(summary).toBe("setting.comfyStatus 11000ms（近 60s 内共 3 次）");
+  });
+
+  it("不同路径 / 不同类型的窗口互相独立", () => {
+    expect(recordSlowQuery("a.b", 2_000, "query", 1_000)).not.toBeNull();
+    expect(recordSlowQuery("a.c", 2_000, "query", 1_000)).not.toBeNull();
+    expect(recordSlowQuery("a.b", 2_000, "mutation", 1_000)).not.toBeNull();
   });
 });
