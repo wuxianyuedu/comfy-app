@@ -30,6 +30,7 @@ import { useActiveTaskId, getNodeIdByTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
 import { ValidationErrorList } from "@/components/studio/shared/ValidationErrorList";
 import { useCancelTask } from "./hooks/use-cancel-task";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 /** Runtime shape of an SSE frame from /api/tasks/[id]/stream — only the
  *  fields this panel consumes.  `JSON.parse` yields `unknown`; the guards
@@ -319,7 +320,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          className={overlayClass("modal", "z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm")}
           onClick={(e) => {
             if (e.target === e.currentTarget) setOpen(false);
           }}

@@ -4,6 +4,7 @@ import { completeChat } from "@/lib/llm/browser";
 import { Icon } from "@/components/ui/icon";
 import type { LLMConfigView } from "@/lib/llm/types";
 import { useLLMConfig, useLLMConfigSave } from "./hooks/use-llm-config";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 /** catch 抛出值（unknown）→ 与旧 `e?.message ?? fallback` 逐值等价的消息提取：
  *  带 string message 的对象取 message（Error 实例即此路径），其余回退。 */
@@ -198,7 +199,7 @@ function LLMSettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
+      className={overlayClass("modal", "z-50 grid place-items-center bg-black/50 p-4")}
       onClick={onClose}
     >
       <div

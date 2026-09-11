@@ -26,6 +26,7 @@ import {
   type LogOriginFilter,
 } from "./log-store";
 import { useLogPanel } from "./LogProvider";
+import { overlayClass } from "~/lib/full-screen-layer";
 import {
   LEVEL_BADGE_STYLES,
   LEVEL_TEXT_STYLES,
@@ -316,7 +317,7 @@ export function LogPanel() {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-99 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div className={overlayClass("modal", "z-99 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm")}>
       <div className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-6xl"} flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60`}>
         {/* Header */}
         <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/8 bg-white/2 px-4">

@@ -8,6 +8,7 @@ import {
 } from "./api-channel-settings-config";
 import { useApiChannelSettings } from "./hooks/use-api-channel-settings";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 interface Props {
   initial: ApiChannelsView | null;
@@ -29,7 +30,7 @@ export function ApiChannelSettings({ initial, onClose, onSaved }: Props) {
   const current = draft[tab];
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
+    <div className={overlayClass("modal", "z-50 grid place-items-center bg-black/50 p-4")} onClick={onClose}>
       <div
         className="border-border bg-surface w-full max-w-md rounded-2xl border p-5 shadow-2xl"
         onClick={(event) => event.stopPropagation()}

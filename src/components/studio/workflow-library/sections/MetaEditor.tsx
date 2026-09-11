@@ -8,6 +8,7 @@ import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
   const [open, setOpen] = useState(false);
@@ -74,7 +75,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
             ref={popRef}
             role="dialog"
             aria-label="模型标签编辑器"
-            className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-24"
+            className={overlayClass("modal", "z-50 flex items-start justify-center bg-black/40 p-4 pt-24")}
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) setOpen(false);
             }}
