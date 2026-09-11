@@ -18,6 +18,10 @@ import userEvent from "@testing-library/user-event";
 import { LogPanel } from "./LogPanel";
 import { LOG_PAGE_SIZE, computeOriginCounts, useLogStore } from "./log-store";
 import type { LogEntry } from "./log-store";
+import {
+  LOG_PANEL_OVERLAY_Z,
+  LOG_PANEL_POPUP_Z_CLASS,
+} from "./log-panel-layers";
 
 function makeEntry(index: number, overrides: Partial<LogEntry> = {}): LogEntry {
   return {
@@ -272,7 +276,7 @@ describe("LogPanel 日志面板", () => {
     expect(button.children[1]?.textContent).toContain("1");
   });
 
-  it("标题旁常驻「来源 · 总数 · 警告 · 错误」汇总", () => {
+  it("标题旁只在有警告/错误时给出提示徽标，完整分类数在悬浮说明里", () => {
     act(() =>
       useLogStore
         .getState()
@@ -285,11 +289,12 @@ describe("LogPanel 日志面板", () => {
     render(<LogPanel />);
 
     const badge = screen.getByTitle(/当前来源「全部来源」共 3 条/);
-    expect(badge.textContent).toContain("全部来源");
-    expect(badge.textContent).toContain("3");
-    /* 警告与错误也要在这一句里带出来（此前只显示错误数） */
+    /* 警告与错误带出来（此前只显示错误数） */
     expect(badge.textContent).toContain("警告 1");
     expect(badge.textContent).toContain("错误 1");
+    /* 来源名与总数不在这里复述：来源下拉、级别按钮「全部」各有一份，
+       第三份就是用户反馈的「红框中两部分重复了」（见 ISSUE #262 复审用例）。 */
+    expect(screen.getByTitle(/当前来源「全部来源」共 3 条 · 信息 1/)).toBeTruthy();
   });
 
   it("页脚写出当前看的是哪一段，点一下即去掉该层筛选", async () => {
@@ -378,5 +383,65 @@ describe("LogPanel 日志面板", () => {
     expect(optionOf("应用服务")).toContain("3 条 · 信息无 · 警告 2 · 错误 1");
     expect(optionOf("启动器")).toContain("1 条 · 信息 1 · 警告无 · 错误无");
     expect(optionOf("全部来源")).toContain("4 条 · 信息 1 · 警告 2 · 错误 1");
+  });
+
+  /* ISSUE #262 回归：面板遮罩 z-99，弹层若留在默认 z-50，在真实浏览器里会被
+   * 遮罩整块压住——弹层照常渲染，却收不到指针事件（「点下拉看不到菜单」
+   * 「没法切换来源」「日志没法翻页」是同一个根因）。
+   * jsdom 不做层叠与命中测试，所以这里断言的是**层级接线**：弹层定位层拿到的
+   * class 必须高于遮罩。真正「点得动」由 e2e（真实 Chromium）兜底。 */
+  it("弹层定位层的层级高于面板遮罩（否则被遮罩压住、点不动）", async () => {
+    act(() =>
+      useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]),
+    );
+    const { container } = render(<LogPanel />);
+
+    /* 面板遮罩：overlayClass("modal", …) 拼出的最外层，层级取自同一份契约。 */
+    const overlay = container.querySelector(`[class*="z-${LOG_PANEL_OVERLAY_Z}"]`);
+    expect(overlay).not.toBeNull();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: "按来源筛选" }));
+
+    /* 层级必须给在**定位层**（Popup 的父节点）而不是 Popup 自身：
+       Popup 的 z 只在定位层建立的 stacking context 内部比较，改它越不出去。 */
+    const positioner = document.querySelector<HTMLElement>(
+      '[data-slot="select-content"]',
+    )?.parentElement;
+    expect(positioner?.className ?? "").toContain(LOG_PANEL_POPUP_Z_CLASS);
+    expect(Number(LOG_PANEL_POPUP_Z_CLASS.slice(2))).toBeGreaterThan(
+      LOG_PANEL_OVERLAY_Z,
+    );
+  });
+
+  /* ISSUE #262 复审：标题旁的徽标此前把「<来源> · <条数> · 警告 n · 错误 n」
+     又写了一遍，而同一组数字在右边下拉（当前来源）与左边级别按钮上各有一份。
+     用户反馈「红框中两部分重复了」指的就是它。现在只在有警告/错误时才出现，
+     且只报这两项——来源名与总数交给下拉与级别按钮。 */
+  it("标题徽标不重复来源与总数，只在有警告/错误时提示这两项", () => {
+    act(() =>
+      useLogStore.getState().appendFileLogs([
+        makeEntry(1, { level: "info", origin: "app" }),
+        makeEntry(2, { level: "info", origin: "app" }),
+      ]),
+    );
+    const { unmount } = render(<LogPanel />);
+    /* 全为零（无警告无错误）→ 整块不渲染，标题行不再多一个重复数字的胶囊 */
+    expect(screen.queryByTitle(/当前来源「全部来源」共 2 条/)).toBeNull();
+    unmount();
+
+    act(() =>
+      useLogStore.getState().appendFileLogs([
+        makeEntry(3, { level: "warn", origin: "app" }),
+        makeEntry(4, { level: "error", origin: "app" }),
+      ]),
+    );
+    render(<LogPanel />);
+    const badge = screen.getByTitle(/当前来源「全部来源」共 4 条/);
+    expect(badge.textContent).toContain("警告 1");
+    expect(badge.textContent).toContain("错误 1");
+    /* 不再复述来源名与总数（那两处已有：来源下拉 + 级别按钮的「全部」计数） */
+    expect(badge.textContent).not.toContain("全部来源");
+    expect(badge.textContent).not.toContain("· 4");
   });
 });
