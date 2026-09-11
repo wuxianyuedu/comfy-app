@@ -75,6 +75,9 @@ export interface DynamicWorkflowFormProps {
   onUploadError?: (message: string) => void;
   /** 上传被 ComfyUI 未就绪挡住、正在等待启动时回调一次，供调用方显示进行态。 */
   onUploadProgress?: (message: string) => void;
+  /** 行尾附加的只读徽标（工作流库画布节点用它标出每个参数连到的「对外参数」）。
+   *  缺省不渲染：画布节点 / CreatePanel / 表单预览的观感一律不变。 */
+  rowTrailing?: (entry: EnrichedWidget) => ReactNode;
 }
 
 /** ComfyUI types that render as connectable port rows instead of generic

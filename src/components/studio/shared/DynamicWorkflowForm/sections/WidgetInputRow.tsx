@@ -3,6 +3,7 @@
 // 单个「可编辑参数」行：标签行（可改名 / 必填切换 / 可见性 / 类型徽章）+ 控件行。
 // 纯展示：状态全部由外部传入，交互通过回调上抛。
 
+import type { ReactNode } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 import { EditableLabel } from "~/components/studio/shared/EditableLabel";
@@ -39,6 +40,9 @@ interface WidgetInputRowProps {
   dimmed?: boolean;
   /** 挂左侧可连接端点（画布节点用），圆心骑跨卡片左缘。 */
   withHandle?: boolean;
+  /** 行尾附加的只读徽标（工作流库画布节点用它标出该参数连到的「对外参数」）。
+   *  缺省不渲染——画布 / 表单等等价场景不受影响。 */
+  trailing?: ReactNode;
 }
 
 export function WidgetInputRow({
@@ -58,6 +62,7 @@ export function WidgetInputRow({
   onVisibilityChange,
   dimmed = false,
   withHandle = false,
+  trailing,
 }: WidgetInputRowProps) {
   const accent = ACCENT[entry.control];
   const label = ioLabel(entry, allPins);
@@ -120,6 +125,7 @@ export function WidgetInputRow({
             {entry.required ? "必填" : "可选"}
           </button>
         )}
+        {trailing}
         {onVisibilityChange && (
           <button
             type="button"
