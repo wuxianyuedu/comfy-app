@@ -60,3 +60,20 @@ export function buildSourceData(
     isApiFallback: template.rawJson == null,
   };
 }
+
+/** 详情请求是否对**当前渲染的**工作流就绪。
+ *
+ *  换工作流时 `useQuery({id})` 的 data 会短暂悬空（新 key 首次拉取），但
+ *  `workflow` 行数据是同步就位的 —— 此时若把「选中行有值 + 查询在飞」当成
+ *  加载态，右侧会先闪一屏「加载详情中…」再被真实内容顶掉，连带整页布局
+ *  跳一下。判据因此收紧为「当前 workflow 的键还没到过数据」，而不是
+ *  `isLoading`（它在换 key 与后台 refetch 时为真，二者都不该出现占位）。
+ *
+ *  未选中工作流时不算加载（空态由视图渲染）。 */
+export function isDetailLoadingFor(
+  workflowId: string | null,
+  settledId: string | null,
+): boolean {
+  if (!workflowId) return false;
+  return settledId !== workflowId;
+}

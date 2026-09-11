@@ -10,6 +10,7 @@ import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { api } from "~/trpc/react";
 import {
   buildSourceData,
+  isDetailLoadingFor,
   normalizeWorkflowIO,
   type DetailTab,
   type WorkflowLibraryDetailProps,
@@ -114,6 +115,22 @@ export function useWorkflowLibraryDetail(
     { enabled: !!workflow }
   );
 
+  /* 就绪条件：当前选中工作流已排空过一次详情请求的数据（或错误）。
+   *  `detailQuery.isLoading` 在「换工作流」和「后台 refetch」两种情况下都为
+   *  真，但两者都不该让右侧闪一屏占位——前者问的是上一个 key，后者是后台刷新。
+   *  判定搬进 config 里的纯函数，本文件只负责喂值。 */
+  const detailSettledId = detailQuery.data
+    ? (workflow?.id ?? null)
+    : detailQuery.error
+      ? (workflow?.id ?? null)
+      : null;
+  const enrichedSettled = !!enrichedQuery.data || !!enrichedQuery.error;
+  /* detailFull 是与 detail 并行的第二个请求；两者都排空才把表单交给预览，
+   * 否则表单会先按空 IO 渲染再重排一次（左下「首次打开布局切换」）。 */
+  const isDetailLoading =
+    isDetailLoadingFor(workflow?.id ?? null, detailSettledId) ||
+    (!!workflow && !enrichedSettled);
+
   const workflowIO = useMemo(
     () =>
       normalizeWorkflowIO(enrichedQuery.data?.workflowIO) ??
@@ -210,7 +227,7 @@ export function useWorkflowLibraryDetail(
     sourceOpen,
     openSource,
     closeSource,
-    isLoading: detailQuery.isLoading,
+    isLoading: isDetailLoading,
     errorMessage: detailQuery.error?.message,
     workflowIO,
     sourceData,
