@@ -27,7 +27,8 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
   │           失败同样触发 on_page_load Finished，不校验会把 Edge 错误页
   │           当成应用界面显示）
   │           + 交换窗口默认**不抢前台**（窗口进任务栏 + 任务栏闪烁提醒），
-  │           是否给前台由启动器经 COMFYAPP_FOREGROUND 决定（见 §1.3）
+  │           是否给前台由启动器经 COMFYAPP_FOREGROUND 决定；窗口交接那一刻
+  │           再由启动器的复核进程复裁一次（见 §1.3）
   └─▶ cmd → pnpm dev → node next dev（127.0.0.1:3100）
         就绪后 splash 调 navigate_to_app → main 加载 /workspace → 交换窗口
 ```
@@ -105,6 +106,46 @@ comfy-cli 做 UI→API 转换，解释器固定为 `<项目根>\python-venv\comf
 | 显式冷启动（`-ColdStart` / `--cold-start`，脚本或终端拉起） | 允许 | 命令行路径，用户在终端里等结果 |
 | 已有实例在跑，这次只是唤起（`--focus`，默认开） | 允许 | 用户点了启动就该看到界面 |
 | 其余（前台是别的应用） | **拒绝** | 这就是用户切去干别的了，抢前台会打断他 |
+
+### 交接时刻的复核（`scripts/win32-window-focus.py`）
+
+只判一次不够——用户双击后去干别的可以持续几分钟，等应用真正冒出来时「双击入口还在
+前台」这条判据早已失真；更关键的是**窗口交接那一刻 Windows 会把前台自动放行给新显示
+的主窗**：启动页窗口一直是 `WS_EX_TOOLWINDOW`（不产生任务栏按钮），主窗 `show()` 时
+任务栏按钮首次创建，Windows 把它当成「新窗口」按「用户刚启动 → 允许置前」放行。
+于是壳里任何 `set_focus()` 都「成功」——「不打断用户」的策略在交接这一瞬间被架空，
+这正是 ISSUE #359 修复后用户仍反馈「启动仍然抢前台」的原因。
+
+因此壳侧**不再无条件调 `set_focus()` 试探**（只在 `request_focus` / `configured`
+为真时才争取前台），并新增一个交接复核进程收尾：
+
+| 段 | 位置 | 职责 |
+|---|---|---|
+| 执行（窗口显示） | `src-tauri/src/lib.rs` 的 `show_main_window_without_focus()` | `show()` 一律执行（窗口必须出现在任务栏）；只有显式要求给前台时调 `set_focus()`，未获前台则补任务栏闪烁 |
+| 复核（交接后，独立进程） | `scripts/start_tauri_launcher.py` 的 `spawn_foreground_watch()` → `scripts/win32-window-focus.py` | 主窗口可见后复裁一次：`give` 把前台拿到手（含键盘焦点）／`restore` 把系统自放的前台还回去／`leave` 什么都不做 |
+
+复核判决表（`decide_handoff()`，**默认什么都不做**）：
+
+| 情形 | 动作 | 为什么 |
+|---|---|---|
+| 启动期判决允许（`COMFYAPP_FOREGROUND=1`） | `give` | 用户就在等这个应用，前台必须真的到手（含键盘焦点，否则输入会落到别的窗口） |
+| 不该给，但窗口自己已是前台（系统交接时自动放行） | `restore` | 这个前台不是用户要的，留着就是「还是会抢前台」 |
+| 不该给，且前台是别的应用 | `leave` | 用户切去干别的了，窗口只留在任务栏 + 任务栏闪烁提醒 |
+| 窗口还没显示 | `leave` | 没有前台归属要处理 |
+
+「还回去」用 `SendInput` 发一个**无副作用的 Alt 按键**（不产生输入内容、不切换窗口），
+把输入权交回用户当前线程，再靠 `SetForegroundWindow` 把前台还回去——单独调
+`SetForegroundWindow` 会被前台锁定挡下（实测就是「`already=focused` / 任务栏闪烁反复
+触发」那条路径）。复核只在交接那一刻执行一次，之后不再动前台：用户后来自己点了别处，
+就不该再被拉回去。
+
+复核跑在**独立进程**而非线程：前台输入相关的动作（`AttachThreadInput` / `SendInput` /
+`SetForegroundWindow`）都绑定调用线程的输入状态，混进 GUI 线程会干扰窗口消息；
+独立进程还带 60s 超时熔断，不留常驻进程。日志：`log/launcher/foreground-watch.log`
+（交接发生在启动完成之后，那时启动器主日志已经收尾，独立落盘才排得到）。
+
+纯判定函数 `decide_handoff()` 不依赖 Win32，可在 CI 上直接测；回归测试见
+`tests/check-file-structure.test.ts` 的「窗口交接时刻的前台归属复核」用例组。
 
 启动器另有两个显式覆盖开关：`--foreground` / `--background`（调试与特殊入口用）。
 壳侧的三个调用点（main 页面加载完成交换窗口、splash 缺失时的兜底导航、150s
@@ -212,6 +253,7 @@ log/
 | `log/launcher/pnpm-install-stdout/stderr.log` | dev-launcher.ps1（依赖预检） | 自动补装依赖的原始输出 | 每次触发覆盖 |
 | `log/launcher/drizzle-push-stdout/stderr.log` | dev-launcher.ps1（schema 同步） | drizzle-kit push / heal-db 的原始输出 | 每次启动覆盖 |
 | `log/launcher/tauri-shell.pid` | dev-launcher.ps1 写 / python 启动器读+删 | 本次拉起的桌面壳 PID；启动器先退出时靠它对仍存活的壳做 `taskkill /T /F` 兜底回收（见 §3） | 每次启动覆盖，兜底回收后删除 |
+| `log/launcher/foreground-watch.log` | python 启动器 → 交接复核进程（`scripts/win32-window-focus.py`） | 窗口交接时刻的前台归属裁定与执行结果（`give` / `restore` / `leave` + 句柄），排查「启动仍然抢前台」先看这里（见 §1.3） | 追加写 |
 | `run/launch-status.json` | python 启动器 | 结构化启动进度，splash 页展示；launcher 退出 30s 后自删 | — |
 | 启动页「查看日志」面板 | splash 前端轮询 `get_launch_log` | dev-launcher.log（经 sentinel 定位）+ dev-launcher-stderr.log + log/shell/shell.log（release）的尾部（去 ANSI、限长），启动页实时看执行到哪一步 | — |
 | `.next/dev/logs/next-development.log` | Next dev server | dev server 内部日志（含锁冲突提示） | Next 自管 |
@@ -276,6 +318,8 @@ log/
 | 打包启动器时报「无法清理 start-tauri」 | 残留的提权进程（如卡死的 pyinstaller/启动器）持有 `_internal` 文件，普通权限无法终止 | 重启后重试；应急：`pyinstaller --distpath dist-new tools/start-tauri.spec` 打到新目录后手动换文件 |
 | 启动时先看到 Edge「无法访问此页面 / ERR_CONNECTION_REFUSED」（localhost 拒绝连接），之后才出现启动进度或直接黑等 | **壳编译时没带 `custom-protocol` feature**（裸 `cargo build --release`）：tauri 的 `cfg(dev)` 由该 feature 决定，不带它 = dev 模式行为——①启动页相对 URL 解析到 `build.devUrl`（http://localhost:3100/{{shell.splash}}），dev server 未就绪时 WebView2 渲染错误页且永不重试（2026-09-02 定位，冷启动必现；官方 `pnpm tauri build` 会自动带该 feature，所以生产包没这问题）②资源根本没内嵌进二进制（启动页由 dev server 提供）。叠加因素：壳二进制过期（改了 src-tauri 后未重编，旧版 splash 的 `window.location.replace` 兜底把错误页顶上来）；WebView2 对导航失败也触发 on_page_load Finished，交换窗口前不校验可达性会把错误页当应用显示 | 重编壳必须带 feature：`cd src-tauri; cargo build --release --features custom-protocol`。现版壳已四重防护：splash 不再自导航、交换前 TCP 可达性校验、main 加载失败重导航循环、启动页看门狗（URL 被带走 1s 内恢复进度页） |
 | 应用启动完成瞬间把窗口弹到最前面，打断用户正在看的别的内容（启动期间切出去干别的了） | **窗口交换只做 `show()` + `set_focus()`**：启动耗时期间用户可能已切走，加载完成照样抢前台（ISSUE #359）。判据缺失——「用户刚点的启动」与「用户早就切走了」在旧实现里没被区分 | 已修：启动完成默认只 `show()`（窗口进任务栏）并 `request_user_attention` 请求任务栏闪烁提醒；是否给前台由启动器 `decide_foreground()` 判决并经 `COMFYAPP_FOREGROUND` 注入（见 §1.3），只有「前台本来就是本应用 / 前台是双击入口 / 显式冷启动 / 唤起已有实例」才给。改的是 `src-tauri/src/**`、`Cargo.toml`（`tray-icon`）与 capabilities，**必须重编壳**：`cd src-tauri; cargo build --release --features custom-protocol` |
+| 上面这条修完、重编壳后**启动仍然抢前台**（ISSUE #359 回归） | **交接瞬间 Windows 自己把前台放行给了主窗**，壳里那条「不抢前台」根本管不到：①启动页窗口是 `WS_EX_TOOLWINDOW`，不产生任务栏按钮；主窗 `show()` 时任务栏按钮首次创建，Windows 按「新窗口 + 用户刚启动」放行前台（实测日志就是 `show_main_window_without_focus` 里 `is_focused()` 一开始就为 true）；②旧实现「无条件调一次 `set_focus()` 再看结果」——窗口已被系统放行，这次调用必然「成功」，反而把「不抢前台」演成了「一定给前台」；③启动期的 `decide_foreground()` 只判一次，用户切去干别的几分钟后「双击入口还在前台」这条早已失真 | 已修（两段）：①壳侧只在 `request_focus` / `COMFYAPP_FOREGROUND=1` 时才调 `set_focus()`，不再无条件试探；②新增交接复核进程（`scripts/win32-window-focus.py`，由 `spawn_foreground_watch()` 在主窗口可见时拉起）：不该给就给前台**还回去**（`SendInput` 无副作用 Alt + `SetForegroundWindow`），该给就拿到手（含键盘焦点）。判决表与结论见 §1.3，回归测试见 `tests/check-file-structure.test.ts`。诊断入口：`log/launcher/foreground-watch.log` |
+
 
 | 打开设置失败，页面只剩一句「配置数据未就绪」（没有原因、没有重试、日志面板里也找不到对应失败） | **判据取错**（ISSUE #304）：设置页有两个查询（`setting.get` / `llm.configGet`），降级视图此前只在「两份数据都没拿到」时才触发。当一份成功、一份失败（如 `llm` 相关表缺失 → `no such table: llmConfig`）时，草稿两份都不齐却又不满足该条件，容器一路落到兜底文案。叠加两个观测缺陷：①补记日志的 `query` 字段写死成 `setting.get`，与实际失败的查询对不上；②只记翻译后的可读文案（`signal is aborted without reason` 被译成「请求被中断，请稍候重试」），服务端原文丢失，用户按提示反复等重启永远修不好 | 已修：`hasError = 任一查询失败 且 草稿未就绪`（一份成功一份失败也落错误视图）；日志按实际失败查询记全名称，并把原始报错（tRPC `code` / 服务端 `message` / `cause` / 堆栈首行）写入 `raw` 字段；`errorMessage` 优先取 `shape.message` 的服务端原文，不让传输层包装文案盖掉根因。见 07 §7.12.1 |
 | 工作流库/项目列表整页空数据，tRPC 查询 500（console 报 no such table / Could not locate bindings） | **Drizzle 迁移三重遗漏**（2026-09-03 定位）：① better-sqlite3@11 无 Node 24 预编译包、本机无 MSVC → 原生绑定缺失，所有 DB 查询崩（升级到 v12，prebuild 下载即可）② `resolveDbPath` 用 `new URL("file:./db.sqlite")` 解析 → Windows 落到盘符根 `F:\db.sqlite` 空库（真实数据在 `prisma/db.sqlite`）③ schema.ts 表名 camelCase 与 Prisma 建的 PascalCase 表不一致 | ① better-sqlite3 钉在 v12（v13 移除预编译包，本机无编译链不能升）② 路径解析统一走 `path.resolve(process.cwd(), …)`（与 drizzle-kit 同锚点）③ 表名已重命名对齐 schema.ts；**换 Node 版本或重装依赖后先跑一次 `pnpm db:studio` 确认表与数据都在** |
