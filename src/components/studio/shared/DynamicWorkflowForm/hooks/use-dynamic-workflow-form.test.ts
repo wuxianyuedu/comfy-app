@@ -418,7 +418,52 @@ describe("useDynamicWorkflowForm — 图片上传", () => {
     expect(onChange).not.toHaveBeenCalled();
     expect(result.current.uploading).toBe(false);
     expect(result.current.uploadTarget).toBeNull();
+    /* 失败必须留一个用户可见出口：controller 暴露 uploadError，视图据此
+     * 渲染提示条（此前失败只进 console，上传位毫无反馈 — ISSUE #345）。 */
+    expect(result.current.uploadError).toBe("boom");
     consoleErr.mockRestore();
+  });
+
+  it("上传失败：原因同时上抛给调用方（画布节点/库节点各自渲染提示条）", async () => {
+    vi.mocked(uploadImageFile).mockRejectedValue(new Error("ComfyUI 启动超时"));
+    const onUploadError = vi.fn();
+    const consoleErr = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const { result } = renderHook(() =>
+      useDynamicWorkflowForm(baseProps({ onUploadError })),
+    );
+
+    act(() => result.current.pickFile("img-key"));
+    await act(async () => {
+      await result.current.onFile({
+        target: { files: [new File(["x"], "a.png")], value: "" },
+      } as never);
+    });
+
+    expect(onUploadError).toHaveBeenCalledWith("ComfyUI 启动超时");
+    consoleErr.mockRestore();
+  });
+
+  it("等待 ComfyUI 启动：进行态上抛给调用方，不静默等待", async () => {
+    vi.mocked(uploadImageFile).mockImplementation(async (_file, opts) => {
+      opts?.onProgress?.("正在启动 ComfyUI…");
+      return "ok.png";
+    });
+    const onUploadProgress = vi.fn();
+    const { result } = renderHook(() =>
+      useDynamicWorkflowForm(baseProps({ onUploadProgress })),
+    );
+
+    act(() => result.current.pickFile("img-key"));
+    await act(async () => {
+      await result.current.onFile({
+        target: { files: [new File(["x"], "a.png")], value: "" },
+      } as never);
+    });
+
+    expect(onUploadProgress).toHaveBeenCalledWith("正在启动 ComfyUI…");
+    expect(result.current.uploadError).toBeNull();
   });
 
   it("没有上传目标时 onFile 是 no-op（不会把文件写到错误的字段）", async () => {

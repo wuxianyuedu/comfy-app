@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireServerUser } from "@/lib/auth-server";
 import { uploadImage, comfyBase } from "@/lib/comfyui/client";
+import { ensureComfyUiReady } from "@/lib/comfyui/lifecycle";
 import { logger } from "~/server/lib/logger";
 
 export const runtime = "nodejs";
@@ -15,8 +16,14 @@ function errorMessage(e: unknown, fallback: string): string {
   return fallback;
 }
 
+/** ComfyUI 不可达（未运行 / 端口不通）的判据：这些形态才值得触发自动启动。 */
+function isUnreachable(msg: string): boolean {
+  return /fetch failed|ECONNREFUSED|ENOTFOUND|instance is not running/i.test(msg);
+}
+
 // (OWASP A04/A05): whitelist image types and cap the size so a
 // malformed upload cannot write arbitrary extensions or exhaust memory.
+
 const ALLOWED_MIME = new Set([
   "image/png",
   "image/jpeg",
@@ -63,8 +70,15 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const msg = errorMessage(e, "上传失败");
     const base = comfyBase();
-    // Detect common connectivity issues and provide actionable guidance
-    if (msg.includes("fetch failed") || msg.includes("ECONNREFUSED") || msg.includes("ENOTFOUND")) {
+    if (isUnreachable(msg)) {
+      /* ComfyUI 没在运行 / 配置路径的实例没起来。上传本身要求它已经跑着
+       * （文件要落进它的 input 目录），这里只能回报 503；但顺手踢一次自动
+       * 启动，客户端随后调 `/api/comfy/ensure` 就能看到「正在启动」而不是
+       * 永远等不到实例（ISSUE #345）。fire-and-forget：不在这条请求里等
+       * 冷加载（可能几十秒），避免上传请求挂死。 */
+      void ensureComfyUiReady({ timeoutMs: 0 }).catch(() => {
+        /* 启动失败已在 ensure 侧落日志（含「不再自动重试」闩锁），此处不重复刷 */
+      });
       logger.error(
         `[upload] 503 ComfyUI unreachable — ${base} | error: ${msg} | file: ${filename} (${(buf.length/1024).toFixed(0)}KB)`
       );

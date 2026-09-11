@@ -52,8 +52,12 @@ export interface DynamicWorkflowFormController {
   uploading: boolean;
   uploadTarget: string | null;
   pickFile: (ioKey: string) => void;
+  /** 上传失败的可读原因（未运行 / 启动超时…）；下一次选择文件时清空。
+   *  视图据此在表单内渲染提示条——上传位本身没有错误区。 */
+  uploadError: string | null;
+  dismissUploadError: () => void;
   /** 上传是异步的（读文件 + 调接口），但 `<input type=file>` 的 onChange 只
-   *  要求 void 返回 —— 调用方不需要 await，失败已在内部记日志。 */
+   *  要求 void 返回 —— 调用方不需要 await，失败在这里转成 uploadError。 */
   onFile: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
   set: (ioKey: string, value: unknown) => void;
   /** 未开启重排（调用方未传 onReorder）时为 null。 */
@@ -68,6 +72,9 @@ export interface DynamicWorkflowFormController {
 export function useDynamicWorkflowForm(
   props: DynamicWorkflowFormProps
 ): DynamicWorkflowFormController {
+  /* 逐字段取出回调：React Compiler 不接受依赖写成 `props.x` 之外的可选链，
+   * 也让 deps 表读起来是具体字段而不是整个 props 对象。 */
+  const { onUploadError, onUploadProgress } = props;
   const { io, values, onChange, onReorder, mode } = props;
 
   /* IO-edit 作者态：行内提供了「必填 / 可选」切换或 👁 可见性等编辑回调。
@@ -205,6 +212,10 @@ export function useDynamicWorkflowForm(
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadTarget, setUploadTarget] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  /* 上传失败的原因（可读文案）：此前只在 console 留一行，表单里没有任何
+   * 出口，用户看到的是「点了没反应 / 图片没进来」（ISSUE #345）。 */
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const dismissUploadError = useCallback(() => setUploadError(null), []);
 
   const set = useCallback(
     (ioKey: string, value: unknown) => onChange({ ...values, [ioKey]: value }),
@@ -222,17 +233,25 @@ export function useDynamicWorkflowForm(
       event.target.value = "";
       if (!file || !uploadTarget) return;
       setUploading(true);
+      setUploadError(null);
       try {
-        const name = await uploadImageFile(file);
+        /* ComfyUI 未运行 / 正在启动时由客户端自动等就绪后重试；等待期间
+         * 把「正在启动…」上抛给调用方（画布节点/库节点有提示条位置）。 */
+        const name = await uploadImageFile(file, {
+          onProgress: (message) => onUploadProgress?.(message),
+        });
         set(uploadTarget, name);
       } catch (err) {
+        const message = err instanceof Error ? err.message : "上传失败";
         console.error("[DynamicWorkflowForm] upload failed", err);
+        setUploadError(message);
+        onUploadError?.(message);
       } finally {
         setUploading(false);
         setUploadTarget(null);
       }
     },
-    [uploadTarget, set]
+    [uploadTarget, set, onUploadError, onUploadProgress]
   );
 
   return {
@@ -250,6 +269,8 @@ export function useDynamicWorkflowForm(
     uploading,
     uploadTarget,
     pickFile,
+    uploadError,
+    dismissUploadError,
     onFile,
     set,
     dragHandlers,
