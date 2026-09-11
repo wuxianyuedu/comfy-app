@@ -16,13 +16,19 @@
  *      三元组 + 端口级自动映射。
  *
  * 落库位置：沿用既有的 `paramMap` JSON 列，`source` 命名空间下**只按模式**存放
- * 作者画的线，键写作 `source.mode:<模式>`（值 = `{ <entryId>: ioKey | null }`，
- * `null` = 作者显式断开）。不新增表结构。
+ * 被覆盖过的落点，键写作 `source.mode:<模式>`（值 = `{ <entryId>: ioKey | null }`，
+ * `null` = 该落点被显式断开）。不新增表结构。
  *
- * 为什么没有「与模式无关的手工线」：连线是作者在某个模式下的画布上画的，
- * 不存在脱离模式的语境；留一个通用层只会让「这条线到底哪个模式在生效」变成
- * 需要推理的问题，两套键空间互相覆盖也正是丢线的历史根因。因此没有选中模式
- * 时**禁止连线**，每条手工线都归属一个模式。
+ * 为什么没有「与模式无关的覆盖」：落点覆盖是作者针对某个模式做的，
+ * 不存在脱离模式的语境；留一个通用层只会让「这条覆盖到底哪个模式在生效」变成
+ * 需要推理的问题，两套键空间互相覆盖也正是丢覆盖的历史根因。因此没有选中模式
+ * 时**写入是空操作**，每条覆盖都归属一个模式。
+ *
+ * 本模块**只产出数据**：勾选一个对外参数不会在画布上新增任何节点或连线。
+ * 每个条目的落点默认由 `autoMapEntries` 按名字自动判定，运行期由
+ * `applyParamMapping` 按这张表严格落值。画布上不呈现这些落点 —— 它们不是工作流
+ * 图的一部分（历史上一度把映射画成 `pio:<条目>` 节点 + 连线，勾选即长节点，
+ * 与「工作流图」混淆，已移除）。
  */
 
 import {
@@ -543,86 +549,3 @@ export function applyParamMapping(args: {
 
   return { inputs, unmatched };
 }
-
-/* ── 画布上的「对外参数节点」（纯派生，无 React / 无 IO） ──
- *
- * 映射在编辑器画布上表现为一个个**真实节点**：每个对外参数一个卡片，卡片右侧
- * 一个输出端点，作者把它拖到宿主节点的端口上即完成连线。节点位置按宿主节点
- * 的位置在左侧成列排布 —— 位置是**派生**的，不落库：作者拖不动这些卡片（要挪
- * 就挪宿主节点），也就不会出现「换了台机器打开发现卡片飘到天边」。
- *
- * 这里只算几何与 id，视图（React Flow 节点）由编辑器组装。
- */
-
-/** 对外参数节点 id 前缀（与 ComfyUI 数字节点 id / note: / grp: 等命名空间隔离）。 */
-export const PARAM_NODE_PREFIX = "pio:";
-
-/** 对外参数节点 id。条目的 nodeId 可能是 "5" 这类纯数字，直接当 React Flow
- *  节点 id 会与宿主节点撞名，必须加前缀。 */
-export function paramNodeId(entryId: string): string {
-  return `${PARAM_NODE_PREFIX}${entryId}`;
-}
-
-/** 从节点 id 反解对外参数条目 id；不是对外参数节点时返回 null。 */
-export function entryIdFromParamNodeId(nodeId: string): string | null {
-  return nodeId.startsWith(PARAM_NODE_PREFIX)
-    ? nodeId.slice(PARAM_NODE_PREFIX.length)
-    : null;
-}
-
-/** 对外参数卡片的几何（宽度与端口行高必须与渲染组件一致，否则连线锚点会歪）。 */
-export const PARAM_NODE_WIDTH = 208;
-/** 卡片头（标题）+ 尾部提示的行高。 */
-export const PARAM_NODE_HEADER_H = 26;
-export const PARAM_NODE_ROW_H = 22;
-export const PARAM_NODE_PAD_Y = 8;
-
-/** 卡片高度：头部 + 每个端口一行 + 上下留白（至少留一行，空条目也画得出端点）。 */
-export function paramNodeHeight(entry: ParamEntry): number {
-  return PARAM_NODE_HEADER_H + Math.max(1, entry.pins.length) * PARAM_NODE_ROW_H + PARAM_NODE_PAD_Y;
-}
-
-/** 卡片列与宿主节点左缘之间的水平距离（留出走线的空间）。 */
-export const GROUP_OFFSET_X = 260;
-
-/** 卡片列间距（换列时的横向步长）。 */
-export const PARAM_NODE_COLUMN_W = PARAM_NODE_WIDTH + 28;
-
-/** 每张卡片之间的纵向留白。 */
-export const PARAM_NODE_GAP = 10;
-
-/** 同一宿主节点上每列最多堆几张卡片，超出换列（否则纵向无限延伸）。 */
-const PARAM_NODES_PER_COLUMN = 6;
-
-/** 由宿主节点的画布位置 + 条目顺序算出卡片位置。
- *
- *  位置是**派生**的：宿主节点挪到哪，卡片列就跟到哪（作者拖不动卡片本身）。
- *  宿主节点没有位置（`hostPosById` 缺这项）时跳过 —— 交由视图兜底，不产出
- *  NaN 坐标。同一宿主节点上的多张卡片纵向依次排开，超过一列容量换到左边一列。 */
-export function placeParamNodes(
-  entries: readonly ParamEntry[],
-  hostPosById: Record<string, { x: number; y: number } | undefined>
-): Record<string, { x: number; y: number }> {
-  const out: Record<string, { x: number; y: number }> = {};
-  const cursorByNode: Record<string, number> = {};
-  const columnByNode: Record<string, number> = {};
-  for (const entry of entries) {
-    const host = hostPosById[entry.nodeId];
-    if (!host) continue;
-    const column = columnByNode[entry.nodeId] ?? 0;
-    const rowY = cursorByNode[entry.nodeId] ?? 0;
-    out[paramNodeId(entry.id)] = {
-      x: host.x - GROUP_OFFSET_X - column * PARAM_NODE_COLUMN_W,
-      y: host.y + rowY,
-    };
-    const nextRow = rowY + paramNodeHeight(entry) + PARAM_NODE_GAP;
-    if (nextRow > PARAM_NODES_PER_COLUMN * (PARAM_NODE_HEADER_H + PARAM_NODE_ROW_H + PARAM_NODE_GAP)) {
-      columnByNode[entry.nodeId] = column + 1;
-      cursorByNode[entry.nodeId] = 0;
-    } else {
-      cursorByNode[entry.nodeId] = nextRow;
-    }
-  }
-  return out;
-}
-

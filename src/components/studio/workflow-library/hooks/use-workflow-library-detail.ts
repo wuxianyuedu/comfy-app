@@ -58,9 +58,6 @@ export interface WorkflowLibraryDetailController {
   isLoading: boolean;
   errorMessage: string | undefined;
   workflowIO: WorkflowIOMap | null;
-  /** 模板 paramMap 列（含 `source.mode:<模式>` 连线）—— 库画布据此画对外
-   *  参数卡片与映射连线。没有连线时为空对象（不是 undefined，消费方少一层判空）。 */
-  paramMap: Record<string, unknown>;
   sourceData: SourceModalData | null;
   /** 有可执行图 —— 决定主 CTA 是否可点。 */
   usable: boolean;
@@ -144,16 +141,6 @@ export function useWorkflowLibraryDetail(
   const sourceData = useMemo(
     () => (workflow ? buildSourceData(workflow, template) : null),
     [workflow, template]
-  );
-
-  /* paramMap 是库画布画映射连线的事实源；线上返回的是 Json 列，非对象一律
-   * 当空处理（画布容不下脏数据）。 */
-  const paramMap = useMemo<Record<string, unknown>>(
-    () =>
-      template?.paramMap && typeof template.paramMap === "object" && !Array.isArray(template.paramMap)
-        ? (template.paramMap as Record<string, unknown>)
-        : {},
-    [template]
   );
 
   const formatFlags = useMemo(
@@ -243,7 +230,6 @@ export function useWorkflowLibraryDetail(
     isLoading: isDetailLoading,
     errorMessage: detailQuery.error?.message,
     workflowIO,
-    paramMap,
     sourceData,
     usable: formatFlags.usable,
     canResync: syncFlags.canResync,

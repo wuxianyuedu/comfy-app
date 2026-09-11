@@ -39,7 +39,8 @@ export interface DetailTemplate {
   rawJson?: unknown;
   graph?: unknown;
   workflowIO?: unknown;
-  /** 工作流模板的 paramMap 列（含 `source.mode:<模式>` 的对外参数连线）。 */
+  /** 工作流模板的 paramMap 列（含 `source.mode:<模式>` 的对外参数落点覆盖）。
+   *  仅在类型层描述线上返回的 Json 列；库画布不据此画任何节点/连线。 */
   paramMap?: unknown;
 }
 

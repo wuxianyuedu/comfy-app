@@ -10,7 +10,7 @@
 import React, { useCallback } from "react";
 import {
   ReactFlow, Controls, MiniMap, useStoreApi,
-  type Connection, type Node, type Edge,
+  type Node, type Edge,
   type OnNodesChange, type OnEdgesChange,
 } from "@xyflow/react";
 import { CanvasGrid, ZoomIndicator, CanvasRulers } from "../WorkflowCanvasDecorations";
@@ -79,12 +79,6 @@ export interface WorkflowEditorCanvasProps {
   /** Lazily activates deletable/reconnectable for a clicked edge (see
    *  defaultEdgeOptions below). */
   onEdgeClick?: (event: React.MouseEvent, edge: Edge) => void;
-  /** 画布上新增一条连线（对外参数卡片 → 宿主节点端口）。 */
-  onConnect?: (connection: Connection) => void;
-  /** 连线合法性闸门：无模式 / 落点不是宿主节点端口一律拒绝。 */
-  isValidConnection?: (connection: Connection | Edge) => boolean;
-  /** 删除连线（映射线 = 该对外参数在当前模式下断开）。 */
-  onEdgesDelete?: (edges: Edge[]) => void;
 }
 
 export function WorkflowEditorCanvas({
@@ -98,9 +92,6 @@ export function WorkflowEditorCanvas({
   onMiniMapJump,
   onOpenSettings,
   onEdgeClick,
-  onConnect,
-  isValidConnection,
-  onEdgesDelete,
 }: WorkflowEditorCanvasProps) {
   /* Stable identity → colour lookup for the MiniMap.  Depends on nothing
    *  (role colours are static), so MiniMap never re-renders due to a fresh
@@ -153,9 +144,6 @@ export function WorkflowEditorCanvas({
       onEdgesChange={onEdgesChange}
       onNodeDragStop={onNodeDragStop}
       onEdgeClick={onEdgeClick}
-      onConnect={onConnect}
-      isValidConnection={isValidConnection}
-      onEdgesDelete={onEdgesDelete}
       nodeTypes={workflowNodeTypes}
       edgeTypes={workflowEdgeTypes}
       /* 过滤视口裁剪造成的 error#008 假告警（ISSUE #374）—— 见 handleError。 */

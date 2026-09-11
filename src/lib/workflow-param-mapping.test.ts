@@ -8,12 +8,10 @@ import {
   buildSourceOverrides,
   classifyPin,
   clearModeWiring,
-  entryIdFromParamNodeId,
   handleIdForIoKey,
   hasManualWiring,
   ioKeyForHandle,
   isDefaultMapping,
-  paramNodeId,
   parseParamMapping,
   resolveMapping,
   runtimeNodeId,
@@ -180,15 +178,6 @@ describe("默认连线状态的判定与恢复默认", () => {
     expect(cleared.labels).toEqual({ k: "名字" });
     /* 不改原对象。 */
     expect(mapping.manualByMode.T2I).toEqual({ a: "x" });
-  });
-});
-
-describe("画布节点 id 与几何", () => {
-  it("paramNodeId / entryIdFromParamNodeId 互为反函数", () => {
-    expect(paramNodeId("5|size-width")).toBe("pio:5|size-width");
-    expect(entryIdFromParamNodeId("pio:5|size-width")).toBe("5|size-width");
-    expect(entryIdFromParamNodeId("5")).toBeNull();
-    expect(entryIdFromParamNodeId("note:1")).toBeNull();
   });
 });
 
