@@ -22,14 +22,50 @@ static SIDECAR_PID: Mutex<Option<u32>> = Mutex::new(None);
 struct AppState {
   project_root: Mutex<String>,
   app_url: Mutex<String>,
+  /// 应用窗口是否已显示过。启动期 main 一直隐藏待命，只有首次显示才需要
+  /// 「不抢前台」处理（见 show_main_window_without_focus）。
+  shown: Mutex<bool>,
+  /// 是否允许把应用窗口顶到前台。默认 false：启动耗时期间用户可能已切到
+  /// 别的窗口，加载完成后突然抢焦点会把正在看的内容打断。由启动器按
+  /// COMFYAPP_FOREGROUND 控制；应用已在前台 / 用户主动唤起时不改配置直接放行。
+  foreground: Mutex<bool>,
+  /// 已按「不抢前台」方式显示过但用户还没看过的应用窗口，供托盘「打开主界面」
+  /// 时清掉闪烁提醒。
+  attention: Mutex<bool>,
 }
 
 impl AppState {
-  fn new(project_root: String, app_url: String) -> Self {
+  fn new(project_root: String, app_url: String, foreground: bool) -> Self {
     Self {
       project_root: Mutex::new(project_root),
       app_url: Mutex::new(app_url),
+      shown: Mutex::new(false),
+      foreground: Mutex::new(foreground),
+      attention: Mutex::new(false),
     }
+  }
+
+  fn foreground(&self) -> bool {
+    *self.foreground.lock().unwrap()
+  }
+
+  /// 标记应用窗口已显示过并返回「本次是否为首次显示」。
+  fn mark_shown(&self) -> bool {
+    let mut shown = self.shown.lock().unwrap();
+    let first = !*shown;
+    *shown = true;
+    first
+  }
+
+  fn set_attention(&self, value: bool) {
+    *self.attention.lock().unwrap() = value;
+  }
+
+  fn take_attention(&self) -> bool {
+    let mut a = self.attention.lock().unwrap();
+    let had = *a;
+    *a = false;
+    had
   }
 
   fn project_root(&self) -> String {
@@ -94,10 +130,7 @@ fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHand
       None => false,
     };
     if splash_open && main_hidden {
-      if let Some(m) = monitor.get_webview_window("main") {
-        let _ = m.show();
-        let _ = m.set_focus();
-      }
+      show_main_window_without_focus(&monitor, false);
       if let Some(s) = monitor.get_webview_window("splash") {
         let _ = s.close();
       }
@@ -106,10 +139,106 @@ fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHand
   Ok(())
 }
 
+/// 让已显示的应用窗口回到前台并清掉任务栏提醒。
+///
+/// 用户显式唤起（托盘「打开主界面」、二次启动）时调用——这类场景不适用
+/// 「不打断」策略：用户就是想看它。
+#[tauri::command]
+fn activate_main_window(app_handle: tauri::AppHandle) -> Result<(), String> {
+  show_main_window_without_focus(&app_handle, true);
+  Ok(())
+}
+
+/// 供前端在挂载时询问「应用窗口是否应自动给前台」。
+///
+/// 判据在壳进程里（`COMFYAPP_FOREGROUND`，由启动器按「前台本来就是本应用 /
+/// 用户刚点了启动」注入，见 scripts/start_tauri_launcher.py 的
+/// decide_foreground）。放在 Rust 侧而不是前端读 env，是因为只有服务端渲染
+/// 阶段能拿到非 `NEXT_PUBLIC_` 前缀的变量，客户端读不到会一律降级成「不给前台」。
+#[tauri::command]
+fn should_activate_on_launch(state: tauri::State<'_, AppState>) -> bool {
+  state.foreground()
+}
+
 /// 供启动页读取当前应用目标 URL，用于自主探测后端是否就绪。
 #[tauri::command]
 fn get_app_url(state: tauri::State<'_, AppState>) -> String {
   state.app_url()
+}
+
+/// 把应用窗口（main）显示出来，并按需避免抢前台。
+///
+/// 启动期用户可能已切到别的窗口（切出去干别的了），此时应用加载完成若是照直
+/// `show()` + `set_focus()`，Windows 会把窗口直接顶到最前面——正在看的内容被
+/// 打断。默认策略改为「只显示、不激活」：窗口出现在任务栏，同时请求一次任务栏
+/// 闪烁提醒（request_user_attention），用户处理完手上的事自己点开。
+///
+/// 以下几种情况仍然给前台，否则成了「双击启动没反应」：
+/// 1. AppState.foreground = true——启动器经 `COMFYAPP_FOREGROUND` 注入，判据是
+///    「前台本来就是本应用 / 用户刚点的启动 / 用户再次唤起运行中的实例」
+///    （见 scripts/start_tauri_launcher.py 的 decide_foreground）；
+/// 2. 首次显示前本应用已是系统前台窗口（从应用内重启、壳内导航等场景）；
+/// 3. Windows 允许 `set_focus()` 生效（用户此刻没在别的窗口上操作，启动瞬间的
+///    常见情形）——这时抢前台本就是用户的期望。
+/// `request_focus` 传入调用方的显式意图：用户主动唤起（托盘「打开主界面」、
+/// 二次启动的单实例回调）时为 true。
+fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
+  let Some(win) = app.get_webview_window("main") else {
+    return;
+  };
+  let state = app.try_state::<AppState>();
+  let first_show = state.as_ref().map(|s| s.mark_shown()).unwrap_or(false);
+  let configured = state.as_ref().map(|s| s.foreground()).unwrap_or(false);
+  // 首次显示前本应用是否已在前台：前台本来就是自己，不存在「打断」，而且必须给
+  // 前台——否则用户双击启动后还要自己去任务栏点一下。
+  let already_foreground_active = first_show && win.is_focused().unwrap_or(false);
+  let activate = request_focus || configured || already_foreground_active;
+
+  if let Err(e) = win.show() {
+    log::warn!("[ComfyAPP] show main window failed: {:?}", e);
+  }
+
+  // 无论走哪条分支都调一次 set_focus：前台锁定（foreground lock）允许时它会
+  // 生效——用户没在别的窗口上操作时就是这种情形，符合预期；被系统拦下时窗口
+  // 同样留在任务栏，不会有任何打断。
+  let _ = win.set_focus();
+  if win.is_focused().unwrap_or(false) {
+    if let Some(s) = state.as_ref() {
+      s.set_attention(false);
+    }
+    log::info!(
+      "[ComfyAPP] main window shown with focus (request={} configured={} already={})",
+      request_focus,
+      configured,
+      already_foreground_active
+    );
+    return;
+  }
+
+  if activate {
+    // 明确要求给前台（用户主动唤起 / 启动器判定前台是本应用）但系统没给：
+    // 记录日志即可，不额外闪烁——用户本来就盯着这个应用。
+    log::warn!(
+      "[ComfyAPP] main window shown, foreground request not granted (request={} configured={})",
+      request_focus,
+      configured
+    );
+    return;
+  }
+
+  // 不抢前台：让任务栏按钮持续闪烁到用户点开，作为「加载好了」的提示。
+  if let Some(s) = state.as_ref() {
+    s.set_attention(true);
+  }
+  match win.request_user_attention(Some(tauri::UserAttentionType::Informational)) {
+    Ok(()) => {
+      log::info!("[ComfyAPP] main window shown without focus, taskbar attention requested")
+    }
+    Err(e) => log::warn!(
+      "[ComfyAPP] main window shown without focus, request_user_attention failed: {:?}",
+      e
+    ),
+  }
 }
 
 /// 桌面壳内打开 ComfyUI：把运行中的 ComfyUI 网页界面放进 Tauri 壳的独立
@@ -377,10 +506,9 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
           if let Ok(target) = url.parse::<tauri::Url>() {
             let _ = win.navigate(target);
           }
-          // 启动页（splash）不可用，无窗口可交换：直接显示「应用」窗口并关闭黑屏 splash
-          let _ = win.show();
-          let _ = win.set_focus();
         }
+        // 启动页（splash）不可用，无窗口可交换：直接显示「应用」窗口并关闭黑屏 splash
+        show_main_window_without_focus(&handle, false);
         if let Some(splash) = handle.get_webview_window("splash") {
           let _ = splash.close();
         }
@@ -481,13 +609,52 @@ fn build_single_instance_plugin() -> tauri::plugin::TauriPlugin<Wry> {
   single_instance::init(|app, _args, _cwd| {
     // 应用仍在启动期（splash 还开着、main 尚未交换）时不做前台抢占，
     // 否则会把尚在 about:blank 的隐藏主窗顶出来，破坏启动页流程。
+    // 二次启动是用户显式意图，直接给前台（这不会「打断」——用户刚点了启动）。
     if app.get_webview_window("splash").is_none() {
-      if let Some(main) = app.get_webview_window("main") {
-        let _ = main.show();
-        let _ = main.set_focus();
-      }
+      show_main_window_without_focus(app, true);
     }
   })
+}
+
+/// 托盘图标 id（应用退出时用同一 id 查回托盘对象）。
+const TRAY_ID: &str = "comfyapp-tray";
+
+/// 系统托盘：应用以「不抢前台」方式显示时，用户从任务栏点开过就不需要它，
+/// 但「启动完成后窗口在任务栏、用户又切走了」这类场景需要一个稳定的唤起入口，
+/// 因此常驻一个最小托盘——左键单击把主窗口带回前台，右键给出显示/退出。
+/// 托盘是窗口的附属入口，不改变窗口关闭语义（关主窗即退出应用）。
+fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+  use tauri::menu::{Menu, MenuItem};
+  use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+
+  let open_item = MenuItem::with_id(app, "open-main", "打开主界面", true, None::<&str>)?;
+  let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+  let menu = Menu::with_items(app, &[&open_item, &quit_item])?;
+
+  TrayIconBuilder::with_id(TRAY_ID)
+    .icon(app.default_window_icon().unwrap().clone())
+    .tooltip("Comfy APP")
+    .menu(&menu)
+    .show_menu_on_left_click(false)
+    .on_menu_event(|app, event| match event.id().as_ref() {
+      "open-main" => show_main_window_without_focus(app, true),
+      "quit" => app.exit(0),
+      _ => {}
+    })
+    .on_tray_icon_event(|tray, event| {
+      // 只响应「单击左键后抬起」：双击会先产生一次单击，重复唤起无副作用。
+      if let TrayIconEvent::Click {
+        button: MouseButton::Left,
+        button_state: MouseButtonState::Up,
+        ..
+      } = event
+      {
+        show_main_window_without_focus(tray.app_handle(), true);
+      }
+    })
+    .build(app)?;
+  log::info!("[ComfyAPP] tray icon created");
+  Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -500,6 +667,17 @@ pub fn run() {
 
   let log_plugin = build_log_plugin(&project_root);
 
+  // 是否允许启动完成时把应用窗口顶到前台。默认 false（不打断用户正在看的
+  // 内容）；启动器在「前台本来就是本应用 / 用户主动唤起 / 冷启动」等场景注入
+  // COMFYAPP_FOREGROUND=1 覆盖（判据见 scripts/start_tauri_launcher.py 的
+  // decide_foreground 与 docs/standards/launch-and-build.md §1.3）。
+  let foreground = std::env::var("COMFYAPP_FOREGROUND")
+    .map(|raw| {
+      let value = raw.trim().to_ascii_lowercase();
+      value == "1" || value == "true" || value == "yes"
+    })
+    .unwrap_or(false);
+
   let app = tauri::Builder::default()
     .plugin(build_window_state_plugin())
     .plugin(build_single_instance_plugin())
@@ -510,8 +688,16 @@ pub fn run() {
     .plugin(tauri_plugin_updater::Builder::new().build())
     // 进程重启：更新安装完成后调 relaunch 使新版本生效；也供「重启应用」按钮用。
     .plugin(tauri_plugin_process::init())
-    .manage(AppState::new(project_root, app_url))
-    .invoke_handler(tauri::generate_handler![get_launch_status, navigate_to_app, get_app_url, get_launch_log, open_comfyui_window])
+    .manage(AppState::new(project_root, app_url, foreground))
+    .invoke_handler(tauri::generate_handler![
+      get_launch_status,
+      navigate_to_app,
+      get_app_url,
+      get_launch_log,
+      open_comfyui_window,
+      activate_main_window,
+      should_activate_on_launch
+    ])
     .setup(|app| {
       // ── 方向 B：启动页与「应用」窗口分离 ──
       // 配置里的 splash 窗口（label="splash"）仅显示启动进度，可见。
@@ -561,10 +747,9 @@ pub fn run() {
               spawn_renavigate(app_handle_for_page.clone(), payload.url().clone());
               return;
             }
-            if let Some(m) = app_handle_for_page.get_webview_window("main") {
-              let _ = m.show();
-              let _ = m.set_focus();
-            }
+            // 启动期可能已过了几十秒，用户很可能切到了别的窗口：这里只把应用
+            // 显示到任务栏并做闪烁提醒，不把窗口顶到前台（见函数注释）。
+            show_main_window_without_focus(&app_handle_for_page, false);
             if let Some(s) = app_handle_for_page.get_webview_window("splash") {
               let _ = s.close();
             }
@@ -651,15 +836,34 @@ pub fn run() {
           }
         }
       }
+      // 托盘是「窗口只在任务栏、用户又切走了」时的兜底唤起入口：创建失败
+      // （缺图标资源 / 系统限制）只记 WARN，绝不能让整个应用起不来。
+      if let Err(e) = build_tray(app.handle()) {
+        log::warn!("[ComfyAPP] tray icon not created: {:?}", e);
+      }
       Ok(())
     })
     .build(tauri::generate_context!())
     .expect("error while building tauri application");
 
-  app.run(|_app, event| {
-    if let tauri::RunEvent::Exit = event {
+  app.run(|app, event| match event {
+    tauri::RunEvent::Exit => {
       #[cfg(not(debug_assertions))]
       kill_sidecar();
     }
+    tauri::RunEvent::ExitRequested { code, .. } => {
+      // 关窗即退出（不做「最小化到托盘」）。用户若在窗口只显示到任务栏、还没点开
+      // 的情况下直接退出，留一条日志，便于对照「双击了却没看到界面」的反馈。
+      if code.is_none() {
+        if let Some(state) = app.try_state::<AppState>() {
+          if state.take_attention() {
+            log::info!(
+              "[ComfyAPP] exiting while the window was only shown in the taskbar (never opened by the user)"
+            );
+          }
+        }
+      }
+    }
+    _ => {}
   });
 }

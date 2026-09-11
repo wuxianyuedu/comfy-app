@@ -41,3 +41,46 @@ export async function openUrlInShell(url: string): Promise<ShellOpenResult> {
     };
   }
 }
+
+/**
+ * 询问壳：本次启动完成后要不要自动把应用窗口给前台。
+ *
+ * 判据在壳进程里（启动器注入的 `COMFYAPP_FOREGROUND`，见
+ * `scripts/start_tauri_launcher.py` 的 decide_foreground）：默认 false——
+ * 启动耗时期间用户可能已切去别的窗口，加载完成抢前台会打断他正在看的内容；
+ * 只有「前台本来就是本应用 / 用户刚点的启动 / 用户再次唤起运行中的实例」
+ * 才为 true。非壳环境（服务端渲染、浏览器）返回 false。
+ */
+export async function shouldActivateWindowOnLaunch(): Promise<boolean> {
+  if (!isDesktopShell()) return false;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return (await invoke<boolean>("should_activate_on_launch")) === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 把已在任务栏的应用窗口唤到前台（清掉任务栏闪烁提醒）。
+ *
+ * 用在哪：应用启动时若判定「不抢前台」（用户已切去别的窗口，见
+ * `docs/standards/launch-and-build.md` §1），窗口只显示在任务栏并闪烁提示；
+ * 之后用户主动唤起本应用（再点一次启动器 / 双击图标）时，壳会把
+ * `COMFYAPP_FOREGROUND=1` 注入已运行的实例，应用据此在首次挂载时把自己顶到
+ * 前台——否则「再点一次还是没反应」。收件箱这类「用户点了就该看到」的入口
+ * 也可以直接复用本函数。
+ *
+ * 非壳环境 / 命令不可用（旧壳未含 activate_main_window）时静默降级：这不是
+ * 用户主动点的动作，失败不该打扰用户。
+ */
+export async function activateMainWindow(): Promise<boolean> {
+  if (!isDesktopShell()) return false;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("activate_main_window");
+    return true;
+  } catch {
+    return false;
+  }
+}
