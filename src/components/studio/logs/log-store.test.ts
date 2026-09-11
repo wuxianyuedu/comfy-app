@@ -251,7 +251,9 @@ describe("appendFileLogs 批量追加", () => {
         makeEntry({ id: "m3", level: "error", message: "启动失败" }),
       ]);
     const { counts, filteredLogs } = useLogStore.getState();
-    expect(counts).toEqual({ all: 3, debug: 0, info: 2, warn: 0, error: 1 });
+    /* counts 与 filteredLogs 同一口径（都跟着搜索词收窄）：搜索命中 m1/m3，
+     * 计数也只数这两条——面板上「按钮写着 2」与「列表里确实 2 条」才对得上。 */
+    expect(counts).toEqual({ all: 2, debug: 0, info: 1, warn: 0, error: 1 });
     expect(idsOf(filteredLogs)).toEqual(["m1", "m3"]);
   });
 

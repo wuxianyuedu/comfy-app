@@ -229,7 +229,11 @@ export function isReactQueryLog(args: unknown[]): boolean {
   // 真实追踪至少两个参数（格式串 + 样式），单参数的不是追踪，避免误吞业务文案。
   if (args.length >= 2) {
     const first = args[0];
-    if (typeof first === "string" && /^\s*%c\s*(?:<<|>>)\s*(?:query|mutation)\s*#\d+/i.test(first)) return true;
+    if (
+      typeof first === "string" &&
+      /^\s*%c\s*(?:<<|>>)\s*(?:query|mutation)\s*#\d+/i.test(first)
+    )
+      return true;
   }
   // 塌缩/重包装形态：loggerLink 的 %c 样式与逐帧参数被 React devtools 吞并，
   // 合并成带 "[[" 前缀的单串（形如 `[[ << mutation #43 ]workflow.update {}`），
@@ -330,7 +334,6 @@ export function isRoutineRpcTimingLine(line: string): boolean {
     .replace(/^(?:[a-z]+\]?|\])\s*/i, "");
   return /^\S+\s+\d+ms(\s*\{.*\})?$/i.test(body);
 }
-
 
 function parseLogLevel(level: string): LogLevel {
   switch (level.toLowerCase()) {
@@ -539,7 +542,10 @@ export function dedupeRepeats(
   while (i < entries.length) {
     const first = entries[i]!;
     let run = 1;
-    while (i + run < entries.length && foldKey(entries[i + run]!) === foldKey(first)) {
+    while (
+      i + run < entries.length &&
+      foldKey(entries[i + run]!) === foldKey(first)
+    ) {
       run += 1;
     }
     if (run <= limit) {
@@ -560,7 +566,10 @@ export function dedupeRepeats(
 
 function formatForClipboard(entries: LogEntry[]): string {
   return entries
-    .map((e) => `${formatTime(e.time, { alwaysDate: true })} [${e.level.toUpperCase()}] ${e.message}`)
+    .map(
+      (e) =>
+        `${formatTime(e.time, { alwaysDate: true })} [${e.level.toUpperCase()}] ${e.message}`,
+    )
     .join("\n");
 }
 
@@ -568,10 +577,11 @@ function zeroCounts(): LogLevelCounts {
   return { all: 0, debug: 0, info: 0, warn: 0, error: 0 };
 }
 
-function computeCounts(logs: LogEntry[]): LogLevelCounts {
+function computeCounts(logs: LogEntry[], search = ""): LogLevelCounts {
   const base = zeroCounts();
-  base.all = logs.length;
   for (const entry of logs) {
+    if (!matchesSearch(entry, search)) continue;
+    base.all++;
     base[entry.level]++;
   }
   return base;
@@ -589,11 +599,14 @@ function computeCounts(logs: LogEntry[]): LogLevelCounts {
  *   `countsByOrigin[origin][level]` 取值，不需要在视图里再换算；
  * - **逐来源独立**：`countsByOrigin.launcher.warn` 只数 `origin === "launcher"`
  *   的行，`countsByOrigin.all` 才是全量；
- * - **不带搜索词**：与级别行的既有口径一致（搜索是「找具体内容」的独立动作，
- *   把它并进计数会让用户在输入框里每敲一个字母就看到数字跳动）。
+ * - **不搜也能看，搜了就跟着收窄**：计数是「当前界面上能选到什么」的口径，因此
+ *   与 `computeFiltered` 共用同一个 `matchesSearch`——搜索时会点中哪些行，计数上
+ *   就显示几。两处若各写一套匹配规则，会出现「左边写着警告 2、切过去只剩 1」，
+ *   比不显示数字更让人怀疑面板（ISSUE #360 的同一类问题）。
  */
 export function computeOriginCounts(
   logs: LogEntry[],
+  search = "",
 ): LogOriginCounts {
   const table: LogOriginCounts = {
     all: zeroCounts(),
@@ -604,6 +617,7 @@ export function computeOriginCounts(
   };
 
   for (const entry of logs) {
+    if (!matchesSearch(entry, search)) continue;
     table.all.all += 1;
     table.all[entry.level] += 1;
     /* 无 origin 的行（console 拦截 / Tauri 事件 / 全局错误）只计入 all——
@@ -617,21 +631,29 @@ export function computeOriginCounts(
   return table;
 }
 
+/**
+ * 搜索命中判据（唯一事实）：面板的过滤与各处计数都走这里，两边口径不会漂移
+ * ——「按钮上写着 2、切过去只剩 1」正是口径分叉的产物。
+ */
+function matchesSearch(entry: LogEntry, search: string): boolean {
+  const needle = search.trim().toLowerCase();
+  if (!needle) return true;
+  return (
+    entry.message.toLowerCase().includes(needle) ||
+    entry.location?.toLowerCase().includes(needle) === true
+  );
+}
+
 function computeFiltered(
   logs: LogEntry[],
   filter: LogFilter,
   search: string,
   origin: LogOriginFilter,
 ): LogEntry[] {
-  const needle = search.trim().toLowerCase();
   return logs.filter((entry) => {
     const levelOk = filter === "all" || entry.level === filter;
     const originOk = origin === "all" || entry.origin === origin;
-    const searchOk =
-      !needle ||
-      entry.message.toLowerCase().includes(needle) ||
-      entry.location?.toLowerCase().includes(needle);
-    return levelOk && originOk && searchOk;
+    return levelOk && originOk && matchesSearch(entry, search);
   });
 }
 
@@ -641,8 +663,7 @@ function welcomeEntry(): LogEntry {
     seq: nextSeq(),
     time: Date.now(),
     level: "info",
-    message:
-      "日志面板已启用。按 Ctrl+Shift+L 或点击状态栏日志按钮打开/关闭。",
+    message: "日志面板已启用。按 Ctrl+Shift+L 或点击状态栏日志按钮打开/关闭。",
     source: "system",
   };
 }
@@ -661,6 +682,14 @@ export interface LogStoreState {
    * 一份，用户不必先切来源才知道那边有几个警告（见 computeOriginCounts）。
    */
   countsByOrigin: LogOriginCounts;
+  /**
+   * 面板渲染一帧所需的全部状态（见 {@link LogPanelSlice}）。
+   *
+   * 它随时间线或筛选状态变化而整体重建，面板只订阅这一个字段。视图层因此不必
+   * 自己拼装状态、也就不会出现「某条写入路径忘了带视图状态」的漏项——那正是
+   * 「来源切了、计数还停在切之前」这类 bug 的来源。
+   */
+  header: LogPanelSlice;
   /** 翻页：当前页（1 起，倒序查看，1 = 最新一页）与每页条数。 */
   page: number;
   pageSize: number;
@@ -714,7 +743,36 @@ export interface LogStoreState {
   download: () => void;
 }
 
-/** 从状态推导派生字段（计数 / 过滤结果），所有写入路径共用。 */
+/** 面板渲染一帧需要的全部状态（`LogPanelState` 的别称，视图侧更短的写法）。 */
+export type LogPanelState = LogStoreState;
+
+/**
+ * 面板状态切片（`LogPanel()` 内部那个 `useLogPanel(state => state.panel)`）。
+ *
+ * 面板订阅的是**状态本身**：store 只在时间线/筛选真正变化时才重建这些对象，
+ * 因此选它不会引入逐帧比较。这样写而不是在视图里用 `useShallow` 现拼对象，
+ * 是为了让「面板读哪些状态」这件事只写一遍、只在一个文件里（视图层零状态拼装）。
+ */
+export interface LogPanelSlice {
+  filteredLogs: LogEntry[];
+  filter: LogFilter;
+  origin: LogOriginFilter;
+  search: string;
+  isOpen: boolean;
+  counts: LogLevelCounts;
+  countsByOrigin: LogOriginCounts;
+  page: number;
+  pageSize: number;
+  bootId: string | null;
+}
+
+/**
+ * 派生出「时间线 + 计数 + 过滤结果」这三件随时间线走的东西。
+ *
+ * 不碰视图状态（当前页 / 已读水位 / 来源 / 级别 / 搜索）——那些由
+ * {@link applyView} 收口，保证 `header` 切片永远反映的是**写入之后**的状态，
+ * 而不是写入前那一份。
+ */
 function derive(
   logs: LogEntry[],
   filter: LogFilter,
@@ -724,10 +782,70 @@ function derive(
 ) {
   return {
     logs,
-    counts: computeCounts(logs),
-    countsByOrigin: computeOriginCounts(logs),
+    counts: computeCounts(logs, search),
+    countsByOrigin: computeOriginCounts(logs, search),
     filteredLogs: computeFiltered(logs, filter, search, origin),
     revision,
+  };
+}
+
+/** 从当前状态里摘出视图那几项（`applyView` 的入参形状）。 */
+function viewOf(state: LogStoreState): LogPanelView {
+  return {
+    filter: state.filter,
+    origin: state.origin,
+    search: state.search,
+    isOpen: state.isOpen,
+    page: state.page,
+    pageSize: state.pageSize,
+    bootId: state.bootId,
+  };
+}
+
+/** 视图状态（筛选条件 + 页码 + 收缩状态），`applyView` 的入参。 */
+interface LogPanelView {
+  filter: LogFilter;
+  origin: LogOriginFilter;
+  search: string;
+  isOpen: boolean;
+  page: number;
+  pageSize: number;
+  bootId: string | null;
+}
+
+/**
+ * 把视图状态与派生字段合成一次 `set` 的载荷。
+ *
+ * 面板订阅的状态切片（`header`）必须是**写入之后**的状态：`set` 的浅合并不会
+ * 回头替我们重算切片，若某条写入路径忘了带上它，面板上就是「来源已经切了、
+ * 计数还停在切之前」。所有改视图状态的路径都从这里出去，这一条就不会漏。
+ *
+ * `filteredLogs` 按**合并后的视图**重算（几百毫秒才变一次的时间线上，这点开销
+ * 换「少一个会漂移的中间量」是划算的）；`page` 由调用方先钳好再传进来。
+ */
+function applyView(derived: ReturnType<typeof derive>, view: LogPanelView) {
+  const filteredLogs = computeFiltered(
+    derived.logs,
+    view.filter,
+    view.search,
+    view.origin,
+  );
+  return {
+    ...derived,
+    ...view,
+    filteredLogs,
+    header: {
+      filteredLogs,
+      filter: view.filter,
+      origin: view.origin,
+      search: view.search,
+      isOpen: view.isOpen,
+      counts: derived.counts,
+      countsByOrigin: derived.countsByOrigin,
+      page: view.page,
+      pageSize: view.pageSize,
+      bootId: view.bootId,
+    },
   };
 }
 
@@ -740,6 +858,18 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   isOpen: false,
   counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
   countsByOrigin: computeOriginCounts([]),
+  header: {
+    filteredLogs: [],
+    filter: "all",
+    origin: "all",
+    search: "",
+    isOpen: false,
+    counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
+    countsByOrigin: computeOriginCounts([]),
+    page: 1,
+    pageSize: LOG_PAGE_SIZE,
+    bootId: null,
+  },
   page: 1,
   pageSize: LOG_PAGE_SIZE,
   sessionStart: null,
@@ -757,7 +887,16 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         time: Date.now(),
       };
       const logs = mergeTimeline(state.logs, [full]);
-      return derive(logs, state.filter, state.search, state.origin, state.revision + 1);
+      return applyView(
+        derive(
+          logs,
+          state.filter,
+          state.search,
+          state.origin,
+          state.revision + 1,
+        ),
+        viewOf(state),
+      );
     }),
 
   appendFileLogs: (entries) =>
@@ -770,7 +909,16 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       /* 批次里全是重复行 → 时间线没变，不推进 revision（否则「有 N 条新的日志」
        * 会被重复行刷成假计数）。 */
       if (logs === state.logs) return { logs: state.logs };
-      return derive(logs, state.filter, state.search, state.origin, state.revision + 1);
+      return applyView(
+        derive(
+          logs,
+          state.filter,
+          state.search,
+          state.origin,
+          state.revision + 1,
+        ),
+        viewOf(state),
+      );
     }),
 
   /* 会话起点到达得比首次轮询晚时，时间线里可能已经混进了上次运行的行：
@@ -781,12 +929,15 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       const changed = logs.length !== state.logs.length;
       return {
         sessionStart,
-        ...derive(
-          logs,
-          state.filter,
-          state.search,
-          state.origin,
-          changed ? state.revision + 1 : state.revision,
+        ...applyView(
+          derive(
+            logs,
+            state.filter,
+            state.search,
+            state.origin,
+            changed ? state.revision + 1 : state.revision,
+          ),
+          viewOf(state),
         ),
       };
     }),
@@ -797,68 +948,121 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   setBootId: (bootId) =>
     set((state) => {
       if (state.bootId === bootId) return {};
+      /* 只有「从无到有 / 换了一个」才算换进程：首次拿到标识时时间线里还没有
+       * 旧进程的行，不必清。 */
       const changed = state.bootId !== null && state.bootId !== bootId;
       return {
         bootId,
         ...(changed
           ? {
-              ...derive([], state.filter, state.search, state.origin, state.revision + 1),
-              page: 1,
+              ...applyView(
+                derive(
+                  [],
+                  state.filter,
+                  state.search,
+                  state.origin,
+                  state.revision + 1,
+                ),
+                // 视图入参取自写入前的 state，切片里的 bootId 在这里显式补齐
+                { ...viewOf(state), bootId, page: 1 },
+              ),
               viewRevision: state.revision + 1,
               viewLength: 0,
             }
-          : {}),
+          : { header: { ...state.header, bootId } }),
       };
     }),
 
   setFilter: (f) =>
-    set((state) => ({
-      filter: f,
-      filteredLogs: computeFiltered(state.logs, f, state.search, state.origin),
-      /* 过滤条件变了，当前页多半越界：回到最新一页，避免用户停在空白页。 */
-      page: 1,
-      viewRevision: state.revision,
-      viewLength: computeFiltered(state.logs, f, state.search, state.origin).length,
-    })),
+    set((state) => {
+      const next = {
+        ...viewOf(state),
+        filter: f,
+        /* 过滤条件变了，当前页多半越界：
+        回到最新一页，避免用户停在空白页。 */ page: 1,
+      };
+      const derived = derive(
+        state.logs,
+        next.filter,
+        next.search,
+        next.origin,
+        state.revision,
+      );
+      return {
+        ...applyView(derived, next),
+        viewRevision: state.revision,
+        viewLength: derived.filteredLogs.length,
+      };
+    }),
 
   setOrigin: (o) =>
-    set((state) => ({
-      origin: o,
-      filteredLogs: computeFiltered(state.logs, state.filter, state.search, o),
-      page: 1,
-      viewRevision: state.revision,
-      viewLength: computeFiltered(state.logs, state.filter, state.search, o).length,
-    })),
+    set((state) => {
+      const next = { ...viewOf(state), origin: o, page: 1 };
+      const derived = derive(
+        state.logs,
+        next.filter,
+        next.search,
+        next.origin,
+        state.revision,
+      );
+      return {
+        ...applyView(derived, next),
+        viewRevision: state.revision,
+        viewLength: derived.filteredLogs.length,
+      };
+    }),
 
   setSearch: (s) =>
-    set((state) => ({
-      search: s,
-      filteredLogs: computeFiltered(state.logs, state.filter, s, state.origin),
-      page: 1,
-      viewRevision: state.revision,
-      viewLength: computeFiltered(state.logs, state.filter, s, state.origin).length,
-    })),
+    set((state) => {
+      const next = { ...viewOf(state), search: s, page: 1 };
+      const derived = derive(
+        state.logs,
+        next.filter,
+        next.search,
+        next.origin,
+        state.revision,
+      );
+      return {
+        ...applyView(derived, next),
+        viewRevision: state.revision,
+        viewLength: derived.filteredLogs.length,
+      };
+    }),
 
   /* 翻页时更新「已读水位」：进入历史页 → 记下当前 revision（此后新增的才算
    * 「新来的」）；回到第 1 页 → 推到当前 revision（已读）。 */
   setPage: (page) =>
     set((state) => ({
       page: Math.max(1, page),
+      header: { ...state.header, page: Math.max(1, page) },
       viewRevision: state.revision,
       viewLength: state.filteredLogs.length,
     })),
-  setIsOpen: (open) => set({ isOpen: open }),
-  toggleOpen: () => set((state) => ({ isOpen: !state.isOpen })),
+  setIsOpen: (open) =>
+    set((state) => ({
+      isOpen: open,
+      header: { ...state.header, isOpen: open },
+    })),
+  toggleOpen: () =>
+    set((state) => {
+      const isOpen = !state.isOpen;
+      return { isOpen, header: { ...state.header, isOpen } };
+    }),
 
   clear: () =>
-    set((state) => ({
-      ...derive([], state.filter, state.search, state.origin, state.revision + 1),
-      page: 1,
-      /* 清空后「已读水位」推到当前 revision：新日志的 revision 更大，
-       * 仍能正确算作新内容。 */
-      viewRevision: state.revision + 1,
-      viewLength: 0,
-    })),
+    set((state) => {
+      const view = { ...viewOf(state), page: 1 };
+      return {
+        ...applyView(
+          derive([], view.filter, view.search, view.origin, state.revision + 1),
+          view,
+        ),
+        /* 清空后「已读水位」推到当前 revision：新日志的 revision 更大，
+         * 仍能正确算作新内容。 */
+        viewRevision: state.revision + 1,
+        viewLength: 0,
+      };
+    }),
 
   copyAll: async () => {
     const text = formatForClipboard(get().logs);
@@ -917,7 +1121,10 @@ export function selectPageLogs(
  * 面板是否「已经不在最新」：不在第 1 页，或用户手动上滚离开了底部。
  * 两者都必须给「回到最新」出口，否则用户会以为日志不再刷新（ISSUE #262）。
  */
-export function selectShouldPinToLatest(page: number, autoScroll: boolean): boolean {
+export function selectShouldPinToLatest(
+  page: number,
+  autoScroll: boolean,
+): boolean {
   return page !== 1 || !autoScroll;
 }
 
@@ -943,5 +1150,9 @@ export function selectNewLogCount(state: {
 }): number {
   if (state.revision <= state.viewRevision) return 0;
   if (!selectShouldPinToLatest(state.page, state.autoScroll)) return 0;
-  return Math.max(0, state.filteredLogs.length - Math.min(state.viewLength, state.filteredLogs.length));
+  return Math.max(
+    0,
+    state.filteredLogs.length -
+      Math.min(state.viewLength, state.filteredLogs.length),
+  );
 }
