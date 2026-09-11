@@ -12,6 +12,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "@/config/custom-nodes";
 import { SourceModal } from "../SourceModal";
+import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import type { WorkflowDetail,
   WorkflowIOParam,
 } from "../workflow-types";
@@ -36,6 +37,7 @@ import {
   createNodeJsonViewerStore,
 } from "./WorkflowStores";
 
+import { mergeExposedEntry } from "./io-exposure";
 import { useParamMapping } from "./hooks/use-param-mapping";
 import { ParamMappingPanel } from "./ParamMappingPanel";
 import type { ParamWire } from "./ParamWireLayer";
@@ -478,11 +480,29 @@ function WorkflowEditorBody({
     setEdges(buildEdges(scopeDetail, initialNodes, outSlotNameById));
   }, [initialNodes, scopeDetail, outSlotNameById, setNodes, setEdges]);
 
+  /* IO 编辑预览用的合并条目：本地勾选态（未保存的 label / value / required /
+   *  seedMode / modes）覆盖在服务端富化结果之上，显示名按「本地 label →
+   *  富化名 → 原始 pin 名」回退（子工作流封装节点的富化名会落到包装槽位名，
+   *  见 io-exposure.ts）。节点卡片上的运行期表单据此渲染，与 IO 面板同源。 */
+  const ioPreviewMap = useMemo<WorkflowIOMap>(() => {
+    const out: WorkflowIOMap = {};
+    const detailIOMap = detail?.workflowIO;
+    if (!detailIOMap) return out;
+    for (const [key, local] of Object.entries(workflowIO)) {
+      if (!local) continue;
+      const enriched = detailIOMap[key];
+      out[key] = enriched
+        ? mergeExposedEntry(local, enriched)
+        : { ...local, type: local.type ?? "*" };
+    }
+    return out;
+  }, [workflowIO, detail?.workflowIO]);
+
   /* 对外参数映射：把 workflowIO 归并成「按节点分组的对外参数」，给出默认自动
    *  映射，并允许作者在左侧栏与画布之间手工连线（默认连线状态可编辑）。 */
   const mapping = useParamMapping({
     workflowId,
-    io: detail?.workflowIO ?? null,
+    io: ioPreviewMap,
     mode: detail?.defaultMode ?? null,
     paramMap,
   });
@@ -496,13 +516,13 @@ function WorkflowEditorBody({
         sourceId: entry.id,
         sourceNodeId: entry.nodeId,
         sourceLabel: entry.label,
-        targetNodeId: pin ? (detail?.workflowIO?.[ioKey ?? ""]?.nodeId ?? entry.nodeId) : entry.nodeId,
+        targetNodeId: pin ? (ioPreviewMap[ioKey ?? ""]?.nodeId ?? entry.nodeId) : entry.nodeId,
         targetSlot: pin?.name ?? null,
         manual: mapping.isManual(entry.id),
         color: "",
       };
     });
-  }, [paramPanelOpen, mapping, detail]);
+  }, [paramPanelOpen, mapping, ioPreviewMap]);
 
   const { resetLayout, handleSave, onNodeDragStop } = useWorkflowPersistence({
     workflowId,
@@ -522,17 +542,6 @@ function WorkflowEditorBody({
   });
 ;
 
-  /* IO-preview merge.  IMPORTANT: this useMemo MUST sit
-   *  BEFORE any early-return (loading / error below) so the hook order
-   *  is stable across renders — otherwise React fires "Rendered more
-   *  hooks than during the previous render" the moment the loading
-   *  state flips from true → false.  `workflowIO` (local state) only
-   *  carries the four identity fields written by toggleIO; the server
-   *  returns an enriched map (type / defaultValue / nodeTitle /
-   *  multiline).  The preview panel needs the union: a freshly-toggled
-   *  pin must inherit the server-side enrichment so `controlForEntry`
-   *  picks the right widget, while an un-saved label rename from local
-   *  state must win immediately. */
   /* Loading state */
   if (loading) {
     return (
@@ -561,10 +570,6 @@ function WorkflowEditorBody({
       </div>
     );
   }
-
-  /* (IO-preview merge was hoisted above the loading/error early-returns
-   *  so React hook order stays stable — see comment at the top of the
-   *  component for the full rationale.) */
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-(--color-canvas) pb-6">

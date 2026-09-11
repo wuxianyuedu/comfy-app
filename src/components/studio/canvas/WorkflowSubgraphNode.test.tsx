@@ -59,3 +59,47 @@ describe("WorkflowSubgraphNode", () => {
     expect(screen.getByText("我的子图")).toBeInTheDocument();
   });
 });
+
+describe("WorkflowSubgraphNode — 封装节点暴露口的显示名（ISSUE #349）", () => {
+  const wrapperData = {
+    ...baseData,
+    inputs: [
+      {
+        name: "value_1",
+        type: "INT",
+        isConnection: false,
+        widget: { name: "value_1" },
+        widgetValue: 12345,
+        proxyField: { nodeId: "12", field: "seed", label: "随机种子" },
+      },
+      {
+        name: "value_2",
+        type: "INT",
+        isConnection: false,
+        widget: { name: "value_2" },
+        widgetValue: 20,
+        proxyField: { nodeId: "12", field: "steps" },
+      },
+    ],
+  };
+
+  it("优先显示内部真实字段的业务名，而不是本层别名 value_1", () => {
+    const { container } = renderNode(<WorkflowSubgraphNode data={wrapperData} />);
+    expect(screen.getByText("随机种子")).toBeInTheDocument();
+    // 内部字段没有 label/localized 时退到字段名，而不是别名。
+    expect(screen.getByText("steps")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("value_1");
+    expect(container.textContent).not.toContain("value_2");
+  });
+
+  it("勾选时透传的业务名与行上显示的一致（IO 面板不再对不上）", () => {
+    const stores = makeStores();
+    stores.io.setState({ ioEditMode: true });
+    renderNode(<WorkflowSubgraphNode data={wrapperData} />, stores);
+    const boxes = screen.getAllByTitle(/暴露为工作流/);
+    boxes[0]!.click();
+    const entries = Object.values(stores.io.getState().workflowIO);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.label).toBe("随机种子");
+  });
+});

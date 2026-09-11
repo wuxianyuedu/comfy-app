@@ -71,15 +71,22 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
    *  wrappers — e.g. Settings.outputs[11] = `{name:"", type:"*",
    *  label:"PREVIEW"}`.  Without this filter the canvas would render
    *  a 22px-tall empty row that the user mistakes for a render bug. */
+  /* 暴露口的显示名。wrapper 本层槽位名是 ComfyUI 自动编号的别名
+   *  （`value_1`），业务名在内部真实字段上（proxyField，服务端由
+   *  `properties.proxyWidgets` 解析）。先取内部字段的 label → localized →
+   *  字段名，再回退本层 label/localized/别名——IO 面板用同一条链
+   *  （见 workflow-detail-io 的富化），两处逐字一致。 */
+  const exposedName = (inp: RawInputMeta): string =>
+    sanitizeComboLabel(inp.proxyField?.label) ||
+    sanitizeComboLabel(inp.proxyField?.localized) ||
+    sanitizeComboLabel(inp.proxyField?.field) ||
+    sanitizeComboLabel(inp.label) ||
+    sanitizeComboLabel(inp.localized) ||
+    inp.name ||
+    "";
+
   const cleanedInputs = inputsList
-    .map((inp) => ({
-      inp,
-      label:
-        sanitizeComboLabel(inp.label) ||
-        sanitizeComboLabel(inp.localized) ||
-        inp.name ||
-        "",
-    }))
+    .map((inp) => ({ inp, label: exposedName(inp) }))
     .filter(({ label }) => label.trim().length > 0);
 
   const cleanedOutputs = outputsList
@@ -486,10 +493,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                       name: inp.name,
                       kind: "widget",
                       direction: "input",
-                      // forward the subgraph wrapper's
-                      // widget label / zh localized_name so the IO
-                      // preview shows the meaningful display name.
-                      label: inp.label ?? inp.localized ?? inp.name,
+                      // forward the SAME resolved display name the row
+                      // shows (内部字段业务名 → 本层 label/localized → 别名),
+                      // 这样 IO 面板初值与画布逐字一致（ISSUE #349）。
+                      label: label || inp.name,
                     }}
                   />
                 )}
@@ -597,11 +604,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                             name: inp.name,
                             kind: "widget",
                             direction: "input",
-                            // forward the STRING widget's
-                            // display label / zh localized_name so the
-                            // IO preview shows the meaningful name
-                            // instead of the bare wrapper key.
-                            label: inp.label ?? inp.localized ?? inp.name,
+                            // 同 compact 行：转发已解析好的显示名
+                            // （内部字段业务名 → 本层 label/localized → 别名）。
+                            label: label || inp.name,
                           }}
                         />
                       )}

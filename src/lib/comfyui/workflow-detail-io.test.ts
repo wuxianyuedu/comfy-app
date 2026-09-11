@@ -301,3 +301,192 @@ describe("enrichWorkflowIO — classType（产出节点类名）", () => {
     expect(result["22::widget::image"]!.classType).toBeUndefined();
   });
 });
+
+describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（ISSUE #349）", () => {
+  const WRAPPER = "aaaaaaaa-1111-2222-3333-444444444444";
+  const wrapperParams = (rawExtra?: Record<string, unknown>) =>
+    makeParams(
+      {
+        "1::widget::value_1": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "1",
+          name: "value_1",
+        },
+      },
+      {
+        rawInputsById: {
+          "1": [
+            {
+              name: "value_1",
+              type: "INT",
+              isConnection: false,
+              widget: { name: "value_1" },
+              widgetValue: 12345,
+              ...rawExtra,
+            },
+          ],
+        },
+        graph: { "1": { class_type: WRAPPER, inputs: {} } },
+        nodeTypeById: { "1": WRAPPER },
+        nodeTitleById: { "1": "Sampler" },
+      }
+    );
+
+  it("用内部真实字段的业务名，而不是本层别名 value_1", async () => {
+    const result = await enrichWorkflowIO(
+      wrapperParams({
+        proxyField: { nodeId: "12", field: "seed", label: "随机种子" },
+      })
+    );
+    expect(result["1::widget::value_1"]!.label).toBe("随机种子");
+    expect(result["1::widget::value_1"]!.type).toBe("INT");
+    expect(result["1::widget::value_1"]!.defaultValue).toBe(12345);
+  });
+
+  it("内部字段没有 label 时退到 localized，再退到字段名（不是别名）", async () => {
+    const byLocalized = await enrichWorkflowIO(
+      wrapperParams({ proxyField: { nodeId: "12", field: "seed", localized: "种子" } })
+    );
+    expect(byLocalized["1::widget::value_1"]!.label).toBe("种子");
+
+    const byField = await enrichWorkflowIO(
+      wrapperParams({ proxyField: { nodeId: "12", field: "seed" } })
+    );
+    expect(byField["1::widget::value_1"]!.label).toBe("seed");
+  });
+
+  it("作者已命名的本地 label 依旧最高优先（不被内部字段覆盖）", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "1::widget::value_1": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "1",
+            name: "value_1",
+            label: "我的种子",
+          },
+        },
+        {
+          rawInputsById: {
+            "1": [
+              {
+                name: "value_1",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "value_1" },
+                widgetValue: 1,
+                proxyField: { nodeId: "12", field: "seed", label: "随机种子" },
+              },
+            ],
+          },
+        }
+      )
+    );
+    expect(result["1::widget::value_1"]!.label).toBe("我的种子");
+  });
+
+  it("存量 label 恰好是别名时视为未命名，改由内部字段取名", async () => {
+    /* 修复前勾选会把画布显示名（别名 value_1）写进 label 落库，这不是
+     * 作者命名，不该把内部字段的业务名压掉。 */
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "1::widget::value_1": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "1",
+            name: "value_1",
+            label: "value_1",
+          },
+        },
+        {
+          rawInputsById: {
+            "1": [
+              {
+                name: "value_1",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "value_1" },
+                widgetValue: 1,
+                proxyField: { nodeId: "12", field: "seed", label: "随机种子" },
+              },
+            ],
+          },
+        }
+      )
+    );
+    expect(result["1::widget::value_1"]!.label).toBe("随机种子");
+  });
+
+  it("普通节点上 label 与 pin 名相同仍原样保留（不误判为存量别名）", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "7::widget::seed": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "7",
+            name: "seed",
+            label: "seed",
+          },
+        },
+        {
+          rawInputsById: {
+            "7": [
+              {
+                name: "seed",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "seed" },
+                widgetValue: 42,
+                localized: "随机种",
+              },
+            ],
+          },
+        }
+      )
+    );
+    expect(result["7::widget::seed"]!.label).toBe("seed");
+  });
+
+  it("没有 proxyField（普通节点 / 未解析出代理）时行为与旧版一致", async () => {
+    const result = await enrichWorkflowIO(
+      wrapperParams({ label: "Steps" })
+    );
+    expect(result["1::widget::value_1"]!.label).toBe("Steps");
+  });
+
+  it("存库键是内部字段名时按 proxyField.field 回退匹配上同一个暴露口", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "1::widget::seed": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "1",
+            name: "seed",
+          },
+        },
+        {
+          rawInputsById: {
+            "1": [
+              {
+                name: "value_1",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "value_1" },
+                widgetValue: 7,
+                proxyField: { nodeId: "12", field: "seed", label: "随机种子" },
+              },
+            ],
+          },
+          graph: { "1": { class_type: WRAPPER, inputs: {} } },
+        }
+      )
+    );
+    expect(result["1::widget::seed"]!.label).toBe("随机种子");
+    expect(result["1::widget::seed"]!.defaultValue).toBe(7);
+  });
+});
