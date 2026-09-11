@@ -67,3 +67,57 @@ export function mergeExposedEntry<T extends WorkflowIOEntry>(
     type: local?.type ?? enriched.type,
   };
 }
+
+/** 视图内节点元数据 → 可当「服务端富化」用的最小 IO 表（纯函数）。
+ *
+ *  IO 预览面板的数据源是服务端富化的 `detail.workflowIO`。下钻到子工作流
+ *  后，详情响应里没有这份富化（子图路由不产出 workflowIO：它按整份工作流
+ *  的下标打键，带进内层视图会误伤顶层未保存的编辑）——面板只能回落到本地
+ *  存的 label，于是修复前落库的槽位名/别名（`value_1`）会一直显示（ISSUE #349）。
+ *
+ *  子图详情的 `nodes[].raw_inputs[]` 里本来就带着内部节点的真实 label /
+ *  localized / type，这里就地派生一份，让内层视图与顶层视图的取名口径一致。
+ *  只补「服务端富化查不到」的字段，不覆盖已有值。 */
+export function enrichFromViewNodes(
+  nodes:
+    | {
+        id: string;
+        class_type?: string;
+        raw_inputs?: {
+          name: string;
+          label?: string;
+          localized?: string;
+          type?: string;
+          defaultValue?: unknown;
+          multiline?: boolean;
+          widgetValue?: unknown;
+        }[];
+      }[]
+    | null
+    | undefined
+): Record<string, WorkflowIOEntry> {
+  const out: Record<string, WorkflowIOEntry> = {};
+  for (const node of nodes ?? []) {
+    if (!node?.id) continue;
+    for (const input of node.raw_inputs ?? []) {
+      if (!input?.name) continue;
+      const label =
+        sanitizeComboLabel(input.label) ||
+        sanitizeComboLabel(input.localized) ||
+        input.name;
+      const value = input.defaultValue ?? input.widgetValue;
+      out[`${node.id}::widget::${input.name}`] = {
+        direction: "input",
+        kind: "widget",
+        nodeId: node.id,
+        name: input.name,
+        label,
+        type: input.type ?? "*",
+        ...(input.multiline !== undefined ? { multiline: input.multiline } : {}),
+        ...(value !== undefined ? { defaultValue: value } : {}),
+        ...(node.class_type ? { classType: node.class_type } : {}),
+      };
+    }
+  }
+  return out;
+}

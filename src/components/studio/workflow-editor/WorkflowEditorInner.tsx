@@ -46,6 +46,7 @@ import { buildParamNodes } from "./workflow-param-nodes";
 import { buildParamEdges } from "./workflow-param-edges";
 import { entryIdFromParamNodeId } from "~/lib/workflow-param-mapping";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
+import { enrichFromViewNodes } from "./io-exposure";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
 import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
 import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
@@ -393,6 +394,17 @@ function WorkflowEditorBody({
    * and per-node output-slot names. */
   const { rawMetaById, scopeDetail, outSlotNameById } = useWorkflowDerivedData(detail);
 
+  /* IO 预览的富化数据源。顶层视图直接用服务端产出的 `detail.workflowIO`；
+   * 下钻到子工作流后该字段为空（子图路由不产出它），于是退回「按当前视图
+   * 节点元数据就地派生」——否则修复前落库的槽位名/别名会一直显示
+   * （ISSUE #349）。派生只补齐缺失键，不覆盖服务端已给的富化结果。 */
+  const ioDetailMap = useMemo(() => {
+    if (detail?.workflowIO && Object.keys(detail.workflowIO).length > 0) {
+      return detail.workflowIO;
+    }
+    return enrichFromViewNodes(scopeDetail?.nodes);
+  }, [detail, scopeDetail]);
+
   /* P2: 把 detail 派生的查找上下文同步进 viewer / rgthree store，让
    * getNodeJson/getNodeView/getBypass 读到实时 detail（等价于旧 Context
    * 每次用新 props 渲染）。 */
@@ -738,7 +750,7 @@ function WorkflowEditorBody({
         {ioPreviewOpen && (
           <WorkflowIoPreviewPanel
             workflowIO={workflowIO}
-            detailIOMap={detail.workflowIO ?? null}
+            detailIOMap={ioDetailMap}
             modes={detail.modes ?? []}
             defaultMode={detail.defaultMode ?? null}
             onModesChange={(modes, defaultMode) => {
