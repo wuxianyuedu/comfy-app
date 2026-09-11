@@ -15,6 +15,8 @@
  * 服务端富化（type/defaultValue/nodeTitle/multiline）。对每个 key 优先取
  * 富化条目、再叠加本地条目——本地是作者编辑态的唯一事实源（label/value/
  * required/seedMode/modes 的未保存修改都在上面，必须整体透传）。
+ * 显示名以本地 label 为准，回退顺序见 `io-exposure.ts`（子工作流封装节点的
+ * 富化名会落到包装槽位名 `value_1`，与画布上的业务名对不上）。
  *
  * 位置：右上角，占满画布高度，z-30。 */
 "use client";
@@ -29,6 +31,7 @@ import {
 } from "@/components/studio/shared/workflow-io";
 import { ALL_WORKFLOW_TYPES } from "@/lib/workflow-types";
 import { MultiModeSelect } from "~/components/studio/ui/MultiModeSelect";
+import { mergeExposedEntry } from "./workflow-editor/io-exposure";
 import type { WorkflowIOParam } from "./workflow-types";
 import { RequiredSummary } from "./RequiredSummary";
 import { getIOEditApi } from "./workflow-editor/WorkflowStores";
@@ -79,8 +82,8 @@ export function WorkflowIoPreviewPanel({
       if (!local) continue;
       const e = detailIOMap[key];
       if (e) {
-        /* Local override beats server label so an un-saved rename wins. */
-        out[key] = { ...e, ...local, label: local.label ?? e.label };
+        /* 本地条目整体覆盖在富化结果上（label 的兜底顺序见 io-exposure）。 */
+        out[key] = mergeExposedEntry(local, e);
       } else {
         /* 尚未有服务端富化（刚勾选就打开预览）：整体透传本地条目——它
          *  携带 value/required/seedMode/modes 等未保存编辑，逐字段列举
