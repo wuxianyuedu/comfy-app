@@ -530,6 +530,11 @@ pub fn run() {
         .center()
         .resizable(true)
         .fullscreen(false)
+        // 关闭原生装饰：标题行由前端 ShellTabs / TitleBarTabs 接管，页签直接
+        // 显示在标题行（ISSUE #310 / #200），不再额外占用应用内区域。拖拽与
+        // 最小化/最大化/关闭由 window-controls-client 调 Tauri window API 补齐，
+        // 对应权限见 capabilities/{default,remote}.json。
+        .decorations(false)
         .visible(false)
         .on_page_load(move |_win, payload| {
           if payload.event() == tauri::webview::PageLoadEvent::Finished {

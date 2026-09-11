@@ -3,8 +3,15 @@
 /* ── ShellTabs · 应用级「页签」容器（窗口顶部一条页签栏 + 内容区）────
  *
  * 设计目标：把「主应用」（workspace）与「内嵌的 ComfyUI」都收进同一个
- * Tauri 主窗口内的页签里，顶部一条可切换、可关闭的页签栏，替代此前会
+ * Tauri 主窗口内的页签里，一条可切换、可关闭的页签栏，替代此前会
  * 弹出空白独立窗口的 open_comfyui_window 方案。
+ *
+ * 两种渲染形态（判据见 `shouldUseTitleBarTabs`）：
+ *  - **桌面壳内**：页签搬到窗口**标题行**——主窗口关闭原生装饰，由
+ *    `TitleBarTabs` 接管整条标题栏（页签 + 拖拽区 + 最小化/最大化/关闭），
+ *    不再额外占用应用内区域（ISSUE #310 / #200）。
+ *  - **浏览器 / dev**：窗口由系统浏览器提供，没有原生标题栏可让位，
+ *    退回「应用内页签栏」，保留原有行为与观感。
  *
  * 关键取舍：
  *  - 主应用内容（children）与已打开的 ComfyUI iframe 都**始终挂载**，
@@ -17,19 +24,23 @@
  * 样式说明：内容区高度为「窗口高 - 页签栏高」，主应用内部用 h-full 布局。
  */
 
+import { useCallback, useSyncExternalStore } from "react";
 import { X } from "lucide-react";
 import {
   useShellTabs,
   MAIN_TAB_ID,
   type ShellTab,
 } from "~/lib/shell-tabs-store";
+import { isDesktopShell } from "~/lib/desktop-shell-client";
+import { shouldUseTitleBarTabs } from "~/lib/title-bar-derive";
+import { TitleBarTabs } from "./TitleBarTabs";
 
 interface ShellTabsProps {
   /** 主应用页签的内容（即 workspace 整套界面）。 */
   children: React.ReactNode;
 }
 
-/** 单个页签按钮：标题 + 可选关闭按钮。 */
+/** 单个页签按钮：标题 + 可选关闭按钮（浏览器形态用）。 */
 function TabButton({
   tab,
   active,
@@ -77,32 +88,72 @@ function TabButton({
   );
 }
 
+/** 应用内页签栏（浏览器 / dev 形态）。 */
+function InAppTabStrip({
+  tabs,
+  activeTabId,
+  onActivate,
+  onClose,
+}: {
+  tabs: ShellTab[];
+  activeTabId: string;
+  onActivate: (id: string) => void;
+  onClose: (id: string) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="应用页签"
+      className="flex h-10 shrink-0 items-stretch border-b border-(--color-border-subtle) bg-(--color-subtle)/40"
+    >
+      {tabs.map((tab) => (
+        <TabButton
+          key={tab.id}
+          tab={tab}
+          active={tab.id === activeTabId}
+          onSelect={onActivate}
+          onClose={onClose}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function ShellTabs({ children }: ShellTabsProps) {
   const tabs = useShellTabs((s) => s.tabs);
   const activeTabId = useShellTabs((s) => s.activeTabId);
   const activateTab = useShellTabs((s) => s.activateTab);
   const closeTab = useShellTabs((s) => s.closeTab);
 
+  // 壳探测只能在客户端进行（SSR 无 window）。用 useSyncExternalStore 取
+  // 客户端快照（服务端恒 false）——首帧按「非壳」渲染，客户端再取真实值，
+  // 既不触发 set-state-in-effect（规范 08 §8.6），也不会 hydration 报错。
+  const inShell = useSyncExternalStore(
+    useCallback(() => () => undefined, []),
+    () => isDesktopShell(),
+    () => false,
+  );
+
   const contentTabs = tabs.filter((t) => t.id !== MAIN_TAB_ID);
+  const useTitleBar = shouldUseTitleBarTabs(inShell);
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-(--color-canvas) text-(--color-ink) pb-6">
-      {/* 顶部页签栏：固定高 40px */}
-      <div
-        role="tablist"
-        aria-label="应用页签"
-        className="flex h-10 shrink-0 items-stretch border-b border-(--color-border-subtle) bg-(--color-subtle)/40"
-      >
-        {tabs.map((tab) => (
-          <TabButton
-            key={tab.id}
-            tab={tab}
-            active={tab.id === activeTabId}
-            onSelect={activateTab}
-            onClose={closeTab}
-          />
-        ))}
-      </div>
+      {useTitleBar ? (
+        <TitleBarTabs
+          tabs={tabs}
+          activeTabId={activeTabId}
+          onActivate={activateTab}
+          onClose={closeTab}
+        />
+      ) : (
+        <InAppTabStrip
+          tabs={tabs}
+          activeTabId={activeTabId}
+          onActivate={activateTab}
+          onClose={closeTab}
+        />
+      )}
 
       {/* 内容区：主应用与 ComfyUI 均保持挂载，用 CSS 显隐切换，避免丢态 */}
       <div className="relative min-h-0 flex-1">
