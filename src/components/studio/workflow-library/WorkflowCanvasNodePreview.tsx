@@ -88,6 +88,9 @@ export function WorkflowCanvasNodePreview({
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  /* 素材上传的可见出口：ComfyUI 未运行 / 正在启动 / 启动超时都落在这里。
+   * 上传位自身没有错误区，只记 console 用户看不到任何原因（ISSUE #345）。 */
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   // onOutput 与 onSettled 都来自同一 SSE 闭包，state 读取会拿到渲染期旧值——
   // 用 ref 保证 onSettled 能看到 onOutput 刚写入的结果图。
@@ -397,6 +400,8 @@ export function WorkflowCanvasNodePreview({
               : undefined
           }
           workflowId={workflowId}
+          onUploadProgress={(message) => setUploadNotice(message)}
+          onUploadError={(message) => setUploadNotice(message)}
         />
 
         {/* outputs 行：与画布 outputs labelRow 镜像同构（库内无端点） */}
@@ -466,6 +471,28 @@ export function WorkflowCanvasNodePreview({
       {phase.kind === "failed" && (
         <div className="w-[380px] rounded-lg border border-red-500/20 bg-red-500/8 px-3 py-2 text-[11px] leading-relaxed text-red-600">
           {phase.message}
+        </div>
+      )}
+
+      {/* 素材上传被「ComfyUI 未就绪」挡住时的出口：说明当前在等什么，
+          并给出去设置页手动启动的路（自动启动失败 / 手动关闭过才有这个必要）。 */}
+      {uploadNotice && (
+        <div
+          className="w-[380px] rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-700"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <span className="min-w-0 flex-1">{uploadNotice}</span>
+            <button
+              type="button"
+              onClick={() => setUploadNotice(null)}
+              className="shrink-0 rounded px-1 text-amber-700/70 transition-colors hover:text-amber-800"
+              aria-label="关闭上传提示"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
       {!running && missingLabels.length > 0 && (

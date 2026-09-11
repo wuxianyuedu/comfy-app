@@ -7,23 +7,74 @@
  * 失败一律「抛出带中文文案的 Error」，由调用方（hook）决定提示形态。
  */
 
+import { waitForComfyReady } from "@/lib/comfy-readiness-client";
 import { parseValidationErrorsJson, type ValidationError } from "@/lib/comfyui/validation";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs } from "~/trpc/react";
 
-export async function uploadImageFile(file: File): Promise<string> {
+/** 单次 /api/upload 的结果：成功给出文件名，失败给出可读原因与可否重试。 */
+type UploadAttempt =
+  | { ok: true; name: string }
+  | { ok: false; retryable: boolean; message: string };
+
+/** 单次 POST /api/upload；不成功时返回可读原因与是否值得重试。 */
+async function postUpload(file: File): Promise<UploadAttempt> {
   const fd = new FormData();
   fd.append("image", file);
-  const res = await fetch("/api/upload", { method: "POST", body: fd });
-  const d: unknown = await res.json();
+  let res: Response;
+  try {
+    res = await fetch("/api/upload", { method: "POST", body: fd });
+  } catch {
+    // 网络层失败（应用服务重启窗口）：按可重试处理，不把 fetch 原文抛给用户。
+    return { ok: false, retryable: true, message: "上传请求未送达，请稍候重试" };
+  }
+  let d: unknown;
+  try {
+    d = await res.json();
+  } catch {
+    d = undefined;
+  }
   const obj = typeof d === "object" && d !== null ? (d as Record<string, unknown>) : null;
   const name = typeof obj?.name === "string" ? obj.name : "";
-  if (!name) {
-    const errRaw = obj?.error;
-    // /api/upload's `error` is a plain string; non-string payloads fall back.
-    throw new Error(typeof errRaw === "string" ? errRaw : "上传失败");
-  }
-  return name;
+  if (name) return { ok: true, name };
+  const errRaw = obj?.error;
+  /* ComfyUI 未运行时的 503（`hint: comfyui-unreachable`）是可重试的：服务端
+   * 此时会顺手把实例拉起来，调用方等一会儿再传就能成功（ISSUE #345）。 */
+  const retryable =
+    res.status === 503 || (typeof obj?.hint === "string" && obj.hint === "comfyui-unreachable");
+  return {
+    ok: false,
+    retryable,
+    message: typeof errRaw === "string" && errRaw ? errRaw : "上传失败",
+  };
+}
+
+/**
+ * 上传素材到 ComfyUI 的 input 目录，返回落库后的文件名。
+ *
+ * ComfyUI 未运行 / 正在启动时不再直接抛「无法连接」：先让服务端按配置把实例
+ * 拉起来（`/api/comfy/ensure` + 短轮询），就绪后自动重试一次上传。整条路径上
+ * `onProgress` 会把「正在启动 ComfyUI…」这类状态交给调用方展示——上传位因此
+ * 有明确进行态，而不是静默失败后只在 console 留一行（ISSUE #345）。
+ */
+export async function uploadImageFile(
+  file: File,
+  opts: { onProgress?: (message: string) => void; readyTimeoutMs?: number } = {}
+): Promise<string> {
+  const first = await postUpload(file);
+  if (first.ok) return first.name;
+  if (!first.retryable) throw new Error(first.message);
+
+  opts.onProgress?.(first.message);
+  const ready = await waitForComfyReady({
+    timeoutMs: opts.readyTimeoutMs,
+    onProgress: (message) => opts.onProgress?.(message),
+  });
+  if (!ready.ok) throw new Error(ready.message);
+
+  const retry = await postUpload(file);
+  if (retry.ok) return retry.name;
+  throw new Error(retry.message);
 }
 
 /* Re-upload an already-generated output (served via /outputs/...) back into

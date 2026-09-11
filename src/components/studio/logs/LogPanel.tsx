@@ -17,6 +17,7 @@ import {
 import { useShallow } from "zustand/react/shallow";
 import {
   useLogPanel,
+  selectNewLogCount,
   type LogEntry,
   type LogLevel,
   type LogFilter,
@@ -363,18 +364,29 @@ export function LogPanel() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [wrap, setWrap] = useState(true);
   const [wide, setWide] = useState(false);
-  const prevCountRef = useRef(filteredLogs.length);
 
-  // Auto-scroll to bottom when new logs arrive, unless user scrolled up.
-  // 翻页后（不在第 1 页）不自动滚动：用户正在阅读历史页，滚动会打断阅读位置。
+  // ── 按「入库顺序（seq）」滚动、并按 seq 判断有无新内容（#346）────────────
+  // 不能用 filteredLogs.length：批次到达顺序与时间戳顺序不一定一致，条目被插入
+  // 中间而不是末尾时长度会变但「末条」没变（或反过来），滚动与「新日志」判定
+  // 都会失真。`seq` 是入库顺序，新内容 = 末条 seq 变大。
+  //
+  // 翻页后（不在第 1 页）不自动滚动，但仍统计「有了多少条比当前页更新的日志」
+  // 并在页脚提示——否则用户停在历史页时完全看不到「刚才其实有新增」。
+  const latestSeq = filteredLogs[filteredLogs.length - 1]?.seq ?? 0;
+  const prevLatestSeqRef = useRef(latestSeq);
+  /* 「停在历史页时又来了多少条新日志」由 store 持有（见 log-store 的
+   * `latestSeq` / `viewSeq`）：它随「翻页」与「新日志入库」两个动作更新，
+   * 因此在渲染期可读，不必在 effect 里 setState（会级联渲染）。 */
+  const newLogCount = useLogPanel(selectNewLogCount);
+
   useEffect(() => {
     const el = bodyRef.current;
     if (!el || !isOpen) return;
-    if (page === 1 && filteredLogs.length > prevCountRef.current && autoScroll) {
+    if (latestSeq !== prevLatestSeqRef.current && page === 1 && autoScroll) {
       el.scrollTop = el.scrollHeight;
     }
-    prevCountRef.current = filteredLogs.length;
-  }, [filteredLogs.length, isOpen, autoScroll, page]);
+    prevLatestSeqRef.current = latestSeq;
+  }, [latestSeq, isOpen, autoScroll, page]);
 
   const onScroll = () => {
     const el = bodyRef.current;
@@ -557,6 +569,17 @@ export function LogPanel() {
                 className="rounded-md bg-violet-500/90 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-violet-500"
               >
                 恢复自动滚动
+              </button>
+            )}
+            {newLogCount > 0 && (
+              /* 停在历史页时新增日志只更新计数与时间线，本页内容不变——没有这条
+               * 提示，用户会以为「日志不再刷新了」（ISSUE #346）。 */
+              <button
+                type="button"
+                onClick={() => setPage(1)}
+                className="rounded-md bg-amber-500/90 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-amber-500"
+              >
+                有 {newLogCount} 条新的日志 · 回到最新
               </button>
             )}
             <span className="flex items-center gap-1">
