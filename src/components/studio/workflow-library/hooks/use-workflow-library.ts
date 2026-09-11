@@ -36,6 +36,10 @@ import { useWorkflowImport } from "./use-workflow-import";
 /** 目录配置改动后，已挂载的列表要重新拉取（事件由 CustomNodesSettings 抛出）。 */
 const PATHS_CHANGED_EVENT = "comfyapp:local-workflows-path-changed";
 
+/** 列表首次拉取超过这个时长仍未返回，就认为「等太久了」：视图据此把
+ *  「加载中」换成可重试的提示，而不是让用户对着空列表猜（见 hook 内注释）。 */
+export const LIST_STALL_MS = 8_000;
+
 export interface WorkflowLibraryController {
   /** 过滤后的已载入工作流。 */
   workflows: WorkflowRow[];
@@ -81,6 +85,13 @@ export interface WorkflowLibraryController {
   actionError: string | null;
   /* 错误：列表拉取失败（重新拉取成功即消失） */
   loadError: string | null;
+  /* 列表仍在首次拉取中（未失败、未拿到数据）。视图据此区分「加载中」与
+   * 「真的没有」——否则加载卡住时界面显示的是「未找到匹配的工作流」，
+   * 用户看到的是「工作流没了」。 */
+  loading: boolean;
+  /* 首次拉取超时：服务在响应（HTTP 层通），但 tRPC 查询迟迟不 resolve。
+   * 视图据此给可操作出口（重试 + 打开日志面板），不再无限转圈。 */
+  loadStalled: boolean;
   /* 动作 */
   load: () => void;
   refresh: () => void;
@@ -163,6 +174,37 @@ export function useWorkflowLibrary(
     load();
     loadModelTags();
   }, [load, loadModelTags]);
+
+  /* ── 首次拉取的「卡住」判定 ───────────────────────────────────────────
+   * 场景（用户反馈）：断开应用（关掉桌面窗口 / 重开 start-tauri.exe）后
+   * 再打开工作流库，界面上只剩一句「未找到匹配的工作流 / 共 0 个工作流」，
+   * 看起来像工作流全没了。实际是列表查询迟迟不 resolve——react-query 的
+   * `isLoading` 为真时真实数据一行都没渲染，而空态文案恰好长得和「真的
+   * 没有工作流」一模一样，用户无从区分。
+   *
+   * 这里给首次拉取加一条**只读**的超时探针：超时只表示「还没拿到数据」，
+   * 不推断失败原因（服务在编译 / 数据库在迁移 / 进程刚重启都可能），因此
+   * 视图给的是「重试 + 打开日志面板」而不是断言某个根因。拿到数据或查询
+   * 报错（走 loadError 通道）即自动退出该状态。
+   *
+   * 计时器必须自己收：查询 resolve 之后挂着的 setTimeout 会让定时器
+   * 在组件树里空转，也拖慢测试里的假时钟推进。 */
+  const [loadStalled, setLoadStalled] = useState(false);
+  const awaitingData = listQ.isLoading || listQ.isFetching;
+  useEffect(() => {
+    if (!awaitingData || listQ.data) return;
+    const timer = setTimeout(() => setLoadStalled(true), LIST_STALL_MS);
+    return () => clearTimeout(timer);
+  }, [awaitingData, listQ.data]);
+  useEffect(() => {
+    /* 数据到达（或失败）后立刻撤下「加载较久」提示——它是瞬时的等待出口，
+     * 不是常驻状态；下一次拉取若又卡住会重新点亮。
+     * 后置到 render 提交后执行（规范 08 §8.6 写法二）：effect 体里同步
+     * setState 会被 React 19 的 set-state-in-effect 规则拦下。 */
+    if (!listQ.data && !listQ.isError) return;
+    const timer = setTimeout(() => setLoadStalled(false), 0);
+    return () => clearTimeout(timer);
+  }, [listQ.data, listQ.isError]);
 
   /** react-query 的数据要落进本地 state（列表是乐观更新 + 服务端回填混合）。
    *  用快照比对避免同一份数据反复 setState。 */
@@ -338,6 +380,8 @@ export function useWorkflowLibrary(
       : tagsQ.error
         ? `模型标签库加载失败：${errorMessage(tagsQ.error, "未知错误")}`
         : null,
+    loading: listQ.isLoading && !listQ.data && !listQ.isError,
+    loadStalled,
     load,
     refresh,
     loadModelTags,

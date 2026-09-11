@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Download } from "lucide-react";
+import { AlertTriangle, Loader2, Search, Download } from "lucide-react";
 import {
   deriveFormatFlags,
   deriveSyncFlags,
@@ -10,6 +10,7 @@ import {
 } from "./workflow-library-config";
 import { TaskTypeChip } from "../ui/TaskTypeChip";
 import { SourceTag } from "../ui/SourceTag";
+import { EmptyState } from "../ui/EmptyState";
 
 interface WorkflowLibraryListProps {
   workflows: WorkflowRow[];
@@ -19,10 +20,21 @@ interface WorkflowLibraryListProps {
   onSearchChange: (value: string) => void;
   onSelect: (id: string) => void;
   onLoadPending?: (pending: PendingRow) => void;
+  /** 列表仍在拉取中；此时「一条都没有」不代表「没有工作流」。 */
+  loading?: boolean;
+  /** 拉取超过预期时长仍未返回（服务在响应但查询没回来）。 */
+  stalled?: boolean;
+  /** 重试拉取（超时提示里的动作）。 */
+  onRefresh?: () => void;
 }
 
 /**
  * 左侧工作流列表：搜索 + 可滚动条目。选中项高亮，右侧详情面板联动。
+ *
+ * 三态必须可区分（规范 10.5：空态要说清「为什么是空的」）：
+ *   加载中 / 数据没回来 → 进度提示，绝不渲染成「未找到匹配的工作流」；
+ *   拉取超时 → 提示「仍在加载」并说明可以做什么，不假装是空库；
+ *   确实没有（且未筛选）→ 指引导入或配置本地目录。
  */
 export function WorkflowLibraryList({
   workflows,
@@ -32,7 +44,11 @@ export function WorkflowLibraryList({
   onSearchChange,
   onSelect,
   onLoadPending,
+  loading = false,
+  stalled = false,
+  onRefresh,
 }: WorkflowLibraryListProps) {
+  const empty = workflows.length === 0 && pendingRows.length === 0;
   return (
     <div className="flex h-full w-80 flex-col border-r border-(--color-border-subtle) bg-(--color-panel-deep)">
       {/* 搜索栏 */}
@@ -51,10 +67,49 @@ export function WorkflowLibraryList({
 
       {/* 列表：已载入工作流排在前 */}
       <div className="flex-1 overflow-y-auto px-1.5 py-1.5">
-        {workflows.length === 0 && pendingRows.length === 0 ? (
-          <div className="py-10 text-center text-xs text-(--color-ink-fainter)">
-            未找到匹配的工作流
-          </div>
+        {empty && loading ? (
+          <EmptyState
+            minHeightClass="min-h-[160px]"
+            title="正在加载工作流…"
+            description="本地目录会一起扫描，文件多时首次载入需要几秒。"
+            icon={Loader2}
+            className="[&_svg]:animate-spin"
+          />
+        ) : empty && stalled ? (
+          <EmptyState
+            minHeightClass="min-h-[160px]"
+            tone="warning"
+            icon={AlertTriangle}
+            title="工作流列表还没返回"
+            description={
+              <>
+                应用服务可能在编译或重启。可稍候重试；若持续如此，按{" "}
+                <kbd className="border-border rounded border px-1 font-mono">
+                  Ctrl+Shift+L
+                </kbd>{" "}
+                打开日志面板查看具体原因。
+              </>
+            }
+            action={
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-3 py-1 text-[11px]"
+              >
+                重试
+              </button>
+            }
+          />
+        ) : empty ? (
+          <EmptyState
+            minHeightClass="min-h-[160px]"
+            title={search ? "未找到匹配的工作流" : "还没有工作流"}
+            description={
+              search
+                ? "换个关键词，或清空搜索框看全部。"
+                : "点右上角「导入工作流」粘贴 JSON，或在设置里配置本地工作流目录后自动扫描。"
+            }
+          />
         ) : (
           <ul className="space-y-1">
             {workflows.map((workflow) => (
