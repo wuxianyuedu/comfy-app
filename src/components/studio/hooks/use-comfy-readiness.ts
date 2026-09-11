@@ -1,14 +1,14 @@
 "use client";
 
 // ── 底部状态栏 controller（规范 17 §17.2 第②层）───────────────────────
-// 把「轮询到的原始指标」折叠成视图直接可渲染的字段：显隐谓词、百分比、
-// 降级提示与「就绪」三态。视图（BrowserStatusBar）只读这里的结果，不自己
-// 做判据推导——判据一变只有一处要改，也便于 renderHook 直接断言。
+// 把「轮询到的原始指标」折叠成视图直接可渲染的字段：显隐谓词、百分比与
+// 降级提示。视图（BrowserStatusBar）只读这里的结果，不自己做判据推导——
+// 判据一变只有一处要改，也便于 renderHook 直接断言。
+//
+// 注意这里不再产出「ComfyUI 就绪」这一格：状态栏那格已改为显示**应用服务**
+// 状态（见 use-dev-server-status.ts），ComfyUI 是否运行由占用条是否可见 +
+// 降级文案表达（"显存/内存暂不可用" 本身就等于「ComfyUI 没启动」）。
 
-import {
-  deriveComfyReadiness,
-  type ComfyReadiness,
-} from "~/lib/comfy-readiness";
 import type { ComfyStatsPayload } from "~/lib/comfy-stats-client";
 
 import { useComfyStats } from "./use-comfy-stats";
@@ -28,8 +28,6 @@ export interface ComfyStatusViewModel {
   online: boolean;
   /** 已连接但首个采样还没回来（轮询空窗），占用条暂不显示但不应报「未连接」 */
   connecting: boolean;
-  /** 就绪三态 + 可读文案（见 src/lib/comfy-readiness.ts 的语义定义） */
-  readiness: ComfyReadiness;
   /** ComfyUI CUDA 逻辑口径；非 NVIDIA 卡上仍是唯一可显示的口径 */
   cudaVram: StatBar | null;
   /** nvidia-smi 物理专用显存口径；非 NVIDIA 卡 / 查询失败时为 null（隐藏，不留空项） */
@@ -63,7 +61,6 @@ export function useComfyReadiness(): ComfyStatusViewModel {
     stats,
     online,
     connecting: online && !hasStats,
-    readiness: deriveComfyReadiness(online, hasStats),
     cudaVram: hasStats ? toBar(stats?.vramUsed, stats?.vramTotal) : null,
     smiVram: hasStats ? toBar(stats?.smiVramUsed, stats?.smiVramTotal) : null,
     ram: hasStats ? toBar(stats?.ramUsed, stats?.ramTotal) : null,

@@ -124,6 +124,9 @@ export function WorkflowLibrary({
           onLoadPending={(pending) => {
             void c.handleLoadPending(pending);
           }}
+          loading={c.loading}
+          stalled={c.loadStalled}
+          onRefresh={c.refresh}
         />
         <div className="flex-1">
           <WorkflowLibraryDetail

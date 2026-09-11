@@ -135,10 +135,15 @@ test.describe("工作区链路 @critical", () => {
     await gotoWorkspaceView(page, "流程");
 
     // 空态必须告诉用户「现在没有」且给出下一步动作，不能是一片空白。
-    // 两条断言对应两件事：①空态文案本身；②可行动的导入入口常驻。
+    // 三态都在断言范围内（ISSUE #369）：加载没回来时是「正在加载」/「还没返回」，
+    // 拿到空数据才是「还没有工作流」——只要它**有话说**而不是一片空白就算过。
     // （规范 10.1「功能降级要有用户可见出口」在 E2E 层的落点。）
     await expect(
-      page.getByText(/未找到匹配的工作流|共 0 个工作流/).first(),
+      page
+        .getByText(
+          /正在加载工作流|工作流列表还没返回|还没有工作流|未找到匹配的工作流|共 0 个工作流/,
+        )
+        .first(),
     ).toBeVisible({ timeout: 15_000 });
     await expect(
       page.getByRole("button", { name: /导入工作流/ }),

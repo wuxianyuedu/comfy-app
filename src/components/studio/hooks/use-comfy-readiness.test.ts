@@ -61,11 +61,11 @@ afterEach(() => {
 });
 
 describe("useComfyReadiness（数据形态折叠）", () => {
-  it("未连接：占用条全部隐藏（不显示 0% 空白项），就绪态 offline 且有可见降级提示", () => {
+  it("未连接：占用条全部隐藏（不显示 0% 空白项），并在状态栏给出可见降级提示", () => {
     stubStats(false, OFFLINE);
     const { result } = renderHook(() => useComfyReadiness());
 
-    expect(result.current.readiness.state).toBe("offline");
+    expect(result.current.online).toBe(false);
     expect(result.current.cudaVram).toBeNull();
     expect(result.current.smiVram).toBeNull();
     expect(result.current.ram).toBeNull();
@@ -78,7 +78,7 @@ describe("useComfyReadiness（数据形态折叠）", () => {
     const { result } = renderHook(() => useComfyReadiness());
 
     expect(result.current.connecting).toBe(true);
-    expect(result.current.readiness.state).toBe("connecting");
+    expect(result.current.cudaVram).toBeNull();
     expect(result.current.ram).toBeNull();
   });
 
@@ -98,7 +98,7 @@ describe("useComfyReadiness（数据形态折叠）", () => {
       total: 32 * GIB,
       pct: 50,
     });
-    expect(result.current.readiness.state).toBe("ready");
+    expect(result.current.online).toBe(true);
     expect(result.current.degradedNote).toBeNull();
   });
 
@@ -149,7 +149,7 @@ describe("useComfyReadiness（真实轮询失败降级）", () => {
     // 不 mock 网络：jsdom 下 fetch 打相对路径会失败，正是「后端不可达」形态
     const { result } = renderHook(() => useComfyReadiness());
 
-    await waitFor(() => expect(result.current.readiness.state).toBe("offline"));
+    await waitFor(() => expect(result.current.online).toBe(false));
     expect(result.current.degradedNote).not.toBeNull();
     expect(result.current.cudaVram).toBeNull();
   });
