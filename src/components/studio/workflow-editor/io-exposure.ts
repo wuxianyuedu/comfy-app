@@ -23,12 +23,6 @@ export interface ExposedLabelSource {
   type?: string;
 }
 
-/** 一个已暴露条目的显示名，与画布上该 pin 的标签逐字一致：
- *  本地 label（画布勾选时透传）→ 服务端富化名 → 原始 pin 名。
- *
- *  两处都过一遍 `sanitizeComboLabel`：画布（WorkflowNode /
- *  WorkflowSubgraphNode）渲染 pin 标签时就会剥掉 COMBO 候选串，IO 面板若
- *  用原文，同一个 pin 又会以两种写法出现——本次要消灭的正是这类「对不上」。 */
 /** 本地存的名字是不是「机器生成的原始槽位名」。
  *
  *  勾选那一刻会把画布上的显示名写进本地 `label`；修复前某些路径写进去的其实
@@ -36,14 +30,50 @@ export interface ExposedLabelSource {
  *  它只是**显示名**，不是作者的命名 —— 作者手写一个与 pin 名逐字相同的名字
  *  几乎不可能，判定成本很低。
  *
- *  `aliasBase` 是服务端富化（或视图就地派生）下发的「该条目现在的原始槽位名」，
- *  只有它才是判定基准：本地条目的 `name` 在加载时已被解析成显示名，拿它比对
- *  会把真名字误判成别名、也会把别名漏判。基准缺失（富化还没到）时一律不判定，
- *  宁可留着旧值也不误删作者命名。 */
-export function isStaleExposedAlias(label: string | undefined, aliasBase: string | undefined): boolean {
-  return label !== undefined && aliasBase !== undefined && label === aliasBase;
+ *  `aliasBase` 是同一份事实源（服务端富化 / 视图就地派生）下发的「该条目现在
+ *  的原始槽位名」，只有它才是判定基准：本地条目的 `name` 在加载时已被解析成
+ *  显示名，拿它比对会把真名字误判成别名、也会把别名漏判。基准缺失（富化还没到）
+ *  时一律不判定，宁可留着旧值也不误删作者命名。
+ *
+ *  但基准**不能只是 pin 名**。判定要回答的问题是「作者到底有没有重命名过」，
+ *  而同一个 pin 有三种可能的名字：
+ *    ① 富化名（`enrichedLabel`，取自作者命名 → 子图内部业务名 → 本层
+ *       label/localized → 别名）；
+ *    ② 本层槽位上作者写的名字（`slotLabel`，仅当它与槽位名不同才算数）；
+ *    ③ 别名本身（= 基准）。
+ *  只看 ③ 会漏判 `value_1` 这类同名条目：判据是「本地存的就是别名本身」，
+ *  不是「本地存的恰好等于某个别名」——把别名与 ③ 比对等于什么都没判，条目会
+ *  被当成作者命名留下，写入时再把那串机器名固化回库（ISSUE #349 的复现路径）。
+ *  所以判据收敛成：**本地存的这串，是富化能如实改写成另一个名字的名字**。 */
+export function isStaleExposedAlias(
+  label: string | undefined,
+  aliasBase: string | undefined,
+  enrichedLabel?: string,
+  slotLabel?: string
+): boolean {
+  if (label === undefined || aliasBase === undefined) return false;
+  const clean = (value: string | undefined) => sanitizeComboLabel(value);
+  const local = clean(label);
+  const base = clean(aliasBase);
+  if (!local || !base) return false;
+  const name = clean(enrichedLabel);
+  const slot = clean(slotLabel);
+  /* 富化名与别名不同 → 富化确实知道一个更好的名字。本地存的正是别名本身时让位；
+   *  本地存的已经是那个更好的名字（富化名）时什么都不用动。 */
+  if (name && name !== base) return local === base;
+  /* 富化名仍是别名（本层确实没写作者名），但本层槽位给了另一个作者业务名
+   *  （富化链把它排在 localized 之后，够不着）——本地存的是别名本身时同样让位。 */
+  if (slot && slot !== base) return local === base;
+  /* 两个来源都只有别名：本地这串与富化名一致，无从判定它不是作者命名，留着。 */
+  return false;
 }
 
+/** 一个已暴露条目的显示名，与画布上该 pin 的标签逐字一致：
+ *  本地 label（画布勾选时透传）→ 服务端富化名 → 原始 pin 名。
+ *
+ *  两处都过一遍 `sanitizeComboLabel`：画布（WorkflowNode /
+ *  WorkflowSubgraphNode）渲染 pin 标签时就会剥掉 COMBO 候选串，IO 面板若
+ *  用原文，同一个 pin 又会以两种写法出现——本次要消灭的正是这类「对不上」。 */
 export function resolveExposedLabel(
   local: ExposedLabelSource | undefined | null,
   enriched: WorkflowIOEntry | undefined | null,
@@ -58,8 +88,7 @@ export function resolveExposedLabel(
    *  否则用户重开工作流仍会看到旧的 `value_1` 把修复后的名字压回去
    *  （ISSUE #349）。作者手写的名字几乎不可能与机器别名逐字相同，不会误伤。 */
   if (localLabel) {
-    const isStaleAlias =
-      localLabel === fallbackName && enrichedLabel !== "" && enrichedLabel !== localLabel;
+    const isStaleAlias = isStaleExposedAlias(localLabel, fallbackName, enrichedLabel);
     if (!isStaleAlias) return localLabel;
   }
   if (enrichedLabel) return enrichedLabel;
@@ -81,6 +110,24 @@ export function mergeExposedEntry<T extends WorkflowIOEntry>(
     label: resolveExposedLabel(local, enriched, enriched.name),
     type: local?.type ?? enriched.type,
   };
+}
+
+/** 本地条目的别名判定基准（ioKey → 该条目现在的原始槽位名 + 本层作者名）。
+ *
+ *  两个字段都来自富化（或视图就地派生的同一份事实源），缺一不可：
+ *    · `name`      原始槽位名 —— 判定「本地存的是不是那串机器名」的基准；
+ *    · `slotLabel` 本层槽位上作者写的名字（无则缺省）—— 富化链把它排在
+ *      `localized` 之后，够不着，但它足以说明本层槽位确实有作者命名，
+ *      是「本地这串要不要让位」的第二判据（见 isStaleExposedAlias）。 */
+export interface ExposedAliasBase {
+  name: string;
+  /** 富化链现在给这个条目的显示名（作者命名 → 子图内部业务名 → 本层
+   *  label/localized → 别名）。与 `name` 不同 = 富化确实知道一个更好的名字，
+   *  本地存着那串机器名时应当让位。 */
+  enrichedLabel?: string;
+  /** 本层槽位上作者写的名字（与槽位名不同才有值）。富化链把它排在
+   *  `localized` 之后够不着，但它足以说明本层确实有作者命名。 */
+  slotLabel?: string;
 }
 
 /** 视图内节点元数据 → 可当「服务端富化」用的最小 IO 表（纯函数）。

@@ -35,7 +35,7 @@ import type {
   NodeJsonViewerContextValue,
 } from "../workflow-types";
 import type { WorkflowIOModeOverride } from "~/lib/workflow-io-types";
-import { isStaleExposedAlias } from "./io-exposure";
+import { isStaleExposedAlias, type ExposedAliasBase } from "./io-exposure";
 import { rectToAnchor } from "../workflow-utils";
 import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
 import { patchWorkflowSilently } from "@/lib/workflow-mutations";
@@ -55,19 +55,23 @@ export interface IOEditState {
   ioEditMode: boolean;
   workflowIO: Record<string, WorkflowIOParam>;
   ioPreviewOpen: boolean;
-  /** 服务端富化下发的「该条目现在的原始槽位名」（ioKey → pin 名）。
+  /** 服务端富化下发的别名判定基准（ioKey → 原始槽位名 + 本层作者名）。
    *
    *  只有它才能判定「本地存的名字是不是一串机器生成的槽位名」——判定基准必须
    *  来自富化（服务端 / 视图派生的同一份事实源），不能从本地条目推。没有它时
    *  `name` 会在加载时被解析好的名字覆盖，任何写入都会把旧名字固化回库
-   *  （ISSUE #349 的复现路径）。空表 = 富化还没到，此时不做清理。 */
-  aliasBaseByKey: Record<string, string>;
+   *  （ISSUE #349 的复现路径）。空表 = 富化还没到，此时不做清理。
+   *
+   *  基准不只有槽位名：同名条目（本地 label 恰好等于槽位名本身）只靠名字比对
+   *  永远判不出来，还得知道「本层槽位有没有另一个作者业务名」——
+   *  见 `ExposedAliasBase` 与 `isStaleExposedAlias`。 */
+  aliasBaseByKey: Record<string, ExposedAliasBase>;
 }
 export interface IOEditActions {
   setIoEditMode: (on: boolean) => void;
   setIoPreviewOpen: (open: boolean) => void;
-  /** 同步富化下发的槽位名基准（只有内容真的变了才写，避免渲染回路）。 */
-  setAliasBase: (next: Record<string, string>) => void;
+  /** 同步富化下发的别名判定基准（只有内容真的变了才写，避免渲染回路）。 */
+  setAliasBase: (next: Record<string, ExposedAliasBase>) => void;
   toggleIO: (ref: IoRef) => void;
   setIOLabel: (key: string, label: string) => void;
   toggleIORequired: (key: string) => void;
@@ -109,12 +113,16 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         const prev = state.aliasBaseByKey;
         const prevKeys = Object.keys(prev);
         const nextKeys = Object.keys(next);
-        if (
+        /* 逐键比 name + slotLabel：值对象每次都由富化重建，浅比引用会把每帧
+         *  都当成变化 → setAliasBase → 重渲 → 再算一份基准（渲染回路）。 */
+        const same =
           prevKeys.length === nextKeys.length &&
-          nextKeys.every((key) => prev[key] === next[key])
-        ) {
-          return {};
-        }
+          nextKeys.every(
+            (key) =>
+              prev[key]?.name === next[key]?.name &&
+              prev[key]?.slotLabel === next[key]?.slotLabel
+          );
+        if (same) return {};
         return { aliasBaseByKey: next };
       }),
 
@@ -182,9 +190,19 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
          *
          *  清掉本地 label 后，条目回到「未重命名」语义：显示名继续由富化名提供，
          *  落库也不再固化那串机器名。真正的作者命名（≠ pin 名）不受影响。 */
-        const aliasBase = get().aliasBaseByKey;
-        const base = aliasBase[key];
-        const staleAlias = cur.label !== undefined && isStaleExposedAlias(cur.label, base);
+        const aliases = get().aliasBaseByKey[key];
+        /* 判据需要的不只是槽位名：同名条目（本地 label 就是槽位名本身）要问
+         *  「富化链现在给这个名字的显示名是什么」——富化名与别名不同就说明本层
+         *  确实有作者命名，本地那串该让位；`slotLabel` 是富化名也停在别名时的
+         *  第二判据。缺任一项时 isStaleExposedAlias 只按手头的信息判，不会乱清。 */
+        const staleAlias =
+          cur.label !== undefined &&
+          isStaleExposedAlias(
+            cur.label,
+            aliases?.name,
+            aliases?.enrichedLabel,
+            aliases?.slotLabel
+          );
         const modes: Record<string, WorkflowIOModeOverride> = { ...(cur.modes ?? {}) };
         if (patch === null) {
           if (!(mode in modes)) return {};
