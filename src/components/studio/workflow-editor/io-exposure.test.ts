@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
-import { enrichFromViewNodes, mergeExposedEntry, resolveExposedLabel } from "./io-exposure";
+import {
+  enrichFromViewNodes,
+  isStaleExposedAlias,
+  mergeExposedEntry,
+  resolveExposedLabel,
+} from "./io-exposure";
 
 /** 服务端富化条目（workflow-detail-io 的输出形状）。 */
 function enriched(partial: Partial<WorkflowIOEntry> = {}): WorkflowIOEntry {
@@ -123,5 +128,26 @@ describe("enrichFromViewNodes — 子图内层视图的就地富化兜底", () =
   it("无节点 / 无 raw_inputs 时返回空表", () => {
     expect(enrichFromViewNodes(null)).toEqual({});
     expect(enrichFromViewNodes([{ id: "1" }])).toEqual({});
+  });
+});
+
+
+describe("isStaleExposedAlias — 本地存的名字是不是机器生成的槽位名", () => {
+  it("本地名等于富化下发的槽位名 → 是别名", () => {
+    expect(isStaleExposedAlias("value_1", "value_1")).toBe(true);
+    expect(isStaleExposedAlias("image", "image")).toBe(true);
+  });
+
+  it("本地名是被解析好的显示名（seed）→ 不是别名", () => {
+    expect(isStaleExposedAlias("seed", "value_1")).toBe(false);
+  });
+
+  it("作者手写的名字 → 不是别名", () => {
+    expect(isStaleExposedAlias("我的种子", "value_1")).toBe(false);
+  });
+
+  it("基准缺失（富化未加载）或本地未命名 → 不判定", () => {
+    expect(isStaleExposedAlias("value_1", undefined)).toBe(false);
+    expect(isStaleExposedAlias(undefined, "value_1")).toBe(false);
   });
 });
