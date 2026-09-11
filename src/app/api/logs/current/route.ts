@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
+import path from "node:path";
 import { resolveSessionStart } from "@/lib/log-session-scope";
 import { fileMtimeMs } from "@/lib/log-session-scope.server";
+import { getServerBootId } from "@/lib/dev-server-id";
 import {
   COMFYUI_RUNTIME_LOG,
   DEV_LAUNCHER_CURRENT_SENTINEL,
   DEV_LAUNCHER_LOG,
   DRIZZLE_STUDIO_RUNTIME_LOG,
+  NEXTJS_LOG_DIR,
   OLLAMA_RUNTIME_LOG,
   START_TAURI_LAUNCHER_LOG,
   APP_RUNTIME_LOG,
@@ -20,6 +23,21 @@ const RUNTIME_LOG_FILES: Record<string, string> = {
   "ollama-runtime": OLLAMA_RUNTIME_LOG,
   "app-runtime": APP_RUNTIME_LOG,
 };
+
+/** 应用服务输出转录文件（本次进程）：惰性解析，取不到时退化为「文件不存在」。 */
+function panelCaptureLog(): string | null {
+  try {
+    const entries = fs
+      .readdirSync(/*turbopackIgnore: true*/ NEXTJS_LOG_DIR)
+      .filter((name) => name.startsWith("nextjs-panel-") && name.endsWith(".log"))
+      .sort();
+    const latest = entries[entries.length - 1];
+    return latest ? path.join(NEXTJS_LOG_DIR, latest) : null;
+  } catch {
+    /* 目录不存在（从未跑过 dev）→ 面板该来源恒空，不报错 */
+    return null;
+  }
+}
 
 /**
  * 追加写日志（app-runtime / 各常驻服务 runtime）不轮转，积累几个月后可能是
@@ -96,6 +114,20 @@ interface Slice {
   /** 本次返回内容在文件中的起点。 */
   offset: number;
   sessionStart: number | null;
+  /**
+   * 服务端进程启动标识与客户端缓存的**不一致**（见下方 `bootId` 的完整说明）。
+   * true = 客户端拿到的这份状态来自「另一个应用服务进程」，应视为一次真正的
+   * 重启：清掉时间线、重置游标并重新拉取，而不是继续往旧时间线上追加。
+   */
+  mismatch?: boolean;
+  /**
+   * 当前提供本响应的应用服务进程标识。客户端存下它，下一轮轮询比对——
+   * 它同时承担两件事：
+   *   1. **排障**：面板页脚展示「服务:xxxx」，用户报障时能说清自己连的是哪个进程；
+   *   2. **重启可见**：进程换了（重启 / 另一实例接管端口）时客户端能立刻发现并
+   *      重读日志，而不是把两个进程的输出混成一条时间线。
+   */
+  bootId?: string;
 }
 
 /**
@@ -104,17 +136,29 @@ interface Slice {
  * - 游标无效（首帧 / 文件被新运行覆盖重建 / 文件变小）→ 回尾部窗口；
  * - 尾部窗口再掐头对齐到完整行。
  */
-function readLogSlice(logFile: string, requestedOffset: number): Slice {
+function readLogSlice(
+  logFile: string,
+  requestedOffset: number,
+  bootId: string,
+  mismatch: boolean,
+): Slice {
   const sessionStart = sessionStartMs();
   if (!fs.existsSync(/*turbopackIgnore: true*/ logFile)) {
-    return { content: "", size: 0, offset: 0, sessionStart };
+    return { content: "", size: 0, offset: 0, sessionStart, bootId, mismatch };
   }
   const fileSize = fs.statSync(/*turbopackIgnore: true*/ logFile).size;
   const cursorValid =
     Number.isFinite(requestedOffset) && requestedOffset > 0 && requestedOffset <= fileSize;
   /* 游标已被读到文件末尾：没有新增，直接回空（不必再读一次）。 */
   if (cursorValid && requestedOffset === fileSize) {
-    return { content: "", size: fileSize, offset: fileSize, sessionStart };
+    return {
+      content: "",
+      size: fileSize,
+      offset: fileSize,
+      sessionStart,
+      bootId,
+      mismatch,
+    };
   }
   let start = cursorValid ? requestedOffset : Math.max(0, fileSize - TAIL_BYTES);
 
@@ -129,6 +173,8 @@ function readLogSlice(logFile: string, requestedOffset: number): Slice {
       size: fileSize,
       offset: start,
       sessionStart,
+      bootId,
+      mismatch,
     };
   }
   return {
@@ -136,28 +182,63 @@ function readLogSlice(logFile: string, requestedOffset: number): Slice {
     size: fileSize,
     offset: start,
     sessionStart,
+    bootId,
+    mismatch,
   };
+}
+
+/** 解析某个日志来源对应的文件；来源不被识别 / 文件不存在时返回 null。 */
+function resolveSourceFile(source: string): { file: string; resumable: boolean } | null {
+  /* 追加写来源（应用运行日志 / 常驻服务）保留历史内容 → 需要会话起点截断。 */
+  if (source in RUNTIME_LOG_FILES) {
+    return { file: RUNTIME_LOG_FILES[source]!, resumable: true };
+  }
+  /* 「应用服务输出」：Next dev server 的 stdout/stderr 转录（本次进程一份）。 */
+  if (source === "app") {
+    const file = panelCaptureLog();
+    return file ? { file, resumable: true } : null;
+  }
+  /* 启动链路日志（launcher / dev-launcher）每次运行覆盖重建，天然只有本次
+   * 内容，不需要会话起点；切片规则一致。 */
+  return { file: resolveCurrentLog(source), resumable: false };
 }
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const source = searchParams.get("source") ?? "dev-launcher";
   const requestedOffset = Number(searchParams.get("offset") ?? "0");
+  /* 客户端上一轮看到的服务端进程标识：与本响应不一致 = 中间发生过一次真正的
+   * 服务端重启（或另一实例接管了端口）。面板据此重置游标与时间线，而不是把
+   * 新旧两个进程的输出混成一条线（ISSUE #360：重启前后日志互相污染）。 */
+  const clientBootId = searchParams.get("bootId") ?? "";
+  const bootId = getServerBootId();
+  const mismatch = clientBootId !== "" && clientBootId !== bootId;
 
   try {
-    /* 追加写来源（应用运行日志 / 常驻服务）统一走增量切片。 */
-    if (source in RUNTIME_LOG_FILES) {
-      return NextResponse.json(readLogSlice(RUNTIME_LOG_FILES[source]!, requestedOffset));
+    const resolved = resolveSourceFile(source);
+    if (!resolved) {
+      /* 来源暂时没有文件（如应用服务转录尚未落盘）：回一个**明确的空切片**，
+       * 而不是 404/500——面板据此区分「本次运行确实还没有输出」与「接口挂了」。 */
+      return NextResponse.json({
+        content: "",
+        size: 0,
+        offset: 0,
+        sessionStart: sessionStartMs(),
+        bootId,
+        mismatch,
+      });
     }
-    /* 启动链路日志（launcher / dev-launcher）每次运行覆盖重建，天然只有本次
-     * 内容，不需要会话起点；切片规则一致。 */
-    return NextResponse.json(readLogSlice(resolveCurrentLog(source), requestedOffset));
+    return NextResponse.json(
+      readLogSlice(resolved.file, mismatch ? 0 : requestedOffset, bootId, mismatch),
+    );
   } catch (error) {
     return NextResponse.json(
       {
         content: "",
         size: 0,
         offset: 0,
+        bootId,
+        mismatch,
         error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
