@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildRawInputs } from "@/lib/comfyui/workflow-detail-raw";
+import { buildRawInputs, buildInnerNodeInputs } from "@/lib/comfyui/workflow-detail-raw";
 import type { RawWorkflow } from "@/lib/comfyui/raw";
 
 const WRAPPER = "aaaaaaaa-1111-2222-3333-444444444444";
@@ -106,5 +106,33 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
     subs[key]!.nodes = [];
     const { rawInputsById } = await buildRawInputs(broken, noCombo);
     expect(rawInputsById["1"]![0]!.proxyField).toEqual({ nodeId: "12", field: "seed" });
+  });
+});
+
+describe("buildInnerNodeInputs — 子图内部节点输入索引", () => {
+  it("按内部节点 id 索引出 name / label / localized / type 与控件值", () => {
+    const inner = buildInnerNodeInputs(wrapperWorkflow);
+    const seed = inner["12"]!.find((input) => input.name === "seed");
+    expect(seed).toBeDefined();
+    expect(seed!.label).toBe("随机种子");
+    expect(seed!.type).toBe("INT");
+    /* widgets_values[0] 属于 seed；seed 家族多占一个
+     *  control_after_generate 槽，故 steps 取到下标 2。 */
+    expect(seed!.widgetValue).toBe(12345);
+    expect(inner["12"]!.find((input) => input.name === "steps")!.widgetValue).toBe(20);
+  });
+
+  it("没有子图定义时返回空表", () => {
+    expect(buildInnerNodeInputs({ nodes: [] })).toEqual({});
+    expect(buildInnerNodeInputs(null)).toEqual({});
+  });
+
+  it("纯连线端口不入控件槽计数", () => {
+    const inner = buildInnerNodeInputs(wrapperWorkflow);
+    const model = inner["12"]!.find((input) => input.name === "model");
+    expect(model).toBeDefined();
+    expect(model!.isConnection).toBe(false);
+    expect(model!.widget).toBeUndefined();
+    expect(model!.widgetValue).toBeUndefined();
   });
 });

@@ -31,6 +31,7 @@ import {
   buildRawInputs,
   buildRawNodeMeta,
   buildNodeTypeMap,
+  buildInnerNodeInputs,
   buildRawView,
   type DetailNodeView,
   type RawNodeMeta,
@@ -406,6 +407,9 @@ export async function buildWorkflowDetailFull(
   const workflowIO = await enrichWorkflowIO({
     workflowIORaw,
     rawInputsById,
+    /* 子图内部节点索引：下钻到子工作流里勾选的参数，nodeId 指向内部节点，
+     *  顶层 rawInputsById 查不到 —— 没有它类型/显示名都会退化（ISSUE #349）。 */
+    innerInputsById: buildInnerNodeInputs(raw),
     rawNodeMeta,
     graph,
     nodeTitleById,
@@ -558,6 +562,7 @@ export async function buildSubgraphDetail(
   if (!raw?.definitions?.subgraphs) {
     throw new TRPCError({ code: "NOT_FOUND", message: "该工作流没有内嵌子工作流" });
   }
+
   // Subgraph definitions may be keyed by either the UUID or a numeric id;
   // ComfyUI uses the UUID as the key for newer workflows.
   const subgraphs = raw.definitions.subgraphs;

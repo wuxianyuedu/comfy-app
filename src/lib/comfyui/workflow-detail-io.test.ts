@@ -564,9 +564,10 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
     expect(result["9::widget::value_1"]!.label).toBe("我的种子");
   });
 
-  it("非封装节点（普通节点）label 与 pin 名相同仍原样保留", async () => {
-    /* 别名清洗只对 class_type 是 UUID 的封装节点生效——普通节点的 pin 名
-     *  就是真名（`seed`），不存在「槽位别名」这个概念。 */
+  it("普通节点：作者手写的名字与 pin 名逐字相同时原样保留", async () => {
+    /* 机器名判定要求「存在一个与槽位名不同的作者可见名」——raw 条目
+     *  label 与 pin 名逐字相同时无从判定，此时信任存量 label（作者确实
+     *  可以把它改名成与 pin 名一样的字）。 */
     const result = await enrichWorkflowIO(
       makeParams(
         {
@@ -583,7 +584,7 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
             "7": [
               {
                 name: "seed",
-                label: "Seed",
+                label: "seed",
                 type: "INT",
                 isConnection: false,
                 widget: { name: "seed" },
@@ -597,6 +598,149 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
       )
     );
     expect(result["7::widget::seed"]!.label).toBe("seed");
+  });
+
+  it("普通节点：存量 label 是 pin 名时让位给作者的 label（ISSUE #349）", async () => {
+    /* LoadImage 的 image 槽：作者写的 label 是 "Last Frame Image"，而存量
+     *  workflowIO 里躺着的是勾选那一刻的原始 pin 名 `image`（旧版画布在拿
+     *  不到 meta 时会这么写）。IO 面板必须显示作者名，与画布逐字一致。 */
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "24::widget::image": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "24",
+            name: "image",
+            label: "image",
+          },
+        },
+        {
+          rawInputsById: {
+            "24": [
+              {
+                name: "image",
+                label: "Last Frame Image",
+                localized: "图像",
+                type: "COMBO",
+                isConnection: false,
+                widget: { name: "image" },
+                widgetValue: "last.png",
+              },
+            ],
+          },
+          graph: { "24": { class_type: "LoadImage", inputs: {} } },
+          nodeTypeById: { "24": "LoadImage" },
+        }
+      )
+    );
+    expect(result["24::widget::image"]!.label).toBe("Last Frame Image");
+  });
+
+  it("普通节点：作者手写的其它名字不受影响（不误伤）", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "24::widget::image": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "24",
+            name: "image",
+            label: "尾帧图",
+          },
+        },
+        {
+          rawInputsById: {
+            "24": [
+              {
+                name: "image",
+                label: "Last Frame Image",
+                type: "COMBO",
+                isConnection: false,
+                widget: { name: "image" },
+                widgetValue: "last.png",
+              },
+            ],
+          },
+          graph: { "24": { class_type: "LoadImage", inputs: {} } },
+          nodeTypeById: { "24": "LoadImage" },
+        }
+      )
+    );
+    expect(result["24::widget::image"]!.label).toBe("尾帧图");
+  });
+});
+
+describe("enrichWorkflowIO — 子图内部节点（下钻视图勾选）的兜底取名", () => {
+  it("顶层 rawInputsById 查不到时，用 innerInputsById 补出类型与作者名", async () => {
+    /* 下钻到子工作流内部勾选种子：落库 nodeId 是内部节点 1670，顶层
+     *  rawInputsById 里没有它。没有兜底表时类型退化成 `*`、显示名退化成
+     *  pin 名（ISSUE #349）。 */
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "1670::widget::value": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "1670",
+            name: "value",
+          },
+        },
+        {
+          rawInputsById: {},
+          innerInputsById: {
+            "1670": [
+              {
+                name: "value",
+                label: "Seed",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "value" },
+                widgetValue: 1234,
+              },
+            ],
+          },
+          graph: {},
+          nodeTypeById: {},
+        }
+      )
+    );
+    const entry = result["1670::widget::value"]!;
+    expect(entry.label).toBe("Seed");
+    expect(entry.type).toBe("INT");
+    expect(entry.defaultValue).toBe(1234);
+  });
+
+  it("顶层能查到时不看兜底表（顶层语义优先）", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "1670::widget::value": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "1670",
+            name: "value",
+          },
+        },
+        {
+          rawInputsById: {
+            "1670": [
+              { name: "value", label: "顶层名", type: "FLOAT", isConnection: false, widget: { name: "value" } },
+            ],
+          },
+          innerInputsById: {
+            "1670": [
+              { name: "value", label: "内层名", type: "INT", isConnection: false, widget: { name: "value" } },
+            ],
+          },
+          graph: {},
+          nodeTypeById: {},
+        }
+      )
+    );
+    const entry = result["1670::widget::value"]!;
+    expect(entry.label).toBe("顶层名");
+    expect(entry.type).toBe("FLOAT");
   });
 });
 
