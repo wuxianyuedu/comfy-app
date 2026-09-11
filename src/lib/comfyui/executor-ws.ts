@@ -16,6 +16,7 @@ import { taskRepository } from "../core/repository";
 import { logger } from "~/server/lib/logger";
 import {
   getHistory,
+  probeComfyBase,
   resolveComfyBase,
   resetComfyBase,
   toWsBase,
@@ -102,6 +103,14 @@ export async function connect(): Promise<void> {
   let base: string;
   try {
     base = await resolveComfyBase();
+    /* `resolveComfyBase()` 在「配置了路径、进程表又查不到 main.py」时不再抛错
+     * （Comfy Desktop 的实例由 standalone-env 启动、命令行里没有 main.py，
+     * 抛错会让 HTTP 探测一次都发不出去，见 ISSUE #344），改为回落配置地址。
+     * 那条回落路径必须在这里补一次真实探测才能判定「能不能用」——否则
+     * WS 会拿着一个连不上的地址去建连，自动启动也不再被触发。 */
+    if (!(await probeComfyBase())) {
+      throw new Error("Configured ComfyUI instance is not reachable");
+    }
   } catch {
     s.connecting = false;
     // ComfyUI 不可达：若配置了安装路径 + 自动启动，则按需拉起并等待就绪。
