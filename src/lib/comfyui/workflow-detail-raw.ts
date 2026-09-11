@@ -40,6 +40,15 @@ export interface RawInputEntry {
   __comboField?: string;
   /** COMBO 候选列表（object_info 解析成功时写入，随 detail 下发） */
   comboOptions?: string[];
+  /** 子工作流封装节点暴露口背后的「内部真实字段」。
+   *
+   *  wrapper 的 `inputs[]` 里那一条是本层生成的别名槽位（ComfyUI 为
+   *  proxyWidgets 自动编号成 `value_1` / `value_2`），字段名与业务语义都在
+   *  内部节点上（`proxyWidgets[i] = [internalNodeId, fieldName]`）。富化只按
+   *  `name` 回查时拿不到内部字段的业务名，标签就退化成别名（ISSUE #349）。
+   *  这里把解析结果随条目下发，让富化（workflow-detail-io）能在别名之外
+   *  找到真实字段名与它的 label / localized。 */
+  proxyField?: { nodeId: string; field: string; label?: string; localized?: string };
 }
 
 /** outputs[] 单条元数据（镜像客户端 RawOutputMeta；isBoundary 仅子图路径写入）。 */
@@ -479,11 +488,28 @@ export async function buildRawInputs(
           if (!updated.label && typeof inp?.localized_name === "string") {
             updated.label = inp.localized_name;
           }
+          /* 记录内部真实字段（业务名的唯一来源）。wrapper 本层槽位名是
+           *  ComfyUI 自动编号的别名（value_1），富化据此才能在别名之外
+           *  找到真实字段名与其 label / localized（ISSUE #349）。 */
+          if (internalNodeId && fieldName) {
+            updated.proxyField = {
+              nodeId: internalNodeId,
+              field: fieldName,
+              ...(typeof inp?.label === "string" ? { label: inp.label } : {}),
+              ...(typeof inp?.localized_name === "string"
+                ? { localized: inp.localized_name }
+                : {}),
+            };
+          }
           /* Stash the proxy target (internal node class + field) so the
            *  async COMBO-option pass below can resolve candidate lists from
            *  /api/object_info for any COMBO widget on this wrapper. */
           updated.__comboClass = internalNode.type;
           updated.__comboField = fieldName;
+        } else if (internalNodeId && fieldName) {
+          /* 内部节点缺失（子图定义不完整 / 同名冲突）时也要留下字段名——
+           *  它仍比别名 value_1 有信息量，富化按 field 兜底。 */
+          updated.proxyField = { nodeId: internalNodeId, field: fieldName };
         }
         /* Re-stamp multiline if we just learned the value (the base
          *  parser ran before this pass and may have skipped it). */

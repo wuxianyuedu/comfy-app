@@ -69,6 +69,13 @@ export interface RawInputMeta {
    *  on the left for the synthetic `image` entry) and guarantees the
    *  preview / placeholder rendering is single-sourced. */
   preview?: boolean;
+  /** 子工作流封装节点暴露口背后的「内部真实字段」（服务端由
+   *  `properties.proxyWidgets` 解析后随条目下发）。
+   *
+   *  wrapper 的槽位名是本层自动编号的别名（`value_1`），业务名在内部节点
+   *  上。画布与 IO 面板都按「内部字段 label → localized → 字段名」取名，
+   *  避免同一 pin 在两处显示成不同字符串（ISSUE #349）。普通节点不携带。 */
+  proxyField?: { nodeId: string; field: string; label?: string; localized?: string };
 }
 
 export interface ComfyGraphNode {
