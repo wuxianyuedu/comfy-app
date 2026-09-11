@@ -1,19 +1,17 @@
 "use client";
 
-/* ── 对外参数映射的编排层（规范 §17.2 第②层）──
+/* ── 对外参数落点的编排层（规范 §17.2 第②层）──
  *
- * 编辑器把「对外参数 → 节点端口」的连线模型接到画布上时，需要四样东西：
- *   ① 连线状态（作者画的线优先于默认连线状态）与「当前选中哪个对外参数」；
- *   ② 从已打开的画布端口拖出的即时连线；
- *   ③ 保存时把线合进 paramMap（source 命名空间）+ 校验（防一个端口被两口占用）；
- *   ④ 视图拿这些状态渲染对外参数节点与连线。
+ * 「对外参数 → 节点端口」的落点是**纯数据**：它不在画布上呈现（勾选 IO 不会新增
+ * 任何节点或连线，见 WorkflowEditorInner 的「对外参数落点」段）。这一层只需要：
+ *   ① 落点状态（被覆盖过优先于自动判定）与「当前选中哪个对外参数」；
+ *   ② 保存时把覆盖合进 paramMap（source 命名空间）+ 校验（防一个端口被两口占用）。
  *
- * 纯函数（聚类 / 默认连线状态 / 校验 / 序列化）都在 `~/lib/workflow-param-mapping`，
+ * 纯函数（聚类 / 自动落点 / 校验 / 序列化）都在 `~/lib/workflow-param-mapping`，
  * 这里只做状态与持久化编排。
  *
- * 连线**必须**在某模式下画：没有选中模式时 `connect` / `disconnect` 是空操作，
- * 画布上也不提供连线手柄（见 §5 的「没有模式禁止连线」）。每条线落库写作
- * `source.mode:<模式>`，不存在脱离模式的手工线。 */
+ * 覆盖**必须**归属某模式：没有选中模式时 `connect` 是空操作，落库写作
+ * `source.mode:<模式>`，不存在脱离模式的覆盖。 */
 
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -37,25 +35,25 @@ export interface ParamMappingController {
   entries: ParamEntry[];
   /** 当前模式下生效的「对外参数 id → 目标 ioKey」。 */
   resolved: Record<string, string | null>;
-  /** 默认连线状态（作者画的线之外的兜底）。 */
+  /** 自动判定的落点（被覆盖过的条目之外的兜底）。 */
   auto: Record<string, string | null>;
-  /** 当前模式；为空时画布不提供连线能力。 */
+  /** 当前模式；为空时落点覆盖没有归属（写入是空操作）。 */
   mode: string | null;
-  /** 当前模式是否允许编辑连线（有模式才有归属）。 */
+  /** 当前模式是否允许写落点覆盖（有模式才有归属）。 */
   canWire: boolean;
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
-  /** 该对外参数在当前模式下是否被作者改过线。 */
+  /** 该对外参数在当前模式下是否被覆盖过落点。 */
   isManual: (id: string) => boolean;
-  /** 当前模式下是否有任何被改过的线（画布级「恢复默认」的可用性依据）。 */
+  /** 当前模式下是否有任何被覆盖过的落点（顶栏「恢复默认映射」的可用性依据）。 */
   hasManual: boolean;
-  /** 在当前模式下画一条线到某个端口；null = 断开该模式下的线。 */
+  /** 在当前模式下把某个对外参数的落点覆盖成某个端口；null = 断开该落点。 */
   connect: (id: string, ioKey: string | null) => void;
-  /** 撤销某个对外参数在当前模式下的线，回到默认连线状态。 */
+  /** 撤销某个对外参数在当前模式下的覆盖，回到自动判定。 */
   resetToAuto: (id: string) => void;
-  /** 撤销当前模式下的全部线（「恢复默认」）。 */
+  /** 撤销当前模式下的全部覆盖（「恢复默认映射」）。 */
   resetAll: () => void;
-  /** 合入本轮编辑后的完整映射（保存时序列化进 paramMap.source）。 */
+  /** 合入本轮编辑后的完整落点表（保存时序列化进 paramMap.source）。 */
   mapping: ParamMapping;
   /** 保存前把映射并入 paramMap；校验不过是空数组。 */
   validate: () => { ok: boolean; problems: string[] };
@@ -66,9 +64,9 @@ export interface ParamMappingController {
 export interface UseParamMappingArgs {
   workflowId: string;
   io: WorkflowIOMap | null | undefined;
-  /** 当前模式（工作流 defaultMode）；为空时禁止连线。 */
+  /** 当前模式（工作流 defaultMode）；为空时落点覆盖写入是空操作。 */
   mode: string | null | undefined;
-  /** 工作流模板的 paramMap 原始列（含 `source` 命名空间下的连线）。 */
+  /** 工作流模板的 paramMap 原始列（含 `source` 命名空间下的落点覆盖）。 */
   paramMap: Record<string, unknown>;
 }
 
@@ -80,7 +78,7 @@ export function useParamMapping({
 }: UseParamMappingArgs): ParamMappingController {
   const activeMode = mode ?? null;
   /* paramMap 是外部事实源（GET 恢复 / 保存回写）。本地 overlay 只在作者这一轮
-   * 编辑里累积线，避免每连一条就整体 PATCH 一次。 */
+   * 编辑里累积覆盖，避免每改一条就整体 PATCH 一次。 */
   const persisted = useMemo(() => parseParamMapping(paramMap), [paramMap]);
   const [overlay, setOverlay] = useState<ParamMapping>({ manualByMode: {} });
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -118,7 +116,7 @@ export function useParamMapping({
     [merged, activeMode]
   );
 
-  /** 在当前模式下写入一条线；没有模式时是空操作（连线必须有归属）。 */
+  /** 在当前模式下写入一条落点覆盖；没有模式时是空操作（覆盖必须有归属）。 */
   const writeManual = useCallback(
     (id: string, ioKey: string | null) => {
       if (!activeMode) return;
@@ -146,8 +144,8 @@ export function useParamMapping({
     [activeMode]
   );
 
-  /* 「恢复默认」＝ 清掉当前模式的全部线。本地 overlay 与已落库的那一份一起清，
-   *  否则 overlay 里刚画的一条会在下一帧把已删除的线复活。 */
+  /* 「恢复默认映射」＝ 清掉当前模式的全部覆盖。本地 overlay 与已落库的那一份一起清，
+   *  否则 overlay 里刚写的一条会在下一帧把已清除的覆盖复活。 */
   const resetAll = useCallback(() => {
     setOverlay((prev) => clearModeWiring(prev, activeMode));
   }, [activeMode]);
@@ -157,7 +155,7 @@ export function useParamMapping({
     [entries, io, merged, activeMode]
   );
 
-  /* 保存时把线并入 paramMap：以调用方给的最新 paramMap 为底稿（它会带上
+  /* 保存时把落点覆盖并入 paramMap：以调用方给的最新 paramMap 为底稿（它会带上
    *  paramMap 里的其它命名空间，如 positiveNode），再叠加 source。 */
   const withMapping = useCallback(
     (base: Record<string, unknown>) => serializeParamMapping(merged, base),
@@ -214,5 +212,5 @@ export function validateMapping(
   return { ok: problems.length === 0, problems };
 }
 
-/** 某个对外参数在当前模式下是否仍是默认连线状态（画布行尾徽标 / 「恢复默认」用）。 */
+/** 某个对外参数在当前模式下是否仍是自动判定的落点（「恢复默认映射」用）。 */
 export { applyParamMapping, buildSourceOverrides, isDefaultMapping };
