@@ -22,6 +22,8 @@ interface DetailBodyProps {
   activeTab: DetailTab;
   isLoading: boolean;
   workflowIO: WorkflowIOMap | null;
+  /** 模板 paramMap（对外参数落点），画布节点页签据此标出对外参数与落点。 */
+  paramMap: Record<string, unknown>;
   sourceData: SourceModalData | null;
   usable: boolean;
   onEdit: () => void;
@@ -40,6 +42,7 @@ export function DetailBody({
   activeTab,
   isLoading,
   workflowIO,
+  paramMap,
   sourceData,
   usable,
   onEdit,
@@ -69,10 +72,8 @@ export function DetailBody({
               在编辑器中打开
             </button>
           </div>
-          {/* 画布预览：只画工作流自身的图 + 一张宿主运行卡片，卡片居中。
-              这里曾为「对外参数卡片列」留过一条左侧 gutter，参数卡片刻画已整体
-              移除（勾选 IO 不再在画布上新增节点/连线），gutter 随之撤掉——
-              留着只会让卡片偏右、左边空出一块。 */}
+          {/* 画布预览：宿主运行卡片居中；工作流暴露了对外参数时，左侧并排一列
+              只读的对外参数卡片（与宿主卡片一起参与居中，不用固定留白挂靠）。 */}
           <div className="flex min-h-0 flex-1 justify-center overflow-auto px-2 py-4">
             {/* key=workflow.id：切换左侧工作流时重建预览，避免上一工作流的
                 运行结果/状态/表单残留（详情区复用的是同一 DOM 位置）。 */}
@@ -82,6 +83,7 @@ export function DetailBody({
               workflowName={workflow.name}
               taskType={workflow.taskType}
               workflowIO={workflowIO}
+              paramMap={paramMap}
               usable={usable}
               modes={meta?.modes}
               defaultMode={meta?.defaultMode}
