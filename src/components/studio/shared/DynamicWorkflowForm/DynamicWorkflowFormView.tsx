@@ -40,6 +40,8 @@ interface DynamicWorkflowFormViewProps {
   mode?: string | null;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
   onReorder?: (fromKey: string, beforeKey: string | null) => void;
+  /** 行尾附加的只读徽标（工作流库画布节点用它标出每个参数连到的「对外参数」）。 */
+  rowTrailing?: (entry: EnrichedWidget) => ReactNode;
 }
 
 export function DynamicWorkflowFormView({
@@ -58,6 +60,7 @@ export function DynamicWorkflowFormView({
   onVisibilityChange,
   onReorder,
   mode,
+  rowTrailing,
 }: DynamicWorkflowFormViewProps) {
   if (loading) return <LoadingSkeleton />;
   if (controller.isEmpty) return <EmptyStateHint emptyHint={emptyHint} />;
@@ -133,6 +136,7 @@ export function DynamicWorkflowFormView({
       }
       dimmed={!!visibilityMode && rowEntry.modes?.[visibilityMode]?.visible === false}
       withHandle={withHandle}
+      trailing={rowTrailing?.(entry)}
     />
     );
   };
