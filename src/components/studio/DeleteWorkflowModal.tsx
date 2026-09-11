@@ -6,6 +6,7 @@
  */
 import { useEffect } from "react";
 import { Trash2 } from "lucide-react";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 interface DeleteWorkflowModalProps {
   pendingDelete: { id: string; name: string } | null;
@@ -45,7 +46,7 @@ export function DeleteWorkflowModal({
       aria-modal="true"
       aria-labelledby="delete-modal-title"
       onClick={() => !deleting && onBackdropClick()}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
+      className={overlayClass("modal", "z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm")}
     >
       <div
         onClick={(event) => event.stopPropagation()}

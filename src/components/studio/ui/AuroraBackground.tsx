@@ -14,6 +14,9 @@
  */
 export function AuroraBackground({ className = "" }: { className?: string }) {
   return (
+    /* 应用级背景层，不是浮在内容上的浮层：标题行自身是半透明，背景若从标题行
+       下方才开始，顶部会露出一条亮带。故此处保留铺满视口的写法，
+       由 scripts/check-title-bar-clearance.cjs 豁免清单放行。 */
     <div
       aria-hidden
       data-testid="aurora-bg"

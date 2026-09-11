@@ -25,6 +25,7 @@ import { createPortal } from "react-dom";
 import { CodeBlock, extToLanguage } from "../ui/CodeBlock";
 import { fetchDebugSource } from "@/lib/debug-source-client";
 import { useDebugStore } from "./debug-store";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 export interface RenderChainModule {
   /** 完整相对路径（相对项目根，如 src/components/xxx.tsx） */
@@ -191,7 +192,7 @@ export function DebugChainFooter({
       {openFile &&
         createPortal(
           <div
-            className="fixed inset-0 z-100 flex items-center justify-center"
+            className={overlayClass("modal", "z-100 flex items-center justify-center")}
             role="presentation"
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}

@@ -49,6 +49,7 @@ import { TEMPERATURE_TASKS } from "./hooks/use-settings-page";
 import { useUpdateCheckStore } from "@/components/update-check/update-check-store";
 import { SettingsShell } from "@/components/settings/SettingsShell";
 import { fmtBytes } from "~/lib/format-bytes";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 /** 安装形态 → 设置页徽标文案。 */
 const INSTANCE_KIND_LABEL: Record<
@@ -1236,7 +1237,7 @@ export function SettingsPageView({
                   服务端模型清单供点选。 */}
           {dialog && (
             <div
-              className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
+              className={overlayClass("modal", "z-50 grid place-items-center bg-black/50 p-4")}
               onClick={() => setDialog(null)}
             >
               <div
@@ -1444,7 +1445,7 @@ export function SettingsPageView({
                   路径 / 提示词 / 尺寸 / 额外参数均可自定义输入。 */}
           {usageTest && (
             <div
-              className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
+              className={overlayClass("modal", "z-50 grid place-items-center bg-black/50 p-4")}
               onClick={() => setUsageTest(null)}
             >
               <div
