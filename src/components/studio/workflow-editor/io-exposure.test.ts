@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
-import { mergeExposedEntry, resolveExposedLabel } from "./io-exposure";
+import { enrichFromViewNodes, mergeExposedEntry, resolveExposedLabel } from "./io-exposure";
 
 /** 服务端富化条目（workflow-detail-io 的输出形状）。 */
 function enriched(partial: Partial<WorkflowIOEntry> = {}): WorkflowIOEntry {
@@ -93,5 +93,35 @@ describe("mergeExposedEntry — 本地编辑态覆盖服务端富化", () => {
   it("本地没有 label 时沿用服务端富化名，不会把名字清空", () => {
     const merged = mergeExposedEntry({}, enriched({ label: "Last Frame Image" }));
     expect(merged.label).toBe("Last Frame Image");
+  });
+});
+
+describe("enrichFromViewNodes — 子图内层视图的就地富化兜底", () => {
+  const viewNodes = [
+    {
+      id: "1670",
+      class_type: "PrimitiveInt",
+      raw_inputs: [
+        { name: "value", label: "Seed", localized: "随机种", type: "INT", widgetValue: 1234 },
+        { name: "model_name", localized: "模型", type: "COMBO" },
+      ],
+    },
+  ];
+
+  it("按 nodeId::widget::name 建表，label → localized → name 取名", () => {
+    const map = enrichFromViewNodes(viewNodes);
+    expect(map["1670::widget::value"]!.label).toBe("Seed");
+    expect(map["1670::widget::value"]!.type).toBe("INT");
+    expect(map["1670::widget::value"]!.defaultValue).toBe(1234);
+    expect(map["1670::widget::model_name"]!.label).toBe("模型");
+  });
+
+  it("带上节点类名，供「首帧 / 尾帧」这类按类名判定的消费方使用", () => {
+    expect(enrichFromViewNodes(viewNodes)["1670::widget::value"]!.classType).toBe("PrimitiveInt");
+  });
+
+  it("无节点 / 无 raw_inputs 时返回空表", () => {
+    expect(enrichFromViewNodes(null)).toEqual({});
+    expect(enrichFromViewNodes([{ id: "1" }])).toEqual({});
   });
 });

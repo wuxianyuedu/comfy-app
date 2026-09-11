@@ -54,6 +54,11 @@ export interface WorkflowIORawEntry {
 export interface WorkflowIOEnrichParams {
   workflowIORaw: Record<string, WorkflowIORawEntry>;
   rawInputsById: Record<string, RawInputEntry[]>;
+  /** 子工作流内部节点的输入元数据（`buildInnerNodeInputs`）。
+   *  勾选点落在子图内层视图时，落库 `nodeId` 指向内部节点，顶层 `rawInputsById`
+   *  里没有它 —— 没有这份兜底表，类型退化成 `*`、显示名退化成 pin 名
+   *  （ISSUE #349）。缺省（API-only / 无子图）时行为与旧版逐值等价。 */
+  innerInputsById?: Record<string, RawInputEntry[]>;
   rawNodeMeta: RawNodeMeta[];
   graph: Record<string, unknown>;
   nodeTitleById: Record<string, string>;
@@ -144,6 +149,7 @@ export async function enrichWorkflowIO(
   const {
     workflowIORaw,
     rawInputsById,
+    innerInputsById,
     rawNodeMeta,
     graph,
     nodeTitleById,
@@ -211,7 +217,11 @@ export async function enrichWorkflowIO(
       const inputEntries = rawInputsById[canonicalNodeId] ?? [];
       const ri =
         inputEntries.find((raw) => raw.name === v.name) ??
-        inputEntries.find((raw) => raw.proxyField?.field === v.name);
+        inputEntries.find((raw) => raw.proxyField?.field === v.name) ??
+        /* 勾选点落在子图内层视图（下钻后的画布）时，落库 nodeId 是内部节点，
+         *  顶层 rawInputsById 里没有它 —— 退回子图内部节点的索引，否则类型
+         *  退化成 `*`、显示名退化成 pin 名（ISSUE #349）。 */
+        innerInputsById?.[canonicalNodeId]?.find((raw) => raw.name === v.name);
       if (ri) {
         type = ri.type || "*";
         /* 子工作流封装节点（class_type 是 UUID）的暴露口要特殊处理：
@@ -237,18 +247,29 @@ export async function enrichWorkflowIO(
          *  proxyField 判定会让这类工作流的存量别名永远清不掉（ISSUE #349）。
          *  故以「class_type 是 UUID 的封装节点」为准，只要本层还找得到与槽位
          *  名不同的作者 label/localized，就认得出这是一串机器别名。 */
-        const graphClassForWrapper = asRecord(graph[canonicalNodeId])?.class_type;
-        const isWrapperNode = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(
-          nodeTypeById[canonicalNodeId] ??
-            (typeof graphClassForWrapper === "string" ? graphClassForWrapper : "")
-        );
-        const hasAuthorSlotName =
-          (ri.label !== undefined && ri.label !== ri.name) ||
-          (ri.localized !== undefined && ri.localized !== ri.name);
+        /* 作者在本层槽位上写的**英文业务名**（`label`）—— 它是判定「库存
+         *  label 是不是一串机器生成的槽位名」的唯一可靠基准。刻意不用
+         *  `localized`：那是 ComfyUI 的通用翻译（`seed` → "随机种"），拿它
+         *  去压作者手写的名字会误伤。
+         *
+         *  封装节点还要额外认内部真实字段（`proxyField`）。 */
+        const authorSlotLabel =
+          ri.label !== undefined && ri.label !== ri.name ? ri.label : undefined;
+        const authorFacingName =
+          f?.label ?? (f?.localized !== ri.name ? f?.localized : undefined) ?? f?.field ?? authorSlotLabel;
+        /* 存量/机器名：勾选那一刻会把「画布显示名」写进 label，而修复前某些
+         *  路径写进去的其实是原始槽位名（封装节点的别名 `value_1`，或普通节点
+         *  的 pin 名 `image`）。这串东西不是作者的命名，不该把作者名压掉 ——
+         *  ISSUE #349：`image` 挡住了 `Last Frame Image`。
+         *
+         *  判定：label 恰好等于本层槽位名，且本层/内部确实带一个不同的作者
+         *  业务名。作者把参数重命名成与 pin 名逐字相同（且 raw 里另有一个
+         *  业务名）的概率极低，因此不会误伤。 */
         const staleAlias =
           label !== undefined &&
           label === ri.name &&
-          (f !== undefined || (isWrapperNode && hasAuthorSlotName));
+          authorFacingName !== undefined &&
+          authorFacingName !== ri.name;
         label =
           (staleAlias ? undefined : label) ??
           f?.label ??
