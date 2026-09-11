@@ -352,6 +352,62 @@ def find_and_focus_tauri_window() -> bool:
         return False
 
 
+def foreground_window_process() -> str:
+    """当前系统前台窗口所属进程的 exe 文件名（小写），取不到返回空串。
+
+    只用于「这次启动要不要给前台」的判断（见 decide_foreground）；供调试时单独
+    调用查看，也是该判据在测试里的打桩点。
+    """
+    try:
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return ""
+        return _window_process_name(hwnd)
+    except Exception:
+        return ""
+
+
+def decide_foreground(*, cold_start: bool = False, already_running: bool = False) -> bool:
+    """决定这次启动是否允许应用窗口在加载完成后自动顶到前台。
+
+    默认**不允许**：应用启动要几十秒，用户完全可能切去别的窗口干活，等页面加载
+    完成再弹到最前面会把正在看的内容打断（用户先看到的就是这个）。这时只把窗口
+    显示到任务栏 + 请求任务栏闪烁提醒，用户自己点开。命中下面任一条则允许给前台
+    ——这些情形要么用户就在等这个应用，要么前台本来就是它，都不存在「打断」：
+
+    - 已有实例在跑，这次只是把它唤到前面（用户点了启动就该看到界面）；
+    - 冷启动（脚本 / 终端敲命令拉起，不是「点了就去忙别的」的路径）；
+    - 前台本来就是本应用（用户从应用里重启、更新后重启）；
+    - 前台是双击入口（资源管理器 / 启动器自身）—— 用户刚「点」过启动。
+
+    返回值经 `COMFYAPP_FOREGROUND` 环境变量传给 Tauri 壳，由
+    `show_main_window_without_focus` 消费（见 launch-and-build.md §1.3）。
+    """
+    if already_running:
+        log("foreground allowed: an instance is already running (user asked to raise it)")
+        return True
+    if cold_start:
+        log("foreground allowed: cold start from a shell")
+        return True
+    foreground = foreground_window_process()
+    if foreground.startswith("app"):
+        log("foreground allowed: this app is already the foreground window")
+        return True
+    # 双击入口是资源管理器或打包后的启动器 exe：用户刚「点」过本应用，此刻等它
+    # 出现就是预期。直接敲 python 脚本调试（前台是终端）不走这条。
+    user_click_entries = (
+        "explorer.exe",
+        "start-tauri.exe",
+        "start-tauri-dev.exe",
+        "start-tauri-standalone.exe",
+    )
+    if foreground in user_click_entries:
+        log(f"foreground allowed: launched from a user click (foreground={foreground})")
+        return True
+    log("foreground denied: startup may finish while the user is elsewhere")
+    return False
+
+
 def set_dpi_aware() -> None:
     """高 DPI 屏幕避免模糊。"""
     try:
@@ -701,6 +757,9 @@ user32.SetWindowTextW.argtypes = [HWND, LPCWSTR]
 
 user32.IsWindowVisible.argtypes = [HWND]
 user32.IsWindowVisible.restype = BOOL
+
+user32.GetForegroundWindow.argtypes = []
+user32.GetForegroundWindow.restype = HWND
 
 user32.GetWindowTextLengthW.argtypes = [HWND]
 user32.GetWindowTextLengthW.restype = ctypes.c_int
@@ -1654,7 +1713,15 @@ def _fatal_box(message: str, title: str = f"{APP_TITLE} 启动器") -> int:
 
 def _parse_args(argv: list[str]) -> dict[str, bool | str]:
     # 默认使用预编译 Tauri 壳（窗口秒出）；--tauri-dev 走旧版 tauri dev（慢，但支持 Rust 热重载）。
-    args: dict[str, bool | str] = {"splash": False, "focus": True, "tauri_dev": False, "standalone": False}
+    args: dict[str, bool | str] = {
+        "splash": False,
+        "focus": True,
+        "tauri_dev": False,
+        "standalone": False,
+        "cold_start": False,
+        "foreground": False,
+        "background": False,
+    }
     for arg in argv[1:]:
         a = arg.lower().lstrip("-/")
         if a in ("splash",):
@@ -1667,6 +1734,12 @@ def _parse_args(argv: list[str]) -> dict[str, bool | str]:
             args["standalone"] = True
         elif a in ("no-focus", "nofocus"):
             args["focus"] = False
+        elif a in ("cold-start", "coldstart"):
+            args["cold_start"] = True
+        elif a in ("foreground", "activate"):
+            args["foreground"] = True
+        elif a in ("background", "no-foreground"):
+            args["background"] = True
         elif a in ("help", "h", "?"):
             args["help"] = True
     return args
@@ -1777,6 +1850,9 @@ def main(argv: list[str] | None = None) -> int:
             "  --standalone  走独立模式（需先 pnpm tauri build，不连 dev server）\n"
             "  --splash      启用旧版 Win32 启动小弹窗（调试用）\n"
             "  --no-focus    发现已有窗口时不置顶\n"
+            "  --cold-start  本次是脚本/终端拉起：启动完成后允许给前台\n"
+            "  --foreground  启动完成后强制把应用窗口置前\n"
+            "  --background  启动完成后一律不置前（留在任务栏闪烁提醒）\n"
             "  --help        显示此帮助",
             f"{APP_TITLE} 启动器",
             MB_OK,
@@ -1830,7 +1906,10 @@ def main(argv: list[str] | None = None) -> int:
 
     _write_lock_pid(lock_file)
 
-    # 如果 Tauri 窗口已经存在，直接聚焦（不重复启动）
+    # 如果 Tauri 窗口已经存在，直接聚焦（不重复启动）。
+    # 这是用户主动唤起已有实例，先把「允许前台」告诉壳：壳收到单实例回调时也走给前台路径。
+    if args.get("focus", True) and find_tauri_window():
+        os.environ["COMFYAPP_FOREGROUND"] = "1"
     if args.get("focus", True) and find_and_focus_tauri_window():
         if mutex:
             kernel32.ReleaseMutex(mutex)
@@ -1844,6 +1923,16 @@ def main(argv: list[str] | None = None) -> int:
     # 解析到 ::1（IPv6）而 Next.js dev server 监听在 IPv4，导致 ERR_CONNECTION_REFUSED。
     os.environ["COMFYAPP_PROJECT_ROOT"] = project_root
     os.environ["COMFYAPP_DEV_URL"] = "http://127.0.0.1:%d/workspace" % _read_app_port(project_root)
+
+    # 启动完成是否允许应用窗口自动抢前台：默认否（启动耗时期间用户可能已切走，
+    # 突然弹到最前面会打断他正在看的内容），见 decide_foreground。
+    if args.get("foreground"):
+        force_foreground = True
+    elif args.get("background"):
+        force_foreground = False
+    else:
+        force_foreground = decide_foreground(cold_start=bool(args.get("cold_start")))
+    os.environ["COMFYAPP_FOREGROUND"] = "1" if force_foreground else "0"
 
     # 检测 comfy-cli 虚拟环境；缺失则后台触发安装（不阻塞启动）
     ensure_comfy_cli_venv(project_root)
