@@ -9,7 +9,7 @@
 
 import React, { useCallback } from "react";
 import {
-  ReactFlow, Controls, MiniMap,
+  ReactFlow, Controls, MiniMap, useStoreApi,
   type Connection, type Node, type Edge,
   type OnNodesChange, type OnEdgesChange,
 } from "@xyflow/react";
@@ -22,6 +22,40 @@ import {
 import { PORT_ROLES } from "../canvas/WorkflowNode";
 import type { WorkflowNodeData } from "../workflow-types";
 import { workflowNodeTypes, workflowEdgeTypes } from "./WorkflowEditorNodes";
+
+/** React Flow 的 error#008 文本前缀（见 @xyflow/system 的 errorMessages）。 */
+const EDGE_HANDLE_ERROR = "Couldn't create edge for";
+
+/** 过滤「视口裁剪」造成的 error#008 假告警，保留真正找不到 handle 的告警。
+ *
+ *  背景（ISSUE #374）：本画布开着 `onlyRenderVisibleElements`。React Flow 的
+ *  节点裁剪按**每个节点各自**与视口求交（`getNodesInside`），而边的裁剪按
+ *  **两端节点的并集包围盒**与视口求交（`isEdgeVisible`）。一条横跨整个画布的
+ *  长边，其并集盒覆盖视口 → 判定为「可见」而进入渲染；但它的两端节点各自都在
+ *  视口外、没有挂载，`handleBounds` 为空 —— `getEdgePosition` 于是返回 null 并
+ *  打 error#008。这是裁剪策略的固有副作用，不是数据错误：用户一滚到那片区域，
+ *  节点挂载、边随即正常渲染。
+ *
+ *  真正的 handle 缺失（渲染的 id 与边引用的 id 不同名）必须继续暴露 —— 那才是
+ *  画布上「线永远画不出来」的 bug。判据：报错涉及的**两端节点此刻是否已挂载**。
+ *  两端都挂载还报错 = 真问题；任一端未挂载 = 裁剪噪声。
+ *
+ *  返回值：`true` 表示这条告警应被忽略（纯函数，便于单测）。 */
+export function isEdgeHandleCullingNoise(args: {
+  message: string;
+  /** 已挂载（进入 handleBounds 测量）的节点 id 集合。 */
+  mountedNodeIds: ReadonlySet<string>;
+  /** 该边引用的两端节点 id；节点不存在/已删除时传 null。 */
+  sourceId: string | null;
+  targetId: string | null;
+}): boolean {
+  const { message, mountedNodeIds, sourceId, targetId } = args;
+  if (!message.startsWith(EDGE_HANDLE_ERROR)) return false;
+  /* 端点信息缺失（边引用的节点已被删）→ 交给 React Flow 自己处理。 */
+  if (!sourceId || !targetId) return false;
+  /* 两端都挂载还报错 ⇒ 是真的找不到 handle，必须暴露。 */
+  return !mountedNodeIds.has(sourceId) || !mountedNodeIds.has(targetId);
+}
 
 /* Role key → minimap colour.  Hoisted to a module-level Map so the MiniMap
  *  `nodeColor` callback can stay referentially stable (empty useCallback
@@ -76,6 +110,41 @@ export function WorkflowEditorCanvas({
     return (d?.assignedRole ? ROLE_COLOR_BY_KEY.get(d.assignedRole) : undefined) ?? "#333";
   }, []);
 
+  /* ── error#008 假告警过滤器（ISSUE #374）──
+   *  见 `isEdgeHandleCullingNoise` 的文档：视口裁剪下「长边可见 / 端点未挂载」
+   *  会成批刷 error#008，而真正的 handle 不同名必须继续暴露。
+   *
+   *  「已挂载」的判据取 React Flow 内部事实源：`nodeLookup[id].internals
+   *  .handleBounds` —— 它只在节点的 DOM 真正挂载、被测量之后才有值。用
+   *  `useStoreApi` 在回调里按需读取，而不是订阅整张表，避免拖拽期间频繁重渲染。 */
+  const store = useStoreApi();
+  const handleError = useCallback(
+    (id: string, message: string) => {
+      if (!message.startsWith(EDGE_HANDLE_ERROR)) {
+        console.warn(`[React Flow] ${message}`);
+        return;
+      }
+      const { nodeLookup, edgeLookup } = store.getState();
+      const edge = edgeLookup.get(id);
+      const mounted = new Set<string>();
+      nodeLookup.forEach((internal, nodeId) => {
+        if (internal.internals.handleBounds) mounted.add(nodeId);
+      });
+      if (
+        isEdgeHandleCullingNoise({
+          message,
+          mountedNodeIds: mounted,
+          sourceId: edge?.source ?? null,
+          targetId: edge?.target ?? null,
+        })
+      ) {
+        return;
+      }
+      console.warn(`[React Flow] ${message}`);
+    },
+    [store]
+  );
+
   return (
     <ReactFlow
       nodes={nodes}
@@ -89,6 +158,8 @@ export function WorkflowEditorCanvas({
       onEdgesDelete={onEdgesDelete}
       nodeTypes={workflowNodeTypes}
       edgeTypes={workflowEdgeTypes}
+      /* 过滤视口裁剪造成的 error#008 假告警（ISSUE #374）—— 见 handleError。 */
+      onError={handleError}
       /* commercial-grade perf — only mount nodes/edges that
        *  intersect the viewport.  The DaSiWa Wan 2.2 template ships 130
        *  nodes across a ~7000 px bbox; React Flow was previously mounting

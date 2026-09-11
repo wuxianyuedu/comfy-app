@@ -67,7 +67,11 @@ export function resolveManualEntryIds(
 /** 库预览的连线（对外参数卡片 → 宿主卡片端口）。
  *
  *  与编辑器同源：自动线虚线、作者线实线、显式断开不画线。库内连线**只读**
- *  （selectable/deletable 关掉），拉线与删除仍是编辑器画布的手势。 */
+ *  （selectable/deletable 关掉），拉线与删除仍是编辑器画布的手势。
+ *
+ *  刻意**不**传 `io`：库预览的线是量 DOM 画出来的 SVG（按 `data-io-key` 找
+ *  目标行），落点用 workflowIO 的 ioKey 天经地义；只有编辑器画布的 React Flow
+ *  连线才需要把 ioKey 翻成渲染侧的 pin 名（见 buildParamEdges）。 */
 export function buildLibraryParamEdges(args: {
   entries: readonly ParamEntry[];
   resolved: Record<string, string | null>;

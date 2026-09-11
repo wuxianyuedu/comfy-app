@@ -44,7 +44,11 @@ import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
 import { useParamMapping } from "./hooks/use-param-mapping";
 import { buildParamNodes } from "./workflow-param-nodes";
 import { buildParamEdges } from "./workflow-param-edges";
-import { entryIdFromParamNodeId } from "~/lib/workflow-param-mapping";
+import {
+  entryIdFromParamNodeId,
+  handleIdForIoKey,
+  ioKeyForHandle,
+} from "~/lib/workflow-param-mapping";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
 import { enrichFromViewNodes } from "./io-exposure";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
@@ -474,9 +478,24 @@ function WorkflowEditorBody({
         mode: wiringMode,
         entries: paramMapping.entries.map((entry) => entry.id),
         resolved: paramMapping.resolved,
+        /* 连线的 targetHandle 取 io 里的 pin 名（见 buildParamEdges）——
+         *  pin 名变了线就得重画，因此把「目标 → 渲染 handle id」的解析结果
+         *  一并纳入签名。 */
+        targets: Object.fromEntries(
+          Object.entries(paramMapping.resolved).map(([entryId, ioKey]) => [
+            entryId,
+            handleIdForIoKey(workflowIO, ioKey),
+          ])
+        ),
         manual: paramMapping.mapping.manualByMode?.[wiringMode ?? ""] ?? {},
       }),
-    [paramMapping.entries, paramMapping.resolved, paramMapping.mapping, wiringMode]
+    [
+      paramMapping.entries,
+      paramMapping.resolved,
+      paramMapping.mapping,
+      wiringMode,
+      workflowIO,
+    ]
   );
   const paramWiring = useMemo(() => {
     const nodes = buildParamNodes({
@@ -496,6 +515,10 @@ function WorkflowEditorBody({
         entries: paramMapping.entries,
         resolved: paramMapping.resolved,
         isManual: paramMapping.isManual,
+        /* 映射目标存的是 ioKey，画布上的 handle id 是 pin 名 —— 由 io 现翻
+         * （ISSUE #374：直接拿 ioKey 当 targetHandle 会被 React Flow 判成
+         * 悬空 handle 并丢弃整条线）。 */
+        io: workflowIO,
         renderedCardIds,
       }),
     };
@@ -518,21 +541,28 @@ function WorkflowEditorBody({
   );
 
   /* 在画布上拉一条线：源必须是某张对外参数卡片，目标必须落在宿主节点的某个
-   * 端口上（`targetHandle` 就是 ioKey）。别的连线一律拒绝 —— 画布上的图连线
-   * 由工作流本身决定，作者的手工连线只表达「映射」。 */
+   * 端口上。别的连线一律拒绝 —— 画布上的图连线由工作流本身决定，作者的手工
+   * 连线只表达「映射」。
+   *
+   *  React Flow 给的 `targetHandle` 是**渲染侧的 pin 名**（`<Handle id=…>`），
+   *  而落库与运行期用的是 ioKey（`<nodeId>::<kind>::<name>`）—— 两者不同名，
+   *  必须翻回来再存，否则这条线在下一帧重绘时会被 React Flow 判成悬空 handle
+   *  并丢弃（error#008，ISSUE #374）。 */
   const onConnect = useCallback(
     (connection: ReactFlowConnection) => {
       const entryId = entryIdFromParamNodeId(connection.source);
-      if (!entryId || !connection.targetHandle) return;
+      if (!entryId || !connection.targetHandle || !connection.target) return;
       const entry = paramMapping.entries.find((item) => item.id === entryId);
       if (entry?.nodeId !== connection.target) return;
-      paramMapping.connect(entryId, connection.targetHandle);
+      const ioKey = ioKeyForHandle(workflowIO, connection.target, connection.targetHandle);
+      if (!ioKey) return;
+      paramMapping.connect(entryId, ioKey);
     },
-    [paramMapping]
+    [paramMapping, workflowIO]
   );
 
   /* 连线合法性闸门：没有模式时任何连线都不成立（禁止连线），落点也必须是
-   * 该对外参数宿主节点上真实存在的端口。 */
+   * 该对外参数宿主节点上真实存在的端口（按 pin 名反查 ioKey，见 onConnect）。 */
   const isValidConnection = useCallback(
     (connection: ReactFlowConnection | Edge) => {
       if (!wiringMode) return false;
@@ -541,7 +571,7 @@ function WorkflowEditorBody({
       const targetHandle = "targetHandle" in connection ? connection.targetHandle : null;
       if (!entryId || !target || !targetHandle) return false;
       const entry = paramMapping.entries.find((item) => item.id === entryId);
-      return entry?.nodeId === target && !!workflowIO?.[targetHandle];
+      return entry?.nodeId === target && !!ioKeyForHandle(workflowIO, target, targetHandle);
     },
     [wiringMode, paramMapping.entries, workflowIO]
   );

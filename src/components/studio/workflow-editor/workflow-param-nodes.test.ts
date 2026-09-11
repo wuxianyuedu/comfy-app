@@ -133,14 +133,43 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
       entries,
       resolved: resolveMapping(entries, io, null, "T2I"),
       isManual: () => false,
+      io,
     });
     const width = edges.find((edge) => edge.id === "pe-5|size-width")!;
     expect(width.source).toBe("pio:5|size-width");
     expect(width.sourceHandle).toBe("pio-out");
     expect(width.target).toBe("5");
-    expect(width.targetHandle).toBe("5::widget::width");
+    /* targetHandle 必须是**节点卡片上真实渲染的 handle id（pin 名）**，
+     * 不是 workflowIO 的 ioKey —— 取 ioKey 时 React Flow 在 handleBounds 里
+     * 查不到该 id，会丢弃整条线并打 error#008（ISSUE #374）。 */
+    expect(width.targetHandle).toBe("width");
     expect(width.style?.strokeDasharray).toBeTypeOf("string");
     expect(width.data?.manual).toBe(false);
+  });
+
+  it("回归（ISSUE #374）：targetHandle 一律取渲染侧的 pin 名而不是 ioKey", () => {
+    const edges = buildParamEdges({
+      entries,
+      resolved: resolveMapping(entries, io, null, "T2I"),
+      isManual: () => false,
+      io,
+    });
+    for (const edge of edges) {
+      expect(edge.targetHandle).not.toContain("::");
+      expect(io[edge.targetHandle!]).toBeUndefined();
+    }
+    /* 两端的名字必须与节点卡片上 <Handle id=…> 的取法逐字一致。 */
+    expect(edges.find((edge) => edge.id === "pe-9|prompt")?.targetHandle).toBe("text");
+  });
+
+  it("ioKey 反查不到 pin 名（条目已被移除 / io 未就绪）时不画线", () => {
+    const edges = buildParamEdges({
+      entries,
+      resolved: { "9|prompt": "9::widget::text" },
+      isManual: () => true,
+      io: {},
+    });
+    expect(edges).toEqual([]);
   });
 
   it("作者画过的线改实线并标记为手工", () => {
@@ -149,6 +178,7 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
       entries,
       resolved,
       isManual: (entryId) => entryId === "9|prompt",
+      io,
     });
     expect(edges.find((edge) => edge.id === "pe-9|prompt")?.style?.strokeDasharray).toBeUndefined();
     expect(edges.find((edge) => edge.id === "pe-9|prompt")?.data?.manual).toBe(true);
@@ -159,6 +189,7 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
       entries,
       resolved: { "5|size-width": null, "9|prompt": "9::widget::text" },
       isManual: () => true,
+      io,
     });
     expect(edges.map((edge) => edge.id)).toEqual(["pe-9|prompt"]);
   });
@@ -168,6 +199,7 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
       entries,
       resolved: resolveMapping(entries, io, null, "T2I"),
       isManual: () => false,
+      io,
       /* 只渲染了 9 号节点的卡片（子图内部节点的 nodeId 在顶层画布上不存在，
        *  buildParamNodes 会跳过它）——连线必须与卡片同口径。 */
       renderedCardIds: new Set(["pio:9|prompt"]),
@@ -180,6 +212,7 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
       entries,
       resolved: resolveMapping(entries, io, null, "T2I"),
       isManual: () => false,
+      io,
     });
     expect(edges.every((edge) => edge.deletable === true)).toBe(true);
     expect(edges[0]?.data?.paramEntryId).toBeTypeOf("string");

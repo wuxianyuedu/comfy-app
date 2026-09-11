@@ -9,7 +9,9 @@ import {
   classifyPin,
   clearModeWiring,
   entryIdFromParamNodeId,
+  handleIdForIoKey,
   hasManualWiring,
+  ioKeyForHandle,
   isDefaultMapping,
   paramNodeId,
   parseParamMapping,
@@ -352,5 +354,47 @@ describe("applyParamMapping — 子图内部条目的运行期节点 id", () => 
       values: { "1670|other": 33 },
     });
     expect(inputs).toEqual([{ nodeId: "4:1670", name: "value", value: 33 }]);
+  });
+});
+
+describe("handleIdForIoKey / ioKeyForHandle — 两个键空间互转（ISSUE #374）", () => {
+  const map: WorkflowIOMap = {
+    "1512::widget::value": pin("1512", "value", { type: "BOOLEAN" }),
+    "23::widget::upload": pin("23", "upload", { type: "IMAGEUPLOAD" }),
+    /* pin 名里带 `::` —— 证明不能靠切分 ioKey 反推 pin 名。 */
+    "7::widget::weird::name": pin("7", "weird::name", { type: "STRING" }),
+  };
+
+  it("ioKey → 渲染 handle id 取的是 pin 名", () => {
+    expect(handleIdForIoKey(map, "1512::widget::value")).toBe("value");
+    expect(handleIdForIoKey(map, "23::widget::upload")).toBe("upload");
+    expect(handleIdForIoKey(map, "7::widget::weird::name")).toBe("weird::name");
+  });
+
+  it("pin 名含 `::` 时不会被切错", () => {
+    /* 天真实现（split("::") 取末段）会得到 "name"，与渲染的 handle id 不符。 */
+    expect(handleIdForIoKey(map, "7::widget::weird::name")).toBe(map["7::widget::weird::name"]!.name);
+  });
+
+  it("查不到（条目已移除 / io 未就绪）回 null，调用方据此不画线", () => {
+    expect(handleIdForIoKey(map, "404::widget::nope")).toBeNull();
+    expect(handleIdForIoKey(map, null)).toBeNull();
+    expect(handleIdForIoKey({}, "1512::widget::value")).toBeNull();
+  });
+
+  it("逆向：handle id + 节点 id → ioKey", () => {
+    expect(ioKeyForHandle(map, "1512", "value")).toBe("1512::widget::value");
+    expect(ioKeyForHandle(map, "7", "weird::name")).toBe("7::widget::weird::name");
+    /* 节点对不上 / handle 不存在 → null（合法性闸门据此拒绝）。 */
+    expect(ioKeyForHandle(map, "23", "value")).toBeNull();
+    expect(ioKeyForHandle(map, "1512", "nope")).toBeNull();
+    expect(ioKeyForHandle(map, "1512", null)).toBeNull();
+  });
+
+  it("往返自洽：ioKey → handle → ioKey 还原同一个键", () => {
+    for (const ioKey of Object.keys(map)) {
+      const handleId = handleIdForIoKey(map, ioKey)!;
+      expect(ioKeyForHandle(map, map[ioKey]!.nodeId, handleId)).toBe(ioKey);
+    }
   });
 });
