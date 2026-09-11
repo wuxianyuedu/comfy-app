@@ -105,7 +105,10 @@ export async function resolveComfyBase(): Promise<string> {
           logger.info(`[comfyui] Connected to configured instance on :${port} (pid=${lookup.pid})`);
           return _resolvedBase;
         }
-        // 进程在但端口未绑定（仍在启动）——不误连到别的 ComfyUI，返回配置地址。
+        // 进程在但端口未绑定（仍在加载）——先按配置地址返回给调用方试一次；
+        // 探头不要把这次「还在启动」的结论缓存住，否则 ComfyUI 稍后绑定端口 /
+        // 落在偏移端口上时，本进程会一直沿用这个连不上的地址（见
+        // probeComfyUi 的按次探测口径）。
         logger.info(`[comfyui] Configured instance (pid=${lookup.pid}) starting, port not bound yet`);
         return `http://${host}:${configuredPort}`;
       }
@@ -115,18 +118,24 @@ export async function resolveComfyBase(): Promise<string> {
       // 退回端口探测：先试配置端口，再试 +1..+N（下方公共路径）。若配置
       // 端口上有 ComfyUI 响应，几乎总是本实例（另一实例占端口的场景在
       // 查询成功分支已覆盖）。
-      if (lookup.failed) {
-        logger.warn(
-          `[comfyui] Process lookup failed (timeout/busy?) for ${plan.mainPy}, falling back to port probe`,
-        );
-      } else {
-        // 配置的实例确认没有在运行——抛错触发自动启动（executor-ws connect 的 catch）
-        logger.warn(`[comfyui] Configured instance not running: ${plan.mainPy}`);
-        throw new Error("Configured ComfyUI instance is not running");
-      }
+      // 「进程表里查不到配置路径的 main.py」不再抛错，退回端口探测。
+      //
+      // 抛错的本意是「避免误连到别的实例，并触发自动启动」，但判据本身不成立：
+      // Comfy Desktop 的实例由 standalone-env 启动，命令行里没有 `main.py`
+      // （见 status.ts 的同类教训），进程在跑也查不到 —— 于是 `resolveComfyBase`
+      // 直接抛错，`probeComfyUi()` 连一次 HTTP 都没发出去就被 catch 成「不可达」。
+      // 表现就是设置页永远停在「ComfyUI 正在启动…」：端口上明明有实例正常应答
+      // （ISSUE #344）。「实例在不在」由 status.ts 的进程级快照负责，
+      // `resolveComfyBase` 只负责「连得上哪个地址」，不该越权下「没在跑」的结论。
+      logger.warn(
+        lookup.failed
+          ? `[comfyui] Process lookup failed (timeout/busy?) for ${plan.mainPy}, falling back to port probe`
+          : `[comfyui] Configured instance (${plan.mainPy}) not found in process table, falling back to port probe`,
+      );
+    } else {
+      // comfyuiPath 无效（如目录不存在）——退到端口探测
+      logger.warn(`[comfyui] Invalid comfyuiPath, falling back to port probe`);
     }
-    // comfyuiPath 无效（如目录不存在）——退到端口探测
-    logger.warn(`[comfyui] Invalid comfyuiPath, falling back to port probe`);
   }
 
   // Try configured port first
@@ -163,6 +172,41 @@ export async function resolveComfyBase(): Promise<string> {
     `[comfyui] Cannot reach ComfyUI on :${configuredPort} or any of [${Array.from({length: PROBE_RANGE}, (_, i) => configuredPort + i + 1).join(", ")}]`
   );
   return `http://${host}:${configuredPort}`;
+}
+
+/** 端口探测的结果地址，但不写进会话缓存。
+ *
+ * 与 `resolveComfyBase` 的分工：那个是「本次会话连哪个地址」的**粘性**结论
+ * （命中后不再复查，供提交/上传等 mutation 复用）；本函数是**按次**探测，
+ * 只回答「此刻哪个地址应答」，不改变会话结论。
+ *
+ * 状态判定必须走这条：`getComfyUiStatus` 每次轮询都要拿当下的事实，
+ * 若沿用粘性缓存，一次「进程在但端口未绑定」的探测会把配置地址钉在缓存里，
+ * ComfyUI 随后就绪（或落在偏移端口）时仍被当成不可达 —— 设置页的「正在启动…」
+ * 就再也不会翻成「运行中」（ISSUE #344）。*/
+export async function probeComfyBase(): Promise<string | null> {
+  const cached = _resolvedBase;
+  try {
+    const base = await resolveComfyBase();
+    return await probeBaseOnce(base);
+  } finally {
+    /* 还原会话缓存：按次探测不得污染「本次会话连哪个地址」的粘性结论。
+     * 探测本身已经写入了 `_resolvedBase`（resolveComfyBase 的既有行为），
+     * 这里回滚成探测前的值。 */
+    _resolvedBase = cached;
+  }
+}
+
+/** 对指定地址各发一次 `/system_stats`，通了返回该地址。 */
+async function probeBaseOnce(base: string): Promise<string | null> {
+  try {
+    const r = await fetch(`${base}/system_stats`, {
+      signal: AbortSignal.timeout(1500),
+    });
+    return r.ok ? base : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

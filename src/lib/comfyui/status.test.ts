@@ -32,6 +32,7 @@ import {
   launcherCommandCandidates,
   readRegisteredLauncher,
   COMFY_SNAPSHOT_TTL_MS,
+  COMFY_UNBOUND_PORT_TTL_MS,
 } from "./status";
 import { getSettingsSync } from "../app-settings";
 import { resolveComfyLaunchPlan } from "./launch-path";
@@ -140,11 +141,28 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
 
 describe("快照缓存 — 便宜但不失时效", () => {
   it("TTL 内复用同一结果，不在途重复查进程表", async () => {
+    // 已绑定端口的「在跑」结论才允许缓存：它不会在下一秒变成别的结论。
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: 1, failed: false });
+    vi.mocked(findPidListeningPort).mockResolvedValue(8188);
     await getComfyRuntimeSnapshot({ force: true });
     const calls = vi.mocked(findPidForMainPyDetailed).mock.calls.length;
     await getComfyRuntimeSnapshot();
     expect(vi.mocked(findPidForMainPyDetailed).mock.calls.length).toBe(calls);
+  });
+
+  it("「进程在但端口未绑定」的快照不缓存：状态行必须能立刻翻成「运行中」", async () => {
+    // 这条对应 ISSUE #344 的「ComfyUI 早就启动了，设置界面还是显示启动中」：
+    // 端口未绑定是「正在启动」的中间态，下一步就是绑定端口 —— 缓存它会
+    // 把状态行按在「启动中」上不动。
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: 1, failed: false });
+    vi.mocked(findPidListeningPort).mockResolvedValue(null);
+    const first = await getComfyRuntimeSnapshot({ force: true });
+    expect(first.running).toBe(true);
+    expect(first.port).toBeNull();
+    // 复取必须重新查事实，而不是沿用「还没有端口」的旧结论。
+    vi.mocked(findPidListeningPort).mockResolvedValue(8189);
+    const second = await getComfyRuntimeSnapshot();
+    expect(second.port).toBe(8189);
   });
 
   it("force 绕过 TTL：外部刚启动的实例立刻能被认出来", async () => {
@@ -158,6 +176,10 @@ describe("快照缓存 — 便宜但不失时效", () => {
 
   it("TTL 很短（秒级）：不会长时间沿用旧结论", () => {
     expect(COMFY_SNAPSHOT_TTL_MS).toBeLessThanOrEqual(3_000);
+  });
+
+  it("「启动中」快照的 TTL 比普通 TTL 更短（不缓存）", () => {
+    expect(COMFY_UNBOUND_PORT_TTL_MS).toBeLessThan(COMFY_SNAPSHOT_TTL_MS);
   });
 });
 
