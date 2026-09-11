@@ -397,6 +397,22 @@ function WorkflowEditorBody({
     return enrichFromViewNodes(scopeDetail?.nodes);
   }, [detail, scopeDetail]);
 
+  /* 富化下发的「原始槽位名」基准（ioKey → pin 名）同步进 IOEdit store。
+   *
+   *  本地 `workflowIO` 里存的是勾选那一刻写进去的显示名，其中一部分是修复前
+   *  固化的机器名（`value_1` / `image`）。判定「本地这一串该不该让位给富化名」
+   *  需要这份基准；缺了它，任何一次写入（切换 seed 的随机值/固定值、改必填、
+   *  改值）都会把旧名字当作作者命名落库，显示名随即退回 `value_1`
+   *  （ISSUE #349 的复现路径）。 */
+  useEffect(() => {
+    const base: Record<string, string> = {};
+    for (const [key, entry] of Object.entries<{ name?: unknown }>(ioDetailMap ?? {})) {
+      const name = entry?.name;
+      if (typeof name === "string" && name) base[key] = name;
+    }
+    ioApi.getState().setAliasBase(base);
+  }, [ioDetailMap, ioApi]);
+
   /* P2: 把 detail 派生的查找上下文同步进 viewer / rgthree store，让
    * getNodeJson/getNodeView/getBypass 读到实时 detail（等价于旧 Context
    * 每次用新 props 渲染）。 */

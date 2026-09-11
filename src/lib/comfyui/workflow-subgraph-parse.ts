@@ -192,6 +192,16 @@ export interface SubgraphGraphResult {
    *  for the caller to assemble boundaryLinks. */
   inputNameByNodeSlot: Record<string, string[]>;
   outputNameByNodeSlot: Record<string, string[]>;
+  /** 子图暴露口 → 作者写在**外层 wrapper** 上的业务名（`label`）。
+   *
+   *  勾选点落在外层封装卡片上时，落库的 `name` 是 wrapper 本层的槽位名；
+   *  ComfyUI 在某些路径上把 `properties.proxyWidgets` 隔离掉
+   *  （`proxyWidgetErrorQuarantine`），顶层富化于是查不到内部「真实的作者名」，
+   *  只剩 ComfyUI 通用翻译（`seed` → `localized: "随机种"`）——作者写的
+   *  `Seed` 就丢在这一层（ISSUE #349：切成随机值/固定值后名字退回 `value_1`）。
+   *  内层视图的 wrapper 边界记录（`-10` 边的源节点）与本层槽位名一对就能
+   *  把作者名捞回来，作为「按 alias 回退取名」的来源下发给顶层富化。 */
+  proxyAuthorLabels: Record<string, string>;
 }
 
 /**
@@ -241,6 +251,37 @@ export function buildSubgraphGraph(
   const connectsFromByNode: Record<string, string> = {};
 
   const { inputNameByNodeSlot, outputNameByNodeSlot } = parseSubgraphSlots(sub);
+
+  /* 子图暴露口 → 作者名（见 SubgraphGraphResult.proxyAuthorLabels 的说明）。
+   *  wrapper 的暴露口在内层表现为「源为 -10 哨兵的入边」，边本身登记着作者
+   *  写在外层卡片的 `label`（`sub.inputs[].label`），源端槽位名就是 wrapper
+   *  本层的槽位名（`value_1`）。两者一对，就能在 proxyWidgets 缺失时仍把作者
+   *  名（`Seed`）交回上层富化。 */
+  const proxyAuthorLabels: Record<string, string> = {};
+  for (const pinRaw of Array.isArray(sub.inputs) ? sub.inputs : []) {
+    const pin = asRecord(pinRaw);
+    if (!pin) continue;
+    const authorLabel = typeof pin.label === "string" ? pin.label.trim() : "";
+    if (!authorLabel) continue;
+    const linkIds = Array.isArray(pin.linkIds)
+      ? pin.linkIds
+      : Array.isArray(pin.links)
+        ? pin.links
+        : pin.link === undefined
+          ? []
+          : [pin.link];
+    /* 哨兵边源端是外层 wrapper，`-10` 入边的 target 才是内层消费节点：
+     *  作者名只有外层 `pin.label` 一处，槽位名取自那个内层节点的暴露槽位
+     *  （wrapper 本层槽位名与它同名）——两者一对，别名之外就有作者名可用。 */
+    for (const lid of linkIds) {
+      const lk = linkById[Number(lid)];
+      /* 只在「源端是外层 wrapper 的哨兵边」上回收作者名。 */
+      if (lk?.src !== "-10") continue;
+      const slotNames: string[] | undefined = inputNameByNodeSlot[lk.targetId];
+      const slotName = slotNames?.[lk.targetSlot];
+      if (slotName) proxyAuthorLabels[slotName] = authorLabel;
+    }
+  }
 
   for (const rn of innerNodes) {
     if (!rn?.id) continue;
@@ -500,6 +541,7 @@ export function buildSubgraphGraph(
      *  they are already final by the time we assemble the result. */
     inputNameByNodeSlot,
     outputNameByNodeSlot,
+    proxyAuthorLabels,
   };
 }
 

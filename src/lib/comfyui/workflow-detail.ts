@@ -585,6 +585,20 @@ export async function buildSubgraphDetail(
      * all live in workflow-subgraph-parse.ts (see module docs there). */
     const { linkById, boundaryLinkInfoById } = parseSubgraphLinks(sub);
     const sg = buildSubgraphGraph(sub, linkById);
+    /* 子图暴露口的作者名（proxyWidgets 被隔离时长名字的来源），随节点下发给
+     *  客户端「就地派生富化」用 —— 顶层富化在这里也在场，直接按
+     *  `节点id::widget::槽位名` 预先打进内层节点的 raw_inputs（见下）。 */
+    for (const n of sg.nodes) {
+      for (const inp of n.raw_inputs ?? []) {
+        const authorLabel = sg.proxyAuthorLabels[inp.name];
+        if (!authorLabel) continue;
+        /* 只对「本层槽位名与作者名不同」的暴露口打标；`field` 用槽位名本身，
+         *  让富化按本层名字回查得中（顶层 `innerInputsById` 的键就是槽位名）。 */
+        if (inp.name === authorLabel) continue;
+        inp.label = authorLabel;
+        inp.proxyField ??= { nodeId: "", field: inp.name, label: authorLabel };
+      }
+    }
     const { boundaryPins, pinIdByLinkId } = parseSubgraphPins(sub);
     const boundaryLinks = buildBoundaryLinks(
       boundaryLinkInfoById,
