@@ -31,11 +31,11 @@ export interface WorkflowEditorTopBarProps {
   forceReloadDetail: () => void;
   setViewJsonOpen: React.Dispatch<React.SetStateAction<boolean>>;
   resetLayout: () => void;
-  /** 对外的「恢复默认参数映射」：清掉当前模式下作者画过的全部连线。 */
+  /** 「恢复默认映射」：清掉当前模式下被覆盖过的落点，全部回到自动判定。 */
   resetParamWiring: () => void;
-  /** 当前模式下是否有作者画过的连线（没有则按钮禁用）。 */
+  /** 当前模式下是否有落点被覆盖过（没有则按钮禁用）。 */
   hasParamWiring: boolean;
-  /** 当前模式（无模式 = 禁止连线，按钮禁用并说明原因）。 */
+  /** 当前模式（无模式时落点覆盖没有归属，按钮禁用并说明原因）。 */
   wiringMode: string | null;
   handleSave: () => void;
   saving: boolean;
@@ -336,10 +336,10 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-gray-200 transition-colors hover:bg-white/10 disabled:opacity-40"
             title={
               !wiringMode
-                ? "该工作流未声明模式，参数映射的连线必须归属一个模式"
+                ? "该工作流未声明模式，参数落点必须归属一个模式"
                 : hasParamWiring
-                  ? "把「对外参数 → 节点端口」的连线全部恢复成自动探测的默认连线"
-                  : "当前模式下没有改过的连线"
+                  ? "把「对外参数 → 节点端口」的落点全部恢复成自动判定的默认落点"
+                  : "当前模式下没有改过的落点"
             }
           >
             ↺ 恢复默认映射

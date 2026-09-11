@@ -7,7 +7,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useNodesState, useEdgesState, useReactFlow,
-  type Connection as ReactFlowConnection, type Node, type Edge,
+  type Node, type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "@/config/custom-nodes";
@@ -42,9 +42,6 @@ import { WorkflowEditorCanvas } from "./WorkflowEditorCanvas";
 import { buildInitialNodes } from "./workflow-editor-build-nodes";
 import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
 import { useParamMapping } from "./hooks/use-param-mapping";
-import { buildParamNodes } from "./workflow-param-nodes";
-import { buildParamEdges } from "./workflow-param-edges";
-import { entryIdFromParamNodeId } from "~/lib/workflow-param-mapping";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
 import { enrichFromViewNodes } from "./io-exposure";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
@@ -456,11 +453,15 @@ function WorkflowEditorBody({
     [detail, scopeDetail, rawMetaById, outSlotNameById, paramMap, onEnterSubgraph, viewHostNodeId]
   );
 
-  /* ── 对外参数映射：画布上的节点与连线 ──
+  /* ── 对外参数落点（纯数据层）──
    *
-   * 连线（`paramMap.source.mode:<模式>`）就是画布上「对外参数节点 → 宿主节点
-   * 端口」的那条线，没有第二套界面。模式取工作流的 defaultMode —— 没有模式
-   * 就没有连线可言（连线归属哪个模式无从判定），此时卡片不渲染端点、拖不出线。
+   * 勾选 IO 只做一件事：把 pin 暴露成「对外参数」（写 workflowIO 落库），
+   * 它以**表单行**的形式出现在「预览 IO」与运行期表单里。画布上不再为它新增
+   * 任何节点或连线 —— 画布只画工作流自身的图（节点 / 备注 / 分组 / 子图边界口）。
+   *
+   * 每个对外参数「落到哪个节点端口」仍然是 `paramMap.source.mode:<模式>` 这张
+   * 按模式的落点表：默认由名字自动判定（提示词 / 尺寸 / 参考图…），运行期严格按
+   * 这张表落值。它只是数据，没有画布呈现 —— 顶栏「恢复默认映射」直接清表。
    * 这些 hook 必须无条件调用（在下方 loading / error 的提前返回之前）。 */
   const wiringMode = detail?.defaultMode ?? null;
   const paramMapping = useParamMapping({
@@ -470,120 +471,23 @@ function WorkflowEditorBody({
     paramMap,
   });
 
-  /* 卡片位置派生自宿主节点当前的画布坐标 —— 作者拖动宿主节点，卡片列跟着走。 */
-  const hostPosById = useMemo(() => {
-    const out: Record<string, { x: number; y: number }> = {};
-    for (const node of graphNodes) out[node.id] = node.position;
-    return out;
-  }, [graphNodes]);
-
-  /* 卡片与连线只在**内容真的变了**时才重建。
-   *
-   * `isManual` / `onReset` 这类回调进入 memo 依赖表会让 memo 形同虚设（外层每次
-   * 渲染都可能给出新身份），而 `initialNodes` 每次渲染换新数组时，React Flow 的
-   * 同步 effect 会跟着每一帧重跑 —— 渲染回路，浏览器里表现为卡死、测试里表现为
-   * 堆爆。这里把「条目标识 + 当前模式 + 解析结果 + 作者画过的线」压成一个签名，
-   * 签名不变就复用上一批对象，签名一变立即重建（回调闭包因此总是新鲜的）。 */
-  const paramSignature = useMemo(
-    () =>
-      JSON.stringify({
-        mode: wiringMode,
-        entries: paramMapping.entries.map((entry) => entry.id),
-        resolved: paramMapping.resolved,
-        manual: paramMapping.mapping.manualByMode?.[wiringMode ?? ""] ?? {},
-      }),
-    [paramMapping.entries, paramMapping.resolved, paramMapping.mapping, wiringMode]
-  );
-  const paramWiring = useMemo(() => {
-    const nodes = buildParamNodes({
-      entries: paramMapping.entries,
-      hostPosById,
-      mode: wiringMode,
-      isManual: paramMapping.isManual,
-      onReset: (entryId: string) => paramMapping.resetToAuto(entryId),
-    });
-    /* 卡片集合即「哪些对外参数在当前视图里真的有宿主」—— 连线用它当闸门，
-     *  否则子图内部节点的 nodeId 在顶层画布上不存在时会画出一条悬空线（视觉上
-     *  就是图上多出一个没来历的节点）。 */
-    const renderedCardIds = new Set(nodes.map((node) => node.id));
-    return {
-      nodes,
-      edges: buildParamEdges({
-        entries: paramMapping.entries,
-        resolved: paramMapping.resolved,
-        isManual: paramMapping.isManual,
-        renderedCardIds,
-      }),
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 上面的签名即全部内容
-  }, [paramSignature]);
-  const paramNodes = paramWiring.nodes;
-  const paramEdges = paramWiring.edges;
-
-  /* 删除一条映射线 = 该对外参数「在这个模式下断开」。React Flow 的删除手势
-   * 会先把它从本地 edges 拿掉，我们必须同步把状态写回 paramMap，否则下一帧
-   * 同步 effect 又把它画回来（看起来像删不掉）。 */
-  const onEdgesDelete = useCallback(
-    (deleted: Edge[]) => {
-      for (const edge of deleted) {
-        const entryId = entryIdFromParamNodeId(edge.source);
-        if (entryId) paramMapping.connect(entryId, null);
-      }
-    },
-    [paramMapping]
-  );
-
-  /* 在画布上拉一条线：源必须是某张对外参数卡片，目标必须落在宿主节点的某个
-   * 端口上（`targetHandle` 就是 ioKey）。别的连线一律拒绝 —— 画布上的图连线
-   * 由工作流本身决定，作者的手工连线只表达「映射」。 */
-  const onConnect = useCallback(
-    (connection: ReactFlowConnection) => {
-      const entryId = entryIdFromParamNodeId(connection.source);
-      if (!entryId || !connection.targetHandle) return;
-      const entry = paramMapping.entries.find((item) => item.id === entryId);
-      if (entry?.nodeId !== connection.target) return;
-      paramMapping.connect(entryId, connection.targetHandle);
-    },
-    [paramMapping]
-  );
-
-  /* 连线合法性闸门：没有模式时任何连线都不成立（禁止连线），落点也必须是
-   * 该对外参数宿主节点上真实存在的端口。 */
-  const isValidConnection = useCallback(
-    (connection: ReactFlowConnection | Edge) => {
-      if (!wiringMode) return false;
-      const entryId = entryIdFromParamNodeId(connection.source ?? "");
-      const target = "target" in connection ? connection.target : null;
-      const targetHandle = "targetHandle" in connection ? connection.targetHandle : null;
-      if (!entryId || !target || !targetHandle) return false;
-      const entry = paramMapping.entries.find((item) => item.id === entryId);
-      return entry?.nodeId === target && !!workflowIO?.[targetHandle];
-    },
-    [wiringMode, paramMapping.entries, workflowIO]
-  );
-
-  /* useNodesState 只接受挂载首帧的初值；后续同步统一走下面的 effect（初始
-   * 图节点即为这一帧的初值，对外参数卡片等 detail 就绪后才会补上）。 */
+  /* useNodesState 只接受挂载首帧的初值；后续同步统一走下面的 effect。 */
   const [nodes, setNodes, onNodesChange] = useNodesState(graphNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  const initialNodes: Node[] = useMemo(
-    () => [...graphNodes, ...paramNodes],
-    [graphNodes, paramNodes]
-  );
+  /* 画布节点就是工作流图本身 —— 不再叠加任何「勾选才出现」的派生节点。 */
+  const initialNodes: Node[] = graphNodes;
 
   /* Sync nodes/edges when the graph or the mapping changes.  useNodesState only
    * takes its initial value on mount, so when the workflow detail arrives async
    * (or the author edits a wire) we have to push the freshly derived nodes into
    * the flow state ourselves.
    *
-   * 图节点与对外参数卡片一起替换：卡片的位置由宿主节点坐标派生、`data` 里的
-   * 回调每次现算，所以整批换掉即可 —— 位置没变的卡片在 React Flow 眼里仍是
-   * 同一个节点，不会重挂 DOM。 */
+   * 节点整批替换：位置没变的节点在 React Flow 眼里仍是同一个节点，不会重挂 DOM。 */
   useEffect(() => {
     setNodes(initialNodes);
-    setEdges([...buildEdges(scopeDetail, graphNodes, outSlotNameById), ...paramEdges]);
-  }, [initialNodes, graphNodes, paramEdges, scopeDetail, outSlotNameById, setNodes, setEdges]);
+    setEdges(buildEdges(scopeDetail, graphNodes, outSlotNameById));
+  }, [initialNodes, graphNodes, scopeDetail, outSlotNameById, setNodes, setEdges]);
 
 
   /* Fit-to-middle once per workflow/subgraph open. Placed after `nodes`
@@ -812,9 +716,6 @@ function WorkflowEditorBody({
           onMiniMapJump={onMiniMapJump}
           onOpenSettings={() => setCanvasSettingsOpen(true)}
           onEdgeClick={onEdgeClick}
-          onConnect={onConnect}
-          isValidConnection={isValidConnection}
-          onEdgesDelete={onEdgesDelete}
         />
 
         {/* Floating instruction tooltip */}        {/* Floating instruction tooltip */}
