@@ -163,6 +163,18 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
     expect(edges.map((edge) => edge.id)).toEqual(["pe-9|prompt"]);
   });
 
+  it("卡片不存在（宿主节点不在当前视图）时不画线 —— 不产生悬空线头", () => {
+    const edges = buildParamEdges({
+      entries,
+      resolved: resolveMapping(entries, io, null, "T2I"),
+      isManual: () => false,
+      /* 只渲染了 9 号节点的卡片（子图内部节点的 nodeId 在顶层画布上不存在，
+       *  buildParamNodes 会跳过它）——连线必须与卡片同口径。 */
+      renderedCardIds: new Set(["pio:9|prompt"]),
+    });
+    expect(edges.map((edge) => edge.id)).toEqual(["pe-9|prompt"]);
+  });
+
   it("连线可删除 —— 删掉一条线就是「这个模式下断开」", () => {
     const edges = buildParamEdges({
       entries,

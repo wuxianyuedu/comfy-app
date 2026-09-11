@@ -178,6 +178,10 @@ export interface WorkflowIOParam {
    *  分不出三张 LoadImage 里哪张是首帧。本地新勾选的 pin 没有此字段，
    *  服务端下次读取时补上。 */
   classType?: string;
+  /** 宿主（外层封装）节点 id。仅在「下钻到子工作流内部」勾选时写入：此时
+   *  `nodeId` 是子图内部节点 id（`1670`），运行期 comfy-cli 展开后是 `4:1670`
+   *  （宿主 id + 内部 id），两个 id 都存下来才能在运行期确定性还原。 */
+  hostNodeId?: string;
 }
 
 /** A single parameter reference used to toggle IO exposure. */
@@ -187,6 +191,9 @@ export interface IoRef {
   kind: "param" | "widget" | "output";
   direction: "input" | "output";
   label?: string;
+  /** 宿主（外层封装）节点 id：当前视图是子工作流内部时，由画布把「从哪一层
+   *  钻进来」的宿主 id 一并带上，落库后运行期据它还原 `host:inner` 拼接 id。 */
+  hostNodeId?: string;
 }
 
 /** Shared context so every custom node (WorkflowNode / WorkflowSubgraphNode) can read the
@@ -511,6 +518,13 @@ export interface WorkflowNodeData {
    *  When present the card is forced to these dimensions instead of the
    *  content-driven min/max-width layout.  Undefined → content-driven. */
   size?: { w: number; h: number };
+  /** 当前视图的宿主（外层封装）节点 id —— 仅当视图是「下钻后的子工作流内部」
+   *  时由编辑器注入（值 = 进入本层时的 wrapper 节点 id）。
+   *
+   *  本层节点都是子图内部节点（id 形如 `1670`），在顶层画布上不存在；勾选它们
+   *  时 `IoRef.nodeId` 会带上 `hostNodeId`，运行期据此把内部 id 还原成 comfy-cli
+   *  展开后的 `4:1670` 拼接形式。顶层视图不注入（undefined）。 */
+  hostNodeId?: string;
 }
 
 /** Row dimensions used to lay out the target Handles next to each input row. */
@@ -635,5 +649,9 @@ export interface WorkflowSubgraphData {
    *  read for `flags.collapsed` so an imported subgraph that ComfyUI
    *  ships collapsed stays collapsed here too. */
   flags?: Record<string, unknown>;
+  /** 当前视图的宿主（外层封装）节点 id 链 —— 仅当视图是「下钻后的子工作流
+   *  内部」时注入；本卡片自身的暴露口勾选时带着它落库，运行期还原
+   *  comfy-cli 展开后的 `host:inner` 拼接 id（见 IoRef.hostNodeId）。 */
+  hostNodeId?: string;
 }
 

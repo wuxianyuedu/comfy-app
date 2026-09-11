@@ -808,3 +808,40 @@ describe("enrichWorkflowIO — 真实封装节点工作流的端到端取名（I
     expect(io["1512::widget::value_1"]!.type).toBe("INT");
   });
 });
+
+describe("enrichWorkflowIO — hostNodeId 透传", () => {
+  it("子图内部条目的宿主 id 原样往返（GET 重建后仍能拼出运行期 id）", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "1670::widget::value": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "1670",
+            name: "value",
+            hostNodeId: "4",
+          },
+        },
+        {
+          innerInputsById: {
+            "1670": [
+              { name: "value", type: "INT", isConnection: false, widget: { name: "value" }, widgetValue: 1 },
+            ],
+          },
+        }
+      )
+    );
+    const entry = result["1670::widget::value"]!;
+    expect(entry.hostNodeId).toBe("4");
+    expect(entry.type).toBe("INT");
+  });
+
+  it("顶层条目没有宿主 id 时不凭空补一个", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams({
+        "5::widget::width": { direction: "input", kind: "widget", nodeId: "5", name: "width" },
+      })
+    );
+    expect(result["5::widget::width"]!.hostNodeId).toBeUndefined();
+  });
+});

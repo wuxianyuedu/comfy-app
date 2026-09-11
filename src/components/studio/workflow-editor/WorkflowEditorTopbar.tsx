@@ -22,8 +22,10 @@ export interface WorkflowEditorTopBarProps {
   onClose: () => void;
   detail: WorkflowDetail;
   rootWorkflowName: string;
-  subgraphStack: { uid: string; name: string }[];
-  setSubgraphStack: React.Dispatch<React.SetStateAction<{ uid: string; name: string }[]>>;
+  subgraphStack: { uid: string; name: string; nodeId: string }[];
+  setSubgraphStack: React.Dispatch<
+    React.SetStateAction<{ uid: string; name: string; nodeId: string }[]>
+  >;
   fetchDetail: (opts?: { subgraphUid?: string; parentTitle?: string; bust?: boolean }) => Promise<void>;
   onExitSubgraph: () => void;
   forceReloadDetail: () => void;
@@ -247,63 +249,60 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             {debugMode ? "✓ 调试中" : "调试"}
           </button>
           {error && <span className="text-xs text-red-400">{error}</span>}
-          {/* the "编辑 IO" / "预览 IO" affordances are
-           *  scoped to the ROOT workflow only — subgraphs (子工作流) can't
-           *  run independently.  The whole concept of `workflowIO` is a
-           *  contract between this workflow's author and whoever calls
-           *  it (currently the DynamicWorkflowForm generator); a subgraph
-           *  is reached through its parent, so it never needs to publish
-           *  its own IO surface.  Hiding the buttons keeps the toolbar
-           *  honest about what's even meaningful here.  State cleanup
-           *  happens in `onEnterSubgraph` (above) so the buttons
-           *  disappear *before* the subgraph's WorkflowNodes would otherwise
-           *  inherit any leftover `ioEditMode=true` and render stray
-           *  checkboxes. */}
-          {subgraphStack.length === 0 && (
-            <button
-              type="button"
-              onClick={() => setIoEditMode((value) => !value)}
-              className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
-                ioEditMode
-                  ? "border-amber-400/60 bg-amber-400/20 text-amber-100 hover:bg-amber-400/30"
-                  : "border-white/15 bg-white/5 text-gray-200 hover:bg-white/10"
-              }`}
-              title="进入 IO 编辑模式：在每个节点参数前显示勾选框，勾选即把该参数暴露为工作流的外部输入或输出"
-            >
-              {ioEditMode ? "✓ 编辑 IO 中" : "📌 编辑 IO"}
-              {ioEditMode && Object.keys(workflowIO).length > 0 && (
-                <span className="ml-1 rounded-full bg-amber-300/30 px-1.5 text-[11px] font-bold text-amber-50">
-                  {Object.keys(workflowIO).length}
-                </span>
-              )}
-            </button>
-          )}
+          {/* the "编辑 IO" / "预览 IO" affordances are available at BOTH
+           *  levels — the root workflow AND inside a subgraph.
+           *
+           *  子图本身没有独立的 IO 契约（它由父工作流经边界 pin 进入），但**父
+           *  工作流**完全可以把参数暴露在子图内部的节点上（`LoadImage` 的
+           *  `image`、`PrimitiveInt` 的 `value`…）。下钻后仍能勾选，作者才能把
+           *  这类内部参数接进父工作流的对外参数；勾选时画布把「从哪一层钻进来」
+           *  的宿主节点 id 一并带上（`IoRef.hostNodeId`），运行期据此把内部节点
+           *  id 还原成 comfy-cli 展开后的 `宿主id:内部id`。
+           *
+           *  内层视图没有服务端富化结果（子图路由不产出 workflowIO：它按整份
+           *  工作流的下标打键，带进内层会误伤顶层未保存的编辑），IO 预览按当前
+           *  视图节点的原始元数据就地派生（见 `enrichFromViewNodes`），保证两层
+           *  取名口径一致。 */}
+          <button
+            type="button"
+            onClick={() => setIoEditMode((value) => !value)}
+            className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
+              ioEditMode
+                ? "border-amber-400/60 bg-amber-400/20 text-amber-100 hover:bg-amber-400/30"
+                : "border-white/15 bg-white/5 text-gray-200 hover:bg-white/10"
+            }`}
+            title="进入 IO 编辑模式：在每个节点参数前显示勾选框，勾选即把该参数暴露为工作流的外部输入或输出"
+          >
+            {ioEditMode ? "✓ 编辑 IO 中" : "📌 编辑 IO"}
+            {ioEditMode && Object.keys(workflowIO).length > 0 && (
+              <span className="ml-1 rounded-full bg-amber-300/30 px-1.5 text-[11px] font-bold text-amber-50">
+                {Object.keys(workflowIO).length}
+              </span>
+            )}
+          </button>
           {/* IO preview toggle. Sits next to "编辑 IO" so the
            *  author can flip into edit + open the preview in one sweep.
            *  Disabled outside edit mode — preview is meaningful only when
            *  there's an IO selection to render.  When the user opens the
            *  panel but hasn't entered edit mode, auto-flip edit on too,
-           *  so checkboxes remain useful alongside the preview.  Also
-           *  hidden in subgraph view — same rationale as the edit
-           *  toggle: a subgraph has no IO contract to preview. */}
-          {subgraphStack.length === 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                if (!ioEditMode) setIoEditMode(true);
-                setIoPreviewOpen((value) => !value);
-              }}
-              disabled={!ioEditMode && !ioPreviewOpen && Object.keys(workflowIO).length === 0}
-              className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
-                ioPreviewOpen
-                  ? "border-sky-400/60 bg-sky-400/20 text-sky-100 hover:bg-sky-400/30"
-                  : "border-white/15 bg-white/5 text-gray-200 hover:bg-white/10 disabled:opacity-40"
-              }`}
-              title="预览当前勾选的 IO 在最终表单中的样子；预览面板中每个名称都可点击重命名"
-            >
-              {ioPreviewOpen ? "👁 关闭预览" : "👁 预览 IO"}
-            </button>
-          )}
+           *  so checkboxes remain useful alongside the preview.  Both levels
+           *  share this affordance (see the "编辑 IO" comment above). */}
+          <button
+            type="button"
+            onClick={() => {
+              if (!ioEditMode) setIoEditMode(true);
+              setIoPreviewOpen((value) => !value);
+            }}
+            disabled={!ioEditMode && !ioPreviewOpen && Object.keys(workflowIO).length === 0}
+            className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
+              ioPreviewOpen
+                ? "border-sky-400/60 bg-sky-400/20 text-sky-100 hover:bg-sky-400/30"
+                : "border-white/15 bg-white/5 text-gray-200 hover:bg-white/10 disabled:opacity-40"
+            }`}
+            title="预览当前勾选的 IO 在最终表单中的样子；预览面板中每个名称都可点击重命名"
+          >
+            {ioPreviewOpen ? "👁 关闭预览" : "👁 预览 IO"}
+          </button>
           {/* 顶部直达 JSON 源码查看器。复用 WorkflowLibrary
            *  的 SourceModal —— 从缓存里的 disk snapshot 拿 graph/rawJson,
            *  无需再 fetch。打开 modal 前判读 detail 是否已就绪,否则 toast 提醒。 */}

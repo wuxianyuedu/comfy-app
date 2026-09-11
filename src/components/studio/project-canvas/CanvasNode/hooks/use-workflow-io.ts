@@ -124,12 +124,17 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     const t = setTimeout(() => {
       if (!d.workflowId) return;
       setWfIOLoading(true);
-      void vanillaApi.workflow.detail
+      /* `detailFull` 而非 `detail`：运行期表单与画布节点同样要的是**富化后**的
+       *  workflowIO（type / defaultValue / label / nodeTitle / classType 都由
+       *  服务端按 raw_inputs 回查补齐）。`detail` 直读 DB 原始列 —— 那里面只有
+       *  勾选那一刻写入的四个身份字段，type 缺失会让控件退化成单行文本框，
+       *  显示名也停留在机器名（ISSUE #349：编辑器里叫「尾帧图」，运行期还是
+       *  `image`）。两条链路必须吃同一份富化结果，否则又是「改了看着没生效」。 */
+      void vanillaApi.workflow.detailFull
         .query({ id: d.workflowId })
-        .then((dd) => {
-          const tpl = dd.template;
+        .then((tpl) => {
           if (!alive || !tpl) return;
-          setWfIO((tpl.workflowIO as WorkflowIOMap) ?? null);
+          setWfIO(tpl.workflowIO ?? null);
           const paramMap = (tpl.paramMap as Record<string, unknown>) ?? null;
           setWfParamMap(paramMap);
           /* 一并写进节点数据：运行期（use-generate）不能依赖 hook 的异步

@@ -171,11 +171,6 @@ function WorkflowEditorBody({
     },
     [ioApi]
   );
-  const setIoEditMode = useCallback(
-    (v: boolean | ((prev: boolean) => boolean)) =>
-      ioApi.setState((state) => ({ ioEditMode: typeof v === "function" ? v(state.ioEditMode) : v })),
-    [ioApi]
-  );
   const setIoPreviewOpen = useCallback(
     (v: boolean | ((prev: boolean) => boolean)) =>
       ioApi.setState((state) => ({ ioPreviewOpen: typeof v === "function" ? v(state.ioPreviewOpen) : v })),
@@ -193,7 +188,9 @@ function WorkflowEditorBody({
   /* Subgraph navigation stack.  Empty while viewing the top-level workflow.
    *  Each entry is {uid, name} for breadcrumb display; clicking a crumb
    *  pops back to that level. */
-  const [subgraphStack, setSubgraphStack] = useState<{ uid: string; name: string }[]>([]);
+  const [subgraphStack, setSubgraphStack] = useState<
+    { uid: string; name: string; nodeId: string }[]
+  >([]);
   /* The root workflow's display name is captured on the FIRST top-level
    *  fetch and then preserved across subgraph navigation, so the breadcrumb
    *  can always render "<root workflow> / <subgraph 1> / <subgraph 2> …".
@@ -369,8 +366,6 @@ function WorkflowEditorBody({
     setError,
     setParamMap,
     setWorkflowIO,
-    setIoEditMode,
-    setIoPreviewOpen,
     setSubgraphStack,
     setRootWorkflowName,
     setSubgraphLoading,
@@ -424,6 +419,12 @@ function WorkflowEditorBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail, rawMetaById, subgraphRawContext, subgraphStack.length]);
 
+  /* 当前视图的宿主（外层封装）节点 id 链 —— 顶层为空串，下钻后是 `4`（或嵌套
+   *  时的 `4:5`）。本层节点都是子图内部节点（id 形如 `1670`），带上它才能在勾选
+   *  时落库「外层 + 内层」两个 id，运行期确定性还原成 `4:1670`（ISSUE #349 后续：
+   *  不再靠「拿裸 id 扫一遍所有子图定义」兜底）。 */
+  const viewHostNodeId = subgraphStack.at(-1)?.nodeId ?? "";
+
   const graphNodes: Node[] = useMemo(
     () =>
       buildInitialNodes({
@@ -433,9 +434,10 @@ function WorkflowEditorBody({
         outSlotNameById,
         paramMap,
         onEnterSubgraph,
+        hostNodeId: viewHostNodeId || undefined,
       }),
      
-    [detail, scopeDetail, rawMetaById, outSlotNameById, paramMap, onEnterSubgraph]
+    [detail, scopeDetail, rawMetaById, outSlotNameById, paramMap, onEnterSubgraph, viewHostNodeId]
   );
 
   /* ── 对外参数映射：画布上的节点与连线 ──
@@ -484,12 +486,17 @@ function WorkflowEditorBody({
       isManual: paramMapping.isManual,
       onReset: (entryId: string) => paramMapping.resetToAuto(entryId),
     });
+    /* 卡片集合即「哪些对外参数在当前视图里真的有宿主」—— 连线用它当闸门，
+     *  否则子图内部节点的 nodeId 在顶层画布上不存在时会画出一条悬空线（视觉上
+     *  就是图上多出一个没来历的节点）。 */
+    const renderedCardIds = new Set(nodes.map((node) => node.id));
     return {
       nodes,
       edges: buildParamEdges({
         entries: paramMapping.entries,
         resolved: paramMapping.resolved,
         isManual: paramMapping.isManual,
+        renderedCardIds,
       }),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 上面的签名即全部内容

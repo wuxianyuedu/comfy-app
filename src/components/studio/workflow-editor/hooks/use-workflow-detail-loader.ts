@@ -37,9 +37,7 @@ export interface WorkflowDetailLoaderArgs {
       | Record<string, WorkflowIOParam>
       | ((prev: Record<string, WorkflowIOParam>) => Record<string, WorkflowIOParam>)
   ) => void;
-  setIoEditMode: (v: boolean | ((prev: boolean) => boolean)) => void;
-  setIoPreviewOpen: (v: boolean | ((prev: boolean) => boolean)) => void;
-  setSubgraphStack: Dispatch<SetStateAction<{ uid: string; name: string }[]>>;
+  setSubgraphStack: Dispatch<SetStateAction<{ uid: string; name: string; nodeId: string }[]>>;
   setRootWorkflowName: Dispatch<SetStateAction<string>>;
   setSubgraphLoading: Dispatch<SetStateAction<boolean>>;
   setSubgraphRawContext: Dispatch<SetStateAction<{ parentRawJson: unknown; subUid: string } | null>>;
@@ -61,8 +59,6 @@ export function useWorkflowDetailLoader({
   setError,
   setParamMap,
   setWorkflowIO,
-  setIoEditMode,
-  setIoPreviewOpen,
   setSubgraphStack,
   setRootWorkflowName,
   setSubgraphLoading,
@@ -70,14 +66,20 @@ export function useWorkflowDetailLoader({
   setSubgraphError,
 }: WorkflowDetailLoaderArgs) {
   const pushSubgraphStack = useCallback(
-    (uid: string, name: string) => {
-      setSubgraphStack((prev) => [...prev, { uid, name }]);
+    (uid: string, name: string, nodeId: string) => {
+      setSubgraphStack((prev) => [
+        ...prev,
+        /* nodeId 是「外层封装节点 id 的完整链路」，每下钻一层就把本层宿主接在
+         * 末尾：第 1 层是 `4`，第 2 层是 `4:5` —— 与 comfy-cli 展开嵌套子图
+         * 后 `4:5:1670` 的拼接顺序一致，运行期拼上内部节点 id 即得真实节点 id。 */
+        { uid, name, nodeId: [...prev.map((entry) => entry.nodeId), nodeId].filter(Boolean).join(":") },
+      ]);
     },
     [], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const fetchDetail = useCallback(
-    async (opts?: { subgraphUid?: string; parentTitle?: string; bust?: boolean }) => {
+    async (opts?: { subgraphUid?: string; parentTitle?: string; bust?: boolean; hostNodeId?: string }) => {
       const url = opts?.subgraphUid
         ? `/api/workflows/${workflowId}/subgraph?uid=${encodeURIComponent(opts.subgraphUid)}`
         : `/api/workflows/${workflowId}`;
@@ -214,7 +216,7 @@ export function useWorkflowDetailLoader({
             setRootWorkflowName((prev) => prev ?? cached.name ?? "");
           }
           if (opts?.subgraphUid) {
-            pushSubgraphStack(opts.subgraphUid, opts.parentTitle ?? cached.name ?? "子工作流");
+            pushSubgraphStack(opts.subgraphUid, opts.parentTitle ?? cached.name ?? "子工作流", opts.hostNodeId ?? "");
           }
         }
         // Background refresh: ALWAYS commit if it wins the race (it's
@@ -276,7 +278,7 @@ export function useWorkflowDetailLoader({
             setRootWorkflowName((prev) => prev ?? d.name ?? "");
           }
           if (opts?.subgraphUid) {
-            pushSubgraphStack(opts.subgraphUid, opts.parentTitle ?? d.name ?? "子工作流");
+            pushSubgraphStack(opts.subgraphUid, opts.parentTitle ?? d.name ?? "子工作流", opts.hostNodeId ?? "");
           }
         }
       } catch (e: unknown) {
@@ -345,22 +347,15 @@ export function useWorkflowDetailLoader({
    *  canvas panel; clicking expand jumps straight into the inner graph. */
   const onEnterSubgraph = useCallback(
     (nodeId: string, uid: string, parentTitle: string) => {
-      /* a subgraph can't run on its own — it lives
-       *  inside the parent workflow and only takes data in via the
-       *  parent's IO-boundary pin nodes.  Once we drill in, the IO edit
-       *  affordances are meaningless (you can't `run` this subgraph to
-       *  collect outputs the way you can with the root workflow), so we
-       *  tear them down before the new detail arrives.  The toolbar
-       *  buttons are also conditionally hidden (see `isSubgraphView`
-       *  guard below), but flipping the states off here prevents the
-       *  short window where the toolbar still shows the old toggle but
-       *  every WorkflowNode already renders the subgraph view with stale
-       *  `ioEditMode=true` checkboxes dotted across it. */
-      setIoEditMode(false);
-      setIoPreviewOpen(false);
+      /* IO 编辑态**跨层保留**：子图本身没有独立的 IO 契约，但父工作流的对外
+       *  参数完全可能落在子图内部的节点上（`LoadImage.image` / `PrimitiveInt.value`
+       *  …）。下钻后仍能勾选，作者才能把这类内部参数接进父工作流的对外参数；
+       *  勾选时画布带上宿主节点 id（`IoRef.hostNodeId`），运行期据此把内部节点
+       *  id 还原成 comfy-cli 展开后的 `宿主id:内部id`。两个开关都不在这里清掉，
+       *  否则下钻一次就得重新手动打开。 */
       setSubgraphError("");
       setSubgraphLoading(true);
-      setTimeout(() => { void fetchDetail({ subgraphUid: uid, parentTitle }); }, 0);
+      setTimeout(() => { void fetchDetail({ subgraphUid: uid, parentTitle, hostNodeId: nodeId }); }, 0);
     },
     [fetchDetail], // eslint-disable-line react-hooks/exhaustive-deps
   );
