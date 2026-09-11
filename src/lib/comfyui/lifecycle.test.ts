@@ -41,6 +41,8 @@ vi.mock("../log-paths", () => ({
 vi.mock("~/server/lib/logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 import {
+  getComfyUiStatus,
+  resetComfyUiStatus,
   stopComfyUiProcess,
   ensureComfyUiReady,
   clearComfyManualStop,
@@ -268,5 +270,66 @@ describe("关闭流程 — 进程树回收判据", () => {
     const r = await stopComfyUiProcess();
     expect(r.ok).toBe(true);
     expect(r.detail).toContain("未在运行");
+  });
+});
+
+/* ── 状态结论的 TTL 缓存（ISSUE #346）─────────────────────────────────────
+ * 现象：状态行按秒轮询 `setting.comfyStatus`，每次都要重付一遍
+ * 「PowerShell 进程表查询（10s 上限）+ HTTP 探测（1.5s）」——本机实测单次
+ * 10~12s，日志面板里于是堆满同一条 `setting.comfyStatus 10457ms`。
+ *
+ * 契约（两条都要，缺一条就出问题）：
+ *   ① 同一 TTL 窗口内的重复追问复用同一结论（不让轮询反复付秒级探测的成本）；
+ *   ② `starting` / `stopping` 这类**瞬时态**不跟着结论一起缓存，且
+ *      「事实已经/即将变化」的动作会显式失效缓存（否则设置页会在 ComfyUI
+ *      已经起来之后仍显示「启动中…」，见 ISSUE #344）。
+ */
+describe("getComfyUiStatus 的 TTL 缓存（#346）", () => {
+  it("TTL 窗口内的重复查询复用同一结论（对象引用相同 = 没重新判定）", async () => {
+    resetComfyUiStatus();
+    const first = await getComfyUiStatus();
+    expect(await getComfyUiStatus()).toBe(first);
+    expect(await getComfyUiStatus()).toBe(first);
+  });
+
+  it("瞬时态不缓存：starting 变化后立刻反映到结论里", async () => {
+    resetComfyUiStatus();
+    const before = await getComfyUiStatus();
+    expect(before.starting).toBe(false);
+
+    /* 造一个「启动进行中」的窗口：走保活路径 + 进程探测找不到 main.py，
+     * 启动会一直等到 timeoutMs 到点，期间 starting 为真。 */
+    const { getExitPolicy } = await import("../app-settings");
+    const { spawnManaged } = await import("../process-launch");
+    const { resolveComfyLaunchPlan } = await import("./launch-path");
+    vi.mocked(resolveComfyLaunchPlan).mockReturnValue({
+      cmd: "python",
+      baseArgs: ["-s", "/x/main.py"],
+      cwd: "/x",
+      mainPy: "/x/main.py",
+    });
+    vi.mocked(getExitPolicy).mockReturnValue({ exitKillComfyui: false } as never);
+    vi.mocked(spawnManaged).mockReturnValue({
+      child: { pid: 98766 },
+      error: undefined,
+    } as never);
+    vi.mocked(findPidForMainPy).mockResolvedValue(null);
+
+    const pending = ensureComfyUiReady({ manual: true, timeoutMs: 250 });
+    await new Promise((r) => setTimeout(r, 60));
+    expect((await getComfyUiStatus()).starting).toBe(true);
+
+    await pending;
+    expect((await getComfyUiStatus()).starting).toBe(false);
+    vi.mocked(getExitPolicy).mockReturnValue({ exitKillComfyui: true } as never);
+  });
+
+  it("resetComfyUiStatus 后不再复用旧结论（启动/关闭动作会改动事实）", async () => {
+    resetComfyUiStatus();
+    const first = await getComfyUiStatus();
+    expect(await getComfyUiStatus()).toBe(first);
+
+    resetComfyUiStatus();
+    expect(await getComfyUiStatus()).not.toBe(first);
   });
 });
