@@ -29,6 +29,21 @@ export interface ExposedLabelSource {
  *  两处都过一遍 `sanitizeComboLabel`：画布（WorkflowNode /
  *  WorkflowSubgraphNode）渲染 pin 标签时就会剥掉 COMBO 候选串，IO 面板若
  *  用原文，同一个 pin 又会以两种写法出现——本次要消灭的正是这类「对不上」。 */
+/** 本地存的名字是不是「机器生成的原始槽位名」。
+ *
+ *  勾选那一刻会把画布上的显示名写进本地 `label`；修复前某些路径写进去的其实
+ *  就是原始槽位名（封装节点的别名 `value_1`、普通节点的 pin 名 `image`）。
+ *  它只是**显示名**，不是作者的命名 —— 作者手写一个与 pin 名逐字相同的名字
+ *  几乎不可能，判定成本很低。
+ *
+ *  `aliasBase` 是服务端富化（或视图就地派生）下发的「该条目现在的原始槽位名」，
+ *  只有它才是判定基准：本地条目的 `name` 在加载时已被解析成显示名，拿它比对
+ *  会把真名字误判成别名、也会把别名漏判。基准缺失（富化还没到）时一律不判定，
+ *  宁可留着旧值也不误删作者命名。 */
+export function isStaleExposedAlias(label: string | undefined, aliasBase: string | undefined): boolean {
+  return label !== undefined && aliasBase !== undefined && label === aliasBase;
+}
+
 export function resolveExposedLabel(
   local: ExposedLabelSource | undefined | null,
   enriched: WorkflowIOEntry | undefined | null,

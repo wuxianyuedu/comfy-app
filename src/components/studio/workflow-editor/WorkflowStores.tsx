@@ -35,6 +35,7 @@ import type {
   NodeJsonViewerContextValue,
 } from "../workflow-types";
 import type { WorkflowIOModeOverride } from "~/lib/workflow-io-types";
+import { isStaleExposedAlias } from "./io-exposure";
 import { rectToAnchor } from "../workflow-utils";
 import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
 import { patchWorkflowSilently } from "@/lib/workflow-mutations";
@@ -54,10 +55,19 @@ export interface IOEditState {
   ioEditMode: boolean;
   workflowIO: Record<string, WorkflowIOParam>;
   ioPreviewOpen: boolean;
+  /** 服务端富化下发的「该条目现在的原始槽位名」（ioKey → pin 名）。
+   *
+   *  只有它才能判定「本地存的名字是不是一串机器生成的槽位名」——判定基准必须
+   *  来自富化（服务端 / 视图派生的同一份事实源），不能从本地条目推。没有它时
+   *  `name` 会在加载时被解析好的名字覆盖，任何写入都会把旧名字固化回库
+   *  （ISSUE #349 的复现路径）。空表 = 富化还没到，此时不做清理。 */
+  aliasBaseByKey: Record<string, string>;
 }
 export interface IOEditActions {
   setIoEditMode: (on: boolean) => void;
   setIoPreviewOpen: (open: boolean) => void;
+  /** 同步富化下发的槽位名基准（只有内容真的变了才写，避免渲染回路）。 */
+  setAliasBase: (next: Record<string, string>) => void;
   toggleIO: (ref: IoRef) => void;
   setIOLabel: (key: string, label: string) => void;
   toggleIORequired: (key: string) => void;
@@ -85,13 +95,28 @@ export interface IOEditActions {
 export type IOEditStore = IOEditState & IOEditActions;
 
 export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
-  return createStore<IOEditStore>((set) => ({
+  return createStore<IOEditStore>((set, get) => ({
     ioEditMode: false,
     workflowIO: {},
     ioPreviewOpen: false,
+    aliasBaseByKey: {},
 
     setIoEditMode: (on) => set({ ioEditMode: on }),
     setIoPreviewOpen: (open) => set({ ioPreviewOpen: open }),
+
+    setAliasBase: (next) =>
+      set((state) => {
+        const prev = state.aliasBaseByKey;
+        const prevKeys = Object.keys(prev);
+        const nextKeys = Object.keys(next);
+        if (
+          prevKeys.length === nextKeys.length &&
+          nextKeys.every((key) => prev[key] === next[key])
+        ) {
+          return {};
+        }
+        return { aliasBaseByKey: next };
+      }),
 
     toggleIO: (ref) => {
       const key = `${ref.nodeId}::${ref.kind}::${ref.name}`;
@@ -146,6 +171,20 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
       set((state) => {
         const cur = state.workflowIO[key];
         if (!cur || !mode) return {};
+        /* 写这个条目之前先把「存量机器名」清掉。
+         *
+         * 旧版勾选会把画布上的显示名写进本地 label，而修复前某些路径写进去的
+         *  就是原始槽位名（封装节点的别名 `value_1`、普通节点的 pin 名
+         *  `image`）。这串东西由 `resolveExposedLabel` 在**显示**上让位给服务端
+         *  富化名，但本地 label 仍是老值：任何一次写入（切换 seed 的「随机值 /
+         *  固定值」、改必填、改值、拖排序……）都会把老值当作「作者命名」整体
+         *  落库，显示名随即退回 `value_1`（ISSUE #349 的复现路径）。
+         *
+         *  清掉本地 label 后，条目回到「未重命名」语义：显示名继续由富化名提供，
+         *  落库也不再固化那串机器名。真正的作者命名（≠ pin 名）不受影响。 */
+        const aliasBase = get().aliasBaseByKey;
+        const base = aliasBase[key];
+        const staleAlias = cur.label !== undefined && isStaleExposedAlias(cur.label, base);
         const modes: Record<string, WorkflowIOModeOverride> = { ...(cur.modes ?? {}) };
         if (patch === null) {
           if (!(mode in modes)) return {};
@@ -156,7 +195,12 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         /* modes 全空时把字段摘掉，避免往服务端 JSON 里塞一个空对象。 */
         const nextEntry: WorkflowIOParam =
           Object.keys(modes).length > 0 ? { ...cur, modes } : { ...cur, modes: undefined };
-        return { workflowIO: { ...state.workflowIO, [key]: nextEntry } };
+        return {
+          workflowIO: {
+            ...state.workflowIO,
+            [key]: staleAlias ? { ...nextEntry, label: undefined } : nextEntry,
+          },
+        };
       }),
 
     purgeModeOverrides: (codes) => {
