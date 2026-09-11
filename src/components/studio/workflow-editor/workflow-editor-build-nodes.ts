@@ -34,12 +34,16 @@ export interface BuildInitialNodesCtx {
   outSlotNameById: Record<string, string[]>;
   paramMap: Record<string, unknown>;
   onEnterSubgraph?: (id: string, classType: string, title: string) => void;
+  /** 当前视图的宿主（外层封装）节点 id —— 仅当视图是「下钻后的子工作流内部」
+   *  时传入。本层节点都是子图内部节点，勾选时把它一并带上，运行期据此还原
+   *  comfy-cli 展开后的 `host:inner` 拼接 id（见 IoRef.hostNodeId）。 */
+  hostNodeId?: string;
 }
 
 export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   const {
     detail, scopeDetail, rawMetaById, outSlotNameById,
-    paramMap, onEnterSubgraph,
+    paramMap, onEnterSubgraph, hostNodeId,
   } = ctx;
 
     if (!detail) return [];
@@ -123,6 +127,9 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       data: {
         nodeId: n.id,
         classType: n.class_type,
+        /* 下钻到子图内部时，本层节点 id 都是内部 id（`1670`）；带上宿主 id
+         * 让勾选能落库「外层 + 内层」两个 id（见 IoRef.hostNodeId）。 */
+        hostNodeId,
         title: n.title,
         inputs: graphById[n.id]?.inputs ?? {},
         inputSources: buildInputSources(graphById[n.id]?.inputs, nodesById),
@@ -196,6 +203,10 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
           : undefined,
         data: {
           nodeId: n.id,
+          /* 本层若是「子图内部的子图」，本卡片自身就是下一层的宿主，其内部
+           *  勾选由下一层的 hostNodeId 表达；本层卡片的暴露口（boundary pin）
+           *  仍属于当前视图，故沿用当前视图的 hostNodeId。 */
+          hostNodeId,
           title: friendlyNodeTitle(n.class_type, n.title, "zh"),
           uid: n.class_type.slice(0, 8),
           inputs: n.raw_inputs ?? [],

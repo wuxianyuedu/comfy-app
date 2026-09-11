@@ -13,6 +13,7 @@
  * (see src/app/api/workflows/[id]/route.ts → "workflowIO ENRICHMENT").
  */
 
+import { runtimeNodeId } from "~/lib/workflow-param-mapping";
 import {
   collectModeCodes,
   isVisibleInMode,
@@ -444,7 +445,9 @@ export function toWorkflowInputsPayload(
     // 所以这里无需担心把无意义的 link 默认值发出去。
     const value = values[entry.ioKey];
     if (value === undefined || value === "") continue;
-    payload.push({ nodeId: entry.nodeId, name: entry.name, value: value });
+    /* 运行期节点 id：子图内部勾选的条目把落库的宿主 id 拼成 comfy-cli 展开后的
+     * `host:inner` 形式（见 runtimeNodeId），顶层勾选原样下发。 */
+    payload.push({ nodeId: runtimeNodeId(entry), name: entry.name, value: value });
   }
   return payload;
 }
