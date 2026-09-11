@@ -327,11 +327,12 @@ export function ProjectOutputs() {
       {/* ── Metadata drawer ── */}
       {selected && (
         <>
+          {/* 遮罩 + 抽屉都从标题行下方起：顶部让出应用页签栏（ISSUE #310） */}
           <div
-            className="fixed inset-0 z-80 bg-black/50"
+            className="top-title-bar fixed right-0 bottom-0 left-0 z-80 bg-black/50"
             onClick={() => setSelectedId(null)}
           />
-          <aside className="fixed top-0 right-0 z-90 flex h-full w-[380px] max-w-[90vw] flex-col overflow-hidden border-l border-white/10 bg-(--color-node) shadow-2xl">
+          <aside className="top-title-bar fixed right-0 bottom-0 z-90 flex w-[380px] max-w-[90vw] flex-col overflow-hidden border-l border-white/10 bg-(--color-node) shadow-2xl">
             {/* head */}
             <div className="flex items-center justify-between border-b border-white/6 px-5 py-3">
               <div className="flex items-center gap-2">

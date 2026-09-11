@@ -13,6 +13,10 @@
  *  - **浏览器 / dev**：窗口由系统浏览器提供，没有原生标题栏可让位，
  *    退回「应用内页签栏」，保留原有行为与观感。
  *
+ * 两种形态共用同一个高度量 `TITLE_BAR_HEIGHT_CLASS`（`h-title-bar` ←
+ * `--spacing-title-bar`）：全屏视图层按 `top-title-bar` 让位，页签栏高度必须
+ * 与它同源，否则让位量与实际高度对不上（多留空白或盖住一条）。
+ *
  * 关键取舍：
  *  - 主应用内容（children）与已打开的 ComfyUI iframe 都**始终挂载**，
  *    用 CSS 显隐切换，而不是条件卸载——这样切页签不会丢 workspace 的
@@ -33,6 +37,7 @@ import {
 } from "~/lib/shell-tabs-store";
 import { isDesktopShell } from "~/lib/desktop-shell-client";
 import { shouldUseTitleBarTabs } from "~/lib/title-bar-derive";
+import { TITLE_BAR_HEIGHT_CLASS } from "~/lib/full-screen-layer";
 import { TitleBarTabs } from "./TitleBarTabs";
 
 interface ShellTabsProps {
@@ -104,7 +109,7 @@ function InAppTabStrip({
     <div
       role="tablist"
       aria-label="应用页签"
-      className="flex h-10 shrink-0 items-stretch border-b border-(--color-border-subtle) bg-(--color-subtle)/40"
+      className={`flex ${TITLE_BAR_HEIGHT_CLASS} shrink-0 items-stretch border-b border-(--color-border-subtle) bg-(--color-subtle)/40`}
     >
       {tabs.map((tab) => (
         <TabButton
@@ -138,7 +143,7 @@ export function ShellTabs({ children }: ShellTabsProps) {
   const useTitleBar = shouldUseTitleBarTabs(inShell);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-(--color-canvas) text-(--color-ink) pb-6">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-(--color-canvas) pb-6 text-(--color-ink)">
       {useTitleBar ? (
         <TitleBarTabs
           tabs={tabs}

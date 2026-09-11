@@ -66,9 +66,9 @@ test.describe("登录链路 @critical", () => {
     // 切到注册模式：出现昵称字段、提交按钮变为「创建并登录」
     await page.getByRole("button", { name: "创建账号" }).click();
     await expect(page.getByText("昵称（可选）")).toBeVisible();
-    await expect(
-      page.locator('form button[type="submit"]'),
-    ).toHaveText("创建并登录");
+    await expect(page.locator('form button[type="submit"]')).toHaveText(
+      "创建并登录",
+    );
 
     await page.getByPlaceholder("name@example.com").fill("e2e@example.com");
     await page.locator('input[type="password"]').fill("e2e-password-123");
@@ -83,9 +83,14 @@ test.describe("登录链路 @critical", () => {
           const url = page.url();
           if (!url.endsWith("/login")) return "navigated";
           const body = await page.locator("body").innerText();
-          return /提交中|加载中|请稍候|创建并登录/.test(body) ? "submitted" : "idle";
+          return /提交中|加载中|请稍候|创建并登录/.test(body)
+            ? "submitted"
+            : "idle";
         },
-        { timeout: 15_000, message: "点击提交后页面没有任何推进（表单未接通）" },
+        {
+          timeout: 15_000,
+          message: "点击提交后页面没有任何推进（表单未接通）",
+        },
       )
       .not.toBe("idle");
   });
@@ -118,9 +123,7 @@ test.describe("工作区链路 @critical", () => {
     await gotoWorkspaceView(page, "流程");
 
     // 工作流库页头标题 + 导入入口（导入是对外可见的主要动作）
-    await expect(
-      page.getByRole("heading", { name: "工作流库" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "工作流库" })).toBeVisible();
     await expect(
       page.getByRole("button", { name: /导入工作流/ }),
     ).toBeVisible();
@@ -244,5 +247,49 @@ test.describe("工作台概览 @critical", () => {
     await expect(
       page.getByRole("heading", { name: "灵感从这里开始" }),
     ).toBeVisible();
+  });
+});
+
+test.describe("应用页签与全屏视图 @critical", () => {
+  /**
+   * ISSUE #310 回归：应用级页签搬到窗口标题行后，应用内的「全屏视图」
+   * （设置、工作流编辑器、消息中心…）仍按 `fixed inset-0` 铺满整个视口，
+   * 把标题行里的页签整条盖住 —— 用户打开这些视图后就再也看不到页签。
+   *
+   * 这里在浏览器形态（`InAppTabStrip`，无原生标题行可让位）下断言：
+   * 打开设置后，页签栏仍在视口内可见、且未被设置层覆盖。
+   */
+  test("@critical 打开设置后应用页签仍可见可点", async ({ page }) => {
+    await stubBackend(page);
+    await page.goto("/workspace");
+
+    const tablist = page.getByRole("tablist", { name: "应用页签" });
+    await expect(tablist).toBeVisible();
+
+    // 打开设置（overlay 形态，不卸载 workspace 组件树）。
+    // 设置入口是 nav 底部的图标按钮，只有 title="设置"。
+    await page.getByTitle("设置").first().click();
+    // 设置 overlay 是 dynamic import + 首屏 loading，给它更宽的等待窗口。
+    await expect(page.getByRole("heading", { name: "设置" })).toBeVisible({
+      timeout: 20_000,
+    });
+
+    // 关键断言：页签栏仍在、且没有被设置层盖住（顶部元素仍是页签）。
+    await expect(tablist).toBeVisible();
+    const tabBox = await tablist.boundingBox();
+    expect(tabBox).not.toBeNull();
+    const box = tabBox ?? { x: 0, y: 0, width: 0, height: 0 };
+    expect(box.height).toBeGreaterThan(0);
+
+    // 点顶部中心位置，落到的元素必须仍在页签栏内 —— 若设置层盖住了标题行，
+    // elementFromPoint 会返回设置层的子节点。
+    const hitTest = await page.evaluate(
+      ({ x, y }) => {
+        const el = document.elementFromPoint(x, y);
+        return el ? Boolean(el.closest('[role="tablist"]')) : false;
+      },
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+    );
+    expect(hitTest).toBe(true);
   });
 });

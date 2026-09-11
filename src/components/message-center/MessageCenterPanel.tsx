@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { useMessageCenterStore } from "./message-center-store";
+import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
 
 const KIND_META: Record<
   string,
@@ -81,8 +82,9 @@ export function MessageCenterPanel() {
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[10020] flex flex-col bg-[#0a0a0f]/92 backdrop-blur-md"
+    <FullScreenLayer
+      zClass="z-[10020]"
+      className="flex flex-col bg-[#0a0a0f]/92 backdrop-blur-md"
       role="dialog"
       aria-modal="true"
       aria-label="消息中心"
@@ -207,6 +209,6 @@ export function MessageCenterPanel() {
           关闭 (Esc)
         </button>
       </footer>
-    </div>
+    </FullScreenLayer>
   );
 }
