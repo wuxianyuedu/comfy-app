@@ -92,8 +92,56 @@ export const createTRPCRouter = t.router;
  * 面板可见日志只在「出问题」时才写：调用失败或耗时超过阈值视为问题。
  * 正常成功的调用仅走 pino `logger.debug`（落在 nextjs 文件日志，方便诊断），
  * 不写入面板可见的 app-runtime 通道，避免每条 query/mutation 都在面板累积成几千条噪音。
+ *
+ * ── 慢查询按「路径 + 时间桶」聚合（ISSUE #346）────────────────────────
+ * 慢查询 warn 本身是必要的出口（「有问题的 query」唯一的面板出口，见规范 07
+ * §7.13），但同一个查询在每一轮轮询里都慢时，每次都会写一条**内容完全相同**的
+ * 行：面板上只剩满屏 `setting.comfyStatus 10457ms`，不仅刷屏，还把真正新增的
+ * 业务日志挤出视野，用户读到的信息量是零。
+ *
+ * 同一路径在同一时间桶内只写**首条**，其余累计条数；桶满后写一条带 `×N` 的
+ * 汇总行。这样「持续慢」从 N 条噪音压缩成 2 条可读记录：一条首次发生的时刻 +
+ * 一条「发生了多少次」。
  */
 const SLOW_QUERY_THRESHOLD_MS = 1000;
+
+/** 聚合窗口：同一 (路径, 类型) 在窗口内的后续慢查询只累加计数，不重复写行。 */
+const SLOW_LOG_COALESCE_MS = 60_000;
+
+type SlowBucket = { at: number; count: number };
+
+const G_KEY = "__trpcSlowQueryBuckets_v1";
+const buckets = (() => {
+  const g = globalThis as unknown as Record<string, Map<string, SlowBucket> | undefined>;
+  g[G_KEY] ??= new Map<string, SlowBucket>();
+  return g[G_KEY];
+})();
+
+/** 记录一次慢查询；返回需要在面板写的行（不写时返回 null）。 */
+export function recordSlowQuery(
+  path: string,
+  durationMs: number,
+  type: string,
+  nowMs: number = Date.now(),
+): string | null {
+  const key = `${type}:${path}`;
+  const bucket = buckets.get(key);
+  if (bucket && nowMs - bucket.at < SLOW_LOG_COALESCE_MS) {
+    bucket.count += 1;
+    return null;
+  }
+  const text =
+    bucket && bucket.count > 1
+      ? `${path} ${durationMs}ms（近 ${Math.round(SLOW_LOG_COALESCE_MS / 1000)}s 内共 ${bucket.count} 次）`
+      : `${path} ${durationMs}ms`;
+  buckets.set(key, { at: nowMs, count: 1 });
+  return text;
+}
+
+/** 测试辅助：清空慢查询聚合桶（跨用例共享 globalThis，必须显式重置）。 */
+export function resetSlowQueryBuckets(): void {
+  buckets.clear();
+}
 
 const timingMiddleware = t.middleware(async ({ next, path, type }) => {
   const start = Date.now();
@@ -107,7 +155,8 @@ const timingMiddleware = t.middleware(async ({ next, path, type }) => {
     logger.debug({ path, durationMs, type }, "trpc_timing");
     // 仅当调用明显变慢（预期外的慢）才在面板给一条 warn，正常调用不打扰用户。
     if (durationMs >= SLOW_QUERY_THRESHOLD_MS) {
-      trpcRuntimeLog.warn(`${path} ${durationMs}ms`, { type });
+      const text = recordSlowQuery(path, durationMs, type);
+      if (text) trpcRuntimeLog.warn(text, { type });
     }
     return result;
   } catch (cause) {

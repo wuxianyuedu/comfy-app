@@ -211,6 +211,7 @@ export async function stopComfyUiProcess(): Promise<{ ok: boolean; detail: strin
   const outcome = decideStopOutcome(stopProbes);
   // 进程树刚被改动过：快照必须失效，否则状态行会继续沿用关闭前的结论。
   resetComfyRuntimeSnapshot();
+  resetComfyUiStatus();
   if (outcome.ok) {
     appendRuntimeLog("[stop] ComfyUI 已关闭");
     // 非 bound（keepAlive / 接管场景）没有 child.on("exit") 会落会话结束
@@ -269,6 +270,32 @@ function isTerminalAutoStartFailure(detail: string): boolean {
   return /启动失败|立即退出|未配置|未开启自动启动|手动关闭/.test(detail);
 }
 
+/** 状态结论的缓存时长：探测本身是秒级的（进程表查询 10s 上限 + HTTP 1.5s），
+ *  比轮询间隔还长；缓存只为吸收「轮询 / 连点」的重复探测，不做长 TTL——
+ *  外部实例刚起来时最多等这么久被认出来。 */
+export const COMFY_STATUS_TTL_MS = 10_000;
+
+type StatusCacheGlobal = {
+  entry?: { at: number; status: ComfyUiStatus };
+  inflight?: Promise<ComfyUiStatus>;
+};
+
+const STATUS_CACHE_KEY = "__comfyUiStatusCache_v1";
+
+function statusCache(): StatusCacheGlobal {
+  const g = globalThis as unknown as Record<string, StatusCacheGlobal | undefined>;
+  const st = g[STATUS_CACHE_KEY] ?? {};
+  g[STATUS_CACHE_KEY] = st;
+  return st;
+}
+
+/** 丢掉状态结论缓存：进程树刚被启动 / 关闭动作改动过，下一问必须重取事实。 */
+export function resetComfyUiStatus(): void {
+  const cs = statusCache();
+  cs.entry = undefined;
+  cs.inflight = undefined;
+}
+
 /**
  * 设置页状态：进程级快照（优先）+ HTTP 探测（判定「能不能立刻用」）合并成一条结论。
  *
@@ -283,7 +310,48 @@ function isTerminalAutoStartFailure(detail: string): boolean {
  * 「未运行」的结论，而是把 `probing` 置真：宁可多显示一次「检测中…」，也不要
  * 把正在启动的实例误报成未运行（这正是用户看到的状态来回跳）。
  */
-export async function getComfyUiStatus(): Promise<ComfyUiStatus> {
+export async function getComfyUiStatus(
+  opts: { force?: boolean } = {},
+): Promise<ComfyUiStatus> {
+  /* TTL 缓存 + 在途去重：状态行按秒轮询，每次轮询都重付一遍
+   * 「PowerShell 进程表查询 + HTTP 探测」在本机要十几秒（ISSUE #346 的
+   * `setting.comfyStatus 10457ms` 就是它），既让状态行刷新慢到看不出变化，
+   * 也让每次慢查询都在日志面板留一条 warn 刷屏。
+   *
+   * 缓存的是**合并后的结论**而不是某一路事实：状态行显示的就是这条结论，
+   * 缓存它就等于「同一个 TTL 窗口内只做一次判定」。
+   * 启动 / 关闭 / 手动刷新等「事实即将或已经变化」的动作会先
+   * `resetComfyUiStatus()`，不会读到旧结论。 */
+  const cs = statusCache();
+  const cached = cs.entry;
+  if (!opts.force && cached && Date.now() - cached.at < COMFY_STATUS_TTL_MS) {
+    /* `starting` / `stopping` **不缓存**：它们是进程内计时器（启动单飞锁、
+     * 关闭窗口）驱动的**瞬时**态，会独立于探测结果变化。把「启动中」缓存
+     * 十几秒，设置页会在 ComfyUI 已经起来之后仍显示「启动中…」——这正是
+     * ISSUE #344 的现象。缓存只覆盖探测出来的那部分事实。 */
+    return withTransientFlags(cached.status);
+  }
+  /* 在途去重：并发查询（tRPC 批处理 / 连点刷新）共享同一次判定，
+   * force 也一样——「强制」的语义是「不吃已有结论」，不是「再起一次重复探测」。 */
+  if (cs.inflight) return cs.inflight;
+  const task = computeComfyUiStatus().then((status) => {
+    cs.entry = { at: Date.now(), status };
+    cs.inflight = undefined;
+    return status;
+  });
+  cs.inflight = task;
+  return task;
+}
+
+/** 把瞬时态（starting / stopping）换成「此刻」的值，其余沿用缓存的探测结论。 */
+function withTransientFlags(status: ComfyUiStatus): ComfyUiStatus {
+  const starting = isComfyStarting();
+  const stopping = isComfyStopping();
+  if (status.starting === starting && status.stopping === stopping) return status;
+  return { ...status, starting, stopping };
+}
+
+async function computeComfyUiStatus(): Promise<ComfyUiStatus> {
   const starting = isComfyStarting();
   const stopping = isComfyStopping();
   const snap = await getComfyRuntimeSnapshot();
@@ -374,8 +442,14 @@ function appendRuntimeLog(line: string): void {
  * 启动的 `[spawn]`/`[out]` 行接在上次启动结尾后面，日志面板里难以分辨
  * 会话边界。此函数用 box 字符 + ANSI 亮色（面板解析后渲染成高亮）划出
  * 清晰的会话分隔线。
+ *
+ * 横幅正文**不再自带时刻**：此前标题里再写一遍时间（形如
+ * `▶ ComfyUI 启动会话  <日期 时刻>`），与紧随其后的行首时刻只差 1 秒，
+ * 用户把两条相似时刻读成一个，于是「ComfyUI 明明起来并写了新行，看着却像
+ * 没有新增」（ISSUE #346 的同源困惑）。时刻只留在每条行首
+ * （`appendRuntimeLog` 的统一口径），横幅只负责划边界。
  * @param kind start（绿）= 新会话开始；end（黄）= 会话结束
- * @param title 横幅中间的信息行（含时间戳/exit code 等）
+ * @param title 横幅中间的信息行（会话说明 / exit code 等，不含时刻）
  */
 function appendSessionBanner(kind: "start" | "end", title: string): void {
   try {
@@ -417,7 +491,10 @@ export async function ensureComfyUiReady(
 
   // 用户明确要求拉起 → 状态快照必然过期（进程树即将变化），先失效，
   // 让紧随其后的状态查询看到启动后的新事实而不是旧结论。
-  if (opts.manual) resetComfyRuntimeSnapshot();
+  if (opts.manual) {
+    resetComfyRuntimeSnapshot();
+    resetComfyUiStatus();
+  }
 
   // 快路径：已经在运行（探测可能有端口偏移，返回真实 base）
   const upBase = await probeComfyUi();
@@ -520,7 +597,7 @@ export async function ensureComfyUiReady(
     const keepAlive = resolveLaunchPolicy(getExitPolicy().exitKillComfyui) === "keepAlive";
     // 每次启动先在日志里落一条明显的会话分隔横幅（ANSI 亮绿），
     // 让日志面板能一眼分清「上次启动的结尾」和「这次启动的开头」。
-    appendSessionBanner("start", `▶ ComfyUI 启动会话  ${localTimestamp()}`);
+    appendSessionBanner("start", "▶ ComfyUI 启动会话");
     note(`ComfyUI 未运行，按配置路径启动：${plan.cmd} ${args.join(" ")}${keepAlive ? "（保活模式：应用退出后不关闭）" : ""}`);
 
     const deadline = opts.timeoutMs != null ? Date.now() + opts.timeoutMs : null;
