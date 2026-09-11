@@ -17,6 +17,7 @@ import {
   autoMapEntries,
   buildParamEntries,
   buildSourceOverrides,
+  manualTargetFor,
   parseParamMapping,
   resolveMapping,
   serializeParamMapping,
@@ -72,11 +73,13 @@ export function useParamMapping({
   const entries = useMemo(() => buildParamEntries(io), [io]);
   const auto = useMemo(() => autoMapEntries(entries, io), [entries, io]);
 
-  const manualForMode = useMemo(
+  /* 通用层与按模式层分别合并（键空间都是 entryId → 目标/模式表），
+   *  本地 overlay 覆盖已落库的那一份。 */
+  const manualMerged = useMemo(
     () => ({ ...(persisted.manual ?? {}), ...(overlay.manual ?? {}) }),
     [persisted, overlay]
   );
-  const manualByModeForMode = useMemo(
+  const manualByModeMerged = useMemo(
     () => ({
       ...(persisted.manualByMode ?? {}),
       ...(overlay.manualByMode ?? {}),
@@ -86,11 +89,11 @@ export function useParamMapping({
 
   const merged = useMemo<ParamMapping>(
     () => ({
-      manual: manualForMode,
-      manualByMode: manualByModeForMode,
+      manual: manualMerged,
+      manualByMode: manualByModeMerged,
       labels: { ...(persisted.labels ?? {}), ...(overlay.labels ?? {}) },
     }),
-    [manualForMode, manualByModeForMode, persisted, overlay]
+    [manualMerged, manualByModeMerged, persisted, overlay]
   );
 
   const resolved = useMemo(
@@ -99,11 +102,8 @@ export function useParamMapping({
   );
 
   const isManual = useCallback(
-    (id: string) => {
-      if (mode && manualByModeForMode[mode] && id in manualByModeForMode[mode]) return true;
-      return id in manualForMode;
-    },
-    [manualForMode, manualByModeForMode, mode]
+    (id: string) => manualTargetFor(merged, id, mode ?? null) !== undefined,
+    [merged, mode]
   );
 
   /** 写入一个手工线（带模式时只覆盖该模式）。 */
@@ -113,8 +113,9 @@ export function useParamMapping({
         if (!mode) {
           return { ...prev, manual: { ...(prev.manual ?? {}), [id]: ioKey } };
         }
+        /* 按模式层：`{ [entryId]: { [mode]: ioKey } }`（与落库形状同构）。 */
         const byMode = { ...(prev.manualByMode ?? {}) };
-        byMode[mode] = { ...(byMode[mode] ?? {}), [id]: ioKey };
+        byMode[id] = { ...(byMode[id] ?? {}), [mode]: ioKey };
         return { ...prev, manualByMode: byMode };
       });
     },
@@ -130,9 +131,10 @@ export function useParamMapping({
           return { ...prev, manual };
         }
         const byMode = { ...(prev.manualByMode ?? {}) };
-        const next = { ...(byMode[mode] ?? {}) };
-        delete next[id];
-        byMode[mode] = next;
+        const next = { ...(byMode[id] ?? {}) };
+        delete next[mode];
+        if (Object.keys(next).length > 0) byMode[id] = next;
+        else delete byMode[id];
         return { ...prev, manualByMode: byMode };
       });
     },
