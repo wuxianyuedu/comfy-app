@@ -9,11 +9,16 @@ import {
   isRoutineRpcTimingLog,
   isRoutineRpcTimingLine,
   parseFileLogs,
-  appendSorted,
+  mergeTimeline,
+  dedupeRepeats,
+  selectPageLogs,
+  selectNewLogCount,
+  selectShouldPinToLatest,
+  MAX_LOG_ENTRIES,
+  LOG_PAGE_SIZE,
   captureLocation,
 } from "./log-store";
 import type { LogEntry } from "./log-store";
-import { selectNewLogCount } from "./LogProvider";
 
 /* ── 测试夹具 ─────────────────────────────────────────────── */
 
@@ -39,15 +44,39 @@ function resetStore() {
     logs: [],
     filteredLogs: [],
     filter: "all",
+    origin: "all",
     search: "",
     isOpen: false,
     counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
     sessionStart: null,
+    page: 1,
+    revision: 0,
+    viewRevision: 0,
+    viewLength: 0,
   });
+  /* seq 计数器跨用例共享且单调递增，测试之间不重置：条目 id 由它派生，
+   * 重置会导致不同用例造出同名条目（时间线去重会误判成重复行）。 */
 }
 
 function idsOf(entries: LogEntry[]): (string | undefined)[] {
   return entries.map((e) => e.id);
+}
+
+/**
+ * 「历史页有 N 条新日志」的当前值。
+ * `autoScroll` 不在 store 里（它是面板的滚动状态），由用例显式传入——
+ * 与 LogPanel 的调用方式一致（面板把两者组合后交给 selectNewLogCount）。
+ */
+function newCount(page: number, autoScroll: boolean): number {
+  const s = useLogStore.getState();
+  return selectNewLogCount({
+    revision: s.revision,
+    viewRevision: s.viewRevision,
+    viewLength: s.viewLength,
+    filteredLogs: s.filteredLogs,
+    page,
+    autoScroll,
+  });
 }
 
 /** 造一条「时刻可控」的日志行（会话边界用例都按 time 判定）。 */
@@ -222,40 +251,36 @@ describe("setSessionStart 收拢迟到的时间线", () => {
   });
 });
 
-/* ── MAX_LOG_ENTRIES 上限裁剪 ─────────────────────────────── */
+/* ── MAX_LOG_ENTRIES 上限裁剪（只裁最旧的，且裁的是「最旧」不是「最早到达」）── */
 
 describe("MAX_LOG_ENTRIES 上限裁剪", () => {
-  it("批量追加超过 2000 条时最旧的日志被挤出", () => {
+  it("批量追加超过上限时最旧的日志被挤出，最新的一定留着", () => {
     /* 夹具的 seq 跨用例共享且单调递增：先造 1995 条「旧」的、再造 10 条
-     * 「新」的，两批的 seq 天然有序，不依赖 setState 的先后。 */
+     * 「新」的，两批的时间戳与 seq 都天然有序。 */
     const baseSeq = seq;
     const oldLogs: LogEntry[] = Array.from({ length: 1995 }, (_, i) =>
-      makeEntry({ id: `old-${i}`, message: `old-${i}`, seq: baseSeq + 1 + i }),
+      makeEntry({ id: `old-${i}`, message: `old-${i}`, time: 1_000 + i, seq: baseSeq + 1 + i }),
     );
     seq = baseSeq + 1995;
     useLogStore.setState({ logs: oldLogs });
     const fresh: LogEntry[] = Array.from({ length: 10 }, (_, i) =>
-      makeEntry({ id: `new-${i}`, message: `new-${i}`, seq: seq + 1 + i }),
+      makeEntry({ id: `new-${i}`, message: `new-${i}`, time: 10_000 + i, seq: seq + 1 + i }),
     );
     seq = seq + 10;
     useLogStore.getState().appendFileLogs(fresh);
 
     const { logs, counts } = useLogStore.getState();
-    expect(logs).toHaveLength(2000);
-    // 1995 + 10 = 2005,裁掉最旧的 5 条旧记录(old-0..old-4) → 首条是 old-5
+    expect(logs).toHaveLength(MAX_LOG_ENTRIES);
+    // 1995 + 10 = 2005，裁掉最旧的 5 条（old-0..old-4）→ 首条是 old-5
     expect(logs[0]?.id).toBe("old-5");
     expect(logs[1990]?.id).toBe("new-0");
     expect(logs[1999]?.id).toBe("new-9");
-    expect(counts.all).toBe(2000);
+    expect(counts.all).toBe(MAX_LOG_ENTRIES);
   });
 
   it("addEntry 在满仓时挤出最旧的一条", () => {
-    /* 满仓的 2000 条都用「负 seq」：面板时间线是**按 seq 排序**的，且
-     * addEntry 新条目的 seq 必然大于它们（模块级计数器单调递增），因此新条目
-     * 一定排在末尾——测试造的是「先有旧内容，再来新内容」，不依赖 makeEntry
-     * 与 store 计数器的相对大小。 */
-    const oldLogs: LogEntry[] = Array.from({ length: 2000 }, (_, i) =>
-      makeEntry({ id: `old-${i}`, seq: i - 2000 }),
+    const oldLogs: LogEntry[] = Array.from({ length: MAX_LOG_ENTRIES }, (_, i) =>
+      makeEntry({ id: `old-${i}`, time: i, seq: i - MAX_LOG_ENTRIES }),
     );
     useLogStore.setState({ logs: oldLogs });
     useLogStore
@@ -263,23 +288,30 @@ describe("MAX_LOG_ENTRIES 上限裁剪", () => {
       .addEntry({ level: "warn", message: "最新一条", source: "system" });
 
     const { logs } = useLogStore.getState();
-    expect(logs).toHaveLength(2000);
+    expect(logs).toHaveLength(MAX_LOG_ENTRIES);
     expect(logs[0]?.id).toBe("old-1");
-    expect(logs[1999]?.message).toBe("最新一条");
+    expect(logs[logs.length - 1]?.message).toBe("最新一条");
   });
 
-  it("恰好达到 2000 条上限时不裁剪", () => {
-    const oldLogs: LogEntry[] = Array.from({ length: 1999 }, (_, i) =>
-      makeEntry({ id: `old-${i}`, seq: i - 1999 }),
+  it("恰好达到上限时不裁剪", () => {
+    const oldLogs: LogEntry[] = Array.from({ length: MAX_LOG_ENTRIES - 1 }, (_, i) =>
+      makeEntry({ id: `old-${i}`, time: i, seq: i - MAX_LOG_ENTRIES }),
     );
     useLogStore.setState({ logs: oldLogs });
     useLogStore
       .getState()
-      .addEntry({ level: "info", message: "第 2000 条", source: "system" });
+      .addEntry({ level: "info", message: `第 ${MAX_LOG_ENTRIES} 条`, source: "system" });
 
     const { logs } = useLogStore.getState();
-    expect(logs).toHaveLength(2000);
+    expect(logs).toHaveLength(MAX_LOG_ENTRIES);
     expect(logs[0]?.id).toBe("old-0");
+  });
+
+  it("上限只约束内存：分页每页 200 条，与上限不耦合（#262）", () => {
+    // 旧实现把 pageSize 直接设成 2000，等于「上限即页大小」：翻页永远只有一页，
+    // 看起来就是「锁死 2000 条、不能翻页」。上限是内存保护，页大小是阅读体验，
+    // 两者必须是独立常量。
+    expect(LOG_PAGE_SIZE).toBeLessThan(MAX_LOG_ENTRIES);
   });
 });
 
@@ -885,8 +917,6 @@ describe("会话边界：时间线比较的边界与不变量（规范 07 §7.14
 });
 
 describe("会话起点迟到：混入的历史行必须被收拢（不变量）", () => {
-  // 复用文件顶部的 resetStore（beforeEach 已全局接入），这里只需额外保证 page 归位
-  beforeEach(() => useLogStore.setState({ page: 1 }));
 
   it("起点到达前的历史行全部被清掉，且计数同步重算（不留幽灵计数）", () => {
     const cutoff = 1_000;
@@ -944,7 +974,13 @@ describe("会话起点迟到：混入的历史行必须被收拢（不变量）"
     const first = idsOf(useLogStore.getState().logs);
 
     // 模拟重载：清空后重放同一个起点与同一批数据
-    useLogStore.setState({ logs: [], sessionStart: null, counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 } });
+    useLogStore.setState({
+      logs: [],
+      sessionStart: null,
+      revision: 0,
+      viewRevision: 0,
+      counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
+    });
     act(() => useLogStore.getState().setSessionStart(cutoff));
     act(() => useLogStore.getState().appendFileLogs(batch));
     const second = idsOf(useLogStore.getState().logs);
@@ -987,92 +1023,330 @@ describe("轮询响应契约：会话起点随追加写来源下发（/api/logs/
   });
 });
 
-/* ── 入库顺序与「新增日志不可见」的修复（ISSUE #346）─────────────────────
+/* ── 时间线按时刻排序（ISSUE #262）─────────────────────────────────────
  * 三路轮询（launcher / dev / app-runtime）并发到达，而转录行带的是**文件写入
- * 时刻**：后到的批次里可能有更早时刻的行。此前直接按到达顺序 `[...logs, ...fresh]`
- * 追加，时间戳顺序与数组顺序就会不一致——面板看起来「停在原地」，新增的行其实被
- * 插进了中间（滚动位置之外），用户读到的是「日志怎么不再刷新了」。
+ * 时刻**：后到的批次里可能有更早时刻的行。旧实现直接按到达顺序 `[...logs, ...fresh]`
+ * 追加，于是面板看着「日期忽大忽小、新增的行被插进中间」——用户反馈的
+ * 「连最基本的按时间顺序显示都做不到」就是它（ISSUE #262）。
  *
- * 下面把「入库顺序（seq）决定排列」钉成断言：改回按到达顺序堆叠就会红。
+ * 下面把「时间线按时刻有序、同刻按入库顺序稳定」钉成断言：改回按到达顺序堆叠就会红。
  */
-describe("appendSorted：入库顺序决定排列，时间戳不再决定位置（#346）", () => {
-  it("乱序批次（后到的时刻更早）仍按入库顺序排在末尾", () => {
-    const a = entry("a", 300);
-    const b = entry("b", 100); // 时刻更早，但后入库
-    const out = appendSorted([a], [b]);
-    expect(idsOf(out)).toEqual(["a", "b"]);
+describe("mergeTimeline：时间线按时刻排序，时刻相同再按入库顺序（#262）", () => {
+  it("迟到的旧时刻行被插回它该在的位置，而不是堆到末尾", () => {
+    const out = mergeTimeline([entry("a", 300)], [entry("b", 100)]);
+    expect(idsOf(out)).toEqual(["b", "a"]);
   });
 
-  it("降序到达的批次被稳定重排为入库顺序（不是按时间戳重排）", () => {
-    const batch = [entry("x", 10), entry("y", 20), entry("z", 30)];
-    const out = appendSorted([], batch);
-    expect(idsOf(out)).toEqual(["x", "y", "z"]);
+  it("乱序批次合并后整体按时刻升序", () => {
+    const out = mergeTimeline([entry("d", 400)], [
+      entry("c", 300),
+      entry("a", 100),
+      entry("b", 200),
+    ]);
+    expect(idsOf(out)).toEqual(["a", "b", "c", "d"]);
+    expect(out.map((e) => e.time)).toEqual([100, 200, 300, 400]);
   });
 
-  it("既有的时间戳序在合并后仍能判定「哪条最新」（末条即最新入库）", () => {
-    const first = [entry("first", 1_000)];
-    const second = [entry("second", 1_500)];
-    const third = [entry("third", 1_200)];
-    const out = appendSorted(appendSorted(first, second), third);
-    expect(idsOf(out)).toEqual(["first", "second", "third"]);
-    expect(out[out.length - 1]?.id).toBe("third");
+  it("同一毫秒内的多行按入库顺序（seq）保持稳定，不随排序抖动", () => {
+    const same = 1_000;
+    const a: LogEntry = { ...entry("a", same), seq: 10 };
+    const b: LogEntry = { ...entry("b", same), seq: 11 };
+    const c: LogEntry = { ...entry("c", same), seq: 12 };
+    // 即使被乱序送达，同一毫秒内仍按入库顺序排（seq 是稳定次键）
+    const out = mergeTimeline([b, c], [a]);
+    expect(idsOf(out)).toEqual(["a", "b", "c"]);
   });
 
-  it("空批返回原数组引用（不产生无谓的状态更新）", () => {
+  it("跨毫秒只看时刻：更早到达但时刻更晚的行排在后面", () => {
+    const first = [entry("late-time", 2_000)];
+    const second = [entry("early-time", 500)];
+    expect(idsOf(mergeTimeline(first, second))).toEqual(["early-time", "late-time"]);
+  });
+
+  it("同一行被两路读到（时刻/级别/内容全同）时只保留一条", () => {
+    // launcher 转写会包含 dev 输出：同一行可能在两个来源里各出现一次。
+    const dup = { ...entry("dev-copy", 1_000) };
+    const other = { ...dup, id: "launcher-copy", seq: dup.seq + 1 };
+    const out = mergeTimeline([dup], [other]);
+    expect(idsOf(out)).toEqual(["dev-copy"]);
+  });
+
+  it("内容相同但时刻不同的行都保留（同一句话在两个时间点各发生一次）", () => {
+    const a = entry("a", 1_000);
+    const b = { ...entry("b", 2_000), message: a.message };
+    expect(mergeTimeline([a], [b])).toHaveLength(2);
+  });
+
+  it("全是重复行时返回原数组引用（不产生无谓的状态更新）", () => {
     const current = [entry("a", 1)];
-    expect(appendSorted(current, [])).toBe(current);
+    expect(mergeTimeline(current, [{ ...entry("b", 1), message: current[0]!.message }])).toBe(
+      current,
+    );
+  });
+
+  it("空批返回原数组引用", () => {
+    const current = [entry("a", 1)];
+    expect(mergeTimeline(current, [])).toBe(current);
+  });
+
+  it("超过上限时裁掉时刻最旧的（不是最早到达的）", () => {
+    const current = [entry("newest", 1_000)];
+    // 后到达但时刻更早的一批：合并后它们排在前面，超过 max 时会被裁掉
+    const late = [entry("ancient", 1), entry("old", 2), entry("new", 3), entry("mid", 500)];
+    const out = mergeTimeline(current, late, 3);
+    expect(idsOf(out)).toEqual(["new", "mid", "newest"]);
   });
 });
 
-describe("appendFileLogs 走入库顺序（#346 回归）", () => {
-  it("后到的批次即使时刻更早，也排在已有条目之后", () => {
+describe("appendFileLogs 走时间线合并（#262 回归）", () => {
+  it("后到的批次时刻更早时，面板里仍按时刻顺序排列", () => {
     act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry({ id: "old", time: 5_000 })]),
+      useLogStore.getState().appendFileLogs([makeEntry({ id: "newer", time: 5_000 })]),
     );
     act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry({ id: "late", time: 1_000 })]),
+      useLogStore.getState().appendFileLogs([makeEntry({ id: "older", time: 1_000 })]),
     );
-    // 面板按数组顺序渲染 → 新增的 late 必须在末尾（可见位置），而不是被插到中间
-    expect(idsOf(useLogStore.getState().logs)).toEqual(["old", "late"]);
+    expect(idsOf(useLogStore.getState().logs)).toEqual(["older", "newer"]);
+  });
+
+  it("同一批内容被重复轮询回来时不会重复入库（面板条数＝真实行数）", () => {
+    const batch = [
+      makeEntry({ id: "x1", message: "第一行", time: 1_000 }),
+      makeEntry({ id: "x2", message: "第二行", time: 1_100 }),
+    ];
+    act(() => useLogStore.getState().appendFileLogs(batch));
+    // 文件被整段重读（首帧窗口 / 服务端要求回退重读）→ 同一批行再次送达
+    act(() =>
+      useLogStore
+        .getState()
+        .appendFileLogs(batch.map((e, i) => ({ ...e, id: `dup-${i}` }))),
+    );
+    expect(useLogStore.getState().logs.map((e) => e.message)).toEqual([
+      "第一行",
+      "第二行",
+    ]);
   });
 });
 
-/* ── 历史页的「有新增日志」水位（ISSUE #346）──────────────────────────────
- * 翻到历史页时面板内容不会因新日志而改变，用户此前只能看到「警告计数在涨、
- * 页面却不动」。store 持一个「已读水位」（viewSeq = 翻页那一刻的末条 seq），
- * 面板据它显示「有 N 条新的日志 · 回到最新」。
+/* ── 连续重复行折叠（让「有信息量」落到显示层）─────────────────────────
+ * 一屏里连续 N 条完全相同的行（每轮轮询写一条同样的慢查询 / 重连提示）是最常见
+ * 的「没信息量」形态。写入侧已按时间桶聚合（§7.14.1），显示层再兜一道：只折叠
+ * **连续**重复，且只保留前 limit 条 + 一条「重复 N 次」说明。
  */
-describe("viewSeq 已读水位与「历史页有新增」计数（#346）", () => {
+describe("dedupeRepeats 连续重复行折叠", () => {
+  /* 连续重复行的定义是「时刻 + 级别 + 内容」全同（跨来源去重用的同一判据），
+   * 因此夹具刻意让 message 取同一个值，只有 time 不同也不影响折叠（相邻即折叠）。 */
+  const repeat = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      makeEntry({ id: `r-${i}`, message: "ComfyUI 未就绪，等待中", time: 1_000 + i }),
+    );
+
+  it("少于等于阈值时原样保留", () => {
+    expect(dedupeRepeats(repeat(5))).toHaveLength(5);
+  });
+
+  it("超过阈值时保留前几条 + 一条「重复 N 次」说明", () => {
+    const out = dedupeRepeats(repeat(400), 5);
+    // 5 条原文 + 1 条折叠说明
+    expect(out).toHaveLength(6);
+    expect(out[5]?.message).toBe("…（以上内容连续重复 395 次）");
+  });
+
+  it("只折叠连续重复：中间隔着别的行时不合并", () => {
+    const entries = [
+      ...repeat(3),
+      makeEntry({ id: "other", message: "别的事件", time: 2_000 }),
+      ...repeat(3),
+    ];
+    expect(dedupeRepeats(entries)).toHaveLength(7);
+  });
+
+  it("折叠只影响显示，不改动时间线（原文仍在 store 里）", () => {
+    act(() => useLogStore.getState().appendFileLogs(repeat(50)));
+    const before = useLogStore.getState().logs.length;
+    dedupeRepeats(useLogStore.getState().logs);
+    expect(before).toBe(50);
+    expect(useLogStore.getState().logs).toHaveLength(50);
+  });
+});
+
+/* ── 分页选择器（#262：显示多少条 ≠ 内存上限）────────────────────────── */
+
+describe("selectPageLogs 倒序分页", () => {
+  const logs = Array.from({ length: 450 }, (_, i) =>
+    makeEntry({ id: `p-${i}`, time: i, seq: i }),
+  );
+
+  it("第 1 页是最新的一段，往前翻看到更早的", () => {
+    const first = selectPageLogs(logs, 1, 200);
+    expect(first.entries[0]?.id).toBe("p-250");
+    expect(first.entries[199]?.id).toBe("p-449");
+    const second = selectPageLogs(logs, 2, 200);
+    expect(second.entries[0]?.id).toBe("p-50");
+    expect(second.entries[199]?.id).toBe("p-249");
+  });
+
+  it("页码超界时钳到最后一页（并回传钳后的页码）", () => {
+    const out = selectPageLogs(logs, 99, 200);
+    expect(out.page).toBe(3);
+    expect(out.totalPages).toBe(3);
+    expect(out.entries).toHaveLength(50);
+  });
+
+  it("空时间线恒为第 1 页、共 1 页", () => {
+    const out = selectPageLogs([], 5, 200);
+    expect(out.page).toBe(1);
+    expect(out.totalPages).toBe(1);
+    expect(out.entries).toEqual([]);
+  });
+
+  it("总页数随过滤结果变化（450 条 / 每页 200 → 3 页）", () => {
+    expect(selectPageLogs(logs, 1, 200).totalPages).toBe(3);
+    expect(selectPageLogs(logs.slice(0, 100), 1, 200).totalPages).toBe(1);
+  });
+});
+
+describe("selectShouldPinToLatest 何时该给「回到最新」出口", () => {
+  it("停在第 1 页且贴底：不需要出口", () => {
+    expect(selectShouldPinToLatest(1, true)).toBe(false);
+  });
+
+  it("翻到历史页：需要出口（即使滚动条在底部）", () => {
+    expect(selectShouldPinToLatest(3, true)).toBe(true);
+  });
+
+  it("用户上滚离开底部：需要出口（新日志不该把他的阅读位置冲走）", () => {
+    expect(selectShouldPinToLatest(1, false)).toBe(true);
+  });
+});
+
+/* ── 历史页的「有新增日志」水位（ISSUE #346 / #262）──────────────────────
+ * 翻到历史页时面板内容不会因新日志而改变，用户此前只能看到「警告计数在涨、
+ * 页面却不动」。store 持一个「已读水位」（viewRevision = 翻页那一刻的时间线
+ * 生成号），面板据它显示「有 N 条新的日志 · 回到最新」。
+ *
+ * 判据用生成号而不是末条 seq：时间线按时刻排序后，一条**迟到的旧时刻行**会插进
+ * 中间、末条不变——只看末条会漏掉这类新增。
+ */
+describe("viewRevision 已读水位与「历史页有新增」计数（#346）", () => {
   it("翻到历史页后新到的日志计入「新的日志」条数", () => {
     act(() =>
       useLogStore.getState().appendFileLogs([
-        makeEntry({ id: "a" }),
-        makeEntry({ id: "b" }),
-        makeEntry({ id: "c" }),
+        makeEntry({ id: "a", time: 1_000 }),
+        makeEntry({ id: "b", time: 2_000 }),
+        makeEntry({ id: "c", time: 3_000 }),
       ]),
     );
     act(() => useLogStore.getState().setPage(2));
-    expect(selectNewLogCount(useLogStore.getState())).toBe(0);
+    expect(newCount(2, true)).toBe(0);
 
-    act(() => useLogStore.getState().appendFileLogs([makeEntry({ id: "d" })]));
-    expect(selectNewLogCount(useLogStore.getState())).toBe(1);
+    act(() =>
+      useLogStore.getState().appendFileLogs([makeEntry({ id: "d", time: 4_000 })]),
+    );
+    expect(newCount(2, true)).toBe(1);
+  });
+
+  it("迟到的旧时刻行也算新增：判据是生成号，不是末条", () => {
+    act(() =>
+      useLogStore
+        .getState()
+        .appendFileLogs([makeEntry({ id: "a", time: 1_000 }), makeEntry({ id: "c", time: 3_000 })]),
+    );
+    act(() => useLogStore.getState().setPage(2));
+    // 迟到的 b 时刻更早，会插到时间线中间 —— 末条仍是 c，但内容确实变了
+    act(() =>
+      useLogStore.getState().appendFileLogs([makeEntry({ id: "b", time: 2_000 })]),
+    );
+    expect(newCount(2, true)).toBe(1);
   });
 
   it("回到第 1 页即视为已读，计数归零", () => {
     act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry({ id: "a" }), makeEntry({ id: "b" })]),
+      useLogStore
+        .getState()
+        .appendFileLogs([makeEntry({ id: "a", time: 1_000 }), makeEntry({ id: "b", time: 2_000 })]),
     );
     act(() => useLogStore.getState().setPage(2));
-    act(() => useLogStore.getState().appendFileLogs([makeEntry({ id: "c" })]));
-    expect(selectNewLogCount(useLogStore.getState())).toBe(1);
+    act(() =>
+      useLogStore.getState().appendFileLogs([makeEntry({ id: "c", time: 3_000 })]),
+    );
+    expect(newCount(2, true)).toBe(1);
 
     act(() => useLogStore.getState().setPage(1));
-    expect(selectNewLogCount(useLogStore.getState())).toBe(0);
+    expect(newCount(1, true)).toBe(0);
   });
 
-  it("未翻页（停在第 1 页）时恒为 0：自动滚动已经展示了新内容，不需要提示", () => {
-    act(() => useLogStore.getState().appendFileLogs([makeEntry({ id: "a" })]));
+  it("停在第 1 页但用户上滚离开底部时，也提示有新日志", () => {
+    act(() => useLogStore.getState().appendFileLogs([makeEntry({ id: "a", time: 1_000 })]));
+    act(() => useLogStore.getState().setPage(1));
+    // 用户上滚 = autoScroll false：这正是「新日志把他的阅读位置冲走」的场景
+    act(() =>
+      useLogStore.getState().appendFileLogs([makeEntry({ id: "b", time: 2_000 })]),
+    );
+    expect(newCount(1, false)).toBe(1);
+  });
+
+  it("全批都是重复行（时间线未变）时不虚报新增", () => {
+    const batch = [makeEntry({ id: "a", message: "同一行", time: 1_000 })];
+    act(() => useLogStore.getState().appendFileLogs(batch));
+    act(() => useLogStore.getState().setPage(2));
+    act(() => useLogStore.getState().appendFileLogs([{ ...batch[0]!, id: "dup" }]));
+    expect(newCount(2, true)).toBe(0);
+  });
+});
+
+/* ── 来源筛选（#262）────────────────────────────────────────────────── */
+
+describe("setOrigin 按来源筛选", () => {
+  const seed = () =>
+    act(() =>
+      useLogStore.getState().appendFileLogs([
+        {
+          ...makeEntry({ id: "dev-1", time: 1_000, message: "开发服务已就绪" }),
+          origin: "dev",
+        },
+        {
+          ...makeEntry({ id: "app-1", time: 2_000, message: "任务入队" }),
+          origin: "app-runtime",
+        },
+        {
+          ...makeEntry({ id: "app-2", time: 3_000, message: "任务完成" }),
+          origin: "app-runtime",
+        },
+      ]),
+    );
+
+  it("只看应用运行日志时启动行被挡在外面", () => {
+    seed();
+    act(() => useLogStore.getState().setOrigin("app-runtime"));
+    expect(idsOf(useLogStore.getState().filteredLogs)).toEqual(["app-1", "app-2"]);
+    expect(useLogStore.getState().counts.all).toBe(3);
+  });
+
+  it("只看启动日志时应用行被挡在外面", () => {
+    seed();
+    act(() => useLogStore.getState().setOrigin("dev"));
+    expect(idsOf(useLogStore.getState().filteredLogs)).toEqual(["dev-1"]);
+  });
+
+  it("切回全部来源恢复完整时间线", () => {
+    seed();
+    act(() => useLogStore.getState().setOrigin("app-runtime"));
+    act(() => useLogStore.getState().setOrigin("all"));
+    expect(useLogStore.getState().filteredLogs).toHaveLength(3);
+  });
+
+  it("来源筛选与级别筛选、搜索叠加生效", () => {
+    seed();
+    act(() => useLogStore.getState().setOrigin("app-runtime"));
+    act(() => useLogStore.getState().setSearch("任务完成"));
+    expect(idsOf(useLogStore.getState().filteredLogs)).toEqual(["app-2"]);
+  });
+
+  it("切换来源后回到第 1 页（避免停在越界的空白页）", () => {
+    seed();
+    act(() => useLogStore.getState().setPage(2));
+    act(() => useLogStore.getState().setOrigin("app-runtime"));
     expect(useLogStore.getState().page).toBe(1);
-    expect(selectNewLogCount(useLogStore.getState())).toBe(0);
   });
 });

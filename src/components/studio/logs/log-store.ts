@@ -5,45 +5,64 @@
  *
  * 规范 07 §7.4：日志状态用 Zustand 管理，不使用 React Context。
  * 多个面板（BrowserStatusBar / LogPanel）直接读取同一 store。
+ *
+ * ── 时间线契约（面板「按时间顺序 + 有信息量」的地基）──────────────────
+ * 时间线是**合并后的单一顺序**，不是「按到达顺序堆叠」：
+ *   1. 排序键是 `(time, seq)`——`time` 是每行自带的写入时刻（毫秒），
+ *      `seq` 只是同一毫秒内的稳定次键（跨来源去重后按它保持确定性顺序）。
+ *      此前按到达顺序堆叠，三路轮询（launcher / dev / app-runtime）并发回来时
+ *      旧时刻的行会落在新时刻的行之后，面板看着像「停在原地」（ISSUE #346）。
+ *   2. 同一行被多路读到（launcher 转写含 dev 输出、文件被整段重读）时按
+ *      `time + level + message` 去重，不重复计入。没有这条，面板的条数与
+ *      真实事件数对不上，翻页也会翻出重复内容。
+ *   3. 读不到时刻的裸文本行由解析层钳到当时本地时刻，因此**不会**落到历史行
+ *      之前（旧的「按解析时刻 + 只追加」写法会把它们排到末尾，破坏时间序）。
  */
 
 import { create } from "zustand";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
+/** 面板只渲染最近这么多条日志（规范 07 §7.5 的环形缓冲上限）。 */
+export const MAX_LOG_ENTRIES = 2000;
+
+/**
+ * 面板每页条数（规范 07 §7.13 的分页契约）：
+ * 「显示」页与内存上限各管一段，两者不再耦合。
+ */
+export const LOG_PAGE_SIZE = 200;
+
+/** 每一页（面板显示窗口）里最多保留的连续重复行数（见 dedupeRepeats）。 */
+const REPEAT_FOLD_LIMIT = 5;
+
 export interface LogEntry {
   /** nanoid-style short id */
   id: string;
-  /** Unix timestamp (ms) */
+  /** 日志写入时刻（毫秒）。排序、展示、会话边界判定都用它。 */
   time: number;
   level: LogLevel;
   /** Serialized message */
   message: string;
-  /** Where the log came from */
+  /** Where the log came from（console / tauri / system）。 */
   source: "console" | "tauri" | "system";
-  /** 文件来源：dev-launcher / app-runtime 的文件行带此标记（仅面板内显示，不参与过滤） */
+  /** 文件来源：dev-launcher / launcher / app-runtime 的文件行带此标记。 */
   origin?: "dev" | "launcher" | "app-runtime";
   /** Caller location (file:line) for console logs */
   location?: string;
   /**
-   * 入库顺序（严格递增）。面板按它排序、并据它判断「有没有比当前页更新的日志」。
+   * 入库顺序：只在同一毫秒内作为稳定排序次键（时间戳相同时保持确定的先后），
+   * 以及「去重后是否为新内容」的判据。
    *
-   * 为什么不按 `time` 排：文件转录行带的是**文件写入时刻**，而它在轮询响应里
-   * 是分批到达的——三路轮询（launcher / dev / app-runtime）并发，`app-runtime`
-   * 那一路要等两个 IO 响应，于是它的旧时刻行会晚于 dev 的新时刻行入库。面板
-   * 此前直接 `[...state.logs, ...fresh]` 按到达顺序堆叠，时间线排序只能靠
-   * DOM 里恰好有序，一旦乱序，用户看到的就是「新增日志不见了」（其实被插在
-   * 中间，视线之外）——ISSUE #346。
-   *
-   * `time` 仍是**展示**时刻（行内时间戳），`seq` 只服务排序与「有无新内容」判定。
+   * 它**不参与**跨毫秒排序——时间线按 `time` 升序，这是面板「按时间显示」
+   * 的定义本身（ISSUE #262）。
    */
   seq: number;
 }
 
 export type LogFilter = LogLevel | "all";
 
-/** 环形缓冲上限：内存中最多保留 2000 条日志（规范 07 §7.5） */
-const MAX_LOG_ENTRIES = 2000;
+/** 面板可筛选的来源（`all` = 全部）。 */
+export type LogOriginFilter = LogEntry["origin"] | "all";
 
 let entryId = 0;
 function nextId() {
@@ -52,15 +71,12 @@ function nextId() {
 }
 
 /**
- * 入库顺序计数器（进程内单调递增，不随清空 / 过滤重置）。
- *
- * 它只回答「谁先进的面板」——排序与「有没有比当前页更新的日志」都靠它，
- * 不依赖各来源自带的时间戳（三路轮询并发到达，时间戳顺序与到达顺序无关）。
- * 放在模块级而非 store state 里：`clear()` / 重载后仍要保持单调，否则清空
- * 后新日志的 seq 会退回旧值，被当成「历史行」排到前面。
+ * 入库序计数器（进程内单调递增，不随清空 / 过滤重置）。
+ * 只作同一毫秒内的排序次键与去重判据；模块级而非 store state，保证
+ * `clear()` / 页面重载后仍单调，否则新日志会被当成旧日志排到前面。
  */
 let entrySeq = 0;
-function nextSeq() {
+function nextSeq(): number {
   entrySeq += 1;
   return entrySeq;
 }
@@ -339,15 +355,16 @@ export function parseFileLogs(
   baseDate?: Date,
   origin?: LogEntry["origin"],
 ): LogEntry[] {
+  /*
+   * 读不到时刻时的兜底：baseDate 是**这批内容所属的日期**（默认今天），时刻取
+   * 解析当时的本地时间。这样裸文本行落在「现在」，不会因为时间戳缺失被排到
+   * 时间线开头（用 00:00:00 会），与「时间线按 time 升序」的契约相容。
+   */
   const now = Date.now();
   const today = baseDate ?? new Date();
   const entries: LogEntry[] = [];
-  /* 解析顺序即入库顺序：seq 在解析期分配，批次之间自然衔接（appendFileLogs
-   * 还会再归一化一次，见那里的说明）。 */
   let seq = nextSeq();
-  const push = (
-    entry: Omit<LogEntry, "seq">,
-  ) => {
+  const push = (entry: Omit<LogEntry, "seq">) => {
     entries.push({ ...entry, seq: seq++ });
   };
   for (const rawLine of text.split("\n")) {
@@ -434,12 +451,110 @@ export function parseFileLogs(
   return entries;
 }
 
+/** 行身份：同一行被多路读到（launcher 转写含 dev 输出）时据此去重。 */
+function entryKey(entry: Pick<LogEntry, "time" | "level" | "message">): string {
+  return `${entry.time}\u0000${entry.level}\u0000${entry.message}`;
+}
+
+/**
+ * 把新条目并进时间线：**按时刻排序 + 跨来源去重**，然后只保留最近 MAX_LOG_ENTRIES 条。
+ *
+ * - 排序键 `(time, seq)`：`time` 来自行内的写入时刻；`seq` 只在同一毫秒内决定
+ *   先后（三路轮询并发到达，同毫秒内按到达顺序保持稳定即可）。
+ * - 去重：与已有条目 key 相同的新条目直接丢弃。dev-launcher 转写会包含 dev
+ *   输出、文件被整段重读也会重复送来同一批行，没有这一步面板条数与真实事件数
+ *   就对不上（翻页还会翻出重复内容）。
+ * - 上限只裁**最旧**的条目：内存占用有界，且「显示多少条」由分页决定，
+ *   不再等于内存上限（ISSUE #262：面板本该能翻页看更多，却卡在 2000 条）。
+ */
+export function mergeTimeline(
+  current: LogEntry[],
+  fresh: LogEntry[],
+  max = MAX_LOG_ENTRIES,
+): LogEntry[] {
+  if (fresh.length === 0) return current;
+  const seen = new Set(current.map(entryKey));
+  const added: LogEntry[] = [];
+  for (const entry of fresh) {
+    const key = entryKey(entry);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    added.push(entry);
+  }
+  if (added.length === 0) return current;
+  const merged = current.length === 0 ? added.slice() : [...current, ...added];
+  merged.sort((a, b) => (a.time !== b.time ? a.time - b.time : a.seq - b.seq));
+  return merged.length > max ? merged.slice(merged.length - max) : merged;
+}
+
+/** 时间线的**真实**末条（最新一条）——「已读水位」「有无新内容」「跳最新」都用它。 */
+export function lastSeqOf(logs: LogEntry[]): number {
+  return logs[logs.length - 1]?.seq ?? 0;
+}
+
+/**
+ * 会话起点过滤：丢掉「上一次运行」残留的行。
+ *
+ * 追加写日志（如 app-runtime）里混着历史运行的内容，行格式只记时刻、不记
+ * 是哪一次运行写的；行时刻早于会话起点即判为历史。
+ * 读不出时刻的裸文本行（`time` 取解析当时的时刻）天然不会早于起点，保留。
+ *
+ * @param cutoffMs 会话起点（毫秒）；null/undefined = 不启用该过滤
+ */
+export function dropStaleEntries(
+  entries: LogEntry[],
+  cutoffMs: number | null | undefined,
+): LogEntry[] {
+  if (cutoffMs === null || cutoffMs === undefined) return entries;
+  return entries.filter((entry) => entry.time >= cutoffMs);
+}
+
+/**
+ * 渲染前折叠连续重复行：同一页里连续 N 条内容完全相同的行压缩成一条
+ * `…（重复 N 次）`，只保留前 REPEAT_FOLD_LIMIT 条。
+ *
+ * 为什么必须有这一步：面板里最常见的「没信息量」形态不是长度，而是**重复**——
+ * 同一路轮询每轮写一条同样的慢查询 / 重连提示，一屏就被刷满，用户看不到别的
+ * （ISSUE #262）。写入侧已经按时间桶聚合了一次（§7.14.1），这里是视图侧的最后
+ * 一道保险：只影响显示，不改动时间线本身。
+ *
+ * 只折叠**连续**重复（按相邻位置），不按键全局分组——跨距离的相同行之间隔着
+ * 别的事件，合并它们会把时间线读成「同一个事件发生了 N 次」，那是错的。
+ */
+export function dedupeRepeats(
+  entries: LogEntry[],
+  limit = REPEAT_FOLD_LIMIT,
+): LogEntry[] {
+  /* 折叠键只看「级别 + 内容」，不看时刻：每轮轮询写出来的重复行时刻必然不同，
+   * 带上时刻就一条也折叠不了。跨来源去重看时刻（entryKey），这里看语义。 */
+  const foldKey = (entry: LogEntry) => `${entry.level}\u0000${entry.message}`;
+  const out: LogEntry[] = [];
+  let i = 0;
+  while (i < entries.length) {
+    const first = entries[i]!;
+    let run = 1;
+    while (i + run < entries.length && foldKey(entries[i + run]!) === foldKey(first)) {
+      run += 1;
+    }
+    if (run <= limit) {
+      out.push(first);
+      i += 1;
+      continue;
+    }
+    for (let k = 0; k < limit; k += 1) out.push(entries[i + k]!);
+    out.push({
+      ...first,
+      id: `${first.id}-repeat`,
+      message: `…（以上内容连续重复 ${run - limit} 次）`,
+    });
+    i += run;
+  }
+  return out;
+}
+
 function formatForClipboard(entries: LogEntry[]): string {
   return entries
-    .map(
-      (e) =>
-        `[${formatTime(e.time, { alwaysDate: true })}] [${e.level.toUpperCase()}]${e.location ? ` [${e.location}]` : ""} ${e.message}`,
-    )
+    .map((e) => `${formatTime(e.time, { alwaysDate: true })} [${e.level.toUpperCase()}] ${e.message}`)
     .join("\n");
 }
 
@@ -461,15 +576,17 @@ function computeFiltered(
   logs: LogEntry[],
   filter: LogFilter,
   search: string,
+  origin: LogOriginFilter,
 ): LogEntry[] {
   const needle = search.trim().toLowerCase();
   return logs.filter((entry) => {
     const levelOk = filter === "all" || entry.level === filter;
+    const originOk = origin === "all" || entry.origin === origin;
     const searchOk =
       !needle ||
       entry.message.toLowerCase().includes(needle) ||
       entry.location?.toLowerCase().includes(needle);
-    return levelOk && searchOk;
+    return levelOk && originOk && searchOk;
   });
 }
 
@@ -489,10 +606,12 @@ export interface LogStoreState {
   logs: LogEntry[];
   filteredLogs: LogEntry[];
   filter: LogFilter;
+  /** 来源筛选（#262：启动日志与应用运行日志混在一屏，需要能分开看）。 */
+  origin: LogOriginFilter;
   search: string;
   isOpen: boolean;
   counts: Record<LogLevel | "all", number>;
-  /** 翻页：当前页（1 起，倒序查看，1 = 最新一页）与每页条数（#294）。 */
+  /** 翻页：当前页（1 起，倒序查看，1 = 最新一页）与每页条数。 */
   page: number;
   pageSize: number;
   /**
@@ -501,17 +620,30 @@ export interface LogStoreState {
    */
   sessionStart: number | null;
   /**
-   * 「已读水位」：翻到历史页那一刻的末条 `seq`。
+   * 生成 `logs` 切片的生成号（每次时间线变化 +1）。
+   *
+   * 它是「store 有没有新日志」的判据，而不是时间线末条 seq：时间线按时刻排序，
+   * 一条**迟到但时刻更早**的行会插进中间、末条不变——只看末条会漏掉这种新增。
+   */
+  revision: number;
+  /**
+   * 「已读水位」的长度口径：翻到历史位置那一刻**过滤后**的条数。
+   * 页脚「有 N 条新的日志」= 当前 filteredLogs.length − 它（见 selectNewLogCount）。
+   */
+  viewLength: number;
+  /**
+   * 「已读水位」：翻到历史页那一刻的 `revision`。
    *
    * 面板据此算出「停在历史页期间又新来了多少条日志」并在页脚提示——历史页的
    * 内容不会因为新日志而改变，没有这条提示，用户看到的就是「计数在涨、面板不
-   * 动」（ISSUE #346）。回到第 1 页即视为已读，水位推到当前末条。
+   * 动」（ISSUE #346）。回到第 1 页即视为已读，水位推到当前 revision。
    */
-  viewSeq: number;
+  viewRevision: number;
   addEntry: (entry: Omit<LogEntry, "id" | "time" | "seq">) => void;
   appendFileLogs: (entries: LogEntry[]) => void;
   setSessionStart: (sessionStart: number | null) => void;
   setFilter: (f: LogFilter) => void;
+  setOrigin: (o: LogOriginFilter) => void;
   setSearch: (s: string) => void;
   setPage: (page: number) => void;
   setIsOpen: (open: boolean) => void;
@@ -521,50 +653,19 @@ export interface LogStoreState {
   download: () => void;
 }
 
-/**
- * 会话起点过滤：丢掉「上一次运行」残留的行。
- *
- * 追加写日志（如 app-runtime）里混着历史运行的内容，行格式只记时刻、不记
- * 是哪一次运行写的；行时刻早于会话起点即判为历史。
- * 读不出时刻的裸文本行（`time` 取解析当时的时刻）天然不会早于起点，保留。
- *
- * @param cutoffMs 会话起点（毫秒）；null/undefined = 不启用该过滤
- */
-export function dropStaleEntries(entries: LogEntry[], cutoffMs: number | null | undefined): LogEntry[] {
-  if (cutoffMs === null || cutoffMs === undefined) return entries;
-  return entries.filter((entry) => entry.time >= cutoffMs);
-}
-
-/**
- * 把一批新条目并进面板时间线，按 **入库顺序（seq）** 排列。
- *
- * 三路轮询（launcher / dev / app-runtime）并发到达，而转录行带的是**文件写入
- * 时刻**——后到的批次里可能有更早时刻的行（app-runtime 那一路要多等两个 IO
- * 响应）。此前直接 `[...logs, ...fresh]` 按到达顺序追加，时间戳顺序与数组顺序
- * 就可能不一致：面板看起来「停在原地」，新增的行其实被插进了中间（滚动位置
- * 之外），用户读到的是「新增日志怎么不见了」（ISSUE #346）。
- *
- * 快路径：绝大多数批次本来就是单调的（`fresh` 的 seq 全都大于现有末条），
- * 直接 push 免掉排序；只有真正乱序时才按 seq 稳定排序。
- */
-/** 时间线末条的入库顺序（空面板为 0）——「已读水位」与「有无新内容」都用它。 */
-export function lastSeqOf(logs: LogEntry[]): number {
-  return logs[logs.length - 1]?.seq ?? 0;
-}
-
-export function appendSorted(current: LogEntry[], fresh: LogEntry[]): LogEntry[] {
-  if (fresh.length === 0) return current;
-  if (current.length === 0) return fresh;
-  const last = current[current.length - 1]!;
-  if (fresh[0]!.seq > last.seq) return [...current, ...fresh];
-  return [...current, ...fresh].sort((a, b) => a.seq - b.seq);
-}
-
-function derive(logs: LogEntry[], filter: LogFilter, search: string) {
+/** 从状态推导派生字段（计数 / 过滤结果），所有写入路径共用。 */
+function derive(
+  logs: LogEntry[],
+  filter: LogFilter,
+  search: string,
+  origin: LogOriginFilter,
+  revision: number,
+) {
   return {
     logs,
     counts: computeCounts(logs),
-    filteredLogs: computeFiltered(logs, filter, search),
+    filteredLogs: computeFiltered(logs, filter, search, origin),
+    revision,
   };
 }
 
@@ -572,13 +673,16 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   logs: typeof window === "undefined" ? [] : [welcomeEntry()],
   filteredLogs: [],
   filter: "all",
+  origin: "all",
   search: "",
   isOpen: false,
   counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
   page: 1,
-  pageSize: 2000,
+  pageSize: LOG_PAGE_SIZE,
   sessionStart: null,
-  viewSeq: 0,
+  revision: 0,
+  viewRevision: 0,
+  viewLength: 0,
 
   addEntry: (entry) =>
     set((state) => {
@@ -588,11 +692,8 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         seq: nextSeq(),
         time: Date.now(),
       };
-      return derive(
-        appendSorted(state.logs, [full]).slice(-MAX_LOG_ENTRIES),
-        state.filter,
-        state.search,
-      );
+      const logs = mergeTimeline(state.logs, [full]);
+      return derive(logs, state.filter, state.search, state.origin, state.revision + 1);
     }),
 
   appendFileLogs: (entries) =>
@@ -601,8 +702,11 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       /* 空批次直接原样返回：计数/过滤结果不变（setState 浅合并，不覆盖
        * counts），与「追加空数组时状态保持不变」的既有契约一致。 */
       if (fresh.length === 0) return { logs: state.logs };
-      const logs = appendSorted(state.logs, fresh).slice(-MAX_LOG_ENTRIES);
-      return derive(logs, state.filter, state.search);
+      const logs = mergeTimeline(state.logs, fresh);
+      /* 批次里全是重复行 → 时间线没变，不推进 revision（否则「有 N 条新的日志」
+       * 会被重复行刷成假计数）。 */
+      if (logs === state.logs) return { logs: state.logs };
+      return derive(logs, state.filter, state.search, state.origin, state.revision + 1);
     }),
 
   /* 会话起点到达得比首次轮询晚时，时间线里可能已经混进了上次运行的行：
@@ -610,30 +714,66 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   setSessionStart: (sessionStart) =>
     set((state) => {
       const logs = dropStaleEntries(state.logs, sessionStart);
-      return { sessionStart, ...derive(logs, state.filter, state.search) };
+      const changed = logs.length !== state.logs.length;
+      return {
+        sessionStart,
+        ...derive(
+          logs,
+          state.filter,
+          state.search,
+          state.origin,
+          changed ? state.revision + 1 : state.revision,
+        ),
+      };
     }),
 
   setFilter: (f) =>
-    set((state) => ({ filter: f, filteredLogs: computeFiltered(state.logs, f, state.search) })),
+    set((state) => ({
+      filter: f,
+      filteredLogs: computeFiltered(state.logs, f, state.search, state.origin),
+      /* 过滤条件变了，当前页多半越界：回到最新一页，避免用户停在空白页。 */
+      page: 1,
+      viewRevision: state.revision,
+      viewLength: computeFiltered(state.logs, f, state.search, state.origin).length,
+    })),
+
+  setOrigin: (o) =>
+    set((state) => ({
+      origin: o,
+      filteredLogs: computeFiltered(state.logs, state.filter, state.search, o),
+      page: 1,
+      viewRevision: state.revision,
+      viewLength: computeFiltered(state.logs, state.filter, state.search, o).length,
+    })),
 
   setSearch: (s) =>
-    set((state) => ({ search: s, filteredLogs: computeFiltered(state.logs, state.filter, s) })),
+    set((state) => ({
+      search: s,
+      filteredLogs: computeFiltered(state.logs, state.filter, s, state.origin),
+      page: 1,
+      viewRevision: state.revision,
+      viewLength: computeFiltered(state.logs, state.filter, s, state.origin).length,
+    })),
 
-  /* 翻页时更新「已读水位」：进入历史页 → 记下当前末条 seq（此后新增的才算
-   * 「新来的」）；回到第 1 页 → 推到末条（已读）。 */
+  /* 翻页时更新「已读水位」：进入历史页 → 记下当前 revision（此后新增的才算
+   * 「新来的」）；回到第 1 页 → 推到当前 revision（已读）。 */
   setPage: (page) =>
     set((state) => ({
       page: Math.max(1, page),
-      viewSeq: lastSeqOf(state.logs),
+      viewRevision: state.revision,
+      viewLength: state.filteredLogs.length,
     })),
   setIsOpen: (open) => set({ isOpen: open }),
   toggleOpen: () => set((state) => ({ isOpen: !state.isOpen })),
 
   clear: () =>
     set((state) => ({
-      ...derive([], state.filter, state.search),
-      /* 清空后「已读水位」归零：新日志的 seq 仍大于它，能正确算作新内容。 */
-      viewSeq: 0,
+      ...derive([], state.filter, state.search, state.origin, state.revision + 1),
+      page: 1,
+      /* 清空后「已读水位」推到当前 revision：新日志的 revision 更大，
+       * 仍能正确算作新内容。 */
+      viewRevision: state.revision + 1,
+      viewLength: 0,
     })),
 
   copyAll: async () => {
@@ -667,3 +807,57 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
     URL.revokeObjectURL(url);
   },
 }));
+
+/* ── 派生视图：面板怎么切一页 ───────────────────────────────────────── */
+
+/**
+ * 按时间倒序分页：第 1 页是最新的一段，往前翻看更早的日志。
+ *
+ * 分页在**过滤后的时间线**上做（filteredLogs 顺序即时间顺序），因此
+ * 「最新一页」总在 page=1，与 `counts.all` 无关。
+ */
+export function selectPageLogs(
+  logs: LogEntry[],
+  page: number,
+  pageSize: number,
+): { entries: LogEntry[]; page: number; totalPages: number } {
+  const total = logs.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const end = total - (safePage - 1) * pageSize;
+  const start = Math.max(0, end - pageSize);
+  return { entries: logs.slice(start, end), page: safePage, totalPages };
+}
+
+/**
+ * 面板是否「已经不在最新」：不在第 1 页，或用户手动上滚离开了底部。
+ * 两者都必须给「回到最新」出口，否则用户会以为日志不再刷新（ISSUE #262）。
+ */
+export function selectShouldPinToLatest(page: number, autoScroll: boolean): boolean {
+  return page !== 1 || !autoScroll;
+}
+
+/**
+ * 停在历史位置期间新来了多少条日志。
+ *
+ * 判据是 `revision` 变化（时间线真的变过），而不是「末条变了」：按时刻排序后，
+ * 一条**迟到的旧时刻行**会插进中间、末条不动——只看末条会漏掉这类新增。
+ *
+ * 计数口径是**时间线里比水位新的条数**（`readAt` 是翻页那一刻的时间线长度）。
+ * 为什么用长度而不是 seq：`seq` 在测试与多 store 场景下可能被夹具重造，
+ * 与真实入库顺序不可比。长度差是「用户接下来会多看到几条」的直接答案，
+ * 也是这里唯一需要回答的问题。
+ */
+export function selectNewLogCount(state: {
+  revision: number;
+  viewRevision: number;
+  filteredLogs: LogEntry[];
+  /** 翻页那一刻的 filteredLogs.length（store 的 viewLength）。 */
+  viewLength: number;
+  page: number;
+  autoScroll: boolean;
+}): number {
+  if (state.revision <= state.viewRevision) return 0;
+  if (!selectShouldPinToLatest(state.page, state.autoScroll)) return 0;
+  return Math.max(0, state.filteredLogs.length - Math.min(state.viewLength, state.filteredLogs.length));
+}

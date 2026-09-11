@@ -18,7 +18,7 @@ import {
   useLogStore,
 } from "./log-store";
 
-export type { LogEntry, LogFilter, LogLevel } from "./log-store";
+export type { LogEntry, LogFilter, LogLevel, LogOriginFilter } from "./log-store";
 
 /**
  * 订阅日志 store 的指定字段（规范 07 §7.4：组件只订阅自己需要的字段，
@@ -26,18 +26,6 @@ export type { LogEntry, LogFilter, LogLevel } from "./log-store";
  */
 export function useLogPanel<T>(selector: (state: LogStoreState) => T): T {
   return useLogStore(selector);
-}
-
-/**
- * 「停在历史页时又新来了多少条日志」——历史页新增提示的判据。
- *
- * 计数放在 store 而不是面板里：它由「翻页」与「新日志入库」两个动作共同决定，
- * 是**状态**不是渲染期能算出来的派生量（渲染期读 ref 会被 react-hooks 规则拦下，
- * 在 effect 里同步 setState 又会级联渲染）。放在 store 里两者都避免。
- */
-export function selectNewLogCount(state: LogStoreState): number {
-  if (state.page === 1) return 0;
-  return state.logs.filter((entry) => entry.seq > state.viewSeq).length;
 }
 
 /* ── 全局未捕获错误进面板（规范 07：操作出问题在日志里要能看到）──────────
@@ -73,6 +61,21 @@ export function describeUnhandledRejection(reason: unknown): string {
   }
   return describeGlobalError(reason);
 }
+
+/**
+ * 面板轮询的日志来源与顺序。顺序即请求顺序，也决定同一批轮询的入库先后。
+ *
+ * - `dev` / `launcher`：启动链路（dev-launcher.log / start-tauri-launcher.log）；
+ * - `app-runtime`：应用运行期业务操作（见 src/lib/app-runtime-log.ts）。
+ *
+ * 三路的行都带写入时刻，合并后由 `mergeTimeline` 按时刻排序，因此到达顺序
+ * 不影响面板的时间序（ISSUE #262）。
+ */
+const POLL_SOURCES = ["launcher", "dev", "app-runtime"] as const;
+type PollSource = (typeof POLL_SOURCES)[number];
+
+/** 轮询间隔：日志「实时感」与请求量的折中（对齐规范 07 §7.8 的增量轮询）。 */
+const POLL_MS = 2000;
 
 export function LogProvider({ children }: { children: React.ReactNode }) {
   const addEntry = useLogStore((s) => s.addEntry);
@@ -194,14 +197,21 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
   }, [addEntry]);
 
   // ── Load launcher log files: startup logs + ongoing dev-server output ──
-  // 轮询来源：launcher（启动链路）、dev（dev-launcher 实时输出）、
-  // app-runtime（应用运行期业务操作日志，见 src/lib/app-runtime-log.ts）。
   //
-  // 面板只显示「本次运行」：三个来源里只有 dev（dev-launcher.log）每次启动被
-  // 覆盖重建，app-runtime 是追加不轮转的——上一次、上上一次运行的行会随首帧
-  // 的整文件重读混进来。服务端在轮询响应里带回会话起点，这里用行时刻裁掉
-  // （见 log-store 的 dropStaleEntries 与 src/lib/log-session-scope.ts）。
-  const offsetsRef = useRef<Partial<Record<"dev" | "launcher" | "app-runtime", number>>>({
+  // 增量读取靠服务端回传的字节游标（`data.size`）。此前把「本轮新增」错当成
+  // 游标（`offsetsRef.current[source] = data.size` 看似对，但服务端在文件超出
+  // 首屏窗口时会把 offset 归零并要求重读整文件），于是每次轮询都在重读整段、
+  // 重复行反复入库——面板看起来「一直在刷同一批内容」，2000 条的环形缓冲被
+  // 重复行占满，真正的新内容反而进不来（ISSUE #262）。
+  //
+  // 现在服务端返回的 `offset` 就是「本段内容在文件里的起点」，游标只能推进到
+  // `size`，并且**回退重读**由面板侧的去重（mergeTimeline）兜底：重复行不会
+  // 被计入时间线，也不会挤掉真正的新日志。
+  //
+  // 面板只显示「本次运行」：`dev`（dev-launcher.log）每次启动被覆盖重建；
+  // `app-runtime` 是追加不轮转的——上一次运行的行会随整段重读混进来。服务端在
+  // 轮询响应里带回会话起点，这里用行时刻裁掉（log-store 的 dropStaleEntries）。
+  const offsetsRef = useRef<Partial<Record<PollSource, number>>>({
     dev: 0,
     launcher: 0,
     "app-runtime": 0,
@@ -210,10 +220,8 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     let mounted = true;
-    const POLL_MS = 2000;
 
-    const sources = ["launcher", "dev", "app-runtime"] as const;
-    const pollSource = async (source: (typeof sources)[number]) => {
+    const pollSource = async (source: PollSource) => {
       try {
         const offset = offsetsRef.current[source] ?? 0;
         const data = await fetchFileLogSlice(source, offset);
@@ -234,11 +242,9 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
         if (entries.length > 0) {
           appendFileLogs(entries);
         }
-
-        // 文件被重置（新运行）时 offset 会回 0；此时丢弃旧 offset，完整重读
-        if (data.offset === 0 && (offsetsRef.current[source] ?? 0) > 0) {
-          offsetsRef.current[source] = 0;
-        }
+        /* 游标只能推进到服务端报告的文件末尾：`data.size` 是文件总字节数，
+         * 下一轮从它之后继续读。`data.offset === 0`（服务端要求重读整文件）
+         * 时同样落到 size，避免下一轮再从头读一遍。 */
         offsetsRef.current[source] = data.size;
       } catch {
         // 开发服务器尚未就绪或日志文件不存在时静默忽略
@@ -246,7 +252,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     };
 
     const poll = async () => {
-      for (const source of sources) {
+      for (const source of POLL_SOURCES) {
         await pollSource(source);
       }
     };

@@ -2,6 +2,7 @@
 
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowDownToLine,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -16,240 +17,22 @@ import {
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import {
-  useLogPanel,
+  dedupeRepeats,
   selectNewLogCount,
+  selectPageLogs,
+  selectShouldPinToLatest,
   type LogEntry,
-  type LogLevel,
   type LogFilter,
-} from "./LogProvider";
-
-const LEVEL_STYLES: Record<LogLevel, string> = {
-  debug: "bg-gray-500/15 text-gray-400 border-gray-500/20",
-  info: "bg-cyan-500/15 text-cyan-400 border-cyan-500/20",
-  warn: "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  error: "bg-rose-500/15 text-rose-400 border-rose-500/20",
-};
-
-/* ── ANSI SGR → React spans ──
- * 解析 \x1b[...m 颜色/样式码，把单色 message 渲染成与终端一致的多色文本。
- * 支持 8 色、亮色、256 色、RGB 前景/背景、bold/italic/underline/faint。 */
-const ANSI_COLORS: Record<number, string> = {
-  0: "#000000",
-  1: "#ef4444",
-  2: "#22c55e",
-  3: "#f59e0b",
-  4: "#3b82f6",
-  5: "#a855f7",
-  6: "#06b6d4",
-  7: "#e5e7eb",
-};
-const ANSI_BRIGHT_COLORS: Record<number, string> = {
-  0: "#4b5563",
-  1: "#ff6b6b",
-  2: "#4ade80",
-  3: "#fbbf24",
-  4: "#60a5fa",
-  5: "#c084fc",
-  6: "#22d3ee",
-  7: "#f9fafb",
-};
-
-function parseAnsi256(i: number): string {
-  if (i < 8) return ANSI_COLORS[i]!;
-  if (i < 16) return ANSI_BRIGHT_COLORS[i - 8]!;
-  if (i >= 232) {
-    const gray = (i - 232) * 10 + 8;
-    return `rgb(${gray},${gray},${gray})`;
-  }
-  const redIndex = Math.floor((i - 16) / 36);
-  const greenIndex = Math.floor(((i - 16) % 36) / 6);
-  const blueIndex = (i - 16) % 6;
-  const ramp = [0, 95, 135, 175, 215, 255];
-  return `rgb(${ramp[redIndex]},${ramp[greenIndex]},${ramp[blueIndex]})`;
-}
-
-interface AnsiStyle {
-  color?: string;
-  backgroundColor?: string;
-  fontWeight?: "bold";
-  fontStyle?: "italic";
-  textDecoration?: string;
-  opacity?: number;
-}
-
-function ansiToSpans(text: string): React.ReactNode[] {
-  const regex = /\x1b\[([0-9;:]*)m/g;
-  const out: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let style: AnsiStyle = {};
-  let key = 0;
-
-  const pushChunk = (chunk: string, s: AnsiStyle) => {
-    if (!chunk) return;
-    if (Object.keys(s).length === 0) {
-      out.push(<span key={key++}>{chunk}</span>);
-      return;
-    }
-    const css: React.CSSProperties = {
-      color: s.color,
-      backgroundColor: s.backgroundColor,
-      fontWeight: s.fontWeight,
-      fontStyle: s.fontStyle,
-      textDecoration: s.textDecoration,
-      opacity: s.opacity,
-    };
-    out.push(
-      <span key={key++} style={css}>
-        {chunk}
-      </span>,
-    );
-  };
-
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(text)) !== null) {
-    pushChunk(text.slice(lastIndex, match.index), style);
-    lastIndex = regex.lastIndex;
-
-    const raw = match[1];
-    if (!raw || raw === "0" || raw === "00") {
-      style = {};
-      continue;
-    }
-
-    const parts = raw.split(";").map((part) => (part === "" ? 0 : Number(part)));
-    let i = 0;
-    while (i < parts.length) {
-      const code = parts[i]!;
-      if (code === 0) {
-        style = {};
-        i++;
-      } else if (code === 1) {
-        style.fontWeight = "bold";
-        i++;
-      } else if (code === 2) {
-        style.opacity = 0.65;
-        i++;
-      } else if (code === 3) {
-        style.fontStyle = "italic";
-        i++;
-      } else if (code === 4) {
-        style.textDecoration = "underline";
-        i++;
-      } else if (code >= 30 && code <= 37) {
-        style.color = ANSI_COLORS[code - 30];
-        i++;
-      } else if (code >= 40 && code <= 47) {
-        style.backgroundColor = ANSI_COLORS[code - 40];
-        i++;
-      } else if (code >= 90 && code <= 97) {
-        style.color = ANSI_BRIGHT_COLORS[code - 90];
-        i++;
-      } else if (code >= 100 && code <= 107) {
-        style.backgroundColor = ANSI_BRIGHT_COLORS[code - 100];
-        i++;
-      } else if (code === 38 && parts[i + 1] === 5) {
-        const idx = parts[i + 2];
-        if (idx !== undefined) style.color = parseAnsi256(idx);
-        i += 3;
-      } else if (code === 48 && parts[i + 1] === 5) {
-        const idx = parts[i + 2];
-        if (idx !== undefined) style.backgroundColor = parseAnsi256(idx);
-        i += 3;
-      } else if (code === 38 && parts[i + 1] === 2) {
-        const red = parts[i + 2];
-        const green = parts[i + 3];
-        const blue = parts[i + 4];
-        if (red !== undefined && green !== undefined && blue !== undefined) {
-          style.color = `rgb(${red},${green},${blue})`;
-        }
-        i += 5;
-      } else if (code === 48 && parts[i + 1] === 2) {
-        const red = parts[i + 2];
-        const green = parts[i + 3];
-        const blue = parts[i + 4];
-        if (red !== undefined && green !== undefined && blue !== undefined) {
-          style.backgroundColor = `rgb(${red},${green},${blue})`;
-        }
-        i += 5;
-      } else {
-        i++;
-      }
-    }
-  }
-  pushChunk(text.slice(lastIndex), style);
-  return out;
-}
-
-/* ── Plain-text log token coloring ──
- * PowerShell Write-Host colors are host-rendered and NOT preserved by
- * Start-Transcript as ANSI escape codes.  When a message has no ANSI codes,
- * we colorize common launcher tokens ([OK], [STEP], URLs, etc.) so the
- * in-app panel matches the terminal look.
- */
-interface TokenStyle {
-  regex: RegExp;
-  style: React.CSSProperties;
-}
-const LOG_TOKENS: TokenStyle[] = [
-  { regex: /^\[\d{2}:\d{2}:\d{2}\]/g, style: { color: "#6b7280" } },
-  { regex: /\[OK\]/g, style: { color: "#22c55e", fontWeight: "bold" } },
-  { regex: /\[STEP\]/g, style: { color: "#06b6d4", fontWeight: "bold" } },
-  { regex: /\[WARN\]/g, style: { color: "#f59e0b", fontWeight: "bold" } },
-  { regex: /\[ERROR\]/g, style: { color: "#ef4444", fontWeight: "bold" } },
-  { regex: /\[INFO\]/g, style: { color: "#9ca3af" } },
-  { regex: /PID\s*[:：]\s*\d+/gi, style: { color: "#c084fc" } },
-  {
-    regex: /https?:\/\/[^\s]+/g,
-    style: { color: "#60a5fa", textDecoration: "underline" },
-  },
-  { regex: /\b(?:[A-Z]:\\|\\)[^\s]*/g, style: { color: "#a78bfa" } },
-];
-
-function hasAnsi(text: string): boolean {
-  return /\x1b\[[0-9;:]*m/.test(text);
-}
-
-function tokenizeLogMessage(text: string): React.ReactNode[] {
-  const combined =
-    /(\[\d{2}:\d{2}:\d{2}\]|\[OK\]|\[STEP\]|\[WARN\]|\[ERROR\]|\[INFO\]|PID\s*[:：]\s*\d+|https?:\/\/[^\s]+|\b(?:[A-Z]:\\|\\)[^\s]*)/gi;
-  // split 带捕获组时，匹配到的分隔符（时间戳/[OK]/URL 等）会保留在结果里；
-  // 空串只出现在文本开头/结尾或相邻 token 之间，丢弃不会丢内容。
-  // 每段是否着色由下方逐段匹配 LOG_TOKENS 决定，与这里的过滤无关。
-  const parts = text.split(combined).filter(Boolean);
-  let key = 0;
-  return parts.map((part) => {
-    for (const token of LOG_TOKENS) {
-      token.regex.lastIndex = 0;
-      if (token.regex.test(part)) {
-        return (
-          <span key={key++} style={token.style}>
-            {part}
-          </span>
-        );
-      }
-    }
-    return <span key={key++}>{part}</span>;
-  });
-}
-
-/* Per-message render cache: a parsed log line is immutable, so we cache the
- * produced React spans by the raw message string.  This avoids re-running the
- * ANSI/token parser for every row on every parent re-render (search, filter,
- * scroll, new-log arrival) — the single biggest cost in the old panel.
- * Memory is bounded by RENDER_CACHE_MAX (full clear on overflow).  Dev note:
- * Fast Refresh re-executes this module on edit, so rule changes naturally
- * start with a fresh cache — no stale-entry purge needed. */
-const RENDER_CACHE = new Map<string, React.ReactNode[]>();
-const RENDER_CACHE_MAX = 5000;
-
-function renderLogMessage(text: string): React.ReactNode[] {
-  const hit = RENDER_CACHE.get(text);
-  if (hit) return hit;
-  const out = hasAnsi(text) ? ansiToSpans(text) : tokenizeLogMessage(text);
-  if (RENDER_CACHE.size >= RENDER_CACHE_MAX) RENDER_CACHE.clear();
-  RENDER_CACHE.set(text, out);
-  return out;
-}
+  type LogOriginFilter,
+} from "./log-store";
+import { useLogPanel } from "./LogProvider";
+import {
+  LEVEL_BADGE_STYLES,
+  LEVEL_TEXT_STYLES,
+  TOKEN_CLASS,
+  rowFragments,
+  type RowToken,
+} from "./log-row-style";
 
 const FILTER_LABELS: { label: string; value: LogFilter }[] = [
   { label: "全部", value: "all" },
@@ -257,6 +40,15 @@ const FILTER_LABELS: { label: string; value: LogFilter }[] = [
   { label: "信息", value: "info" },
   { label: "警告", value: "warn" },
   { label: "错误", value: "error" },
+];
+
+/* 来源筛选（ISSUE #262）：启动日志与应用运行日志此前混在一屏，query 噪音把
+ * 业务日志挤掉。分开看是最直接的「让日志有意义」手段。 */
+const ORIGIN_LABELS: { label: string; value: LogOriginFilter }[] = [
+  { label: "全部来源", value: "all" },
+  { label: "应用", value: "app-runtime" },
+  { label: "启动", value: "dev" },
+  { label: "启动器", value: "launcher" },
 ];
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -284,43 +76,109 @@ function formatTime(ts: number): string {
   return time;
 }
 
+/* Per-message render cache: a parsed log line is immutable, so we cache the
+ * produced fragment list by the raw message string.  This avoids re-running the
+ * ANSI/token parser for every row on every parent re-render (search, filter,
+ * scroll, new-log arrival) — the single biggest cost in the old panel.
+ * Memory is bounded by RENDER_CACHE_MAX (full clear on overflow).  Dev note:
+ * Fast Refresh re-executes this module on edit, so rule changes naturally
+ * start with a fresh cache — no stale-entry purge needed. */
+const FRAGMENT_CACHE = new Map<string, RowToken[]>();
+const FRAGMENT_CACHE_MAX = 5000;
+
+function fragmentsOf(text: string): RowToken[] {
+  const hit = FRAGMENT_CACHE.get(text);
+  if (hit) return hit;
+  const out = rowFragments(text);
+  if (FRAGMENT_CACHE.size >= FRAGMENT_CACHE_MAX) FRAGMENT_CACHE.clear();
+  FRAGMENT_CACHE.set(text, out);
+  return out;
+}
+
+function HighlightedText({
+  text,
+  keyword,
+}: {
+  text: string;
+  keyword: string;
+}) {
+  const fragments = fragmentsOf(text);
+  const needle = keyword.trim().toLowerCase();
+  return (
+    <>
+      {fragments.map((fragment, index) => {
+        const className = fragment.style ? TOKEN_CLASS[fragment.style] : undefined;
+        if (!needle) {
+          return (
+            <span key={index} className={className}>
+              {fragment.text}
+            </span>
+          );
+        }
+        const lower = fragment.text.toLowerCase();
+        const parts: React.ReactNode[] = [];
+        let cursor = 0;
+        let at = lower.indexOf(needle);
+        let key = 0;
+        while (at !== -1) {
+          if (at > cursor) parts.push(fragment.text.slice(cursor, at));
+          parts.push(
+            <mark
+              key={key++}
+              className="rounded-sm bg-amber-400/30 px-0.5 text-amber-100"
+            >
+              {fragment.text.slice(at, at + needle.length)}
+            </mark>,
+          );
+          cursor = at + needle.length;
+          at = lower.indexOf(needle, cursor);
+        }
+        if (cursor < fragment.text.length) parts.push(fragment.text.slice(cursor));
+        return (
+          <span key={index} className={className}>
+            {parts}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 const LogRow = memo(function LogRow({
   entry,
   wrap,
+  keyword,
 }: {
   entry: LogEntry;
   wrap: boolean;
+  keyword: string;
 }) {
-  const levelClass = LEVEL_STYLES[entry.level];
   return (
     <div className="flex items-start gap-2.5 border-b border-white/3 px-4 py-1 font-mono text-[13px] leading-snug hover:bg-white/2">
-      <span className="shrink-0 text-gray-500">{formatTime(entry.time)}</span>
+      <time
+        dateTime={new Date(entry.time).toISOString()}
+        className="shrink-0 tabular-nums text-gray-500"
+      >
+        {formatTime(entry.time)}
+      </time>
       <span
-        className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${levelClass}`}
+        className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_BADGE_STYLES[entry.level]}`}
       >
         {entry.level}
       </span>
       <span
         className={`min-w-0 flex-1 ${
           wrap ? "break-words whitespace-pre-wrap" : "truncate"
-        } ${
-          entry.level === "error"
-            ? "text-rose-300"
-            : entry.level === "warn"
-              ? "text-amber-300"
-              : entry.level === "debug"
-                ? "text-gray-400"
-                : "text-gray-300"
-        }`}
+        } ${LEVEL_TEXT_STYLES[entry.level]}`}
         title={!wrap ? entry.message : undefined}
       >
-        {renderLogMessage(entry.message)}
+        <HighlightedText text={entry.message} keyword={keyword} />
       </span>
       {entry.location && (
         <button
           type="button"
           onClick={() => void navigator.clipboard.writeText(entry.location!).catch(() => undefined)}
-          className="max-w-[45%] shrink-0 cursor-pointer break-all text-right text-[11px] text-gray-600 hover:text-gray-400"
+          className="max-w-[28%] shrink-0 cursor-pointer truncate text-right text-[11px] text-gray-600 hover:text-gray-400"
           title={`${entry.location}（点击复制）`}
         >
           {entry.location}
@@ -330,21 +188,41 @@ const LogRow = memo(function LogRow({
         <span className="shrink-0 text-[11px] text-gray-600">{entry.origin}</span>
       ) : (
         entry.source !== "console" && (
-          <span className="shrink-0 text-[11px] text-gray-600">
-            {entry.source}
-          </span>
+          <span className="shrink-0 text-[11px] text-gray-600">{entry.source}</span>
         )
       )}
     </div>
   );
 });
 
+const ORIGIN_TEXT: Record<string, string> = {
+  all: "全部来源",
+  "app-runtime": "应用运行",
+  dev: "开发服务",
+  launcher: "启动器",
+};
+
+/** 页脚的一行摘要：说清楚「现在看的是哪一段、还有多少」。 */
+function pageSummary(
+  page: number,
+  totalPages: number,
+  pageSize: number,
+  total: number,
+  all: number,
+): string {
+  if (total === 0) return "无匹配日志";
+  const head = `第 ${page} / ${totalPages} 页 · ${pageSize} 条/页`;
+  const tail = `匹配 ${total} 条 · 面板保留最近 ${all} 条`;
+  return `${head} · ${tail}`;
+}
+
 export function LogPanel() {
-  const { filteredLogs, filter, search, isOpen, counts, page, pageSize } =
+  const { filteredLogs, filter, origin, search, isOpen, counts, page, pageSize } =
     useLogPanel(
       useShallow((state) => ({
         filteredLogs: state.filteredLogs,
         filter: state.filter,
+        origin: state.origin,
         search: state.search,
         isOpen: state.isOpen,
         counts: state.counts,
@@ -352,7 +230,9 @@ export function LogPanel() {
         pageSize: state.pageSize,
       })),
     );
+  const revision = useLogPanel((state) => state.revision);
   const setFilter = useLogPanel((state) => state.setFilter);
+  const setOrigin = useLogPanel((state) => state.setOrigin);
   const setSearch = useLogPanel((state) => state.setSearch);
   const setPage = useLogPanel((state) => state.setPage);
   const setIsOpen = useLogPanel((state) => state.setIsOpen);
@@ -365,28 +245,30 @@ export function LogPanel() {
   const [wrap, setWrap] = useState(true);
   const [wide, setWide] = useState(false);
 
-  // ── 按「入库顺序（seq）」滚动、并按 seq 判断有无新内容（#346）────────────
-  // 不能用 filteredLogs.length：批次到达顺序与时间戳顺序不一定一致，条目被插入
-  // 中间而不是末尾时长度会变但「末条」没变（或反过来），滚动与「新日志」判定
-  // 都会失真。`seq` 是入库顺序，新内容 = 末条 seq 变大。
-  //
-  // 翻页后（不在第 1 页）不自动滚动，但仍统计「有了多少条比当前页更新的日志」
-  // 并在页脚提示——否则用户停在历史页时完全看不到「刚才其实有新增」。
-  const latestSeq = filteredLogs[filteredLogs.length - 1]?.seq ?? 0;
-  const prevLatestSeqRef = useRef(latestSeq);
-  /* 「停在历史页时又来了多少条新日志」由 store 持有（见 log-store 的
-   * `latestSeq` / `viewSeq`）：它随「翻页」与「新日志入库」两个动作更新，
-   * 因此在渲染期可读，不必在 effect 里 setState（会级联渲染）。 */
-  const newLogCount = useLogPanel(selectNewLogCount);
+  /* 分页在**过滤后的时间线**上做（时间倒序，第 1 页最新）。页码越界时钳回，
+   * 并把 store 里的 page 一并归位，避免「看着第 1 页、state 里却是第 9 页」。 */
+  const { entries: rawPageLogs, page: safePage, totalPages } = useMemo(
+    () => selectPageLogs(filteredLogs, page, pageSize),
+    [filteredLogs, page, pageSize],
+  );
+  /* 连续重复行折叠只影响显示（见 log-store 的 dedupeRepeats），不改时间线。 */
+  const pageLogs = useMemo(() => dedupeRepeats(rawPageLogs), [rawPageLogs]);
 
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage, setPage]);
+
+  /* 新日志到达 → 第 1 页且用户停在底部时贴底。判据是 `revision`（时间线生成号）
+   * 而不是「末条 seq」：按时刻排序后，迟到的旧时刻行会插进中间、末条不变。 */
+  const prevRevisionRef = useRef(revision);
   useEffect(() => {
     const el = bodyRef.current;
     if (!el || !isOpen) return;
-    if (latestSeq !== prevLatestSeqRef.current && page === 1 && autoScroll) {
+    if (revision !== prevRevisionRef.current && safePage === 1 && autoScroll) {
       el.scrollTop = el.scrollHeight;
     }
-    prevLatestSeqRef.current = latestSeq;
-  }, [latestSeq, isOpen, autoScroll, page]);
+    prevRevisionRef.current = revision;
+  }, [revision, isOpen, autoScroll, safePage]);
 
   const onScroll = () => {
     const el = bodyRef.current;
@@ -395,29 +277,34 @@ export function LogPanel() {
     setAutoScroll(nearBottom);
   };
 
-  const errorCount = useMemo(() => counts.error, [counts.error]);
+  const shouldPin = selectShouldPinToLatest(safePage, autoScroll);
+  const newLogCount = useLogPanel(
+    useShallow((state) =>
+      selectNewLogCount({
+        revision: state.revision,
+        viewRevision: state.viewRevision,
+        viewLength: state.viewLength,
+        filteredLogs: state.filteredLogs,
+        page: state.page,
+        autoScroll,
+      }),
+    ),
+  );
 
-  // ── 翻页（#294）：一次只渲染一页（默认 2000 条/页），按时间倒序分页——
-  // 第 1 页是最新的一段，往前翻看更早的日志。总页数按当前过滤结果计算，
-  // 页码超界时钳到最后一页（日志被清空/过滤变少时自动回正）。
+  const jumpToLatest = () => {
+    setAutoScroll(true);
+    setPage(1);
+    const el = bodyRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  };
+
   const total = filteredLogs.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const pageLogs = useMemo(() => {
-    const end = total - (safePage - 1) * pageSize;
-    const start = Math.max(0, end - pageSize);
-    return filteredLogs.slice(start, end);
-  }, [filteredLogs, safePage, pageSize, total]);
-  const effectivePage = Math.min(page, totalPages);
-  useEffect(() => {
-    if (page !== safePage) setPage(safePage);
-  }, [page, safePage, setPage]);
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-99 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60`}>
+      <div className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-6xl"} flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60`}>
         {/* Header */}
         <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/8 bg-white/2 px-4">
           <div className="flex items-center gap-2">
@@ -425,21 +312,21 @@ export function LogPanel() {
             <span className="text-[15px] font-semibold text-gray-100">
               应用日志
             </span>
-            {errorCount > 0 && (
+            {counts.error > 0 && (
               <span className="rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[11px] font-medium text-rose-300">
-                {errorCount} 错误
+                {counts.error} 错误
               </span>
             )}
           </div>
 
           {/* Level filters */}
-          <div className="ml-4 flex items-center gap-1">
+          <div className="ml-2 flex items-center gap-1">
             {FILTER_LABELS.map((option) => (
               <button
                 key={option.value}
                 type="button"
                 onClick={() => setFilter(option.value)}
-                className={`rounded-md px-2.5 py-1 text-[13px] transition-colors ${
+                className={`rounded-md px-2 py-1 text-[13px] transition-colors ${
                   filter === option.value
                     ? "bg-white/10 text-gray-100"
                     : "text-gray-500 hover:bg-white/4 hover:text-gray-300"
@@ -454,14 +341,27 @@ export function LogPanel() {
             ))}
           </div>
 
+          <select
+            value={origin}
+            onChange={(event) => setOrigin(event.target.value as LogOriginFilter)}
+            title="按来源筛选：应用运行日志 / 启动日志"
+            className="h-8 rounded-lg border border-white/6 bg-[#13131a] px-2 text-[12px] text-gray-300 outline-none focus:border-violet-500/40"
+          >
+            {ORIGIN_LABELS.map((option) => (
+              <option key={option.value ?? "all"} value={option.value ?? "all"}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
           {/* Search */}
-          <div className="relative ml-auto flex w-60 items-center">
+          <div className="relative ml-auto flex w-56 items-center">
             <Search size={14} className="pointer-events-none absolute left-2.5 text-gray-600" />
             <input
               type="text"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜索日志..."
+              placeholder="搜索日志（支持命中高亮）..."
               className="h-8 w-full rounded-lg border border-white/6 bg-[#13131a] pr-7 pl-8 text-[13px] text-gray-200 outline-none placeholder:text-gray-600 focus:border-violet-500/40"
             />
             {search && (
@@ -492,7 +392,7 @@ export function LogPanel() {
             <button
               type="button"
               onClick={copyAll}
-              title="复制全部"
+              title="复制全部日志"
               className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
             >
               <Copy size={16} />
@@ -500,7 +400,7 @@ export function LogPanel() {
             <button
               type="button"
               onClick={download}
-              title="下载日志"
+              title="下载为文本文件"
               className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
             >
               <Download size={16} />
@@ -508,7 +408,7 @@ export function LogPanel() {
             <button
               type="button"
               onClick={clear}
-              title="清空"
+              title="清空面板"
               className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
             >
               <Trash2 size={16} />
@@ -538,81 +438,58 @@ export function LogPanel() {
           onScroll={onScroll}
           className="custom-scrollbar flex-1 overflow-y-auto bg-[#0d0d14]/60"
         >
-          {total === 0 ? (
+          {pageLogs.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-gray-600">
               <FileText size={32} strokeWidth={1.5} className="opacity-30" />
-              暂无匹配的日志
+              {total === 0 ? "暂无匹配的日志" : "本页无内容"}
             </div>
           ) : (
             <div className="flex flex-col">
               {pageLogs.map((entry) => (
-                <LogRow key={entry.id} entry={entry} wrap={wrap} />
+                <LogRow key={entry.id} entry={entry} wrap={wrap} keyword={search} />
               ))}
             </div>
           )}
         </div>
 
-        {/* Footer / count + 翻页（#294：每页 2000 条，倒序分页，第 1 页最新） */}
+        {/* Footer：分页 + 「回到最新」出口。
+            面板保留最近 MAX_LOG_ENTRIES 条（内存上限，防止长跑吃满内存），
+            但**显示**按 200 条/页翻，用户不会再被「两千条封顶」挡住视线。 */}
         <div className="flex h-9 shrink-0 items-center justify-between border-t border-white/8 bg-white/2 px-4 text-[12px] text-gray-500">
-          <span>
-            本页 {pageLogs.length} / 共 {total} 条（面板总计 {counts.all} 条）
-          </span>
+          <span>{pageSummary(safePage, totalPages, pageSize, total, counts.all)}</span>
           <span className="flex items-center gap-3">
-            {!autoScroll && (
+            {shouldPin && (
               <button
                 type="button"
-                onClick={() => {
-                  setAutoScroll(true);
-                  const el = bodyRef.current;
-                  if (el) el.scrollTop = el.scrollHeight;
-                }}
-                className="rounded-md bg-violet-500/90 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-violet-500"
+                onClick={jumpToLatest}
+                className="flex items-center gap-1 rounded-md bg-violet-500/90 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-violet-500"
               >
-                恢复自动滚动
-              </button>
-            )}
-            {newLogCount > 0 && (
-              /* 停在历史页时新增日志只更新计数与时间线，本页内容不变——没有这条
-               * 提示，用户会以为「日志不再刷新了」（ISSUE #346）。 */
-              <button
-                type="button"
-                onClick={() => setPage(1)}
-                className="rounded-md bg-amber-500/90 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-amber-500"
-              >
-                有 {newLogCount} 条新的日志 · 回到最新
+                <ArrowDownToLine size={12} />
+                {newLogCount > 0
+                  ? `有 ${newLogCount} 条新的日志 · 回到最新`
+                  : "回到最新"}
               </button>
             )}
             <span className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => setPage(effectivePage + 1)}
-                disabled={effectivePage >= totalPages}
+                onClick={() => setPage(safePage + 1)}
+                disabled={safePage >= totalPages}
                 title="更早的一页"
                 className="rounded-md p-1 text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <ChevronLeft size={14} />
               </button>
-              <span className="tabular-nums">
-                第 {effectivePage} / {totalPages} 页（每页 {pageSize} 条）
-              </span>
+              <span className="tabular-nums">{ORIGIN_TEXT[origin ?? "all"] ?? "全部来源"}</span>
               <button
                 type="button"
-                onClick={() => setPage(effectivePage - 1)}
-                disabled={effectivePage <= 1}
+                onClick={() => setPage(safePage - 1)}
+                disabled={safePage <= 1}
                 title="更新的一页"
                 className="rounded-md p-1 text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <ChevronRight size={14} />
               </button>
-              {effectivePage > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setPage(1)}
-                  className="rounded-md bg-violet-500/90 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-violet-500"
-                >
-                  回到最新
-                </button>
-              )}
             </span>
           </span>
         </div>
