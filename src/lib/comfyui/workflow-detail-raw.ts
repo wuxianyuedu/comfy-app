@@ -608,6 +608,62 @@ export function buildNodeTypeMap(raw: RawWorkflow | null): Record<string, string
   return nodeTypeById;
 }
 
+/** 子工作流内部节点的输入元数据索引（nodeId → raw 条目）。
+ *
+ *  `buildRawInputs` 只走顶层 `raw.nodes`，子图定义里的内部节点不在其中。
+ *  当用户「下钻到子工作流内部」勾选参数时，落库的 `nodeId` 指向的是内部节点
+ *  （如 `PrimitiveInt.value`），顶层富化按 id 回查必然落空 —— 类型退化成 `*`、
+ *  显示名退化成 pin 名（ISSUE #349：IO 编辑里 seed 显示成别名/原始键）。
+ *  这里把每个子图定义的内部节点输入打平索引，供富化在顶层找不到时兜底。
+ *
+ *  键是内部节点 id 的字符串形式；同名节点在多个子图定义里重复出现时后者覆盖
+ *  （ComfyUI 内部节点 id 在工作流内唯一，实际不会冲突）。 */
+export function buildInnerNodeInputs(
+  raw: RawWorkflow | null
+): Record<string, RawInputEntry[]> {
+  const innerInputsById: Record<string, RawInputEntry[]> = {};
+  const subgraphs = raw?.definitions?.subgraphs;
+  if (!subgraphs) return innerInputsById;
+  for (const subKey of Object.keys(subgraphs)) {
+    const subDef = subgraphs[subKey];
+    if (!subDef || !Array.isArray(subDef.nodes)) continue;
+    for (const node of subDef.nodes) {
+      if (node?.id == null) continue;
+      const inputs = Array.isArray(node.inputs) ? node.inputs : [];
+      if (inputs.length === 0) continue;
+      const widgetValues: unknown[] = Array.isArray(node.widgets_values)
+        ? node.widgets_values
+        : [];
+      const list: RawInputEntry[] = [];
+      for (const inp of inputs) {
+        if (!inp || typeof inp.name !== "string") continue;
+        const widgetName =
+          inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
+        const entry: RawInputEntry = {
+          name: inp.name,
+          label: typeof inp.label === "string" ? inp.label : undefined,
+          localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
+          type: typeof inp.type === "string" ? inp.type : inp.link != null ? "*" : "STRING",
+          isConnection: inp.link != null,
+        };
+        if (widgetName) {
+          entry.widget = { name: widgetName };
+          /* 内部节点的值按「inputs[] 中控件出现顺序」对齐 widgets_values，
+           *  seed 家族多占一个 control_after_generate 槽位（与顶层解析同口径）。 */
+          const slot = list.reduce((count, prev) => {
+            if (!prev.widget) return count;
+            return prev.name === "seed" || prev.name === "noise_seed" ? count + 2 : count + 1;
+          }, 0);
+          if (slot < widgetValues.length) entry.widgetValue = widgetValues[slot];
+        }
+        list.push(entry);
+      }
+      innerInputsById[String(node.id)] = list;
+    }
+  }
+  return innerInputsById;
+}
+
 /** raw 视图专用数据包。
  * 存库的 `graph`（即 `detail.nodes` 的来源）在某些工作流里被「拆平」成了
  * `N:xx` 节点（例如某工作流的 flat form，而其 `_t2i` 兄弟保留 wrapper）。
