@@ -845,3 +845,76 @@ describe("enrichWorkflowIO — hostNodeId 透传", () => {
     expect(result["5::widget::width"]!.hostNodeId).toBeUndefined();
   });
 });
+
+describe("enrichWorkflowIO — slotLabel 下发（别名判定的第二判据）", () => {
+  const WRAPPER_UUID = "e0940f57-80b2-480e-8a38-36968dc1763d";
+
+  /* wrapper 槽位别名 value_1，作者把业务名写在本层 inputs[].label 上。
+   * 通用翻译（localized_name）也在，且排在前 —— 显示名会停在翻译上，
+   * 仅凭显示的 label 无从判断本层是否有作者命名，只有 slotLabel 能作证。 */
+  const raw = {
+    nodes: [
+      {
+        id: 9,
+        type: WRAPPER_UUID,
+        inputs: [
+          {
+            name: "value_1",
+            label: "Seed",
+            localized_name: "随机种",
+            type: "INT",
+            widget: { name: "value_1" },
+            link: null,
+          },
+        ],
+        outputs: [],
+        properties: { proxyWidgetErrorQuarantine: [["1670", "value"]] },
+        widgets_values: [],
+      },
+    ],
+    links: [],
+    definitions: { subgraphs: [] },
+  } as unknown as RawWorkflow;
+
+  it("本层作者名随富化条目下发（供「本地存的是不是机器名」判定）", async () => {
+    const { rawInputsById } = await buildRawInputs(raw, async () => undefined);
+    const io = await enrichWorkflowIO(
+      makeParams(
+        { "9::widget::value_1": { direction: "input", kind: "widget", nodeId: "9", name: "value_1" } },
+        {
+          rawInputsById,
+          graph: { "9": { class_type: WRAPPER_UUID, inputs: {} } },
+          nodeTypeById: { "9": WRAPPER_UUID },
+        }
+      )
+    );
+    /* 显示名取到作者写在槽位上的 label（"Seed"）—— label 排在现代链的
+     *  localized 之前。无论如何，作者名必须随条目下发成 slotLabel。 */
+    expect(io["9::widget::value_1"]!.label).toBe("Seed");
+    expect(io["9::widget::value_1"]!.slotLabel).toBe("Seed");
+  });
+
+  it("普通节点：没有另一个作者名就不塞无信息量的 slotLabel", async () => {
+    const plain = {
+      nodes: [
+        {
+          id: 24,
+          type: "LoadImage",
+          inputs: [{ name: "image", localized_name: "图像", type: "COMBO", widget: { name: "image" }, link: null }],
+          widgets_values: ["a.png"],
+          properties: {},
+        },
+      ],
+      links: [],
+      definitions: { subgraphs: [] },
+    } as unknown as RawWorkflow;
+    const { rawInputsById } = await buildRawInputs(plain, async () => undefined);
+    const io = await enrichWorkflowIO(
+      makeParams(
+        { "24::widget::image": { direction: "input", kind: "widget", nodeId: "24", name: "image" } },
+        { rawInputsById, graph: { "24": { class_type: "LoadImage", inputs: {} } } }
+      )
+    );
+    expect(io["24::widget::image"]!.slotLabel).toBeUndefined();
+  });
+});
