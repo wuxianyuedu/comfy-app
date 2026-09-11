@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { useCustomNodesSettings } from "./hooks/use-custom-nodes-settings";
 import { NodesTab } from "./NodesTab";
 import { ParseConsole, ReportCards } from "./SettingsParts";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 /** 自定义节点导入对话框。
  *
@@ -29,7 +30,7 @@ export function CustomNodesSettings() {
 
       {ctrl.open && (
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
+          className={overlayClass("modal", "z-50 grid place-items-center bg-black/50 p-4")}
           onClick={() => ctrl.setOpen(false)}
         >
           <div

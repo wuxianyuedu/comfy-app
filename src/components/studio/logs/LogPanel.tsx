@@ -23,9 +23,12 @@ import {
   selectShouldPinToLatest,
   type LogEntry,
   type LogFilter,
+  type LogLevel,
+  type LogOriginCounts,
   type LogOriginFilter,
 } from "./log-store";
 import { useLogPanel } from "./LogProvider";
+import { overlayClass } from "~/lib/full-screen-layer";
 import {
   LEVEL_BADGE_STYLES,
   LEVEL_TEXT_STYLES,
@@ -33,6 +36,47 @@ import {
   rowFragments,
   type RowToken,
 } from "./log-row-style";
+
+/**
+ * 计数小徽标：一眼看出「这一类有多少警告、多少错误」。
+ *
+ * 干说数字不够——用户要的是「这里有没有问题」。所以 warn / error 非零时用
+ * 对应级别色，零条目的 warn / error **不显示**（省掉一屏 `警告 0 错误 0` 的噪音），
+ * 其余情况退化为灰色数字（`info 1026` 这种量级本身没有警示含义）。
+ */
+function CountChip({
+  level,
+  value,
+}: {
+  level: LogLevel | "all";
+  value: number;
+}) {
+  const alarming = value > 0 && (level === "warn" || level === "error");
+  const tone =
+    value > 0 && level === "error"
+      ? "text-rose-300"
+      : value > 0 && level === "warn"
+        ? "text-amber-300"
+        : "text-gray-600";
+  return (
+    <span className={`tabular-nums text-[11px] ${tone}`}>
+      {alarming ? `· ${value}` : value}
+    </span>
+  );
+}
+
+/**
+ * 来源下拉里每一项的摘要：`27 条 · 信息 27 · 警告 0`——零警告来源不再显示
+ * 「警告 0」这种一屏噪音，有警告/错误的则一定带出来。
+ * 原生 `<option>` 无法分色，因此这里用**文字**表达状态（选中态在标题徽标里
+ * 有带颜色的版本）。
+ */
+function originOptionSummary(counts: LogOriginCounts[LogOriginFilter]): string {
+  const parts = [`${counts.all} 条`, `信息 ${counts.info}`];
+  if (counts.warn > 0) parts.push(`警告 ${counts.warn}`);
+  if (counts.error > 0) parts.push(`错误 ${counts.error}`);
+  return parts.join(" · ");
+}
 
 const FILTER_LABELS: { label: string; value: LogFilter }[] = [
   { label: "全部", value: "all" },
@@ -43,13 +87,16 @@ const FILTER_LABELS: { label: string; value: LogFilter }[] = [
 ];
 
 /* 来源筛选（ISSUE #262）：启动日志与应用运行日志此前混在一屏，query 噪音把
- * 业务日志挤掉。分开看是最直接的「让日志有意义」手段。 */
-const ORIGIN_LABELS: { label: string; value: LogOriginFilter }[] = [
-  { label: "全部来源", value: "all" },
-  { label: "应用运行", value: "app-runtime" },
-  { label: "应用服务", value: "app" },
-  { label: "启动", value: "dev" },
-  { label: "启动器", value: "launcher" },
+ * 业务日志挤掉。分开看是最直接的「让日志有意义」手段。
+ *
+ * 文案统一取自 ORIGIN_TEXT（此前下拉里叫「启动」、页脚里叫「开发服务」，
+ * 同一个来源两种叫法，用户对不上号）。 */
+const ORIGIN_LABELS: LogOriginFilter[] = [
+  "all",
+  "app-runtime",
+  "app",
+  "dev",
+  "launcher",
 ];
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -196,12 +243,15 @@ const LogRow = memo(function LogRow({
   );
 });
 
-const ORIGIN_TEXT: Record<string, string> = {
+/**
+ * 来源的显示文案（下拉、标题徽标、页脚共用一份，避免同一来源三种叫法）。
+ */
+const ORIGIN_TEXT: Record<LogOriginFilter, string> = {
   all: "全部来源",
   "app-runtime": "应用运行",
   /** 应用服务自身输出（Next dev server 的 stdout/stderr 转录）。 */
   app: "应用服务",
-  dev: "开发服务",
+  dev: "启动",
   launcher: "启动器",
 };
 
@@ -227,6 +277,7 @@ export function LogPanel() {
     search,
     isOpen,
     counts,
+    countsByOrigin,
     page,
     pageSize,
     bootId,
@@ -238,11 +289,15 @@ export function LogPanel() {
       search: state.search,
       isOpen: state.isOpen,
       counts: state.counts,
+      countsByOrigin: state.countsByOrigin,
       page: state.page,
       pageSize: state.pageSize,
       bootId: state.bootId,
     })),
   );
+  /* 计数一律看**当前来源**：「全部来源」下是全局数，选了某个来源就是该来源自己
+   * 的数——级别按钮与来源下拉共用同一份，两边永远对得上（ISSUE #360）。 */
+  const originCounts = countsByOrigin[origin ?? "all"] ?? countsByOrigin.all;
   const revision = useLogPanel((state) => state.revision);
   const setFilter = useLogPanel((state) => state.setFilter);
   const setOrigin = useLogPanel((state) => state.setOrigin);
@@ -316,7 +371,7 @@ export function LogPanel() {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-99 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div className={overlayClass("modal", "z-99 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm")}>
       <div className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-6xl"} flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60`}>
         {/* Header */}
         <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/8 bg-white/2 px-4">
@@ -325,44 +380,56 @@ export function LogPanel() {
             <span className="text-[15px] font-semibold text-gray-100">
               应用日志
             </span>
-            {counts.error > 0 && (
-              <span className="rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[11px] font-medium text-rose-300">
-                {counts.error} 错误
-              </span>
-            )}
+            {/* 标题旁的常驻汇总：现在看的是哪个来源、共多少条、其中多少警告与
+                错误。此前只显示错误数，警告再多也看不见——正是用户反馈的
+                「看着警告很多、切过去却是空的」（ISSUE #360）。 */}
+            <span
+              className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-gray-400"
+              title={`当前来源「${ORIGIN_TEXT[origin ?? "all"]}」共 ${originCounts.all} 条 · 信息 ${originCounts.info} · 警告 ${originCounts.warn} · 错误 ${originCounts.error}`}
+            >
+              {ORIGIN_TEXT[origin ?? "all"]}
+              {" · "}
+              <CountChip level="all" value={originCounts.all} />
+              <CountChip level="warn" value={originCounts.warn} />
+              <CountChip level="error" value={originCounts.error} />
+            </span>
           </div>
 
-          {/* Level filters */}
+          {/* Level filters：数字是**当前来源**下的计数，与右边来源下拉同口径 */}
           <div className="ml-2 flex items-center gap-1">
             {FILTER_LABELS.map((option) => (
               <button
                 key={option.value}
                 type="button"
                 onClick={() => setFilter(option.value)}
-                className={`rounded-md px-2 py-1 text-[13px] transition-colors ${
+                className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] transition-colors ${
                   filter === option.value
                     ? "bg-white/10 text-gray-100"
                     : "text-gray-500 hover:bg-white/4 hover:text-gray-300"
                 }`}
-                title={`${option.label} (${counts[option.value]})`}
+                title={`当前来源的${option.label}：${originCounts[option.value]} 条（警告 ${originCounts.warn} · 错误 ${originCounts.error}）`}
               >
                 {option.label}
-                <span className="ml-1 text-[11px] text-gray-600">
-                  {counts[option.value]}
-                </span>
+                <CountChip level={option.value} value={originCounts[option.value]} />
               </button>
             ))}
           </div>
 
+          {/* 来源筛选：每项自带「信息 / 警告 / 错误」三个数。
+              此前只有名字，用户必须先切过去才知道那边有没有问题——
+              切换后看到空列表就以为日志丢了（ISSUE #360）。
+              `title` 里补出总数，一屏内看清每个类别有多少警告、多少错误。 */}
           <select
-            value={origin}
+            value={origin ?? "all"}
             onChange={(event) => setOrigin(event.target.value as LogOriginFilter)}
-            title="按来源筛选：应用运行日志 / 启动日志"
-            className="h-8 rounded-lg border border-white/6 bg-[#13131a] px-2 text-[12px] text-gray-300 outline-none focus:border-violet-500/40"
+            title="按来源筛选：下拉里每一项都标出该类别的信息 / 警告 / 错误条数"
+            className="h-8 max-w-[15rem] rounded-lg border border-white/6 bg-[#13131a] px-2 text-[12px] text-gray-300 outline-none focus:border-violet-500/40"
           >
-            {ORIGIN_LABELS.map((option) => (
-              <option key={option.value ?? "all"} value={option.value ?? "all"}>
-                {option.label}
+            {ORIGIN_LABELS.map((value) => (
+              <option key={value} value={value}>
+                {`${ORIGIN_TEXT[value]} · ${originOptionSummary(
+                  countsByOrigin[value] ?? countsByOrigin.all,
+                )}`}
               </option>
             ))}
           </select>
@@ -505,7 +572,7 @@ export function LogPanel() {
               >
                 <ChevronLeft size={14} />
               </button>
-              <span className="tabular-nums">{ORIGIN_TEXT[origin ?? "all"] ?? "全部来源"}</span>
+              <span className="tabular-nums">{ORIGIN_TEXT[origin ?? "all"]}</span>
               <button
                 type="button"
                 onClick={() => setPage(safePage - 1)}

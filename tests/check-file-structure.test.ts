@@ -19,6 +19,7 @@
 import {
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
   copyFileSync,
@@ -474,5 +475,109 @@ print("LOG=" + " | ".join(messages))
 
   it.skipIf(!python)("双击入口自身的进程（打包后的 start-tauri.exe）也算用户点击", () => {
     expect(decide("", "start-tauri.exe")).toContain("RESULT=true");
+  });
+});
+
+describe("窗口交接时刻的前台归属复核（独立进程，ISSUE #359 回归）", () => {
+  /**
+   * 启动期判决只回答了「双击之后用户是不是马上走开了」；用户切去干别的可以持续
+   * 几分钟，等应用真正冒出来时「双击入口还在前台」已经失真。更关键的是窗口交接
+   * 那一刻：启动页窗口带 WS_EX_TOOLWINDOW，关闭它之后主窗任务栏按钮重建，Windows
+   * 会把前台**自动放行**给主窗——壳里任何 set_focus() 都「成功」，「不打断用户」
+   * 的策略当场被架空（用户回报的「构建后启动仍然抢前台」）。
+   *
+   * 因此交接时刻要再裁定一次，判据收敛在 scripts/win32-window-focus.py 的纯函数
+   * decide_handoff：只有启动期判决允许给前台才给（give），系统自动放行的前台要还
+   * 回去（restore），前台本来就是别的应用就什么都不做（leave）。
+   *
+   * Win32 部分在 Linux CI 上跑不到，这里按本文件既有套路抽出源码打桩后断言判决表，
+   * 锁住这条用户可感知的行为不再回退。
+   */
+  const FOCUS_SCRIPT = join(process.cwd(), "scripts", "win32-window-focus.py");
+  const python = (() => {
+    for (const candidate of ["python3", "python"]) {
+      try {
+        execFileSync(candidate, ["-c", "import sys; sys.exit(0)"], {
+          stdio: "ignore",
+        });
+        return candidate;
+      } catch {
+        // 试下一个候选
+      }
+    }
+    return "";
+  })();
+
+  /** 抽出 decide_handoff 直接断言判决表。 */
+  const decide = (call: string): string => {
+    const script = `
+import ast, json, sys
+
+src = open(${JSON.stringify(FOCUS_SCRIPT)}, encoding="utf-8").read()
+tree = ast.parse(src)
+blocks = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "decide_handoff"]
+namespace = {}
+exec(compile(ast.Module(body=blocks, type_ignores=[]), "<stub>", "exec"), namespace)
+print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
+`;
+    const proc = spawnSync(python, ["-c", script], { encoding: "utf8" });
+    return `${proc.stdout ?? ""}${proc.stderr ?? ""}`;
+  };
+
+  it.skipIf(!python)("用户就在等它（启动期判决允许）时把前台拿到手", () => {
+    expect(
+      decide("startup_allowed=True, window_visible=True, window_was_foreground=False"),
+    ).toContain('RESULT="give"');
+    expect(
+      decide("startup_allowed=True, window_visible=True, window_was_foreground=True"),
+    ).toContain('RESULT="give"');
+  });
+
+  it.skipIf(!python)("不该给但系统交接时自动放行了前台 -> 把前台还回去", () => {
+    expect(
+      decide("startup_allowed=False, window_visible=True, window_was_foreground=True"),
+    ).toContain('RESULT="restore"');
+  });
+
+  it.skipIf(!python)("用户切走了（前台是别的应用）时什么都不做，窗口留在任务栏", () => {
+    expect(
+      decide("startup_allowed=False, window_visible=True, window_was_foreground=False"),
+    ).toContain('RESULT="leave"');
+  });
+
+  it.skipIf(!python)("窗口没显示时不做任何前台动作", () => {
+    expect(
+      decide("startup_allowed=False, window_visible=False, window_was_foreground=True"),
+    ).toContain('RESULT="leave"');
+    expect(
+      decide("startup_allowed=True, window_visible=False, window_was_foreground=False"),
+    ).toContain('RESULT="leave"');
+  });
+
+  it("壳侧不再无条件 set_focus 试探（那条路径让「别打断用户」形同虚设）", () => {
+    const rust = readFileSync(
+      join(process.cwd(), "src-tauri", "src", "lib.rs"),
+      "utf8",
+    );
+    const body = rust.slice(
+      rust.indexOf("fn show_main_window_without_focus"),
+      rust.indexOf("fn open_comfyui_window"),
+    );
+    expect(body).toContain("if activate {");
+    // 无条件 set_focus：只在 activate 分支里才允许出现一次
+    expect(body.match(/win\.set_focus\(\)/g)?.length).toBe(1);
+    // 交接时刻的前台复审入口必须存在（把系统自动放行的前台还回去）
+    expect(rust).toContain("win32-window-focus.py");
+  });
+
+  it("启动器在窗口就绪时拉起交接复核进程", () => {
+    const launcher = readFileSync(
+      join(process.cwd(), "scripts", "start_tauri_launcher.py"),
+      "utf8",
+    );
+    expect(launcher).toContain("def spawn_foreground_watch(");
+    // 三条完成路径（prebuilt / tauri dev / standalone）都要复核
+    expect(launcher.match(/spawn_foreground_watch\(/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(launcher).toContain("foreground-watch.log");
   });
 });

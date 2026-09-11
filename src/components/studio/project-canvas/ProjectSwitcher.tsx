@@ -5,6 +5,7 @@
  *  rename state lives in useProjectManager and is threaded through props.
  */
 import { Icon } from "@/components/ui/icon";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 interface ProjectSwitcherProps {
   projectName: string;
@@ -54,7 +55,7 @@ export function ProjectSwitcher({
       </button>
       {menuOpen && (
         <>
-          <div className="fixed inset-0 z-30" onClick={onCloseMenu} />
+          <div className={overlayClass("modal", "z-30")} onClick={onCloseMenu} />
           <div className="absolute top-10 left-0 z-40 w-60 overflow-hidden rounded-xl border border-white/10 bg-[#14121f]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur">
             <div className="px-2 py-1 text-[10px] tracking-wider text-gray-500 uppercase">
               我的画布项目

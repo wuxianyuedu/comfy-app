@@ -952,6 +952,9 @@ class SplashWindow:
         self._stop_tailer = threading.Event()
         self._close_btn_rect = (0, 0, 0, 0)  # left, top, right, bottom
         self._close_should_terminate = False
+        # 项目根：启动完成时用它在后台复核窗口交接后的前台归属
+        # （见 spawn_foreground_watch）。
+        self._project_root = ""
 
     def _register_class(self) -> bool:
         wnd_proc = ctypes.WINFUNCTYPE(
@@ -1377,6 +1380,83 @@ class SplashWindow:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  启动完成后的前台归属复核（窗口交接那一刻，独立进程）
+# ═══════════════════════════════════════════════════════════════════════════════
+def app_window_process_name() -> str:
+    """应用壳窗口所属进程的 exe 文件名（小写）。"""
+    return os.path.basename(sys.executable).lower() if os.name == "nt" else "app.exe"
+
+
+def _find_app_window() -> HWND:
+    """当前可见的应用壳窗口句柄（主窗口或启动页），找不到返回 0。"""
+    found: list[HWND] = [0]
+
+    def callback(hwnd: HWND, _lparam: LPARAM) -> bool:
+        if not user32.IsWindowVisible(hwnd):
+            return True
+        length = user32.GetWindowTextLengthW(hwnd)
+        if length == 0:
+            return True
+        buf = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(hwnd, buf, length + 1)
+        if _is_app_shell_window(hwnd, buf.value):
+            found[0] = hwnd
+            return False
+        return True
+
+    try:
+        proc = WNDENUMPROC(callback)
+        user32.EnumWindows(proc, 0)
+        callback._keep = proc  # type: ignore[attr-defined]
+    except Exception as exc:
+        log(f"_find_app_window error: {exc}")
+    return found[0]
+
+
+def spawn_foreground_watch(project_root: str) -> None:
+    """交接复核：窗口真正显示之后，再裁定一次前台归属（见 scripts/win32-window-focus.py）。
+
+    启动期的 `decide_foreground` 只回答「双击之后用户是不是马上走开了」——用户切去
+    干别的可以持续几分钟，等应用真正冒出来时「双击入口还在前台」这条判据早已失真；
+    更关键的是窗口交接那一刻 Windows 会把前台**自动放行**给新显示的主窗（启动页是
+    WS_EX_TOOLWINDOW，关闭后任务栏按钮重建），壳里任何 `set_focus()` 都「成功」，
+    「不打断用户」的策略当场被架空。复核进程负责把这个不该给的前台还回去。
+
+    独立进程而非线程：前台输入相关的动作（AttachThreadInput / SendInput /
+    SetForegroundWindow）都绑定调用线程的输入状态，混进 GUI 线程会干扰窗口消息。
+    日志写 log/launcher/foreground-watch.log——交接发生在启动完成之后，那时启动器
+    主日志已经收尾，独立落盘才排得到。
+    """
+    hwnd = _find_app_window()
+    if not hwnd:
+        log("foreground watch: no app shell window found, skip")
+        return
+    focus_script = os.path.join(project_root, "scripts", "win32-window-focus.py")
+    if not os.path.isfile(focus_script):
+        log(f"foreground watch: script missing: {focus_script}")
+        return
+    try:
+        log_dir = _ensure_log_dir(project_root)
+        out = open(os.path.join(log_dir, "foreground-watch.log"), "a", encoding="utf-8", buffering=1)
+        child_env = {**os.environ, "COMFYAPP_FOREGROUND": os.environ.get("COMFYAPP_FOREGROUND", "0")}
+        subprocess.Popen(
+            [sys.executable, focus_script, "HWND:%d" % int(hwnd), app_window_process_name()],
+            cwd=project_root,
+            env=child_env,
+            stdin=subprocess.DEVNULL,
+            stdout=out,
+            stderr=out,
+            close_fds=True,
+            # 熔断保护：复核最迟 60s 自己退出，不留常驻进程。
+            creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
+            | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+        )
+        log(f"foreground watch spawned (hwnd={int(hwnd)}, process={app_window_process_name()})")
+    except Exception as exc:
+        log(f"foreground watch spawn failed: {exc}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  comfy-cli 虚拟环境准备（后台触发，不阻塞启动）
 # ═══════════════════════════════════════════════════════════════════════════════
 def _comfy_cli_venv_python(project_root: str) -> str:
@@ -1504,6 +1584,7 @@ def monitor(proc: "subprocess.Popen[str] | None", splash: SplashWindow):
                 return
             if find_tauri_window(exact=True):
                 log("tauri window detected, closing splash in 600ms")
+                spawn_foreground_watch(splash._project_root)  # type: ignore[attr-defined]
                 splash.close_later(600, terminate=False)
                 return
             if proc is not None and proc.poll() is not None:
@@ -1633,6 +1714,8 @@ def _monitor_headless(
                     elapsed=elapsed(),
                 )
                 log("tauri window detected, launcher exiting")
+                # 交接已完成（主窗口已可见）：复核前台归属，把「不该给的前台」还回去。
+                spawn_foreground_watch(project_root)
                 if proc is not None and proc.poll() is None:
                     try:
                         proc.wait(timeout=3)
@@ -1677,6 +1760,7 @@ def _monitor_headless(
                 ready=True,
                 elapsed=elapsed(),
             )
+            spawn_foreground_watch(project_root)
         else:
             _write_status(
                 project_root,
@@ -1827,6 +1911,7 @@ def _run_standalone(project_root: str, mutex, args) -> int:
     while time.time() < deadline:
         if find_tauri_window(exact=True):
             log("standalone mode: tauri window detected, launcher exiting")
+            spawn_foreground_watch(project_root)
             break
         if proc.poll() is not None:
             log("standalone mode: app.exe exited early")
@@ -1966,6 +2051,7 @@ def main(argv: list[str] | None = None) -> int:
         return monitor_code
 
     splash = SplashWindow()
+    splash._project_root = project_root
     if not splash.show():
         if mutex:
             kernel32.CloseHandle(mutex)

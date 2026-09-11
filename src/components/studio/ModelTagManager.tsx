@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 
 import { useModelTags, type TagItem } from "./hooks/use-model-tags";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 interface ModelTagManagerProps {
   /** Initial tags (from the parent's cached library list). */
@@ -46,7 +47,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
 
   return (
     <div
-      className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 p-4"
+      className={overlayClass("modal", "z-100 flex items-center justify-center bg-black/60 p-4")}
       onClick={onClose}
     >
       <div

@@ -48,18 +48,15 @@ export type RawUiNode = {
   widgets_values?: unknown[];
 };
 
-/** Map an API-format node id (e.g. "76:67") or top-level id to the raw UI node. */
+/** Map an API-format node id (e.g. "4:1670") or top-level id to the raw UI node.
+ *
+ *  子图内部的覆盖项落库时会把「宿主 id 链」与「内部节点 id」都记下来，运行期
+ *  拼成 comfy-cli 展开后的 `4:1670`（嵌套时 `4:5:1670`）。本函数按这条链**逐层
+ *  下钻**：每一段在前一层的节点表里找到 wrapper，取它的 `type`（子图 UUID）定位
+ *  子图定义，再用下一段在该定义里继续找 —— 而不是「拿最后一段的裸 id 去所有
+ *  子图定义里扫一遍」。后者在同名内部 id、或定义缺失时会撞上错的节点 / 静默
+ *  落空（`slot < 0 → continue`，用户看到「改了没生效」），逐层下钻才是确定性的。 */
 function resolveRawNode(raw: JsonRecord, nodeId: string): RawUiNode | null {
-  const defs = raw.definitions;
-  const subs =
-    defs != null && typeof defs === "object"
-      ? (defs as JsonRecord).subgraphs
-      : undefined;
-  const subList: unknown[] = Array.isArray(subs)
-    ? subs
-    : subs != null && typeof subs === "object"
-      ? Object.values(subs)
-      : [];
   const findInNodes = (nodes: unknown, id: string): RawUiNode | null => {
     if (!Array.isArray(nodes)) return null;
     for (const x of nodes) {
@@ -73,29 +70,39 @@ function resolveRawNode(raw: JsonRecord, nodeId: string): RawUiNode | null {
     }
     return null;
   };
-  if (nodeId.includes(":")) {
-    const internalId = nodeId.split(":").pop()!;
-    for (const sg of subList) {
-      const nodes =
-        sg != null && typeof sg === "object"
-          ? (sg as JsonRecord).nodes
-          : undefined;
-      const n = findInNodes(nodes, internalId);
-      if (n) return n;
+
+  if (!nodeId.includes(":")) {
+    const top = findInNodes(raw.nodes, nodeId);
+    if (top) return top;
+    /* 存量兜底：入库时还不知道「宿主 id」的旧数据，内部节点只存了裸 id
+     *  （`1670`）。新数据一律带宿主 id 走上方确定性下钻；这里仅为已在库的
+     *  旧行保留「在子图定义里找同名内部节点」的最后兜底，找不到就是找不到
+     *  —— 顶层确实没有这个 id 时返回 null 好过误写到别处。 */
+    for (const sub of subgraphDefs(raw).values()) {
+      const found = findInNodes(sub.nodes, nodeId);
+      if (found) return found;
     }
     return null;
   }
-  const top = findInNodes(raw.nodes, nodeId);
-  if (top) return top;
-  for (const sg of subList) {
-    const nodes =
-      sg != null && typeof sg === "object"
-        ? (sg as JsonRecord).nodes
-        : undefined;
-    const n = findInNodes(nodes, nodeId);
-    if (n) return n;
+
+  const segments = nodeId.split(":").filter((seg) => seg !== "");
+  if (segments.length < 2) return null;
+
+  const defsByUid = subgraphDefs(raw);
+  let currentNodes: unknown = raw.nodes;
+  let node: RawUiNode | null = null;
+  for (let i = 0; i < segments.length; i++) {
+    node = findInNodes(currentNodes, segments[i]!);
+    if (!node) return null;
+    if (i === segments.length - 1) return node;
+    /* 还有下一段 ⇒ 本节点必须是子图 wrapper：用它的 `type`（子图 UUID）定位
+     *  子图定义，下一段在该定义的 nodes 里继续找。 */
+    const classType = typeof node.type === "string" ? node.type : undefined;
+    const sub = classType ? defsByUid.get(classType) : undefined;
+    if (!sub || !Array.isArray(sub.nodes)) return null;
+    currentNodes = sub.nodes;
   }
-  return null;
+  return node;
 }
 
 /** Index of a named widget input within a UI node's `widgets_values` array. */

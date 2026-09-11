@@ -27,7 +27,8 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
   │           失败同样触发 on_page_load Finished，不校验会把 Edge 错误页
   │           当成应用界面显示）
   │           + 交换窗口默认**不抢前台**（窗口进任务栏 + 任务栏闪烁提醒），
-  │           是否给前台由启动器经 COMFYAPP_FOREGROUND 决定（见 §1.3）
+  │           是否给前台由启动器经 COMFYAPP_FOREGROUND 决定；窗口交接那一刻
+  │           再由启动器的复核进程复裁一次（见 §1.3）
   └─▶ cmd → pnpm dev → node next dev（127.0.0.1:3100）
         就绪后 splash 调 navigate_to_app → main 加载 /workspace → 交换窗口
 ```
@@ -105,6 +106,46 @@ comfy-cli 做 UI→API 转换，解释器固定为 `<项目根>\python-venv\comf
 | 显式冷启动（`-ColdStart` / `--cold-start`，脚本或终端拉起） | 允许 | 命令行路径，用户在终端里等结果 |
 | 已有实例在跑，这次只是唤起（`--focus`，默认开） | 允许 | 用户点了启动就该看到界面 |
 | 其余（前台是别的应用） | **拒绝** | 这就是用户切去干别的了，抢前台会打断他 |
+
+### 交接时刻的复核（`scripts/win32-window-focus.py`）
+
+只判一次不够——用户双击后去干别的可以持续几分钟，等应用真正冒出来时「双击入口还在
+前台」这条判据早已失真；更关键的是**窗口交接那一刻 Windows 会把前台自动放行给新显示
+的主窗**：启动页窗口一直是 `WS_EX_TOOLWINDOW`（不产生任务栏按钮），主窗 `show()` 时
+任务栏按钮首次创建，Windows 把它当成「新窗口」按「用户刚启动 → 允许置前」放行。
+于是壳里任何 `set_focus()` 都「成功」——「不打断用户」的策略在交接这一瞬间被架空，
+这正是 ISSUE #359 修复后用户仍反馈「启动仍然抢前台」的原因。
+
+因此壳侧**不再无条件调 `set_focus()` 试探**（只在 `request_focus` / `configured`
+为真时才争取前台），并新增一个交接复核进程收尾：
+
+| 段 | 位置 | 职责 |
+|---|---|---|
+| 执行（窗口显示） | `src-tauri/src/lib.rs` 的 `show_main_window_without_focus()` | `show()` 一律执行（窗口必须出现在任务栏）；只有显式要求给前台时调 `set_focus()`，未获前台则补任务栏闪烁 |
+| 复核（交接后，独立进程） | `scripts/start_tauri_launcher.py` 的 `spawn_foreground_watch()` → `scripts/win32-window-focus.py` | 主窗口可见后复裁一次：`give` 把前台拿到手（含键盘焦点）／`restore` 把系统自放的前台还回去／`leave` 什么都不做 |
+
+复核判决表（`decide_handoff()`，**默认什么都不做**）：
+
+| 情形 | 动作 | 为什么 |
+|---|---|---|
+| 启动期判决允许（`COMFYAPP_FOREGROUND=1`） | `give` | 用户就在等这个应用，前台必须真的到手（含键盘焦点，否则输入会落到别的窗口） |
+| 不该给，但窗口自己已是前台（系统交接时自动放行） | `restore` | 这个前台不是用户要的，留着就是「还是会抢前台」 |
+| 不该给，且前台是别的应用 | `leave` | 用户切去干别的了，窗口只留在任务栏 + 任务栏闪烁提醒 |
+| 窗口还没显示 | `leave` | 没有前台归属要处理 |
+
+「还回去」用 `SendInput` 发一个**无副作用的 Alt 按键**（不产生输入内容、不切换窗口），
+把输入权交回用户当前线程，再靠 `SetForegroundWindow` 把前台还回去——单独调
+`SetForegroundWindow` 会被前台锁定挡下（实测就是「`already=focused` / 任务栏闪烁反复
+触发」那条路径）。复核只在交接那一刻执行一次，之后不再动前台：用户后来自己点了别处，
+就不该再被拉回去。
+
+复核跑在**独立进程**而非线程：前台输入相关的动作（`AttachThreadInput` / `SendInput` /
+`SetForegroundWindow`）都绑定调用线程的输入状态，混进 GUI 线程会干扰窗口消息；
+独立进程还带 60s 超时熔断，不留常驻进程。日志：`log/launcher/foreground-watch.log`
+（交接发生在启动完成之后，那时启动器主日志已经收尾，独立落盘才排得到）。
+
+纯判定函数 `decide_handoff()` 不依赖 Win32，可在 CI 上直接测；回归测试见
+`tests/check-file-structure.test.ts` 的「窗口交接时刻的前台归属复核」用例组。
 
 启动器另有两个显式覆盖开关：`--foreground` / `--background`（调试与特殊入口用）。
 壳侧的三个调用点（main 页面加载完成交换窗口、splash 缺失时的兜底导航、150s
@@ -212,6 +253,7 @@ log/
 | `log/launcher/pnpm-install-stdout/stderr.log` | dev-launcher.ps1（依赖预检） | 自动补装依赖的原始输出 | 每次触发覆盖 |
 | `log/launcher/drizzle-push-stdout/stderr.log` | dev-launcher.ps1（schema 同步） | drizzle-kit push / heal-db 的原始输出 | 每次启动覆盖 |
 | `log/launcher/tauri-shell.pid` | dev-launcher.ps1 写 / python 启动器读+删 | 本次拉起的桌面壳 PID；启动器先退出时靠它对仍存活的壳做 `taskkill /T /F` 兜底回收（见 §3） | 每次启动覆盖，兜底回收后删除 |
+| `log/launcher/foreground-watch.log` | python 启动器 → 交接复核进程（`scripts/win32-window-focus.py`） | 窗口交接时刻的前台归属裁定与执行结果（`give` / `restore` / `leave` + 句柄），排查「启动仍然抢前台」先看这里（见 §1.3） | 追加写 |
 | `run/launch-status.json` | python 启动器 | 结构化启动进度，splash 页展示；launcher 退出 30s 后自删 | — |
 | 启动页「查看日志」面板 | splash 前端轮询 `get_launch_log` | dev-launcher.log（经 sentinel 定位）+ dev-launcher-stderr.log + log/shell/shell.log（release）的尾部（去 ANSI、限长），启动页实时看执行到哪一步 | — |
 | `.next/dev/logs/next-development.log` | Next dev server | dev server 内部日志（含锁冲突提示） | Next 自管 |
@@ -276,6 +318,8 @@ log/
 | 打包启动器时报「无法清理 start-tauri」 | 残留的提权进程（如卡死的 pyinstaller/启动器）持有 `_internal` 文件，普通权限无法终止 | 重启后重试；应急：`pyinstaller --distpath dist-new tools/start-tauri.spec` 打到新目录后手动换文件 |
 | 启动时先看到 Edge「无法访问此页面 / ERR_CONNECTION_REFUSED」（localhost 拒绝连接），之后才出现启动进度或直接黑等 | **壳编译时没带 `custom-protocol` feature**（裸 `cargo build --release`）：tauri 的 `cfg(dev)` 由该 feature 决定，不带它 = dev 模式行为——①启动页相对 URL 解析到 `build.devUrl`（http://localhost:3100/{{shell.splash}}），dev server 未就绪时 WebView2 渲染错误页且永不重试（2026-09-02 定位，冷启动必现；官方 `pnpm tauri build` 会自动带该 feature，所以生产包没这问题）②资源根本没内嵌进二进制（启动页由 dev server 提供）。叠加因素：壳二进制过期（改了 src-tauri 后未重编，旧版 splash 的 `window.location.replace` 兜底把错误页顶上来）；WebView2 对导航失败也触发 on_page_load Finished，交换窗口前不校验可达性会把错误页当应用显示 | 重编壳必须带 feature：`cd src-tauri; cargo build --release --features custom-protocol`。现版壳已四重防护：splash 不再自导航、交换前 TCP 可达性校验、main 加载失败重导航循环、启动页看门狗（URL 被带走 1s 内恢复进度页） |
 | 应用启动完成瞬间把窗口弹到最前面，打断用户正在看的别的内容（启动期间切出去干别的了） | **窗口交换只做 `show()` + `set_focus()`**：启动耗时期间用户可能已切走，加载完成照样抢前台（ISSUE #359）。判据缺失——「用户刚点的启动」与「用户早就切走了」在旧实现里没被区分 | 已修：启动完成默认只 `show()`（窗口进任务栏）并 `request_user_attention` 请求任务栏闪烁提醒；是否给前台由启动器 `decide_foreground()` 判决并经 `COMFYAPP_FOREGROUND` 注入（见 §1.3），只有「前台本来就是本应用 / 前台是双击入口 / 显式冷启动 / 唤起已有实例」才给。改的是 `src-tauri/src/**`、`Cargo.toml`（`tray-icon`）与 capabilities，**必须重编壳**：`cd src-tauri; cargo build --release --features custom-protocol` |
+| 上面这条修完、重编壳后**启动仍然抢前台**（ISSUE #359 回归） | **交接瞬间 Windows 自己把前台放行给了主窗**，壳里那条「不抢前台」根本管不到：①启动页窗口是 `WS_EX_TOOLWINDOW`，不产生任务栏按钮；主窗 `show()` 时任务栏按钮首次创建，Windows 按「新窗口 + 用户刚启动」放行前台（实测日志就是 `show_main_window_without_focus` 里 `is_focused()` 一开始就为 true）；②旧实现「无条件调一次 `set_focus()` 再看结果」——窗口已被系统放行，这次调用必然「成功」，反而把「不抢前台」演成了「一定给前台」；③启动期的 `decide_foreground()` 只判一次，用户切去干别的几分钟后「双击入口还在前台」这条早已失真 | 已修（两段）：①壳侧只在 `request_focus` / `COMFYAPP_FOREGROUND=1` 时才调 `set_focus()`，不再无条件试探；②新增交接复核进程（`scripts/win32-window-focus.py`，由 `spawn_foreground_watch()` 在主窗口可见时拉起）：不该给就给前台**还回去**（`SendInput` 无副作用 Alt + `SetForegroundWindow`），该给就拿到手（含键盘焦点）。判决表与结论见 §1.3，回归测试见 `tests/check-file-structure.test.ts`。诊断入口：`log/launcher/foreground-watch.log` |
+
 
 | 关掉应用、马上重新双击 {{shell.exe.prebuilt}}，再进工作流库看到「未找到匹配的工作流 / 共 0 个工作流」——像是工作流被清空了（ISSUE #369） | **「还没加载出来」与「真的没有」在界面上长得一样**：`workflow.list` 是服务端较慢的一跳，而服务启动期要经过依赖预检（可能触发一次 `pnpm install`）→ next dev 首屏编译 → Drizzle `push` 同步表结构，这段时间里查询一直没 resolve；列表组件只有「有数据 / 无数据」两种呈现，于是空态文案（「未找到匹配的工作流」）被当成结论显示出来。这与「数据库真的空 / 目录里真的没有工作流」逐字相同，用户无从区分 | 已修：列表三态明确分开——`loading`（正在加载）/ `loadStalled`（超过 8s 未返回 → 可重试 + 引导打开日志面板看原因）/ 真为空（区分「搜索无结果」与「还没有工作流」，给导入或配置本地目录的引导）。判据在 `use-workflow-library.ts` 的 controller，形态在 `workflow-library-config` 与 `WorkflowLibraryList`。**注意**：这类「慢一跳」的界面不能只在快路径上测；新增列表/详情页时默认要有加载态，否则同一症状会在别处再现 |
 
@@ -307,6 +351,7 @@ log/
 | 设置页「打开查看 ComfyUI」弹出独立第 2 窗口且空白、无法关闭 | 旧方案用 Rust `open_comfyui_window` 在壳内另开一个 `comfyui` WebviewWindow；用户反馈这违背「像文件管理器多页签」的预期，且独立窗口可能空白/难关闭 | 已改为**同一主窗口内的应用级页签**（后续 ISSUE #310/#200 又把页签搬到窗口标题行，见下表末行）：`shell-tabs-store` 管理页签，`ShellTabs` 在窗口顶部渲染页签栏，ComfyUI 以 iframe 内嵌为主应用页签并行内容（CSS 显隐切换，主应用组件树保持挂载不丢态）。配套：①`tauri.conf.json` CSP 增加 `frame-src 'self' http://127.0.0.1:* http://localhost:*` 放行本地 ComfyUI 被 iframe 内嵌；②设置页 `openComfy` 桌面壳分支改为 `useShellTabs.openTab` 打开 ComfyUI 页签，不再调用 `open_comfyui_window`；③浏览器/dev 模式仍走系统浏览器兜底。注：若 ComfyUI 自身设置 `X-Frame-Options`/CSP `frame-ancestors` 拒绝嵌套，页签会空白——此时可回退到独立窗口（Rust `open_comfyui_window` 保留）或让 ComfyUI 放行 frame |
 | 页签栏占用了应用内的一块区域，而不是显示在窗口标题行（用户期望「像文件资源管理器那样」） | 应用内页签方案（上一条）只解决了「不另弹独立窗口」，页签栏仍渲染在**原生标题栏下方**，等于在应用内又占掉一条 40px 区域（ISSUE #310 / #200） | 已改为**自定义标题栏**：主窗口 `decorations: false` 关掉原生装饰，页签栏与标题行合并为同一条横条——页签 + 拖拽空白区 + 最小化/最大化/关闭。配套：①`TitleBarTabs` 渲染标题行，拖拽区用 `data-no-drag` 标记排除页签/按钮（点击不被拖拽吞掉），双击空白处最大化/还原；②窗口动作（`startDragging`/`minimize`/`toggleMaximize`/`isMaximized`/`close`）统一封在 `src/lib/window-controls-client.ts`（浏览器降级为空操作），最大化状态用 `onResized` 订阅同步；③`capabilities/{default,remote}.json` 各补 5 条 `core:window:allow-*` 权限；④浏览器 / dev 无原生标题栏可让位，`shouldUseTitleBarTabs` 判据退回应用内页签栏。**改的是 `src-tauri/src/**` 与窗口配置，必须重编壳**：`cd src-tauri; cargo build --release --features custom-protocol`。回归测试见 `src/lib/title-bar-derive.test.ts` |
 | **打开全屏视图（设置 / 工作流编辑器 / 脚本编辑器 / 消息中心）后，页签整条消失、切不回其它页签** | **全屏视图仍按 `fixed inset-0` 铺满整个视口，把标题行（页签栏）盖住**（ISSUE #310 回归）：页签搬到窗口标题行之后，「全屏」的坐标系变了——标题行是**应用级 chrome**，任何视图都不该盖它；而应用内那些「全屏视图」的 `inset-0` 是相对**整个视口**定位的，于是页签被自己的视图盖掉，用户只能先关掉当前视图（实测：设置页打开后顶部只剩设置自己的 header，主应用页签不可见也不可点） | 已修：新增 `src/lib/full-screen-layer.ts`（判据）+ `src/components/studio/fullscreen/FullScreenLayer.tsx`（视图层），全屏视图的定位从 `fixed inset-0` 改为 `fixed top-title-bar right-0 bottom-0 left-0`——**让出标题行、铺满其下方的内容区**（`bottom-0` 必须显式，否则靠内容高度撑开、拉伸不到底）。接入点：`SettingsOverlay`（含 loading / error / 未就绪三态）、`WorkflowEditorInner`（loading / error / 主态）、`WorkflowCanvasEditor` 崩溃兜底、`WorkflowLibrary` 动态加载占位、`ScriptMarkdownEditor`、`MessageCenterPanel`、`WorkflowCanvasSettings` / `ProjectCanvasSettings` 抽屉、`ProjectOutputs` 元数据抽屉。**踩坑**：tailwind v4 只有 `--spacing-<name>` 命名空间能生成间距类，自定义名 `--title-bar-height` **产出 0 个类**（全屏视图会静默退回 `top:auto` 继续被盖住）——标题行高度因此定为 `--spacing-title-bar: 2.25rem`，`TitleBarTabs` / `InAppTabStrip` 的 `h-title-bar` 与全屏视图的 `top-title-bar` 同取这一处。回归测试见 `src/lib/full-screen-layer.test.ts` 与 `e2e/critical-flows.spec.ts`（「打开设置后应用页签仍可见可点」，用 `elementFromPoint` 断言顶部命中页签栏） |
+| **打开居中弹窗（应用日志 / 执行日志 / 任务详情 / 模型库…）后，页签与右上角的关闭按钮被挡住** | **同一处回归的第二形态：首轮只改了「全屏视图」，弹窗类浮层仍是 `fixed inset-0`**（ISSUE #310 二次回归）。页签搬到窗口标题行后，任何铺满**整个视口**的浮层都会盖住标题行；而弹窗是全项目最通用的写法（25 个文件），逐个文件手改必然再漏——用户实测：打开「应用日志」后页签与右上角关闭按钮同时不可见、不可点 | 已修（判据与门禁见 12 §12.8）：① 全屏视图与模态弹窗统一经 `overlayClass(kind, extra)` / `fullScreenLayerClass(z, extra)` 取让位定位（顶部 `top-title-bar`），不再手写 `fixed inset-0`；② 接入 21 个浮层（应用日志、执行日志 ×2、任务详情、视频队列、模型库 / 标签、来源、删除工作流、产出预览、调试链路、`ModalDialog`、设置页两个弹窗、工坊 API 渠道 / LLM 上下文、节点设置、右键菜单 / 项目切换 / 种子模式遮罩、工作流库元数据编辑、`ui/dialog` 与 `ui/sheet` 遮罩）；③ **新增硬规则门禁** `scripts/check-title-bar-clearance.cjs`（pre-commit 第 3 步 + CI），`src/components/**`、`src/app/**` 里出现 `fixed inset-0` 即阻断，避免再靠人肉逐个文件翻。豁免仅 3 条（判据模块、注释引用、装饰背景层），见脚本内 `EXEMPT`。回归测试见 `src/lib/full-screen-layer.test.ts`、`tests/check-title-bar-clearance.test.ts`、`e2e/critical-flows.spec.ts`（新增「打开应用日志面板后应用页签仍可见可点」，已反向验证：改回 `inset-0` → 用例失败） |
 ## 6. 工具链钉死项（改之前必须理解原因）
 
 | 位置 | 配置 | 原因 |

@@ -7,6 +7,7 @@ import { folderMeta, getFolderTooltip } from "@/lib/model-types";
 import { useModelFolderConfig } from "./hooks/use-model-folder-config";
 import { useModelLibrary } from "./hooks/use-model-library";
 import { ALL_TYPES, type FolderConfigRow as FolderConfigRowData, fmtSize } from "./model-library-config";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 /**
  * 工作室模型库 —— 视图层（规范 17 §17.2 第③层）。
@@ -167,7 +168,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
   const c = useModelFolderConfig();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className={overlayClass("modal", "z-50 flex items-center justify-center p-4")}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-(--color-border) bg-(--color-panel) shadow-2xl shadow-black/50">
         {/* header */}

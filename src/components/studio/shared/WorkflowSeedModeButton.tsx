@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 /** Seed modes — ComfyUI `control_after_generate` mapping.  Each entry has the
  *  ComfyUI value, the Chinese label, and a two-line description used in the
@@ -145,7 +146,7 @@ export function SeedModeButton({
       {createPortal(
         <>
           <div
-            className="fixed inset-0"
+            className={overlayClass("modal")}
             style={{ zIndex: 9998 }}
             onClick={(event) => {
               event.stopPropagation();

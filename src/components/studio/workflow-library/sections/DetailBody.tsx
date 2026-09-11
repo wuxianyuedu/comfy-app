@@ -46,14 +46,14 @@ export function DetailBody({
   meta,
   onSeedModeChange,
 }: DetailBodyProps) {
+  /* 换工作流 / 首次打开时详情查询尚未排空：此时表单拿不到 IO，预览会先渲染
+   * 一遍无参卡片再被真实 IO 顶掉（整块高度改变 → 页面跳一下），参数页签同
+   * 理。统一的处理是「还没就绪就不渲染页签内容」——container 用 min-h-0 撑满
+   * 父级，切换不会闪出占位文案，也不会出现半渲染的中间态。 */
+  if (isLoading) return null;
+
   return (
     <>
-      {isLoading && (
-        <div className="flex h-40 items-center justify-center text-xs text-(--color-ink-fainter)">
-          加载详情中…
-        </div>
-      )}
-
       {activeTab === "canvas" && (
         <div className="flex h-full min-h-[420px] flex-col rounded-2xl border border-(--color-border) bg-(--color-panel-deep) p-1">
           <div className="flex items-center justify-between px-3 py-2">

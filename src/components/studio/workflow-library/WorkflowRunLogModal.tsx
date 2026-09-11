@@ -21,6 +21,7 @@ import {
 } from "@/lib/workflow-run-store";
 import type { WorkflowRunMeta } from "@/lib/workflow-run-store";
 import { useCancelTask } from "../project-canvas/hooks/use-cancel-task";
+import { overlayClass } from "~/lib/full-screen-layer";
 
 /* 与项目画布 GlobalStepLogPanel 同款 level badge 配色。 */
 type Level = TaskLogEntry["level"];
@@ -137,7 +138,7 @@ export function WorkflowRunLogModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className={overlayClass("modal", "z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm")}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

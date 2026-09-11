@@ -173,15 +173,19 @@ fn get_app_url(state: tauri::State<'_, AppState>) -> String {
 /// 打断。默认策略改为「只显示、不激活」：窗口出现在任务栏，同时请求一次任务栏
 /// 闪烁提醒（request_user_attention），用户处理完手上的事自己点开。
 ///
-/// 以下几种情况仍然给前台，否则成了「双击启动没反应」：
-/// 1. AppState.foreground = true——启动器经 `COMFYAPP_FOREGROUND` 注入，判据是
+/// 只有下面两种情况给前台，其余一律「只显示」：
+/// 1. `request_focus`——调用方的显式意图（托盘「打开主界面」、二次启动的单实例
+///    回调），这类场景用户就是想看它；
+/// 2. `AppState.foreground`——启动器经 `COMFYAPP_FOREGROUND` 注入，判据是
 ///    「前台本来就是本应用 / 用户刚点的启动 / 用户再次唤起运行中的实例」
-///    （见 scripts/start_tauri_launcher.py 的 decide_foreground）；
-/// 2. 首次显示前本应用已是系统前台窗口（从应用内重启、壳内导航等场景）；
-/// 3. Windows 允许 `set_focus()` 生效（用户此刻没在别的窗口上操作，启动瞬间的
-///    常见情形）——这时抢前台本就是用户的期望。
-/// `request_focus` 传入调用方的显式意图：用户主动唤起（托盘「打开主界面」、
-/// 二次启动的单实例回调）时为 true。
+///    （见 scripts/start_tauri_launcher.py 的 decide_foreground）。
+///
+/// **不再无条件调 `set_focus()` 试探**（ISSUE #359 回归的直接原因）：启动页窗口带
+/// `WS_EX_TOOLWINDOW`，交接时它被关闭、主窗的任务栏按钮重建，Windows 把主窗当成
+/// 「新窗口」并**自己放行前台**——于是 `set_focus()` 必成功，用户的「别打断我」策略
+/// 被架空，表现为「构建后启动仍然抢前台」。前台归属的最终裁定交给启动器的交接
+/// 复核进程（scripts/win32-window-focus.py：它知道用户是否就在等这个应用，
+/// 也拿得到双击启动所赋予的输入权，能把不该给的前台收回去）。
 fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
   let Some(win) = app.get_webview_window("main") else {
     return;
@@ -189,55 +193,56 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
   let state = app.try_state::<AppState>();
   let first_show = state.as_ref().map(|s| s.mark_shown()).unwrap_or(false);
   let configured = state.as_ref().map(|s| s.foreground()).unwrap_or(false);
-  // 首次显示前本应用是否已在前台：前台本来就是自己，不存在「打断」，而且必须给
-  // 前台——否则用户双击启动后还要自己去任务栏点一下。
-  let already_foreground_active = first_show && win.is_focused().unwrap_or(false);
-  let activate = request_focus || configured || already_foreground_active;
+  let activate = request_focus || configured;
 
   if let Err(e) = win.show() {
     log::warn!("[ComfyAPP] show main window failed: {:?}", e);
   }
-
-  // 无论走哪条分支都调一次 set_focus：前台锁定（foreground lock）允许时它会
-  // 生效——用户没在别的窗口上操作时就是这种情形，符合预期；被系统拦下时窗口
-  // 同样留在任务栏，不会有任何打断。
-  let _ = win.set_focus();
-  if win.is_focused().unwrap_or(false) {
-    if let Some(s) = state.as_ref() {
-      s.set_attention(false);
-    }
-    log::info!(
-      "[ComfyAPP] main window shown with focus (request={} configured={} already={})",
-      request_focus,
-      configured,
-      already_foreground_active
-    );
-    return;
+  // 显示动作本身会不会把前台带过来由系统决定（交接瞬间 Windows 当真当「新窗口」
+  // 放行）。这里只把结论记下来，交给启动器的交接复核进程把不该给的前台还回去。
+  let focused_after_show = win.is_focused().unwrap_or(false);
+  let keep_attention = !activate && !focused_after_show;
+  if let Some(s) = state.as_ref() {
+    s.set_attention(keep_attention);
   }
 
   if activate {
-    // 明确要求给前台（用户主动唤起 / 启动器判定前台是本应用）但系统没给：
-    // 记录日志即可，不额外闪烁——用户本来就盯着这个应用。
-    log::warn!(
-      "[ComfyAPP] main window shown, foreground request not granted (request={} configured={})",
-      request_focus,
-      configured
-    );
+    // 用户主动唤起 / 启动器判定用户就在等它：必须把前台拿到手——系统可能因
+    // 前台锁定（用户在别的窗口上刚有点击）拦下 set_focus，未获前台时补一次
+    // 任务栏闪烁，用户才不至于「点了没反应」。
+    let _ = win.set_focus();
+    if !win.is_focused().unwrap_or(false) {
+      log::warn!(
+        "[ComfyAPP] main window shown, foreground request not granted (request={} configured={})",
+        request_focus,
+        configured
+      );
+      if let Some(s) = state.as_ref() {
+        s.set_attention(true);
+      }
+      let _ = win.request_user_attention(Some(tauri::UserAttentionType::Informational));
+    } else {
+      log::info!(
+        "[ComfyAPP] main window shown with focus (request={} configured={} first={})",
+        request_focus,
+        configured,
+        first_show
+      );
+    }
     return;
   }
 
+  log::info!(
+    "[ComfyAPP] main window shown without stealing focus (focused_after_show={} first={})",
+    focused_after_show,
+    first_show
+  );
   // 不抢前台：让任务栏按钮持续闪烁到用户点开，作为「加载好了」的提示。
-  if let Some(s) = state.as_ref() {
-    s.set_attention(true);
-  }
-  match win.request_user_attention(Some(tauri::UserAttentionType::Informational)) {
-    Ok(()) => {
-      log::info!("[ComfyAPP] main window shown without focus, taskbar attention requested")
+  if keep_attention {
+    match win.request_user_attention(Some(tauri::UserAttentionType::Informational)) {
+      Ok(()) => log::info!("[ComfyAPP] taskbar attention requested"),
+      Err(e) => log::warn!("[ComfyAPP] request_user_attention failed: {:?}", e),
     }
-    Err(e) => log::warn!(
-      "[ComfyAPP] main window shown without focus, request_user_attention failed: {:?}",
-      e
-    ),
   }
 }
 

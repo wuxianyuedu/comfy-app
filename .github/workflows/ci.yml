@@ -60,6 +60,10 @@ jobs:
       - name: Test
         run: pnpm run test
 
+      - name: Title bar clearance
+        # 顶层浮层（fixed + inset-0）必须让出窗口标题行，否则页签与窗口按钮被盖住
+        run: node scripts/check-title-bar-clearance.cjs
+
       - name: UI/Logic separation ratchet
         # 棘轮只许降不许升（规范 17）：新增违规失败；治理后未收紧基线也失败
         run: node scripts/check-ui-logic-separation.cjs --strict
