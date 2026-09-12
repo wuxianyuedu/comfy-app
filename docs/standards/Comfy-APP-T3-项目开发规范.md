@@ -91,6 +91,8 @@ lib（纯函数） ← 任意层
 | CSS 类 | kebab-case，Tailwind 原子类优先 | `camelCaseClass` |
 | 领域术语 | 统一术语表（workflow/project-canvas/studio 等），禁止混用近义词 | updream/canvas 混用 |
 
+**统一术语表**：领域词汇的唯一所指与代码落点见 [术语表](../glossary.md)——尤其「三种画布」（项目画布 / 工作流编辑器画布 / 旧流程画布）与 `节点`/`运行`/`项目` 这类一词多指的词，写文档/注释/Issue 时必须带限定词。新增域概念时同步登记术语表。
+
 **验收**：`tsc --noEmit` 零错误 + 命名审计无高危项。
 
 ---
