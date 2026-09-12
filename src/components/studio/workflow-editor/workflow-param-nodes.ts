@@ -47,6 +47,7 @@ export function buildParamNodes(ctx: BuildParamNodesCtx): Node[] {
       pins: entry.pins,
       width: PARAM_NODE_WIDTH,
       canWire: !!mode,
+      noModeHint: !mode,
       canReset: !!mode && isManual(entry.id),
       onReset: () => onReset(entry.id),
     };

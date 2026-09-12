@@ -45,9 +45,10 @@ const io: WorkflowIOMap = {
   },
 };
 
-const entries = buildParamEntries(io);
-const promptEntry = entries.find((entry) => entry.cls === "prompt")!;
-const sizeEntry = entries.find((entry) => entry.cls === "size-height")!;
+/* 库内卡片列与编辑器同一份契约条目（按模式），故这里也带上模式。 */
+const entries = buildParamEntries(io, undefined, { mode: "T2I" });
+const promptEntry = entries.find((entry) => entry.id === "prompt")!;
+const sizeEntry = entries.find((entry) => entry.id === "size")!;
 
 describe("deriveLibraryParamCards", () => {
   it("没有作者落点覆盖时，resolved 就是自动判定出来的落点", () => {
@@ -56,9 +57,11 @@ describe("deriveLibraryParamCards", () => {
       paramMap: {},
       mode: "T2I",
     });
-    /* 提示词 1 条 + 分辨率节点上的宽度/高度 2 条（同一节点的同分类端口算一条）。 */
-    expect(derived).toHaveLength(3);
+    /* 契约口径（文生图）：提示词 + 尺寸 —— 与具体工作流无关，「宽度/高度」这类
+     * 同一语义的端口不再各占一张卡。 */
+    expect(derived.map((entry) => entry.id)).toEqual(["prompt", "size"]);
     expect(resolved[promptEntry.id]).toBe("9::widget::text");
+    expect(resolved[sizeEntry.id]).toBe("5::widget::width");
   });
 
   it("作者改过的落点优先于自动判定", () => {
@@ -101,20 +104,19 @@ describe("deriveLibraryParamCards", () => {
   it("ownersByPin 把每个落点行映到对外参数名", () => {
     const { ownersByPin } = deriveLibraryParamCards({ io, paramMap: {}, mode: "T2I" });
     expect(ownersByPin["9::widget::text"]).toBe(promptEntry.label);
-    expect(ownersByPin["5::widget::height"]).toBe(sizeEntry.label);
+    expect(ownersByPin["5::widget::width"]).toBe(sizeEntry.label);
     /* 没有对外参数声称的行不标徽标 —— 表里直接没有这个键。 */
     expect(ownersByPin["不存在的端口"]).toBeUndefined();
   });
 
   it("两个对外参数落到同一行时，徽标只归第一个条目（同一行不重复标）", () => {
-    const widthEntry = entries.find((entry) => entry.cls === "size-width")!;
     const { ownersByPin } = deriveLibraryParamCards({
       io,
       paramMap: {
         source: {
           "mode:T2I": {
-            /* 宽度与提示词被作者都落到同一行 —— 只保留先出现的那个。 */
-            [widthEntry.id]: "9::widget::text",
+            /* 尺寸与提示词被作者都落到同一行 —— 只保留先出现的那个。 */
+            [sizeEntry.id]: "9::widget::text",
             [promptEntry.id]: "9::widget::text",
           },
         },
@@ -124,19 +126,23 @@ describe("deriveLibraryParamCards", () => {
     expect(ownersByPin["9::widget::text"]).toBe(promptEntry.label);
   });
 
-  it("对外参数名用作者改过的那个（作者名随 IO 一起进来）", () => {
-    /* 作者改名落在 workflowIO 条目上（IO 编辑里就地改名 → 落库），库内卡片头
-     * 显示的就是同一个名字，不会退到分类默认名。 */
+  it("卡片头是契约里的统一参数名，不跟着工作流里的端口名走", () => {
+    /* 这是本期口径：对外参数**只跟模式有关**，与具体工作流无关。工作流把提示词
+     * 口叫 `positive_prompt` / `value_1` / `text` 都不影响卡片头 ——「提示词」就是
+     * 「提示词」。工作流只决定它落到哪一行端口（`ownersByPin` 给出那一行）。 */
     const renamedIO: WorkflowIOMap = {
       ...io,
       "9::widget::text": { ...io["9::widget::text"]!, label: "画面描述" },
     };
-    const { ownersByPin } = deriveLibraryParamCards({
+    const withRename = deriveLibraryParamCards({
       io: renamedIO,
       paramMap: {},
       mode: "T2I",
     });
-    expect(ownersByPin["9::widget::text"]).toBe("画面描述");
+    const plain = deriveLibraryParamCards({ io, paramMap: {}, mode: "T2I" });
+    expect(plain.entries.map((entry) => entry.label)).toEqual(["提示词", "尺寸"]);
+    expect(withRename.entries.map((entry) => entry.label)).toEqual(["提示词", "尺寸"]);
+    expect(withRename.ownersByPin["9::widget::text"]).toBe("提示词");
   });
 
   it("畸形 paramMap 不炸（数组 / 非对象 / 缺 source）", () => {

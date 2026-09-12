@@ -49,6 +49,7 @@ import { buildParamNodes } from "./workflow-param-nodes";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
 import { enrichFromViewNodes, isMachineName, type ExposedAliasBase } from "./io-exposure";
 import { sanitizeComboLabel } from "../workflow-utils";
+import { resolveWorkflowMode } from "@/lib/workflow-types";
 import { ioLabel, type WorkflowIOEntry } from "../shared/workflow-io";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
 import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
@@ -529,7 +530,15 @@ function WorkflowEditorBody({
    * 模式取工作流的 defaultMode：落点覆盖必须归属一个模式，没有模式时卡片不渲染
    * 端点、拖不出线（写入也是空操作）。卡片位置由宿主节点坐标派生、不可拖动。
    * 这些 hook 必须无条件调用（在下方 loading / error 的提前返回之前）。 */
-  const wiringMode = detail?.defaultMode ?? null;
+  /* 生效模式：defaultMode → modes[0] → taskType（与库详情、项目画布节点同一口径，
+   *  见 resolveWorkflowMode）。此前只认 defaultMode —— 工作流声明了模式但没写
+   *  defaultMode 时这里是 null，卡片于是提示「先选模式才能连线」，而节点上（库里 /
+   *  画布上）明明已经显示着「单图生视频」了，自相矛盾（ISSUE #355 复审）。 */
+  const wiringMode = resolveWorkflowMode({
+    modes: detail?.modes,
+    defaultMode: detail?.defaultMode,
+    taskType: detail?.taskType,
+  });
   const paramMapping = useParamMapping({
     workflowId,
     io: workflowIO,

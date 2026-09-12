@@ -51,6 +51,7 @@ import {
 import { seedModeOverrides } from "@/components/studio/project-canvas/CanvasNode/helpers";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
+import { resolveWorkflowMode } from "@/lib/workflow-types";
 import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
 import { deriveLibraryParamCards } from "./workflow-library-param-cards";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
@@ -321,9 +322,16 @@ export function WorkflowCanvasNodePreview({
    * 消费视角 —— 卡片不可拖、不渲染端点，拉线 / 断开 / 恢复默认都在编辑器里做，
    * 库内只把落点标在卡片的端口行上。 */
   const hostRef = useRef<HTMLDivElement | null>(null);
+  /* 生效模式与节点上的模式 chip 同一口径（defaultMode → modes[0] → taskType）——
+   * 卡片列按它过滤统一对外参数，不会再出现「chip 显示着单图生视频、卡片却说
+   * 需要先选模式」的自相矛盾。 */
+  const effectiveMode = useMemo(
+    () => resolveWorkflowMode({ modes, defaultMode, taskType }),
+    [modes, defaultMode, taskType],
+  );
   const paramCards = useMemo(
-    () => deriveLibraryParamCards({ io: workflowIO, paramMap, mode: defaultMode ?? null }),
-    [workflowIO, paramMap, defaultMode],
+    () => deriveLibraryParamCards({ io: workflowIO, paramMap, mode: effectiveMode }),
+    [workflowIO, paramMap, effectiveMode],
   );
 
   const hasRuns = currentRuns.length > 0;

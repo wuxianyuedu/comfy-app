@@ -56,12 +56,14 @@ export interface UseGenerateArgs {
   wfIO: WorkflowIOMap | null;
   /** 作者在工作流库配的「对外参数 → 节点端口」映射（paramMap.source）。 */
   wfParamMap?: Record<string, unknown> | null;
+  /** 工作流当前生效的模式（落点覆盖按它归属，`source.mode:<模式>`）。 */
+  wfMode?: string | null;
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   getNode: (id: string) => Node | undefined;
 }
 
-export function useGenerate({ id, d, patch, wfIO, wfParamMap, setNodes, setEdges, getNode }: UseGenerateArgs) {
+export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, setEdges, getNode }: UseGenerateArgs) {
   /* mount-time reconcile — if the node was
    *  loaded with stale `status="running"` (e.g. dev server restarted
    *  while a generation was in flight, or the user closed/reopened the
@@ -132,12 +134,14 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, setNodes, setEdges
         /* 有映射表时按「对外参数 → 目标端口」解析：连了线的对外口只覆盖它连到
          *  的那个端口（不把该节点别的默认值也塞进去），没连线的对外口仍按默认值
          *  兜底 —— 这正是「自动映射 = 默认连线状态，可在此基础上编辑」的运行期语义。 */
+        const mode = wfMode ?? null;
         const mapped = wfIO
           ? applyParamMapping({
               io: wfIO,
-              entries: buildParamEntries(wfIO),
+              entries: buildParamEntries(wfIO, undefined, { mode }),
               mapping: parseParamMapping(wfParamMap ?? d.paramMap),
               values: d.workflowInputs ?? {},
+              mode,
             })
           : null;
         const baseInputs =
