@@ -30,7 +30,7 @@ export const WorkflowParamNode = React.memo(function WorkflowParamNode({
   /* 悬浮置顶：对外参数卡片同样要压住连线（ISSUE #400）。
    *  它自带的 zIndex 已是 20（比普通节点高，见 buildParamNodes），但连线仍
    *  可能盖上来；这里与 FlowNode / 子图卡片共用同一档悬浮层。 */
-  const { hovered, hoverHandlers: hoverEvents } = useHoverElevation();
+  const { hoverHandlers: hoverEvents, hoverRef } = useHoverElevation();
 
   return (
     <WorkflowParamCard
@@ -48,7 +48,7 @@ export const WorkflowParamNode = React.memo(function WorkflowParamNode({
       /* 端口行只列名字：卡片本身不标落点，落点由那条线表达。行高必须与
        *  PARAM_NODE_ROW_H 同口径，否则卡片实际高度与 placeParamNodes 算出的
        *  位置对不上，卡片会互相压住。 */
-      hovered={hovered}
+      hoverRef={hoverRef}
       hoverEvents={hoverEvents}
       rowTrailing={(pin) => (
         <span className="shrink-0 font-mono text-[9.5px] text-(--color-ink-fainter)">
