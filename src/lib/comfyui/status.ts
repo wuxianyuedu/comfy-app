@@ -53,6 +53,14 @@ export type ComfyRuntimeSnapshot = {
   via: string | null;
   /** 进程表查询本身是否失败（超时/无权限）：结果不可信，不得当作「没在跑」。 */
   unverified: boolean;
+  /** 本次是否**真的查过**进程表。
+   *
+   *  与 `unverified` 不同：`unverified` 只说「没有一条事实可信」，而 0 条候选
+   *  时既不失败也一条都问不到，两者都是「false + unverified=false」——上层
+   *  据此把「没启动」坐实成「未运行」，于是启动等待期里的瞬时结论被照单全收，
+   *  状态行在「启动中」与「未运行」之间来回跳（ISSUE #442）。
+   *  取值同上：命中任一候选（含 bound 子进程）即算查过。 */
+  didQueryProcTable: boolean;
   /** 事实来源：bound=本进程持有的子进程；process=配置路径进程表命中；
    *  launcher=setup 登记启动器；any=按环境反查（pyvenv.cfg / uv 托管解释器）
    *  出来的解释器进程。 */
@@ -98,7 +106,15 @@ function isStale(snap: ComfyRuntimeSnapshot, at: number, now: number): boolean {
 
 /** 不带快照的空结果。 */
 function emptySnapshot(): ComfyRuntimeSnapshot {
-  return { running: false, pid: null, port: null, via: null, unverified: false, source: null };
+  return {
+    running: false,
+    pid: null,
+    port: null,
+    via: null,
+    unverified: false,
+    didQueryProcTable: false,
+    source: null,
+  };
 }
 
 /** 本进程持有的子进程（bound 模式）：最可靠的事实，优先于任何查询。
@@ -109,8 +125,9 @@ function emptySnapshot(): ComfyRuntimeSnapshot {
 type ChildHolder = { child?: { pid?: number } };
 
 let readBoundChildPid: () => number | null = () => {
-  const holder = (globalThis as unknown as { __comfyLifecycle_v1?: ChildHolder })
-    .__comfyLifecycle_v1;
+  const holder = (
+    globalThis as unknown as { __comfyLifecycle_v1?: ChildHolder }
+  ).__comfyLifecycle_v1;
   const pid = holder?.child?.pid;
   return typeof pid === "number" && pid > 0 ? pid : null;
 };
@@ -128,7 +145,10 @@ function boundChildPid(): number | null {
  *  一致（便携 → venv → 桌面 standalone-env），这里作为兜底再放宽一层。 */
 export function launcherCommandCandidates(pythonExe: string): string[] {
   const dir = path.dirname(pythonExe);
-  const exts = process.platform === "win32" ? ["pythonw.exe", "python.exe"] : ["pythonw", "python"];
+  const exts =
+    process.platform === "win32"
+      ? ["pythonw.exe", "python.exe"]
+      : ["pythonw", "python"];
   // 去重：便携版解释器本身就叫 python.exe，枚举结果与候选重复时不必查两遍。
   return [...new Set([...exts.map((n) => path.join(dir, n)), pythonExe])];
 }
@@ -228,7 +248,15 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   const bound = boundChildPid();
   if (bound) {
     const port = await resolvePortFast(bound, configuredPortOf(settings));
-    return { running: true, pid: bound, port, via: "本应用启动的进程", unverified: false, source: "bound" };
+    return {
+      running: true,
+      pid: bound,
+      port,
+      via: "本应用启动的进程",
+      unverified: false,
+      didQueryProcTable: true,
+      source: "bound",
+    };
   }
 
   const comfyuiPath = settings.comfyuiPath?.trim() ?? "";
@@ -251,6 +279,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
         port: await resolvePortFast(lookup.pid, configuredPortOf(settings)),
         via: "配置路径的实例",
         unverified: false,
+        didQueryProcTable: true,
         source: "process",
       };
     }
@@ -260,9 +289,12 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   // 3) 启动器形态：Comfy Desktop 的 standalone-env 由 uv 启动，命令行里没有
   //    main.py（步骤 2 必然落空）；先试 setup 登记的启动器，再试解释器候选。
   const classify = classifyComfyInstall(comfyuiPath);
-  const registered = readRegisteredLauncher(classify.instanceRoot ?? comfyuiPath);
+  const registered = readRegisteredLauncher(
+    classify.instanceRoot ?? comfyuiPath,
+  );
   const candidates: { cmd: string; via: string }[] = [];
-  if (registered) candidates.push({ cmd: registered, via: "setup 中登记的启动器" });
+  if (registered)
+    candidates.push({ cmd: registered, via: "setup 中登记的启动器" });
   if (!("error" in plan)) {
     for (const cmd of launcherCommandCandidates(plan.cmd)) {
       candidates.push({ cmd, via: "配置路径的解释器" });
@@ -303,12 +335,19 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
         port: await resolvePortFast(lookup.pid, configuredPortOf(settings)),
         via: candidates[i]!.via,
         unverified: false,
+        didQueryProcTable: true,
         source: snapshotSourceFor(candidates[i]!.via),
       };
     }
   }
 
-  return { ...emptySnapshot(), unverified: lookupFailed };
+  // 一条候选都没问过（配置路径存在但没有可解释器候选）时同样算「没查过」：
+  // 上层不能把这份空快照当成「探明没在跑」。
+  return {
+    ...emptySnapshot(),
+    unverified: lookupFailed,
+    didQueryProcTable: candidates.length > 0,
+  };
 }
 
 /** 候选来路 → 快照来源标记（供诊断区分「配置路径命中」与「反查命中」）。 */
