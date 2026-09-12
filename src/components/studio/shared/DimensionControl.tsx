@@ -28,6 +28,7 @@ import {
 } from "./MultiSegmentPopover";
 import { Field } from "./StyleSwitcher";
 import { Eye, EyeOff } from "lucide-react";
+import { WIRE_PINS_ATTR, wirePinsValue } from "~/lib/workflow-io-types";
 
 /** Dimension group narrowed to its W/H form (the classic 比例+清晰度 picker). */
 type SizeGroup = DimensionGroup & { width: EnrichedWidget; height: EnrichedWidget };
@@ -365,8 +366,11 @@ function DimensionSizeControl({
     <div
       className="space-y-2.5"
       /* 组合参数整体作为一个可锚定的目标：宽/高由同一个控件录入，单个端口没有
-       * 独立行，映射连线只能连到这个控件上（工作流库画布按此量端点）。 */
-      data-dimension-pins={`${group.width.ioKey},${group.height.ioKey}`}
+       * 独立行，映射连线只能连到这个控件上（工作流库画布按此量端点）。
+       * 属性名来自共享契约：量测侧与这里必须用同一个字符串。 */
+      {...{
+        [WIRE_PINS_ATTR]: wirePinsValue([group.width.ioKey, group.height.ioKey]),
+      }}
     >
       {/* 比例 + 清晰度 单段摆在 W/H 上方——既对应「预设 → 推算
           宽高」的方向，又让下方两个 NumberField 紧挨在一起形成紧凑一行。 */}
@@ -614,9 +618,12 @@ function AspectMegapixelControl({
     <div
       className="space-y-2.5"
       /* 同上：比例/像素/倍数由同一控件录入，整块作为可锚定目标。 */
-      data-dimension-pins={[group.aspect?.ioKey, group.megapixels?.ioKey]
-        .filter(Boolean)
-        .join(",")}
+      {...{
+        [WIRE_PINS_ATTR]: wirePinsValue([
+          group.aspect?.ioKey,
+          group.megapixels?.ioKey,
+        ]),
+      }}
     >
       <div className="rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5">
         <div className="flex items-center gap-2">

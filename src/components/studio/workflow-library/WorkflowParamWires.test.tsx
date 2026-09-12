@@ -58,17 +58,36 @@ const wire: ParamWire = {
 };
 
 describe("measureWires", () => {
-  it("起点是圆点右沿中心、终点是宿主行左沿中心（相对容器）", () => {
+  it("起点是圆点**外侧边缘**、终点是宿主行左沿中心（相对容器）", () => {
     const container = makeContainer(
       { left: 100, top: 50 },
       { left: 200, top: 70, width: 8, height: 12 },
       { left: 400, top: 120, width: 300, height: 40 },
     );
     const [segment] = measureWires(container, [wire]);
-    /* 容器原点 (100, 50)。圆点（left 200, top 70, 8 宽 12 高）圆心相对容器
-     * = (104, 26)；宿主行（left 400, top 120, 40 高）左沿中心 = (300, 90)。 */
-    expect(segment!.d.startsWith("M 104 26")).toBe(true);
+    /* 容器原点 (100, 50)。圆点锚点（left 200, top 70, 8 宽 12 高）的**外侧
+     * 边缘**相对容器 = (100 + 8 + 4, 26) = (112, 26)（与画布上 React Flow 的
+     * 连线口径一致：线从端点外缘出发，不切进卡片）；宿主行（left 400, top 120,
+     * 40 高）左沿中心 = (300, 90)。 */
+    expect(segment!.d.startsWith("M 112 26")).toBe(true);
     expect(segment!.d.endsWith("300 90")).toBe(true);
+  });
+
+  it("端口键含 `::` 也量得到（不做选择器转义）", () => {
+    /* 端口名本身可能带分隔符，ioKey 里因此会有 `::`。此前用选择器拼字符串
+     * 匹配，遇到这类键要么语法出错、要么匹配到别的元素 —— 表现是「线不画」。 */
+    const container = makeContainer(
+      { left: 0, top: 0 },
+      { left: 100, top: 10, width: 12, height: 12 },
+      { left: 300, top: 40, width: 200, height: 20 },
+    );
+    container.querySelector('[data-io-key="9::widget::text"]')!
+      .setAttribute("data-io-key", "1::widget::a::b");
+    const [segment] = measureWires(container, [
+      { ...wire, targetIoKey: "1::widget::a::b" },
+    ]);
+    expect(segment).toBeTruthy();
+    expect(segment!.d.endsWith("300 50")).toBe(true);
   });
 
   it("任一端不在就整条不画（不留悬空线头）", () => {
@@ -87,8 +106,30 @@ describe("measureWires", () => {
     );
     const [segment] = measureWires(container, [wire]);
     /* 终点在起点左侧时，控制点仍按间距的一半（绝对值）外扩，线是平滑的 S 形
-     * 而不是被负半径拗出的尖角。 */
-    expect(segment!.d).toBe("M 304 6 C 356 6 148 10 200 10");
+     * 而不是被负半径拗出的尖角。起点 = 圆点锚点 (300, 0, 8 宽) 的外缘 312。 */
+    expect(segment!.d).toBe("M 312 6 C 368 6 144 10 200 10");
+  });
+
+  it("组合参数（宽/高、比例/像素）的落点锚在整块控件上", () => {
+    /* 这类口子由同一个控件录入，没有独立的一行可以连 —— 只认 `data-io-key`
+     * 就会整条线都不画，「尺寸」这张卡看起来就没连上。 */
+    const container = document.createElement("div");
+    const dot = document.createElement("span");
+    dot.setAttribute("data-wire-anchor", "size");
+    const group = document.createElement("div");
+    group.setAttribute("data-io-pins", "5::widget::width,5::widget::height");
+    container.append(dot, group);
+    container.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 0, height: 0 }) as DOMRect;
+    dot.getBoundingClientRect = () =>
+      ({ left: 100, top: 10, width: 12, height: 12 }) as DOMRect;
+    group.getBoundingClientRect = () =>
+      ({ left: 300, top: 40, width: 200, height: 60 }) as DOMRect;
+    const [segment] = measureWires(container, [
+      { entryId: "size", targetIoKey: "5::widget::height", manual: false },
+    ]);
+    expect(segment).toBeTruthy();
+    expect(segment!.d.endsWith("300 70")).toBe(true);
   });
 
   it("量不到任何线时整层不渲染", () => {

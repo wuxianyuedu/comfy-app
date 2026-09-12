@@ -152,6 +152,9 @@ export function WorkflowLibrary({
 
       <WorkflowCanvasEditor
         workflowId={c.editingId ?? ""}
+        /* 库详情里选定的生效模式一并带进编辑器：两处显示、连线、落点落在同一个
+         *  模式上（不带的话编辑器按工作流默认模式打开，看起来像「线丢了」）。 */
+        initialMode={c.editingMode}
         open={!!c.editingId}
         onClose={c.handleEditorClose}
         onSave={c.load}

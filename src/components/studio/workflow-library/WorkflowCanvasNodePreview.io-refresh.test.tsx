@@ -275,6 +275,46 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     ).toBeTruthy();
   });
 
+  it("组合参数（宽高 / 比例像素）的行也带落点锚点", () => {
+    /* 这类口子由同一个控件录入，没有独立的一行可以连 —— 锚点必须挂在整块控件
+     *  上，否则映射连线量不到落点，整条线都不画（看起来就是「尺寸这张卡没连」）。 */
+    const { container } = render(
+      <WorkflowCanvasNodePreview
+        workflowId="wf-1"
+        workflowName="测试工作流"
+        taskType="t2i"
+        workflowIO={{
+          "5::widget::aspect_ratio": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "5",
+            name: "aspect_ratio",
+            label: "宽高比",
+            type: "COMBO",
+            defaultValue: "16:9",
+          },
+          "5::widget::megapixels": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "5",
+            name: "megapixels",
+            label: "像素量",
+            type: "FLOAT",
+            defaultValue: 1,
+          },
+        }}
+        paramMap={{}}
+        usable
+        defaultMode="T2I"
+      />,
+    );
+    const group = container.querySelector(
+      '[data-io-pins*="5::widget::aspect_ratio"]',
+    );
+    expect(group).toBeTruthy();
+    expect(group!.getAttribute("data-io-pins")).toContain("5::widget::megapixels");
+  });
+
   it("没有对外参数时不渲染卡片列（空 IO）", () => {
     const { container } = render(
       <WorkflowCanvasNodePreview
