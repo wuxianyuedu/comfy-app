@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_MAX_FIT_ZOOM,
+  createFitOnceScheduler,
   createFitSettleStepper,
   DEFAULT_MIN_FIT_ZOOM,
   computeFitViewport,
@@ -194,5 +195,34 @@ describe("createFitSettleStepper", () => {
 
     expect(stepper.next(() => []).bounds).toBeNull();
     expect(stepper.next(() => []).done).toBe(true);
+  });
+});
+
+describe("createFitOnceScheduler", () => {
+  it("帧被取消后重排，不会把这次聚焦吃掉（同一 key 允许重复 markPending）", () => {
+    /* 复现顺序：进入子图的那次 commit 里先排程（pending），紧接着 nodes 同步
+     * effect 让聚焦 effect 重跑 —— cleanup 取消了 rAF，重跑必须能再排一次。
+     * 旧实现把「已聚焦」在排程时就记死，重跑被拦住 ⇒ 视口停在上一份图。 */
+    const scheduler = createFitOnceScheduler();
+
+    expect(scheduler.markPending("4#subgraph:uid")).toBe(true);
+    /* cleanup 取消了未触发的 rAF：这次 markPending 是重排，必须仍然放行。 */
+    expect(scheduler.markPending("4#subgraph:uid")).toBe(true);
+    expect(scheduler.isSettled("4#subgraph:uid")).toBe(false);
+
+    /* 真正下发视口后才算已聚焦；此后再排程应被拒绝（用户手动拖动后不抢视角）。 */
+    scheduler.markSettled("4#subgraph:uid");
+    expect(scheduler.isSettled("4#subgraph:uid")).toBe(true);
+    expect(scheduler.markPending("4#subgraph:uid")).toBe(false);
+  });
+
+  it("切换图（key 不同）时重新排程，两张图各聚焦一次", () => {
+    const scheduler = createFitOnceScheduler();
+    scheduler.markPending("__root__");
+    scheduler.markSettled("__root__");
+
+    expect(scheduler.markPending("4#subgraph:uid")).toBe(true);
+    expect(scheduler.isSettled("__root__")).toBe(true);
+    expect(scheduler.isSettled("4#subgraph:uid")).toBe(false);
   });
 });
