@@ -35,13 +35,20 @@ import {
   type WorkflowIOEntry,
   type WorkflowIOMap,
 } from "~/lib/workflow-io-types";
+import { exposedParamsForMode } from "~/lib/workflow-exposed-params";
 
 /* ── 对外参数分类 ──
  * 与工坊封装的 WorkshopPinClass 子集 + `other`（尺寸/参考图/提示词之外，
- * 作者自行勾选的对外输入，例如 steps / cfg / 种子）。 */
+ * 作者自行勾选的对外输入，例如 steps / cfg / 种子）。
+ *
+ * `other` **不参与对外参数契约**：那是工作流内部参数（步数 / CFG / 采样器…），
+ * 对外只按模式给统一的那几个口子 —— 见 `~/lib/workflow-exposed-params`。 */
 export type ParamClass =
   | "prompt"
   | "negative"
+  /** 契约口径的聚合值：对外只报一个「尺寸」，工作流内部落到宽度 / 高度 /
+   *  宽高比 / 像素量 中的哪一种由端口本身决定（见 SIZE_CLASSES）。 */
+  | "size"
   | "size-width"
   | "size-height"
   | "size-aspect"
@@ -51,19 +58,29 @@ export type ParamClass =
   | "last-frame"
   | "other";
 
-/** 一个「对外参数」（= 一个节点上被暴露的一类输入，可能含多个端口）。 */
+/** 统一「尺寸」在契约里的落点形态 —— 一个对外参数可以落在其中任一类端口上。 */
+export const SIZE_CLASSES: readonly ParamClass[] = [
+  "size-width",
+  "size-height",
+  "size-aspect",
+  "size-megapixels",
+];
+
+/** 一个「对外参数」（= 契约里的一个统一口子，落到工作流的某个端口上）。
+ *
+ *  `id` 是契约内的稳定键（`prompt` / `size` / `first-frame`…），**不含工作流
+ *  信息** —— 同一个「提示词」在所有工作流里都是同一个键，落点由映射表决定。 */
 export interface ParamEntry {
-  /** 稳定键：按节点 + 分类聚合，直接作为连线源句柄 id。 */
+  /** 契约内的稳定键（`ExposedParamClass` 或带序号的参考图口）。 */
   id: string;
+  /** 该口子落到的端口所属节点（旧聚类路径带，契约路径为空串）。 */
   nodeId: string;
   nodeTitle: string;
   cls: ParamClass;
-  /** 展示名：作者写的 label 优先，其次已有对外名，最后回落到分类默认名。 */
+  /** 展示名：契约里的统一名（与具体工作流无关）。 */
   label: string;
-  /** 已有的对外名（工坊 / 画布动态表单里用的名字）。 */
-  exposedName: string;
-  type: string;
-  /** 该对外口包含的端口（ioKey 保持 workflowIO 的原始键）。 */
+  /** 该契约口子在当前工作流里的候选端口（ioKey 保持 workflowIO 的原始键）。
+   *  自动判定从中挑一个作为默认落点；作者也可以在画布上改成别的端口。 */
   pins: { ioKey: string; name: string; type: string; defaultValue: unknown }[];
 }
 
@@ -71,6 +88,7 @@ export interface ParamEntry {
 const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
   prompt: "提示词",
   negative: "负面提示词",
+  size: "尺寸",
   "size-width": "宽度",
   "size-height": "高度",
   "size-aspect": "宽高比",
@@ -142,13 +160,106 @@ export function classifyPin(e: WorkflowIOEntry): ParamClass {
   return "other";
 }
 
-/** 该分类是否可与同一节点的同分类端口归并为一个对外参数。 */
-function classKey(cls: ParamClass, nodeId: string): string {
-  return `${nodeId}|${cls}`;
+/** 端口分类 → 契约里的统一参数口子（`null` = 不是对外参数，属工作流内部）。 */
+function contractParamFor(cls: ParamClass): string | null {
+  if (cls === "other") return null;
+  if (isSizeClass(cls)) return "size";
+  return cls;
 }
 
-/** 把 IO 条目按「节点 + 分类」聚合成对外参数条目（稳定顺序）。 */
+/** 该分类是否属于「尺寸」语义（含契约聚合值 `"size"` 本身）。 */
+function isSizeClass(cls: ParamClass): boolean {
+  return cls === "size" || SIZE_CLASSES.includes(cls);
+}
+
+/** 某个条目接受哪些端口分类（`"size"` 对应宽/高/宽高比/像素量四种）。 */
+export function candidateClasses(cls: ParamClass): readonly ParamClass[] {
+  return isSizeClass(cls) ? SIZE_CLASSES : [cls];
+}
+
+/** 该契约口子接受的端口分类。 */
+function classesForContractParam(param: string): readonly ParamClass[] {
+  if (param === "size") return SIZE_CLASSES;
+  if (/^reference-image($|-)/.test(param)) return ["reference-image"];
+  return [param as ParamClass];
+}
+
+/** 把 IO 条目聚合成**统一对外参数**条目（顺序 = 契约顺序，与工作流无关）。
+ *
+ *  此前这里是「按节点 + 分类」聚类 —— 结果是一份**跟着工作流走**的清单：同一个
+ *  「提示词」在不同工作流里叫 `text` / `positive_prompt` / `value_1`，卡片列表于是
+ *  变成工作流内部参数名的大杂烩（`value` / `value_2` / `resolution_preset`…）。
+ *  现在条目来自契约表（`exposedParamsForMode`）：对外有哪些参数只跟模式有关，
+ *  工作流只决定「每个统一参数落到哪一行端口」。
+ *
+ *  · `mode` 给出时按契约过滤：契约里没有的口子（步数 / CFG / 采样器…）一律不出现；
+ *  · `optional` 的口子（如负面提示词）只有工作流确实有对应端口时才出现，
+ *    不给每个工作流都摆一张死卡片；
+ *  · 不传 `mode` 时保持旧的「按节点 + 分类」聚类（供没有模式语境的调用方使用）。
+ */
 export function buildParamEntries(
+  io: WorkflowIOMap | null | undefined,
+  labels?: Record<string, string>,
+  options?: { mode?: string | null },
+): ParamEntry[] {
+  if (options != null && "mode" in options) {
+    return buildContractEntries(io, labels, options.mode ?? null);
+  }
+  return buildLegacyEntries(io, labels);
+}
+
+/** 契约驱动的条目构造（有模式语境时的唯一路径）。 */
+function buildContractEntries(
+  io: WorkflowIOMap | null | undefined,
+  labels: Record<string, string> | undefined,
+  mode: string | null,
+): ParamEntry[] {
+  /* 先把工作流里所有可对外落点的端口按分类归拢（同一分类可命中多个端口）。 */
+  const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
+  for (const [ioKey, raw] of Object.entries(io ?? {})) {
+    const entry = raw as WorkflowIOEntry | undefined;
+    if (entry?.direction !== "input" || entry.kind !== "widget") continue;
+    const cls = classifyPin(entry);
+    if (cls === "other") continue;
+    const list = pinsByClass.get(cls) ?? [];
+    list.push({
+      ioKey,
+      name: entry.name,
+      type: entry.type ?? "*",
+      defaultValue: entry.defaultValue,
+    });
+    pinsByClass.set(cls, list);
+  }
+
+  /* 工作流一个可落点的端口都没有（io 为空 / 全是内部参数）时，契约里那些
+   * 「有候选端口才能连」的口子一并省掉 —— 摆一排连不上任何东西的卡片只会
+   * 让用户以为「这个工作流有提示词口」。 */
+  const hasAnyPin = pinsByClass.size > 0;
+
+  const out: ParamEntry[] = [];
+  for (const def of exposedParamsForMode(mode)) {
+    const pins = classesForContractParam(def.id).flatMap(
+      (cls) => pinsByClass.get(cls) ?? [],
+    );
+    /* 可选口子（负面提示词 / 第二张参考图）工作流没有对应端口就不摆出来。 */
+    if (pins.length === 0 && (def.optional || !hasAnyPin)) continue;
+    if (out.some((entry) => entry.id === def.id)) continue;
+    const override = pins.map((pin) => labels?.[pin.ioKey]).find(Boolean);
+    out.push({
+      id: def.id,
+      /* 落点由映射表决定，这里不带宿主节点（分组展示不需要它）。 */
+      nodeId: "",
+      nodeTitle: "",
+      cls: def.cls,
+      label: override ?? def.label,
+      pins,
+    });
+  }
+  return out;
+}
+
+/** 无模式语境下的旧聚类（按节点 + 分类）—— 只有拿不到模式的调用方会走这里。 */
+function buildLegacyEntries(
   io: WorkflowIOMap | null | undefined,
   labels?: Record<string, string>,
 ): ParamEntry[] {
@@ -158,7 +269,7 @@ export function buildParamEntries(
     const entry = raw as WorkflowIOEntry | undefined;
     if (entry?.direction !== "input" || entry.kind !== "widget") continue;
     const cls = classifyPin(entry);
-    const key = classKey(cls, entry.nodeId);
+    const key = `${entry.nodeId}|${cls}`;
     const pin = {
       ioKey,
       name: entry.name,
@@ -181,8 +292,6 @@ export function buildParamEntries(
         nodeTitle: entry.nodeTitle ?? "",
         cls,
         label: override ?? entry.label ?? CLASS_FALLBACK_LABEL[cls],
-        exposedName: entry.label ?? entry.name,
-        type: entry.type ?? "*",
         pins: [pin],
       },
     });
@@ -200,6 +309,8 @@ export function buildParamEntries(
 const AUTO_MAPPABLE: Record<ParamClass, (e: WorkflowIOEntry) => boolean> = {
   prompt: (e) => /prompt|提示词|描述词/i.test(searchText(e)),
   negative: (e) => /negative|负向|负面|反向/i.test(searchText(e)),
+  /* 聚合值本身不参与逐端口判定（真正跑的是 SIZE_CLASSES 里的四个分类）。 */
+  size: () => false,
   "size-width": (e) =>
     /^(width|base_width|w|宽度|横向)$/.test(searchText(e).trim()),
   "size-height": (e) =>
@@ -241,11 +352,15 @@ export function autoMapEntries(
   const map: Record<string, string | null> = {};
   for (const entry of entries) {
     let chosen: string | null = null;
-    const predicate = AUTO_MAPPABLE[entry.cls];
+    /* 契约聚合口子（`size`）本身不是一个分类：候选端口来自它接受的若干分类
+     *  （宽 / 高 / 宽高比 / 像素量），逐个按各自的名字启发式判定。 */
+    const predicates = candidateClasses(entry.cls).map(
+      (cls) => AUTO_MAPPABLE[cls] ?? (() => false),
+    );
     for (const pin of entry.pins) {
       const raw = io?.[pin.ioKey];
       if (!raw || !isScalarPin(pin)) continue;
-      if (predicate(raw)) {
+      if (predicates.some((predicate) => predicate(raw))) {
         chosen = pin.ioKey;
         break;
       }
@@ -267,6 +382,44 @@ export function autoMapEntries(
     map[entry.id] = chosen;
   }
   return map;
+}
+
+/* ── 历史键的兼容读取 ──
+ *
+ * 统一参数表的键曾经是 `<节点 id>|<分类>`（`5|size-width`）——那是「按工作流
+ * 聚类」时代的产物。现在键变成契约口子（`size` / `prompt`…），作者当年连过的
+ * 线若只按新键去查会落空，表现就是「改了落点没生效」（不报错，静默回到自动）。
+ * 因此解析映射时把旧键一并当作候选：只读、不写，落库一律用新键。 */
+function legacyEntryIds(entry: ParamEntry): string[] {
+  const nodeIds = new Set<string>();
+  if (entry.nodeId) nodeIds.add(entry.nodeId);
+  for (const pin of entry.pins) {
+    const raw = pin.ioKey.split("::")[0];
+    if (raw) nodeIds.add(raw);
+  }
+  const classes = candidateClasses(entry.cls);
+  const out: string[] = [];
+  for (const nodeId of nodeIds) {
+    for (const klass of classes) out.push(`${nodeId}|${klass}`);
+  }
+  return out;
+}
+
+/** 某个条目在当前模式下的手工线（新键优先，其次历史键）。 */
+function manualTargetForEntryRaw(
+  manual: Record<string, string | null> | undefined,
+  entry: ParamEntry,
+): { found: boolean; target: string | null } {
+  if (!manual) return { found: false, target: null };
+  if (Object.prototype.hasOwnProperty.call(manual, entry.id)) {
+    return { found: true, target: manual[entry.id] ?? null };
+  }
+  for (const legacy of legacyEntryIds(entry)) {
+    if (Object.prototype.hasOwnProperty.call(manual, legacy)) {
+      return { found: true, target: manual[legacy] ?? null };
+    }
+  }
+  return { found: false, target: null };
 }
 
 /* ── 映射的应用（运行期） ── */
@@ -309,9 +462,8 @@ export function resolveMapping(
     ? (mapping?.manualByMode?.[mode] ?? {})
     : {};
   for (const entry of entries) {
-    if (Object.prototype.hasOwnProperty.call(manual, entry.id)) {
-      out[entry.id] = manual[entry.id] ?? null;
-    }
+    const hit = manualTargetForEntryRaw(manual, entry);
+    if (hit.found) out[entry.id] = hit.target;
   }
   return out;
 }
@@ -402,6 +554,30 @@ export function isDefaultMapping(
   return manualTargetFor(mapping, entryId, mode) === undefined;
 }
 
+/** 同 `manualTargetFor`，但按**条目**查（含历史键兼容读取）。
+ *
+ *  画布上的卡片拿到的是一条 `ParamEntry` 而不是一个裸 id，用它查才能把
+ *  「当年按 `<节点>|<分类>` 落库的线」也算进来 —— 否则作者改过的落点在契约改版
+ *  后会静默回到自动判定。 */
+export function manualTargetForEntry(
+  mapping: ParamMapping | null | undefined,
+  entry: ParamEntry,
+  mode?: string | null,
+): string | null | undefined {
+  if (!mode) return undefined;
+  const hit = manualTargetForEntryRaw(mapping?.manualByMode?.[mode], entry);
+  return hit.found ? hit.target : undefined;
+}
+
+/** 同 `isDefaultMapping`，但按条目查（含历史键兼容读取）。 */
+export function isDefaultMappingForEntry(
+  mapping: ParamMapping | null | undefined,
+  entry: ParamEntry,
+  mode?: string | null,
+): boolean {
+  return manualTargetForEntry(mapping, entry, mode) === undefined;
+}
+
 /** 该模式下是否有任何对外参数被作者改过线（画布级的「恢复默认」开关依据）。 */
 export function hasManualWiring(
   mapping: ParamMapping | null | undefined,
@@ -433,7 +609,7 @@ export function entryIdForPin(
 ): string | null {
   const raw = io?.[ioKey];
   if (!raw) return null;
-  return classKey(classifyPin(raw), raw.nodeId);
+  return contractParamFor(classifyPin(raw));
 }
 
 /** 映射落点（`resolved` 的值，= ioKey）→ 画布渲染侧那条端口的 **React Flow
@@ -541,7 +717,6 @@ export function applyParamMapping(args: {
    *   · 手工：用户值只落到那个端口，该节点其余端口不再兜底（作者的线说了算）；
    *   · 自动（默认连线状态）：与"没连线"同义 —— 用户值落自动挑中的端口，
    *     其余端口照旧默认值兜底，语义等价于旧的「暴露 pin 全量下发」。 */
-  const isManualTarget = (id: string) => !isDefaultMapping(mapping, id, mode);
   const inputs: MappedInput[] = [];
   const unmatched: string[] = [];
   const seen = new Set<string>();
@@ -554,10 +729,18 @@ export function applyParamMapping(args: {
     inputs.push({ nodeId: runtimeNodeId(raw), name: raw.name, value });
   };
 
-  /* ① 用户给了值的对外参数：落到它连着的那个端口。没连线（或作者显式断开）
-   *    → 如实记进 unmatched，绝不凭空挑一个端口顶上去。 */
+  /* ① 用户给了值的统一口子：落到它连着的那个端口。没连线（或作者显式断开）
+   *    → 如实记进 unmatched，绝不凭空挑一个端口顶上去。
+   *
+   *    `values` 有两个来源：工坊侧按**契约 id**（`prompt` / `size`）给值；运行期
+   *    表单按 **ioKey** 给值（DynamicWorkflowForm 的行键）。两者都要接住 ——
+   *    只认一种就会让另一种静默失效（表现为「改了没生效」）。 */
   for (const entry of entries) {
-    const supplied = values[entry.id];
+    const byContract = values[entry.id];
+    const byPinKeys = entry.pins
+      .map((pin) => values[pin.ioKey])
+      .find((value) => value !== undefined);
+    const supplied = byContract ?? byPinKeys;
     if (supplied === undefined) continue;
     const target = resolved[entry.id];
     if (target && io?.[target]) {
@@ -567,10 +750,10 @@ export function applyParamMapping(args: {
     unmatched.push(entry.id);
   }
 
-  /* ② 未连线/仅自动映射的对外参数：按默认值兜底（「用户不改就用工作流默认值」）。
-   *    手工连了线的口跳过 —— 用户值已经写在那个端口上，再塞默认值只会打架。 */
+  /* ② 未连线/仅自动映射的统一口子：按默认值兜底（「用户不改就用工作流默认值」）。
+   *    作者手工连了线的口跳过 —— 用户值已经写在那个端口上，再塞默认值只会打架。 */
   for (const entry of entries) {
-    if (isManualTarget(entry.id)) continue;
+    if (!isDefaultMappingForEntry(mapping, entry, mode)) continue;
     for (const pin of entry.pins) {
       const raw = io?.[pin.ioKey];
       if (!raw || !isScalarPin(pin)) continue;

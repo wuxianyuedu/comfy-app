@@ -149,22 +149,69 @@ describe("WorkflowCanvasNodePreview — 默认值刷新", () => {
 /* ── 对外参数卡片列 + 行尾归属徽标（ISSUE #355）──
  *
  * 库里要看得见「对外参数」，且它与宿主卡片的表单行不重复表达同一件事：
- *   卡片列 = 这个对外参数由哪些端口组成；
+ *   卡片列 = 这个模式统一对外暴露的参数（提示词 / 尺寸…，与具体工作流无关）；
  *   表单行尾徽标 = 这一行属于哪个对外参数。
  * 两者都从同一份 paramMap（`source.mode:<模式>`）派生。 */
+
+/** 一个「文生图」形状的工作流：提示词口 + 宽高比口。 */
+function promptSizeIO(): WorkflowIOMap {
+  return {
+    "9::widget::positive_prompt": {
+      direction: "input",
+      kind: "widget",
+      nodeId: "9",
+      name: "positive_prompt",
+      type: "STRING",
+      defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
+    },
+    /* 只有「宽高比」一个口 —— 成对的宽/高会被并成同一个控件（组合参数），
+     * 没有独立的一行可以标徽标；这里刻意用单口形状测行尾徽标。 */
+    "5::widget::aspect_ratio": {
+      direction: "input",
+      kind: "widget",
+      nodeId: "5",
+      name: "aspect_ratio",
+      label: "宽高比",
+      type: "COMBO",
+      defaultValue: "16:9",
+    },
+  };
+}
+
 describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
-  it("有对外参数时并排渲染只读卡片列，卡片头是参数名", () => {
+  it("卡片头是契约里的统一参数名（提示词 / 尺寸），不是工作流里的端口名", () => {
     const { container } = render(
       <WorkflowCanvasNodePreview
         workflowId="wf-1"
         workflowName="测试工作流"
         taskType="t2i"
-        workflowIO={ioWith(20, 7)}
+        workflowIO={promptSizeIO()}
         paramMap={{}}
         usable
+        defaultMode="T2I"
       />,
     );
     expect(container.querySelector('[data-testid="workflow-param-card-column"]')).toBeTruthy();
+    expect(screen.getByTestId("param-node-prompt")).toBeTruthy();
+    expect(screen.getByTestId("param-node-size")).toBeTruthy();
+    /* 工作流内部参数（步数 / CFG…）不再是「对外参数」——契约里没有它们。 */
+    expect(screen.queryByTestId("param-node-other")).toBeNull();
+  });
+
+  it("节点上已经选了模式时，卡片不再提示「需要选择模式」", () => {
+    const { container } = render(
+      <WorkflowCanvasNodePreview
+        workflowId="wf-1"
+        workflowName="测试工作流"
+        taskType="I2V"
+        workflowIO={promptSizeIO()}
+        paramMap={{}}
+        usable
+        modes={["T2V", "I2V"]}
+        defaultMode="I2V"
+      />,
+    );
+    expect(container.textContent).not.toContain("先选模式才能连线");
   });
 
   it("被对外参数落到的那一行，行尾标出它属于哪个对外参数", () => {
@@ -173,33 +220,34 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         workflowId="wf-1"
         workflowName="测试工作流"
         taskType="t2i"
-        workflowIO={ioWith(20, 7)}
+        workflowIO={promptSizeIO()}
         paramMap={{}}
         usable
+        defaultMode="T2I"
       />,
     );
-    /* steps 与 cfg 是同一个节点上的两个口 —— 按「节点 + 分类」聚合成**一个**
-     * 对外参数「步数」，自动判定落到 steps 那一行；因此有且只有那一行带徽标。 */
+    /* 提示词落到 positive_prompt、尺寸落到宽高比那一行 —— 两行各带一次徽标。 */
     const tags = [...container.querySelectorAll('[data-testid="wflib-param-owner"]')];
-    expect(tags.map((tag) => tag.textContent)).toEqual(["步数"]);
+    expect(tags.map((tag) => tag.textContent).sort()).toEqual(["尺寸", "提示词"]);
   });
 
   it("作者显式断开的那一条不再标徽标", () => {
-    const stepsEntry = buildParamEntries(ioWith(20, 7)).find(
-      (entry) => entry.label === "步数",
-    )!;
+    const promptEntry = buildParamEntries(promptSizeIO(), undefined, {
+      mode: "T2I",
+    }).find((entry) => entry.id === "prompt")!;
     const { container } = render(
       <WorkflowCanvasNodePreview
         workflowId="wf-1"
         workflowName="测试工作流"
         taskType="t2i"
-        workflowIO={ioWith(20, 7)}
-        paramMap={{ source: { "mode:t2i": { [stepsEntry.id]: null } } }}
+        workflowIO={promptSizeIO()}
+        paramMap={{ source: { "mode:T2I": { [promptEntry.id]: null } } }}
         usable
-        defaultMode="t2i"
+        defaultMode="T2I"
       />,
     );
-    expect(container.querySelectorAll('[data-testid="wflib-param-owner"]').length).toBe(0);
+    const tags = [...container.querySelectorAll('[data-testid="wflib-param-owner"]')];
+    expect(tags.map((tag) => tag.textContent)).toEqual(["尺寸"]);
   });
 
   it("没有对外参数时不渲染卡片列（空 IO）", () => {

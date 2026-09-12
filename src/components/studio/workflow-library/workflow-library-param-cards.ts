@@ -46,7 +46,9 @@ export function deriveLibraryParamCards(args: {
   mode: string | null | undefined;
 }): LibraryParamCards {
   const { io, paramMap, mode } = args;
-  const entries = buildParamEntries(io);
+  /* 契约驱动：卡片列 = 该模式统一对外暴露的参数（提示词 / 尺寸 / 首帧…），
+   * 与具体工作流无关；工作流只决定每张卡落到哪一行端口。 */
+  const entries = buildParamEntries(io, undefined, { mode: mode ?? null });
   /* paramMap 里没有 `auto` 字段（它不是持久化字段）——现算一份自动判定，
    * 与编辑器 useParamMapping 里的 auto 同源（autoMapEntries）。 */
   const parsed = parseParamMapping(paramMap);

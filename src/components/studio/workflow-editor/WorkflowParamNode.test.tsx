@@ -9,6 +9,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { ReactFlow, ReactFlowProvider } from "@xyflow/react";
 
 import type { WorkflowParamNodeData } from "./workflow-param-node-data";
+import { WorkflowParamCard } from "./WorkflowParamCard";
 import { WorkflowParamNode } from "./WorkflowParamNode";
 
 /* React Flow 挂载时自行测量容器尺寸；jsdom 没有 ResizeObserver。 */
@@ -41,6 +42,7 @@ function renderNode(data: Partial<WorkflowParamNodeData> = {}) {
     ],
     width: 208,
     canWire: true,
+    noModeHint: false,
     canReset: false,
     onReset: vi.fn(),
     ...data,
@@ -77,10 +79,33 @@ describe("WorkflowParamNode", () => {
     expect(screen.getByText("INT")).toBeTruthy();
   });
 
-  it("没有模式时提示「先选模式才能连线」，且不渲染端点", () => {
-    const { container } = renderNode({ canWire: false });
-    expect(screen.getByText("先选模式才能连线")).toBeTruthy();
+  it("没有模式时不渲染端点，并说明「该工作流未声明模式」", () => {
+    const { container } = renderNode({ canWire: false, noModeHint: true });
+    expect(screen.getByText("该工作流未声明模式，落点暂不可编辑")).toBeTruthy();
     expect(container.querySelector(".react-flow__handle")).toBeNull();
+  });
+
+  it("只读消费（库内卡片列）不写任何编辑提示", () => {
+    /* 库内卡片是只读视图，走 WorkflowParamCard 本体（不是画布节点）：这里以前
+     * 复用 canWire=false，于是渲染出「先选模式才能连线」——而节点上的模式 chip
+     * 明明已经写着「单图生视频」（ISSUE #355 复审）。 */
+    render(
+      <WorkflowParamCard
+        entryId="size"
+        cls="size"
+        label="尺寸"
+        classLabel="尺寸"
+        hostNodeId="5"
+        pins={[]}
+        width={208}
+        canWire={false}
+        readOnly
+        noModeHint
+        canReset={false}
+      />,
+    );
+    expect(screen.queryByText("该工作流未声明模式，落点暂不可编辑")).toBeNull();
+    expect(screen.queryByText("先选模式才能连线")).toBeNull();
   });
 
   it("有模式时渲染输出端点", () => {

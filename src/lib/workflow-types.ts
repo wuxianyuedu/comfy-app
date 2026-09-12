@@ -426,6 +426,28 @@ export function normalizeTaskType(raw: string): string {
   return CODE_BY_LOWER.get(trimmed.toLowerCase()) ?? trimmed;
 }
 
+/** 一个工作流「当前生效的模式」—— 三处消费方（画布节点 / 工作流库 / 编辑器）
+ *  必须得出同一个答案，否则会出现「库里显示单图生视频、卡片却说需要选模式」。
+ *
+ *  优先级：声明的 defaultMode（且必须仍在 modes 里）→ modes[0] → taskType。
+ *  都为空 = 该工作流确实没有模式（此时才谈得上「未声明模式」）。 */
+export function resolveWorkflowMode(args: {
+  modes?: readonly string[] | null;
+  defaultMode?: string | null;
+  taskType?: string | null;
+}): string | null {
+  const modes = (args.modes ?? []).filter(
+    (mode): mode is string => typeof mode === "string" && mode.length > 0,
+  );
+  const declared = args.defaultMode;
+  if (declared && (modes.length === 0 || modes.includes(declared))) return declared;
+  if (modes.length > 0) return modes[0]!;
+  if (typeof args.taskType === "string" && args.taskType) {
+    return normalizeTaskType(args.taskType);
+  }
+  return null;
+}
+
 /** 根据图中节点自动推断工作流类型 */
 export function inferWorkflowTypeFromGraph(graph: Record<string, unknown>): string {
   const nodeClasses = new Set(
