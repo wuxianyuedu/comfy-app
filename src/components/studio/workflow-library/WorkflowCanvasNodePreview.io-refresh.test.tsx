@@ -250,6 +250,31 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     expect(tags.map((tag) => tag.textContent)).toEqual(["尺寸"]);
   });
 
+  it("每张卡片右侧有圆点端口，宿主行是它的连线锚点（ISSUE #355 复审）", () => {
+    /* 「对外参数需要右侧有小圆点的端口，可和工作流节点上的参数相连」——
+     * 圆点画在卡片的输出端口行上，宿主表单行则是线另一端（`data-io-key`）。 */
+    const { container } = render(
+      <WorkflowCanvasNodePreview
+        workflowId="wf-1"
+        workflowName="测试工作流"
+        taskType="t2i"
+        workflowIO={promptSizeIO()}
+        paramMap={{}}
+        usable
+        defaultMode="T2I"
+      />,
+    );
+    expect(container.querySelector('[data-wire-anchor="prompt"]')).toBeTruthy();
+    expect(container.querySelector('[data-wire-anchor="size"]')).toBeTruthy();
+    /* 宿主卡片的两行都在（连线另一端量得到）。 */
+    expect(
+      container.querySelector('[data-io-key="9::widget::positive_prompt"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-io-key="5::widget::aspect_ratio"]'),
+    ).toBeTruthy();
+  });
+
   it("没有对外参数时不渲染卡片列（空 IO）", () => {
     const { container } = render(
       <WorkflowCanvasNodePreview

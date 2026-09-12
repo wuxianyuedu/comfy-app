@@ -9,7 +9,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import { buildParamEntries, autoMapEntries } from "~/lib/workflow-param-mapping";
+import {
+  buildParamEntries,
+  autoMapEntries,
+} from "~/lib/workflow-param-mapping";
 import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 
@@ -50,7 +53,9 @@ describe("WorkflowParamCardColumn", () => {
       />,
     );
     for (const entry of entries) {
-      expect(container.querySelector(`[data-testid="param-node-${entry.id}"]`)).toBeTruthy();
+      expect(
+        container.querySelector(`[data-testid="param-node-${entry.id}"]`),
+      ).toBeTruthy();
     }
     expect(screen.getByText("提示词")).toBeTruthy();
     expect(screen.getByText("高度")).toBeTruthy();
@@ -65,7 +70,9 @@ describe("WorkflowParamCardColumn", () => {
       />,
     );
     const promptCard = entries.find((entry) => entry.cls === "prompt")!;
-    const card = container.querySelector(`[data-testid="param-node-${promptCard.id}"]`)!;
+    const card = container.querySelector(
+      `[data-testid="param-node-${promptCard.id}"]`,
+    )!;
     expect(card.textContent).toContain("positive_prompt");
     expect(card.textContent).toContain("→ positive_prompt");
   });
@@ -88,11 +95,47 @@ describe("WorkflowParamCardColumn", () => {
     ).toBe("INT");
   });
 
+  it("每张卡片右侧有一颗小圆点端口（可与宿主卡片上的参数相连）", () => {
+    /* ISSUE #355 复审：卡片右侧此前是无属性的圆点甚至没有圆点，作者看不出
+     * 「这个口能和节点上的哪一行连」。现在圆点画在**带类型的输出端口**那一行
+     * 的右沿，并带 `data-wire-anchor` 供连线层量出锚点。 */
+    const { container } = render(
+      <WorkflowParamCardColumn
+        entries={entries}
+        resolved={autoMapEntries(entries, io)}
+        io={io}
+      />,
+    );
+    const promptCard = entries.find((entry) => entry.cls === "prompt")!;
+    const dot = container.querySelector(
+      `[data-wire-anchor="${promptCard.id}"]`,
+    );
+    expect(dot).toBeTruthy();
+    /* 圆点必须落在输出端口行内（行是 absolute 的锚），而不是卡片上随便一处。 */
+    const outputRow = screen.getByTestId(`param-node-out-${promptCard.id}-0`);
+    expect(outputRow.contains(dot)).toBe(true);
+  });
+
+  it("一个对外参数只有一颗圆点 —— 未连线时列出的候选行不给点", () => {
+    /* 未连线时输出端口行会逐个列出候选（尺寸 = 宽/高/宽高比/像素量），那几行
+     * 说的是「能接到哪些类型」，不是多个出口。给每行都画点 = 凭空多出端点。 */
+    const { container } = render(
+      <WorkflowParamCardColumn entries={entries} resolved={{}} io={io} />,
+    );
+    const sizeCard = entries.find((entry) => entry.cls === "size-height")!;
+    const dots = container.querySelectorAll(
+      `[data-wire-anchor="${sizeCard.id}"]`,
+    );
+    expect(dots).toHaveLength(1);
+  });
+
   it("库里没有对外参数时不渲染卡片列", () => {
     const { container } = render(
       <WorkflowParamCardColumn entries={[]} resolved={{}} io={io} />,
     );
-    expect(container.querySelector('[data-testid="workflow-param-card-column"]')).toBeNull();
+    expect(
+      container.querySelector('[data-testid="workflow-param-card-column"]'),
+    ).toBeNull();
   });
 });
 
@@ -104,6 +147,8 @@ describe("ParamOwnerTag", () => {
 
   it("没有归属时不渲染任何东西", () => {
     const { container } = render(<ParamOwnerTag />);
-    expect(container.querySelector('[data-testid="wflib-param-owner"]')).toBeNull();
+    expect(
+      container.querySelector('[data-testid="wflib-param-owner"]'),
+    ).toBeNull();
   });
 });
