@@ -25,6 +25,7 @@ import { state, log } from "./runner-state";
 import type { Job } from "./runner-state";
 import { complete, fail } from "./executor-finalize";
 import { applyRawOverrides, type JsonRecord } from "./raw-overrides";
+import { trace } from "./trace";
 
 // 保持 executor.ts barrel 的 `applyRawOverrides` 导出不变
 //（纯逻辑已抽到 ./raw-overrides，这里仅透传）。
@@ -41,7 +42,10 @@ export { applyRawOverrides };
  * 同族单例（runner-state / reaper 定时器 / lifecycle 启动锁）都已挂在
  * globalThis 上，这里补齐最后一个漏网项。 */
 const CLI_PROCS_GLOBAL = "__comfyCliProcs_v1";
-const globalRef = globalThis as unknown as Record<string, Map<string, ChildProcess> | undefined>;
+const globalRef = globalThis as unknown as Record<
+  string,
+  Map<string, ChildProcess> | undefined
+>;
 export const cliProcs: Map<string, ChildProcess> =
   globalRef[CLI_PROCS_GLOBAL] ?? new Map<string, ChildProcess>();
 globalRef[CLI_PROCS_GLOBAL] = cliProcs;
@@ -212,6 +216,14 @@ export async function executeViaComfyCli(job: Job) {
   // from the log panel without digging through devtools.
   log(taskId, "info", `comfy-cli 执行 raw 工作流（${host}:${port}）`);
   log(taskId, "info", `  ${pyName} ${args.join(" ")}`);
+  /* ISSUE #216：把完整命令行写进 trace，便于在支持现场原样复现。 */
+  trace("cli", taskId, "启动 comfy-cli", {
+    bin: py,
+    args,
+    host,
+    port,
+    workflowFile: tmpFile,
+  });
   // explicit pre-spawn line so the user
   // sees a "→ 启动" marker before the (potentially slow) Python
   // boot.  Without this, the first log on a raw submission was
@@ -242,6 +254,7 @@ export async function executeViaComfyCli(job: Job) {
     "info",
     `comfy-cli 进程已启动（pid=${child.pid ?? "?"}，等待 stdout…）`,
   );
+  trace("cli", taskId, `进程已启动 pid=${child.pid ?? "?"}`);
 
   const guard = setTimeout(() => {
     if (settled) return;
@@ -387,6 +400,9 @@ export async function executeViaComfyCli(job: Job) {
   let nonJsonLines = 0;
   child.stdout?.setEncoding("utf-8");
   child.stdout?.on("data", (chunk: string) => {
+    /* ISSUE #216：原始 chunk 直送 trace（不截断不聚合）——面板只显示解析后的
+     * 事件，出现「没找到生成结果」时唯一能回答「ComfyUI 到底回了什么」的就是这里。 */
+    trace("cli", taskId, "stdout 原始输出", { chunk });
     buf += chunk;
     let idx: number;
     while ((idx = buf.indexOf("\n")) >= 0) {
@@ -402,6 +418,7 @@ export async function executeViaComfyCli(job: Job) {
         // import error.  Cap to avoid flooding the panel during
         // legitimate verbose output.
         nonJsonLines++;
+        trace("cli", taskId, "stdout 非 JSON 行", { line });
         if (nonJsonLines <= 20) {
           const trimmed = line.length > 240 ? line.slice(0, 240) + "…" : line;
           log(taskId, "info", `[comfy-cli stdout] ${trimmed}`);
@@ -414,7 +431,12 @@ export async function executeViaComfyCli(job: Job) {
         }
         continue;
       }
-      if (!ev || typeof ev !== "object") continue;
+      if (!ev || typeof ev !== "object") {
+        trace("cli", taskId, "stdout JSON 非对象", { line });
+        continue;
+      }
+      /* 已解析事件也原样落 trace：面板会按事件类型折叠成一行，这里保留原文。 */
+      trace("cli", taskId, "stdout 事件", { event: ev });
       const evt = ev as JsonRecord;
       if (
         evt.type === "queued" &&
@@ -436,6 +458,15 @@ export async function executeViaComfyCli(job: Job) {
         );
       } else if (evt.type === "envelope") {
         finish(Boolean(evt.ok), ev);
+      } else if (evt.type === "error") {
+        /* comfy-cli 的显式 error 事件（非 envelope）：完整落盘，否则只有
+         * 「未收到 envelope」这类结论，看不到 CLI 自己的原因。 */
+        trace("cli", taskId, "error 事件", { event: ev, promptId });
+        log(
+          taskId,
+          "warn",
+          `[comfy-cli] error 事件${typeof evt.message === "string" ? `：${evt.message}` : ""}`,
+        );
       } else if (
         evt.type === "progress" &&
         typeof evt.completed === "number" &&
@@ -478,6 +509,9 @@ export async function executeViaComfyCli(job: Job) {
   let noisyWarningLines = 0;
   child.stderr?.setEncoding("utf-8");
   child.stderr?.on("data", (d: string) => {
+    /* ISSUE #216：stderr 原始 chunk 直送 trace——面板只显示前 60 行且会过滤
+     * Python 警告噪声，真正的 traceback 尾部（异常类 + 行号）必须完整可查。 */
+    trace("cli", taskId, "stderr 原始输出", { chunk: d });
     errBuf += d;
     const lines = d.split(/\r?\n/);
     for (const line of lines) {
@@ -518,6 +552,13 @@ export async function executeViaComfyCli(job: Job) {
       );
     }
     const tail = errBuf.trim().split("\n").slice(-12).join("\n");
+    /* 未收到 envelope 的退出是「结果丢失」的头号嫌疑路径：完整 stderr +
+     * 未消费的 stdout 尾部一次性落 trace（面板仍是精简的 12 行）。 */
+    trace("cli", taskId, `进程退出 code=${code}（未收到 envelope）`, {
+      stderr: errBuf,
+      stdoutLeftover: buf,
+      promptId,
+    });
     log(
       taskId,
       "error",
@@ -535,6 +576,7 @@ export async function executeViaComfyCli(job: Job) {
     settled = true;
     clearTimeout(guard);
     cliProcs.delete(taskId);
+    trace("cli", taskId, "进程启动失败", { error: err });
     log(taskId, "error", `comfy-cli 启动失败：${err.message}`);
     void fail(taskId, promptId ?? "", `comfy-cli 启动失败：${err.message}`);
   });
