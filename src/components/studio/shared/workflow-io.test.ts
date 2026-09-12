@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   controlForEntry,
+  ioLabel,
   isUploadPinName,
   mergeRefreshedDefaults,
   splitWorkflowIO,
@@ -304,5 +305,99 @@ describe("typeDisplay — type 是什么就显示什么", () => {
     expect(typeDisplay(undefined, "STRING")).toBe("STRING");
     expect(typeDisplay("", "INT")).toBe("INT");
     expect(typeDisplay(undefined)).toBe("*");
+  });
+});
+
+describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
+  /** 封装槽位条目：机器槽位名 + 作者业务名（服务端富化后的形状）。 */
+  function wrapperSeed(extra?: Partial<WorkflowIOEntry>): EnrichedWidget {
+    return {
+      direction: "input",
+      kind: "widget",
+      nodeId: "1512",
+      name: "value_1",
+      label: "Seed",
+      ioKey: "1512::widget::value_1",
+      control: "int",
+      ...extra,
+    };
+  }
+
+  it("同一 pin 的派生拷贝不算撞名（行按模式叠加 seedMode 时名字不许掉回别名）", () => {
+    const original = wrapperSeed();
+    const rowCopy = { ...original, seedMode: "increment" };
+    /* 行渲染用的拷贝 + 全量表里的原件：同一个 pin 的两份记录，必须都显示 Seed。 */
+    expect(
+      ioLabel(rowCopy, [
+        original,
+        {
+          ...wrapperSeed(),
+          ioKey: "23::widget::image",
+          nodeId: "23",
+          name: "image",
+          label: "首帧图",
+        },
+      ]),
+    ).toBe("Seed");
+    expect(ioLabel(original, [rowCopy])).toBe("Seed");
+  });
+
+  it("没有 ioKey 时按「节点 + 方向 + 槽位名」认出同一个 pin", () => {
+    const original = wrapperSeed();
+    delete (original as { ioKey?: string }).ioKey;
+    const copy = { ...original, required: true };
+    expect(ioLabel(copy, [original])).toBe("Seed");
+  });
+
+  it("不同 pin 真撞名时用 name 区分（保持既有行为）", () => {
+    const first = {
+      direction: "input",
+      kind: "param",
+      nodeId: "1",
+      name: "inputImage",
+      label: "图像",
+      ioKey: "1::param::inputImage",
+      control: "link",
+    } as EnrichedWidget;
+    const second = {
+      direction: "input",
+      kind: "param",
+      nodeId: "2",
+      name: "outputImage",
+      label: "图像",
+      ioKey: "2::param::outputImage",
+      control: "link",
+    } as EnrichedWidget;
+    expect(ioLabel(first, [first, second])).toBe("inputImage");
+    expect(ioLabel(second, [first, second])).toBe("outputImage");
+  });
+
+  it("撞名时区分标记绝不使用封装槽位的机器别名：改用宿主标题", () => {
+    const seed = wrapperSeed({ nodeTitle: "Checkpoint settings" });
+    const homonym = {
+      direction: "input",
+      kind: "widget",
+      nodeId: "9",
+      name: "value_9",
+      label: "Seed",
+      ioKey: "9::widget::value_9",
+      control: "int",
+    } as EnrichedWidget;
+    /* 两条都叫 Seed：不能把 value_1 露出来，用「Seed · 宿主标题」区分。 */
+    expect(ioLabel(seed, [seed, homonym])).toBe("Seed · Checkpoint settings");
+  });
+
+  it("撞名且没有宿主标题时保留作者命名，不退化成 value_1", () => {
+    const seed = wrapperSeed();
+    const homonym = {
+      direction: "input",
+      kind: "widget",
+      nodeId: "9",
+      name: "value_9",
+      label: "Seed",
+      ioKey: "9::widget::value_9",
+      control: "int",
+    } as EnrichedWidget;
+    expect(ioLabel(seed, [seed, homonym])).toBe("Seed");
   });
 });
