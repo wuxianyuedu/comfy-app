@@ -351,16 +351,32 @@ test.describe("应用页签与全屏视图 @critical", () => {
   test.describe("应用日志面板：下拉位置、可点性与翻页 @critical", () => {
     const ROWS = 450;
 
-    /** 造一批有内容的日志行，让面板有得翻、有得选。 */
+    /**
+     * 造一批有内容的日志行，让面板有得翻、有得选。
+     *
+     * 时刻一定带 `[YYYY-MM-DD HH:mm:ss.mmm]` 前缀：面板的级别解析只认这一种
+     * （或 `[HH:mm:ss]`）形状的行；ISO 的 `T` / `Z` 分毫写法则整行落到兜底分支、
+     * 级别恒为 info——那样「警告黄、错误红」就永远没有可断言的样本。
+     */
     async function stubLogs(page: Page) {
       await page.route("**/api/logs/current**", async (route: Route) => {
         const start = Date.now() - 600_000;
+        const fmt = (ms: number) => {
+          const d = new Date(ms);
+          const p = (n: number, l = 2) => String(n).padStart(l, "0");
+          return (
+            `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+            `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.` +
+            `${p(d.getMilliseconds(), 3)}`
+          );
+        };
+        /* 掺进 2 条警告、3 条错误（取最新的一端，共 450 条仍在上限内）：
+         * 级别按钮上的 warn / error 才有非零样本，「警告黄、错误红」才可断言。 */
         const lines = Array.from({ length: ROWS }, (_, i) => {
-          const t = new Date(start + i * 1000)
-            .toISOString()
-            .replace("T", " ")
-            .replace("Z", "");
-          return `[${t}.000] [INFO] [app] 事件 ${i}`;
+          const t = fmt(start + i * 1000);
+          const level =
+            i >= ROWS - 3 ? "[ERROR]" : i >= ROWS - 5 ? "[WARN]" : "[INFO]";
+          return `[${t}] ${level} [app] 事件 ${i}`;
         });
         await route.fulfill({
           status: 200,
@@ -560,17 +576,20 @@ test.describe("应用页签与全屏视图 @critical", () => {
 
     /**
      * ISSUE #262 复审：「顶部还有较大空白区域，全部/警告/错误这些挤在一起，
-     * 可以占用大些空间」。
+     * 可以占用大些空间」；五审：「不要因为宽度不够导致文字显示成省略号」。
      *
-     * 这两件事是一体的：行头的富余宽度过去被一个**无名空白**吸走，五个筛选按钮
-     * 被钉死在 32px 上。现在筛选按钮整组 `flex-1`、每个按钮等分，于是
+     * 这三件事是一体的：行头的富余宽度过去被一个**无名空白**吸走，五个筛选按钮
+     * 被钉死在 32px 上。现在筛选按钮整组 `flex-1`、每个按钮等分（`min-w-fit`
+     * 保住「文字 + 四位数字」的固有宽度），于是
      *   1. 按钮明显变宽（不再是 32px 的窄条）；
-     *   2. 最右一个按钮与搜索框之间不再横着一大片空白。
+     *   2. 最右一个按钮与搜索框之间不再横着一大片空白；
+     *   3. 标签与计数都完整显示，没有元素被文本溢出裁掉。
      *
      * 宽度只有真实浏览器量得出来（jsdom 不做布局），所以这几条在这里：
      *   - 最窄的按钮宽度 ≥ 56px（32px 的老形态直接红）；
      *   - 五个按钮等宽（差 ≤ 2px：`flex-1 basis-0` 的均分语义）；
-     *   - 「错误」按钮右边缘到搜索框左边缘的空白 < 48px（老形态这里是上百 px）。
+     *   - 「错误」按钮右边缘到搜索框左边缘的空白 < 48px（老形态这里是上百 px）；
+     *   - 每个按钮的 `scrollWidth <= clientWidth`（没有一个字被切掉/省略）。
      */
     test("@critical 级别筛选占满行头富余宽度，不再挤成窄条也不留大片空白", async ({
       page,
@@ -607,6 +626,100 @@ test.describe("应用页签与全屏视图 @critical", () => {
       const gap = searchBox!.x - (boxes[4]!.x + boxes[4]!.width);
       /* 按钮与搜索框之间的空白被按钮吃掉（老形态这里是 300px 上下）。 */
       expect(gap).toBeLessThan(48);
+    });
+
+    /**
+     * ISSUE #262 五审（对应用户这轮的截图）：
+     *
+     * 1. 「警告/错误显示重复了，左侧那两个去掉」——标题旁那块灰底胶囊
+     *    （`警告 n · 错误 n`）与级别按钮上的同名计数同源，是同一项数据说两遍；
+     * 2. 「右侧的警告文字改成黄色，错误改成红色」——级别色落在**文字**上；
+     * 3. 「每个都保留显示文字和四位数字的宽度即可。不要因为宽度不够导致文字
+     *    显示成省略号」——截图里的老形态正是 `警… 539`（标签被切成省略号、
+     *    数字被挤到下一行）。
+     *
+     * 这三条都是**布局结果**：jsdom 既不做布局也不实现 `scrollWidth`，
+     * 所以判据只能落在真实浏览器上。
+     */
+    test("@critical 级别按钮不省略、带级别色，且标题旁不再复述警告/错误", async ({
+      page,
+    }) => {
+      await stubBackend(page);
+      await stubLogs(page);
+      await openPanel(page);
+
+      /* ① 按钮不被裁：内容宽度不超过可视宽度（被切成 `警…` 时 scrollWidth 会反超）。 */
+      for (const label of ["全部", "调试", "信息", "警告", "错误"]) {
+        const button = page
+          .getByTitle(new RegExp(`^当前来源的${label}：`))
+          .first();
+        const box = await button.boundingBox();
+        expect(box).not.toBeNull();
+        /* 「两字标签 + 四位数字」的固有宽度在 60px 上下：低于 56px 说明按钮
+         * 被压到放不下内容（老形态就是在这里把「警告」切成「警…」的）。 */
+        expect(box!.width).toBeGreaterThanOrEqual(56);
+
+        const overflow = await button.evaluate((el) => {
+          const nodes = [el, ...Array.from(el.children)] as HTMLElement[];
+          return nodes.map((n) => n.scrollWidth - n.clientWidth);
+        });
+        for (const px of overflow) expect(px).toBeLessThanOrEqual(1);
+      }
+
+      /* ② 级别色：警告黄、错误红，且两者**不同色**（同一处不能两色齐发）。
+       * 颜色读数交给浏览器换算成 sRGB：Tailwind v4 产出的可能是 `lab(...)`，
+       * 直接切字符串会算出色相错值（实测踩过）。这里借 2D 画布取值——
+       * canvas 只认 sRGB，`getComputedStyle` 留在原色彩空间是没用的。 */
+      const rgbOf = (label: string) =>
+        page
+          .getByTitle(new RegExp(`^当前来源的${label}：`))
+          .first()
+          .evaluate((el) => {
+            const color = getComputedStyle(el).color;
+            const canvas = document.createElement("canvas");
+            canvas.width = canvas.height = 1;
+            const ctx = canvas.getContext("2d")!;
+            ctx.fillStyle = color;
+            ctx.fillRect(0, 0, 1, 1);
+            const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+            return [r, g, b] as [number, number, number];
+          });
+      const [wr, wg, wb] = await rgbOf("警告");
+      const [er, eg, eb] = await rgbOf("错误");
+      expect([wr, wg, wb]).not.toEqual([er, eg, eb]);
+      /* 黄：红、绿都高，蓝明显低；红：红高，绿、蓝都低。 */
+      expect(wr).toBeGreaterThan(wb + 60);
+      expect(wg).toBeGreaterThan(wb + 60);
+      expect(er).toBeGreaterThan(eg + 80);
+      expect(er).toBeGreaterThan(eb + 80);
+
+      /* 数字不跟着变色（中性灰）：否则一行里两个高亮块互相稀释。 */
+      const countColor = await page
+        .getByTitle(/^当前来源的警告：/)
+        .first()
+        .evaluate((el) => {
+          const count = el.children[1] as HTMLElement;
+          const canvas = document.createElement("canvas");
+          canvas.width = canvas.height = 1;
+          const ctx = canvas.getContext("2d")!;
+          ctx.fillStyle = getComputedStyle(count).color;
+          ctx.fillRect(0, 0, 1, 1);
+          return Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3));
+        });
+      expect(countColor).not.toEqual([wr, wg, wb]);
+
+      /* ③ 标题旁那块灰底胶囊整块删除（"左侧那两个"就是它复述的两个数）；
+       *    行头第一行里只剩标题，不再有第二个计数源。 */
+      expect(
+        await page.locator('span.rounded-full[class*="bg-white/5"]').count(),
+      ).toBe(0);
+      const headerFirstRow = await page
+        .locator("div.flex.min-h-14")
+        .first()
+        .evaluate((el) => el.firstElementChild!.textContent ?? "");
+      expect(headerFirstRow).toContain("应用日志");
+      expect(headerFirstRow).not.toMatch(/警告 \d+/);
+      expect(headerFirstRow).not.toMatch(/错误 \d+/);
     });
 
     /**
