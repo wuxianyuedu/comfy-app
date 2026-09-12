@@ -501,8 +501,19 @@ def _shell_pid_file(project_root: str) -> str:
     dev-launcher.ps1 只负责在壳退出时回收它；而「启动器 / 监控线程先退出、壳还活着」
     这条路径没人善后——最典型的是用户直接关掉启动器窗口后，app.exe 变成无主的常驻
     进程：桌面窗口没了，进程还在，下次编译还会锁住 target\release\app.exe。
+
+    **上一轮留下的 PID 文件必须先删掉**：这个文件是「上一次 run 的残留」，而
+    dev-launcher.ps1 是被本次启动器另起的进程，等它走到写 PID 那一步之前，文件里
+    还留着上一轮的旧 PID。旧 PID 很可能已被系统回收给别的无关进程（Windows 会复用
+    PID），一旦兜底回收路径读到它就会去杀一个不相干的进程。先删 = 窗口期内读不到
+    文件（_kill_shell_from_pid_file 直接返回），语义安全。
     """
     return os.path.join(project_root, "log", "launcher", "tauri-shell.pid")
+
+
+def _reset_shell_pid_file(project_root: str) -> None:
+    """清掉上一轮的桌面壳 PID 文件（在拉起 dev-launcher.ps1 之前调用）。"""
+    _safe_remove(_shell_pid_file(project_root))
 
 
 def _kill_shell_from_pid_file(project_root: str) -> None:
@@ -1539,6 +1550,10 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
     else:
         ps_args = ["-Prebuilt"]
         log(f"launching {ps1} -Prebuilt")
+
+    # 拉起 dev-launcher.ps1 之前先清掉上一轮留下的壳 PID 文件：窗口期内读到的
+    # 只会是「上一轮的旧 PID」，而那号可能已被无关进程占用（见 _shell_pid_file）。
+    _reset_shell_pid_file(project_root)
 
     # 启动 PowerShell 隐藏窗口；stdin 也关闭避免句柄泄漏
     # stdout/stderr 重定向到文件，方便排查「提前退出但无日志」的问题。
