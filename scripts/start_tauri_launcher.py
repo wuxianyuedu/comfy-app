@@ -128,8 +128,10 @@ GRAY = 0xAF9CA3  # #9CA3AF in BGR
 GRAY_DIM = 0x80726B  # #6B7280 in BGR
 ERROR_RED = 0x4444EF  # #EF4444 in BGR
 
-SPLASH_W = 520
-SPLASH_H = 210
+# 旧版 Win32 启动小弹窗（--splash 调试用）的尺寸。它显示的是状态行与日志尾部，
+# 太窄会让每行都折成两截——与 Tauri 启动页同一条「给日志留宽度」的原则。
+SPLASH_W = 640
+SPLASH_H = 300
 
 APP_TITLE = "Comfy APP"
 APP_WINDOW_TITLE = "Comfy APP"

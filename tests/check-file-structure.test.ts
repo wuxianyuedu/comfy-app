@@ -581,3 +581,80 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     expect(launcher).toContain("foreground-watch.log");
   });
 });
+
+describe("启动页日志可读宽度（宽窗口 + 展开日志加宽卡片）", () => {
+  /**
+   * 启动页的日志面板是「一行一条日志」的不折行布局（`white-space: pre`，见
+   * docs/standards/07-日志系统.md §7.18.6），因此**窗口宽度就是可读宽度**：
+   * 卡片 520px 时 11px 等宽字一行只放得下约 65 字符，带时间戳与 [app_lib][INFO]
+   * 前缀的壳日志几乎每行都被切成两截，用户看到的就是「日志宽度太小」。
+   *
+   * 判据写在这里而不是人脑里：窗口给得宽（并留出展开日志的空间）、展开日志
+   * 必须有加宽卡片的动作、且窗口尺寸不得超过显示器（小屏上窗口跑到屏幕外
+   * 同样是「看不全」）。改动三份启动页副本与 tauri.conf.json 时先看这条。
+   */
+  const CONF = join(process.cwd(), "src-tauri", "tauri.conf.json");
+  const SPLASH_COPIES = [
+    join(process.cwd(), "src-tauri", "splash-assets", "splash.html"),
+    join(process.cwd(), "src-tauri", "splash-assets", "index.html"),
+    join(process.cwd(), "public", "splash.html"),
+  ];
+
+  const splashWindow = (): { width: number; height: number } => {
+    const conf = JSON.parse(readFileSync(CONF, "utf8")) as {
+      app: { windows: { label?: string; width: number; height: number }[] };
+    };
+    const win = conf.app.windows.find((w) => w.label === "splash") ?? conf.app.windows[0];
+    if (!win) throw new Error("tauri.conf.json 里没有窗口配置");
+    return win;
+  };
+
+  it("splash 窗口宽度给足，够放下未折行的日志（旧的 1280 太窄）", () => {
+    const win = splashWindow();
+    expect(win.width).toBeGreaterThanOrEqual(1600);
+    expect(win.height).toBeGreaterThanOrEqual(900);
+  });
+
+  it("窗口尺寸按显示器收敛，小屏上不会被推出屏幕外", () => {
+    const rust = readFileSync(
+      join(process.cwd(), "src-tauri", "src", "lib.rs"),
+      "utf8",
+    );
+    expect(rust).toContain("fn splash_window_size");
+    // 必须真的取过显示器尺寸并用于收敛，而不是只写了个函数
+    expect(rust).toContain("primary_monitor()");
+    expect(rust).toContain("splash_window_size(app.handle())");
+  });
+
+  it("三份启动页副本一致，且展开日志时卡片真的加宽", () => {
+    const texts = SPLASH_COPIES.map((p) => readFileSync(p, "utf8"));
+    expect(new Set(texts).size).toBe(1);
+    const html = texts[0];
+    expect(html).toBeDefined();
+    if (!html) return;
+    // 卡片默认宽度比旧值大，展开日志时切到更宽的宽版
+    expect(html).toContain(".card.wide");
+    expect(html).toContain("classList.toggle('wide'");
+    const widths = [...html.matchAll(/min\((\d+)px, calc\(100vw - 48px\)\)/g)].map(
+      (m) => Number(m[1]),
+    );
+    expect(widths.length).toBeGreaterThanOrEqual(2);
+    const collapsed = widths[0] ?? 0;
+    const expanded = widths[1] ?? 0;
+    expect(collapsed).toBeGreaterThanOrEqual(640);
+    expect(expanded).toBeGreaterThan(collapsed);
+  });
+
+  it("日志面板给足高度，展开后不是一条窄缝", () => {
+    const html = readFileSync(SPLASH_COPIES[0] ?? "", "utf8");
+    const panel = html.slice(
+      html.indexOf(".log-panel {"),
+      html.indexOf(".log-panel pre"),
+    );
+    const height = Number(/height:\s*(\d+)px/.exec(panel)?.[1] ?? 0);
+    expect(height).toBeGreaterThanOrEqual(300);
+    // 单行不折行 + 横向滚动必须保留，否则「加宽」会被折行悄悄取代
+    expect(html).toContain("white-space: pre;");
+    expect(html).toContain("overflow-x: auto;");
+  });
+});
