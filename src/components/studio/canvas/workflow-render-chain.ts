@@ -16,7 +16,7 @@
  */
 
 import type { RenderChainModule } from "../debug/DebugChainFooter";
-import { NODE_TYPE_REGISTRY } from "@/components/workflow-canvas/node-registry";
+import { NODE_TYPE_REGISTRY } from "@/lib/comfyui/node-registry";
 import { isCustomNode, getCustomNodePackage } from "@/config/custom-nodes";
 
 /** 工作流画布所有节点共用的渲染链路（不随 classType 变化） */
@@ -47,7 +47,7 @@ export function getWorkflowRenderChainModules(classType: string): RenderChainMod
     });
   } else if (classType in NODE_TYPE_REGISTRY) {
     chain.push({
-      file: "src/components/workflow-canvas/node-registry.ts",
+      file: "src/lib/comfyui/node-registry.ts",
       label: "node-registry",
     });
   }

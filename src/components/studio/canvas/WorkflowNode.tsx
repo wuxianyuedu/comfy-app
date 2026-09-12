@@ -11,7 +11,7 @@
 import React, { useState } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { friendlyNodeTitle } from "@/lib/comfyui/node-titles";
-import { PackageFooter } from "@/components/workflow-canvas/nodes/PackageFooter";
+import { PackageFooter } from "./PackageFooter";
 import { DebugChainFooter } from "../debug/DebugChainFooter";
 import { getWorkflowRenderChainModules } from "./workflow-render-chain";
 import { useDebugStore } from "../debug/debug-store";
