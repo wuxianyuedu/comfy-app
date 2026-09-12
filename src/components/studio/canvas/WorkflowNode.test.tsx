@@ -33,8 +33,7 @@ function makeStores(): WFStores {
   };
 }
 
-function renderFlowNode(data: WorkflowNodeData): WFStores {
-  const stores = makeStores();
+function renderFlowNode(data: WorkflowNodeData, stores: WFStores = makeStores()): WFStores {
   renderWithFlow(
     <WFStoresProvider stores={stores}>
       <FlowNode data={data} />
@@ -102,6 +101,21 @@ describe("FlowNode（WorkflowNode 渲染冒烟）", () => {
     expect(screen.getByRole("button", { name: "折叠节点" })).toBeInTheDocument();
     expect(document.querySelector('[data-input-key="seed"]')).not.toBeNull();
     expect(screen.getByTitle("42")).toBeInTheDocument();
+  });
+  /* 输出端点在 IO 编辑模式下必须继续挂载 —— 它同时是下游 `out:<name>` 边的
+   * 锚点。此前 IO 编辑模式整个不渲染它，React Flow 解析不到 handle 就丢掉整条
+   * 边（error#008），画布上表现为「这个节点的输出没有连线」（ISSUE #394）。 */
+  it("IO 编辑模式下输出端点仍在，仅视觉降级", () => {
+    const stores = renderFlowNode(nodeData({ rawInputs: RAW_INPUTS }));
+    expect(document.querySelector('[data-handleid="out:LATENT"]')).not.toBeNull();
+    stores.io.setState({ ioEditMode: true });
+    renderFlowNode(nodeData({ rawInputs: RAW_INPUTS }), stores);
+    const handles = document.querySelectorAll('[data-handleid="out:LATENT"]');
+    expect(handles.length).toBeGreaterThan(0);
+    /* 降级 = 缩小 + 降透明度，而不是卸载。 */
+    const last = handles[handles.length - 1] as HTMLElement;
+    expect(last.style.opacity).toBe("0.35");
+    expect(last.style.width).toBe("4px");
   });
 });
 

@@ -459,7 +459,6 @@ export function useSettingsPage(): SettingsPageController {
   });
   const comfyStartM = api.setting.comfyStart.useMutation();
   const comfyStopM = api.setting.comfyStop.useMutation();
-  const comfyOpenM = api.setting.comfyOpen.useMutation();
   const [comfyStopping, setComfyStopping] = useState(false);
   const [comfyOpening, setComfyOpening] = useState(false);
   /* Drizzle Studio：状态查询 + 启动/关闭/打开动作（enabled 门控同 comfyStatus） */
@@ -687,30 +686,22 @@ export function useSettingsPage(): SettingsPageController {
         await comfyStatusQ.refetch();
         return;
       }
-      /* 去哪打开由服务端探测结论决定（ISSUE #310 三次回归）：ComfyUI 会发
-       * `X-Frame-Options: DENY`，而它与本应用不同源（端口不同即跨源），
-       * iframe 内嵌必然被拒绝 —— 页签会打开，但里面只有一张浏览器的
-       * 「已阻止此内容」错误页。宿主页自身判不出这件事（跨源读不到响应头，
-       * 事件也不带原因），所以判据在 `comfyEmbeddable`，由 `openComfyTab`
-       * 落成「内嵌页签 / 壳内独立窗口 / 系统浏览器」三档。 */
+      /* 打开方式由服务端探测结论决定（ISSUE #310）：目标是**只有多页签**，
+       * 不弹第二个窗口。正常情况下 ComfyUI 由本应用拉起、启动参数带了
+       * `--enable-cors-header`，跨源不会被 origin-only 中间件拦 403，直接
+       * 内嵌；万一判到不可嵌（外部实例不受本应用参数控制等），页签照常
+       * 打开、里面渲染可读说明 —— 仍留在同一个窗口里，不另开窗口。 */
       const decision = await openComfyTab(base, window.location.origin);
-      if (decision.embedUrl) {
-        // 用稳定 id 打开 ComfyUI 页签：重启后端口偏移（base 变化）时
-        // 复用同一页签并刷新地址，而不是叠出重复页签。
-        useShellTabs.getState().openTab({
-          id: "comfyui",
-          label: "ComfyUI",
-          url: decision.embedUrl,
-          closable: true,
-        });
-      } else if (decision.target === "browser") {
-        // 不可嵌且没有可开窗的壳时，交给服务端用系统浏览器兜底。
-        const result = await comfyOpenM.mutateAsync();
-        showFlash(result.ok ? "ok" : "err", result.detail);
-        await comfyStatusQ.refetch();
-        return;
-      }
-      showFlash("ok", decision.detail);
+      // 用稳定 id 打开 ComfyUI 页签：重启后端口偏移（base 变化）时
+      // 复用同一页签并刷新地址，而不是叠出重复页签。
+      useShellTabs.getState().openTab({
+        id: "comfyui",
+        label: "ComfyUI",
+        url: decision.embedUrl,
+        closable: true,
+        blockedReason: decision.target === "blocked" ? decision.detail : null,
+      });
+      showFlash(decision.target === "embed" ? "ok" : "err", decision.detail);
       // 无论成败都刷新状态行，修正探测抖动（如进程查询超时）造成的「未运行」显示。
       await comfyStatusQ.refetch();
     } catch (error) {
@@ -718,7 +709,7 @@ export function useSettingsPage(): SettingsPageController {
     } finally {
       setComfyOpening(false);
     }
-  }, [comfyOpenM, comfyStatusQ, showFlash]);
+  }, [comfyStatusQ, showFlash]);
 
   /* ── Drizzle Studio 启动 / 关闭 / 打开 ─────────────────── */
   const startDbStudio = useCallback(async () => {

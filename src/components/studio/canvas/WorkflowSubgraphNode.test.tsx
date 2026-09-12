@@ -102,4 +102,23 @@ describe("WorkflowSubgraphNode — 封装节点暴露口的显示名（ISSUE #34
     expect(entries).toHaveLength(1);
     expect(entries[0]!.label).toBe("随机种子");
   });
+  /* 同 WorkflowNode：输出端点是下游 `out:<name>` 边的锚点，IO 编辑模式下
+   * 不能卸载，只能降级视觉（ISSUE #394）。 */
+  it("IO 编辑模式下子图输出端点仍在，仅视觉降级", () => {
+    const data = {
+      ...baseData,
+      outputs: [{ name: "IMAGE", type: "IMAGE", links: [1] }],
+      connectedOutputs: new Set(["IMAGE"]),
+    };
+    const stores = makeStores();
+    renderNode(<WorkflowSubgraphNode data={data} />, stores);
+    expect(document.querySelector('[data-handleid="out:IMAGE"]')).not.toBeNull();
+    stores.io.setState({ ioEditMode: true });
+    renderNode(<WorkflowSubgraphNode data={data} />, stores);
+    const handles = document.querySelectorAll('[data-handleid="out:IMAGE"]');
+    expect(handles.length).toBeGreaterThan(0);
+    const last = handles[handles.length - 1] as HTMLElement;
+    expect(last.style.opacity).toBe("0.35");
+    expect(last.style.width).toBe("4px");
+  });
 });
