@@ -933,6 +933,8 @@ function WorkflowEditorBody({
           onConnect={onConnect}
           isValidConnection={isValidConnection}
           onEdgesDelete={onEdgesDelete}
+          /* 选中节点后由画布把「相关连线」标记写回 edges（上下游加粗高亮）。 */
+          setEdges={setEdges}
         />
 
         {/* Floating instruction tooltip */}        {/* Floating instruction tooltip */}
