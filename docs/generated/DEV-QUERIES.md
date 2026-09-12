@@ -11,23 +11,23 @@
 
 ```bash
 # 全量类型检查(tsconfig 已开 noUnusedLocals,未使用的 import 会报 TS6133/TS6196 error)
-npm run typecheck
+pnpm typecheck
 
 # 全量输出里只看某个文件的报错(把 AgentPanel 换成任意文件名片段)
-npx tsc --noEmit 2>&1 | grep -i "AgentPanel"
+pnpm exec tsc --noEmit 2>&1 | grep -i "AgentPanel"
 ```
 
 ## 2. ESLint
 
 ```bash
 # 单文件 lint(项目里 no-unused-vars 是 warn 级,不会让 eslint 本身失败,但 tsc 会拦)
-npx eslint src/components/studio/AgentPanel.tsx
+pnpm exec eslint src/components/studio/AgentPanel.tsx
 
 # 提交门槛 = lint + typecheck
-npm run check
+pnpm check
 
 # 自动修复(导入排序等)
-npx eslint src --fix
+pnpm exec eslint src --fix
 ```
 
 ## 3. 判断一段代码是不是死代码(有没有使用方)
@@ -77,7 +77,7 @@ grep -n "\"check\"\|typecheck\|\"test\"" package.json
 
 ## 7. Node 网络超时(装依赖失败必看)
 
-**症状**:`pnpm add` / `npm install` 报 `ERR_PNPM_META_FETCH_FAIL` / `UND_ERR_CONNECT_TIMEOUT`,npmmirror 镜像也超时;但 `curl` 访问同一地址正常。
+**症状**:`pnpm add`(历史上用 `npm install`,现应改为 `pnpm`)报 `ERR_PNPM_META_FETCH_FAIL` / `UND_ERR_CONNECT_TIMEOUT`,npmmirror 镜像也超时;但 `curl` 访问同一地址正常。
 
 **原因**:本机 `dns.lookup`(getaddrinfo)对 registry 域名只返回失效的 IPv6,Node 的 fetch/https 全部卡死在连接 IPv6 上;curl 和显式 IPv4 的 TLS 均正常。
 
@@ -98,7 +98,7 @@ NODE_OPTIONS="--require ./scripts/force-ipv4-dns.cjs" pnpm add -D <包名>
 
 ```bash
 # 改完代码后的最小验证组合(先看目标文件,再跑全量门槛)
-npx tsc --noEmit 2>&1 | grep -i "你改的文件名"
-npx eslint src/path/to/File.tsx
-npm run check
+pnpm exec tsc --noEmit 2>&1 | grep -i "你改的文件名"
+pnpm exec eslint src/path/to/File.tsx
+pnpm check
 ```

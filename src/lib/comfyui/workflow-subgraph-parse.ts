@@ -200,7 +200,12 @@ export interface SubgraphGraphResult {
    *  只剩 ComfyUI 通用翻译（`seed` → `localized: "随机种"`）——作者写的
    *  `Seed` 就丢在这一层（ISSUE #349：切成随机值/固定值后名字退回 `value_1`）。
    *  内层视图的 wrapper 边界记录（`-10` 边的源节点）与本层槽位名一对就能
-   *  把作者名捞回来，作为「按 alias 回退取名」的来源下发给顶层富化。 */
+   *  把作者名捞回来，作为「按 alias 回退取名」的来源下发给顶层富化。
+   *
+   *  **键是 `节点id::槽位名`，不是裸槽位名**：一个子图里多个同类节点共享
+   *  同一个内部槽位名（四个 `PrimitiveInt` 的入参都叫 `value`），只按槽位名
+   *  记账会被后写的暴露口覆盖 —— 于是 `Seed` 节点显示成最后一个 `FPS` 的口名
+   *  （ISSUE #394）。 */
   proxyAuthorLabels: Record<string, string>;
 }
 
@@ -279,7 +284,7 @@ export function buildSubgraphGraph(
       if (lk?.src !== "-10") continue;
       const slotNames: string[] | undefined = inputNameByNodeSlot[lk.targetId];
       const slotName = slotNames?.[lk.targetSlot];
-      if (slotName) proxyAuthorLabels[slotName] = authorLabel;
+      if (slotName) proxyAuthorLabels[`${lk.targetId}::${slotName}`] = authorLabel;
     }
   }
 
@@ -388,7 +393,17 @@ export function buildSubgraphGraph(
       }
     }
 
-    graph[nodeId] = { class_type: classType, inputs: inputMap };
+    /* 作者在 ComfyUI properties 里改过名的节点（`title` 字段）必须留到视图层：
+     *  画布标题栏按 `friendlyNodeTitle(classType, title)` 取名，作者名优先于
+     *  classType 的静态中文名（ISSUE #394：`PrimitiveInt` + `title: "Seed"`
+     *  在子图内部一直显示成 "Primitive Int"）。这里与顶层路
+     *  （workflow-detail / workflow-detail-raw）的取值链逐字一致。 */
+    const rawTitle = typeof rn.title === "string" ? rn.title.trim() : "";
+    graph[nodeId] = {
+      class_type: classType,
+      inputs: inputMap,
+      ...(rawTitle ? { _meta: { title: rawTitle } } : {}),
+    };
 
     /* Per-output metadata. */
     const rawOutputs: RawOutputEntry[] = [];

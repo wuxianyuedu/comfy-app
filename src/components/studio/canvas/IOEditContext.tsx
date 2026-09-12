@@ -26,7 +26,6 @@ import {
   createIOEditStore,
   createRgthreeGroupsStore,
   createNodeJsonViewerStore,
-  useNodeJsonViewerStore,
 } from "../workflow-editor/WorkflowStores";
 
 /* ── 兼容再导出：消费方统一从 ./wf-contexts 取以下符号 ── */
@@ -78,14 +77,11 @@ export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node
   const viewerApi = useNodeJsonViewer();
   const ref = React.useRef<HTMLButtonElement | null>(null);
   const requestShow = viewerApi.requestShow;
-  /* 右上角展示「短序号」#1/#2…（按 detail.nodes 列表顺序），
-   * 完整 nodeId 保留在 title / aria-label / data 属性中，JSON 查看器仍按完整 id 查询。 */
-  const nodes = useNodeJsonViewerStore((state) => state.detail?.nodes ?? null);
-  const shortLabel = React.useMemo(() => {
-    if (!nodes) return null;
-    const idx = nodes.findIndex((node) => String(node.id) === nodeId);
-    return idx === -1 ? null : `#${idx + 1}`;
-  }, [nodes, nodeId]);
+  /* 右上角显示**节点真实 id**（与 ComfyUI 一致，便于和日志/JSON/报错对号）。
+   * 这里曾经跟「项目画布节点短序号」一起被改成按 `detail.nodes` 下标映射的
+   *  `#1/#2…`（ISSUE #394）：那个短序号是项目画布自己的展示约定，工作流编辑器
+   * 画布不是它的语义范围 —— 改回去之后，编辑器的 `#1670` 与 JSON 查看器、
+   * 执行日志、ComfyUI 报错里的 id 逐字一致。 */
 
   const handleOpen = (e: React.SyntheticEvent) => {
     e.stopPropagation();
@@ -112,7 +108,7 @@ export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node
       }
     >
       <span aria-hidden style={{ fontSize: 9, lineHeight: 1 }}>🔍</span>
-      <span>{shortLabel ?? `#${nodeId}`}</span>
+      <span>#{nodeId}</span>
     </button>
   );
 }
