@@ -587,10 +587,13 @@ export async function buildSubgraphDetail(
     const sg = buildSubgraphGraph(sub, linkById);
     /* 子图暴露口的作者名（proxyWidgets 被隔离时长名字的来源），随节点下发给
      *  客户端「就地派生富化」用 —— 顶层富化在这里也在场，直接按
-     *  `节点id::widget::槽位名` 预先打进内层节点的 raw_inputs（见下）。 */
+     *  `节点id::widget::槽位名` 预先打进内层节点的 raw_inputs（见下）。
+     *  查表键必须带节点 id：内部槽位名在同一子图里会重名（四个 `PrimitiveInt`
+     *  的入参都叫 `value`），只按槽位名查会把最后一个暴露口的作者名安到所有
+     *  同名字段上（ISSUE #394：`Seed` 节点显示成 `FPS`）。 */
     for (const n of sg.nodes) {
       for (const inp of n.raw_inputs ?? []) {
-        const authorLabel = sg.proxyAuthorLabels[inp.name];
+        const authorLabel = sg.proxyAuthorLabels[`${n.id}::${inp.name}`];
         if (!authorLabel) continue;
         /* 只对「本层槽位名与作者名不同」的暴露口打标；`field` 用槽位名本身，
          *  让富化按本层名字回查得中（顶层 `innerInputsById` 的键就是槽位名）。 */
