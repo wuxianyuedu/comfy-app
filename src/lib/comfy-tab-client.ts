@@ -32,6 +32,10 @@ export type OpenComfyTabResult = {
   embedUrl: string | null;
   /** 可直接展示给用户的说明（含不可嵌时的修复动作）。 */
   detail: string;
+  /** 运行中的 ComfyUI 地址。不可嵌时也**必须**带上：它是用户能自己验证、
+   *  复制到浏览器打开的唯一定位信息（ISSUE #310 第三次现场只剩一个「已阻止
+   *  此内容」，没有地址就没人能判断到底是哪一层拦的）。 */
+  base: string;
 };
 
 /**
@@ -56,6 +60,7 @@ export async function openComfyTab(
       target: "embed",
       embedUrl: base,
       detail: `已在页签中打开 ComfyUI（${base}）`,
+      base,
     };
   }
 
@@ -64,5 +69,6 @@ export async function openComfyTab(
     target: "blocked",
     embedUrl: null,
     detail: `ComfyUI 未放行跨源内嵌（${verdict.reason}）`,
+    base,
   };
 }
