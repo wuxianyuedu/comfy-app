@@ -173,6 +173,71 @@ function collectProxyWidgetPairs(
   return pairs;
 }
 
+/** 节点类名是不是子图封装节点（`class_type` 是子图 UUID）。
+ *
+ *  封装节点在画布上渲染成紫色整卡，`class_type` 就是子图定义的 UUID ——
+ *  ComfyUI 不在这一层放插件类名。用来区分「槽位名是平台自动编号的别名」
+ *  与「槽位名是插件作者定义的 pin 名」。 */
+function isUuidLikeClassType(classType: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    classType.trim()
+  );
+}
+
+/** ComfyUI 为子图 wrapper 槽位自动编号出的名字（`value_1` / 裸序号 `1`）。
+ *
+ *  这不是「语法糖」，而是平台的编号产物：作者不会手写它，因此看到这个形状
+ *  就可以判定该槽位的业务名要另找来源（子图边界 pin 的作者 label）。 */
+function isWrapperAliasSlot(name: string): boolean {
+  const slot = name.trim();
+  return /^value_\d+$/.test(slot) || /^\d+$/.test(slot);
+}
+
+/** 子图边界 pin 的作者名表：`槽位名 → 作者 label`（按子图 UUID 分组）。
+ *
+ *  ComfyUI 把子工作流封装节点（wrapper）的暴露槽位逐槽自动编号成 `value_1` /
+ *  `value_2`（部分导出是裸序号 `1` / `2`），作者写的业务名（`Seed`）只留在子图
+ *  定义的边界 pin（`definitions.subgraphs[uid].inputs[].label`）上。wrapper 自身
+ *  的 `inputs[]` 常常只有别名，甚至 `properties.proxyWidgets` 被整体隔离
+ *  （`proxyWidgetErrorQuarantine`）—— 两条常规来源都拿不到作者名时，富化链
+ *  只能停在别名上，名字随即被当成「作者命名」固化回库（ISSUE #349）。
+ *
+ *  这里把边界 pin 的作者名按「槽位名」预先索引好，供下面的 wrapper 分支回填；
+ *  槽位名与边界 pin 的 `name` 同名是 ComfyUI 的约定（wrapper 本层槽位即边界
+ *  pin）。子图定义缺失 / pin 没写 label 时整表为空，行为与旧版逐值一致。 */
+function subgraphAuthorLabelsByUid(
+  raw: RawWorkflow | null
+): Record<string, Record<string, string>> {
+  const byUid: Record<string, Record<string, string>> = {};
+  const subgraphs = raw?.definitions?.subgraphs;
+  if (!subgraphs || typeof subgraphs !== "object") return byUid;
+  /* `subgraphs` 有两种形态：以 UUID 为键的对象，或按顺序排列的数组（旧导出）。
+   * 键也可能是数字序号，真 UUID 藏在定义自身的 `id` 上 —— 两种都登记，让
+   * 上层按 wrapper 的 `class_type` 查得到。 */
+  const subgraphEntries: [string, RawSubgraphDef][] = Array.isArray(subgraphs)
+    ? (subgraphs as RawSubgraphDef[]).map(
+        (subDef, index): [string, RawSubgraphDef] => [String(index), subDef]
+      )
+    : Object.entries(subgraphs);
+  for (const [key, subDef] of subgraphEntries) {
+    if (!subDef || !Array.isArray(subDef.inputs)) continue;
+    const table: Record<string, string> = {};
+    for (const pinRaw of subDef.inputs) {
+      if (!pinRaw || typeof pinRaw !== "object") continue;
+      const pin = pinRaw as Record<string, unknown>;
+      const slot = typeof pin.name === "string" ? pin.name.trim() : "";
+      const label = typeof pin.label === "string" ? pin.label.trim() : "";
+      if (!slot || !label || slot === label) continue;
+      table[slot] = label;
+    }
+    if (Object.keys(table).length === 0) continue;
+    const uid = typeof subDef.id === "string" ? subDef.id : "";
+    if (uid) byUid[uid] = table;
+    byUid[key] = table;
+  }
+  return byUid;
+}
+
 export async function buildRawInputs(
   raw: RawWorkflow | null,
   comboOptionsForClassField: (
@@ -206,6 +271,9 @@ export async function buildRawInputs(
     widgetOrderTable ??= await fetchWidgetOrderTable();
     return widgetOrderTable;
   };
+  /* 子图边界 pin 的作者名（wrapper 槽位别名 → 作者业务名），供 wrapper 分支
+   *  回填 —— 见 subgraphAuthorLabelsByUid 的说明。 */
+  const subgraphAuthorLabels = subgraphAuthorLabelsByUid(raw);
   if (raw && Array.isArray(raw.nodes)) {
     for (const rn of raw.nodes) {
       if (!rn) continue;
@@ -280,9 +348,21 @@ export async function buildRawInputs(
           if (valueByName.has(widgetName)) widgetValue = valueByName.get(widgetName);
           else if (legacyByName.has(widgetName)) widgetValue = legacyByName.get(widgetName);
         }
+        /* 作者名回填（仅封装节点）：wrapper 本层只写了自动编号的槽位名
+         *  （`value_1`）时，从子图边界 pin 取作者业务名（`Seed`）—— 顺序不能
+         *  反，作者真在本层写了别的名字时一律以本层为准，不被边界 pin 覆盖
+         *  （ISSUE #349）。 */
+        const ownLabel = typeof inp.label === "string" ? inp.label.trim() : "";
+        const ownLabelIsAuthorFacing = ownLabel.length > 0 && ownLabel !== inp.name;
+        const wrapperAuthorLabel =
+          isUuidLikeClassType(rnClassType) &&
+          !ownLabelIsAuthorFacing &&
+          isWrapperAliasSlot(inp.name)
+            ? subgraphAuthorLabels[rnClassType]?.[inp.name]
+            : undefined;
         const entry: RawInputEntry = {
           name: inp.name,
-          label: typeof inp.label === "string" ? inp.label : undefined,
+          label: wrapperAuthorLabel ?? (typeof inp.label === "string" ? inp.label : undefined),
           localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
           type: typeof inp.type === "string" ? inp.type : (isConn ? "*" : "STRING"),
           isConnection: isConn,

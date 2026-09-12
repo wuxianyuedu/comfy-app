@@ -173,6 +173,18 @@ describe("isStaleExposedAlias — 本地存的名字是不是机器生成的槽�
     expect(isStaleExposedAlias("value_1", "value_1", "value_1", "value_1")).toBe(false);
   });
 
+  it("封装节点的自动编号槽位：作者名回收不到时也判定为别名", () => {
+    /* 作者名、富化名全都停在别名 —— 只有「宿主是封装节点 + 槽位名是自动
+     *  编号」这条事实可依（ISSUE #349 的复现路径）。 */
+    const wrapper = "e0940f57-80b2-480e-8a38-36968dc1763d";
+    expect(isStaleExposedAlias("value_1", "value_1", "value_1", undefined, wrapper)).toBe(true);
+    expect(isStaleExposedAlias("1", "1", "1", undefined, wrapper)).toBe(true);
+    /* 普通节点的同名 pin 不受影响。 */
+    expect(isStaleExposedAlias("value_1", "value_1", "value_1", undefined, "PrimitiveInt")).toBe(
+      false
+    );
+  });
+
   it("作者手写的名字永不让位", () => {
     expect(isStaleExposedAlias("我的种子", "value_1", "Seed")).toBe(false);
     expect(isStaleExposedAlias("我的种子", "value_1", "value_1", "Seed")).toBe(false);
@@ -217,6 +229,39 @@ describe("isMachineName — 机器名判定的两条前提（ISSUE #349）", () 
      * 有作者命名。只看名字相不相等永远判不出来 —— 那正是它一直复活的原因。 */
     expect(isMachineName("value_1", { name: "value_1", enrichedLabel: "value_1", slotLabel: "Seed" })).toBe(true);
     expect(isMachineName("1", { name: "1", enrichedLabel: "1", slotLabel: "Seed" })).toBe(true);
+  });
+
+  it("③ 槽位名是封装节点的自动编号别名 → 机器名，不需要别的来源作证", () => {
+    /* 作者名可能整体回收不到（子图导出缺 `-10` 哨兵边），此时①与②都无从
+     *  作证；而 `value_N` / 裸序号本来就是 ComfyUI 编出来的，不可能是作者
+     *  手写 —— 少了这条判据，别名会一直以「未命名」的名义活下来，切一次
+     *  seed 行为就被重新固化回库（ISSUE #349 的复现路径）。 */
+    const wrapper = { classType: "e0940f57-80b2-480e-8a38-36968dc1763d" };
+    expect(isMachineName("value_1", { name: "value_1", enrichedLabel: "value_1", ...wrapper })).toBe(true);
+    expect(isMachineName("1", { name: "1", ...wrapper })).toBe(true);
+    expect(isMachineName("value_12", { name: "value_12", ...wrapper })).toBe(true);
+  });
+
+  it("③ 只对封装节点生效：普通节点的 pin 名即使长得像也不清", () => {
+    /* `LoadImage.image`、`KSampler.seed` 这类 pin 名是插件作者定义的，
+     *  可能恰好长成 `value_1`；把普通节点也纳入会让作者命名被误清。 */
+    expect(isMachineName("value_1", { name: "value_1", enrichedLabel: "value_1" })).toBe(false);
+    expect(
+      isMachineName("value_1", {
+        name: "value_1",
+        enrichedLabel: "value_1",
+        classType: "PrimitiveInt",
+      })
+    ).toBe(false);
+    expect(
+      isMachineName("1", { name: "1", enrichedLabel: "1", classType: "LoadImage" })
+    ).toBe(false);
+  });
+
+  it("③ 作者手写的名字（与槽位名不同）依旧不让位", () => {
+    const wrapper = { classType: "e0940f57-80b2-480e-8a38-36968dc1763d" };
+    expect(isMachineName("我的种子", { name: "value_1", ...wrapper })).toBe(false);
+    expect(isMachineName("Seed", { name: "Seed", ...wrapper })).toBe(false);
   });
 
   it("两个来源都指不出别的名字 → 无从判定，宁可留着", () => {

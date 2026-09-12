@@ -445,11 +445,16 @@ function WorkflowEditorBody({
       const facts = ioDetailMap[key];
       const enriched = facts ? sanitizeComboLabel(ioLabel(facts)) : undefined;
       const slot = facts?.slotLabel ? sanitizeComboLabel(facts.slotLabel) : undefined;
+      /* 宿主类名优先取富化事实源；富化还没到时退到条目自身记录的类名 ——
+       *  「封装节点的 `value_N` 槽位是机器名」这条判据不依赖作者名回收，
+       *  因此不能只在富化到场时才成立（ISSUE #349）。 */
+      const classType = facts?.classType ?? entry.classType;
       if (
         isMachineName(entry.label, {
           name: entry.name,
           ...(enriched ? { enrichedLabel: enriched } : {}),
           ...(slot ? { slotLabel: slot } : {}),
+          ...(classType ? { classType } : {}),
         })
       ) {
         return true;
