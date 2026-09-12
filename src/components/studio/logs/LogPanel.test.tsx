@@ -113,8 +113,9 @@ afterEach(async () => {
  * 级别筛选按钮。
  *
  * 用 `title` 前缀定位而不是 role+name：按钮的可访问名是「标签 + 数字」拼出来的
- * （如「警告· 2」），按 `/警告/` 找会同时命中标题徽标里的同名文本，选不中唯一
- * 元素。这里按既有实现给出的 `title`（「当前来源的警告：…」）作为稳定锚点。
+ * （如「警告 2」），而标题旁那组警告/错误文本里也有一个「警告」，按 `/警告/` 找
+ * 会命中不止一个元素。这里按既有实现给出的 `title`（「当前来源的警告：…」）
+ * 作为稳定锚点。
  */
 function levelButton(label: string): HTMLElement {
   const button = screen
@@ -334,13 +335,85 @@ describe("LogPanel 日志面板", () => {
     expect(button.className).not.toContain("w-8");
     const group = button.parentElement!;
     expect(group.className).toContain("flex-1");
-    /* 标签与计数是**两个**子元素、同行排布；计数非零时带「·」前缀（级别色强调）。 */
+    /* 标签与计数是**两个**子元素、同行排布。 */
     expect(button.children).toHaveLength(2);
     expect(button.children[0]?.textContent).toBe("警告");
     expect(button.children[1]?.textContent).toContain("1");
   });
 
-  it("标题旁只在有警告/错误时给出提示徽标，完整分类数在悬浮说明里", () => {
+  /* ISSUE #262 五审：「不要因为宽度不够导致文字显示成省略号」。
+   *
+   * 省略号在 CSS 里需要**同时**满足三个前提：`text-overflow: ellipsis`
+   * （`.truncate`）、`overflow: hidden`、`white-space: nowrap`。去掉后两个，
+   * 文本就不可能被换成省略号；再把按钮的 `min-w-0` 换成 `min-w-fit`，按钮的
+   * 最小宽度就是「内边距 + 文字 + 四位数字」的固有宽度，挤不下时也不会切字。
+   * 这三条在 jsdom 里只能断言**接线**（不做布局），实际渲染宽度由 e2e 量。 */
+  it("级别按钮不会把文字切成省略号（无 truncate/overflow-hidden/min-w-0）", () => {
+    act(() =>
+      useLogStore
+        .getState()
+        .appendFileLogs([
+          makeEntry(1, { level: "warn", origin: "app" }),
+          makeEntry(2, { level: "info", origin: "app" }),
+        ]),
+    );
+    render(<LogPanel />);
+
+    for (const label of ["全部", "调试", "信息", "警告", "错误"]) {
+      const button = levelButton(label);
+      expect(button.className).not.toContain("truncate");
+      expect(button.className).not.toContain("overflow-hidden");
+      expect(button.className).not.toContain("min-w-0");
+      expect(button.className).toContain("min-w-fit");
+
+      const labelEl = button.children[0] as HTMLElement;
+      const countEl = button.children[1] as HTMLElement;
+      expect(labelEl.className).toContain("whitespace-nowrap");
+      expect(labelEl.className).not.toContain("truncate");
+      /* 数字列：定宽 `4ch` + 右对齐 + 等宽数字——「文字 + 四位数字」是固定预算，
+       * 数字位数再多也不省略、不缩窄。 */
+      expect(countEl.className).toContain("tabular-nums");
+      expect(countEl.className).toContain("w-[4ch]");
+      /* 数字就是数字本身：不缩、不省、不加「·」前缀。 */
+      expect(countEl.textContent).toMatch(/^\d+$/);
+    }
+  });
+
+  /* ISSUE #262 五审：级别色给**文字**——「警告」黄、「错误」红（用户原话
+   * 「右侧的警告文字改成黄色，错误改成红色」）。
+   *
+   * 颜色不上在数字上，是因为按 `/警告/` 扫过去时用户读的是那几个字；数字
+   * （`4ch` 定宽）保持中性灰，避免一行里出现两个互相稀释的高亮块。
+   * 零条目也照样着色：它表达的是「这一格是警告」，不是「这里有 0 个问题」。 */
+  it("级别按钮的标签带级别色：警告黄、错误红，数字保持中性", () => {
+    act(() =>
+      useLogStore.getState().appendFileLogs([
+        makeEntry(1, { level: "warn", origin: "app" }),
+        makeEntry(2, { level: "error", origin: "app" }),
+      ]),
+    );
+    render(<LogPanel />);
+
+    /* 颜色挂在按钮上、由标签文字继承（标签自身只管不换行）。 */
+    expect(levelButton("警告").className).toContain("text-amber-300");
+    expect(levelButton("错误").className).toContain("text-rose-300");
+    /* 其余级别不带这两个警示色（否则「警告黄」就不成立了）。 */
+    expect(levelButton("全部").className).not.toContain("text-amber-300");
+    expect(levelButton("信息").className).not.toContain("text-amber-300");
+    /* 数字是中性灰、显式覆盖继承色，不跟着级别变色。 */
+    for (const label of ["警告", "错误"]) {
+      expect(levelButton(label).children[1]!.className).toContain(
+        "text-gray-600",
+      );
+    }
+  });
+
+  /* ISSUE #262 五审：「警告/错误显示重复了，左侧那两个去掉」。
+   *
+   * 标题旁那块灰底胶囊（`警告 n · 错误 n`）与级别按钮上的同名计数完全同源
+   * （同一个 `originCounts`），是同一项数据在两处出现。现在整块删除，计数只
+   * 保留在级别按钮上；完整分类数（含信息）留在各按钮的悬浮说明里。 */
+  it("标题旁不再有复述警告/错误的灰底胶囊（计数只在级别按钮上）", () => {
     act(() =>
       useLogStore
         .getState()
@@ -352,15 +425,16 @@ describe("LogPanel 日志面板", () => {
     );
     render(<LogPanel />);
 
-    const badge = screen.getByTitle(/当前来源「全部来源」共 3 条/);
-    /* 警告与错误带出来（此前只显示错误数） */
-    expect(badge.textContent).toContain("警告 1");
-    expect(badge.textContent).toContain("错误 1");
-    /* 来源名与总数不在这里复述：来源下拉、级别按钮「全部」各有一份，
-       第三份就是用户反馈的「红框中两部分重复了」（见 ISSUE #262 复审用例）。 */
-    expect(
-      screen.getByTitle(/当前来源「全部来源」共 3 条 · 信息 1/),
-    ).toBeTruthy();
+    /* 老形态：标题旁一个 `rounded-full bg-white/5` 的胶囊，title 里写全分类数。 */
+    expect(screen.queryByText(/^警告 \d+ · 错误 \d+$/)).toBeNull();
+    expect(document.querySelector("span.rounded-full")).toBeNull();
+
+    /* 计数与完整分类数改由级别按钮承载（悬浮说明里能读全）。 */
+    expect(levelButton("警告").textContent).toContain("警告1");
+    expect(levelButton("错误").textContent).toContain("错误1");
+    expect(levelButton("警告").getAttribute("title")).toContain(
+      "共 3 条 · 警告 1 · 错误 1",
+    );
   });
 
   it("页脚写出当前看的是哪一段，点一下即去掉该层筛选", async () => {
@@ -577,11 +651,9 @@ describe("LogPanel 日志面板", () => {
     );
   });
 
-  /* ISSUE #262 复审：标题旁的徽标此前把「<来源> · <条数> · 警告 n · 错误 n」
-     又写了一遍，而同一组数字在右边下拉（当前来源）与左边级别按钮上各有一份。
-     用户反馈「红框中两部分重复了」指的就是它。现在只在有警告/错误时才出现，
-     且只报这两项——来源名与总数交给下拉与级别按钮。 */
-  it("标题徽标不重复来源与总数，只在有警告/错误时提示这两项", () => {
+  /* 零条目同样不留占位：胶囊已删，所以「警告 0 / 错误 0」在任何地方都不出现，
+   * 标题行不会因为一个恒在的徽标被挤（列宽也就不会被逼到省略号）。 */
+  it("警告/错误都为零时标题行不留占位", () => {
     act(() =>
       useLogStore
         .getState()
@@ -590,25 +662,11 @@ describe("LogPanel 日志面板", () => {
           makeEntry(2, { level: "info", origin: "app" }),
         ]),
     );
-    const { unmount } = render(<LogPanel />);
-    /* 全为零（无警告无错误）→ 整块不渲染，标题行不再多一个重复数字的胶囊 */
-    expect(screen.queryByTitle(/当前来源「全部来源」共 2 条/)).toBeNull();
-    unmount();
-
-    act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([
-          makeEntry(3, { level: "warn", origin: "app" }),
-          makeEntry(4, { level: "error", origin: "app" }),
-        ]),
-    );
     render(<LogPanel />);
-    const badge = screen.getByTitle(/当前来源「全部来源」共 4 条/);
-    expect(badge.textContent).toContain("警告 1");
-    expect(badge.textContent).toContain("错误 1");
-    /* 不再复述来源名与总数（那两处已有：来源下拉 + 级别按钮的「全部」计数） */
-    expect(badge.textContent).not.toContain("全部来源");
-    expect(badge.textContent).not.toContain("· 4");
+
+    expect(document.querySelector("span.rounded-full")).toBeNull();
+    /* 级别按钮上仍然是 `警告0`（`0` 与「切过去是空的」互相印证），
+     * 但按钮不会把它单独摆成一行的宽度。 */
+    expect(levelButton("警告").textContent).toBe("警告0");
   });
 });

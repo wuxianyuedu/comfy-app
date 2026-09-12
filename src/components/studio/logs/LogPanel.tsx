@@ -59,29 +59,20 @@ import {
 } from "./log-row-style";
 
 /**
- * 计数小徽标：一眼看出「这一类有多少警告、多少错误」。
+ * 级别按钮上的计数数字。
  *
- * 干说数字不够——用户要的是「这里有没有问题」。所以 warn / error 非零时用
- * 对应级别色，零条目的 warn / error **不显示**（省掉一屏 `警告 0 错误 0` 的噪音），
- * 其余情况退化为灰色数字（`info 1026` 这种量级本身没有警示含义）。
+ * **定宽 + 右对齐 + 等宽数字**：四个按钮上的 `0 / 12 / 3 / 1822` 宽度不一，
+ * 按钮再等分也读不齐。这里给它一个显式的 `w-[4ch]`——「文字 + 四位数字」是
+ * 这一格的固定预算，所以**文本长度不再随内容变化**。
+ *
+ * 数字本身不再按级别染色（`text-gray-600` 固定）：级别色已由同一行左侧的
+ * **标签文字**承担（「警告」黄、「错误」红），同一个含义不必写两遍，
+ * 也避免两个色块挤在一个按钮里互相稀释。
  */
-function CountChip({
-  level,
-  value,
-}: {
-  level: LogLevel | "all";
-  value: number;
-}) {
-  const alarming = value > 0 && (level === "warn" || level === "error");
-  const tone =
-    value > 0 && level === "error"
-      ? "text-rose-300"
-      : value > 0 && level === "warn"
-        ? "text-amber-300"
-        : "text-gray-600";
+function CountChip({ value }: { value: number }) {
   return (
-    <span className={`text-[11px] tabular-nums ${tone}`}>
-      {alarming ? `· ${value}` : value}
+    <span className="w-[4ch] shrink-0 text-right text-[11px] tabular-nums text-gray-600">
+      {value}
     </span>
   );
 }
@@ -172,6 +163,24 @@ const ORIGIN_COLUMNS: {
   { key: "warn", title: "警告", tone: "warn" },
   { key: "error", title: "错误", tone: "error" },
 ];
+
+/**
+ * 级别标签在筛选按钮上的配色。
+ *
+ * 用户要求很直接：「警告文字改成黄色，错误改成红色」。颜色给**文字**而不是
+ * 数字，是因为按 `/警告/` 找过去时，用户扫的是这几个字；数字（`4ch` 定宽）
+ * 保持中性灰，才不会出现「两个字都带色、读起来像两个高亮块」。
+ *
+ * 零条目也照样着色：它表达的仍然是「这一格是警告」，而不是「这里有问题」——
+ * 「有没有问题」由数字回答（`0` 与「切过去是空的」互相印证）。
+ */
+const LEVEL_LABEL_STYLES: Record<LogFilter, string> = {
+  all: "text-gray-100",
+  debug: "text-gray-500 hover:text-gray-300",
+  info: "text-cyan-300 hover:text-cyan-200",
+  warn: "text-amber-300 hover:text-amber-200",
+  error: "text-rose-300 hover:text-rose-200",
+};
 
 const FILTER_LABELS: { label: string; value: LogFilter }[] = [
   { label: "全部", value: "all" },
@@ -702,29 +711,13 @@ export function LogPanel() {
             <span className="text-[15px] font-semibold whitespace-nowrap text-gray-100">
               应用日志
             </span>
-            {/* 不再在这里复述「来源 · 条数 · 警告 · 错误」：同一组数字已经在右边
-                的来源下拉（当前来源）与左边的级别按钮上各有一份，第三份既不增加
-                信息量，又把本该留给标题的横向空间挤掉——用户反馈的「红框中两部分
-                重复了」就是这个（ISSUE #262）。
-                这里只留在**下面几处都看不见**时才需要的那一条：当前来源下的
-                警告 / 错误里有问题时给个徽标提醒，全为零则完全不渲染。 */}
-            {originCounts.warn > 0 || originCounts.error > 0 ? (
-              <span
-                className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-gray-400"
-                title={`当前来源「${ORIGIN_TEXT[origin ?? "all"]}」共 ${originCounts.all} 条 · 信息 ${originCounts.info} · 警告 ${originCounts.warn} · 错误 ${originCounts.error}`}
-              >
-                <span
-                  className={`tabular-nums ${originCounts.warn > 0 ? "text-amber-300" : "text-gray-600"}`}
-                >
-                  {`警告 ${originCounts.warn}`}
-                </span>
-                <span
-                  className={`tabular-nums ${originCounts.error > 0 ? "text-rose-300" : "text-gray-600"}`}
-                >
-                  {` · 错误 ${originCounts.error}`}
-                </span>
-              </span>
-            ) : null}
+            {/* 这里**不再**复述任何计数（ISSUE #262 五审）。
+                它此前是一块灰底胶囊，写着「警告 n · 错误 n」——而这两个数在右边
+                的级别按钮上已经各有一份（同一个 `originCounts`）。用户圈出的
+                「警告/错误显示重复了，左侧那两个去掉」指的就是它：一项数据两处
+                出现，还会把标题行本就紧张的横向空间挤掉。
+                计数只保留在级别按钮上，颜色由那儿的文字承担（「警告」黄、
+                「错误」红）；完整分类数（含信息）在各按钮的悬浮说明里。 */}
           </div>
 
           {/* Level filters：数字是**当前来源**下的计数，与右边来源下拉同口径。
@@ -752,18 +745,23 @@ export function LogPanel() {
                 type="button"
                 onClick={() => setFilter(option.value)}
                 aria-pressed={filter === option.value}
-                className={`flex h-9 min-w-0 flex-1 basis-0 items-center justify-center gap-1.5 overflow-hidden rounded-lg px-2 text-[12px] leading-none transition-colors ${
+                /* 横向预算 = 左右内边距 + 标签 + 数字。`min-w-fit` 取的是**内容
+                 * 固有宽度**（不是容器宽度）：`min-w-0` 会让容器压到能忽略固有宽度、
+                 * 于是「警告」被切成 `警…`——用户报的就是这个（ISSUE #262）。
+                 *
+                 * 不省略的代价是窄窗口下整组可能横向溢出，所以同步去掉
+                 * `overflow-hidden`：它是 `text-overflow: ellipsis` 生效的前提之一，
+                 * 留着它等于给省略号留后门。横向溢出由行头的 `flex-wrap`
+                 * （容器 `min-w-56` 是折行判据）接住。 */
+                className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] leading-none transition-colors ${
                   filter === option.value
-                    ? "bg-white/10 text-gray-100"
-                    : "text-gray-500 hover:bg-white/4 hover:text-gray-300"
-                }`}
+                    ? "bg-white/10"
+                    : "hover:bg-white/4"
+                } ${LEVEL_LABEL_STYLES[option.value]}`}
                 title={`当前来源的${option.label}：${originCounts[option.value]} 条（该来源共 ${originCounts.all} 条 · 警告 ${originCounts.warn} · 错误 ${originCounts.error}）`}
               >
-                <span className="truncate">{option.label}</span>
-                <CountChip
-                  level={option.value}
-                  value={originCounts[option.value]}
-                />
+                <span className="whitespace-nowrap">{option.label}</span>
+                <CountChip value={originCounts[option.value]} />
               </button>
             ))}
           </div>
