@@ -55,7 +55,6 @@ const moves = {
   "FlowNodeWidgetRows": "canvas/FlowNodeWidgetRows",
   "NodeFrost": "canvas/NodeFrost",
   "RgthreeBodies": "canvas/RgthreeBodies",
-  "workflow-canvas-render-chain": "canvas/workflow-canvas-render-chain",
   "workflow-canvas-settings": "canvas/workflow-canvas-settings",
   "workflow-render-chain": "canvas/workflow-render-chain",
   "workflow-node-entries": "canvas/workflow-node-entries",

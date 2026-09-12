@@ -26,24 +26,39 @@
 
 ## 2. 核心歧义词：三种「画布」（ISSUE #401 的直接诉求）
 
-本项目有**三个**都叫「画布」的东西，其中两个在用、一个是历史遗留。**不带限定
-词的「画布」不得单独使用**。
+本项目有**三个**都叫「画布」的东西，其中两个在用、第三个（旧流程画布）已删除。
+**不带限定词的「画布」不得单独使用**——写「画布」时一律补限定词。
 
 | 正式名 | 界面/导航叫法 | 代码落点 | 是什么 | 状态 |
 |---|---|---|---|---|
 | **项目画布** | 左侧导航「画布」(`NAV_ITEMS` id `canvas`) | 视图 `src/components/studio/ProjectCanvas.tsx`；逻辑 `src/lib/project-canvas/`；节点 `src/components/studio/project-canvas/` | 用户编排**创作流程**的主画布：节点是生成单元（`image`/`video`/`script`/`workflow`…），产出直接是素材 | 在用（核心） |
 | **工作流编辑器画布** | 工作流库里「在工作流编辑器中打开」 | 视图 `src/components/studio/canvas/WorkflowCanvasEditor.tsx`（内含 `workflow-editor/`）；节点 `src/components/studio/canvas/WorkflowNode.tsx` | 把**一份 ComfyUI 工作流**摊开成图：节点是 ComfyUI `class_type`，用于看结构 / 改参数 / 配 IO | 在用 |
-| **旧流程画布**（命名空间 `workflow-canvas`） | 无独立入口 | `src/components/workflow-canvas/`（`WorkflowCanvas.tsx`/`graph-utils.ts`/`nodes/`） | 早期「可执行工作流引擎」画布；现存价值是节点注册表与节点样式被上述两者复用 | **历史遗留**，勿在此新增功能 |
+| ~~**旧流程画布**（`workflow-canvas`）~~ | 无独立入口 | ~~`src/components/workflow-canvas/`~~ | 早期「可执行工作流引擎」画布 | **已删除**（ISSUE #419）——死代码清掉，仍被复用的节点注册表 / 节点样式已归位到 `src/lib/comfyui/` 与 `studio/canvas/`，详见本表下方注 |
 
 **判别口诀（三问定一个画布）**：
 
 1. 入口在哪？→ 左侧导航「画布」= 项目画布；工作流库里打开 = 工作流编辑器画布。
 2. 节点是什么？→ 生成单元（能出图/出视频）= 项目画布；ComfyUI `class_type` = 工作流编辑器画布。
-3. 路径前缀？→ `project-canvas` = 项目画布；`studio/canvas` 或 `workflow-editor` = 工作流编辑器画布；裸 `components/workflow-canvas` = 旧流程画布。
+3. 路径前缀？→ `project-canvas` = 项目画布；`studio/canvas` 或 `workflow-editor` = 工作流编辑器画布。
+   （第三种「旧流程画布」已删除，路径前缀不存在了。）
 
 > **写文档时的硬约定**：涉及画布性能（[主规范 §6.1](../standards/Comfy-APP-T3-项目开发规范.md)、
 > [02 §2.11](../standards/02-性能规范.md)）默认指**项目画布**；涉及 ComfyUI 图结构 /
 > `class_type` / 参数映射时默认指**工作流编辑器画布**。二者都涉及时一律写全名。
+
+> **旧流程画布删除后的归位去向**（曾经的「节点注册表与节点样式被复用」的那部分）：
+>
+> | 原位置 | 现位置 | 说明 |
+> |---|---|---|
+> | `workflow-canvas/types.ts` 的类型段 | `src/lib/comfyui/node-config.ts`（`NodeTypeConfig`/`PortSpec`/`FieldDef`） + `src/lib/comfyui/field-types.ts`（`FieldType`） | 纯类型，lib 层 |
+> | `workflow-canvas/node-registry.ts` | `src/lib/comfyui/node-registry.ts` | 内置 `class_type` 配置表 |
+> | `workflow-canvas/nodes/PackageFooter.tsx` | `src/components/studio/canvas/PackageFooter.tsx` | 节点卡片左下角来源标签 |
+> | `workflow-canvas/CustomNodesSettings/` | `src/components/studio/workflow-library/CustomNodesSettings/` | 「自定义节点设置」弹层，工作流库在用 |
+>
+> 真正无人消费的死代码（`WorkflowCanvas.tsx`/`WorkflowCanvas.parts.tsx`/`NodeEditor.tsx`/
+> `graph-utils.ts`/`workflow-canvas-utils.ts`/`nodes/`（ComfyNode 族）/`index.ts`/
+> `workflow-canvas-render-chain.ts` 与 `globals.css` 的 `.workflow-canvas*`、`.wf-*` 样式段）
+> 已一并删除。
 
 ---
 
@@ -53,7 +68,7 @@
 |---|---|---|---|
 | **画布项目**（`CanvasProject`） | 项目画布里的一个可命名、可切换、可持久化的作品单位 | `src/lib/project-canvas/canvas-store.ts` 的 `CanvasProject`；id 前缀 `proj_*` | 「画布」「项目文件」（「项目」还被 `NAV_ITEMS` id `works`「项目」占用，指作品相册，见 §6） |
 | **画布节点**（项目画布节点） | 项目画布上的一个生成单元 | `CanvasNodeType`（`src/lib/project-canvas/canvas-types.ts`），id 由 `makeNodeId()` 生成（`n_*`），`data.kind` ∈ `image\|video\|script\|agent\|workflow\|text\|picture\|movie` | 「节点」（不加限定） |
-| **编辑器节点**（工作流节点） | 工作流编辑器画布上的一个 ComfyUI 节点 | `src/components/workflow-canvas/types.ts` 的 `NodeData`，字段 `comfyId`（ComfyUI 图里的 key）+ `classType` | 「ComfyUI 节点」以外的简称 |
+| **编辑器节点**（工作流节点） | 工作流编辑器画布上的一个 ComfyUI 节点 | `src/components/studio/workflow-types.ts` 的 `WorkflowNodeData`，字段 `nodeId`（ComfyUI 图里的 key）+ `classType` | 「ComfyUI 节点」以外的简称 |
 | **ComfyUI 节点 / 节点 id** | ComfyUI 图 JSON 里的键与 `class_type` | 图结构 `ComfyGraph = Record<string, ComfyGraphNode>`；编辑器显示的右上角编号是**真实节点 id**（如 `#1670`，见 [15 附录 §15.5](../standards/15-附录.md)） | 「编号」单独用 |
 | **子工作流节点** | 项目画布上代表「一份可展开工作流」的节点（折叠态是卡片，展开态下钻） | `src/components/studio/canvas/WorkflowSubgraphNode.tsx`、`SubgraphHeader.tsx` | 「嵌套节点」 |
 | **视口（viewport）** | 画布可见区域（pan/zoom 状态） | ReactFlow `useReactFlow()`；不进全局 store（[02 §2.11](../standards/02-性能规范.md)） | 「画布」 |

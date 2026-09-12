@@ -21,7 +21,7 @@ import type {
   PortSpec,
   FieldDef,
   FieldType,
-} from "@/components/workflow-canvas/types";
+} from "@/lib/comfyui/node-config";
 
 /** Map a raw ComfyUI category string → accent color. Exported so the UI can
  *  render the same category colour for node-preview cards without having to

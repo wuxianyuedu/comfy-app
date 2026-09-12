@@ -62,7 +62,7 @@
    - `src/lib/comfyui/types.ts`（端口/类型推断）
    - `src/lib/comfyui/node-titles.ts`（标题本地化）
 2. 内置节点（`NODE_TYPE_REGISTRY` 命中 `classType`）追加：
-   - `src/components/workflow-canvas/node-registry.ts`（节点配置定义处）
+   - `src/lib/comfyui/node-registry.ts`（节点配置定义处）
 3. 自定义节点（`CUSTOM_NODE_TYPES` / `getCustomNodePackage` 命中）追加：
    - `src/config/customNodes.ts`（manifest 加载）
    - `src/app/api/custom-nodes/route.ts`（后端处理）
