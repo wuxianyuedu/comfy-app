@@ -809,6 +809,110 @@ describe("enrichWorkflowIO — 真实封装节点工作流的端到端取名（I
   });
 });
 
+describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取名（ISSUE #349）", () => {
+  /* 真实复现路径：wrapper 本层只有自动编号的别名 `value_1`，ComfyUI 把
+   * `properties.proxyWidgets` 整体隔离掉，子图导出里也没有 `-10` 哨兵边
+   * （`proxyAuthorLabels` 于是为空）。上一版的两条判据（富化名不同 / 本层
+   * slotLabel）都无从作证，别名被当成「作者命名」，于是「切一次 seed 行为
+   * 名字就退回 value_1」。现在作者名从子图边界 pin 回收，且即便回收不到，
+   * 封装节点的自动编号槽位也直接按机器名处理。 */
+  const WRAPPER_UUID = "e0940f57-80b2-480e-8a38-36968dc1763d";
+
+  const raw = {
+    nodes: [
+      {
+        id: 4,
+        type: WRAPPER_UUID,
+        inputs: [{ name: "value_1", type: "INT", widget: { name: "value_1" }, link: null }],
+        outputs: [],
+        properties: { proxyWidgetErrorQuarantine: [["1670", "value"]] },
+        widgets_values: [],
+      },
+    ],
+    links: [],
+    definitions: {
+      subgraphs: [
+        {
+          id: WRAPPER_UUID,
+          name: "I2V",
+          inputs: [{ name: "value_1", label: "Seed", type: "INT" }],
+          nodes: [],
+        },
+      ],
+    },
+  } as unknown as RawWorkflow;
+
+  it("存量别名 label 被作者名顶掉，且类型 / 类名随条目下发", async () => {
+    const { rawInputsById } = await buildRawInputs(raw, async () => undefined);
+    const io = await enrichWorkflowIO(
+      makeParams(
+        {
+          "4::widget::value_1": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "4",
+            name: "value_1",
+            label: "value_1",
+          },
+        },
+        {
+          rawInputsById,
+          graph: { "4": { class_type: WRAPPER_UUID, inputs: {} } },
+          nodeTypeById: { "4": WRAPPER_UUID },
+        }
+      )
+    );
+    const entry = io["4::widget::value_1"]!;
+    expect(entry.label).toBe("Seed");
+    expect(entry.slotLabel).toBe("Seed");
+    expect(entry.type).toBe("INT");
+    /* 类名必须下发 —— 客户端「槽位名是封装节点自动编号别名」的判定靠它。 */
+    expect(entry.classType).toBe(WRAPPER_UUID);
+  });
+
+  it("子图边界 pin 也没写作者名时，别名判据由 classType 承担", async () => {
+    const noLabels = JSON.parse(JSON.stringify(raw)) as unknown as RawWorkflow;
+    noLabels.definitions!.subgraphs![0]!.inputs = [{ name: "value_1", type: "INT" }];
+    const { rawInputsById } = await buildRawInputs(noLabels, async () => undefined);
+    const io = await enrichWorkflowIO(
+      makeParams(
+        {
+          "4::widget::value_1": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "4",
+            name: "value_1",
+            label: "value_1",
+          },
+        },
+        {
+          rawInputsById,
+          graph: { "4": { class_type: WRAPPER_UUID, inputs: {} } },
+          nodeTypeById: { "4": WRAPPER_UUID },
+        }
+      )
+    );
+    expect(io["4::widget::value_1"]!.classType).toBe(WRAPPER_UUID);
+  });
+
+  it("作者写在本层的名字优先于子图边界 pin", async () => {
+    const own = JSON.parse(JSON.stringify(raw)) as unknown as RawWorkflow;
+    own.nodes[0]!.inputs![0]!.label = "我的种子";
+    const { rawInputsById } = await buildRawInputs(own, async () => undefined);
+    const io = await enrichWorkflowIO(
+      makeParams(
+        { "4::widget::value_1": { direction: "input", kind: "widget", nodeId: "4", name: "value_1" } },
+        {
+          rawInputsById,
+          graph: { "4": { class_type: WRAPPER_UUID, inputs: {} } },
+          nodeTypeById: { "4": WRAPPER_UUID },
+        }
+      )
+    );
+    expect(io["4::widget::value_1"]!.label).toBe("我的种子");
+  });
+});
+
 describe("enrichWorkflowIO — hostNodeId 透传", () => {
   it("子图内部条目的宿主 id 原样往返（GET 重建后仍能拼出运行期 id）", async () => {
     const result = await enrichWorkflowIO(
