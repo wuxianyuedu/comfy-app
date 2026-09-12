@@ -1,67 +1,54 @@
 /**
- * 画布只画工作流自身的图 —— 勾选 IO 不得往画布上新增任何 React Flow 节点。
+ * 画布上的「对外参数节点」只表达映射，不得改动工作流图。
  *
- * 为什么要有这条：映射曾经以「每个对外参数一张卡片（`pio:<条目>` 节点）+ 一条
- * 连线」的形式画在画布上，于是「勾了某个参数」和「图上多出一个节点」被绑死：
- * 取消勾选节点还在、切模式线还在、子图内部勾选还会留下悬空线头。语义上勾选只做
- * 一件事 —— 把这个端口暴露成工作流的对外参数（落 workflowIO / 出现在运行表单
- * 与「预览 IO」里），画布是工作流本身的呈现，不该被暴露选择影响。
+ * 背景：勾选 IO 与画布节点曾经被绑死过一次 —— 那套派生节点复用了工作流节点的
+ * 视觉，取消勾选 / 切模式时还会以另一种形态残留，看图时分不清哪些是真实节点。
  *
- * **例外（刻意保留）**：工作流库详情的「画布节点」页签里有一列**只读**的对外
- * 参数卡片（`WorkflowParamCardColumn`）。它不是画布上的节点（不进 React Flow、
- * 不可拖、没有端点、不连任何线），而是这张预览卡片旁边的一块说明：哪几个端口
- * 合成了哪个对外参数、每个对外参数落到哪一行。它与宿主卡片的表单行互补 ——
- * 表单行是「这一格填的是什么值」，卡片是「这一行属于哪个对外参数」。既然暴露的
- * 参数在库详情必须看得见，而画布上又不许长节点，这一列就落在画布**之外**的
- * flex 布局里，两张卡片并排居中（不靠固定留白挂靠，见下面最后一条）。
+ * 但映射本身**必须**在画布上看得见、并且可连线（ISSUE #355）：作者要知道
+ * 「这个对外口落到工作流的哪一行」，最自然的地方就是画布本身 —— 一张接线卡片
+ * 拖一条线到宿主节点的端口。所以这里的约束不是「画布上不许有对外参数」，而是
+ * 三条边界：
  *
- * 这条守卫是源码级的：视图层只允许 `buildInitialNodes`（工作流自身的节点）与
- * `buildEdges`（图内连线）两个来源，任何「按 IO 条目派生 React Flow 节点／连线」
- * 的重新引入都会被当场拦下。
+ *   ① 图节点只来自工作流自身（`buildInitialNodes` / 图内连线 `buildEdges`）；
+ *      对外参数节点只能由 `buildParamNodes` 产出、连线只能由 `buildParamEdges`
+ *      产出 —— 谁都不许把 IO 条目拼进图节点/图连线的数组里；
+ *   ② 对外参数节点必须与图节点在 id、类型、可拖性上分开：`pio:<条目id>` 前缀、
+ *      `wfParam` 类型、`draggable:false`（位置派生自宿主节点）；
+ *   ③ 连线只表达映射：目标是宿主节点上真实存在的端口（ioKey），且**不改工作流
+ *      图** —— 拉线 / 删线只写 `paramMap`，不写图。
+ *
+ * 这条守卫是源码级的：视图层出现第三条「派生画布节点/连线」的来源即被拦下。
  */
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const EDITOR_DIR = path.resolve(__dirname);
 const LIBRARY_DIR = path.resolve(__dirname, "../workflow-library");
 
-/** 视图层里「派生画布节点 / 连线」的允许来源。 */
-const ALLOWED_NODE_SOURCES = ["buildInitialNodes", "buildEdges"];
+/** 视图层里「工作流图」的允许来源（对外参数节点/连线是另一条受约束的通道）。 */
+const ALLOWED_GRAPH_SOURCES = ["buildInitialNodes", "buildEdges"];
+/** 视图层里「对外参数节点 / 映射连线」的允许来源。 */
+const ALLOWED_PARAM_SOURCES = ["buildParamNodes", "buildParamEdges"];
 
-/** 曾经用来把「对外参数」画成**画布节点与连线**的模块名 —— 一个都不许回来。
- *  注意这里不含卡片视觉本体：卡片现在是画布之外的只读视图，允许存在。 */
+/** 曾经把「对外参数映射」渲染成画布节点/连线的模块名 —— 一个都不许回来。
+ *  它们与当前这套的区别是：卡片复用了工作流节点的视觉与节点类型，且连线被
+ *  当成图连线的一部分（切模式 / 取消勾选会留下残影）。 */
 const BANNED_MODULES = [
-  "workflow-param-nodes.ts",
-  "workflow-param-edges.ts",
-  "workflow-param-nodes.test.ts",
-  "WorkflowParamNode.tsx",
-  "WorkflowParamNode.test.tsx",
-  "workflow-param-node-data.ts",
+  "workflow-param-node-data.test.ts",
   "WorkflowParamMapLayer.tsx",
   "WorkflowParamMapLayer.test.tsx",
   "workflow-library-canvas-config.ts",
   "workflow-library-canvas-config.test.ts",
 ];
 
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir, { recursive: true })
-    .map((entry) => String(entry))
-    .filter((name) => /\.tsx?$/.test(name) && !name.endsWith(".test.ts") && !name.endsWith(".test.tsx"))
-    .map((name) => path.join(dir, name));
-}
-
 /** 去掉块注释与行注释，避免文档里提到旧机制时误伤断言。 */
 function stripComments(code: string): string {
   return code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
 }
 
-describe("勾选 IO 不在画布上新增节点", () => {
-  it("编辑器与工作流库里都没有「按对外参数条目派生画布节点/连线」的模块", () => {
-    const names = [...sourceFiles(EDITOR_DIR), ...sourceFiles(LIBRARY_DIR)].map((file) =>
-      path.basename(file)
-    );
-    for (const banned of BANNED_MODULES) expect(names).not.toContain(banned);
+describe("对外参数节点只在画布上表达映射", () => {
+  it("曾经的「复用图节点视觉」的映射模块没有回来", () => {
     for (const dir of [EDITOR_DIR, LIBRARY_DIR]) {
       for (const banned of BANNED_MODULES) {
         expect(existsSync(path.join(dir, banned))).toBe(false);
@@ -69,26 +56,74 @@ describe("勾选 IO 不在画布上新增节点", () => {
     }
   });
 
-  it("节点类型注册表里没有「对外参数卡片」这类 node type", () => {
-    const nodes = readFileSync(path.join(EDITOR_DIR, "WorkflowEditorNodes.tsx"), "utf8");
+  it("工作流图上没有「对外参数卡片」这类 node type —— 它们有独立类型", () => {
+    const nodes = readFileSync(
+      path.join(EDITOR_DIR, "WorkflowEditorNodes.tsx"),
+      "utf8",
+    );
     expect(nodes).toMatch(/export const workflowNodeTypes = \{/);
-    expect(stripComments(nodes)).not.toContain("wfParam");
+    /* 对外参数卡片注册在 `wfParam` 名下（不是工作流图的一部分）。 */
+    expect(nodes).toContain("wfParam: WorkflowParamNode");
   });
 
-  it("编辑器画布节点只来自工作流自身（buildInitialNodes / buildEdges）", () => {
-    const inner = readFileSync(path.join(EDITOR_DIR, "WorkflowEditorInner.tsx"), "utf8");
-    for (const allowed of ALLOWED_NODE_SOURCES) expect(inner).toContain(allowed);
-    const code = stripComments(inner);
-    /* 任何把 IO 条目拼进画布节点/连线数组的写法都会被这里拦下。 */
-    expect(code).not.toMatch(/setNodes\(\[\.\.\.[^\]]*param/i);
-    expect(code).not.toMatch(/\.\.\.param(Nodes|Edges)/);
-    expect(code).not.toMatch(/from "\.\/workflow-param-(nodes|edges)"/);
+  it("图节点只来自工作流自身；对外参数节点只来自 buildParamNodes", () => {
+    const inner = stripComments(
+      readFileSync(path.join(EDITOR_DIR, "WorkflowEditorInner.tsx"), "utf8"),
+    );
+    for (const allowed of ALLOWED_GRAPH_SOURCES)
+      expect(inner).toContain(allowed);
+    for (const allowed of ALLOWED_PARAM_SOURCES)
+      expect(inner).toContain(allowed);
+    /* 图节点 / 图连线数组里不许出现 IO 派生的卡片与映射线：它们各自有独立
+     *  的构建入口（buildParamNodes / buildParamEdges），与图一起并排推送。 */
+    expect(inner).not.toMatch(/setNodes\(\[\.\.\.[^\]]*param/i);
+    expect(inner).not.toMatch(/buildEdges\([^)]*param/i);
   });
 
-  it("工作流库画布预览不再叠「对外参数映射层」", () => {
+  it("拉线 / 删线只写映射，不写工作流图", () => {
+    const inner = stripComments(
+      readFileSync(path.join(EDITOR_DIR, "WorkflowEditorInner.tsx"), "utf8"),
+    );
+    /* 连线的源必须是 `pio:` 卡片（entryIdFromParamNodeId 反解），落点写入
+     * paramMapping.connect —— 两者都在，且 savePatch 不出现在这两个回调里。 */
+    const connectBlock = inner.slice(
+      inner.indexOf("const onConnect = useCallback"),
+    );
+    expect(connectBlock).toContain("paramMapping.connect");
+    const deleteBlock = inner.slice(
+      inner.indexOf("const onEdgesDelete = useCallback"),
+    );
+    expect(deleteBlock).toContain("paramMapping.connect");
+    for (const block of [connectBlock, deleteBlock]) {
+      const body = block.slice(0, block.indexOf("const ", 10));
+      expect(body).not.toContain("savePatch");
+      expect(body).not.toContain("workflowIO");
+    }
+  });
+
+  it("对外参数卡片是接线面板：不可拖（位置派生自宿主节点）", () => {
+    const build = stripComments(
+      readFileSync(path.join(EDITOR_DIR, "workflow-param-nodes.ts"), "utf8"),
+    );
+    expect(build).toContain("draggable: false");
+    expect(build).toContain("connectable: false");
+    expect(build).toContain("placeParamNodes");
+  });
+
+  it("映射连线带得动两个键空间：source 是卡片、targetHandle 是落点 ioKey", () => {
+    const edges = stripComments(
+      readFileSync(path.join(EDITOR_DIR, "workflow-param-edges.ts"), "utf8"),
+    );
+    expect(edges).toContain("paramNodeId(entry.id)");
+    expect(edges).toContain("targetHandle: target");
+    /* 卡片不存在时不画线 —— 否则图上会多出一条指向不存在节点的线头。 */
+    expect(edges).toContain("renderedCardIds");
+  });
+
+  it("工作流库不叠「对外参数映射层」（库内是只读说明，不是画布节点）", () => {
     const preview = readFileSync(
       path.join(LIBRARY_DIR, "WorkflowCanvasNodePreview.tsx"),
-      "utf8"
+      "utf8",
     );
     const code = stripComments(preview);
     expect(code).not.toContain("WorkflowParamMapLayer");
@@ -100,13 +135,25 @@ describe("勾选 IO 不在画布上新增节点", () => {
     /* 卡片列是画布之外的只读视图：它只能 import 卡片视觉本体与纯派生函数，
      * 不许碰 React Flow（Handle / 边 / 节点类型），也不许自己画线。 */
     const column = stripComments(
-      readFileSync(path.join(LIBRARY_DIR, "WorkflowParamCardColumn.tsx"), "utf8")
+      readFileSync(
+        path.join(LIBRARY_DIR, "WorkflowParamCardColumn.tsx"),
+        "utf8",
+      ),
     );
-    for (const forbidden of ["@xyflow/react", "Handle", "onConnect", "<svg", "<path"]) {
+    for (const forbidden of [
+      "@xyflow/react",
+      "Handle",
+      "onConnect",
+      "<svg",
+      "<path",
+    ]) {
       expect(column).not.toContain(forbidden);
     }
-    const card = stripComments(readFileSync(path.join(EDITOR_DIR, "WorkflowParamCard.tsx"), "utf8"));
-    for (const forbidden of ["@xyflow/react", "Handle", "onConnect", "<svg", "<path"]) {
+    /* 卡片视觉本体本身也不许依赖 React Flow —— 端点由消费方注入。 */
+    const card = stripComments(
+      readFileSync(path.join(EDITOR_DIR, "WorkflowParamCard.tsx"), "utf8"),
+    );
+    for (const forbidden of ["@xyflow/react", "Handle"]) {
       expect(card).not.toContain(forbidden);
     }
   });
@@ -117,25 +164,31 @@ describe("勾选 IO 不在画布上新增节点", () => {
      * 看到、左边空出块区域」。容器只负责居中，不做单侧留白。 */
     const body = readFileSync(
       path.join(LIBRARY_DIR, "sections/DetailBody.tsx"),
-      "utf8"
+      "utf8",
     );
     const code = stripComments(body);
     expect(code).not.toMatch(/pl-\[\d+px\]/);
     expect(code).toContain("flex min-h-0 flex-1 justify-center overflow-auto");
   });
 
-  it("对外参数模块不再导出画布几何（节点 id / 卡片尺寸）", () => {
-    const lib = readFileSync(path.resolve(__dirname, "../../../lib/workflow-param-mapping.ts"), "utf8");
-    const code = stripComments(lib);
-    for (const gone of [
+  it("映射几何只由纯函数给出（位置派生，不落库）", () => {
+    const lib = stripComments(
+      readFileSync(
+        path.resolve(__dirname, "../../../lib/workflow-param-mapping.ts"),
+        "utf8",
+      ),
+    );
+    /* 位置 / 尺寸必须来自这里，视图层不许自己算卡片坐标。 */
+    for (const required of [
       "PARAM_NODE_PREFIX",
       "paramNodeId",
       "entryIdFromParamNodeId",
       "placeParamNodes",
-      "PARAM_NODE_WIDTH",
-      "PARAM_NODE_GAP",
+      "paramNodeHeight",
     ]) {
-      expect(code).not.toContain(gone);
+      expect(lib).toContain(required);
     }
+    /* 位置是派生的：不写回 paramMap / positions。 */
+    expect(lib).not.toContain("positions[");
   });
 });
