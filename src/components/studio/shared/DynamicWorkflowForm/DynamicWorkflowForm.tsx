@@ -38,6 +38,7 @@ export function DynamicWorkflowForm(props: DynamicWorkflowFormProps) {
       onReorder={props.onReorder}
       mode={props.mode}
       rowTrailing={props.rowTrailing}
+      workflowIO={props.io}
     />
   );
 }

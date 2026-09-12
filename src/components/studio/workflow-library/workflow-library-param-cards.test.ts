@@ -186,11 +186,16 @@ describe("deriveLibraryParamCards", () => {
         {
           entryId: promptEntry.id,
           targetIoKey: "9::widget::text",
+          /* 线从**被落到的那颗圆点**出发：handle id = 端口名（库里按端口名找点）。 */
+          handleId: "positive_prompt",
+          grouped: false,
           manual: false,
         },
         {
           entryId: sizeEntry.id,
           targetIoKey: "5::widget::width",
+          handleId: "width",
+          grouped: false,
           manual: false,
         },
       ]),

@@ -30,7 +30,7 @@ function makeContainer(
 ) {
   const container = document.createElement("div");
   const dot = document.createElement("span");
-  dot.setAttribute("data-wire-anchor", "prompt");
+  dot.setAttribute("data-wire-anchor", "prompt?9::widget::text");
   const row = document.createElement("div");
   row.setAttribute("data-io-key", "9::widget::text");
   container.append(dot, row);
@@ -54,6 +54,8 @@ function makeContainer(
 const wire: ParamWire = {
   entryId: "prompt",
   targetIoKey: "9::widget::text",
+  handleId: "9::widget::text",
+  grouped: false,
   manual: false,
 };
 
@@ -93,7 +95,7 @@ describe("measureWires", () => {
   it("任一端不在就整条不画（不留悬空线头）", () => {
     const container = document.createElement("div");
     const dot = document.createElement("span");
-    dot.setAttribute("data-wire-anchor", "prompt");
+    dot.setAttribute("data-wire-anchor", "prompt?9::widget::text");
     container.append(dot);
     expect(measureWires(container, [wire])).toEqual([]);
   });
@@ -115,7 +117,7 @@ describe("measureWires", () => {
      * 就会整条线都不画，「尺寸」这张卡看起来就没连上。 */
     const container = document.createElement("div");
     const dot = document.createElement("span");
-    dot.setAttribute("data-wire-anchor", "size");
+    dot.setAttribute("data-wire-anchor", "size?5::widget::height");
     const group = document.createElement("div");
     group.setAttribute("data-io-pins", "5::widget::width,5::widget::height");
     container.append(dot, group);
@@ -126,7 +128,13 @@ describe("measureWires", () => {
     group.getBoundingClientRect = () =>
       ({ left: 300, top: 40, width: 200, height: 60 }) as DOMRect;
     const [segment] = measureWires(container, [
-      { entryId: "size", targetIoKey: "5::widget::height", manual: false },
+      {
+        entryId: "size",
+        targetIoKey: "5::widget::height",
+        handleId: "5::widget::height",
+        grouped: true,
+        manual: false,
+      },
     ]);
     expect(segment).toBeTruthy();
     expect(segment!.d.endsWith("300 70")).toBe(true);

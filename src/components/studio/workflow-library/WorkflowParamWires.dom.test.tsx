@@ -14,7 +14,10 @@ import { act, cleanup, render } from "@testing-library/react";
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { buildParamEntries } from "~/lib/workflow-param-mapping";
-import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
+import {
+  WorkflowParamCardColumn,
+  wireAnchorValue,
+} from "./WorkflowParamCardColumn";
 import { WorkflowParamWires } from "./WorkflowParamWires";
 
 vi.stubGlobal(
@@ -62,6 +65,8 @@ describe("映射连线的两端锚点", () => {
     const wire = {
       entryId: prompt.id,
       targetIoKey: "9::widget::positive_prompt",
+      handleId: "positive_prompt",
+      grouped: false,
       manual: false,
     };
     const tree = (
@@ -78,7 +83,10 @@ describe("映射连线的两端锚点", () => {
     );
     const { container } = render(tree);
 
-    const dot = container.querySelector(`[data-wire-anchor="${prompt.id}"]`)!;
+    /* 锚点按「条目 + 被落到的那颗点的 handle id」定位（一个候选一颗点）。 */
+    const anchor = wireAnchorValue(prompt.id, "positive_prompt");
+    const dot = container.querySelector(`[data-wire-anchor="${anchor}"]`)!;
+    expect(dot, `锚点 ${anchor} 应挂在卡片圆点上`).toBeTruthy();
     const row = container.querySelector(
       '[data-io-key="9::widget::positive_prompt"]',
     )!;

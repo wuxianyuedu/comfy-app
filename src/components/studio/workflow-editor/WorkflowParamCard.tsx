@@ -10,7 +10,7 @@
  * 收敛到这里，消费方只负责在输出端口行右侧挂「端点」与在端口行尾补说明。
  *
  * 卡片上有两种「端口」，别混淆：
- *   · **输入端口行**（`pins`）= 这个对外参数落地时的候选/实际落点（工作流内部
+ *   · **输入端口行**（`inputRows`）= 这个对外参数落地时的候选/实际落点（工作流内部
  *     的 pin 名 + 类型）；
  *   · **带类型的输出端口**（`outputPorts`）= 这张卡右侧出去的是什么（对外语义
  *     的类型，如「提示词」出去的都是 STRING）。它跟着**当前落点**走：同一个
@@ -21,6 +21,7 @@ import type { DOMAttributes } from "react";
 import { RotateCcw } from "lucide-react";
 
 import type { ParamEntry, ParamOutputPort } from "~/lib/workflow-param-mapping";
+import { inputRowType } from "~/lib/workflow-param-input-rows";
 import {
   PARAM_NODE_HEADER_H,
   PARAM_NODE_OUTPUT_ROW_H,
@@ -35,7 +36,8 @@ export interface WorkflowParamCardProps {
   /** 分类中文名（悬停提示用）。 */
   classLabel: string;
   hostNodeId: string;
-  pins: ParamEntry["pins"];
+  /** 卡片的输入端口行（已剔除被组合控件接管的端口）。 */
+  inputRows: ParamEntry["pins"];
   width: number;
   /** 是否允许连线：false 时卡片置灰。
    *
@@ -51,16 +53,16 @@ export interface WorkflowParamCardProps {
   /** 「恢复默认」是否可用。只读消费处不传回调（按钮根本不渲染）。 */
   canReset: boolean;
   onReset?: () => void;
-  /** 该口子的**带类型输出端口**（提示词 → STRING…）。
+  /** 该口子的**输出端口**（提示词 → STRING…）——一个候选一颗圆点。
    *
    *  由 `paramOutputPorts` 从「真正落到的端口」派生 —— 同一个「尺寸」口落到
    *  `width` 是 INT、落到 `resolution_preset` 是 COMBO，类型跟着落点走。
-   *  未连线时退到候选端口并标 `*`，不谎报类型。 */
+   *  未连线时逐个列出候选，不谎报类型。 */
   outputPorts: readonly ParamOutputPort[];
-  /** 每条输出端口行右侧的端点槽位（编辑器 = <Handle>）。
+  /** **每一行**输出端口右侧的端点槽位（编辑器 = <Handle>，库里 = 只读圆点）。
    *
-   *  只给**第一条**端口行挂端点即可（一个对外参数只有一个出口）；返回 null
-   *  的行不渲染端点（没有模式 = 禁止连线，库里只读同理）。 */
+   *  每颗圆点各带自己的 handle id（见 `ParamOutputPort.handleId`），拖哪颗点就连到
+   *  哪个候选端口。没有模式（返回 null）时该行不渲染端点 = 那个候选连不了。 */
   endpoint?: (port: ParamOutputPort, index: number) => React.ReactNode;
   /** 端口行的**行尾**内容（如落点说明）。
    *
@@ -83,7 +85,7 @@ export function WorkflowParamCard({
   label,
   classLabel,
   hostNodeId,
-  pins,
+  inputRows,
   width,
   canWire,
   readOnly = false,
@@ -160,9 +162,10 @@ export function WorkflowParamCard({
         )}
       </div>
 
-      {/* 端口行：一行一个 pin，仅作展示（真正的连线手柄在卡片右侧）。 */}
+      {/* 输入端口行：一个端口一行（被组合控件接管的端口不在此列，见
+          workflow-param-input-rows）。行数即几何里的输入行数，两端同口径。 */}
       <div className="flex flex-col px-2 py-1">
-        {pins.map((pin) => (
+        {inputRows.map((pin) => (
           <div
             key={pin.ioKey}
             className="flex min-w-0 items-center gap-1.5 text-[10.5px] text-(--color-ink-soft)"
@@ -172,21 +175,21 @@ export function WorkflowParamCard({
             <span className="min-w-0 flex-1 truncate">{pin.name}</span>
             {rowTrailing?.(pin) ?? (
               <span className="shrink-0 font-mono text-[9.5px] text-(--color-ink-fainter)">
-                {pin.type}
+                {inputRowType(pin)}
               </span>
             )}
           </div>
         ))}
       </div>
 
-      {/* ── 带类型的输出端口 ──
-          这一行就是卡片右侧那颗**小圆点端点**的意思：圆点出去的是什么类型、
-          叫什么名字。类型跟着当前落点走（提示词落到 STRING 文本口就是 STRING；
-          尺寸落到 COMBO 的预设口就是 COMBO），只连了候选还没落定时标 `*`。
+      {/* ── 输出端口 ──
+          每行 = 一个候选落点 + 它自己的圆点端点：圆点出去的是什么类型、叫什么
+          名字，看这一行即可。类型跟着当前落点走（提示词落到 STRING 文本口就是
+          STRING；尺寸落到 COMBO 的预设口就是 COMBO），尚未连线的候选照给类型
+          —— 那是它落到那一行时的类型，不是谎报。
           端点槽位（`endpoint`）压在这一行的右端，所以「类型 + 名称」整组**右对齐
-          到端点**，而不是像端口行那样左对齐 —— 圆点就是这一行在说什么的那个口，
-          名字与类型贴着它才读得出「这颗点连到谁」。
-          端口行不再在行尾重复标落点名（那与这一行同义，一处事实只说一次）。 */}
+          到端点**：圆点就是这一行在说什么的那个口，名字与类型贴着它才读得出
+          「这颗点连到谁」。 */}
       <div className="flex flex-col px-2 pb-1">
         {outputPorts.map((port, index) => (
           <div
