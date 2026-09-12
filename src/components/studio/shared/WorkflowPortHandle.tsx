@@ -120,8 +120,12 @@ export function PortHandle({
     ...extraStyle,
   };
 
+  /* 端点圆点带一个稳定的数据属性：工作流库那层只读连线要量它的**圆心**
+   *  （行的左沿 + 行高中线并不等于圆点位置 —— 组合控件折叠后行是两行结构，
+   *  圆点锁在标签行中线，按整行 50% 量就会把线画到圆点下方十几像素处，表现为
+   *  「线没有连接到端点上」）。 */
   if (!nodeId) {
-    return <span aria-hidden style={dotStyle} />;
+    return <span aria-hidden style={dotStyle} data-port-dot={id} />;
   }
 
   return (
@@ -130,6 +134,7 @@ export function PortHandle({
       position={dir === "in" ? Position.Left : Position.Right}
       id={id}
       style={dotStyle}
+      data-port-dot={id}
     />
   );
 }

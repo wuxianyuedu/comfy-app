@@ -111,6 +111,7 @@ describe("buildParamNodes — 每个对外参数一个可连线节点", () => {
     const sizeEntry: ParamEntry = {
       id: "size",
       nodeId: "5",
+      hostNodeId: "5",
       nodeTitle: "分辨率选择器",
       cls: "size",
       label: "尺寸",
@@ -158,11 +159,13 @@ describe("buildParamNodes — 每个对外参数一个可连线节点", () => {
       isManual: () => false,
       onReset: vi.fn(),
     });
-    /* 端口行现在按 `inputRows` 渲染（缺省 = pins）：注入该字段后卡片只列它。 */
-    expect(dataOf(nodes[0]!).inputRows).toEqual(dataOf(nodes[0]!).pins);
+    /* 卡片体不再有「输入端口行」这一段（那是同一批端口的重复表达）——端口
+     *  只由输出端口区呈现（一行 = 端点 + 参数名 + 类型）。 */
+    expect("inputRows" in dataOf(nodes[0]!)).toBe(false);
+    expect(dataOf(nodes[0]!).pins.length).toBeGreaterThan(0);
   });
 
-  it("组合控件接管的端口不再重复列成输入行，且几何跟着少数的那几行", () => {
+  it("卡片几何只计入头部 + 输出端口区（没有输入端口行了）", () => {
     const sizeWidth = entries.find((entry) => entry.id === "5|size-width")!;
     const nodes = buildParamNodes({
       entries: [sizeWidth],
@@ -170,13 +173,11 @@ describe("buildParamNodes — 每个对外参数一个可连线节点", () => {
       mode: "T2I",
       isManual: () => false,
       onReset: vi.fn(),
-      groupedKeys: new Set(["5::widget::width"]),
     });
     const card = nodes[0]!;
     expect(dataOf(card).pins.length).toBe(1);
-    expect(dataOf(card).inputRows).toEqual([]);
     expect((card.style as { height: number }).height).toBe(
-      paramNodeHeight(sizeWidth, dataOf(card).outputPorts.length, 0),
+      paramNodeHeight(dataOf(card).outputPorts.length),
     );
   });
 
@@ -214,14 +215,12 @@ describe("buildParamNodes — 每个对外参数一个可连线节点", () => {
       onReset: vi.fn(),
     });
     const prompt = nodes.find((node) => node.id === "pio:9|prompt")!;
-    expect(dataOf(prompt).outputPorts[0]!.connected).toBe(false);
+    /* `connected` = 端口在工作流里真实存在（候选端口都存在，故为 true）。 */
+    expect(dataOf(prompt).outputPorts[0]!.connected).toBe(true);
     expect(dataOf(prompt).outputPorts[0]!.name).toBe("text");
-    /* 高度计入输出端口区：卡片高度 = 候选端口行 + 输出端口行（多画一行而几何
-     * 没跟上 → 卡片互相压住）。 */
-    const entry = entries.find((item) => item.id === "9|prompt")!;
-    expect((prompt.style as { height: number }).height).toBe(
-      paramNodeHeight(entry, 1),
-    );
+    /* 高度计入输出端口区：卡片高度 = 头部 + 输出端口行（多画一行而几何没跟上
+     *  → 卡片互相压住）。 */
+    expect((prompt.style as { height: number }).height).toBe(paramNodeHeight(1));
   });
 
   it("宿主节点没有坐标时跳过（不产出 NaN 位置）", () => {
@@ -288,7 +287,9 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
     });
     const width = edges.find((edge) => edge.id === "pe-5|size-width")!;
     expect(width.source).toBe("pio:5|size-width");
-    expect(width.sourceHandle).toBe("pio-out");
+    /* 源端点 = 当前落点那一颗（卡片上每个候选一颗 Handle，id 就是 ioKey）——
+     * 写死 `pio-out` 会接到一个不存在的 handle，React Flow 直接丢弃整条边。 */
+    expect(width.sourceHandle).toBe("5::widget::width");
     expect(width.target).toBe("5");
     expect(width.targetHandle).toBe("5::widget::width");
     expect(width.style?.strokeDasharray).toBeTypeOf("string");
@@ -423,5 +424,151 @@ describe("isValidParamConnection — 连线闸门（方向 + 落点）", () => {
         io,
       ),
     ).toBe(false);
+  });
+});
+
+/* ── 契约路径（生产路径）：条目来自对外参数契约，`nodeId` 是空串 ──
+ *
+ * 契约条目的 `id` 是 `prompt` / `size`（与工作流无关），`nodeId` 为空 —— 画布
+ * 卡片的位置、映射线的宿主端、连线的合法性判定都必须走 `hostNodeId`。此前各处
+ * 一律读 `nodeId`，于是契约路径下：卡片一张都渲染不出来（查不到宿主坐标）、
+ * 映射线指向空节点、连线闸门恒定失败。用户看到的正是「看不到对外参数卡片 /
+ * 端点拉不了线」（ISSUE #355）。 */
+
+describe("契约条目的宿主节点（hostNodeId）—— ISSUE #355", () => {
+  const contractIo: WorkflowIOMap = {
+    "4::widget::positive_prompt": {
+      direction: "input",
+      kind: "widget",
+      nodeId: "4",
+      nodeTitle: "image_z_image",
+      name: "positive_prompt",
+      type: "STRING",
+      defaultValue: "3只小猫在喝山泉",
+    },
+    "4::widget::aspect_ratio": {
+      direction: "input",
+      kind: "widget",
+      nodeId: "4",
+      nodeTitle: "ResolutionSelector",
+      name: "aspect_ratio",
+      type: "COMBO",
+      defaultValue: "16:9 (Widescreen)",
+      options: ["16:9 (Widescreen)"],
+    },
+    "4::widget::megapixels": {
+      direction: "input",
+      kind: "widget",
+      nodeId: "4",
+      nodeTitle: "ResolutionSelector",
+      name: "megapixels",
+      type: "FLOAT",
+      defaultValue: 1,
+    },
+    "4::widget::multiple": {
+      direction: "input",
+      kind: "widget",
+      nodeId: "4",
+      nodeTitle: "ResolutionSelector",
+      name: "multiple",
+      type: "INT",
+      defaultValue: 8,
+    },
+  };
+  const contractEntries = buildParamEntries(contractIo, undefined, { mode: "T2I" });
+  const contractPos = { "4": { x: 600, y: 300 } };
+
+  it("契约条目自带宿主节点 id（nodeId 为空串）", () => {
+    const prompt = contractEntries.find((entry) => entry.id === "prompt")!;
+    expect(prompt.nodeId).toBe("");
+    expect(prompt.hostNodeId).toBe("4");
+  });
+
+  it("按 hostNodeId 派生出卡片位置 —— 卡片真的渲染得出来", () => {
+    const nodes = buildParamNodes({
+      entries: contractEntries,
+      hostPosById: contractPos,
+      mode: "T2I",
+      isManual: () => false,
+      onReset: vi.fn(),
+      io: contractIo,
+    });
+    expect(nodes.map((node) => node.id)).toEqual([
+      "pio:prompt",
+      "pio:size",
+    ]);
+    for (const node of nodes) {
+      expect(Number.isFinite(node.position.x)).toBe(true);
+      expect(node.position.x).toBeLessThan(contractPos["4"].x);
+    }
+  });
+
+  it("映射线的宿主端与源端点都指向真实存在的 handle", () => {
+    const edges = buildParamEdges({
+      entries: contractEntries,
+      resolved: resolveMapping(contractEntries, contractIo, null, "T2I"),
+      isManual: () => false,
+    });
+    const prompt = edges.find((edge) => edge.id === "pe-prompt")!;
+    expect(prompt.target).toBe("4");
+    expect(prompt.targetHandle).toBe("4::widget::positive_prompt");
+    /* 源端点必须与卡片上真实渲染的 <Handle id> 同名（ioKey）。 */
+    expect(prompt.sourceHandle).toBe("4::widget::positive_prompt");
+  });
+
+  it("连线闸门认契约条目：拖到宿主行即合法（此前恒定拒绝）", () => {
+    expect(
+      isValidParamConnection(
+        {
+          source: paramNodeId("prompt"),
+          target: "4",
+          targetHandle: "4::widget::positive_prompt",
+        },
+        contractEntries,
+        contractIo,
+      ),
+    ).toBe(true);
+    /* 反向拖（宿主行 → 卡片端点）同样成立。 */
+    expect(
+      isValidParamConnection(
+        {
+          source: "4",
+          sourceHandle: "4::widget::aspect_ratio",
+          target: paramNodeId("size"),
+        },
+        contractEntries,
+        contractIo,
+      ),
+    ).toBe(true);
+    /* 拖到别的节点的端口 → 仍然拒绝。 */
+    expect(
+      isValidParamConnection(
+        {
+          source: paramNodeId("prompt"),
+          target: "9",
+          targetHandle: "9::widget::text",
+        },
+        contractEntries,
+        contractIo,
+      ),
+    ).toBe(false);
+  });
+
+  it("尺寸卡片把比例 / 像素 / 倍数三个出口都摆出来（ISSUE #355 复审）", () => {
+    const nodes = buildParamNodes({
+      entries: contractEntries,
+      hostPosById: contractPos,
+      mode: "T2I",
+      isManual: () => false,
+      onReset: vi.fn(),
+      io: contractIo,
+      resolved: resolveMapping(contractEntries, contractIo, null, "T2I"),
+    });
+    const size = nodes.find((node) => node.id === "pio:size")!;
+    expect(dataOf(size).outputPorts.map((port) => port.name)).toEqual([
+      "aspect_ratio",
+      "megapixels",
+      "multiple",
+    ]);
   });
 });
