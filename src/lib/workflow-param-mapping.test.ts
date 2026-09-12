@@ -12,7 +12,14 @@ import {
   hasManualWiring,
   ioKeyForHandle,
   isDefaultMapping,
+  PARAM_NODE_HEADER_H,
+  PARAM_NODE_OUTPUT_ROW_H,
+  PARAM_NODE_PAD_Y,
+  PARAM_NODE_ROW_H,
+  paramNodeHeight,
+  paramOutputPorts,
   parseParamMapping,
+  portTypeDisplay,
   resolveMapping,
   runtimeNodeId,
   serializeParamMapping,
@@ -478,5 +485,109 @@ describe("handleIdForIoKey / ioKeyForHandle — 两个键空间互转（ISSUE #3
       const handleId = handleIdForIoKey(map, ioKey)!;
       expect(ioKeyForHandle(map, map[ioKey]!.nodeId, handleId)).toBe(ioKey);
     }
+  });
+});
+
+describe("paramOutputPorts — 卡片上带类型的输出端口（ISSUE #355 复审）", () => {
+  const outIo: WorkflowIOMap = {
+    "9::widget::text": {
+      direction: "input",
+      kind: "widget",
+      nodeId: "9",
+      name: "positive_prompt",
+      label: "提示词",
+      type: "STRING",
+      defaultValue: "3只小猫在喝山泉的完整描述词，足够长到被判成提示词口",
+    },
+    "5::widget::width": {
+      direction: "input",
+      kind: "widget",
+      nodeId: "5",
+      name: "width",
+      type: "INT",
+      defaultValue: 512,
+    },
+    "5::widget::resolution_preset": {
+      direction: "input",
+      kind: "widget",
+      nodeId: "5",
+      name: "resolution_preset",
+      type: "COMBO",
+      options: ["720p", "1080p"],
+    },
+  };
+
+  it("类型取自**真正落到的端口**（提示词落到 text 就是 STRING）", () => {
+    const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
+    const prompt = entries.find((entry) => entry.id === "prompt")!;
+    expect(paramOutputPorts(prompt, outIo, "9::widget::text")).toEqual([
+      { name: "positive_prompt", type: "STRING", connected: true },
+    ]);
+  });
+
+  it("同一个口落到不同类型就有不同类型（尺寸 → COMBO 预设口）", () => {
+    const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
+    const size = entries.find((entry) => entry.id === "size")!;
+    expect(paramOutputPorts(size, outIo, "5::widget::width")[0]!.type).toBe("INT");
+    expect(
+      paramOutputPorts(size, outIo, "5::widget::resolution_preset")[0]!.type,
+    ).toBe("COMBO");
+  });
+
+  it("未连线时退到候选端口并标 *，不谎报类型", () => {
+    const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
+    const prompt = entries.find((entry) => entry.id === "prompt")!;
+    /* 连了候选之外 / 显式断开 → 不是 connected，类型如实给候选中那一个。 */
+    const ports = paramOutputPorts(prompt, outIo, null);
+    expect(ports.map((port) => port.connected)).toEqual([false]);
+    expect(ports[0]!.type).toBe("STRING");
+
+    /* 一个候选都没有（工作流没有可落点端口）→ 一条 * 占位，卡片仍画得出端点。 */
+    const empty = { ...prompt, pins: [] };
+    expect(paramOutputPorts(empty, outIo, null)).toEqual([
+      { name: "提示词", type: "*", connected: false },
+    ]);
+  });
+
+  it("落点指向已不存在的端口时按未连线处理", () => {
+    const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
+    const prompt = entries.find((entry) => entry.id === "prompt")!;
+    const ports = paramOutputPorts(prompt, outIo, "9::widget::gone");
+    expect(ports[0]!.connected).toBe(false);
+    expect(ports[0]!.type).toBe("STRING");
+  });
+
+  it("portTypeDisplay：声明类型原样大写，缺省 *", () => {
+    expect(portTypeDisplay("imageupload")).toBe("IMAGEUPLOAD");
+    expect(portTypeDisplay(" STRING ")).toBe("STRING");
+    expect(portTypeDisplay(undefined)).toBe("*");
+    expect(portTypeDisplay("")).toBe("*");
+  });
+});
+
+describe("paramNodeHeight — 输出端口区计入卡片高度", () => {
+  const entry = {
+    id: "prompt",
+    nodeId: "9",
+    nodeTitle: "T",
+    cls: "prompt" as const,
+    label: "提示词",
+    pins: [
+      { ioKey: "9::widget::text", name: "text", type: "STRING", defaultValue: "" },
+    ],
+  };
+
+  it("多一条输出端口就多一行高度（否则卡片互相压住）", () => {
+    expect(paramNodeHeight(entry, 1)).toBe(
+      PARAM_NODE_HEADER_H + PARAM_NODE_ROW_H + PARAM_NODE_OUTPUT_ROW_H + PARAM_NODE_PAD_Y,
+    );
+    expect(paramNodeHeight(entry, 2) - paramNodeHeight(entry, 1)).toBe(
+      PARAM_NODE_OUTPUT_ROW_H,
+    );
+  });
+
+  it("输出端口数缺省按至少一条处理（与 paramOutputPorts 的兜底一致）", () => {
+    expect(paramNodeHeight(entry)).toBe(paramNodeHeight(entry, 1));
+    expect(paramNodeHeight(entry, 0)).toBe(paramNodeHeight(entry, 1));
   });
 });
