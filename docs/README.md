@@ -28,6 +28,7 @@ AIGC:
 | 设计规格 | [superpowers/specs/](superpowers/specs/) | 功能设计文档（如 wf-debug-mode 设计） | 归档参考 |
 | 生成文档（原文） | [generated/](generated/) | 由 `pnpm doc:render` 从编辑文档自动生成，占位符已替换成真实值，供直接阅读；禁止手改。可双击 `tools/docs/generate-docs.ps1` 一键生成 | 自动生成 |
 | 文档引用事实登记表 | [reference-facts.md](reference-facts.md) | 文档里硬编码值/路径的单一事实映射：占位符语义 + 权威来源 + 提取规则；由 `pnpm doc:check` 动态核对 | 配套 |
+| 术语表 | [glossary.md](glossary.md) | 全项目统一领域词汇：术语 → 唯一所指 → 代码落点（含「三种画布」判别口诀与歧义词限定规则） | **强制口径**（沟通/文档/命名发生歧义时以本表为准） |
 | 审计整改报告 | `docs/audits/`（当前为空） | 规范/代码审计发现的整改跟踪（逐项记录违规、规则、严重度与状态） | 过程跟踪（闭环后删除，见 §7） |
 
 > 本文档集成的范围为：**主规范 + standards 文档集（README + 01~17 章，共 18 篇）**。两者共同构成项目开发规范的"总纲 + 细则"双层体系，其余 docs/api、superpowers 等为配套产物。
@@ -117,6 +118,7 @@ AIGC:
 ## 6. 使用路径
 
 - **日常开发**：先读主规范对应章节（总纲约束）→ 再进文档集对应章节看代码示例（第 3 节映射）。
+- **说术语/写 Issue/起 PR 标题**：先查 [术语表](glossary.md)——`画布`/`节点`/`运行`/`项目`/`视图` 这类一词多指的词必须带限定词（判别口诀见 glossary §2）。
 - **提交前自查**：按 [13.1 提交前自查清单](standards/13-提交与-code-review.md#131-提交前自查清单) 逐条对照；换行符 LF 与 git-lfs 参数见 [13.7/13.8](standards/13-提交与-code-review.md#137-换行符与提交噪声lf)。
 - **Code Review**：对照 [14 反模式速查表](standards/14-反模式速查表.md) + [13.4 Review 维度](standards/13-提交与-code-review.md#134-code-review-重点维度) 逐项检查。
 - **新成员**：按 [15.5 新成员 10 分钟速读路径](standards/15-附录.md#155-新成员-10-分钟速读路径) 建立全局认知。

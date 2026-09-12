@@ -111,6 +111,10 @@
 >
 > **不纳入**：`docs/audits/`（过程文件）、`docs/api/`（TypeDoc 自动生成）、
 > `docs/superpowers/`（设计归档）、`docs/generated/`（本体系自动生成产物）。
+> `docs/glossary.md`（术语表）位于 `docs/` 根、不在 `SCOPED_DOC_DIRS` 内：它由**术语 →
+> 所指 → 代码落点**的对照表构成，路径以可读的代码落点写法出现（非「存在性引用」），
+> 纳入裸值/路径扫描会因表格里的示例标识符误报；如需把其中某个具体路径升级为存在性核对，
+> 按第 4 节补登为 `path` 类 FACTS 即可。
 > 规范目录（`docs/standards/`、`docs/guides/`）里**不纳入**的只有两条，且都在
 > 脚本的豁免名单里**显式声明并附理由**：`docs/standards/README.md`（文档集索引，
 > 只有导航与章节映射）、`docs/guides/reviews/2026-08-30-canvasnode-review.md`
