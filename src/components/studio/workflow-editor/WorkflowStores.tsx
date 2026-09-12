@@ -131,7 +131,8 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           nextKeys.every(
             (key) =>
               prev[key]?.name === next[key]?.name &&
-              prev[key]?.slotLabel === next[key]?.slotLabel
+              prev[key]?.slotLabel === next[key]?.slotLabel &&
+              prev[key]?.classType === next[key]?.classType
           );
         if (same) return {};
         return { aliasBaseByKey: next };
@@ -157,6 +158,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           name: ref.name,
           enrichedLabel: aliases?.enrichedLabel,
           ...(aliases?.slotLabel ? { slotLabel: aliases.slotLabel } : {}),
+          ...(aliases?.classType ? { classType: aliases.classType } : {}),
         });
         return {
           workflowIO: {
@@ -239,6 +241,9 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
               ? { enrichedLabel: aliases.enrichedLabel }
               : {}),
             ...(aliases?.slotLabel !== undefined ? { slotLabel: aliases.slotLabel } : {}),
+            /* 宿主类名让「槽位名本身就是别名」这一条在没有作者名可回收时
+             *  也能成立（ISSUE #349：切 seed 行为后名字退回 value_1）。 */
+            ...(aliases?.classType !== undefined ? { classType: aliases.classType } : {}),
           });
         const modes: Record<string, WorkflowIOModeOverride> = { ...(cur.modes ?? {}) };
         if (patch === null) {
