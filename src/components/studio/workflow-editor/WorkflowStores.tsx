@@ -356,6 +356,12 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         return changed ? { workflowIO: nextMap } : {};
       }),
 
+    /* 拖拽排序：把 `fromKey` 移动到 `beforeKey` 表示的位置。
+     *
+     *  契约：`beforeKey` 是**松手时鼠标所在的那一行**（`null` = 移到末尾）。
+     *  「落在谁身上」有两种语义，按拖动方向选 —— 向右拖时插到目标之后，向左
+     *  拖时插到目标之前。只用「插到目标之前」的话，右移一格等于原地不动
+     *  （ISSUE #349：编辑 IO 里拖拽调整参数顺序失效）。 */
     reorderIO: (fromKey, beforeKey) => {
       if (fromKey === beforeKey) return;
       set((state) => {
@@ -378,11 +384,21 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
             if (bo === undefined) return -1;
             return ao - bo;
           });
+        /* 被移动行在重排前的下标 —— 判定落点「在目标之前还是之后」用。 */
+        const fromIndex = ordered.findIndex(({ entryKey }) => entryKey === fromKey);
         const without = ordered.filter(({ entryKey }) => entryKey !== fromKey);
         let targetIdx = without.length;
         if (beforeKey) {
           const i = without.findIndex(({ entryKey }) => entryKey === beforeKey);
-          if (i >= 0) targetIdx = i;
+          if (i >= 0) {
+            /* 落在目标上时插到它**前面还是后面**，看这次拖动是往前还是往后：
+             *  用户向右拖（`fromIndex` 在目标之前）时目标落在原位置的下方，
+             *  松手看到的落点是「目标之后」；向左拖反之。只用「插到目标之前」
+             *  的话，右移一格等于原地不动 —— 用户看到的就是「拖了但顺序没变」
+             *  （ISSUE #349：编辑 IO 里拖拽调整参数顺序失效）。 */
+            const targetIndex = ordered.indexOf(without[i]!);
+            targetIdx = fromIndex < targetIndex ? i + 1 : i;
+          }
         }
         without.splice(targetIdx, 0, { entryKey: fromKey, entry: fromEntry });
         const renumbered: Record<string, WorkflowIOParam> = { ...prev };

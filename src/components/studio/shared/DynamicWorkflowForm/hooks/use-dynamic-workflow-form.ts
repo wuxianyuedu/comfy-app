@@ -167,29 +167,52 @@ export function useDynamicWorkflowForm(
    * form rendered on the same page.  `draggingKey` is the ioKey the user
    * picked up; `dragOverKey` is the row currently under the cursor (paints
    * the insert line).  Both are cleared on drop / dragend so a dropped row
-   * never leaves a stale highlight behind. */
+   * never leaves a stale highlight behind.
+   *
+   *  **被拿起的键同时记在 ref 上**：一次原生拖拽横跨多个 task（dragstart →
+   *  dragover… → drop），`drop` 拿到的处理器闭包可能来自**另一次渲染**，
+   *  它读到的 `draggingKey` 是那一刻的 state 而不是起手时写入的值。ref 在
+   *  dragstart 现场立刻写好，drop 一律以它为准 —— 否则「拖完什么都没发生」
+   *  （ISSUE #349：编辑 IO 里拖拽调整参数顺序失效）。
+   *  state 仍保留：插入指示线 / 半透明行都靠它触发重渲。 */
+  const dragFromRef = useRef<string | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
+  const beginDrag = useCallback((ioKey: string) => {
+    dragFromRef.current = ioKey;
+    setDraggingKey(ioKey);
+    setDragOverKey(ioKey);
+  }, []);
+
   const endDrag = useCallback(() => {
+    dragFromRef.current = null;
     setDraggingKey(null);
     setDragOverKey(null);
   }, []);
 
-  const beginPortDrag = useCallback((ioKey: string) => {
-    setDraggingKey(ioKey);
-    setDragOverKey(ioKey);
+  /* 事件目标所在的行：`data-io-key` 挂在每一行的行锚点上（参数行与端口行
+   *  都带），而原生事件的目标常常是行内的某个子元素（标签按钮、输入框）。 */
+  const rowKeyOf = useCallback((target: EventTarget | null): string | null => {
+    const el = target instanceof HTMLElement ? target : null;
+    return el?.closest<HTMLElement>("[data-io-key]")?.dataset.ioKey ?? null;
   }, []);
+
+  /* 端口行（wire / 数值行）与参数行共用一套拖拽状态：端口行把
+   *  dragstart / dragend 上抛，真正被拿起的键与高亮都记在这里。 */
+  const beginPortDrag = beginDrag;
 
   const dragHandlers = useMemo<RowDragHandlers | null>(() => {
     if (!onReorder) return null;
     return {
       onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
-        setDraggingKey(ioKey);
-        setDragOverKey(ioKey);
+        /* 起手行以**事件目标所在的那一行**为准：行级 draggable 下目标通常是
+         *  行内子元素（标签按钮、输入框），bind 进来的 ioKey 是渲染时那一次
+         *  的闭包值，可能与用户实际抓住的行不一致。取不到才退回 bind 值。 */
+        beginDrag(rowKeyOf(event.target) ?? ioKey);
         /* Firefox refuses to start a drag unless dataTransfer.setData is
-         * called.  The payload is ignored — rows are identified by ioKey via
-         * state. */
+         * called.  Payload 只给原生拖拽一个「有内容」的凭据 —— 真正的来源键
+         * 以上面的 ref 为准（见 dragFromRef 注释）。 */
         try {
           event.dataTransfer.setData("text/plain", ioKey);
           event.dataTransfer.effectAllowed = "move";
@@ -198,21 +221,25 @@ export function useDynamicWorkflowForm(
         }
       },
       onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
-        if (!draggingKey || draggingKey === ioKey) return;
+        const fromKey = dragFromRef.current;
+        if (!fromKey || fromKey === ioKey) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
         if (dragOverKey !== ioKey) setDragOverKey(ioKey);
       },
       onDrop: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         event.preventDefault();
-        const fromKey = draggingKey;
+        /* 来源一律取**起手那一刻记下的键**（ref）。落点行以事件目标为准，
+         *  两者相同即「拖回原地」，不动数据。 */
+        const fromKey = dragFromRef.current;
+        const toKey = rowKeyOf(event.target) ?? ioKey;
         endDrag();
-        if (!fromKey || fromKey === ioKey) return;
-        onReorder(fromKey, ioKey);
+        if (!fromKey || fromKey === toKey) return;
+        onReorder(fromKey, toKey);
       },
       onDragEnd: endDrag,
     };
-  }, [onReorder, draggingKey, dragOverKey, endDrag]);
+  }, [onReorder, dragOverKey, endDrag, beginDrag, rowKeyOf]);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadTarget, setUploadTarget] = useState<string | null>(null);
