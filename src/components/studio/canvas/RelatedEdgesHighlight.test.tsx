@@ -24,7 +24,10 @@ import {
 import {
   EDGE_FOCUS_ACTIVE_KEY,
   EDGE_FOCUS_DATA_KEY,
+  NODE_PORT_FOCUS_ACTIVE_KEY,
+  NODE_PORT_FOCUS_DATA_KEY,
   readEdgeFocusRole,
+  readPortFocusRole,
   useRelatedEdgesHighlight,
 } from "./hooks/use-related-edges-highlight";
 
@@ -69,7 +72,11 @@ const ANCHOR_EDGES: Edge[] = [
  *  immutability 规则；写入放在 usePublish 的 effect 里，不在渲染期。 */
 interface Sink {
   edges: Edge[];
+  /** 最新节点表（带端口关注标记的那一份）。 */
+  nodes: Node[];
   select: (nodeId: string, selected: boolean) => void;
+  /** 删掉一条连线（模拟作者断开映射 / 上游节点被删）。 */
+  dropEdge: (edgeId: string) => void;
 }
 
 function Stage({
@@ -83,14 +90,18 @@ function Stage({
   edges: Edge[];
   resolveNodeId?: (visualNodeId: string) => string | null;
 }) {
-  const [nodes] = useNodesState(asNodes(nodeIds));
+  const [nodes, setNodes] = useNodesState(asNodes(nodeIds));
   const [currentEdges, setEdges, onEdgesChange] = useEdgesState(edges);
   const store = useStoreApi();
-  /* useEdgesState 的 setter 本身稳定，包一层是为了满足 hook 依赖写法。 */
+  /* useEdgesState / useNodesState 的 setter 本身稳定，包一层是为了满足 hook
+   * 依赖写法（且让「未传 setNodes」的老调用方行为不变）。 */
   const applyEdges = useCallback((updater: (current: Edge[]) => Edge[]) => {
     setEdges(updater);
   }, [setEdges]);
-  useRelatedEdgesHighlight(applyEdges, { resolveNodeId });
+  const applyNodes = useCallback((updater: (current: Node[]) => Node[]) => {
+    setNodes(updater);
+  }, [setNodes]);
+  useRelatedEdgesHighlight(applyEdges, { resolveNodeId, setNodes: applyNodes });
 
   const select = useCallback(
     (nodeId: string, selected: boolean) => {
@@ -105,10 +116,19 @@ function Stage({
   /* 每次提交后把最新边表与选中入口同步到观测棚。写的是 ref（不是 props / hook
    * 参数），且只在 effect 里写一次 —— React 19 的 refs / immutability 两条规则
    * 都拦渲染期或跨提交改外部值。 */
+  const dropEdge = useCallback(
+    (edgeId: string) => {
+      setEdges((current) => current.filter((edge) => edge.id !== edgeId));
+    },
+    [setEdges],
+  );
+
   const sinkRef = useRef(sink);
   useEffect(() => {
     sinkRef.current.edges = currentEdges;
+    sinkRef.current.nodes = nodes;
     sinkRef.current.select = select;
+    sinkRef.current.dropEdge = dropEdge;
   });
 
   return (
@@ -127,7 +147,12 @@ function renderStage(
     resolveNodeId?: (visualNodeId: string) => string | null;
   } = {},
 ): Sink {
-  const sink: Sink = { edges: [], select: () => undefined };
+  const sink: Sink = {
+    edges: [],
+    nodes: [],
+    select: () => undefined,
+    dropEdge: () => undefined,
+  };
   render(
     <ReactFlowProvider>
       <Stage
@@ -154,6 +179,12 @@ function edgeById(sink: Sink, id: string): Edge {
   return edge!;
 }
 
+function nodeById(sink: Sink, id: string): Node {
+  const node = sink.nodes.find((candidate) => candidate.id === id);
+  expect(node).toBeTruthy();
+  return node!;
+}
+
 describe("readEdgeFocusRole", () => {
   it("未标记 / 非法值都归零，只认三种关注级别", () => {
     expect(readEdgeFocusRole({ data: undefined })).toBe("none");
@@ -162,6 +193,58 @@ describe("readEdgeFocusRole", () => {
     expect(readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "upstream" } })).toBe("upstream");
     expect(readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "downstream" } })).toBe("downstream");
     expect(readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "related" } })).toBe("related");
+  });
+});
+
+describe("useRelatedEdgesHighlight 写回端口行级别", () => {
+  it("选中中间节点：落到它上面的端口行按上游 / 下游标记", () => {
+    const sink = renderStage({
+      edges: [
+        { id: "e-1-2", source: "1", target: "2", targetHandle: "seed" },
+        { id: "e-2-3", source: "2", target: "3", sourceHandle: "IMAGE" },
+      ],
+    });
+    toggleSelected(sink, "2", true);
+    const data = nodeById(sink, "2").data;
+    expect(readPortFocusRole(data, "seed")).toBe("upstream");
+    expect(readPortFocusRole(data, "out:IMAGE")).toBe("downstream");
+    expect(data[NODE_PORT_FOCUS_ACTIVE_KEY]).toBe(true);
+  });
+
+  it("无关节点只带「有选中项」开关，不写任何端口标记", () => {
+    const sink = renderStage();
+    toggleSelected(sink, "2", true);
+    const data = nodeById(sink, "1").data;
+    expect(data[NODE_PORT_FOCUS_DATA_KEY]).toBeUndefined();
+    expect(data[NODE_PORT_FOCUS_ACTIVE_KEY]).toBe(true);
+  });
+
+  it("取消选中：端口标记与开关一起清干净（不留「全图仍发灰」的残留）", () => {
+    const sink = renderStage({
+      edges: [{ id: "e-1-2", source: "1", target: "2", targetHandle: "seed" }],
+    });
+    toggleSelected(sink, "2", true);
+    expect(readPortFocusRole(nodeById(sink, "2").data, "seed")).toBe("upstream");
+
+    toggleSelected(sink, "2", false);
+    for (const node of sink.nodes) {
+      const data = node.data;
+      expect(data?.[NODE_PORT_FOCUS_DATA_KEY]).toBeUndefined();
+      expect(data?.[NODE_PORT_FOCUS_ACTIVE_KEY]).toBeUndefined();
+    }
+  });
+
+  it("连线增删会重算端口行：断开后那一行不再亮", () => {
+    const sink = renderStage({
+      edges: [{ id: "e-1-2", source: "1", target: "2", targetHandle: "seed" }],
+    });
+    toggleSelected(sink, "2", true);
+    expect(readPortFocusRole(nodeById(sink, "2").data, "seed")).toBe("upstream");
+
+    act(() => {
+      sink.dropEdge("e-1-2");
+    });
+    expect(readPortFocusRole(nodeById(sink, "2").data, "seed")).toBe("none");
   });
 });
 
