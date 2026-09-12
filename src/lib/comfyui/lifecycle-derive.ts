@@ -67,7 +67,9 @@ export function decideEnsureLaunch(facts: EnsureFacts): EnsureDecision {
  * 注意开关只在**拉起那一刻**生效：桌面壳退出是 `taskkill /T /F` 杀整树，
  * 退出时没有机会再改决定。
  */
-export function resolveLaunchPolicy(exitKillComfyui: boolean | undefined): LaunchPolicy {
+export function resolveLaunchPolicy(
+  exitKillComfyui: boolean | undefined,
+): LaunchPolicy {
   return exitKillComfyui === true ? "bound" : "keepAlive";
 }
 
@@ -92,7 +94,9 @@ export interface SpawnArgsFacts {
  */
 export function buildSpawnArgs(facts: SpawnArgsFacts): string[] {
   const port =
-    facts.effectivePort && facts.effectivePort > 0 ? facts.effectivePort : facts.defaultPort;
+    facts.effectivePort && facts.effectivePort > 0
+      ? facts.effectivePort
+      : facts.defaultPort;
   const args = [
     ...facts.baseArgs,
     ...(port !== facts.defaultPort ? ["--port", String(port)] : []),
@@ -124,7 +128,10 @@ export interface ProcessCheckFacts {
  * 早查会误判「没起来」）；②距上次查询够久（限频，避免每轮轮询都全表扫描）。
  */
 export function shouldCheckKeepAliveProcess(facts: ProcessCheckFacts): boolean {
-  return facts.sinceSpawnMs > facts.graceMs && facts.sinceLastCheckMs > facts.intervalMs;
+  return (
+    facts.sinceSpawnMs > facts.graceMs &&
+    facts.sinceLastCheckMs > facts.intervalMs
+  );
 }
 
 /**
@@ -169,7 +176,11 @@ export interface StopFacts {
 
 export type StopDecision =
   /** 杀进程树（Windows `taskkill /PID <pid> /T /F`）。 */
-  | { kind: "kill"; pid: number; kindLabel: "bound 子进程" | "按配置路径定位到的进程" }
+  | {
+      kind: "kill";
+      pid: number;
+      kindLabel: "bound 子进程" | "按配置路径定位到的进程";
+    }
   /** 在跑但不是本应用按配置路径启动的：只能用户自己关。 */
   | { kind: "foreign-running" }
   /** 本来就没在跑。 */
@@ -206,6 +217,16 @@ export function shouldClearStoppingOnStopMiss(facts: {
   return !facts.stillUp && !facts.starting;
 }
 
+/** 通用「某个时刻起的计时窗口是否仍生效」：at 为 undefined 视为无窗口。 */
+export function isWithinWindow(facts: {
+  at: number | undefined;
+  nowMs: number;
+  windowMs: number;
+}): boolean {
+  if (facts.at === undefined) return false;
+  return facts.nowMs - facts.at < facts.windowMs;
+}
+
 /** 「关闭中」窗口内的时间判据（`isComfyStopping` 的纯实现）。 */
 export function isWithinStoppingWindow(facts: {
   stoppingAt: number | undefined;
@@ -226,7 +247,10 @@ export function decideStopOutcome(probeResults: (string | null)[]): {
 } {
   const stillUp = probeResults[probeResults.length - 1] !== null;
   return stillUp
-    ? { ok: false, detail: "关闭命令已发送，但 ComfyUI 仍在响应，请手动确认进程已退出" }
+    ? {
+        ok: false,
+        detail: "关闭命令已发送，但 ComfyUI 仍在响应，请手动确认进程已退出",
+      }
     : { ok: true, detail: "ComfyUI 已关闭" };
 }
 
@@ -264,7 +288,9 @@ export const COMFY_EMBED_FLAG = "--enable-cors-header";
 export function hasEmbedClearanceFlag(args: string[]): boolean {
   return args.some((a) => {
     const lower = a.toLowerCase();
-    return lower === COMFY_EMBED_FLAG || lower.startsWith(`${COMFY_EMBED_FLAG}=`);
+    return (
+      lower === COMFY_EMBED_FLAG || lower.startsWith(`${COMFY_EMBED_FLAG}=`)
+    );
   });
 }
 
@@ -281,4 +307,133 @@ export function hasEmbedClearanceFlag(args: string[]): boolean {
 export function withEmbedClearanceFlag(args: string[]): string[] {
   if (hasEmbedClearanceFlag(args)) return [...args];
   return [...args, COMFY_EMBED_FLAG];
+}
+
+/* ── 运行状态结论（设置页状态行 / 启动按钮旁）─────────────────────────
+ *
+ * 「进程级快照 + HTTP 探测」两份事实 → 一条可渲染的结论，原本写在
+ * `lifecycle.ts` 的 `buildComfyUiStatus()` 里。抽出成纯函数是因为它有两条
+ * **只有跑起来才发现**的规则（都来自 ISSUE #442 的「状态来回跳」）：
+ *
+ *   ① 启动窗口内不落「未运行」。拉起动作与「状态行确认到运行中」之间有一段
+ *      空窗（拉起 → 端口绑定 → /system_stats 就绪），其间进程表还没看到实例、
+ *      HTTP 也没通，判定会得出「未运行」——而用户眼里 ComfyUI 正在启动，
+ *      状态行却在「启动中」和「未运行」间来回跳。
+ *   ② 「探明没在跑」的结论有黏滞期。一次成功的进程表查询「没命中」固然是
+ *      「未运行」的证据，但相邻一轮的探针抖动（查询超时、环境反查没认出
+ *      uv 起的实例）会给出更弱的证据并改口，用户看到的还是跳变。
+ */
+
+/** 运行状态结论所需的**纯事实**（生命周期状态由调用方翻成布尔后传入）。 */
+export interface ComfyStatusFacts {
+  /** 本进程发出的拉起流程正在进行（进程内单飞锁）。 */
+  starting: boolean;
+  /** 用户刚点过关闭、进程树尚未确认退出。 */
+  stopping: boolean;
+  /** 探测到的可达 base；不可达为 null。 */
+  probe: string | null;
+  /** 进程级快照（见 comfyui/status.ts）。 */
+  snap: {
+    running: boolean;
+    pid: number | null;
+    port: number | null;
+    via: string | null;
+    /** 进程表查询本身失败：本次结论不可信。 */
+    unverified: boolean;
+    /** 本次是否**真的查过**进程表（0 条候选时「没命中」不构成「未运行」证据）。 */
+    didQueryProcTable: boolean;
+  };
+  /** 是否仍在「启动流程进行中」的计时窗口内（见 COMFY_STARTING_WINDOW_MS）。 */
+  startingWindow: boolean;
+  /** 「探明没在跑」是否仍在黏滞期内（见 COMFY_NOT_RUNNING_HOLD_MS）。 */
+  notRunningHeld: boolean;
+  /** 兜底 PID（本进程握着的子进程句柄；快照里没有时用它）。 */
+  fallbackPid?: number | undefined;
+}
+
+export interface ComfyStatusVerdict {
+  up: boolean;
+  base: string | null;
+  starting: boolean;
+  stopping: boolean;
+  /** 探测仍在进行 / 事实不可信：UI 显示「检测中…」而不是先报「未运行」。 */
+  probing: boolean;
+  pid?: number | undefined;
+  port?: number | null;
+  via?: string | null;
+}
+
+/** 两份事实 → 一条状态结论（纯组装，无 IO、无全局状态）。 */
+export function deriveComfyUiStatus(
+  facts: ComfyStatusFacts,
+): ComfyStatusVerdict {
+  const { starting, stopping, probe, snap } = facts;
+  const fallbackPid = facts.fallbackPid;
+
+  // 1) HTTP 通了：能立刻用（base 用探测到的真实地址，可能带端口偏移）。
+  if (probe) {
+    return {
+      up: true,
+      base: probe,
+      starting,
+      stopping,
+      probing: false,
+      pid: snap.pid ?? fallbackPid,
+      port: snap.port ?? null,
+      via: snap.via,
+    };
+  }
+
+  // 2) 进程活着且已绑定端口：/system_stats 短暂不响应也算运行中。
+  const port = snap.port ?? null;
+  if (snap.running && port) {
+    return {
+      up: true,
+      base: `http://127.0.0.1:${port}`,
+      starting,
+      stopping,
+      probing: false,
+      pid: snap.pid ?? undefined,
+      port,
+      via: snap.via,
+    };
+  }
+
+  // 3) 进程活着但端口还没绑定：正在启动（不是「未运行」）。
+  if (snap.running) {
+    return {
+      up: false,
+      base: null,
+      starting: true,
+      stopping,
+      probing: false,
+      pid: snap.pid ?? undefined,
+      port: null,
+      via: snap.via,
+    };
+  }
+
+  /* 4) 什么都没探到。这里是「未运行」与「不敢下结论」的分界，也是 ISSUE #442
+   *    的主战场——判据从强到弱：
+   *
+   *      拉起流程正在进行（单飞锁）→ 「启动中」；
+   *      仍在启动计时窗口内        → 「启动中」；
+   *      上一轮刚探明没在跑        → 「未运行」（黏滞，不让更弱的证据改口）；
+   *      没真查过进程表 / 查过但失败 → 「检测中…」（证据不足以报故障）；
+   *      其余                      → 「未运行」。
+   */
+  const startingNow = starting || facts.startingWindow;
+  return {
+    up: false,
+    base: null,
+    starting: startingNow,
+    stopping,
+    probing:
+      !startingNow &&
+      !facts.notRunningHeld &&
+      (!snap.didQueryProcTable || snap.unverified),
+    pid: fallbackPid,
+    port: null,
+    via: null,
+  };
 }
