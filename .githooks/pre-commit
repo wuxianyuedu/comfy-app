@@ -5,32 +5,39 @@
 # 2026-09-02: npx → pnpm exec。本项目使用 pnpm 管理 node_modules，
 # npx/npm 在该环境下解析 .bin 别名链（typescript → typescript6/7）会崩溃，
 # 且 npx 可能触发与 pnpm 布局不一致的隐式安装。
-echo "[pre-commit] 1/6 文件结构硬规则"
+echo "[pre-commit] 1/7 文件结构硬规则"
 node scripts/check-file-structure.cjs || exit 1
 
-echo "[pre-commit] 2/6 React 函数式 updater 纯净性(ISSUE #141)"
+echo "[pre-commit] 2/7 React 函数式 updater 纯净性(ISSUE #141)"
 node scripts/check-react-updater-purity.cjs || exit 1
 
 # 2026-09-11(ISSUE #310 弹窗类回归): 标题行(页签栏)让位。
 # 页签搬到窗口标题行后，任何 `fixed inset-0` 的顶层浮层都会把页签和右上角
 # 窗口按钮一起盖住；首轮修复只改了全屏视图、弹窗类漏改。这条把判据机器化。
-echo "[pre-commit] 3/6 标题行让位硬规则"
+echo "[pre-commit] 3/7 标题行让位硬规则"
 node scripts/check-title-bar-clearance.cjs || exit 1
 
-echo "[pre-commit] 4/6 tsc --noEmit"
+echo "[pre-commit] 4/7 tsc --noEmit"
 pnpm exec tsc --noEmit || exit 1
 
 # 2026-09-10(ISSUE #322): 与 CI 的 .github/workflows/ci.yml 对齐为**零警告**口径。
 # 此前本地只判「无 error」，CI 判 --max-warnings 0 —— 结果是 warning 能在本地
 # 顺利进历史，直到 CI 才被拦下（复核返工）。规范 11.7 / 13.5 的门禁是零警告，
 # 本地与 CI 必须同一口径。
-echo "[pre-commit] 5/6 eslint（零警告）"
+echo "[pre-commit] 5/7 eslint（零警告）"
 pnpm exec eslint . --max-warnings 0 || exit 1
 
 # 2026-09-04: UI 与逻辑分离棘轮(规范 17)。违规数只许降不许升:
 # 新增 fetch / vanillaApi / tRPC hook 进视图层 → 阻断;
 # 治理后指标下降 → 提示执行 --update 收紧基线(不阻断,避免打断提交)。
-echo "[pre-commit] 6/6 UI/逻辑分离棘轮"
+echo "[pre-commit] 6/7 UI/逻辑分离棘轮"
 node scripts/check-ui-logic-separation.cjs || exit 1
+
+# 2026-09-12(ISSUE #408): CHANGELOG 碎片形态。
+# CHANGELOG.md 的 [Unreleased] 是「人人都改同一处」的文件,并行分支必然冲突;
+# 改为一件变更一个 changelog.d/ 碎片(见规范 13.10.5)后,这里守住碎片的
+# 文件名与段落标题口径——碎片写歪了会在发版并入时才暴露,那时已难追溯。
+echo "[pre-commit] 7/7 CHANGELOG 碎片"
+node scripts/check-changelog-fragments.cjs || exit 1
 
 echo "[pre-commit] 全部通过 ✓"

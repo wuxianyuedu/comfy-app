@@ -1,0 +1,3 @@
+## Changed
+
+- **更新日志改成「一件变更一个文件」，并行开发不会再在 `CHANGELOG.md` 上撞车（ISSUE #408）**：`CHANGELOG.md` 的 `[Unreleased]` 是全仓库唯一「人人都改、且都改同一个地方」的文件——两条并行分支（或两个 agent 同时开工）往里追加条目时必然落在同一行区间，无论谁先合都要手工解一次冲突，而这段冲突没有任何信息量（两边的内容都该保留，没有真取舍）。现在**约定条目先进 `changelog.d/<issue号>-<slug>.md`**（一件变更一个文件，首行标 `## Added` / `## Fixed` 等段落），git 层面不同文件不会冲突；发布或整理时由 `node scripts/merge-changelog-fragments.mjs` 按 Keep a Changelog 的固定段落顺序一次性并入 `[Unreleased]`（`--release <版本号>` 可顺带把 `[Unreleased]` 定版为带日期的版本段落），编辑时间从「每轮改动」压缩到「每次发版」。配套门禁 `scripts/check-changelog-fragments.cjs` 在 pre-commit 与 CI 校验碎片文件名与形态；完整细则见规范 §13.10.5 与 `changelog.d/README.md`。

@@ -88,7 +88,13 @@
     任务批次号（`T12-3`）—— 这些归 `git log`，写进注释会随代码搬迁过期失真。
     由 `scripts/check-file-structure.cjs` 的 **R10** 在 pre-commit 强制拦截，
     回归测试见 `tests/check-file-structure.test.ts`。
-12. **改动任何文件前必须完成「改动前必读文档」前置阅读**（见本文件对应章节）：
+12. **变更日志只写 `changelog.d/` 碎片，不直接改 `CHANGELOG.md`**（ISSUE #408 / 规范 §13.10.5）：
+    `CHANGELOG.md` 的 `[Unreleased]` 是全仓库唯一「人人都改同一处」的文件，并行分支必然冲突。
+    条目写 `changelog.d/<issue号>-<slug>.md`（一件变更一个文件，首行标 `## Added` / `## Fixed` 等段落），
+    由 `node scripts/merge-changelog-fragments.mjs` 在发版/整理时并入。
+    形态由 `scripts/check-changelog-fragments.cjs` 在 pre-commit 与 CI 强制拦截，
+    回归测试见 `tests/check-changelog-fragments.test.ts`。
+13. **改动任何文件前必须完成「改动前必读文档」前置阅读**（见本文件对应章节）：
     未读 `README.md` / `docs/README.md` / 本文件全文就动手 = 违规；
     命中「强制先读规范文档的改动范围」表或相关规范章节时，须读完对应章节
     并在提交/实施说明里注明遵循了哪些条目。把「先看文档再改代码」当默认动作，
