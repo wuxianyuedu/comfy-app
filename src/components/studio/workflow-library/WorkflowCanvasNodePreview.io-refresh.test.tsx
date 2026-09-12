@@ -30,6 +30,7 @@ vi.mock("@/lib/workflow-run-store", () => {
 vi.mock("../WorkflowRunLogModal", () => ({ WorkflowRunLogModal: () => null }));
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import { buildParamEntries } from "~/lib/workflow-param-mapping";
 import { WorkflowCanvasNodePreview } from "./WorkflowCanvasNodePreview";
 
 /* 预览卡片现在挂在 React Flow 画布上（ISSUE #355），React Flow 挂载时会自行
@@ -141,5 +142,77 @@ describe("WorkflowCanvasNodePreview — 默认值刷新", () => {
     );
     expect(stepsInput().value).toBe("50");
     expect(cfgInput().value).toBe("3.0");
+  });
+});
+
+
+/* ── 对外参数卡片列 + 行尾归属徽标（ISSUE #355）──
+ *
+ * 库里要看得见「对外参数」，且它与宿主卡片的表单行不重复表达同一件事：
+ *   卡片列 = 这个对外参数由哪些端口组成；
+ *   表单行尾徽标 = 这一行属于哪个对外参数。
+ * 两者都从同一份 paramMap（`source.mode:<模式>`）派生。 */
+describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
+  it("有对外参数时并排渲染只读卡片列，卡片头是参数名", () => {
+    const { container } = render(
+      <WorkflowCanvasNodePreview
+        workflowId="wf-1"
+        workflowName="测试工作流"
+        taskType="t2i"
+        workflowIO={ioWith(20, 7)}
+        paramMap={{}}
+        usable
+      />,
+    );
+    expect(container.querySelector('[data-testid="workflow-param-card-column"]')).toBeTruthy();
+  });
+
+  it("被对外参数落到的那一行，行尾标出它属于哪个对外参数", () => {
+    const { container } = render(
+      <WorkflowCanvasNodePreview
+        workflowId="wf-1"
+        workflowName="测试工作流"
+        taskType="t2i"
+        workflowIO={ioWith(20, 7)}
+        paramMap={{}}
+        usable
+      />,
+    );
+    /* steps 与 cfg 是同一个节点上的两个口 —— 按「节点 + 分类」聚合成**一个**
+     * 对外参数「步数」，自动判定落到 steps 那一行；因此有且只有那一行带徽标。 */
+    const tags = [...container.querySelectorAll('[data-testid="wflib-param-owner"]')];
+    expect(tags.map((tag) => tag.textContent)).toEqual(["步数"]);
+  });
+
+  it("作者显式断开的那一条不再标徽标", () => {
+    const stepsEntry = buildParamEntries(ioWith(20, 7)).find(
+      (entry) => entry.label === "步数",
+    )!;
+    const { container } = render(
+      <WorkflowCanvasNodePreview
+        workflowId="wf-1"
+        workflowName="测试工作流"
+        taskType="t2i"
+        workflowIO={ioWith(20, 7)}
+        paramMap={{ source: { "mode:t2i": { [stepsEntry.id]: null } } }}
+        usable
+        defaultMode="t2i"
+      />,
+    );
+    expect(container.querySelectorAll('[data-testid="wflib-param-owner"]').length).toBe(0);
+  });
+
+  it("没有对外参数时不渲染卡片列（空 IO）", () => {
+    const { container } = render(
+      <WorkflowCanvasNodePreview
+        workflowId="wf-1"
+        workflowName="测试工作流"
+        taskType="t2i"
+        workflowIO={{}}
+        paramMap={{}}
+        usable
+      />,
+    );
+    expect(container.querySelector('[data-testid="workflow-param-card-column"]')).toBeNull();
   });
 });

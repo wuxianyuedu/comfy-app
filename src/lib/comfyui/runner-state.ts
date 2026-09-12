@@ -197,6 +197,16 @@ export type RunnerState = {
 
   settled: Set<string>;
 
+  /** 「终态已落库」标记（与 `settled` 的「终态已认领」区分）。
+   *  同一个 taskId 可能被多条收口路径尝试写终态：正常 executor 路径、
+   *  看门狗超时、reaper 孤儿回收。`settled` 只保证「谁先认领」，但认领失败
+   *  的一方若直接调用 `finalizeFailure`（不走 claim）仍会二次写库，把先写入
+   *  的失败原因覆盖掉——用户就会在「执行日志」（经 SSE 拿到的第一份原因）与
+   *  「应用日志 / DB」（被后写入覆盖的第二份原因）看到互相矛盾的结果。
+   *  这里给「DB 终态写入」单独加一把一次性锁：首个写入者落库，其余直接跳过，
+   *  保证两处永远显示同一个失败原因。 */
+  finalized: Set<string>;
+
   timers: Map<string, NodeJS.Timeout>;
 
   reconnectAttempts: number;
@@ -261,6 +271,7 @@ export function state(): RunnerState {
       startedAt: new Map(),
 
       settled: new Set(),
+      finalized: new Set(),
 
       timers: new Map(),
 
@@ -504,6 +515,22 @@ export function schedulePersistLogs(taskId: string) {
 }
 
 
+
+/** 尝试认领「DB 终态写入」这一次性权利。首个调用者返回 true（应落库），
+ *  其余（含 reaper 与 executor 并发收口同一任务）返回 false（必须跳过）。
+ *  语义与 `claimSettle` 平行，但锁的是「DB 终态」而不是「收口流程」。 */
+export function claimFinalize(taskId: string): boolean {
+  const s = state();
+  if (s.finalized.has(taskId)) return false;
+  s.finalized.add(taskId);
+  return true;
+}
+
+/** 任务被重新入队（同一个 taskId 重跑）时清掉上一次的收口标记，
+ *  否则第二次执行会被这把一次性锁误判为「已落库」而静默丢失终态。 */
+export function clearFinalize(taskId: string): void {
+  state().finalized.delete(taskId);
+}
 
 export async function persistLogs(taskId: string) {
 

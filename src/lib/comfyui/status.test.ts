@@ -14,7 +14,10 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-vi.mock("../app-settings", () => ({ getSettingsSync: vi.fn() }));
+vi.mock("../app-settings", () => ({
+  COMFYUI_DEFAULT_PORT: 8188,
+  getSettingsSync: vi.fn(),
+}));
 vi.mock("./launch-path", () => ({ resolveComfyLaunchPlan: vi.fn() }));
 vi.mock("./instance-kind", () => ({ classifyComfyInstall: vi.fn() }));
 vi.mock("./proc-detect", () => ({
@@ -22,6 +25,14 @@ vi.mock("./proc-detect", () => ({
   findPidListeningPort: vi.fn(),
 }));
 vi.mock("./env-python", () => ({ collectComfyPythonCandidates: vi.fn() }));
+/* 「配置端口抢跑」用的直连探测：测试里默认「没人应答」，避免真发 HTTP。
+ * 需要它的用例（端口抢跑）自行改 mock 返回值。 */
+vi.mock("./client", () => ({
+  probeComfyAtPort: vi.fn(async () => null),
+  probeComfyBase: vi.fn(async () => null),
+  resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
+  resetComfyBase: vi.fn(),
+}));
 vi.mock("~/server/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -40,6 +51,7 @@ import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { collectComfyPythonCandidates } from "./env-python";
+import { probeComfyAtPort } from "./client";
 
 const plan = {
   cmd: "C:\\Comfy\\python_embeded\\python.exe",
@@ -65,6 +77,10 @@ beforeEach(() => {
   // 快照挂在 globalThis（HMR 单例）+ mock 调用历史都是跨用例共享的：
   // 逐用例重置，否则「未调用」类断言会被上一个用例的调用污染。
   vi.clearAllMocks();
+  /* clearAllMocks 也会清掉工厂里写的实现（返回 undefined），所以「配置端口
+   * 抢跑」的直连探测必须在清完**之后**重新钉成「没人应答」——否则
+   * resolvePortFast 会拿到 undefined，把「进程在跑」的实例当成没端口。 */
+  vi.mocked(probeComfyAtPort).mockResolvedValue(null);
   resetComfyRuntimeSnapshot();
   setBoundChildPidReader(() => null);
 });
@@ -196,6 +212,50 @@ describe("getComfyRuntimeSnapshot — 外部实例也要认出来", () => {
   });
 });
 
+describe("配置端口抢跑 — 不让 Get-NetTCPConnection 一个人占满首屏", () => {
+  it("配置端口已应答 → 不等权威端口查询返回，直接采信配置端口", async () => {
+    // 主场景：实例就在配置端口上跑。权威查询（Get-NetTCPConnection，本机
+    // ~2.5s）很慢，但配置端口毫秒级就有应答 —— 抢先给出结论，
+    // 「设置页打开要等一会」里被白等的那段就是它。
+    vi.mocked(getSettingsSync).mockReturnValue({
+      comfyuiPath: "C:\\Comfy",
+      comfyuiPort: 8188,
+    } as never);
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: 4242, failed: false });
+    vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:8188");
+    vi.mocked(findPidListeningPort).mockImplementation(
+      () => new Promise((r) => setTimeout(() => r(8188), 5000)),
+    );
+
+    const t0 = Date.now();
+    const snap = await getComfyRuntimeSnapshot({ force: true });
+    const dt = Date.now() - t0;
+
+    expect(snap.running).toBe(true);
+    expect(snap.port).toBe(8188);
+    // 没有被那个 5s 的权威查询拖住。
+    expect(dt).toBeLessThan(2000);
+  });
+
+  it("配置端口没人应答 → 仍以权威查询为准（不猜、不误报端口）", async () => {
+    vi.mocked(getSettingsSync).mockReturnValue({
+      comfyuiPath: "C:\\Comfy",
+      comfyuiPort: 8188,
+    } as never);
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: 4242, failed: false });
+    // 实例偏移到了 8190，配置端口上没人应答。
+    vi.mocked(probeComfyAtPort).mockResolvedValue(null);
+    vi.mocked(findPidListeningPort).mockResolvedValue(8190);
+
+    const snap = await getComfyRuntimeSnapshot({ force: true });
+    expect(snap.running).toBe(true);
+    expect(snap.port).toBe(8190);
+
+    vi.mocked(probeComfyAtPort).mockResolvedValue(null);
+    vi.mocked(findPidListeningPort).mockResolvedValue(null);
+  });
+});
+
 describe("快照缓存 — 便宜但不失时效", () => {
   it("TTL 内复用同一结果，不在途重复查进程表", async () => {
     // 已绑定端口的「在跑」结论才允许缓存：它不会在下一秒变成别的结论。
@@ -237,6 +297,60 @@ describe("快照缓存 — 便宜但不失时效", () => {
 
   it("「启动中」快照的 TTL 比普通 TTL 更短（不缓存）", () => {
     expect(COMFY_UNBOUND_PORT_TTL_MS).toBeLessThan(COMFY_SNAPSHOT_TTL_MS);
+  });
+});
+
+describe("候选查询并发化 — 冷启动等待不叠成 N 倍（ISSUE #339 残留延迟）", () => {
+  it("多个候选的进程表查询**同时**发出，而不是一个个排队", async () => {
+    // 命中场景：配置路径的 main.py 落空，setup 登记的启动器与环境反查都要试。
+    // 串行实现里这三个查询会排队相加（每个 PowerShell 枚举 ~2.5s，三个就是
+    // 7s+），用户看到的正是「ComfyUI 已经启动了，打开设置页还要等一会」。
+    // 这里用一个「记录并发峰值」的桩把这件事钉住：峰值必须 > 1。
+    let inFlight = 0;
+    let peak = 0;
+    vi.mocked(getSettingsSync).mockReturnValue({
+      comfyuiPath: "C:\\Comfy",
+      comfyuiPort: 0,
+    } as never);
+    vi.mocked(findPidForMainPyDetailed).mockImplementation(async (needle: string) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      // 每个查询都「慢」一拍，串行实现下峰值只能是 1。
+      await new Promise((r) => setTimeout(r, 20));
+      inFlight -= 1;
+      // 只有最后一个候选命中：前面几级都必须问过，判据链才完整。
+      return needle.includes("pythonw")
+        ? { pid: 4321, failed: false }
+        : { pid: null, failed: false };
+    });
+    vi.mocked(findPidListeningPort).mockResolvedValue(8188);
+
+    const snap = await getComfyRuntimeSnapshot({ force: true });
+    expect(snap.running).toBe(true);
+    expect(snap.pid).toBe(4321);
+    expect(peak).toBeGreaterThan(1);
+  });
+
+  it("几路同时命中时，仍按候选声明顺序取第一个（顺序语义不变）", async () => {
+    let call = 0;
+    vi.mocked(getSettingsSync).mockReturnValue({
+      comfyuiPath: "C:\\Comfy",
+      comfyuiPort: 0,
+    } as never);
+    vi.mocked(findPidForMainPyDetailed).mockImplementation(async () => {
+      call += 1;
+      // 让**后**发出的请求先返回：并发实现若按「谁先返回」取结论，
+      // 这里就会取到错误的那一个。
+      const delay = call === 1 ? 40 : 5;
+      await new Promise((r) => setTimeout(r, delay));
+      return { pid: 100 + call, failed: false };
+    });
+    vi.mocked(findPidListeningPort).mockResolvedValue(8190);
+
+    const snap = await getComfyRuntimeSnapshot({ force: true });
+    // 第一个候选是配置路径的 main.py（声明顺序里最先），必须先取它。
+    expect(snap.pid).toBe(101);
+    expect(snap.via).toBe("配置路径的实例");
   });
 });
 
