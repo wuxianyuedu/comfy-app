@@ -59,8 +59,11 @@ export function WorkflowParamCardColumn({
             hostNodeId={entry.nodeId}
             pins={entry.pins}
             width={CARD_WIDTH}
-            /* 只读消费：卡片不参与连线，端点与「恢复默认」都不渲染。 */
+            /* 只读消费：卡片不参与连线，端点与「恢复默认」都不渲染。
+             * `readOnly` 与 `canWire` 分开表达 —— 只读卡片不该写
+             * 「先选模式才能连线」（节点上模式早就选好了，ISSUE #355 复审）。 */
             canWire={false}
+            readOnly
             canReset={false}
             /* 单端口条目在行尾标出它落到宿主卡片的哪一行；多端口条目
              * 还是显示端口类型（落点跟着具体端口名走）。 */

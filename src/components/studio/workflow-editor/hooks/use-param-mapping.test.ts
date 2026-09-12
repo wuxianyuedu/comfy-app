@@ -32,126 +32,133 @@ const io: WorkflowIOMap = {
   },
 };
 
-function render(paramMap: Record<string, unknown> = {}, mode: string | null = "T2I") {
+function render(
+  paramMap: Record<string, unknown> = {},
+  mode: string | null = "T2I",
+) {
   return renderHook(() =>
-    useParamMapping({ workflowId: "wf", io, mode, paramMap })
+    useParamMapping({ workflowId: "wf", io, mode, paramMap }),
   );
 }
 
 describe("useParamMapping", () => {
-  it("对外参数按节点聚类，默认走自动映射（默认连线状态）", () => {
+  it("条目来自统一对外参数契约（按模式），默认走自动映射（默认连线状态）", () => {
     const { result } = render();
+    /* 只有契约里的口子：提示词 + 尺寸 —— 工作流内部参数（other）不再出现。 */
     expect(result.current.entries.map((entry) => entry.id).sort()).toEqual([
-      "5|other",
-      "5|size-width",
-      "9|prompt",
+      "prompt",
+      "size",
     ]);
-    expect(result.current.resolved["5|size-width"]).toBe("5::widget::width");
-    expect(result.current.resolved["9|prompt"]).toBe("9::widget::text");
-    expect(result.current.isManual("5|size-width")).toBe(false);
+    expect(result.current.resolved.size).toBe("5::widget::width");
+    expect(result.current.resolved.prompt).toBe("9::widget::text");
+    expect(result.current.isManual("size")).toBe(false);
     expect(result.current.hasManual).toBe(false);
   });
 
   it("连一条线覆盖默认连线状态，且标记为「已改过」", () => {
     const { result } = render();
-    act(() => result.current.connect("5|size-width", "5::widget::resolution"));
-    expect(result.current.resolved["5|size-width"]).toBe("5::widget::resolution");
-    expect(result.current.isManual("5|size-width")).toBe(true);
+    act(() => result.current.connect("size", "5::widget::resolution"));
+    expect(result.current.resolved.size).toBe("5::widget::resolution");
+    expect(result.current.isManual("size")).toBe(true);
     expect(result.current.hasManual).toBe(true);
   });
 
   it("单个「恢复默认」回到默认连线状态", () => {
     const { result } = render();
-    act(() => result.current.connect("5|size-width", "5::widget::resolution"));
-    act(() => result.current.resetToAuto("5|size-width"));
-    expect(result.current.resolved["5|size-width"]).toBe("5::widget::width");
-    expect(result.current.isManual("5|size-width")).toBe(false);
+    act(() => result.current.connect("size", "5::widget::resolution"));
+    act(() => result.current.resetToAuto("size"));
+    expect(result.current.resolved.size).toBe("5::widget::width");
+    expect(result.current.isManual("size")).toBe(false);
   });
 
   it("整模式的「恢复默认」清掉当前模式的全部线", () => {
     const { result } = render();
-    act(() => result.current.connect("5|size-width", "5::widget::resolution"));
-    act(() => result.current.connect("9|prompt", null));
+    act(() => result.current.connect("size", "5::widget::resolution"));
+    act(() => result.current.connect("prompt", null));
     expect(result.current.hasManual).toBe(true);
     act(() => result.current.resetAll());
     expect(result.current.hasManual).toBe(false);
-    expect(result.current.resolved["5|size-width"]).toBe("5::widget::width");
+    expect(result.current.resolved.size).toBe("5::widget::width");
     /* 显式断开的线也一起撤销，参数回到默认线，而不是一直「没连上」。 */
-    expect(result.current.resolved["9|prompt"]).toBe("9::widget::text");
+    expect(result.current.resolved.prompt).toBe("9::widget::text");
   });
 
   it("没有模式时禁止连线（canWire=false，connect 是空操作）", () => {
     const { result } = render({}, null);
     expect(result.current.canWire).toBe(false);
-    act(() => result.current.connect("5|size-width", "5::widget::resolution"));
-    expect(result.current.isManual("5|size-width")).toBe(false);
-    expect(result.current.resolved["5|size-width"]).toBe("5::widget::width");
+    act(() => result.current.connect("size", "5::widget::resolution"));
+    expect(result.current.isManual("size")).toBe(false);
+    expect(result.current.resolved.size).toBe("5::widget::width");
   });
 
   it("从已落库的 paramMap.source（mode:<模式>）恢复作者的线", () => {
     const { result } = render({
+      source: { "mode:T2I": { size: "5::widget::resolution" } },
+    });
+    expect(result.current.resolved.size).toBe("5::widget::resolution");
+    expect(result.current.isManual("size")).toBe(true);
+  });
+
+  it("改版前落库的 `<节点 id>|<分类>` 键仍读得回来（不静默退回默认）", () => {
+    const { result } = render({
       source: { "mode:T2I": { "5|size-width": "5::widget::resolution" } },
     });
-    expect(result.current.resolved["5|size-width"]).toBe("5::widget::resolution");
-    expect(result.current.isManual("5|size-width")).toBe(true);
+    expect(result.current.resolved.size).toBe("5::widget::resolution");
+    expect(result.current.isManual("size")).toBe(true);
   });
 
   it("按模式的线只在该模式下生效", () => {
-    const paramMap = { source: { "mode:T2I": { "5|size-width": "5::widget::resolution" } } };
-    const t2i = renderHook(() => useParamMapping({ workflowId: "wf", io, mode: "T2I", paramMap }));
-    const i2i = renderHook(() => useParamMapping({ workflowId: "wf", io, mode: "I2I", paramMap }));
-    expect(t2i.result.current.resolved["5|size-width"]).toBe("5::widget::resolution");
-    expect(i2i.result.current.resolved["5|size-width"]).toBe("5::widget::width");
+    const paramMap = {
+      source: { "mode:T2I": { size: "5::widget::resolution" } },
+    };
+    const t2i = renderHook(() =>
+      useParamMapping({ workflowId: "wf", io, mode: "T2I", paramMap }),
+    );
+    const i2i = renderHook(() =>
+      useParamMapping({ workflowId: "wf", io, mode: "I2I", paramMap }),
+    );
+    expect(t2i.result.current.resolved.size).toBe("5::widget::resolution");
+    expect(i2i.result.current.resolved.size).toBe("5::widget::width");
   });
 
   it("withMapping 把线写进 paramMap.source.mode:<模式>，且保留原有键", () => {
     const { result } = render({ positiveNode: "9" });
-    act(() => result.current.connect("5|size-width", "5::widget::resolution"));
+    act(() => result.current.connect("size", "5::widget::resolution"));
     const merged = result.current.withMapping({ positiveNode: "9" });
     expect(merged.positiveNode).toBe("9");
     expect(merged.source).toMatchObject({
-      "mode:T2I": { "5|size-width": "5::widget::resolution" },
+      "mode:T2I": { size: "5::widget::resolution" },
     });
   });
 
   it("显式断开写 null（运行期据此如实回报「没落值」）", () => {
     const { result } = render();
-    act(() => result.current.connect("5|size-width", null));
-    expect(result.current.resolved["5|size-width"]).toBeNull();
-    expect(result.current.isManual("5|size-width")).toBe(true);
+    act(() => result.current.connect("size", null));
+    expect(result.current.resolved.size).toBeNull();
+    expect(result.current.isManual("size")).toBe(true);
     const merged = result.current.withMapping({});
-    expect(merged.source).toMatchObject({ "mode:T2I": { "5|size-width": null } });
+    expect(merged.source).toMatchObject({ "mode:T2I": { size: null } });
   });
 });
 
 describe("validateMapping", () => {
+  const entry = (id: string, cls: "other" | "size" = "other") => ({
+    id,
+    nodeId: "5",
+    nodeTitle: "",
+    cls,
+    label: id,
+    pins: [],
+  });
+
   it("同一端口被两个对外参数占用 → 报错", () => {
     const result = validateMapping(
-      [
-        {
-          id: "a",
-          nodeId: "5",
-          nodeTitle: "",
-          cls: "other",
-          label: "A",
-          exposedName: "width",
-          type: "INT",
-          pins: [],
-        },
-        {
-          id: "b",
-          nodeId: "5",
-          nodeTitle: "",
-          cls: "other",
-          label: "B",
-          exposedName: "width",
-          type: "INT",
-          pins: [],
-        },
-      ],
+      [entry("a"), entry("b")],
       io,
-      { manualByMode: { T2I: { a: "5::widget::width", b: "5::widget::width" } } },
-      "T2I"
+      {
+        manualByMode: { T2I: { a: "5::widget::width", b: "5::widget::width" } },
+      },
+      "T2I",
     );
     expect(result.ok).toBe(false);
     expect(result.problems[0]).toContain("同时占用");
@@ -159,21 +166,10 @@ describe("validateMapping", () => {
 
   it("连到不存在的端口 → 报错", () => {
     const result = validateMapping(
-      [
-        {
-          id: "a",
-          nodeId: "5",
-          nodeTitle: "",
-          cls: "other",
-          label: "A",
-          exposedName: "width",
-          type: "INT",
-          pins: [],
-        },
-      ],
+      [entry("a")],
       io,
       { manualByMode: { T2I: { a: "5::widget::ghost" } } },
-      "T2I"
+      "T2I",
     );
     expect(result.ok).toBe(false);
     expect(result.problems[0]).toContain("不存在");
@@ -181,21 +177,10 @@ describe("validateMapping", () => {
 
   it("正常映射通过", () => {
     const result = validateMapping(
-      [
-        {
-          id: "a",
-          nodeId: "5",
-          nodeTitle: "",
-          cls: "other",
-          label: "A",
-          exposedName: "width",
-          type: "INT",
-          pins: [],
-        },
-      ],
+      [entry("a")],
       io,
       { manualByMode: { T2I: { a: "5::widget::width" } } },
-      "T2I"
+      "T2I",
     );
     expect(result).toEqual({ ok: true, problems: [] });
   });

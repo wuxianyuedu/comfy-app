@@ -180,6 +180,7 @@
 |------|---------------------|
 | 双击 `tools/start/run-local.ps1` 提示「找不到 node」 | Node.js 没装或装完没重启电脑，先完成 4.1 |
 | 双击 `tools/start/run-local.ps1` 报 `pnpm` 相关错误 | 可先手动重装依赖：在项目根打开终端执行 `pnpm install` 再双击启动 |
+| 应用一直开着、期间拉到新代码，打开某功能变成白屏 / 点了没反应（控制台报 `xxx is not a function`） | 「界面比代码旧」：已打开的界面不会因代码变化重建自己。**按 `Ctrl+R` 重载一次即恢复**；仍不行就关掉应用重新双击启动入口。详见 [`guide-stale-code.md`](guide-stale-code.md) |
 | 团队更新了代码后启动报错 / 拉取更新后怎么同步环境 | 见 [`guides/sync-after-pull.md`](guides/sync-after-pull.md)：先关掉运行中的窗口，重双击 `tools/start/run-local.ps1`；报 pnpm 相关错误则删 `node_modules` 后重双击 |
 | 启动时提示「pnpm 版本不匹配 / pnpm 有更新」 | 启动器会自动检测并在必要时用 corepack 对齐，**通常无需手动操作**；若自动对齐失败，窗口/日志会给出提示，手动执行一次 `corepack enable && corepack prepare pnpm@11.25.0 --activate`（版本号以提示为准）即可 |
 | 双击 `tools/start/start-web.ps1` 报「数据库/表不存在」 | 首次会自动建库；如仍异常，先双击 `tools/start/run-local.ps1` 补齐依赖与 `.env` 后重试 |

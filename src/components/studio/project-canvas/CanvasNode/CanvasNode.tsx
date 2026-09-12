@@ -27,6 +27,7 @@ import { useFileUpload } from "./hooks/use-file-upload";
 import { useWorkflowIo } from "./hooks/use-workflow-io";
 import { useGenerate } from "./hooks/use-generate";
 import { ErrorPanel } from "./ErrorPanel";
+import { resolveWorkflowMode } from "@/lib/workflow-types";
 
 export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
   const d = data as CanvasNodeData;
@@ -87,12 +88,21 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
   });
 
   /* Task-run logic: mount-time reconcile + runGenerate + error-panel retry. */
+  /* 运行期与编辑器取同一个生效模式：`defaultMode → modes[0] → taskType`。
+   * 运行期表单按这个模式解析默认值与落点，落库的键也是 `source.mode:<模式>`。 */
+  const wfMode = resolveWorkflowMode({
+    modes: wfModes?.modes,
+    defaultMode: wfModes?.defaultMode,
+    taskType: d.workflowTaskType ?? null,
+  });
+
   const { runGenerate, retryGenerate } = useGenerate({
     id,
     d,
     patch,
     wfIO,
     wfParamMap,
+    wfMode,
     setNodes,
     setEdges,
     getNode,

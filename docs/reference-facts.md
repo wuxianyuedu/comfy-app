@@ -100,7 +100,8 @@
 > （「全量」由 §3.1 的校验范围守卫机器判定：新增规范文档未登记即报错，不再靠人记得）：
 >
 > - **启动链路类**：`docs/standards/launch-and-build.md`、`docs/startup-hotreload.md`、
->   `docs/guide-non-developer.md`
+>   `docs/guide-non-developer.md`、`docs/guide-stale-code.md`（与
+>   `guide-non-developer.md` 同组：应用内「页面跑着旧代码」的处置指南）
 > - **含值类引用的文档**：`docs/standards/Comfy-APP-T3-项目开发规范.md`、
 >   `docs/standards/16-shadcn-ui与表单校验.md`、`docs/workshop-mcp.md`
 >   （MCP HTTP 端口经 `onlyDocs` 仅在 workshop-mcp 校验；ComfyUI 端口经 `onlyDocs` +
@@ -111,6 +112,10 @@
 >
 > **不纳入**：`docs/audits/`（过程文件）、`docs/api/`（TypeDoc 自动生成）、
 > `docs/superpowers/`（设计归档）、`docs/generated/`（本体系自动生成产物）。
+> `docs/glossary.md`（术语表）位于 `docs/` 根、不在 `SCOPED_DOC_DIRS` 内：它由**术语 →
+> 所指 → 代码落点**的对照表构成，路径以可读的代码落点写法出现（非「存在性引用」），
+> 纳入裸值/路径扫描会因表格里的示例标识符误报；如需把其中某个具体路径升级为存在性核对，
+> 按第 4 节补登为 `path` 类 FACTS 即可。
 > 规范目录（`docs/standards/`、`docs/guides/`）里**不纳入**的只有两条，且都在
 > 脚本的豁免名单里**显式声明并附理由**：`docs/standards/README.md`（文档集索引，
 > 只有导航与章节映射）、`docs/guides/reviews/2026-08-30-canvasnode-review.md`

@@ -121,3 +121,16 @@ dev server HMR 自动生效，无需打扰；但上表第 2 列那批「**改完
   `src/components/update-check/UpdateCheckProvider.tsx`（根布局挂一次）。
 - 递归扫描 `src-tauri` 时跳过 `target` / `node_modules` / `.next`，重编壳产生的产物
   不会误触发。
+
+### 6.1 与「界面比代码旧」的分工（别混成一条）
+
+上面的检测只覆盖**改完当前窗口不生效、需要重启**的那批文件。`src/` 下的前端源码
+不在其中——它由 HMR 处理。但 HMR 有一条边界：**已经打开的界面不会因为代码变了就
+重建自己**，于是「应用长开 + 期间拉到新代码」时，页面里仍可能是旧代码造出来的
+对象，用到新加的能力就会报 `xxx is not a function`（严重时整块画布白屏）。
+
+这件事由另一条链路观测与提示（构建标识轮询 + 应用内通知），**不要**并入本节的检测：
+把 `src/` 加进来会让它开始对每次前端改动都报「需重启」，而绝大多数改动根本不需要。
+机制与判据见
+[`standards/launch-and-build.md` §4.3](standards/launch-and-build.md#43-陈旧实例运行图落后于源码时的可观测性issue-389)，
+用户侧处置见 [`guide-stale-code.md`](guide-stale-code.md)。

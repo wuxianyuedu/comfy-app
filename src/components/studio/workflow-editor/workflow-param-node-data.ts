@@ -23,6 +23,8 @@ export interface WorkflowParamNodeData extends Record<string, unknown> {
   width: number;
   /** 当前模式是否允许连线（无模式 → 不渲染端点）。 */
   canWire: boolean;
+  /** 确实没有模式可归属时的说明（有模式时为 false，卡片不写任何警告）。 */
+  noModeHint: boolean;
   /** 当前模式下是否画过线（决定「恢复默认」是否可用）。 */
   canReset: boolean;
   /** 「恢复默认」：撤销该对外参数在当前模式下的线。 */

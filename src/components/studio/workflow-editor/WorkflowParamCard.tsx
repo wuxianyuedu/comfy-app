@@ -28,8 +28,17 @@ export interface WorkflowParamCardProps {
   hostNodeId: string;
   pins: ParamEntry["pins"];
   width: number;
-  /** 是否允许连线：false 时卡片置灰、给出「先选模式才能连线」提示。 */
+  /** 是否允许连线：false 时卡片置灰。
+   *
+   *  注意与 `readOnly` 的区别：`canWire=false` 表达「这张卡当前不可编辑」
+   *  （如库内只读消费），**不等于**「因为没有模式所以不能连线」——后者由
+   *  `noModeHint` 单独表达。只读卡片上不写「先选模式才能连线」，否则会出现
+   *  「节点上明明已经选了单图生视频，卡片却说需要选模式」这种自相矛盾的提示。 */
   canWire: boolean;
+  /** 只读消费（库内卡片列）：不渲染任何编辑提示。 */
+  readOnly?: boolean;
+  /** 确实没有模式可归属时给出说明（只读卡片不显示）。 */
+  noModeHint?: boolean;
   /** 「恢复默认」是否可用。只读消费处不传回调（按钮根本不渲染）。 */
   canReset: boolean;
   onReset?: () => void;
@@ -48,13 +57,15 @@ export function WorkflowParamCard({
   pins,
   width,
   canWire,
+  readOnly = false,
+  noModeHint = false,
   canReset,
   onReset,
   endpoint,
   rowTrailing,
 }: WorkflowParamCardProps) {
   const style = paramClassStyle(cls);
-  const disabled = !canWire;
+  const disabled = !canWire || readOnly;
 
   return (
     <div
@@ -131,9 +142,9 @@ export function WorkflowParamCard({
         ))}
       </div>
 
-      {disabled && (
+      {!readOnly && noModeHint && (
         <div className="px-2 pb-1.5 text-[9.5px] leading-relaxed text-amber-500/80">
-          先选模式才能连线
+          该工作流未声明模式，落点暂不可编辑
         </div>
       )}
 

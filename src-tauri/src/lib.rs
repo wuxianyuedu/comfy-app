@@ -662,6 +662,43 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
   Ok(())
 }
 
+/// 启动页窗口的兜底尺寸，与 tauri.conf.json 的 splash 窗口几何保持一致
+/// （配置是编译期内嵌的静态值，这里只在「屏幕装不下」时需要再收一次）。
+const SPLASH_WINDOW_SIZE: (f64, f64) = (1680.0, 1000.0);
+
+/// 启动页窗口尺寸：优先用配置值，但**不得超过当前显示器可用区域**。
+///
+/// 为什么需要这一步：启动页的日志面板是「一行一条日志」的不折行布局
+/// （`white-space: pre` + 横向滚动），窗口越宽越能一次读全一行——因此窗口
+/// 尺寸给得比内容卡片大得多。但固定值在小屏（1366×768 笔记本、
+/// 1920×1080 开了 150% 缩放）上会超出屏幕：窗口被系统推到屏幕外，用户看到
+/// 的是「启动页缺了一角」。这里按显示器取一次上限（宽高各留 48px 边距，
+/// 与页面自身的 `100vw - 48px` 约束同口径），窗口尺寸于是「大屏大、
+/// 小屏不越界」，尺寸不够时由页面内的 `min(..., 100vw - 48px)` 继续收。
+fn splash_window_size(app: &tauri::AppHandle) -> (f64, f64) {
+  let (mut width, mut height) = SPLASH_WINDOW_SIZE;
+  let Ok(Some(monitor)) = app.primary_monitor() else {
+    log::warn!("[ComfyAPP] primary monitor unavailable, keeping default splash size");
+    return (width, height);
+  };
+  let scale = monitor.scale_factor();
+  let available = monitor.size().to_logical::<f64>(scale);
+  let max_width = (available.width - 48.0).max(640.0);
+  let max_height = (available.height - 48.0).max(480.0);
+  if width > max_width || height > max_height {
+    log::info!(
+      "[ComfyAPP] splash window clamped to monitor: {:.0}x{:.0} (available {:.0}x{:.0})",
+      width.min(max_width),
+      height.min(max_height),
+      available.width,
+      available.height
+    );
+  }
+  width = width.min(max_width);
+  height = height.min(max_height);
+  (width, height)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let project_root = resolve_project_root();
@@ -710,6 +747,14 @@ pub fn run() {
       // 由启动页探测后端就绪后调用 navigate_to_app 导航到应用 URL；main 页面真正
       // 加载完成（on_page_load Finished）时再交换窗口：显示 main、关闭 splash。
       // 这样启动页会一直显示到应用首屏真正可见，不再出现「启动完成却还要等很久」。
+      // 启动页窗口尺寸按当前显示器收一次（见 splash_window_size）：配置值给得宽，
+      // 为的是让日志面板的单行日志尽量不被折成两截；屏幕装不下时再收回来。
+      if let Some(splash) = app.get_webview_window("splash") {
+        let (width, height) = splash_window_size(app.handle());
+        let _ = splash.set_size(tauri::LogicalSize::new(width, height));
+        let _ = splash.center();
+      }
+
       let main_url: tauri::Url = "about:blank"
         .parse()
         .unwrap_or_else(|_| tauri::Url::parse(&default_dev_url("127.0.0.1")).unwrap());

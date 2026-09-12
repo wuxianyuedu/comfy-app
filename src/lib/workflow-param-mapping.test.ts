@@ -76,6 +76,64 @@ describe("buildParamEntries", () => {
   });
 });
 
+describe("buildParamEntries — 统一对外参数契约（按模式）", () => {
+  const io: WorkflowIOMap = {
+    "5::widget::width": pin("5", "width", { type: "INT", defaultValue: 512 }),
+    "5::widget::height": pin("5", "height", { type: "INT", defaultValue: 512 }),
+    "5::widget::steps": pin("5", "steps", { type: "INT", defaultValue: 20 }),
+    "9::widget::text": pin("9", "text", {
+      defaultValue: "a very long positive prompt used by the workflow author",
+    }),
+  };
+
+  it("条目只来自契约：工作流内部参数（步数 / CFG…）不再是「对外参数」", () => {
+    const ids = buildParamEntries(io, undefined, { mode: "T2I" }).map((entry) => entry.id);
+    expect(ids).toEqual(["prompt", "size"]);
+  });
+
+  it("「尺寸」是一个口子：宽 / 高 / 宽高比 / 像素量都算它的候选落点", () => {
+    const size = buildParamEntries(io, undefined, { mode: "T2I" }).find(
+      (entry) => entry.id === "size",
+    )!;
+    expect(size.pins.map((item) => item.name)).toEqual(["width", "height"]);
+  });
+
+  it("按模式给口子：单图生视频多一个首帧，文生图没有", () => {
+    const videoIO: WorkflowIOMap = {
+      ...io,
+      "11::widget::image": pin("11", "first_frame", { type: "IMAGE" }),
+    };
+    expect(
+      buildParamEntries(videoIO, undefined, { mode: "I2V" }).map((entry) => entry.id),
+    ).toEqual(["prompt", "first-frame", "size"]);
+    expect(
+      buildParamEntries(videoIO, undefined, { mode: "T2I" }).map((entry) => entry.id),
+    ).toEqual(["prompt", "size"]);
+  });
+
+  it("契约里没有对应端口的口子不出现（工作流一个可落点端口都没有时）", () => {
+    const internalOnly: WorkflowIOMap = {
+      "5::widget::steps": pin("5", "steps", { type: "INT", defaultValue: 20 }),
+    };
+    expect(buildParamEntries(internalOnly, undefined, { mode: "T2I" })).toEqual([]);
+  });
+
+  it("卡片名是契约里的统一名，不跟着工作流端口名走", () => {
+    const renamed: WorkflowIOMap = {
+      "9::widget::text": pin("9", "text", { label: "画面描述" }),
+    };
+    const prompt = buildParamEntries(renamed, undefined, { mode: "T2I" }).find(
+      (entry) => entry.id === "prompt",
+    )!;
+    expect(prompt.label).toBe("提示词");
+  });
+
+  it("不传 mode 时保持旧的「按节点 + 分类」聚类", () => {
+    const ids = buildParamEntries(io).map((entry) => entry.id).sort();
+    expect(ids).toEqual(["5|other", "5|size-height", "5|size-width", "9|prompt"]);
+  });
+});
+
 describe("autoMapEntries", () => {
   it("默认连线：命中的分类优先，未命中退回该节点第一个有默认值的标量口", () => {
     const io: WorkflowIOMap = {
@@ -285,6 +343,41 @@ describe("applyParamMapping — 运行期落值", () => {
       mode: "T2I",
     });
     expect(inputs.find((item) => item.name === "width")?.value).toBe(1024);
+  });
+
+  it("契约条目：值可以按契约 id（工坊侧）或 ioKey（运行期表单）给", () => {
+    const entries = buildParamEntries(io, undefined, { mode: "T2I" });
+    /* 工坊侧按契约 id 给。 */
+    const byContract = applyParamMapping({
+      io,
+      entries,
+      mapping: null,
+      values: { size: 1024 },
+      mode: "T2I",
+    });
+    expect(byContract.inputs.find((item) => item.name === "width")?.value).toBe(1024);
+    /* 运行期表单按 ioKey 给（DynamicWorkflowForm 的行键就是 ioKey）。 */
+    const byPinKey = applyParamMapping({
+      io,
+      entries,
+      mapping: null,
+      values: { "5::widget::width": 768 },
+      mode: "T2I",
+    });
+    expect(byPinKey.inputs.find((item) => item.name === "width")?.value).toBe(768);
+  });
+
+  it("契约条目：改版前落库的 `<节点 id>|<分类>` 键仍算作者的线", () => {
+    const entries = buildParamEntries(io, undefined, { mode: "T2I" });
+    const { inputs } = applyParamMapping({
+      io,
+      entries,
+      mapping: { manualByMode: { T2I: { "5|size-width": null } } },
+      values: { "5::widget::width": 1024 },
+      mode: "T2I",
+    });
+    /* 作者当年把「尺寸」显式断开了 → 用户值不落任何端口（不凭空兜底）。 */
+    expect(inputs.find((item) => item.name === "width")?.value).not.toBe(1024);
   });
 
   it("与旧行为对齐：全默认连线状态下的默认值兜底 =「每个暴露 pin 都下发」", () => {

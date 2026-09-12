@@ -16,6 +16,7 @@ import {
 import { CanvasGrid, ZoomIndicator, CanvasRulers } from "../WorkflowCanvasDecorations";
 import {
   CanvasSettingsButton,
+  CanvasRecenterButton,
   isCustomCanvasSettings,
   type CanvasSettings,
 } from "../canvas/WorkflowCanvasSettings";
@@ -76,6 +77,8 @@ export interface WorkflowEditorCanvasProps {
   canvasSettingsHydrated: boolean;
   onMiniMapJump: (event: React.MouseEvent, position: { x: number; y: number }) => void;
   onOpenSettings: () => void;
+  /** 「重新居中」：把视口移回有节点的位置（纯视口动作，不改节点布局）。 */
+  onRecenter: () => void;
   /** Lazily activates deletable/reconnectable for a clicked edge (see
    *  defaultEdgeOptions below). */
   onEdgeClick?: (event: React.MouseEvent, edge: Edge) => void;
@@ -97,6 +100,7 @@ export function WorkflowEditorCanvas({
   canvasSettingsHydrated,
   onMiniMapJump,
   onOpenSettings,
+  onRecenter,
   onEdgeClick,
   onConnect,
   isValidConnection,
@@ -167,7 +171,7 @@ export function WorkflowEditorCanvas({
        *  browser paint off-screen DOM every frame.  With viewport culling
        *  the DOM stays proportional to what's visible, and drag/pan/zoom
        *  costs drop to a small constant.
-       *  NOTE: the parent still drives the initial fitToMiddle() viewport
+       *  NOTE: the parent still drives the initial fitToContent() viewport
        *  (min zoom floor 0.35) — culling uses each node's measured size
        *  after first paint, so the initial fit is unaffected. */
       onlyRenderVisibleElements
@@ -224,6 +228,7 @@ export function WorkflowEditorCanvas({
         hasOverrides={canvasSettingsHydrated && isCustomCanvasSettings(canvasSettings)}
         onClick={onOpenSettings}
       />
+      <CanvasRecenterButton onClick={onRecenter} />
       {/* Controls / MiniMap 的配色由 globals.css 的 `.react-flow__controls*`
           / `.react-flow__minimap*` token 规则统一负责（画布与项目画布共用），
           组件侧不再叠加写死的暗色覆盖类。 */}
