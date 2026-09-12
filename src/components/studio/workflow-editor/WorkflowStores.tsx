@@ -35,7 +35,7 @@ import type {
   NodeJsonViewerContextValue,
 } from "../workflow-types";
 import type { WorkflowIOModeOverride } from "~/lib/workflow-io-types";
-import { isStaleExposedAlias, type ExposedAliasBase } from "./io-exposure";
+import { HOMONYM_LABEL_SUFFIX, isMachineName, type ExposedAliasBase } from "./io-exposure";
 import { rectToAnchor } from "../workflow-utils";
 import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
 import { patchWorkflowSilently } from "@/lib/workflow-mutations";
@@ -55,16 +55,14 @@ export interface IOEditState {
   ioEditMode: boolean;
   workflowIO: Record<string, WorkflowIOParam>;
   ioPreviewOpen: boolean;
-  /** 服务端富化下发的别名判定基准（ioKey → 原始槽位名 + 本层作者名）。
+  /** 富化下发的「真实 pin 名 / 作者名」事实源（ioKey → 该 pin 现在的事实）。
    *
-   *  只有它才能判定「本地存的名字是不是一串机器生成的槽位名」——判定基准必须
-   *  来自富化（服务端 / 视图派生的同一份事实源），不能从本地条目推。没有它时
-   *  `name` 会在加载时被解析好的名字覆盖，任何写入都会把旧名字固化回库
-   *  （ISSUE #349 的复现路径）。空表 = 富化还没到，此时不做清理。
-   *
-   *  基准不只有槽位名：同名条目（本地 label 恰好等于槽位名本身）只靠名字比对
-   *  永远判不出来，还得知道「本层槽位有没有另一个作者业务名」——
-   *  见 `ExposedAliasBase` 与 `isStaleExposedAlias`。 */
+   *  用它判定本地条目里存的名字是不是一串机器生成的 pin 名 —— 判定要有
+   *  参照物（真实 pin 名 + 富化名 + 本层作者名），而这个参照物只能来自富化：
+   *  本地条目的 `name` 在加载时已被解析成显示名，拿它自己比等于没比。
+   *  它**不是**「我们写过脏值的键表」：写入前靠它实时判定，所以取消勾选再
+   *  勾选、或上一次会话留下的脏值，都会被同一套判据挡下（ISSUE #349）。
+   *  空表 = 富化还没到，此时不做清理（宁可留旧值也不误删作者命名）。 */
   aliasBaseByKey: Record<string, ExposedAliasBase>;
 }
 export interface IOEditActions {
@@ -95,6 +93,19 @@ export interface IOEditActions {
    *  返回清理后的 workflowIO 映射；没有任何覆盖命中时返回 null，调用方
    *  据此决定是否需要把清理结果落库。 */
   purgeModeOverrides: (codes: string[]) => Record<string, WorkflowIOParam> | null;
+  /** 就地摘掉「label 明显是机器 pin 名」的条目上的 label（ISSUE #349）。
+   *
+   *  与写入路径同一条判据，只是发生在富化到达之后的本地态上：本地 store 里
+   *  躺的是回读时那份带脏 label 的条目，任何一次整体写回都会把它当作者命名
+   *  固化回库，显示名随即退回 `value_1`。取消勾选再勾选、下钻再回来这类
+   *  「重新加载」路径同样会复活它，因此判定必须在数据上实时做，而不是靠
+   *  「记得哪个键写过脏值」。
+   *
+   *  `isMachine` 由调用方注入（它持有富化事实源），返回 true 的条目会被摘掉
+   *  label、回到「未重命名」语义；没有任何命中时不产生新状态引用。 */
+  purgeMachineNames: (
+    isMachine: (key: string, entry: WorkflowIOParam) => boolean
+  ) => void;
 }
 export type IOEditStore = IOEditState & IOEditActions;
 
@@ -134,6 +145,19 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           delete next[key];
           return { workflowIO: next };
         }
+        /* 落库前先把「机器名」挡掉（ISSUE #349）。
+         *
+         * 勾选那一刻画布透传的是显示名，而修复前某些路径透传的就是原始 pin 名
+         * （封装节点别名 `value_1`、普通节点 pin 名 `image`）。它一旦进了
+         * `label` 就是条「作者命名」，显示层让位也只能让到下一次写入为止。
+         * 这里在入口处判一次：明显是机器名就**不写 label**，条目回到「未命名」
+         * 语义，显示名继续由富化链提供；取消勾选后再勾选也不会复活。 */
+        const aliases = state.aliasBaseByKey[key];
+        const machineName = isMachineName(ref.label, {
+          name: ref.name,
+          enrichedLabel: aliases?.enrichedLabel,
+          ...(aliases?.slotLabel ? { slotLabel: aliases.slotLabel } : {}),
+        });
         return {
           workflowIO: {
             ...state.workflowIO,
@@ -142,7 +166,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
               kind: ref.kind,
               nodeId: ref.nodeId,
               name: ref.name,
-              label: ref.label,
+              ...(ref.label && !machineName ? { label: ref.label } : {}),
               /* 下钻到子图内部勾选时，画布把「从哪一层钻进来」的宿主节点 id 一并
                * 带上：内部节点 id（`1670`）在顶层画布上不存在，运行期 comfy-cli
                * 展开后的 id 是 `4:1670`，两个 id 都存下来才能确定性还原。 */
@@ -158,10 +182,22 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         const next = label.trim();
         const cur = state.workflowIO[key];
         if (!cur) return {};
-        if (!next)
-          return { workflowIO: { ...state.workflowIO, [key]: { ...cur, label: undefined } } };
-        if (next === cur.label) return {};
-        return { workflowIO: { ...state.workflowIO, [key]: { ...cur, label: next } } };
+        /* 清空 = 恢复默认（取消这条参数的重命名）。 */
+        if (!next) return { workflowIO: { ...state.workflowIO, [key]: { ...cur, label: undefined } } };
+        /* 手写的名字恰好与机器 pin 名逐字相同时加后缀保留。
+         *
+         * 这类名字（`LoadImage.image`、`seed`）是最容易被认成机器名的形态，
+         * 直接写下去会被后续显示 / 写入判定当成脏值清掉 —— 作者看到的是
+         * 「改了也不行」。加一个后缀就与机器名区分开了，作者的名字被保住
+         * （ISSUE #349：改名的入口必须真的改得动）。 */
+        const aliases = state.aliasBaseByKey[key];
+        const pinName = cur.name;
+        const sameAsMachine =
+          next === pinName ||
+          (aliases?.name !== undefined && next === aliases.name);
+        const kept = sameAsMachine ? `${next}${HOMONYM_LABEL_SUFFIX}` : next;
+        if (kept === cur.label) return {};
+        return { workflowIO: { ...state.workflowIO, [key]: { ...cur, label: kept } } };
       }),
 
     toggleIORequired: (key) =>
@@ -194,15 +230,16 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         /* 判据需要的不只是槽位名：同名条目（本地 label 就是槽位名本身）要问
          *  「富化链现在给这个名字的显示名是什么」——富化名与别名不同就说明本层
          *  确实有作者命名，本地那串该让位；`slotLabel` 是富化名也停在别名时的
-         *  第二判据。缺任一项时 isStaleExposedAlias 只按手头的信息判，不会乱清。 */
+         *  第二判据。缺任一项时只按手头的信息判，不对就一律不动。 */
         const staleAlias =
           cur.label !== undefined &&
-          isStaleExposedAlias(
-            cur.label,
-            aliases?.name,
-            aliases?.enrichedLabel,
-            aliases?.slotLabel
-          );
+          isMachineName(cur.label, {
+            name: cur.name,
+            ...(aliases?.enrichedLabel !== undefined
+              ? { enrichedLabel: aliases.enrichedLabel }
+              : {}),
+            ...(aliases?.slotLabel !== undefined ? { slotLabel: aliases.slotLabel } : {}),
+          });
         const modes: Record<string, WorkflowIOModeOverride> = { ...(cur.modes ?? {}) };
         if (patch === null) {
           if (!(mode in modes)) return {};
@@ -219,6 +256,22 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
             [key]: staleAlias ? { ...nextEntry, label: undefined } : nextEntry,
           },
         };
+      }),
+
+    purgeMachineNames: (isMachine) =>
+      set((state) => {
+        let changed = false;
+        const next: Record<string, WorkflowIOParam> = {};
+        for (const [key, entry] of Object.entries(state.workflowIO)) {
+          const label = entry?.label;
+          if (!entry || label === undefined || !isMachine(key, entry)) {
+            next[key] = entry;
+            continue;
+          }
+          next[key] = { ...entry, label: undefined };
+          changed = true;
+        }
+        return changed ? { workflowIO: next } : {};
       }),
 
     purgeModeOverrides: (codes) => {

@@ -182,6 +182,16 @@ export interface WorkflowIOParam {
    *  `nodeId` 是子图内部节点 id（`1670`），运行期 comfy-cli 展开后是 `4:1670`
    *  （宿主 id + 内部 id），两个 id 都存下来才能在运行期确定性还原。 */
   hostNodeId?: string;
+  /** 本层槽位上作者写的业务名（服务端富化下发，与槽位名不同才有值）。
+   *
+   *  只用作**别名判定的事实源**，不参与显示：本地 label 是不是一串机器生成
+   *  的槽位名，要看它和真实 pin 名、富化名、本层作者名是否互相指向同一个名字。
+   *  缺了这份事实，本地存着的那串机器名就会被当成作者命名，任何一次写入都把
+   *  它固化回库（ISSUE #349）。 */
+  slotLabel?: string;
+  /** 富化链现在给这个条目的显示名（`label → localized → name` 之外，还含子图
+   *  内部字段业务名）。同 `slotLabel`，只作别名判定的事实源。 */
+  enrichedLabel?: string;
 }
 
 /** A single parameter reference used to toggle IO exposure. */
