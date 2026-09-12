@@ -21,7 +21,7 @@ import { RgthreeFastGroupsBypasserBody, RgthreePowerLoraLoaderBody, RgthreeLabel
 import { FrostLayer } from "./NodeFrost";
 import { WorkflowImagePreview } from "../WorkflowImagePreview";
 import { useIOEditContext } from "./IOEditContext";
-import { HOVER_ATTRIBUTE, useHoverElevation } from "../workflow-editor/HoverElevation";
+import { useHoverElevation } from "../workflow-editor/HoverElevation";
 import { useFlowNodeEntries } from "./workflow-node-entries";
 import { computeNodePalette } from "./workflow-node-palette";
 import { FlowNodeHeader } from "./FlowNodeHeader";
@@ -63,7 +63,7 @@ export const FlowNode = React.memo(function FlowNode({
 
   /* 悬浮置顶：鼠标指着的节点压住连线（ISSUE #400）。
    *  状态是本节点自己的 —— 鼠标进出只重渲染被指的这一个节点。 */
-  const { hovered, hoverHandlers } = useHoverElevation();
+  const { hoverHandlers, hoverRef } = useHoverElevation();
 
   /* Input/output row bucketing + palette live in sibling modules so the
    *  renderer below only orchestrates layout. */
@@ -96,7 +96,7 @@ export const FlowNode = React.memo(function FlowNode({
   return (
     <div
       className="relative flex flex-col rounded-lg border shadow-[0_4px_20px_rgba(0,0,0,0.55)]"
-      {...{ [HOVER_ATTRIBUTE]: hovered ? "true" : undefined }}
+      ref={hoverRef}
       data-node-id={data.nodeId}
       {...hoverHandlers}
       style={{
