@@ -555,7 +555,10 @@ export function LogPanel() {
    *
    * 其余页（历史页）本来就与「最新」无关，继续用固定窗口。 */
   const anchored = useMemo(
-    () => (safePage === 1 ? selectFirstPageWindow(filteredLogs, anchorId, pageSize) : null),
+    () =>
+      safePage === 1
+        ? selectFirstPageWindow(filteredLogs, anchorId, pageSize)
+        : null,
     [safePage, filteredLogs, anchorId, pageSize],
   );
   const visibleLogs = anchored ? anchored.entries : rawPageLogs;
@@ -683,10 +686,20 @@ export function LogPanel() {
         className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-6xl"} flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60`}
       >
         {/* Header */}
-        <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/8 bg-white/2 px-4">
-          <div className="flex items-center gap-2">
-            <FileText size={16} className="text-violet-400" />
-            <span className="text-[15px] font-semibold text-gray-100">
+        {/* 行头：宽窗口下是一行（标题 / 筛选器 / 空白 / 搜索 / 来源 / 操作），
+            窄窗口下筛选器整组**折到第二行**（见筛选器容器的 `min-w`），
+            因此行高用 `min-h`、允许内容把它撑高，而不是钉死一个固定高度。
+
+            为什么必须能折行：筛选器五个按钮加标题、搜索、来源下拉、六个操作按钮
+            的总宽在 700px 上下就超过可用宽度；此前只有「一起硬挤」一条路，挤到
+            最后标题换行、搜索框缩成图标、筛选器只剩下一列竖字。折行是这类
+            「控件数量固定、宽度不定」行头的标准解法。 */}
+        <div className="flex min-h-14 shrink-0 flex-wrap items-center gap-y-1.5 border-b border-white/8 bg-white/2 px-4 py-2">
+          <div className="flex shrink-0 items-center gap-2">
+            <FileText size={16} className="shrink-0 text-violet-400" />
+            {/* 标题不可换行：换行会把行头撑高、把下面的筛选器挤成竖排单字
+                （窄窗口下实测就是这样）。宽度不够时宁可让别的元素让它。 */}
+            <span className="text-[15px] font-semibold whitespace-nowrap text-gray-100">
               应用日志
             </span>
             {/* 不再在这里复述「来源 · 条数 · 警告 · 错误」：同一组数字已经在右边
@@ -715,24 +728,38 @@ export function LogPanel() {
           </div>
 
           {/* Level filters：数字是**当前来源**下的计数，与右边来源下拉同口径。
-              标签与数字**分行**（标签在上、数字在下）——并排时中文单字标签与
-              四位数字会各占一份宽度，横向挤到头行放不下，标题行的剩余空间本该
-              留给自己，而不是留给筛选器（用户反馈：太挤，汉字要竖直才排得下）。 */}
-          <div className="ml-2 flex shrink-0 items-center gap-0.5">
+              标签与数字**同行**（标签在左、计数在右）——这是本轮之前被否掉的一种
+              排法，当时的问题是它**各占一份固有宽度**、不和别人分享空间：行头一挤
+              就先把筛选器压到 32px、汉字只剩竖排的余地。
+              现在筛选器整组 `flex-1`：它自己就是那块弹性空间，宽度随行头伸缩，
+              每个按钮等分并在有富余时一起变宽（用户诉求：「全部/警告/错误这些挤
+              在一起，可以占用大些空间」；「顶部还有较大空白区域」指的就是它们与
+              搜索框之间那块被 `flex-1` 空白吸走的地方）。 */}
+          {/* 这个容器同时承担两件事：
+              1. **它自己就是那块弹性空间**——不再另设无名空白，五个按钮等分富余
+                 宽度（用户诉求：「全部/警告/错误这些挤在一起，可以占用大些空间」）；
+                 右侧的搜索 / 来源下拉 / 操作按钮也因此被顶到最右，不必再靠一个
+                 单独的 `flex-1` 空白——多一个 `flex-1` 只会和它平分富余宽度，
+                 于是「空白又回来了」。
+              2. **`min-w-56` 是折行与否的判据**：可用宽度不足 224px 时它整组落到
+                 第二行（`flex-wrap` 的换行单位就是这个容器）并吃掉整行宽度。
+                 比「每个按钮各自 min-w 后硬挤」好在：无论多窄，标签都保持可读，
+                 不会退化成只剩一列竖字。 */}
+          <div className="ml-3 flex min-w-56 flex-1 basis-0 items-center gap-1">
             {FILTER_LABELS.map((option) => (
               <button
                 key={option.value}
                 type="button"
                 onClick={() => setFilter(option.value)}
                 aria-pressed={filter === option.value}
-                className={`flex w-8 flex-col items-center rounded-md py-0.5 text-[12px] leading-tight transition-colors ${
+                className={`flex h-9 min-w-0 flex-1 basis-0 items-center justify-center gap-1.5 overflow-hidden rounded-lg px-2 text-[12px] leading-none transition-colors ${
                   filter === option.value
                     ? "bg-white/10 text-gray-100"
                     : "text-gray-500 hover:bg-white/4 hover:text-gray-300"
                 }`}
                 title={`当前来源的${option.label}：${originCounts[option.value]} 条（该来源共 ${originCounts.all} 条 · 警告 ${originCounts.warn} · 错误 ${originCounts.error}）`}
               >
-                <span>{option.label}</span>
+                <span className="truncate">{option.label}</span>
                 <CountChip
                   level={option.value}
                   value={originCounts[option.value]}
@@ -741,19 +768,15 @@ export function LogPanel() {
             ))}
           </div>
 
-          {/* 弹性空白：把「搜索 + 来源下拉 + 操作按钮」整组推到最右，中间这段
-              宽度留给左侧的类别与条数（用户诉求：给左边的日志类别和条数展示
-              留下较大空间）。它必须在搜索框**之前**——放在后面只是把搜索框留在
-              原位、空白挪到右边，用户看到的那块红框一点没少。 */}
-          <div className="min-w-0 flex-1" />
-
           {/* Search 紧跟在级别按钮之后（不再 `ml-auto`）。
               行头的稀有宽度应当优先给**类别与条数**：搜索框是偶尔才用一次的
               控件，却因为吃掉了 `ml-auto` 多出来的全部空间，把来源下拉一直顶在
               级别按钮旁边，两者之间空出一大片（用户截图的红框正是这块空白），
               而左侧那排四位数的计数反而最挤。现在下拉右移贴住搜索框，
               中间被让出来的宽度由 `flex-1` 的空白区吸收。 */}
-          <div className="relative ml-2 flex w-56 items-center">
+          {/* 搜索框可收缩（`shrink` + `min-w`）：行头窄到放不下时它先让位，
+              而不是去挤筛选器的标签。`w-56` 是它舒展时的宽度。 */}
+          <div className="relative flex w-56 min-w-24 shrink items-center">
             <Search
               size={14}
               className="pointer-events-none absolute left-2.5 text-gray-600"

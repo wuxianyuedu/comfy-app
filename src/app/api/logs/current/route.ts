@@ -29,7 +29,9 @@ function panelCaptureLog(): string | null {
   try {
     const entries = fs
       .readdirSync(/*turbopackIgnore: true*/ NEXTJS_LOG_DIR)
-      .filter((name) => name.startsWith("nextjs-panel-") && name.endsWith(".log"))
+      .filter(
+        (name) => name.startsWith("nextjs-panel-") && name.endsWith(".log"),
+      )
       .sort();
     const latest = entries[entries.length - 1];
     return latest ? path.join(NEXTJS_LOG_DIR, latest) : null;
@@ -73,7 +75,11 @@ function readBytes(file: string, start: number, length: number): Buffer | null {
 }
 
 /** 把窗口起点向后对齐到第一个完整行（丢弃被截断的头半行），避免解析出乱码。 */
-function alignToLineStart(buf: Buffer, start: number, fileSize: number): number {
+function alignToLineStart(
+  buf: Buffer,
+  start: number,
+  fileSize: number,
+): number {
   if (start <= 0) return 0;
   const nl = buf.indexOf(0x0a);
   if (nl < 0) return fileSize;
@@ -97,7 +103,9 @@ function sessionStartMs(): number | null {
 function resolveCurrentLog(source: string): string {
   if (source === "launcher") return LAUNCHER_LOG_FILE;
   try {
-    const sentinel = fs.readFileSync(/*turbopackIgnore: true*/ SENTINEL_FILE, "utf8").trim();
+    const sentinel = fs
+      .readFileSync(/*turbopackIgnore: true*/ SENTINEL_FILE, "utf8")
+      .trim();
     if (sentinel && fs.existsSync(/*turbopackIgnore: true*/ sentinel)) {
       return sentinel;
     }
@@ -113,6 +121,14 @@ interface Slice {
   size: number;
   /** 本次返回内容在文件中的起点。 */
   offset: number;
+  /**
+   * 本次运行的开始时刻（毫秒）；**只有跨运行累积的来源才有值**。
+   *
+   * 覆盖重建的来源（launcher / dev / app）返回 null：它们的文件天然只含本次
+   * 内容，若还下发一个「会话起点」，客户端会把本次启动早期的行（启动器的
+   * python/exe/cwd 头几行写在 dev-launcher.log 被创建之前）误判成历史而丢掉
+   * ——用户读到的就是「启动和启动器日志丢失」（ISSUE #262 复审）。
+   */
   sessionStart: number | null;
   /**
    * 服务端进程启动标识与客户端缓存的**不一致**（见下方 `bootId` 的完整说明）。
@@ -141,14 +157,21 @@ function readLogSlice(
   requestedOffset: number,
   bootId: string,
   mismatch: boolean,
+  /**
+   * 该来源的文件是否跨运行累积（见 `resolveSourceFile`）。只有累积来源才需要
+   * 会话起点；覆盖重建的来源恒为 null，客户端据此不做任何行时刻裁剪。
+   */
+  resumable: boolean,
 ): Slice {
-  const sessionStart = sessionStartMs();
+  const sessionStart = resumable ? sessionStartMs() : null;
   if (!fs.existsSync(/*turbopackIgnore: true*/ logFile)) {
     return { content: "", size: 0, offset: 0, sessionStart, bootId, mismatch };
   }
   const fileSize = fs.statSync(/*turbopackIgnore: true*/ logFile).size;
   const cursorValid =
-    Number.isFinite(requestedOffset) && requestedOffset > 0 && requestedOffset <= fileSize;
+    Number.isFinite(requestedOffset) &&
+    requestedOffset > 0 &&
+    requestedOffset <= fileSize;
   /* 游标已被读到文件末尾：没有新增，直接回空（不必再读一次）。 */
   if (cursorValid && requestedOffset === fileSize) {
     return {
@@ -160,7 +183,9 @@ function readLogSlice(
       mismatch,
     };
   }
-  let start = cursorValid ? requestedOffset : Math.max(0, fileSize - TAIL_BYTES);
+  let start = cursorValid
+    ? requestedOffset
+    : Math.max(0, fileSize - TAIL_BYTES);
 
   const buf = readBytes(logFile, start, fileSize - start) ?? Buffer.alloc(0);
   /* 只有「滑动窗口」分支才需要掐头对齐：游标来自上一次响应的 `size`，
@@ -188,7 +213,9 @@ function readLogSlice(
 }
 
 /** 解析某个日志来源对应的文件；来源不被识别 / 文件不存在时返回 null。 */
-function resolveSourceFile(source: string): { file: string; resumable: boolean } | null {
+function resolveSourceFile(
+  source: string,
+): { file: string; resumable: boolean } | null {
   /* 追加写来源（应用运行日志 / 常驻服务）保留历史内容 → 需要会话起点截断。 */
   if (source in RUNTIME_LOG_FILES) {
     return { file: RUNTIME_LOG_FILES[source]!, resumable: true };
@@ -223,13 +250,21 @@ export async function GET(request: Request) {
         content: "",
         size: 0,
         offset: 0,
-        sessionStart: sessionStartMs(),
+        /* 无对应文件的来源（转录尚未落盘）：没有可累积的内容，不给起点——
+         * 给了反而会让客户端去裁一条并不存在的「历史」。 */
+        sessionStart: null,
         bootId,
         mismatch,
       });
     }
     return NextResponse.json(
-      readLogSlice(resolved.file, mismatch ? 0 : requestedOffset, bootId, mismatch),
+      readLogSlice(
+        resolved.file,
+        mismatch ? 0 : requestedOffset,
+        bootId,
+        mismatch,
+        resolved.resumable,
+      ),
     );
   } catch (error) {
     return NextResponse.json(
@@ -237,6 +272,7 @@ export async function GET(request: Request) {
         content: "",
         size: 0,
         offset: 0,
+        sessionStart: null,
         bootId,
         mismatch,
         error: error instanceof Error ? error.message : String(error),

@@ -88,10 +88,15 @@ beforeEach(() => {
 afterEach(async () => {
   cleanup();
   /* 来源下拉是 portal 渲染到 `document.body` 的。`cleanup()` 卸载 React 树之后，
-   * base-ui 还要跑一轮收尾才摘掉弹层宿主——jsdom 里那一步等的是 `transitionend`
-   * 这类事件，不会自己到来。先放它跑一轮宏任务，再手工把残留清干净：否则下一个
-   * 用例继承上一棵树的弹层宿主，新下拉点开也不渲染候选（读到的现象就是「点开了
-   * 却没有 option」）。真实浏览器里这些会自行结束，这里只是替测试环境收尾。 */
+   * base-ui 还要跑几轮收尾才摘掉弹层宿主：jsdom 里它等的是 `transitionend`
+   * 这类事件，不会自己到来；而它的清理回调又会在**之后**的某个宏任务里再动一次
+   * DOM。只放一轮宏任务就清空 `body`，下一轮回调会往清空后的 DOM 里补写节点，
+   * 下一个用例于是继承到一个坏掉的弹层宿主——用户读到的现象是「点开了却没有
+   * option」（本文件里表现为「来源列表计数」那条在整文件跑时随机失败）。
+   *
+   * 因此收尾分**两轮**：先让 base-ui 自己跑完两轮宏任务，再手工把残留清干净，
+   * 最后清空 `body`。真实浏览器里这些会自行结束，这里只是替测试环境收尾。 */
+  await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
   document
     .querySelectorAll(
@@ -170,7 +175,9 @@ describe("LogPanel 日志面板", () => {
     expect(screen.getByText(/第 1 \//)).toBeInTheDocument();
     /* 回到最新后会看到窗口里的内容；新来的那条在窗口之后（下一轮滚动就能看到），
      * 因此这里断言的是「页码回到了第 1 页」与「计数归零」这两件用户能感知的事。 */
-    expect(screen.queryByRole("button", { name: /有 \d+ 条新的日志/ })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /有 \d+ 条新的日志/ }),
+    ).toBeNull();
   });
 
   it("按来源筛选能滤掉启动行，只看应用运行日志", async () => {
@@ -268,7 +275,45 @@ describe("LogPanel 日志面板", () => {
     expect(screen.getByText(/暂无匹配的日志/)).toBeInTheDocument();
   });
 
-  it("级别按钮的标签与数字上下分行（横向不再挤成竖排的汉字）", () => {
+  /* 位置有意放在「弹层与扳机底边对齐」**之前**：那一条会把下拉打开着结束，
+   * 而 base-ui 的浮层树是模块级的、jsdom 里关不干净——它之后的用例再点自己的
+   * 下拉会点不开（候选一个都不渲染）。这里断言的是「选项里写了什么」，不该被
+   * 那条用例的实现细节牵连，所以排在它前面。 */
+  it("来源列表里每一项都自带「条数 / 信息 / 警告 / 错误」的计数", async () => {
+    act(() =>
+      useLogStore
+        .getState()
+        .appendFileLogs([
+          makeEntry(1, { level: "warn", origin: "app" }),
+          makeEntry(2, { level: "warn", origin: "app" }),
+          makeEntry(3, { level: "error", origin: "app" }),
+          makeEntry(4, { level: "info", origin: "launcher" }),
+        ]),
+    );
+    render(<LogPanel />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("combobox", { name: "按来源筛选" }));
+    const optionOf = (label: string) =>
+      screen
+        .queryAllByRole("option")
+        .find((option) => (option.textContent ?? "").startsWith(label))
+        ?.textContent ?? "";
+
+    /* 「应用服务」有 2 警告 1 错误；「启动器」一条警告都没有——切换过去是空
+     * 列表这件事，在切换之前就已经写在选项里了。零条目读「无」，与「这一项
+     * 本来就不存在」区分开。 */
+    expect(optionOf("应用服务")).toContain("3 条 · 信息无 · 警告 2 · 错误 1");
+    expect(optionOf("启动器")).toContain("1 条 · 信息 1 · 警告无 · 错误无");
+    expect(optionOf("全部来源")).toContain("4 条 · 信息 1 · 警告 2 · 错误 1");
+  });
+
+  /* ISSUE #262 回归：面板遮罩 z-99，弹层若留在默认 z-50，在真实浏览器里会被
+   * 遮罩整块压住——弹层照常渲染，却收不到指针事件（「点下拉看不到菜单」
+   * 「没法切换来源」「日志没法翻页」是同一个根因）。
+   * jsdom 不做层叠与命中测试，所以这里断言的是**层级接线**：弹层定位层拿到的
+   * class 必须高于遮罩。真正「点得动」由 e2e（真实 Chromium）兜底。 */
+  it("级别按钮整组吃掉行头的富余宽度（不再挤成 32px 的窄条）", () => {
     act(() =>
       useLogStore
         .getState()
@@ -277,12 +322,21 @@ describe("LogPanel 日志面板", () => {
     render(<LogPanel />);
 
     const button = levelButton("警告");
-    /* 标签与数字是**两个**子元素、且容器是竖向排列：并排时中文单字标签与四位
-     * 数字各占一份宽度，行头放不下就只能把字竖起来（用户反馈第 3 条）。 */
-    expect(button.className).toContain("flex-col");
+    /* 用户诉求：「顶部还有较大空白区域，全部/警告/错误这些挤在一起，可以占用
+     * 大些空间」。落地方式有两件，缺一不可：
+     *   1. 每个按钮 `flex-1 basis-0` —— 五个按钮**等分**容器宽度，不再是固定的
+     *      `w-8`（32px）；
+     *   2. 容器 `flex-1` —— 它自己就是那块弹性空间，富余宽度不再被一个无名的
+     *      空白 div 吸走（多一个 `flex-1` 会与它平分，"空白又回来了"）。
+     * 几何结果（按钮实际有多宽）由 e2e 在真实浏览器里量，这里断言接线。 */
+    expect(button.className).toContain("flex-1");
+    expect(button.className).toContain("basis-0");
+    expect(button.className).not.toContain("w-8");
+    const group = button.parentElement!;
+    expect(group.className).toContain("flex-1");
+    /* 标签与计数是**两个**子元素、同行排布；计数非零时带「·」前缀（级别色强调）。 */
     expect(button.children).toHaveLength(2);
     expect(button.children[0]?.textContent).toBe("警告");
-    /* 警告计数非零时徽标带「·」前缀（用级别色强调），这里只断言数字本身 */
     expect(button.children[1]?.textContent).toContain("1");
   });
 
@@ -304,7 +358,9 @@ describe("LogPanel 日志面板", () => {
     expect(badge.textContent).toContain("错误 1");
     /* 来源名与总数不在这里复述：来源下拉、级别按钮「全部」各有一份，
        第三份就是用户反馈的「红框中两部分重复了」（见 ISSUE #262 复审用例）。 */
-    expect(screen.getByTitle(/当前来源「全部来源」共 3 条 · 信息 1/)).toBeTruthy();
+    expect(
+      screen.getByTitle(/当前来源「全部来源」共 3 条 · 信息 1/),
+    ).toBeTruthy();
   });
 
   it("页脚写出当前看的是哪一段，点一下即去掉该层筛选", async () => {
@@ -373,7 +429,7 @@ describe("LogPanel 日志面板", () => {
     );
     const { container } = render(<LogPanel />);
 
-    const header = container.querySelector(".h-12");
+    const header = container.querySelector(".min-h-14");
     expect(header).not.toBeNull();
     const order = Array.from(header!.children);
 
@@ -394,13 +450,24 @@ describe("LogPanel 日志面板", () => {
     expect(search).toBeGreaterThan(levelButtons);
     expect(triggerHost).toBeGreaterThan(search);
 
-    /* 弹性空白（flex-1）：它才是「留大空间给左边」的载体，位置在搜索之前。
-     * 没有它，`justify-between` 之外的行头会把搜索框与下拉直接顶到级别按钮后面，
-     * 中间那大块空白反过来留在左边（用户截图里的红框）。 */
-    const spacer = order.find((el) => el.className.includes("flex-1"));
-    expect(spacer).toBeDefined();
-    expect(order.indexOf(spacer!)).toBeGreaterThan(levelButtons);
-    expect(order.indexOf(spacer!)).toBeLessThan(search);
+    /* 「留大空间给左边」的载体是本轮的**级别按钮容器**（它自己 `flex-1`），
+     * 位置在搜索之前：没有它，行头会把搜索框与下拉直接顶在级别按钮后面，
+     * 大块空白反过来留在右边（用户截图里的红框）。
+     *
+     * 早先这里另有一个无名 `flex-1` 空白 div 承担同一职责；本轮去掉它——
+     * 两个 `flex-1` 会**平分**富余宽度，等于把一半空间又还给了空白。 */
+    const group = levelButton("全部").parentElement!;
+    expect(group.className).toContain("flex-1");
+    expect(order.indexOf(group)).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf(group)).toBeLessThan(search);
+    /* 行头里不再有第二个无名弹性空白：唯一的弹性项就是级别按钮容器。 */
+    const spacers = order.filter(
+      (el) =>
+        el.className.includes("flex-1") &&
+        el.tagName === "DIV" &&
+        el.children.length === 0,
+    );
+    expect(spacers).toHaveLength(0);
   });
 
   it("来源下拉的弹层与扳机底边对齐，且不向上翻转", async () => {
@@ -484,40 +551,6 @@ describe("LogPanel 日志面板", () => {
      这是全文唯一真正展开下拉的用例，且刻意排在最后：base-ui 的弹层关闭要等过渡
      结束（jsdom 不会派发那个事件），展开过一次就会给后续用例留下一份没摘除的
      弹层宿主。只影响测试环境，真实浏览器里过渡会正常结束。 */
-  it("来源列表里每一项都自带「条数 / 信息 / 警告 / 错误」的计数", async () => {
-    act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([
-          makeEntry(1, { level: "warn", origin: "app" }),
-          makeEntry(2, { level: "warn", origin: "app" }),
-          makeEntry(3, { level: "error", origin: "app" }),
-          makeEntry(4, { level: "info", origin: "launcher" }),
-        ]),
-    );
-    render(<LogPanel />);
-    const user = userEvent.setup();
-
-    await user.click(screen.getByRole("combobox", { name: "按来源筛选" }));
-    const optionOf = (label: string) =>
-      screen
-        .queryAllByRole("option")
-        .find((option) => (option.textContent ?? "").startsWith(label))
-        ?.textContent ?? "";
-
-    /* 「应用服务」有 2 警告 1 错误；「启动器」一条警告都没有——切换过去是空
-     * 列表这件事，在切换之前就已经写在选项里了。零条目读「无」，与「这一项
-     * 本来就不存在」区分开。 */
-    expect(optionOf("应用服务")).toContain("3 条 · 信息无 · 警告 2 · 错误 1");
-    expect(optionOf("启动器")).toContain("1 条 · 信息 1 · 警告无 · 错误无");
-    expect(optionOf("全部来源")).toContain("4 条 · 信息 1 · 警告 2 · 错误 1");
-  });
-
-  /* ISSUE #262 回归：面板遮罩 z-99，弹层若留在默认 z-50，在真实浏览器里会被
-   * 遮罩整块压住——弹层照常渲染，却收不到指针事件（「点下拉看不到菜单」
-   * 「没法切换来源」「日志没法翻页」是同一个根因）。
-   * jsdom 不做层叠与命中测试，所以这里断言的是**层级接线**：弹层定位层拿到的
-   * class 必须高于遮罩。真正「点得动」由 e2e（真实 Chromium）兜底。 */
   it("弹层定位层的层级高于面板遮罩（否则被遮罩压住、点不动）", async () => {
     act(() =>
       useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]),
@@ -525,7 +558,9 @@ describe("LogPanel 日志面板", () => {
     const { container } = render(<LogPanel />);
 
     /* 面板遮罩：overlayClass("modal", …) 拼出的最外层，层级取自同一份契约。 */
-    const overlay = container.querySelector(`[class*="z-${LOG_PANEL_OVERLAY_Z}"]`);
+    const overlay = container.querySelector(
+      `[class*="z-${LOG_PANEL_OVERLAY_Z}"]`,
+    );
     expect(overlay).not.toBeNull();
 
     const user = userEvent.setup();
@@ -548,10 +583,12 @@ describe("LogPanel 日志面板", () => {
      且只报这两项——来源名与总数交给下拉与级别按钮。 */
   it("标题徽标不重复来源与总数，只在有警告/错误时提示这两项", () => {
     act(() =>
-      useLogStore.getState().appendFileLogs([
-        makeEntry(1, { level: "info", origin: "app" }),
-        makeEntry(2, { level: "info", origin: "app" }),
-      ]),
+      useLogStore
+        .getState()
+        .appendFileLogs([
+          makeEntry(1, { level: "info", origin: "app" }),
+          makeEntry(2, { level: "info", origin: "app" }),
+        ]),
     );
     const { unmount } = render(<LogPanel />);
     /* 全为零（无警告无错误）→ 整块不渲染，标题行不再多一个重复数字的胶囊 */
@@ -559,10 +596,12 @@ describe("LogPanel 日志面板", () => {
     unmount();
 
     act(() =>
-      useLogStore.getState().appendFileLogs([
-        makeEntry(3, { level: "warn", origin: "app" }),
-        makeEntry(4, { level: "error", origin: "app" }),
-      ]),
+      useLogStore
+        .getState()
+        .appendFileLogs([
+          makeEntry(3, { level: "warn", origin: "app" }),
+          makeEntry(4, { level: "error", origin: "app" }),
+        ]),
     );
     render(<LogPanel />);
     const badge = screen.getByTitle(/当前来源「全部来源」共 4 条/);
