@@ -385,27 +385,27 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                       {/* per-PORT output checkbox removed;
                        *  workflow outputs are node-identified.  The per-node output
                        *  checkbox now lives in the subgraph node header. */}
-                      {/* same as WorkflowNode — hide the
-                       *  output source Handle while in IO-edit mode.  Workflow
-                       *  outputs are identified by node, so the checkbox
-                       *  above is enough; the right-edge port dot is visual
-                       *  noise that misleads authors into thinking they need
-                       *  to wire outputs to expose them. */}
-                      {!io?.ioEditMode && (
-                        <Handle
-                          type="source"
-                          position={Position.Right}
-                          id={`out:${outName}`}
-                          isConnectable={false}
-                          className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
-                          style={{
-                            right: 5,
-                            background: outCol,
-                            boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
-                          }}
-                          title={`${outDisplay} (${outType})`}
-                        />
-                      )}
+                      {/* 输出端点**任何视图模式下都必须挂载** —— 同
+                       *  FlowNodePinRows：它同时是下游 `out:<name>` 边的锚点，
+                       *  条件不渲染会让 React Flow 解析不到 handle 而丢掉整条边
+                       *  （error#008），画布上表现为「输出没有连线」。
+                       *  IO 编辑模式下改用「缩到几乎不可见」代替「不渲染」。 */}
+                      <Handle
+                        type="source"
+                        position={Position.Right}
+                        id={`out:${outName}`}
+                        isConnectable={false}
+                        className="!rounded-full !border !border-(--color-canvas)"
+                        style={{
+                          right: 5,
+                          background: outCol,
+                          boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
+                          ...(io?.ioEditMode
+                            ? { width: 4, height: 4, opacity: 0.35, right: 0 }
+                            : { width: 10, height: 10 }),
+                        }}
+                        title={`${outDisplay} (${outType})`}
+                      />
                     </>
                   )}
                 </div>
