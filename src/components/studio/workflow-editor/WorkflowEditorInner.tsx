@@ -31,6 +31,7 @@ import {
   selectIoEditMode,
   selectWorkflowIO,
   selectIoPreviewOpen,
+  selectWiredPinKeys,
   createIOEditStore,
   createRgthreeGroupsStore,
   createNodeJsonViewerStore,
@@ -44,7 +45,7 @@ import { buildInitialNodes } from "./workflow-editor-build-nodes";
 import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
 import { useParamMapping } from "./hooks/use-param-mapping";
 import { entryIdFromParamNodeId } from "~/lib/workflow-param-mapping";
-import { buildParamEdges } from "./workflow-param-edges";
+import { buildParamEdges, isValidParamConnection } from "./workflow-param-edges";
 import { buildParamNodes } from "./workflow-param-nodes";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
 import { enrichFromViewNodes, isMachineName, type ExposedAliasBase } from "./io-exposure";
@@ -217,6 +218,7 @@ function WorkflowEditorBody({
    * 这里用 selector 订阅成响应式局部变量，让下方既有合并/预览/保存逻辑零改动。 */
   const workflowIO = useIOEditStore(selectWorkflowIO);
   const ioEditMode = useIOEditStore(selectIoEditMode);
+  const wiredPinKeys = useIOEditStore(selectWiredPinKeys);
   const ioPreviewOpen = useIOEditStore(selectIoPreviewOpen);
   const savePatch = useWorkflowSaveMutation();
   /* Side-panel toggle for the IO preview.  Default closed — the canvas already
@@ -621,8 +623,16 @@ function WorkflowEditorBody({
         entries: paramMapping.entries.map((entry) => entry.id),
         resolved: paramMapping.resolved,
         manual: paramMapping.mapping.manualByMode?.[wiringMode ?? ""] ?? {},
+        /* 可行落点集合同样进签名：行渲染出来 / 收起来时卡片候选要跟着变。 */
+        reachable: [...wiredPinKeys].sort(),
       }),
-    [paramMapping.entries, paramMapping.resolved, paramMapping.mapping, wiringMode]
+    [
+      paramMapping.entries,
+      paramMapping.resolved,
+      paramMapping.mapping,
+      wiringMode,
+      wiredPinKeys,
+    ]
   );
   const paramWiring = useMemo(() => {
     const paramNodes = buildParamNodes({
@@ -632,6 +642,9 @@ function WorkflowEditorBody({
       /* 卡片上带类型的输出端口：类型取自当前落点，故把 resolved 与 io 一起给。 */
       resolved: paramMapping.resolved,
       io: workflowIO,
+      /* 可行落点 = 画布此刻真的渲染出来的行（组合控件折叠成逐行参数后露出来的
+       * 就是全部可连行）。候选取它做交，免得画出连不上的端点。 */
+      reachableKeys: wiredPinKeys,
       isManual: paramMapping.isManual,
       onReset: (entryId: string) => paramMapping.resetToAuto(entryId),
     });
@@ -666,33 +679,35 @@ function WorkflowEditorBody({
     [paramMapping]
   );
 
+  /* 连线合法性闸门：判断这条连接表不表达一条映射（两端方向 + 落点是否真实存在）。
+   *
+   *  为什么**不在这里锁模式**：闸门会被 React Flow 在连线过程中反复调用（预判
+   *  悬停处能不能落线），锁模式等于「手势在连线画出来之前就被判非法」，指针旁
+   *  直接出现禁用标记 —— 用户看到的就是「对外参数卡片连不了线」（ISSUE #355）。
+   *  模式只决定这条线**归属哪个命名空间**（写入路径见 useParamMapping.connect）。 */
+  const isValidConnection = useCallback(
+    (connection: ReactFlowConnection | Edge) =>
+      isValidParamConnection(connection, paramMapping.entries, workflowIO),
+    [paramMapping.entries, workflowIO]
+  );
+
   /* 在画布上拉一条线：源必须是某张对外参数卡片，目标必须落在宿主节点的某个
    * 端口上（`targetHandle` 就是 ioKey）。别的连线一律拒绝 —— 画布上的图连线
    * 由工作流本身决定，作者的手工连线只表达「映射」。 */
   const onConnect = useCallback(
     (connection: ReactFlowConnection) => {
-      const entryId = entryIdFromParamNodeId(connection.source);
-      if (!entryId || !connection.targetHandle) return;
-      const entry = paramMapping.entries.find((item) => item.id === entryId);
-      if (entry?.nodeId !== connection.target) return;
-      paramMapping.connect(entryId, connection.targetHandle);
+      if (!isValidConnection(connection)) return;
+      /* 卡片端点是 source（输出）、宿主行是 target（输入）是常态；反向拖时两个
+       *  键互换，落点要取另一端的那一个。 */
+      const forward = entryIdFromParamNodeId(connection.source ?? "");
+      const entryId = forward ?? entryIdFromParamNodeId(connection.target ?? "");
+      const targetHandle = forward
+        ? connection.targetHandle
+        : connection.sourceHandle;
+      if (!entryId || !targetHandle) return;
+      paramMapping.connect(entryId, targetHandle);
     },
-    [paramMapping]
-  );
-
-  /* 连线合法性闸门：没有模式时任何连线都不成立（禁止连线），落点也必须是
-   * 该对外参数宿主节点上真实存在的端口。 */
-  const isValidConnection = useCallback(
-    (connection: ReactFlowConnection | Edge) => {
-      if (!wiringMode) return false;
-      const entryId = entryIdFromParamNodeId(connection.source ?? "");
-      const target = "target" in connection ? connection.target : null;
-      const targetHandle = "targetHandle" in connection ? connection.targetHandle : null;
-      if (!entryId || !target || !targetHandle) return false;
-      const entry = paramMapping.entries.find((item) => item.id === entryId);
-      return entry?.nodeId === target && !!workflowIO?.[targetHandle];
-    },
-    [wiringMode, paramMapping.entries, workflowIO]
+    [paramMapping, isValidConnection]
   );
 
   /* useNodesState 只接受挂载首帧的初值；后续同步统一走下面的 effect（初始图节点

@@ -101,13 +101,33 @@ describe("对外参数节点只在画布上表达映射", () => {
     }
   });
 
-  it("对外参数卡片是接线面板：不可拖（位置派生自宿主节点）", () => {
+  it("对外参数卡片是接线面板：不可拖，但**必须可连线**", () => {
+    /* 卡片的位置派生自宿主节点，所以自己拖不动；但它是唯一的连线起点，
+     *  `connectable` 必须为真 —— React Flow 把「这一端能不能拉线」算作
+     *  `handle.connectable && handle.connectableend`，节点上写 false 会让每颗
+     *  端点变成点不动的装饰，用户表现为「点击端点拉线出现禁用标记」（ISSUE #355）。 */
     const build = stripComments(
       readFileSync(path.join(EDITOR_DIR, "workflow-param-nodes.ts"), "utf8"),
     );
     expect(build).toContain("draggable: false");
-    expect(build).toContain("connectable: false");
+    expect(build).toContain("connectable: true");
+    expect(build).not.toContain("connectable: false");
     expect(build).toContain("placeParamNodes");
+  });
+
+  it("没有模式也连得上：端点渲染与模式无关，候选端点只收窄到真能连的行", () => {
+    /* 「对外参数卡片连不了线，点击端点拉线会出现禁用标记」：成因之一是卡片把
+     *  「有没有模式」当成「能不能连线」，没选中模式时端点整体不渲染。模式只决定
+     *  这条线归属哪个命名空间，不决定拖线本身是否成立 —— 因此：
+     *   ① `canWire` 恒为真（源码级：不许再出现 `!!mode`）；
+     *   ② 候选端点交上「宿主卡片真的画出来、连得上」的行集合（reachableKeys），
+     *      端点不会画在一颗落不上去的句柄上。 */
+    const build = stripComments(
+      readFileSync(path.join(EDITOR_DIR, "workflow-param-nodes.ts"), "utf8"),
+    );
+    expect(build).toContain("canWire: true");
+    expect(build).not.toContain("canWire: !!mode");
+    expect(build).toContain("reachableKeys");
   });
 
   it("映射连线带得动两个键空间：source 是卡片、targetHandle 是落点 ioKey", () => {
