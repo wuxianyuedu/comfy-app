@@ -30,6 +30,7 @@ import {
 } from "@/lib/workshop/generation-client";
 import {
   appendWorkflowRunLog,
+  failWorkflowRun,
   getWorkflowRunStoreSnapshot,
   latestRunForWorkflow,
   patchWorkflowRun,
@@ -182,10 +183,8 @@ export function WorkflowCanvasNodePreview({
             patchWorkflowRun(resume.taskId, { status: "done" });
           } else {
             setPhase({ kind: "failed", message: r.message ?? "生成失败" });
-            patchWorkflowRun(resume.taskId, {
-              status: "failed",
-              errorMessage: r.message ?? "生成失败",
-            });
+            /* 失败原因同时落一条 error 日志（横幅之外，用户筛选/回放也能看到）。 */
+            failWorkflowRun(resume.taskId, r.message ?? "生成失败");
           }
         },
       });
@@ -291,10 +290,7 @@ export function WorkflowCanvasNodePreview({
               patchWorkflowRun(taskId, { status: "done" });
             } else {
               setPhase({ kind: "failed", message: r.message ?? "生成失败" });
-              patchWorkflowRun(taskId, {
-                status: "failed",
-                errorMessage: r.message ?? "生成失败",
-              });
+              failWorkflowRun(taskId, r.message ?? "生成失败");
             }
             resolve();
           },
