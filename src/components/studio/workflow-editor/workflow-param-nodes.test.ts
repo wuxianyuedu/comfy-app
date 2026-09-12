@@ -15,7 +15,7 @@ import {
   resolveMapping,
   type ParamEntry,
 } from "~/lib/workflow-param-mapping";
-import { buildParamEdges } from "./workflow-param-edges";
+import { buildParamEdges, isValidParamConnection } from "./workflow-param-edges";
 import { buildParamNodes } from "./workflow-param-nodes";
 import type { WorkflowParamNodeData } from "./workflow-param-node-data";
 
@@ -81,7 +81,9 @@ describe("buildParamNodes — 每个对外参数一个可连线节点", () => {
     expect(width.type).toBe("wfParam");
   });
 
-  it("没有模式时不渲染端点（拖不出线 = 禁止连线）", () => {
+  it("没有模式也连得上：端点照渲染（模式只决定这条线归属哪个命名空间）", () => {
+    /* 此前卡片把「有没有模式」当成「能不能连线」，未声明模式的工作流上端点整体
+     * 不渲染 —— 用户看到的就是「点击端点拉线出现禁用标记」（ISSUE #355）。 */
     const noMode = buildParamNodes({
       entries,
       hostPosById: hostPos,
@@ -89,7 +91,8 @@ describe("buildParamNodes — 每个对外参数一个可连线节点", () => {
       isManual: () => false,
       onReset: vi.fn(),
     });
-    expect(noMode.every((node) => dataOf(node).canWire === false)).toBe(true);
+    expect(noMode.every((node) => dataOf(node).canWire === true)).toBe(true);
+    /* 「恢复默认」仍只在真的画过线时可用（没有模式就没有可撤销的线）。 */
     expect(noMode.every((node) => dataOf(node).canReset === false)).toBe(true);
 
     const withMode = buildParamNodes({
@@ -100,6 +103,34 @@ describe("buildParamNodes — 每个对外参数一个可连线节点", () => {
       onReset: vi.fn(),
     });
     expect(withMode.every((node) => dataOf(node).canWire === true)).toBe(true);
+  });
+
+  it("候选端点收窄到「宿主卡片真的画得出来、连得上」的行", () => {
+    /* 折叠成逐行参数之后露出来的行才是可连行：端点画在一颗落不上去的句柄上，
+     *  拖过去只会被闸门判成非法（禁用标记）。 */
+    const sizeEntry: ParamEntry = {
+      id: "size",
+      nodeId: "5",
+      nodeTitle: "分辨率选择器",
+      cls: "size",
+      label: "尺寸",
+      pins: [
+        { ioKey: "5::widget::width", name: "width", type: "INT", defaultValue: 512 },
+        { ioKey: "5::widget::height", name: "height", type: "INT", defaultValue: 512 },
+      ],
+    };
+    const nodes = buildParamNodes({
+      entries: [sizeEntry],
+      hostPosById: { "5": hostPos["5"] },
+      mode: "T2I",
+      isManual: () => false,
+      onReset: vi.fn(),
+      /* 画布上只有 width 这一行露出来。 */
+      reachableKeys: new Set(["5::widget::width"]),
+    });
+    expect(dataOf(nodes[0]!).outputPorts.map((port) => port.ioKey)).toEqual([
+      "5::widget::width",
+    ]);
   });
 
   it("「恢复默认」只在作者连过的条目上可用，并回调该条目", () => {
@@ -306,5 +337,91 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
       renderedCardIds: new Set(["pio:9|prompt"]),
     });
     expect(edges.map((edge) => edge.id)).toEqual(["pe-9|prompt"]);
+  });
+});
+
+describe("isValidParamConnection — 连线闸门（方向 + 落点）", () => {
+  /* ISSUE #355：「对外参数卡片连不了线，点击端点拉线会出现禁用标记」。成因之一是
+   * 闸门在**连线过程中**被 React Flow 反复调用（预判悬停处能否落线），而它把
+   * 「有没有模式」「targetHandle 是不是 ioKey」当成硬条件 —— 手势在连线画出来
+   * 之前就被判非法。这里锁住「哪些连接是合法映射线」。 */
+  const sizeEntry = entries.find((entry) => entry.id === "5|size-width")!;
+
+  it("卡片端点 → 该对外参数的宿主端口：合法", () => {
+    expect(
+      isValidParamConnection(
+        {
+          source: paramNodeId(sizeEntry.id),
+          sourceHandle: "5::widget::width",
+          target: "5",
+          targetHandle: "5::widget::width",
+        },
+        entries,
+        io,
+      ),
+    ).toBe(true);
+  });
+
+  it("反向拖（宿主端口 → 卡片端点）同样合法", () => {
+    expect(
+      isValidParamConnection(
+        {
+          source: "5",
+          sourceHandle: "5::widget::width",
+          target: paramNodeId(sizeEntry.id),
+          targetHandle: "5::widget::width",
+        },
+        entries,
+        io,
+      ),
+    ).toBe(true);
+  });
+
+  it("落点不在该对外参数的宿主节点上 → 拒绝", () => {
+    expect(
+      isValidParamConnection(
+        {
+          source: paramNodeId(sizeEntry.id),
+          target: "9",
+          targetHandle: "9::widget::text",
+        },
+        entries,
+        io,
+      ),
+    ).toBe(false);
+  });
+
+  it("落点端口在 workflowIO 里不存在 → 拒绝（画得出来也落不到值）", () => {
+    expect(
+      isValidParamConnection(
+        {
+          source: paramNodeId(sizeEntry.id),
+          target: "5",
+          targetHandle: "5::widget::nope",
+        },
+        entries,
+        io,
+      ),
+    ).toBe(false);
+  });
+
+  it("图上普通连线（两端都不是卡片）→ 交给画布自己管", () => {
+    expect(
+      isValidParamConnection(
+        { source: "5", target: "9", targetHandle: "9::widget::text" },
+        entries,
+        io,
+      ),
+    ).toBe(false);
+  });
+
+  it("两张卡片互连 → 不表达任何落点", () => {
+    expect(
+      isValidParamConnection(
+        { source: paramNodeId("5|size-width"), target: paramNodeId("9|prompt") },
+        entries,
+        io,
+      ),
+    ).toBe(false);
   });
 });

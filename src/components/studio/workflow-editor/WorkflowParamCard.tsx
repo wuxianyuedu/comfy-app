@@ -41,15 +41,23 @@ export interface WorkflowParamCardProps {
   width: number;
   /** 是否允许连线：false 时卡片置灰。
    *
+   *  编辑器画布上恒为 true —— 对外参数卡片就是接线面板，**没有模式也要能连**
+   *  （模式只是这条线归属的命名空间，不影响拖线本身是否成立）。
+   *
    *  注意与 `readOnly` 的区别：`canWire=false` 表达「这张卡当前不可编辑」
-   *  （如库内只读消费），**不等于**「因为没有模式所以不能连线」——后者由
-   *  `noModeHint` 单独表达。只读卡片上不写「先选模式才能连线」，否则会出现
-   *  「节点上明明已经选了单图生视频，卡片却说需要选模式」这种自相矛盾的提示。 */
+   *  （如库内只读消费），**不等于**「因为没有模式所以不能连线」——只读卡片上
+   *  不写任何编辑提示，否则会出现「节点上明明已经选了单图生视频，卡片却说需要
+   *  选模式」这种自相矛盾的提示。 */
   canWire: boolean;
   /** 只读消费（库内卡片列）：不渲染任何编辑提示。 */
   readOnly?: boolean;
-  /** 确实没有模式可归属时给出说明（只读卡片不显示）。 */
-  noModeHint?: boolean;
+  /** 页脚说明（一句话说清这个口现在连上了没有、该怎么改）。只读消费不传。 */
+  footNote?: string;
+  /** 该对外参数在当前模式下是否**已经落到了**宿主卡片的某一行。
+   *
+   *  只影响页脚的观感（已连 = 静默，未连 = 提示色）；文案由 `footNote` 给 ——
+   *  卡片本体不替消费方拼句子。 */
+  wired?: boolean;
   /** 「恢复默认」是否可用。只读消费处不传回调（按钮根本不渲染）。 */
   canReset: boolean;
   onReset?: () => void;
@@ -89,10 +97,11 @@ export function WorkflowParamCard({
   width,
   canWire,
   readOnly = false,
-  noModeHint = false,
   canReset,
   onReset,
   outputPorts,
+  footNote,
+  wired = false,
   endpoint,
   rowTrailing,
   hoverRef,
@@ -227,9 +236,19 @@ export function WorkflowParamCard({
         ))}
       </div>
 
-      {!readOnly && noModeHint && (
-        <div className="px-2 pb-1.5 text-[9.5px] leading-relaxed text-amber-500/80">
-          该工作流未声明模式，落点暂不可编辑
+      {/* 页脚说明由消费方给出（`footNote`）：卡片本体是画布无关的视觉本体，它
+          不该知道「连线手势怎么用」。库内只读消费不传它 —— 那里没有可做的操作。
+          没有这段说明，卡片上就只剩一颗圆点：「默认线」「作者改过的线」「一个候选
+          都落不上」三种状态读起来一模一样（ISSUE #355：「对外参数卡片连不了线，
+          点击端点拉线会出现禁用标记」）。 */}
+      {!readOnly && footNote && (
+        <div
+          className={`px-2 pb-1.5 text-[9.5px] leading-relaxed ${
+            wired ? "text-(--color-ink-fainter)" : "text-amber-500/80"
+          }`}
+          data-testid={`param-node-hint-${entryId}`}
+        >
+          {footNote}
         </div>
       )}
     </div>
