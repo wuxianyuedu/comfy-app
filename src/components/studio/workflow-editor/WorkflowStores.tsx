@@ -67,6 +67,12 @@ export interface IOEditState {
   aliasBaseByKey: Record<string, ExposedAliasBase>;
 }
 export interface IOEditActions {
+  /** 开关 IO 编辑模式。关闭时**一并关掉 IO 预览**：预览面板里的每一行都对应
+   *  一个「编辑 IO」勾选项（改名 / 默认值 / 必填 / 模式覆盖都从那里来），
+   *  留下一个没有勾选框的预览面板只会让人以为勾选还在生效。
+   *
+   *  反向不成立：打开预览仍会自动进入编辑模式（勾选框要可用），这是顶栏
+   *  「预览 IO」按钮自己的语义，见 `setIoPreviewOpen`。 */
   setIoEditMode: (on: boolean) => void;
   setIoPreviewOpen: (open: boolean) => void;
   /** 同步富化下发的别名判定基准（只有内容真的变了才写，避免渲染回路）。 */
@@ -117,7 +123,8 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     ioPreviewOpen: false,
     aliasBaseByKey: {},
 
-    setIoEditMode: (on) => set({ ioEditMode: on }),
+    setIoEditMode: (on) =>
+      set(on ? { ioEditMode: true } : { ioEditMode: false, ioPreviewOpen: false }),
     setIoPreviewOpen: (open) => set({ ioPreviewOpen: open }),
 
     setAliasBase: (next) =>

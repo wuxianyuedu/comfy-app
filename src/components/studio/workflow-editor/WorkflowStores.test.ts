@@ -351,6 +351,58 @@ describe("IOEditStore 机器名的入口与出口都挡（ISSUE #349）", () => 
   });
 });
 
+describe("IOEditStore 编辑模式与预览的开关耦合", () => {
+  it("关闭编辑模式时一并关闭 IO 预览", () => {
+    const store = createIOEditStore("wf");
+    store.getState().setIoEditMode(true);
+    store.getState().setIoPreviewOpen(true);
+
+    store.getState().setIoEditMode(false);
+
+    expect(store.getState().ioEditMode).toBe(false);
+    expect(store.getState().ioPreviewOpen).toBe(false);
+  });
+
+  it("开启编辑模式不动预览开关（预览本来就关着就保持关着）", () => {
+    const store = createIOEditStore("wf");
+    store.getState().setIoEditMode(true);
+    expect(store.getState().ioPreviewOpen).toBe(false);
+  });
+
+  it("反方向不耦合：单独关预览不退出编辑模式（勾选框要继续可用）", () => {
+    const store = createIOEditStore("wf");
+    store.getState().setIoEditMode(true);
+    store.getState().setIoPreviewOpen(true);
+
+    store.getState().setIoPreviewOpen(false);
+
+    expect(store.getState().ioEditMode).toBe(true);
+    expect(store.getState().ioPreviewOpen).toBe(false);
+  });
+
+  it("关闭编辑模式不碰 IO 勾选结果（只关面板，不清选择）", () => {
+    const store = createIOEditStore("wf");
+    store.getState().toggleIO({
+      nodeId: "24",
+      name: "image",
+      kind: "widget",
+      direction: "input",
+      label: "尾帧图",
+    });
+    store.getState().setIoEditMode(false);
+    expect(store.getState().workflowIO["24::widget::image"]).toBeDefined();
+  });
+
+  it("本来就是关的：重复关闭不产生多余状态变更", () => {
+    const store = createIOEditStore("wf");
+    const before = store.getState();
+    store.getState().setIoEditMode(false);
+    store.getState().setIoEditMode(false);
+    expect(store.getState().ioEditMode).toBe(before.ioEditMode);
+    expect(store.getState().ioPreviewOpen).toBe(false);
+  });
+});
+
 describe("callStoreAction", () => {
   it("动作存在时正常调用并返回 true", () => {
     const store = createIOEditStore("wf");

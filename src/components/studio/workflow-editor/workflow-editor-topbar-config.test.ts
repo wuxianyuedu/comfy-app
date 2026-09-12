@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -117,5 +118,25 @@ describe("顶栏容器：窄了换行，不压扁按钮", () => {
     expect(tokens(TOP_BAR_BREADCRUMB_MIN_WIDTH_CLASS)).toContain(
       "min-w-[170px]",
     );
+  });
+});
+
+/* ── 顶栏只通过 store 动作开关 IO 编辑 / 预览 ──────────────────────────────
+ * 「关编辑模式 ⇒ 关预览」这层耦合写在 store 的 `setIoEditMode` 里。顶栏若绕过
+ * 动作、直接 `setState({ ioEditMode })`，耦合就被短路掉：编辑模式退出、预览面
+ * 板留在画布上，而面板里每一行都来自已经不存在的勾选项。
+ * 这里做源码级守卫 —— 断言的是「有没有留后门」，不是某个按钮的字面实现。 */
+describe("IO 编辑 / 预览开关必须走 store 动作", () => {
+  const source = readFileSync(path.resolve(__dirname, "WorkflowEditorTopbar.tsx"), "utf8");
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+
+  it("顶栏不直接 setState 写 ioEditMode / ioPreviewOpen", () => {
+    expect(code).not.toMatch(/setState\([\s\S]{0,120}?ioEditMode/);
+    expect(code).not.toMatch(/setState\([\s\S]{0,120}?ioPreviewOpen/);
+  });
+
+  it("开关动作确实调到了 store", () => {
+    expect(code).toContain("setIoEditMode(");
+    expect(code).toContain("setIoPreviewOpen(");
   });
 });

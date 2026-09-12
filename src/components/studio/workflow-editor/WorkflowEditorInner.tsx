@@ -209,11 +209,13 @@ function WorkflowEditorBody({
   const ioEditMode = useIOEditStore(selectIoEditMode);
   const ioPreviewOpen = useIOEditStore(selectIoPreviewOpen);
   const savePatch = useWorkflowSaveMutation();
-  /* Side-panel toggle for the IO preview.  Independent of
-   *  `ioEditMode` so the author can A/B toggle before vs. after opening
-   *  the panel.  Default closed — the canvas already gives a busy
-   *  experience and we don't want to pile on a second floating panel
-   *  before the user asks for one. */
+  /* Side-panel toggle for the IO preview.  Default closed — the canvas already
+   *  gives a busy experience and we don't want to pile on a second floating
+   *  panel before the user asks for one.
+   *
+   *  与 `ioEditMode` 的关系是单向的：打开预览可以独立于编辑模式之外存在
+   *  （作者可以只读地 A/B 看一眼），但**关掉编辑模式必然关掉预览** —— 那条
+   *  耦合写在 store 的 `setIoEditMode` 里，见那里的注释。 */
   /* canvas-settings panel state — sits next to
    *  ioPreviewOpen / viewJsonOpen as a sibling overlay opened by a gear
    *  button in the canvas chrome.  Default closed. */
