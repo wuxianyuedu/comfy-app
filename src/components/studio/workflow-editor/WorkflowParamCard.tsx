@@ -10,6 +10,7 @@
  * 消费方只负责在右侧挂「端点」与行尾补充说明这两件事。
  */
 
+import type { DOMAttributes } from "react";
 import { RotateCcw } from "lucide-react";
 
 import type { ParamEntry } from "~/lib/workflow-param-mapping";
@@ -46,6 +47,13 @@ export interface WorkflowParamCardProps {
   endpoint?: React.ReactNode;
   /** 端口行尾的补充说明（如「→ 落到的端口名」）。 */
   rowTrailing?: (pin: ParamEntry["pins"][number]) => React.ReactNode;
+  /** 鼠标是否悬浮在这张卡片上（节点渲染器传入）—— 悬浮时压住连线（ISSUE #400）。 */
+  hovered?: boolean;
+  /** 鼠标进出卡片本体时的事件（节点渲染器用 useHoverElevation 生成）——
+   *  卡片据此打 `data-hovered`，由 CSS 抬起层级压住连线（ISSUE #400）。
+   *  命名刻意不含端点类关键字：本文件是**画布无关**的视觉本体（见
+   *  workflow-canvas-io-isolation 的守卫）。 */
+  hoverEvents?: DOMAttributes<HTMLDivElement>;
 }
 
 export function WorkflowParamCard({
@@ -63,6 +71,8 @@ export function WorkflowParamCard({
   onReset,
   endpoint,
   rowTrailing,
+  hovered = false,
+  hoverEvents,
 }: WorkflowParamCardProps) {
   const style = paramClassStyle(cls);
   const disabled = !canWire || readOnly;
@@ -76,6 +86,10 @@ export function WorkflowParamCard({
         background: "var(--color-card, #16161C)",
         isolation: "isolate",
       }}
+      /* 悬浮态由消费方（画布节点）判定并传入；属性名与 CSS 选择器
+       *  `.react-flow__node[data-hovered="true"]` 对齐（见 globals.css）。 */
+      data-hovered={hovered ? "true" : undefined}
+      {...hoverEvents}
       data-testid={`param-node-${entryId}`}
     >
       {/* 头部：分类圆点 + 对外参数名 + 「恢复默认」 */}
