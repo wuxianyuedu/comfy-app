@@ -34,6 +34,7 @@ import {
   createIOEditStore,
   createRgthreeGroupsStore,
   createNodeJsonViewerStore,
+  callStoreAction,
 } from "./WorkflowStores";
 
 import { WorkflowEditorTopBar } from "./WorkflowEditorTopbar";
@@ -438,31 +439,38 @@ function WorkflowEditorBody({
    *  再回来、或富化还没到就先改了 seed 行为，都会让这串机器名以「作者命名」的
    *  名义被整体写回，显示名随即退回 `value_1`（ISSUE #349 的复现路径）。
    *  这里做的是同一条判定，只是发生在富化到达之后的本地态上 —— 判据只看事实
-   *  源，不依赖「我们是否记得写过这个键」，所以任何路径重放都能挡下。 */
+   *  源，不依赖「我们是否记得写过这个键」，所以任何路径重放都能挡下。
+   *
+   *  经 callStoreAction 调用：本动作是后加进 store 的，而 store 实例在挂载时
+   *  创建一次、其动作集合也随之定格；热更新后未重载的旧窗口会拿到缺这个动作的
+   *  实例（见 callStoreAction 注释）。那种情况下跳过本次兜底、等重载后再生效，
+   *  不让一次时序问题把整个编辑器打成错误页。 */
   useEffect(() => {
     if (!detail) return;
-    ioApi.getState().purgeMachineNames((key, entry) => {
-      const facts = ioDetailMap[key];
-      const enriched = facts ? sanitizeComboLabel(ioLabel(facts)) : undefined;
-      const slot = facts?.slotLabel ? sanitizeComboLabel(facts.slotLabel) : undefined;
-      if (
-        isMachineName(entry.label, {
-          name: entry.name,
-          ...(enriched ? { enrichedLabel: enriched } : {}),
-          ...(slot ? { slotLabel: slot } : {}),
-        })
-      ) {
-        return true;
-      }
-      /* 无富化可比时（键漂移把脏值写进了 `name`，富化按这个键查不到东西）：
-       *  只在「键尾 === name === label」这种三项自证的情况下摘 —— 真实 pin 名
-       *  与键尾不一致的条目一律放过，宁可留一个脏名也不误删作者命名。
-       *  没有这一步，图三里的 `1` 会永远粘在面板上（ISSUE #349）。 */
-      if (entry.label === undefined) return false;
-      const keyEntries = key.split("::");
-      const keyTail = keyEntries.length >= 3 ? keyEntries.slice(2).join("::") : key;
-      return keyTail === entry.name && entry.label === entry.name;
-    });
+    callStoreAction(ioApi, "purgeMachineNames", (state) =>
+      state.purgeMachineNames((key, entry) => {
+        const facts = ioDetailMap[key];
+        const enriched = facts ? sanitizeComboLabel(ioLabel(facts)) : undefined;
+        const slot = facts?.slotLabel ? sanitizeComboLabel(facts.slotLabel) : undefined;
+        if (
+          isMachineName(entry.label, {
+            name: entry.name,
+            ...(enriched ? { enrichedLabel: enriched } : {}),
+            ...(slot ? { slotLabel: slot } : {}),
+          })
+        ) {
+          return true;
+        }
+        /* 无富化可比时（键漂移把脏值写进了 `name`，富化按这个键查不到东西）：
+         *  只在「键尾 === name === label」这种三项自证的情况下摘 —— 真实 pin 名
+         *  与键尾不一致的条目一律放过，宁可留一个脏名也不误删作者命名。
+         *  没有这一步，图三里的 `1` 会永远粘在面板上（ISSUE #349）。 */
+        if (entry.label === undefined) return false;
+        const keyEntries = key.split("::");
+        const keyTail = keyEntries.length >= 3 ? keyEntries.slice(2).join("::") : key;
+        return keyTail === entry.name && entry.label === entry.name;
+      })
+    );
   }, [detail, ioDetailMap, ioApi]);
 
   /* P2: 把 detail 派生的查找上下文同步进 viewer / rgthree store，让
