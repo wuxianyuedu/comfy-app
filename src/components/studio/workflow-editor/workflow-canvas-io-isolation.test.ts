@@ -1,5 +1,5 @@
 /**
- * 画布只画工作流自身的图 —— 勾选 IO 不得往画布上新增任何节点。
+ * 画布只画工作流自身的图 —— 勾选 IO 不得往画布上新增任何 React Flow 节点。
  *
  * 为什么要有这条：映射曾经以「每个对外参数一张卡片（`pio:<条目>` 节点）+ 一条
  * 连线」的形式画在画布上，于是「勾了某个参数」和「图上多出一个节点」被绑死：
@@ -7,8 +7,13 @@
  * 一件事 —— 把这个端口暴露成工作流的对外参数（落 workflowIO / 出现在运行表单
  * 与「预览 IO」里），画布是工作流本身的呈现，不该被暴露选择影响。
  *
- * 编辑器画布与工作流库的画布预览**共用**这条约束：两处都只能画工作流自身的
- * 节点与图内连线。
+ * **例外（刻意保留）**：工作流库详情的「画布节点」页签里有一列**只读**的对外
+ * 参数卡片（`WorkflowParamCardColumn`）。它不是画布上的节点（不进 React Flow、
+ * 不可拖、没有端点、不连任何线），而是这张预览卡片旁边的一块说明：哪几个端口
+ * 合成了哪个对外参数、每个对外参数落到哪一行。它与宿主卡片的表单行互补 ——
+ * 表单行是「这一格填的是什么值」，卡片是「这一行属于哪个对外参数」。既然暴露的
+ * 参数在库详情必须看得见，而画布上又不许长节点，这一列就落在画布**之外**的
+ * flex 布局里，两张卡片并排居中（不靠固定留白挂靠，见下面最后一条）。
  *
  * 这条守卫是源码级的：视图层只允许 `buildInitialNodes`（工作流自身的节点）与
  * `buildEdges`（图内连线）两个来源，任何「按 IO 条目派生 React Flow 节点／连线」
@@ -24,17 +29,19 @@ const LIBRARY_DIR = path.resolve(__dirname, "../workflow-library");
 /** 视图层里「派生画布节点 / 连线」的允许来源。 */
 const ALLOWED_NODE_SOURCES = ["buildInitialNodes", "buildEdges"];
 
-/** 曾经用来把「对外参数」画成画布节点的模块名 —— 一个都不许回来。 */
+/** 曾经用来把「对外参数」画成**画布节点与连线**的模块名 —— 一个都不许回来。
+ *  注意这里不含卡片视觉本体：卡片现在是画布之外的只读视图，允许存在。 */
 const BANNED_MODULES = [
   "workflow-param-nodes.ts",
   "workflow-param-edges.ts",
   "workflow-param-nodes.test.ts",
   "WorkflowParamNode.tsx",
   "WorkflowParamNode.test.tsx",
-  "WorkflowParamCard.tsx",
   "workflow-param-node-data.ts",
   "WorkflowParamMapLayer.tsx",
+  "WorkflowParamMapLayer.test.tsx",
   "workflow-library-canvas-config.ts",
+  "workflow-library-canvas-config.test.ts",
 ];
 
 function sourceFiles(dir: string): string[] {
@@ -89,10 +96,25 @@ describe("勾选 IO 不在画布上新增节点", () => {
     expect(code).not.toContain("resolveManualEntryIds");
   });
 
-  it("工作流库详情不留「对外参数卡片列」的孤儿占位", () => {
-    /* 卡片列撤掉后，详情里那条约 300px 的左侧 gutter 曾留下来：卡片层已经
-     * 不画了，占位还在 —— 表现就是用户看到的「卡片没看到、左边空出块区域」。
-     * 这里锁住这条 gutter 不回来（容器只负责居中，不做单侧留白）。 */
+  it("对外参数卡片列不是画布节点：无 React Flow、无端点、无连线", () => {
+    /* 卡片列是画布之外的只读视图：它只能 import 卡片视觉本体与纯派生函数，
+     * 不许碰 React Flow（Handle / 边 / 节点类型），也不许自己画线。 */
+    const column = stripComments(
+      readFileSync(path.join(LIBRARY_DIR, "WorkflowParamCardColumn.tsx"), "utf8")
+    );
+    for (const forbidden of ["@xyflow/react", "Handle", "onConnect", "<svg", "<path"]) {
+      expect(column).not.toContain(forbidden);
+    }
+    const card = stripComments(readFileSync(path.join(EDITOR_DIR, "WorkflowParamCard.tsx"), "utf8"));
+    for (const forbidden of ["@xyflow/react", "Handle", "onConnect", "<svg", "<path"]) {
+      expect(card).not.toContain(forbidden);
+    }
+  });
+
+  it("工作流库详情不靠单侧定宽留白给卡片列腾位置", () => {
+    /* 卡片列与宿主卡片并排居中。历史上这里曾经用一条约 300px 的左侧 gutter 给
+     * 卡片列挂靠，卡片层撤掉后 gutter 没跟着撤 —— 表现就是用户看到的「卡片没
+     * 看到、左边空出块区域」。容器只负责居中，不做单侧留白。 */
     const body = readFileSync(
       path.join(LIBRARY_DIR, "sections/DetailBody.tsx"),
       "utf8"

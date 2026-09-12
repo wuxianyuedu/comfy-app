@@ -48,7 +48,10 @@ import {
   type WorkflowIOMap,
 } from "../shared/workflow-io";
 import { seedModeOverrides } from "@/components/studio/project-canvas/CanvasNode/helpers";
+import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
+import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
+import { deriveLibraryParamCards } from "./workflow-library-param-cards";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import {
   WorkflowNodeActionButton,
@@ -72,6 +75,8 @@ interface Props {
   workflowName: string;
   taskType: string;
   workflowIO: WorkflowIOMap | null;
+  /** 模板 paramMap（含 `source.mode:<模式>` 的对外参数落点）。 */
+  paramMap?: Record<string, unknown>;
   usable: boolean;
   /** 多模式工作流：提供时第二行右侧的类型 chip 变成模式切换下拉。 */
   modes?: string[];
@@ -86,6 +91,7 @@ export function WorkflowCanvasNodePreview({
   workflowName,
   taskType,
   workflowIO,
+  paramMap,
   usable,
   modes,
   defaultMode,
@@ -311,10 +317,16 @@ export function WorkflowCanvasNodePreview({
     (r) => r.workflowId === workflowId,
   );
 
-  /* 画布预览只画工作流自身的图 + 这张宿主运行卡片。对外参数以**表单行**出现
-   * 在卡片里（同一个 DynamicWorkflowForm），不再额外铺一层「对外参数卡片 + 连
-   * 线」——那些「勾选才出现」的节点/线不属于工作流图，混在预览里会让人分不清
-   * 哪些是真实节点。 */
+  /* ── 对外参数卡片列（只读）──
+   * 每个对外参数一张卡片，与宿主卡片并排；卡片说「这个对外参数由哪些端口组成」，
+   * 表单行说「这一格填的是什么值」，两者不重复表达同一个落点。卡片列不可拖、
+   * 不可改落点 —— 拉线 / 断开 / 恢复默认仍在编辑器画布上做。 */
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const paramCards = useMemo(
+    () => deriveLibraryParamCards({ io: workflowIO, paramMap, mode: defaultMode ?? null }),
+    [workflowIO, paramMap, defaultMode],
+  );
+
   const hasRuns = currentRuns.length > 0;
   const activeRun = currentRuns[0] ?? null;
 
@@ -323,9 +335,18 @@ export function WorkflowCanvasNodePreview({
      * 又包了一层同款边框 + 重复标题，出现「面板套面板」）。卡片宽 380，
      * 进度/结果/错误行与其对齐。 */
     <div className="flex w-full flex-col items-center gap-3">
-      {/* ── 画布同款节点卡片：唯一视觉源在 shared/workflow-node-parts ── */}
-      <div className="relative">
-      <WorkflowNodeCardShell>
+      {/* 对外参数卡片列 + 宿主卡片并排：卡片列在左、宿主运行卡片在右。 */}
+      <div className="flex items-start justify-center gap-4">
+        {paramCards.entries.length > 0 && (
+          <WorkflowParamCardColumn
+            entries={paramCards.entries}
+            resolved={paramCards.resolved}
+            io={workflowIO}
+          />
+        )}
+        {/* ── 画布同款节点卡片：唯一视觉源在 shared/workflow-node-parts ── */}
+        <div ref={hostRef} className="relative">
+          <WorkflowNodeCardShell>
         <WorkflowNodeHeader
           title={workflowName}
           right={
@@ -406,6 +427,11 @@ export function WorkflowCanvasNodePreview({
           compact
           mode={defaultMode}
           seedModes={seedModes}
+          /* 被某个对外参数落到的那一行，行尾标出它属于谁 —— 与左侧卡片的
+           * 端口行互为两端，一眼看出「这个参数到底喂给了哪一行」。 */
+          rowTrailing={(entry) => (
+            <ParamOwnerTag label={paramCards.ownersByPin[entry.ioKey]} />
+          )}
           onSeedModeChange={
             onSeedModeChange
               ? (ioKey: string, mode: string) => onSeedModeChange(ioKey, mode)
@@ -440,7 +466,8 @@ export function WorkflowCanvasNodePreview({
               : undefined
           }
         />
-      </WorkflowNodeCardShell>
+          </WorkflowNodeCardShell>
+        </div>
       </div>
 
       {/* 进度条（running 时） */}
