@@ -77,7 +77,7 @@ export type WorkflowIOMap = Record<string, WorkflowIOEntry>;
  *  （WorkflowIOEntry & { ioKey, control } 等）也能直接传进来。 */
 export function isVisibleInMode(
   entry: { modes?: Record<string, WorkflowIOModeOverride> } | undefined | null,
-  mode?: string | null
+  mode?: string | null,
 ): boolean {
   if (!entry || typeof entry !== "object") return true;
   if (!mode) return true;
@@ -90,7 +90,7 @@ export function isVisibleInMode(
  *  其次才是作者在 IO 编辑里写的通用覆盖 value，最后才是工作流图里读出的 defaultValue。 */
 export function resolveEntryDefault(
   entry: WorkflowIOEntry,
-  mode?: string | null
+  mode?: string | null,
 ): unknown {
   if (mode) {
     const modeDefault = entry.modes?.[mode]?.defaultValue;
@@ -107,7 +107,7 @@ export function resolveEntryDefault(
  *  仍按旧行为读取 entry.required）。未开启模式（mode 为空）时只读条目级。 */
 export function resolveEntryRequired(
   entry: WorkflowIOEntry | undefined | null,
-  mode?: string | null
+  mode?: string | null,
 ): boolean | undefined {
   if (!entry || typeof entry !== "object") return undefined;
   if (mode) {
@@ -123,7 +123,7 @@ export function resolveEntryRequired(
  *  undefined = 该参数不是 seed / 该模式无覆盖，回退条目级 seedMode。 */
 export function resolveEntrySeedMode(
   entry: WorkflowIOEntry | undefined | null,
-  mode?: string | null
+  mode?: string | null,
 ): string | undefined {
   if (!entry || typeof entry !== "object") return undefined;
   if (mode) {
@@ -134,7 +134,9 @@ export function resolveEntrySeedMode(
 }
 
 /** 收集整张 IO 表里出现过的全部模式码（去重、保持稳定顺序）。 */
-export function collectModeCodes(io: WorkflowIOMap | null | undefined): string[] {
+export function collectModeCodes(
+  io: WorkflowIOMap | null | undefined,
+): string[] {
   const seen = new Set<string>();
   for (const entry of Object.values(io ?? {})) {
     if (!entry || typeof entry !== "object") continue;
@@ -143,4 +145,28 @@ export function collectModeCodes(io: WorkflowIOMap | null | undefined): string[]
     }
   }
   return [...seen];
+}
+
+/** ── 映射连线的锚点契约（宿主卡片那一端的 data 属性） ──
+ *
+ * 工作流库的只读映射连线（`WorkflowParamWires`）要量出「卡片圆点 → 宿主卡片上
+ *  被落到的那一行」，靠的就是行上的锚点属性。端口键（ioKey）里**可能含 `::`**
+ *  （端口名本身带分隔符），所以量测一律走 `getAttribute` 精确比较，不做选择器
+ *  转义 —— 两边必须用同一套属性名，故收在这里，禁止各处手写字符串。
+ *
+ *  两种落点形状：
+ *   · 独立参数行（`WidgetInputRow` / 端口行）：整行一个锚点；
+ *   · 组合参数（`DimensionControl` / `VideoControl`）：宽高、比例/像素由同一个
+ *     控件录入，没有独立的一行可以连 —— 锚点挂在整块控件上，线指向的就是那一格。
+ */
+
+/** 独立参数行上的落点锚点（值 = 该行的 ioKey）。 */
+export const WIRE_ROW_ATTR = "data-io-key";
+
+/** 组合参数控件上的落点锚点（值 = 该控件覆盖的 ioKeys，逗号分隔）。 */
+export const WIRE_PINS_ATTR = "data-io-pins";
+
+/** 组合参数锚点的值（覆盖到的 ioKeys）。 */
+export function wirePinsValue(ioKeys: readonly (string | undefined)[]): string {
+  return ioKeys.filter((key): key is string => Boolean(key)).join(",");
 }

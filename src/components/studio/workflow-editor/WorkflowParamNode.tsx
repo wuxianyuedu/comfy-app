@@ -7,6 +7,9 @@
  * 它包含的端口，右侧一个输出端点。作者把这个端点拖到宿主节点的端口上即可
  * 完成连线 —— 映射就是画布上的连线，不再有另一套界面。
  *
+ * 卡片右侧那颗小圆点就是这张卡的输出端点，内容（名称 + 类型）右对齐贴着它 ——
+ * 线从圆点外缘出发连到宿主节点被落到的那一行（见 WorkflowParamCard）。
+ *
  * 两条交互约束（对应「没有模式禁止连线」）：
  *   · 没有选中模式时**不渲染输出端点**，连线无从拖起，卡片上给出说明；
  *   · 「恢复默认」只在当前模式下确实画过线时可用（否则点了没有变化）。
@@ -49,7 +52,8 @@ export const WorkflowParamNode = React.memo(function WorkflowParamNode({
       noModeHint={data.noModeHint}
       canReset={data.canReset}
       onReset={data.onReset}
-      /* 端口行只列名字：卡片本身不标落点，落点由那条线表达。行高必须与
+      /* 端口行只列名字：卡片本身不标落点，落点由那条线表达（单端口条目的落点名
+       *  写在下面带类型的输出端口那一行、贴着端点，不再重复标一次）。行高必须与
        *  PARAM_NODE_ROW_H 同口径，否则卡片实际高度与 placeParamNodes 算出的
        *  位置对不上，卡片会互相压住。 */
       hoverRef={hoverRef}
