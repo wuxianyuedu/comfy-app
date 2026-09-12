@@ -9,6 +9,7 @@ import { renderMarkdown } from "@/lib/comfyui/markdown";
 import { WorkflowEdge } from "@/components/studio/canvas/WorkflowEdge";
 import { FlowNode } from "../canvas/WorkflowNode";
 import { WorkflowSubgraphNode } from "../canvas/WorkflowSubgraphNode";
+import { WorkflowParamNode } from "./WorkflowParamNode";
 import type { WorkflowGroupData, WorkflowIoPortData, WorkflowNoteData } from "../workflow-types";
 import { NODE_TITLE_H, lightenHex, hexToRgba, mixHex } from "../workflow-utils";
 
@@ -296,8 +297,12 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: {
  * what's inside without expanding the subgraph. */
 /* 节点类型注册表只含**工作流自身的图**：普通节点 / 备注 / 分组 / 子图封装 /
  *  子图边界口。对外参数不再是画布节点（勾选只写 workflowIO，见
- *  WorkflowEditorInner 的「对外参数落点」段），因此没有 wfParam。 */
-export const workflowNodeTypes = { wfNode: FlowNode, wfNote: WorkflowNoteNode, wfGroup: WorkflowGroupNode, wfSubgraph: WorkflowSubgraphNode, wfIoPort: WorkflowIoPortNode };
+ *  WorkflowEditorInner 的「对外参数映射」段）。 */
+/* 节点类型注册表 = 工作流自身的图（普通节点 / 备注 / 分组 / 子图封装 / 子图边界口）
+ *  + 「对外参数节点」。后者是**接线面板**：它不来自图上任何一个节点，而是作者
+ *  勾选暴露出来的对外口，端点拖到宿主节点端口上即完成「这个参数落到哪一行」的
+ *  连线（映射就是这条线，见 workflow-param-edges）。 */
+export const workflowNodeTypes = { wfNode: FlowNode, wfNote: WorkflowNoteNode, wfGroup: WorkflowGroupNode, wfSubgraph: WorkflowSubgraphNode, wfIoPort: WorkflowIoPortNode, wfParam: WorkflowParamNode };
 // Custom edge renderer — rounder bezier (curvature 0.85) + ComfyUI-style
 // white hub dot at the curve midpoint.  Defined at module scope so React
 // Flow doesn't re-register edgeTypes on every render.

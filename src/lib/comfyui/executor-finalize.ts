@@ -20,7 +20,13 @@ import { taskRepository } from "../core/repository";
 import { getView } from "./client";
 import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
 import { friendlyError } from "./executor-errors";
-import { claimSettle, fetchHistoryEntry, type ComfyHistoryEntry } from "./executor-ws";
+import {
+  claimSettle,
+  fetchHistoryEntry,
+  traceComfyQueue,
+  type ComfyHistoryEntry,
+} from "./executor-ws";
+import { historyTraceSummary, historyOutputKeys, trace } from "./trace";
 import { processQueue } from "./executor-scheduler";
 import { state, log, persistLogs, claimFinalize } from "./runner-state";
 import { createAppRuntimeLogger } from "@/lib/app-runtime-log";
@@ -63,12 +69,17 @@ export async function complete(taskId: string, promptId: string) {
     await finalizeFailure(
       taskId,
       promptId,
-      (e as { message?: unknown } | null | undefined)?.message ?? "结果处理失败"
+      (e as { message?: unknown } | null | undefined)?.message ??
+        "结果处理失败",
     );
   }
 }
 
-async function completeInner(taskId: string, promptId: string, executedWorkflow: unknown = null) {
+async function completeInner(
+  taskId: string,
+  promptId: string,
+  executedWorkflow: unknown = null,
+) {
   const s = state();
 
   // 项目级产出：读取任务归属的项目与请求参数，决定磁盘落点 +
@@ -99,24 +110,99 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   log(taskId, "info", "🔍 拉取 ComfyUI history（最长 ~3s）…");
   const entry: ComfyHistoryEntry | null = await fetchHistoryEntry(promptId);
   if (!entry) {
-    await finalizeFailure(taskId, promptId, "未找到生成结果");
+    /* ISSUE #216：这句结论此前是用户能拿到的全部信息（「未找到生成结果」），
+     *  既没有 promptId 也没有 ComfyUI 的原始回执。现在把能确定的事实全部摊开：
+     *  promptId 有没有回传、/history 最后一次返回了什么、ComfyUI 队列里还有没有
+     *  本任务；结构化原文同时落 comfyui/trace.log（见 trace.ts）。 */
+    const detail = promptId
+      ? `promptId=${promptId}，但 ComfyUI /history 中无该条目的有效结果`
+      : "ComfyUI 全程未回传 prompt_id（工作流可能未被接受或在 comfy-cli 转换阶段失败）";
+    log(
+      taskId,
+      "error",
+      `✗ 未找到生成结果：${detail}\n` +
+        `  · ComfyUI 原始回执已完整写入 log/comfyui/comfyui-trace.log（含 comfy-cli 全部 stdout/stderr 与 /history、/queue 原文）`,
+    );
+    await traceComfyQueue(taskId);
+    trace("session", taskId, "收口：未找到生成结果", { promptId, detail });
+    await finalizeFailure(taskId, promptId, `未找到生成结果：${detail}`);
     return;
   }
   const outputsCount = Object.keys(entry.outputs ?? {}).length;
   log(taskId, "info", `✓ history 就绪（${outputsCount} 节点输出）`);
+  /* 把 history 的结论摘要打进任务日志：即使后面 outputs 判定为「无输出内容」，
+   *  用户也能立刻看到 ComfyUI 自己报的 status（success/error/completed）与
+   *  每个节点的输出键，而不是只看到一句收口结论。原文在 trace 文件里。 */
+  const verdict = historyTraceSummary(promptId, { [promptId]: entry });
+  log(
+    taskId,
+    "info",
+    `ComfyUI history 摘要：status=${verdict.statusStr ?? "(无)"} completed=${
+      verdict.completed ?? "(无)"
+    } 输出节点=${verdict.outputNodeCount}${
+      verdict.executionError ? ` 执行错误=${verdict.executionError}` : ""
+    }`,
+  );
+  const outputKeys = historyOutputKeys({ [promptId]: entry }, promptId);
+  if (outputKeys.length) {
+    log(
+      taskId,
+      "info",
+      "输出节点明细：\n" +
+        outputKeys
+          .map((o) => `  · 节点 ${o.nodeId} → ${o.keys.join(", ") || "(空)"}`)
+          .join("\n"),
+    );
+  }
 
   const msgs: unknown[] = entry.status?.messages ?? [];
-  const errored = msgs.some((msg) => statusMessageTypeOf(msg) === "execution_error");
+  const errored = msgs.some(
+    (msg) => statusMessageTypeOf(msg) === "execution_error",
+  );
   if (errored || entry.status?.status_str === "error") {
-    const ex = msgs.find((msg) => statusMessageTypeOf(msg) === "execution_error");
-    await finalizeFailure(taskId, promptId, executionErrorMessageOf(ex) ?? "执行错误");
+    const ex = msgs.find(
+      (msg) => statusMessageTypeOf(msg) === "execution_error",
+    );
+    /* ISSUE #216：执行错误此前只留一句 exception_message，status.messages 的
+     *  完整结构（含节点 id / traceback）全部丢弃。原文进 trace，面板给摘要。 */
+    trace("history", taskId, "ComfyUI 报执行错误", {
+      promptId,
+      status: entry.status,
+    });
+    log(
+      taskId,
+      "error",
+      `ComfyUI 报执行错误（status=${entry.status?.status_str ?? "error"}），完整 status.messages 见 log/comfyui/comfyui-trace.log`,
+    );
+    await finalizeFailure(
+      taskId,
+      promptId,
+      executionErrorMessageOf(ex) ?? "执行错误",
+    );
     return;
   }
 
-  const { images, videos, audios, others, texts } = collectOutputs(entry.outputs ?? {});
+  const { images, videos, audios, others, texts } = collectOutputs(
+    entry.outputs ?? {},
+  );
   const hasOutput =
-    images.length || videos.length || audios.length || texts.length || others.length;
+    images.length ||
+    videos.length ||
+    audios.length ||
+    texts.length ||
+    others.length;
   if (!hasOutput) {
+    /* ISSUE #216：outputs 非空但收集不到任何产物（未知输出键 / 输出被节点丢弃）
+     *  时，把 outputs 原文落 trace，并提示去哪里核对，而不是只报「无输出内容」。 */
+    trace("history", taskId, "history 有 outputs 但未收集到任何产物", {
+      promptId,
+      outputs: entry.outputs ?? {},
+    });
+    log(
+      taskId,
+      "error",
+      `ComfyUI history 有 ${outputsCount} 个节点输出，但没识别出任何可下载产物（未知输出结构）；原文见 log/comfyui/comfyui-trace.log`,
+    );
     await finalizeFailure(taskId, promptId, "无输出内容");
     return;
   }
@@ -130,7 +216,11 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   const runtime = extractRuntimeParams(entry);
   const actualSeed: number | undefined = runtime.seed;
   if (actualSeed !== undefined) {
-    log(taskId, "info", `真实执行 seed = ${actualSeed}（${runtime.samplerClassType ?? "KSampler"}@${runtime.samplerNodeId ?? "?"}）`);
+    log(
+      taskId,
+      "info",
+      `真实执行 seed = ${actualSeed}（${runtime.samplerClassType ?? "KSampler"}@${runtime.samplerNodeId ?? "?"}）`,
+    );
   }
 
   const parts: string[] = [];
@@ -214,7 +304,9 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
       ...(runtime.sampler_name ? { sampler_name: runtime.sampler_name } : {}),
       ...(runtime.scheduler ? { scheduler: runtime.scheduler } : {}),
       ...(runtime.denoise !== undefined ? { denoise: runtime.denoise } : {}),
-      ...(runtime.samplerClassType ? { sampler_class: runtime.samplerClassType } : {}),
+      ...(runtime.samplerClassType
+        ? { sampler_class: runtime.samplerClassType }
+        : {}),
       ...(runtime.samplerNodeId ? { sampler_node: runtime.samplerNodeId } : {}),
       source: "history",
     };
@@ -255,13 +347,10 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
       sortIndex: i,
       isCover: i === 0,
       mediaType: s2.mediaType,
-      seed:
-        actualSeed !== undefined
-          ? String(actualSeed)
-          : reqSeed ?? null,
-      width: s2.mediaType === "image" ? reqW ?? null : null,
-      height: s2.mediaType === "image" ? reqH ?? null : null,
-    }))
+      seed: actualSeed !== undefined ? String(actualSeed) : (reqSeed ?? null),
+      width: s2.mediaType === "image" ? (reqW ?? null) : null,
+      height: s2.mediaType === "image" ? (reqH ?? null) : null,
+    })),
   );
 
   // 项目级产出：写一份可复现的 manifest，便于「按项目归档 + 一键还原」。
@@ -271,7 +360,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     workflowName: taskRow?.workflowName ?? null,
     prompt: taskRow?.prompt ?? null,
     negativePrompt: taskRow?.negativePrompt ?? null,
-    seed: actualSeed !== undefined ? String(actualSeed) : reqSeed ?? null,
+    seed: actualSeed !== undefined ? String(actualSeed) : (reqSeed ?? null),
     size: sizeStr || null,
     referenceImages: (taskRow?.referenceImages as string[] | null) ?? [],
     params: taskParams,
@@ -279,7 +368,11 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     files: saved,
   };
   await fs
-    .writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf-8")
+    .writeFile(
+      path.join(dir, "manifest.json"),
+      JSON.stringify(manifest, null, 2),
+      "utf-8",
+    )
     .catch(() => undefined);
 
   // 落盘本次执行实际用到的 workflow.json。种子等已在
@@ -288,7 +381,11 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // 已展开 graph。
   if (executedWorkflow != null) {
     await fs
-      .writeFile(path.join(dir, "workflow.json"), JSON.stringify(executedWorkflow, null, 2), "utf-8")
+      .writeFile(
+        path.join(dir, "workflow.json"),
+        JSON.stringify(executedWorkflow, null, 2),
+        "utf-8",
+      )
       .catch(() => undefined);
   }
 
@@ -301,7 +398,10 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // a re-attach — extremely rare).
   const startedAt = s.startedAt.get(taskId);
   if (startedAt) {
-    const elapsedSec = Math.max(0, Math.round((Date.now() - startedAt) / 100) / 10);
+    const elapsedSec = Math.max(
+      0,
+      Math.round((Date.now() - startedAt) / 100) / 10,
+    );
     log(taskId, "info", `✓ 全部完成（总耗时 ${elapsedSec}s）`);
     s.startedAt.delete(taskId);
   }
@@ -323,7 +423,7 @@ export async function fail(
   taskId: string,
   promptId: string,
   error: unknown,
-  validationErrors?: ValidationError[]
+  validationErrors?: ValidationError[],
 ) {
   if (!claimSettle(taskId)) return;
   await finalizeFailure(taskId, promptId, error, validationErrors);
@@ -337,7 +437,7 @@ export async function finalizeFailure(
   taskId: string,
   promptId: string,
   error: unknown,
-  validationErrors?: ValidationError[]
+  validationErrors?: ValidationError[],
 ) {
   const s = state();
   const friendly = friendlyError(error) || "任务失败";
@@ -346,7 +446,11 @@ export async function finalizeFailure(
    *  直接跳过——否则后写入的原因会覆盖先写入的，SSE（执行日志）与
    *  DB / 应用日志就会显示两个互相矛盾的失败原因。 */
   if (!claimFinalize(taskId)) {
-    log(taskId, "warn", `跳过重复收口：终态已由其它路径落库（本次原因：${friendly}）`);
+    log(
+      taskId,
+      "warn",
+      `跳过重复收口：终态已由其它路径落库（本次原因：${friendly}）`,
+    );
     /* 仍需释放活跃槽位并推进队列，否则重复收口会把队列卡死。 */
     s.active = Math.max(0, s.active - 1);
     void processQueue();
@@ -364,7 +468,7 @@ export async function finalizeFailure(
   await taskRepository.finalizeFailure(
     taskId,
     friendly,
-    validationErrors?.length ? validationErrors : undefined
+    validationErrors?.length ? validationErrors : undefined,
   );
 
   await persistLogs(taskId);

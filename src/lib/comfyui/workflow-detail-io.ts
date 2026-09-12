@@ -153,6 +153,13 @@ export interface WorkflowIOEntry {
    *  （`value_1`）时，仅凭显示的 label 无从判断本层有没有作者命名，而这里能。
    *  没有它，同名条目在写入时会被当成作者命名固化回库（ISSUE #349）。 */
   slotLabel?: string;
+  /** 富化链现在给这个条目的显示名（`label → localized → name` 之外还含子图
+   *  内部字段业务名）。
+   *
+   *  客户端只用它做**别名判定的事实源**：本地 label 是不是一串机器 pin 名，
+   *  要拿真实 pin 名 + 本层作者名 + 这里的富化名三者互相印证，缺一处就可能
+   *  把机器名当成作者命名（ISSUE #349）。 */
+  enrichedLabel?: string;
 }
 
 /** Enrich the stored IO selection into a self-describing record (see the
@@ -233,6 +240,31 @@ export async function enrichWorkflowIO(
       const inputEntries = rawInputsById[canonicalNodeId] ?? [];
       const ri =
         inputEntries.find((raw) => raw.name === v.name) ??
+        /* 键漂移：修复前某些路径把**画布上的显示名**写进了 `name`，于是存下来的
+         *  条目变成 `4::widget::1` / `4::widget::Seed` —— 它既不是 ComfyUI 的槽位
+         *  名，也不在包装层槽位表里，按名字回查必然落空，类型退化成 `*`、显示名
+         *  退化成那串脏值（ISSUE #349 的「名字变成 1」）。
+         *
+         *  判据收敛成「同一节点上恰好只有一个暴露槽位与这个脏名字同名」才认：
+         *  多插槽节点（KSampler 的 seed / steps / cfg…）绝不会被误认，宁可这一条
+         *  少一个名字，也不把别的槽位的 label 安到它头上。
+         *
+         *  比对时把作者业务名也纳入（`proxyField.label` / 本层 `label`）——
+         *  漂移进去的常常正是勾选那一刻的画布显示名（= 作者业务名）。 */
+        inputEntries.find((raw) => {
+          if (!raw.widget) return false;
+          /* 候选名字集合：真实槽位名 + 内部字段名 + 本层作者名 + 内部作者名。
+           *  「恰好只有一个暴露槽位认领这个名字」才认 —— 多插槽节点上同名者
+           *  不止一行时宁可放过，也不把别的槽位的 label 安到这一行。 */
+          const names = [raw.name, raw.proxyField?.field, raw.label, raw.proxyField?.label];
+          if (!names.includes(v.name)) return false;
+          return inputEntries.filter((other) => {
+            if (!other.widget) return false;
+            return [other.name, other.proxyField?.field, other.label, other.proxyField?.label].includes(
+              v.name
+            );
+          }).length === 1;
+        }) ??
         inputEntries.find((raw) => raw.proxyField?.field === v.name) ??
         /* 勾选点落在子图内层视图（下钻后的画布）时，落库 nodeId 是内部节点，
          *  顶层 rawInputsById 里没有它 —— 退回子图内部节点的索引，否则类型
@@ -438,6 +470,9 @@ export async function enrichWorkflowIO(
       /* 本层作者名：只在真的与槽位名不同时下发，避免给「label 就是 pin 名」
        *  的普通节点塞一份无信息量的副本。 */
       ...(slotLabel !== undefined ? { slotLabel } : {}),
+      /* 富化链最终给出的显示名 —— 客户端拿它 + 上面两个字段一起判「本地存的那串
+       *  是不是机器 pin 名」。只作判定事实源，客户端显示仍按自己的合并链取。 */
+      ...(label !== undefined ? { enrichedLabel: label } : {}),
     };
   }
 

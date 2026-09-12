@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
 import {
   enrichFromViewNodes,
+  isMachineName,
   isStaleExposedAlias,
   mergeExposedEntry,
   resolveExposedLabel,
@@ -193,5 +194,71 @@ describe("isStaleExposedAlias — 本地存的名字是不是机器生成的槽�
   it("基准缺失（富化未加载）或本地未命名 → 不判定", () => {
     expect(isStaleExposedAlias("value_1", undefined)).toBe(false);
     expect(isStaleExposedAlias(undefined, "value_1")).toBe(false);
+  });
+});
+
+describe("isMachineName — 机器名判定的两条前提（ISSUE #349）", () => {
+  it("候选串必须与真实 pin 名逐字相同才可能被当成机器名", () => {
+    /* 作者手写的名字（`seed` / `我的种子`）与 pin 名不同 → 一律不是机器名，
+     *  哪怕富化链给的是另一个名字。这是「作者命名永不让位」的机器化表达。 */
+    expect(isMachineName("seed", { name: "value_1", enrichedLabel: "value_1" })).toBe(false);
+    expect(isMachineName("我的种子", { name: "value_1", enrichedLabel: "Seed" })).toBe(false);
+    expect(isMachineName("Seed", { name: "value_1", enrichedLabel: "value_1" })).toBe(false);
+  });
+
+  it("① 候选串就是 pin 名、富化链另有更好的名字 → 机器名", () => {
+    expect(isMachineName("value_1", { name: "value_1", enrichedLabel: "Seed" })).toBe(true);
+    expect(isMachineName("image", { name: "image", enrichedLabel: "Last Frame Image" })).toBe(true);
+  });
+
+  it("② 富化名也停在 pin 名，但勾选时画布透传的作者名不是它 → 机器名", () => {
+    /* 图一 / 图二那条工作流的形状：wrapper 槽位 `value_1` → 内部
+     * `PrimitiveInt.value`，富化名停在槽位名，只有 slotLabel 还能作证本层
+     * 有作者命名。只看名字相不相等永远判不出来 —— 那正是它一直复活的原因。 */
+    expect(isMachineName("value_1", { name: "value_1", enrichedLabel: "value_1", slotLabel: "Seed" })).toBe(true);
+    expect(isMachineName("1", { name: "1", enrichedLabel: "1", slotLabel: "Seed" })).toBe(true);
+  });
+
+  it("两个来源都指不出别的名字 → 无从判定，宁可留着", () => {
+    expect(isMachineName("value_1", { name: "value_1", enrichedLabel: "value_1" })).toBe(false);
+    expect(isMachineName("value_1", { name: "value_1" })).toBe(false);
+    expect(isMachineName("value_1", { name: "value_1", enrichedLabel: "value_1", slotLabel: "value_1" })).toBe(false);
+  });
+
+  it("基准缺失（富化还没到 / 未命名）时一律不判定", () => {
+    expect(isMachineName("value_1", { name: undefined, enrichedLabel: "Seed" })).toBe(false);
+    expect(isMachineName(undefined, { name: "value_1", enrichedLabel: "Seed" })).toBe(false);
+    expect(isMachineName("   ", { name: "value_1", enrichedLabel: "Seed" })).toBe(false);
+  });
+
+  it("判定不依赖「我们记得写过这个键」——同一组事实反复判结果一致", () => {
+    const facts = { name: "value_1", enrichedLabel: "Seed", slotLabel: "Seed" };
+    expect(isMachineName("value_1", facts)).toBe(true);
+    expect(isMachineName("value_1", facts)).toBe(true);
+    expect(isMachineName("Seed", facts)).toBe(false);
+  });
+});
+
+describe("resolveExposedLabel — 本地 label 与富化名同源时以富化链为准（ISSUE #349）", () => {
+  it("本地存的与富化名逐字相同、且都不是 pin 名 → 取富化名，不把它竖成作者命名", () => {
+    /* 勾选那一刻写进本地 label 的就是画布显示名，而画布显示名正是从同一个
+     *  槽位读出来的：它在本地躺着并不代表作者命名过。把它当作者命名会让任何
+     *  一次写入重新固化它，显示名随即退回那串名字。 */
+    expect(resolveExposedLabel({ label: "1" }, enriched({ label: "1" }), "value_1")).toBe("1");
+    expect(resolveExposedLabel({ label: "1" }, enriched({ label: "1", slotLabel: "Seed" }), "value_1")).toBe("1");
+  });
+
+  it("富化链另有更好的名字时本地那串机器名让位", () => {
+    expect(resolveExposedLabel({ label: "value_1" }, enriched({ label: "Seed" }), "value_1")).toBe("Seed");
+  });
+
+  it("作者手写的名字（与富化名不同、与 pin 名也不同）依旧最高优先", () => {
+    expect(resolveExposedLabel({ label: "我的种子" }, enriched({ label: "Seed" }), "value_1")).toBe("我的种子");
+    expect(resolveExposedLabel({ label: "seed" }, enriched({ label: "value_1" }), "value_1")).toBe("seed");
+  });
+
+  it("本地未命名时按 富化名 → pin 名 回退", () => {
+    expect(resolveExposedLabel({}, enriched({ label: "Seed" }), "value_1")).toBe("Seed");
+    expect(resolveExposedLabel({}, undefined, "value_1")).toBe("value_1");
   });
 });

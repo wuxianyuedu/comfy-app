@@ -7,7 +7,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useNodesState, useEdgesState, useReactFlow,
-  type Node, type Edge,
+  type Connection as ReactFlowConnection, type Node, type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "@/config/custom-nodes";
@@ -42,8 +42,12 @@ import { WorkflowEditorCanvas } from "./WorkflowEditorCanvas";
 import { buildInitialNodes } from "./workflow-editor-build-nodes";
 import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
 import { useParamMapping } from "./hooks/use-param-mapping";
+import { entryIdFromParamNodeId } from "~/lib/workflow-param-mapping";
+import { buildParamEdges } from "./workflow-param-edges";
+import { buildParamNodes } from "./workflow-param-nodes";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
-import { enrichFromViewNodes, type ExposedAliasBase } from "./io-exposure";
+import { enrichFromViewNodes, isMachineName, type ExposedAliasBase } from "./io-exposure";
+import { sanitizeComboLabel } from "../workflow-utils";
 import { ioLabel, type WorkflowIOEntry } from "../shared/workflow-io";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
 import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
@@ -412,7 +416,7 @@ function WorkflowEditorBody({
    *  都会把旧名字当作作者命名落库，显示名随即退回 `value_1`（ISSUE #349）。 */
   useEffect(() => {
     const base: Record<string, ExposedAliasBase> = {};
-    for (const [key, entry] of Object.entries<WorkflowIOEntry>(ioDetailMap ?? {})) {
+    for (const [key, entry] of Object.entries<WorkflowIOEntry>(ioDetailMap)) {
       const name = entry?.name;
       if (typeof name !== "string" || !name) continue;
       const enrichedLabel = ioLabel(entry);
@@ -425,6 +429,41 @@ function WorkflowEditorBody({
     }
     ioApi.getState().setAliasBase(base);
   }, [ioDetailMap, ioApi]);
+
+  /* 客户端兜底：富化下发的每一条本地条目，落库前/写入前再判一次「label 是不是
+   *  机器名」，是就摘掉。
+   *
+   *  服务端读取出参时已经就地纠正过（读取时才能纠正，不改写库里数据），但本地
+   *  store 里躺的仍是**回读时**那份带脏 label 的条目：取消勾选再勾选、下钻子图
+   *  再回来、或富化还没到就先改了 seed 行为，都会让这串机器名以「作者命名」的
+   *  名义被整体写回，显示名随即退回 `value_1`（ISSUE #349 的复现路径）。
+   *  这里做的是同一条判定，只是发生在富化到达之后的本地态上 —— 判据只看事实
+   *  源，不依赖「我们是否记得写过这个键」，所以任何路径重放都能挡下。 */
+  useEffect(() => {
+    if (!detail) return;
+    ioApi.getState().purgeMachineNames((key, entry) => {
+      const facts = ioDetailMap[key];
+      const enriched = facts ? sanitizeComboLabel(ioLabel(facts)) : undefined;
+      const slot = facts?.slotLabel ? sanitizeComboLabel(facts.slotLabel) : undefined;
+      if (
+        isMachineName(entry.label, {
+          name: entry.name,
+          ...(enriched ? { enrichedLabel: enriched } : {}),
+          ...(slot ? { slotLabel: slot } : {}),
+        })
+      ) {
+        return true;
+      }
+      /* 无富化可比时（键漂移把脏值写进了 `name`，富化按这个键查不到东西）：
+       *  只在「键尾 === name === label」这种三项自证的情况下摘 —— 真实 pin 名
+       *  与键尾不一致的条目一律放过，宁可留一个脏名也不误删作者命名。
+       *  没有这一步，图三里的 `1` 会永远粘在面板上（ISSUE #349）。 */
+      if (entry.label === undefined) return false;
+      const keyEntries = key.split("::");
+      const keyTail = keyEntries.length >= 3 ? keyEntries.slice(2).join("::") : key;
+      return keyTail === entry.name && entry.label === entry.name;
+    });
+  }, [detail, ioDetailMap, ioApi]);
 
   /* P2: 把 detail 派生的查找上下文同步进 viewer / rgthree store，让
    * getNodeJson/getNodeView/getBypass 读到实时 detail（等价于旧 Context
@@ -466,15 +505,15 @@ function WorkflowEditorBody({
     [detail, scopeDetail, rawMetaById, outSlotNameById, paramMap, onEnterSubgraph, viewHostNodeId]
   );
 
-  /* ── 对外参数落点（纯数据层）──
+  /* ── 对外参数映射：画布上的节点与连线 ──
    *
-   * 勾选 IO 只做一件事：把 pin 暴露成「对外参数」（写 workflowIO 落库），
-   * 它以**表单行**的形式出现在「预览 IO」与运行期表单里。画布上不再为它新增
-   * 任何节点或连线 —— 画布只画工作流自身的图（节点 / 备注 / 分组 / 子图边界口）。
+   * 勾选 IO 只做一件事：把 pin 暴露成「对外参数」（写 workflowIO 落库）。这些
+   * 对外口在画布上是**一列接线卡片**（`wfParam` 节点）：卡片说「这个对外参数由
+   * 哪些端口组成」，右侧端点拖到宿主节点的某一行即完成映射 —— 连线本身就是
+   * 映射，与 `paramMap.source.mode:<模式>` 同一份事实源，没有第二套界面。
    *
-   * 每个对外参数「落到哪个节点端口」仍然是 `paramMap.source.mode:<模式>` 这张
-   * 按模式的落点表：默认由名字自动判定（提示词 / 尺寸 / 参考图…），运行期严格按
-   * 这张表落值。它只是数据，没有画布呈现 —— 顶栏「恢复默认映射」直接清表。
+   * 模式取工作流的 defaultMode：落点覆盖必须归属一个模式，没有模式时卡片不渲染
+   * 端点、拖不出线（写入也是空操作）。卡片位置由宿主节点坐标派生、不可拖动。
    * 这些 hook 必须无条件调用（在下方 loading / error 的提前返回之前）。 */
   const wiringMode = detail?.defaultMode ?? null;
   const paramMapping = useParamMapping({
@@ -484,23 +523,120 @@ function WorkflowEditorBody({
     paramMap,
   });
 
-  /* useNodesState 只接受挂载首帧的初值；后续同步统一走下面的 effect。 */
+  /* 卡片位置派生自宿主节点当前的画布坐标 —— 作者拖动宿主节点，卡片列跟着走。 */
+  const hostPosById = useMemo(() => {
+    const out: Record<string, { x: number; y: number }> = {};
+    for (const node of graphNodes) out[node.id] = node.position;
+    return out;
+  }, [graphNodes]);
+
+  /* 卡片与连线只在**内容真的变了**时才重建。
+   *
+   * `isManual` / `onReset` 这类回调进入 memo 依赖表会让 memo 形同虚设（外层每次
+   * 渲染都可能给出新身份），而 `initialNodes` 每次渲染换新数组时，React Flow 的
+   * 同步 effect 会跟着每一帧重跑 —— 渲染回路，浏览器里表现为卡死、测试里表现为
+   * 堆爆。这里把「条目标识 + 当前模式 + 解析结果 + 作者连过的线」压成一个签名，
+   * 签名不变就复用上一批对象，签名一变立即重建（回调闭包因此总是新鲜的）。 */
+  const paramSignature = useMemo(
+    () =>
+      JSON.stringify({
+        mode: wiringMode,
+        entries: paramMapping.entries.map((entry) => entry.id),
+        resolved: paramMapping.resolved,
+        manual: paramMapping.mapping.manualByMode?.[wiringMode ?? ""] ?? {},
+      }),
+    [paramMapping.entries, paramMapping.resolved, paramMapping.mapping, wiringMode]
+  );
+  const paramWiring = useMemo(() => {
+    const paramNodes = buildParamNodes({
+      entries: paramMapping.entries,
+      hostPosById,
+      mode: wiringMode,
+      isManual: paramMapping.isManual,
+      onReset: (entryId: string) => paramMapping.resetToAuto(entryId),
+    });
+    /* 卡片集合即「哪些对外参数在当前视图里真的有宿主」—— 连线用它当闸门，
+     * 否则子图内部节点的 nodeId 在顶层画布上不存在时会画出一条悬空线（视觉上
+     * 就是图上多出一个没来历的节点）。 */
+    const renderedCardIds = new Set(paramNodes.map((node) => node.id));
+    return {
+      nodes: paramNodes,
+      edges: buildParamEdges({
+        entries: paramMapping.entries,
+        resolved: paramMapping.resolved,
+        isManual: paramMapping.isManual,
+        renderedCardIds,
+      }),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 上面的签名即全部内容
+  }, [paramSignature]);
+  const paramNodes = paramWiring.nodes;
+  const paramEdges = paramWiring.edges;
+
+  /* 删除一条映射线 = 该对外参数「在这个模式下断开」。React Flow 的删除手势会先
+   * 把它从本地 edges 拿掉，我们必须同步把状态写回 paramMap，否则下一帧同步
+   * effect 又把它画回来（看起来像删不掉）。 */
+  const onEdgesDelete = useCallback(
+    (deleted: Edge[]) => {
+      for (const edge of deleted) {
+        const entryId = entryIdFromParamNodeId(edge.source);
+        if (entryId) paramMapping.connect(entryId, null);
+      }
+    },
+    [paramMapping]
+  );
+
+  /* 在画布上拉一条线：源必须是某张对外参数卡片，目标必须落在宿主节点的某个
+   * 端口上（`targetHandle` 就是 ioKey）。别的连线一律拒绝 —— 画布上的图连线
+   * 由工作流本身决定，作者的手工连线只表达「映射」。 */
+  const onConnect = useCallback(
+    (connection: ReactFlowConnection) => {
+      const entryId = entryIdFromParamNodeId(connection.source);
+      if (!entryId || !connection.targetHandle) return;
+      const entry = paramMapping.entries.find((item) => item.id === entryId);
+      if (entry?.nodeId !== connection.target) return;
+      paramMapping.connect(entryId, connection.targetHandle);
+    },
+    [paramMapping]
+  );
+
+  /* 连线合法性闸门：没有模式时任何连线都不成立（禁止连线），落点也必须是
+   * 该对外参数宿主节点上真实存在的端口。 */
+  const isValidConnection = useCallback(
+    (connection: ReactFlowConnection | Edge) => {
+      if (!wiringMode) return false;
+      const entryId = entryIdFromParamNodeId(connection.source ?? "");
+      const target = "target" in connection ? connection.target : null;
+      const targetHandle = "targetHandle" in connection ? connection.targetHandle : null;
+      if (!entryId || !target || !targetHandle) return false;
+      const entry = paramMapping.entries.find((item) => item.id === entryId);
+      return entry?.nodeId === target && !!workflowIO?.[targetHandle];
+    },
+    [wiringMode, paramMapping.entries, workflowIO]
+  );
+
+  /* useNodesState 只接受挂载首帧的初值；后续同步统一走下面的 effect（初始图节点
+   * 即为这一帧的初值，对外参数卡片等 detail 就绪后才会补上）。 */
   const [nodes, setNodes, onNodesChange] = useNodesState(graphNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  /* 画布节点就是工作流图本身 —— 不再叠加任何「勾选才出现」的派生节点。 */
-  const initialNodes: Node[] = graphNodes;
+  const initialNodes: Node[] = useMemo(
+    () => [...graphNodes, ...paramNodes],
+    [graphNodes, paramNodes]
+  );
 
   /* Sync nodes/edges when the graph or the mapping changes.  useNodesState only
    * takes its initial value on mount, so when the workflow detail arrives async
    * (or the author edits a wire) we have to push the freshly derived nodes into
    * the flow state ourselves.
    *
-   * 节点整批替换：位置没变的节点在 React Flow 眼里仍是同一个节点，不会重挂 DOM。 */
+   * 图节点与对外参数卡片一起替换：卡片的位置由宿主节点坐标派生、`data` 里的
+   * 回调每次现算，所以整批换掉即可 —— 位置没变的卡片在 React Flow 眼里仍是
+   * 同一个节点，不会重挂 DOM。 */
   useEffect(() => {
     setNodes(initialNodes);
-    setEdges(buildEdges(scopeDetail, graphNodes, outSlotNameById));
-  }, [initialNodes, graphNodes, scopeDetail, outSlotNameById, setNodes, setEdges]);
+    setEdges([...buildEdges(scopeDetail, graphNodes, outSlotNameById), ...paramEdges]);
+  }, [initialNodes, graphNodes, paramEdges, scopeDetail, outSlotNameById, setNodes, setEdges]);
 
 
   /* Fit-to-middle once per workflow/subgraph open. Placed after `nodes`
@@ -729,6 +865,9 @@ function WorkflowEditorBody({
           onMiniMapJump={onMiniMapJump}
           onOpenSettings={() => setCanvasSettingsOpen(true)}
           onEdgeClick={onEdgeClick}
+          onConnect={onConnect}
+          isValidConnection={isValidConnection}
+          onEdgesDelete={onEdgesDelete}
         />
 
         {/* Floating instruction tooltip */}        {/* Floating instruction tooltip */}

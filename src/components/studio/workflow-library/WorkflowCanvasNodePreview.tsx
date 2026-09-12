@@ -315,8 +315,11 @@ export function WorkflowCanvasNodePreview({
 
   /* ── 对外参数卡片列（只读）──
    * 每个对外参数一张卡片，与宿主卡片并排；卡片说「这个对外参数由哪些端口组成」，
-   * 表单行说「这一格填的是什么值」，两者不重复表达同一个落点。卡片列不可拖、
-   * 不可改落点 —— 拉线 / 断开 / 恢复默认仍在编辑器画布上做。 */
+   * 表单行说「这一格填的是什么值」，两者不重复表达同一个落点。
+   *
+   * 编辑器画布上这些卡片是**可连线的节点**（拖端点即选落点）；库详情是只读
+   * 消费视角 —— 卡片不可拖、不渲染端点，拉线 / 断开 / 恢复默认都在编辑器里做，
+   * 库内只把落点标在卡片的端口行上。 */
   const hostRef = useRef<HTMLDivElement | null>(null);
   const paramCards = useMemo(
     () => deriveLibraryParamCards({ io: workflowIO, paramMap, mode: defaultMode ?? null }),
