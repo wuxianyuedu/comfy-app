@@ -21,12 +21,12 @@ import { FrostLayer } from "./NodeFrost";
 import { StringTextarea } from "../StringTextarea";
 import { useIOEditContext, IoCheckbox } from "./IOEditContext";
 import { SubgraphHeader } from "./SubgraphHeader";
-import { HOVER_ATTRIBUTE, useHoverElevation } from "../workflow-editor/HoverElevation";
+import { useHoverElevation } from "../workflow-editor/HoverElevation";
 export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ data, selected }: { data: WorkflowSubgraphData; selected?: boolean }) {
   const io = useIOEditContext();
   /* 悬浮置顶：与 FlowNode 同一套语义（ISSUE #400）—— 鼠标指着的子图卡片
    *  也要压住连线。状态在本节点内，悬浮进出不影响其余节点。 */
-  const { hovered, hoverHandlers } = useHoverElevation();
+  const { hoverHandlers, hoverRef } = useHoverElevation();
 
   /* viewport zoom is NO LONGER subscribed here — see FlowNode /
    *  FrostLayer: only frosted (bypass / disabled) nodes need to track zoom.
@@ -140,7 +140,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
   return (
     <div
       className="relative flex flex-col rounded-lg border shadow-[0_6px_22px_rgba(0,0,0,0.6)]"
-      {...{ [HOVER_ATTRIBUTE]: hovered ? "true" : undefined }}
+      ref={hoverRef}
       data-node-id={data.nodeId}
       {...hoverHandlers}
       style={{

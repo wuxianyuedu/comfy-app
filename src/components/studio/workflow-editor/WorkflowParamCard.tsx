@@ -64,12 +64,12 @@ export interface WorkflowParamCardProps {
   endpoint?: (port: ParamOutputPort, index: number) => React.ReactNode;
   /** 端口行尾的补充说明（如「→ 落到的端口名」）。 */
   rowTrailing?: (pin: ParamEntry["pins"][number]) => React.ReactNode;
-  /** 鼠标是否悬浮在这张卡片上（节点渲染器传入）—— 悬浮时压住连线（ISSUE #400）。 */
-  hovered?: boolean;
-  /** 鼠标进出卡片本体时的事件（节点渲染器用 useHoverElevation 生成）——
-   *  卡片据此打 `data-hovered`，由 CSS 抬起层级压住连线（ISSUE #400）。
+  /** 卡片元素的 ref（节点渲染器用 useHoverElevation 生成）—— 悬浮态由该钩子
+   *  写到 React Flow 的节点外壳上，由 CSS 抬起层级压住连线（ISSUE #400）。
    *  命名刻意不含端点类关键字：本文件是**画布无关**的视觉本体（见
    *  workflow-canvas-io-isolation 的守卫）。 */
+  hoverRef?: (element: HTMLDivElement | null) => void;
+  /** 鼠标进出卡片本体时的事件（节点渲染器用 useHoverElevation 生成）。 */
   hoverEvents?: DOMAttributes<HTMLDivElement>;
 }
 
@@ -89,7 +89,7 @@ export function WorkflowParamCard({
   outputPorts,
   endpoint,
   rowTrailing,
-  hovered = false,
+  hoverRef,
   hoverEvents,
 }: WorkflowParamCardProps) {
   const style = paramClassStyle(cls);
@@ -104,9 +104,10 @@ export function WorkflowParamCard({
         background: "var(--color-card, #16161C)",
         isolation: "isolate",
       }}
-      /* 悬浮态由消费方（画布节点）判定并传入；属性名与 CSS 选择器
-       *  `.react-flow__node[data-hovered="true"]` 对齐（见 globals.css）。 */
-      data-hovered={hovered ? "true" : undefined}
+      /* 悬浮态由消费方（画布节点）的钩子写到 React Flow 外壳上 —— 抬层级的是
+       *  外壳（它自带 position:absolute + z-index，自成层叠上下文），不是这张
+       *  卡片（见 HoverElevation 的注释）。 */
+      ref={hoverRef}
       {...hoverEvents}
       data-testid={`param-node-${entryId}`}
     >
