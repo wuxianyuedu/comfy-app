@@ -536,9 +536,13 @@ export async function buildWorkflowDetailFull(
 export async function buildSubgraphDetail(
   userId: string,
   id: string,
-  uid: string
+  uid: string,
+  /** 宿主链前缀（`4` / `4:5`）。拖拽落库时子图内部节点用的是 `宿主:内部`
+   *  拼接键，读回时必须按同一个口径还原，否则子图里拖过的位置在下次打开
+   *  时全部退回原始坐标。 */
+  hostId = ""
 ): Promise<WorkflowDetailFull> {
-  const cacheKey = `sg:${userId}:${id}:${uid}`;
+  const cacheKey = `sg:${userId}:${id}:${uid}:${hostId}`;
 
   /* Hot path: return the pre-serialized subgraph detail verbatim, skipping
    * the Prisma read + transform.  (Never cached: 400/404 cases below.) */
@@ -611,7 +615,8 @@ export async function buildSubgraphDetail(
     );
     const ann = extractSubgraphAnnotations(
       sub,
-      (tpl.positions as Record<string, [number, number]>) ?? {}
+      (tpl.positions as Record<string, [number, number]>) ?? {},
+      hostId
     );
 
     return JSON.stringify({
