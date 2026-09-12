@@ -193,16 +193,53 @@ export function numericBounds(e: WorkflowIOEntry): {
     : { min: 0, max: 1_000_000, step: 1, decimalPlaces: 0 };
 }
 
+/** 两条记录是不是同一个 pin —— 撞名判定必须先排除「条目自己」。
+ *
+ *  不能只看对象身份：同一行在渲染时会按当前模式派生出拷贝
+ *  （`{...entry, seedMode}`，见 DynamicWorkflowFormView 的 renderRow；
+ *  GroupedControls 折叠态的行同样是现造的拷贝）。拷贝与原件是「同一个 pin
+ *  的两份记录」，用身份比较会被判成「另一个撞名的条目 → 回退 name」，于是
+ *  **每一行都与自己撞名**，显示名一律掉回原始 pin 名 —— 封装槽位就是
+ *  `value_1`，这正是切一次 seed 行为名字就变回 `value_1` 的根因（ISSUE #349）。
+ *
+ *  判据按可靠度递降：对象身份 → `ioKey` → 「节点 + 方向 + 槽位名」三元组。
+ *  三元组就是 ioKey 的拼法，因此任何一份拷贝都认得出来。 */
+function isSamePin(a: WorkflowIOEntry, b: WorkflowIOEntry): boolean {
+  if (a === b) return true;
+  const aKey = (a as { ioKey?: string }).ioKey;
+  const bKey = (b as { ioKey?: string }).ioKey;
+  if (aKey !== undefined && bKey !== undefined) return aKey === bKey;
+  return a.nodeId === b.nodeId && a.direction === b.direction && a.name === b.name;
+}
+
+/** 名字是不是 ComfyUI 给子工作流槽位自动编号出的机器别名（`value_1` / 裸序号）。
+ *
+ *  与 workflow-editor/io-exposure 的 isWrapperAliasName 同形，但在共享层就地
+ *  实现：它只回答「撞名时能不能拿这个名字当区分标记」，不需要知道宿主类名。 */
+function isMachineAliasName(name: string | undefined): boolean {
+  const slot = name?.trim();
+  if (!slot) return false;
+  return /^value_\d+$/.test(slot) || /^\d+$/.test(slot);
+}
+
 /** Best display label for an exposed pin.
  *
  * Per user direction: the canvas's IO editor prefers the
  * `label` field so authors see `positive_prompt` / `negative_prompt`
  * instead of the bare ComfyUI key (`text` / `text_1`).  When the caller
  * also passes the full list of entries being displayed together
- * (`allEntries`), entries that share a label fall back to `name` so the
- * two pins stay visually distinguishable (e.g. two pins both labeled
- * "image" → one becomes "image (inputImage)", the other "image
- * (outputImage)" — both via the name fallback).
+ * (`allEntries`), entries that share a label fall back to a
+ * disambiguator so the two pins stay visually distinguishable (e.g. two
+ * pins both labeled "图像" → shown as `inputImage` / `outputImage`).
+ *
+ * 两条硬性约束（ISSUE #349）：
+ *   ① 「条目自己」不算撞名 —— 同一 pin 在渲染时会有派生拷贝（按模式叠加
+ *      seedMode / required、组合控件折叠态现造的行），身份必须认得出它们是
+ *      同一个 pin，否则每行都跟自己撞名、名字掉回原始 pin 名；
+ *   ② 区分标记**绝不用机器别名** —— 封装槽位的 `name` 是 ComfyUI 自动编号的
+ *      `value_1`，把它当显示名正是用户报的「名字变回 value_1」。这种情形改用
+ *      宿主节点标题（作者看得懂）区分；连标题都没有时保留作者命名，宁可两行
+ *      同名，也不把平台编号产物当名字显示。
  *
  * Without `allEntries` the function returns the same `label || name`
  * behaviour the rest of the app already relies on, so existing callers
@@ -211,9 +248,15 @@ export function ioLabel(e: WorkflowIOEntry, allEntries?: readonly WorkflowIOEntr
   const candidate = (e.label?.trim()) ?? e.name;
   if (allEntries && allEntries.length > 1) {
     for (const entry of allEntries) {
-      if (entry === e) continue;
+      if (isSamePin(entry, e)) continue;
       const other = (entry.label?.trim()) ?? entry.name;
-      if (other === candidate) return e.name;
+      if (other !== candidate) continue;
+      /* 撞名：换一个能区分的标记。机器别名（封装槽位 `value_N` / 裸序号）是
+       *  平台编号产物，不是给用户看的名字，宁可退回宿主标题也不显示它。 */
+      if (!isMachineAliasName(e.name)) return e.name;
+      const title = e.nodeTitle?.trim();
+      if (title && title !== candidate) return `${candidate} · ${title}`;
+      return candidate;
     }
   }
   return candidate;
