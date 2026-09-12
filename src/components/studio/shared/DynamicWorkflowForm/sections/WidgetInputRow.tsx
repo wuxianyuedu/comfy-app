@@ -40,6 +40,17 @@ interface WidgetInputRowProps {
   dimmed?: boolean;
   /** 挂左侧可连接端点（画布节点用），圆心骑跨卡片左缘。 */
   withHandle?: boolean;
+  /** 左侧端点的 handle id。
+   *
+   *  画布上 handle id 必须**全局唯一**：同一个 pin 名出现在两个节点上时（自定义
+   *  节点重复命名很常见），边会接到同名 handle 的第一处 —— 表现就是「线连到了
+   *  别的节点上」。缺省仍用 ioKey（画布未富化时它就是唯一键）。 */
+  handleId?: string;
+  /** 映射连线的**落点锚点**值（`data-io-pins`）。
+   *
+   *  卡片连线要落到「是哪一行/哪一档控件」上：独立参数行就是它自己的 ioKey，
+   *  组合控件覆盖的端口则写「这块控件覆盖的全部端口」。缺省用 ioKey。 */
+  wirePins?: string;
   /** 行尾附加的只读徽标（工作流库画布节点用它标出该参数连到的「对外参数」）。
    *  缺省不渲染——画布 / 表单等等价场景不受影响。 */
   trailing?: ReactNode;
@@ -62,6 +73,8 @@ export function WidgetInputRow({
   onVisibilityChange,
   dimmed = false,
   withHandle = false,
+  handleId,
+  wirePins,
   trailing,
 }: WidgetInputRowProps) {
   const accent = ACCENT[entry.control];
@@ -157,10 +170,11 @@ export function WidgetInputRow({
         <div
           className={`relative ${dimmed ? "opacity-50" : ""}`}
           data-io-key={entry.ioKey}
+          data-io-pins={wirePins ?? entry.ioKey}
         >
           {withHandle && (
             <PortHandle
-              id={entry.ioKey}
+              id={handleId ?? entry.ioKey}
               dir="in"
               type={entry.type}
               style={{ top: 16, transform: "translateY(-50%)" }}
@@ -174,9 +188,12 @@ export function WidgetInputRow({
       );
     }
     return (
-      <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
+      <div
+        className={`relative ${dimmed ? "opacity-50" : ""}`}
+        data-io-pins={wirePins ?? entry.ioKey}
+      >
         {withHandle && (
-          <PortHandle id={entry.ioKey} dir="in" type={entry.type} />
+          <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />
         )}
         <div className="flex items-center gap-2 rounded-md bg-(--color-canvas-deep) px-2.5 py-1.5 pr-[14px] pl-[14px]">
           <span
@@ -224,14 +241,16 @@ export function WidgetInputRow({
     return (
       <div
         className={`relative ${dimmed ? "opacity-50" : ""}`}
-        /* 行锚点：库画布的映射连线需要量出这一行的位置（ioKey 即端口名）。 */
+        /* 行锚点：库画布的映射连线需要量出这一行的位置（ioKey 即端口名）；
+         * data-io-pins 是「落到这一格」的精确锚点（缺省即本行）。 */
         data-io-key={entry.ioKey}
+        data-io-pins={wirePins ?? entry.ioKey}
       >
         {withHandle && (
           /* 圆心锁到标签行中线（pt-1.5 = 6 + h-5 / 2 = 10 = 16px）：默认的
            * top:50% 会让圆点掉在两行之间、与参数名错位。 */
           <PortHandle
-            id={entry.ioKey}
+            id={handleId ?? entry.ioKey}
             dir="in"
             type={entry.type}
             style={{ top: 16, transform: "translateY(-50%)" }}
@@ -246,8 +265,13 @@ export function WidgetInputRow({
   /* 宽版：标签行在上，控件紧随其后。handle 挂在行 wrapper 上，圆心才能骑跨
    * 卡片左缘 —— 放进带 padding 的子行会让圆心内缩 14px，与端口行错位。 */
   return (
-    <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
-      {withHandle && <PortHandle id={entry.ioKey} dir="in" type={entry.type} />}
+    <div
+      className={`relative ${dimmed ? "opacity-50" : ""}`}
+      data-io-pins={wirePins ?? entry.ioKey}
+    >
+      {withHandle && (
+        <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />
+      )}
       <div className="px-[14px] pt-1.5">{labelRow}</div>
       {control}
     </div>

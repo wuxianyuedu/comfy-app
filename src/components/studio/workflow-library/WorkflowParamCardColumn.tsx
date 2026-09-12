@@ -24,6 +24,7 @@ import {
   type ParamEntry,
   type ParamOutputPort,
 } from "~/lib/workflow-param-mapping";
+import { inputRowsForEntry } from "~/lib/workflow-param-input-rows";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { WorkflowParamCard } from "../workflow-editor/WorkflowParamCard";
 import { paramClassStyle } from "./workflow-param-mapping-ui";
@@ -31,6 +32,15 @@ import { resolveTargetName } from "./workflow-library-param-cards";
 
 /** 卡片宽度：与项目画布节点同宽，两列并排时仍放得下。 */
 const CARD_WIDTH = 220;
+
+/** 只读连线锚点的值：条目 id + 端口的 handle id（两者都可能含 `::`，量测侧
+ *  一律按属性整串精确比较，不做选择器转义、也不切分）。
+ *
+ *  用 `?` 当分隔符：它不与 `::`（ioKey 分隔符）冲突，也不会像 NUL 那样在
+ *  HTML 属性里被吞掉 —— 一条锚点对应「卡片上的哪一颗圆点」。 */
+export function wireAnchorValue(entryId: string, handleId: string): string {
+  return `${entryId}?${handleId}`;
+}
 
 /** 端点圆点的描边色 = 卡片底色，形成「半圆在外」的观感（与 PortHandle 的
  *  `dir="out"` 同一口径，见 shared/WorkflowPortHandle）。 */
@@ -56,12 +66,15 @@ export interface WorkflowParamCardColumnProps {
   /** 当前模式下「条目 → 目标 ioKey」的生效落点。 */
   resolved: Record<string, string | null>;
   io: WorkflowIOMap | null;
+  /** 宿主表单把哪些端口交给了组合控件（卡片不再重复列它们）。 */
+  groupedKeys?: ReadonlySet<string>;
 }
 
 export function WorkflowParamCardColumn({
   entries,
   resolved,
   io,
+  groupedKeys,
 }: WorkflowParamCardColumnProps) {
   if (entries.length === 0) return null;
 
@@ -86,7 +99,7 @@ export function WorkflowParamCardColumn({
             label={entry.label}
             classLabel={style.label}
             hostNodeId={entry.nodeId}
-            pins={entry.pins}
+            inputRows={inputRowsForEntry(entry, { groupedKeys })}
             width={CARD_WIDTH}
             /* 只读消费：卡片不参与连线，端点与「恢复默认」都不渲染。
              * `readOnly` 与 `canWire` 分开表达 —— 只读卡片不该写
@@ -100,28 +113,31 @@ export function WorkflowParamCardColumn({
             /* 右侧小圆点端点：与项目画布节点上的端口同款视觉，圆点画在输出
              * 端口那一行的右沿（`data-wire-anchor` 供连线层量出锚点）。只读
              * 卡片不给它连线能力 —— 画面上的线由 WorkflowParamWires 叠一层。 */
-            endpoint={(port, index) =>
-              /* 一个对外参数只有一个出口 —— 只画第一行的圆点（与编辑器画布
-               *  `endpoint={(_, index) => index === 0 && <Handle/>}` 同口径）。
-               * 未连线时输出端口行会逐个列出候选，那几行是「能接到哪些类型」，
-               * 不是多个出口，给每行都画点会凭空多出几个端点。 */
-              index === 0 ? (
-                <span
-                  aria-hidden
-                  data-wire-anchor={entry.id}
-                  className="absolute top-1/2 shrink-0 rounded-full"
-                  style={{
-                    right: PARAM_NODE_DOT_OFFSET,
-                    width: PARAM_NODE_DOT_SIZE,
-                    height: PARAM_NODE_DOT_SIZE,
-                    transform: "translateY(-50%)",
-                    background: outputPortColor(port, style.color),
-                    border: `1px solid ${PORT_DOT_STROKE}`,
-                    boxShadow: "0 4px 4px rgba(0,0,0,0.25)",
-                  }}
-                />
-              ) : null
-            }
+            endpoint={(port) => (
+              /* **每个候选一颗圆点**（与编辑器画布同口径）：未连线时输出端口行
+               * 逐个列出候选（尺寸 = 宽/高/宽高比/像素量），每一行都是能接到的那
+               * 一个候选口 —— 只给第一行画点会让「尺寸」看着只有一个出口
+               * （ISSUE #355 复审）。 */
+              <span
+                aria-hidden
+                /* 连线锚点按**候选端口**认：一个端口一颗点，连线量到的就是那一颗。
+                 * 值 = 条目 id + 端口的 handle id。量测侧按属性整串精确比较，
+                 * 含 `::` 的端口键不做选择器转义（见 WorkflowParamWires）。 */
+                data-wire-anchor={wireAnchorValue(entry.id, port.handleId)}
+                className="absolute top-1/2 shrink-0 rounded-full"
+                style={{
+                  right: PARAM_NODE_DOT_OFFSET,
+                  width: PARAM_NODE_DOT_SIZE,
+                  height: PARAM_NODE_DOT_SIZE,
+                  transform: "translateY(-50%)",
+                  background: outputPortColor(port, style.color),
+                  border: `1px solid ${PORT_DOT_STROKE}`,
+                  boxShadow: "0 4px 4px rgba(0,0,0,0.25)",
+                  /* 生效落点那一颗实心，其余候选淡一档：与编辑器画布同口径。 */
+                  opacity: port.active ? 1 : 0.55,
+                }}
+              />
+            )}
             /* 端口行尾只给**多端口**条目补落点说明（落点跟着具体端口名走，
              *  多行之间要能区分）；单端口条目的落点名写在带类型的输出端口那一行
              *  上、贴着端点，行尾再标一次就是把同一件事说两遍 —— 那一段正是用户

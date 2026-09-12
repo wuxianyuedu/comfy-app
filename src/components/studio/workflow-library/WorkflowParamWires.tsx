@@ -19,6 +19,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { WIRE_PINS_ATTR, WIRE_ROW_ATTR } from "~/lib/workflow-io-types";
+import { wireAnchorValue } from "./WorkflowParamCardColumn";
 
 /** 自动判定落点的描边色（与编辑器画布一致）。 */
 const AUTO_STROKE = "#64748b";
@@ -26,10 +27,16 @@ const AUTO_STROKE = "#64748b";
 const MANUAL_STROKE = "#a78bfa";
 
 export interface ParamWire {
-  /** 对外参数条目 id（卡片圆点的 `data-wire-anchor`）。 */
+  /** 对外参数条目 id（卡片圆点锚点的一部分）。 */
   entryId: string;
   /** 落点的 ioKey（宿主表单行的 `data-io-key`）。 */
   targetIoKey: string;
+  /** 被连的**输出端口 handle id** —— 一个对外参数可能有多颗圆点（候选落点），
+   *  线必须从被落到的那一颗出发，而不是「卡片上随便一颗」。 */
+  handleId: string;
+  /** 被连的端口落在**组合控件**上（宽/高、比例/像素这类没有独立行的端口），
+   *  端点锚在整块控件上。 */
+  grouped: boolean;
   /** 是否作者改过（实线）—— 否则是自动判定的默认线（虚线）。 */
   manual: boolean;
 }
@@ -81,12 +88,22 @@ export function measureWires(
   const box = container.getBoundingClientRect();
   const out: Segment[] = [];
   for (const wire of wires) {
-    const from = findAnchor(container, "data-wire-anchor", wire.entryId);
+    /* 起点 = **被落到的那一颗圆点**：卡片上一个候选一颗点，按「条目 + 端口」
+     *  精确定位，否则多候选口子（尺寸）会连到随便一颗上。 */
+    const from = findAnchor(
+      container,
+      "data-wire-anchor",
+      wireAnchorValue(wire.entryId, wire.handleId),
+    );
     /* 落点有两种形状：独立参数行（整行一个锚点）与组合参数控件（一块控件
-     *  覆盖多个端口）—— 后者的行根本不存在，只认前者就会漏画整条线。 */
-    const to =
-      findAnchor(container, WIRE_ROW_ATTR, wire.targetIoKey) ??
-      findAnchor(container, WIRE_PINS_ATTR, wire.targetIoKey, ",");
+     *  覆盖多个端口）—— 后者的行根本不存在，只认前者就会漏画整条线。
+     *  先按「这块端口属于组合控件」这个事实找控件锚点，找不到再退到独立行
+     *  （组合判定来自表单派生态，与卡片列同一份，不靠 DOM 结构猜）。 */
+    const to = wire.grouped
+      ? (findAnchor(container, WIRE_PINS_ATTR, wire.targetIoKey, ",") ??
+        findAnchor(container, WIRE_ROW_ATTR, wire.targetIoKey))
+      : (findAnchor(container, WIRE_ROW_ATTR, wire.targetIoKey) ??
+        findAnchor(container, WIRE_PINS_ATTR, wire.targetIoKey, ","));
     /* 任一端不在（卡片没渲染 / 那一行不在当前表单里）→ 不画，避免悬空线头。 */
     if (!from || !to) continue;
     const a = from.getBoundingClientRect();
@@ -117,7 +134,7 @@ export function WorkflowParamWires({ wires }: WorkflowParamWiresProps) {
   const hasWires = wires.length > 0;
   /* 依赖签名：线集合变了（换工作流 / 改模式 / 落点变化）就要重量一次。 */
   const signature = wires
-    .map((w) => `${w.entryId}>${w.targetIoKey}>${w.manual ? 1 : 0}`)
+    .map((w) => `${w.entryId}>${w.handleId}>${w.targetIoKey}>${w.manual ? 1 : 0}`)
     .join("|");
 
   useEffect(() => {

@@ -14,6 +14,7 @@ import {
   placeParamNodes,
   type ParamEntry,
 } from "~/lib/workflow-param-mapping";
+import { inputRowsForEntry } from "~/lib/workflow-param-input-rows";
 import { paramClassStyle } from "../workflow-library/workflow-param-mapping-ui";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import type { WorkflowParamNodeData } from "./workflow-param-node-data";
@@ -28,6 +29,9 @@ export interface BuildParamNodesCtx {
   resolved?: Record<string, string | null>;
   /** workflowIO：反查落点端口的类型用（不切分 ioKey）。 */
   io?: WorkflowIOMap | null;
+  /** 宿主表单把哪些端口交给了组合控件（卡片不再重复列它们；连线仍可落到
+   *  那一块控件上）。缺省 = 没有组合控件。 */
+  groupedKeys?: ReadonlySet<string>;
   /** 当前模式；为空 = 禁止连线。 */
   mode: string | null;
   /** 某个条目在当前模式下是否画过线（决定「恢复默认」可用性）。 */
@@ -36,7 +40,8 @@ export interface BuildParamNodesCtx {
 }
 
 export function buildParamNodes(ctx: BuildParamNodesCtx): Node[] {
-  const { entries, hostPosById, mode, isManual, onReset, resolved, io } = ctx;
+  const { entries, hostPosById, mode, isManual, onReset, resolved, io, groupedKeys } =
+    ctx;
   if (entries.length === 0) return [];
   const positions = placeParamNodes(entries, hostPosById);
   const out: Node[] = [];
@@ -45,9 +50,13 @@ export function buildParamNodes(ctx: BuildParamNodesCtx): Node[] {
     /* 宿主节点不在当前视图里（下钻到子图内部、顶层画布没有这个 id）→ 不渲染
      * 卡片，也就不可能有指向不存在节点的连线。 */
     if (!position) continue;
-    /* 带类型的输出端口：类型取自**真正落到的端口**（未连线时退到候选并标 `*`）。
-     * 卡片高度与它同口径 —— 视图多画一行而几何没跟上，卡片就会互相压住。 */
+    /* 输出端口：一个候选一颗圆点（类型取自**真正落到的那个端口**，未连线时逐个
+     * 列出候选）。卡片高度与它同口径 —— 视图多画一行而几何没跟上，卡片就会互
+     * 相压住。 */
     const outputPorts = paramOutputPorts(entry, io, resolved?.[entry.id]);
+    /* 输入端口行：被组合控件接管的端口不重复列（那一块控件本身就是它们的入口）。
+     * 行数同样进几何 —— 少了行还按老高度算，卡片会互相压住。 */
+    const inputRows = inputRowsForEntry(entry, { groupedKeys });
     const data: WorkflowParamNodeData = {
       entryId: entry.id,
       hostNodeId: entry.nodeId,
@@ -56,6 +65,7 @@ export function buildParamNodes(ctx: BuildParamNodesCtx): Node[] {
       label: entry.label,
       classLabel: paramClassStyle(entry.cls).label,
       pins: entry.pins,
+      inputRows,
       width: PARAM_NODE_WIDTH,
       canWire: !!mode,
       noModeHint: !mode,
@@ -74,7 +84,7 @@ export function buildParamNodes(ctx: BuildParamNodesCtx): Node[] {
       connectable: false,
       style: {
         width: PARAM_NODE_WIDTH,
-        height: paramNodeHeight(entry, outputPorts.length),
+        height: paramNodeHeight(entry, outputPorts.length, inputRows.length),
       },
       data,
     });

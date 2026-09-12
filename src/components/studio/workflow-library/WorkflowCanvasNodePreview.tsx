@@ -42,6 +42,7 @@ import { DynamicWorkflowForm } from "../shared/DynamicWorkflowForm";
 import {
   defaultInputValues,
   getMissingRequiredInputs,
+  inferGroups,
   mergeRefreshedDefaults,
   resolveEntrySeedMode,
   splitWorkflowIO,
@@ -228,6 +229,16 @@ export function WorkflowCanvasNodePreview({
    * 渲染（库内无 React Flow 上下文，不带端点），outputs 单独成段在表单之后。 */
   const { inputs, outputs } = splitWorkflowIO(workflowIO);
 
+  /* 组合控件（宽/高、比例/像素/倍数、时长/画质/比例）把这些端口收进同一块控件，
+   *  表单里因此**没有独立的一行**。对外参数卡片据此两件事：
+   *    · 不再重复列这些端口（那块控件本身就是它们的入口）；
+   *    · 被落到这些端口上的线指向那一格控件（`WORKFLOW_PARAM_GROUPED_HANDLE`）。
+   *  判定与表单同一份（`inferGroups`），不另算一遍避免漂移。 */
+  const groupedKeys = useMemo(
+    () => inferGroups(splitWorkflowIO(workflowIO).widgetInputs).groupedKeys,
+    [workflowIO],
+  );
+
   /* seed 类参数的「控件后行为」：按生效模式解析（模式覆盖优先，回退条目全局）。
    *  没有模式时与旧行为一致，只读条目全局 seedMode。 */
   const seedModes = useMemo(() => {
@@ -334,8 +345,14 @@ export function WorkflowCanvasNodePreview({
    * 库内只把落点标在卡片的端口行上。 */
   const hostRef = useRef<HTMLDivElement | null>(null);
   const paramCards = useMemo(
-    () => deriveLibraryParamCards({ io: workflowIO, paramMap, mode: effectiveMode }),
-    [workflowIO, paramMap, effectiveMode],
+    () =>
+      deriveLibraryParamCards({
+        io: workflowIO,
+        paramMap,
+        mode: effectiveMode,
+        groupedKeys,
+      }),
+    [workflowIO, paramMap, effectiveMode, groupedKeys],
   );
   /* 生效模式名（chip 上显示的那个）。卡片刻的名字、表单按它解析的 required /
    * seed 行为、「在编辑器中打开」带过去的模式，全都取自同一个生效模式。 */
@@ -355,13 +372,16 @@ export function WorkflowCanvasNodePreview({
       {/* 对外参数卡片列 + 宿主卡片并排：卡片列在左、宿主运行卡片在右。
           容器 `relative` 是只读映射连线的量测基准（见 WorkflowParamWires）——
           卡片右侧的圆点与宿主卡片上被落到的那一行之间画一条线，读者不必对照
-          两处文字也能看出「提示词喂给了 positive_prompt」。 */}
-      <div className="relative flex items-start justify-center gap-4">
+          两处文字也能看出「提示词喂给了 positive_prompt」。
+          两列之间留出走线的横向空间（ISSUE #355 复审：贴太近就看不出哪条线连
+          到哪一行）—— 间距与编辑器画布的卡片列留白同量级。 */}
+      <div className="relative flex items-start justify-center gap-24">
         {paramCards.entries.length > 0 && (
           <WorkflowParamCardColumn
             entries={paramCards.entries}
             resolved={paramCards.resolved}
             io={workflowIO}
+            groupedKeys={groupedKeys}
           />
         )}
         {/* ── 画布同款节点卡片：唯一视觉源在 shared/workflow-node-parts ── */}

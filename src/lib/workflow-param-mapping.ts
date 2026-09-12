@@ -184,30 +184,39 @@ function classesForContractParam(param: string): readonly ParamClass[] {
   return [param as ParamClass];
 }
 
-/* ── 带类型的输出端口 ──
+/* ── 输出端口 ──
  *
- * 对外参数卡片右侧的那个端点是**有类型的**：它代表「这里会吐出什么」。作者（与
- * 消费方）看卡片时要能一眼答出「提示词这个口出去的是 STRING」，而不是看到一颗
- * 无属性的圆点。此前卡片只在端口行尾标了端口自身的类型，端点本身不带任何类型
- * 信息 —— 卡片上没有「提示词 → STRING」这条事实（ISSUE #355 复审）。
+ * 对外参数卡片右侧的端口读作「这个口落到工作流的哪一行」。此前它是一颗**单一**的
+ * 无属性圆点，而多候选口子（尺寸 = 宽 / 高 / 宽高比 / 像素量）在未连线时会把候选
+ * 逐条列成「输出端口行」—— 于是「尺寸」卡片画出 4 行候选、却只有 1 颗圆点，读作
+ * 「尺寸只有一个出口，另外几个候选没端口」（ISSUE #355 复审）。
  *
- * 类型取自该口子**真正落到的端口**（resolved 的 ioKey），因为对外参数的类型由
- * 它连到的那个端口决定：同一个「尺寸」口，落到 `width` 是 INT、落到
- * `resolution_preset` 就是 COMBO。所以本函数必须拿到 resolved 与 io，不能只靠
- * 契约表硬编码类型。
+ * 现在的口径：**输出端口 = 候选落点本身**，一个候选一颗圆点，圆点就是连到那一行
+ * 的起点 —— 未连线时四颗点（宽/高/宽高比/像素量各一颗），连线后只剩被落到的那
+ * 一颗。类型取自端口自己的声明（同一个「尺寸」口落到 `width` 是 INT、落到
+ * `resolution_preset` 就是 COMBO），不看契约名硬编码。
  *
- * 没连线（`null`）时给 `*`（未确定）——卡片照出端口，只是写着「还没接上」，
- * 不谎报一个类型。
+ * 每颗圆点带自己的 handle id：它就是该端口的 **React Flow handle id（= pin 名）**
+ * —— 落库与运行期用的 ioKey 经 `ioKeyForHandle` 翻回来（两个键空间不能混，
+ * 见 ISSUE #374）。未连线的候选没有连线，handle 仍是端口名，连上即落库。
  */
 
 /** 单条输出端口的展示形态（纯数据，视图只负责画）。 */
 export interface ParamOutputPort {
-  /** 端口自身的名字（落到哪个 pin；未连线时是契约展示名）。 */
+  /** 端口自身的名字（落到哪个 pin）。 */
   name: string;
   /** 声明类型（大写，如 STRING / INT / COMBO）；未知为 `*`。 */
   type: string;
   /** 是否已经落到了工作流里真实存在的端口。 */
   connected: boolean;
+  /** 该端口对应的 ioKey（工作流内部键；`""` = 端口本身不存在，占位用）。 */
+  ioKey: string;
+  /** React Flow 的 handle id —— 连线的起点标识。
+   *  画布上等于**该端口的 ioKey**（与宿主行 handle 同名）；库里那层只读连线按
+   *  端口名找锚点，故两者都用得到。 */
+  handleId: string;
+  /** 是否为**当前生效落点**（连线即连到它；未连线时是自动判定会挑中的那个）。 */
+  active: boolean;
 }
 
 /** 一枚标签/端口的类型展示名：声明类型原样大写，缺省 `*`。 */
@@ -216,38 +225,65 @@ export function portTypeDisplay(type: string | undefined | null): string {
   return t.length > 0 ? t : "*";
 }
 
-/** 一个对外参数卡片的**带类型输出端口**（可能有多个，如「尺寸」落到宽度 + 高度）。
+/** 未连线时的端口名：契约展示名（卡片上不谎报成一个不存在的 pin 名）。 */
+function fallbackHandleId(entry: ParamEntry): string {
+  return entry.id || entry.label;
+}
+
+/** 一个对外参数卡片的**输出端口**（每个候选落点一颗，见上方说明）。
  *
- *  取该口子当前真正落到的端口；落点经 `resolved` 给出，类型经 `io` 反查 ——
- *  不去切分 ioKey（端口名本身可能含 `::`，见 handleIdForIoKey 的说明）。
- *  未连线 / 落点已不存在时退到该口子的候选端口（逐个列出，类型照给），
- *  一个都取不到时给一条 `*` 的占位端口，卡片仍画得出端点。 */
+ *  `resolvedTarget` = 该口子当前生效的落点 ioKey（作者连过的优先，否则自动判定）：
+ *  · 有落点 → 只给一颗点（连到哪就只连得到哪，避免一张卡画出多条线）；
+ *  · 无落点 → 逐个列出候选端口，每颗点连同名的 handle。
+ *
+ *  未连线且一个候选都没有（工作流里没有可落点的端口）时给一条占位端口，卡片仍
+ *  画得出端点 —— `handleId` 退到契约名，`ioKey` 为空（没有可落的地方）。 */
 export function paramOutputPorts(
   entry: ParamEntry,
   io: WorkflowIOMap | null | undefined,
   resolvedTarget: string | null | undefined,
 ): ParamOutputPort[] {
+  const toPort = (
+    ioKey: string,
+    name: string,
+    type: string | undefined,
+    connected: boolean,
+    active: boolean,
+  ): ParamOutputPort => ({
+    name: name || entry.label,
+    type: portTypeDisplay(type),
+    connected,
+    ioKey,
+    /* 库里那层只读连线按「端口名」找圆点锚点（一张卡上一个候选一颗点），所以
+     * handle id 取端口名；画布手势另走 ioKey（见 WorkflowParamNode 的说明）。 */
+    handleId: name || fallbackHandleId(entry),
+    active,
+  });
+
   const target = resolvedTarget ?? null;
+  /* ① 有生效落点：一颗点，类型与名字都取自真正落到的那一行。 */
   const raw = target ? io?.[target] : undefined;
-  if (raw) {
-    return [
-      {
-        name: raw.name || entry.label,
-        type: portTypeDisplay(raw.type),
-        connected: true,
-      },
-    ];
+  if (target && raw) {
+    return [toPort(target, raw.name, raw.type, true, true)];
   }
-  /* 多候选口子（尺寸 = 宽/高/宽高比/像素量）未连线时逐个列出候选类型 ——
-   * 作者据此知道这个口现在能接到哪些类型上。 */
+  /* ② 未连线：逐个列出候选端口（同一个「尺寸」口把宽/高/宽高比/像素量都摆出来），
+   *    每颗点都对得上自己那一行。 */
   if (entry.pins.length > 0) {
-    return entry.pins.map((pin) => ({
-      name: pin.name,
-      type: portTypeDisplay(pin.type),
-      connected: false,
-    }));
+    return entry.pins.map((pin) =>
+      toPort(pin.ioKey, pin.name, pin.type, false, false),
+    );
   }
-  return [{ name: entry.label, type: "*", connected: false }];
+  /* ③ 连候选都没有：占位端口，卡片仍画得出端点（没有可落的地方）。 */
+  return [toPort("", entry.label, undefined, false, false)];
+}
+
+/** 该对外参数在某个模式下的**默认落点端口**（`auto`）。
+ *
+ *  默认连线的端点排在候选第一位，颜色与实心点一致；作者改过落点后第一颗就是
+ *  他连的那颗。缺省（没有模式语境）时退到候选首项。 */
+export function defaultOutputPortIndex(ports: readonly ParamOutputPort[]): number {
+  const index = ports.findIndex((port) => port.active);
+  return index >= 0 ? index : 0;
 }
 
 /** 把 IO 条目聚合成**统一对外参数**条目（顺序 = 契约顺序，与工作流无关）。
@@ -681,6 +717,12 @@ export function entryIdForPin(
 /** 映射落点（`resolved` 的值，= ioKey）→ 画布渲染侧那条端口的 **React Flow
  *  handle id**。
  *
+ *  ⚠️ 现状：画布渲染侧**直接用 ioKey 当 handle id**（见 WidgetInputRow 的
+ *  `handleId` 与 workflow-param-input-rows）。`pin 名` 这个旧口径在「两个节点
+ *  有同名 pin」时会让边接到同名 handle 的第一处 —— 表现就是「线连到了别的节点
+ *  上」。本函数保留给只读呈现（库里那层的连线量测按 pin 名找锚点），画布手势
+ *  一律走 ioKey。
+ *
  *  两个键空间必须分清（ISSUE #374）：
  *   · ioKey（`<nodeId>::<kind>::<name>`）是 workflowIO 的字典键，运行期
  *     `io[target]` 回查靠它，落库的 `paramMap.source.mode:<模式>` 也存它；
@@ -887,14 +929,19 @@ export const PARAM_NODE_DOT_OFFSET = -(
  *  输出端口条数由 `outputPortCount` 给（视图用 `paramOutputPorts` 现算，见
  *  `WorkflowParamCard`）——几何与渲染必须同口径，否则 `placeParamNodes` 算出的
  *  位置与卡片实际高度对不上，卡片会互相压住。缺省按「至少一条」处理，
- *  与 `paramOutputPorts` 的兜底一致。 */
+ *  与 `paramOutputPorts` 的兜底一致。
+ *
+ *  `inputRowCount` 同理：未接落点的参数不再由组合控件吞掉，而是补回自己的端口行
+ *  （见 workflow-param-input-rows），卡片高度随之变化。 */
 export function paramNodeHeight(
   entry: ParamEntry,
   outputPortCount = 1,
+  inputRowCount?: number,
 ): number {
+  const inputRows = Math.max(1, inputRowCount ?? entry.pins.length);
   return (
     PARAM_NODE_HEADER_H +
-    Math.max(1, entry.pins.length) * PARAM_NODE_ROW_H +
+    inputRows * PARAM_NODE_ROW_H +
     Math.max(1, outputPortCount) * PARAM_NODE_OUTPUT_ROW_H +
     PARAM_NODE_PAD_Y
   );

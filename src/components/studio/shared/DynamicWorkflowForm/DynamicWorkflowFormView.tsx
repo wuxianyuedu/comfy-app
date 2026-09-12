@@ -12,6 +12,7 @@ import {
   resolveEntrySeedMode,
   type EnrichedWidget,
 } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import type { DynamicWorkflowFormController } from "./hooks/use-dynamic-workflow-form";
 import { SectionHeader } from "./SectionHeader";
 import { EmptyStateHint } from "./sections/EmptyStateHint";
@@ -42,6 +43,8 @@ interface DynamicWorkflowFormViewProps {
   onReorder?: (fromKey: string, beforeKey: string | null) => void;
   /** 行尾附加的只读徽标（工作流库画布节点用它标出每个参数连到的「对外参数」）。 */
   rowTrailing?: (entry: EnrichedWidget) => ReactNode;
+  /** 原始 workflowIO —— 折叠成普通参数行时要按它取每个端口的控件与默认值。 */
+  workflowIO?: WorkflowIOMap | null;
 }
 
 export function DynamicWorkflowFormView({
@@ -61,6 +64,7 @@ export function DynamicWorkflowFormView({
   onReorder,
   mode,
   rowTrailing,
+  workflowIO,
 }: DynamicWorkflowFormViewProps) {
   if (loading) return <LoadingSkeleton />;
   if (controller.isEmpty) return <EmptyStateHint emptyHint={emptyHint} />;
@@ -136,6 +140,11 @@ export function DynamicWorkflowFormView({
       }
       dimmed={!!visibilityMode && rowEntry.modes?.[visibilityMode]?.visible === false}
       withHandle={withHandle}
+      /* 画布上 handle id 必须唯一：同一个 pin 名可能同时出现在两个节点上（自定义
+       * 节点重名很常见），用 ioKey 当 handle id 才会接到「那一行」而不是「同名的
+       * 另一行」。落点锚点（data-io-pins）与之同源，连线量到的就是这一格。 */
+      handleId={entry.ioKey}
+      wirePins={entry.ioKey}
       trailing={rowTrailing?.(entry)}
     />
     );
@@ -217,6 +226,12 @@ export function DynamicWorkflowFormView({
           mode={mode}
           visibilityMode={visibilityMode}
           onVisibilityChange={onVisibilityChange}
+          /* 画布 / 库内把组合控件折叠成逐行参数：这几个参数各自的输入端口露出来
+           * （ISSUE #355 复审「红框那块占满空间」）。宽版表单不折叠 —— 作者在那里
+           * 要的是完整录入能力。 */
+          collapseGrouped={compact}
+          io={workflowIO}
+          allPins={allPins as EnrichedWidget[]}
         />
       )}
 
