@@ -180,3 +180,47 @@ export function createFitSettleStepper(options: FitSettleOptions): FitSettleStep
     rounds: () => attempts,
   };
 }
+
+/**
+ * 「每份图只自动聚焦一次」的调度器 —— 把「是否已经聚焦过」与「聚焦是否真的
+ * 下发过」分开记账。
+ *
+ * 为什么必须分开（ISSUE #394 第二轮）：只按「图的 key」记一个布尔，会在
+ * **effect 依赖抖动**时把图标记成「已聚焦」而其实一次都没聚焦到 ——
+ *
+ *   · 进入子图的那一次 commit 里，打开聚焦的 effect 先跑（按新图的 key 记账
+ *     并排下一帧的 rAF），紧接着 `nodes` 同步 effect 把节点整批换掉；
+ *   · 节点数变化会让聚焦 effect 重跑，先执行 cleanup（取消那个还没触发的
+ *     rAF），再被「已聚焦」的记账拦住、不再排新的一帧；
+ *   · 结果是：图被记成已聚焦，视口却一直停在**上一个视图**（用户看到的就是
+ *     「打开子工作流没聚焦到」，与修好分批测量之前一模一样）。
+ *
+ * 所以记账的单位是「已**下发**过聚焦的图 key」：`isSettled(key)` 只管跳过；
+ * `markPending(key)` 在排程时登记，`markSettled(key)` 才在真正下发视口后调用。
+ * 同一 key 的 pending 状态允许被重复排程（帧被取消后重排），不会吃掉这次聚焦。
+ */
+export interface FitOnceScheduler {
+  /** 这份图是否已经**下发**过自动聚焦（是 → 无需再排程）。 */
+  isSettled(key: string): boolean;
+  /** 排程这次聚焦：登记 pending。返回 false 表示这份图已下发过，调用方应放弃。 */
+  markPending(key: string): boolean;
+  /** 真正下发视口后调用：把这份图记为已聚焦（并清掉 pending）。 */
+  markSettled(key: string): void;
+}
+
+export function createFitOnceScheduler(): FitOnceScheduler {
+  const settled = new Set<string>();
+  const pending = new Set<string>();
+  return {
+    isSettled: (key) => settled.has(key),
+    markPending: (key) => {
+      if (settled.has(key)) return false;
+      pending.add(key);
+      return true;
+    },
+    markSettled: (key) => {
+      settled.add(key);
+      pending.delete(key);
+    },
+  };
+}

@@ -56,6 +56,7 @@ import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
 import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
 import {
   computeFitViewport,
+  createFitOnceScheduler,
   createFitSettleStepper,
   normalizeBounds,
   type Bounds,
@@ -347,8 +348,14 @@ function WorkflowEditorBody({
    *  indistinguishable from background.  Re-runs on subgraph
    *  navigation so a cramped child graph still fits. */
   const rf = useReactFlow();
-  /** 已自动 fit 过的图的 key（detail.id），而非布尔——切换子图时要重新 fit。 */
-  const fittedRef = useRef<string | null>(null);
+  /* 自动聚焦的记账（详见 subgraph-viewport.ts 的 FitOnceScheduler）：按图的
+   * key（detail.id）记「已下发过聚焦的那份图」，切换子图自然会重新聚焦。
+   * 关键点是**排程与已聚焦分开**：effect 的依赖会抖（节点整批换掉 →
+   * nodes.length 变化），重跑时的 cleanup 会取消还没触发的 rAF；把「已聚焦」
+   * 在排程时就记死，会让被取消的那一次永远补不回来 —— 视口于是停在上一份图
+   * （ISSUE #394：打开子工作流没聚焦到）。 */
+  const fitSchedulerRef = useRef<ReturnType<typeof createFitOnceScheduler> | null>(null);
+  fitSchedulerRef.current ??= createFitOnceScheduler();
   /* MiniMap → main-viewport single-click jump.
    *  Pairs with <MiniMap pannable zoomable onClick={onMiniMapJump} /> below. */
   const onMiniMapJump = useMiniMapJump(rf);
@@ -699,10 +706,15 @@ function WorkflowEditorBody({
     /* nodes 是异步填充的：依赖里若没有 nodes.length，effect 会在数组还空着时
      * 提前 return，且此后不再触发，画布将永远停在默认缩放。这里按「图的 key」
      * 记录已经 fit 过的那份图——首次拿到节点、或切到另一份图/子图时才 fit，
-     * 用户后续增删节点不会反复抢走其视角。 */
+     * 用户后续增删节点不会反复抢走其视角。
+     *
+     * 「已 fit」记的是**下发过视口**的图，不是「排过程」的图：下面的节点同步
+     * effect 会让 nodes.length 变化、进而重跑本 effect，重跑前的 cleanup 取消
+     * 掉还没触发的那一帧 rAF。排程即记账会把这次聚焦吃掉（视口留在上一份图，
+     * 表现就是「打开子工作流没聚焦到」，ISSUE #394）。 */
     const fitKey = detail?.id ?? "__root__";
-    if (fittedRef.current === fitKey) return;
-    fittedRef.current = fitKey;
+    const scheduler = fitSchedulerRef.current;
+    if (!scheduler?.markPending(fitKey)) return;
     /* 节点是**分批**测量的：React Flow 先挂载再量 DOM，首帧里只有视口内
      *  （恰好是被上一个视图带偏的那一块）的节点拿得到 measured，其余仍是 0。
      *  只在「第一帧 / 第二帧」fit 会把这次测量结果当成整张图的范围 ——
@@ -720,8 +732,15 @@ function WorkflowEditorBody({
     const step = () => {
       const { bounds, done } = stepper.next(() => collectFitTargets(rf.getNodes()));
       applyFitViewport(rf, bounds);
-      if (done) return;
-      raf = requestAnimationFrame(step);
+      /* 收敛（测量已稳定、视口已下发）后才把这份图记为「聚焦过」：只排过程
+       * 不算数，否则被 cleanup 取消的那次就补不回来了。提前在首帧记账也不
+       * 行 —— 首帧可能还在量上一份图的节点，会把这帧的范围错当成本图的。
+       * 记账后本 effect 的重跑（增删节点 / 拖动引起的依赖抖动）不再抢视角。 */
+      if (!done) {
+        raf = requestAnimationFrame(step);
+        return;
+      }
+      scheduler.markSettled(fitKey);
     };
     /* Defer one frame so ReactFlow has measured the viewport and laid
      * nodes out before we fit. */
