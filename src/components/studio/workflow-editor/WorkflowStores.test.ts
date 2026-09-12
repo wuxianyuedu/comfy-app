@@ -9,9 +9,9 @@
  *   落库，让位给富化名的只是显示层；任何一次写入都会把它重新固化，显示名随即
  *   退回别名（切 seed 的随机值/固定值就是这个路径）。
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { createIOEditStore } from "./WorkflowStores";
+import { callStoreAction, createIOEditStore, type IOEditStore } from "./WorkflowStores";
 import { HOMONYM_LABEL_SUFFIX } from "./io-exposure";
 
 describe("IOEditStore.toggleIO", () => {
@@ -343,5 +343,41 @@ describe("IOEditStore 机器名的入口与出口都挡（ISSUE #349）", () => 
     expect(store.getState().workflowIO).toBe(before);
     store.getState().purgeMachineNames(() => true);
     expect(store.getState().workflowIO[KEY]!.label).toBeUndefined();
+  });
+});
+
+describe("callStoreAction", () => {
+  it("动作存在时正常调用并返回 true", () => {
+    const store = createIOEditStore("wf");
+    const key = "4::widget::value_1";
+    store.setState({
+      workflowIO: {
+        [key]: { direction: "input", kind: "widget", nodeId: "4", name: "value_1", label: "我的种子" },
+      },
+    });
+    const ok = callStoreAction(store, "purgeMachineNames", (state) =>
+      state.purgeMachineNames(() => true)
+    );
+    expect(ok).toBe(true);
+    expect(store.getState().workflowIO[key]!.label).toBeUndefined();
+  });
+
+  it("动作缺失时降级不抛错 —— 热更新后未重载的陈旧实例", () => {
+    const store = createIOEditStore("wf");
+    /* 模拟旧实例：动作集合比当前模块少一个成员。 */
+    const stale = {
+      getState: () => ({}) as unknown as IOEditStore,
+    } as unknown as Parameters<typeof callStoreAction<IOEditStore>>[0];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      expect(() =>
+        callStoreAction(stale, "purgeMachineNames", () => undefined)
+      ).not.toThrow();
+      expect(warn).toHaveBeenCalledOnce();
+      /* 正常实例不受影响。 */
+      expect(callStoreAction(store, "purgeMachineNames", () => undefined)).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

@@ -64,12 +64,18 @@ function SelectContent({
   align = "center",
   alignOffset = 0,
   alignItemWithTrigger = true,
+  collisionAvoidance,
   positionerClassName,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
     SelectPrimitive.Positioner.Props,
-    "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
+    | "align"
+    | "alignOffset"
+    | "side"
+    | "sideOffset"
+    | "alignItemWithTrigger"
+    | "collisionAvoidance"
   > & {
     /* 定位层（portal 宿主）的额外 class。层级必须在**这一层**给：Popup 自己的
        z-50 只在 positioner 建立的 stacking context 内部生效，改它不解决被
@@ -84,6 +90,10 @@ function SelectContent({
         align={align}
         alignOffset={alignOffset}
         alignItemWithTrigger={alignItemWithTrigger}
+        /* 撞到视口边界时的行为由调用方决定：日志面板要求弹层**始终从扳机下方
+           展开**（`side: "none"`），宁可让弹层自己滚动，也不要翻到上面去把头部
+           顶到窗口外（ISSUE #262）。 */
+        collisionAvoidance={collisionAvoidance}
         /* 层级由调用方决定：模态弹窗里的下拉若固定 z-50，会被模态遮罩（z-99）
            整块压住——弹层画得出来却**收不到指针事件**（ISSUE #262）。 */
         className={cn("isolate z-50", positionerClassName)}

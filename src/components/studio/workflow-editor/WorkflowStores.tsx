@@ -422,6 +422,43 @@ export function getViewerApi(): StoreApi<NodeJsonViewerStore> {
   return ctx.viewer;
 }
 
+/** 调用 store 实例上的一个动作，**动作缺失时降级而非抛错**。
+ *
+ *  背景：store 实例由 `useState(() => createIOEditStore(...))` 在挂载时创建一次，
+ *  实例上的「动作集合」是那一刻从本模块取到的函数。而动作本身是本模块的成员，
+ *  会随热更新（HMR）/ 重新编译整体替换。于是存在一个稳定可复现的窗口：
+ *
+ *    · 开发态 dev server 长开，拉了新提交后页面没重载；
+ *    · 编辑器在改动前就已挂载（如 `start-tauri.exe` 起的窗口一直开着）；
+ *
+ *  此时 `getState()` 返回的仍是**旧实例**——它带着旧的动作集合，可能缺少本模块
+ *  新声明的动作。直接调用会抛 `xxx is not a function`，被
+ *  `<WorkflowCanvasEditor>` 的 ErrorBoundary 接住 → 编辑器降级成错误页。
+ *
+ *  这里把「能力不存在」当降级处理而不是异常：跳过本次调用（下次依赖变化或
+ *  页面重载后自然生效），只打一条可诊断的告警。与规范「L1 功能降级」一致 ——
+ *  单个增强动作的时序问题不应让整个画布白屏。
+ *
+ *  传入 `action` 为可能为 undefined 的成员时才会走到告警分支，因此这条告警
+ *  本身也是「实例陈旧」的信号，不是可以长期忽略的噪音（陈旧实例在新一轮
+ *  重载后消失）。 */
+export function callStoreAction<S extends object>(
+  store: StoreApi<S>,
+  action: keyof S & string,
+  call: (state: S) => void
+): boolean {
+  const state = store.getState();
+  if (typeof state[action] !== "function") {
+    console.warn(
+      `[wf-stores] 动作 ${action} 在当前 store 实例上不存在，已跳过本次调用` +
+        `（多为热更新后未重载的陈旧实例，重载页面即恢复）`
+    );
+    return false;
+  }
+  call(state);
+  return true;
+}
+
 export function useIOEditStore<U>(selector: (s: IOEditStore) => U): U {
   const ctx = useContext(WFStoresContext);
   if (!ctx) throw new Error("useIOEditStore 必须在 <WFStoresContext.Provider> 内使用");
