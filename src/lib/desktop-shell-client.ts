@@ -1,4 +1,4 @@
-// 桌面壳（Tauri）能力封装：壳内开窗 / 环境探测。
+// 桌面壳（Tauri）能力封装：环境探测 / 窗口唤起。
 //
 // 前端页面既可能跑在 Tauri 壳里（WebView），也可能跑在浏览器（纯 web / dev）。
 // 本模块集中封装「只有壳里才有的能力」，浏览器环境调用返回不可用，避免各
@@ -19,28 +19,12 @@ export function isDesktopShell(): boolean {
   );
 }
 
-export type ShellOpenResult = { ok: boolean; detail: string };
-
-/**
- * 在桌面壳内打开一个指向 url 的独立窗口，相当于壳内「子页签」。
- * 由 Rust 侧 open_comfyui_window 命令承载；非壳环境返回不可用，调用方应
- * 回退到系统浏览器。返回 ok=false 时 detail 给出可读原因。
- */
-export async function openUrlInShell(url: string): Promise<ShellOpenResult> {
-  if (!isDesktopShell()) {
-    return { ok: false, detail: "当前不在桌面壳内，无法在壳内开窗" };
-  }
-  try {
-    const { invoke } = await import("@tauri-apps/api/core");
-    const detail = await invoke<string>("open_comfyui_window", { url });
-    return { ok: true, detail };
-  } catch (e) {
-    return {
-      ok: false,
-      detail: `壳内打开失败：${e instanceof Error ? e.message : String(e)}。壳可能需要重编（app.exe 需含 open_comfyui_window 命令），或先改用系统浏览器打开。`,
-    };
-  }
-}
+/* 注：这里曾有一个 `openUrlInShell` —— 调 Rust `open_comfyui_window` 在壳内
+ * 另开一个独立窗口。**已删除，不要再加回来**：ISSUE #310 用户明确要求
+ * 「不要打开另一个窗口，我只要多页签的形式」，应用内不再有任何「另开窗口」
+ * 的入口。ComfyUI 改为内嵌进同一窗口的页签（放行由启动参数
+ * `--enable-cors-header` 保证，见 `src/lib/comfyui/lifecycle-derive.ts`）。
+ * Rust 侧 `open_comfyui_window` 命令保留未删（无调用方），避免动壳编译。 */
 
 /**
  * 询问壳：本次启动完成后要不要自动把应用窗口给前台。

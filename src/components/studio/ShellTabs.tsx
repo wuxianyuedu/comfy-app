@@ -124,6 +124,31 @@ function InAppTabStrip({
   );
 }
 
+/**
+ * 无法内嵌时在**页签内**渲染的说明。
+ *
+ * 为什么要有它：以前这种情况会弹一个（多半也空白的）独立窗口 —— 用户既没
+ * 得到内容，也不知道为什么。现在页签照常打开，这里给出成因与下一步，
+ * 至少让失败是**可读、可行动**的，而不是一片空白（ISSUE #310）。
+ */
+function TabBlockedNotice({ label, reason }: { label: string; reason: string }) {
+  return (
+    <div className="flex h-full items-center justify-center p-8">
+      <div className="max-w-xl space-y-3 text-center">
+        <p className="text-base font-medium text-(--color-ink-bright)">
+          无法在此页签中显示 {label}
+        </p>
+        <p className="text-sm leading-relaxed text-(--color-ink-muted)">
+          {reason}
+        </p>
+        <p className="text-xs leading-relaxed text-(--color-ink-fainter)">
+          通常重启 ComfyUI 即可恢复（应用会自动以放行内嵌的参数拉起它）。
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function ShellTabs({ children }: ShellTabsProps) {
   const tabs = useShellTabs((s) => s.tabs);
   const activeTabId = useShellTabs((s) => s.activeTabId);
@@ -176,7 +201,9 @@ export function ShellTabs({ children }: ShellTabsProps) {
             className={activeTabId === tab.id ? "h-full" : "hidden h-full"}
             aria-hidden={activeTabId !== tab.id}
           >
-            {tab.url ? (
+            {tab.blockedReason ? (
+              <TabBlockedNotice label={tab.label} reason={tab.blockedReason} />
+            ) : tab.url ? (
               <iframe
                 src={tab.url}
                 title={tab.label}
