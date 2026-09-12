@@ -120,24 +120,34 @@ export function FlowNodePinRows({
                   >
                     {outDisplay}
                   </span>
-                  {/* Output source Handle hidden while in IO-edit mode —
-                   * workflow outputs are identified by node, so the
-                   * header checkbox is the only handle the author needs. */}
-                  {!io?.ioEditMode && (
-                    <Handle
-                      type="source"
-                      position={Position.Right}
-                      id={`out:${outName}`}
-                      isConnectable={false}
-                      className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
-                      style={{
-                        right: 5,
-                        background: outCol,
-                        boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
-                      }}
-                      title={`${outDisplay} (${outType})`}
-                    />
-                  )}
+                  {/* Output source Handle —— **任何视图模式下都必须挂载**。
+                   *
+                   * 它不只是「拖线的入口」，更是下游那些 `out:<name>` 边的
+                   * 锚点：React Flow 在 handleBounds 里找不到边引用的 handle id 时，
+                   * 会丢弃整条边并打 error#008 —— 用户看到的就是「这条输出没有
+                   * 连线」。IO 编辑模式下曾整个不渲染它（理由：输出按节点勾选，
+                   * 端口圆点是多余的视觉噪声），结果切进 IO 编辑那一刻，该节点
+                   * 所有下游连线集体消失。
+                   *
+                   * 保留「不误导作者去连输出口」的原意改为**视觉降级**：IO 编辑
+                   * 模式下圆点缩到几乎不可见（只留一点色晕锚点），作者看不到可
+                   * 拖的端口，线却照样画得出来。 */}
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={`out:${outName}`}
+                    isConnectable={false}
+                    className="!rounded-full !border !border-(--color-canvas)"
+                    style={{
+                      right: 5,
+                      background: outCol,
+                      boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
+                      ...(io?.ioEditMode
+                        ? { width: 4, height: 4, opacity: 0.35, right: 0 }
+                        : { width: 10, height: 10 }),
+                    }}
+                    title={`${outDisplay} (${outType})`}
+                  />
                 </>
               )}
             </div>
