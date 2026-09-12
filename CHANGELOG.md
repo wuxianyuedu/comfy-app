@@ -4,6 +4,11 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+> **本文件不要直接手改**：新条目先进 `changelog.d/<issue号>-<slug>.md` 碎片
+> （一件变更一个文件），由 `node scripts/merge-changelog-fragments.mjs` 并入这里。
+> 这样并行分支不会在同一份文本上撞车，见
+> [前端工程规范 §13.10.5](docs/standards/13-提交与-code-review.md#13105-碎片化落地改-changelogd不改-changelogmd)。
+>
 > **什么该记 / 什么不该记**，见
 > [前端工程规范 §13.10](docs/standards/13-提交与-code-review.md#1310-changelog-记录规范)。
 > 简述：外部可见的功能、行为变更、破坏性变更、影响升级的修复才进本文件；
