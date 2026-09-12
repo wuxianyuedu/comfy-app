@@ -53,6 +53,7 @@ import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
 import { resolveWorkflowMode } from "@/lib/workflow-types";
 import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
+import { WorkflowParamWires } from "./WorkflowParamWires";
 import { deriveLibraryParamCards } from "./workflow-library-param-cards";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import {
@@ -342,8 +343,11 @@ export function WorkflowCanvasNodePreview({
      * 又包了一层同款边框 + 重复标题，出现「面板套面板」）。卡片宽 380，
      * 进度/结果/错误行与其对齐。 */
     <div className="flex w-full flex-col items-center gap-3">
-      {/* 对外参数卡片列 + 宿主卡片并排：卡片列在左、宿主运行卡片在右。 */}
-      <div className="flex items-start justify-center gap-4">
+      {/* 对外参数卡片列 + 宿主卡片并排：卡片列在左、宿主运行卡片在右。
+          容器 `relative` 是只读映射连线的量测基准（见 WorkflowParamWires）——
+          卡片右侧的圆点与宿主卡片上被落到的那一行之间画一条线，读者不必对照
+          两处文字也能看出「提示词喂给了 positive_prompt」。 */}
+      <div className="relative flex items-start justify-center gap-4">
         {paramCards.entries.length > 0 && (
           <WorkflowParamCardColumn
             entries={paramCards.entries}
@@ -475,6 +479,9 @@ export function WorkflowCanvasNodePreview({
         />
           </WorkflowNodeCardShell>
         </div>
+        {/* 只读映射连线：卡片圆点 → 宿主卡片上被落到的那一行。量不到锚点
+            （行不在当前渲染里）就整条不画，不留悬空线头。 */}
+        <WorkflowParamWires wires={paramCards.wires} />
       </div>
 
       {/* 进度条（running 时） */}

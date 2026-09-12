@@ -15,7 +15,11 @@
 import React from "react";
 import { Handle, Position } from "@xyflow/react";
 
-import { PARAM_NODE_ROW_H } from "~/lib/workflow-param-mapping";
+import {
+  PARAM_NODE_DOT_OFFSET,
+  PARAM_NODE_DOT_SIZE,
+  PARAM_NODE_ROW_H,
+} from "~/lib/workflow-param-mapping";
 import { useHoverElevation } from "./HoverElevation";
 import { paramClassStyle } from "../workflow-library/workflow-param-mapping-ui";
 import { WorkflowParamCard } from "./WorkflowParamCard";
@@ -70,10 +74,13 @@ export const WorkflowParamNode = React.memo(function WorkflowParamNode({
             isConnectable
             style={{
               position: "absolute",
+              /* 圆心骑跨卡片右缘（行是端点定位的锚，偏移里含行内边距）——
+               * 与工作流库那张只读卡片用同一个常量，两处圆点不会一边贴边、
+               * 一边内缩。 */
               top: "50%",
-              right: -10,
-              width: 12,
-              height: 12,
+              right: PARAM_NODE_DOT_OFFSET,
+              width: PARAM_NODE_DOT_SIZE,
+              height: PARAM_NODE_DOT_SIZE,
               borderRadius: 9999,
               background: style.color,
               border: "1px solid #16161C",

@@ -17,8 +17,8 @@
 // 编辑器画布上做，这里只呈现。
 
 import {
-  autoMapEntries,
   buildParamEntries,
+  manualTargetFor,
   parseParamMapping,
   resolveMapping,
   type ParamEntry,
@@ -33,6 +33,10 @@ export interface LibraryParamCards {
   /** 每个被落到的一行（ioKey）→ 落到它的对外参数名，按条目顺序取第一个。
    *  宿主卡片的参数行据此在行尾标出「这一行属于哪个对外参数」。 */
   ownersByPin: Record<string, string>;
+  /** 卡片圆点端点 → 宿主行 的只读连线（卡片列右侧的小圆点与宿主卡片上被落
+   *  到的那一行之间）。自动判定画虚线、作者改过画实线，与编辑器画布同一套
+   *  语义 —— 库里不画线的话，圆点就只是一颗装饰点，读者答不出它连到哪。 */
+  wires: { entryId: string; targetIoKey: string; manual: boolean }[];
 }
 
 /** 从 workflowIO + paramMap 派生库内画布所需的归属数据。
@@ -52,21 +56,27 @@ export function deriveLibraryParamCards(args: {
   /* paramMap 里没有 `auto` 字段（它不是持久化字段）——现算一份自动判定，
    * 与编辑器 useParamMapping 里的 auto 同源（autoMapEntries）。 */
   const parsed = parseParamMapping(paramMap);
-  const resolved = resolveMapping(
-    entries,
-    io,
-    { ...parsed, auto: autoMapEntries(entries, io) },
-    mode ?? null,
-  );
+  const resolved = resolveMapping(entries, io, parsed, mode ?? null);
 
   const ownersByPin: Record<string, string> = {};
+  const wires: LibraryParamCards["wires"] = [];
   for (const entry of entries) {
     const target = resolved[entry.id];
-    if (!target || ownersByPin[target]) continue;
+    /* 未连线 / 作者显式断开（`null`）→ 不画线：圆点悬空本身就在说「没连上」，
+     *  画一条通向某处的线反而误导。 */
+    if (!target) continue;
+    wires.push({
+      entryId: entry.id,
+      targetIoKey: target,
+      /* 「作者改过」的口径与编辑器同一份（manualTargetFor）：该模式下这一
+       *  条目确实有一条手工线 —— 显式断开也算改过，只是那时不画线。 */
+      manual: manualTargetFor(parsed, entry.id, mode ?? null) !== undefined,
+    });
+    if (ownersByPin[target]) continue;
     ownersByPin[target] = entry.label;
   }
 
-  return { entries, resolved, ownersByPin };
+  return { entries, resolved, ownersByPin, wires };
 }
 
 /** 某个对外参数当前落到的端口名（卡片行尾用它标出去向）。

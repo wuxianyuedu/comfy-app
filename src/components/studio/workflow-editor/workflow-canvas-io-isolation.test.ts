@@ -158,6 +158,32 @@ describe("对外参数节点只在画布上表达映射", () => {
     }
   });
 
+  it("库内卡片的小圆点端口是只读呈现：不给它连线能力，线由独立层画", () => {
+    /* ISSUE #355 复审要求「对外参数右侧有小圆点的端口，可和工作流节点上的
+     * 参数相连」。库内那一列仍是只读消费：圆点只是端点视觉，SVG 连线叠在
+     * 另一层（WorkflowParamWires），卡片列自身依旧不许碰 React Flow。 */
+    const column = stripComments(
+      readFileSync(
+        path.join(LIBRARY_DIR, "WorkflowParamCardColumn.tsx"),
+        "utf8",
+      ),
+    );
+    /* 圆点带锚点（连线层据此量位置），但没有任何连线回调。 */
+    expect(column).toContain("data-wire-anchor");
+    for (const forbidden of ["@xyflow/react", "Handle", "onConnect"]) {
+      expect(column).not.toContain(forbidden);
+    }
+    /* 连线层独立成文件：它只读地量位置 + 画 SVG，不写 paramMap。 */
+    const wires = stripComments(
+      readFileSync(path.join(LIBRARY_DIR, "WorkflowParamWires.tsx"), "utf8"),
+    );
+    expect(wires).toContain("data-wire-anchor");
+    expect(wires).toContain("data-io-key");
+    for (const forbidden of ["@xyflow/react", "onConnect", "savePatch"]) {
+      expect(wires).not.toContain(forbidden);
+    }
+  });
+
   it("工作流库详情不靠单侧定宽留白给卡片列腾位置", () => {
     /* 卡片列与宿主卡片并排居中。历史上这里曾经用一条约 300px 的左侧 gutter 给
      * 卡片列挂靠，卡片层撤掉后 gutter 没跟着撤 —— 表现就是用户看到的「卡片没

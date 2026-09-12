@@ -868,6 +868,20 @@ export const PARAM_NODE_PAD_Y = 8;
 /** 输出端口区的行高 —— 与端口行同口径（视觉上就是一行带类型徽标的端口）。 */
 export const PARAM_NODE_OUTPUT_ROW_H = PARAM_NODE_ROW_H;
 
+/** 卡片右侧那颗**输出端点小圆点**的直径。 */
+export const PARAM_NODE_DOT_SIZE = 12;
+
+/** 圆点相对输出端口行右沿的偏移（负值 = 半颗圆点探出卡片）。
+ *
+ *  输出端口行带 `px-2`（8px）内边距，而行是端点定位的锚 —— 要让圆心正好骑跨
+ *  卡片右缘（与项目画布的 PortHandle「半圆在外」一致），偏移必须是
+ *  `-(行内边距 + 半颗圆点)`。编辑器画布与工作流库两处都用这个值，圆点不会一边
+ *  贴边、一边内缩。 */
+export const PARAM_NODE_DOT_OFFSET = -(
+  PARAM_NODE_PAD_Y +
+  PARAM_NODE_DOT_SIZE / 2
+);
+
 /** 卡片高度：头部 + 输入端口区 + 带类型的输出端口区 + 上下留白。
  *
  *  输出端口条数由 `outputPortCount` 给（视图用 `paramOutputPorts` 现算，见
