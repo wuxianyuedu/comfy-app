@@ -4,6 +4,7 @@ exports[`WorkflowSubgraphNode > 渲染子图标题与 #id 徽标 1`] = `
 <div>
   <div
     class="relative flex flex-col rounded-lg border shadow-[0_6px_22px_rgba(0,0,0,0.6)]"
+    data-node-id="10"
     style="height: auto; min-width: 280px; border-color: rgba(124, 92, 252, 0.55); isolation: isolate; background: var(--color-node); outline: none;"
   >
     <div
