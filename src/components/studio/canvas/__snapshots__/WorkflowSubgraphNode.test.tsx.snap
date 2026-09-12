@@ -62,7 +62,8 @@ exports[`WorkflowSubgraphNode > 渲染子图标题与 #id 徽标 1`] = `
           🔍
         </span>
         <span>
-          #10
+          #
+          10
         </span>
       </button>
     </div>
