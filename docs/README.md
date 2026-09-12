@@ -108,7 +108,7 @@ AIGC:
 | 10 | [错误处理与降级](standards/10-错误处理与降级.md) | 三级降级、ErrorBoundary、error.tsx、空状态 |
 | 11 | [测试与可观测性](standards/11-测试与可观测性.md) | 测试分层、行为测试、埋点、CI 门禁 |
 | 12 | [代码组织与文件结构](standards/12-代码组织与文件结构.md) | 目录约定、barrel、命名、循环依赖预防 |
-| 13 | [提交与 Code Review](standards/13-提交与-code-review.md) | 提交前自查、Commit Message、PR、Review 维度、CI、LF/git-lfs、CHANGELOG 记录规范 |
+| 13 | [提交与 Code Review](standards/13-提交与-code-review.md) | 提交前自查、Commit Message、PR、Review 维度、CI、LF/git-lfs、CHANGELOG 记录规范与碎片化（13.10.5） |
 | 14 | [反模式速查表](standards/14-反模式速查表.md) | 状态/性能/样式/组件/类型/异步/a11y/Git 反模式对照 |
 | 15 | [附录](standards/15-附录.md) | 技术栈速查、组件评分、ADR、命令速查、新成员路径、疑难索引 |
 | 16 | [shadcn/ui 与表单校验](standards/16-shadcn-ui与表单校验.md) | ui/ 定位、四层范式（controller hook + 纯展示）、表单方案 |
