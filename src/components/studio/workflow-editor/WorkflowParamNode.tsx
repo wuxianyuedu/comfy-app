@@ -33,6 +33,23 @@ export const WorkflowParamNode = React.memo(function WorkflowParamNode({
   data: WorkflowParamNodeData;
 }) {
   const style = paramClassStyle(data.cls);
+  /* 页脚：一句话说清这个口现在连上了没有、该怎么改。
+   *  没有它，卡片上只剩一颗圆点 —— 「默认线」「你改过的线」「一个候选都落不上」
+   *  三种状态读起来一模一样，用户只能靠点一下再猜（ISSUE #355：「点击端点拉线会
+   *  出现禁用标记」）。文案只在这里拼：卡片本体是画布无关的视觉本体，不替消费方
+   *  造句。
+   *
+   *  「有没有可落的工作流端口」看 `connected`（候选端口在工作流里是否真实存在），
+   *  不是看候选条数 —— 一条候选也没有时 paramOutputPorts 会给一条占位端口，
+   *  它同样是一行（`length` 恒 ≥ 1）。 */
+  const hasReachablePin = data.outputPorts.some((port) => port.connected);
+  const footNote = data.wired
+    ? data.wireManual
+      ? "已连（你改过的线）· 可拖圆点改落点"
+      : "默认连线 · 可拖圆点改落点"
+    : !hasReachablePin
+      ? "这个口在工作流里没有可连的参数行"
+      : "还没有落点 · 拖圆点到节点参数行";
   /* 悬浮置顶：对外参数卡片同样要压住连线（ISSUE #400）。
    *  它自带的 zIndex 已是 20（比普通节点高，见 buildParamNodes），但连线仍
    *  可能盖上来；这里与 FlowNode / 子图卡片共用同一档悬浮层。 */
@@ -48,7 +65,8 @@ export const WorkflowParamNode = React.memo(function WorkflowParamNode({
       inputRows={data.inputRows}
       width={data.width}
       canWire={data.canWire}
-      noModeHint={data.noModeHint}
+      footNote={footNote}
+      wired={data.wired}
       canReset={data.canReset}
       onReset={data.onReset}
       /* 端口行只列名字：卡片本身不标落点，落点由那条线表达（落点名写在下面
@@ -69,6 +87,12 @@ export const WorkflowParamNode = React.memo(function WorkflowParamNode({
             type="source"
             position={Position.Right}
             isConnectable
+            /* 兜底把手势授权到**卡片自己**身上：`connectable` 是端点能否拉线 /
+             *  落线的一半条件（另一半是 connectableend），宿主节点上的
+             *  `connectable: false` 会让这颗圆点变成点不动的装饰。见
+             *  workflow-param-nodes 的说明。 */
+            isConnectableStart
+            isConnectableEnd
             data-testid={`param-node-port-${data.entryId}-${index}`}
             style={{
               position: "absolute",

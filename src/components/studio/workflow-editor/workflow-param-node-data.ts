@@ -31,10 +31,14 @@ export interface WorkflowParamNodeData extends Record<string, unknown> {
   outputPorts: readonly ParamOutputPort[];
   /** 卡片宽度（须与 placeParamNodes 的几何常量一致）。 */
   width: number;
-  /** 当前模式是否允许连线（无模式 → 不渲染端点）。 */
+  /** 卡片是否可以连线。编辑器画布上恒为 true —— 卡片就是接线面板，没有模式也
+   *  能拖线（模式只决定这条线归属哪个命名空间）。 */
   canWire: boolean;
-  /** 确实没有模式可归属时的说明（有模式时为 false，卡片不写任何警告）。 */
-  noModeHint: boolean;
+  /** 当前模式下这条线是默认线还是作者改过的线（卡片页脚明说）。 */
+  wireManual: boolean;
+  /** 该对外参数在当前模式下是否已经落到宿主卡片的某一行（页脚依据）。
+   *  只连上一颗端点时页脚不许写「没有可连的端口」。 */
+  wired: boolean;
   /** 当前模式下是否画过线（决定「恢复默认」是否可用）。 */
   canReset: boolean;
   /** 「恢复默认」：撤销该对外参数在当前模式下的线。 */

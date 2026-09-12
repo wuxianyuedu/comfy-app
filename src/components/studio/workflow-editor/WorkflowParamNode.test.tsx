@@ -1,12 +1,19 @@
 // @vitest-environment jsdom
 /* 画布上的对外参数卡片（视图层）—— ISSUE #355
  *
- * 卡片是画布上「参数 → 端口」连线的起点：有模式才渲染端点（没有模式禁止连线），
- * 「恢复默认」只在当前模式下确实连过线时可用。 */
+ * 卡片是画布上「参数 → 端口」连线的起点：端点必须真的点得动（ISSUE #355：
+ * 「点击端点拉线会出现禁用标记」），「恢复默认」只在当前模式下确实连过线时可用。 */
 
+import { useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { ReactFlow, ReactFlowProvider } from "@xyflow/react";
+import {
+  Handle,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  useStoreApi,
+} from "@xyflow/react";
 
 import type { WorkflowParamNodeData } from "./workflow-param-node-data";
 import { WorkflowParamCard } from "./WorkflowParamCard";
@@ -35,7 +42,90 @@ function port(
   return { ioKey, name, type, connected, active, handleId: ioKey };
 }
 
-function renderNode(data: Partial<WorkflowParamNodeData> = {}) {
+/** 连线手势的成败写在 React Flow store 的 `connection` 上，DOM 里看不出来
+ *  （jsdom 没有布局，连接线容器量不出宽高）—— 渲染时把 store 顺手捞出来。 */
+type FlowStore = ReturnType<typeof useStoreApi>;
+
+function StoreProbe({ onReady }: { onReady: (store: FlowStore) => void }) {
+  const store = useStoreApi();
+  useEffect(() => {
+    onReady(store);
+  }, [store, onReady]);
+  return null;
+}
+
+/** 用真实的 mousedown + mousemove 走一遍连线手势。
+ *
+ *  jsdom 没有布局：React Flow 量不出容器矩形与端点位置（真实浏览器里由测量写），
+ *  这里补上，否则手势在第一段就被拒。三段的顺序即 React Flow 的受理链：
+ *
+ *    ① 端点 class 含 `connectablestart`（= 宿主节点 connectable）
+ *    ② mousedown 左键（@xyflow/react 的 <Handle> 绑的正是 `onMouseDown`）
+ *    ③ 指针越过 connectionDragThreshold（默认 1px）才真正开画
+ */
+function startWireGesture(api: () => FlowStore, handle: HTMLElement): void {
+  /* React Flow 用 elementFromPoint 判断「指针底下是不是另一颗端点」，jsdom 没实现。
+   * 返回 null = 底下没有别的端点，走 closest-handle 那条路（本用例想要的就是这条）。 */
+  document.elementFromPoint = () => null;
+  const rect = {
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: 500,
+    bottom: 500,
+    width: 500,
+    height: 500,
+    toJSON: () => ({}),
+  } as DOMRect;
+  /* 必须打在**实例**上：容器元素由 React Flow 自己创建并持有，jsdom 里它量出来的
+   *  矩形是全 0（真实浏览器有布局）。 */
+  Object.defineProperty(api().getState().domNode!, "getBoundingClientRect", {
+    configurable: true,
+    value: () => rect,
+  });
+  Object.defineProperty(handle, "getRootNode", {
+    configurable: true,
+    value: () => document,
+  });
+  const node = api().getState().nodeLookup.get("pio:5|size-width");
+  if (node) {
+    node.internals.handleBounds = {
+      source: [
+        {
+          id: "5::widget::width",
+          type: "source",
+          position: Position.Right,
+          x: 200,
+          y: 40,
+          width: 12,
+          height: 12,
+          nodeId: "pio:5|size-width",
+        },
+      ],
+      target: [],
+    };
+  }
+
+  handle.dispatchEvent(
+    new MouseEvent("mousedown", {
+      bubbles: true,
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    }),
+  );
+  document.dispatchEvent(
+    new MouseEvent("mousemove", { bubbles: true, clientX: 40, clientY: 40 }),
+  );
+}
+
+function renderNode(
+  data: Partial<WorkflowParamNodeData> = {},
+  /** 无自带手势授权的端点渲染器（模拟「只靠宿主节点 connectable」的旧行为）。 */
+  legacyEndpoint = false,
+) {
+  let api: FlowStore | null = null;
   const full: WorkflowParamNodeData = {
     entryId: "5|size-width",
     hostNodeId: "5",
@@ -61,14 +151,16 @@ function renderNode(data: Partial<WorkflowParamNodeData> = {}) {
     ],
     width: 208,
     canWire: true,
-    noModeHint: false,
+    wireManual: false,
+    wired: true,
     canReset: false,
     onReset: vi.fn(),
     outputPorts: [port("5::widget::width", "width", "INT", true, true)],
     ...data,
   };
-  return render(
+  const view = render(
     <ReactFlowProvider>
+      <StoreProbe onReady={(store) => (api = store)} />
       <ReactFlow
         nodes={[
           {
@@ -79,11 +171,42 @@ function renderNode(data: Partial<WorkflowParamNodeData> = {}) {
           },
         ]}
         edges={[]}
-        nodeTypes={{ wfParam: WorkflowParamNode }}
+        nodeTypes={{
+          wfParam: legacyEndpoint
+            ? ({ data: nodeData }: { data: WorkflowParamNodeData }) => (
+                /* 旧行为：端点只有 `isConnectable`，手势授权全靠宿主节点
+                 *  connectable（卡片节点上被写死 false → 点不动）。见下方回归用例。 */
+                <WorkflowParamCard
+                  entryId={nodeData.entryId}
+                  cls={nodeData.cls}
+                  label={nodeData.label}
+                  classLabel={nodeData.classLabel}
+                  hostNodeId={nodeData.hostNodeId}
+                  inputRows={nodeData.inputRows}
+                  width={nodeData.width}
+                  canWire={nodeData.canWire}
+                  wired={nodeData.wired}
+                  canReset={nodeData.canReset}
+                  outputPorts={nodeData.outputPorts}
+                  endpoint={() => (
+                    <Handle
+                      id={nodeData.outputPorts[0]!.ioKey}
+                      type="source"
+                      position={Position.Right}
+                      isConnectable
+                      isConnectableStart={false}
+                      isConnectableEnd={false}
+                    />
+                  )}
+                />
+              )
+            : WorkflowParamNode,
+        }}
         fitView={false}
       />
     </ReactFlowProvider>,
   );
+  return { ...view, api: () => api! };
 }
 
 describe("WorkflowParamNode", () => {
@@ -170,10 +293,49 @@ describe("WorkflowParamNode", () => {
     expect(screen.getAllByText("height").length).toBeGreaterThan(0);
   });
 
-  it("没有模式时不渲染端点，并说明「该工作流未声明模式」", () => {
-    const { container } = renderNode({ canWire: false, noModeHint: true });
-    expect(screen.getByText("该工作流未声明模式，落点暂不可编辑")).toBeTruthy();
-    expect(container.querySelector(".react-flow__handle")).toBeNull();
+  it("端点可拉线：isConnectableStart / isConnectableEnd 都挂上", () => {
+    /* 「对外参数卡片连不了线，点击端点拉线会出现禁用标记」（ISSUE #355）：
+     *  React Flow 的 <Handle> 把「这一端能不能拉线 / 能不能落线」算作
+     *  `handle.connectable && handle.connectableend`，其中 connectable 来自**宿主
+     *  节点**（`node.connectable || nodesConnectable`）—— 卡片节点上写
+     *  `connectable: false` 时每颗圆点都是点不动的装饰，hover 还会吃到「禁用」标记。
+     *  这里显式把两段手势都授权给卡片自己，节点属性将来若被改回 false 也仍然连得上。 */
+    const { container } = renderNode({ canWire: true });
+    const handle = container.querySelector<HTMLElement>(".react-flow__handle")!;
+    expect(handle.classList.contains("connectable")).toBe(true);
+    expect(handle.classList.contains("connectablestart")).toBe(true);
+    expect(handle.classList.contains("connectableend")).toBe(true);
+  });
+
+  it("页脚说清这个口现在连上了没有，以及怎么改", () => {
+    /* 一颗空圆点读不出「默认线 / 你改过的线 / 一个候选都落不上」三态。 */
+    const { unmount } = renderNode({ wired: true, wireManual: false });
+    expect(
+      screen.getByTestId("param-node-hint-5|size-width").textContent,
+    ).toContain("默认连线");
+    unmount();
+
+    const manual = renderNode({ wired: true, wireManual: true });
+    expect(
+      screen.getByTestId("param-node-hint-5|size-width").textContent,
+    ).toContain("你改过的线");
+    manual.unmount();
+
+    /* 没有候选端口（这个口在工作流里无处可落）—— 与「有候选但还没连」分开说。 */
+    const empty = renderNode({
+      wired: false,
+      outputPorts: [port("", "尺寸", "*", false, false)],
+    });
+    expect(
+      screen.getByTestId("param-node-hint-5|size-width").textContent,
+    ).toContain("没有可连的参数行");
+    empty.unmount();
+
+    /* 有候选、还没连 → 直接给出该做的动作。 */
+    renderNode({ wired: false });
+    expect(
+      screen.getByTestId("param-node-hint-5|size-width").textContent,
+    ).toContain("拖圆点到节点参数行");
   });
 
   it("只读消费（库内卡片列）不写任何编辑提示", () => {
@@ -191,7 +353,6 @@ describe("WorkflowParamNode", () => {
         width={208}
         canWire={false}
         readOnly
-        noModeHint
         canReset={false}
         outputPorts={[port("", "尺寸", "*", false, false)]}
       />,
@@ -287,5 +448,49 @@ describe("WorkflowParamNode", () => {
     });
     expect(screen.getAllByText("width").length).toBeGreaterThan(0);
     expect(screen.queryByText("height")).toBeNull();
+  });
+});
+
+describe("端点手势：按下即开始连线（不是「不可连」的装饰）", () => {
+  /* ISSUE #355 的原话是「对外参数卡片连不了线，点击端点拉线会出现禁用标记」。
+   * React Flow 的受理链是三段串起来的，任一为假手势都在画线之前死掉：
+   *
+   *   ① 端点 class 含 `connectablestart`（= handle 的 isConnectableStart，且
+   *      handle.connectable = 宿主节点 connectable || nodesConnectable）；
+   *   ② mousedown 左键（@xyflow/react 的 <Handle> 绑的正是 `onMouseDown`）；
+   *   ③ 指针移过 connectionDragThreshold 后才真正开画（默认 1px）。
+   *
+   * 这里把三段都走一遍，断言 store 里出现 connection.fromHandle —— 画布上那条
+   * 连接线正是从它画出来的。写不进去 = 用户看到的就是「点不动 / 禁用标记」。
+   * 手势的固定动作收在 startWireGesture 里，两条用例共用。 */
+  it("在端点上按下并移动指针会进入连线态", () => {
+    const { api, container } = renderNode({ canWire: true });
+    const handle = container.querySelector<HTMLElement>(".react-flow__handle")!;
+    expect(handle.getAttribute("data-handleid")).toBe("5::widget::width");
+    /* 受理与否写在端点自带的 class 上（见 @xyflow/react 的 Handle 组件）。 */
+    expect(handle.classList.contains("connectable")).toBe(true);
+    expect(handle.classList.contains("connectablestart")).toBe(true);
+
+    startWireGesture(api, handle);
+
+    const from = api().getState().connection.fromHandle;
+    expect(from?.nodeId).toBe("pio:5|size-width");
+    expect(from?.id).toBe("5::widget::width");
+  });
+
+  it("端点自带的手势授权是必需的：只靠宿主节点 connectable 会被改回 false 拖死", () => {
+    /* ISSUE #355 的原始故障：`connectable` 取自宿主节点
+     *  （`node.connectable || nodesConnectable`）。卡片节点上写 false 时 React Flow
+     *  不给端点加 `connectablestart`（连线的起点授权），端点照样画在卡片上，但
+     *  按下去什么都不发生，指针旁还吃禁用标记。
+     *
+     *  这里渲染「端点没有自带那两段授权」的同款卡片（= workflow-param-nodes 里
+     *  曾经的 `connectable: false`），确认手势确实死在第一段。 */
+    const { api, container } = renderNode({ canWire: true }, true);
+    const handle = container.querySelector<HTMLElement>(".react-flow__handle")!;
+    expect(handle.classList.contains("connectablestart")).toBe(false);
+
+    startWireGesture(api, handle);
+    expect(api().getState().connection.fromHandle).toBeNull();
   });
 });
