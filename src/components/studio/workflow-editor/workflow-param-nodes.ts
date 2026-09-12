@@ -10,16 +10,24 @@ import {
   PARAM_NODE_WIDTH,
   paramNodeHeight,
   paramNodeId,
+  paramOutputPorts,
   placeParamNodes,
   type ParamEntry,
 } from "~/lib/workflow-param-mapping";
 import { paramClassStyle } from "../workflow-library/workflow-param-mapping-ui";
+import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import type { WorkflowParamNodeData } from "./workflow-param-node-data";
 
 export interface BuildParamNodesCtx {
   entries: readonly ParamEntry[];
   /** 宿主节点（对外参数所属节点）当前的画布坐标。 */
   hostPosById: Record<string, { x: number; y: number } | undefined>;
+  /** 当前模式下生效的「条目 id → 目标 ioKey」—— 卡片上那个**带类型的输出
+   *  端口**的类型由它决定（同一个「尺寸」口落到 `width` 是 INT、落到
+   *  `resolution_preset` 是 COMBO）。缺省时按未连线处理（退到候选端口）。 */
+  resolved?: Record<string, string | null>;
+  /** workflowIO：反查落点端口的类型用（不切分 ioKey）。 */
+  io?: WorkflowIOMap | null;
   /** 当前模式；为空 = 禁止连线。 */
   mode: string | null;
   /** 某个条目在当前模式下是否画过线（决定「恢复默认」可用性）。 */
@@ -28,7 +36,7 @@ export interface BuildParamNodesCtx {
 }
 
 export function buildParamNodes(ctx: BuildParamNodesCtx): Node[] {
-  const { entries, hostPosById, mode, isManual, onReset } = ctx;
+  const { entries, hostPosById, mode, isManual, onReset, resolved, io } = ctx;
   if (entries.length === 0) return [];
   const positions = placeParamNodes(entries, hostPosById);
   const out: Node[] = [];
@@ -37,6 +45,9 @@ export function buildParamNodes(ctx: BuildParamNodesCtx): Node[] {
     /* 宿主节点不在当前视图里（下钻到子图内部、顶层画布没有这个 id）→ 不渲染
      * 卡片，也就不可能有指向不存在节点的连线。 */
     if (!position) continue;
+    /* 带类型的输出端口：类型取自**真正落到的端口**（未连线时退到候选并标 `*`）。
+     * 卡片高度与它同口径 —— 视图多画一行而几何没跟上，卡片就会互相压住。 */
+    const outputPorts = paramOutputPorts(entry, io, resolved?.[entry.id]);
     const data: WorkflowParamNodeData = {
       entryId: entry.id,
       hostNodeId: entry.nodeId,
@@ -50,6 +61,7 @@ export function buildParamNodes(ctx: BuildParamNodesCtx): Node[] {
       noModeHint: !mode,
       canReset: !!mode && isManual(entry.id),
       onReset: () => onReset(entry.id),
+      outputPorts,
     };
     out.push({
       id: paramNodeId(entry.id),
@@ -60,7 +72,10 @@ export function buildParamNodes(ctx: BuildParamNodesCtx): Node[] {
       draggable: false,
       selectable: true,
       connectable: false,
-      style: { width: PARAM_NODE_WIDTH, height: paramNodeHeight(entry) },
+      style: {
+        width: PARAM_NODE_WIDTH,
+        height: paramNodeHeight(entry, outputPorts.length),
+      },
       data,
     });
   }

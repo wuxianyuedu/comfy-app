@@ -48,10 +48,14 @@ export const WorkflowParamNode = React.memo(function WorkflowParamNode({
           {pin.type}
         </span>
       )}
-      endpoint={
+      /* 带类型的输出端口：类型跟着当前落点走（提示词 → STRING）。端点就挂在这
+       * 一行上 —— 卡片右侧出去的是一个**有类型的端口**，不是一颗无属性的圆点。 */
+      outputPorts={data.outputPorts}
+      endpoint={(_, index) =>
         /* 输出端点：连线从这里拖到宿主节点的端口。没有模式时整个 Handle 不渲染
-           —— React Flow 找不到 handle 就拖不出线，等于「禁止连线」。 */
-        data.canWire ? (
+           —— React Flow 找不到 handle 就拖不出线，等于「禁止连线」。
+           只在第一条端口行上挂一个（一个对外参数只有一个出口）。 */
+        data.canWire && index === 0 ? (
           <Handle
             type="source"
             position={Position.Right}
@@ -60,7 +64,7 @@ export const WorkflowParamNode = React.memo(function WorkflowParamNode({
             style={{
               position: "absolute",
               top: "50%",
-              right: -6,
+              right: -10,
               width: 12,
               height: 12,
               borderRadius: 9999,

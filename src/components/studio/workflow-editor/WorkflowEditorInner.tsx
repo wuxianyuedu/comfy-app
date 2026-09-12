@@ -602,6 +602,9 @@ function WorkflowEditorBody({
       entries: paramMapping.entries,
       hostPosById,
       mode: wiringMode,
+      /* 卡片上带类型的输出端口：类型取自当前落点，故把 resolved 与 io 一起给。 */
+      resolved: paramMapping.resolved,
+      io: workflowIO,
       isManual: paramMapping.isManual,
       onReset: (entryId: string) => paramMapping.resetToAuto(entryId),
     });

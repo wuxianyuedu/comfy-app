@@ -6,15 +6,23 @@
  *   · 编辑器画布 —— 由 WorkflowParamNode 包一层 <Handle>，端点可拖线（编辑）；
  *   · 工作流库画布 —— 只读展示，端点不渲染，看的是「这个对外参数由哪些端口
  *     组成」。
- * 两处的头部 / 端口行 / 「恢复默认」必须完全一致，故把视觉收敛到这里，
- * 消费方只负责在右侧挂「端点」与行尾补充说明这两件事。
+ * 两处的头部 / 端口行 / 带类型的输出端口 / 「恢复默认」必须完全一致，故把视觉
+ * 收敛到这里，消费方只负责在输出端口行右侧挂「端点」与在端口行尾补说明。
+ *
+ * 卡片上有两种「端口」，别混淆：
+ *   · **输入端口行**（`pins`）= 这个对外参数落地时的候选/实际落点（工作流内部
+ *     的 pin 名 + 类型）；
+ *   · **带类型的输出端口**（`outputPorts`）= 这张卡右侧出去的是什么（对外语义
+ *     的类型，如「提示词」出去的都是 STRING）。它跟着**当前落点**走：同一个
+ *     「尺寸」口落到 `width` 是 INT、落到 `resolution_preset` 就是 COMBO。
  */
 
 import { RotateCcw } from "lucide-react";
 
-import type { ParamEntry } from "~/lib/workflow-param-mapping";
+import type { ParamEntry, ParamOutputPort } from "~/lib/workflow-param-mapping";
 import {
   PARAM_NODE_HEADER_H,
+  PARAM_NODE_OUTPUT_ROW_H,
   PARAM_NODE_ROW_H,
 } from "~/lib/workflow-param-mapping";
 import { paramClassStyle } from "../workflow-library/workflow-param-mapping-ui";
@@ -42,8 +50,17 @@ export interface WorkflowParamCardProps {
   /** 「恢复默认」是否可用。只读消费处不传回调（按钮根本不渲染）。 */
   canReset: boolean;
   onReset?: () => void;
-  /** 右侧端点槽位（编辑器 = <Handle>）。 */
-  endpoint?: React.ReactNode;
+  /** 该口子的**带类型输出端口**（提示词 → STRING…）。
+   *
+   *  由 `paramOutputPorts` 从「真正落到的端口」派生 —— 同一个「尺寸」口落到
+   *  `width` 是 INT、落到 `resolution_preset` 是 COMBO，类型跟着落点走。
+   *  未连线时退到候选端口并标 `*`，不谎报类型。 */
+  outputPorts: readonly ParamOutputPort[];
+  /** 每条输出端口行右侧的端点槽位（编辑器 = <Handle>）。
+   *
+   *  只给**第一条**端口行挂端点即可（一个对外参数只有一个出口）；返回 null
+   *  的行不渲染端点（没有模式 = 禁止连线，库里只读同理）。 */
+  endpoint?: (port: ParamOutputPort, index: number) => React.ReactNode;
   /** 端口行尾的补充说明（如「→ 落到的端口名」）。 */
   rowTrailing?: (pin: ParamEntry["pins"][number]) => React.ReactNode;
 }
@@ -61,6 +78,7 @@ export function WorkflowParamCard({
   noModeHint = false,
   canReset,
   onReset,
+  outputPorts,
   endpoint,
   rowTrailing,
 }: WorkflowParamCardProps) {
@@ -142,13 +160,50 @@ export function WorkflowParamCard({
         ))}
       </div>
 
+      {/* ── 带类型的输出端口 ──
+          这张卡右侧的端点出去的是**什么类型**，在这里明写一行：端口名 + 类型
+          徽标。类型跟着当前落点走（提示词落到 STRING 文本口就是 STRING；尺寸
+          落到 COMBO 的预设口就是 COMBO），只连了候选还没落定时标 `*`。
+          端点槽位就是这一行的高度 —— 线与端点对齐，看线即可读出类型。 */}
+      <div className="flex flex-col px-2 pb-1">
+        {outputPorts.map((port, index) => (
+          <div
+            key={`${port.name}-${index}`}
+            className="flex min-w-0 items-center gap-1.5 text-[10.5px]"
+            style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
+            data-testid={`param-node-out-${entryId}-${index}`}
+            title={`输出端口 ${port.name} · ${port.type}`}
+          >
+            <span
+              className="shrink-0 rounded px-1 font-mono text-[9px] leading-[14px]"
+              style={{
+                color: style.color,
+                background: `${style.color}1f`,
+                border: `1px solid ${style.color}44`,
+              }}
+              data-testid={`param-node-out-type-${entryId}-${index}`}
+            >
+              {port.type}
+            </span>
+            <span
+              className={`min-w-0 flex-1 truncate ${
+                port.connected
+                  ? "text-(--color-ink-soft)"
+                  : "text-(--color-ink-fainter)"
+              }`}
+            >
+              {port.name}
+            </span>
+            {endpoint?.(port, index)}
+          </div>
+        ))}
+      </div>
+
       {!readOnly && noModeHint && (
         <div className="px-2 pb-1.5 text-[9.5px] leading-relaxed text-amber-500/80">
           该工作流未声明模式，落点暂不可编辑
         </div>
       )}
-
-      {endpoint}
     </div>
   );
 }

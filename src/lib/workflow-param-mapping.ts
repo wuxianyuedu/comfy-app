@@ -184,6 +184,72 @@ function classesForContractParam(param: string): readonly ParamClass[] {
   return [param as ParamClass];
 }
 
+/* ── 带类型的输出端口 ──
+ *
+ * 对外参数卡片右侧的那个端点是**有类型的**：它代表「这里会吐出什么」。作者（与
+ * 消费方）看卡片时要能一眼答出「提示词这个口出去的是 STRING」，而不是看到一颗
+ * 无属性的圆点。此前卡片只在端口行尾标了端口自身的类型，端点本身不带任何类型
+ * 信息 —— 卡片上没有「提示词 → STRING」这条事实（ISSUE #355 复审）。
+ *
+ * 类型取自该口子**真正落到的端口**（resolved 的 ioKey），因为对外参数的类型由
+ * 它连到的那个端口决定：同一个「尺寸」口，落到 `width` 是 INT、落到
+ * `resolution_preset` 就是 COMBO。所以本函数必须拿到 resolved 与 io，不能只靠
+ * 契约表硬编码类型。
+ *
+ * 没连线（`null`）时给 `*`（未确定）——卡片照出端口，只是写着「还没接上」，
+ * 不谎报一个类型。
+ */
+
+/** 单条输出端口的展示形态（纯数据，视图只负责画）。 */
+export interface ParamOutputPort {
+  /** 端口自身的名字（落到哪个 pin；未连线时是契约展示名）。 */
+  name: string;
+  /** 声明类型（大写，如 STRING / INT / COMBO）；未知为 `*`。 */
+  type: string;
+  /** 是否已经落到了工作流里真实存在的端口。 */
+  connected: boolean;
+}
+
+/** 一枚标签/端口的类型展示名：声明类型原样大写，缺省 `*`。 */
+export function portTypeDisplay(type: string | undefined | null): string {
+  const t = (type ?? "").trim().toUpperCase();
+  return t.length > 0 ? t : "*";
+}
+
+/** 一个对外参数卡片的**带类型输出端口**（可能有多个，如「尺寸」落到宽度 + 高度）。
+ *
+ *  取该口子当前真正落到的端口；落点经 `resolved` 给出，类型经 `io` 反查 ——
+ *  不去切分 ioKey（端口名本身可能含 `::`，见 handleIdForIoKey 的说明）。
+ *  未连线 / 落点已不存在时退到该口子的候选端口（逐个列出，类型照给），
+ *  一个都取不到时给一条 `*` 的占位端口，卡片仍画得出端点。 */
+export function paramOutputPorts(
+  entry: ParamEntry,
+  io: WorkflowIOMap | null | undefined,
+  resolvedTarget: string | null | undefined,
+): ParamOutputPort[] {
+  const target = resolvedTarget ?? null;
+  const raw = target ? io?.[target] : undefined;
+  if (raw) {
+    return [
+      {
+        name: raw.name || entry.label,
+        type: portTypeDisplay(raw.type),
+        connected: true,
+      },
+    ];
+  }
+  /* 多候选口子（尺寸 = 宽/高/宽高比/像素量）未连线时逐个列出候选类型 ——
+   * 作者据此知道这个口现在能接到哪些类型上。 */
+  if (entry.pins.length > 0) {
+    return entry.pins.map((pin) => ({
+      name: pin.name,
+      type: portTypeDisplay(pin.type),
+      connected: false,
+    }));
+  }
+  return [{ name: entry.label, type: "*", connected: false }];
+}
+
 /** 把 IO 条目聚合成**统一对外参数**条目（顺序 = 契约顺序，与工作流无关）。
  *
  *  此前这里是「按节点 + 分类」聚类 —— 结果是一份**跟着工作流走**的清单：同一个
@@ -799,11 +865,23 @@ export const PARAM_NODE_HEADER_H = 26;
 export const PARAM_NODE_ROW_H = 22;
 export const PARAM_NODE_PAD_Y = 8;
 
-/** 卡片高度：头部 + 每个端口一行 + 上下留白（至少留一行，空条目也画得出端点）。 */
-export function paramNodeHeight(entry: ParamEntry): number {
+/** 输出端口区的行高 —— 与端口行同口径（视觉上就是一行带类型徽标的端口）。 */
+export const PARAM_NODE_OUTPUT_ROW_H = PARAM_NODE_ROW_H;
+
+/** 卡片高度：头部 + 输入端口区 + 带类型的输出端口区 + 上下留白。
+ *
+ *  输出端口条数由 `outputPortCount` 给（视图用 `paramOutputPorts` 现算，见
+ *  `WorkflowParamCard`）——几何与渲染必须同口径，否则 `placeParamNodes` 算出的
+ *  位置与卡片实际高度对不上，卡片会互相压住。缺省按「至少一条」处理，
+ *  与 `paramOutputPorts` 的兜底一致。 */
+export function paramNodeHeight(
+  entry: ParamEntry,
+  outputPortCount = 1,
+): number {
   return (
     PARAM_NODE_HEADER_H +
     Math.max(1, entry.pins.length) * PARAM_NODE_ROW_H +
+    Math.max(1, outputPortCount) * PARAM_NODE_OUTPUT_ROW_H +
     PARAM_NODE_PAD_Y
   );
 }
@@ -844,7 +922,10 @@ export function placeParamNodes(
     const nextRow = rowY + paramNodeHeight(entry) + PARAM_NODE_GAP;
     const columnCapacity =
       PARAM_NODES_PER_COLUMN *
-      (PARAM_NODE_HEADER_H + PARAM_NODE_ROW_H + PARAM_NODE_GAP);
+      (PARAM_NODE_HEADER_H +
+        PARAM_NODE_ROW_H +
+        PARAM_NODE_OUTPUT_ROW_H +
+        PARAM_NODE_GAP);
     if (nextRow > columnCapacity) {
       columnByNode[entry.nodeId] = column + 1;
       cursorByNode[entry.nodeId] = 0;
