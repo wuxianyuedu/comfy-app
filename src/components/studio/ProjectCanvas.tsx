@@ -18,6 +18,7 @@ import {
   useEdgesState,
   useReactFlow,
   type Edge,
+  type Node as FlowNode,
   type NodeMouseHandler,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -207,7 +208,11 @@ function CanvasInner({
 
   /* 选中节点 → 相关连线高亮：把「上下游」标记写回 edges，由画布的
    * `smoothstep` 边渲染层加成不同样式。 */
-  useRelatedEdgesHighlight(setEdges);
+  useRelatedEdgesHighlight(setEdges, {
+    /* 节点表的 setter 声明的是 CanvasNodeType[]，而这里只改节点 data 上的端口
+     *  关注字段（结构上仍是同一批节点）—— 收窄成 Node[] 会挡在类型门口。 */
+    setNodes: setNodes as unknown as (updater: (nodes: FlowNode[]) => FlowNode[]) => void,
+  });
 
   /* 双 rAF fitView：等 ReactFlow 完成本轮布局后再 fit，
    * 替代 setTimeout(80ms) 魔法数字（慢机器上可能布局未完成）。 */

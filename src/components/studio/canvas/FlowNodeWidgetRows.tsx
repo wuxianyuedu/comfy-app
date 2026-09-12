@@ -9,6 +9,15 @@ import { friendlyInputName } from "@/lib/comfyui/node-titles";
 import { renderWidgetValue, valueCellColor, withAlpha, sanitizeComboLabel } from "../workflow-utils";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import { StringTextarea } from "../StringTextarea";
+import {
+  PORT_ROW_TONES,
+  portDotGlow,
+  resolvePortRowTone,
+} from "./flow-focus-endpoints";
+import {
+  NODE_PORT_FOCUS_ACTIVE_KEY,
+  readPortFocusRole,
+} from "./hooks/use-related-edges-highlight";
 import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";
 
 interface FlowNodeWidgetRowsProps {
@@ -26,6 +35,11 @@ export function FlowNodeWidgetRows({
   visibleWidgetEntries,
   hasSize,
 }: FlowNodeWidgetRowsProps) {
+  /* 选中节点时端口行跟着连线一起变（判据与连线同源，见 FlowNodePinRows）：
+   *  有连线落到的那一行提亮、端点放大，没有落到的行压暗。级别由
+   *  `useRelatedEdgesHighlight` 写在本节点 data 上，行渲染层只读。 */
+  const nodeData = data as unknown as Record<string, unknown>;
+  const portFocusActive = nodeData[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
   return (
     <div className="relative flex min-h-0 flex-1 flex-col py-0.5">
       {visibleWidgetEntries.map(([k, v], idx) => {
@@ -60,6 +74,16 @@ export function FlowNodeWidgetRows({
             stringText.length >= 32 ||
             stringText.includes("\n"));
 
+        /* 这一行的观感：widget 行的 Handle id 就是输入名（无前缀）。档位映射收口
+         * 在 `PORT_ROW_TONES`（与连接行共用同一张表，避免两处各写一套三元链）。 */
+        const tone =
+          PORT_ROW_TONES[
+            resolvePortRowTone({
+              role: readPortFocusRole(nodeData, k),
+              hasSelection: portFocusActive,
+            })
+          ];
+
         return (
           <div
             // idx appended so ComfyUI number-slot inputs ("1", "2", …)
@@ -73,6 +97,8 @@ export function FlowNodeWidgetRows({
                 // min-h-[22px] h-auto lets long labels wrap.
                 : "group relative flex min-h-[22px] h-auto items-center gap-1.5 pl-5 pr-2 py-0.5 text-[11px]"
             }
+            /* 相关行提亮背景、无关行整行压暗（与 FlowNodePinRows 同一张表）。 */
+            style={{ background: tone.background, opacity: tone.opacity }}
           >
             {/* 每行都挂一个 target Handle，映射线（对外参数 → 本行）才有锚点：
                 React Flow 找不到 handle 会丢弃整条边并打 error#008。未连线的行
@@ -88,7 +114,13 @@ export function FlowNodeWidgetRows({
                 left: 5,
                 background: typeCol,
                 opacity: isConn || isBoundary ? 1 : 0,
-                boxShadow: isConn || isBoundary ? `0 0 6px ${typeCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)` : undefined,
+                /* 相关行的端点放大 + 光晕增强（无连线的行端点仍完全透明）。 */
+                width: tone.dotSize,
+                height: tone.dotSize,
+                boxShadow:
+                  isConn || isBoundary
+                    ? portDotGlow(typeCol, tone.dotGlowStrong)
+                    : undefined,
                 borderColor: isConn || isBoundary ? "var(--color-canvas)" : "transparent",
               }}
               title={`${k} (${inputType})`}
@@ -112,7 +144,16 @@ export function FlowNodeWidgetRows({
                 )}
                 <span
                   className="shrink-0 whitespace-normal break-words text-left text-[11px]"
-                  style={{ color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)" }}
+                  style={{
+                    /* 提亮档统一走表里的色；其余行沿用「连线行比普通行重一档」的
+                     * 既有口径（`ink-strong` / `ink-subtle`）。 */
+                    color: tone.background
+                      ? tone.labelColor
+                      : isConn
+                        ? "var(--color-ink-strong)"
+                        : "var(--color-ink-subtle)",
+                    fontWeight: tone.labelWeight,
+                  }}
                   title={k}
                 >
                   {friendlyLabel}
@@ -137,7 +178,15 @@ export function FlowNodeWidgetRows({
                 )}
                 <span
                   className="min-w-0 shrink whitespace-normal break-words text-left text-[11px]"
-                  style={{ flex: "0 1 auto", color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)" }}
+                  style={{
+                    flex: "0 1 auto",
+                    color: tone.background
+                      ? tone.labelColor
+                      : isConn
+                        ? "var(--color-ink-strong)"
+                        : "var(--color-ink-subtle)",
+                    fontWeight: tone.labelWeight,
+                  }}
                   title={k}
                 >
                   {friendlyLabel}
