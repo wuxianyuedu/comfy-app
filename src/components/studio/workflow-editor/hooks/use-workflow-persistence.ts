@@ -5,7 +5,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { Node } from "@xyflow/react";
 import type { WorkflowDetail, WorkflowIOParam } from "@/components/studio/workflow-types";
 import { NODE_TITLE_H, extractNoteTitle } from "@/components/studio/workflow-utils";
-import { MODE_KEY_PREFIX } from "@/lib/workflow-param-mapping";
+import { MODE_KEY_PREFIX, runtimeNodeId } from "@/lib/workflow-param-mapping";
 import { useToast } from "../../ToastProvider";
 import type { WorkflowSaver } from "./use-workflow-save";
 
@@ -23,6 +23,14 @@ export interface WorkflowPersistenceArgs {
   onClose: () => void;
   setSaving: Dispatch<SetStateAction<boolean>>;
   setError: Dispatch<SetStateAction<string>>;
+  /** 当前视图的宿主链路（顶层为空串，下钻一层是 `4`，再下钻是 `4:5`）。
+   *  子图内部的节点 id 是**裸内部 id**（`1670`），而服务端 `positions` 列里
+   *  同一批节点存的是**拼接键**（`4:1670`，见 `extractPositions` 里
+   *  `${wId}:${iId}` 的写法）。两者不是同一套键：不拼上前缀，
+   *  子图里的拖拽会写进一个顶层永远读不到的裸键、下钻回来时又拿它当
+   *  「原始坐标」把真实位置盖掉 —— 这正是「改过位置的节点重置后回不到原始
+   *  布局、再改一次却回归到一个错误位置」的来源。 */
+  hostNodeId?: string;
 }
 
 /**
@@ -42,6 +50,7 @@ export function useWorkflowPersistence({
   onSave,
   setSaving,
   setError,
+  hostNodeId = "",
 }: WorkflowPersistenceArgs) {
   const toast = useToast();
   /* Snapshot the original layout for the current view (keyed by
@@ -78,7 +87,7 @@ export function useWorkflowPersistence({
         notes: scopeDetail?.notes ?? null,
       };
     }
-  }, [detail?.id, scopeDetail]);
+  }, [detail?.id, scopeDetail, hostNodeId]);
 
   /* Reset every node back to the layout as originally loaded for this view.
    *  - Restore `detail.positions` + `detail.notes` to the snapshot taken
@@ -125,24 +134,43 @@ export function useWorkflowPersistence({
      *  - 过滤后为空 = 快照里一个键都不属于本视图（典型的跨命名空间错配，
      *    如 RAW 视图快照 vs API 视图），按「无快照」处理（走 Kahn 兜底），
      *    不再拿别的命名空间的键数去冒充本视图的覆盖率。 */
-    const viewNodeIds = new Set(scopeDetail.nodes.map((node) => node.id));
+    /* 本视图的节点 id 同时接受两种写法：快照一侧取决于数据来源 ——
+     *  `buildSubgraphDetail` 的 `positions` 用**裸内部 id**（`1001`），
+     *  而顶层列与拖拽落库用**拼接键**（`4:1001`）。两者指向同一个节点，
+     *  过滤时都要认，否则「裁剪后为空」会被误判成本视图没有快照。 */
+    const viewNodeIds = new Set<string>();
+    for (const node of scopeDetail.nodes) {
+      viewNodeIds.add(node.id);
+      viewNodeIds.add(runtimeNodeId({ nodeId: node.id, hostNodeId }));
+    }
     const isThisViewKey = (key: string) =>
       viewNodeIds.has(key) || key.startsWith("grp:bpin:");
+    /* 还原时把裸内部 id 规范成与落库同口径的拼接键：拖拽写库用的是
+     *  `宿主:内部`，若这里把快照里的裸 `1001` 原样写回，就等于往同一个节点的
+     *  另一套键上写 —— 顶层读不到、下次进子图又读到旧值，越重置越乱。
+     *  已经带前缀的键（顶层 `4:1001`、导轨 `grp:bpin:*`）原样保留。 */
+    const normalizeKey = (key: string) =>
+      hostNodeId && viewNodeIds.has(key) && !key.includes(":")
+        ? runtimeNodeId({ nodeId: key, hostNodeId })
+        : key;
     const origForView =
       orig === null
         ? null
         : Object.fromEntries(
-            Object.entries(orig).filter(([key]) => isThisViewKey(key))
+            Object.entries(orig)
+              .filter(([key]) => isThisViewKey(key))
+              .map(([key, pos]) => [normalizeKey(key), pos])
           );
     const origForViewCount =
       origForView === null ? 0 : Object.keys(origForView).length;
-    /* 本视图该有多少个坐标：至少覆盖全部图节点；快照里若还带着导轨坐标，
-     *  期望值同样要算上它们，否则「图节点齐了但只有一条导轨被拖过」会被
-     *  误判成 sparse。 */
-    const origHasRailKeys =
-      orig !== null && Object.keys(orig).some((key) => key.startsWith("grp:bpin:"));
-    const expectedCount =
-      scopeDetail.nodes.length + (origHasRailKeys ? 2 : 0);
+    /* 本视图该有多少个坐标：全部图节点 + 快照里**实际存在**的导轨键。
+     *  导轨数量按实到实算（不是硬编码 2）：只要第一条导轨被拖过就会落盘一条
+     *  坐标，拿「2」当期望值会把这种正常情况误判成 sparse。 */
+    const origRailCount =
+      orig === null
+        ? 0
+        : Object.keys(orig).filter((key) => key.startsWith("grp:bpin:")).length;
+    const expectedCount = scopeDetail.nodes.length + origRailCount;
     const isSparse =
       (orig !== null && origForViewCount > 0 && origForViewCount < expectedCount) ||
       (orig !== null && origForViewCount === 0 && scopeDetail.nodes.length > 0) ||
@@ -187,7 +215,7 @@ export function useWorkflowPersistence({
       mergePositions: payload.merge === true,
     });
     requestAnimationFrame(() => requestAnimationFrame(() => fitToContent()));
-  }, [detail, setDetail, workflowId, scopeDetail, fitToContent, savePatch]);
+  }, [detail, setDetail, workflowId, scopeDetail, fitToContent, savePatch, hostNodeId]);
 
   /* Re-sync nodes when paramMap changes (update assignedRole badges). 取角色时
    *  跳过 `mode:` 前缀的按模式连线表 —— 它的值不是节点 id，命中会把整张模式
@@ -289,31 +317,28 @@ export function useWorkflowPersistence({
           });
         } else {
           /* 单一格式（不再区分 RAW / API 视图），图节点拖拽统一
-           * 写回 detail.positions（覆盖 ComfyUI 原始布局）。 */
-          const nodeId = node.id;
+           *  写回 detail.positions（覆盖 ComfyUI 原始布局）。
+           *
+           *  子图视图下的节点 id 是**裸内部 id**，而 `positions` 列存的是
+           *  `宿主:内部` 拼接键（`runtimeNodeId` 就是这条约定的实现，预览/运行
+           *  链路也用它）。不拼前缀就会出现两个各写各的键：子图里的拖拽落到
+           *  `1670`、顶层链路只认 `4:1670`，两边的布局互相看不见 —— 下钻回来
+           *  时那个裸键还会被当成「已保存坐标」把真正的原始位置盖掉。 */
+          const nodeId = runtimeNodeId({ nodeId: node.id, hostNodeId });
           setDetail((prev) =>
             prev ? { ...prev, positions: { ...(prev.positions ?? {}), [nodeId]: [x, y] } } : prev
           );
-          /* Subgraph view: write with `merge: true` so a single inner-node
-           *  drag doesn't overwrite the entire top-level `tpl.positions`
-           *  column.  Top-level view keeps the default REPLACE behaviour
-           *  (it never touches other namespaces).  `subgraphStack` is the
-           *  canonical "are we inside a subgraph" signal — empty array
-           *  when browsing the root workflow. */
-          const payload: Record<string, unknown> = { positions: { [nodeId]: [x, y] } };
-          /* RAW 视图（顶层）拖拽也走 merge:true。tpl.positions
-           *  现在并存 api-id（来自 API 图）与 raw-id（来自 RAW 视图）两套坐标，
-           *  顶层默认 REPLACE 会把另一套坐标清空。单键合并既能落盘当前节点，
-           *  又保留另一视图的键。 */
-          payload.merge = true;
+          /* 一律走 `merge: true` 的单键合并：`positions` 是一张混装多套
+           *  id 命名空间（顶层裸 id / 子图拼接键 / `grp:bpin:*` 导轨）的平表，
+           *  顶层默认的 REPLACE 会把其它命名空间的坐标整片清掉。 */
           savePatch.mutate({
             id: workflowId,
-            positions: payload.positions,
-            mergePositions: payload.merge === true,
+            positions: { [nodeId]: [x, y] },
+            mergePositions: true,
           });
         }
       },
-      [detail, setDetail, workflowId, savePatch]
+      [detail, setDetail, workflowId, savePatch, hostNodeId]
     );
 
   return { resetLayout, handleSave, onNodeDragStop };
