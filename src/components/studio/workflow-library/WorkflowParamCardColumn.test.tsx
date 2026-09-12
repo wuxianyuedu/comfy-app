@@ -70,7 +70,25 @@ describe("WorkflowParamCardColumn", () => {
     expect(card.textContent).toContain("→ positive_prompt");
   });
 
-  it("没有对外参数时不渲染卡片列", () => {
+  it("卡片带**有类型**的输出端口（提示词 → STRING）—— ISSUE #355 复审", () => {
+    render(
+      <WorkflowParamCardColumn
+        entries={entries}
+        resolved={autoMapEntries(entries, io)}
+        io={io}
+      />,
+    );
+    const promptCard = entries.find((entry) => entry.cls === "prompt")!;
+    expect(
+      screen.getByTestId(`param-node-out-type-${promptCard.id}-0`).textContent,
+    ).toBe("STRING");
+    const heightCard = entries.find((entry) => entry.cls === "size-height")!;
+    expect(
+      screen.getByTestId(`param-node-out-type-${heightCard.id}-0`).textContent,
+    ).toBe("INT");
+  });
+
+  it("库里没有对外参数时不渲染卡片列", () => {
     const { container } = render(
       <WorkflowParamCardColumn entries={[]} resolved={{}} io={io} />,
     );
