@@ -19,12 +19,22 @@ import path from "node:path";
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "log-current-"));
 const logFile = path.join(tmp, "app-runtime.log");
 
+/* 全部日志路径都落到本用例自己的临时目录：`log/` 在 .gitignore 里，
+ * CI / 干净检出上根本不存在。若不 mock `NEXTJS_LOG_DIR`，`source=app` 会去读
+ * 真实的 `log/nextjs/`——开发者本机跑过 dev 就"绿"、CI 上就"红"，
+ * 表现为一条与环境耦合、结论不可信的 flaky（ISSUE #436）。
+ * 与转录自身的用例（`capture-streams.server.test.ts`）保持同一口径。 */
+const nextjsLogDir = path.join(tmp, "nextjs");
+const panelLogFile = path.join(nextjsLogDir, "nextjs-panel-test.log");
+
 vi.mock("@/lib/log-paths", async () => {
   const actual = await vi.importActual("@/lib/log-paths");
   return {
     ...(actual as Record<string, unknown>),
     APP_RUNTIME_LOG: logFile,
     DEV_LAUNCHER_LOG: path.join(tmp, "dev-launcher.log"),
+    NEXTJS_LOG_DIR: nextjsLogDir,
+    START_TAURI_LAUNCHER_LOG: path.join(tmp, "start-tauri-launcher.log"),
   };
 });
 
@@ -55,6 +65,10 @@ async function read(source: string, offset = 0) {
 
 beforeEach(() => {
   fs.writeFileSync(logFile, "", "utf8");
+  /* 面板转录目录按用例重建：`source=app` 依赖它存在且含一份 nextjs-panel-* 文件。 */
+  fs.rmSync(nextjsLogDir, { recursive: true, force: true });
+  fs.mkdirSync(nextjsLogDir, { recursive: true });
+  fs.writeFileSync(panelLogFile, "", "utf8");
 });
 
 afterEach(() => {
@@ -128,10 +142,15 @@ describe("GET /api/logs/current 增量读取", () => {
 
   it("应用服务转录（source=app）仍下发会话起点", async () => {
     /* 文件名虽按进程命名，但服务端取的是目录里最新的一份：本次进程尚未落盘时
-     * 会读到上一个进程的文件。裁掉它的历史行（早于本次启动）是有意行为。 */
+     * 会读到上一个进程的文件。裁掉它的历史行（早于本次启动）是有意行为。
+     * 转录目录已由 beforeEach 备好（见文件头 mock 块），这里只需锚点存在。 */
     fs.writeFileSync(path.join(tmp, "dev-launcher.log"), "x", "utf8");
+    fs.appendFileSync(panelLogFile, "[2026-09-11 15:00:00.000] [INFO] x\n");
     const data = await read("app", 0);
     expect(typeof data.sessionStart).toBe("number");
+    /* 顺带钉住「确实读到了转录文件」：目录缺失时会退化成空切片，
+     * 那样 sessionStart 恒为 null——正是这条用例此前在 CI 上失败的形态。 */
+    expect(data.content).toContain("[INFO] x");
   });
 
   it("文件不存在时返回空内容且 size=0，不抛错", async () => {
