@@ -44,6 +44,8 @@ import {
 } from "@/lib/comfyui/workflow-detail-io";
 import {
   parseSubgraphLinks,
+  boundarySlotsByNode,
+  reportDroppedBoundaryLinks,
   buildSubgraphGraph,
   parseSubgraphPins,
   buildBoundaryLinks,
@@ -584,7 +586,14 @@ export async function buildSubgraphDetail(
     /* Sentinal-link indexing + inner-node graph transform + boundary rails
      * all live in workflow-subgraph-parse.ts (see module docs there). */
     const { linkById, boundaryLinkInfoById } = parseSubgraphLinks(sub);
-    const sg = buildSubgraphGraph(sub, linkById);
+    /* 边界槽位下标要先于槽位表算出来：ComfyUI 的 \`target_slot\` 与节点自带
+     *  \`idx\` 在某些导出路径上口径不同，只有哨兵边记下的关联是权威事实
+     *  （见 \`parseSubgraphSlots\`）。 */
+    const sg = buildSubgraphGraph(
+      sub,
+      linkById,
+      boundarySlotsByNode(boundaryLinkInfoById)
+    );
     /* 子图暴露口的作者名（proxyWidgets 被隔离时长名字的来源），随节点下发给
      *  客户端「就地派生富化」用 —— 顶层富化在这里也在场，直接按
      *  `节点id::widget::槽位名` 预先打进内层节点的 raw_inputs（见下）。
@@ -609,6 +618,10 @@ export async function buildSubgraphDetail(
       sg.inputNameByNodeSlot,
       sg.outputNameByNodeSlot
     );
+    /* 被丢掉的边界连线必须留下可诊断的痕迹：否则「这条线没画出来」在界面上
+     *  只是一个安静的空白，排障时既不知道是哪条边、也无从判断是数据问题还是
+     *  渲染问题（规范 10 §10.3.1：降级不得静默）。 */
+    reportDroppedBoundaryLinks(sub, boundaryLinkInfoById, pinIdByLinkId, boundaryLinks);
     const ann = extractSubgraphAnnotations(
       sub,
       (tpl.positions as Record<string, [number, number]>) ?? {}
