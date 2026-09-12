@@ -21,10 +21,13 @@ export interface WorkflowParamNodeData extends Record<string, unknown> {
   label: string;
   /** 分类的中文名（提示词 / 宽度 / …），用作悬停提示。 */
   classLabel: string;
-  /** 该对外参数包含的端口。 */
+  /** 该对外参数包含的端口（被组合控件接管的端口已剔除，见
+   *  `inputRowsForEntry`）。 */
   pins: ParamEntry["pins"];
-  /** 卡片右侧那个**带类型的输出端口**（提示词 → STRING）。
-   *  类型跟着当前落点走；未连线时退到候选端口并标 `*`。 */
+  /** 卡片的输入端口行（一个端口一行）。 */
+  inputRows: ParamEntry["pins"];
+  /** 卡片右侧的**输出端口**（提示词 → STRING）—— 一个候选一颗圆点。
+   *  类型跟着当前落点走；未连线时逐个列出候选。 */
   outputPorts: readonly ParamOutputPort[];
   /** 卡片宽度（须与 placeParamNodes 的几何常量一致）。 */
   width: number;

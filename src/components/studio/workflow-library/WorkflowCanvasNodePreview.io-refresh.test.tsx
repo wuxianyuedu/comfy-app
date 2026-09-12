@@ -264,8 +264,15 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         defaultMode="T2I"
       />,
     );
-    expect(container.querySelector('[data-wire-anchor="prompt"]')).toBeTruthy();
-    expect(container.querySelector('[data-wire-anchor="size"]')).toBeTruthy();
+    /* 锚点 = 「条目 id + 该候选端口的 handle id」：一个候选一颗圆点。 */
+    expect(
+      container.querySelector(
+        `[data-wire-anchor="prompt?positive_prompt"]`,
+      ),
+    ).toBeTruthy();
+    expect(
+      container.querySelector(`[data-wire-anchor="size?aspect_ratio"]`),
+    ).toBeTruthy();
     /* 宿主卡片的两行都在（连线另一端量得到）。 */
     expect(
       container.querySelector('[data-io-key="9::widget::positive_prompt"]'),
@@ -275,9 +282,10 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     ).toBeTruthy();
   });
 
-  it("组合参数（宽高 / 比例像素）的行也带落点锚点", () => {
-    /* 这类口子由同一个控件录入，没有独立的一行可以连 —— 锚点必须挂在整块控件
-     *  上，否则映射连线量不到落点，整条线都不画（看起来就是「尺寸这张卡没连」）。 */
+  it("组合参数折叠后，每个端口各自一行、各有落点锚点", () => {
+    /* 「红框位置需要收窄……需要将这几个参数的输入端口显示出来」（ISSUE #355 复审）：
+     *  宽高比 / 像素量不再挤在一整块组合卡里，按普通参数行逐行渲染 —— 每行一个
+     *  端口、一个落点锚点，连线落得到具体那一行。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
         workflowId="wf-1"
@@ -308,11 +316,78 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         defaultMode="T2I"
       />,
     );
-    const group = container.querySelector(
-      '[data-io-pins*="5::widget::aspect_ratio"]',
+    expect(container.querySelector('[data-testid="grouped-collapsed-rows"]')).toBeTruthy();
+    expect(
+      container.querySelector('[data-io-pins="5::widget::aspect_ratio"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-io-pins="5::widget::megapixels"]'),
+    ).toBeTruthy();
+  });
+
+  it("卡片列与宿主卡片之间留出走线空间（不再贴在一起）—— ISSUE #355 复审", () => {
+    /* 「对外参数和工作流节点太近了，看不清哪里连接哪里」：两列之间必须留出走线
+     *  的横向空间，否则线短得看不出两端。 */
+    const { container } = render(
+      <WorkflowCanvasNodePreview
+        workflowId="wf-1"
+        workflowName="测试工作流"
+        taskType="t2i"
+        workflowIO={promptSizeIO()}
+        paramMap={{}}
+        usable
+        defaultMode="T2I"
+      />,
     );
-    expect(group).toBeTruthy();
-    expect(group!.getAttribute("data-io-pins")).toContain("5::widget::megapixels");
+    const column = container.querySelector('[data-testid="workflow-param-card-column"]')!;
+    /* 卡片列与宿主卡片同在一个 flex 容器里，靠 gap 拉开 —— 断言两端之间确实有
+     *  间距类，而不是贴边。 */
+    const row = column.parentElement!;
+    expect(row.className).toContain("gap-24");
+  });
+
+  it("组合控件的端口未被连上时折叠成普通参数行（输入端口露出来）—— ISSUE #355 复审", () => {
+    /* 「红框位置需要收窄……需要将这几个参数的输入端口显示出来」：宽高比 / 像素量
+     *  没被任何映射落到时不占一整块组合卡，按普通参数行逐行渲染，各有自己的
+     *  输入端口可连。 */
+    const { container } = render(
+      <WorkflowCanvasNodePreview
+        workflowId="wf-1"
+        workflowName="测试工作流"
+        taskType="t2i"
+        workflowIO={{
+          "5::widget::aspect_ratio": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "5",
+            name: "aspect_ratio",
+            label: "宽高比",
+            type: "COMBO",
+            defaultValue: "16:9",
+          },
+          "5::widget::megapixels": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "5",
+            name: "megapixels",
+            label: "像素量",
+            type: "FLOAT",
+            defaultValue: 1,
+          },
+        }}
+        paramMap={{}}
+        usable
+        defaultMode="T2I"
+      />,
+    );
+    /* 折叠成逐行的参数行：每个端口一行、各有落点锚点。 */
+    expect(container.querySelector('[data-testid="grouped-collapsed-rows"]')).toBeTruthy();
+    expect(
+      container.querySelector('[data-io-pins="5::widget::aspect_ratio"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-io-pins="5::widget::megapixels"]'),
+    ).toBeTruthy();
   });
 
   it("没有对外参数时不渲染卡片列（空 IO）", () => {

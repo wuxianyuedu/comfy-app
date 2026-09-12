@@ -13,7 +13,10 @@ import {
   buildParamEntries,
   autoMapEntries,
 } from "~/lib/workflow-param-mapping";
-import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
+import {
+  WorkflowParamCardColumn,
+  wireAnchorValue,
+} from "./WorkflowParamCardColumn";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 
 afterEach(cleanup);
@@ -120,8 +123,8 @@ describe("WorkflowParamCardColumn", () => {
 
   it("每张卡片右侧有一颗小圆点端口（可与宿主卡片上的参数相连）", () => {
     /* ISSUE #355 复审：卡片右侧此前是无属性的圆点甚至没有圆点，作者看不出
-     * 「这个口能和节点上的哪一行连」。现在圆点画在**带类型的输出端口**那一行
-     * 的右沿，并带 `data-wire-anchor` 供连线层量出锚点。 */
+     * 「这个口能和节点上的哪一行连」。现在圆点画在它对应的**输出端口行**右沿，
+     * 并带 `data-wire-anchor` 供连线层量出锚点。 */
     const { container } = render(
       <WorkflowParamCardColumn
         entries={entries}
@@ -131,7 +134,7 @@ describe("WorkflowParamCardColumn", () => {
     );
     const promptCard = entries.find((entry) => entry.cls === "prompt")!;
     const dot = container.querySelector(
-      `[data-wire-anchor="${promptCard.id}"]`,
+      `[data-wire-anchor="${wireAnchorValue(promptCard.id, "positive_prompt")}"]`,
     );
     expect(dot).toBeTruthy();
     /* 圆点必须落在输出端口行内（行是 absolute 的锚），而不是卡片上随便一处。 */
@@ -139,17 +142,19 @@ describe("WorkflowParamCardColumn", () => {
     expect(outputRow.contains(dot)).toBe(true);
   });
 
-  it("一个对外参数只有一颗圆点 —— 未连线时列出的候选行不给点", () => {
-    /* 未连线时输出端口行会逐个列出候选（尺寸 = 宽/高/宽高比/像素量），那几行
-     * 说的是「能接到哪些类型」，不是多个出口。给每行都画点 = 凭空多出端点。 */
+  it("**每个候选一颗**圆点 —— 尺寸不再只有一个出口（ISSUE #355 复审）", () => {
+    /* 未连线时输出端口行逐个列出候选（尺寸 = 宽/高/宽高比/像素量），每一行都是
+     * 能接到的那一个候选口，各画一颗点；只给第一行画点会让「尺寸」看着只有一个
+     * 出口 —— 那正是用户这轮截图指出的问题。 */
     const { container } = render(
       <WorkflowParamCardColumn entries={entries} resolved={{}} io={io} />,
     );
     const sizeCard = entries.find((entry) => entry.cls === "size-height")!;
     const dots = container.querySelectorAll(
-      `[data-wire-anchor="${sizeCard.id}"]`,
+      `[data-wire-anchor^="${sizeCard.id}?"]`,
     );
-    expect(dots).toHaveLength(1);
+    expect(dots).toHaveLength(sizeCard.pins.length);
+    expect(sizeCard.pins.length).toBeGreaterThan(0);
   });
 
   it("库里没有对外参数时不渲染卡片列", () => {

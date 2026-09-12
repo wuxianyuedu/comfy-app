@@ -201,6 +201,49 @@ describe("对外参数节点只在画布上表达映射", () => {
     expect(code).toContain("flex min-h-0 flex-1 justify-center overflow-auto");
   });
 
+  it("输出端口=候选落点本身：每颗点各带 handle id，连线两端同名（ISSUE #355 复审）", () => {
+    /* 「尺寸这里明明有 2 个参数，却只有一个输出端点，需要补充」：卡片右侧的输出
+     *  端口不再是「一颗无属性的点」，而是**每个候选一颗**，各自带 handle id；
+     *  宿主节点的行/控件用 ioKey 当 handle id，两端才对得上 —— 同名 pin 出现在
+     *  别的节点上时也不会接到那一行。 */
+    const node = stripComments(
+      readFileSync(path.join(EDITOR_DIR, "WorkflowParamNode.tsx"), "utf8"),
+    );
+    /* 端点 id 用 ioKey：与宿主行 handle 同名（两个键空间见 handleIdForIoKey），
+     *  同名 pin 出现在别的节点上时也不会接到那一行。 */
+    expect(node).toContain("id={port.ioKey}");
+    const rows = stripComments(
+      readFileSync(
+        path.resolve(
+          __dirname,
+          "../../studio/shared/DynamicWorkflowForm/sections/WidgetInputRow.tsx",
+        ),
+        "utf8",
+      ),
+    );
+    expect(rows).toContain("data-io-pins");
+    expect(rows).toContain("handleId ?? entry.ioKey");
+  });
+
+  it("画布 / 库内的组合控件折叠成逐行参数（输入端口露出来）—— ISSUE #355 复审", () => {
+    /* 「红框位置需要收窄……需要将这几个参数的输入端口显示出来」：宽高 / 比例像素
+     *  这类组合控件把几个端口收进一整块，画布上占满空间且看不见端口。画布 / 库内
+     *  默认折叠成普通参数行（一端口一行、各自带落点锚点），宽版表单不折叠。 */
+    const grouped = stripComments(
+      readFileSync(
+        path.resolve(__dirname, "../shared/GroupedControls.tsx"),
+        "utf8",
+      ),
+    );
+    expect(grouped).toContain("collapseGrouped");
+    expect(grouped).toContain("CollapsedGroupRows");
+    const preview = stripComments(
+      readFileSync(path.join(LIBRARY_DIR, "WorkflowCanvasNodePreview.tsx"), "utf8"),
+    );
+    /* 卡片列与宿主卡片之间留出走线空间（太近就看不清哪条线连到哪一行）。 */
+    expect(preview).toContain("gap-24");
+  });
+
   it("对外参数清单只来自契约（按模式），不再逐节点列出工作流内部参数", () => {
     /* 「对外参数」是产品对用户承诺的那几个口子（提示词 / 尺寸 / 首帧…），
      * 由模式决定，与具体工作流无关 —— 契约表是唯一来源。视图层与映射层都不许

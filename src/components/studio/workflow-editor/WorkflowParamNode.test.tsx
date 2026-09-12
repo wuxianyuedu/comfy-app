@@ -24,6 +24,17 @@ vi.stubGlobal(
 
 afterEach(cleanup);
 
+/** 造一条输出端口（每颗点自带 ioKey / handleId，见 ParamOutputPort）。 */
+function port(
+  ioKey: string,
+  name: string,
+  type: string,
+  connected: boolean,
+  active: boolean,
+) {
+  return { ioKey, name, type, connected, active, handleId: ioKey };
+}
+
 function renderNode(data: Partial<WorkflowParamNodeData> = {}) {
   const full: WorkflowParamNodeData = {
     entryId: "5|size-width",
@@ -40,12 +51,20 @@ function renderNode(data: Partial<WorkflowParamNodeData> = {}) {
         defaultValue: 512,
       },
     ],
+    inputRows: [
+      {
+        ioKey: "5::widget::width",
+        name: "width",
+        type: "INT",
+        defaultValue: 512,
+      },
+    ],
     width: 208,
     canWire: true,
     noModeHint: false,
     canReset: false,
     onReset: vi.fn(),
-    outputPorts: [{ name: "width", type: "INT", connected: true }],
+    outputPorts: [port("5::widget::width", "width", "INT", true, true)],
     ...data,
   };
   return render(
@@ -90,7 +109,7 @@ describe("WorkflowParamNode", () => {
       entryId: "prompt",
       cls: "prompt",
       label: "提示词",
-      outputPorts: [{ name: "positive_prompt", type: "STRING", connected: true }],
+      outputPorts: [port("9::widget::text", "positive_prompt", "STRING", true, true)],
     });
     const row = screen.getByTestId("param-node-out-prompt-0");
     expect(row.className).toContain("justify-end");
@@ -106,7 +125,7 @@ describe("WorkflowParamNode", () => {
       entryId: "prompt",
       cls: "prompt",
       label: "提示词",
-      outputPorts: [{ name: "positive_prompt", type: "STRING", connected: true }],
+      outputPorts: [port("9::widget::text", "positive_prompt", "STRING", true, true)],
     });
     expect(screen.getByTestId("param-node-out-type-prompt-0").textContent).toBe("STRING");
     expect(screen.getByText("positive_prompt")).toBeTruthy();
@@ -117,7 +136,9 @@ describe("WorkflowParamNode", () => {
       entryId: "size",
       cls: "size",
       label: "尺寸",
-      outputPorts: [{ name: "resolution_preset", type: "COMBO", connected: true }],
+      outputPorts: [
+        port("5::widget::resolution_preset", "resolution_preset", "COMBO", true, true),
+      ],
     });
     expect(screen.getByTestId("param-node-out-type-size-0").textContent).toBe("COMBO");
     unmount();
@@ -128,7 +149,7 @@ describe("WorkflowParamNode", () => {
       entryId: "size",
       cls: "size",
       label: "尺寸",
-      outputPorts: [{ name: "尺寸", type: "*", connected: false }],
+      outputPorts: [port("", "尺寸", "*", false, false)],
     });
     expect(screen.getByTestId("param-node-out-type-size-0").textContent).toBe("*");
   });
@@ -139,8 +160,8 @@ describe("WorkflowParamNode", () => {
       cls: "size",
       label: "尺寸",
       outputPorts: [
-        { name: "width", type: "INT", connected: false },
-        { name: "height", type: "INT", connected: false },
+        port("5::widget::width", "width", "INT", false, false),
+        port("5::widget::height", "height", "INT", false, false),
       ],
     });
     expect(screen.getByTestId("param-node-out-type-size-0").textContent).toBe("INT");
@@ -166,13 +187,13 @@ describe("WorkflowParamNode", () => {
         label="尺寸"
         classLabel="尺寸"
         hostNodeId="5"
-        pins={[]}
+        inputRows={[]}
         width={208}
         canWire={false}
         readOnly
         noModeHint
         canReset={false}
-        outputPorts={[{ name: "尺寸", type: "*", connected: false }]}
+        outputPorts={[port("", "尺寸", "*", false, false)]}
       />,
     );
     expect(screen.queryByText("该工作流未声明模式，落点暂不可编辑")).toBeNull();
@@ -197,24 +218,74 @@ describe("WorkflowParamNode", () => {
   });
 
   it("多端口条目逐行列出各端口（宽度 + 高度在同一张卡上）", () => {
+    const pins = [
+      {
+        ioKey: "5::widget::width",
+        name: "width",
+        type: "INT",
+        defaultValue: 512,
+      },
+      {
+        ioKey: "5::widget::height",
+        name: "height",
+        type: "INT",
+        defaultValue: 768,
+      },
+    ];
     renderNode({
       entryId: "5|size",
-      pins: [
-        {
-          ioKey: "5::widget::width",
-          name: "width",
-          type: "INT",
-          defaultValue: 512,
-        },
-        {
-          ioKey: "5::widget::height",
-          name: "height",
-          type: "INT",
-          defaultValue: 768,
-        },
+      pins,
+      inputRows: pins,
+      outputPorts: [
+        port("5::widget::width", "width", "INT", false, false),
+        port("5::widget::height", "height", "INT", false, false),
       ],
     });
     expect(screen.getAllByText("width").length).toBeGreaterThan(0);
     expect(screen.getAllByText("height").length).toBeGreaterThan(0);
+  });
+
+  it("每个候选落点各有一颗端点 —— 尺寸不再只有一个出口（ISSUE #355 复审）", () => {
+    const pins = [
+      { ioKey: "5::widget::aspect_ratio", name: "aspect_ratio", type: "COMBO", defaultValue: "16:9" },
+      { ioKey: "5::widget::megapixels", name: "megapixels", type: "FLOAT", defaultValue: 1 },
+    ];
+    const { container } = renderNode({
+      entryId: "size",
+      cls: "size",
+      label: "尺寸",
+      pins,
+      inputRows: pins,
+      outputPorts: [
+        port("5::widget::aspect_ratio", "aspect_ratio", "COMBO", false, false),
+        port("5::widget::megapixels", "megapixels", "FLOAT", false, false),
+      ],
+    });
+    /* 两颗端点，且各自的 handle id 就是对应端口的 ioKey：拖哪颗连到哪个候选。 */
+    const handles = [...container.querySelectorAll(".react-flow__handle")].map(
+      (element) => element.getAttribute("data-handleid") ?? element.id,
+    );
+    expect(handles.length).toBe(2);
+    expect(handles.join(" ")).toContain("5::widget::aspect_ratio");
+    expect(handles.join(" ")).toContain("5::widget::megapixels");
+  });
+
+  it("输入端口行按传入的 inputRows 渲染（组合控件接管的端口不重复列）", () => {
+    renderNode({
+      entryId: "size",
+      cls: "size",
+      label: "尺寸",
+      pins: [
+        { ioKey: "5::widget::width", name: "width", type: "INT", defaultValue: 512 },
+        { ioKey: "5::widget::height", name: "height", type: "INT", defaultValue: 512 },
+      ],
+      /* 高度被组合控件接管 → 卡片只列宽度这一行。 */
+      inputRows: [
+        { ioKey: "5::widget::width", name: "width", type: "INT", defaultValue: 512 },
+      ],
+      outputPorts: [port("5::widget::width", "width", "INT", true, true)],
+    });
+    expect(screen.getAllByText("width").length).toBeGreaterThan(0);
+    expect(screen.queryByText("height")).toBeNull();
   });
 });
