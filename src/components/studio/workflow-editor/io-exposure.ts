@@ -23,28 +23,72 @@ export interface ExposedLabelSource {
   type?: string;
 }
 
-/** 本地存的名字是不是「机器生成的原始槽位名」。
+/** 显示名判定要用到的全部事实（同一份「事实源」，本地 / 服务端通用）。
  *
- *  勾选那一刻会把画布上的显示名写进本地 `label`；修复前某些路径写进去的其实
- *  就是原始槽位名（封装节点的别名 `value_1`、普通节点的 pin 名 `image`）。
- *  它只是**显示名**，不是作者的命名 —— 作者手写一个与 pin 名逐字相同的名字
- *  几乎不可能，判定成本很低。
+ *  一个已暴露 pin 的名字有三种可能，各由不同来源给出：
+ *    · `name`          真实 pin 名 / 槽位名（ComfyUI 的机器名）；
+ *    · `enrichedLabel` 富化链给出的显示名（作者命名 → 子图内部业务名 →
+ *                      本层 label/localized → 别名）；
+ *    · `slotLabel`     勾选那一刻画布透传的显示名（本层作者业务名）。
  *
- *  `aliasBase` 是同一份事实源（服务端富化 / 视图就地派生）下发的「该条目现在
- *  的原始槽位名」，只有它才是判定基准：本地条目的 `name` 在加载时已被解析成
- *  显示名，拿它比对会把真名字误判成别名、也会把别名漏判。基准缺失（富化还没到）
- *  时一律不判定，宁可留着旧值也不误删作者命名。
+ *  判定必须建立在整组字段上，不能只看名字相不相等 —— 见 below。 */
+export interface ExposedNameFacts {
+  /** 真实 pin 名 / 槽位名（机器名）。缺失时不做任何别名判定。 */
+  name?: string;
+  /** 富化链给出的显示名。 */
+  enrichedLabel?: string;
+  /** 本层槽位上作者写的业务名（与槽位名不同才有值）。 */
+  slotLabel?: string;
+}
+
+/** 手写名与机器槽位别名「同名」时的去重后缀。
  *
- *  但基准**不能只是 pin 名**。判定要回答的问题是「作者到底有没有重命名过」，
- *  而同一个 pin 有三种可能的名字：
- *    ① 富化名（`enrichedLabel`，取自作者命名 → 子图内部业务名 → 本层
- *       label/localized → 别名）；
- *    ② 本层槽位上作者写的名字（`slotLabel`，仅当它与槽位名不同才算数）；
- *    ③ 别名本身（= 基准）。
- *  只看 ③ 会漏判 `value_1` 这类同名条目：判据是「本地存的就是别名本身」，
- *  不是「本地存的恰好等于某个别名」——把别名与 ③ 比对等于什么都没判，条目会
- *  被当成作者命名留下，写入时再把那串机器名固化回库（ISSUE #349 的复现路径）。
- *  所以判据收敛成：**本地存的这串，是富化能如实改写成另一个名字的名字**。 */
+ *  `pinName` 本身就是作者能想到的名字（`LoadImage.image`、`seed`…）。
+ *  真手写一个逐字相同的名字时把它加后缀而不是丢弃 —— 否则作者改完名一看
+ *  没生效，回头再找就是第二轮「改了也不行」（ISSUE #349）。 */
+export const HOMONYM_LABEL_SUFFIX = "（自定义）";
+
+/** 显示名候选串：去空白、剥掉 COMBO 候选串，空串视为无。 */
+function cleanName(value: string | undefined | null): string {
+  return sanitizeComboLabel(value);
+}
+
+/** `candidate` 是不是一个「机器生成的名字」。
+ *
+ *  判据是**把名字互相比较**，而不是拿其中一个去和一个未知基准比，也不是
+ *  「我们记住了哪个键写过脏值」—— 脏值在本地 store 里没有痕迹（可能来自
+ *  上一次会话、来自取消勾选前的旧条目、或来自服务端回读），任何依赖本地
+ *  记忆的判据都会在「重开工作流 / 取消勾选再勾」之后失效，那正是它一直复活
+ *  的原因（ISSUE #349）。
+ *
+ *  只有两条能判定「这串是机器名」，共同前提是**候选串就是真实 pin 名/槽位名**：
+ *
+ *    ① 富化链另外给得出一个不同的名字 —— 说明这个槽位确实有作者命名，
+ *       候选串只是从槽位名抄下来的（`Last Frame Image` vs `image`）；
+ *    ② 富化名也停在同一个名字，但勾选那一刻画布透传的作者名不是它 ——
+ *       说明画布上显示的是别的名字（`Seed` vs `value_1`）。
+ *
+ *  两个别的来源**都**指不出另一个名字时，无从判定，原样保留 —— 宁可留着旧值，
+ *  也不误删作者命名。作者手写的名字永远不满足前提①（它不等于 pin 名），
+ *  因此不会被误伤。 */
+export function isMachineName(candidate: string | undefined, facts: ExposedNameFacts): boolean {
+  const local = cleanName(candidate);
+  const base = cleanName(facts.name);
+  if (!local || !base) return false;
+  /* 前提：候选串必须与真实 pin 名逐字相同。作者手写的名字（`我的种子`、
+   *  `Seed`）与 pin 名不同，这里直接放行。 */
+  if (local !== base) return false;
+  const enriched = cleanName(facts.enrichedLabel);
+  const slot = cleanName(facts.slotLabel);
+  if (enriched && enriched !== local) return true;
+  if (slot && slot !== local) return true;
+  return false;
+}
+
+/** 保留兼容名的别名判定（本地候选串 → 事实源）。
+ *
+ *  与 `isMachineName` 同源：候选串明显是机器名时返回 true。参数顺序沿用旧
+ *  调用点（`label, aliasBase, enrichedLabel, slotLabel`），行为与重构前一致。 */
 export function isStaleExposedAlias(
   label: string | undefined,
   aliasBase: string | undefined,
@@ -52,47 +96,50 @@ export function isStaleExposedAlias(
   slotLabel?: string
 ): boolean {
   if (label === undefined || aliasBase === undefined) return false;
-  const clean = (value: string | undefined) => sanitizeComboLabel(value);
-  const local = clean(label);
-  const base = clean(aliasBase);
+  const local = cleanName(label);
+  const base = cleanName(aliasBase);
   if (!local || !base) return false;
-  const name = clean(enrichedLabel);
-  const slot = clean(slotLabel);
-  /* 富化名与别名不同 → 富化确实知道一个更好的名字。本地存的正是别名本身时让位；
-   *  本地存的已经是那个更好的名字（富化名）时什么都不用动。 */
-  if (name && name !== base) return local === base;
-  /* 富化名仍是别名（本层确实没写作者名），但本层槽位给了另一个作者业务名
-   *  （富化链把它排在 localized 之后，够不着）——本地存的是别名本身时同样让位。 */
-  if (slot && slot !== base) return local === base;
-  /* 两个来源都只有别名：本地这串与富化名一致，无从判定它不是作者命名，留着。 */
-  return false;
+  /* 本地存的不是这个 pin 的名字 → 不可能是这个 pin 的机器名。 */
+  if (local !== base) return false;
+  return isMachineName(label, { name: aliasBase, enrichedLabel, slotLabel });
 }
 
-/** 一个已暴露条目的显示名，与画布上该 pin 的标签逐字一致：
- *  本地 label（画布勾选时透传）→ 服务端富化名 → 原始 pin 名。
+/** 一个已暴露条目的显示名，与画布上该 pin 的标签逐字一致。
  *
- *  两处都过一遍 `sanitizeComboLabel`：画布（WorkflowNode /
- *  WorkflowSubgraphNode）渲染 pin 标签时就会剥掉 COMBO 候选串，IO 面板若
- *  用原文，同一个 pin 又会以两种写法出现——本次要消灭的正是这类「对不上」。 */
+ *  回退链：本地 label → 富化名 → 真实 pin 名。两个取舍：
+ *  ① 本地 label 明显是机器名（见 `isMachineName`）时让位给富化名；
+ *  ② **本地 label 与富化名逐字相同，不代表作者命名过** —— 勾选那一刻写进去的
+ *     就是画布显示名，而那个名字正是从同一个槽位读出来的。所以这里返回
+ *     富化名 / 真实 pin 名，绝不把本地存的那串再竖起来当作者命名。
+ *
+ *  历史事故（ISSUE #349）：「本地 label === 别名」被当成作者命名，于是切一次
+ *  seed 行为就被整体写回，重新固化那串机器名，显示名退回 `value_1`。让位要
+ *  在**显示与写入两处**都成立，否则取消勾选再勾选（重开工作流）就会复活。 */
 export function resolveExposedLabel(
   local: ExposedLabelSource | undefined | null,
   enriched: WorkflowIOEntry | undefined | null,
   fallbackName: string
 ): string {
-  const localLabel = sanitizeComboLabel(local?.label);
-  const enrichedLabel = enriched ? sanitizeComboLabel(ioLabel(enriched)) : "";
-  /* 存量别名：勾选那一刻写进本地 label 的是「画布显示名」。修复前封装节点
-   *  的显示名恰好是 ComfyUI 自动编号的槽位别名（`value_1`），于是本地 label
-   *  里躺着一串机器生成的名字。它等于原始 pin 名、且与服务端富化名不同时，
-   *  视为「没重命名过」——取富化名（作者 label → 内部字段 → 本层 label），
-   *  否则用户重开工作流仍会看到旧的 `value_1` 把修复后的名字压回去
-   *  （ISSUE #349）。作者手写的名字几乎不可能与机器别名逐字相同，不会误伤。 */
-  if (localLabel) {
-    const isStaleAlias = isStaleExposedAlias(localLabel, fallbackName, enrichedLabel);
-    if (!isStaleAlias) return localLabel;
+  const localLabel = cleanName(local?.label);
+  const enrichedLabel = enriched ? cleanName(ioLabel(enriched)) : "";
+  const base = cleanName(fallbackName);
+  const facts: ExposedNameFacts = {
+    name: base,
+    enrichedLabel,
+    ...(enriched?.slotLabel ? { slotLabel: cleanName(enriched.slotLabel) } : {}),
+  };
+  /* ① 本地那串明显是机器名：让位，走富化链。 */
+  if (localLabel && isMachineName(localLabel, facts)) {
+    return enrichedLabel || base || localLabel;
   }
-  if (enrichedLabel) return enrichedLabel;
-  return localLabel || fallbackName;
+  /* ② 本地那串与富化名同源（名字相同）：它不携带任何作者意图，一律以富化链
+   *    为准 —— 富化名缺失时退到真实 pin 名，而不是把这串竖起来。 */
+  if (localLabel && enrichedLabel && localLabel === enrichedLabel) {
+    if (enrichedLabel === base) return base;
+    return enrichedLabel;
+  }
+  if (localLabel) return localLabel;
+  return enrichedLabel || base;
 }
 
 /** 把本地勾选态与服务端富化条目合并成 IO 编辑面板用的条目：
