@@ -4,7 +4,11 @@
 // 组件都能引用它，而不必互相 import —— 注册表被大量模块间接引用，反向依赖会
 // 把整棵节点树拖进只用类型的文件里。
 
-import type { ParamClass, ParamEntry } from "~/lib/workflow-param-mapping";
+import type {
+  ParamClass,
+  ParamEntry,
+  ParamOutputPort,
+} from "~/lib/workflow-param-mapping";
 
 export interface WorkflowParamNodeData extends Record<string, unknown> {
   /** 条目 id（`<hostNodeId>|<cls>`）。 */
@@ -19,6 +23,9 @@ export interface WorkflowParamNodeData extends Record<string, unknown> {
   classLabel: string;
   /** 该对外参数包含的端口。 */
   pins: ParamEntry["pins"];
+  /** 卡片右侧那个**带类型的输出端口**（提示词 → STRING）。
+   *  类型跟着当前落点走；未连线时退到候选端口并标 `*`。 */
+  outputPorts: readonly ParamOutputPort[];
   /** 卡片宽度（须与 placeParamNodes 的几何常量一致）。 */
   width: number;
   /** 当前模式是否允许连线（无模式 → 不渲染端点）。 */

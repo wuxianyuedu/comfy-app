@@ -45,6 +45,7 @@ function renderNode(data: Partial<WorkflowParamNodeData> = {}) {
     noModeHint: false,
     canReset: false,
     onReset: vi.fn(),
+    outputPorts: [{ name: "width", type: "INT", connected: true }],
     ...data,
   };
   return render(
@@ -70,13 +71,63 @@ describe("WorkflowParamNode", () => {
   it("渲染对外参数名与端口行，并带「恢复默认」按钮", () => {
     renderNode();
     expect(screen.getByText("宽度")).toBeTruthy();
-    expect(screen.getByText("width")).toBeTruthy();
+    /* 「width」既是端口行也是输出端口行 —— 两处都该有（输入引脚 + 带类型的出口）。 */
+    expect(screen.getAllByText("width").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("恢复默认")).toBeTruthy();
   });
 
   it("端口行尾显示端口类型（落点由那条线表达，不重复标一遍）", () => {
     renderNode();
-    expect(screen.getByText("INT")).toBeTruthy();
+    /* INT 出现两处：端口行尾 + 输出端口类型徽标。 */
+    expect(screen.getAllByText("INT").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("卡片带一个**有类型**的输出端口（提示词 → STRING）", () => {
+    renderNode({
+      entryId: "prompt",
+      cls: "prompt",
+      label: "提示词",
+      outputPorts: [{ name: "positive_prompt", type: "STRING", connected: true }],
+    });
+    expect(screen.getByTestId("param-node-out-type-prompt-0").textContent).toBe("STRING");
+    expect(screen.getByText("positive_prompt")).toBeTruthy();
+  });
+
+  it("输出端口的类型跟着落点走（同一个尺寸口落到 COMBO 就写 COMBO）", () => {
+    const { unmount } = renderNode({
+      entryId: "size",
+      cls: "size",
+      label: "尺寸",
+      outputPorts: [{ name: "resolution_preset", type: "COMBO", connected: true }],
+    });
+    expect(screen.getByTestId("param-node-out-type-size-0").textContent).toBe("COMBO");
+    unmount();
+  });
+
+  it("未连线时输出端口标 *，不谎报类型", () => {
+    renderNode({
+      entryId: "size",
+      cls: "size",
+      label: "尺寸",
+      outputPorts: [{ name: "尺寸", type: "*", connected: false }],
+    });
+    expect(screen.getByTestId("param-node-out-type-size-0").textContent).toBe("*");
+  });
+
+  it("多输出端口逐条列出（候选都被标出来）", () => {
+    renderNode({
+      entryId: "size",
+      cls: "size",
+      label: "尺寸",
+      outputPorts: [
+        { name: "width", type: "INT", connected: false },
+        { name: "height", type: "INT", connected: false },
+      ],
+    });
+    expect(screen.getByTestId("param-node-out-type-size-0").textContent).toBe("INT");
+    expect(screen.getByTestId("param-node-out-type-size-1").textContent).toBe("INT");
+    expect(screen.getAllByText("width").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("height").length).toBeGreaterThan(0);
   });
 
   it("没有模式时不渲染端点，并说明「该工作流未声明模式」", () => {
@@ -102,6 +153,7 @@ describe("WorkflowParamNode", () => {
         readOnly
         noModeHint
         canReset={false}
+        outputPorts={[{ name: "尺寸", type: "*", connected: false }]}
       />,
     );
     expect(screen.queryByText("该工作流未声明模式，落点暂不可编辑")).toBeNull();
@@ -143,7 +195,7 @@ describe("WorkflowParamNode", () => {
         },
       ],
     });
-    expect(screen.getByText("width")).toBeTruthy();
-    expect(screen.getByText("height")).toBeTruthy();
+    expect(screen.getAllByText("width").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("height").length).toBeGreaterThan(0);
   });
 });

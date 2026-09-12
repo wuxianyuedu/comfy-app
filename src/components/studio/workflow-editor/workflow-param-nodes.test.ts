@@ -9,6 +9,7 @@ import type { WorkflowIOMap } from "~/lib/workflow-io-types";
 import {
   buildParamEntries,
   entryIdFromParamNodeId,
+  paramNodeHeight,
   paramNodeId,
   placeParamNodes,
   resolveMapping,
@@ -116,6 +117,43 @@ describe("buildParamNodes — 每个对外参数一个可连线节点", () => {
     expect(dataOf(height).canReset).toBe(false);
     dataOf(width).onReset();
     expect(onReset).toHaveBeenCalledWith("5|size-width");
+  });
+
+  it("卡片带**有类型**的输出端口，类型取自真正落到的端口 —— ISSUE #355 复审", () => {
+    const nodes = buildParamNodes({
+      entries,
+      hostPosById: hostPos,
+      mode: "T2I",
+      resolved: resolveMapping(entries, io, null, "T2I"),
+      io,
+      isManual: () => false,
+      onReset: vi.fn(),
+    });
+    const prompt = nodes.find((node) => node.id === "pio:9|prompt")!;
+    expect(dataOf(prompt).outputPorts).toEqual([
+      { name: "text", type: "STRING", connected: true },
+    ]);
+    const width = nodes.find((node) => node.id === "pio:5|size-width")!;
+    expect(dataOf(width).outputPorts[0]!.type).toBe("INT");
+  });
+
+  it("没有 resolved / io 时输出端口退到候选并标 *，卡片高度仍留一行", () => {
+    const nodes = buildParamNodes({
+      entries,
+      hostPosById: hostPos,
+      mode: "T2I",
+      isManual: () => false,
+      onReset: vi.fn(),
+    });
+    const prompt = nodes.find((node) => node.id === "pio:9|prompt")!;
+    expect(dataOf(prompt).outputPorts[0]!.connected).toBe(false);
+    expect(dataOf(prompt).outputPorts[0]!.name).toBe("text");
+    /* 高度计入输出端口区：卡片高度 = 候选端口行 + 输出端口行（多画一行而几何
+     * 没跟上 → 卡片互相压住）。 */
+    const entry = entries.find((item) => item.id === "9|prompt")!;
+    expect((prompt.style as { height: number }).height).toBe(
+      paramNodeHeight(entry, 1),
+    );
   });
 
   it("宿主节点没有坐标时跳过（不产出 NaN 位置）", () => {

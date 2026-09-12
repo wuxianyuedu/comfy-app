@@ -13,7 +13,10 @@
  *   表单行 = 这一格现在填的是什么值（值），行尾徽标标出它属于哪个对外参数。
  */
 
-import type { ParamEntry } from "~/lib/workflow-param-mapping";
+import {
+  paramOutputPorts,
+  type ParamEntry,
+} from "~/lib/workflow-param-mapping";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { WorkflowParamCard } from "../workflow-editor/WorkflowParamCard";
 import { paramClassStyle } from "./workflow-param-mapping-ui";
@@ -65,6 +68,9 @@ export function WorkflowParamCardColumn({
             canWire={false}
             readOnly
             canReset={false}
+            /* 带类型的输出端口：与编辑器同一份派生（类型跟着落点走），库里也
+             * 读得到「提示词 → STRING」。 */
+            outputPorts={paramOutputPorts(entry, io, resolved[entry.id])}
             /* 单端口条目在行尾标出它落到宿主卡片的哪一行；多端口条目
              * 还是显示端口类型（落点跟着具体端口名走）。 */
             rowTrailing={(pin) =>
