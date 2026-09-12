@@ -1,0 +1,68 @@
+"use client";
+
+/* 工作流库「画布节点」预览左侧的**只读对外参数卡片列**。
+ *
+ * 每个对外参数一张卡片（视觉本体复用 workflow-editor/WorkflowParamCard）：
+ *   · 卡片头是参数名（作者在编辑器里勾选/改名后的那个名字）；
+ *   · 卡片体逐行列出它包含的端口名与类型，端口行尾标出该端口落到宿主卡片的
+ *     哪一行参数（只有一个端口时标「→ <参数名>」）；
+ *   · 卡片不可拖、不可改落点 —— 拉线 / 断开 / 恢复默认都在编辑器画布上做。
+ *
+ * 与宿主卡片的**表单行**是同一条事实的两端，不重复表达：
+ *   卡片 = 这个对外参数由哪些端口组成（归属）；
+ *   表单行 = 这一格现在填的是什么值（值），行尾徽标标出它属于哪个对外参数。
+ */
+
+import type { ParamEntry } from "~/lib/workflow-param-mapping";
+import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import { WorkflowParamCard } from "../workflow-editor/WorkflowParamCard";
+import { paramClassStyle } from "./workflow-param-mapping-ui";
+import { resolveTargetName } from "./workflow-library-param-cards";
+
+/** 卡片宽度：与项目画布节点同宽，两列并排时仍放得下。 */
+const CARD_WIDTH = 220;
+
+export interface WorkflowParamCardColumnProps {
+  entries: readonly ParamEntry[];
+  /** 当前模式下「条目 → 目标 ioKey」的生效落点。 */
+  resolved: Record<string, string | null>;
+  io: WorkflowIOMap | null;
+}
+
+export function WorkflowParamCardColumn({
+  entries,
+  resolved,
+  io,
+}: WorkflowParamCardColumnProps) {
+  if (entries.length === 0) return null;
+
+  return (
+    <aside
+      className="flex shrink-0 flex-col gap-2 self-start"
+      style={{ width: CARD_WIDTH }}
+      aria-label="对外参数"
+      data-testid="workflow-param-card-column"
+    >
+      <p className="px-0.5 text-[11px] font-medium text-(--color-ink-faint)">
+        对外参数（只读）
+      </p>
+      {entries.map((entry) => {
+        const target = resolveTargetName(io, resolved[entry.id]);
+        const style = paramClassStyle(entry.cls);
+        return (
+          <WorkflowParamCard
+            key={entry.id}
+            entryId={entry.id}
+            cls={entry.cls}
+            label={entry.label}
+            classLabel={style.label}
+            hostNodeId={entry.nodeId}
+            pins={entry.pins}
+            width={CARD_WIDTH}
+            targetName={target}
+          />
+        );
+      })}
+    </aside>
+  );
+}

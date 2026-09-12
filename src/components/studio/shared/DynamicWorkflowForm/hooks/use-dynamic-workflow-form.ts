@@ -82,11 +82,16 @@ export function useDynamicWorkflowForm(
    *  预览里调它们的必填与可见——否则它们被按端口行版式压缩成单行，那套版式
    *  从不渲染必填/👁，作者永远碰不到（seed 挤没的历史根因）。
    *  CreatePanel / 画布 workflow 节点等运行期只读表单不带这些回调，数值行
-   *  仍保持原有紧凑端口行 + SeedMode 的布局。 */
+   *  仍保持原有紧凑端口行 + SeedMode 的布局。
+   *
+   *  `rowTrailing` 同样按「作者态」处理：行尾徽标只有完整参数行才渲染得出，
+   *  数值行若留在端口行版式里就永远标不上（工作流库的行归属徽标会漏掉
+   *  seed/steps 这类数值参数）。 */
   const isAuthoringEdit = !!(
     props.onRequiredChange ??
     props.onLabelChange ??
     props.onVisibilityChange ??
+    props.rowTrailing ??
     onReorder
   );
 
