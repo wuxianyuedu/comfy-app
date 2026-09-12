@@ -59,7 +59,25 @@ export function WorkflowParamCardColumn({
             hostNodeId={entry.nodeId}
             pins={entry.pins}
             width={CARD_WIDTH}
-            targetName={target}
+            /* 只读消费：卡片不参与连线，端点与「恢复默认」都不渲染。 */
+            canWire={false}
+            canReset={false}
+            /* 单端口条目在行尾标出它落到宿主卡片的哪一行；多端口条目
+             * 还是显示端口类型（落点跟着具体端口名走）。 */
+            rowTrailing={(pin) =>
+              target && entry.pins.length === 1 ? (
+                <span
+                  className="shrink-0 truncate text-[9.5px] text-(--color-ink-fainter)"
+                  title={`落点：${target}`}
+                >
+                  → {target}
+                </span>
+              ) : (
+                <span className="shrink-0 font-mono text-[9.5px] text-(--color-ink-fainter)">
+                  {pin.type}
+                </span>
+              )
+            }
           />
         );
       })}
