@@ -183,7 +183,10 @@ export function WorkflowParamCard({
         {outputPorts.map((port, index) => (
           <div
             key={`${port.name}-${index}`}
-            className="flex min-w-0 items-center gap-1.5 text-[10.5px]"
+            /* `relative` 是端点定位的锚：注入的端点（画布上的 <Handle>、库内
+             *  的只读圆点）都以**这一行**为参照居中，而不是整张卡片 —— 否则
+             *  多行输出端口时圆点会全部叠在卡片中线，看不出连的是哪一行。 */
+            className="relative flex min-w-0 items-center gap-1.5 text-[10.5px]"
             style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
             data-testid={`param-node-out-${entryId}-${index}`}
             title={`输出端口 ${port.name} · ${port.type}`}

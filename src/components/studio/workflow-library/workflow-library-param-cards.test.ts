@@ -4,13 +4,19 @@
  *   ① 每个对外参数由哪些端口组成（卡片列）；
  *   ② 宿主卡片里被落到的那一行属于哪个对外参数（行尾徽标）。
  * 这里只测派生规则（与 paramMap 同源、按模式归属）与「端口键 → 参数名」的反查。
+ *
+ * 另测只读映射连线（卡片圆点 → 宿主行）：`wires` 与 `resolved` / 编辑器同一
+ * 份事实源，未连线与显式断开都不给线。
  */
 
 import { describe, expect, it } from "vitest";
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { buildParamEntries } from "~/lib/workflow-param-mapping";
-import { deriveLibraryParamCards, resolveTargetName } from "./workflow-library-param-cards";
+import {
+  deriveLibraryParamCards,
+  resolveTargetName,
+} from "./workflow-library-param-cards";
 
 const io: WorkflowIOMap = {
   "9::widget::text": {
@@ -67,7 +73,9 @@ describe("deriveLibraryParamCards", () => {
   it("作者改过的落点优先于自动判定", () => {
     const { resolved } = deriveLibraryParamCards({
       io,
-      paramMap: { source: { "mode:T2I": { [promptEntry.id]: "9::widget::text" } } },
+      paramMap: {
+        source: { "mode:T2I": { [promptEntry.id]: "9::widget::text" } },
+      },
       mode: "T2I",
     });
     expect(resolved[promptEntry.id]).toBe("9::widget::text");
@@ -102,7 +110,11 @@ describe("deriveLibraryParamCards", () => {
   });
 
   it("ownersByPin 把每个落点行映到对外参数名", () => {
-    const { ownersByPin } = deriveLibraryParamCards({ io, paramMap: {}, mode: "T2I" });
+    const { ownersByPin } = deriveLibraryParamCards({
+      io,
+      paramMap: {},
+      mode: "T2I",
+    });
     expect(ownersByPin["9::widget::text"]).toBe(promptEntry.label);
     expect(ownersByPin["5::widget::width"]).toBe(sizeEntry.label);
     /* 没有对外参数声称的行不标徽标 —— 表里直接没有这个键。 */
@@ -140,8 +152,14 @@ describe("deriveLibraryParamCards", () => {
       mode: "T2I",
     });
     const plain = deriveLibraryParamCards({ io, paramMap: {}, mode: "T2I" });
-    expect(plain.entries.map((entry) => entry.label)).toEqual(["提示词", "尺寸"]);
-    expect(withRename.entries.map((entry) => entry.label)).toEqual(["提示词", "尺寸"]);
+    expect(plain.entries.map((entry) => entry.label)).toEqual([
+      "提示词",
+      "尺寸",
+    ]);
+    expect(withRename.entries.map((entry) => entry.label)).toEqual([
+      "提示词",
+      "尺寸",
+    ]);
     expect(withRename.ownersByPin["9::widget::text"]).toBe("提示词");
   });
 
@@ -154,6 +172,60 @@ describe("deriveLibraryParamCards", () => {
       });
       expect(resolved[promptEntry.id]).toBe("9::widget::text");
     }
+  });
+
+  it("每个落点给一条只读连线：卡片圆点 → 宿主行", () => {
+    /* 圆点不给线就只是一颗装饰点：读者答不出「提示词这个口连到哪一行」。 */
+    const { wires } = deriveLibraryParamCards({
+      io,
+      paramMap: {},
+      mode: "T2I",
+    });
+    expect(wires).toEqual(
+      expect.arrayContaining([
+        {
+          entryId: promptEntry.id,
+          targetIoKey: "9::widget::text",
+          manual: false,
+        },
+        {
+          entryId: sizeEntry.id,
+          targetIoKey: "5::widget::width",
+          manual: false,
+        },
+      ]),
+    );
+    expect(wires).toHaveLength(2);
+  });
+
+  it("作者改过的线标 manual（实线），自动判定的不标（虚线）", () => {
+    const { wires } = deriveLibraryParamCards({
+      io,
+      paramMap: {
+        source: { "mode:T2I": { [promptEntry.id]: "9::widget::text" } },
+      },
+      mode: "T2I",
+    });
+    expect(wires.find((w) => w.entryId === promptEntry.id)!.manual).toBe(true);
+    expect(wires.find((w) => w.entryId === sizeEntry.id)!.manual).toBe(false);
+  });
+
+  it("未连接 / 显式断开不留线（圆点悬空本身就在说没连上）", () => {
+    const { wires } = deriveLibraryParamCards({
+      io,
+      paramMap: { source: { "mode:T2I": { [promptEntry.id]: null } } },
+      mode: "T2I",
+    });
+    expect(wires.some((w) => w.entryId === promptEntry.id)).toBe(false);
+  });
+
+  it("别的模式的线不影响当前模式的连线", () => {
+    const { wires } = deriveLibraryParamCards({
+      io,
+      paramMap: { source: { "mode:I2I": { [promptEntry.id]: null } } },
+      mode: "T2I",
+    });
+    expect(wires.some((w) => w.entryId === promptEntry.id)).toBe(true);
   });
 
   it("没有对外参数时条目为空（视图据此不渲染卡片列）", () => {
