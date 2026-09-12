@@ -64,6 +64,11 @@ jobs:
         # 顶层浮层（fixed + inset-0）必须让出窗口标题行，否则页签与窗口按钮被盖住
         run: node scripts/check-title-bar-clearance.cjs
 
+      - name: CHANGELOG fragments
+        # 碎片形态（规范 13.10.5 / ISSUE #408）：条目写 changelog.d/<issue号>-<slug>.md，
+        # 文件名与段落标题不合规即失败，避免发版并入时才发现写歪
+        run: node scripts/check-changelog-fragments.cjs
+
       - name: UI/Logic separation ratchet
         # 棘轮只许降不许升（规范 17）：新增违规失败；治理后未收紧基线也失败
         run: node scripts/check-ui-logic-separation.cjs --strict

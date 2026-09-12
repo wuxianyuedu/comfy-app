@@ -16,7 +16,7 @@
 - [ ] 无 `any` / `as Record<string, any>` 新增（确需用 `unknown` + 类型守卫）
 - [ ] 无单字母变量新增（循环索引 i/j/k、catch 参数 e、占位 _ 除外）
 - [ ] 注释无作者 / 日期 / 版本流水，只写「当前代码的 Why」（见 [12.4](12-代码组织与文件结构.md#124-注释规范只写当前代码的-why)）
-- [ ] 用户可感知的变更已记入 `CHANGELOG.md` 的 `[Unreleased]`（内部重构/文档修订除外，见 [13.10](#1310-changelog-记录规范)）
+- [ ] 用户可感知的变更已写入 `changelog.d/<issue号>-<slug>.md` 碎片（内部重构/文档修订除外）——**不直接改 `CHANGELOG.md`**，见 [13.10.5](#13105-碎片化落地改-changelogd不改-changelogmd)
 - [ ] 新组件 200 行以内；超过则已拆分（见 [4.1](04-组件设计.md#41-单一职责一个组件干一件事)）
 - [ ] 列表/日志有内存上限（见 [2.1](02-性能规范.md#21-列表日志必须有上限)）
 - [ ] 高频状态用 Zustand 而非 Context（见 [1.1](01-架构与状态管理.md#11-全局高频状态禁止用-react-context)）
@@ -216,6 +216,55 @@ git -c filter.lfs.process= -c filter.lfs.required=false commit -m "type(scope): 
 - 未发布条目放 `## [Unreleased]`；发版时改为版本号 + 日期（`## [0.2.0] - 2026-09-15`）。
 - **维护时机**：PR 合入前随代码一起改（对齐 [13.9](#139-优化点归档强制) 的同提交原则）。
   **禁止发版前集中补写**——集中补写必然漏项且失真。
+
+#### 13.10.5 碎片化落地：改 `changelog.d/`，不改 `CHANGELOG.md`
+
+`CHANGELOG.md` 的 `[Unreleased]` 是**全仓库唯一「人人都改、且都改同一个地方」的文件**：
+两条并行分支（或两个 agent 同时开工）往里追加条目时，必然落在同一行区间 ——
+无论谁先合，另一方都要手工解一次冲突。这段冲突没有任何信息量：两边的条目都
+该保留，没有真正的取舍，纯粹是把同一份文本排两遍（ISSUE #408）。
+
+因此条目**先进碎片目录，由脚本并入**：
+
+| 环节 | 载体 | 谁写 |
+|------|------|------|
+| 开发中 | `changelog.d/<issue号>-<slug>.md`，一件变更一个文件 | 改代码的人（随 PR 提交） |
+| 发版 / 整理 | `CHANGELOG.md` 的 `[Unreleased]` / 版本段落 | `node scripts/merge-changelog-fragments.mjs` |
+
+**碎片写法**（与原先写在 `CHANGELOG.md` 里完全一致，只是搬了地方）：
+
+```
+changelog.d/408-changelog-conflict-free.md
+────────────────────────────────────────────
+## Changed
+
+- **更新日志改成一件变更一个文件，并行开发不再撞车（ISSUE #408）**：……
+```
+
+- **文件名**：`<issue号>-<slug>.md`（`408-changelog-conflict-free.md`）；
+  无 ISSUE 号用 `0-`；slug 用小写英文与 `-`。
+- **首行**：段落标题（`## Added` / `## Changed` / `## Fixed` / …），它决定条目
+  并入 `[Unreleased]` 的哪一节，**不能省**。
+- **正文**：一条变更一行、以 `- ` 开头、写法同原 `CHANGELOG.md`。
+- 一个 PR 里有多条**不同类型**的变更 → 建多个碎片文件（`Added` 一个、`Fixed` 一个），
+  这本身就是「不同文件不冲突」的用法。
+
+**门禁与工具**
+
+```bash
+node scripts/check-changelog-fragments.cjs          # 校验碎片形态(pre-commit 与 CI 自动跑)
+node scripts/merge-changelog-fragments.mjs          # 并入 [Unreleased] 并删除碎片
+node scripts/merge-changelog-fragments.mjs --check  # 只预览,不落盘
+node scripts/merge-changelog-fragments.mjs --release 0.2.0   # 并入并把 [Unreleased] 定版
+```
+
+**为什么不是「只在发版时统一写」**：那会退回「集中补写」，必然漏项失真
+（[13.10.4](#13104-格式与时机) 已明令禁止）。碎片方案保住「随 PR 一起写」的时效性，
+只把**文本冲突**改成**文件合并**。
+
+> **与「一个提交只做一件事」的关系**：碎片文件使「同一 PR 内多人协作同一份
+> 变更记录」成为 git 层面不可能冲突的操作，这是 [13.7](#137-换行符与提交噪声lf)
+> 「禁止无关全文件变更」在 changelog 上的自然延伸 —— 每次改动只碰属于它的那个文件。
 
 ### 13.11 随手改与 TODO 记录规范
 
