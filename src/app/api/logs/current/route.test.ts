@@ -40,7 +40,11 @@ function writeLines(n: number, startIndex = 0): void {
 }
 
 async function read(source: string, offset = 0) {
-  const res = await GET(new Request(`http://localhost/api/logs/current?source=${source}&offset=${offset}`));
+  const res = await GET(
+    new Request(
+      `http://localhost/api/logs/current?source=${source}&offset=${offset}`,
+    ),
+  );
   return (await res.json()) as {
     content: string;
     size: number;
@@ -90,10 +94,44 @@ describe("GET /api/logs/current 增量读取", () => {
 
   it("追加写来源都带会话起点；读不到锚点时是 null（客户端据此不截断）", async () => {
     writeLines(1);
-    for (const source of ["app-runtime", "comfyui-runtime", "drizzle-studio-runtime", "ollama-runtime"]) {
+    for (const source of [
+      "app-runtime",
+      "comfyui-runtime",
+      "drizzle-studio-runtime",
+      "ollama-runtime",
+    ]) {
       const data = await read(source, 0);
       expect(data).toHaveProperty("sessionStart");
     }
+  });
+
+  /* ISSUE #262 复审：「启动和启动器日志丢失」的服务端一半。
+   *
+   * 会话起点取自 dev-launcher.log 的 mtime，而启动器的头几行（python / exe /
+   * cwd / 探测 Node）写在它被创建**之前**。若覆盖重建的来源也下发这个起点，
+   * 客户端就会把本次启动最早、最该被看到的行当成「上一次运行的残留」丢掉。
+   * 因此契约是：**只有跨运行累积的来源带 sessionStart**，其余恒为 null。 */
+  it("覆盖重建的来源（launcher / dev-launcher）不下发会话起点", async () => {
+    fs.writeFileSync(path.join(tmp, "dev-launcher.log"), "x", "utf8");
+    for (const source of ["launcher", "dev-launcher", "dev"]) {
+      const data = await read(source, 0);
+      expect(data.sessionStart).toBeNull();
+    }
+  });
+
+  it("跨运行累积的来源仍然下发会话起点（历史行仍要被裁）", async () => {
+    fs.writeFileSync(path.join(tmp, "dev-launcher.log"), "x", "utf8");
+    writeLines(1);
+    const data = await read("app-runtime", 0);
+    expect(typeof data.sessionStart).toBe("number");
+  });
+
+  it("应用服务转录（source=app）仍下发会话起点", async () => {
+    /* 文件名虽按进程命名，但服务端取的是目录里最新的一份：本次进程尚未落盘时
+     * 会读到上一个进程的文件。裁掉它的历史行（早于本次启动）是有意行为。 */
+    fs.writeFileSync(path.join(tmp, "dev-launcher.log"), "x", "utf8");
+    const data = await read("app", 0);
+    expect(typeof data.sessionStart).toBe("number");
   });
 
   it("文件不存在时返回空内容且 size=0，不抛错", async () => {
