@@ -458,7 +458,7 @@ function Test-ToolchainGate {
 
 # ── 预检 0.5：pnpm 版本一致性检查 ──
 # package.json 的 packageManager 字段声明了本项目所需的 pnpm 版本（如
-# pnpm@11.25.0）。若本机 pnpm 版本不匹配（常见于拉取代码后团队升级了 pnpm
+# pnpm@12.4.1）。若本机 pnpm 版本不匹配（常见于拉取代码后团队升级了 pnpm
 # 版本，或本机直接安装的全局 pnpm 而非 corepack 管理），会影响 pnpm install
 # 与 dev 脚本的执行语义。此函数在启动前比对两者：
 #   - 一致 → OK，无需处理（corepack 管理的 pnpm 会自动跟随 packageManager）；

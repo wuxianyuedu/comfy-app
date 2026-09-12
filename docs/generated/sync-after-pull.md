@@ -10,15 +10,15 @@
 
 ## 1. 为什么要做这一步
 
-从 2026-09 起，本仓库把 pnpm 11 的项目级配置迁移到了 `pnpm-workspace.yaml`
+从 2026-09 起，本仓库把 pnpm 的项目级配置迁移到了 `pnpm-workspace.yaml`
 （详见 `docs/standards/launch-and-build.md` §6「工具链钉死项」），关键配置包括：
 
 | 配置 | 作用 |
 |---|---|
-| `minimumReleaseAge: 0` | 关闭 pnpm 11 默认的「新包 24h 拒装」供应链门槛 |
+| `minimumReleaseAge: 0` | 关闭 pnpm 默认的「新包 24h 拒装」供应链门槛 |
 | `verifyDepsBeforeRun: false` | 关闭 pnpm 命令前的隐式自动 `pnpm install` |
 | `allowBuilds` | 显式批准含 postinstall 构建脚本的依赖（如 better-sqlite3、esbuild、msw） |
-| `package.json` → `packageManager: pnpm@11.25.0` | 钉死 pnpm 版本（由 corepack 管理） |
+| `package.json` → `packageManager: pnpm@12.4.1` | 钉死 pnpm 版本（由 corepack 管理） |
 
 这些配置**只影响新执行的 `pnpm install`**，不会自动作用到已装好的 `node_modules`。
 所以本地拉取到这类提交后，需要按下面的步骤让依赖环境与仓库配置对齐。
@@ -55,14 +55,14 @@ pnpm install
 
 ### pnpm 版本不对怎么办
 
-本仓库钉死 `pnpm@11.25.0`。若 `pnpm -v` 版本不一致或命令报错，用 Node 自带的
+本仓库钉死 `pnpm@12.4.1`。若 `pnpm -v` 版本不一致或命令报错，用 Node 自带的
 corepack 对齐（corepack 会读取 `package.json` 的 `packageManager` 字段自动切换）：
 
 > **启动器已自动处理**：从 2026-09 起，`tools/start/start-tauri.ps1`、`tools/start/start-tauri-dev.ps1`、`tools/start/start-web.ps1`、`tools/start/run-local.ps1` 启动时都会自动检测 pnpm 实际版本与 `package.json` 声明是否一致；不一致时若 corepack 可用会先自动 `corepack prepare` 对齐，失败才需要你手动执行下面的命令。
 
 ```powershell
 corepack enable
-corepack prepare pnpm@11.25.0 --activate
+corepack prepare pnpm@12.4.1 --activate
 ```
 
 ---
@@ -91,6 +91,6 @@ corepack prepare pnpm@11.25.0 --activate
 | 只是普通拉取（没改依赖/配置） | 无需操作，直接启动 |
 | 拉取后 `pnpm-workspace.yaml` / `pnpm-lock.yaml` 有变更 | `pnpm install` |
 | install 报 `ERR_PNPM_IGNORED_BUILDS` / 年龄门槛错误 | 删除 `node_modules` 后重新 `pnpm install` |
-| pnpm 版本与仓库要求（11.25.0）不一致 | `corepack enable` + `corepack prepare pnpm@11.25.0 --activate` |
+| pnpm 版本与仓库要求（12.4.1）不一致 | `corepack enable` + `corepack prepare pnpm@12.4.1 --activate` |
 | 双击脚本用户，拉取后启动报依赖错误 | 删 `node_modules`，重双击 `run-local.ps1` |
 | dev server 正在运行 | 先关掉再装依赖（原生模块会被进程锁住，装到一半会 EPERM 失败） |

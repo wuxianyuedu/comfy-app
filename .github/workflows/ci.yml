@@ -18,8 +18,8 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          # 不写 version：读 package.json 的 packageManager（pnpm@11.25.0）。
-          # 手写版本号迟早与 packageManager 漂移，且 pnpm 11 的项目级配置已迁移
+          # 不写 version：读 package.json 的 packageManager（pnpm@12.4.1）。
+          # 手写版本号迟早与 packageManager 漂移，且 pnpm 11 起项目级配置已迁移
           # 到 pnpm-workspace.yaml（.npmrc 里的 pnpm 专属设置不再生效）。
           run_install: false
 

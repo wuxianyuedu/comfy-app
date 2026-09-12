@@ -1,20 +1,20 @@
 # pnpm 11 起项目级配置迁移到本文件（.npmrc 中的 pnpm 专属设置不再生效）。
-# minimumReleaseAge: pnpm 11.25 默认开启「最短发布年龄」供应链保护（默认 24h，
+# minimumReleaseAge: pnpm 默认开启「最短发布年龄」供应链保护（默认 24h，
 # 拒绝安装发布不足 24h 的包）。本仓库依赖版本以 pnpm-lock.yaml 锁定为准，
 # 锁定的新版本包（如 typescript-eslint 8.69.0）会撞上该默认值导致 install 被拒、
 # node_modules 残缺。此处关闭；如需启用供应链年龄保护，删除下面这行即可。
 minimumReleaseAge: 0
 
-# pnpm 11 默认 verify-deps-before-run=install：任何 pnpm 命令（dev/exec/run）
+# pnpm 默认 verify-deps-before-run=install：任何 pnpm 命令（dev/exec/run）
 # 执行前都会自动补跑 pnpm install + postinstall。副作用：dev server 运行期间
 # prisma 引擎 DLL 被进程锁定 → postinstall EPERM → 所有 pnpm 命令连锁失败。
 # 依赖状态改由启动器/scripts 显式管理（preflight 检查），这里彻底关闭隐式安装。
 verifyDepsBeforeRun: false
 
-# pnpm 11 默认不批准第三方包的 postinstall 构建脚本，非交互模式下存在未批准
+# pnpm 默认不批准第三方包的 postinstall 构建脚本，非交互模式下存在未批准
 # 依赖时 pnpm install 会以 exit 1 失败（ERR_PNPM_IGNORED_BUILDS），并连带
 # pnpm dev 启动前的依赖自动检查一起失败。以下为检出含构建脚本的依赖，显式
-# 批准（恢复 pnpm 11 之前的行为）；新增含构建脚本的依赖后需补充。
+# 批准（恢复「默认执行构建脚本」之前的既有行为）；新增含构建脚本的依赖后需补充。
 allowBuilds:
   "@sentry/cli": true
   unrs-resolver: true
@@ -22,7 +22,7 @@ allowBuilds:
   # 无需本地 MSVC；仍需批准才允许执行安装脚本）
   "better-sqlite3": true
   # MCP SDK 与 tsx 均为纯 JS / 预编译可执行，无原生构建脚本；此处显式批准以防
-  # pnpm 11 对新依赖的 postinstall 校验（与上面策略一致）。
+  # pnpm 对新依赖的 postinstall 校验（与上面策略一致）。
   "@modelcontextprotocol/sdk": true
   "tsx": true
   # prisma 系为 better-auth prisma-adapter 的传递依赖（本项目用 Drizzle/sqlite，schema 已删）。
@@ -31,7 +31,7 @@ allowBuilds:
   '@prisma/engines': false
   prisma: false
   # esbuild：vite/vitest 的可选优化依赖，postinstall 只是下载/校验平台二进制。
-  # pnpm 11 不批准时非交互 install 直接 exit 1（ERR_PNPM_IGNORED_BUILDS），
+  # pnpm 不批准时非交互 install 直接 exit 1（ERR_PNPM_IGNORED_BUILDS），
   # 会让 CI 的 `pnpm install --frozen-lockfile` 装不完就挂掉；已随包提供
   # 平台专属二进制（@esbuild/linux-x64 等），不执行脚本也能正常工作。
   esbuild: true
