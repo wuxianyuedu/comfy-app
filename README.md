@@ -141,6 +141,9 @@ Comfy-APP-T3/
 两条路都无需安装 Rust、无需手工编译。
 
 > 拉取团队更新后本地怎么同步依赖环境（pnpm 配置有变更时），见 [`docs/guides/sync-after-pull.md`](./docs/guides/sync-after-pull.md)。
+>
+> 应用**一直开着**、期间拉到新代码后出现白屏 / 功能点了没反应（「界面比代码旧」），
+> 见 [`docs/guide-stale-code.md`](./docs/guide-stale-code.md)；应用内也会主动提示该怎么重载。
 
 开发人员请继续阅读下方「快速上手」与「开发模式」。
 

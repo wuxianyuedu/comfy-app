@@ -100,7 +100,8 @@
 > （「全量」由 §3.1 的校验范围守卫机器判定：新增规范文档未登记即报错，不再靠人记得）：
 >
 > - **启动链路类**：`docs/standards/launch-and-build.md`、`docs/startup-hotreload.md`、
->   `docs/guide-non-developer.md`
+>   `docs/guide-non-developer.md`、`docs/guide-stale-code.md`（与
+>   `guide-non-developer.md` 同组：应用内「页面跑着旧代码」的处置指南）
 > - **含值类引用的文档**：`docs/standards/Comfy-APP-T3-项目开发规范.md`、
 >   `docs/standards/16-shadcn-ui与表单校验.md`、`docs/workshop-mcp.md`
 >   （MCP HTTP 端口经 `onlyDocs` 仅在 workshop-mcp 校验；ComfyUI 端口经 `onlyDocs` +

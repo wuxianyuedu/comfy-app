@@ -12,6 +12,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { callStoreAction, createIOEditStore, type IOEditStore } from "./WorkflowStores";
+import {
+  registerStaleStoreDeliver,
+  reportCodeUpdatedSinceLoad,
+  resetStaleStoreNotify,
+} from "~/lib/stale-store-notify";
 import { HOMONYM_LABEL_SUFFIX } from "./io-exposure";
 
 describe("IOEditStore.toggleIO", () => {
@@ -378,6 +383,27 @@ describe("callStoreAction", () => {
       expect(callStoreAction(store, "purgeMachineNames", () => undefined)).toBe(true);
     } finally {
       warn.mockRestore();
+    }
+  });
+
+  /* 降级不能是静默的：跳过调用只保住了「不白屏」，用户看到的是功能悄悄失效。
+   * 这里锁住「降级时顺手把事实交给通知通道」这条接线（去重与文案在通知层，
+   * 见 ~/lib/stale-store-notify 的用例）。 */
+  it("动作缺失时把「陈旧实例」事实交给通知通道", () => {
+    const deliveries: { title: string }[] = [];
+    registerStaleStoreDeliver((n) => deliveries.push(n));
+    reportCodeUpdatedSinceLoad();
+    const stale = {
+      getState: () => ({}) as unknown as IOEditStore,
+    } as unknown as Parameters<typeof callStoreAction<IOEditStore>>[0];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      callStoreAction(stale, "purgeMachineNames", () => undefined);
+      expect(deliveries).toHaveLength(1);
+      expect(deliveries[0]!.title).toContain("重载");
+    } finally {
+      warn.mockRestore();
+      resetStaleStoreNotify();
     }
   });
 });
