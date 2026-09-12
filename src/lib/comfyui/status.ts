@@ -33,10 +33,11 @@
 
 import fs from "fs";
 import path from "path";
-import { getSettingsSync } from "../app-settings";
+import { COMFYUI_DEFAULT_PORT, getSettingsSync } from "../app-settings";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
+import { probeComfyAtPort } from "./client";
 import { collectComfyPythonCandidates } from "./env-python";
 import { logger } from "~/server/lib/logger";
 
@@ -177,13 +178,56 @@ export function extractSetupCmds(raw: string): string | null {
   }
 }
 
+/** 设置里的 ComfyUI 监听端口（0 = 未配置 → 平台默认 8188）。
+ *
+ * 快照的「配置端口抢跑」要用它：绝大多数实例就监听在这里，探一下就能跳过
+ * 一次 `Get-NetTCPConnection`（见 {@link resolvePortFast}）。 */
+function configuredPortOf(settings: { comfyuiPort?: number }): number {
+  const p = settings.comfyuiPort ?? 0;
+  return p > 0 ? p : COMFYUI_DEFAULT_PORT;
+}
+
+/** 定位某个 PID 实际监听的端口，**并用「配置端口是否应答」抢跑**。
+ *
+ * 为什么需要抢跑：`findPidListeningPort` 是一次独立的 PowerShell 调用
+ * （`Get-NetTCPConnection`，本机 ~2.5s），而它前面那次「找 main.py」的进程表
+ * 查询也是同量级——两次串起来就是 5s 左右，用户看到的就是「ComfyUI 明明已经
+ * 在跑，设置页还要等一会才显示运行中」。
+ *
+ * 但绝大多数实例就监听在配置端口上。于是这里同时做两件事：
+ *   ① `findPidListeningPort(pid)` —— 权威答案（能认出端口偏移的实例）；
+ *   ② 探一下配置端口 —— 便宜（环回地址毫秒级应答）且几乎总是对的。
+ * 谁先给出可信结果就用谁：配置端口应答 + 进程在跑，等价于「实例在跑且就在这个
+ * 端口」。①随后返回时若给出不同的端口，说明实例确实偏移过端口，那时①已经
+ * 赢在「更权威」上是不成立的——所以我们只在①尚未出结果时才采信②，
+ * 避免用「猜的端口」覆盖「查出来的端口」。
+ */
+async function resolvePortFast(
+  pid: number,
+  configuredPort: number,
+): Promise<number | null> {
+  const authoritative = findPidListeningPort(pid);
+  if (!configuredPort) return authoritative;
+
+  const guessed = probeComfyAtPort(configuredPort).then((base) =>
+    base ? configuredPort : null,
+  );
+  const winner = await Promise.race([
+    authoritative.then((port) => ({ port })),
+    guessed.then((port) => ({ port })),
+  ]);
+  if (winner.port) return winner.port;
+  // 抢跑没结论（配置端口没人应答）→ 仍以权威查询为准。
+  return authoritative;
+}
+
 async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   const settings = getSettingsSync();
 
   // 1) bound 子进程：本进程亲手拉起的，PID 直接可信（无需查进程表）。
   const bound = boundChildPid();
   if (bound) {
-    const port = await findPidListeningPort(bound);
+    const port = await resolvePortFast(bound, configuredPortOf(settings));
     return { running: true, pid: bound, port, via: "本应用启动的进程", unverified: false, source: "bound" };
   }
 
@@ -204,7 +248,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
       return {
         running: true,
         pid: lookup.pid,
-        port: await findPidListeningPort(lookup.pid),
+        port: await resolvePortFast(lookup.pid, configuredPortOf(settings)),
         via: "配置路径的实例",
         unverified: false,
         source: "process",
@@ -235,17 +279,31 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
     candidates.push({ cmd: c.exe, via: c.via });
   }
 
-  for (const c of candidates) {
-    const lookup = await findPidForMainPyDetailed(c.cmd);
+  /* 候选**并发**查进程表，而不是一个个 await 串起来。
+   *
+   * 这批候选是「同一件事的几种问法」（配置路径的解释器 / setup 登记的启动器 /
+   * 环境反查出的解释器），彼此无依赖，真正命中的通常只有一个。此前串行 await
+   * 会把冷启动的等待叠成 N 倍：每次 `findPidForMainPyDetailed` 都要起一个
+   * PowerShell 枚举 `Win32_Process`（本机 ~2.5s，超时给到 10s），三个候选就是
+   * 7s+，而这段时间纯粹在排队——用户的观感就是「设置页打开要等一会才显示
+   * ComfyUI 运行中」。并发之后整批只付最慢那一次（ISSUE #339 残留延迟）。
+   *
+   * 命中后按候选**原始顺序**取第一个：几路同时命中时，仍由「先声明的判据优先」
+   * 决定结论（顺序语义与串行版一致，不会因为谁先返回而改变判定）。 */
+  const lookups = await Promise.all(
+    candidates.map((c) => findPidForMainPyDetailed(c.cmd)),
+  );
+  for (let i = 0; i < candidates.length; i++) {
+    const lookup = lookups[i]!;
     if (lookup.failed) lookupFailed = true;
     if (lookup.pid) {
       return {
         running: true,
         pid: lookup.pid,
-        port: await findPidListeningPort(lookup.pid),
-        via: c.via,
+        port: await resolvePortFast(lookup.pid, configuredPortOf(settings)),
+        via: candidates[i]!.via,
         unverified: false,
-        source: snapshotSourceFor(c.via),
+        source: snapshotSourceFor(candidates[i]!.via),
       };
     }
   }

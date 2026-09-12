@@ -136,3 +136,71 @@ describe("buildInnerNodeInputs — 子图内部节点输入索引", () => {
     expect(model!.widgetValue).toBeUndefined();
   });
 });
+
+describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）", () => {
+  /** 把 wrapper 的 proxyWidgets 换成任意形态，其余保持真实导出形状。 */
+  function withProxy(props: Record<string, unknown>): RawWorkflow {
+    const clone = structuredClone(wrapperWorkflow) as unknown as {
+      nodes: { properties: Record<string, unknown> }[];
+    };
+    clone.nodes[0]!.properties = props;
+    return clone as unknown as RawWorkflow;
+  }
+
+  it("对象形态 proxyWidgets（键即槽位名）也能解析出内部字段", async () => {
+    const { rawInputsById } = await buildRawInputs(
+      withProxy({ proxyWidgets: { value_1: ["12", "seed"], value_2: ["12", "steps"] } }),
+      noCombo
+    );
+    const entries = rawInputsById["1"]!;
+    expect(entries[0]!.proxyField?.field).toBe("seed");
+    expect(entries[1]!.proxyField?.field).toBe("steps");
+  });
+
+  it("槽位名偏离位置序时按名字匹配，不按位置硬塞", async () => {
+    /* 私有导出里槽位名不叫 value_N：位置序会把 seed 安到 value_9 上；按名匹配
+     *  才能把 value_1 对回它自己的目标（ISSUE #349：value_1 一直是 PrimitiveInt
+     *  的 `value`，不是 KSampler 的 seed）。 */
+    const { rawInputsById } = await buildRawInputs(
+      withProxy({ proxyWidgets: { value_2: ["12", "steps"], value_1: ["12", "seed"] } }),
+      noCombo
+    );
+    const entries = rawInputsById["1"]!;
+    expect(entries[0]!.name).toBe("value_1");
+    expect(entries[0]!.proxyField?.field).toBe("seed");
+    expect(entries[1]!.name).toBe("value_2");
+    expect(entries[1]!.proxyField?.field).toBe("steps");
+  });
+
+  it("位置序目标撞车时宁可留空，也不把别的槽位的字段名安上", async () => {
+    /* 只有一条映射却有两个 widget 槽位：位置 0 命中，位置 1 必须留空 ——
+     *  否则第二个槽位会顶着第一个槽位的字段名，显示名彻底错位。 */
+    const { rawInputsById } = await buildRawInputs(
+      withProxy({ proxyWidgets: [["12", "seed"]] }),
+      noCombo
+    );
+    const entries = rawInputsById["1"]!;
+    expect(entries[0]!.proxyField?.field).toBe("seed");
+    expect(entries[1]!.proxyField).toBeUndefined();
+  });
+
+  it("畸形条目（长度不足 / 键对不上任何槽位）被安全忽略", async () => {
+    const { rawInputsById } = await buildRawInputs(
+      withProxy({ proxyWidgets: [["12"], ["12", "steps"], ["12", "seed"]].slice(0, 2) }),
+      noCombo
+    );
+    const entries = rawInputsById["1"]!;
+    expect(entries[0]!.proxyField?.field).toBe("steps");
+    expect(entries[1]!.proxyField).toBeUndefined();
+  });
+
+  it("没有 proxyWidgets（被隔离）时行为与旧版一致：只留别名，不猜字段", async () => {
+    const { rawInputsById } = await buildRawInputs(
+      withProxy({ proxyWidgetErrorQuarantine: [["12", "seed"]] }),
+      noCombo
+    );
+    const entries = rawInputsById["1"]!;
+    expect(entries[0]!.proxyField).toBeUndefined();
+    expect(entries[0]!.name).toBe("value_1");
+  });
+});
