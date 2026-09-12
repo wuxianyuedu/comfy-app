@@ -189,9 +189,13 @@ export interface SettingsPageController {
   comfyStarting: boolean;
   comfyStopping: boolean;
   comfyOpening: boolean;
+  /** 浏览器打开动作进行中（与页签打开各自独立，便于分别显示忙碌态）。 */
+  comfyBrowserOpening: boolean;
   startComfy: () => Promise<void>;
   stopComfy: () => Promise<void>;
   openComfy: () => Promise<void>;
+  /** 用系统默认浏览器打开运行中的 ComfyUI（页签内嵌之外的并列出口）。 */
+  openComfyInBrowser: () => Promise<void>;
   /* Drizzle Studio（本地数据库可视化）：状态 + 启动/关闭/打开查看 */
   dbStudioStatus: {
     up: boolean;
@@ -459,8 +463,12 @@ export function useSettingsPage(): SettingsPageController {
   });
   const comfyStartM = api.setting.comfyStart.useMutation();
   const comfyStopM = api.setting.comfyStop.useMutation();
+  /* 「在浏览器打开」：服务端能力早就有了（openComfyUi → openUrlInBrowser 拉起
+   * 系统默认浏览器），此前只缺一个能点到它的入口。与页签内嵌**并列**，不替代。 */
+  const comfyOpenM = api.setting.comfyOpen.useMutation();
   const [comfyStopping, setComfyStopping] = useState(false);
   const [comfyOpening, setComfyOpening] = useState(false);
+  const [comfyBrowserOpening, setComfyBrowserOpening] = useState(false);
   /* Drizzle Studio：状态查询 + 启动/关闭/打开动作（enabled 门控同 comfyStatus） */
   const dbStudioStatusQ = api.setting.dbStudioStatus.useQuery(undefined, {
     refetchInterval: 15_000,
@@ -710,6 +718,28 @@ export function useSettingsPage(): SettingsPageController {
       setComfyOpening(false);
     }
   }, [comfyStatusQ, showFlash]);
+
+  /* 「在浏览器打开」＝把 ComfyUI 交给系统默认浏览器（放大看 / 装浏览器插件 /
+   * 多屏铺开）。它与页签内嵌是**并列出口**，不改变页签那一套：页签仍然内嵌，
+   * 这里只是把同一个地址再交给浏览器。
+   *
+   * 端点用 comfyOpen 而不是 openExternal：地址由服务端自己探（openComfyUi 内部
+   * 先 probeComfyUi），不采信前端 state 里的旧 base —— 用户点按钮时可能已经
+   * 隔了很久，端口可能已经变了，拿旧地址会打开一个空白浏览器页。
+   *
+   * 与 openComfy 一样先 refetch 一次状态，避免拿几秒前的旧结论误报「未运行」。 */
+  const openComfyInBrowser = useCallback(async () => {
+    setComfyBrowserOpening(true);
+    try {
+      await comfyStatusQ.refetch();
+      const result = await comfyOpenM.mutateAsync();
+      showFlash(result.ok ? "ok" : "err", result.detail);
+    } catch (error) {
+      showFlash("err", errorMessage(error, "打开浏览器失败"));
+    } finally {
+      setComfyBrowserOpening(false);
+    }
+  }, [comfyOpenM, comfyStatusQ, showFlash]);
 
   /* ── Drizzle Studio 启动 / 关闭 / 打开 ─────────────────── */
   const startDbStudio = useCallback(async () => {
@@ -1330,9 +1360,11 @@ export function useSettingsPage(): SettingsPageController {
     comfyStarting,
     comfyStopping,
     comfyOpening,
+    comfyBrowserOpening,
     startComfy,
     stopComfy,
     openComfy,
+    openComfyInBrowser,
     dbStudioStatus: dbStudio
       ? {
           up: !!dbStudio.up,
