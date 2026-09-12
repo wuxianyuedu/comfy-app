@@ -49,6 +49,12 @@ import { TEMPERATURE_TASKS } from "./hooks/use-settings-page";
 import { useUpdateCheckStore } from "@/components/update-check/update-check-store";
 import { SettingsShell } from "@/components/settings/SettingsShell";
 import { fmtBytes } from "~/lib/format-bytes";
+import {
+  STATUS_ACTIONS_CLASS,
+  STATUS_ROW_CLASS,
+  STATUS_TEXT_CLASS,
+  statusButtonClass,
+} from "./settings-status-row-config";
 import { overlayClass } from "~/lib/full-screen-layer";
 
 /** 安装形态 → 设置页徽标文案。 */
@@ -877,7 +883,7 @@ export function SettingsPageView({
                   type="button"
                   onClick={() => void c.relaunchApp()}
                   disabled={c.appUpdate.busy !== "idle"}
-                  className="border-border text-muted-foreground hover:bg-subtle hover:text-ink rounded-lg border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
+                  className="border-border text-muted-foreground hover:bg-subtle hover:text-ink shrink-0 rounded-lg border px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors disabled:opacity-50"
                 >
                   重启应用
                 </button>
@@ -927,14 +933,16 @@ export function SettingsPageView({
           />
 
           {/* Ollama status row */}
-          <div className="border-border bg-surface-1 mb-4 flex items-center gap-3 rounded-lg border px-3 py-2.5">
+          <div
+            className={`border-border bg-surface-1 mb-4 rounded-lg border px-3 py-2.5 ${STATUS_ROW_CLASS}`}
+          >
             {c.ollamaStatus === "checking" && (
               <>
                 <Loader2
                   size={14}
                   className="text-muted-foreground animate-spin"
                 />
-                <span className="text-muted-foreground text-sm">
+                <span className={`text-muted-foreground ${STATUS_TEXT_CLASS}`}>
                   检测 Ollama 服务…
                 </span>
               </>
@@ -945,7 +953,7 @@ export function SettingsPageView({
                   size={14}
                   className="text-muted-foreground animate-spin"
                 />
-                <span className="text-muted-foreground text-sm">
+                <span className={`text-muted-foreground ${STATUS_TEXT_CLASS}`}>
                   Ollama 启动中，正在等待服务就绪…
                 </span>
               </>
@@ -953,13 +961,13 @@ export function SettingsPageView({
             {c.ollamaStatus === "up" && (
               <>
                 <span className="inline-block size-2 shrink-0 rounded-full bg-emerald-400" />
-                <span className="text-ink/80 text-sm">
+                <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>
                   Ollama 运行中（{c.ollamaModels.length} 个模型可用）
                 </span>
                 <Btn
                   onClick={() => void c.stopOllama()}
                   disabled={c.ollamaStopping}
-                  className="ml-auto"
+                  className="ml-auto shrink-0"
                 >
                   {c.ollamaStopping ? "关闭中…" : "关闭 Ollama"}
                 </Btn>
@@ -968,11 +976,13 @@ export function SettingsPageView({
             {c.ollamaStatus === "down" && (
               <>
                 <span className="inline-block size-2 shrink-0 rounded-full bg-rose-400" />
-                <span className="text-ink/80 text-sm">Ollama 未运行</span>
+                <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>
+                  Ollama 未运行
+                </span>
                 <Btn
                   onClick={() => void c.startOllama()}
                   disabled={c.ollamaStarting}
-                  className="ml-auto"
+                  className="ml-auto shrink-0"
                 >
                   {c.ollamaStarting ? "启动中…" : "启动 Ollama"}
                 </Btn>
@@ -1976,7 +1986,9 @@ export function SettingsPageView({
               提交任务时 ComfyUI 未运行则自动启动
             </label>
           </div>
-          <div className="border-border bg-surface-1 mb-4 flex items-center gap-3 rounded-lg border px-3 py-2">
+          <div
+            className={`border-border bg-surface-1 mb-4 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
+          >
             <span
               className={`inline-block size-2 shrink-0 rounded-full ${
                 c.comfyStatus?.up
@@ -1990,7 +2002,16 @@ export function SettingsPageView({
                         : "bg-rose-400"
               }`}
             />
-            <span className="text-ink/80 text-sm">
+            <span
+              className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
+              title={
+                c.comfyStatus?.up
+                  ? `ComfyUI 运行中${c.comfyStatus.base ? `（${c.comfyStatus.base}）` : ""}${
+                      c.comfyStatus.via ? `·${c.comfyStatus.via}` : ""
+                    }`
+                  : undefined
+              }
+            >
               {c.comfyStatus?.up
                 ? `ComfyUI 运行中${c.comfyStatus.base ? `（${c.comfyStatus.base}）` : ""}${
                     c.comfyStatus.via ? `·${c.comfyStatus.via}` : ""
@@ -2003,7 +2024,7 @@ export function SettingsPageView({
                       ? "ComfyUI 状态检测中…"
                       : "ComfyUI 未运行"}
             </span>
-            <div className="ml-auto flex items-center gap-2">
+            <div className={STATUS_ACTIONS_CLASS}>
               {/* 打开运行中的 ComfyUI 界面：桌面壳内在同一主窗口开一个「页签」
                       （iframe 内嵌）；浏览器/dev 模式同样落在应用内页签。
                       旁边的「在浏览器打开」是并列出口，不是替代（见该按钮注释）。 */}
@@ -2135,7 +2156,9 @@ export function SettingsPageView({
             （local.drizzle.studio），本地只起一个回连端口；点「打开查看」
             会用你的系统默认浏览器打开它。
           </p>
-          <div className="border-border bg-surface-1 flex items-center gap-3 rounded-lg border px-3 py-2">
+          <div
+            className={`border-border bg-surface-1 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
+          >
             <span
               className={`inline-block size-2 shrink-0 rounded-full ${
                 c.dbStudioStatus?.up
@@ -2145,14 +2168,21 @@ export function SettingsPageView({
                     : "bg-rose-400"
               }`}
             />
-            <span className="text-ink/80 text-sm">
+            <span
+              className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
+              title={
+                c.dbStudioStatus?.up
+                  ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port ?? 4983}）`
+                  : undefined
+              }
+            >
               {c.dbStudioStatus?.up
                 ? `Drizzle Studio 运行中（端口 ${c.dbStudioStatus.port ?? 4983}）`
                 : c.dbStudioStarting || c.dbStudioStatus?.starting
                   ? "Drizzle Studio 正在启动…"
                   : "Drizzle Studio 未运行"}
             </span>
-            <div className="ml-auto flex items-center gap-2">
+            <div className={STATUS_ACTIONS_CLASS}>
               {/* 按钮只看自身动作的在途状态（dbStudioStarting/Stopping/
                       Opening），不看全局 saving——saving 是保存偏好/ComfyUI
                       等共享标志，卡住时曾把三个按钮一起锁死（#92）。
@@ -2434,7 +2464,9 @@ function Btn({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`bg-primary hover:bg-primary-hover rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${className ?? ""}`}
+      className={statusButtonClass(
+        `bg-primary hover:bg-primary-hover text-white disabled:opacity-50 ${className ?? ""}`,
+      )}
     >
       {children}
     </button>
