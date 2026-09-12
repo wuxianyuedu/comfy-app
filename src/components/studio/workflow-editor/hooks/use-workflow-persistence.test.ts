@@ -45,6 +45,7 @@ function renderReset(args: {
   detail: WorkflowDetail;
   scopeDetail: WorkflowDetail;
   fitToContent?: () => void;
+  hostNodeId?: string;
 }) {
   const setDetail = vi.fn();
   const mutate = vi.fn();
@@ -64,6 +65,7 @@ function renderReset(args: {
         onClose: vi.fn(),
         setSaving: vi.fn(),
         setError: vi.fn(),
+        hostNodeId: args.hostNodeId,
       }),
     {
       initialProps: { detail: args.detail, scopeDetail: args.scopeDetail },
@@ -192,5 +194,97 @@ describe("resetLayout", () => {
       "grp:bpin:inputs": [0, 0],
       "grp:bpin:outputs": [900, 0],
     });
+  });
+});
+
+/* 子图视图的 id 命名空间。
+ *
+ * 下钻后画布上的节点 id 是**裸内部 id**（`1670`），而 `positions` 列存的
+ * 是 `宿主:内部` 拼接键（`4:1670`，见 extractPositions）。两套键各写各的时
+ * 会出现「子图里拖的位置顶层看不到、下钻回来又被当成原始坐标盖掉真正的原始
+ * 位置」—— 用户看到的就是「重置布局回不到原始工作流，再改一次却回归到一个
+ * 错误位置」。下面两条钉住写入与还原都必须走同一个拼接口径。 */
+describe("resetLayout · 子图 id 命名空间", () => {
+  it("子图内拖动内部节点时，落库的键是 `宿主:内部` 而不是裸内部 id", () => {
+    const detail = makeDetail({
+      id: "wf-1#subgraph:uid",
+      nodes: nodesOf(["1001", "1002"]),
+      positions: { "4:1001": [1000, 1000], "4:1002": [1200, 1000] },
+    });
+    const { result, mutate } = renderReset({
+      detail,
+      scopeDetail: detail,
+      hostNodeId: "4",
+    });
+
+    act(() =>
+      result.current.onNodeDragStop(
+        {},
+        { id: "1001", type: "wfNode", position: { x: 30, y: 0 } }
+      )
+    );
+
+    /* 锚点反演：wfNode 的 y 要加回 NODE_TITLE_H(30)。 */
+    expect(mutate.mock.calls.at(-1)![0]).toMatchObject({
+      positions: { "4:1001": [30, 30] },
+      mergePositions: true,
+    });
+  });
+
+  it("嵌套子图（宿主链 `4:5`）拼接成 `4:5:内部id`，与运行期口径一致", () => {
+    const detail = makeDetail({
+      id: "wf-1#subgraph:nested",
+      nodes: nodesOf(["1670"]),
+      positions: { "4:5:1670": [100, 100] },
+    });
+    const { result, mutate } = renderReset({
+      detail,
+      scopeDetail: detail,
+      hostNodeId: "4:5",
+    });
+
+    act(() =>
+      result.current.onNodeDragStop(
+        {},
+        { id: "1670", type: "wfNode", position: { x: 10, y: 20 } }
+      )
+    );
+
+    expect(mutate.mock.calls.at(-1)![0]).toMatchObject({
+      positions: { "4:5:1670": [10, 50] },
+      mergePositions: true,
+    });
+  });
+
+  it("子图还原只写本视图的拼接键，顶层 wrapper 坐标与导轨坐标都不受影响", () => {
+    /* 子图细节（buildSubgraphDetail 的产物）里 positions 是**裸内部 id**，
+     * 服务端顶层列里同时躺着 wrapper 本体 `4` 与导轨 `grp:bpin:*`。 */
+    const positions = {
+      "4": [0, 0] as [number, number],
+      "1001": [1000, 1000] as [number, number],
+      "1002": [1200, 1000] as [number, number],
+      "grp:bpin:inputs": [5, 5] as [number, number],
+    };
+    const detail = makeDetail({
+      id: "wf-1#subgraph:uid",
+      nodes: nodesOf(["1001", "1002"]),
+      positions,
+    });
+    const { result, setDetail, mutate } = renderReset({
+      detail,
+      scopeDetail: detail,
+      hostNodeId: "4",
+    });
+
+    act(() => result.current.resetLayout());
+
+    /* 本视图还原时把内部 id 拼成与落库同口径的 `宿主:内部`；导轨属于本视图，
+     * 原样保留；wrapper 本体 `4` 与当前视图无关，不能被顺手抹掉。 */
+    expect(readWrittenPositions(setDetail, detail)).toEqual({
+      "4:1001": [1000, 1000],
+      "4:1002": [1200, 1000],
+      "grp:bpin:inputs": [5, 5],
+    });
+    expect(mutate.mock.calls.at(-1)![0]).toMatchObject({ mergePositions: true });
   });
 });
