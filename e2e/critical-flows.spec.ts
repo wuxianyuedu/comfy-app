@@ -872,10 +872,12 @@ test.describe("应用页签与全屏视图 @critical", () => {
         body: JSON.stringify({
           result: {
             data: {
+              /* 必须是**服务端**的探测结论形状（`{ embeddable, reason }`）：
+               * `target` 是客户端 `openComfyTab` 的产出，桩在这里等于把
+               * 「结论 → 渲染」这段链路整个跳过。 */
               json: {
                 embeddable: false,
                 reason: "ComfyUI 对跨源请求返回 403（未开启 CORS）",
-                target: "blocked",
               },
             },
           },
@@ -891,6 +893,11 @@ test.describe("应用页签与全屏视图 @critical", () => {
     await expect(page.getByText(/无法在此页签中显示 ComfyUI/)).toBeVisible({
       timeout: 20_000,
     });
+    // 说明里必须带上**地址**：只剩一句「看不了」时，用户无法自查，也分不清是
+    // 应用外壳拦的还是 ComfyUI 自己拦的（ISSUE #310 第三次回归的现场）。
+    await expect(
+      page.getByText("http://127.0.0.1:8188", { exact: true }),
+    ).toBeVisible();
     // 页签本身照常存在（不是「什么都没发生」）。
     await expect(page.getByRole("tab", { name: /ComfyUI/ })).toBeVisible();
     // 不弹第二个窗口。
@@ -936,12 +943,25 @@ test.describe("应用页签与全屏视图 @critical", () => {
 
     await openComfyFromSettings(page);
     // 先走页签形态（同一条 @critical 链路）：此刻页签是「主应用 + ComfyUI」。
-    const tabsBefore = await page.getByRole("tab").count();
+    // 用可重试的 `toHaveCount` 取基线，不用一次性 `count()` —— 「打开查看」里
+    // 先 await 服务端探测、再 openTab，页签是**过一会儿**才出现的；一次性取值
+    // 会把尚未新增的「1 个」当成基线，随后断言必然失败（本次实测踩到）。
     await expect(page.getByRole("tab", { name: /ComfyUI/ })).toBeVisible();
+    await expect(page.getByRole("tab")).toHaveCount(2);
+    const tabsBefore = await page.getByRole("tab").count();
 
     // 回到设置里点「在浏览器打开」。
-    await page.getByTitle("设置").first().click();
-    await page.getByRole("button", { name: "创作后端", exact: true }).click();
+    // 先切回**主应用**页签：ComfyUI 页签是保持挂载 + CSS 显隐的（切页签不丢画布
+    // 编辑态），而上面刚把 ComfyUI 页签激活了 —— 主应用连同设置页一起被 `hidden`，
+    // 不切回来则导航栏与按钮都点不到。切回后设置页仍停在创作后端那一屏
+    // （点「打开查看」不离开设置），不必再点一次导航栏的「设置」（那会再叠一层
+    // 设置全屏视图，把底下的界面盖住）。
+    await page.getByRole("tab", { name: "主应用" }).click();
+    const activeBefore = await page
+      .getByRole("tab")
+      .evaluateAll((els) =>
+        els.findIndex((el) => el.getAttribute("aria-selected") === "true"),
+      );
     await page
       .getByRole("button", { name: /在浏览器打开/ })
       .first()
@@ -951,8 +971,21 @@ test.describe("应用页签与全屏视图 @critical", () => {
     await expect
       .poll(() => browserOpenCalls, { timeout: 20_000 })
       .toBeGreaterThan(0);
-    // 页签数量不变：这条出口不新增、也不切换页签。
+    // 页签数量不变、激活项也不变：这条出口不新增、也不切换页签。
     await expect(page.getByRole("tab")).toHaveCount(tabsBefore);
+    await expect
+      .poll(
+        () =>
+          page
+            .getByRole("tab")
+            .evaluateAll((els) =>
+              els.findIndex(
+                (el) => el.getAttribute("aria-selected") === "true",
+              ),
+            ),
+        { timeout: 10_000 },
+      )
+      .toBe(activeBefore);
     // 也不在应用内另开窗口。
     expect(windowCount).toBe(0);
   });

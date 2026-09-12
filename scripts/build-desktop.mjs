@@ -171,6 +171,38 @@ if (totalMB / 1024 > MAX_STATIC_GB) {
 }
 console.log(`[build-desktop]   static 体积 ${totalMB.toFixed(1)}MB（护栏阈值 ${MAX_STATIC_GB}GB）`);
 
+// ── 2.6 WebView2 参数 manifest（跨源内嵌的开关）───────────
+// 应用级页签把 ComfyUI（跨源）内嵌进同一个 WebView，WebView2 默认按 Chromium 的
+// 「不同源不可嵌」执行 → 页签里是 Edge 的「已阻止此内容」。唯一的可靠开关
+// `--disable-web-security` 必须经 per_app 性能参数下发，而它**只从 exe 同级的
+// app.exe.manifest 读取**（见 src-tauri/build.rs 的 write_webview2_perf_manifest）。
+// 先于本步骤跑的 `pnpm build` 已触发 build.rs 生成过一份；这里再确认 + 兜底写一份，
+// 保证「打包产物里 exe 旁边一定有这个文件」不依赖构建顺序。
+// 若改动了 build.rs 里的 manifest 内容，这里的常量必须同步（tests/webview2-manifest.test.ts 锁住）。
+const WEBVIEW2_MANIFEST = `<?xml version="1.0" encoding="UTF-8"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <webview2:webview2 xmlns:webview2="http://schemas.microsoft.com/appx/manifest/webview2/windows10">
+        <webview2:per_app_arguments>
+          <webview2:argument>--autoplay-policy=no-user-gesture-required</webview2:argument>
+          <webview2:argument>--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection</webview2:argument>
+          <webview2:argument>--disable-web-security</webview2:argument>
+        </webview2:per_app_arguments>
+      </webview2:webview2>
+    </windowsSettings>
+  </application>
+</assembly>
+`;
+const manifestTarget = join(root, "start-tauri", "app.exe.manifest");
+mkdirSync(join(root, "start-tauri"), { recursive: true });
+if (!existsSync(manifestTarget) || readFileSync(manifestTarget, "utf8") !== WEBVIEW2_MANIFEST) {
+  writeFileSync(manifestTarget, WEBVIEW2_MANIFEST, "utf8");
+  console.log("[build-desktop]   已写入 start-tauri/app.exe.manifest（WebView2 跨源内嵌参数）");
+} else {
+  console.log("[build-desktop]   start-tauri/app.exe.manifest 已是最新");
+}
+
 // ── 3/4 Node 运行时 sidecar ────────────────────────────────
 console.log("[build-desktop] 3/4 复制 Node 运行时为 sidecar ...");
 mkdirSync(binDir, { recursive: true });
