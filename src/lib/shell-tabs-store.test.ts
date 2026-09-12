@@ -60,6 +60,45 @@ describe("shell-tabs-store 应用级页签状态", () => {
     expect(s.activeTabId).toBe(MAIN_TAB_ID);
   });
 
+  it("openTab 复用已有页签时同步 blockedUrl（重启换端口后说明里的地址跟着更新）", () => {
+    const st = useShellTabs.getState();
+    st.openTab({
+      id: "comfyui",
+      label: "ComfyUI",
+      url: null,
+      closable: true,
+      blockedReason: "探测失败",
+      blockedUrl: "http://127.0.0.1:8188",
+    });
+    st.openTab({
+      id: "comfyui",
+      label: "ComfyUI",
+      url: null,
+      closable: true,
+      blockedReason: "探测失败",
+      blockedUrl: "http://127.0.0.1:8189",
+    });
+    const s = useShellTabs.getState();
+    expect(s.tabs).toHaveLength(2);
+    expect(s.tabs[1]!.blockedUrl).toBe("http://127.0.0.1:8189");
+  });
+
+  /* 复用页签时 blockedUrl 与 blockedReason 同规则：**没有新结论就清空**。
+   * 地址必须跟着「这一次的说明」走 —— 留着上一次的地址，用户复制去浏览器
+   * 会打开一个早已换端口的实例，比没有地址更误导。 */
+  it("openTab 复用页签时未带 blockedUrl 则清空（不留下上一次的地址）", () => {
+    const st = useShellTabs.getState();
+    st.openTab({
+      id: "comfyui",
+      label: "ComfyUI",
+      url: null,
+      closable: true,
+      blockedUrl: "http://127.0.0.1:8188",
+    });
+    st.openTab({ id: "comfyui", label: "ComfyUI", url: "http://127.0.0.1:8188", closable: true });
+    expect(useShellTabs.getState().tabs[1]!.blockedUrl).toBeNull();
+  });
+
   it("updateTab 更新页签标题/地址", () => {
     const st = useShellTabs.getState();
     st.openTab({ id: "comfyui", label: "ComfyUI", url: "http://127.0.0.1:8188", closable: true });

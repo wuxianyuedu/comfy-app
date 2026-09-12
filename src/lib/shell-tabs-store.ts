@@ -40,6 +40,15 @@ export interface ShellTab {
    * 另开一个（多半也是空白的）独立窗口，把问题搬走却不说原因（ISSUE #310）。
    */
   blockedReason?: string | null;
+  /**
+   * 无法内嵌时对应的**内容地址**，渲染在说明里供用户复制/自查。
+   *
+   * 为什么必须带上：只剩一句「已阻止此内容」时，用户（和排查的人）都无法判断
+   * 到底是哪一层拦的 —— 地址是唯一能自己验证的信息（复制到浏览器能开 → 拦的
+   * 是应用外壳；也不能开 → 拦的是对方自己）。ISSUE #310 第三次回归现场就是
+   * 「有错误页、没地址」，于是只能再来一轮猜测。
+   */
+  blockedUrl?: string | null;
 }
 
 export interface ShellTabsState {
@@ -56,7 +65,9 @@ export interface ShellTabsState {
   /** 更新指定页签标题 / 地址。 */
   updateTab: (
     id: string,
-    patch: Partial<Pick<ShellTab, "label" | "url" | "blockedReason">>,
+    patch: Partial<
+      Pick<ShellTab, "label" | "url" | "blockedReason" | "blockedUrl">
+    >,
   ) => void;
 }
 
@@ -92,6 +103,7 @@ export const useShellTabs = create<ShellTabsState>((set) => ({
                   label: tab.label ?? t.label,
                   url: tab.url ?? t.url,
                   blockedReason: tab.blockedReason ?? null,
+                  blockedUrl: tab.blockedUrl ?? null,
                 }
               : t,
           ),
@@ -104,6 +116,7 @@ export const useShellTabs = create<ShellTabsState>((set) => ({
         url: tab.url,
         closable: tab.closable,
         blockedReason: tab.blockedReason ?? null,
+        blockedUrl: tab.blockedUrl ?? null,
       };
       return { tabs: [...state.tabs, next], activeTabId: id };
     }),
