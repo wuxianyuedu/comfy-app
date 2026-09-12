@@ -217,6 +217,15 @@ flex 默认 `flex-shrink: 1`，宽度一紧张就从每个子项身上按比例�
 > 没有下限时 flex 会认为它「还能再压」，按钮组永远等不到换行、只能被压到与
 > 标题重叠；下限给太大（相对按钮组天然宽度）则会在明明排得下的时候过早换行。
 
+**同构的成排按钮抽一份判据**：同一个页面里形态相同的按钮排（典型是设置页的
+「状态行」：左侧状态文字 + 右侧一排动作按钮，ComfyUI / Drizzle Studio /
+Ollama 三处同构）不要再各自拼 class——抽成一个纯派生模块（常量 + 拼串函数，
+规范 17 §17.2 第①层），视图只消费返回值。理由是这三条规则漏掉任何一条都不会
+立刻报错，只会**在某个窗口宽度下**才显出「文字折行、按钮变高」的形态（ISSUE
+#423），而散落在 N 个 `<button>` 上的 class 改一处漏一片。可参考的落地：
+`src/app/(main)/settings/settings-status-row-config.ts` 与
+`src/components/studio/workflow-editor/workflow-editor-topbar-config.ts`。
+
 ### 3.9 布局类名顺序约定（可读性）
 
 ```tsx
