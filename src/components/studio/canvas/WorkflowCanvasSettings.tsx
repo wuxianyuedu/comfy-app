@@ -393,6 +393,28 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
   );
 }
 
+/* ── Top-right 「重新居中」按钮（紧挨 ⚙ 设置上方） ──
+ *
+ *  为什么需要它：自动聚焦只在「打开工作流 / 进入子工作流」时做一次，之后
+ *  作者把节点拖出视野、或用滚轮把画布缩成一团时，没有回到内容处的出口
+ *  （与项目画布的「重置布局」不同 —— 那个会改数据，这个只动视口）。
+ *  纯视口动作，不写库、不移动任何节点。 */
+
+export function CanvasRecenterButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="回到有节点的位置（只移动视口，不改动节点布局）"
+      aria-label="重新居中"
+      className="pointer-events-auto absolute right-3 top-3 z-6 select-none rounded-md border border-white/10 bg-(--color-panel)/90 px-2.5 py-1 text-[11px] font-medium tracking-tight text-gray-300 shadow-lg backdrop-blur-sm transition-colors hover:border-white/25 hover:text-gray-100"
+    >
+      <span aria-hidden className="mr-1 align-baseline text-[12px]">🎯</span>
+      居中
+    </button>
+  );
+}
+
 /* ── Small presentational row helpers ── */
 
 function Section({

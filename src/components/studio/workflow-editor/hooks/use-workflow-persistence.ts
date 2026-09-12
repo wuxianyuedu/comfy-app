@@ -17,7 +17,7 @@ export interface WorkflowPersistenceArgs {
   setNodes: Dispatch<SetStateAction<Node[]>>;
   paramMap: Record<string, unknown>;
   workflowIO: Record<string, WorkflowIOParam>;
-  fitToMiddle: () => void;
+  fitToContent: () => void;
   savePatch: WorkflowSaver;
   onSave?: () => void;
   onClose: () => void;
@@ -37,7 +37,7 @@ export function useWorkflowPersistence({
   setNodes,
   paramMap,
   workflowIO,
-  fitToMiddle,
+  fitToContent,
   savePatch,
   onSave,
   setSaving,
@@ -123,7 +123,7 @@ export function useWorkflowPersistence({
       setDetail((prev) =>
         prev ? { ...prev, positions: null, notes: prev.notes ?? null } : prev
       );
-      requestAnimationFrame(() => requestAnimationFrame(() => fitToMiddle()));
+      requestAnimationFrame(() => requestAnimationFrame(() => fitToContent()));
       return;
     }
     setDetail((prev) =>
@@ -149,8 +149,8 @@ export function useWorkflowPersistence({
       notes: payload.notes,
       mergePositions: payload.merge === true,
     });
-    requestAnimationFrame(() => requestAnimationFrame(() => fitToMiddle()));
-  }, [detail, setDetail, workflowId, scopeDetail, fitToMiddle, savePatch]);
+    requestAnimationFrame(() => requestAnimationFrame(() => fitToContent()));
+  }, [detail, setDetail, workflowId, scopeDetail, fitToContent, savePatch]);
 
   /* Re-sync nodes when paramMap changes (update assignedRole badges). 取角色时
    *  跳过 `mode:` 前缀的按模式连线表 —— 它的值不是节点 id，命中会把整张模式
