@@ -85,23 +85,30 @@ export function useWorkflowPersistence({
    *    on entry, so the in-memory canvas (via the sync effect above)
    *    re-lays the nodes out to their original coordinates.
    *  - Persist the same to the server (`PATCH positions` + `PATCH notes`)
-   *    so a reload keeps the reset.  For API-only workflows the snapshot
-   *    `positions` is `null` → we send `{}`; with the `Object.keys>0`
-   *    guard in `initialNodes` the reload falls back to the Kahn
-   *    auto-layout (the original behaviour).
-   *  - Subgraph view: send `merge: true` so the inner-subgraph node ids
-   *    in `positions` are merged into `tpl.positions` instead of replacing
-   *    it.  The top-level workflow's positional data (a different
-   *    id-namespace) stays intact.  Top-level view keeps the default
-   *    REPLACE behaviour, which is what the previous top-level reset
-   *    did and the snapshot contains the complete saved layout.
-   *  - detect a SPARSE snapshot (positions count < node
-   *    count).  If the snapshot is partial, do NOT write it back to the
-   *    server — that would re-poison the column and the user's next
-   *    open would be just as broken.  Instead, just clear the local
-   *    `positions` to `null` so the in-memory canvas re-lays out via
-   *    Kahn; the next manual drag will start populating the column
-   *    properly.  Mirror the same logic for notes. */
+   *    so a reload keeps the reset.  `merge: true` is sent for BOTH the
+   *    top-level and the subgraph view, so only the keys belonging to the
+   *    current view's id-namespace are written and the other namespace
+   *    (api-id coords vs raw-id / inner-subgraph coords) is preserved.
+   *  - Detect a SPARSE snapshot — a snapshot that genuinely lacks
+   *    coordinates for nodes of the CURRENT view.  If the snapshot is
+   *    partial, do NOT write it back to the server — that would
+   *    re-poison the column and the user's next open would be just as
+   *    broken.  Instead, just clear the local `positions` to `null` so
+   *    the in-memory canvas re-lays out via Kahn; the next manual drag
+   *    will start populating the column properly.  Mirror the same logic
+   *    for notes.
+   *
+   *  Sparse detection is scoped to the CURRENT view before counting.
+   *  `detail.positions` is one flat map holding several id-namespaces at
+   *  once (top-level node ids, `wrapperId:innerId` keys for inner nodes,
+   *  `grp:bpin:*` rails).  Comparing its raw key count against the number
+   *  of nodes in the current view conflates the two: a subgraph view with
+   *  30 inner nodes and a snapshot holding 2 top-level keys reads as
+   *  "2 < 30 ⇒ sparse", and the reset then silently degrades to "clear
+   *  local positions + Kahn re-layout" — the dragged nodes keep their
+   *  dragged coordinates and the button looks dead.  Filtering the
+   *  snapshot down to the ids this view actually renders is what makes
+   *  the count comparable. */
   const resetLayout = useCallback(() => {
     if (!detail) return;
     if (!scopeDetail) return;
@@ -109,8 +116,36 @@ export function useWorkflowPersistence({
     const snap = originalLayoutByIdRef.current[snapKey] ?? null;
     const orig = snap?.positions ?? null;
     const origNotes = snap?.notes ?? null;
+    /* 快照裁剪到「当前视图真正渲染的那些 id」再计数。
+     *  - 图节点：scopeDetail.nodes 的 id（顶层是裸 id，下钻后是 `宿主:内部`
+     *    形式，与服务端/拖拽侧写库的键同口径）。
+     *  - 边界 pin 导轨 `grp:bpin:inputs|outputs` 是可拖动的，键不在
+     *    scopeDetail.nodes 里，但同样属于本视图，单独放行，否则它们的坐标
+     *    会被裁剪掉、拖过的导轨位置重置不回去。
+     *  - 过滤后为空 = 快照里一个键都不属于本视图（典型的跨命名空间错配，
+     *    如 RAW 视图快照 vs API 视图），按「无快照」处理（走 Kahn 兜底），
+     *    不再拿别的命名空间的键数去冒充本视图的覆盖率。 */
+    const viewNodeIds = new Set(scopeDetail.nodes.map((node) => node.id));
+    const isThisViewKey = (key: string) =>
+      viewNodeIds.has(key) || key.startsWith("grp:bpin:");
+    const origForView =
+      orig === null
+        ? null
+        : Object.fromEntries(
+            Object.entries(orig).filter(([key]) => isThisViewKey(key))
+          );
+    const origForViewCount =
+      origForView === null ? 0 : Object.keys(origForView).length;
+    /* 本视图该有多少个坐标：至少覆盖全部图节点；快照里若还带着导轨坐标，
+     *  期望值同样要算上它们，否则「图节点齐了但只有一条导轨被拖过」会被
+     *  误判成 sparse。 */
+    const origHasRailKeys =
+      orig !== null && Object.keys(orig).some((key) => key.startsWith("grp:bpin:"));
+    const expectedCount =
+      scopeDetail.nodes.length + (origHasRailKeys ? 2 : 0);
     const isSparse =
-      (orig !== null && Object.keys(orig).length < scopeDetail.nodes.length) ||
+      (orig !== null && origForViewCount > 0 && origForViewCount < expectedCount) ||
+      (orig !== null && origForViewCount === 0 && scopeDetail.nodes.length > 0) ||
       (origNotes !== null &&
         scopeDetail.notes &&
         Array.isArray(origNotes) &&
@@ -126,21 +161,23 @@ export function useWorkflowPersistence({
       requestAnimationFrame(() => requestAnimationFrame(() => fitToContent()));
       return;
     }
+    /* 只把「属于本视图」的键还原回内存与库：其余命名空间的键（另一视图的
+     *  坐标）必须原样留着，否则重置一次就把另一套布局抹了。 */
     setDetail((prev) =>
       prev
         ? {
             ...prev,
-            positions: orig ?? null,
+            positions: origForView ?? null,
             notes: origNotes ?? prev.notes,
           }
         : prev
     );
     const payload: Record<string, unknown> = {
-      positions: orig ?? {},
+      positions: origForView ?? {},
       notes: origNotes ?? [],
     };
-    /* RAW 视图的快照只含 raw-id 坐标，若用顶层默认的 REPLACE
-     *  写回会清空 tpl.positions 里并存的 api-id 坐标。统一走 merge:true，只把
+    /* 快照含 raw-id / 内部节点坐标时，用顶层默认的 REPLACE
+     *  写回会清空 tpl.positions 里并存的另一套坐标。统一走 merge:true，只把
      *  当前视图的键写回、保留另一视图的键，避免跨视图数据损坏。 */
     payload.merge = true;
     savePatch.mutate({
