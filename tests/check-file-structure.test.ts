@@ -794,27 +794,48 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
   });
 });
 
-describe("启动页日志可读宽度（宽窗口 + 展开日志加宽卡片）", () => {
+describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自绘标题行）", () => {
   /**
    * 启动页的日志面板是「一行一条日志」的不折行布局（`white-space: pre`，见
-   * docs/standards/07-日志系统.md §7.18.6），因此**窗口宽度就是可读宽度**：
-   * 卡片 520px 时 11px 等宽字一行只放得下约 65 字符，带时间戳与 [app_lib][INFO]
-   * 前缀的壳日志几乎每行都被切成两截，用户看到的就是「日志宽度太小」。
+   * docs/standards/07-日志系统.md §7.18.6），所以**窗口宽度就是可读宽度**：
+   * 窗口太窄日志每行都被切成两截（旧的 1280 就是这么来的）。
    *
-   * 判据写在这里而不是人脑里：窗口给得宽（并留出展开日志的空间）、展开日志
-   * 必须有加宽卡片的动作、且窗口尺寸不得超过显示器（小屏上窗口跑到屏幕外
-   * 同样是「看不全」）。改动三份启动页副本与 tauri.conf.json 时先看这条。
+   * 但「给得宽」的旧做法走到了另一个极端（ISSUE #412）：窗口按 1680×1000 开，
+   * 而内容卡片只有 720/1400 宽、收起日志时垂直方向更是大片留白——用户在 2K/4K
+   * 屏上看到的是一大块没有任何用途的空白区域。现在的取向是**窗口即内容**：
+   *
+   * - 开窗 = 紧凑档（够放下收起日志时的内容，见 SPLASH_WINDOW_SIZE）；
+   * - 展开日志 = 壳把窗口调到展开档（SPLASH_WINDOW_SIZE_EXPANDED），页面只把
+   *   「展开 / 收起」告诉壳（`set_splash_compact`），不自己写第二份尺寸常量；
+   * - 两档都按当前显示器收敛（小屏不越界）；
+   * - 窗口 `decorations: false`（无原生标题栏），最小化 / 关闭由启动页自身
+   *   右上角的按钮提供。
+   *
+   * 改动三份启动页副本、tauri.conf.json 或 src-tauri/src/lib.rs 时先看这条。
    */
   const CONF = join(process.cwd(), "src-tauri", "tauri.conf.json");
+  const LIB_RS = join(process.cwd(), "src-tauri", "src", "lib.rs");
   const SPLASH_COPIES = [
     join(process.cwd(), "src-tauri", "splash-assets", "splash.html"),
     join(process.cwd(), "src-tauri", "splash-assets", "index.html"),
     join(process.cwd(), "public", "splash.html"),
   ];
 
-  const splashWindow = (): { width: number; height: number } => {
+  const splashWindow = (): {
+    label?: string;
+    width: number;
+    height: number;
+    decorations?: boolean;
+  } => {
     const conf = JSON.parse(readFileSync(CONF, "utf8")) as {
-      app: { windows: { label?: string; width: number; height: number }[] };
+      app: {
+        windows: {
+          label?: string;
+          width: number;
+          height: number;
+          decorations?: boolean;
+        }[];
+      };
     };
     const win =
       conf.app.windows.find((w) => w.label === "splash") ?? conf.app.windows[0];
@@ -822,50 +843,96 @@ describe("启动页日志可读宽度（宽窗口 + 展开日志加宽卡片）"
     return win;
   };
 
-  it("splash 窗口宽度给足，够放下未折行的日志（旧的 1280 太窄）", () => {
+  /** 从 lib.rs 里取某个尺寸常量（`const NAME: (f64, f64) = (w, h);`）。 */
+  const sizeConst = (rust: string, name: string): [number, number] => {
+    const m = new RegExp(
+      `const ${name}: \\(f64, f64\\) = \\((\\d+(?:\\.\\d+)?), (\\d+(?:\\.\\d+)?)\\);`,
+    ).exec(rust);
+    if (!m) throw new Error(`lib.rs 里没有常量 ${name}`);
+    return [Number(m[1]), Number(m[2])];
+  };
+
+  it("splash 开窗是紧凑的一条，不铺满屏幕留空白", () => {
     const win = splashWindow();
-    expect(win.width).toBeGreaterThanOrEqual(1600);
-    expect(win.height).toBeGreaterThanOrEqual(900);
+    // 高度必须贴着「收起日志时的内容高度」（约 190px），而不是留出一大块空白：
+    // 旧值 1680×1000 就是这块空白的来源（内容只占上面两百来像素）。
+    expect(win.width).toBeLessThanOrEqual(900);
+    expect(win.height).toBeLessThanOrEqual(280);
+    expect(win.width).toBeGreaterThanOrEqual(640);
+    // 紧凑档必须与壳里的常量一致，否则开窗和回落档会是两个尺寸
+    const rust = readFileSync(LIB_RS, "utf8");
+    const [compactWidth, compactHeight] = sizeConst(rust, "SPLASH_WINDOW_SIZE");
+    expect(compactWidth).toBe(win.width);
+    expect(compactHeight).toBe(win.height);
+  });
+
+  it("展开日志那一档够放下未折行的日志（旧的 1280 太窄）", () => {
+    const rust = readFileSync(LIB_RS, "utf8");
+    const [expandedWidth, expandedHeight] = sizeConst(
+      rust,
+      "SPLASH_WINDOW_SIZE_EXPANDED",
+    );
+    expect(expandedWidth).toBeGreaterThanOrEqual(1400);
+    expect(expandedHeight).toBeGreaterThanOrEqual(700);
+    // 紧凑档必须比展开档小，否则「两档」没有意义
+    const [compactWidth, compactHeight] = sizeConst(rust, "SPLASH_WINDOW_SIZE");
+    expect(compactWidth).toBeLessThan(expandedWidth);
+    expect(compactHeight).toBeLessThan(expandedHeight);
   });
 
   it("窗口尺寸按显示器收敛，小屏上不会被推出屏幕外", () => {
-    const rust = readFileSync(
-      join(process.cwd(), "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const rust = readFileSync(LIB_RS, "utf8");
     expect(rust).toContain("fn splash_window_size");
     // 必须真的取过显示器尺寸并用于收敛，而不是只写了个函数
     expect(rust).toContain("primary_monitor()");
     expect(rust).toContain("splash_window_size(app.handle())");
+    // 展开档也要过同一条收敛路径
+    expect(rust).toContain("fn clamp_to_monitor");
   });
 
-  it("三份启动页副本一致，且展开日志时卡片真的加宽", () => {
+  it("启动页自己提供最小化 / 关闭（窗口没有原生标题栏）", () => {
+    const win = splashWindow();
+    expect(win.decorations).toBe(false);
+    const html = readFileSync(SPLASH_COPIES[0] ?? "", "utf8");
+    // 页面里的两个按钮 + 壳侧的窗口动作都要在，缺一个就是「关不掉也缩不了」
+    expect(html).toContain('id="btn-minimize"');
+    expect(html).toContain('id="btn-close"');
+    expect(html).toContain("minimize()");
+    expect(html).toContain("close()");
+    // 拖拽区与按钮分开：整条标题行可拖动，按钮不吞点击
+    expect(html).toContain("-webkit-app-region: drag");
+    expect(html).toContain("-webkit-app-region: no-drag");
+  });
+
+  it("三份启动页副本一致，且日志展开由壳统一调尺寸", () => {
     const texts = SPLASH_COPIES.map((p) => readFileSync(p, "utf8"));
     expect(new Set(texts).size).toBe(1);
     const html = texts[0];
     expect(html).toBeDefined();
     if (!html) return;
-    // 卡片默认宽度比旧值大，展开日志时切到更宽的宽版
-    expect(html).toContain(".card.wide");
-    expect(html).toContain("classList.toggle('wide'");
-    const widths = [
-      ...html.matchAll(/min\((\d+)px, calc\(100vw - 48px\)\)/g),
-    ].map((m) => Number(m[1]));
-    expect(widths.length).toBeGreaterThanOrEqual(2);
-    const collapsed = widths[0] ?? 0;
-    const expanded = widths[1] ?? 0;
-    expect(collapsed).toBeGreaterThanOrEqual(640);
-    expect(expanded).toBeGreaterThan(collapsed);
+    // 页面只报「紧凑 / 展开」，尺寸常量只在壳里一份（避免两处常量漂移）
+    expect(html).toContain("set_splash_compact");
+    expect(html).not.toContain(".card.wide");
+    const rust = readFileSync(LIB_RS, "utf8");
+    expect(rust).toContain("fn set_splash_compact");
+    // 新增应用命令要三处同步：build.rs / capabilities（否则运行期 not allowed by ACL）
+    expect(readFileSync(join(process.cwd(), "src-tauri", "build.rs"), "utf8")).toContain(
+      '"set_splash_compact"',
+    );
+    expect(
+      readFileSync(join(process.cwd(), "src-tauri", "capabilities", "splash.json"), "utf8"),
+    ).toContain('"allow-set-splash-compact"');
   });
 
-  it("日志面板给足高度，展开后不是一条窄缝", () => {
+  it("日志面板吃掉窗口剩余高度（展开后不是一条窄缝，也不留空白）", () => {
     const html = readFileSync(SPLASH_COPIES[0] ?? "", "utf8");
     const panel = html.slice(
       html.indexOf(".log-panel {"),
       html.indexOf(".log-panel pre"),
     );
-    const height = Number(/height:\s*(\d+)px/.exec(panel)?.[1] ?? 0);
-    expect(height).toBeGreaterThanOrEqual(300);
+    // 不再写死高度：面板 flex 撑满窗口剩余空间，窗口放大多少就显示多少行
+    expect(panel).toContain("flex: 1 1 auto");
+    expect(panel).not.toMatch(/height:\s*\d+px/);
     // 单行不折行 + 横向滚动必须保留，否则「加宽」会被折行悄悄取代
     expect(html).toContain("white-space: pre;");
     expect(html).toContain("overflow-x: auto;");

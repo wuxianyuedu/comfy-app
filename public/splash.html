@@ -18,6 +18,10 @@
       --radius: 16px;
     }
     * { box-sizing: border-box; }
+    /* 窗口即内容：启动页窗口按内容尺寸开（见 src-tauri/src/lib.rs 的
+       SPLASH_WINDOW_SIZE），所以这里不再要求「居中一张卡片」，而是让面板
+       铺满整个窗口，四周只留一点内边距——窗口边缘就是内容边缘，屏幕上
+       不出现任何空白区域。 */
     html, body {
       margin: 0;
       height: 100%;
@@ -26,53 +30,96 @@
                   var(--bg);
       color: var(--text);
       font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       overflow: hidden;
       user-select: none;
     }
-    /* 卡片宽度 = 日志可读宽度。日志面板是「一行一条日志」的不折行布局，
-       卡片多宽，一行就能看多少字符：
-         - 未展开日志时 720px：那里只有进度与状态文案，铺满整个宽窗口不好看；
-         - 展开日志后 1400px：11px 等宽字放得下约 175 字符，带时间戳与
-           [app_lib][INFO] 前缀的壳日志（常在 130~160 字符）基本一行看全，
-           只有真正的长路径才需要横向滚动。
-       两档都受视口约束（`100vw - 48px`）：窗口比卡片窄时自动收敛，不会撑破。 */
+    /* 面板是唯一的子元素，纵向撑满窗口：日志展开时由日志面板吃掉剩余高度，
+       收起时内容在上、下方不留空白带（窗口高度本来就按内容给）。 */
     .card {
-      width: min(720px, calc(100vw - 48px));
-      transition: width 0.2s ease;
-    }
-    .card.wide {
-      width: min(1400px, calc(100vw - 48px));
-    }
-    .card, .card.wide {
-      /* 不用半透明 + backdrop-filter：WebView2 在某些显卡/驱动下会把这层渲染成
-         透明或黑块，导致启动页只剩窗口底色。改用不透明面板保证可见。 */
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100%;
+      padding: 14px 16px 12px;
       background: #151320;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: var(--radius);
-      padding: 32px;
-      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+    }
+    /* 标题行：品牌 + 窗口按钮（最小化 / 关闭）。
+       窗口本身关了原生装饰（decorations: false），系统标题栏与那三个按钮
+       都不再存在，这两个按钮就是启动期唯一的最小化 / 关闭入口。
+       整条是拖拽区，按钮用 -webkit-app-region: no-drag 排除，点击不会被
+       拖拽吞掉（与主窗口自定义标题行同一套约定）。 */
+    .titlebar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 10px;
+      -webkit-app-region: drag;
     }
     .brand {
-      font-size: 22px;
+      font-size: 17px;
       font-weight: 700;
       color: var(--violet);
-      margin: 0 0 6px;
+      margin: 0;
       letter-spacing: -0.02em;
     }
     .subtitle {
-      font-size: 13px;
+      font-size: 12px;
       color: var(--muted);
-      margin: 0 0 22px;
+      margin: 0;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .win-buttons {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      -webkit-app-region: no-drag;
+    }
+    .win-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .win-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+    }
+    .win-btn.danger:hover {
+      background: var(--error);
+      color: #fff;
+    }
+    .stale-banner {
+      display: none;
+      margin: 0 0 10px;
+      padding: 8px 10px;
+      border: 1px solid rgba(245, 180, 60, 0.35);
+      background: rgba(245, 180, 60, 0.1);
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #F5C07A;
+      word-break: break-word;
     }
     .bar-track {
       height: 6px;
       background: rgba(255, 255, 255, 0.06);
       border-radius: 999px;
       overflow: hidden;
-      margin-bottom: 14px;
+      margin-bottom: 10px;
+      flex-shrink: 0;
     }
     .bar-fill {
       height: 100%;
@@ -88,7 +135,8 @@
       align-items: baseline;
       font-size: 12px;
       color: var(--dim);
-      margin-bottom: 10px;
+      margin-bottom: 8px;
+      flex-shrink: 0;
     }
     .phase {
       color: var(--muted);
@@ -98,8 +146,9 @@
       font-size: 12px;
       line-height: 1.5;
       color: var(--dim);
-      min-height: 36px;
+      min-height: 34px;
       word-break: break-word;
+      flex-shrink: 0;
     }
     .message.error {
       color: var(--error);
@@ -108,27 +157,16 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-top: 20px;
+      margin-top: 12px;
       font-size: 11px;
       color: var(--dim);
+      flex-shrink: 0;
     }
     .elapsed {
       font-variant-numeric: tabular-nums;
     }
     .hint {
       opacity: 0.7;
-    }
-    .stale-banner {
-      display: none;
-      margin: 0 0 14px;
-      padding: 10px 12px;
-      border: 1px solid rgba(245, 180, 60, 0.35);
-      background: rgba(245, 180, 60, 0.1);
-      border-radius: 10px;
-      font-size: 12px;
-      line-height: 1.6;
-      color: #F5C07A;
-      word-break: break-word;
     }
     .log-toggle {
       background: transparent;
@@ -144,15 +182,18 @@
       color: var(--text);
       border-color: rgba(255, 255, 255, 0.3);
     }
-    /* 展开日志后卡片变矮胖会浪费竖向空间，面板给足高度才能一次看到更多行 */
+    /* 日志面板吃掉剩余高度（不再写死 320px）：展开时窗口同步放大
+       （set_splash_compact(false)），面板随窗口长高，单行日志一次能看到
+       更多行；窗口被用户拉大时也不会在面板下方留空白。 */
     .log-panel {
       display: none;
-      margin-top: 14px;
+      margin-top: 12px;
       background: #0B0A12;
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 10px;
       padding: 10px 12px;
-      height: 320px;
+      flex: 1 1 auto;
+      min-height: 0;
       overflow-y: auto;
     }
     .log-panel pre {
@@ -184,8 +225,22 @@
 </head>
 <body>
   <div class="card">
-    <h1 class="brand">Comfy APP</h1>
-    <p class="subtitle">正在启动桌面应用…</p>
+    <div class="titlebar">
+      <h1 class="brand">Comfy APP</h1>
+      <p class="subtitle" id="subtitle">正在启动桌面应用…</p>
+      <div class="win-buttons">
+        <button class="win-btn" id="btn-minimize" type="button" title="最小化" aria-label="最小化">
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M2 6h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+          </svg>
+        </button>
+        <button class="win-btn danger" id="btn-close" type="button" title="关闭" aria-label="关闭">
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
+    </div>
     <div class="stale-banner" id="stale-banner"></div>
     <div class="bar-track">
       <div class="bar-fill" id="bar"></div>
@@ -196,7 +251,7 @@
     </div>
     <div class="message" id="message">启动器正在初始化…</div>
     <div class="footer">
-      <span class="hint">窗口关闭即可终止启动</span>
+      <span class="hint">点右上角 ✕ 即终止启动</span>
       <button class="log-toggle" id="log-btn" type="button">查看日志</button>
       <span class="elapsed" id="elapsed">00:00</span>
     </div>
@@ -253,6 +308,49 @@
         console.warn('tauri invoke failed:', e);
       }
       return null;
+    }
+
+    // ── 窗口按钮（最小化 / 关闭）与尺寸档位 ──
+    // 启动页窗口关了原生装饰（decorations: false），系统标题栏连同它的
+    // 最小化 / 关闭按钮都不存在，下面这两个按钮就是启动期唯一的窗口出口。
+    // 窗口控制走 Tauri 自带的 window API（withGlobalTauri 已开），失败时安静
+    // 降级——按钮画不出来不该影响启动流程本身。
+    const COMPACT_SIZE = { width: 744, height: 216 };
+    const subtitleEl = $('subtitle');
+
+    /** 取当前启动页窗口（非 Tauri 环境返回 null）。 */
+    function currentWindow() {
+      const api = window.__TAURI__ && window.__TAURI__.window;
+      return api && api.getCurrentWindow ? api.getCurrentWindow() : null;
+    }
+
+    $('btn-minimize').addEventListener('click', () => {
+      const win = currentWindow();
+      if (win) void win.minimize().catch((e) => console.warn('minimize failed:', e));
+    });
+    // 关闭 = 放弃本次启动：壳退出后由 dev-launcher 的兜底回收 sidecar / dev server
+    // 进程树（与主窗口「关窗即退出」同一语义）。
+    $('btn-close').addEventListener('click', () => {
+      const win = currentWindow();
+      if (win) void win.close().catch((e) => console.warn('close failed:', e));
+    });
+
+    /** 把窗口调到与内容匹配的档位（展开日志变宽变高，收起回到紧凑）。 */
+    async function applyCompact(compact) {
+      subtitleEl.textContent = compact ? '正在启动桌面应用…' : '正在启动桌面应用…（展开日志）';
+      // 尺寸由壳按与建窗同一份常量计算（含显示器上限），页面不自己写第二份
+      // magic number，只把「紧凑 / 展开」这件事告诉壳。非壳环境忽略。
+      await invoke('set_splash_compact', { compact });
+      if (!compact) return;
+      // 收起日志时若用户手动拉大过窗口，把它收回内容宽度：窗口状态插件不记忆
+      // splash，回落档位以 COMPACT_SIZE 为准，避免「收起后仍是宽窗」的空白。
+      const win = currentWindow();
+      if (win) {
+        void win
+          .setSize(new window.__TAURI__.window.LogicalSize(COMPACT_SIZE.width, COMPACT_SIZE.height))
+          .then(() => win.center())
+          .catch((e) => console.warn('restore splash size failed:', e));
+      }
     }
 
     async function fetchStatus() {
@@ -358,9 +456,9 @@
       logVisible = !logVisible;
       logPanel.style.display = logVisible ? 'block' : 'none';
       logBtn.textContent = logVisible ? '隐藏日志' : '查看日志';
-      // 展开日志时加宽卡片：日志宽度只受卡片宽度约束，窗口宽度不够时
-      // CSS 的 min(1400px, 100vw - 48px) 会自动收敛，不会撑出视口。
-      document.querySelector('.card').classList.toggle('wide', logVisible);
+      // 窗口也跟着内容变：展开日志时窗口放大到「一屏放得下多少行日志」，
+      // 收起时回到紧凑尺寸——窗口始终与内容同尺寸，屏幕上不留空白区。
+      void applyCompact(!logVisible);
       if (logVisible) {
         fetchLog();
         logTimer = setInterval(fetchLog, 800);
@@ -434,6 +532,10 @@
         }
       }
     }
+
+    // 开局把窗口尺寸对齐到「紧凑」档（壳建窗时已设过一次；用户上次把窗口
+    // 拉大后重启，这里再对齐一次以保证一致）。
+    void applyCompact(true);
 
     // 首次立即执行，随后每 250ms 轮询，保证启动页观感顺滑
     tick();

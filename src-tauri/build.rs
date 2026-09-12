@@ -65,6 +65,7 @@ fn main() {
         "get_launch_status",
         "get_app_url",
         "get_launch_log",
+        "set_splash_compact",
         "navigate_to_app",
         "open_comfyui_window",
         "activate_main_window",
