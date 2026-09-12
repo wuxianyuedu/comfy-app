@@ -209,11 +209,14 @@ function WorkflowEditorBody({
   const ioEditMode = useIOEditStore(selectIoEditMode);
   const ioPreviewOpen = useIOEditStore(selectIoPreviewOpen);
   const savePatch = useWorkflowSaveMutation();
-  /* Side-panel toggle for the IO preview.  Independent of
-   *  `ioEditMode` so the author can A/B toggle before vs. after opening
-   *  the panel.  Default closed — the canvas already gives a busy
-   *  experience and we don't want to pile on a second floating panel
-   *  before the user asks for one. */
+  /* Side-panel toggle for the IO preview.  Default closed — the canvas already
+   *  gives a busy experience and we don't want to pile on a second floating
+   *  panel before the user asks for one.
+   *
+   *  与 `ioEditMode` 是双向耦合：开预览一并进编辑模式（勾选框要可用），
+   *  关预览一并退出编辑模式（面板没了就不该再留一排勾选框）；反方向同样
+   *  成立 —— 关编辑模式一并关预览。两层耦合都写在 store 的
+   *  `setIoEditMode` / `setIoPreviewOpen` 里，见那里的注释。 */
   /* canvas-settings panel state — sits next to
    *  ioPreviewOpen / viewJsonOpen as a sibling overlay opened by a gear
    *  button in the canvas chrome.  Default closed. */
@@ -235,9 +238,14 @@ function WorkflowEditorBody({
     },
     [ioApi]
   );
+  /* 预览开关一律走 store 动作：关闭预览时 store 会把 `ioEditMode` 一并关掉、
+   *  打开时一并打开，绕过动作直接写状态就会留下「面板没了、勾选框还在」或
+   *  「面板出来了、勾选框不可用」的两截状态（见 store 里那两个动作的注释）。 */
   const setIoPreviewOpen = useCallback(
     (v: boolean | ((prev: boolean) => boolean)) =>
-      ioApi.setState((state) => ({ ioPreviewOpen: typeof v === "function" ? v(state.ioPreviewOpen) : v })),
+      ioApi
+        .getState()
+        .setIoPreviewOpen(typeof v === "function" ? v(ioApi.getState().ioPreviewOpen) : v),
     [ioApi]
   );
   const [error, setError] = useState("");
