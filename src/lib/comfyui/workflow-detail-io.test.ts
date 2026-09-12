@@ -918,3 +918,77 @@ describe("enrichWorkflowIO — slotLabel 下发（别名判定的第二判据）
     expect(io["24::widget::image"]!.slotLabel).toBeUndefined();
   });
 });
+
+
+describe("enrichWorkflowIO — 键漂移兜底与别名判定事实源（ISSUE #349）", () => {
+  /** 图一那条工作流的形状：wrapper 槽位 `value_1` → 内部 `PrimitiveInt.value`，
+   *  富化名只能给到 `1`（内部字段名恰好是数字），作者名藏在 `slotLabel`。 */
+  const wrapperRow = {
+    name: "value_1",
+    type: "INT",
+    isConnection: false,
+    widget: { name: "value_1" },
+    widgetValue: 1,
+    proxyField: { nodeId: "12", field: "1" },
+  };
+  const wrapperParams = (ioKey: string, name: string) =>
+    makeParams(
+      { [ioKey]: { direction: "input", kind: "widget", nodeId: "4", name } },
+      {
+        rawInputsById: { "4": [wrapperRow] },
+        graph: { "4": { class_type: "uuid-wrapper", inputs: {} } },
+      }
+    );
+
+  it("随条目下发富化名（enrichedLabel），供客户端做别名判定", async () => {
+    const result = await enrichWorkflowIO(wrapperParams("4::widget::value_1", "value_1"));
+    expect(result["4::widget::value_1"]!.enrichedLabel).toBe("1");
+    expect(result["4::widget::value_1"]!.label).toBe("1");
+  });
+
+  it("键漂移（name 存的是画布显示名）时仍能解析回真实槽位", async () => {
+    /* 修复前某些路径把画布显示名写进了 `name`，存下来就是 `4::widget::Seed`;
+     *  它不是 ComfyUI 槽位名，按名字回查必然落空 —— 类型退化成 `*`、显示名
+     *  退化成那串脏值（用户截图里的「名字变成 1」）。 */
+    const result = await enrichWorkflowIO(
+      makeParams(
+        { "4::widget::Seed": { direction: "input", kind: "widget", nodeId: "4", name: "Seed" } },
+        {
+          rawInputsById: {
+            "4": [
+              {
+                ...wrapperRow,
+                label: "Seed",
+                proxyField: { nodeId: "12", field: "seed", label: "Seed" },
+              },
+            ],
+          },
+          graph: { "4": { class_type: "uuid-wrapper", inputs: {} } },
+        }
+      )
+    );
+    const entry = result["4::widget::Seed"]!;
+    expect(entry.type).toBe("INT");
+    expect(entry.defaultValue).toBe(1);
+    expect(entry.enrichedLabel).toBe("Seed");
+  });
+
+  it("多插槽节点上同样的脏名字不会被误认到别的行", async () => {
+    /* KSampler 有 seed / steps / cfg…：脏名字 `1` 与 `value_1` 的行对不上，
+     *  宁可这一条少一个名字，也不把别的槽位的 label 安到它头上。 */
+    const result = await enrichWorkflowIO(
+      makeParams(
+        { "7::widget::1": { direction: "input", kind: "widget", nodeId: "7", name: "1" } },
+        {
+          rawInputsById: {
+            "7": [
+              { name: "seed", type: "INT", isConnection: false, widget: { name: "seed" }, widgetValue: 1 },
+              { name: "steps", type: "INT", isConnection: false, widget: { name: "steps" }, widgetValue: 20 },
+            ],
+          },
+        }
+      )
+    );
+    expect(result["7::widget::1"]!.label).toBe("1");
+  });
+});

@@ -12,6 +12,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createIOEditStore } from "./WorkflowStores";
+import { HOMONYM_LABEL_SUFFIX } from "./io-exposure";
 
 describe("IOEditStore.toggleIO", () => {
   it("顶层勾选不写 hostNodeId", () => {
@@ -152,5 +153,136 @@ describe("IOEditStore 写入时清掉存量机器名", () => {
     store.getState().setAliasBase({ "4::widget::value_1": { name: "value_1", enrichedLabel: "value_1" } });
     store.getState().setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "fixed" });
     expect(store.getState().workflowIO["4::widget::value_1"]!.label).toBe("value_1");
+  });
+});
+
+
+/* ────────────────────────────────────────────────────────────────────────
+ * ISSUE #349 收尾：编辑 IO 时「取消勾选 → 重新勾选」和「切模式」都不该让
+ * 参数名退回机器名。用户原话：
+ *   图1「切换不同模式，同一个参数名称不一致…是 seed 参数」
+ *   图2/图4「只要取消 io 的勾选，对应参数名字的修改就应该还原」
+ *   图3「改成了 1，而且修改了也不行」
+ * 三条其实是同一个根因：本地条目里的 label 可能是机器 pin 名，而显示/写入
+ * 判定依赖「我们记得写过脏值」—— 一旦重新加载（取消勾选再勾、重开工作流）
+ * 记忆就没了，脏名复活。下面的用例守着「判定只看事实源」这条契约。
+ * ──────────────────────────────────────────────────────────────────────── */
+describe("IOEditStore 机器名的入口与出口都挡（ISSUE #349）", () => {
+  const KEY = "4::widget::value_1";
+  /* 图一那条工作流的事实：wrapper 槽位 value_1 → 内部 PrimitiveInt.value，
+   * 富化名停在槽位名，作者名只有本层 slotLabel 能作证。 */
+  const aliasBase = { [KEY]: { name: "value_1", enrichedLabel: "value_1", slotLabel: "Seed" } };
+
+  it("勾选时不把机器名写进 label —— 所以取消勾选再勾选不会复活脏名", () => {
+    const store = createIOEditStore("wf");
+    store.getState().setAliasBase(aliasBase);
+    const ref = {
+      nodeId: "4", name: "value_1", kind: "widget" as const, direction: "input" as const,
+      label: "value_1",
+    };
+    store.getState().toggleIO(ref);
+    expect(store.getState().workflowIO[KEY]!.label).toBeUndefined();
+    /* 取消勾选 → 重新勾选：本地已无任何记忆，仍不写入机器名。 */
+    store.getState().toggleIO(ref);
+    store.getState().toggleIO(ref);
+    expect(store.getState().workflowIO[KEY]!.label).toBeUndefined();
+  });
+
+  it("勾选时作者真名照常落库（machine 判定不误伤业务名）", () => {
+    const store = createIOEditStore("wf");
+    store.getState().setAliasBase(aliasBase);
+    store.getState().toggleIO({
+      nodeId: "4", name: "value_1", kind: "widget", direction: "input", label: "Seed",
+    });
+    expect(store.getState().workflowIO[KEY]!.label).toBe("Seed");
+  });
+
+  it("重新加载后的旧条目（label 仍是脏值）切 seed 模式时被清掉", () => {
+    /* 这是「重开工作流 → 切一下随机值 → 又变回 value_1」的复现路径：本地
+     *  store 里躺的是回读时那份带脏 label 的条目，写入整体回写会把它当作者
+     *  命名固化。判定必须只看事实源，不看本地记忆。 */
+    const store = createIOEditStore("wf");
+    store.setState({
+      workflowIO: {
+        [KEY]: { direction: "input", kind: "widget", nodeId: "4", name: "value_1", label: "value_1" },
+      },
+    });
+    store.getState().setAliasBase(aliasBase);
+    store.getState().setIOModeOverride(KEY, "i2v", { seedMode: "random" });
+    const entry = store.getState().workflowIO[KEY]!;
+    expect(entry.label).toBeUndefined();
+    expect(entry.modes?.i2v?.seedMode).toBe("random");
+  });
+
+  it("富化名也停在机器名时，本层作者名是最后的判据", () => {
+    /* 图一那条工作流的真实形状：富化链只能给出 `value_1`（本层确实没写作者
+     *  label，只有通用翻译），但 `slotLabel` 记着本层槽位上的作者名 `Seed`。 */
+    const store = createIOEditStore("wf");
+    store.setState({
+      workflowIO: {
+        [KEY]: { direction: "input", kind: "widget", nodeId: "4", name: "value_1", label: "value_1" },
+      },
+    });
+    store.getState().setAliasBase({ [KEY]: { name: "value_1", enrichedLabel: "value_1", slotLabel: "Seed" } });
+    store.getState().setIOModeOverride(KEY, "i2v", { seedMode: "fixed" });
+    expect(store.getState().workflowIO[KEY]!.label).toBeUndefined();
+  });
+
+  it("全库只有机器名一个来源时不动本地值（无从判定就不猜）", () => {
+    const store = createIOEditStore("wf");
+    store.setState({
+      workflowIO: {
+        [KEY]: { direction: "input", kind: "widget", nodeId: "4", name: "value_1", label: "value_1" },
+      },
+    });
+    store.getState().setAliasBase({ [KEY]: { name: "value_1", enrichedLabel: "value_1" } });
+    store.getState().setIOModeOverride(KEY, "i2v", { seedMode: "fixed" });
+    expect(store.getState().workflowIO[KEY]!.label).toBe("value_1");
+  });
+
+  it("作者命名永不被写入路径清掉", () => {
+    const store = createIOEditStore("wf");
+    store.setState({
+      workflowIO: {
+        [KEY]: { direction: "input", kind: "widget", nodeId: "4", name: "value_1", label: "我的种子" },
+      },
+    });
+    store.getState().setAliasBase(aliasBase);
+    store.getState().setIOModeOverride(KEY, "i2v", { seedMode: "fixed" });
+    expect(store.getState().workflowIO[KEY]!.label).toBe("我的种子");
+  });
+
+  it("改名成与 pin 名逐字相同的名字也留得住（图三「修改了也不行」）", () => {
+    const store = createIOEditStore("wf");
+    store.getState().toggleIO({
+      nodeId: "24", name: "image", kind: "widget", direction: "input",
+    });
+    store.getState().setIOLabel("24::widget::image", "image");
+    expect(store.getState().workflowIO["24::widget::image"]!.label).toBe(
+      `image${HOMONYM_LABEL_SUFFIX}`
+    );
+  });
+
+  it("清空改名 = 恢复默认显示名", () => {
+    const store = createIOEditStore("wf");
+    store.getState().toggleIO({
+      nodeId: "24", name: "image", kind: "widget", direction: "input", label: "尾帧图",
+    });
+    store.getState().setIOLabel("24::widget::image", "  ");
+    expect(store.getState().workflowIO["24::widget::image"]!.label).toBeUndefined();
+  });
+
+  it("purgeMachineNames 只在判定命中时产生新状态引用", () => {
+    const store = createIOEditStore("wf");
+    store.setState({
+      workflowIO: {
+        [KEY]: { direction: "input", kind: "widget", nodeId: "4", name: "value_1", label: "我的种子" },
+      },
+    });
+    const before = store.getState().workflowIO;
+    store.getState().purgeMachineNames(() => false);
+    expect(store.getState().workflowIO).toBe(before);
+    store.getState().purgeMachineNames(() => true);
+    expect(store.getState().workflowIO[KEY]!.label).toBeUndefined();
   });
 });

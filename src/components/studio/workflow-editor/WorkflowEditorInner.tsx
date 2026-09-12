@@ -43,7 +43,8 @@ import { buildInitialNodes } from "./workflow-editor-build-nodes";
 import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
 import { useParamMapping } from "./hooks/use-param-mapping";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
-import { enrichFromViewNodes, type ExposedAliasBase } from "./io-exposure";
+import { enrichFromViewNodes, isMachineName, type ExposedAliasBase } from "./io-exposure";
+import { sanitizeComboLabel } from "../workflow-utils";
 import { ioLabel, type WorkflowIOEntry } from "../shared/workflow-io";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
 import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
@@ -412,7 +413,7 @@ function WorkflowEditorBody({
    *  都会把旧名字当作作者命名落库，显示名随即退回 `value_1`（ISSUE #349）。 */
   useEffect(() => {
     const base: Record<string, ExposedAliasBase> = {};
-    for (const [key, entry] of Object.entries<WorkflowIOEntry>(ioDetailMap ?? {})) {
+    for (const [key, entry] of Object.entries<WorkflowIOEntry>(ioDetailMap)) {
       const name = entry?.name;
       if (typeof name !== "string" || !name) continue;
       const enrichedLabel = ioLabel(entry);
@@ -425,6 +426,41 @@ function WorkflowEditorBody({
     }
     ioApi.getState().setAliasBase(base);
   }, [ioDetailMap, ioApi]);
+
+  /* 客户端兜底：富化下发的每一条本地条目，落库前/写入前再判一次「label 是不是
+   *  机器名」，是就摘掉。
+   *
+   *  服务端读取出参时已经就地纠正过（读取时才能纠正，不改写库里数据），但本地
+   *  store 里躺的仍是**回读时**那份带脏 label 的条目：取消勾选再勾选、下钻子图
+   *  再回来、或富化还没到就先改了 seed 行为，都会让这串机器名以「作者命名」的
+   *  名义被整体写回，显示名随即退回 `value_1`（ISSUE #349 的复现路径）。
+   *  这里做的是同一条判定，只是发生在富化到达之后的本地态上 —— 判据只看事实
+   *  源，不依赖「我们是否记得写过这个键」，所以任何路径重放都能挡下。 */
+  useEffect(() => {
+    if (!detail) return;
+    ioApi.getState().purgeMachineNames((key, entry) => {
+      const facts = ioDetailMap[key];
+      const enriched = facts ? sanitizeComboLabel(ioLabel(facts)) : undefined;
+      const slot = facts?.slotLabel ? sanitizeComboLabel(facts.slotLabel) : undefined;
+      if (
+        isMachineName(entry.label, {
+          name: entry.name,
+          ...(enriched ? { enrichedLabel: enriched } : {}),
+          ...(slot ? { slotLabel: slot } : {}),
+        })
+      ) {
+        return true;
+      }
+      /* 无富化可比时（键漂移把脏值写进了 `name`，富化按这个键查不到东西）：
+       *  只在「键尾 === name === label」这种三项自证的情况下摘 —— 真实 pin 名
+       *  与键尾不一致的条目一律放过，宁可留一个脏名也不误删作者命名。
+       *  没有这一步，图三里的 `1` 会永远粘在面板上（ISSUE #349）。 */
+      if (entry.label === undefined) return false;
+      const keyEntries = key.split("::");
+      const keyTail = keyEntries.length >= 3 ? keyEntries.slice(2).join("::") : key;
+      return keyTail === entry.name && entry.label === entry.name;
+    });
+  }, [detail, ioDetailMap, ioApi]);
 
   /* P2: 把 detail 派生的查找上下文同步进 viewer / rgthree store，让
    * getNodeJson/getNodeView/getBypass 读到实时 detail（等价于旧 Context
