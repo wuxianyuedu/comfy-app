@@ -122,10 +122,12 @@ export function WorkflowParamCardColumn({
                 />
               ) : null
             }
-            /* 单端口条目在行尾标出它落到宿主卡片的哪一行；多端口条目
-             * 还是显示端口类型（落点跟着具体端口名走）。 */
+            /* 端口行尾只给**多端口**条目补落点说明（落点跟着具体端口名走，
+             *  多行之间要能区分）；单端口条目的落点名写在带类型的输出端口那一行
+             *  上、贴着端点，行尾再标一次就是把同一件事说两遍 —— 那一段正是用户
+             *  圈出来要求去掉的「没用」内容。 */
             rowTrailing={(pin) =>
-              target && entry.pins.length === 1 ? (
+              target && entry.pins.length > 1 ? (
                 <span
                   className="shrink-0 truncate text-[9.5px] text-(--color-ink-fainter)"
                   title={`落点：${target}`}

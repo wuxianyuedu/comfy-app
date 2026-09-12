@@ -62,7 +62,11 @@ export interface WorkflowParamCardProps {
    *  只给**第一条**端口行挂端点即可（一个对外参数只有一个出口）；返回 null
    *  的行不渲染端点（没有模式 = 禁止连线，库里只读同理）。 */
   endpoint?: (port: ParamOutputPort, index: number) => React.ReactNode;
-  /** 端口行尾的补充说明（如「→ 落到的端口名」）。 */
+  /** 端口行的**行尾**内容（如落点说明）。
+   *
+   *  只给**多端口**条目用：落点跟着具体端口名走，多行之间需要区分。单端口条目
+   *  的落点在下面那行带类型的输出端口里已经写了名字（且贴着端点），行尾再标一次
+   *  就是把同一件事说两遍（ISSUE #355 复审「红框内那段没用，去掉」）。 */
   rowTrailing?: (pin: ParamEntry["pins"][number]) => React.ReactNode;
   /** 卡片元素的 ref（节点渲染器用 useHoverElevation 生成）—— 悬浮态由该钩子
    *  写到 React Flow 的节点外壳上，由 CSS 抬起层级压住连线（ISSUE #400）。
@@ -176,10 +180,13 @@ export function WorkflowParamCard({
       </div>
 
       {/* ── 带类型的输出端口 ──
-          这张卡右侧的端点出去的是**什么类型**，在这里明写一行：端口名 + 类型
-          徽标。类型跟着当前落点走（提示词落到 STRING 文本口就是 STRING；尺寸
-          落到 COMBO 的预设口就是 COMBO），只连了候选还没落定时标 `*`。
-          端点槽位就是这一行的高度 —— 线与端点对齐，看线即可读出类型。 */}
+          这一行就是卡片右侧那颗**小圆点端点**的意思：圆点出去的是什么类型、
+          叫什么名字。类型跟着当前落点走（提示词落到 STRING 文本口就是 STRING；
+          尺寸落到 COMBO 的预设口就是 COMBO），只连了候选还没落定时标 `*`。
+          端点槽位（`endpoint`）压在这一行的右端，所以「类型 + 名称」整组**右对齐
+          到端点**，而不是像端口行那样左对齐 —— 圆点就是这一行在说什么的那个口，
+          名字与类型贴着它才读得出「这颗点连到谁」。
+          端口行不再在行尾重复标落点名（那与这一行同义，一处事实只说一次）。 */}
       <div className="flex flex-col px-2 pb-1">
         {outputPorts.map((port, index) => (
           <div
@@ -187,11 +194,20 @@ export function WorkflowParamCard({
             /* `relative` 是端点定位的锚：注入的端点（画布上的 <Handle>、库内
              *  的只读圆点）都以**这一行**为参照居中，而不是整张卡片 —— 否则
              *  多行输出端口时圆点会全部叠在卡片中线，看不出连的是哪一行。 */
-            className="relative flex min-w-0 items-center gap-1.5 text-[10.5px]"
+            className="relative flex min-w-0 items-center justify-end gap-1.5 text-[10.5px]"
             style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
             data-testid={`param-node-out-${entryId}-${index}`}
             title={`输出端口 ${port.name} · ${port.type}`}
           >
+            <span
+              className={`min-w-0 truncate ${
+                port.connected
+                  ? "text-(--color-ink-soft)"
+                  : "text-(--color-ink-fainter)"
+              }`}
+            >
+              {port.name}
+            </span>
             <span
               className="shrink-0 rounded px-1 font-mono text-[9px] leading-[14px]"
               style={{
@@ -202,15 +218,6 @@ export function WorkflowParamCard({
               data-testid={`param-node-out-type-${entryId}-${index}`}
             >
               {port.type}
-            </span>
-            <span
-              className={`min-w-0 flex-1 truncate ${
-                port.connected
-                  ? "text-(--color-ink-soft)"
-                  : "text-(--color-ink-fainter)"
-              }`}
-            >
-              {port.name}
             </span>
             {endpoint?.(port, index)}
           </div>

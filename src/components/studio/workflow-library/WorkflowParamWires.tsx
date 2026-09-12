@@ -4,8 +4,9 @@
  *
  * 对外参数卡片右侧的圆点端口与宿主卡片上被落到的那一行参数之间画一条线 ——
  * 这就是项目画布上那条映射线的静态版本：看线即可读出「提示词喂给了
- * positive_prompt」。卡片与宿主行各自带锚点（`data-wire-anchor` /
- * `data-io-key`），本组件在布局后量出两者的位置再叠一层 SVG。
+ * positive_prompt」。卡片与宿主行各自带锚点（`data-wire-anchor` / 宿主行与组合
+ * 参数控件的两种落点锚点，见 `~/lib/workflow-io-types`），本组件在布局后量出
+ * 两者的位置再叠一层 SVG。
  *
  * 为什么量位置而不是用固定坐标：卡片高度随端口行数变化（「尺寸」可能有多行、
  * 未连线时还要列出候选），宿主表单行的高度也随控件类型变化 —— 只有量出来的
@@ -16,6 +17,8 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+
+import { WIRE_PINS_ATTR, WIRE_ROW_ATTR } from "~/lib/workflow-io-types";
 
 /** 自动判定落点的描边色（与编辑器画布一致）。 */
 const AUTO_STROKE = "#64748b";
@@ -41,7 +44,36 @@ interface Segment {
   d: string;
 }
 
-/** 量出每条线两端的锚点，转成相对容器的坐标并给出贝塞尔路径。 */
+/** 按属性**精确匹配**找锚点。
+ *
+ *  不能用 `querySelector(`[attr="${value}"]`)`：端口键（ioKey）里可能含
+ *  `::`、引号乃至 CSS 特殊字符（端口名本身带分隔符是合法数据），拼进选择器
+ *  要么语法出错、要么匹配到别的元素 —— 表现就是「线不画」。遍历 data 属性做
+ *  字符串比较既准确又不必依赖 `CSS.escape`。 */
+function findAnchor(
+  container: HTMLElement,
+  attr: string,
+  value: string,
+  separator = "",
+): HTMLElement | null {
+  const match = (el: Element): boolean => {
+    const raw = el.getAttribute(attr);
+    if (raw === null) return false;
+    if (separator === "") return raw === value;
+    return raw.split(separator).includes(value);
+  };
+  if (match(container)) return container;
+  for (const el of container.querySelectorAll<HTMLElement>("*")) {
+    if (match(el)) return el;
+  }
+  return null;
+}
+
+/** 量出每条线两端的锚点，转成相对容器的坐标并给出贝塞尔路径。
+ *
+ *  起点 = 卡片那颗小圆点的**外侧边缘**（= 圆点锚点右沿 + 半颗圆点），与画布上
+ *  React Flow 的连线起点口径一致：线从端点外缘出发，不会切进卡片里。
+ *  终点 = 宿主那一行的左沿中心。 */
 export function measureWires(
   container: HTMLElement,
   wires: readonly ParamWire[],
@@ -49,19 +81,17 @@ export function measureWires(
   const box = container.getBoundingClientRect();
   const out: Segment[] = [];
   for (const wire of wires) {
-    const from = container.querySelector<HTMLElement>(
-      `[data-wire-anchor="${cssEscape(wire.entryId)}"]`,
-    );
-    const to = container.querySelector<HTMLElement>(
-      `[data-io-key="${cssEscape(wire.targetIoKey)}"]`,
-    );
+    const from = findAnchor(container, "data-wire-anchor", wire.entryId);
+    /* 落点有两种形状：独立参数行（整行一个锚点）与组合参数控件（一块控件
+     *  覆盖多个端口）—— 后者的行根本不存在，只认前者就会漏画整条线。 */
+    const to =
+      findAnchor(container, WIRE_ROW_ATTR, wire.targetIoKey) ??
+      findAnchor(container, WIRE_PINS_ATTR, wire.targetIoKey, ",");
     /* 任一端不在（卡片没渲染 / 那一行不在当前表单里）→ 不画，避免悬空线头。 */
     if (!from || !to) continue;
     const a = from.getBoundingClientRect();
     const b = to.getBoundingClientRect();
-    /* 起点 = 圆点**中心**（锚点就是那颗小圆点，量它的圆心才是线的落点）；
-     * 终点 = 宿主行左沿中心（与画布上「输出端点 → 输入端点」的方向一致）。 */
-    const x1 = a.left - box.left + a.width / 2;
+    const x1 = a.left - box.left + a.width + a.width / 2;
     const y1 = a.top - box.top + a.height / 2;
     const x2 = b.left - box.left;
     const y2 = b.top - box.top + b.height / 2;
@@ -78,16 +108,13 @@ export function measureWires(
   return out;
 }
 
-/** `CSS.escape` 在 jsdom / 老 WebView 上可能缺失，退回「只保留安全字符」。 */
-function cssEscape(value: string): string {
-  if (typeof CSS !== "undefined" && typeof CSS.escape === "function")
-    return CSS.escape(value);
-  return value.replace(/["\\\]]/g, "\\$&");
-}
-
 export function WorkflowParamWires({ wires }: WorkflowParamWiresProps) {
   const ref = useRef<SVGSVGElement | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
+  /* 空集合时**不挂线层**：挂载那一刻还没量过，`segments` 是空的，但 svg 必须先
+   * 在 DOM 里才量得到锚点（量测的起点是 svg 的 parentElement）。所以「要不要
+   * 渲染 svg」只取决于有没有线要画，而不是「已经量到几条」。 */
+  const hasWires = wires.length > 0;
   /* 依赖签名：线集合变了（换工作流 / 改模式 / 落点变化）就要重量一次。 */
   const signature = wires
     .map((w) => `${w.entryId}>${w.targetIoKey}>${w.manual ? 1 : 0}`)
@@ -99,10 +126,15 @@ export function WorkflowParamWires({ wires }: WorkflowParamWiresProps) {
     let frame = 0;
     const remeasure = () => {
       cancelAnimationFrame(frame);
-      /* 等一帧：本组件可能与卡片同批挂载，立刻量会拿到前一次布局的位置。 */
-      frame = requestAnimationFrame(() =>
-        setSegments(measureWires(container, wires)),
-      );
+      /* 同步先量一次，再等一帧量一次：本组件可能与卡片同批挂载（那时量到的
+       *  还是布局前的位置，需要下一帧的量修正），也可能挂载时布局已经就绪
+       *  （头部卡片列先渲染、线层后挂载）—— 只等被取消的那一帧就会一条线都
+       *  画不出来。两次都写同一份状态，内容不变时不触发重渲染。 */
+      setSegments(measureWires(container, wires));
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        setSegments(measureWires(container, wires));
+      });
     };
     remeasure();
     /* 卡片高度随端口行数 / 宿主控件类型变化，尺寸一变就重量 —— 用
@@ -119,7 +151,8 @@ export function WorkflowParamWires({ wires }: WorkflowParamWiresProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 线集合由 signature 表达
   }, [signature]);
 
-  if (segments.length === 0) return null;
+  /* 没有线要画就整层不渲染（也就不必量）。 */
+  if (!hasWires) return null;
 
   return (
     <svg

@@ -26,7 +26,9 @@ interface DetailBodyProps {
   paramMap: Record<string, unknown>;
   sourceData: SourceModalData | null;
   usable: boolean;
-  onEdit: () => void;
+  /** 在编辑器中打开当前工作流；入参是**当前生效模式** —— 用户在库里选了哪个
+   *  模式，编辑器就落在同一个模式上（不再固定打开默认模式）。 */
+  onEdit: (mode?: string | null) => void;
   /** 多模式工作流的模式切换（画布预览节点的类型 chip 可点选默认模式）。 */
   meta?: {
     modes: string[];
@@ -53,6 +55,13 @@ export function DetailBody({
    * 一遍无参卡片再被真实 IO 顶掉（整块高度改变 → 页面跳一下），参数页签同
    * 理。统一的处理是「还没就绪就不渲染页签内容」——container 用 min-h-0 撑满
    * 父级，切换不会闪出占位文案，也不会出现半渲染的中间态。 */
+  /* 「在编辑器中打开」要带上的模式：默认取工作流默认模式，用户在画布预览里
+   *  切换模式后跟着它走 —— 编辑器打开时落在同一个模式上，连线与落点不会换成
+   *  另一套（不带的话看起来就像「我连的线丢了」）。 */
+  const [editorMode, setEditorMode] = useState<string | null>(
+    meta?.defaultMode ?? null,
+  );
+
   if (isLoading) return null;
 
   return (
@@ -65,7 +74,7 @@ export function DetailBody({
             </span>
             <button
               type="button"
-              onClick={onEdit}
+              onClick={() => onEdit(editorMode)}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-violet-600 transition-colors hover:bg-violet-500/10"
             >
               <Maximize2 className="h-3 w-3" />
@@ -87,7 +96,10 @@ export function DetailBody({
               usable={usable}
               modes={meta?.modes}
               defaultMode={meta?.defaultMode}
-              onModeChange={meta?.onModeChange}
+              onModeChange={(code) => {
+                setEditorMode(code);
+                meta?.onModeChange(code);
+              }}
               onSeedModeChange={onSeedModeChange}
             />
           </div>

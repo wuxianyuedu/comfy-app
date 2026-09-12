@@ -29,6 +29,7 @@ import {
   type VideoRole,
 } from "./grouped-controls-presets";
 import { VideoField } from "./VideoField";
+import { WIRE_PINS_ATTR, wirePinsValue } from "~/lib/workflow-io-types";
 
 function VideoControl({
   group,
@@ -54,9 +55,15 @@ function VideoControl({
   if (group.aspect) entries.push({ role: "aspect", entry: group.aspect });
   if (group.quality) entries.push({ role: "quality", entry: group.quality });
 
+  /* 组合参数整体作为一个可锚定的目标：时长/画质/比例由同一个控件录入，
+   *  单个端口没有独立行，映射连线只能连到这块控件上（两种录入方式都挂）。 */
+  const wireAnchor = {
+    [WIRE_PINS_ATTR]: wirePinsValue(entries.map((item) => item.entry.ioKey)),
+  };
+
   if (style === "split") {
     return (
-      <div className="space-y-2">
+      <div className="space-y-2" {...wireAnchor}>
         <StyleSwitcher
           style={style}
           onChange={onStyle}
@@ -143,7 +150,7 @@ function VideoControl({
   const summary = sections.map((section) => section.value).join(" · ");
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" {...wireAnchor}>
       <StyleSwitcher
         style={style}
         onChange={onStyle}

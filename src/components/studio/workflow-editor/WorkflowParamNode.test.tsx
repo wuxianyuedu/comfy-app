@@ -82,6 +82,25 @@ describe("WorkflowParamNode", () => {
     expect(screen.getAllByText("INT").length).toBeGreaterThanOrEqual(2);
   });
 
+  it("输出端口行「名称 + 类型」右对齐到端点（顺序与端口行相反）", () => {
+    /* 端点圆点压在这一行右端（见 WorkflowParamCardColumn / WorkflowParamNode），
+     * 所以这一行的内容整组贴右 —— 名字在左、类型徽标在最右，紧挨圆点。
+     * 端口行则相反（名字在左、类型在行尾），两处不是同一套顺序，别照着改。 */
+    const { container } = renderNode({
+      entryId: "prompt",
+      cls: "prompt",
+      label: "提示词",
+      outputPorts: [{ name: "positive_prompt", type: "STRING", connected: true }],
+    });
+    const row = screen.getByTestId("param-node-out-prompt-0");
+    expect(row.className).toContain("justify-end");
+    /* 末位是注入的端点槽位（画布上是 <Handle>，无文本）。 */
+    const cells = [...row.children].map((child) => child.textContent);
+    expect(cells.slice(0, 2)).toEqual(["positive_prompt", "STRING"]);
+    /* 端点由消费方注入，压在同一行的右端（这里是画布上的 <Handle>）。 */
+    expect(container.querySelector(".react-flow__handle")).toBeTruthy();
+  });
+
   it("卡片带一个**有类型**的输出端口（提示词 → STRING）", () => {
     renderNode({
       entryId: "prompt",

@@ -178,7 +178,11 @@ describe("对外参数节点只在画布上表达映射", () => {
       readFileSync(path.join(LIBRARY_DIR, "WorkflowParamWires.tsx"), "utf8"),
     );
     expect(wires).toContain("data-wire-anchor");
-    expect(wires).toContain("data-io-key");
+    /* 落点两种形状都要认：独立参数行（`data-io-key`）与组合参数控件
+     *  （`data-io-pins`，宽高 / 比例像素由同一控件录入，没有独立行）。属性名
+     *  来自共享契约（workflow-io-types），两边用同一个字符串。 */
+    expect(wires).toContain("WIRE_ROW_ATTR");
+    expect(wires).toContain("WIRE_PINS_ATTR");
     for (const forbidden of ["@xyflow/react", "onConnect", "savePatch"]) {
       expect(wires).not.toContain(forbidden);
     }

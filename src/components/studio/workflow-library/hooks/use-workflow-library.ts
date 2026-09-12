@@ -64,6 +64,8 @@ export interface WorkflowLibraryController {
   setSelectedId: (id: string | null) => void;
   /* 弹层开关 */
   editingId: string | null;
+  /** 打开编辑器时落到的模式（画布预览里选的生效模式）。 */
+  editingMode: string | null;
   setEditingId: (id: string | null) => void;
   showModelManager: boolean;
   setShowModelManager: (value: boolean) => void;
@@ -108,7 +110,7 @@ export interface WorkflowLibraryController {
   handleDownload: (id: string, name: string) => Promise<void>;
   handleResync: (id: string, name: string) => Promise<void>;
   handleLoadPending: (pending: PendingRow) => Promise<void>;
-  handleEdit: (id: string) => void;
+  handleEdit: (id: string, mode?: string | null) => void;
   /** 关闭画布编辑器：清 editingId 并失效该工作流的详情缓存（ISSUE #288）。 */
   handleEditorClose: () => void;
 }
@@ -147,6 +149,10 @@ export function useWorkflowLibrary(
     name: string;
   } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  /* 打开编辑器时要落到的模式码。库详情的画布预览里切换模式后，「在编辑器中
+   *  打开」带上当前生效模式 —— 否则库里看着是单图生视频、编辑器打开成了默认
+   *  模式（卡片、连线、落点全都换了一套），用户会以为「我连的线丢了」。 */
+  const [editingMode, setEditingMode] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   /* §17.5.4：动作错误与加载错误分两条通道，否则后台刷新会把失败提示吞掉。
@@ -327,7 +333,13 @@ export function useWorkflowLibrary(
     setSelectedId((current) => (current === id ? null : current));
   }, []);
 
-  const handleEdit = useCallback((id: string) => setEditingId(id), []);
+  const handleEdit = useCallback(
+    (id: string, mode?: string | null) => {
+      setEditingId(id);
+      setEditingMode(mode ?? null);
+    },
+    [],
+  );
 
   /* 关闭编辑器时失效该工作流的详情缓存。IO 编辑里改了默认值 / 覆盖层后，
    * 库详情（画布预览 + 参数配置）必须重拉富化 IO 才能看到新默认值；
@@ -360,6 +372,7 @@ export function useWorkflowLibrary(
     selectedRow,
     setSelectedId,
     editingId,
+    editingMode,
     setEditingId,
     showModelManager,
     setShowModelManager,
