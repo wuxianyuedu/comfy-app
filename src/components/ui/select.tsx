@@ -64,12 +64,18 @@ function SelectContent({
   align = "center",
   alignOffset = 0,
   alignItemWithTrigger = true,
+  positionerClassName,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
-  >) {
+  > & {
+    /* 定位层（portal 宿主）的额外 class。层级必须在**这一层**给：Popup 自己的
+       z-50 只在 positioner 建立的 stacking context 内部生效，改它不解决被
+       外层遮罩压住的问题。 */
+    positionerClassName?: string;
+  }) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner
@@ -78,7 +84,9 @@ function SelectContent({
         align={align}
         alignOffset={alignOffset}
         alignItemWithTrigger={alignItemWithTrigger}
-        className="isolate z-50"
+        /* 层级由调用方决定：模态弹窗里的下拉若固定 z-50，会被模态遮罩（z-99）
+           整块压住——弹层画得出来却**收不到指针事件**（ISSUE #262）。 */
+        className={cn("isolate z-50", positionerClassName)}
       >
         <SelectPrimitive.Popup
           data-slot="select-content"
