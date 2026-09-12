@@ -329,7 +329,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
     // 入口在底部状态栏：只有 title 属性，没有可读文本。
     await page.getByTitle(/^日志面板/).click();
     // 面板标题：确认弹窗真的打开了（而不是入口没接上）。
-    await expect(page.getByText("应用日志", { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText("应用日志", { exact: true }).first(),
+    ).toBeVisible();
 
     await expectTopHitsTabStrip(page);
   });
@@ -526,7 +528,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
       }));
       /* 关键：选区还在（没被刷新冲掉），且滚动位置没有被新日志推走。 */
       expect(after.selected).toBe(before.selected);
-      expect(Math.abs(after.scrollTop - before.scrollTop)).toBeLessThanOrEqual(1);
+      expect(Math.abs(after.scrollTop - before.scrollTop)).toBeLessThanOrEqual(
+        1,
+      );
     });
 
     test("@critical 行头里类别计数在下拉左侧，下拉贴住右侧操作区", async ({
@@ -549,11 +553,135 @@ test.describe("应用页签与全屏视图 @critical", () => {
       expect(triggerBox).not.toBeNull();
       expect(searchBox).not.toBeNull();
 
-      /* 顺序即分工：计数在左、搜索在中、下拉在右（用户第 1 条诉求）。 */
+      /* 顺序即分工：计数在左、搜索在中、下拉在右。 */
       expect(levelBox!.x).toBeLessThan(searchBox!.x);
       expect(searchBox!.x).toBeLessThan(triggerBox!.x);
-      /* 下拉不再紧贴级别按钮，两者之间的空白由 `flex-1` 提供。 */
-      expect(triggerBox!.x - (levelBox!.x + levelBox!.width)).toBeGreaterThan(120);
+    });
+
+    /**
+     * ISSUE #262 复审：「顶部还有较大空白区域，全部/警告/错误这些挤在一起，
+     * 可以占用大些空间」。
+     *
+     * 这两件事是一体的：行头的富余宽度过去被一个**无名空白**吸走，五个筛选按钮
+     * 被钉死在 32px 上。现在筛选按钮整组 `flex-1`、每个按钮等分，于是
+     *   1. 按钮明显变宽（不再是 32px 的窄条）；
+     *   2. 最右一个按钮与搜索框之间不再横着一大片空白。
+     *
+     * 宽度只有真实浏览器量得出来（jsdom 不做布局），所以这几条在这里：
+     *   - 最窄的按钮宽度 ≥ 56px（32px 的老形态直接红）；
+     *   - 五个按钮等宽（差 ≤ 2px：`flex-1 basis-0` 的均分语义）；
+     *   - 「错误」按钮右边缘到搜索框左边缘的空白 < 48px（老形态这里是上百 px）。
+     */
+    test("@critical 级别筛选占满行头富余宽度，不再挤成窄条也不留大片空白", async ({
+      page,
+    }) => {
+      await stubBackend(page);
+      await stubLogs(page);
+      await openPanel(page);
+
+      const labels = ["全部", "调试", "信息", "警告", "错误"];
+      const boxes = [];
+      for (const label of labels) {
+        const box = await page
+          .getByTitle(new RegExp(`^当前来源的${label}：`))
+          .first()
+          .boundingBox();
+        expect(box).not.toBeNull();
+        boxes.push(box!);
+      }
+
+      const widths = boxes.map((b) => b.width);
+      const minWidth = Math.min(...widths);
+      const maxWidth = Math.max(...widths);
+      /* 不再是 `w-8`（32px）那种窄条。 */
+      expect(minWidth).toBeGreaterThanOrEqual(56);
+      /* 五个按钮等分同一块空间。 */
+      expect(maxWidth - minWidth).toBeLessThanOrEqual(2);
+      /* 按钮高度也吃满行头（老形态 32.75px 里塞两行文本）。 */
+      expect(Math.max(...boxes.map((b) => b.height))).toBeGreaterThanOrEqual(
+        32,
+      );
+
+      const searchBox = await page.getByPlaceholder(/搜索日志/).boundingBox();
+      expect(searchBox).not.toBeNull();
+      const gap = searchBox!.x - (boxes[4]!.x + boxes[4]!.width);
+      /* 按钮与搜索框之间的空白被按钮吃掉（老形态这里是 300px 上下）。 */
+      expect(gap).toBeLessThan(48);
+    });
+
+    /**
+     * ISSUE #262 复审：「启动和启动器日志丢失」。
+     *
+     * 真实现场：会话起点取自 `dev-launcher.log` 的 mtime，而启动器进程
+     * （launcher）在它被创建**之前**就写下了自己的头几行（python / exe / cwd /
+     * 探测 Node）。过去拿这个起点去裁**整条时间线**，这些本次启动最早、最该被
+     * 看到的行被静默丢掉——面板上「启动」「启动器」两个来源恒为空。
+     *
+     * 这里在浏览器里复现同一时序：launcher 的行早于 sessionStart，dev 的行晚于
+     * 它。两条都必须出现在面板上（后者本来就该在，前者是老形态丢掉的那批）。
+     */
+    test("@critical 启动器与启动日志不被会话起点裁掉", async ({ page }) => {
+      await stubBackend(page);
+
+      const now = Date.now();
+      const sessionStart = now - 20_000;
+      const fmt = (t: number) => {
+        const d = new Date(t);
+        const p = (n: number, l = 2) => String(n).padStart(l, "0");
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+      };
+      /* launcher 进程启动时写下的行（早于 dev-launcher.log 被创建） */
+      const launcherLines = [
+        `[${fmt(now - 45_000)}] === launcher started ===`,
+        `[${fmt(now - 44_000)}] python=3.12`,
+      ];
+      const devLines = [`[${fmt(now - 15_000)}] [STEP] 启动开发服务`];
+
+      await page.route("**/api/logs/current**", async (route: Route) => {
+        const source = new URL(route.request().url()).searchParams.get(
+          "source",
+        );
+        const lines =
+          source === "launcher"
+            ? launcherLines
+            : source === "dev-launcher"
+              ? devLines
+              : [];
+        const content = lines.join("\n") + (lines.length ? "\n" : "");
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            content,
+            size: 1000 + content.length,
+            offset: 0,
+            /* 覆盖重建的来源按契约不下发起点；这里仍然给上，是为了证明「即使
+             * 服务端给了起点，客户端也不会拿它去裁这类来源」——两层都要兜住。 */
+            sessionStart,
+            bootId: "e2e:1",
+          }),
+        });
+      });
+
+      await page.goto("/workspace");
+      await page.getByTitle(/^日志面板/).click();
+      await expect(
+        page.getByText("应用日志", { exact: true }).first(),
+      ).toBeVisible();
+
+      /* 启动器的早期行必须在面板上（老形态：一行都没有）。 */
+      await expect(
+        page.getByText("=== launcher started ===").first(),
+      ).toBeVisible();
+      await expect(page.getByText("python=3.12").first()).toBeVisible();
+      await expect(page.getByText("[STEP] 启动开发服务").first()).toBeVisible();
+
+      /* 切到「启动器」来源也能看到（不是只混在全部来源里）。 */
+      await page.getByRole("combobox", { name: "按来源筛选" }).click();
+      await page.getByRole("option", { name: /启动器/ }).click();
+      await expect(
+        page.getByText("=== launcher started ===").first(),
+      ).toBeVisible();
     });
   });
 
@@ -580,7 +708,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
       timeout: 20_000,
     });
     await page.getByRole("button", { name: "创作后端", exact: true }).click();
-    await page.getByRole("button", { name: /打开查看/ }).first().click();
+    await page
+      .getByRole("button", { name: /打开查看/ })
+      .first()
+      .click();
   }
 
   test("@critical ComfyUI 在页签里内嵌渲染 不另开窗口", async ({ page }) => {
@@ -698,7 +829,10 @@ test.describe("应用页签与全屏视图 @critical", () => {
     // 回到设置里点「在浏览器打开」。
     await page.getByTitle("设置").first().click();
     await page.getByRole("button", { name: "创作后端", exact: true }).click();
-    await page.getByRole("button", { name: /在浏览器打开/ }).first().click();
+    await page
+      .getByRole("button", { name: /在浏览器打开/ })
+      .first()
+      .click();
 
     // 动作确实发出了（服务端有可见出口，不是静默失败）。
     await expect

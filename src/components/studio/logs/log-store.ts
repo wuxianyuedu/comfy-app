@@ -502,11 +502,52 @@ export function lastSeqOf(logs: LogEntry[]): number {
 }
 
 /**
+ * 哪些来源的文件**跨运行累积**，因此需要会话起点把它们裁到本次运行。
+ *
+ * 这是客户端与服务端共享的一条事实（服务端 `resumable` 分支从同一原则推导），
+ * 所以单独列出来而不是散在判据里：
+ *   - `app-runtime`：**追加写、不轮转**，文件里混着前几次运行的行——只能靠
+ *     行时刻裁（见 §7.14）；
+ *   - `app`（nextjs-panel-<pid>-<ts>.log）：文件名按进程命名，但服务端取的是
+ *     「目录里最新的那一份」，在本次进程还没落盘时会**读到上一个进程的文件**，
+ *     因此同样要裁；
+ *   - `launcher`（start-tauri-launcher.log）/ `dev`（dev-launcher.log）：
+ *     每次运行**覆盖重建**，文件内容天然只有本次——它们**不需要**裁。
+ *
+ * 为什么必须逐来源判定、而不能拿一个全局 cutoff 往整条时间线上套：
+ * 会话起点取自 `dev-launcher.log` 的 mtime，而**启动器的头几行写在它被创建
+ * 之前**（python 版本、exe、cwd、探测 Node…）。用一个全局 cutoff 一刀切，
+ * 这些真·本次运行的行会被当成历史丢掉——用户读到的就是「启动和启动器日志
+ * 丢失」（ISSUE #262 复审）。覆盖重建的来源不存在「历史行」，因此不参与裁剪。
+ */
+const SESSION_SCOPED_ORIGINS = new Set<NonNullable<LogEntry["origin"]>>([
+  "app-runtime",
+  "app",
+]);
+
+/**
+ * 该来源的文件是否跨运行累积、需要会话起点裁剪（契约判据，可独立断言）。
+ *
+ * 留成导出函数是为了让「哪类来源该裁」这条契约有唯一事实来源：视图/store 与
+ * 测试都问它，而不是各自抄一份字符串判断。
+ */
+export function isSessionScopedOrigin(
+  origin: LogEntry["origin"] | undefined,
+): boolean {
+  return origin !== undefined && SESSION_SCOPED_ORIGINS.has(origin);
+}
+
+/**
  * 会话起点过滤：丢掉「上一次运行」残留的行。
  *
- * 追加写日志（如 app-runtime）里混着历史运行的内容，行格式只记时刻、不记
- * 是哪一次运行写的；行时刻早于会话起点即判为历史。
- * 读不出时刻的裸文本行（`time` 取解析当时的时刻）天然不会早于起点，保留。
+ * 只有 {@link isSessionScopedOrigin} 判为跨运行累积的来源才参与比较——文件每次
+ * 运行覆盖重建的来源（launcher / dev / app）与运行期生成的条目（console / tauri /
+ * system）一律保留：
+ *   - 前者内容天然只有本次，拿起点去裁只会把「本次启动早期」的行误判成历史；
+ *   - 后者的时刻是「现在」，永远不会早于起点。
+ *
+ * 行时刻早于会话起点即判为历史。读不出时刻的裸文本行（`time` 取解析当时的时刻）
+ * 天然不会早于起点，保留。
  *
  * @param cutoffMs 会话起点（毫秒）；null/undefined = 不启用该过滤
  */
@@ -515,7 +556,9 @@ export function dropStaleEntries(
   cutoffMs: number | null | undefined,
 ): LogEntry[] {
   if (cutoffMs === null || cutoffMs === undefined) return entries;
-  return entries.filter((entry) => entry.time >= cutoffMs);
+  return entries.filter(
+    (entry) => !isSessionScopedOrigin(entry.origin) || entry.time >= cutoffMs,
+  );
 }
 
 /**
@@ -1173,7 +1216,10 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         viewBaselineAfter:
           nextPage === 1
             ? 0
-            : Math.max(0, state.filteredLogs.length - nextPage * state.pageSize),
+            : Math.max(
+                0,
+                state.filteredLogs.length - nextPage * state.pageSize,
+              ),
         followBaseline: Math.max(0, state.filteredLogs.length - 1),
         followResetAt: 0,
         ...anchorOf(state),
