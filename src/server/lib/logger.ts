@@ -67,15 +67,8 @@ export function createPinoLogger(opts: PinoLoggerOptions = {}) {
       logMethod(args, method, levelNum) {
         if (levelNum >= 50) {
           try {
-            const ns = typeof args[1] === "string" ? args[1] : "server";
-            const payload =
-              args[0] && typeof args[0] === "object"
-                ? (args[0] as Record<string, unknown>)
-                : undefined;
-            appRuntimeLog.error(renderServerLogMessage(payload), {
-              ns,
-              level: "error",
-            });
+            const entry = renderServerLogEntry(args);
+            appRuntimeLog.error(entry.msg, { ns: entry.ns, level: "error" });
           } catch {
             /* 镜像失败绝不影响日志主流程 */
           }
@@ -107,19 +100,62 @@ export const logger = createPinoLogger();
  * 不整包透传 payload——避免把 prompt / PII 之类的字段二次落盘。
  */
 
+/**
+ * 把一条 pino 调用还原成「可读文案 + 命名空间」。
+ *
+ * pino 的调用签名有四种：`log.error(obj, msg)`、`log.error(msg)`、
+ * `log.error(obj)`、`log.error(msg, ...args)`。历史上这里只认第一种——
+ * **第一个参数不是对象时，整条 ERROR 的正文被丢弃**，镜像出去的只有一句
+ * 无信息的「服务端错误」（形如 `[app] 服务端错误 {"ns":"server"}`）。
+ * 而仓库里多条真实调用正是字符串形态（自定义 message 更易读，如
+ * `logger.error("[upload] 503 ComfyUI unreachable — ...")`）。
+ *
+ * 现在四种签名都取得到正文：**字符串参数本身就是文案**，对象参数才走字段提取，
+ * 对象里还带 `msg` 时（`log.error({ msg: "..." })`）以字段为准。
+ * 命名空间依次尝试「字符串形态的第二个参数」与对象里的 `ns` /
+ * `event`（结构化埋点两处都见过），都没有才回落 `server`。
+ */
+function renderServerLogEntry(args: unknown[]): { msg: string; ns: string } {
+  const first = args[0];
+  const second = args[1];
+  // 两参形态（pino 的 (obj, msg) / (msg, ns)）：字符串里的正文优先取第二个参数
+  const stringArg = typeof first === "string" ? first : undefined;
+  const secondString = typeof second === "string" ? second : undefined;
+  const payload =
+    first && typeof first === "object"
+      ? (first as Record<string, unknown>)
+      : undefined;
+
+  // 空串按「没取到」处理：`??` 只挡 null/undefined，挡不住 ""（会写出空行）
+  const firstNonEmpty = (...candidates: (string | undefined)[]) =>
+    candidates.find((c) => c !== undefined && c.length > 0);
+
+  const msg = payload
+    ? (firstNonEmpty(renderServerLogMessage(payload), stringArg) ?? "服务端错误")
+    : // 没有结构化字段：字符串参数就是正文；再没有才回落占位文案
+      (firstNonEmpty(stringArg, secondString) ?? "服务端错误");
+
+  const payloadNs = [payload?.ns, payload?.event].find(
+    (v): v is string => typeof v === "string" && v.length > 0,
+  );
+  const ns = firstNonEmpty(payloadNs, secondString) ?? "server";
+  return { msg, ns };
+}
+
 /** 从结构化字段里取一句可读文案（优先 msg / err 的 message）。 */
 function renderServerLogMessage(payload?: Record<string, unknown>): string {
-  if (!payload) return "服务端错误";
+  if (!payload) return "";
   const raw = payload.msg ?? payload.message;
   if (typeof raw === "string" && raw.length > 0) return raw;
   const err = payload.err as { message?: unknown } | undefined;
   if (err && typeof err.message === "string" && err.message.length > 0) {
     return err.message;
   }
+  if (Object.keys(payload).length === 0) return "";
   try {
     const compact = JSON.stringify(payload);
     return compact.length > 300 ? `${compact.slice(0, 300)}…` : compact;
   } catch {
-    return "服务端错误";
+    return "";
   }
 }

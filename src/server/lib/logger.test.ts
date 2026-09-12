@@ -207,6 +207,50 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
     expect(added).toContain("no such table: llmConfig");
   });
 
+  /* ── 字符串形态的 ERROR 也要带正文（ISSUE #440）────────────────────
+   * 用户报的日志行是 `[app] 服务端错误 {"ns":"server","level":"error"}`：
+   * 明明发生了 ERROR，面板里却只有一句无信息占位文案，等于「有错但看不出是什么错」。
+   * 根因是镜像此前只认 `(obj, msg)` 一种调用形态，`logger.error("字符串")`
+   * 的正文被整个丢弃——而仓库里多条真实调用正是字符串形态。 */
+  it("logger.error(字符串) 的正文进面板，不再是占位文案", async () => {
+    const before = await readAppRuntimeLog();
+    const { dest } = capture();
+    const log = createPinoLogger({ destination: dest });
+    log.error("[upload] 503 ComfyUI unreachable — http://127.0.0.1:8188");
+    await flush();
+
+    const added = (await readAppRuntimeLog()).slice(before.length);
+    expect(added).toContain("[ERROR]");
+    expect(added).toContain("[upload] 503 ComfyUI unreachable");
+    // 正文取到了，就不该再出现「信息量为零」的占位句
+    expect(added).not.toContain("服务端错误");
+  });
+
+  it("结构化埋点的 event 名同时充当命名空间", async () => {
+    const before = await readAppRuntimeLog();
+    const { dest } = capture();
+    const log = createPinoLogger({ destination: dest });
+    log.error({ event: "audit_write_failed", err: new Error("disk full") }, "audit");
+    await flush();
+
+    const added = (await readAppRuntimeLog()).slice(before.length);
+    // 命名空间落在行尾的结构化字段里（面板据此显示 [ns] 前缀）
+    expect(added).toContain('"ns":"audit_write_failed"');
+    expect(added).toContain("disk full");
+  });
+
+  it("纯对象、无 msg/err 时仍回落可读文案，不退化成空行", async () => {
+    const before = await readAppRuntimeLog();
+    const { dest } = capture();
+    const log = createPinoLogger({ destination: dest });
+    log.error({ ns: "comfyui", detail: "启动超时" });
+    await flush();
+
+    const added = (await readAppRuntimeLog()).slice(before.length);
+    expect(added).toContain('"ns":"comfyui"');
+    expect(added).toContain("启动超时");
+  });
+
   it("logger.info 不写面板（高频调用不刷屏）", async () => {
     const before = await readAppRuntimeLog();
     const { dest } = capture();

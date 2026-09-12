@@ -1,0 +1,3 @@
+## Fixed
+
+- **服务端 ERROR 不再只显示一句「服务端错误」（ISSUE #440）**。日志面板里 `[app] 服务端错误 {"ns":"server","level":"error"}` 这类行**没有任何信息量**：知道出错了，但看不出是什么错。根因在 `src/server/lib/logger.ts` 的 pino ERROR 镜像钩子——它只认 `logger.error(obj, msg)` 一种调用形态，**第一个参数不是对象时整条正文被丢弃**，只回落一句占位文案。而仓库里多条真实调用恰恰是字符串形态（如 `logger.error("[upload] 503 ComfyUI unreachable — ...")`、`logger.error(\`❌ tRPC failed on ${path}: ${error.message}\`)`），于是这些失败的**具体原因在面板里全部丢失**，只剩一句看起来「哪里都像、又哪里都不是」的通用报错。修复后四种 pino 签名（`(obj, msg)` / `(msg)` / `(obj)` / `(msg, ...args)`）都取得到正文：字符串参数本身就是文案，对象参数才走字段提取，`msg` 字段仍优先；命名空间依次尝试对象里的 `ns` / `event` 与字符串形态的第二个参数，都没有才回落 `server`。纯对象且不含 `msg`/`err` 时保留「键值压缩」兜底（上限 300 字符），不再退化成空行。补 3 条回归用例：字符串形态带正文且不再出现占位句、`event` 名充当命名空间、纯对象回落到可读键值。
