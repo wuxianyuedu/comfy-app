@@ -117,6 +117,33 @@ export function patchWorkflowRun(
   touch({ ...prev, ...patch });
 }
 
+/** 收口一次「失败」运行：状态 + 错误原因（横幅）+ 一条 error 日志行。
+ *
+ *  Why 日志行和横幅要一起写：横幅只在弹窗顶部显示，用户按级别筛选
+ *  （如只看「错误」）或在时间线里对照步骤时看不到它。把失败原因同时作为
+ *  一条 error 日志落进 logs，它就跟其它步骤日志一样参与筛选 / 计数 / 回放，
+ *  第二张图里「应用日志有原因、工作流日志没有」的割裂也就不再出现。
+ *
+ *  去重：同一 (原因, 级别) 已经作为最后一条日志存在时不再重复追加，
+ *  避免「服务端已写过 ✗ 生成失败」+「客户端再补一条」出现两行一模一样的。 */
+export function failWorkflowRun(taskId: string, message: string): void {
+  const prev = runs.get(taskId);
+  if (!prev) return;
+  const reason = message || "生成失败";
+  const logs = prev.logs ?? [];
+  const last = logs[logs.length - 1];
+  const duplicatedAsLogLine =
+    last?.level === "error" &&
+    typeof last.msg === "string" &&
+    (last.msg === reason || last.msg.includes(reason));
+  const nextLogs = duplicatedAsLogLine
+    ? logs
+    : [...logs, { t: Date.now(), level: "error" as const, msg: `✗ 生成失败：${reason}` }].slice(
+        -MAX_LOGS,
+      );
+  touch({ ...prev, status: "failed", errorMessage: reason, logs: nextLogs });
+}
+
 /** 按 taskId 查运行元信息。 */
 export function getWorkflowRun(taskId: string): WorkflowRunMeta | null {
   return runs.get(taskId) ?? null;

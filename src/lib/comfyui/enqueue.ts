@@ -14,7 +14,7 @@
 
 import "./reaper"; // module side-effect: launch the reaper sweeps
 import { interrupt } from "./client";
-import { state, log, persistLogs, MAX_CONCURRENCY } from "./runner-state";
+import { state, log, persistLogs, claimFinalize, clearFinalize, MAX_CONCURRENCY } from "./runner-state";
 import type { Job, TaskEvent, LogEntry } from "./runner-state";
 import { connect, processQueue, cliProcs } from "./executor";
 import { taskRepository } from "../core/repository";
@@ -24,6 +24,10 @@ export function enqueue(job: Job) {
   const store = state();
 
   store.settled.delete(job.taskId);
+
+  /* 同一 taskId 重跑（重试 / 复用）：清掉上一次的「终态已落库」标记，
+   *  否则新的终态会被一次性锁挡住，任务永远停在旧状态。 */
+  clearFinalize(job.taskId);
 
   store.queue.push(job);
 
@@ -126,6 +130,34 @@ export async function cancelTask(taskId: string) {
 
 
   log(taskId, "warn", "用户取消任务");
+
+  // 取消也是「写终态」的一种。对**尚未终态**的任务先抢落库锁：抢不到说明
+
+  // 它已在本进程被别的原因收口（成功 / 失败 / 被 reaper 判孤），此时不能再
+
+  // 把原因改写成「用户取消」，否则用户在执行日志看到的失败原因会被取消动作
+
+  // 悄悄覆盖掉。DB 行本就是终态时保持旧行为（仍允许改写为 CANCELLED）。
+
+  if (!isTerminal(task.status) && !claimFinalize(taskId)) {
+
+    log(taskId, "warn", "任务终态已落库，取消请求不再改写终态");
+
+    if (task.promptId) store.promptToTask.delete(task.promptId);
+
+    store.promptByTask.delete(taskId);
+
+    const hadQueueSlot = store.queue.some((queue) => queue.taskId === taskId);
+
+    if (hadQueueSlot || cliProcs.has(taskId)) store.active = Math.max(0, store.active - 1);
+
+    await persistLogs(taskId);
+
+    if (hadQueueSlot || cliProcs.has(taskId)) void processQueue();
+
+    return;
+
+  }
 
   if (!isTerminal(task.status) && task.promptId) {
 

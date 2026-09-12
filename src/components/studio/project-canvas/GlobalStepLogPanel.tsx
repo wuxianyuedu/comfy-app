@@ -56,6 +56,37 @@ const LEVEL_STYLES: Record<Level, string> = {
   info: "bg-cyan-500/15 text-cyan-400 border-cyan-500/20",
 };
 
+/** 把「失败原因」补写为一条 error 日志行（横幅之外）。
+ *
+ *  SSE 的 `state` / `error` 帧只带一个原因字符串、可能不带对应 `log` 帧
+ *  （典型：dev server 重启后由 reaper 收口、或 DB 轮询补发的终态）。此前
+ *  面板只把这个原因渲染成顶部横幅，用户按「错误 / 警告」筛选或回放时间线时
+ *  根本看不到失败原因（ISSUE #378）。
+ *
+ *  纯函数 + 显式 next：去重判断在 updater 之外完成，避免在 setState 的
+ *  updater 里做副作用（StrictMode 下 updater 可能被调用两次）。 */
+function withFailureLogLine(prev: StepLogEntry[], reason: string, now: number): StepLogEntry[] {
+  if (!reason) return prev;
+  const text = `✗ 生成失败：${reason}`;
+  const last = prev[prev.length - 1];
+  /* 末行已是同因错误（服务端自己写过 ✗ 生成失败）→ 不重复追加。 */
+  if (last?.level === "error" && typeof last.msg === "string" && last.msg.includes(reason)) {
+    return prev;
+  }
+  return [...prev, { t: now, level: "error", msg: text, client: true }];
+}
+
+/** 把上面那条日志行同时写进（跨卸载存活的）缓存与组件 state。 */
+function appendFailureLogLine(
+  taskId: string,
+  reason: string,
+  setLogs: React.Dispatch<React.SetStateAction<StepLogEntry[]>>,
+): void {
+  const t = Date.now();
+  appendStepLog(taskId, { t, level: "error", msg: `✗ 生成失败：${reason}`, client: true });
+  setLogs((prev) => withFailureLogLine(prev, reason, t));
+}
+
 const FILTER_LABELS: { label: string; value: Level | "all" }[] = [
   { label: "全部", value: "all" },
   { label: "错误", value: "error" },
@@ -192,7 +223,14 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             if (lastStatusRef.current !== st) lastStatusRef.current = st;
             setStatus(st);
             if (Number.isFinite(pct)) setProgress(pct);
-            if (typeof msg.error === "string") setError(msg.error);
+            if (typeof msg.error === "string") {
+              setError(msg.error);
+              /* 失败原因同时补一条 error 日志行：横幅只在顶部显示，用户
+               *  按「错误 / 警告」筛选或回放时间线时看不到它（ISSUE #378）。 */
+              if (st === "FAILED" || st === "ERROR" || st === "CANCELLED") {
+                appendFailureLogLine(tid, msg.error, setLogs);
+              }
+            }
           }
           if (msg.workflowName || msg.status) {
             patchStepLogMeta(tid, {
@@ -209,7 +247,10 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         } else if (msg.type === "error") {
           if (lastStatusRef.current !== "FAILED") lastStatusRef.current = "FAILED";
           setStatus("FAILED");
-          if (typeof msg.error === "string") setError(msg.error);
+          if (typeof msg.error === "string") {
+            setError(msg.error);
+            appendFailureLogLine(tid, msg.error, setLogs);
+          }
           es.close();
           esRef.current = null;
         }
