@@ -67,7 +67,16 @@ export interface IOEditState {
   aliasBaseByKey: Record<string, ExposedAliasBase>;
 }
 export interface IOEditActions {
+  /** 开关 IO 编辑模式。关闭时**一并关掉 IO 预览**（见下一条的耦合说明）；
+   *  打开时不动预览。 */
   setIoEditMode: (on: boolean) => void;
+  /** 开关 IO 预览面板。关闭时**一并退出 IO 编辑模式**：面板已经在画面上消失，
+   *  节点卡片上再留着勾选框，作者手上就只剩一个「看不到结果、只看到选择器」的
+   *  半截状态。打开时**一并进入编辑模式**，让勾选框与面板同时可用。
+   *
+   *  两个方向都收在这里，而不是在视图层手写两处 setState —— 顶栏按钮、
+   *  画布按钮都只调这一个动作，谁都不许绕过（源码级守卫见
+   *  `workflow-editor-topbar-config.test.ts`）。 */
   setIoPreviewOpen: (open: boolean) => void;
   /** 同步富化下发的别名判定基准（只有内容真的变了才写，避免渲染回路）。 */
   setAliasBase: (next: Record<string, ExposedAliasBase>) => void;
@@ -117,8 +126,10 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     ioPreviewOpen: false,
     aliasBaseByKey: {},
 
-    setIoEditMode: (on) => set({ ioEditMode: on }),
-    setIoPreviewOpen: (open) => set({ ioPreviewOpen: open }),
+    setIoEditMode: (on) =>
+      set(on ? { ioEditMode: true } : { ioEditMode: false, ioPreviewOpen: false }),
+    setIoPreviewOpen: (open) =>
+      set(open ? { ioPreviewOpen: true, ioEditMode: true } : { ioPreviewOpen: false, ioEditMode: false }),
 
     setAliasBase: (next) =>
       set((state) => {

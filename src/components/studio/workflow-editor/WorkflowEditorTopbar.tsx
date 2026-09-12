@@ -72,14 +72,20 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   const ioPreviewOpen = useIOEditStore(selectIoPreviewOpen);
   const debugMode = useDebugStore((state) => state.debugMode);
   const toggleDebugMode = useDebugStore((state) => state.toggleDebugMode);
+  /* 开关编辑模式 / 预览一律走 store 动作（不要再手写 `ioApi.setState(...)`）：
+   *  关编辑模式连带走预览、关预览连带走编辑模式，两层耦合都落在 store 里。
+   *  绕过动作直接写状态就会留下「没有勾选框的预览面板」，或反过来留下
+   *  「面板已消失、勾选框还挂在节点上」的半截状态。 */
   const setIoEditMode = useCallback(
     (v: boolean | ((prev: boolean) => boolean)) =>
-      ioApi.setState((state) => ({ ioEditMode: typeof v === "function" ? v(state.ioEditMode) : v })),
+      ioApi.getState().setIoEditMode(typeof v === "function" ? v(ioApi.getState().ioEditMode) : v),
     [ioApi]
   );
   const setIoPreviewOpen = useCallback(
     (v: boolean | ((prev: boolean) => boolean)) =>
-      ioApi.setState((state) => ({ ioPreviewOpen: typeof v === "function" ? v(state.ioPreviewOpen) : v })),
+      ioApi
+        .getState()
+        .setIoPreviewOpen(typeof v === "function" ? v(ioApi.getState().ioPreviewOpen) : v),
     [ioApi]
   );
   const toast = useToast();
@@ -273,7 +279,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             type="button"
             onClick={() => setIoEditMode((value) => !value)}
             className={topBarButtonClass(ioEditMode ? "ioOn" : "outline", "compact")}
-            title="进入 IO 编辑模式：在每个节点参数前显示勾选框，勾选即把该参数暴露为工作流的外部输入或输出"
+            title="进入 IO 编辑模式：在每个节点参数前显示勾选框，勾选即把该参数暴露为工作流的外部输入或输出。退出编辑模式时会一并关闭 IO 预览"
           >
             {ioEditMode ? "✓ 编辑 IO 中" : "📌 编辑 IO"}
             {ioEditMode && Object.keys(workflowIO).length > 0 && (
@@ -287,21 +293,21 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
            *  Disabled outside edit mode — preview is meaningful only when
            *  there's an IO selection to render.  When the user opens the
            *  panel but hasn't entered edit mode, auto-flip edit on too,
-           *  so checkboxes remain useful alongside the preview.  Both levels
-           *  share this affordance (see the "编辑 IO" comment above). */}
+           *  so checkboxes remain usable alongside the preview.
+           *
+           *  两个方向都耦合：关预览会一并退出编辑模式（面板消失后画布上不该
+           *  再留一排没有结果的勾选框），关编辑模式也一并关预览。耦合落在 store
+           *  的 `setIoEditMode` / `setIoPreviewOpen` 上，不在这里手写两处 setState。 */}
           <button
             type="button"
-            onClick={() => {
-              if (!ioEditMode) setIoEditMode(true);
-              setIoPreviewOpen((value) => !value);
-            }}
+            onClick={() => setIoPreviewOpen((value) => !value)}
             disabled={!ioEditMode && !ioPreviewOpen && Object.keys(workflowIO).length === 0}
             className={topBarButtonClass(
               ioPreviewOpen ? "ioPreviewOn" : "outline",
               "compact",
               "disabled:opacity-40",
             )}
-            title="预览当前勾选的 IO 在最终表单中的样子；预览面板中每个名称都可点击重命名"
+            title="预览当前勾选的 IO 在最终表单中的样子；预览面板中每个名称都可点击重命名。关闭预览时会一并退出 IO 编辑模式"
           >
             {ioPreviewOpen ? "👁 关闭预览" : "👁 预览 IO"}
           </button>
