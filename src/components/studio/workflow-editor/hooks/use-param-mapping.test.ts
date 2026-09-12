@@ -145,6 +145,7 @@ describe("validateMapping", () => {
   const entry = (id: string, cls: "other" | "size" = "other") => ({
     id,
     nodeId: "5",
+    hostNodeId: "5",
     nodeTitle: "",
     cls,
     label: id,

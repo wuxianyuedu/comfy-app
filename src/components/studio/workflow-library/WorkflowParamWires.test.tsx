@@ -92,6 +92,32 @@ describe("measureWires", () => {
     expect(segment!.d.endsWith("300 50")).toBe(true);
   });
 
+  it("终点落在宿主行**端点圆点的圆心**上（不是整行的左沿中线）", () => {
+    /* 折叠成逐行参数之后一行是「标签行 + 控件行」两段结构，圆点锁在标签行中线；
+     * 按整行 50% 量会把线画到圆心下方十几像素处 —— 用户看到的正是「线没有连接
+     * 到端点上」（ISSUE #355）。 */
+    const container = document.createElement("div");
+    const dot = document.createElement("span");
+    dot.setAttribute("data-wire-anchor", "prompt?9::widget::text");
+    const portDot = document.createElement("span");
+    portDot.setAttribute("data-port-dot", "9::widget::text");
+    const row = document.createElement("div");
+    row.setAttribute("data-io-key", "9::widget::text");
+    container.append(dot, portDot, row);
+    container.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 0, height: 0 }) as DOMRect;
+    dot.getBoundingClientRect = () =>
+      ({ left: 100, top: 10, width: 12, height: 12 }) as DOMRect;
+    /* 整行很高（标签 + 控件），而其圆心（圆点）在上方。 */
+    row.getBoundingClientRect = () =>
+      ({ left: 300, top: 40, width: 240, height: 80 }) as DOMRect;
+    portDot.getBoundingClientRect = () =>
+      ({ left: 294, top: 42, width: 12, height: 12 }) as DOMRect;
+    const [segment] = measureWires(container, [wire]);
+    /* 终点 = 圆点圆心 (294 + 6, 42 + 6) = (300, 48)，不是整行中线 (300, 80)。 */
+    expect(segment!.d.endsWith("300 48")).toBe(true);
+  });
+
   it("任一端不在就整条不画（不留悬空线头）", () => {
     const container = document.createElement("div");
     const dot = document.createElement("span");

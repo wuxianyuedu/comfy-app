@@ -53,6 +53,8 @@ export type ParamClass =
   | "size-height"
   | "size-aspect"
   | "size-megapixels"
+  /** 对齐倍数（absorbed into the same picker as 比例/像素）. */
+  | "size-multiple"
   | "reference-image"
   | "first-frame"
   | "last-frame"
@@ -64,6 +66,7 @@ export const SIZE_CLASSES: readonly ParamClass[] = [
   "size-height",
   "size-aspect",
   "size-megapixels",
+  "size-multiple",
 ];
 
 /** 一个「对外参数」（= 契约里的一个统一口子，落到工作流的某个端口上）。
@@ -73,8 +76,19 @@ export const SIZE_CLASSES: readonly ParamClass[] = [
 export interface ParamEntry {
   /** 契约内的稳定键（`ExposedParamClass` 或带序号的参考图口）。 */
   id: string;
-  /** 该口子落到的端口所属节点（旧聚类路径带，契约路径为空串）。 */
+  /** 该口子落到的端口所属节点（旧聚类路径带；契约路径由候选端口派生，
+   *  见 `hostNodeId`）。 */
   nodeId: string;
+  /** 承载这个对外参数的**宿主节点 id** —— 画布卡片的位置、映射线的宿主端、
+   *  以及连线的合法性判定都以它为准。
+   *
+   *  契约路径下 `nodeId` 是空串（契约条目与工作流无关），但卡片仍要挂在「这个
+   *  口真正落到的那一行所在的节点」旁边：此前各处一律读 `nodeId`，于是契约路径
+   *  下卡片算不出位置（`placeParamNodes` 查不到宿主坐标 → 一张卡片都不渲染）、
+   *  边指向空节点、连线闸门恒定失败 —— 用户表现为「对外参数端点拉不了线」。
+   *  宿主 id 从候选端口派生（落点所在节点优先，其次首个候选），是同一份事实的
+   *  最近可用近似。 */
+  hostNodeId: string;
   nodeTitle: string;
   cls: ParamClass;
   /** 展示名：契约里的统一名（与具体工作流无关）。 */
@@ -82,6 +96,16 @@ export interface ParamEntry {
   /** 该契约口子在当前工作流里的候选端口（ioKey 保持 workflowIO 的原始键）。
    *  自动判定从中挑一个作为默认落点；作者也可以在画布上改成别的端口。 */
   pins: { ioKey: string; name: string; type: string; defaultValue: unknown }[];
+}
+
+/** 端口所属的节点 id（ioKey 形如 `<nodeId>::<kind>::<name>`）。
+ *
+ *  端口名本身**可能含 `::`**，所以只切前两段取节点 id —— 后两段不参与解析。
+ *  放在本模块（而不是一个更上层的模块）是因为 `buildParamEntries` 派生宿主节点
+ *  id 时也要用它，反向依赖会成环。 */
+export function nodeIdOfIoKey(ioKey: string): string {
+  const parts = ioKey.split("::");
+  return parts.length >= 2 ? parts[0]! : ioKey;
 }
 
 /** 分类默认名（作者未改名时用来填充「对外参数名」列）。 */
@@ -93,6 +117,7 @@ const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
   "size-height": "高度",
   "size-aspect": "宽高比",
   "size-megapixels": "像素量",
+  "size-multiple": "倍数",
   "reference-image": "参考图",
   "first-frame": "首帧",
   "last-frame": "尾帧",
@@ -146,6 +171,12 @@ export function classifyPin(e: WorkflowIOEntry): ParamClass {
   }
   if (/aspect_?ratio|宽高比|纵横比|比例/.test(text)) return "size-aspect";
   if (/megapixel|百万像素|\b像素\b/.test(text)) return "size-megapixels";
+  /* 对齐倍数（`multiple` / `倍数`）：它与比例 / 像素由同一个控件录入
+   *  （见 DimensionControl 的 ResolutionSelector），因此同属「尺寸」语义 ——
+   *  此前被判成 `other`，契约里根本出不来，用户看到「尺寸只有一个比例口，
+   *  倍数哪去了」（ISSUE #355）。 */
+  if (/\bmultiple\b|upscale_(factor|by|amount)|倍率|倍数|对齐倍数/.test(text))
+    return "size-multiple";
   if (/prompt|提示词|描述词|描述/.test(text)) return "prompt";
   /* 无类型但默认值很长（>40 字符）的文本一般是提示词框 —— 与工作流库的控件
    * 推导启发式（workflow-encapsulation / workflow-detail-io）保持一致，
@@ -262,30 +293,40 @@ export function paramOutputPorts(
   });
 
   const target = resolvedTarget ?? null;
-  /* ① 有生效落点：一颗点，类型与名字都取自真正落到的那一行。 */
-  const raw = target ? io?.[target] : undefined;
-  if (target && raw) {
-    return [toPort(target, raw.name, raw.type, true, true)];
-  }
-  /* ② 未连线：逐个列出候选端口（同一个「尺寸」口把宽/高/宽高比/像素量都摆出来），
-   *    每颗点都对得上自己那一行。
+  /* **每个候选端口一颗圆点**（不论当前有没有落点）：同一张「尺寸」卡片要把
+   *  宽 / 高 / 宽高比 / 像素量 / 倍数各自的出口都摆出来，作者拖哪一颗就连到
+   *  哪个候选（ISSUE #355：「尺寸这里不是有多个输出端口吗，现在怎么还是一个
+   *  比例」）。只列「当前生效落点」那一颗的话，卡片上就只剩一根线可以拉，
+   *  其余候选连端点都没有。
    *
-   *    `reachableKeys` 给的是「宿主卡片上真的画得出来、连得上的那一行」的 ioKey
-   *    集合（被组合控件折叠成逐行参数之后，露出来的行就是全部可连行）。给定时只
-   *    列这些候选 —— 端点画在一颗落不上去的句柄上，拖过去只会被闸门判成非法，
-   *    用户看到的就是「点击端点拉线出现禁用标记」（ISSUE #355）。集合缺省
-   *    （调用方拿不到宿主表单的折叠结果）时保持原样，不擅自藏候选。
+   *  `reachableKeys` 给的是「宿主卡片上真的画得出来、连得上的那一行」的 ioKey
+   *  集合（组合控件折叠成逐行参数之后，露出来的行就是全部可连行）。给定时只列
+   *  这些候选 —— 端点画在一颗落不上去的句柄上，拖过去只会被闸门判成非法，用户
+   *  看到的就是「点击端点拉线出现禁用标记」。集合缺省（调用方拿不到宿主表单的
+   *  折叠结果）时保持原样，不擅自藏候选。
    *
-   *    真的一个可连候选都没有时退到占位端口（卡片仍画得出端点，见 ③）—— 一张
-   *    候选全被组合控件吞掉的卡片若画出三四颗连不上的点，比不画更误导。 */
+   *  生效落点若不在候选里（历史数据 / 端口已从 IO 里移除）也要补一颗并标 active
+   *  —— 否则「当前落点」在卡片上凭空消失，读者答不出这个口现在连着哪。 */
   const candidates =
     reachableKeys && reachableKeys.size > 0
       ? entry.pins.filter((pin) => reachableKeys.has(pin.ioKey))
       : entry.pins;
+  const targetRaw = target ? io?.[target] : undefined;
+  const targetInCandidates =
+    !!target && candidates.some((pin) => pin.ioKey === target);
   if (candidates.length > 0) {
-    return candidates.map((pin) =>
-      toPort(pin.ioKey, pin.name, pin.type, false, false),
+    const ports = candidates.map((pin) =>
+      toPort(pin.ioKey, pin.name, pin.type, true, pin.ioKey === target),
     );
+    if (target && targetRaw && !targetInCandidates) {
+      ports.unshift(toPort(target, targetRaw.name, targetRaw.type, true, true));
+    }
+    return ports;
+  }
+  /* 连候选都没有：有生效落点时仍给那一颗（如实呈现当前落点），否则退到占位
+   * 端口 —— 卡片始终画得出端点。 */
+  if (target && targetRaw) {
+    return [toPort(target, targetRaw.name, targetRaw.type, true, true)];
   }
   /* ③ 连候选都没有：占位端口，卡片仍画得出端点（没有可落的地方）。 */
   return [toPort("", entry.label, undefined, false, false)];
@@ -363,8 +404,12 @@ function buildContractEntries(
     const override = pins.map((pin) => labels?.[pin.ioKey]).find(Boolean);
     out.push({
       id: def.id,
-      /* 落点由映射表决定，这里不带宿主节点（分组展示不需要它）。 */
+      /* 落点由映射表决定，`nodeId` 不带宿主节点（分组展示不需要它）。 */
       nodeId: "",
+      /* 卡片挂载 / 连线需要宿主节点 id：取候选端口所属的节点（首个候选）。
+       * 契约条目跨节点的情况不存在（一个口子落到一个节点的某一行），首个候选
+       * 即最近可用近似。 */
+      hostNodeId: nodeIdOfIoKey(pins[0]?.ioKey ?? ""),
       nodeTitle: "",
       cls: def.cls,
       label: override ?? def.label,
@@ -405,6 +450,7 @@ function buildLegacyEntries(
       entry: {
         id: key,
         nodeId: entry.nodeId,
+        hostNodeId: entry.nodeId,
         nodeTitle: entry.nodeTitle ?? "",
         cls,
         label: override ?? entry.label ?? CLASS_FALLBACK_LABEL[cls],
@@ -433,6 +479,8 @@ const AUTO_MAPPABLE: Record<ParamClass, (e: WorkflowIOEntry) => boolean> = {
     /^(height|base_height|h|高度|纵向)$/.test(searchText(e).trim()),
   "size-aspect": (e) => /aspect_?ratio|宽高比|纵横比|比例/.test(searchText(e)),
   "size-megapixels": (e) => /megapixel|百万像素|\b像素\b/.test(searchText(e)),
+  "size-multiple": (e) =>
+    /\bmultiple\b|upscale_(factor|by|amount)|倍率|倍数|对齐倍数/.test(searchText(e)),
   "reference-image": (e) => isImagePin(e),
   "first-frame": (e) => isImagePin(e),
   "last-frame": (e) => isImagePin(e),
@@ -732,7 +780,7 @@ export function entryIdForPin(
  *  handle id**。
  *
  *  ⚠️ 现状：画布渲染侧**直接用 ioKey 当 handle id**（见 WidgetInputRow 的
- *  `handleId` 与 workflow-param-input-rows）。`pin 名` 这个旧口径在「两个节点
+ *  `handleId`）。`pin 名` 这个旧口径在「两个节点
  *  有同名 pin」时会让边接到同名 handle 的第一处 —— 表现就是「线连到了别的节点
  *  上」。本函数保留给只读呈现（库里那层的连线量测按 pin 名找锚点），画布手势
  *  一律走 ioKey。
@@ -938,24 +986,18 @@ export const PARAM_NODE_DOT_OFFSET = -(
   PARAM_NODE_DOT_SIZE / 2
 );
 
-/** 卡片高度：头部 + 输入端口区 + 带类型的输出端口区 + 上下留白。
+/** 卡片高度：头部 + 带类型的输出端口区 + 上下留白。
  *
  *  输出端口条数由 `outputPortCount` 给（视图用 `paramOutputPorts` 现算，见
  *  `WorkflowParamCard`）——几何与渲染必须同口径，否则 `placeParamNodes` 算出的
  *  位置与卡片实际高度对不上，卡片会互相压住。缺省按「至少一条」处理，
  *  与 `paramOutputPorts` 的兜底一致。
  *
- *  `inputRowCount` 同理：未接落点的参数不再由组合控件吞掉，而是补回自己的端口行
- *  （见 workflow-param-input-rows），卡片高度随之变化。 */
-export function paramNodeHeight(
-  entry: ParamEntry,
-  outputPortCount = 1,
-  inputRowCount?: number,
-): number {
-  const inputRows = Math.max(1, inputRowCount ?? entry.pins.length);
+ *  卡片体只有输出端口这一段（一行 = 端点 + 参数名 + 类型），不再另列「输入端口
+ *  行」——那是同一批端口的重复表达（见 WorkflowParamCard 的说明）。 */
+export function paramNodeHeight(outputPortCount = 1): number {
   return (
     PARAM_NODE_HEADER_H +
-    inputRows * PARAM_NODE_ROW_H +
     Math.max(1, outputPortCount) * PARAM_NODE_OUTPUT_ROW_H +
     PARAM_NODE_PAD_Y
   );
@@ -986,15 +1028,18 @@ export function placeParamNodes(
   const cursorByNode: Record<string, number> = {};
   const columnByNode: Record<string, number> = {};
   for (const entry of entries) {
-    const host = hostPosById[entry.nodeId];
+    /* 宿主节点用 `hostNodeId`（契约路径下 `nodeId` 是空串，卡片会一张都排不出来
+     *  —— 用户表现为「画布上找不到对外参数卡片」，见 ParamEntry.hostNodeId）。 */
+    const host = hostPosById[entry.hostNodeId] ?? hostPosById[entry.nodeId];
     if (!host) continue;
-    const column = columnByNode[entry.nodeId] ?? 0;
-    const rowY = cursorByNode[entry.nodeId] ?? 0;
+    const hostKey = hostPosById[entry.hostNodeId] ? entry.hostNodeId : entry.nodeId;
+    const column = columnByNode[hostKey] ?? 0;
+    const rowY = cursorByNode[hostKey] ?? 0;
     out[paramNodeId(entry.id)] = {
       x: host.x - GROUP_OFFSET_X - column * PARAM_NODE_COLUMN_W,
       y: host.y + rowY,
     };
-    const nextRow = rowY + paramNodeHeight(entry) + PARAM_NODE_GAP;
+    const nextRow = rowY + paramNodeHeight() + PARAM_NODE_GAP;
     const columnCapacity =
       PARAM_NODES_PER_COLUMN *
       (PARAM_NODE_HEADER_H +
@@ -1002,10 +1047,10 @@ export function placeParamNodes(
         PARAM_NODE_OUTPUT_ROW_H +
         PARAM_NODE_GAP);
     if (nextRow > columnCapacity) {
-      columnByNode[entry.nodeId] = column + 1;
-      cursorByNode[entry.nodeId] = 0;
+      columnByNode[hostKey] = column + 1;
+      cursorByNode[hostKey] = 0;
     } else {
-      cursorByNode[entry.nodeId] = nextRow;
+      cursorByNode[hostKey] = nextRow;
     }
   }
   return out;
