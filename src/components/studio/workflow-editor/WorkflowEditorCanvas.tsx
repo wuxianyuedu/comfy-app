@@ -91,6 +91,8 @@ export interface WorkflowEditorCanvasProps {
   onEdgesDelete?: (edges: Edge[]) => void;
   /** 写回连线表：选中节点后由本画布把「相关连线」标记写进 edges（见 hook 注释）。 */
   setEdges: (updater: (edges: Edge[]) => Edge[]) => void;
+  /** 写回节点表：同一帧里把「相关端口行」标记写进节点 data（见 hook 注释）。 */
+  setNodes: (updater: (nodes: Node[]) => Node[]) => void;
 }
 
 export function WorkflowEditorCanvas({
@@ -109,6 +111,7 @@ export function WorkflowEditorCanvas({
   isValidConnection,
   onEdgesDelete,
   setEdges,
+  setNodes,
 }: WorkflowEditorCanvasProps) {
   /* Stable identity → colour lookup for the MiniMap.  Depends on nothing
    *  (role colours are static), so MiniMap never re-renders due to a fresh
@@ -120,7 +123,7 @@ export function WorkflowEditorCanvas({
 
   /* 选中节点 → 相关连线高亮（上下游加粗）。标记写在 edges 的 data 上，
    *  由 <WorkflowEdge> 统一加样式；这里只负责在选中变化时重算。 */
-  useRelatedEdgesHighlight(setEdges);
+  useRelatedEdgesHighlight(setEdges, { setNodes });
 
   /* ── error#008 假告警过滤器（ISSUE #374）──
    *  见 `isEdgeHandleCullingNoise` 的文档：视口裁剪下「长边可见 / 端点未挂载」

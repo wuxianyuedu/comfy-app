@@ -11,6 +11,17 @@ import { friendlyInputName } from "@/lib/comfyui/node-titles";
 import { sanitizeComboLabel } from "../workflow-utils";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";
+import {
+  OUTPUT_PORT_HANDLE_PREFIX,
+  PORT_ROW_TONES,
+  portDotGlow,
+  resolvePortRowTone,
+  type PortRowTone,
+} from "./flow-focus-endpoints";
+import {
+  NODE_PORT_FOCUS_ACTIVE_KEY,
+  readPortFocusRole,
+} from "./hooks/use-related-edges-highlight";
 
 interface FlowNodePinRowsProps {
   data: WorkflowNodeData;
@@ -27,6 +38,21 @@ export function FlowNodePinRows({
   uniqueConnEntries,
   outputs,
 }: FlowNodePinRowsProps) {
+  /* 选中节点时端口行跟着连线一起变：有连线落到的那一行提亮、端口圆点放大，
+   *  没有连线落到的行压暗。级别由 `useRelatedEdgesHighlight` 写在本节点 data 上
+   *  （与连线标记同一帧算出），行渲染层只读。 */
+  const nodeData = data as unknown as Record<string, unknown>;
+  const portFocusActive = nodeData[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
+  /* 一行两端的 Handle id 不同（输入名 / `out:<输出名>`），但观感要一致：两端的
+   * 级别合成一档 —— focused > related > 「都无关」压暗。 */
+  const toneOf = (...handles: (string | undefined)[]): PortRowTone => {
+    const roles = handles.map((handle) => readPortFocusRole(nodeData, handle));
+    for (const role of roles) {
+      const tone = resolvePortRowTone({ role, hasSelection: true });
+      if (tone === "focused" || tone === "related") return tone;
+    }
+    return resolvePortRowTone({ role: "none", hasSelection: portFocusActive });
+  };
   return (
     <div
       className="border-b border-white/5 py-0.5"
@@ -59,6 +85,11 @@ export function FlowNodePinRows({
             : undefined;
           const outDisplay = outRaw?.localized ?? outName;
 
+          /* 端口行的观感：两端取一致的一档（见 toneOf）。 */
+          const tone = PORT_ROW_TONES[
+            toneOf(inName, outName ? `${OUTPUT_PORT_HANDLE_PREFIX}${outName}` : undefined)
+          ];
+
           return (
             <div
               // Key includes both names so number-slot ports ("1", "2", …)
@@ -67,6 +98,9 @@ export function FlowNodePinRows({
               className="relative flex h-[22px] items-center pl-5 pr-5 text-[11px]"
               data-pin-input={inName}
               data-pin-output={outName}
+              /* 相关行提亮背景：线加粗了、落到的那一行也跟着亮，视线从线落到行上。
+                 无关行压暗是**整行**的（含标签与端口），由 style.opacity 统一施加。 */
+              style={{ background: tone.background, opacity: tone.opacity }}
             >
               {inEntry && (
                 <>
@@ -81,7 +115,10 @@ export function FlowNodePinRows({
                     style={{
                       left: 5,
                       background: inCol,
-                      boxShadow: `0 0 6px ${inCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
+                      /* 相关行的端口放大 + 光晕增强：线是接到这一颗点上的。 */
+                      width: tone.dotSize,
+                      height: tone.dotSize,
+                      boxShadow: portDotGlow(inCol, tone.dotGlowStrong),
                     }}
                     title={`${inName} (${inType})`}
                   />
@@ -105,7 +142,8 @@ export function FlowNodePinRows({
                     />
                   )}
                   <span
-                    className="min-w-0 flex-1 truncate text-left text-[11px] text-zinc-200"
+                    className="min-w-0 flex-1 truncate text-left text-[11px]"
+                    style={{ color: tone.labelColor, fontWeight: tone.labelWeight }}
                     title={String(inName)}
                   >
                     {inLabel}
@@ -115,7 +153,8 @@ export function FlowNodePinRows({
               {outEntry && (
                 <>
                   <span
-                    className="min-w-0 flex-1 truncate text-right text-[11px] text-gray-200"
+                    className="min-w-0 flex-1 truncate text-right text-[11px]"
+                    style={{ color: tone.labelColor, fontWeight: tone.labelWeight }}
                     title={`${outName} (${outType})`}
                   >
                     {outDisplay}
@@ -143,8 +182,15 @@ export function FlowNodePinRows({
                       background: outCol,
                       boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
                       ...(io?.ioEditMode
-                        ? { width: 4, height: 4, opacity: 0.35, right: 0 }
-                        : { width: 10, height: 10 }),
+                        ? {
+                            /* IO 编辑模式下端点整体缩到几乎不可见（不误导作者去连
+                             * 输出口），提亮档只放大 1px 保持「这是同一个锚点」。 */
+                            width: tone.dotSize === 12 ? 5 : 4,
+                            height: tone.dotSize === 12 ? 5 : 4,
+                            opacity: 0.35,
+                            right: 0,
+                          }
+                        : { width: tone.dotSize, height: tone.dotSize }),
                     }}
                     title={`${outDisplay} (${outType})`}
                   />
