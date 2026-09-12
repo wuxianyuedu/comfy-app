@@ -2005,7 +2005,8 @@ export function SettingsPageView({
             </span>
             <div className="ml-auto flex items-center gap-2">
               {/* 打开运行中的 ComfyUI 界面：桌面壳内在同一主窗口开一个「页签」
-                      （iframe 内嵌）；浏览器/dev 模式回退到系统浏览器。 */}
+                      （iframe 内嵌）；浏览器/dev 模式同样落在应用内页签。
+                      旁边的「在浏览器打开」是并列出口，不是替代（见该按钮注释）。 */}
               <Btn
                 onClick={() => void c.openComfy()}
                 /* 只在「明确未运行」时禁用：探测进行中（probing）也允许点一下，
@@ -2016,6 +2017,19 @@ export function SettingsPageView({
                 }
               >
                 {c.comfyOpening ? "打开中…" : "打开查看"}
+              </Btn>
+              {/* 并列出口：同一个地址再交给系统默认浏览器（放大看 / 装插件 /
+                      多屏）。页签内嵌照旧，这里不做替换。地址由服务端自己探
+                      （comfyOpen），不采信界面里缓存的旧 base。禁用口径与
+                      「打开查看」一致：只看「明确未运行」。 */}
+              <Btn
+                onClick={() => void c.openComfyInBrowser()}
+                disabled={
+                  c.comfyBrowserOpening ||
+                  (!c.comfyStatus?.up && !c.comfyStatus?.probing)
+                }
+              >
+                {c.comfyBrowserOpening ? "打开中…" : "在浏览器打开"}
               </Btn>
               <Btn
                 onClick={() => void c.startComfy()}
