@@ -715,18 +715,83 @@ export interface LogStoreState {
    */
   revision: number;
   /**
-   * 「已读水位」的长度口径：翻到历史位置那一刻**过滤后**的条数。
-   * 页脚「有 N 条新的日志」= 当前 filteredLogs.length − 它（见 selectNewLogCount）。
-   */
-  viewLength: number;
-  /**
-   * 「已读水位」：翻到历史页那一刻的 `revision`。
+   * 「已翻过去的历史」：翻到这一页那一刻，窗口之后本来就有多少条。
    *
-   * 面板据此算出「停在历史页期间又新来了多少条日志」并在页脚提示——历史页的
-   * 内容不会因为新日志而改变，没有这条提示，用户看到的就是「计数在涨、面板不
-   * 动」（ISSUE #346）。回到第 1 页即视为已读，水位推到当前 revision。
+   * 页脚「有 N 条新的日志」= 窗口之后的条数 − 它（见 selectNewLogCount）——
+   * 否则停在第 2 页会一开口就报「有 200 条新的日志」，而那 200 条是用户自己
+   * 翻过去的。第 1 页恒为 0。
+   */
+  viewBaselineAfter: number;
+  /**
+   * 「已读水位」：翻到历史位置那一刻**已经看到**的条目。
+   *
+   * 它是投影计数（`selectNewLogCount`）的输入，回答「我看到的之后又来了几条」。
+   * 同时也决定贴底时滚动到哪里（见 LogPanel 的贴底基线）——两者用同一份水位，
+   * 所以「面板说有几条新的」与「实际滚到哪」永远不会各说各话。
+   */
+  viewSeenIds: ReadonlySet<string>;
+  /**
+   * 「贴底基线」：面板开着且用户贴着底看时，**只追到这里**。
+   *
+   * 它是「日志一直在动、选不中想复制的那一行」的根治点（ISSUE #262 复审）：
+   * 面板此前用「内容一变就滚到 `scrollHeight`」贴底，而日志每 2s 轮询一次、
+   * 上限 2000 条时几乎每轮都有新行——于是内容每两秒整体上移一次，用户刚框住的
+   * 文本立刻被滚动冲掉。现在贴底只追到「面板开着那一刻已看过的最后一条」，
+   * 新行在下面**默默累积**（页脚同时给出「有 N 条新的日志 · 回到最新」出口），
+   * 看不看、什么时候看由用户决定。
+   *
+   * 它与「已读水位」（`viewSeenIds`）是同一份东西的两种用途：水位决定**滚到哪**
+   * 与**报几条新的**，因此两处永远不会互相矛盾。
+   */
+  followBaseline: number;
+  /**
+   * 用户主动按下「回到最新」的时刻；此后贴底直接追到最新，不再受
+   * {@link followBaseline} 约束。
+   */
+  followResetAt: number;
+  /**
+   * 「已读水位」的生成号：翻到历史页那一刻的 `revision`。
+   *
+   * 判据是 `revision` 变化（时间线真的变过）而不是「末条变了」：按时刻排序后，
+   * 一条**迟到的旧时刻行**会插进中间、末条不动——只看末条会漏掉这类新增
+   * （ISSUE #346）。
+   *
+   * ⚠️ 时间线被环形缓冲截断时 `revision` **不推进**（见 appendFileLogs）：
+   * 截断没有让任何一条真正的新日志落板，而推进它会把下面这条推论的循环打断——
+   * 「revision 变过 → 有新内容 → 重新取水位」，那会让面板把**每两秒一次的
+   * 新日志**都当成用户已经读过（水位被反复刷到最新），页脚于是永远报不出
+   * 「有 N 条新的日志」（ISSUE #262 复审：翻页翻不动、提示不出现）。
    */
   viewRevision: number;
+  /**
+   * 第 1 页窗口的**锚点**：用户「正在看的那一段」的头一条 id（null = 不锚定）。
+   *
+   * 为什么需要它：第 1 页取的是时间线的**尾部 200 条**。日志每 2s 轮询一次，
+   * 每来一条新行，这 200 条的窗口就整体前移一格——React 会卸载掉最上面那一条、
+   * 挂上新的最末一条。用户刚在顶部某一行里框住的文本**随节点一起被卸载**，选区
+   * 于是消失（ISSUE #262 复审：「刚选择就刷新把我的选择弄没了」，在真实浏览器里
+   * 实测到的正是这条）。
+   *
+   * 锚定之后，「用户看过的那一段」钉在原地、新行列在它**之后**：DOM 节点不重建，
+   * 选区自然不会被冲掉；想追最新也可以亲手往下滚。
+   *
+   * 重取时机（= 用户「转到最新」）：打开面板 / 点「回到最新」 / 换页 / 切筛选 /
+   * 搜索 / 用户自己滚到底部。
+   */
+  anchorId: string | null;
+  /**
+   * 贴底看最新（true，默认）：面板停在「已看过的最新一条」处，新日志在下面累积。
+   * false = 用户手动上滚离开了底部，或自己关掉了自动滚动。
+   *
+   * 它同时决定页脚「回到最新」出口是否出现（selectShouldPinToLatest），
+   * 因此必须与 {@link LogStoreState.setFollowBottom} 一起看在 store 里——
+   * 视图只读它，不再各存一份。
+   */
+  autoScroll: boolean;
+  /** 用户滚到底部/离开底部时由视图上报（见 setFollowBottom）。 */
+  setFollowBottom: (follow: boolean) => void;
+  /** 用户点击「回到最新」：解绑贴底基线并回到第 1 页（见 jumpToLatest）。 */
+  jumpToLatest: () => void;
   addEntry: (entry: Omit<LogEntry, "id" | "time" | "seq">) => void;
   appendFileLogs: (entries: LogEntry[]) => void;
   setSessionStart: (sessionStart: number | null) => void;
@@ -764,6 +829,12 @@ export interface LogPanelSlice {
   page: number;
   pageSize: number;
   bootId: string | null;
+  /** 贴底看最新（见 {@link LogStoreState.autoScroll}）。 */
+  autoScroll: boolean;
+  /** 第 1 页窗口的锚点（见 {@link LogStoreState.anchorId}）。 */
+  anchorId: string | null;
+  /** 「已翻过去的历史」条数（见 {@link LogStoreState.viewBaselineAfter}）。 */
+  viewBaselineAfter: number;
 }
 
 /**
@@ -799,6 +870,9 @@ function viewOf(state: LogStoreState): LogPanelView {
     page: state.page,
     pageSize: state.pageSize,
     bootId: state.bootId,
+    autoScroll: state.autoScroll,
+    anchorId: state.anchorId,
+    viewBaselineAfter: state.viewBaselineAfter,
   };
 }
 
@@ -811,6 +885,9 @@ interface LogPanelView {
   page: number;
   pageSize: number;
   bootId: string | null;
+  autoScroll: boolean;
+  anchorId: string | null;
+  viewBaselineAfter: number;
 }
 
 /**
@@ -845,6 +922,9 @@ function applyView(derived: ReturnType<typeof derive>, view: LogPanelView) {
       page: view.page,
       pageSize: view.pageSize,
       bootId: view.bootId,
+      autoScroll: view.autoScroll,
+      anchorId: view.anchorId,
+      viewBaselineAfter: view.viewBaselineAfter,
     },
   };
 }
@@ -869,14 +949,22 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
     page: 1,
     pageSize: LOG_PAGE_SIZE,
     bootId: null,
+    autoScroll: true,
+    anchorId: null,
+    viewBaselineAfter: 0,
   },
   page: 1,
   pageSize: LOG_PAGE_SIZE,
+  autoScroll: true,
   sessionStart: null,
   bootId: null,
   revision: 0,
   viewRevision: 0,
-  viewLength: 0,
+  viewSeenIds: new Set<string>(),
+  viewBaselineAfter: 0,
+  followBaseline: 0,
+  followResetAt: 0,
+  anchorId: null,
 
   addEntry: (entry) =>
     set((state) => {
@@ -906,16 +994,28 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
        * counts），与「追加空数组时状态保持不变」的既有契约一致。 */
       if (fresh.length === 0) return { logs: state.logs };
       const logs = mergeTimeline(state.logs, fresh);
-      /* 批次里全是重复行 → 时间线没变，不推进 revision（否则「有 N 条新的日志」
-       * 会被重复行刷成假计数）。 */
+      /* 全批是重复行（或全被会话起点裁掉）→ 时间线没变，什么都不推进。 */
       if (logs === state.logs) return { logs: state.logs };
+      /* 批次里到底有没有**一条真正落板的新行**？
+       *
+       * 不能用「长度有没有变」判断：时间线封顶（环形缓冲到上限）之后，新行会顶掉
+       * 同样多条最旧的行，长度恒等于 MAX_LOG_ENTRIES——明明是「有新日志」，长度
+       * 却说他「没有」。判据只能是**身份**：新行是否出现在合并后的时间线里。
+       *
+       * 这一条同时决定两件事：
+       *   1. `revision` 只在真的落了新行时才推进。截断本身不推进，否则页脚会把
+       *      「时间线右移一格」也当成有新日志而重新取水位，新行当场被标成已读
+       *      （ISSUE #262 复审：提示永远不出现 → 用户读到的就是「翻页翻不动」）；
+       *   2. 贴底基线的推进同样只认新行，内容不会被每两秒一次的轮询反复拉动。 */
+      const landed = new Set(logs.map((entry) => entry.id));
+      const hasNew = fresh.some((entry) => landed.has(entry.id));
       return applyView(
         derive(
           logs,
           state.filter,
           state.search,
           state.origin,
-          state.revision + 1,
+          hasNew ? state.revision + 1 : state.revision,
         ),
         viewOf(state),
       );
@@ -967,7 +1067,10 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
                 { ...viewOf(state), bootId, page: 1 },
               ),
               viewRevision: state.revision + 1,
-              viewLength: 0,
+              viewSeenIds: new Set<string>(),
+              viewBaselineAfter: 0,
+              followResetAt: Date.now(),
+              anchorId: null,
             }
           : { header: { ...state.header, bootId } }),
       };
@@ -990,8 +1093,14 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       );
       return {
         ...applyView(derived, next),
+        /* 过滤条件变了 = 用户看到的这一段也变了：水位换成切完之后的那一段，
+         * 新到的行仍留在水位之外，页脚的「有 N 条新的日志」因此不会凭空归零。 */
+        viewSeenIds: currentWatermark(state),
         viewRevision: state.revision,
-        viewLength: derived.filteredLogs.length,
+        /* 切筛选 / 搜索都会把页码拉回第 1 页 → 窗口就是最新一段，基线归零。 */
+        viewBaselineAfter: 0,
+        followResetAt: 0,
+        ...anchorOf(state),
       };
     }),
 
@@ -1007,8 +1116,14 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       );
       return {
         ...applyView(derived, next),
+        /* 过滤条件变了 = 用户看到的这一段也变了：水位换成切完之后的那一段，
+         * 新到的行仍留在水位之外，页脚的「有 N 条新的日志」因此不会凭空归零。 */
+        viewSeenIds: currentWatermark(state),
         viewRevision: state.revision,
-        viewLength: derived.filteredLogs.length,
+        /* 切筛选 / 搜索都会把页码拉回第 1 页 → 窗口就是最新一段，基线归零。 */
+        viewBaselineAfter: 0,
+        followResetAt: 0,
+        ...anchorOf(state),
       };
     }),
 
@@ -1024,19 +1139,80 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       );
       return {
         ...applyView(derived, next),
+        /* 过滤条件变了 = 用户看到的这一段也变了：水位换成切完之后的那一段，
+         * 新到的行仍留在水位之外，页脚的「有 N 条新的日志」因此不会凭空归零。 */
+        viewSeenIds: currentWatermark(state),
         viewRevision: state.revision,
-        viewLength: derived.filteredLogs.length,
+        /* 切筛选 / 搜索都会把页码拉回第 1 页 → 窗口就是最新一段，基线归零。 */
+        viewBaselineAfter: 0,
+        followResetAt: 0,
+        ...anchorOf(state),
       };
     }),
 
-  /* 翻页时更新「已读水位」：进入历史页 → 记下当前 revision（此后新增的才算
-   * 「新来的」）；回到第 1 页 → 推到当前 revision（已读）。 */
+  /* 翻页 = 用户「把这一刻的时间线当作已读基准」：水位取到当前位置，此后新增的
+   * 行才算「新来的」，页脚据此报数（ISSUE #346）。
+   *
+   * 水位**不能**按「切完之后那一页的内容」取：停在第 3 页时说「我只看到这 200 条」
+   * 并不成立——比他更新、他已经放弃追赶的那一大段同样不该算「新的」。实测正是
+   * 这个错法让页脚从「有 401 条新的日志」开始报数（#262 复审）。
+   *
+   * 贴底基线同时按当前水位重取：换页 = 用户要在这里停下来看，新行只累积不推动。 */
   setPage: (page) =>
+    set((state) => {
+      const nextPage = Math.max(1, page);
+      const seen = currentWatermark(state);
+      return {
+        page: nextPage,
+        header: { ...state.header, page: nextPage },
+        viewSeenIds: seen,
+        viewRevision: state.revision,
+        /* 「已翻过去的历史」= 第 1 页之外、压在这一页上面的那些条数。
+         * 第 1 页恒为 0（窗口就是最新一段，其后本来就没有东西），否则用户一停下
+         * 就会被报「有 200 条新的日志」——而那 200 条是他自己刚翻过去的。 */
+        viewBaselineAfter:
+          nextPage === 1
+            ? 0
+            : Math.max(0, state.filteredLogs.length - nextPage * state.pageSize),
+        followBaseline: Math.max(0, state.filteredLogs.length - 1),
+        followResetAt: 0,
+        ...anchorOf(state),
+      };
+    }),
+
+  /**
+   * 贴底看最新 vs. 追最新：贴底（true）时面板按水位停在用户读过的地方，日志
+   * 只在下面累积（页脚给出新增条数）；追最新（false）时不再自动滚动。
+   *
+   * `autoScroll` 过去只在视图层的 useState 里，现在同时写进 store：贴底基线的
+   * 解绑（{@link followBaseline}）与视图的贴底判定必须用同一份状态，否则会出现
+   * 「面板说不自动滚动、却仍在滚」这种两边各说各话的形态。
+   */
+  setFollowBottom: (follow) =>
     set((state) => ({
-      page: Math.max(1, page),
-      header: { ...state.header, page: Math.max(1, page) },
-      viewRevision: state.revision,
-      viewLength: state.filteredLogs.length,
+      autoScroll: follow,
+      /* 用户自己滚回底部 = 他主动追最新：锚点与贴底基线一起重取，此后新行继续
+       * 从他看的位置往下排。 */
+      ...(follow
+        ? {
+            followResetAt: Date.now(),
+            viewBaselineAfter: 0,
+            followBaseline: followBaselineOf(state),
+            ...anchorOf(state),
+          }
+        : {}),
+      header: { ...state.header, autoScroll: follow },
+    })),
+
+  /** 用户显式要求「回到最新」：解绑贴底基线，此后贴底一路追到最新。 */
+  jumpToLatest: () =>
+    set((state) => ({
+      followResetAt: Date.now(),
+      autoScroll: true,
+      followBaseline: followBaselineOf(state),
+      ...anchorOf(state),
+      header: { ...state.header, autoScroll: true, page: 1 },
+      page: 1,
     })),
   setIsOpen: (open) =>
     set((state) => ({
@@ -1046,7 +1222,21 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   toggleOpen: () =>
     set((state) => {
       const isOpen = !state.isOpen;
-      return { isOpen, header: { ...state.header, isOpen } };
+      /* 打开面板 = 用户此刻看到的是「最新的那一段」：水位与贴底基线一起取到当前，
+       * 后续新到的行才算「新的」。面板开着不动时两者都不随新日志前进，这正是
+       * 「内容不要自己动」的实现（ISSUE #262 复审）。 */
+      return {
+        isOpen,
+        header: { ...state.header, isOpen },
+        ...(isOpen
+          ? {
+              viewSeenIds: currentWatermark(state),
+              followBaseline: followBaselineOf(state),
+              followResetAt: 0,
+              ...anchorOf(state),
+            }
+          : {}),
+      };
     }),
 
   clear: () =>
@@ -1057,10 +1247,14 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
           derive([], view.filter, view.search, view.origin, state.revision + 1),
           view,
         ),
-        /* 清空后「已读水位」推到当前 revision：新日志的 revision 更大，
-         * 仍能正确算作新内容。 */
+        /* 清空后不再有「已读 / 未读」可言：水位里保留的那些 id 已经不在时间线上，
+         * 下次新日志直接按「没取过水位」处理（水位为空即按「当前看到的全部」处理），贴底基线同时解绑，
+         * 此后贴底直接追到最新。 */
         viewRevision: state.revision + 1,
-        viewLength: 0,
+        viewSeenIds: new Set<string>(),
+        viewBaselineAfter: 0,
+        followResetAt: Date.now(),
+        anchorId: null,
       };
     }),
 
@@ -1096,6 +1290,66 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   },
 }));
 
+/* ── 已读水位与贴底基线 ─────────────────────────────────────────────── */
+
+/**
+ * 「已读水位」的内容：**已读过哪些条目**（id 集合）。
+ *
+ * 用条目身份而不是条数，是本文件在 ISSUE #262 复审里改掉的一条口径。条数在
+ * **时间线被截断**时不再是单调量：环形缓冲只保留最近 MAX_LOG_ENTRIES 条，长度
+ * 会停在 2000，于是「当前长度 − 上次长度」恒为 0——页脚永远报不出「有 N 条新的
+ * 日志」，用户也就永远等不到那个「回到最新」的入口（现场实测：页脚写着
+ * 「面板保留最近 2000 条」，却一直是第 1 页）。
+ *
+ * 身份口径下，新条目（id 新）天然不在水位里，被挤掉多少条旧行都不影响计数，
+ * 因此贴底位置也不会被截断反复拉动。
+ */
+function watermarkIds(entries: LogEntry[]): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const entry of entries) ids.add(entry.id);
+  return ids;
+}
+
+/**
+ * 取「已读水位」：**此刻时间线里已有的全部条目**。
+ *
+ * 语义是「用户把这一刻当作分界——此刻之前的不算新的，之后到的才算」。
+ *
+ * ⚠️ 水位只能由**显式动作**整体替换（翻页 / 切筛选 / 搜索 / 打开面板），不能在
+ * 每次写入新日志时「顺手扩展」。写日志时扩展，会让水位**追着最新跑**：写入之后
+ * 的视图里本来就含新行，扩展一步等于把刚到的行直接标成已读，页脚于是永远报 0
+ * ——用户看到的就是「面板一直在涨，却从来不提示有新的」（ISSUE #262 复审）。
+ *
+ * 也不能只取「当前这一页那 200 条」。停在第 2 页时说「我只看到这 200 条」并不
+ * 成立：比他更新、他已经放弃追赶的那一大段同样不该算「新的」。实测正是这个错法
+ * 让页脚从「有 401 条新的日志」开始报数（#262 复审）。
+ */
+function currentWatermark(state: LogStoreState): ReadonlySet<string> {
+  return watermarkIds(state.filteredLogs);
+}
+
+/** 打开面板 / 首次取水位时的基准：当前这一段就是用户正在看的。 */
+function followBaselineOf(state: LogStoreState): number {
+  return Math.max(0, state.filteredLogs.length - 1);
+}
+
+/**
+ * 重取第 1 页锚点：当前窗口（尾部 pageSize 条）的头一条。
+ *
+ * 「转到最新」的每个动作都调用它——打开面板 / 点回到最新 / 换页 / 切筛选 / 搜索 /
+ * 用户自己滚到底部。除此之外锚点不动，这是「看得正起劲的那一段不要被新日志推走」
+ * 的实现（见 `anchorId` 的完整说明）。
+ */
+function anchorOf(state: LogStoreState): { anchorId: string | null } {
+  return { anchorId: headOfFirstPage(state) };
+}
+
+function headOfFirstPage(state: LogStoreState): string | null {
+  const size = Math.max(1, state.pageSize);
+  const start = Math.max(0, state.filteredLogs.length - size);
+  return state.filteredLogs[start]?.id ?? null;
+}
+
 /* ── 派生视图：面板怎么切一页 ───────────────────────────────────────── */
 
 /**
@@ -1118,6 +1372,35 @@ export function selectPageLogs(
 }
 
 /**
+ * 第 1 页的**锚定**窗口：只要锚点还在时间线里，就以它为起点往后取 pageSize 条。
+ *
+ * 锚点不在（被环形缓冲挤出去了 / 还没设）→ 退回「尾部 pageSize 条」这个默认窗口。
+ * 返回的 `truncatedFromEnd` 说明窗口后面还有多少条**更新的**日志，页脚据此说
+ * 「有 N 条新的日志」——它就是「用户还没看的那批」。
+ *
+ * 为什么不能一直用「尾部 pageSize 条」：窗口每一轮轮询都整体前移一格，React 会
+ * 卸载最上面那一条、挂上新的最末一条。用户刚框住的文本随节点被卸载，选区消失
+ * （ISSUE #262 复审在真实浏览器里实测到的正是这条）。锚定之后窗口原地不动，
+ * DOM 节点不重建，选区自然留住。
+ */
+export function selectFirstPageWindow(
+  logs: LogEntry[],
+  anchorId: string | null,
+  pageSize: number,
+): { entries: LogEntry[]; truncatedFromEnd: number } {
+  const size = Math.max(1, pageSize);
+  if (anchorId !== null) {
+    const at = logs.findIndex((entry) => entry.id === anchorId);
+    if (at !== -1) {
+      const entries = logs.slice(at, at + size);
+      return { entries, truncatedFromEnd: logs.length - (at + entries.length) };
+    }
+  }
+  const start = Math.max(0, logs.length - size);
+  return { entries: logs.slice(start), truncatedFromEnd: 0 };
+}
+
+/**
  * 面板是否「已经不在最新」：不在第 1 页，或用户手动上滚离开了底部。
  * 两者都必须给「回到最新」出口，否则用户会以为日志不再刷新（ISSUE #262）。
  */
@@ -1131,28 +1414,31 @@ export function selectShouldPinToLatest(
 /**
  * 停在历史位置期间新来了多少条日志。
  *
- * 判据是 `revision` 变化（时间线真的变过），而不是「末条变了」：按时刻排序后，
- * 一条**迟到的旧时刻行**会插进中间、末条不动——只看末条会漏掉这类新增。
+ * 判据分两层，缺一不可：
+ *   1. `revision` 变过 —— 时间线**真的**变过（不是「末条变了」：按时刻排序后，
+ *      一条迟到的旧时刻行会插进中间、末条不动）；
+ *   2. 用户当前窗口**之后**确实还有日志 —— 条数由锚定窗口的 `truncatedFromEnd`
+ *      直接给出（见 selectFirstPageWindow）。长度差在这里是不管用的：第 1 页窗口
+ *      锚定之后长度不再变化，时间线封顶时长度差更是恒为 0（ISSUE #262 复审）。
  *
- * 计数口径是**时间线里比水位新的条数**（`readAt` 是翻页那一刻的时间线长度）。
- * 为什么用长度而不是 seq：`seq` 在测试与多 store 场景下可能被夹具重造，
- * 与真实入库顺序不可比。长度差是「用户接下来会多看到几条」的直接答案，
- * 也是这里唯一需要回答的问题。
+ * ⚠️ `revision` 在这里仍是门槛，所以**环形缓冲截断不能推进它**：截断只是把最旧
+ * 的一批挤出去，新行如果推进了 revision，下面的计数就会把「写入之后视图里本来就
+ * 含新行」当成已读，报出 0（用户读到的就是「翻页翻不动、提示不出现」）。
  */
 export function selectNewLogCount(state: {
-  revision: number;
-  viewRevision: number;
-  filteredLogs: LogEntry[];
-  /** 翻页那一刻的 filteredLogs.length（store 的 viewLength）。 */
-  viewLength: number;
+  /** 当前窗口之后还有多少条更新的日志。 */
+  unseenAfterView: number;
+  /**
+   * 用户翻到这一页那一刻，窗口之后本来就有多少条（「已翻过去的历史」）。
+   *
+   * 计数必须减掉它，否则停在第 2 页时会一开口就报「有 200 条新的日志」——
+   * 那 200 条是用户**自己翻过去的**，不是新来的（现场实测过这个错法）。
+   * 第 1 页这个值是 0（窗口就是最新一段，其后本来就没有东西）。
+   */
+  baselineAfterView: number;
   page: number;
   autoScroll: boolean;
 }): number {
-  if (state.revision <= state.viewRevision) return 0;
   if (!selectShouldPinToLatest(state.page, state.autoScroll)) return 0;
-  return Math.max(
-    0,
-    state.filteredLogs.length -
-      Math.min(state.viewLength, state.filteredLogs.length),
-  );
+  return Math.max(0, state.unseenAfterView - state.baselineAfterView);
 }

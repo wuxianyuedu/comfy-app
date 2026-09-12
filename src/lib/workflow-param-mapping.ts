@@ -16,19 +16,18 @@
  *      三元组 + 端口级自动映射。
  *
  * 落库位置：沿用既有的 `paramMap` JSON 列，`source` 命名空间下**只按模式**存放
- * 被覆盖过的落点，键写作 `source.mode:<模式>`（值 = `{ <entryId>: ioKey | null }`，
- * `null` = 该落点被显式断开）。不新增表结构。
+ * 作者连过的线，键写作 `source.mode:<模式>`（值 = `{ <entryId>: ioKey | null }`，
+ * `null` = 作者显式断开）。不新增表结构。
  *
  * 为什么没有「与模式无关的覆盖」：落点覆盖是作者针对某个模式做的，
  * 不存在脱离模式的语境；留一个通用层只会让「这条覆盖到底哪个模式在生效」变成
  * 需要推理的问题，两套键空间互相覆盖也正是丢覆盖的历史根因。因此没有选中模式
  * 时**写入是空操作**，每条覆盖都归属一个模式。
  *
- * 本模块**只产出数据**：勾选一个对外参数不会在画布上新增任何节点或连线。
- * 每个条目的落点默认由 `autoMapEntries` 按名字自动判定，运行期由
- * `applyParamMapping` 按这张表严格落值。画布上不呈现这些落点 —— 它们不是工作流
- * 图的一部分（历史上一度把映射画成 `pio:<条目>` 节点 + 连线，勾选即长节点，
- * 与「工作流图」混淆，已移除）。
+ * 本模块**只产出数据**：条目的落点默认由 `autoMapEntries` 按名字自动判定，
+ * 运行期由 `applyParamMapping` 按这张表严格落值。画布上那张接线卡片与它拖出的
+ * 线是同一份数据的视图（见文件末尾的画布几何段）—— 连线即编辑，映射没有第二套
+ * 界面。
  */
 
 import {
@@ -91,13 +90,16 @@ const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);
 /* ── 分类判定 ──
  * 顺序即优先级：负面先于正向，首/尾帧先于普通参考图，尺寸类先于提示词
  * （避免 "width" 之类被泛化的文本启发式抢走）。与工坊封装同口径。 */
-const FIRST_FRAME_HINT = /first[_\s-]?frame|首帧|起始帧|第一帧|image_?1|start_?image/;
+const FIRST_FRAME_HINT =
+  /first[_\s-]?frame|首帧|起始帧|第一帧|image_?1|start_?image/;
 const LAST_FRAME_HINT = /last[_\s-]?frame|尾帧|结束帧|末帧|image_?2|end_?image/;
 
 function isImagePin(e: WorkflowIOEntry): boolean {
   const type = (e.type ?? "").toUpperCase();
   if (IMAGE_TYPES.has(type)) return true;
-  return /upload|image|参考图|首帧|尾帧|first_?frame|last_?frame/.test(searchText(e));
+  return /upload|image|参考图|首帧|尾帧|first_?frame|last_?frame/.test(
+    searchText(e),
+  );
 }
 
 /** 导出给工坊封装复用：把已有对外条目的分类映射到 ParamClass。 */
@@ -112,10 +114,16 @@ export function classifyPin(e: WorkflowIOEntry): ParamClass {
   if (/negative|负向|负面|反向/.test(text)) return "negative";
   /* 尺寸名必须"干净"——`prompt_width_of_thing` 这类把 width 当词根的名字不算
    * 尺寸口（真实工作流里 width/height 从不带其它业务词）。 */
-  if (/^(width|base_width|w|宽度|横向)$/.test(text.trim()) || /宽度|横向/.test(text)) {
+  if (
+    /^(width|base_width|w|宽度|横向)$/.test(text.trim()) ||
+    /宽度|横向/.test(text)
+  ) {
     return "size-width";
   }
-  if (/^(height|base_height|h|高度|纵向)$/.test(text.trim()) || /高度|纵向/.test(text)) {
+  if (
+    /^(height|base_height|h|高度|纵向)$/.test(text.trim()) ||
+    /高度|纵向/.test(text)
+  ) {
     return "size-height";
   }
   if (/aspect_?ratio|宽高比|纵横比|比例/.test(text)) return "size-aspect";
@@ -142,12 +150,9 @@ function classKey(cls: ParamClass, nodeId: string): string {
 /** 把 IO 条目按「节点 + 分类」聚合成对外参数条目（稳定顺序）。 */
 export function buildParamEntries(
   io: WorkflowIOMap | null | undefined,
-  labels?: Record<string, string>
+  labels?: Record<string, string>,
 ): ParamEntry[] {
-  const byNode = new Map<
-    string,
-    { entry: ParamEntry; order: number }
-  >();
+  const byNode = new Map<string, { entry: ParamEntry; order: number }>();
   let order = 0;
   for (const [ioKey, raw] of Object.entries(io ?? {})) {
     const entry = raw as WorkflowIOEntry | undefined;
@@ -163,7 +168,8 @@ export function buildParamEntries(
     const existing = byNode.get(key);
     if (existing) {
       existing.entry.pins.push(pin);
-      if (entry.displayOrder !== undefined) existing.order = Math.min(existing.order, order);
+      if (entry.displayOrder !== undefined)
+        existing.order = Math.min(existing.order, order);
       continue;
     }
     const override = labels?.[ioKey];
@@ -194,14 +200,16 @@ export function buildParamEntries(
 const AUTO_MAPPABLE: Record<ParamClass, (e: WorkflowIOEntry) => boolean> = {
   prompt: (e) => /prompt|提示词|描述词/i.test(searchText(e)),
   negative: (e) => /negative|负向|负面|反向/i.test(searchText(e)),
-  "size-width": (e) => /^(width|base_width|w|宽度|横向)$/.test(searchText(e).trim()),
-  "size-height": (e) => /^(height|base_height|h|高度|纵向)$/.test(searchText(e).trim()),
+  "size-width": (e) =>
+    /^(width|base_width|w|宽度|横向)$/.test(searchText(e).trim()),
+  "size-height": (e) =>
+    /^(height|base_height|h|高度|纵向)$/.test(searchText(e).trim()),
   "size-aspect": (e) => /aspect_?ratio|宽高比|纵横比|比例/.test(searchText(e)),
   "size-megapixels": (e) => /megapixel|百万像素|\b像素\b/.test(searchText(e)),
   "reference-image": (e) => isImagePin(e),
   "first-frame": (e) => isImagePin(e),
   "last-frame": (e) => isImagePin(e),
-  "other": () => true,
+  other: () => true,
 };
 
 /** 一个端口是否可直接接标量值（连线型端口不可作为对外参数的落点）。 */
@@ -209,8 +217,18 @@ function isScalarPin(i: { type: string }): boolean {
   const t = (i.type ?? "").toUpperCase();
   if (!t || t === "*") return true;
   return !new Set([
-    "MODEL", "CLIP", "VAE", "CONDITIONING", "LATENT", "CONTROL_NET",
-    "SAMPLER", "SIGMAS", "GUIDER", "NOISE", "CLIP_VISION", "STYLE_MODEL",
+    "MODEL",
+    "CLIP",
+    "VAE",
+    "CONDITIONING",
+    "LATENT",
+    "CONTROL_NET",
+    "SAMPLER",
+    "SIGMAS",
+    "GUIDER",
+    "NOISE",
+    "CLIP_VISION",
+    "STYLE_MODEL",
     "UPSCALE_MODEL",
   ]).has(t);
 }
@@ -218,7 +236,7 @@ function isScalarPin(i: { type: string }): boolean {
 /** 自动映射：每个对外参数 → 目标端口（默认连线状态，可被手工覆盖）。 */
 export function autoMapEntries(
   entries: readonly ParamEntry[],
-  io: WorkflowIOMap | null | undefined
+  io: WorkflowIOMap | null | undefined,
 ): Record<string, string | null> {
   const map: Record<string, string | null> = {};
   for (const entry of entries) {
@@ -238,7 +256,11 @@ export function autoMapEntries(
     if (!chosen) {
       const withDefault = entry.pins.find((pin) => {
         const raw = io?.[pin.ioKey];
-        return raw && isScalarPin(pin) && resolveEntryDefault(raw, null) !== undefined;
+        return (
+          raw &&
+          isScalarPin(pin) &&
+          resolveEntryDefault(raw, null) !== undefined
+        );
       });
       chosen = (withDefault ?? entry.pins.find(isScalarPin))?.ioKey ?? null;
     }
@@ -279,11 +301,13 @@ export function resolveMapping(
   entries: readonly ParamEntry[],
   io: WorkflowIOMap | null | undefined,
   mapping: ParamMapping | null | undefined,
-  mode?: string | null
+  mode?: string | null,
 ): Record<string, string | null> {
   const auto = mapping?.auto ?? autoMapEntries(entries, io);
   const out: Record<string, string | null> = { ...auto };
-  const manual: Record<string, string | null> = mode ? (mapping?.manualByMode?.[mode] ?? {}) : {};
+  const manual: Record<string, string | null> = mode
+    ? (mapping?.manualByMode?.[mode] ?? {})
+    : {};
   for (const entry of entries) {
     if (Object.prototype.hasOwnProperty.call(manual, entry.id)) {
       out[entry.id] = manual[entry.id] ?? null;
@@ -298,7 +322,7 @@ export function resolveMapping(
 export function manualTargetFor(
   mapping: ParamMapping | null | undefined,
   entryId: string,
-  mode?: string | null
+  mode?: string | null,
 ): string | null | undefined {
   if (!mode) return undefined;
   const byEntry = mapping?.manualByMode?.[mode];
@@ -318,16 +342,22 @@ export function manualTargetFor(
  *  畸形数据（数字 / 数组 / 非对象模式表）同样丢弃——画布容不下脏数据。 */
 export function parseParamMapping(paramMap: unknown): ParamMapping {
   const out: ParamMapping = { manualByMode: {}, labels: {} };
-  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) return out;
+  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap))
+    return out;
   const sourceRaw = (paramMap as Record<string, unknown>).source;
-  if (!sourceRaw || typeof sourceRaw !== "object" || Array.isArray(sourceRaw)) return out;
-  for (const [key, value] of Object.entries(sourceRaw as Record<string, unknown>)) {
+  if (!sourceRaw || typeof sourceRaw !== "object" || Array.isArray(sourceRaw))
+    return out;
+  for (const [key, value] of Object.entries(
+    sourceRaw as Record<string, unknown>,
+  )) {
     if (!key.startsWith(MODE_KEY_PREFIX)) continue;
     const mode = key.slice(MODE_KEY_PREFIX.length);
     if (!mode) continue;
     if (!value || typeof value !== "object" || Array.isArray(value)) continue;
     const byEntry: Record<string, string | null> = {};
-    for (const [entryId, target] of Object.entries(value as Record<string, unknown>)) {
+    for (const [entryId, target] of Object.entries(
+      value as Record<string, unknown>,
+    )) {
       if (typeof target === "string") byEntry[entryId] = target;
       /* 显式的 null = 作者把这条线断开了，属于合法状态。 */
       else if (target === null) byEntry[entryId] = null;
@@ -344,7 +374,7 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
  *  `source` 之外的键原样保留（paramMap 里还有 positiveNode 等其它命名空间）。 */
 export function serializeParamMapping(
   mapping: ParamMapping,
-  paramMap: Record<string, unknown>
+  paramMap: Record<string, unknown>,
 ): Record<string, unknown> {
   const source: Record<string, unknown> = {};
   for (const [mode, byEntry] of Object.entries(mapping.manualByMode ?? {})) {
@@ -353,7 +383,8 @@ export function serializeParamMapping(
       if (typeof target !== "string" && target !== null) continue;
       targets[id] = target;
     }
-    if (Object.keys(targets).length > 0) source[`${MODE_KEY_PREFIX}${mode}`] = targets;
+    if (Object.keys(targets).length > 0)
+      source[`${MODE_KEY_PREFIX}${mode}`] = targets;
   }
   return { ...paramMap, source };
 }
@@ -366,7 +397,7 @@ export function serializeParamMapping(
 export function isDefaultMapping(
   mapping: ParamMapping | null | undefined,
   entryId: string,
-  mode?: string | null
+  mode?: string | null,
 ): boolean {
   return manualTargetFor(mapping, entryId, mode) === undefined;
 }
@@ -374,7 +405,7 @@ export function isDefaultMapping(
 /** 该模式下是否有任何对外参数被作者改过线（画布级的「恢复默认」开关依据）。 */
 export function hasManualWiring(
   mapping: ParamMapping | null | undefined,
-  mode?: string | null
+  mode?: string | null,
 ): boolean {
   if (!mode) return false;
   return Object.keys(mapping?.manualByMode?.[mode] ?? {}).length > 0;
@@ -384,7 +415,7 @@ export function hasManualWiring(
  *  落库后 `source.mode:<模式>` 整条消失，该模式的每个对外参数回到默认连线状态。 */
 export function clearModeWiring(
   mapping: ParamMapping | null | undefined,
-  mode?: string | null
+  mode?: string | null,
 ): ParamMapping {
   const out: ParamMapping = {
     manualByMode: { ...(mapping?.manualByMode ?? {}) },
@@ -398,7 +429,7 @@ export function clearModeWiring(
 /** 从已有的 workflowIO 反查某个端口的对外参数 id（用于把旧数据接进新模型）。 */
 export function entryIdForPin(
   io: WorkflowIOMap | null | undefined,
-  ioKey: string
+  ioKey: string,
 ): string | null {
   const raw = io?.[ioKey];
   if (!raw) return null;
@@ -422,7 +453,7 @@ export function entryIdForPin(
  *  io 未就绪）时返回 null，调用方据此不画线。 */
 export function handleIdForIoKey(
   io: WorkflowIOMap | null | undefined,
-  ioKey: string | null | undefined
+  ioKey: string | null | undefined,
 ): string | null {
   if (!ioKey) return null;
   const name = io?.[ioKey]?.name;
@@ -438,7 +469,7 @@ export function handleIdForIoKey(
 export function ioKeyForHandle(
   io: WorkflowIOMap | null | undefined,
   nodeId: string,
-  handleId: string | null | undefined
+  handleId: string | null | undefined,
 ): string | null {
   if (!nodeId || !handleId) return null;
   for (const [ioKey, entry] of Object.entries(io ?? {})) {
@@ -454,7 +485,7 @@ export function buildSourceOverrides(
   entries: readonly ParamEntry[],
   io: WorkflowIOMap | null | undefined,
   mapping: ParamMapping | null | undefined,
-  mode?: string | null
+  mode?: string | null,
 ): Record<string, string | null> {
   const resolved = resolveMapping(entries, io, mapping, mode);
   const out: Record<string, string | null> = {};
@@ -549,4 +580,94 @@ export function applyParamMapping(args: {
   }
 
   return { inputs, unmatched };
+}
+
+/* ── 画布上的「对外参数节点」（纯派生，无 React / 无 IO） ──
+ *
+ * 映射在编辑器画布上表现为一个个**真实节点**：每个对外参数一张卡片，卡片右侧
+ * 一个输出端点，作者把它拖到宿主节点的端口上即完成连线 —— 连线就是映射，没有
+ * 第二套界面。节点位置按宿主节点的位置在左侧成列排布 —— 位置是**派生**的，不
+ * 落库：作者拖不动这些卡片（要挪就挪宿主节点），也就不会出现「换了台机器打开
+ * 发现卡片飘到天边」。
+ *
+ * 这里只算几何与 id，视图（React Flow 节点）由编辑器组装。
+ */
+
+/** 对外参数节点 id 前缀（与 ComfyUI 数字节点 id / note: / grp: 等命名空间隔离）。 */
+export const PARAM_NODE_PREFIX = "pio:";
+
+/** 对外参数节点 id。条目的 nodeId 可能是 "5" 这类纯数字，直接当 React Flow
+ *  节点 id 会与宿主节点撞名，必须加前缀。 */
+export function paramNodeId(entryId: string): string {
+  return `${PARAM_NODE_PREFIX}${entryId}`;
+}
+
+/** 从节点 id 反解对外参数条目 id；不是对外参数节点时返回 null。 */
+export function entryIdFromParamNodeId(nodeId: string): string | null {
+  return nodeId.startsWith(PARAM_NODE_PREFIX)
+    ? nodeId.slice(PARAM_NODE_PREFIX.length)
+    : null;
+}
+
+/** 对外参数卡片的几何（宽度与端口行高必须与渲染组件一致，否则连线锚点会歪）。 */
+export const PARAM_NODE_WIDTH = 208;
+/** 卡片头（标题）+ 端口行的行高。 */
+export const PARAM_NODE_HEADER_H = 26;
+export const PARAM_NODE_ROW_H = 22;
+export const PARAM_NODE_PAD_Y = 8;
+
+/** 卡片高度：头部 + 每个端口一行 + 上下留白（至少留一行，空条目也画得出端点）。 */
+export function paramNodeHeight(entry: ParamEntry): number {
+  return (
+    PARAM_NODE_HEADER_H +
+    Math.max(1, entry.pins.length) * PARAM_NODE_ROW_H +
+    PARAM_NODE_PAD_Y
+  );
+}
+
+/** 卡片列与宿主节点左缘之间的水平距离（留出走线的空间）。 */
+export const GROUP_OFFSET_X = 260;
+
+/** 卡片列间距（换列时的横向步长）。 */
+export const PARAM_NODE_COLUMN_W = PARAM_NODE_WIDTH + 28;
+
+/** 每张卡片之间的纵向留白。 */
+export const PARAM_NODE_GAP = 10;
+
+/** 同一宿主节点上每列最多堆几张卡片，超出换列（否则纵向无限延伸）。 */
+const PARAM_NODES_PER_COLUMN = 6;
+
+/** 由宿主节点的画布位置 + 条目顺序算出卡片位置。
+ *
+ *  位置是**派生**的：宿主节点挪到哪，卡片列就跟到哪（作者拖不动卡片本身）。
+ *  宿主节点没有位置（`hostPosById` 缺这项）时跳过 —— 交由视图兜底，不产出
+ *  NaN 坐标。同一宿主节点上的多张卡片纵向依次排开，超过一列容量换到左边一列。 */
+export function placeParamNodes(
+  entries: readonly ParamEntry[],
+  hostPosById: Record<string, { x: number; y: number } | undefined>,
+): Record<string, { x: number; y: number }> {
+  const out: Record<string, { x: number; y: number }> = {};
+  const cursorByNode: Record<string, number> = {};
+  const columnByNode: Record<string, number> = {};
+  for (const entry of entries) {
+    const host = hostPosById[entry.nodeId];
+    if (!host) continue;
+    const column = columnByNode[entry.nodeId] ?? 0;
+    const rowY = cursorByNode[entry.nodeId] ?? 0;
+    out[paramNodeId(entry.id)] = {
+      x: host.x - GROUP_OFFSET_X - column * PARAM_NODE_COLUMN_W,
+      y: host.y + rowY,
+    };
+    const nextRow = rowY + paramNodeHeight(entry) + PARAM_NODE_GAP;
+    const columnCapacity =
+      PARAM_NODES_PER_COLUMN *
+      (PARAM_NODE_HEADER_H + PARAM_NODE_ROW_H + PARAM_NODE_GAP);
+    if (nextRow > columnCapacity) {
+      columnByNode[entry.nodeId] = column + 1;
+      cursorByNode[entry.nodeId] = 0;
+    } else {
+      cursorByNode[entry.nodeId] = nextRow;
+    }
+  }
+  return out;
 }

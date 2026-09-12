@@ -335,6 +335,229 @@ test.describe("应用页签与全屏视图 @critical", () => {
   });
 
   /**
+   * ISSUE #262 复审（这一轮的 4 条反馈）。四条里有三条**只能用真实浏览器证明**：
+   * 弹层几何、翻页可点、以及「框住文本后内容还动不动」——jsdom 不做层叠与布局、
+   * 也不实现 Selection 与滚动，单测全绿照样复现。
+   *
+   * 这里在真实 Chromium 里量：
+   *   1. 来源下拉的弹层**顶边贴住扳机底边**（原先因 alignItemWithTrigger 会
+   *      向上生长、顶到窗口最上方）；
+   *   2. 弹层**可点**（点候选能切换来源）——层级契约的现场复核（规范 07 §7.21.4）；
+   *   3. 切换来源与翻页都生效（用户报的「没法翻页」）；
+   *   4. 行头里类别计数在下拉**左侧**，下拉贴着右侧操作区（布局重排的验收）。
+   */
+  test.describe("应用日志面板：下拉位置、可点性与翻页 @critical", () => {
+    const ROWS = 450;
+
+    /** 造一批有内容的日志行，让面板有得翻、有得选。 */
+    async function stubLogs(page: Page) {
+      await page.route("**/api/logs/current**", async (route: Route) => {
+        const start = Date.now() - 600_000;
+        const lines = Array.from({ length: ROWS }, (_, i) => {
+          const t = new Date(start + i * 1000)
+            .toISOString()
+            .replace("T", " ")
+            .replace("Z", "");
+          return `[${t}.000] [INFO] [app] 事件 ${i}`;
+        });
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            content: lines.join("\n") + "\n",
+            size: 1_000_000,
+            offset: 0,
+            sessionStart: start,
+            bootId: "e2e:1",
+          }),
+        });
+      });
+    }
+
+    async function openPanel(page: Page) {
+      await page.goto("/workspace");
+      await page.getByTitle(/^日志面板/).click();
+      await expect(
+        page.getByText("应用日志", { exact: true }).first(),
+      ).toBeVisible();
+      await expect(page.getByTitle("更早的一页")).toBeVisible();
+    }
+
+    test("@critical 下拉弹层贴住扳机底边，且候选点得动、来源切得过来", async ({
+      page,
+    }) => {
+      await stubBackend(page);
+      await stubLogs(page);
+      await openPanel(page);
+
+      const trigger = page.getByRole("combobox", { name: "按来源筛选" });
+      const triggerBox = await trigger.boundingBox();
+      expect(triggerBox).not.toBeNull();
+
+      await trigger.click();
+      const popup = page.locator('[data-slot="select-content"]');
+      await expect(popup).toBeVisible();
+      const popupBox = await popup.boundingBox();
+      expect(popupBox).not.toBeNull();
+
+      const t = triggerBox!;
+      const p = popupBox!;
+      /* 用户第 2 条诉求的可量化形式：「弹出下拉菜单的最上方和下拉按钮的最下方
+       * 对齐」。三条一起断言：
+       *   1. 弹层顶边**贴在扳机底边**（允许 ±8px：base-ui 的 alignItemWithTrigger
+       *      会带上一个把「已选项文本」与扳机文字对齐的微调量，用户视觉上仍是
+       *      「紧贴底边」）；
+       *   2. 弹层顶边**在窗口顶部的下方**（原先向上生长时会顶到 y≈0、盖住标题行）；
+       *   3. 弹层不覆盖扳机本身（`data-align-trigger=false` 的几何证据）。 */
+      expect(Math.abs(p.y - (t.y + t.height))).toBeLessThanOrEqual(8);
+      expect(p.y).toBeGreaterThan(20);
+      expect(p.y).toBeGreaterThan(t.y);
+
+      /* 可点性：弹层矩形内多点 elementFromPoint 必须命中弹层子树，而不是被
+       * 面板遮罩/日志行接走（规范 07 §7.21.4 的判据）。 */
+      const hitAllInPopup = await page.evaluate(
+        ({ box }) => {
+          const points = [
+            [box.x + 4, box.y + 4],
+            [box.x + box.width - 4, box.y + 4],
+            [box.x + 4, box.y + box.height - 4],
+            [box.x + box.width - 4, box.y + box.height - 4],
+            [box.x + box.width / 2, box.y + box.height / 2],
+          ];
+          return points.every(([x, y]) => {
+            const el = document.elementFromPoint(x!, y!);
+            return Boolean(el?.closest('[data-slot="select-content"]'));
+          });
+        },
+        { box: p },
+      );
+      expect(hitAllInPopup).toBe(true);
+
+      /* 真的点一个候选：来源能切过去（用户第 2 条的另一半）。 */
+      await page.getByRole("option", { name: /应用服务/ }).click();
+      await expect(trigger).toContainText("应用服务");
+    });
+
+    test("@critical 翻页能在历史页之间来回，且页码随内容变化", async ({
+      page,
+    }) => {
+      await stubBackend(page);
+      await stubLogs(page);
+      await openPanel(page);
+
+      await expect(page.getByText(/第 1 \/ \d+ 页/)).toBeVisible();
+      await page.getByTitle("更早的一页").click();
+      await expect(page.getByText(/第 2 \/ \d+ 页/)).toBeVisible();
+      await page.getByTitle("更新的一页").click();
+      await expect(page.getByText(/第 1 \/ \d+ 页/)).toBeVisible();
+    });
+
+    test("@critical 框选日志文本后，新日志到达不会把内容滚动走", async ({
+      page,
+    }) => {
+      await stubBackend(page);
+
+      /* 每次轮询都追加一行：模拟「日志到上限了还继续产生新日志」。 */
+      let round = 0;
+      await page.route("**/api/logs/current**", async (route: Route) => {
+        const start = Date.now() - 600_000;
+        const lines = Array.from({ length: 40 }, (_, i) => {
+          const t = new Date(start + i * 1000)
+            .toISOString()
+            .replace("T", " ")
+            .replace("Z", "");
+          return `[${t}.000] [INFO] [app] 事件 ${i}`;
+        });
+        round += 1;
+        if (round > 1) {
+          const tail = `[${new Date().toISOString().replace("T", " ").replace("Z", "")}.000] [INFO] [app] 新来的 ${round}`;
+          lines.push(tail);
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            content: lines.join("\n") + "\n",
+            size: 1_000_000,
+            offset: 0,
+            sessionStart: start,
+            bootId: "e2e:1",
+          }),
+        });
+      });
+      await openPanel(page);
+
+      const scroller = page.locator("[data-log-text]").first();
+      await expect(scroller).toBeVisible();
+
+      /* 用户框住第一行日志的一段文本（拖选），然后等两轮轮询。
+       * 用「文本节点长度」算终点：日志行会被切成多个分片 span，跟着高亮/ANSI
+       * 解析走，写死偏移会踩到「该节点没有第 6 个字符」。 */
+      await page.evaluate(() => {
+        const host = document.querySelector("[data-log-text]")!;
+        /* 取最长的那个文本节点，确保框选的是真实内容而不是一个装饰性分片。 */
+        const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+        let best: Text | null = null;
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+          const text = n as Text;
+          if (!best || text.length > best.length) best = text;
+        }
+        const node = best!;
+        const range = document.createRange();
+        range.setStart(node, 0);
+        range.setEnd(node, Math.min(6, node.length));
+        const selection = window.getSelection()!;
+        selection.removeAllRanges();
+        selection.addRange(range);
+      });
+
+      const before = await page.evaluate(() => ({
+        selected: window.getSelection()?.toString() ?? "",
+        scrollTop: document.querySelector(".custom-scrollbar")?.scrollTop ?? 0,
+      }));
+      expect(before.selected.length).toBeGreaterThan(0);
+
+      /* 等 ≥2 轮轮询（2s 一轮） */
+      await page.waitForTimeout(5_000);
+
+      const after = await page.evaluate(() => ({
+        selected: window.getSelection()?.toString() ?? "",
+        scrollTop: document.querySelector(".custom-scrollbar")?.scrollTop ?? 0,
+      }));
+      /* 关键：选区还在（没被刷新冲掉），且滚动位置没有被新日志推走。 */
+      expect(after.selected).toBe(before.selected);
+      expect(Math.abs(after.scrollTop - before.scrollTop)).toBeLessThanOrEqual(1);
+    });
+
+    test("@critical 行头里类别计数在下拉左侧，下拉贴住右侧操作区", async ({
+      page,
+    }) => {
+      await stubBackend(page);
+      await stubLogs(page);
+      await openPanel(page);
+
+      const allButton = page.getByTitle(/^当前来源的全部：/).first();
+      const trigger = page.getByRole("combobox", { name: "按来源筛选" });
+      const search = page.getByPlaceholder(/搜索日志/);
+
+      const [levelBox, triggerBox, searchBox] = [
+        await allButton.boundingBox(),
+        await trigger.boundingBox(),
+        await search.boundingBox(),
+      ];
+      expect(levelBox).not.toBeNull();
+      expect(triggerBox).not.toBeNull();
+      expect(searchBox).not.toBeNull();
+
+      /* 顺序即分工：计数在左、搜索在中、下拉在右（用户第 1 条诉求）。 */
+      expect(levelBox!.x).toBeLessThan(searchBox!.x);
+      expect(searchBox!.x).toBeLessThan(triggerBox!.x);
+      /* 下拉不再紧贴级别按钮，两者之间的空白由 `flex-1` 提供。 */
+      expect(triggerBox!.x - (levelBox!.x + levelBox!.width)).toBeGreaterThan(120);
+    });
+  });
+
+  /**
    * 同一处回归的**第三形态**：ComfyUI 页签里的内容。
    *
    * 前两轮修的都是「本应用自己的浮层盖住标题行」，而 ComfyUI 页签是另一类：

@@ -1,19 +1,22 @@
 "use client";
 
-/* 对外参数卡片的**视觉本体**（无 React Flow 依赖、无连线能力）。
+/* 对外参数卡片的**视觉本体**（无 React Flow 依赖）。
  *
- * 卡片只出现在**只读消费视角**（工作流库详情的「画布节点」页签）：每个对外参数
- * 一张卡，卡片里逐行列出它含的端口名与类型。它回答的是「这个对外参数由哪些端口
- * 组成」，与宿主卡片里的**表单行**互补 —— 表单行是「当前填的是什么值」，两者
- * 各表达一件事，不重复：表单行回答值，卡片回答归属（哪些 pin 合成这一个对外口）。
- *
- * 连线（谁落到哪个端口）以「端口行名 + 目标行尾徽标」的方式在表单区表达：
- *   ① 某对外参数只有一个端口时，卡片行尾标出它落到的那一行参数名；
- *   ② 宿主卡片里被落到的那一行，行尾标出它属于哪个对外参数。
- * 两处对得上，一眼看出「提示词到底喂给了哪一行」。
+ * 卡片有两个消费场景：
+ *   · 编辑器画布 —— 由 WorkflowParamNode 包一层 <Handle>，端点可拖线（编辑）；
+ *   · 工作流库画布 —— 只读展示，端点不渲染，看的是「这个对外参数由哪些端口
+ *     组成」。
+ * 两处的头部 / 端口行 / 「恢复默认」必须完全一致，故把视觉收敛到这里，
+ * 消费方只负责在右侧挂「端点」与行尾补充说明这两件事。
  */
 
+import { RotateCcw } from "lucide-react";
+
 import type { ParamEntry } from "~/lib/workflow-param-mapping";
+import {
+  PARAM_NODE_HEADER_H,
+  PARAM_NODE_ROW_H,
+} from "~/lib/workflow-param-mapping";
 import { paramClassStyle } from "../workflow-library/workflow-param-mapping-ui";
 
 export interface WorkflowParamCardProps {
@@ -25,9 +28,15 @@ export interface WorkflowParamCardProps {
   hostNodeId: string;
   pins: ParamEntry["pins"];
   width: number;
-  /** 该对外参数当前落到的端口名（`null` = 该条目的端口不在当前工作流的
-   *  IO 表里，无从判定去问哪一行）。 */
-  targetName?: string | null;
+  /** 是否允许连线：false 时卡片置灰、给出「先选模式才能连线」提示。 */
+  canWire: boolean;
+  /** 「恢复默认」是否可用。只读消费处不传回调（按钮根本不渲染）。 */
+  canReset: boolean;
+  onReset?: () => void;
+  /** 右侧端点槽位（编辑器 = <Handle>）。 */
+  endpoint?: React.ReactNode;
+  /** 端口行尾的补充说明（如「→ 落到的端口名」）。 */
+  rowTrailing?: (pin: ParamEntry["pins"][number]) => React.ReactNode;
 }
 
 export function WorkflowParamCard({
@@ -38,25 +47,31 @@ export function WorkflowParamCard({
   hostNodeId,
   pins,
   width,
-  targetName,
+  canWire,
+  canReset,
+  onReset,
+  endpoint,
+  rowTrailing,
 }: WorkflowParamCardProps) {
   const style = paramClassStyle(cls);
+  const disabled = !canWire;
 
   return (
     <div
       className="relative flex flex-col rounded-lg border shadow-[0_4px_20px_rgba(0,0,0,0.45)]"
       style={{
         width,
-        borderColor: `${style.color}66`,
+        borderColor: disabled ? "rgba(148,163,184,0.28)" : `${style.color}66`,
         background: "var(--color-card, #16161C)",
         isolation: "isolate",
       }}
       data-testid={`param-node-${entryId}`}
     >
-      {/* 头部：分类圆点 + 对外参数名 */}
+      {/* 头部：分类圆点 + 对外参数名 + 「恢复默认」 */}
       <div
-        className="flex shrink-0 items-center gap-1.5 px-2 py-1.5"
+        className="flex shrink-0 items-center gap-1.5 px-2"
         style={{
+          height: PARAM_NODE_HEADER_H,
           borderBottom: "1px solid rgba(255,255,255,0.06)",
           background: `${style.color}14`,
         }}
@@ -74,26 +89,40 @@ export function WorkflowParamCard({
         >
           {label}
         </span>
+        {onReset && (
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={!canReset}
+            className={`nodrag nopan shrink-0 rounded p-0.5 transition-colors ${
+              canReset
+                ? "text-(--color-ink-soft) hover:bg-white/8 hover:text-(--color-ink-bright)"
+                : "cursor-default text-(--color-ink-fainter)"
+            }`}
+            data-testid={`param-node-reset-${entryId}`}
+            title={
+              canReset
+                ? "恢复默认：撤销该对外参数在当前模式下的连线，回到自动探测的默认线"
+                : "已是默认连线状态"
+            }
+            aria-label="恢复默认"
+          >
+            <RotateCcw size={11} />
+          </button>
+        )}
       </div>
 
-      {/* 端口行：一行一个 pin；只有一个端口时在行尾标出它落到宿主卡片的哪一行。 */}
+      {/* 端口行：一行一个 pin，仅作展示（真正的连线手柄在卡片右侧）。 */}
       <div className="flex flex-col px-2 py-1">
         {pins.map((pin) => (
           <div
             key={pin.ioKey}
             className="flex min-w-0 items-center gap-1.5 text-[10.5px] text-(--color-ink-soft)"
-            style={{ height: 18 }}
+            style={{ height: PARAM_NODE_ROW_H }}
             title={`${pin.name} · ${pin.type}`}
           >
             <span className="min-w-0 flex-1 truncate">{pin.name}</span>
-            {targetName && pins.length === 1 ? (
-              <span
-                className="shrink-0 truncate text-[9.5px] text-(--color-ink-fainter)"
-                title={`落点：${targetName}`}
-              >
-                → {targetName}
-              </span>
-            ) : (
+            {rowTrailing?.(pin) ?? (
               <span className="shrink-0 font-mono text-[9.5px] text-(--color-ink-fainter)">
                 {pin.type}
               </span>
@@ -101,6 +130,14 @@ export function WorkflowParamCard({
           </div>
         ))}
       </div>
+
+      {disabled && (
+        <div className="px-2 pb-1.5 text-[9.5px] leading-relaxed text-amber-500/80">
+          先选模式才能连线
+        </div>
+      )}
+
+      {endpoint}
     </div>
   );
 }
