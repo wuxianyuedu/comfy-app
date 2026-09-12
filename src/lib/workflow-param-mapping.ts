@@ -242,6 +242,7 @@ export function paramOutputPorts(
   entry: ParamEntry,
   io: WorkflowIOMap | null | undefined,
   resolvedTarget: string | null | undefined,
+  reachableKeys?: ReadonlySet<string>,
 ): ParamOutputPort[] {
   const toPort = (
     ioKey: string,
@@ -267,9 +268,22 @@ export function paramOutputPorts(
     return [toPort(target, raw.name, raw.type, true, true)];
   }
   /* ② 未连线：逐个列出候选端口（同一个「尺寸」口把宽/高/宽高比/像素量都摆出来），
-   *    每颗点都对得上自己那一行。 */
-  if (entry.pins.length > 0) {
-    return entry.pins.map((pin) =>
+   *    每颗点都对得上自己那一行。
+   *
+   *    `reachableKeys` 给的是「宿主卡片上真的画得出来、连得上的那一行」的 ioKey
+   *    集合（被组合控件折叠成逐行参数之后，露出来的行就是全部可连行）。给定时只
+   *    列这些候选 —— 端点画在一颗落不上去的句柄上，拖过去只会被闸门判成非法，
+   *    用户看到的就是「点击端点拉线出现禁用标记」（ISSUE #355）。集合缺省
+   *    （调用方拿不到宿主表单的折叠结果）时保持原样，不擅自藏候选。
+   *
+   *    真的一个可连候选都没有时退到占位端口（卡片仍画得出端点，见 ③）—— 一张
+   *    候选全被组合控件吞掉的卡片若画出三四颗连不上的点，比不画更误导。 */
+  const candidates =
+    reachableKeys && reachableKeys.size > 0
+      ? entry.pins.filter((pin) => reachableKeys.has(pin.ioKey))
+      : entry.pins;
+  if (candidates.length > 0) {
+    return candidates.map((pin) =>
       toPort(pin.ioKey, pin.name, pin.type, false, false),
     );
   }

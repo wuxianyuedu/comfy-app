@@ -41,6 +41,16 @@ import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
 import { patchWorkflowSilently } from "@/lib/workflow-mutations";
 import { reportStaleStoreAction } from "@/lib/stale-store-notify";
 
+/** 「没有任何行可连」的空集合：常量复用，避免每次渲染给出新引用。 */
+const EMPTY_KEY_SET: ReadonlySet<string> = new Set<string>();
+
+/** 把「节点 → 落点行」拍平成一份可查的 ioKey 集合。 */
+function toKeySet(byNode: Record<string, string[]>): ReadonlySet<string> {
+  const out = new Set<string>();
+  for (const keys of Object.values(byNode)) for (const key of keys) out.add(key);
+  return out;
+}
+
 /* ───────────────────────────────────────────────────────────────────────
  *  IOEdit store
  * ───────────────────────────────────────────────────────────────────────
@@ -56,6 +66,19 @@ export interface IOEditState {
   ioEditMode: boolean;
   workflowIO: Record<string, WorkflowIOParam>;
   ioPreviewOpen: boolean;
+  /** 当前画布上**真的渲染出来、连得上**的落点行（ioKey 集合）。
+   *
+   *  对外参数卡片的候选端点据此收窄：只有宿主卡片上确实画着那一行，端点才画得
+   *  出来、线才落得下去（折叠成逐行参数后露出来的就是全部可连行）。这份名单由
+   *  宿主节点渲染时上报 —— 它是画布此刻的事实，不是从 workflowIO 推的猜测
+   *  （组合控件是否接管、行是否可见都取决于渲染态）。
+   *
+   *  与 `workflowIO` 分开存：后者是**数据**（落库的条目），前者是**渲染事实**
+   *  （当前视图里有哪些行可连），混在一起会让「取消勾选一个参数」被当成
+   *  「这一行不存在了」。 */
+  wiredPinKeys: ReadonlySet<string>;
+  /** 节点 id → 该节点上报的落点行（`wiredPinKeys` 由它拍平而来）。 */
+  wiredPinKeysByNode: Record<string, string[]>;
   /** 富化下发的「真实 pin 名 / 作者名」事实源（ioKey → 该 pin 现在的事实）。
    *
    *  用它判定本地条目里存的名字是不是一串机器生成的 pin 名 —— 判定要有
@@ -80,6 +103,12 @@ export interface IOEditActions {
   setIoPreviewOpen: (open: boolean) => void;
   /** 同步富化下发的别名判定基准（只有内容真的变了才写，避免渲染回路）。 */
   setAliasBase: (next: Record<string, ExposedAliasBase>) => void;
+  /** 上报某个宿主节点当前渲染出来的落点行；该节点没渲染时传空数组撤回。
+   *
+   *  上报整份集合而不是增量：节点会被卸载、重挂、切视图，增量式的
+   *  「加一行 / 减一行」在卸载路径上必然漏减，攒下来的幽灵行又会让卡片画出
+   *  连不上的端点。按节点归拢，任一次上报都完整覆盖该节点的那一份。 */
+  reportNodeWiredPins: (nodeId: string, ioKeys: string[]) => void;
   toggleIO: (ref: IoRef) => void;
   setIOLabel: (key: string, label: string) => void;
   toggleIORequired: (key: string) => void;
@@ -125,11 +154,34 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     workflowIO: {},
     ioPreviewOpen: false,
     aliasBaseByKey: {},
+    wiredPinKeysByNode: {},
+    wiredPinKeys: EMPTY_KEY_SET,
 
     setIoEditMode: (on) =>
       set(on ? { ioEditMode: true } : { ioEditMode: false, ioPreviewOpen: false }),
     setIoPreviewOpen: (open) =>
       set(open ? { ioPreviewOpen: true, ioEditMode: true } : { ioPreviewOpen: false, ioEditMode: false }),
+
+    reportNodeWiredPins: (nodeId, ioKeys) => {
+      /* 按节点归拢 + 按内容比较：这份名单是「渲染事实」，同一次渲染里同样的
+       * 内容不该产生新引用（否则卡片节点整批重建、React Flow 每帧重跑同步
+       * effect —— 表现为画布卡死）。 */
+      set((state) => {
+        const prev = state.wiredPinKeysByNode ?? {};
+        const prevKeys = prev[nodeId] ?? [];
+        if (
+          prevKeys.length === ioKeys.length &&
+          prevKeys.every((key, index) => key === ioKeys[index])
+        ) {
+          return {};
+        }
+        const next = { ...prev, [nodeId]: ioKeys };
+        return {
+          wiredPinKeysByNode: next,
+          wiredPinKeys: toKeySet(next),
+        };
+      });
+    },
 
     setAliasBase: (next) =>
       set((state) => {
@@ -503,6 +555,9 @@ export function useIOEditStore<U>(selector: (s: IOEditStore) => U): U {
 
 /* 便捷子选择器 —— 消费方直接用，避免手写 selector 样板。 */
 export const selectIoEditMode = (s: IOEditStore) => s.ioEditMode;
+/** 画布上真的画得出来、连得上的落点行（见 IOEditState.wiredPinKeys）。 */
+export const selectWiredPinKeys = (s: IOEditStore) =>
+  s.wiredPinKeys ?? EMPTY_KEY_SET;
 export const selectWorkflowIO = (s: IOEditStore) => s.workflowIO;
 export const selectIoPreviewOpen = (s: IOEditStore) => s.ioPreviewOpen;
 

@@ -488,3 +488,34 @@ describe("callStoreAction", () => {
     }
   });
 });
+
+describe("IOEditStore.reportNodeWiredPins —— 画布上「真的连得上的行」", () => {
+  it("按节点上报后拍平成一份可查的 ioKey 集合", () => {
+    const store = createIOEditStore("wf");
+    store
+      .getState()
+      .reportNodeWiredPins("5", ["5::widget::width", "5::widget::height"]);
+    expect([...store.getState().wiredPinKeys].sort()).toEqual([
+      "5::widget::height",
+      "5::widget::width",
+    ]);
+  });
+
+  it("同一个节点重复上报是覆盖而不是累加（卸载时传空数组即撤回）", () => {
+    const store = createIOEditStore("wf");
+    store.getState().reportNodeWiredPins("5", ["5::widget::width"]);
+    store.getState().reportNodeWiredPins("5", []);
+    expect([...store.getState().wiredPinKeys]).toEqual([]);
+    /* 撤回只影响本节点那一份，别的节点的行不受影响。 */
+    store.getState().reportNodeWiredPins("9", ["9::widget::text"]);
+    expect([...store.getState().wiredPinKeys]).toEqual(["9::widget::text"]);
+  });
+
+  it("内容没变时不产生新引用（否则卡片节点整批重建、画布卡死）", () => {
+    const store = createIOEditStore("wf");
+    store.getState().reportNodeWiredPins("5", ["5::widget::width"]);
+    const before = store.getState().wiredPinKeys;
+    store.getState().reportNodeWiredPins("5", ["5::widget::width"]);
+    expect(store.getState().wiredPinKeys).toBe(before);
+  });
+});

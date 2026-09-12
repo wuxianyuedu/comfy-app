@@ -11,7 +11,12 @@
 
 import type { Edge } from "@xyflow/react";
 
-import { paramNodeId, type ParamEntry } from "~/lib/workflow-param-mapping";
+import {
+  entryIdFromParamNodeId,
+  paramNodeId,
+  type ParamEntry,
+} from "~/lib/workflow-param-mapping";
+import type { WorkflowIOMap } from "~/lib/workflow-io-types";
 
 /** 自动判定落点的描边色。 */
 const AUTO_STROKE = "#64748b";
@@ -67,4 +72,52 @@ export function buildParamEdges(ctx: BuildParamEdgesCtx): Edge[] {
     });
   }
   return out;
+}
+
+
+/* ── 连线两端的方向与归属判定（纯函数）──
+ *
+ * React Flow 在**连线过程中**用 `isValidConnection` 预判「悬停处能不能落线」，
+ * 判非法就在指针旁给出禁用标记。所以这个闸门必须把两端的方向判死，否则：
+ *
+ *   · 从卡片端点（source）拖到宿主节点里任意一行 —— 那些句柄是躺在节点里的
+ *     **输入**端点，id 与落点同名，命中「目标必须落在宿主节点端口上」却过不了
+ *     方向；反过来从宿主行拖向卡片也同样被判非法。用户看到的就是「点击端点拉线
+ *     出现禁用标记」（ISSUE #355）。
+ *
+ * 这里只做「这条连接表达不表达一条映射」的判断，不碰模式（模式决定这条线归属哪个
+ * 命名空间，不决定拖线本身是否成立）。
+ */
+
+/** 一条连接是否是一条合法的映射线（卡片端点 ↔ 该对外参数的宿主节点端口）。
+ *
+ *  两个方向都接：卡片端点是 source（输出）、宿主行是 target（输入）是常态；
+ *  反向拖（宿主行 → 卡片端点）时两个键互换，React Flow 在非 Strict 连线模式下
+ *  不保证方向，所以这里显式归一化，免得「怎么拖都连不上」。 */
+export function isValidParamConnection(
+  connection: {
+    source?: string | null;
+    target?: string | null;
+    sourceHandle?: string | null;
+    targetHandle?: string | null;
+  },
+  entries: readonly ParamEntry[],
+  io: WorkflowIOMap | null | undefined,
+): boolean {
+  const forward = entryIdFromParamNodeId(connection.source ?? "");
+  const backward = entryIdFromParamNodeId(connection.target ?? "");
+  const entryId = forward ?? backward;
+  /* 两端都不是卡片（图上普通连线）→ 不是映射线。这里只做映射线的合法性判断，
+   *  图上原有连线的合法性由画布自己管。 */
+  if (!entryId) return false;
+  /* 两端都是卡片 → 一张接线面板连到另一张，不表达任何落点。 */
+  if (forward && backward) return false;
+  const targetNodeId = forward ? connection.target : connection.source;
+  const targetHandle = forward ? connection.targetHandle : connection.sourceHandle;
+  if (!targetNodeId || !targetHandle) return false;
+  const entry = entries.find((item) => item.id === entryId);
+  if (entry?.nodeId !== targetNodeId) return false;
+  /* 落点是宿主行（或组合控件）的 handle id —— 它必须在 workflowIO 里真实存在，
+   *  否则边画得出来、运行期却落不到值（静默失效）。 */
+  return !!io?.[targetHandle];
 }
