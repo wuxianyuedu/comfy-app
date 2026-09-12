@@ -43,14 +43,14 @@ pnpm typecheck          # tsc --noEmit
 | `src/components/studio/AgentPanel.test.tsx` | AgentPanel（空态、四状态、回调、禁用态、头像兜底） | 8 |
 | `src/components/studio/logs/log-store.test.ts` | 日志 store（批量追加/上限裁剪/过滤搜索/serialize/解析） | 53 |
 | `src/components/studio/debug/debug-store.test.ts` | 调试开关 store（状态迁移、幂等） | 7 |
-| `src/components/workflow-canvas/CustomNodesSettings/parsing.test.ts` | 解析纯函数（pathKey/deriveRowState/splitPaths/eqArr） | 33 |
+| `src/components/studio/workflow-library/CustomNodesSettings/parsing.test.ts` | 解析纯函数（pathKey/deriveRowState/splitPaths/eqArr） | 33 |
 | `src/components/studio/workflow-library/WorkflowLibraryHelpers.test.ts` | 库卡片派生（格式标志/同步态/技术名/ago） | 27 |
 | `src/lib/media.test.ts` | isVideo（扩展名/大小写/URL/查询串/边界） | 9 |
 | `src/components/studio/canvas/SubgraphHeader.test.tsx` | 子图头（标题回退、折叠/钻入回调、IO checkbox 条件） | 12 |
 | `src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.test.tsx` | Field/StatusDot/StatusBadge/NodeChip | 11 |
 | `src/components/studio/project-canvas/CanvasNode/ResultCard.test.tsx` | 结果卡（三分支、mediaType 判定、占位与回退） | 11 |
 | `src/components/studio/shared/DynamicWorkflowForm/sections/*.test.tsx` | 表单分区（骨架/空态/I/O 端点 chip） | 10 |
-| `src/components/workflow-canvas/CustomNodesSettings/SettingsParts.test.tsx` | 设置行/值 chip/汇总/进度/报告卡 | 17 |
+| `src/components/studio/workflow-library/CustomNodesSettings/SettingsParts.test.tsx` | 设置行/值 chip/汇总/进度/报告卡 | 17 |
 | （另 2 个文件为既有 lib 测试） | — | — |
 
 ### 新增测试指引

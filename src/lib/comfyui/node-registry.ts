@@ -1,12 +1,12 @@
 /**
- * Node Type Registry
+ * Node Type Registry — 内置 ComfyUI 节点（class_type）→ 展示配置。
  *
- * Maps every ComfyUI class_type we support to its visual config,
- * default fields, and category. Used by both graph→ReactFlow conversion
- * and the parameter editor panel.
+ * 只有一个消费者：`src/config/custom-nodes.ts`。自定义节点 manifest 里携带的
+ * class_type 是否属于「已知内置节点」（决定节点卡片的来源标签与调试链路标注）
+ * 就查这张表。
  */
 
-import type { NodeTypeConfig, FieldDef } from "./types";
+import type { NodeTypeConfig, FieldDef } from "./node-config";
 import { CUSTOM_NODE_TYPES } from "@/config/custom-nodes";
 
 /* ── Shared field definitions (reused across node types) ── */
@@ -263,23 +263,11 @@ export function getNodeConfig(classType: string): NodeTypeConfig {
   );
 }
 
-/** All known class_type names (for the "add node" menu). Recomputed on call so
- *  newly-parsed custom nodes appear without a restart. */
+/** All known class_type names (built-in + parsed custom nodes). Recomputed on
+ *  call so newly-parsed custom nodes appear without a restart. */
 export function getAllNodeTypes(): string[] {
   return Object.keys({
     ...NODE_TYPE_REGISTRY,
     ...CUSTOM_NODE_TYPES,
   });
 }
-
-/** Category labels for grouping in add-node menu */
-export const CATEGORY_LABELS: Record<string, string> = {
-  input: "输入",
-  output: "输出",
-  model: "模型",
-  process: "处理",
-  conditioning: "条件编码",
-  latent: "潜空间",
-  image: "图像处理",
-  custom: "自定义节点",
-};
