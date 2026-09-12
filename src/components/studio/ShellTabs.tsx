@@ -131,9 +131,17 @@ function InAppTabStrip({
  * 得到内容，也不知道为什么。现在页签照常打开，这里给出成因与下一步，
  * 至少让失败是**可读、可行动**的，而不是一片空白（ISSUE #310）。
  */
-function TabBlockedNotice({ label, reason }: { label: string; reason: string }) {
+function TabBlockedNotice({
+  label,
+  reason,
+  url,
+}: {
+  label: string;
+  reason: string;
+  url?: string | null;
+}) {
   return (
-    <div className="flex h-full items-center justify-center p-8">
+    <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
       <div className="max-w-xl space-y-3 text-center">
         <p className="text-base font-medium text-(--color-ink-bright)">
           无法在此页签中显示 {label}
@@ -145,6 +153,28 @@ function TabBlockedNotice({ label, reason }: { label: string; reason: string }) 
           通常重启 ComfyUI 即可恢复（应用会自动以放行内嵌的参数拉起它）。
         </p>
       </div>
+      {/* 地址是唯一能「自己验证」的信息：复制到浏览器里能打开 → 拦的是应用外壳
+       * 的跨源 frame 策略；浏览器里也打不开 → 拦的是 ComfyUI 自己。此前只剩
+       * 「已阻止此内容」一句时，两种情形长得一模一样（ISSUE #310）。 */}
+      {url && (
+        <div className="flex max-w-xl items-center gap-2 rounded-md border border-(--color-border-subtle) bg-(--color-subtle)/40 px-3 py-2">
+          <code className="truncate text-xs text-(--color-ink-muted)">
+            {url}
+          </code>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard?.writeText(url);
+            }}
+            className="shrink-0 rounded px-2 py-1 text-xs text-(--color-ink-muted) hover:bg-(--color-subtle) hover:text-(--color-ink-strong)"
+          >
+            复制地址
+          </button>
+        </div>
+      )}
+      <p className="max-w-xl text-center text-xs leading-relaxed text-(--color-ink-fainter)">
+        也可以到 设置 → 创作后端，点「在浏览器打开」直接查看。
+      </p>
     </div>
   );
 }
@@ -202,7 +232,11 @@ export function ShellTabs({ children }: ShellTabsProps) {
             aria-hidden={activeTabId !== tab.id}
           >
             {tab.blockedReason ? (
-              <TabBlockedNotice label={tab.label} reason={tab.blockedReason} />
+              <TabBlockedNotice
+                label={tab.label}
+                reason={tab.blockedReason}
+                url={tab.blockedUrl}
+              />
             ) : tab.url ? (
               <iframe
                 src={tab.url}

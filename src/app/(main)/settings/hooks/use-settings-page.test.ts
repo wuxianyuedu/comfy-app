@@ -1116,6 +1116,9 @@ describe("打开查看 ComfyUI — 页签形态（ISSUE #310）", () => {
     // 不塞内嵌地址（那是空白页签的来源），改为带可读说明。
     expect(tab?.url ?? null).toBeNull();
     expect(tab?.blockedReason).toContain("403");
+    /* 说明里必须带上地址：只剩一句「看不了」时，用户既无法自查、也无法判断
+     * 是外壳拦的还是 ComfyUI 自己拦的（ISSUE #310 第三次回归的现场）。 */
+    expect(tab?.blockedUrl).toBe("http://127.0.0.1:8188");
     expect(result.current.flash?.kind).toBe("err");
   });
 
