@@ -23,6 +23,7 @@ import {
   hasManualWiring,
   isDefaultMapping,
   manualTargetFor,
+  manualTargetForEntry,
   parseParamMapping,
   resolveMapping,
   serializeParamMapping,
@@ -83,7 +84,13 @@ export function useParamMapping({
   const [overlay, setOverlay] = useState<ParamMapping>({ manualByMode: {} });
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const entries = useMemo(() => buildParamEntries(io), [io]);
+  /* 条目来自**统一对外参数契约**（按模式），与工作流无关：`prompt` / `size` /
+   *  `first-frame`… 工作流只决定每个口子落到哪一行端口。没有模式时退到契约里
+   *  最通用的一套，不再逐节点列出工作流内部参数（`value_1` / `steps`…）。 */
+  const entries = useMemo(
+    () => buildParamEntries(io, undefined, { mode: activeMode }),
+    [io, activeMode]
+  );
   const auto = useMemo(() => autoMapEntries(entries, io), [entries, io]);
 
   /* 本地 overlay 覆盖已落库的那一份（键空间与落库同构：模式 → 条目 → 目标）。 */
@@ -111,9 +118,20 @@ export function useParamMapping({
     [entries, io, merged, activeMode]
   );
 
+  const entryById = useMemo(() => {
+    const map = new Map<string, ParamEntry>();
+    for (const entry of entries) map.set(entry.id, entry);
+    return map;
+  }, [entries]);
+
+  /* 按条目查（含历史键兼容读取）——只按裸 id 查会让改版前落库的线静默失效。 */
   const isManual = useCallback(
-    (id: string) => manualTargetFor(merged, id, activeMode) !== undefined,
-    [merged, activeMode]
+    (id: string) => {
+      const entry = entryById.get(id);
+      if (!entry) return manualTargetFor(merged, id, activeMode) !== undefined;
+      return manualTargetForEntry(merged, entry, activeMode) !== undefined;
+    },
+    [merged, activeMode, entryById]
   );
 
   /** 在当前模式下写入一条落点覆盖；没有模式时是空操作（覆盖必须有归属）。 */

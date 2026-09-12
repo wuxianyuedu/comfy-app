@@ -171,6 +171,47 @@ describe("对外参数节点只在画布上表达映射", () => {
     expect(code).toContain("flex min-h-0 flex-1 justify-center overflow-auto");
   });
 
+  it("对外参数清单只来自契约（按模式），不再逐节点列出工作流内部参数", () => {
+    /* 「对外参数」是产品对用户承诺的那几个口子（提示词 / 尺寸 / 首帧…），
+     * 由模式决定，与具体工作流无关 —— 契约表是唯一来源。视图层与映射层都不许
+     * 自己按 pin 名聚类出一份「跟着工作流走」的清单。 */
+    const lib = readFileSync(
+      path.resolve(__dirname, "../../../lib/workflow-exposed-params.ts"),
+      "utf8",
+    );
+    expect(lib).toContain("exposedParamsForMode");
+    const mapping = stripComments(
+      readFileSync(
+        path.resolve(__dirname, "../../../lib/workflow-param-mapping.ts"),
+        "utf8",
+      ),
+    );
+    expect(mapping).toContain("exposedParamsForMode");
+  });
+
+  it("节点上已经选了模式时，卡片不再写「先选模式才能连线」", () => {
+    /* 模式解析收敛到 resolveWorkflowMode（defaultMode → modes[0] → taskType）：
+     * 编辑器此前只认 defaultMode，声明了模式但没写默认值时卡片就提示「先选模式
+     * 才能连线」，而库里 / 画布上的模式 chip 明明已经显示着「单图生视频」了。 */
+    const inner = readFileSync(
+      path.join(EDITOR_DIR, "WorkflowEditorInner.tsx"),
+      "utf8",
+    );
+    const code = stripComments(inner);
+    expect(code).toContain("resolveWorkflowMode");
+    expect(code).not.toMatch(/wiringMode\s*=\s*detail\?\.defaultMode/);
+    /* 只读卡片（库内）不写「先选模式才能连线」—— 那是编辑态才有的信息。 */
+    const card = stripComments(
+      readFileSync(path.join(EDITOR_DIR, "WorkflowParamCard.tsx"), "utf8"),
+    );
+    expect(card).not.toContain("先选模式才能连线");
+    const column = readFileSync(
+      path.join(LIBRARY_DIR, "WorkflowParamCardColumn.tsx"),
+      "utf8",
+    );
+    expect(stripComments(column)).toContain("readOnly");
+  });
+
   it("映射几何只由纯函数给出（位置派生，不落库）", () => {
     const lib = stripComments(
       readFileSync(

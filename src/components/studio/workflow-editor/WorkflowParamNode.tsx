@@ -37,6 +37,7 @@ export const WorkflowParamNode = React.memo(function WorkflowParamNode({
       pins={data.pins}
       width={data.width}
       canWire={data.canWire}
+      noModeHint={data.noModeHint}
       canReset={data.canReset}
       onReset={data.onReset}
       /* 端口行只列名字：卡片本身不标落点，落点由那条线表达。行高必须与

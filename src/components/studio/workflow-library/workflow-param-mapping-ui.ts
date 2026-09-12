@@ -12,6 +12,7 @@ import type { ParamClass } from "~/lib/workflow-param-mapping";
 export const PARAM_CLASS_LABEL: Record<ParamClass, string> = {
   prompt: "提示词",
   negative: "负面提示词",
+  size: "尺寸",
   "size-width": "宽度",
   "size-height": "高度",
   "size-aspect": "宽高比",
@@ -26,6 +27,7 @@ export const PARAM_CLASS_LABEL: Record<ParamClass, string> = {
 export const PARAM_CLASS_COLOR: Record<ParamClass, string> = {
   prompt: "#a78bfa",
   negative: "#f87171",
+  size: "#38bdf8",
   "size-width": "#38bdf8",
   "size-height": "#38bdf8",
   "size-aspect": "#38bdf8",
