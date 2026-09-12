@@ -5,8 +5,12 @@ import { expect, test, type Page, type Route } from "@playwright/test";
  * 四段收进 CI 的 `@critical` 门禁。
  *
  * 设计约束（与规范 11.3.1 / 11.7 对齐）：
- *   - **不依赖真实 ComfyUI / GPU / 外网**：所有后端交互走 Playwright 路由拦截
- *     或固定 fixture，否则 CI 上必挂、本地也脆。
+ *   - **不依赖真实 ComfyUI / GPU / 外网**：后端交互走 Playwright 路由拦截、
+ *     固定 fixture，或本仓库自带的**假 ComfyUI**（`e2e/support/fake-comfyui-server.mjs`，
+ *     由 playwright.config 的第二个 webServer 拉起）。为什么「内嵌」那两条必须
+ *     用假服务而不是路由拦截：能不能被内嵌是**服务端**探测的
+ *     （`setting.comfyEmbeddable`），浏览器侧 `route.fulfill` 够不到那条链路
+ *     （ISSUE #310）。
  *   - **选择器只用用户可见的东西**（getByRole / getByText），不依赖 data-testid，
  *     这样重构 DOM 不会让用例失效、而真实回归一定会被抓到。
  *   - 只断言「用户能感知的结果」，不断言内部 state。
@@ -331,44 +335,98 @@ test.describe("应用页签与全屏视图 @critical", () => {
   });
 
   /**
-   * 同一处回归的**第三形态**：ComfyUI 页签里的 iframe。
+   * 同一处回归的**第三形态**：ComfyUI 页签里的内容。
    *
    * 前两轮修的都是「本应用自己的浮层盖住标题行」，而 ComfyUI 页签是另一类：
-   * 页签打开了、地址也对，里面却是浏览器的「已阻止此内容」错误页 ——
-   * ComfyUI 会发 `X-Frame-Options: DENY`，而它与本应用不同源（端口不同即跨源），
-   * iframe 内嵌必然被拒。宿主页跨源读不到响应头、事件也不带原因，所以
-   * 「能不能嵌」由服务端 `setting.comfyEmbeddable` 回答。
+   * 页签打开了、地址也对，里面却什么都没有 —— 未开 CORS 的 ComfyUI 会对
+   * 跨源请求返 **403**（origin-only 中间件），响应体为空所以一片白。宿主页
+   * 跨源读不到响应头、事件也不带原因，所以「能不能嵌」由服务端
+   * `setting.comfyEmbeddable` 回答。
    *
-   * 这里在浏览器形态下断言不可嵌时**不会**塞进一个注定空白的内嵌页签。
+   * 两个方向都要守住（ISSUE #310，用户要求「只要多页签，不要另一个窗口」）：
+   *   ① 可嵌 → 页签里确实渲染 iframe；
+   *   ② 不可嵌 → 仍在**同一个窗口的页签**里给出可读说明，不弹第二个窗口。
    */
-  test("@critical ComfyUI 不可内嵌时不塞 iframe 而是给可见出口", async ({ page }) => {
+  /* 打开设置 → 创作后端 → 点「打开查看」。假 ComfyUI 在 8188 上（见
+   * playwright.config.ts 的第二个 webServer），带 `--enable-cors-header`
+   * 语义启动，即用户实际会遇到的正常路径。 */
+  async function openComfyFromSettings(page: Page) {
+    await page.goto("/workspace");
+    await page.getByTitle("设置").first().click();
+    await expect(page.getByRole("heading", { name: "设置" })).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.getByRole("button", { name: "创作后端", exact: true }).click();
+    await page.getByRole("button", { name: /打开查看/ }).first().click();
+  }
+
+  test("@critical ComfyUI 在页签里内嵌渲染 不另开窗口", async ({ page }) => {
+    let windowCount = 0;
+    page.on("popup", () => {
+      windowCount += 1;
+    });
+
+    await openComfyFromSettings(page);
+
+    // 页签里确实渲染出被嵌页（而不是一片空白）。
+    await expect(page.locator('iframe[title="ComfyUI"]')).toHaveCount(1, {
+      timeout: 20_000,
+    });
+    // 页签栏出现 ComfyUI —— 就是用户要的「多页签」形态。
+    await expect(page.getByRole("tab", { name: /ComfyUI/ })).toBeVisible();
+    // 且**没有**弹出第二个窗口。
+    expect(windowCount).toBe(0);
+  });
+
+  /* 负向：内嵌探测判「不可嵌」时，**仍然留在同一个页签**里给出可读说明 ——
+   * 不塞一个注定空白的 iframe、不弹第二个窗口、不跳浏览器。
+   *
+   * 只桩 `comfyEmbeddable` 一个端点（其余走真实后端）：判定要覆盖的是
+   * 「客户端拿到 blocked 结论后怎么渲染」，而 blocked 的**成因**（ComfyUI 未开
+   * CORS 对跨源返 403）已在 `src/lib/comfy-embed.test.ts` 与假 ComfyUI 的
+   * 真实 403 场景里各自钉住。 */
+  test("@critical ComfyUI 不可嵌时在同一页签里给说明 不另开窗口", async ({
+    page,
+  }) => {
+    let windowCount = 0;
+    page.on("popup", () => {
+      windowCount += 1;
+    });
+
     await page.route("**/api/trpc/**", async (route: Route) => {
       const url = route.request().url();
-      const short = url.split("/api/trpc/")[1]?.split("?")[0]?.split(",")[0] ?? "";
-      let data: unknown;
-      if (short === "setting.get") data = { json: "{}" };
-      else if (short === "comfyui.status")
-        data = { up: true, base: "http://127.0.0.1:8188", starting: false, stopping: false };
-      else if (short === "comfyEmbeddable")
-        data = { embeddable: false, reason: "ComfyUI 返回 X-Frame-Options: DENY" };
-      else {
+      if (!url.includes("comfyEmbeddable")) {
         await route.continue();
         return;
       }
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ result: { data } }),
+        body: JSON.stringify({
+          result: {
+            data: {
+              json: {
+                embeddable: false,
+                reason: "ComfyUI 对跨源请求返回 403（未开启 CORS）",
+                target: "blocked",
+              },
+            },
+          },
+        }),
       });
     });
 
-    await page.goto("/workspace");
-    await page.getByTitle("设置").first().click();
-    await expect(page.getByRole("heading", { name: "设置" })).toBeVisible({
+    await openComfyFromSettings(page);
+
+    // 绝不塞一个注定空白的内嵌 iframe（那正是空白页签的来源）。
+    await expect(page.locator('iframe[title="ComfyUI"]')).toHaveCount(0);
+    // 说明留在**页签内**，用户看得见成因。
+    await expect(page.getByText(/无法在此页签中显示 ComfyUI/)).toBeVisible({
       timeout: 20_000,
     });
-
-    // 页签里绝不出现指向 ComfyUI 的内嵌 iframe（那正是错误页的来源）。
-    await expect(page.locator('iframe[title="ComfyUI"]')).toHaveCount(0);
+    // 页签本身照常存在（不是「什么都没发生」）。
+    await expect(page.getByRole("tab", { name: /ComfyUI/ })).toBeVisible();
+    // 不弹第二个窗口。
+    expect(windowCount).toBe(0);
   });
 });

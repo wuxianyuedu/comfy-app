@@ -32,6 +32,14 @@ export interface ShellTab {
   url: string | null;
   /** 是否可关闭（主应用页签恒为 false）。 */
   closable: boolean;
+  /**
+   * 无法内嵌时的**页签内**说明（成因 + 修复动作）。
+   *
+   * 为什么挂在页签上而不是弹窗：目标形态是「只有多页签」。当内容打不开时，
+   * 页签照常打开、里面渲染这段文字，用户留在同一个窗口里；而不是像以前那样
+   * 另开一个（多半也是空白的）独立窗口，把问题搬走却不说原因（ISSUE #310）。
+   */
+  blockedReason?: string | null;
 }
 
 export interface ShellTabsState {
@@ -48,7 +56,7 @@ export interface ShellTabsState {
   /** 更新指定页签标题 / 地址。 */
   updateTab: (
     id: string,
-    patch: Partial<Pick<ShellTab, "label" | "url">>,
+    patch: Partial<Pick<ShellTab, "label" | "url" | "blockedReason">>,
   ) => void;
 }
 
@@ -75,11 +83,16 @@ export const useShellTabs = create<ShellTabsState>((set) => ({
       const id = resolveTabId(tab);
       const existing = state.tabs.find((t) => t.id === id);
       if (existing) {
-        // 已存在：仅激活 + 必要时刷新标题/地址。
+        // 已存在：仅激活 + 必要时刷新标题/地址/说明。
         return {
           tabs: state.tabs.map((t) =>
             t.id === id
-              ? { ...t, label: tab.label ?? t.label, url: tab.url ?? t.url }
+              ? {
+                  ...t,
+                  label: tab.label ?? t.label,
+                  url: tab.url ?? t.url,
+                  blockedReason: tab.blockedReason ?? null,
+                }
               : t,
           ),
           activeTabId: id,
@@ -90,6 +103,7 @@ export const useShellTabs = create<ShellTabsState>((set) => ({
         label: tab.label,
         url: tab.url,
         closable: tab.closable,
+        blockedReason: tab.blockedReason ?? null,
       };
       return { tabs: [...state.tabs, next], activeTabId: id };
     }),

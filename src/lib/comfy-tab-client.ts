@@ -1,36 +1,36 @@
 /* ── ComfyUI 页签的打开决策（第②层：网络 + 壳交互）────────────────────
  * 视图（`use-settings-page.ts` 的「打开查看」）只消费本模块的返回值，
- * 不自己判 X-Frame-Options、不自己拼 iframe，也不直接 invoke 壳命令
- * （规范 17 §17.2）。
+ * 不自己判响应头、不自己拼 iframe，也不直接 invoke 壳命令（规范 17 §17.2）。
  *
- * 为什么决策要放在这一层而不是视图里：**宿主页根本判不出来**。
- * ComfyUI 与应用不同源（端口不同即跨源），iframe 里的 `error` / `load`
- * 事件都不带失败原因，被 `X-Frame-Options: DENY` 拒绝与「页面确实是空的」
- * 在 JS 里长得一样；控制台只会留一句浏览器自己发的
- * 「已阻止此内容。请与网站所有者联系以解决此问题。」——用户看到的就是
- * 一张空白页签（ISSUE #310 三次回归的现场）。所以「能不能嵌」必须由
- * 服务端探测（`setting.comfyEmbeddable`）回答。
+ * 目标形态（ISSUE #310 用户明确要求）：**只有多页签，不弹第二个窗口**。
+ * 所以本模块只回两种结果——能嵌就内嵌，判定不能嵌也仍然在**同一个页签**
+ * 里渲染一张应用内的可见说明（成因 + 修复动作），不再退到壳内独立窗口或
+ * 系统浏览器。
  *
- * 兜底链：可嵌 → 内嵌页签；不可嵌且在壳内 → 壳内独立窗口（Rust
- * `open_comfyui_window`，仍在同一应用里）；其余 → 系统浏览器。
+ * 为什么「能不能嵌」要在服务端探：跨源读不到响应头，iframe 的 error/load
+ * 事件都不带失败原因 —— 被拒绝与「页面确实是空的」在 JS 里长得一样，
+ * 用户看到的只有一片空白。判据在 `comfy-embed.ts`，经 tRPC
+ * `setting.comfyEmbeddable` 暴露。
+ *
+ * 正常情况下这里应该总是 `embed`：ComfyUI 是本应用 spawn 的，启动参数带了
+ * `--enable-cors-header`，跨源不再被 origin-only 中间件拦 403。`blocked`
+ * 只出现在「外部启动的实例不受本应用参数控制 / 用户手填参数覆盖」时。
  */
 
 import { vanillaApi } from "~/trpc/vanilla";
 
-import { isDesktopShell, openUrlInShell } from "./desktop-shell-client";
-
-/** 打开 ComfyUI 的结果：`target` 说明最终去了哪里，`detail` 可直接展示。 */
+/** 打开 ComfyUI 的结果：`target` 说明最终形态，`detail` 可直接展示。 */
 export type OpenComfyTabResult = {
-  /** 最终打开方式。 */
-  target: "embed" | "shell-window" | "browser";
+  /** 最终形态：内嵌页签 / 页签内阻止说明（两者都在应用内，不弹窗）。 */
+  target: "embed" | "blocked";
   /** 内嵌时可用的 URL（`target === "embed"` 时非空）。 */
   embedUrl: string | null;
-  /** 可直接展示给用户的说明。 */
+  /** 可直接展示给用户的说明（含不可嵌时的修复动作）。 */
   detail: string;
 };
 
 /**
- * 打开 ComfyUI 页签。
+ * 决定 ComfyUI 页签怎么打开。
  *
  * @param base        运行中 ComfyUI 的地址（设置页状态里已探好的 base）
  * @param hostOrigin  应用自身的源（`window.location.origin`）
@@ -39,10 +39,12 @@ export async function openComfyTab(
   base: string,
   hostOrigin: string,
 ): Promise<OpenComfyTabResult> {
-  const inShell = isDesktopShell();
   const verdict = await vanillaApi.setting.comfyEmbeddable
     .query({ base, hostOrigin })
-    .catch(() => ({ embeddable: false, reason: "内嵌策略探测失败" }));
+    .catch(() => ({
+      embeddable: false,
+      reason: "内嵌策略探测失败（未能问到服务端结论）",
+    }));
 
   if (verdict.embeddable) {
     return {
@@ -52,20 +54,10 @@ export async function openComfyTab(
     };
   }
 
-  // 不可嵌：壳内退到独立窗口（仍是本应用的一部分），否则交给系统浏览器。
-  if (inShell) {
-    const r = await openUrlInShell(base);
-    return {
-      target: "shell-window",
-      embedUrl: null,
-      detail: r.ok
-        ? `ComfyUI 不允许被内嵌（${verdict.reason}），已在应用内的独立窗口中打开`
-        : `${r.detail}（原因：${verdict.reason}）`,
-    };
-  }
+  // 不可嵌也留在页签内：页签本身照常打开，只是内容换成可读的说明。
   return {
-    target: "browser",
+    target: "blocked",
     embedUrl: null,
-    detail: `ComfyUI 不允许被内嵌（${verdict.reason}），已改用系统浏览器打开`,
+    detail: `ComfyUI 未放行跨源内嵌（${verdict.reason}）`,
   };
 }

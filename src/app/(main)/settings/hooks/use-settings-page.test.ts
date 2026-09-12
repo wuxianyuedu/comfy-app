@@ -29,6 +29,7 @@ import { createTestQueryClient } from "../../../../../tests/helpers/renderWithPr
 import { createTestTRPC } from "../../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../../tests/helpers/trpc-msw";
 import { api } from "~/trpc/react";
+import { useShellTabs, MAIN_TAB_ID } from "~/lib/shell-tabs-store";
 import { probeOllama, startOllama } from "~/lib/llm/ollama-client";
 
 
@@ -127,6 +128,10 @@ interface Behavior {
   saveLlmError?: string;
   saveSettingsError?: string;
   comfyStart?: { ok: boolean; detail: string };
+  /** comfyui.status 返回的 base（非空即「运行中」，供「打开查看」使用）。 */
+  comfyBase?: string | null;
+  /** comfyEmbeddable 探测结论（决定页签里渲染 iframe 还是可读说明）。 */
+  comfyEmbeddable?: { embeddable: boolean; reason: string };
   dbStudioStatusError?: string;
   dbStudioUp?: boolean;
 }
@@ -155,11 +160,18 @@ const mockRouter = t.router({
       return { settings: behavior.settings ?? SETTINGS };
     }),
     comfyStatus: t.procedure.query(() => ({
-      up: false,
-      base: null,
+      up: behavior.comfyBase != null,
+      base: behavior.comfyBase ?? null,
       starting: false,
       pathConfigured: true,
     })),
+    comfyEmbeddable: t.procedure.query(
+      () =>
+        behavior.comfyEmbeddable ?? {
+          embeddable: true,
+          reason: "ComfyUI 已开启 CORS",
+        },
+    ),
     comfyStart: t.procedure.mutation(
       () => behavior.comfyStart ?? { ok: true, detail: "已启动" },
     ),
@@ -1037,5 +1049,79 @@ describe("useSettingsPage", () => {
       kind: "err",
       text: "没有可打开的资源地址",
     });
+  });
+});
+
+/* ── 「打开查看 ComfyUI」的打开形态（ISSUE #310）───────────────────────
+ * 用户明确要求：**只要多页签，不要另开窗口**。所以这里断言的是
+ * 「页签里渲染什么」，而不是「去了哪个窗口」——两条用例覆盖可嵌 / 不可嵌，
+ * 两者都必须落在同一个页签上，且不可嵌时给出可读的成因。
+ */
+describe("打开查看 ComfyUI — 页签形态（ISSUE #310）", () => {
+  beforeEach(() => {
+    useShellTabs.setState({
+      tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
+      activeTabId: MAIN_TAB_ID,
+    });
+  });
+
+  it("可嵌 → 打开 ComfyUI 页签并带上内嵌地址", async () => {
+    behavior.comfyBase = "http://127.0.0.1:8188";
+    behavior.comfyEmbeddable = { embeddable: true, reason: "已开启 CORS" };
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await act(async () => {
+      await result.current.openComfy();
+    });
+
+    const tab = useShellTabs.getState().tabs.find((t) => t.id === "comfyui");
+    expect(tab).toBeDefined();
+    expect(tab?.url).toBe("http://127.0.0.1:8188");
+    expect(tab?.blockedReason ?? null).toBeNull();
+    expect(useShellTabs.getState().activeTabId).toBe("comfyui");
+    expect(result.current.flash?.kind).toBe("ok");
+  });
+
+  it("不可嵌 → 页签照常打开但带上可读说明（不静默空白）", async () => {
+    behavior.comfyBase = "http://127.0.0.1:8188";
+    behavior.comfyEmbeddable = {
+      embeddable: false,
+      reason: "ComfyUI 对跨源请求返回 403（未开启 CORS）",
+    };
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await act(async () => {
+      await result.current.openComfy();
+    });
+
+    const tab = useShellTabs.getState().tabs.find((t) => t.id === "comfyui");
+    expect(tab).toBeDefined();
+    // 不塞内嵌地址（那是空白页签的来源），改为带可读说明。
+    expect(tab?.url ?? null).toBeNull();
+    expect(tab?.blockedReason).toContain("403");
+    expect(result.current.flash?.kind).toBe("err");
+  });
+
+  it("未运行时给可行动的提示且不开页签", async () => {
+    behavior.comfyBase = null;
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await act(async () => {
+      await result.current.openComfy();
+    });
+
+    expect(
+      useShellTabs.getState().tabs.find((t) => t.id === "comfyui"),
+    ).toBeUndefined();
+    expect(result.current.flash?.text).toContain("先点「启动 ComfyUI」");
   });
 });
