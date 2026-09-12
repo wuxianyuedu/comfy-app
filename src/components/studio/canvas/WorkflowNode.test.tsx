@@ -76,7 +76,7 @@ describe("FlowNode（WorkflowNode 渲染冒烟）", () => {
   it("渲染标题、#id chip、TOP PINS 连接行与 widget 参数行", () => {
     renderFlowNode(nodeData({ rawInputs: RAW_INPUTS }));
     expect(screen.getByText("主采样器")).toBeInTheDocument(); // displayTitle（作者标题优先）
-    expect(screen.getByText("#9")).toBeInTheDocument(); // NodeIdChip（detail 为空 → 完整 id）
+    expect(screen.getByText("#9")).toBeInTheDocument(); // NodeIdChip（始终是真实节点 id）
     // TOP PINS：连接输入行（KSampler 静态输出 LATENT 组成共享行）
     expect(document.querySelector('[data-pin-input="model"]')).not.toBeNull();
     expect(document.querySelector('[data-pin-output="LATENT"]')).not.toBeNull();
@@ -102,5 +102,28 @@ describe("FlowNode（WorkflowNode 渲染冒烟）", () => {
     expect(screen.getByRole("button", { name: "折叠节点" })).toBeInTheDocument();
     expect(document.querySelector('[data-input-key="seed"]')).not.toBeNull();
     expect(screen.getByTitle("42")).toBeInTheDocument();
+  });
+});
+
+/* 右上角编号必须是**节点真实 id**，不跟着项目画布的「短序号」约定走 ——
+ * 项目画布按画布节点列表顺序显示 #1/#2…，工作流编辑器画布不是那个语义范围：
+ * 它在一次「改项目画布右上角 id」的改动里被一起换成了 `detail.nodes` 下标映射，
+ * 于是编辑器里的 #24 和 JSON 查看器 / 执行日志 / ComfyUI 报错里的 1670 对不上
+ * （ISSUE #394）。 */
+describe("FlowNode 右上角编号", () => {
+  it("detail.nodes 在场时仍显示真实节点 id，不映射成短序号", () => {
+    const stores = makeStores();
+    stores.viewer.setState({
+      detail: {
+        nodes: [{ id: "1" }, { id: "9" }, { id: "30" }],
+      } as never,
+    });
+    renderWithFlow(
+      <WFStoresProvider stores={stores}>
+        <FlowNode data={nodeData({ nodeId: "30", rawInputs: RAW_INPUTS })} />
+      </WFStoresProvider>,
+    );
+    expect(screen.getByText("#30")).toBeInTheDocument();
+    expect(screen.queryByText("#3")).toBeNull();
   });
 });
