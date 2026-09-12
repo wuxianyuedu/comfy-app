@@ -19,6 +19,9 @@ import {
   resolveLaunchPolicy,
   shouldCheckKeepAliveProcess,
   shouldClearStoppingOnStopMiss,
+  hasEmbedClearanceFlag,
+  withEmbedClearanceFlag,
+  COMFY_EMBED_FLAG,
   type EnsureFacts,
 } from "./lifecycle-derive";
 
@@ -99,7 +102,7 @@ describe("buildSpawnArgs — spawn 参数组装", () => {
       defaultPort: 8188,
       extraArgs: [],
     });
-    expect(args).toEqual(["-s", "/x/main.py"]);
+    expect(args).toEqual(["-s", "/x/main.py", COMFY_EMBED_FLAG]);
     expect(args).not.toContain("--port");
   });
 
@@ -110,7 +113,7 @@ describe("buildSpawnArgs — spawn 参数组装", () => {
       defaultPort: 8188,
       extraArgs: [],
     });
-    expect(args).toEqual(["-s", "/x/main.py", "--port", "8199"]);
+    expect(args).toEqual(["-s", "/x/main.py", "--port", "8199", COMFY_EMBED_FLAG]);
   });
 
   it("端口为 0/undefined → 落到默认端口且不传 --port", () => {
@@ -121,7 +124,7 @@ describe("buildSpawnArgs — spawn 参数组装", () => {
         defaultPort: 8188,
         extraArgs: [],
       });
-      expect(args).toEqual(["-s", "/x/main.py"]);
+      expect(args).toEqual(["-s", "/x/main.py", COMFY_EMBED_FLAG]);
     }
   });
 
@@ -132,7 +135,7 @@ describe("buildSpawnArgs — spawn 参数组装", () => {
       defaultPort: 8188,
       extraArgs: ["--cpu", "--lowvram"],
     });
-    expect(args).toEqual(["main.py", "--port", "9001", "--cpu", "--lowvram"]);
+    expect(args).toEqual(["main.py", "--port", "9001", "--cpu", "--lowvram", COMFY_EMBED_FLAG]);
   });
 });
 
@@ -252,5 +255,52 @@ describe("decideStopOutcome — 关闭收尾结论", () => {
 
   it("一个探测结果都没有（循环没跑）→ 视为未关闭，不给假成功", () => {
     expect(decideStopOutcome([]).ok).toBe(false);
+  });
+});
+
+/* ── 内嵌放行开关（ISSUE #310）────────────────────────────────────────
+ * 这几条钉住的是「本应用拉起的 ComfyUI 一定能被内嵌」这件事本身：
+ * 空白页签的成因是未开 CORS 的 origin-only 中间件对跨源返 403，
+ * 而开关握在我们手里（见 comfy-embed.ts 的成因说明）。
+ */
+describe("withEmbedClearanceFlag — 内嵌放行开关注入", () => {
+  it("未带开关时补上 --enable-cors-header", () => {
+    expect(withEmbedClearanceFlag(["main.py", "--port", "8199"])).toEqual([
+      "main.py",
+      "--port",
+      "8199",
+      COMFY_EMBED_FLAG,
+    ]);
+  });
+
+  it("已手填开关时不重复注入（幂等）", () => {
+    const already = ["main.py", COMFY_EMBED_FLAG];
+    expect(withEmbedClearanceFlag(already)).toEqual(already);
+  });
+
+  it("识别 --enable-cors-header=ORIGIN 的等号写法，也算已带", () => {
+    const already = ["main.py", `${COMFY_EMBED_FLAG}=http://127.0.0.1:3100`];
+    expect(hasEmbedClearanceFlag(already)).toBe(true);
+    expect(withEmbedClearanceFlag(already)).toEqual(already);
+  });
+
+  it("不改动入参数组（返回新副本）", () => {
+    const input = ["main.py"];
+    const out = withEmbedClearanceFlag(input);
+    expect(input).toEqual(["main.py"]);
+    expect(out).not.toBe(input);
+  });
+
+  /* 开关放在**最后一位**是刻意的：argparse 的 `nargs="?"` + `const="*"` 让
+   * 它在末尾解析为 `*`，既不会吃掉前面参数的值，也不会被当成位置参数。
+   * buildSpawnArgs 的顺序契约就靠这条钉住。 */
+  it("buildSpawnArgs 把开关放在最后一位", () => {
+    const args = buildSpawnArgs({
+      baseArgs: ["main.py"],
+      effectivePort: 8199,
+      defaultPort: 8188,
+      extraArgs: ["--cpu", "--lowvram"],
+    });
+    expect(args[args.length - 1]).toBe(COMFY_EMBED_FLAG);
   });
 });

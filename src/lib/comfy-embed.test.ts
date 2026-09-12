@@ -1,10 +1,14 @@
 /**
- * 「ComfyUI 能不能被 iframe 内嵌」判据的测试（ISSUE #310 三次回归）。
+ * 「ComfyUI 能不能被 iframe 内嵌」判据的测试（ISSUE #310 多次回归）。
  *
- * 为什么值得单独钉住：这条判据此前**不存在**。页签打开后里面是空白/错误页，
- * 而宿主页在跨源下读不到任何失败原因 —— 断言只能写在人脑子里，于是同一处
- * 回归了三次（全屏视图 → 弹窗类 → ComfyUI iframe 被 X-Frame-Options 拒绝）。
- * 这里把每一条判决写死，改动判据就会被 CI 拦住。
+ * 为什么值得单独钉住：这条判据此前**不存在**，而空白页签是最难排查的失败
+ * 形态 —— 页签打开了、地址也对，里面什么都没有，日志里一个字都没有。
+ *
+ * **成因已经更正**：真正的拦路虎不是 `X-Frame-Options: DENY`（ComfyUI 与
+ * aiohttp 都不发这个头，见下 `probe` 一节的实测注释），而是 ComfyUI 未开
+ * CORS 时的 origin-only 中间件对跨源请求返回 **403**。这个开关握在本应用
+ * 手里（启动时带 `--enable-cors-header`），所以正常路径应当总是「可嵌」。
+ * 本文件把这套判决的每一条都写死，改动判据就会被 CI 拦住。
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -113,7 +117,7 @@ describe("judgeEmbeddable — 判决表", () => {
     expect(v.embeddable).toBe(true);
   });
 
-  it("跨源 + 两个头都没有 → 不可嵌（探测不到结论时不赌，退壳内窗口）", () => {
+  it("跨源 + 两个头都没有 → 不可嵌（拿不到放行证据时不赌）", () => {
     const v = judgeEmbeddable({
       base: COMFY,
       hostOrigin: HOST,
@@ -126,28 +130,54 @@ describe("judgeEmbeddable — 判决表", () => {
 
 describe("decideComfyTabOpen — 打开方式判决", () => {
   it("可嵌 → 内嵌页签", () => {
-    expect(decideComfyTabOpen(true, true)).toBe("embed");
-    expect(decideComfyTabOpen(true, false)).toBe("embed");
+    expect(decideComfyTabOpen(true)).toBe("embed");
   });
 
-  it("不可嵌 + 壳内 → 壳内独立窗口（仍在同一应用里）", () => {
-    expect(decideComfyTabOpen(false, true)).toBe("shell-window");
-  });
-
-  it("不可嵌 + 浏览器 → 系统浏览器", () => {
-    expect(decideComfyTabOpen(false, false)).toBe("browser");
+  /* 用户明确要求「不要打开另一个窗口，我只要多页签的形式」（ISSUE #310），
+   * 所以这里**只允许两种结果，且都留在应用内**：没有任何输入组合能推出
+   * 「另开窗口」或「交给系统浏览器」。 */
+  it("不可嵌 → 仍在页签里给说明（不弹窗、不跳浏览器）", () => {
+    expect(decideComfyTabOpen(false)).toBe("blocked");
   });
 });
 
 describe("probeComfyEmbeddable — 取事实（IO）", () => {
-  const res = (headers: Record<string, string>, ok = true) =>
-    ({ ok, headers: new Headers(headers) }) as Response;
+  const res = (
+    headers: Record<string, string>,
+    status = 200,
+  ) =>
+    ({ ok: status < 400, status, headers: new Headers(headers) }) as Response;
 
   it("同源不发请求，直接可嵌", async () => {
     const fetchImpl = vi.fn<typeof fetch>();
     const v = await probeComfyEmbeddable(HOST, HOST, fetchImpl);
     expect(v.embeddable).toBe(true);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("探测请求必须带 Origin（否则测不出跨源拦截）", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => res({ "access-control-allow-origin": "*" }));
+    await probeComfyEmbeddable(COMFY, HOST, fetchImpl);
+    const init = fetchImpl.mock.calls[0]?.[1];
+    expect((init?.headers as Record<string, string> | undefined)?.Origin).toBe(
+      HOST,
+    );
+  });
+
+  it("ComfyUI 已开 CORS（带 Access-Control-Allow-Origin）→ 可嵌", async () => {
+    const v = await probeComfyEmbeddable(COMFY, HOST, async () =>
+      res({ "access-control-allow-origin": "*" }),
+    );
+    expect(v.embeddable).toBe(true);
+  });
+
+  /* 下面这条是本次更正的**现场**：未开 CORS 的 ComfyUI 对跨源返回 403，
+   * 响应体为空 —— 页签里就是一片空白。此前把它误记成 X-Frame-Options DENY。 */
+  it("跨源被 origin-only 中间件拦下（403）→ 不可嵌并点明该开什么开关", async () => {
+    const v = await probeComfyEmbeddable(COMFY, HOST, async () => res({}, 403));
+    expect(v.embeddable).toBe(false);
+    expect(v.reason).toContain("403");
+    expect(v.reason).toContain("--enable-cors-header");
   });
 
   it("读到 X-Frame-Options: DENY → 不可嵌", async () => {
@@ -163,5 +193,30 @@ describe("probeComfyEmbeddable — 取事实（IO）", () => {
     });
     expect(v.embeddable).toBe(false);
     expect(v.reason).toContain("无法探测");
+  });
+});
+
+describe("judgeEmbeddable — 403 优先于其它头", () => {
+  it("403 即便同时缺头，也给「该开 --enable-cors-header」的结论", () => {
+    const v = judgeEmbeddable({
+      base: COMFY,
+      hostOrigin: HOST,
+      xFrameOptions: null,
+      contentSecurityPolicy: null,
+      status: 403,
+    });
+    expect(v.embeddable).toBe(false);
+    expect(v.reason).toContain("--enable-cors-header");
+  });
+
+  it("有 Access-Control-Allow-Origin 即放行（跨源确证）", () => {
+    const v = judgeEmbeddable({
+      base: COMFY,
+      hostOrigin: HOST,
+      xFrameOptions: null,
+      contentSecurityPolicy: null,
+      allowOrigin: "*",
+    });
+    expect(v.embeddable).toBe(true);
   });
 });

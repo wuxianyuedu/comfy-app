@@ -41,15 +41,29 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: {
-    // CI 上必须用生产构建 + start：dev server（Turbopack）首屏要现场编译，
-    // 冷启动远超 180s 的等待窗口，会让冒烟/视觉用例集体超时。CI 门禁已先跑
-    // `pnpm build`，这里只需起服务。本地开发仍用 dev（热更新、无需先构建）。
-    command: process.env.CI ? "pnpm start" : "pnpm dev",
-    url: "http://localhost:3100",
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-    // Next 16 默认读 .env / .env.production：CI 无真实密钥，跳过 env.js 校验
-    env: { SKIP_ENV_VALIDATION: "1" },
-  },
+  webServer: [
+    {
+      // CI 上必须用生产构建 + start：dev server（Turbopack）首屏要现场编译，
+      // 冷启动远超 180s 的等待窗口，会让冒烟/视觉用例集体超时。CI 门禁已先跑
+      // `pnpm build`，这里只需起服务。本地开发仍用 dev（热更新、无需先构建）。
+      command: process.env.CI ? "pnpm start" : "pnpm dev",
+      url: "http://localhost:3100",
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+      // Next 16 默认读 .env / .env.production：CI 无真实密钥，跳过 env.js 校验
+      env: { SKIP_ENV_VALIDATION: "1" },
+    },
+    {
+      // 假 ComfyUI（ISSUE #310）：内嵌能不能成，取决于**被嵌页自己**的响应头
+      // （未开 CORS 时对跨源请求返 403）。这条链路是**服务端**探测的
+      // （`setting.comfyEmbeddable`），浏览器侧 `route.fulfill` 伪造不到，
+      // 必须真有一个 HTTP 服务在 8188 上，才能覆盖「点打开查看 → 页签真的
+      // 渲染出被嵌页」这条路。默认带 `--enable-cors-header` 语义（用户实际
+      // 会遇到的正常路径）。
+      command: "node e2e/support/fake-comfyui-server.mjs",
+      url: "http://127.0.0.1:8188/system_stats",
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+    },
+  ],
 });
