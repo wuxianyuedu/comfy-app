@@ -1,25 +1,29 @@
 // 「这个页面能不能被 iframe 内嵌」的判据（纯派生，无 IO / 无 React）。
 //
-// 背景（ISSUE #310 三次回归）：应用级页签把 ComfyUI 以内嵌 iframe 呈现，
-// 但 ComfyUI 自身会对响应加 `X-Frame-Options: DENY`（反 CSRF 的默认姿态），
-// 且它与被内嵌的宿主页面**不同源**（宿主是应用自己的 http://127.0.0.1:3100，
+// 背景（ISSUE #310 多次回归）：应用级页签把 ComfyUI 以内嵌 iframe 呈现，
+// 而它与宿主页面**不同源**（宿主是应用自己的 http://127.0.0.1:3100，
 // ComfyUI 是 http://127.0.0.1:<comfyuiPort>，端口不同即跨源）。
-// 跨源 + DENY 的唯一结果就是 WebView2/Chromium 拒绝渲染，页签里留下一张
-// 「已阻止此内容。请与网站所有者联系以解决此问题。」的错误页 ——
-// 页签打开了、地址也对，但什么也看不见。
 //
-// 这一条此前没有任何判据：`ShellTabs` 无条件渲染 iframe，`tauri.conf.json`
-// 的 CSP `frame-src` 也只管「允不允许加载」，管不到对端自己发的拒绝头。
-// 于是断言只存在于人的脑子里，回归过一次，还会再来。
+// **真正的拦路虎不是 `X-Frame-Options`**（此前记错的成因）：ComfyUI 在没有
+// 开 CORS 时挂的是 `create_origin_only_middleware()`，它对跨源请求——
+// `Sec-Fetch-Site: cross-site`，或回环地址下 `Host` 域名 ≠ `Origin` 域名
+// ——直接返回 **HTTP 403**（反 CSRF：防随机网页 POST 127.0.0.1 排队）。
+// iframe 内嵌正是跨源请求，于是页签打开了、地址也对，里面**一片空白**
+// （403 响应体为空，被 WebView2 渲染成白页）。
+//
+// 好消息：这个开关握在**我们自己手里** —— ComfyUI 是本应用 spawn 的，
+// 启动参数带上 `--enable-cors-header` 就会改挂 `create_cors_middleware()`，
+// 跨源不再 403 并回 `Access-Control-Allow-Origin`（见 `lifecycle-derive.ts`
+// 的 `withEmbedClearanceFlag`）。所以本模块的定位是**兜底 + 诊断**：
+// 正常情况下 ComfyUI 已放行、这里判「可嵌」；只有用户手填的额外参数覆盖、
+// 或实例是外部启动（不受本应用参数控制）时才会判不可嵌。
 //
 // 本模块把「能不能嵌」变成可测的判决：
-//   - `isEmbeddableByHost(base, hostOrigin)`：同源必然可嵌；跨源必须探到
-//     ComfyUI **显式**放行（CSP `frame-ancestors` 命中宿主，或没有任何
-//     拒绝性 `X-Frame-Options`）—— 探测不到结论时按「不可嵌」处理，
-//     因为不可嵌的兜底（壳内独立窗口）总是可用，而赌它能嵌会把错误页
-//     摆在用户面前。
-//   - `decideComfyTabOpen(embed)`：由「可嵌性」推出去哪打开（内嵌页签 /
-//     壳内独立窗口 / 系统浏览器）。
+//   - `judgeEmbeddable`：看探测到的**事实**（可嵌的明确证据：同源、
+//     `Access-Control-Allow-Origin`、CSP `frame-ancestors` 命中宿主、
+//     或无任何拒绝性 `X-Frame-Options`）；拿不到结论时**按不可嵌处理**，
+//     并把「该开什么开关」写进 reason，而不是把空白页摆给用户。
+//   - `decideComfyTabOpen(embed)`：由「可嵌性」推出去哪打开。
 
 /** 探测结果：对端是否允许被 `hostOrigin` 内嵌。 */
 export type EmbedVerdict = {
@@ -29,10 +33,12 @@ export type EmbedVerdict = {
   reason: string;
 };
 
-/** 跨源探测拿不到明确结论时的兜底：按不可嵌处理（走壳内独立窗口）。 */
+/** 跨源探测拿不到明确结论时的兜底：按不可嵌处理（退到确定可用的方式）。 */
 const UNVERIFIED: EmbedVerdict = {
   embeddable: false,
-  reason: "未探测到 ComfyUI 放行内嵌（跨源 + X-Frame-Options/CSP 未明确允许）",
+  reason:
+    "未探测到 ComfyUI 放行跨源内嵌（缺 Access-Control-Allow-Origin，且无 X-Frame-Options/CSP 明确放行）" +
+    "——ComfyUI 需以 --enable-cors-header 启动（本应用拉起时会自动带上）",
 };
 
 /** `X-Frame-Options` 的取值语义：只有 DENY / SAMEORIGIN 是拒绝。 */
@@ -93,9 +99,31 @@ export function judgeEmbeddable(input: {
   hostOrigin: string;
   xFrameOptions: string | null;
   contentSecurityPolicy: string | null;
+  /** 探测响应的 HTTP 状态码：403 即 ComfyUI 的 origin-only 中间件拦下了跨源。 */
+  status?: number;
+  /** 探测响应的 `Access-Control-Allow-Origin`：有值即说明 CORS 已放行。 */
+  allowOrigin?: string | null;
 }): EmbedVerdict {
   if (isSameOrigin(input.base, input.hostOrigin)) {
     return { embeddable: true, reason: "同源，浏览器不做内嵌校验" };
+  }
+  /* 403 是「跨源被 origin-only 中间件拦下」的确证（ISSUE #310 空白页签的现场）：
+   * 直接给出可行动的成因，不去猜 XFO / CSP。 */
+  if (input.status === 403) {
+    return {
+      embeddable: false,
+      reason:
+        "ComfyUI 对跨源请求返回 403（未开启 CORS 的 origin-only 中间件拦截）" +
+        "——需以 --enable-cors-header 启动（本应用拉起时会自动带上；外部实例需自行加该参数）",
+    };
+  }
+  /* 有 `Access-Control-Allow-Origin` 即 ComfyUI 已开 CORS：跨源放行的确证，
+   * 优先于「头读不到」的判断。 */
+  if (input.allowOrigin) {
+    return {
+      embeddable: true,
+      reason: "ComfyUI 已开启 CORS（响应带 Access-Control-Allow-Origin）",
+    };
   }
   const ancestors = frameAncestorsAllows(
     input.contentSecurityPolicy,
@@ -114,34 +142,54 @@ export function judgeEmbeddable(input: {
     };
   }
   const xfo = parseXFrameOptions(input.xFrameOptions);
-  if (xfo === "allow") return { ...UNVERIFIED };
-  return {
-    embeddable: false,
-    reason: `ComfyUI 返回 X-Frame-Options: ${input.xFrameOptions?.trim() ?? xfo}`,
-  };
+  if (xfo === "deny" || xfo === "sameorigin") {
+    return {
+      embeddable: false,
+      reason: `ComfyUI 返回 X-Frame-Options: ${input.xFrameOptions?.trim() ?? xfo}`,
+    };
+  }
+  // 两个头都读不到：拿不到「放行」的明确证据，按不可嵌处理（不赌）。
+  return { ...UNVERIFIED };
 }
 
 /** ComfyUI 页签该在哪里打开。 */
-export type ComfyTabTarget = "embed" | "shell-window" | "browser";
+export type ComfyTabTarget = "embed" | "blocked";
 
 /**
  * 打开 ComfyUI 的目标判决。
  *
- * @param embeddable  探测结论：能否内嵌
- * @param inShell     是否在桌面壳里（浏览器里没有「壳内独立窗口」这一档）
+ * **只有两档，且都留在应用内**（ISSUE #310 用户明确要求：「不要打开另一个
+ * 窗口，我只要多页签的形式」）：
+ *   - 可嵌 → 直接内嵌进页签；
+ *   - 不可嵌 → 同样把页签打开，但里面渲染一张**应用内的可见说明**（给出
+ *     成因与修复动作），而不是弹第二个窗口、也不是把浏览器的空白错误页
+ *     摆给用户。
+ *
+ * 为什么删掉了「壳内独立窗口」这一档：那是绕开 ComfyUI 跨源 403 的兜底，
+ * 而那个开关其实握在我们手里（启动时带 `--enable-cors-header`，见
+ * `lifecycle-derive.ts` 的 `withEmbedClearanceFlag`）。绕道的代价是用户
+ * 每点一次都多出一个窗口，体验与「像文件管理器那样多页签」的目标相悖。
+ * 保留的 `blocked` 档只用于「外部实例不受本应用参数控制」这类边缘情形，
+ * 且**仍在同一个窗口里**给出可读的下一步。
+ *
+ * 注：早先还有 `browser`（系统浏览器）一档；它同样违背「多页签」的目标，
+ * 现在也不再使用。
+ *
+ * @param embeddable 探测结论：能否内嵌
  */
-export function decideComfyTabOpen(
-  embeddable: boolean,
-  inShell: boolean,
-): ComfyTabTarget {
-  if (embeddable) return "embed";
-  return inShell ? "shell-window" : "browser";
+export function decideComfyTabOpen(embeddable: boolean): ComfyTabTarget {
+  return embeddable ? "embed" : "blocked";
 }
 
 /* ── 探测（IO 薄层）────────────────────────────────────────────────
- * 判据在上面，这里只负责「取事实」：向 base 的发一次 HEAD/GET，读回
- * X-Frame-Options / Content-Security-Policy。取不到事实一律按不可嵌处理
- * （宁可退到壳内独立窗口，也不把错误页摆给用户）。
+ * 判据在上面，这里只负责「取事实」：向 base 发一次 GET（**带 `Origin`**，
+ * 模拟 iframe 的跨源请求），读回状态码与 Access-Control-Allow-Origin /
+ * X-Frame-Options / Content-Security-Policy。
+ *
+ * 必须带 `Origin`：ComfyUI 的 origin-only 中间件只在「Origin 存在且与
+ * Host 不同域」时才 403，裸探测（无 Origin）会拿到 200，从而误判成「可嵌」
+ * —— 这正是上一轮把成因记成「X-Frame-Options DENY」的观测盲区。
+ * 取不到事实一律按不可嵌处理，并把可行动的成因写进 reason。
  */
 
 /** 探测用的超时：ComfyUI 在环回地址上应答是毫秒级，1.5s 足够。 */
@@ -166,6 +214,8 @@ export async function probeComfyEmbeddable(
     res = await fetchImpl(base, {
       method: "GET",
       redirect: "follow",
+      // 带上 Origin 才是「iframe 视角」的真实探测（见本段开头说明）。
+      headers: { Origin: hostOrigin },
       signal: AbortSignal.timeout(EMBED_PROBE_TIMEOUT_MS),
     });
   } catch (e) {
@@ -179,5 +229,7 @@ export async function probeComfyEmbeddable(
     hostOrigin,
     xFrameOptions: res.headers.get("x-frame-options"),
     contentSecurityPolicy: res.headers.get("content-security-policy"),
+    status: res.status,
+    allowOrigin: res.headers.get("access-control-allow-origin"),
   });
 }

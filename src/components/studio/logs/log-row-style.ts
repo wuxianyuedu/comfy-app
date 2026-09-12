@@ -122,3 +122,61 @@ export const TOKEN_CLASS: Record<AnsiStyleKey, string> = {
   "cyan-bg": "bg-cyan-500/20",
   "white-bg": "bg-white/10",
 };
+
+/* ── 行内文本选区判定（「日志一直在动、选不中想复制的行」的另一半）────── */
+
+/** 选区判定需要的最小 DOM 视图（真实 `Selection` / `window` 都满足它）。 */
+export interface SelectionLike {
+  readonly rangeCount: number;
+  readonly anchorNode: Node | null;
+  readonly focusNode: Node | null;
+  isCollapsed: boolean;
+}
+
+/**
+ * 日志行的文本容器标记。视图在每个 `LogRow` 的消息元素上打这个属性，
+ * 选区判定据此确认「用户框选的是日志内容」而不是页面里别的文本。
+ */
+export const LOG_ROW_TEXT_ATTRIBUTE = "data-log-text";
+
+/**
+ * 选区容器（消息文本）→ 它所属的日志行标记属性。
+ *
+ * 复制一行时浏览器给出的选区端点常常落在**文本节点**上（而不是元素），
+ * 因此这里既认元素本身，也认它的父元素。
+ */
+export const LOG_ROW_ATTRIBUTE = "data-log-row";
+
+/**
+ * 用户当前是否正在日志正文里框选文本。
+ *
+ * 贴底基线已经让内容不再整体上移，但「用户正在框中途又来了新日志」仍需保护：
+ * 拖动过程中浏览器会随滚动改锚点，滚动会打断框选。因此贴底前多问一句
+ * 「选区是否落在日志正文里」，是「看不见的选择被刷新弄没」的最后一道保险
+ * （ISSUE #262 复审）。
+ *
+ * 传 null（jsdom / 无选区 API 的环境）时返回 false：判据取不到就说「没有选区」，
+ * 与既有行为一致，不会把贴底整体关掉。
+ */
+export function selectionInsideLogs(selection: SelectionLike | null): boolean {
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return false;
+  }
+  try {
+    return [selection.anchorNode, selection.focusNode].some(
+      (node) => node !== null && nodeIsLogText(node),
+    );
+  } catch {
+    /* 极端情况下（节点已脱离文档）取父节点会抛，按「不在日志里」处理 */
+    return false;
+  }
+}
+
+function nodeIsLogText(node: Node): boolean {
+  const element =
+    node.nodeType === 1 ? (node as Element) : (node.parentElement ?? null);
+  return Boolean(
+    element?.closest?.(`[${LOG_ROW_TEXT_ATTRIBUTE}]`) ??
+      element?.parentElement?.closest?.(`[${LOG_ROW_TEXT_ATTRIBUTE}]`),
+  );
+}

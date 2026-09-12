@@ -126,23 +126,26 @@ export const settingRouter = createTRPCRouter({
     return openComfyUi();
   }),
 
-  /** 「打开查看 ComfyUI」该在哪打开：内嵌页签 / 壳内独立窗口 / 系统浏览器。
+  /** ComfyUI 能否被内嵌进应用页签（「打开查看」据此决定页签里渲染什么）。
    *
-   *  必须在**服务端**探：宿主页在 WebView2 里既读不到 ComfyUI 的响应头
-   *  （跨源），也拿不到「被 X-Frame-Options 拒绝」这个失败事件的判据
-   *  （iframe 的 error/load 事件都不带原因，`frame-ancestors 'none'` 与
-   *  「内容为空」在 JS 里长得一样）——这正是 ISSUE #310 三次回归的温床：
-   *  页签打开了，里面只是那张「已阻止此内容」的错误页。
+   *  必须在**服务端**探：宿主页在 WebView2 里跨源读不到 ComfyUI 的响应头，
+   *  iframe 的 error/load 事件也都不带失败原因 ——「被拦下」与「内容为空」
+   *  在 JS 里长得一样，这正是 ISSUE #310 空白页签难排查的原因。
    *
-   *  探测失败一律按「不可嵌」返回并带上原因，调用方据此退到壳内独立窗口
-   *  （Rust `open_comfyui_window`，仍在同一个应用里，只是独立窗口）。 */
+   *  成因已更正：拦路的是「未开 CORS 时的 origin-only 中间件对跨源请求返回
+   *  403」（不是 `X-Frame-Options: DENY`），响应体为空所以一片白。探测会带
+   *  `Origin` 模拟 iframe 视角，并以 403 / `Access-Control-Allow-Origin` 判读。
+   *
+   *  该开关由本应用在拉起 ComfyUI 时注入（`withEmbedClearanceFlag` 加
+   *  `--enable-cors-header`），所以正常路径下这里应当恒为「可嵌」；
+   *  `target` 只有 embed / blocked 两档，两者都留在同一个窗口的页签里。 */
   comfyEmbeddable: authedProcedure
     .input(z.object({ base: z.string().url(), hostOrigin: z.string().url() }))
     .query(async ({ input }) => {
       const verdict = await probeComfyEmbeddable(input.base, input.hostOrigin);
       return {
         ...verdict,
-        target: decideComfyTabOpen(verdict.embeddable, true),
+        target: decideComfyTabOpen(verdict.embeddable),
       };
     }),
 

@@ -109,6 +109,77 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
   });
 });
 
+describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收（ISSUE #349）", () => {
+  /** 真实导出形状：wrapper 本层只有自动编号的别名，`properties.proxyWidgets`
+   *  被 ComfyUI 隔离掉（只剩 quarantine），作者名只留在子图边界 `inputs[]` 上。 */
+  const quarantined = {
+    last_node_id: 4,
+    nodes: [
+      {
+        id: 4,
+        type: WRAPPER,
+        pos: [0, 0],
+        inputs: [
+          { name: "value_1", type: "INT", link: null, widget: { name: "value_1" } },
+          { name: "value_2", type: "INT", link: null, widget: { name: "value_2" } },
+        ],
+        outputs: [],
+        properties: { proxyWidgetErrorQuarantine: [["12", "seed"]] },
+        widgets_values: [],
+      },
+    ],
+    links: [],
+    definitions: {
+      subgraphs: [
+        {
+          id: WRAPPER,
+          name: "I2V",
+          inputs: [
+            { name: "value_1", label: "Seed", type: "INT" },
+            { name: "value_2", type: "INT" },
+          ],
+          nodes: [],
+        },
+      ],
+    },
+  } as unknown as RawWorkflow;
+
+  it("本层没写 label 时用边界 pin 的作者名", async () => {
+    const { rawInputsById } = await buildRawInputs(quarantined, noCombo);
+    expect(rawInputsById["4"]![0]!.label).toBe("Seed");
+  });
+
+  it("边界 pin 也没写 label 时保持原样（不给无信息量的名字）", async () => {
+    const { rawInputsById } = await buildRawInputs(quarantined, noCombo);
+    expect(rawInputsById["4"]![1]!.label).toBeUndefined();
+  });
+
+  it("作者真在本层写了别的名字时以本层为准，边界 pin 不覆盖", async () => {
+    const own = JSON.parse(JSON.stringify(quarantined)) as unknown as RawWorkflow;
+    own.nodes[0]!.inputs![0]!.label = "我的种子";
+    const { rawInputsById } = await buildRawInputs(own, noCombo);
+    expect(rawInputsById["4"]![0]!.label).toBe("我的种子");
+  });
+
+  it("普通节点的 pin 名不会被同名的子图边界 pin 覆盖", async () => {
+    const plain = {
+      last_node_id: 7,
+      nodes: [
+        {
+          id: 7,
+          type: "PrimitiveInt",
+          inputs: [{ name: "value_1", type: "INT", link: null, widget: { name: "value_1" } }],
+          widgets_values: [1],
+        },
+      ],
+      links: [],
+      definitions: quarantined.definitions,
+    } as unknown as RawWorkflow;
+    const { rawInputsById } = await buildRawInputs(plain, noCombo);
+    expect(rawInputsById["7"]![0]!.label).toBeUndefined();
+  });
+});
+
 describe("buildInnerNodeInputs — 子图内部节点输入索引", () => {
   it("按内部节点 id 索引出 name / label / localized / type 与控件值", () => {
     const inner = buildInnerNodeInputs(wrapperWorkflow);

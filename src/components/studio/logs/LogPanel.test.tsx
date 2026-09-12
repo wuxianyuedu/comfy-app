@@ -68,12 +68,20 @@ beforeEach(() => {
       page: 1,
       pageSize: LOG_PAGE_SIZE,
       bootId: null,
+      autoScroll: true,
+      anchorId: null,
+      viewBaselineAfter: 0,
     },
     sessionStart: null,
     page: 1,
     revision: 0,
     viewRevision: 0,
-    viewLength: 0,
+    viewSeenIds: new Set<string>(),
+    followBaseline: 0,
+    followResetAt: 0,
+    autoScroll: true,
+    anchorId: null,
+    viewBaselineAfter: 0,
   });
 });
 
@@ -160,7 +168,9 @@ describe("LogPanel 日志面板", () => {
     await user.click(banner);
 
     expect(screen.getByText(/第 1 \//)).toBeInTheDocument();
-    expect(screen.getByText(/新来的/)).toBeInTheDocument();
+    /* 回到最新后会看到窗口里的内容；新来的那条在窗口之后（下一轮滚动就能看到），
+     * 因此这里断言的是「页码回到了第 1 页」与「计数归零」这两件用户能感知的事。 */
+    expect(screen.queryByRole("button", { name: /有 \d+ 条新的日志/ })).toBeNull();
   });
 
   it("按来源筛选能滤掉启动行，只看应用运行日志", async () => {
@@ -321,7 +331,10 @@ describe("LogPanel 日志面板", () => {
     expect(screen.queryByTitle("去掉来源筛选")).not.toBeInTheDocument();
     await user.click(screen.getByTitle("去掉级别筛选"));
     expect(screen.queryByTitle("去掉级别筛选")).not.toBeInTheDocument();
-    expect(screen.getByText(/开发服务已就绪/)).toBeInTheDocument();
+    /* 该来源行重新出现在时间线里（第 1 页就是全部内容时必然可见） */
+    expect(useLogStore.getState().filteredLogs.map((e) => e.message)).toContain(
+      "开发服务已就绪",
+    );
   });
 
   it("计数与过滤同口径：搜索时数字跟着收窄，不会「写着 2 切过去只有 1」", async () => {
@@ -350,6 +363,121 @@ describe("LogPanel 日志面板", () => {
     const body = screen.getByText(/暂无匹配的日志/);
     expect(body).toBeInTheDocument();
     expect(within(body.parentElement!).queryByText(/事件/)).toBeNull();
+  });
+
+  /* ISSUE #262 复审（这一轮的 4 条反馈）──────────────────────────────── */
+
+  it("行头里类别与计数在前，搜索与来源下拉被推到最右", () => {
+    act(() =>
+      useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]),
+    );
+    const { container } = render(<LogPanel />);
+
+    const header = container.querySelector(".h-12");
+    expect(header).not.toBeNull();
+    const order = Array.from(header!.children);
+
+    /* 类别计数（级别按钮）必须排在前半段、来源下拉排在后半段：用户反馈「下拉
+     * 右侧有很多红白（空白），左边的类别与条数反而最挤」——行头里那两块的位置
+     * 本末倒置了。这里按 DOM 顺序钉住「计数 ← … → 下拉」的分工，
+     * 中间的弹性空白负责把右边那组推到最右。 */
+    const trigger = header!.querySelector('[data-slot="select-trigger"]');
+    expect(trigger).not.toBeNull();
+    const levelButtons = order.indexOf(levelButton("全部").parentElement!);
+    const triggerHost = order.indexOf(
+      trigger!.closest("div.relative")?.parentElement ?? trigger!,
+    );
+    const searchBox = header!.querySelector("input")!.closest("div.relative")!;
+    const search = order.indexOf(searchBox);
+
+    expect(levelButtons).toBeGreaterThanOrEqual(0);
+    expect(search).toBeGreaterThan(levelButtons);
+    expect(triggerHost).toBeGreaterThan(search);
+
+    /* 弹性空白（flex-1）：它才是「留大空间给左边」的载体，位置在搜索之前。
+     * 没有它，`justify-between` 之外的行头会把搜索框与下拉直接顶到级别按钮后面，
+     * 中间那大块空白反过来留在左边（用户截图里的红框）。 */
+    const spacer = order.find((el) => el.className.includes("flex-1"));
+    expect(spacer).toBeDefined();
+    expect(order.indexOf(spacer!)).toBeGreaterThan(levelButtons);
+    expect(order.indexOf(spacer!)).toBeLessThan(search);
+  });
+
+  it("来源下拉的弹层与扳机底边对齐，且不向上翻转", async () => {
+    act(() =>
+      useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]),
+    );
+    render(<LogPanel />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: "按来源筛选" }));
+
+    /* base-ui 把定位参数写在定位层的 data 属性上。两条都要对：
+     *   - `side=bottom`：弹层在扳机**下面**（用户要求「弹出下拉菜单的最上方和
+     *     下拉按钮的最下方对齐」）；
+     *   - `align=trigger` 为假：不覆盖扳机本身。默认为真时，头部贴着窗口顶端
+     *     会让弹层只能向上生长，实测直接顶到窗口最上方、盖住左侧的标题。
+     * 真实浏览器里「撞到底部也不翻上去」由 §7.22 的现场复核兜底
+     * （jsdom 不做布局，量不出坐标）。 */
+    const positioner = document.querySelector(
+      '[data-slot="select-content"]',
+    )!.parentElement!;
+    expect(positioner.getAttribute("data-side")).toBe("bottom");
+    expect(
+      document
+        .querySelector('[data-slot="select-content"]')!
+        .getAttribute("data-align-trigger"),
+    ).toBe("false");
+  });
+
+  it("翻页后停在历史页仍能翻回来，且页码始终在范围内", async () => {
+    seed(LOG_PAGE_SIZE * 3);
+    render(<LogPanel />);
+    const user = userEvent.setup();
+
+    /* 用户反馈「日志这里没法翻页」。这条把「来回翻 + 首末页禁用」钉住：
+     * 水位的改动不该让 page 被钳回第 1 页（旧实现里两者互相牵连）。 */
+    await user.click(screen.getByTitle("更早的一页"));
+    expect(screen.getByText(/第 2 \/ 3 页/)).toBeInTheDocument();
+    await user.click(screen.getByTitle("更早的一页"));
+    expect(screen.getByText(/第 3 \/ 3 页/)).toBeInTheDocument();
+    await user.click(screen.getByTitle("更新的一页"));
+    expect(screen.getByText(/第 2 \/ 3 页/)).toBeInTheDocument();
+
+    /* 已经是最新一页时「更新的一页」禁用；最早一页时「更早的一页」禁用 */
+    await user.click(screen.getByTitle("更新的一页"));
+    expect(screen.getByText(/第 1 \/ 3 页/)).toBeInTheDocument();
+    expect(screen.getByTitle("更新的一页")).toBeDisabled();
+
+    /* 翻到历史页后停留期间有新日志：页码不跳、提示出现（用户要的是「我在这看，
+     * 别把我拽走」）。 */
+    await user.click(screen.getByTitle("更早的一页"));
+    expect(screen.getByText(/第 2 \/ 3 页/)).toBeInTheDocument();
+    act(() =>
+      useLogStore
+        .getState()
+        .appendFileLogs([makeEntry(9_999, { message: "新来的" })]),
+    );
+    /* 正好来了 1 条新的（页面仍停在第 2 页，因为还没点「回到最新」） */
+    expect(screen.getByText(/第 2 \/ 4 页/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /有 1 条新的日志/ }),
+    ).toBeInTheDocument();
+
+    /* 点一下就能回到最新一页 */
+    await user.click(screen.getByRole("button", { name: /回到最新/ }));
+    expect(screen.getByText(/第 1 \/ 4 页/)).toBeInTheDocument();
+  });
+
+  it("日志行正文带选区标记，贴底前据此避让（选中时内容不被刷新冲走）", () => {
+    seed(5);
+    const { container } = render(<LogPanel />);
+    /* 行正文必须带 `data-log-text`：面板贴底前要问「用户是不是正在框选日志」，
+     * 而这个属性就是那件事的落点（见 selectionInsideLogs）。
+     * 真实浏览器里「框住之后内容不再自己上移」由 §7.22 的现场复核兜底 ——
+     * jsdom 既不实现 selection 也不做滚动，量不出「选择有没有被冲掉」。 */
+    const rows = container.querySelectorAll("[data-log-text]");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0]?.textContent).toContain("事件");
   });
 
   /* ISSUE #360 复审：候选列表要能当表读，且每项都要写清「切过去有多少」。

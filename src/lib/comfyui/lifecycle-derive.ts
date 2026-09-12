@@ -93,11 +93,16 @@ export interface SpawnArgsFacts {
 export function buildSpawnArgs(facts: SpawnArgsFacts): string[] {
   const port =
     facts.effectivePort && facts.effectivePort > 0 ? facts.effectivePort : facts.defaultPort;
-  return [
+  const args = [
     ...facts.baseArgs,
     ...(port !== facts.defaultPort ? ["--port", String(port)] : []),
     ...facts.extraArgs,
   ];
+  /* 无条件补上内嵌放行开关（幂等）：应用把 ComfyUI 内嵌进同一窗口的页签，
+   * 而两者不同源——未开 CORS 时 ComfyUI 的 origin-only 中间件会对跨源
+   * 请求直接 403，页签里就是一片空白（见本文件 embed clearance 一节）。
+   * 放在最后一位：不干扰 --port 与用户额外参数的位置语义。 */
+  return withEmbedClearanceFlag(args);
 }
 
 /** 保活模式下「进程存在性检查」的节流判决所需事实。 */
@@ -228,4 +233,52 @@ export function decideStopOutcome(probeResults: (string | null)[]): {
 /** 就绪结论：探测到就返回，否则 null（继续等）。 */
 export function shouldReportReady(probeBase: string | null): boolean {
   return probeBase !== null;
+}
+
+/* ── 内嵌放行参数（embed clearance）────────────────────────────────────
+ * 为什么需要：应用把 ComfyUI 以 iframe 内嵌在同一个窗口的页签里，而
+ * ComfyUI 与宿主**不同源**（宿主 http://127.0.0.1:3100，ComfyUI
+ * http://127.0.0.1:<comfyuiPort>，端口不同即跨源）。
+ *
+ * ComfyUI 在**未开 CORS** 时挂的是 `create_origin_only_middleware()`：
+ * 它按 `Sec-Fetch-Site: cross-site` 或「Host 域名 ≠ Origin 域名」直接
+ * 返回 **403**（反 CSRF：防随机网站 POST 127.0.0.1 排队）。iframe 内嵌
+ * 恰恰是跨源请求，于是页面内容 403 —— 页签打开了、地址也对，里面什么
+ * 也看不见（ISSUE #310 的空白页签现场）。
+ *
+ * 关键事实：**ComfyUI 并不发 `X-Frame-Options: DENY`**（server.py 与
+ * aiohttp 都不加这个头，见回归测试里的实测注释）。此前把成因记成
+ * "对端拒嵌"、并据此退到「独立窗口」兜底，是在绕开一个**我们自己拉起
+ * 进程时就能关掉**的开关：`--enable-cors-header` 会让 ComfyUI 改挂
+ * `create_cors_middleware()`（不再 403，并回 `Access-Control-Allow-Origin`）。
+ *
+ * 本函数把「启动参数里必须带上内嵌放行开关」变成可测的判据：幂等——用户
+ * 已在额外参数里手填过就不重复注入（重复的 `--enable-cors-header` 会被
+ * argparse 当成第二个位置参数报错或覆盖语义）。
+ */
+
+/** 让 ComfyUI 放行跨源内嵌（iframe）所需的启动开关。 */
+export const COMFY_EMBED_FLAG = "--enable-cors-header";
+
+/** 该参数是否已存在（兼容 `--enable-cors-header` 与 `--enable-cors-header=ORIGIN`）。 */
+export function hasEmbedClearanceFlag(args: string[]): boolean {
+  return args.some((a) => {
+    const lower = a.toLowerCase();
+    return lower === COMFY_EMBED_FLAG || lower.startsWith(`${COMFY_EMBED_FLAG}=`);
+  });
+}
+
+/**
+ * 保证启动参数里带上内嵌放行开关。
+ *
+ * 默认放行值故意用 `*`（ComfyUI 的 `--enable-cors-header` 省略值时即 `*`）：
+ * 本应用固定绑回环地址，且这里只解决「能被本窗口内嵌」，不引入对外暴露面
+ * ——`--listen` 仍由用户的额外参数决定。
+ *
+ * @param args        已组装好的 spawn 参数（含 baseArgs / --port / 用户额外参数）
+ * @returns 追加了开关的新数组；已有则不重复注入（原数组原样返回新副本）
+ */
+export function withEmbedClearanceFlag(args: string[]): string[] {
+  if (hasEmbedClearanceFlag(args)) return [...args];
+  return [...args, COMFY_EMBED_FLAG];
 }
