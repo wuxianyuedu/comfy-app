@@ -32,7 +32,6 @@ import { api } from "~/trpc/react";
 import { useShellTabs, MAIN_TAB_ID } from "~/lib/shell-tabs-store";
 import { probeOllama, startOllama } from "~/lib/llm/ollama-client";
 
-
 import {
   useSettingsPage,
   type LlmConfig,
@@ -132,11 +131,16 @@ interface Behavior {
   comfyBase?: string | null;
   /** comfyEmbeddable 探测结论（决定页签里渲染 iframe 还是可读说明）。 */
   comfyEmbeddable?: { embeddable: boolean; reason: string };
+  /** comfyOpen（在浏览器打开）的返回文案；默认成功。 */
+  comfyOpen?: { ok: boolean; detail: string };
   dbStudioStatusError?: string;
   dbStudioUp?: boolean;
 }
 
 let behavior: Behavior = {};
+/* 「在浏览器打开」端点的调用计数：单独一个模块级变量，不放进 behavior ——
+ * 每个用例都会整体重置 behavior，塞进去就得在每一处重置点重复，容易漏。 */
+let comfyOpenCalls = 0;
 
 const t = createTestTRPC();
 const mockRouter = t.router({
@@ -179,10 +183,15 @@ const mockRouter = t.router({
       ok: true,
       detail: "已关闭",
     })),
-    comfyOpen: t.procedure.mutation(() => ({
-      ok: true,
-      detail: "已用系统默认浏览器打开 ComfyUI",
-    })),
+    comfyOpen: t.procedure.mutation(() => {
+      comfyOpenCalls += 1;
+      return (
+        behavior.comfyOpen ?? {
+          ok: true,
+          detail: "已用系统默认浏览器打开 ComfyUI",
+        }
+      );
+    }),
     /* Drizzle Studio：新增分区拉起的 status 查询与动作，均需有 mock handler，
      * 否则 onUnhandledRequest:error 会让渲染整个 hook 的用例全挂 */
     dbStudioStatus: t.procedure.query(() => {
@@ -289,6 +298,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   behavior = {};
+  comfyOpenCalls = 0;
   server.resetHandlers();
 });
 afterAll(() => server.close());
@@ -536,7 +546,9 @@ describe("useSettingsPage", () => {
     expect(second.result.current.serveState?.errorText).toContain(
       "no such table: llmConfig",
     );
-    expect(second.result.current.drafts?.settings.comfyuiPath).toBe("D:/ComfyUI");
+    expect(second.result.current.drafts?.settings.comfyuiPath).toBe(
+      "D:/ComfyUI",
+    );
     expect(typeof second.result.current.retry).toBe("function");
   });
 
@@ -918,7 +930,6 @@ describe("useSettingsPage", () => {
     expect(result.current.dbStudioStarting).toBe(false);
   });
 
-
   it("远端模型：编辑候选条目（改名/接口/密钥）；重名排除自身", async () => {
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
@@ -1123,5 +1134,77 @@ describe("打开查看 ComfyUI — 页签形态（ISSUE #310）", () => {
       useShellTabs.getState().tabs.find((t) => t.id === "comfyui"),
     ).toBeUndefined();
     expect(result.current.flash?.text).toContain("先点「启动 ComfyUI」");
+  });
+});
+
+/* ── 「在浏览器打开」＝页签之外的**并列**出口 ────────────────────────
+ * #310 定下「点『打开查看』只出页签」；这条出口是用户主动点的另一条路
+ * （放大看 / 装插件 / 多屏），所以断言两件事：
+ *   ① 它不再自己判内嵌、也不再开或切页签（页签那套行为完全不受影响）；
+ *   ② 地址由服务端自己探（comfyOpen），前端 state 里的旧 base 不作数。
+ */
+describe("在浏览器打开 ComfyUI — 与页签并列的出口", () => {
+  beforeEach(() => {
+    useShellTabs.setState({
+      tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
+      activeTabId: MAIN_TAB_ID,
+    });
+  });
+
+  it("运行中 → 调用 comfyOpen 并回报成功，不新增也不切换页签", async () => {
+    behavior.comfyBase = "http://127.0.0.1:8188";
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await act(async () => {
+      await result.current.openComfyInBrowser();
+    });
+
+    expect(comfyOpenCalls).toBe(1);
+    expect(result.current.flash?.kind).toBe("ok");
+    /* 关键：这条路径不碰页签栏 —— 用户要的是「页签照旧，另给一个浏览器出口」。 */
+    expect(useShellTabs.getState().tabs).toHaveLength(1);
+    expect(useShellTabs.getState().activeTabId).toBe(MAIN_TAB_ID);
+  });
+
+  it("未运行 → 原样回报服务端的可行动提示（err），且不开页签", async () => {
+    behavior.comfyBase = null;
+    behavior.comfyOpen = {
+      ok: false,
+      detail: "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看",
+    };
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await act(async () => {
+      await result.current.openComfyInBrowser();
+    });
+
+    expect(result.current.flash?.kind).toBe("err");
+    expect(result.current.flash?.text).toContain("先点「启动 ComfyUI」");
+    expect(useShellTabs.getState().tabs).toHaveLength(1);
+  });
+
+  it("打开失败（浏览器命令不可用）→ err 提示，不误报成功", async () => {
+    behavior.comfyBase = "http://127.0.0.1:8188";
+    behavior.comfyOpen = {
+      ok: false,
+      detail: "打开系统浏览器失败：spawn cmd.exe ENOENT",
+    };
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await act(async () => {
+      await result.current.openComfyInBrowser();
+    });
+
+    expect(result.current.flash?.kind).toBe("err");
+    expect(result.current.flash?.text).toContain("打开系统浏览器失败");
   });
 });

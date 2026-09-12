@@ -353,6 +353,70 @@ ComfyUI 是否可达）→ 最后看同一行的 `/queue 快照`（`running`/`pe
 判据：**新增一条「会失败但没人看得见原始回执」的路径时，必须在 trace 里补一行**，
 否则又回到「结论清晰、现场为零」。
 
+### 4.3 「陈旧实例」：运行图落后于源码时的可观测性（ISSUE #389）
+
+**这一类故障不属于「谁写错了」，而是「运行中的模块图停在改动之前」。**
+桌面壳 / dev server 长开时，`src/` 的前端源码由 HMR 自动生效——但**已经挂载的
+组件不会因此重建**。store 实例在挂载时创建一次，它身上的「动作集合」是那一刻
+从模块取到的函数；而动作本身是模块成员，会随热更新整体替换。于是出现稳定窗口：
+
+```
+拉了新提交（或改了 store 源码）+ 窗口一直开着、页面没重载
+  → 旧实例的动作集合里没有新声明的动作
+  → 直接调用抛 `xxx is not a function`
+  → 被 <WorkflowCanvasEditor> 的 ErrorBoundary 接住 → 编辑器整块降级成错误页（白屏）
+```
+
+历史形态：ISSUE #389 报的 `ioApi.getState().purgeMachineNames is not a function`
+（`purgeMachineNames` 是后加进 store 的动作，报错窗口里运行图正好停在它之前）。
+
+**三层处理，缺一层都不算修完：**
+
+| 层 | 做什么 | 实现 |
+|---|---|---|
+| 不让它白屏 | 动作不在当前实例上时**跳过本次调用**并按 L1 功能降级（规范 10 §10.1），只打一条可诊断告警 | `WorkflowStores.callStoreAction` |
+| 判定「页面是否还跑着旧代码」 | 构建标识 = 进程启动标识 + 被观测源码模块的 mtime 指纹；加载时与当前不一致、或加载后发生变化，都算「跑过一段代码更新」 | `GET /api/dev/build-id`、`src/lib/code-update-since-load.ts` |
+| 告诉用户怎么办 | 真的观测到陈旧实例时，应用内通知把「重载一次即恢复」讲清楚（toast + 消息中心留底） | `src/lib/stale-store-instance.ts`、`src/lib/stale-store-notify.ts`、`src/components/code-update/**` |
+
+**为什么判据用 mtime + 进程标识，而不是 Git 提交号**：本项目最常见的用法是
+「桌面壳长开、边改边看」，改动往往**还没提交**——提交号根本不会变，等于没有
+信号。也正因为如此，这件事**不能**塞进 `/api/update-check`：那条通道回答的是
+「哪些改动需要重启才生效」，并明确把 `src/` 排除在外（HMR 会处理）；而这里要
+回答的是「HMR 生效了，但已挂载的旧实例没跟上」。两件事、两套判据。
+
+**判据的两条组成部分**（都由 `/api/dev/build-id` 给出，缺一不可）：
+
+- **进程启动标识**（`src/lib/dev-server-id.ts` 的 bootId）：变了 = 应用服务重启
+  过，页面手里的还是旧进程送来的代码；
+- **被观测源码模块的 mtime 指纹**：变了 = 本机源码改过，页面还没重载到改动后
+  的模块。新增「会被旧实例调用到的模块」时，把它加进 `WATCHED_MODULES`。
+
+**「通知」这条线为什么必须与降级同时存在**：只降级不告知，用户看到的是某个
+增强动作**悄无声息地失效**——比白屏更难排查。而「为什么跳过、该怎么办」在运行时
+是可知的（正是「跑过一段代码更新」这个事实），所以它不该等用户来问。
+
+**跨层送达的约定**（唯一一处，别照抄）：触发点在**最底层的 store 调用处**
+（`callStoreAction`），提示要出在**应用级通道**上（toast + 消息中心）。两者之间
+不能直接连线（底层模块不得反向依赖 React 组件目录），因此用模块级注册 + 订阅在
+`src/lib/stale-store-notify.ts` 收口；去重（同一次会话只提示一次）也在那一层，
+而不是指望每个调用点自己记得「只报一次」。若将来出现第二种同类事件，应改为
+zustand 队列，而不是再加一个模块级单例。
+
+**新增 store 动作时的两条硬约定：**
+
+1. 新动作**必须**经 `callStoreAction` 调用（或在调用点自行判存在性）——
+   直接 `getState().newAction(...)` 就是把白屏重新放回去；
+2. 「陈旧实例」的下游表现（跳过调用）要有可见出口，别让它静默——降级路径
+   同样是失败路径，规范 07 §7.12 与规范 10 §10.3.1 的「失败必须有出口」
+   对它一样成立。
+
+回归测试：`src/lib/stale-store-instance.test.ts`（判据与文案）、
+`src/lib/code-update-since-load.test.ts`（构建标识的边界）、
+`src/lib/stale-store-notify.test.ts`（送达与去重）、
+`src/app/api/dev/build-id/route.test.ts`（构建标识稳定性与敏感度）、
+`src/components/code-update/**`（观测器接线 + 用户可见结果）、
+`src/components/studio/workflow-editor/WorkflowStores.test.ts`（降级 → 通知的接线）。
+
 ## 5. 排障手册（症状 → 已知根因）
 
 | 症状                                                                                                                                   | 根因（历史案例）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 对策                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -409,6 +473,7 @@ ComfyUI 是否可达）→ 最后看同一行的 `/queue 快照`（`running`/`pe
 | 启动时 `dev-launcher.ps1` 报 `ParserError: Unexpected token '-Level'`（定位到 corepack prepare 分支的 Write-Log 行），启动中断 | Write-Log 调用里把命名参数 `-Level WARN` 误写进了字符串括号内：`Write-Log ("…" -Level WARN)`，PowerShell 把它解析成对字符串的无效操作符而报语法错（2026-09-07 定位，仅当 pnpm 版本不一致且 corepack prepare 失败触发） | 已修：右括号移到字符串后：`Write-Log ("…") -Level WARN`，让 `-Level` 成为命名参数。排查同类错误：`grep -nE '\("[^"]*" -Level' *.ps1` |
 | 壳内打开 ComfyUI 报「Command open_comfyui_window not allowed by ACL」（壳已重编、命令已注册、`remote.json` 已加 `core:default` 仍如此） | 根因在 Tauri 2.11 起的安全变更（tauri fix#15266，随 2.11.0 合入）：远程源调用**应用自建命令**一律强制走 ACL，**必须先在 build.rs 用 `AppManifest::commands` 声明命令**（生成 `allow-<command>` 权限条目），否则即便 `remote.json` 的 permissions 有 `core:default` 也无法命中应用命令 → 无授权被拒。`core:default` 只放行 core 插件命令，不含应用自建命令。附带影响：一旦启用 AppManifest，本地 splash 的自建命令（get_launch_status/get_app_url/get_launch_log/navigate_to_app）也随之受 ACL 管控，需补 splash 的本地授权能力 | 三处配合：①`build.rs` 改 `tauri_build::try_build(Attributes::new().app_manifest(AppManifest::new().commands(&[...全部命令])))`；②`capabilities/remote.json` permissions 追加应用命令授权 `allow-open-comfyui-window` / `allow-activate-main-window` / `allow-should-activate-on-launch`（main 远程窗）；③新增 `capabilities/splash.json` 给 splash 窗授 `allow-get-launch-status`/`allow-get-app-url`/`allow-get-launch-log`/`allow-navigate-to-app`（本地命令，防 AppManifest 打开后 splash 也被拦）。**新增应用命令要三处同步**：`build.rs` 的 AppManifest 列表、`capabilities/default.json`（main 本地源）、`capabilities/remote.json`（main 远程源）——少一处就是运行期「not allowed by ACL」。改壳层配置/构建脚本，须重编：`cd src-tauri; cargo build --release --features custom-protocol` |
 | **ComfyUI 页签打开了，里面却是一片空白**（地址栏/CSP 都正常、日志无报错、看不出任何失败原因） | **未开 CORS 的 ComfyUI 对跨源请求返回 403，而宿主页判不出来**（ISSUE #310；成因在 2026-09-12 更正）：ComfyUI 未开 CORS 时挂 `create_origin_only_middleware()`，对 `Sec-Fetch-Site: cross-site` 或「回环地址下 Host 域名 ≠ Origin 域名」的请求**直接 403**（反 CSRF）——iframe 内嵌正是跨源请求，403 响应体为空所以一片白。**注意：成因不是 `X-Frame-Options: DENY`**（ComfyUI 与 aiohttp 都不发这个头，上一轮记错方向，导致绕道去另开窗口）。宿主页跨源读不到响应头、iframe 事件也不带原因，所以必须由服务端探 | 已修（判据见 12 §12.8.2）：① **开关握在自己手里** —— ComfyUI 由本应用 spawn，`buildSpawnArgs` 统一注入 `--enable-cors-header`（`withEmbedClearanceFlag`，幂等），跨源不再 403 并回 `Access-Control-Allow-Origin`，正常路径下必然可嵌；② 探测模拟 iframe 视角（**带 `Origin`**），按 `403` / `Access-Control-Allow-Origin` / CSP / XFO 判读，拿不到放行证据时按不可嵌处理；③ **打开方式只剩两档且都在同一窗口**：可嵌 → 内嵌页签；不可嵌 → 仍在页签里渲染可读说明（`ShellTab.blockedReason` + `TabBlockedNotice`），**不再另开独立窗口、也不跳系统浏览器**（用户要求「只要多页签」）。回归：`src/lib/comfy-embed.test.ts`、`src/lib/comfyui/lifecycle-derive.test.ts`、`src/app/(main)/settings/hooks/use-settings-page.test.ts`、`e2e/critical-flows.spec.ts`（两条都断言不弹窗） |
+| **工作流编辑器 / 画布整块白屏**，console 报 `ioApi.getState().xxx is not a function`（ISSUE #389） | **运行图落后于源码**：桌面壳长开时拉了新提交，页面没重载；store 实例在挂载时创建一次、其动作集合也随之定格，而动作本身会随热更新整体替换——旧实例缺少新声明的动作，直接调用抛错被 ErrorBoundary 接住。**注意**：源码里该动作是存在的（`tsc` 干净、单测通过），报错的是运行中的旧实例，不是代码缺陷 | 已修（两层）：① `callStoreAction` 把「能力不存在」当 L1 降级——跳过本次调用 + 一条可诊断告警，不再让一次时序问题把整块画布打白；② 新增「页面是否还跑着旧代码」的判据（`/api/dev/build-id`）与应用内通知（toast + 消息中心），把「重载一次即恢复」和「重载不会丢工作」直接讲给用户。见 §4.3 |
 | **CI 的 E2E 起不来**：`Timed out waiting 180000ms from config.webServer`（本地 `pnpm start` 却像没事） | **`next start` 不认 `COMFYAPP_PORT`**：默认端口由 3000 改 3100 那次只改了 config/文档，`pnpm start` 仍回落 Next 默认的 **3000**，而 `webServer.url` 与 `baseURL` 都按 3100 等 —— 等满 180s 超时（2026-09-12 定位；同一处遗漏还让「本地手起生产服务」与配置对不上） | 已修：`pnpm start` 改为 `node scripts/start.mjs`，与 `scripts/dev.mjs` 对称（读 `.env` 的 `COMFYAPP_PORT`，再显式 `next start -p`）。**不要**把 `start` 改回裸 `next start`。参见 11 章 §11.3.1 |
 | 设置页「打开查看 ComfyUI」弹出独立第 2 窗口且空白、无法关闭 | 旧方案用 Rust `open_comfyui_window` 在壳内另开一个 `comfyui` WebviewWindow；用户反馈这违背「像文件管理器多页签」的预期，且独立窗口可能空白/难关闭 | 已改为**同一主窗口内的应用级页签**（ISSUE #310/#200 又把页签搬到窗口标题行）：`shell-tabs-store` 管理页签，`ShellTabs` 在窗口顶部渲染页签栏，ComfyUI 以 iframe 内嵌。**「壳内独立窗口」兜底档此后已彻底移除**——用户明确要求「不要打开另一个窗口，我只要多页签的形式」；内嵌放行由启动参数 `--enable-cors-header` 保证（见上一行），判到不可嵌时也在**同一个页签**里给可读说明，不再弹窗。Rust `open_comfyui_window` 命令保留未删（无 UI 调用），避免动壳编译 |
 | 页签栏占用了应用内的一块区域，而不是显示在窗口标题行（用户期望「像文件资源管理器那样」） | 应用内页签方案（上一条）只解决了「不另弹独立窗口」，页签栏仍渲染在**原生标题栏下方**，等于在应用内又占掉一条 40px 区域（ISSUE #310 / #200） | 已改为**自定义标题栏**：主窗口 `decorations: false` 关掉原生装饰，页签栏与标题行合并为同一条横条——页签 + 拖拽空白区 + 最小化/最大化/关闭。配套：①`TitleBarTabs` 渲染标题行，拖拽区用 `data-no-drag` 标记排除页签/按钮（点击不被拖拽吞掉），双击空白处最大化/还原；②窗口动作（`startDragging`/`minimize`/`toggleMaximize`/`isMaximized`/`close`）统一封在 `src/lib/window-controls-client.ts`（浏览器降级为空操作），最大化状态用 `onResized` 订阅同步；③`capabilities/{default,remote}.json` 各补 5 条 `core:window:allow-*` 权限；④浏览器 / dev 无原生标题栏可让位，`shouldUseTitleBarTabs` 判据退回应用内页签栏。**改的是 `src-tauri/src/**` 与窗口配置，必须重编壳**：`cd src-tauri; cargo build --release --features custom-protocol`。回归测试见 `src/lib/title-bar-derive.test.ts` |

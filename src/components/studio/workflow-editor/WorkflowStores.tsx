@@ -39,6 +39,7 @@ import { HOMONYM_LABEL_SUFFIX, isMachineName, type ExposedAliasBase } from "./io
 import { rectToAnchor } from "../workflow-utils";
 import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
 import { patchWorkflowSilently } from "@/lib/workflow-mutations";
+import { reportStaleStoreAction } from "@/lib/stale-store-notify";
 
 /* ───────────────────────────────────────────────────────────────────────
  *  IOEdit store
@@ -441,7 +442,14 @@ export function getViewerApi(): StoreApi<NodeJsonViewerStore> {
  *
  *  传入 `action` 为可能为 undefined 的成员时才会走到告警分支，因此这条告警
  *  本身也是「实例陈旧」的信号，不是可以长期忽略的噪音（陈旧实例在新一轮
- *  重载后消失）。 */
+ *  重载后消失）。
+ *
+ *  **降级不能是静默的**（规范 10 §10.1 的 L1 + §10.3.1「降级不得静默」）：
+ *  跳过调用只保住了「不白屏」，用户看到的是某个功能悄无声息不起作用。而
+ *  「为什么跳过、该怎么办」在运行时是**可知**的——正是「页面跑过一段代码
+ *  更新」这个事实。于是这里顺手把信号交给 `~/lib/stale-store-notify`：真出现
+ *  陈旧实例时，应用内会弹一条带「重载即可恢复」指引的通知（去重与文案在
+ *  那一层，本处只上报事实）。 */
 export function callStoreAction<S extends object>(
   store: StoreApi<S>,
   action: keyof S & string,
@@ -453,6 +461,7 @@ export function callStoreAction<S extends object>(
       `[wf-stores] 动作 ${action} 在当前 store 实例上不存在，已跳过本次调用` +
         `（多为热更新后未重载的陈旧实例，重载页面即恢复）`
     );
+    reportStaleStoreAction("missing-store-action");
     return false;
   }
   call(state);

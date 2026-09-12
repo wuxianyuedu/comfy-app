@@ -32,8 +32,21 @@
       overflow: hidden;
       user-select: none;
     }
+    /* 卡片宽度 = 日志可读宽度。日志面板是「一行一条日志」的不折行布局，
+       卡片多宽，一行就能看多少字符：
+         - 未展开日志时 720px：那里只有进度与状态文案，铺满整个宽窗口不好看；
+         - 展开日志后 1400px：11px 等宽字放得下约 175 字符，带时间戳与
+           [app_lib][INFO] 前缀的壳日志（常在 130~160 字符）基本一行看全，
+           只有真正的长路径才需要横向滚动。
+       两档都受视口约束（`100vw - 48px`）：窗口比卡片窄时自动收敛，不会撑破。 */
     .card {
-      width: min(520px, calc(100vw - 48px));
+      width: min(720px, calc(100vw - 48px));
+      transition: width 0.2s ease;
+    }
+    .card.wide {
+      width: min(1400px, calc(100vw - 48px));
+    }
+    .card, .card.wide {
       /* 不用半透明 + backdrop-filter：WebView2 在某些显卡/驱动下会把这层渲染成
          透明或黑块，导致启动页只剩窗口底色。改用不透明面板保证可见。 */
       background: #151320;
@@ -131,6 +144,7 @@
       color: var(--text);
       border-color: rgba(255, 255, 255, 0.3);
     }
+    /* 展开日志后卡片变矮胖会浪费竖向空间，面板给足高度才能一次看到更多行 */
     .log-panel {
       display: none;
       margin-top: 14px;
@@ -138,7 +152,7 @@
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 10px;
       padding: 10px 12px;
-      height: 180px;
+      height: 320px;
       overflow-y: auto;
     }
     .log-panel pre {
@@ -147,8 +161,10 @@
       font-size: 11px;
       line-height: 1.5;
       color: var(--muted);
-      white-space: pre-wrap;
-      word-break: break-all;
+      /* 一行一条日志：不折行、超宽横向滚动。让每一行都完整地待在一行里，
+         读日志才是「扫一眼」；折行的日志会让人分不清哪一行的尾巴接到了哪儿。 */
+      white-space: pre;
+      overflow-x: auto;
       /* 日志内容允许选中复制，便于把启动卡住的现场发给协作者 */
       user-select: text;
     }
@@ -342,6 +358,9 @@
       logVisible = !logVisible;
       logPanel.style.display = logVisible ? 'block' : 'none';
       logBtn.textContent = logVisible ? '隐藏日志' : '查看日志';
+      // 展开日志时加宽卡片：日志宽度只受卡片宽度约束，窗口宽度不够时
+      // CSS 的 min(1400px, 100vw - 48px) 会自动收敛，不会撑出视口。
+      document.querySelector('.card').classList.toggle('wide', logVisible);
       if (logVisible) {
         fetchLog();
         logTimer = setInterval(fetchLog, 800);

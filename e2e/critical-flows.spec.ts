@@ -652,4 +652,61 @@ test.describe("应用页签与全屏视图 @critical", () => {
     // 不弹第二个窗口。
     expect(windowCount).toBe(0);
   });
+
+  /**
+   * 「在浏览器打开」是**与页签并列**的出口（放大看 / 装插件 / 多屏），
+   * 不是替代页签：点它不得新增或切换页签，且动作要真的发出去。
+   *
+   * 这条链路走服务端 `setting.comfyOpen`（Node 侧 spawn 拉起系统默认浏览器），
+   * 浏览器里没法真开一个系统窗口，所以这里断言「动作发出去了」——桩掉该端点
+   * 并数调用次数；同时用 popup 计数确认**没有**在应用内另开窗口。
+   */
+  test("@critical 在浏览器打开 ComfyUI 不新增也不切换应用页签", async ({
+    page,
+  }) => {
+    let windowCount = 0;
+    page.on("popup", () => {
+      windowCount += 1;
+    });
+
+    let browserOpenCalls = 0;
+    await page.route("**/api/trpc/**", async (route: Route) => {
+      const url = route.request().url();
+      if (!url.includes("comfyOpen")) {
+        await route.continue();
+        return;
+      }
+      browserOpenCalls += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          result: {
+            data: {
+              json: { ok: true, detail: "已用系统默认浏览器打开 ComfyUI" },
+            },
+          },
+        }),
+      });
+    });
+
+    await openComfyFromSettings(page);
+    // 先走页签形态（同一条 @critical 链路）：此刻页签是「主应用 + ComfyUI」。
+    const tabsBefore = await page.getByRole("tab").count();
+    await expect(page.getByRole("tab", { name: /ComfyUI/ })).toBeVisible();
+
+    // 回到设置里点「在浏览器打开」。
+    await page.getByTitle("设置").first().click();
+    await page.getByRole("button", { name: "创作后端", exact: true }).click();
+    await page.getByRole("button", { name: /在浏览器打开/ }).first().click();
+
+    // 动作确实发出了（服务端有可见出口，不是静默失败）。
+    await expect
+      .poll(() => browserOpenCalls, { timeout: 20_000 })
+      .toBeGreaterThan(0);
+    // 页签数量不变：这条出口不新增、也不切换页签。
+    await expect(page.getByRole("tab")).toHaveCount(tabsBefore);
+    // 也不在应用内另开窗口。
+    expect(windowCount).toBe(0);
+  });
 });

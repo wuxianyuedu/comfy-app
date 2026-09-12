@@ -12,6 +12,7 @@ import { LogPanel } from "~/components/studio/logs/LogPanel";
 import { ToastProvider } from "~/components/studio/ToastProvider";
 import { BrowserStatusBar } from "~/components/studio/BrowserStatusBar";
 import { UpdateCheckProvider } from "~/components/update-check/UpdateCheckProvider";
+import { CodeUpdateWatcher } from "~/components/code-update/CodeUpdateWatcher";
 import { MessageCenterPanel } from "~/components/message-center/MessageCenterPanel";
 
 export const metadata: Metadata = {
@@ -48,6 +49,11 @@ export default function RootLayout({
                   {/* 运行期「本地更新需重启」检测：轮询 + Ctrl+Shift+U 手动，
                       挂一次即可，自身渲染空节点、用应用内 toast 提示 */}
                   <UpdateCheckProvider />
+                  {/* 运行期「页面还跑着上一版代码」检测：长开窗口 + 拉新代码时，
+                      已挂载组件里的旧实例会与新模块错位（表现为某个功能静默失效，
+                      或整块画布被打成错误页）。这里观测构建标识变化，真发生时用
+                      应用内通知把「重载一次即恢复」讲清楚（toast + 消息中心留底）。 */}
+                  <CodeUpdateWatcher />
                 </ToastProvider>
               </LogProvider>
             </TRPCReactProvider>

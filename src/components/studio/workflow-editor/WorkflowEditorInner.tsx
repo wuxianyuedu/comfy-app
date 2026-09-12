@@ -54,6 +54,13 @@ import { ioLabel, type WorkflowIOEntry } from "../shared/workflow-io";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
 import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
 import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
+import {
+  computeFitViewport,
+  createFitSettleStepper,
+  normalizeBounds,
+  type Bounds,
+  type FitBoundsNode,
+} from "./subgraph-viewport";
 
 /* ── Canvas grid ──
  *  Two stacked native <Background> layers so the grid pans / zooms with
@@ -87,6 +94,58 @@ import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
  *  short-circuit and render nothing.  Note `<ReactFlow>` minZoom is 0.15
  *  (see ZoomIndicator), so we never hit a zoom where we'd still want the
  *  grid but it's missing for technical reasons. */
+/* ── 画布聚焦（打开工作流 / 子工作流时把视口对准真实内容）──
+ *
+ *  算式本体在 subgraph-viewport.ts（纯函数 + 单测）；这里只放与 React Flow
+ *  store 打交道的部分：挑出参与包围盒的节点、读容器尺寸、下发视口。
+ *
+ *  为什么必须「反复算、直到收敛」而不是一次性 fitView：节点是分批测量的
+ *  （视口裁剪下只有看得见的节点会挂载并被量到尺寸）。第一帧里测量的范围
+ *  恰好就是上一个视图留下的那块视口，据此 fit 会把整张图当成「就那么大」，
+ *  子图内容于是停在视野外（ISSUE #394）。 */
+const FIT_FALLBACK_SIZE = { width: 240, height: 80 } as const;
+/** 连续多少轮测量结果不再扩大就收手（超大图逐屏挂载时不必等全部量完）。 */
+const FIT_SETTLE_ROUNDS = 3;
+/** 轮数护栏，避免测量始终不稳时无限重算。 */
+const FIT_MAX_ATTEMPTS = 24;
+
+/** 参与聚焦的节点：真实节点（`wfNode` / `wfSubgraph` / `wfNote`）。
+ *  跳过左右栏的边界口与它们的 `grp:bpin:*` 外框 —— 那两条栏位于
+ *  `minX - RAIL_GAP` / `maxX + RAIL_GAP`（见 workflow-editor-build-nodes），
+ *  参与包围盒就会把中心拉偏、把工作流压成一条细缝。 */
+function collectFitTargets(
+  nodes: readonly { id: string; type?: string; position: { x: number; y: number };
+    measured?: { width?: number; height?: number }; width?: number; height?: number;
+    style?: { width?: number | string; height?: number | string } }[],
+): FitBoundsNode[] {
+  const out: FitBoundsNode[] = [];
+  for (const n of nodes) {
+    if (n.type === "wfIoPort") continue;
+    if (String(n.id).startsWith("grp:bpin:")) continue;
+    out.push(n);
+  }
+  return out;
+}
+
+/** 下发一次视口。没有可测量的节点时退回 React Flow 自己的 fitView。 */
+function applyFitViewport(
+  rf: { fitView: (options?: { padding?: number; duration?: number }) => unknown;
+    setViewport: (viewport: { x: number; y: number; zoom: number },
+      options?: { duration?: number }) => unknown },
+  bounds: Bounds | null,
+): void {
+  const container = document.querySelector(".react-flow");
+  const viewport = computeFitViewport(bounds, {
+    width: container?.clientWidth ?? 0,
+    height: container?.clientHeight ?? 0,
+  });
+  if (!viewport) {
+    void rf.fitView({ padding: 0.1, duration: 0 });
+    return;
+  }
+  void rf.setViewport(viewport, { duration: 0 });
+}
+
 /* 外层：创建 3 个 per-instance Zustand store（经 createIOEditStore 等工厂），
  * 再经 <WFStoresProvider> 下发。状态判断逻辑与渲染子树都在这之下。 */
 export function WorkflowEditorInner({
@@ -302,52 +361,20 @@ function WorkflowEditorBody({
    *  fetch silently updates storage while UI remains stale". */
   const latestRequestIdRef = useRef(0);
 
-  /* Centre the viewport on the *middle* workflow nodes only (never the
-   *  left/right boundary-pin rails / their wfGroup frames — see below).
-   *  Reads the live node list from React Flow's store (`rf.getNodes()`)
-   *  instead of the React `nodes` closure, so it can be called both from
-   *  the auto-fit effect on subgraph entry AND from the manual "重置布局"
-   *  (reset layout) button after the nodes have been re-laid-out by the
-   *  sync effect — no stale-closure / render-order races. */
-  const fitToMiddle = useCallback(() => {
-    const all = rf.getNodes();
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    let hasMiddle = false;
-    for (const n of all) {
-      // Skip boundary-pin labels and their wfGroup frames — they live in
-      // the left/right rails (minX - RAIL_GAP) and would otherwise pull
-      // the centre leftward and shrink the workflow to a sliver.
-      if (n.type === "wfIoPort") continue;
-      if (String(n.id).startsWith("grp:bpin:")) continue;
-      hasMiddle = true;
-      const w = Number(n.measured?.width ?? n.width ?? 240);
-      const h = Number(n.measured?.height ?? n.height ?? 80);
-      const x = n.position.x;
-      const y = n.position.y;
-      if (x < minX) minX = x;
-      if (x + w > maxX) maxX = x + w;
-      if (y < minY) minY = y;
-      if (y + h > maxY) maxY = y + h;
-    }
-    if (!hasMiddle || !Number.isFinite(minX)) {
-      void rf.fitView({ padding: 0.10, duration: 0 });
-      return;
-    }
-    const bboxW = Math.max(1, maxX - minX);
-    const bboxH = Math.max(1, maxY - minY);
-    const containerW = document.querySelector(".react-flow")?.clientWidth ?? 1200;
-    const containerH = document.querySelector(".react-flow")?.clientHeight ?? 700;
-    // Zoom that fully encloses the middle bbox with ~12% margin on each
-    // side, floored at 0.35 so wide workflows stay legible.
-    let zoom = Math.min((containerW * 0.76) / bboxW, (containerH * 0.76) / bboxH, 1.5);
-    if (zoom < 0.35) zoom = 0.35;
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    void rf.setViewport(
-      { x: containerW / 2 - zoom * centerX, y: containerH / 2 - zoom * centerY, zoom },
-      { duration: 0 }
-    );
+  /* 把视口对准「当前视图里真实有内容的节点」。
+   *
+   *  两个调用方：进入工作流 / 子工作流后的自动聚焦（见下方 effect），
+   *  以及画布右上角「🎯 居中」按钮 —— 作者把节点拖出视野或缩得太小之后
+   *  需要一条回到内容处的出口。纯视口动作：不移动节点、不写库。 */
+  const fitToContent = useCallback(() => {
+    applyFitViewport(rf, normalizeBounds(collectFitTargets(rf.getNodes()), FIT_FALLBACK_SIZE));
   }, [rf]);
+
+  /* 「重新居中」按钮。延后一帧再算：React Flow 在下一帧才提交最新的测量
+   *  结果，直接算会用到上一帧的尺寸（对刚展开/折叠过节点的画布尤其明显）。 */
+  const recenterCanvas = useCallback(() => {
+    requestAnimationFrame(() => fitToContent());
+  }, [fitToContent]);
 
   /* Fetch workflow detail (or subgraph detail when navigating into one).
    * Performance: a per-session (sessionStorage) cache keyed by URL lets a
@@ -662,7 +689,7 @@ function WorkflowEditorBody({
   }, [initialNodes, graphNodes, paramEdges, scopeDetail, outSlotNameById, setNodes, setEdges]);
 
 
-  /* Fit-to-middle once per workflow/subgraph open. Placed after `nodes`
+  /* Fit-to-content once per workflow/subgraph open. Placed after `nodes`
    * so we don't reference it before declaration (react-hooks/immutability). */
   useEffect(() => {
     if (nodes.length === 0) return;
@@ -673,17 +700,31 @@ function WorkflowEditorBody({
     const fitKey = detail?.id ?? "__root__";
     if (fittedRef.current === fitKey) return;
     fittedRef.current = fitKey;
-    // Defer one frame so ReactFlow has measured the viewport and laid
-    // nodes out before we fit.
-    const raf = requestAnimationFrame(() => {
-      fitToMiddle();
-      // One final settle (some React Flow minor versions re-trigger
-      // their own fitView once measurements resolve a frame later; this
-      // reasserts ours).
-      requestAnimationFrame(() => fitToMiddle());
+    /* 节点是**分批**测量的：React Flow 先挂载再量 DOM，首帧里只有视口内
+     *  （恰好是被上一个视图带偏的那一块）的节点拿得到 measured，其余仍是 0。
+     *  只在「第一帧 / 第二帧」fit 会把这次测量结果当成整张图的范围 ——
+     *  子图内容在视野外就这么来的（ISSUE #394）。
+     *
+     *  所以每次测量到位都重算一次，收敛到「本次 fit 覆盖的范围不再扩大」为止：
+     *  要么整个 bbox 都被量到（内容完整、范围稳定），要么连续若干次不再增长
+     *  （超大图逐屏挂载，此时以已量到的内容为准）。上限只是护栏。 */
+    const stepper = createFitSettleStepper({
+      fallbackSize: FIT_FALLBACK_SIZE,
+      settleRounds: FIT_SETTLE_ROUNDS,
+      maxAttempts: FIT_MAX_ATTEMPTS,
     });
+    let raf = 0;
+    const step = () => {
+      const { bounds, done } = stepper.next(() => collectFitTargets(rf.getNodes()));
+      applyFitViewport(rf, bounds);
+      if (done) return;
+      raf = requestAnimationFrame(step);
+    };
+    /* Defer one frame so ReactFlow has measured the viewport and laid
+     * nodes out before we fit. */
+    raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [rf, detail?.id, fitToMiddle, nodes.length]);
+  }, [rf, detail?.id, nodes.length]);
 
   /* lazy edge interactivity.  defaultEdgeOptions in the canvas
    *  sets deletable/reconnectable=false so untouched edges stay inert; the
@@ -714,7 +755,7 @@ function WorkflowEditorBody({
     setNodes,
     paramMap,
     workflowIO,
-    fitToMiddle,
+    fitToContent,
     savePatch,
     onSave,
     onClose,
@@ -887,6 +928,7 @@ function WorkflowEditorBody({
           canvasSettingsHydrated={canvasSettingsHydrated}
           onMiniMapJump={onMiniMapJump}
           onOpenSettings={() => setCanvasSettingsOpen(true)}
+          onRecenter={recenterCanvas}
           onEdgeClick={onEdgeClick}
           onConnect={onConnect}
           isValidConnection={isValidConnection}
