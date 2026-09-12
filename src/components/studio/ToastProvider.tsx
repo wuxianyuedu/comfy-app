@@ -24,9 +24,11 @@ export interface ToastItem {
 
 export interface ToastContextValue {
   toast: (t: Omit<ToastItem, "id">) => string;
-  success: (title: string, description?: string) => string;
-  error: (title: string, description?: string) => string;
-  info: (title: string, description?: string) => string;
+  success: (title: string, description?: string, duration?: number) => string;
+  error: (title: string, description?: string, duration?: number) => string;
+  /** `duration` 覆盖默认 3.2s 自动收起时间；用于「这句话是要照着做的」这类提示
+   *  （如陈旧实例的「重载一次即恢复」指引）——默认时长会让用户来不及读完。 */
+  info: (title: string, description?: string, duration?: number) => string;
   loading: (title: string, description?: string) => string;
   update: (id: string, patch: Partial<Omit<ToastItem, "id">>) => void;
   dismiss: (id: string) => void;
@@ -95,10 +97,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<ToastContextValue>(
     () => ({
       toast,
-      success: (title, description) => toast({ kind: "success", title, description }),
-      error: (title, description) => toast({ kind: "error", title, description }),
-      info: (title, description) => toast({ kind: "info", title, description }),
-      loading: (title, description) => toast({ kind: "loading", title, description, duration: 0 }),
+      success: (title, description, duration) =>
+        toast({ kind: "success", title, description, duration }),
+      error: (title, description, duration) =>
+        toast({ kind: "error", title, description, duration }),
+      info: (title, description, duration) =>
+        toast({ kind: "info", title, description, duration }),
+      loading: (title, description) =>
+        toast({ kind: "loading", title, description, duration: 0 }),
       update,
       dismiss,
     }),

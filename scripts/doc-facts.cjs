@@ -20,6 +20,7 @@ const SCOPED_DOCS = [
   "docs/standards/launch-and-build.md",
   "docs/startup-hotreload.md",
   "docs/guide-non-developer.md",
+  "docs/guide-stale-code.md",
   // 扩展：含值类引用的文档
   "docs/standards/Comfy-APP-T3-项目开发规范.md",
   "docs/standards/16-shadcn-ui与表单校验.md",
