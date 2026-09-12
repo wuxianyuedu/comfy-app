@@ -61,7 +61,10 @@ describe("WorkflowParamCardColumn", () => {
     expect(screen.getByText("高度")).toBeTruthy();
   });
 
-  it("端口行在卡片里，单端口条目还在行尾标出落点那一行", () => {
+  it("端口行只列端口本身，落点不再在行尾重复一遍（ISSUE #355 复审）", () => {
+    /* 用户圈出「红框内那段没用」：行尾的「→ 落点」与下面那行带类型的输出端口
+     * 说的是同一件事（那一行已经写出落点名，还贴着端点圆点）。单端口条目因此
+     * 不再在行尾重复标注 —— 只留端口自己的类型。 */
     const { container } = render(
       <WorkflowParamCardColumn
         entries={entries}
@@ -73,8 +76,28 @@ describe("WorkflowParamCardColumn", () => {
     const card = container.querySelector(
       `[data-testid="param-node-${promptCard.id}"]`,
     )!;
-    expect(card.textContent).toContain("positive_prompt");
-    expect(card.textContent).toContain("→ positive_prompt");
+    expect(card.textContent).not.toContain("→ positive_prompt");
+    /* 落点名走在带类型的输出端口那一行（贴着端点）。 */
+    expect(
+      screen.getByTestId(`param-node-out-${promptCard.id}-0`).textContent,
+    ).toContain("positive_prompt");
+  });
+
+  it("多端口条目仍在端口行尾标落点（多行之间要能区分）", () => {
+    const { container } = render(
+      <WorkflowParamCardColumn
+        entries={entries}
+        resolved={autoMapEntries(entries, io)}
+        io={io}
+      />,
+    );
+    /* 只有「尺寸」是同一个落点覆盖多个候选端口的口子；它把落点标在行尾。 */
+    const sizeCard = entries.find((entry) => entry.cls === "size-height")!;
+    expect(sizeCard.pins.length).toBe(1);
+    const card = container.querySelector(
+      `[data-testid="param-node-${sizeCard.id}"]`,
+    )!;
+    expect(card.textContent).toContain("height");
   });
 
   it("卡片带**有类型**的输出端口（提示词 → STRING）—— ISSUE #355 复审", () => {

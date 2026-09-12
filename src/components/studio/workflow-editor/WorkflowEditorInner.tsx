@@ -151,10 +151,13 @@ function applyFitViewport(
  * 再经 <WFStoresProvider> 下发。状态判断逻辑与渲染子树都在这之下。 */
 export function WorkflowEditorInner({
   workflowId,
+  /** 打开时落到的模式码（工作流库的画布预览里选的那个）。 */
+  initialMode = null,
   onClose,
   onSave,
 }: {
   workflowId: string;
+  initialMode?: string | null;
   onClose: () => void;
   onSave?: () => void;
 }) {
@@ -174,7 +177,12 @@ export function WorkflowEditorInner({
   }));
   return (
     <WFStoresProvider stores={stores}>
-      <WorkflowEditorBody workflowId={workflowId} onClose={onClose} onSave={onSave} />
+      <WorkflowEditorBody
+        workflowId={workflowId}
+        initialMode={initialMode}
+        onClose={onClose}
+        onSave={onSave}
+      />
     </WFStoresProvider>
   );
 }
@@ -189,10 +197,12 @@ interface WFStoresHelper {
  * store（hook 在 <WFStoresProvider> 之下才合法，故体逻辑用 *Api 访问）。 */
 function WorkflowEditorBody({
   workflowId,
+  initialMode,
   onClose,
   onSave,
 }: {
   workflowId: string;
+  initialMode?: string | null;
   onClose: () => void;
   onSave?: () => void;
 }) {
@@ -578,7 +588,9 @@ function WorkflowEditorBody({
    *  画布上）明明已经显示着「单图生视频」了，自相矛盾（ISSUE #355 复审）。 */
   const wiringMode = resolveWorkflowMode({
     modes: detail?.modes,
-    defaultMode: detail?.defaultMode,
+    /* 库详情里选定的模式优先于工作流默认模式：用户从「画布样式预览」点进来时
+     *  看到的连线 / 落点/ 卡片必须还是他刚看的那一套（否则像「线丢了」）。 */
+    defaultMode: initialMode ?? detail?.defaultMode,
     taskType: detail?.taskType,
   });
   const paramMapping = useParamMapping({

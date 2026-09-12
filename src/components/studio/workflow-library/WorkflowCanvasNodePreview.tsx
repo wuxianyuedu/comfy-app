@@ -116,22 +116,30 @@ export function WorkflowCanvasNodePreview({
   const [logOpen, setLogOpen] = useState(false);
   const [viewTaskId, setViewTaskId] = useState<string | null>(null);
 
-  /* 模式默认值播种：workflow 或 defaultMode 变化时，用该模式（或默认模式）的
-   *  两级默认值（模式覆盖 -> 作者 value -> 图内 defaultValue）回填表单，使
-   *  「画布样式预览」初始即展示该模式下配置的默认值。不强制（io 尚未就绪 /
-   *  defaultMode 空时跳过），用户后续可自由覆盖。 */
+  /* 生效模式与节点上的模式 chip 同一口径（defaultMode → modes[0] → taskType）——
+   * 卡片列、宿主表单、seed 模式、必填判定全都按它解析，不会再出现「chip 显示着
+   * 单图生视频、卡片却说需要先选模式」这类自相矛盾。 */
+  const effectiveMode = useMemo(
+    () => resolveWorkflowMode({ modes, defaultMode, taskType }),
+    [modes, defaultMode, taskType],
+  );
+
+  /* 模式默认值播种：workflow 或**生效模式**变化时，用该模式的两级默认值
+   *  （模式覆盖 -> 作者 value -> 图内 defaultValue）回填表单，使「画布样式
+   *  预览」初始即展示该模式下配置的默认值（模式 chip 上显示的就是它）。
+   *  io 尚未就绪时跳过，用户后续可自由覆盖。 */
   const seedRef = useRef<string | null>(null);
   /* 上一次播种下去的默认值表 —— 判断「用户有没有改过这一格」的基线（见
    *  mergeRefreshedDefaults）。它必须始终是「播种时的那一份」，所以只在播种
    * 处写入，其余时候连引用都不能动。 */
   const baselineRef = useRef<Record<string, unknown>>({});
-  /* 播种键同时含 workflowId 与 defaultMode：换工作流 / 换模式都会落到下面的
+  /* 播种键同时含 workflowId 与生效模式：换工作流 / 换模式都会落到下面的
    * 「整表重播」分支。这一步是必须的——若只按 mode 判定，上一个工作流的
    * 用户覆盖值会被当成新工作流的覆盖值保留下来（ioKey 恰好同名时）。 */
-  const activeSeedKey = `${workflowId ?? ""}|${defaultMode ?? ""}`;
+  const activeSeedKey = `${workflowId ?? ""}|${effectiveMode ?? ""}`;
   useEffect(() => {
     if (!workflowIO) return;
-    const fresh = defaultInputValues(workflowIO, defaultMode ?? null);
+    const fresh = defaultInputValues(workflowIO, effectiveMode);
     if (seedRef.current === activeSeedKey) {
       /* 同一个工作流 + 同一个模式，IO 变了 = 作者在编辑器里改了默认值。
        *  此时不能整表覆盖（会吃掉用户已填的覆盖值），只把「仍等于旧默认值」
@@ -148,7 +156,7 @@ export function WorkflowCanvasNodePreview({
     baselineRef.current = fresh;
     setValues(fresh);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在 workflow/模式变化时整表播种，IO 变化走上面的保覆盖刷新
-  }, [workflowIO, workflowId, defaultMode]);
+  }, [workflowIO, workflowId, effectiveMode]);
 
   /* 重开窗口恢复：若 store 里有本工作流仍在运行的登记，恢复「生成中」视角。
    * 恢复走惰性初始化（useState 的初始化函数在挂载时读 store），避免 effect
@@ -197,8 +205,10 @@ export function WorkflowCanvasNodePreview({
   const running = phase.kind === "running" || phase.kind === "starting";
   const missing = useMemo(
     () =>
-      workflowIO ? getMissingRequiredInputs(workflowIO, values, defaultMode ?? null) : [],
-    [workflowIO, values, defaultMode],
+      workflowIO
+        ? getMissingRequiredInputs(workflowIO, values, effectiveMode)
+        : [],
+    [workflowIO, values, effectiveMode],
   );
   /* 缺参提示人性化：ioKey（76::widget::text）→ 展示标签（pos text 等）。 */
   const missingLabels = useMemo(
@@ -218,16 +228,16 @@ export function WorkflowCanvasNodePreview({
    * 渲染（库内无 React Flow 上下文，不带端点），outputs 单独成段在表单之后。 */
   const { inputs, outputs } = splitWorkflowIO(workflowIO);
 
-  /* seed 类参数的「控件后行为」：按当前模式解析（模式覆盖优先，回退条目全局）。
-   *  defaultMode 空时与旧行为一致，只读条目全局 seedMode。 */
+  /* seed 类参数的「控件后行为」：按生效模式解析（模式覆盖优先，回退条目全局）。
+   *  没有模式时与旧行为一致，只读条目全局 seedMode。 */
   const seedModes = useMemo(() => {
     const map: Record<string, string> = {};
     for (const [ioKey, entry] of Object.entries(workflowIO ?? {})) {
-      const resolved = resolveEntrySeedMode(entry, defaultMode);
+      const resolved = resolveEntrySeedMode(entry, effectiveMode);
       if (resolved) map[ioKey] = resolved;
     }
     return map;
-  }, [workflowIO, defaultMode]);
+  }, [workflowIO, effectiveMode]);
 
   const statusLabel =
     phase.kind === "running"
@@ -323,16 +333,15 @@ export function WorkflowCanvasNodePreview({
    * 消费视角 —— 卡片不可拖、不渲染端点，拉线 / 断开 / 恢复默认都在编辑器里做，
    * 库内只把落点标在卡片的端口行上。 */
   const hostRef = useRef<HTMLDivElement | null>(null);
-  /* 生效模式与节点上的模式 chip 同一口径（defaultMode → modes[0] → taskType）——
-   * 卡片列按它过滤统一对外参数，不会再出现「chip 显示着单图生视频、卡片却说
-   * 需要先选模式」的自相矛盾。 */
-  const effectiveMode = useMemo(
-    () => resolveWorkflowMode({ modes, defaultMode, taskType }),
-    [modes, defaultMode, taskType],
-  );
   const paramCards = useMemo(
     () => deriveLibraryParamCards({ io: workflowIO, paramMap, mode: effectiveMode }),
     [workflowIO, paramMap, effectiveMode],
+  );
+  /* 生效模式名（chip 上显示的那个）。卡片刻的名字、表单按它解析的 required /
+   * seed 行为、「在编辑器中打开」带过去的模式，全都取自同一个生效模式。 */
+  const effectiveModeLabel = useMemo(
+    () => (effectiveMode ? modeLabel(effectiveMode) : modeLabel(taskType)),
+    [effectiveMode, taskType],
   );
 
   const hasRuns = currentRuns.length > 0;
@@ -409,7 +418,7 @@ export function WorkflowCanvasNodePreview({
             {modes && modes.length > 1 && onModeChange ? (
               /* 多模式：类型 chip 变成模式切换下拉（与工作流库「类型」同码表） */
               <DarkSelect
-                value={defaultMode ?? taskType}
+                value={effectiveMode ?? taskType}
                 onChange={(code) => onModeChange(code)}
                 options={modes}
                 labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
@@ -420,7 +429,7 @@ export function WorkflowCanvasNodePreview({
             ) : (
               <WorkflowStaticChip>
                 <span className="text-[11px] font-medium text-(--color-ink-bright)">
-                  {modeLabel(taskType) || "—"}
+                  {effectiveModeLabel || "—"}
                 </span>
               </WorkflowStaticChip>
             )}
@@ -436,7 +445,7 @@ export function WorkflowCanvasNodePreview({
           onChange={setValues}
           showOutputs={false}
           compact
-          mode={defaultMode}
+          mode={effectiveMode}
           seedModes={seedModes}
           /* 被某个对外参数落到的那一行，行尾标出它属于谁 —— 与左侧卡片的
            * 端口行互为两端，一眼看出「这个参数到底喂给了哪一行」。 */

@@ -50,11 +50,14 @@ function EditorCrashFallback({
 
 export function WorkflowCanvasEditor({
   workflowId,
+  /** 打开时落到的模式码（工作流库的画布预览里选的那个）。 */
+  initialMode = null,
   open,
   onClose,
   onSave,
 }: {
   workflowId: string;
+  initialMode?: string | null;
   open: boolean;
   onClose: () => void;
   onSave?: () => void;
@@ -71,6 +74,7 @@ export function WorkflowCanvasEditor({
       <ReactFlowProvider>
         <WorkflowEditorInner
           workflowId={workflowId}
+          initialMode={initialMode}
           onClose={onClose}
           onSave={onSave}
         />
