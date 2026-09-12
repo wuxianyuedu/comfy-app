@@ -17,6 +17,12 @@ import {
   selectWorkflowIO,
   selectIoPreviewOpen,
 } from "./WorkflowStores";
+import {
+  TOP_BAR_BREADCRUMB_CLASS,
+  TOP_BAR_ROOT_CLASS,
+  topBarButtonClass,
+  topBarGroupClass,
+} from "./workflow-editor-topbar-config";
 
 export interface WorkflowEditorTopBarProps {
   onClose: () => void;
@@ -79,8 +85,8 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   const toast = useToast();
 
   return (
-      <header className="flex shrink-0 items-center justify-between border-b border-white/6 px-4 py-3 backdrop-blur-md" style={{ background: "rgba(10,10,15,0.85)" }}>
-        <div className="flex items-center gap-3">
+      <header className={TOP_BAR_ROOT_CLASS} style={{ background: "rgba(10,10,15,0.85)" }}>
+        <div className={TOP_BAR_BREADCRUMB_CLASS}>
           <button
             type="button"
             onClick={onClose}
@@ -194,7 +200,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 强制重载
               </button>
             </div>
-            <p className="mt-0.5 text-[11px] font-medium text-gray-400">
+            <p className="mt-0.5 truncate text-[11px] font-medium text-gray-400">
               {detail.nodes.filter((node) => !isNoteType(node.class_type)).length} 个节点
               <span className="mx-1.5 text-gray-600">·</span>
               {Object.keys(workflowIO).length} 个暴露 IO
@@ -230,7 +236,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className={topBarGroupClass("compact")}>
           {/* 单一格式（不再区分 RAW / API 视图），节点布局统一由
            *  detail.positions 决定；RAW / API 切换 UI 已移除。 */}
           {/* 调试模式 — 节点卡片叠加显示渲染链路模块标签。
@@ -239,11 +245,11 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           <button
             type="button"
             onClick={toggleDebugMode}
-            className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
-              debugMode
-                ? "bg-violet-500/90 text-white shadow"
-                : "text-gray-400 hover:text-gray-200"
-            }`}
+            className={topBarButtonClass(
+              "ghost",
+              "compact",
+              debugMode ? "bg-violet-500/90 text-white shadow" : "",
+            )}
             title="调试模式：在节点卡片上叠加显示渲染链路模块标签（点击复制完整路径）"
           >
             {debugMode ? "✓ 调试中" : "调试"}
@@ -266,11 +272,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           <button
             type="button"
             onClick={() => setIoEditMode((value) => !value)}
-            className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
-              ioEditMode
-                ? "border-amber-400/60 bg-amber-400/20 text-amber-100 hover:bg-amber-400/30"
-                : "border-white/15 bg-white/5 text-gray-200 hover:bg-white/10"
-            }`}
+            className={topBarButtonClass(ioEditMode ? "ioOn" : "outline", "compact")}
             title="进入 IO 编辑模式：在每个节点参数前显示勾选框，勾选即把该参数暴露为工作流的外部输入或输出"
           >
             {ioEditMode ? "✓ 编辑 IO 中" : "📌 编辑 IO"}
@@ -294,11 +296,11 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               setIoPreviewOpen((value) => !value);
             }}
             disabled={!ioEditMode && !ioPreviewOpen && Object.keys(workflowIO).length === 0}
-            className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
-              ioPreviewOpen
-                ? "border-sky-400/60 bg-sky-400/20 text-sky-100 hover:bg-sky-400/30"
-                : "border-white/15 bg-white/5 text-gray-200 hover:bg-white/10 disabled:opacity-40"
-            }`}
+            className={topBarButtonClass(
+              ioPreviewOpen ? "ioPreviewOn" : "outline",
+              "compact",
+              "disabled:opacity-40",
+            )}
             title="预览当前勾选的 IO 在最终表单中的样子；预览面板中每个名称都可点击重命名"
           >
             {ioPreviewOpen ? "👁 关闭预览" : "👁 预览 IO"}
@@ -316,7 +318,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               setViewJsonOpen(true);
             }}
             disabled={!detail}
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-gray-200 transition-colors hover:bg-white/10 disabled:opacity-40"
+            className={topBarButtonClass("outline", "compact", "disabled:opacity-40")}
             title="查看当前工作流的 API + RAW 源码（基于磁盘已保存版本，未保存的画布修改不在内）"
           >
             📋 查看 JSON
@@ -324,7 +326,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           <button
             type="button"
             onClick={resetLayout}
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-gray-200 transition-colors hover:bg-white/10"
+            className={topBarButtonClass("outline", "compact")}
             title="把所有节点恢复到进入工作流时的原始位置（撤销全部手动拖动）"
           >
             重置布局
@@ -333,7 +335,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             type="button"
             onClick={resetParamWiring}
             disabled={!wiringMode || !hasParamWiring}
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-gray-200 transition-colors hover:bg-white/10 disabled:opacity-40"
+            className={topBarButtonClass("outline", "compact", "disabled:opacity-40")}
             title={
               !wiringMode
                 ? "该工作流未声明模式，参数落点必须归属一个模式"
@@ -348,7 +350,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="rounded-lg bg-violet-500/90 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:opacity-50"
+            className={topBarButtonClass("solid", "compact", "disabled:opacity-50")}
           >
             {saving ? "保存中…" : "💾 保存"}
           </button>
