@@ -91,3 +91,4 @@ corepack prepare pnpm@11.25.0 --activate
 | pnpm 版本与仓库要求（11.25.0）不一致 | `corepack enable` + `corepack prepare pnpm@11.25.0 --activate` |
 | 双击脚本用户，拉取后启动报依赖错误 | 删 `node_modules`，重双击 `run-local.ps1` |
 | dev server 正在运行 | 先关掉再装依赖（原生模块会被进程锁住，装到一半会 EPERM 失败） |
+| 不想关窗口，只想让界面用上刚拉到的新代码 | 重载一次页面（`Ctrl+R`）即可；「应用一直开着导致界面比代码旧」的成因与处置见 [`../guide-stale-code.md`](../guide-stale-code.md) |

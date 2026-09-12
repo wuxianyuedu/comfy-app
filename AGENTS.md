@@ -18,7 +18,10 @@
 按改动范围快速定位规范章节：
 - 前端业务 / 组件 / 状态 / 性能 / 类型 / 样式 / 测试 → `docs/standards/README.md`
   总览，按主题进入 `docs/standards/01~17` 对应章节；
-- 启动链路 / Tauri 壳 / 构建打包 / ComfyUI 生命周期 → `docs/standards/launch-and-build.md`；
+- 启动链路 / Tauri 壳 / 构建打包 / ComfyUI 生命周期 → `docs/standards/launch-and-build.md`
+  （§4.3「陈旧实例：运行图落后于源码」= 长开窗口 + 拉新代码导致的白屏及其通知；
+  改 store 动作、或新增会被已挂载实例调用到的模块时必读；用户侧说明见
+  `docs/guide-stale-code.md`）；
 - 提交 / PR / 自查清单 → `docs/standards/13-提交与-code-review.md`（§13.1 自查清单）；
 - 不确定读哪些 → 先读 `docs/standards/15-附录.md` §15.5「新成员 10 分钟速读路径」建立全局认知。
 
