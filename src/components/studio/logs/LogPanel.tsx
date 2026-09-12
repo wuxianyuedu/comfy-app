@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import {
   dedupeRepeats,
+  selectFirstPageWindow,
   selectNewLogCount,
   selectPageLogs,
   selectShouldPinToLatest,
@@ -50,8 +51,10 @@ import { overlayClass } from "~/lib/full-screen-layer";
 import {
   LEVEL_BADGE_STYLES,
   LEVEL_TEXT_STYLES,
+  LOG_ROW_TEXT_ATTRIBUTE,
   TOKEN_CLASS,
   rowFragments,
+  selectionInsideLogs,
   type RowToken,
 } from "./log-row-style";
 
@@ -304,6 +307,9 @@ const LogRow = memo(function LogRow({
         {entry.level}
       </span>
       <span
+        /* 选区判定的落点：面板贴底前要知道「用户框选的是不是日志正文」，
+         * 这个属性就是那件事的载体（见 selectionInsideLogs）。 */
+        {...{ [LOG_ROW_TEXT_ATTRIBUTE]: "" }}
         className={`min-w-0 flex-1 ${
           wrap ? "break-words whitespace-pre-wrap" : "truncate"
         } ${LEVEL_TEXT_STYLES[entry.level]}`}
@@ -402,6 +408,18 @@ function OriginSelect({
           `w-auto` 去掉，弹层会被压到扳机的 90px，四列数字挤成一团。 */}
       <SelectContent
         positionerClassName={LOG_PANEL_POPUP_Z_CLASS}
+        /* 与扳机**底边**对齐（用户要求：「弹出下拉菜单的最上方和下拉按钮的
+         * 最下方对齐即可」）。
+         *
+         * base-ui 的 `alignItemWithTrigger` 默认会把弹层挪去盖住扳机本身，
+         * 于是头部在窗口顶端时弹层只能向上生长——实测直接顶到窗口最上方、
+         * 盖住标题行的左侧（截图里就是这样）。两条一起改：
+         *   - `alignItemWithTrigger={false}`：弹层不覆盖扳机，从它下面开始；
+         *   - `collisionAvoidance={{ side: "none" }}`：撞到视口底部也不翻到
+         *     上面去，需要时改为**滚动**弹层自身。
+         * 于是弹层顶边恒等于扳机底边（sideOffset 4px），与窗口位置无关。 */
+        alignItemWithTrigger={false}
+        collisionAvoidance={{ side: "none" }}
         className="w-auto min-w-max rounded-lg border border-white/8 bg-[#15141f] p-0 text-gray-300"
       >
         {/* 列标题：把「数字是什么」写在一次，行内就不必每格重复「信息 / 警告」 */}
@@ -482,22 +500,39 @@ export function LogPanel() {
     page,
     pageSize,
     bootId,
+    autoScroll,
+    anchorId,
+    viewBaselineAfter,
   } = useLogPanel((state) => state.header);
   /* 计数一律看**当前来源**：「全部来源」下是全局数，选了某个来源就是该来源自己
    * 的数——级别按钮与来源下拉共用同一份，两边永远对得上（ISSUE #360）。 */
   const originCounts = countsByOrigin[origin ?? "all"] ?? countsByOrigin.all;
   const revision = useLogPanel((state) => state.revision);
+  /* 「用户有没有主动要求回到最新」的生成号：它一变，贴底就升级为「一路追到
+   * 最新」（见 log-store 的 followResetAt）。视图不自己去猜这件事，否则
+   * store 与视图会各存一份贴底状态，出现「面板说不自动滚动、却仍在滚」。 */
+  const followResetAt = useLogPanel((state) => state.followResetAt);
   const setFilter = useLogPanel((state) => state.setFilter);
   const setOrigin = useLogPanel((state) => state.setOrigin);
   const setSearch = useLogPanel((state) => state.setSearch);
   const setPage = useLogPanel((state) => state.setPage);
+  const setFollowBottom = useLogPanel((state) => state.setFollowBottom);
+  const storeJumpToLatest = useLogPanel((state) => state.jumpToLatest);
   const setIsOpen = useLogPanel((state) => state.setIsOpen);
   const clear = useLogPanel((state) => state.clear);
   const copyAll = useLogPanel((state) => state.copyAll);
   const download = useLogPanel((state) => state.download);
 
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [autoScroll, setAutoScroll] = useState(true);
+  /* 贴底基线（= 用户已看过的最新一条在**页面里的序号**）。
+   *
+   * 面板贴着底看时只滚到这里：新日志在下面累积，不再每两秒把内容整体上移一次
+   * ——那正是「刚选中一行就被刷新冲掉」的直接原因（ISSUE #262 复审）。
+   * 基线在「打开面板 / 用户滚回底部 / 换页」时重取，用户点「回到最新」后
+   * followResetAt 变化，贴底升级为一路追到最新。 */
+  const baselineRef = useRef(0);
+  /* 上一次贴底落在页面里的序号；仅用于「有新增才滚」的比较（不参与可见输出）。 */
+  const appliedRef = useRef(-1);
   const [wrap, setWrap] = useState(true);
   const [wide, setWide] = useState(false);
 
@@ -511,30 +546,107 @@ export function LogPanel() {
     () => selectPageLogs(filteredLogs, page, pageSize),
     [filteredLogs, page, pageSize],
   );
+
+  /* 第 1 页用**锚定**窗口（见 store 的 anchorId）：不锚定时窗口整体前移，每来一条
+   * 新日志就重建一次首行节点——用户刚框住的文本随节点被卸载，选区当场消失
+   * （「刚选择就刷新把我的选择弄没了」）。锚定后窗口原地不动，新行列在它之后；
+   * 「后面还有多少条新的」由 `truncatedFromEnd` 直接给出（不再靠长度差，封顶时
+   * 长度差恒为 0）。
+   *
+   * 其余页（历史页）本来就与「最新」无关，继续用固定窗口。 */
+  const anchored = useMemo(
+    () => (safePage === 1 ? selectFirstPageWindow(filteredLogs, anchorId, pageSize) : null),
+    [safePage, filteredLogs, anchorId, pageSize],
+  );
+  const visibleLogs = anchored ? anchored.entries : rawPageLogs;
+  /* 当前窗口之后还有多少条更新的日志（锚定窗口直接给出；历史页则按页码算）。 */
+  const unseenAfterView = anchored
+    ? anchored.truncatedFromEnd
+    : Math.max(0, filteredLogs.length - safePage * pageSize);
+
   /* 连续重复行折叠只影响显示（见 log-store 的 dedupeRepeats），不改时间线。 */
-  const pageLogs = useMemo(() => dedupeRepeats(rawPageLogs), [rawPageLogs]);
+  const pageLogs = useMemo(() => dedupeRepeats(visibleLogs), [visibleLogs]);
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage, setPage]);
 
-  /* 新日志到达 → 第 1 页且用户停在底部时贴底。判据是 `revision`（时间线生成号）
-   * 而不是「末条 seq」：按时刻排序后，迟到的旧时刻行会插进中间、末条不变。 */
-  const prevRevisionRef = useRef(revision);
+  /* ── 贴底：只追到「基线」，不再追着最新跑（ISSUE #262 复审）────────────
+   *
+   * 旧行为是「时间线一变就 scrollTop = scrollHeight」，配一条「用户是不是在底部」
+   * 的判定。判据本身没错，错的是它**每两秒就成立一次**：日志上限 2000 条时几乎
+   * 每轮轮询都有新行，于是内容每隔两秒整体上移一次，用户刚框住的文本立刻被滚动
+   * 冲掉（甚至根本框不到）。
+   *
+   * 现在分三层，任何一层成立都不动滚动位置：
+   *   1. 不在第 1 页（在看历史）——历史页的内容本来就不该变；
+   *   2. 用户没贴着底（自己上滚了）——同上，回到底部才重新贴；
+   *   3. **用户正在日志正文里框选文本**——按 `selectionInsideLogs` 判定。
+   *
+   * 贴底时也不再滚到最新，而是滚到「基线」：面板打开 / 用户滚回底部 / 换页那一刻
+   * 已看过的最后一条。新行在下面累积，腾出的空间交给页脚的
+   * 「有 N 条新的日志 · 回到最新」这个显式出口。
+   *
+   * 实现上**只在 effect 里读写 ref**：这些是「上一次贴到哪」的记账值，用 state
+   * 承载会让贴底本身触发一次重渲染，正好落进「滚动 → 重渲染 → 再滚动」的循环。
+   */
   useEffect(() => {
-    const el = bodyRef.current;
-    if (!el || !isOpen) return;
-    if (revision !== prevRevisionRef.current && safePage === 1 && autoScroll) {
-      el.scrollTop = el.scrollHeight;
+    if (!isOpen) {
+      baselineRef.current = 0;
+      appliedRef.current = -1;
+      return;
     }
-    prevRevisionRef.current = revision;
-  }, [revision, isOpen, autoScroll, safePage]);
+    if (safePage !== 1 || !autoScroll) return;
+    const el = bodyRef.current;
+    if (!el) return;
+
+    /* 用户点过「回到最新」→ 不再受基线约束，一路追到最新一页的底部。 */
+    if (followResetAt > 0) {
+      baselineRef.current = Math.max(0, visibleLogs.length - 1);
+    }
+    /* **正在框选就什么都别做**：拖动过程中浏览器会随滚动改锚点，滚动会打断框选
+     * ——这正是「刚选中就被刷新弄没」的最后一环（前两环在 store：贴底基线）。 */
+    if (selectionInsideLogs(currentSelection())) return;
+
+    /* 贴底目标 = max(基线上一次落点, 已追到哪)，并钳到本页最后一条：
+     * 保证新行一条条露出来（不跳空），又不会被后面的新行无限拖走。 */
+    const bottomIndex = visibleLogs.length - 1;
+    const targetIndex = Math.max(
+      0,
+      Math.min(baselineRef.current, bottomIndex),
+      Math.min(appliedRef.current, bottomIndex),
+    );
+    const target = el.querySelector<HTMLElement>(
+      `[data-log-index="${targetIndex}"]`,
+    );
+    if (!target) return;
+    el.scrollTop = Math.max(
+      0,
+      target.offsetTop + target.offsetHeight - el.clientHeight,
+    );
+    appliedRef.current = targetIndex;
+  }, [
+    isOpen,
+    autoScroll,
+    safePage,
+    revision,
+    followResetAt,
+    visibleLogs.length,
+  ]);
 
   const onScroll = () => {
     const el = bodyRef.current;
     if (!el) return;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
-    setAutoScroll(nearBottom);
+    /* 用户回到（或离开）底部：贴底基线跟着当前页的内容重取，从此他看的是
+     * 「自己停下时那一段」，而不是被新日志推着走的最新一段。 */
+    if (nearBottom && !autoScroll) {
+      baselineRef.current = appliedRef.current = Math.max(
+        0,
+        visibleLogs.length - 1,
+      );
+    }
+    setFollowBottom(nearBottom);
   };
 
   const shouldPin = selectShouldPinToLatest(safePage, autoScroll);
@@ -542,22 +654,18 @@ export function LogPanel() {
     useCallback(
       (state: LogPanelState) =>
         selectNewLogCount({
-          revision: state.revision,
-          viewRevision: state.viewRevision,
-          viewLength: state.viewLength,
-          filteredLogs: state.filteredLogs,
+          unseenAfterView,
+          baselineAfterView: viewBaselineAfter,
           page: state.page,
           autoScroll,
         }),
-      [autoScroll],
+      [autoScroll, unseenAfterView, viewBaselineAfter],
     ),
   );
 
   const jumpToLatest = () => {
-    setAutoScroll(true);
+    storeJumpToLatest();
     setPage(1);
-    const el = bodyRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
   };
 
   const total = filteredLogs.length;
@@ -633,18 +741,19 @@ export function LogPanel() {
             ))}
           </div>
 
-          {/* 来源筛选：候选列表里每项自带「条数 / 信息 / 警告 / 错误」四列。
-              此前只有名字，用户必须先切过去才知道那边有没有问题——切换后看到
-              空列表就以为日志丢了（ISSUE #360）；列表改成四列对齐的自绘下拉，
-              切换前扫一眼就是一张表。 */}
-          <OriginSelect
-            value={origin ?? "all"}
-            countsByOrigin={countsByOrigin}
-            onChange={setOrigin}
-          />
+          {/* 弹性空白：把「搜索 + 来源下拉 + 操作按钮」整组推到最右，中间这段
+              宽度留给左侧的类别与条数（用户诉求：给左边的日志类别和条数展示
+              留下较大空间）。它必须在搜索框**之前**——放在后面只是把搜索框留在
+              原位、空白挪到右边，用户看到的那块红框一点没少。 */}
+          <div className="min-w-0 flex-1" />
 
-          {/* Search */}
-          <div className="relative ml-auto flex w-56 items-center">
+          {/* Search 紧跟在级别按钮之后（不再 `ml-auto`）。
+              行头的稀有宽度应当优先给**类别与条数**：搜索框是偶尔才用一次的
+              控件，却因为吃掉了 `ml-auto` 多出来的全部空间，把来源下拉一直顶在
+              级别按钮旁边，两者之间空出一大片（用户截图的红框正是这块空白），
+              而左侧那排四位数的计数反而最挤。现在下拉右移贴住搜索框，
+              中间被让出来的宽度由 `flex-1` 的空白区吸收。 */}
+          <div className="relative ml-2 flex w-56 items-center">
             <Search
               size={14}
               className="pointer-events-none absolute left-2.5 text-gray-600"
@@ -666,6 +775,16 @@ export function LogPanel() {
               </button>
             )}
           </div>
+
+          {/* 来源筛选贴到最右侧（搜索框之后）。候选列表里每项自带
+              「条数 / 信息 / 警告 / 错误」四列——此前只有名字，用户必须先切过去
+              才知道那边有没有问题，切换后看到空列表就以为日志丢了（ISSUE #360）。
+              位置放在最右是用户的直接要求：中间空出来的宽度归左侧的类别与条数。 */}
+          <OriginSelect
+            value={origin ?? "all"}
+            countsByOrigin={countsByOrigin}
+            onChange={setOrigin}
+          />
 
           {/* Actions */}
           <div className="flex items-center gap-1 pl-2">
@@ -737,13 +856,12 @@ export function LogPanel() {
             </div>
           ) : (
             <div className="flex flex-col">
-              {pageLogs.map((entry) => (
-                <LogRow
-                  key={entry.id}
-                  entry={entry}
-                  wrap={wrap}
-                  keyword={search}
-                />
+              {/* `data-log-index`：贴底要知道「滚到哪一行」，而不是「滚到
+                  最底下」——两者差的就是用户还没看的那批新日志。 */}
+              {pageLogs.map((entry, index) => (
+                <div key={entry.id} data-log-index={index}>
+                  <LogRow entry={entry} wrap={wrap} keyword={search} />
+                </div>
               ))}
             </div>
           )}
@@ -848,4 +966,17 @@ export function LogPanel() {
       </div>
     </div>
   );
+}
+
+/**
+ * 取当前选区（浏览器里是 `window.getSelection()`）。
+ *
+ * 抽成函数是为了让上面的贴底 effect 能「取不到就说没有」：jsdom 没有
+ * `getSelection`，返回 null 后 `selectionInsideLogs` 会给出 false，
+ * 贴底行为与既有测试一致，不会因为多了一道判据而整体失效。
+ */
+function currentSelection() {
+  if (typeof window === "undefined") return null;
+  if (typeof window.getSelection !== "function") return null;
+  return window.getSelection();
 }
