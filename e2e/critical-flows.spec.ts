@@ -329,4 +329,46 @@ test.describe("应用页签与全屏视图 @critical", () => {
 
     await expectTopHitsTabStrip(page);
   });
+
+  /**
+   * 同一处回归的**第三形态**：ComfyUI 页签里的 iframe。
+   *
+   * 前两轮修的都是「本应用自己的浮层盖住标题行」，而 ComfyUI 页签是另一类：
+   * 页签打开了、地址也对，里面却是浏览器的「已阻止此内容」错误页 ——
+   * ComfyUI 会发 `X-Frame-Options: DENY`，而它与本应用不同源（端口不同即跨源），
+   * iframe 内嵌必然被拒。宿主页跨源读不到响应头、事件也不带原因，所以
+   * 「能不能嵌」由服务端 `setting.comfyEmbeddable` 回答。
+   *
+   * 这里在浏览器形态下断言不可嵌时**不会**塞进一个注定空白的内嵌页签。
+   */
+  test("@critical ComfyUI 不可内嵌时不塞 iframe 而是给可见出口", async ({ page }) => {
+    await page.route("**/api/trpc/**", async (route: Route) => {
+      const url = route.request().url();
+      const short = url.split("/api/trpc/")[1]?.split("?")[0]?.split(",")[0] ?? "";
+      let data: unknown;
+      if (short === "setting.get") data = { json: "{}" };
+      else if (short === "comfyui.status")
+        data = { up: true, base: "http://127.0.0.1:8188", starting: false, stopping: false };
+      else if (short === "comfyEmbeddable")
+        data = { embeddable: false, reason: "ComfyUI 返回 X-Frame-Options: DENY" };
+      else {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ result: { data } }),
+      });
+    });
+
+    await page.goto("/workspace");
+    await page.getByTitle("设置").first().click();
+    await expect(page.getByRole("heading", { name: "设置" })).toBeVisible({
+      timeout: 20_000,
+    });
+
+    // 页签里绝不出现指向 ComfyUI 的内嵌 iframe（那正是错误页的来源）。
+    await expect(page.locator('iframe[title="ComfyUI"]')).toHaveCount(0);
+  });
 });

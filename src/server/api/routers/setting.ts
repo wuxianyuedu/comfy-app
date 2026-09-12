@@ -10,6 +10,7 @@ import {
   stopComfyUiProcess,
 } from "@/lib/comfyui/lifecycle";
 import { classifyComfyInstall } from "@/lib/comfyui/instance-kind";
+import { decideComfyTabOpen, probeComfyEmbeddable } from "@/lib/comfy-embed";
 import {
   ensureDrizzleStudioUp,
   isDrizzleStudioStarting,
@@ -124,6 +125,26 @@ export const settingRouter = createTRPCRouter({
   comfyOpen: authedProcedure.mutation(async () => {
     return openComfyUi();
   }),
+
+  /** 「打开查看 ComfyUI」该在哪打开：内嵌页签 / 壳内独立窗口 / 系统浏览器。
+   *
+   *  必须在**服务端**探：宿主页在 WebView2 里既读不到 ComfyUI 的响应头
+   *  （跨源），也拿不到「被 X-Frame-Options 拒绝」这个失败事件的判据
+   *  （iframe 的 error/load 事件都不带原因，`frame-ancestors 'none'` 与
+   *  「内容为空」在 JS 里长得一样）——这正是 ISSUE #310 三次回归的温床：
+   *  页签打开了，里面只是那张「已阻止此内容」的错误页。
+   *
+   *  探测失败一律按「不可嵌」返回并带上原因，调用方据此退到壳内独立窗口
+   *  （Rust `open_comfyui_window`，仍在同一个应用里，只是独立窗口）。 */
+  comfyEmbeddable: authedProcedure
+    .input(z.object({ base: z.string().url(), hostOrigin: z.string().url() }))
+    .query(async ({ input }) => {
+      const verdict = await probeComfyEmbeddable(input.base, input.hostOrigin);
+      return {
+        ...verdict,
+        target: decideComfyTabOpen(verdict.embeddable, true),
+      };
+    }),
 
   /** Drizzle Studio 运行状态（设置页「数据库」分区）。
    *  探测失败按「未运行」降级返回而非抛错——状态查询挂了会把三个按钮
