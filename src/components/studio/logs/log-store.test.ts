@@ -16,6 +16,7 @@ import {
   selectShouldPinToLatest,
   MAX_LOG_ENTRIES,
   LOG_PAGE_SIZE,
+  selectFirstPageWindow,
   captureLocation,
   computeOriginCounts,
 } from "./log-store";
@@ -55,7 +56,12 @@ function resetStore() {
     page: 1,
     revision: 0,
     viewRevision: 0,
-    viewLength: 0,
+    viewSeenIds: new Set<string>(),
+    followBaseline: 0,
+    followResetAt: 0,
+    autoScroll: true,
+    anchorId: null,
+    viewBaselineAfter: 0,
   });
   /* seq 计数器跨用例共享且单调递增，测试之间不重置：条目 id 由它派生，
    * 重置会导致不同用例造出同名条目（时间线去重会误判成重复行）。 */
@@ -72,11 +78,20 @@ function idsOf(entries: LogEntry[]): (string | undefined)[] {
  */
 function newCount(page: number, autoScroll: boolean): number {
   const s = useLogStore.getState();
+  /* 窗口口径与面板完全一致（面板也是这个算式）：
+   *   第 1 页 → 锚定窗口（selectFirstPageWindow），`truncatedFromEnd` 即「锚点之后
+   *             还没进窗口的条数」；没有锚点时退回尾部 pageSize 条，其后的都是新的。
+   *   历史页 → 第 page 页之后（更新的）整段。
+   * 直接调产品函数，避免用例自己再写一份会漂移的算式。 */
+  /* 与面板同一条算式（第 1 页 = 锚定窗口的 truncatedFromEnd；历史页 = 页码之后）。 */
+  const unseenAfterView =
+    page === 1
+      ? selectFirstPageWindow(s.filteredLogs, s.anchorId, s.pageSize)
+          .truncatedFromEnd
+      : Math.max(0, s.filteredLogs.length - s.pageSize * page);
   return selectNewLogCount({
-    revision: s.revision,
-    viewRevision: s.viewRevision,
-    viewLength: s.viewLength,
-    filteredLogs: s.filteredLogs,
+    unseenAfterView,
+    baselineAfterView: s.viewBaselineAfter,
     page,
     autoScroll,
   });
@@ -400,6 +415,154 @@ describe("MAX_LOG_ENTRIES 上限裁剪", () => {
     // 看起来就是「锁死 2000 条、不能翻页」。上限是内存保护，页大小是阅读体验，
     // 两者必须是独立常量。
     expect(LOG_PAGE_SIZE).toBeLessThan(MAX_LOG_ENTRIES);
+  });
+});
+
+/* ── 满仓时的「有新日志」与贴底基线（ISSUE #262 复审）────────────────────
+ *
+ * 用户反馈两条连在一起的现象：
+ *   「日志到上限了还继续产生新日志，面板内容不断移动，想复制某一项十分困难，
+ *     甚至无法选择，刚选择就刷新把选择弄没了」；
+ *   「日志没法翻页」。
+ *
+ * 两者同源：**时间线到上限时，新行并没有真正落板，只是把最旧的一批挤了出去**。
+ * 旧实现把这种「右移一格」也当作时间线变了（推进 revision），于是
+ *   1. 页脚把 revision 变化当成有新日志 → 重新取水位 → 而写入之后的视图里本来就
+ *      含新行，新行当场被标成已读 → 「有 N 条新的日志」永远报 0，那个「回到最新」
+ *      的出口也就永远不出现（用户读到的就是「翻页翻不动」）；
+ *   2. 贴底按「尾部有没有变」判定 → 每两秒一次的轮询都有新行 → 内容整体上移
+ *      一次，用户刚框住的文本立刻被冲掉。
+ *
+ * 修法是把两条判据都换成「条目身份」：截断不推进 revision，水位与贴底基线都只由
+ * 显式动作推进，新行靠 id 判「没见过」。
+ */
+describe("满仓（环形缓冲截断）时的水位与 revision（#262 复审）", () => {
+  /** 把时间线灌到满仓：id 单调，time 单调。 */
+  function fillFull() {
+    const baseSeq = seq;
+    /* 不用 makeEntry：它会递增共享计数器并**覆盖**这里显式给出的 seq，
+     * 让「时间线里谁在前谁在后」变得不可预测（用例要的是确定性顺序）。 */
+    const full: LogEntry[] = Array.from({ length: MAX_LOG_ENTRIES }, (_, i) => ({
+      id: `full-${i}`,
+      message: `full-${i}`,
+      time: 1_700_000_000_000 + i,
+      seq: baseSeq + 1 + i,
+      level: "info" as const,
+      source: "system" as const,
+    }));
+    seq = baseSeq + MAX_LOG_ENTRIES;
+    /* 直接 setState 灌满时间线时 `filteredLogs` 不会跟着派生，而 setPage 的水位
+     * 取自 filteredLogs —— 不显式补齐，水位就恒为空集（用例会误判成「一切皆未读」）。 */
+    useLogStore.setState({ logs: full, filteredLogs: full });
+    /* setPage(1) = 「我在看最新一段」：锚点与基线一起就位，此后到达的才算新的。 */
+    act(() => useLogStore.getState().setPage(1));
+    return full;
+  }
+
+  it("满仓时新到一条：revision 推进（有新行落板），但水位不被动过", () => {
+    fillFull();
+    const before = useLogStore.getState();
+
+    act(() =>
+      useLogStore.getState().appendFileLogs([
+        makeEntry({
+          id: "overflow-1",
+          message: "溢出的一条",
+          time: before.logs[before.logs.length - 1]!.time + 1,
+          seq: seq + 1,
+        }),
+      ]),
+    );
+
+    const after = useLogStore.getState();
+    expect(after.logs).toHaveLength(MAX_LOG_ENTRIES);
+    /* 溢出条顶掉了最旧的一条，但它确实落板了 → revision 推进，
+     * 页脚据此知道「时间线真的变过」（还不等于有新日志，见下一条断言）。 */
+    expect(after.revision).toBe(before.revision + 1);
+    /* 关键是水位**没被写入路径动过**：溢出条仍在「未读」里，页脚因此报得出它。
+     * 旧实现把「截断」也当成有新内容并顺手刷新水位，新行当场被标成已读。 */
+    expect(after.viewSeenIds.has("overflow-1")).toBe(false);
+    expect(after.viewSeenIds.has("full-0")).toBe(true);
+  });
+
+  it("满仓时贴底基线不再被每次新增拉动（复制文本时内容不动）", () => {
+    fillFull();
+    const baseline = useLogStore.getState().followBaseline;
+
+    const baseSeq = seq;
+    const overflow: LogEntry[] = Array.from({ length: 5 }, (_, i) =>
+      makeEntry({
+        id: `ov-${i}`,
+        message: `ov-${i}`,
+        time: 1_800_000_000_000 + i,
+        seq: baseSeq + 1 + i,
+      }),
+    );
+    seq = baseSeq + 5;
+    act(() => useLogStore.getState().appendFileLogs(overflow));
+
+    /* 基线是「面板要滚到页面里的第几个条目」，只由显式动作（翻页 / 回到底部 /
+     * 点回到最新）推进——新日志到达时保持原值，内容才不会自己动。 */
+    expect(useLogStore.getState().followBaseline).toBe(baseline);
+  });
+
+  it("满仓时新行仍能被数出来：窗口口径不受长度封顶影响", () => {
+    fillFull();
+    const beforeLen = useLogStore.getState().filteredLogs.length;
+    /* 时间戳必须**大于**满仓那批的最大值，否则新行会排到中间、不落在窗口之后。
+     * 不用 makeEntry：它会递增共享计数器、并覆盖这里显式给出的 seq。 */
+    const lastTime = useLogStore.getState().logs.at(-1)!.time;
+
+    act(() =>
+      useLogStore.getState().appendFileLogs([
+        {
+          id: "unread-1",
+          message: "没看过的一条",
+          time: lastTime + 1,
+          seq: seq + 1,
+          level: "info",
+          source: "system",
+        },
+      ]),
+    );
+    const s = useLogStore.getState();
+    /* 长度封顶在 MAX_LOG_ENTRIES：旧口径（长度差）在这里恒为 0，报了「没有新
+     * 日志」；窗口口径看的是「窗口之后还有多少条」，封仓照样数得出来。
+     * 这条就是「面板一直在涨，但确实报得出新来了几条」的最小证据。 */
+    expect(s.filteredLogs.length).toBe(beforeLen);
+    expect(s.anchorId).not.toBeNull();
+    /* 「有没有新内容」这个数由窗口给出，与内存上限无关。
+     * 注意贴底看第 1 页时（autoScroll=true）页脚**不显示**这个入口——新内容本来
+     * 就自动呈现在眼前；显式的「回到最新」只在用户上滚离开底部、或翻到历史页时给。 */
+    expect(
+      selectFirstPageWindow(s.filteredLogs, s.anchorId, s.pageSize).truncatedFromEnd,
+    ).toBe(1);
+    expect(newCount(1, false)).toBe(1);
+  });
+
+  it("点「回到最新」后窗口追到尾部，计数归零", () => {
+    fillFull();
+    /* 刚在最新一段：没有新内容，也没有出口（`selectShouldPinToLatest(1, true)`） */
+    expect(newCount(1, true)).toBe(0);
+
+    const lastTime = useLogStore.getState().logs.at(-1)!.time;
+    act(() =>
+      useLogStore.getState().appendFileLogs([
+        {
+          id: "later-1",
+          message: "后面又来的一条",
+          time: lastTime + 1,
+          seq: seq + 1,
+          level: "info",
+          source: "system",
+        },
+      ]),
+    );
+    /* 满仓 + 锚点在尾部窗口头一条 → 窗口之后就是刚追加的那条 */
+    expect(newCount(1, false)).toBe(1);
+
+    act(() => useLogStore.getState().jumpToLatest());
+    expect(newCount(1, false)).toBe(0);
   });
 });
 
@@ -1067,6 +1230,7 @@ describe("会话起点迟到：混入的历史行必须被收拢（不变量）"
       sessionStart: null,
       revision: 0,
       viewRevision: 0,
+      viewSeenIds: new Set<string>(),
       counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
     });
     act(() => useLogStore.getState().setSessionStart(cutoff));
@@ -1308,55 +1472,65 @@ describe("selectShouldPinToLatest 何时该给「回到最新」出口", () => {
   });
 });
 
-/* ── 历史页的「有新增日志」水位（ISSUE #346 / #262）──────────────────────
- * 翻到历史页时面板内容不会因新日志而改变，用户此前只能看到「警告计数在涨、
- * 页面却不动」。store 持一个「已读水位」（viewRevision = 翻页那一刻的时间线
- * 生成号），面板据它显示「有 N 条新的日志 · 回到最新」。
+/* ── 「有 N 条新的日志」：窗口口径（ISSUE #346 / #262 复审）──────────────
  *
- * 判据用生成号而不是末条 seq：时间线按时刻排序后，一条**迟到的旧时刻行**会插进
- * 中间、末条不变——只看末条会漏掉这类新增。
+ * 翻到历史位置时面板内容不会因新日志而改变，用户此前只能看到「计数在涨、页面却
+ * 不动」。出口是页脚那句「有 N 条新的日志 · 回到最新」。
+ *
+ * 判据在 #346 是「水位 + 长度差」，#262 复审换成了**窗口几何量**：用户看的那一段
+ * （第 1 页的锚定窗口 / 历史页整段）之后还有多少条。旧口径有两处必然失灵的场合，
+ * 两处都被用户撞到过：
+ *   1. 时间线**封顶**（环形缓冲 2000 条）时长度差恒为 0 —— 明明一直在涨，却报
+ *      「没有新日志」，那个出口永远不出现（用户读到的就是「翻页翻不动」）；
+ *   2. 写入路径一旦「顺手刷新水位」，新行当场被标成已读，同样永远报 0。
+ * 窗口口径是几何量，与「谁什么时候读了什么」无关，这两处都不会发生。
  */
-describe("viewRevision 已读水位与「历史页有新增」计数（#346）", () => {
-  it("翻到历史页后新到的日志计入「新的日志」条数", () => {
+describe("「有 N 条新的日志」按窗口口径计数（#346 / #262 复审）", () => {
+  /* 需要**多于两页**的内容才谈得上「翻到历史页」：第 1 页是最新 200 条，翻到第 2 页
+   * 之后仍有更新的日志压在上面，这些就是「我没看、但已经来了」的那批。 */
+  const seedPages = (extra = 0) => {
+    const base = LOG_PAGE_SIZE * 2 + extra;
     act(() =>
-      useLogStore.getState().appendFileLogs([
-        makeEntry({ id: "a", time: 1_000 }),
-        makeEntry({ id: "b", time: 2_000 }),
-        makeEntry({ id: "c", time: 3_000 }),
-      ]),
+      useLogStore.getState().appendFileLogs(
+        Array.from({ length: base }, (_, i) =>
+          makeEntry({ id: `h-${i}`, message: `事件 ${i}`, time: i * 10, seq: i }),
+        ),
+      ),
     );
+  };
+
+  it("翻到历史页后新到的日志计入条数", () => {
+    seedPages();
     act(() => useLogStore.getState().setPage(2));
     expect(newCount(2, true)).toBe(0);
 
     act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry({ id: "d", time: 4_000 })]),
+      useLogStore
+        .getState()
+        .appendFileLogs([makeEntry({ id: "later", time: 999_999 })]),
     );
     expect(newCount(2, true)).toBe(1);
   });
 
-  it("迟到的旧时刻行也算新增：判据是生成号，不是末条", () => {
+  it("迟到的旧时刻行也算新增（谁排在窗口之后，谁就是新的）", () => {
+    seedPages();
+    act(() => useLogStore.getState().setPage(2));
+    /* 迟到的一条时刻更早，会插到时间线**中间**：末条不变、窗口却确实往后挪了。 */
     act(() =>
       useLogStore
         .getState()
-        .appendFileLogs([makeEntry({ id: "a", time: 1_000 }), makeEntry({ id: "c", time: 3_000 })]),
-    );
-    act(() => useLogStore.getState().setPage(2));
-    // 迟到的 b 时刻更早，会插到时间线中间 —— 末条仍是 c，但内容确实变了
-    act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry({ id: "b", time: 2_000 })]),
+        .appendFileLogs([makeEntry({ id: "late", time: 5, seq: 9_999 })]),
     );
     expect(newCount(2, true)).toBe(1);
   });
 
   it("回到第 1 页即视为已读，计数归零", () => {
+    seedPages();
+    act(() => useLogStore.getState().setPage(2));
     act(() =>
       useLogStore
         .getState()
-        .appendFileLogs([makeEntry({ id: "a", time: 1_000 }), makeEntry({ id: "b", time: 2_000 })]),
-    );
-    act(() => useLogStore.getState().setPage(2));
-    act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry({ id: "c", time: 3_000 })]),
+        .appendFileLogs([makeEntry({ id: "later", time: 999_999 })]),
     );
     expect(newCount(2, true)).toBe(1);
 
@@ -1365,21 +1539,87 @@ describe("viewRevision 已读水位与「历史页有新增」计数（#346）",
   });
 
   it("停在第 1 页但用户上滚离开底部时，也提示有新日志", () => {
-    act(() => useLogStore.getState().appendFileLogs([makeEntry({ id: "a", time: 1_000 })]));
+    seedPages();
+    /* setPage(1) = 用户把第 1 页（最新一段）当作已读基线，锚点随之就位。 */
     act(() => useLogStore.getState().setPage(1));
-    // 用户上滚 = autoScroll false：这正是「新日志把他的阅读位置冲走」的场景
     act(() =>
-      useLogStore.getState().appendFileLogs([makeEntry({ id: "b", time: 2_000 })]),
+      useLogStore
+        .getState()
+        .appendFileLogs([makeEntry({ id: "later", time: 999_999 })]),
     );
+    /* 用户上滚 = autoScroll false：这正是「新日志把他的阅读位置冲走」的场景 */
     expect(newCount(1, false)).toBe(1);
   });
 
   it("全批都是重复行（时间线未变）时不虚报新增", () => {
-    const batch = [makeEntry({ id: "a", message: "同一行", time: 1_000 })];
-    act(() => useLogStore.getState().appendFileLogs(batch));
+    seedPages();
+    /* 先让这条内容落板，再翻到历史页（此刻看不到它，但它的位置已经恒定）。 */
+    const line = makeEntry({ id: "dup-src", message: "同一行", time: 999_999 });
+    act(() => useLogStore.getState().appendFileLogs([line]));
     act(() => useLogStore.getState().setPage(2));
-    act(() => useLogStore.getState().appendFileLogs([{ ...batch[0]!, id: "dup" }]));
-    expect(newCount(2, true)).toBe(0);
+    const settled = newCount(2, true);
+    /* 再送来**同一行**（时间/级别/内容全同，只是 id 不同）：时间线按内容去重，
+     * 什么都没有新增，计数也不该动。 */
+    act(() => useLogStore.getState().appendFileLogs([{ ...line, id: "dup" }]));
+    expect(newCount(2, true)).toBe(settled);
+  });
+});
+
+/* ── 第 1 页锚定窗口：用户正在看的那一段不被新日志推走（#262 复审）────────
+ *
+ * 用户原话：「日志到上限了还继续产生新日志内容，日志面板中显示的内容就不断移动，
+ * 我想复制其中某一项就十分困难，甚至无法选择，刚选择就刷新把我的选择弄没了。」
+ *
+ * 直接原因在真实浏览器里量到了：第 1 页取的是时间线**尾部 200 条**，每来一条新行
+ * 这个窗口就整体前移一格，React 于是卸载最上面那一条、挂上新的最末一条——用户框
+ * 在首行里的文本**随节点一起被卸载**，选区当场消失（滚动位置甚至没动）。
+ *
+ * 修法是给第 1 页一个锚点：窗口钉在「用户看过的那一段」上，新行列在它之后。
+ */
+describe("selectFirstPageWindow 第 1 页锚定窗口（#262 复审）", () => {
+  const logs = Array.from({ length: 300 }, (_, i) =>
+    makeEntry({ id: `w-${i}`, time: i, seq: i }),
+  );
+
+  it("有锚点时以锚点为窗口起点，且给出「后面还有多少条更新的日志」", () => {
+    const out = selectFirstPageWindow(logs, "w-50", 200);
+    expect(out.entries[0]?.id).toBe("w-50");
+    expect(out.entries).toHaveLength(200);
+    /* 300 - (50 + 200) = 50 条比窗口更新的日志 */
+    expect(out.truncatedFromEnd).toBe(50);
+  });
+
+  it("新日志到达时窗口不动（这正是选区不被冲掉的原因）", () => {
+    const before = selectFirstPageWindow(logs, "w-50", 200);
+    const grown = [
+      ...logs,
+      makeEntry({ id: "w-new", time: 9_999, seq: 9_999 }),
+    ];
+    const after = selectFirstPageWindow(grown, "w-50", 200);
+    /* 窗口内容逐条相同（DOM 节点不会被重建），只是「后面的」多了 1 条 */
+    expect(after.entries.map((e) => e.id)).toEqual(
+      before.entries.map((e) => e.id),
+    );
+    expect(after.truncatedFromEnd).toBe(before.truncatedFromEnd + 1);
+  });
+
+  it("锚点已被环形缓冲挤出去时退回尾部窗口（不报错、也不留空页）", () => {
+    const out = selectFirstPageWindow(logs, "已经被挤掉的 id", 200);
+    expect(out.entries).toHaveLength(200);
+    expect(out.entries[199]?.id).toBe("w-299");
+    expect(out.truncatedFromEnd).toBe(0);
+  });
+
+  it("没有锚点（首次打开）时就是尾部窗口", () => {
+    const out = selectFirstPageWindow(logs, null, 200);
+    expect(out.entries[0]?.id).toBe("w-100");
+    expect(out.truncatedFromEnd).toBe(0);
+  });
+
+  it("时间线短于窗口时整段都在窗口里", () => {
+    const out = selectFirstPageWindow(logs.slice(0, 20), "w-0", 200);
+    expect(out.entries).toHaveLength(20);
+    expect(out.truncatedFromEnd).toBe(0);
   });
 });
 
