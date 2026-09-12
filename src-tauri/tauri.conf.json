@@ -15,12 +15,13 @@
       {
         "label": "splash",
         "title": "Comfy APP 启动中",
-        "width": 1680,
-        "height": 1000,
-        "minWidth": 880,
-        "minHeight": 520,
+        "width": 744,
+        "height": 216,
+        "minWidth": 620,
+        "minHeight": 180,
         "center": true,
         "resizable": true,
+        "decorations": false,
         "fullscreen": false,
         "backgroundColor": "#0A0A0F",
         "url": "splash.html"

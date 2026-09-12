@@ -417,6 +417,30 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   Ok(sections.join("\n\n"))
 }
 
+/// 启动页「收起 / 展开日志」时把窗口调到对应档位。
+///
+/// 为什么由壳来做而不是让页面自己调窗口 API：尺寸档位是**窗口语义**（内容多大
+/// 窗口多大），常量与开窗时的 `splash_window_size` 同源——两处各写一份，改一处
+/// 就会露出空白或裁掉内容。展开日志后日志面板按窗口高度撑满，单行日志也才放得开。
+#[tauri::command]
+fn set_splash_compact(app_handle: tauri::AppHandle, compact: bool) -> Result<(), String> {
+  let Some(splash) = app_handle.get_webview_window("splash") else {
+    return Err("找不到启动页窗口 splash".to_string());
+  };
+  let requested = if compact {
+    SPLASH_WINDOW_SIZE
+  } else {
+    SPLASH_WINDOW_SIZE_EXPANDED
+  };
+  let (width, height) = clamp_to_monitor(&app_handle, requested);
+  splash
+    .set_size(tauri::LogicalSize::new(width, height))
+    .map_err(|e| format!("调整启动页尺寸失败: {:?}", e))?;
+  // 只调尺寸不挪位置，窗口左边缘会留在原地、看起来往右跑；重新居中一次。
+  let _ = splash.center();
+  Ok(())
+}
+
 /// 生产模式：挑一个空闲端口给 standalone server（避开固定端口冲突）
 #[cfg(not(debug_assertions))]
 fn pick_free_port() -> u16 {
@@ -662,23 +686,31 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
   Ok(())
 }
 
-/// 启动页窗口的兜底尺寸，与 tauri.conf.json 的 splash 窗口几何保持一致
-/// （配置是编译期内嵌的静态值，这里只在「屏幕装不下」时需要再收一次）。
-const SPLASH_WINDOW_SIZE: (f64, f64) = (1680.0, 1000.0);
-
-/// 启动页窗口尺寸：优先用配置值，但**不得超过当前显示器可用区域**。
+/// 启动页窗口尺寸（逻辑像素）：**窗口即内容**，不铺满屏幕。
 ///
-/// 为什么需要这一步：启动页的日志面板是「一行一条日志」的不折行布局
-/// （`white-space: pre` + 横向滚动），窗口越宽越能一次读全一行——因此窗口
-/// 尺寸给得比内容卡片大得多。但固定值在小屏（1366×768 笔记本、
-/// 1920×1080 开了 150% 缩放）上会超出屏幕：窗口被系统推到屏幕外，用户看到
-/// 的是「启动页缺了一角」。这里按显示器取一次上限（宽高各留 48px 边距，
-/// 与页面自身的 `100vw - 48px` 约束同口径），窗口尺寸于是「大屏大、
-/// 小屏不越界」，尺寸不够时由页面内的 `min(..., 100vw - 48px)` 继续收。
-fn splash_window_size(app: &tauri::AppHandle) -> (f64, f64) {
-  let (mut width, mut height) = SPLASH_WINDOW_SIZE;
+/// 为什么要收成一条窄条（ISSUE #412）：启动页此前按「窗口越大、日志一行越
+/// 能放全」的思路给到 1680×1000 并带原生标题栏，于是在 2K/4K 屏上启动时
+/// 会出现一大片既没有内容、也没有用途的空白（卡片只有 720/1400 宽，垂直方向
+/// 更是大片留白），观感上像「弹了个空窗口」。现在的取向是：
+///
+/// - 窗口初始尺寸 = 内容卡片的宽度（+ 窗口内边距），高度 = 收起日志时的
+///   卡片高度，位置居中——启动期只占屏幕一小块，不打扰后面的工作；
+/// - 关掉原生装饰（`decorations: false`），最小化 / 关闭由**启动页自身的
+///   标题行**提供（页面右上角），不再为三个系统按钮多留一条标题栏；
+/// - 上限仍取当前显示器可用区域（宽高各留 48px 边距，与页面自身的
+///   `min(100vw - 48px)` 同口径）：小屏不越界，尺寸不够时由页面继续收；
+/// - 展开日志后页面会把窗口调到 SPLASH_WINDOW_SIZE_EXPANDED，仍是「内容多大、
+///   窗口多大」。
+const SPLASH_WINDOW_SIZE: (f64, f64) = (744.0, 216.0);
+
+/// 展开日志后的窗口尺寸（对应页面里「展开日志」那一档，见 splash.html）。
+const SPLASH_WINDOW_SIZE_EXPANDED: (f64, f64) = (1424.0, 788.0);
+
+/// 按当前显示器可用区域收一次尺寸（不越界）。
+fn clamp_to_monitor(app: &tauri::AppHandle, size: (f64, f64)) -> (f64, f64) {
+  let (mut width, mut height) = size;
   let Ok(Some(monitor)) = app.primary_monitor() else {
-    log::warn!("[ComfyAPP] primary monitor unavailable, keeping default splash size");
+    log::warn!("[ComfyAPP] primary monitor unavailable, keeping requested splash size");
     return (width, height);
   };
   let scale = monitor.scale_factor();
@@ -697,6 +729,11 @@ fn splash_window_size(app: &tauri::AppHandle) -> (f64, f64) {
   width = width.min(max_width);
   height = height.min(max_height);
   (width, height)
+}
+
+/// 启动页初始尺寸：紧凑的一条，受显示器约束（见 SPLASH_WINDOW_SIZE）。
+fn splash_window_size(app: &tauri::AppHandle) -> (f64, f64) {
+  clamp_to_monitor(app, SPLASH_WINDOW_SIZE)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -736,6 +773,7 @@ pub fn run() {
       navigate_to_app,
       get_app_url,
       get_launch_log,
+      set_splash_compact,
       open_comfyui_window,
       activate_main_window,
       should_activate_on_launch
@@ -747,8 +785,9 @@ pub fn run() {
       // 由启动页探测后端就绪后调用 navigate_to_app 导航到应用 URL；main 页面真正
       // 加载完成（on_page_load Finished）时再交换窗口：显示 main、关闭 splash。
       // 这样启动页会一直显示到应用首屏真正可见，不再出现「启动完成却还要等很久」。
-      // 启动页窗口尺寸按当前显示器收一次（见 splash_window_size）：配置值给得宽，
-      // 为的是让日志面板的单行日志尽量不被折成两截；屏幕装不下时再收回来。
+      // 启动页尺寸收成「刚好装下内容」的一条并居中（见 splash_window_size）：
+      // 启动期只在屏幕中央占一小块，不铺满屏幕留出大片空白（ISSUE #412）。
+      // 展开日志时由页面调 set_splash_compact(false) 放大，仍是内容尺寸。
       if let Some(splash) = app.get_webview_window("splash") {
         let (width, height) = splash_window_size(app.handle());
         let _ = splash.set_size(tauri::LogicalSize::new(width, height));

@@ -107,6 +107,7 @@ SWP_NOMOVE = 0x0002
 SWP_NOSIZE = 0x0001
 SWP_SHOWWINDOW = 0x0040
 SWP_NOACTIVATE = 0x0010
+SW_MINIMIZE = 6
 LOGPIXELSX = 88
 SM_CXSCREEN = 0
 SM_CYSCREEN = 1
@@ -128,10 +129,13 @@ GRAY = 0xAF9CA3  # #9CA3AF in BGR
 GRAY_DIM = 0x80726B  # #6B7280 in BGR
 ERROR_RED = 0x4444EF  # #EF4444 in BGR
 
-# 旧版 Win32 启动小弹窗（--splash 调试用）的尺寸。它显示的是状态行与日志尾部，
-# 太窄会让每行都折成两截——与 Tauri 启动页同一条「给日志留宽度」的原则。
-SPLASH_W = 640
-SPLASH_H = 300
+# Win32 启动画面（--splash 调试用 / 壳弹出前的占位）的尺寸。
+#
+# 与 Tauri 启动页同一条取向（ISSUE #412）：**窗口即内容**，开成一条紧凑的窄条
+# 居中显示，不铺满屏幕留出大片空白。窗口是 WS_POPUP 无边框的，最小化 / 关闭
+# 由画面右上角自绘的两个按钮提供（原先只有一个 ✕，且位置与标题挤在一起）。
+SPLASH_W = 560
+SPLASH_H = 168
 
 APP_TITLE = "Comfy APP"
 APP_WINDOW_TITLE = "Comfy APP"
@@ -964,6 +968,8 @@ class SplashWindow:
         self._log_tailer: threading.Thread | None = None
         self._stop_tailer = threading.Event()
         self._close_btn_rect = (0, 0, 0, 0)  # left, top, right, bottom
+        self._min_btn_rect = (0, 0, 0, 0)  # left, top, right, bottom
+        self._hover_btn = ""  # "" | "min" | "close"，仅用于按钮悬停高亮
         self._close_should_terminate = False
         # 项目根：启动完成时用它在后台复核窗口交接后的前台归属
         # （见 spawn_foreground_watch）。
@@ -1006,14 +1012,31 @@ class SplashWindow:
         if msg == WM_LBUTTONDOWN:
             x = ctypes.c_short(lparam & 0xFFFF).value
             y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
-            lx, ty, rx, by = self._close_btn_rect
-            if lx <= x <= rx and ty <= y <= by:
+            if self._hit(self._min_btn_rect, x, y):
+                # 最小化到任务栏：点任务栏按钮可原样恢复（不销毁窗口）。
+                user32.ShowWindow(self.hwnd, SW_MINIMIZE)
+                return 0
+            if self._hit(self._close_btn_rect, x, y):
+                # 关闭 = 放弃本次启动（进程树由 dev-launcher 兜底回收）。
                 self._close_should_terminate = True
                 user32.PostMessageW(self.hwnd, WM_CLOSE, 0, 0)
                 return 0
             self._dragging = True
             self._drag_start_x = x
             self._drag_start_y = y
+            return 0
+        if msg == WM_MOUSEMOVE and not self._dragging:
+            # 悬停高亮：无边框窗口只有这一处视觉反馈，给用户「这是按钮」的信号。
+            x = ctypes.c_short(lparam & 0xFFFF).value
+            y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
+            hover = ""
+            if self._hit(self._min_btn_rect, x, y):
+                hover = "min"
+            elif self._hit(self._close_btn_rect, x, y):
+                hover = "close"
+            if hover != self._hover_btn:
+                self._hover_btn = hover
+                user32.InvalidateRect(self.hwnd, None, False)
             return 0
         if msg == WM_MOUSEMOVE and self._dragging:
             x = ctypes.c_short(lparam & 0xFFFF).value
@@ -1042,6 +1065,12 @@ class SplashWindow:
             user32.PostQuitMessage(0)
             return 0
         return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+
+    @staticmethod
+    def _hit(rect: tuple[int, int, int, int], x: int, y: int) -> bool:
+        """点是否落在按钮矩形内（left, top, right, bottom）。"""
+        lx, ty, rx, by = rect
+        return lx <= x <= rx and ty <= y <= by
 
     def _create_font(self, hdc: HDC, size: int, bold: bool = False) -> HFONT:
         # 将 pt 转换为逻辑高度（负数表示字符高度）
@@ -1129,6 +1158,12 @@ class SplashWindow:
         self._log_tailer = t
 
     def _paint(self, hdc: HDC):
+        """自绘启动画面：一条紧凑的窄条，右上角是最小化 / 关闭。
+
+        布局自上而下：标题行（品牌 + 右上角窗口按钮）→ 阶段状态 → 进度条。
+        窗口尺寸本身就按内容给（见 SPLASH_W / SPLASH_H），所以这里不预留
+        空白区域，画完即内容边界。
+        """
         rc = RECT()
         user32.GetClientRect(self.hwnd, ctypes.byref(rc))
         w, h = rc.right, rc.bottom
@@ -1141,60 +1176,72 @@ class SplashWindow:
         gdi32.DeleteObject(bg_brush)
 
         # 面板（带 1px 紫色边框）
-        pad = 10
+        pad = 8
         panel_brush = gdi32.CreateSolidBrush(PANEL)
         panel_pen = gdi32.CreatePen(0, 1, VIOLET)
         old_brush = gdi32.SelectObject(hdc, panel_brush)
         old_pen = gdi32.SelectObject(hdc, panel_pen)
-        gdi32.RoundRect(hdc, pad, pad, w - pad, h - pad, 16, 16)
+        gdi32.RoundRect(hdc, pad, pad, w - pad, h - pad, 14, 14)
         gdi32.SelectObject(hdc, old_brush)
         gdi32.SelectObject(hdc, old_pen)
         gdi32.DeleteObject(panel_brush)
         gdi32.DeleteObject(panel_pen)
 
-        # 文字
         gdi32.SetBkMode(hdc, TRANSPARENT)
 
-        title_font = self._create_font(hdc, 18, bold=True)
+        # ── 标题行：品牌 + 右上角窗口按钮 ──
+        # 按钮先算矩形（同时给命中判定用），文本右边界据此让位，避免文字压到按钮。
+        btn_size = 24
+        btn_gap = 6
+        btn_top = pad + 10
+        close_right = w - pad - 12
+        self._close_btn_rect = (close_right - btn_size, btn_top,
+                                close_right, btn_top + btn_size)
+        self._min_btn_rect = (close_right - btn_size * 2 - btn_gap, btn_top,
+                              close_right - btn_size - btn_gap, btn_top + btn_size)
+
+        title_font = self._create_font(hdc, 14, bold=True)
         old_font = gdi32.SelectObject(hdc, title_font)
         gdi32.SetTextColor(hdc, VIOLET if self._status != "error" else ERROR_RED)
-
         title_rc = RECT()
-        title_rc.left = pad + 24
-        title_rc.top = pad + 20
-        title_rc.right = w - pad - 50  # 给关闭按钮留空
-        title_rc.bottom = title_rc.top + 28
+        title_rc.left = pad + 14
+        title_rc.top = btn_top
+        title_rc.right = self._min_btn_rect[0] - 10
+        title_rc.bottom = btn_top + btn_size
         user32.DrawTextW(hdc, self._title, -1, ctypes.byref(title_rc),
                          DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
         gdi32.SelectObject(hdc, old_font)
         gdi32.DeleteObject(title_font)
 
-        sub_font = self._create_font(hdc, 11)
+        self._draw_window_button(hdc, self._min_btn_rect, "min")
+        self._draw_window_button(hdc, self._close_btn_rect, "close")
+
+        # ── 阶段状态（副标题 + 消息）：标题行下方 ──
+        sub_font = self._create_font(hdc, 10)
         old_font = gdi32.SelectObject(hdc, sub_font)
         gdi32.SetTextColor(hdc, GRAY)
         sub_rc = RECT()
-        sub_rc.left = pad + 24
-        sub_rc.top = pad + 52
-        sub_rc.right = w - pad - 24
-        sub_rc.bottom = sub_rc.top + 20
+        sub_rc.left = pad + 14
+        sub_rc.top = btn_top + btn_size + 8
+        sub_rc.right = w - pad - 14
+        sub_rc.bottom = sub_rc.top + 18
         user32.DrawTextW(hdc, self._subtitle, -1, ctypes.byref(sub_rc),
                          DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
 
-        # 阶段消息：允许多行折行，显示更多日志内容
         msg_rc = RECT()
-        msg_rc.left = pad + 24
-        msg_rc.top = pad + 108
-        msg_rc.right = w - pad - 24
-        msg_rc.bottom = msg_rc.top + 44
+        msg_rc.left = pad + 14
+        msg_rc.top = sub_rc.bottom + 2
+        msg_rc.right = w - pad - 14
+        msg_rc.bottom = msg_rc.top + 34
         gdi32.SetTextColor(hdc, GRAY_DIM)
         user32.DrawTextW(hdc, self._msg, -1, ctypes.byref(msg_rc),
                          DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX)
 
-        # 已用时间（右下角）
+        # 已用时间（进度条右端同高）
         elapsed = time.time() - self._start_time
         elapsed_text = f"已用 {int(elapsed // 60):02d}:{int(elapsed % 60):02d}"
         time_rc = RECT()
-        time_rc.left = w - pad - 90
+        time_rc.left = w - pad - 100
         time_rc.top = h - pad - 26
         time_rc.right = w - pad - 14
         time_rc.bottom = time_rc.top + 16
@@ -1204,34 +1251,12 @@ class SplashWindow:
         gdi32.SelectObject(hdc, old_font)
         gdi32.DeleteObject(sub_font)
 
-        # 关闭按钮（右上角 X）
-        btn_size = 26
-        btn_pad = 16
-        self._close_btn_rect = (w - btn_pad - btn_size, btn_pad,
-                                w - btn_pad, btn_pad + btn_size)
-        lx, ty, rx, by = self._close_btn_rect
-        # 绘制半透明白色 hover 区域（简化为固定淡色）
-        close_brush = gdi32.CreateSolidBrush(0x2A2024)  # 稍亮的面板色
-        old_b = gdi32.SelectObject(hdc, close_brush)
-        gdi32.RoundRect(hdc, lx, ty, rx, by, 6, 6)
-        gdi32.SelectObject(hdc, old_b)
-        gdi32.DeleteObject(close_brush)
-        close_pen = gdi32.CreatePen(0, 2, GRAY)
-        old_p = gdi32.SelectObject(hdc, close_pen)
-        margin = 8
-        gdi32.MoveToEx(hdc, lx + margin, ty + margin, None)
-        gdi32.LineTo(hdc, rx - margin, by - margin)
-        gdi32.MoveToEx(hdc, rx - margin, ty + margin, None)
-        gdi32.LineTo(hdc, lx + margin, by - margin)
-        gdi32.SelectObject(hdc, old_p)
-        gdi32.DeleteObject(close_pen)
-
-        # 进度条
+        # ── 进度条（贴近底部，右侧为已用时间让位）──
         if self._status in ("ok", "timeout"):
-            bar_y = pad + 90
             bar_h = 6
-            bar_x = pad + 24
-            bar_w = w - 2 * pad - 48
+            bar_x = pad + 14
+            bar_w = w - 2 * pad - 28 - 92
+            bar_y = h - pad - 12 - bar_h
 
             track_brush = gdi32.CreateSolidBrush(0x1C1012)
             track_pen = gdi32.CreatePen(0, 1, 0x1C1012)
@@ -1264,6 +1289,43 @@ class SplashWindow:
                     gdi32.RoundRect(hdc, x1, bar_y, x2, bar_y + bar_h, bar_h, bar_h)
                     gdi32.SelectObject(hdc, old_b)
                     gdi32.DeleteObject(grad_brush)
+
+    def _draw_window_button(self, hdc: HDC, rect: tuple[int, int, int, int],
+                            kind: str) -> None:
+        """绘制右上角的最小化 / 关闭按钮（含悬停高亮）。
+
+        无边框窗口没有系统标题栏，这两个按钮是启动画面唯一的窗口出口，
+        因此必须自绘并给出悬停反馈（见 _wnd_proc 的 WM_MOUSEMOVE 与命中判定）。
+        """
+        lx, ty, rx, by = rect
+        hovered = self._hover_btn == kind
+        if kind == "close":
+            bg = ERROR_RED if hovered else 0x2A2024
+            fg = 0xFFFFFF if hovered else GRAY
+        else:
+            bg = 0x3A2E34 if hovered else 0x2A2024
+            fg = 0xFFFFFF if hovered else GRAY
+
+        brush = gdi32.CreateSolidBrush(bg)
+        old_b = gdi32.SelectObject(hdc, brush)
+        gdi32.RoundRect(hdc, lx, ty, rx, by, 6, 6)
+        gdi32.SelectObject(hdc, old_b)
+        gdi32.DeleteObject(brush)
+
+        pen = gdi32.CreatePen(0, 1, fg)
+        old_p = gdi32.SelectObject(hdc, pen)
+        margin = 7
+        cy = (ty + by) // 2
+        if kind == "min":
+            gdi32.MoveToEx(hdc, lx + margin, cy, None)
+            gdi32.LineTo(hdc, rx - margin, cy)
+        else:
+            gdi32.MoveToEx(hdc, lx + margin, ty + margin, None)
+            gdi32.LineTo(hdc, rx - margin, by - margin)
+            gdi32.MoveToEx(hdc, rx - margin, ty + margin, None)
+            gdi32.LineTo(hdc, lx + margin, by - margin)
+        gdi32.SelectObject(hdc, old_p)
+        gdi32.DeleteObject(pen)
 
     def _center_on_cursor_monitor(self) -> tuple[int, int]:
         """在鼠标所在显示器居中；获取失败则回退到主屏居中。"""
