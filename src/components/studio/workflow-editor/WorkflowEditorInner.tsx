@@ -803,6 +803,9 @@ function WorkflowEditorBody({
     onClose,
     setSaving,
     setError,
+    /* 子图视图下把宿主链路传进去：内部节点 id 要拼成 `宿主:内部` 才与
+     *  `positions` 列里的键同口径（见 use-workflow-persistence 的说明）。 */
+    hostNodeId: viewHostNodeId,
   });
 ;
 
