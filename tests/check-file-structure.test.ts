@@ -237,27 +237,61 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
     return "";
   })();
 
-  const runGuard = (script: string): string =>
-    execFileSync(
+  // 结论在 stdout，守卫的日志（`Log` 被桩件改写到 stderr）要一起收，
+  // 否则「回收陈旧壳」「非交互构建」「请先结束启动器」这些可见出口断言不到。
+  const runGuard = (script: string): string => {
+    const proc = spawnSync(
       psExe,
       ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
-      {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      },
+      { encoding: "utf8" },
     );
+    return `${proc.stdout ?? ""}${proc.stderr ?? ""}`;
+  };
 
-  // 打桩 Get-CimInstance：守卫只依赖它拿进程列表，替换后即可在任意平台喂造数据。
-  const guardScript = (procsJson: string): string => `
+  // 打桩 Get-CimInstance（进程枚举）与 taskkill（回收动作）：既用来验证筛选规则，
+  // 也用来验证「陈旧壳 / 非交互构建自动回收后继续」与「启动器还在跑才中止」这两条
+  // ISSUE #412 的判据——不真的动本机进程。
+  //
+  // 造数据用 `{ Id, Path, Cmd, Name }`：Name 为 `app.exe`（壳）或启动器 exe 名
+  // （`start-tauri.exe` 等）。`Name='xxx'` 按名过滤；`ProcessId=<n>` 用来回答
+  // 「我是谁 / 我爹是谁」（`Test-UnattendedBuild` 靠它判双击 / 由启动器拉起），
+  // 桩件查自身时如实回 `$PID`，查父进程时回 `opts.parent`。
+  const guardScript = (
+    procsJson: string,
+    opts: { parent?: string } = {},
+  ): string => `
 $ErrorActionPreference = "Stop"
 function Log { param([string]$Msg) Write-Output $Msg }
 function Get-CimInstance {
   param([string]$ClassName, [string]$Filter)
   $rows = '${procsJson}' | ConvertFrom-Json
+  if ($Filter -match "ProcessId=(\\d+)") {
+    $want = [int]$Matches[1]
+    if ($want -eq $PID) {
+      [pscustomobject]@{ ProcessId = $PID; ParentProcessId = 9001; Name = "pwsh.exe" }
+    } elseif ($want -eq 9001) {
+      [pscustomobject]@{ ProcessId = 9001; ParentProcessId = 0; Name = "${opts.parent ?? "pwsh.exe"}" }
+    }
+    return
+  }
   foreach ($r in $rows) {
+    if ($r.Name -and $Filter -notlike ("*" + [char]39 + $r.Name + [char]39 + "*")) { continue }
+    if ($global:KILLED_PIDS -contains [int]$r.Id) { continue }
     [pscustomobject]@{ ProcessId = $r.Id; ExecutablePath = $r.Path; CommandLine = $r.Cmd }
   }
 }
+function taskkill {
+  param([Parameter(ValueFromRemainingArguments = $true)]$Args)
+  Write-Output ("KILL " + ($Args -join " "))
+  $global:KILLED = [int]$global:KILLED + 1
+  # 模拟回收：记住被杀掉的 PID，后续查询不再返回它们（否则「回收后复查」这条路
+  # 在桩件里永远走不通，测不出守卫真实的继续/中止分支）
+  if ($Args.Count -ge 2 -and $Args[0] -eq "/PID") {
+    $global:KILLED_PIDS += [int]$Args[1]
+  }
+}
+$global:KILLED_PIDS = @()
+$script:KILLED_PIDS = @()
 . "${GUARD}"
 $root = "${process.cwd()}"
 $hits = @(Get-RunningShellProcess -ProjectRoot $root)
@@ -272,9 +306,10 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
         Id: 111,
         Path: join(root, "src-tauri", "target", "release", "app.exe"),
         Cmd: "",
+        Name: "app.exe",
       },
-      { Id: 222, Path: "D:\\other\\app.exe", Cmd: "" },
-      { Id: 333, Path: "", Cmd: `other ${root} unrelated` },
+      { Id: 222, Path: "D:\\other\\app.exe", Cmd: "", Name: "app.exe" },
+      { Id: 333, Path: "", Cmd: `other ${root} unrelated`, Name: "app.exe" },
     ]);
     const out = runGuard(guardScript(json));
     expect(out).toContain("HITS=2");
@@ -289,6 +324,7 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
         Id: 444,
         Path: join(root, "SRC-TAURI", "Target", "Release", "APP.EXE"),
         Cmd: "",
+        Name: "app.exe",
       },
     ]);
     const out = runGuard(guardScript(json));
@@ -300,6 +336,123 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
     const out = runGuard(guardScript(JSON.stringify([])));
     expect(out).toContain("HITS=0");
   });
+
+  /**
+   * ISSUE #412：用户双击 build-all 时一上来就被「目标文件被占用」挡下，
+   * 提示「请先关闭桌面窗口」——可窗口早就关了，照做也关不掉，卡成死循环。
+   *
+   * 判据收敛成：陈旧壳（起它的启动器已退出 = 无主孤儿壳）与非交互构建下的占用
+   * 自动回收后继续；只有「启动器还在跑 / 用户可能正开着应用」才中止。
+   * 这里用打桩进程表把三条规则各锁一次（回收动作走 Write-Output 便于断言）。
+   */
+  // 结论走 stdout、守卫日志走 stderr（同 dev-launcher 用例的套路）：`Log` 若也写
+  // stdout，正文会与 `CODE=` 挤在同一行，断言被日志粘住而失衡。
+  // KILLED 计数用 `$global:`（Assert-ShellNotRunning 有自己的作用域，`$script:` 改不到）。
+  const assertShellScript = (
+    procsJson: string,
+    opts: { parent?: string } = {},
+  ): string =>
+    guardScript(procsJson, opts)
+      .replace(
+        "function Log { param([string]$Msg) Write-Output $Msg }",
+        "function Log { param([string]$Msg) [Console]::Error.WriteLine($Msg) }",
+      )
+      .replace(
+        "$global:KILLED_PIDS = @()",
+        "$global:KILLED = 0\n$global:KILLED_PIDS = @()",
+      ) +
+    `
+$code = Assert-ShellNotRunning -ProjectRoot $root -Purpose "构建 release 壳"
+Write-Output ("CODE=" + $code)
+Write-Output ("KILLED=" + $global:KILLED)
+Write-Output ("|END")
+`;
+
+  it.skipIf(!psExe)(
+    "陈旧壳（启动器已退出）自动回收后继续构建，不再要求用户去关窗口",
+    () => {
+      const root = process.cwd();
+      const json = JSON.stringify([
+        {
+          Id: 711,
+          Path: join(root, "src-tauri", "target", "release", "app.exe"),
+          Cmd: "",
+          Name: "app.exe",
+        },
+      ]);
+      // 进程表里没有任何本仓库启动器 -> 该壳是无主孤儿壳
+      const out = runGuard(assertShellScript(json));
+      expect(out).toContain("CODE=0");
+      expect(out).toContain("KILLED=1");
+      expect(out).toContain("回收陈旧桌面壳");
+    },
+  );
+
+  it.skipIf(!psExe)(
+    "启动器还在跑时不自动回收，改为中止并点名要求先结束启动器（ISSUE #412）",
+    () => {
+      const root = process.cwd();
+      const json = JSON.stringify([
+        {
+          Id: 721,
+          Path: join(root, "src-tauri", "target", "release", "app.exe"),
+          Cmd: "",
+          Name: "app.exe",
+        },
+        {
+          Id: 722,
+          Path: join(root, "start-tauri", "start-tauri.exe"),
+          Cmd: "",
+          Name: "start-tauri.exe",
+        },
+      ]);
+      const out = runGuard(assertShellScript(json, { parent: "pwsh.exe" }));
+      expect(out).toContain("CODE=1");
+      expect(out).toContain("KILLED=0");
+      expect(out).toContain("请先结束启动器");
+    },
+  );
+
+  it.skipIf(!psExe)(
+    "双击构建（父进程 explorer）没人能确认，占用一律自动回收后继续",
+    () => {
+      const root = process.cwd();
+      const json = JSON.stringify([
+        {
+          Id: 731,
+          Path: join(root, "src-tauri", "target", "release", "app.exe"),
+          Cmd: "",
+          Name: "app.exe",
+        },
+        {
+          Id: 732,
+          Path: join(root, "start-tauri", "start-tauri.exe"),
+          Cmd: "",
+          Name: "start-tauri.exe",
+        },
+      ]);
+      const out = runGuard(assertShellScript(json, { parent: "explorer.exe" }));
+      expect(out).toContain("CODE=0");
+      expect(out).toContain("KILLED=1");
+      expect(out).toContain("非交互构建");
+    },
+  );
+
+  it.skipIf(!psExe)(
+    "启动器进程的命中同样按 exe 真实路径，别处的同名进程不算",
+    () => {
+      const json = JSON.stringify([
+        {
+          Id: 741,
+          Path: "D:\\other\\start-tauri.exe",
+          Cmd: "",
+          Name: "start-tauri.exe",
+        },
+      ]);
+      const out = runGuard(guardScript(json));
+      expect(out).toContain("HITS=0");
+    },
+  );
 });
 
 describe("dev-launcher.ps1（桌面壳残留治理）", () => {
@@ -461,9 +614,12 @@ print("LOG=" + " | ".join(messages))
     expect(decide("", "explorer.exe")).toContain("RESULT=true");
   });
 
-  it.skipIf(!python)("前台本来就是本应用（重启 / 更新后重启）允许给前台", () => {
-    expect(decide("", "app.exe")).toContain("RESULT=true");
-  });
+  it.skipIf(!python)(
+    "前台本来就是本应用（重启 / 更新后重启）允许给前台",
+    () => {
+      expect(decide("", "app.exe")).toContain("RESULT=true");
+    },
+  );
 
   it.skipIf(!python)("脚本 / 终端冷启动允许给前台", () => {
     expect(decide("cold_start=True", "pwsh.exe")).toContain("RESULT=true");
@@ -473,8 +629,47 @@ print("LOG=" + " | ".join(messages))
     expect(decide("already_running=True", "pwsh.exe")).toContain("RESULT=true");
   });
 
-  it.skipIf(!python)("双击入口自身的进程（打包后的 start-tauri.exe）也算用户点击", () => {
-    expect(decide("", "start-tauri.exe")).toContain("RESULT=true");
+  it.skipIf(!python)(
+    "双击入口自身的进程（打包后的 start-tauri.exe）也算用户点击",
+    () => {
+      expect(decide("", "start-tauri.exe")).toContain("RESULT=true");
+    },
+  );
+});
+
+describe("桌面壳 PID 文件的残留窗口（ISSUE #412 附带修复）", () => {
+  /**
+   * `log/launcher/tauri-shell.pid` 是「上一轮 run 的残留」：dev-launcher.ps1 是被
+   * 本次启动器另起的进程，在它写到「壳已启动」那一步之前，文件里还是上一轮的旧 PID。
+   * Windows 会复用 PID，旧号很可能已归某个无关进程——兜底回收路径读到它就会去杀
+   * 不相干的东西。修法是拉起 dev-launcher.ps1 之前先删文件（窗口期内读不到 = 安全）。
+   */
+  const launcher = readFileSync(
+    join(process.cwd(), "scripts", "start_tauri_launcher.py"),
+    "utf8",
+  );
+
+  it("拉起 dev-launcher.ps1 之前先清掉上一轮的壳 PID 文件", () => {
+    expect(launcher).toContain("def _reset_shell_pid_file(");
+    const start = launcher.indexOf("def launch_dev_server(");
+    const body = launcher.slice(start, launcher.indexOf("def monitor(", start));
+    expect(body).toContain("_reset_shell_pid_file(project_root)");
+    // 必须在 subprocess.Popen 之前（否则清除会把本次真实 PID 一起删掉）
+    expect(body.indexOf("_reset_shell_pid_file(")).toBeLessThan(
+      body.indexOf("subprocess.Popen("),
+    );
+  });
+
+  it("兜底回收读不到 PID 文件时不做任何猜测性击杀", () => {
+    const body = launcher.slice(
+      launcher.indexOf("def _kill_shell_from_pid_file("),
+      launcher.indexOf(
+        "# ═══",
+        launcher.indexOf("def _kill_shell_from_pid_file("),
+      ),
+    );
+    expect(body).toContain("except Exception:");
+    expect(body).toContain("return");
   });
 });
 
@@ -526,31 +721,46 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
 
   it.skipIf(!python)("用户就在等它（启动期判决允许）时把前台拿到手", () => {
     expect(
-      decide("startup_allowed=True, window_visible=True, window_was_foreground=False"),
+      decide(
+        "startup_allowed=True, window_visible=True, window_was_foreground=False",
+      ),
     ).toContain('RESULT="give"');
     expect(
-      decide("startup_allowed=True, window_visible=True, window_was_foreground=True"),
+      decide(
+        "startup_allowed=True, window_visible=True, window_was_foreground=True",
+      ),
     ).toContain('RESULT="give"');
   });
 
   it.skipIf(!python)("不该给但系统交接时自动放行了前台 -> 把前台还回去", () => {
     expect(
-      decide("startup_allowed=False, window_visible=True, window_was_foreground=True"),
+      decide(
+        "startup_allowed=False, window_visible=True, window_was_foreground=True",
+      ),
     ).toContain('RESULT="restore"');
   });
 
-  it.skipIf(!python)("用户切走了（前台是别的应用）时什么都不做，窗口留在任务栏", () => {
-    expect(
-      decide("startup_allowed=False, window_visible=True, window_was_foreground=False"),
-    ).toContain('RESULT="leave"');
-  });
+  it.skipIf(!python)(
+    "用户切走了（前台是别的应用）时什么都不做，窗口留在任务栏",
+    () => {
+      expect(
+        decide(
+          "startup_allowed=False, window_visible=True, window_was_foreground=False",
+        ),
+      ).toContain('RESULT="leave"');
+    },
+  );
 
   it.skipIf(!python)("窗口没显示时不做任何前台动作", () => {
     expect(
-      decide("startup_allowed=False, window_visible=False, window_was_foreground=True"),
+      decide(
+        "startup_allowed=False, window_visible=False, window_was_foreground=True",
+      ),
     ).toContain('RESULT="leave"');
     expect(
-      decide("startup_allowed=True, window_visible=False, window_was_foreground=False"),
+      decide(
+        "startup_allowed=True, window_visible=False, window_was_foreground=False",
+      ),
     ).toContain('RESULT="leave"');
   });
 
@@ -577,7 +787,9 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     );
     expect(launcher).toContain("def spawn_foreground_watch(");
     // 三条完成路径（prebuilt / tauri dev / standalone）都要复核
-    expect(launcher.match(/spawn_foreground_watch\(/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(
+      launcher.match(/spawn_foreground_watch\(/g)?.length,
+    ).toBeGreaterThanOrEqual(4);
     expect(launcher).toContain("foreground-watch.log");
   });
 });
@@ -604,7 +816,8 @@ describe("启动页日志可读宽度（宽窗口 + 展开日志加宽卡片）"
     const conf = JSON.parse(readFileSync(CONF, "utf8")) as {
       app: { windows: { label?: string; width: number; height: number }[] };
     };
-    const win = conf.app.windows.find((w) => w.label === "splash") ?? conf.app.windows[0];
+    const win =
+      conf.app.windows.find((w) => w.label === "splash") ?? conf.app.windows[0];
     if (!win) throw new Error("tauri.conf.json 里没有窗口配置");
     return win;
   };
@@ -635,9 +848,9 @@ describe("启动页日志可读宽度（宽窗口 + 展开日志加宽卡片）"
     // 卡片默认宽度比旧值大，展开日志时切到更宽的宽版
     expect(html).toContain(".card.wide");
     expect(html).toContain("classList.toggle('wide'");
-    const widths = [...html.matchAll(/min\((\d+)px, calc\(100vw - 48px\)\)/g)].map(
-      (m) => Number(m[1]),
-    );
+    const widths = [
+      ...html.matchAll(/min\((\d+)px, calc\(100vw - 48px\)\)/g),
+    ].map((m) => Number(m[1]));
     expect(widths.length).toBeGreaterThanOrEqual(2);
     const collapsed = widths[0] ?? 0;
     const expanded = widths[1] ?? 0;

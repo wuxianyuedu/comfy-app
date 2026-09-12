@@ -229,7 +229,8 @@ true`——这类场景的策略反过来，必须给前台。
   兜底清理。**不要**假设 Job 标志生效。
 - 桌面壳（{{shell.app.exe}}）的生命周期必须有人兜底：壳由 dev-launcher.ps1 拉起，正常路径以「壳退出」为锚点回收；**启动器先退出（用户关掉启动器窗口 / python 监控线程结束）时壳会变成无主常驻进程**（窗口没了、进程还在，锁住 `target\release\{{shell.app.exe}}`）。因此：
   - dev-launcher.ps1 启动前按「exe 真实路径落在本仓库 `src-tauri\target\{release,debug}`」回收残留壳（**不要**按 `CommandLine -like` 判断：预编译壳经 `ProcessStartInfo(UseShellExecute=false)` 启动，命令行里不含项目根路径，会漏判）；
-  - 壳拉起后把 PID 写入 `log/launcher/tauri-shell.pid`，python 启动器的监控线程在 dev-launcher 退出/异常/超时路径检查该 PID，仍存活就 `taskkill /PID <pid> /T /F` 补刀并删除 PID 文件。
+  - 壳拉起后把 PID 写入 `log/launcher/tauri-shell.pid`，python 启动器的监控线程在 dev-launcher 退出/异常/超时路径检查该 PID，仍存活就 `taskkill /PID <pid> /T /F` 补刀并删除 PID 文件；
+  - **拉起 dev-launcher.ps1 之前必须先删这个 PID 文件**（`_reset_shell_pid_file`）：它是上一轮 run 的残留，而 dev-launcher.ps1 是被本次启动器另起的进程——在它写新 PID 之前，文件里还是旧 PID。Windows 会复用 PID，旧号很可能已归某个无关进程，兜底路径读到就会去杀不相干的东西。先删 = 窗口期内读不到文件，语义安全。
 - pnpm 已关闭 `verifyDepsBeforeRun`（见 §6）：任何 pnpm 命令都不会隐式
   补跑 install。dev server 运行期间不要手动跑 `pnpm install`
   （better-sqlite3 等原生模块被进程锁定，install 会 EPERM）。
@@ -435,6 +436,7 @@ zustand 队列，而不是再加一个模块级单例。
 | 所有请求挂死、`tsc` 报 typescript 缺失                                                                                                 | Next 16.3.2 默认 `useTypeScriptCli: true`，与 typescript6 别名不兼容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 已在 next.config.js 关闭；换回标准 typescript 包后可移除该配置                                                                                                                                                                                                                                                                                                                                                                                |
 | 提交时钩子报 `Class extends value undefined`                                                                                           | npm 11.19 在本机解析 .bin 别名链崩溃                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 钩子已改 `pnpm exec`；勿把钩子改回 npx                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 构建 release 壳在编译收尾报 `error: failed to remove file ...\target\release\{{shell.app.exe}}` / `Caused by: 拒绝访问。 (os error 5)` | 上一次启动的桌面壳（{{shell.app.exe}}）还开着：cargo 覆盖产物前会先删除旧 exe，Windows 不允许替换运行中进程的可执行文件。等待整个 Rust 编译（可能十几分钟）走完才失败，报错本身也看不出「壳还在跑」（2026-09-06 定位）                                                                                                                                                                                                                                                                                                                                                                                                                    | 不要用任务管理器单杀壳（其 Next dev server 子进程会残留占端口，见 §3）：正常关闭桌面窗口即可（壳退出时会自行 `taskkill /T` 回收 sidecar 进程树），无响应时用 `taskkill /IM {{shell.app.exe}} /T /F`。已由 `tools/scripts/Build-Guard.ps1` 把这类占用提到编译**之前**拦截，并在失败时追加提示（见 §7）                                                                                                                                         |
+| **一键发布构建被「目标文件被占用」挡下**：双击 `tools\build\build-all.ps1`，一上来就在 `[2/4] 前置检查：目标壳是否仍在运行` 报「构建 release 壳 目标文件被占用，无法覆盖：src-tauri\target\release\`{{shell.app.exe}}`」，构建连编译都没开始（ISSUE #412） | **前置守卫把「陈旧壳」也当成了「用户正在用应用」**：用户的实际动作是「启动 exe → 关掉窗口 → 重新构建」，而关窗后壳常常已无人使用（启动器先退出、壳成无主孤儿进程，或只剩命令行残留），守卫却一律中止构建，要求用户「先去关桌面窗口」——用户照做也关不掉（窗口早就没了），卡成死循环。而且 `Assert-ShellNotRunning` 的 `-AutoCloseShell` 开关**从来没有调用方传过**，双击构建又没人能按任意键确认，等于自动回收这条路谁都没走 | 已修（`tools/scripts/Build-Guard.ps1`）：① 命中占用先分类，**陈旧壳**（`Get-RunningLauncher` 查不到本仓库启动器 = 起它的启动器已退出，或 exe 路径指不到本仓库）直接 `taskkill /PID <pid> /T /F` 回收后**继续构建**；② 双击 / 由启动器拉起的**非交互构建**（父进程是 `explorer.exe` 或 `start-tauri*.exe`）同样自动回收，不留「按任意键」死胡同；③ 只有「本仓库启动器仍在跑」才中止，日志额外点名「先结束启动器」——启动器会拉起新壳顶上 `{{shell.app.exe}}`，届时杀掉现有壳既丢了用户窗口、编译途中还会再次被占用。见 §7.1 |
 | 桌面窗口已经关了，`{{shell.app.exe}}` 进程还在（只能手工 `taskkill /IM {{shell.app.exe}} /T /F`）                                      | **启动器先于壳退出，壳成了无主进程**：壳由 dev-launcher.ps1 拉起，正常路径以「壳退出」为锚点回收；但用户关掉启动器窗口 / python 监控线程结束时 dev-launcher 的 `WaitForExit` 与 taskkill 兜底都没机会跑。旧实现的「残留壳清理」还按 `CommandLine -like "*<项目根>*"` 筛选，而预编译壳经 `ProcessStartInfo(UseShellExecute=false)` 启动、命令行里不含项目根路径 → 既漏判残留，也让残留壳锁住 `target\release\{{shell.app.exe}}`（连带 §5「os error 5」那条）                                                                                                                                                                               | 已三层治理（2026-09-06 定位）：①启动前按 **exe 真实路径**回收残留壳；②壳拉起后 PID 落 `log/launcher/tauri-shell.pid`，python 启动器在监控退出/异常/超时时对仍存活的 PID 执行 `taskkill /PID <pid> /T /F` 后删除该文件；③正常关窗仍走 dev-launcher 的进程树回收。见 §3                                                                                                                                                                         |
 | 打包启动器时报「无法清理 start-tauri」                                                                                                 | 残留的提权进程（如卡死的 pyinstaller/启动器）持有 `_internal` 文件，普通权限无法终止                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 重启后重试；应急：`pyinstaller --distpath dist-new tools/start-tauri.spec` 打到新目录后手动换文件                                                                                                                                                                                                                                                                                                                                             |
 | 启动时先看到 Edge「无法访问此页面 / ERR_CONNECTION_REFUSED」（localhost 拒绝连接），之后才出现启动进度或直接黑等                       | **壳编译时没带 `custom-protocol` feature**（裸 `cargo build --release`）：tauri 的 `cfg(dev)` 由该 feature 决定，不带它 = dev 模式行为——①启动页相对 URL 解析到 `build.devUrl`（http://localhost:3100/{{shell.splash}}），dev server 未就绪时 WebView2 渲染错误页且永不重试（2026-09-02 定位，冷启动必现；官方 `pnpm tauri build` 会自动带该 feature，所以生产包没这问题）②资源根本没内嵌进二进制（启动页由 dev server 提供）。叠加因素：壳二进制过期（改了 src-tauri 后未重编，旧版 splash 的 `window.location.replace` 兜底把错误页顶上来）；WebView2 对导航失败也触发 on_page_load Finished，交换窗口前不校验可达性会把错误页当应用显示 | 重编壳必须带 feature：`cd src-tauri; cargo build --release --features custom-protocol`。现版壳已四重防护：splash 不再自导航、交换前 TCP 可达性校验、main 加载失败重导航循环、启动页看门狗（URL 被带走 1s 内恢复进度页）                                                                                                                                                                                                                       |
@@ -513,19 +515,34 @@ zustand 队列，而不是再加一个模块级单例。
 `tools/scripts/Build-Guard.ps1`，调用 `Assert-ShellNotRunning` 检查
 `src-tauri\target\{release,debug}\{{shell.app.exe}}` 是否正被运行中的桌面壳占用：
 
-- **命中即中止**（exit 1，日志给处置提示），不让整轮编译走到链接收尾才报
-  `os error 5`（见 §5 对应行）；
+- **陈旧壳自动回收后继续构建**：命中占用的壳先分类——「陈旧壳」（起它的启动器已
+  退出，即无主孤儿壳；或连可执行文件路径都指不到本仓库的老式残留）与「非交互构建
+  下的占用」（双击构建 / 由启动器拉起的后台构建，没人能按任意键确认）
+  **一律 `taskkill /PID <pid> /T /F` 回收**（禁止单杀，见 §3）再复查，回收成功即
+  继续构建。`-AutoCloseShell` 显式打开同样行为；
+- **只有「用户可能正开着应用」才中止**（exit 1，日志给处置提示），不让整轮编译走到
+  链接收尾才报 `os error 5`（见 §5 对应行）。判据是「本仓库启动器
+  （`start-tauri*.exe`）仍在运行」——启动器会把壳重新拉起来顶上
+  `target\release\{{shell.app.exe}}`，这时杀掉现有壳只是把窗口连同用户的工作一起
+  干掉，而且编译途中还会被新壳占用。中止日志因此额外点名「先结束启动器」；
+- **构建前也要查启动器本身**：`Get-RunningLauncher` 按 exe 真实路径（`start-tauri/`、
+  `start-tauri-dev/`、`start-tauri-standalone/` 三个产物目录）列出仍在跑的本仓库
+  启动器，供上面的分类判据与中止提示共用。别按进程名判断——别处的同名进程不算；
 - **判据是进程可执行文件的真实路径**，而不是进程名或命令行。预编译壳由
   `dev-launcher.ps1` 用 `ProcessStartInfo` 启动，`UseShellExecute=false` 时命令行里
   不含项目根路径——`dev-launcher.ps1` 清理残留壳用的 `CommandLine -like "*$root*"`
   因此并不可靠，这里不能照抄。`ExecutablePath` 取不到时退回命令行匹配（宁可多提示
   一次，也不要漏判后白跑构建）；
 - 需要无人值守时用 `-AutoCloseShell` 自动 `taskkill /PID <pid> /T /F` 回收（**禁止**
-  单杀，见 §3），回收失败仍返回 1。
+  单杀，见 §3），回收失败仍返回 1；
+- **判据宁严勿宽**：判成「有人正在用」最多让用户手动关一次窗口；判成「陈旧」却会在
+  用户正开着应用时把它的窗口一起杀掉，所以「启动器在跑」一律当作「有人用」。
 
 回归测试：`tests/check-file-structure.test.ts` 的「Build-Guard.ps1（构建前置守卫）」
 用例用 PowerShell 打桩 `Get-CimInstance` 喂造数据，锁住「本仓库 target 下的 exe 命中 /
-别处同名进程不命中 / 路径大小写差异命中」三条规则（非 Windows 平台自动跳过）。
+别处同名进程不命中 / 路径大小写差异命中」「陈旧壳被自动回收（发布什么 kill）」
+「启动器在跑时不自动回收、改为中止」「非交互构建下自动回收」等规则
+（非 Windows 平台自动跳过）。
 
 #### 应用自更新（tauri-plugin-updater / tauri-plugin-process）
 

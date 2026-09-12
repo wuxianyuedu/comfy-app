@@ -63,7 +63,7 @@ export function buildParamEdges(ctx: BuildParamEdgesCtx): Edge[] {
         strokeDasharray: manual ? undefined : "6 4",
         opacity: manual ? 1 : 0.75,
       },
-      data: { paramEntryId: entry.id, manual },
+      data: { paramEntryId: entry.id, manual, paramMap: true },
     });
   }
   return out;
