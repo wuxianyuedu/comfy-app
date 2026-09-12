@@ -65,6 +65,8 @@ import {
 import { GlobalStepLogPanel } from "./project-canvas/GlobalStepLogPanel";
 import { CanvasContextMenu } from "./project-canvas/CanvasContextMenu";
 import { ProjectSwitcher } from "./project-canvas/ProjectSwitcher";
+import { useRelatedEdgesHighlight } from "./canvas/hooks/use-related-edges-highlight";
+import { ProjectEdge } from "./project-canvas/ProjectEdge";
 import { CanvasToolbar } from "./project-canvas/CanvasToolbar";
 import { EmptyCanvasHint } from "./project-canvas/EmptyCanvasHint";
 
@@ -77,6 +79,11 @@ const nodeTypes = {
   canvasNode: CanvasNode,
   workflowArdot: WorkflowNodeArdot,
 } as const;
+
+/* 边渲染注册表：`default` 承接 `defaultEdgeOptions.type = "smoothstep"` 落到
+ * 本画布的全部连线（React Flow 对未注册的类型走内置渲染，注册后交给组件，
+ * 组件内部仍用 getSmoothStepPath 画出同一条曲线，只额外叠加选中态样式）。 */
+const edgeTypes = { default: ProjectEdge } as const;
 
 /* MiniMap 颜色表 hoisted to a module-level Map so the
  * `nodeColor` callback can stay referentially stable — MiniMap only re-runs
@@ -197,6 +204,10 @@ function CanvasInner({
     screenToFlowPosition,
     setNodes,
   });
+
+  /* 选中节点 → 相关连线高亮：把「上下游」标记写回 edges，由画布的
+   * `smoothstep` 边渲染层加成不同样式。 */
+  useRelatedEdgesHighlight(setEdges);
 
   /* 双 rAF fitView：等 ReactFlow 完成本轮布局后再 fit，
    * 替代 setTimeout(80ms) 魔法数字（慢机器上可能布局未完成）。 */
@@ -372,6 +383,7 @@ function CanvasInner({
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         /* commercial-grade perf — only mount nodes/edges that
          *  intersect the viewport (same treatment as the workflow canvas).
          *  Project graphs with many workflow/material nodes previously

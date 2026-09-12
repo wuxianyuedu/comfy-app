@@ -23,6 +23,7 @@ import {
 import { PORT_ROLES } from "../canvas/WorkflowNode";
 import type { WorkflowNodeData } from "../workflow-types";
 import { workflowNodeTypes, workflowEdgeTypes } from "./WorkflowEditorNodes";
+import { useRelatedEdgesHighlight } from "../canvas/hooks/use-related-edges-highlight";
 
 /** React Flow 的 error#008 文本前缀（见 @xyflow/system 的 errorMessages）。 */
 const EDGE_HANDLE_ERROR = "Couldn't create edge for";
@@ -88,6 +89,8 @@ export interface WorkflowEditorCanvasProps {
   isValidConnection?: (connection: Connection | Edge) => boolean;
   /** 删除连线（映射线 = 该对外参数在当前模式下断开）。 */
   onEdgesDelete?: (edges: Edge[]) => void;
+  /** 写回连线表：选中节点后由本画布把「相关连线」标记写进 edges（见 hook 注释）。 */
+  setEdges: (updater: (edges: Edge[]) => Edge[]) => void;
 }
 
 export function WorkflowEditorCanvas({
@@ -105,6 +108,7 @@ export function WorkflowEditorCanvas({
   onConnect,
   isValidConnection,
   onEdgesDelete,
+  setEdges,
 }: WorkflowEditorCanvasProps) {
   /* Stable identity → colour lookup for the MiniMap.  Depends on nothing
    *  (role colours are static), so MiniMap never re-renders due to a fresh
@@ -113,6 +117,10 @@ export function WorkflowEditorCanvas({
     const d = node.data as WorkflowNodeData | undefined;
     return (d?.assignedRole ? ROLE_COLOR_BY_KEY.get(d.assignedRole) : undefined) ?? "#333";
   }, []);
+
+  /* 选中节点 → 相关连线高亮（上下游加粗）。标记写在 edges 的 data 上，
+   *  由 <WorkflowEdge> 统一加样式；这里只负责在选中变化时重算。 */
+  useRelatedEdgesHighlight(setEdges);
 
   /* ── error#008 假告警过滤器（ISSUE #374）──
    *  见 `isEdgeHandleCullingNoise` 的文档：视口裁剪下「长边可见 / 端点未挂载」
