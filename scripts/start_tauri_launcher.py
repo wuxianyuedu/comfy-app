@@ -390,10 +390,15 @@ def decide_foreground(*, cold_start: bool = False, already_running: bool = False
     显示到任务栏 + 请求任务栏闪烁提醒，用户自己点开。命中下面任一条则允许给前台
     ——这些情形要么用户就在等这个应用，要么前台本来就是它，都不存在「打断」：
 
-    - 已有实例在跑，这次只是把它唤到前面（用户点了启动就该看到界面）；
+    - 已有实例在跑，这次只是把它唤到前面（用户点了启动就该看到界面，且此刻
+      就唤起、不存在「几十秒后突然弹出」）；
     - 冷启动（脚本 / 终端敲命令拉起，不是「点了就去忙别的」的路径）；
-    - 前台本来就是本应用（用户从应用里重启、更新后重启）；
-    - 前台是双击入口（资源管理器 / 启动器自身）—— 用户刚「点」过启动。
+    - 前台本来就是本应用（用户从应用里重启、更新后重启）。
+
+    曾经把「前台是双击入口（explorer / 启动器自身）」也判为允许——但双击之后
+    切去干别的正是常态：启动期此刻前台还是 explorer，几十秒后正式窗口冒出来时
+    用户早就在别处工作了，于是出现「弹到最前打断两次」（第二次是交接复核按
+    「用户就在等」强拉回前台）。双击启动因此一律不给前台，任务栏闪烁提醒即可。
 
     返回值经 `COMFYAPP_FOREGROUND` 环境变量传给 Tauri 壳，由
     `show_main_window_without_focus` 消费（见 launch-and-build.md §1.3）。
@@ -407,17 +412,6 @@ def decide_foreground(*, cold_start: bool = False, already_running: bool = False
     foreground = foreground_window_process()
     if foreground.startswith("app"):
         log("foreground allowed: this app is already the foreground window")
-        return True
-    # 双击入口是资源管理器或打包后的启动器 exe：用户刚「点」过本应用，此刻等它
-    # 出现就是预期。直接敲 python 脚本调试（前台是终端）不走这条。
-    user_click_entries = (
-        "explorer.exe",
-        "start-tauri.exe",
-        "start-tauri-dev.exe",
-        "start-tauri-standalone.exe",
-    )
-    if foreground in user_click_entries:
-        log(f"foreground allowed: launched from a user click (foreground={foreground})")
         return True
     log("foreground denied: startup may finish while the user is elsewhere")
     return False

@@ -430,18 +430,9 @@
     if (minBtn) minBtn.addEventListener('click', () => void performWinAction('minimize'));
     if (closeBtn) closeBtn.addEventListener('click', () => void performWinAction('close'));
 
-    /**
-     * 确认壳里的窗口兜底命令是否就位。
-     * 缺失只说明壳过期（改了 src-tauri 没重编 / 启动器没重打包），不影响
-     * window API 那条主路径；这里只留一条 warn 供排查「点了没反应」。
-     */
-    async function probeWindowCommands() {
-      try {
-        await invokeRaw('win_minimize');
-      } catch (e) {
-        console.warn('win_minimize unavailable (stale shell?), window api only:', e);
-      }
-    }
+    // 「壳命令是否就位」不做启动期探测：invoke 命令就是真的执行（调 win_minimize
+    // 会真的把窗口最小化），启动页会一出现就自己缩进任务栏。壳是否过期由用户
+    // 真正点按钮时的三条互补路径判断，全部失败时消息区已给出可见提示。
 
     /** 把窗口调到与内容匹配的档位（展开日志变宽变高，收起回到紧凑）。 */
     async function applyCompact(compact) {
@@ -651,9 +642,6 @@
     // 开局把窗口尺寸对齐到「紧凑」档（壳建窗时已设过一次；用户上次把窗口
     // 拉大后重启，这里再对齐一次以保证一致）。
     void applyCompact(true);
-
-    // 顺带确认窗口兜底命令是否就位（缺了只记 warn，主路径仍是 window API）。
-    void probeWindowCommands();
 
     // 首次立即执行，随后每 250ms 轮询，保证启动页观感顺滑
     tick();
