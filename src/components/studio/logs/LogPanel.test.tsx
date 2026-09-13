@@ -11,8 +11,15 @@
  *   4. 「看不出有没有新增」——停在历史页时页脚出现「有新的日志 · 回到最新」，
  *      点击后回到第 1 页。
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { LogPanel } from "./LogPanel";
@@ -22,6 +29,11 @@ import {
   LOG_PANEL_OVERLAY_Z,
   LOG_PANEL_POPUP_Z_CLASS,
 } from "./log-panel-layers";
+
+/* 本文件是 jsdom 里的**重交互**用例（数百行日志的渲染 + 多次 userEvent 点击），
+ * 默认 5s 超时在全量并行负载下不够（翻页 / 回到最新等用例各自偶发超时）。
+ * 整文件放宽到 20s——只作用于本文件，不影响其它文件的失败速度。 */
+vi.setConfig({ testTimeout: 20_000 });
 
 function makeEntry(index: number, overrides: Partial<LogEntry> = {}): LogEntry {
   return {
@@ -96,8 +108,17 @@ afterEach(async () => {
    *
    * 因此收尾分**两轮**：先让 base-ui 自己跑完两轮宏任务，再手工把残留清干净，
    * 最后清空 `body`。真实浏览器里这些会自行结束，这里只是替测试环境收尾。 */
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  /* 收尾要等多久不能写死：base-ui 的收尾回调排在其后的宏任务 / rAF 里，
+   * 负载下（全量并行跑其它文件时）会晚于固定两轮宏任务才动 DOM——残宿主
+   * 因此落进下个用例，表现为「点开了却没有 option」。这里轮询到 DOM 连续
+   * 两轮不再变化（该跑的回调都跑完了）再手工兜底清除，上限封顶防悬挂。 */
+  let prevBody = "";
+  for (let i = 0; i < 30; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const body = document.body.innerHTML;
+    if (body === prevBody) break;
+    prevBody = body;
+  }
   document
     .querySelectorAll(
       '[data-slot="select-content"], [data-slot="select-backdrop"]',
@@ -320,6 +341,11 @@ describe("LogPanel 日志面板", () => {
     const user = userEvent.setup();
 
     await user.click(screen.getByRole("combobox", { name: "按来源筛选" }));
+    /* 选项经 portal 异步挂载，负载下同步读取可能跑在挂载之前——optionOf 的
+     * 空串兜底会把「没等到」伪装成「内容不符」。先显式等 option 出现。 */
+    await waitFor(() =>
+      expect(screen.getAllByRole("option").length).toBeGreaterThan(0),
+    );
     const optionOf = (label: string) =>
       screen
         .queryAllByRole("option")
