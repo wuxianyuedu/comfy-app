@@ -5,9 +5,15 @@
 // from the Settings page), falling back to COMFYUI_BASE env then localhost.
 //
 // Port auto-detection: if the configured port is unreachable (ECONNREFUSED),
-// the resolver will probe nearby ports (+1, +2, … up to PROBE_RANGE) and use
-// the first one that responds. The discovered port is cached in-memory for the
-// session lifetime.
+// the resolver will probe nearby ports (+1, +2, … up to PROBE_RANGE, then the
+// ComfyUI window port) and use the first one that responds. The discovered port
+// is cached in-memory for the session lifetime.
+//
+// 日志口径：探测全落空**不是**「ComfyUI 没在运行」的结论——本模块只认识
+// 「配置地址 + 就近偏移 + 窗口地址」这一批地址，实例落在别的端口时同样落空
+// （真正的运行判据是 `comfyui/status.ts` 的进程级快照）。因此这种情况记一条
+// **warn** 汇总（含问过哪些地址），并按地址清单静默一段时间，避免运行期
+// 每次提交 / 上传都把同一句话刷进面板。
 //
 // 多实例场景：comfyuiPath 配置了实例根目录后，resolveComfyBase 会先在 OS
 // 进程列表确认「该路径的 main.py 是否真的在运行」，再通过 PID→监听端口
@@ -27,6 +33,76 @@ const PROBE_RANGE = 5;
 
 /** Cached resolved base URL (set once after successful probe) */
 let _resolvedBase: string | null = null;
+
+/** ComfyUI 的窗口地址（桌面版「打开查看」用的那个）。它作为实例清单的兜底项，
+ *  而不是「服务端点」的等价物：窗口地址上跑的是 ComfyUI Desktop 的 Web UI，
+ *  未必是我们配置的那个实例。 */
+const COMFY_WINDOW_PORT = 8000;
+
+/** 端口探测的候选清单：端口与地址成对给出。
+ *
+ *  偏移 0 = 配置地址（我们拉起的实例照此监听，除非端口被占时 ComfyUI 自己 +1）；
+ *  偏移 1..N = 就近偏移；末尾补一条窗口地址，只在前面全部落空时才轮得到。 */
+function probeTargets(configuredPort: number): { port: number; url: string }[] {
+  const targets = Array.from({ length: PROBE_RANGE + 1 }, (_, offset) => {
+    const port = configuredPort + offset;
+    return { port, url: `http://127.0.0.1:${port}` };
+  });
+  if (!targets.some((t) => t.port === COMFY_WINDOW_PORT)) {
+    targets.push({
+      port: COMFY_WINDOW_PORT,
+      url: `http://127.0.0.1:${COMFY_WINDOW_PORT}`,
+    });
+  }
+  return targets;
+}
+
+/** 「探测全落空」汇总行的静默期。 */
+export const COMFY_PROBE_LOG_REPEAT_MS = 60_000;
+
+/** 上一批「探测全落空」的地址清单与写入时刻：抑制同一批地址的反复刷屏。
+ *
+ *  背景：`resolveComfyBase()` 只在**探到实例**时才把结论写进 `_resolvedBase`；
+ *  「谁都没应答」不缓存（这是对的——实例随时可能起来，缓存会把会话钉死在一个
+ *  连不上的地址上）。代价是运行期每一次提交 / 上传 / 状态轮询都会重扫一遍候选
+ *  地址，也就都会写出一条内容**完全相同**的日志：面板里同一句话被刷成几百行，
+ *  真正的现场信息反而被挤出视野（规范 07 §7.14：周期性的重复输出要先聚合）。
+ *
+ *  这不是状态结论、不参与任何判定（运行与否由 `comfyui/status.ts` 的快照回答），
+ *  只是一个防刷屏的写入开关：地址清单一变（用户改了端口）就重新允许写第一条。 */
+const SILENT_PROBE_KEY = "__comfySilentProbeV1";
+type SilentProbeGlobal = { key?: string; lastAt?: number };
+const probeLogStore = globalThis as unknown as Record<
+  string,
+  SilentProbeGlobal | undefined
+>;
+const probeLog: SilentProbeGlobal = probeLogStore[SILENT_PROBE_KEY] ?? {};
+probeLogStore[SILENT_PROBE_KEY] = probeLog;
+
+/** 探测链路的会话标识：只有**同一会话 + 同一批地址**才算「重复」。 */
+const SESSION_ID = Math.random().toString(36).slice(2, 10);
+
+/** 本次「探测全落空」是否值得再写一条日志（同一批地址、同一静默期内不重复写）。
+ *  导出供回归测试直接断言节流判据。 */
+export function shouldLogProbeMiss(
+  key: string,
+  now: number = Date.now(),
+): boolean {
+  const repeat =
+    probeLog.key === key &&
+    probeLog.lastAt !== undefined &&
+    now - probeLog.lastAt < COMFY_PROBE_LOG_REPEAT_MS;
+  if (repeat) return false;
+  probeLog.key = key;
+  probeLog.lastAt = now;
+  return true;
+}
+
+/** 测试注入点：清掉防刷屏状态（用例之间互不污染）。 */
+export function resetProbeMissLog(): void {
+  probeLog.key = undefined;
+  probeLog.lastAt = undefined;
+}
 
 /**
  * Node's undici `fetch` resolves the hostname `localhost` to IPv6 `::1` first.
@@ -145,32 +221,41 @@ export async function resolveComfyBase(): Promise<string> {
     return _resolvedBase;
   }
 
-  // Probe nearby ports (ComfyUI often auto-increments when port is occupied)
-  for (let offset = 1; offset <= PROBE_RANGE; offset++) {
-
-    const port = configuredPort + offset;
-
-    if (await probePort(host, port)) {
-
-      _resolvedBase = `http://${host}:${port}`;
-
+  /* 端口探测：配置地址先试，再试就近偏移（ComfyUI 端口被占时会 +1），最后才是
+   * 窗口地址。命中偏移端口要记一条 warn——但只在**第一次**发现时记：探到之后
+   * `_resolvedBase` 就记住了，本函数不会再走到这里。 */
+  const targets = probeTargets(configuredPort);
+  for (const target of targets.slice(1)) {
+    if (!(await probePort(host, target.port))) continue;
+    _resolvedBase = target.url;
+    if (target.port === COMFY_WINDOW_PORT) {
       logger.warn(
-
-        `[comfyui] Configured port :${configuredPort} unreachable, auto-discovered ComfyUI on :${port}`
-
+        `[comfyui] Configured port :${configuredPort} unreachable, falling back to the ComfyUI window at :${COMFY_WINDOW_PORT}`,
       );
-
-      return _resolvedBase;
-
+    } else {
+      logger.warn(
+        `[comfyui] Configured port :${configuredPort} unreachable, auto-discovered ComfyUI on :${target.port}`,
+      );
     }
-
+    return _resolvedBase;
   }
 
-
-  // All probes failed — fall back to configured value (callers will get 503)
-  logger.error(
-    `[comfyui] Cannot reach ComfyUI on :${configuredPort} or any of [${Array.from({length: PROBE_RANGE}, (_, i) => configuredPort + i + 1).join(", ")}]`
-  );
+  /* 全落空——注意这**不等于**「ComfyUI 没在运行」：这条链路只认识「配置地址 +
+   * 就近偏移 + 窗口地址」，实例落在别的端口（用户在 ComfyUI 侧自定义端口、
+   * 或另一套启动方式占了别的端口）时同样走到这里。运行判据是
+   * `comfyui/status.ts` 的进程级快照，它认得外部实例与解释器反查出来的实例；
+   * 本函数只回答「这一批地址里哪个能连」。
+   *
+   * 因此这里记 warn 而不是 error：此前用 error，用户读到「ComfyUI 明明在跑却报
+   * error」的第一反应就是「这里有故障」，而多数情况下实例只是不在这批地址上。
+   * 汇总行写清问过哪些地址，并按地址清单静默，避免运行期反复刷同一条。 */
+  const scope = targets.map((t) => `:${t.port}`).join(" / ");
+  if (shouldLogProbeMiss(`${SESSION_ID}|${host}|${scope}`)) {
+    logger.warn(
+      `[comfyui] Cannot reach ComfyUI on ${scope} (probed ${targets.length} addresses, ${COMFY_PROBE_LOG_REPEAT_MS / 1000}s 内不再重复)` +
+        `；这不代表实例没在运行——若实例落在其它端口，请在 设置 → 创作后端 改「端口」`,
+    );
+  }
   return `http://${host}:${configuredPort}`;
 }
 
