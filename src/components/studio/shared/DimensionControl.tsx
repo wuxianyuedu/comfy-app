@@ -733,7 +733,12 @@ function AspectMegapixelControl({
                 .map((entry) => (
                   <div
                     key={entry.ioKey}
-                    className="relative flex h-[22px] items-center gap-1.5 pl-[2px]"
+                    /* 左内边距与节点上其他参数行同款（`pl-[14px]`）：端点圆点
+                     *  12px、圆心骑跨卡片左缘（-6），文字从 14px 起 —— 圆点与
+                     *  参数名之间才留得出 8px 的空隙。此前这里是 `pl-[2px]`，
+                     *  圆点右沿（6px）压过文字起点（2px），名字被圆点盖住
+                     *  （ISSUE #355：「端口圆点和参数名字之间距离太近」）。 */
+                    className="relative flex h-[22px] items-center gap-1.5 pl-[14px]"
                     {...{
                       [WIRE_ROW_ATTR]: entry.ioKey,
                       [WIRE_PINS_ATTR]: entry.ioKey,

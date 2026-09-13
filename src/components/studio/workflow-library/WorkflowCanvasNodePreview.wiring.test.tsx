@@ -74,6 +74,14 @@ const io: WorkflowIOMap = {
     type: "INT",
     defaultValue: 8,
   },
+  "5::output::IMAGE": {
+    direction: "output",
+    kind: "output",
+    nodeId: "5",
+    name: "images",
+    label: "images",
+    type: "IMAGE",
+  },
 };
 
 function rect(
@@ -204,6 +212,45 @@ describe("库内映射编辑", () => {
     );
     const dot = noMode.querySelector<HTMLElement>(
       '[data-wire-anchor="size?megapixels"]',
+    )!;
+    expect(dot.getAttribute("title")).toBeNull();
+  });
+});
+
+describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
+  it("宿主卡片的输出行带端口圆点（红框里的那一行）", () => {
+    /* 用户口径：「红框中的输出端口也要有端口圆点」。项目画布 / 编辑器上的输出
+     *  行一直有这颗点（`PortHandle dir="out"`），库内预览此前漏了 —— 补上，
+     *  并且它正是右列连线的起点。 */
+    const { container } = renderPreview({});
+    expect(container.querySelector('[data-port-dot="5::output::IMAGE"]')).toBeTruthy();
+  });
+
+  it("节点右侧列出对外输出参数，卡片圆点在卡片左缘", () => {
+    const { container } = renderPreview({});
+    const column = container.querySelector(
+      '[data-testid="workflow-output-param-column"]',
+    )!;
+    expect(column).toBeTruthy();
+    expect(column.getAttribute("aria-label")).toBe("对外输出参数");
+    const card = column.querySelector('[data-testid="param-node-5::output::IMAGE"]')!;
+    expect(card.textContent).toContain("images");
+    const dot = column.querySelector('[data-wire-anchor="5::output::IMAGE?images"]')!;
+    expect(dot).toBeTruthy();
+    /* 端点槽位在行首（圆点在左）：卡片的左缘才是「线从宿主进来」的那一侧。 */
+    expect(
+      screen.getByTestId("param-node-out-5::output::IMAGE-0").firstElementChild,
+    ).toBe(dot);
+  });
+
+  it("右列是只读消费：不给「恢复默认」，也不带拖拽提示", () => {
+    const { container } = renderPreview({ source: { "mode:T2I": {} } });
+    const card = container.querySelector(
+      '[data-testid="param-node-5::output::IMAGE"]',
+    )!;
+    expect(card.querySelector('[data-testid^="param-node-reset"]')).toBeNull();
+    const dot = container.querySelector(
+      '[data-wire-anchor="5::output::IMAGE?images"]',
     )!;
     expect(dot.getAttribute("title")).toBeNull();
   });

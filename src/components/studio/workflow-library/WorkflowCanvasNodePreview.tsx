@@ -54,8 +54,12 @@ import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
 import { resolveWorkflowMode } from "@/lib/workflow-types";
 import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
+import { WorkflowOutputParamCardColumn } from "./WorkflowOutputParamCardColumn";
 import { WorkflowParamWires } from "./WorkflowParamWires";
-import { deriveLibraryParamCards } from "./workflow-library-param-cards";
+import {
+  deriveLibraryOutputCards,
+  deriveLibraryParamCards,
+} from "./workflow-library-param-cards";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import {
@@ -67,6 +71,7 @@ import {
   WorkflowNodePill,
   WorkflowStaticChip,
 } from "../shared/WorkflowNodeParts";
+import { PortHandle } from "../shared/WorkflowPortHandle";
 
 type Phase =
   | { kind: "idle" }
@@ -371,6 +376,14 @@ export function WorkflowCanvasNodePreview({
       }),
     [workflowIO, wiring.effectiveParamMap, effectiveMode, groupedKeys],
   );
+  /* ── 对外输出参数（右列）──
+   * 与左列对称：左列是「对外要什么 → 落到哪一行」，右列是「对外给什么」。
+   * 输出不参与映射，所以这列恒为只读：只有卡片与「宿主输出行 → 卡片」的线，
+   * 没有拖拽手势、没有「恢复默认」。 */
+  const outputCards = useMemo(
+    () => deriveLibraryOutputCards({ io: workflowIO }),
+    [workflowIO],
+  );
   /* 生效模式名（chip 上显示的那个）。卡片刻的名字、表单按它解析的 required /
    * seed 行为、「在编辑器中打开」带过去的模式，全都取自同一个生效模式。 */
   const effectiveModeLabel = useMemo(
@@ -505,7 +518,11 @@ export function WorkflowCanvasNodePreview({
           onUploadError={(message) => setUploadNotice(message)}
         />
 
-        {/* outputs 行：与画布 outputs labelRow 镜像同构（库内无端点） */}
+        {/* outputs 行：与画布 outputs labelRow 同构，**带输出端点圆点**。
+            用户口径是「红框中的输出端口也要有端口圆点，然后工作流节点右侧需要
+            显示对外输出参数」（ISSUE #355）：输出行右侧的圆点与项目画布 /
+            编辑器上同一颗（`PortHandle`，非 React Flow 上下文里退化为几何一致的
+            装饰圆点），右侧那列「对外输出参数」卡片再从这颗圆点连出去。 */}
         {outputs.length > 0 && (
           <div className="border-t border-(--color-border-subtle)">
             {outputs.map((output) => (
@@ -514,6 +531,19 @@ export function WorkflowCanvasNodePreview({
                 output={output}
                 inputs={inputs}
                 outputs={outputs}
+                renderHandle={({ id, dir, type }) => (
+                  <PortHandle
+                    id={id}
+                    dir={dir}
+                    type={type}
+                    style={{
+                      right: -6,
+                      top: 14,
+                      transform: "translateY(-50%)",
+                      boxShadow: "none",
+                    }}
+                  />
+                )}
               />
             ))}
           </div>
@@ -531,11 +561,15 @@ export function WorkflowCanvasNodePreview({
         />
           </WorkflowNodeCardShell>
         </div>
-        {/* 映射连线：卡片圆点 → 宿主卡片上被落到的那一行。量不到锚点
-            （行不在当前渲染里）就整条不画，不留悬空线头。
-            可编辑：拖圆点即改落点、点线选中后按 ⌫ 断开。 */}
+        {/* 对外输出参数卡片列：在宿主卡片**右侧**（与左列的输入卡片对称）。
+            卡片圆点骑跨卡片左缘，线从宿主卡片的输出行圆点连过来。 */}
+        <WorkflowOutputParamCardColumn outputs={outputCards.outputs} />
+        {/* 映射连线：输入侧 = 卡片圆点 → 宿主卡片上被落到的那一行；输出侧 =
+            宿主卡片输出行圆点 → 对外输出参数卡片。量不到锚点（行不在当前渲染
+            里）就整条不画，不留悬空线头。
+            可编辑的只有输入侧：拖圆点即改落点、点线选中后按 ⌫ 断开。 */}
         <WorkflowParamWires
-          wires={paramCards.wires}
+          wires={[...paramCards.wires, ...outputCards.wires]}
           selectedEntryId={selectedParamId}
           onSelect={setSelectedParamId}
           onConnect={

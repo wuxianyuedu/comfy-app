@@ -14,6 +14,7 @@ import type { Edge } from "@xyflow/react";
 import {
   entryIdFromParamNodeId,
   paramNodeId,
+  wiredTargetsForEntry,
   type ParamEntry,
 } from "~/lib/workflow-param-mapping";
 import type { WorkflowIOMap } from "~/lib/workflow-io-types";
@@ -29,6 +30,18 @@ export interface BuildParamEdgesCtx {
   resolved: Record<string, string | null>;
   /** 某个条目在当前模式下是否作者连过线。 */
   isManual: (entryId: string) => boolean;
+  /** 组合控件覆盖到的端口（`inferGroups(...).groupedKeys`）。
+   *
+   *  「尺寸」这类对外参数由多个端口共同组成（宽高比 / 像素量 / 倍数由同一块控件
+   *  录入），默认状态下每个端口各有一条线 —— 只画自动判定挑中的那一条会让「尺寸」
+   *  看着只有一个出口（ISSUE #355）。缺省时按单条线处理（老调用方行为不变）。 */
+  groupedKeys?: ReadonlySet<string>;
+  /** 画布此刻真的画得出来的落点（ioKey 集合）。
+   *
+   *  一对多摊开的那些端口里，若有一行在当前视图里根本没渲染（下钻到子图内部时
+   *  顶层节点不在画布上），指向它的边会接在一个不存在的 handle 上 —— React Flow
+   *  丢弃整条边、逐条打 error。给定时只画画得出来的那几条。 */
+  reachableKeys?: ReadonlySet<string>;
   /** 已经渲染出来的卡片 id（`pio:<条目 id>`）集合。
    *
    *  连线的 source 必须是真实存在的卡片，否则 React Flow 会画出一条
@@ -40,7 +53,8 @@ export interface BuildParamEdgesCtx {
 }
 
 export function buildParamEdges(ctx: BuildParamEdgesCtx): Edge[] {
-  const { entries, resolved, isManual, renderedCardIds } = ctx;
+  const { entries, resolved, isManual, renderedCardIds, groupedKeys, reachableKeys } =
+    ctx;
   const out: Edge[] = [];
   for (const entry of entries) {
     const target = resolved[entry.id];
@@ -55,28 +69,46 @@ export function buildParamEdges(ctx: BuildParamEdgesCtx): Edge[] {
      *  端点上」，见 ParamEntry.hostNodeId）。 */
     const hostNodeId = entry.hostNodeId || entry.nodeId;
     if (!hostNodeId) continue;
-    out.push({
-      id: `pe-${entry.id}`,
-      source: paramNodeId(entry.id),
-      /* 源端点 = **当前落点那一颗**（与卡片上每候选一颗圆点同口径）：写死
-       *  `pio-out` 会接到一个不存在的 handle 上，React Flow 丢弃整条边。 */
-      sourceHandle: target,
-      target: hostNodeId,
-      targetHandle: target,
-      type: "default",
-      /* 可选中 / 可删除 —— 删掉一条线就是「该对外参数在这个模式下断开」，
-       * 这是最自然的编辑手势。 */
-      selectable: true,
-      deletable: true,
-      animated: false,
-      style: {
-        stroke: manual ? MANUAL_STROKE : AUTO_STROKE,
-        strokeWidth: manual ? 2.5 : 2,
-        strokeDasharray: manual ? undefined : "6 4",
-        opacity: manual ? 1 : 0.75,
-      },
-      data: { paramEntryId: entry.id, manual, paramMap: true },
-    });
+    /* 默认状态下一对多：组合控件里的那几个端口各接一条（见 ctx.groupedKeys）；
+     *  作者手工改过落点后只画他指定的那一条（运行期同口径）。 */
+    const wiredTargets = wiredTargetsForEntry({
+      entry,
+      target,
+      manual,
+      groupedKeys,
+    }).filter(
+      /* 落点那一颗永远画（它就是这条映射本身）；其余摊开来的端口只画画得出来的。 */
+      (wired) =>
+        wired.ioKey === target ||
+        !reachableKeys ||
+        reachableKeys.has(wired.ioKey),
+    );
+    for (const wired of wiredTargets) {
+      out.push({
+        /* 边的 id 含被接的端口：一个对外参数可以接多条，只用条目 id 会让它们
+         *  共用同一个 key（React Flow 会丢弃重复 id 的边）。 */
+        id: `pe-${entry.id}-${wired.ioKey}`,
+        source: paramNodeId(entry.id),
+        /* 源端点 = **这一条线对应的那一颗圆点**（与卡片上每候选一颗圆点同口径）：
+         *  写死 `pio-out` 会接到一个不存在的 handle 上，React Flow 丢弃整条边。 */
+        sourceHandle: wired.ioKey,
+        target: hostNodeId,
+        targetHandle: wired.ioKey,
+        type: "default",
+        /* 可选中 / 可删除 —— 删掉一条线就是「该对外参数在这个模式下断开」，
+         * 这是最自然的编辑手势。 */
+        selectable: true,
+        deletable: true,
+        animated: false,
+        style: {
+          stroke: manual ? MANUAL_STROKE : AUTO_STROKE,
+          strokeWidth: manual ? 2.5 : 2,
+          strokeDasharray: manual ? undefined : "6 4",
+          opacity: manual ? 1 : 0.75,
+        },
+        data: { paramEntryId: entry.id, manual, paramMap: true },
+      });
+    }
   }
   return out;
 }
