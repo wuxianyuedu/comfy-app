@@ -101,6 +101,7 @@ export function WorkflowLibraryDetailView({
           onSeedModeChange={(ioKey, mode) => {
             void metaEditor.patchSeedMode(ioKey, mode);
           }}
+          onPatchParamMap={(next) => metaEditor.patchParamMap(next)}
         />
       </div>
 

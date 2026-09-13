@@ -1,6 +1,6 @@
 "use client";
 
-/* 工作流库「画布节点」预览左侧的**只读对外参数卡片列**。
+/* 工作流库「画布节点」预览左侧的**对外参数卡片列**（可编辑映射）。
  *
  * 每个对外参数一张卡片（视觉本体复用 workflow-editor/WorkflowParamCard）：
  *   · 卡片头是参数名（作者在编辑器里勾选/改名后的那个名字）；
@@ -9,8 +9,10 @@
  *   · 卡片右侧有一颗**带类型的小圆点端点**（输出端口），可与宿主卡片上被落到
  *     的那一行参数相连 —— 那是与项目画布同款的端点视觉（ISSUE #355 复审：
  *     「对外参数需要右侧有小圆点的端口，可和工作流节点上的参数相连」）。
- *   · 卡片不可拖、不可改落点 —— 拉线 / 断开 / 恢复默认都在编辑器画布上做；
- *     这里画的连线由 `WorkflowParamWires` 量出锚点后叠一层 SVG（只读呈现）。
+ *   · 卡片**可连线**（ISSUE #355：「连线要能编辑，现在编辑不了」）：从圆点按下
+ *     并拖到宿主卡片上的某一行即改落点，卡片头的 ↺ 撤销该口的手工线。手势实现
+ *     在 `WorkflowParamWires`（指针事件 + 命中测试），卡片只负责把圆点画出来并
+ *     标上锚点 —— 卡片列自身仍不碰 React Flow（见 workflow-canvas-io-isolation）。
  *
  * 与宿主卡片的**表单行**是同一条事实的两端，不重复表达：
  *   卡片 = 这个对外参数由哪些端口组成（归属）；
@@ -64,12 +66,25 @@ export interface WorkflowParamCardColumnProps {
   /** 当前模式下「条目 → 目标 ioKey」的生效落点。 */
   resolved: Record<string, string | null>;
   io: WorkflowIOMap | null;
+  /** 是否允许连线：库里也允许（拖圆点改落点）—— 没有模式时不给（写入无归属）。 */
+  canWire?: boolean;
+  /** 作者手里正选中的条目（线被点选 / 卡片被点）。 */
+  selectedEntryId?: string | null;
+  onSelect?: (entryId: string | null) => void;
+  /** 该对外参数在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
+  isManual?: (entryId: string) => boolean;
+  onReset?: (entryId: string) => void;
 }
 
 export function WorkflowParamCardColumn({
   entries,
   resolved,
   io,
+  canWire = false,
+  selectedEntryId = null,
+  onSelect,
+  isManual,
+  onReset,
 }: WorkflowParamCardColumnProps) {
   if (entries.length === 0) return null;
 
@@ -81,25 +96,30 @@ export function WorkflowParamCardColumn({
       data-testid="workflow-param-card-column"
     >
       <p className="px-0.5 text-[11px] font-medium text-(--color-ink-faint)">
-        对外参数（只读）
+        {canWire ? "对外参数 · 拖圆点改落点" : "对外参数"}
       </p>
       {entries.map((entry) => {
         const style = paramClassStyle(entry.cls);
         return (
           <WorkflowParamCard
             key={entry.id}
+            /* 选中的卡片（含被点选的线那一端）提亮：一条线上有三处（卡片、
+             * 圆点、宿主行），选中状态必须同时在两端看得出来。 */
+            selected={selectedEntryId === entry.id}
+            onSelect={onSelect ? () => onSelect(entry.id) : undefined}
             entryId={entry.id}
             cls={entry.cls}
             label={entry.label}
             classLabel={style.label}
             hostNodeId={entry.hostNodeId || entry.nodeId}
             width={CARD_WIDTH}
-            /* 只读消费：卡片不参与连线，端点与「恢复默认」都不渲染。
-             * `readOnly` 与 `canWire` 分开表达 —— 只读卡片不该写
-             * 「先选模式才能连线」（节点上模式早就选好了，ISSUE #355 复审）。 */
-            canWire={false}
-            readOnly
-            canReset={false}
+            /* `canWire` 与 `readOnly` 分开表达：库里现在**可连线**（拖圆点改落点），
+             * 但卡片本身仍是消费方托管的视觉本体 —— 不写「先选模式才能连线」那类
+             * 编辑提示（节点上模式早就选好了，ISSUE #355）。 */
+            canWire={canWire}
+            readOnly={!canWire}
+            canReset={canWire && !!isManual?.(entry.id)}
+            onReset={canWire ? () => onReset?.(entry.id) : undefined}
             /* 带类型的输出端口：与编辑器同一份派生（类型跟着落点走），库里也
              * 读得到「提示词 → STRING」。 */
             outputPorts={paramOutputPorts(entry, io, resolved[entry.id])}
@@ -110,14 +130,27 @@ export function WorkflowParamCardColumn({
               /* **每个候选一颗圆点**（与编辑器画布同口径）：未连线时输出端口行
                * 逐个列出候选（尺寸 = 宽/高/宽高比/像素量），每一行都是能接到的那
                * 一个候选口 —— 只给第一行画点会让「尺寸」看着只有一个出口
-               * （ISSUE #355 复审）。 */
+               * （ISSUE #355 复审）。
+               *
+               * 可连线时这颗点就是**拖线的起手位**（按下 → 拖到宿主行 → 写入落点），
+               * 指针样式与命中范围由 `WorkflowParamWires` 处理。
+               *
+               * 它刻意**不是**一个 `role="button"` 的控件：拖拽手势没有键盘等价
+               * 操作，谎报成按钮只会让读屏用户撞到一个按不动的控件。落点的查看与
+               * 修改在编辑器画布上都是完整可及的（那里是真正的端点控件），这里只
+               * 呈现当前落点并让鼠标手势更快。 */
               <span
                 aria-hidden
                 /* 连线锚点按**候选端口**认：一个端口一颗点，连线量到的就是那一颗。
                  * 值 = 条目 id + 端口的 handle id。量测侧按属性整串精确比较，
                  * 含 `::` 的端口键不做选择器转义（见 WorkflowParamWires）。 */
                 data-wire-anchor={wireAnchorValue(entry.id, port.handleId)}
-                className="absolute top-1/2 shrink-0 rounded-full"
+                title={
+                  canWire ? `拖到工作流参数行上改「${entry.label}」的落点` : undefined
+                }
+                className={`absolute top-1/2 shrink-0 rounded-full ${
+                  canWire ? "cursor-crosshair" : ""
+                }`}
                 style={{
                   right: PARAM_NODE_DOT_OFFSET,
                   width: PARAM_NODE_DOT_SIZE,

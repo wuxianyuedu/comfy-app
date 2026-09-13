@@ -135,6 +135,7 @@ export function WorkflowLibrary({
             onPatchModes={c.patchModes}
             onPatchModelTags={c.patchModelTags}
             onPatchWorkflowIO={c.patchWorkflowIO}
+            onPatchParamMap={c.patchParamMap}
             onUse={c.handleUse}
             onEdit={c.handleEdit}
             onDelete={c.handleDeleteClick}
