@@ -44,27 +44,40 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 
 ### 1.1 端口统一配置（COMFYAPP_PORT）
 
-应用端口**不做硬编码**，统一由 `.env` 的 `COMFYAPP_PORT` 控制（默认 `3100`）。
-当端口与其他应用冲突时，改 `.env` 一处、重启应用即可，无需改代码。各层读取来源：
+应用端口**不做硬编码**，取值优先级（解析的唯一事实源：Node 侧
+`scripts/app-port.mjs` / PowerShell 侧 `scripts/app-port.ps1`）：
+
+1. `.env` 显式 `COMFYAPP_PORT`（每个检出各自的 `.env`；要固定端口、例如与
+   其他应用冲突时配置，改一处、重启应用即可）；
+2. **按检出路径稳定推导**——对检出绝对路径（反斜杠转正斜杠、转小写）的
+   UTF-8 字节取 FNV-1a 32 位哈希，映射到 3200~3999 区间内的固定端口；
+   同一检出恒定同端口，多份检出并行开发互不冲突（见 §1.4）；
+3. 兜底 `3100`：仅在路径推导不可用的异常情况，也是 `tauri.conf.json` 静态
+   `devUrl` 的编译期兜底值。
+
+各层读取来源：
 
 | 层                      | 读取方式                                                                                         |
 | ----------------------- | ------------------------------------------------------------------------------------------------ |
-| dev-launcher.ps1        | 启动时解析 `.env` 的 `COMFYAPP_PORT`，用于 `pnpm dev -p`、健康检查、端口清理、`COMFYAPP_DEV_URL` |
-| start_tauri_launcher.py | `_read_app_port()` 解析 `.env`，用于 `COMFYAPP_DEV_URL` 与 launch-status 的 `app_url`            |
-| Rust 壳（lib.rs）       | `default_dev_url()` 读 `COMFYAPP_PORT` 环境变量（fallback 时用）                                 |
-| tauri.conf.json         | `beforeDevCommand: node scripts/dev.mjs`，读 `.env` 端口后启动 next dev                          |
-| `pnpm dev` / `pnpm start` | 统一经 `scripts/dev.mjs` / `scripts/start.mjs` 读 `.env` 端口，再显式传 `-p` 给 next            |
-| 前端 tRPC               | `process.env.COMFYAPP_PORT ?? process.env.PORT ?? 3100`                                          |
+| dev-launcher.ps1        | `scripts/app-port.ps1` 的 `Get-AppPort`，用于 `pnpm dev -p`、健康检查、端口清理、`COMFYAPP_DEV_URL` |
+| start_tauri_launcher.py | `_read_app_port()`（.env 优先，缺省按检出路径推导），用于 `COMFYAPP_DEV_URL` 与 launch-status 的 `app_url` |
+| Rust 壳（lib.rs）       | `default_dev_url()` 读 `COMFYAPP_PORT` 环境变量；未注入时按 `single_instance::derive_app_port()` 推导 |
+| tauri.conf.json         | `beforeDevCommand: node scripts/dev.mjs`，经 `scripts/app-port.mjs` 解析端口后启动 next dev       |
+| `pnpm dev` / `pnpm start` | 统一经 `scripts/dev.mjs` / `scripts/start.mjs` → `scripts/app-port.mjs` 解析端口，再显式传 `-p` 给 next |
+| Playwright              | `playwright.config.ts` 经 `scripts/app-port.mjs` 解析，与 webServer/baseURL 同源                  |
+| 前端 tRPC               | `process.env.COMFYAPP_PORT ?? process.env.PORT ?? 3100`（服务端运行时 env 由启动链路注入）        |
+
+> **推导算法是跨语言约定**：Node / PowerShell / Python / Rust 四侧实现必须逐字节
+> 一致（FNV-1a-32），任一侧改动必须四处同步；`tests/app-port.test.ts` 与
+> `src-tauri/src/single_instance.rs` 的单测锁有相同校验向量。
 
 > **为什么 `pnpm start` 也要经脚本**：`next start` **不认 `COMFYAPP_PORT`**（只认 `PORT`）。
 > 默认端口由 3000 改成 3100 那次只改了 config 与文档，`pnpm start` 仍会回落到 Next 的
 > 默认 3000 —— 而 Playwright 的 `webServer.url` 与 `baseURL` 都按 3100 找服务，CI 的
 > E2E 因此长期起不来（`Timed out waiting 180000ms from config.webServer`，2026-09-12
-> 定位）。`scripts/start.mjs` 与 `dev.mjs` 对称：读 `.env` 端口 + `next start -p`，
+> 定位）。`scripts/start.mjs` 与 `dev.mjs` 对称：同一端口解析 + `next start -p`，
 > 保证「一处配置、dev 与 prod-start 两条链路一致」。
 
-> 取值合法性：1~65535；非法或缺失时统一回退 3100，并在启动日志中 WARN 提示。
->
 > **推荐经 `start-tauri.ps1` / `{{shell.exe.prebuilt}}`（launcher）启动**：launcher 会把
 > `COMFYAPP_DEV_URL` / `COMFYAPP_PORT` 注入壳进程，`tauri.conf.json` 的静态 `devUrl`
 > 仅作为兜底，不参与主导航。若绕过 launcher 直接 `pnpm tauri dev` 且改了端口，
@@ -177,6 +190,30 @@ true`——这类场景的策略反过来，必须给前台。
 打开主界面 / 退出），给「窗口只在任务栏、用户又切走了」提供一个稳定入口。
 关主窗仍然直接退出应用（不做「最小化到托盘」）——那需要另配重启 / 退出语义，
 不在本策略范围内。启用托盘需要 `tauri` 的 `tray-icon` feature（见 `Cargo.toml`）。
+
+### 1.4 多检出并行（同一项目检出多份同时开发）
+
+同一项目检出多份是开发期的常态，**各检出必须能同时运行、互不干扰**。为此
+启动链路做了三层按检出隔离：
+
+| 机制                 | 位置                                        | 行为                                                                                                                             |
+| -------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 端口按检出推导       | §1.1（`.env` 显式值优先）                   | 各检出各自稳定的端口；两份检出不再争抢同一端口                                                                                   |
+| 单实例按检出隔离     | python 启动器互斥量 / Rust 壳 `single_instance.rs` | 互斥量与焦点事件名带**检出路径哈希**：同检出二次启动 → 唤起已有窗口；不同检出 → 各自独立运行                                     |
+| 端口清理只动自己     | `dev-launcher.ps1` 的 `Stop-ProcessOnPort`  | 杀占用端口的进程前先核对其 exe 路径 / 命令行是否落在本检出根内；外部进程（别份检出 / 其它程序）**绝不清理**，端口被占则让启动失败并给明确提示 |
+
+历史行为（已废弃）：启动器互斥量与壳单实例用全局固定名，端口清理按端口号
+无差别击杀——表现为「启动第二份检出时，把第一份检出的 dev server / 壳杀掉，
+或自己被第一份检出吞掉」。
+
+> **窗口识别也按检出**：python 启动器查找/聚焦应用窗口时核对窗口进程的 exe
+> 路径落在本检出内（`_SHELL_OWN_PREFIX`），否则另一份检出的同名壳
+> （进程都叫 {{shell.app.exe}}、标题相同）会被误认成自己的实例。
+>
+> **注意**：两份检出共用外部服务（如 ComfyUI 默认端口）的行为不变——后启动
+> 的一方会探测到已运行的实例并复用；需要隔离时在各自设置里配不同端口。
+> WebView2 用户数据目录按应用标识共享（同一台机器上的两份检出同一身份），
+> localStorage 等按源隔离（端口不同即不同源），不互相污染。
 
 ## 2. 启动预检（dev-launcher.ps1，新增于 2026-09-02）
 

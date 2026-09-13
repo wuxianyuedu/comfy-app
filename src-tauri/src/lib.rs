@@ -10,8 +10,10 @@ use tauri::{Manager, Wry};
 
 // ── 官方 first-party 插件 ──
 use tauri_plugin_process;
-use tauri_plugin_single_instance as single_instance;
 use tauri_plugin_window_state::StateFlags as WindowStateFlags;
+
+// 按检出隔离的单实例保护与端口推导（launch-and-build.md §1.4 多检出并行）
+mod single_instance;
 
 // 生产模式 sidecar（Next standalone server）PID，应用退出时回收
 #[cfg(not(debug_assertions))]
@@ -81,10 +83,14 @@ impl AppState {
   }
 }
 
-/// 默认开发 URL：优先读 COMFYAPP_PORT 环境变量（默认 3100），
-/// 与 .env 的 COMFYAPP_PORT、启动器 -p 参数保持一致，避免端口冲突时壳仍跳 3100。
+/// 默认开发 URL：优先读 COMFYAPP_PORT 环境变量；未注入时按检出路径稳定推导
+/// （与 scripts/app-port.mjs 等多语言实现同算法，见 single_instance 模块注释
+/// 与 launch-and-build.md §1.1/§1.4）。
 fn default_dev_url(host: &str) -> String {
-  let port = std::env::var("COMFYAPP_PORT").unwrap_or_else(|_| "3100".to_string());
+  let port = match std::env::var("COMFYAPP_PORT") {
+    Ok(raw) if !raw.trim().is_empty() => raw.trim().to_string(),
+    _ => single_instance::derive_app_port().to_string(),
+  };
   format!("http://{}:{}/workspace", host, port)
 }
 
@@ -631,19 +637,10 @@ fn build_window_state_plugin() -> tauri::plugin::TauriPlugin<Wry> {
     .build()
 }
 
-/// 壳层单实例保护：launcher（CreateMutexW）只保护「双击启动」这一层；当
-/// app.exe 被直接拉起（standalone 双击、launcher 已退而壳还活着）时仍可能
-/// 叠加窗口。把单实例下沉到壳进程，二次实例由插件杀掉并在回调里把主窗口带到前台。
-fn build_single_instance_plugin() -> tauri::plugin::TauriPlugin<Wry> {
-  single_instance::init(|app, _args, _cwd| {
-    // 应用仍在启动期（splash 还开着、main 尚未交换）时不做前台抢占，
-    // 否则会把尚在 about:blank 的隐藏主窗顶出来，破坏启动页流程。
-    // 二次启动是用户显式意图，直接给前台（这不会「打断」——用户刚点了启动）。
-    if app.get_webview_window("splash").is_none() {
-      show_main_window_without_focus(app, true);
-    }
-  })
-}
+/// 壳层单实例保护已按检出隔离（src-tauri/src/single_instance.rs）：launcher
+/// （CreateMutexW）只保护「双击启动」这一层；当 app.exe 被直接拉起（standalone
+/// 双击、launcher 已退而壳还活着）时仍可能叠加窗口。把单实例下沉到壳进程，
+/// 二次实例在 run() 早期退出并通知首实例唤起主窗口。
 
 /// 托盘图标 id（应用退出时用同一 id 查回托盘对象）。
 const TRAY_ID: &str = "comfyapp-tray";
@@ -738,6 +735,12 @@ fn splash_window_size(app: &tauri::AppHandle) -> (f64, f64) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  // 按检出单实例（§1.4）：同一检出的壳已在跑时，向其发送「唤起前台」事件后
+  // 退出；不同检出的壳互不可见、各自独立运行。必须在建窗口之前判定。
+  if single_instance::another_instance_running() {
+    log::info!("[ComfyAPP] another instance of this checkout is running, focus requested and exiting");
+    return;
+  }
   let project_root = resolve_project_root();
   // 开发模式默认跳本地 Next.js dev server；可由 launcher 通过环境变量注入。
   // 生产模式在 spawn_sidecar 中更新为实际 sidecar 端口。
@@ -759,7 +762,6 @@ pub fn run() {
 
   let app = tauri::Builder::default()
     .plugin(build_window_state_plugin())
-    .plugin(build_single_instance_plugin())
     .plugin(log_plugin)
     // 应用自更新：设置页「检测更新 / 更新并重启」入口（见 app-update-client.ts）。
     // 更新源与签名公钥在 tauri.conf.json 的 plugins.updater 配置；无有效端点时
@@ -779,6 +781,10 @@ pub fn run() {
       should_activate_on_launch
     ])
     .setup(|app| {
+      // 按检出单实例：等待二次启动实例发来的「唤起前台」事件（见 run() 早期
+      // 判定与 single_instance 模块注释）。
+      single_instance::spawn_focus_waiter(app.handle().clone());
+
       // ── 方向 B：启动页与「应用」窗口分离 ──
       // 配置里的 splash 窗口（label="splash"）仅显示启动进度，可见。
       // 真正的应用窗口（label="main"）在此创建为隐藏窗口，先停在 about:blank，

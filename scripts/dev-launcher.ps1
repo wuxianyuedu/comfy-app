@@ -49,6 +49,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# 应用端口解析（.env 显式值 / 按检出路径推导），与启动链路各层同源（§1.1/§1.4）
+. (Join-Path $PSScriptRoot "app-port.ps1")
+
 # 以 CI 模式运行 pnpm，避免它在隐藏窗口里弹出「是否重新安装 node_modules」
 # 等交互式提示，导致 dev server 进程卡死、健康检查一直超时。
 $env:CI = "true"
@@ -211,7 +214,7 @@ function Write-LaunchStatus {
       elapsed    = $elapsed
       ready      = $false
       error      = [bool]$IsError
-      app_url    = "http://127.0.0.1:3100/workspace"
+      app_url    = "http://127.0.0.1:$(if ($script:appPort) { $script:appPort } else { 3100 })/workspace"
       stale_shell = $script:ShellStaleMsg
       pnpm_mismatch = $script:PnpmMismatchMsg
       updated_at = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss")
@@ -243,9 +246,9 @@ function Ensure-SplashResource {
 }
 
 # ── 启动前清理：按端口精准杀掉残留 dev server（不误伤其它 node 进程）──
-#     只杀真正占用 3100/3101/3102 的进程，不影响你后台跑的其它程序。
 # ── 读取 .env 中的端口配置 ──
-# 端口统一由 .env 的 COMFYAPP_PORT 控制（默认 3100），避免与其他应用端口冲突。
+# 端口取值：.env 显式 COMFYAPP_PORT 优先；缺省按检出路径稳定推导（多份检出
+# 并行开发互不冲突，见 §1.4）；要固定端口（如与其他应用冲突）写进 .env 即可。
 # 逐行解析 KEY= 且兼容带双引号的值；该函数供启动链路各脚本复用。
 function Get-DotEnvValue($path, $key) {
   if (-not (Test-Path $path)) { return $null }
@@ -264,18 +267,33 @@ function Stop-ProcessOnPort($port) {
     $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     if (-not $conns) { return }
     $ids = @($conns.OwningProcess) | Sort-Object -Unique
+    $rootNorm = $root.ToLowerInvariant()
     foreach ($id in $ids) {
       try {
         $proc = Get-Process -Id $id -ErrorAction SilentlyContinue
-        if ($proc) {
-          Write-Log ("端口 {0} 被 PID {1} ({2}) 占用，正在终止..." -f $port, $id, $proc.ProcessName) -Level WARN
-          # 先尝试优雅退出，再强制
-          $proc.CloseMainWindow() | Out-Null
-          Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
+        if (-not $proc) { continue }
+        # 多检出并行保护（§1.4）：只回收属于**本检出**的进程（可执行文件路径
+        # 或命令行落在本检出根内）。其它检出的 dev server / 用户自己的程序占着
+        # 端口时绝不能动——本检出的 server 会因端口占用启动失败，由失败路径
+        # 给出明确提示，而不是把别人的实例杀掉。
+        $own = $false
+        try {
+          $ci = Get-CimInstance Win32_Process -Filter "ProcessId=$id" -ErrorAction Stop
+          $exePath = "$($ci.ExecutablePath)".ToLowerInvariant()
+          $cmdline = "$($ci.CommandLine)".ToLowerInvariant()
+          if ($exePath.StartsWith($rootNorm) -or $cmdline.Contains($rootNorm)) { $own = $true }
+        } catch { }
+        if (-not $own) {
+          Write-Log ("端口 {0} 被 PID {1} ({2}) 占用，但不是本检出的进程（多检出并行保护），跳过清理。" -f $port, $id, $proc.ProcessName) -Level WARN
+          continue
         }
+        Write-Log ("端口 {0} 被 PID {1} ({2}) 占用，正在终止..." -f $port, $id, $proc.ProcessName) -Level WARN
+        # 先尝试优雅退出，再强制
+        $proc.CloseMainWindow() | Out-Null
+        Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
       } catch { }
     }
-    # 等端口真正释放，避免 next 启动时又抢到 3101（缩短到 200ms，降低启动等待）
+    # 等端口真正释放，避免 next 启动时又抢到 +1（缩短到 200ms，降低启动等待）
     Start-Sleep -Milliseconds 200
   } catch { }
 }
@@ -879,19 +897,21 @@ try {
     throw "缺少 .env：请先双击 tools\start\run-local.ps1（或执行 scripts\prepare-local-run.ps1）完成本地初始化后再启动。"
   }
 
-  # ── 端口统一配置：读取 .env 的 COMFYAPP_PORT（默认 3100） ──
-  # 端口冲突时改 .env 一处即可（如 COMFYAPP_PORT="3200"），本脚本与 Tauri 壳、
-  # 前端 tRPC 客户端会一致读取该端口；下一次启动即生效。
+  # ── 端口统一配置：.env 显式 COMFYAPP_PORT 优先，缺省按检出路径稳定推导 ──
+  # 多份检出并行开发时各得其所（§1.4）；端口冲突时改 .env 一处即可，下一次
+  # 启动生效。本脚本与 Tauri 壳、dev/start 脚本一致读取该端口。
   $portRaw = Get-DotEnvValue -Path (Join-Path $root ".env") -Key "COMFYAPP_PORT"
-  if (-not $portRaw) { $portRaw = "3100" }
   $parsedPort = 0
-  if (-not [int]::TryParse($portRaw, [ref]$parsedPort) -or $parsedPort -lt 1 -or $parsedPort -gt 65535) {
-    Write-Log "COMFYAPP_PORT 的值不合法，已回退到默认端口 3100。" -Level WARN
-    $script:appPort = 3100
-  } else {
+  if ($portRaw -and [int]::TryParse($portRaw, [ref]$parsedPort) -and $parsedPort -ge 1 -and $parsedPort -le 65535) {
     $script:appPort = $parsedPort
+    Write-Log ("使用端口 {0}（来自 .env 的 COMFYAPP_PORT）" -f $script:appPort) -Level INFO
+  } else {
+    if ($portRaw) {
+      Write-Log "COMFYAPP_PORT 的值不合法，改按检出路径推导端口。" -Level WARN
+    }
+    $script:appPort = Get-AppPort $root
+    Write-Log ("使用端口 {0}（按检出路径推导；要固定端口在 .env 写 COMFYAPP_PORT）" -f $script:appPort) -Level INFO
   }
-  Write-Log ("使用端口 {0}（来自 .env 的 COMFYAPP_PORT）" -f $script:appPort) -Level INFO
 
   if ($Prebuilt) {
     # 2026-09-01 优化：双击后的第一件事就是拉起预编译壳，让用户立刻看到窗口。
