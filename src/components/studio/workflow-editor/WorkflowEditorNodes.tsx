@@ -10,6 +10,7 @@ import { WorkflowEdge } from "@/components/studio/canvas/WorkflowEdge";
 import { FlowNode } from "../canvas/WorkflowNode";
 import { WorkflowSubgraphNode } from "../canvas/WorkflowSubgraphNode";
 import { WorkflowParamNode } from "./WorkflowParamNode";
+import { WorkflowOutputParamNode } from "./WorkflowOutputParamNode";
 import type { WorkflowGroupData, WorkflowIoPortData, WorkflowNoteData } from "../workflow-types";
 import { NODE_TITLE_H, lightenHex, hexToRgba, mixHex } from "../workflow-utils";
 
@@ -302,7 +303,7 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: {
  *  + 「对外参数节点」。后者是**接线面板**：它不来自图上任何一个节点，而是作者
  *  勾选暴露出来的对外口，端点拖到宿主节点端口上即完成「这个参数落到哪一行」的
  *  连线（映射就是这条线，见 workflow-param-edges）。 */
-export const workflowNodeTypes = { wfNode: FlowNode, wfNote: WorkflowNoteNode, wfGroup: WorkflowGroupNode, wfSubgraph: WorkflowSubgraphNode, wfIoPort: WorkflowIoPortNode, wfParam: WorkflowParamNode };
+export const workflowNodeTypes = { wfNode: FlowNode, wfNote: WorkflowNoteNode, wfGroup: WorkflowGroupNode, wfSubgraph: WorkflowSubgraphNode, wfIoPort: WorkflowIoPortNode, wfParam: WorkflowParamNode, wfOutput: WorkflowOutputParamNode };
 // Custom edge renderer — rounder bezier (curvature 0.85) + ComfyUI-style
 // white hub dot at the curve midpoint.  Defined at module scope so React
 // Flow doesn't re-register edgeTypes on every render.

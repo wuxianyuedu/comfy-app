@@ -170,3 +170,12 @@ export const WIRE_PINS_ATTR = "data-io-pins";
 export function wirePinsValue(ioKeys: readonly (string | undefined)[]): string {
   return ioKeys.filter((key): key is string => Boolean(key)).join(",");
 }
+
+/** 落点锚点自己声明的 IO 方向（值 = `"input"` / `"output"`）。
+ *
+ *  连线层要判「这个落点能不能接这一端」：输入的落点是参数行（`input`），输出的
+ *  落点是工作流的输出行（`output`）—— 拖输出卡片的圆点只能落在输出行上。判据取
+ *  行自带的属性，与 IO 表同源，连线层不必持有 workflowIO。
+ *
+ *  缺省（老视图没写）按输入处理：库里两列中只有输出行会写这个属性。 */
+export const WIRE_DIRECTION_ATTR = "data-io-direction";
