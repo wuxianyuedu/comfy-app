@@ -74,6 +74,9 @@ export interface WorkflowParamCardColumnProps {
   /** 该对外参数在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
   isManual?: (entryId: string) => boolean;
   onReset?: (entryId: string) => void;
+  /** 宿主卡片此刻真的画得出来的端口（ioKey 集合）—— 候选圆点按它收窄：
+   *  画不出端点的端口不给拖，拖过去也落不上。缺省 = 不收窄。 */
+  reachableKeys?: ReadonlySet<string>;
 }
 
 export function WorkflowParamCardColumn({
@@ -85,6 +88,7 @@ export function WorkflowParamCardColumn({
   onSelect,
   isManual,
   onReset,
+  reachableKeys,
 }: WorkflowParamCardColumnProps) {
   if (entries.length === 0) return null;
 
@@ -122,7 +126,12 @@ export function WorkflowParamCardColumn({
             onReset={canWire ? () => onReset?.(entry.id) : undefined}
             /* 带类型的输出端口：与编辑器同一份派生（类型跟着落点走），库里也
              * 读得到「提示词 → STRING」。 */
-            outputPorts={paramOutputPorts(entry, io, resolved[entry.id])}
+            outputPorts={paramOutputPorts(
+              entry,
+              io,
+              resolved[entry.id],
+              reachableKeys,
+            )}
             /* 右侧小圆点端点：与项目画布节点上的端口同款视觉，圆点画在输出
              * 端口那一行的右沿（`data-wire-anchor` 供连线层量出锚点）。只读
              * 卡片不给它连线能力 —— 画面上的线由 WorkflowParamWires 叠一层。 */
@@ -146,7 +155,9 @@ export function WorkflowParamCardColumn({
                  * 含 `::` 的端口键不做选择器转义（见 WorkflowParamWires）。 */
                 data-wire-anchor={wireAnchorValue(entry.id, port.handleId)}
                 title={
-                  canWire ? `拖到工作流参数行上改「${entry.label}」的落点` : undefined
+                  canWire
+                    ? `拖到工作流参数行上改「${entry.label}」的落点`
+                    : undefined
                 }
                 className={`absolute top-1/2 shrink-0 rounded-full ${
                   canWire ? "cursor-crosshair" : ""

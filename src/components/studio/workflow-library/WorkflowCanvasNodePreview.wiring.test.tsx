@@ -255,3 +255,117 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
     expect(dot.getAttribute("title")).toBeNull();
   });
 });
+
+/* ── 画布视口（可拖动 / 缩放）与尺寸三项的候选收窄 —— ISSUE #355 ── */
+
+describe("画布视口", () => {
+  it("拖动空白处平移内容层，位移超过阈值才动画面", async () => {
+    const { container } = renderPreview({});
+    const surface = container.querySelector<HTMLElement>(
+      '[data-testid="wflib-canvas-pan-surface"]',
+    )!;
+    const content = container.querySelector<HTMLElement>(
+      '[data-testid="wflib-canvas-content"]',
+    )!;
+    expect(content.style.transform).toContain("translate3d(0px, 0px, 0)");
+
+    /* 小于阈值（4px）的位移按「点一下」处理：点卡片选中不会被手抖变成位移。 */
+    await act(async () => {
+      surface.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 100 }),
+      );
+    });
+    await act(async () => {
+      window.dispatchEvent(
+        new PointerEvent("pointermove", { bubbles: true, clientX: 102, clientY: 100 }),
+      );
+    });
+    expect(content.style.transform).toContain("translate3d(0px, 0px, 0)");
+
+    /* 越过阈值之后内容跟着手走。 */
+    await act(async () => {
+      window.dispatchEvent(
+        new PointerEvent("pointermove", { bubbles: true, clientX: 160, clientY: 130 }),
+      );
+    });
+    expect(content.style.transform).toContain("translate3d(60px, 30px, 0)");
+    await act(async () => {
+      window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    });
+  });
+
+  it("从输入框 / 圆点上按下不启动平移（它们各自的手势优先）", async () => {
+    const { container } = renderPreview({});
+    const content = container.querySelector<HTMLElement>(
+      '[data-testid="wflib-canvas-content"]',
+    )!;
+    const input = container.querySelector<HTMLElement>("input")!;
+    await act(async () => {
+      input.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 100 }),
+      );
+    });
+    await act(async () => {
+      window.dispatchEvent(
+        new PointerEvent("pointermove", { bubbles: true, clientX: 200, clientY: 100 }),
+      );
+    });
+    expect(content.style.transform).toContain("translate3d(0px, 0px, 0)");
+    await act(async () => {
+      window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    });
+  });
+
+  it("滚轮围绕光标缩放，「复位」回到初始视口", async () => {
+    const { container } = renderPreview({});
+    const viewport = container.querySelector<HTMLElement>(
+      '[data-testid="wflib-canvas-viewport"]',
+    )!;
+    const content = container.querySelector<HTMLElement>(
+      '[data-testid="wflib-canvas-content"]',
+    )!;
+    viewport.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width: 400,
+        height: 300,
+        right: 400,
+        bottom: 300,
+      }) as DOMRect;
+    await act(async () => {
+      viewport.dispatchEvent(
+        new WheelEvent("wheel", {
+          bubbles: true,
+          cancelable: true,
+          deltaY: -100,
+          clientX: 100,
+          clientY: 80,
+        }),
+      );
+    });
+    expect(content.style.transform).not.toContain("scale(1)");
+    expect(screen.getByTestId("wflib-canvas-zoom").textContent).not.toBe(
+      "100%",
+    );
+    await act(async () => {
+      screen.getByTestId("wflib-canvas-reset").click();
+    });
+    expect(content.style.transform).toContain("scale(1)");
+    expect(
+      screen.getByTestId("wflib-canvas-reset").hasAttribute("disabled"),
+    ).toBe(true);
+  });
+});
+
+describe("尺寸三项各自可取外部值", () => {
+  it("每项各有一颗圆点，且候选收窄到宿主卡片真的画出来的行", () => {
+    const { container } = renderPreview({});
+    for (const handle of ["aspect_ratio", "megapixels", "multiple"]) {
+      expect(
+        container.querySelector(`[data-wire-anchor="size?${handle}"]`),
+        `尺寸的 ${handle} 应各有一颗出口圆点`,
+      ).toBeTruthy();
+    }
+  });
+});
