@@ -13,6 +13,7 @@ import {
   extractBase64DataUrl,
   extractMediaUrl,
   extractRemoteTaskId,
+  resolveImagesGenerationsEndpoint,
   type ApiChannelKind,
   type ApiChannelStored,
   type ApiChannelsView,
@@ -133,7 +134,7 @@ export async function generateImageViaApi(req: ApiImageRequest): Promise<string>
       const entry = entries.find((r) => r.name === wantedModel && r.baseUrl);
       if (entry) {
         upstream = {
-          endpoint: `${(entry.baseUrl ?? "").replace(/\/+$/, "")}/images/generations`,
+          endpoint: resolveImagesGenerationsEndpoint(entry.baseUrl ?? ""),
           apiKey: entry.apiKey ?? "",
           model: entry.name,
         };
