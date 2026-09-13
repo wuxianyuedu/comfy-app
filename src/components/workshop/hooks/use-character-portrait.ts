@@ -23,6 +23,7 @@ import {
   importPortraitFile,
   type PortraitRequest,
 } from "~/lib/workshop/character-portrait-client";
+import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { Character, CharacterPortrait } from "~/lib/workshop/types";
 import {
   DEFAULT_SHOT_SIZE,
@@ -42,6 +43,8 @@ export interface PortraitSession {
   /** 是否正在导入图片 */
   importing: boolean;
   channel: PortraitChannel;
+  /** 远端通道使用的模型名（设置页「远端模型」kind=image 的条目；空串 = 未选） */
+  remoteModel: string;
   /** 定妆照尺寸（复用镜头生图的比例 / 像素 / 对齐三段选择） */
   size: ShotSizeState;
   /** 本机任务的完成度 0~100；远端为一次性请求，不提供进度 */
@@ -55,10 +58,16 @@ export interface PortraitSession {
 
 export interface PortraitSessionActions {
   /** 更新用户选择（通道 / 尺寸） */
-  patch: (p: Partial<Pick<PortraitSession, "channel" | "size">>) => void;
+  patch: (
+    p: Partial<Pick<PortraitSession, "channel" | "size" | "remoteModel">>,
+  ) => void;
   appendLog: (entry: PortraitLogEntry) => void;
-  /** 按角色提示词生成一张定妆照，结果作为新候选并入该角色 */
-  generate: (character: Character) => Promise<void>;
+  /** 按角色提示词生成一张定妆照，结果作为新候选并入该角色。
+   *  overrides.remoteModel：本次使用的设置页「远端模型」名（远端通道）。 */
+  generate: (
+    character: Character,
+    overrides?: { remoteModel?: string },
+  ) => Promise<void>;
   /** 外部导入一张现成定妆照（写进素材库「角色」分类） */
   importFile: (character: Character, file: File) => Promise<void>;
   /** 把候选里的一张定为定妆照（后续分镜图的参考图） */
@@ -73,6 +82,7 @@ function initialSession(): PortraitSession {
     busy: false,
     importing: false,
     channel: "local",
+    remoteModel: "",
     size: DEFAULT_SHOT_SIZE,
     progress: 0,
     modelLabel: "",
@@ -93,14 +103,19 @@ export function useCharacterPortrait(opts: {
   const [session, setSession] = React.useState<PortraitSession>(initialSession);
 
   const patch = React.useCallback(
-    (p: Partial<Pick<PortraitSession, "channel" | "size">>) =>
+    (p: Partial<Pick<PortraitSession, "channel" | "size" | "remoteModel">>) =>
       setSession((prev) => ({ ...prev, ...p })),
     [],
   );
 
   const appendLog = React.useCallback(
-    (entry: PortraitLogEntry) =>
-      setSession((prev) => ({ ...prev, log: appendPortraitLog(prev.log, entry) })),
+    (entry: PortraitLogEntry) => {
+      setSession((prev) => ({ ...prev, log: appendPortraitLog(prev.log, entry) }));
+      // 生成日志异步落一份到 log/workshop/（fire-and-forget，失败不影响生成）
+      persistGenerationLogs("portrait", [
+        { ts: entry.ts, kind: entry.level, summary: entry.text },
+      ]);
+    },
     [],
   );
 
@@ -139,7 +154,7 @@ export function useCharacterPortrait(opts: {
   );
 
   const generate = React.useCallback(
-    async (character: Character) => {
+    async (character: Character, overrides?: { remoteModel?: string }) => {
       if (session.busy) return;
       const prompt = character.positivePrompt.trim();
       if (!prompt) {
@@ -161,7 +176,13 @@ export function useCharacterPortrait(opts: {
       }
       const size = shotSizeToParam(session.size);
       const label = character.name || "该角色";
-      const modelLabel = channel === "local" ? `本地 · ${checkpoint}` : "远端 API";
+      const remoteModel = (overrides?.remoteModel ?? session.remoteModel).trim();
+      const modelLabel =
+        channel === "local"
+          ? `本地 · ${checkpoint}`
+          : remoteModel
+            ? `远端 API · ${remoteModel}`
+            : "远端 API";
       setSession((prev) => ({
         ...prev,
         busy: true,
@@ -217,37 +238,35 @@ export function useCharacterPortrait(opts: {
             ...prev,
             progress: 100,
             status: `已生成一张定妆照（${modelLabel}），可在下方候选里挑选`,
-            log: appendPortraitLog(
-              prev.log,
-              makePortraitLog("success", `定妆照生成完成（任务 ${taskId.slice(0, 12)}…）`),
-            ),
           }));
+          appendLog(
+            makePortraitLog("success", `定妆照生成完成（任务 ${taskId.slice(0, 12)}…）`),
+          );
         } else {
-          const url = await generateRemotePortrait(req, {
-            projectId,
-            name: `${label}-定妆照-${Date.now()}`,
-          });
+          const url = await generateRemotePortrait(
+            req,
+            {
+              projectId,
+              name: `${label}-定妆照-${Date.now()}`,
+              ...(remoteModel ? { model: remoteModel } : {}),
+            },
+          );
           addCandidate(character.id, {
             url,
             source: "remote",
+            ...(remoteModel ? { model: remoteModel } : {}),
             createdAt: Date.now(),
           });
           setSession((prev) => ({
             ...prev,
             status: `已生成一张定妆照（${modelLabel}），可在下方候选里挑选`,
-            log: appendPortraitLog(
-              prev.log,
-              makePortraitLog("success", "远端 API 返回图片完成"),
-            ),
           }));
+          appendLog(makePortraitLog("success", "远端 API 返回图片完成"));
         }
       } catch (e: unknown) {
         const message = errorMessage(e, "定妆照生成失败");
-        setSession((prev) => ({
-          ...prev,
-          error: message,
-          log: appendPortraitLog(prev.log, makePortraitLog("error", message)),
-        }));
+        setSession((prev) => ({ ...prev, error: message }));
+        appendLog(makePortraitLog("error", message));
       } finally {
         // focusCharacterId 保留：让发起本次生成的角色卡继续展示状态与日志。
         setSession((prev) => ({ ...prev, busy: false }));
@@ -257,6 +276,7 @@ export function useCharacterPortrait(opts: {
       session.busy,
       session.channel,
       session.size,
+      session.remoteModel,
       checkpoint,
       projectId,
       addCandidate,

@@ -125,7 +125,7 @@ export function useStoryboardPlanner(props: Props) {
   // 并经 props.extract 注入：展示读 session，写入走 actions。controller 跨阶段页签
   // 常驻，提取中切页签再切回状态不丢，无需模块级缓存。遗留/独立使用(未注入)时
   // 退化为本 hook 局部会话。
-  const localExtract = useExtractSession("tool");
+  const localExtract = useExtractSession("tool", "storyboard");
   const { session: extractSession, actions: extractActions } = extract ?? {
     session: localExtract[0],
     actions: localExtract[1],

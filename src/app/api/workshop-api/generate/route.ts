@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
   }
 
   const kind: unknown = body.kind;
+  const model = strField(body, "model");
   const prompt = strField(body, "prompt") ?? "";
   const negative = strField(body, "negative");
   const size = strField(body, "size");
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
       if (!prompt) {
         return NextResponse.json({ error: "prompt 不能为空" }, { status: 400 });
       }
-      const url = await generateImageViaApi({ prompt, negative, size });
+      const url = await generateImageViaApi({ prompt, negative, size, model });
       return NextResponse.json({ url });
     }
 

@@ -7,6 +7,8 @@ import "server-only";
 import { promises as fs, readFileSync } from "fs";
 import path from "path";
 
+import { remoteModelRepository } from "@/lib/core/repository";
+
 import {
   extractBase64DataUrl,
   extractMediaUrl,
@@ -112,21 +114,54 @@ export interface ApiImageRequest {
   prompt: string;
   negative?: string;
   size?: string;
+  /** 设置页「远端模型」的名字：按 remoteModel 表条目的连接参数直连生图 */
+  model?: string;
 }
 
 /** Call an OpenAI-compatible images/generations endpoint; returns a usable URL
  *  (remote or inline data URL for b64 payloads). */
 export async function generateImageViaApi(req: ApiImageRequest): Promise<string> {
   const c = getWorkshopApiSettingsSync().image;
-  if (!c.baseUrl) throw new Error("API 生图通道未配置：请先填写 Base URL 与 API Key");
+  // 设置页「远端模型」优先：按名字取 remoteModel 表条目的连接参数直连生图，
+  // 用户不必再在工坊 API 通道里重复配置一份。未指定名字 / 查无条目时回落到
+  // 工坊 API 通道设置（旧行为，两边都不配才报「未配置」）。
+  let upstream: { endpoint: string; apiKey: string; model: string } | null = null;
+  const wantedModel = (req.model ?? "").trim();
+  if (wantedModel) {
+    try {
+      const entries = await remoteModelRepository.list();
+      const entry = entries.find((r) => r.name === wantedModel && r.baseUrl);
+      if (entry) {
+        upstream = {
+          endpoint: `${(entry.baseUrl ?? "").replace(/\/+$/, "")}/images/generations`,
+          apiKey: entry.apiKey ?? "",
+          model: entry.name,
+        };
+      }
+    } catch {
+      // 表不可用（未迁移等）→ 回落通道设置
+    }
+  }
+  const legacy = upstream ?? {
+    endpoint: endpoint(c),
+    apiKey: c.apiKey,
+    model: c.model,
+  };
+  if (!legacy.endpoint || legacy.endpoint === "/images/generations") {
+    throw new Error(
+      "远端 API 生图通道未配置 —— 可在设置页「远端模型」里添加生图模型（kind=图片），或打开 API 通道设置填写 Base URL 与 API Key",
+    );
+  }
   let res: Response;
   try {
-    res = await fetch(endpoint(c), {
+    res = await fetch(legacy.endpoint, {
       method: "POST",
-      headers: headersFor(c),
+      headers: legacy.apiKey
+        ? { "Content-Type": "application/json", Authorization: `Bearer ${legacy.apiKey}` }
+        : { "Content-Type": "application/json" },
       body: JSON.stringify({
         // 空串显式归一为 undefined(省略字段);不用 ?? —— ?? 会把 "" 原样送进 payload
-        model: c.model === "" ? undefined : c.model,
+        model: legacy.model === "" ? undefined : legacy.model,
         prompt: req.prompt,
         negative_prompt: req.negative === "" ? undefined : req.negative,
         size: req.size === "" ? undefined : req.size,
