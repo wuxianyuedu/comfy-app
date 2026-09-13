@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-/* 组合卡收窄之后，映射连线的几何仍然落在正确的位置 —— ISSUE #355
+/* 组合控件的映射连线几何 —— ISSUE #355
  *
- * 「组合卡回来」这件事会动布局：卡片列里多了一块 3 行的卡，宿主卡片里组合卡
- * 与逐行参数上下相邻。线两端都靠**量**（不是固定坐标），因此只要锚点还在、
- * 量出来的就还是对的 —— 这条测试就是钉住这一点：组合卡存在时，线仍从卡片
- * 圆点出发、收在**逐行参数的端点圆心**上，而不是收到上面那块组合卡上。
+ * 画布 / 库内的组合控件不再摊成逐行参数：它是**一整块**（比例 / 像素 / 倍数由
+ * 同一个下拉录入），所以覆盖到的端口在这块控件上共用一个落点锚点，映射线收在
+ * 整块控件的矩形上（不是某一行的端点圆点 —— 那些行已经不存在了）。
+ *
+ * 线两端都靠**量**（不是固定坐标），因此锚点在、量出来的就是对的。这条测试钉住
+ * 这一点：线从卡片圆点出发，收在组合控件那一格的边界上。
  *
  * jsdom 不做布局，所以 rect 全部打桩；这里验证的是「量哪两个元素」，不是像素。 */
 
@@ -72,7 +74,7 @@ function rect(
 }
 
 describe("组合卡回来之后的连线几何", () => {
-  it("线从卡片圆点出发，收在逐行参数的端点圆点上（不是上方那块组合卡）", async () => {
+  it("线从卡片圆点出发，收在组合控件那一格的左沿（整块是同一格落点）", async () => {
     const widgets = Object.entries(io).map(([ioKey, entry]) => ({
       ...entry,
       ioKey,
@@ -101,8 +103,6 @@ describe("组合卡回来之后的连线几何", () => {
           onChange={() => undefined}
           compact
           collapseGrouped
-          io={io}
-          allPins={widgets}
         />
         <WorkflowParamWires
           wires={[
@@ -123,12 +123,10 @@ describe("组合卡回来之后的连线几何", () => {
     /* 卡片那颗圆点（起点）。 */
     const dot = root.querySelector('[data-wire-anchor="size?megapixels"]')!;
     rect(dot, { left: 200, top: 60, width: 12, height: 12 });
-    /* 宿主那一行的端点圆点（终点）—— 它才是「这个口落到哪一行」的事实。 */
-    const portDot = root.querySelector('[data-port-dot="5::widget::megapixels"]')!;
-    rect(portDot, { left: 494, top: 122, width: 12, height: 12 });
-    /* 组合卡整块与那一行**都**在（线不该量到组合卡上）。 */
-    const groupedCard = root.querySelector('[data-testid="grouped-card"]')!;
-    rect(groupedCard, { left: 300, top: 20, width: 180, height: 70 });
+    /* 组合控件那一格（终点）：比例/像素/倍数由同一块控件录入，映射线落在这块
+     *  控件上 —— 量的是它的矩形，线收在它左沿中线。 */
+    const anchor = root.querySelector("[data-io-pins]")!;
+    rect(anchor, { left: 494, top: 100, width: 180, height: 70 });
 
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -138,9 +136,8 @@ describe("组合卡回来之后的连线几何", () => {
       .querySelector('[data-testid="wflib-param-wire-size"]')!
       .getAttribute("d")!;
     /* 起点 = 圆点外缘 (200 + 12 + 6, 66) = (218, 66)；
-       终点 = 端点圆点圆心 (494 + 6, 122 + 6) = (500, 128)。
-       组合卡（top 20..90）的底边不会成为终点 —— 线收在行上。 */
+       终点 = 组合控件左沿中线 (494, 100 + 70 / 2) = (494, 135)。 */
     expect(path.startsWith("M 218 66")).toBe(true);
-    expect(path.endsWith("500 128")).toBe(true);
+    expect(path.endsWith("494 135")).toBe(true);
   });
 });

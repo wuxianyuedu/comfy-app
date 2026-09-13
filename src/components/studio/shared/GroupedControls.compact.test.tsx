@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
-/* 画布 / 库内收窄后的组合参数卡 —— ISSUE #355 复审
+/* 画布 / 库内的组合参数控件 —— ISSUE #355 复审
  *
- * 用户三条要求在这里同时成立：
- *   ① 「组合控件要显示出来」—— 那块卡还在（不是被整块换成逐行列表）；
- *   ② 「组合控件的宽度缩小……不要显示可编辑参数值部分，就只要这三项
- *      · 宽高比 COMBO / · 百万像素 COMBO / · 倍数 INT」—— 卡内逐行只报
- *      名称 + 类型，值由下面的逐行参数各自录入（同一件事不说两遍）；
- *   ③ 「需要将这几个参数的输入端口显示出来」—— 每个端口在下面各占一行、
- *      各有可连的输入端点与落点锚点。
+ * 用户在画布节点上要的是**原来那块带下拉的组合控件**，不是摊成逐行参数的清单：
+ *   · 「组合参数不要现在这种样式」「改回之前的样式」「改成之前带有下拉菜单的
+ *     样式」—— 控件本体照旧画出来（`MultiSegmentPopover` 那一下拉）；
+ *   · 「让你减小宽度的也是这个控件」—— 收窄的是**它**，不是把它换掉；
+ *   · 红框里那三段（宽高比下拉 / 百万像素步进器 / 倍数步进器）不再摊成独立
+ *     参数行。
  *
- * 宽版表单（`collapseGrouped={false}`）保留完整录入能力，本文件不涉及。
+ * 因此本文件的断言是：紧凑版式里控件**在**（带下拉触发器）、宽度**按内容收窄**、
+ * 且不再出现「逐行参数清单」那种形态。
+ *
+ * 宽版表单（`collapseGrouped={false}`）保留整块录入，本文件不涉及。
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -70,68 +72,52 @@ function renderCompact() {
       onChange={() => undefined}
       compact
       collapseGrouped
-      io={io}
-      allPins={widgets()}
     />,
   );
   return container;
 }
 
-describe("画布 / 库内的组合参数卡", () => {
-  it("组合卡仍然画出来，且带落点锚点（线量得到这一格）", () => {
+describe("画布 / 库内的组合参数控件", () => {
+  it("组合控件照旧画出来（带下拉菜单），并带落点锚点", () => {
+    /* 用户口径：「改回之前的样式」「改成之前带有下拉菜单的样式」—— 控件本体
+     *  必须还在，且是那块带下拉的控件（触发器 + 下拉面板）。 */
     const column = renderCompact();
-    const card = column.querySelector('[data-testid="grouped-card"]');
-    expect(card).toBeTruthy();
-    expect(card!.getAttribute(WIRE_PINS_ATTR)).toBe(
+    expect(column.querySelector('[aria-label="选择比例、像素与倍数"]')).toBeTruthy();
+    expect(column.querySelector('[aria-haspopup="listbox"]')).toBeTruthy();
+    expect(column.querySelector(`[${WIRE_PINS_ATTR}]`)).toBeTruthy();
+  });
+
+  it("落点锚点覆盖该控件录入的全部端口（线量得到这一格）", () => {
+    const column = renderCompact();
+    const anchor = column.querySelector(`[${WIRE_PINS_ATTR}]`)!;
+    expect(anchor.getAttribute(WIRE_PINS_ATTR)).toBe(
       "5::widget::aspect_ratio,5::widget::megapixels,5::widget::multiple",
     );
   });
 
-  it("卡内三项各一行，只报「名称 + 类型」", () => {
-    /* 用户给的就是这个形状：「· 宽高比 COMBO / · 百万像素 COMBO / · 倍数 INT」。 */
+  it("不再摊成逐行参数清单（红框那三段不再各占一行）", () => {
+    /* 上一轮把这三个端口摊成了独立参数行 + 一张只报名称/类型的展示卡，用户指着
+     *  那份清单说「不要现在这种样式」。现在这三行都不该在。 */
     const column = renderCompact();
-    const items = [...column.querySelectorAll("[data-grouped-item]")];
-    expect(items.map((item) => item.getAttribute("data-grouped-item"))).toEqual([
-      "5::widget::aspect_ratio",
-      "5::widget::megapixels",
-      "5::widget::multiple",
-    ]);
-    expect(items[0]!.textContent).toBe("·宽高比COMBO");
-    expect(items[1]!.textContent).toBe("·百万像素FLOAT");
-    expect(items[2]!.textContent).toBe("·倍数INT");
-  });
-
-  it("卡里不再出现可编辑的控件（值只在逐行参数上出现一次）", () => {
-    /* 卡内若还摊一份可编辑控件，同一件事就有两处录入入口，用户圈出来的「占满
-     *  空间」也正是那块控件造成的。 */
-    const column = renderCompact();
-    const card = column.querySelector('[data-testid="grouped-card"]')!;
-    expect(card.querySelector("input")).toBeNull();
-    expect(card.querySelector("button")).toBeNull();
-  });
-
-  it("每个端口在下面各占一行、各有可连端点与落点锚点", () => {
-    /* 「需要将这几个参数的输入端口显示出来」：折叠成逐行参数之后，每一行都是
-     *  一个可连的落点（`data-port-dot` 是端点，`data-io-pins` 是落点锚点）。 */
-    const column = renderCompact();
+    expect(column.querySelector('[data-testid="grouped-collapsed-rows"]')).toBeNull();
+    expect(column.querySelector('[data-testid="grouped-card"]')).toBeNull();
     for (const ioKey of Object.keys(io)) {
       expect(
-        column.querySelector(`[data-port-dot="${ioKey}"]`),
-        `${ioKey} 的输入端点应露出来`,
-      ).toBeTruthy();
-      expect(
-        column.querySelector(`[data-io-pins="${ioKey}"]`),
-        `${ioKey} 的落点锚点应露出来`,
-      ).toBeTruthy();
+        column.querySelector(`[data-io-key="${ioKey}"]`),
+        `${ioKey} 不该再摊成独立参数行`,
+      ).toBeNull();
     }
   });
 
-  it("组合卡按内容收窄，不占满整行", () => {
-    /* 「组合控件的宽度缩小，现在占满了空间」：`w-fit` + 上限，宽度跟随内容。 */
+  it("控件按内容收窄，不占满整行", () => {
+    /* 「组合控件的宽度缩小，现在占满了空间」：`w-fit` + 上限，宽度跟随内容；
+     *  下拉触发器另给一档固定宽度，不再拽满整行。 */
     const column = renderCompact();
-    const card = column.querySelector('[data-testid="grouped-card"]')!;
-    /* `w-fit` 让宽度跟随内容；上限只是护栏（长名字不撑破卡片列）。 */
-    expect(card.className).toContain("w-fit");
-    expect(card.className).toContain("max-w-full");
+    const card = column.querySelector(".w-fit");
+    expect(card).toBeTruthy();
+    expect(card!.className).toContain("max-w-full");
+    const triggerBox = column.querySelector('[aria-label="选择比例、像素与倍数"]')!
+      .closest("div.w-\\[168px\\]");
+    expect(triggerBox).toBeTruthy();
   });
 });
