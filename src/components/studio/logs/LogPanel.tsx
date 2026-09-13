@@ -23,7 +23,9 @@ import {
   X,
 } from "lucide-react";
 import {
+  CONSOLE_ORIGIN,
   dedupeRepeats,
+  formatEntryForClipboard,
   selectFirstPageWindow,
   selectNewLogCount,
   selectPageLogs,
@@ -71,7 +73,7 @@ import {
  */
 function CountChip({ value }: { value: number }) {
   return (
-    <span className="w-[4ch] shrink-0 text-right text-[11px] tabular-nums text-gray-600">
+    <span className="w-[4ch] shrink-0 text-right text-[11px] text-gray-600 tabular-nums">
       {value}
     </span>
   );
@@ -201,6 +203,7 @@ const ORIGIN_LABELS: LogOriginFilter[] = [
   "app",
   "dev",
   "launcher",
+  CONSOLE_ORIGIN,
 ];
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -293,6 +296,91 @@ function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
   );
 }
 
+/**
+ * 一行日志末尾的复制按钮。
+ *
+ * 为什么必须有它（用户反馈第 2 条）：「日志多了我想复制报错文本还是复制不了，
+ * 我刚选中内容就刷走了」。此前唯一的出口是标题栏上的「复制**全部**日志」——
+ * 用户要的是一行，拿到的却是 2000 行，还得自己在里面搜。
+ *
+ * 它也让「选区」这件事变得不重要：不必先框住文本（框到一半可能被新日志/滚动
+ * 打断），点一下就拿走整行。
+ *
+ * 反馈是本地的、按行独立的：连点不会互相覆盖，也不需要全局 toast——按钮自己
+ * 在 1.2s 内显示「已复制」，且**只在成功时**改口（写剪贴板失败时说「已复制」
+ * 是撒谎，反而让用户把一次失败的复制当成成功）。
+ */
+function RowCopyButton({ entry }: { entry: LogEntry }) {
+  const [state, setState] = useState<"idle" | "done" | "failed">("idle");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* 卸载时清掉定时器：日志行会随翻页/锚定窗口被卸载，留着定时器等于在一个
+   * 已卸载组件上 setState（React 会警告，且那一下点击的反馈没了意义）。 */
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
+
+  const flash = (next: "done" | "failed") => {
+    setState(next);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setState("idle"), 1200);
+  };
+
+  const onCopy = async () => {
+    const text = formatEntryForClipboard(entry);
+    try {
+      if (typeof navigator === "undefined" || !navigator.clipboard) {
+        throw new Error("clipboard unavailable");
+      }
+      await navigator.clipboard.writeText(text);
+      flash("done");
+    } catch {
+      flash("failed");
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => void onCopy()}
+      title={
+        state === "done"
+          ? "已复制本条日志"
+          : state === "failed"
+            ? "复制失败：剪贴板不可用，请手动选中复制"
+            : "复制本条日志"
+      }
+      aria-label="复制本条日志"
+      data-log-copy=""
+      /* 悬停/聚焦才显形：日志是「长时间盯着看」的界面，一个常在的按钮列会
+       * 在每行末尾多出一块常驻色块，把正文的右边界切碎。键盘 Tab 聚焦时同样
+       * 显形（`focus-visible`），不然纯键盘用户点不到它。 */
+      className={`shrink-0 self-center rounded p-1 transition-opacity ${
+        state === "idle"
+          ? "opacity-0 group-hover:opacity-100 hover:bg-white/8 hover:text-gray-200 focus-visible:opacity-100"
+          : "opacity-100"
+      } ${
+        state === "done"
+          ? "text-emerald-300"
+          : state === "failed"
+            ? "text-rose-300"
+            : "text-gray-500"
+      }`}
+    >
+      {state === "idle" ? (
+        <Copy size={13} />
+      ) : (
+        <span className="text-[11px] whitespace-nowrap">
+          {state === "done" ? "已复制" : "复制失败"}
+        </span>
+      )}
+    </button>
+  );
+}
+
 const LogRow = memo(function LogRow({
   entry,
   wrap,
@@ -303,7 +391,7 @@ const LogRow = memo(function LogRow({
   keyword: string;
 }) {
   return (
-    <div className="flex items-start gap-2.5 border-b border-white/3 px-4 py-1 font-mono text-[13px] leading-snug hover:bg-white/2">
+    <div className="group flex items-start gap-2.5 border-b border-white/3 px-4 py-1 font-mono text-[13px] leading-snug hover:bg-white/2">
       <time
         dateTime={new Date(entry.time).toISOString()}
         className="shrink-0 text-gray-500 tabular-nums"
@@ -351,6 +439,9 @@ const LogRow = memo(function LogRow({
           </span>
         )
       )}
+      {/* 复制按钮永远在**最后一列**：它是行的终点，位置固定用户才找得到；
+          `self-center` 让它在多行（换行显示）的行里也贴住垂直中线。 */}
+      <RowCopyButton entry={entry} />
     </div>
   );
 });
@@ -365,6 +456,11 @@ const ORIGIN_TEXT: Record<LogOriginFilter, string> = {
   app: "应用服务",
   dev: "启动",
   launcher: "启动器",
+  /* 无文件来源的那些行（浏览器 console 拦截、Tauri 事件、全局未捕获错误）。
+   * 文案写「控制台 / 全局错误」而不是「其他」：它回答的是「这批行是谁写的」，
+   * 让用户一眼知道切过去能看到什么（`ResizeObserver loop…`、未捕获的 Promise
+   * 拒绝都在这里）。 */
+  [CONSOLE_ORIGIN]: "控制台 / 全局错误",
 };
 
 /**
@@ -754,9 +850,7 @@ export function LogPanel() {
                  * 留着它等于给省略号留后门。横向溢出由行头的 `flex-wrap`
                  * （容器 `min-w-56` 是折行判据）接住。 */
                 className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] leading-none transition-colors ${
-                  filter === option.value
-                    ? "bg-white/10"
-                    : "hover:bg-white/4"
+                  filter === option.value ? "bg-white/10" : "hover:bg-white/4"
                 } ${LEVEL_LABEL_STYLES[option.value]}`}
                 title={`当前来源的${option.label}：${originCounts[option.value]} 条（该来源共 ${originCounts.all} 条 · 警告 ${originCounts.warn} · 错误 ${originCounts.error}）`}
               >

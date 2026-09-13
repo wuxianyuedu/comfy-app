@@ -723,6 +723,149 @@ test.describe("应用页签与全屏视图 @critical", () => {
     });
 
     /**
+     * ISSUE #262 六审：「有的日志只在全部页签才显示，这种也要有自己的分类或是
+     * 归入其他分类」。
+     *
+     * 那批行是**没有文件来源**的（浏览器 console 拦截 / Tauri 事件 / 全局未捕获
+     * 错误），过去它们只在「全部来源」下可见：选中任何一个来源都会整批消失，
+     * 而下拉里既没有它们的名字、也看不出「还有一批行没被任何分类覆盖」。
+     *
+     * 判据是**守恒**：逐个分类的条数加起来 = 「全部来源」的条数——因此不存在
+     * 任何一行落不进分类。这条只能在真实浏览器里量：要读的正是下拉弹层里
+     * 四列数字的文本（jsdom 里弹层的过渡/层级行为与真实环境不同）。
+     */
+    test("@critical 无文件来源的日志有「控制台 / 全局错误」分类且能筛出来", async ({
+      page,
+    }) => {
+      await stubBackend(page);
+      await stubLogs(page);
+      await openPanel(page);
+
+      /* 掺 3 条**没有文件来源**的行：面板里的这种行正是 console 拦截来的
+       * （`source: "console"`、无 `origin`）。必须在面板打开**之后**打印——
+       * 拦截器是 `LogProvider` 挂载时装上的，更早的 console 调用没人接
+       * （`addInitScript` 里打印会一条也进不了面板）。`stubLogs` 造的都是
+       * app-runtime 文件行，所以这 3 条是唯一的 console 样本。 */
+      for (let i = 0; i < 3; i += 1) {
+        await page.evaluate(() =>
+          console.error(
+            "ResizeObserver loop completed with undelivered notifications.",
+          ),
+        );
+      }
+      /* 拦截器经 `queueMicrotask` 入库，而面板一页 200 条、窗口**锚定**在打开
+       * 面板那一刻（真实日志文件同时在往里灌行），所以「这批行马上可见」不成立
+       * ——用可见性等待会等不到。这里等下拉开来源下拉后它们的计数到位。
+       *
+       * 顺带一个坑：`console.error` 会让 Next dev 的错误浮层也渲染一份同样的
+       * 文本，那是个隐藏节点——按文本全局找并 `toBeVisible` 会等到超时。 */
+      await page.getByRole("combobox", { name: "按来源筛选" }).click();
+      const consoleOption = page.getByRole("option", {
+        name: /控制台 \/ 全局错误/,
+      });
+      await expect(consoleOption).toBeVisible();
+      /* 样本真的进了面板（时刻最新 ≠ 窗口里可见，见上面的说明）。**至少** 3 条
+       * 而不是正好 3 条：应用自身也会往 console 写错误（例如资源加载失败），
+       * 它们同属这一分类，写死等值会让用例在别的机器上假红。 */
+      const consoleBucketText = async () =>
+        (await consoleOption.textContent()) ?? "";
+      await expect
+        .poll(async () =>
+          Number(
+            /控制台 \/ 全局错误(\d+)/.exec(await consoleBucketText())?.[1] ??
+              "0",
+          ),
+        )
+        .toBeGreaterThanOrEqual(3);
+
+      /* 「各分类之和 = 全部来源」：**守恒**。多加一类来源却忘了给它建桶时，
+       * 这条会红——用户报的「有的日志只在全部页签才显示」正是那个状态。
+       *
+       * 数字读的是每项里的 `sr-only` 纯文本摘要（`N 条 · 信息 x · 警告 y ·
+       * 错误 z`）而不是自绘的四列：后者是视觉产物，列的位置随样式变，读它等于
+       * 把用例绑在排版上。 */
+      const summaryOf = async (label: string) =>
+        page
+          .getByRole("option", { name: new RegExp(`^${label} \\d`) })
+          .evaluate((el) => {
+            /* 选项里的 `sr-only` 有好几处（四列各自的「N 警告」也在其中），
+             * 只有那个**以数字开头**的才是整行的纯文本摘要。 */
+            const nodes = Array.from(el.querySelectorAll(".sr-only"));
+            const summary = nodes
+              .map((n) => n.textContent?.trim() ?? "")
+              .find((t) => /^\d+ 条/.test(t));
+            return Number(/^(\d+) 条/.exec(summary ?? "")?.[1] ?? "0");
+          });
+
+      const total = await summaryOf("全部来源");
+      expect(total).toBeGreaterThan(5);
+      const buckets = [
+        "应用运行",
+        "应用服务",
+        "启动",
+        "启动器",
+        "控制台 / 全局错误",
+      ];
+      let sum = 0;
+      for (const label of buckets) sum += await summaryOf(label);
+      expect(sum).toBe(total);
+      /* 那批无文件来源的行确实有自己的计数（不是 0，也不只计入「全部来源」）。 */
+      expect(await summaryOf("控制台 / 全局错误")).toBeGreaterThanOrEqual(3);
+
+      /* 切过去能看到那批行（切来源会回到第 1 页，窗口重取），且文件来源的行
+       * 不在里面。 */
+      await consoleOption.click();
+      await expect(
+        page
+          .locator("[data-log-text]", {
+            hasText: "ResizeObserver loop completed",
+          })
+          .first(),
+      ).toBeVisible();
+      await expect(
+        page.locator("[data-log-text]", { hasText: /事件 / }),
+      ).toHaveCount(0);
+    });
+
+    /**
+     * ISSUE #262 六审：「日志多了我想复制报错文本还是复制不了，我刚选中内容就
+     * 刷走了，需要每条日志后面加一个复制按钮，可复制日志内容」。
+     *
+     * 两件事在真实浏览器里量：
+     *   1. 每条行末尾都有复制按钮，且**点得动**（`opacity-0` 的按钮在 jsdom 里
+     *      与正常按钮无从区分，命中测试只有浏览器做得了）；
+     *   2. 它写进剪贴板的**就是这一行**（带时刻与级别），而不是整页。
+     */
+    test("@critical 每条日志末尾的复制按钮能复制到这一行", async ({
+      page,
+      context,
+    }) => {
+      await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+      await stubBackend(page);
+      await stubLogs(page);
+      await openPanel(page);
+
+      const rows = page.locator("[data-log-index]");
+      await expect(rows.first()).toBeVisible();
+      const buttons = page.getByRole("button", { name: "复制本条日志" });
+      /* 每行一个（面板一页 200 条）。 */
+      expect(await buttons.count()).toBeGreaterThanOrEqual(2);
+
+      /* 悬停那行让按钮显形，再点（不悬停时它是 `opacity-0`，用户也看不到）。 */
+      await rows.first().hover();
+      await buttons.first().click();
+      await expect(page.getByText("已复制")).toBeVisible();
+
+      const written = await page.evaluate(() => navigator.clipboard.readText());
+      /* 写进去的是**这一行**：有时刻、有级别、有正文。 */
+      expect(written).toMatch(/\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}/);
+      expect(written).toContain("[INFO]");
+      expect(written).toContain("事件");
+      /* 且不是整页（否则「复制全部」与它就没有区别了）。 */
+      expect(written.split("\n")).toHaveLength(1);
+    });
+
+    /**
      * ISSUE #262 复审：「启动和启动器日志丢失」。
      *
      * 真实现场：会话起点取自 `dev-launcher.log` 的 mtime，而启动器进程
