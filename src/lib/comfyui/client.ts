@@ -4,10 +4,14 @@
 // The base URL is resolved per-call from app settings (so it can be changed
 // from the Settings page), falling back to COMFYUI_BASE env then localhost.
 //
-// Port auto-detection: if the configured port is unreachable (ECONNREFUSED),
-// the resolver will probe nearby ports (+1, +2, … up to PROBE_RANGE, then the
-// ComfyUI window port) and use the first one that responds. The discovered port
-// is cached in-memory for the session lifetime.
+// 地址解析顺序（ISSUE #449）：
+//   ① 配置了 comfyuiPath → **先问进程事实**：按路径找到实例进程，读它实际
+//      监听的端口（见 `instance-port.ts`）。端口是「进程监听出来的」，不是
+//      「逐个试出来的」——这一跳同时回答「在不在跑」与「在哪个端口」。
+//   ② 拿不到进程事实（没配路径 / 没命中 / 查询失败）→ 才退回端口探测：
+//      配置端口 → 就近偏移 +1..+PROBE_RANGE（ComfyUI 端口被占时会自增）→
+//      ComfyUI 窗口端口，取第一个应答的。
+//   ③ 命中即缓存（会话粘性）；没命中**不缓存**（实例随时可能起来）。
 //
 // 日志口径：探测全落空**不是**「ComfyUI 没在运行」的结论——本模块只认识
 // 「配置地址 + 就近偏移 + 窗口地址」这一批地址，实例落在别的端口时同样落空
@@ -16,15 +20,11 @@
 // 每次提交 / 上传都把同一句话刷进面板。
 //
 // 多实例场景：comfyuiPath 配置了实例根目录后，resolveComfyBase 会先在 OS
-// 进程列表确认「该路径的 main.py 是否真的在运行」，再通过 PID→监听端口
+// 进程列表确认「该路径的实例进程是否真的在运行」，再通过 PID→监听端口
 // 定位实际端口。端口上有别的 ComfyUI 响应 ≠ 配置路径的实例在运行。
 
 import { getSettingsSync } from "../app-settings";
-import { resolveComfyLaunchPlan } from "./launch-path";
-import {
-  findPidForMainPyDetailed,
-  findPidListeningPort,
-} from "./proc-detect";
+import { baseForLocalPort, queryInstanceByPath } from "./instance-port";
 import { queryNvidiaVram } from "./gpu-vram";
 import { logger } from "~/server/lib/logger";
 
@@ -166,55 +166,55 @@ export async function resolveComfyBase(): Promise<string> {
       ? settings.comfyuiPort
       : parseInt(url.port) || 8188;
 
-  // comfyuiPath 已配置：先确认配置的实例在 OS 层确实在运行。
-  // 避免「端口上有任何 ComfyUI 响应 = 已在运行」的误判——可能跑着的是
-  // 另一个实例，并非用户配置路径的那个。
+  /* comfyuiPath 已配置：**先问进程事实**，再谈探测（ISSUE #449）。
+   *
+   * 顺序很关键：实例的端口是「进程监听出来的」而不是「试出来的」。直接从配置
+   * 路径把进程找出来、顺手读它监听的端口（一次进程表查询 + 一次端口查询），
+   * 就能同时回答「在不在跑」与「在哪个端口」——不必先探 :8188 再依次试
+   * 8189..8193，等到全落空还只能写一句「连不上」。Comfy Desktop 的实例常见
+   * 「桌面里正在跑、但端口与设置里的不一致」：旧流程会一路探偏移端口全落空，
+   * 新流程第一跳就拿到那个真实端口。
+   *
+   * 判据链本身收在 `instance-port.ts`（与 status.ts 同口径：main.py → 启动器
+   * 候选 → 环境反查），这里只管把结论翻成地址。 */
   const comfyuiPath = settings.comfyuiPath?.trim();
   if (comfyuiPath) {
-    const plan = resolveComfyLaunchPlan(comfyuiPath);
-    if (!("error" in plan)) {
-      const lookup = await findPidForMainPyDetailed(plan.mainPy);
-      if (lookup.pid) {
-        const port = await findPidListeningPort(lookup.pid);
-        if (port) {
-          _resolvedBase = `http://${host}:${port}`;
-          logger.info(`[comfyui] Connected to configured instance on :${port} (pid=${lookup.pid})`);
-          return _resolvedBase;
-        }
-        // 进程在但端口未绑定（仍在加载）——先按配置地址返回给调用方试一次；
-        // 探头不要把这次「还在启动」的结论缓存住，否则 ComfyUI 稍后绑定端口 /
-        // 落在偏移端口上时，本进程会一直沿用这个连不上的地址（见
-        // probeComfyUi 的按次探测口径）。
-        logger.info(`[comfyui] Configured instance (pid=${lookup.pid}) starting, port not bound yet`);
-        return `http://${host}:${configuredPort}`;
-      }
-      // 进程查询失败（超时/高负载）≠ 实例未运行：结果不可信，此时不能抛错，
-      // 否则正在运行的实例会被状态探测误报为「未运行」（ISSUE #114：启动
-      // 成功后状态行回退「未运行」，但点「打开查看」又能打开）。
-      // 退回端口探测：先试配置端口，再试 +1..+N（下方公共路径）。若配置
-      // 端口上有 ComfyUI 响应，几乎总是本实例（另一实例占端口的场景在
-      // 查询成功分支已覆盖）。
-      // 「进程表里查不到配置路径的 main.py」不再抛错，退回端口探测。
-      //
-      // 抛错的本意是「避免误连到别的实例，并触发自动启动」，但判据本身不成立：
-      // Comfy Desktop 的实例由 standalone-env 启动，命令行里没有 `main.py`
-      // （见 status.ts 的同类教训），进程在跑也查不到 —— 于是 `resolveComfyBase`
-      // 直接抛错，`probeComfyUi()` 连一次 HTTP 都没发出去就被 catch 成「不可达」。
-      // 表现就是设置页永远停在「ComfyUI 正在启动…」：端口上明明有实例正常应答
-      // （ISSUE #344）。「实例在不在」由 status.ts 的进程级快照负责，
-      // `resolveComfyBase` 只负责「连得上哪个地址」，不该越权下「没在跑」的结论。
-      logger.warn(
-        lookup.failed
-          ? `[comfyui] Process lookup failed (timeout/busy?) for ${plan.mainPy}, falling back to port probe`
-          : `[comfyui] Configured instance (${plan.mainPy}) not found in process table, falling back to port probe`,
+    const found = await queryInstanceByPath(comfyuiPath);
+    const portBase = baseForLocalPort(found.port);
+    if (found.port != null && portBase) {
+      _resolvedBase = portBase;
+      logger.info(
+        `[comfyui] Connected to configured instance on :${found.port} (pid=${found.pid}, via=${found.via})`,
       );
-    } else {
-      // comfyuiPath 无效（如目录不存在）——退到端口探测
-      logger.warn(`[comfyui] Invalid comfyuiPath, falling back to port probe`);
+      return _resolvedBase;
     }
+    if (found.running) {
+      /* 进程在但端口未绑定（仍在加载）——先按配置地址返回给调用方试一次；
+       * 不要把这次「还在启动」的结论缓存住，否则 ComfyUI 稍后绑定端口 / 落在
+       * 偏移端口上时，本进程会一直沿用这个连不上的地址（见 probeComfyUi 的
+       * 按次探测口径）。 */
+      logger.info(
+        `[comfyui] Configured instance (pid=${found.pid}, via=${found.via}) starting, port not bound yet`,
+      );
+      return `http://${host}:${configuredPort}`;
+    }
+    /* 没命中的两种含义必须分清（都是「不抛错」的老结论，见 ISSUE #344）：
+     *   · unverified（进程表查询超时 / 高负载）→ 结果不可信，正在运行的实例
+     *     绝不能因此被判「没在跑」，退回端口探测（下方公共路径）；
+     *   · 查询成功但一条候选都没命中（Comfy Desktop 实例由 standalone-env /
+     *     uv 起、命令行里未必有 main.py）→ 同样退回端口探测，由 HTTP 事实说话。
+     * 「实例在不在」由 status.ts 的进程级快照负责，本函数只回答「连得上哪个
+     * 地址」，不越权下「没在跑」的结论。 */
+    logger.warn(
+      found.unverified
+        ? `[comfyui] Process lookup failed (timeout/busy?) for ${comfyuiPath}, falling back to port probe`
+        : `[comfyui] No running instance process found for ${comfyuiPath}, falling back to port probe`,
+    );
   }
 
-  // Try configured port first
+  /* 公共探测路径（拿不到进程事实时的兜底）：配置端口 → 就近偏移 → 窗口地址。
+   * 走到这里的前提是「问不到实例进程」——要么没配 comfyuiPath，要么按路径没
+   * 命中（含查询失败/不可信），要么实例确实不是这个路径起的。 */
   if (await probePort(host, configuredPort)) {
     _resolvedBase = `http://${host}:${configuredPort}`;
     logger.info(`[comfyui] Connected on configured port :${configuredPort}`);
@@ -248,7 +248,11 @@ export async function resolveComfyBase(): Promise<string> {
    *
    * 因此这里记 warn 而不是 error：此前用 error，用户读到「ComfyUI 明明在跑却报
    * error」的第一反应就是「这里有故障」，而多数情况下实例只是不在这批地址上。
-   * 汇总行写清问过哪些地址，并按地址清单静默，避免运行期反复刷同一条。 */
+   * 汇总行写清问过哪些地址，并按地址清单静默，避免运行期反复刷同一条。
+   *
+   * 配置了 comfyuiPath 时这条 warn 前面还会有一条「No running instance process
+   * found / Process lookup failed」（见上）——两者合起来才是完整现场：
+   * 「按这条路径没找到实例进程」+「这一批地址也都没人应答」。 */
   const scope = targets.map((t) => `:${t.port}`).join(" / ");
   if (shouldLogProbeMiss(`${SESSION_ID}|${host}|${scope}`)) {
     logger.warn(
