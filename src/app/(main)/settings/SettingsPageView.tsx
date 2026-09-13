@@ -1960,7 +1960,9 @@ export function SettingsPageView({
                 placeholder="留空使用默认 8188"
               />
               <p className="text-muted-foreground -mt-2 mb-3 text-xs">
-                非 8188 端口会在启动时自动传 --port，实际运行端口以设置为准。
+                非 8188 端口会在启动时自动传 --port。这里填的是默认端口：实例已经
+                由别的方式（Comfy Desktop、你自己的终端）跑起来时，应用会直接按
+                实例进程实际监听的端口连——端口不一致也不需要改这里。
               </p>
               <Field
                 label="ComfyUI 启动参数（可选）"
