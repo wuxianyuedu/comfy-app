@@ -23,6 +23,7 @@ import {
   modeUsesLastFrame,
   type WorkshopExposedValues,
 } from "./workflow-encapsulation";
+import { deriveEncapsulationStatus } from "./workshop-encapsulation-status";
 
 /** tRPC wire contract for the local (ComfyUI) generate mutation. */
 export type GenerateInput = RouterInputs["generate"]["generate"];
@@ -48,6 +49,10 @@ export interface WorkshopWorkflowOption {
   category: WorkshopWorkflowCategory;
   /** 该工作流可跑的全部模式码（taskType 常是其中的默认模式）。 */
   modes: string[];
+  /** 挂在条目上的模型标签（工作流库「管理模型」维护，如 z-Image）。 */
+  modelTags: string[];
+  /** 对外参数封装就绪：契约必备口「提示词」已有落点，工坊可直接驱动。 */
+  encapsulationReady: boolean;
 }
 
 /** 工作流列表项 → 工坊选项；字段缺失/异常时给出安全缺省。
@@ -71,12 +76,23 @@ function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption 
         : isVideoMode(taskType) || modes.some((mode) => isVideoMode(mode))
           ? "video"
           : "image";
+  const modelTags = Array.isArray(row.modelTags)
+    ? row.modelTags.filter((tag): tag is string => typeof tag === "string" && tag !== "")
+    : [];
+  const mode = row.defaultMode ?? taskType ?? modes[0] ?? null;
+  const encapsulationReady = deriveEncapsulationStatus({
+    io: (row.workflowIO ?? null) as Parameters<typeof deriveEncapsulationStatus>[0]["io"],
+    paramMap: (row.paramMap ?? null) as Parameters<typeof deriveEncapsulationStatus>[0]["paramMap"],
+    mode: typeof mode === "string" ? mode : null,
+  }).ready;
   return {
     id,
     name,
     ...(taskType !== undefined ? { taskType } : {}),
     category,
     modes,
+    modelTags,
+    encapsulationReady,
   };
 }
 

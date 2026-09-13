@@ -20,6 +20,7 @@ import {
 import {
   generateLocalPortrait,
   generateRemotePortrait,
+  generateWorkflowPortrait,
   importPortraitFile,
   type PortraitRequest,
 } from "~/lib/workshop/character-portrait-client";
@@ -45,6 +46,8 @@ export interface PortraitSession {
   channel: PortraitChannel;
   /** 远端通道使用的模型名（设置页「远端模型」kind=image 的条目；空串 = 未选） */
   remoteModel: string;
+  /** 本地通道使用的工作流（工作流库中已配置对外参数的条目；空串 = 内置 txt2img） */
+  localWorkflowId: string;
   /** 定妆照尺寸（复用镜头生图的比例 / 像素 / 对齐三段选择） */
   size: ShotSizeState;
   /** 本机任务的完成度 0~100；远端为一次性请求，不提供进度 */
@@ -59,14 +62,20 @@ export interface PortraitSession {
 export interface PortraitSessionActions {
   /** 更新用户选择（通道 / 尺寸） */
   patch: (
-    p: Partial<Pick<PortraitSession, "channel" | "size" | "remoteModel">>,
+    p: Partial<
+      Pick<PortraitSession, "channel" | "size" | "remoteModel" | "localWorkflowId">
+    >,
   ) => void;
   appendLog: (entry: PortraitLogEntry) => void;
   /** 按角色提示词生成一张定妆照，结果作为新候选并入该角色。
    *  overrides.remoteModel：本次使用的设置页「远端模型」名（远端通道）。 */
   generate: (
     character: Character,
-    overrides?: { remoteModel?: string },
+    overrides?: {
+      remoteModel?: string;
+      localWorkflowId?: string;
+      localLabel?: string;
+    },
   ) => Promise<void>;
   /** 外部导入一张现成定妆照（写进素材库「角色」分类） */
   importFile: (character: Character, file: File) => Promise<void>;
@@ -83,6 +92,7 @@ function initialSession(): PortraitSession {
     importing: false,
     channel: "local",
     remoteModel: "",
+    localWorkflowId: "",
     size: DEFAULT_SHOT_SIZE,
     progress: 0,
     modelLabel: "",
@@ -103,7 +113,9 @@ export function useCharacterPortrait(opts: {
   const [session, setSession] = React.useState<PortraitSession>(initialSession);
 
   const patch = React.useCallback(
-    (p: Partial<Pick<PortraitSession, "channel" | "size" | "remoteModel">>) =>
+    (p: Partial<
+      Pick<PortraitSession, "channel" | "size" | "remoteModel" | "localWorkflowId">
+    >) =>
       setSession((prev) => ({ ...prev, ...p })),
     [],
   );
@@ -154,7 +166,14 @@ export function useCharacterPortrait(opts: {
   );
 
   const generate = React.useCallback(
-    async (character: Character, overrides?: { remoteModel?: string }) => {
+    async (
+      character: Character,
+      overrides?: {
+        remoteModel?: string;
+        localWorkflowId?: string;
+        localLabel?: string;
+      },
+    ) => {
       if (session.busy) return;
       const prompt = character.positivePrompt.trim();
       if (!prompt) {
@@ -166,20 +185,29 @@ export function useCharacterPortrait(opts: {
         return;
       }
       const channel = session.channel;
-      if (channel === "local" && !checkpoint) {
+      const remoteModel = (overrides?.remoteModel ?? session.remoteModel).trim();
+      const localWorkflowId = (
+        overrides?.localWorkflowId ?? session.localWorkflowId
+      ).trim();
+      /* 本地通道二选一：库工作流（自带封装，不依赖 Checkpoint）或内置 txt2img
+       *（需要 Checkpoint）。两者都没有才拦下，与区块的门禁提示同一口径。 */
+      if (channel === "local" && !localWorkflowId && !checkpoint) {
         setSession((prev) => ({
           ...prev,
           status: "",
-          error: "本地通道需要先选 Checkpoint（右侧「生成资源」里选择）",
+          error:
+            "本地通道需要先选模型：上方下拉选工作流库模型（需在库里配置好对外参数），或到右侧「生成资源」选一个本地 Checkpoint",
         }));
         return;
       }
       const size = shotSizeToParam(session.size);
       const label = character.name || "该角色";
-      const remoteModel = (overrides?.remoteModel ?? session.remoteModel).trim();
+      const localLabel = (overrides?.localLabel ?? "").trim();
       const modelLabel =
         channel === "local"
-          ? `本地 · ${checkpoint}`
+          ? localWorkflowId
+            ? `本地 · ${localLabel || "库工作流"}`
+            : `本地 · ${checkpoint}`
           : remoteModel
             ? `远端 API · ${remoteModel}`
             : "远端 API";
@@ -205,9 +233,31 @@ export function useCharacterPortrait(opts: {
       };
       try {
         if (channel === "local") {
-          const { taskId, url } = await generateLocalPortrait(
-            req,
-            { checkpoint, params: character.params },
+          const { taskId, url } = localWorkflowId
+            ? await generateWorkflowPortrait(
+                req,
+                { workflowId: localWorkflowId },
+                {
+                  onProgress: (pct) =>
+                    setSession((prev) =>
+                      prev.focusCharacterId === character.id
+                        ? { ...prev, progress: pct }
+                        : prev,
+                    ),
+                  onLog: (entry) => {
+                    if (entry.level === "progress") return;
+                    appendLog(
+                      makePortraitLog(
+                        entry.level === "error" ? "error" : "info",
+                        entry.msg,
+                      ),
+                    );
+                  },
+                },
+              )
+            : await generateLocalPortrait(
+                req,
+                { checkpoint, params: character.params },
             {
               onProgress: (pct) =>
                 setSession((prev) =>
@@ -277,6 +327,7 @@ export function useCharacterPortrait(opts: {
       session.channel,
       session.size,
       session.remoteModel,
+      session.localWorkflowId,
       checkpoint,
       projectId,
       addCandidate,
