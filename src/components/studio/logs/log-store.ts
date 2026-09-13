@@ -293,8 +293,29 @@ function formatTime(ts: number, opts?: { alwaysDate?: boolean }): string {
   return time;
 }
 
+/* 启动链路行的形态（dev-launcher 的 Transcript 是「裸文本 + 缩进」的混合体）：
+ *
+ *   "[10:22:24] [INFO ] 预检通过"                    ← 级别标记带填充空格（PadRight 5）
+ *   "[10:22:25] [STEP] 检查端口占用"                 ← 标准形态
+ *   "  [10:22:24] [INFO ] 未检测到 .env 配置文件。"     ← 缩进两格的续行
+ *   "  [10:22:24] [ERROR] 启动失败："                   ← 同上
+ *   "[10:22:30] [[OK] 服务器已就绪"                   ← 颜色码残缺留下的多余 `[`
+ *
+ * 三条口径缺一不可，否则整行会掉进裸文本兜底、以 "[HH:mm:ss] [LEVEL]" 原文
+ * 显示在面板上（ISSUE #262 六审：用户读到的就是「启动 / 启动器两项还是没有
+ * 日志内容」——行其实抓到了，只是没被认成日志行）：
+ *   1. 级别标记容错：`\[` + 可选残码 + 可选空白 + 级别 + 可选空白 + 可选残码 + `]`。
+ *      PowerShell 的 `PadRight(5)` 会给 INFO / STEP / OK 补尾空格，严格的
+ *      `\[INFO\]` 匹配不到；颜色码残缺时 `[` 后还会多留一段假转义（`[[90m[OK`）；
+ *   2. 行首允许**缩进**（`\s*`）—— dev-launcher 的引导文案与错误详情是缩进
+ *      两格的续行，且同样带完整的时刻 + 级别前缀，不该当成另一种形态；
+ *   3. 只认这六个级别名（`STEP` / `OK` / `INFO` / `WARN` / `ERROR` / `DEBUG`）——
+ *      容错只放宽「级别周围」，不放过 `[rpc]` / `[system]` 这类普通前缀词。
+ *
+ * 时刻仍限 `HH:mm:ss`（带日期的行由下面两条更具体的规则接管）；级别名大小写
+ * 不敏感，与 app-runtime / launcher 转录的宽松口径一致。 */
 const LOG_LINE_RE =
-  /^\[(\d{2}):(\d{2}):(\d{2})\]\s*\[(STEP|OK|INFO|WARN|ERROR|DEBUG)\]\s*(.*)$/;
+  /^\s*\[(\d{2}):(\d{2}):(\d{2})\]\s*\[\[?[0-9;]*m?\[?\s*(STEP|OK|INFO|WARN|ERROR|DEBUG)\s*\[?[0-9;]*m?\]\s*(.*)$/;
 const LAUNCHER_LOG_RE =
   /^\[(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]\s*(.*)$/;
 const APP_RUNTIME_LOG_RE =
@@ -379,7 +400,12 @@ export function parseFileLogs(
   for (const rawLine of text.split("\n")) {
     // Strip ANSI SGR (e.g. \x1b[36m) that the launcher now writes into the
     // transcript, so the [HH:mm:ss] [LEVEL] regex still matches cleanly.
-    const line = rawLine.replace(/\r$/, "").replace(/\x1b\[[0-9;:]*m/g, "");
+    // 颜色码残缺（\x1b 丢失、只剩 `[90m` / `[0m`）时它们会留在正文里，按 SGR
+    // 的形状整段剥掉，免得面板上出现 `[[OK] 【[90m[OK[0m] …` 这类双份级别标记。
+    const line = rawLine
+      .replace(/\r$/, "")
+      .replace(/\x1b\[[0-9;:]*m/g, "")
+      .replace(/\[[0-9;:]*m/g, "");
     if (!line.trim()) continue;
     // 常规 tRPC/RPC 调用计时行（如 `[rpc] xxx 155ms {"type":"query"}`）不进面板：
     // 正常调用高频产生会刷屏（#294）；失败/慢查询（error/warn 级别）仍保留。

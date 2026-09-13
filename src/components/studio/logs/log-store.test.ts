@@ -1129,6 +1129,92 @@ describe("parseFileLogs 文件日志解析", () => {
     expect(entries.map((e) => e.level)).toEqual(["info", "info"]);
   });
 
+  /*
+   * 启动链路（`dev` = log/launcher/dev-launcher.log / `launcher` =
+   * log/launcher/start-tauri-launcher.log）的行来自 PowerShell 的
+   * `Write-Log`（`[ts] [LEVEL] msg`）与 python 启动器的裸文本（`[ts] msg`）。
+   *
+   * 这里逐条钉住「整行必须以日志行的身份落板」——行内容对了但没被认出来时，
+   * 面板上出现的是带前缀的**原文**（级别标记也成了正文），用户读到的就是
+   * 「启动 / 启动器两项没有日志内容」（ISSUE #262 六审）。
+   */
+  describe("启动链路行形态（dev-launcher Transcript / python 启动器）", () => {
+    const base = new Date(2026, 8, 13);
+
+    it("级别标记带填充空格（PowerShell PadRight 5）仍解析出级别并去掉标记", () => {
+      const entries = parseFileLogs(
+        [
+          "[10:22:24] [INFO ] 预检通过",
+          "[10:22:25] [STEP] 检查端口占用",
+          "[10:22:26] [OK   ] Job Object 创建成功",
+          "[10:22:27] [WARN ] 180 秒内未就绪",
+          "[10:22:28] [ERROR] 找不到预编译 Tauri 壳",
+        ].join("\n"),
+        base,
+      );
+      expect(entries.map((e) => e.level)).toEqual([
+        "info",
+        "info",
+        "info",
+        "warn",
+        "error",
+      ]);
+      expect(entries.map((e) => e.message)).toEqual([
+        "预检通过",
+        "检查端口占用",
+        "Job Object 创建成功",
+        "180 秒内未就绪",
+        "找不到预编译 Tauri 壳",
+      ]);
+      /* 时刻仍取行首时刻，不是「解析当下」——否则启动日志会被排到时间线末尾。 */
+      expect(entries[0]?.time).toBe(
+        new Date(2026, 8, 13, 10, 22, 24).getTime(),
+      );
+    });
+
+    it("缩进两格的续行同样算日志行，级别不退化成 info 原文", () => {
+      const entries = parseFileLogs(
+        [
+          "  [10:22:24] [INFO ] 未检测到 .env 配置文件。",
+          "  [10:22:25] [ERROR] 启动失败：",
+        ].join("\n"),
+        base,
+      );
+      expect(entries.map((e) => e.level)).toEqual(["info", "error"]);
+      expect(entries[1]?.message).toBe("启动失败：");
+    });
+
+    it("颜色码残缺留下的多余 [ 不影响级别标记", () => {
+      const entries = parseFileLogs(
+        [
+          "[10:22:30] [[OK] 服务器已就绪",
+          "[10:22:31] [\x1b[90m[OK\x1b[0m] 服务器已就绪",
+        ].join("\n"),
+        base,
+      );
+      expect(entries).toHaveLength(2);
+      expect(entries.map((e) => e.message)).toEqual([
+        "服务器已就绪",
+        "服务器已就绪",
+      ]);
+    });
+
+    it("python 启动器的裸文本行不被当成日志行（原样保留，交给兜底分支）", () => {
+      const entries = parseFileLogs(
+        "[2026-09-13 10:22:24.723] === launcher started ===",
+        base,
+        "launcher",
+      );
+      expect(entries[0]?.level).toBe("info");
+      expect(entries[0]?.message).toBe("=== launcher started ===");
+    });
+
+    it("普通前缀词（[rpc] / [system]）不被级别容错吞掉", () => {
+      const entries = parseFileLogs("[10:23:00] [rpc] abc 155ms", base);
+      expect(entries[0]?.message).toBe("[10:23:00] [rpc] abc 155ms");
+    });
+  });
+
   it("源码怪癖:WARNING 不在行正则枚举内,该行回退为 info 并保留原文", () => {
     const base = new Date(2026, 7, 15);
     const entries = parseFileLogs("[01:00:00] [WARNING] w", base);
