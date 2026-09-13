@@ -21,6 +21,10 @@ import {
 } from "@/components/workshop/ExtractToolbar";
 import { ExtractModelSelect } from "@/components/workshop/ExtractModelSelect";
 import {
+  CharacterPortraitStudio,
+  type CharacterPortraitContext,
+} from "@/components/workshop/CharacterPortraitStudio";
+import {
   channelProviderLabel,
   channelSelectionDisplayValue,
   resolveChannelSelection,
@@ -70,6 +74,9 @@ interface Props {
   /** 提取会话（busy/progress/日志）已收归工坊 controller，经 props 注入；
    *  未注入（遗留/独立使用场景）时退化为本组件内的局部会话。 */
   extract?: { session: ExtractSession; actions: ExtractSessionActions };
+  /** 定妆照会话与生成通道配置（同样收归 controller，经 props 注入）。
+   *  未注入时不渲染定妆照区块，遗留/独立使用场景不受影响。 */
+  portrait?: CharacterPortraitContext;
 }
 
 /** 判断导入内容是否为 JSON(角色卡 JSON 走结构化解析,其余按剧本 markdown 解析) */
@@ -118,6 +125,7 @@ export function CharacterDesigner({
   onCharactersChange,
   scriptMarkdown,
   extract,
+  portrait,
 }: Props) {
   const [brief, setBrief] = React.useState("");
   const [genBusy, setGenBusy] = React.useState(false);
@@ -678,6 +686,11 @@ export function CharacterDesigner({
                   </p>
                 )}
               </div>
+
+              {/* 定妆照：按上方提示词生成 / 导入，多次结果留作候选供挑选 */}
+              {portrait && (
+                <CharacterPortraitStudio character={character} portrait={portrait} />
+              )}
             </div>
           ))}
         </div>

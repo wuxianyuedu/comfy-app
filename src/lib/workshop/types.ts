@@ -44,6 +44,27 @@ export interface Character {
   positivePrompt: string; // generated ComfyUI positive prompt
   negativePrompt: string; // generated negative prompt
   params: Record<string, unknown>; // recommended generation params
+  /** 定妆照候选（多次生成 / 外部导入累积，供挑选；上限见 character-portrait.ts）。
+   *  存在角色本身而非独立表 —— 角色随草稿 JSON 列一起持久化，新增字段无需迁移。 */
+  portraits?: CharacterPortrait[];
+  /** 已选定的定妆照（portraits 里的一张），后续分镜图以此作为参考图。 */
+  portraitUrl?: string;
+}
+
+/** 定妆照来源通道：本机 ComfyUI 工作流 / 远端 API 直连 / 外部导入的现成图。 */
+export type PortraitSource = "local" | "remote" | "import";
+
+/** 一张角色定妆照候选。 */
+export interface CharacterPortrait {
+  /** 浏览器可直接引用的图片地址（本机产物走 /api/generated，导入走素材库）。 */
+  url: string;
+  source: PortraitSource;
+  /** 生成时使用的模型（本机 checkpoint / 远端 API 模型名），导入来源没有。 */
+  model?: string;
+  /** 本机通道的 ComfyUI 任务 id，便于回溯任务历史。 */
+  taskId?: string;
+  /** 生成/导入时间戳（ms），用于排序与同图去重。 */
+  createdAt: number;
 }
 
 /** A storyboard shot that maps to one image-generation task (and later a video clip) */

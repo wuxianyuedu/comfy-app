@@ -97,6 +97,8 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     characterExtractActions,
     storyboardExtract,
     storyboardExtractActions,
+    characterPortrait,
+    characterPortraitActions,
     isScriptEditorOpen,
     notice,
     rendered,
@@ -264,6 +266,13 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 extract={{
                   session: characterExtract,
                   actions: characterExtractActions,
+                }}
+                portrait={{
+                  session: characterPortrait,
+                  actions: characterPortraitActions,
+                  checkpoint,
+                  apiChannels,
+                  onOpenApiSettings: openApiSettings,
                 }}
               />
             </React.Suspense>
