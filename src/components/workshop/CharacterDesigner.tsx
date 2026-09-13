@@ -21,6 +21,11 @@ import {
 } from "@/components/workshop/ExtractToolbar";
 import { ExtractModelSelect } from "@/components/workshop/ExtractModelSelect";
 import {
+  channelProviderLabel,
+  channelSelectionDisplayValue,
+  resolveChannelSelection,
+} from "@/lib/workshop/channel-options";
+import {
   buildExtractCharactersMessages,
   mergeCharacterDrafts,
   parseCharacterEntries,
@@ -129,26 +134,10 @@ export function CharacterDesigner({
   const [aiError, setAiError] = React.useState("");
   const { config, openSettings } = useLLM();
 
-  /** 一句话生成实际生效的 provider/model：
-   *  手动在区块内选择过（genSel 非空）即用它；否则沿用全局 config。 */
-  const genEffective = React.useMemo(() => {
-    if (genSel) {
-      // genSel 只可能来自不带「工具」通道的下拉（local/remote），不会是 tool
-      const parsed = parseChannelOption(genSel);
-      return {
-        provider: parsed.channel === "tool" ? "local" : parsed.channel,
-        model: parsed.model,
-      };
-    }
-    return {
-      provider: config?.provider ?? "local",
-      model: config?.model ?? "",
-    };
-  }, [genSel, config]);
-  /** 下拉展示值：未手动选时跟随全局 config，保证选中态与生效模型一致。 */
-  const genSelectValue =
-    genSel ||
-    (config?.model ? `${config.provider}::${config.model}` : "");
+  /** 一句话生成实际生效的 provider/model 与下拉展示值：
+   *  手动在区块内选择过（genSel 非空）即用它，否则沿用全局 config（换算见 channel-options）。 */
+  const genEffective = resolveChannelSelection(genSel, config);
+  const genSelectValue = channelSelectionDisplayValue(genSel, config);
 
   // ── 三通道提取(工具 / 本地模型 / 远端API)+ 外部导入 ──
   // 提取的 通道/忙闲/过程/状态/错误/执行日志 已收归工坊 controller（characterExtract）
@@ -219,7 +208,7 @@ export function CharacterDesigner({
     setGenProgress("");
     setGenStatus("");
     setGenError("");
-    const modelLabel = provider === "local" ? "本地" : "远端";
+    const modelLabel = channelProviderLabel(provider);
     try {
       const full = await streamChat({
         messages: buildCharacterFromBriefMessages(brief),
@@ -469,7 +458,7 @@ export function CharacterDesigner({
         </div>
         {config && !genSel && (
           <p className="text-muted-foreground mt-2 text-[11px]">
-            未手动选择模型时，沿用全局配置（当前：{config.provider === "local" ? "本地" : "远端"} ·{" "}
+            未手动选择模型时，沿用全局配置（当前：{channelProviderLabel(config.provider)} ·{" "}
             {config.model || "未选模型"}）。点下拉可切换本次生成的 本地/远端 模型。
           </p>
         )}
@@ -485,7 +474,7 @@ export function CharacterDesigner({
               <p className="text-primary text-xs">
                 {genProgress
                   ? "正在生成角色…"
-                  : `正在调用 ${genEffective.provider === "local" ? "本地" : "远端"} · ${
+                  : `正在调用 ${channelProviderLabel(genEffective.provider)} · ${
                       genEffective.model || "当前配置"
                     } 生成角色…`}
               </p>
