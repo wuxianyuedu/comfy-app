@@ -239,10 +239,21 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
 
   // 结论在 stdout，守卫的日志（`Log` 被桩件改写到 stderr）要一起收，
   // 否则「回收陈旧壳」「非交互构建」「请先结束启动器」这些可见出口断言不到。
+  // PS 5.1 对重定向输出默认按系统 ANSI 代码页（zh-CN 为 GBK）编码中文，这里
+  // 按 UTF-8 读必是乱码，故在会话内先强制 UTF-8（pwsh 7 本就 UTF-8，前置语句
+  // 是无害重复；setter 在无控制台句柄的宿主可能抛错，吞掉即可）。
+  const psUtf8Prelude =
+    "try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}\n";
   const runGuard = (script: string): string => {
     const proc = spawnSync(
       psExe,
-      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        psUtf8Prelude + script,
+      ],
       { encoding: "utf8" },
     );
     return `${proc.stdout ?? ""}${proc.stderr ?? ""}`;
