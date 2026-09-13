@@ -63,7 +63,8 @@ export function decideEnsureLaunch(facts: EnsureFacts): EnsureDecision {
 /**
  * 退出策略 → 拉起方式。
  *
- * `exitKillComfyui` 为 false（或未配置）时视为「保活」；显式 true 才是 bound。
+ * `exitKillComfyui` 为 false（或未配置，即设置里的默认值）时视为「保活」；
+ * 显式 true 才是 bound。
  * 注意开关只在**拉起那一刻**生效：桌面壳退出是 `taskkill /T /F` 杀整树，
  * 退出时没有机会再改决定。
  */

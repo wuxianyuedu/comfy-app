@@ -94,7 +94,7 @@ describe("resolveLaunchPolicy — 退出策略到拉起方式", () => {
     expect(resolveLaunchPolicy(false)).toBe("keepAlive");
   });
 
-  it("未配置（undefined）→ 保活：与历史默认行为一致，不能意外变成 bound", () => {
+  it("未配置（undefined）→ 保活：与设置里的默认值（不勾选）一致，不能意外变成 bound", () => {
     expect(resolveLaunchPolicy(undefined)).toBe("keepAlive");
   });
 });

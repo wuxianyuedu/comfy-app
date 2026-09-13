@@ -747,10 +747,11 @@ export async function ensureComfyUiReady(
     });
     const desktopEnv = eff.envVars;
 
-    // 退出策略决定拉起方式：exitKillComfyui=true（默认）→ bound，ComfyUI 挂
-    // 在应用进程树内，应用退出连带关闭；false → keepAlive，脱离进程树保活，
-    // 下次打开应用直接复用。注意开关只在「拉起时」生效（桌面壳退出是
-    // taskkill /T /F 杀整树，退出那一刻没有机会再决定）。
+    // 退出策略决定拉起方式：exitKillComfyui=true → bound，ComfyUI 挂在应用
+    // 进程树内，应用退出连带关闭；false（默认，见 app-settings 的 DEFAULTS）
+    // → keepAlive，脱离进程树保活，下次打开应用直接复用。注意开关只在
+    // 「拉起时」生效（桌面壳退出是 taskkill /T /F 杀整树，退出那一刻没有
+    // 机会再决定）。
     const keepAlive =
       resolveLaunchPolicy(getExitPolicy().exitKillComfyui) === "keepAlive";
     // 每次启动先在日志里落一条明显的会话分隔横幅（ANSI 亮绿），
