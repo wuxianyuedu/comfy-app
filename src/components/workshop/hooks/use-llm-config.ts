@@ -51,6 +51,8 @@ export interface LLMConfigController {
   localModels: string[];
   /** 静态配置下的远端独立模型名（存 remoteModel 表，仅 chat 文本生成类型）。 */
   remoteModels: string[];
+  /** 静态配置下的远端生图模型名（kind=image，供定妆照等远端生图通道挑选）。 */
+  remoteImageModels: string[];
   loading: boolean;
   refresh: () => void;
 }
@@ -58,10 +60,11 @@ export interface LLMConfigController {
 export function useLLMConfig(): LLMConfigController {
   const configQ = api.llm.configGet.useQuery();
   const [config, setConfig] = useState<LLMConfigView | null>(null);
-  const [split, setSplit] = useState<{ local: string[]; remote: string[] }>({
-    local: [],
-    remote: [],
-  });
+  const [split, setSplit] = useState<{
+    local: string[];
+    remote: string[];
+    remoteImage: string[];
+  }>({ local: [], remote: [], remoteImage: [] });
 
   const refresh = useCallback(() => {
     void configQ.refetch();
@@ -83,6 +86,10 @@ export function useLLMConfig(): LLMConfigController {
     /* 远端候选只收 chat（或 kind 缺省按 chat 处理）的模型。 */
     const remoteNames = p.remoteEntries
       .filter((e) => isChatModel(e.kind))
+      .map((e) => e.name);
+    /* 远端生图模型（kind=image）单独一组，给定妆照等远端生图通道挑选。 */
+    const remoteImageNames = p.remoteEntries
+      .filter((e) => e.kind === "image")
       .map((e) => e.name);
     /* 本地 Ollama 模型均通过 chat/completions 调用，天然可做文本任务。 */
     const local = p.localNames.slice();
@@ -106,7 +113,7 @@ export function useLLMConfig(): LLMConfigController {
         local.push(model);
       }
     }
-    setSplit({ local, remote });
+    setSplit({ local, remote, remoteImage: remoteImageNames });
     setConfig({
       ...cfg,
       provider: effectiveProvider,
@@ -119,6 +126,7 @@ export function useLLMConfig(): LLMConfigController {
     config,
     localModels: split.local,
     remoteModels: split.remote,
+    remoteImageModels: split.remoteImage,
     loading: configQ.isLoading,
     refresh,
   };

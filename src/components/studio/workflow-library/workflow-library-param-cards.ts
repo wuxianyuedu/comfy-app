@@ -42,6 +42,10 @@ export interface LibraryParamCards {
    *  到的那一行之间）。自动判定画虚线、作者改过画实线，与编辑器画布同一套
    *  语义 —— 库里不画线的话，圆点就只是一颗装饰点，读者答不出它连到哪。 */
   wires: ParamCardWire[];
+  /** 宿主卡片此刻真的画得出来的端口（见 `deriveLibraryParamCards` 的入参
+   *  `reachableKeys`；缺省 = 不收窄）。卡片上的候选圆点按它收窄，
+   *  与连线用同一份事实。 */
+  reachableKeys?: ReadonlySet<string>;
 }
 
 /** 库内一条只读映射连线。 */
@@ -72,8 +76,14 @@ export function deriveLibraryParamCards(args: {
   mode: string | null | undefined;
   /** 宿主表单把哪些端口交给了组合控件（卡片不再重复列；连线仍指向那块控件）。 */
   groupedKeys?: ReadonlySet<string>;
+  /** 宿主卡片此刻**真的画得出来、连得上**的那几行（ioKey 集合）。
+   *
+   *  给定时卡片上的候选圆点收窄到这些行：画不出端点的端口不给拖 —— 拖过去
+   *  也只会落不上（用户看到的就是「点击端点拉线出现禁用标记」）。缺省 = 不
+   *  收窄（老调用方行为不变）。 */
+  reachableKeys?: ReadonlySet<string>;
 }): LibraryParamCards {
-  const { io, paramMap, mode, groupedKeys } = args;
+  const { io, paramMap, mode, groupedKeys, reachableKeys } = args;
   /* 契约驱动：卡片列 = 该模式统一对外暴露的参数（提示词 / 尺寸 / 首帧…），
    * 与具体工作流无关；工作流只决定每张卡落到哪一行端口。 */
   const entries = buildParamEntries(io, undefined, { mode: mode ?? null });
@@ -91,7 +101,8 @@ export function deriveLibraryParamCards(args: {
     if (!target) continue;
     /* 「作者改过」的口径与编辑器同一份（manualTargetFor）：该模式下这一条目
      *  确实有一条手工线 —— 显式断开也算改过，只是那时不画线。 */
-    const manual = manualTargetFor(parsed, entry.id, mode ?? null) !== undefined;
+    const manual =
+      manualTargetFor(parsed, entry.id, mode ?? null) !== undefined;
     /* 线要从**对应的那一颗圆点**出发：卡片上一个候选一颗点，取该端口的
      *  handle id（与编辑器画布同口径）。
      *
@@ -106,6 +117,16 @@ export function deriveLibraryParamCards(args: {
       manual,
       groupedKeys,
     })) {
+      /* 宿主卡片上画不出来的行连不出线（端点画在一颗落不上去的句柄上只会误导）。
+       *  **当前生效落点永远画**：它就是这条映射本身，画不出来会让卡片看着像「没连上」。
+       *  收窄只作用于「一对外参数摊开来的其余端口」（组合控件里那几个兄弟口）。 */
+      if (
+        reachableKeys &&
+        reachableKeys.size > 0 &&
+        wired.ioKey !== target &&
+        !reachableKeys.has(wired.ioKey)
+      )
+        continue;
       wires.push({
         entryId: entry.id,
         targetIoKey: wired.ioKey,
@@ -120,7 +141,7 @@ export function deriveLibraryParamCards(args: {
     }
   }
 
-  return { entries, resolved, ownersByPin, wires };
+  return { entries, resolved, ownersByPin, wires, reachableKeys };
 }
 
 /** 对外**输出**参数卡片与它们的连线（纯派生）。
@@ -134,7 +155,10 @@ export function deriveLibraryParamCards(args: {
  *  可改的映射、右边是本来就通着的产出」。 */
 export function deriveLibraryOutputCards(args: {
   io: WorkflowIOMap | null | undefined;
-}): { outputs: (WorkflowIOEntry & { ioKey: string })[]; wires: ParamCardWire[] } {
+}): {
+  outputs: (WorkflowIOEntry & { ioKey: string })[];
+  wires: ParamCardWire[];
+} {
   const { io } = args;
   /* 顺序与宿主卡片上的输出行**同一份**（`splitWorkflowIO` 里按作者拖出的
    *  `displayOrder` 排过）：右列卡的先后与节点上那几行一一对应，读者不必自己
@@ -150,4 +174,3 @@ export function deriveLibraryOutputCards(args: {
   }));
   return { outputs, wires };
 }
-

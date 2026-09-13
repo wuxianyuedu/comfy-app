@@ -309,17 +309,22 @@ async function postRelay(body: Record<string, unknown>): Promise<unknown> {
   return data;
 }
 
-/** API channel: one-shot image generation → usable image URL. */
+/** API channel: one-shot image generation → usable image URL.
+ *  model 传设置页远端模型名（remoteModel 表）时，服务端按该条目的连接参数
+ *  生图；不传则回落到工坊 API 通道设置（旧行为）。 */
 export async function apiGenerateImage(req: {
   prompt: string;
   negative?: string;
   size?: string;
+  /** 设置页配置的远端模型名（remoteModel 表按名取连接参数） */
+  model?: string;
 }): Promise<string> {
   const data = await postRelay({
     kind: "image",
     prompt: req.prompt,
     negative: req.negative,
     size: req.size,
+    ...(req.model ? { model: req.model } : {}),
   });
   const url =
     isRecord(data) && typeof data.url === "string" && data.url

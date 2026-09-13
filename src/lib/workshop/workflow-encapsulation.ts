@@ -368,6 +368,74 @@ export function longEdgeToMegapixels(longEdge: number | undefined): number | und
   return Math.round(mp * 100) / 100;
 }
 
+/* ── "WxH" → 各尺寸端口认的形状（画布/库内连线通路用）──
+ *
+ * 画布上拖出来的「尺寸」线拿到的是作品里存的 WxH 串（如 "1920x1080"）。落到
+ * `aspect_ratio` / `megapixels` 这类端口上时要现算成它们各自认的形状 —— 照抄
+ * 像素串会被 ComfyUI 判成非法选项（表现为「改了没生效」）。
+ *
+ * 工坊封装本身（`buildEncapsulatedInputs`）不走这里：它直接拿「比例 + 像素基准」，
+ * 不经 WxH 反解（见 `WorkshopExposedValues` 的 `aspect` / `megapixels`）。这两个
+ * 派生函数只服务「外部值本身是 WxH」的画布通路。 */
+
+/** 一档标准宽高比：把 "WxH" 还原成标签用。 */
+const RATIO_PRESETS: { ratio: number; labels: string[] }[] = [
+  { ratio: 1, labels: ["1:1", "1x1"] },
+  { ratio: 16 / 9, labels: ["16:9"] },
+  { ratio: 9 / 16, labels: ["9:16"] },
+  { ratio: 4 / 3, labels: ["4:3"] },
+  { ratio: 3 / 4, labels: ["3:4"] },
+  { ratio: 3 / 2, labels: ["3:2"] },
+  { ratio: 2 / 3, labels: ["2:3"] },
+  { ratio: 21 / 9, labels: ["21:9"] },
+];
+
+/** 标准比例标签：与目标比例相对差最小、且**该 pin 真的声明了这个选项**的那个。
+ *
+ *  pin 没有 `options`（IO 未富化到候选表）时按内置表给标签 —— 工坊的标准比例
+ *  标签与主流工作流一致；给了 options 就只认它自己那一份，绝不写表外的值。 */
+export function aspectLabelForSize(
+  width: number,
+  height: number,
+  options?: readonly string[],
+): string | null {
+  if (!(width > 0) || !(height > 0)) return null;
+  const target = width / height;
+  const ranked = [...RATIO_PRESETS].sort(
+    (a, b) => Math.abs(a.ratio - target) - Math.abs(b.ratio - target),
+  );
+  for (const preset of ranked) {
+    /* 相对差超过 2% 就不算命中该比例（如 1000x999 不该被写成 "16:9"）。 */
+    if (Math.abs(preset.ratio - target) / target > 0.02) continue;
+    for (const label of preset.labels) {
+      if (!options || options.length === 0) return label;
+      const hit = options.find(
+        (option) => option === label || option.split(" ")[0] === label,
+      );
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+/** 像素量（百万像素）：W×H / 1e6，按 pin 声明的小数精度取整。 */
+export function megapixelsForSize(
+  width: number,
+  height: number,
+  defaultValue?: unknown,
+): number | null {
+  if (!(width > 0) || !(height > 0)) return null;
+  const raw = (width * height) / 1_000_000;
+  if (!Number.isFinite(raw) || raw <= 0) return null;
+  /* 精度取默认值的小数位（`1.0` → 1 位；`1` → 0 位），工坊的 `1M` 这类
+   * 声明通常写 1.0，写 1.03 进去会被 pin 判成「不在候选内」。 */
+  const digits =
+    typeof defaultValue === "number" && !Number.isInteger(defaultValue) ? 1 : 0;
+  const factor = 10 ** digits;
+  const rounded = Math.round(raw * factor) / factor;
+  return rounded > 0 ? rounded : null;
+}
+
 /** 组装工坊对外参数 → workflowInputs。
  *
  *  规则：

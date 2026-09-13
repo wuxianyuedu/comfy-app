@@ -768,3 +768,104 @@ describe("wiredTargetsForEntry — 一个对外参数当前接到哪些端口", 
     expect(wired.map((item) => item.ioKey)).toEqual(["5::widget::megapixels"]);
   });
 });
+
+/* ── 尺寸各项各自取值（ISSUE #355）──
+ *
+ * 用户口径：「尺寸有多个数值，只有一条线，需要多条线都能连，尺寸那几项每一项都
+ * 需要从外部获取值」。画布通路上外部给的「尺寸」是 "WxH"，落到比例 / 像素量这些
+ * 端口上要现算成它们各自认的形状 —— 照抄像素串会被 ComfyUI 判成非法选项。
+ *
+ * 「对齐倍数」不再属于尺寸语义（它只是 W/H 吸附到哪个网格的实现细节，见工坊
+ * 尺寸选择器口径），因此不在这里。 */
+
+describe("applyParamMapping — 尺寸各项各自取值", () => {
+  const sizeIo: WorkflowIOMap = {
+    "5::widget::aspect_ratio": pin("5", "aspect_ratio", {
+      type: "COMBO",
+      defaultValue: "16:9",
+      options: ["16:9", "4:3", "1:1"],
+    }),
+    "5::widget::megapixels": pin("5", "megapixels", {
+      type: "FLOAT",
+      defaultValue: 1,
+    }),
+    "5::widget::width": pin("5", "width", {
+      type: "INT",
+      defaultValue: 1024,
+    }),
+  };
+  const groupedKeys = new Set(Object.keys(sizeIo));
+
+  it("同一个「尺寸」口接到多个端口时，逐个派生成各自认的形状", () => {
+    const entries = buildParamEntries(sizeIo, undefined, { mode: "T2I" });
+    const { inputs } = applyParamMapping({
+      io: sizeIo,
+      entries,
+      /* 作者把那几条线都连到同一个「尺寸」口上（库里/画布上拖出来的线）。 */
+      mapping: { manualByMode: { T2I: { size: "5::widget::megapixels" } } },
+      values: { size: "1024x1024" },
+      mode: "T2I",
+      groupedKeys,
+    });
+    /* 手工落点只往它指定的那一个端口供值（运行期同口径：其余端口回工作流默认值）。 */
+    expect(inputs.find((item) => item.name === "megapixels")?.value).toBe(1);
+    expect(inputs.some((item) => item.name === "aspect_ratio")).toBe(false);
+  });
+
+  it("默认连线状态下多个端口都拿到值（一对外参数对多端口）", () => {
+    const entries = buildParamEntries(sizeIo, undefined, { mode: "T2I" });
+    const { inputs } = applyParamMapping({
+      io: sizeIo,
+      entries,
+      mapping: null,
+      values: { size: "1920x1080" },
+      mode: "T2I",
+      groupedKeys,
+    });
+    const byName = new Map(inputs.map((item) => [item.name, item.value]));
+    expect(byName.get("aspect_ratio")).toBe("16:9");
+    expect(byName.get("megapixels")).toBe(2);
+    expect(byName.get("width")).toBe(1920);
+  });
+
+  it("比例不在端口声明的候选里 → 不写非法值，退回默认值", () => {
+    const narrow: WorkflowIOMap = {
+      "5::widget::aspect_ratio": pin("5", "aspect_ratio", {
+        type: "COMBO",
+        defaultValue: "4:3",
+        options: ["4:3"],
+      }),
+    };
+    const entries = buildParamEntries(narrow, undefined, { mode: "T2I" });
+    const { inputs } = applyParamMapping({
+      io: narrow,
+      entries,
+      mapping: null,
+      values: { size: "1024x1024" },
+      mode: "T2I",
+    });
+    expect(inputs.find((item) => item.name === "aspect_ratio")?.value).toBe(
+      "4:3",
+    );
+  });
+
+  it("非尺寸口原样透传（提示词在所有落点上同形）", () => {
+    const io: WorkflowIOMap = {
+      "9::widget::text": pin("9", "text", { defaultValue: "built-in" }),
+      "9::widget::positive_prompt": pin("9", "positive_prompt", {
+        defaultValue: "built-in",
+      }),
+    };
+    const entries = buildParamEntries(io, undefined, { mode: "T2I" });
+    const { inputs } = applyParamMapping({
+      io,
+      entries,
+      mapping: null,
+      values: { prompt: "一只猫" },
+      mode: "T2I",
+    });
+    expect(inputs.find((item) => item.name === "positive_prompt")?.value).toBe(
+      "一只猫",
+    );
+  });
+});

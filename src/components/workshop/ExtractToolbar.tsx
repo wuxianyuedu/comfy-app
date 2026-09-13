@@ -6,6 +6,9 @@ import {
   parseChannelOption,
 } from "@/components/workshop/ExtractModelSelect";
 import type { ExtractLogEntry } from "@/lib/workshop/extraction-log";
+import { fetchGenerationLogs } from "@/lib/workshop/generation-log-client";
+import type { GenerationLogStage } from "@/lib/workshop/generation-log";
+import type { PersistableGenerationLog } from "@/lib/workshop/generation-log-client";
 
 /** @deprecated 兼容既有 import：通道类型已迁至 ExtractModelSelect */
 export type { ExtractChannel } from "@/components/workshop/ExtractModelSelect";
@@ -63,6 +66,9 @@ interface ExtractToolbarProps {
   errorText?: string;
   /** 本次提取的结构化执行日志（模型输入/输出/结果/错误），跑完仍展示 */
   executionLog?: ExtractLogEntry[];
+  /** 传了环节名（character / storyboard）就提供「历史」入口：按需拉取
+   *  log/workshop/ 里落盘的历史日志（跨刷新 / 重启可回看）。 */
+  logStage?: GenerationLogStage;
   /** 无剧本文本等情况下禁用提取(导入仍可用) */
   extractDisabled?: boolean;
   extractDisabledReason?: string;
@@ -82,10 +88,23 @@ export function ExtractToolbar({
   statusText,
   errorText,
   executionLog,
+  logStage,
   extractDisabled = false,
   extractDisabledReason,
 }: ExtractToolbarProps) {
   const fileRef = React.useRef<HTMLInputElement>(null);
+
+  /* 执行日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
+  const [historyOpen, setHistoryOpen] = React.useState(false);
+  const [history, setHistory] = React.useState<PersistableGenerationLog[] | null>(
+    null,
+  );
+  const loadHistory = () => {
+    if (!logStage) return;
+    setHistoryOpen(true);
+    if (history) return;
+    void fetchGenerationLogs(logStage, 100).then(setHistory);
+  };
 
   return (
     <div className="border-primary-soft bg-primary-soft/30 rounded-xl border p-3">
@@ -161,8 +180,20 @@ export function ExtractToolbar({
           className="border-border bg-bg/40 mt-2 rounded-lg border px-3 py-2"
           open={busy}
         >
-          <summary className="text-primary cursor-pointer text-[11px] font-medium select-none">
-            执行日志（{executionLog.length} 条）
+          <summary className="text-primary flex cursor-pointer items-center gap-2 text-[11px] font-medium select-none">
+            <span>执行日志（{executionLog.length} 条）</span>
+            {logStage && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  loadHistory();
+                }}
+                className="text-muted-foreground hover:text-primary text-[10px] font-normal underline underline-offset-2"
+              >
+                历史
+              </button>
+            )}
           </summary>
           <ul className="mt-2 space-y-2">
             {executionLog.map((entry, i) => (
@@ -191,6 +222,46 @@ export function ExtractToolbar({
               </li>
             ))}
           </ul>
+          {logStage && historyOpen && (
+            <div className="border-border/60 mt-2 border-t pt-2">
+              <p className="text-muted-foreground text-[10px]">
+                历史日志（含此前会话，保存在 log/workshop/）
+              </p>
+              {history === null ? (
+                <p className="text-muted-foreground text-[10.5px]">加载中…</p>
+              ) : history.length === 0 ? (
+                <p className="text-muted-foreground text-[10.5px]">
+                  还没有落盘的历史日志。
+                </p>
+              ) : (
+                <ul className="mt-1.5 max-h-48 space-y-1.5 overflow-y-auto">
+                  {history.map((entry, i) => (
+                    <li
+                      key={`${entry.ts}-${i}`}
+                      className="bg-surface rounded-lg px-2.5 py-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="bg-primary-soft text-primary rounded px-1.5 py-0.5 text-[10px] font-medium">
+                          {entry.kind}
+                        </span>
+                        <span className="text-muted-foreground min-w-0 flex-1 truncate text-[11px] leading-relaxed">
+                          {entry.summary}
+                        </span>
+                        <span className="text-muted-foreground/60 shrink-0 text-[10px]">
+                          {new Date(entry.ts).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      {entry.detail && (
+                        <pre className="bg-bg/70 text-ink-subtle mt-1.5 max-h-32 overflow-y-auto rounded px-2 py-1.5 text-[10.5px] leading-relaxed break-all whitespace-pre-wrap">
+                          {entry.detail}
+                        </pre>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </details>
       )}
     </div>

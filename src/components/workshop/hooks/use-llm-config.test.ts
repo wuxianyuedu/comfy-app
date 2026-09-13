@@ -127,6 +127,22 @@ describe("useLLMConfig 远端模型 kind 过滤", () => {
   });
 });
 
+describe("useLLMConfig 远端生图模型清单", () => {
+  it("kind=image 的远端条目单独暴露给定妆照远端通道挑选", async () => {
+    const qc = createTestQueryClient();
+    const { result } = renderHook(() => useLLMConfig(), {
+      wrapper: makeWrapper(qc),
+    });
+    await waitFor(() =>
+      expect(result.current.remoteImageModels.length).toBeGreaterThan(0),
+    );
+    expect(result.current.remoteImageModels).toContain("dall-e-3");
+    // chat / video 条目不进生图清单
+    expect(result.current.remoteImageModels).not.toContain("gpt-4o");
+    expect(result.current.remoteImageModels).not.toContain("sora");
+  });
+});
+
 describe("useLLMConfig 生效提供方（本机 ollama 误存为「远端」的归组修正）", () => {
   it("provider=remote 但 baseUrl 回环且无密钥 → 主模型归本地组，config.provider 按本地生效", async () => {
     currentCfg = {
