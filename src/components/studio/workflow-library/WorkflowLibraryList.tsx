@@ -9,6 +9,7 @@ import {
   type WorkflowRow,
 } from "./workflow-library-config";
 import { TaskTypeChip } from "../ui/TaskTypeChip";
+import { deriveEncapsulationStatus } from "@/lib/workshop/workshop-encapsulation-status";
 import { SourceTag } from "../ui/SourceTag";
 import { EmptyState } from "../ui/EmptyState";
 
@@ -177,6 +178,12 @@ function WorkflowListItem({
   const { usable } = deriveFormatFlags(workflow);
   const { missing, canResync } = deriveSyncFlags(workflow);
   const isTech = isTechnicalName(workflow.name);
+  /* 对外参数封装状态（与生成链路同口径）：提示词口已有落点 = 工坊可直接驱动。 */
+  const encapsulation = deriveEncapsulationStatus({
+    io: workflow.workflowIO ?? null,
+    paramMap: workflow.paramMap ?? null,
+    mode: workflow.defaultMode ?? workflow.taskType ?? null,
+  });
 
   return (
     <li>
@@ -206,6 +213,22 @@ function WorkflowListItem({
               不可执行
             </span>
           )}
+          {usable &&
+            (encapsulation.ready ? (
+              <span
+                title={`对外参数已配置（${encapsulation.resolvedCount}/${encapsulation.entries.length}）`}
+                className="shrink-0 rounded bg-emerald-500/12 px-1 py-px text-[9px] text-emerald-600"
+              >
+                对外参数已配置
+              </span>
+            ) : (
+              <span
+                title={`未配置：${encapsulation.missingLabels.join("、") || "提示词口未落到端口"}`}
+                className="shrink-0 rounded bg-amber-500/12 px-1 py-px text-[9px] text-amber-600"
+              >
+                对外参数未配置
+              </span>
+            ))}
           {canResync && (
             <span className="shrink-0 rounded bg-amber-500/12 px-1 py-px text-[9px] text-amber-600">
               {missing ? "已丢失" : "有更新"}
