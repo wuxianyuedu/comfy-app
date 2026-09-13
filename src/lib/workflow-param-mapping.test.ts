@@ -15,7 +15,6 @@ import {
   PARAM_NODE_HEADER_H,
   PARAM_NODE_OUTPUT_ROW_H,
   PARAM_NODE_PAD_Y,
-  PARAM_NODE_ROW_H,
   paramNodeHeight,
   paramOutputPorts,
   defaultOutputPortIndex,
@@ -552,13 +551,15 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
   it("同一个口落到不同类型就有不同类型（尺寸 → COMBO 预设口）", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
     const size = entries.find((entry) => entry.id === "size")!;
-    expect(paramOutputPorts(size, outIo, "5::widget::width")[0]!.type).toBe("INT");
-    expect(paramOutputPorts(size, outIo, "5::widget::aspect_ratio")[0]!.type).toBe(
-      "COMBO",
-    );
+    const byName = (name: string) =>
+      paramOutputPorts(size, outIo, "5::widget::width").find(
+        (port) => port.name === name,
+      )!;
+    expect(byName("width").type).toBe("INT");
+    expect(byName("aspect_ratio").type).toBe("COMBO");
   });
 
-  it("未连线时**逐个候选**给端口 —— 尺寸有几个候选就有几颗点（ISSUE #355 复审）", () => {
+  it("**每个候选都给端口** —— 尺寸有几个候选就有几颗点（ISSUE #355 复审）", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
     const size = entries.find((entry) => entry.id === "size")!;
     const ports = paramOutputPorts(size, outIo, null);
@@ -570,7 +571,8 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
       "megapixels",
     ]);
     expect(ports.map((port) => port.type)).toEqual(["INT", "INT", "COMBO", "FLOAT"]);
-    expect(ports.every((port) => !port.connected)).toBe(true);
+    /* `connected` = 端口在工作流里真实存在（不是「已连上」）—— 候选端口都存在。 */
+    expect(ports.every((port) => port.connected)).toBe(true);
     /* 每颗点自带 handle id（= 该端口的 ioKey）：拖哪颗就连到哪个候选。 */
     expect(ports.map((port) => port.handleId)).toEqual([
       "width",
@@ -581,11 +583,27 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
     expect(ports.every((port) => !port.active)).toBe(true);
   });
 
+  it("**已有落点时仍列出全部候选**，生效那颗标 active（ISSUE #355 复审）", () => {
+    /* 「尺寸只有一个比例口，像素数哪去了」：卡片要把每个候选的出口都摆出来，
+     *  拖哪一颗就连到哪个候选；当前落点那一颗标实心。 */
+    const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
+    const size = entries.find((entry) => entry.id === "size")!;
+    const ports = paramOutputPorts(size, outIo, "5::widget::height");
+    expect(ports.map((port) => port.name)).toEqual([
+      "width",
+      "height",
+      "aspect_ratio",
+      "megapixels",
+    ]);
+    expect(ports.map((port) => port.active)).toEqual([false, true, false, false]);
+    expect(defaultOutputPortIndex(ports)).toBe(1);
+  });
+
   it("未连线时端口名就是候选端口名，不谎报类型", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
     const prompt = entries.find((entry) => entry.id === "prompt")!;
     const ports = paramOutputPorts(prompt, outIo, null);
-    expect(ports.map((port) => port.connected)).toEqual([false]);
+    expect(ports.map((port) => port.connected)).toEqual([true]);
     expect(ports[0]!.type).toBe("STRING");
   });
 
@@ -600,21 +618,23 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
     expect(ports[0]!.handleId).toBe("提示词");
   });
 
-  it("落点指向已不存在的端口时按未连线处理", () => {
+  it("落点指向已不存在的端口时列候选、不留一颗悬空点", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
     const prompt = entries.find((entry) => entry.id === "prompt")!;
     const ports = paramOutputPorts(prompt, outIo, "9::widget::gone");
-    expect(ports[0]!.connected).toBe(false);
-    expect(ports[0]!.type).toBe("STRING");
+    /* 端口已从 IO 里移除 → 那个落点画不出端点（io 里查不到类型/名字）。此时照
+     * 常列出工作流里真实存在的候选，而不是凭空造一颗标着 active 的点。 */
+    expect(ports.map((port) => port.name)).toEqual(["positive_prompt"]);
+    expect(ports[0]!.ioKey).toBe("9::widget::text");
+    expect(ports[0]!.active).toBe(false);
   });
 
   it("生效落点排在可识别的位置（第一颗即连上的那颗）", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
     const size = entries.find((entry) => entry.id === "size")!;
     const ports = paramOutputPorts(size, outIo, "5::widget::height");
-    expect(ports).toHaveLength(1);
-    expect(defaultOutputPortIndex(ports)).toBe(0);
-    expect(ports[0]!.name).toBe("height");
+    expect(defaultOutputPortIndex(ports)).toBe(1);
+    expect(ports[1]!.name).toBe("height");
   });
 
   it("portTypeDisplay：声明类型原样大写，缺省 *", () => {
@@ -626,28 +646,16 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
 });
 
 describe("paramNodeHeight — 输出端口区计入卡片高度", () => {
-  const entry = {
-    id: "prompt",
-    nodeId: "9",
-    nodeTitle: "T",
-    cls: "prompt" as const,
-    label: "提示词",
-    pins: [
-      { ioKey: "9::widget::text", name: "text", type: "STRING", defaultValue: "" },
-    ],
-  };
-
   it("多一条输出端口就多一行高度（否则卡片互相压住）", () => {
-    expect(paramNodeHeight(entry, 1)).toBe(
-      PARAM_NODE_HEADER_H + PARAM_NODE_ROW_H + PARAM_NODE_OUTPUT_ROW_H + PARAM_NODE_PAD_Y,
+    /* 卡片体 = 头部 + 输出端口行（端点 + 参数名 + 类型），不再另列输入端口行。 */
+    expect(paramNodeHeight(1)).toBe(
+      PARAM_NODE_HEADER_H + PARAM_NODE_OUTPUT_ROW_H + PARAM_NODE_PAD_Y,
     );
-    expect(paramNodeHeight(entry, 2) - paramNodeHeight(entry, 1)).toBe(
-      PARAM_NODE_OUTPUT_ROW_H,
-    );
+    expect(paramNodeHeight(2) - paramNodeHeight(1)).toBe(PARAM_NODE_OUTPUT_ROW_H);
   });
 
   it("输出端口数缺省按至少一条处理（与 paramOutputPorts 的兜底一致）", () => {
-    expect(paramNodeHeight(entry)).toBe(paramNodeHeight(entry, 1));
-    expect(paramNodeHeight(entry, 0)).toBe(paramNodeHeight(entry, 1));
+    expect(paramNodeHeight()).toBe(paramNodeHeight(1));
+    expect(paramNodeHeight(0)).toBe(paramNodeHeight(1));
   });
 });

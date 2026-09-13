@@ -4,28 +4,25 @@
  *
  * 卡片有两个消费场景：
  *   · 编辑器画布 —— 由 WorkflowParamNode 包一层 <Handle>，端点可拖线（编辑）；
- *   · 工作流库画布 —— 只读展示，端点不渲染，看的是「这个对外参数由哪些端口
- *     组成」。
- * 两处的头部 / 端口行 / 带类型的输出端口 / 「恢复默认」必须完全一致，故把视觉
- * 收敛到这里，消费方只负责在输出端口行右侧挂「端点」与在端口行尾补说明。
+ *   · 工作流库画布 —— 只读展示，端点画成装饰圆点。
+ * 两处的头部 / 带类型的输出端口 / 「恢复默认」必须完全一致，故把视觉收敛到这里，
+ * 消费方只负责在输出端口行右侧挂「端点」。
  *
- * 卡片上有两种「端口」，别混淆：
- *   · **输入端口行**（`inputRows`）= 这个对外参数落地时的候选/实际落点（工作流内部
- *     的 pin 名 + 类型）；
- *   · **带类型的输出端口**（`outputPorts`）= 这张卡右侧出去的是什么（对外语义
- *     的类型，如「提示词」出去的都是 STRING）。它跟着**当前落点**走：同一个
- *     「尺寸」口落到 `width` 是 INT、落到 `resolution_preset` 就是 COMBO。
+ * 卡片体就是**一行一个端口：端点 + 参数名 + 类型**（`outputPorts`）。
+ *
+ * 此前这里另有一段「输入端口行」把同一批端口再列一遍（`text  STRING`），与下面
+ * 的输出端口行（`text  STRING  ●`）说同一件事 —— 单端口条目上读起来就是同一个
+ * 信息重复两遍，用户圈出来要求去掉（ISSUE #355 复审）。现在只保留输出端口这一段：
+ * 它就是「全量候选出口」本身（每个候选一颗端点），名称与类型贴着端点画。
  */
 
 import type { DOMAttributes } from "react";
 import { RotateCcw } from "lucide-react";
 
 import type { ParamEntry, ParamOutputPort } from "~/lib/workflow-param-mapping";
-import { inputRowType } from "~/lib/workflow-param-input-rows";
 import {
   PARAM_NODE_HEADER_H,
   PARAM_NODE_OUTPUT_ROW_H,
-  PARAM_NODE_ROW_H,
 } from "~/lib/workflow-param-mapping";
 import { paramClassStyle } from "../workflow-library/workflow-param-mapping-ui";
 
@@ -36,8 +33,6 @@ export interface WorkflowParamCardProps {
   /** 分类中文名（悬停提示用）。 */
   classLabel: string;
   hostNodeId: string;
-  /** 卡片的输入端口行（已剔除被组合控件接管的端口）。 */
-  inputRows: ParamEntry["pins"];
   width: number;
   /** 是否允许连线：false 时卡片置灰。
    *
@@ -72,12 +67,6 @@ export interface WorkflowParamCardProps {
    *  每颗圆点各带自己的 handle id（见 `ParamOutputPort.handleId`），拖哪颗点就连到
    *  哪个候选端口。没有模式（返回 null）时该行不渲染端点 = 那个候选连不了。 */
   endpoint?: (port: ParamOutputPort, index: number) => React.ReactNode;
-  /** 端口行的**行尾**内容（如落点说明）。
-   *
-   *  只给**多端口**条目用：落点跟着具体端口名走，多行之间需要区分。单端口条目
-   *  的落点在下面那行带类型的输出端口里已经写了名字（且贴着端点），行尾再标一次
-   *  就是把同一件事说两遍（ISSUE #355 复审「红框内那段没用，去掉」）。 */
-  rowTrailing?: (pin: ParamEntry["pins"][number]) => React.ReactNode;
   /** 卡片元素的 ref（节点渲染器用 useHoverElevation 生成）—— 悬浮态由该钩子
    *  写到 React Flow 的节点外壳上，由 CSS 抬起层级压住连线（ISSUE #400）。
    *  命名刻意不含端点类关键字：本文件是**画布无关**的视觉本体（见
@@ -93,7 +82,6 @@ export function WorkflowParamCard({
   label,
   classLabel,
   hostNodeId,
-  inputRows,
   width,
   canWire,
   readOnly = false,
@@ -103,7 +91,6 @@ export function WorkflowParamCard({
   footNote,
   wired = false,
   endpoint,
-  rowTrailing,
   hoverRef,
   hoverEvents,
 }: WorkflowParamCardProps) {
@@ -169,26 +156,6 @@ export function WorkflowParamCard({
             <RotateCcw size={11} />
           </button>
         )}
-      </div>
-
-      {/* 输入端口行：一个端口一行（被组合控件接管的端口不在此列，见
-          workflow-param-input-rows）。行数即几何里的输入行数，两端同口径。 */}
-      <div className="flex flex-col px-2 py-1">
-        {inputRows.map((pin) => (
-          <div
-            key={pin.ioKey}
-            className="flex min-w-0 items-center gap-1.5 text-[10.5px] text-(--color-ink-soft)"
-            style={{ height: PARAM_NODE_ROW_H }}
-            title={`${pin.name} · ${pin.type}`}
-          >
-            <span className="min-w-0 flex-1 truncate">{pin.name}</span>
-            {rowTrailing?.(pin) ?? (
-              <span className="shrink-0 font-mono text-[9.5px] text-(--color-ink-fainter)">
-                {inputRowType(pin)}
-              </span>
-            )}
-          </div>
-        ))}
       </div>
 
       {/* ── 输出端口 ──

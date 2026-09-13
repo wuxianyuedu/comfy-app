@@ -20,7 +20,6 @@ import {
   placeParamNodes,
   type ParamEntry,
 } from "~/lib/workflow-param-mapping";
-import { inputRowsForEntry } from "~/lib/workflow-param-input-rows";
 import { paramClassStyle } from "../workflow-library/workflow-param-mapping-ui";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import type { WorkflowParamNodeData } from "./workflow-param-node-data";
@@ -35,9 +34,6 @@ export interface BuildParamNodesCtx {
   resolved?: Record<string, string | null>;
   /** workflowIO：反查落点端口的类型用（不切分 ioKey）。 */
   io?: WorkflowIOMap | null;
-  /** 宿主表单把哪些端口交给了组合控件（卡片不再重复列它们；连线仍可落到
-   *  那一块控件上）。缺省 = 没有组合控件。 */
-  groupedKeys?: ReadonlySet<string>;
   /** 宿主卡片上**真的画得出来、连得上**的那一行（ioKey 集合）。
    *
    *  被组合控件折叠成逐行参数之后，露出来的行就是全部可连行；反过来，落到被
@@ -60,7 +56,6 @@ export function buildParamNodes(ctx: BuildParamNodesCtx): Node[] {
     onReset,
     resolved,
     io,
-    groupedKeys,
     reachableKeys,
   } = ctx;
   if (entries.length === 0) return [];
@@ -82,16 +77,14 @@ export function buildParamNodes(ctx: BuildParamNodesCtx): Node[] {
     );
     /* 输入端口行：被组合控件接管的端口不重复列（那一块控件本身就是它们的入口）。
      * 行数同样进几何 —— 少了行还按老高度算，卡片会互相压住。 */
-    const inputRows = inputRowsForEntry(entry, { groupedKeys });
     const data: WorkflowParamNodeData = {
       entryId: entry.id,
-      hostNodeId: entry.nodeId,
+      hostNodeId: entry.hostNodeId || entry.nodeId,
       hostNodeTitle: entry.nodeTitle,
       cls: entry.cls,
       label: entry.label,
       classLabel: paramClassStyle(entry.cls).label,
       pins: entry.pins,
-      inputRows,
       width: PARAM_NODE_WIDTH,
       /* 卡片就是接线面板：**没有模式也能连线**（模式只决定这条线归属哪个命名
        *  空间）。此前这里把 canWire 绑成「有没有模式」，于是未声明模式的工作流上
@@ -115,7 +108,7 @@ export function buildParamNodes(ctx: BuildParamNodesCtx): Node[] {
       connectable: true,
       style: {
         width: PARAM_NODE_WIDTH,
-        height: paramNodeHeight(entry, outputPorts.length, inputRows.length),
+        height: paramNodeHeight(outputPorts.length),
       },
       data,
     });
