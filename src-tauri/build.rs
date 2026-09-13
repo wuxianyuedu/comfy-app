@@ -72,6 +72,10 @@ fn main() {
         "get_app_url",
         "get_launch_log",
         "set_splash_compact",
+        // 启动页右上角的最小化 / 关闭（decorations: false 后唯一的窗口出口）：
+        // 按钮走自己的两个命令，不把 core:window 的整面命令授权给启动页。
+        "win_close",
+        "win_minimize",
         "navigate_to_app",
         "open_comfyui_window",
         "activate_main_window",

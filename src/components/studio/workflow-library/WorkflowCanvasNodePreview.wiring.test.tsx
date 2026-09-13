@@ -112,19 +112,15 @@ describe("库内映射编辑", () => {
       '[data-wire-anchor="size?megapixels"]',
     )!;
     expect(dot, "尺寸卡的像素量出口应有一颗可拖的圆点").toBeTruthy();
-    /* 端点与宿主行各钉一个位置（jsdom 不做布局，不钉就量不到，落点判不出来）。 */
+    /* 端点与宿主那一项各钉一个位置（jsdom 不做布局，不钉就量不到，落点判不出来）。
+     *  组合控件覆盖的每个端口**各有一项自己的落点**（比例 / 像素 / 倍数各一行）：
+     *  拖到哪一项就落到哪个端口上，不是笼统地落到整块控件。 */
     rect(dot, { left: 100, top: 70, width: 12, height: 12 });
-    rect(container.querySelector('[data-port-dot="5::widget::megapixels"]')!, {
-      left: 300,
-      top: 60,
-      width: 12,
-      height: 12,
-    });
     rect(container.querySelector('[data-io-pins="5::widget::megapixels"]')!, {
       left: 300,
       top: 55,
       width: 240,
-      height: 60,
+      height: 20,
     });
 
     await act(async () => {

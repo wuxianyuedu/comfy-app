@@ -924,6 +924,80 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     ).toContain('"allow-set-splash-compact"');
   });
 
+  /**
+   * 「窗口按钮点了没反应」的第一道闸：**按钮必须真的能调到窗口能力**。
+   *
+   * ISSUE #412 的第二次回报就是这个症状（最小化 / 关闭都没效果）。这类问题的
+   * 成因不在按钮画得对不对，而在「点击之后调用了什么」：
+   *
+   * - 事件监听没绑上 / 被顶掉时，内联 onclick 仍要能把动作递出去；
+   * - 壳过期（改了 src-tauri 没重编）时，Tauri window API 可能整块不可用，
+   *   此时要有**应用自建命令**这条兜底（win_minimize / win_close，随壳一起走
+   *   ACL 三处同步），并在都不可用时给出可见提示，而不是静默无反应；
+   * - 拖拽区与按钮必须分开声明「别被拖拽吞掉点击」。
+   *
+   * 改动启动页按钮或壳命令时先看这条。
+   */
+  it("启动页的窗口按钮有内联兜底，不是只靠 addEventListener", () => {
+    const html = readFileSync(SPLASH_COPIES[0] ?? "", "utf8");
+    // 内联 onclick 是「脚本没跑到绑定」时的第二道；两条路必须汇到同一个入口
+    expect(html).toContain("window.__splashWinAction");
+    expect(html).toMatch(/onclick="window\.__splashWinAction && window\.__splashWinAction\('minimize'\)"/);
+    expect(html).toMatch(/onclick="window\.__splashWinAction && window\.__splashWinAction\('close'\)"/);
+    expect(html).toContain("performWinAction");
+    // 按钮容器整体也不拖拽（个别按钮漏标 no-drag 时的第二层保险）
+    const buttonsCss = html.slice(
+      html.indexOf(".win-buttons {"),
+      html.indexOf(".win-btn {"),
+    );
+    expect(buttonsCss).toContain("-webkit-app-region: no-drag");
+  });
+
+  it("窗口按钮有壳命令兜底，且命令三处同步", () => {
+    const html = readFileSync(SPLASH_COPIES[0] ?? "", "utf8");
+    expect(html).toContain("win_minimize");
+    expect(html).toContain("win_close");
+    // 失败必须可见：都调不通时给出提示，不许静默
+    expect(html).toContain("noticeWindowAction");
+
+    const rust = readFileSync(LIB_RS, "utf8");
+    expect(rust).toContain("fn win_minimize");
+    expect(rust).toContain("fn win_close");
+    expect(rust).toContain("win_minimize,");
+    expect(rust).toContain("win_close,");
+
+    expect(readFileSync(join(process.cwd(), "src-tauri", "build.rs"), "utf8")).toContain(
+      '"win_close"',
+    );
+    const splashCap = readFileSync(
+      join(process.cwd(), "src-tauri", "capabilities", "splash.json"),
+      "utf8",
+    );
+    expect(splashCap).toContain('"allow-win-close"');
+    expect(splashCap).toContain('"allow-win-minimize"');
+  });
+
+  it("自绘启动器的窗口尺寸与启动页同值，且最小化不是空调用", () => {
+    const py = readFileSync(
+      join(process.cwd(), "scripts", "start_tauri_launcher.py"),
+      "utf8",
+    );
+    const win = splashWindow();
+    const w = Number(/^SPLASH_W = (\d+)/m.exec(py)?.[1]);
+    const h = Number(/^SPLASH_H = (\d+)/m.exec(py)?.[1]);
+    // 同一张「启动中」画面在本链路有两个实现（壳内嵌启动页 / 启动器 Win32 弹窗），
+    // 尺寸各写一份就会改一处、两边不一致——这里盯死必须同值。
+    expect(w).toBe(win.width);
+    expect(h).toBe(win.height);
+
+    // 置顶弹窗不会被 ShowWindow(SW_MINIMIZE) 最小化，必须走「隐藏 + 撤置顶」，
+    // 且用定时器维持（否则其它逻辑一 ShowWindow 就把它翻回来）。
+    expect(py).toContain("def _minimize");
+    expect(py).toContain("def _keep_minimized");
+    expect(py).toContain("SW_HIDE");
+    expect(py).toMatch(/if self\._minimized:\s*\n\s*self\._keep_minimized\(\)/);
+  });
+
   it("日志面板吃掉窗口剩余高度（展开后不是一条窄缝，也不留空白）", () => {
     const html = readFileSync(SPLASH_COPIES[0] ?? "", "utf8");
     const panel = html.slice(
