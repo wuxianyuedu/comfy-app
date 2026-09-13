@@ -135,9 +135,77 @@ describe("对外参数节点只在画布上表达映射", () => {
       readFileSync(path.join(EDITOR_DIR, "workflow-param-edges.ts"), "utf8"),
     );
     expect(edges).toContain("paramNodeId(entry.id)");
-    expect(edges).toContain("targetHandle: target");
+    expect(edges).toContain("targetHandle: wired.ioKey");
     /* 卡片不存在时不画线 —— 否则图上会多出一条指向不存在节点的线头。 */
     expect(edges).toContain("renderedCardIds");
+  });
+
+  it("一个对外参数可以接多个端口：默认状态按组合控件一对多，手工落点只画一条", () => {
+    /* 「尺寸」由宽高比 / 像素量 / 倍数共同组成（同一块组合控件录入），默认状态
+     *  下这三个端口各接一条线 —— 只画自动判定挑中的那一条，会让「尺寸」看着只有
+     *  一个出口（ISSUE #355：「尺寸现在有三个参数，就应该可以连三条线出来」）。
+     *
+     *  这条规则必须只有一份：画布连线与库内连线都经 `wiredTargetsForEntry`，
+     *  两处不会一个画三条、一个画一条。 */
+    const lib = stripComments(
+      readFileSync(
+        path.resolve(__dirname, "../../../lib/workflow-param-mapping.ts"),
+        "utf8",
+      ),
+    );
+    expect(lib).toContain("export function wiredTargetsForEntry");
+    expect(lib).toContain("groupedKeys");
+
+    const edges = stripComments(
+      readFileSync(path.join(EDITOR_DIR, "workflow-param-edges.ts"), "utf8"),
+    );
+    expect(edges).toContain("wiredTargetsForEntry");
+    const cards = stripComments(
+      readFileSync(
+        path.join(LIBRARY_DIR, "workflow-library-param-cards.ts"),
+        "utf8",
+      ),
+    );
+    expect(cards).toContain("wiredTargetsForEntry");
+  });
+
+  it("对外输出参数卡片列在节点右侧：只读、圆点在左、与宿主输出行同源", () => {
+    /* ISSUE #355：「红框中的输出端口也要有端口圆点，然后工作流节点右侧需要显示
+     *  对外输出参数」。左列（输入）说「对外要什么、落到哪一行」，右列（输出）
+     *  说「对外给什么」—— 两列共用同一张卡片本体，端点各在自己那侧。
+     *
+     *  输出不参与映射（没有落点、没有 paramMap 键空间），所以这一列恒为只读：
+     *  不给拖拽手势、不给「恢复默认」，也不许自己画线（线在 WorkflowParamWires
+     *  那一层，与输入侧共用一套量测）。 */
+    const column = stripComments(
+      readFileSync(
+        path.join(LIBRARY_DIR, "WorkflowOutputParamCardColumn.tsx"),
+        "utf8",
+      ),
+    );
+    expect(column).toContain('side="left"');
+    expect(column).toContain("data-wire-anchor");
+    for (const forbidden of [
+      "@xyflow/react",
+      "Handle",
+      "onConnect",
+      "<svg",
+      "<path",
+      "resolveDropTarget",
+    ]) {
+      expect(column).not.toContain(forbidden);
+    }
+    /* 宿主卡片的输出行要**画出圆点**（此前库内预览的 outputs 行没有端点）。 */
+    const preview = stripComments(
+      readFileSync(path.join(LIBRARY_DIR, "WorkflowCanvasNodePreview.tsx"), "utf8"),
+    );
+    expect(preview).toContain("renderHandle");
+    expect(preview).toContain("WorkflowOutputParamCardColumn");
+    /* 输出侧连线与输入侧同一层、同一套量测（不是各画一套）。 */
+    const wires = stripComments(
+      readFileSync(path.join(LIBRARY_DIR, "WorkflowParamWires.tsx"), "utf8"),
+    );
+    expect(wires).toContain("hostToParam");
   });
 
   it("工作流库不叠「对外参数映射层」（库内是只读说明，不是画布节点）", () => {

@@ -42,11 +42,28 @@ const MANUAL_STROKE = "#a78bfa";
 /** 拖动中的预览线描边色。 */
 const DRAG_STROKE = "#c4b5fd";
 
+/** 线的两端在哪一侧：
+ *
+ *  · `"paramToHost"`（默认）—— 对外**输入**参数卡片（左列）→ 宿主卡片参数行。
+ *    这是映射线的常态：卡片圆点是起点，参数行/组合控件是终点，第 2 项起按
+ *    「落点」判归属。
+ *  · `"hostToParam"`—— 宿主卡片的输出行 → 对外**输出**参数卡片（右列）。
+ *    方向相反：圆点在宿主行右侧、卡片在节点右边且圆点骑跨卡片**左**缘，
+ *    线从宿主输出行出发向右收在卡片圆点上。
+ *
+ *  输出侧没有「落点」概念（输出不参与映射、不可改），所以这类线恒为只读呈现，
+ *  也不参与拖拽起手判定。两处共用同一套量测与画线代码，就不会出现「输入侧的线
+ *  收在圆心上、输出侧的线停在行边」这种漂移。 */
+export type ParamWireKind = "paramToHost" | "hostToParam";
+
 export interface ParamWire {
   /** 对外参数条目 id（卡片圆点锚点的一部分）。 */
   entryId: string;
-  /** 落点的 ioKey（宿主表单行的 `data-io-key`）。 */
+  /** 落点的 ioKey（宿主表单行的 `data-io-key`）。
+   *  `hostToParam` 线里它是**宿主输出行的 ioKey**（圆点挂 `data-port-dot`）。 */
   targetIoKey: string;
+  /** 线的两端在哪一侧（缺省 = 输入侧）。 */
+  kind?: ParamWireKind;
   /** 被连的**输出端口 handle id** —— 一个对外参数可能有多颗圆点（候选落点），
    *  线必须从被落到的那一颗出发，而不是「卡片上随便一颗」。 */
   handleId: string;
@@ -135,6 +152,15 @@ function collectDropTargets(
   return out;
 }
 
+/** 一条线在 React 列表里的稳定 key。
+ *
+ *  必须是「条目 + 被接的那个端口」——一个对外参数默认可以**一对多**（「尺寸」的
+ *  宽高比 / 像素量 / 倍数各一条线），只用条目 id 会让三条线共用同一个 key
+ *  （React 重复 key，且点选高亮会张冠李戴）。 */
+function wireKey(wire: ParamWire): string {
+  return `${wire.entryId}?${wire.handleId}`;
+}
+
 /** 量出每条线两端的锚点，转成相对容器的坐标并给出贝塞尔路径。
  *
  *  起点 = 卡片那颗小圆点的**外侧边缘**（= 圆点锚点右沿 + 半颗圆点），与画布上
@@ -147,6 +173,33 @@ export function measureWires(
   const box = container.getBoundingClientRect();
   const out: Segment[] = [];
   for (const wire of wires) {
+    /* 输出侧的线方向相反：起点是**宿主卡片的输出行圆点**（`data-port-dot`），
+     * 终点是**对外输出参数卡片上的圆点**（`data-wire-anchor`）。两者的量法
+     * （起点取圆点外缘、终点取圆心）与输入侧共用下面同一段算式。 */
+    if (wire.kind === "hostToParam") {
+      const hostDot = findAnchor(container, PORT_DOT_ATTR, wire.targetIoKey);
+      const cardDot = findAnchor(
+        container,
+        "data-wire-anchor",
+        wireAnchorValue(wire.entryId, wire.handleId),
+      );
+      /* 任一端不在（输出行没渲染 / 卡片列没渲染）→ 不画，避免悬空线头。 */
+      if (!hostDot || !cardDot) continue;
+      const a = hostDot.getBoundingClientRect();
+      const b = cardDot.getBoundingClientRect();
+      const x1 = a.left - box.left + a.width + a.width / 2;
+      const y1 = a.top - box.top + a.height / 2;
+      const x2 = b.left - box.left + b.width / 2;
+      const y2 = b.top - box.top + b.height / 2;
+      const dx = Math.max(Math.abs(x2 - x1) / 2, 16);
+      out.push({
+        key: wireKey(wire),
+        entryId: wire.entryId,
+        manual: wire.manual,
+        d: `M ${x1} ${y1} C ${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`,
+      });
+      continue;
+    }
     /* 起点 = **被落到的那一颗圆点**：卡片上一个候选一颗点，按「条目 + 端口」
      *  精确定位，否则多候选口子（尺寸）会连到随便一颗上。 */
     const from = findAnchor(
@@ -184,7 +237,7 @@ export function measureWires(
      * `Math.abs` 兜住，线仍是一条平滑的 S 形。 */
     const dx = Math.max(Math.abs(x2 - x1) / 2, 16);
     out.push({
-      key: wire.entryId,
+      key: wireKey(wire),
       entryId: wire.entryId,
       manual: wire.manual,
       d: `M ${x1} ${y1} C ${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`,
@@ -249,7 +302,10 @@ export function WorkflowParamWires({
   const mounted = hasWires || !!drag || interactive;
   /* 依赖签名：线集合变了（换工作流 / 改模式 / 落点变化）就要重量一次。 */
   const signature = wires
-    .map((w) => `${w.entryId}>${w.handleId}>${w.targetIoKey}>${w.manual ? 1 : 0}`)
+    .map(
+      (w) =>
+        `${w.kind ?? "paramToHost"}>${w.entryId}>${w.handleId}>${w.targetIoKey}>${w.manual ? 1 : 0}`,
+    )
     .join("|");
 
   useEffect(() => {

@@ -135,6 +135,20 @@ describe("画布 / 库内的组合参数控件", () => {
     }
   });
 
+  it("端点圆点与参数名之间留出与节点上其他行同款的间隙", () => {
+    /* 「端口圆点和参数名字之间距离太近」（ISSUE #355）：这三行此前是 `pl-[2px]`，
+     *  而端点 12px、圆心骑跨卡片左缘（-6）—— 圆点右沿正压在文字起点上，名字被
+     *  圆点盖住。节点上其他参数行的左内边距是 14px（`WidgetInputRow` 的
+     *  `px-[14px]`），这里必须同款，圆点与名字之间才留得出 8px 的空隙。 */
+    const column = renderCompact();
+    for (const ioKey of Object.keys(io)) {
+      const row = column.querySelector(`[data-io-key="${ioKey}"]`)!;
+      expect(row.className, `${ioKey} 行左内边距应与其他参数行一致`).toContain(
+        "pl-[14px]",
+      );
+    }
+  });
+
   it("控件按内容收窄，不占满整行", () => {
     /* 「组合控件的宽度缩小，现在占满了空间」：`w-fit` + 上限，宽度跟随内容；
      *  下拉触发器另给一档固定宽度，不再拽满整行。 */
