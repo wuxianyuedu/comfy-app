@@ -37,14 +37,20 @@ function VideoControl({
   set,
   workflowId,
   disabled,
+  narrow,
 }: {
   group: VideoGroup;
   values: Record<string, unknown>;
   set: (ioKey: string, v: unknown) => void;
   workflowId?: string;
   disabled?: boolean;
+  /** 画布 / 库内的紧凑版式：控件按内容收窄（`w-fit`），不再占满整行。
+   *  与宽版表单的区别**只是宽度**：录入能力、下拉、落点锚点全部一致。 */
+  narrow?: boolean;
 }) {
-  const [style, setStyle] = useState<GroupStyle>(() => loadGroupStyle(workflowId, group.groupId));
+  const [style, setStyle] = useState<GroupStyle>(() =>
+    loadGroupStyle(workflowId, group.groupId),
+  );
   const onStyle = (newStyle: GroupStyle) => {
     setStyle(newStyle);
     saveGroupStyle(workflowId, group.groupId, newStyle);
@@ -63,10 +69,14 @@ function VideoControl({
 
   if (style === "split") {
     return (
-      <div className="space-y-2" {...wireAnchor}>
+      <div
+        className={narrow ? "w-fit max-w-full space-y-2" : "space-y-2"}
+        {...wireAnchor}
+      >
         <StyleSwitcher
           style={style}
           onChange={onStyle}
+          narrow={narrow}
           options={[
             { value: "split", label: "分别填写" },
             { value: "preset", label: "时长 + 画质 + 比例" },
@@ -98,7 +108,10 @@ function VideoControl({
       return {
         label: "时长",
         value: videoDurationLabel(value),
-        options: presets.map((preset) => ({ value: preset.label, label: preset.label })),
+        options: presets.map((preset) => ({
+          value: preset.label,
+          label: preset.label,
+        })),
         onChange: (lbl: string) => {
           const preset = presets.find((item) => item.label === lbl);
           if (preset) set(entry.ioKey, preset.value);
@@ -111,7 +124,10 @@ function VideoControl({
       return {
         label: "画质",
         value: videoQualityLabel(value),
-        options: presets.map((preset) => ({ value: preset.label, label: preset.label })),
+        options: presets.map((preset) => ({
+          value: preset.label,
+          label: preset.label,
+        })),
         onChange: (lbl: string) => {
           const preset = presets.find((item) => item.label === lbl);
           if (preset) set(entry.ioKey, preset.value);
@@ -120,9 +136,14 @@ function VideoControl({
     }
     /* role === "aspect" — a COMBO aspect uses its own options, otherwise a
      *  friendly ratio preset writing the float ratio back into the widget. */
-    if (entry.control === "select" && Array.isArray(entry.options) && entry.options.length > 0) {
+    if (
+      entry.control === "select" &&
+      Array.isArray(entry.options) &&
+      entry.options.length > 0
+    ) {
       const opts = entry.options;
-      const val = typeof cur === "string" && opts.includes(cur) ? cur : opts[0]!;
+      const val =
+        typeof cur === "string" && opts.includes(cur) ? cur : opts[0]!;
       return {
         label: "比例",
         value: val,
@@ -150,16 +171,26 @@ function VideoControl({
   const summary = sections.map((section) => section.value).join(" · ");
 
   return (
-    <div className="space-y-2" {...wireAnchor}>
+    <div
+      className={narrow ? "w-fit max-w-full space-y-2" : "space-y-2"}
+      {...wireAnchor}
+    >
       <StyleSwitcher
         style={style}
         onChange={onStyle}
+        narrow={narrow}
         options={[
           { value: "split", label: "分别填写" },
           { value: "preset", label: "时长 + 画质 + 比例" },
         ]}
       />
-      <MultiSegmentPopover triggerContent={summary} ariaLabel="选择时长、画质与比例" sections={sections} />
+      <div className={narrow ? "w-[168px] max-w-full" : undefined}>
+        <MultiSegmentPopover
+          triggerContent={summary}
+          ariaLabel="选择时长、画质与比例"
+          sections={sections}
+        />
+      </div>
     </div>
   );
 }

@@ -273,19 +273,20 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     expect(
       container.querySelector(`[data-wire-anchor="size?aspect_ratio"]`),
     ).toBeTruthy();
-    /* 宿主卡片的两行都在（连线另一端量得到）。 */
+    /* 宿主卡片的两端都在（连线另一端量得到）：提示词是普通参数行，
+     *  宽高比则落在组合控件那一格上（比例/像素由同一块控件录入）。 */
     expect(
       container.querySelector('[data-io-key="9::widget::positive_prompt"]'),
     ).toBeTruthy();
     expect(
-      container.querySelector('[data-io-key="5::widget::aspect_ratio"]'),
+      container.querySelector('[data-io-pins="5::widget::aspect_ratio"]'),
     ).toBeTruthy();
   });
 
-  it("组合参数折叠后，每个端口各自一行、各有落点锚点", () => {
-    /* 「红框位置需要收窄……需要将这几个参数的输入端口显示出来」（ISSUE #355 复审）：
-     *  宽高比 / 像素量不再挤在一整块组合卡里，按普通参数行逐行渲染 —— 每行一个
-     *  端口、一个落点锚点，连线落得到具体那一行。 */
+  it("组合控件按内容收窄，仍是一整块（不摊成逐行参数）—— ISSUE #355", () => {
+    /* 用户口径：「组合参数不要现在这种样式」「改回之前的样式」「改成之前带有
+     *  下拉菜单的样式」—— 这块控件（比例 / 像素 / 倍数同一个下拉）就是原来的
+     *  样式，只是按内容收窄。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
         workflowId="wf-1"
@@ -316,13 +317,18 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         defaultMode="T2I"
       />,
     );
-    expect(container.querySelector('[data-testid="grouped-collapsed-rows"]')).toBeTruthy();
+    /* 控件在（带下拉触发器），且带覆盖这两个端口的落点锚点。 */
     expect(
-      container.querySelector('[data-io-pins="5::widget::aspect_ratio"]'),
+      container.querySelector('[aria-label="选择比例与像素"]'),
     ).toBeTruthy();
     expect(
-      container.querySelector('[data-io-pins="5::widget::megapixels"]'),
+      container.querySelector(
+        '[data-io-pins="5::widget::aspect_ratio,5::widget::megapixels"]',
+      ),
     ).toBeTruthy();
+    /* 不再摊成逐行参数清单。 */
+    expect(container.querySelector('[data-testid="grouped-collapsed-rows"]')).toBeNull();
+    expect(container.querySelector('[data-io-key="5::widget::aspect_ratio"]')).toBeNull();
   });
 
   it("卡片列与宿主卡片之间留出走线空间（不再贴在一起）—— ISSUE #355 复审", () => {
@@ -346,10 +352,8 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     expect(row.className).toContain("gap-24");
   });
 
-  it("组合控件的端口未被连上时折叠成普通参数行（输入端口露出来）—— ISSUE #355 复审", () => {
-    /* 「红框位置需要收窄……需要将这几个参数的输入端口显示出来」：宽高比 / 像素量
-     *  没被任何映射落到时不占一整块组合卡，按普通参数行逐行渲染，各有自己的
-     *  输入端口可连。 */
+  it("组合控件的端口未被任何映射落到时，控件照旧画出来并可被连", () => {
+    /* 落点为空也一样是这块控件：它覆盖的端口共用一个落点锚点，拖线时落得上。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
         workflowId="wf-1"
@@ -380,13 +384,12 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         defaultMode="T2I"
       />,
     );
-    /* 折叠成逐行的参数行：每个端口一行、各有落点锚点。 */
-    expect(container.querySelector('[data-testid="grouped-collapsed-rows"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="选择比例与像素"]')).toBeTruthy();
+    /* 两个端口共用一个落点锚点（同一块控件录入）。 */
     expect(
-      container.querySelector('[data-io-pins="5::widget::aspect_ratio"]'),
-    ).toBeTruthy();
-    expect(
-      container.querySelector('[data-io-pins="5::widget::megapixels"]'),
+      container.querySelector(
+        '[data-io-pins="5::widget::aspect_ratio,5::widget::megapixels"]',
+      ),
     ).toBeTruthy();
   });
 
