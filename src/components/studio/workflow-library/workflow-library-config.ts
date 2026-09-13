@@ -9,6 +9,36 @@ import type { WorkflowPreview as WorkflowPreviewT } from "@/lib/comfyui/workflow
 import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 import { getWorkflowType, normalizeTaskType } from "@/lib/workflow-types";
 
+/** 服务端 list 返回的本地工作流根目录摘要（只取前端判据用得到的字段）。 */
+export interface LocalWorkflowRoot {
+  absPath: string;
+  exists: boolean;
+  /** 该根下扫到的工作流文件数 */
+  count: number;
+  /** 读取该根时的错误（权限 / 不是目录等），服务端在无法访问时给出 */
+  error?: string;
+}
+
+/** 列表为空时的「为什么是空」判据（本地工作流目录侧）。
+ *  本地侧没有可疑之处（根在、也有文件）时返回 null，空态用默认引导文案。
+ *  取服务端一直在返回、前端此前丢弃的 localRoots——没有它，空态只能笼统地说
+ *  「还没有工作流」，用户看到的是「工作流全没了」。 */
+export function deriveLocalRootsHint(
+  roots: readonly LocalWorkflowRoot[] | null | undefined,
+): string | null {
+  if (!roots || roots.length === 0) {
+    return "没有解析到本地工作流目录：到「设置 → 创作后端」配置 ComfyUI 安装路径，或用上层目录 .env 里的 LOCAL_WORKFLOWS_PATH 指定目录。";
+  }
+  const paths = roots.map((root) => root.absPath).join("、");
+  if (roots.every((root) => !root.exists)) {
+    return `本地工作流目录不可访问：${paths}。到「设置 → 创作后端」核对 ComfyUI 安装路径是否仍指向正确的实例。`;
+  }
+  if (roots.every((root) => root.count === 0)) {
+    return `本地工作流目录里没有工作流文件（.json / .workflow）：${paths}。`;
+  }
+  return null;
+}
+
 export interface WorkflowRow {
   id: string;
   name: string;
