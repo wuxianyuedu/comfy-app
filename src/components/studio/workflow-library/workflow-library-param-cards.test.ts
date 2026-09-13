@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { buildParamEntries } from "~/lib/workflow-param-mapping";
+import { applyOutputBindingEdit } from "~/lib/workflow-output-binding";
 import {
   deriveLibraryOutputCards,
   deriveLibraryParamCards,
@@ -372,7 +373,7 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
     expect(outputs.map((output) => output.ioKey)).toEqual(["9::output::IMAGE"]);
   });
 
-  it("每个输出一条只读连线：宿主输出行 → 卡片", () => {
+  it("每个输出一条线：宿主输出行 → 卡片（默认虚线的口径）", () => {
     const { wires } = deriveLibraryOutputCards({ io: outIO });
     expect(wires).toEqual([
       {
@@ -385,6 +386,56 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
         kind: "hostToParam",
       },
     ]);
+  });
+
+  it("默认取值行 = 工作流自己那一行；改过之后按覆盖表解析", () => {
+    const two: WorkflowIOMap = {
+      "9::output::IMAGE": { ...outIO["9::output::IMAGE"]!, displayOrder: 0 },
+      "9::output::MASK": {
+        direction: "output",
+        kind: "output",
+        nodeId: "9",
+        name: "mask",
+        type: "MASK",
+        displayOrder: 1,
+      },
+    };
+    const base = deriveLibraryOutputCards({ io: two, mode: "T2I" });
+    expect(base.resolved).toEqual({
+      "9::output::IMAGE": "9::output::IMAGE",
+      /* 没连过、又不是排在最前的那个 → 悬空，不硬凑来源。 */
+      "9::output::MASK": null,
+    });
+    const paramMap = applyOutputBindingEdit(null, {
+      outputIoKey: "9::output::MASK",
+      ioKey: "9::output::IMAGE",
+      mode: "T2I",
+    });
+    const moved = deriveLibraryOutputCards({ io: two, paramMap, mode: "T2I" });
+    expect(moved.resolved["9::output::MASK"]).toBe("9::output::IMAGE");
+    expect(moved.wires.find((w) => w.entryId === "9::output::MASK")!.manual).toBe(true);
+    expect(moved.isManual("9::output::MASK")).toBe(true);
+    /* 别的模式不受影响。 */
+    expect(
+      deriveLibraryOutputCards({ io: two, paramMap, mode: "T2V" }).isManual(
+        "9::output::MASK",
+      ),
+    ).toBe(false);
+  });
+
+  it("作者显式断开 → 不画线（悬空本身就在说「没接」）", () => {
+    const paramMap = applyOutputBindingEdit(null, {
+      outputIoKey: "9::output::IMAGE",
+      ioKey: null,
+      mode: "T2I",
+    });
+    const { wires, resolved } = deriveLibraryOutputCards({
+      io: outIO,
+      paramMap,
+      mode: "T2I",
+    });
+    expect(resolved["9::output::IMAGE"]).toBeNull();
+    expect(wires).toHaveLength(0);
   });
 
   it("没有输出时两张表都是空的（视图据此不渲染右列）", () => {

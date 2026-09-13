@@ -13,8 +13,9 @@
 // 重复表达同一个落点。
 //
 // 数据源与编辑器同一份：`workflowIO` 聚类出条目，`paramMap.source.mode:<模式>`
-// 给出当前模式生效的落点。库内是**只读消费视角**：拉线 / 断开 / 恢复默认都在
-// 编辑器画布上做，这里只呈现。
+// 给出当前模式生效的落点（输出侧对应 `paramMap.output.mode:<模式>`）。两处的
+// 连线在库里都能改（ISSUE #355）：左列拖圆点改落点，右列拖圆点改输出从哪一行
+// 取值 —— 手势由视图层上抛，本文件只做纯派生。
 
 import {
   buildParamEntries,
@@ -30,6 +31,12 @@ import {
   type WorkflowIOEntry,
   type WorkflowIOMap,
 } from "~/components/studio/shared/workflow-io";
+import {
+  defaultOutputSource,
+  hasManualOutputBinding,
+  manualOutputSource,
+  resolveOutputSource,
+} from "~/lib/workflow-output-binding";
 
 export interface LibraryParamCards {
   /** 对外参数条目（稳定顺序）。 */
@@ -47,6 +54,9 @@ export interface LibraryParamCards {
    *  `reachableKeys`；缺省 = 不收窄）。卡片上的候选圆点按它收窄，
    *  与连线用同一份事实。 */
   reachableKeys?: ReadonlySet<string>;
+  /** 对外**输出**参数在当前模式下的落点（输出口 ioKey → 取值的那一行 ioKey）。
+   *  卡片与连线都要读这一份：与 `resolved` 对输入侧的作用对称。 */
+  outputResolved?: Record<string, string | null>;
 }
 
 /** 库内一条只读映射连线。 */
@@ -159,30 +169,75 @@ export function deriveLibraryParamCards(args: {
 /** 对外**输出**参数卡片与它们的连线（纯派生）。
  *
  *  与输入侧对称：左列说「这个工作流对外要什么、落到节点哪一行」，右列说
- *  「它对外给什么」。输出不参与映射（没有落点、没有 `paramMap` 键空间），所以
- *  这里只产出「有哪些输出 + 从节点输出行连到卡片的那几条线」，全是只读呈现。
+ *  「它对外给什么」。输出不参与运行期映射（没有 `source` 键空间），但**它从哪
+ *  一行取值**是作者要能改的（ISSUE #355：「右列的对外输出参数目前是只读…需要
+ *  可拖」，用于临时把 `images` 指到别处）—— 落点覆盖写在
+ *  `paramMap.output.mode:<模式>`（见 `~/lib/workflow-output-binding`）。
  *
- *  线恒为**自动**口径（虚线以外的实线语义不适用于输出：没有「作者改过的线」），
- *  故 `manual` 恒 false —— 主题色与输入侧的默认线一致，读者一眼分清「左边是
- *  可改的映射、右边是本来就通着的产出」。 */
+ *  因此返回值比输入侧多两样：
+ *    · `resolved`：输出口 → 取值那一行（作者连过的优先，否则它自己那一行）；
+ *    · `wires`：宿主**取值行**的圆点 → 卡片自己的圆点（方向仍是从左往右画），
+ *      断开的口不画线（悬空即「没接」）。
+ *
+ *  线恒为**自动**口径（`manual` 恒 false）之外的区分靠实线/虚线表达「这一行是
+ *  不是作者改过的取值来源」。 */
 export function deriveLibraryOutputCards(args: {
   io: WorkflowIOMap | null | undefined;
+  paramMap?: Record<string, unknown> | null;
+  mode?: string | null;
 }): {
   outputs: (WorkflowIOEntry & { ioKey: string })[];
   wires: ParamCardWire[];
+  /** 输出口 ioKey → 当前取值的那一行 ioKey（`null` = 悬空 / 断开）。 */
+  resolved: Record<string, string | null>;
+  /** 某个输出口在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
+  isManual: (ioKey: string) => boolean;
+  /** 某个输出口是否存在任何取值来源（宿主那一行真的画得出来）。 */
+  wired: boolean;
 } {
-  const { io } = args;
+  const { io, paramMap, mode } = args;
   /* 顺序与宿主卡片上的输出行**同一份**（`splitWorkflowIO` 里按作者拖出的
    *  `displayOrder` 排过）：右列卡的先后与节点上那几行一一对应，读者不必自己
    *  配对谁是谁。 */
   const outputs = splitWorkflowIO(io).outputs;
-  const wires: ParamCardWire[] = outputs.map((output) => ({
-    entryId: output.ioKey,
-    targetIoKey: output.ioKey,
-    handleId: output.name,
-    grouped: false,
-    manual: false,
-    kind: "hostToParam",
-  }));
-  return { outputs, wires };
+  const resolved: Record<string, string | null> = {};
+  const wires: ParamCardWire[] = [];
+  /* 「取值行」必须是一叠真实存在的**输出**行：作者连到一个已经不存在的端口
+   *  （工作流改版）或连成输入口（非法）时，按悬空处理 —— 画不出线也不谎报来源。 */
+  const outputKeys = new Set(outputs.map((item) => item.ioKey));
+  for (const output of outputs) {
+    const target = resolveOutputSource(paramMap, output, outputs, mode, io);
+    resolved[output.ioKey] =
+      target && outputKeys.has(target) ? target : null;
+  }
+  for (const output of outputs) {
+    const target = resolved[output.ioKey];
+    if (!target) continue;
+    wires.push({
+      entryId: output.ioKey,
+      targetIoKey: target,
+      handleId: output.name,
+      grouped: false,
+      manual: manualOutputSource(paramMap, output.ioKey, mode) !== undefined,
+      kind: "hostToParam",
+    });
+  }
+  return {
+    outputs,
+    wires,
+    resolved,
+    isManual: (ioKey: string) =>
+      manualOutputSource(paramMap, ioKey, mode) !== undefined,
+    wired: outputs.length > 0,
+  };
 }
+
+/** 输出侧的「恢复默认」是否可用（该模式下有任何输出口被改过）。 */
+export function hasManualLibraryOutput(args: {
+  paramMap?: Record<string, unknown> | null;
+  mode?: string | null;
+}): boolean {
+  return hasManualOutputBinding(args.paramMap, args.mode);
+}
+
+export { defaultOutputSource };

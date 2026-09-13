@@ -154,6 +154,9 @@ export function WorkflowParamCardColumn({
                  * 值 = 条目 id + 端口的 handle id。量测侧按属性整串精确比较，
                  * 含 `::` 的端口键不做选择器转义（见 WorkflowParamWires）。 */
                 data-wire-anchor={wireAnchorValue(entry.id, port.handleId)}
+                /* 圆点自己声明属于哪一列：两列共用同一套手势，连线层据此决定
+                 *  可落点集合（输入行 / 输出行）与落库键空间。 */
+                data-wire-kind="paramToHost"
                 title={
                   canWire
                     ? `拖到工作流参数行上改「${entry.label}」的落点`

@@ -13,6 +13,7 @@ import type { Edge } from "@xyflow/react";
 
 import {
   entryIdFromParamNodeId,
+  outputIoKeyFromNodeId,
   paramNodeId,
   wiredTargetsForEntry,
   type ParamEntry,
@@ -127,6 +128,45 @@ export function buildParamEdges(ctx: BuildParamEdgesCtx): Edge[] {
  * 这里只做「这条连接表达不表达一条映射」的判断，不碰模式（模式决定这条线归属哪个
  * 命名空间，不决定拖线本身是否成立）。
  */
+
+/** 一条连接是否是一条合法的**输出取值线**（宿主输出行 ↔ 对外输出卡片）。
+ *
+ *  与输入侧对称、方向相反：输入的卡片是 source（输出端点）、宿主参数行是 target；
+ *  输出这边宿主**输出行**是 source、输出卡片是 target（线从节点右侧出来收在卡片
+ *  左缘的圆点）。两个方向都归一化 —— React Flow 在非 Strict 连线模式下不保证
+ *  方向，只认一个方向会让「反向拖」被判非法。
+ *
+ *  判据两条：卡片那一端的 id 反解得回一个输出口 ioKey（`pout:` 前缀），且另一端
+ *  的 handle 是本工作流里真实存在的**输出**行（ioKey）。
+ *
+ *  ⚠️ 输出卡片与同名的**输入**条目可以同时在画布上：同一个 id 在两列各有一张卡，
+ *  这时「卡片端 = 输出卡」这条判据才是决定性的（靠 `pout:` 前缀区分），否则一条
+ *  本该改取值行的线会被输入侧受理。 */
+export function isValidOutputConnection(
+  connection: {
+    source?: string | null;
+    target?: string | null;
+    sourceHandle?: string | null;
+    targetHandle?: string | null;
+  },
+  io: WorkflowIOMap | null | undefined,
+): boolean {
+  const sourceIsCard = outputIoKeyFromNodeId(connection.source ?? "");
+  const targetIsCard = outputIoKeyFromNodeId(connection.target ?? "");
+  /* 两端都不是输出卡片（图连线 / 输入映射线）→ 不是这条通道的线。 */
+  if (!sourceIsCard && !targetIsCard) return false;
+  /* 两张卡片之间连一条没有意义（输出卡片只与工作流节点交互）。 */
+  if (sourceIsCard && targetIsCard) return false;
+  /* 落点永远在**卡片另一端**：常态是卡片作 target（宿主输出行作 source），
+   *  反向拖时卡片作 source（宿主输出行作 target）。取错一侧会把卡片自己的
+   *  handle 当成落点 —— 它恰好也是一个输出 ioKey，于是「落在输入行上」被判合法。 */
+  const rowHandle = sourceIsCard
+    ? connection.targetHandle
+    : connection.sourceHandle;
+  if (!rowHandle) return false;
+  /* 落点必须是**输出**行：输入行不是产出，从它读不到任何东西。 */
+  return io?.[rowHandle]?.direction === "output";
+}
 
 /** 一条连接是否是一条合法的映射线（卡片端点 ↔ 该对外参数的宿主节点端口）。
  *

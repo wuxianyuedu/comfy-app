@@ -146,7 +146,7 @@ describe("组合卡回来之后的连线几何", () => {
     /* 线按「条目 + 被接的端口」取 id：一个对外参数默认可以一对多（尺寸 =
      *  三个端口各一条线），只用条目 id 会让三条线共用同一个 testid。 */
     const path = container
-      .querySelector('[data-testid="wflib-param-wire-size?megapixels"]')!
+      .querySelector('[data-testid="wflib-param-wire-param:size?megapixels"]')!
       .getAttribute("d")!;
     /* 起点 = 圆点外缘 (200 + 12 + 6, 66) = (218, 66)；
        终点 = 那一行端点的圆心 (488 + 12 / 2, 105 + 12 / 2) = (494, 111)。 */
@@ -263,7 +263,7 @@ describe("对外输出参数的连线几何", () => {
     });
     const path = container
       .querySelector(
-        '[data-testid="wflib-param-wire-9::output::IMAGE?images"]',
+        '[data-testid="wflib-param-wire-output:9::output::IMAGE?images"]',
       )!
       .getAttribute("d")!;
     /* 起点 = 输出行圆点的外缘 (400 + 12 + 6, 66) = (418, 66)；
@@ -306,7 +306,7 @@ describe("对外输出参数的连线几何", () => {
     });
     expect(
       container.querySelector(
-        '[data-testid="wflib-param-wire-9::output::IMAGE?images"]',
+        '[data-testid="wflib-param-wire-output:9::output::IMAGE?images"]',
       ),
     ).toBeNull();
   });

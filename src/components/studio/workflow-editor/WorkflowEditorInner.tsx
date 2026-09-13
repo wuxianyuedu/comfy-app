@@ -45,8 +45,19 @@ import { buildInitialNodes } from "./workflow-editor-build-nodes";
 import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
 import { useParamMapping } from "./hooks/use-param-mapping";
 import { entryIdFromParamNodeId } from "~/lib/workflow-param-mapping";
-import { buildParamEdges, isValidParamConnection } from "./workflow-param-edges";
+import {
+  buildParamEdges,
+  isValidOutputConnection,
+  isValidParamConnection,
+} from "./workflow-param-edges";
 import { buildParamNodes } from "./workflow-param-nodes";
+import { buildOutputWiring } from "./workflow-output-nodes";
+import { outputIoKeyFromNodeId } from "~/lib/workflow-param-mapping";
+import {
+  applyOutputBindingEdit,
+  canApplyOutputBindingEdit,
+  clearOutputBindingEdit,
+} from "~/lib/workflow-output-binding";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
 import { enrichFromViewNodes, isMachineName, type ExposedAliasBase } from "./io-exposure";
 import { sanitizeComboLabel } from "../workflow-utils";
@@ -607,6 +618,13 @@ function WorkflowEditorBody({
     paramMap,
   });
 
+  /* 工作流的输出行（左列卡片是「对外要什么」，右键卡片是「对外给什么」）——
+   *  顺序与宿主卡片上的输出行同源（`splitWorkflowIO` 按 displayOrder 排过）。 */
+  const outputRows = useMemo(
+    () => splitWorkflowIO(workflowIO).outputs,
+    [workflowIO],
+  );
+
   /* 卡片位置派生自宿主节点当前的画布坐标 —— 作者拖动宿主节点，卡片列跟着走。 */
   const hostPosById = useMemo(() => {
     const out: Record<string, { x: number; y: number }> = {};
@@ -685,17 +703,91 @@ function WorkflowEditorBody({
   const paramNodes = paramWiring.nodes;
   const paramEdges = paramWiring.edges;
 
+  /* ── 对外**输出**参数卡片（宿主节点右侧一列）──
+   *
+   * 与左列对称：左说「对外要什么、喂给哪一行」，右说「对外给什么、从哪一行读」。
+   * 输出的取值行覆盖写在 `paramMap.output.mode:<模式>`（与输入的 `source` 不是
+   * 同一张表）；卡片同样不可拖动（位置派生自宿主节点），但端点可连线。
+   *
+   * 写入口是 `setParamMap`：编辑器不在每条线后落库，落库统一走保存
+   * （`useWorkflowPersistence` 把当前 `paramMap` 整列 PATCH 上去）——
+   * 与输入侧「连线累积在 paramMap 里、保存时一起写」完全同一条路径。 */
+  const writeOutputBinding = useCallback(
+    (outputIoKey: string, target: string | null) => {
+      if (!wiringMode) return;
+      setParamMap((prev) =>
+        applyOutputBindingEdit(prev, {
+          outputIoKey,
+          ioKey: target,
+          mode: wiringMode,
+        }),
+      );
+    },
+    [wiringMode],
+  );
+
+  const resetOutputBinding = useCallback(
+    (outputIoKey: string) => {
+      if (!wiringMode) return;
+      setParamMap((prev) =>
+        clearOutputBindingEdit(prev, outputIoKey, wiringMode),
+      );
+    },
+    [wiringMode],
+  );
+
+  const outputSignature = useMemo(
+    () =>
+      JSON.stringify({
+        mode: wiringMode,
+        outputs: outputRows.map((output) => output.ioKey),
+        /* 只有被改过的输出口进签名：没改过的取值行就是它自己那一行，不会变。 */
+        overrides: Object.entries(paramMap.output ?? {}).filter(
+          ([key]) => key === `mode:${wiringMode ?? ""}`,
+        ),
+        reachable: [...wiredPinKeys].sort(),
+      }),
+    [wiringMode, outputRows, paramMap, wiredPinKeys],
+  );
+  const outputWiring = useMemo(
+    () =>
+      buildOutputWiring({
+        io: workflowIO,
+        outputs: outputRows,
+        paramMap,
+        mode: wiringMode,
+        hostPosById,
+        reachableKeys: wiredPinKeys,
+        onReset: resetOutputBinding,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 上面的签名即全部内容
+    [outputSignature, hostPosById, resetOutputBinding],
+  );
+  const outputNodes = outputWiring.nodes;
+  const outputEdges = outputWiring.edges;
+
   /* 删除一条映射线 = 该对外参数「在这个模式下断开」。React Flow 的删除手势会先
    * 把它从本地 edges 拿掉，我们必须同步把状态写回 paramMap，否则下一帧同步
    * effect 又把它画回来（看起来像删不掉）。 */
   const onEdgesDelete = useCallback(
     (deleted: Edge[]) => {
       for (const edge of deleted) {
+        /* 输入映射线：源是 `pio:` 卡片 → 该对外参数在这个模式下断开。 */
         const entryId = entryIdFromParamNodeId(edge.source);
-        if (entryId) paramMapping.connect(entryId, null);
+        if (entryId) {
+          paramMapping.connect(entryId, null);
+          continue;
+        }
+        /* 输出取值线：目标是 `pout:` 卡片 → 该输出在这个模式下摘掉取值行
+         *  （悬空即「已断开」，不会被默认取值行复活）。 */
+        const outputIoKey = outputIoKeyFromNodeId(edge.target);
+        if (outputIoKey) {
+          writeOutputBinding(outputIoKey, null);
+          continue;
+        }
       }
     },
-    [paramMapping]
+    [paramMapping, writeOutputBinding]
   );
 
   /* 连线合法性闸门：判断这条连接表不表达一条映射（两端方向 + 落点是否真实存在）。
@@ -706,6 +798,10 @@ function WorkflowEditorBody({
    *  模式只决定这条线**归属哪个命名空间**（写入路径见 useParamMapping.connect）。 */
   const isValidConnection = useCallback(
     (connection: ReactFlowConnection | Edge) =>
+      /* 两条通道共用同一道闸门：输入映射线（对外参数 → 宿主参数行）与输出取值线
+       *  （宿主输出行 → 对外输出卡片）。判据按「卡片端是哪一列的 id」分流 ——
+       *  同名 id 在两列各有一张卡时，这是唯一能分清的一条依据。 */
+      isValidOutputConnection(connection, workflowIO) ||
       isValidParamConnection(connection, paramMapping.entries, workflowIO),
     [paramMapping.entries, workflowIO]
   );
@@ -716,6 +812,30 @@ function WorkflowEditorBody({
   const onConnect = useCallback(
     (connection: ReactFlowConnection) => {
       if (!isValidConnection(connection)) return;
+      /* 先分流：输出取值线（卡片带 `pout:` 前缀）走输出通道 —— 同名的输入条目
+       *  在两列各有一张卡，先判输入会把这条线写到错误的表里。 */
+      const outputIoKey =
+        outputIoKeyFromNodeId(connection.source ?? "") ??
+        outputIoKeyFromNodeId(connection.target ?? "");
+      if (outputIoKey) {
+        const rowHandle =
+          outputIoKeyFromNodeId(connection.source ?? "") !== null
+            ? connection.sourceHandle
+            : connection.targetHandle;
+        if (!rowHandle) return;
+        if (
+          !canApplyOutputBindingEdit(
+            { ioKey: rowHandle, mode: wiringMode },
+            workflowIO
+          )
+        )
+          return;
+        /* 拖回它**默认**取值的那一行 = 撤销这条手工线（而不是留一条等价覆盖）
+         *  ——「恢复默认」与「拖回来」不该是两种并存的状态。 */
+        if (rowHandle === outputIoKey) resetOutputBinding(outputIoKey);
+        else writeOutputBinding(outputIoKey, rowHandle);
+        return;
+      }
       /* 卡片端点是 source（输出）、宿主行是 target（输入）是常态；反向拖时两个
        *  键互换，落点要取另一端的那一个。 */
       const forward = entryIdFromParamNodeId(connection.source ?? "");
@@ -726,7 +846,14 @@ function WorkflowEditorBody({
       if (!entryId || !targetHandle) return;
       paramMapping.connect(entryId, targetHandle);
     },
-    [paramMapping, isValidConnection]
+    [
+      paramMapping,
+      isValidConnection,
+      resetOutputBinding,
+      wiringMode,
+      workflowIO,
+      writeOutputBinding,
+    ]
   );
 
   /* useNodesState 只接受挂载首帧的初值；后续同步统一走下面的 effect（初始图节点
@@ -735,8 +862,8 @@ function WorkflowEditorBody({
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   const initialNodes: Node[] = useMemo(
-    () => [...graphNodes, ...paramNodes],
-    [graphNodes, paramNodes]
+    () => [...graphNodes, ...paramNodes, ...outputNodes],
+    [graphNodes, paramNodes, outputNodes]
   );
 
   /* Sync nodes/edges when the graph or the mapping changes.  useNodesState only
@@ -749,8 +876,23 @@ function WorkflowEditorBody({
    * 同一个节点，不会重挂 DOM。 */
   useEffect(() => {
     setNodes(initialNodes);
-    setEdges([...buildEdges(scopeDetail, graphNodes, outSlotNameById), ...paramEdges]);
-  }, [initialNodes, graphNodes, paramEdges, scopeDetail, outSlotNameById, setNodes, setEdges]);
+    setEdges([
+      /* 图连线（工作流自身）→ 映射连线（对外参数喂给哪一行）→ 输出取值线
+       *（对外产出从哪一行读）。三者各自有独立的构建入口，互不掺和。 */
+      ...buildEdges(scopeDetail, graphNodes, outSlotNameById),
+      ...paramEdges,
+      ...outputEdges,
+    ]);
+  }, [
+    initialNodes,
+    graphNodes,
+    paramEdges,
+    outputEdges,
+    scopeDetail,
+    outSlotNameById,
+    setNodes,
+    setEdges,
+  ]);
 
 
   /* Fit-to-content once per workflow/subgraph open. Placed after `nodes`

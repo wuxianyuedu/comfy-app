@@ -265,16 +265,60 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
     ).toBe(dot);
   });
 
-  it("右列是只读消费：不给「恢复默认」，也不带拖拽提示", () => {
+  it("右列可拖：圆点带拖拽提示（改这个输出从哪一行取值）", () => {
+    /* ISSUE #355 复审：「右列的对外输出参数目前是只读…需要可拖」。有模式 + 给了
+     *  落库回调时圆点就是起手位；没改过时「恢复默认」不可用（点了不会有变化）。 */
     const { container } = renderPreview({ source: { "mode:T2I": {} } });
     const card = container.querySelector(
       '[data-testid="param-node-5::output::IMAGE"]',
     )!;
-    expect(card.querySelector('[data-testid^="param-node-reset"]')).toBeNull();
+    expect(
+      card.querySelector<HTMLButtonElement>('[data-testid^="param-node-reset"]')!
+        .disabled,
+    ).toBe(true);
     const dot = container.querySelector(
       '[data-wire-anchor="5::output::IMAGE?images"]',
     )!;
-    expect(dot.getAttribute("title")).toBeNull();
+    expect(dot.getAttribute("data-wire-kind")).toBe("hostToParam");
+    expect(dot.getAttribute("title")).toContain("取值");
+  });
+
+  it("拖输出卡片的圆点到另一行输出上 → 取值行被持久化写出", async () => {
+    const { container, onPatch } = renderPreview({});
+    const dot = container.querySelector<HTMLElement>(
+      '[data-wire-anchor="5::output::IMAGE?images"]',
+    )!;
+    rect(dot, { left: 700, top: 100, width: 12, height: 12 });
+    /* 宿主卡片的输出行（可落点）：库内预览里由 WorkflowNodeOutputsRow 渲染，
+     *  带 `data-io-direction="output"`。 */
+    const row = container.querySelector<HTMLElement>(
+      '[data-io-key="5::output::IMAGE"]',
+    )!;
+    rect(row, { left: 300, top: 80, width: 240, height: 20 });
+
+    await act(async () => {
+      dot.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          clientX: 706,
+          clientY: 106,
+        }),
+      );
+    });
+    await act(async () => {
+      document.dispatchEvent(
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          clientX: 400,
+          clientY: 90,
+        }),
+      );
+    });
+
+    expect(onPatch).toHaveBeenCalledTimes(1);
+    const payload = onPatch.mock.calls[0]![0] as Record<string, unknown>;
+    /* 落在**它自己那一行**上 = 撤销手工线（不留一条等价覆盖）。 */
+    expect(payload.output).toBeUndefined();
   });
 });
 
@@ -423,7 +467,7 @@ describe("尺寸各项各自可取外部值", () => {
     for (const handle of ["aspect_ratio", "megapixels", "width"]) {
       expect(
         container.querySelector(
-          `[data-testid="wflib-param-wire-size?${handle}"]`,
+          `[data-testid="wflib-param-wire-param:size?${handle}"]`,
         ),
         `尺寸的 ${handle} 应各有一条线`,
       ).toBeTruthy();
