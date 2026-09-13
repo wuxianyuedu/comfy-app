@@ -3,6 +3,7 @@ import {
   extractBase64DataUrl,
   extractSavedOutputs,
   guessMediaKind,
+  resolveImagesGenerationsEndpoint,
 } from "~/lib/workshop/api-channel-shared";
 
 describe("guessMediaKind", () => {
@@ -65,5 +66,27 @@ describe("extractSavedOutputs", () => {
 
   it("无 localPath 的对象跳过", () => {
     expect(extractSavedOutputs([{ foo: 1 }])).toEqual([]);
+  });
+});
+
+
+describe("resolveImagesGenerationsEndpoint", () => {
+  it("Base URL 三种形态都拼出正确的生图端点（不重复拼接）", () => {
+    // 只到根（常见 OpenAI 兼容写法）
+    expect(resolveImagesGenerationsEndpoint("https://x.com/v1")).toBe(
+      "https://x.com/v1/images/generations",
+    );
+    // 只到资源段
+    expect(resolveImagesGenerationsEndpoint("https://x.com/v1/images")).toBe(
+      "https://x.com/v1/images/generations",
+    );
+    // 已含完整动作段 → 原样（回归：曾被再拼一次打到 /v1/images/images/generations）
+    expect(resolveImagesGenerationsEndpoint("https://x.com/v1/images/generations")).toBe(
+      "https://x.com/v1/images/generations",
+    );
+    // 尾部斜杠归一
+    expect(resolveImagesGenerationsEndpoint("https://x.com/v1/")).toBe(
+      "https://x.com/v1/images/generations",
+    );
   });
 });
