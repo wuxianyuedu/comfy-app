@@ -45,11 +45,17 @@ import {
   inferGroups,
   mergeRefreshedDefaults,
   resolveEntrySeedMode,
+  filterVisibleInMode,
   splitWorkflowIO,
   toWorkflowInputsPayload,
   type WorkflowIOMap,
 } from "../shared/workflow-io";
 import { seedModeOverrides } from "@/components/studio/project-canvas/CanvasNode/helpers";
+import {
+  applyParamMapping,
+  buildParamEntries,
+  parseParamMapping,
+} from "@/lib/workflow-param-mapping";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
 import { resolveWorkflowMode } from "@/lib/workflow-types";
@@ -61,6 +67,7 @@ import {
   deriveLibraryParamCards,
 } from "./workflow-library-param-cards";
 import { useParamWiring } from "./hooks/use-param-wiring";
+import { WorkflowCanvasViewportFrame } from "./WorkflowCanvasViewportFrame";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import {
   WorkflowNodeActionButton,
@@ -158,7 +165,11 @@ export function WorkflowCanvasNodePreview({
        *  此时不能整表覆盖（会吃掉用户已填的覆盖值），只把「仍等于旧默认值」
        *  的那一格刷新到新默认值；用户改过的格子原样保留。 */
       setValues((current) => {
-        const merged = mergeRefreshedDefaults(current, baselineRef.current, fresh);
+        const merged = mergeRefreshedDefaults(
+          current,
+          baselineRef.current,
+          fresh,
+        );
         return merged ?? current;
       });
       baselineRef.current = fresh;
@@ -202,7 +213,10 @@ export function WorkflowCanvasNodePreview({
         },
         onSettled: (r) => {
           if (r.ok) {
-            setPhase({ kind: "done", imageUrl: resultUrlRef.current ?? undefined });
+            setPhase({
+              kind: "done",
+              imageUrl: resultUrlRef.current ?? undefined,
+            });
             patchWorkflowRun(resume.taskId, { status: "done" });
           } else {
             setPhase({ kind: "failed", message: r.message ?? "生成失败" });
@@ -251,6 +265,25 @@ export function WorkflowCanvasNodePreview({
     [workflowIO],
   );
 
+  /* 宿主卡片此刻**真的画得出来**的端口（ioKey 集合）。
+   *
+   *  它是「这个端口现在连得上 / 现在能从外部取到值」的事实源：卡片右侧每个候选
+   *  圆点按它收窄（画不出端点的端口不给拖 —— 拖过去也只会被落点解析拒绝，用户
+   *  看到的就是「点击端点拉线出现禁用标记」），连线量测的终点也取自同一批行。
+   *
+   *  口径与宿主表单**同一份**（不是另算一遍）：`splitWorkflowIO` 拆出输入 →
+   *  `filterVisibleInMode` 按当前模式去掉隐藏项 → 组合控件接管的端口也算画得出来
+   *  （它们在控件里各有落点）。纯派生，因此不必等 DOM 测量、也不会在渲染里读 ref。 */
+  const reachableKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const entry of splitWorkflowIO(workflowIO).inputs) {
+      if (!filterVisibleInMode([entry], effectiveMode).length) continue;
+      keys.add(entry.ioKey);
+    }
+    for (const ioKey of groupedKeys) keys.add(ioKey);
+    return keys;
+  }, [workflowIO, effectiveMode, groupedKeys]);
+
   /* seed 类参数的「控件后行为」：按生效模式解析（模式覆盖优先，回退条目全局）。
    *  没有模式时与旧行为一致，只读条目全局 seedMode。 */
   const seedModes = useMemo(() => {
@@ -279,10 +312,29 @@ export function WorkflowCanvasNodePreview({
     resultUrlRef.current = null;
     setPhase({ kind: "starting" });
     try {
-      const workflowInputs = toWorkflowInputsPayload(
-        workflowIO ?? undefined,
-        values,
-      );
+      /* 运行期载荷按**映射表**组装（不是裸的「暴露 pin 全量下发」）：
+       *  「尺寸」这类一个对外参数接多个端口的口子，值要逐端口派生成各自认的形状
+       *  （比例标签 / 百万像素 / 对齐倍数）—— 否则用户在图里连出来的那几条线
+       *  在运行期收不到值（ISSUE #355：「尺寸那三项每一项都需要从外部获取值」）。
+       *
+       *  映射表来源与画布同一份（`paramMap.source.mode:<模式>`，库里改过就跟当前
+       *  `wiring.effectiveParamMap`）。映射还没就绪（没有模式）时退回原路径。 */
+      const mapped = workflowIO
+        ? applyParamMapping({
+            io: workflowIO,
+            entries: buildParamEntries(workflowIO, undefined, {
+              mode: effectiveMode,
+            }),
+            mapping: parseParamMapping(wiring.effectiveParamMap),
+            values,
+            mode: effectiveMode,
+            groupedKeys,
+          })
+        : null;
+      const workflowInputs =
+        mapped && mapped.inputs.length > 0
+          ? mapped.inputs
+          : toWorkflowInputsPayload(workflowIO ?? undefined, values);
       /* seed「控件后行为」与画布运行同源：条目上配置了 seedMode 的参数
        * 附加 control_after_generate 输入，后端按 fixed/randomize 等处理。 */
       const cagInputs = seedModeOverrides(workflowIO ?? null, seedModes);
@@ -299,7 +351,7 @@ export function WorkflowCanvasNodePreview({
         workflowId,
         workflowName,
         taskType,
-        startedAt: Date.now(),
+        startedAt: nowMs(),
         status: "running",
       });
       await new Promise<void>((resolve) => {
@@ -355,7 +407,27 @@ export function WorkflowCanvasNodePreview({
    * 库里这份映射**能改**（ISSUE #355：「连线要能编辑，现在编辑不了」）：从卡片
    * 右侧的圆点拖到宿主卡片的某一行即改落点，点线选中后按 ⌫ 断开，卡片头 ↺ 恢复
    * 默认。落库形状与编辑器画布逐字一致（`paramMap.source.mode:<模式>`）。 */
+  /* 宿主卡片此刻**真的画得出来**的端口（ioKey 集合）。
+   *
+   *  它是「这个端口现在连得上 / 现在能从外部取到值」的事实源：卡片右侧每个候选
+   *  圆点按它收窄（画不出端点的端口不给拖，否则拖过去只会被落点解析拒绝 —— 用户
+   *  看到的就是「点击端点拉线出现禁用标记」），连线量测的终点也取自同一批行。
+   *
+   *  行集合会随模式切换（可见性）、折叠状态、IO 富化结果变化，故每次宿主表单渲染
+   *  后重新收集一次；用 `useSyncExternalStore` 之外的最简办法：渲染后布局稳定时
+   *  从 DOM 现收（见下面的 effect）。 */
   const hostRef = useRef<HTMLDivElement | null>(null);
+
+  /* 画布视口（只读平移 / 缩放）。
+   *
+   *  用户口径：「这里需要可以拖动整个画布查看其他超出边框的内容」（ISSUE #355）。
+   *  三列（对外参数卡片列 + 宿主卡片 + 对外输出参数卡片列）合起来常宽过面板，
+   *  超出去的部分此前只能靠整页横向滚动 —— 面板自身是「撑满父级、否则内部滚动」
+   *  的容器，看起来就是「拖不动」。
+   *
+   *  只读：不碰映射、不碰连线（连线量测读的是被平移后的真实 DOM 矩形，拖动
+   *  画布不会让线错位）。 */
+  const [wiresOpen, setWiresOpen] = useState(true);
   /* 映射编辑编排：本地 overlay + 落库。没有 `onPatchParamMap`（只读消费方）时
    * 仍然派生正确的落点，只是拖不动。 */
   const wiring = useParamWiring({
@@ -373,8 +445,17 @@ export function WorkflowCanvasNodePreview({
         paramMap: wiring.effectiveParamMap,
         mode: effectiveMode,
         groupedKeys,
+        /* 候选端点收窄到「宿主卡片此刻真的画得出来的行」——画不出端点的端口不给
+         * 拖，拖过去也落不上（与编辑器画布的 `reachableKeys` 同一口径）。 */
+        reachableKeys,
       }),
-    [workflowIO, wiring.effectiveParamMap, effectiveMode, groupedKeys],
+    [
+      workflowIO,
+      wiring.effectiveParamMap,
+      effectiveMode,
+      groupedKeys,
+      reachableKeys,
+    ],
   );
   /* ── 对外输出参数（右列）──
    * 与左列对称：左列是「对外要什么 → 落到哪一行」，右列是「对外给什么」。
@@ -399,187 +480,234 @@ export function WorkflowCanvasNodePreview({
      * 又包了一层同款边框 + 重复标题，出现「面板套面板」）。卡片宽 380，
      * 进度/结果/错误行与其对齐。 */
     <div className="flex w-full flex-col items-center gap-3">
-      {/* 对外参数卡片列 + 宿主卡片并排：卡片列在左、宿主运行卡片在右。
+      {/* ── 画布视口外框（拖动平移 / 滚轮缩放 / 适应 / 复位）──
+          三列（对外参数 / 宿主卡片 / 对外输出参数）合起来常宽过面板，超出去的
+          部分此前看不到（ISSUE #355：「需要可以拖动整个画布查看其他超出边框的
+          内容」）。状态与手势都在这一层，拖动画布不会让预览主体重渲染。 */}
+      <WorkflowCanvasViewportFrame
+        hint="拖动空白处平移画布 · 滚轮缩放"
+        toolbar={
+          outputCards.outputs.length > 0 ? (
+            /* 映射 / 输出连线是量出来的绝对定位 SVG（见 WorkflowParamWires），
+               卡片密集时线会压住内容 —— 给一个一键收起的出口。 */
+            <button
+              type="button"
+              onClick={() => setWiresOpen((prev) => !prev)}
+              aria-pressed={wiresOpen}
+              className="rounded border border-(--color-border-strong) px-2 py-0.5 text-[10.5px] text-(--color-ink-soft) transition-colors hover:bg-white/8 hover:text-(--color-ink-bright)"
+              data-testid="wflib-canvas-toggle-wires"
+              title={
+                wiresOpen
+                  ? "隐藏映射 / 输出连线（只看卡片）"
+                  : "显示映射 / 输出连线"
+              }
+            >
+              {wiresOpen ? "隐藏连线" : "显示连线"}
+            </button>
+          ) : null
+        }
+      >
+        {/* 对外参数卡片列 + 宿主卡片并排：卡片列在左、宿主运行卡片在右。
           容器 `relative` 是只读映射连线的量测基准（见 WorkflowParamWires）——
           卡片右侧的圆点与宿主卡片上被落到的那一行之间画一条线，读者不必对照
           两处文字也能看出「提示词喂给了 positive_prompt」。
           两列之间留出走线的横向空间（ISSUE #355 复审：贴太近就看不出哪条线连
           到哪一行）—— 间距与编辑器画布的卡片列留白同量级。 */}
-      <div className="relative flex items-start justify-center gap-24">
-        {paramCards.entries.length > 0 && (
-          <WorkflowParamCardColumn
-            entries={paramCards.entries}
-            resolved={paramCards.resolved}
-            io={workflowIO}
-            /* 没有模式时不给连线能力：落点覆盖必须归属一个模式，写入无归属
-             * 等于什么都没发生（与编辑器画布的写入路径同一口径）。 */
-            canWire={!!effectiveMode && !!onPatchParamMap}
-            selectedEntryId={selectedParamId}
-            onSelect={setSelectedParamId}
-            isManual={wiring.isManual}
-            onReset={wiring.resetToAuto}
-          />
-        )}
-        {/* ── 画布同款节点卡片：唯一视觉源在 shared/workflow-node-parts ── */}
-        <div ref={hostRef} className="relative">
-          <WorkflowNodeCardShell>
-        <WorkflowNodeHeader
-          title={workflowName}
-          right={
-            <WorkflowNodePill>
-              <span
-                className={[
-                  "h-1.5 w-1.5 rounded-full",
-                  running ? "animate-pulse bg-amber-300" : phase.kind === "done"
-                    ? "bg-emerald-400"
-                    : phase.kind === "failed"
-                      ? "bg-rose-400"
-                      : "bg-(--color-primary)",
-                ].join(" ")}
-              />
-              <span
-                className="text-[10px] font-medium text-(--color-ink-soft)"
-                style={{ fontFamily: "var(--font-sans)" }}
-              >
-                {statusLabel}
-              </span>
-            </WorkflowNodePill>
-          }
-        />
-
-        <WorkflowNodeDivider />
-
-        {/* chips 双行：与画布 WorkflowNode 同构（Row1 来源+模型，Row2 工作流+模式）；
-         *  库内为只读语境，固定「本机 / 全部模型 / 当前工作流 / 任务类型」。 */}
-        <div className="flex flex-col gap-1 pr-[14px] pb-1.5 pl-[14px]">
-          <div className="flex h-7 min-w-0 items-center gap-1">
-            <WorkflowStaticChip>
-              <span className="h-1.5 w-1.5 rounded-full bg-(--color-success-strong)" />
-              <span className="text-[11px] font-semibold text-(--color-success-strong)">
-                本机
-              </span>
-            </WorkflowStaticChip>
-            <WorkflowStaticChip className="min-w-0 flex-1">
-              <span className="truncate text-[11px] font-semibold text-(--color-ink-bright)">
-                全部模型
-              </span>
-            </WorkflowStaticChip>
-          </div>
-          <div className="flex h-7 min-w-0 items-center gap-1">
-            <WorkflowStaticChip className="min-w-0 flex-1" title={workflowName}>
-              <span className="truncate text-[11px] font-semibold text-(--color-ink-bright)">
-                {workflowName}
-              </span>
-            </WorkflowStaticChip>
-            {modes && modes.length > 1 && onModeChange ? (
-              /* 多模式：类型 chip 变成模式切换下拉（与工作流库「类型」同码表） */
-              <DarkSelect
-                value={effectiveMode ?? taskType}
-                onChange={(code) => onModeChange(code)}
-                options={modes}
-                labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
-                popoverMinWidth={150}
-                autoFitFromOptions={false}
-                className="!bg-transparent !border-(--color-border-strong) shrink-0 text-[11px]"
-              />
-            ) : (
-              <WorkflowStaticChip>
-                <span className="text-[11px] font-medium text-(--color-ink-bright)">
-                  {effectiveModeLabel || "—"}
-                </span>
-              </WorkflowStaticChip>
-            )}
-          </div>
-        </div>
-
-        {/* compact = 与项目画布节点完全同版的密度与结构（无「组合参数 /
-         *  可编辑参数」等分组标题），库内预览对齐画布观感。端点圆点在
-         *  非 React Flow 节点内由 PortHandle 降级为装饰。 */}
-        <DynamicWorkflowForm
-          io={workflowIO ?? undefined}
-          values={values}
-          onChange={setValues}
-          showOutputs={false}
-          compact
-          mode={effectiveMode}
-          seedModes={seedModes}
-          /* 被某个对外参数落到的那一行，行尾标出它属于谁 —— 与左侧卡片的
-           * 端口行互为两端，一眼看出「这个参数到底喂给了哪一行」。 */
-          rowTrailing={(entry) => (
-            <ParamOwnerTag label={paramCards.ownersByPin[entry.ioKey]} />
+        <div className="relative flex w-fit items-start justify-center gap-24">
+          {paramCards.entries.length > 0 && (
+            <WorkflowParamCardColumn
+              entries={paramCards.entries}
+              resolved={paramCards.resolved}
+              io={workflowIO}
+              /* 没有模式时不给连线能力：落点覆盖必须归属一个模式，写入无归属
+               * 等于什么都没发生（与编辑器画布的写入路径同一口径）。 */
+              canWire={!!effectiveMode && !!onPatchParamMap}
+              selectedEntryId={selectedParamId}
+              onSelect={setSelectedParamId}
+              isManual={wiring.isManual}
+              onReset={wiring.resetToAuto}
+              reachableKeys={paramCards.reachableKeys}
+              wiredDotKeys={paramCards.wiredDotKeys}
+            />
           )}
-          onSeedModeChange={
-            onSeedModeChange
-              ? (ioKey: string, mode: string) => onSeedModeChange(ioKey, mode)
-              : undefined
-          }
-          workflowId={workflowId}
-          onUploadProgress={(message) => setUploadNotice(message)}
-          onUploadError={(message) => setUploadNotice(message)}
-        />
+          {/* ── 画布同款节点卡片：唯一视觉源在 shared/workflow-node-parts ── */}
+          <div className="relative">
+            <div ref={hostRef} className="relative">
+              <WorkflowNodeCardShell>
+                <WorkflowNodeHeader
+                  title={workflowName}
+                  right={
+                    <WorkflowNodePill>
+                      <span
+                        className={[
+                          "h-1.5 w-1.5 rounded-full",
+                          running
+                            ? "animate-pulse bg-amber-300"
+                            : phase.kind === "done"
+                              ? "bg-emerald-400"
+                              : phase.kind === "failed"
+                                ? "bg-rose-400"
+                                : "bg-(--color-primary)",
+                        ].join(" ")}
+                      />
+                      <span
+                        className="text-[10px] font-medium text-(--color-ink-soft)"
+                        style={{ fontFamily: "var(--font-sans)" }}
+                      >
+                        {statusLabel}
+                      </span>
+                    </WorkflowNodePill>
+                  }
+                />
 
-        {/* outputs 行：与画布 outputs labelRow 同构，**带输出端点圆点**。
+                <WorkflowNodeDivider />
+
+                {/* chips 双行：与画布 WorkflowNode 同构（Row1 来源+模型，Row2 工作流+模式）；
+                 *  库内为只读语境，固定「本机 / 全部模型 / 当前工作流 / 任务类型」。 */}
+                <div className="flex flex-col gap-1 pr-[14px] pb-1.5 pl-[14px]">
+                  <div className="flex h-7 min-w-0 items-center gap-1">
+                    <WorkflowStaticChip>
+                      <span className="h-1.5 w-1.5 rounded-full bg-(--color-success-strong)" />
+                      <span className="text-[11px] font-semibold text-(--color-success-strong)">
+                        本机
+                      </span>
+                    </WorkflowStaticChip>
+                    <WorkflowStaticChip className="min-w-0 flex-1">
+                      <span className="truncate text-[11px] font-semibold text-(--color-ink-bright)">
+                        全部模型
+                      </span>
+                    </WorkflowStaticChip>
+                  </div>
+                  <div className="flex h-7 min-w-0 items-center gap-1">
+                    <WorkflowStaticChip
+                      className="min-w-0 flex-1"
+                      title={workflowName}
+                    >
+                      <span className="truncate text-[11px] font-semibold text-(--color-ink-bright)">
+                        {workflowName}
+                      </span>
+                    </WorkflowStaticChip>
+                    {modes && modes.length > 1 && onModeChange ? (
+                      /* 多模式：类型 chip 变成模式切换下拉（与工作流库「类型」同码表） */
+                      <DarkSelect
+                        value={effectiveMode ?? taskType}
+                        onChange={(code) => onModeChange(code)}
+                        options={modes}
+                        labels={Object.fromEntries(
+                          modes.map((code) => [code, modeLabel(code)]),
+                        )}
+                        popoverMinWidth={150}
+                        autoFitFromOptions={false}
+                        className="shrink-0 !border-(--color-border-strong) !bg-transparent text-[11px]"
+                      />
+                    ) : (
+                      <WorkflowStaticChip>
+                        <span className="text-[11px] font-medium text-(--color-ink-bright)">
+                          {effectiveModeLabel || "—"}
+                        </span>
+                      </WorkflowStaticChip>
+                    )}
+                  </div>
+                </div>
+
+                {/* compact = 与项目画布节点完全同版的密度与结构（无「组合参数 /
+                 *  可编辑参数」等分组标题），库内预览对齐画布观感。端点圆点在
+                 *  非 React Flow 节点内由 PortHandle 降级为装饰。 */}
+                <DynamicWorkflowForm
+                  io={workflowIO ?? undefined}
+                  values={values}
+                  onChange={setValues}
+                  showOutputs={false}
+                  compact
+                  mode={effectiveMode}
+                  seedModes={seedModes}
+                  /* 被某个对外参数落到的那一行，行尾标出它属于谁 —— 与左侧卡片的
+                   * 端口行互为两端，一眼看出「这个参数到底喂给了哪一行」。 */
+                  rowTrailing={(entry) => (
+                    <ParamOwnerTag
+                      label={paramCards.ownersByPin[entry.ioKey]}
+                    />
+                  )}
+                  onSeedModeChange={
+                    onSeedModeChange
+                      ? (ioKey: string, mode: string) =>
+                          onSeedModeChange(ioKey, mode)
+                      : undefined
+                  }
+                  workflowId={workflowId}
+                  onUploadProgress={(message) => setUploadNotice(message)}
+                  onUploadError={(message) => setUploadNotice(message)}
+                />
+
+                {/* outputs 行：与画布 outputs labelRow 同构，**带输出端点圆点**。
             用户口径是「红框中的输出端口也要有端口圆点，然后工作流节点右侧需要
             显示对外输出参数」（ISSUE #355）：输出行右侧的圆点与项目画布 /
             编辑器上同一颗（`PortHandle`，非 React Flow 上下文里退化为几何一致的
             装饰圆点），右侧那列「对外输出参数」卡片再从这颗圆点连出去。 */}
-        {outputs.length > 0 && (
-          <div className="border-t border-(--color-border-subtle)">
-            {outputs.map((output) => (
-              <WorkflowNodeOutputsRow
-                key={output.nodeId + ":" + output.name}
-                output={output}
-                inputs={inputs}
-                outputs={outputs}
-                renderHandle={({ id, dir, type }) => (
-                  <PortHandle
-                    id={id}
-                    dir={dir}
-                    type={type}
-                    style={{
-                      right: -6,
-                      top: 14,
-                      transform: "translateY(-50%)",
-                      boxShadow: "none",
-                    }}
-                  />
+                {outputs.length > 0 && (
+                  <div className="border-t border-(--color-border-subtle)">
+                    {outputs.map((output) => (
+                      <WorkflowNodeOutputsRow
+                        key={output.nodeId + ":" + output.name}
+                        output={output}
+                        inputs={inputs}
+                        outputs={outputs}
+                        renderHandle={({ id, dir, type }) => (
+                          <PortHandle
+                            id={id}
+                            dir={dir}
+                            type={type}
+                            style={{
+                              right: -6,
+                              top: 14,
+                              transform: "translateY(-50%)",
+                              boxShadow: "none",
+                            }}
+                          />
+                        )}
+                      />
+                    ))}
+                  </div>
                 )}
-              />
-            ))}
-          </div>
-        )}
 
-        <WorkflowNodeActionButton
-          label={running ? `生成中 ${pct}%` : "▶ 用此工作流生成"}
-          disabled={!canRun}
-          onClick={run}
-          title={
-            missingLabels.length > 0
-              ? `必填参数未填：${missingLabels.join("、")}`
-              : undefined
-          }
-        />
-          </WorkflowNodeCardShell>
-        </div>
-        {/* 对外输出参数卡片列：在宿主卡片**右侧**（与左列的输入卡片对称）。
+                <WorkflowNodeActionButton
+                  label={running ? `生成中 ${pct}%` : "▶ 用此工作流生成"}
+                  disabled={!canRun}
+                  onClick={run}
+                  title={
+                    missingLabels.length > 0
+                      ? `必填参数未填：${missingLabels.join("、")}`
+                      : undefined
+                  }
+                />
+              </WorkflowNodeCardShell>
+            </div>
+          </div>
+          {/* 对外输出参数卡片列：在宿主卡片**右侧**（与左列的输入卡片对称）。
             卡片圆点骑跨卡片左缘，线从宿主卡片的输出行圆点连过来。 */}
-        <WorkflowOutputParamCardColumn outputs={outputCards.outputs} />
-        {/* 映射连线：输入侧 = 卡片圆点 → 宿主卡片上被落到的那一行；输出侧 =
+          <WorkflowOutputParamCardColumn outputs={outputCards.outputs} />
+          {/* 映射连线：输入侧 = 卡片圆点 → 宿主卡片上被落到的那一行；输出侧 =
             宿主卡片输出行圆点 → 对外输出参数卡片。量不到锚点（行不在当前渲染
             里）就整条不画，不留悬空线头。
             可编辑的只有输入侧：拖圆点即改落点、点线选中后按 ⌫ 断开。 */}
-        <WorkflowParamWires
-          wires={[...paramCards.wires, ...outputCards.wires]}
-          selectedEntryId={selectedParamId}
-          onSelect={setSelectedParamId}
-          onConnect={
-            effectiveMode && onPatchParamMap ? wiring.connect : undefined
-          }
-          onDisconnect={
-            effectiveMode && onPatchParamMap ? wiring.disconnect : undefined
-          }
-        />
-      </div>
+          {/* 连线层受「显示连线」开关控制：库里的映射线是量出来的绝对定位 SVG，
+            卡片列与宿主卡片之间节点密集时线会压住卡片内容 —— 给一个一键收起的
+            出口（对应编辑器画布那边「拖动卡片本身」的能力）。 */}
+          {wiresOpen && (
+            <WorkflowParamWires
+              wires={[...paramCards.wires, ...outputCards.wires]}
+              selectedEntryId={selectedParamId}
+              onSelect={setSelectedParamId}
+              onConnect={
+                effectiveMode && onPatchParamMap ? wiring.connect : undefined
+              }
+              onDisconnect={
+                effectiveMode && onPatchParamMap ? wiring.disconnect : undefined
+              }
+            />
+          )}
+        </div>
+      </WorkflowCanvasViewportFrame>
 
       {/* 进度条（running 时） */}
       {phase.kind === "running" && (
@@ -695,4 +823,14 @@ export function WorkflowCanvasNodePreview({
       />
     </div>
   );
+}
+
+/** 当前时间戳（毫秒）。
+ *
+ *  抽成模块级函数而不是在组件体里直接 `Date.now()`：React 的纯度检查会顺着
+ *  组件作用域内的调用点判定「渲染期调用了非纯函数」，而这里其实只在**点击运行
+ *  的事件回调**里执行（永远不会在渲染期跑到）。由列出的这个事实源统一取时间，
+ *  也方便将来在测试里打桩。 */
+function nowMs(): number {
+  return Date.now();
 }

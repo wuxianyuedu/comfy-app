@@ -36,6 +36,10 @@ import {
   type WorkflowIOMap,
 } from "~/lib/workflow-io-types";
 import { exposedParamsForMode } from "~/lib/workflow-exposed-params";
+import {
+  aspectLabelForSize,
+  megapixelsForSize,
+} from "~/lib/workshop/workflow-encapsulation";
 
 /* ── 对外参数分类 ──
  * 与工坊封装的 WorkshopPinClass 子集 + `other`（尺寸/参考图/提示词之外，
@@ -53,8 +57,6 @@ export type ParamClass =
   | "size-height"
   | "size-aspect"
   | "size-megapixels"
-  /** 对齐倍数（absorbed into the same picker as 比例/像素）. */
-  | "size-multiple"
   | "reference-image"
   | "first-frame"
   | "last-frame"
@@ -66,7 +68,6 @@ export const SIZE_CLASSES: readonly ParamClass[] = [
   "size-height",
   "size-aspect",
   "size-megapixels",
-  "size-multiple",
 ];
 
 /** 一个「对外参数」（= 契约里的一个统一口子，落到工作流的某个端口上）。
@@ -117,7 +118,6 @@ const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
   "size-height": "高度",
   "size-aspect": "宽高比",
   "size-megapixels": "像素量",
-  "size-multiple": "倍数",
   "reference-image": "参考图",
   "first-frame": "首帧",
   "last-frame": "尾帧",
@@ -171,12 +171,6 @@ export function classifyPin(e: WorkflowIOEntry): ParamClass {
   }
   if (/aspect_?ratio|宽高比|纵横比|比例/.test(text)) return "size-aspect";
   if (/megapixel|百万像素|\b像素\b/.test(text)) return "size-megapixels";
-  /* 对齐倍数（`multiple` / `倍数`）：它与比例 / 像素由同一个控件录入
-   *  （见 DimensionControl 的 ResolutionSelector），因此同属「尺寸」语义 ——
-   *  此前被判成 `other`，契约里根本出不来，用户看到「尺寸只有一个比例口，
-   *  倍数哪去了」（ISSUE #355）。 */
-  if (/\bmultiple\b|upscale_(factor|by|amount)|倍率|倍数|对齐倍数/.test(text))
-    return "size-multiple";
   if (/prompt|提示词|描述词|描述/.test(text)) return "prompt";
   /* 无类型但默认值很长（>40 字符）的文本一般是提示词框 —— 与工作流库的控件
    * 推导启发式（workflow-encapsulation / workflow-detail-io）保持一致，
@@ -294,7 +288,7 @@ export function paramOutputPorts(
 
   const target = resolvedTarget ?? null;
   /* **每个候选端口一颗圆点**（不论当前有没有落点）：同一张「尺寸」卡片要把
-   *  宽 / 高 / 宽高比 / 像素量 / 倍数各自的出口都摆出来，作者拖哪一颗就连到
+   *  宽 / 高 / 宽高比 / 像素量各自的出口都摆出来，作者拖哪一颗就连到
    *  哪个候选（ISSUE #355：「尺寸这里不是有多个输出端口吗，现在怎么还是一个
    *  比例」）。只列「当前生效落点」那一颗的话，卡片上就只剩一根线可以拉，
    *  其余候选连端点都没有。
@@ -335,7 +329,7 @@ export function paramOutputPorts(
 /** 一个对外参数当前**接到哪些端口**（默认状态可以是「一对多」）。
  *
  *  为什么不是一个端口：像「尺寸」这样的对外参数**由多个端口共同组成** ——
- *  宽高比 / 像素量 / 倍数由同一块组合控件录入（`inferGroups` 的 `groupedKeys`），
+ *  宽高比 / 像素量由同一块组合控件录入（`inferGroups` 的 `groupedKeys`），
  *  宽 / 高同理。默认状态下这几个端口都取自这一个对外参数，画面上就该各有一条线；
  *  只画「自动判定挑中的那一个」会让「尺寸」看着只有一个出口
  *  （ISSUE #355：「尺寸现在有三个参数，就应该可以连三条线出来」）。
@@ -355,8 +349,27 @@ export function wiredTargetsForEntry(args: {
   manual: boolean;
   /** 组合控件覆盖到的端口（`inferGroups(...).groupedKeys`）；缺省时不做一对多。 */
   groupedKeys?: ReadonlySet<string>;
+  /** 是否**连每一个候选端口都算一条线**（视图侧口径，与运行期无关）。
+   *
+   *  缺省 `false` = 只报「当前生效落点」那一个（运行期派值、编辑器连线用这个
+   *  口径：手工落点意味着该口只往那一个端口供值）。给 `true` 时把该条目全部
+   *  可落点逐个报出来 —— 库内画布卡片给每个候选都画了圆点（每个都能拖线改落点），
+   *  线就该逐条画出来；点有、线没有，读作「这几项没接上」（ISSUE #355：「宽高比
+   *  和百万像素这两项都需要能导入到工作流中，2 条线都要能连出去」）。 */
+  allCandidates?: boolean;
 }): { ioKey: string; active: boolean }[] {
-  const { entry, io, target, manual, groupedKeys } = args;
+  const { entry, io, target, manual, groupedKeys, allCandidates } = args;
+  /* 视图口径：不挑「当前落点」，把候选逐个报出来（落在哪个哪个就是 active）。 */
+  if (allCandidates) {
+    const candidates = (
+      io ? entry.pins.filter((pin) => !!io[pin.ioKey]) : entry.pins
+    ).map((pin) => ({ ioKey: pin.ioKey, active: pin.ioKey === target }));
+    /* 生效落点不在候选里（历史数据 / 端口已从 IO 移除）也要补一条并标 active
+     *  —— 否则「当前落点」在图上凭空消失，读者答不出这个口现在连着哪。 */
+    if (target && !candidates.some((c) => c.ioKey === target))
+      candidates.unshift({ ioKey: target, active: true });
+    return candidates;
+  }
   if (!target) return [];
   if (manual) return [{ ioKey: target, active: true }];
   /* 落点落在组合控件里 → 该控件覆盖、且属于这个条目的端口全都算「接上了」。
@@ -366,18 +379,36 @@ export function wiredTargetsForEntry(args: {
     const siblings = entry.pins.filter(
       (pin) => groupedKeys.has(pin.ioKey) && (!io || !!io[pin.ioKey]),
     );
-    const keys = siblings.length > 0 ? siblings.map((pin) => pin.ioKey) : [target];
+    const keys =
+      siblings.length > 0 ? siblings.map((pin) => pin.ioKey) : [target];
     if (!keys.includes(target)) keys.unshift(target);
     return keys.map((ioKey) => ({ ioKey, active: ioKey === target }));
   }
   return [{ ioKey: target, active: true }];
 }
 
+/** 某个条目在某个 ioKey 上「用哪个 handle 连」——库内画布卡片按**端口名**给
+ *  圆点打锚点（`paramOutputPorts` 的 `handleId`），所以连线也必须按端口名对齐
+ *  那一颗点，否则同一个条目下多条线会全部落到第一颗点上。 */
+export function wireHandleIdForIoKey(
+  io: WorkflowIOMap | null | undefined,
+  entry: ParamEntry,
+  ioKey: string,
+): string {
+  return (
+    io?.[ioKey]?.name ??
+    entry.pins.find((pin) => pin.ioKey === ioKey)?.name ??
+    ioKey
+  );
+}
+
 /** 该对外参数在某个模式下的**默认落点端口**（`auto`）。
  *
  *  默认连线的端点排在候选第一位，颜色与实心点一致；作者改过落点后第一颗就是
  *  他连的那颗。缺省（没有模式语境）时退到候选首项。 */
-export function defaultOutputPortIndex(ports: readonly ParamOutputPort[]): number {
+export function defaultOutputPortIndex(
+  ports: readonly ParamOutputPort[],
+): number {
   const index = ports.findIndex((port) => port.active);
   return index >= 0 ? index : 0;
 }
@@ -520,8 +551,6 @@ const AUTO_MAPPABLE: Record<ParamClass, (e: WorkflowIOEntry) => boolean> = {
     /^(height|base_height|h|高度|纵向)$/.test(searchText(e).trim()),
   "size-aspect": (e) => /aspect_?ratio|宽高比|纵横比|比例/.test(searchText(e)),
   "size-megapixels": (e) => /megapixel|百万像素|\b像素\b/.test(searchText(e)),
-  "size-multiple": (e) =>
-    /\bmultiple\b|upscale_(factor|by|amount)|倍率|倍数|对齐倍数/.test(searchText(e)),
   "reference-image": (e) => isImagePin(e),
   "first-frame": (e) => isImagePin(e),
   "last-frame": (e) => isImagePin(e),
@@ -908,6 +937,47 @@ export function runtimeNodeId(entry: {
   return `${entry.hostNodeId}:${entry.nodeId}`;
 }
 
+/** 把**一个对外值**派生成某个端口自己认的形状（「尺寸」这类一对外参数接多端口时用）。
+ *
+ *  外部给出的「尺寸」是 `"832x1216"` 这样的像素串；落到工作流的 `width` 上就是
+ *  832，落到 `aspect_ratio` 上就得是它自己声明的那个比例标签，落到 `megapixels`
+ *  上则是 0.9 这样的百万像素数。各落点形状不同、值也不同 —— 直接照抄像素串会
+ *  被 ComfyUI 判成非法选项（表现为「改了没生效」）。
+ *
+ *  非「尺寸」的口子原样透传（提示词 / 首帧这类值在所有落点上同形）。
+ *  端口形状算不出（比例不在候选里等）时返回 `undefined`，调用方按默认值兜底。 */
+function sizeValueForPin(
+  io: WorkflowIOMap | null | undefined,
+  entry: ParamEntry,
+  ioKey: string,
+  supplied: unknown,
+): unknown {
+  if (entry.cls !== "size") return supplied;
+  const raw = io?.[ioKey];
+  if (!raw) return supplied;
+  const dims = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(String(supplied).trim());
+  if (!dims) return supplied;
+  const width = Number(dims[1]);
+  const height = Number(dims[2]);
+  switch (classifyPin(raw)) {
+    case "size-width":
+      return width;
+    case "size-height":
+      return height;
+    case "size-aspect": {
+      const label = aspectLabelForSize(width, height, raw.options);
+      return label ?? undefined;
+    }
+    case "size-megapixels": {
+      const mp = megapixelsForSize(width, height, raw.defaultValue);
+      return mp ?? undefined;
+    }
+    default:
+      /* 落点不是尺寸类端口（工作流的自定义 pin）：原样透传，由工作流自己解释。 */
+      return supplied;
+  }
+}
+
 /** 把映射落到运行时载荷：对外值 → `workflowInputs` 三元组。
  *
  *  · 有映射：只覆盖被映射的那个口（作者显式画的线说了算，避免把整节点默认值
@@ -921,8 +991,14 @@ export function applyParamMapping(args: {
   mapping: ParamMapping | null | undefined;
   values: Record<string, unknown>;
   mode?: string | null;
+  /** 组合控件覆盖到的端口（`inferGroups(...).groupedKeys`）。
+   *
+   *  带「尺寸」这类一对外参数对多端口的口子时必传：默认状态下它接到的是
+   *  组合控件覆盖的那几个端口，值要逐端口派生成各自认的形状（宽高比 / 像素量）。
+   *  不传时按单端口处理（老调用方行为不变）。 */
+  groupedKeys?: ReadonlySet<string>;
 }): { inputs: MappedInput[]; unmatched: string[] } {
-  const { io, entries, mapping, values, mode } = args;
+  const { io, entries, mapping, values, mode, groupedKeys } = args;
   const resolved = resolveMapping(entries, io, mapping, mode);
   /* 作者手工连了线的对外口（含"手工断开"）与纯自动映射要分开对待：
    *   · 手工：用户值只落到那个端口，该节点其余端口不再兜底（作者的线说了算）；
@@ -953,12 +1029,27 @@ export function applyParamMapping(args: {
       .find((value) => value !== undefined);
     const supplied = byContract ?? byPinKeys;
     if (supplied === undefined) continue;
-    const target = resolved[entry.id];
-    if (target && io?.[target]) {
-      push(target, supplied);
-      continue;
+    /* 一个对外参数可能接到**多个端口**（「尺寸」的宽高比 / 像素量由同一
+     * 块控件录入，默认状态下几个端口都取自这一个口）。这时要把同一个对外值
+     * 派生成每个端口各自认的形状，逐个下发 —— 只往「自动判定挑中的那一个」写，
+     * 用户在图上连出来的另外两条线就从外部拿不到值（ISSUE #355：「尺寸那三项
+     * 每一项都需要从外部获取值」）。 */
+    const targets = wiredTargetsForEntry({
+      entry,
+      io,
+      target: resolved[entry.id],
+      manual: !isDefaultMappingForEntry(mapping, entry, mode),
+      groupedKeys,
+    });
+    let pushed = false;
+    for (const wired of targets) {
+      if (!io?.[wired.ioKey]) continue;
+      const perPort = sizeValueForPin(io, entry, wired.ioKey, supplied);
+      if (perPort === undefined) continue;
+      push(wired.ioKey, perPort);
+      pushed = true;
     }
-    unmatched.push(entry.id);
+    if (!pushed) unmatched.push(entry.id);
   }
 
   /* ② 未连线/仅自动映射的统一口子：按默认值兜底（「用户不改就用工作流默认值」）。
@@ -1073,7 +1164,9 @@ export function placeParamNodes(
      *  —— 用户表现为「画布上找不到对外参数卡片」，见 ParamEntry.hostNodeId）。 */
     const host = hostPosById[entry.hostNodeId] ?? hostPosById[entry.nodeId];
     if (!host) continue;
-    const hostKey = hostPosById[entry.hostNodeId] ? entry.hostNodeId : entry.nodeId;
+    const hostKey = hostPosById[entry.hostNodeId]
+      ? entry.hostNodeId
+      : entry.nodeId;
     const column = columnByNode[hostKey] ?? 0;
     const rowY = cursorByNode[hostKey] ?? 0;
     out[paramNodeId(entry.id)] = {

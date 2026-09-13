@@ -127,6 +127,7 @@ export function WorkflowLibrary({
           loading={c.loading}
           stalled={c.loadStalled}
           onRefresh={c.refresh}
+          localRootsHint={c.localRootsHint}
         />
         <div className="flex-1">
           <WorkflowLibraryDetail

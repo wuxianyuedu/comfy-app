@@ -23,6 +23,7 @@ import { useToast } from "../../ToastProvider";
 import {
   countBySource,
   countByType,
+  deriveLocalRootsHint,
   filterPending,
   filterWorkflows,
   type PendingRow,
@@ -94,6 +95,10 @@ export interface WorkflowLibraryController {
   /* 首次拉取超时：服务在响应（HTTP 层通），但 tRPC 查询迟迟不 resolve。
    * 视图据此给可操作出口（重试 + 打开日志面板），不再无限转圈。 */
   loadStalled: boolean;
+  /* 空列表时「为什么是空」的出口：本地工作流目录一个都没解析到 / 全部不可访问 /
+   * 目录里没有工作流文件。服务端一直在返回 localRoots，此前前端把它丢掉了，
+   * 于是空态只能说「还没有工作流」——用户看到的是「工作流全没了」。 */
+  localRootsHint: string | null;
   /* 动作 */
   load: () => void;
   refresh: () => void;
@@ -242,6 +247,13 @@ export function useWorkflowLibrary(
       window.removeEventListener(PATHS_CHANGED_EVENT, onChanged);
     };
   }, [load]);
+
+  /** 空列表的「为什么是空」：判据在配置层（deriveLocalRootsHint），这里只负责
+   *  在拿到数据后才给出结论（未加载完不算「空」）。 */
+  const localRootsHint = useMemo(
+    () => (listQ.data ? deriveLocalRootsHint(listQ.data.localRoots) : null),
+    [listQ.data],
+  );
 
   const modelTags = useMemo(
     () =>
@@ -397,6 +409,7 @@ export function useWorkflowLibrary(
         : null,
     loading: listQ.isLoading && !listQ.data && !listQ.isError,
     loadStalled,
+    localRootsHint,
     load,
     refresh,
     loadModelTags,

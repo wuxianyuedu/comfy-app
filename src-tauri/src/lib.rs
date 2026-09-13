@@ -229,6 +229,18 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
   let configured = state.as_ref().map(|s| s.foreground()).unwrap_or(false);
   let activate = request_focus || configured;
 
+  /* 最小化时先还原：`show()`（tao 走 SW_SHOW）对最小化窗口不会还原——Windows
+   * 只把它「按原尺寸/原状态」显示出来，仍是任务栏上一条不动的按钮；随后的
+   * `set_focus()` 也只是把「最小化的窗口」记为前台。用户双击启动或点托盘得到的
+   * 观感就是「点了没法切到前台」，而再点一次任务栏又能出来（第二次点击走的是
+   * 系统自己的还原路径）——正是「有时候切不到前台」。
+   * 仅在确实最小化时调 unminimize：它的实现是 SW_RESTORE，对非最小化窗口带激活
+   * 语义，无条件调会把「不抢前台」策略架空（见本函数开头与 §1.3）。 */
+  if win.is_minimized().unwrap_or(false) {
+    if let Err(e) = win.unminimize() {
+      log::warn!("[ComfyAPP] unminimize main window failed: {:?}", e);
+    }
+  }
   if let Err(e) = win.show() {
     log::warn!("[ComfyAPP] show main window failed: {:?}", e);
   }
@@ -298,6 +310,10 @@ fn open_comfyui_window(app: tauri::AppHandle, url: String) -> Result<String, Str
     let current = win.url().map(|u| u.to_string()).unwrap_or_default();
     if current != url {
       let _ = win.navigate(parsed.clone());
+    }
+    // 同主窗：最小化时 show() 不还原，先 unminimize 再显示/聚焦。
+    if win.is_minimized().unwrap_or(false) {
+      let _ = win.unminimize();
     }
     let _ = win.show();
     let _ = win.set_focus();

@@ -74,6 +74,12 @@ export interface WorkflowParamCardColumnProps {
   /** 该对外参数在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
   isManual?: (entryId: string) => boolean;
   onReset?: (entryId: string) => void;
+  /** 宿主卡片此刻真的画得出来的端口（ioKey 集合）—— 候选圆点按它收窄：
+   *  画不出端点的端口不给拖，拖过去也落不上。缺省 = 不收窄。 */
+  reachableKeys?: ReadonlySet<string>;
+  /** **真的画出了线**的圆点（`<条目 id>?<handle id>`）。给定时这些圆点按「已
+   *  连接」上色（实心、不透明度 1），不让「带线的点」看着像断开的。 */
+  wiredDotKeys?: ReadonlySet<string>;
 }
 
 export function WorkflowParamCardColumn({
@@ -85,6 +91,8 @@ export function WorkflowParamCardColumn({
   onSelect,
   isManual,
   onReset,
+  reachableKeys,
+  wiredDotKeys,
 }: WorkflowParamCardColumnProps) {
   if (entries.length === 0) return null;
 
@@ -100,6 +108,9 @@ export function WorkflowParamCardColumn({
       </p>
       {entries.map((entry) => {
         const style = paramClassStyle(entry.cls);
+        /* 这颗候选圆点上有没有线（见 `wiredDotKeys` 的说明）。 */
+        const wired = (port: ParamOutputPort) =>
+          wiredDotKeys?.has(`${entry.id}?${port.handleId}`) ?? false;
         return (
           <WorkflowParamCard
             key={entry.id}
@@ -122,7 +133,12 @@ export function WorkflowParamCardColumn({
             onReset={canWire ? () => onReset?.(entry.id) : undefined}
             /* 带类型的输出端口：与编辑器同一份派生（类型跟着落点走），库里也
              * 读得到「提示词 → STRING」。 */
-            outputPorts={paramOutputPorts(entry, io, resolved[entry.id])}
+            outputPorts={paramOutputPorts(
+              entry,
+              io,
+              resolved[entry.id],
+              reachableKeys,
+            )}
             /* 右侧小圆点端点：与项目画布节点上的端口同款视觉，圆点画在输出
              * 端口那一行的右沿（`data-wire-anchor` 供连线层量出锚点）。只读
              * 卡片不给它连线能力 —— 画面上的线由 WorkflowParamWires 叠一层。 */
@@ -146,7 +162,9 @@ export function WorkflowParamCardColumn({
                  * 含 `::` 的端口键不做选择器转义（见 WorkflowParamWires）。 */
                 data-wire-anchor={wireAnchorValue(entry.id, port.handleId)}
                 title={
-                  canWire ? `拖到工作流参数行上改「${entry.label}」的落点` : undefined
+                  canWire
+                    ? `拖到工作流参数行上改「${entry.label}」的落点`
+                    : undefined
                 }
                 className={`absolute top-1/2 shrink-0 rounded-full ${
                   canWire ? "cursor-crosshair" : ""
@@ -159,8 +177,14 @@ export function WorkflowParamCardColumn({
                   background: outputPortColor(port, style.color),
                   border: `1px solid ${PORT_DOT_STROKE}`,
                   boxShadow: "0 4px 4px rgba(0,0,0,0.25)",
-                  /* 生效落点那一颗实心，其余候选淡一档：与编辑器画布同口径。 */
-                  opacity: port.active ? 1 : 0.55,
+                  /* 已连接的圆点实心、未连接的淡一档。
+                   *
+                   *  判据是「**这颗点有没有线**」（`wiredDotKeys`），不是「它是不是
+                   *  当前生效落点」：库内每个候选各画一条线，按后者上色会让带线的
+                   *  候选灰掉、看着反而是断的（用户口径：「这里连线断开了是什么
+                   *  原因」，ISSUE #355）。没有 `wiredDotKeys`（或该点确实没线）时
+                   *  退回「生效落点实心」的旧口径。 */
+                  opacity: wired(port) || port.active ? 1 : 0.55,
                 }}
               />
             )}

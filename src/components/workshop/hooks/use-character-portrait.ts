@@ -185,20 +185,23 @@ export function useCharacterPortrait(opts: {
         return;
       }
       const channel = session.channel;
-      if (channel === "local" && !checkpoint) {
+      const remoteModel = (overrides?.remoteModel ?? session.remoteModel).trim();
+      const localWorkflowId = (
+        overrides?.localWorkflowId ?? session.localWorkflowId
+      ).trim();
+      /* 本地通道二选一：库工作流（自带封装，不依赖 Checkpoint）或内置 txt2img
+       *（需要 Checkpoint）。两者都没有才拦下，与区块的门禁提示同一口径。 */
+      if (channel === "local" && !localWorkflowId && !checkpoint) {
         setSession((prev) => ({
           ...prev,
           status: "",
-          error: "本地通道需要先选 Checkpoint（右侧「生成资源」里选择）",
+          error:
+            "本地通道需要先选模型：上方下拉选工作流库模型（需在库里配置好对外参数），或到右侧「生成资源」选一个本地 Checkpoint",
         }));
         return;
       }
       const size = shotSizeToParam(session.size);
       const label = character.name || "该角色";
-      const remoteModel = (overrides?.remoteModel ?? session.remoteModel).trim();
-      const localWorkflowId = (
-        overrides?.localWorkflowId ?? session.localWorkflowId
-      ).trim();
       const localLabel = (overrides?.localLabel ?? "").trim();
       const modelLabel =
         channel === "local"

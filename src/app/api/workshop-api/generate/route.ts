@@ -50,10 +50,10 @@ export async function POST(req: NextRequest) {
 
   const kind: unknown = body.kind;
   const model = strField(body, "model");
-  const image = strField(body, "image");
   const mode = strField(body, "mode");
   const aspectRatio = strField(body, "aspectRatio");
   const megapixels = strField(body, "megapixels");
+  const image = strField(body, "image");
   const prompt = strField(body, "prompt") ?? "";
   const negative = strField(body, "negative");
   const size = strField(body, "size");

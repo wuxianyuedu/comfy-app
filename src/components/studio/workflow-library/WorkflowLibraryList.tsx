@@ -27,6 +27,9 @@ interface WorkflowLibraryListProps {
   stalled?: boolean;
   /** 重试拉取（超时提示里的动作）。 */
   onRefresh?: () => void;
+  /** 本地工作流目录侧的可读原因（没解析到根 / 根不可访问 / 目录里没有文件）；
+   *  非空时用它替换默认空态文案，说明「为什么是空」。 */
+  localRootsHint?: string | null;
 }
 
 /**
@@ -48,6 +51,7 @@ export function WorkflowLibraryList({
   loading = false,
   stalled = false,
   onRefresh,
+  localRootsHint = null,
 }: WorkflowLibraryListProps) {
   const empty = workflows.length === 0 && pendingRows.length === 0;
   return (
@@ -108,7 +112,8 @@ export function WorkflowLibraryList({
             description={
               search
                 ? "换个关键词，或清空搜索框看全部。"
-                : "点右上角「导入工作流」粘贴 JSON，或在设置里配置本地工作流目录后自动扫描。"
+                : localRootsHint ??
+                  "点右上角「导入工作流」粘贴 JSON，或在设置里配置本地工作流目录后自动扫描。"
             }
           />
         ) : (

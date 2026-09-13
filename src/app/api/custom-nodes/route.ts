@@ -12,7 +12,11 @@ import { type NextRequest, NextResponse } from "next/server";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { deriveComfyuiSubdir, getSettingsSync } from "@/lib/app-settings";
+import {
+  deriveComfyuiSubdir,
+  deriveComfyuiWorkflowsDir,
+  getSettingsSync,
+} from "@/lib/app-settings";
 import { readEnvVar } from "@/lib/envfile";
 import { requireServerUser } from "@/lib/auth-server";
 
@@ -77,7 +81,7 @@ function getPaths(): string[] {
  *  The server NEVER writes to these; it's a pure read-only scanner
  *  (see localWorkflows.ts). */
 function getLocalWorkflowPaths(): string[] {
-  const derived = deriveComfyuiSubdir(getSettingsSync().comfyuiPath, "workflows");
+  const derived = deriveComfyuiWorkflowsDir(getSettingsSync().comfyuiPath);
   const extra = (readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "")
     .split(/[\n,]/)
     .map((part) => part.trim())

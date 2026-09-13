@@ -335,8 +335,8 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
   });
 
   it("默认状态下一对多：组合控件里的一组端口各画一条线", () => {
-    /* 「尺寸」由宽高比 / 像素量 / 倍数共同组成（同一块组合控件录入），默认状态下
-     *  这三个端口各接一条线 —— 只画自动判定挑中的那一条，会让「尺寸」看着只有
+    /* 「尺寸」由宽高比 / 像素量 / 宽 / 高共同组成（同一块组合控件录入），默认状态
+     *  下这些端口各接一条线 —— 只画自动判定挑中的那一条，会让「尺寸」看着只有
      *  一个出口（ISSUE #355：「尺寸现在有三个参数，就应该可以连三条线出来」）。
      *  作者手工改过落点后只留他指定的那一条（运行期同口径）。 */
     const groupedIO: WorkflowIOMap = {
@@ -348,9 +348,9 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
         direction: "input", kind: "widget", nodeId: "5",
         name: "megapixels", type: "FLOAT", defaultValue: 1,
       },
-      "5::widget::multiple": {
+      "5::widget::width": {
         direction: "input", kind: "widget", nodeId: "5",
-        name: "multiple", type: "INT", defaultValue: 8,
+        name: "width", type: "INT", defaultValue: 1024,
       },
     };
     const groupedKeys = new Set(Object.keys(groupedIO));
@@ -366,21 +366,21 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
       groupedKeys,
     });
     expect(edges.map((edge) => edge.targetHandle)).toEqual([
+      "5::widget::width",
       "5::widget::aspect_ratio",
       "5::widget::megapixels",
-      "5::widget::multiple",
     ]);
     expect(new Set(edges.map((edge) => edge.id)).size).toBe(3);
 
     /* 作者手工指定落点 → 只画他指定的那一条（其余端口不再由这个口供值）。 */
     const manualEdges = buildParamEdges({
       entries: sizeEntries,
-      resolved: { [size.id]: "5::widget::multiple" },
+      resolved: { [size.id]: "5::widget::megapixels" },
       isManual: () => true,
       groupedKeys,
     });
     expect(manualEdges.map((edge) => edge.targetHandle)).toEqual([
-      "5::widget::multiple",
+      "5::widget::megapixels",
     ]);
   });
 
@@ -397,9 +397,9 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
         direction: "input", kind: "widget", nodeId: "5",
         name: "megapixels", type: "FLOAT", defaultValue: 1,
       },
-      "5::widget::multiple": {
+      "5::widget::width": {
         direction: "input", kind: "widget", nodeId: "5",
-        name: "multiple", type: "INT", defaultValue: 8,
+        name: "width", type: "INT", defaultValue: 1024,
       },
     };
     const sizeEntries = buildParamEntries(groupedIO, undefined, { mode: "T2I" });
@@ -411,12 +411,12 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
       groupedKeys: new Set(Object.keys(groupedIO)),
       reachableKeys: new Set([
         "5::widget::aspect_ratio",
-        "5::widget::multiple",
+        "5::widget::width",
       ]),
     });
     expect(edges.map((edge) => edge.targetHandle)).toEqual([
+      "5::widget::width",
       "5::widget::aspect_ratio",
-      "5::widget::multiple",
     ]);
   });
 
@@ -557,14 +557,14 @@ describe("契约条目的宿主节点（hostNodeId）—— ISSUE #355", () => {
       type: "FLOAT",
       defaultValue: 1,
     },
-    "4::widget::multiple": {
+    "4::widget::width": {
       direction: "input",
       kind: "widget",
       nodeId: "4",
       nodeTitle: "ResolutionSelector",
-      name: "multiple",
+      name: "width",
       type: "INT",
-      defaultValue: 8,
+      defaultValue: 1024,
     },
   };
   const contractEntries = buildParamEntries(contractIo, undefined, { mode: "T2I" });
@@ -648,7 +648,7 @@ describe("契约条目的宿主节点（hostNodeId）—— ISSUE #355", () => {
     ).toBe(false);
   });
 
-  it("尺寸卡片把比例 / 像素 / 倍数三个出口都摆出来（ISSUE #355 复审）", () => {
+  it("尺寸卡片把比例 / 像素 / 宽高三个出口都摆出来（ISSUE #355 复审）", () => {
     const nodes = buildParamNodes({
       entries: contractEntries,
       hostPosById: contractPos,
@@ -660,9 +660,9 @@ describe("契约条目的宿主节点（hostNodeId）—— ISSUE #355", () => {
     });
     const size = nodes.find((node) => node.id === "pio:size")!;
     expect(dataOf(size).outputPorts.map((port) => port.name)).toEqual([
+      "width",
       "aspect_ratio",
       "megapixels",
-      "multiple",
     ]);
   });
 });
