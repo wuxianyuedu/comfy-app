@@ -45,7 +45,7 @@ vi.stubGlobal(
 
 afterEach(cleanup);
 
-/** 「尺寸」口有宽高比 / 像素量 / 倍数三个候选。 */
+/** 「尺寸」口有宽 / 宽高比 / 像素量 三个候选。 */
 const io: WorkflowIOMap = {
   "5::widget::aspect_ratio": {
     direction: "input",
@@ -65,14 +65,14 @@ const io: WorkflowIOMap = {
     type: "FLOAT",
     defaultValue: 1,
   },
-  "5::widget::multiple": {
+  "5::widget::width": {
     direction: "input",
     kind: "widget",
     nodeId: "5",
-    name: "multiple",
-    label: "倍数",
+    name: "width",
+    label: "宽度",
     type: "INT",
-    defaultValue: 8,
+    defaultValue: 1024,
   },
   "5::output::IMAGE": {
     direction: "output",
@@ -180,7 +180,7 @@ describe("库内映射编辑", () => {
       '[data-wire-anchor="size?megapixels"]',
     )!;
     const other = container.querySelector<HTMLElement>(
-      '[data-wire-anchor="size?multiple"]',
+      '[data-wire-anchor="size?width"]',
     )!;
     expect(active.style.opacity).toBe("1");
     expect(other.style.opacity).toBe("0.55");
@@ -358,10 +358,10 @@ describe("画布视口", () => {
   });
 });
 
-describe("尺寸三项各自可取外部值", () => {
+describe("尺寸各项各自可取外部值", () => {
   it("每项各有一颗圆点，且候选收窄到宿主卡片真的画出来的行", () => {
     const { container } = renderPreview({});
-    for (const handle of ["aspect_ratio", "megapixels", "multiple"]) {
+    for (const handle of ["aspect_ratio", "megapixels", "width"]) {
       expect(
         container.querySelector(`[data-wire-anchor="size?${handle}"]`),
         `尺寸的 ${handle} 应各有一颗出口圆点`,

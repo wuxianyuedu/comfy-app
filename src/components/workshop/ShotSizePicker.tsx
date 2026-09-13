@@ -1,17 +1,19 @@
 "use client";
 
-/** 镜头生图「比例 + 像素 + 对齐」三段选择器。
+/** 镜头生图「比例 + 像素」两段选择器。
  *
- *  复用画布 IO 表单的 MultiSegmentPopover（比例 / 清晰度 / 对齐倍数），
- *  换算与摘要逻辑全部在 shot-size-config.ts（纯函数），本组件只做
- *  props → 弹层段落 的映射与选中态回显。 */
+ *  复用画布 IO 表单的 MultiSegmentPopover（比例 / 清晰度），换算与摘要逻辑
+ *  全部在 shot-size-config.ts（纯函数），本组件只做 props → 弹层段落 的映射
+ *  与选中态回显。
+ *
+ *  没有「对齐倍数」段落：倍数只影响 W/H 吸附到哪个网格（ComfyUI 常用 64），
+ *  不是用户要决策的东西 —— 固定用 `DEFAULT_ALIGN_MULTIPLE`。 */
 
 import { useMemo } from "react";
 
 import {
   DIM_CLARITY_PRESETS,
   DIM_RATIO_PRESETS,
-  DEFAULT_ALIGN_MULTIPLE,
 } from "~/components/studio/shared/workflow-io";
 import {
   MultiSegmentPopover,
@@ -19,12 +21,7 @@ import {
   shortRatioLabel,
   type SegmentSection,
 } from "~/components/studio/shared/MultiSegmentPopover";
-import { AlignMultipleStepper } from "~/components/studio/shared/AlignMultipleStepper";
-import {
-  normalizeShotSize,
-  shotSizeSummary,
-  type ShotSizeState,
-} from "./shot-size-config";
+import { shotSizeSummary, type ShotSizeState } from "./shot-size-config";
 
 export function ShotSizePicker({
   value,
@@ -35,7 +32,7 @@ export function ShotSizePicker({
   onChange: (next: ShotSizeState) => void;
   disabled?: boolean;
 }) {
-  const state = useMemo(() => normalizeShotSize(value), [value]);
+  const state = value;
 
   const sections = useMemo<SegmentSection<string>[]>(
     () => [
@@ -70,15 +67,6 @@ export function ShotSizePicker({
       sections={sections}
       align="right"
       disabled={disabled}
-      footer={
-        <AlignMultipleStepper
-          value={state.align}
-          onChange={(align) => onChange({ ...state, align })}
-          disabled={disabled}
-        />
-      }
     />
   );
 }
-
-export { DEFAULT_ALIGN_MULTIPLE };

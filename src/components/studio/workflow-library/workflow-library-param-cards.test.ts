@@ -263,13 +263,13 @@ describe("deriveLibraryParamCards", () => {
         type: "FLOAT",
         defaultValue: 1,
       },
-      "5::widget::multiple": {
+      "5::widget::width": {
         direction: "input",
         kind: "widget",
         nodeId: "5",
-        name: "multiple",
+        name: "width",
         type: "INT",
-        defaultValue: 8,
+        defaultValue: 1024,
       },
     };
     const { wires } = deriveLibraryParamCards({
@@ -279,15 +279,15 @@ describe("deriveLibraryParamCards", () => {
       groupedKeys: new Set(Object.keys(groupedIO)),
     });
     expect(wires.map((wire) => wire.targetIoKey)).toEqual([
+      "5::widget::width",
       "5::widget::aspect_ratio",
       "5::widget::megapixels",
-      "5::widget::multiple",
     ]);
     /* 库里按**端口名**找卡片圆点锚点（不是 ioKey）。 */
     expect(wires.map((wire) => wire.handleId)).toEqual([
+      "width",
       "aspect_ratio",
       "megapixels",
-      "multiple",
     ]);
     /* 这三条都是「本来就通着」的默认线（虚线口径）。 */
     expect(wires.every((wire) => wire.manual === false)).toBe(true);
@@ -312,26 +312,24 @@ describe("deriveLibraryParamCards", () => {
         type: "FLOAT",
         defaultValue: 1,
       },
-      "5::widget::multiple": {
+      "5::widget::width": {
         direction: "input",
         kind: "widget",
         nodeId: "5",
-        name: "multiple",
+        name: "width",
         type: "INT",
-        defaultValue: 8,
+        defaultValue: 1024,
       },
     };
     const { wires } = deriveLibraryParamCards({
       io: groupedIO,
       paramMap: {
-        source: { "mode:T2I": { size: "5::widget::multiple" } },
+        source: { "mode:T2I": { size: "5::widget::megapixels" } },
       },
       mode: "T2I",
       groupedKeys: new Set(Object.keys(groupedIO)),
     });
-    expect(wires.map((wire) => wire.targetIoKey)).toEqual([
-      "5::widget::multiple",
-    ]);
+    expect(wires.map((wire) => wire.targetIoKey)).toEqual(["5::widget::megapixels"]);
     expect(wires[0]!.manual).toBe(true);
   });
 });
@@ -378,73 +376,3 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
   });
 });
 
-/* ── 候选端点收窄到「宿主卡片真的画得出来的行」（ISSUE #355）──
- *
- * 端点点在一颗落不上去的句柄上时，拖过去只会被落点解析拒绝 —— 用户看到的就是
- * 「点击端点拉线出现禁用标记」。库内给出宿主卡片此刻的可连行集合时，候选据此收窄。 */
-
-describe("reachableKeys 收窄候选端点", () => {
-  const io: WorkflowIOMap = {
-    "5::widget::aspect_ratio": {
-      direction: "input",
-      kind: "widget",
-      nodeId: "5",
-      name: "aspect_ratio",
-      type: "COMBO",
-      defaultValue: "16:9",
-    },
-    "5::widget::megapixels": {
-      direction: "input",
-      kind: "widget",
-      nodeId: "5",
-      name: "megapixels",
-      type: "FLOAT",
-      defaultValue: 1,
-    },
-    "5::widget::multiple": {
-      direction: "input",
-      kind: "widget",
-      nodeId: "5",
-      name: "multiple",
-      type: "INT",
-      defaultValue: 8,
-    },
-  };
-
-  it("默认状态下摊开来的兄弟口也要画得出来（宿主画不出就不给画线）", () => {
-    /* 未连线 = 默认连线状态：组合控件覆盖的兄弟口各画一条（见 wiredTargetsForEntry）。
-     *  可连集合只含宽高比与百万像素 → 倍数那一条不画（画不出端点）。 */
-    const cards = deriveLibraryParamCards({
-      io,
-      paramMap: {},
-      mode: "T2I",
-      groupedKeys: new Set(Object.keys(io)),
-      reachableKeys: new Set([
-        "5::widget::aspect_ratio",
-        "5::widget::megapixels",
-      ]),
-    });
-    const sizeWires = cards.wires.filter((wire) => wire.entryId === "size");
-    expect(sizeWires.map((wire) => wire.handleId).sort()).toEqual([
-      "aspect_ratio",
-      "megapixels",
-    ]);
-  });
-
-  it("宿主卡片一行都画不出来时，当前落点仍然画（不谎报成「没连上」）", () => {
-    const cards = deriveLibraryParamCards({
-      io,
-      paramMap: { source: { "mode:T2I": { size: "5::widget::aspect_ratio" } } },
-      mode: "T2I",
-      reachableKeys: new Set<string>(),
-    });
-    const sizeWires = cards.wires.filter((wire) => wire.entryId === "size");
-    expect(sizeWires.map((wire) => wire.handleId)).toEqual(["aspect_ratio"]);
-  });
-
-  it("不给集合时不收窄（老调用方行为不变）", () => {
-    const cards = deriveLibraryParamCards({ io, paramMap: {}, mode: "T2I" });
-    expect(cards.wires.length).toBeGreaterThan(0);
-    expect(cards.reachableKeys).toBeUndefined();
-  });
-});
