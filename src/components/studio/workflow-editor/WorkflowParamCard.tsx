@@ -67,6 +67,11 @@ export interface WorkflowParamCardProps {
    *  每颗圆点各带自己的 handle id（见 `ParamOutputPort.handleId`），拖哪颗点就连到
    *  哪个候选端口。没有模式（返回 null）时该行不渲染端点 = 那个候选连不了。 */
   endpoint?: (port: ParamOutputPort, index: number) => React.ReactNode;
+  /** 该卡片（或被点选的那条线）当前是否被选中 —— 选中的卡片描边提亮，
+   *  让「我选的是这个口」在两处（卡片与线）同时看得出来。 */
+  selected?: boolean;
+  /** 点卡片本身 = 选中这个对外参数的口（库里据此高亮它那条线）。 */
+  onSelect?: () => void;
   /** 卡片元素的 ref（节点渲染器用 useHoverElevation 生成）—— 悬浮态由该钩子
    *  写到 React Flow 的节点外壳上，由 CSS 抬起层级压住连线（ISSUE #400）。
    *  命名刻意不含端点类关键字：本文件是**画布无关**的视觉本体（见
@@ -91,6 +96,8 @@ export function WorkflowParamCard({
   footNote,
   wired = false,
   endpoint,
+  selected = false,
+  onSelect,
   hoverRef,
   hoverEvents,
 }: WorkflowParamCardProps) {
@@ -102,10 +109,16 @@ export function WorkflowParamCard({
       className="relative flex flex-col rounded-lg border shadow-[0_4px_20px_rgba(0,0,0,0.45)]"
       style={{
         width,
-        borderColor: disabled ? "rgba(148,163,184,0.28)" : `${style.color}66`,
+        borderColor: selected
+          ? style.color
+          : disabled
+            ? "rgba(148,163,184,0.28)"
+            : `${style.color}66`,
         background: "var(--color-card, #16161C)",
         isolation: "isolate",
       }}
+      data-selected={selected ? "true" : undefined}
+      onClick={onSelect}
       /* 悬浮态由消费方（画布节点）的钩子写到 React Flow 外壳上 —— 抬层级的是
        *  外壳（它自带 position:absolute + z-index，自成层叠上下文），不是这张
        *  卡片（见 HoverElevation 的注释）。 */

@@ -111,6 +111,23 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
 
   /** 整体落库 workflowIO（详情预览里改 seed「控件后行为」等参数级配置）。
    *  成功后失效 detail 缓存，预览面板按富化后的数据重渲染。 */
+  /** 对外参数落点（`paramMap.source.mode:<模式>`）持久化。
+   *
+   *  与 `patchWorkflowIO` 同一路径（PATCH 整列 + 失效两个 detail 缓存）：库里
+   *  拖一条线改落点，预览与编辑器都不该读到一个过期的 paramMap。 */
+  const patchParamMap = useCallback(
+    async (id: string, paramMap: Record<string, unknown>) => {
+      try {
+        await updateMut.mutateAsync({ id, paramMap });
+        await utils.workflow.detail.invalidate({ id });
+        await utils.workflow.detailFull.invalidate({ id });
+      } catch (e) {
+        toast.error("更新参数映射失败", errorMessage(e, "未知错误"));
+      }
+    },
+    [updateMut, utils, toast],
+  );
+
   const patchWorkflowIO = useCallback(
     async (id: string, workflowIO: Record<string, unknown>) => {
       try {
@@ -216,6 +233,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     handleDelete,
     patchModes,
     patchModelTags,
+    patchParamMap,
     patchWorkflowIO,
     downloadJson,
     resyncWorkflow,

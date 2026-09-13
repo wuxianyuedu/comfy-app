@@ -18,12 +18,15 @@
  * ───────────────────────────────────────────────────────────────────────── */
 import {
   controlForEntry,
+  typeDisplay,
   type DimensionGroup,
   type EnrichedWidget,
   type VideoGroup,
   type WorkflowIOMap,
 } from "./workflow-io";
+import { controlTypeFallback } from "./DynamicWorkflowForm/dynamic-workflow-form-config";
 import { WidgetInputRow } from "./DynamicWorkflowForm/sections/WidgetInputRow";
+import { WIRE_PINS_ATTR, wirePinsValue } from "~/lib/workflow-io-types";
 import { DimensionControl } from "./DimensionControl";
 import { VideoControl } from "./VideoControl";
 
@@ -80,15 +83,23 @@ function GroupedControls({
       if (entry?.ioKey) keys.add(entry.ioKey);
     }
   }
-  /* 画布 / 库内（`compact`）默认折叠成**逐行参数**：用户要的是「这几个参数的
-   * 输入端口显示出来」（ISSUE #355 复审）—— 这几个参数本来就有自己的输入端口，
-   * 组合控件只是把它们的值录入合并成一块；画布上那块占满空间，端口反而看不见，
-   * 连线也无从落手。需要组合录入时按「展开组合录入」切回去（偏好按工作流记住）。
-   *  `collapseGrouped={false}` 保留组合控件（宽版表单 / CreatePanel 的既有观感）。 */
-  const collapsible = compact && keys.size > 0 && collapseGrouped !== false;
-  if (collapsible) {
+  /* 画布 / 库内（`compact`）默认把组合控件**收窄成展示卡 + 逐行列表**：
+   *
+   *   ① 组合卡本身仍然画出来（这几个端口属于同一格录入，这件事得看得见），但按
+   *      内容收窄、不占满整行；卡内分项**只显示「名称 + 类型」**，不放可编辑的值 ——
+   *      值由下面的逐行参数各自录入，同一件事不在两处各放一份；
+   *   ② 组合卡覆盖到的每个端口在下面**各占一行**，各有可连的输入端点，映射线因此
+   *      落得到具体那一行（组合卡本身也保留落点锚点，见 CollapsedGroupRows）。
+   *
+   * `collapseGrouped={false}` 保留组合控件的完整录入能力（宽版表单 / CreatePanel
+   * 的既有观感：作者在那里要的是整块录入，不是逐行清单）。 */
+  const collapsed = compact && keys.size > 0 && collapseGrouped !== false;
+  if (collapsed) {
     return (
       <CollapsedGroupRows
+        dimension={dimension}
+        video={video}
+        count={count}
         keys={keys}
         io={io}
         values={values}
@@ -161,8 +172,22 @@ function groupEntries(
   ].filter((entry): entry is EnrichedWidget => !!entry);
 }
 
-/** 未接落点时的组合参数：按**普通参数行**逐行渲染（一端口一行、各有端点）。 */
+/** 收窄后的组合参数卡 + 逐行参数列表（画布 / 库内的默认形态）。
+ *
+ *  卡与列表各说一件事：
+ *   · 卡说「这几个口由同一格录入」—— 一行一个分项，只报名称与类型；
+ *   · 列表说「每个口各自的落点与端点」—— 一端口一行，各有可连的输入端点。
+ *
+ *  值只出现一次（在逐行参数上）：卡里再放一份可编辑控件，同一件事就有两处入口，
+ *  而那块控件也正是「占满空间、端口看不见」的成因。
+ *
+ *  卡与每一行都带落点锚点（`WIRE_PINS_ATTR` / 行自己的 `WIRE_ROW_ATTR`）：
+ *  卡覆盖的那几格同样允许落线（宽/高这类口在这一格上一起给值），而命中判定取最小
+ *  矩形，所以精确拖到某一行时永远优先落在那一行。 */
 function CollapsedGroupRows({
+  dimension,
+  video,
+  count,
   keys,
   io,
   values,
@@ -172,8 +197,10 @@ function CollapsedGroupRows({
   visibilityMode,
   onVisibilityChange,
   onRequiredChange,
-  onExpand,
 }: {
+  dimension: DimensionGroup | null;
+  video: VideoGroup | null;
+  count: number;
   keys: ReadonlySet<string>;
   io?: WorkflowIOMap | null;
   values: Record<string, unknown>;
@@ -183,29 +210,72 @@ function CollapsedGroupRows({
   visibilityMode?: string | null;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
-  onExpand?: () => void;
 }) {
-  /* 折叠态要按**普通参数行**渲染：控件类型由 `controlForEntry` 现推（与表单同
-   *  一份），否则宽度/高度会退化成文本框。 */
+  /* 卡片里的分项：按声明顺序，名称取作者名/槽位名，类型取 pin 自身声明。 */
+  const items = [
+    ...groupEntries(dimension),
+    ...groupEntries(video),
+  ].filter((entry) => keys.has(entry.ioKey));
+
+  /* 逐行参数：按 `keys` 顺序（声明顺序）渲染成普通参数行 —— 控件类型由
+   *  `controlForEntry` 现推（与表单同一份），否则宽度/高度会退化成文本框。 */
   const rows: EnrichedWidget[] = [...keys]
     .map((ioKey) => {
       const raw = io?.[ioKey];
       return raw ? { ...raw, ioKey, control: controlForEntry(raw) } : null;
     })
     .filter((row): row is EnrichedWidget => !!row);
-  if (rows.length === 0) return null;
+
   return (
     <div className="space-y-0" data-testid="grouped-collapsed-rows">
-      {onExpand && (
-        <div className="flex items-center justify-end px-[14px] pt-1">
-          <button
-            type="button"
-            onClick={onExpand}
-            className="nodrag nopan rounded border border-white/10 px-1.5 py-px text-[10px] text-(--color-ink-faint) transition-colors hover:bg-white/6 hover:text-(--color-ink-soft)"
-            title="展开为比例 + 像素等预设录入方式"
+      {items.length > 0 && (
+        <div className="px-[14px] pt-1 pb-0.5">
+          {/* 收窄的组合卡：`w-fit` + 上限，不再占满整行；三行只报名称 + 类型。 */}
+          <div
+            className="w-fit max-w-full rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 px-2 py-1"
+            data-testid="grouped-card"
+            {...{
+              [WIRE_PINS_ATTR]: wirePinsValue(items.map((item) => item.ioKey)),
+            }}
           >
-            展开组合录入
-          </button>
+            <div className="flex items-center gap-1.5">
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ background: "#FF9C5B" }}
+              />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-(--color-accent)">
+                组合参数
+              </span>
+              <span className="rounded-full bg-white/10 px-1.5 py-px font-mono text-[9px] text-(--color-ink-muted)">
+                {count}
+              </span>
+            </div>
+            <ul className="mt-0.5 flex flex-col">
+              {items.map((item) => (
+                <li
+                  key={item.ioKey}
+                  className="flex items-center gap-1.5 text-[10.5px] leading-[16px] text-(--color-ink-soft)"
+                  data-grouped-item={item.ioKey}
+                >
+                  <span aria-hidden className="text-(--color-ink-fainter)">
+                    ·
+                  </span>
+                  <span className="min-w-0 truncate" title={item.name}>
+                    {item.label ?? item.name}
+                  </span>
+                  <span
+                    className="shrink-0 rounded px-1 font-mono text-[9px] leading-[14px]"
+                    style={{
+                      background: "var(--color-border-strong)",
+                      color: "var(--color-ink-muted)",
+                    }}
+                  >
+                    {typeDisplay(item.type, controlTypeFallback(item.control))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
       {rows.map((row) => (

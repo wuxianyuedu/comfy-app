@@ -178,22 +178,28 @@ describe("对外参数节点只在画布上表达映射", () => {
     }
   });
 
-  it("库内卡片的小圆点端口是只读呈现：不给它连线能力，线由独立层画", () => {
-    /* ISSUE #355 复审要求「对外参数右侧有小圆点的端口，可和工作流节点上的
-     * 参数相连」。库内那一列仍是只读消费：圆点只是端点视觉，SVG 连线叠在
-     * 另一层（WorkflowParamWires），卡片列自身依旧不许碰 React Flow。 */
+  it("库内也能改连线：卡片列不碰 React Flow，手势与落库在独立层", () => {
+    /* ISSUE #355：「对外参数右侧有小圆点的端口，可和工作流节点上的参数相连」，
+     * 且「连线要能编辑，现在编辑不了」。库内因此**不再是只读呈现** —— 但连线
+     * 能力不许把 React Flow 引进卡片列：
+     *
+     *   · 卡片列只画圆点 + 标锚点（`data-wire-anchor`），手势由连线层承担；
+     *   · 连线层用指针事件 + 命中测试（`resolveDropTarget`，与画布闸门同一套
+     *     判据），画 SVG；它落库一律经 `onConnect` 回调上抛，**自己不写
+     *     paramMap**（写入编排在 `hooks/use-param-wiring.ts`，经 tRPC 落库）。
+     */
     const column = stripComments(
       readFileSync(
         path.join(LIBRARY_DIR, "WorkflowParamCardColumn.tsx"),
         "utf8",
       ),
     );
-    /* 圆点带锚点（连线层据此量位置），但没有任何连线回调。 */
+    /* 圆点带锚点（连线层据此量位置 + 起手拖动）。 */
     expect(column).toContain("data-wire-anchor");
-    for (const forbidden of ["@xyflow/react", "Handle", "onConnect"]) {
+    for (const forbidden of ["@xyflow/react", "Handle"]) {
       expect(column).not.toContain(forbidden);
     }
-    /* 连线层独立成文件：它只读地量位置 + 画 SVG，不写 paramMap。 */
+    /* 连线层独立成文件：量位置 + 画 SVG + 上抛手势结果；不直接动数据。 */
     const wires = stripComments(
       readFileSync(path.join(LIBRARY_DIR, "WorkflowParamWires.tsx"), "utf8"),
     );
@@ -203,9 +209,20 @@ describe("对外参数节点只在画布上表达映射", () => {
      *  来自共享契约（workflow-io-types），两边用同一个字符串。 */
     expect(wires).toContain("WIRE_ROW_ATTR");
     expect(wires).toContain("WIRE_PINS_ATTR");
-    for (const forbidden of ["@xyflow/react", "onConnect", "savePatch"]) {
+    /* 命中判定与画布同一份纯函数（两边同一个手势不该一个受理一个拒绝）。 */
+    expect(wires).toContain("resolveDropTarget");
+    for (const forbidden of ["@xyflow/react", "savePatch", "mutateAsync"]) {
       expect(wires).not.toContain(forbidden);
     }
+    /* 写入编排收在 hooks/ 里（第②层），经回调落库；连线层只上抛。 */
+    const hook = stripComments(
+      readFileSync(
+        path.join(LIBRARY_DIR, "hooks/use-param-wiring.ts"),
+        "utf8",
+      ),
+    );
+    expect(hook).toContain("applyWireEdit");
+    expect(hook).toContain("onPatchParamMap");
   });
 
   it("工作流库详情不靠单侧定宽留白给卡片列腾位置", () => {
