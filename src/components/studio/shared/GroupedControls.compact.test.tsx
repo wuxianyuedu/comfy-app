@@ -1,15 +1,19 @@
 // @vitest-environment jsdom
-/* 画布 / 库内的组合参数控件 —— ISSUE #355 复审
+/* 画布 / 库内的组合参数控件 —— ISSUE #355 复审（第二轮）
  *
- * 用户在画布节点上要的是**原来那块带下拉的组合控件**，不是摊成逐行参数的清单：
+ * 用户口径（逐条对照）：
  *   · 「组合参数不要现在这种样式」「改回之前的样式」「改成之前带有下拉菜单的
- *     样式」—— 控件本体照旧画出来（`MultiSegmentPopover` 那一下拉）；
- *   · 「让你减小宽度的也是这个控件」—— 收窄的是**它**，不是把它换掉；
- *   · 红框里那三段（宽高比下拉 / 百万像素步进器 / 倍数步进器）不再摊成独立
- *     参数行。
+ *     样式」—— 控件本体照旧画出来（`MultiSegmentPopover` 那一下拉），宽度按内容
+ *     收窄的是**它**；
+ *   · 「红框部分对齐到右侧，左侧留出的区域放置那三个参数，三个参数要到框外」
+ *     —— 组合框整块右对齐，宽高比 / 百万像素 / 倍数以**真正的参数行**形式摆在
+ *     框外的左侧区域；
+ *   · 「参数左侧的圆点要和其他参数一致……实际上用的端点还是要那种大的」——
+ *     这三行左侧是 12px 的大端点（`PortHandle`，与节点上其他输入行同款），
+ *     不是框里那排「· 小点 + 名字」。
  *
- * 因此本文件的断言是：紧凑版式里控件**在**（带下拉触发器）、宽度**按内容收窄**、
- * 且不再出现「逐行参数清单」那种形态。
+ * 因此本文件的断言是：紧凑版式里控件**在**（带下拉触发器）、框**右对齐**、
+ * 三个参数**在框外各自成行且带大端点**。
  *
  * 宽版表单（`collapseGrouped={false}`）保留整块录入，本文件不涉及。
  */
@@ -95,17 +99,39 @@ describe("画布 / 库内的组合参数控件", () => {
     );
   });
 
-  it("不再摊成逐行参数清单（红框那三段不再各占一行）", () => {
-    /* 上一轮把这三个端口摊成了独立参数行 + 一张只报名称/类型的展示卡，用户指着
-     *  那份清单说「不要现在这种样式」。现在这三行都不该在。 */
+  it("三个参数摆在组合框**外**，各自成行且带大端点", () => {
+    /* 「三个参数要到框外」「参数左侧的圆点要和其他参数一致……端点还是要那种大的」：
+     *  宽高比 / 百万像素 / 倍数 各占一行、各带 12px 的 PortHandle 端点（与节点上
+     *  其他输入行同款），且**不在**组合框里面（框里只剩表头与下拉）。 */
     const column = renderCompact();
-    expect(column.querySelector('[data-testid="grouped-collapsed-rows"]')).toBeNull();
-    expect(column.querySelector('[data-testid="grouped-card"]')).toBeNull();
     for (const ioKey of Object.keys(io)) {
-      expect(
-        column.querySelector(`[data-io-key="${ioKey}"]`),
-        `${ioKey} 不该再摊成独立参数行`,
-      ).toBeNull();
+      const row = column.querySelector(`[data-io-key="${ioKey}"]`);
+      expect(row, `${ioKey} 应当以参数行形态出现在框外`).toBeTruthy();
+      /* 行外层的组合框（带圆角的边框那一块）不能是它的祖先。 */
+      expect(row!.closest('[data-grouped-box]')).toBeNull();
+      const dot = row!.querySelector(`[data-port-dot="${ioKey}"]`);
+      expect(dot, `${ioKey} 行左侧应当有大端点`).toBeTruthy();
+      expect((dot as HTMLElement).style.width).toBe("12px");
+      expect((dot as HTMLElement).style.height).toBe("12px");
+    }
+  });
+
+  it("组合框整块右对齐，且框内不再重复列这三个参数", () => {
+    /* 「红框部分对齐到右侧」：外层的 flex 用 `justify-end` 把框推向右沿；
+     *  三个参数既已在框外成行，框里不再重复列一遍名称。 */
+    const column = renderCompact();
+    const outer = column.querySelector(".flex.justify-end");
+    expect(outer).toBeTruthy();
+    const box = column.querySelector('[data-grouped-box]');
+    expect(box).toBeTruthy();
+    /* 框在右、参数行在左：框是外层的第二个子元素。 */
+    expect(outer!.lastElementChild).toBe(box);
+    expect(box!.textContent).toContain("比例 + 像素");
+    /* 框里不再有「· 小点 + 参数名」那排清单（参数已挪到框外成行）。 */
+    expect(box!.querySelector("ul")).toBeNull();
+    for (const ioKey of Object.keys(io)) {
+      expect(box!.querySelector(`[data-io-key="${ioKey}"]`)).toBeNull();
+      expect(box!.querySelector(`[data-port-dot="${ioKey}"]`)).toBeNull();
     }
   });
 
@@ -113,9 +139,10 @@ describe("画布 / 库内的组合参数控件", () => {
     /* 「组合控件的宽度缩小，现在占满了空间」：`w-fit` + 上限，宽度跟随内容；
      *  下拉触发器另给一档固定宽度，不再拽满整行。 */
     const column = renderCompact();
-    const card = column.querySelector(".w-fit");
-    expect(card).toBeTruthy();
-    expect(card!.className).toContain("max-w-full");
+    const box = column.querySelector('[data-grouped-box]');
+    expect(box).toBeTruthy();
+    expect(box!.className).toContain("w-fit");
+    expect(box!.className).toContain("max-w-full");
     const triggerBox = column.querySelector('[aria-label="选择比例、像素与倍数"]')!
       .closest("div.w-\\[168px\\]");
     expect(triggerBox).toBeTruthy();

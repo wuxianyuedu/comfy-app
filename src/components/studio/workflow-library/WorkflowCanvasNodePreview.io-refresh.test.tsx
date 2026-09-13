@@ -283,10 +283,12 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     ).toBeTruthy();
   });
 
-  it("组合控件按内容收窄，仍是一整块（不摊成逐行参数）—— ISSUE #355", () => {
+  it("组合控件右对齐、按内容收窄，三个参数在框外各自成行 —— ISSUE #355", () => {
     /* 用户口径：「组合参数不要现在这种样式」「改回之前的样式」「改成之前带有
      *  下拉菜单的样式」—— 这块控件（比例 / 像素 / 倍数同一个下拉）就是原来的
-     *  样式，只是按内容收窄。 */
+     *  样式，只是按内容收窄；「红框部分对齐到右侧，左侧留出的区域放置那三个
+     *  参数，三个参数要到框外」—— 框贴右沿，宽高比 / 百万像素以真正的参数行
+     *  （大端点）摆在框外左侧。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
         workflowId="wf-1"
@@ -321,14 +323,26 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     expect(
       container.querySelector('[aria-label="选择比例与像素"]'),
     ).toBeTruthy();
+    const box = container.querySelector("[data-grouped-box]")!;
+    expect(box).toBeTruthy();
+    /* 框贴右沿：外层 flex 用 justify-end。 */
+    expect(box.parentElement!.className).toContain("justify-end");
+    /* 两个参数在框外各自成行、各带大端点；框里不再列它们。 */
+    for (const ioKey of ["5::widget::aspect_ratio", "5::widget::megapixels"]) {
+      const row = container.querySelector(`[data-io-key="${ioKey}"]`);
+      expect(row, `${ioKey} 应当以参数行形态出现在框外`).toBeTruthy();
+      expect(row!.closest("[data-grouped-box]")).toBeNull();
+      const dot = row!.querySelector(`[data-port-dot="${ioKey}"]`);
+      expect(dot, `${ioKey} 行左侧应当有大端点`).toBeTruthy();
+      expect((dot as HTMLElement).style.width).toBe("12px");
+      expect(box.querySelector(`[data-io-key="${ioKey}"]`)).toBeNull();
+    }
+    /* 仍留一层整块锚点兜底（拖到框的空白处）。 */
     expect(
       container.querySelector(
         '[data-io-pins="5::widget::aspect_ratio,5::widget::megapixels"]',
       ),
     ).toBeTruthy();
-    /* 不再摊成逐行参数清单。 */
-    expect(container.querySelector('[data-testid="grouped-collapsed-rows"]')).toBeNull();
-    expect(container.querySelector('[data-io-key="5::widget::aspect_ratio"]')).toBeNull();
   });
 
   it("卡片列与宿主卡片之间留出走线空间（不再贴在一起）—— ISSUE #355 复审", () => {
