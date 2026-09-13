@@ -527,6 +527,7 @@ export function WorkflowCanvasNodePreview({
               isManual={wiring.isManual}
               onReset={wiring.resetToAuto}
               reachableKeys={paramCards.reachableKeys}
+              wiredDotKeys={paramCards.wiredDotKeys}
             />
           )}
           {/* ── 画布同款节点卡片：唯一视觉源在 shared/workflow-node-parts ── */}

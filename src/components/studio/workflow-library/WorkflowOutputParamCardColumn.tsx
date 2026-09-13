@@ -23,6 +23,7 @@ import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
 import { WorkflowParamCard } from "../workflow-editor/WorkflowParamCard";
 import { paramClassStyle } from "./workflow-param-mapping-ui";
 import { wireAnchorValue } from "./WorkflowParamCardColumn";
+import { outputWireDotId } from "./workflow-library-param-cards";
 
 /** 卡片宽度：与左侧输入卡片同宽，两列夹着宿主卡片时仍放得下。 */
 const CARD_WIDTH = 200;
@@ -56,7 +57,10 @@ export function WorkflowOutputParamCardColumn({
          *  自身的名字 + 类型 —— 与左侧输入卡片同构（头说「这是谁」，体说「它由
          *  哪些端口组成」）。 */
         const title = outputCardLabel(output);
-        const portName = (output.name ?? "").trim() || title;
+        /* 端口名与连线锚点的 handle id 用**同一份算式**（`outputWireDotId`）：
+         *  两处各算一遍时空名 / 空白会一边锚 `输出`、一边找空串，线量不到锚点就
+         *  整条不画（ISSUE #355：「images 和对外输出参数之间无法连线」）。 */
+        const portName = outputWireDotId(output);
         const type = output.type ?? "*";
         return (
           <WorkflowParamCard
@@ -90,6 +94,11 @@ export function WorkflowOutputParamCardColumn({
               <span
                 aria-hidden
                 data-wire-anchor={wireAnchorValue(output.ioKey, portName)}
+                /* 只读锚点：这颗圆点是**线的落点**，不是拖线的起手位 —— 输出不
+                 *  参与映射，拖它没有可写入的映射键。连线层据此把它排除在拖拽
+                 *  起手之外（此前它会起手，且起点算在圆点右侧，手势一拖就往
+                 *  反方向画，读作「往右拖线却飘向左侧」，ISSUE #355）。 */
+                data-wire-readonly=""
                 className="absolute top-1/2 shrink-0 rounded-full"
                 style={{
                   left: PARAM_NODE_DOT_OFFSET,
