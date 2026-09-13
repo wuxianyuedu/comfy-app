@@ -336,7 +336,8 @@ describe("buildEncapsulatedInputs", () => {
     expect(res.workflowInputs).toEqual([{ nodeId: "3", name: "steps", value: 28 }]);
   });
 
-  it("aspect/megapixels pin 纳入尺寸语义但值仍走默认值", () => {
+
+  it("aspect/megapixels/multiple pin 纳入尺寸语义并从外部取值", () => {
     const io: WorkflowIOMap = {
       ar: {
         direction: "input",
@@ -346,13 +347,60 @@ describe("buildEncapsulatedInputs", () => {
         type: "COMBO",
         defaultValue: "16:9 (Widescreen)",
       },
-      mp: { direction: "input", kind: "widget", nodeId: "1", name: "megapixels", type: "FLOAT", defaultValue: 1 },
+      mp: {
+        direction: "input",
+        kind: "widget",
+        nodeId: "1",
+        name: "megapixels",
+        type: "FLOAT",
+        defaultValue: 1,
+      },
+      mul: {
+        direction: "input",
+        kind: "widget",
+        nodeId: "1",
+        name: "multiple",
+        type: "INT",
+        defaultValue: 8,
+      },
     };
+    /* 工坊给的 "WxH" 派生成三类端口各自认的形状：比例标签 / 百万像素 / 对齐网格
+     * （ISSUE #355：「尺寸那三项每一项都需要从外部获取值」）。 */
     const res = buildEncapsulatedInputs(io, null, { size: "1024x1024" });
     expect(res.exposed.ar).toBe("size-aspect");
     expect(res.exposed.mp).toBe("size-megapixels");
-    expect(valueOf(res.workflowInputs, "aspect_ratio")).toBe("16:9 (Widescreen)");
+    expect(res.exposed.mul).toBe("size-multiple");
+    expect(valueOf(res.workflowInputs, "aspect_ratio")).toBe("1:1");
     expect(valueOf(res.workflowInputs, "megapixels")).toBe(1);
+    expect(valueOf(res.workflowInputs, "multiple")).toBe(128);
+  });
+
+  it("比例只认 pin 自己声明的候选，对不上就让默认值兜底", () => {
+    const io: WorkflowIOMap = {
+      ar: {
+        direction: "input",
+        kind: "widget",
+        nodeId: "1",
+        name: "aspect_ratio",
+        type: "COMBO",
+        defaultValue: "16:9 (Widescreen)",
+        options: ["16:9 (Widescreen)", "9:16 (Portrait)"],
+      },
+    };
+    /* 16:9 命中候选里的第一个（工坊的标准标签与 pin 的写法不同，按值原样写回）。 */
+    expect(
+      valueOf(
+        buildEncapsulatedInputs(io, null, { size: "1920x1080" }).workflowInputs,
+        "aspect_ratio",
+      ),
+    ).toBe("16:9 (Widescreen)");
+    /* 1:1 不在候选里 → 不写非法值，退回默认。 */
+    expect(
+      valueOf(
+        buildEncapsulatedInputs(io, null, { size: "1024x1024" }).workflowInputs,
+        "aspect_ratio",
+      ),
+    ).toBe("16:9 (Widescreen)");
   });
 
   it("空 IO 表安全返回空结果", () => {

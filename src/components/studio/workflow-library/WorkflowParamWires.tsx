@@ -117,36 +117,50 @@ function findAnchor(
   return null;
 }
 
+/** 落点锚点的值（`data-pin-anchor` = ioKey）—— 端口自己那一行上的零尺寸定位点
+ *  （宿主表单的端口行 / 组合控件逐项参数各自带一枚）。 */
+const PIN_ANCHOR_ATTR = "data-pin-anchor";
+
 /** 本轮渲染真的画出来的落点集合（ioKey → 量得到的矩形）。
  *
- *  拖线时用它做命中测试：只有画得出来的行才落得上去（组合控件折叠成逐行参数
- *  后，露出来的行就是全部可连行）。圆点（12px）比行小，`resolveDropTarget`
- *  因此优先命中圆点。 */
+ *  拖线时用它做命中测试：只有画得出来的行才落得上去。
+ *
+ *  三种锚点的**优先级**很关键（`resolveDropTarget` 在都命中时取最小矩形，
+ *  但这里还要保证「同一端口只报一处」）：
+ *
+ *   ① `data-pin-anchor` / `data-port-dot` —— 端口**自己那一行**上的定位点
+ *      （12px）。同一个 ioKey 有它就不再收别的，否则组合控件那块大矩形会把
+ *      同一端口的命中区域撑成整格，拖到哪一格都落在同一个口上。
+ *   ② 组合控件一格的 `data-io-pins` —— 该格覆盖的端口各算一个可落点，
+ *      取同一块矩形（那些端口没有自己的行时只能退到这一格）。 */
 function collectDropTargets(
   container: HTMLElement,
 ): { ioKey: string; rect: DOMRect }[] {
   const out: { ioKey: string; rect: DOMRect }[] = [];
+  const precise = new Set<string>();
   for (const el of container.querySelectorAll<HTMLElement>(
-    `[${WIRE_ROW_ATTR}], [${WIRE_PINS_ATTR}], [${PORT_DOT_ATTR}]`,
+    `[${PIN_ANCHOR_ATTR}], [${PORT_DOT_ATTR}]`,
+  )) {
+    const key =
+      el.getAttribute(PIN_ANCHOR_ATTR) ?? el.getAttribute(PORT_DOT_ATTR);
+    if (!key || precise.has(key)) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) continue;
+    precise.add(key);
+    out.push({ ioKey: key, rect });
+  }
+  for (const el of container.querySelectorAll<HTMLElement>(
+    `[${WIRE_PINS_ATTR}], [${WIRE_ROW_ATTR}]`,
   )) {
     const rect = el.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) continue;
-    const rowKey = el.getAttribute(WIRE_ROW_ATTR);
-    if (rowKey) {
-      out.push({ ioKey: rowKey, rect });
-      continue;
-    }
-    const portKey = el.getAttribute(PORT_DOT_ATTR);
-    if (portKey) {
-      out.push({ ioKey: portKey, rect });
-      continue;
-    }
-    /* 组合控件一格的锚点覆盖多个端口：每一格都是可落点，取同一块矩形。 */
     const pins = el.getAttribute(WIRE_PINS_ATTR);
-    if (pins) {
-      for (const key of pins.split(",")) {
-        if (key) out.push({ ioKey: key, rect });
-      }
+    const keys = pins
+      ? pins.split(",").filter(Boolean)
+      : [el.getAttribute(WIRE_ROW_ATTR)].filter((key): key is string => !!key);
+    for (const key of keys) {
+      if (precise.has(key)) continue;
+      out.push({ ioKey: key, rect });
     }
   }
   return out;
@@ -350,8 +364,8 @@ export function WorkflowParamWires({
     if (!onConnect) return;
     const down = (event: PointerEvent) => {
       const target = event.target as HTMLElement | null;
-      const raw = target?.closest<HTMLElement>("[data-wire-anchor]")?.dataset
-        .wireAnchor;
+      const raw =
+        target?.closest<HTMLElement>("[data-wire-anchor]")?.dataset.wireAnchor;
       if (!raw) return;
       const separator = raw.indexOf("?");
       if (separator < 0) return;
