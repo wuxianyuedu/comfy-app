@@ -35,9 +35,12 @@ const CFG = {
 };
 
 const t = createTestTRPC();
+/** 可变配置源：生效提供方相关用例按场景替换 configGet 的返回（各自新建
+ *  QueryClient，缓存不跨用例污染；用例结束不还原——下一个用例会自行设置）。 */
+let currentCfg: unknown = CFG;
 const mockRouter = t.router({
   llm: t.router({
-    configGet: t.procedure.query(() => ({ config: CFG })),
+    configGet: t.procedure.query(() => ({ config: currentCfg })),
   }),
 });
 const server = setupTrpcServer(mockRouter);
@@ -121,5 +124,67 @@ describe("useLLMConfig 远端模型 kind 过滤", () => {
     expect(result.current.config?.extraModels).toContain("legacy-model");
     expect(result.current.config?.extraModels).not.toContain("dall-e-3");
     expect(result.current.config?.extraModels).not.toContain("sora");
+  });
+});
+
+describe("useLLMConfig 生效提供方（本机 ollama 误存为「远端」的归组修正）", () => {
+  it("provider=remote 但 baseUrl 回环且无密钥 → 主模型归本地组，config.provider 按本地生效", async () => {
+    currentCfg = {
+      provider: "remote",
+      baseUrl: "http://127.0.0.1:11434/v1",
+      model: "qwen3:14b",
+      extraModels: ["llama3"],
+      temperature: 0.7,
+      maxTokens: 2048,
+      hasApiKey: false,
+    };
+    const qc = createTestQueryClient();
+    const { result } = renderHook(() => useLLMConfig(), {
+      wrapper: makeWrapper(qc),
+    });
+    await waitFor(() => expect(result.current.config).not.toBeNull());
+    expect(result.current.localModels).toContain("qwen3:14b");
+    expect(result.current.remoteModels).not.toContain("qwen3:14b");
+    // 徽标 / 页脚等消费 config.provider 的展示点据此显示「本地」
+    expect(result.current.config?.provider).toBe("local");
+  });
+
+  it("回环但配置了密钥（本机网关转发远端的形态）→ 仍按远端分组", async () => {
+    currentCfg = {
+      provider: "remote",
+      baseUrl: "http://127.0.0.1:3000/v1",
+      model: "qwen3:14b",
+      extraModels: [],
+      apiKey: "sk-gateway",
+      temperature: 0.7,
+      maxTokens: 2048,
+      hasApiKey: true,
+    };
+    const qc = createTestQueryClient();
+    const { result } = renderHook(() => useLLMConfig(), {
+      wrapper: makeWrapper(qc),
+    });
+    await waitFor(() => expect(result.current.config).not.toBeNull());
+    expect(result.current.remoteModels).toContain("qwen3:14b");
+    expect(result.current.config?.provider).toBe("remote");
+  });
+
+  it("真远端（非回环）配置不受影响，主模型归远端组", async () => {
+    currentCfg = {
+      provider: "remote",
+      baseUrl: "https://api.openai.com/v1",
+      model: "gpt-4o",
+      extraModels: [],
+      temperature: 0.7,
+      maxTokens: 2048,
+      hasApiKey: false,
+    };
+    const qc = createTestQueryClient();
+    const { result } = renderHook(() => useLLMConfig(), {
+      wrapper: makeWrapper(qc),
+    });
+    await waitFor(() => expect(result.current.config).not.toBeNull());
+    expect(result.current.remoteModels).toContain("gpt-4o");
+    expect(result.current.config?.provider).toBe("remote");
   });
 });

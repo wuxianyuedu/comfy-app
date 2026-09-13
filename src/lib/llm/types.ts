@@ -151,6 +151,23 @@ export function foldRemoteToLocal(
   return { localNames: locals, remoteEntries: remotes };
 }
 
+/** 生效提供方判定（工坊分组 / 徽标 / 页脚的统一口径）：
+ *  baseUrl 指向本机回环且未配密钥时，即便存储的 provider 是 remote 也按
+ *  「本地」——本机 Ollama/LM Studio 被存成「远端 API」（历史迁移 / 设置表单
+ *  误选）时，工坊下拉会把 ollama 模型挂「远端」小标、可用性探测也走错通道。
+ *  带 apiKey 的回环地址可能是本机网关转发远端计费模型，尊重存储值不强行改判；
+ *  provider 已是 local 的一律保持 local（局域网自建服务仍算本地）。 */
+export function effectiveProviderType(
+  provider: LLMProviderType,
+  baseUrl: string | null | undefined,
+  hasApiKey: boolean,
+): LLMProviderType {
+  if (provider === "remote" && !hasApiKey && isLoopbackBaseUrl(baseUrl ?? "")) {
+    return "local";
+  }
+  return provider;
+}
+
 /**
  * 任务温度解析（设置覆盖与推荐默认的唯一裁决点）：
  *   该任务的用户覆盖值 → 调用方显式指定的温度 → 该任务推荐默认 → 全局默认。
