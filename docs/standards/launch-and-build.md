@@ -126,7 +126,7 @@ comfy-cli 做 UI→API 转换，解释器固定为 `<项目根>\python-venv\comf
 | 段                     | 位置                                                         | 职责                                                                                                                                                                              |
 | ---------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 判决（启动期，一次性） | `scripts/start_tauri_launcher.py` 的 `decide_foreground()`   | 决定本次启动是否允许给前台；结果写环境变量 `COMFYAPP_FOREGROUND`（`1`/`0`），由 dev-launcher.ps1 透传给壳                                                                         |
-| 执行（窗口交换时）     | `src-tauri/src/lib.rs` 的 `show_main_window_without_focus()` | 主窗以 `focused(false)` 创建：首次 `show()` 由 tao 走 `SW_SHOWNOACTIVATE`——窗口进任务栏但不向前台要焦点（不带它的话 `show()` 自带的激活语义会让 Windows 把前台放行给主窗）；只有判决/调用方明确要求给前台时才调 `set_focus()`，未获前台则 `request_user_attention` 请求任务栏闪烁提醒 |
+| 执行（窗口交换时）     | `src-tauri/src/lib.rs` 的 `show_main_window_without_focus()` | 主窗以 `focused(false)` 创建：首次 `show()` 由 tao 走 `SW_SHOWNOACTIVATE`——窗口进任务栏但不向前台要焦点（不带它的话 `show()` 自带的激活语义会让 Windows 把前台放行给主窗）；只有判决/调用方明确要求给前台时才调 `set_focus()`，未获前台则 `request_user_attention` 请求任务栏闪烁提醒；**窗口处于最小化时先 `unminimize()`**——`show()` 走 `SW_SHOW`，对最小化窗口不还原，只把它记为前台，用户看到的是「点托盘 / 二次启动没反应」（再点一次任务栏才出来，因为那次走的是系统自己的还原路径） |
 
 `decide_foreground()` 的判决表（命中任一即允许给前台，**默认拒绝**）：
 
