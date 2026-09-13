@@ -85,6 +85,11 @@ const config = {
       "font-src 'self' data:",
       // ComfyUI 本地服务 / SSE 流 / WebSocket（ws://127.0.0.1:8188）
       "connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* https:",
+      // 应用级「ComfyUI 页签」以 iframe 内嵌本地 ComfyUI（跨端口即跨源）：
+      // frame-src 不写就回退到 default-src 'self'，页签里只剩
+      // Edge 的「已阻止此内容」（WebView2 的 --disable-web-security 不豁免
+      // 嵌入方页面自己的 CSP）。与 tauri.conf.json 的 frame-src 同口径。
+      "frame-src 'self' http://127.0.0.1:* http://localhost:*",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
