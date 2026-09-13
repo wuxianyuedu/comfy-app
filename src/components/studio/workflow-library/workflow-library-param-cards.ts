@@ -50,6 +50,13 @@ export interface LibraryParamCards {
    *  到的那一行之间）。自动判定画虚线、作者改过画实线，与编辑器画布同一套
    *  语义 —— 库里不画线的话，圆点就只是一颗装饰点，读者答不出它连到哪。 */
   wires: ParamCardWire[];
+  /** **真的画出了线**的那些卡片圆点（`<条目 id>?<handle id>`）。
+   *
+   *  与 `wires` 同一份事实的另一面：视图据此判断「这颗圆点该不该画成已连接」
+   *  —— 库内每个候选各画一条线，若还按「生效落点那一颗才实心、其余淡一档」
+   *  上色，带线的圆点看着反而是断的（用户口径：「这里连线断开了是什么原因」，
+   *  ISSUE #355）。 */
+  wiredDotKeys: Set<string>;
   /** 宿主卡片此刻真的画得出来的端口（见 `deriveLibraryParamCards` 的入参
    *  `reachableKeys`；缺省 = 不收窄）。卡片上的候选圆点按它收窄，
    *  与连线用同一份事实。 */
@@ -163,7 +170,12 @@ export function deriveLibraryParamCards(args: {
     }
   }
 
-  return { entries, resolved, ownersByPin, wires, reachableKeys };
+  /* 「画了线的圆点」= 上面逐条产出的线本身（`handleId` 与卡片锚点同口径）。 */
+  const wiredDotKeys = new Set(
+    wires.map((item) => `${item.entryId}?${item.handleId}`),
+  );
+
+  return { entries, resolved, ownersByPin, wires, wiredDotKeys, reachableKeys };
 }
 
 /** 对外**输出**参数卡片与它们的连线（纯派生）。
@@ -216,7 +228,11 @@ export function deriveLibraryOutputCards(args: {
     wires.push({
       entryId: output.ioKey,
       targetIoKey: target,
-      handleId: output.name,
+      /* handle id 与卡片圆点上的锚点**同一份算式**（见 `outputWireDotId`）：
+       *  两处各算一遍时，端口名为空 / 带空白就会一边锚 `输出`、一边找空串 ——
+       *  线量不到锚点，整条不画，用户看到的正是「images 和对外输出参数之间
+       *  无法连线」（ISSUE #355）。 */
+      handleId: outputWireDotId(output),
       grouped: false,
       manual: manualOutputSource(paramMap, output.ioKey, mode) !== undefined,
       kind: "hostToParam",
@@ -241,3 +257,18 @@ export function hasManualLibraryOutput(args: {
 }
 
 export { defaultOutputSource };
+
+/** 对外输出卡片上那颗圆点的 **handle id**（= 连线锚点里 `?` 后面的那一段）。
+ *
+ *  输入卡片用「端口名」当 handle（见 `ParamOutputPort.handleId`），输出卡片对称
+ *  沿用同一口径。输出端口名可能是空串 / 带空白（作者没给 name 的旧数据），这时
+ *  退回卡片标题「输出」—— 与 `WorkflowOutputParamCardColumn` 里 `portName` 的
+ *  算式**必须逐字一致**：锚点值与导线两端各算一遍，任何一处漏了 trim / 兜底，
+ *  线就量不到锚点、整条不画。 */
+export function outputWireDotId(
+  output: WorkflowIOEntry & { ioKey: string },
+): string {
+  const name = (output.name ?? "").trim();
+  return name || "输出";
+}
+

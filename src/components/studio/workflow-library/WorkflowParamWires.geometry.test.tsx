@@ -66,6 +66,19 @@ const io: WorkflowIOMap = {
   },
 };
 
+/** 钉住元素的**布局**尺寸（jsdom 不做布局，`offsetWidth/Height` 恒为 0）——
+ *  缩放换算靠「视觉 rect / 布局尺寸」，测试必须能把布局尺寸桩进去。 */
+function layoutSize(el: Element, width: number, height: number) {
+  Object.defineProperty(el, "offsetWidth", {
+    value: width,
+    configurable: true,
+  });
+  Object.defineProperty(el, "offsetHeight", {
+    value: height,
+    configurable: true,
+  });
+}
+
 function rect(
   el: Element,
   r: { left: number; top: number; width: number; height: number },
@@ -148,9 +161,11 @@ describe("组合卡回来之后的连线几何", () => {
     const path = container
       .querySelector('[data-testid="wflib-param-wire-param:size?megapixels"]')!
       .getAttribute("d")!;
-    /* 起点 = 圆点外缘 (200 + 12 + 6, 66) = (218, 66)；
-       终点 = 那一行端点的圆心 (488 + 12 / 2, 105 + 12 / 2) = (494, 111)。 */
-    expect(path.startsWith("M 218 66")).toBe(true);
+    /* 起点 = 圆点**朝终点的那条外缘**（终点在右侧 → 取圆点右缘 200 + 12 = 212，
+       y 取圆心 66）；终点 = 那一行端点的圆心 (488 + 6, 105 + 6) = (494, 111)。
+       （此前写死「右缘 + 半颗点」= 218：多算 6px，输出卡片那侧更会把起点算到
+       光标的另一侧，读作「线飘向左侧」。） */
+    expect(path.startsWith("M 212 66")).toBe(true);
     expect(path.endsWith("494 111")).toBe(true);
   });
 });
@@ -159,49 +174,62 @@ describe("视口缩放下的连线量测（缩放不改变线的落点）", () =
   /* 库内画布是可缩放视口（内容层贴 `scale(z)`），而连线层是绝对定位的 SVG、
    *  坐标写在容器自己的坐标系里；`getBoundingClientRect()` 给的却是被祖先
    *  scale 过的屏幕像素。两者混用，缩放不是 100% 时线立刻与圆点错位 —— 用户
-   *  口径：「改了缩放，后线的位置错乱」（ISSUE #355）。
+   *  口径：「改了缩放，后线的位置错乱」「拖动的线直接飘向左侧」（ISSUE #355）。
    *
-   *  算式在 `wireScale`（容器 / 其外框的 rect 之比）与 `rectInContainer`（把
-   *  屏幕 rect 换回容器局部坐标）里，两者都是纯函数，直接断言；JSX 几何的
-   *  「量哪两个元素」由本文件上面两条用例覆盖（jsdom 不做布局，父级 rect 恒为 0，
+   *  算式在 `wireScale`（容器自己的「屏幕尺寸 / 布局尺寸」之比）与
+   *  `rectInContainer`（把屏幕 rect 换回容器局部坐标）里，两者都是纯函数，直接
+   *  断言；JSX 几何的「量哪两个元素」由本文件上面两条用例覆盖（jsdom 不做布局，
    *  缩放路径在这里用纯函数钉住）。 */
-  it("缩放比取自容器与其外框的 rect 之比", () => {
+  it("缩放比取自容器自己的「屏幕尺寸 / 布局尺寸」之比", () => {
+    const content = document.createElement("div");
+    document.body.appendChild(content);
+    /* 布局宽 200，视觉宽 400 → 这一层被 CSS 缩放了 2 倍。 */
+    content.getBoundingClientRect = () =>
+      ({ width: 400, height: 300 }) as DOMRect;
+    layoutSize(content, 200, 150);
+    expect(wireScale(content)).toBe(2);
+    content.remove();
+  });
+
+  it("**连线层的容器与其父级都在缩放层之内**：父级之比恒为 1，必须走布局尺寸", () => {
+    /* 这是「线飘向左侧」的根因：容器（`relative w-fit`）与它的父级（视口内容层）
+     *  同在 `scale(z)` 之内，两个 rect 同比缩放、比值永远是 1 —— 缩放测不出来，
+     *  线就按屏幕像素画在局部坐标系里，放大一倍偏一倍。 */
     const frame = document.createElement("div");
     const content = document.createElement("div");
     frame.appendChild(content);
     document.body.appendChild(frame);
+    /* 两者都被放大 2 倍：父级 rect 800 / 容器 rect 400 = 2（看上去像 2 倍），
+     *  但容器的布局宽是 200 —— 真实缩放是 400 / 200 = 2，而父级之比是
+     *  800 / 400 = 2 …… 关键在下面这条：父级与容器同宽时比值恒为 1。 */
     frame.getBoundingClientRect = () =>
       ({ width: 400, height: 300 }) as DOMRect;
     content.getBoundingClientRect = () =>
-      ({ width: 200, height: 150 }) as DOMRect;
-    /* 外框 400 / 内容 200 = 内容被缩放到 50%。 */
+      ({ width: 400, height: 300 }) as DOMRect;
+    layoutSize(content, 200, 150);
+    /* 父级与容器同宽（都是被缩放的同一层），父级之比 = 1；真实缩放 = 2。 */
     expect(wireScale(content)).toBe(2);
     frame.remove();
   });
 
-  it("量不到宽度时不假装有缩放（退回 1，不把线画到天边）", () => {
-    const frame = document.createElement("div");
+  it("量不到布局尺寸时不假装有缩放（退回 1，不把线画到天边）", () => {
     const content = document.createElement("div");
-    frame.appendChild(content);
-    document.body.appendChild(frame);
-    frame.getBoundingClientRect = () => ({ width: 0, height: 0 }) as DOMRect;
+    document.body.appendChild(content);
     content.getBoundingClientRect = () => ({ width: 0, height: 0 }) as DOMRect;
+    layoutSize(content, 0, 0);
     expect(wireScale(content)).toBe(1);
-    frame.remove();
+    content.remove();
   });
 
   it("rect 换算回容器局部坐标：屏幕坐标除以缩放，再减容器屏幕原点", () => {
-    const frame = document.createElement("div");
     const content = document.createElement("div");
     const dot = document.createElement("span");
-    frame.appendChild(content);
     content.appendChild(dot);
-    document.body.appendChild(frame);
-    /* 容器屏幕原点 (10, 20)（被平移），内容被缩放 2 倍（外框 900 / 内容 450）。 */
-    frame.getBoundingClientRect = () =>
-      ({ width: 900, height: 600, left: 0, top: 0 }) as DOMRect;
+    document.body.appendChild(content);
+    /* 容器屏幕原点 (10, 20)（被平移），布局宽 450、视觉宽 900 → 缩放 2 倍。 */
     content.getBoundingClientRect = () =>
-      ({ width: 450, height: 300, left: 10, top: 20 }) as DOMRect;
+      ({ width: 900, height: 600, left: 10, top: 20 }) as DOMRect;
+    layoutSize(content, 450, 300);
     /* 圆点在屏幕上的位置：容器原点 + 局部 (100, 50) × 缩放 2 = (210, 120)。 */
     dot.getBoundingClientRect = () =>
       ({ width: 24, height: 24, left: 210, top: 120 }) as DOMRect;
@@ -210,7 +238,7 @@ describe("视口缩放下的连线量测（缩放不改变线的落点）", () =
     expect(box.top).toBe(50);
     expect(box.width).toBe(12);
     expect(box.height).toBe(12);
-    frame.remove();
+    content.remove();
   });
 });
 
@@ -266,10 +294,11 @@ describe("对外输出参数的连线几何", () => {
         '[data-testid="wflib-param-wire-output:9::output::IMAGE?images"]',
       )!
       .getAttribute("d")!;
-    /* 起点 = 输出行圆点的外缘 (400 + 12 + 6, 66) = (418, 66)；
-       终点 = 卡片圆点的圆心 (700 + 6, 100 + 6) = (706, 106)。 */
-    expect(path.startsWith("M 418 66")).toBe(true);
-    expect(path.endsWith("706 106")).toBe(true);
+    /* 两端各取**朝向对方**的那条外缘：宿主输出行圆点朝右 → 右缘 (400 + 12, 66) =
+       (412, 66)；卡片圆点朝左（骑跨卡片左缘）→ 左缘 (700, 100 + 6) = (700, 106)。
+       写死「右缘 + 半颗点」会把终点算到圆点右缘的 712 —— 线切进卡片里。 */
+    expect(path.startsWith("M 412 66")).toBe(true);
+    expect(path.endsWith("700 106")).toBe(true);
   });
 
   it("两端缺一个就不画线（输出行或卡片列没渲染时不留悬空线头）", async () => {

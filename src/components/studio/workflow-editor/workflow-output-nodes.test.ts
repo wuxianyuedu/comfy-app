@@ -70,15 +70,15 @@ describe("输出卡片与取值线", () => {
       expect(node.type).toBe("wfOutput");
       expect(node.draggable).toBe(false);
       expect(node.connectable).toBe(true);
-      expect(node.position!.x).toBeGreaterThan(hostPosById["5"].x);
+      expect(node.position.x).toBeGreaterThan(hostPosById["5"].x);
     }
     /* 同一宿主的两张卡片纵向排开，不互相压住。 */
-    expect(nodes[1]!.position!.y).toBeGreaterThan(nodes[0]!.position!.y);
+    expect(nodes[1]!.position.y).toBeGreaterThan(nodes[0]!.position.y);
   });
 
   it("卡片头不把端口名再抄一遍，卡片体带端口名与类型", () => {
     const { nodes } = build();
-    const data = nodes[0]!.data as Record<string, unknown>;
+    const data = nodes[0]!.data;
     expect(data.label).toBe("输出");
     expect(data.portName).toBe("images");
     expect(data.portType).toBe("IMAGE");
@@ -111,7 +111,7 @@ describe("输出卡片与取值线", () => {
     expect(edge.style!.strokeDasharray).toBeUndefined();
     const data = nodes.find(
       (node) => node.id === outputNodeId("5::output::VIDEO"),
-    )!.data as Record<string, unknown>;
+    )!.data;
     expect(data.wireManual).toBe(true);
     expect(data.canReset).toBe(true);
     expect(outputBindingOverridden(paramMap, "5::output::VIDEO", "T2I")).toBe(true);
@@ -132,7 +132,7 @@ describe("输出卡片与取值线", () => {
     const { nodes } = build({}, null);
     expect(nodes.length).toBe(2);
     for (const node of nodes) {
-      expect((node.data as Record<string, unknown>).canWire).toBe(false);
+      expect(node.data.canWire).toBe(false);
     }
   });
 

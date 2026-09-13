@@ -15,6 +15,10 @@ import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { buildParamEntries } from "~/lib/workflow-param-mapping";
 import { applyOutputBindingEdit } from "~/lib/workflow-output-binding";
 import {
+  inferGroups,
+  splitWorkflowIO,
+} from "~/components/studio/shared/workflow-io";
+import {
   deriveLibraryOutputCards,
   deriveLibraryParamCards,
 } from "./workflow-library-param-cards";
@@ -355,6 +359,28 @@ describe("deriveLibraryParamCards", () => {
   });
 });
 
+describe("deriveLibraryParamCards — 画了线的圆点（wiredDotKeys）", () => {
+  it("每个候选各一条线，wiredDotKeys 与线一一对应", () => {
+    /* 视图按它判断「这颗圆点该不该画成已连接」：库内每个候选各画一条线，若还按
+     *  「生效落点才实心」上色，带线的圆点看着反而是断的（ISSUE #355：「这里连线
+     *  断开是什么原因」）。 */
+    const groupedKeys = inferGroups(
+      splitWorkflowIO(io).widgetInputs,
+    ).groupedKeys;
+    const { wires, wiredDotKeys } = deriveLibraryParamCards({
+      io,
+      paramMap: {},
+      mode: "T2I",
+      groupedKeys,
+    });
+    expect(wires.length).toBeGreaterThan(0);
+    for (const wire of wires) {
+      expect(wiredDotKeys.has(`${wire.entryId}?${wire.handleId}`)).toBe(true);
+    }
+    expect(wiredDotKeys.size).toBe(wires.length);
+  });
+});
+
 describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", () => {
   const outIO: WorkflowIOMap = {
     "9::output::IMAGE": {
@@ -436,6 +462,24 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
     });
     expect(resolved["9::output::IMAGE"]).toBeNull();
     expect(wires).toHaveLength(0);
+  });
+
+  it("输出端口名为空时 handle 退回「输出」—— 与卡片锚点同一算式", () => {
+    /* 两个地方各算一遍 handle，任何一处漏了 trim / 兜底，锚点与导线就对不上，
+     *  线量不到锚点、整条不画（ISSUE #355：「images 和对外输出参数之间无法
+     *  连线」）。 */
+    const nameless: WorkflowIOMap = {
+      "9::output::EMPTY": {
+        direction: "output",
+        kind: "output",
+        nodeId: "9",
+        name: "   ",
+        label: "",
+        type: "IMAGE",
+      },
+    };
+    const { wires } = deriveLibraryOutputCards({ io: nameless });
+    expect(wires[0]!.handleId).toBe("输出");
   });
 
   it("没有输出时两张表都是空的（视图据此不渲染右列）", () => {

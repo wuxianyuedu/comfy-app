@@ -466,9 +466,10 @@ export function WorkflowCanvasNodePreview({
     ],
   );
   /* ── 对外输出参数（右列）──
-   * 与左列对称：左列是「对外要什么 → 落到哪一行」，右列是「对外给什么」。
-   * 输出不参与映射，所以这列恒为只读：只有卡片与「宿主输出行 → 卡片」的线，
-   * 没有拖拽手势、没有「恢复默认」。 */
+   * 与左列对称：左列是「对外要什么 → 落到哪一行」，右列是「对外给什么 →
+   * 从哪一行取值」。输出不参与**运行期**映射（没有 `source` 键空间），但它
+   * 从哪一行取值是作者能改的：拖圆点写 `paramMap.output.mode:<模式>`，卡片头
+   * ↺ 恢复默认 —— 手势与落库都经下面的 `outputWiring`。 */
   const outputCards = useMemo(
     () =>
       deriveLibraryOutputCards({
@@ -610,6 +611,7 @@ export function WorkflowCanvasNodePreview({
               isManual={wiring.isManual}
               onReset={wiring.resetToAuto}
               reachableKeys={paramCards.reachableKeys}
+              wiredDotKeys={paramCards.wiredDotKeys}
             />
           )}
           {/* ── 画布同款节点卡片：唯一视觉源在 shared/workflow-node-parts ── */}

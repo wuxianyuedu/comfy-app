@@ -2,20 +2,16 @@
 
 // 详情面板主体：画布预览 / 参数配置 / 源文件三个页签的内容。纯展示。
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Maximize2 } from "lucide-react";
 
 import type { SourceModalData } from "~/components/studio/SourceModal";
-import { DynamicWorkflowForm } from "~/components/studio/shared/DynamicWorkflowForm";
-import {
-  defaultInputValues,
-  mergeRefreshedDefaults,
-  type WorkflowIOMap,
-} from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { JsonViewer } from "~/components/studio/ui/JsonViewer";
 import type { DetailTab } from "../workflow-library-detail-config";
 import type { WorkflowRow } from "../workflow-library-config";
 import { WorkflowCanvasNodePreview } from "../WorkflowCanvasNodePreview";
+import { WorkshopEncapsulationPanel } from "./WorkshopEncapsulationPanel";
 
 interface DetailBodyProps {
   workflow: WorkflowRow;
@@ -113,13 +109,14 @@ export function DetailBody({
       )}
 
       {activeTab === "params" && (
-        <div
+        <WorkshopEncapsulationPanel
           key={workflow.id}
-          className="mx-auto max-w-2xl rounded-2xl border border-(--color-border) bg-(--color-panel-deep) p-4"
-        >
-          <h3 className="mb-3 text-sm font-medium text-(--color-ink-strong)">可配置参数</h3>
-          <WorkflowParamForm io={workflowIO} workflowId={workflow.id} />
-        </div>
+          workflowId={workflow.id}
+          displayName={workflow.modelTags?.[0] ?? workflow.name}
+          workflowIO={workflowIO}
+          paramMap={paramMap}
+          mode={workflow.defaultMode ?? workflow.taskType ?? workflow.modes?.[0] ?? null}
+        />
       )}
 
       {activeTab === "source" && (
@@ -143,52 +140,5 @@ export function DetailBody({
         </div>
       )}
     </>
-  );
-}
-
-/** 参数配置页签的表单：值只是本地草稿，不回写父级。
- *
- *  默认值刷新（保覆盖）：IO 编辑里改了默认值后回到本页签，未覆盖的参数要
- *  跟着刷新到新默认值，用户改过的参数保持原值（ISSUE #288）。入参带
- *  `key={workflow.id}` —— 换工作流时整个组件重建，播种基线随之重置。 */
-function WorkflowParamForm({
-  io,
-  workflowId,
-}: {
-  io: WorkflowIOMap | null;
-  workflowId: string;
-}) {
-  /* 值 + 播种基线一起持有：基线是判断「用户有没有改过这一格」的唯一依据，
-   * 必须和值同步更新（见 mergeRefreshedDefaults）。 */
-  const [state, setState] = useState<{
-    seededFor: string | null;
-    values: Record<string, unknown>;
-    baseline: Record<string, unknown>;
-  }>({ seededFor: null, values: {}, baseline: {} });
-
-  /* 播种走渲染期校正（而非 effect）：effect 内同步 setState 会触发级联渲染，
-   * 被 lint 的 set-state-in-effect 拦下；渲染期校正由 React 立即重跑本组件，
-   * 用户看不到中间态。 */
-  const defaults = useMemo(() => (io ? defaultInputValues(io, null) : null), [io]);
-  if (defaults && state.seededFor !== workflowId) {
-    /* 首次播种 / 换了工作流：整表采用默认值。 */
-    setState({ seededFor: workflowId, values: defaults, baseline: defaults });
-  } else if (defaults && state.baseline !== defaults) {
-    /* IO 变了（作者在编辑器里改了默认值）：只刷新未被用户覆盖的格子。 */
-    const merged = mergeRefreshedDefaults(state.values, state.baseline, defaults);
-    setState({
-      seededFor: workflowId,
-      values: merged ?? state.values,
-      baseline: defaults,
-    });
-  }
-
-  return (
-    <DynamicWorkflowForm
-      io={io}
-      values={state.values}
-      onChange={(next) => setState((prev) => ({ ...prev, values: next }))}
-      workflowId={workflowId}
-    />
   );
 }

@@ -110,9 +110,9 @@ describe("映射连线的两端锚点", () => {
 
     const svg = container.querySelector('[data-testid="wflib-param-wires"]')!;
     expect(svg).toBeTruthy();
-    /* 起点 x = 圆点外缘（left + width + width/2）= 218，终点 x = 宿主行左沿 400。 */
+    /* 起点 x = 圆点**朝终点的那条外缘**（left + width = 212），终点 x = 宿主行左沿 400。 */
     const path = svg.querySelector("path")!.getAttribute("d")!;
-    expect(path).toMatch(/^M 218 \d/);
+    expect(path).toMatch(/^M 212 \d/);
     expect(path.endsWith(" 400 140")).toBe(true);
   });
 });
@@ -140,10 +140,7 @@ describe("库内拖线改落点", () => {
         <div data-port-dot="9::widget::positive_prompt" />
         <div data-io-key="9::widget::positive_prompt" />
         <div data-io-key="9::widget::negative_prompt" />
-        <WorkflowParamWires
-          wires={[]}
-          onConnect={onConnect}
-        />
+        <WorkflowParamWires wires={[]} onConnect={onConnect} />
       </div>
     );
     const { container } = render(tree);
@@ -151,18 +148,24 @@ describe("库内拖线改落点", () => {
       `[data-wire-anchor="${wireAnchorValue(prompt.id, "positive_prompt")}"]`,
     )!;
     stubRect(dot, { left: 100, top: 70, width: 12, height: 12 });
-    stubRect(container.querySelector('[data-io-key="9::widget::positive_prompt"]')!, {
-      left: 300,
-      top: 60,
-      width: 240,
-      height: 30,
-    });
-    stubRect(container.querySelector('[data-io-key="9::widget::negative_prompt"]')!, {
-      left: 300,
-      top: 120,
-      width: 240,
-      height: 30,
-    });
+    stubRect(
+      container.querySelector('[data-io-key="9::widget::positive_prompt"]')!,
+      {
+        left: 300,
+        top: 60,
+        width: 240,
+        height: 30,
+      },
+    );
+    stubRect(
+      container.querySelector('[data-io-key="9::widget::negative_prompt"]')!,
+      {
+        left: 300,
+        top: 120,
+        width: 240,
+        height: 30,
+      },
+    );
     return { container, dot, prompt };
   }
 
@@ -171,12 +174,20 @@ describe("库内拖线改落点", () => {
     const { dot, prompt } = renderEditable(onConnect);
     await act(async () => {
       dot.dispatchEvent(
-        new PointerEvent("pointerdown", { bubbles: true, clientX: 106, clientY: 76 }),
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          clientX: 106,
+          clientY: 76,
+        }),
       );
     });
     await act(async () => {
       document.dispatchEvent(
-        new PointerEvent("pointermove", { bubbles: true, clientX: 400, clientY: 75 }),
+        new PointerEvent("pointermove", {
+          bubbles: true,
+          clientX: 400,
+          clientY: 75,
+        }),
       );
     });
     /* 拖动中就该看得见一条预览线（否则「拖了没反应」与「拖坏了」长得一样）。 */
@@ -185,7 +196,11 @@ describe("库内拖线改落点", () => {
     ).toBeTruthy();
     await act(async () => {
       document.dispatchEvent(
-        new PointerEvent("pointerup", { bubbles: true, clientX: 400, clientY: 75 }),
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          clientX: 400,
+          clientY: 75,
+        }),
       );
     });
     expect(onConnect).toHaveBeenCalledWith(
@@ -199,17 +214,117 @@ describe("库内拖线改落点", () => {
     const { dot } = renderEditable(onConnect);
     await act(async () => {
       dot.dispatchEvent(
-        new PointerEvent("pointerdown", { bubbles: true, clientX: 106, clientY: 76 }),
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          clientX: 106,
+          clientY: 76,
+        }),
       );
     });
     await act(async () => {
       document.dispatchEvent(
-        new PointerEvent("pointermove", { bubbles: true, clientX: 900, clientY: 900 }),
+        new PointerEvent("pointermove", {
+          bubbles: true,
+          clientX: 900,
+          clientY: 900,
+        }),
       );
     });
     await act(async () => {
       document.dispatchEvent(
-        new PointerEvent("pointerup", { bubbles: true, clientX: 900, clientY: 900 }),
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          clientX: 900,
+          clientY: 900,
+        }),
+      );
+    });
+    expect(onConnect).not.toHaveBeenCalled();
+  });
+
+  it("拖动的预览线朝**光标**方向画：往右拖就往右，不再飘向左侧", async () => {
+    /* 此前起点写死「圆点右缘 + 半颗点」：右列输出卡片的圆点骑跨卡片**左**缘时，
+     *  起点被算到光标另一侧，预览线与光标反向 —— 用户口径：「我想往右连线，结果
+     *  拖动的线直接飘向左侧」（ISSUE #355）。 */
+    const onConnect = vi.fn();
+    const { container, dot } = renderEditable(onConnect);
+    stubRect(dot, { left: 100, top: 70, width: 12, height: 12 });
+    await act(async () => {
+      dot.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          clientX: 106,
+          clientY: 76,
+        }),
+      );
+    });
+    await act(async () => {
+      document.dispatchEvent(
+        new PointerEvent("pointermove", {
+          bubbles: true,
+          clientX: 400,
+          clientY: 76,
+        }),
+      );
+    });
+    const preview = document.querySelector<SVGPathElement>(
+      '[data-testid="wflib-param-wire-preview"]',
+    )!;
+    expect(preview).toBeTruthy();
+    const d = preview.getAttribute("d")!;
+    const startX = Number(/^M ([\d.-]+)/.exec(d)![1]);
+    /* 路径形如 `M x1 y1 C cx1 y1 cx2 y2 x2 y2` —— 终点 x 是倒数第二个数。 */
+    const nums = d
+      .trim()
+      .split(/\s+/)
+      .map(Number)
+      .filter((n) => !Number.isNaN(n));
+    const endX = nums[nums.length - 2]!;
+    /* 光标在右侧 → 终点在起点右侧（不再反向）。 */
+    expect(endX).toBeGreaterThan(startX);
+    expect(container).toBeTruthy();
+  });
+
+  it("没给输出侧回调时输出圆点按下不起手 —— 拖了也落不下来", async () => {
+    /* 圆点声明自己是输出侧起手位（`data-wire-kind`），而这一层没拿到
+     *  `onConnectOutput` = 这一列当前不可编辑，按下不该起手（不该拖的东西不要
+     *  摆出能拖的样子）。 */
+    const onConnect = vi.fn();
+    const { container } = renderEditable(onConnect);
+    const readonlyDot = document.createElement("span");
+    readonlyDot.setAttribute("data-wire-anchor", "9::output::IMAGE?images");
+    readonlyDot.setAttribute("data-wire-kind", "hostToParam");
+    container.appendChild(readonlyDot);
+    stubRect(readonlyDot, { left: 500, top: 300, width: 12, height: 12 });
+    await act(async () => {
+      readonlyDot.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          clientX: 500,
+          clientY: 306,
+        }),
+      );
+    });
+    await act(async () => {
+      document.dispatchEvent(
+        new PointerEvent("pointermove", {
+          bubbles: true,
+          clientX: 300,
+          clientY: 306,
+        }),
+      );
+    });
+    /* 没有预览线 = 手势根本没起手。 */
+    expect(
+      document.querySelector('[data-testid="wflib-param-wire-preview"]'),
+    ).toBeNull();
+    await act(async () => {
+      document.dispatchEvent(
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          clientX: 300,
+          clientY: 306,
+        }),
       );
     });
     expect(onConnect).not.toHaveBeenCalled();
@@ -220,12 +335,20 @@ describe("库内拖线改落点", () => {
     const { dot, prompt } = renderEditable(onConnect);
     await act(async () => {
       dot.dispatchEvent(
-        new PointerEvent("pointerdown", { bubbles: true, clientX: 106, clientY: 76 }),
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          clientX: 106,
+          clientY: 76,
+        }),
       );
     });
     await act(async () => {
       document.dispatchEvent(
-        new PointerEvent("pointerup", { bubbles: true, clientX: 400, clientY: 135 }),
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          clientX: 400,
+          clientY: 135,
+        }),
       );
     });
     expect(onConnect).toHaveBeenCalledWith(
@@ -240,7 +363,10 @@ describe("库内拖线改落点", () => {
  * 线层整层不吃指针事件（它盖在卡片与宿主卡片之上），所以键盘监听挂在 document
  * 上；否则这条快捷键永远按不动。焦点在输入框里时不拦截（那里的退格是删字）。 */
 describe("断开与取消选中", () => {
-  function renderSelected(onDisconnect: (id: string) => void, onSelect = vi.fn()) {
+  function renderSelected(
+    onDisconnect: (id: string) => void,
+    onSelect = vi.fn(),
+  ) {
     const { container } = render(
       <div>
         <WorkflowParamWires

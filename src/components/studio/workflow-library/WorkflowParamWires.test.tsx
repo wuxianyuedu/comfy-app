@@ -60,18 +60,18 @@ const wire: ParamWire = {
 };
 
 describe("measureWires", () => {
-  it("起点是圆点**外侧边缘**、终点是宿主行左沿中心（相对容器）", () => {
+  it("起点是圆点**朝向终点的那条外缘**、终点是宿主行左沿中心（相对容器）", () => {
     const container = makeContainer(
       { left: 100, top: 50 },
       { left: 200, top: 70, width: 8, height: 12 },
       { left: 400, top: 120, width: 300, height: 40 },
     );
     const [segment] = measureWires(container, [wire]);
-    /* 容器原点 (100, 50)。圆点锚点（left 200, top 70, 8 宽 12 高）的**外侧
-     * 边缘**相对容器 = (100 + 8 + 4, 26) = (112, 26)（与画布上 React Flow 的
-     * 连线口径一致：线从端点外缘出发，不切进卡片）；宿主行（left 400, top 120,
-     * 40 高）左沿中心 = (300, 90)。 */
-    expect(segment!.d.startsWith("M 112 26")).toBe(true);
+    /* 容器原点 (100, 50)。终点在右侧 → 起点取圆点锚点（left 200, top 70, 8 宽
+     *  12 高）的**右缘**：相对容器 = (200 - 100 + 8, 70 - 50 + 6) = (108, 26)
+     *  （线从端点外缘出发，不切进卡片）；宿主行（left 400, top 120, 40 高）
+     *  左沿中心 = (300, 90)。 */
+    expect(segment!.d.startsWith("M 108 26")).toBe(true);
     expect(segment!.d.endsWith("300 90")).toBe(true);
   });
 
@@ -83,7 +83,8 @@ describe("measureWires", () => {
       { left: 100, top: 10, width: 12, height: 12 },
       { left: 300, top: 40, width: 200, height: 20 },
     );
-    container.querySelector('[data-io-key="9::widget::text"]')!
+    container
+      .querySelector('[data-io-key="9::widget::text"]')!
       .setAttribute("data-io-key", "1::widget::a::b");
     const [segment] = measureWires(container, [
       { ...wire, targetIoKey: "1::widget::a::b" },
@@ -134,8 +135,9 @@ describe("measureWires", () => {
     );
     const [segment] = measureWires(container, [wire]);
     /* 终点在起点左侧时，控制点仍按间距的一半（绝对值）外扩，线是平滑的 S 形
-     * 而不是被负半径拗出的尖角。起点 = 圆点锚点 (300, 0, 8 宽) 的外缘 312。 */
-    expect(segment!.d).toBe("M 312 6 C 368 6 144 10 200 10");
+     * 而不是被负半径拗出的尖角。起点 = 圆点锚点 (300, 0, 8 宽) **朝左的那条
+     * 外缘** = 300（终点在左，线从左侧出线，不会从圆心穿过去往右折）。 */
+    expect(segment!.d).toBe("M 300 6 C 350 6 150 10 200 10");
   });
 
   it("组合参数（宽/高、比例/像素）的落点锚在整块控件上", () => {
