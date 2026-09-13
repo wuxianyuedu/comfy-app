@@ -8,11 +8,13 @@
 import React, { useCallback, useState } from "react";
 
 import {
+  adapterInputsFromContract,
+  builtInModeContract,
   defaultEndpointPathForMode,
-  defaultInputsForMode,
   parseRemoteModeAdapters,
   type RemoteModeAdapter,
 } from "@/lib/workshop/model-mode-contract";
+import { useModeContracts } from "./use-mode-contracts";
 import { api } from "~/trpc/react";
 
 export interface AdapterCandidate {
@@ -25,6 +27,8 @@ export interface ModelAdaptersController {
   /** 可配置适配器的远端模型（kind=image / video）。 */
   candidates: AdapterCandidate[];
   loading: boolean;
+  /** 模式契约注册表（每种模式的统一输入 / 输出）。 */
+  modeContracts: ReturnType<typeof useModeContracts>;
   /** 当前选中模型的适配器草稿（选中变化时自动播种）。 */
   draft: RemoteModeAdapter[];
   setDraft: React.Dispatch<React.SetStateAction<RemoteModeAdapter[]>>;
@@ -39,6 +43,7 @@ export interface ModelAdaptersController {
 
 export function useModelAdapters(): ModelAdaptersController {
   const configQ = api.llm.configGet.useQuery();
+  const modeContracts = useModeContracts();
   const [selectedModel, setSelectedModel] = useState("");
   const [draft, setDraft] = useState<RemoteModeAdapter[]>([]);
   const [saving, setSaving] = useState(false);
@@ -99,21 +104,29 @@ export function useModelAdapters(): ModelAdaptersController {
     setMessage(null);
   }, []);
 
-  const addMode = useCallback((mode: string) => {
-    setDraft((prev) =>
-      prev.some((a) => a.mode === mode)
-        ? prev
-        : [
-            ...prev,
-            {
-              mode,
-              endpointPath: defaultEndpointPathForMode(mode),
-              inputs: defaultInputsForMode(mode),
-              outputField: "",
-            },
-          ],
-    );
-  }, []);
+  const addMode = useCallback(
+    (mode: string) => {
+      setDraft((prev) =>
+        prev.some((a) => a.mode === mode)
+          ? prev
+          : [
+              ...prev,
+              {
+                mode,
+                endpointPath: defaultEndpointPathForMode(mode),
+                // 默认输入清单来自**模式契约注册表**（用户改过用改过的，
+                // 没改过用内置默认）—— 统一口在这里先定义、适配器只做翻译。
+                inputs: adapterInputsFromContract(
+                  modeContracts.contracts.find((c) => c.mode === mode) ??
+                    builtInModeContract(mode),
+                ),
+                outputField: "",
+              },
+            ],
+      );
+    },
+    [modeContracts.contracts],
+  );
 
   const save = useCallback(async () => {
     if (!selectedModel) return;
@@ -139,6 +152,7 @@ export function useModelAdapters(): ModelAdaptersController {
   return {
     candidates,
     loading: configQ.isLoading,
+    modeContracts,
     draft,
     setDraft,
     selectModel,
