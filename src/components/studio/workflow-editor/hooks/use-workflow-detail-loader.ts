@@ -80,8 +80,15 @@ export function useWorkflowDetailLoader({
 
   const fetchDetail = useCallback(
     async (opts?: { subgraphUid?: string; parentTitle?: string; bust?: boolean; hostNodeId?: string }) => {
+      /* 子图内部节点在 `positions` 列里存的是 `宿主:内部` 拼接键，读回时
+       * 必须带同一个宿主链前缀，否则子图里拖过的位置会被当成「没有覆盖」而
+       * 退回原始坐标。前缀进 URL 也顺带进了缓存键，不同层级的同名子图不会
+       * 互相串用缓存。 */
+      const hostId = opts?.hostNodeId ?? "";
       const url = opts?.subgraphUid
-        ? `/api/workflows/${workflowId}/subgraph?uid=${encodeURIComponent(opts.subgraphUid)}`
+        ? `/api/workflows/${workflowId}/subgraph?uid=${encodeURIComponent(opts.subgraphUid)}${
+            hostId ? `&host=${encodeURIComponent(hostId)}` : ""
+          }`
         : `/api/workflows/${workflowId}`;
 
       // 维护 subgraphRawContext
@@ -168,7 +175,7 @@ export function useWorkflowDetailLoader({
        *  附带：TTL 5min → 30s；后台 fetch 也更新 UI（latestRequestId 守
        *     卫 race condition）；console.banner 在每次 fetchDetail 入口打
        *     显眼状态。 */
-      const cacheKey = `wfdetail:R6:outputsLabel+boundaryPinLocalized+rawInputsRawStamp+nodeMode+workflowIOTyped:${url}`;
+      const cacheKey = `wfdetail:R7:subgraphHostNamespaced:${url}`;
       const WFCACHE_TTL_MS = 30_000;
 
       /* Once-per-page-load purge: drop every wfdetail:* entry that doesn't
@@ -178,7 +185,7 @@ export function useWorkflowDetailLoader({
       try {
         for (let i = sessionStorage.length - 1; i >= 0; i--) {
           const k = sessionStorage.key(i);
-          if (k && k.startsWith("wfdetail:") && !k.startsWith("wfdetail:R6:")) {
+          if (k && k.startsWith("wfdetail:") && !k.startsWith("wfdetail:R7:")) {
             sessionStorage.removeItem(k);
           }
         }
@@ -223,7 +230,7 @@ export function useWorkflowDetailLoader({
         // newer than what we just painted), so schema-fingerprint
         // upgrades automatically surface without a manual reload.
         const bgPromise = opts?.subgraphUid
-          ? vanillaApi.workflow.subgraph.query({ id: workflowId, uid: opts.subgraphUid })
+          ? vanillaApi.workflow.subgraph.query({ id: workflowId, uid: opts.subgraphUid, hostId })
           : vanillaApi.workflow.detailFull.query({ id: workflowId });
         bgPromise
           .then((data: WorkflowDetailResponse | null) => {
@@ -255,7 +262,7 @@ export function useWorkflowDetailLoader({
       try {
         const d = (await withTimeout(
           opts?.subgraphUid
-            ? vanillaApi.workflow.subgraph.query({ id: workflowId, uid: opts.subgraphUid })
+            ? vanillaApi.workflow.subgraph.query({ id: workflowId, uid: opts.subgraphUid, hostId })
             : vanillaApi.workflow.detailFull.query({
                 id: workflowId,
                 bust: isBust ? true : undefined,
@@ -309,22 +316,37 @@ export function useWorkflowDetailLoader({
    *  - 重新调用 fetchDetail({bust:true})（服务器 LRU 也会被 ?_bust=1 清掉）
    *  - server side 通过 url 上的 _r3= 时间戳参数穿透 server LRU 的 30s 边界
    */
-  const forceReloadDetail = useCallback(() => {
-    try {
-      // 1) 清光所有 sessionStorage key（防御性）
-      sessionStorage.clear();
-    } catch {
-      /* private mode 等 */
-    }
-    // 2) 任何 in-flight fetchDetail 都作废
-    latestRequestIdRef.current++;
-    setError("");
-    // 3) 重新跑一次（冷路径 → network → setDetail → 立刻看到新数据）
-    setDetail(null);
-    setLoading(true);
-    setSubgraphLoading(false);
-    void fetchDetail({ bust: true });
-  }, [fetchDetail]); // eslint-disable-line react-hooks/exhaustive-deps
+  const forceReloadDetail = useCallback(
+    (
+      hostNodeId = "",
+      /** 静默模式：不把编辑器打成 loading、不清空当前 detail。用于「重置布局」
+       *  这类**主动重拉**——用户刚点完按钮，画布不该整屏闪一下 loading，
+       *  而新数据到了自然会替换（保留节点拖拽/缩放状态）。 */
+      silent = false
+    ) => {
+      try {
+        // 1) 清光所有 sessionStorage key（防御性）
+        sessionStorage.clear();
+      } catch {
+        /* private mode 等 */
+      }
+      // 2) 任何 in-flight fetchDetail 都作废
+      latestRequestIdRef.current++;
+      setError("");
+      // 3) 重新跑一次（冷路径 → network → setDetail → 立刻看到新数据）
+      /* 强制重载必须带上当前视图的宿主链：子图视图下节点的坐标存在
+       *  `宿主:内部` 键上，不带前缀重新拉回来的就是一份丢了全部拖拽结果的
+       *  数据 —— 看起来像「一重载布局就全乱」。 */
+      if (!silent) {
+        setDetail(null);
+        setLoading(true);
+        setSubgraphLoading(false);
+      }
+      void fetchDetail({ bust: true, hostNodeId });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fetchDetail]
+  );
 
   useEffect(() => {
     /* When the parent reuses this editor instance for a *different*
@@ -346,7 +368,14 @@ export function useWorkflowDetailLoader({
    *  WorkflowSubgraphNode card in the parent graph, not in a separate full-
    *  canvas panel; clicking expand jumps straight into the inner graph. */
   const onEnterSubgraph = useCallback(
-    (nodeId: string, uid: string, parentTitle: string) => {
+    (
+      nodeId: string,
+      uid: string,
+      parentTitle: string,
+      /** 上一层的宿主链（顶层下钻为空串）。嵌套子图要拼成 `4:5`，
+       *  与拖拽落库用的 `runtimeNodeId` 口径一致。 */
+      parentHostId = ""
+    ) => {
       /* IO 编辑态**跨层保留**：子图本身没有独立的 IO 契约，但父工作流的对外
        *  参数完全可能落在子图内部的节点上（`LoadImage.image` / `PrimitiveInt.value`
        *  …）。下钻后仍能勾选，作者才能把这类内部参数接进父工作流的对外参数；
@@ -355,7 +384,11 @@ export function useWorkflowDetailLoader({
        *  否则下钻一次就得重新手动打开。 */
       setSubgraphError("");
       setSubgraphLoading(true);
-      setTimeout(() => { void fetchDetail({ subgraphUid: uid, parentTitle, hostNodeId: nodeId }); }, 0);
+      const hostChain = [parentHostId, nodeId].filter(Boolean).join(":");
+      setTimeout(
+        () => { void fetchDetail({ subgraphUid: uid, parentTitle, hostNodeId: hostChain }); },
+        0
+      );
     },
     [fetchDetail], // eslint-disable-line react-hooks/exhaustive-deps
   );
@@ -373,7 +406,18 @@ export function useWorkflowDetailLoader({
         setTimeout(() => { void fetchDetail(); }, 0);
       } else {
         const parent = next[next.length - 1];
-        setTimeout(() => { void fetchDetail({ subgraphUid: parent!.uid, parentTitle: parent!.name }); }, 0);
+        /* 回到上一层时同样要带上它自己的宿主链：上一层若是子图内部视图，
+         *  它的坐标也存成 `宿主:内部`，不带前缀就会退回原始坐标。 */
+        setTimeout(
+          () => {
+            void fetchDetail({
+              subgraphUid: parent!.uid,
+              parentTitle: parent!.name,
+              hostNodeId: parent!.nodeId,
+            });
+          },
+          0
+        );
       }
       return next;
     });

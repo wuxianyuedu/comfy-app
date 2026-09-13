@@ -33,7 +33,13 @@ export interface BuildInitialNodesCtx {
   rawMetaById: Record<string, RawNodeMeta>;
   outSlotNameById: Record<string, string[]>;
   paramMap: Record<string, unknown>;
-  onEnterSubgraph?: (id: string, classType: string, title: string) => void;
+  onEnterSubgraph?: (
+    id: string,
+    classType: string,
+    title: string,
+    /** 本层视图的宿主链，嵌套下钻时与当前节点的 id 拼成新的宿主链。 */
+    parentHostId?: string
+  ) => void;
   /** 当前视图的宿主（外层封装）节点 id —— 仅当视图是「下钻后的子工作流内部」
    *  时传入。本层节点都是子图内部节点，勾选时把它一并带上，运行期据此还原
    *  comfy-cli 展开后的 `host:inner` 拼接 id（见 IoRef.hostNodeId）。 */
@@ -216,7 +222,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
           connectedInputs,
           size: n.size ? { w: n.size[0], h: n.size[1] } : undefined,
           mode: rawMetaById[n.id]?.mode ?? 0,
-          onEnter: () => onEnterSubgraph?.(n.id, n.class_type, n.title),
+          onEnter: () => onEnterSubgraph?.(n.id, n.class_type, n.title, hostNodeId),
         },
       };
     };
