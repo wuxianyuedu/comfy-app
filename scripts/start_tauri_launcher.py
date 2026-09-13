@@ -149,6 +149,12 @@ SPLASH_H = 216
 APP_TITLE = "Comfy APP"
 APP_WINDOW_TITLE = "Comfy APP"
 
+# 按检出隔离的窗口识别前缀（多检出并行，§1.4）：main() 在拿到项目根后立即写入
+# 「本检出绝对路径 + 分隔符」（小写）。为空 = 未初始化（退回仅按进程名识别的
+# 旧行为）；非空时只有 exe 路径落在前缀下的 app.exe 才算本检出的壳——否则
+# 另一份检出的同名壳会被误认成自己的实例，后启动的检出把别人的窗口顶到前台。
+_SHELL_OWN_PREFIX = ""
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  日志（辅助排查，写入项目根目录 log/launcher/start-tauri-launcher.log）
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -259,12 +265,11 @@ def get_project_root() -> str:
     return cwd
 
 
-def _window_process_name(hwnd: HWND) -> str:
-    """返回窗口所属进程的 exe 文件名（小写），失败返回空串。
+def _window_process_path(hwnd: HWND) -> str:
+    """返回窗口所属进程的 exe 完整路径（小写），取不到返回空串。
 
-    用于窗口识别防误判：浏览器打开 localhost:3100 时标签页标题同样是
-    "Comfy APP"，仅按标题子串匹配会把浏览器窗口误认成 Tauri 壳，
-    导致双击启动器只聚焦浏览器就退出、应用根本没启动。
+    多检出并行时按路径区分「这份检出」与「别份检出」的壳：进程名都是
+    app.exe，只有路径能说明归属。
     """
     try:
         pid = DWORD(0)
@@ -279,12 +284,23 @@ def _window_process_name(hwnd: HWND) -> str:
             buf = ctypes.create_unicode_buffer(260)
             size = DWORD(260)
             if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
-                return os.path.basename(buf.value).lower()
+                return buf.value.lower()
         finally:
             kernel32.CloseHandle(h)
     except Exception:
         return ""
     return ""
+
+
+def _window_process_name(hwnd: HWND) -> str:
+    """返回窗口所属进程的 exe 文件名（小写），失败返回空串。
+
+    用于窗口识别防误判：浏览器打开 localhost:3100 时标签页标题同样是
+    "Comfy APP"，仅按标题子串匹配会把浏览器窗口误认成 Tauri 壳，
+    导致双击启动器只聚焦浏览器就退出、应用根本没启动。
+    """
+    path = _window_process_path(hwnd)
+    return os.path.basename(path) if path else ""
 
 
 def _is_app_shell_window(hwnd: HWND, title: str, exact: bool = False) -> bool:
@@ -299,7 +315,12 @@ def _is_app_shell_window(hwnd: HWND, title: str, exact: bool = False) -> bool:
     if not title:
         return False
     matched = title.strip() == APP_WINDOW_TITLE if exact else APP_WINDOW_TITLE in title
-    return matched and _window_process_name(hwnd) == "app.exe"
+    if not matched or _window_process_name(hwnd) != "app.exe":
+        return False
+    # 多检出并行：exe 路径必须落在本检出内（前缀未初始化时退回旧行为）
+    if _SHELL_OWN_PREFIX and not _window_process_path(hwnd).startswith(_SHELL_OWN_PREFIX):
+        return False
+    return True
 
 
 def find_tauri_window(exact: bool = False) -> bool:
@@ -382,6 +403,17 @@ def foreground_window_process() -> str:
         return ""
 
 
+def _foreground_window_path() -> str:
+    """当前前台窗口所属进程的 exe 完整路径（小写），取不到返回空串。"""
+    try:
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return ""
+        return _window_process_path(hwnd)
+    except Exception:
+        return ""
+
+
 def decide_foreground(*, cold_start: bool = False, already_running: bool = False) -> bool:
     """决定这次启动是否允许应用窗口在加载完成后自动顶到前台。
 
@@ -410,7 +442,16 @@ def decide_foreground(*, cold_start: bool = False, already_running: bool = False
         log("foreground allowed: cold start from a shell")
         return True
     foreground = foreground_window_process()
-    if foreground.startswith("app"):
+    # 「前台本来就是本应用」按**本检出**判定：另一份检出的壳在前台时给不给
+    # 前台应走默认判决（用户在看的可能就是别份检出），不能因为进程同名就放行。
+    foreground_own = (
+        foreground.startswith("app")
+        and (
+            not _SHELL_OWN_PREFIX
+            or _foreground_window_path().startswith(_SHELL_OWN_PREFIX)
+        )
+    )
+    if foreground_own:
         log("foreground allowed: this app is already the foreground window")
         return True
     log("foreground denied: startup may finish while the user is elsewhere")
@@ -634,9 +675,29 @@ def _build_failure_message(project_root: str, detail: str) -> str:
     return "\n\n".join(parts)
 
 
+def _fnv1a32(data: bytes) -> int:
+    """FNV-1a 32 位哈希（与 scripts/app-port.mjs 等多语言实现按字节对齐）。"""
+    h = 0x811C9DC5
+    for b in data:
+        h ^= b
+        h = (h * 0x01000193) & 0xFFFFFFFF
+    return h
+
+
+def _derive_app_port(project_root: str) -> int:
+    """按检出绝对路径稳定推导端口（多检出并行互不冲突，§1.4）。
+
+    与 scripts/app-port.mjs（Node）、dev-launcher.ps1（PowerShell）、
+    src-tauri/src/lib.rs（Rust）是同一算法的多语言实现，改动必须四处同步：
+    对「绝对路径、反斜杠转正斜杠、转小写」的 UTF-8 字节取 FNV-1a 32 位哈希，
+    映射到 3200..3999：port = 3200 + (fnv1a32(path) % 800)。
+    """
+    normalized = os.path.abspath(project_root).replace("\\", "/").lower()
+    return 3200 + (_fnv1a32(normalized.encode("utf-8")) % 800)
+
+
 def _read_app_port(project_root: str) -> int:
-    """读取 .env 中 COMFYAPP_PORT，未配置或非法时回退 3100。"""
-    default = 3100
+    """端口取值：.env 显式 COMFYAPP_PORT 优先；缺省按检出路径稳定推导（§1.4）。"""
     try:
         env_path = os.path.join(project_root, ".env")
         with open(env_path, "r", encoding="utf-8") as f:
@@ -649,7 +710,7 @@ def _read_app_port(project_root: str) -> int:
                         return port
     except (OSError, ValueError):
         pass
-    return default
+    return _derive_app_port(project_root)
 
 
 def _write_status(
@@ -2221,13 +2282,22 @@ def main(argv: list[str] | None = None) -> int:
         ps1_path = None
 
     # 单实例保护 + 陈旧锁自愈
+    # 互斥量按检出隔离（§1.4）：名字带上检出路径哈希，另一份检出的启动器
+    # 与本检出互不可见，各自的单实例 / 唤起语义独立生效。
+    global _SHELL_OWN_PREFIX
+    _SHELL_OWN_PREFIX = (
+        os.path.abspath(project_root).lower().rstrip("\\/") + os.sep
+    )
     lock_file = _launcher_lock_file(project_root)
     _stale_pid = _read_lock_pid(lock_file)
     if _stale_pid is not None and not _is_pid_alive(_stale_pid):
         log(f"stale lock file (pid {_stale_pid} dead), removing")
         _safe_remove(lock_file)
 
-    mutex = create_mutex("Local\\ComfyAppTauriLauncherMutex")
+    mutex = create_mutex(
+        "Local\\ComfyAppTauriLauncherMutex-%08x"
+        % _fnv1a32(_SHELL_OWN_PREFIX.encode("utf-8"))
+    )
     if is_another_instance_running(mutex):
         # 互斥量被占用：若真有 Tauri 窗口在跑，置顶已有窗口后退出（正常单实例行为）
         if find_and_focus_tauri_window():
