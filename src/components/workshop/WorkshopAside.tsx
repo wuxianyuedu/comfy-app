@@ -170,7 +170,7 @@ export function WorkshopAside({
         <div className="text-ink mb-3 flex items-center justify-between text-[13px] font-semibold">
           生成资源
           <span className="text-faint text-[10.5px]">
-            {anyChannelConfigured ? "API 通道已配置" : "API 通道未配置"}
+            {anyChannelConfigured ? "远端模型已适配" : "远端模型未适配"}
           </span>
         </div>
         <label className="block">
@@ -221,7 +221,7 @@ export function WorkshopAside({
           onClick={onOpenApiSettings}
           className="text-muted-foreground mt-3 w-full rounded-lg bg-(--color-subtle) py-2.5 text-xs hover:bg-(--color-surface-2)"
         >
-          配置 API 直连通道
+          配置模型适配（远端生图 / 视频）
         </Button>
       </div>
 

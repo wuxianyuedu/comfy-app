@@ -143,6 +143,8 @@ export class LlmConfigRepository {
   }
 }
 
+import { parseRemoteModeAdapters, type RemoteModeAdapter } from "@/lib/workshop/model-mode-contract";
+
 // ── 远端独立模型仓储（option C：远端模型独立成表，不与本地 ollama 候选混存）──
 export class RemoteModelRepository {
   /** 全部远端模型，按创建先后排序（配置视图稳定顺序）。 */
@@ -201,18 +203,61 @@ export class RemoteModelRepository {
         .delete(remoteModel)
         .where(inArray(remoteModel.name, removed.map((r) => r.name)));
     }
+    const adaptersByName = new Map(
+      rows.map((r) => [r.name, r.workshopAdapters]),
+    );
     for (const e of cleaned) {
       const existing = rows.find((r) => r.name === e.name);
+      const carriedAdapters = adaptersByName.get(e.name) ?? null;
       if (existing) {
         await db
           .update(remoteModel)
-          .set({ baseUrl: e.baseUrl, apiKey: e.apiKey, kind: e.kind })
+          .set({
+            baseUrl: e.baseUrl,
+            apiKey: e.apiKey,
+            kind: e.kind,
+            workshopAdapters: carriedAdapters,
+          })
           .where(eq(remoteModel.id, existing.id));
       } else {
-        await db.insert(remoteModel).values(e);
+        await db.insert(remoteModel).values({ ...e, workshopAdapters: carriedAdapters });
       }
     }
     return this.list();
+  }
+
+  /** 读取某条远端模型的工坊模式适配器（JSON 列；未配置返回空数组）。 */
+  async getWorkshopAdapters(name: string) {
+    const row = await this.findByName(name);
+    if (!row) return [];
+    return parseAdaptersJson(row.workshopAdapters);
+  }
+
+  /** 保存某条远端模型的工坊模式适配器（整份覆盖）。模型不存在返回空数组。 */
+  async saveWorkshopAdapters(
+    name: string,
+    adapters: RemoteModeAdapter[],
+  ) {
+    const row = await this.findByName(name);
+    if (!row) return [];
+    await db
+      .update(remoteModel)
+      .set({
+        workshopAdapters: JSON.stringify(adapters),
+        updatedAt: new Date(),
+      })
+      .where(eq(remoteModel.id, row.id));
+    return adapters;
+  }
+}
+
+/** 解析 remoteModel.workshopAdapters JSON 列（坏数据按空处理）。 */
+export function parseAdaptersJson(raw: string | null): RemoteModeAdapter[] {
+  if (!raw) return [];
+  try {
+    return parseRemoteModeAdapters(JSON.parse(raw));
+  } catch {
+    return [];
   }
 }
 

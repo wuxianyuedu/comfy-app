@@ -2,6 +2,23 @@ import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { getLLMConfig, completeLLM, ensureRemoteStorageMigrated, getConfigForClient } from "@/lib/llm/server";
 import { splitExtraModels } from "@/lib/llm/types";
+import { remoteModelRepository } from "@/lib/core/repository";
+import {
+  parseRemoteModeAdapters,
+  WORKSHOP_INPUT_TYPES,
+} from "@/lib/workshop/model-mode-contract";
+
+/** 适配器输入行：统一输入类型 → 请求体字段名 */
+const adapterInputSchema = z.object({
+  type: z.enum(WORKSHOP_INPUT_TYPES.map((t) => t.type) as [string, ...string[]]),
+  field: z.string().min(1),
+});
+const adapterSchema = z.object({
+  mode: z.string().min(1),
+  endpointPath: z.string().min(1),
+  inputs: z.array(adapterInputSchema).min(1),
+  outputField: z.string().optional(),
+});
 
 /** 合法的任务类型 key（用于温度覆盖） */
 const taskTypeKeys = ["txt2img", "img2video", "chat", "code", "creative"] as const;
@@ -26,6 +43,33 @@ export const llmRouter = createTRPCRouter({
     const cfg = await getConfigForClient();
     return { config: cfg };
   }),
+
+  /** 读取某条远端模型的工坊模式适配器 */
+  workshopAdaptersGet: authedProcedure
+    .input(z.object({ name: z.string().min(1) }))
+    .query(async ({ input }) => {
+      const adapters = await remoteModelRepository.getWorkshopAdapters(input.name);
+      return { adapters };
+    }),
+
+  /** 保存某条远端模型的工坊模式适配器（整份覆盖） */
+  workshopAdaptersSave: authedProcedure
+    .input(
+      z.object({
+        name: z.string().min(1),
+        adapters: z.array(adapterSchema),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const adapters = parseRemoteModeAdapters(
+        input.adapters.map((a) => ({ ...a, mode: a.mode.toUpperCase() })),
+      );
+      const saved = await remoteModelRepository.saveWorkshopAdapters(
+        input.name,
+        adapters,
+      );
+      return { adapters: saved };
+    }),
 
   /** POST /api/llm/config — update singleton config */
   configSave: authedProcedure
