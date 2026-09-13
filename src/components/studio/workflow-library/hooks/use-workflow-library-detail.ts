@@ -45,6 +45,9 @@ export interface MetaEditorController {
   /** 持久化某个 IO 参数的 seed「控件后行为」（fixed/increment/decrement/random）。
    *  写进 workflowIO 条目并整体落库，预览面板与画布运行时共用。 */
   patchSeedMode: (ioKey: string, mode: string) => Promise<void>;
+  /** 持久化对外参数落点（预览面板拖圆点改落点 / 断开 / 恢复默认）。
+   *  整列写回 `paramMap.source.mode:<模式>`，与编辑器画布同一份形状。 */
+  patchParamMap: (next: Record<string, unknown>) => Promise<void>;
 }
 
 export interface WorkflowLibraryDetailController {
@@ -84,6 +87,7 @@ export function useWorkflowLibraryDetail(
     onPatchModes,
     onPatchModelTags,
     onPatchWorkflowIO,
+    onPatchParamMap,
     bundleBusy,
     resyncBusy,
     onUse,
@@ -213,6 +217,10 @@ export function useWorkflowLibraryDetail(
         if (!workflow || !onPatchModelTags) return;
         await onPatchModelTags(workflow.id, names);
       },
+      patchParamMap: async (next) => {
+        if (!workflow || !onPatchParamMap) return;
+        await onPatchParamMap(workflow.id, next);
+      },
       patchSeedMode: async (ioKey, mode) => {
         if (!workflow || !onPatchWorkflowIO) return;
         /* 在模板原始 workflowIO 上只改目标条目的 seedMode，整体落库；
@@ -228,7 +236,7 @@ export function useWorkflowLibraryDetail(
         await onPatchWorkflowIO(workflow.id, next);
       },
     }),
-    [workflow, allModelTags, bundleBusy, resyncBusy, onPatchModes, onPatchModelTags, onPatchWorkflowIO, template],
+    [workflow, allModelTags, bundleBusy, resyncBusy, onPatchModes, onPatchModelTags, onPatchWorkflowIO, onPatchParamMap, template],
   );
 
   return {
