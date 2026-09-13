@@ -152,7 +152,7 @@ fn activate_main_window(app_handle: tauri::AppHandle) -> Result<(), String> {
 /// 供前端在挂载时询问「应用窗口是否应自动给前台」。
 ///
 /// 判据在壳进程里（`COMFYAPP_FOREGROUND`，由启动器按「前台本来就是本应用 /
-/// 用户刚点了启动」注入，见 scripts/start_tauri_launcher.py 的
+/// 显式冷启动 / 唤起已有实例」注入，见 scripts/start_tauri_launcher.py 的
 /// decide_foreground）。放在 Rust 侧而不是前端读 env，是因为只有服务端渲染
 /// 阶段能拿到非 `NEXT_PUBLIC_` 前缀的变量，客户端读不到会一律降级成「不给前台」。
 #[tauri::command]
@@ -177,15 +177,17 @@ fn get_app_url(state: tauri::State<'_, AppState>) -> String {
 /// 1. `request_focus`——调用方的显式意图（托盘「打开主界面」、二次启动的单实例
 ///    回调），这类场景用户就是想看它；
 /// 2. `AppState.foreground`——启动器经 `COMFYAPP_FOREGROUND` 注入，判据是
-///    「前台本来就是本应用 / 用户刚点的启动 / 用户再次唤起运行中的实例」
-///    （见 scripts/start_tauri_launcher.py 的 decide_foreground）。
+///    「前台本来就是本应用 / 显式冷启动 / 用户再次唤起运行中的实例」；双击启动
+///    不再注入（用户切去干别的正是常态，见 scripts/start_tauri_launcher.py 的
+///    decide_foreground）。
 ///
-/// **不再无条件调 `set_focus()` 试探**（ISSUE #359 回归的直接原因）：启动页窗口带
-/// `WS_EX_TOOLWINDOW`，交接时它被关闭、主窗的任务栏按钮重建，Windows 把主窗当成
-/// 「新窗口」并**自己放行前台**——于是 `set_focus()` 必成功，用户的「别打断我」策略
-/// 被架空，表现为「构建后启动仍然抢前台」。前台归属的最终裁定交给启动器的交接
-/// 复核进程（scripts/win32-window-focus.py：它知道用户是否就在等这个应用，
-/// 也拿得到双击启动所赋予的输入权，能把不该给的前台收回去）。
+/// **不再无条件调 `set_focus()` 试探**（ISSUE #359 回归的直接原因）：交接时
+/// `show()` 若带激活语义，Windows 会把主窗当成「新窗口」**自己放行前台**——
+/// `set_focus()` 必成功，用户的「别打断我」策略被架空。现在主窗以 `focused(false)`
+/// 创建（首次 `show()` 走 `SW_SHOWNOACTIVATE`，不向前台要焦点），前台归属的
+/// 最终裁定交给启动器的交接复核进程（scripts/win32-window-focus.py：它知道
+/// 用户是否就在等这个应用，也拿得到双击启动所赋予的输入权，能把不该给的
+/// 前台收回去）。
 fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
   let Some(win) = app.get_webview_window("main") else {
     return;
@@ -842,6 +844,14 @@ pub fn run() {
         // 对应权限见 capabilities/{default,remote}.json。
         .decorations(false)
         .visible(false)
+        // 首次显示必须「不激活」：tao 对 focused(false) 的窗口在首次 show() 时走
+        // ShowWindow(SW_SHOWNOACTIVATE)（见 tao window_state.rs 的
+        // MARKER_DONT_FOCUS），窗口进任务栏但不向前台要焦点——否则交接瞬间
+        // show() 自带的激活语义会由 Windows 把前台放行给主窗，「不打断用户」
+        // 的策略在启动页关闭那一刻被架空（表现为双击启动完成后窗口弹到最前）。
+        // 显式唤起（托盘 / 二次启动 / 启动器判决给前台）仍走 set_focus()，
+        // 不受本标记影响。
+        .focused(false)
         .on_page_load(move |_win, payload| {
           if payload.event() == tauri::webview::PageLoadEvent::Finished {
             let url = payload.url().as_str();

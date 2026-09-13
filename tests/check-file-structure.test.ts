@@ -557,9 +557,11 @@ describe("启动链路「不抢前台」判据（python 启动器）", () => {
   /**
    * 应用启动要几十秒，用户很可能切去别的窗口干活；加载完成若是照直把窗口顶到
    * 最前面，正在看的内容就被打断。判据收敛在 start_tauri_launcher.py 的
-   * decide_foreground：只有「前台本来就是本应用」「用户刚点的启动（前台是
-   * explorer / 启动器自身）」「显式冷启动」才允许自动给前台，其余一律留在任务栏
-   * 并用任务栏闪烁提示（Rust 壳侧 show_main_window_without_focus 执行）。
+   * decide_foreground：只有「前台本来就是本应用」「显式冷启动」「唤起已有实例」
+   * 才允许自动给前台；**双击启动也不给**——双击之后切去干别的正是常态，等
+   * 正式窗口冒出来时用户早就在别处工作了（曾按「用户刚点的启动」放行，结果
+   * 连同交接复核的 give 一起把用户打断两次）。其余情形一律留在任务栏并用
+   * 任务栏闪烁提示（Rust 壳侧 show_main_window_without_focus 执行）。
    *
    * Win32 前台窗口在 Linux CI 上取不到，因此按本文件里 PowerShell 桩件的同一套路：
    * 把函数源码从启动器里抽出来、打桩 _window_process_name 后直接断言判决表，
@@ -610,9 +612,14 @@ print("LOG=" + " | ".join(messages))
     expect(out).toContain("foreground denied");
   });
 
-  it.skipIf(!python)("用户刚点的启动（前台是资源管理器）允许给前台", () => {
-    expect(decide("", "explorer.exe")).toContain("RESULT=true");
-  });
+  it.skipIf(!python)(
+    "双击启动（前台是资源管理器）也不给前台——用户切去干别的正是常态",
+    () => {
+      const out = decide("", "explorer.exe");
+      expect(out).toContain("RESULT=false");
+      expect(out).toContain("foreground denied");
+    },
+  );
 
   it.skipIf(!python)(
     "前台本来就是本应用（重启 / 更新后重启）允许给前台",
@@ -630,9 +637,9 @@ print("LOG=" + " | ".join(messages))
   });
 
   it.skipIf(!python)(
-    "双击入口自身的进程（打包后的 start-tauri.exe）也算用户点击",
+    "双击入口自身的进程（打包后的 start-tauri.exe）同样不给前台",
     () => {
-      expect(decide("", "start-tauri.exe")).toContain("RESULT=true");
+      expect(decide("", "start-tauri.exe")).toContain("RESULT=false");
     },
   );
 });
