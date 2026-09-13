@@ -9,6 +9,7 @@ import { fpsTone, useFps } from "./hooks/use-fps";
 import { useComfyReadiness } from "./hooks/use-comfy-readiness";
 import { useDevServerStatus } from "./hooks/use-dev-server-status";
 import { fmtBytes } from "~/lib/format-bytes";
+import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell-tabs-store";
 
 /* ── Tauri window bottom status bar ─────────────────────────
    显示当前浏览器地址 + 系统资源（显存/内存）+ 实时帧率 + 应用服务状态。
@@ -75,8 +76,15 @@ export function BrowserStatusBar() {
   const fps = useFps();
   const { cudaVram, smiVram, ram, degradedNote } = useComfyReadiness();
   const devServer = useDevServerStatus();
+  // 非主应用页签（内嵌 ComfyUI 等 iframe 页签）时整体隐藏：状态栏是固定悬浮层，
+  // 盖住窗口最底下 24px——iframe 页面自绘的底部控件（运行操作栏下缘、扩展面板）
+  // 恰好落在这一条里，浏览器整窗打开时它们是完整可见的，页签里却被压住，形成
+  // 「浏览器里看得见、应用里看不到」的适配差。主应用页签恢复显示。
+  const activeTabId = useShellTabs((s) => s.activeTabId);
 
   const tone = fpsTone(fps);
+
+  if (activeTabId !== MAIN_TAB_ID) return null;
 
   return (
     <div
