@@ -262,10 +262,10 @@ describe("对外参数节点只在画布上表达映射", () => {
     expect(rows).toContain("handleId ?? entry.ioKey");
   });
 
-  it("画布 / 库内的组合控件折叠成逐行参数（输入端口露出来）—— ISSUE #355 复审", () => {
-    /* 「红框位置需要收窄……需要将这几个参数的输入端口显示出来」：宽高 / 比例像素
-     *  这类组合控件把几个端口收进一整块，画布上占满空间且看不见端口。画布 / 库内
-     *  默认折叠成普通参数行（一端口一行、各自带落点锚点），宽版表单不折叠。 */
+  it("画布 / 库内的组合控件收窄成一块，不再摊成逐行参数清单 —— ISSUE #355", () => {
+    /* 「组合参数不要现在这种样式」「改回之前的样式」「改成之前带有下拉菜单的
+     *  样式」「让你减小宽度的也是这个控件」：画布 / 库内保留那块带下拉的组合控件
+     *  （`narrow` 只收窄宽度），不再把覆盖到的端口摊成逐行参数清单。 */
     const grouped = stripComments(
       readFileSync(
         path.resolve(__dirname, "../shared/GroupedControls.tsx"),
@@ -273,7 +273,9 @@ describe("对外参数节点只在画布上表达映射", () => {
       ),
     );
     expect(grouped).toContain("collapseGrouped");
-    expect(grouped).toContain("CollapsedGroupRows");
+    expect(grouped).toContain("narrow");
+    /* 摊成逐行参数清单的形态已被撤掉：它既丢了控件，又让同一件事有两处入口。 */
+    expect(grouped).not.toContain("CollapsedGroupRows");
     const preview = stripComments(
       readFileSync(path.join(LIBRARY_DIR, "WorkflowCanvasNodePreview.tsx"), "utf8"),
     );

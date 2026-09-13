@@ -12,7 +12,6 @@ import {
   resolveEntrySeedMode,
   type EnrichedWidget,
 } from "~/components/studio/shared/workflow-io";
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import type { DynamicWorkflowFormController } from "./hooks/use-dynamic-workflow-form";
 import { SectionHeader } from "./SectionHeader";
 import { EmptyStateHint } from "./sections/EmptyStateHint";
@@ -43,8 +42,6 @@ interface DynamicWorkflowFormViewProps {
   onReorder?: (fromKey: string, beforeKey: string | null) => void;
   /** 行尾附加的只读徽标（工作流库画布节点用它标出每个参数连到的「对外参数」）。 */
   rowTrailing?: (entry: EnrichedWidget) => ReactNode;
-  /** 原始 workflowIO —— 折叠成普通参数行时要按它取每个端口的控件与默认值。 */
-  workflowIO?: WorkflowIOMap | null;
 }
 
 export function DynamicWorkflowFormView({
@@ -64,7 +61,6 @@ export function DynamicWorkflowFormView({
   onReorder,
   mode,
   rowTrailing,
-  workflowIO,
 }: DynamicWorkflowFormViewProps) {
   if (loading) return <LoadingSkeleton />;
   if (controller.isEmpty) return <EmptyStateHint emptyHint={emptyHint} />;
@@ -226,12 +222,10 @@ export function DynamicWorkflowFormView({
           mode={mode}
           visibilityMode={visibilityMode}
           onVisibilityChange={onVisibilityChange}
-          /* 画布 / 库内把组合控件折叠成逐行参数：这几个参数各自的输入端口露出来
-           * （ISSUE #355 复审「红框那块占满空间」）。宽版表单不折叠 —— 作者在那里
-           * 要的是完整录入能力。 */
+          /* 画布 / 库内把组合控件收窄成一块（宽度按内容走，仍是那块带下拉的
+           * 控件）：不再摊成逐行参数清单。宽版表单不收窄 —— 作者在那里要的是
+           * 整块录入。 */
           collapseGrouped={compact}
-          io={workflowIO}
-          allPins={allPins as EnrichedWidget[]}
         />
       )}
 

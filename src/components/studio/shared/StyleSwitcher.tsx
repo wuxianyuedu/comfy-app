@@ -31,10 +31,13 @@ export function StyleSwitcher({
   style,
   onChange,
   options,
+  narrow,
 }: {
   style: GroupStyle;
   onChange: (s: GroupStyle) => void;
   options: { value: GroupStyle; label: string }[];
+  /** 画布 / 库内的紧凑版式：下拉按内容收窄，不再拽满整行。 */
+  narrow?: boolean;
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -43,7 +46,7 @@ export function StyleSwitcher({
         value={style}
         options={options.map((option) => option.value)}
         labels={Object.fromEntries(options.map((option) => [option.value, option.label]))}
-        className="flex-1"
+        className={narrow ? "w-[148px] max-w-full" : "flex-1"}
         onChange={(value) => onChange(value as GroupStyle)}
       />
     </div>

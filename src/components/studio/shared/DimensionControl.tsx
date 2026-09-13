@@ -31,7 +31,10 @@ import { Eye, EyeOff } from "lucide-react";
 import { WIRE_PINS_ATTR, wirePinsValue } from "~/lib/workflow-io-types";
 
 /** Dimension group narrowed to its W/H form (the classic 比例+清晰度 picker). */
-type SizeGroup = DimensionGroup & { width: EnrichedWidget; height: EnrichedWidget };
+type SizeGroup = DimensionGroup & {
+  width: EnrichedWidget;
+  height: EnrichedWidget;
+};
 /** Dimension group narrowed to its 宽高比 + 百万像素 (+ 倍数) form (ResolutionSelector). */
 type AspectMegaGroup = DimensionGroup & {
   aspect: EnrichedWidget;
@@ -139,6 +142,7 @@ function DimensionControl({
   setMany,
   disabled,
   workflowId,
+  narrow,
   onRequiredChange,
   mode,
   visibilityMode,
@@ -150,6 +154,9 @@ function DimensionControl({
   setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
   workflowId?: string;
+  /** 画布 / 库内的紧凑版式：控件按内容收窄（`w-fit`），不再占满整行。
+   *  与宽版表单的区别**只是宽度**：录入能力、下拉、落点锚点全部一致。 */
+  narrow?: boolean;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
   /** 多模式作者态：按该模式解析必填。 */
   mode?: string | null;
@@ -166,6 +173,7 @@ function DimensionControl({
         setMany={setMany}
         disabled={disabled}
         workflowId={workflowId}
+        narrow={narrow}
         onRequiredChange={onRequiredChange}
         mode={mode}
         visibilityMode={visibilityMode}
@@ -180,6 +188,7 @@ function DimensionControl({
         values={values}
         setMany={setMany}
         disabled={disabled}
+        narrow={narrow}
         onRequiredChange={onRequiredChange}
         mode={mode}
         visibilityMode={visibilityMode}
@@ -197,6 +206,7 @@ function DimensionSizeControl({
   setMany,
   disabled,
   workflowId,
+  narrow,
   onRequiredChange,
   mode,
   visibilityMode,
@@ -208,13 +218,18 @@ function DimensionSizeControl({
   setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
   workflowId?: string;
+  narrow?: boolean;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
   mode?: string | null;
   visibilityMode?: string | null;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
 }) {
-  const w0 = Number(values[group.width.ioKey] ?? group.width.defaultValue ?? 1024);
-  const h0 = Number(values[group.height.ioKey] ?? group.height.defaultValue ?? 1024);
+  const w0 = Number(
+    values[group.width.ioKey] ?? group.width.defaultValue ?? 1024,
+  );
+  const h0 = Number(
+    values[group.height.ioKey] ?? group.height.defaultValue ?? 1024,
+  );
 
   /* user-pinned alignment multiple for the
    *  megapixel clearity presets.  Persisted per-workflow so a panel
@@ -225,7 +240,7 @@ function DimensionSizeControl({
     if (typeof window === "undefined") return DEFAULT_ALIGN_MULTIPLE;
     try {
       const raw = window.localStorage.getItem(
-        `${ALIGN_PREFIX}:${workflowId ?? "global"}`
+        `${ALIGN_PREFIX}:${workflowId ?? "global"}`,
       );
       if (!raw) return DEFAULT_ALIGN_MULTIPLE;
       const parsed = Number.parseInt(raw, 10);
@@ -242,14 +257,14 @@ function DimensionSizeControl({
         try {
           window.localStorage.setItem(
             `${ALIGN_PREFIX}:${workflowId ?? "global"}`,
-            String(clamped)
+            String(clamped),
           );
         } catch {
           /* storage unavailable — non-fatal */
         }
       }
     },
-    [workflowId]
+    [workflowId],
   );
 
   // Derive the active ratio / clarity presets from the live width+height so
@@ -258,8 +273,12 @@ function DimensionSizeControl({
   const ratio = useMemo(() => {
     const currentRatio = h0 === 0 ? 1 : w0 / h0;
     return DIM_RATIO_PRESETS.reduce(
-      (best, preset) => (Math.abs(preset.ratio - currentRatio) < Math.abs(best.ratio - currentRatio) ? preset : best),
-      DIM_RATIO_PRESETS[0]!
+      (best, preset) =>
+        Math.abs(preset.ratio - currentRatio) <
+        Math.abs(best.ratio - currentRatio)
+          ? preset
+          : best,
+      DIM_RATIO_PRESETS[0]!,
     ).label;
   }, [w0, h0]);
   /* clarity preset is now picked across both
@@ -277,23 +296,26 @@ function DimensionSizeControl({
    *  hand-typed value. */
   const derivedClarity = useMemo(
     () => pickClarityPreset(w0, h0, alignMultiple).label,
-    [w0, h0, alignMultiple]
+    [w0, h0, alignMultiple],
   );
   const [explicitClarity, setExplicitClarity] = useState<string | null>(null);
   const clarity = explicitClarity ?? derivedClarity;
 
   const applyPreset = useCallback(
     (rLabel: string, cLabel: string) => {
-      const rp = DIM_RATIO_PRESETS.find((preset) => preset.label === rLabel) ?? DIM_RATIO_PRESETS[0];
+      const rp =
+        DIM_RATIO_PRESETS.find((preset) => preset.label === rLabel) ??
+        DIM_RATIO_PRESETS[0];
       const cp =
-        DIM_CLARITY_PRESETS.find((preset) => preset.label === cLabel) ?? DIM_CLARITY_PRESETS[0];
+        DIM_CLARITY_PRESETS.find((preset) => preset.label === cLabel) ??
+        DIM_CLARITY_PRESETS[0];
       /* pass the user's alignMultiple through
        *  so megapixel presets (1M/2M/4M) snap to the chosen grid. */
       const { width, height } = dimsForRatio(rp!.ratio, cp!, alignMultiple);
       setExplicitClarity(cLabel);
       setMany({ [group.width.ioKey]: width, [group.height.ioKey]: height });
     },
-    [group, setMany, alignMultiple]
+    [group, setMany, alignMultiple],
   );
 
   /* changing the alignment multiple
@@ -307,7 +329,8 @@ function DimensionSizeControl({
       const clamped = normalizeAlignMultiple(next);
       setAlignMultiple(clamped);
       const rp =
-        DIM_RATIO_PRESETS.find((preset) => preset.label === ratio) ?? DIM_RATIO_PRESETS[0];
+        DIM_RATIO_PRESETS.find((preset) => preset.label === ratio) ??
+        DIM_RATIO_PRESETS[0];
       const cp =
         DIM_CLARITY_PRESETS.find((preset) => preset.label === clarity) ??
         DIM_CLARITY_PRESETS[0];
@@ -315,7 +338,7 @@ function DimensionSizeControl({
       setExplicitClarity(null);
       setMany({ [group.width.ioKey]: width, [group.height.ioKey]: height });
     },
-    [ratio, clarity, group, setMany, setAlignMultiple]
+    [ratio, clarity, group, setMany, setAlignMultiple],
   );
 
   const handleW = useCallback(
@@ -323,14 +346,14 @@ function DimensionSizeControl({
       setExplicitClarity(null);
       set(group.width.ioKey, value);
     },
-    [group, set]
+    [group, set],
   );
   const handleH = useCallback(
     (value: number) => {
       setExplicitClarity(null);
       set(group.height.ioKey, value);
     },
-    [group, set]
+    [group, set],
   );
 
   const sections: SegmentSection<string>[] = useMemo(
@@ -359,7 +382,7 @@ function DimensionSizeControl({
         onChange: (value) => applyPreset(ratio, value),
       },
     ],
-    [ratio, clarity, applyPreset]
+    [ratio, clarity, applyPreset],
   );
 
   return (
@@ -369,17 +392,27 @@ function DimensionSizeControl({
        * 独立行，映射连线只能连到这个控件上（工作流库画布按此量端点）。
        * 属性名来自共享契约：量测侧与这里必须用同一个字符串。 */
       {...{
-        [WIRE_PINS_ATTR]: wirePinsValue([group.width.ioKey, group.height.ioKey]),
+        [WIRE_PINS_ATTR]: wirePinsValue([
+          group.width.ioKey,
+          group.height.ioKey,
+        ]),
       }}
     >
       {/* 比例 + 清晰度 单段摆在 W/H 上方——既对应「预设 → 推算
-          宽高」的方向，又让下方两个 NumberField 紧挨在一起形成紧凑一行。 */}
-      <div className="rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5">
+          宽高」的方向，又让下方两个 NumberField 紧挨在一起形成紧凑一行。
+          窄版（画布节点 / 库内）卡按内容收窄：`w-fit` + 上限，长度跟内容走。 */}
+      <div
+        className={
+          narrow
+            ? "w-fit max-w-full rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2"
+            : "rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5"
+        }
+      >
         <div className="flex items-center gap-2">
-          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-(--color-accent)">
+          <span className="shrink-0 text-[10px] font-semibold tracking-wider text-(--color-accent) uppercase">
             比例 + 清晰度
           </span>
-          <div className="min-w-0 flex-1">
+          <div className={narrow ? "w-[112px] min-w-0" : "min-w-0 flex-1"}>
             <MultiSegmentPopover
               ariaLabel="选择比例与清晰度"
               triggerContent={`${shortRatioLabel(ratio)} / ${clarity}`}
@@ -410,31 +443,36 @@ function DimensionSizeControl({
       {/* Width + Height — always visible, styled like any other node parameter
           field (NumberField, two-column grid).  Picking a preset in the row
           above writes the real W/H via applyPreset → setMany, so the
-          NumberFields below update live.  R-ardot108 (2026-08-17): the
-          stepper +/- matches the user-pinned alignMultiple so the manual
-          W/H nudge lands on the same grid the megapixel clearity uses. */}
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="宽度">
-          <NumberField
-            value={w0}
-            min={64}
-            max={4096}
-            step={alignMultiple}
-            disabled={disabled}
-            onChange={handleW}
-          />
-        </Field>
-        <Field label="高度">
-          <NumberField
-            value={h0}
-            min={64}
-            max={4096}
-            step={alignMultiple}
-            disabled={disabled}
-            onChange={handleH}
-          />
-        </Field>
-      </div>
+          NumberFields below update live.  The stepper +/- matches the
+          user-pinned alignMultiple so the manual W/H nudge lands on the same
+          grid the megapixel clearity uses.
+          窄版不画宽高步进器：这两个端口在组合控件里由「比例 + 清晰度」推算，
+          它们各自的落点由这块控件承担（见 GroupedControls 的落点口径），
+          同一件事不在两处各放一份录入。 */}
+      {!narrow && (
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="宽度">
+            <NumberField
+              value={w0}
+              min={64}
+              max={4096}
+              step={alignMultiple}
+              disabled={disabled}
+              onChange={handleW}
+            />
+          </Field>
+          <Field label="高度">
+            <NumberField
+              value={h0}
+              min={64}
+              max={4096}
+              step={alignMultiple}
+              disabled={disabled}
+              onChange={handleH}
+            />
+          </Field>
+        </div>
+      )}
     </div>
   );
 }
@@ -457,6 +495,7 @@ function AspectMegapixelControl({
   values,
   setMany,
   disabled,
+  narrow,
   onRequiredChange,
   mode,
   visibilityMode,
@@ -466,6 +505,7 @@ function AspectMegapixelControl({
   values: Record<string, unknown>;
   setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
+  narrow?: boolean;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
   mode?: string | null;
   visibilityMode?: string | null;
@@ -486,13 +526,19 @@ function AspectMegapixelControl({
     Number(values[megapixels.ioKey] ?? megapixels.defaultValue ?? 1) || 1;
 
   /** Candidate chips: the node's own COMBO options when available. */
-  const aspectOptions = useMemo((): { value: string; label: string; ratio: number }[] => {
+  const aspectOptions = useMemo((): {
+    value: string;
+    label: string;
+    ratio: number;
+  }[] => {
     const source =
       Array.isArray(aspect.options) && aspect.options.length > 0
         ? aspect.options
         : ASPECT_RATIO_LABEL_PRESETS.map((preset) => preset.value);
     return source.map((value) => {
-      const known = ASPECT_RATIO_LABEL_PRESETS.find((preset) => preset.value === value);
+      const known = ASPECT_RATIO_LABEL_PRESETS.find(
+        (preset) => preset.value === value,
+      );
       if (known) return { value, label: known.label, ratio: known.ratio };
       const ratio = parseRatioFromLabel(value);
       return { value, label: shortRatioLabel(value), ratio: ratio ?? 1 };
@@ -501,18 +547,25 @@ function AspectMegapixelControl({
 
   /** Reverse-detect the active chip so a hand-typed value still highlights. */
   const activeAspect = useMemo(() => {
-    const exact = aspectOptions.find((option) => option.value === currentAspect);
+    const exact = aspectOptions.find(
+      (option) => option.value === currentAspect,
+    );
     if (exact) return exact;
     const ratio = parseRatioFromLabel(currentAspect);
     if (ratio === null) return null;
     return aspectOptions.reduce(
-      (best, option) => (Math.abs(option.ratio - ratio) < Math.abs(best.ratio - ratio) ? option : best),
-      aspectOptions[0]!
+      (best, option) =>
+        Math.abs(option.ratio - ratio) < Math.abs(best.ratio - ratio)
+          ? option
+          : best,
+      aspectOptions[0]!,
     );
   }, [aspectOptions, currentAspect]);
 
   const mpLabel = useMemo(() => {
-    const hit = MEGAPIXEL_VALUE_PRESETS.find((preset) => Math.abs(preset.value - currentMp) < 0.01);
+    const hit = MEGAPIXEL_VALUE_PRESETS.find(
+      (preset) => Math.abs(preset.value - currentMp) < 0.01,
+    );
     return hit?.label ?? `${currentMp}M`;
   }, [currentMp]);
 
@@ -546,7 +599,10 @@ function AspectMegapixelControl({
     return parsed.map((n) => ({ value: n, label: String(n) }));
   }, [multiple, currentMultiple]);
 
-  const multipleLabel = useMemo(() => String(currentMultiple), [currentMultiple]);
+  const multipleLabel = useMemo(
+    () => String(currentMultiple),
+    [currentMultiple],
+  );
 
   /* Preserve the workflow's own spelling when the user only changes the
    * megapixel count — writing a preset string into a node that spells the
@@ -561,7 +617,7 @@ function AspectMegapixelControl({
           : {}),
       });
     },
-    [aspect.ioKey, megapixels.ioKey, multiple, setMany]
+    [aspect.ioKey, megapixels.ioKey, multiple, setMany],
   );
 
   const sections: SegmentSection<string>[] = useMemo(
@@ -584,9 +640,16 @@ function AspectMegapixelControl({
           label: preset.label,
         })),
         onChange: (label) => {
-          const preset = MEGAPIXEL_VALUE_PRESETS.find((item) => item.label === label);
+          const preset = MEGAPIXEL_VALUE_PRESETS.find(
+            (item) => item.label === label,
+          );
           if (!preset) return;
-          apply(activeAspect?.value ?? currentAspect ?? ASPECT_RATIO_LABEL_PRESETS[0]!.value, preset.value);
+          apply(
+            activeAspect?.value ??
+              currentAspect ??
+              ASPECT_RATIO_LABEL_PRESETS[0]!.value,
+            preset.value,
+          );
         },
       },
       ...(multiple
@@ -599,10 +662,14 @@ function AspectMegapixelControl({
                 label: option.label,
               })),
               onChange: (label: string) => {
-                const hit = multipleOptions.find((option) => option.label === label);
+                const hit = multipleOptions.find(
+                  (option) => option.label === label,
+                );
                 if (!hit) return;
                 apply(
-                  activeAspect?.value ?? currentAspect ?? ASPECT_RATIO_LABEL_PRESETS[0]!.value,
+                  activeAspect?.value ??
+                    currentAspect ??
+                    ASPECT_RATIO_LABEL_PRESETS[0]!.value,
                   currentMp,
                   hit.value,
                 );
@@ -611,26 +678,46 @@ function AspectMegapixelControl({
           ]
         : []),
     ],
-    [aspectOptions, activeAspect, currentAspect, currentMp, mpLabel, apply, multiple, multipleLabel, multipleOptions]
+    [
+      aspectOptions,
+      activeAspect,
+      currentAspect,
+      currentMp,
+      mpLabel,
+      apply,
+      multiple,
+      multipleLabel,
+      multipleOptions,
+    ],
   );
 
   return (
     <div
       className="space-y-2.5"
-      /* 同上：比例/像素/倍数由同一控件录入，整块作为可锚定目标。 */
+      /* 同上：比例/像素/倍数由同一控件录入，整块作为可锚定目标。
+       *  倍数（`multiple`）必须一并列进来 —— 漏掉它，落到这个端口上的映射线
+       *  在整块控件上找不到锚点，只能整条不画（用户看到的是「线没连上」）。 */
       {...{
         [WIRE_PINS_ATTR]: wirePinsValue([
           group.aspect?.ioKey,
           group.megapixels?.ioKey,
+          group.multiple?.ioKey,
         ]),
       }}
     >
-      <div className="rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5">
+      <div
+        className={
+          narrow
+            ? "w-fit max-w-full rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2"
+            : "rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5"
+        }
+      >
         <div className="flex items-center gap-2">
-          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-(--color-accent)">
+          <span className="shrink-0 text-[10px] font-semibold tracking-wider text-(--color-accent) uppercase">
             比例 + 像素{multiple ? " + 倍数" : ""}
           </span>
-          <div className="min-w-0 flex-1">
+          {/* 窄版：下拉触发器按内容收窄（固定一档宽度），不再占满整行。 */}
+          <div className={narrow ? "w-[168px] min-w-0" : "min-w-0 flex-1"}>
             <MultiSegmentPopover
               ariaLabel={multiple ? "选择比例、像素与倍数" : "选择比例与像素"}
               triggerContent={`${activeAspect?.label ?? "自定义"} / ${mpLabel}${multiple ? ` / ${multipleLabel}` : ""}`}
@@ -640,6 +727,24 @@ function AspectMegapixelControl({
             />
           </div>
         </div>
+        {/* 逐端口落点：这块控件覆盖的每个端口各有一个**自己的**落点锚点，
+            拖到哪一项就落到哪个端口上。整块也有一个总锚点（见最外层），
+            但那一档只在落到空白处时兜底 —— 一个笼统的「落到这块控件」等于
+            让用户猜「我到底连到了比例还是像素」（ISSUE #355）。 */}
+        <ul className="mt-1 flex flex-col gap-0.5">
+          {[aspect, megapixels, multiple].filter(Boolean).map((entry) => (
+            <li
+              key={entry!.ioKey}
+              className="flex items-center gap-1.5 text-[9.5px] leading-[14px] text-(--color-ink-faint)"
+              {...{ [WIRE_PINS_ATTR]: entry!.ioKey }}
+            >
+              <span aria-hidden>·</span>
+              <span className="min-w-0 truncate">
+                {entry!.label ?? entry!.name}
+              </span>
+            </li>
+          ))}
+        </ul>
         <RequiredChips
           pins={[aspect, megapixels, multiple]}
           onRequiredChange={onRequiredChange}
