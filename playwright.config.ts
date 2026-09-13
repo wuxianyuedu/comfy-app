@@ -1,8 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
+import { resolveAppPort } from "./scripts/app-port.mjs";
 
 /**
  * Playwright E2E 配置（AGENTS 硬规则：本仓库只用 pnpm，webServer 用 `pnpm dev`）。
- * - webServer: 起 Next dev server（3100 端口），测试前自动等待就绪
+ * - webServer: 起 Next dev server（端口走 scripts/app-port.mjs 的统一解析，
+ *   与 dev/start/启动链路同源），测试前自动等待就绪
  *   （pnpm 而非 npm：AGENTS.md 硬规则 1，npm/npx 在本仓库解析 typescript 别名
  *   链会崩溃）
  * - testDir:   ./e2e
@@ -13,6 +15,9 @@ import { defineConfig, devices } from "@playwright/test";
  * 视觉基线维护：改动需人工 review。用例基线变更时用
  * `pnpm exec playwright test --update-snapshots` 重录，并在 PR 描述标注原因。
  */
+const appPort = resolveAppPort(process.cwd());
+const appOrigin = `http://localhost:${appPort}`;
+
 export default defineConfig({
   testDir: "./e2e",
   testMatch: ["**/*.spec.ts", "**/*.visual.spec.ts"],
@@ -31,7 +36,7 @@ export default defineConfig({
     },
   },
   use: {
-    baseURL: "http://localhost:3100",
+    baseURL: appOrigin,
     trace: "on-first-retry",
     locale: "zh-CN",
   },
@@ -47,7 +52,7 @@ export default defineConfig({
       // 冷启动远超 180s 的等待窗口，会让冒烟/视觉用例集体超时。CI 门禁已先跑
       // `pnpm build`，这里只需起服务。本地开发仍用 dev（热更新、无需先构建）。
       command: process.env.CI ? "pnpm start" : "pnpm dev",
-      url: "http://localhost:3100",
+      url: appOrigin,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
       // Next 16 默认读 .env / .env.production：CI 无真实密钥，跳过 env.js 校验
