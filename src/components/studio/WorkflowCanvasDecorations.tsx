@@ -4,15 +4,22 @@ import React, { useState, useRef, useMemo } from "react";
 import { useReactFlow, useStore, Background, BackgroundVariant } from "@xyflow/react";
 import type { CanvasSettings } from "./canvas/WorkflowCanvasSettings";
 import { DEFAULT_CANVAS_SETTINGS } from "./canvas/WorkflowCanvasSettings";
+import {
+  GRID_BASE_LAYER_ID,
+  GRID_MAJOR_LAYER_ID,
+  GRID_MINOR_LAYER_ID,
+} from "./canvas/workflow-canvas-grid";
 export const GRID_CELL = 10;
 export const GRID_MAJOR_EVERY = 10;
 export const CANVAS_BG = "#0a0a0f";
-/* lowered from 0.6 → 0.30 so the grid stays visible at
- *  the fitView zoom floor (0.35) — previously the post-fit canvas came up
- *  blank in screenshots because the grid hid itself before users noticed
- *  the canvas had rendered.  With this floor below 0.35 the workspace
- *  feels "alive" the moment you open a workflow. */
-export const GRID_HIDE_ZOOM = 0.3;
+/* 细网格线的**淡出上限**（不是整张网格的关闭阈值）：低于这个缩放，
+ *  10px 一格已经糊成噪点，细线不再画，只留 100px 的主参考线。
+ *
+ *  这里曾经是「整张网格一起关掉」的阈值：缩到 0.3 以下 `<CanvasGrid>` 直接
+ *  返回 null，连带承载底色的 `bgColor` 也一起消失 —— 画布上只剩节点卡片那点
+ *  像素，整屏读起来就是黑屏（用户侧「缩小到能显示节点」的那一段正是此处）。
+ *  细线可以淡出，**底色不能**：底色的有无是画布有没有渲染出来的唯一直观凭据。 */
+export const GRID_FINE_FADE_ZOOM = 0.3;
 
 export function CanvasGrid({
   settings = DEFAULT_CANVAS_SETTINGS,
@@ -23,7 +30,7 @@ export function CanvasGrid({
    *  avoids crossing any <ReactFlow> internal context boundaries. */
   settings?: CanvasSettings;
 }) {
-  const { minorAlpha, hideGrid } = useStore((state) => {
+  const { minorAlpha, showFineLines } = useStore((state) => {
     const zoom = state.transform[2];
     const cellPx = settings.gridGap * zoom;
     /* Pick the fade-in curve so:
@@ -37,34 +44,43 @@ export function CanvasGrid({
     const t = Math.max(0, Math.min(1, (cellPx - 3) / 3));
     return {
       minorAlpha: Math.round(t * 10) / 10,
-      hideGrid: zoom <= GRID_HIDE_ZOOM,
+      /* 淡出的是**细线**，不是整个网格层（见 GRID_FINE_FADE_ZOOM 的说明）。 */
+      showFineLines: zoom > GRID_FINE_FADE_ZOOM,
     };
   });
-  if (!settings.showGrid || hideGrid) return null;
+  /* 用户主动关网格（画布设置里的「显示网格」）时也要保留底色 —— 关的是格子，
+   *  不是画布背景。此前 `!settings.showGrid` 也走 return null，关掉网格后整块
+   *  画布与「缩小到极限」是同一种黑屏。 */
   return (
     <>
-      <Background
-        id="wf-grid-minor"
-        variant={BackgroundVariant.Lines}
-        /* gap / lineWidth / alpha are now bound to the user's
-         *  canvas settings instead of the hard-coded 10 / 1 / 0.22.
-         *  Multiplied by a zoom-fade factor so the lines stay readable
-         *  at any zoom (the alpha at zoom 0.5 was previously 0). */
-        gap={settings.gridGap}
-        lineWidth={settings.gridMinorLineWidth}
-        color={`rgba(148,163,184,${(settings.gridMinorAlpha * minorAlpha).toFixed(3)})`}
-        bgColor={CANVAS_BG}
-      />
-      {/* Major reference lines always land at `gridGap * 10` to keep the
-       *  1:10 ratio users expect; only their alpha + width are tunable. */}
-      <Background
-        id="wf-grid-major"
-        variant={BackgroundVariant.Lines}
-        gap={settings.gridGap * GRID_MAJOR_EVERY}
-        lineWidth={settings.gridMajorLineWidth}
-        color={`rgba(148,163,184,${settings.gridMajorAlpha.toFixed(3)})`}
-        bgColor="transparent"
-      />
+      {settings.showGrid && showFineLines && (
+        <Background
+          id={GRID_MINOR_LAYER_ID}
+          variant={BackgroundVariant.Lines}
+          /* gap / lineWidth / alpha are now bound to the user's
+           *  canvas settings instead of the hard-coded 10 / 1 / 0.22.
+           *  Multiplied by a zoom-fade factor so the lines stay readable
+           *  at any zoom (the alpha at zoom 0.5 was previously 0). */
+          gap={settings.gridGap}
+          lineWidth={settings.gridMinorLineWidth}
+          color={`rgba(148,163,184,${(settings.gridMinorAlpha * minorAlpha).toFixed(3)})`}
+        />
+      )}
+      {/* 底色层：**唯一一个恒常渲染**的网格层（它自己就是画布的底色）。
+          细线在主参考线之前渲染（都会被后画的层盖在上方），顺序不影响观感。 */}
+      <Background id={GRID_BASE_LAYER_ID} variant={BackgroundVariant.Dots} gap={1e6} color="transparent" bgColor={CANVAS_BG} />
+      {settings.showGrid && (
+        /* Major reference lines always land at `gridGap * 10` to keep the
+         *  1:10 ratio users expect; only their alpha + width are tunable. */
+        <Background
+          id={GRID_MAJOR_LAYER_ID}
+          variant={BackgroundVariant.Lines}
+          gap={settings.gridGap * GRID_MAJOR_EVERY}
+          lineWidth={settings.gridMajorLineWidth}
+          color={`rgba(148,163,184,${settings.gridMajorAlpha.toFixed(3)})`}
+          bgColor="transparent"
+        />
+      )}
     </>
   );
 }
