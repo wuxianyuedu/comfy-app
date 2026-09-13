@@ -285,12 +285,15 @@ describe("库内拖线改落点", () => {
     expect(container).toBeTruthy();
   });
 
-  it("只读锚点（右列输出卡片）按下不起手 —— 拖了也落不下来", async () => {
+  it("没给输出侧回调时输出圆点按下不起手 —— 拖了也落不下来", async () => {
+    /* 圆点声明自己是输出侧起手位（`data-wire-kind`），而这一层没拿到
+     *  `onConnectOutput` = 这一列当前不可编辑，按下不该起手（不该拖的东西不要
+     *  摆出能拖的样子）。 */
     const onConnect = vi.fn();
     const { container } = renderEditable(onConnect);
     const readonlyDot = document.createElement("span");
     readonlyDot.setAttribute("data-wire-anchor", "9::output::IMAGE?images");
-    readonlyDot.setAttribute("data-wire-readonly", "");
+    readonlyDot.setAttribute("data-wire-kind", "hostToParam");
     container.appendChild(readonlyDot);
     stubRect(readonlyDot, { left: 500, top: 300, width: 12, height: 12 });
     await act(async () => {

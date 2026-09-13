@@ -169,14 +169,15 @@ describe("对外参数节点只在画布上表达映射", () => {
     expect(cards).toContain("wiredTargetsForEntry");
   });
 
-  it("对外输出参数卡片列在节点右侧：只读、圆点在左、与宿主输出行同源", () => {
+  it("对外输出参数卡片列在节点右侧：可拖改取值行、圆点在左、与宿主输出行同源", () => {
     /* ISSUE #355：「红框中的输出端口也要有端口圆点，然后工作流节点右侧需要显示
      *  对外输出参数」。左列（输入）说「对外要什么、落到哪一行」，右列（输出）
      *  说「对外给什么」—— 两列共用同一张卡片本体，端点各在自己那侧。
      *
-     *  输出不参与映射（没有落点、没有 paramMap 键空间），所以这一列恒为只读：
-     *  不给拖拽手势、不给「恢复默认」，也不许自己画线（线在 WorkflowParamWires
-     *  那一层，与输入侧共用一套量测）。 */
+     *  输出侧**同样可拖**（复审：「需要可拖」，例如临时把 images 指到别处）：
+     *  拖卡片左缘那颗圆点到宿主卡片的另一行输出上即改「从哪一行取值」。落点覆盖
+     *  写在 `paramMap.output.mode:<模式>`（与输入的 `source` 不是同一张表）。
+     *  卡片列自身仍不许碰 React Flow：手势在连线层，量测与输入侧共用一套。 */
     const column = stripComments(
       readFileSync(
         path.join(LIBRARY_DIR, "WorkflowOutputParamCardColumn.tsx"),
@@ -185,6 +186,8 @@ describe("对外参数节点只在画布上表达映射", () => {
     );
     expect(column).toContain('side="left"');
     expect(column).toContain("data-wire-anchor");
+    /* 圆点声明自己是「输出取值行」的起手位（连线层据此收窄可落点并分流回调）。 */
+    expect(column).toContain("data-wire-kind");
     for (const forbidden of [
       "@xyflow/react",
       "Handle",
@@ -244,6 +247,70 @@ describe("对外参数节点只在画布上表达映射", () => {
     for (const forbidden of ["@xyflow/react", "Handle"]) {
       expect(card).not.toContain(forbidden);
     }
+  });
+
+  it("输出的取值行覆盖写在独立的键空间，不混进输入侧的 source 表", () => {
+    /* 输入侧的 `paramMap.source` 是**运行期**载荷覆盖表（后端把对外值派到那个
+     *  端口）；输出侧的选取纯属视图层「这个概念从哪一行读值」。混在同一张表里，
+     *  运行期会把一个输出 ioKey 当成输入覆盖去查，落空后行为不可预期。
+     *
+     *  两边各有一份纯函数编排（applyWireEdit / applyOutputBindingEdit），
+     *  库内与画布都只经它们写。 */
+    const lib = stripComments(
+      readFileSync(
+        path.resolve(__dirname, "../../../lib/workflow-output-binding.ts"),
+        "utf8",
+      ),
+    );
+    expect(lib).toContain("OUTPUT_BINDING_NAMESPACE");
+    expect(lib).toContain("applyOutputBindingEdit");
+    expect(lib).toContain("resolveOutputSource");
+    /* 输出侧没有自动判定：默认落点就是工作流自己排在最前的那一行。 */
+    expect(lib).toContain("defaultOutputSource");
+
+    /* 库内手柄与画布手柄都经同一份纯函数写，不各写一套。 */
+    for (const file of [
+      path.join(LIBRARY_DIR, "WorkflowCanvasNodePreview.tsx"),
+      path.join(EDITOR_DIR, "WorkflowEditorInner.tsx"),
+    ]) {
+      const code = stripComments(readFileSync(file, "utf8"));
+      expect(code).toContain("applyOutputBindingEdit");
+    }
+  });
+
+  it("画布上的输出卡片是独立通道：`pout:` 前缀、wfOutput 类型、不可拖但可连", () => {
+    /* 与输入卡片对称：位置派生自宿主节点（拖不动），端点可连线。id 与输入卡片
+     *  同一条命名空间但前缀不同 —— 一个输出 ioKey 与某个输入条目 id 可能同名，
+     *  不加前缀会撞车（React Flow 节点 id 唯一）。 */
+    const build = stripComments(
+      readFileSync(path.join(EDITOR_DIR, "workflow-output-nodes.ts"), "utf8"),
+    );
+    expect(build).toContain("outputNodeId");
+    expect(build).toContain("draggable: false");
+    expect(build).toContain("connectable: true");
+    expect(build).toContain("placeOutputNodes");
+    const lib = stripComments(
+      readFileSync(
+        path.resolve(__dirname, "../../../lib/workflow-param-mapping.ts"),
+        "utf8",
+      ),
+    );
+    expect(lib).toContain("OUTPUT_NODE_PREFIX");
+    expect(lib).toContain("placeOutputNodes");
+    /* 注册表里有这张卡片的渲染器。 */
+    const nodes = readFileSync(
+      path.join(EDITOR_DIR, "WorkflowEditorNodes.tsx"),
+      "utf8",
+    );
+    expect(nodes).toContain("wfOutput: WorkflowOutputParamNode");
+    /* 闸门必须按「卡片端是哪一列的 id」分流：同名 id 在两列各有一张卡时，
+     *  这是唯一能分清的一条依据。 */
+    const edges = stripComments(
+      readFileSync(path.join(EDITOR_DIR, "workflow-param-edges.ts"), "utf8"),
+    );
+    expect(edges).toContain("isValidOutputConnection");
+    expect(edges).toContain("outputIoKeyFromNodeId");
+    expect(edges).toContain('direction === "output"');
   });
 
   it("库内也能改连线：卡片列不碰 React Flow，手势与落库在独立层", () => {

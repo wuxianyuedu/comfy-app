@@ -56,6 +56,11 @@ import {
   buildParamEntries,
   parseParamMapping,
 } from "@/lib/workflow-param-mapping";
+import {
+  applyOutputBindingEdit,
+  canApplyOutputBindingEdit,
+  clearOutputBindingEdit,
+} from "@/lib/workflow-output-binding";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
 import { resolveWorkflowMode } from "@/lib/workflow-types";
@@ -134,6 +139,9 @@ export function WorkflowCanvasNodePreview({
   const [logOpen, setLogOpen] = useState(false);
   /* 选中的对外参数（点卡片或点它那条线）—— 选中后按 ⌫ 断开，或按卡片头 ↺ 恢复默认。 */
   const [selectedParamId, setSelectedParamId] = useState<string | null>(null);
+  /* 右列选中的对外输出口 —— 与左列的选中互斥（同一时刻只有一处被选，否则
+   *  「按 ⌫ 断的是哪一根」说不清）。 */
+  const [selectedOutputId, setSelectedOutputId] = useState<string | null>(null);
   const [viewTaskId, setViewTaskId] = useState<string | null>(null);
 
   /* 生效模式与节点上的模式 chip 同一口径（defaultMode → modes[0] → taskType）——
@@ -458,18 +466,90 @@ export function WorkflowCanvasNodePreview({
     ],
   );
   /* ── 对外输出参数（右列）──
-   * 与左列对称：左列是「对外要什么 → 落到哪一行」，右列是「对外给什么」。
-   * 输出不参与映射，所以这列恒为只读：只有卡片与「宿主输出行 → 卡片」的线，
-   * 没有拖拽手势、没有「恢复默认」。 */
+   * 与左列对称：左列是「对外要什么 → 落到哪一行」，右列是「对外给什么 →
+   * 从哪一行取值」。输出不参与**运行期**映射（没有 `source` 键空间），但它
+   * 从哪一行取值是作者能改的：拖圆点写 `paramMap.output.mode:<模式>`，卡片头
+   * ↺ 恢复默认 —— 手势与落库都经下面的 `outputWiring`。 */
   const outputCards = useMemo(
-    () => deriveLibraryOutputCards({ io: workflowIO }),
-    [workflowIO],
+    () =>
+      deriveLibraryOutputCards({
+        io: workflowIO,
+        paramMap: wiring.effectiveParamMap,
+        mode: effectiveMode,
+      }),
+    [workflowIO, wiring.effectiveParamMap, effectiveMode],
   );
   /* 生效模式名（chip 上显示的那个）。卡片刻的名字、表单按它解析的 required /
    * seed 行为、「在编辑器中打开」带过去的模式，全都取自同一个生效模式。 */
   const effectiveModeLabel = useMemo(
     () => (effectiveMode ? modeLabel(effectiveMode) : modeLabel(taskType)),
     [effectiveMode, taskType],
+  );
+
+  /* ── 对外输出参数的落点编辑（右列）──
+   *
+   * 与左列同一份编排思路（本地叠加 + 落库），但键空间分开：输出的取值行写在
+   * `paramMap.output.mode:<模式>`。同一份本地 overlay 承载它，落库回调也共用
+   * `onPatchParamMap` —— 库里不必等一次 PATCH 往返才看得见结果。
+   *
+   * 没有 `onPatchParamMap`（只读消费方）时不可拖：回调为 undefined，连线层据此
+   * 不起手（拖不动的东西不摆出能拖的样子）。 */
+  const outputWiring = useMemo(
+    () => ({
+      isManual: (ioKey: string) => outputCards.isManual(ioKey),
+      connect: (outputIoKey: string, targetIoKey: string) => {
+        if (!effectiveMode || !onPatchParamMap) return;
+        if (
+          !canApplyOutputBindingEdit(
+            { ioKey: targetIoKey, mode: effectiveMode },
+            workflowIO,
+          )
+        )
+          return;
+        /* 连回它**默认**取值的那一行 = 撤销这条手工线（而不是把它写成一条
+         *  多余的覆盖）—— 否则「恢复默认」与「拖回来」会留下两种等价状态。 */
+        const revert = outputIoKey === targetIoKey;
+        const next = revert
+          ? clearOutputBindingEdit(
+              wiring.effectiveParamMap,
+              outputIoKey,
+              effectiveMode,
+            )
+          : applyOutputBindingEdit(wiring.effectiveParamMap, {
+              outputIoKey,
+              ioKey: targetIoKey,
+              mode: effectiveMode,
+            });
+        void onPatchParamMap(next);
+      },
+      disconnect: (outputIoKey: string) => {
+        if (!effectiveMode || !onPatchParamMap) return;
+        void onPatchParamMap(
+          applyOutputBindingEdit(wiring.effectiveParamMap, {
+            outputIoKey,
+            ioKey: null,
+            mode: effectiveMode,
+          }),
+        );
+      },
+      reset: (outputIoKey: string) => {
+        if (!effectiveMode || !onPatchParamMap) return;
+        void onPatchParamMap(
+          clearOutputBindingEdit(
+            wiring.effectiveParamMap,
+            outputIoKey,
+            effectiveMode,
+          ),
+        );
+      },
+    }),
+    [
+      outputCards,
+      effectiveMode,
+      onPatchParamMap,
+      wiring.effectiveParamMap,
+      workflowIO,
+    ],
   );
 
   const hasRuns = currentRuns.length > 0;
@@ -523,7 +603,11 @@ export function WorkflowCanvasNodePreview({
                * 等于什么都没发生（与编辑器画布的写入路径同一口径）。 */
               canWire={!!effectiveMode && !!onPatchParamMap}
               selectedEntryId={selectedParamId}
-              onSelect={setSelectedParamId}
+              /* 选中互斥：选了左边就放下右边，⌫ 断的线只有一根。 */
+              onSelect={(id) => {
+                setSelectedParamId(id);
+                if (id) setSelectedOutputId(null);
+              }}
               isManual={wiring.isManual}
               onReset={wiring.resetToAuto}
               reachableKeys={paramCards.reachableKeys}
@@ -685,7 +769,20 @@ export function WorkflowCanvasNodePreview({
           </div>
           {/* 对外输出参数卡片列：在宿主卡片**右侧**（与左列的输入卡片对称）。
             卡片圆点骑跨卡片左缘，线从宿主卡片的输出行圆点连过来。 */}
-          <WorkflowOutputParamCardColumn outputs={outputCards.outputs} />
+          <WorkflowOutputParamCardColumn
+            outputs={outputCards.outputs}
+            resolved={outputCards.resolved}
+            /* 与左列同一道闸门：有模式 + 上层给了落库回调才可拖（没有模式时
+             *  覆盖无归属，写入等于什么都没发生）。 */
+            canWire={!!effectiveMode && !!onPatchParamMap}
+            selectedOutputId={selectedOutputId}
+            onSelect={(id) => {
+              setSelectedOutputId(id);
+              if (id) setSelectedParamId(null);
+            }}
+            isManual={outputWiring.isManual}
+            onReset={outputWiring.reset}
+          />
           {/* 映射连线：输入侧 = 卡片圆点 → 宿主卡片上被落到的那一行；输出侧 =
             宿主卡片输出行圆点 → 对外输出参数卡片。量不到锚点（行不在当前渲染
             里）就整条不画，不留悬空线头。
@@ -695,14 +792,30 @@ export function WorkflowCanvasNodePreview({
             出口（对应编辑器画布那边「拖动卡片本身」的能力）。 */}
           {wiresOpen && (
             <WorkflowParamWires
+              /* 两套键空间一起叠：输入侧（paramMap.source）与输出侧
+               *  （paramMap.output）。线的 key 带命名空间前缀，两列的 id 撞车
+               *  也不会串。 */
               wires={[...paramCards.wires, ...outputCards.wires]}
-              selectedEntryId={selectedParamId}
-              onSelect={setSelectedParamId}
+              selectedEntryId={selectedParamId ?? selectedOutputId}
+              onSelect={(id) => {
+                setSelectedParamId(id);
+                setSelectedOutputId(id);
+              }}
               onConnect={
                 effectiveMode && onPatchParamMap ? wiring.connect : undefined
               }
               onDisconnect={
                 effectiveMode && onPatchParamMap ? wiring.disconnect : undefined
+              }
+              onConnectOutput={
+                effectiveMode && onPatchParamMap
+                  ? outputWiring.connect
+                  : undefined
+              }
+              onDisconnectOutput={
+                effectiveMode && onPatchParamMap
+                  ? outputWiring.disconnect
+                  : undefined
               }
             />
           )}
