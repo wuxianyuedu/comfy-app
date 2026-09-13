@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  effectiveProviderType,
   extraModelName,
   foldRemoteToLocal,
   isLoopbackBaseUrl,
@@ -177,5 +178,31 @@ describe("foldRemoteToLocal", () => {
     );
     expect(folded.localNames.filter((n) => n === "qwen3:14b").length).toBe(1);
     expect(folded.remoteEntries).toEqual([]);
+  });
+});
+
+describe("effectiveProviderType", () => {
+  it("本机回环 + 无密钥的「远端」配置按本地生效（ollama 误存为远端的修复口径）", () => {
+    expect(
+      effectiveProviderType("remote", "http://127.0.0.1:11434/v1", false),
+    ).toBe("local");
+    expect(
+      effectiveProviderType("remote", "http://localhost:11434/v1", false),
+    ).toBe("local");
+  });
+
+  it("回环但带密钥（可能是本机网关转发远端）尊重存储的 remote", () => {
+    expect(
+      effectiveProviderType("remote", "http://127.0.0.1:3000/v1", true),
+    ).toBe("remote");
+  });
+
+  it("非回环地址尊重存储值；local 永远保持 local", () => {
+    expect(
+      effectiveProviderType("remote", "https://api.openai.com/v1", false),
+    ).toBe("remote");
+    expect(
+      effectiveProviderType("local", "http://192.168.1.8:11434/v1", false),
+    ).toBe("local");
   });
 });
