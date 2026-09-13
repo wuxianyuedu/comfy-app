@@ -5,6 +5,12 @@ import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import type { ProjectMeta, ProjectType } from "@/lib/workshop/types";
 import { PROJECT_TYPE_LABELS } from "@/lib/workshop/types";
 import { useLLM } from "@/components/workshop/LLMContext";
+import { ExtractModelSelect } from "@/components/workshop/ExtractModelSelect";
+import {
+  channelProviderLabel,
+  channelSelectionDisplayValue,
+  resolveChannelSelection,
+} from "@/lib/workshop/channel-options";
 import { streamChat } from "@/lib/llm/browser";
 import {
   buildScriptMarkdownMessages,
@@ -43,7 +49,16 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
   const [aiBusy, setAiBusy] = React.useState(false);
   const [aiDraft, setAiDraft] = React.useState("");
   const [aiError, setAiError] = React.useState("");
+  /** AI 生成成功提示（含本次实际使用的 本地/远端 模型） */
+  const [aiStatus, setAiStatus] = React.useState("");
+  /** AI 生成独立选择的 本地/远端 模型（下拉值 "local::<m>" / "remote::<m>"；
+   *  空串 = 未手动选择，沿用全局 config 的 provider/model）。 */
+  const [genSel, setGenSel] = React.useState("");
   const { config, openSettings } = useLLM();
+
+  /** 本次生成实际生效的 provider/model 与下拉展示值（换算见 channel-options）。 */
+  const genEffective = resolveChannelSelection(genSel, config);
+  const genSelectValue = channelSelectionDisplayValue(genSel, config);
 
   /** 模板结构化（离线）：不调用模型，按固定模板产出可编辑的剧本骨架 */
   function handleStructure() {
@@ -58,18 +73,26 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
       openSettings();
       return;
     }
+    // 生成剧本可独立于全局配置选 本地/远端 模型：genSel 为空则沿用全局 config。
+    const { provider, model } = genEffective;
     setAiBusy(true);
     setAiDraft("");
     setAiError("");
+    setAiStatus("");
     try {
       const full = await streamChat({
         messages: buildScriptMarkdownMessages(meta, idea),
+        // 显式 provider+model：命中所选模型独立连接参数时改走该参数（与角色卡一致）
+        opts: model ? { provider, model } : undefined,
         onToken: (token) => setAiDraft((draft) => draft + token),
       });
       const markdown = full.trim();
       if (!markdown) throw new Error("AI 未返回有效内容");
       onScriptChange(markdown);
       setIdea("");
+      setAiStatus(
+        `已用 ${channelProviderLabel(provider)} · ${model || "当前配置"} 生成剧本，已写入剧本内容。`,
+      );
     } catch (e: unknown) {
       setAiError(errorMessage(e, "生成剧本失败"));
     } finally {
@@ -117,10 +140,16 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
 
       {/* ── 生成剧本 ── */}
       <section className="rounded-xl border border-primary-soft bg-primary-soft/30 p-4">
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="flex items-center text-sm font-semibold text-primary">
             <Icon name="sparkles" size={14} className="mr-1.5 inline align-[-2px]" />生成剧本
           </h3>
+          {/* 与角色卡一致：本次生成可独立选择 本地 / 远端 的哪个模型 */}
+          <ExtractModelSelect
+            value={genSelectValue}
+            onChange={setGenSel}
+            allowTool={false}
+          />
         </div>
         <div className="space-y-2">
           <textarea
@@ -158,9 +187,18 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
               {aiError}
             </p>
           )}
+          {aiStatus && !aiError && (
+            <p className="text-primary text-xs">{aiStatus}</p>
+          )}
           {!config && !aiBusy && (
             <p className="text-xs text-muted-foreground">
               未配置 LLM，AI 生成将不可用（仍可用「模板生成」）。可在右上角「LLM 设置」中接入本地或远端模型。
+            </p>
+          )}
+          {config && !genSel && (
+            <p className="text-xs text-muted-foreground">
+              未手动选择模型时，沿用全局配置（当前：{channelProviderLabel(config.provider)} ·{" "}
+              {config.model || "未选模型"}）。点上方下拉可切换本次生成的 本地/远端 模型。
             </p>
           )}
         </div>

@@ -4,21 +4,15 @@ import React from "react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { fetchLocalModels, fetchRemoteModels } from "@/lib/llm/model-catalog-client";
 import { useLLM } from "@/components/workshop/LLMContext";
+import {
+  channelOptionValue,
+  parseChannelOption,
+  type ExtractChannel,
+} from "@/lib/workshop/channel-options";
 
-/** 提取通道：①工具(内置规则) ②本地模型 ③远端 API —— 单下拉三分组 */
-export type ExtractChannel = "tool" | "local" | "remote";
-
-/** 下拉选项 key：工具通道无模型；local/remote 携带模型名 */
-export function channelOptionValue(channel: ExtractChannel, model: string): string {
-  return channel === "tool" ? "tool" : `${channel}::${model}`;
-}
-
-export function parseChannelOption(value: string): { channel: ExtractChannel; model: string } {
-  if (value === "tool") return { channel: "tool", model: "" };
-  const idx = value.indexOf("::");
-  const channel = value.slice(0, idx) as "local" | "remote";
-  return { channel, model: value.slice(idx + 2) };
-}
+/** 兼容既有 import：通道编码 / 解析已迁至 lib/workshop/channel-options（纯函数，可单测）。 */
+export { channelOptionValue, parseChannelOption };
+export type { ExtractChannel };
 
 /** 下拉单行标签：模型名 + 右侧「本地 / 远端」小标 */
 function optionLabel(name: string, badge: string): React.ReactNode {
@@ -115,12 +109,12 @@ export function ExtractModelSelect({
       );
     } else if (selAvail?.kind === "ok") {
       hint = (
-        <p className="mt-1 text-[11px] text-emerald-600">{badge}服务可达，可直接提取。</p>
+        <p className="mt-1 text-[11px] text-emerald-600">{badge}服务可达，可直接使用。</p>
       );
     } else if (selAvail?.kind === "err") {
       hint = (
         <p className="mt-1 text-[11px] leading-relaxed text-red-600">
-          {badge}模型不可用：{selAvail.detail}。可先确认对应服务已启动 / 配置正确后再提取。
+          {badge}模型不可用：{selAvail.detail}。可先确认对应服务已启动 / 配置正确后再试。
         </p>
       );
     }
