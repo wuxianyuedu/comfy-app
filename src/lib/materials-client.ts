@@ -116,11 +116,11 @@ export async function fetchMaterials(
   return parseList(body);
 }
 
-/** 上传素材。projectId 为空时传 shared=true 落到共享目录。 */
-export async function uploadMaterial(
+/** 上传的公共部分：拼 FormData、发请求、按错误信封抛错。 */
+async function postMaterial(
   file: File,
   opts: { folder: string; projectId?: string | null },
-): Promise<void> {
+): Promise<unknown> {
   const fd = new FormData();
   fd.append("file", file);
   fd.append("folder", opts.folder);
@@ -130,6 +130,41 @@ export async function uploadMaterial(
   const res = await fetch(ENDPOINT, { method: "POST", body: fd });
   const body = await readJson(res);
   if (!res.ok) throw new Error(readMaterialError(body) ?? `上传失败 (${res.status})`);
+  return body;
+}
+
+/** 上传素材（不需要回执时用它）。projectId 为空时传 shared=true 落到共享目录。 */
+export async function uploadMaterial(
+  file: File,
+  opts: { folder: string; projectId?: string | null },
+): Promise<void> {
+  await postMaterial(file, opts);
+}
+
+/** 上传成功回执里的可用信息 —— POST 只回 url/id/name 等基础字段，
+ *  不含 kind / updatedAt，故不等于完整的 MaterialItem。 */
+export interface MaterialUploadResult {
+  /** 稳定 id：`scope/folder/name` */
+  id: string;
+  name: string;
+  /** 浏览器可直接引用的地址（走 /api/generated 读盘） */
+  url: string;
+}
+
+/** 上传素材并取回落盘地址（工坊「定妆照」导入需要把图写进素材库再引用）。 */
+export async function uploadMaterialItem(
+  file: File,
+  opts: { folder: string; projectId?: string | null },
+): Promise<MaterialUploadResult> {
+  const body = await postMaterial(file, opts);
+  const item = isRecord(body) ? body.item : undefined;
+  const url = isRecord(item) && typeof item.url === "string" ? item.url : "";
+  if (!url) throw new Error("上传成功但服务端未返回素材地址");
+  return {
+    url,
+    id: isRecord(item) && typeof item.id === "string" ? item.id : url,
+    name: isRecord(item) && typeof item.name === "string" ? item.name : file.name,
+  };
 }
 
 /** 删除素材。id 形如 `scope/folder/name`，服务端据此定位。 */

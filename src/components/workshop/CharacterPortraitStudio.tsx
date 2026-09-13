@@ -1,0 +1,247 @@
+"use client";
+
+// ── 角色定妆照区块（规范 17 §17.2 第③层：只渲染 + 上抛）────────────────────
+// 定妆照 = 按角色提示词生成的「人物基准图」，后续分镜图以它作参考图。
+// 一次生图常常不满意，故本区块保留历次结果（本地 / 远端 / 外部导入）供挑选，
+// 挑中的一张写在角色上（character.portraitUrl）。业务与网络全在
+// hooks/use-character-portrait.ts 与 lib/workshop/character-portrait-client.ts。
+
+import React from "react";
+
+import { Icon } from "@/components/ui/icon";
+import { ShotSizePicker } from "@/components/workshop/ShotSizePicker";
+import type {
+  PortraitSession,
+  PortraitSessionActions,
+} from "@/components/workshop/hooks/use-character-portrait";
+import type { ApiChannelsView } from "@/lib/workshop/api-channel-shared";
+import {
+  PORTRAIT_SOURCE_LABELS,
+  portraitCandidates,
+} from "@/lib/workshop/character-portrait";
+import type { Character } from "@/lib/workshop/types";
+
+/** 定妆照区块需要的全部上下文：会话（controller 常驻）+ 生成通道配置。 */
+export interface CharacterPortraitContext {
+  session: PortraitSession;
+  actions: PortraitSessionActions;
+  /** 本地通道当前 Checkpoint（右侧「生成资源」里切换） */
+  checkpoint: string;
+  /** API 直连通道的脱敏配置（远端通道的门禁） */
+  apiChannels: ApiChannelsView | null;
+  onOpenApiSettings: () => void;
+}
+
+interface Props {
+  character: Character;
+  portrait: CharacterPortraitContext;
+}
+
+/** 单张角色卡里的「定妆照」区块：生成 / 导入 / 挑选。 */
+export function CharacterPortraitStudio({ character, portrait }: Props) {
+  const { session, actions, checkpoint, apiChannels, onOpenApiSettings } = portrait;
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  /** 会话消息只挂在发起它的那张卡上，别的角色卡不重复展示同一份进度与日志。 */
+  const focused = session.focusCharacterId === character.id;
+  const busy = session.busy && focused;
+  const importing = session.importing && focused;
+  const remoteReady = apiChannels?.image.configured === true;
+  const localBlocked = session.channel === "local" && !checkpoint;
+  const remoteBlocked = session.channel === "remote" && !remoteReady;
+  const hasPrompt = !!character.positivePrompt.trim();
+  const canGenerate =
+    hasPrompt && !session.busy && !session.importing && !localBlocked && !remoteBlocked;
+
+  const candidates = portraitCandidates(character);
+
+  return (
+    <div className="bg-subtle mt-3 rounded-lg p-3">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <p className="text-muted-foreground text-xs font-medium">定妆照</p>
+        <div className="flex gap-1">
+          {(["local", "remote"] as const).map((channel) => (
+            <button
+              key={channel}
+              type="button"
+              onClick={() => actions.patch({ channel })}
+              disabled={session.busy || session.importing}
+              className={`rounded-md border px-2 py-1 text-[11px] transition-colors disabled:opacity-40 ${
+                session.channel === channel
+                  ? "border-primary bg-primary-soft text-primary"
+                  : "border-border text-muted-foreground hover:bg-surface"
+              }`}
+            >
+              {channel === "local" ? "本地（ComfyUI）" : "远端 API"}
+            </button>
+          ))}
+        </div>
+        <ShotSizePicker
+          value={session.size}
+          onChange={(size) => actions.patch({ size })}
+          disabled={session.busy}
+        />
+        <button
+          type="button"
+          onClick={() => void actions.generate(character)}
+          disabled={!canGenerate}
+          className="bg-primary rounded-md px-3 py-1.5 text-[11px] font-medium text-white transition-opacity disabled:opacity-40"
+        >
+          {busy ? "生成中…" : candidates.length > 0 ? "再生成一张" : "生成定妆照"}
+        </button>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={session.busy || session.importing}
+          className="border-border text-ink hover:bg-surface rounded-md border px-3 py-1.5 text-[11px] transition-colors disabled:opacity-40"
+        >
+          {importing ? "导入中…" : "导入图片"}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void actions.importFile(character, file);
+            // 允许重复选择同一文件
+            event.target.value = "";
+          }}
+        />
+      </div>
+
+      {/* 通道门禁提示：说清缺什么、去哪里补，不让按钮无声失效 */}
+      {session.channel === "local" && !checkpoint && (
+        <p className="text-muted-foreground text-[11px]">
+          本地通道需要先选 Checkpoint —— 在右侧「生成资源」里选一个本地模型。
+        </p>
+      )}
+      {session.channel === "remote" && !remoteReady && (
+        <p className="flex flex-wrap items-center gap-1 text-[11px] text-amber-600">
+          <Icon name="info" size={11} />
+          远端 API 生图通道未配置 ——
+          <button
+            type="button"
+            onClick={onOpenApiSettings}
+            className="underline underline-offset-2"
+          >
+            打开 API 通道设置
+          </button>
+          填写 Base URL 与 API Key 后可用。
+        </p>
+      )}
+      {!hasPrompt && (
+        <p className="text-muted-foreground text-[11px]">
+          该角色还没有生成提示词：先在下方补全外貌 / 服装等信息，提示词会自动合成。
+        </p>
+      )}
+
+      {focused && (
+        <div className="mt-2 space-y-1">
+          {busy && (
+            <>
+              <p className="text-primary text-[11px]">
+                正在用 {session.modelLabel || "当前通道"} 生成定妆照…
+              </p>
+              <div className="bg-elevated h-1 w-full overflow-hidden rounded-full">
+                <div
+                  className="bg-primary h-full rounded-full transition-all"
+                  style={{ width: `${Math.max(4, session.progress)}%` }}
+                />
+              </div>
+            </>
+          )}
+          {session.status && !session.error && (
+            <p className="text-primary text-[11px]">{session.status}</p>
+          )}
+          {session.error && (
+            <p className="rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-700">
+              {session.error}
+            </p>
+          )}
+          {session.log.length > 0 && (
+            <details className="bg-bg/60 rounded-md px-2 py-1" open={busy}>
+              <summary className="text-primary cursor-pointer text-[10px] select-none">
+                生成过程（{session.log.length} 条）
+              </summary>
+              <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
+                {session.log.map((entry) => (
+                  <li
+                    key={`${entry.ts}-${entry.text}`}
+                    className={`text-[10.5px] leading-relaxed ${
+                      entry.level === "error"
+                        ? "text-red-600"
+                        : entry.level === "success"
+                          ? "text-emerald-600"
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    <span className="text-faint mr-1">
+                      {new Date(entry.ts).toLocaleTimeString()}
+                    </span>
+                    {entry.text}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+
+      {/* 候选：历次生成与导入的图都在这里，点一张即定为定妆照 */}
+      {candidates.length === 0 ? (
+        <p className="text-muted-foreground mt-2 text-[11px]">
+          还没有定妆照 —— 生成或导入后可在这里挑一张定为定妆照，后续分镜图会以它作参考图。
+        </p>
+      ) : (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {candidates.map((candidate) => {
+            const selected = character.portraitUrl === candidate.url;
+            return (
+              <div key={candidate.url} className="relative">
+                <button
+                  type="button"
+                  onClick={() => actions.select(character.id, candidate.url)}
+                  title={selected ? "已定为定妆照" : "设为定妆照"}
+                  aria-label={
+                    selected
+                      ? "当前定妆照"
+                      : `把这张（${PORTRAIT_SOURCE_LABELS[candidate.source]}）设为定妆照`
+                  }
+                  className={`block overflow-hidden rounded-lg border-2 transition-colors ${
+                    selected ? "border-primary" : "border-border hover:border-primary/60"
+                  }`}
+                >
+                  <img
+                    src={candidate.url}
+                    alt={`定妆照候选（${PORTRAIT_SOURCE_LABELS[candidate.source]}）`}
+                    loading="lazy"
+                    className="h-24 w-24 object-cover"
+                  />
+                </button>
+                <span className="pointer-events-none absolute top-1 left-1 rounded bg-black/60 px-1 text-[9px] text-white">
+                  {PORTRAIT_SOURCE_LABELS[candidate.source]}
+                </span>
+                {selected && (
+                  <span className="pointer-events-none absolute right-1 bottom-1 rounded bg-primary px-1 text-[9px] text-white">
+                    定妆照
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => actions.remove(character.id, candidate.url)}
+                  disabled={session.busy || session.importing}
+                  aria-label="删除这张定妆照候选"
+                  className="text-muted-foreground hover:text-red-500 absolute -top-1.5 -right-1.5 rounded-full bg-black/70 px-1 text-[10px] disabled:opacity-40"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
