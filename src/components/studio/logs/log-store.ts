@@ -61,8 +61,34 @@ export interface LogEntry {
 
 export type LogFilter = LogLevel | "all";
 
-/** 面板可筛选的来源（`all` = 全部）。 */
-export type LogOriginFilter = NonNullable<LogEntry["origin"]> | "all";
+/**
+ * 面板可筛选的来源（`all` = 全部）。
+ *
+ * 比 `LogEntry["origin"]` 多一个 `"console"`：面板里有**三分之一的行根本不属于
+ * 任何文件来源**——浏览器 console 拦截、Tauri 事件、全局未捕获错误（它们的
+ * `origin` 是 `undefined`）。此前它们只在「全部来源」下可见，选中任何一个来源
+ * 都会把它们整批藏起来，而下拉里既没有它们的名字、也没有任何一处能看出
+ * 「还有一批行没被任何分类覆盖」（用户反馈第 1 条：「有的日志只在全部页签才显示，
+ * 这种也要有自己的分类或是归入其他分类」）。
+ *
+ * 因此「控制台 / 全局错误」是一个**真分类**：它有自己的计数、按它筛出这些行，
+ * 且 `console + 四个文件来源 = 全部来源`（见 computeOriginCounts 的守恒契约）。
+ */
+export type LogOriginFilter =
+  NonNullable<LogEntry["origin"]> | "console" | "all";
+
+/**
+ * 行没有文件来源（`origin` 为 undefined）时归入的桶（见 {@link LogOriginFilter}）。
+ *
+ * 单独取个名字而不是在各处散写 `"console"` 字面量：它就是这条归类规则的唯一
+ * 事实来源，视图、计数、过滤三处都问它。
+ */
+export const CONSOLE_ORIGIN = "console" as const;
+
+/** 有文件来源的行 → 它自己的来源；没有的 → 「控制台 / 全局错误」桶。 */
+export function bucketOf(entry: Pick<LogEntry, "origin">): LogOriginFilter {
+  return entry.origin ?? CONSOLE_ORIGIN;
+}
 
 /** 单一级别的计数表（`all` = 该范围内全部级别）。 */
 export type LogLevelCounts = Record<LogLevel | "all", number>;
@@ -633,13 +659,19 @@ export function dedupeRepeats(
   return out;
 }
 
+/**
+ * 单行日志 → 可复制的文本（**唯一口径**：行的复制按钮与「复制全部日志」共用）。
+ *
+ * 时刻取**全日期**（`MM-DD HH:mm:ss.mmm`）而不是行首显示的那一截：面板上同一天
+ * 的行只显示时分秒，但复制出去的文本会离开面板的上下文（贴进 issue、发给人看），
+ * 没有日期就说不清是哪天的事。
+ */
+export function formatEntryForClipboard(entry: LogEntry): string {
+  return `${formatTime(entry.time, { alwaysDate: true })} [${entry.level.toUpperCase()}] ${entry.message}`;
+}
+
 function formatForClipboard(entries: LogEntry[]): string {
-  return entries
-    .map(
-      (e) =>
-        `${formatTime(e.time, { alwaysDate: true })} [${e.level.toUpperCase()}] ${e.message}`,
-    )
-    .join("\n");
+  return entries.map(formatEntryForClipboard).join("\n");
 }
 
 function zeroCounts(): LogLevelCounts {
@@ -683,16 +715,19 @@ export function computeOriginCounts(
     launcher: zeroCounts(),
     app: zeroCounts(),
     "app-runtime": zeroCounts(),
+    [CONSOLE_ORIGIN]: zeroCounts(),
   };
 
   for (const entry of logs) {
     if (!matchesSearch(entry, search)) continue;
     table.all.all += 1;
     table.all[entry.level] += 1;
-    /* 无 origin 的行（console 拦截 / Tauri 事件 / 全局错误）只计入 all——
-     * 它们本来就不属于任何文件来源，来源下拉里的「全部来源」才是它们的家。 */
-    if (!entry.origin) continue;
-    const bucket = table[entry.origin];
+    /* 逐来源独立计数（ISSUE #360），且**每个来源都必须有一个桶**：
+     * 无 origin 的行（console 拦截 / Tauri 事件 / 全局错误）归 `console`，
+     * 有 origin 的归它自己。于是「console + 四个文件来源 = 全部来源」这条
+     * 守恒关系恒成立——下拉里的分类加起来就是「全部来源」，不会再出现
+     * 「只在全部页签才显示、哪个分类都进不去」的行（ISSUE #262 六审）。 */
+    const bucket = table[bucketOf(entry)];
     if (!bucket) continue;
     bucket.all += 1;
     bucket[entry.level] += 1;
@@ -721,7 +756,9 @@ function computeFiltered(
 ): LogEntry[] {
   return logs.filter((entry) => {
     const levelOk = filter === "all" || entry.level === filter;
-    const originOk = origin === "all" || entry.origin === origin;
+    /* 过滤与计数共用 `bucketOf`：两处各写一份判据必然漂移，而漂移的表现正是
+     * 「下拉上写着 5 条、切过去只有 3 条」这类不再可信的数字（ISSUE #360）。 */
+    const originOk = origin === "all" || bucketOf(entry) === origin;
     return levelOk && originOk && matchesSearch(entry, search);
   });
 }

@@ -20,6 +20,9 @@ import {
   selectFirstPageWindow,
   captureLocation,
   computeOriginCounts,
+  bucketOf,
+  CONSOLE_ORIGIN,
+  formatEntryForClipboard,
 } from "./log-store";
 import type { LogEntry } from "./log-store";
 
@@ -174,7 +177,7 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
     expect(table.all).toEqual({ all: 6, debug: 0, info: 2, warn: 3, error: 1 });
   });
 
-  it("无来源的行（console 拦截 / Tauri 事件 / 全局错误）只计入 all", () => {
+  it("无来源的行（console 拦截 / Tauri 事件 / 全局错误）归入「控制台 / 全局错误」", () => {
     const table = computeOriginCounts([
       makeEntry({ level: "error" }),
       makeEntry({ level: "warn" }),
@@ -182,6 +185,15 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
     ]);
 
     expect(table.all).toEqual({ all: 3, debug: 0, info: 0, warn: 2, error: 1 });
+    /* ISSUE #262 六审：这类行过去**只**计入 all——它们在来源下拉里没有名字，
+     * 选中任何一个来源都会整批消失。现在它们有自己的桶，且带完整级别计数。 */
+    expect(table[CONSOLE_ORIGIN]).toEqual({
+      all: 2,
+      debug: 0,
+      info: 0,
+      warn: 1,
+      error: 1,
+    });
     for (const origin of ["dev", "launcher", "app", "app-runtime"] as const) {
       expect(table[origin].all).toBe(origin === "app" ? 1 : 0);
     }
@@ -203,13 +215,55 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
   });
 
   it("空时间线的表是完整的全零结构（视图可直接索引）", () => {
+    const zero = { all: 0, debug: 0, info: 0, warn: 0, error: 0 };
     expect(computeOriginCounts([])).toEqual({
-      all: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
-      dev: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
-      launcher: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
-      app: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
-      "app-runtime": { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
+      all: zero,
+      dev: zero,
+      launcher: zero,
+      app: zero,
+      "app-runtime": zero,
+      [CONSOLE_ORIGIN]: zero,
     });
+  });
+
+  /* ISSUE #262 六审：用户的原话是「有的日志只在全部页签才显示，这种也要有自己的
+   * 分类或是归入其他分类」。判据是一条**守恒关系**：各分类加起来 = 全部来源。
+   * 它把「有没有行落不进任何分类」变成可断言的等式——再加一类新来源却忘了给它
+   * 建桶，这条会红。 */
+  it("守恒：各分类之和 = 全部来源（没有行落不进任何分类）", () => {
+    const logs = [
+      makeEntry({ origin: "dev" }),
+      makeEntry({ origin: "launcher", level: "warn" }),
+      makeEntry({ origin: "app" }),
+      makeEntry({ origin: "app-runtime", level: "error" }),
+      makeEntry({ level: "error" }), // console 拦截
+      makeEntry({ source: "tauri" }), // Tauri 事件（同样无 origin）
+      makeEntry({ source: "system", level: "warn" }), // 全局未捕获错误
+    ];
+    const table = computeOriginCounts(logs);
+    const buckets = [
+      "dev",
+      "launcher",
+      "app",
+      "app-runtime",
+      CONSOLE_ORIGIN,
+    ] as const;
+
+    const sum = buckets.reduce((acc, key) => acc + table[key].all, 0);
+    expect(sum).toBe(table.all.all);
+    expect(sum).toBe(logs.length);
+    /* 逐级别也同样守恒（否则「全部」下的警告数与各分类加起来对不上）。 */
+    for (const level of ["debug", "info", "warn", "error"] as const) {
+      const perLevel = buckets.reduce((acc, key) => acc + table[key][level], 0);
+      expect(perLevel).toBe(table.all[level]);
+    }
+  });
+
+  it("bucketOf 是归类规则的唯一事实来源：无来源归 console，有来源归自己", () => {
+    expect(bucketOf({ origin: "dev" })).toBe("dev");
+    expect(bucketOf({ origin: "app-runtime" })).toBe("app-runtime");
+    expect(bucketOf({})).toBe(CONSOLE_ORIGIN);
+    expect(bucketOf({ origin: undefined })).toBe(CONSOLE_ORIGIN);
   });
 
   it("store 在每次时间线变化后重算二维计数", () => {
@@ -429,20 +483,18 @@ describe("会话起点不得裁掉「每次运行覆盖重建」的来源（ISSU
 
   it("appendFileLogs 走同一条规则：起点设好之后 launcher 的早期行照样进面板", () => {
     useLogStore.getState().setSessionStart(cutoff);
-    useLogStore
-      .getState()
-      .appendFileLogs([
-        makeEntry({
-          id: "launcher-head",
-          time: cutoff - 45_000,
-          origin: "launcher",
-        }),
-        makeEntry({
-          id: "stale-runtime",
-          time: cutoff - 45_000,
-          origin: "app-runtime",
-        }),
-      ]);
+    useLogStore.getState().appendFileLogs([
+      makeEntry({
+        id: "launcher-head",
+        time: cutoff - 45_000,
+        origin: "launcher",
+      }),
+      makeEntry({
+        id: "stale-runtime",
+        time: cutoff - 45_000,
+        origin: "app-runtime",
+      }),
+    ]);
     expect(idsOf(useLogStore.getState().logs)).toEqual(["launcher-head"]);
   });
 
@@ -546,13 +598,11 @@ describe("MAX_LOG_ENTRIES 上限裁剪", () => {
         makeEntry({ id: `old-${i}`, time: i, seq: i - MAX_LOG_ENTRIES }),
     );
     useLogStore.setState({ logs: oldLogs });
-    useLogStore
-      .getState()
-      .addEntry({
-        level: "info",
-        message: `第 ${MAX_LOG_ENTRIES} 条`,
-        source: "system",
-      });
+    useLogStore.getState().addEntry({
+      level: "info",
+      message: `第 ${MAX_LOG_ENTRIES} 条`,
+      source: "system",
+    });
 
     const { logs } = useLogStore.getState();
     expect(logs).toHaveLength(MAX_LOG_ENTRIES);
@@ -1760,18 +1810,16 @@ describe("「有 N 条新的日志」按窗口口径计数（#346 / #262 复审�
   const seedPages = (extra = 0) => {
     const base = LOG_PAGE_SIZE * 2 + extra;
     act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs(
-          Array.from({ length: base }, (_, i) =>
-            makeEntry({
-              id: `h-${i}`,
-              message: `事件 ${i}`,
-              time: i * 10,
-              seq: i,
-            }),
-          ),
+      useLogStore.getState().appendFileLogs(
+        Array.from({ length: base }, (_, i) =>
+          makeEntry({
+            id: `h-${i}`,
+            message: `事件 ${i}`,
+            time: i * 10,
+            seq: i,
+          }),
         ),
+      ),
     );
   };
 
@@ -1955,6 +2003,77 @@ describe("setOrigin 按来源筛选", () => {
     act(() => useLogStore.getState().setPage(2));
     act(() => useLogStore.getState().setOrigin("app-runtime"));
     expect(useLogStore.getState().page).toBe(1);
+  });
+
+  /* ISSUE #262 六审：一部分行（console 拦截 / Tauri 事件 / 全局错误）没有文件
+   * 来源，此前只在「全部来源」下可见。现在它们有自己的分类。 */
+  it("「控制台 / 全局错误」筛出无文件来源的行（console / tauri / system）", () => {
+    act(() =>
+      useLogStore.getState().appendFileLogs([
+        {
+          ...makeEntry({
+            id: "console-1",
+            time: 1_000,
+            message: "ResizeObserver",
+          }),
+          source: "console",
+        },
+        {
+          ...makeEntry({ id: "tauri-1", time: 2_000, message: "Tauri 事件" }),
+          source: "tauri",
+        },
+        {
+          ...makeEntry({ id: "dev-1", time: 3_000, message: "开发服务已就绪" }),
+          origin: "dev",
+        },
+      ]),
+    );
+
+    act(() => useLogStore.getState().setOrigin(CONSOLE_ORIGIN));
+    expect(idsOf(useLogStore.getState().filteredLogs)).toEqual([
+      "console-1",
+      "tauri-1",
+    ]);
+    /* 计数与过滤同口径：切过去看到的条数就是下拉上写的那个数。 */
+    const state = useLogStore.getState();
+    expect(state.countsByOrigin[CONSOLE_ORIGIN].all).toBe(2);
+    expect(state.filteredLogs).toHaveLength(
+      state.countsByOrigin[CONSOLE_ORIGIN].all,
+    );
+  });
+
+  it("有来源的行不会漏进「控制台 / 全局错误」", () => {
+    seed();
+    act(() => useLogStore.getState().setOrigin(CONSOLE_ORIGIN));
+    expect(useLogStore.getState().filteredLogs).toHaveLength(0);
+  });
+});
+
+/* ── 单行复制（ISSUE #262 六审）────────────────────────────────────────
+ * 用户的原话是「日志多了我想复制报错文本还是复制不了，我刚选中内容就刷走了，
+ * 需要每条日志后面加一个复制按钮」。行的复制按钮与「复制全部日志」共用这一份
+ * 文本拼装，所以口径放在这里测。 */
+describe("formatEntryForClipboard 单行文本", () => {
+  it("带全日期、级别与正文（与「复制全部日志」同一口径）", () => {
+    const text = formatEntryForClipboard(
+      makeEntry({
+        time: new Date(2026, 0, 2, 3, 4, 5, 6).getTime(),
+        level: "error",
+        message: "任务失败：连接超时",
+      }),
+    );
+    /* 时刻必须带日期：复制出去的文本离开了面板的上下文（贴进 issue），
+     * 只有时分秒说不清是哪天的事。 */
+    expect(text).toContain("01-02");
+    expect(text).toContain("[ERROR]");
+    expect(text).toContain("任务失败：连接超时");
+  });
+
+  it("多行正文（Error 的 stack 会带换行）原样保留，不被压成一行", () => {
+    const text = formatEntryForClipboard(
+      makeEntry({ level: "error", message: "boom\n  at foo (bar.ts:1:1)" }),
+    );
+    expect(text).toContain("\n  at foo (bar.ts:1:1)");
   });
 });
 
