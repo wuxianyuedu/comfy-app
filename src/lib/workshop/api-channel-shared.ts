@@ -169,3 +169,19 @@ export function extractSavedOutputs(value: unknown): SavedOutput[] {
   }
   return out;
 }
+
+/** 由远端模型条目的 Base URL 解析「生图」端点（OpenAI 兼容 images/generations）。
+ *  用户在设置页填的 Base URL 三种形态都兼容：
+ *    已含完整动作段（…/v1/images/generations）→ 原样使用；
+ *    只到资源段（…/v1/images）→ 只补动作段 /generations；
+ *    只到根（…/v1）→ 补全 /images/generations。
+ *  历史事故：条目里填了完整端点仍被无条件再拼一次，请求打到
+ *  /v1/images/images/generations 而 404。纯字符串拼装，可单测。 */
+export function resolveImagesGenerationsEndpoint(baseUrl: string): string {
+  const base = String(baseUrl ?? "")
+    .trim()
+    .replace(/\/+$/, "");
+  if (/\/images\/generations$/i.test(base)) return base;
+  if (/\/images$/i.test(base)) return `${base}/generations`;
+  return `${base}/images/generations`;
+}
