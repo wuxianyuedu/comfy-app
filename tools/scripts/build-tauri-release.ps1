@@ -49,9 +49,9 @@ if ((Assert-ShellNotRunning -ProjectRoot $PROJECT_ROOT -Purpose "构建 release 
 Log "  未发现正在运行的桌面壳，继续。"
 Log ""
 
-Log "[3/4] 同步启动页资源（prebuilt 壳只需内嵌 splash.html）"
+Log "[3/4] 同步启动页资源 + 补齐 Node sidecar（编译期校验必需）"
 # prebuilt 模式的页面由 dev server（http://127.0.0.1:3100）提供，壳里只需要启动页；
-# standalone 资源（server.js / .next / Node sidecar）由 tools\build\build-standalone.ps1 负责。
+# standalone 的 server.js / .next 资源由 tools\build\build-standalone.ps1 负责。
 # 过去这里在 static 缺失时会跑完整 build-desktop.mjs，而 Next standalone 的 file
 # tracing 会把整个项目（node_modules / python-venv / 各构建产物）拷进 static（实测 8GB+），
 # 随后被 cargo build 一起嵌进 app.exe —— 既拖慢构建又浪费空间。故改为只同步启动页。
@@ -69,6 +69,27 @@ if (Test-Path $devLauncher) {
     $destScripts = Join-Path $TAURI_DIR "static\scripts"
     if (-not (Test-Path $destScripts)) { New-Item -ItemType Directory -Force $destScripts | Out-Null }
     Copy-Item -Force $devLauncher (Join-Path $destScripts "dev-launcher.ps1")
+}
+# tauri.conf.json 声明 bundle.externalBin = ["binaries/node"]，tauri-build 在每次
+# cargo build 的编译期都会校验 src-tauri/binaries/node-<target-triple>.exe 存在——
+# 即便 prebuilt 壳运行时用不到 sidecar 也绕不开。binaries/ 被 src-tauri/.gitignore
+# 忽略不入库，全新克隆或清理后必然缺失，编译开局即 panic
+# （resource path binaries\node-<triple>.exe doesn't exist）。
+# 这里与 build-desktop.mjs 第 3/4 步同样地用当前 Node 运行时补齐，仅缺失时复制。
+$binDir = Join-Path $TAURI_DIR "binaries"
+$triple = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "aarch64-pc-windows-msvc" } else { "x86_64-pc-windows-msvc" }
+$sidecar = Join-Path $binDir "node-$triple.exe"
+if (-not (Test-Path $sidecar)) {
+    $node = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $node) {
+        Log "[错误] 缺少 Node sidecar：$sidecar ，且 PATH 中没有 node，无法自动补齐。"
+        Log "  安装 Node.js ≥ 22 后重跑本脚本；或手动把 node.exe 复制为上述路径。"
+        Open-Log
+        exit 1
+    }
+    New-Item -ItemType Directory -Force $binDir | Out-Null
+    Copy-Item -Force $node.Source $sidecar
+    Log "  已补齐 Node sidecar：node-$triple.exe（复制自 $($node.Source)）"
 }
 Log ""
 
