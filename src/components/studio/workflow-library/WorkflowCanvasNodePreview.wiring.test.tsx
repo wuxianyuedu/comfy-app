@@ -133,12 +133,20 @@ describe("库内映射编辑", () => {
 
     await act(async () => {
       dot.dispatchEvent(
-        new PointerEvent("pointerdown", { bubbles: true, clientX: 106, clientY: 76 }),
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          clientX: 106,
+          clientY: 76,
+        }),
       );
     });
     await act(async () => {
       document.dispatchEvent(
-        new PointerEvent("pointerup", { bubbles: true, clientX: 306, clientY: 66 }),
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          clientX: 306,
+          clientY: 66,
+        }),
       );
     });
 
@@ -157,12 +165,20 @@ describe("库内映射编辑", () => {
     rect(dot, { left: 100, top: 70, width: 12, height: 12 });
     await act(async () => {
       dot.dispatchEvent(
-        new PointerEvent("pointerdown", { bubbles: true, clientX: 106, clientY: 76 }),
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          clientX: 106,
+          clientY: 76,
+        }),
       );
     });
     await act(async () => {
       document.dispatchEvent(
-        new PointerEvent("pointerup", { bubbles: true, clientX: 900, clientY: 900 }),
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          clientX: 900,
+          clientY: 900,
+        }),
       );
     });
     expect(onPatch).not.toHaveBeenCalled();
@@ -223,7 +239,9 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
      *  行一直有这颗点（`PortHandle dir="out"`），库内预览此前漏了 —— 补上，
      *  并且它正是右列连线的起点。 */
     const { container } = renderPreview({});
-    expect(container.querySelector('[data-port-dot="5::output::IMAGE"]')).toBeTruthy();
+    expect(
+      container.querySelector('[data-port-dot="5::output::IMAGE"]'),
+    ).toBeTruthy();
   });
 
   it("节点右侧列出对外输出参数，卡片圆点在卡片左缘", () => {
@@ -233,9 +251,13 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
     )!;
     expect(column).toBeTruthy();
     expect(column.getAttribute("aria-label")).toBe("对外输出参数");
-    const card = column.querySelector('[data-testid="param-node-5::output::IMAGE"]')!;
+    const card = column.querySelector(
+      '[data-testid="param-node-5::output::IMAGE"]',
+    )!;
     expect(card.textContent).toContain("images");
-    const dot = column.querySelector('[data-wire-anchor="5::output::IMAGE?images"]')!;
+    const dot = column.querySelector(
+      '[data-wire-anchor="5::output::IMAGE?images"]',
+    )!;
     expect(dot).toBeTruthy();
     /* 端点槽位在行首（圆点在左）：卡片的左缘才是「线从宿主进来」的那一侧。 */
     expect(
@@ -272,12 +294,20 @@ describe("画布视口", () => {
     /* 小于阈值（4px）的位移按「点一下」处理：点卡片选中不会被手抖变成位移。 */
     await act(async () => {
       surface.dispatchEvent(
-        new PointerEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 100 }),
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          clientX: 100,
+          clientY: 100,
+        }),
       );
     });
     await act(async () => {
       window.dispatchEvent(
-        new PointerEvent("pointermove", { bubbles: true, clientX: 102, clientY: 100 }),
+        new PointerEvent("pointermove", {
+          bubbles: true,
+          clientX: 102,
+          clientY: 100,
+        }),
       );
     });
     expect(content.style.transform).toContain("translate3d(0px, 0px, 0)");
@@ -285,7 +315,11 @@ describe("画布视口", () => {
     /* 越过阈值之后内容跟着手走。 */
     await act(async () => {
       window.dispatchEvent(
-        new PointerEvent("pointermove", { bubbles: true, clientX: 160, clientY: 130 }),
+        new PointerEvent("pointermove", {
+          bubbles: true,
+          clientX: 160,
+          clientY: 130,
+        }),
       );
     });
     expect(content.style.transform).toContain("translate3d(60px, 30px, 0)");
@@ -302,12 +336,20 @@ describe("画布视口", () => {
     const input = container.querySelector<HTMLElement>("input")!;
     await act(async () => {
       input.dispatchEvent(
-        new PointerEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 100 }),
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          clientX: 100,
+          clientY: 100,
+        }),
       );
     });
     await act(async () => {
       window.dispatchEvent(
-        new PointerEvent("pointermove", { bubbles: true, clientX: 200, clientY: 100 }),
+        new PointerEvent("pointermove", {
+          bubbles: true,
+          clientX: 200,
+          clientY: 100,
+        }),
       );
     });
     expect(content.style.transform).toContain("translate3d(0px, 0px, 0)");
@@ -365,6 +407,25 @@ describe("尺寸各项各自可取外部值", () => {
       expect(
         container.querySelector(`[data-wire-anchor="size?${handle}"]`),
         `尺寸的 ${handle} 应各有一颗出口圆点`,
+      ).toBeTruthy();
+    }
+  });
+
+  it("每个候选各自连出一条线（宽高比与百万像素都要能连出去）", () => {
+    /* ISSUE #355 复审：截图里「尺寸」卡片有宽高比 / 百万像素两颗圆点，画面上
+     *  却只有一条线通到宿主卡片 —— 用户要的是「这两项都需要能导入到工作流中，
+     *  所以 2 条线都要能连出去」。
+     *
+     *  根因：连线派生只取「当前生效落点」那一个端口（半自动映射的口径），而卡片
+     *  把每个候选都画成了可拖的圆点 —— 有端点、没线，读作「这几项没接上」。
+     *  现在按行逐个产出：有几颗点就有几条线，且各连到对应那一行。 */
+    const { container } = renderPreview({});
+    for (const handle of ["aspect_ratio", "megapixels", "width"]) {
+      expect(
+        container.querySelector(
+          `[data-testid="wflib-param-wire-size?${handle}"]`,
+        ),
+        `尺寸的 ${handle} 应各有一条线`,
       ).toBeTruthy();
     }
   });
