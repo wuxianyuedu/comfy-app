@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "splash-local",
-  "description": "grants the local-origin splash window the app commands it needs (get_launch_status / get_app_url / get_launch_log / set_splash_compact / navigate_to_app). Required since the AppManifest in build.rs turns on ACL resolution for custom commands from every origin, including bundled local content.",
+  "description": "grants the local-origin splash window the app commands it needs (get_launch_status / get_app_url / get_launch_log / set_splash_compact / win_minimize / win_close / navigate_to_app). Required since the AppManifest in build.rs turns on ACL resolution for custom commands from every origin, including bundled local content.",
   "windows": [
     "splash"
   ],
@@ -11,6 +11,8 @@
     "allow-get-app-url",
     "allow-get-launch-log",
     "allow-set-splash-compact",
+    "allow-win-minimize",
+    "allow-win-close",
     "allow-navigate-to-app"
   ]
 }

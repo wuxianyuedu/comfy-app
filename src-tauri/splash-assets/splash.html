@@ -229,12 +229,28 @@
       <h1 class="brand">Comfy APP</h1>
       <p class="subtitle" id="subtitle">正在启动桌面应用…</p>
       <div class="win-buttons">
-        <button class="win-btn" id="btn-minimize" type="button" title="最小化" aria-label="最小化">
+        <button
+          class="win-btn"
+          id="btn-minimize"
+          type="button"
+          title="最小化"
+          aria-label="最小化"
+          data-win-action="minimize"
+          onclick="window.__splashWinAction && window.__splashWinAction('minimize')"
+        >
           <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
             <path d="M2 6h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
           </svg>
         </button>
-        <button class="win-btn danger" id="btn-close" type="button" title="关闭" aria-label="关闭">
+        <button
+          class="win-btn danger"
+          id="btn-close"
+          type="button"
+          title="关闭"
+          aria-label="关闭"
+          data-win-action="close"
+          onclick="window.__splashWinAction && window.__splashWinAction('close')"
+        >
           <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
             <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
           </svg>
@@ -251,7 +267,7 @@
     </div>
     <div class="message" id="message">启动器正在初始化…</div>
     <div class="footer">
-      <span class="hint">点右上角 ✕ 即终止启动</span>
+      <span class="hint">关闭（右上角 ✕）即放弃本次启动</span>
       <button class="log-toggle" id="log-btn" type="button">查看日志</button>
       <span class="elapsed" id="elapsed">00:00</span>
     </div>
@@ -312,28 +328,120 @@
 
     // ── 窗口按钮（最小化 / 关闭）与尺寸档位 ──
     // 启动页窗口关了原生装饰（decorations: false），系统标题栏连同它的
-    // 最小化 / 关闭按钮都不存在，下面这两个按钮就是启动期唯一的窗口出口。
-    // 窗口控制走 Tauri 自带的 window API（withGlobalTauri 已开），失败时安静
-    // 降级——按钮画不出来不该影响启动流程本身。
+    // 最小化 / 关闭按钮都不存在，这两个按钮就是启动期唯一的窗口出口。
+    //
+    // 三条互补的调用路径，任一条能成就成（见 docs/standards/07-日志系统.md §7.18.7）：
+    //   ① 脚本就绪后在此绑定监听 —— 常规路径；
+    //   ② 按钮内联 onclick 调 window.__splashWinAction —— 脚本还没跑到绑定、
+    //      或监听器被别的东西清掉时的兜底；两条路走同一个入口 performWinAction，
+    //      因此不会重复触发；
+    //   ③ 应用自建命令 win_minimize / win_close（壳侧直接操作窗口）——
+    //      Tauri window API 抛错或全局对象不可得时的最后一条。
+    // 三条都不可用时消息区给出可见提示（不再「点了没反应」）。
     const COMPACT_SIZE = { width: 744, height: 216 };
     const subtitleEl = $('subtitle');
 
-    /** 取当前启动页窗口（非 Tauri 环境返回 null）。 */
-    function currentWindow() {
-      const api = window.__TAURI__ && window.__TAURI__.window;
-      return api && api.getCurrentWindow ? api.getCurrentWindow() : null;
+    /** 正在执行的窗口动作（'' 表示空闲）——onclick 与监听两条路的去重。 */
+    let winActionPending = '';
+    /** 提示定时器：连续点击不叠出多个。 */
+    let winActionNoticeTimer = 0;
+
+    /** 在消息区给出可见提示（借 8 秒后把进度文案还回去）。 */
+    function noticeWindowAction(text) {
+      if (!messageEl) return;
+      clearTimeout(winActionNoticeTimer);
+      const previous = messageEl.dataset.progressText ?? messageEl.textContent ?? '';
+      messageEl.dataset.progressText = previous;
+      messageEl.textContent = text;
+      winActionNoticeTimer = setTimeout(() => {
+        if (messageEl.dataset.progressText !== undefined) {
+          messageEl.textContent = messageEl.dataset.progressText;
+          delete messageEl.dataset.progressText;
+        }
+      }, 8000);
     }
 
-    $('btn-minimize').addEventListener('click', () => {
+    /**
+     * 取当前启动页窗口。
+     * 优先 `getCurrentWindow()`；老版本全局对象里没有它时用
+     * `getCurrentWebviewWindow()` 兜底；都不可得时返回 null（走壳命令路径）。
+     */
+    function currentWindow() {
+      const api = window.__TAURI__ && window.__TAURI__.window;
+      if (!api) return null;
+      try {
+        if (typeof api.getCurrentWindow === 'function') return api.getCurrentWindow();
+        if (typeof api.getCurrentWebviewWindow === 'function') return api.getCurrentWebviewWindow();
+      } catch (e) {
+        console.warn('resolve current window failed:', e);
+      }
+      return null;
+    }
+
+    /** 真正执行一次窗口动作：成功返回 true。 */
+    async function runWindowAction(action) {
       const win = currentWindow();
-      if (win) void win.minimize().catch((e) => console.warn('minimize failed:', e));
-    });
-    // 关闭 = 放弃本次启动：壳退出后由 dev-launcher 的兜底回收 sidecar / dev server
-    // 进程树（与主窗口「关窗即退出」同一语义）。
-    $('btn-close').addEventListener('click', () => {
-      const win = currentWindow();
-      if (win) void win.close().catch((e) => console.warn('close failed:', e));
-    });
+      if (win) {
+        try {
+          if (action === 'close') await win.close();
+          else await win.minimize();
+          return true;
+        } catch (e) {
+          console.warn('window ' + action + ' via api failed:', e);
+        }
+      }
+      // 壳命令兜底：命令没注册（壳过期）或失败都算未完成。
+      const fallback = action === 'close' ? 'win_close' : 'win_minimize';
+      try {
+        await invokeRaw(fallback);
+        return true;
+      } catch (e) {
+        console.warn('window ' + action + ' via ' + fallback + ' failed:', e);
+      }
+      return false;
+    }
+
+    /** 按钮的唯一入口（监听与内联 onclick 都走到这里，重复调用自动去重）。 */
+    async function performWinAction(action) {
+      if (winActionPending === action) return;
+      winActionPending = action;
+      try {
+        const done = await runWindowAction(action);
+        if (!done) {
+          noticeWindowAction(
+            action === 'close'
+              ? '关闭失败：当前壳缺少窗口命令，请更新（重编壳 / 重新打包启动器）'
+              : '最小化失败：当前壳缺少窗口命令，请更新（重编壳 / 重新打包启动器）',
+          );
+        }
+      } finally {
+        winActionPending = '';
+      }
+    }
+
+    // 兜底路径②的落点：先挂上，任何时刻点击都有响应。
+    window.__splashWinAction = (action) => {
+      void performWinAction(action === 'close' ? 'close' : 'minimize');
+    };
+
+    // 兜底路径①：正常的事件监听（与内联 onclick 同入口，不会执行两次）。
+    const minBtn = $('btn-minimize');
+    const closeBtn = $('btn-close');
+    if (minBtn) minBtn.addEventListener('click', () => void performWinAction('minimize'));
+    if (closeBtn) closeBtn.addEventListener('click', () => void performWinAction('close'));
+
+    /**
+     * 确认壳里的窗口兜底命令是否就位。
+     * 缺失只说明壳过期（改了 src-tauri 没重编 / 启动器没重打包），不影响
+     * window API 那条主路径；这里只留一条 warn 供排查「点了没反应」。
+     */
+    async function probeWindowCommands() {
+      try {
+        await invokeRaw('win_minimize');
+      } catch (e) {
+        console.warn('win_minimize unavailable (stale shell?), window api only:', e);
+      }
+    }
 
     /** 把窗口调到与内容匹配的档位（展开日志变宽变高，收起回到紧凑）。 */
     async function applyCompact(compact) {
@@ -345,9 +453,10 @@
       // 收起日志时若用户手动拉大过窗口，把它收回内容宽度：窗口状态插件不记忆
       // splash，回落档位以 COMPACT_SIZE 为准，避免「收起后仍是宽窗」的空白。
       const win = currentWindow();
-      if (win) {
+      const api = window.__TAURI__ && window.__TAURI__.window;
+      if (win && api && api.LogicalSize) {
         void win
-          .setSize(new window.__TAURI__.window.LogicalSize(COMPACT_SIZE.width, COMPACT_SIZE.height))
+          .setSize(new api.LogicalSize(COMPACT_SIZE.width, COMPACT_SIZE.height))
           .then(() => win.center())
           .catch((e) => console.warn('restore splash size failed:', e));
       }
@@ -409,8 +518,14 @@
         ? '✓ ' + label
         : '<span class="spinner"></span>' + label;
 
-      messageEl.textContent = message || '';
-      messageEl.classList.toggle('error', !!error);
+      // 消息区正被「窗口按钮失败」提示占用时不要被轮询顶掉：那句提示是
+      // 用户「点了没反应」时唯一的解释（8 秒后自动交还进度文案）。
+      if (messageEl.dataset.progressText === undefined) {
+        messageEl.textContent = message || '';
+        messageEl.classList.toggle('error', !!error);
+      } else {
+        messageEl.dataset.progressText = message || '';
+      }
       elapsedEl.textContent = fmtTime(elapsed || 0);
     }
 
@@ -536,6 +651,9 @@
     // 开局把窗口尺寸对齐到「紧凑」档（壳建窗时已设过一次；用户上次把窗口
     // 拉大后重启，这里再对齐一次以保证一致）。
     void applyCompact(true);
+
+    // 顺带确认窗口兜底命令是否就位（缺了只记 warn，主路径仍是 window API）。
+    void probeWindowCommands();
 
     // 首次立即执行，随后每 250ms 轮询，保证启动页观感顺滑
     tick();
