@@ -32,9 +32,18 @@ export interface WorkflowEditorTopBarProps {
   setSubgraphStack: React.Dispatch<
     React.SetStateAction<{ uid: string; name: string; nodeId: string }[]>
   >;
-  fetchDetail: (opts?: { subgraphUid?: string; parentTitle?: string; bust?: boolean }) => Promise<void>;
+  fetchDetail: (opts?: {
+    subgraphUid?: string;
+    parentTitle?: string;
+    bust?: boolean;
+    /** 目标层级的宿主链（`4` / `4:5`），子图坐标按它拼键读回。 */
+    hostNodeId?: string;
+  }) => Promise<void>;
   onExitSubgraph: () => void;
-  forceReloadDetail: () => void;
+  /** 强制重载当前视图：必须带上本视图的宿主链，否则子图里拖过的坐标
+   *  会因为读错命名空间而全部丢失。`silent` 用于重置布局这类主动重拉，
+   *  不把画布打成 loading。 */
+  forceReloadDetail: (hostNodeId?: string, silent?: boolean) => void;
   setViewJsonOpen: React.Dispatch<React.SetStateAction<boolean>>;
   resetLayout: () => void;
   /** 「恢复默认映射」：清掉当前模式下被覆盖过的落点，全部回到自动判定。 */
@@ -43,6 +52,8 @@ export interface WorkflowEditorTopBarProps {
   hasParamWiring: boolean;
   /** 当前模式（无模式时落点覆盖没有归属，按钮禁用并说明原因）。 */
   wiringMode: string | null;
+  /** 当前视图的宿主链（顶层为空串，下钻后 `4` / `4:5`）。 */
+  viewHostNodeId: string;
   handleSave: () => void;
   saving: boolean;
   error: string;
@@ -62,6 +73,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   resetParamWiring,
   hasParamWiring,
   wiringMode,
+  viewHostNodeId,
   handleSave,
   saving,
   error,
@@ -170,7 +182,18 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                       onClick={() => {
                         const next = subgraphStack.slice(0, i + 1);
                         setSubgraphStack(next);
-                        void fetchDetail({ subgraphUid: crumb.uid, parentTitle: crumb.name });
+                        /* 跳到第 i 层：宿主链是这一层之前所有 wrapper id 的
+                         *  拼接（与 runtimeNodeId 同口径），少拼一层就会读到
+                         *  别的层级的坐标。 */
+                        const hostChain = next
+                          .slice(0, -1)
+                          .map((c) => c.nodeId)
+                          .join(":");
+                        void fetchDetail({
+                          subgraphUid: crumb.uid,
+                          parentTitle: crumb.name,
+                          hostNodeId: hostChain,
+                        });
                       }}
                       className={`${baseCls} rounded-md px-1.5 py-0.5 text-gray-400 hover:bg-white/5 hover:text-violet-200`}
                       title={`${crumb.name}（跳到此层）`}
@@ -198,7 +221,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                *     schema 不匹配会直接导致 cacheKey 不命中，走冷路径 */}
               <button
                 type="button"
-                onClick={forceReloadDetail}
+                onClick={() => forceReloadDetail(viewHostNodeId)}
                 className="ml-1 inline-flex items-center gap-1 rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-200 transition-colors hover:bg-rose-500/20"
                 title="强制重载（清 sessionStorage + 跳过 server LRU + 重拉数据）"
               >

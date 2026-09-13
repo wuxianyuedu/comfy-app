@@ -829,10 +829,27 @@ export function reportDroppedBoundaryLinks(
  * positions win; stale keys not present in the subgraph are ignored; raw
  * positions are only seeded for nodes in this subgraph so neighbouring
  * subgraphs' positions can't leak in.
+ *
+ * `hostId` is the host-chain prefix the drag handler writes with
+ * (`runtimeNodeId`, e.g. `4` or `4:5`).  The shared `positions` column keeps
+ * subgraph inner nodes under `host:inner` keys, but this view's node ids are
+ * the BARE inner ids — reading only bare keys silently discarded every drag
+ * made inside a subgraph, so reopening always showed raw positions.  Both
+ * spellings are accepted here (bare, for legacy/imported data).
  */
+export function runtimeInnerId(key: string, hostId: string): string {
+  if (!hostId) return "";
+  const prefix = `${hostId}:`;
+  if (!key.startsWith(prefix)) return "";
+  const inner = key.slice(prefix.length);
+  /* 只剥本层宿主链：`4:5:1670` 相对 `4` 属于更深一层，不是本视图的键。 */
+  return inner && !inner.includes(":") ? inner : "";
+}
+
 export function extractSubgraphAnnotations(
   sub: RawSubgraphDef,
-  tplPositions: Record<string, [number, number]>
+  tplPositions: Record<string, [number, number]>,
+  hostId = ""
 ): {
   groups: { id: string; title: string; bounding: [number, number, number, number]; color: string }[];
   notes: { id: string; title: string; text: string; pos: [number, number]; size: [number, number]; color: string }[];
@@ -877,21 +894,31 @@ export function extractSubgraphAnnotations(
     });
   }
 
-  /* Positions: raw.pos per node, layered with user-dragged positions
-   *  from `tpl.positions`. */
-  const positions: Record<string, [number, number]> = {};
+  /* Positions: user-dragged overrides win over the raw (original) coords.
+   *  Both `host:inner` and bare-inner key spellings are read — see the
+   *  `hostId` note above. */
   const innerNodeIdSet = new Set(
     innerNodes.filter((rn) => rn?.id != null).map((rn) => String(rn.id))
   );
-  for (const [id, pos] of Object.entries(tplPositions)) {
-    if (innerNodeIdSet.has(id) && Array.isArray(pos) && pos.length >= 2) {
-      positions[id] = [Number(pos[0]) || 0, Number(pos[1]) || 0];
-    }
+  const draggedByInnerId: Record<string, [number, number]> = {};
+  for (const [key, pos] of Object.entries(tplPositions)) {
+    if (!Array.isArray(pos) || pos.length < 2) continue;
+    const innerId = innerNodeIdSet.has(key) ? key : runtimeInnerId(key, hostId);
+    if (!innerId || !innerNodeIdSet.has(innerId)) continue;
+    draggedByInnerId[innerId] = [Number(pos[0]) || 0, Number(pos[1]) || 0];
   }
+  const positions: Record<string, [number, number]> = {};
   for (const rn of innerNodes) {
     if (!rn?.id) continue;
     const id = String(rn.id);
-    if (positions[id]) continue; // user drag wins
+    /* 用 `!== undefined` 而不是真值判断：坐标为 `[0,0]` 的对象仍然为真，
+     *  但一旦写成 `[0, 0]` 的裸数组比较、或改成取单值时，0 会被当成「没有
+     *  拖拽」，原始坐标又把用户拖到原点的节点盖回去。 */
+    const dragged = draggedByInnerId[id];
+    if (dragged !== undefined) {
+      positions[id] = dragged;
+      continue;
+    }
     if (Array.isArray(rn.pos) && rn.pos.length >= 2) {
       positions[id] = [Number(rn.pos[0]) || 0, Number(rn.pos[1]) || 0];
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Node } from "@xyflow/react";
 import type { WorkflowDetail, WorkflowIOParam } from "@/components/studio/workflow-types";
@@ -23,6 +23,9 @@ export interface WorkflowPersistenceArgs {
   onClose: () => void;
   setSaving: Dispatch<SetStateAction<boolean>>;
   setError: Dispatch<SetStateAction<string>>;
+  /** 重置布局后重新拉当前视图的数据：服务端已删掉本视图的坐标覆盖，
+   *  重新取到的就是工作流自带的原始布局。 */
+  reloadView?: () => void;
   /** 当前视图的宿主链路（顶层为空串，下钻一层是 `4`，再下钻是 `4:5`）。
    *  子图内部的节点 id 是**裸内部 id**（`1670`），而服务端 `positions` 列里
    *  同一批节点存的是**拼接键**（`4:1670`，见 `extractPositions` 里
@@ -50,172 +53,87 @@ export function useWorkflowPersistence({
   onSave,
   setSaving,
   setError,
+  reloadView,
   hostNodeId = "",
 }: WorkflowPersistenceArgs) {
   const toast = useToast();
-  /* Snapshot the original layout for the current view (keyed by
-   *  detail.id) the FIRST time we see each workflow / subgraph.  The
-   *  "重置布局" (reset layout) button restores these so users can undo
-   *  every manual drag and return to the workflow's as-loaded arrangement:
-   *  raw imports → the imported coordinates; API-only workflows → `null`
-   *  (which makes `initialNodes` fall through to the Kahn auto-layout, the
-   *  original behaviour for those workflows).  Covers both graph-node
-   *  `positions` and `notes` (notes are draggable too, so "所有节点"
-   *  must reset them as well).  Captured once per detail.id so drilling
-   *  into / back out of subgraphs keeps each view's own baseline. */
-  const originalLayoutByIdRef = useRef<
-    Record<
-      string,
-      {
-        positions: Record<string, [number, number]> | null;
-        notes: WorkflowDetail["notes"] | null;
-      }
-    >
-  >({});
-  useEffect(() => {
-    /* 只读取 detail.id：整体引用 detail 会让本 effect 依赖整个对象（每次
-     *  PATCH 后都是新引用），而这里只关心「换了另一份图」这一个信号。 */
-    const detailId = detail?.id;
-    if (!detailId) return;
-    /* RAW / API 视图各有独立基线。RAW 视图按 rawView 的节点/
-     *  位置快照，API 视图按 API 图的快照，互不干扰（避免 RAW 重置时误还原 API
-     *  坐标，反之亦然）。 */
-    const snapKey = `${detailId}`;
-    if (!(snapKey in originalLayoutByIdRef.current)) {
-      originalLayoutByIdRef.current[snapKey] = {
-        positions: scopeDetail?.positions ?? null,
-        notes: scopeDetail?.notes ?? null,
-      };
-    }
-  }, [detail?.id, scopeDetail, hostNodeId]);
-
-  /* Reset every node back to the layout as originally loaded for this view.
-   *  - Restore `detail.positions` + `detail.notes` to the snapshot taken
-   *    on entry, so the in-memory canvas (via the sync effect above)
-   *    re-lays the nodes out to their original coordinates.
-   *  - Persist the same to the server (`PATCH positions` + `PATCH notes`)
-   *    so a reload keeps the reset.  `merge: true` is sent for BOTH the
-   *    top-level and the subgraph view, so only the keys belonging to the
-   *    current view's id-namespace are written and the other namespace
-   *    (api-id coords vs raw-id / inner-subgraph coords) is preserved.
-   *  - Detect a SPARSE snapshot — a snapshot that genuinely lacks
-   *    coordinates for nodes of the CURRENT view.  If the snapshot is
-   *    partial, do NOT write it back to the server — that would
-   *    re-poison the column and the user's next open would be just as
-   *    broken.  Instead, just clear the local `positions` to `null` so
-   *    the in-memory canvas re-lays out via Kahn; the next manual drag
-   *    will start populating the column properly.  Mirror the same logic
-   *    for notes.
+  /* 「本视图该管哪些键」的唯一判据。
    *
-   *  Sparse detection is scoped to the CURRENT view before counting.
-   *  `detail.positions` is one flat map holding several id-namespaces at
-   *  once (top-level node ids, `wrapperId:innerId` keys for inner nodes,
-   *  `grp:bpin:*` rails).  Comparing its raw key count against the number
-   *  of nodes in the current view conflates the two: a subgraph view with
-   *  30 inner nodes and a snapshot holding 2 top-level keys reads as
-   *  "2 < 30 ⇒ sparse", and the reset then silently degrades to "clear
-   *  local positions + Kahn re-layout" — the dragged nodes keep their
-   *  dragged coordinates and the button looks dead.  Filtering the
-   *  snapshot down to the ids this view actually renders is what makes
-   *  the count comparable. */
+   * `positions` 是一张混装多套 id 命名空间的平表：
+   *   · 顶层节点      → 裸 id（`4`）
+   *   · 子图内部节点  → `宿主:内部` 拼接键（`4:1670`；嵌套是 `4:5:1670`）
+   *   · 边界 pin 导轨 → `grp:bpin:inputs|outputs`
+   * 重置布局只该清掉**本层**的键：顶层视图清裸 id（子图的 `host:inner` 属于
+   * 下钻视图），子图视图清 `host:inner` 这一层（`host:inner:deeper` 属于更深
+   * 一层）。判断口径与服务端 `resetPositionsScope` 的删除规则必须一致，否则
+   * 本地剔了、库里没删（或反过来），一刷新又是另一个布局。 */
+  const isForeignViewKey = useCallback(
+    (key: string) => {
+      /* 导轨不属于任何数据节点：顶层视图的导轨是顶层布局的一部分，属于本层
+       *  （返回 false = 一并清掉）；子图视图里的导轨属于外层画布，不能顺手
+       *  抹掉（返回 true = 保留）。 */
+      if (key.startsWith("grp:bpin:")) return hostNodeId !== "";
+      if (!hostNodeId) return key.includes(":");
+      const prefix = `${hostNodeId}:`;
+      if (!key.startsWith(prefix)) return true;
+      const inner = key.slice(prefix.length);
+      return inner.includes(":");
+    },
+    [hostNodeId]
+  );
+  /* 把当前视图的节点位置恢复成工作流自带的原始布局（用户口语里的
+   *  「重置位置」）。语义 = 清除本视图所有被改动过的坐标，见下方实现说明。 */
   const resetLayout = useCallback(() => {
     if (!detail) return;
     if (!scopeDetail) return;
-    const snapKey = `${detail.id}`;
-    const snap = originalLayoutByIdRef.current[snapKey] ?? null;
-    const orig = snap?.positions ?? null;
-    const origNotes = snap?.notes ?? null;
-    /* 快照裁剪到「当前视图真正渲染的那些 id」再计数。
-     *  - 图节点：scopeDetail.nodes 的 id（顶层是裸 id，下钻后是 `宿主:内部`
-     *    形式，与服务端/拖拽侧写库的键同口径）。
-     *  - 边界 pin 导轨 `grp:bpin:inputs|outputs` 是可拖动的，键不在
-     *    scopeDetail.nodes 里，但同样属于本视图，单独放行，否则它们的坐标
-     *    会被裁剪掉、拖过的导轨位置重置不回去。
-     *  - 过滤后为空 = 快照里一个键都不属于本视图（典型的跨命名空间错配，
-     *    如 RAW 视图快照 vs API 视图），按「无快照」处理（走 Kahn 兜底），
-     *    不再拿别的命名空间的键数去冒充本视图的覆盖率。 */
-    /* 本视图的节点 id 同时接受两种写法：快照一侧取决于数据来源 ——
-     *  `buildSubgraphDetail` 的 `positions` 用**裸内部 id**（`1001`），
-     *  而顶层列与拖拽落库用**拼接键**（`4:1001`）。两者指向同一个节点，
-     *  过滤时都要认，否则「裁剪后为空」会被误判成本视图没有快照。 */
-    const viewNodeIds = new Set<string>();
-    for (const node of scopeDetail.nodes) {
-      viewNodeIds.add(node.id);
-      viewNodeIds.add(runtimeNodeId({ nodeId: node.id, hostNodeId }));
-    }
-    const isThisViewKey = (key: string) =>
-      viewNodeIds.has(key) || key.startsWith("grp:bpin:");
-    /* 还原时把裸内部 id 规范成与落库同口径的拼接键：拖拽写库用的是
-     *  `宿主:内部`，若这里把快照里的裸 `1001` 原样写回，就等于往同一个节点的
-     *  另一套键上写 —— 顶层读不到、下次进子图又读到旧值，越重置越乱。
-     *  已经带前缀的键（顶层 `4:1001`、导轨 `grp:bpin:*`）原样保留。 */
-    const normalizeKey = (key: string) =>
-      hostNodeId && viewNodeIds.has(key) && !key.includes(":")
-        ? runtimeNodeId({ nodeId: key, hostNodeId })
-        : key;
-    const origForView =
-      orig === null
-        ? null
-        : Object.fromEntries(
-            Object.entries(orig)
-              .filter(([key]) => isThisViewKey(key))
-              .map(([key, pos]) => [normalizeKey(key), pos])
-          );
-    const origForViewCount =
-      origForView === null ? 0 : Object.keys(origForView).length;
-    /* 本视图该有多少个坐标：全部图节点 + 快照里**实际存在**的导轨键。
-     *  导轨数量按实到实算（不是硬编码 2）：只要第一条导轨被拖过就会落盘一条
-     *  坐标，拿「2」当期望值会把这种正常情况误判成 sparse。 */
-    const origRailCount =
-      orig === null
-        ? 0
-        : Object.keys(orig).filter((key) => key.startsWith("grp:bpin:")).length;
-    const expectedCount = scopeDetail.nodes.length + origRailCount;
-    const isSparse =
-      (orig !== null && origForViewCount > 0 && origForViewCount < expectedCount) ||
-      (orig !== null && origForViewCount === 0 && scopeDetail.nodes.length > 0) ||
-      (origNotes !== null &&
-        scopeDetail.notes &&
-        Array.isArray(origNotes) &&
-        Array.isArray(scopeDetail.notes) &&
-        origNotes.length < scopeDetail.notes.length);
-    if (isSparse) {
-      /* Snapshot is incomplete — keep the server's existing positions
-       * untouched and just clear locally so the canvas re-lays out via
-       * Kahn.  Subsequent drags will populate a fresh, complete map. */
-      setDetail((prev) =>
-        prev ? { ...prev, positions: null, notes: prev.notes ?? null } : prev
-      );
-      requestAnimationFrame(() => requestAnimationFrame(() => fitToContent()));
-      return;
-    }
-    /* 只把「属于本视图」的键还原回内存与库：其余命名空间的键（另一视图的
-     *  坐标）必须原样留着，否则重置一次就把另一套布局抹了。 */
-    setDetail((prev) =>
-      prev
-        ? {
-            ...prev,
-            positions: origForView ?? null,
-            notes: origNotes ?? prev.notes,
-          }
-        : prev
-    );
-    const payload: Record<string, unknown> = {
-      positions: origForView ?? {},
-      notes: origNotes ?? [],
-    };
-    /* 快照含 raw-id / 内部节点坐标时，用顶层默认的 REPLACE
-     *  写回会清空 tpl.positions 里并存的另一套坐标。统一走 merge:true，只把
-     *  当前视图的键写回、保留另一视图的键，避免跨视图数据损坏。 */
-    payload.merge = true;
+    /* 「重置布局」= 清除本视图所有被改动过的位置，回到工作流自带的原始布局。
+     *
+     * 不能靠「把进入时的快照写回去」：客户端拿到的 `detail.positions` 是
+     * 服务端把**原始坐标**与**用户拖拽覆盖**合并后的结果，客户端分不清哪个
+     * 键是覆盖。照着重写一遍等于把覆盖值当原始值再存一次 —— 那正是「重置后
+     * 回不到原始布局」「再改一次反而回归到一个错误位置」的来源：重置写的
+     * 恰恰就是它要清的那份数据。
+     *
+     * 正确做法是让服务端**删掉**本命名空间的坐标键（`resetPositionsScope`）：
+     * 读路径在覆盖消失后自然只剩原始坐标，语义与用户理解的「清除更改过的
+     * 位置」一致。本地的旧坐标同样要剔除，否则在重新拉取落到之前，画布还是
+     * 旧的覆盖值。 */
+    setDetail((prev) => {
+      if (!prev) return prev;
+      const cur = prev.positions ?? null;
+      if (cur === null) return prev;
+      const kept: Record<string, [number, number]> = {};
+      for (const [key, pos] of Object.entries(cur)) {
+        if (isForeignViewKey(key)) kept[key] = pos;
+      }
+      return { ...prev, positions: Object.keys(kept).length > 0 ? kept : null };
+    });
     savePatch.mutate({
       id: workflowId,
-      positions: payload.positions,
-      notes: payload.notes,
-      mergePositions: payload.merge === true,
+      /* 空串 = 顶层视图；子图视图传宿主链（`4` / `4:5`）。服务端据此只清
+       *  本层的键，别的命名空间与别的层级原样保留。 */
+      resetPositionsScope: hostNodeId,
     });
-    requestAnimationFrame(() => requestAnimationFrame(() => fitToContent()));
-  }, [detail, setDetail, workflowId, scopeDetail, fitToContent, savePatch, hostNodeId]);
+    /* 重新拉当前视图：服务端的覆盖已经删掉，这一次拿到的是真正的原始布局
+     * （子图视图的原始坐标来自 `definitions.subgraphs[uid].nodes[].pos`）。
+     * 不重拉也能看，但本地剔除只能丢掉已知的覆盖键；重拉才是一次干净的
+     * 对齐，也顺带把服务端缓存里那份带覆盖的结果换掉。 */
+    if (reloadView) {
+      reloadView();
+    } else {
+      requestAnimationFrame(() => requestAnimationFrame(() => fitToContent()));
+    }
+  }, [
+    detail,
+    setDetail,
+    workflowId,
+    scopeDetail,
+    fitToContent,
+    savePatch,
+    hostNodeId,
+    reloadView,
+    isForeignViewKey,
+  ]);
 
   /* Re-sync nodes when paramMap changes (update assignedRole badges). 取角色时
    *  跳过 `mode:` 前缀的按模式连线表 —— 它的值不是节点 id，命中会把整张模式

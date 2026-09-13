@@ -345,6 +345,69 @@ describe("workflow.update", () => {
     });
   });
 
+  it("resetPositionsScope 顶层：只清裸 id 与导轨，子图命名空间的坐标留着", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "wf-reset-top",
+      userId: "user-a",
+      rawJson: { nodes: [{ id: "1", type: "KSampler", pos: [9, 9] }], links: [] },
+      positions: {
+        "1": [111, 222],
+        "grp:bpin:inputs": [0, 0],
+        "4:1670": [1000, 1000],
+      },
+    });
+    await createCaller(makeCtx()).update({ id: "wf-reset-top", resetPositionsScope: "" });
+    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-reset-top")!;
+    expect(row.positions).toEqual({ "4:1670": [1000, 1000] });
+  });
+
+  it("resetPositionsScope 子图：只清本层拼接键，wrapper 本体与更深一层都不动", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "wf-reset-sub",
+      userId: "user-a",
+      positions: {
+        "4": [10, 10],
+        "4:1670": [1000, 1000],
+        "4:1671": [1200, 1000],
+        "4:5:1670": [500, 500],
+        "9:1670": [700, 700],
+      },
+    });
+    await createCaller(makeCtx()).update({ id: "wf-reset-sub", resetPositionsScope: "4" });
+    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-reset-sub")!;
+    expect(row.positions).toEqual({
+      "4": [10, 10],
+      "4:5:1670": [500, 500],
+      "9:1670": [700, 700],
+    });
+  });
+
+  it("重置清空后写入 null 而不是空对象（空对象会被当「有坐标」把节点堆到原点）", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "wf-reset-empty",
+      userId: "user-a",
+      positions: { "1": [1, 1] },
+    });
+    await createCaller(makeCtx()).update({ id: "wf-reset-empty", resetPositionsScope: "" });
+    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-reset-empty")!;
+    expect(row.positions).toBeNull();
+  });
+
+  it("resetPositionsScope 与 positions 互斥：重置时不被写回的数据覆盖", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "wf-reset-excl",
+      userId: "user-a",
+      positions: { "1": [1, 1] },
+    });
+    await createCaller(makeCtx()).update({
+      id: "wf-reset-excl",
+      resetPositionsScope: "",
+      positions: { "1": [999, 999] },
+    });
+    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-reset-excl")!;
+    expect(row.positions).toBeNull();
+  });
+
   it("upgradeFromApi 非 API 格式 → BAD_REQUEST", async () => {
     seedWorkflowTemplate(tdb, { id: "wf-1", userId: "user-a" });
     await expect(

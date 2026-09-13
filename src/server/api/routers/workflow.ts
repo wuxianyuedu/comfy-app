@@ -588,6 +588,10 @@ export const workflowRouter = createTRPCRouter({
         modelTags: z.array(z.string()).optional(),
         upgradeFromApi: z.unknown().optional(),
         mergePositions: z.boolean().optional(),
+        /** 「重置布局」用：删掉该命名空间下的全部坐标覆盖，让节点回到工作流
+         *  自带的原始布局。空串表示顶层；子图视图传宿主链（`4` / `4:5`）。
+         *  与 `positions` 互斥（重置是删除，不是写回）。 */
+        resetPositionsScope: z.string().optional(),
         groups: z.unknown().optional(),
         notes: z.unknown().optional(),
       })
@@ -635,15 +639,63 @@ export const workflowRouter = createTRPCRouter({
         patch.apiSource = "user";
       }
 
+      /* 「重置布局」= 直接清除本视图的坐标覆盖。
+       *
+       *  为什么不是「把快照写回去」：客户端拿到的 `detail.positions` 是
+       *  服务端把**原始坐标**与**用户拖拽覆盖**合并后的结果，客户端分不清
+       *  哪个键是覆盖。照着重写一遍等于把覆盖值当成原始值再存一次 —— 用户
+       *  看到的正是「重置之后位置回不到原始布局」「再改一次反而回归到一个
+       *  错误位置」。删除覆盖键之后，读路径自然只剩原始坐标，语义才对得上
+       *  「重置位置 = 清除所有更改过的位置」。
+       *
+       *  只删当前命名空间的键：顶层把裸 id / `grp:bpin:*` 全部清掉；子图只清
+       *  `<host>:<inner>` 这一层（`4:5:1670` 属于更深一层，用 `4:` 前缀匹配，
+       *  由 `runtimeInnerId` 同口径判定）。别的层级与别的命名空间原样保留。 */
+      if (input.resetPositionsScope !== undefined) {
+        const scope = input.resetPositionsScope;
+        /* 重置是「删除覆盖」这一件事本身，与写入互斥：同时传 positions 时
+         *  以重置为准，否则刚清掉的键又被写回来，按钮看起来时灵时不灵。 */
+        patch.positions = undefined;
+        const cur =
+          existing.positions && typeof existing.positions === "object" && !Array.isArray(existing.positions)
+            ? (existing.positions as Record<string, unknown>)
+            : {};
+        const next: Record<string, unknown> = {};
+        if (scope) {
+          const prefix = `${scope}:`;
+          for (const [key, value] of Object.entries(cur)) {
+            /* 导轨坐标 `grp:bpin:*` 不属于任何数据节点，但它是顶层画布的布局
+             *  一部分：顶层重置要清掉，子图重置不能顺手抹掉（那是外层视图的
+             *  布局）。 */
+            if (key.startsWith("grp:bpin:")) continue;
+            const inner = key.startsWith(prefix) ? key.slice(prefix.length) : "";
+            /* 只保留「不属于本层」的键：不带前缀的裸键（原始/老数据）与更深一层
+             *  的拼接键都要留着，「属于本层」的才丢。 */
+            if (inner && !inner.includes(":")) continue;
+            next[key] = value;
+          }
+        } else {
+          for (const [key, value] of Object.entries(cur)) {
+            if (key.startsWith("grp:bpin:")) continue;
+            /* 顶层只清「裸 id」：保留的必须是带冒号的键 —— 子图内部节点的
+             *  `host:inner` 坐标属于下钻视图，顶层重置不该动。 */
+            if (!key.includes(":")) continue;
+            next[key] = value;
+          }
+        }
+        patch.positions = Object.keys(next).length > 0 ? next : null;
+      }
+
       // positions merge / replace + groups & notes write-back into rawJson
       let nextRawJson: Record<string, unknown> | null = null;
       if (existing.rawJson && typeof existing.rawJson === "object" && !Array.isArray(existing.rawJson)) {
         nextRawJson = existing.rawJson as Record<string, unknown>;
       }
-      if (input.positions !== undefined || groups !== undefined || notes !== undefined) {
+      const writePositions = input.positions !== undefined && input.resetPositionsScope === undefined;
+      if (writePositions || groups !== undefined || notes !== undefined) {
         nextRawJson = nextRawJson ? { ...nextRawJson } : {};
         const nodes = Array.isArray(nextRawJson.nodes) ? [...(nextRawJson.nodes as unknown[])] : [];
-        if (input.positions !== undefined) {
+        if (writePositions) {
           const posMap = input.positions as Record<string, [number, number]>;
           for (let i = 0; i < nodes.length; i++) {
             const nd = nodes[i];
@@ -664,7 +716,7 @@ export const workflowRouter = createTRPCRouter({
         if (notes !== undefined) nextRawJson.notes = notes;
         if (nodes.length > 0) nextRawJson.nodes = nodes;
         patch.rawJson = nextRawJson;
-        if (input.positions !== undefined) {
+        if (writePositions) {
           if (mergePositions) {
             // Merge into the existing positions column (single-key drags from
             // subgraph / RAW views must not wipe the other namespace).
@@ -758,8 +810,17 @@ export const workflowRouter = createTRPCRouter({
   /** GET /api/workflows/[id]/subgraph — full derived subgraph detail
    *  (port of the legacy REST GET handler, requires the subgraph uid). */
   subgraph: authedProcedure
-    .input(z.object({ id: z.string(), uid: z.string() }))
+    .input(
+      z.object({
+        id: z.string(),
+        uid: z.string(),
+        /* 宿主链前缀（`4` / `4:5`）。子图内部节点在 `positions` 列里存的是
+         * `宿主:内部` 拼接键，读回时按同一口径还原；缺省为空串（顶层口径 /
+         * 老客户端调用）。 */
+        hostId: z.string().optional(),
+      })
+    )
     .query(async ({ ctx, input }) => {
-      return buildSubgraphDetail(ctx.user.id, input.id, input.uid);
+      return buildSubgraphDetail(ctx.user.id, input.id, input.uid, input.hostId ?? "");
     }),
 });

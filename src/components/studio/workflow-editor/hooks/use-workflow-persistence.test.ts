@@ -46,6 +46,7 @@ function renderReset(args: {
   scopeDetail: WorkflowDetail;
   fitToContent?: () => void;
   hostNodeId?: string;
+  reloadView?: () => void;
 }) {
   const setDetail = vi.fn();
   const mutate = vi.fn();
@@ -65,6 +66,7 @@ function renderReset(args: {
         onClose: vi.fn(),
         setSaving: vi.fn(),
         setError: vi.fn(),
+        reloadView: args.reloadView,
         hostNodeId: args.hostNodeId,
       }),
     {
@@ -90,110 +92,77 @@ function readWrittenPositions(setDetail: ReturnType<typeof vi.fn>, detail: Workf
 }
 
 describe("resetLayout", () => {
-  it("快照只含顶层 id、当前视图是子图内部节点时，仍按完整快照还原（不再误判 sparse）", () => {
-    /* 服务端 positions 并存两套命名空间：顶层 `4`（wrapper 本体）与
-     * `4:1001`（wrapper 内部节点）。当前视图只渲染内部节点。 */
-    const positions = {
-      "4": [100, 100] as [number, number],
-      "4:1001": [1000, 1000] as [number, number],
-      "4:1002": [1200, 1000] as [number, number],
-    };
-    const detail = makeDetail({ positions });
-    const scopeDetail = makeDetail({
-      nodes: nodesOf(["4:1001", "4:1002"]),
-      positions,
-    });
-    const { result, setDetail, mutate } = renderReset({ detail, scopeDetail });
-
-    // 快照在首次见到 detail.id 时抓取 —— 此刻 positions 已是「原始坐标」。
-    act(() => result.current.resetLayout());
-
-    const written = readWrittenPositions(setDetail, detail);
-    expect(written).toEqual({
-      "4:1001": [1000, 1000],
-      "4:1002": [1200, 1000],
-    });
-    // 顶层命名空间的坐标不能被顺手抹掉。
-    expect(written).not.toHaveProperty("4");
-    // 同一个 payload 也落库（merge，保住另一命名空间）。
-    expect(mutate).toHaveBeenCalledTimes(1);
-    expect(mutate.mock.calls[0]![0]).toMatchObject({
-      id: "wf-1",
-      positions: { "4:1001": [1000, 1000], "4:1002": [1200, 1000] },
-      mergePositions: true,
-    });
-  });
-
-  it("快照里一个键都不属于当前视图时，按「无快照」走 Kahn 兜底（不写库）", () => {
-    const detail = makeDetail({ positions: { "4": [100, 100] as [number, number] } });
-    const scopeDetail = makeDetail({
-      nodes: nodesOf(["4:1001", "4:1002"]),
-      positions: { "4": [100, 100] as [number, number] },
-    });
-    const { result, setDetail, mutate } = renderReset({ detail, scopeDetail });
-
-    act(() => result.current.resetLayout());
-
-    expect(readWrittenPositions(setDetail, detail)).toBeNull();
-    expect(mutate).not.toHaveBeenCalled();
-  });
-
-  it("快照真的残缺（本视图节点缺坐标）时，不写库、只清本地走 Kahn", () => {
-    const positions = { "1001": [0, 0] as [number, number] };
-    const detail = makeDetail({ positions });
-    const scopeDetail = makeDetail({
-      nodes: nodesOf(["1001", "1002", "1003"]),
-      positions,
-    });
-    const { result, setDetail, mutate } = renderReset({ detail, scopeDetail });
-
-    act(() => result.current.resetLayout());
-
-    expect(readWrittenPositions(setDetail, detail)).toBeNull();
-    expect(mutate).not.toHaveBeenCalled();
-  });
-
-  it("完整快照：全部节点坐标写回并落库", () => {
+  it("重置 = 清除本视图坐标覆盖：向服务端发 resetPositionsScope，本地同步剔除", () => {
     const positions = {
       "1001": [10, 20] as [number, number],
       "1002": [30, 40] as [number, number],
     };
     const detail = makeDetail({ positions });
-    const scopeDetail = makeDetail({
-      nodes: nodesOf(["1001", "1002"]),
-      positions,
-    });
+    const scopeDetail = makeDetail({ nodes: nodesOf(["1001", "1002"]), positions });
     const { result, setDetail, mutate } = renderReset({ detail, scopeDetail });
 
     act(() => result.current.resetLayout());
 
-    expect(readWrittenPositions(setDetail, detail)).toEqual({
-      "1001": [10, 20],
-      "1002": [30, 40],
+    /* 顶层视图 → 空串 scope。 */
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(mutate.mock.calls[0]![0]).toEqual({
+      id: "wf-1",
+      resetPositionsScope: "",
     });
-    expect(mutate.mock.calls[0]![0]).toMatchObject({ mergePositions: true });
+    /* 本地坐标整片清掉：重拉之前画布也不该继续显示旧覆盖。 */
+    expect(readWrittenPositions(setDetail, detail)).toBeNull();
   });
 
-  it("可拖动的边界导轨坐标一并还原，不因裁剪而丢失", () => {
+  it("重置必须重新拉取当前视图（否则画布停在本地剔除后的中间态）", () => {
+    const detail = makeDetail({
+      positions: { "1001": [10, 20] as [number, number] },
+    });
+    const reloadView = vi.fn();
+    const { result, fitToContent } = renderReset({
+      detail,
+      scopeDetail: makeDetail({ nodes: nodesOf(["1001"]), positions: detail.positions }),
+      reloadView,
+    });
+
+    act(() => result.current.resetLayout());
+
+    expect(reloadView).toHaveBeenCalledTimes(1);
+    /* 有重拉就不再自己 fit：重拉回来的数据会触发一次新的 fit。 */
+    expect(fitToContent).not.toHaveBeenCalled();
+  });
+
+  it("顶层重置只清裸 id，子图命名空间的键与导轨之外的同层数据原样保留", () => {
     const positions = {
-      "1001": [10, 20] as [number, number],
+      "4": [100, 100] as [number, number],
+      "4:1670": [1000, 1000] as [number, number],
       "grp:bpin:inputs": [0, 0] as [number, number],
-      "grp:bpin:outputs": [900, 0] as [number, number],
     };
-    const detail = makeDetail({ positions });
-    const scopeDetail = makeDetail({
-      nodes: nodesOf(["1001"]),
+    const detail = makeDetail({
+      nodes: nodesOf(["4"]),
       positions,
     });
+    const { result, setDetail, mutate } = renderReset({
+      detail,
+      scopeDetail: detail,
+    });
+
+    act(() => result.current.resetLayout());
+
+    /* 子图内部节点的坐标属于下钻视图，顶层重置不该碰。 */
+    expect(readWrittenPositions(setDetail, detail)).toEqual({
+      "4:1670": [1000, 1000],
+    });
+    expect(mutate.mock.calls[0]![0]).toEqual({ id: "wf-1", resetPositionsScope: "" });
+  });
+
+  it("没有坐标覆盖时重置是空操作（不发请求、不产生多余状态）", () => {
+    const detail = makeDetail({ positions: null });
+    const scopeDetail = makeDetail({ nodes: nodesOf(["1001"]), positions: null });
     const { result, setDetail } = renderReset({ detail, scopeDetail });
 
     act(() => result.current.resetLayout());
 
-    expect(readWrittenPositions(setDetail, detail)).toEqual({
-      "1001": [10, 20],
-      "grp:bpin:inputs": [0, 0],
-      "grp:bpin:outputs": [900, 0],
-    });
+    expect(readWrittenPositions(setDetail, detail)).toBeNull();
   });
 });
 
@@ -256,13 +225,14 @@ describe("resetLayout · 子图 id 命名空间", () => {
     });
   });
 
-  it("子图还原只写本视图的拼接键，顶层 wrapper 坐标与导轨坐标都不受影响", () => {
-    /* 子图细节（buildSubgraphDetail 的产物）里 positions 是**裸内部 id**，
-     * 服务端顶层列里同时躺着 wrapper 本体 `4` 与导轨 `grp:bpin:*`。 */
+  it("子图重置只清本层的拼接键，顶层 wrapper 坐标与导轨坐标都不受影响", () => {
+    /* 子图视图下 `positions` 里混着三套东西：wrapper 本体 `4`（顶层视图的
+     *  布局）、`4:1670`（本层的拖拽覆盖）、`grp:bpin:*`（外层画布的导轨）。
+     *  重置只该清中间那一套。 */
     const positions = {
       "4": [0, 0] as [number, number],
-      "1001": [1000, 1000] as [number, number],
-      "1002": [1200, 1000] as [number, number],
+      "4:1001": [1000, 1000] as [number, number],
+      "4:1002": [1200, 1000] as [number, number],
       "grp:bpin:inputs": [5, 5] as [number, number],
     };
     const detail = makeDetail({
@@ -278,13 +248,61 @@ describe("resetLayout · 子图 id 命名空间", () => {
 
     act(() => result.current.resetLayout());
 
-    /* 本视图还原时把内部 id 拼成与落库同口径的 `宿主:内部`；导轨属于本视图，
-     * 原样保留；wrapper 本体 `4` 与当前视图无关，不能被顺手抹掉。 */
+    expect(mutate.mock.calls.at(-1)![0]).toEqual({
+      id: "wf-1",
+      resetPositionsScope: "4",
+    });
     expect(readWrittenPositions(setDetail, detail)).toEqual({
-      "4:1001": [1000, 1000],
-      "4:1002": [1200, 1000],
+      "4": [0, 0],
       "grp:bpin:inputs": [5, 5],
     });
-    expect(mutate.mock.calls.at(-1)![0]).toMatchObject({ mergePositions: true });
+  });
+
+  it("嵌套子图只清自己那一层，更深的 `4:5:1670` 留给下层视图", () => {
+    const positions = {
+      "4:5": [0, 0] as [number, number],
+      "4:5:1670": [1000, 1000] as [number, number],
+      "4:1671": [700, 700] as [number, number],
+    };
+    const detail = makeDetail({
+      id: "wf-1#subgraph:nested",
+      nodes: nodesOf(["1670"]),
+      positions,
+    });
+    const { result, setDetail, mutate } = renderReset({
+      detail,
+      scopeDetail: detail,
+      hostNodeId: "4:5",
+    });
+
+    act(() => result.current.resetLayout());
+
+    expect(mutate.mock.calls.at(-1)![0]).toEqual({
+      id: "wf-1",
+      resetPositionsScope: "4:5",
+    });
+    expect(readWrittenPositions(setDetail, detail)).toEqual({
+      "4:5": [0, 0],
+      "4:1671": [700, 700],
+    });
+  });
+
+  it("子图重置后重新拉取当前视图", () => {
+    const detail = makeDetail({
+      id: "wf-1#subgraph:uid",
+      nodes: nodesOf(["1001"]),
+      positions: { "4:1001": [1000, 1000] as [number, number] },
+    });
+    const reloadView = vi.fn();
+    const { result } = renderReset({
+      detail,
+      scopeDetail: detail,
+      hostNodeId: "4",
+      reloadView,
+    });
+
+    act(() => result.current.resetLayout());
+
+    expect(reloadView).toHaveBeenCalledTimes(1);
   });
 });

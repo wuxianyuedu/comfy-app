@@ -818,6 +818,9 @@ function WorkflowEditorBody({
     onClose,
     setSaving,
     setError,
+    /* 重置布局之后重新拉当前视图：服务端已经把坐标覆盖删掉，重拉拿到的就是
+     *  工作流自带的原始布局。 */
+    reloadView: () => forceReloadDetail(viewHostNodeId, true),
     /* 子图视图下把宿主链路传进去：内部节点 id 要拼成 `宿主:内部` 才与
      *  `positions` 列里的键同口径（见 use-workflow-persistence 的说明）。 */
     hostNodeId: viewHostNodeId,
@@ -874,6 +877,7 @@ function WorkflowEditorBody({
           fetchDetail={fetchDetail}
           onExitSubgraph={onExitSubgraph}
           forceReloadDetail={forceReloadDetail}
+          viewHostNodeId={viewHostNodeId}
           setViewJsonOpen={setViewJsonOpen}
           resetLayout={resetLayout}
           resetParamWiring={() => paramMapping.resetAll()}
