@@ -28,7 +28,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { WIRE_PINS_ATTR, WIRE_ROW_ATTR } from "~/lib/workflow-io-types";
+import {
+  WIRE_DIRECTION_ATTR,
+  WIRE_PINS_ATTR,
+  WIRE_ROW_ATTR,
+} from "~/lib/workflow-io-types";
 import {
   resolveDropTarget,
   type DOMRectLike,
@@ -54,9 +58,9 @@ const DRAG_STROKE = "#c4b5fd";
  *    方向相反：圆点在宿主行右侧、卡片在节点右边且圆点骑跨卡片**左**缘，
  *    线从宿主输出行出发向右收在卡片圆点上。
  *
- *  输出侧没有「落点」概念（输出不参与映射、不可改），所以这类线恒为只读呈现，
- *  也不参与拖拽起手判定。两处共用同一套量测与画线代码，就不会出现「输入侧的线
- *  收在圆心上、输出侧的线停在行边」这种漂移。 */
+ *  输出侧也能拖（ISSUE #355）：拖输出卡片左缘那颗圆点落到宿主卡片的另一行输出
+ *  上，即改「这个输出口从哪一行取值」，落在它自己那一行则回到默认。两端共用同一
+ *  套量测与画线代码，就不会出现「输入侧的线收在圆心上、输出侧的线停在行边」。 */
 export type ParamWireKind = "paramToHost" | "hostToParam";
 
 export interface ParamWire {
@@ -65,6 +69,10 @@ export interface ParamWire {
   /** 落点的 ioKey（宿主表单行的 `data-io-key`）。
    *  `hostToParam` 线里它是**宿主输出行的 ioKey**（圆点挂 `data-port-dot`）。 */
   targetIoKey: string;
+  /** 线的键空间。输出口与输入参数是两套不同的键（且输出口本身也是 workflowIO
+   *  的键），同一个 id 在两侧可以同时存在 —— 不分开会让两条线在 React 列表里
+   *  共用同一个 key（重复 key，点选高亮会张冠李戴）。 */
+  namespace?: "param" | "output";
   /** 线的两端在哪一侧（缺省 = 输入侧）。 */
   kind?: ParamWireKind;
   /** 被连的**输出端口 handle id** —— 一个对外参数可能有多颗圆点（候选落点），
@@ -86,6 +94,13 @@ export interface WorkflowParamWiresProps {
   onConnect?: (entryId: string, ioKey: string) => void;
   /** 断开（选中一条线按 ⌫）。 */
   onDisconnect?: (entryId: string) => void;
+  /** 输出侧落点写入（拖输出卡片的圆点落到某一**输出行**上）。
+   *
+   *  与输入侧分开传：输出的落点覆盖写在 `paramMap.output.mode:<模式>`，键空间与
+   *  输入侧的 `source` 不同。上抛的是「这个输出口」与「它从哪一行取值」。 */
+  onConnectOutput?: (outputIoKey: string, targetIoKey: string) => void;
+  /** 输出侧断开（把某个输出口从它当前取值的那一行摘开）。 */
+  onDisconnectOutput?: (outputIoKey: string) => void;
 }
 
 interface Segment {
@@ -124,6 +139,10 @@ function findAnchor(
  *  （宿主表单的端口行 / 组合控件逐项参数各自带一枚）。 */
 const PIN_ANCHOR_ATTR = "data-pin-anchor";
 
+/** 行自己声明的 IO 方向（`data-io-direction`）—— 属性名收在
+ *  `workflow-io-types`（与落点锚点同源），量测侧从同一处取。 */
+const IO_DIRECTION_ATTR = WIRE_DIRECTION_ATTR;
+
 /** 本轮渲染真的画出来的落点集合（ioKey → 量得到的矩形）。
  *
  *  拖线时用它做命中测试：只有画得出来的行才落得上去。
@@ -138,15 +157,25 @@ const PIN_ANCHOR_ATTR = "data-pin-anchor";
  *      取同一块矩形（那些端口没有自己的行时只能退到这一格）。 */
 function collectDropTargets(
   container: HTMLElement,
+  /** 只收「输出行」的锚点（拖输出卡片的圆点时传 true）。
+   *
+   *  输出的取值来源必须是工作流的**输出行**（`direction: "output"`），而不是
+   *  输入参数行；把输入行也收进来的话，手势看似能落上去、写入却只能被拒绝 ——
+   *  用户看到的就是「拖过去没反应」。判据取行自己声明的方向
+   *  （`data-io-direction`），与 IO 表同源。 */
+  outputsOnly = false,
 ): { ioKey: string; rect: DOMRectLike }[] {
   /* 坐标一律取**容器局部坐标**（除缩放），与拖动时的光标坐标同一口径（见
    *  `dragPath` 与 pointerup 的用法）—— 视口缩放下才判得准落点。 */
   const scale = wireScale(container);
   const out: { ioKey: string; rect: DOMRectLike }[] = [];
   const precise = new Set<string>();
+  const isOutputAnchor = (el: Element): boolean =>
+    el.getAttribute(IO_DIRECTION_ATTR) === "output";
   for (const el of container.querySelectorAll<HTMLElement>(
     `[${PIN_ANCHOR_ATTR}], [${PORT_DOT_ATTR}]`,
   )) {
+    if (outputsOnly && !isOutputAnchor(el)) continue;
     const key =
       el.getAttribute(PIN_ANCHOR_ATTR) ?? el.getAttribute(PORT_DOT_ATTR);
     if (!key || precise.has(key)) continue;
@@ -158,6 +187,8 @@ function collectDropTargets(
   for (const el of container.querySelectorAll<HTMLElement>(
     `[${WIRE_PINS_ATTR}], [${WIRE_ROW_ATTR}]`,
   )) {
+    /* 输出的取值来源只可能是输出行：组合控件覆盖的都是输入口，直接跳过。 */
+    if (outputsOnly && !isOutputAnchor(el)) continue;
     const box = rectInContainer(el, container, scale);
     if (box.width === 0 && box.height === 0) continue;
     const pins = el.getAttribute(WIRE_PINS_ATTR);
@@ -194,7 +225,11 @@ function toRectLike(box: {
  *  宽高比 / 像素量 / 倍数各一条线），只用条目 id 会让三条线共用同一个 key
  *  （React 重复 key，且点选高亮会张冠李戴）。 */
 function wireKey(wire: ParamWire): string {
-  return `${wire.entryId}?${wire.handleId}`;
+  /* 前缀把两套键空间分开：同一个 id 既可能是某个输入参数条目，也可能是某个
+   *  输出口 —— 不分前缀时两条线会共用同一个 key（React 重复 key，点选高亮
+   *  张冠李戴）。 */
+  const ns = wire.namespace ?? (wire.kind === "hostToParam" ? "output" : "param");
+  return `${ns}:${wire.entryId}?${wire.handleId}`;
 }
 
 /** 把**屏幕**坐标换算回「容器自己的坐标空间」所需的缩放。
@@ -411,6 +446,8 @@ export function WorkflowParamWires({
   onSelect,
   onConnect,
   onDisconnect,
+  onConnectOutput,
+  onDisconnectOutput,
 }: WorkflowParamWiresProps) {
   const ref = useRef<SVGSVGElement | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
@@ -419,6 +456,9 @@ export function WorkflowParamWires({
   const [drag, setDrag] = useState<{
     entryId: string;
     handleId: string;
+    /** 这一拖是「改输入落点」还是「改输出的取值行」—— 决定可落点集合与上抛回调。
+     *  同一个手势在两列上语义不同，所以必须在这里分开记。 */
+    kind: ParamWireKind;
     /** 已算好的预览线路径（量不到圆点时为空，不画）。 */
     path: string | null;
     /** 当前悬停命中的落点 ioKey（null = 没落在任何行上）。 */
@@ -430,13 +470,13 @@ export function WorkflowParamWires({
   const hasWires = wires.length > 0;
   /* 拖线手势要能起手，即使一条线都还没画（新连一条线时 wires 为空）——
    * 但只要有人在拖，图层就必须挂着（预览线画在这里）。 */
-  const interactive = !!onConnect;
+  const interactive = !!onConnect || !!onConnectOutput;
   const mounted = hasWires || !!drag || interactive;
   /* 依赖签名：线集合变了（换工作流 / 改模式 / 落点变化）就要重量一次。 */
   const signature = wires
     .map(
       (w) =>
-        `${w.kind ?? "paramToHost"}>${w.entryId}>${w.handleId}>${w.targetIoKey}>${w.manual ? 1 : 0}`,
+        `${w.namespace ?? ""}>${w.kind ?? "paramToHost"}>${w.entryId}>${w.handleId}>${w.targetIoKey}>${w.manual ? 1 : 0}`,
     )
     .join("|");
 
@@ -479,25 +519,30 @@ export function WorkflowParamWires({
    * 移动 / 抬起同样在文档级：指针会移出线层（拖到宿主卡片上），绑在 svg 上
    * 中途就丢事件了。 */
   useEffect(() => {
-    if (!onConnect) return;
+    if (!onConnect && !onConnectOutput) return;
     const down = (event: PointerEvent) => {
       const target = event.target as HTMLElement | null;
       const anchor = target?.closest<HTMLElement>("[data-wire-anchor]");
-      /* 只读锚点（右列对外输出卡片的圆点）不起手：输出不参与映射，拖它没有可
-       *  写入的键 —— 起了手却落不下来，读作「连不上」；而且它的圆心在卡片左缘，
-       *  手势会画向反方向（ISSUE #355）。 */
-      if (!anchor || anchor.hasAttribute("data-wire-readonly")) return;
-      const raw = anchor.dataset.wireAnchor;
+      const raw = anchor?.dataset.wireAnchor;
       if (!raw) return;
       const separator = raw.indexOf("?");
       if (separator < 0) return;
       const entryId = raw.slice(0, separator);
       const handleId = raw.slice(separator + 1);
+      /* 圆点自己声明它属于哪一列（输入卡片的落点 / 输出卡片的取值行）——两列
+       *  共用同一套手势与画线，语义在这里分流。没声明方向的（老视图）按输入侧
+       *  处理。 */
+      const kind: ParamWireKind =
+        anchor.dataset.wireKind === "hostToParam" ? "hostToParam" : "paramToHost";
+      /* 对应方向的落库回调没给 = 这一列不可编辑，按下不起手（不该拖的东西不要
+       *  摆出能拖的样子）。 */
+      if (kind === "hostToParam" ? !onConnectOutput : !onConnect) return;
       event.preventDefault();
       const container = ref.current?.parentElement;
       setDrag({
         entryId,
         handleId,
+        kind,
         path: container
           ? dragPath(container, entryId, handleId, {
               x: event.clientX,
@@ -509,7 +554,7 @@ export function WorkflowParamWires({
     };
     document.addEventListener("pointerdown", down);
     return () => document.removeEventListener("pointerdown", down);
-  }, [onConnect]);
+  }, [onConnect, onConnectOutput]);
 
   useEffect(() => {
     if (!drag) return;
@@ -524,10 +569,11 @@ export function WorkflowParamWires({
         y: (event.clientY - (box?.top ?? 0)) / scale,
       };
     };
+    const outputsOnly = drag.kind === "hostToParam";
     const move = (event: PointerEvent) => {
       const point = localPoint(event);
       const hover = container
-        ? resolveDropTarget(point, collectDropTargets(container))
+        ? resolveDropTarget(point, collectDropTargets(container, outputsOnly))
         : null;
       setDrag((prev) =>
         prev
@@ -543,9 +589,15 @@ export function WorkflowParamWires({
     };
     const up = (event: PointerEvent) => {
       const hit = container
-        ? resolveDropTarget(localPoint(event), collectDropTargets(container))
+        ? resolveDropTarget(
+            localPoint(event),
+            collectDropTargets(container, outputsOnly),
+          )
         : null;
-      if (hit) onConnect?.(drag.entryId, hit);
+      if (hit) {
+        if (drag.kind === "hostToParam") onConnectOutput?.(drag.entryId, hit);
+        else onConnect?.(drag.entryId, hit);
+      }
       setDrag(null);
     };
     const cancel = () => setDrag(null);
@@ -557,7 +609,7 @@ export function WorkflowParamWires({
       document.removeEventListener("pointerup", up);
       document.removeEventListener("pointercancel", cancel);
     };
-  }, [drag, onConnect]);
+  }, [drag, onConnect, onConnectOutput]);
 
   /* 选中一条线后按 ⌫ / Delete = 在该模式下显式断开；Esc = 取消选中。
    *
@@ -568,6 +620,12 @@ export function WorkflowParamWires({
    *  焦点在输入框里时不拦截：用户在参数行里按退格是在删字，不是在断线。 */
   useEffect(() => {
     if (!selectedEntryId) return;
+    /* 选中的是右列的输出口还是左列的输入参数：两边的断开落在不同的键空间
+     *  （`paramMap.output` vs `paramMap.source`），按有没有对应回调分流。 */
+    const isOutputSelection = wires.some(
+      (w) => w.namespace === "output" && w.entryId === selectedEntryId,
+    );
+    const disconnect = isOutputSelection ? onDisconnectOutput : onDisconnect;
     const onKeyDown = (event: KeyboardEvent) => {
       const active = document.activeElement;
       if (
@@ -582,14 +640,14 @@ export function WorkflowParamWires({
         onSelect?.(null);
         return;
       }
-      if (!onDisconnect) return;
+      if (!disconnect) return;
       if (event.key !== "Backspace" && event.key !== "Delete") return;
       event.preventDefault();
-      onDisconnect(selectedEntryId);
+      disconnect(selectedEntryId);
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [selectedEntryId, onDisconnect, onSelect]);
+  }, [selectedEntryId, onDisconnect, onDisconnectOutput, onSelect, wires]);
 
   if (!mounted) return null;
 

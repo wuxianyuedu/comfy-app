@@ -14,6 +14,7 @@ import {
   type EnrichedWidget,
   type WorkflowIOEntry,
 } from "~/components/studio/shared/workflow-io";
+import { WIRE_DIRECTION_ATTR } from "~/lib/workflow-io-types";
 import { ACCENT } from "../constants";
 import { controlTypeFallback } from "../dynamic-workflow-form-config";
 import { WidgetControl } from "./WidgetControl";
@@ -171,6 +172,8 @@ export function WidgetInputRow({
           className={`relative ${dimmed ? "opacity-50" : ""}`}
           data-io-key={entry.ioKey}
           data-io-pins={wirePins ?? entry.ioKey}
+          /* 方向：这一行是**输入**参数行（拖输出卡片的圆点只能落在输出行上）。 */
+          {...{ [WIRE_DIRECTION_ATTR]: "input" }}
         >
           {withHandle && (
             <PortHandle
@@ -245,6 +248,8 @@ export function WidgetInputRow({
          * data-io-pins 是「落到这一格」的精确锚点（缺省即本行）。 */
         data-io-key={entry.ioKey}
         data-io-pins={wirePins ?? entry.ioKey}
+        /* 方向：这一行是**输入**参数行（拖输出卡片的圆点只能落在输出行上）。 */
+        {...{ [WIRE_DIRECTION_ATTR]: "input" }}
       >
         {withHandle && (
           /* 圆心锁到标签行中线（pt-1.5 = 6 + h-5 / 2 = 10 = 16px）：默认的

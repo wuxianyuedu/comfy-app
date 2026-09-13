@@ -1189,3 +1189,56 @@ export function placeParamNodes(
   }
   return out;
 }
+
+/* ── 画布上「对外输出参数节点」的几何 ──
+ *
+ * 与输入卡片同一套常量（宽度 / 行高 / 圆点尺寸都共用），只是**排在宿主节点的
+ * 右侧**（左列是「对外要什么」，右列是「对外给什么」）。位置同样派生、不落库：
+ * 作者拖不动卡片本身，要挪就挪宿主节点。
+ */
+
+/** 输出卡片列与宿主节点右缘之间的水平距离（留出走线的空间）。 */
+export const OUTPUT_CARD_OFFSET_X = GROUP_OFFSET_X;
+
+/** 输出卡片的高度：头部 + 一行端口 + 上下留白（与输入卡片同口径）。 */
+export function outputCardHeight(): number {
+  return paramNodeHeight(1);
+}
+
+/** 由宿主节点的画布位置算出输出卡片的位置（宿主卡片右侧一列）。 */
+export function placeOutputNodes(
+  outputs: readonly { ioKey: string; nodeId: string }[],
+  hostPosById: Record<string, { x: number; y: number } | undefined>,
+  hostWidthById?: Record<string, number | undefined>,
+): Record<string, { x: number; y: number }> {
+  const out: Record<string, { x: number; y: number }> = {};
+  const cursorByNode: Record<string, number> = {};
+  for (const output of outputs) {
+    const hostNodeId = nodeIdOfIoKey(output.ioKey) || output.nodeId;
+    const host = hostPosById[hostNodeId];
+    if (!host) continue;
+    const rowY = cursorByNode[hostNodeId] ?? 0;
+    const hostWidth = hostWidthById?.[hostNodeId] ?? 0;
+    out[output.ioKey] = {
+      x: host.x + hostWidth + OUTPUT_CARD_OFFSET_X,
+      y: host.y + rowY,
+    };
+    cursorByNode[hostNodeId] = rowY + outputCardHeight() + PARAM_NODE_GAP;
+  }
+  return out;
+}
+
+/** 画布上「对外输出参数节点」的 id：与输入卡片同一条命名空间，但带独立前缀 ——
+ *  一个输出的 ioKey 与某个输入条目 id 可能同名，不加前缀会撞车。 */
+export const OUTPUT_NODE_PREFIX = "pout:";
+
+export function outputNodeId(outputIoKey: string): string {
+  return `${OUTPUT_NODE_PREFIX}${outputIoKey}`;
+}
+
+/** 从节点 id 反解输出口 ioKey；不是输出卡片时返回 null。 */
+export function outputIoKeyFromNodeId(nodeId: string): string | null {
+  return nodeId.startsWith(OUTPUT_NODE_PREFIX)
+    ? nodeId.slice(OUTPUT_NODE_PREFIX.length)
+    : null;
+}
