@@ -801,6 +801,32 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     expect(rust).toContain("win32-window-focus.py");
   });
 
+  it("启动页被用户关闭而主窗仍未显示时，壳整体退出（不留无窗壳进程）", () => {
+    // 主窗在 setup 时就以隐藏态创建：只关 splash 的话壳会带着看不见的主窗
+    // 继续活着——任务栏残留、dev server 继续拉起、服务就绪后主窗还会自己
+    // 弹出来。启动页的关闭请求必须在主窗尚未显示时让整个壳退出。
+    const rust = readFileSync(
+      join(process.cwd(), "src-tauri", "src", "lib.rs"),
+      "utf8",
+    );
+    // 关闭请求的处理：钩子挂在 splash 窗口对象上、检查主窗可见性、放弃时退出
+    const handler = rust.slice(
+      rust.indexOf("启动页关闭 = 放弃本次启动"),
+      rust.indexOf("启动页看门狗"),
+    );
+    expect(handler).toContain("WindowEvent::CloseRequested");
+    expect(handler).toContain('get_webview_window("splash")');
+    expect(handler).toContain("mark_abandoned()");
+    expect(handler).toContain(".exit(0)");
+    // 交接与安全网等「显示主窗」的路径都要被 abandoned 标记拦住
+    // （CloseRequested 处理器之外的调用点：交接 / 150s 安全网 / 就绪兜底导航）
+    const abandonedGuards = rust.match(/is_abandoned\(\)/g)?.length ?? 0;
+    expect(
+      abandonedGuards,
+      "is_abandoned 拦截必须覆盖全部「显示主窗」路径",
+    ).toBeGreaterThanOrEqual(3);
+  });
+
   it("启动器在窗口就绪时拉起交接复核进程", () => {
     const launcher = readFileSync(
       join(process.cwd(), "scripts", "start_tauri_launcher.py"),

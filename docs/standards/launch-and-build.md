@@ -33,6 +33,11 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
   │           + 交换窗口默认**不抢前台**（窗口进任务栏 + 任务栏闪烁提醒），
   │           是否给前台由启动器经 COMFYAPP_FOREGROUND 决定；窗口交接那一刻
   │           再由启动器的复核进程复裁一次（见 §1.3）
+  │           + 用户关闭启动页（右上角 ✕）而主窗尚未显示 = **放弃本次启动，
+  │           整个壳进程直接退出**：主窗是隐藏待命创建的，只关 splash 会留下
+  │           看不见窗口的壳进程（任务栏残留、dev server 继续被拉起、稍后还会
+  │           自己把主窗弹出来）；壳退出后 dev server 由 dev-launcher 以壳退出
+  │           为锚点回收（正常交接时主窗已显示，壳自己关启动页不触发退出）
   └─▶ cmd → pnpm dev → node next dev（127.0.0.1:3100）
         就绪后 splash 调 navigate_to_app → main 加载 /workspace → 交换窗口
 ```
