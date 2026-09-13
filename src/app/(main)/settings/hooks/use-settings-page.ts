@@ -708,6 +708,9 @@ export function useSettingsPage(): SettingsPageController {
         url: decision.embedUrl,
         closable: true,
         blockedReason: decision.target === "blocked" ? decision.detail : null,
+        /* 不可嵌时把地址一并带进说明：用户能复制到浏览器自查，也能判断
+         * 是外壳拦的还是 ComfyUI 自己拦的（ISSUE #310）。 */
+        blockedUrl: decision.target === "blocked" ? decision.base : null,
       });
       showFlash(decision.target === "embed" ? "ok" : "err", decision.detail);
       // 无论成败都刷新状态行，修正探测抖动（如进程查询超时）造成的「未运行」显示。

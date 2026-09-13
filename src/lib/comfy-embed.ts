@@ -38,7 +38,9 @@ const UNVERIFIED: EmbedVerdict = {
   embeddable: false,
   reason:
     "未探测到 ComfyUI 放行跨源内嵌（缺 Access-Control-Allow-Origin，且无 X-Frame-Options/CSP 明确放行）" +
-    "——ComfyUI 需以 --enable-cors-header 启动（本应用拉起时会自动带上）",
+    "——ComfyUI 需以 --enable-cors-header 启动（本应用拉起时会自动带上）；" +
+    "若浏览器里手动打开同一地址正常，说明拦下内嵌的是应用外壳（WebView2 的跨源 frame 策略），" +
+    "需用带 WebView2 放行参数的壳启动（见 docs/standards/12-代码组织与文件结构.md §12.8.4）",
 };
 
 /** `X-Frame-Options` 的取值语义：只有 DENY / SAMEORIGIN 是拒绝。 */
@@ -87,12 +89,31 @@ export function isSameOrigin(a: string, b: string): boolean {
   }
 }
 
+/** 地址是否为 http(s) 源（`about:blank` / `file:` / `tauri://` 一律不算）。 */
+export function isHttpOrigin(origin: string): boolean {
+  try {
+    const { protocol } = new URL(origin);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * 由响应头判「`base` 能不能被 `hostOrigin` 内嵌」。
  *
- * 同源：浏览器不做 XFO / frame-ancestors 校验，必然可嵌。
- * 跨源：`frame-ancestors` 优先（它明确放行时按放行，明确不放行时按拒绝），
- * 没有该指令时看 `X-Frame-Options`；两个头都没有则按不可信处理。
+ * 判读顺序（每一档都对应一次真实事故，不要凭直觉调换）：
+ *   0. 任一侧**不是 http(s)**（`about:blank` / `file:` / `tauri://`）→ 判不出：
+ *      拿不到事实就不能报「可嵌」，否则页面会把用户丢进一个被拒绝的 iframe。
+ *   1. 同源 → 必然可嵌（浏览器不做 XFO / frame-ancestors 校验）。
+ *   2. 403 → ComfyUI 的 origin-only 中间件拦下了跨源（反 CSRF）。
+ *   3. `Access-Control-Allow-Origin` 有值 → 跨源放行的确证。
+ *   4. CSP `frame-ancestors` 明确放行 / 明确拒绝。
+ *   5. `X-Frame-Options: DENY|SAMEORIGIN` → 拒绝。
+ *   6. `frame-ancestors: *` → 放行（有的服务器只发通配，不发 CORS 头；
+ *      判据要认它，否则会把「明确放行」误判成「没证据」）。
+ *   7. 都没有 → 判不出：按不可嵌处理，并把「真正的原因很可能是被请求方
+ *      自己拦下」写进 reason。
  */
 export function judgeEmbeddable(input: {
   base: string;
@@ -104,6 +125,15 @@ export function judgeEmbeddable(input: {
   /** 探测响应的 `Access-Control-Allow-Origin`：有值即说明 CORS 已放行。 */
   allowOrigin?: string | null;
 }): EmbedVerdict {
+  /* 非 http(s) 的地址（壳里宿主页是 `about:blank`，见 lib.rs 的 main 窗初始
+   * URL）既不是同源、也探不出跨源放行与否。**必须先于 isSameOrigin 处理**：
+   * `URL` 对这两个「非特殊 scheme」会解析出两个空端口（都等于 0），
+   * 同源比较会脱掉 scheme 直接判成「协议/主机/端口全等」→ 把
+   * `about:blank` 与 `http://localhost:8080` 判成同源，进而报「可嵌」，
+   * 页面于是无条件塞 iframe（ISSUE #310 的空白/被拒页签现场）。 */
+  if (!isHttpOrigin(input.base) || !isHttpOrigin(input.hostOrigin)) {
+    return { ...UNVERIFIED };
+  }
   if (isSameOrigin(input.base, input.hostOrigin)) {
     return { embeddable: true, reason: "同源，浏览器不做内嵌校验" };
   }
@@ -208,6 +238,12 @@ export async function probeComfyEmbeddable(
   hostOrigin: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<EmbedVerdict> {
+  /* 非 http(s)（壳里宿主页的 origin 就是 "null" / `about:blank`）既不是同源、
+   * 也没什么可探的：**先判掉，绝不在缺少事实时报「可嵌」**——否则页面会无条件
+   * 塞 iframe，把用户丢进一个我们解释不了的空白页签。 */
+  if (!isHttpOrigin(base) || !isHttpOrigin(hostOrigin)) {
+    return { ...UNVERIFIED };
+  }
   if (isSameOrigin(base, hostOrigin)) {
     return { embeddable: true, reason: "同源，浏览器不做内嵌校验" };
   }

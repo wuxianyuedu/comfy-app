@@ -62,6 +62,12 @@ fn main() {
   tauri_build::try_build(
     tauri_build::Attributes::new().app_manifest(
       tauri_build::AppManifest::new().commands(&[
+        // 用户界面（ComfyUI 页签）与壳**不同源**，属远程内容：本命令必须在
+        // AppManifest 里声明，远程源才可能拿到 allow-webview-frame 权限。
+        // 不声明时 WebView2 的 `--disable-web-security` 不生效，跨源 iframe
+        // 只剩一条出路——对方显式发 `frame-ancestors` / `X-Frame-Options` 放行，
+        // 而 ComfyUI 两样都不发，于是页签里显示 Edge 的「已阻止此内容」。
+        "allow_webview_frame",
         "get_launch_status",
         "get_app_url",
         "get_launch_log",
@@ -74,4 +80,63 @@ fn main() {
     ),
   )
   .expect("tauri build failed");
+
+  write_webview2_perf_manifest();
+}
+
+/// 落 WebView2 的 `per_app` 性能参数，并把它复制到 exe 同级。
+///
+/// 为什么需要（ISSUE #310 反复回归的「已阻止此内容」）：应用级页签把 ComfyUI
+/// 内嵌进同一个 WebView，而两者**不同源**（端口不同即跨源）。WebView2 默认
+/// 按 Chromium 的「不同源不可嵌」执行，页面里直接显示
+/// `已阻止此内容。请与网站所有者联系以解决此问题。` —— 并且页面侧读不到任何
+/// 失败原因（跨源读不到响应头，iframe 的 error/load 事件都不带原因），是本项目
+/// 最难排查的一类失败。关闭它的唯一可靠开关是 WebView2 的
+/// `--disable-web-security`，且必须通过 `per_app` 性能参数下发。
+///
+/// 两个生效条件缺一不可（见 docs/standards/12-代码组织与文件结构.md §12.8.4）：
+///   ① manifest **必须落在 exe 旁边**（`<exe目录>/app.exe.manifest`）——WebView2
+///      只按 exe 同级的固定文件名加载它，参数否则静默失效；
+///   ② 必须**重编 Rust 壳**（`cargo build --release --features custom-protocol`）。
+///
+/// 依赖 wry 的 `WebViewAttributes::additional_browser_args`：它一旦被设置，
+/// **默认集（`--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection`
+/// ` --autoplay-policy=no-user-gesture-required`）会被整体替换**，所以本 manifest
+/// 必须把默认项原样带上，再追加本应用需要的开关。
+fn write_webview2_perf_manifest() {
+  let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap_or_else(|_| {
+    println!("cargo:warning=OUT_DIR 不可用，WebView2 跨源内嵌将失效");
+    ".".to_string()
+  }));
+  let manifest = out_dir.join("app.exe.manifest");
+  let body = r#"<?xml version="1.0" encoding="UTF-8"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <webview2:webview2 xmlns:webview2="http://schemas.microsoft.com/appx/manifest/webview2/windows10">
+        <webview2:per_app_arguments>
+          <webview2:argument>--autoplay-policy=no-user-gesture-required</webview2:argument>
+          <webview2:argument>--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection</webview2:argument>
+          <webview2:argument>--disable-web-security</webview2:argument>
+        </webview2:per_app_arguments>
+      </webview2:webview2>
+    </windowsSettings>
+  </application>
+</assembly>
+"#;
+  if let Err(e) = std::fs::write(&manifest, body) {
+    println!("cargo:warning=无法写入 WebView2 参数 manifest：{}", e);
+    return;
+  }
+  // 同步到 exe 同级目录（仓库内为 start-tauri/，与启动脚本放 app.exe 的位置一致）。
+  let exe_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    .join("..")
+    .join("start-tauri");
+  if let Err(e) = std::fs::create_dir_all(&exe_dir) {
+    println!("cargo:warning=无法创建 start-tauri 目录：{}", e);
+    return;
+  }
+  if std::fs::copy(&manifest, exe_dir.join("app.exe.manifest")).is_err() {
+    println!("cargo:warning=无法把 WebView2 参数 manifest 复制到 start-tauri（跨源内嵌将失效）");
+  }
 }

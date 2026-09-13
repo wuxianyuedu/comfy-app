@@ -15,6 +15,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   decideComfyTabOpen,
   frameAncestorsAllows,
+  isHttpOrigin,
   isSameOrigin,
   judgeEmbeddable,
   parseXFrameOptions,
@@ -218,5 +219,69 @@ describe("judgeEmbeddable — 403 优先于其它头", () => {
       allowOrigin: "*",
     });
     expect(v.embeddable).toBe(true);
+  });
+});
+
+/* ── 壳内宿主页的「非 http(s) 源」陷阱（ISSUE #310 第三次回归）────────
+ * 桌面壳的 main 窗初始 URL 是 `about:blank`（见 src-tauri/src/lib.rs），
+ * 页面把 `window.location.origin` 传上来时它就是字符串 "null"。旧判据里
+ * `isSameOrigin("about:blank", "http://localhost:8080")` 会返回 true ——
+ * `URL` 对非特殊 scheme 把端口解析成 0、且两者相同，比较只剩「主机相等」，
+ * 于是**任何** about:blank / file: 页面都会被判成「与 ComfyUI 同源、可嵌」，
+ * 无条件塞 iframe，页签里出现我们无法解释的空白/被拒页。
+ * 下面这几条钉住「判不出就不许报可嵌」。 */
+describe("judgeEmbeddable — 非 http(s) 源一律判不出", () => {
+  it("宿主是 about:blank（壳内 main 窗初始 URL）→ 不可嵌", () => {
+    const v = judgeEmbeddable({
+      base: COMFY,
+      hostOrigin: "about:blank",
+      xFrameOptions: null,
+      contentSecurityPolicy: null,
+      allowOrigin: "*",
+    });
+    expect(v.embeddable).toBe(false);
+    expect(v.reason).toContain("--enable-cors-header");
+  });
+
+  it("ComfyUI 地址是 file: / tauri:// → 不可嵌（不去猜）", () => {
+    for (const base of ["file:///C:/ComfyUI/index.html", "tauri://localhost"]) {
+      expect(
+        judgeEmbeddable({
+          base,
+          hostOrigin: HOST,
+          xFrameOptions: null,
+          contentSecurityPolicy: null,
+        }).embeddable,
+      ).toBe(false);
+    }
+  });
+
+  it("两侧都是 about:blank 也不许报可嵌（旧判据会因端口 0 判成同源）", () => {
+    expect(
+      judgeEmbeddable({
+        base: "about:blank",
+        hostOrigin: "about:blank",
+        xFrameOptions: null,
+        contentSecurityPolicy: null,
+      }).embeddable,
+    ).toBe(false);
+  });
+
+  it("探测走真实路径时同样不报可嵌，且不发请求", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    const v = await probeComfyEmbeddable(COMFY, "about:blank", fetchImpl);
+    expect(v.embeddable).toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("isHttpOrigin", () => {
+  it("只认 http / https", () => {
+    expect(isHttpOrigin("http://127.0.0.1:8080")).toBe(true);
+    expect(isHttpOrigin("https://x.test")).toBe(true);
+    expect(isHttpOrigin("about:blank")).toBe(false);
+    expect(isHttpOrigin("file:///x")).toBe(false);
+    expect(isHttpOrigin("tauri://localhost")).toBe(false);
+    expect(isHttpOrigin("not-a-url")).toBe(false);
   });
 });

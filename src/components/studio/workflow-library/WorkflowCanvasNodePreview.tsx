@@ -381,7 +381,6 @@ export function WorkflowCanvasNodePreview({
             entries={paramCards.entries}
             resolved={paramCards.resolved}
             io={workflowIO}
-            groupedKeys={groupedKeys}
           />
         )}
         {/* ── 画布同款节点卡片：唯一视觉源在 shared/workflow-node-parts ── */}

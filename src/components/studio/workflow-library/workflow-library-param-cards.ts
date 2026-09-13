@@ -102,15 +102,3 @@ export function deriveLibraryParamCards(args: {
   return { entries, resolved, ownersByPin, wires };
 }
 
-/** 某个对外参数当前落到的端口名（卡片行尾用它标出去向）。
- *
- *  落点存的是 ioKey，卡片要显示的是宿主卡片上那一行的**参数名** —— 两者经
- *  `io` 反查，不切分 ioKey（端口名本身可能含 `::`）。 */
-export function resolveTargetName(
-  io: WorkflowIOMap | null | undefined,
-  ioKey: string | null | undefined,
-): string | null {
-  if (!ioKey) return null;
-  const name = io?.[ioKey]?.name;
-  return typeof name === "string" && name.length > 0 ? name : null;
-}

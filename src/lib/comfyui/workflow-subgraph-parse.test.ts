@@ -8,12 +8,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  boundarySlotsByNode,
+  buildBoundaryLinks,
   buildSubgraphGraph,
   extractSubgraphAnnotations,
   parseSubgraphLinks,
+  parseSubgraphPins,
+  reportDroppedBoundaryLinks,
   runtimeInnerId,
 } from "./workflow-subgraph-parse";
-import type { RawSubgraphDef } from "./raw";
+import type { RawNodeInput, RawSubgraphDef } from "./raw";
 
 /** 最小子图定义：wrapper 暴露 value_1（作者名 Seed），内层 PrimitiveInt 消费它。 */
 function makeSub(extra: Record<string, unknown> = {}): RawSubgraphDef {
@@ -130,6 +134,7 @@ describe("buildSubgraphGraph — 节点作者标题", () => {
   });
 });
 
+
 /* 子图视图的坐标读回。
  *
  * 拖拽落库的键是 `宿主:内部`（`runtimeNodeId`），而这一层的节点 id 是裸内部
@@ -196,5 +201,132 @@ describe("runtimeInnerId", () => {
     expect(runtimeInnerId("9:1670", "4")).toBe("");
     expect(runtimeInnerId("1670", "4")).toBe("");
     expect(runtimeInnerId("4:1670", "")).toBe("");
+  });
+});
+
+describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实存在的那一行", () => {
+  /* ISSUE #441：React Flow 报 `Couldn't create edge for target handle id: "in"`
+   * （error#008）。根因是边界连线的 targetHandle 解析不出槽位名、落到兜底字面量
+   * `"in"`，而画布上并没有这个 handle —— 整条边被静默丢弃，「这个暴露口从来没
+   * 连上」。
+   *
+   * 触发条件是**槽位下标口径不一致**：ComfyUI 的 `target_slot` 写在「控件序号」
+   * 空间（跳过 `model`/`negative` 这类纯连接口），而 `inputs[]` 的位置是另一个
+   * 空间。哨兵边记下的关联才是权威事实，`parseSubgraphSlots` 按它解析。 */
+
+  /** 复刻 ISSUE 报文的内层节点：`model`/`negative` 是纯连接口，`seed` 是控件槽。 */
+  function makeConsumerSub(opts: {
+    targetSlot: number;
+    seedIdx: number;
+    /** seed 在 raw `inputs[]` 里的数组位置（缺省 = 紧跟两个纯连接口之后）。 */
+    seedArrayIndex?: number;
+  }): RawSubgraphDef {
+    /* 前两行是纯连接口，中间补若干占位槽 —— 让「控件序号空间」与「数组位置
+     * 空间」在下标上真的错开，测试才有区分度。 */
+    const seedAt = opts.seedArrayIndex ?? 2;
+    const slots: RawNodeInput[] = [];
+    for (let index = 0; index <= Math.max(seedAt, 2); index++) {
+      if (index === seedAt) {
+        slots.push({ name: "seed", idx: opts.seedIdx, type: "INT", widget: { name: "seed" }, link: 7 });
+      } else if (index === 0) {
+        slots.push({ name: "model", idx: 0, type: "MODEL" });
+      } else if (index === 1) {
+        slots.push({ name: "negative", idx: 1, type: "CONDITIONING" });
+      } else {
+        slots.push({ name: `extra_${index}`, idx: index, type: "FLOAT" });
+      }
+    }
+    return {
+      id: "e0940f57-80b2-480e-8a38-36968dc1763d",
+      name: "WAN22 I2V",
+      inputs: [{ id: "pin-1", name: "value_1", label: "Seed", linkIds: [7] }],
+      outputs: [],
+      links: [
+        {
+          id: 7,
+          origin_id: -10,
+          origin_slot: 0,
+          target_id: 5277,
+          target_slot: opts.targetSlot,
+          type: "INT",
+        },
+      ],
+      nodes: [
+        {
+          id: 5277,
+          type: "KSampler",
+          inputs: slots,
+          outputs: [{ name: "LATENT", links: [] }],
+          widgets_values: [123, "randomize"],
+        },
+      ],
+    };
+  }
+
+  /** 走一遍「服务端解析 → 客户端组装 handle id」的完整链路。 */
+  function resolveTargetHandle(sub: RawSubgraphDef): string | null {
+    const { linkById, boundaryLinkInfoById } = parseSubgraphLinks(sub);
+    const sg = buildSubgraphGraph(sub, linkById, boundarySlotsByNode(boundaryLinkInfoById));
+    const { pinIdByLinkId } = parseSubgraphPins(sub);
+    const links = buildBoundaryLinks(
+      boundaryLinkInfoById,
+      pinIdByLinkId,
+      sg.inputNameByNodeSlot,
+      sg.outputNameByNodeSlot
+    );
+    /* 与 `workflow-utils.buildEdges` 的组装口径逐字一致：槽位名缺席时退化成
+     * 字面量 `"in"` —— 那正是 error#008 里那个不存在的 handle。 */
+    return links[0] ? links[0].innerSlotName || "in" : null;
+  }
+
+  it("target_slot 落在 inputs[] 下标空间时解析到 seed", () => {
+    expect(resolveTargetHandle(makeConsumerSub({ targetSlot: 2, seedIdx: 2 }))).toBe("seed");
+  });
+
+  it("target_slot 落在控件序号空间时同样解析到 seed", () => {
+    /* ComfyUI 报的是**控件序号**（跳过 model/negative 这类纯连接口），而
+     * `inputs[]` 的位置是另一个空间：控件序号 7 在这份报文里指向的是
+     * `inputs[6]`。修复前按 inputs[] 下标查会落空 → handle 退化成 `"in"`，
+     * 正是 ISSUE 里那条 `e-bb-5277-in`。 */
+    const sub = makeConsumerSub({ targetSlot: 6, seedIdx: 2, seedArrayIndex: 6 });
+    expect(resolveTargetHandle(sub)).toBe("seed");
+  });
+
+  it("控件槽 idx 从 0 连续编号（跳过纯连接口）时不串到 model", () => {
+    /* 有的导出路径给 widget 槽写 `idx: 1`（> 前面纯连接口的数量）——照抄 idx
+     * 会把线锚到 model 那一行，值落错端口。哨兵边口径不受 idx 影响。 */
+    expect(resolveTargetHandle(makeConsumerSub({ targetSlot: 2, seedIdx: 1 }))).toBe("seed");
+  });
+
+  it("哨兵边指向不存在的槽位时不产出边（不再落成字面量 in）", () => {
+    expect(resolveTargetHandle(makeConsumerSub({ targetSlot: 9, seedIdx: 2 }))).toBeNull();
+  });
+
+  it("边界落点与控件值取的是同一行（seed 拿到哨兵边的控件值）", () => {
+    const { linkById, boundaryLinkInfoById } = parseSubgraphLinks(
+      makeConsumerSub({ targetSlot: 5, seedIdx: 2 })
+    );
+    const sg = buildSubgraphGraph(makeConsumerSub({ targetSlot: 5, seedIdx: 2 }), linkById, boundarySlotsByNode(boundaryLinkInfoById));
+    expect(sg.graph["5277"]?.inputs?.seed).toBe(123);
+  });
+
+  it("被丢掉的边界连线会点名上报（不是静默跳过）", () => {
+    const sub = makeConsumerSub({ targetSlot: 9, seedIdx: 2 });
+    const { boundaryLinkInfoById } = parseSubgraphLinks(sub);
+    const { pinIdByLinkId } = parseSubgraphPins(sub);
+    const dropped = reportDroppedBoundaryLinks(sub, boundaryLinkInfoById, pinIdByLinkId, []);
+    expect(dropped).toEqual([
+      { linkId: 7, pinId: "pin-1", innerNodeId: "5277", innerSlot: 9 },
+    ]);
+  });
+
+  it("正常产出的边不算「被丢掉」", () => {
+    const sub = makeConsumerSub({ targetSlot: 2, seedIdx: 2 });
+    const { boundaryLinkInfoById } = parseSubgraphLinks(sub);
+    const { pinIdByLinkId } = parseSubgraphPins(sub);
+    const produced = [
+      { linkId: 7, kind: "input" as const, pinId: "pin-1", innerNodeId: "5277", innerSlotName: "seed" },
+    ];
+    expect(reportDroppedBoundaryLinks(sub, boundaryLinkInfoById, pinIdByLinkId, produced)).toEqual([]);
   });
 });

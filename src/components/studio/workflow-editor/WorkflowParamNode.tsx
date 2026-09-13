@@ -62,17 +62,12 @@ export const WorkflowParamNode = React.memo(function WorkflowParamNode({
       label={data.label}
       classLabel={data.classLabel}
       hostNodeId={data.hostNodeId}
-      inputRows={data.inputRows}
       width={data.width}
       canWire={data.canWire}
       footNote={footNote}
       wired={data.wired}
       canReset={data.canReset}
       onReset={data.onReset}
-      /* 端口行只列名字：卡片本身不标落点，落点由那条线表达（落点名写在下面
-       * 输出端口那一行、贴着端点，不重复标一次）。行高必须与 PARAM_NODE_ROW_H
-       * 同口径，否则卡片实际高度与 placeParamNodes 算出的位置对不上，卡片会
-       * 互相压住。 */
       hoverRef={hoverRef}
       hoverEvents={hoverEvents}
       /* 输出端口：每个候选一颗端点，端点就挂在该候选那一行上 —— 卡片右侧出去的

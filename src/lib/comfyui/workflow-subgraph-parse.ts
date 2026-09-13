@@ -12,10 +12,12 @@ import {
   pairWidgetValues,
   toStringValue,
   type ApiWorkflowNode,
+  type RawNodeInput,
   type RawNode,
   type RawSubgraphDef,
 } from "@/lib/comfyui/raw";
 import { inferIsMultiline } from "@/lib/comfyui/types";
+import { logger } from "~/server/lib/logger";
 import {
   type DetailNodeView,
   type RawInputEntry,
@@ -35,6 +37,30 @@ const LOAD_IMAGE_NODE_TYPES = new Set([
   "LoadImage", "LoadImageMasked", "ComfyUI LoadImage", "ComfyUI-LoadImage",
   "Load Image", "ImageLoader", "ComfyUI-ImageLoader",
 ]);
+
+/** 按节点归拢「被哨兵边实际关联的槽位」——**这是下标口径的唯一权威事实**。
+ *
+ *  ComfyUI 在不同导出路径上给出的「槽位」下标口径并不一致：有的写它在内层节点
+ *  `inputs[]` 里的下标，有的写**控件序号**（把 `model`/`negative` 这类纯连接口排除
+ *  在外，`target_slot` 于是会超出 `inputs[]` 的长度）。边界连线的 handle id 必须落在
+ *  **真的挂载了 Handle 的那一行**上，否则 React Flow 找不到锚点、整条边被丢弃并打
+ *  error#008 —— 用户看到的是「这个暴露口从来没连上」。
+ *
+ *  所以不猜口径，而是把「ComfyUI 实际关联的那个槽位」记下来交给
+ *  `parseSubgraphSlots` 解析：`-10` 哨兵边的目标槽位就是内层消费节点的输入槽，
+ *  槽位名与「哪一行真的有边」于是永远同源。 */
+
+export function boundarySlotsByNode(
+  boundaryLinkInfoById: Record<number, BoundaryLinkInfo>
+): Record<string, number[]> {
+  const byNode: Record<string, Set<number>> = {};
+  for (const info of Object.values(boundaryLinkInfoById)) {
+    (byNode[info.innerNodeId] ??= new Set()).add(info.innerSlot);
+  }
+  const out: Record<string, number[]> = {};
+  for (const [nodeId, slots] of Object.entries(byNode)) out[nodeId] = [...slots].sort((a, b) => a - b);
+  return out;
+}
 
 export interface SubgraphLinkEntry {
   src: string;
@@ -123,6 +149,51 @@ export function parseSubgraphLinks(sub: RawSubgraphDef): {
   return { linkById, boundaryLinkInfoById };
 }
 
+/** 一个输入槽位在「槽位下标」与「raw 数组位置」两套坐标系里的落点。 */
+interface InputSlotRef {
+  /** 槽位下标 —— `names[slot]` 读到的就是它的槽位名。 */
+  slot: number;
+  /** 该槽位在原始 `inputs[]` 里的位置。 */
+  index: number;
+}
+
+/** 把 raw 节点的 `inputs[]` 解析成「槽位下标 → 槽位」。
+ *
+ *  槽位下标的口径按**节点上有没有被哨兵边关联的槽位**择优，不做全局猜测：
+ *  · 有（`boundarySlots`）→ 下标就是 raw 槽位数组的位置。哨兵边记下的关联就是
+ *    事实（`target_slot: 2` 指向的正是 `inputs[2]`），而节点自带的 `idx` 在部分
+ *    导出路径上给 widget 槽从 0 连续编号、不跳过纯连接槽，照抄会整体错位；
+ *  · 没有 → 沿用 `idx`（缺席时按数组顺序），保持既有行为。
+ *
+ *  判据按节点取，所以同一子图里两种口径可以并存。 */
+function resolveInputSlots(
+  inputs: readonly RawNodeInput[],
+  boundarySlots: readonly number[] | undefined
+): InputSlotRef[] {
+  if (!boundarySlots || boundarySlots.length === 0) {
+    return inputs
+      .map((entry, index) => ({ index, slot: entry?.idx ?? index }))
+      .sort((a, b) => a.slot - b.slot);
+  }
+  /* 哨兵边口径：**整张表按数组位置重建**（槽位下标 = 数组下标）。
+   *
+   *  不能只留被关联的那几个槽位 —— 槽位表是「下标 → 槽位名」的查表结构，缺项会
+   *  让别的下标读到 undefined（边界值走的就是这张表）。整表重建才能保证「哨兵边
+   *  指向的下标」与「真实渲染的那一行」对得上。 */
+  return inputs.map((_, index) => ({ index, slot: index }));
+}
+
+/** 按槽位下标取槽位名（缺槽读成空串 = 「没解析出槽位名」）。 */
+function slotNameAt(
+  slots: readonly InputSlotRef[],
+  inputs: readonly RawNodeInput[],
+  index: number
+): string {
+  const ref = slots.find((item) => item.slot === index);
+  const name = ref ? inputs[ref.index]?.name : undefined;
+  return typeof name === "string" ? name : "";
+}
+
 /**
  * Pre-pass: collect per-node input/output slot-name lookups (positional
  * index → slot name).  These are needed to translate a sentinel link's
@@ -130,7 +201,12 @@ export function parseSubgraphLinks(sub: RawSubgraphDef): {
  * *name* (which becomes the React Flow edge's targetHandle /
  * sourceHandle).  Modern ComfyUI puts an `idx` on each slot entry;
  * older versions fall back to array order (idx=0,1,2,...). */
-export function parseSubgraphSlots(sub: RawSubgraphDef): {
+export function parseSubgraphSlots(
+  sub: RawSubgraphDef,
+  /** 被哨兵边**实际关联**的输入槽位（`boundarySlotsByNode(…)` 的产物）——
+   *  ComfyUI 写下的关联是事实，能直接解开「下标口径不一致」的歧义。 */
+  boundarySlotsByNodeId?: Record<string, number[]>
+): {
   inputNameByNodeSlot: Record<string, string[]>;
   outputNameByNodeSlot: Record<string, string[]>;
   inputWidgetValueByNodeSlot: Record<string, unknown[]>;
@@ -146,20 +222,18 @@ export function parseSubgraphSlots(sub: RawSubgraphDef): {
     if (!rn?.id) continue;
     const nodeId = String(rn.id);
     if (Array.isArray(rn.inputs)) {
-      const sorted = [...rn.inputs].sort(
-        (a, b) => (a?.idx ?? 0) - (b?.idx ?? 0)
-      );
-      inputNameByNodeSlot[nodeId] = sorted.map(
-        (x) => (typeof x?.name === "string" ? x.name : "")
-      );
+      const rawInputs: RawNodeInput[] = rn.inputs;
+      const slots = resolveInputSlots(rawInputs, boundarySlotsByNodeId?.[nodeId]);
+      const widgets = Array.isArray(rn.widgets_values) ? rn.widgets_values : [];
+      inputNameByNodeSlot[nodeId] = slots.map(({ slot }) => slotNameAt(slots, rawInputs, slot));
       // Snapshot widget values aligned with slot order so the boundary
       // pass can also surface a default `value` (CLIPTextEncode's `text`
       // sits here when the wrapper exposes the prompt as an input).
-      inputWidgetValueByNodeSlot[nodeId] = sorted.map((x, i) => {
-        if (!x || typeof x.name !== "string") return undefined;
-        if (!x.widget) return undefined;
-        const wv = Array.isArray(rn.widgets_values) ? rn.widgets_values : [];
-        return wv[i];
+      inputWidgetValueByNodeSlot[nodeId] = slots.map(({ slot, index }) => {
+        const slotInput = rawInputs[index];
+        if (!slotNameAt(slots, rawInputs, slot)) return undefined;
+        if (!slotInput?.widget) return undefined;
+        return widgets[slot];
       });
     }
     if (Array.isArray(rn.outputs)) {
@@ -219,7 +293,10 @@ export interface SubgraphGraphResult {
  */
 export function buildSubgraphGraph(
   sub: RawSubgraphDef,
-  linkById: Record<number, SubgraphLinkEntry>
+  linkById: Record<number, SubgraphLinkEntry>,
+  /** 被哨兵边实际关联的输入槽位（`boundarySlotsByNode(…)` 的产物）——槽位表
+   *  按它解析，边界 handle id 才会落在真的挂载了 Handle 的那一行上。 */
+  boundarySlotsByNodeId?: Record<string, number[]>
 ): SubgraphGraphResult {
   const innerNodes: RawNode[] = Array.isArray(sub.nodes) ? sub.nodes : [];
   const graph: Record<string, ApiWorkflowNode> = {};
@@ -255,7 +332,10 @@ export function buildSubgraphGraph(
   const connectsToByNode: Record<string, string> = {};
   const connectsFromByNode: Record<string, string> = {};
 
-  const { inputNameByNodeSlot, outputNameByNodeSlot } = parseSubgraphSlots(sub);
+  const { inputNameByNodeSlot, outputNameByNodeSlot } = parseSubgraphSlots(
+    sub,
+    boundarySlotsByNodeId
+  );
 
   /* 子图暴露口 → 作者名（见 SubgraphGraphResult.proxyAuthorLabels 的说明）。
    *  wrapper 的暴露口在内层表现为「源为 -10 哨兵的入边」，边本身登记着作者
@@ -667,18 +747,23 @@ export function buildBoundaryLinks(
   boundaryLinkInfoById: Record<number, BoundaryLinkInfo>,
   pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }>,
   inputNameByNodeSlot: Record<string, string[]>,
-  outputNameByNodeSlot: Record<string, string[]>
+  /** 输出侧槽位表 —— 输出边界连线由别处组装，本函数只处理输入侧，保留参数以
+   *  与调用方口径一致（不参与计算）。 */
+  _outputNameByNodeSlot: Record<string, string[]>
 ): BoundaryLink[] {
   const boundaryLinks: BoundaryLink[] = [];
   for (const [linkIdStr, info] of Object.entries(boundaryLinkInfoById)) {
     const linkId = Number(linkIdStr);
     const pinInfo = pinIdByLinkId[linkId];
-    if (!pinInfo) continue; // orphan sentinel link — skip
-    const slotNames =
-      info.kind === "input"
-        ? inputNameByNodeSlot[info.innerNodeId]
-        : outputNameByNodeSlot[info.innerNodeId];
-    const innerSlotName = slotNames?.[info.innerSlot] ?? "";
+    /* 暴露口没有登记这条边（或哨兵边没有对应的暴露口）→ 不产出边界连线。
+     * 产出也会在客户端落成一条指向不存在 handle 的边（React Flow 丢弃整条边
+     * 并打 error#008），不如在这里就不产出。 */
+    if (!pinInfo || info.kind !== "input") continue;
+    const innerSlotName = inputNameByNodeSlot[info.innerNodeId]?.[info.innerSlot] ?? "";
+    /* 解析不出槽位名 → 整条边丢掉：handle id 只在这里产出，空槽位名到了画布上
+     * 会退化成字面量 `"in"`，而那个 handle 并不存在（error#008 的成因）。
+     * 丢掉的那条在下方 `reportDroppedBoundaryLinks` 里点名上报。 */
+    if (!innerSlotName) continue;
     boundaryLinks.push({
       linkId,
       kind: info.kind,
@@ -688,6 +773,51 @@ export function buildBoundaryLinks(
     });
   }
   return boundaryLinks;
+}
+
+/** 上报「想画但画不出来」的边界连线。
+ *
+ *  `buildBoundaryLinks` 会丢掉解析不出槽位名的哨兵边 —— 丢掉是对的（产出只会
+ *  在画布上落一条指向不存在 handle 的边），但**不能悄无声息**：这条边的视觉表现
+ *  是「这个暴露口从来没连上」，与「本来就没连」逐字相同，用户/排障者无从区分。
+ *
+ *  这里按「有哨兵边、却没能产出连线」的差集点名上报，带上足够对号的信息
+ *  （暴露口 id、内层节点、槽位下标、该节点解析出的槽位表），一条边只报一次。 */
+export function reportDroppedBoundaryLinks(
+  sub: RawSubgraphDef,
+  boundaryLinkInfoById: Record<number, BoundaryLinkInfo>,
+  pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }>,
+  produced: readonly BoundaryLink[]
+): { linkId: number; pinId: string; innerNodeId: string; innerSlot: number }[] {
+  const producedIds = new Set(produced.map((link) => link.linkId));
+  const dropped: { linkId: number; pinId: string; innerNodeId: string; innerSlot: number }[] = [];
+  for (const [linkIdStr, info] of Object.entries(boundaryLinkInfoById)) {
+    const linkId = Number(linkIdStr);
+    if (producedIds.has(linkId)) continue;
+    const pinInfo = pinIdByLinkId[linkId];
+    /* 没有对应暴露口的哨兵边不是「丢线」——它从来就不该在画布上有一条连线。 */
+    if (!pinInfo || info.kind !== "input") continue;
+    dropped.push({
+      linkId,
+      pinId: pinInfo.pinId,
+      innerNodeId: info.innerNodeId,
+      innerSlot: info.innerSlot,
+    });
+  }
+  if (dropped.length === 0) return dropped;
+  const nodeIds = [...new Set(dropped.map((item) => item.innerNodeId))];
+  const subgraphName =
+    typeof sub.name === "string" && sub.name
+      ? sub.name
+      : typeof sub.id === "string"
+        ? sub.id
+        : "?";
+  logger.warn(
+    `[workflow] 子图 ${subgraphName} ` +
+      `有 ${dropped.length} 条边界连线解析不出内层落点，已跳过绘制（不会画成指向不存在 handle 的边）：` +
+      ` ${JSON.stringify(dropped)}；涉及节点 ${nodeIds.join(", ")}`
+  );
+  return dropped;
 }
 
 /**

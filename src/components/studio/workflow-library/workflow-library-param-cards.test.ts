@@ -15,7 +15,6 @@ import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { buildParamEntries } from "~/lib/workflow-param-mapping";
 import {
   deriveLibraryParamCards,
-  resolveTargetName,
 } from "./workflow-library-param-cards";
 
 const io: WorkflowIOMap = {
@@ -243,25 +242,3 @@ describe("deriveLibraryParamCards", () => {
   });
 });
 
-describe("resolveTargetName", () => {
-  it("端口键经 io 反查出参数名，不切分键名", () => {
-    /* 端口名本身可能含 `::` —— 切分必然取错，只能反查。 */
-    const tricky: WorkflowIOMap = {
-      "1::widget::a::b": {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "a::b",
-        type: "STRING",
-        defaultValue: "x",
-      },
-    };
-    expect(resolveTargetName(tricky, "1::widget::a::b")).toBe("a::b");
-  });
-
-  it("空落点 / 查不到的端口一律 null", () => {
-    expect(resolveTargetName(io, null)).toBeNull();
-    expect(resolveTargetName(io, "不存在")).toBeNull();
-    expect(resolveTargetName(null, "9::widget::text")).toBeNull();
-  });
-});

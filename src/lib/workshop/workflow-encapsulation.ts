@@ -41,6 +41,7 @@ export type WorkshopPinClass =
   | "size-height"
   | "size-aspect"
   | "size-megapixels"
+  | "size-multiple"
   | "reference-image"
   | "first-frame"
   | "last-frame"
@@ -204,6 +205,13 @@ function isMegapixelsPin(e: WorkflowIOEntry): boolean {
   return /megapixel|百万像素|\b像素\b/.test(text);
 }
 
+/** 对齐倍数（`multiple` / 倍数）——与比例 / 像素同属「尺寸」语义，由同一个控件
+ *  录入。判定放在 aspect / megapixels 之后，避免把 `upscale_factor` 之类抢走。 */
+function isMultiplePin(e: WorkflowIOEntry): boolean {
+  const text = searchText(e);
+  return /\bmultiple\b|upscale_(factor|by|amount)|倍率|倍数|对齐倍数/.test(text);
+}
+
 /** 判定一个 IO 输入条目在工坊里属于哪一类对外控件。
  *
  *  仅对 `direction === "input"` 的条目有意义；输出与连线型输入一律 internal。
@@ -219,6 +227,7 @@ export function classifyWorkshopPin(e: WorkflowIOEntry): WorkshopPinClass {
   if (isHeightPin(e)) return "size-height";
   if (isMegapixelsPin(e)) return "size-megapixels";
   if (isAspectPin(e)) return "size-aspect";
+  if (isMultiplePin(e)) return "size-multiple";
   if (isPromptPin(e)) return "prompt";
   return "internal";
 }
@@ -346,6 +355,7 @@ export function buildEncapsulatedInputs(
        * 尺寸语义，实际值仍走默认值，故 matched 恒 false。 */
       case "size-aspect":
       case "size-megapixels":
+      case "size-multiple":
         return { matched: false, value: undefined };
       default:
         return { matched: false, value: undefined };
