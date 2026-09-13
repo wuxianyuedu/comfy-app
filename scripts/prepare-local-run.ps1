@@ -11,6 +11,9 @@ $OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new()
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+# 应用端口解析（.env 显式值 / 按检出路径推导），与启动链路各层同源（§1.1/§1.4）
+. (Join-Path $PSScriptRoot "app-port.ps1")
+
 $env:CI = "true"   # 让 pnpm 非交互，不弹「是否重装」对话框
 
 function Say-OK   { Write-Host "[OK]   " -NoNewline -ForegroundColor Green; Write-Host "$args" }
@@ -181,13 +184,8 @@ Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
 Write-Host "  初始化完成！" -ForegroundColor Green
 Write-Host "  接下来请双击 tools\start\start-web.ps1 启动。" -ForegroundColor Green
-# 端口由 .env 的 COMFYAPP_PORT 控制（默认 3100），此处读取后提示真实地址
-$showedPort = "3100"
-$portLine = Get-Content -LiteralPath $envFile -Encoding UTF8 | Where-Object { $_ -match "^\s*COMFYAPP_PORT\s*=" } | Select-Object -First 1
-if ($portLine) {
-  $pv = (($portLine -split "=", 2)[1]).Trim().Trim('"').Trim("'")
-  if ($pv -match "^[0-9]+$") { $showedPort = $pv }
-}
+# 端口取值与启动链路同源（§1.1/§1.4），此处读取后提示真实地址
+$showedPort = Get-AppPort $root
 Write-Host "  启动后再用浏览器打开：http://localhost:$showedPort" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
