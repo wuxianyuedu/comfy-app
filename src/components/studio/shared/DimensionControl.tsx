@@ -16,6 +16,7 @@ import {
   parseRatioFromLabel,
   resolveEntryRequired,
   isVisibleInMode,
+  typeDisplay,
   type DimensionGroup,
   type EnrichedWidget,
 } from "./workflow-io";
@@ -27,8 +28,13 @@ import {
   type SegmentSection,
 } from "./MultiSegmentPopover";
 import { Field } from "./StyleSwitcher";
+import { PortHandle } from "./WorkflowFormControls";
 import { Eye, EyeOff } from "lucide-react";
-import { WIRE_PINS_ATTR, wirePinsValue } from "~/lib/workflow-io-types";
+import {
+  WIRE_PINS_ATTR,
+  WIRE_ROW_ATTR,
+  wirePinsValue,
+} from "~/lib/workflow-io-types";
 
 /** Dimension group narrowed to its W/H form (the classic 比例+清晰度 picker). */
 type SizeGroup = DimensionGroup & {
@@ -708,50 +714,112 @@ function AspectMegapixelControl({
       <div
         className={
           narrow
-            ? "w-fit max-w-full rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2"
+            ? "flex items-start justify-end gap-3"
             : "rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5"
         }
       >
-        <div className="flex items-center gap-2">
-          <span className="shrink-0 text-[10px] font-semibold tracking-wider text-(--color-accent) uppercase">
-            比例 + 像素{multiple ? " + 倍数" : ""}
-          </span>
-          {/* 窄版：下拉触发器按内容收窄（固定一档宽度），不再占满整行。 */}
-          <div className={narrow ? "w-[168px] min-w-0" : "min-w-0 flex-1"}>
-            <MultiSegmentPopover
-              ariaLabel={multiple ? "选择比例、像素与倍数" : "选择比例与像素"}
-              triggerContent={`${activeAspect?.label ?? "自定义"} / ${mpLabel}${multiple ? ` / ${multipleLabel}` : ""}`}
-              sections={sections}
-              align="right"
-              disabled={disabled}
+        {narrow ? (
+          /* 窄版（画布节点 / 库内）：组合控件**右对齐**，左侧腾出来的区域摆这三个
+           *  参数本身 —— 一行一个，端点骑跨卡片左缘，与节点上其他参数行长得一样
+           *  （12px 大端点 + 参数名 + 类型徽章），不是控件框里那排「· 小点 + 名字」。
+           *
+           *  这三行是真正的落点：映射连线量到的就是它们自己的圆点（`data-io-key`
+           *  与端点 id 同为 ioKey），拖到「百万像素」就连到 `megapixels`，不再只能
+           *  笼统地落到整块控件上。 */
+          <>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5 self-center">
+              {[aspect, megapixels, multiple]
+                .filter((entry): entry is EnrichedWidget => !!entry)
+                .map((entry) => (
+                  <div
+                    key={entry.ioKey}
+                    className="relative flex h-[22px] items-center gap-1.5 pl-[2px]"
+                    {...{
+                      [WIRE_ROW_ATTR]: entry.ioKey,
+                      [WIRE_PINS_ATTR]: entry.ioKey,
+                    }}
+                  >
+                    <PortHandle
+                      id={entry.ioKey}
+                      dir="in"
+                      type={entry.type}
+                      style={{ top: "50%", transform: "translateY(-50%)" }}
+                    />
+                    <span
+                      className="min-w-0 truncate text-[12px] font-medium text-(--color-ink-bright)"
+                      style={{ fontFamily: "var(--font-sans)" }}
+                    >
+                      {entry.label ?? entry.name}
+                    </span>
+                    <span
+                      className="inline-flex shrink-0 items-center rounded-[3px] px-1 py-px text-[10px] font-semibold"
+                      style={{
+                        fontFamily: "var(--font-sans)",
+                        background: "var(--color-border-strong)",
+                        color: "var(--color-ink-muted)",
+                      }}
+                    >
+                      {typeDisplay(entry.type)}
+                    </span>
+                  </div>
+                ))}
+            </div>
+            {/* 组合控件本体（表头 + 下拉），整块贴右沿：框里不再重复列那三个参数
+                —— 它们已经以真正的参数行形态摆在框外左侧了。 */}
+            <div
+              data-grouped-box
+              className="w-fit max-w-full shrink-0 rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2"
+            >
+              <span className="text-[10px] font-semibold tracking-wider text-(--color-accent) uppercase">
+                比例 + 像素{multiple ? " + 倍数" : ""}
+              </span>
+              <div className="mt-1 w-[168px] min-w-0">
+                <MultiSegmentPopover
+                  ariaLabel={
+                    multiple ? "选择比例、像素与倍数" : "选择比例与像素"
+                  }
+                  triggerContent={`${activeAspect?.label ?? "自定义"} / ${mpLabel}${multiple ? ` / ${multipleLabel}` : ""}`}
+                  sections={sections}
+                  align="right"
+                  disabled={disabled}
+                />
+              </div>
+              <RequiredChips
+                pins={[aspect, megapixels, multiple]}
+                onRequiredChange={onRequiredChange}
+                mode={mode}
+                visibilityMode={visibilityMode}
+                onVisibilityChange={onVisibilityChange}
+              />
+            </div>
+          </>
+        ) : (
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-[10px] font-semibold tracking-wider text-(--color-accent) uppercase">
+                比例 + 像素{multiple ? " + 倍数" : ""}
+              </span>
+              <div className="min-w-0 flex-1">
+                <MultiSegmentPopover
+                  ariaLabel={
+                    multiple ? "选择比例、像素与倍数" : "选择比例与像素"
+                  }
+                  triggerContent={`${activeAspect?.label ?? "自定义"} / ${mpLabel}${multiple ? ` / ${multipleLabel}` : ""}`}
+                  sections={sections}
+                  align="right"
+                  disabled={disabled}
+                />
+              </div>
+            </div>
+            <RequiredChips
+              pins={[aspect, megapixels, multiple]}
+              onRequiredChange={onRequiredChange}
+              mode={mode}
+              visibilityMode={visibilityMode}
+              onVisibilityChange={onVisibilityChange}
             />
           </div>
-        </div>
-        {/* 逐端口落点：这块控件覆盖的每个端口各有一个**自己的**落点锚点，
-            拖到哪一项就落到哪个端口上。整块也有一个总锚点（见最外层），
-            但那一档只在落到空白处时兜底 —— 一个笼统的「落到这块控件」等于
-            让用户猜「我到底连到了比例还是像素」（ISSUE #355）。 */}
-        <ul className="mt-1 flex flex-col gap-0.5">
-          {[aspect, megapixels, multiple].filter(Boolean).map((entry) => (
-            <li
-              key={entry!.ioKey}
-              className="flex items-center gap-1.5 text-[9.5px] leading-[14px] text-(--color-ink-faint)"
-              {...{ [WIRE_PINS_ATTR]: entry!.ioKey }}
-            >
-              <span aria-hidden>·</span>
-              <span className="min-w-0 truncate">
-                {entry!.label ?? entry!.name}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <RequiredChips
-          pins={[aspect, megapixels, multiple]}
-          onRequiredChange={onRequiredChange}
-          mode={mode}
-          visibilityMode={visibilityMode}
-          onVisibilityChange={onVisibilityChange}
-        />
+        )}
       </div>
     </div>
   );

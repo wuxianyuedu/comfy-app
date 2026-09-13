@@ -35,6 +35,14 @@ log = "0.4"
 tauri = { version = "2.11.3", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 tauri-plugin-window-state = "2"
-tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+# 按检出隔离的单实例保护（src-tauri/src/single_instance.rs）：tauri-plugin-
+# single-instance 的互斥量/窗口名取自编译期 identifier，是全机共享的——同一
+# 项目检出两份并行开发时，后启动的壳会被另一份检出「吞掉」。自实现把身份
+# 锚点换成检出路径（多检出并行，launch-and-build.md §1.4）。
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Threading",
+] }

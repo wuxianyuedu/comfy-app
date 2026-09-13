@@ -14,9 +14,14 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-const tmp = fs.mkdtempSync(
-  `${process.env.TMPDIR ?? "/tmp"}/capture-streams-`,
+/* 临时目录必须与实现同源构造：实现用 path.join(NEXTJS_LOG_DIR, …)（Windows 拼
+ * 反斜杠），若这里用 `/tmp` 这类 POSIX 字符串当 mock 目录，startsWith 前缀比对
+ * 必因分隔符不一致而假失败。os.tmpdir() + realpath 归一化后两边同为真实绝对路径。 */
+const tmp = fs.realpathSync(
+  fs.mkdtempSync(path.join(os.tmpdir(), "capture-streams-")),
 );
 
 vi.mock("@/lib/log-paths", async () => {
