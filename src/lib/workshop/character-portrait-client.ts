@@ -5,6 +5,8 @@
 //   · 导入：素材库「角色」分类（/api/materials），落盘后拿到可引用的本地地址
 
 import { uploadMaterialItem } from "@/lib/materials-client";
+import { shortRatioLabel } from "~/components/studio/shared/MultiSegmentPopover";
+import type { ShotSizeState } from "~/components/workshop/shot-size-config";
 import type { SavedOutput } from "./api-channel-shared";
 import {
   apiGenerateImage,
@@ -152,16 +154,30 @@ async function localizePortraitImage(
 
 /** 远端 API 通道生成一张定妆照，返回可引用的地址。
  *  opts.model 传设置页「远端模型」（kind=image）的名字：按该条目的连接参数
- *  直连生图，不必再配一份工坊 API 通道；不传则走旧通道设置。 */
+ *  直连生图，不必再配一份工坊 API 通道；不传则走旧通道设置。
+ *  opts.sizeState 带工坊尺寸选择（宽高比 + 百万像素）：远端模型配置了
+ *  T2I 模式适配器时，统一输入按适配器字段映射下发。 */
 export async function generateRemotePortrait(
   req: PortraitRequest,
-  opts: { projectId: string; name: string; model?: string },
+  opts: {
+    projectId: string;
+    name: string;
+    model?: string;
+    sizeState?: ShotSizeState;
+  },
 ): Promise<string> {
   const url = await apiGenerateImage({
     prompt: req.prompt,
     negative: req.negative,
     size: req.size,
     ...(opts.model ? { model: opts.model } : {}),
+    mode: "T2I",
+    ...(opts.sizeState
+      ? {
+          aspectRatio: shortRatioLabel(opts.sizeState.ratio),
+          megapixels: opts.sizeState.clarity,
+        }
+      : {}),
   });
   return localizePortraitImage(url, opts);
 }

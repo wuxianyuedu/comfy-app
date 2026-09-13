@@ -334,6 +334,12 @@ export async function apiGenerateImage(req: {
   size?: string;
   /** 设置页配置的远端模型名（remoteModel 表按名取连接参数） */
   model?: string;
+  /** 工坊模式码（T2I / I2I / …）：远端模型有该模式适配器时按它翻译字段 */
+  mode?: string;
+  /** 统一输入：宽高比（如 "16:9"）/ 百万像素（如 "1M"）/ 输入图 */
+  aspectRatio?: string;
+  megapixels?: string;
+  image?: string;
 }): Promise<string> {
   const data = await postRelay({
     kind: "image",
@@ -341,6 +347,10 @@ export async function apiGenerateImage(req: {
     negative: req.negative,
     size: req.size,
     ...(req.model ? { model: req.model } : {}),
+    ...(req.mode ? { mode: req.mode } : {}),
+    ...(req.aspectRatio ? { aspectRatio: req.aspectRatio } : {}),
+    ...(req.megapixels ? { megapixels: req.megapixels } : {}),
+    ...(req.image ? { image: req.image } : {}),
   });
   const url =
     isRecord(data) && typeof data.url === "string" && data.url

@@ -18,6 +18,7 @@ import {
   type ShotSizeState,
 } from "./shot-size-config";
 import { ShotSizePicker } from "./ShotSizePicker";
+import { shortRatioLabel } from "~/components/studio/shared/MultiSegmentPopover";
 
 /** catch 抛出值（unknown）→ 消息提取：带 string message 的对象取 message，其余回退。 */
 function errorMessage(e: unknown, fallback: string): string {
@@ -210,6 +211,9 @@ export function ShotStudio({
           size: shot.params.size !== undefined && shot.params.size !== ""
             ? strParam(shot.params.size, shotSizeToParam(shotSize))
             : shotSizeToParam(shotSize),
+          mode: "T2I",
+          aspectRatio: shortRatioLabel(shotSize.ratio),
+          megapixels: shotSize.clarity,
         });
         patchShot(shot.id, { status: "done", imageUrl: url });
       }

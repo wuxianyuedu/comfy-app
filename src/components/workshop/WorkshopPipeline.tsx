@@ -11,7 +11,7 @@
 
 import { AgentFab, AgentOverlay } from "~/components/workshop/AgentOverlay";
 import { useWorkshopAgent } from "~/components/workshop/hooks/use-workshop-agent";
-import { ApiChannelSettings } from "~/components/workshop/ApiChannelSettings";
+import { WorkshopModelAdapterModal } from "~/components/workshop/WorkshopModelAdapterModal";
 import { LLMProvider } from "~/components/workshop/LLMContext";
 import { useWorkshopPipeline } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { WorkshopAside } from "~/components/workshop/WorkshopAside";
@@ -90,13 +90,9 @@ export function WorkshopPipeline() {
           />
         </div>
 
-        {/* API 直连通道设置(生图 / 视频)— 与 LLM 设置同款交互模型 */}
+        {/* 模型适配：为远端模型配置工坊各模式下的输入 / 输出映射 */}
         {controller.apiSettingsOpen && (
-          <ApiChannelSettings
-            initial={controller.apiChannels}
-            onClose={controller.closeApiSettings}
-            onSaved={controller.handleApiChannelsSaved}
-          />
+          <WorkshopModelAdapterModal onClose={controller.closeApiSettings} />
         )}
       </div>
 

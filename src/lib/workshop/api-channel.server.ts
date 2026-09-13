@@ -8,6 +8,11 @@ import { promises as fs, readFileSync } from "fs";
 import path from "path";
 
 import { remoteModelRepository } from "@/lib/core/repository";
+import {
+  readFieldPath,
+  type RemoteModeAdapter,
+  type WorkshopInputType,
+} from "@/lib/workshop/model-mode-contract";
 
 import {
   extractBase64DataUrl,
@@ -117,24 +122,52 @@ export interface ApiImageRequest {
   size?: string;
   /** 设置页「远端模型」的名字：按 remoteModel 表条目的连接参数直连生图 */
   model?: string;
+  /** 工坊模式码（T2I / I2I / …）：有适配器时按它取字段映射 */
+  mode?: string;
+  /** 统一输入：宽高比（如 "16:9"）/ 百万像素（如 "1M"）/ 输入图（URL 或 data URL） */
+  aspectRatio?: string;
+  megapixels?: string;
+  image?: string;
 }
 
 /** Call an OpenAI-compatible images/generations endpoint; returns a usable URL
  *  (remote or inline data URL for b64 payloads). */
+/** 统一输入的当前取值（适配器按类型取值落字段）。 */
+function unifiedImageInputs(req: ApiImageRequest): Partial<
+  Record<WorkshopInputType, unknown>
+> {
+  return {
+    prompt: req.prompt ?? undefined,
+    negative: req.negative ?? undefined,
+    "aspect-ratio": req.aspectRatio ?? undefined,
+    megapixels: req.megapixels ?? undefined,
+    image: req.image ?? undefined,
+  };
+}
+
 export async function generateImageViaApi(req: ApiImageRequest): Promise<string> {
   const c = getWorkshopApiSettingsSync().image;
   // 设置页「远端模型」优先：按名字取 remoteModel 表条目的连接参数直连生图，
   // 用户不必再在工坊 API 通道里重复配置一份。未指定名字 / 查无条目时回落到
   // 工坊 API 通道设置（旧行为，两边都不配才报「未配置」）。
   let upstream: { endpoint: string; apiKey: string; model: string } | null = null;
+  let adapter: RemoteModeAdapter | null = null;
   const wantedModel = (req.model ?? "").trim();
+  const wantedMode = (req.mode ?? "").trim().toUpperCase();
   if (wantedModel) {
     try {
       const entries = await remoteModelRepository.list();
       const entry = entries.find((r) => r.name === wantedModel && r.baseUrl);
       if (entry) {
+        // 模式适配器优先：条目配置了该模式的输入映射就按它翻译统一输入。
+        const adapters = await remoteModelRepository.getWorkshopAdapters(wantedModel);
+        adapter =
+          adapters.find((a) => a.mode === wantedMode) ??
+          (adapters.length === 1 ? adapters[0]! : null);
         upstream = {
-          endpoint: resolveImagesGenerationsEndpoint(entry.baseUrl ?? ""),
+          endpoint: adapter
+            ? `${(entry.baseUrl ?? "").replace(/\/+$/, "")}${adapter.endpointPath}`
+            : resolveImagesGenerationsEndpoint(entry.baseUrl ?? ""),
           apiKey: entry.apiKey ?? "",
           model: entry.name,
         };
@@ -153,6 +186,28 @@ export async function generateImageViaApi(req: ApiImageRequest): Promise<string>
       "远端 API 生图通道未配置 —— 可在设置页「远端模型」里添加生图模型（kind=图片），或打开 API 通道设置填写 Base URL 与 API Key",
     );
   }
+  // 请求体：有适配器按字段映射落统一输入；否则用 OpenAI 兼容默认映射。
+  let body: Record<string, unknown>;
+  if (adapter) {
+    const unified = unifiedImageInputs(req);
+    body = {};
+    for (const { type, field } of adapter.inputs) {
+      const value = unified[type];
+      if (value === undefined || value === "") continue;
+      body[field] = value;
+    }
+    if (legacy.model) body.model = legacy.model;
+  } else {
+    body = {
+      // 空串显式归一为 undefined(省略字段);不用 ?? —— ?? 会把 "" 原样送进 payload
+      model: legacy.model === "" ? undefined : legacy.model,
+      prompt: req.prompt,
+      negative_prompt: req.negative === "" ? undefined : req.negative,
+      size: req.size === "" ? undefined : req.size,
+      n: 1,
+      response_format: "url",
+    };
+  }
   let res: Response;
   try {
     res = await fetch(legacy.endpoint, {
@@ -160,15 +215,7 @@ export async function generateImageViaApi(req: ApiImageRequest): Promise<string>
       headers: legacy.apiKey
         ? { "Content-Type": "application/json", Authorization: `Bearer ${legacy.apiKey}` }
         : { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        // 空串显式归一为 undefined(省略字段);不用 ?? —— ?? 会把 "" 原样送进 payload
-        model: legacy.model === "" ? undefined : legacy.model,
-        prompt: req.prompt,
-        negative_prompt: req.negative === "" ? undefined : req.negative,
-        size: req.size === "" ? undefined : req.size,
-        n: 1,
-        response_format: "url",
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(180_000),
     });
   } catch (e) {
@@ -178,6 +225,10 @@ export async function generateImageViaApi(req: ApiImageRequest): Promise<string>
   if (!res.ok) {
     const detail = JSON.stringify(payload).slice(0, 200);
     throw new Error(`API 生图失败 (${res.status}): ${detail}`);
+  }
+  if (adapter?.outputField) {
+    const hit = readFieldPath(payload, adapter.outputField);
+    if (typeof hit === "string" && hit) return hit;
   }
   const url = extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
   if (!url) throw new Error("API 生图响应中未找到图片 URL / b64 数据");
