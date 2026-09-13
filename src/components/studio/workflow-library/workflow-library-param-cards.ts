@@ -21,6 +21,7 @@ import {
   manualTargetFor,
   parseParamMapping,
   resolveMapping,
+  wireHandleIdForIoKey,
   wiredTargetsForEntry,
   type ParamEntry,
 } from "~/lib/workflow-param-mapping";
@@ -116,6 +117,15 @@ export function deriveLibraryParamCards(args: {
       target,
       manual,
       groupedKeys,
+      /** 库内**每一个能连的候选端口各画一条线**（与编辑器画布同口径）。
+       *
+       *  不给这个开关时这里只画「当前生效落点」那一条：「尺寸」这类口子落到
+       *  某个端口后，卡片上看着就只有一个出口 —— 用户要的是「宽高比 + 百万像素
+       *  这两项都需要能导入到工作流中，所以 2 条线都要能连出去」（ISSUE #355）。
+       *
+       *  库内卡片给每个候选都画了圆点（每个候选都能拖线改落点），线就该同样
+       *  逐条画出来：点有、线没有，读作「这几项没接上」。 */
+      allCandidates: true,
     })) {
       /* 宿主卡片上画不出来的行连不出线（端点画在一颗落不上去的句柄上只会误导）。
        *  **当前生效落点永远画**：它就是这条映射本身，画不出来会让卡片看着像「没连上」。
@@ -131,8 +141,10 @@ export function deriveLibraryParamCards(args: {
         entryId: entry.id,
         targetIoKey: wired.ioKey,
         /* 库内这层按**端口名**找卡片上的圆点锚点（`paramOutputPorts` 的
-         *  `handleId` 就是端口名）；ioKey 是运行期/落库的键空间，两者不能混。 */
-        handleId: io?.[wired.ioKey]?.name ?? wired.ioKey,
+         *  `handleId` 就是端口名）；ioKey 是运行期/落库的键空间，两者不能混。
+         *  同一口子摊成多条线时，每条必须对到自己那一颗圆点（都退到 ioKey 就会
+         *  让第二、三条线落回第一颗点上）。 */
+        handleId: wireHandleIdForIoKey(io, entry, wired.ioKey),
         grouped: groupedKeys?.has(wired.ioKey) ?? false,
         manual,
       });
