@@ -24,11 +24,9 @@ import {
   type ParamEntry,
   type ParamOutputPort,
 } from "~/lib/workflow-param-mapping";
-import { inputRowsForEntry } from "~/lib/workflow-param-input-rows";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { WorkflowParamCard } from "../workflow-editor/WorkflowParamCard";
 import { paramClassStyle } from "./workflow-param-mapping-ui";
-import { resolveTargetName } from "./workflow-library-param-cards";
 
 /** 卡片宽度：与项目画布节点同宽，两列并排时仍放得下。 */
 const CARD_WIDTH = 220;
@@ -66,15 +64,12 @@ export interface WorkflowParamCardColumnProps {
   /** 当前模式下「条目 → 目标 ioKey」的生效落点。 */
   resolved: Record<string, string | null>;
   io: WorkflowIOMap | null;
-  /** 宿主表单把哪些端口交给了组合控件（卡片不再重复列它们）。 */
-  groupedKeys?: ReadonlySet<string>;
 }
 
 export function WorkflowParamCardColumn({
   entries,
   resolved,
   io,
-  groupedKeys,
 }: WorkflowParamCardColumnProps) {
   if (entries.length === 0) return null;
 
@@ -89,7 +84,6 @@ export function WorkflowParamCardColumn({
         对外参数（只读）
       </p>
       {entries.map((entry) => {
-        const target = resolveTargetName(io, resolved[entry.id]);
         const style = paramClassStyle(entry.cls);
         return (
           <WorkflowParamCard
@@ -98,8 +92,7 @@ export function WorkflowParamCardColumn({
             cls={entry.cls}
             label={entry.label}
             classLabel={style.label}
-            hostNodeId={entry.nodeId}
-            inputRows={inputRowsForEntry(entry, { groupedKeys })}
+            hostNodeId={entry.hostNodeId || entry.nodeId}
             width={CARD_WIDTH}
             /* 只读消费：卡片不参与连线，端点与「恢复默认」都不渲染。
              * `readOnly` 与 `canWire` 分开表达 —— 只读卡片不该写
@@ -138,24 +131,6 @@ export function WorkflowParamCardColumn({
                 }}
               />
             )}
-            /* 端口行尾只给**多端口**条目补落点说明（落点跟着具体端口名走，
-             *  多行之间要能区分）；单端口条目的落点名写在带类型的输出端口那一行
-             *  上、贴着端点，行尾再标一次就是把同一件事说两遍 —— 那一段正是用户
-             *  圈出来要求去掉的「没用」内容。 */
-            rowTrailing={(pin) =>
-              target && entry.pins.length > 1 ? (
-                <span
-                  className="shrink-0 truncate text-[9.5px] text-(--color-ink-fainter)"
-                  title={`落点：${target}`}
-                >
-                  → {target}
-                </span>
-              ) : (
-                <span className="shrink-0 font-mono text-[9.5px] text-(--color-ink-fainter)">
-                  {pin.type}
-                </span>
-              )
-            }
           />
         );
       })}

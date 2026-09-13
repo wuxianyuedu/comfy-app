@@ -182,7 +182,6 @@ function renderNode(
                   label={nodeData.label}
                   classLabel={nodeData.classLabel}
                   hostNodeId={nodeData.hostNodeId}
-                  inputRows={nodeData.inputRows}
                   width={nodeData.width}
                   canWire={nodeData.canWire}
                   wired={nodeData.wired}
@@ -210,18 +209,18 @@ function renderNode(
 }
 
 describe("WorkflowParamNode", () => {
-  it("渲染对外参数名与端口行，并带「恢复默认」按钮", () => {
+  it("渲染对外参数名与输出端口行，并带「恢复默认」按钮", () => {
     renderNode();
     expect(screen.getByText("宽度")).toBeTruthy();
-    /* 「width」既是端口行也是输出端口行 —— 两处都该有（输入引脚 + 带类型的出口）。 */
     expect(screen.getAllByText("width").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("恢复默认")).toBeTruthy();
   });
 
-  it("端口行尾显示端口类型（落点由那条线表达，不重复标一遍）", () => {
+  it("端口类型只在一处（输出端口徽标）—— 不再有重复的输入端口行", () => {
     renderNode();
-    /* INT 出现两处：端口行尾 + 输出端口类型徽标。 */
-    expect(screen.getAllByText("INT").length).toBeGreaterThanOrEqual(2);
+    /* 卡片体 = 端点 + 参数名 + 类型；此前另有一段「输入端口行」把同一批端口再
+     *  列一遍，类型徽标因此出现两次（ISSUE #355 复审要求去掉）。 */
+    expect(screen.getAllByText("INT")).toHaveLength(1);
   });
 
   it("输出端口行「名称 + 类型」右对齐到端点（顺序与端口行相反）", () => {
@@ -349,7 +348,6 @@ describe("WorkflowParamNode", () => {
         label="尺寸"
         classLabel="尺寸"
         hostNodeId="5"
-        inputRows={[]}
         width={208}
         canWire={false}
         readOnly
@@ -431,7 +429,7 @@ describe("WorkflowParamNode", () => {
     expect(handles.join(" ")).toContain("5::widget::megapixels");
   });
 
-  it("输入端口行按传入的 inputRows 渲染（组合控件接管的端口不重复列）", () => {
+  it("卡片体只有输出端口那一段：每行 = 端点 + 参数名 + 类型", () => {
     renderNode({
       entryId: "size",
       cls: "size",
@@ -440,14 +438,13 @@ describe("WorkflowParamNode", () => {
         { ioKey: "5::widget::width", name: "width", type: "INT", defaultValue: 512 },
         { ioKey: "5::widget::height", name: "height", type: "INT", defaultValue: 512 },
       ],
-      /* 高度被组合控件接管 → 卡片只列宽度这一行。 */
-      inputRows: [
-        { ioKey: "5::widget::width", name: "width", type: "INT", defaultValue: 512 },
-      ],
       outputPorts: [port("5::widget::width", "width", "INT", true, true)],
     });
-    expect(screen.getAllByText("width").length).toBeGreaterThan(0);
-    expect(screen.queryByText("height")).toBeNull();
+    const card = screen.getByTestId("param-node-size");
+    /* 输出端口行有；重复的「输入端口行」容器不存在。 */
+    expect(screen.getByTestId("param-node-out-size-0")).toBeTruthy();
+    expect(card.querySelectorAll('[data-testid^="param-node-out-size-"]')).toHaveLength(1);
+    expect(screen.getAllByText("width")).toHaveLength(1);
   });
 });
 

@@ -19,6 +19,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import { WIRE_PINS_ATTR, WIRE_ROW_ATTR } from "~/lib/workflow-io-types";
+
+/** 端点圆点的数据属性（见 WorkflowPortHandle）—— 只读连线量圆心用。 */
+const PORT_DOT_ATTR = "data-port-dot";
 import { wireAnchorValue } from "./WorkflowParamCardColumn";
 
 /** 自动判定落点的描边色（与编辑器画布一致）。 */
@@ -95,22 +98,30 @@ export function measureWires(
       "data-wire-anchor",
       wireAnchorValue(wire.entryId, wire.handleId),
     );
-    /* 落点有两种形状：独立参数行（整行一个锚点）与组合参数控件（一块控件
-     *  覆盖多个端口）—— 后者的行根本不存在，只认前者就会漏画整条线。
-     *  先按「这块端口属于组合控件」这个事实找控件锚点，找不到再退到独立行
-     *  （组合判定来自表单派生态，与卡片列同一份，不靠 DOM 结构猜）。 */
-    const to = wire.grouped
+    /* 终点 = 宿主那一行**端点圆点的圆心**（不是整行的左沿中线）。
+     *
+     *  折叠成逐行参数之后，一行是「标签行 + 控件行」两段结构，而圆点锁在标签行
+     *  中线上；按整行 50% 量会把线画到圆心下方十几像素处 —— 用户看到的就是
+     *  「线没有连接到端点上」（ISSUE #355）。组合控件那一格同理：它的锚点是整块
+     *  控件，圆点（若有）仍按 `data-port-dot` 找得到。
+     *
+     *  找不到圆点（该行没渲染端点 / 只读预览里退化成了装饰点也带同一属性）时退到
+     *  行左沿中线 —— 宁可粗一点，也不整条不画。 */
+    const dot = findAnchor(container, PORT_DOT_ATTR, wire.targetIoKey);
+    const row = wire.grouped
       ? (findAnchor(container, WIRE_PINS_ATTR, wire.targetIoKey, ",") ??
         findAnchor(container, WIRE_ROW_ATTR, wire.targetIoKey))
       : (findAnchor(container, WIRE_ROW_ATTR, wire.targetIoKey) ??
         findAnchor(container, WIRE_PINS_ATTR, wire.targetIoKey, ","));
+    const to = dot ?? row;
     /* 任一端不在（卡片没渲染 / 那一行不在当前表单里）→ 不画，避免悬空线头。 */
     if (!from || !to) continue;
     const a = from.getBoundingClientRect();
     const b = to.getBoundingClientRect();
     const x1 = a.left - box.left + a.width + a.width / 2;
     const y1 = a.top - box.top + a.height / 2;
-    const x2 = b.left - box.left;
+    /* 圆点：终点取圆心（线正好收在点上）；退到整行时取左沿中线（线头停在行边）。 */
+    const x2 = dot ? b.left - box.left + b.width / 2 : b.left - box.left;
     const y2 = b.top - box.top + b.height / 2;
     /* 水平间距的一半作控制点 —— 线从圆点平出、到宿主行平入，不会被卡片
      * 拐角切出尖角。间距为负（卡片与宿主卡片重叠）时控制点会反向，用

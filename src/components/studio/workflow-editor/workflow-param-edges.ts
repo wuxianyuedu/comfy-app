@@ -50,11 +50,18 @@ export function buildParamEdges(ctx: BuildParamEdgesCtx): Edge[] {
     if (renderedCardIds && !renderedCardIds.has(paramNodeId(entry.id)))
       continue;
     const manual = isManual(entry.id);
+    /* 宿主端用 `hostNodeId`：契约路径下 `nodeId` 是空串，边会指向一个不存在的
+     *  节点 —— React Flow 找不到 target 就整条丢掉（用户看到「默认连线没连到
+     *  端点上」，见 ParamEntry.hostNodeId）。 */
+    const hostNodeId = entry.hostNodeId || entry.nodeId;
+    if (!hostNodeId) continue;
     out.push({
       id: `pe-${entry.id}`,
       source: paramNodeId(entry.id),
-      sourceHandle: "pio-out",
-      target: entry.nodeId,
+      /* 源端点 = **当前落点那一颗**（与卡片上每候选一颗圆点同口径）：写死
+       *  `pio-out` 会接到一个不存在的 handle 上，React Flow 丢弃整条边。 */
+      sourceHandle: target,
+      target: hostNodeId,
       targetHandle: target,
       type: "default",
       /* 可选中 / 可删除 —— 删掉一条线就是「该对外参数在这个模式下断开」，
@@ -116,7 +123,11 @@ export function isValidParamConnection(
   const targetHandle = forward ? connection.targetHandle : connection.sourceHandle;
   if (!targetNodeId || !targetHandle) return false;
   const entry = entries.find((item) => item.id === entryId);
-  if (entry?.nodeId !== targetNodeId) return false;
+  /* 宿主端按 `hostNodeId` 判（契约路径下 `nodeId` 是空串，拿它比会让闸门对每
+   *  一次拖拽都返回 false —— 用户表现为「怎么拖都连不上」）。 */
+  if (!entry) return false;
+  const hostNodeId = entry.hostNodeId || entry.nodeId;
+  if (hostNodeId !== targetNodeId) return false;
   /* 落点是宿主行（或组合控件）的 handle id —— 它必须在 workflowIO 里真实存在，
    *  否则边画得出来、运行期却落不到值（静默失效）。 */
   return !!io?.[targetHandle];
