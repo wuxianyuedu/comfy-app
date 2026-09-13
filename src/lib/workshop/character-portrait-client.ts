@@ -8,6 +8,7 @@ import { uploadMaterialItem } from "@/lib/materials-client";
 import type { SavedOutput } from "./api-channel-shared";
 import {
   apiGenerateImage,
+  buildLibraryWorkflowInput,
   startLocalGenerate,
   watchTask,
   type GenerateInput,
@@ -65,6 +66,39 @@ export async function generateLocalPortrait(
   handlers: LocalPortraitHandlers = {},
 ): Promise<{ taskId: string; url: string }> {
   const taskId = await startLocalGenerate(buildLocalPortraitInput(req, opts));
+  const url = await new Promise<string>((resolve, reject) => {
+    let imageUrl = "";
+    watchTask(taskId, {
+      onProgress: (pct) => handlers.onProgress?.(pct),
+      onLog: (entry) => handlers.onLog?.(entry),
+      onOutput: (output: SavedOutput) => {
+        if (output.kind !== "video" && !imageUrl) imageUrl = output.url;
+      },
+      onSettled: (result) => {
+        if (!result.ok) reject(new Error(result.message ?? "定妆照生成失败"));
+        else if (imageUrl) resolve(imageUrl);
+        else reject(new Error("任务完成但没有产出图片"));
+      },
+    });
+  });
+  return { taskId, url };
+}
+
+/** 库工作流链路生成一张定妆照：按对外参数封装（提示词 / 尺寸，其余走默认值）
+ *  组装输入并提交本地 ComfyUI，返回任务 id 与产物地址。
+ *  与 generateLocalPortrait（内置 txt2img + Checkpoint）互为替代 ——
+ *  工作流库里配置好对外参数的工作流，在角色卡本地通道像远端模型一样被选择。 */
+export async function generateWorkflowPortrait(
+  req: PortraitRequest,
+  opts: { workflowId: string },
+  handlers: LocalPortraitHandlers = {},
+): Promise<{ taskId: string; url: string }> {
+  const { input } = await buildLibraryWorkflowInput(opts.workflowId, {
+    prompt: req.prompt,
+    ...(req.negative !== undefined ? { negativePrompt: req.negative } : {}),
+    size: req.size,
+  });
+  const taskId = await startLocalGenerate(input);
   const url = await new Promise<string>((resolve, reject) => {
     let imageUrl = "";
     watchTask(taskId, {

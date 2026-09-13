@@ -85,6 +85,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     styles,
     checkpoints,
     checkpoint,
+    workflowOptions,
     setCheckpoint,
     workflowId,
     videoWorkflowId,
@@ -272,6 +273,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                   actions: characterPortraitActions,
                   checkpoint,
                   apiChannels,
+                  workflows: workflowOptions,
                   onOpenApiSettings: openApiSettings,
                 }}
               />

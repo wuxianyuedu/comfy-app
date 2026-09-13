@@ -8,7 +8,7 @@ import type { WorkflowRow } from "./workflow-library-config";
 /** 详情面板的三个页签 —— 数组顺序即渲染顺序。 */
 export const DETAIL_TABS = [
   { key: "canvas", label: "画布节点" },
-  { key: "params", label: "参数配置" },
+  { key: "params", label: "工坊封装" },
   { key: "source", label: "源文件" },
 ] as const;
 
