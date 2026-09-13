@@ -278,10 +278,10 @@ export function WorkshopHeader({
           size="xs"
           onClick={onOpenApiSettings}
           className="text-muted-foreground hover:text-ink gap-1 rounded-full bg-(--color-subtle) px-3 py-1.5 text-xs hover:bg-(--color-surface-2)"
-          title="配置生图 / 视频 API 直连通道"
+          title="为远端模型配置工坊各模式下的输入 / 输出"
         >
           <Icon name="settings" size={13} />
-          API 通道
+          模型适配
           {anyChannelConfigured ? " · 已配置" : ""}
         </Button>
         <Button

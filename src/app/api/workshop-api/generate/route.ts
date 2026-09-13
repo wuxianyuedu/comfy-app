@@ -50,10 +50,13 @@ export async function POST(req: NextRequest) {
 
   const kind: unknown = body.kind;
   const model = strField(body, "model");
+  const image = strField(body, "image");
+  const mode = strField(body, "mode");
+  const aspectRatio = strField(body, "aspectRatio");
+  const megapixels = strField(body, "megapixels");
   const prompt = strField(body, "prompt") ?? "";
   const negative = strField(body, "negative");
   const size = strField(body, "size");
-  const image = strField(body, "image");
   const remoteTaskId = strField(body, "remoteTaskId");
   const frames = intField(body, "frames", 1, 1000);
   const fps = intField(body, "fps", 1, 120);
@@ -63,7 +66,16 @@ export async function POST(req: NextRequest) {
       if (!prompt) {
         return NextResponse.json({ error: "prompt 不能为空" }, { status: 400 });
       }
-      const url = await generateImageViaApi({ prompt, negative, size, model });
+      const url = await generateImageViaApi({
+        prompt,
+        negative,
+        size,
+        model,
+        mode,
+        aspectRatio,
+        megapixels,
+        image,
+      });
       return NextResponse.json({ url });
     }
 

@@ -325,6 +325,9 @@ export const remoteModel = sqliteTable(
     apiKey: text("apiKey"),
     /** 用途：chat / image / video */
     kind: text("kind").notNull().default("chat"),
+    /** 工坊按模式的输入/输出适配器（JSON 数组字符串；RemoteModeAdapter[]）。
+     *  配置后工坊按该模型在对应模式下的字段映射发起请求，替代统一猜测。 */
+    workshopAdapters: text("workshopAdapters"),
     createdAt: dateNotNull("createdAt").notNull().$defaultFn(() => new Date()),
     updatedAt: dateNotNull("updatedAt").notNull().$defaultFn(() => new Date()).$onUpdate(() => new Date()),
   },

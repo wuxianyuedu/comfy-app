@@ -27,7 +27,8 @@ import {
 import { execFileSync, spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi
+} from "vitest";
 
 const SCRIPT = join(process.cwd(), "scripts", "check-file-structure.cjs");
 // 构建前置守卫：断言它真的能认出「路径落在本仓库 src-tauri\target\ 下的 app.exe」，
@@ -212,6 +213,10 @@ describe("check-file-structure.cjs（提交门槛）", () => {
 });
 
 describe("Build-Guard.ps1（构建前置守卫）", () => {
+  /* 用例真实 spawn PowerShell（5.1 冷启动 + 造数据 + 收输出），单条常态就要
+   * 3~4s；全量并行满载时 5s 默认超时偶发击穿（2026-09-13 两次）。整组放宽到
+   * 20s——只影响本 describe，不掩盖其它文件的真实挂起。 */
+  vi.setConfig({ testTimeout: 20_000 });
   /**
    * 复现并锁住「cargo 覆盖 target\release\app.exe 时拒绝访问 (os error 5)」这条
    * 已知故障路径（规范 §5）：壳还在跑 → 覆盖被拒 → 整轮编译白跑。

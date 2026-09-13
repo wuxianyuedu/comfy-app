@@ -296,6 +296,7 @@ export function useCharacterPortrait(opts: {
               projectId,
               name: `${label}-定妆照-${Date.now()}`,
               ...(remoteModel ? { model: remoteModel } : {}),
+              sizeState: session.size,
             },
           );
           addCandidate(character.id, {
