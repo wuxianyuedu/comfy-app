@@ -53,8 +53,6 @@ export type ParamClass =
   | "size-height"
   | "size-aspect"
   | "size-megapixels"
-  /** 对齐倍数（absorbed into the same picker as 比例/像素）. */
-  | "size-multiple"
   | "reference-image"
   | "first-frame"
   | "last-frame"
@@ -66,7 +64,6 @@ export const SIZE_CLASSES: readonly ParamClass[] = [
   "size-height",
   "size-aspect",
   "size-megapixels",
-  "size-multiple",
 ];
 
 /** 一个「对外参数」（= 契约里的一个统一口子，落到工作流的某个端口上）。
@@ -117,7 +114,6 @@ const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
   "size-height": "高度",
   "size-aspect": "宽高比",
   "size-megapixels": "像素量",
-  "size-multiple": "倍数",
   "reference-image": "参考图",
   "first-frame": "首帧",
   "last-frame": "尾帧",
@@ -171,12 +167,6 @@ export function classifyPin(e: WorkflowIOEntry): ParamClass {
   }
   if (/aspect_?ratio|宽高比|纵横比|比例/.test(text)) return "size-aspect";
   if (/megapixel|百万像素|\b像素\b/.test(text)) return "size-megapixels";
-  /* 对齐倍数（`multiple` / `倍数`）：它与比例 / 像素由同一个控件录入
-   *  （见 DimensionControl 的 ResolutionSelector），因此同属「尺寸」语义 ——
-   *  此前被判成 `other`，契约里根本出不来，用户看到「尺寸只有一个比例口，
-   *  倍数哪去了」（ISSUE #355）。 */
-  if (/\bmultiple\b|upscale_(factor|by|amount)|倍率|倍数|对齐倍数/.test(text))
-    return "size-multiple";
   if (/prompt|提示词|描述词|描述/.test(text)) return "prompt";
   /* 无类型但默认值很长（>40 字符）的文本一般是提示词框 —— 与工作流库的控件
    * 推导启发式（workflow-encapsulation / workflow-detail-io）保持一致，
@@ -520,8 +510,6 @@ const AUTO_MAPPABLE: Record<ParamClass, (e: WorkflowIOEntry) => boolean> = {
     /^(height|base_height|h|高度|纵向)$/.test(searchText(e).trim()),
   "size-aspect": (e) => /aspect_?ratio|宽高比|纵横比|比例/.test(searchText(e)),
   "size-megapixels": (e) => /megapixel|百万像素|\b像素\b/.test(searchText(e)),
-  "size-multiple": (e) =>
-    /\bmultiple\b|upscale_(factor|by|amount)|倍率|倍数|对齐倍数/.test(searchText(e)),
   "reference-image": (e) => isImagePin(e),
   "first-frame": (e) => isImagePin(e),
   "last-frame": (e) => isImagePin(e),

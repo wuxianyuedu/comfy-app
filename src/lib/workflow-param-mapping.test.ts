@@ -662,19 +662,21 @@ describe("paramNodeHeight — 输出端口区计入卡片高度", () => {
 });
 
 describe("wiredTargetsForEntry — 一个对外参数当前接到哪些端口", () => {
-  /* 「尺寸」在 ResolutionSelector 这类节点上由三个端口共同组成（宽高比 / 像素量 /
-   *  倍数由同一块组合控件录入）。默认状态下这三个端口都来自这一个对外参数，画面上
-   *  就该各有一条线 —— 只画自动判定挑中的那一个，会让「尺寸」看着只有一个出口
+  /* 「尺寸」在 ResolutionSelector 这类节点上由多个端口共同组成（宽高比 / 像素量
+   *  由同一块组合控件录入）。默认状态下这些端口都来自这一个对外参数，画面上就该
+   *  各有一条线 —— 只画自动判定挑中的那一个，会让「尺寸」看着只有一个出口
    *  （ISSUE #355：「尺寸现在有三个参数，就应该可以连三条线出来」）。 */
   const sizeIo: WorkflowIOMap = {
     "5::widget::aspect_ratio": pin("5", "aspect_ratio", { type: "COMBO" }),
     "5::widget::megapixels": pin("5", "megapixels", { type: "FLOAT" }),
-    "5::widget::multiple": pin("5", "multiple", { type: "INT" }),
+    "5::widget::width": pin("5", "width", { type: "INT" }),
+    "5::widget::height": pin("5", "height", { type: "INT" }),
   };
   const grouped = new Set([
     "5::widget::aspect_ratio",
     "5::widget::megapixels",
-    "5::widget::multiple",
+    "5::widget::width",
+    "5::widget::height",
   ]);
 
   it("默认状态：组合控件覆盖的每个候选端口各一条线", () => {
@@ -689,9 +691,10 @@ describe("wiredTargetsForEntry — 一个对外参数当前接到哪些端口", 
       groupedKeys: grouped,
     });
     expect(wired.map((item) => item.ioKey)).toEqual([
+      "5::widget::width",
+      "5::widget::height",
       "5::widget::aspect_ratio",
       "5::widget::megapixels",
-      "5::widget::multiple",
     ]);
     /* 自动判定挑中的那一颗标 active（卡片上实心，其余淡一档）。 */
     expect(wired.filter((item) => item.active).map((item) => item.ioKey)).toEqual([
@@ -706,13 +709,13 @@ describe("wiredTargetsForEntry — 一个对外参数当前接到哪些端口", 
     const wired = wiredTargetsForEntry({
       entry: size,
       io: sizeIo,
-      target: "5::widget::multiple",
+      target: "5::widget::megapixels",
       manual: true,
       groupedKeys: grouped,
     });
     /* 手工落点意味着该模式下这个口只往那一个端口供值（运行期同口径），其余
      *  端口回到工作流自身的默认值 —— 这时再画线就是谎报。 */
-    expect(wired.map((item) => item.ioKey)).toEqual(["5::widget::multiple"]);
+    expect(wired.map((item) => item.ioKey)).toEqual(["5::widget::megapixels"]);
   });
 
   it("未连线 / 显式断开 → 一条都不画", () => {
@@ -757,11 +760,11 @@ describe("wiredTargetsForEntry — 一个对外参数当前接到哪些端口", 
     const wired = wiredTargetsForEntry({
       entry: size,
       io: sizeIo,
-      target: "5::widget::multiple",
+      target: "5::widget::megapixels",
       manual: false,
       /* 宿主表单这一帧没有把组合控件画出来 → 没有「同一块控件的一组端口」。 */
       groupedKeys: new Set<string>(),
     });
-    expect(wired.map((item) => item.ioKey)).toEqual(["5::widget::multiple"]);
+    expect(wired.map((item) => item.ioKey)).toEqual(["5::widget::megapixels"]);
   });
 });

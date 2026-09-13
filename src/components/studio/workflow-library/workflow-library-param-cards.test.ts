@@ -263,13 +263,13 @@ describe("deriveLibraryParamCards", () => {
         type: "FLOAT",
         defaultValue: 1,
       },
-      "5::widget::multiple": {
+      "5::widget::width": {
         direction: "input",
         kind: "widget",
         nodeId: "5",
-        name: "multiple",
+        name: "width",
         type: "INT",
-        defaultValue: 8,
+        defaultValue: 1024,
       },
     };
     const { wires } = deriveLibraryParamCards({
@@ -279,15 +279,15 @@ describe("deriveLibraryParamCards", () => {
       groupedKeys: new Set(Object.keys(groupedIO)),
     });
     expect(wires.map((wire) => wire.targetIoKey)).toEqual([
+      "5::widget::width",
       "5::widget::aspect_ratio",
       "5::widget::megapixels",
-      "5::widget::multiple",
     ]);
     /* 库里按**端口名**找卡片圆点锚点（不是 ioKey）。 */
     expect(wires.map((wire) => wire.handleId)).toEqual([
+      "width",
       "aspect_ratio",
       "megapixels",
-      "multiple",
     ]);
     /* 这三条都是「本来就通着」的默认线（虚线口径）。 */
     expect(wires.every((wire) => wire.manual === false)).toBe(true);
@@ -312,24 +312,24 @@ describe("deriveLibraryParamCards", () => {
         type: "FLOAT",
         defaultValue: 1,
       },
-      "5::widget::multiple": {
+      "5::widget::width": {
         direction: "input",
         kind: "widget",
         nodeId: "5",
-        name: "multiple",
+        name: "width",
         type: "INT",
-        defaultValue: 8,
+        defaultValue: 1024,
       },
     };
     const { wires } = deriveLibraryParamCards({
       io: groupedIO,
       paramMap: {
-        source: { "mode:T2I": { size: "5::widget::multiple" } },
+        source: { "mode:T2I": { size: "5::widget::megapixels" } },
       },
       mode: "T2I",
       groupedKeys: new Set(Object.keys(groupedIO)),
     });
-    expect(wires.map((wire) => wire.targetIoKey)).toEqual(["5::widget::multiple"]);
+    expect(wires.map((wire) => wire.targetIoKey)).toEqual(["5::widget::megapixels"]);
     expect(wires[0]!.manual).toBe(true);
   });
 });
