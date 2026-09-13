@@ -796,6 +796,100 @@ test.describe("应用页签与全屏视图 @critical", () => {
         page.getByText("=== launcher started ===").first(),
       ).toBeVisible();
     });
+
+    /**
+     * ISSUE #262 六审：「启动和启动器 2 项还是没有日志内容」。
+     *
+     * 三审修的是**裁剪**（行被会话起点当成历史丢掉），这一轮是下一段：行抓到了、
+     * 也没被裁，但**没被认成日志行**。真实现场是 PowerShell 的 `Write-Log`：
+     * 级别经 `PadRight(5)` 补过尾空格（`[INFO ]` / `[OK   ]`），引导文案与错误
+     * 详情是**缩进两格**的续行（`  [10:22:24] [ERROR] …`），颜色码偶尔残缺还会
+     * 在 `[` 后多留一段假转义（`[[90m[OK`）。严格的 `\[INFO\]` 一个都匹配不到，
+     * 整行于是以**原文**落板——面板上那两个来源看起来就只是带前缀的文本。
+     *
+     * 这里在浏览器里喂真实形态的行：断言级别标签被认出来（`INFO` / `ERROR`
+     * 不是正文的一部分）、正文里不再残留 `[HH:mm:ss] [LEVEL]` 前缀。
+     */
+    test("@critical 启动与启动器两来源的日志行按级别解析 不整行显示原文", async ({
+      page,
+    }) => {
+      await stubBackend(page);
+
+      const fmt = (t: number) => {
+        const d = new Date(t);
+        const p = (n: number, l = 2) => String(n).padStart(l, "0");
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+      };
+      const now = Date.now();
+      const sessionStart = now - 30_000;
+      /* 两个来源各自的真实形态（级别填充、缩进续行、残码） */
+      const devLines = [
+        "[10:22:24] [INFO ] 预检通过",
+        "[10:22:25] [STEP] 检查端口占用",
+        "[10:22:26] [OK   ] Job Object 创建成功",
+        "  [10:22:27] [ERROR] 找不到预编译 Tauri 壳",
+      ];
+      const launcherLines = [
+        `[${fmt(now - 45_000)}] === launcher started ===`,
+        `[${fmt(now - 44_000)}] python=3.12`,
+      ];
+
+      await page.route("**/api/logs/current**", async (route: Route) => {
+        const source = new URL(route.request().url()).searchParams.get(
+          "source",
+        );
+        const lines =
+          source === "dev-launcher"
+            ? devLines
+            : source === "launcher"
+              ? launcherLines
+              : [];
+        const content = lines.join("\n") + (lines.length ? "\n" : "");
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            content,
+            size: 1000 + content.length,
+            offset: 0,
+            sessionStart,
+            bootId: "e2e:1",
+          }),
+        });
+      });
+
+      await page.goto("/workspace");
+      await page.getByTitle(/^日志面板/).click();
+      await expect(
+        page.getByText("应用日志", { exact: true }).first(),
+      ).toBeVisible();
+
+      /* 四个级别标记都被认出来，正文里不残留 `[HH:mm:ss] [LEVEL]` 前缀。 */
+      await expect(page.getByText("预检通过")).toBeVisible();
+      await expect(page.getByText("检查端口占用")).toBeVisible();
+      await expect(page.getByText("Job Object 创建成功")).toBeVisible();
+      await expect(page.getByText("找不到预编译 Tauri 壳")).toBeVisible();
+
+      const body = await page
+        .locator('[data-log-text]')
+        .allInnerTexts();
+      expect(body.length).toBeGreaterThan(0);
+      for (const text of body) {
+        expect(text).not.toMatch(/\[\d{2}:\d{2}:\d{2}\]\s*\[(INFO|STEP|OK|WARN|ERROR|DEBUG)\s*\]/);
+      }
+
+      /* 级别标签与正文分开：`INFO` / `ERROR` 出现在级别徽标里，而不是正文里。 */
+      const errorRow = page
+        .locator('[data-log-text]')
+        .filter({ hasText: "找不到预编译 Tauri 壳" });
+      await expect(errorRow).toHaveText("找不到预编译 Tauri 壳");
+
+      /* 切到「启动」来源，四个级别标记仍在（说明是按级别解析、不是原文兜底）。 */
+      await page.getByRole("combobox", { name: "按来源筛选" }).click();
+      await page.getByRole("option", { name: /^启动 4 / }).click();
+      await expect(page.getByText("检查端口占用")).toBeVisible();
+      await expect(page.getByText("找不到预编译 Tauri 壳")).toBeVisible();
+    });
   });
 
   /**
