@@ -15,7 +15,7 @@ import {
   selectPageLogs,
   selectNewLogCount,
   selectShouldPinToLatest,
-  MAX_LOG_ENTRIES,
+  isPanelSelfPollingLine,
   LOG_PAGE_SIZE,
   selectFirstPageWindow,
   captureLocation,
@@ -537,10 +537,15 @@ describe("setSessionStart 收拢迟到的时间线", () => {
   });
 });
 
-/* ── MAX_LOG_ENTRIES 上限裁剪（只裁最旧的，且裁的是「最旧」不是「最早到达」）── */
+/* ── 时间线不设总数上限，只限「同时显示数」──────────────────────────
+ *
+ * 用户要求：面板要能往前翻完整段日志，不再被「面板保留最近 2000 条」截断。
+ * 此前 2000 条环形缓冲被应用服务来源的高频行占满时，启动 / 启动器写在启动早期
+ * 的行被整批挤出去——用户看到的就是那两个来源恒为空。现在「一次看多少」只由
+ * 分页（每页 ≤ LOG_PAGE_SIZE）决定，时间线本身不裁剪。 */
 
-describe("MAX_LOG_ENTRIES 上限裁剪", () => {
-  it("批量追加超过上限时最旧的日志被挤出，最新的一定留着", () => {
+describe("时间线不设总数上限", () => {
+  it("批量追加超过旧上限（2000 条）时一条不丢，最旧的还在最前面", () => {
     /* 夹具的 seq 跨用例共享且单调递增：先造 1995 条「旧」的、再造 10 条
      * 「新」的，两批的时间戳与 seq 都天然有序。 */
     const baseSeq = seq;
@@ -566,19 +571,16 @@ describe("MAX_LOG_ENTRIES 上限裁剪", () => {
     useLogStore.getState().appendFileLogs(fresh);
 
     const { logs, counts } = useLogStore.getState();
-    expect(logs).toHaveLength(MAX_LOG_ENTRIES);
-    // 1995 + 10 = 2005，裁掉最旧的 5 条（old-0..old-4）→ 首条是 old-5
-    expect(logs[0]?.id).toBe("old-5");
-    expect(logs[1990]?.id).toBe("new-0");
-    expect(logs[1999]?.id).toBe("new-9");
-    expect(counts.all).toBe(MAX_LOG_ENTRIES);
+    /* 1995 + 10 = 2005，超过旧上限：一条不丢，首尾都对 */
+    expect(logs).toHaveLength(2005);
+    expect(logs[0]?.id).toBe("old-0");
+    expect(logs[2004]?.id).toBe("new-9");
+    expect(counts.all).toBe(2005);
   });
 
-  it("addEntry 在满仓时挤出最旧的一条", () => {
-    const oldLogs: LogEntry[] = Array.from(
-      { length: MAX_LOG_ENTRIES },
-      (_, i) =>
-        makeEntry({ id: `old-${i}`, time: i, seq: i - MAX_LOG_ENTRIES }),
+  it("addEntry 只追加、不挤出旧行", () => {
+    const oldLogs: LogEntry[] = Array.from({ length: 2001 }, (_, i) =>
+      makeEntry({ id: `old-${i}`, time: i, seq: i - 2001 }),
     );
     useLogStore.setState({ logs: oldLogs });
     useLogStore
@@ -586,74 +588,58 @@ describe("MAX_LOG_ENTRIES 上限裁剪", () => {
       .addEntry({ level: "warn", message: "最新一条", source: "system" });
 
     const { logs } = useLogStore.getState();
-    expect(logs).toHaveLength(MAX_LOG_ENTRIES);
-    expect(logs[0]?.id).toBe("old-1");
+    expect(logs).toHaveLength(2002);
+    expect(logs[0]?.id).toBe("old-0");
     expect(logs[logs.length - 1]?.message).toBe("最新一条");
   });
 
-  it("恰好达到上限时不裁剪", () => {
-    const oldLogs: LogEntry[] = Array.from(
-      { length: MAX_LOG_ENTRIES - 1 },
-      (_, i) =>
-        makeEntry({ id: `old-${i}`, time: i, seq: i - MAX_LOG_ENTRIES }),
+  it("显示的上限只由每页大小承担：时间线超过一页时分页接管", () => {
+    const total = LOG_PAGE_SIZE + 500;
+    useLogStore.getState().appendFileLogs(
+      Array.from({ length: total }, (_, i) =>
+        makeEntry({
+          id: `bulk-${i}`,
+          message: `bulk-${i}`,
+          time: i,
+          seq: i + 1,
+        }),
+      ),
     );
-    useLogStore.setState({ logs: oldLogs });
-    useLogStore.getState().addEntry({
-      level: "info",
-      message: `第 ${MAX_LOG_ENTRIES} 条`,
-      source: "system",
-    });
-
-    const { logs } = useLogStore.getState();
-    expect(logs).toHaveLength(MAX_LOG_ENTRIES);
-    expect(logs[0]?.id).toBe("old-0");
-  });
-
-  it("上限只约束内存：分页每页 200 条，与上限不耦合（#262）", () => {
-    // 旧实现把 pageSize 直接设成 2000，等于「上限即页大小」：翻页永远只有一页，
-    // 看起来就是「锁死 2000 条、不能翻页」。上限是内存保护，页大小是阅读体验，
-    // 两者必须是独立常量。
-    expect(LOG_PAGE_SIZE).toBeLessThan(MAX_LOG_ENTRIES);
+    const { logs, filteredLogs } = useLogStore.getState();
+    expect(logs).toHaveLength(total);
+    /* 第 1 页是最新的 LOG_PAGE_SIZE 条，更早的翻页可达——而不是被裁掉 */
+    const out = selectPageLogs(filteredLogs, 1, LOG_PAGE_SIZE);
+    expect(out.totalPages).toBe(2);
+    expect(out.entries).toHaveLength(LOG_PAGE_SIZE);
   });
 });
 
-/* ── 满仓时的「有新日志」与贴底基线（ISSUE #262 复审）────────────────────
+/* ── 长时间线下的水位与 revision（#262 复审；原「满仓（环形缓冲截断）」场景）──
  *
- * 用户反馈两条连在一起的现象：
- *   「日志到上限了还继续产生新日志，面板内容不断移动，想复制某一项十分困难，
- *     甚至无法选择，刚选择就刷新把选择弄没了」；
- *   「日志没法翻页」。
- *
- * 两者同源：**时间线到上限时，新行并没有真正落板，只是把最旧的一批挤了出去**。
- * 旧实现把这种「右移一格」也当作时间线变了（推进 revision），于是
- *   1. 页脚把 revision 变化当成有新日志 → 重新取水位 → 而写入之后的视图里本来就
- *      含新行，新行当场被标成已读 → 「有 N 条新的日志」永远报 0，那个「回到最新」
- *      的出口也就永远不出现（用户读到的就是「翻页翻不动」）；
- *   2. 贴底按「尾部有没有变」判定 → 每两秒一次的轮询都有新行 → 内容整体上移
- *      一次，用户刚框住的文本立刻被冲掉。
- *
- * 修法是把两条判据都换成「条目身份」：截断不推进 revision，水位与贴底基线都只由
- * 显式动作推进，新行靠 id 判「没见过」。
+ * 时间线已不设总数上限，但这一组的契约仍然成立，并且是「将来若恢复内存上限，
+ * 不得把截断当成有新行」的防线（规范 §7.22.4）：
+ *   1. `revision` 只在**新行落板**时推进——全批重复行（时间线原样返回）不算；
+ *   2. 水位与贴底基线只由显式动作（翻页 / 回到底部 / 回到最新）推进，写入路径
+ *      不顺手扩展——否则新行当场被标成已读，页脚永远报 0；
+ *   3. 「有 N 条新的日志」按**窗口几何量**计数，与长度、与「谁什么时候读了什么」
+ *      无关，长线上照样数得出来。
  */
-describe("满仓（环形缓冲截断）时的水位与 revision（#262 复审）", () => {
-  /** 把时间线灌到满仓：id 单调，time 单调。 */
-  function fillFull() {
+describe("长时间线下的水位与 revision（#262 复审）", () => {
+  /** 灌出一条长线（2000 条）：id 单调，time 单调。 */
+  function fillLong() {
     const baseSeq = seq;
     /* 不用 makeEntry：它会递增共享计数器并**覆盖**这里显式给出的 seq，
      * 让「时间线里谁在前谁在后」变得不可预测（用例要的是确定性顺序）。 */
-    const full: LogEntry[] = Array.from(
-      { length: MAX_LOG_ENTRIES },
-      (_, i) => ({
-        id: `full-${i}`,
-        message: `full-${i}`,
-        time: 1_700_000_000_000 + i,
-        seq: baseSeq + 1 + i,
-        level: "info" as const,
-        source: "system" as const,
-      }),
-    );
-    seq = baseSeq + MAX_LOG_ENTRIES;
-    /* 直接 setState 灌满时间线时 `filteredLogs` 不会跟着派生，而 setPage 的水位
+    const full: LogEntry[] = Array.from({ length: 2000 }, (_, i) => ({
+      id: `full-${i}`,
+      message: `full-${i}`,
+      time: 1_700_000_000_000 + i,
+      seq: baseSeq + 1 + i,
+      level: "info" as const,
+      source: "system" as const,
+    }));
+    seq = baseSeq + 2000;
+    /* 直接 setState 灌时间线时 `filteredLogs` 不会跟着派生，而 setPage 的水位
      * 取自 filteredLogs —— 不显式补齐，水位就恒为空集（用例会误判成「一切皆未读」）。 */
     useLogStore.setState({ logs: full, filteredLogs: full });
     /* setPage(1) = 「我在看最新一段」：锚点与基线一起就位，此后到达的才算新的。 */
@@ -661,8 +647,8 @@ describe("满仓（环形缓冲截断）时的水位与 revision（#262 复审�
     return full;
   }
 
-  it("满仓时新到一条：revision 推进（有新行落板），但水位不被动过", () => {
-    fillFull();
+  it("长线上新到一条：revision 推进（有新行落板），旧行不丢、水位不动", () => {
+    fillLong();
     const before = useLogStore.getState();
 
     act(() =>
@@ -677,18 +663,46 @@ describe("满仓（环形缓冲截断）时的水位与 revision（#262 复审�
     );
 
     const after = useLogStore.getState();
-    expect(after.logs).toHaveLength(MAX_LOG_ENTRIES);
-    /* 溢出条顶掉了最旧的一条，但它确实落板了 → revision 推进，
-     * 页脚据此知道「时间线真的变过」（还不等于有新日志，见下一条断言）。 */
+    /* 不设上限：新行追加在末尾，旧行一条不丢 */
+    expect(after.logs).toHaveLength(before.logs.length + 1);
+    expect(after.logs[0]?.id).toBe("full-0");
     expect(after.revision).toBe(before.revision + 1);
-    /* 关键是水位**没被写入路径动过**：溢出条仍在「未读」里，页脚因此报得出它。
-     * 旧实现把「截断」也当成有新内容并顺手刷新水位，新行当场被标成已读。 */
+    /* 关键是水位**没被写入路径动过**：新行仍在「未读」里，页脚因此报得出它。 */
     expect(after.viewSeenIds.has("overflow-1")).toBe(false);
     expect(after.viewSeenIds.has("full-0")).toBe(true);
   });
 
-  it("满仓时贴底基线不再被每次新增拉动（复制文本时内容不动）", () => {
-    fillFull();
+  it("全批都是重复行：时间线原样返回，revision 不推进", () => {
+    fillLong();
+    const before = useLogStore.getState();
+    const lastTime = before.logs[before.logs.length - 1]!.time;
+
+    act(() =>
+      useLogStore.getState().appendFileLogs([
+        makeEntry({
+          id: "fresh-1",
+          message: "独一份的一行",
+          time: lastTime + 1,
+          seq: seq + 1,
+        }),
+      ]),
+    );
+    const landed = useLogStore.getState();
+    expect(landed.revision).toBe(before.revision + 1);
+
+    /* 同一行再送一次（内容/时刻/级别全同，只是 id 不同）：跨来源去重把整批
+     * 判成重复、时间线原样返回——revision 不动，页脚不会虚报「有新的日志」。 */
+    const again = useLogStore.getState().logs.find((e) => e.id === "fresh-1")!;
+    act(() =>
+      useLogStore.getState().appendFileLogs([{ ...again, id: "dup-again" }]),
+    );
+    const after = useLogStore.getState();
+    expect(after.logs).toHaveLength(landed.logs.length);
+    expect(after.revision).toBe(landed.revision);
+  });
+
+  it("贴底基线不再被每次新增拉动（复制文本时内容不动）", () => {
+    fillLong();
     const baseline = useLogStore.getState().followBaseline;
 
     const baseSeq = seq;
@@ -708,10 +722,10 @@ describe("满仓（环形缓冲截断）时的水位与 revision（#262 复审�
     expect(useLogStore.getState().followBaseline).toBe(baseline);
   });
 
-  it("满仓时新行仍能被数出来：窗口口径不受长度封顶影响", () => {
-    fillFull();
+  it("新行仍能被数出来：窗口口径与长度无关", () => {
+    fillLong();
     const beforeLen = useLogStore.getState().filteredLogs.length;
-    /* 时间戳必须**大于**满仓那批的最大值，否则新行会排到中间、不落在窗口之后。
+    /* 时间戳必须**大于**那批的最大值，否则新行会排到中间、不落在窗口之后。
      * 不用 makeEntry：它会递增共享计数器、并覆盖这里显式给出的 seq。 */
     const lastTime = useLogStore.getState().logs.at(-1)!.time;
 
@@ -728,12 +742,10 @@ describe("满仓（环形缓冲截断）时的水位与 revision（#262 复审�
       ]),
     );
     const s = useLogStore.getState();
-    /* 长度封顶在 MAX_LOG_ENTRIES：旧口径（长度差）在这里恒为 0，报了「没有新
-     * 日志」；窗口口径看的是「窗口之后还有多少条」，封仓照样数得出来。
-     * 这条就是「面板一直在涨，但确实报得出新来了几条」的最小证据。 */
-    expect(s.filteredLogs.length).toBe(beforeLen);
+    /* 不设上限：长度随新行增长；「有没有新内容」仍由窗口给出，两者独立 */
+    expect(s.filteredLogs.length).toBe(beforeLen + 1);
     expect(s.anchorId).not.toBeNull();
-    /* 「有没有新内容」这个数由窗口给出，与内存上限无关。
+    /* 「有没有新内容」这个数由窗口给出，与总量无关。
      * 注意贴底看第 1 页时（autoScroll=true）页脚**不显示**这个入口——新内容本来
      * 就自动呈现在眼前；显式的「回到最新」只在用户上滚离开底部、或翻到历史页时给。 */
     expect(
@@ -744,7 +756,7 @@ describe("满仓（环形缓冲截断）时的水位与 revision（#262 复审�
   });
 
   it("点「回到最新」后窗口追到尾部，计数归零", () => {
-    fillFull();
+    fillLong();
     /* 刚在最新一段：没有新内容，也没有出口（`selectShouldPinToLatest(1, true)`） */
     expect(newCount(1, true)).toBe(0);
 
@@ -761,7 +773,7 @@ describe("满仓（环形缓冲截断）时的水位与 revision（#262 复审�
         },
       ]),
     );
-    /* 满仓 + 锚点在尾部窗口头一条 → 窗口之后就是刚追加的那条 */
+    /* 锚点在尾部窗口头一条 → 窗口之后就是刚追加的那条 */
     expect(newCount(1, false)).toBe(1);
 
     act(() => useLogStore.getState().jumpToLatest());
@@ -1135,6 +1147,50 @@ describe("isRoutineRpcTimingLine 文件行侧过滤（#294）", () => {
 
   it("非 rpc 业务行保留", () => {
     expect(isRoutineRpcTimingLine("普通业务输出")).toBe(false);
+  });
+});
+
+/* ── isPanelSelfPollingLine：面板自轮询行不进面板 ────────────────────────
+ *
+ * 面板每 2s 轮询 4 路来源与 server-id，dev server 的访问日志把这些请求原样
+ * 打进 app 转录——下一轮轮询又读回来，是一条自我反馈回路。不滤掉就会以每轮
+ * 数行的速度无限累积（此前还把「启动 / 启动器」的行从 2000 条缓冲里全部挤出去，
+ * 用户看到那两个来源恒为空）。业务请求不是回声，必须照常进面板。 */
+describe("isPanelSelfPollingLine 面板自轮询行过滤", () => {
+  it("只匹配面板自用端点的访问日志行", () => {
+    expect(
+      isPanelSelfPollingLine(
+        "GET /api/logs/current?source=app&offset=5168432&bootId=dev-boot%3Ax 200 in 64ms (next.js: 36ms)",
+      ),
+    ).toBe(true);
+    expect(isPanelSelfPollingLine("GET /api/logs/current 200 in 5ms")).toBe(
+      true,
+    );
+    expect(isPanelSelfPollingLine("GET /api/dev/server-id 200 in 3ms")).toBe(
+      true,
+    );
+    /* 业务请求与面板之外的可观测端点不是回声 */
+    expect(
+      isPanelSelfPollingLine("GET /api/trpc/workflow.list 200 in 12ms"),
+    ).toBe(false);
+    expect(isPanelSelfPollingLine("POST /api/logs/app-runtime 204")).toBe(
+      false,
+    );
+    expect(isPanelSelfPollingLine("GET /api/logs/history?q=x 200")).toBe(false);
+  });
+
+  it("parseFileLogs 丢弃裸形态与带时间戳前缀形态的自轮询行", () => {
+    const entries = parseFileLogs(
+      [
+        "GET /api/logs/current?source=app&offset=1 200 in 12ms",
+        "[10:22:24] [INFO ] GET /api/logs/current?source=dev 200 in 9ms",
+        "GET /api/dev/server-id 200 in 3ms",
+        "业务日志照常保留",
+      ].join("\n"),
+      new Date(2026, 8, 13),
+      "app",
+    );
+    expect(entries.map((e) => e.message)).toEqual(["业务日志照常保留"]);
   });
 });
 
@@ -1647,17 +1703,17 @@ describe("mergeTimeline：时间线按时刻排序，时刻相同再按入库顺
     expect(mergeTimeline(current, [])).toBe(current);
   });
 
-  it("超过上限时裁掉时刻最旧的（不是最早到达的）", () => {
+  it("后到但时刻更早的一批全部并入：时间线不设上限，谁也不被裁掉", () => {
     const current = [entry("newest", 1_000)];
-    // 后到达但时刻更早的一批：合并后它们排在前面，超过 max 时会被裁掉
+    // 后到达但时刻更早的一批：合并后按时刻排在前面
     const late = [
       entry("ancient", 1),
       entry("old", 2),
       entry("new", 3),
       entry("mid", 500),
     ];
-    const out = mergeTimeline(current, late, 3);
-    expect(idsOf(out)).toEqual(["new", "mid", "newest"]);
+    const out = mergeTimeline(current, late);
+    expect(idsOf(out)).toEqual(["ancient", "old", "new", "mid", "newest"]);
   });
 });
 
