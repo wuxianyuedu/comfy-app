@@ -39,7 +39,6 @@ import { exposedParamsForMode } from "~/lib/workflow-exposed-params";
 import {
   aspectLabelForSize,
   megapixelsForSize,
-  multipleForSize,
 } from "~/lib/workshop/workflow-encapsulation";
 
 /* ── 对外参数分类 ──
@@ -58,8 +57,6 @@ export type ParamClass =
   | "size-height"
   | "size-aspect"
   | "size-megapixels"
-  /** 对齐倍数（absorbed into the same picker as 比例/像素）. */
-  | "size-multiple"
   | "reference-image"
   | "first-frame"
   | "last-frame"
@@ -71,7 +68,6 @@ export const SIZE_CLASSES: readonly ParamClass[] = [
   "size-height",
   "size-aspect",
   "size-megapixels",
-  "size-multiple",
 ];
 
 /** 一个「对外参数」（= 契约里的一个统一口子，落到工作流的某个端口上）。
@@ -122,7 +118,6 @@ const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
   "size-height": "高度",
   "size-aspect": "宽高比",
   "size-megapixels": "像素量",
-  "size-multiple": "倍数",
   "reference-image": "参考图",
   "first-frame": "首帧",
   "last-frame": "尾帧",
@@ -176,12 +171,6 @@ export function classifyPin(e: WorkflowIOEntry): ParamClass {
   }
   if (/aspect_?ratio|宽高比|纵横比|比例/.test(text)) return "size-aspect";
   if (/megapixel|百万像素|\b像素\b/.test(text)) return "size-megapixels";
-  /* 对齐倍数（`multiple` / `倍数`）：它与比例 / 像素由同一个控件录入
-   *  （见 DimensionControl 的 ResolutionSelector），因此同属「尺寸」语义 ——
-   *  此前被判成 `other`，契约里根本出不来，用户看到「尺寸只有一个比例口，
-   *  倍数哪去了」（ISSUE #355）。 */
-  if (/\bmultiple\b|upscale_(factor|by|amount)|倍率|倍数|对齐倍数/.test(text))
-    return "size-multiple";
   if (/prompt|提示词|描述词|描述/.test(text)) return "prompt";
   /* 无类型但默认值很长（>40 字符）的文本一般是提示词框 —— 与工作流库的控件
    * 推导启发式（workflow-encapsulation / workflow-detail-io）保持一致，
@@ -299,7 +288,7 @@ export function paramOutputPorts(
 
   const target = resolvedTarget ?? null;
   /* **每个候选端口一颗圆点**（不论当前有没有落点）：同一张「尺寸」卡片要把
-   *  宽 / 高 / 宽高比 / 像素量 / 倍数各自的出口都摆出来，作者拖哪一颗就连到
+   *  宽 / 高 / 宽高比 / 像素量各自的出口都摆出来，作者拖哪一颗就连到
    *  哪个候选（ISSUE #355：「尺寸这里不是有多个输出端口吗，现在怎么还是一个
    *  比例」）。只列「当前生效落点」那一颗的话，卡片上就只剩一根线可以拉，
    *  其余候选连端点都没有。
@@ -340,7 +329,7 @@ export function paramOutputPorts(
 /** 一个对外参数当前**接到哪些端口**（默认状态可以是「一对多」）。
  *
  *  为什么不是一个端口：像「尺寸」这样的对外参数**由多个端口共同组成** ——
- *  宽高比 / 像素量 / 倍数由同一块组合控件录入（`inferGroups` 的 `groupedKeys`），
+ *  宽高比 / 像素量由同一块组合控件录入（`inferGroups` 的 `groupedKeys`），
  *  宽 / 高同理。默认状态下这几个端口都取自这一个对外参数，画面上就该各有一条线；
  *  只画「自动判定挑中的那一个」会让「尺寸」看着只有一个出口
  *  （ISSUE #355：「尺寸现在有三个参数，就应该可以连三条线出来」）。
@@ -525,8 +514,6 @@ const AUTO_MAPPABLE: Record<ParamClass, (e: WorkflowIOEntry) => boolean> = {
     /^(height|base_height|h|高度|纵向)$/.test(searchText(e).trim()),
   "size-aspect": (e) => /aspect_?ratio|宽高比|纵横比|比例/.test(searchText(e)),
   "size-megapixels": (e) => /megapixel|百万像素|\b像素\b/.test(searchText(e)),
-  "size-multiple": (e) =>
-    /\bmultiple\b|upscale_(factor|by|amount)|倍率|倍数|对齐倍数/.test(searchText(e)),
   "reference-image": (e) => isImagePin(e),
   "first-frame": (e) => isImagePin(e),
   "last-frame": (e) => isImagePin(e),
@@ -915,9 +902,9 @@ export function runtimeNodeId(entry: {
 
 /** 把**一个对外值**派生成某个端口自己认的形状（「尺寸」这类一对外参数接多端口时用）。
  *
- *  工坊侧给出的「尺寸」是 `"832x1216"` 这样的像素串；落到工作流的 `width` 上就是
+ *  外部给出的「尺寸」是 `"832x1216"` 这样的像素串；落到工作流的 `width` 上就是
  *  832，落到 `aspect_ratio` 上就得是它自己声明的那个比例标签，落到 `megapixels`
- *  上则是 0.9 这样的百万像素数。三种落点形状不同、值也不同 —— 直接照抄像素串会
+ *  上则是 0.9 这样的百万像素数。各落点形状不同、值也不同 —— 直接照抄像素串会
  *  被 ComfyUI 判成非法选项（表现为「改了没生效」）。
  *
  *  非「尺寸」的口子原样透传（提示词 / 首帧这类值在所有落点上同形）。
@@ -948,10 +935,6 @@ function sizeValueForPin(
       const mp = megapixelsForSize(width, height, raw.defaultValue);
       return mp ?? undefined;
     }
-    case "size-multiple": {
-      const multiple = multipleForSize(width, height);
-      return multiple ?? undefined;
-    }
     default:
       /* 落点不是尺寸类端口（工作流的自定义 pin）：原样透传，由工作流自己解释。 */
       return supplied;
@@ -974,8 +957,8 @@ export function applyParamMapping(args: {
   /** 组合控件覆盖到的端口（`inferGroups(...).groupedKeys`）。
    *
    *  带「尺寸」这类一对外参数对多端口的口子时必传：默认状态下它接到的是
-   *  组合控件覆盖的那几个端口，值要逐端口派生成各自认的形状（宽高比 / 像素量 /
-   *  倍数）。不传时按单端口处理（老调用方行为不变）。 */
+   *  组合控件覆盖的那几个端口，值要逐端口派生成各自认的形状（宽高比 / 像素量）。
+   *  不传时按单端口处理（老调用方行为不变）。 */
   groupedKeys?: ReadonlySet<string>;
 }): { inputs: MappedInput[]; unmatched: string[] } {
   const { io, entries, mapping, values, mode, groupedKeys } = args;
@@ -1009,7 +992,7 @@ export function applyParamMapping(args: {
       .find((value) => value !== undefined);
     const supplied = byContract ?? byPinKeys;
     if (supplied === undefined) continue;
-    /* 一个对外参数可能接到**多个端口**（「尺寸」的宽高比 / 像素量 / 倍数由同一
+    /* 一个对外参数可能接到**多个端口**（「尺寸」的宽高比 / 像素量由同一
      * 块控件录入，默认状态下几个端口都取自这一个口）。这时要把同一个对外值
      * 派生成每个端口各自认的形状，逐个下发 —— 只往「自动判定挑中的那一个」写，
      * 用户在图上连出来的另外两条线就从外部拿不到值（ISSUE #355：「尺寸那三项

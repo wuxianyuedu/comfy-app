@@ -41,7 +41,6 @@ export type WorkshopPinClass =
   | "size-height"
   | "size-aspect"
   | "size-megapixels"
-  | "size-multiple"
   | "reference-image"
   | "first-frame"
   | "last-frame"
@@ -67,9 +66,22 @@ export type VideoPinRole =
 export interface WorkshopExposedValues {
   prompt?: string;
   negativePrompt?: string;
-  /** "宽x高"（如 "832x1216"）。有 width/height pin 时按 W/H 落，
-   *  只有 aspect/megapixels pin 时自行换算。 */
+  /** "宽x高"（如 "832x1216"）。有 width/height pin 时按 W/H 落。
+   *
+   *  **不用于 aspect / megapixels 端口** —— 工作流用「比例 + 像素基准」表达
+   *  尺寸时改由 `aspect` / `megapixels` / `pixelLongEdge` 逐端口派值（见各字段
+   *  说明）：把 WxH 反解回比例会落在两个预设之间，用户表现为「给了 1k 却算出
+   *  个怪尺寸」。 */
   size?: string;
+  /** 宽高比（标准比例标签，如 "16:9" / "3:4"）。落在 `aspect_ratio` 类端口上，
+   *  且必须命中该端口自己声明的候选（COMBO 的 `options`）—— 命不中就退回默认值，
+   *  绝不写一个非法选项进去。 */
+  aspect?: string;
+  /** 总像素量（单位：百万像素，1 = 1M）。落在 `megapixels` 类端口上。 */
+  megapixels?: number;
+  /** 像素基准档的长边像素（1k = 1024 / 2k = 2048 / 4k = 4096）。落在只声明了
+   *  单个「分辨率 / 长边」端口的尺寸口上（工坊的 1k/2k/4k 档）。 */
+  pixelLongEdge?: number;
   /** 参考图文件名（已上传到 ComfyUI 输入目录）。
    *  按顺序填进工作流里的图片槽位；视频模式下首帧槽优先拿第一张。 */
   referenceImages?: string[];
@@ -205,13 +217,6 @@ function isMegapixelsPin(e: WorkflowIOEntry): boolean {
   return /megapixel|百万像素|\b像素\b/.test(text);
 }
 
-/** 对齐倍数（`multiple` / 倍数）——与比例 / 像素同属「尺寸」语义，由同一个控件
- *  录入。判定放在 aspect / megapixels 之后，避免把 `upscale_factor` 之类抢走。 */
-function isMultiplePin(e: WorkflowIOEntry): boolean {
-  const text = searchText(e);
-  return /\bmultiple\b|upscale_(factor|by|amount)|倍率|倍数|对齐倍数/.test(text);
-}
-
 /** 判定一个 IO 输入条目在工坊里属于哪一类对外控件。
  *
  *  仅对 `direction === "input"` 的条目有意义；输出与连线型输入一律 internal。
@@ -227,7 +232,6 @@ export function classifyWorkshopPin(e: WorkflowIOEntry): WorkshopPinClass {
   if (isHeightPin(e)) return "size-height";
   if (isMegapixelsPin(e)) return "size-megapixels";
   if (isAspectPin(e)) return "size-aspect";
-  if (isMultiplePin(e)) return "size-multiple";
   if (isPromptPin(e)) return "prompt";
   return "internal";
 }
@@ -270,22 +274,109 @@ export function parseSizeParam(size: string | undefined): { width: number; heigh
   return { width, height };
 }
 
-/* ── 尺寸三项各自取值（宽高比 / 像素量 / 倍数）──
+/** 把一组 IO 条目按 ioKey → 分类整理；同一分类出现多个时取首个（稳定顺序）。 */
+function classifyAll(io: WorkflowIOMap): Map<string, WorkshopPinClass> {
+  const out = new Map<string, WorkshopPinClass>();
+  for (const [key, entry] of Object.entries(io)) {
+    out.set(key, classifyWorkshopPin(entry));
+  }
+  return out;
+}
+
+function pickFirst(
+  classified: Map<string, WorkshopPinClass>,
+  cls: WorkshopPinClass
+): string | undefined {
+  for (const [key, value] of classified) {
+    if (value === cls) return key;
+  }
+  return undefined;
+}
+
+/** 工坊给的比例标签 → 某个 `aspect_ratio` 端口**自己声明的**候选值。
  *
- * 对外参数里「尺寸」是**一个**口子，但工作流里它可能落在三类不同的端口上：
- * 宽高比（COMBO 标签）、像素量（FLOAT，1 ≈ 1M 总像素）、对齐倍数（INT）。此前
- * 这三类一律 `matched: false` —— 值只能靠工作流默认值，用户在图里拖出来的
- * 「尺寸 → 百万像素」那条线**从外部拿不到值**（ISSUE #355：「尺寸那三项每一项
- * 都需要从外部获取值」）。
+ *  这类端口是 COMBO，写进去的值必须逐字命中它的 `options`（如
+ *  `"16:9 (Widescreen)"`）；写一个自由文本只会让 ComfyUI 静默回落到第一个选项
+ *  —— 用户看到的是「改了比例没生效」。因此按「先精确、再归一化比对」的顺序找：
  *
- * 现在从工坊给的 "WxH" 现算：
- *   · 比例：还原成**标准比例标签**（16:9 / 4:3…），且必须命中该 pin 自己的选项；
- *   · 像素量：W×H / 1e6（1 ≈ 1M），按 pin 声明的小数精度取舍；
- *   · 倍数：宽高的最大公约数与常用网格取交（>= 2 才算「成倍数」）。
+ *  1. `options` 里有与标签逐字相同的项 → 用它；
+ *  2. 否则比归一化后的比例值（从选项串里解 `16:9` 这类比值），取最接近的一项；
+ *  3. 都没有（端口没声明候选 / 无法解析）→ 返回 undefined，交由调用方退回默认值。 */
+export function matchAspectOption(
+  entry: WorkflowIOEntry,
+  aspect: string | undefined
+): string | undefined {
+  if (typeof aspect !== "string" || !aspect.trim()) return undefined;
+  const wanted = aspect.trim();
+  const options = Array.isArray(entry.options)
+    ? entry.options.filter((option): option is string => typeof option === "string")
+    : [];
+  const exact = options.find((option) => option.trim() === wanted);
+  if (exact !== undefined) return exact;
+  /* COMBO 没声明候选（老数据 / 自定义节点）时按原样写 —— 那时没有「候选」可
+   * 违反，工坊的标准标签就是最合理的猜测。 */
+  if (options.length === 0) return wanted;
+  const wantedRatio = parseRatioFromText(wanted);
+  if (wantedRatio === null) return undefined;
+  let best: string | undefined;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const option of options) {
+    const ratio = parseRatioFromText(option);
+    if (ratio === null) continue;
+    const dist = Math.abs(ratio - wantedRatio);
+    if (dist < bestDist) {
+      best = option;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+/** 工作流是否用「尺寸」语义接住了值（宽 / 高 / 比例 / 像素量 任一类端口存在）。 */
+function hasAnySizeSlot(classified: Map<string, WorkshopPinClass>): boolean {
+  return (
+    pickFirst(classified, "size-width") !== undefined ||
+    pickFirst(classified, "size-height") !== undefined ||
+    pickFirst(classified, "size-aspect") !== undefined ||
+    pickFirst(classified, "size-megapixels") !== undefined
+  );
+}
+
+/** 从自由文本里解出宽高比（`"16:9 (Widescreen)"` → 16/9）；解不出返回 null。 */
+function parseRatioFromText(text: string): number | null {
+  const match = /(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)/.exec(text);
+  if (!match) return null;
+  const w = Number(match[1]);
+  const h = Number(match[2]);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  return w / h;
+}
+
+/** 像素基准档的长边像素 → 百万像素量（给只暴露 `megapixels` 端口的工作流用）。
  *
- * 三类都是**尽力而为**：算不出来、或者 pin 只认自己声明的候选而对不上时返回
- * `null`，由调用方按默认值兜底 —— 宁可不动，也不写一个非法值进去让 ComfyUI
- * 静默回落（那才是「改了没生效」）。 */
+ *  长边与总像素的换算只是一次近似：`pixelLongEdge` 是「长边像素」语义，而
+ *  `megapixels` 是「总像素」语义，两者之间还差一个比例。工坊侧同时给了
+ *  `aspect`，但这里刻意**不**用它推总像素 —— 端口只声明了 `megapixels` 时，
+ *  它多半自己也按比例算 W/H；我们给出「长边档 ≈ 多少百万像素（按 1:1）」的
+ *  保守换算，改由工作流自己按它的比例分配。1k→1、2k→4、4k→16（幂次口径）。 */
+export function longEdgeToMegapixels(longEdge: number | undefined): number | undefined {
+  if (typeof longEdge !== "number" || !Number.isFinite(longEdge) || longEdge <= 0) {
+    return undefined;
+  }
+  const mp = (longEdge / 1024) ** 2;
+  /* 保留两位小数，避免 4k 算出 16.000000000000004 这种噪声写进工作流。 */
+  return Math.round(mp * 100) / 100;
+}
+
+/* ── "WxH" → 各尺寸端口认的形状（画布/库内连线通路用）──
+ *
+ * 画布上拖出来的「尺寸」线拿到的是作品里存的 WxH 串（如 "1920x1080"）。落到
+ * `aspect_ratio` / `megapixels` 这类端口上时要现算成它们各自认的形状 —— 照抄
+ * 像素串会被 ComfyUI 判成非法选项（表现为「改了没生效」）。
+ *
+ * 工坊封装本身（`buildEncapsulatedInputs`）不走这里：它直接拿「比例 + 像素基准」，
+ * 不经 WxH 反解（见 `WorkshopExposedValues` 的 `aspect` / `megapixels`）。这两个
+ * 派生函数只服务「外部值本身是 WxH」的画布通路。 */
 
 /** 一档标准宽高比：把 "WxH" 还原成标签用。 */
 const RATIO_PRESETS: { ratio: number; labels: string[] }[] = [
@@ -298,20 +389,6 @@ const RATIO_PRESETS: { ratio: number; labels: string[] }[] = [
   { ratio: 2 / 3, labels: ["2:3"] },
   { ratio: 21 / 9, labels: ["21:9"] },
 ];
-
-/** 常见的对齐倍数网格（与 AlignMultipleStepper / DimensionControl 同口径）。 */
-const MULTIPLE_GRID = [8, 16, 32, 64, 128];
-
-function gcd(a: number, b: number): number {
-  let x = Math.round(Math.abs(a));
-  let y = Math.round(Math.abs(b));
-  while (y) {
-    const t = x % y;
-    x = y;
-    y = t;
-  }
-  return x;
-}
 
 /** 标准比例标签：与目标比例相对差最小、且**该 pin 真的声明了这个选项**的那个。
  *
@@ -359,36 +436,6 @@ export function megapixelsForSize(
   return rounded > 0 ? rounded : null;
 }
 
-/** 对齐倍数：宽高的公约数落在常用网格上的那一档（>= 2 才算「成倍数」）。
- *
- *  取**最大**的命中档：64 能整除就不必写 8 —— 倍数越大网格越粗，写入的口径
- *  越接近工作流自己的默认（多数工作流声明 8 / 64）。 */
-export function multipleForSize(width: number, height: number): number | null {
-  if (!(width > 0) || !(height > 0)) return null;
-  const divisor = gcd(width, height);
-  const hits = MULTIPLE_GRID.filter((step) => divisor % step === 0);
-  return hits.length > 0 ? hits[hits.length - 1]! : null;
-}
-
-/** 把一组 IO 条目按 ioKey → 分类整理；同一分类出现多个时取首个（稳定顺序）。 */
-function classifyAll(io: WorkflowIOMap): Map<string, WorkshopPinClass> {
-  const out = new Map<string, WorkshopPinClass>();
-  for (const [key, entry] of Object.entries(io)) {
-    out.set(key, classifyWorkshopPin(entry));
-  }
-  return out;
-}
-
-function pickFirst(
-  classified: Map<string, WorkshopPinClass>,
-  cls: WorkshopPinClass
-): string | undefined {
-  for (const [key, value] of classified) {
-    if (value === cls) return key;
-  }
-  return undefined;
-}
-
 /** 组装工坊对外参数 → workflowInputs。
  *
  *  规则：
@@ -434,8 +481,7 @@ export function buildEncapsulatedInputs(
 
   const userValueFor = (
     cls: WorkshopPinClass,
-    /** 该端口自己的声明（COMBO 候选、默认值精度）—— 尺寸类三项现算时要看它。 */
-    entry?: WorkflowIOEntry
+    ioEntry: WorkflowIOEntry
   ): { matched: boolean; value: unknown } => {
     switch (cls) {
       case "prompt":
@@ -446,34 +492,23 @@ export function buildEncapsulatedInputs(
         return { matched: dims !== null, value: dims?.width };
       case "size-height":
         return { matched: dims !== null, value: dims?.height };
+      /* 比例 / 像素量：工坊给的是「比例 + 像素基准」，不折成 WxH。
+       *  比例必须命中该端口自己声明的候选（COMBO options），否则视为没给 ——
+       *  写一个不在候选里的值只会让 ComfyUI 静默回落到第一个选项。 */
+      case "size-aspect": {
+        const aspect = matchAspectOption(ioEntry, values.aspect);
+        return { matched: aspect !== undefined, value: aspect };
+      }
+      case "size-megapixels": {
+        const mp = values.megapixels ?? longEdgeToMegapixels(values.pixelLongEdge);
+        return { matched: mp !== undefined, value: mp };
+      }
       case "first-frame":
         return { matched: firstFrame !== undefined, value: firstFrame };
       case "last-frame":
         return { matched: lastFrame !== undefined, value: lastFrame };
       case "reference-image":
         return { matched: refImage !== undefined, value: nextReference() };
-      /* 宽高比 / 像素量 / 倍数由**同一个「尺寸」口**派生：工坊给的是 "WxH"，
-       * 对这三类端口要现算成它们各自认的形状（标签 / 百万像素 / 对齐网格）。
-       * 此前一律 `matched: false`，于是这三项永远只能吃工作流默认值 ——
-       * 用户拖出来的「尺寸 → 百万像素」那条线从外部拿不到值（ISSUE #355）。
-       *
-       * 算不出来（比例不在 pin 的候选里 / 倍数不落在网格上）时如实给
-       * `matched: false`，由默认值兜底 —— 绝不写一个 pin 不认的值进去。 */
-      case "size-aspect": {
-        if (!dims) return { matched: false, value: undefined };
-        const label = aspectLabelForSize(dims.width, dims.height, entry?.options);
-        return { matched: label !== null, value: label ?? undefined };
-      }
-      case "size-megapixels": {
-        if (!dims) return { matched: false, value: undefined };
-        const mp = megapixelsForSize(dims.width, dims.height, entry?.defaultValue);
-        return { matched: mp !== null, value: mp ?? undefined };
-      }
-      case "size-multiple": {
-        if (!dims) return { matched: false, value: undefined };
-        const multiple = multipleForSize(dims.width, dims.height);
-        return { matched: multiple !== null, value: multiple ?? undefined };
-      }
       default:
         return { matched: false, value: undefined };
     }
@@ -504,8 +539,15 @@ export function buildEncapsulatedInputs(
   if (values.prompt !== undefined && !pickFirst(classified, "prompt")) unmatched.push("prompt");
   if (values.negativePrompt !== undefined && !pickFirst(classified, "negative"))
     unmatched.push("negativePrompt");
-  if (dims && !pickFirst(classified, "size-width") && !pickFirst(classified, "size-height"))
-    unmatched.push("size");
+  /* 尺寸：宽 / 高 / 比例 / 像素量任一类端口接住就不算没落下去（工作流用哪种口径
+   *  表达尺寸由它自己决定）。工坊会同时给出 WxH 与「比例 + 像素基准」，工作流
+   *  只吃其中一路 —— 另一路没落点上**不算问题**，因此只在「一类尺寸端口都没有」
+   *  时报一次 `size`，避免把「工作流只暴露 width/height」误报成「比例没生效」。 */
+  if (!hasAnySizeSlot(classified)) {
+    if (dims !== null || values.aspect !== undefined || values.megapixels !== undefined) {
+      unmatched.push("size");
+    }
+  }
   /* 参考图：首帧槽（含普通参考图槽）都没有，才算没落下去。
    * 首尾帧工作流的 referenceImages[0] 会落到首帧槽，不该报 unmatched。 */
   const hasImageSlot =
