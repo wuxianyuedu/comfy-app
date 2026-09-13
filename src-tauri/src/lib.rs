@@ -34,6 +34,11 @@ struct AppState {
   /// 已按「不抢前台」方式显示过但用户还没看过的应用窗口，供托盘「打开主界面」
   /// 时清掉闪烁提醒。
   attention: Mutex<bool>,
+  /// 用户在启动期关闭了启动页（放弃本次启动）。壳进程随即整体退出；置位是
+  /// 为了在退出生效前的瞬间，拦住所有「把隐藏主窗显示出来」的后续路径
+  /// （页面加载完成的窗口交接、150s 安全网、就绪兜底导航），避免用户已经
+  /// 放弃的启动又把窗口弹出来。
+  abandoned: Mutex<bool>,
 }
 
 impl AppState {
@@ -44,7 +49,20 @@ impl AppState {
       shown: Mutex::new(false),
       foreground: Mutex::new(foreground),
       attention: Mutex::new(false),
+      abandoned: Mutex::new(false),
     }
+  }
+
+  /// 标记「用户已放弃本次启动」并返回标记前的值（幂等：重复关闭启动页只记一次）。
+  fn mark_abandoned(&self) -> bool {
+    let mut abandoned = self.abandoned.lock().unwrap();
+    let was = *abandoned;
+    *abandoned = true;
+    was
+  }
+
+  fn is_abandoned(&self) -> bool {
+    *self.abandoned.lock().unwrap()
   }
 
   fn foreground(&self) -> bool {
@@ -130,6 +148,14 @@ fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHand
   let monitor = app_handle.clone();
   std::thread::spawn(move || {
     std::thread::sleep(std::time::Duration::from_secs(150));
+    let abandoned = monitor
+      .try_state::<AppState>()
+      .map(|s| s.is_abandoned())
+      .unwrap_or(false);
+    if abandoned {
+      // 用户已关闭启动页放弃本次启动，壳正在退出：不再把主窗显示出来。
+      return;
+    }
     let splash_open = monitor.get_webview_window("splash").is_some();
     let main_hidden = match monitor.get_webview_window("main") {
       Some(m) => !m.is_visible().unwrap_or(false),
@@ -573,10 +599,17 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
             let _ = win.navigate(target);
           }
         }
-        // 启动页（splash）不可用，无窗口可交换：直接显示「应用」窗口并关闭黑屏 splash
-        show_main_window_without_focus(&handle, false);
-        if let Some(splash) = handle.get_webview_window("splash") {
-          let _ = splash.close();
+        // 启动页（splash）不可用，无窗口可交换：直接显示「应用」窗口并关闭黑屏 splash。
+        // 用户已放弃本次启动时止步——壳正在退出，别把主窗又显示出来。
+        let abandoned = handle
+          .try_state::<AppState>()
+          .map(|s| s.is_abandoned())
+          .unwrap_or(false);
+        if !abandoned {
+          show_main_window_without_focus(&handle, false);
+          if let Some(splash) = handle.get_webview_window("splash") {
+            let _ = splash.close();
+          }
         }
         return;
       }
@@ -874,6 +907,16 @@ pub fn run() {
               return;
             }
             log::info!("[ComfyAPP] app page loaded, swapping windows");
+            // 用户已在启动期关闭启动页（放弃本次启动）：壳正在退出，别再把
+            // 主窗显示出来（否则用户关闭后过一会儿窗口又自己冒出来）。
+            let abandoned = app_handle_for_page
+              .try_state::<AppState>()
+              .map(|s| s.is_abandoned())
+              .unwrap_or(false);
+            if abandoned {
+              log::info!("[ComfyAPP] launch abandoned by user, skip window swap");
+              return;
+            }
             // 导航失败（连接被拒/服务又挂掉）时 WebView2 也会以 http URL 触发
             // Finished，页面内容是内嵌的 Edge「无法访问此页面」错误页——历史上
             // 它曾被当成「应用加载完成」直接顶给用户。交换前用 TCP 可达性做
@@ -892,6 +935,36 @@ pub fn run() {
           }
         })
         .build()?;
+
+      // ── 启动页关闭 = 放弃本次启动，整个应用直接退出 ──
+      // 主窗在 setup 时就已创建（隐藏待命），如果只关 splash 窗口，壳会带着
+      // 一个看不见的主窗继续活着：任务栏图标挂着、dev server 继续被拉起，
+      // 用户以为已经退出，实际进程还在（还会在服务就绪后把主窗又弹出来）。
+      // 因此：启动页的关闭请求到达而主窗仍未显示时，标记「已放弃」并退出整个
+      // 壳进程——dev-launcher 以壳退出为锚点回收 dev server 进程树，启动器
+      // 监控线程随之收尾，任务栏不再残留。正常交接（壳自己关启动页）发生时
+      // 主窗已经显示，走不到这条退出路径。
+      let handle_for_splash_close = app.handle().clone();
+      if let Some(splash_for_close) = app.get_webview_window("splash") {
+        splash_for_close.on_window_event(move |event| {
+          if let tauri::WindowEvent::CloseRequested { .. } = event {
+            let main_visible = handle_for_splash_close
+              .get_webview_window("main")
+              .map(|m| m.is_visible().unwrap_or(false))
+              .unwrap_or(false);
+            if main_visible {
+              return;
+            }
+            if let Some(state) = handle_for_splash_close.try_state::<AppState>() {
+              state.mark_abandoned();
+            }
+            log::info!(
+              "[ComfyAPP] splash closed while main window hidden, exiting app (launch abandoned)"
+            );
+            handle_for_splash_close.exit(0);
+          }
+        });
+      }
 
       // ── 启动页看门狗（仅 custom-protocol 构建）──
       // custom-protocol 关闭时（tauri dev），tauri 的 cfg(dev) 开启，窗口相对
