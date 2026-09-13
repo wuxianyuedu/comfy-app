@@ -18,7 +18,11 @@ import { inferGroups } from "~/components/studio/shared/workflow-io";
 import { buildParamEntries } from "~/lib/workflow-param-mapping";
 import { GroupedControls } from "~/components/studio/shared/GroupedControls";
 import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
-import { WorkflowParamWires } from "./WorkflowParamWires";
+import {
+  WorkflowParamWires,
+  rectInContainer,
+  wireScale,
+} from "./WorkflowParamWires";
 import { wireAnchorValue } from "./WorkflowParamCardColumn";
 
 vi.stubGlobal(
@@ -151,6 +155,65 @@ describe("组合卡回来之后的连线几何", () => {
   });
 });
 
+describe("视口缩放下的连线量测（缩放不改变线的落点）", () => {
+  /* 库内画布是可缩放视口（内容层贴 `scale(z)`），而连线层是绝对定位的 SVG、
+   *  坐标写在容器自己的坐标系里；`getBoundingClientRect()` 给的却是被祖先
+   *  scale 过的屏幕像素。两者混用，缩放不是 100% 时线立刻与圆点错位 —— 用户
+   *  口径：「改了缩放，后线的位置错乱」（ISSUE #355）。
+   *
+   *  算式在 `wireScale`（容器 / 其外框的 rect 之比）与 `rectInContainer`（把
+   *  屏幕 rect 换回容器局部坐标）里，两者都是纯函数，直接断言；JSX 几何的
+   *  「量哪两个元素」由本文件上面两条用例覆盖（jsdom 不做布局，父级 rect 恒为 0，
+   *  缩放路径在这里用纯函数钉住）。 */
+  it("缩放比取自容器与其外框的 rect 之比", () => {
+    const frame = document.createElement("div");
+    const content = document.createElement("div");
+    frame.appendChild(content);
+    document.body.appendChild(frame);
+    frame.getBoundingClientRect = () =>
+      ({ width: 400, height: 300 }) as DOMRect;
+    content.getBoundingClientRect = () =>
+      ({ width: 200, height: 150 }) as DOMRect;
+    /* 外框 400 / 内容 200 = 内容被缩放到 50%。 */
+    expect(wireScale(content)).toBe(2);
+    frame.remove();
+  });
+
+  it("量不到宽度时不假装有缩放（退回 1，不把线画到天边）", () => {
+    const frame = document.createElement("div");
+    const content = document.createElement("div");
+    frame.appendChild(content);
+    document.body.appendChild(frame);
+    frame.getBoundingClientRect = () => ({ width: 0, height: 0 }) as DOMRect;
+    content.getBoundingClientRect = () => ({ width: 0, height: 0 }) as DOMRect;
+    expect(wireScale(content)).toBe(1);
+    frame.remove();
+  });
+
+  it("rect 换算回容器局部坐标：屏幕坐标除以缩放，再减容器屏幕原点", () => {
+    const frame = document.createElement("div");
+    const content = document.createElement("div");
+    const dot = document.createElement("span");
+    frame.appendChild(content);
+    content.appendChild(dot);
+    document.body.appendChild(frame);
+    /* 容器屏幕原点 (10, 20)（被平移），内容被缩放 2 倍（外框 900 / 内容 450）。 */
+    frame.getBoundingClientRect = () =>
+      ({ width: 900, height: 600, left: 0, top: 0 }) as DOMRect;
+    content.getBoundingClientRect = () =>
+      ({ width: 450, height: 300, left: 10, top: 20 }) as DOMRect;
+    /* 圆点在屏幕上的位置：容器原点 + 局部 (100, 50) × 缩放 2 = (210, 120)。 */
+    dot.getBoundingClientRect = () =>
+      ({ width: 24, height: 24, left: 210, top: 120 }) as DOMRect;
+    const box = rectInContainer(dot, content, wireScale(content));
+    expect(box.left).toBe(100);
+    expect(box.top).toBe(50);
+    expect(box.width).toBe(12);
+    expect(box.height).toBe(12);
+    frame.remove();
+  });
+});
+
 describe("对外输出参数的连线几何", () => {
   it("线从宿主输出行的圆点出发，收在右侧输出卡片的圆点上", async () => {
     /* 输出侧方向相反：起点是**宿主卡片输出行的圆点**（`data-port-dot`），终点是
@@ -159,7 +222,10 @@ describe("对外输出参数的连线几何", () => {
      *  行边。 */
     const { container } = render(
       <div>
-        <div data-port-dot="9::output::IMAGE" style={{ position: "absolute" }} />
+        <div
+          data-port-dot="9::output::IMAGE"
+          style={{ position: "absolute" }}
+        />
         <span
           data-wire-anchor={wireAnchorValue("9::output::IMAGE", "images")}
           style={{ position: "absolute" }}
@@ -239,7 +305,9 @@ describe("对外输出参数的连线几何", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
     expect(
-      container.querySelector('[data-testid="wflib-param-wire-9::output::IMAGE?images"]'),
+      container.querySelector(
+        '[data-testid="wflib-param-wire-9::output::IMAGE?images"]',
+      ),
     ).toBeNull();
   });
 });

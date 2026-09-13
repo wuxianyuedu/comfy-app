@@ -349,8 +349,27 @@ export function wiredTargetsForEntry(args: {
   manual: boolean;
   /** 组合控件覆盖到的端口（`inferGroups(...).groupedKeys`）；缺省时不做一对多。 */
   groupedKeys?: ReadonlySet<string>;
+  /** 是否**连每一个候选端口都算一条线**（视图侧口径，与运行期无关）。
+   *
+   *  缺省 `false` = 只报「当前生效落点」那一个（运行期派值、编辑器连线用这个
+   *  口径：手工落点意味着该口只往那一个端口供值）。给 `true` 时把该条目全部
+   *  可落点逐个报出来 —— 库内画布卡片给每个候选都画了圆点（每个都能拖线改落点），
+   *  线就该逐条画出来；点有、线没有，读作「这几项没接上」（ISSUE #355：「宽高比
+   *  和百万像素这两项都需要能导入到工作流中，2 条线都要能连出去」）。 */
+  allCandidates?: boolean;
 }): { ioKey: string; active: boolean }[] {
-  const { entry, io, target, manual, groupedKeys } = args;
+  const { entry, io, target, manual, groupedKeys, allCandidates } = args;
+  /* 视图口径：不挑「当前落点」，把候选逐个报出来（落在哪个哪个就是 active）。 */
+  if (allCandidates) {
+    const candidates = (
+      io ? entry.pins.filter((pin) => !!io[pin.ioKey]) : entry.pins
+    ).map((pin) => ({ ioKey: pin.ioKey, active: pin.ioKey === target }));
+    /* 生效落点不在候选里（历史数据 / 端口已从 IO 移除）也要补一条并标 active
+     *  —— 否则「当前落点」在图上凭空消失，读者答不出这个口现在连着哪。 */
+    if (target && !candidates.some((c) => c.ioKey === target))
+      candidates.unshift({ ioKey: target, active: true });
+    return candidates;
+  }
   if (!target) return [];
   if (manual) return [{ ioKey: target, active: true }];
   /* 落点落在组合控件里 → 该控件覆盖、且属于这个条目的端口全都算「接上了」。
@@ -360,18 +379,36 @@ export function wiredTargetsForEntry(args: {
     const siblings = entry.pins.filter(
       (pin) => groupedKeys.has(pin.ioKey) && (!io || !!io[pin.ioKey]),
     );
-    const keys = siblings.length > 0 ? siblings.map((pin) => pin.ioKey) : [target];
+    const keys =
+      siblings.length > 0 ? siblings.map((pin) => pin.ioKey) : [target];
     if (!keys.includes(target)) keys.unshift(target);
     return keys.map((ioKey) => ({ ioKey, active: ioKey === target }));
   }
   return [{ ioKey: target, active: true }];
 }
 
+/** 某个条目在某个 ioKey 上「用哪个 handle 连」——库内画布卡片按**端口名**给
+ *  圆点打锚点（`paramOutputPorts` 的 `handleId`），所以连线也必须按端口名对齐
+ *  那一颗点，否则同一个条目下多条线会全部落到第一颗点上。 */
+export function wireHandleIdForIoKey(
+  io: WorkflowIOMap | null | undefined,
+  entry: ParamEntry,
+  ioKey: string,
+): string {
+  return (
+    io?.[ioKey]?.name ??
+    entry.pins.find((pin) => pin.ioKey === ioKey)?.name ??
+    ioKey
+  );
+}
+
 /** 该对外参数在某个模式下的**默认落点端口**（`auto`）。
  *
  *  默认连线的端点排在候选第一位，颜色与实心点一致；作者改过落点后第一颗就是
  *  他连的那颗。缺省（没有模式语境）时退到候选首项。 */
-export function defaultOutputPortIndex(ports: readonly ParamOutputPort[]): number {
+export function defaultOutputPortIndex(
+  ports: readonly ParamOutputPort[],
+): number {
   const index = ports.findIndex((port) => port.active);
   return index >= 0 ? index : 0;
 }
@@ -913,7 +950,7 @@ function sizeValueForPin(
   io: WorkflowIOMap | null | undefined,
   entry: ParamEntry,
   ioKey: string,
-  supplied: unknown
+  supplied: unknown,
 ): unknown {
   if (entry.cls !== "size") return supplied;
   const raw = io?.[ioKey];
@@ -1127,7 +1164,9 @@ export function placeParamNodes(
      *  —— 用户表现为「画布上找不到对外参数卡片」，见 ParamEntry.hostNodeId）。 */
     const host = hostPosById[entry.hostNodeId] ?? hostPosById[entry.nodeId];
     if (!host) continue;
-    const hostKey = hostPosById[entry.hostNodeId] ? entry.hostNodeId : entry.nodeId;
+    const hostKey = hostPosById[entry.hostNodeId]
+      ? entry.hostNodeId
+      : entry.nodeId;
     const column = columnByNode[hostKey] ?? 0;
     const rowY = cursorByNode[hostKey] ?? 0;
     out[paramNodeId(entry.id)] = {
