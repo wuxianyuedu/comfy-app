@@ -64,7 +64,7 @@ export type Settings = {
   comfyuiAutoStart: boolean;
   /** ComfyUI 监听端口；0 = 默认 8188（启动时按需显式传 --port）。 */
   comfyuiPort: number;
-  /** 应用退出是否连带关闭自己拉起的 ComfyUI（默认 true=连带关闭）。 */
+  /** 应用退出是否连带关闭自己拉起的 ComfyUI（默认 false=保活，退出后继续运行）。 */
   exitKillComfyui: boolean;
   /** 应用退出是否连带关闭自己拉起的 Ollama（默认 true=连带关闭）。 */
   exitKillOllama: boolean;

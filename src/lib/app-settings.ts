@@ -48,16 +48,26 @@ export type AppSettings = {
    */
   loginRequired: boolean;
   /**
-   * 应用进程退出时是否连带关闭自己拉起的 ComfyUI（进程保活开关，默认 true）。
+   * 应用进程退出时是否连带关闭自己拉起的 ComfyUI（进程保活开关，默认 false）。
    * 语义：桌面壳退出是 taskkill /T /F 杀整棵进程树，被杀进程没有任何清理
    * 机会，所以这个开关不是「退出时再决定」，而是「拉起时决定是否脱离进程树」。
    * true = ComfyUI 挂在应用进程树内，应用退出连带关闭；false = 脱离进程树
    * 保活，下次打开应用直接复用。仅对本应用拉起的实例生效（外部启动的不归它管）。
    * 改动会在「下一次拉起」生效。
+   *
+   * 默认取「保活」：ComfyUI 冷启动 + 加载模型是分钟级的成本，默认随应用退出
+   * 连杀会让每次打开应用都要重付一遍；且被杀时正在跑的任务没有机会收尾。
    */
   exitKillComfyui: boolean;
   /** 同 exitKillComfyui，作用于应用拉起的 Ollama serve 进程。 */
   exitKillOllama: boolean;
+  /**
+   * exitKillComfyui 默认值迁移标记（一次性，非用户可见开关）。
+   * 该开关的历史默认值是 true，而 saveSettings 会把整个对象（含默认值）写盘 ——
+   * 于是老安装的设置文件里都躺着一条 true，光改 DEFAULTS 对它们不生效。
+   * 首次读到没有本标记的文件时把值落成新默认并写标记；之后用户手动勾选不再被覆盖。
+   */
+  exitKillComfyuiDefaultMigrated?: boolean;
 };
 
 /** 从 comfyuiPath 推导 ComfyUI 安装内的只读资源目录（custom_nodes / workflows）。
@@ -95,9 +105,20 @@ const DEFAULTS: AppSettings = {
   comfyuiAutoStart: true,
   comfyuiPort: 0,
   loginRequired: false,
-  exitKillComfyui: true,
+  exitKillComfyui: false,
   exitKillOllama: true,
 };
+
+/** 退出策略默认值变更的一次性迁移（判据见 exitKillComfyuiDefaultMigrated）。
+ *  纯函数、不做 IO —— 导出供单测直接锁住「迁移一次就收手」的行为。 */
+export function migrateExitDefaults(settings: AppSettings): AppSettings {
+  if (settings.exitKillComfyuiDefaultMigrated === true) return settings;
+  return {
+    ...settings,
+    exitKillComfyui: DEFAULTS.exitKillComfyui,
+    exitKillComfyuiDefaultMigrated: true,
+  };
+}
 
 let cache: AppSettings | null = null;
 
@@ -110,9 +131,9 @@ export function getSettingsSync(): AppSettings {
     /* comfyuiUrl 已废弃（ComfyUI 由本应用拉起，连接地址固定 127.0.0.1:端口）；
      * 从旧文件里剥掉，下次保存时彻底从磁盘消失。 */
     delete parsed.comfyuiUrl;
-    cache = { ...DEFAULTS, ...parsed };
+    cache = migrateExitDefaults({ ...DEFAULTS, ...parsed });
   } catch {
-    cache = { ...DEFAULTS };
+    cache = migrateExitDefaults({ ...DEFAULTS });
   }
   return cache;
 }
@@ -132,7 +153,7 @@ export async function saveSettings(partial: Partial<AppSettings>): Promise<AppSe
 
 /** 退出策略：应用进程退出时是否连带关闭自己拉起的后台服务。 */
 export type ExitPolicy = {
-  /** true = 应用退出连带关闭 ComfyUI（默认，保持历史行为）；false = ComfyUI 保活。 */
+  /** true = 应用退出连带关闭 ComfyUI；false = ComfyUI 保活（默认）。 */
   exitKillComfyui: boolean;
   /** true = 应用退出连带关闭 Ollama（默认）；false = Ollama 保活。 */
   exitKillOllama: boolean;
@@ -145,7 +166,7 @@ export type ExitPolicy = {
 export function getExitPolicy(): ExitPolicy {
   const s = getSettingsSync();
   return {
-    exitKillComfyui: s.exitKillComfyui ?? true,
+    exitKillComfyui: s.exitKillComfyui ?? false,
     exitKillOllama: s.exitKillOllama ?? true,
   };
 }

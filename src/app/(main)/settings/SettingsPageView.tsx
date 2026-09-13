@@ -2286,7 +2286,7 @@ export function SettingsPageView({
                 id="exit-kill-comfyui"
                 type="checkbox"
                 className="size-4 accent-[var(--primary,#7c5cff)]"
-                checked={c.drafts.settings.exitKillComfyui ?? true}
+                checked={c.drafts.settings.exitKillComfyui ?? false}
                 onChange={(event) =>
                   c.patchSettings({
                     exitKillComfyui: event.target.checked,
@@ -2301,10 +2301,10 @@ export function SettingsPageView({
               </label>
             </div>
             <p className="text-muted-foreground mt-1.5 text-xs">
-              勾选（默认）：ComfyUI 由本应用拉起并挂在应用进程内，应用退出
-              时一并关闭；取消勾选：ComfyUI 脱离进程树保活，退出应用后继续
-              运行，下次打开直接复用。仅对本应用拉起的实例生效；手动在其他
-              终端/窗口启动的 ComfyUI 不受此开关影响。
+              默认不勾选：ComfyUI 脱离进程树保活，退出应用后继续运行，下次
+              打开直接复用；勾选：ComfyUI 由本应用拉起并挂在应用进程内，应用
+              退出时一并关闭。仅对本应用拉起的实例生效；手动在其他终端/窗口
+              启动的 ComfyUI 不受此开关影响。
             </p>
           </div>
           <div className="mb-4">
