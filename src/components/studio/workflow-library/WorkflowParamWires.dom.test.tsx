@@ -300,3 +300,94 @@ describe("断开与取消选中", () => {
     expect(onDisconnect).not.toHaveBeenCalled();
   });
 });
+
+/* ── 落点命中：拖到哪一项就落到哪个端口（ISSUE #355）──
+ *
+ * 「尺寸」的三个端口由同一块组合控件录入：整块控件各覆盖这三个端口（`data-io-pins`），
+ * 若候选里只有那块大矩形，拖到任何一格都会命中同一个口 —— 写进去的不是你指的那一个。
+ * 这里走完整手势：从卡片圆点按下、落在「百万像素」那一行的圆点上松开，断言落库载荷
+ * 就是 `megapixels`。 */
+
+describe("落点命中", () => {
+  it("拖到某一项的圆点 → 落到那个端口（不是组合控件里的第一个）", async () => {
+    const io: WorkflowIOMap = {
+      "5::widget::aspect_ratio": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "5",
+        name: "aspect_ratio",
+        type: "COMBO",
+        defaultValue: "16:9",
+      },
+      "5::widget::megapixels": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "5",
+        name: "megapixels",
+        type: "FLOAT",
+        defaultValue: 1,
+      },
+    };
+    const onConnect = vi.fn();
+    const { container } = render(
+      <div>
+        {/* 组合控件一格：覆盖两个端口。 */}
+        <div data-io-pins="5::widget::aspect_ratio,5::widget::megapixels" />
+        {/* 两项各自的行 + 精确圆点。 */}
+        <div data-io-key="5::widget::aspect_ratio">
+          <span data-port-dot="5::widget::aspect_ratio" />
+        </div>
+        <div data-io-key="5::widget::megapixels">
+          <span data-port-dot="5::widget::megapixels" />
+        </div>
+        <WorkflowParamCardColumn
+          entries={buildParamEntries(io, undefined, { mode: "T2I" })}
+          resolved={{}}
+          io={io}
+        />
+        <WorkflowParamWires wires={[]} onConnect={onConnect} />
+      </div>,
+    );
+    const box = container.querySelector<HTMLElement>("[data-io-pins]")!;
+    stubRect(box, { left: 0, top: 0, width: 240, height: 80 });
+    for (const ioKey of ["5::widget::aspect_ratio", "5::widget::megapixels"]) {
+      stubRect(container.querySelector(`[data-io-key="${ioKey}"]`)!, {
+        left: 0,
+        top: 0,
+        width: 240,
+        height: 20,
+      });
+      stubRect(container.querySelector(`[data-port-dot="${ioKey}"]`)!, {
+        left: ioKey.endsWith("megapixels") ? 300 : 300,
+        top: ioKey.endsWith("megapixels") ? 70 : 30,
+        width: 12,
+        height: 12,
+      });
+    }
+    const dot = container.querySelector<HTMLElement>(
+      '[data-wire-anchor="size?megapixels"]',
+    )!;
+    stubRect(dot, { left: 100, top: 40, width: 12, height: 12 });
+
+    await act(async () => {
+      dot.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          clientX: 106,
+          clientY: 46,
+        }),
+      );
+    });
+    await act(async () => {
+      document.dispatchEvent(
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          clientX: 306,
+          clientY: 76,
+        }),
+      );
+    });
+
+    expect(onConnect).toHaveBeenCalledWith("size", "5::widget::megapixels");
+  });
+});

@@ -11,7 +11,7 @@ import {
 } from "@/lib/core/repository";
 import { reimportFromSource, importFromLocalPath } from "@/lib/comfyui/importSource";
 import { readEnvVar } from "@/lib/envfile";
-import { deriveComfyuiSubdir, getSettingsSync } from "@/lib/app-settings";
+import { deriveComfyuiWorkflowsDir, getSettingsSync } from "@/lib/app-settings";
 import {
   scanLocalWorkflowRoots,
   scanLocalWorkflowChecksums,
@@ -43,10 +43,11 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 
 /** Resolve the local-workflow scan roots.
- *  主路径：设置里配置的 ComfyUI 安装根下的 `workflows` 目录（自动推导）。
+ *  主路径：设置里配置的 ComfyUI 安装根下的用户工作流目录（自动推导，
+ *  见 deriveComfyuiWorkflowsDir —— 兼容 user/default/workflows 与旧 workflows）。
  *  `.env` 的 LOCAL_WORKFLOWS_PATH 仍作为覆盖项保留（向后兼容，可加扫额外目录）。 */
 function getLocalWorkflowRoots(): string[] {
-  const derived = deriveComfyuiSubdir(getSettingsSync().comfyuiPath, "workflows");
+  const derived = deriveComfyuiWorkflowsDir(getSettingsSync().comfyuiPath);
   const extra = (readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "")
     .split(/[\n,]/)
     .map((part) => part.trim())
@@ -199,7 +200,12 @@ export const workflowRouter = createTRPCRouter({
       let localRootsList: Array<{ rawPath: string; absPath: string; exists: boolean }> = [];
       let localAllFiles: LocalWorkflowFile[] = [];
       if (localRoots.length > 0) {
-        const { roots, allFiles } = scanLocalWorkflowRoots(localRoots);
+        /* 递归扫描：ComfyUI 自己的 workflows/ 与桌面版的 user/default/workflows
+         * 都会分子目录（default/、image/…），用户给一个根就是要「这个目录下的都算」，
+         * 只扫一层会把它们全漏掉而界面上只显示「还没有工作流」。 */
+        const { roots, allFiles } = scanLocalWorkflowRoots(localRoots, {
+          recursive: true,
+        });
         localRootsSummary = roots.map((root) =>({          rawPath: root.rawPath,
           absPath: root.absPath,
           exists: root.exists,
@@ -373,6 +379,17 @@ export const workflowRouter = createTRPCRouter({
             ? findRootFor(enriched.sourcePath, localRootsList)
             : undefined,
       }));
+
+      /* 空结果本身没有任何痕迹（成功返回空 payload），排障时看不出是「本来就没有」
+       * 还是「本地工作流目录没扫到」——把判据记进 app-runtime 日志，下次「界面空了」
+       * 能直接对上原因。 */
+      if (enrichedWithRoot.length === 0 && localPending.length === 0) {
+        logger.warn(
+          `[workflow.list] 空结果 | userId=${ctx.user.id} roots=${JSON.stringify(
+            localRootsList,
+          )} scannedFiles=${localAllFiles.length}`,
+        );
+      }
 
       return {
         workflows: enrichedWithRoot,

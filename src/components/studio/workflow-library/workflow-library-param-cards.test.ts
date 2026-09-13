@@ -174,8 +174,11 @@ describe("deriveLibraryParamCards", () => {
     }
   });
 
-  it("每个落点给一条只读连线：卡片圆点 → 宿主行", () => {
-    /* 圆点不给线就只是一颗装饰点：读者答不出「提示词这个口连到哪一行」。 */
+  it("每个候选落点都给一条只读连线：卡片圆点 → 宿主行", () => {
+    /* 圆点不给线就只是一颗装饰点：读者答不出「提示词这个口连到哪一行」。
+     *  多候选口子（尺寸）是「每一个能连的候选各一条线」—— 卡片上每个候选都有
+     *  圆点，线只画一条的话，其余几项读作「没接上」（ISSUE #355：「宽高比 + 百万
+     *  像素这两项都需要能导入到工作流中，2 条线都要能连出去」）。 */
     const { wires } = deriveLibraryParamCards({
       io,
       paramMap: {},
@@ -200,7 +203,12 @@ describe("deriveLibraryParamCards", () => {
         },
       ]),
     );
-    expect(wires).toHaveLength(2);
+    /* 尺寸下面每一个候选端口各一条，且各对到自己那一颗圆点（handle 不许复用）。 */
+    const sizeWires = wires.filter((wire) => wire.entryId === sizeEntry.id);
+    expect(sizeWires.length).toBeGreaterThan(1);
+    expect(new Set(sizeWires.map((wire) => wire.handleId)).size).toBe(
+      sizeWires.length,
+    );
   });
 
   it("作者改过的线标 manual（实线），自动判定的不标（虚线）", () => {
@@ -263,13 +271,13 @@ describe("deriveLibraryParamCards", () => {
         type: "FLOAT",
         defaultValue: 1,
       },
-      "5::widget::multiple": {
+      "5::widget::width": {
         direction: "input",
         kind: "widget",
         nodeId: "5",
-        name: "multiple",
+        name: "width",
         type: "INT",
-        defaultValue: 8,
+        defaultValue: 1024,
       },
     };
     const { wires } = deriveLibraryParamCards({
@@ -279,22 +287,22 @@ describe("deriveLibraryParamCards", () => {
       groupedKeys: new Set(Object.keys(groupedIO)),
     });
     expect(wires.map((wire) => wire.targetIoKey)).toEqual([
+      "5::widget::width",
       "5::widget::aspect_ratio",
       "5::widget::megapixels",
-      "5::widget::multiple",
     ]);
     /* 库里按**端口名**找卡片圆点锚点（不是 ioKey）。 */
     expect(wires.map((wire) => wire.handleId)).toEqual([
+      "width",
       "aspect_ratio",
       "megapixels",
-      "multiple",
     ]);
     /* 这三条都是「本来就通着」的默认线（虚线口径）。 */
     expect(wires.every((wire) => wire.manual === false)).toBe(true);
     /* 三个端口都算「尺寸」的落点 —— 宿主卡片上三行各标一次徽标。 */
   });
 
-  it("作者手工改过落点后只留他指定的那一条（不再谎报其余端口）", () => {
+  it("作者手工改过落点后，每个候选仍各留一条、被指定的那条标 manual", () => {
     const groupedIO: WorkflowIOMap = {
       "5::widget::aspect_ratio": {
         direction: "input",
@@ -312,25 +320,37 @@ describe("deriveLibraryParamCards", () => {
         type: "FLOAT",
         defaultValue: 1,
       },
-      "5::widget::multiple": {
+      "5::widget::width": {
         direction: "input",
         kind: "widget",
         nodeId: "5",
-        name: "multiple",
+        name: "width",
         type: "INT",
-        defaultValue: 8,
+        defaultValue: 1024,
       },
     };
     const { wires } = deriveLibraryParamCards({
       io: groupedIO,
       paramMap: {
-        source: { "mode:T2I": { size: "5::widget::multiple" } },
+        source: { "mode:T2I": { size: "5::widget::megapixels" } },
       },
       mode: "T2I",
       groupedKeys: new Set(Object.keys(groupedIO)),
     });
-    expect(wires.map((wire) => wire.targetIoKey)).toEqual(["5::widget::multiple"]);
-    expect(wires[0]!.manual).toBe(true);
+    /* 每个候选各一条（用户口径：这几项都要能连出去），作者指定过落点的那一条
+     *  是实线（manual），其余仍是默认虚线。 */
+    expect(wires.map((wire) => wire.targetIoKey)).toEqual([
+      "5::widget::width",
+      "5::widget::aspect_ratio",
+      "5::widget::megapixels",
+    ]);
+    expect(wires.map((wire) => wire.manual)).toEqual([true, true, true]);
+    /* 线从**被落到的那一颗圆点**出发：handle 按端口名各归各位。 */
+    expect(
+      wires.every(
+        (wire) => wire.handleId === wire.targetIoKey.split("::").pop(),
+      ),
+    ).toBe(true);
   });
 });
 
@@ -375,4 +395,3 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
     expect(wires).toHaveLength(0);
   });
 });
-

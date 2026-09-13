@@ -45,6 +45,7 @@ import {
   type Tab,
 } from "~/components/workshop/stage-config";
 
+import { parseShotSize, shotSizeToExposed } from "~/components/workshop/shot-size-config";
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
@@ -862,10 +863,14 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     async (shot: Shot): Promise<GenerateInput> => {
       const size = paramString(shot.params.size, "832x1216");
       if (workflowId) {
+        /* 工作流库里的工作流多数字段声明的是 `aspect_ratio` / `megapixels`，
+         * 把 WxH 折成字符串再反解回比例只会落在两个预设之间 —— 走库时按
+         * 「比例 + 像素基准」逐端口派值（见 `shotSizeToExposed`）。 */
         const { input } = await buildLibraryWorkflowInput(workflowId, {
           prompt: shot.prompt,
           negativePrompt: shot.negativePrompt || undefined,
           size,
+          ...shotSizeToExposed(parseShotSize(size)),
         });
         return input;
       }

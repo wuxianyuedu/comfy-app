@@ -10,6 +10,7 @@
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import type { Edge, Node } from "@xyflow/react";
 import {
+  inferGroups,
   outputTargetKind,
   toWorkflowInputsPayload,
   splitWorkflowIO,
@@ -135,6 +136,13 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
          *  的那个端口（不把该节点别的默认值也塞进去），没连线的对外口仍按默认值
          *  兜底 —— 这正是「自动映射 = 默认连线状态，可在此基础上编辑」的运行期语义。 */
         const mode = wfMode ?? null;
+        /* 组合控件覆盖到的端口（宽/高、比例/像素/倍数）：一个「尺寸」口接到这几个
+         *  端口上时，值要逐端口派生成各自认的形状 —— 不传这份集合，多端口只能按
+         *  单端口处理，「尺寸」另外几条线就从外部拿不到值（ISSUE #355）。判定与
+         *  表单同一份（`inferGroups`），不另算一遍避免漂移。 */
+        const groupedKeys = wfIO
+          ? inferGroups(splitWorkflowIO(wfIO).widgetInputs).groupedKeys
+          : undefined;
         const mapped = wfIO
           ? applyParamMapping({
               io: wfIO,
@@ -142,6 +150,7 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
               mapping: parseParamMapping(wfParamMap ?? d.paramMap),
               values: d.workflowInputs ?? {},
               mode,
+              groupedKeys,
             })
           : null;
         const baseInputs =
