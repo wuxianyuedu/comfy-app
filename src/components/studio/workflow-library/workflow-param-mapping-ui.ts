@@ -40,6 +40,16 @@ export const PARAM_CLASS_COLOR: Record<ParamClass, string> = {
   other: "#94a3b8",
 };
 
+/** 输出侧的伪分类：对外**输出**参数卡片的展示名与配色。
+ *
+ *  它不是 `ParamClass` 的一员 —— 输出参数不参与映射（没有「落点」可言），
+ *  只是拿同一张卡片视觉把「这个工作流对外产出什么」摆出来。取映射层的分类键
+ *  会误导读者以为它也能连线改落点，故单列一个常量。 */
+export const PARAM_OUTPUT_STYLE: ParamClassStyle = {
+  label: "输出",
+  color: "#7c5cfc",
+};
+
 export interface ParamClassStyle {
   label: string;
   color: string;
@@ -47,6 +57,7 @@ export interface ParamClassStyle {
 
 /** 取分类的展示名与配色（未知分类回落到「参数」）。 */
 export function paramClassStyle(cls: string): ParamClassStyle {
+  if (cls === "output") return PARAM_OUTPUT_STYLE;
   const key = cls as ParamClass;
   return {
     label: PARAM_CLASS_LABEL[key] ?? PARAM_CLASS_LABEL.other,

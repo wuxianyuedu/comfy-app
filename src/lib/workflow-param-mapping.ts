@@ -332,6 +332,47 @@ export function paramOutputPorts(
   return [toPort("", entry.label, undefined, false, false)];
 }
 
+/** 一个对外参数当前**接到哪些端口**（默认状态可以是「一对多」）。
+ *
+ *  为什么不是一个端口：像「尺寸」这样的对外参数**由多个端口共同组成** ——
+ *  宽高比 / 像素量 / 倍数由同一块组合控件录入（`inferGroups` 的 `groupedKeys`），
+ *  宽 / 高同理。默认状态下这几个端口都取自这一个对外参数，画面上就该各有一条线；
+ *  只画「自动判定挑中的那一个」会让「尺寸」看着只有一个出口
+ *  （ISSUE #355：「尺寸现在有三个参数，就应该可以连三条线出来」）。
+ *
+ *  作者手工指定落点后**只画他指定的那一条**：手工落点意味着该模式下这个口只往
+ *  那一个端口供值（运行期 `applyParamMapping` 同口径），其余端口回到工作流自身
+ *  的默认值 —— 这时再画线就是谎报。
+ *
+ *  `active` 标出「自动判定挑中的那个 / 作者指定的那个」，供卡片上的实心圆点使用。 */
+export function wiredTargetsForEntry(args: {
+  entry: ParamEntry;
+  /** workflowIO：判定候选端口是否真的存在（候选可能来自过期的 IO 快照）。 */
+  io?: WorkflowIOMap | null | undefined;
+  /** 当前模式下这个条目的落点（`resolveMapping` 的结果；`null` = 未连线/断开）。 */
+  target: string | null | undefined;
+  /** 作者是否手工改过这个口（`isDefaultMappingForEntry` 的取反）。 */
+  manual: boolean;
+  /** 组合控件覆盖到的端口（`inferGroups(...).groupedKeys`）；缺省时不做一对多。 */
+  groupedKeys?: ReadonlySet<string>;
+}): { ioKey: string; active: boolean }[] {
+  const { entry, io, target, manual, groupedKeys } = args;
+  if (!target) return [];
+  if (manual) return [{ ioKey: target, active: true }];
+  /* 落点落在组合控件里 → 该控件覆盖、且属于这个条目的端口全都算「接上了」。
+   *  候选端口取自条目的 pins；给了 io 时只保留真的存在的那些（过期快照里的
+   *  端口画不出线来）。 */
+  if (groupedKeys?.has(target)) {
+    const siblings = entry.pins.filter(
+      (pin) => groupedKeys.has(pin.ioKey) && (!io || !!io[pin.ioKey]),
+    );
+    const keys = siblings.length > 0 ? siblings.map((pin) => pin.ioKey) : [target];
+    if (!keys.includes(target)) keys.unshift(target);
+    return keys.map((ioKey) => ({ ioKey, active: ioKey === target }));
+  }
+  return [{ ioKey: target, active: true }];
+}
+
 /** 该对外参数在某个模式下的**默认落点端口**（`auto`）。
  *
  *  默认连线的端点排在候选第一位，颜色与实心点一致；作者改过落点后第一颗就是

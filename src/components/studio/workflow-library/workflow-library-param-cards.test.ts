@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { buildParamEntries } from "~/lib/workflow-param-mapping";
 import {
+  deriveLibraryOutputCards,
   deriveLibraryParamCards,
 } from "./workflow-library-param-cards";
 
@@ -239,6 +240,139 @@ describe("deriveLibraryParamCards", () => {
       mode: "T2I",
     });
     expect(derived).toHaveLength(0);
+  });
+
+  it("组合控件里的一组端口各画一条线（尺寸有三个参数就该有三条线）", () => {
+    /* ISSUE #355：「尺寸现在有三个参数，就应该可以连三条线出来」。宽高比 /
+     *  像素量 / 倍数由同一块组合控件录入，默认状态下都取自这一个对外参数 ——
+     *  只画自动判定挑中的那一条，会让「尺寸」看着只有一个出口。 */
+    const groupedIO: WorkflowIOMap = {
+      "5::widget::aspect_ratio": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "5",
+        name: "aspect_ratio",
+        type: "COMBO",
+        defaultValue: "16:9",
+      },
+      "5::widget::megapixels": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "5",
+        name: "megapixels",
+        type: "FLOAT",
+        defaultValue: 1,
+      },
+      "5::widget::multiple": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "5",
+        name: "multiple",
+        type: "INT",
+        defaultValue: 8,
+      },
+    };
+    const { wires } = deriveLibraryParamCards({
+      io: groupedIO,
+      paramMap: {},
+      mode: "T2I",
+      groupedKeys: new Set(Object.keys(groupedIO)),
+    });
+    expect(wires.map((wire) => wire.targetIoKey)).toEqual([
+      "5::widget::aspect_ratio",
+      "5::widget::megapixels",
+      "5::widget::multiple",
+    ]);
+    /* 库里按**端口名**找卡片圆点锚点（不是 ioKey）。 */
+    expect(wires.map((wire) => wire.handleId)).toEqual([
+      "aspect_ratio",
+      "megapixels",
+      "multiple",
+    ]);
+    /* 这三条都是「本来就通着」的默认线（虚线口径）。 */
+    expect(wires.every((wire) => wire.manual === false)).toBe(true);
+    /* 三个端口都算「尺寸」的落点 —— 宿主卡片上三行各标一次徽标。 */
+  });
+
+  it("作者手工改过落点后只留他指定的那一条（不再谎报其余端口）", () => {
+    const groupedIO: WorkflowIOMap = {
+      "5::widget::aspect_ratio": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "5",
+        name: "aspect_ratio",
+        type: "COMBO",
+        defaultValue: "16:9",
+      },
+      "5::widget::megapixels": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "5",
+        name: "megapixels",
+        type: "FLOAT",
+        defaultValue: 1,
+      },
+      "5::widget::multiple": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "5",
+        name: "multiple",
+        type: "INT",
+        defaultValue: 8,
+      },
+    };
+    const { wires } = deriveLibraryParamCards({
+      io: groupedIO,
+      paramMap: {
+        source: { "mode:T2I": { size: "5::widget::multiple" } },
+      },
+      mode: "T2I",
+      groupedKeys: new Set(Object.keys(groupedIO)),
+    });
+    expect(wires.map((wire) => wire.targetIoKey)).toEqual(["5::widget::multiple"]);
+    expect(wires[0]!.manual).toBe(true);
+  });
+});
+
+describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", () => {
+  const outIO: WorkflowIOMap = {
+    "9::output::IMAGE": {
+      direction: "output",
+      kind: "output",
+      nodeId: "9",
+      name: "images",
+      label: "images",
+      type: "IMAGE",
+    },
+    "9::widget::text": io["9::widget::text"]!,
+  };
+
+  it("输出条目来自 workflowIO 的 output 方向，输入不混进来", () => {
+    const { outputs } = deriveLibraryOutputCards({ io: outIO });
+    expect(outputs.map((output) => output.ioKey)).toEqual(["9::output::IMAGE"]);
+  });
+
+  it("每个输出一条只读连线：宿主输出行 → 卡片", () => {
+    const { wires } = deriveLibraryOutputCards({ io: outIO });
+    expect(wires).toEqual([
+      {
+        entryId: "9::output::IMAGE",
+        targetIoKey: "9::output::IMAGE",
+        handleId: "images",
+        grouped: false,
+        manual: false,
+        /* 方向与输入侧相反：线从**宿主卡片的输出行**出发，收在对外输出卡片上。 */
+        kind: "hostToParam",
+      },
+    ]);
+  });
+
+  it("没有输出时两张表都是空的（视图据此不渲染右列）", () => {
+    const { outputs, wires } = deriveLibraryOutputCards({
+      io: { "9::widget::text": io["9::widget::text"]! },
+    });
+    expect(outputs).toHaveLength(0);
+    expect(wires).toHaveLength(0);
   });
 });
 

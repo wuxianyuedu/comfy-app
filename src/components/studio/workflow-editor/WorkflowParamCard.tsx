@@ -28,7 +28,10 @@ import { paramClassStyle } from "../workflow-library/workflow-param-mapping-ui";
 
 export interface WorkflowParamCardProps {
   entryId: string;
-  cls: ParamEntry["cls"];
+  /** 卡片分类：对外**输入**参数用映射层的 `ParamClass`；对外**输出**参数用
+   *  伪分类 `"output"`（输出不参与映射，见 `PARAM_OUTPUT_STYLE`）。两者只影响
+   *  配色与展示名，不影响卡片结构。 */
+  cls: ParamEntry["cls"] | "output";
   label: string;
   /** 分类中文名（悬停提示用）。 */
   classLabel: string;
@@ -72,6 +75,14 @@ export interface WorkflowParamCardProps {
   selected?: boolean;
   /** 点卡片本身 = 选中这个对外参数的口（库里据此高亮它那条线）。 */
   onSelect?: () => void;
+  /** 端点槽位在哪一侧：`"right"`（默认）= 对外输入参数卡片，圆点骑跨卡片**右**缘
+   *  （线从卡片出发去宿主参数行）；`"left"` = 对外输出参数卡片，圆点骑跨卡片
+   *  **左**缘（线从宿主输出行进来）。
+   *
+   *  两侧共用同一张卡片的视觉与几何常量（行高 / 圆点尺寸 / 骑跨偏移），所以
+   *  输入卡片与输出卡片不会一边贴边、一边内缩 —— 换的只是行内顺序（名字与类型
+   *  贴着圆点站）与端点的定位侧。 */
+  side?: "right" | "left";
   /** 卡片元素的 ref（节点渲染器用 useHoverElevation 生成）—— 悬浮态由该钩子
    *  写到 React Flow 的节点外壳上，由 CSS 抬起层级压住连线（ISSUE #400）。
    *  命名刻意不含端点类关键字：本文件是**画布无关**的视觉本体（见
@@ -96,6 +107,7 @@ export function WorkflowParamCard({
   footNote,
   wired = false,
   endpoint,
+  side = "right",
   selected = false,
   onSelect,
   hoverRef,
@@ -109,9 +121,12 @@ export function WorkflowParamCard({
       className="relative flex flex-col rounded-lg border shadow-[0_4px_20px_rgba(0,0,0,0.45)]"
       style={{
         width,
+        /* 描边配色：选中 → 分类色；**可编辑但当前不可连**（没有模式语境）→ 灰，
+         * 那是「现在改不了」的提示；只读呈现（`readOnly`，如右侧的对外输出
+         * 参数卡片）→ 照常按分类上色，它不是「不可用」，只是没有可改的口。 */
         borderColor: selected
           ? style.color
-          : disabled
+          : disabled && !readOnly
             ? "rgba(148,163,184,0.28)"
             : `${style.color}66`,
         background: "var(--color-card, #16161C)",
@@ -186,11 +201,16 @@ export function WorkflowParamCard({
             /* `relative` 是端点定位的锚：注入的端点（画布上的 <Handle>、库内
              *  的只读圆点）都以**这一行**为参照居中，而不是整张卡片 —— 否则
              *  多行输出端口时圆点会全部叠在卡片中线，看不出连的是哪一行。 */
-            className="relative flex min-w-0 items-center justify-end gap-1.5 text-[10.5px]"
+            className={`relative flex min-w-0 items-center gap-1.5 text-[10.5px] ${
+              side === "left" ? "justify-start" : "justify-end"
+            }`}
             style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
             data-testid={`param-node-out-${entryId}-${index}`}
-            title={`输出端口 ${port.name} · ${port.type}`}
+            title={`${side === "left" ? "输入端口" : "输出端口"} ${port.name} · ${port.type}`}
           >
+            {/* 端点槽位与「名字 + 类型」的相对顺序跟着端点所在的一侧走：
+                圆点在左时槽位在前（DOM 顺序 = 视觉顺序），在右时槽位在后。 */}
+            {side === "left" ? endpoint?.(port, index) : null}
             <span
               className={`min-w-0 truncate ${
                 port.connected
@@ -211,7 +231,7 @@ export function WorkflowParamCard({
             >
               {port.type}
             </span>
-            {endpoint?.(port, index)}
+            {side === "right" ? endpoint?.(port, index) : null}
           </div>
         ))}
       </div>

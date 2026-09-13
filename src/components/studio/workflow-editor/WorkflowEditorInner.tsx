@@ -51,7 +51,12 @@ import { useWorkflowDerivedData } from "./workflow-editor-derived";
 import { enrichFromViewNodes, isMachineName, type ExposedAliasBase } from "./io-exposure";
 import { sanitizeComboLabel } from "../workflow-utils";
 import { resolveWorkflowMode } from "@/lib/workflow-types";
-import { ioLabel, type WorkflowIOEntry } from "../shared/workflow-io";
+import {
+  inferGroups,
+  ioLabel,
+  splitWorkflowIO,
+  type WorkflowIOEntry,
+} from "../shared/workflow-io";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
 import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
 import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
@@ -616,6 +621,16 @@ function WorkflowEditorBody({
    * 同步 effect 会跟着每一帧重跑 —— 渲染回路，浏览器里表现为卡死、测试里表现为
    * 堆爆。这里把「条目标识 + 当前模式 + 解析结果 + 作者连过的线」压成一个签名，
    * 签名不变就复用上一批对象，签名一变立即重建（回调闭包因此总是新鲜的）。 */
+  /* 组合控件覆盖到的端口（宽高 / 比例·像素·倍数由同一块控件录入）——
+   *  「尺寸」这类对外参数默认是**一对多**的：这几个端口各接一条线，只画自动判定
+   *  挑中的那一条会让「尺寸」看着只有一个出口（ISSUE #355：「尺寸现在有三个参数，
+   *  就应该可以连三条线出来」）。判定与画布表单同一份（`inferGroups`），不另算
+   *  一遍避免漂移。 */
+  const groupedKeys = useMemo(
+    () => inferGroups(splitWorkflowIO(workflowIO).widgetInputs).groupedKeys,
+    [workflowIO]
+  );
+
   const paramSignature = useMemo(
     () =>
       JSON.stringify({
@@ -625,6 +640,7 @@ function WorkflowEditorBody({
         manual: paramMapping.mapping.manualByMode?.[wiringMode ?? ""] ?? {},
         /* 可行落点集合同样进签名：行渲染出来 / 收起来时卡片候选要跟着变。 */
         reachable: [...wiredPinKeys].sort(),
+        grouped: [...groupedKeys].sort(),
       }),
     [
       paramMapping.entries,
@@ -632,6 +648,7 @@ function WorkflowEditorBody({
       paramMapping.mapping,
       wiringMode,
       wiredPinKeys,
+      groupedKeys,
     ]
   );
   const paramWiring = useMemo(() => {
@@ -658,6 +675,8 @@ function WorkflowEditorBody({
         entries: paramMapping.entries,
         resolved: paramMapping.resolved,
         isManual: paramMapping.isManual,
+        groupedKeys,
+        reachableKeys: wiredPinKeys,
         renderedCardIds,
       }),
     };

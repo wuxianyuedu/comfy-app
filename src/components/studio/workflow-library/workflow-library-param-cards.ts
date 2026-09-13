@@ -19,12 +19,16 @@
 import {
   buildParamEntries,
   manualTargetFor,
-  paramOutputPorts,
   parseParamMapping,
   resolveMapping,
+  wiredTargetsForEntry,
   type ParamEntry,
 } from "~/lib/workflow-param-mapping";
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import {
+  splitWorkflowIO,
+  type WorkflowIOEntry,
+  type WorkflowIOMap,
+} from "~/components/studio/shared/workflow-io";
 
 export interface LibraryParamCards {
   /** 对外参数条目（稳定顺序）。 */
@@ -44,6 +48,10 @@ export interface LibraryParamCards {
 export interface ParamCardWire {
   entryId: string;
   targetIoKey: string;
+  /** 线的两端在哪一侧（见 `WorkflowParamWires` 的 `ParamWireKind`）：
+   *  缺省 = 输入侧（卡片 → 宿主参数行），`"hostToParam"` = 输出侧
+   *  （宿主输出行 → 对外输出参数卡片）。 */
+  kind?: "paramToHost" | "hostToParam";
   /** 被连的**输出端口 handle id** —— 一个对外参数可能有多颗圆点（每个候选
    *  一颗），线必须从被落到的那一颗出发。 */
   handleId: string;
@@ -81,24 +89,65 @@ export function deriveLibraryParamCards(args: {
     /* 未连线 / 作者显式断开（`null`）→ 不画线：圆点悬空本身就在说「没连上」，
      *  画一条通向某处的线反而误导。 */
     if (!target) continue;
-    /* 线要从**被落到的那一颗圆点**出发：卡片上一个候选一颗点，取当前落点对应
-     *  端口的 handle id（与编辑器画布同口径）。 */
-    const port = paramOutputPorts(entry, io, target).find(
-      (item) => item.ioKey === target,
-    );
-    wires.push({
-      entryId: entry.id,
-      targetIoKey: target,
-      handleId: port?.handleId ?? target,
-      grouped: groupedKeys?.has(target) ?? false,
-      /* 「作者改过」的口径与编辑器同一份（manualTargetFor）：该模式下这一
-       *  条目确实有一条手工线 —— 显式断开也算改过，只是那时不画线。 */
-      manual: manualTargetFor(parsed, entry.id, mode ?? null) !== undefined,
-    });
-    if (ownersByPin[target]) continue;
-    ownersByPin[target] = entry.label;
+    /* 「作者改过」的口径与编辑器同一份（manualTargetFor）：该模式下这一条目
+     *  确实有一条手工线 —— 显式断开也算改过，只是那时不画线。 */
+    const manual = manualTargetFor(parsed, entry.id, mode ?? null) !== undefined;
+    /* 线要从**对应的那一颗圆点**出发：卡片上一个候选一颗点，取该端口的
+     *  handle id（与编辑器画布同口径）。
+     *
+     *  默认状态下「尺寸」这类口是**一对多**的（宽高比 / 像素量 / 倍数由同一块
+     *  组合控件录入），每个端口各一条线 —— 只画自动判定挑中的那一条，会让
+     *  「尺寸」看着只有一个出口（ISSUE #355：「尺寸现在有三个参数，就应该可以
+     *  连三条线出来」）。作者手工指定落点后只画他指定的那一条。 */
+    for (const wired of wiredTargetsForEntry({
+      entry,
+      io,
+      target,
+      manual,
+      groupedKeys,
+    })) {
+      wires.push({
+        entryId: entry.id,
+        targetIoKey: wired.ioKey,
+        /* 库内这层按**端口名**找卡片上的圆点锚点（`paramOutputPorts` 的
+         *  `handleId` 就是端口名）；ioKey 是运行期/落库的键空间，两者不能混。 */
+        handleId: io?.[wired.ioKey]?.name ?? wired.ioKey,
+        grouped: groupedKeys?.has(wired.ioKey) ?? false,
+        manual,
+      });
+      if (ownersByPin[wired.ioKey]) continue;
+      ownersByPin[wired.ioKey] = entry.label;
+    }
   }
 
   return { entries, resolved, ownersByPin, wires };
+}
+
+/** 对外**输出**参数卡片与它们的连线（纯派生）。
+ *
+ *  与输入侧对称：左列说「这个工作流对外要什么、落到节点哪一行」，右列说
+ *  「它对外给什么」。输出不参与映射（没有落点、没有 `paramMap` 键空间），所以
+ *  这里只产出「有哪些输出 + 从节点输出行连到卡片的那几条线」，全是只读呈现。
+ *
+ *  线恒为**自动**口径（虚线以外的实线语义不适用于输出：没有「作者改过的线」），
+ *  故 `manual` 恒 false —— 主题色与输入侧的默认线一致，读者一眼分清「左边是
+ *  可改的映射、右边是本来就通着的产出」。 */
+export function deriveLibraryOutputCards(args: {
+  io: WorkflowIOMap | null | undefined;
+}): { outputs: (WorkflowIOEntry & { ioKey: string })[]; wires: ParamCardWire[] } {
+  const { io } = args;
+  /* 顺序与宿主卡片上的输出行**同一份**（`splitWorkflowIO` 里按作者拖出的
+   *  `displayOrder` 排过）：右列卡的先后与节点上那几行一一对应，读者不必自己
+   *  配对谁是谁。 */
+  const outputs = splitWorkflowIO(io).outputs;
+  const wires: ParamCardWire[] = outputs.map((output) => ({
+    entryId: output.ioKey,
+    targetIoKey: output.ioKey,
+    handleId: output.name,
+    grouped: false,
+    manual: false,
+    kind: "hostToParam",
+  }));
+  return { outputs, wires };
 }
 

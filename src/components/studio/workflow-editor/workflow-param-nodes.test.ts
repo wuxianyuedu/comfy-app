@@ -257,9 +257,12 @@ describe("buildParamNodes — 每个对外参数一个可连线节点", () => {
       resolved: resolveMapping(entries, io, null, "T2I"),
       isManual: () => false,
     });
-    expect(edges.find((edge) => edge.id === "pe-5|size-width")!.targetHandle).toBe(
-      port.ioKey,
-    );
+    /* 边的 id 含被接的端口：一个对外参数默认可以接多条（尺寸 = 比例/像素/
+     *  倍数各一条），只用条目 id 会让它们共用同一个 key。 */
+    expect(
+      edges.find((edge) => edge.id === `pe-5|size-width-${port.ioKey}`)!
+        .targetHandle,
+    ).toBe(port.ioKey);
   });
 
   it("卡片 id 与图节点 id 不撞名（前缀可往返）", () => {
@@ -285,7 +288,9 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
       resolved: resolveMapping(entries, io, null, "T2I"),
       isManual: () => false,
     });
-    const width = edges.find((edge) => edge.id === "pe-5|size-width")!;
+    const width = edges.find(
+      (edge) => edge.id === "pe-5|size-width-5::widget::width",
+    )!;
     expect(width.source).toBe("pio:5|size-width");
     /* 源端点 = 当前落点那一颗（卡片上每个候选一颗 Handle，id 就是 ioKey）——
      * 写死 `pio-out` 会接到一个不存在的 handle，React Flow 直接丢弃整条边。 */
@@ -303,12 +308,9 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
       resolved,
       isManual: (entryId) => entryId === "9|prompt",
     });
-    expect(
-      edges.find((edge) => edge.id === "pe-9|prompt")?.style?.strokeDasharray,
-    ).toBeUndefined();
-    expect(edges.find((edge) => edge.id === "pe-9|prompt")?.data?.manual).toBe(
-      true,
-    );
+    const manual = edges.find((edge) => edge.id === "pe-9|prompt-9::widget::text")!;
+    expect(manual.style?.strokeDasharray).toBeUndefined();
+    expect(manual.data?.manual).toBe(true);
   });
 
   it("显式断开（resolved=null）不画线", () => {
@@ -317,7 +319,9 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
       resolved: { "5|size-width": null, "9|prompt": "9::widget::text" },
       isManual: () => true,
     });
-    expect(edges.map((edge) => edge.id)).toEqual(["pe-9|prompt"]);
+    expect(edges.map((edge) => edge.id)).toEqual([
+      "pe-9|prompt-9::widget::text",
+    ]);
   });
 
   it("连线可删除 —— 删掉一条线就是「这个模式下断开」", () => {
@@ -330,6 +334,92 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
     expect(edges[0]?.data?.paramEntryId).toBeTypeOf("string");
   });
 
+  it("默认状态下一对多：组合控件里的一组端口各画一条线", () => {
+    /* 「尺寸」由宽高比 / 像素量 / 倍数共同组成（同一块组合控件录入），默认状态下
+     *  这三个端口各接一条线 —— 只画自动判定挑中的那一条，会让「尺寸」看着只有
+     *  一个出口（ISSUE #355：「尺寸现在有三个参数，就应该可以连三条线出来」）。
+     *  作者手工改过落点后只留他指定的那一条（运行期同口径）。 */
+    const groupedIO: WorkflowIOMap = {
+      "5::widget::aspect_ratio": {
+        direction: "input", kind: "widget", nodeId: "5",
+        name: "aspect_ratio", type: "COMBO", defaultValue: "16:9",
+      },
+      "5::widget::megapixels": {
+        direction: "input", kind: "widget", nodeId: "5",
+        name: "megapixels", type: "FLOAT", defaultValue: 1,
+      },
+      "5::widget::multiple": {
+        direction: "input", kind: "widget", nodeId: "5",
+        name: "multiple", type: "INT", defaultValue: 8,
+      },
+    };
+    const groupedKeys = new Set(Object.keys(groupedIO));
+    const sizeEntries = buildParamEntries(groupedIO, undefined, { mode: "T2I" });
+    const size = sizeEntries.find((entry) => entry.id === "size")!;
+    const resolved = {
+      [size.id]: "5::widget::aspect_ratio",
+    } as Record<string, string | null>;
+    const edges = buildParamEdges({
+      entries: sizeEntries,
+      resolved,
+      isManual: () => false,
+      groupedKeys,
+    });
+    expect(edges.map((edge) => edge.targetHandle)).toEqual([
+      "5::widget::aspect_ratio",
+      "5::widget::megapixels",
+      "5::widget::multiple",
+    ]);
+    expect(new Set(edges.map((edge) => edge.id)).size).toBe(3);
+
+    /* 作者手工指定落点 → 只画他指定的那一条（其余端口不再由这个口供值）。 */
+    const manualEdges = buildParamEdges({
+      entries: sizeEntries,
+      resolved: { [size.id]: "5::widget::multiple" },
+      isManual: () => true,
+      groupedKeys,
+    });
+    expect(manualEdges.map((edge) => edge.targetHandle)).toEqual([
+      "5::widget::multiple",
+    ]);
+  });
+
+  it("一对多摊开的端口里，画不出来的那几行不连（不留指向不存在 handle 的边）", () => {
+    /* 下钻到子图内部时，顶层节点不在画布上、对应的行也就没渲染 —— 那几行接不了
+     *  线。落点那一颗永远画（它就是这条映射本身），摊开来的其余端口只画得出
+     *  画得出来的那些。 */
+    const groupedIO: WorkflowIOMap = {
+      "5::widget::aspect_ratio": {
+        direction: "input", kind: "widget", nodeId: "5",
+        name: "aspect_ratio", type: "COMBO", defaultValue: "16:9",
+      },
+      "5::widget::megapixels": {
+        direction: "input", kind: "widget", nodeId: "5",
+        name: "megapixels", type: "FLOAT", defaultValue: 1,
+      },
+      "5::widget::multiple": {
+        direction: "input", kind: "widget", nodeId: "5",
+        name: "multiple", type: "INT", defaultValue: 8,
+      },
+    };
+    const sizeEntries = buildParamEntries(groupedIO, undefined, { mode: "T2I" });
+    const size = sizeEntries.find((entry) => entry.id === "size")!;
+    const edges = buildParamEdges({
+      entries: sizeEntries,
+      resolved: { [size.id]: "5::widget::aspect_ratio" },
+      isManual: () => false,
+      groupedKeys: new Set(Object.keys(groupedIO)),
+      reachableKeys: new Set([
+        "5::widget::aspect_ratio",
+        "5::widget::multiple",
+      ]),
+    });
+    expect(edges.map((edge) => edge.targetHandle)).toEqual([
+      "5::widget::aspect_ratio",
+      "5::widget::multiple",
+    ]);
+  });
+
   it("卡片没渲染出来时不画线（子图内部节点在顶层画布上没有宿主）", () => {
     const edges = buildParamEdges({
       entries,
@@ -337,7 +427,9 @@ describe("buildParamEdges — 端点之间的映射连线", () => {
       isManual: () => false,
       renderedCardIds: new Set(["pio:9|prompt"]),
     });
-    expect(edges.map((edge) => edge.id)).toEqual(["pe-9|prompt"]);
+    expect(edges.map((edge) => edge.id)).toEqual([
+      "pe-9|prompt-9::widget::text",
+    ]);
   });
 });
 
@@ -509,7 +601,9 @@ describe("契约条目的宿主节点（hostNodeId）—— ISSUE #355", () => {
       resolved: resolveMapping(contractEntries, contractIo, null, "T2I"),
       isManual: () => false,
     });
-    const prompt = edges.find((edge) => edge.id === "pe-prompt")!;
+    const prompt = edges.find(
+      (edge) => edge.id === "pe-prompt-4::widget::positive_prompt",
+    )!;
     expect(prompt.target).toBe("4");
     expect(prompt.targetHandle).toBe("4::widget::positive_prompt");
     /* 源端点必须与卡片上真实渲染的 <Handle id> 同名（ioKey）。 */
