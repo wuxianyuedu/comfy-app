@@ -56,6 +56,7 @@ import { resolveWorkflowMode } from "@/lib/workflow-types";
 import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
 import { WorkflowParamWires } from "./WorkflowParamWires";
 import { deriveLibraryParamCards } from "./workflow-library-param-cards";
+import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import {
   WorkflowNodeActionButton,
@@ -88,6 +89,9 @@ interface Props {
   onModeChange?: (code: string) => void;
   /** seed 类参数「控件后行为」的持久化回调（与 IO 编辑一致）。 */
   onSeedModeChange?: (ioKey: string, mode: string) => void;
+  /** 对外参数落点的持久化回调（库里拖圆点改落点，写回
+   *  `paramMap.source.mode:<模式>`）。不传时卡片列只呈现当前落点、不可拖。 */
+  onPatchParamMap?: (next: Record<string, unknown>) => void | Promise<void>;
 }
 
 export function WorkflowCanvasNodePreview({
@@ -101,6 +105,7 @@ export function WorkflowCanvasNodePreview({
   defaultMode,
   onModeChange,
   onSeedModeChange,
+  onPatchParamMap,
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -115,6 +120,8 @@ export function WorkflowCanvasNodePreview({
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   /* 全屏执行日志弹窗开关。 */
   const [logOpen, setLogOpen] = useState(false);
+  /* 选中的对外参数（点卡片或点它那条线）—— 选中后按 ⌫ 断开，或按卡片头 ↺ 恢复默认。 */
+  const [selectedParamId, setSelectedParamId] = useState<string | null>(null);
   const [viewTaskId, setViewTaskId] = useState<string | null>(null);
 
   /* 生效模式与节点上的模式 chip 同一口径（defaultMode → modes[0] → taskType）——
@@ -336,23 +343,33 @@ export function WorkflowCanvasNodePreview({
     (r) => r.workflowId === workflowId,
   );
 
-  /* ── 对外参数卡片列（只读）──
+  /* ── 对外参数卡片列（映射可编辑）──
    * 每个对外参数一张卡片，与宿主卡片并排；卡片说「这个对外参数由哪些端口组成」，
    * 表单行说「这一格填的是什么值」，两者不重复表达同一个落点。
    *
-   * 编辑器画布上这些卡片是**可连线的节点**（拖端点即选落点）；库详情是只读
-   * 消费视角 —— 卡片不可拖、不渲染端点，拉线 / 断开 / 恢复默认都在编辑器里做，
-   * 库内只把落点标在卡片的端口行上。 */
+   * 库里这份映射**能改**（ISSUE #355：「连线要能编辑，现在编辑不了」）：从卡片
+   * 右侧的圆点拖到宿主卡片的某一行即改落点，点线选中后按 ⌫ 断开，卡片头 ↺ 恢复
+   * 默认。落库形状与编辑器画布逐字一致（`paramMap.source.mode:<模式>`）。 */
   const hostRef = useRef<HTMLDivElement | null>(null);
+  /* 映射编辑编排：本地 overlay + 落库。没有 `onPatchParamMap`（只读消费方）时
+   * 仍然派生正确的落点，只是拖不动。 */
+  const wiring = useParamWiring({
+    paramMap: paramMap ?? {},
+    mode: effectiveMode,
+    onPatchParamMap,
+  });
+  /* 本地 overlay 已经并入 wiring 内部的生效 paramMap，但卡片列与连线要读的
+   * 是同一份 —— 故把 overlay 之后的 paramMap 回传给派生。`reportParamMap`
+   * 让 hook 把「生效的那一份」吐出来（见 useParamWiring 的 effectiveParamMap）。 */
   const paramCards = useMemo(
     () =>
       deriveLibraryParamCards({
         io: workflowIO,
-        paramMap,
+        paramMap: wiring.effectiveParamMap,
         mode: effectiveMode,
         groupedKeys,
       }),
-    [workflowIO, paramMap, effectiveMode, groupedKeys],
+    [workflowIO, wiring.effectiveParamMap, effectiveMode, groupedKeys],
   );
   /* 生效模式名（chip 上显示的那个）。卡片刻的名字、表单按它解析的 required /
    * seed 行为、「在编辑器中打开」带过去的模式，全都取自同一个生效模式。 */
@@ -381,6 +398,13 @@ export function WorkflowCanvasNodePreview({
             entries={paramCards.entries}
             resolved={paramCards.resolved}
             io={workflowIO}
+            /* 没有模式时不给连线能力：落点覆盖必须归属一个模式，写入无归属
+             * 等于什么都没发生（与编辑器画布的写入路径同一口径）。 */
+            canWire={!!effectiveMode && !!onPatchParamMap}
+            selectedEntryId={selectedParamId}
+            onSelect={setSelectedParamId}
+            isManual={wiring.isManual}
+            onReset={wiring.resetToAuto}
           />
         )}
         {/* ── 画布同款节点卡片：唯一视觉源在 shared/workflow-node-parts ── */}
@@ -507,9 +531,20 @@ export function WorkflowCanvasNodePreview({
         />
           </WorkflowNodeCardShell>
         </div>
-        {/* 只读映射连线：卡片圆点 → 宿主卡片上被落到的那一行。量不到锚点
-            （行不在当前渲染里）就整条不画，不留悬空线头。 */}
-        <WorkflowParamWires wires={paramCards.wires} />
+        {/* 映射连线：卡片圆点 → 宿主卡片上被落到的那一行。量不到锚点
+            （行不在当前渲染里）就整条不画，不留悬空线头。
+            可编辑：拖圆点即改落点、点线选中后按 ⌫ 断开。 */}
+        <WorkflowParamWires
+          wires={paramCards.wires}
+          selectedEntryId={selectedParamId}
+          onSelect={setSelectedParamId}
+          onConnect={
+            effectiveMode && onPatchParamMap ? wiring.connect : undefined
+          }
+          onDisconnect={
+            effectiveMode && onPatchParamMap ? wiring.disconnect : undefined
+          }
+        />
       </div>
 
       {/* 进度条（running 时） */}

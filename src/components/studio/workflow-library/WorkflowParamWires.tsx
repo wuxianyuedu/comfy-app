@@ -1,16 +1,26 @@
 "use client";
 
-/* 工作流库「画布节点」预览里的**只读映射连线**。
+/* 工作流库「画布节点」预览里的**映射连线**（可编辑）。
  *
  * 对外参数卡片右侧的圆点端口与宿主卡片上被落到的那一行参数之间画一条线 ——
- * 这就是项目画布上那条映射线的静态版本：看线即可读出「提示词喂给了
- * positive_prompt」。卡片与宿主行各自带锚点（`data-wire-anchor` / 宿主行与组合
- * 参数控件的两种落点锚点，见 `~/lib/workflow-io-types`），本组件在布局后量出
- * 两者的位置再叠一层 SVG。
+ * 这就是项目画布上那条映射线的库内版本：看线即可读出「提示词喂给了
+ * positive_prompt」，拖线即可改落点。
  *
- * 为什么量位置而不是用固定坐标：卡片高度随端口行数变化（「尺寸」可能有多行、
- * 未连线时还要列出候选），宿主表单行的高度也随控件类型变化 —— 只有量出来的
- * 才是真的。量不到（元素还没挂上 / 行不在当前渲染里）就整条不画，不画悬空线。
+ * 库里这份连线是**可编辑**的（ISSUE #355：「连线要能编辑，现在编辑不了」）。
+ * 编辑器画布上这件事由 React Flow 承担（端点即 <Handle>）；库里没有 React Flow
+ * 上下文，因此手势在本层用指针事件等价实现：
+ *
+ *   · 从卡片圆点按下并拖动 → 拖出一条跟随光标的预览线；
+ *   · 落在宿主落点上松开 → 写入 `paramMap.source.mode:<模式>`（= 改落点）；
+ *   · 落在空白处松开 → 不改动任何映射（不留悬空线）；
+ *   · 点击一条已有线 → 选中；按 ⌫ / Delete → 该对外参数在这个模式下显式断开。
+ *
+ * 命中解析用 `resolveDropTarget`（纯函数，与画布的闸门同一套判据 —— 同一个手势
+ * 不该在两个界面一个受理、一个拒绝）。
+ *
+ * 为什么量位置而不是用固定坐标：卡片高度随端口行数变化（「尺寸」可能有多行），
+ * 宿主表单行的高度也随控件类型变化 —— 只有量出来的才是真的。量不到就拿不到
+ * 锚点，那条线不画（不留悬空线头）。
  *
  * 自动判定出来的落点画虚线、作者改过的画实线，与编辑器画布同一套语义（见
  * workflow-editor/workflow-param-edges.ts）。
@@ -19,8 +29,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import { WIRE_PINS_ATTR, WIRE_ROW_ATTR } from "~/lib/workflow-io-types";
+import { resolveDropTarget } from "~/lib/workflow-param-wiring";
 
-/** 端点圆点的数据属性（见 WorkflowPortHandle）—— 只读连线量圆心用。 */
+/** 端点圆点的数据属性（见 WorkflowPortHandle）—— 连线量圆心用。 */
 const PORT_DOT_ATTR = "data-port-dot";
 import { wireAnchorValue } from "./WorkflowParamCardColumn";
 
@@ -28,6 +39,8 @@ import { wireAnchorValue } from "./WorkflowParamCardColumn";
 const AUTO_STROKE = "#64748b";
 /** 作者改过的线的描边色。 */
 const MANUAL_STROKE = "#a78bfa";
+/** 拖动中的预览线描边色。 */
+const DRAG_STROKE = "#c4b5fd";
 
 export interface ParamWire {
   /** 对外参数条目 id（卡片圆点锚点的一部分）。 */
@@ -46,10 +59,18 @@ export interface ParamWire {
 
 export interface WorkflowParamWiresProps {
   wires: readonly ParamWire[];
+  /** 连线被点选时选出该条目（父级据此让卡片与线一起高亮）。 */
+  selectedEntryId?: string | null;
+  onSelect?: (entryId: string | null) => void;
+  /** 落点写入（拖线落在某个宿主行上）。 */
+  onConnect?: (entryId: string, ioKey: string) => void;
+  /** 断开（选中一条线按 ⌫）。 */
+  onDisconnect?: (entryId: string) => void;
 }
 
 interface Segment {
   key: string;
+  entryId: string;
   manual: boolean;
   d: string;
 }
@@ -79,11 +100,46 @@ function findAnchor(
   return null;
 }
 
+/** 本轮渲染真的画出来的落点集合（ioKey → 量得到的矩形）。
+ *
+ *  拖线时用它做命中测试：只有画得出来的行才落得上去（组合控件折叠成逐行参数
+ *  后，露出来的行就是全部可连行）。圆点（12px）比行小，`resolveDropTarget`
+ *  因此优先命中圆点。 */
+function collectDropTargets(
+  container: HTMLElement,
+): { ioKey: string; rect: DOMRect }[] {
+  const out: { ioKey: string; rect: DOMRect }[] = [];
+  for (const el of container.querySelectorAll<HTMLElement>(
+    `[${WIRE_ROW_ATTR}], [${WIRE_PINS_ATTR}], [${PORT_DOT_ATTR}]`,
+  )) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) continue;
+    const rowKey = el.getAttribute(WIRE_ROW_ATTR);
+    if (rowKey) {
+      out.push({ ioKey: rowKey, rect });
+      continue;
+    }
+    const portKey = el.getAttribute(PORT_DOT_ATTR);
+    if (portKey) {
+      out.push({ ioKey: portKey, rect });
+      continue;
+    }
+    /* 组合控件一格的锚点覆盖多个端口：每一格都是可落点，取同一块矩形。 */
+    const pins = el.getAttribute(WIRE_PINS_ATTR);
+    if (pins) {
+      for (const key of pins.split(",")) {
+        if (key) out.push({ ioKey: key, rect });
+      }
+    }
+  }
+  return out;
+}
+
 /** 量出每条线两端的锚点，转成相对容器的坐标并给出贝塞尔路径。
  *
  *  起点 = 卡片那颗小圆点的**外侧边缘**（= 圆点锚点右沿 + 半颗圆点），与画布上
  *  React Flow 的连线起点口径一致：线从端点外缘出发，不会切进卡片里。
- *  终点 = 宿主那一行的左沿中心。 */
+ *  终点 = 宿主那一行的圆点圆心（找不到圆点时退到行左沿中心）。 */
 export function measureWires(
   container: HTMLElement,
   wires: readonly ParamWire[],
@@ -129,6 +185,7 @@ export function measureWires(
     const dx = Math.max(Math.abs(x2 - x1) / 2, 16);
     out.push({
       key: wire.entryId,
+      entryId: wire.entryId,
       manual: wire.manual,
       d: `M ${x1} ${y1} C ${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`,
     });
@@ -136,13 +193,60 @@ export function measureWires(
   return out;
 }
 
-export function WorkflowParamWires({ wires }: WorkflowParamWiresProps) {
+/** 拖动中的预览线：起点 = 被拖的那颗圆点，终点 = 光标位置。
+ *
+ *  在**事件回调里**算好存进 state（而不是渲染期读 ref）：React 的 refs 规则
+ *  禁止渲染期访问 ref，而这里既需要容器（ref 的 parentElement）又需要当前
+ *  光标位置 —— 两者都只在事件发生那一刻是真的。 */
+function dragPath(
+  container: HTMLElement,
+  entryId: string,
+  handleId: string,
+  point: { x: number; y: number } | null,
+): string | null {
+  const from = findAnchor(
+    container,
+    "data-wire-anchor",
+    wireAnchorValue(entryId, handleId),
+  );
+  if (!from || !point) return null;
+  const box = container.getBoundingClientRect();
+  const a = from.getBoundingClientRect();
+  const x1 = a.left - box.left + a.width + a.width / 2;
+  const y1 = a.top - box.top + a.height / 2;
+  const x2 = point.x - box.left;
+  const y2 = point.y - box.top;
+  const dx = Math.max(Math.abs(x2 - x1) / 2, 16);
+  return `M ${x1} ${y1} C ${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`;
+}
+
+export function WorkflowParamWires({
+  wires,
+  selectedEntryId = null,
+  onSelect,
+  onConnect,
+  onDisconnect,
+}: WorkflowParamWiresProps) {
   const ref = useRef<SVGSVGElement | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
+  /* 拖动中的预览线：起点 = 被拖的那颗圆点、终点 = 光标，路径在事件里算好。
+   *  同时记下当前悬停命中的落点（有则预览线转实线，等于「松手会连到这里」）。 */
+  const [drag, setDrag] = useState<{
+    entryId: string;
+    handleId: string;
+    /** 已算好的预览线路径（量不到圆点时为空，不画）。 */
+    path: string | null;
+    /** 当前悬停命中的落点 ioKey（null = 没落在任何行上）。 */
+    hover: string | null;
+  } | null>(null);
   /* 空集合时**不挂线层**：挂载那一刻还没量过，`segments` 是空的，但 svg 必须先
    * 在 DOM 里才量得到锚点（量测的起点是 svg 的 parentElement）。所以「要不要
    * 渲染 svg」只取决于有没有线要画，而不是「已经量到几条」。 */
   const hasWires = wires.length > 0;
+  /* 拖线手势要能起手，即使一条线都还没画（新连一条线时 wires 为空）——
+   * 但只要有人在拖，图层就必须挂着（预览线画在这里）。 */
+  const interactive = !!onConnect;
+  const mounted = hasWires || !!drag || interactive;
   /* 依赖签名：线集合变了（换工作流 / 改模式 / 落点变化）就要重量一次。 */
   const signature = wires
     .map((w) => `${w.entryId}>${w.handleId}>${w.targetIoKey}>${w.manual ? 1 : 0}`)
@@ -177,16 +281,129 @@ export function WorkflowParamWires({ wires }: WorkflowParamWiresProps) {
       observer?.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 线集合由 signature 表达
-  }, [signature]);
+  }, [signature, mounted]);
 
-  /* 没有线要画就整层不渲染（也就不必量）。 */
-  if (!hasWires) return null;
+  /* ── 拖线手势 ──
+   * 起手位是**卡片上的圆点**（`data-wire-anchor`），而圆点长在卡片列子树里、
+   * 不在本层（本层只是叠在容器上的 SVG）。所以按下也必须在**文档级**监听，
+   * 只受理真的落在圆点上的那一次：在 svg 上监听会一条线都拖不动。
+   *
+   * 移动 / 抬起同样在文档级：指针会移出线层（拖到宿主卡片上），绑在 svg 上
+   * 中途就丢事件了。 */
+  useEffect(() => {
+    if (!onConnect) return;
+    const down = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      const raw = target?.closest<HTMLElement>("[data-wire-anchor]")?.dataset
+        .wireAnchor;
+      if (!raw) return;
+      const separator = raw.indexOf("?");
+      if (separator < 0) return;
+      const entryId = raw.slice(0, separator);
+      const handleId = raw.slice(separator + 1);
+      event.preventDefault();
+      const container = ref.current?.parentElement;
+      setDrag({
+        entryId,
+        handleId,
+        path: container
+          ? dragPath(container, entryId, handleId, {
+              x: event.clientX,
+              y: event.clientY,
+            })
+          : null,
+        hover: null,
+      });
+    };
+    document.addEventListener("pointerdown", down);
+    return () => document.removeEventListener("pointerdown", down);
+  }, [onConnect]);
+
+  useEffect(() => {
+    if (!drag) return;
+    const container = ref.current?.parentElement;
+    const move = (event: PointerEvent) => {
+      const point = { x: event.clientX, y: event.clientY };
+      const hover = container
+        ? resolveDropTarget(point, collectDropTargets(container))
+        : null;
+      setDrag((prev) =>
+        prev
+          ? {
+              ...prev,
+              hover,
+              path: container
+                ? dragPath(container, prev.entryId, prev.handleId, point)
+                : null,
+            }
+          : prev,
+      );
+    };
+    const up = (event: PointerEvent) => {
+      const point = { x: event.clientX, y: event.clientY };
+      const hit = container
+        ? resolveDropTarget(point, collectDropTargets(container))
+        : null;
+      if (hit) onConnect?.(drag.entryId, hit);
+      setDrag(null);
+    };
+    const cancel = () => setDrag(null);
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
+    document.addEventListener("pointercancel", cancel);
+    return () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      document.removeEventListener("pointercancel", cancel);
+    };
+  }, [drag, onConnect]);
+
+  /* 选中一条线后按 ⌫ / Delete = 在该模式下显式断开；Esc = 取消选中。
+   *
+   *  监听挂在**文档级**：线层整层不吃指针事件（见下方 svg 的说明），因此它拿不到
+   *  键盘焦点 —— 挂在 svg 上这一条快捷键永远按不动。选中态本身是「点了某条线/
+   *  某张卡」的结果，动作只对那个条目生效，挂在文档级不会误伤别处的输入。
+   *
+   *  焦点在输入框里时不拦截：用户在参数行里按退格是在删字，不是在断线。 */
+  useEffect(() => {
+    if (!selectedEntryId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLElement &&
+        (active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA" ||
+          active.isContentEditable)
+      ) {
+        return;
+      }
+      if (event.key === "Escape") {
+        onSelect?.(null);
+        return;
+      }
+      if (!onDisconnect) return;
+      if (event.key !== "Backspace" && event.key !== "Delete") return;
+      event.preventDefault();
+      onDisconnect(selectedEntryId);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selectedEntryId, onDisconnect, onSelect]);
+
+  if (!mounted) return null;
 
   return (
     <svg
       ref={ref}
       aria-hidden
-      className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+      /* 线层整层**不吃指针事件**：它是叠在卡片列与宿主卡片之上的一层 SVG
+       *  （`absolute inset-0`），保留命中会让它把下面所有交互都吞掉 —— 卡片
+       *  右侧的圆点因此永远收不到 pointerdown（拖线一条都起不来），宿主卡片上
+       *  的输入框也点不动。需要点的地方只有**线本身**：那一条 `path` 单独开
+       *  `pointer-events: stroke`，用来点选后按 ⌫ 断开。
+       *
+       *  这也正是手势监听放在 document 上的原因：起手位（圆点）根本不在本层。 */
+      className="pointer-events-none absolute inset-0 h-full w-full overflow-visible outline-none"
       data-testid="wflib-param-wires"
     >
       {segments.map((segment) => (
@@ -194,13 +411,33 @@ export function WorkflowParamWires({ wires }: WorkflowParamWiresProps) {
           key={segment.key}
           d={segment.d}
           fill="none"
-          stroke={segment.manual ? MANUAL_STROKE : AUTO_STROKE}
+          stroke={
+            selectedEntryId === segment.entryId
+              ? DRAG_STROKE
+              : segment.manual
+                ? MANUAL_STROKE
+                : AUTO_STROKE
+          }
           strokeWidth={segment.manual ? 2.5 : 2}
           strokeDasharray={segment.manual ? undefined : "6 4"}
           opacity={segment.manual ? 1 : 0.75}
+          /* 线本身要能点选（选中后按 ⌫ 断开）——线层其余部分不吃指针事件，
+           * 否则会盖住宿主卡片上的输入框。 */
+          {...(interactive ? { pointerEvents: "stroke" as const } : {})}
+          onClick={() => onSelect?.(segment.entryId)}
           data-testid={`wflib-param-wire-${segment.key}`}
         />
       ))}
+      {drag?.path && (
+        <path
+          d={drag.path}
+          fill="none"
+          stroke={drag?.hover ? MANUAL_STROKE : DRAG_STROKE}
+          strokeWidth={2}
+          strokeDasharray={drag?.hover ? undefined : "4 4"}
+          data-testid="wflib-param-wire-preview"
+        />
+      )}
     </svg>
   );
 }

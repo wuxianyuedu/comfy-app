@@ -116,3 +116,187 @@ describe("映射连线的两端锚点", () => {
     expect(path.endsWith(" 400 140")).toBe(true);
   });
 });
+
+/* ── 库内拖线改落点（ISSUE #355：「连线要能编辑，现在编辑不了」）──
+ *
+ * 库里那份连线不是只读呈现：从卡片圆点按下、拖到宿主卡片的某一行松开，就改
+ * 了该对外参数在这个模式下的落点。手势在本层用指针事件实现（库里没有 React
+ * Flow 上下文），命中判定复用 `resolveDropTarget`（与画布闸门同一套判据）。
+ * 这里走完「按下 → 移动 → 松开」三段，断言落点被上抛且**只在真的命中了行时**
+ * 才上抛。 */
+describe("库内拖线改落点", () => {
+  /** 卡片列 + 宿主行 + 可编辑连线层。 */
+  function renderEditable(onConnect: (entryId: string, ioKey: string) => void) {
+    const entries = buildParamEntries(io, undefined, { mode: "T2I" });
+    const prompt = entries.find((entry) => entry.id === "prompt")!;
+    const tree = (
+      <div>
+        <WorkflowParamCardColumn
+          entries={entries}
+          resolved={{ [prompt.id]: "9::widget::positive_prompt" }}
+          io={io}
+          canWire
+        />
+        <div data-port-dot="9::widget::positive_prompt" />
+        <div data-io-key="9::widget::positive_prompt" />
+        <div data-io-key="9::widget::negative_prompt" />
+        <WorkflowParamWires
+          wires={[]}
+          onConnect={onConnect}
+        />
+      </div>
+    );
+    const { container } = render(tree);
+    const dot = container.querySelector(
+      `[data-wire-anchor="${wireAnchorValue(prompt.id, "positive_prompt")}"]`,
+    )!;
+    stubRect(dot, { left: 100, top: 70, width: 12, height: 12 });
+    stubRect(container.querySelector('[data-io-key="9::widget::positive_prompt"]')!, {
+      left: 300,
+      top: 60,
+      width: 240,
+      height: 30,
+    });
+    stubRect(container.querySelector('[data-io-key="9::widget::negative_prompt"]')!, {
+      left: 300,
+      top: 120,
+      width: 240,
+      height: 30,
+    });
+    return { container, dot, prompt };
+  }
+
+  it("拖到宿主行上松手 → 该行被上抛为落点", async () => {
+    const onConnect = vi.fn();
+    const { dot, prompt } = renderEditable(onConnect);
+    await act(async () => {
+      dot.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true, clientX: 106, clientY: 76 }),
+      );
+    });
+    await act(async () => {
+      document.dispatchEvent(
+        new PointerEvent("pointermove", { bubbles: true, clientX: 400, clientY: 75 }),
+      );
+    });
+    /* 拖动中就该看得见一条预览线（否则「拖了没反应」与「拖坏了」长得一样）。 */
+    expect(
+      document.querySelector('[data-testid="wflib-param-wire-preview"]'),
+    ).toBeTruthy();
+    await act(async () => {
+      document.dispatchEvent(
+        new PointerEvent("pointerup", { bubbles: true, clientX: 400, clientY: 75 }),
+      );
+    });
+    expect(onConnect).toHaveBeenCalledWith(
+      prompt.id,
+      "9::widget::positive_prompt",
+    );
+  });
+
+  it("拖到空白处松手 → 不上抛（不写映射，也不留悬空线）", async () => {
+    const onConnect = vi.fn();
+    const { dot } = renderEditable(onConnect);
+    await act(async () => {
+      dot.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true, clientX: 106, clientY: 76 }),
+      );
+    });
+    await act(async () => {
+      document.dispatchEvent(
+        new PointerEvent("pointermove", { bubbles: true, clientX: 900, clientY: 900 }),
+      );
+    });
+    await act(async () => {
+      document.dispatchEvent(
+        new PointerEvent("pointerup", { bubbles: true, clientX: 900, clientY: 900 }),
+      );
+    });
+    expect(onConnect).not.toHaveBeenCalled();
+  });
+
+  it("拖到另一行 → 改到那一行（改落点不是新连一条）", async () => {
+    const onConnect = vi.fn();
+    const { dot, prompt } = renderEditable(onConnect);
+    await act(async () => {
+      dot.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true, clientX: 106, clientY: 76 }),
+      );
+    });
+    await act(async () => {
+      document.dispatchEvent(
+        new PointerEvent("pointerup", { bubbles: true, clientX: 400, clientY: 135 }),
+      );
+    });
+    expect(onConnect).toHaveBeenCalledWith(
+      prompt.id,
+      "9::widget::negative_prompt",
+    );
+  });
+});
+
+/* ── 选中一条线后按 ⌫ 断开 ──
+ *
+ * 线层整层不吃指针事件（它盖在卡片与宿主卡片之上），所以键盘监听挂在 document
+ * 上；否则这条快捷键永远按不动。焦点在输入框里时不拦截（那里的退格是删字）。 */
+describe("断开与取消选中", () => {
+  function renderSelected(onDisconnect: (id: string) => void, onSelect = vi.fn()) {
+    const { container } = render(
+      <div>
+        <WorkflowParamWires
+          wires={[
+            {
+              entryId: "size",
+              targetIoKey: "5::widget::multiple",
+              handleId: "multiple",
+              grouped: false,
+              manual: true,
+            },
+          ]}
+          selectedEntryId="size"
+          onSelect={onSelect}
+          onDisconnect={onDisconnect}
+        />
+        <input data-testid="probe-input" />
+      </div>,
+    );
+    return { container, onSelect };
+  }
+
+  it("按 ⌫ 断开选中的那条线", async () => {
+    const onDisconnect = vi.fn();
+    renderSelected(onDisconnect);
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Backspace", bubbles: true }),
+      );
+    });
+    expect(onDisconnect).toHaveBeenCalledWith("size");
+  });
+
+  it("按 Esc 取消选中（不再指着一个口）", async () => {
+    const onSelect = vi.fn();
+    renderSelected(vi.fn(), onSelect);
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    });
+    expect(onSelect).toHaveBeenCalledWith(null);
+  });
+
+  it("焦点在输入框里时退格不接头（那是在删字，不是在断线）", async () => {
+    const onDisconnect = vi.fn();
+    const { container } = renderSelected(onDisconnect);
+    const input = container.querySelector<HTMLInputElement>(
+      '[data-testid="probe-input"]',
+    )!;
+    input.focus();
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Backspace", bubbles: true }),
+      );
+    });
+    expect(onDisconnect).not.toHaveBeenCalled();
+  });
+});

@@ -37,6 +37,8 @@ interface DetailBodyProps {
   };
   /** seed 类参数的「控件后行为」持久化（画布预览节点与 IO 编辑一致）。 */
   onSeedModeChange?: (ioKey: string, mode: string) => void;
+  /** 对外参数落点持久化（画布预览拖圆点改落点）。 */
+  onPatchParamMap?: (next: Record<string, unknown>) => Promise<void>;
 }
 
 export function DetailBody({
@@ -50,6 +52,7 @@ export function DetailBody({
   onEdit,
   meta,
   onSeedModeChange,
+  onPatchParamMap,
 }: DetailBodyProps) {
   /* 换工作流 / 首次打开时详情查询尚未排空：此时表单拿不到 IO，预览会先渲染
    * 一遍无参卡片再被真实 IO 顶掉（整块高度改变 → 页面跳一下），参数页签同
@@ -101,6 +104,7 @@ export function DetailBody({
                 meta?.onModeChange(code);
               }}
               onSeedModeChange={onSeedModeChange}
+              onPatchParamMap={onPatchParamMap}
             />
           </div>
         </div>

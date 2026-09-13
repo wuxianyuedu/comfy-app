@@ -106,6 +106,8 @@ export interface WorkflowLibraryController {
   patchModelTags: (id: string, names: string[]) => Promise<void>;
   /** 整体落库 workflowIO（详情预览的 seed「控件后行为」等参数级配置）。 */
   patchWorkflowIO: (id: string, workflowIO: Record<string, unknown>) => Promise<void>;
+  /** 整体落库 paramMap（详情预览拖线改对外参数落点）。 */
+  patchParamMap: (id: string, paramMap: Record<string, unknown>) => Promise<void>;
   handleDeleteClick: (id: string, name: string) => void;
   handleDownload: (id: string, name: string) => Promise<void>;
   handleResync: (id: string, name: string) => Promise<void>;
@@ -408,5 +410,6 @@ export function useWorkflowLibrary(
     patchModes: actions.patchModes,
     patchModelTags: actions.patchModelTags,
     patchWorkflowIO: actions.patchWorkflowIO,
+    patchParamMap: actions.patchParamMap,
   };
 }
