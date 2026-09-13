@@ -46,6 +46,11 @@ import {
 } from "~/components/workshop/stage-config";
 
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
+import {
+  useCharacterPortrait,
+  type PortraitSession,
+  type PortraitSessionActions,
+} from "./use-character-portrait";
 
 /* ── 工坊项目存储层（单草稿 → 多项目可切换） ──
  *
@@ -388,6 +393,9 @@ export interface WorkshopPipelineController {
   characterExtractActions: ExtractSessionActions;
   storyboardExtract: ExtractSession;
   storyboardExtractActions: ExtractSessionActions;
+  /** 角色定妆照：生成 / 导入的进度与日志（跨页签常驻） */
+  characterPortrait: PortraitSession;
+  characterPortraitActions: PortraitSessionActions;
 
   // ── 动作
   generateShot: (shot: Shot) => Promise<void>;
@@ -514,6 +522,14 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const [activeProjectId, setActiveProjectId] = React.useState<string>(
     () => loadProjectsOnce().activeId,
   );
+
+  // ── 角色定妆照会话（同提取会话：由 controller 常驻，切页签不丢进度；
+  //    候选写在角色对象上，随草稿持久化）──
+  const [characterPortrait, characterPortraitActions] = useCharacterPortrait({
+    setCharacters,
+    checkpoint,
+    projectId: activeProjectId,
+  });
 
   /** 当前全部可持久化内容（落盘、切换前保存都用它）。 */
   const currentDraft = React.useCallback(
@@ -1045,6 +1061,8 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     characterExtractActions,
     storyboardExtract,
     storyboardExtractActions,
+    characterPortrait,
+    characterPortraitActions,
 
     generateShot,
     openScriptEditor,
