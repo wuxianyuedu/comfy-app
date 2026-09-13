@@ -198,7 +198,7 @@ export function ShellTabs({ children }: ShellTabsProps) {
   const useTitleBar = shouldUseTitleBarTabs(inShell);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-(--color-canvas) pb-6 text-(--color-ink)">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-(--color-canvas) text-(--color-ink)">
       {useTitleBar ? (
         <TitleBarTabs
           tabs={tabs}
@@ -215,11 +215,20 @@ export function ShellTabs({ children }: ShellTabsProps) {
         />
       )}
 
-      {/* 内容区：主应用与 ComfyUI 均保持挂载，用 CSS 显隐切换，避免丢态 */}
+      {/* 内容区：主应用与 ComfyUI 均保持挂载，用 CSS 显隐切换，避免丢态。
+       *
+       * 底部间距只给主应用（pb-6）：全局底部状态栏（根布局挂载的 24px 固定
+       * 悬浮层）盖住窗口最底下一条，主应用内容留在它上方；而 ComfyUI iframe
+       * 必须拿满「页签栏以下」的全部高度——它要和浏览器整窗打开时一样容纳
+       * 自绘的底部控件（运行操作栏、扩展面板），少一截就出现「浏览器里看得见、
+       * 应用里被裁掉」的适配差（状态栏在非主应用页签会隐藏，见 BrowserStatusBar）。
+       */}
       <div className="relative min-h-0 flex-1">
         {/* 主应用页签（恒挂载，用 CSS 显隐） */}
         <div
-          className={activeTabId !== MAIN_TAB_ID ? "hidden h-full" : "h-full"}
+          className={
+            activeTabId !== MAIN_TAB_ID ? "hidden h-full pb-6" : "h-full pb-6"
+          }
         >
           {children}
         </div>
