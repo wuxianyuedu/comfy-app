@@ -28,10 +28,17 @@ vi.mock("~/server/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { resolveComfyBase, probeComfyBase, resetComfyBase } from "./client";
+import {
+  resolveComfyBase,
+  probeComfyBase,
+  resetComfyBase,
+  resetProbeMissLog,
+  COMFY_PROBE_LOG_REPEAT_MS,
+} from "./client";
 import { getSettingsSync } from "../app-settings";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { resolveComfyLaunchPlan } from "./launch-path";
+import { logger } from "~/server/lib/logger";
 
 const plan = {
   cmd: "D:\\Comfy\\ComfyUI\\.venv\\Scripts\\python.exe",
@@ -54,6 +61,7 @@ function respondOn(ports: number[]) {
 beforeEach(() => {
   vi.clearAllMocks();
   resetComfyBase();
+  resetProbeMissLog();
   vi.mocked(getSettingsSync).mockReturnValue({
     comfyuiPath: "D:\\Comfy",
     comfyuiPort: 8188,
@@ -65,8 +73,16 @@ beforeEach(() => {
 
 afterEach(() => {
   resetComfyBase();
+  resetProbeMissLog();
   vi.restoreAllMocks();
 });
+
+/** logger.warn 里有没有一条命中 `pattern` 的行。 */
+function warned(pattern: RegExp): boolean {
+  return vi
+    .mocked(logger.warn)
+    .mock.calls.some(([msg]) => pattern.test(String(msg)));
+}
 
 describe("resolveComfyBase — 进程表查不到 main.py 时退回端口探测", () => {
   it("Comfy Desktop 实例（命令行无 main.py）在 8188 应答 → 认出该地址", async () => {
@@ -100,5 +116,64 @@ describe("probeComfyBase — 按次探测，不污染会话缓存", () => {
     await expect(probeComfyBase()).resolves.toBe("http://127.0.0.1:8189");
     // 会话缓存没被这次探测改写（下次 resolve 重新按自己的链路判定）。
     await expect(resolveComfyBase()).resolves.toBe("http://127.0.0.1:8189");
+  });
+});
+
+describe("探测全落空 — 只说「没探到这批地址」，且不刷屏", () => {
+  it("降为 warn 而不是 error，并在文案里交代「不代表实例没在运行」", async () => {
+    // 现场：ComfyUI 在跑但不在「配置地址 + 就近偏移 + 窗口地址」这批地址上
+    // （用户在 ComfyUI 侧改过端口 / 另有一套启动方式）。此前这条记成 error，
+    // 用户读到「ComfyUI 已经在 8188 运行着却报 error」——把一次「没探到」
+    // 说成了故障。
+    respondOn([9999]);
+    await resolveComfyBase();
+    expect(warned(/Cannot reach ComfyUI/)).toBe(true);
+    expect(warned(/不代表实例没在运行/)).toBe(true);
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("汇总行写清「问过哪些地址」：配置端口 + 就近偏移 + 窗口端口", async () => {
+    respondOn([]);
+    await resolveComfyBase();
+    const line = vi
+      .mocked(logger.warn)
+      .mock.calls.map(([m]) => String(m))
+      .find((m) => m.includes("Cannot reach ComfyUI"))!;
+    // 排查需要的是范围，不是一句「连不上」——配置端口、偏移端口、窗口端口都在里面。
+    for (const port of [8188, 8189, 8190, 8191, 8192, 8193, 8000]) {
+      expect(line).toContain(`:${port}`);
+    }
+    expect(line).toContain("改「端口」");
+  });
+
+  it("同一批地址静默期内只写一条：运行期反复探测不再把面板刷满", async () => {
+    respondOn([]);
+    await resolveComfyBase();
+    await resolveComfyBase();
+    await resolveComfyBase();
+    const hits = vi
+      .mocked(logger.warn)
+      .mock.calls.filter(([m]) => String(m).includes("Cannot reach ComfyUI"));
+    expect(hits).toHaveLength(1);
+  });
+
+  it("静默期过后重新允许写一条", async () => {
+    respondOn([]);
+    await resolveComfyBase();
+    // 把时钟推过一个静默窗口（不必真等 60s）：届时应当重新留下一条现场。
+    const later = Date.now() + COMFY_PROBE_LOG_REPEAT_MS + 1;
+    vi.spyOn(Date, "now").mockReturnValue(later);
+    await resolveComfyBase();
+    const hits = vi
+      .mocked(logger.warn)
+      .mock.calls.filter(([m]) => String(m).includes("Cannot reach ComfyUI"));
+    expect(hits).toHaveLength(2);
+  });
+
+  it("命中窗口端口 8000 时记 warn 并说明是窗口地址回落", async () => {
+    // Comfy Desktop 同机常驻窗口端口，配置的实例没起来时探测会落到它上面。
+    respondOn([8000]);
+    await expect(resolveComfyBase()).resolves.toBe("http://127.0.0.1:8000");
+    expect(warned(/window at :8000/)).toBe(true);
   });
 });
