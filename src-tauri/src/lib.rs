@@ -417,6 +417,35 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   Ok(sections.join("\n\n"))
 }
 
+/// 关闭窗口（默认启动页）。
+///
+/// 与最小化一组：启动页窗口关了原生装饰（`decorations: false`），窗口按钮是
+/// 启动期唯一的出口，而按钮只是「按钮」，不该因此把 core:window 的整面命令
+/// 授权出去——所以这里给按钮两个自己的命令，壳侧直接操作窗口。
+///
+/// 它同时是 Tauri window API 那条主路径的兜底（页面侧 `win_minimize` /
+/// `win_close` 探不到时给出「壳过期」的可见提示，见 docs/standards/07-日志系统.md §7.18.7）。
+#[tauri::command]
+fn win_close(app_handle: tauri::AppHandle) -> Result<(), String> {
+  let Some(win) = app_handle.get_webview_window("splash") else {
+    return Err("找不到启动页窗口 splash".to_string());
+  };
+  win
+    .close()
+    .map_err(|e| format!("关闭启动页窗口失败: {:?}", e))
+}
+
+/// 最小化窗口（默认启动页）。语义与 `win_close` 成对，见其说明。
+#[tauri::command]
+fn win_minimize(app_handle: tauri::AppHandle) -> Result<(), String> {
+  let Some(win) = app_handle.get_webview_window("splash") else {
+    return Err("找不到启动页窗口 splash".to_string());
+  };
+  win
+    .minimize()
+    .map_err(|e| format!("最小化启动页窗口失败: {:?}", e))
+}
+
 /// 启动页「收起 / 展开日志」时把窗口调到对应档位。
 ///
 /// 为什么由壳来做而不是让页面自己调窗口 API：尺寸档位是**窗口语义**（内容多大
@@ -774,6 +803,8 @@ pub fn run() {
       get_app_url,
       get_launch_log,
       set_splash_compact,
+      win_close,
+      win_minimize,
       open_comfyui_window,
       activate_main_window,
       should_activate_on_launch

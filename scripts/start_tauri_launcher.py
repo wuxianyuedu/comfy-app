@@ -108,6 +108,10 @@ SWP_NOSIZE = 0x0001
 SWP_SHOWWINDOW = 0x0040
 SWP_NOACTIVATE = 0x0010
 SW_MINIMIZE = 6
+SW_RESTORE = 9
+SW_HIDE = 0
+SW_SHOW = 5
+GW_HWNDNEXT = 2
 LOGPIXELSX = 88
 SM_CXSCREEN = 0
 SM_CYSCREEN = 1
@@ -134,8 +138,13 @@ ERROR_RED = 0x4444EF  # #EF4444 in BGR
 # 与 Tauri 启动页同一条取向（ISSUE #412）：**窗口即内容**，开成一条紧凑的窄条
 # 居中显示，不铺满屏幕留出大片空白。窗口是 WS_POPUP 无边框的，最小化 / 关闭
 # 由画面右上角自绘的两个按钮提供（原先只有一个 ✕，且位置与标题挤在一起）。
-SPLASH_W = 560
-SPLASH_H = 168
+#
+# 数值**逐字对齐** `src-tauri/tauri.conf.json` 的 splash 窗口尺寸与启动页
+# `public/splash.html` 的紧凑档：同一张「启动中」画面在本链路有两个实现
+# （壳内嵌启动页 / 启动器 Win32 弹窗），尺寸各写一份就会一次改一处、两边不一致。
+# `tests/check-file-structure.test.ts` 有一条用例盯着这三处必须同值。
+SPLASH_W = 744
+SPLASH_H = 216
 
 APP_TITLE = "Comfy APP"
 APP_WINDOW_TITLE = "Comfy APP"
@@ -793,6 +802,12 @@ user32.ShowWindow.restype = BOOL
 user32.SetForegroundWindow.argtypes = [HWND]
 user32.SetForegroundWindow.restype = BOOL
 
+user32.GetWindow.argtypes = [HWND, UINT]
+user32.GetWindow.restype = HWND
+
+user32.IsWindow.argtypes = [HWND]
+user32.IsWindow.restype = BOOL
+
 user32.MessageBoxW.argtypes = [HWND, LPCWSTR, LPCWSTR, UINT]
 user32.MessageBoxW.restype = ctypes.c_int
 
@@ -971,6 +986,13 @@ class SplashWindow:
         self._min_btn_rect = (0, 0, 0, 0)  # left, top, right, bottom
         self._hover_btn = ""  # "" | "min" | "close"，仅用于按钮悬停高亮
         self._close_should_terminate = False
+        # 最小化状态：置顶弹窗不能被 ShowWindow(SW_MINIMIZE) 最小化（见 _minimize），
+        # 这里用「隐藏 + 撤置顶 + 把前台还回去」实现，需要定时器周期维持。
+        self._minimized = False
+        self._below_hwnd = 0
+        self._below_checked = False
+        # 启动前提示（如「壳可能过期」）钉住正文，不被日志 tail 顶掉。
+        self._pinned_warning = False
         # 项目根：启动完成时用它在后台复核窗口交接后的前台归属
         # （见 spawn_foreground_watch）。
         self._project_root = ""
@@ -1005,6 +1027,15 @@ class SplashWindow:
             user32.EndPaint(hwnd, ctypes.byref(ps))
             return 0
         if msg == WM_TIMER:
+            # 置顶（TOPMOST）的弹窗不能被最小化：ShowWindow(SW_MINIMIZE) 走的是
+            # 「最小化整个 owned 窗口组」，而本窗口属于启动器进程（无主窗口组），
+            # 系统找不到可最小化的父窗口，于是调用不生效——表现为「点最小化没反应」。
+            # 真正有效的做法是改走「隐藏 + 撤置顶 + 交还前台」，需要一个能在
+            # 非激活状态下持续执行的循环，这里借已有的 40ms 定时器（见
+            # _keep_minimized / WM_TIMER 是本窗口唯一的周期钩子）。
+            if self._minimized:
+                self._keep_minimized()
+                return 0
             if self._status == "ok":
                 self._marquee = (self._marquee + 0.03) % 1.0
             user32.InvalidateRect(hwnd, None, False)
@@ -1013,8 +1044,7 @@ class SplashWindow:
             x = ctypes.c_short(lparam & 0xFFFF).value
             y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
             if self._hit(self._min_btn_rect, x, y):
-                # 最小化到任务栏：点任务栏按钮可原样恢复（不销毁窗口）。
-                user32.ShowWindow(self.hwnd, SW_MINIMIZE)
+                self._minimize()
                 return 0
             if self._hit(self._close_btn_rect, x, y):
                 # 关闭 = 放弃本次启动（进程树由 dev-launcher 兜底回收）。
@@ -1144,10 +1174,13 @@ class SplashWindow:
                             break
                     if matched_progress is not None:
                         self._progress = matched_progress
-                    if "ERROR" in latest or "错误" in latest:
-                        self._msg = f"⚠ {msg[:60]}"
-                    elif "STEP" in latest or "OK" in latest:
-                        self._msg = msg[:70]
+                    # 「壳可能过期」这类启动前提示是处置建议，不该被后续日志行顶掉
+                    # （它只在启动前设一次，日志一直在变，顶掉就再也看不到了）。
+                    if not self._pinned_warning:
+                        if "ERROR" in latest or "错误" in latest:
+                            self._msg = f"⚠ {msg[:60]}"
+                        elif "STEP" in latest or "OK" in latest:
+                            self._msg = msg[:70]
                     user32.InvalidateRect(self.hwnd, None, False)
                 except Exception as exc:
                     log(f"log tailer error: {exc}")
@@ -1160,7 +1193,8 @@ class SplashWindow:
     def _paint(self, hdc: HDC):
         """自绘启动画面：一条紧凑的窄条，右上角是最小化 / 关闭。
 
-        布局自上而下：标题行（品牌 + 右上角窗口按钮）→ 阶段状态 → 进度条。
+        布局自上而下：标题行（品牌 + 右上角窗口按钮）→ 阶段状态 → 进度条 →
+        脚注（已用时间 / 提示），全部按窗口高度自上而下铺开、底部留 14px 内边距。
         窗口尺寸本身就按内容给（见 SPLASH_W / SPLASH_H），所以这里不预留
         空白区域，画完即内容边界。
         """
@@ -1237,12 +1271,12 @@ class SplashWindow:
         user32.DrawTextW(hdc, self._msg, -1, ctypes.byref(msg_rc),
                          DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX)
 
-        # 已用时间（进度条右端同高）
+        # 已用时间（进度条右端）
         elapsed = time.time() - self._start_time
         elapsed_text = f"已用 {int(elapsed // 60):02d}:{int(elapsed % 60):02d}"
         time_rc = RECT()
         time_rc.left = w - pad - 100
-        time_rc.top = h - pad - 26
+        time_rc.top = h - pad - 54
         time_rc.right = w - pad - 14
         time_rc.bottom = time_rc.top + 16
         gdi32.SetTextColor(hdc, GRAY_DIM)
@@ -1289,6 +1323,21 @@ class SplashWindow:
                     gdi32.RoundRect(hdc, x1, bar_y, x2, bar_y + bar_h, bar_h, bar_h)
                     gdi32.SelectObject(hdc, old_b)
                     gdi32.DeleteObject(grad_brush)
+
+        # 脚注：把「右上角两个按钮各做什么」写清楚（无边框窗口没有标题栏提示位）。
+        hint_font = self._create_font(hdc, 9)
+        old_font = gdi32.SelectObject(hdc, hint_font)
+        gdi32.SetTextColor(hdc, GRAY_DIM)
+        hint_rc = RECT()
+        hint_rc.left = pad + 14
+        hint_rc.top = h - pad - 24
+        hint_rc.right = self._min_btn_rect[0] - 12
+        hint_rc.bottom = hint_rc.top + 16
+        user32.DrawTextW(hdc, "关闭（右上角 ✕）即放弃本次启动；最小化后可从任务栏还原",
+                         -1, ctypes.byref(hint_rc),
+                         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX)
+        gdi32.SelectObject(hdc, old_font)
+        gdi32.DeleteObject(hint_font)
 
     def _draw_window_button(self, hdc: HDC, rect: tuple[int, int, int, int],
                             kind: str) -> None:
@@ -1391,6 +1440,19 @@ class SplashWindow:
         self._msg = msg
         user32.InvalidateRect(self.hwnd, None, False)
 
+    def set_warning(self, msg: str):
+        """提示（不影响启动流程）：副标题换成警告语，正文给可执行的处置。
+
+        置为「钉住」：正文是处置建议，不能让后续日志行把它顶掉。
+
+        与 set_error 的区别只在语义：窗口按钮「点了没反应」这类问题的成因常是
+        「壳过期」，但启动本身还能继续——把处置写出来即可，不该把画面变成失败态。
+        """
+        self._subtitle = "⚠ 壳可能过期"
+        self._msg = msg
+        self._pinned_warning = True
+        user32.InvalidateRect(self.hwnd, None, False)
+
     def set_timeout(self):
         self._status = "timeout"
         self._subtitle = "启动时间较长"
@@ -1402,6 +1464,10 @@ class SplashWindow:
             return
         self._closed = True
         self._close_should_terminate = terminate
+        # 用户可能先把窗口最小化过：结束前把状态清掉并让窗口回到可见，
+        # 否则销毁的是「隐藏 + 未置顶」的那个，用户看不出它已经走了。
+        self._minimized = False
+        self._reset_below_hwnd()
         user32.KillTimer(self.hwnd, self._timer_id)
         # 必须从 GUI 线程调用 PostQuitMessage 才有效；Timer 线程不能直接发 WM_QUIT。
         # 改发 WM_CLOSE 到窗口，WndProc 在主线程里收到后再 PostQuitMessage。
@@ -1411,6 +1477,62 @@ class SplashWindow:
             except Exception as exc:
                 log(f"post close error: {exc}")
         threading.Timer(delay_ms / 1000.0, _post_close).start()
+
+    # ── 最小化（置顶弹窗的正确做法） ──
+    # 点右上角的最小化必须有反应，这里不能只写 ShowWindow(SW_MINIMIZE)：
+    # 窗口带 WS_EX_TOPMOST 且属于启动器进程（无同进程主窗口组），系统会去
+    # 最小化「它的整个窗口组」——找不到可最小化的父窗口，调用等于没发生。
+    # 所以改成两条动作合起来：
+    #   ① 撤掉置顶（TOPMOST 不撤，窗口会一直压在别人上面，等于没最小化）；
+    #   ② 隐藏窗口（启动器按进度用 Activate 唤起「相关窗口」时不会再翻出它），
+    #      并把前台交还给原本压在下面的窗口。
+    # 恢复（原样回到屏幕上的位置）由启动器自己在需要时调用 _restore。
+    def _minimize(self):
+        self._minimized = True
+        self._reset_below_hwnd()
+        self._keep_minimized()
+
+    def _reset_below_hwnd(self):
+        self._below_hwnd = 0
+        self._below_checked = False
+
+    def _keep_minimized(self):
+        """把窗口维持在被用户「最小化」后的状态（定时器每 40ms 调一次）。
+
+        幂等：已经是隐藏态时只做一次前台交还，不重复抢。
+        """
+        try:
+            if user32.IsWindowVisible(self.hwnd):
+                if not self._below_checked:
+                    self._below_checked = True
+                    self._below_hwnd = user32.GetWindow(self.hwnd, GW_HWNDNEXT) or 0
+                user32.SetWindowPos(
+                    self.hwnd, 0, 0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER,
+                )
+                user32.ShowWindow(self.hwnd, SW_HIDE)
+                # 前台还回去：否则用户点了「最小化」，画面上的活跃窗口还是消失的
+                # 那个（键盘输入落不到任何可见窗口）。
+                if self._below_hwnd and user32.IsWindow(self._below_hwnd):
+                    user32.SetForegroundWindow(self._below_hwnd)
+        except Exception as exc:
+            log(f"keep_minimized error: {exc}")
+
+    def _restore(self):
+        """最小化后恢复：还原置顶与可见性，回到屏幕上原来的位置。"""
+        if not self._minimized:
+            return
+        self._minimized = False
+        self._reset_below_hwnd()
+        try:
+            user32.ShowWindow(self.hwnd, SW_SHOW)
+            user32.SetWindowPos(
+                self.hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            )
+            user32.SetForegroundWindow(self.hwnd)
+        except Exception as exc:
+            log(f"restore splash error: {exc}")
 
     def _terminate_proc(self):
         """用户主动关闭/超时时，终止 dev-launcher 进程树，避免后台残留。"""
@@ -1589,6 +1711,63 @@ def ensure_comfy_cli_venv(project_root: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 #  启动 dev-launcher.ps1
 # ═══════════════════════════════════════════════════════════════════════════════
+def _warn_if_stale_shell(project_root: str) -> str:
+    """壳二进制比壳源码旧时记一条可定位的警告，返回警告文本（空串表示没问题）。
+
+    为什么在启动器里查一次：「窗口按钮点了没反应」这类问题里，最常见的一组成因
+    是**壳没重编**——`src-tauri/src/**`、`tauri.conf.json`、启动页改了之后仍跑着
+    旧 `app.exe`，于是新启动页调的命令在旧壳里不存在（`win_minimize` /
+    `win_close` 报 not allowed / not found 之类）。纯文件时间戳比较不可能给出
+    确切结论，但它能把「先重编壳」这一步提到用户面前——这比让人对着一个没反应的
+    按钮猜要省事得多。
+
+    与 `dev-launcher.ps1` 的壳时效检查（stale_shell）同源、同判据。
+    """
+    try:
+        shell_sources = [
+            os.path.join(project_root, "src-tauri", "tauri.conf.json"),
+            os.path.join(project_root, "src-tauri", "build.rs"),
+        ]
+        src_dir = os.path.join(project_root, "src-tauri", "src")
+        if os.path.isdir(src_dir):
+            for name in os.listdir(src_dir):
+                if name.endswith(".rs"):
+                    shell_sources.append(os.path.join(src_dir, name))
+        for rel in ("splash-assets/splash.html", "splash-assets/index.html"):
+            shell_sources.append(os.path.join(project_root, "src-tauri", rel))
+
+        newest = 0.0
+        for path in shell_sources:
+            try:
+                newest = max(newest, os.path.getmtime(path))
+            except OSError:
+                continue
+        if newest <= 0:
+            return ""
+
+        for exe in (
+            os.path.join(project_root, "src-tauri", "target", "release", "app.exe"),
+            os.path.join(project_root, "src-tauri", "target", "debug", "app.exe"),
+        ):
+            try:
+                if os.path.getmtime(exe) >= newest:
+                    return ""
+                break
+            except OSError:
+                continue
+
+        warn = (
+            "桌面壳早于壳源码 / 启动页，可能是旧壳（窗口按钮依赖新壳命令）。"
+            "请重编壳：cd src-tauri && cargo build --release "
+            "--features custom-protocol"
+        )
+        log("STALE SHELL: " + warn)
+        return warn
+    except Exception as exc:
+        log(f"stale shell check error: {exc}")
+        return ""
+
+
 def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.Popen[str] | None":
     ps1 = os.path.join(project_root, "scripts", "dev-launcher.ps1")
     if not os.path.isfile(ps1):
@@ -1663,6 +1842,9 @@ def monitor(proc: "subprocess.Popen[str] | None", splash: SplashWindow):
                 return
             if find_tauri_window(exact=True):
                 log("tauri window detected, closing splash in 600ms")
+                # 用户可能把启动画面最小化过：交接这一下要让他看得见（窗口还原
+                # 后再关闭），否则「启动完成了但界面上什么都没发生」。
+                splash._restore()
                 spawn_foreground_watch(splash._project_root)  # type: ignore[attr-defined]
                 splash.close_later(600, terminate=False)
                 return
@@ -2131,11 +2313,17 @@ def main(argv: list[str] | None = None) -> int:
 
     splash = SplashWindow()
     splash._project_root = project_root
+    # 旧壳会让启动页的窗口按钮失效（新命令在旧壳里不存在）。这条只记日志、
+    # 提醒重编，不阻断启动——判据是文件时间戳，不足以据此拒绝启动。
+    stale_shell_warn = _warn_if_stale_shell(project_root)
     if not splash.show():
         if mutex:
             kernel32.CloseHandle(mutex)
         close_logging()
         return _fatal_box("无法创建启动画面窗口。")
+
+    if stale_shell_warn:
+        splash.set_warning(stale_shell_warn)
 
     proc = launch_dev_server(project_root, mode=mode)
     if proc is None:
