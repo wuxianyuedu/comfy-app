@@ -46,6 +46,8 @@ import {
 } from "~/components/workshop/stage-config";
 
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
+import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
+import type { GenerationLogStage } from "~/lib/workshop/generation-log";
 import {
   useCharacterPortrait,
   type PortraitSession,
@@ -421,6 +423,9 @@ export interface WorkshopPipelineController {
  *  即使阶段组件卸载期间后台 async 仍能安全调用更新。 */
 export function useExtractSession(
   defaultChannel: string,
+  /** 传了环节名（character / storyboard）就把每条执行日志异步落盘到
+   *  log/workshop/（fire-and-forget），刷新 / 重启后可在「历史」里回看。 */
+  stage?: GenerationLogStage,
 ): [ExtractSession, ExtractSessionActions] {
   const [session, setSession] = React.useState<ExtractSession>(() => ({
     channelValue: defaultChannel,
@@ -458,9 +463,11 @@ export function useExtractSession(
     setSession((prev) => ({ ...prev, progress: prev.progress + text }));
   }, []);
   const appendLog = React.useCallback(
-    (entry: ExtractLogEntry) =>
-      setSession((prev) => ({ ...prev, log: [...prev.log, entry] })),
-    [],
+    (entry: ExtractLogEntry) => {
+      setSession((prev) => ({ ...prev, log: [...prev.log, entry] }));
+      if (stage) persistGenerationLogs(stage, [entry]);
+    },
+    [stage],
   );
   const setLog = React.useCallback((entries: ExtractLogEntry[]) => {
     setSession((prev) => ({ ...prev, log: entries }));
@@ -505,9 +512,14 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const [notice, setNotice] = React.useState<string | null>(null);
 
   // ── 提取会话收归 controller：切页签卸载只丢 stage 组件，此处常驻 ──
-  const [characterExtract, characterExtractActions] = useExtractSession("tool");
-  const [storyboardExtract, storyboardExtractActions] =
-    useExtractSession("tool");
+  const [characterExtract, characterExtractActions] = useExtractSession(
+    "tool",
+    "character",
+  );
+  const [storyboardExtract, storyboardExtractActions] = useExtractSession(
+    "tool",
+    "storyboard",
+  );
 
   // 剧本内容默认为空，全部内容经 localStorage 草稿持久化
   // （防抖自动保存，挂载时惰性恢复）。

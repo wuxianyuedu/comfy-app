@@ -22,6 +22,8 @@ interface LLMContextValue {
   localModels: string[];
   /** 静态配置下的远端独立模型名（工坊下拉「远端」组读它，不实时探测）。 */
   remoteModels: string[];
+  /** 静态配置下的远端生图模型名（kind=image，定妆照远端通道挑选用）。 */
+  remoteImageModels: string[];
   loading: boolean;
   settingsOpen: boolean;
   openSettings: () => void;
@@ -38,7 +40,8 @@ export function useLLM(): LLMContextValue {
 }
 
 export function LLMProvider({ children }: { children: React.ReactNode }) {
-  const { config, localModels, remoteModels, loading, refresh } = useLLMConfig();
+  const { config, localModels, remoteModels, remoteImageModels, loading, refresh } =
+    useLLMConfig();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -49,6 +52,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
     config,
     localModels,
     remoteModels,
+    remoteImageModels,
     loading,
     settingsOpen,
     openSettings: () => setSettingsOpen(true),

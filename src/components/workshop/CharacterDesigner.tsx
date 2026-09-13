@@ -152,7 +152,7 @@ export function CharacterDesigner({
   // 并经 props.extract 注入：展示读 session，流程里写入走 actions。
   // controller 跨阶段页签常驻，提取中切页签再切回状态不丢，无需模块级缓存。
   // 遗留/独立使用（未注入 extract prop）时，退化为本组件局部会话。
-  const localExtract = useExtractSession("tool");
+  const localExtract = useExtractSession("tool", "character");
   const { session: extractSession, actions: extractActions } = extract ?? {
     session: localExtract[0],
     actions: localExtract[1],
@@ -527,6 +527,7 @@ export function CharacterDesigner({
         statusText={extractStatus}
         errorText={extractError}
         executionLog={extractionLog}
+        logStage="character"
         extractDisabled={!hasScript}
         extractDisabledReason="未获取到剧本文本(在「剧本」阶段编写后可提取)。仍可用「外部导入」载入角色卡 JSON 或人物清单。"
       />

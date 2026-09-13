@@ -8,8 +8,12 @@
 
 import React from "react";
 
+import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { Icon } from "@/components/ui/icon";
 import { ShotSizePicker } from "@/components/workshop/ShotSizePicker";
+import { useLLM } from "@/components/workshop/LLMContext";
+import { fetchGenerationLogs } from "@/lib/workshop/generation-log-client";
+import type { PersistableGenerationLog } from "@/lib/workshop/generation-log-client";
 import type {
   PortraitSession,
   PortraitSessionActions,
@@ -46,12 +50,29 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   const focused = session.focusCharacterId === character.id;
   const busy = session.busy && focused;
   const importing = session.importing && focused;
-  const remoteReady = apiChannels?.image.configured === true;
+  /* 远端模型来自设置页「远端模型」（kind=图片）；有配置时远端通道直接可用，
+   * 不必再在工坊 API 通道里重复填一份 Base URL / API Key。 */
+  const { remoteImageModels } = useLLM();
+  const effectiveRemoteModel =
+    session.remoteModel || (remoteImageModels[0] ?? "");
+  const remoteReady =
+    apiChannels?.image.configured === true || remoteImageModels.length > 0;
   const localBlocked = session.channel === "local" && !checkpoint;
   const remoteBlocked = session.channel === "remote" && !remoteReady;
   const hasPrompt = !!character.positivePrompt.trim();
   const canGenerate =
     hasPrompt && !session.busy && !session.importing && !localBlocked && !remoteBlocked;
+
+  /* 生成日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
+  const [historyOpen, setHistoryOpen] = React.useState(false);
+  const [history, setHistory] = React.useState<PersistableGenerationLog[] | null>(
+    null,
+  );
+  const loadHistory = () => {
+    setHistoryOpen(true);
+    if (history) return;
+    void fetchGenerationLogs("portrait", 100).then(setHistory);
+  };
 
   const candidates = portraitCandidates(character);
 
@@ -76,6 +97,17 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             </button>
           ))}
         </div>
+        {session.channel === "remote" && remoteImageModels.length > 0 && (
+          <DarkSelect
+            value={effectiveRemoteModel}
+            onChange={(value) => actions.patch({ remoteModel: value })}
+            options={remoteImageModels}
+            placeholder="选择远端生图模型"
+            disabled={session.busy || session.importing}
+            className="!bg-(--color-subtle) !border-(--color-border) text-[11px]"
+            popoverMinWidth={220}
+          />
+        )}
         <ShotSizePicker
           value={session.size}
           onChange={(size) => actions.patch({ size })}
@@ -83,7 +115,14 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         />
         <button
           type="button"
-          onClick={() => void actions.generate(character)}
+          onClick={() =>
+            void actions.generate(
+              character,
+              session.channel === "remote" && effectiveRemoteModel
+                ? { remoteModel: effectiveRemoteModel }
+                : undefined,
+            )
+          }
           disabled={!canGenerate}
           className="bg-primary rounded-md px-3 py-1.5 text-[11px] font-medium text-white transition-opacity disabled:opacity-40"
         >
@@ -120,7 +159,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
       {session.channel === "remote" && !remoteReady && (
         <p className="flex flex-wrap items-center gap-1 text-[11px] text-amber-600">
           <Icon name="info" size={11} />
-          远端 API 生图通道未配置 ——
+          远端 API 生图未配置 —— 在
+          <span className="font-medium">设置 → 模型</span>
+          里添加一条「图片」类型的远端模型即可直接使用；或
           <button
             type="button"
             onClick={onOpenApiSettings}
@@ -128,7 +169,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           >
             打开 API 通道设置
           </button>
-          填写 Base URL 与 API Key 后可用。
+          填写 Base URL 与 API Key。
         </p>
       )}
       {!hasPrompt && (
@@ -160,10 +201,22 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
               {session.error}
             </p>
           )}
-          {session.log.length > 0 && (
+          {(session.log.length > 0 || focused) && (
             <details className="bg-bg/60 rounded-md px-2 py-1" open={busy}>
-              <summary className="text-primary cursor-pointer text-[10px] select-none">
-                生成过程（{session.log.length} 条）
+              <summary className="text-primary flex cursor-pointer items-center gap-2 text-[10px] select-none">
+                <span>
+                  生成过程{session.log.length > 0 ? `（${session.log.length} 条）` : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    loadHistory();
+                  }}
+                  className="text-muted-foreground hover:text-primary underline underline-offset-2"
+                >
+                  历史
+                </button>
               </summary>
               <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
                 {session.log.map((entry) => (
@@ -184,6 +237,40 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   </li>
                 ))}
               </ul>
+              {historyOpen && (
+                <div className="border-border/60 mt-1 border-t pt-1">
+                  <p className="text-muted-foreground text-[10px]">
+                    历史日志（含此前会话，保存在 log/workshop/）
+                  </p>
+                  {history === null ? (
+                    <p className="text-muted-foreground text-[10.5px]">加载中…</p>
+                  ) : history.length === 0 ? (
+                    <p className="text-muted-foreground text-[10.5px]">
+                      还没有落盘的历史日志。
+                    </p>
+                  ) : (
+                    <ul className="max-h-40 space-y-0.5 overflow-y-auto">
+                      {history.map((entry, i) => (
+                        <li
+                          key={`${entry.ts}-${i}`}
+                          className={`text-[10.5px] leading-relaxed ${
+                            entry.kind === "error"
+                              ? "text-red-600"
+                              : entry.kind === "success"
+                                ? "text-emerald-600"
+                                : "text-muted-foreground"
+                          }`}
+                        >
+                          <span className="text-faint mr-1">
+                            {new Date(entry.ts).toLocaleTimeString()}
+                          </span>
+                          {entry.summary}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </details>
           )}
         </div>

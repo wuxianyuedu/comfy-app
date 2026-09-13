@@ -21,6 +21,9 @@ export const SERVICES_LOG_DIR = path.join(LOG_ROOT, "services");
 /** 构建与工具脚本日志（tools/scripts/Log-Common.ps1、setup 脚本）。 */
 export const TOOLS_LOG_DIR = path.join(LOG_ROOT, "tools");
 
+/** 工坊生成执行日志（角色卡提取 / 分镜拆解 / 定妆照生成，按天分文件追加）。 */
+export const WORKSHOP_LOG_DIR = path.join(LOG_ROOT, "workshop");
+
 /** dev-launcher 历史归档（按年月分目录）。 */
 export const ARCHIVE_LOG_DIR = path.join(LOG_ROOT, "archive");
 

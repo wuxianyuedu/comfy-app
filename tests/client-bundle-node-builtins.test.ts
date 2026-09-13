@@ -149,7 +149,9 @@ function findClientReachableNodeBuiltins(): { file: string; chain: string[] }[] 
 }
 
 describe("客户端可达图中不得出现顶层 import Node 内建的模块", () => {
-  it("全仓扫描为绿（无客户端可达的 Node-only 模块）", () => {
+  it(
+    "全仓扫描为绿（无客户端可达的 Node-only 模块）",
+    () => {
     const hits = findClientReachableNodeBuiltins();
     const report = hits
       .map((h) => `  ✗ ${h.file}\n      引用链：${h.chain.join(" -> ")}`)
@@ -161,7 +163,10 @@ describe("客户端可达图中不得出现顶层 import Node 内建的模块", 
         `修法：把纯逻辑（客户端要用的）与 IO（Node-only）拆成两个文件，\n` +
         `IO 那个放 <name>.server.ts（见 ISSUE #282 / #317 与规范 07 §7.12）。\n${report}`,
     ).toEqual([]);
-  });
+    },
+    // 全仓逐文件扫描（2000+ 文件读盘 + 正则），全量并行负载下 5s 默认值不够
+    30_000,
+  );
 
   it("log-session-scope 已分层：纯函数模块不含 fs，IO 在 .server 模块", () => {
     // 这是本测试要守住的具体回归（ISSUE #317 的 P0）。
