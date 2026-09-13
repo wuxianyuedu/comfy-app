@@ -6,7 +6,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /* Mock 掉 lifecycle 的副作用依赖：避免测试触碰真实 spawn / fs / DB / ComfyUI。
- *  probeComfyUi 由 resolveComfyBase 兜底：resolveComfyBase 抛错 → probeComfyUi 返回 null。
+ *  probeComfyUi 底层是 probeComfyBase（按次探测）：默认桩返回 null =「探不通」，
+ *  需要可达的用例再单独把它改成应答。
  *  stopComfyUiProcess 只需走到「pid 未定位到 → 返回未在运行」分支即可把 manualStop 置上。
  *  lifecycle 的全局状态挂在 globalThis（HMR 单例），跨用例会持久累积：
  *  「闩锁」类用例靠每例先 stopComfyUiProcess 落闩锁自证；
@@ -60,6 +61,20 @@ vi.mock("../log-paths", () => ({
 vi.mock("~/server/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+/* win32 的 stopComfyUiProcess 经 exec(taskkill…) 杀整棵进程树；不 mock 的话
+ * vi.mocked(exec) 拿到的是真函数，「is not a spy」直接抛错（该断言只在 win32
+ * 分支走到，Linux CI 察觉不到）。回调由桩同步调用，收口流程才能走完；spawn
+ * 一并桩掉，防止任何路径摸到真实进程；其余导出保持原实现。 */
+vi.mock("child_process", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    exec: vi.fn((_cmd: string, cb?: (err: Error | null) => void) => {
+      cb?.(null);
+    }),
+    spawn: vi.fn(),
+  };
+});
 
 import {
   getComfyUiStatus,
@@ -394,8 +409,10 @@ describe("关闭流程 — 进程树回收判据", () => {
     const { findPidForMainPy } = await import("./proc-detect");
 
     // 造「无句柄但仍在跑」场景：探测可达 + 进程表定位到 PID。
-    const { resolveComfyBase } = await import("./client");
-    vi.mocked(resolveComfyBase).mockResolvedValueOnce("http://127.0.0.1:8188");
+    // probeComfyUi 走的是 probeComfyBase（按次探测，无会话缓存），不是
+    // resolveComfyBase——mock 后者探测依旧为 null，流程会提前按「未在运行」收口。
+    const { probeComfyBase } = await import("./client");
+    vi.mocked(probeComfyBase).mockResolvedValueOnce("http://127.0.0.1:8188");
     vi.mocked(findPidForMainPy).mockResolvedValueOnce(4321);
     const execSpy = vi.mocked(exec);
 
