@@ -1,5 +1,6 @@
 import type * as LoggerModule from "~/server/lib/logger";
 import type * as EnvfileModule from "@/lib/envfile";
+import type * as AppSettingsModule from "@/lib/app-settings";
 import type * as ImportSourceModule from "@/lib/comfyui/importSource";
 import type * as RawModule from "@/lib/comfyui/raw";
 /**
@@ -36,6 +37,17 @@ vi.mock("@/lib/envfile", async (importOriginal) => ({
   ...(await importOriginal<typeof EnvfileModule>()),
   readEnvVar: vi.fn(() => null),
 }));
+/* 本地工作流根目录由「设置里的 ComfyUI 路径」推导，而 data/app-settings.json 是
+ * 每台机器各一份：不抹掉这层，判据就随开发机的真实安装目录而变（本机装了
+ * ComfyUI 时 localRoots 非空，空库用例会假失败）。这里保留其余字段的真实取值，
+ * 只把 comfyuiPath 清空。 */
+vi.mock("@/lib/app-settings", async (importOriginal) => {
+  const mod = await importOriginal<typeof AppSettingsModule>();
+  return {
+    ...mod,
+    getSettingsSync: vi.fn(() => ({ ...mod.getSettingsSync(), comfyuiPath: "" })),
+  };
+});
 vi.mock("@/lib/comfyui/importSource", async (importOriginal) => ({
   ...(await importOriginal<typeof ImportSourceModule>()),
   importFromLocalPath: vi.fn(),

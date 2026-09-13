@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   deriveFormatFlags,
+  deriveLocalRootsHint,
   deriveSyncFlags,
   isTechnicalName,
   type WorkflowRow,
@@ -19,6 +20,41 @@ function makeRow(overrides: Partial<WorkflowRow> = {}): WorkflowRow {
     ...overrides,
   };
 }
+
+describe("deriveLocalRootsHint 空列表原因", () => {
+  it("一个根都没解析到 → 提示去配 ComfyUI 路径 / LOCAL_WORKFLOWS_PATH", () => {
+    expect(deriveLocalRootsHint(null)).toContain("没有解析到本地工作流目录");
+    expect(deriveLocalRootsHint([])).toContain("没有解析到本地工作流目录");
+  });
+
+  it("全部根都不可访问 → 列出路径并提示核对安装路径", () => {
+    const hint = deriveLocalRootsHint([
+      { absPath: "D:/Comfy/workflows", exists: false, count: 0 },
+      { absPath: "D:/Comfy/ComfyUI/workflows", exists: false, count: 0, error: "无法访问" },
+    ]);
+    expect(hint).toContain("不可访问");
+    expect(hint).toContain("D:/Comfy/workflows");
+  });
+
+  it("根在但一个工作流文件都没有 → 指出目录里没有文件", () => {
+    expect(
+      deriveLocalRootsHint([{ absPath: "D:/Comfy/workflows", exists: true, count: 0 }]),
+    ).toContain("没有工作流文件");
+  });
+
+  it("根可用且扫到文件 → 不算「因为目录有问题」，返回 null 走默认空态文案", () => {
+    expect(
+      deriveLocalRootsHint([{ absPath: "D:/Comfy/workflows", exists: true, count: 7 }]),
+    ).toBeNull();
+    // 多个根里只要有一个可用并扫到文件，也不归因到目录
+    expect(
+      deriveLocalRootsHint([
+        { absPath: "D:/a", exists: false, count: 0 },
+        { absPath: "D:/b", exists: true, count: 3 },
+      ]),
+    ).toBeNull();
+  });
+});
 
 describe("deriveFormatFlags 格式标志推导", () => {
   it("新字段齐全时透传 hasApi/hasRaw/apiOrigin", () => {
