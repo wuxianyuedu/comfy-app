@@ -588,8 +588,8 @@ function pageSummary(
   search: string,
 ): string {
   if (total === 0) return search.trim() ? "无筛选命中的日志" : "无匹配日志";
-  const head = `第 ${page} / ${totalPages} 页 · ${pageSize} 条/页`;
-  const tail = `${search.trim() ? "筛选命中" : "匹配"} ${total} 条 · 面板保留最近 ${all} 条`;
+  const head = `第 ${page} / ${totalPages} 页 · 每页最多 ${pageSize} 条`;
+  const tail = `${search.trim() ? "筛选命中" : "匹配"} ${total} 条 · 面板共保留 ${all} 条`;
   return `${head} · ${tail}`;
 }
 
@@ -983,8 +983,8 @@ export function LogPanel() {
         </div>
 
         {/* Footer：分页 + 「回到最新」出口。
-            面板保留最近 MAX_LOG_ENTRIES 条（内存上限，防止长跑吃满内存），
-            但**显示**按 200 条/页翻，用户不会再被「两千条封顶」挡住视线。 */}
+            时间线不设总数上限（能往前翻完整段历史），**同时显示**多少条由
+            每页 ≤ LOG_PAGE_SIZE 兜住，用户不会再被「两千条封顶」挡住视线。 */}
         <div className="flex h-9 shrink-0 items-center justify-between border-t border-white/8 bg-white/2 px-4 text-[12px] text-gray-500">
           <span className="flex items-center gap-2">
             <span>

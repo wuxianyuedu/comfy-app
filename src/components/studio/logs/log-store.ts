@@ -23,14 +23,17 @@ import { create } from "zustand";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
-/** 面板只渲染最近这么多条日志（规范 07 §7.5 的环形缓冲上限）。 */
-export const MAX_LOG_ENTRIES = 2000;
-
 /**
- * 面板每页条数（规范 07 §7.13 的分页契约）：
- * 「显示」页与内存上限各管一段，两者不再耦合。
+ * 面板每页最多显示多少条——这是面板对「同时显示数」的**唯一**上限。
+ *
+ * 时间线本身**不设总数上限**（用户要求：日志要能往前翻完整段，不再被
+ * 「面板保留最近 2000 条」截断）。此前有 2000 条环形缓冲时，应用服务来源的
+ * 高频行把这 2000 条全部占满，启动 / 启动器写在启动早期的行被整批挤出去，
+ * 用户看到的就是那两个来源恒为空。渲染成本由每页 ≤ LOG_PAGE_SIZE 兜住；
+ * 内存随运行时长增长的速率由「面板自轮询行不进面板」（isPanelSelfPollingLine）
+ * 压到接近业务增速，完整历史始终在 log/ 下的文件里，可按需重读。
  */
-export const LOG_PAGE_SIZE = 200;
+export const LOG_PAGE_SIZE = 2000;
 
 /** 每一页（面板显示窗口）里最多保留的连续重复行数（见 dedupeRepeats）。 */
 const REPEAT_FOLD_LIMIT = 5;
@@ -382,6 +385,28 @@ export function isRoutineRpcTimingLine(line: string): boolean {
   return /^\S+\s+\d+ms(\s*\{.*\})?$/i.test(body);
 }
 
+/**
+ * 过滤面板**自轮询**产生的访问日志行（Next dev server 的请求日志）。
+ *
+ * 面板每 2s 轮询一次 4 路日志来源（`GET /api/logs/current?source=…`）与
+ * `GET /api/dev/server-id`，dev server 把每个请求打到 stdout，被转录进
+ * nextjs-panel 文件（app 来源）——下一轮轮询又把它读回来。这是一条**自我
+ * 反馈回路**：不滤掉就以每轮数行的速度无限累积，而且这些行读不到行内时刻、
+ * 只能钳到解析当时，于是成批挤在同一毫秒里把真正的日志淹没。时间线此前封顶
+ * 2000 条时，它们正是把「启动 / 启动器」的行全部挤出面板的推手；现在不设
+ * 上限，不滤掉的话同样会让时间线变成只剩回声。
+ *
+ * 只匹配面板自用的这两条端点：业务请求（tRPC / 页面路由 / 生成接口）照常显示。
+ * 端点名取自 LogProvider 的轮询实现（fetchFileLogSlice / server-id 探测），
+ * 两边改名要同步。带时间戳前缀的形态（`[HH:mm:ss] [INFO] GET …`）由
+ * parseFileLogs 在拆出正文后再问一次本函数。
+ */
+export function isPanelSelfPollingLine(line: string): boolean {
+  return /^\s*GET\s+\/api\/(?:logs\/current|dev\/server-id)(?:\?|\s|$)/.test(
+    line,
+  );
+}
+
 function parseLogLevel(level: string): LogLevel {
   switch (level.toLowerCase()) {
     case "error":
@@ -436,9 +461,14 @@ export function parseFileLogs(
     // 常规 tRPC/RPC 调用计时行（如 `[rpc] xxx 155ms {"type":"query"}`）不进面板：
     // 正常调用高频产生会刷屏（#294）；失败/慢查询（error/warn 级别）仍保留。
     if (isRoutineRpcTimingLine(line)) continue;
+    // 面板自轮询的访问日志行（`GET /api/logs/current?…` 等）不进面板：
+    // 它们是面板每 2s 轮询自己的回声，无限累积且成批挤在同一毫秒（见函数说明）。
+    if (isPanelSelfPollingLine(line)) continue;
     const m = LOG_LINE_RE.exec(line);
     if (m) {
       const [, hh, mm, ss, lv, msg] = m;
+      // 带时间戳前缀的自轮询行（如 dev-launcher 转录的 dev 输出）：拆出正文后再判一次
+      if (isPanelSelfPollingLine(msg ?? "")) continue;
       const d = new Date(today);
       d.setHours(Number(hh ?? "0"), Number(mm ?? "0"), Number(ss ?? "0"), 0);
       push({
@@ -518,20 +548,20 @@ function entryKey(entry: Pick<LogEntry, "time" | "level" | "message">): string {
 }
 
 /**
- * 把新条目并进时间线：**按时刻排序 + 跨来源去重**，然后只保留最近 MAX_LOG_ENTRIES 条。
+ * 把新条目并进时间线：**按时刻排序 + 跨来源去重**，不设总数上限。
  *
  * - 排序键 `(time, seq)`：`time` 来自行内的写入时刻；`seq` 只在同一毫秒内决定
  *   先后（三路轮询并发到达，同毫秒内按到达顺序保持稳定即可）。
  * - 去重：与已有条目 key 相同的新条目直接丢弃。dev-launcher 转写会包含 dev
  *   输出、文件被整段重读也会重复送来同一批行，没有这一步面板条数与真实事件数
  *   就对不上（翻页还会翻出重复内容）。
- * - 上限只裁**最旧**的条目：内存占用有界，且「显示多少条」由分页决定，
- *   不再等于内存上限（ISSUE #262：面板本该能翻页看更多，却卡在 2000 条）。
+ * - 不裁剪：时间线保留本面板生命周期内的全部条目（用户要求能往前翻完整段），
+ *   「一次看多少」由分页（LOG_PAGE_SIZE）决定，与总量解耦。返回值 === current
+ *   当且仅当 fresh 全是重复行——appendFileLogs 据此判断「有没有新行落板」。
  */
 export function mergeTimeline(
   current: LogEntry[],
   fresh: LogEntry[],
-  max = MAX_LOG_ENTRIES,
 ): LogEntry[] {
   if (fresh.length === 0) return current;
   const seen = new Set(current.map(entryKey));
@@ -545,7 +575,7 @@ export function mergeTimeline(
   if (added.length === 0) return current;
   const merged = current.length === 0 ? added.slice() : [...current, ...added];
   merged.sort((a, b) => (a.time !== b.time ? a.time - b.time : a.seq - b.seq));
-  return merged.length > max ? merged.slice(merged.length - max) : merged;
+  return merged;
 }
 
 /** 时间线的**真实**末条（最新一条）——「已读水位」「有无新内容」「跳最新」都用它。 */
@@ -862,11 +892,12 @@ export interface LogStoreState {
    * 一条**迟到的旧时刻行**会插进中间、末条不动——只看末条会漏掉这类新增
    * （ISSUE #346）。
    *
-   * ⚠️ 时间线被环形缓冲截断时 `revision` **不推进**（见 appendFileLogs）：
-   * 截断没有让任何一条真正的新日志落板，而推进它会把下面这条推论的循环打断——
-   * 「revision 变过 → 有新内容 → 重新取水位」，那会让面板把**每两秒一次的
-   * 新日志**都当成用户已经读过（水位被反复刷到最新），页脚于是永远报不出
-   * 「有 N 条新的日志」（ISSUE #262 复审：翻页翻不动、提示不出现）。
+   * ⚠️ `revision` 只在**新行落板**时推进（见 appendFileLogs）：环形缓冲截断
+   * 不算落板——2000 条上限的时代它是把旧行挤出去、没有新内容，推进它会把下面
+   * 这条推论的循环打断——「revision 变过 → 有新内容 → 重新取水位」，那会让面板
+   * 把**每两秒一次的新日志**都当成用户已经读过（水位被反复刷到最新），页脚于是
+   * 永远报不出「有 N 条新的日志」（ISSUE #262 复审：翻页翻不动、提示不出现）。
+   * 现行时间线无上限、没有截断形态，这条原则保留为「恢复上限时必须沿用」的约定。
    */
   viewRevision: number;
   /**
@@ -1102,26 +1133,19 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       const logs = mergeTimeline(state.logs, fresh);
       /* 全批是重复行（或全被会话起点裁掉）→ 时间线没变，什么都不推进。 */
       if (logs === state.logs) return { logs: state.logs };
-      /* 批次里到底有没有**一条真正落板的新行**？
-       *
-       * 不能用「长度有没有变」判断：时间线封顶（环形缓冲到上限）之后，新行会顶掉
-       * 同样多条最旧的行，长度恒等于 MAX_LOG_ENTRIES——明明是「有新日志」，长度
-       * 却说他「没有」。判据只能是**身份**：新行是否出现在合并后的时间线里。
-       *
-       * 这一条同时决定两件事：
-       *   1. `revision` 只在真的落了新行时才推进。截断本身不推进，否则页脚会把
-       *      「时间线右移一格」也当成有新日志而重新取水位，新行当场被标成已读
-       *      （ISSUE #262 复审：提示永远不出现 → 用户读到的就是「翻页翻不动」）；
-       *   2. 贴底基线的推进同样只认新行，内容不会被每两秒一次的轮询反复拉动。 */
-      const landed = new Set(logs.map((entry) => entry.id));
-      const hasNew = fresh.some((entry) => landed.has(entry.id));
+      /* mergeTimeline 返回新数组 ⟺ 至少一条新行真正落板。时间线不设总数上限，
+       * 不存在「产生了新数组、新行却被裁掉」的形态——2000 条环形缓冲的时代，
+       * 截断会把旧行挤出去，必须按条目身份另问一遍「有没有新行」（规范 §7.22.4）；
+       * **将来若恢复内存上限，那条身份判据必须一并恢复**：截断不算新内容落板。
+       * `revision` 只在真落了新行时推进，页脚「有 N 条新的日志」与贴底基线
+       * 才不会被「时间线右移一格」这种形态虚报。 */
       return applyView(
         derive(
           logs,
           state.filter,
           state.search,
           state.origin,
-          hasNew ? state.revision + 1 : state.revision,
+          state.revision + 1,
         ),
         viewOf(state),
       );
@@ -1405,10 +1429,11 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
  * 「已读水位」的内容：**已读过哪些条目**（id 集合）。
  *
  * 用条目身份而不是条数，是本文件在 ISSUE #262 复审里改掉的一条口径。条数在
- * **时间线被截断**时不再是单调量：环形缓冲只保留最近 MAX_LOG_ENTRIES 条，长度
- * 会停在 2000，于是「当前长度 − 上次长度」恒为 0——页脚永远报不出「有 N 条新的
- * 日志」，用户也就永远等不到那个「回到最新」的入口（现场实测：页脚写着
- * 「面板保留最近 2000 条」，却一直是第 1 页）。
+ * **时间线有上限**时不再是单调量：2000 条环形缓冲的时代长度会停在常数上，
+ * 于是「当前长度 − 上次长度」恒为 0——页脚永远报不出「有 N 条新的日志」，
+ * 用户也就永远等不到那个「回到最新」的入口（现场实测：页脚写着
+ * 「面板保留最近 2000 条」，却一直是第 1 页）。现行时间线无上限，长度重新
+ * 变成单调量，但身份口径仍然保留：它不受将来任何上限策略的影响。
  *
  * 身份口径下，新条目（id 新）天然不在水位里，被挤掉多少条旧行都不影响计数，
  * 因此贴底位置也不会被截断反复拉动。
@@ -1483,7 +1508,7 @@ export function selectPageLogs(
 /**
  * 第 1 页的**锚定**窗口：只要锚点还在时间线里，就以它为起点往后取 pageSize 条。
  *
- * 锚点不在（被环形缓冲挤出去了 / 还没设）→ 退回「尾部 pageSize 条」这个默认窗口。
+ * 锚点不在（还没设）→ 退回「尾部 pageSize 条」这个默认窗口。
  * 返回的 `truncatedFromEnd` 说明窗口后面还有多少条**更新的**日志，页脚据此说
  * 「有 N 条新的日志」——它就是「用户还没看的那批」。
  *

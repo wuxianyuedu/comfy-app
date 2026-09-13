@@ -43,6 +43,21 @@ function seed(count: number) {
   );
 }
 
+/**
+ * 把每页大小临时改成 200（顶层与 `header` 切片必须同时改，见 §7.20.5）：
+ * 交互密集的翻页用例不必每个动作都重排 2000 行——默认页大小的完整渲染
+ * 成本已由「渲染最新一页」那条用例覆盖。夹具自带页数（600 / 200 = 3 页），
+ * 不依赖 LOG_PAGE_SIZE 的具体值。
+ */
+function useSmallPage(size = 200) {
+  act(() =>
+    useLogStore.setState((state) => ({
+      pageSize: size,
+      header: { ...state.header, pageSize: size },
+    })),
+  );
+}
+
 beforeEach(() => {
   const empty = { all: 0, debug: 0, info: 0, warn: 0, error: 0 };
   useLogStore.setState({
@@ -135,7 +150,7 @@ describe("LogPanel 日志面板", () => {
     expect(screen.getByText(/第 1 \/ 2 页/)).toBeInTheDocument();
     // 最新一页包含时间最近的那条
     expect(screen.getByText(/事件 249/)).toBeInTheDocument();
-  });
+  }, 20_000);
 
   it("翻到更早一页能看到第 1 页没有的日志", async () => {
     seed(LOG_PAGE_SIZE + 50);
@@ -146,7 +161,7 @@ describe("LogPanel 日志面板", () => {
     await user.click(screen.getByTitle("更早的一页"));
     expect(screen.getByText(/第 2 \/ 2 页/)).toBeInTheDocument();
     expect(screen.getByText(/事件 0$/)).toBeInTheDocument();
-  });
+  }, 20_000);
 
   it("渲染的行按时刻升序（用户诉求「最基本的时间顺序」）", () => {
     seed(20);
@@ -160,7 +175,8 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("停在历史页时提示「有新的日志」并可一键回到最新", async () => {
-    seed(LOG_PAGE_SIZE * 3);
+    seed(600);
+    useSmallPage();
     render(<LogPanel />);
     const user = userEvent.setup();
     await user.click(screen.getByTitle("更早的一页"));
@@ -179,7 +195,7 @@ describe("LogPanel 日志面板", () => {
     expect(
       screen.queryByRole("button", { name: /有 \d+ 条新的日志/ }),
     ).toBeNull();
-  });
+  }, 20_000);
 
   it("按来源筛选能滤掉启动行，只看应用运行日志", async () => {
     act(() =>
@@ -598,7 +614,8 @@ describe("LogPanel 日志面板", () => {
   });
 
   it("翻页后停在历史页仍能翻回来，且页码始终在范围内", async () => {
-    seed(LOG_PAGE_SIZE * 3);
+    seed(600);
+    useSmallPage();
     render(<LogPanel />);
     const user = userEvent.setup();
 
@@ -634,7 +651,7 @@ describe("LogPanel 日志面板", () => {
     /* 点一下就能回到最新一页 */
     await user.click(screen.getByRole("button", { name: /回到最新/ }));
     expect(screen.getByText(/第 1 \/ 4 页/)).toBeInTheDocument();
-  });
+  }, 20_000);
 
   /* ISSUE #262 六审：「日志多了我想复制报错文本还是复制不了，我刚选中内容就
    * 刷走了，需要每条日志后面加一个复制按钮，可复制日志内容」。
