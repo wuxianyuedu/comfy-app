@@ -270,6 +270,106 @@ export function parseSizeParam(size: string | undefined): { width: number; heigh
   return { width, height };
 }
 
+/* ── 尺寸三项各自取值（宽高比 / 像素量 / 倍数）──
+ *
+ * 对外参数里「尺寸」是**一个**口子，但工作流里它可能落在三类不同的端口上：
+ * 宽高比（COMBO 标签）、像素量（FLOAT，1 ≈ 1M 总像素）、对齐倍数（INT）。此前
+ * 这三类一律 `matched: false` —— 值只能靠工作流默认值，用户在图里拖出来的
+ * 「尺寸 → 百万像素」那条线**从外部拿不到值**（ISSUE #355：「尺寸那三项每一项
+ * 都需要从外部获取值」）。
+ *
+ * 现在从工坊给的 "WxH" 现算：
+ *   · 比例：还原成**标准比例标签**（16:9 / 4:3…），且必须命中该 pin 自己的选项；
+ *   · 像素量：W×H / 1e6（1 ≈ 1M），按 pin 声明的小数精度取舍；
+ *   · 倍数：宽高的最大公约数与常用网格取交（>= 2 才算「成倍数」）。
+ *
+ * 三类都是**尽力而为**：算不出来、或者 pin 只认自己声明的候选而对不上时返回
+ * `null`，由调用方按默认值兜底 —— 宁可不动，也不写一个非法值进去让 ComfyUI
+ * 静默回落（那才是「改了没生效」）。 */
+
+/** 一档标准宽高比：把 "WxH" 还原成标签用。 */
+const RATIO_PRESETS: { ratio: number; labels: string[] }[] = [
+  { ratio: 1, labels: ["1:1", "1x1"] },
+  { ratio: 16 / 9, labels: ["16:9"] },
+  { ratio: 9 / 16, labels: ["9:16"] },
+  { ratio: 4 / 3, labels: ["4:3"] },
+  { ratio: 3 / 4, labels: ["3:4"] },
+  { ratio: 3 / 2, labels: ["3:2"] },
+  { ratio: 2 / 3, labels: ["2:3"] },
+  { ratio: 21 / 9, labels: ["21:9"] },
+];
+
+/** 常见的对齐倍数网格（与 AlignMultipleStepper / DimensionControl 同口径）。 */
+const MULTIPLE_GRID = [8, 16, 32, 64, 128];
+
+function gcd(a: number, b: number): number {
+  let x = Math.round(Math.abs(a));
+  let y = Math.round(Math.abs(b));
+  while (y) {
+    const t = x % y;
+    x = y;
+    y = t;
+  }
+  return x;
+}
+
+/** 标准比例标签：与目标比例相对差最小、且**该 pin 真的声明了这个选项**的那个。
+ *
+ *  pin 没有 `options`（IO 未富化到候选表）时按内置表给标签 —— 工坊的标准比例
+ *  标签与主流工作流一致；给了 options 就只认它自己那一份，绝不写表外的值。 */
+export function aspectLabelForSize(
+  width: number,
+  height: number,
+  options?: readonly string[],
+): string | null {
+  if (!(width > 0) || !(height > 0)) return null;
+  const target = width / height;
+  const ranked = [...RATIO_PRESETS].sort(
+    (a, b) => Math.abs(a.ratio - target) - Math.abs(b.ratio - target),
+  );
+  for (const preset of ranked) {
+    /* 相对差超过 2% 就不算命中该比例（如 1000x999 不该被写成 "16:9"）。 */
+    if (Math.abs(preset.ratio - target) / target > 0.02) continue;
+    for (const label of preset.labels) {
+      if (!options || options.length === 0) return label;
+      const hit = options.find(
+        (option) => option === label || option.split(" ")[0] === label,
+      );
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+/** 像素量（百万像素）：W×H / 1e6，按 pin 声明的小数精度取整。 */
+export function megapixelsForSize(
+  width: number,
+  height: number,
+  defaultValue?: unknown,
+): number | null {
+  if (!(width > 0) || !(height > 0)) return null;
+  const raw = (width * height) / 1_000_000;
+  if (!Number.isFinite(raw) || raw <= 0) return null;
+  /* 精度取默认值的小数位（`1.0` → 1 位；`1` → 0 位），工坊的 `1M` 这类
+   * 声明通常写 1.0，写 1.03 进去会被 pin 判成「不在候选内」。 */
+  const digits =
+    typeof defaultValue === "number" && !Number.isInteger(defaultValue) ? 1 : 0;
+  const factor = 10 ** digits;
+  const rounded = Math.round(raw * factor) / factor;
+  return rounded > 0 ? rounded : null;
+}
+
+/** 对齐倍数：宽高的公约数落在常用网格上的那一档（>= 2 才算「成倍数」）。
+ *
+ *  取**最大**的命中档：64 能整除就不必写 8 —— 倍数越大网格越粗，写入的口径
+ *  越接近工作流自己的默认（多数工作流声明 8 / 64）。 */
+export function multipleForSize(width: number, height: number): number | null {
+  if (!(width > 0) || !(height > 0)) return null;
+  const divisor = gcd(width, height);
+  const hits = MULTIPLE_GRID.filter((step) => divisor % step === 0);
+  return hits.length > 0 ? hits[hits.length - 1]! : null;
+}
+
 /** 把一组 IO 条目按 ioKey → 分类整理；同一分类出现多个时取首个（稳定顺序）。 */
 function classifyAll(io: WorkflowIOMap): Map<string, WorkshopPinClass> {
   const out = new Map<string, WorkshopPinClass>();
@@ -333,7 +433,9 @@ export function buildEncapsulatedInputs(
   };
 
   const userValueFor = (
-    cls: WorkshopPinClass
+    cls: WorkshopPinClass,
+    /** 该端口自己的声明（COMBO 候选、默认值精度）—— 尺寸类三项现算时要看它。 */
+    entry?: WorkflowIOEntry
   ): { matched: boolean; value: unknown } => {
     switch (cls) {
       case "prompt":
@@ -350,13 +452,28 @@ export function buildEncapsulatedInputs(
         return { matched: lastFrame !== undefined, value: lastFrame };
       case "reference-image":
         return { matched: refImage !== undefined, value: nextReference() };
-      /* aspect / megapixels 没有从 "WxH" 直接可落的值——工坊的 size 是像素，
-       * 这两种 pin 只能靠默认值。列为对外分类仅为让 UI 知道它们被纳入了
-       * 尺寸语义，实际值仍走默认值，故 matched 恒 false。 */
-      case "size-aspect":
-      case "size-megapixels":
-      case "size-multiple":
-        return { matched: false, value: undefined };
+      /* 宽高比 / 像素量 / 倍数由**同一个「尺寸」口**派生：工坊给的是 "WxH"，
+       * 对这三类端口要现算成它们各自认的形状（标签 / 百万像素 / 对齐网格）。
+       * 此前一律 `matched: false`，于是这三项永远只能吃工作流默认值 ——
+       * 用户拖出来的「尺寸 → 百万像素」那条线从外部拿不到值（ISSUE #355）。
+       *
+       * 算不出来（比例不在 pin 的候选里 / 倍数不落在网格上）时如实给
+       * `matched: false`，由默认值兜底 —— 绝不写一个 pin 不认的值进去。 */
+      case "size-aspect": {
+        if (!dims) return { matched: false, value: undefined };
+        const label = aspectLabelForSize(dims.width, dims.height, entry?.options);
+        return { matched: label !== null, value: label ?? undefined };
+      }
+      case "size-megapixels": {
+        if (!dims) return { matched: false, value: undefined };
+        const mp = megapixelsForSize(dims.width, dims.height, entry?.defaultValue);
+        return { matched: mp !== null, value: mp ?? undefined };
+      }
+      case "size-multiple": {
+        if (!dims) return { matched: false, value: undefined };
+        const multiple = multipleForSize(dims.width, dims.height);
+        return { matched: multiple !== null, value: multiple ?? undefined };
+      }
       default:
         return { matched: false, value: undefined };
     }
@@ -366,7 +483,7 @@ export function buildEncapsulatedInputs(
     const cls = classified.get(key) ?? "internal";
     if (cls !== "internal") {
       exposed[key] = cls;
-      const { matched, value } = userValueFor(cls);
+      const { matched, value } = userValueFor(cls, entry);
       // 用户给了值就用用户值；否则与内部参数一样回退默认值。
       const finalValue =
         matched && value !== undefined ? value : resolveEntryDefault(entry, mode);

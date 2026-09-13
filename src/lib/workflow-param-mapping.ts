@@ -36,6 +36,11 @@ import {
   type WorkflowIOMap,
 } from "~/lib/workflow-io-types";
 import { exposedParamsForMode } from "~/lib/workflow-exposed-params";
+import {
+  aspectLabelForSize,
+  megapixelsForSize,
+  multipleForSize,
+} from "~/lib/workshop/workflow-encapsulation";
 
 /* ── 对外参数分类 ──
  * 与工坊封装的 WorkshopPinClass 子集 + `other`（尺寸/参考图/提示词之外，
@@ -908,6 +913,51 @@ export function runtimeNodeId(entry: {
   return `${entry.hostNodeId}:${entry.nodeId}`;
 }
 
+/** 把**一个对外值**派生成某个端口自己认的形状（「尺寸」这类一对外参数接多端口时用）。
+ *
+ *  工坊侧给出的「尺寸」是 `"832x1216"` 这样的像素串；落到工作流的 `width` 上就是
+ *  832，落到 `aspect_ratio` 上就得是它自己声明的那个比例标签，落到 `megapixels`
+ *  上则是 0.9 这样的百万像素数。三种落点形状不同、值也不同 —— 直接照抄像素串会
+ *  被 ComfyUI 判成非法选项（表现为「改了没生效」）。
+ *
+ *  非「尺寸」的口子原样透传（提示词 / 首帧这类值在所有落点上同形）。
+ *  端口形状算不出（比例不在候选里等）时返回 `undefined`，调用方按默认值兜底。 */
+function sizeValueForPin(
+  io: WorkflowIOMap | null | undefined,
+  entry: ParamEntry,
+  ioKey: string,
+  supplied: unknown
+): unknown {
+  if (entry.cls !== "size") return supplied;
+  const raw = io?.[ioKey];
+  if (!raw) return supplied;
+  const dims = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(String(supplied).trim());
+  if (!dims) return supplied;
+  const width = Number(dims[1]);
+  const height = Number(dims[2]);
+  switch (classifyPin(raw)) {
+    case "size-width":
+      return width;
+    case "size-height":
+      return height;
+    case "size-aspect": {
+      const label = aspectLabelForSize(width, height, raw.options);
+      return label ?? undefined;
+    }
+    case "size-megapixels": {
+      const mp = megapixelsForSize(width, height, raw.defaultValue);
+      return mp ?? undefined;
+    }
+    case "size-multiple": {
+      const multiple = multipleForSize(width, height);
+      return multiple ?? undefined;
+    }
+    default:
+      /* 落点不是尺寸类端口（工作流的自定义 pin）：原样透传，由工作流自己解释。 */
+      return supplied;
+  }
+}
+
 /** 把映射落到运行时载荷：对外值 → `workflowInputs` 三元组。
  *
  *  · 有映射：只覆盖被映射的那个口（作者显式画的线说了算，避免把整节点默认值
@@ -921,8 +971,14 @@ export function applyParamMapping(args: {
   mapping: ParamMapping | null | undefined;
   values: Record<string, unknown>;
   mode?: string | null;
+  /** 组合控件覆盖到的端口（`inferGroups(...).groupedKeys`）。
+   *
+   *  带「尺寸」这类一对外参数对多端口的口子时必传：默认状态下它接到的是
+   *  组合控件覆盖的那几个端口，值要逐端口派生成各自认的形状（宽高比 / 像素量 /
+   *  倍数）。不传时按单端口处理（老调用方行为不变）。 */
+  groupedKeys?: ReadonlySet<string>;
 }): { inputs: MappedInput[]; unmatched: string[] } {
-  const { io, entries, mapping, values, mode } = args;
+  const { io, entries, mapping, values, mode, groupedKeys } = args;
   const resolved = resolveMapping(entries, io, mapping, mode);
   /* 作者手工连了线的对外口（含"手工断开"）与纯自动映射要分开对待：
    *   · 手工：用户值只落到那个端口，该节点其余端口不再兜底（作者的线说了算）；
@@ -953,12 +1009,27 @@ export function applyParamMapping(args: {
       .find((value) => value !== undefined);
     const supplied = byContract ?? byPinKeys;
     if (supplied === undefined) continue;
-    const target = resolved[entry.id];
-    if (target && io?.[target]) {
-      push(target, supplied);
-      continue;
+    /* 一个对外参数可能接到**多个端口**（「尺寸」的宽高比 / 像素量 / 倍数由同一
+     * 块控件录入，默认状态下几个端口都取自这一个口）。这时要把同一个对外值
+     * 派生成每个端口各自认的形状，逐个下发 —— 只往「自动判定挑中的那一个」写，
+     * 用户在图上连出来的另外两条线就从外部拿不到值（ISSUE #355：「尺寸那三项
+     * 每一项都需要从外部获取值」）。 */
+    const targets = wiredTargetsForEntry({
+      entry,
+      io,
+      target: resolved[entry.id],
+      manual: !isDefaultMappingForEntry(mapping, entry, mode),
+      groupedKeys,
+    });
+    let pushed = false;
+    for (const wired of targets) {
+      if (!io?.[wired.ioKey]) continue;
+      const perPort = sizeValueForPin(io, entry, wired.ioKey, supplied);
+      if (perPort === undefined) continue;
+      push(wired.ioKey, perPort);
+      pushed = true;
     }
-    unmatched.push(entry.id);
+    if (!pushed) unmatched.push(entry.id);
   }
 
   /* ② 未连线/仅自动映射的统一口子：按默认值兜底（「用户不改就用工作流默认值」）。
