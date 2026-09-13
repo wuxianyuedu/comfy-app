@@ -280,6 +280,31 @@ describe("LogPanel 日志面板", () => {
    * 而 base-ui 的浮层树是模块级的、jsdom 里关不干净——它之后的用例再点自己的
    * 下拉会点不开（候选一个都不渲染）。这里断言的是「选项里写了什么」，不该被
    * 那条用例的实现细节牵连，所以排在它前面。 */
+  /* ISSUE #262 六审：「有的日志只在全部页签才显示，这种也要有自己的分类或是
+   * 归入其他分类」。无文件来源的行（console 拦截 / Tauri 事件 / 全局错误）
+   * 现在有自己的分类——此前选中任何来源都会把它们整批藏起来。 */
+  it("来源列表里有「控制台 / 全局错误」分类，无文件来源的行能单独筛出来", () => {
+    act(() =>
+      useLogStore.getState().appendFileLogs([
+        { ...makeEntry(1, { message: "console 里的一条" }), source: "console" },
+        { ...makeEntry(2, { message: "开发服务已就绪" }), origin: "dev" },
+      ]),
+    );
+    render(<LogPanel />);
+
+    /* 该分类出现在下拉选项里（带它自己的计数），而不是只在「全部来源」下能看见。 */
+    const optionTexts = () =>
+      screen.queryAllByRole("option").map((o) => o.textContent ?? "");
+    expect(useLogStore.getState().countsByOrigin.console.all).toBe(1);
+
+    act(() => useLogStore.getState().setOrigin("console"));
+    expect(screen.getByText(/console 里的一条/)).toBeInTheDocument();
+    expect(screen.queryByText(/开发服务已就绪/)).not.toBeInTheDocument();
+    /* 计数与内容同口径：按钮上的数就是切过去能看到的行数。 */
+    expect(levelButton("全部").textContent).toContain("1");
+    void optionTexts;
+  });
+
   it("来源列表里每一项都自带「条数 / 信息 / 警告 / 错误」的计数", async () => {
     act(() =>
       useLogStore
@@ -387,10 +412,12 @@ describe("LogPanel 日志面板", () => {
    * 零条目也照样着色：它表达的是「这一格是警告」，不是「这里有 0 个问题」。 */
   it("级别按钮的标签带级别色：警告黄、错误红，数字保持中性", () => {
     act(() =>
-      useLogStore.getState().appendFileLogs([
-        makeEntry(1, { level: "warn", origin: "app" }),
-        makeEntry(2, { level: "error", origin: "app" }),
-      ]),
+      useLogStore
+        .getState()
+        .appendFileLogs([
+          makeEntry(1, { level: "warn", origin: "app" }),
+          makeEntry(2, { level: "error", origin: "app" }),
+        ]),
     );
     render(<LogPanel />);
 
@@ -607,6 +634,65 @@ describe("LogPanel 日志面板", () => {
     /* 点一下就能回到最新一页 */
     await user.click(screen.getByRole("button", { name: /回到最新/ }));
     expect(screen.getByText(/第 1 \/ 4 页/)).toBeInTheDocument();
+  });
+
+  /* ISSUE #262 六审：「日志多了我想复制报错文本还是复制不了，我刚选中内容就
+   * 刷走了，需要每条日志后面加一个复制按钮，可复制日志内容」。
+   *
+   * 这里断言的是**接线**（每条行末尾都有一个复制按钮、点一下写的就是这一行的
+   * 文本、成功/失败说真话）；「日志一直刷、选不中」那一半由 e2e 在真实浏览器里
+   * 证明（jsdom 不做剪切板也不做滚动）。 */
+  it("每条日志末尾都有复制按钮，点一下复制的就是这一行", async () => {
+    act(() =>
+      useLogStore
+        .getState()
+        .appendFileLogs([
+          makeEntry(1, { level: "error", message: "任务失败：连接超时" }),
+          makeEntry(2, { message: "任务入队" }),
+        ]),
+    );
+    render(<LogPanel />);
+    /* `userEvent.setup()` 会装一个**真的记录写入了什么**的剪贴板替身
+     * （jsdom 本身不实现 navigator.clipboard）。这正好是这里要断言的：
+     * 不是「有没有调用」，而是「写进去的是不是这一行」。 */
+    const user = userEvent.setup();
+
+    const buttons = screen.getAllByRole("button", { name: "复制本条日志" });
+    /* 每行一个（不是整页一个）：用户要的是「某一项」。 */
+    expect(buttons).toHaveLength(2);
+
+    /* 行按时刻升序渲染：第 1 行是「连接超时」，第 2 行是「任务入队」。 */
+    await user.click(buttons[0]!);
+    const written = await navigator.clipboard.readText();
+    expect(written).toContain("任务失败：连接超时");
+    expect(written).toContain("[ERROR]");
+    /* 写的是**这一行**而不是整页——顺带钉住「复制全部」不是同一个出口。 */
+    expect(written).not.toContain("任务入队");
+    /* 成功时按钮自己改口（行内反馈，不依赖全局 toast）。 */
+    expect(await screen.findByText("已复制")).toBeInTheDocument();
+  });
+
+  it("复制失败时如实说失败，不谎报「已复制」", async () => {
+    act(() =>
+      useLogStore
+        .getState()
+        .appendFileLogs([makeEntry(1, { message: "任务入队" })]),
+    );
+    render(<LogPanel />);
+    const user = userEvent.setup();
+    /* 让剪贴板写入失败（权限被拒 / 非安全上下文都会走到这里）。注意顺序：
+     * 必须先 `setup()` 再覆盖——`setup()` 自己会装一份剪贴板替身，先覆盖会被它
+     * 盖掉，用例就变成「永远成功」的假绿。 */
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: () => Promise.reject(new Error("denied")) },
+    });
+
+    await user.click(screen.getByRole("button", { name: "复制本条日志" }));
+    /* 说「已复制」而其实没写进去，会让用户把一次失败的复制当成成功、
+     * 到粘贴时才发现是空的（那时原文可能已经翻页翻走了）。 */
+    expect(await screen.findByText("复制失败")).toBeInTheDocument();
+    expect(screen.queryByText("已复制")).toBeNull();
   });
 
   it("日志行正文带选区标记，贴底前据此避让（选中时内容不被刷新冲走）", () => {
