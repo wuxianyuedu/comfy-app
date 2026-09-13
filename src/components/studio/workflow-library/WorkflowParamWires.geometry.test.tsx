@@ -74,7 +74,7 @@ function rect(
 }
 
 describe("组合卡回来之后的连线几何", () => {
-  it("线从卡片圆点出发，收在组合控件那一格的左沿（整块是同一格落点）", async () => {
+  it("线从卡片圆点出发，收在组合控件覆盖的那一行自己的圆点上", async () => {
     const widgets = Object.entries(io).map(([ioKey, entry]) => ({
       ...entry,
       ioKey,
@@ -123,10 +123,16 @@ describe("组合卡回来之后的连线几何", () => {
     /* 卡片那颗圆点（起点）。 */
     const dot = root.querySelector('[data-wire-anchor="size?megapixels"]')!;
     rect(dot, { left: 200, top: 60, width: 12, height: 12 });
-    /* 组合控件那一格（终点）：比例/像素/倍数由同一块控件录入，映射线落在这块
-     *  控件上 —— 量的是它的矩形，线收在它左沿中线。 */
-    const anchor = root.querySelector("[data-io-pins]")!;
-    rect(anchor, { left: 494, top: 100, width: 180, height: 70 });
+    /* 组合控件覆盖的那一行（终点）：比例/像素/倍数在画布上是各自成行的参数行
+     *  （框外的左侧），各带自己的大端点 —— 线收在这一行端点的**圆心**上。 */
+    const row = root.querySelector<HTMLElement>(
+      '[data-io-key="5::widget::megapixels"]',
+    )!;
+    rect(row, { left: 494, top: 100, width: 180, height: 22 });
+    const rowDot = row.querySelector(
+      '[data-port-dot="5::widget::megapixels"]',
+    )!;
+    rect(rowDot, { left: 488, top: 105, width: 12, height: 12 });
 
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -136,8 +142,8 @@ describe("组合卡回来之后的连线几何", () => {
       .querySelector('[data-testid="wflib-param-wire-size"]')!
       .getAttribute("d")!;
     /* 起点 = 圆点外缘 (200 + 12 + 6, 66) = (218, 66)；
-       终点 = 组合控件左沿中线 (494, 100 + 70 / 2) = (494, 135)。 */
+       终点 = 那一行端点的圆心 (488 + 12 / 2, 105 + 12 / 2) = (494, 111)。 */
     expect(path.startsWith("M 218 66")).toBe(true);
-    expect(path.endsWith("494 135")).toBe(true);
+    expect(path.endsWith("494 111")).toBe(true);
   });
 });
