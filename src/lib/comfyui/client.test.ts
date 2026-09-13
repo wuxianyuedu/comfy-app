@@ -98,6 +98,55 @@ describe("resolveComfyBase — 进程表查不到 main.py 时退回端口探测"
   });
 });
 
+describe("resolveComfyBase — 先问进程事实，再谈探测（ISSUE #449）", () => {
+  it("按配置路径拿到进程与实际监听端口 → 直接连它，不再逐个试端口", async () => {
+    // 实例真实监听 8189（桌面里改过端口），而设置里的「端口」还是 8188：
+    // 旧流程会先探 8188、再依次试 8189..8193；新流程第一跳就问进程拿到 8189。
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
+      pid: 4321,
+      failed: false,
+    });
+    vi.mocked(findPidListeningPort).mockResolvedValue(8189);
+    const fetchSpy = respondOn([8189]);
+    await expect(resolveComfyBase()).resolves.toBe("http://127.0.0.1:8189");
+    // 端口来自进程（PID 4321 的监听端口），不是探出来的
+    expect(findPidListeningPort).toHaveBeenCalledWith(4321);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("进程在跑但端口未绑定 → 回落配置地址且不缓存该结论（下次重新问）", async () => {
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
+      pid: 777,
+      failed: false,
+    });
+    vi.mocked(findPidListeningPort).mockResolvedValue(null);
+    respondOn([]);
+    await expect(resolveComfyBase()).resolves.toBe("http://127.0.0.1:8188");
+    // 结论没被缓存：实例稍后绑定端口时应重新问（而不是沿用这个连不上的地址）。
+    resetComfyBase();
+    vi.mocked(findPidListeningPort).mockResolvedValue(8188);
+    const fetchSpy = respondOn([8188]);
+    await expect(resolveComfyBase()).resolves.toBe("http://127.0.0.1:8188");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("进程表查询失败（超时/高负载）→ 不判「没在跑」，退回端口探测", async () => {
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
+      pid: null,
+      failed: true,
+    });
+    respondOn([8189]);
+    await expect(resolveComfyBase()).resolves.toBe("http://127.0.0.1:8189");
+    expect(warned(/Process lookup failed/)).toBe(true);
+  });
+
+  it("查询成功但没命中 → 退回端口探测（Comfy Desktop 由 uv 起，命令行未必有 main.py）", async () => {
+    respondOn([8188]);
+    await expect(resolveComfyBase()).resolves.toBe("http://127.0.0.1:8188");
+    expect(warned(/No running instance process found/)).toBe(true);
+  });
+});
+
 describe("probeComfyBase — 按次探测，不污染会话缓存", () => {
   it("「进程在、端口未绑定」的启动中结论不写进缓存：端口就绪后立刻能探到", async () => {
     vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: 100, failed: false });
