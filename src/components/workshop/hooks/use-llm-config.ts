@@ -7,6 +7,7 @@
 import { useCallback, useState } from "react";
 
 import {
+  effectiveProviderType,
   splitExtraModels,
   type LLMConfigView,
   type RemoteModelKind,
@@ -87,11 +88,19 @@ export function useLLMConfig(): LLMConfigController {
     const local = p.localNames.slice();
     const remote = remoteNames.slice();
     const model = cfg.model?.trim() ?? "";
-    /* 兜底：当前生效主模型不在候选里时，按 provider 归入对应组，保证下拉总能选它。
+    /* 生效提供方：本机 Ollama 被存成「远端 API」（baseUrl 回环 + 无密钥）时按
+       本地分组与展示——否则 ollama 模型在下拉/徽标里被挂成「远端」，可用性
+       探测也走错通道（§1.1 口径与 describeFetchFailure / foldRemoteToLocal 一致）。 */
+    const effectiveProvider = effectiveProviderType(
+      cfg.provider,
+      cfg.baseUrl,
+      !!cfg.apiKey,
+    );
+    /* 兜底：当前生效主模型不在候选里时，按生效提供方归入对应组，保证下拉总能选它。
        明确是远端 image/video 类型的主模型不收入文本候选（避免误选到生成任务）。 */
     if (model && !local.includes(model) && !remote.includes(model)) {
       const entry = p.remoteEntries.find((e) => e.name === model);
-      if (cfg.provider === "remote") {
+      if (effectiveProvider === "remote") {
         if (!entry || isChatModel(entry.kind)) remote.push(model);
       } else {
         local.push(model);
@@ -100,6 +109,7 @@ export function useLLMConfig(): LLMConfigController {
     setSplit({ local, remote });
     setConfig({
       ...cfg,
+      provider: effectiveProvider,
       extraModels: toModelNames(cfg.extraModels),
       hasApiKey: !!cfg.apiKey,
     });
@@ -140,7 +150,13 @@ export function useLLMConfigSave(): LLMConfigSaveController {
         return {
           ...cfg,
           hasApiKey: !!cfg.apiKey,
-          provider: cfg.provider as "local" | "remote",
+          // 与 useLLMConfig 同口径：本机 ollama 误存成「远端」时，保存后的
+          // 视图配置也要按生效提供方展示，否则徽标/页脚闪回「远端」。
+          provider: effectiveProviderType(
+            cfg.provider as "local" | "remote",
+            cfg.baseUrl,
+            !!cfg.apiKey,
+          ),
           extraModels: toModelNames(rawExtra),
           temperatureByTask:
             (cfg.temperatureByTask as
