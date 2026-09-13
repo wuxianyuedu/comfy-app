@@ -191,15 +191,18 @@ describe("库内映射编辑", () => {
     /* 卡片头出现「恢复默认」（只有作者真的改过这条线时才渲染/可用）。 */
     const reset = screen.getByTestId("param-node-reset-size");
     expect(reset.hasAttribute("disabled")).toBe(false);
-    /* 被落到的那一颗圆点实心（`opacity: 1`），其余候选淡一档。 */
+    /* 圆点的「已连接」判据是**这颗点有没有线**，不是「它是不是生效落点」：库内
+     *  每个候选各画一条线（见 workflow-library-param-cards 的 `wiredDotKeys`），
+     *  带线的候选看着必须是连上的（用户口径：「这里连线断开了是什么原因」，
+     *  ISSUE #355）。这里两颗候选都有线，因此都是实心。 */
     const active = container.querySelector<HTMLElement>(
       '[data-wire-anchor="size?megapixels"]',
     )!;
-    const other = container.querySelector<HTMLElement>(
+    const sibling = container.querySelector<HTMLElement>(
       '[data-wire-anchor="size?width"]',
     )!;
     expect(active.style.opacity).toBe("1");
-    expect(other.style.opacity).toBe("0.55");
+    expect(sibling.style.opacity).toBe("1");
   });
 
   it("有模式而只读时圆点给出「怎么改」的提示，没有模式则连提示都不给", () => {

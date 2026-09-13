@@ -206,21 +206,28 @@ function wireKey(wire: ParamWire): string {
  *  错位（用户口径：「改了缩放，后线的位置错乱」ISSUE #355）。除以缩放后，无论
  *  视口缩到 35% 还是放到 200%，线都钉在圆点上。
  *
- *  取自**容器与其父级**的 rect 之比：父级是外框里边距层（撑满、自身不缩放），
- *  容器是内容层（被贴了 `scale(z)`）—— 两者的比值就是作用在内容上的缩放，与
- *  容器自身有没有内容无关（容器 `w-fit` 时其布局宽度也可能为 0）。
+ *  **口径 = 容器自己的「屏幕尺寸 / 布局尺寸」之比**：`getBoundingClientRect()`
+ *  给视觉（被祖先 transform 缩放过的）尺寸，`offsetWidth/Height` 给布局（未缩放）
+ *  尺寸，两者的比值就是作用在这一层上的 CSS 缩放，与祖先层级怎么摆无关。
+ *
+ *  不能再拿「容器与其父级的 rect 之比」：连线层的容器（`relative w-fit`）与它的
+ *  父级（视口内容层）**都在被缩放的那一层之内**，两个 rect 同比缩放、比值恒为 1
+ *  —— 缩放永远测不出来，线按屏幕像素画在局部坐标系里，放大一倍就偏一倍
+ *  （用户口径：「拖动的线直接飘向左侧」，ISSUE #355）。
  *
  *  平移（`translate`）不需要额外处理：它在锚点 rect 与容器 rect 的差值里自然
  *  抵消。 */
 export function wireScale(container: HTMLElement): number {
-  const frame = container.parentElement;
-  if (!frame) return 1;
-  const outer = frame.getBoundingClientRect();
-  const inner = container.getBoundingClientRect();
-  /* 量不到（布局未就绪 / 单测里没钉 rect）时按「没有缩放」处理：宁可线粗一点，
+  const rect = container.getBoundingClientRect();
+  /* 布局尺寸取**两个方向里量得到的那个**：容器可能是一维放大的（`w-fit` 的横向
+   *  宽、纵向由内容撑高），任一方向为 0 时另一个方向仍能给出缩放。 */
+  const byWidth =
+    container.offsetWidth > 0 ? rect.width / container.offsetWidth : 0;
+  const byHeight =
+    container.offsetHeight > 0 ? rect.height / container.offsetHeight : 0;
+  const scale = byWidth > 0 ? byWidth : byHeight;
+  /* 量不到（布局未就绪 / 单测里没钉尺寸）时按「没有缩放」处理：宁可线粗一点，
    *  也不把线按一个猜出来的倍率画到天边。 */
-  if (!(outer.width > 0) || !(inner.width > 0)) return 1;
-  const scale = outer.width / inner.width;
   return Number.isFinite(scale) && scale > 0 ? scale : 1;
 }
 
@@ -243,10 +250,35 @@ export function rectInContainer(
   };
 }
 
+/** 锚点朝向**目标**的那一条边上的出线点（局部坐标）。
+ *
+ *  连线两端各挂在一颗 12px 的圆点上：线应当从圆点**背向卡片**的那一侧出去，
+ *  而不是从圆心穿过去（穿圆心会让线头切进卡片里）。朝向由目标点决定 —— 目标在
+ *  右侧就从圆点右缘出线，在左侧就从左缘出线。
+ *
+ *  为什么不能用写死的一侧：左列的对外参数卡片圆点骑跨卡片**右**缘（线向右去宿主
+ *  行），右列的对外输出参数卡片圆点骑跨卡片**左**缘（线向左去宿主输出行）。写死
+ *  「右缘 + 半颗点」在输出侧会把起点算到圆点右侧 18px 处 —— 拖动起点因此落在光标
+ *  的另一侧，预览线看着「飘向左边」（ISSUE #355）。
+ *
+ *  同一侧时取外缘（不穿过圆心），另一侧时取另一外缘；水平间距为 0（两点同一列）
+ *  时给圆心，线不会凭空横向折出一截。 */
+function edgePointToward(
+  box: { left: number; width: number; top: number; height: number },
+  targetX: number,
+): { x: number; y: number } {
+  const centerX = box.left + box.width / 2;
+  const y = box.top + box.height / 2;
+  if (Math.abs(targetX - centerX) < 0.5) return { x: centerX, y };
+  const x = targetX > centerX ? box.left + box.width : box.left;
+  return { x, y };
+}
+
 /** 量出每条线两端的锚点，转成相对容器的坐标并给出贝塞尔路径。
  *
- *  起点 = 卡片那颗小圆点的**外侧边缘**（= 圆点锚点右沿 + 半颗圆点），与画布上
- *  React Flow 的连线起点口径一致：线从端点外缘出发，不会切进卡片里。
+ *  两端各挂在 12px 的圆点上：起点取圆点**朝向终点**的那条外缘（见
+ *  `edgePointToward`），与画布上 React Flow 的连线起点口径一致 —— 线从端点外缘
+ *  出发，不会切进卡片里，也不会从圆点穿过去。
  *  终点 = 宿主那一行的圆点圆心（找不到圆点时退到行左沿中心）。
  *
  *  所有坐标都换算到容器的局部坐标系（见 `rectInContainer`）—— 视口缩放不改变
@@ -272,10 +304,14 @@ export function measureWires(
       if (!hostDot || !cardDot) continue;
       const a = rectInContainer(hostDot, container, scale);
       const b = rectInContainer(cardDot, container, scale);
-      const x1 = a.left + a.width + a.width / 2;
-      const y1 = a.top + a.height / 2;
-      const x2 = b.left + b.width / 2;
-      const y2 = b.top + b.height / 2;
+      /* 输出侧方向相反：宿主输出行圆点（左）→ 卡片圆点（右）。两端各取朝向
+       *  对方的那一条外缘，线不会被圆点或卡片切进去。 */
+      const from = edgePointToward(a, b.left + b.width / 2);
+      const to = edgePointToward(b, a.left + a.width / 2);
+      const x1 = from.x;
+      const y1 = from.y;
+      const x2 = to.x;
+      const y2 = to.y;
       const dx = Math.max(Math.abs(x2 - x1) / 2, 16);
       out.push({
         key: wireKey(wire),
@@ -312,11 +348,15 @@ export function measureWires(
     if (!from || !to) continue;
     const a = rectInContainer(from, container, scale);
     const b = rectInContainer(to, container, scale);
-    const x1 = a.left + a.width + a.width / 2;
-    const y1 = a.top + a.height / 2;
-    /* 圆点：终点取圆心（线正好收在点上）；退到整行时取左沿中线（线头停在行边）。 */
-    const x2 = dot ? b.left + b.width / 2 : b.left;
-    const y2 = b.top + b.height / 2;
+    /* 终点取哪一处：有圆点时取**圆心**（线正好收在点上），退到整行时取行左沿
+     *  中线（线头停在行边）。先定终点的参考 x，起点再据此取朝向它的那条边。 */
+    const endX = dot ? b.left + b.width / 2 : b.left;
+    const endY = b.top + b.height / 2;
+    const start = edgePointToward(a, endX);
+    const x1 = start.x;
+    const y1 = start.y;
+    const x2 = endX;
+    const y2 = endY;
     /* 水平间距的一半作控制点 —— 线从圆点平出、到宿主行平入，不会被卡片
      * 拐角切出尖角。间距为负（卡片与宿主卡片重叠）时控制点会反向，用
      * `Math.abs` 兜住，线仍是一条平滑的 S 形。 */
@@ -351,12 +391,16 @@ function dragPath(
   const scale = wireScale(container);
   const box = container.getBoundingClientRect();
   const a = rectInContainer(from, container, scale);
-  const x1 = a.left + a.width + a.width / 2;
-  const y1 = a.top + a.height / 2;
   /* 光标是**屏幕**坐标，同样要除缩放回到容器坐标系 —— 否则缩小时预览线
    *  会明显慢于/快于光标，「拖不准」。 */
   const x2 = (point.x - box.left) / scale;
   const y2 = (point.y - box.top) / scale;
+  /* 起点取**朝向光标**的那条外缘：右列的输出卡片圆点骑跨卡片左缘，光标在它左边
+   *  时线必须从左侧出线。写死右缘会把起点算到光标的另一侧 —— 用户看到的正是
+   *  「往右拖，线却飘向左侧」（ISSUE #355）。 */
+  const start = edgePointToward(a, x2);
+  const x1 = start.x;
+  const y1 = start.y;
   const dx = Math.max(Math.abs(x2 - x1) / 2, 16);
   return `M ${x1} ${y1} C ${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`;
 }
@@ -438,8 +482,12 @@ export function WorkflowParamWires({
     if (!onConnect) return;
     const down = (event: PointerEvent) => {
       const target = event.target as HTMLElement | null;
-      const raw =
-        target?.closest<HTMLElement>("[data-wire-anchor]")?.dataset.wireAnchor;
+      const anchor = target?.closest<HTMLElement>("[data-wire-anchor]");
+      /* 只读锚点（右列对外输出卡片的圆点）不起手：输出不参与映射，拖它没有可
+       *  写入的键 —— 起了手却落不下来，读作「连不上」；而且它的圆心在卡片左缘，
+       *  手势会画向反方向（ISSUE #355）。 */
+      if (!anchor || anchor.hasAttribute("data-wire-readonly")) return;
+      const raw = anchor.dataset.wireAnchor;
       if (!raw) return;
       const separator = raw.indexOf("?");
       if (separator < 0) return;
