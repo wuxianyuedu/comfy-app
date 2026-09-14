@@ -55,7 +55,8 @@ export function WorkflowLibraryList({
 }: WorkflowLibraryListProps) {
   const empty = workflows.length === 0 && pendingRows.length === 0;
   return (
-    <div className="flex h-full w-80 shrink-0 flex-col border-r border-border-subtle bg-panel-deep">      {/* 搜索栏 */}
+    <div className="flex h-full w-80 shrink-0 flex-col border-r border-border-subtle bg-panel-deep">
+      {/* 搜索栏 */}
       <div className="border-b border-border-subtle p-3">
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-ink-fainter" />

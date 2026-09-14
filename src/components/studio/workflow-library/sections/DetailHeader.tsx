@@ -61,7 +61,8 @@ export function DetailHeader({
   const modes = workflow.modes ?? [];
 
   return (
-    <div className="border-b border-border-subtle px-5 py-4">      {/* 标题区与操作按钮组同排。窗口窄 / 详情面板被挤窄时**整组按钮换到第二行**，
+    <div className="border-b border-border-subtle px-5 py-4">
+      {/* 标题区与操作按钮组同排。窗口窄 / 详情面板被挤窄时**整组按钮换到第二行**，
           而不是被挤出去裁掉：面板根容器是 `overflow-hidden`，按钮组一旦溢出右侧就
           直接消失（此前 `shrink-0` + 无 `flex-wrap` 的形态下，小屏看不到「删除」这
           类最右侧的按钮）。与编辑器顶栏同一套退化顺序（见

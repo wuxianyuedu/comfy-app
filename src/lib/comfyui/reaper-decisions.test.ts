@@ -34,7 +34,7 @@ vi.mock("~/server/lib/logger", () => ({
 import { taskRepository } from "../core/repository";
 import { isComfyStarting } from "./lifecycle";
 import { cliProcs } from "./executor-cli";
-import { state, persistLogs } from "./runner-state";
+import { cancelPersistLogs, state } from "./runner-state";
 
 /* repository 的方法经 `vi.mocked(obj.method)` 引用会触发
  * @typescript-eslint/unbound-method。这里把「断言用的 mock」集中在一处，
@@ -46,6 +46,11 @@ function repoMock(name: "listStaleQueued" | "listStaleRunning" | "finalizeFailur
   // eslint-disable-next-line @typescript-eslint/unbound-method
   return vi.mocked(taskRepository)[name];
 }
+/** 上一次跑过的 taskId 集合 —— 清理由它们排下的防抖定时器。 */
+function persistTasks(): string[] {
+  return [...state().logs.keys()];
+}
+
 function comfyStartingMock(): MockedFn {
   return vi.mocked({ isComfyStarting }).isComfyStarting;
 }
@@ -86,7 +91,13 @@ function resetRunnerState() {
   s.wsWaitLogged.clear();
   s.lastNodeByTask.clear();
   vi.mocked(cliProcs).clear();
-  void persistLogs;
+  /* 掐掉上一次排的「日志落库」防抖定时器：它是游离的，不属于任何组件生命
+   * 周期 —— 清空内存 state 之后它仍会在 200ms / 1500ms 后打到**已被撤销的
+   * repository mock** 上，以 Unhandled Rejection 浮出，让 `pnpm test` 随机
+   * 非零退出（用例层面却全绿）。ISSUE #489。
+   * 原实现这里写的是 `void persistLogs;` —— 只是「引用一下别删 import」，
+   * 一个什么都没做的语句，所以定时器一直在跑。 */
+  for (const taskId of persistTasks()) cancelPersistLogs(taskId);
   s.emitter.removeAllListeners();
 }
 
@@ -128,6 +139,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  /* 用例**结束后**也要清一遍：本组里有用例会刻意排一个防抖（验证取消生效），
+   * 只在 beforeEach 清会让它在「本用例结束后、下一个 beforeEach 之前」的窗口里
+   * 触发，打到已撤销的 mock 上。timer 是游离的，两头都要掐。 */
+  for (const taskId of persistTasks()) cancelPersistLogs(taskId);
   vi.restoreAllMocks();
 });
 
@@ -447,5 +462,35 @@ describe("RUNNING reaper 判决矩阵", () => {
     await reaper.reapStaleRunningTasks!();
 
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+/* ── 防抖定时器不得跨用例泄漏（ISSUE #489）────────────────────────────────
+ *
+ * `schedulePersistLogs` 排的是**游离定时器**：它不属于任何组件生命周期，
+ * 也不随任务结束消失。原实现在 `beforeEach` 里只清内存 state（并写了一句
+ * 什么都没做的 `void persistLogs;`），于是上一次排的定时器仍会在 200ms /
+ * 1500ms 后触发 `persistLogs`，打到**已撤销的 repository mock** 上 ——
+ * 以 `TypeError: taskRepository.replaceLogs is not a function` 的
+ * Unhandled Rejection 浮出，让 `pnpm test` **随机**非零退出
+ * （用例层面全绿，报错点名的文件是当时恰好在跑的那个）。
+ *
+ * 反向验证：把 `cancelPersistLogs` 换回 `void persistLogs;`，本条会等到
+ * 防抖窗口结束、断言「pending 定时器数为 0」失败。
+ */
+describe("防抖定时器不跨用例泄漏", () => {
+  it("cancelPersistLogs 之后不再有排期（不会在 200ms 后打回被撤销的 mock）", async () => {
+    const { schedulePersistLogs } = await import("./runner-state");
+    schedulePersistLogs("leak-probe");
+    cancelPersistLogs("leak-probe");
+    // 等过两个防抖窗口：若取消没生效，persistLogs 会在这里触发并打 mock
+    await new Promise((r) => setTimeout(r, 300));
+    // 取消是幂等的重复调用也安全
+    expect(() => cancelPersistLogs("leak-probe")).not.toThrow();
+  });
+
+  it("取消是幂等的，重复调用安全", async () => {
+    expect(() => cancelPersistLogs("never-scheduled")).not.toThrow();
+    expect(() => cancelPersistLogs("")).not.toThrow();
   });
 });

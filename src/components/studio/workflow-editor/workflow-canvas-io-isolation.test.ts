@@ -138,7 +138,8 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     );
     expect(nodes).toContain("@xyflow/react");
     expect(nodes).toContain("PortHandle");
-    /* 写入编排收在 hooks/ 里（第②层），经回调落库；画布只上抛。 */    const hook = stripComments(
+    /* 写入编排收在 hooks/ 里（第②层），经回调落库；画布只上抛。 */
+    const hook = stripComments(
       readFileSync(path.join(LIBRARY_DIR, "hooks/use-param-wiring.ts"), "utf8"),
     );
     expect(hook).toContain("applyWireEdit");
@@ -149,7 +150,8 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     );
     for (const forbidden of ["savePatch", "mutateAsync"]) {
       expect(canvas).not.toContain(forbidden);
-    }  });
+    }
+  });
 
   it("库内也画对外输出卡片列（左列说「要什么」，右列说「给什么」）", () => {
     const outputColumn = stripComments(
@@ -160,7 +162,8 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     );
     expect(outputColumn).toContain('side="left"');
     expect(outputColumn).toContain("endpoint");
-    /* 输出侧同样只让出端点槽位，不碰 React Flow。 */    for (const forbidden of ["@xyflow/react", "Handle", "onConnect"]) {
+    /* 输出侧同样只让出端点槽位，不碰 React Flow。 */
+    for (const forbidden of ["@xyflow/react", "Handle", "onConnect"]) {
       expect(outputColumn).not.toContain(forbidden);
     }
   });
@@ -172,7 +175,8 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     }
   });
 
-  it("工作流库不叠「对外参数映射层」（库内是 React Flow 画布，不是自绘连线层）", () => {    const preview = readFileSync(
+  it("工作流库不叠「对外参数映射层」（库内是 React Flow 画布，不是自绘连线层）", () => {
+    const preview = readFileSync(
       path.join(LIBRARY_DIR, "WorkflowCanvasNodePreview.tsx"),
       "utf8",
     );
@@ -194,7 +198,8 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
       "hooks/use-library-canvas-viewport.ts",
     ]) {
       expect(existsSync(path.join(LIBRARY_DIR, gone)), gone).toBe(false);
-    }  });
+    }
+  });
 
   it("对外参数清单只来自契约（按模式），不再逐节点列出工作流内部参数", () => {
     /* 「对外参数」是产品对用户承诺的那几个口子（提示词 / 尺寸 / 首帧…），

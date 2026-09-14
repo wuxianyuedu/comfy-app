@@ -65,7 +65,8 @@ export function DetailBody({
             <button
               type="button"
               onClick={onEdit}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-violet-700 dark:text-violet-300 transition-colors hover:bg-violet-500/10"            >
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-violet-700 dark:text-violet-300 transition-colors hover:bg-violet-500/10"
+            >
               <Maximize2 className="h-3 w-3" />
               在编辑器中打开
             </button>

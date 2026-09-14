@@ -25,7 +25,7 @@
  * 直接执行时（`node scripts/standalone-private-inputs.mjs`）清理
  * `.next/standalone`；被 import 时导出 `stripPrivateInputs(dir)` 供复用。
  */
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -60,6 +60,89 @@ export function stripPrivateInputs(dir, onRemoved) {
   return removed;
 }
 
+/* ── 开发期文件 / 内部门禁脚本：产物级白名单剔除 ──────────────────────────
+ *
+ * `next build` 的 file tracing 会把仓库根的**开发文件与整套 CI 门禁脚本**一起
+ * 复制进 `.next/standalone`（Turbopack 退化为「全项目追踪」的产物，见 §7.2）：
+ *
+ *   AGENTS.md / CHANGELOG.md / README.md           内部规范与变更史
+ *   eslint.config.js / playwright.config.ts /      开发与门禁配置
+ *   vitest.config.ts / typedoc.json / …
+ *   scripts/**（46 个文件 / 544K，含 16 个 *.cjs 门禁脚本）+ __pycache__
+ *
+ * 它们随 static 被编译期内嵌进 exe —— 解包即得内部规范全文与全部门禁脚本。
+ * 判断标准不是「多带了几百 K」，而是**它们不可能是任何 server code 的运行时
+ * 依赖**（路由跑的是 `.next/server/**` 的编译产物）。
+ *
+ * 为什么用**白名单**而不是再列一份黑名单：黑名单是欠完备的，每加一个根级文件
+ * 就要记得补一条（这正是上一次 `db.sqlite` 漏掉的原因）。这里反过来：scripts/
+ * 只保留**运行时真的会读**的那几个（判据是代码里有 `process.cwd()` + 路径拼接），
+ * 其余一律剔除；新增脚本默认被剔除，要留下必须显式加进 RUNTIME_SCRIPTS 并说明理由。
+ *
+ * 注意 RUNTIME_SCRIPTS 里保留 dev-launcher.ps1 有两个身份：`src-tauri/src/lib.rs`
+ * 的 `resolve_project_root()` 靠它存在来判断项目根，`build-desktop.mjs` 也会单独
+ * 把它拷进 static/scripts。删掉它壳会找不到项目根。
+ */
+export const RUNTIME_SCRIPTS = [
+  // src/app/api/helper/{install,status}/route.ts 直接把这份脚本当下载内容返回
+  "install-comfyapp-helper.ps1",
+  // src-tauri/src/lib.rs::resolve_project_root() 的项目根判据 + 壳的启动编排
+  "dev-launcher.ps1",
+];
+
+/** 产物根下不该随分发包出去的开发文件（相对产物根）。 */
+export const DEV_ARTIFACTS = [
+  "AGENTS.md",
+  "CHANGELOG.md",
+  "README.md",
+  "components.json",
+  "drizzle.config.ts",
+  "eslint.config.js",
+  "playwright.config.ts",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  "prettier.config.js",
+  "tsconfig.json",
+  "typedoc.json",
+  "vitest.config.ts",
+  // TypeScript 增量编译缓存：构建期产物，不是运行时依赖
+  "tsconfig.tsbuildinfo",
+  "__pycache__",
+];
+
+/**
+ * 剔除开发期文件与内部门禁脚本（白名单保留 RUNTIME_SCRIPTS）。
+ *
+ * @param {string} dir 产物目录（`.next/standalone` 或 `src-tauri/static`）
+ * @param {(name: string) => void} [onRemoved] 每删一项的回调（用于日志）
+ * @returns {string[]} 实际删掉的条目名
+ */
+export function stripDevArtifacts(dir, onRemoved) {
+  const removed = [];
+  for (const name of DEV_ARTIFACTS) {
+    const p = join(dir, name);
+    if (existsSync(p)) {
+      rmSync(p, { recursive: true, force: true });
+      removed.push(name);
+      onRemoved?.(name);
+    }
+  }
+  // scripts/：白名单之外一律剔除（新增脚本默认不进产物）
+  const scriptsDir = join(dir, "scripts");
+  if (existsSync(scriptsDir)) {
+    const keep = new Set(RUNTIME_SCRIPTS);
+    for (const name of readdirSync(scriptsDir)) {
+      if (keep.has(name)) continue;
+      rmSync(join(scriptsDir, name), { recursive: true, force: true });
+      removed.push(`scripts/${name}`);
+      onRemoved?.(`scripts/${name}`);
+    }
+    // 全部被剔（未来 RUNTIME_SCRIPTS 变空）时不留空目录
+    if (readdirSync(scriptsDir).length === 0) rmSync(scriptsDir, { recursive: true, force: true });
+  }
+  return removed;
+}
+
 /** 作为脚本直接执行：清理 `.next/standalone`。 */
 function main() {
   const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -72,8 +155,14 @@ function main() {
   const removed = stripPrivateInputs(standalone, (name) => {
     console.log(`[standalone-clean] 已剔除开发机私有输入 .next/standalone/${name}`);
   });
+  const devRemoved = stripDevArtifacts(standalone, (name) => {
+    console.log(`[standalone-clean] 已剔除开发期文件 .next/standalone/${name}`);
+  });
   if (removed.length === 0) {
     console.log("[standalone-clean] ✓ 产物无开发机私有输入（.env / db.sqlite*）");
+  }
+  if (devRemoved.length === 0) {
+    console.log("[standalone-clean] ✓ 产物无开发期文件 / 内部门禁脚本");
   }
   return 0;
 }

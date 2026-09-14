@@ -28,7 +28,8 @@
  * 运行期由 `applyParamMapping` 按这张表严格落值。工作流库「画布节点」页签上的
  * 三列 React Flow 节点（卡片列 / 宿主卡片 / 输出卡片列）是同一份数据的视图
  * （`workflow-library-param-cards` + `WorkflowLibraryCanvas`）—— 拖线即编辑
- * 落点，映射没有第二套界面。 */
+ * 落点，映射没有第二套界面。
+ */
 
 import {
   resolveEntryDefault,
@@ -1105,7 +1106,8 @@ export function applyParamMapping(args: {
  * **画布几何（节点 id 前缀 / 卡片坐标 / 卡片高度推算）已随编辑器卡片一起删除**：
  * 卡片现在只出现在工作流库详情的「画布节点」页签，位置与三列布局由 React Flow
  * 的节点坐标（`workflow-library-wire-graph` 的 `layoutLibraryNodes`）承担，
- * 这里不需要第二套几何。 */
+ * 这里不需要第二套几何。
+ */
 
 /** 卡片头（标题）行高。 */
 export const PARAM_NODE_HEADER_H = 26;

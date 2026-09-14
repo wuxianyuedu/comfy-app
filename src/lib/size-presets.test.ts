@@ -9,7 +9,8 @@ import {
   megapixelsOf,
   nearestRatioPreset,
   normalizeAlignMultiple,
-  normalizeRatioLabel,  normalizeSizeSpec,
+  normalizeRatioLabel,
+  normalizeSizeSpec,
   parseSizeText,
   ratioOfLabel,
   resolutionDims,
@@ -27,7 +28,8 @@ import {
   sizeSpecSummary,
   sizeSpecToWxH,
   toMegapixelSpec,
-  toSizeSpec,  type SizeSpec,
+  toSizeSpec,
+  type SizeSpec,
 } from "./size-presets";
 
 describe("size-presets：分辨率表", () => {
@@ -189,6 +191,7 @@ describe("size-presets：尺寸表达（比例 + 分辨率 / 比例 + 百万像�
     expect(toSizeSpec(undefined)).toEqual(DEFAULT_SIZE_SPEC);
     expect(toSizeSpec(42)).toEqual(DEFAULT_SIZE_SPEC);
   });
+
   it("宽高 → `aspect_ratio` 端口该写的候选值", () => {
     /* 端口没声明候选 → 用标准短标签。 */
     expect(aspectLabelForDims(1280, 720)).toBe("16:9");
