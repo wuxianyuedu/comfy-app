@@ -183,12 +183,8 @@ export function WorkflowNodeOutputsRow({
           {oLabel}
         </span>
         <span
-          className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
-          style={{
-            fontFamily: "var(--font-sans)",
-            background: "var(--color-border-strong)",
-            color: "var(--color-ink-muted)",
-          }}
+          className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
+          style={{ fontFamily: "var(--font-sans)" }}
         >
           {typeDisplay(oType)}
         </span>
