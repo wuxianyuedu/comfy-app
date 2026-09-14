@@ -54,15 +54,28 @@ describe("设置页状态行：窄了整排换行，不压扁控件", () => {
 });
 
 describe("设置页视图：三条状态行都接上了这套判据", () => {
-  /* 视图源码只取 import 段之后的部分：否则「用了几次」会把 import 名本身也算进去。 */
-  const viewBody =
+  /* 视图已按分区拆到 components/（ISSUE #535 拆 SettingsPageView），三条状态行
+   * 分别在 LlmLocalSection（Ollama）/ ComfyuiSection / DatabaseSection 里，判据
+   * 扫这三份源码；本地 Btn 原语在 SettingsPrimitives（statusButtonClass 的唯一
+   * 落点）。取 import 段之后的部分：否则「用了几次」会把 import 名本身也算进去。 */
+  const readViewBody = (rel: string) =>
+    readFileSync(new URL(rel, import.meta.url), "utf8").split(
+      '} from "../settings-status-row-config";',
+    )[1] ?? "";
+  const viewBody = [
+    readViewBody("./components/LlmLocalSection.tsx"),
+    readViewBody("./components/ComfyuiSection.tsx"),
+    readViewBody("./components/DatabaseSection.tsx"),
+  ].join("\n");
+  /* Btn 原语单独取：它 import 路径是 "./settings-status-row-config"。 */
+  const primitivesBody =
     readFileSync(
-      new URL("./SettingsPageView.tsx", import.meta.url),
+      new URL("./components/SettingsPrimitives.tsx", import.meta.url),
       "utf8",
-    ).split('} from "./settings-status-row-config";')[1] ?? "";
+    ).split('} from "../settings-status-row-config";')[1] ?? "";
 
   it("本地 Btn 走 statusButtonClass，不再自己拼尺寸类", () => {
-    expect(viewBody).toContain("statusButtonClass(");
+    expect(primitivesBody).toContain("statusButtonClass(");
     expect(viewBody).not.toContain(
       "className={`bg-primary hover:bg-primary-hover rounded-lg px-4 py-2",
     );
