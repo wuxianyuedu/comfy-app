@@ -14,6 +14,8 @@
  *     作者与修改日期归 git log，写进注释会随代码搬迁过期失真
  *   - R11 Next 16 起代理约定名是 src/proxy.ts（`middleware` 已废弃，ISSUE #489）：
  *     文件被删 / 改回旧名 / 挪离 src 根都阻断
+ *   - R12 src/ 源码禁止内嵌控制字符（NUL 等，规范 §12.11）：带 NUL 的文件会被
+ *     git / diff / grep / 编辑器判成二进制，改动从此无法 Review
  *   - R5 超 900 行的视图文件进拆分候选（只提醒不阻断）：扫描范围必须同时含
  *     `src/components/` 与 `src/app/`，否则页面的纯展示视图完全不设防
  *     （settings/SettingsPageView.tsx 2498 行，ISSUE #535）
@@ -316,7 +318,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
 
   // ── R12：src/ 源码里不得内嵌控制字符（规范 §12.11）──
   // 判据来自一次真实事故：`lib/comfyui/markdown.ts` 曾用真的 NUL 字节做占位符
-  // 哨兵（` CODE<n> `），于是整个文件被 git / diff / grep / 编辑器当二进制：
+  // 哨兵（`\0CODE<n>\0`），于是整个文件被 git / diff / grep / 编辑器当二进制：
   // `git diff` 只回「Binary files differ」、`git show --stat` 显示 bin、
   // `grep -rn` 静默跳过。哨兵改成可打印形式后，这条规则负责防回潮。
   describe("R12：源码内嵌控制字符被阻断（规范 §12.11）", () => {
