@@ -72,8 +72,16 @@ pub fn derive_app_port() -> u16 {
   derive_app_port_for_root(&identity_root())
 }
 
+/// 规范化检出路径：转正斜杠 + 转小写 + 去尾斜杠（跨四语言约定，§1.1）。
+/// 本函数**不做**路径解析（不像 Node 的 path.resolve / Python 的 abspath
+/// 会拼 cwd）——绝对路径原样处理，保证同一检出恒定同端口，与
+/// scripts/app-port.mjs 的 normalizeRootForPort 行为一致。
+pub fn normalize_root_for_port(root: &str) -> String {
+  root.replace('\\', "/").to_lowercase().trim_end_matches('/').to_string()
+}
+
 pub fn derive_app_port_for_root(root: &str) -> u16 {
-  let normalized = root.replace('\\', "/").to_lowercase();
+  let normalized = normalize_root_for_port(root);
   3200 + (fnv1a32(normalized.as_bytes()) % 800) as u16
 }
 
@@ -173,5 +181,17 @@ mod tests {
     let port = super::derive_app_port_for_root("F:\\AI\\Other\\comfy-app-t3-branch");
     assert_eq!(port, 3305);
     assert!((3200..=3999).contains(&port));
+  }
+
+  #[test]
+  fn normalize_is_platform_and_cwd_independent() {
+    // 反斜杠/正斜杠、大小写、尾斜杠三种写法必须归一到同一个值——端口才谈得上
+    // 「同一检出恒定同端口」（多检出并行的前提，§1.4）。
+    let want = "f:/ai/other/comfy-app-t3-branch";
+    assert_eq!(super::normalize_root_for_port("F:\\AI\\Other\\comfy-app-t3-branch"), want);
+    assert_eq!(super::normalize_root_for_port("F:/AI/Other/comfy-app-t3-branch/"), want);
+    assert_eq!(super::derive_app_port_for_root("F:/AI/Other/comfy-app-t3-branch/"), 3305);
+    // POSIX 路径（含尾斜杠）同样稳定。
+    assert_eq!(super::normalize_root_for_port("/workspace/"), "/workspace");
   }
 }

@@ -20,16 +20,94 @@ export type ComfyLaunchPlan = {
  * <env>\Scripts（Windows）/ <env>\bin（POSIX），环境根是其上一级；
  * 嵌入式 / standalone-env 的 python.exe 直接位于环境根。
  */
-function envHasTorch(
+/** 解释器可执行名候选：Windows 是 python.exe；POSIX 是 bin/python（win 无后缀）。
+ *  不含 pythonw / pythonw.exe —— 它们吞掉 stdout/stderr，ComfyUI 启动出错时
+ *  看不到任何日志（排查不了），工坊只把 ComfyUI 当后端服务用。 */
+const INTERPRETER_NAMES: Record<"win32" | "posix", readonly string[]> = {
+  win32: ["python.exe"],
+  posix: ["python3", "python"],
+};
+
+/** venv 目录候选（含平台特定的可执行子目录）。
+ *  Windows 的 venv 把解释器放 `Scripts/`，POSIX 放 `bin/` —— 只认 `Scripts`
+ *  时，Linux/macOS 上明明建好的 .venv 会被判「找不到解释器」。 */
+function venvDirs(sourceRoot: string): string[] {
+  return [
+    path.join(sourceRoot, ".venv", "Scripts"),
+    path.join(sourceRoot, ".venv", "bin"),
+    path.join(sourceRoot, "venv", "Scripts"),
+    path.join(sourceRoot, "venv", "bin"),
+  ];
+}
+
+/** 在候选目录里找可用的解释器：按 INTERPRETER_NAMES 逐个试，命中即返回绝对路径。
+ *  `pyDir` 可能是「解释器所在目录」（.venv/Scripts 或 .venv/bin），也可能是
+ *  「环境根 / 源码根」（python_embeded、standalone-env，解释器直接在根下）。 */
+function findInterpreterIn(
+  pyDir: string,
+  exists: (p: string) => boolean
+): string | null {
+  for (const names of Object.values(INTERPRETER_NAMES)) {
+    for (const name of names) {
+      const candidate = path.join(pyDir, name);
+      if (exists(/*turbopackIgnore: true*/ candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+export function envHasTorch(
   pyDir: string,
   exists: (p: string) => boolean
 ): boolean {
   const base = path.basename(pyDir).toLowerCase();
   const envRoot =
     base === "scripts" || base === "bin" ? path.dirname(pyDir) : pyDir;
-  return exists(
-    /*turbopackIgnore: true*/ path.join(envRoot, "Lib", "site-packages", "torch")
+  // 依赖目录随平台命名：
+  //   Windows → <envRoot>/Lib/site-packages（大小写不敏感）
+  //   POSIX   → <envRoot>/lib/python3.x/site-packages（带版本号子目录）
+  // 只看 Windows 形态时，Linux 上明明装了 torch 也会判 hasDeps=false，
+  // 退化成「按优先级选中空壳解释器」（启动即 No module named 'torch'）。
+  if (
+    exists(
+      /*turbopackIgnore: true*/ path.join(envRoot, "Lib", "site-packages", "torch")
+    )
+  ) {
+    return true;
+  }
+  return sitePackagesDirs(envRoot, exists).some((sp) =>
+    exists(/*turbopackIgnore: true*/ path.join(sp, "torch"))
   );
+}
+
+/** 枚举环境根下的 POSIX site-packages 目录（`lib/python3.x/site-packages`）。
+ *
+ *  只用 `exists` 探有限个版本号，不做目录枚举 —— 原因有二：
+ *   ① 本模块整体是「注入 exists 的纯函数」，用真实 fs.readdirSync 会让注入了
+ *      虚拟路径的单测全部 miss（依赖判定的两个用例就是这么红起来的）；
+ *   ② Turbopack 对目录枚举的静态分析会退化成全项目追踪（仓库既有约定：
+ *      动态文件访问要收敛，见 docs §5 「pnpm run build 卡在 Collecting page data」）。
+ *  版本号候选覆盖 3.9~3.14：够用且恒定，不做无边界探测。 */
+const PYTHON_MINOR_CANDIDATES: readonly string[] = [
+  "3.9",
+  "3.10",
+  "3.11",
+  "3.12",
+  "3.13",
+  "3.14",
+];
+
+export function sitePackagesDirs(
+  envRoot: string,
+  exists: (p: string) => boolean
+): string[] {
+  const out: string[] = [];
+  for (const minor of PYTHON_MINOR_CANDIDATES) {
+    const sp = path.join(envRoot, "lib", `python${minor}`, "site-packages");
+    // 只收实际存在的，免得把一堆猜测路径喂给下游（判 torch 时还要再 exists 一次）。
+    if (exists(/*turbopackIgnore: true*/ sp)) out.push(sp);
+  }
+  return out;
 }
 
 /**
@@ -87,7 +165,7 @@ export function resolveComfyLaunchPlan(
     exists(/*turbopackIgnore: true*/ path.join(root, ".comfyui-desktop-2")) ||
     exists(/*turbopackIgnore: true*/ path.join(root, "manifest.json"));
 
-  // 对每个源码根枚举候选解释器目录。
+  // 对每个源码根枚举候选解释器目录（已含平台特定的可执行名）。
   // Desktop 实例：standalone-env 优先（ComfyUI 的官方运行时）。
   // 非 Desktop：python_embeded（便携）→ .venv/venv（源码内）→ standalone-env。
   for (const src of sourceRoots) {
@@ -96,29 +174,28 @@ export function resolveComfyLaunchPlan(
       ? [
           path.join(root, "standalone-env"), // 桌面：实例根的官方运行时
           path.join(parent, "standalone-env"), // 桌面：父级实例根（兼容配了源码根）
-          path.join(src, ".venv", "Scripts"), // 兜底：源码内 venv
-          path.join(src, "venv", "Scripts"), // 兜底：源码内 venv
+          ...venvDirs(src), // 兜底：源码内 venv
           path.join(src, "python_embeded"), // 便携兜底
           path.join(root, "python_embeded"),
-          src, // 极简：源码根直接带 python.exe
+          src, // 极简：源码根直接带解释器
         ]
       : [
           path.join(src, "python_embeded"), // 便携：源码根内
           path.join(root, "python_embeded"), // 便携：便携根（main.py 在 ComfyUI/ 子目录）
-          path.join(src, ".venv", "Scripts"), // venv/vendor：源码根内（含 torch）
-          path.join(src, "venv", "Scripts"), // venv：源码根内
+          ...venvDirs(src), // venv/vendor：源码根内（含 torch）
           path.join(root, "standalone-env"), // 桌面：实例根
           path.join(parent, "standalone-env"), // 桌面：父级实例根（兼容配了源码根）
-          src, // 极简：源码根直接带 python.exe
+          src, // 极简：源码根直接带解释器
         ];
     const present = pyDirs
-      .map((pyDir) => ({ pyDir, py: path.join(pyDir, "python.exe") }))
-      .filter((c) => exists(/*turbopackIgnore: true*/ c.py));
+      .map((pyDir) => ({ pyDir, py: findInterpreterIn(pyDir, exists) }))
+      .filter((c): c is { pyDir: string; py: string } => c.py !== null);
     if (present.length === 0) continue;
     // 两段选择：优先挑「装了 torch」的解释器——依赖装在哪个环境随安装方式
     // 漂移（老桌面在 standalone-env，vendor / 新版桌面在 ComfyUI/.venv，便携在
-    // python_embeded），固定优先级会选中空壳解释器（No module named 'torch'
-    // 秒退）。候选里谁都缺 torch 时退回原优先级，失败走启动日志的真实报错。
+    // python_embeded，Linux 在 .venv），固定优先级会选中空壳解释器（No module
+    // named 'torch' 秒退）。候选里谁都缺 torch 时退回原优先级，失败走启动日志的
+    // 真实报错。
     const withDeps = present.find((c) => envHasTorch(c.pyDir, exists));
     const chosen = withDeps ?? present[0]!;
     const mainPy = path.join(src, "main.py");
@@ -133,7 +210,9 @@ export function resolveComfyLaunchPlan(
 
   return {
     error:
-      `在 ${root} 下找到 main.py 但找不到可用的 python.exe。` +
-      "支持：python_embeded\\python.exe（便携版）、standalone-env\\python.exe（桌面版，配置实例根）、.venv\\Scripts\\python.exe（venv）。",
+      `在 ${root} 下找到 main.py 但找不到可用的 Python 解释器。` +
+      "支持：python_embeded/python(.exe)（便携版）、standalone-env/python(.exe)" +
+      "（桌面版，配置实例根）、.venv/Scripts/python.exe（Windows venv）、" +
+      ".venv/bin/python（Linux/macOS venv）。",
   };
 }
