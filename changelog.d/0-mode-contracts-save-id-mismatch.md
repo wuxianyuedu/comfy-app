@@ -1,0 +1,4 @@
+## Fixed
+
+- **「模型适配」弹窗的「模式契约」页签一保存就报 `Invalid option: expected one of "prompt"|"negative"|"aspect-ratio"|"megapixels"|…`（tRPC `llm.modeContractsSave`）**：契约口和适配器口是**两套 id**——契约口是工坊对用户的统一口径（`prompt` / `negative` / `size` / `reference-image` / `first-frame` / `last-frame`），适配器口才按接口请求体细分（契约的「尺寸」在适配器层拆成 `aspect-ratio` + `megapixels`）。但 `modeContractsSave` 的入参校验误用了 `WORKSHOP_INPUT_TYPES`（适配器那套），于是只要契约里含「尺寸」或「参考图」就被 zod 直接打回：从契约编辑器点进去的模式草稿默认来自内置契约（`builtInModeContract`），第二个口就可能是 `size`，所以「进去什么都没改、点保存」也必报错。现在入参校验改用契约口自己的值域 `isModeContractInputId`（含 `reference-image-2` 这类带序号的参考图槽位），并在错误信息里写明该用哪套 id。
+- 同时修掉同一处 id 值域的第二处不一致：`parseModeContracts`（落库前的归一化）原来也用基础 6 口过滤，内置契约里带序号的参考图口（图生图类第 2 张参考图，如 `reference-image-2`）会被**静默丢掉**——用户存完再读回来就少一口。现在两处同源，往返不丢口；契约口渲染时 `reference-image-2` 显示为「参考图 2」（与对外参数命名一致），适配器默认行仍只为第 1 张参考图生成字段名（第 2 张起没有约定字段名，留给用户自行补一行，不再猜）。
