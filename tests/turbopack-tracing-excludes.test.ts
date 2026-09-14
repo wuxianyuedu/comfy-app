@@ -108,6 +108,7 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
     "./changelog.d/**", // 89 个变更碎片、384K，纯文档数据
     "./src/**/*.test.ts", // 143 个测试文件，路由只 import 编译产物，测试是死重量
     "./src/**/*.test.tsx",
+    "./log/**", // 运行期输出，经 instrumentation 的 nft 旁路进产物
   ])("关键目录 %s 仍在排除清单里", (entry) => {
     expect(
       config.includes(entry),

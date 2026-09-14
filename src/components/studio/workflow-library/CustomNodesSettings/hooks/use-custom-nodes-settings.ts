@@ -104,6 +104,18 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   const [logs, setLogs] = useState<{ level: string; msg: string }[]>([]);
   const consoleRef = useRef<HTMLDivElement>(null);
   const logsRef = useRef<HTMLDivElement>(null);
+  /* 卸载标记：见 fetchSettings 的 finally —— 那里有一个「让完成后提示停留
+   * 800ms」的 setTimeout，它同样是一条脱离组件生命周期的链路。卸载后触发会
+   * 落到已拆除的环境上（test 里表现为 React 读 window 抛
+   * `ReferenceError: window is not defined`，`pnpm test` 因此随机非零退出，
+   * 而用例层面全绿）。ISSUE #489。 */
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   // 原始 manifest（classType → 完整 spec），独立于 refreshCustomNodes() 填充的
   // 注册表：即使对话框刚打开、尚无消费者调用 refresh，也能渲染预览卡片。每次解析
@@ -277,9 +289,13 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     } catch (e) {
       setSaveErr("读取配置失败：" + String(e));
     } finally {
+      if (!aliveRef.current) return;
       setLoading(false);
       // 保留最终进度行短暂可见，让用户看到「完成」再消失；下次重置时清除。
-      setTimeout(() => setProgress({ phase: "", done: 0, total: 0, discovered: 0, parent: "", msg: "" }), 800);
+      setTimeout(() => {
+        if (!aliveRef.current) return;
+        setProgress({ phase: "", done: 0, total: 0, discovered: 0, parent: "", msg: "" });
+      }, 800);
     }
   }, []);
 

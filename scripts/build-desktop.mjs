@@ -31,7 +31,10 @@ import { fileURLToPath } from "node:url";
 
 // 开发机私有输入（.env / db.sqlite*）的剔除清单与实现：与 `pnpm build` 的
 // 收尾步骤共用同一份，避免两处清单各写一套后静默漂移。
-import { stripPrivateInputs } from "./standalone-private-inputs.mjs";
+import {
+  stripDevArtifacts,
+  stripPrivateInputs,
+} from "./standalone-private-inputs.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -140,6 +143,13 @@ rmSync(join(staticDir, "node_modules", ".cache"), { recursive: true, force: true
 // 分发产物必须是「干净安装」，配置文件由用户侧自行提供。
 stripPrivateInputs(staticDir, (name) => {
   console.log(`[build-desktop]   §分发卫生 已剔除开发机私有输入 static/${name}`);
+});
+// 开发期文件与内部门禁脚本同理：`next build` 的全项目 tracking 会把 AGENTS.md /
+// CHANGELOG.md / 各 *.config.* 与 **整套 scripts/**（含 16 个 *.cjs 门禁脚本）
+// 复制进产物，进而随 static 被内嵌进 exe。清单与实现在
+// scripts/standalone-private-inputs.mjs（白名单保留运行时真的会读的那几个）。
+stripDevArtifacts(staticDir, (name) => {
+  console.log(`[build-desktop]   §分发卫生 已剔除开发期文件 static/${name}`);
 });
 cpSync(join(root, ".next", "static"), join(staticDir, ".next", "static"), { recursive: true });
 if (existsSync(join(root, "public"))) {

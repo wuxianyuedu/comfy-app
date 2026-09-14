@@ -39,6 +39,22 @@ async function forward(req: Request, router: AnyRouter): Promise<Response> {
 }
 
 /**
+ * 把一个已经拿到的 `Request` 转发给指定 router。
+ *
+ * 用途：测试中途用 `server.use()` 换一条**可控 router**（例如让某个 procedure
+ * 卡住到我们显式放行），而不必重建 MSW server。
+ *
+ * @param req 原始请求
+ * @param router 承接它的 tRPC router
+ */
+export async function forwardForTest(
+  req: Request,
+  router: AnyRouter,
+): Promise<Response> {
+  return forward(req, router);
+}
+
+/**
  * 建立一个把 `/api/trpc/*` 请求转发给 `router` 的 MSW server。
  *
  * 用法（每个测试文件）：

@@ -70,6 +70,20 @@ const config = {
       "./start-tauri*/**",
     ],
   },
+  // standalone 产物**必须显式包含** Next 自带的两份运行时脚本。
+  //
+  // 为什么必须显式（实测，ISSUE #489）：Turbopack 的 tracing 对
+  // `require("next/dist/compiled/next-server/app-route-turbo.runtime.prod.js")`
+  // 这类**动态 require 字符串**只追踪到被 middleware 图命中的那一份
+  // （app-page-turbo），app-route-turbo 一份都不在 nft 清单里。
+  // 后果不是少个文件，而是**所有 API 路由 500**：
+  //   `Failed to load external module .../app-route-turbo.runtime.prod.js:
+  //    Cannot find module` —— 只有页面（RSC 渲染）与 middleware 还能工作，
+  //   于是「首页 200、接口全 500」，看起来像业务 bug，实际是产物缺口。
+  // 定位手法见规范 launch-and-build.md §7.4。
+  outputFileTracingIncludes: {
+    "/**": ["./node_modules/next/dist/compiled/next-server/*runtime.prod.js"],
+  },
   // tsconfig paths 在无 baseUrl（TS6/7 已移除）时 Next 不自动生成 alias，手动补齐
   turbopack: {
     resolveAlias: {
