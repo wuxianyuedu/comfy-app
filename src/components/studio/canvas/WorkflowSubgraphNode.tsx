@@ -2,6 +2,7 @@
 /* Extracted WorkflowSubgraphNode (ComfyUI subgraph wrapper renderer).
  * Originally inside WorkflowCanvasEditor.tsx. */
 import React, { useState } from "react";
+import { useTheme } from "next-themes";
 
 import { Handle, Position } from "@xyflow/react";
 import {
@@ -22,11 +23,15 @@ import { StringTextarea } from "../StringTextarea";
 import { useIOEditContext, IoCheckbox } from "./IOEditContext";
 import { SubgraphHeader } from "./SubgraphHeader";
 import { useHoverElevation } from "../workflow-editor/HoverElevation";
+import { resolveAnchorCylinder } from "./workflow-node-palette";
 export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ data, selected }: { data: WorkflowSubgraphData; selected?: boolean }) {
   const io = useIOEditContext();
   /* 悬浮置顶：与 FlowNode 同一套语义（ISSUE #400）—— 鼠标指着的子图卡片
    *  也要压住连线。状态在本节点内，悬浮进出不影响其余节点。 */
   const { hoverHandlers, hoverRef } = useHoverElevation();
+  /* 收起态的锚柱跟主题联动（浅色下白描白会让锚柱整个消失）。 */
+  const { resolvedTheme } = useTheme();
+  const anchor = resolveAnchorCylinder(resolvedTheme);
 
   /* viewport zoom is NO LONGER subscribed here — see FlowNode /
    *  FrostLayer: only frosted (bypass / disabled) nodes need to track zoom.
@@ -139,7 +144,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
 
   return (
     <div
-      className={`relative flex flex-col rounded-lg border shadow-[0_6px_22px_rgba(0,0,0,0.6)] ${
+      className={`relative flex flex-col rounded-lg border shadow-[0_6px_22px_var(--color-shadow-strong)] ${
         nodeMode !== 0 ? "bg-transparent" : "bg-node"
       }`}
       ref={hoverRef}
@@ -230,11 +235,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                   width: 6,
                   height: cylH(wiredInputs.length),
                   borderRadius: 999,
-                  background:
-                    "linear-gradient(180deg, #d4d4d8 0%, #52525b 50%, #18181b 100%)",
-                  border: "1px solid rgba(255,255,255,0.45)",
-                  boxShadow:
-                    "inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.6)",
+                  background: anchor.gradient,
+                  border: anchor.border,
+                  boxShadow: anchor.boxShadow,
                   zIndex: 10,
                 }}
               />
@@ -250,11 +253,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                   width: 6,
                   height: cylH(cleanedOutputs.length),
                   borderRadius: 999,
-                  background:
-                    "linear-gradient(180deg, #d4d4d8 0%, #52525b 50%, #18181b 100%)",
-                  border: "1px solid rgba(255,255,255,0.45)",
-                  boxShadow:
-                    "inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.6)",
+                  background: anchor.gradient,
+                  border: anchor.border,
+                  boxShadow: anchor.boxShadow,
                   zIndex: 10,
                 }}
               />
@@ -305,7 +306,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
       {!isCollapsed && pinRows > 0 && (
         <div
           className="border-border-strong border-b py-0.5"
-          style={{ background: "rgba(255,255,255,0.015)" }}
+          style={{ background: "var(--color-subtle)" }}
         >
             {Array.from({ length: pinRows }).map((_, rowIdx) => {
               const inEntry = connInputs[rowIdx];

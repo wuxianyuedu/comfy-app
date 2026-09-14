@@ -80,7 +80,7 @@ export function RgthreeFastGroupsBypasserBody({
                 background: bypass
                   ? "rgba(236, 72, 153, 0.55)"
                   : "rgba(63, 63, 70, 0.55)",
-                border: "1px solid rgba(255,255,255,0.18)",
+                border: "1px solid var(--color-border-strong)",
                 position: "relative",
                 cursor: "pointer",
                 flex: "0 0 auto",
@@ -151,8 +151,8 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
       <div
         className="flex items-center justify-between rounded px-1.5 py-[3px] text-[10px] font-medium uppercase"
         style={{
-          background: "rgba(255, 255, 255, 0.04)",
-          color: "rgba(255, 255, 255, 0.55)",
+          background: "var(--color-subtle)",
+          color: "var(--color-ink-soft)",
           letterSpacing: 0.4,
         }}
       >
@@ -171,10 +171,10 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
         </span>
         <span
           className="inline-flex items-center gap-1.5 text-[9px]"
-          style={{ color: "rgba(255, 255, 255, 0.36)", letterSpacing: 0.6 }}
+          style={{ color: "var(--color-ink-muted)", letterSpacing: 0.6 }}
         >
           <span>model</span>
-          <span style={{ color: "rgba(255, 255, 255, 0.18)" }}>•</span>
+          <span style={{ color: "var(--color-ink-faintest)" }}>•</span>
           <span>clip</span>
         </span>
       </div>
@@ -184,9 +184,9 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
         <div
           className="rounded px-1.5 py-3 text-center text-[10px]"
           style={{
-            background: "rgba(0, 0, 0, 0.25)",
-            color: "rgba(255, 255, 255, 0.30)",
-            border: "1px dashed rgba(255, 255, 255, 0.08)",
+            background: "var(--color-subtle)",
+            color: "var(--color-ink-muted)",
+            border: "1px dashed var(--color-border-strong)",
           }}
         >
           暂无 Lora — 点击下方按钮添加
@@ -209,12 +209,12 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
             <div
               key={`pll-r-${index}`}
               className="flex items-center gap-2 rounded px-1.5 py-[3px] text-[11px]"
-              style={{ background: "rgba(0, 0, 0, 0.30)" }}
+              style={{ background: "var(--color-subtle)" }}
             >
               <span
                 className="min-widget-0 flex-1 truncate"
                 style={{
-                  color: name ? "rgba(255, 255, 255, 0.85)" : "rgba(255, 255, 255, 0.30)",
+                  color: name ? "var(--color-ink-bright)" : "var(--color-ink-fainter)",
                 }}
                 title={name}
               >
@@ -223,7 +223,7 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
               {modelStr !== undefined && (
                 <span
                   className="shrink-0 tabular-nums"
-                  style={{ color: "rgba(255, 255, 255, 0.55)", fontSize: 10 }}
+                  style={{ color: "var(--color-ink-soft)", fontSize: 10 }}
                 >
                   {modelStr}
                 </span>
@@ -231,7 +231,7 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
               {clipStr !== undefined && (
                 <span
                   className="shrink-0 tabular-nums"
-                  style={{ color: "rgba(255, 255, 255, 0.40)", fontSize: 10 }}
+                  style={{ color: "var(--color-ink-muted)", fontSize: 10 }}
                 >
                   {clipStr}
                 </span>
@@ -249,7 +249,7 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
         style={{
           background: "rgba(139, 92, 246, 0.10)",
           border: "1px solid rgba(139, 92, 246, 0.45)",
-          color: "rgba(255, 255, 255, 0.78)",
+          color: "var(--color-ink-bright)",
           pointerEvents: "none",
           userSelect: "none",
         }}
