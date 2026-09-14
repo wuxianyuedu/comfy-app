@@ -175,15 +175,20 @@ export function shotSizeToExposed(
   };
 }
 
-/** 选择状态 → 远端 API 通道认的尺寸字段（宽高比 + 百万像素字符串）。
+/** 选择状态 → 远端 API 通道认的尺寸字段（比例 + 百万像素 + 倍数）。
  *
- *  分辨率档同样换算成实际总像素 —— 直接透传 "1k" 这类档位名对远端没有意义。 */
+ *  与「模型适配」里契约的 `size` 口同一口径（适配器层就是这三行）：分辨率档
+ *  换算成实际总像素与对齐倍数后再传 —— 直接透传 "1k" 这类档位名对远端没有意义。 */
 export function shotSizeToRelay(
   state: ShotSizeState,
   scene: SizeScene = "image",
-): { aspectRatio: string; megapixels: string } {
+): { aspectRatio: string; megapixels: string; multiple: AlignMultiple } {
   const exposed = shotSizeToExposed(state, scene);
-  return { aspectRatio: exposed.aspect, megapixels: String(exposed.megapixels) };
+  return {
+    aspectRatio: exposed.aspect,
+    megapixels: String(exposed.megapixels),
+    multiple: exposed.multiple,
+  };
 }
 
 /** 生成按钮旁的紧凑摘要（如 "3:4 / 1k"，百万像素档追加倍数 "16:9 / 2M / 64"）。

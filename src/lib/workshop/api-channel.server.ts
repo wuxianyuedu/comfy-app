@@ -124,9 +124,12 @@ export interface ApiImageRequest {
   model?: string;
   /** 工坊模式码（T2I / I2I / …）：有适配器时按它取字段映射 */
   mode?: string;
-  /** 统一输入：宽高比（如 "16:9"）/ 百万像素（如 "1M"）/ 输入图（URL 或 data URL） */
+  /** 统一输入：宽高比（如 "16:9"）/ 百万像素（如 "1M"）/ 宽高对齐倍数
+   *  （8/16/32/64）/ 输入图（URL 或 data URL）。三者构成工坊的「比例 +
+   *  百万像素 + 倍数」尺寸表达；选「分辨率」时由调用方换算后再传。 */
   aspectRatio?: string;
   megapixels?: string;
+  multiple?: number;
   image?: string;
 }
 
@@ -141,6 +144,7 @@ function unifiedImageInputs(req: ApiImageRequest): Partial<
     negative: req.negative ?? undefined,
     "aspect-ratio": req.aspectRatio ?? undefined,
     megapixels: req.megapixels ?? undefined,
+    multiple: req.multiple ?? undefined,
     image: req.image ?? undefined,
   };
 }

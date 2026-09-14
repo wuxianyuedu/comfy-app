@@ -1,6 +1,7 @@
 // Workshop API channel generation relay.
 //   POST /api/workshop-api/generate
-//     { kind: "image", prompt, negative?, size? }            → { url }
+//     { kind: "image", prompt, negative?, size?,
+//       aspectRatio?, megapixels?, multiple?, image? }        → { url }
 //     { kind: "video", prompt, image?, frames?, fps? }        → { url? , remoteTaskId? }
 //     { kind: "video", remoteTaskId }                         → { url } | { pending: true }
 // The relay keeps the provider apiKey server-side and normalizes heterogeneous
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
   const mode = strField(body, "mode");
   const aspectRatio = strField(body, "aspectRatio");
   const megapixels = strField(body, "megapixels");
+  const multiple = intField(body, "multiple", 1, 512);
   const image = strField(body, "image");
   const prompt = strField(body, "prompt") ?? "";
   const negative = strField(body, "negative");
@@ -74,6 +76,7 @@ export async function POST(req: NextRequest) {
         mode,
         aspectRatio,
         megapixels,
+        ...(multiple !== undefined ? { multiple } : {}),
         image,
       });
       return NextResponse.json({ url });

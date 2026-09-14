@@ -86,10 +86,18 @@ describe("shot-size-config", () => {
     expect(exposed.pixelLongEdge).toBeUndefined();
   });
 
-  it("远端通道拿到的百万像素不是档位名（分辨率档也要换算）", () => {
+  it("远端通道拿到的是「比例 + 百万像素 + 倍数」（分辨率档也要换算）", () => {
     const relay = shotSizeToRelay(state({ ratio: "16:9 横屏", clarity: "1k" }));
     expect(relay.aspectRatio).toBe("16:9");
     expect(relay.megapixels).toBe("0.59");
+    /* 与「模型适配」里契约 size 口的三行同口径。 */
+    expect(relay.multiple).toBe(64);
+
+    const mega = shotSizeToRelay(
+      state({ ratio: "16:9 横屏", clarity: "2M", multiple: 32 }),
+    );
+    expect(mega.megapixels).toBe("2");
+    expect(mega.multiple).toBe(32);
   });
 
   it("摘要：分辨率档只说「比例 + 像素」，百万像素档追加倍数", () => {
