@@ -11,7 +11,12 @@ import path from "path";
 
 const FILE = path.join(process.cwd(), "data", "app-settings.json");
 
-/** ComfyUI 默认端口（main.py 未传 --port 时的监听端口）。 */
+/** ComfyUI 默认端口（main.py 未传 --port 时的监听端口）。
+ *
+ *  与 `src/lib/endpoints.ts` 的分工：那里收的是「本机服务地址怎么拼」
+ *  （回环主机 + 各自的默认端口），这里保留端口常量本身 —— 它同时被启动器
+ *  与设置页读取，且 `0 = 未配置` 的语义由调用方（`configuredPortOf`）承担。
+ *  两处都不得再出现裸字面量 `8188`。 */
 export const COMFYUI_DEFAULT_PORT = 8188;
 
 export type VideoWorkflowPref = "auto" | "txt2video" | "img2video";

@@ -23,7 +23,8 @@
 // 进程列表确认「该路径的实例进程是否真的在运行」，再通过 PID→监听端口
 // 定位实际端口。端口上有别的 ComfyUI 响应 ≠ 配置路径的实例在运行。
 
-import { getSettingsSync } from "../app-settings";
+import { COMFYUI_DEFAULT_PORT, getSettingsSync } from "../app-settings";
+import { comfyUiBaseUrl, LOOPBACK_HOST } from "../endpoints";
 import { baseForLocalPort, queryInstanceByPath } from "./instance-port";
 import { queryNvidiaVram } from "./gpu-vram";
 import { logger } from "~/server/lib/logger";
@@ -46,13 +47,10 @@ const COMFY_WINDOW_PORT = 8000;
 function probeTargets(configuredPort: number): { port: number; url: string }[] {
   const targets = Array.from({ length: PROBE_RANGE + 1 }, (_, offset) => {
     const port = configuredPort + offset;
-    return { port, url: `http://127.0.0.1:${port}` };
+    return { port, url: comfyUiBaseUrl(port) };
   });
   if (!targets.some((t) => t.port === COMFY_WINDOW_PORT)) {
-    targets.push({
-      port: COMFY_WINDOW_PORT,
-      url: `http://127.0.0.1:${COMFY_WINDOW_PORT}`,
-    });
+    targets.push({ port: COMFY_WINDOW_PORT, url: comfyUiBaseUrl(COMFY_WINDOW_PORT) });
   }
   return targets;
 }
@@ -117,7 +115,7 @@ function forceIpv4Host(raw: string): string {
 
     const url = new URL(raw);
 
-    if (url.hostname === "localhost") url.hostname = "127.0.0.1";
+    if (url.hostname === "localhost") url.hostname = LOOPBACK_HOST;
 
     return url.toString().replace(/\/$/, "");
 
@@ -134,7 +132,7 @@ function forceIpv4Host(raw: string): string {
  * ComfyUI 未运行时 resolveComfyBase 每次都要付完全部超时）。 */
 async function probePort(host: string, port: number): Promise<boolean> {
   try {
-    const res = await fetch(`http://${host}:${port}/system_stats`, {
+    const res = await fetch(`${comfyUiBaseUrl(port)}/system_stats`, {
       signal: AbortSignal.timeout(300),
     });
     return res.ok;
@@ -157,14 +155,18 @@ export async function resolveComfyBase(): Promise<string> {
   try {
     url = new URL(
       process.env.COMFYUI_BASE ??
-        `http://127.0.0.1:${settings.comfyuiPort && settings.comfyuiPort > 0 ? settings.comfyuiPort : 8188}`,
+        comfyUiBaseUrl(
+          settings.comfyuiPort && settings.comfyuiPort > 0
+            ? settings.comfyuiPort
+            : COMFYUI_DEFAULT_PORT,
+        ),
     );
-  } catch { url = new URL("http://127.0.0.1:8188"); }
-  const host = url.hostname === "localhost" ? "127.0.0.1" : url.hostname;
+  } catch { url = new URL(comfyUiBaseUrl(COMFYUI_DEFAULT_PORT)); }
+  const host = url.hostname === "localhost" ? LOOPBACK_HOST : url.hostname;
   const configuredPort =
     settings.comfyuiPort && settings.comfyuiPort > 0
       ? settings.comfyuiPort
-      : parseInt(url.port) || 8188;
+      : parseInt(url.port) || COMFYUI_DEFAULT_PORT;
 
   /* comfyuiPath 已配置：**先问进程事实**，再谈探测（ISSUE #449）。
    *
@@ -196,7 +198,7 @@ export async function resolveComfyBase(): Promise<string> {
       logger.info(
         `[comfyui] Configured instance (pid=${found.pid}, via=${found.via}) starting, port not bound yet`,
       );
-      return `http://${host}:${configuredPort}`;
+      return comfyUiBaseUrl(configuredPort);
     }
     /* 没命中的两种含义必须分清（都是「不抛错」的老结论，见 ISSUE #344）：
      *   · unverified（进程表查询超时 / 高负载）→ 结果不可信，正在运行的实例
@@ -216,7 +218,9 @@ export async function resolveComfyBase(): Promise<string> {
    * 走到这里的前提是「问不到实例进程」——要么没配 comfyuiPath，要么按路径没
    * 命中（含查询失败/不可信），要么实例确实不是这个路径起的。 */
   if (await probePort(host, configuredPort)) {
-    _resolvedBase = `http://${host}:${configuredPort}`;
+    _resolvedBase = host === LOOPBACK_HOST
+      ? comfyUiBaseUrl(configuredPort)
+      : `http://${host}:${configuredPort}`;
     logger.info(`[comfyui] Connected on configured port :${configuredPort}`);
     return _resolvedBase;
   }
@@ -260,7 +264,7 @@ export async function resolveComfyBase(): Promise<string> {
         `；这不代表实例没在运行——若实例落在其它端口，请在 设置 → 创作后端 改「端口」`,
     );
   }
-  return `http://${host}:${configuredPort}`;
+  return comfyUiBaseUrl(configuredPort);
 }
 
 /** 端口探测的结果地址，但不写进会话缓存。
@@ -313,7 +317,7 @@ export async function probeComfyAtPort(port: number): Promise<string | null> {
    * 探错地方。这种情况下返回 null，交给调用方走通用探测（它会尊重
    * COMFYUI_BASE）。 */
   if (process.env.COMFYUI_BASE) return null;
-  return probeBaseOnce(`http://127.0.0.1:${port}`);
+  return probeBaseOnce(comfyUiBaseUrl(port));
 }
 
 /**
@@ -325,8 +329,10 @@ export function comfyBase(): string {
   if (_resolvedBase) return forceIpv4Host(_resolvedBase);
   const settings = getSettingsSync();
   const port =
-    settings.comfyuiPort && settings.comfyuiPort > 0 ? settings.comfyuiPort : 8188;
-  const raw = process.env.COMFYUI_BASE ?? `http://127.0.0.1:${port}`;
+    settings.comfyuiPort && settings.comfyuiPort > 0
+      ? settings.comfyuiPort
+      : COMFYUI_DEFAULT_PORT;
+  const raw = process.env.COMFYUI_BASE ?? comfyUiBaseUrl(port);
   return forceIpv4Host(raw);
 }
 

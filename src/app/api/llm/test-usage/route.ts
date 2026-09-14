@@ -1,43 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
-import { getLLMConfig } from "@/lib/llm/server";
 import {
-  extractBase64DataUrl,
-  extractMediaUrl,
-  extractRemoteTaskId,
-} from "@/lib/workshop/api-channel-shared";
-import {
-  VIDEO_POLL_TOTAL_MS,
-  pollRemoteVideoTask,
+  SUBMIT_PENDING_DETAIL,
+  USAGE_TEST_KINDS,
+  callChat,
+  callImage,
+  callVideo,
+  isRecord,
+  normalizeEndpointPath,
+  parseExtraJson,
+  resolveUpstream,
   saveMediaToLocalTemp,
-} from "~/lib/llm/video-task-util";
+  strField,
+} from "~/lib/llm/usage-test.server";
 import { errorMessage } from "~/lib/error-message";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/* chat / 生图 / 生视频的单次调用超时（生视频提交后若走任务制则由 video-task-util
- * 轮询取回，不受此上限约束，见 VIDEO_POLL_TOTAL_MS）。 */
-const CHAT_TIMEOUT_MS = 60_000;
-const MEDIA_TIMEOUT_MS = 180_000;
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
-
-function strField(rec: Record<string, unknown>, key: string): string {
-  const v: unknown = rec[key];
-  return typeof v === "string" ? v.trim() : "";
-}
-
-/** 取第一个非空白字符串（空串视为未填，继续向后回落）。 */
-function firstNonEmpty(...vals: Array<string | null | undefined>): string {
-  for (const v of vals) {
-    if (typeof v === "string" && v.trim() !== "") return v;
-  }
-  return "";
-}
-
+/**
+ * POST /api/llm/test-usage —— 按用途（chat / image / video）发起**一次真实调用**。
+ *
+ * 请求解析、连接参数回落（弹窗内填的 → 条目已保存的 → 全局）与上游调用都在
+ * `@/lib/llm/usage-test.server`，与「继续等待」路由（`./query`）逐字共用一份
+ * —— 两个动作对同一上游必须发出同一形状的请求，密钥解析也必须同一口径。
+ *
+ * 生视频走任务制时：内置一轮轮询（VIDEO_POLL_TOTAL_MS），仍未就绪即以
+ * `{ pending:true, taskId }` 返回，由 `./query` 接收「继续等待」，本路由
+ * **不**重新提交。
+ *
+ * 失败一律 200 + `{ ok:false, detail }`，前端按 detail 展示降级文案。
+ */
 export async function POST(req: NextRequest) {
   await getServerUser();
 
@@ -48,204 +41,74 @@ export async function POST(req: NextRequest) {
   const prompt = strField(rec, "prompt");
   const size = strField(rec, "size");
   const extraJson = strField(rec, "extraJson");
-  const typedKey = strField(rec, "apiKey");
-  const typedBase = strField(rec, "baseUrl");
-  let path = strField(rec, "path");
-  if (path !== "" && !path.startsWith("/")) path = `/${path}`;
 
-  if (!["chat", "image", "video"].includes(kind)) {
-    return NextResponse.json({
-      ok: false,
-      detail: `未知用途：${kind || "(空)"}`,
-    });
+  if (!(USAGE_TEST_KINDS as readonly string[]).includes(kind)) {
+    return NextResponse.json({ ok: false, detail: `未知用途：${kind || "(空)"}` });
   }
-  if (!name) {
-    return NextResponse.json({ ok: false, detail: "缺少模型名" });
-  }
-  if (!prompt) {
-    return NextResponse.json({ ok: false, detail: "请填写提示词" });
-  }
+  if (!name) return NextResponse.json({ ok: false, detail: "缺少模型名" });
+  if (!prompt) return NextResponse.json({ ok: false, detail: "请填写提示词" });
+
   // 条目名即模型参数值（设置页清单按模型名建条目）
   const model = name;
+  const up = await resolveUpstream(
+    name,
+    strField(rec, "baseUrl"),
+    strField(rec, "apiKey"),
+    normalizeEndpointPath(strField(rec, "path")),
+  );
+  if ("error" in up) return NextResponse.json({ ok: false, detail: up.error });
 
-  // 条目已保存的连接参数（独立密钥 / 接口地址），按名字在服务端解析
-  const cfg = await getLLMConfig();
-  const entry = cfg.extraModels?.find((e) => e.name === name);
-  const baseUrl = firstNonEmpty(typedBase, entry?.baseUrl, cfg.baseUrl);
-  const apiKey = firstNonEmpty(typedKey, entry?.apiKey, cfg.apiKey);
-  if (!baseUrl) {
-    return NextResponse.json({
-      ok: false,
-      detail: "接口地址为空：请在弹窗内填写，或先在条目里保存接口地址",
-    });
-  }
-
-  // 额外参数：必须是 JSON 对象，逐键合并进请求体（可覆盖默认字段）
-  let extra: Record<string, unknown> = {};
-  if (extraJson !== "") {
-    try {
-      const parsed: unknown = JSON.parse(extraJson);
-      if (!isRecord(parsed)) throw new Error("不是 JSON 对象");
-      extra = parsed;
-    } catch (e) {
-      return NextResponse.json({
-        ok: false,
-        detail: `额外参数不是有效的 JSON 对象：${errorMessage(e, "解析失败")}`,
-      });
-    }
-  }
-
-  const base = baseUrl.replace(/\/+$/, "");
-  const endpoint = `${base}${path}`;
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  const parsedExtra = parseExtraJson(extraJson);
+  if (!parsedExtra.ok) return NextResponse.json({ ok: false, detail: parsedExtra.detail });
+  const { extra } = parsedExtra;
 
   const startedAt = Date.now();
   try {
     if (kind === "chat") {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model,
-          messages: [{ role: "user", content: prompt }],
-          ...extra,
-        }),
-        signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
-      });
-      const payload: unknown = await res.json().catch(() => null);
-      if (!res.ok || !isRecord(payload)) {
-        const detail = isRecord(payload)
-          ? JSON.stringify(payload).slice(0, 240)
-          : `HTTP ${res.status}`;
-        return NextResponse.json({
-          ok: false,
-          detail: `HTTP ${res.status}：${detail}`,
-        });
-      }
-      const choices: unknown = payload.choices;
-      const first: unknown = Array.isArray(choices) ? choices[0] : undefined;
-      const message =
-        isRecord(first) && isRecord(first.message) ? first.message : null;
-      const content: unknown = message?.content;
-      const text =
-        typeof content === "string"
-          ? content
-          : Array.isArray(content)
-            ? content
-                .map((p) =>
-                  isRecord(p) && typeof p.text === "string" ? p.text : "",
-                )
-                .join("")
-            : "";
-      if (!text) {
-        return NextResponse.json({
-          ok: false,
-          detail: `调用成功但未解析到回复文本：${JSON.stringify(payload).slice(0, 240)}`,
-        });
-      }
+      const r = await callChat(up, model, prompt, extra);
+      if (!r.ok) return NextResponse.json({ ok: false, detail: r.detail });
       return NextResponse.json({
         ok: true,
         detail: "调用成功",
-        chatText: text,
+        chatText: r.text,
         elapsedMs: Date.now() - startedAt,
       });
     }
 
     if (kind === "image") {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model,
-          prompt,
-          n: 1,
-          ...(size !== "" ? { size } : {}),
-          ...extra,
-        }),
-        signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
-      });
-      const payload: unknown = await res.json().catch(() => null);
-      if (!res.ok) {
-        const detail = isRecord(payload)
-          ? JSON.stringify(payload).slice(0, 240)
-          : `HTTP ${res.status}`;
-        return NextResponse.json({
-          ok: false,
-          detail: `HTTP ${res.status}：${detail}`,
-        });
-      }
-      const url = extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
-      if (!url) {
-        return NextResponse.json({
-          ok: false,
-          detail: `调用成功但未解析到图片 URL / b64 数据：${JSON.stringify(payload).slice(0, 240)}`,
-        });
-      }
+      const r = await callImage(up, model, prompt, size, extra);
+      if (!r.ok) return NextResponse.json({ ok: false, detail: r.detail });
       /* 产出的图片落到本地 temp 子目录一份（不是只给远端 URL） */
-      const savedPath = await saveMediaToLocalTemp("image", name, url);
+      const savedPath = await saveMediaToLocalTemp("image", name, r.url);
       return NextResponse.json({
         ok: true,
         detail: "生成成功",
-        imageUrl: url,
+        imageUrl: r.url,
         savedPath,
         elapsedMs: Date.now() - startedAt,
       });
     }
 
     // ── video：提交（同步 URL 或任务 ID），任务制则轮询到完成或超时 ──
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ model, prompt, ...extra }),
-      signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
-    });
-    const payload: unknown = await res.json().catch(() => null);
-    if (!res.ok) {
-      const detail = isRecord(payload)
-        ? JSON.stringify(payload).slice(0, 240)
-        : `HTTP ${res.status}`;
-      return NextResponse.json({
-        ok: false,
-        detail: `HTTP ${res.status}：${detail}`,
-      });
+    const outcome = await callVideo(up, model, prompt, extra);
+    if (outcome.status === "error") {
+      return NextResponse.json({ ok: false, detail: outcome.detail });
     }
-    const directUrl = extractMediaUrl(payload);
-    if (directUrl) {
-      const savedPath = await saveMediaToLocalTemp("video", name, directUrl);
+    if (outcome.status === "pending") {
       return NextResponse.json({
         ok: true,
-        detail: "生成成功",
-        videoUrl: directUrl,
-        savedPath,
+        detail: SUBMIT_PENDING_DETAIL,
+        taskId: outcome.taskId,
+        pending: true,
         elapsedMs: Date.now() - startedAt,
       });
     }
-    const taskId = extractRemoteTaskId(payload);
-    if (!taskId) {
-      return NextResponse.json({
-        ok: false,
-        detail: `响应中未找到视频 URL 或任务 ID：${JSON.stringify(payload).slice(0, 240)}`,
-      });
-    }
-    const doneUrl = await pollRemoteVideoTask(base, path, model, taskId, headers);
-    if (doneUrl) {
-      const savedPath = await saveMediaToLocalTemp("video", name, doneUrl);
-      return NextResponse.json({
-        ok: true,
-        detail: "生成成功",
-        videoUrl: doneUrl,
-        savedPath,
-        elapsedMs: Date.now() - startedAt,
-      });
-    }
+    const savedPath = await saveMediaToLocalTemp("video", name, outcome.url);
     return NextResponse.json({
       ok: true,
-      detail: `任务已提交且仍在生成中（已等待 ${Math.round(VIDEO_POLL_TOTAL_MS / 1000)}s）。视频生成通常需要数十秒到几分钟，可点击「继续等待」再次查询，无需重新提交。`,
-      taskId,
-      pending: true,
+      detail: "生成成功",
+      videoUrl: outcome.url,
+      savedPath,
       elapsedMs: Date.now() - startedAt,
     });
   } catch (e) {

@@ -26,6 +26,7 @@ import type { Job } from "./runner-state";
 import { complete, fail } from "./executor-finalize";
 import { applyRawOverrides, type JsonRecord } from "./raw-overrides";
 import { trace } from "./trace";
+import { COMFYUI_DEFAULT_PORT } from "../app-settings";
 
 // 保持 executor.ts barrel 的 `applyRawOverrides` 导出不变
 //（纯逻辑已抽到 ./raw-overrides，这里仅透传）。
@@ -118,11 +119,11 @@ export async function executeViaComfyCli(job: Job) {
   log(taskId, "info", `→ executeViaComfyCli 入口（raw UI-format）`);
   const base = await resolveComfyBase();
   let host = "127.0.0.1";
-  let port = 8188;
+  let port = COMFYUI_DEFAULT_PORT;
   try {
     const u = new URL(base);
     host = u.hostname === "localhost" ? "127.0.0.1" : u.hostname;
-    port = parseInt(u.port) || 8188;
+    port = parseInt(u.port) || COMFYUI_DEFAULT_PORT;
   } catch {
     /* keep defaults */
   }

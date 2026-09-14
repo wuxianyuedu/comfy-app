@@ -1,12 +1,13 @@
 import "server-only";
 import type { ZodType } from "zod";
 import { llmConfigRepository, remoteModelRepository } from "@/lib/core/repository";
+import { OLLAMA_DEFAULT_BASE_URL } from "@/lib/endpoints";
 import { resolveTaskTemperature, splitExtraModels, foldRemoteToLocal, isLoopbackBaseUrl } from "./types";
 import type { LLMConfig, LLMMessage, LLMRequestOptions, LLMProviderType, RemoteModelEntry, RemoteModelKind, TaskType, LLMTool } from "./types";
 
 const ENV_DEFAULTS: LLMConfig = {
   provider: (process.env.LLM_PROVIDER as LLMProviderType) || "local",
-  baseUrl: process.env.LLM_BASE_URL ?? "http://localhost:11434/v1",
+  baseUrl: process.env.LLM_BASE_URL ?? OLLAMA_DEFAULT_BASE_URL,
   model: process.env.LLM_MODEL ?? "",
   extraModels: null,
   apiKey: process.env.LLM_API_KEY ?? null,

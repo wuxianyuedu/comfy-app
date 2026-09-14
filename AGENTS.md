@@ -41,6 +41,7 @@
 | UI/逻辑分离 | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时 | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)） |
 | 跨平台行为 / 端口与文档 | 新增按平台分叉的逻辑、改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs`，或**在文档/README 里写具体端口号** | §1.1、§3.1、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1 |
 | 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |
+| 复用/去重与常量收口 | 抽共享模块、加/改默认地址与端口、写新的质量门禁 | §12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口） |
 
 ## 硬规则（违反 = 提交被拒或必须回滚）
 
@@ -175,6 +176,20 @@
     确认一个都不命中、且用户内容伪造不出同形状。门禁 `scripts/check-file-structure.cjs`
     的 R12 按码位扫 `src/**` 的 `.ts`/`.tsx`（豁免只有制表符 / 换行 / 回车），
     pre-commit 第 2 步与 CI `File structure rules` 各跑一次。
+
+18. **禁止跨文件复制实现（孪生对），默认地址不得各处硬编码**（ISSUE #536 / 规范 §12.12、§12.14）：
+    - 同一段逻辑**逐行重合 ≥75% 且两边都 ≥60 行**即判定为「孪生」，由
+      `scripts/check-code-duplication.cjs` 阻断（棘轮 `scripts/.code-duplication-baseline.json`）。
+      修法是**抽共享模块让两边只留差异**，不是「两边一起改」；共享内核里不许放任何
+      一侧的传输层代码（`server-only` / Next 落盘 / 纯 Node 读文件都由入口注入）。
+    - 本机默认端口与回环地址只在 `src/lib/endpoints.ts` 定义一次，别处一律 import
+      （回环主机写 `127.0.0.1` 不写 `localhost`：Node fetch 会先解析成 `::1`）。
+
+19. **函数长度超 400 行即进拆分候选，按文件计数走棘轮**（ISSUE #536 / 规范 §12.13）：
+    `scripts/check-function-length.cjs` 阻断「新增巨型函数」（棘轮
+    `scripts/.function-length-baseline.json`，只许降不许升）。R5 管**文件**行数、
+    本条管**函数**行数，两条维度不可互相替代。括号配对只认 `()` `{}` `[]`——
+    把 `<` `>` 算进去会让 TSX 里的泛型/JSX 标签把深度漂负、函数尾永远找不到（静默漏报）。
 
 ## 快速排障
 
