@@ -323,9 +323,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     status === "SUCCEEDED" ? "完成" : status === "FAILED" ? "失败" : status === "CANCELLED" ? "已取消"
     : status === "RUNNING" ? `运行中 ${progress}%` : status ?? "—";
   const statusClass =
-    status === "FAILED" ? "bg-red-500/20 text-red-300"
-    : status === "SUCCEEDED" ? "bg-emerald-500/20 text-emerald-300"
-    : status === "RUNNING" ? "bg-violet-500/20 text-violet-300"
+    status === "FAILED" ? "bg-red-500/20 text-red-700 dark:text-red-300"
+    : status === "SUCCEEDED" ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+    : status === "RUNNING" ? "bg-violet-500/20 text-violet-700 dark:text-violet-300"
     : "bg-subtle text-ink-soft";
 
   const errorCount = visibleAll.filter((l) => l.level === "error").length;
@@ -353,7 +353,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         <FileText size={12} />
         执行日志
         {errorCount > 0 && (
-          <span className="rounded-full bg-rose-500/20 px-1 text-[10px] text-rose-300">
+          <span className="rounded-full bg-rose-500/20 px-1 text-[10px] text-rose-700 dark:text-rose-300">
             {errorCount}
           </span>
         )}
@@ -363,7 +363,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         <div
           className={overlayClass(
             "modal",
-            "z-50 flex items-center justify-center bg-black/20 p-4 backdrop-blur-sm dark:bg-black/60",
+            "z-50 flex items-center justify-center bg-canvas-deep p-4 backdrop-blur-sm dark:bg-black/60",
           )}
           onClick={(e) => {
             if (e.target === e.currentTarget) setOpen(false);
@@ -501,12 +501,12 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             >
               {valErrs.length > 0 && (
                 <div className="mb-2 rounded border border-red-500/40 bg-red-500/8 p-2">
-                  <div className="mb-1.5 text-[13px] font-semibold text-red-300">
+                  <div className="mb-1.5 text-[13px] font-semibold text-red-700 dark:text-red-300">
                     ⚠ 工作流验证错误（{valErrs.length}）
                   </div>
                   <ValidationErrorList errors={valErrs.slice(0, 12)} className="text-red-200/95" />
                   {valErrs.length > 12 && (
-                    <div className="mt-1 text-[12px] text-red-300/70">+{valErrs.length - 12} more…</div>
+                    <div className="mt-1 text-[12px] text-red-700 dark:text-red-300/70">+{valErrs.length - 12} more…</div>
                   )}
                 </div>
               )}

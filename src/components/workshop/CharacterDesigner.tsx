@@ -501,7 +501,7 @@ export function CharacterDesigner({
               <p className="text-primary mt-1 text-xs">{genStatus}</p>
             )}
             {genError && (
-              <p className="mt-1 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
+              <p className="mt-1 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-800 dark:text-red-300">
                 {genError}
               </p>
             )}
@@ -534,7 +534,7 @@ export function CharacterDesigner({
 
       {/* AI 润色失败提示：放在角色列表上方，与一句话生成区错误分离 */}
       {aiError && (
-        <p className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
+        <p className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-800 dark:text-red-300">
           {aiError}
         </p>
       )}
@@ -585,7 +585,7 @@ export function CharacterDesigner({
                 <button
                   type="button"
                   onClick={() => remove(character.id)}
-                  className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                  className="text-muted-foreground hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
                   aria-label="删除角色"
                 >
                   <Trash size={16} />
@@ -656,7 +656,7 @@ export function CharacterDesigner({
                   艺术风格（Skill）
                 </span>
                 <DarkSelect
-                  className="!border-(--color-border) !bg-(--color-subtle) text-sm"
+                  className="!border-border !bg-subtle text-sm"
                   value={character.skillSlug ?? ""}
                   onChange={(value) =>
                     update(character.id, { skillSlug: value || undefined })

@@ -164,12 +164,12 @@ export function WorkflowParamCard({
           }}
         />
         <span
-          className="min-w-0 flex-1 truncate text-[11px] font-semibold text-(--color-ink-bright)"
+          className="min-w-0 flex-1 truncate text-[11px] font-semibold text-ink-bright"
           title={`${classLabel} · ${hostNodeId}`}
         >
           {label}
           {idLabel && (
-            <span className="ml-1 font-mono text-[10px] font-normal text-(--color-ink-faint)">
+            <span className="ml-1 font-mono text-[10px] font-normal text-ink-faint">
               {idLabel}
             </span>
           )}
@@ -182,7 +182,7 @@ export function WorkflowParamCard({
             className={`nodrag nopan shrink-0 rounded p-0.5 transition-colors ${
               canReset
                 ? "text-ink-soft hover:bg-subtle hover:text-ink-bright"
-                : "cursor-default text-(--color-ink-fainter)"
+                : "cursor-default text-ink-fainter"
             }`}
             data-testid={`param-node-reset-${entryId}`}
             title={
@@ -225,8 +225,8 @@ export function WorkflowParamCard({
             <span
               className={`min-w-0 truncate ${
                 port.connected
-                  ? "text-(--color-ink-soft)"
-                  : "text-(--color-ink-fainter)"
+                  ? "text-ink-soft"
+                  : "text-ink-fainter"
               }`}
             >
               {port.name}

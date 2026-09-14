@@ -45,11 +45,11 @@ export function ProjectSwitcher({
   return (
     <div className="relative">
       <button
-        className="flex items-center gap-2 border-border-strong rounded-full border bg-linear-to-br from-(--color-subtle) to-(--color-surface-2) px-3.5 py-1.5 text-[12px] font-medium text-gray-100 shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-violet-400/40 hover:shadow-violet-500/15"
+        className="flex items-center gap-2 border-border-strong rounded-full border bg-linear-to-br from-(--color-subtle) to-(--color-surface-2) px-3.5 py-1.5 text-[12px] font-medium text-ink-bright shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-violet-400/40 hover:shadow-violet-500/15"
         onClick={onToggleMenu}
         title="项目列表"
       >
-        <span className="text-violet-300">▦</span>
+        <span className="text-violet-700 dark:text-violet-300">▦</span>
         <span className="max-w-[160px] truncate">{projectName}</span>
         <span className="text-ink-muted">▾</span>
       </button>
@@ -68,7 +68,7 @@ export function ProjectSwitcher({
                   onClick={() => onSwitch(project.id)}
                   className={`hover:bg-subtle flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors ${
                     project.id === projectId
-                      ? "text-violet-300"
+                      ? "text-violet-700 dark:text-violet-300"
                       : "text-ink-bright"
                   }`}
                 >

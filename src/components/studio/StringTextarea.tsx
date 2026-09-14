@@ -26,7 +26,7 @@ export function StringTextarea({ value, mono, hasSize }: { value: string; mono?:
       rows={1}
       onFocus={(event) => event.currentTarget.blur()}
       className={
-        "block w-full resize-none rounded border border-white/10 bg-black/40 px-2 py-1.5 text-[10.5px] leading-snug text-gray-200 outline-none" +
+        "block w-full resize-none rounded border border-border-strong bg-canvas-deep px-2 py-1.5 text-[10.5px] leading-snug text-ink-bright outline-none" +
         (mono ? " font-mono" : "")
       }
       style={{

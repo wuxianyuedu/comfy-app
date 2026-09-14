@@ -699,7 +699,7 @@ function WorkflowEditorBody({
     return (
       <FullScreenLayer
         zClass="z-50"
-        className="flex items-center justify-center bg-(--color-canvas) pb-6"
+        className="flex items-center justify-center bg-canvas pb-6"
       >
         <div className="text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
@@ -713,7 +713,7 @@ function WorkflowEditorBody({
     return (
       <FullScreenLayer
         zClass="z-50"
-        className="flex items-center justify-center bg-(--color-canvas) pb-6"
+        className="flex items-center justify-center bg-canvas pb-6"
       >
         <div className="text-center">
           <p className="text-red-700 dark:text-red-400">
@@ -734,7 +734,7 @@ function WorkflowEditorBody({
   return (
     <FullScreenLayer
       zClass="z-50"
-      className="flex flex-col bg-(--color-canvas) pb-6"
+      className="flex flex-col bg-canvas pb-6"
     >
         {/* ── Top bar ── */}
         <WorkflowEditorTopBar
@@ -761,7 +761,7 @@ function WorkflowEditorBody({
          *  This matches the requested UX: current content unchanged, then a
          *  loading screen, then the subgraph content. */}
         {subgraphLoading && (
-          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/20">
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-canvas-deep">
             <div className="bg-canvas/90 border-border-strong pointer-events-auto rounded-xl border px-6 py-4 shadow-2xl shadow-black/10 backdrop-blur-sm dark:shadow-black/50">
               <div className="flex items-center gap-3">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
@@ -869,7 +869,7 @@ function WorkflowEditorBody({
         />
 
         {/* Floating instruction tooltip */}        {/* Floating instruction tooltip */}
-        <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-[11px] text-gray-400 backdrop-blur-sm">
+        <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-[11px] text-ink-soft backdrop-blur-sm">
           点击节点查看详情 · 拖拽移动节点位置 · 滚轮缩放
         </div>
 

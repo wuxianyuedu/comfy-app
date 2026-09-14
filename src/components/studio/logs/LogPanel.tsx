@@ -67,7 +67,7 @@ import {
  * 按钮再等分也读不齐。这里给它一个显式的 `w-[4ch]`——「文字 + 四位数字」是
  * 这一格的固定预算，所以**文本长度不再随内容变化**。
  *
- * 数字本身不再按级别染色（`text-gray-600` 固定）：级别色已由同一行左侧的
+ * 数字本身不再按级别染色（`text-ink-fainter` 固定）：级别色已由同一行左侧的
  * **标签文字**承担（「警告」黄、「错误」红），同一个含义不必写两遍，
  * 也避免两个色块挤在一个按钮里互相稀释。
  */
@@ -801,7 +801,7 @@ export function LogPanel() {
             「控件数量固定、宽度不定」行头的标准解法。 */}
         <div className="border-border-strong bg-surface-1 flex min-h-14 shrink-0 flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
           <div className="flex shrink-0 items-center gap-2">
-            <FileText size={16} className="shrink-0 text-violet-400" />
+            <FileText size={16} className="shrink-0 text-violet-700 dark:text-violet-400" />
             {/* 标题不可换行：换行会把行头撑高、把下面的筛选器挤成竖排单字
                 （窄窗口下实测就是这样）。宽度不够时宁可让别的元素让它。 */}
             <span className="text-ink-bright text-[15px] font-semibold whitespace-nowrap">

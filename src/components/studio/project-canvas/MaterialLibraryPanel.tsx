@@ -231,7 +231,7 @@ export function MaterialLibraryPanel({
                 <button
                   type="button"
                   onClick={() => enterFolder(seg.key)}
-                  className="text-ink-muted text-[12px] transition-colors hover:text-violet-700 hover:underline dark:hover:text-violet-300"
+                  className="text-ink-muted text-[12px] transition-colors hover:text-violet-700 hover:underline dark:hover:text-violet-700 dark:text-violet-300"
                 >
                   {seg.label}
                 </button>
@@ -255,7 +255,7 @@ export function MaterialLibraryPanel({
       {/* ── Error banner ── */}
       {error && (
         <div className="mx-4 mb-2 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
-          <span className="min-w-0 flex-1 break-words text-[11px] text-red-300">{error}</span>
+          <span className="min-w-0 flex-1 break-words text-[11px] text-red-700 dark:text-red-300">{error}</span>
           <button
             type="button"
             onClick={refresh}
@@ -294,7 +294,7 @@ export function MaterialLibraryPanel({
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    className="flex items-center gap-2 transition-colors hover:text-violet-700 dark:hover:text-violet-400"
+                    className="flex items-center gap-2 transition-colors hover:text-violet-700 dark:hover:text-violet-700 dark:text-violet-400"
                   >
                     <Plus size={14} />
                     点击 + 或右键菜单创建内容
@@ -353,7 +353,7 @@ export function MaterialLibraryPanel({
                     <button
                       type="button"
                       onClick={() => void remove(item)}
-                      className="bg-black/60 text-ink-soft flex h-6 w-6 items-center justify-center rounded backdrop-blur transition-colors hover:text-red-600 dark:hover:text-red-400"
+                      className="bg-black/60 text-ink-soft flex h-6 w-6 items-center justify-center rounded backdrop-blur transition-colors hover:text-red-700 dark:text-red-600 dark:hover:text-red-400"
                       title="删除"
                     >
                       <Trash2 size={12} />
@@ -419,7 +419,7 @@ export function MaterialLibraryPanel({
                     <button
                       type="button"
                       onClick={() => void remove(item)}
-                      className="text-ink-muted hover:bg-subtle flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:text-red-600 dark:hover:text-red-400"
+                      className="text-ink-muted hover:bg-subtle flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:text-red-700 dark:text-red-600 dark:hover:text-red-400"
                       title="删除"
                     >
                       <Trash2 size={13} />

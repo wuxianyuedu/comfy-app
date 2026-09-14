@@ -34,11 +34,11 @@ export function EditableLabel({
   if (!editable || !editing) {
     return (
       /* 字体与 outputs label 一致 — text-[12px] font-semibold
-       *  text-(--color-ink-bright) + 'Inter' font-family，与 outputs 的 `text-[12px] font-semibold
-       *  text-(--color-ink-bright) font-Inter'` 视觉严格对齐，让 inputs 与 outputs 在同一节点内
+       *  text-ink-bright + 'Inter' font-family，与 outputs 的 `text-[12px] font-semibold
+       *  text-ink-bright font-Inter'` 视觉严格对齐，让 inputs 与 outputs 在同一节点内
        *  拥有相同字体权重的 label。 */
       <span
-        className="group flex min-w-0 flex-1 items-center gap-1 truncate text-[12px] font-semibold text-(--color-ink-bright)"
+        className="group flex min-w-0 flex-1 items-center gap-1 truncate text-[12px] font-semibold text-ink-bright"
         style={{ fontFamily: "var(--font-sans)" }}
         title={title}
       >
@@ -55,7 +55,7 @@ export function EditableLabel({
             }}
             onMouseDown={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
-            className="nodrag nopan min-w-0 flex-1 cursor-text truncate text-left text-[12px] font-semibold text-(--color-ink-bright) transition-colors hover:text-(--color-ink-strong)"
+            className="nodrag nopan min-w-0 flex-1 cursor-text truncate text-left text-[12px] font-semibold text-ink-bright transition-colors hover:text-ink-strong"
             style={{ fontFamily: "var(--font-sans)" }}
           >
             {label}
@@ -102,8 +102,8 @@ export function EditableLabel({
         onDoubleClick={(event) => event.stopPropagation()}
         title={title}
         /* 与展示态字体一致 — text-[12px] font-semibold
-         *  text-(--color-ink-bright) + 'Inter'，避免编辑切回展示态时出现字重跳变。 */
-        className="nodrag nopan w-32 max-w-full min-w-0 shrink rounded border border-violet-400/40 bg-white/6 px-1.5 py-px text-[12px] font-semibold text-(--color-ink-bright) outline-none focus:border-violet-400/70"
+         *  text-ink-bright + 'Inter'，避免编辑切回展示态时出现字重跳变。 */
+        className="nodrag nopan w-32 max-w-full min-w-0 shrink rounded border border-violet-400/40 bg-subtle px-1.5 py-px text-[12px] font-semibold text-ink-bright outline-none focus:border-violet-400/70"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </span>

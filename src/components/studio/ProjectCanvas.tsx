@@ -373,7 +373,7 @@ function CanvasInner({
 
   return (
     <div
-      className="relative h-full w-full bg-(--color-canvas)"
+      className="relative h-full w-full bg-canvas"
       onDragOver={onCanvasDragOver}
       onDrop={onCanvasDrop}
     >

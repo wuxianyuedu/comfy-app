@@ -29,7 +29,7 @@ function EditorCrashFallback({
   return (
     <FullScreenLayer
       zClass="z-60"
-      className="flex items-center justify-center bg-(--color-canvas)"
+      className="flex items-center justify-center bg-canvas"
     >
       <div className="w-[min(560px,90vw)] rounded-2xl border border-red-500/25 bg-red-500/5 p-6">
         <p className="text-sm font-semibold text-red-700 dark:text-red-400">

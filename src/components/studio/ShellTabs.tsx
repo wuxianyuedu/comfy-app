@@ -69,10 +69,10 @@ function TabButton({
           onSelect(tab.id);
         }
       }}
-      className={`group flex h-full cursor-pointer items-center gap-2 border-r border-(--color-border-subtle) px-4 text-sm transition-colors ${
+      className={`group flex h-full cursor-pointer items-center gap-2 border-r border-border-subtle px-4 text-sm transition-colors ${
         active
-          ? "bg-(--color-canvas) text-(--color-ink-bright)"
-          : "bg-(--color-subtle)/60 text-(--color-ink-muted) hover:bg-(--color-subtle) hover:text-(--color-ink-strong)"
+          ? "bg-canvas text-ink-bright"
+          : "bg-subtle/60 text-ink-muted hover:bg-subtle hover:text-ink-strong"
       }`}
     >
       <span className="truncate">{tab.label}</span>
@@ -84,7 +84,7 @@ function TabButton({
             e.stopPropagation();
             onClose(tab.id);
           }}
-          className="rounded p-0.5 text-(--color-ink-fainter) hover:bg-(--color-subtle) hover:text-(--color-ink-strong)"
+          className="rounded p-0.5 text-ink-fainter hover:bg-subtle hover:text-ink-strong"
         >
           <X size={14} />
         </button>
@@ -109,7 +109,7 @@ function InAppTabStrip({
     <div
       role="tablist"
       aria-label="应用页签"
-      className={`flex ${TITLE_BAR_HEIGHT_CLASS} shrink-0 items-stretch border-b border-(--color-border-subtle) bg-(--color-subtle)/40`}
+      className={`flex ${TITLE_BAR_HEIGHT_CLASS} shrink-0 items-stretch border-b border-border-subtle bg-subtle/40`}
     >
       {tabs.map((tab) => (
         <TabButton
@@ -143,13 +143,13 @@ function TabBlockedNotice({
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
       <div className="max-w-xl space-y-3 text-center">
-        <p className="text-base font-medium text-(--color-ink-bright)">
+        <p className="text-base font-medium text-ink-bright">
           无法在此页签中显示 {label}
         </p>
-        <p className="text-sm leading-relaxed text-(--color-ink-muted)">
+        <p className="text-sm leading-relaxed text-ink-muted">
           {reason}
         </p>
-        <p className="text-xs leading-relaxed text-(--color-ink-fainter)">
+        <p className="text-xs leading-relaxed text-ink-fainter">
           通常重启 ComfyUI 即可恢复（应用会自动以放行内嵌的参数拉起它）。
         </p>
       </div>
@@ -157,8 +157,8 @@ function TabBlockedNotice({
        * 的跨源 frame 策略；浏览器里也打不开 → 拦的是 ComfyUI 自己。此前只剩
        * 「已阻止此内容」一句时，两种情形长得一模一样（ISSUE #310）。 */}
       {url && (
-        <div className="flex max-w-xl items-center gap-2 rounded-md border border-(--color-border-subtle) bg-(--color-subtle)/40 px-3 py-2">
-          <code className="truncate text-xs text-(--color-ink-muted)">
+        <div className="flex max-w-xl items-center gap-2 rounded-md border border-border-subtle bg-subtle/40 px-3 py-2">
+          <code className="truncate text-xs text-ink-muted">
             {url}
           </code>
           <button
@@ -166,13 +166,13 @@ function TabBlockedNotice({
             onClick={() => {
               void navigator.clipboard?.writeText(url);
             }}
-            className="shrink-0 rounded px-2 py-1 text-xs text-(--color-ink-muted) hover:bg-(--color-subtle) hover:text-(--color-ink-strong)"
+            className="shrink-0 rounded px-2 py-1 text-xs text-ink-muted hover:bg-subtle hover:text-ink-strong"
           >
             复制地址
           </button>
         </div>
       )}
-      <p className="max-w-xl text-center text-xs leading-relaxed text-(--color-ink-fainter)">
+      <p className="max-w-xl text-center text-xs leading-relaxed text-ink-fainter">
         也可以到 设置 → 创作后端，点「在浏览器打开」直接查看。
       </p>
     </div>
@@ -198,7 +198,7 @@ export function ShellTabs({ children }: ShellTabsProps) {
   const useTitleBar = shouldUseTitleBarTabs(inShell);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-(--color-canvas) text-(--color-ink)">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-canvas text-ink">
       {useTitleBar ? (
         <TitleBarTabs
           tabs={tabs}
@@ -254,7 +254,7 @@ export function ShellTabs({ children }: ShellTabsProps) {
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock"
               />
             ) : (
-              <div className="flex h-full items-center justify-center text-(--color-ink-muted)">
+              <div className="flex h-full items-center justify-center text-ink-muted">
                 页签内容为空
               </div>
             )}

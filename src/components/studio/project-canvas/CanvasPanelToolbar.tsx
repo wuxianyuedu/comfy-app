@@ -56,14 +56,14 @@ export function CanvasPanelToolbar({ active, onSelect, floating = true }: Canvas
             title={item.label}
             className={`group relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 ${
               isActive
-                ? "bg-violet-500/20 text-violet-300 shadow-sm shadow-violet-500/10 ring-1 ring-violet-500/25"
+                ? "bg-violet-500/20 text-violet-700 dark:text-violet-300 shadow-sm shadow-violet-500/10 ring-1 ring-violet-500/25"
                 : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
             }`}
           >
             {item.icon}
             {/* Tooltip — show right of button on hover or when active */}
             <span
-              className={`border-border-strong bg-panel/95 pointer-events-none absolute left-full ml-2.5 rounded-lg border px-2.5 py-1 text-[11px] whitespace-nowrap font-medium text-gray-300 shadow-xl shadow-black/40 backdrop-blur-sm transition-opacity ${
+              className={`border-border-strong bg-panel/95 pointer-events-none absolute left-full ml-2.5 rounded-lg border px-2.5 py-1 text-[11px] whitespace-nowrap font-medium text-ink-soft shadow-xl shadow-black/40 backdrop-blur-sm transition-opacity ${
                 isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
               }`}
             >

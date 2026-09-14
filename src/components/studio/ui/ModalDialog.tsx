@@ -9,7 +9,7 @@
  * and ignores dark CSS).
  *
  * Visual language matches the global design tokens (Light / Dark 两态):
- *   - backdrop:  bg-black/20 (Light) / bg-black/65 (Dark) + backdrop-blur-sm
+ *   - backdrop:  bg-canvas-deep (Light) / bg-black/65 (Dark) + backdrop-blur-sm
  *   - card:      bg-panel/95 + 中性 ring(浅色深 ring、深色浅 ring)
  *                + border border-red-500/30 (danger) /
  *                border-violet-500/25 (info)
@@ -104,8 +104,8 @@ export function ModalDialog({
 
   const accentIcon = icon ?? (danger ? ICON_WARN : ICON_INFO);
   const ringClass = danger
-    ? "border-red-500/30 ring-red-500/10 shadow-lg shadow-black/5 dark:shadow-red-950/20"
-    : "border-violet-500/25 ring-violet-500/10 shadow-lg shadow-black/5 dark:shadow-none";
+    ? "border-red-500/30 ring-red-500/10 shadow-lg shadow-black/5 dark:shadow-black/5 dark:shadow-red-950/20"
+    : "border-violet-500/25 ring-violet-500/10 shadow-lg shadow-black/5 dark:shadow-black/5 dark:shadow-none";
   const iconColor = danger
     ? "text-red-600 dark:text-red-400"
     : "text-violet-600 dark:text-violet-400";
@@ -121,7 +121,7 @@ export function ModalDialog({
       aria-modal="true"
       aria-labelledby={titleId}
       onClick={onClose}
-      className={overlayClass("modal", "z-200 flex items-center justify-center bg-black/20 px-4 backdrop-blur-sm dark:bg-black/65")}
+      className={overlayClass("modal", "z-200 flex items-center justify-center bg-canvas-deep px-4 backdrop-blur-sm dark:bg-black/65")}
     >
       <div
         onClick={stop}

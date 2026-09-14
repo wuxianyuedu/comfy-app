@@ -47,33 +47,33 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
 
   return (
     <div
-      className={overlayClass("modal", "z-100 flex items-center justify-center bg-black/60 p-4")}
+      className={overlayClass("modal", "z-100 flex items-center justify-center bg-black/25 p-4 dark:bg-black/60")}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15151C] p-5 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-border-strong bg-panel p-5 shadow-2xl shadow-black/20 dark:shadow-black/50"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="管理模型标签"
       >
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-100">
-            <Icon name="tag" className="h-4 w-4 text-fuchsia-300" />
+          <h3 className="flex items-center gap-2 text-base font-semibold text-ink-bright">
+            <Icon name="tag" className="h-4 w-4 text-fuchsia-700 dark:text-fuchsia-300" />
             模型标签库
           </h3>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 hover:bg-white/5 hover:text-gray-200"
+            className="rounded-lg p-1 text-ink-soft hover:bg-subtle hover:text-ink-bright"
             aria-label="关闭"
           >
             <Icon name="x" className="h-4 w-4" />
           </button>
         </div>
 
-        <p className="mb-3 text-xs leading-relaxed text-gray-400">
-          这些标签是<strong className="text-gray-200">用户级全局库</strong>，可跨多个工作流复用。
+        <p className="mb-3 text-xs leading-relaxed text-ink-soft">
+          这些标签是<strong className="text-ink-bright">用户级全局库</strong>，可跨多个工作流复用。
           在这里新增/删除后，即可在工作流卡片上「＋ 标签」绑定，并在上方按模型筛选。
         </p>
 
@@ -85,7 +85,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
               if (event.key === "Enter") void c.addTag();
             }}
             placeholder="新增模型名，如 z-image / wan2.2"
-            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-fuchsia-500/50"
+            className="min-w-0 flex-1 rounded-lg border border-border-strong bg-canvas-deep px-3 py-2 text-sm text-ink-bright outline-none placeholder:text-ink-muted focus:border-fuchsia-500/50"
           />
           <button
             type="button"
@@ -97,11 +97,11 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
           </button>
         </div>
 
-        {c.error && <div className="mb-3 text-xs text-red-400">{c.error}</div>}
+        {c.error && <div className="mb-3 text-xs text-red-700 dark:text-red-400">{c.error}</div>}
 
         <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pr-1">
           {c.tags.length === 0 && (
-            <div className="py-6 text-center text-sm text-gray-500">还没有模型标签</div>
+            <div className="py-6 text-center text-sm text-ink-muted">还没有模型标签</div>
           )}
           {c.tags.map((tag) =>
 {
@@ -109,7 +109,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
             return (
               <div
                 key={tag.id}
-                className="flex items-center justify-between rounded-lg border border-white/6 bg-white/2 px-3 py-2"
+                className="flex items-center justify-between rounded-lg border border-border-strong bg-subtle px-3 py-2"
               >
                 {isEditing ? (
                   <input
@@ -134,19 +134,19 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                     // otherwise two commits would race (e.g. Enter + blur both fire
                     // and the second one sees the now-renamed tag as 404).
                     onBlur={() => cancelEdit()}
-                    className="min-w-0 flex-1 rounded-md border border-fuchsia-500/50 bg-black/30 px-2 py-0.5 text-sm text-gray-100 outline-none focus:border-fuchsia-400"
+                    className="min-w-0 flex-1 rounded-md border border-fuchsia-500/50 bg-canvas-deep px-2 py-0.5 text-sm text-ink-bright outline-none focus:border-fuchsia-400"
                   />
                 ) : (
                   <span
                     onDoubleClick={() => beginEdit(tag.id, tag.name)}
                     title="双击重命名"
-                    className="cursor-text select-none truncate rounded-sm px-0.5 text-sm text-gray-200 hover:bg-white/5 hover:text-gray-100"
+                    className="cursor-text select-none truncate rounded-sm px-0.5 text-sm text-ink-bright hover:bg-subtle hover:text-ink-bright"
                   >
                     {tag.name}
                   </span>
                 )}
                 <div className="flex shrink-0 items-center gap-2">
-                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] tabular-nums text-gray-400">
+                  <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] tabular-nums text-ink-soft">
                     {tag.count} 个工作流
                   </span>
                   <button
@@ -154,7 +154,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                     onClick={() => void c.deleteTag(tag.name, tag.count)}
                     disabled={isEditing}
                     title={tag.count > 0 ? `删除「${tag.name}」，会一并解除 ${tag.count} 个工作流的绑定` : `删除「${tag.name}」`}
-                    className="rounded-md border border-transparent p-1 text-gray-400 hover:border-red-400/40 hover:bg-red-500/15 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-md border border-transparent p-1 text-ink-soft hover:border-red-400/40 hover:bg-red-500/15 hover:text-red-700 dark:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label={`删除 ${tag.name}`}
                   >
                     <Icon name="trash" className="h-3.5 w-3.5" />

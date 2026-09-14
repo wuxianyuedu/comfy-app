@@ -74,10 +74,10 @@ function TitleBarTab({
           onActivate(tab.id);
         }
       }}
-      className={`group flex h-full max-w-52 min-w-0 cursor-pointer items-center gap-2 border-r border-(--color-border-subtle) px-3 text-sm transition-colors ${
+      className={`group flex h-full max-w-52 min-w-0 cursor-pointer items-center gap-2 border-r border-border-subtle px-3 text-sm transition-colors ${
         active
-          ? "bg-(--color-canvas) text-(--color-ink-bright)"
-          : "text-(--color-ink-muted) hover:bg-(--color-subtle)/70 hover:text-(--color-ink-strong)"
+          ? "bg-canvas text-ink-bright"
+          : "text-ink-muted hover:bg-subtle/70 hover:text-ink-strong"
       }`}
     >
       <span className="truncate">{tab.label}</span>
@@ -90,7 +90,7 @@ function TitleBarTab({
             e.stopPropagation();
             onClose(tab.id);
           }}
-          className="rounded p-0.5 text-(--color-ink-fainter) hover:bg-(--color-subtle) hover:text-(--color-ink-strong)"
+          className="rounded p-0.5 text-ink-fainter hover:bg-subtle hover:text-ink-strong"
         >
           <X size={13} />
         </button>
@@ -127,10 +127,10 @@ function WindowButton({
       title={label}
       data-no-drag
       onClick={onClick}
-      className={`flex h-full w-11 items-center justify-center text-(--color-ink-soft) transition-colors ${
+      className={`flex h-full w-11 items-center justify-center text-ink-soft transition-colors ${
         danger
           ? "hover:bg-red-500 hover:text-white"
-          : "hover:bg-(--color-subtle) hover:text-(--color-ink-bright)"
+          : "hover:bg-subtle hover:text-ink-bright"
       }`}
     >
       {icon}
@@ -185,7 +185,7 @@ export function TitleBarTabs({
 
   return (
     <div
-      className={`flex ${TITLE_BAR_HEIGHT_CLASS} shrink-0 items-stretch border-b border-(--color-border-subtle) bg-(--color-panel) select-none`}
+      className={`flex ${TITLE_BAR_HEIGHT_CLASS} shrink-0 items-stretch border-b border-border-subtle bg-panel select-none`}
       onPointerDown={handlePointerDown}
       onDoubleClick={handleDoubleClick}
     >

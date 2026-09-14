@@ -93,7 +93,7 @@ export function WorkflowModelFilterChip({
                 style={{ background: "var(--color-accent)" }}
               />
               <span className="flex-1">全部模型</span>
-              {value === "all" && <span className="text-fuchsia-300">✓</span>}
+              {value === "all" && <span className="text-fuchsia-700 dark:text-fuchsia-300">✓</span>}
             </button>
             {tags.length === 0 && (
               <div className="text-ink-muted px-3 py-2 text-[10px]">
@@ -126,7 +126,7 @@ export function WorkflowModelFilterChip({
                   <span className="text-ink-muted text-[9px] tabular-nums">
                     {tag.count}
                   </span>
-                  {sel && <span className="text-fuchsia-300">✓</span>}
+                  {sel && <span className="text-fuchsia-700 dark:text-fuchsia-300">✓</span>}
                 </button>
               );
             })}
