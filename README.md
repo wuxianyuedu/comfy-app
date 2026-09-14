@@ -55,6 +55,7 @@ Comfy-APP-T3/
 │  │  ├─ start-desktop.ps1        # 桌面版一键自检 + 启动（给拿到桌面包的人）
 │  │  ├─ run-local.ps1            # 非开发人员一键初始化（自检/生成 .env/装依赖）
 │  │  ├─ verify-quality.ps1       # 一键质量门禁（typecheck / lint / vitest）
+│  │  ├─ run-tests.ps1            # 只跑 vitest（可指定文件 / -Full / 透传参数）
 │  │  ├─ sync-lint.ps1           # 同步依赖 + pnpm lint（拉取更新/改码后日常自检）
 │  │  └─ register-comfyapp-protocol.ps1  # 注册 comfyapp:// 协议（免管理员）
 │  ├─ build/                # 构建打包入口
@@ -123,6 +124,7 @@ Comfy-APP-T3/
 | 运行已构建好的桌面包 | `tools/start/start-desktop.ps1` |
 | 第一次在本机跑起来（自检 + 装依赖 + 生成 `.env`） | `tools/start/run-local.ps1` |
 | 跑一遍质量门禁（typecheck / lint / vitest） | `tools/start/verify-quality.ps1` |
+| 只跑测试（可指定单个文件 / 复现基线失败） | `tools/start/run-tests.ps1` |
 | 拉取更新后同步依赖并跑 lint | `tools/start/sync-lint.ps1` |
 | 注册 `comfyapp://` 协议（任务历史「打开文件夹」） | `tools/start/register-comfyapp-protocol.ps1` |
 | 构建发行包 / 重新打包启动器 | `tools/build/*.ps1`（见 `tools/README.md`） |
