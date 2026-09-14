@@ -38,7 +38,8 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
   │           看不见窗口的壳进程（任务栏残留、dev server 继续被拉起、稍后还会
   │           自己把主窗弹出来）；壳退出后 dev server 由 dev-launcher 以壳退出
   │           为锚点回收（正常交接时主窗已显示，壳自己关启动页不触发退出）
-  └─▶ cmd → pnpm dev → node next dev（127.0.0.1:3100）
+  └─▶ cmd → pnpm dev → node next dev（127.0.0.1:<解析端口>，见 §1.1；
+        本检出缺省 = 路径推导值，静态兜底才是 3100）
         就绪后 splash 调 navigate_to_app → main 加载 /workspace → 交换窗口
 ```
 
@@ -89,6 +90,18 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 > E2E 因此长期起不来（`Timed out waiting 180000ms from config.webServer`，2026-09-12
 > 定位）。`scripts/start.mjs` 与 `dev.mjs` 对称：同一端口解析 + `next start -p`，
 > 保证「一处配置、dev 与 prod-start 两条链路一致」。
+
+> **端口有两条链路，数值经常不相等，别混用**（ISSUE #489）：解析链是
+> `pnpm dev` / `pnpm start` / `tauri.conf.json` 的 `beforeDevCommand` / Playwright ——
+> 它们都经 `scripts/dev.mjs` / `scripts/app-port.mjs`，缺省拿到的是**路径推导值**
+> （3200~3999）；静态链是 `tauri.conf.json` 的 `build.devUrl`（缺省写 3100）——
+> 它是**编译期内嵌的兜底值**，正常启动时被启动器注入的 `COMFYAPP_DEV_URL` 覆盖。
+> 结论：**文档描述 `pnpm dev` 时写 3100 = 写错**（实测某检出推导为 3311，
+> 照 3100 打开即 `ERR_CONNECTION_REFUSED`），必须写控制台打印的
+> `[dev.mjs] COMFYAPP_PORT=<n>`；反之描述启动器 / 壳的兜底行为时，3100 才是对的。
+> 两条事实在登记表里是分开的（`dev.port` / `dev.port.derived`，见
+> [reference-facts.md](../reference-facts.md) §1.1），`pnpm doc:check` 会按文档各自
+> 所属语境核对，防「用静态值给解析链文档背书」这类漏网。
 
 > **推荐经 `start-tauri.ps1` / `{{shell.exe.prebuilt}}`（launcher）启动**：launcher 会把
 > `COMFYAPP_DEV_URL` / `COMFYAPP_PORT` 注入壳进程，`tauri.conf.json` 的静态 `devUrl`
@@ -240,7 +253,10 @@ true`——这类场景的策略反过来，必须给前台。
 按顺序执行，任一失败立即终止并展示日志尾部：
 
 1. **残留壳清理**：按命令行匹配终止上次运行遗留的同项目 {{shell.app.exe}}（防窗口叠加）。
-2. **端口清理**：杀掉 3100/3101/3102 的监听进程（防挤到 3101 连旧代码）。
+2. **端口清理**：杀掉**本检出端口族**的监听进程——族 = `Get-AppPort` 的解析端口
+   `[COMFYAPP_PORT, +1, +2]`（端口缺省时为路径推导值，静态兜底 3100 只是该族的一个
+   特例，**不要写成写死的 3100/3101/3102**：那会在推导端口上留下残留实例，新实例
+   被挤到 +1 后浏览器连着旧代码）。
 3. **缓存指纹**：next.config/tsconfig/package.json/lockfile 指纹变化才清 .next。
 4. **pnpm 版本一致性检查**：比对 `package.json` 的 `packageManager` 声明版本与
    `pnpm -v` 实际版本。一致则跳过；不一致且 corepack 可用时自动
