@@ -296,7 +296,7 @@ export async function resolveEffectiveLaunch(input: {
       : null;
     if (meta) {
       return {
-        port: meta.port ?? 0, // 0 → 调用方按默认 8188
+        port: meta.port ?? 0, // 0 → 调用方按 COMFYUI_DEFAULT_PORT 兜底
         extraArgs: meta.args,
         envVars: meta.envVars,
       };

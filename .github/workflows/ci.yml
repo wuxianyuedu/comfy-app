@@ -94,6 +94,13 @@ jobs:
         # 可绕过），CI 侧没有任何复核——与 13.5「本地与 CI 同一口径」相悖。
         run: node scripts/check-file-structure.cjs
 
+      - name: ComfyUI port contract
+        # ComfyUI 端口口径一致性（规范 §5 / §12.14 / ISSUE #534 P1）：默认端口
+        # 单点定义、连接侧与拉起侧共用同一常量、buildSpawnArgs 的 >0 口径、
+        # 源码里没有裸 8188 字面量。「配置端口为空」两侧落到同一个默认端口，
+        # 分叉的表现是静默连到另一个实例（现象是上传失败 / 端口漂移）。
+        run: node scripts/check-comfyui-port-contract.cjs
+
       - name: Cross-file duplication
         # 跨文件重复块（规范 §12.12 / ISSUE #536）：同一能力的两份实现逐行
         # 重合 ≥75% 即失败。历史上 api-channel 与 test-usage 各有一对孪生，
