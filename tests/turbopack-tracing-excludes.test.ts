@@ -137,10 +137,29 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
  * 这条探针在**构建产物存在时**真去数：standalone 里不得出现测试文件、变更
  * 碎片与文档。没有产物（如只跑单测的检出）时整组跳过 —— 它守的是构建结果，
  * 不是单元逻辑。
+ *
+ * ⚠️ 两个细节决定这组用例是「守卫」还是「陷阱」：
+ *
+ * ① **文件顶层不得调用 listFiles**。`describe.skipIf` 的求解发生在收集期，
+ *    describe 回调体内的语句**也会在收集期执行**（与 skipIf 的求解同处一个
+ *    阶段，且先于任何用例运行）。原实现在回调体首行直接 `listFiles(STANDALONE)`
+ *    ——即使 skipIf 已经判定要跳过，那行 scandir 照样跑，于是「产物缺失」从
+ *    「应当跳过」变成整份文件 `Failed Suites: ENOENT: scandir .../.next/standalone`
+ *    （0 个用例）。实测形态：CI 的 `pnpm run test` 排在 Build 之前，产物必然
+ *    不存在，因此每次必挂；而本机因为 `.next` 恰好存在而全绿，呈现成
+ *    「本地绿、CI 红」。修法是把调用**放在同一个条件里**（`exists ? list()
+ *    : []`），而不是仅靠 describe.skipIf 拦。
+ * ② **判据先求值、再传入**（`standaloneExists` 常量），不要在 skipIf 里
+ *    现算——收集期与回调体两次求值之间的状态差异会让跳过与否不可预期。
+ *
+ * 反向验证：构造一个不含 `.next/standalone` 的工作目录，本组必须**全跳过且
+ * 0 失败**（而不是 ENOENT）；构造一个含 `src/*.test.ts` 的假产物，必须报出它。
  */
 import { existsSync, readdirSync, statSync } from "node:fs";
 
-const STANDALONE = join(process.cwd(), ".next", "standalone");
+function standaloneDir(): string {
+  return join(process.cwd(), ".next", "standalone");
+}
 
 /** 递归列出目录下所有相对路径（只在目录存在时调用）。 */
 function listFiles(dir: string, prefix = ""): string[] {
@@ -160,10 +179,13 @@ function listFiles(dir: string, prefix = ""): string[] {
   return out;
 }
 
-describe.skipIf(!existsSync(STANDALONE))(
+/** 产物目录是否存在；不存在时整组跳过（守卫守的是构建结果，不是构建本身）。 */
+const standaloneExists = existsSync(standaloneDir());
+
+describe.skipIf(!standaloneExists)(
   ".next/standalone 产物里不得有测试 / 文档 / 变更碎片",
   () => {
-    const files = listFiles(STANDALONE);
+    const files = standaloneExists ? listFiles(standaloneDir()) : [];
 
     it("确实数到了产物文件（探针自身不空跑）", () => {
       expect(files.length).toBeGreaterThan(10);
@@ -183,3 +205,42 @@ describe.skipIf(!existsSync(STANDALONE))(
     });
   },
 );
+
+/* ── 守卫自身的可运行性：产物缺失时不得让整份文件失败 ────────────────────
+ *
+ * 上面那组探针「有产物才有意义」，但它的**缺失处理**本身必须可靠 —— 这正是
+ * 本轮修掉的缺陷：产物不存在时整份文件收集失败，于是 CI 的 `pnpm run test`
+ * （排在 Build 之前）每次必挂，而本机因 `.next` 存在而全绿。
+ *
+ * 判据落在**结构**上而不是「再跑一遍 vitest」：真正要守住的是「listFiles 的
+ * 调用挂在判据之下」。用子进程重跑本文件需要完整的最小检出（alias、setup、
+ * node_modules 解析），一旦仓库结构变化就先坏在无关处，反而更容易被删掉；
+ * 而结构断言直接指向那个会出错的写法，改回去即红。
+ */
+describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () => {
+  const source = readFileSync(
+    join(process.cwd(), "tests", "turbopack-tracing-excludes.test.ts"),
+    "utf8",
+  );
+  // 去掉注释再扫描：反面写法的说明本身会命中下面的正则（自指），
+  // 而注释里的示例不构成真实调用
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+  it("listFiles 的调用必须挂在「产物存在」判据之下，不得裸调", () => {
+    const bareCalls = code.match(/=\s*listFiles\(/g) ?? [];
+    expect(
+      bareCalls.length,
+      "listFiles 不得在收集期被裸调（必须有 `存在 ? listFiles(...) : []` 之类的条件）",
+    ).toBe(0);
+  });
+
+  it("跳过判据先求值成常量再传入 describe.skipIf", () => {
+    expect(code).toMatch(/const\s+standaloneExists\s*=\s*existsSync\(/);
+    expect(code).toMatch(/describe\.skipIf\(!standaloneExists\)/);
+  });
+
+  it("存在判据与调用在同一条件表达式里（缺失时整组不执行、不报错）", () => {
+    // 用 RegExp 构造避免本断言的字面量自身命中下面的 bareCalls 匹配
+    expect(code).toMatch(new RegExp("standaloneExists\\s*\\?\\s*listFiles\\("));
+  });
+});
