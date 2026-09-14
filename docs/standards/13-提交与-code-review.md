@@ -114,6 +114,7 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
 ✅ pnpm run typecheck             # tsc --noEmit
 ✅ pnpm exec eslint . --max-warnings 0
 ✅ pnpm run test                  # vitest run
+✅ node scripts/check-file-structure.cjs  # 命名/组织硬规则 R1-R4/R7-R12（§12.8/§12.11）
 ✅ pnpm run test:coverage         # 覆盖率棘轮（vitest.config.ts 的目录阈值）
 ✅ pnpm run build                 # SKIP_ENV_VALIDATION=1（CI 无真实密钥）
 ✅ pnpm exec playwright test --grep @critical   # 只跑 @critical 关键流程
@@ -126,7 +127,7 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
 
 ```
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
-✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则（见 §12.8、12 §12.6）
+✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则 R1-R4/R7-R12（见 §12.6/§12.8/§12.11）
 ✅ node scripts/check-react-updater-purity.cjs
 ✅ node scripts/check-title-bar-clearance.cjs
 ✅ pnpm exec tsc --noEmit

@@ -256,6 +256,53 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       expect(output).toContain("R11");
     });
   });
+
+  // ── R12：src/ 源码里不得内嵌控制字符（规范 §12.11）──
+  // 判据来自一次真实事故：`lib/comfyui/markdown.ts` 曾用真的 NUL 字节做占位符
+  // 哨兵（` CODE<n> `），于是整个文件被 git / diff / grep / 编辑器当二进制：
+  // `git diff` 只回「Binary files differ」、`git show --stat` 显示 bin、
+  // `grep -rn` 静默跳过。哨兵改成可打印形式后，这条规则负责防回潮。
+  describe("R12：源码内嵌控制字符被阻断（规范 §12.11）", () => {
+    /* NUL 只能用**转义**写进用例源码——直接嵌一个真字节会把本测试文件自己也
+     * 变成二进制（正是 R12 要拦的形态）。写进临时文件时才还原成真字节。 */
+    const NUL = "\u0000";
+    const writeSrc = (name: string, body: string) => {
+      mkdirSync(join(workdir, "src"), { recursive: true });
+      writeFileSync(join(workdir, "src", name), body);
+    };
+
+    it("内嵌 NUL 字节被阻断", () => {
+      writeSrc("a.ts", 'export const SENTINEL = "' + NUL + 'CODE0' + NUL + '";\n');
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R12");
+      expect(output).toContain("NUL");
+    });
+
+    it("制表符 / 换行 / 回车属于正常排版，放行", () => {
+      writeSrc("b.ts", "export const a = 1;\r\n\tconst b = 2;\n");
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("R12");
+    });
+
+    it("正文里的**转义写法** `\\u0000` 是普通字符，放行", () => {
+      // 关键区分：源码里写的是 6 个可见字符（反斜杠 + u0000），
+      // 不是一个控制字节。要常量本身带 NUL 的场合（如果真有）才需要它，
+      // 而那时文件依然是纯文本，git 与 grep 都读得动。
+      writeSrc("c.ts", 'export const ESCAPED = "\\u0000";\n');
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("R12");
+    });
+
+    it("普通注释里的中文与 emoji 不是控制字符，放行", () => {
+      writeSrc("d.ts", "// 哨兵 → 用可打印形式，别用真的 NUL 字节 ✅\nexport const d = 4;\n");
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("R12");
+    });
+  });
 });
 
 describe("Build-Guard.ps1（构建前置守卫）", () => {
