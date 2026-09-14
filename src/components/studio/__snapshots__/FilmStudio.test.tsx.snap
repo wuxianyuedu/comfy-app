@@ -300,7 +300,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
           <span
             class="text-ink-faintest absolute top-2.5 left-3 rounded bg-canvas-deep px-2 py-0.5 font-mono text-[10px] backdrop-blur-sm"
           >
-            1280x720
+            16:9 / 1k
              · 
             16
             fps

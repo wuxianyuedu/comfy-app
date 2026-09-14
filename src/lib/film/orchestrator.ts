@@ -22,6 +22,8 @@ import { enqueue, cancelTask } from "@/lib/comfyui/enqueue";
 import { synthesizeFirstFrame } from "@/lib/comfyui/firstframe";
 import { getSettingsSync } from "@/lib/app-settings";
 import { parseIdeaToScenes } from "@/lib/workshop/script-parser";
+import { sizeSpecDims, sizeSpecToWxH, toSizeSpec } from "@/lib/size-presets";
+import { FILM_COMPOSE_SIZE, NATIVE_SHOT_VIDEO_SIZE } from "@/lib/film/film-size";
 import { z } from "zod";
 import { getLLMConfig, completeLLMStructured } from "@/lib/llm/server";
 import type { ProjectType } from "@/lib/workshop/types";
@@ -50,12 +52,16 @@ export interface CreateFilmInput {
   script: string;
   type?: string;
   styleSlug?: string | null;
-  size?: string;
+  /** 成片画幅（尺寸表达：比例 + 分辨率 / 比例 + 百万像素 + 倍数）。缺省走视频
+   *  场景 16:9 1k；仍传 "1280x720" 这类老字符串时由 `toSizeSpec` 归一。 */
+  size?: unknown;
   fps?: number;
   framesPerShot?: number;
   subtitleOn?: boolean;
   bgmName?: string | null;
 }
+
+
 
 const FILM_NEGATIVE =
   "low quality, blurry, deformed, watermark, text, distorted, extra limbs, bad anatomy";
@@ -164,7 +170,10 @@ async function parseScriptToShots(
 
 // ── create ─────────────────────────────────────────────────
 export async function createFilm(input: CreateFilmInput) {
-  const size = input.size ?? "1280x720";
+  /* 成片画幅按尺寸表达存（数据库那一列是文本，存 JSON）；镜头侧仍拿 "WxH" ——
+   * 内置视频工作流只认字符串（token __W__/__H__）。 */
+  const sizeSpec = toSizeSpec(input.size ?? FILM_COMPOSE_SIZE);
+  const shotSize = sizeSpecToWxH(sizeSpec, "video");
   const fps = input.fps ?? 16;
   const framesPerShot = input.framesPerShot ?? 49;
 
@@ -193,7 +202,7 @@ export async function createFilm(input: CreateFilmInput) {
     script: input.script,
     type: input.type ?? "short_video",
     styleSlug: input.styleSlug ?? null,
-    size,
+    size: JSON.stringify(sizeSpec),
     fps,
     framesPerShot,
     subtitleOn: input.subtitleOn ?? true,
@@ -204,7 +213,12 @@ export async function createFilm(input: CreateFilmInput) {
     film.id,
     shots.map((shot) =>
 {
-      const params: Record<string, unknown> = { frames: framesPerShot, fps, size, workflow: wf };
+      const params: Record<string, unknown> = {
+        frames: framesPerShot,
+        fps,
+        size: shotSize,
+        workflow: wf,
+      };
       return {
         order: shot.order,
         heading: shot.heading ?? null,
@@ -247,7 +261,7 @@ async function generateVideoShot(
 
   const meta = getWorkflow("img2video")!;
 
-  const size = (params.size ?? "832x480") as string;
+  const size = (params.size ?? NATIVE_SHOT_VIDEO_SIZE) as string;
 
   // 断言仅收口类型（运行时擦除）：inputImage 为 "" 等 falsy 值时仍需走
   // 下方合成首帧分支，与原 any 行为逐值一致。
@@ -508,7 +522,9 @@ export async function composeFilm(id: string) {
   }
 
   const cwd = process.cwd();
-  const [W, H] = (film.size.split("x").map(Number)) ?? [1280, 720];
+  /* 成片画幅：列里存的是尺寸表达（老行是 "1280x720" 字符串，`toSizeSpec` 兼容），
+   * ffmpeg 要的是像素 —— 在这里折算。 */
+  const { width: W, height: H } = sizeSpecDims(toSizeSpec(film.size), "video");
   const fps = film.fps;
   const tmpDir = path.join(cwd, "public", "generated", "films", `_tmp_${id}`);
   await fs.mkdir(tmpDir, { recursive: true });
