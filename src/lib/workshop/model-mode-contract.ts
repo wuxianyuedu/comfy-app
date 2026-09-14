@@ -1,10 +1,15 @@
 // ── 远端模型「工坊模式适配器」：统一输入类型 + 模式契约（纯函数层）──────
-// 工坊对外只说「统一输入」：提示词 / 负向提示词 / 宽高比 / 百万像素 / 图片 /
-// 首帧 / 尾帧 / 掩码 / 深度图 / 姿态骨架 / 线稿 / 边缘图 / 种子 —— 模式对应
-// 工作流库中定义的模式（T2I / I2I / D2I … T2V / I2V …）。每种远端模型按模式
-// 配置一份适配器（统一输入 → 该接口的请求体字段名 + 产物字段路径），工坊
+// 工坊对外只说「统一输入」：提示词 / 负向提示词 / 宽高比 / 百万像素 / 倍数 /
+// 图片 / 首帧 / 尾帧 / 掩码 / 深度图 / 姿态骨架 / 线稿 / 边缘图 / 种子 —— 模式
+// 对应工作流库中定义的模式（T2I / I2I / D2I … T2V / I2V …）。每种远端模型按
+// 模式配置一份适配器（统一输入 → 该接口的请求体字段名 + 产物字段路径），工坊
 // 发起生成时据此把统一输入翻译成该接口的请求；未配置适配器时回落到
 // OpenAI 兼容 images/generations 的默认映射。
+//
+// 「尺寸」这一类在契约层是一个口（`size`），在适配器层按接口请求体细分：比例
+// （aspect-ratio）+ 总像素（megapixels）+ 宽高对齐倍数（multiple）—— 与工坊
+// 尺寸选择器的两类表达（「比例 + 分辨率」/「比例 + 百万像素 + 倍数」）对齐，
+// 选「分辨率」时由 `lib/size-presets` 换算成后者的三个值再下发。
 //
 // 输出类型由模式的类别决定（图像 → 图片，视频 → 视频，音频 → 音频）。
 
@@ -15,12 +20,16 @@ import {
 import { getWorkflowType } from "~/lib/workflow-types";
 import { isVideoMode } from "~/lib/workshop/workflow-encapsulation";
 
-/** 可作为输入的统一类型（供适配器配置选用）。 */
+/** 可作为输入的统一类型（供适配器配置选用）。
+ *
+ *  「尺寸」在契约层是一个口（`size`），到这里按接口请求体细分为三行：
+ *  宽高比 / 百万像素 / 倍数 —— 与尺寸选择器的两类表达同一口径。 */
 export const WORKSHOP_INPUT_TYPES = [
   { type: "prompt", label: "提示词" },
   { type: "negative", label: "负向提示词" },
   { type: "aspect-ratio", label: "宽高比" },
   { type: "megapixels", label: "百万像素" },
+  { type: "multiple", label: "倍数（宽高对齐）" },
   { type: "image", label: "图片（参考图 / 输入图）" },
   { type: "first-frame", label: "首帧图片" },
   { type: "last-frame", label: "尾帧图片" },
@@ -64,9 +73,11 @@ export function defaultInputsForMode(mode: string): Array<{
   field: string;
 }> {
   const code = mode.trim().toUpperCase();
+  /* 「尺寸」的默认三行：比例 + 百万像素 + 倍数（与契约层的 size 口同一口径）。 */
   const size: Array<{ type: WorkshopInputType; field: string }> = [
     { type: "aspect-ratio", field: "aspect_ratio" },
     { type: "megapixels", field: "megapixels" },
+    { type: "multiple", field: "multiple" },
   ];
   const base: Array<{ type: WorkshopInputType; field: string }> = [
     { type: "prompt", field: "prompt" },
@@ -212,7 +223,7 @@ export function readFieldPath(payload: unknown, path: string): unknown {
 export const MODE_CONTRACT_INPUT_TYPES = [
   { type: "prompt", label: "提示词" },
   { type: "negative", label: "负向提示词" },
-  { type: "size", label: "尺寸（宽高比 + 百万像素）" },
+  { type: "size", label: "尺寸（比例 + 分辨率 · 百万像素 + 倍数）" },
   { type: "reference-image", label: "参考图 / 输入图" },
   { type: "first-frame", label: "首帧图片" },
   { type: "last-frame", label: "尾帧图片" },
@@ -236,8 +247,8 @@ export function modeContractInputLabel(type: ModeContractInputType): string {
  *  （`reference-image-2`，见 workflow-exposed-params 的多参考图槽位）。
  *
  *  与适配器侧的 WorkshopInputType 是**两套 id**，别混用：适配器口按接口请求体
- *  分得更细（契约的「尺寸」在适配器层拆成 aspect-ratio + megapixels），契约口是
- *  工坊对用户的统一口径（尺寸 / 参考图）。 */
+ *  分得更细（契约的「尺寸」在适配器层拆成 aspect-ratio + megapixels + multiple），
+ *  契约口是工坊对用户的统一口径（尺寸 / 参考图）。 */
 export type ModeContractInputId = ModeContractInputType | `reference-image-${number}`;
 
 export function isModeContractInputId(v: unknown): v is ModeContractInputId {
@@ -329,7 +340,7 @@ export function contractToStatusEntries(contract: ModeContract): Array<{
   }));
 }
 
-/** 契约 → 远端适配器的默认输入映射（size 拆成宽高比 + 百万像素两个字段）。
+/** 契约 → 远端适配器的默认输入映射（size 拆成宽高比 + 百万像素 + 倍数三行）。
  *
  *  第 2 张起的参考图口（reference-image-2…）没有约定的默认请求体字段名，这里不猜：
  *  不生成默认行，留给用户在适配器页自行加一行并把字段名填成该接口实际用的名字。 */
@@ -349,6 +360,7 @@ export function adapterInputsFromContract(
         out.push(
           { type: "aspect-ratio", field: "aspect_ratio" },
           { type: "megapixels", field: "megapixels" },
+          { type: "multiple", field: "multiple" },
         );
         break;
       case "reference-image":

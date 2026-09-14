@@ -336,9 +336,12 @@ export async function apiGenerateImage(req: {
   model?: string;
   /** 工坊模式码（T2I / I2I / …）：远端模型有该模式适配器时按它翻译字段 */
   mode?: string;
-  /** 统一输入：宽高比（如 "16:9"）/ 百万像素（如 "1M"）/ 输入图 */
+  /** 统一输入：宽高比（如 "16:9"）/ 百万像素（如 "1.5"）/ 宽高对齐倍数 / 输入图。
+   *  三者合起来就是工坊的「比例 + 百万像素 + 倍数」尺寸表达 —— 选「分辨率」时
+   *  由调用方（`shotSizeToRelay`）换算后再传，不把 "1k" 这种档位名丢给远端。 */
   aspectRatio?: string;
   megapixels?: string;
+  multiple?: number;
   image?: string;
 }): Promise<string> {
   const data = await postRelay({
@@ -350,6 +353,7 @@ export async function apiGenerateImage(req: {
     ...(req.mode ? { mode: req.mode } : {}),
     ...(req.aspectRatio ? { aspectRatio: req.aspectRatio } : {}),
     ...(req.megapixels ? { megapixels: req.megapixels } : {}),
+    ...(req.multiple !== undefined ? { multiple: req.multiple } : {}),
     ...(req.image ? { image: req.image } : {}),
   });
   const url =

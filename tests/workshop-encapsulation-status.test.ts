@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowIOMap } from "../src/components/studio/shared/workflow-io";
 import { deriveEncapsulationStatus } from "../src/lib/workshop/workshop-encapsulation-status";
+import { modeContractInputLabel } from "../src/lib/workshop/model-mode-contract";
+
+/** 尺寸口的展示名与模式契约编辑器同一份措辞（单一出处，不做字面重复断言）。 */
+const SIZE_LABEL = modeContractInputLabel("size");
 
 /** 典型文生图工作流 IO：提示词 + 负向 + 宽高比/百万像素组合控件 + 内部参数。 */
 const IO: WorkflowIOMap = {
@@ -62,7 +66,7 @@ describe("deriveEncapsulationStatus", () => {
     expect(prompt?.targetIoKey).toBe("positive_prompt");
     expect(prompt?.control).toBe("text");
     const size = status.entries.find((e) => e.id === "size");
-    expect(size?.label).toBe("尺寸（宽高比 + 百万像素）");
+    expect(size?.label).toBe(SIZE_LABEL);
     expect(size?.control).toBe("size");
     expect(size?.targetIoKey).not.toBeNull();
     // 内部参数（steps）不在契约口里
@@ -80,7 +84,7 @@ describe("deriveEncapsulationStatus", () => {
     });
     expect(status.ready).toBe(false);
     expect(status.missingLabels).toContain("提示词");
-    expect(status.missingLabels).toContain("尺寸（宽高比 + 百万像素）");
+    expect(status.missingLabels).toContain(SIZE_LABEL);
   });
 
   it("作者落点覆盖（paramMap.manualByMode）优先于自动判定", () => {
@@ -117,7 +121,7 @@ describe("deriveEncapsulationStatus：契约注册表覆盖", () => {
       mode: "t2i",
       contractEntries: [
         { id: "prompt", label: "提示词", control: "text" },
-        { id: "size", label: "尺寸（宽高比 + 百万像素）", control: "size" },
+        { id: "size", label: SIZE_LABEL, control: "size" },
         { id: "reference-image", label: "参考图 / 输入图", control: "image" },
       ],
     });
