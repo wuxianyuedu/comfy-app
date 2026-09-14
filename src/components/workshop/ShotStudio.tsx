@@ -15,10 +15,10 @@ import {
   parseShotSize,
   shotSizeToExposed,
   shotSizeToParam,
+  shotSizeToRelay,
   type ShotSizeState,
 } from "./shot-size-config";
 import { ShotSizePicker } from "./ShotSizePicker";
-import { shortRatioLabel } from "~/components/studio/shared/MultiSegmentPopover";
 
 /** catch 抛出值（unknown）→ 消息提取：带 string message 的对象取 message，其余回退。 */
 function errorMessage(e: unknown, fallback: string): string {
@@ -212,8 +212,9 @@ export function ShotStudio({
             ? strParam(shot.params.size, shotSizeToParam(shotSize))
             : shotSizeToParam(shotSize),
           mode: "T2I",
-          aspectRatio: shortRatioLabel(shotSize.ratio),
-          megapixels: shotSize.clarity,
+          /* 远端通道认「宽高比 + 百万像素」：分辨率档也换算成实际总像素再下发
+           * （透传 "1k" 这类档位名对远端没有意义）。 */
+          ...shotSizeToRelay(shotSize),
         });
         patchShot(shot.id, { status: "done", imageUrl: url });
       }
@@ -271,10 +272,12 @@ export function ShotStudio({
           <Icon name="settings" size={12} />
           API 通道设置
         </button>
-        <label className="flex items-center gap-2 text-xs">
+        {/* 不用 <label> 包住选择器：它内部会挂尺寸表配置弹窗，弹窗里的输入框
+            会被 label 的点击行为抢焦点（弹窗开着、背后的下拉被一起触发）。 */}
+        <div className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">尺寸</span>
           <ShotSizePicker value={shotSize} onChange={setShotSize} disabled={batchRunning} />
-        </label>
+        </div>
         {channel === "local" && checkpoints.length > 0 && (
           <label className="ml-auto flex items-center gap-2 text-xs">
             <span className="text-muted-foreground">Checkpoint</span>

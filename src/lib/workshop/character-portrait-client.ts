@@ -5,8 +5,10 @@
 //   · 导入：素材库「角色」分类（/api/materials），落盘后拿到可引用的本地地址
 
 import { uploadMaterialItem } from "@/lib/materials-client";
-import { shortRatioLabel } from "~/components/studio/shared/MultiSegmentPopover";
-import type { ShotSizeState } from "~/components/workshop/shot-size-config";
+import {
+  shotSizeToRelay,
+  type ShotSizeState,
+} from "~/components/workshop/shot-size-config";
 import type { SavedOutput } from "./api-channel-shared";
 import {
   apiGenerateImage,
@@ -172,12 +174,8 @@ export async function generateRemotePortrait(
     size: req.size,
     ...(opts.model ? { model: opts.model } : {}),
     mode: "T2I",
-    ...(opts.sizeState
-      ? {
-          aspectRatio: shortRatioLabel(opts.sizeState.ratio),
-          megapixels: opts.sizeState.clarity,
-        }
-      : {}),
+    /* 远端通道认「宽高比 + 百万像素」：分辨率档按场景尺寸表换算成实际总像素。 */
+    ...(opts.sizeState ? shotSizeToRelay(opts.sizeState) : {}),
   });
   return localizePortraitImage(url, opts);
 }

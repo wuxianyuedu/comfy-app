@@ -1,25 +1,39 @@
 /** 镜头生图尺寸的纯派生规则（规范 17 §17.2 第①层）。
  *
- *  尺寸对外表达为「比例 + 像素基准」两段：
- *    · 比例   —— 宽高比预设（横/竖/方）
- *    · 像素   —— 像素基准（1k/2k/4k 长边像素 或 1M/2M/4M 总像素）
+ *  尺寸对外表达为两类等价形式，同一块选择器里都能选：
+ *    · 比例 + 分辨率          —— 1k / 2k / 4k，宽高按场景查「尺寸表」；
+ *    · 比例 + 百万像素 + 倍数  —— 1M / 2M / 4M × 宽高对齐倍数 8/16/32/64。
  *
- *  不再对外表达「对齐倍数」：它是把 W/H 吸附到 ComfyUI 网格的实现细节，
- *  用户面没有可决策的内容 —— 内部固定用 `DEFAULT_ALIGN_MULTIPLE`。
+ *  下发时按目标工作流要的形状二选一（用户口径）：
+ *    · 工作流要 width + height → `shotSizeToParam` 的 "WxH"；
+ *    · 工作流要 比例 + 百万像素 + 倍数 → `shotSizeToExposed`；选的是「分辨率」
+ *      时由 `lib/size-presets` 的 `toMegapixelSpec` 唯一解地换算过去。
  *
  *  无 React、无副作用，可直接单测。 */
 
 import {
   DEFAULT_ALIGN_MULTIPLE,
+  alignMultipleOf,
+  longEdgeOf,
+  megapixelsOf,
+  normalizeAlignMultiple,
+  ratioOfLabel,
+  resolutionDims,
+  shortRatio,
+  type AlignMultiple,
+  type SizeScene,
+} from "~/lib/size-presets";
+import {
   DIM_CLARITY_PRESETS,
   DIM_RATIO_PRESETS,
+  clarityKindOfLabel,
   dimsForRatio,
   pickClarityPreset,
+  resolutionTierOfLabel,
   type DimClarityPreset,
 } from "~/components/studio/shared/workflow-io";
-import { shortRatioLabel } from "~/components/studio/shared/MultiSegmentPopover";
 
-/** 默认尺寸：竖屏 1k（与内置 txt2img 的 832x1216 量级一致的 SD 竖屏比例）。 */
+/** 默认尺寸：竖屏 1k（3:4 长边 1024，图片场景表 → 768x1024）。 */
 export const DEFAULT_SHOT_RATIO = "3:4";
 export const DEFAULT_SHOT_CLARITY = "1k";
 
@@ -28,17 +42,24 @@ export interface ShotSizeState {
   ratio: string;
   /** 清晰度预设 label（DIM_CLARITY_PRESETS[].label，如 "1k"、"2M"）。 */
   clarity: string;
+  /** 百万像素档的宽高对齐倍数（8/16/32/64）。
+   *  分辨率档不读它 —— 那一档的宽高由场景尺寸表给定。 */
+  multiple: AlignMultiple;
 }
 
 export const DEFAULT_SHOT_SIZE: ShotSizeState = {
   ratio: DEFAULT_SHOT_RATIO,
   clarity: DEFAULT_SHOT_CLARITY,
+  multiple: DEFAULT_ALIGN_MULTIPLE,
 };
 
-/** 从任意 unknown（Shot.params.size / 草稿 JSON）恢复两段选择状态。
- *  旧数据是 "832x1216" 这类 WxH 字符串 —— 反解出最接近的 比例+清晰度；
- *  无法识别时回退默认值。 */
-export function parseShotSize(raw: unknown): ShotSizeState {
+/** 从任意 unknown（Shot.params.size / 草稿 JSON）恢复尺寸选择状态。
+ *  旧数据是 "832x1216" 这类 WxH 字符串 —— 反解出最接近的 比例 + 像素档，
+ *  倍数取「能整除两侧的最大候选」；无法识别时回退默认值。 */
+export function parseShotSize(
+  raw: unknown,
+  scene: SizeScene = "image",
+): ShotSizeState {
   if (typeof raw !== "string" || !raw.trim()) return { ...DEFAULT_SHOT_SIZE };
   const match = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(raw.trim());
   if (!match) return { ...DEFAULT_SHOT_SIZE };
@@ -55,13 +76,17 @@ export function parseShotSize(raw: unknown): ShotSizeState {
         : best,
     DIM_RATIO_PRESETS[0]!,
   );
-  const clarity = pickClarityPreset(width, height, DEFAULT_ALIGN_MULTIPLE);
-  return { ratio: ratio.label, clarity: clarity.label };
+  const clarity = pickClarityPreset(width, height, DEFAULT_ALIGN_MULTIPLE, scene);
+  return {
+    ratio: ratio.label,
+    clarity: clarity.label,
+    multiple: alignMultipleOf({ width, height }),
+  };
 }
 
 /** 由比例 label 查比值；未知 label 回退 1:1。 */
 export function ratioValueOf(label: string): number {
-  return DIM_RATIO_PRESETS.find((preset) => preset.label === label)?.ratio ?? 1;
+  return ratioOfLabel(label);
 }
 
 /** 由清晰度 label 查预设；未知 label 回退 1k。 */
@@ -72,53 +97,104 @@ export function clarityPresetOf(label: string): DimClarityPreset {
   );
 }
 
-/** 两段状态 → 最终 WxH（固定对齐网格，钳制 [64, 4096]）。 */
-export function shotSizeToDims(state: ShotSizeState): { width: number; height: number } {
+/** 该清晰度档属于哪个子类（分辨率 / 百万像素）。 */
+export function shotClarityKind(state: ShotSizeState): DimClarityPreset["kind"] {
+  return clarityKindOfLabel(state.clarity);
+}
+
+/** 选择状态 → 最终 WxH。 */
+export function shotSizeToDims(
+  state: ShotSizeState,
+  scene: SizeScene = "image",
+): { width: number; height: number } {
   return dimsForRatio(
     ratioValueOf(state.ratio),
     clarityPresetOf(state.clarity),
-    DEFAULT_ALIGN_MULTIPLE,
+    state.multiple,
+    scene,
   );
 }
 
-/** 两段状态 → 生成参数 `size`（"宽x高" 字符串）。
+/** 选择状态 → 生成参数 `size`（"宽x高" 字符串）。
  *
  *  仅内置工作流（txt2img / img2video…）走这条 —— 它们接的就是 WxH 字符串。
- *  工作流库里的工作流不走字符串：尺寸按「比例 + 像素」逐端口派值，
+ *  工作流库里的工作流不走字符串：尺寸按「比例 + 百万像素 + 倍数」逐端口派值，
  *  见 `shotSizeToExposed`。 */
-export function shotSizeToParam(state: ShotSizeState): string {
-  const { width, height } = shotSizeToDims(state);
+export function shotSizeToParam(
+  state: ShotSizeState,
+  scene: SizeScene = "image",
+): string {
+  const { width, height } = shotSizeToDims(state, scene);
   return `${width}x${height}`;
 }
 
-/** 两段状态 → 工坊对外暴露的尺寸形状（不看像素、只看「比例 + 像素基准」）。
- *
- *  工作流库里的工作流可能用 `aspect_ratio`（COMBO，值形如 "16:9 (Widescreen)"）
- *  与 `megapixels`（FLOAT，1 ≈ 1M 总像素）表达尺寸，而不是 WxH 两个整数。
- *  把「比例 + 像素基准」原样交给它们，比先在工坊侧折成 WxH 再反解回来更准确
- *  —— 后者会因四舍五入落在两个预设之间（用户表现为「给了 1k 却算出个怪尺寸」）。
- *
- *  `pixelLongEdge` 是像素基准档（1k/2k/4k）的长边像素，供工作流只暴露
- *  单个「分辨率」端口时使用；百万像素档为 undefined（改用 `megapixels`）。 */
-export function shotSizeToExposed(state: ShotSizeState): {
-  aspect: string;
-  megapixels?: number;
-  pixelLongEdge?: number;
-} {
-  const preset = clarityPresetOf(state.clarity);
-  const aspect = shortRatioLabel(state.ratio);
-  if (preset.kind === "pixel") {
-    return { aspect, pixelLongEdge: preset.longEdge ?? 1024 };
-  }
-  return { aspect, megapixels: (preset.totalPixels ?? 1_000_000) / 1_000_000 };
+/** 比例短标签（"16:9 横屏" → "16:9"）。 */
+export function shotSizeAspect(state: ShotSizeState): string {
+  return shortRatio(state.ratio);
 }
 
-/** 生成按钮旁的紧凑摘要（如 "3:4 / 1k"）。
+/** 选择状态 → 工坊对外暴露的尺寸形状（比例 + 百万像素 + 倍数）。
  *
- *  刻意不带折算出来的 WxH：工坊对尺寸的表达就是「比例 + 像素基准」，具体像素
- *  由工作流侧按它自己的口径算 —— 把折算值写在这里等于又给了一串 "768x1024"，
- *  与「不给 832x1216 这种值」相悖，且工作流只吃比例 / 像素时它还是个会误导的
- *  近似值。 */
+ *  工作流库里的工作流多用 `aspect_ratio`（COMBO，值形如 "16:9 (Widescreen)"）
+ *  与 `megapixels`（FLOAT，1 ≈ 1M 总像素）表达尺寸。
+ *
+ *  用户口径：界面上选的若是「比例 + 百万像素 + 倍数」，直接传；选的若是
+ *  「比例 + 分辨率」，按场景尺寸表换算成「百万像素 + 倍数」再传 ——
+ *  百万像素取该档宽高的**实际总像素**（不是幂次近似），倍数取能同时整除
+ *  两侧的最大候选。
+ *
+ *  `pixelLongEdge` 只在分辨率档给出（供工作流只暴露单个「分辨率」端口时使用）；
+ *  两个端口同时存在时 `megapixels` 更精确，优先它。 */
+export function shotSizeToExposed(
+  state: ShotSizeState,
+  scene: SizeScene = "image",
+): {
+  aspect: string;
+  megapixels: number;
+  multiple: AlignMultiple;
+  pixelLongEdge?: number;
+} {
+  const aspect = shotSizeAspect(state);
+  const tier = resolutionTierOfLabel(state.clarity);
+  if (tier) {
+    /* 分辨率档 → 查场景表拿宽高，再换算成「百万像素 + 倍数」。 */
+    const size = resolutionDims(scene, ratioValueOf(state.ratio), tier);
+    return {
+      aspect,
+      megapixels: megapixelsOf(size),
+      multiple: alignMultipleOf(size),
+      pixelLongEdge: longEdgeOf(size),
+    };
+  }
+  const preset = clarityPresetOf(state.clarity);
+  return {
+    aspect,
+    megapixels: (preset.totalPixels ?? 1_000_000) / 1_000_000,
+    /* 老草稿里可能没有 multiple 字段 —— 规范化一次，避免把 undefined 下发。 */
+    multiple: normalizeAlignMultiple(state.multiple),
+  };
+}
+
+/** 选择状态 → 远端 API 通道认的尺寸字段（宽高比 + 百万像素字符串）。
+ *
+ *  分辨率档同样换算成实际总像素 —— 直接透传 "1k" 这类档位名对远端没有意义。 */
+export function shotSizeToRelay(
+  state: ShotSizeState,
+  scene: SizeScene = "image",
+): { aspectRatio: string; megapixels: string } {
+  const exposed = shotSizeToExposed(state, scene);
+  return { aspectRatio: exposed.aspect, megapixels: String(exposed.megapixels) };
+}
+
+/** 生成按钮旁的紧凑摘要（如 "3:4 / 1k"，百万像素档追加倍数 "16:9 / 2M / 64"）。
+ *
+ *  刻意不带折算出来的 WxH：工坊对尺寸的表达就是「比例 + 像素档（+ 倍数）」，
+ *  具体像素由工作流侧按它自己的口径算 —— 把折算值写在这里等于又给了一串
+ *  "768x1024"，与「不给 832x1216 这种值」相悖，且工作流只吃比例 / 像素时
+ *  它还是个会误导的近似值。 */
 export function shotSizeSummary(state: ShotSizeState): string {
-  return `${shortRatioLabel(state.ratio)} / ${state.clarity}`;
+  const base = `${shotSizeAspect(state)} / ${state.clarity}`;
+  return shotClarityKind(state) === "megapixel"
+    ? `${base} / ${normalizeAlignMultiple(state.multiple)}`
+    : base;
 }

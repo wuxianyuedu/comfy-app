@@ -13,8 +13,10 @@
  * localStorage so the user's preference sticks across reloads.
  *
  * Split into: MultiSegmentPopover.tsx / StyleSwitcher.tsx /
- * AlignMultipleStepper.tsx / DimensionControl.tsx / VideoControl.tsx /
- * VideoField.tsx / grouped-controls-presets.ts.
+ * DimensionControl.tsx（入口 + 宽高形态）/ AspectMegapixelControl.tsx
+ * （比例 + 百万像素 + 倍数形态）/ DimensionControlParts.tsx（共用零件）/
+ * VideoControl.tsx / VideoField.tsx / grouped-controls-presets.ts /
+ * SizePresetTableModal.tsx（尺寸表配置）.
  * ───────────────────────────────────────────────────────────────────────── */
 import {
   type DimensionGroup,

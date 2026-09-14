@@ -41,6 +41,9 @@ export type WorkshopPinClass =
   | "size-height"
   | "size-aspect"
   | "size-megapixels"
+  /** 宽高对齐倍数（8/16/32/64）—— 「比例 + 百万像素 + 倍数」这一类尺寸表达
+   *  的第三段。存在时由工坊按当前选择派值，不再散落成需要用户手填的数字框。 */
+  | "size-multiple"
   | "reference-image"
   | "first-frame"
   | "last-frame"
@@ -79,6 +82,9 @@ export interface WorkshopExposedValues {
   aspect?: string;
   /** 总像素量（单位：百万像素，1 = 1M）。落在 `megapixels` 类端口上。 */
   megapixels?: number;
+  /** 宽高对齐倍数（8/16/32/64）。落在 `multiple` 类端口上，与 `megapixels`
+   *  一起构成「比例 + 百万像素 + 倍数」这类尺寸表达。 */
+  multiple?: number;
   /** 像素基准档的长边像素（1k = 1024 / 2k = 2048 / 4k = 4096）。落在只声明了
    *  单个「分辨率 / 长边」端口的尺寸口上（工坊的 1k/2k/4k 档）。 */
   pixelLongEdge?: number;
@@ -217,6 +223,15 @@ function isMegapixelsPin(e: WorkflowIOEntry): boolean {
   return /megapixel|百万像素|\b像素\b/.test(text);
 }
 
+/** 宽高对齐倍数端口（`multiple` / `alignment` / 标签「倍数」）。
+ *
+ *  刻意与 `isMegapixelsPin` 分开：它是尺寸表达的第三段，工坊按当前选择派值
+ *  （分辨率档时由「哪些倍数能整除两侧」反推），而不是让用户再填一个数字。 */
+function isMultiplePin(e: WorkflowIOEntry): boolean {
+  const text = searchText(e);
+  return /(^|[_\s])multiple([_\s]|$)|alignment|倍数|倍率/.test(text);
+}
+
 /** 判定一个 IO 输入条目在工坊里属于哪一类对外控件。
  *
  *  仅对 `direction === "input"` 的条目有意义；输出与连线型输入一律 internal。
@@ -231,6 +246,7 @@ export function classifyWorkshopPin(e: WorkflowIOEntry): WorkshopPinClass {
   if (isWidthPin(e)) return "size-width";
   if (isHeightPin(e)) return "size-height";
   if (isMegapixelsPin(e)) return "size-megapixels";
+  if (isMultiplePin(e)) return "size-multiple";
   if (isAspectPin(e)) return "size-aspect";
   if (isPromptPin(e)) return "prompt";
   return "internal";
@@ -503,6 +519,10 @@ export function buildEncapsulatedInputs(
         const mp = values.megapixels ?? longEdgeToMegapixels(values.pixelLongEdge);
         return { matched: mp !== undefined, value: mp };
       }
+      /* 倍数：与「百万像素」同属「比例 + 百万像素 + 倍数」一类，工坊按当前
+       *  选择派值（分辨率档由能整除两侧的最大候选反推）。 */
+      case "size-multiple":
+        return { matched: values.multiple !== undefined, value: values.multiple };
       case "first-frame":
         return { matched: firstFrame !== undefined, value: firstFrame };
       case "last-frame":

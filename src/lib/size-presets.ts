@@ -1,0 +1,299 @@
+/* ── 尺寸预设表（比例 × 分辨率 / 比例 + 百万像素 + 倍数）──
+ *
+ * 项目里所有「指定尺寸」的地方都用同一套口径表达，两种类别等价可换算：
+ *   · 比例 + 分辨率     —— 比例（16:9 …）× 分辨率档（1k / 2k / 4k）
+ *   · 比例 + 百万像素 + 倍数 —— 比例 × 总像素档（1M / 2M / 4M）× 宽高对齐倍数（8/16/32/64）
+ *
+ * 为什么要有「分辨率表」而不是现算：1k / 2k / 4k 在不同场景下不是同一个数
+ * —— 图片场景（AI 出图）1k 长边按 1024 走，视频场景（显示器 / 视频行业标准）
+ * 1k 是 1280×720、2k 是 2560×1440。同一档位两套值，只能查表。
+ * 表本身允许用户改（见 size-preset-store），本模块只出**默认值**与纯换算。
+ *
+ * 本模块无 React、无副作用（规范 17 §17.2 第①层），可直接单测。 */
+
+/** 尺寸所属场景：图片（AI 出图口径）/ 视频（显示器与视频行业标准口径）。 */
+export type SizeScene = "image" | "video";
+
+/** 一个比例预设：`label` 是 UI 上的显示名（含方位后缀），`ratio` = 宽 / 高。 */
+export interface SizeRatioPreset {
+  label: string;
+  ratio: number;
+}
+
+/** 比例预设（8 档）。宽高两侧都列出，避免用户手算倒数比例。 */
+export const SIZE_RATIO_PRESETS: SizeRatioPreset[] = [
+  { label: "1:1 正方", ratio: 1 },
+  { label: "4:3", ratio: 4 / 3 },
+  { label: "3:2", ratio: 3 / 2 },
+  { label: "16:9 横屏", ratio: 16 / 9 },
+  { label: "21:9 超宽", ratio: 21 / 9 },
+  { label: "3:4", ratio: 3 / 4 },
+  { label: "2:3", ratio: 2 / 3 },
+  { label: "9:16 竖屏", ratio: 9 / 16 },
+];
+
+/** 分辨率档位（长边口径）。 */
+export const RESOLUTION_TIERS = ["1k", "2k", "4k"] as const;
+export type ResolutionTier = (typeof RESOLUTION_TIERS)[number];
+
+/** 百万像素档位（总像素，单位 M）。 */
+export const MEGAPIXEL_TIERS = [1, 2, 4] as const;
+export type MegapixelTier = (typeof MEGAPIXEL_TIERS)[number];
+
+/** 宽高对齐倍数候选：宽高都要落在这个网格上。 */
+export const ALIGN_MULTIPLE_OPTIONS = [8, 16, 32, 64] as const;
+export type AlignMultiple = (typeof ALIGN_MULTIPLE_OPTIONS)[number];
+export const DEFAULT_ALIGN_MULTIPLE: AlignMultiple = 64;
+
+/** 尺寸下界 / 上界（与 `numericBounds` 给 width/height 的范围一致）。 */
+export const MIN_SIZE = 64;
+export const MAX_SIZE = 4096;
+
+export interface SizeDims {
+  width: number;
+  height: number;
+}
+
+/** 单场景的「比例 → 各分辨率档的宽高」表。 */
+export type SceneResolutionTable = Record<string, Record<ResolutionTier, SizeDims>>;
+
+/** 全场景尺寸表。 */
+export interface SizePresetTable {
+  image: SceneResolutionTable;
+  video: SceneResolutionTable;
+}
+
+const dims = (width: number, height: number): SizeDims => ({ width, height });
+
+/* ── 默认表 ──
+ * 图片场景：AI 出图 / 通用场景，长边约 1024 / 2048 / 3840~4096。
+ * 视频场景：显示器 / 视频行业标准，1K 俗称 = 1280×720、2K = 2560×1440、
+ *          4K UHD = 3840×2160；超宽档按行业常见值单列。 */
+const DEFAULT_IMAGE_TABLE: SceneResolutionTable = {
+  "1:1 正方": { "1k": dims(1024, 1024), "2k": dims(2048, 2048), "4k": dims(3840, 3840) },
+  "4:3": { "1k": dims(1024, 768), "2k": dims(2048, 1536), "4k": dims(4096, 3072) },
+  "3:2": { "1k": dims(1024, 683), "2k": dims(2048, 1365), "4k": dims(4096, 2731) },
+  "16:9 横屏": { "1k": dims(1024, 576), "2k": dims(2048, 1152), "4k": dims(3840, 2160) },
+  "21:9 超宽": { "1k": dims(1195, 512), "2k": dims(2560, 1080), "4k": dims(5120, 2160) },
+  "3:4": { "1k": dims(768, 1024), "2k": dims(1536, 2048), "4k": dims(3072, 4096) },
+  "2:3": { "1k": dims(683, 1024), "2k": dims(1365, 2048), "4k": dims(2731, 4096) },
+  "9:16 竖屏": { "1k": dims(576, 1024), "2k": dims(1152, 2048), "4k": dims(2160, 3840) },
+};
+
+const DEFAULT_VIDEO_TABLE: SceneResolutionTable = {
+  "1:1 正方": { "1k": dims(1024, 1024), "2k": dims(2048, 2048), "4k": dims(3840, 3840) },
+  "4:3": { "1k": dims(1280, 960), "2k": dims(2048, 1536), "4k": dims(4096, 3072) },
+  "3:2": { "1k": dims(1280, 854), "2k": dims(2560, 1707), "4k": dims(3840, 2560) },
+  "16:9 横屏": { "1k": dims(1280, 720), "2k": dims(2560, 1440), "4k": dims(3840, 2160) },
+  "21:9 超宽": { "1k": dims(1280, 540), "2k": dims(2560, 1080), "4k": dims(5120, 2160) },
+  "3:4": { "1k": dims(960, 1280), "2k": dims(1536, 2048), "4k": dims(2880, 3840) },
+  "2:3": { "1k": dims(854, 1280), "2k": dims(1707, 2560), "4k": dims(2560, 3840) },
+  "9:16 竖屏": { "1k": dims(720, 1280), "2k": dims(1440, 2560), "4k": dims(2160, 3840) },
+};
+
+export const DEFAULT_SIZE_PRESET_TABLE: SizePresetTable = {
+  image: DEFAULT_IMAGE_TABLE,
+  video: DEFAULT_VIDEO_TABLE,
+};
+
+/** 场景的显示名。 */
+export const SIZE_SCENE_LABELS: Record<SizeScene, string> = {
+  image: "图片",
+  video: "视频",
+};
+
+/** 从模式码推场景（T2V / I2V / FLF2V … 这类以 V 收尾的是视频模式）。
+ *
+ *  刻意只看模式码：工作流库那层「内容分类」是展示维度，不是生成模式判据
+ *  （与 `workflow-encapsulation` 的 `isVideoMode` 同一口径）。 */
+export function sceneFromMode(mode: string | null | undefined): SizeScene {
+  const code = (mode ?? "").trim().toUpperCase();
+  if (!code) return "image";
+  if (code.includes("VIDEO")) return "video";
+  if (code.endsWith("V")) return "video";
+  return "image";
+}
+
+/** 由任意表达式（如模式名 / 任务类型）推场景，视频关键词命中即视频。 */
+export function sceneFromText(text: string | null | undefined): SizeScene {
+  const raw = (text ?? "").trim();
+  if (!raw) return "image";
+  if (/video|t2v|i2v|flf|首尾帧/i.test(raw)) return "video";
+  return sceneFromMode(raw);
+}
+
+/** 与目标比例最接近的比例预设（表行键）。 */
+export function nearestRatioPreset(ratio: number): SizeRatioPreset {
+  const target = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  return SIZE_RATIO_PRESETS.reduce(
+    (best, preset) =>
+      Math.abs(preset.ratio - target) < Math.abs(best.ratio - target) ? preset : best,
+    SIZE_RATIO_PRESETS[0]!,
+  );
+}
+
+/** 比例预设 label → 比值；未知 label 回退 1:1。 */
+export function ratioOfLabel(label: string): number {
+  return SIZE_RATIO_PRESETS.find((preset) => preset.label === label)?.ratio ?? 1;
+}
+
+/** 表行键 → 短标签（"16:9 横屏" → "16:9"）。 */
+export function shortRatio(label: string): string {
+  return label.split(/\s+/)[0] ?? label;
+}
+
+/** 查表：某场景下「某比例 × 某分辨率档」的宽高。
+ *
+ *  比例按**最接近的预设行**取（手写的自定义比例也拿得到一档可用的值），
+ *  表里缺行时回退到 1:1 行，再缺就按长边现算，保证永远返回有限的宽高。 */
+export function resolutionDims(
+  scene: SizeScene,
+  ratio: number,
+  tier: ResolutionTier,
+  table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): SizeDims {
+  const row = table[scene]?.[nearestRatioPreset(ratio).label];
+  const hit = row?.[tier];
+  if (hit && hit.width > 0 && hit.height > 0) return { ...hit };
+  const safe = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  const longEdge = tier === "4k" ? 3840 : tier === "2k" ? 2048 : 1024;
+  return safe >= 1
+    ? dims(longEdge, Math.max(1, Math.round(longEdge / safe)))
+    : dims(Math.max(1, Math.round(longEdge * safe)), longEdge);
+}
+
+/** 查表：某场景下某比例行的「分辨率档 → 宽高」整行。 */
+export function resolutionRow(
+  scene: SizeScene,
+  ratioLabel: string,
+  table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): Record<ResolutionTier, SizeDims> {
+  const row = table[scene]?.[ratioLabel];
+  if (row) return row;
+  const ratio = ratioOfLabel(ratioLabel);
+  return {
+    "1k": resolutionDims(scene, ratio, "1k", table),
+    "2k": resolutionDims(scene, ratio, "2k", table),
+    "4k": resolutionDims(scene, ratio, "4k", table),
+  };
+}
+
+/** 长边像素（横屏取宽、竖屏取高）。 */
+export function longEdgeOf(size: SizeDims): number {
+  return Math.max(size.width, size.height);
+}
+
+/** 总像素。 */
+export function totalPixelsOf(size: SizeDims): number {
+  return size.width * size.height;
+}
+
+/** 宽高 → 百万像素（默认保留 3 位小数，够表达 1024×576 = 0.59M 这档差异）。 */
+export function megapixelsOf(size: SizeDims, digits = 3): number {
+  const raw = totalPixelsOf(size) / 1_000_000;
+  if (!Number.isFinite(raw) || raw <= 0) return 1;
+  const factor = 10 ** digits;
+  return Math.round(raw * factor) / factor;
+}
+
+/** 宽高 → 能把两侧都整除的最大候选倍数；都除不尽时退到最小档 8。 */
+export function alignMultipleOf(size: SizeDims): AlignMultiple {
+  for (let i = ALIGN_MULTIPLE_OPTIONS.length - 1; i >= 0; i -= 1) {
+    const m = ALIGN_MULTIPLE_OPTIONS[i]!;
+    if (size.width % m === 0 && size.height % m === 0) return m;
+  }
+  return ALIGN_MULTIPLE_OPTIONS[0];
+}
+
+/** 把任意数规范到候选倍数（就近取，小于最小档回退默认 64）。 */
+export function normalizeAlignMultiple(multiple: number): AlignMultiple {
+  if (!Number.isFinite(multiple) || multiple < ALIGN_MULTIPLE_OPTIONS[0]) {
+    return DEFAULT_ALIGN_MULTIPLE;
+  }
+  return ALIGN_MULTIPLE_OPTIONS.reduce((best, option) =>
+    Math.abs(option - multiple) < Math.abs(best - multiple) ? option : best,
+  );
+}
+
+/** 宽高吸附到 `multiple` 网格并钳制到 [MIN_SIZE, MAX_SIZE]。 */
+export function snapSize(size: SizeDims, multiple: AlignMultiple): SizeDims {
+  const snap = (value: number) =>
+    Math.max(MIN_SIZE, Math.min(MAX_SIZE, Math.round(value / multiple) * multiple));
+  return { width: snap(size.width), height: snap(size.height) };
+}
+
+/** 百万像素 + 倍数 + 比例 → 宽高（两侧落倍数网格，总像素预算按比例分配）。
+ *
+ *  `totalPixels = w * h` 与 `w / h = ratio` 联立：
+ *    h = sqrt(totalPixels / ratio)，w = totalPixels / h。 */
+export function megapixelDims(
+  ratio: number,
+  megapixels: number,
+  multiple: AlignMultiple = DEFAULT_ALIGN_MULTIPLE,
+): SizeDims {
+  const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  const total = (Number.isFinite(megapixels) && megapixels > 0 ? megapixels : 1) * 1_000_000;
+  const rawHeight = Math.sqrt(total / safeRatio);
+  const rawWidth = total / rawHeight;
+  return snapSize({ width: rawWidth, height: rawHeight }, normalizeAlignMultiple(multiple));
+}
+
+/** 比例 + 分辨率 → 比例 + 百万像素 + 倍数（两种尺寸类别之间的换算）。
+ *
+ *  用户口径：界面上选的是「比例 + 分辨率」，而目标工作流要的是
+ *  「比例 + 百万像素 + 倍数」时，按这一条换算后再下发：
+ *   · 百万像素 = 该档位查表所得宽高的实际总像素（不是幂次近似）；
+ *   · 倍数     = 能同时整除两侧的最大候选倍数（都除不尽时取 8）。
+
+ *  唯一解，可直接单测。 */
+export function toMegapixelSpec(
+  scene: SizeScene,
+  ratio: number,
+  tier: ResolutionTier,
+  table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): { megapixels: number; multiple: AlignMultiple; size: SizeDims } {
+  const size = resolutionDims(scene, ratio, tier, table);
+  return {
+    megapixels: megapixelsOf(size),
+    multiple: alignMultipleOf(size),
+    size,
+  };
+}
+
+/** 某场景的表相对默认值是否被改过（配置界面据此显示「已改」与恢复入口）。 */
+export function sceneIsModified(scene: SizeScene, table: SizePresetTable): boolean {
+  const current = table[scene];
+  const fallback = DEFAULT_SIZE_PRESET_TABLE[scene];
+  for (const preset of SIZE_RATIO_PRESETS) {
+    for (const tier of RESOLUTION_TIERS) {
+      const a = current[preset.label]?.[tier];
+      const b = fallback[preset.label]?.[tier];
+      if (!a || !b) return true;
+      if (a.width !== b.width || a.height !== b.height) return true;
+    }
+  }
+  return false;
+}
+
+/** 由宽高反解最接近的分辨率档（含场景），识别不出时返回 null。 */
+export function resolutionTierOf(
+  scene: SizeScene,
+  width: number,
+  height: number,
+  table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): ResolutionTier | null {
+  if (!(width > 0) || !(height > 0)) return null;
+  const row = table[scene]?.[nearestRatioPreset(width / height).label];
+  if (!row) return null;
+  let best: ResolutionTier | null = null;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const tier of RESOLUTION_TIERS) {
+    const hit = row[tier];
+    const dist = Math.abs(hit.width - width) + Math.abs(hit.height - height);
+    if (dist < bestDist) {
+      best = tier;
+      bestDist = dist;
+    }
+  }
+  return best;
+}

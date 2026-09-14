@@ -15,6 +15,18 @@
 
 import { runtimeNodeId } from "~/lib/workflow-param-mapping";
 import {
+  DEFAULT_ALIGN_MULTIPLE,
+  MEGAPIXEL_TIERS,
+  RESOLUTION_TIERS,
+  SIZE_RATIO_PRESETS,
+  megapixelDims,
+  normalizeAlignMultiple,
+  resolutionDims,
+  type ResolutionTier,
+  type SizePresetTable,
+  type SizeScene,
+} from "~/lib/size-presets";
+import {
   collectModeCodes,
   isVisibleInMode,
   resolveEntryDefault,
@@ -24,7 +36,18 @@ import {
   type WorkflowIOMap,
   type WorkflowIOModeOverride,
 } from "~/lib/workflow-io-types";
+
 export type { WorkflowIOEntry, WorkflowIOMap, WorkflowIOModeOverride };
+/* 尺寸口径（倍数候选 / 比例表）与场景表同源，统一从 `lib/size-presets` 出口，
+ * 既有的 `from "./workflow-io"` 调用方无需改 import。 */
+export {
+  DEFAULT_ALIGN_MULTIPLE,
+  normalizeAlignMultiple,
+  type AlignMultiple,
+  type ResolutionTier,
+  type SizePresetTable,
+  type SizeScene,
+} from "~/lib/size-presets";
 export {
   collectModeCodes,
   isVisibleInMode,
@@ -582,58 +605,66 @@ export interface VideoGroup {
 
 export type InferredGroup = DimensionGroup | VideoGroup;
 
-/* ── Dimension presets (比例 + 清晰度 → 宽高) ──
- * `ratio` = width / height. splits `DIM_CLARITY_PRESETS`
- * into two `kind`s:
- *   • "pixel"     — long-edge in px (1k = 1024, 2k = 2048, 4k = 4096).  The
- *                   user provides the longer side and the other side is
- *                   derived from the ratio.
- *   • "megapixel" — total pixel count (1M = 1,000,000, 2M = 2,000,000,
- *                   4M = 4,000,000).  Both sides are derived from the
- *                   ratio so each orientation is roughly the same file size.
+/* ── Dimension presets (比例 + 分辨率 / 比例 + 百万像素 + 倍数 → 宽高) ──
  *
- * `dimsForRatio` recognises both kinds — `pixel` callers pass `longEdge`,
- * `megapixel` callers pass `totalPixels` (the long edge is computed as
- * `sqrt(totalPixels / ratio)` and then rounded through the same snap-to-8
- * grid as the pixel path).
+ * 尺寸对外只表达成这两类等价形式：
+ *   · 比例 + 分辨率         —— 1k / 2k / 4k，具体宽高按**场景**查表
+ *                              （图片 = AI 出图口径，视频 = 显示器 / 视频行业标准口径）；
+ *   · 比例 + 百万像素 + 倍数 —— 1M / 2M / 4M × 宽高对齐倍数 8/16/32/64。
+ * 两类之间可互算（见 `lib/size-presets` 的 `toMegapixelSpec`）：目标工作流要
+ * 「比例 + 百万像素 + 倍数」而用户选的是「比例 + 分辨率」时，按表换算后下发。
  *
- * `dimsForRatio` snaps the result to multiples of 8 and clamps to [64, 4096]
- * (the same bounds `numericBounds` gives width/height). */
-export const DIM_RATIO_PRESETS: { label: string; ratio: number }[] = [
-  { label: "1:1 正方", ratio: 1 },
-  { label: "4:3", ratio: 4 / 3 },
-  { label: "3:2", ratio: 3 / 2 },
-  { label: "16:9 横屏", ratio: 16 / 9 },
-  { label: "21:9 超宽", ratio: 21 / 9 },
-  { label: "3:4", ratio: 3 / 4 },
-  { label: "2:3", ratio: 2 / 3 },
-  { label: "9:16 竖屏", ratio: 9 / 16 },
-];
+ * `DIM_CLARITY_PRESETS` 是**档位目录**（不含具体像素）：`kind` 区分子类，
+ * 具体宽高由 `dimsForRatio` 按场景现查。图片与视频的 1k/2k/4k 不是同一组值，
+ * 表允许用户在「尺寸表配置」里改（见 `lib/size-preset-store`）。
+ */
 
-/** clarity presets now carry a `kind` field so the
- *  UI can group pixel-based (1k / 2k / 4k) and megapixel-based (1M / 2M /
- *  4M) presets in two sub-rows inside the 清晰度 segment of the
- *  MultiSegmentPopover. */
+/** 比例预设（与 `SIZE_RATIO_PRESETS` 同源；保留旧名以免全库改 import）。 */
+export const DIM_RATIO_PRESETS: { label: string; ratio: number }[] = SIZE_RATIO_PRESETS;
+
+/** 「像素」大类下的两个子类：分辨率（1k/2k/4k）与百万像素（1M/2M/4M）。 */
 export interface DimClarityPreset {
   kind: "pixel" | "megapixel";
   /** Display label as shown in the popover chip (e.g. "1k", "1M"). */
   label: string;
-  /** Pixel kind: the long-edge in px. */
-  longEdge?: number;
   /** Megapixel kind: total pixel count (width * height). */
   totalPixels?: number;
 }
 
 export const DIM_CLARITY_PRESETS: DimClarityPreset[] = [
-  // Pixel (long edge) — default
-  { kind: "pixel", label: "1k", longEdge: 1024 },
-  { kind: "pixel", label: "2k", longEdge: 2048 },
-  { kind: "pixel", label: "4k", longEdge: 4096 },
-  // Megapixel (total pixels)
-  { kind: "megapixel", label: "1M", totalPixels: 1_000_000 },
-  { kind: "megapixel", label: "2M", totalPixels: 2_000_000 },
-  { kind: "megapixel", label: "4M", totalPixels: 4_000_000 },
+  /* 分辨率档（1k / 2k / 4k）：具体宽高按场景查表，目录里只有档位名。 */
+  ...RESOLUTION_TIERS.map((tier) => ({ kind: "pixel" as const, label: tier })),
+  /* 百万像素档（1M / 2M / 4M）：总像素预算。 */
+  ...MEGAPIXEL_TIERS.map((tier) => ({
+    kind: "megapixel" as const,
+    label: `${tier}M`,
+    totalPixels: tier * 1_000_000,
+  })),
 ];
+
+/** 「像素」大类下两个子类的显示名（视图层分组标题用同一份，避免两处漂移）。 */
+export const CLARITY_SUBGROUP_OF_KIND: Record<DimClarityPreset["kind"], string> = {
+  pixel: "分辨率",
+  megapixel: "百万像素",
+};
+
+/** 清晰度档 label → 它属于哪个子类（未知档按分辨率处理）。 */
+export function clarityKindOfLabel(label: string): DimClarityPreset["kind"] {
+  return DIM_CLARITY_PRESETS.find((preset) => preset.label === label)?.kind ?? "pixel";
+}
+
+/** 分辨率档 label（"1k"）→ 档位；不是分辨率档返回 null。 */
+export function resolutionTierOfLabel(label: string): ResolutionTier | null {
+  return RESOLUTION_TIERS.find((tier) => tier === label) ?? null;
+}
+
+/** 百万像素档 label（"2M"）→ 档位数值（2）；不是百万像素档返回 null。 */
+export function megapixelTierOfLabel(label: string): number | null {
+  const preset = DIM_CLARITY_PRESETS.find(
+    (item) => item.label === label && item.kind === "megapixel",
+  );
+  return preset?.totalPixels ? preset.totalPixels / 1_000_000 : null;
+}
 
 /* ── ResolutionSelector quick presets ──
  *  Some custom nodes (e.g. ResolutionSelector) don't expose raw
@@ -673,116 +704,59 @@ export function parseRatioFromLabel(value: string): number | null {
   return w / h;
 }
 
-/** Given a target ratio + clarity preset, return snapped {width, height}.
+/** Given a target ratio + clarity preset + scene, return the concrete {width, height}.
  *
- *  Pixel preset:     long edge = preset.longEdge; other side is derived
- *                    from the ratio.  "Long edge" is whichever side
- *                    of 1 the ratio sits on.
- *  Megapixel preset: both sides are derived symmetrically — the
- *                    constraint `totalPixels = w*h` together with
- *                    `w/h = ratio` gives
- *                      h = sqrt(totalPixels / ratio)
- *                      w = totalPixels / h = sqrt(totalPixels * ratio)
- *                    so the rectangle honours the total-pixel budget
- *                    regardless of orientation.
+ *  分辨率档（pixel kind）：查「场景 × 比例 × 档位」表 —— 表里的值就是该场景
+ *    1k/2k/4k 的口径（图片与视频不同），不做网格吸附，也不做区间钳制
+ *    （超宽 4k 档的 5120 宽是用户明确要的值）。
+ *  百万像素档（megapixel kind）：`totalPixels = w*h` 与 `w/h = ratio` 联立
+ *    （h = sqrt(totalPixels / ratio)，w = totalPixels / h），再落到用户选的
+ *    倍数网格上 —— 视频 / SDXL 管线通常要求宽高是 64 的倍数。
  *
- *  [fix #2]:
- *    The previous megapixel branch took `rawLongEdge = sqrt(totalPixels)`
- *    and used ratio only to scale the *other* side.  That produced a
- *    geometrically-16:9 rectangle whose actual pixel count was
- *    `totalPixels / ratio` — for 16:9 the user-visible area was
- *    `totalPixels * 9/16 ≈ 0.56M`, exactly the "1M gives 1000×560" the
- *    user reported.  Fix: keep `totalPixels = w*h` as a constraint by
- *    letting ratio enter the square root.
- *
- *  Snap to multiples of 8 (pixel kind) or a user-selectable alignment
- *  multiple (megapixel kind). made the megapixel
- *  snap configurable because ComfyUI video / SDXL pipelines generally
- *  expect W and H to be multiples of 64; the legacy 8-grid silently
- *  produced non-64-aligned outputs (1336×752 for 1M@16:9) that some
- *  model checkpoint unloaders refused.  Range [8, 128] in steps of 8,
- *  default 64 (matches the user-pinned requirement).  The pixel kind
- *  keeps the fine 8-grid because its long-edge values are already
- *  64-aligned (1k=1024, 2k=2048, 4k=4096). */
-export const DEFAULT_ALIGN_MULTIPLE = 64;
-export const MIN_ALIGN_MULTIPLE = 8;
-export const MAX_ALIGN_MULTIPLE = 128;
-/** Clamp `m` into [MIN..MAX] and snap to the nearest multiple of 8.
- *  Anything non-finite / NaN / sub-8 falls back to DEFAULT_ALIGN_MULTIPLE. */
-export function normalizeAlignMultiple(multiple: number): number {
-  if (!Number.isFinite(multiple) || multiple < MIN_ALIGN_MULTIPLE) return DEFAULT_ALIGN_MULTIPLE;
-  const clamped = Math.min(MAX_ALIGN_MULTIPLE, multiple);
-  const snapped = Math.round(clamped / 8) * 8;
-  return snapped >= MIN_ALIGN_MULTIPLE ? snapped : DEFAULT_ALIGN_MULTIPLE;
-}
+ *  传数字（旧签名）时按「显式长边」处理：长边取该数字、另一边按比例推。 */
 export function dimsForRatio(
   ratio: number,
   presetOrBase: DimClarityPreset | number,
-  alignMultiple: number = DEFAULT_ALIGN_MULTIPLE
+  alignMultiple: number = DEFAULT_ALIGN_MULTIPLE,
+  scene: SizeScene = "image",
+  table?: SizePresetTable
 ): { width: number; height: number } {
-  /* megapixel branch honours the user
-   *  alignment; pixel branch keeps the legacy 8-grid. */
-  const alignM = normalizeAlignMultiple(alignMultiple);
-  const snapMega = (value: number) => {
-    const snapped = Math.round(value / alignM) * alignM;
-    return Math.max(64, Math.min(4096, snapped));
-  };
-  const snapPixel = (n: number) =>
-    Math.max(64, Math.min(4096, Math.round(n / 8) * 8));
   /* Guard against a degenerate / missing ratio: NaN / 0 / negative falls
-   * back to a 1:1 square so the form still gets a finite, in-bounds
-   * answer. */
+   * back to a 1:1 square so the form still gets a finite answer. */
   const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
 
-  if (typeof presetOrBase === "number" || presetOrBase.kind === "pixel") {
-    /* Pixel-kind geometry: caller supplies the long edge in pixels, the
-     * other side is derived from ratio. */
-    const rawLongEdge =
-      typeof presetOrBase === "number"
-        ? presetOrBase
-        : presetOrBase.longEdge ?? 1024;
+  if (typeof presetOrBase === "number") {
     const horizontal = safeRatio >= 1;
-    const rawW = horizontal ? rawLongEdge : rawLongEdge * safeRatio;
-    const rawH = horizontal ? rawLongEdge / safeRatio : rawLongEdge;
-    return { width: snapPixel(rawW), height: snapPixel(rawH) };
+    return {
+      width: Math.max(1, Math.round(horizontal ? presetOrBase : presetOrBase * safeRatio)),
+      height: Math.max(1, Math.round(horizontal ? presetOrBase / safeRatio : presetOrBase)),
+    };
   }
 
-  /* Megapixel-kind geometry: totalPixels = w*h, w/h = ratio.  h and w
-   * derived symmetrically so the total-pixel budget is honoured for
-   * both landscape and portrait.  The user-selectable alignMultiple
-   * (default 64) snaps W and H to a ComfyUI-friendly grid. */
-  const totalPixels = presetOrBase.totalPixels ?? 1_000_000;
-  const rawH = Math.sqrt(totalPixels / safeRatio);
-  const rawW = totalPixels / rawH;
-  return { width: snapMega(rawW), height: snapMega(rawH) };
+  if (presetOrBase.kind === "pixel") {
+    const tier = resolutionTierOfLabel(presetOrBase.label) ?? "1k";
+    return resolutionDims(scene, safeRatio, tier, table);
+  }
+
+  return megapixelDims(
+    safeRatio,
+    (presetOrBase.totalPixels ?? 1_000_000) / 1_000_000,
+    normalizeAlignMultiple(alignMultiple)
+  );
 }
 
-/** rewrite the inverse preset picker.
+/** 由宽高反解最接近的清晰度档（跨分辨率 / 百万像素两个子类）。
  *
- *  The previous relative-error scorer had two problems:
- *   (a) [previously documented] For 16:9 the cross-kind comparison
- *       could silently flip a freshly-picked "4M" back to "2k", leaving
- *       two highlights in the popover.
- *   (b) [newly discovered] `dimsForRatio` itself was wrong for the
- *       megapixel kind — see [fix #2] above.  At 16:9 the buggy
- *       `dimsForRatio("4M")` snapped to 1504×848 (= 0.51 × 4M), so even
- *       the "correct" round-trip answer was the wrong preset.
- *
- *  the megapixel snap is now configurable
- *  (`alignMultiple`, default 64).  The inverse picker must mirror the
- *  same multiple — otherwise the forward and inverse functions fall
- *  out of sync (e.g. dimsForRatio(16/9,"1M",64) → 1280×768 but
- *  pickClarityPreset(1280,768) without the parameter → 2M).
- *
- *  The current implementation uses Manhattan distance over the
- *  round-tripped dims: "which preset, when re-applied through
- *  `dimsForRatio`, produces dims closest to the input?"  Ties resolve
- *  to the first preset encountered in `DIM_CLARITY_PRESETS`
- *  (deterministic). */
+ *  用曼哈顿距离比较「该档位经 `dimsForRatio` 还原出来的宽高」与输入的差，
+ *  因此正反两个方向必须传同一套 `alignMultiple` / `scene` —— 否则会落在
+ *  两个档位之间（用户表现为「选了 1k，回读却高亮 2M」）。平手时按
+ *  `DIM_CLARITY_PRESETS` 的声明顺序取第一个（确定性）。 */
 export function pickClarityPreset(
   width: number,
   height: number,
-  alignMultiple: number = DEFAULT_ALIGN_MULTIPLE
+  alignMultiple: number = DEFAULT_ALIGN_MULTIPLE,
+  scene: SizeScene = "image",
+  table?: SizePresetTable
 ): DimClarityPreset {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     return DIM_CLARITY_PRESETS[0]!;
@@ -792,7 +766,7 @@ export function pickClarityPreset(
   let best: DimClarityPreset = DIM_CLARITY_PRESETS[0]!;
   let bestDist = Number.POSITIVE_INFINITY;
   for (const preset of DIM_CLARITY_PRESETS) {
-    const { width: dw, height: dh } = dimsForRatio(ratio, preset, alignM);
+    const { width: dw, height: dh } = dimsForRatio(ratio, preset, alignM, scene, table);
     const dist = Math.abs(width - dw) + Math.abs(height - dh);
     if (dist < bestDist) {
       best = preset;
