@@ -170,7 +170,7 @@ export function AttributeMultiSelect({
             <button
               type="button"
               onClick={() => removeOne(v)}
-              className="text-primary/60 hover:text-red-500"
+              className="text-primary/60 hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
               aria-label={`移除 ${v}`}
             >
               <X size={11} />
@@ -222,7 +222,7 @@ export function AttributeMultiSelect({
               width: pos.width,
               zIndex: 9999,
             }}
-            className="border-border overflow-hidden rounded-lg border bg-(--color-card) shadow-lg shadow-black/40"
+            className="border-border overflow-hidden rounded-lg border bg-card shadow-lg shadow-black/8 dark:shadow-black/40"
           >
             {/* 搜索 */}
             <div className="border-border flex items-center gap-1.5 border-b px-2 py-1.5">

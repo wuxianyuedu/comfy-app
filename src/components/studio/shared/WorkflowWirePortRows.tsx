@@ -157,7 +157,7 @@ export function WirePortRows({
                 style={{ top: "50%", transform: "translateY(-50%)" }}
               />
               <span
-                className="text-[14px] font-medium text-(--color-ink-bright)"
+                className="text-[14px] font-medium text-ink-bright"
                 style={{ fontFamily: "var(--font-sans)" }}
               >
                 {label}
@@ -231,7 +231,7 @@ export function WirePortRows({
                   chip 在右（pr-14 贴 Card 右内缘）——chip 永远在 subrow 右端。*/}
               <div className="relative flex h-4 shrink-0 items-center justify-between gap-2.5 pl-[14px] pr-[14px]">
                 <span
-                  className="text-[14px] font-medium text-(--color-ink-bright)"
+                  className="text-[14px] font-medium text-ink-bright"
                   style={{ fontFamily: "var(--font-sans)" }}
                 >
                   {label}
@@ -263,7 +263,7 @@ export function WirePortRows({
                     value={typeof v === "string" || typeof v === "number" ? String(v) : ""}
                     placeholder={`输入 ${label}`}
                     onChange={(ev) => set(wireInput.ioKey, ev.target.value)}
-                    className="nodrag nopan h-full w-full rounded-md bg-(--color-canvas-deep) px-2.5 py-2 text-[13px] text-(--color-ink-soft) outline-none placeholder:text-(--color-ink-placeholder)"
+                    className="nodrag nopan h-full w-full rounded-md bg-canvas-deep px-2.5 py-2 text-[13px] text-ink-soft outline-none placeholder:text-ink-placeholder"
                     style={{ fontFamily: "var(--font-sans)" }}
                   />
                 )}
@@ -272,7 +272,7 @@ export function WirePortRows({
                     type="button"
                     disabled={uploading}
                     onClick={() => pickFile(wireInput.ioKey)}
-                    className="nodrag nopan inline-flex h-full items-center gap-1.5 rounded-md bg-(--color-canvas-deep) px-2.5 py-1.5 text-[13px] text-(--color-ink-soft) transition-colors hover:text-(--color-ink-bright)"
+                    className="nodrag nopan inline-flex h-full items-center gap-1.5 rounded-md bg-canvas-deep px-2.5 py-1.5 text-[13px] text-ink-soft transition-colors hover:text-ink-bright"
                   >
                     {uploading && uploadTarget === wireInput.ioKey
                       ? "上传中…"
@@ -318,7 +318,7 @@ export function WirePortRows({
                 />
                 <div className="flex-1" />
                 <span
-                  className="text-[14px] font-medium text-(--color-ink-bright)"
+                  className="text-[14px] font-medium text-ink-bright"
                   style={{ fontFamily: "var(--font-sans)" }}
                 >
                   {label}

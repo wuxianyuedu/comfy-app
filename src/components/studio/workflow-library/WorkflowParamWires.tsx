@@ -22,8 +22,9 @@
  * 宿主表单行的高度也随控件类型变化 —— 只有量出来的才是真的。量不到就拿不到
  * 锚点，那条线不画（不留悬空线头）。
  *
- * 自动判定出来的落点画虚线、作者改过的画实线，与编辑器画布同一套语义（见
- * workflow-editor/workflow-param-edges.ts）。
+ * 自动判定出来的落点画虚线、作者改过的画实线 —— 判据与落点解析同源
+ * （`lib/workflow-param-mapping` 的 `resolveMapping` / `manualTargetForEntry`），
+ * 不在这里另算一份。
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -511,6 +512,8 @@ export function dragPath(
   container: HTMLElement,
   entryId: string,
   handleId: string,
+  /** 光标位置，**屏幕坐标**（`clientX/clientY`）；局部坐标换算在本函数内做。
+   *  两个调用点都必须传屏幕坐标 —— 传局部坐标会把容器偏移减两次，预览线飘向左上。 */
   point: { x: number; y: number } | null,
 ): string | null {
   const from = findAnchor(
@@ -711,11 +714,13 @@ export function WorkflowParamWires({
       const hover = container ? resolveDropTarget(point, targets) : null;
       setDrag((prev) => {
         if (!prev) return prev;
-        /* 预览线的终点要传**屏幕坐标**：路径算法内部自己减容器偏移、除缩放。
-         *  这里若把已局部化的 `point` 传进去，偏移会被减两次，预览线固定飘到
-         *  光标**左上方**（拖到哪都拐向左上，看着完全不跟手）；落点判定照旧用
-         *  局部坐标 `point`，两者口径不同、别混。 */
+        /* 预览线的终点要传**屏幕坐标**：`dragPath` / `pathFromAnchor` 自己减容器
+         *  偏移、除缩放。这里若把已局部化的 `point` 传进去，偏移会被减两次，
+         *  预览线固定飘到光标**左上方**（拖到哪都拐向左上，看着完全不跟手）；
+         *  落点判定照旧用局部坐标 `point`，两者口径不同、别混。 */
         const screen = { x: event.clientX, y: event.clientY };
+        /* 反向拖的起点是**起手那一行的圆点**（不是卡片圆点）：`drag.entryId` 在
+         *  反向拖里是空的（entryId 由落点决定），只能按 `fromHostIoKey` 找回锚点。 */
         const fromHost = prev.fromHostIoKey
           ? findAnchor(container ?? document.body, PORT_DOT_ATTR, prev.fromHostIoKey)
           : null;

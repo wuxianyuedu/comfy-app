@@ -58,7 +58,7 @@ export function FlowNodeHeader({
           onToggleCollapsed();
         }}
         onMouseDown={(event) => event.stopPropagation()}
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-white/10 hover:text-white active:bg-white/15"
+        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors e/15"
         style={{ pointerEvents: "auto" }}
       >
         <svg

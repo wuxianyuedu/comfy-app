@@ -7,8 +7,8 @@ import { useMyWorks } from "./hooks/use-my-works";
 const STATUS: Record<string, { label: string; cls: string }> = {
   QUEUED: { label: "排队中", cls: "bg-subtle text-muted-foreground" },
   RUNNING: { label: "生成中", cls: "bg-primary-soft text-primary" },
-  SUCCEEDED: { label: "已完成", cls: "bg-emerald-500/15 text-emerald-500" },
-  FAILED: { label: "失败", cls: "bg-red-500/15 text-red-500" },
+  SUCCEEDED: { label: "已完成", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-500" },
+  FAILED: { label: "失败", cls: "bg-red-500/15 text-red-700 dark:text-red-500" },
   CANCELLED: { label: "已取消", cls: "bg-subtle text-muted-foreground" },
 };
 

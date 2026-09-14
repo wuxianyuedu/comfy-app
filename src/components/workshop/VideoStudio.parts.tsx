@@ -81,7 +81,7 @@ export function ChannelSwitch({
         <button
           type="button"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-lg bg-(--color-subtle) px-3 py-1.5 text-xs hover:bg-(--color-surface-2)"
+          className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-lg bg-subtle px-3 py-1.5 text-xs hover:bg-surface-2"
         >
           <Icon name="settings" size={12} />
           API 通道设置
@@ -107,7 +107,7 @@ export function ChannelSwitch({
         <label className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">帧率</span>
           <DarkSelect
-            className="!bg-(--color-subtle) !border-(--color-border) text-xs"
+            className="!bg-subtle !border-border text-xs"
             value={String(fps)}
             onChange={(v) => onFpsChange(Number(v) || 16)}
             options={FPS_OPTIONS}
@@ -125,7 +125,7 @@ export function ChannelSwitch({
         <button
           type="button"
           onClick={onNextStage}
-          className="text-ink rounded-lg bg-(--color-subtle) px-3 py-1.5 text-xs font-medium hover:bg-(--color-surface-2)"
+          className="text-ink rounded-lg bg-subtle px-3 py-1.5 text-xs font-medium hover:bg-surface-2"
         >
           去合成 →
         </button>
@@ -140,7 +140,7 @@ export function ChannelSwitch({
         </div>
       )}
       {channel === "api" && !apiReady && (
-        <div className="flex items-center gap-2 rounded-lg bg-(--color-amber)/10 px-3 py-2 text-xs text-(--color-amber)">
+        <div className="flex items-center gap-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
           <Icon name="info" size={12} />
           API 视频通道未配置 — 点击上方「API 通道设置」填写 Base URL 与 API Key 后即可使用。
         </div>
@@ -153,11 +153,11 @@ export function ChannelSwitch({
 export function ClipBadge({ status }: { status: NonNullable<Shot["clipStatus"]> }) {
   const map: Record<NonNullable<Shot["clipStatus"]>, { label: string; cls: string }> = {
     idle: { label: "待生成", cls: "bg-subtle text-muted-foreground" },
-    queued: { label: "排队中", cls: "bg-amber-100 text-amber-700" },
-    running: { label: "生成中", cls: "bg-blue-100 text-blue-700" },
-    done: { label: "片段就绪", cls: "bg-emerald-100 text-emerald-700" },
-    failed: { label: "失败", cls: "bg-red-100 text-red-700" },
-    stale: { label: "待更新", cls: "bg-red-100 text-red-700" },
+    queued: { label: "排队中", cls: "bg-amber-100 text-amber-800 dark:text-amber-300" },
+    running: { label: "生成中", cls: "bg-blue-100 text-blue-800 dark:text-blue-300" },
+    done: { label: "片段就绪", cls: "bg-emerald-100 text-emerald-800 dark:text-emerald-300" },
+    failed: { label: "失败", cls: "bg-red-100 text-red-800 dark:text-red-300" },
+    stale: { label: "待更新", cls: "bg-red-100 text-red-800 dark:text-red-300" },
   };
   const s = map[status];
   return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.cls}`}>{s.label}</span>;
@@ -243,7 +243,7 @@ export function ShotCard({
             <label className="flex items-center gap-1 text-[11px]">
               <span className="text-muted-foreground">运动</span>
               <DarkSelect
-                className="!bg-(--color-subtle) !border-(--color-border) text-[11px]"
+                className="!bg-subtle !border-border text-[11px]"
                 value={shot.motion ?? "medium"}
                 onChange={(v) => onPatch({ motion: v as MotionLevel })}
                 options={MOTIONS}
@@ -265,7 +265,7 @@ export function ShotCard({
       </div>
 
       {error && (
-        <p className="mt-2 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-700">{error}</p>
+        <p className="mt-2 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">{error}</p>
       )}
       {!shot.imageUrl && !error && (
         <p className="text-muted-foreground mt-2 text-[10.5px]">

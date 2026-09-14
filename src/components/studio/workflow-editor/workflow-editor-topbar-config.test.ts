@@ -105,7 +105,7 @@ describe("顶栏容器：窄了换行，不压扁按钮", () => {
       "utf8",
     );
     expect(source).toContain(
-      'className="mt-0.5 truncate text-[11px] font-medium text-gray-400"',
+      'className="text-ink-soft mt-0.5 truncate text-[11px] font-medium"',
     );
   });
 

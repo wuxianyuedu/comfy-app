@@ -32,16 +32,20 @@ export function RgthreeFastGroupsBypasserBody({
             className="group relative flex h-[22px] items-center gap-1.5 pl-2 pr-2 text-[11px]"
           >
             <span
-              className="min-w-0 shrink truncate text-left text-[11px]"
-              style={{ flex: "0 1 auto", color: bypass ? "#71717a" : "var(--color-ink-subtle)" }}
+              className={`min-w-0 shrink truncate text-left text-[11px] ${
+                bypass ? "text-ink-faint" : "text-ink-subtle"
+              }`}
+              style={{ flex: "0 1 auto" }}
               title={group.title}
             >
               {label}
             </span>
-            <span className="h-2 w-px shrink-0 bg-white/5" aria-hidden />
+            <span className="bg-border-strong h-2 w-px shrink-0" aria-hidden />
             <span
-              className="min-w-0 truncate text-right text-[10.5px] tabular-nums"
-              style={{ flex: "1 1 0", color: bypass ? "#ec4899" : "#a1a1aa" }}
+              className={`min-w-0 truncate text-right text-[10.5px] tabular-nums ${
+                bypass ? "text-accent-soft" : "text-ink-fainter"
+              }`}
+              style={{ flex: "1 1 0" }}
             >
               {bypass ? "yes" : "no"}
             </span>
@@ -91,7 +95,9 @@ export function RgthreeFastGroupsBypasserBody({
                   width: 10,
                   height: 10,
                   borderRadius: 5,
-                  background: bypass ? "#fce7f3" : "var(--color-ink-subtle)",
+                  background: bypass
+                    ? "var(--color-accent-soft)"
+                    : "var(--color-ink-subtle)",
                   transition: "left 120ms",
                 }}
               />

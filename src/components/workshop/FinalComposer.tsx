@@ -152,8 +152,8 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
         <span
           className={`rounded-lg px-3 py-1 text-[11px] ${
             clipsDone === timeline.length
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-(--color-amber)/15 text-(--color-amber)"
+              ? "bg-emerald-100 text-emerald-800 dark:text-emerald-300"
+              : "bg-amber/15 text-amber"
           }`}
         >
           片段 {clipsDone}/{timeline.length}
@@ -173,7 +173,7 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
             <button
               type="button"
               onClick={stopPlayback}
-              className="text-ink rounded-xl bg-(--color-subtle) px-4 py-2 text-xs font-semibold hover:bg-(--color-surface-2)"
+              className="text-ink rounded-xl bg-subtle px-4 py-2 text-xs font-semibold hover:bg-surface-2"
             >
               停止
             </button>
@@ -189,7 +189,7 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
       </div>
 
       {rendered && (
-        <div className="rounded-xl bg-emerald-100 px-4 py-2 text-xs text-emerald-700">
+        <div className="rounded-xl bg-emerald-100 px-4 py-2 text-xs text-emerald-800 dark:text-emerald-300">
           ✓ 合成清单已导出，成片产物完成。可在右侧资源库下载。
         </div>
       )}
@@ -275,7 +275,7 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
                 <label className="block">
                   <span className="text-muted-foreground mb-0.5 block text-[10px]">转场</span>
                   <DarkSelect
-                    className="!bg-(--color-subtle) !border-(--color-border) text-xs"
+                    className="!bg-subtle !border-border text-xs"
                     value={shot.transition ?? "cut"}
                     onChange={(value) => updateShot(shot.id, { transition: value as Transition })}
                     options={TRANSITIONS}
@@ -286,7 +286,7 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
                 <label className="block">
                   <span className="text-muted-foreground mb-0.5 block text-[10px]">运动</span>
                   <DarkSelect
-                    className="!bg-(--color-subtle) !border-(--color-border) text-xs"
+                    className="!bg-subtle !border-border text-xs"
                     value={shot.motion ?? "medium"}
                     onChange={(value) => updateShot(shot.id, { motion: value as MotionLevel })}
                     options={MOTIONS}

@@ -64,8 +64,15 @@ function extractDevHostPort() {
   // 端口演进：dev-launcher.ps1 现已从 .env 的 COMFYAPP_PORT 读取（默认 3100），
   // 仓库内唯一权威源是 tauri.conf.json 的 build.devUrl。交叉核对提交的
   // .env.example 里 COMFYAPP_PORT 是否与 devUrl 一致（.env 为本地可覆盖变体）。
+  // .env.example 的 COMFYAPP_PORT 在示例里是**注释行**（「需要固定端口时取消注释」），
+  // 读取前必须先剔除注释行——否则「取消注释把示例改成某个具体端口」这种再正常不过的
+  // 改动会被当成权威源冲突，把 doc:check 变成误报机器（ISSUE #489）。
   if (exists(".env.example")) {
-    const m = readText(".env.example").match(/COMFYAPP_PORT\s*=\s*["']?([0-9]+)["']?/);
+    const m = readText(".env.example")
+      .split(/\r?\n/)
+      .filter((l) => !/^\s*#/.test(l))
+      .join("\n")
+      .match(/COMFYAPP_PORT\s*=\s*["']?([0-9]+)["']?/);
     if (m && Number(m[1]) !== port) {
       throw new Error(`端口权威源冲突：tauri.conf.json devUrl=${port} 但 .env.example COMFYAPP_PORT=${m[1]}`);
     }
@@ -78,6 +85,35 @@ function extractFallbackPorts() {
   const { port: mainPort } = extractDevHostPort();
   return [mainPort + 1, mainPort + 2].map(String);
 }
+/**
+ * 「按检出路径推导的端口族」（3200~3999）——作者本机 `pnpm dev` 实际会拿到的端口。
+ *
+ * 与 `extractDevHostPort()` 的区别（这正是 ISSUE #489 的根因）：
+ *   - `tauri.conf.json` 的 `devUrl` **不参与主导航**，它是 Windows 启动器链路与
+ *     编译期兜底值；`pnpm dev` 走的是 `scripts/app-port.mjs` 的解析（.env → 路径
+ *     推导 → 兜底 3100），在 `.env` 未固定端口时**永远落不到那条静态值上**。
+ *   - 于是「用静态 devUrl 值去核对 pnpm dev 语境下的文档」= 拿一个与事实无关的
+ *     oracle 做校验：实测本工作区路径推导结果是 3311，而 README / 新手指南写的
+ *     `localhost:3100` 在 doc:check 眼里永远是「一致」的（静态值也是 3100），
+ *     照文档打开 3100 就是 ERR_CONNECTION_REFUSED。
+ *
+ * 因此端口事实按**链路**拆成两条，各自用自己的 oracle：
+ *   静态链（启动器 / 壳 / 兜底）：`dev.port`        ← tauri.conf.json devUrl
+ *   解析链（pnpm dev / start / Playwright）：`dev.port.derived` ← scripts/app-port.mjs
+ *
+ * 提取方式直接复用 `scripts/app-port.mjs`（唯一事实源）在本工作区路径上的解析结果，
+ * 而不是再实现一遍算法——算法本体已有四语言实现，第五份必然是漂移源。
+ */
+function extractDerivedAppPort() {
+  const { createRequire } = require("node:module");
+  const req = createRequire(__filename);
+  const port = req(path.join(ROOT, "scripts", "app-port.mjs")).resolveAppPort(ROOT);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`无法从 scripts/app-port.mjs 解析本检出端口：${port}`);
+  }
+  return String(port);
+}
+
 function extractLauncherExe() {
   const spec = readText("tools/start-tauri.spec");
   const m = spec.match(/os\.environ\.get\(\s*['"]LAUNCHER_NAME['"]\s*,\s*['"]([^'"]+)['"]\s*\)/);
@@ -138,7 +174,19 @@ const FACTS = [
   { key: "dev.host", kind: "verify", extract: () => extractDevHostPort().host },
   // dev 端口族仅对描述 dev 启动链路的文档校验；workshop-mcp.md 的 4300 是 MCP HTTP
   // 端口（非 dev 回落），若参与 verify 会误判「缺 dev 主端口 3100」，故排除该文档。
+  // 静态链端口（tauri.conf.json devUrl）：只对**描述启动器 / 壳 / 兜底**的文档适用。
   { key: "dev.port", kind: "verify", extract: () => String(extractDevHostPort().port), excludeDocs: ["docs/workshop-mcp.md"] },
+  // 解析链端口（scripts/app-port.mjs）：对**描述 pnpm dev / start 的文档**适用。
+  // 与静态链互斥：同一篇文档里不能同时把两条链路的端口都写成裸值，否则两条事实
+  // 会互相打架（见上方 extractDerivedAppPort 的说明）。
+  {
+    key: "dev.port.derived",
+    kind: "verify",
+    extract: extractDerivedAppPort,
+    // 新手指南只讲「浏览器模式 / Windows 启动器」两条起点，两条都经 dev.mjs 解析端口
+    //（start-web.ps1 → dev-launcher.ps1 → pnpm dev），故适用解析链。
+    onlyDocs: ["docs/guide-non-developer.md"],
+  },
   { key: "dev.port.fallback", kind: "verify", extract: extractFallbackPorts, excludeDocs: ["docs/workshop-mcp.md"] },
   // 独立单值端口（非 dev 端口族）。workshop-mcp.md 的端口（MCP 4300 / ComfyUI 8188）
   // 属独立语义，用占位符替代裸值，doc:render 替换成真实值。
