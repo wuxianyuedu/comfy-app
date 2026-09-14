@@ -8,7 +8,10 @@
 //
 // 输出类型由模式的类别决定（图像 → 图片，视频 → 视频，音频 → 音频）。
 
-import { exposedParamsForMode } from "~/lib/workflow-exposed-params";
+import {
+  EXPOSED_PARAM_LABEL,
+  exposedParamsForMode,
+} from "~/lib/workflow-exposed-params";
 import { getWorkflowType } from "~/lib/workflow-types";
 import { isVideoMode } from "~/lib/workshop/workflow-encapsulation";
 
@@ -229,14 +232,41 @@ export function modeContractInputLabel(type: ModeContractInputType): string {
   return MODE_CONTRACT_INPUT_TYPES.find((t) => t.type === type)?.label ?? type;
 }
 
+/** 契约口 id 的完整值域：6 个基础口 +「参考图」第 2 张起带序号
+ *  （`reference-image-2`，见 workflow-exposed-params 的多参考图槽位）。
+ *
+ *  与适配器侧的 WorkshopInputType 是**两套 id**，别混用：适配器口按接口请求体
+ *  分得更细（契约的「尺寸」在适配器层拆成 aspect-ratio + megapixels），契约口是
+ *  工坊对用户的统一口径（尺寸 / 参考图）。 */
+export type ModeContractInputId = ModeContractInputType | `reference-image-${number}`;
+
+export function isModeContractInputId(v: unknown): v is ModeContractInputId {
+  if (typeof v !== "string") return false;
+  if (isModeContractInputType(v)) return true;
+  return /^reference-image-\d+$/.test(v);
+}
+
+/** 带序号的参考图口的序号（`reference-image-2` → 2；非带序号口返回 0）。 */
+export function referenceImageSlotIndex(id: string): number {
+  const m = /^reference-image-(\d+)$/.exec(id);
+  return m ? Number(m[1]) : 0;
+}
+
+/** 任意契约口 id 的展示名（带序号的参考图口显示为「参考图 2」，其余同基础口）。 */
+export function modeContractInputIdLabel(id: ModeContractInputId): string {
+  const slot = referenceImageSlotIndex(id);
+  if (slot) return `${EXPOSED_PARAM_LABEL["reference-image"]} ${slot}`;
+  return modeContractInputLabel(id as ModeContractInputType);
+}
+
 export type ModeContractOutput = "image" | "video" | "audio";
 
 /** 一种模式的统一输入 / 输出契约（工坊对外口径）。 */
 export interface ModeContract {
   /** 工作流库定义的模式码（T2I / I2I / D2I … T2V / I2V …）。 */
   mode: string;
-  /** 统一输入口（有序；类型取自 MODE_CONTRACT_INPUT_TYPES）。 */
-  inputs: ModeContractInputType[];
+  /** 统一输入口（有序；取值为 ModeContractInputId）。 */
+  inputs: ModeContractInputId[];
   /** 统一输出类别。 */
   output: ModeContractOutput;
 }
@@ -245,12 +275,16 @@ export interface ModeContract {
 export function builtInModeContract(mode: string): ModeContract {
   return {
     mode: mode.trim().toUpperCase(),
-    inputs: exposedParamsForMode(mode).map((d) => d.id as ModeContractInputType),
+    inputs: exposedParamsForMode(mode).map((d) => d.id as ModeContractInputId),
     output: outputKindForMode(mode),
   };
 }
 
-/** 校验并归一化一份注册表（去重、剔非法类型、模式大写）。 */
+/** 校验并归一化一份注册表（去重、剔非法口、模式大写）。
+ *
+ *  口的合法性用 isModeContractInputId —— 与 modeContractsSave 的入参校验同源。
+ *  历史教训：这里用 isModeContractInputType（基础 6 口）时，内置默认契约里带序号的
+ *  参考图口会被**静默丢掉**，用户存完再读回来就少一口。 */
 export function parseModeContracts(raw: unknown): ModeContract[] {
   if (!Array.isArray(raw)) return [];
   const out: ModeContract[] = [];
@@ -261,8 +295,8 @@ export function parseModeContracts(raw: unknown): ModeContract[] {
     const mode = typeof rec.mode === "string" ? rec.mode.trim().toUpperCase() : "";
     if (!mode || seen.has(mode)) continue;
     const rawInputs = Array.isArray(rec.inputs) ? rec.inputs : [];
-    const inputs = rawInputs.filter((i): i is ModeContractInputType =>
-      isModeContractInputType(i),
+    const inputs = rawInputs.filter((i): i is ModeContractInputId =>
+      isModeContractInputId(i),
     );
     if (inputs.length === 0) continue;
     const rawOutput = typeof rec.output === "string" ? rec.output : "";
@@ -284,17 +318,21 @@ export function contractToStatusEntries(contract: ModeContract): Array<{
 }> {
   return contract.inputs.map((type) => ({
     id: type,
-    label: modeContractInputLabel(type),
+    // 带序号的参考图口展示为「参考图 2」（与 exposedParamsForMode 的命名一致）
+    label: modeContractInputIdLabel(type),
     control:
       type === "size"
-        ? "size"
+        ? ("size" as const)
         : type === "prompt" || type === "negative"
-          ? "text"
-          : "image",
+          ? ("text" as const)
+          : ("image" as const),
   }));
 }
 
-/** 契约 → 远端适配器的默认输入映射（size 拆成宽高比 + 百万像素两个字段）。 */
+/** 契约 → 远端适配器的默认输入映射（size 拆成宽高比 + 百万像素两个字段）。
+ *
+ *  第 2 张起的参考图口（reference-image-2…）没有约定的默认请求体字段名，这里不猜：
+ *  不生成默认行，留给用户在适配器页自行加一行并把字段名填成该接口实际用的名字。 */
 export function adapterInputsFromContract(
   contract: ModeContract,
 ): Array<{ type: WorkshopInputType; field: string }> {
