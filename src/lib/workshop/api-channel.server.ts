@@ -1,7 +1,13 @@
-// ── Workshop API channel: server-side config store + upstream calls ───────
+// ── Workshop API channel: Next 侧入口（配置存储 + 上游调用）──────────────
 // Persists per-channel (image / video) endpoint config as a local JSON file
 // (same pattern as app-settings: no DB migration, git-ignored, env fallback).
 // The apiKey is stored server-side only; the browser receives a masked view.
+//
+// 本文件只负责**三件 Next 特有的事**，协议实现全部在 `api-channel-core.ts`：
+//   ① `import "server-only"` —— 把配置与 apiKey 挡在浏览器包外；
+//   ② 落盘读写（含进程内缓存）;
+//   ③ 生图前查 `remoteModel` 表，决定走哪条上游（MCP 侧没有这张表）。
+// 其余（请求体字段、超时、错误文案、响应提取）与 MCP 入口逐字共用一份。
 import "server-only";
 
 import { promises as fs, readFileSync } from "fs";
@@ -9,58 +15,39 @@ import path from "path";
 
 import { remoteModelRepository } from "@/lib/core/repository";
 import {
-  readFieldPath,
   type RemoteModeAdapter,
   type WorkshopInputType,
 } from "@/lib/workshop/model-mode-contract";
 
 import {
-  extractBase64DataUrl,
-  extractMediaUrl,
-  extractRemoteTaskId,
+  callImageGeneration,
+  callVideoPoll,
+  callVideoSubmit,
+  defaultChannelsFromEnv,
+  endpointFor,
+  maskChannels,
+  normalizeSettings,
+  sanitizeChannel,
+  WORKSHOP_API_SETTINGS_FILE,
+  type ApiImageRequest,
+  type ApiUpstreamTarget,
+  type ApiVideoSubmitRequest,
+  type ApiVideoSubmitResult,
+  type WorkshopApiSettings,
+} from "./api-channel-core";
+import {
   resolveImagesGenerationsEndpoint,
   type ApiChannelKind,
   type ApiChannelStored,
-  type ApiChannelsView,
 } from "./api-channel-shared";
 import { readUpstreamJson, resolveMediaDataUrl } from "./media-source.server";
 
-const FILE = path.join(process.cwd(), "data", "workshop-api-settings.json");
+const FILE = path.join(process.cwd(), "data", WORKSHOP_API_SETTINGS_FILE);
 
-const DEFAULT_IMAGE: ApiChannelStored = {
-  baseUrl: process.env.WORKSHOP_API_IMAGE_BASE ?? "",
-  path: "/images/generations",
-  model: process.env.WORKSHOP_API_IMAGE_MODEL ?? "",
-  apiKey: process.env.WORKSHOP_API_IMAGE_KEY ?? "",
-};
-
-const DEFAULT_VIDEO: ApiChannelStored = {
-  baseUrl: process.env.WORKSHOP_API_VIDEO_BASE ?? "",
-  path: "/videos/generations",
-  model: process.env.WORKSHOP_API_VIDEO_MODEL ?? "",
-  apiKey: process.env.WORKSHOP_API_VIDEO_KEY ?? "",
-};
-
-type WorkshopApiSettings = Record<ApiChannelKind, ApiChannelStored>;
+/** 两个通道的默认值来自环境变量（同一套变量名，MCP 入口共用）。 */
+const DEFAULTS = defaultChannelsFromEnv();
 
 let cache: WorkshopApiSettings | null = null;
-
-function sanitizeChannel(raw: unknown, fallback: ApiChannelStored): ApiChannelStored {
-  const src = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
-  const str = (key: string): string | undefined => {
-    const v: unknown = src[key];
-    return typeof v === "string" ? v : undefined;
-  };
-  const baseUrl = (str("baseUrl") ?? fallback.baseUrl).trim();
-  const reqPath = (str("path") ?? fallback.path).trim();
-  return {
-    baseUrl,
-    // Path must be root-relative so `${baseUrl}${path}` stays well-formed.
-    path: reqPath.startsWith("/") ? reqPath : `/${reqPath}`,
-    model: (str("model") ?? fallback.model).trim(),
-    apiKey: str("apiKey") ?? fallback.apiKey,
-  };
-}
 
 /** Read with in-process caching; a fresh install just works (empty = unconfigured). */
 export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
@@ -71,10 +58,7 @@ export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
   } catch {
     // Missing/corrupt file → defaults.
   }
-  cache = {
-    image: sanitizeChannel(stored.image, DEFAULT_IMAGE),
-    video: sanitizeChannel(stored.video, DEFAULT_VIDEO),
-  };
+  cache = normalizeSettings(stored, DEFAULTS);
   return cache;
 }
 
@@ -94,47 +78,12 @@ export async function saveWorkshopApiSettings(
 }
 
 /** Masked view for the browser — apiKey never leaves the server. */
-export function getMaskedChannels(): ApiChannelsView {
-  const s = getWorkshopApiSettingsSync();
-  const view = (c: ApiChannelStored) => ({
-    configured: c.baseUrl.length > 0,
-    baseUrl: c.baseUrl,
-    path: c.path,
-    model: c.model,
-    hasApiKey: c.apiKey.length > 0,
-  });
-  return { image: view(s.image), video: view(s.video) };
+export function getMaskedChannels() {
+  return maskChannels(getWorkshopApiSettingsSync());
 }
 
-function headersFor(c: ApiChannelStored): Record<string, string> {
-  const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (c.apiKey) h.Authorization = `Bearer ${c.apiKey}`;
-  return h;
-}
+export type { ApiImageRequest, ApiVideoSubmitRequest, ApiVideoSubmitResult };
 
-function endpoint(c: ApiChannelStored): string {
-  return `${c.baseUrl.replace(/\/+$/, "")}${c.path}`;
-}
-
-export interface ApiImageRequest {
-  prompt: string;
-  negative?: string;
-  size?: string;
-  /** 设置页「远端模型」的名字：按 remoteModel 表条目的连接参数直连生图 */
-  model?: string;
-  /** 工坊模式码（T2I / I2I / …）：有适配器时按它取字段映射 */
-  mode?: string;
-  /** 统一输入：宽高比（如 "16:9"）/ 百万像素（如 "1M"）/ 宽高对齐倍数
-   *  （8/16/32/64）/ 输入图（URL 或 data URL）。三者构成工坊的「比例 +
-   *  百万像素 + 倍数」尺寸表达；选「分辨率」时由调用方换算后再传。 */
-  aspectRatio?: string;
-  megapixels?: string;
-  multiple?: number;
-  image?: string;
-}
-
-/** Call an OpenAI-compatible images/generations endpoint; returns a usable URL
- *  (remote or inline data URL for b64 payloads). */
 /** 统一输入的当前取值（适配器按类型取值落字段）。 */
 function unifiedImageInputs(req: ApiImageRequest): Partial<
   Record<WorkshopInputType, unknown>
@@ -149,173 +98,106 @@ function unifiedImageInputs(req: ApiImageRequest): Partial<
   };
 }
 
-export async function generateImageViaApi(req: ApiImageRequest): Promise<string> {
-  const c = getWorkshopApiSettingsSync().image;
-  // 设置页「远端模型」优先：按名字取 remoteModel 表条目的连接参数直连生图，
-  // 用户不必再在工坊 API 通道里重复配置一份。未指定名字 / 查无条目时回落到
-  // 工坊 API 通道设置（旧行为，两边都不配才报「未配置」）。
-  let upstream: { endpoint: string; apiKey: string; model: string } | null = null;
-  let adapter: RemoteModeAdapter | null = null;
+/** 按请求体里带的适配器把统一输入翻译成上游字段。 */
+function bodyFromAdapter(
+  adapter: RemoteModeAdapter,
+  req: ApiImageRequest,
+  model: string,
+): Record<string, unknown> {
+  const unified = unifiedImageInputs(req);
+  const body: Record<string, unknown> = {};
+  for (const { type, field } of adapter.inputs) {
+    const value = unified[type];
+    if (value === undefined || value === "") continue;
+    body[field] = value;
+  }
+  if (model) body.model = model;
+  return body;
+}
+
+/** Next 侧的上游解析：设置页「远端模型」优先，未命中回落通道设置。
+ *
+ *  这是本文件**唯一**比纯逻辑多出来的东西 —— 它要读 `remoteModel` 表，
+ *  而 MCP 侧（纯 Node）没有这张表。 */
+async function resolveTarget(
+  req: ApiImageRequest,
+  channel: ApiChannelStored,
+): Promise<{
+  target: ApiUpstreamTarget;
+  channel: ApiChannelStored;
+  adapter: RemoteModeAdapter | null;
+}> {
+  /* 返回体里带上 channel 是为了让调用方把「同一份配置」交给 callImageGeneration
+   * 做端点的最终拼装（未配置时的可读错误也在那里判）。 */
   const wantedModel = (req.model ?? "").trim();
-  const wantedMode = (req.mode ?? "").trim().toUpperCase();
-  if (wantedModel) {
-    try {
-      const entries = await remoteModelRepository.list();
-      const entry = entries.find((r) => r.name === wantedModel && r.baseUrl);
-      if (entry) {
-        // 模式适配器优先：条目配置了该模式的输入映射就按它翻译统一输入。
-        const adapters = await remoteModelRepository.getWorkshopAdapters(wantedModel);
-        adapter =
-          adapters.find((a) => a.mode === wantedMode) ??
-          (adapters.length === 1 ? adapters[0]! : null);
-        upstream = {
-          endpoint: adapter
-            ? `${(entry.baseUrl ?? "").replace(/\/+$/, "")}${adapter.endpointPath}`
-            : resolveImagesGenerationsEndpoint(entry.baseUrl ?? ""),
-          apiKey: entry.apiKey ?? "",
-          model: entry.name,
-        };
-      }
-    } catch {
-      // 表不可用（未迁移等）→ 回落通道设置
-    }
-  }
-  const legacy = upstream ?? {
-    endpoint: endpoint(c),
-    apiKey: c.apiKey,
-    model: c.model,
-  };
-  if (!legacy.endpoint || legacy.endpoint === "/images/generations") {
-    throw new Error(
-      "远端 API 生图通道未配置 —— 可在设置页「远端模型」里添加生图模型（kind=图片），或打开 API 通道设置填写 Base URL 与 API Key",
-    );
-  }
-  // 请求体：有适配器按字段映射落统一输入；否则用 OpenAI 兼容默认映射。
-  let body: Record<string, unknown>;
-  if (adapter) {
-    const unified = unifiedImageInputs(req);
-    body = {};
-    for (const { type, field } of adapter.inputs) {
-      const value = unified[type];
-      if (value === undefined || value === "") continue;
-      body[field] = value;
-    }
-    if (legacy.model) body.model = legacy.model;
-  } else {
-    body = {
-      // 空串显式归一为 undefined(省略字段);不用 ?? —— ?? 会把 "" 原样送进 payload
-      model: legacy.model === "" ? undefined : legacy.model,
-      prompt: req.prompt,
-      negative_prompt: req.negative === "" ? undefined : req.negative,
-      size: req.size === "" ? undefined : req.size,
-      n: 1,
-      response_format: "url",
+  if (!wantedModel) return { target: fallbackTarget(channel), channel, adapter: null };
+  try {
+    const entries = await remoteModelRepository.list();
+    const entry = entries.find((r) => r.name === wantedModel && r.baseUrl);
+    if (!entry) return { target: fallbackTarget(channel), channel, adapter: null };
+    // 模式适配器优先：条目配置了该模式的输入映射就按它翻译统一输入。
+    const adapters = await remoteModelRepository.getWorkshopAdapters(wantedModel);
+    const wantedMode = (req.mode ?? "").trim().toUpperCase();
+    const adapter =
+      adapters.find((a) => a.mode === wantedMode) ??
+      (adapters.length === 1 ? adapters[0]! : null);
+    return {
+      target: {
+        endpoint: adapter
+          ? `${(entry.baseUrl ?? "").replace(/\/+$/, "")}${adapter.endpointPath}`
+          : resolveImagesGenerationsEndpoint(entry.baseUrl ?? ""),
+        apiKey: entry.apiKey ?? "",
+        model: entry.name,
+      },
+      channel,
+      adapter,
     };
+  } catch {
+    // 表不可用（未迁移等）→ 回落通道设置
+    return { target: fallbackTarget(channel), channel, adapter: null };
   }
-  let res: Response;
-  try {
-    res = await fetch(legacy.endpoint, {
-      method: "POST",
-      headers: legacy.apiKey
-        ? { "Content-Type": "application/json", Authorization: `Bearer ${legacy.apiKey}` }
-        : { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(180_000),
-    });
-  } catch (e) {
-    throw new Error(`API 生图请求失败: ${e instanceof Error ? e.message : String(e)}`);
-  }
-  const payload = await readUpstreamJson(res);
-  if (!res.ok) {
-    const detail = JSON.stringify(payload).slice(0, 200);
-    throw new Error(`API 生图失败 (${res.status}): ${detail}`);
-  }
-  if (adapter?.outputField) {
-    const hit = readFieldPath(payload, adapter.outputField);
-    if (typeof hit === "string" && hit) return hit;
-  }
-  const url = extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
-  if (!url) throw new Error("API 生图响应中未找到图片 URL / b64 数据");
-  return url;
 }
 
-export interface ApiVideoSubmitRequest {
-  prompt: string;
-  negative?: string;
-  /** Reference first-frame image (inline data URL) for image-to-video. */
-  imageDataUrl?: string;
-  frames?: number;
-  fps?: number;
+/** 通道设置里的生图上游（含「未配置」时端点为空串的既有行为）。 */
+function fallbackTarget(channel: ApiChannelStored): ApiUpstreamTarget {
+  return {
+    endpoint: endpointFor(channel),
+    apiKey: channel.apiKey,
+    model: channel.model,
+  };
 }
 
-export interface ApiVideoSubmitResult {
-  /** Direct URL when the provider returned the finished video synchronously. */
-  url?: string;
-  /** Async task id to poll via pollVideoViaApi when the provider is task-based. */
-  remoteTaskId?: string;
+/** Call an OpenAI-compatible images/generations endpoint; returns a usable URL
+ *  (remote or inline data URL for b64 payloads). */
+export async function generateImageViaApi(req: ApiImageRequest): Promise<string> {
+  const resolved = await resolveTarget(req, getWorkshopApiSettingsSync().image);
+  /* 有适配器：请求体按字段映射落统一输入 + 按 outputField 取结果；
+   * 无适配器：OpenAI 兼容默认映射（含「未配置」时抛既有的可读错误）。 */
+  return callImageGeneration(req, resolved.channel, () => resolved.target, {
+    readJson: readUpstreamJson,
+    bodyOverride: resolved.adapter
+      ? bodyFromAdapter(resolved.adapter, req, resolved.target.model)
+      : undefined,
+    outputField: resolved.adapter?.outputField,
+  });
 }
 
-/** Submit a video job to the configured endpoint. Supports both sync-URL and
- *  async-task providers; the client polls the latter via generate route. */
-export async function submitVideoViaApi(req: ApiVideoSubmitRequest): Promise<ApiVideoSubmitResult> {
-  const c = getWorkshopApiSettingsSync().video;
-  if (!c.baseUrl) throw new Error("API 视频通道未配置：请先填写 Base URL 与 API Key");
-  let res: Response;
-  try {
-    res = await fetch(endpoint(c), {
-      method: "POST",
-      headers: headersFor(c),
-      body: JSON.stringify({
-        model: c.model === "" ? undefined : c.model,
-        prompt: req.prompt,
-        negative_prompt: req.negative === "" ? undefined : req.negative,
-        image_url: req.imageDataUrl,
-        image: req.imageDataUrl,
-        frames: req.frames,
-        fps: req.fps,
-      }),
-      signal: AbortSignal.timeout(180_000),
-    });
-  } catch (e) {
-    throw new Error(`API 视频提交失败: ${e instanceof Error ? e.message : String(e)}`);
-  }
-  const payload = await readUpstreamJson(res);
-  if (!res.ok) {
-    const detail = JSON.stringify(payload).slice(0, 200);
-    throw new Error(`API 视频提交失败 (${res.status}): ${detail}`);
-  }
-  const url = extractMediaUrl(payload);
-  if (url) return { url };
-  const remoteTaskId = extractRemoteTaskId(payload);
-  if (remoteTaskId) return { remoteTaskId };
-  throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
+/** Submit a video job to the configured endpoint. */
+export async function submitVideoViaApi(
+  req: ApiVideoSubmitRequest,
+): Promise<ApiVideoSubmitResult> {
+  return callVideoSubmit(req, getWorkshopApiSettingsSync().video, {
+    readJson: readUpstreamJson,
+  });
 }
 
 /** Poll an async video task once. Returns the finished URL or { pending: true }. */
 export async function pollVideoViaApi(
   remoteTaskId: string,
 ): Promise<{ url?: string; pending: boolean }> {
-  const c = getWorkshopApiSettingsSync().video;
-  if (!c.baseUrl) throw new Error("API 视频通道未配置");
-  const url = `${c.baseUrl.replace(/\/+$/, "")}/${remoteTaskId.replace(/^\/+/, "")}`;
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "GET",
-      headers: headersFor(c),
-      signal: AbortSignal.timeout(30_000),
-    });
-  } catch (e) {
-    throw new Error(`API 视频轮询失败: ${e instanceof Error ? e.message : String(e)}`);
-  }
-  const payload = await readUpstreamJson(res);
-  if (!res.ok) {
-    const detail = JSON.stringify(payload).slice(0, 200);
-    throw new Error(`API 视频轮询失败 (${res.status}): ${detail}`);
-  }
-  const mediaUrl = extractMediaUrl(payload);
-  if (mediaUrl) return { url: mediaUrl, pending: false };
-  return { pending: true };
+  return callVideoPoll(remoteTaskId, getWorkshopApiSettingsSync().video, {
+    readJson: readUpstreamJson,
+  });
 }
 
 /** Resolve any image reference into an inline data URL (used before forwarding

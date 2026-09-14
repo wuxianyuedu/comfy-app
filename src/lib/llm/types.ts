@@ -187,7 +187,8 @@ export function resolveTaskTemperature(opts: {
 
 export interface LLMConfig {
   provider: LLMProviderType;
-  /** OpenAI-compatible base URL, e.g. http://localhost:11434/v1 or https://api.openai.com/v1 */
+  /** OpenAI-compatible base URL: 本机 Ollama 默认值见 `@/lib/endpoints`
+   *  （`OLLAMA_DEFAULT_BASE_URL`），也可以指向任意远端 `https://…/v1`。 */
   baseUrl: string;
   model: string;
   /** 候选模型（设置页可配置多个）：本地 Ollama 为纯名字；远端条目可带独立 baseUrl / apiKey */

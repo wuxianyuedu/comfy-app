@@ -147,11 +147,14 @@ function extractMcpHttpPort() {
   return m[1];
 }
 function extractComfyUIPort() {
-  // ComfyUI 默认监听端口，权威源 src/lib/comfyui/client.ts 的
-  // `settings.comfyuiPort ... ? settings.comfyuiPort : 8188` 默认分支。
-  const t = readText("src/lib/comfyui/client.ts");
-  const m = t.match(/settings\.comfyuiPort\s*&&\s*settings\.comfyuiPort\s*>\s*0\s*\?\s*settings\.comfyuiPort\s*:\s*(\d+)/);
-  if (!m) throw new Error("无法从 src/lib/comfyui/client.ts 提取 ComfyUI 默认端口");
+  /* ComfyUI 默认监听端口的权威源是 src/lib/app-settings.ts 的常量
+   * `COMFYUI_DEFAULT_PORT`（ISSUE #536 P3 之前它散落在 5 个文件里，
+   *  client.ts 只是其中一处；现在只剩这一个落点）。
+   *  不再从 client.ts 的默认分支取 —— 那处已改写成读常量，正则匹配不到，
+   *  而从「常量定义」取也才是这条事实真正该指向的地方。 */
+  const t = readText("src/lib/app-settings.ts");
+  const m = t.match(/export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*(\d+)/);
+  if (!m) throw new Error("无法从 src/lib/app-settings.ts 的 COMFYUI_DEFAULT_PORT 提取 ComfyUI 默认端口");
 
   return m[1];
 }
