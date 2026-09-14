@@ -9,7 +9,7 @@ exports[`WorkflowSubgraphNode > 渲染子图标题与 #id 徽标 1`] = `
   >
     <div
       class="flex shrink-0 items-center gap-2 rounded-t-lg px-2 text-xs"
-      style="height: 30px; background: rgb(42, 36, 74); border-bottom: 1px solid rgba(255, 255, 255, 0.06);"
+      style="height: 30px; background: rgb(42, 36, 74); border-bottom: 1px solid var(--color-border-subtle);"
     >
       <button
         aria-label="折叠子图"

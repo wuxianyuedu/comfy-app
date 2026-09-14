@@ -82,9 +82,11 @@ export function PackageFooter({
         fontSize: 9,
         lineHeight: 1.2,
         fontFamily: "var(--font-mono)",
-        color: "rgba(255, 255, 255, 0.5)",
+        /* 包脚注叠在节点表面上（随主题），文本/边框都必须跟着走。
+           写死 50% 白 + 22% 白两态都只对深色底成立。 */
+        color: "var(--color-ink-fainter)",
         letterSpacing: 0.3,
-        border: "1px solid rgba(255, 255, 255, 0.22)",
+        border: "1px solid var(--color-border-strong)",
         borderRadius: 4,
         pointerEvents: "none",
         userSelect: "none",

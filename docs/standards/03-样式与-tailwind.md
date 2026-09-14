@@ -8,30 +8,30 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 
 ```tsx
 // ❌ 旧写法：方括号 alpha 值
-"hover:bg-white/[0.06]"
+"hover:bg-white/[0.06]";
 
 // ✅ 正确：任意百分比直接写（v4 canonical，编译为 color-mix 6%）
-"hover:bg-white/6"
+"hover:bg-white/6";
 ```
 
 同类规范写法迁移还有四组（历史存量已由 `scripts/tw4-canonical-codemod.cjs` 清零，新代码禁止旧写法）：
 
 ```tsx
 // 渐变更名：
-"bg-linear-to-br"               // ✅ v4
-"bg-gradient-to-br"             // ❌ v3 旧名
+"bg-linear-to-br"; // ✅ v4
+"bg-gradient-to-br"; // ❌ v3 旧名
 
 // CSS 变量任意值有专用简写：
-"w-(--panel-right-width)"       // ✅ v4
-"w-[var(--panel-right-width)]"  // ❌ v3 写法
+"w-(--panel-right-width)"; // ✅ v4
+"w-[var(--panel-right-width)]"; // ❌ v3 写法
 
 // 负值：负号移入括号内（前缀负号是 v3 形式）：
-"top-[-20%]"                    // ✅ v4
-"-top-[20%]"                    // ❌ v3 写法
+"top-[-20%]"; // ✅ v4
+"-top-[20%]"; // ❌ v3 写法
 
 // 纯整数任意值用裸数字（z / order / duration 等数值工具类同理）：
-"z-99"                          // ✅ v4
-"z-[99]"                        // ❌ 多余括号
+"z-99"; // ✅ v4
+"z-[99]"; // ❌ 多余括号
 ```
 
 **规则**：透明度一律 `/百分比`（小数合法，如 `/1.5`——tailwindcss 内部正是以 `parseFloat(alpha)*100` 做规范化的）。
@@ -53,10 +53,10 @@ v4 的 `bg-(--color-canvas-deep)` 这种「属性前缀 + 内联变量」写法*
 
 ```tsx
 // ❌ 属性前缀 + 内联变量：编得出来，但绕过语义层
-"bg-(--color-node-accent) border-(--color-primary)/35 text-(--color-ink-icon)"
+"bg-(--color-node-accent) border-(--color-primary)/35 text-(--color-ink-icon)";
 
 // ✅ 语义类名（@theme 里 --color-* 会自动生成；% 透明度同样适用）
-"bg-node-accent border-primary/35 text-ink-icon"
+"bg-node-accent border-primary/35 text-ink-icon";
 ```
 
 **允许保留 `var(--color-…)` 的两类场景**（都在 `style={{}}` 里）：
@@ -78,7 +78,7 @@ v4 的 `bg-(--color-canvas-deep)` 这种「属性前缀 + 内联变量」写法*
 
 ```tsx
 // ❌ 错误：魔法透明度值散落各处
-"bg-white/4 hover:bg-white/8 border-white/6"
+"bg-white/4 hover:bg-white/8 border-white/6";
 
 // ✅ 方案 A：@theme 扩展语义色（Tailwind v4 用 CSS 配置，见 src/app/globals.css）
 // @theme { --color-surface-1: rgba(255,255,255,0.04); }
@@ -86,18 +86,15 @@ v4 的 `bg-(--color-canvas-deep)` 这种「属性前缀 + 内联变量」写法*
 
 // ✅ 方案 B：用 cva 管理变体（推荐用于复用按钮/面板）
 import { cva } from "class-variance-authority";
-const panelVariants = cva(
-  "rounded-2xl border transition-colors",
-  {
-    variants: {
-      tone: {
-        default: "bg-white/2 border-white/6",
-        active:  "bg-violet-500/10 border-violet-500/30",
-      },
+const panelVariants = cva("rounded-2xl border transition-colors", {
+  variants: {
+    tone: {
+      default: "bg-white/2 border-white/6",
+      active: "bg-violet-500/10 border-violet-500/30",
     },
-    defaultVariants: { tone: "default" },
-  }
-);
+  },
+  defaultVariants: { tone: "default" },
+});
 ```
 
 ### 3.3 Tooltip 必须加 z-index
@@ -114,13 +111,20 @@ const panelVariants = cva(
 
 ```tsx
 // ❌ 错误：内联 SVG 导致视觉噪音、风格不一致（strokeWidth 有的是 1.8 有的是 2）
-<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+<svg
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  strokeWidth="1.8"
+>
   <path d="..." />
-</svg>
+</svg>;
 
 // ✅ 正确：统一图标库（tree-shakeable、风格一致）
 import { Home, Zap, FolderOpen, Search, X } from "lucide-react";
-<Home size={20} strokeWidth={1.8} />
+<Home size={20} strokeWidth={1.8} />;
 ```
 
 **数据驱动的图标名**（API 返回字符串 key、配置项/数据模型选图标）走中央解析组件，不直接 import：
@@ -128,7 +132,7 @@ import { Home, Zap, FolderOpen, Search, X } from "lucide-react";
 ```tsx
 // ✅ 动态 key：中央 Icon 组件（src/components/ui/Icon.tsx，内部已带 aria-hidden）
 import { Icon } from "@/components/ui/icon";
-<Icon name="plus" size={16} strokeWidth={2} />
+<Icon name="plus" size={16} strokeWidth={2} />;
 ```
 
 新增图标时先在 `Icon.tsx` 的 lucide import 与 `ICON_MAP` 各加一行再使用；静态图标直接 import lucide，动态/可序列化 key 一律走 `<Icon name>`。
@@ -140,7 +144,9 @@ import { Icon } from "@/components/ui/icon";
 ```tsx
 // ❌ 可接受但不推荐：模块级变量防重复注入，代码分割后可能失效
 let INJECTED = false;
-if (!INJECTED) { document.head.appendChild(style); }
+if (!INJECTED) {
+  document.head.appendChild(style);
+}
 
 // ✅ 正确：放到 globals.css 或独立 .css 文件 import
 import "@/styles/json-viewer.css";
@@ -154,7 +160,7 @@ import "@/styles/json-viewer.css";
 /* ✅ 语义化 token，暗/亮模式切换只改 token 值 */
 :root {
   --color-surface-0: #0a0a0f;
-  --color-surface-1: rgba(255,255,255,0.02);
+  --color-surface-1: rgba(255, 255, 255, 0.02);
   --color-ink: #e5e7eb;
   --color-ink-muted: #8b90a8;
 }
@@ -185,13 +191,21 @@ import "@/styles/json-viewer.css";
 
 **已明确不属于固定暗色**（历史误判，已 token 化，勿回退）：
 
-| 表面 | 应使用的 token |
-|---|---|
-| ReactFlow 缩放/适配/锁定控件 `.react-flow__controls-button` | `--color-node` / `--color-border-strong` / `--color-ink-muted` |
-| MiniMap 非视口遮罩（`maskColor`） | `--color-canvas-minimap-mask` |
-| 原生 `<select>` / `<option>` 与滚动条 | `color-scheme` + `--color-node` / `--color-ink-field` |
-| 登录页整屏底 + 极光 | `--color-bg` + 两态极光 |
-| 端口圆点描边 / 内圈高光（`border-(--color-canvas)` + 25% 白 `inset`） | `--color-port-surface` |
+| 表面                                                                              | 应使用的 token                                                                                  |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| ReactFlow 缩放/适配/锁定控件 `.react-flow__controls-button`                       | `--color-node` / `--color-border-strong` / `--color-ink-muted`                                  |
+| MiniMap 非视口遮罩（`maskColor`）                                                 | `--color-canvas-minimap-mask`                                                                   |
+| 原生 `<select>` / `<option>` 与滚动条                                             | `color-scheme` + `--color-node` / `--color-ink-field`                                           |
+| 登录页整屏底 + 极光                                                               | `--color-bg` + 两态极光                                                                         |
+| 端口圆点描边 / 内圈高光（`border-(--color-canvas)` + 25% 白 `inset`）             | `--color-port-surface`                                                                          |
+| 端口内圈光晕（`flow-focus-endpoints` 的 `portDotGlow`）                           | `--color-port-halo-ring` / `--color-port-halo-ring-weak`                                        |
+| 项目画布 MiniMap / Background / Controls（`#0D0818` / `#0B0712` / 25% 白点阵）    | `--color-canvas-minimap-mask` / `--color-canvas-grid-dot` + `.react-flow__controls*` token 规则 |
+| 工作流画布底色 `CANVAS_BG`（写死 `#0a0a0f`）                                      | `--color-canvas`                                                                                |
+| 画布标尺文字 / 连线中点圆点（85% 近白字 + 深色 text-shadow / 纯白点）             | `--color-canvas-ruler-ink` `-shadow` / `--color-edge-hub-dot`                                   |
+| 子图标题栏混色基准（写死 `#16161E` 作为 `mixHex` 基色）                           | `--color-node-mix-base`                                                                         |
+| `JsonViewer` 的 `react18-json-view` 主题（`dark` prop + `jv-theme-comfy` 暗色档） | 两态 `--json-view-*` token（浅色默认 + `.dark` 覆盖）                                           |
+| `CodeBlock` 的 shiki 主题（写死 `one-dark-pro`）                                  | 按 `resolvedTheme` 在 `one-dark-pro` / `github-light` 间切换                                    |
+| `lib/comfyui/markdown.ts` 内联 style（便签 Markdown）                             | `--color-md-*` token                                                                            |
 
 > 判据的用意：**控件**是结构性表面（用户要操作它），跟主题走才不会在浅色
 > 下变成「深底深图标」的隐形按钮；**叠加在内容上的说明层**才是例外。
@@ -254,8 +268,14 @@ pnpm theme:check    # 棘轮检查：未豁免的写死色值只许降不许升
 
 ```tsx
 // ✅ 装饰背景/光晕：pointer-events-none + aria-hidden
-<div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-  <div className="absolute ... rounded-full mix-blend-screen" style={{ background: "radial-gradient(...)" }} />
+<div
+  aria-hidden
+  className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+>
+  <div
+    className="absolute rounded-full mix-blend-screen ..."
+    style={{ background: "radial-gradient(...)" }}
+  />
 </div>
 ```
 

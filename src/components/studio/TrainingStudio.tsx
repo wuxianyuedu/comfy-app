@@ -234,7 +234,8 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               {/* Ring */}
               <div className="relative shrink-0" style={{ width: 96, height: 96 }}>
                 <svg width="96" height="96" viewBox="0 0 96 96">
-                  <circle cx="48" cy="48" r={RING_R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
+                  {/* 进度环底轨必须随主题：写死 8% 白在浅色卡片上是「白描白」。 */}
+                  <circle cx="48" cy="48" r={RING_R} fill="none" stroke="var(--color-border-strong)" strokeWidth="8" />
                   <circle
                     cx="48"
                     cy="48"

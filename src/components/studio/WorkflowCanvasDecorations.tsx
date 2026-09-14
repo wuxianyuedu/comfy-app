@@ -11,7 +11,13 @@ import {
 } from "./canvas/workflow-canvas-grid";
 export const GRID_CELL = 10;
 export const GRID_MAJOR_EVERY = 10;
-export const CANVAS_BG = "#0a0a0f";
+/* 画布底色。React Flow 的 `<Background bgColor>` 直接把它写成 CSS 变量
+ *  （`--xy-background-color-props`），所以这里可以给一个随主题解析的
+ *  `var()` —— 浅色下取 `--color-canvas`（浅灰）、深色下取原 `#0a0a0f`。
+ *  写死 `#0a0a0f` 时，Light 下整块画布（以及缩到极限时唯一可见的底色）
+ *  仍是黑的，与浅色工作区割裂。 */
+export const CANVAS_BG = "var(--color-canvas)";
+
 /* 细网格线的**淡出上限**（不是整张网格的关闭阈值）：低于这个缩放，
  *  10px 一格已经糊成噪点，细线不再画，只留 100px 的主参考线。
  *
@@ -293,8 +299,8 @@ export function CanvasRulers({
             left: screen,
             top: 2,
             transform: "translateX(-50%)",
-            color: "rgba(203, 213, 225, 0.85)",
-            textShadow: "0 0 3px rgba(10,10,15,0.95), 0 0 1px rgba(10,10,15,0.95)",
+            color: "var(--color-canvas-ruler-ink)",
+            textShadow: "var(--color-canvas-ruler-shadow)",
           }}
         >
           {fmt(world)}
@@ -310,8 +316,8 @@ export function CanvasRulers({
             left: screen,
             bottom: 2,
             transform: "translateX(-50%)",
-            color: "rgba(203, 213, 225, 0.85)",
-            textShadow: "0 0 3px rgba(10,10,15,0.95), 0 0 1px rgba(10,10,15,0.95)",
+            color: "var(--color-canvas-ruler-ink)",
+            textShadow: "var(--color-canvas-ruler-shadow)",
           }}
         >
           {fmt(world)}
@@ -326,8 +332,8 @@ export function CanvasRulers({
             top: screen,
             left: 3,
             transform: "translateY(-50%)",
-            color: "rgba(203, 213, 225, 0.85)",
-            textShadow: "0 0 3px rgba(10,10,15,0.95), 0 0 1px rgba(10,10,15,0.95)",
+            color: "var(--color-canvas-ruler-ink)",
+            textShadow: "var(--color-canvas-ruler-shadow)",
           }}
         >
           {fmt(world)}
@@ -342,8 +348,8 @@ export function CanvasRulers({
             top: screen,
             right: 3,
             transform: "translateY(-50%)",
-            color: "rgba(203, 213, 225, 0.85)",
-            textShadow: "0 0 3px rgba(10,10,15,0.95), 0 0 1px rgba(10,10,15,0.95)",
+            color: "var(--color-canvas-ruler-ink)",
+            textShadow: "var(--color-canvas-ruler-shadow)",
           }}
         >
           {fmt(world)}

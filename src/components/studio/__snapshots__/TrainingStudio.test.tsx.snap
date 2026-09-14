@@ -175,7 +175,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                   cy="48"
                   fill="none"
                   r="36"
-                  stroke="rgba(255,255,255,0.08)"
+                  stroke="var(--color-border-strong)"
                   stroke-width="8"
                 />
                 <circle
