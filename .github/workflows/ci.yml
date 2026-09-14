@@ -50,6 +50,19 @@ jobs:
       # 一次性格式化是与本次门禁对齐无关的大面积噪声 diff（且会与 §13.7 的
       # 「禁止无关全文件变更」冲突）。待基线整改后单独接入。
 
+      - name: Branch guard (PR 必须来自分支,不来自 master)
+        # master 只接受「分支开发 → PR → 合并」(规范 13.6 / ISSUE #492)。
+        # 本地门槛在 .githooks/pre-commit,但 --no-verify 或未启用钩子的检出可以绕过;
+        # 这里在服务端复核一次:HEAD 是 master 且不是合并提交 = PR 源分支就是 master。
+        run: |
+          branch=$(git symbolic-ref --quiet --short HEAD || echo "")
+          parents=$(git rev-list --parents -n 1 HEAD | wc -w)
+          echo "PR head branch=$branch parents=$((parents - 1))"
+          if [ "$branch" = "master" ] && [ "$((parents - 1))" -le 1 ]; then
+            echo "::error::PR 源分支不能是 master:请从分支提交并创建 PR(规范 13.6)"
+            exit 1
+          fi
+
       - name: Typecheck
         run: pnpm run typecheck
 

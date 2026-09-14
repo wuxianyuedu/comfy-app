@@ -109,12 +109,13 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 
 ```
 PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
+✅ Branch guard                   # PR 源分支不能是 master（见 13.6）
 ✅ pnpm install --frozen-lockfile
-✅ pnpm run typecheck            # tsc --noEmit
+✅ pnpm run typecheck             # tsc --noEmit
 ✅ pnpm exec eslint . --max-warnings 0
-✅ pnpm run test                 # vitest run
-✅ pnpm run test:coverage        # 覆盖率棘轮（vitest.config.ts 的目录阈值）
-✅ pnpm run build                # SKIP_ENV_VALIDATION=1（CI 无真实密钥）
+✅ pnpm run test                  # vitest run
+✅ pnpm run test:coverage         # 覆盖率棘轮（vitest.config.ts 的目录阈值）
+✅ pnpm run build                 # SKIP_ENV_VALIDATION=1（CI 无真实密钥）
 ✅ pnpm exec playwright test --grep @critical   # 只跑 @critical 关键流程
 ```
 
@@ -124,13 +125,20 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
   `git config core.hooksPath .githooks` 启用）依次跑：
 
 ```
+✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
 ✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则（见 §12.8、12 §12.6）
+✅ node scripts/check-react-updater-purity.cjs
+✅ node scripts/check-title-bar-clearance.cjs
 ✅ pnpm exec tsc --noEmit
-✅ pnpm exec eslint .
+✅ pnpm exec eslint . --max-warnings 0
+✅ node scripts/check-ui-logic-separation.cjs
+✅ node scripts/check-changelog-fragments.cjs
 ```
 
   任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。
-  新克隆仓库后需重设一次：`git config core.hooksPath .githooks`。
+  **钩子由 `pnpm install` 自动接上**（`package.json` 的 postinstall →
+  `scripts/install-git-hooks.sh` 写 `core.hooksPath=.githooks`，幂等）；装了依赖但
+  `git config core.hooksPath` 仍为空时手动执行一次即可。
 - **一律 pnpm，禁止 npm/npx**（AGENTS.md 硬规则 1）：npm 在本项目解析 typescript
   别名链会崩溃（`Class extends value undefined`）。
 - **E2E 用 `@critical` tag 圈定关键流程**：新增冒烟用例若属于「合并前必须验证的
@@ -146,6 +154,60 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
 - 功能分支：`feat/<short-desc>`；修复分支：`fix/<issue-id>-<desc>`。
 - 合并方式：优先 **Squash Merge**（保持主干线性、单 PR 单提交）；大型重构可 Rebase。
 - 项目主分支为 **`master`**；禁止直接 push 到 `master`；所有变更走 PR + Review。
+  **`master` 同样禁止直接 commit**（连「先提交到 master 再推」也不行）——
+  本条的强制口径见下方 13.6.1。
+
+#### 13.6.1 master 只接受「分支开发 → PR → 合并」（机器强制）
+
+只用「禁止直接 push」约束不住主干：本地 `git commit` 到 `master` 完全不经过任何
+检查，而 `--no-verify` 与「新克隆没启用钩子」都能让提交门槛形同虚设，等发现时
+绕过评审与 CI 的变更已经躺在所有人的基线里。因此本仓库把「不在 master 上提交」
+做成三层防线（ISSUE #492）：
+
+| 层 | 位置 | 拦什么 | 能绕过吗 |
+|----|------|--------|---------|
+| 平台 | CNB **分支保护设置**（保护分支 + 禁止直接 push，要求 PR） | `master` 的**直接 push**，**放行 PR 合并** | 需管理员改设置（本身就要权限） |
+| 本地 | `.githooks/pre-commit` 第 1 步跑 `scripts/check-branch-guard.cjs` | `master` 上的**每一次本地提交** | 只能 `--no-verify`（进历史，Review 可见） |
+| 服务端 | `.github/workflows/ci.yml` 的 `Branch guard` 步骤 | **源分支是 `master` 的 PR** | 不能 |
+
+**⚠️ 平台层必须用「分支保护」，不能用「分支锁」**：`git create-branch-lock`
+（仓库设置里 `locked: true`）锁的是**整个分支的写入**——它连 **PR 合并**一起拦掉，
+`master` 一旦被锁，任何 PR 都无法合并（实测：锁上后 PR 的 `mergeable_state` 虽然仍是
+`mergeable`，平台侧合并动作直接失败）。想「禁直接 push、但要能合 PR」只有
+**分支保护设置**这一条路：保护分支 + 禁止直接 push + 需要评审批准。
+`create-branch-lock` 只适合「冻结分支，谁都不许动」的场景（如临时封版），
+**不要**拿它当 PR 流程的守卫。
+
+**判据（为什么不能只看分支名）**：pre-commit 在**合并提交**时 `HEAD` 也是 `master`，
+只看 `git rev-parse --abbrev-ref HEAD` 会把「PR 合并」一起拦掉。可用的事实是
+「本次提交有几个父」：合并提交有 2 个父（被合分支 + `master`），普通提交只有 1 个。
+所以 `scripts/check-branch-guard.cjs` 的口径是：
+
+- `HEAD` 不在 `master` 上 → 放行（正常的分支开发）；
+- `HEAD` 在 `master` 上且父提交数 > 1 → 放行（PR 合并提交，在平台侧完成）；
+- `HEAD` 在 `master` 上且父提交数 ≤ 1 → **阻断**（直连主干的提交）；
+- 取不到分支名（非 git 目录 / detached）→ 放行并说明（判据无从命中，不该误报）。
+
+**被拦下的自救**（提交已经在本地 `master` 上、还没 push）：
+
+```bash
+git branch feat/<简短描述>            # 用当前提交建分支，提交不丢
+git reset --hard origin/master        # master 回退到远端状态
+git checkout feat/<简短描述>          # 换到分支继续开发
+git push origin HEAD                  # 推送并创建 PR
+```
+
+**为什么用「父提交数」而不是「HEAD 是否等于 origin/master」**：刚 `pull` 过、
+或本地领先远端若干提交时，两者都不成立；父提交数是 git 里唯一稳定表达
+「这次提交是不是合并」的事实，且与当前工作树位置无关。
+
+> 规则自测：`tests/check-branch-guard.test.ts`（临时仓库跑真脚本：分支提交放行、
+> master 直提阻断并给出搬迁出口、master 合并提交放行、非 git 目录不崩、
+> 钩子里守卫排在第 1 步）。
+>
+> **分级口径**：上面的本地钩子与 CI 步骤才是「判据」所在（拦的是**提交**与**PR 源分支**）；
+> 平台层的分支保护是「防误操作」的兜底（拦的是**直接 push**）。两者判据不同、不可互相替代：
+> 只有平台保护挡不住 `--no-verify` 的本地提交，只有本地钩子挡不住别的检出直推。
 
 ### 13.7 换行符与提交噪声（LF，对齐主规范 §11.2）
 
