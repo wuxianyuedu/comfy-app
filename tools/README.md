@@ -35,6 +35,7 @@
 | `start/start-desktop.ps1` | start/ | 启动 | 桌面版一键自检 + 启动（给拿到「即开即用桌面包」的普通用户） |
 | `start/run-local.ps1` | start/ | 初始化 | 非开发人员一键初始化：自检 node/pnpm、生成 `.env`、补齐依赖 |
 | `start/verify-quality.ps1` | start/ | 质量门禁 | 双击即跑 typecheck / lint / vitest（见规范 11.12） |
+| `start/run-tests.ps1` | start/ | 质量门禁 | 只跑 vitest（可指定文件 / `-Full` 复现基线失败 / 透传 vitest 参数），补 verify-quality「三项串联」之外的日常红绿循环（见规范 11.12） |
 | `start/sync-lint.ps1` | start/ | 质量检查 | 同步依赖 + `pnpm lint`（install && lint，拉取更新/改完代码后日常自检用，见规范 §8） |
 | `start/register-comfyapp-protocol.ps1` | start/ | 一次性配置 | 注册 `comfyapp://` 协议（HKCU，免管理员） |
 | `build/build-launcher.ps1` | build/ | 启动器（通用） | 打包 `start-tauri/start-tauri.exe`（prebuilt 默认入口，秒出窗口 + dev server） |
@@ -75,6 +76,7 @@
 | `start/start-tauri-dev.ps1` | `scripts/dev-launcher.ps1 -Tauri` |
 | `start/run-local.ps1` | `scripts/prepare-local-run.ps1` |
 | `start/verify-quality.ps1` | `scripts/quality-gate.ps1` |
+| `start/run-tests.ps1` | `scripts/run-tests.ps1` |
 | `start/sync-lint.ps1` | `scripts/sync-lint.ps1` |
 | `docs/generate-docs.ps1` | `scripts/generate-docs.ps1` |
 | `start/register-comfyapp-protocol.ps1` | `scripts/install-comfyapp-helper.ps1` |

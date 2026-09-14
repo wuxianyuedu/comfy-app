@@ -18,7 +18,7 @@ export const DERIVED_PORT_BASE = 3200;
 export const DERIVED_PORT_SPAN = 800;
 
 /**
- * 规范化检出路径：转正斜杠 + 转小写（跨四语言约定，见 §1.1）。
+ * 规范化检出路径：转正斜杠 + 转小写 + 去尾斜杠（跨四语言约定，见 §1.1）。
  *
  * 关键点：**只对非绝对路径做 resolve**。历史实现无条件 `path.resolve()`，
  * 而 `path.resolve` 的语义是「相对当前工作目录解析」——在 POSIX 上
@@ -39,9 +39,11 @@ export function normalizeRootForPort(root) {
   const raw = String(root ?? "");
   // Windows 盘符绝对路径（F:\ 或 F:/）与 UNC 路径（\\server\share）：
   // 在 POSIX 上 path.isAbsolute 认不出它们，必须显式判据，否则会被当相对路径
-  // 拼上 cwd —— 这正是上面描述的失真来源。
-  const winAbsolute = /^[a-zA-Z]:[\\/]/.test(raw) || raw.startsWith("\\\\");
-  const absolute = winAbsolute || path.isAbsolute(raw);
+  // 拼上 cwd —— 这正是上面描述的失真来源。盘符判据本体写作 /^[a-z]:\//i
+  //（ASCII 盘符不区分大小写，无需再列 A-Z），UNC 另判前导双反斜杠。
+  const isWindowsDrive = /^[a-z]:\//i.test(raw.replace(/\\/g, "/"));
+  const isUnc = raw.startsWith("\\\\");
+  const absolute = isWindowsDrive || isUnc || path.isAbsolute(raw);
   const resolved = absolute ? raw : path.resolve(raw);
   return resolved.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "");
 }
