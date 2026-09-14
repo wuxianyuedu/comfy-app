@@ -136,7 +136,7 @@ export function CanvasArea({
                   item.disabled
                     ? "cursor-not-allowed text-(--color-ink-fainter)"
                     : item.danger
-                    ? "text-red-400 hover:bg-red-500/10"
+                    ? "text-red-700 hover:bg-red-500/10 dark:text-red-400"
                     : "text-(--color-ink-strong) hover:bg-(--color-subtle)"
                 }`}
               >

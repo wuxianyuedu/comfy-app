@@ -112,7 +112,7 @@ function PortRowString({
         readOnly
         rows={2}
         defaultValue={value}
-        className="mx-[14px] h-[52px] resize-none rounded-md border border-white/4 bg-(--color-canvas-deep) px-2.5 py-2 text-[11px] leading-relaxed text-(--color-ink-soft) outline-none"
+        className="bg-canvas-deep text-ink-soft mx-[14px] h-[52px] resize-none rounded-md border border-white/4 px-2.5 py-2 text-[11px] leading-relaxed text-(--color-ink-soft) outline-none"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </div>

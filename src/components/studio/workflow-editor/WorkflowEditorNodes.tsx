@@ -145,7 +145,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
        *  absolutely via the `Position` prop, so changing flex `justify-…`
        *  only moves the visible label/value — the dot stays anchored to
        *  its side of the wfGroup. */
-      className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} gap-1 px-1.5 py-[1px] text-[10.5px] leading-[1.4] text-white/90`}
+      className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} gap-1 px-1.5 py-[1px] text-[10.5px] leading-[1.4] text-ink-bright/90`}
       style={{
         width: IO_PORT_WIDTH,
         background: "transparent",

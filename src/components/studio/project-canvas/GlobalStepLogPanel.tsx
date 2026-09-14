@@ -49,11 +49,11 @@ type Level = StepLogEntry["level"];
 
 /* 与应用日志 (LogPanel) 同款 level badge 配色。 */
 const LEVEL_STYLES: Record<Level, string> = {
-  error: "bg-rose-500/15 text-rose-400 border-rose-500/20",
-  warn: "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  success: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-  progress: "bg-violet-500/15 text-violet-400 border-violet-500/20",
-  info: "bg-cyan-500/15 text-cyan-400 border-cyan-500/20",
+  error: "border-rose-500/20 bg-rose-500/15 text-rose-700 dark:text-rose-400",
+  warn: "border-amber-500/20 bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  success: "border-emerald-500/20 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  progress: "border-violet-500/20 bg-violet-500/15 text-violet-700 dark:text-violet-400",
+  info: "border-cyan-500/20 bg-cyan-500/15 text-cyan-700 dark:text-cyan-400",
 };
 
 /** 把「失败原因」补写为一条 error 日志行（横幅之外）。
@@ -326,7 +326,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     status === "FAILED" ? "bg-red-500/20 text-red-300"
     : status === "SUCCEEDED" ? "bg-emerald-500/20 text-emerald-300"
     : status === "RUNNING" ? "bg-violet-500/20 text-violet-300"
-    : "bg-white/6 text-gray-400";
+    : "bg-subtle text-ink-soft";
 
   const errorCount = visibleAll.filter((l) => l.level === "error").length;
 
@@ -348,7 +348,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         onClick={() => setOpen(true)}
         title="打开执行日志"
         data-testid="step-log-trigger"
-        className="pointer-events-auto fixed right-3 top-16 z-30 flex items-center gap-1.5 rounded-md border border-white/10 bg-(--color-panel)/90 px-2.5 py-1.5 text-[11px] font-medium text-gray-300 shadow-lg backdrop-blur-sm transition-colors hover:border-white/25 hover:text-gray-100"
+        className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright pointer-events-auto fixed top-16 right-3 z-30 flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm transition-colors"
       >
         <FileText size={12} />
         执行日志
@@ -361,17 +361,23 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
       {open && (
         <div
-          className={overlayClass("modal", "z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm")}
+          className={overlayClass(
+            "modal",
+            "z-50 flex items-center justify-center bg-black/20 p-4 backdrop-blur-sm dark:bg-black/60",
+          )}
           onClick={(e) => {
             if (e.target === e.currentTarget) setOpen(false);
           }}
         >
-          <div className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60`}>
+          <div className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} flex-col overflow-hidden border-border-strong bg-panel rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60`}>
             {/* Header */}
-            <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-white/2 px-4">
+            <div className="border-border-strong bg-surface-1 flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
               <div className="flex min-w-0 items-center gap-2">
-                <FileText size={16} className="shrink-0 text-violet-400" />
-                <span className="truncate text-[15px] font-semibold text-gray-100">
+                <FileText
+                  size={16}
+                  className="shrink-0 text-violet-700 dark:text-violet-400"
+                />
+                <span className="text-ink-bright truncate text-[15px] font-semibold">
                   执行日志
                 </span>
                 <span className={`rounded-full px-1.5 py-px text-[10px] font-medium ${statusClass}`}>
@@ -404,7 +410,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   <select
                     value={taskId ?? ""}
                     onChange={(event) => setViewTaskId(event.target.value || null)}
-                    className="max-w-[200px] truncate rounded-md border border-white/10 bg-(--color-panel) px-1.5 py-0.5 text-[10.5px] text-gray-300 outline-none"
+                    className="bg-panel border-border-strong text-ink-soft max-w-[200px] truncate rounded-md border px-1.5 py-0.5 text-[10.5px] outline-none"
                     title="切换查看的任务"
                   >
                     {!taskId && <option value="">（无任务）</option>}
@@ -427,7 +433,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 <button
                   type="button"
                   onClick={onClear}
-                  className="rounded-md border border-white/10 bg-white/4 px-2 py-0.5 text-[10.5px] text-gray-300 transition-colors hover:bg-white/8 hover:text-gray-100"
+                  className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md border px-2 py-0.5 text-[10.5px] transition-colors"
                 >
                   清空
                 </button>
@@ -435,7 +441,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   type="button"
                   onClick={() => setWide((w) => !w)}
                   title={wide ? "收缩" : "加宽"}
-                  className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md p-1.5 transition-colors"
                 >
                   {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                 </button>
@@ -443,7 +449,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   type="button"
                   onClick={() => setOpen(false)}
                   title="关闭"
-                  className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md p-1.5 transition-colors"
                 >
                   <X size={16} />
                 </button>
@@ -451,7 +457,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             </div>
 
             {/* Level filter bar — 与应用日志同款单选按钮 */}
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-white/2 px-4 py-1.5">
+            <div className="border-border-strong bg-surface-1 flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
               <div className="flex items-center gap-1">
                 {FILTER_LABELS.map((option) => {
                   const count =
@@ -467,17 +473,17 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                       data-testid={`log-filter-${option.value}`}
                       className={`rounded-md px-2.5 py-1 text-[13px] transition-colors ${
                         filter === option.value
-                          ? "bg-white/10 text-gray-100"
-                          : "text-gray-500 hover:bg-white/4 hover:text-gray-300"
+                          ? "bg-surface-2 text-ink-bright"
+                          : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
                       }`}
                     >
                       {option.label}
-                      <span className="ml-1 text-[11px] text-gray-600">{count}</span>
+                      <span className="text-ink-fainter ml-1 text-[11px]">{count}</span>
                     </button>
                   );
                 })}
               </div>
-              <label className="flex cursor-pointer select-none items-center gap-1.5 text-[12px] text-gray-400">
+              <label className="text-ink-soft flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
                 <input
                   type="checkbox"
                   checked={autoscroll}
@@ -491,7 +497,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             {/* Log body — 与应用日志同款行样式 */}
             <div
               ref={scrollerRef}
-              className="custom-scrollbar flex-1 overflow-y-auto bg-[#0d0d14]/60"
+              className="custom-scrollbar bg-canvas-deep/60 flex-1 overflow-y-auto"
             >
               {valErrs.length > 0 && (
                 <div className="mb-2 rounded border border-red-500/40 bg-red-500/8 p-2">
@@ -512,7 +518,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               )}
 
               {visible.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-gray-600">
+                <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
                   <FileText size={32} strokeWidth={1.5} className="opacity-30" />
                   {taskId ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
                 </div>
@@ -525,9 +531,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                         key={`${log.t}:${index}`}
                         data-testid="log-line"
                         data-level={log.level}
-                        className="flex items-start gap-2.5 border-b border-white/3 px-4 py-1 font-mono text-[13px] leading-snug hover:bg-white/2"
+                        className="border-border-subtle hover:bg-subtle/60 flex items-start gap-2.5 border-b px-4 py-1 font-mono text-[13px] leading-snug"
                       >
-                        <span className="shrink-0 text-gray-500">{fmtTime(log.t)}</span>
+                        <span className="text-ink-muted shrink-0">{fmtTime(log.t)}</span>
                         <span
                           className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_STYLES[log.level]}`}
                         >
@@ -535,13 +541,13 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                         </span>
                         <span
                           className={`min-w-0 flex-1 break-words whitespace-pre-wrap ${
-                            isClient ? "italic text-gray-400" : "text-gray-300"
+                            isClient ? "text-ink-soft italic" : "text-ink-soft"
                           }`}
                         >
                           {log.msg}
                         </span>
                         {log.src && (
-                          <span className="max-w-[200px] shrink-0 truncate text-[11px] text-gray-600 hover:text-gray-400">
+                          <span className="text-ink-fainter hover:text-ink-soft max-w-[200px] shrink-0 truncate text-[11px]">
                             {log.src}
                           </span>
                         )}
@@ -553,7 +559,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             </div>
 
             {/* Footer */}
-            <div className="flex h-9 shrink-0 items-center justify-between border-t border-white/8 bg-white/2 px-4 text-[12px] text-gray-500">
+            <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
               <span>
                 显示 {visible.length} / 总计 {visibleAll.length} 条
               </span>

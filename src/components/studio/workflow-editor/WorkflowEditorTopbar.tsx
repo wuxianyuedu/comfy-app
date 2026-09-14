@@ -108,7 +108,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-white/10 hover:text-gray-300"
+            className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-lg p-1.5 transition-colors"
           >
             <ArrowLeft size={18} />
           </button>
@@ -160,7 +160,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                    *  `subgraphStack`. */
                   return (
                     <React.Fragment key={crumb.uid + i}>
-                      <span className="text-[14px] text-gray-600">/</span>
+                      <span className="text-ink-fainter text-[14px]">/</span>
                       <span
                         className={`${baseCls} rounded-md border border-violet-500/40 bg-violet-500/15 px-2 py-0.5 text-violet-100`}
                         style={{ cursor: "default" }}
@@ -176,7 +176,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                  *  and re-fetches that subgraph's data). */
                 return (
                   <React.Fragment key={crumb.uid + i}>
-                    <span className="text-[14px] text-gray-600">/</span>
+                    <span className="text-ink-fainter text-[14px]">/</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -195,7 +195,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                           hostNodeId: hostChain,
                         });
                       }}
-                      className={`${baseCls} rounded-md px-1.5 py-0.5 text-gray-400 hover:bg-white/5 hover:text-violet-200`}
+                      className={`${baseCls} text-ink-soft hover:bg-subtle rounded-md px-1.5 py-0.5 hover:text-violet-700 dark:hover:text-violet-200`}
                       title={`${crumb.name}（跳到此层）`}
                     >
                       {crumb.name}
@@ -229,17 +229,17 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 强制重载
               </button>
             </div>
-            <p className="mt-0.5 truncate text-[11px] font-medium text-gray-400">
+            <p className="text-ink-soft mt-0.5 truncate text-[11px] font-medium">
               {detail.nodes.filter((node) => !isNoteType(node.class_type)).length} 个节点
-              <span className="mx-1.5 text-gray-600">·</span>
+              <span className="text-ink-fainter mx-1.5">·</span>
               {Object.keys(workflowIO).length} 个暴露 IO
-              <span className="mx-1.5 text-gray-600">·</span>
+              <span className="text-ink-fainter mx-1.5">·</span>
               {(detail.notes?.length ?? 0)} 个注释
-              <span className="mx-1.5 text-gray-600">·</span>
+              <span className="text-ink-fainter mx-1.5">·</span>
               {(detail.groups?.length ?? 0)} 个分组
               {subgraphStack.length > 0 && (
                 <>
-                  <span className="mx-1.5 text-gray-600">·</span>
+                  <span className="text-ink-fainter mx-1.5">·</span>
                   <span className="text-violet-300">子工作流 #{subgraphStack[subgraphStack.length - 1]!.uid}</span>
                 </>
               )}
@@ -249,15 +249,19 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 <p className="mt-1 flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/7.000000000000001 px-2 py-1 text-[11px] text-red-300">
                   <span className="font-semibold">本地文件已丢失：</span>
                   <span className="truncate font-mono">{detail.sourcePath}</span>
-                  <span className="ml-1 shrink-0 text-red-400/80">· 修改保存后刷新将自动重连</span>
+                  <span className="ml-1 shrink-0 text-red-700/80 dark:text-red-400/80">
+            · 修改保存后刷新将自动重连
+          </span>
                 </p>
               ) : detail.sourceChanged ? (
                 <p className="mt-1 flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/7.000000000000001 px-2 py-1 text-[11px] text-emerald-300">
                   <span className="font-semibold">已从本地文件刷新最新内容</span>
-                  <span className="truncate font-mono text-emerald-400/80">{detail.sourcePath}</span>
+                  <span className="truncate font-mono text-emerald-700/80 dark:text-emerald-400/80">
+              {detail.sourcePath}
+            </span>
                 </p>
               ) : (
-                <p className="mt-1 truncate rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-1 text-[11px] text-emerald-400/80" title={detail.sourcePath}>
+                <p className="mt-1 truncate rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-1 text-[11px] text-emerald-700/80 dark:text-emerald-400/80" title={detail.sourcePath}>
                   已连接本地文件 · 文件改动后刷新即可同步
                 </p>
               )
@@ -283,7 +287,11 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           >
             {debugMode ? "✓ 调试中" : "调试"}
           </button>
-          {error && <span className="text-xs text-red-400">{error}</span>}
+          {error && (
+            <span className="text-xs text-red-700 dark:text-red-400">
+              {error}
+            </span>
+          )}
           {/* the "编辑 IO" / "预览 IO" affordances are available at BOTH
            *  levels — the root workflow AND inside a subgraph.
            *

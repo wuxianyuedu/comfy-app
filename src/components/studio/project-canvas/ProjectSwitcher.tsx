@@ -45,19 +45,19 @@ export function ProjectSwitcher({
   return (
     <div className="relative">
       <button
-        className="flex items-center gap-2 rounded-full border border-white/10 bg-linear-to-br from-[#1a1530]/85 to-[#16121f]/85 px-3.5 py-1.5 text-[12px] font-medium text-gray-100 shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-violet-400/40 hover:shadow-violet-500/15"
+        className="flex items-center gap-2 border-border-strong rounded-full border bg-linear-to-br from-(--color-subtle) to-(--color-surface-2) px-3.5 py-1.5 text-[12px] font-medium text-gray-100 shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-violet-400/40 hover:shadow-violet-500/15"
         onClick={onToggleMenu}
         title="项目列表"
       >
         <span className="text-violet-300">▦</span>
         <span className="max-w-[160px] truncate">{projectName}</span>
-        <span className="text-gray-500">▾</span>
+        <span className="text-ink-muted">▾</span>
       </button>
       {menuOpen && (
         <>
           <div className={overlayClass("modal", "z-30")} onClick={onCloseMenu} />
-          <div className="absolute top-10 left-0 z-40 w-60 overflow-hidden rounded-xl border border-white/10 bg-[#14121f]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur">
-            <div className="px-2 py-1 text-[10px] tracking-wider text-gray-500 uppercase">
+          <div className="absolute top-10 left-0 z-40 border-border-strong bg-panel/95 w-60 overflow-hidden rounded-xl border p-1.5 shadow-2xl shadow-black/20 backdrop-blur dark:shadow-black/60">
+            <div className="text-ink-muted px-2 py-1 text-[10px] tracking-wider uppercase">
               我的画布项目
             </div>
             <div className="max-h-56 overflow-auto">
@@ -66,25 +66,25 @@ export function ProjectSwitcher({
                   key={project.id}
                   type="button"
                   onClick={() => onSwitch(project.id)}
-                  className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-white/6 ${
+                  className={`hover:bg-subtle flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors ${
                     project.id === projectId
                       ? "text-violet-300"
-                      : "text-gray-200"
+                      : "text-ink-bright"
                   }`}
                 >
                   <span className="truncate">{project.name}</span>
                   {project.id === projectId && (
-                    <span className="text-[10px] text-violet-400">当前</span>
+                    <span className="text-[10px] text-violet-700 dark:text-violet-400">当前</span>
                   )}
                 </button>
               ))}
               {projects.length === 0 && (
-                <p className="px-2 py-1.5 text-[11px] text-gray-500">
+                <p className="text-ink-muted px-2 py-1.5 text-[11px]">
                   暂无其他项目
                 </p>
               )}
             </div>
-            <div className="my-1 h-px bg-white/6" />
+            <div className="bg-border-strong my-1 h-px" />
             {renaming ? (
               <div className="space-y-1 p-1">
                 <input
@@ -95,7 +95,7 @@ export function ProjectSwitcher({
                     if (event.key === "Enter") onCommitRename();
                     if (event.key === "Escape") onCancelRename();
                   }}
-                  className="w-full rounded-md border border-white/8 bg-black/30 px-2 py-1 text-[12px] text-gray-200 outline-none focus:border-violet-400/60"
+                  className="border-border-strong bg-canvas-deep text-ink-bright w-full rounded-md border px-2 py-1 text-[12px] outline-none focus:border-violet-400/60"
                   placeholder="项目名称"
                 />
                 <div className="flex gap-1">
@@ -108,7 +108,7 @@ export function ProjectSwitcher({
                   </button>
                   <button
                     type="button"
-                    className="flex-1 rounded-md border border-white/8 px-2 py-1 text-[11px] text-gray-300 hover:bg-white/6"
+                    className="border-border-strong text-ink-soft hover:bg-subtle flex-1 rounded-md border px-2 py-1 text-[11px]"
                     onClick={onCancelRename}
                   >
                     取消
@@ -120,7 +120,7 @@ export function ProjectSwitcher({
                 <button
                   type="button"
                   onClick={onNew}
-                  className="rounded-lg px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:bg-white/6"
+                  className="text-ink-bright hover:bg-subtle rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors"
                 >
                   <Icon
                     name="plus"
@@ -132,7 +132,7 @@ export function ProjectSwitcher({
                 <button
                   type="button"
                   onClick={onStartRename}
-                  className="rounded-lg px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:bg-white/6"
+                  className="text-ink-bright hover:bg-subtle rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors"
                 >
                   <Icon
                     name="pen"
@@ -144,7 +144,7 @@ export function ProjectSwitcher({
                 <button
                   type="button"
                   onClick={onDelete}
-                  className="rounded-lg px-2 py-1.5 text-left text-[12px] text-red-400 transition-colors hover:bg-red-400/8"
+                  className="rounded-lg px-2 py-1.5 text-left text-[12px] text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
                 >
                   <Icon
                     name="trash"

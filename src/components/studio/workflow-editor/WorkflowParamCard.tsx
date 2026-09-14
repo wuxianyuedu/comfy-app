@@ -180,7 +180,7 @@ export function WorkflowParamCard({
             disabled={!canReset}
             className={`nodrag nopan shrink-0 rounded p-0.5 transition-colors ${
               canReset
-                ? "text-(--color-ink-soft) hover:bg-white/8 hover:text-(--color-ink-bright)"
+                ? "text-ink-soft hover:bg-subtle hover:text-ink-bright"
                 : "cursor-default text-(--color-ink-fainter)"
             }`}
             data-testid={`param-node-reset-${entryId}`}
@@ -254,7 +254,7 @@ export function WorkflowParamCard({
       {!readOnly && footNote && (
         <div
           className={`px-2 pb-1.5 text-[9.5px] leading-relaxed ${
-            wired ? "text-(--color-ink-fainter)" : "text-amber-500/80"
+            wired ? "text-ink-fainter" : "text-amber-600/90 dark:text-amber-500/80"
           }`}
           data-testid={`param-node-hint-${entryId}`}
         >

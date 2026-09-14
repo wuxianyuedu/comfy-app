@@ -65,7 +65,7 @@ export function FlowNodePinRows({
   };
   return (
     <div
-      className="border-b border-white/5 py-0.5"
+      className="border-border-strong border-b py-0.5"
       style={{ background: "rgba(255,255,255,0.015)" }}
     >
       {Array.from({ length: Math.max(uniqueConnEntries.length, outputs.length) }).map(
