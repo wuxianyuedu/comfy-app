@@ -53,8 +53,10 @@ describe("开发机私有输入的剔除清单（单一实现，两处复用）"
   });
 
   it("build-desktop 复用同一份实现（不在自己文件里另写一套清单）", () => {
-    expect(buildDesktop).toContain(
-      'import { stripPrivateInputs } from "./standalone-private-inputs.mjs"',
+    // 断言「从该模块 import」而不是某一种写法：导入已被拆成多行（新增
+    // stripDevArtifacts），逐字面量断言会随格式变化无谓变红。
+    expect(buildDesktop).toMatch(
+      /import\s*\{[^}]*stripPrivateInputs[^}]*\}\s*from\s*"\.\/standalone-private-inputs\.mjs"/,
     );
     expect(buildDesktop).toMatch(/stripPrivateInputs\(staticDir,/);
     // 反例：static 组装里再出现 `rmSync(join(staticDir, ".env"))` 这种各写一套
@@ -79,5 +81,73 @@ describe("check-standalone-contents：产物层检查覆盖私有输入", () => 
     expect(checker).toContain('const STATIC_DIR = path.join(ROOT, "src-tauri", "static")');
     expect(checker).toMatch(/checkDir\(STANDALONE/);
     expect(checker).toMatch(/checkDir\(STATIC_DIR/);
+  });
+});
+
+/* ── 开发期文件与内部门禁脚本：白名单剔除（ISSUE #489）─────────────────── */
+const stripDevArtifactsBody = stripModule.slice(
+  stripModule.indexOf("export function stripDevArtifacts"),
+);
+
+describe("开发期文件与内部门禁脚本的白名单剔除", () => {
+  it("剔除清单覆盖根级开发文件与各 *.config.*", () => {
+    for (const name of [
+      '"AGENTS.md"',
+      '"CHANGELOG.md"',
+      '"README.md"',
+      '"eslint.config.js"',
+      '"playwright.config.ts"',
+      '"vitest.config.ts"',
+      '"tsconfig.json"',
+      '"pnpm-lock.yaml"',
+      '"tsconfig.tsbuildinfo"',
+    ]) {
+      expect(stripModule, `剔除清单缺少 ${name}`).toContain(name);
+    }
+  });
+
+  it("scripts/ 走白名单：只保留运行时真的会读的那两个", () => {
+    // 白名单的意义就在这里：黑名单欠完备（每加一个脚本都要记得补一条，
+    // 而漏掉是静默的）。这里锁「白名单存在且条目被逐个点名」——
+    // 把白名单换成黑名单会让下面这条失败。
+    expect(stripModule).toContain("export const RUNTIME_SCRIPTS = [");
+    expect(stripModule).toContain('"install-comfyapp-helper.ps1"');
+    expect(stripModule).toContain('"dev-launcher.ps1"');
+    // 剔除实现必须是「不在白名单里就删」，而不是「在黑名单里才删」
+    expect(stripDevArtifactsBody).toMatch(/if \(keep\.has\(name\)\) continue;/);
+  });
+
+  it("build-desktop 也跑白名单剔除（static 是唯一能覆盖的那一层）", () => {
+    expect(buildDesktop).toContain("stripDevArtifacts");
+    expect(buildDesktop).toMatch(/stripDevArtifacts\(staticDir,/);
+  });
+
+  it("`pnpm build` 收尾就剔除（CI 只跑 build，不跑 build-desktop）", () => {
+    // main() 里两个都要跑：只清私有输入不清开发文件，standalone 仍然带 AGENTS.md
+    const mainBody = stripModule.slice(stripModule.lastIndexOf("function main()"));
+    expect(mainBody).toContain("stripPrivateInputs(standalone");
+    expect(mainBody).toContain("stripDevArtifacts(standalone");
+  });
+});
+
+describe("check-standalone-contents：scripts/ 白名单与运行时缺件", () => {
+  it("产物层检查持有与剔除清单一致的 scripts 白名单", () => {
+    expect(checker).toContain('"install-comfyapp-helper.ps1"');
+    expect(checker).toContain('"dev-launcher.ps1"');
+    expect(checker).toContain("ALLOWED_SCRIPTS");
+  });
+
+  it("产物层检查也验「Next 运行时脚本不得缺件」", () => {
+    // 这一条是**反向**检查（必须有的），与上面那些「不该有的」方向相反：
+    // 缺 app-route-turbo 的表现是所有 API 路由 500，构建期却毫无提示。
+    expect(checker).toContain("REQUIRED_RUNTIME_FILES");
+    expect(checker).toContain("app-route-turbo.runtime.prod.js");
+  });
+
+  it("开发期文件的判据锚在产物根，不误伤 node_modules 里的同名文件", () => {
+    // ^ 锚点不能丢：第三方包自带 README.md / tsconfig.json / eslint.config.js
+    // 是正常且必需的，误报会让这条护栏变成噪声。
+    expect(checker).toMatch(/\["开发期文件", \/\^\(AGENTS\|CHANGELOG\|README\)/);
+    expect(checker).toMatch(/\["开发期配置", \/\^\(eslint\|playwright/);
   });
 });
