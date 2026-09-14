@@ -560,6 +560,14 @@ export function WorkflowParamWires({
   useEffect(() => {
     acceptsRef.current = acceptsDrop;
   }, [acceptsDrop]);
+  /* 拖完没落上时的原因（人类可读）。「拖了没反应」以前是静默的：用户只看到线
+   *  弹回去，不知道是没对准、这一列没有可落点、还是这一行不收这个口子。 */
+  const [dropHint, setDropHint] = useState<string | null>(null);
+  useEffect(() => {
+    if (!dropHint) return;
+    const timer = setTimeout(() => setDropHint(null), 4000);
+    return () => clearTimeout(timer);
+  }, [dropHint]);
   /* 空集合时**不挂线层**：挂载那一刻还没量过，`segments` 是空的，但 svg 必须先
    * 在 DOM 里才量得到锚点（量测的起点是 svg 的 parentElement）。所以「要不要
    * 渲染 svg」只取决于有没有线要画，而不是「已经量到几条」。 */
@@ -759,9 +767,34 @@ export function WorkflowParamWires({
           if (drag.kind === "hostToParam") onConnectOutput?.(entryId, fromHostKey);
           else onConnect?.(entryId, fromHostKey);
         }
+        setDropHint(null);
       } else if (hit) {
         if (drag.kind === "hostToParam") onConnectOutput?.(drag.entryId, hit);
         else onConnect?.(drag.entryId, hit);
+        setDropHint(null);
+      } else {
+        /* 没落上：把原因说清楚。判据用**未经闸门过滤**的那一份候选 —— 只有它能
+         *  区分「这一列压根没有可落点」与「有可落点但不收这个口子」。 */
+        const rawTargets = container
+          ? fromHostKey
+            ? collectCardTargets(container, outputsOnly)
+            : collectDropTargets(container, outputsOnly)
+          : [];
+        const rawHit = container ? resolveDropTarget(point, rawTargets) : null;
+        const outputSide = drag.kind === "hostToParam";
+        setDropHint(
+          !container
+            ? null
+            : rawTargets.length === 0
+              ? fromHostKey
+                ? "这一列没有可落点的卡片（卡片列没渲染出来？）"
+                : outputSide
+                  ? "这一列没有可落点的输出行（工作流输出行没带落点属性？）"
+                  : "这一列没有可落点的参数行（工作流输入行没带落点属性？）"
+              : rawHit
+                ? "这一行不接受这个口子（类型不同：契约口与端口分类要匹配）"
+                : "松手时不在任何端口上（对准那一行 / 卡片再松手）",
+        );
       }
       setDrag(null);
     };
@@ -817,6 +850,7 @@ export function WorkflowParamWires({
   if (!mounted) return null;
 
   return (
+    <>
     <svg
       ref={ref}
       aria-hidden
@@ -862,6 +896,16 @@ export function WorkflowParamWires({
           data-testid="wflib-param-wire-preview"
         />
       )}
-    </svg>
+      </svg>
+      {/* 落点失败的原因：贴在容器左下角，4 秒后自己消失（不只读，可直接重试）。 */}
+      {dropHint && (
+        <div
+          className="pointer-events-none absolute bottom-2 left-2 z-20 max-w-[420px] rounded-lg bg-amber-100 px-2.5 py-1.5 text-[11px] text-amber-800 shadow-sm"
+          data-testid="wflib-wire-drop-hint"
+        >
+          没有连上：{dropHint}
+        </div>
+      )}
+    </>
   );
 }
