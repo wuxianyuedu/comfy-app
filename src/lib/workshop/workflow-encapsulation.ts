@@ -47,6 +47,9 @@ export type WorkshopPinClass =
   | "reference-image"
   | "first-frame"
   | "last-frame"
+  /** 视频：时长。按端口名分两种单位 —— 秒（duration / 时长 / 秒数）与
+   *  帧（length / num_frames / frames / 帧数），见 userValueFor 的取值。 */
+  | "duration"
   | "internal";
 
 /** 镜头视频生成各模式在封装口径下对外暴露的角色。 */
@@ -95,6 +98,13 @@ export interface WorkshopExposedValues {
   firstFrame?: string;
   /** 视频：尾帧文件名（首尾帧工作流用）。 */
   lastFrame?: string;
+  /** 视频：时长（秒）。落在按秒表达的时长端口上（`duration` / `秒数` / `时长`）。 */
+  duration?: number;
+  /** 视频：帧数。落在按帧表达的时长端口上（`length` / `num_frames` / `帧数`）。
+   *
+   *  与 `duration` 是同一个「时长」口的两种落点单位：调用方按 fps 折算好再给
+   *  （见 VideoStudio 的 framesFor），这里不再猜 fps。 */
+  frames?: number;
 }
 
 /** 一次封装的结果。 */
@@ -248,8 +258,26 @@ export function classifyWorkshopPin(e: WorkflowIOEntry): WorkshopPinClass {
   if (isMegapixelsPin(e)) return "size-megapixels";
   if (isMultiplePin(e)) return "size-multiple";
   if (isAspectPin(e)) return "size-aspect";
+  if (isDurationPin(e)) return "duration";
   if (isPromptPin(e)) return "prompt";
   return "internal";
+}
+
+/** 该端口是不是「时长」口（视频模式的对外时长落到它上面）。
+ *
+ *  先排掉帧率（帧率不是时长），再认 duration / length / frames / 帧数 / 秒数。 */
+function isDurationPin(e: WorkflowIOEntry): boolean {
+  if (isFpsPin(e)) return false;
+  return /duration|length|num_?frames|frame_?count|frames?|时长|秒数|帧数/.test(
+    searchText(e),
+  );
+}
+
+/** 该时长端口按「帧」还是按「秒」表达（ComfyUI 各家命名不统一）。 */
+function durationPinUsesFrames(e: WorkflowIOEntry): boolean {
+  const text = searchText(e);
+  if (/duration|seconds?|secs?|秒/.test(text)) return false;
+  return /frames?|num_?frames|frame_?count|length|帧数/.test(text);
 }
 
 /* ── 视频模式判定 ──
@@ -529,6 +557,13 @@ export function buildEncapsulatedInputs(
         return { matched: lastFrame !== undefined, value: lastFrame };
       case "reference-image":
         return { matched: refImage !== undefined, value: nextReference() };
+      /* 时长：同一个口两种落点单位 —— 按帧表达的端口吃 `frames`，按秒表达的
+       *  吃 `duration`（两者都由调用方按当前 fps 折算好，这里不猜 fps）。 */
+      case "duration": {
+        const wantsFrames = durationPinUsesFrames(ioEntry);
+        const value = wantsFrames ? values.frames : values.duration;
+        return { matched: value !== undefined, value };
+      }
       default:
         return { matched: false, value: undefined };
     }

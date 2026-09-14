@@ -33,6 +33,10 @@ export interface WorkflowParamCardProps {
    *  配色与展示名，不影响卡片结构。 */
   cls: ParamEntry["cls"] | "output";
   label: string;
+  /** 契约口 id（`prompt` / `size` / `reference-image-2`…）。给了就在名字后面
+   *  以弱化等宽字展示 —— 与「工坊封装」页签同一口径：配置 / 日志 / 代码里用的是
+   *  id，而契约口与适配器口是两套 id，只写中文对不上。 */
+  idLabel?: string;
   /** 分类中文名（悬停提示用）。 */
   classLabel: string;
   hostNodeId: string;
@@ -96,6 +100,7 @@ export function WorkflowParamCard({
   entryId,
   cls,
   label,
+  idLabel,
   classLabel,
   hostNodeId,
   width,
@@ -162,6 +167,11 @@ export function WorkflowParamCard({
           title={`${classLabel} · ${hostNodeId}`}
         >
           {label}
+          {idLabel && (
+            <span className="ml-1 font-mono text-[10px] font-normal text-(--color-ink-faint)">
+              {idLabel}
+            </span>
+          )}
         </span>
         {onReset && (
           <button
