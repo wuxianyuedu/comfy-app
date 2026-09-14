@@ -19,6 +19,7 @@ import {
   paramOutputPorts,
   defaultOutputPortIndex,
   parseParamMapping,
+  pinAcceptsEntry,
   portTypeDisplay,
   resolveMapping,
   runtimeNodeId,
@@ -56,6 +57,39 @@ describe("classifyPin", () => {
     expect(classifyPin(pin("1", "length", { type: "INT" }))).toBe("duration");
     expect(classifyPin(pin("1", "num_frames", { type: "INT" }))).toBe("duration");
     expect(classifyPin(pin("1", "fps", { type: "INT" }))).toBe("other");
+  });
+});
+
+describe("pinAcceptsEntry —— 手工拖线的类型闸门", () => {
+  const aspect = pin("5", "aspect_ratio", {
+    type: "COMBO",
+    options: ["16:9"],
+  });
+  const promptRow = pin("9", "positive_prompt", {
+    type: "STRING",
+    defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
+  });
+
+  it("提示词口落不到尺寸口上（STRING 提示词行 vs COMBO 宽高比）", () => {
+    expect(pinAcceptsEntry("prompt", promptRow)).toBe(true);
+    expect(pinAcceptsEntry("prompt", aspect)).toBe(false);
+  });
+
+  it("「尺寸」口接受宽/高/宽高比/像素量，但不吃提示词行", () => {
+    expect(pinAcceptsEntry("size", pin("5", "width", { type: "INT" }))).toBe(true);
+    expect(pinAcceptsEntry("size", aspect)).toBe(true);
+    expect(pinAcceptsEntry("size", promptRow)).toBe(false);
+  });
+
+  it("参考图口只吃图片行；端口不在 IO 表里（或分类为 other）一律判不上", () => {
+    expect(
+      pinAcceptsEntry("reference-image", pin("9", "image", { type: "IMAGE" })),
+    ).toBe(true);
+    expect(pinAcceptsEntry("reference-image", promptRow)).toBe(false);
+    expect(pinAcceptsEntry("prompt", undefined)).toBe(false);
+    expect(pinAcceptsEntry("prompt", pin("3", "steps", { type: "INT" }))).toBe(
+      false,
+    );
   });
 
   it("尺寸类先于提示词判定（base_width 这类下划线命名也认）", () => {

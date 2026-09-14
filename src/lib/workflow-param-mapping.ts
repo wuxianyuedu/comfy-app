@@ -207,6 +207,23 @@ function isSizeClass(cls: ParamClass): boolean {
   return cls === "size" || SIZE_CLASSES.includes(cls);
 }
 
+/** 手工拖线的**类型闸门**：该契约口能不能落到这个端口上。
+ *
+ *  判据与自动落点同源 —— 条目**接受的端口分类**（`candidateClasses`：`size`
+ *  对应宽 / 高 / 宽高比 / 像素量，其余各自一类）里必须包含这个端口自己的分类
+ *  （`classifyPin`）。自动落点本来就按这套谓词挑端口，手工拖线若不过这道闸门，
+ *  就会出现「提示词拖到宽高比也连上了」：写进去的映射运行期根本取不到值，用户
+ *  看到的是一条假线（提示词口只有一个 STRING 口，宽高比是 COMBO 尺寸口）。 */
+export function pinAcceptsEntry(
+  cls: ParamClass,
+  ioEntry: WorkflowIOEntry | null | undefined,
+): boolean {
+  if (!ioEntry) return false;
+  const target = classifyPin(ioEntry);
+  if (target === "other") return false;
+  return candidateClasses(cls).includes(target);
+}
+
 /** 某个条目接受哪些端口分类（`"size"` 对应宽/高/宽高比/像素量四种）。 */
 export function candidateClasses(cls: ParamClass): readonly ParamClass[] {
   return isSizeClass(cls) ? SIZE_CLASSES : [cls];

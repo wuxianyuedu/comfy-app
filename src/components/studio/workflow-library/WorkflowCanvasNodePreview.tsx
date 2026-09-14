@@ -55,6 +55,7 @@ import {
   applyParamMapping,
   buildParamEntries,
   parseParamMapping,
+  pinAcceptsEntry,
 } from "@/lib/workflow-param-mapping";
 import {
   applyOutputBindingEdit,
@@ -800,6 +801,19 @@ export function WorkflowCanvasNodePreview({
               onSelect={(id) => {
                 setSelectedParamId(id);
                 setSelectedOutputId(id);
+              }}
+              /* 类型闸门（与自动落点同一套判据）：口子接受的端口分类里必须包含
+               *  这一行自己的分类 —— 提示词口只有 STRING 的提示词行，宽高比是
+               *  COMBO 尺寸口，拖上去不该连出线来（那是条运行期取不到值的假线）。
+               *  判据在这里组装：契约与 IO 的知识留在这层，手势层只拿一个布尔。 */
+              acceptsDrop={(entryId, ioKey) => {
+                const entry = buildParamEntries(workflowIO ?? null, undefined, {
+                  mode: effectiveMode,
+                }).find((item) => item.id === entryId);
+                /* 输出口不在契约表里（键空间是 paramMap.output）：它的合法性只由
+                 *  「必须是输出行」决定，方向在落点集合里已经收窄过。 */
+                if (!entry) return true;
+                return pinAcceptsEntry(entry.cls, workflowIO?.[ioKey]);
               }}
               onConnect={
                 effectiveMode && onPatchParamMap ? wiring.connect : undefined
