@@ -1,0 +1,3 @@
+## Fixed
+
+- **文档不再把 `localhost:3100` 写成 `pnpm dev` 的地址（照抄会 `ERR_CONNECTION_REFUSED`，看着像「本平台跑不起来」）**：端口其实有两条链路且数值经常不相等——解析链（`pnpm dev` / `pnpm start` / Playwright 经 `scripts/app-port.mjs`：`.env` 的 `COMFYAPP_PORT` → **按检出路径推导 3200~3999** → 兜底 3100）与静态链（`tauri.conf.json` 的 `build.devUrl`，编译期兜底、不参与主导航）。README「非开发人员快速运行」、`docs/guide-non-developer.md`（含排障表）、`docs/standards/launch-and-build.md`（§1.1 两条链路说明、§2.2 端口清理不再写死 3100/3101/3102）统一改为「以启动时打印的 `[dev.mjs] COMFYAPP_PORT=<n>` 为准」；`pnpm doc:check` 新增解析链端口事实 `dev.port.derived`（直接复用 `app-port.mjs` 解析，不再用静态 `devUrl` 给 `pnpm dev` 语境的文档背书），并修掉 `.env.example` 读端口时不剔注释行的误报源。

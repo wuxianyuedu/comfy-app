@@ -39,7 +39,7 @@
 | ComfyUI 生命周期 | `src/lib/comfyui/**`（lifecycle / executor-* / reaper） | §3、§5 |
 | 工坊管线 | `src/components/workshop/**`、`src/lib/workshop/**` | §5 |
 | UI/逻辑分离 | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时 | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)） |
-| 跨平台行为 | 新增按平台分叉的逻辑、或改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、或动 `scripts/app-port.mjs` | §1.1、§3.1、§9（[launch-and-build.md](docs/standards/launch-and-build.md)） |
+| 跨平台行为 / 端口与文档 | 新增按平台分叉的逻辑、改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs`，或**在文档/README 里写具体端口号** | §1.1、§3.1、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1 |
 | 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |
 
 ## 硬规则（违反 = 提交被拒或必须回滚）
@@ -135,6 +135,13 @@
 
 被提交门槛拦下时，先看报错指出的规范章节（分支守卫 → §13.6.1、文件结构/命名 → §12.8、
 CHANGELOG 碎片 → §13.10.5），不要用 `--no-verify` 换一条干净历史。
+
+**端口写进文档前先分清两条链路**（ISSUE #489）：`pnpm dev` / `pnpm start` / Playwright 走
+**解析链**（`.env` → 检出路径推导 3200~3999 → 兜底 3100，`scripts/app-port.mjs`），缺省拿到的是
+推导值，**不是 3100**；`tauri.conf.json` 的静态 `devUrl: 3100` 属静态链（启动器 / 壳的编译期兜底），
+不参与 `pnpm dev`。文档里写错的表现是致命的静默误导：照文档打开 3100 得到
+`ERR_CONNECTION_REFUSED`，看起来正像「本平台跑不起来」。写法见 README「快速上手」与
+[reference-facts.md](docs/reference-facts.md) §1.1，`pnpm doc:check` 已按语境核对（`dev.port.derived`）。
 
 遇到启动/生成问题，先查规范文档 **§5 症状 → 根因对照表**（本项目全部历史
 事故都在里面），再按 **§4 日志布局** 的顺序看日志（log/ 按子系统分区：

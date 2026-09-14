@@ -19,7 +19,7 @@
 - [ ] 无 `any` / `as Record<string, any>` 新增（确需用 `unknown` + 类型守卫）
 - [ ] 无单字母变量新增（循环索引 i/j/k、catch 参数 e、占位 _ 除外）
 - [ ] 注释无作者 / 日期 / 版本流水，只写「当前代码的 Why」（见 [12.4](12-代码组织与文件结构.md#124-注释规范只写当前代码的-why)）
-- [ ] 用户可感知的变更已记入 `CHANGELOG.md` 的 `[Unreleased]`（内部重构/文档修订除外，见 [13.10](#1310-changelog-记录规范)）
+- [ ] 用户可感知的变更已写入 `changelog.d/<issue号>-<slug>.md` 碎片（内部重构/文档修订除外）——**不直接改 `CHANGELOG.md`**，见 [13.10.5](#13105-碎片化落地改-changelogd不改-changelogmd)
 - [ ] 新组件 200 行以内；超过则已拆分（见 [4.1](04-组件设计.md#41-单一职责一个组件干一件事)）
 - [ ] 列表/日志有内存上限（见 [2.1](02-性能规范.md#21-列表日志必须有上限)）
 - [ ] 高频状态用 Zustand 而非 Context（见 [1.1](01-架构与状态管理.md#11-全局高频状态禁止用-react-context)）
@@ -112,12 +112,13 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 
 ```
 PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
+✅ Branch guard                   # PR 源分支不能是 master（见 13.6）
 ✅ pnpm install --frozen-lockfile
-✅ pnpm run typecheck            # tsc --noEmit
+✅ pnpm run typecheck             # tsc --noEmit
 ✅ pnpm exec eslint . --max-warnings 0
-✅ pnpm run test                 # vitest run
-✅ pnpm run test:coverage        # 覆盖率棘轮（vitest.config.ts 的目录阈值）
-✅ pnpm run build                # SKIP_ENV_VALIDATION=1（CI 无真实密钥）
+✅ pnpm run test                  # vitest run
+✅ pnpm run test:coverage         # 覆盖率棘轮（vitest.config.ts 的目录阈值）
+✅ pnpm run build                 # SKIP_ENV_VALIDATION=1（CI 无真实密钥）
 ✅ pnpm exec playwright test --grep @critical   # 只跑 @critical 关键流程
 ```
 
@@ -127,13 +128,20 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
   `git config core.hooksPath .githooks` 启用）依次跑：
 
 ```
+✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
 ✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则（见 §12.8、12 §12.6）
+✅ node scripts/check-react-updater-purity.cjs
+✅ node scripts/check-title-bar-clearance.cjs
 ✅ pnpm exec tsc --noEmit
-✅ pnpm exec eslint .
+✅ pnpm exec eslint . --max-warnings 0
+✅ node scripts/check-ui-logic-separation.cjs
+✅ node scripts/check-changelog-fragments.cjs
 ```
 
   任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。
-  新克隆仓库后需重设一次：`git config core.hooksPath .githooks`。
+  **钩子由 `pnpm install` 自动接上**（`package.json` 的 postinstall →
+  `scripts/install-git-hooks.sh` 写 `core.hooksPath=.githooks`，幂等）；装了依赖但
+  `git config core.hooksPath` 仍为空时手动执行一次即可。
 - **一律 pnpm，禁止 npm/npx**（AGENTS.md 硬规则 1）：npm 在本项目解析 typescript
   别名链会崩溃（`Class extends value undefined`）。
 - **E2E 用 `@critical` tag 圈定关键流程**：新增冒烟用例若属于「合并前必须验证的
@@ -149,6 +157,60 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
 - 功能分支：`feat/<short-desc>`；修复分支：`fix/<issue-id>-<desc>`。
 - 合并方式：优先 **Squash Merge**（保持主干线性、单 PR 单提交）；大型重构可 Rebase。
 - 项目主分支为 **`master`**；禁止直接 push 到 `master`；所有变更走 PR + Review。
+  **`master` 同样禁止直接 commit**（连「先提交到 master 再推」也不行）——
+  本条的强制口径见下方 13.6.1。
+
+#### 13.6.1 master 只接受「分支开发 → PR → 合并」（机器强制）
+
+只用「禁止直接 push」约束不住主干：本地 `git commit` 到 `master` 完全不经过任何
+检查，而 `--no-verify` 与「新克隆没启用钩子」都能让提交门槛形同虚设，等发现时
+绕过评审与 CI 的变更已经躺在所有人的基线里。因此本仓库把「不在 master 上提交」
+做成三层防线（ISSUE #492）：
+
+| 层 | 位置 | 拦什么 | 能绕过吗 |
+|----|------|--------|---------|
+| 平台 | CNB **分支保护设置**（保护分支 + 禁止直接 push，要求 PR） | `master` 的**直接 push**，**放行 PR 合并** | 需管理员改设置（本身就要权限） |
+| 本地 | `.githooks/pre-commit` 第 1 步跑 `scripts/check-branch-guard.cjs` | `master` 上的**每一次本地提交** | 只能 `--no-verify`（进历史，Review 可见） |
+| 服务端 | `.github/workflows/ci.yml` 的 `Branch guard` 步骤 | **源分支是 `master` 的 PR** | 不能 |
+
+**⚠️ 平台层必须用「分支保护」，不能用「分支锁」**：`git create-branch-lock`
+（仓库设置里 `locked: true`）锁的是**整个分支的写入**——它连 **PR 合并**一起拦掉，
+`master` 一旦被锁，任何 PR 都无法合并（实测：锁上后 PR 的 `mergeable_state` 虽然仍是
+`mergeable`，平台侧合并动作直接失败）。想「禁直接 push、但要能合 PR」只有
+**分支保护设置**这一条路：保护分支 + 禁止直接 push + 需要评审批准。
+`create-branch-lock` 只适合「冻结分支，谁都不许动」的场景（如临时封版），
+**不要**拿它当 PR 流程的守卫。
+
+**判据（为什么不能只看分支名）**：pre-commit 在**合并提交**时 `HEAD` 也是 `master`，
+只看 `git rev-parse --abbrev-ref HEAD` 会把「PR 合并」一起拦掉。可用的事实是
+「本次提交有几个父」：合并提交有 2 个父（被合分支 + `master`），普通提交只有 1 个。
+所以 `scripts/check-branch-guard.cjs` 的口径是：
+
+- `HEAD` 不在 `master` 上 → 放行（正常的分支开发）；
+- `HEAD` 在 `master` 上且父提交数 > 1 → 放行（PR 合并提交，在平台侧完成）；
+- `HEAD` 在 `master` 上且父提交数 ≤ 1 → **阻断**（直连主干的提交）；
+- 取不到分支名（非 git 目录 / detached）→ 放行并说明（判据无从命中，不该误报）。
+
+**被拦下的自救**（提交已经在本地 `master` 上、还没 push）：
+
+```bash
+git branch feat/<简短描述>            # 用当前提交建分支，提交不丢
+git reset --hard origin/master        # master 回退到远端状态
+git checkout feat/<简短描述>          # 换到分支继续开发
+git push origin HEAD                  # 推送并创建 PR
+```
+
+**为什么用「父提交数」而不是「HEAD 是否等于 origin/master」**：刚 `pull` 过、
+或本地领先远端若干提交时，两者都不成立；父提交数是 git 里唯一稳定表达
+「这次提交是不是合并」的事实，且与当前工作树位置无关。
+
+> 规则自测：`tests/check-branch-guard.test.ts`（临时仓库跑真脚本：分支提交放行、
+> master 直提阻断并给出搬迁出口、master 合并提交放行、非 git 目录不崩、
+> 钩子里守卫排在第 1 步）。
+>
+> **分级口径**：上面的本地钩子与 CI 步骤才是「判据」所在（拦的是**提交**与**PR 源分支**）；
+> 平台层的分支保护是「防误操作」的兜底（拦的是**直接 push**）。两者判据不同、不可互相替代：
+> 只有平台保护挡不住 `--no-verify` 的本地提交，只有本地钩子挡不住别的检出直推。
 
 ### 13.7 换行符与提交噪声（LF，对齐主规范 §11.2）
 
@@ -219,6 +281,55 @@ git -c filter.lfs.process= -c filter.lfs.required=false commit -m "type(scope): 
 - 未发布条目放 `## [Unreleased]`；发版时改为版本号 + 日期（`## [0.2.0] - 2026-09-15`）。
 - **维护时机**：PR 合入前随代码一起改（对齐 [13.9](#139-优化点归档强制) 的同提交原则）。
   **禁止发版前集中补写**——集中补写必然漏项且失真。
+
+#### 13.10.5 碎片化落地：改 `changelog.d/`，不改 `CHANGELOG.md`
+
+`CHANGELOG.md` 的 `[Unreleased]` 是**全仓库唯一「人人都改、且都改同一个地方」的文件**：
+两条并行分支（或两个 agent 同时开工）往里追加条目时，必然落在同一行区间 ——
+无论谁先合，另一方都要手工解一次冲突。这段冲突没有任何信息量：两边的条目都
+该保留，没有真正的取舍，纯粹是把同一份文本排两遍（ISSUE #408）。
+
+因此条目**先进碎片目录，由脚本并入**：
+
+| 环节 | 载体 | 谁写 |
+|------|------|------|
+| 开发中 | `changelog.d/<issue号>-<slug>.md`，一件变更一个文件 | 改代码的人（随 PR 提交） |
+| 发版 / 整理 | `CHANGELOG.md` 的 `[Unreleased]` / 版本段落 | `node scripts/merge-changelog-fragments.mjs` |
+
+**碎片写法**（与原先写在 `CHANGELOG.md` 里完全一致，只是搬了地方）：
+
+```
+changelog.d/408-changelog-conflict-free.md
+────────────────────────────────────────────
+## Changed
+
+- **更新日志改成一件变更一个文件，并行开发不再撞车（ISSUE #408）**：……
+```
+
+- **文件名**：`<issue号>-<slug>.md`（`408-changelog-conflict-free.md`）；
+  无 ISSUE 号用 `0-`；slug 用小写英文与 `-`。
+- **首行**：段落标题（`## Added` / `## Changed` / `## Fixed` / …），它决定条目
+  并入 `[Unreleased]` 的哪一节，**不能省**。
+- **正文**：一条变更一行、以 `- ` 开头、写法同原 `CHANGELOG.md`。
+- 一个 PR 里有多条**不同类型**的变更 → 建多个碎片文件（`Added` 一个、`Fixed` 一个），
+  这本身就是「不同文件不冲突」的用法。
+
+**门禁与工具**
+
+```bash
+node scripts/check-changelog-fragments.cjs          # 校验碎片形态(pre-commit 与 CI 自动跑)
+node scripts/merge-changelog-fragments.mjs          # 并入 [Unreleased] 并删除碎片
+node scripts/merge-changelog-fragments.mjs --check  # 只预览,不落盘
+node scripts/merge-changelog-fragments.mjs --release 0.2.0   # 并入并把 [Unreleased] 定版
+```
+
+**为什么不是「只在发版时统一写」**：那会退回「集中补写」，必然漏项失真
+（[13.10.4](#13104-格式与时机) 已明令禁止）。碎片方案保住「随 PR 一起写」的时效性，
+只把**文本冲突**改成**文件合并**。
+
+> **与「一个提交只做一件事」的关系**：碎片文件使「同一 PR 内多人协作同一份
+> 变更记录」成为 git 层面不可能冲突的操作，这是 [13.7](#137-换行符与提交噪声lf)
+> 「禁止无关全文件变更」在 changelog 上的自然延伸 —— 每次改动只碰属于它的那个文件。
 
 ### 13.11 随手改与 TODO 记录规范
 
