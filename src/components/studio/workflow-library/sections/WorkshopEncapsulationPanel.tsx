@@ -19,6 +19,12 @@ import {
   deriveEncapsulationStatus,
   type EncapsulationEntryStatus,
 } from "@/lib/workshop/workshop-encapsulation-status";
+import { useModeContracts } from "@/components/workshop/hooks/use-mode-contracts";
+import {
+  builtInModeContract,
+  contractToStatusEntries,
+  type ModeContract,
+} from "@/lib/workshop/model-mode-contract";
 import {
   DEFAULT_SHOT_SIZE,
   shotSizeToParam,
@@ -52,15 +58,22 @@ export function WorkshopEncapsulationPanel({
   paramMap,
   mode,
 }: WorkshopEncapsulationPanelProps) {
-  const status = React.useMemo(
-    () =>
-      deriveEncapsulationStatus({
-        io: workflowIO,
-        paramMap,
-        mode: mode ?? null,
-      }),
-    [workflowIO, paramMap, mode],
-  );
+  /* 模式契约注册表：用户改过的模式用自定义口径，未改过的用内置默认 ——
+   * 封装视图与远端适配器、实际生成链路同说一套话。 */
+  const { contracts: storedContracts } = useModeContracts();
+  const status = React.useMemo(() => {
+    const contract: ModeContract | undefined = storedContracts.find(
+      (c) => c.mode === (mode ?? "").toUpperCase(),
+    );
+    const effective = contract ?? builtInModeContract(mode ?? "");
+    const contractEntries = contractToStatusEntries(effective);
+    return deriveEncapsulationStatus({
+      io: workflowIO,
+      paramMap,
+      mode: mode ?? null,
+      contractEntries,
+    });
+  }, [workflowIO, paramMap, mode, storedContracts]);
 
   /* 流程测试的对外输入（与工坊同口径）：提示词 / 负向 / 尺寸。 */
   const [prompt, setPrompt] = React.useState(

@@ -10,8 +10,12 @@
 import React from "react";
 
 import {
+  MODE_CONTRACT_INPUT_TYPES,
   WORKSHOP_INPUT_TYPES,
+  builtInModeContract,
+  modeContractInputLabel,
   workshopInputLabel,
+  type ModeContract,
   type WorkshopInputType,
 } from "@/lib/workshop/model-mode-contract";
 import {
@@ -43,6 +47,7 @@ export function WorkshopModelAdapterModal({
   const {
     candidates,
     loading,
+    modeContracts,
     draft,
     setDraft,
     selectModel,
@@ -54,12 +59,35 @@ export function WorkshopModelAdapterModal({
   } = controller;
 
   const [addModeOpen, setAddModeOpen] = React.useState(false);
+  /** 顶层页签：模型适配（每模型每模式字段映射）/ 模式契约（全局统一输入输出） */
+  const [tab, setTab] = React.useState<"adapters" | "contract">("adapters");
+  /* 契约编辑：当前编辑的模式 + 该模式的契约草稿（null = 未进入编辑） */
+  const [contractMode, setContractMode] = React.useState<string | null>(null);
+  const [contractDraft, setContractDraft] = React.useState<ModeContract | null>(null);
 
   const updateAdapter = (
     mode: string,
     updater: (a: (typeof draft)[number]) => (typeof draft)[number],
   ) => {
     setDraft((prev) => prev.map((a) => (a.mode === mode ? updater(a) : a)));
+  };
+
+  /** 进入某模式的契约编辑：注册表里改过用改过的，没改过用内置默认。 */
+  const editContract = (mode: string) => {
+    setContractMode(mode);
+    setContractDraft(
+      modeContracts.contracts.find((c) => c.mode === mode) ??
+        builtInModeContract(mode),
+    );
+  };
+
+  /** 保存契约注册表（当前编辑模式的草稿并入整份注册表）。 */
+  const saveContract = () => {
+    if (!contractDraft) return;
+    const rest = modeContracts.contracts.filter(
+      (c) => c.mode !== contractDraft.mode,
+    );
+    void modeContracts.save([...rest, contractDraft]);
   };
 
   const availableModes = ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative);
@@ -91,7 +119,36 @@ export function WorkshopModelAdapterModal({
           </button>
         </div>
 
+        <div className="border-border flex items-center gap-1.5 px-5 pb-2">
+          {(
+            [
+              { key: "adapters", label: "模型适配" },
+              { key: "contract", label: "模式契约" },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setTab(item.key)}
+              className={`rounded-full px-3 py-1 text-xs transition-colors ${
+                tab === item.key
+                  ? "bg-primary/10 text-primary border border-(--color-primary)/30"
+                  : "border-border text-muted-foreground border hover:bg-(--color-subtle)"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+          {tab === "contract" && (
+            <span className="text-muted-foreground ml-1 text-[10px]">
+              每种模式的统一输入 / 输出 —— 本地工作流按它配落点，远端模型按它建适配器
+            </span>
+          )}
+        </div>
+
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-5 pb-4">
+          {tab === "adapters" && (
+          <>
           {/* 模型选择 */}
           <div>
             <p className="text-ink/80 mb-1.5 text-xs font-medium">
@@ -320,6 +377,129 @@ export function WorkshopModelAdapterModal({
                 </div>
               ))}
             </>
+          )}
+
+          </>
+          )}
+
+          {tab === "contract" && (
+            <div className="space-y-3">
+              <div>
+                <p className="text-ink/80 mb-1.5 text-xs font-medium">
+                  选择要配置的模式（与工作流库同一定义）
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {availableModes.map((t) => (
+                    <button
+                      key={t.code}
+                      type="button"
+                      onClick={() => editContract(t.code)}
+                      className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                        contractMode === t.code
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:bg-(--color-subtle)"
+                      }`}
+                    >
+                      {t.label}
+                      {modeContracts.contracts.some((c) => c.mode === t.code) && (
+                        <span className="text-primary/70 ml-1 text-[10px]">已改</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-muted-foreground/70 mt-1 text-[10px]">
+                  标「已改」的模式使用你自定义的统一输入 / 输出；其余按内置默认。
+                </p>
+              </div>
+
+              {contractDraft && (
+                <div className="border-primary-soft bg-primary-soft/20 space-y-2 rounded-xl border p-3">
+                  <p className="text-ink text-xs font-semibold">
+                    {modeLabel(contractDraft.mode)} 的统一对外参数
+                  </p>
+                  <p className="text-muted-foreground text-[10px]">
+                    输入口（按顺序作为工坊对该模式的统一输入；本地工作流在「画布节点」
+                    为每个口配落点，远端模型在「模型适配」里为每个口配请求字段）
+                  </p>
+                  <div className="space-y-1.5">
+                    {contractDraft.inputs.map((input, i) => (
+                      <div
+                        key={`${input}-${i}`}
+                        className="border-border bg-surface flex items-center justify-between rounded-lg border px-2.5 py-1.5"
+                      >
+                        <span className="text-ink text-[11px]">
+                          {i + 1}. {modeContractInputLabel(input)}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={input === "prompt"}
+                          onClick={() =>
+                            setContractDraft({
+                              ...contractDraft,
+                              inputs: contractDraft.inputs.filter((_, j) => j !== i),
+                            })
+                          }
+                          className="text-muted-foreground/60 hover:text-red-500 px-1 text-xs disabled:opacity-30"
+                          aria-label={`移除 ${modeContractInputLabel(input)}`}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {MODE_CONTRACT_INPUT_TYPES.filter(
+                      (t) => !contractDraft.inputs.includes(t.type),
+                    ).map((t) => (
+                      <button
+                        key={t.type}
+                        type="button"
+                        onClick={() =>
+                          setContractDraft({
+                            ...contractDraft,
+                            inputs: [...contractDraft.inputs, t.type],
+                          })
+                        }
+                        className="border-primary text-primary hover:bg-primary/10 rounded border border-dashed border-(--color-primary)/40 px-2 py-0.5 text-[11px]"
+                      >
+                        ＋ {modeContractInputLabel(t.type)}
+                      </button>
+                    ))}
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground mb-1 text-[10px]">输出类别</p>
+                    <select
+                      value={contractDraft.output}
+                      onChange={(event) =>
+                        setContractDraft({
+                          ...contractDraft,
+                          output: event.target.value as ModeContract["output"],
+                        })
+                      }
+                      className="border-border bg-bg text-ink rounded-lg border px-2 py-1 text-[11px]"
+                    >
+                      <option value="image">图片</option>
+                      <option value="video">视频</option>
+                      <option value="audio">音频</option>
+                    </select>
+                  </div>
+                  {!contractDraft.inputs.includes("prompt") && (
+                    <p className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] text-amber-700">
+                      契约里没有「提示词」口 —— 工坊生成的提示词将无处可落，
+                      保存后该模式无法被工坊驱动。
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={saveContract}
+                    disabled={modeContracts.saving}
+                    className="bg-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+                  >
+                    {modeContracts.saving ? "保存中…" : "保存模式契约"}
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
           {message && (

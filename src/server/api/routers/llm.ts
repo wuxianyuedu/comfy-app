@@ -7,6 +7,10 @@ import {
   parseRemoteModeAdapters,
   WORKSHOP_INPUT_TYPES,
 } from "@/lib/workshop/model-mode-contract";
+import {
+  loadModeContracts,
+  saveModeContracts,
+} from "@/lib/workshop/mode-contract.server";
 
 /** 适配器输入行：统一输入类型 → 请求体字段名 */
 const adapterInputSchema = z.object({
@@ -43,6 +47,34 @@ export const llmRouter = createTRPCRouter({
     const cfg = await getConfigForClient();
     return { config: cfg };
   }),
+
+  /** 模式契约注册表：每种模式的统一输入 / 输出（只含用户改过的模式） */
+  modeContractsGet: authedProcedure.query(async () => {
+    const contracts = await loadModeContracts();
+    return { contracts };
+  }),
+
+  modeContractsSave: authedProcedure
+    .input(
+      z.object({
+        contracts: z.array(
+          z.object({
+            mode: z.string().min(1),
+            inputs: z
+              .array(z.enum(WORKSHOP_INPUT_TYPES.map((t) => t.type) as [string, ...string[]]))
+              .min(1),
+            output: z.enum(["image", "video", "audio"]),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      // zod 层是字符串窄化；saveModeContracts 内部再做一次契约归一化
+      const contracts = await saveModeContracts(
+        input.contracts as unknown as Parameters<typeof saveModeContracts>[0],
+      );
+      return { contracts };
+    }),
 
   /** 读取某条远端模型的工坊模式适配器 */
   workshopAdaptersGet: authedProcedure

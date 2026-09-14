@@ -8,6 +8,7 @@
 //
 // 输出类型由模式的类别决定（图像 → 图片，视频 → 视频，音频 → 音频）。
 
+import { exposedParamsForMode } from "~/lib/workflow-exposed-params";
 import { getWorkflowType } from "~/lib/workflow-types";
 import { isVideoMode } from "~/lib/workshop/workflow-encapsulation";
 
@@ -190,4 +191,138 @@ export function readFieldPath(payload: unknown, path: string): unknown {
     cur = (cur as Record<string, unknown>)[seg];
   }
   return cur;
+}
+
+/* ── 模式契约注册表：每种模式的统一输入 / 输出（可配置，工坊全局生效）──
+ *
+ * 上一版把「某种模式对外暴露什么」写死在代码里（exposedParamsForMode），
+ * 用户没有地方调整。现在契约本身成为可配置实体：
+ *   · 本地工作流按契约配「落点」（画布节点拖圆点 / 工坊封装视图呈现）——
+ *     契约口 id 与落点编辑器同一套（prompt / negative / size / …）；
+ *   · 远端模型按契约建适配器（统一输入 → 请求体字段；尺寸口在适配器层
+ *     细分为宽高比 + 百万像素两个字段）。
+ * 注册表只存**用户改过的模式**；未改过的模式回落内置默认
+ * （exposedParamsForMode + outputKindForMode），保证升级零破坏。
+ */
+
+/** 模式契约的输入口类型（与画布落点编辑器的契约口同一套 id）。 */
+export const MODE_CONTRACT_INPUT_TYPES = [
+  { type: "prompt", label: "提示词" },
+  { type: "negative", label: "负向提示词" },
+  { type: "size", label: "尺寸（宽高比 + 百万像素）" },
+  { type: "reference-image", label: "参考图 / 输入图" },
+  { type: "first-frame", label: "首帧图片" },
+  { type: "last-frame", label: "尾帧图片" },
+] as const;
+
+export type ModeContractInputType = (typeof MODE_CONTRACT_INPUT_TYPES)[number]["type"];
+
+const MODE_CONTRACT_INPUT_SET = new Set<string>(
+  MODE_CONTRACT_INPUT_TYPES.map((t) => t.type),
+);
+
+export function isModeContractInputType(v: unknown): v is ModeContractInputType {
+  return typeof v === "string" && MODE_CONTRACT_INPUT_SET.has(v);
+}
+
+export function modeContractInputLabel(type: ModeContractInputType): string {
+  return MODE_CONTRACT_INPUT_TYPES.find((t) => t.type === type)?.label ?? type;
+}
+
+export type ModeContractOutput = "image" | "video" | "audio";
+
+/** 一种模式的统一输入 / 输出契约（工坊对外口径）。 */
+export interface ModeContract {
+  /** 工作流库定义的模式码（T2I / I2I / D2I … T2V / I2V …）。 */
+  mode: string;
+  /** 统一输入口（有序；类型取自 MODE_CONTRACT_INPUT_TYPES）。 */
+  inputs: ModeContractInputType[];
+  /** 统一输出类别。 */
+  output: ModeContractOutput;
+}
+
+/** 内置默认契约（未在注册表里改过的模式用它）。 */
+export function builtInModeContract(mode: string): ModeContract {
+  return {
+    mode: mode.trim().toUpperCase(),
+    inputs: exposedParamsForMode(mode).map((d) => d.id as ModeContractInputType),
+    output: outputKindForMode(mode),
+  };
+}
+
+/** 校验并归一化一份注册表（去重、剔非法类型、模式大写）。 */
+export function parseModeContracts(raw: unknown): ModeContract[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ModeContract[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) continue;
+    const rec = item as Record<string, unknown>;
+    const mode = typeof rec.mode === "string" ? rec.mode.trim().toUpperCase() : "";
+    if (!mode || seen.has(mode)) continue;
+    const rawInputs = Array.isArray(rec.inputs) ? rec.inputs : [];
+    const inputs = rawInputs.filter((i): i is ModeContractInputType =>
+      isModeContractInputType(i),
+    );
+    if (inputs.length === 0) continue;
+    const rawOutput = typeof rec.output === "string" ? rec.output : "";
+    const output: ModeContractOutput =
+      rawOutput === "video" || rawOutput === "audio"
+        ? rawOutput
+        : outputKindForMode(mode);
+    seen.add(mode);
+    out.push({ mode, inputs, output });
+  }
+  return out;
+}
+
+/** 契约 → 封装状态派生用的口子清单（id / 展示名 / 工坊控件形态）。 */
+export function contractToStatusEntries(contract: ModeContract): Array<{
+  id: string;
+  label: string;
+  control: "text" | "size" | "image";
+}> {
+  return contract.inputs.map((type) => ({
+    id: type,
+    label: modeContractInputLabel(type),
+    control:
+      type === "size"
+        ? "size"
+        : type === "prompt" || type === "negative"
+          ? "text"
+          : "image",
+  }));
+}
+
+/** 契约 → 远端适配器的默认输入映射（size 拆成宽高比 + 百万像素两个字段）。 */
+export function adapterInputsFromContract(
+  contract: ModeContract,
+): Array<{ type: WorkshopInputType; field: string }> {
+  const out: Array<{ type: WorkshopInputType; field: string }> = [];
+  for (const id of contract.inputs) {
+    switch (id) {
+      case "prompt":
+        out.push({ type: "prompt", field: "prompt" });
+        break;
+      case "negative":
+        out.push({ type: "negative", field: "negative_prompt" });
+        break;
+      case "size":
+        out.push(
+          { type: "aspect-ratio", field: "aspect_ratio" },
+          { type: "megapixels", field: "megapixels" },
+        );
+        break;
+      case "reference-image":
+        out.push({ type: "image", field: "image" });
+        break;
+      case "first-frame":
+        out.push({ type: "first-frame", field: "first_frame" });
+        break;
+      case "last-frame":
+        out.push({ type: "last-frame", field: "last_frame" });
+        break;
+    }
+  }
+  return out;
 }
