@@ -259,7 +259,7 @@ export function MaterialLibraryPanel({
           <button
             type="button"
             onClick={refresh}
-            className="shrink-0 text-[11px] text-red-200 underline transition-colors hover:text-red-100"
+            className="shrink-0 text-[11px] text-red-700 underline transition-colors hover:text-red-900 dark:text-red-200 dark:hover:text-red-100"
           >
             重试
           </button>

@@ -148,8 +148,8 @@ const TOP_BAR_TONE_CLASS: Record<TopBarTone, string> = {
   ghost:
     "text-ink-soft hover:text-ink rounded-md font-medium transition-colors",
   /* 「编辑 IO」激活态：琥珀色高亮。 */
-  ioOn: "rounded-lg border border-amber-400/60 bg-amber-400/20 font-semibold text-amber-100 transition-colors hover:bg-amber-400/30",
+  ioOn: "rounded-lg border border-amber-400/60 bg-amber-400/20 font-semibold text-amber-800 transition-colors hover:bg-amber-400/30 dark:text-amber-100",
   /* 「预览 IO」激活态：天蓝色高亮。 */
   ioPreviewOn:
-    "rounded-lg border border-sky-400/60 bg-sky-400/20 font-semibold text-sky-100 transition-colors hover:bg-sky-400/30",
+    "rounded-lg border border-sky-400/60 bg-sky-400/20 font-semibold text-sky-800 transition-colors hover:bg-sky-400/30 dark:text-sky-100",
 };

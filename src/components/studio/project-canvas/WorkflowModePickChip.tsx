@@ -141,7 +141,7 @@ export function WorkflowModePickChip({
                     }}
                     className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[12px] transition-colors ${
                       isDef
-                        ? "bg-violet-500/14.000000000000002 text-violet-100"
+                        ? "bg-violet-500/14 text-violet-700 dark:text-violet-100"
                         : "text-ink-bright hover:bg-subtle"
                     }`}
                   >

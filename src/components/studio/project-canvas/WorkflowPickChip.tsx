@@ -111,7 +111,7 @@ export function WorkflowPickChip({
                   }}
                   className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
                     active
-                      ? "bg-violet-500/20 text-violet-200"
+                      ? "bg-violet-500/20 text-violet-700 dark:text-violet-200"
                       : "text-ink-soft hover:bg-subtle"
                   }`}
                 >
