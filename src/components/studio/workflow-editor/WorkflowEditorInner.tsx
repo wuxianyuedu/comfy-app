@@ -856,14 +856,29 @@ function WorkflowEditorBody({
     ]
   );
 
+  /* ── 对外参数卡片 / 映射线只在「编辑 IO」模式下上画布 ──
+   *
+   * 卡片（左列 = 「对外要什么、落到哪一行」，右列 = 「对外给什么、从哪一行读」）
+   * 表达的是**映射**这一层关系，属于编辑态的工具：只在编辑 IO 时画出来。
+   * 常态查看工作流时它们浮在图节点之上（宿主节点左右各一列、`zIndex: 20`），
+   * 会把工作流本身挡掉一片（用户口径：「工作流编辑器画布中，不应该显示对外暴露
+   * 的参数节点」）。
+   *
+   * 退出编辑模式 → 卡片与映射线一并撤掉，画布只剩工作流图；重新进入编辑模式
+   * 即原样回来 —— 落点数据在 `paramMap` 里，与「是否显示」无关，不因隐藏而丢。 */
+  const showParamWiring = ioEditMode;
+
   /* useNodesState 只接受挂载首帧的初值；后续同步统一走下面的 effect（初始图节点
    * 即为这一帧的初值，对外参数卡片等 detail 就绪后才会补上）。 */
   const [nodes, setNodes, onNodesChange] = useNodesState(graphNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   const initialNodes: Node[] = useMemo(
-    () => [...graphNodes, ...paramNodes, ...outputNodes],
-    [graphNodes, paramNodes, outputNodes]
+    () =>
+      showParamWiring
+        ? [...graphNodes, ...paramNodes, ...outputNodes]
+        : graphNodes,
+    [showParamWiring, graphNodes, paramNodes, outputNodes]
   );
 
   /* Sync nodes/edges when the graph or the mapping changes.  useNodesState only
@@ -878,16 +893,17 @@ function WorkflowEditorBody({
     setNodes(initialNodes);
     setEdges([
       /* 图连线（工作流自身）→ 映射连线（对外参数喂给哪一行）→ 输出取值线
-       *（对外产出从哪一行读）。三者各自有独立的构建入口，互不掺和。 */
+       *（对外产出从哪一行读）。三者各自有独立的构建入口，互不掺和。
+       * 后两者只在编辑 IO 模式下画（卡片不在时留线头就是悬空线）。 */
       ...buildEdges(scopeDetail, graphNodes, outSlotNameById),
-      ...paramEdges,
-      ...outputEdges,
+      ...(showParamWiring ? [...paramEdges, ...outputEdges] : []),
     ]);
   }, [
     initialNodes,
     graphNodes,
     paramEdges,
     outputEdges,
+    showParamWiring,
     scopeDetail,
     outSlotNameById,
     setNodes,

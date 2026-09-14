@@ -42,10 +42,19 @@ def normalize_root_for_port(project_root: str) -> str:
     语义是「相对当前工作目录解析」——同一个检出在不同 cwd 下推出不同端口，
     与「同一检出恒定同端口」的多检出并行承诺矛盾（Node 侧同病，见
     scripts/app-port.mjs 的 normalizeRootForPort）。
+
+    「根锚定」（前导分隔符）必须显式算绝对路径，不能只靠 `os.path.isabs`：
+    Python 3.13 起 `ntpath.isabs()` 对「只有根、没有盘符」的路径返回 False
+    （`os.path.isabs('/workspace')` → False），这类输入于是掉进 abspath 分支
+    被拼上当前盘符（`f:/workspace`）—— 而 Node 的 `path.isAbsolute`、
+    PowerShell 的 `IsPathRooted`、Rust 的原样处理都给出 `/workspace`，
+    四侧对同一输入端口不一致（§1.1 要求逐字节一致）。这条判据与它们同义，
+    且不随 Python 版本变化。
     """
     raw = project_root or ""
-    win_absolute = bool(re.match(r"^[a-zA-Z]:[\\/]", raw)) or raw.startswith("\\\\")
-    absolute = win_absolute or os.path.isabs(raw)
+    rooted = raw.startswith("/") or raw.startswith("\\")
+    win_absolute = bool(re.match(r"^[a-zA-Z]:[\\/]", raw))
+    absolute = rooted or win_absolute or os.path.isabs(raw)
     resolved = raw if absolute else os.path.abspath(raw)
     return resolved.replace("\\", "/").lower().rstrip("/")
 
