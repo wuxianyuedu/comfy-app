@@ -7,7 +7,7 @@
 // 挂载时先 sync 再 refetch 的顺序不可换：后端 sync 会重新扫描 ComfyUI 目录，
 // 用户不必手动点「重新扫描」就能看到最新模型（原组件行为，保留语义）。
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "~/trpc/react";
 
@@ -48,6 +48,21 @@ export function useModelLibrary(): ModelLibraryController {
   const listQ = api.model.list.useQuery();
   const syncMut = api.model.sync.useMutation();
 
+  /* 卸载标记：refetch 是一条**脱离组件生命周期的游离 promise 链**——
+   * 它的 .finally 会在「组件已卸载、测试的 jsdom 环境已拆除」之后才 resolve，
+   * 此时 setLoading 会打到已销毁的环境上。实测形态是 vitest 的
+   * `Unhandled Rejection: ReferenceError: window is not defined`
+   * （react-dom 的 resolveUpdatePriority 读 window），退出码非零、
+   * 而报错点名的文件**每次都不同**（谁回包慢就点谁）。
+   * cleanup() 只卸载组件、不会取消这条已发出的 promise，所以必须自己判存活。 */
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
   const loadModels = useCallback(() => {
     setLoading(true);
     void listQ
@@ -55,7 +70,11 @@ export function useModelLibrary(): ModelLibraryController {
       .catch(() => {
         /* refetch 错误由 query 自身的 error 态承载 */
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        /* 卸载后不再 setState：否则触发 React 的更新调度，进而读到已拆除的
+         * window（见上方 aliveRef 的注释）。 */
+        if (aliveRef.current) setLoading(false);
+      });
   }, [listQ]);
 
   useEffect(() => {

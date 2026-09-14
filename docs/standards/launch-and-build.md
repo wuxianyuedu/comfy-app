@@ -637,6 +637,10 @@ zustand 队列，而不是再加一个模块级单例。
 
 | **安装包里带着开发机的密钥与数据库**（用户/评审都看不出来：构建不报错、CI 全绿、体积护栏也只挡 GB 级） | **产物卫生靠「剔除目录名」的清单，而这两样是文件**（ISSUE #489）：`next build` 把仓库根的 `.env`（Next standalone 的环境加载是**无条件复制**，`outputFileTracingExcludes` 实测删不掉）与 `db.sqlite`（动态路径 tracing）复制进 `.next/standalone`，`scripts/build-desktop.mjs` 的噪声清单只剔目录名 → 随 static 被编译期内嵌进 exe。**CI 不跑 `build-desktop`（也不该跑）**，而触发条件是「开发机有真实 `.env`」——正是 `run-local.ps1` 自动生成 `.env` 的那些机器 | 已修（§7.3）：`outputFileTracingExcludes` 补 `./db.sqlite*`（实测有效）与 `./.env*`（尽力而为）；新增 `scripts/standalone-private-inputs.mjs` 作剔除清单的单一实现，`pnpm build` 收尾与 `build-desktop` 组装后各剥一次；`scripts/check-standalone-contents.cjs` 的禁忌清单补「开发机私有输入 / 开发库文件」并把范围扩到 `src-tauri/static`；门禁见 `tests/dist-artifact-hygiene.test.ts` |
 | **面板里的错误日志带着密钥原文**（pino 流里明明是 `[Redacted]`，落盘的 `app-runtime.log` 里却是明文） | **ERROR 镜像是一条独立落盘通道，不受 pino `redact` 保护**（ISSUE #489）：`src/server/lib/logger.ts` 的镜像在取不到 `msg`/`err.message` 时用 `JSON.stringify(payload)` 整包兜底；而 `REDACT_PATHS` 的 `*.secret` 只匹配「属性名恰好叫 `secret`」，`BETTER_AUTH_GITHUB_CLIENT_SECRET` 这类 `*_SECRET` 命名一条都不命中——pino 的通配语义也表达不了「名字含 secret」（`*secret`/`*_SECRET`/`*secret*` 实测全无效，`*` 会把整条记录连 `msg` 打成 `[Redacted]`） | 已修（规范 07 §7.18.2.1）：镜像不再整包透传（无可读文案时只输出键名清单），并新增**值形状守卫** `redactSecretShaped()`——在日志写入边界擦掉 PEM 私钥块 / JWT / 高熵串，不问字段名因而覆盖「名字无法穷举」的密钥；`Error` 保形 |
+| **standalone 起得来、页面全 200，但每个 API 路由都 500**（报错是 `Failed to load external module …/app-route-turbo.runtime.prod.js`，看起来像业务/数据库/鉴权问题） | **Turbopack 对动态 `require("next/dist/compiled/next-server/<name>.runtime.prod.js")` 字符串的追踪不完整**（ISSUE #489）：只追到被 middleware 图带上的 `app-page-turbo`，`app-route-turbo`（所有 `route.ts` 都要它）一条 `.nft.json` 都没有 → standalone 的 `next-server/` 只有 3 个文件（仓库里 74 个）。构建期静默、CI 只跑 build，而本仓库 `next start` 与 `output: standalone` 不兼容，**没有任何常规门禁会去启动 standalone** | 已修（§7.4）：`next.config.js` 顶层补 `outputFileTracingIncludes`（`./node_modules/next/dist/compiled/next-server/*runtime.prod.js`，实测 +26 文件 / ≈2.6MB，API 全恢复 200）；`tests/standalone-runtime-completeness.test.ts` 锁配置与产物缺件；`check-standalone-contents.cjs` 加**反向**检查「必须有的」运行时脚本 |
+| **安装包里带着 `AGENTS.md` 内部规范全文与整套 `scripts/` 门禁脚本**（解包即得；产物护栏却报「✓ 产物干净」） | **产物卫生清单的漏项**（ISSUE #489，与上面「密钥进包」同源、同一通道）：护栏 `FORBIDDEN` 只列了 `docs/*.md` / `src/**/*.test.*` / `changelog.d/*.md` / `.env` / `db.sqlite*`，**根级 `.md`、各 `*.config.*` 与整个 `scripts/` 一条都不匹配**；`build-desktop.mjs` 的 `STATIC_NOISE` 又**只剔目录名**——这些是文件，于是随 static 被编译期内嵌进 exe | 已修（§7.3 末节）：`stripDevArtifacts` 走**白名单**（`scripts/` 只留运行时真的会读的 `install-comfyapp-helper.ps1` + `dev-launcher.ps1`，新增脚本默认不进产物），根级文件黑名单逐项点名；产物护栏加 `ALLOWED_SCRIPTS` 同款白名单 + 判据锚 `^` 不误伤 `node_modules` 里的同名 README/tsconfig |
+| **`pnpm test` 随机非零退出**（`Test Files N passed` / `Tests M passed / 0 failed` 全绿，退出码却来自 `Unhandled Errors`；每次点名的文件都不同） | **游离的异步链路在用例结束后才 resolve/reject**（ISSUE #489）。已实测三处同族（都是「与报错点名的文件毫无关系」的失败）：① `use-model-library.ts` 的 `listQ.refetch().finally(() => setLoading(false))` 在 jsdom 环境拆除后才 resolve，触发 React 更新调度去读不存在的 `window`（`ReferenceError: window is not defined` @ `resolveUpdatePriority` / `dispatchSetState`）；② `use-custom-nodes-settings.ts` 的「完成后提示停留 800ms」`setTimeout` 同源；③ `runner-state.ts` 的 `schedulePersistLogs` **防抖定时器不属于任何生命周期**，清空内存 state 后仍在 200ms / 1500ms 后打到已 `vi.mock` 撤销的 repository（`TypeError: taskRepository.replaceLogs is not a function`）。`cleanup()` 只卸载组件、**不会取消已发出的 promise 与已排的 timer** | 已修：① 两处 hook 加卸载标记（先判存活再 setState）；③ 新增公共取消 API `cancelPersistLogs`，用例在 `beforeEach` **与** `afterEach` 两头都掐（只在 `beforeEach` 清，定时器会在「本用例结束后、下个 `beforeEach` 之前」的窗口里触发）。回归：`use-model-library.test.ts` 用「卡住回包 + 放行后记账」把偶发变**必现**（只统计更新调度栈的 `window` 读取，避开 react-query / tRPC 的 ambient 读取噪声），`reaper-decisions.test.ts` 锁「取消后不再有排期」。反向验证：还原任一实现即挂 |
+ **hook 里一条脱离组件生命周期的游离 promise 链**（ISSUE #489）：`src/components/studio/hooks/use-model-library.ts` 的 `listQ.refetch().finally(() => setLoading(false))` 在测试结束（jsdom 环境已拆）之后才 resolve，于是 setLoading 触发 React 更新调度、去读已不存在的 `window` → `ReferenceError: window is not defined`（`resolveUpdatePriority` / `dispatchSetState`）。`cleanup()` 只卸载组件、**不会取消这条已发出的 promise**。谁被点名只取决于谁的 MSW handler 回包慢一拍 → 报错文件每次不同（实测 65 轮里 4 轮，约 6%） | 已修：hook 加 `aliveRef` 卸载标记，`.finally` 先判存活再 `setLoading`；回归 `src/components/studio/hooks/use-model-library.test.ts` 用「卡住回包 + 放行后记账」把偶发变**必现**（只统计更新调度栈的 window 读取，避开 react-query/tRPC 的 ambient 读取噪声）。反向验证：去掉 aliveRef 判定 → 本条挂（0 vs 10） |
 | **`pnpm test` 在仓库根新建 `log/` 并写入日志**（CI 上从无到有、开发者本机悄悄多几行，其中含用例的密钥标记行） | **用例直连真实日志路径**（ISSUE #489）：`src/server/lib/logger.test.ts` 的镜像用例 import 真实 `APP_RUNTIME_LOG` 用 `slice(before.length)` 读增量，`generate.test.ts` 的业务里程碑日志也落真实文件；镜像/日志是**真实写盘**副作用，不隔离就会写字 | 已修：`createPinoLogger({ mirror })` 支持注入镜像目标，两处用例都落到自己的 mkdtemp 目录；删掉 `log/` 跑 `pnpm test` 不再重建目录 |
 ## 6. 工具链钉死项（改之前必须理解原因）
 
@@ -882,6 +886,94 @@ node -e "const j=require('./.next/server/instrumentation.js.nft.json');   consol
 > 实测 `outputFileTracingExcludes` 是否真拦得住，拦不住就往
 > `scripts/standalone-private-inputs.mjs` 的清单里加一项，并向
 > `check-standalone-contents.cjs` 的禁忌清单补一条形状。**别只加 excludes 就当修好了。**
+
+**同族缺陷：开发期文件与整套内部门禁脚本也在产物里**（同一轮实测）。全项目
+tracking 还会带上仓库根的 `AGENTS.md`（内部协作规范全文）、`CHANGELOG.md`、
+`README.md`、各 `*.config.*`（`eslint` / `playwright` / `vitest` / `drizzle` /
+`prettier`）与 **整套 `scripts/`（46 个文件 / 544K，含 16 个 `*.cjs` 门禁脚本）**
+外加 `scripts/__pycache__/`。这些随 static 被编译期内嵌进 exe，**解包即得**。
+判断标准不是体积，而是**它们不可能是任何 server code 的运行时依赖**
+（路由跑的是 `.next/server/**` 的编译产物）。
+
+处理方式与私有输入同一条通道（`stripDevArtifacts`，`pnpm build` 收尾 +
+`build-desktop` 各跑一次），但**清单形态不同**：
+
+| | 形态 | 理由 |
+|---|---|---|
+| 根级文件 | **黑名单**逐项点名 | 根目录是「工程配置清单」，变动低频且显式 |
+| `scripts/` | **白名单**（`RUNTIME_SCRIPTS`） | 脚本会不断新增；黑名单欠完备，漏掉是静默的（`db.sqlite` 就这么漏过一次） |
+
+白名单当前只有两项，判据是「代码里能指到 `process.cwd()` + 路径拼接」：
+
+- `install-comfyapp-helper.ps1` —— `src/app/api/helper/{install,status}/route.ts`
+  把它当下载内容返回（`installerAvailable` 也靠它判）；
+- `dev-launcher.ps1` —— `src-tauri/src/lib.rs::resolve_project_root()` 的项目根判据。
+
+产物层由 `check-standalone-contents.cjs` 的 `ALLOWED_SCRIPTS` 白名单同款守：
+**产物 `scripts/` 下的每个条目都必须是登记过的**（比正则形状更严，新脚本进来即命中）。
+反向验证：把白名单条目从剔除实现里去掉重新 build，产物护栏立刻报出 44 个门禁脚本。
+
+### 7.4 standalone 运行时完整性：Next 自带运行时脚本必须显式包含（ISSUE #489）
+
+**症状**（实测复现）：`.next/standalone/server.js` 起得来、页面（RSC 渲染）与
+middleware 全部正常，**但每一个 API 路由都 500**：
+
+```
+⨯ Error: Failed to load external module
+  next/dist/compiled/next-server/app-route-turbo.runtime.prod.js:
+  Error: Cannot find module '…/app-route-turbo.runtime.prod.js'
+```
+
+「首页 200、接口全 500」这个形态极具误导性：看起来像业务代码 / 数据库 / 鉴权
+问题，实际是**产物缺文件**。
+
+**根因**：Turbopack 对
+
+```js
+t.exports=e.x("next/dist/compiled/next-server/app-route-turbo.runtime.prod.js",
+              ()=>require("next/dist/compiled/next-server/app-route-turbo.runtime.prod.js"))
+```
+
+这类**动态 require 字符串**的追踪是**不完整的**。实测 nft 清单里只有
+`app-page-turbo.runtime.prod.js`（被 middleware 图带上），而
+`.next/server/chunks/[root-of-the-server]__*.js` 里明确 require 了
+`app-route-turbo`，且它**不在任何 `.nft.json` 的 files 里**。于是 standalone 的
+`node_modules/next/dist/compiled/next-server/` 只有 3 个文件，而仓库里是 74 个。
+
+**为什么常规门禁抓不到**：
+
+- 构建期**不报错**（缺口是运行期才暴露的），CI 只跑 `pnpm build`；
+- 本仓库 `next start` 与 `output: standalone` **不兼容**（Next 会打
+  `"next start" does not work with "output: standalone"` 警告），也就是说
+  **没有任何常规门禁会去启动 standalone 服务**；
+- `pnpm dev` 走的是源码，不经过 standalone。
+
+**修法**（`next.config.js` 顶层键）：
+
+```js
+outputFileTracingIncludes: {
+  "/**": ["./node_modules/next/dist/compiled/next-server/*runtime.prod.js"],
+},
+```
+
+补上是 26 个文件（≈ +2.6MB），实测 API 路由从「全 500」恢复为 200。
+
+> **方向性提醒**：这条只能靠 `includes` 补。往 `outputFileTracingExcludes` 里
+> 加东西是**反方向**的（excludes 只做减法，补不回缺失的文件）——
+> `tests/standalone-runtime-completeness.test.ts` 有一条用例专门守这个方向。
+
+**门禁**（配置层 + 产物层）：
+
+- 配置层 `tests/standalone-runtime-completeness.test.ts`：锁
+  `outputFileTracingIncludes` 在顶层、条目还在、且没有被人用 excludes 反着写。
+- 产物层 `scripts/check-standalone-contents.cjs`：**反向检查**「必须有的」——
+  逐个点名 `REQUIRED_RUNTIME_FILES`（`app-route-turbo` / `app-page-turbo` /
+  `pages-turbo`），缺任一份即非零退出。这是该脚本里唯一一条「查缺件」而非
+  「查多余」的规则，因为缺件的表现恰恰是运行期 500、而构建期静默。
+
+> **自查一行**（产物已存在时）：
+> `ls .next/standalone/node_modules/next/dist/compiled/next-server/` ——
+> 只看到 3 个文件就是缺件。
 
 ---
 
