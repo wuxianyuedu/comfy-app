@@ -63,6 +63,14 @@ jobs:
             exit 1
           fi
 
+      - name: Sync database schema (non-interactive)
+        # 门禁此前**从不建库**，于是「跑起来的应用要有库」这条路径没有任何
+        # 自动检查在验（ISSUE #489）：`pnpm build` 只证明「没有库也能构建」，
+        # 而 `db:push` 在无 TTY 上「报错 + exit 0 + 留 0 字节库」的静默失败
+        # 因此长期潜伏。走 scripts/db-push.mjs：它复核库里到底有没有表，
+        # 失败即非零退出——CI 上这条链路必须真的能跑通。
+        run: pnpm run db:push
+
       - name: Typecheck
         run: pnpm run typecheck
 
@@ -106,7 +114,10 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: E2E (Playwright @critical)
-        # 只跑 @critical 关键流程（规范 11.7）；其余 E2E 不阻断合并
+        # 只跑 @critical 关键流程（规范 11.7）；其余 E2E 不阻断合并。
+        # 注意**不要**设 SKIP_ENV_VALIDATION 以外的捷径：门禁前面的
+        # `db:push` 已建好表，这里跑的用例要能真的读到库（见 e2e/smoke.spec.ts
+        # 的「数据库链路」一组），否则「库没建」这类退化又会从门禁视野里消失。
         env:
           SKIP_ENV_VALIDATION: "1"
         run: pnpm exec playwright test --grep @critical
