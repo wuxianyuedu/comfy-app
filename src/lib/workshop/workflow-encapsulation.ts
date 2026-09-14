@@ -280,6 +280,44 @@ function durationPinUsesFrames(e: WorkflowIOEntry): boolean {
   return /frames?|num_?frames|frame_?count|length|帧数/.test(text);
 }
 
+/** 时长值 → 该时长端口**自己声明的**候选（只有 COMBO 端口需要这一步）。
+ *
+ *  与比例同一条约定：写一个不在候选里的值，ComfyUI 只会静默回落到第一个选项
+ *  （用户看到的是「改了时长没生效」）。所以：
+ *  1. 端口没声明候选（普通数字口）→ 原样返回；
+ *  2. 候选里有逐字命中的 → 用它（回写候选本身的类型，别把 "16" 写进去当字符串）；
+ *  3. 候选全是数字但没逐字命中 → 取最接近的一档（时长是连续量，落到相邻档位是
+ *     可预期的；直接丢掉反而让用户看到「给了 5 秒却还是默认长度」）；
+ *  4. 候选里有非数字项 → 不猜，返回 undefined，由调用方退回端口默认值。 */
+function matchDurationOption(
+  entry: WorkflowIOEntry,
+  value: number
+): number | string | undefined {
+  const options = Array.isArray(entry.options)
+    ? entry.options.filter((option): option is string => typeof option === "string")
+    : [];
+  if (options.length === 0) return value;
+  const wanted = String(value);
+  const exact = options.find((option) => option.trim() === wanted);
+  if (exact !== undefined) {
+    const trimmed = exact.trim();
+    const num = Number(trimmed);
+    return trimmed !== "" && Number.isFinite(num) ? num : exact;
+  }
+  let best: number | null = null;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const option of options) {
+    const num = Number(option.trim());
+    if (option.trim() === "" || !Number.isFinite(num)) return undefined;
+    const dist = Math.abs(num - value);
+    if (dist < bestDist) {
+      best = num;
+      bestDist = dist;
+    }
+  }
+  return best ?? undefined;
+}
+
 /* ── 视频模式判定 ──
  *
  * 工坊的视频通道有两个模式：文生视频（无首帧）与图生视频（有首帧）。
@@ -558,10 +596,13 @@ export function buildEncapsulatedInputs(
       case "reference-image":
         return { matched: refImage !== undefined, value: nextReference() };
       /* 时长：同一个口两种落点单位 —— 按帧表达的端口吃 `frames`，按秒表达的
-       *  吃 `duration`（两者都由调用方按当前 fps 折算好，这里不猜 fps）。 */
+       *  吃 `duration`（两者都由调用方按当前 fps 折算好，这里不猜 fps）。
+       *  端口声明了候选（COMBO）时先按候选收敛，绝不写非法值进去。 */
       case "duration": {
         const wantsFrames = durationPinUsesFrames(ioEntry);
-        const value = wantsFrames ? values.frames : values.duration;
+        const raw = wantsFrames ? values.frames : values.duration;
+        if (raw === undefined) return { matched: false, value: undefined };
+        const value = matchDurationOption(ioEntry, raw);
         return { matched: value !== undefined, value };
       }
       default:
