@@ -26,7 +26,22 @@ export const OLLAMA_DEFAULT_PORT = 11434;
 /** Ollama 的 OpenAI 兼容入口（默认 Base URL）。 */
 export const OLLAMA_DEFAULT_BASE_URL = `http://${LOOPBACK_HOST}:${OLLAMA_DEFAULT_PORT}/v1`;
 
-/** ComfyUI 的 HTTP 入口（默认端口见 `app-settings.ts` 的 `COMFYUI_DEFAULT_PORT`）。 */
-export function comfyUiBaseUrl(port: number): string {
+/** ComfyUI 默认监听端口（main.py 未传 `--port` 时的出厂值）。
+ *
+ *  为什么在这里、而不是在 `app-settings.ts`：本模块是**零依赖**的常量层，而
+ *  这个值同时被三类消费者读取 —— 浏览器组件（设置页 placeholder / 状态行）、
+ *  Next 服务端（连接侧 `resolveComfyBase()` 的兜底、`lib/core/config.ts` 的
+ *  schema 默认值）、以及拉起侧（`buildSpawnArgs` 的 `defaultPort`）。
+ *  `app-settings.ts` 顶层 `import fs`（读写 `data/app-settings.json`），浏览器图
+ *  一碰它就会让整页 500（`does not support external modules`，ISSUE #282/#317 的
+ *  同一族事故，门禁 `tests/client-bundle-node-builtins.test.ts`）。默认端口属于
+ *  「默认值本身」，正是本模块该承载的东西。
+ *
+ *  约定：**别名与它的语义一起搬**——`app-settings.ts` 里保留同名再导出，
+ *  旧引用（服务端模块）不用改，而新增的浏览器侧引用必须直接指向这里。 */
+export const COMFYUI_DEFAULT_PORT = 8188;
+
+/** ComfyUI 的 HTTP 入口（默认端口见本模块的 `COMFYUI_DEFAULT_PORT`）。 */
+export function comfyUiBaseUrl(port: number = COMFYUI_DEFAULT_PORT): string {
   return `http://${LOOPBACK_HOST}:${port}`;
 }

@@ -66,7 +66,7 @@ export function suggestFix(err?: string | null): string {
   if (/seed/i.test(err))
     return "建议：seed 值超出 INT 范围或被损坏，换一个随机 seed 重试。";
   if (/network|timeout|connect|ECONNREFUSED|fetch failed/i.test(err))
-    return "建议：检查 ComfyUI(:8188) 是否在线、端口是否被防火墙阻挡。";
+    return "建议：检查本地 ComfyUI 服务是否在线、端口是否被防火墙阻挡。";
   if (/prompt|empty|null|undefined/i.test(err))
     return "建议：检查提示词是否为空或包含非法字符。";
   if (/out of memory|OOM|cuda/i.test(err))

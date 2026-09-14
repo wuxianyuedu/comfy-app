@@ -81,7 +81,7 @@
 |---|---|---|---|---|
 | `registry.port` | `{{registry.port}}` | shadcn 本地团队 Registry 服务端口 | `tools/scripts/start-registry.ps1` 的 `$Port` | 读 `$Port` 值（`3874`） |
 | `mcp.http.port` | `{{mcp.http.port}}` | Workshop MCP HTTP 服务端口 | `tools/mcp-http.ts` 的 `MCP_HTTP_PORT ?? 4300` | 读 `MCP_HTTP_PORT` 默认值（`4300`）；仅 `docs/workshop-mcp.md` 校验 |
-| `comfyui.port` | `{{comfyui.port}}` | ComfyUI 默认监听端口 | `src/lib/app-settings.ts` 的 `COMFYUI_DEFAULT_PORT` 常量 | 读常量的值（`8188`）；校验范围 = `onlyDocs`（`docs/workshop-mcp.md`）+ `otherDocs`（主规范「开发端口」行）。**权威源为何换了**：ISSUE #536 P3 之前这个端口散落在 5 个文件里，`client.ts` 只是其中一处；现在只剩 `app-settings.ts` 一个落点，提取规则指向常量定义才是它该指向的地方 |
+| `comfyui.port` | `{{comfyui.port}}` | ComfyUI 默认监听端口 | `src/lib/endpoints.ts` 的 `COMFYUI_DEFAULT_PORT` 常量 | 读常量的值（`8188`）；校验范围 = `onlyDocs`（`docs/workshop-mcp.md`）+ `otherDocs`（主规范「开发端口」行）。**权威源换过两次**：#536 P3 之前这个端口散落在 5 个文件里（`client.ts` 只是其中一处），先收敛成 `app-settings.ts` 的常量；#534 P1 再把**定义**搬到零依赖的 `endpoints.ts`（设置页视图也要读它，而 `app-settings.ts` 顶层 `import fs`，浏览器图一 import 就整页 500），`app-settings.ts` 只再导出同名。因此提取规则指向 `endpoints.ts` 的定义处（迁移原因与门禁见规范 launch-and-build §9.2 第 5 条） |
 
 ---
 

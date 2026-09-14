@@ -13,6 +13,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 
+/* 默认端口从 `~/lib/endpoints` 取（零依赖常量层）：它同时被设置页视图消费，
+ * 而 `app-settings.ts` 顶层 import fs —— 走那条路会让设置页整页 500（ISSUE #282/#317）。 */
+import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { errorMessage, rawErrorDetail } from "~/lib/error-message";
 import { isDesktopShell } from "~/lib/desktop-shell-client";
 import { useShellTabs } from "~/lib/shell-tabs-store";
@@ -127,6 +130,9 @@ export interface SettingsPageDrafts {
 }
 
 export interface SettingsPageController {
+  /** ComfyUI 默认端口（未配置端口时的兜底）：视图的 placeholder / 说明文案用它取值，
+   *  避免把默认端口在文案里再写一遍（规范 §12.14：默认端口单点定义）。 */
+  comfyDefaultPort: number;
   /** 侧边栏当前分区（纯视觉偏好，但影响渲染哪个表单，故由逻辑层持有）。 */
   section: Section;
   setSection: (section: Section) => void;
@@ -1314,6 +1320,9 @@ export function useSettingsPage(): SettingsPageController {
       : null;
 
   return {
+    /* ComfyUI 默认端口（未配置端口时的兜底）。视图的 placeholder 与说明文案
+     * 直接用它，避免把 8188 在文案里再写一遍（规范 §12.14：默认端口单点定义）。 */
+    comfyDefaultPort: COMFYUI_DEFAULT_PORT,
     section,
     setSection,
     theme: theme === "light" ? "light" : "dark",
