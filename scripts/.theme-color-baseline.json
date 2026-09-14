@@ -1,7 +1,7 @@
 {
   "generatedAt": "2026-09-14",
   "note": "未豁免的写死色值处数（规范 03 §3.6.1 之外）。棘轮只许下降；新增豁免请改 scripts/check-theme-colors.cjs 的 EXEMPT_TABLES/EXEMPT_FIXED_DARK，不要用 --update 放水。",
-  "total": 170,
+  "total": 167,
   "files": {
     "src/app/(main)/settings/SettingsPageView.tsx": 7,
     "src/app/login/page.tsx": 3,
@@ -40,8 +40,7 @@
     "src/components/studio/workflow-editor/WorkflowParamCard.tsx": 1,
     "src/components/studio/workflow-library/CustomNodesSettings/NodePreviewCard.tsx": 3,
     "src/components/studio/workflow-library/CustomNodesSettings/SettingsParts.tsx": 1,
-    "src/components/studio/workflow-library/WorkflowOutputParamCardColumn.tsx": 1,
-    "src/components/studio/workflow-library/WorkflowParamWires.tsx": 3,
+    "src/components/studio/workflow-library/WorkflowLibraryCanvas.tsx": 1,
     "src/components/studio/workflow-library/workflow-param-mapping-ui.ts": 1,
     "src/components/studio/workflow-utils.ts": 15,
     "src/lib/comfyui/workflow-detail.ts": 2,

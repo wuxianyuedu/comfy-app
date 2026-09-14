@@ -229,6 +229,12 @@ const EXEMPT_TABLES = [
     reason: "自定义节点状态徽标配色（已加载/目录不存在/解析出错…）常量表",
   },
   {
+    file: "src/components/studio/workflow-library/workflow-library-wire-graph.ts",
+    exports: ["AUTO_STROKE", "MANUAL_STROKE", "DRAG_STROKE", "SELECTED_STROKE"],
+    reason:
+      "工作流库画布的连线状态色常量（自动/手改/拖动预览/选中）：与编辑器画布同一套「线本身是什么状态」的语义，不是表面色",
+  },
+  {
     file: "src/components/studio/workflow-library/workflow-param-mapping-ui.ts",
     exports: ["PARAM_CLASS_COLOR"],
     reason: "契约参数口配色（prompt/negative/size… 分组色常量表）",
