@@ -24,13 +24,13 @@ export function MessageCenterButton() {
       aria-expanded={open}
       className={`relative flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors ${
         open || unread > 0
-          ? "text-violet-300"
-          : "text-gray-500 hover:bg-white/5 hover:text-gray-300"
+          ? "text-violet-700 dark:text-violet-300"
+          : "text-ink-muted hover:bg-subtle hover:text-ink"
       }`}
     >
       <Bell size={12} />
       {unread > 0 && (
-        <span className="flex min-w-[14px] items-center justify-center rounded-full bg-violet-500/20 px-1 text-[10px] font-semibold text-violet-300 tabular-nums">
+        <span className="flex min-w-[14px] items-center justify-center rounded-full bg-violet-500/20 px-1 text-[10px] font-semibold text-violet-700 tabular-nums dark:text-violet-300">
           {unread > 99 ? "99+" : unread}
         </span>
       )}
