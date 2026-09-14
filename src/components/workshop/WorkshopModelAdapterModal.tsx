@@ -13,6 +13,7 @@ import {
   MODE_CONTRACT_INPUT_TYPES,
   WORKSHOP_INPUT_TYPES,
   builtInModeContract,
+  modeContractInputIdLabel,
   modeContractInputLabel,
   workshopInputLabel,
   type ModeContract,
@@ -428,7 +429,7 @@ export function WorkshopModelAdapterModal({
                         className="border-border bg-surface flex items-center justify-between rounded-lg border px-2.5 py-1.5"
                       >
                         <span className="text-ink text-[11px]">
-                          {i + 1}. {modeContractInputLabel(input)}
+                          {i + 1}. {modeContractInputIdLabel(input)}
                         </span>
                         <button
                           type="button"
@@ -440,7 +441,7 @@ export function WorkshopModelAdapterModal({
                             })
                           }
                           className="text-muted-foreground/60 hover:text-red-500 px-1 text-xs disabled:opacity-30"
-                          aria-label={`移除 ${modeContractInputLabel(input)}`}
+                          aria-label={`移除 ${modeContractInputIdLabel(input)}`}
                         >
                           ✕
                         </button>

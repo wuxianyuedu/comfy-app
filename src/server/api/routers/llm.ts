@@ -4,6 +4,7 @@ import { getLLMConfig, completeLLM, ensureRemoteStorageMigrated, getConfigForCli
 import { splitExtraModels } from "@/lib/llm/types";
 import { remoteModelRepository } from "@/lib/core/repository";
 import {
+  isModeContractInputId,
   parseRemoteModeAdapters,
   WORKSHOP_INPUT_TYPES,
 } from "@/lib/workshop/model-mode-contract";
@@ -60,8 +61,16 @@ export const llmRouter = createTRPCRouter({
         contracts: z.array(
           z.object({
             mode: z.string().min(1),
+            // 契约口是工坊对用户的统一口径（尺寸 / 参考图…），**不是**适配器侧的
+            // 输入类型（aspect-ratio / megapixels…）。曾误用 WORKSHOP_INPUT_TYPES
+            // 校验，保存含「尺寸」的契约直接被 zod 打回（Invalid option …）。
             inputs: z
-              .array(z.enum(WORKSHOP_INPUT_TYPES.map((t) => t.type) as [string, ...string[]]))
+              .array(
+                z.string().refine(isModeContractInputId, {
+                  message:
+                    "契约口必须是 prompt|negative|size|reference-image|first-frame|last-frame（第 2 张起的参考图带序号，如 reference-image-2）",
+                }),
+              )
               .min(1),
             output: z.enum(["image", "video", "audio"]),
           }),
@@ -69,10 +78,9 @@ export const llmRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input }) => {
-      // zod 层是字符串窄化；saveModeContracts 内部再做一次契约归一化
-      const contracts = await saveModeContracts(
-        input.contracts as unknown as Parameters<typeof saveModeContracts>[0],
-      );
+      // 口 id 由 isModeContractInputId 做类型守卫（zod 随之把入参窄化成契约口），
+      // saveModeContracts 内部再做一次契约归一化。
+      const contracts = await saveModeContracts(input.contracts);
       return { contracts };
     }),
 
