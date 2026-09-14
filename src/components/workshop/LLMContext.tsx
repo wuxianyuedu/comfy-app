@@ -203,7 +203,10 @@ function LLMSettingsModal({
 
   return (
     <div
-      className={overlayClass("modal", "z-50 grid place-items-center bg-black/50 p-4")}
+      className={overlayClass(
+        "modal",
+        "z-50 grid place-items-center bg-black/20 p-4 backdrop-blur-sm dark:bg-black/50",
+      )}
       onClick={onClose}
     >
       <div
