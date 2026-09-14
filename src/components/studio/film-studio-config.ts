@@ -3,6 +3,8 @@
 // 与 700 行的网络和状态代码混在一起；抽出来后视图文件只剩渲染，
 // 视觉常量也可以被工具/测试直接引用。
 
+import { FILM_COMPOSE_SIZE } from "@/lib/film/film-size";
+
 /* ── 类型（与后端 Prisma 行的 UI 视图一致，保持对外 API 不变）── */
 
 export type FilmStatus =
@@ -39,6 +41,8 @@ export interface Film {
   script: string;
   type: string;
   styleSlug: string | null;
+  /** 成片画幅：库存的是**尺寸表达 JSON**（`lib/size-presets` 的 `SizeSpec`）；
+   *  老行里是 "1280x720" 字符串 —— 展示/消费前用 `toSizeSpec` 归一。 */
   size: string;
   fps: number;
   framesPerShot: number;
@@ -75,7 +79,9 @@ export interface TimelineClip {
 
 export const FILM_TITLE = "未命名成片";
 export const FILM_TYPE = "short_video";
-export const FILM_SIZE = "1280x720";
+/** 成片画幅默认值（尺寸表达；视频场景 16:9 1k → 1280×720），单一出处见
+ *  `lib/film/film-size`。 */
+export const FILM_SIZE = FILM_COMPOSE_SIZE;
 export const FILM_FPS = 16;
 export const FILM_FRAMES_PER_SHOT = 49;
 export const DEFAULT_SCRIPT =

@@ -5,6 +5,7 @@ import { Redo2, Undo2 } from "lucide-react";
 
 import { useFilmStudio } from "./hooks/use-film-studio";
 import { useToast } from "./ToastProvider";
+import { sizeSpecSummary } from "@/lib/size-presets";
 import {
   MOCK_SHOTS,
   MODE_LABELS,
@@ -229,9 +230,9 @@ export function FilmStudio() {
         <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden p-5 pb-3">
           {/* Preview Canvas */}
           <div className="relative mb-3 flex min-h-[320px] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-(--color-border-subtle) bg-(--color-canvas-deep)">
-            {/* Resolution hint */}
+            {/* Resolution hint：写尺寸表达（比例 + 档位），与全项目的尺寸口径一致。 */}
             <span className="absolute left-3 top-2.5 rounded bg-black/50 px-2 py-0.5 text-[10px] font-mono text-(--color-ink-faintest) backdrop-blur-sm">
-              {c.size} · {c.fps}fps
+              {sizeSpecSummary(c.size)} · {c.fps}fps
             </span>
 
             {/* Play overlay */}

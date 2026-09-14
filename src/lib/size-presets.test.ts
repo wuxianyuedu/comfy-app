@@ -9,6 +9,7 @@ import {
   megapixelsOf,
   nearestRatioPreset,
   normalizeAlignMultiple,
+  normalizeRatioLabel,
   normalizeSizeSpec,
   parseSizeText,
   ratioOfLabel,
@@ -27,6 +28,7 @@ import {
   sizeSpecSummary,
   sizeSpecToWxH,
   toMegapixelSpec,
+  toSizeSpec,
   type SizeSpec,
 } from "./size-presets";
 
@@ -166,6 +168,28 @@ describe("size-presets：尺寸表达（比例 + 分辨率 / 比例 + 百万像�
     /* 脏值/空值回退默认，不抛错。 */
     expect(sizeSpecFromText("")).toEqual(DEFAULT_SIZE_SPEC);
     expect(normalizeSizeSpec({ ratio: "42:1", clarity: "999k" })).toEqual(DEFAULT_SIZE_SPEC);
+  });
+
+  it("toSizeSpec / normalizeSizeSpec：外部写法（短比例标签 / 旧字符串 / 对象）都收得下", () => {
+    /* 外部调用方（MCP / 接口）按直觉给的是短比例标签，落到最接近的预设行。 */
+    expect(normalizeRatioLabel("16:9")).toBe("16:9 横屏");
+    expect(normalizeRatioLabel("3:4")).toBe("3:4");
+    expect(normalizeRatioLabel("9:16")).toBe("9:16 竖屏");
+    expect(normalizeRatioLabel("42:1")).toBe(DEFAULT_SIZE_SPEC.ratio);
+
+    expect(
+      normalizeSizeSpec({ ratio: "16:9", clarity: "2M", multiple: 32 }),
+    ).toEqual({ ratio: "16:9 横屏", clarity: "2M", multiple: 32 });
+
+    /* toSizeSpec：对象 / "WxH" 字符串 / 脏值三态都归一。 */
+    expect(toSizeSpec({ ratio: "1:1 正方", clarity: "2k", multiple: 8 })).toEqual({
+      ratio: "1:1 正方",
+      clarity: "2k",
+      multiple: 8,
+    });
+    expect(toSizeSpec("1280x720")).toEqual(sizeSpecFromText("1280x720"));
+    expect(toSizeSpec(undefined)).toEqual(DEFAULT_SIZE_SPEC);
+    expect(toSizeSpec(42)).toEqual(DEFAULT_SIZE_SPEC);
   });
 
   it("宽高 → `aspect_ratio` 端口该写的候选值", () => {

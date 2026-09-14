@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { uploadBgm } from "~/lib/film/bgm-client";
 import { errorMessage } from "~/lib/error-message";
+import type { SizeSpec } from "@/lib/size-presets";
 import { vanillaApi } from "~/trpc/vanilla";
 
 import { useToast } from "../ToastProvider";
@@ -29,8 +30,8 @@ import {
 export interface FilmStudioController {
   /* 成片参数（目前为常量，保留 setter 以便后续开放编辑） */
   title: string;
-  /** 预览区展示的输出分辨率。 */
-  size: string;
+  /** 成片画幅（尺寸表达：比例 + 分辨率 / 比例 + 百万像素 + 倍数）。 */
+  size: SizeSpec;
   /** 预览区展示的帧率。 */
   fps: number;
   script: string;
@@ -62,7 +63,7 @@ export function useFilmStudio(): FilmStudioController {
   const [title] = useState(FILM_TITLE);
   const [type] = useState(FILM_TYPE);
   const [styleSlug] = useState("");
-  const [size] = useState(FILM_SIZE);
+  const [size] = useState<SizeSpec>(FILM_SIZE);
   const [fps] = useState(FILM_FPS);
   const [frames] = useState(FILM_FRAMES_PER_SHOT);
 

@@ -14,6 +14,7 @@ import {
   parseExtractedShots,
 } from "@/lib/workshop/script-parse";
 import { buildCharacterNegative, buildCharacterPrompt, buildShotNegative, buildShotPrompt } from "@/lib/workshop/prompt-builder";
+import { sizeSpecToWxH, type SizeSpec } from "@/lib/size-presets";
 import {
   generateImageViaApi,
   pollVideoViaApi,
@@ -214,7 +215,10 @@ export interface GenerateImageInput {
   shotId?: string;
   characterId?: string;
   channel?: "api" | "comfyui";
-  size?: string;
+  /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见 `lib/size-presets`）。
+   *  缺省各通道按自己的默认档走。调用方（MCP）若仍按老口径给 "1024x1024"，
+   *  由边界用 `toSizeSpec` 归一。 */
+  size?: SizeSpec;
 }
 
 export async function generateImage(id: string, input: GenerateImageInput) {
@@ -246,7 +250,12 @@ export async function generateImage(id: string, input: GenerateImageInput) {
     await repo.updateState(id, state);
     return { url, channel: "comfyui" };
   }
-  const url = await generateImageViaApi({ prompt, negative, size: input.size });
+  const url = await generateImageViaApi({
+    prompt,
+    negative,
+    /* 上游 images/generations 只认 "WxH" —— 尺寸表达在**外部 wire** 边界折算。 */
+    ...(input.size ? { size: sizeSpecToWxH(input.size, "image") } : {}),
+  });
   if (shot) {
     shot.imageUrl = url;
     shot.status = "done";
