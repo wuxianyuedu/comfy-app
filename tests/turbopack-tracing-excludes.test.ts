@@ -102,6 +102,12 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
     "./e2e/**",
     "./tools/**",
     "./log/**",
+    // ISSUE #489：以下三项是实测确认漏掉、且属于「纯数据/测试，绝不可能是
+    // server code 的运行时依赖」的东西。它们出现在 nft 追踪里，正是 §7.2 那条
+    // 「Turbopack 放弃静态追踪、退化为全项目追踪」的产物。
+    "./changelog.d/**", // 89 个变更碎片、384K，纯文档数据
+    "./src/**/*.test.ts", // 143 个测试文件，路由只 import 编译产物，测试是死重量
+    "./src/**/*.test.tsx",
   ])("关键目录 %s 仍在排除清单里", (entry) => {
     expect(
       config.includes(entry),
@@ -121,3 +127,59 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
     ).toBe(false);
   });
 });
+
+/* ── 产物级探针：真看 .next/standalone 里有没有不该有的东西 ──────────────
+ *
+ * 上面的用例只锁「配置清单还在」，看不到「清单是否真的起了作用」——而清单
+ * 失效正是历史上发生过的事（键位曾挂在 experimental 下，一个字都没被读，
+ * 却因为没有任何用例去数产物里的文件而无人察觉）。
+ *
+ * 这条探针在**构建产物存在时**真去数：standalone 里不得出现测试文件、变更
+ * 碎片与文档。没有产物（如只跑单测的检出）时整组跳过 —— 它守的是构建结果，
+ * 不是单元逻辑。
+ */
+import { existsSync, readdirSync, statSync } from "node:fs";
+
+const STANDALONE = join(process.cwd(), ".next", "standalone");
+
+/** 递归列出目录下所有相对路径（只在目录存在时调用）。 */
+function listFiles(dir: string, prefix = ""): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const abs = join(dir, name);
+    const rel = prefix ? `${prefix}/${name}` : name;
+    let st;
+    try {
+      st = statSync(abs);
+    } catch {
+      continue;
+    }
+    if (st.isDirectory()) out.push(...listFiles(abs, rel));
+    else out.push(rel);
+  }
+  return out;
+}
+
+describe.skipIf(!existsSync(STANDALONE))(
+  ".next/standalone 产物里不得有测试 / 文档 / 变更碎片",
+  () => {
+    const files = listFiles(STANDALONE);
+
+    it("确实数到了产物文件（探针自身不空跑）", () => {
+      expect(files.length).toBeGreaterThan(10);
+      expect(files.some((f) => f.includes("node_modules"))).toBe(true);
+    });
+
+    it.each([
+      ["测试文件", /(^|\/)src\/.*\.test\.tsx?$/],
+      ["变更碎片", /(^|\/)changelog\.d\/.*\.md$/],
+      ["文档目录", /(^|\/)docs\/.*\.md$/],
+    ])("不含%s", (_label, re) => {
+      const hits = files.filter((f) => re.test(f));
+      expect(
+        hits.slice(0, 10),
+        `这些文件不该进 standalone（outputFileTracingExcludes 失效或漏项）：${hits.length} 个`,
+      ).toEqual([]);
+    });
+  },
+);
