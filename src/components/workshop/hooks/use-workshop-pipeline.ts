@@ -51,6 +51,12 @@ import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
 import { errorMessage } from "~/lib/error-message";
 import {
+  DEFAULT_GEN_PARAMS,
+  paramInt,
+  paramNumber,
+  paramString,
+} from "~/lib/workshop/param-coerce";
+import {
   useCharacterPortrait,
   type PortraitSession,
   type PortraitSessionActions,
@@ -266,20 +272,6 @@ type SkillsApiResponse = {
 
 /** /api/models?type=CHECKPOINT 返回 payload。 */
 type ModelsApiResponse = { models?: Array<{ fileName: string }> };
-
-/** 安全读取 Shot 参数：对象/数组等会被拒绝，返回 fallback。 */
-function paramString(value: unknown, fallback: string): string {
-  return typeof value === "string" && value ? value : fallback;
-}
-function paramNumber(value: unknown, fallback: number): number {
-  const num =
-    typeof value === "string"
-      ? Number(value)
-      : typeof value === "number"
-        ? value
-        : NaN;
-  return Number.isFinite(num) ? num : fallback;
-}
 
 /** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别）。 */
 export type ShotProgressMap = Record<string, { pct: number; label?: string }>;
@@ -872,10 +864,10 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         prompt: shot.prompt,
         negative: shot.negativePrompt || undefined,
         checkpoint,
-        steps: Math.round(paramNumber(shot.params.steps, 28)),
-        cfg: paramNumber(shot.params.cfg, 7),
-        sampler: paramString(shot.params.sampler, "euler_ancestral"),
-        scheduler: paramString(shot.params.scheduler, "normal"),
+        steps: paramInt(shot.params.steps, DEFAULT_GEN_PARAMS.steps),
+        cfg: paramNumber(shot.params.cfg, DEFAULT_GEN_PARAMS.cfg),
+        sampler: paramString(shot.params.sampler, DEFAULT_GEN_PARAMS.sampler),
+        scheduler: paramString(shot.params.scheduler, DEFAULT_GEN_PARAMS.scheduler),
         size: shotSizeToParam(sizeSpec),
         count: 1,
       };
