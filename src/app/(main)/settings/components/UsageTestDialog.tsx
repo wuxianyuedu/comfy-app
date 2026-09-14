@@ -138,179 +138,11 @@ export function UsageTestDialog({
             </p>
           )}
 
-          {usageTest.kind === "video" && (
-            <div className="mb-2">
-              <p className="text-ink/70 mb-1 text-xs font-medium">
-                mode 快捷选择（仍可手改任意值）
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {VIDEO_MODE_PRESETS.map((m) => {
-                  const modeValue = usageTest.fields.find(
-                    (f) => f.key === "mode",
-                  )?.value;
-                  const active =
-                    modeValue?.trim() === m &&
-                    !isModeValueBroken(modeValue ?? "");
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => d.setVideoMode(m)}
-                      className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
-                        active
-                          ? "border-[var(--primary,#7c5cff)] bg-[var(--primary,#7c5cff)]/15 text-[var(--primary,#7c5cff)]"
-                          : "border-border text-muted-foreground hover:bg-subtle"
-                      }`}
-                    >
-                      {m}
-                    </button>
-                  );
-                })}
-              </div>
-              {usageTest.fields.map((f) => {
-                if (f.key !== "mode") return null;
-                const hint = VIDEO_MODE_HINT[f.value.trim()];
-                return hint ? (
-                  <p
-                    key="mode-hint"
-                    className="text-muted-foreground mt-1 text-[11px]"
-                  >
-                    {hint}
-                  </p>
-                ) : null;
-              })}
-              {usageTest.fields.map((f) => {
-                if (f.key !== "mode" || !isModeValueBroken(f.value))
-                  return null;
-                const i = usageTest.fields.indexOf(f);
-                return (
-                  <div
-                    key="mode-broken"
-                    className="mt-1 rounded-lg border border-dashed border-amber-400/60 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
-                  >
-                    <p>
-                      ⚠ mode 的值被图片/链接覆盖了——这正是「reference
-                      选中消失」和 400 invalid mode 的原因。点下方按钮把图搬到
-                      images 行，或直接把输入框改回 text / keyframe /
-                      reference。
-                    </p>
-                    {isPreviewableUrl(f.value) && (
-                      <button
-                        type="button"
-                        onClick={() => d.rescueMediaFromMode(i, f.value.trim())}
-                        className="mt-1 rounded border border-amber-400/60 px-2 py-0.5 text-[11px] hover:bg-amber-500/10"
-                      >
-                        把这张图搬到 images 行，mode 复位为 text
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-              {videoModeMissingHint(usageTest.fields) && (
-                <p className="mt-1 rounded-lg border border-dashed border-amber-400/60 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-                  ⚠ {videoModeMissingHint(usageTest.fields)}
-                </p>
-              )}
-            </div>
-          )}
+      {usageTest.kind === "video" && (
+        <UsageVideoModeQuickPick d={d} usageTest={usageTest} />
+      )}
 
-          {usageTest.fields.length === 0 && (
-            <p className="text-muted-foreground border-border mb-2 rounded-lg border border-dashed px-3 py-3 text-center text-[11px]">
-              还没有额外字段。点下方「添加字段」可按需补 seed / duration /
-              first_frame 等。
-            </p>
-          )}
-
-          <div className="mb-2 flex flex-col gap-2">
-            {d.usageFieldsToSend(usageTest).map((f) => {
-              const i = usageTest.fields.indexOf(f);
-              return (
-                <div key={i} className="flex flex-col gap-1.5">
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={f.key}
-                      onChange={(event) =>
-                        d.patchField(i, { key: event.target.value })
-                      }
-                      placeholder="字段名（如 seed / first_frame）"
-                      className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-2/5 min-w-0 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
-                    />
-                    <input
-                      type="text"
-                      value={f.value}
-                      onChange={(event) =>
-                        d.patchField(i, { value: event.target.value })
-                      }
-                      placeholder={
-                        f.key === "mode"
-                          ? "模式名：text / keyframe / reference（图片请添加 images 行）"
-                          : isPreviewableUrl(f.value)
-                            ? "已设为图片，可粘贴新的图片地址覆盖"
-                            : isMediaArrayField(f.key)
-                              ? "值：一张或多张图片 URL（多张用逗号分隔，如 a,b）"
-                              : "值：文本 / 数字 / 图片地址"
-                      }
-                      className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full min-w-0 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
-                    />
-                    {f.key === "mode" ? (
-                      <span
-                        className="text-muted-foreground/40 border-border/40 shrink-0 cursor-not-allowed rounded-lg border px-2 py-1.5 text-[11px]"
-                        title="mode 是模式名（text / keyframe / reference），不能填图片；先添加 images / first_frame 行再传图"
-                      >
-                        上传
-                      </span>
-                    ) : (
-                      <label
-                        className="text-muted-foreground hover:text-ink border-border hover:bg-subtle flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border px-2 text-[11px] transition-colors"
-                        title="本地上传一张图片作为该字段的值（自动转 data URL）"
-                      >
-                        上传
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp,image/gif"
-                          className="hidden"
-                          onChange={(event) =>
-                            void d.pickFieldImage(i, event.target.files?.[0])
-                          }
-                        />
-                      </label>
-                    )}
-                    {!(usageTest.kind === "video" && isMediaField(f.key)) &&
-                      f.key !== "mode" && (
-                        <button
-                          type="button"
-                          onClick={() => d.patchField(i, { value: "https://" })}
-                          className="text-muted-foreground hover:text-ink border-border hover:bg-subtle shrink-0 rounded-lg border px-2 text-[11px] transition-colors"
-                          title="填入公网图片地址占位，直接改成你的图片 URL 即可"
-                        >
-                          链接
-                        </button>
-                      )}
-                    <button
-                      type="button"
-                      onClick={() => d.removeField(i)}
-                      className="text-muted-foreground shrink-0 px-1 text-sm hover:text-red-700 dark:text-red-400"
-                      aria-label="删除该字段"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  {isPreviewableUrl(f.value) && (
-                    <FieldImagePreview src={f.value} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => d.addField()}
-            className="text-muted-foreground hover:text-ink border-border mb-3 rounded-lg border border-dashed px-3 py-1.5 text-xs transition-colors"
-          >
-            ＋ 添加字段
-          </button>
+      <UsageFieldEditor d={d} usageTest={usageTest} />
 
           {(usageTest.kind === "image" || usageTest.kind === "video") && (
             <div className="mb-3">
@@ -369,86 +201,14 @@ export function UsageTestDialog({
             </p>
           )}
 
-          {usageTest.result && !usageTest.running && (
-            <div className="mb-3">
-              {usageTest.result.ok ? (
-                <>
-                  <p className="mb-2 rounded-lg bg-emerald-100 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                    {usageTest.result.detail}
-                    {usageTest.result.elapsedMs != null &&
-                      ` · 耗时 ${(usageTest.result.elapsedMs / 1000).toFixed(1)}s`}
-                  </p>
-                  {usageTest.result.chatText && (
-                    <p className="border-border/50 bg-surface-1 max-h-40 overflow-y-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">
-                      {usageTest.result.chatText}
-                    </p>
-                  )}
-                  {usageTest.result.imageUrl && (
-                    <img
-                      src={usageTest.result.imageUrl}
-                      alt="生成结果"
-                      className="border-border/50 max-h-56 w-full rounded-lg border"
-                    />
-                  )}
-                  {usageTest.result.videoUrl && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void c.openExternalUrl(usageTest.result?.videoUrl ?? "")
-                      }
-                      className="text-primary hover:text-primary-hover inline-flex items-center gap-1 text-xs font-medium underline-offset-2 hover:underline"
-                      title="在系统默认浏览器中打开生成的视频"
-                    >
-                      打开生成的视频
-                    </button>
-                  )}
-                  {usageTest.result.savedPath && (
-                    <p
-                      className="border-border/50 bg-surface-1 text-muted-foreground mt-2 rounded-lg border px-3 py-2 text-[11px] break-all"
-                      title="本次产出的内容已在本地 temp 子目录保存一份"
-                    >
-                      已保存到本地：
-                      <span className="font-mono">
-                        {usageTest.result.savedPath}
-                      </span>
-                    </p>
-                  )}
-                  {usageTest.result.pending &&
-                    usageTest.result.taskId &&
-                    !usageTest.querying && (
-                      <div className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-                        <p className="font-medium">
-                          ⏳ 视频仍在生成中（不是失败），已提交到提供方，
-                          生成通常需数十秒到几分钟。
-                        </p>
-                        <p className="text-muted-foreground mt-1 break-all">
-                          任务 ID：{usageTest.result.taskId}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => void d.continueUsageWait()}
-                          disabled={usageTest.querying}
-                          className="mt-2 inline-flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-60"
-                        >
-                          {usageTest.querying ? (
-                            <>
-                              <Loader2 size={12} className="animate-spin" />
-                              等待中…
-                            </>
-                          ) : (
-                            "继续等待并获取结果"
-                          )}
-                        </button>
-                      </div>
-                    )}
-                </>
-              ) : (
-                <p className="rounded-lg bg-red-100 px-3 py-2 text-xs break-all text-red-700 dark:bg-red-500/10 dark:text-red-300">
-                  {usageTest.result.detail}
-                </p>
-              )}
-            </div>
-          )}
+      {usageTest.result && !usageTest.running && (
+        <UsageTestResultPanel
+          c={c}
+          d={d}
+          usageTest={usageTest}
+          result={usageTest.result}
+        />
+      )}
 
           <div className="mt-4 flex justify-end gap-2">
             <button
@@ -476,6 +236,301 @@ export function UsageTestDialog({
             </button>
           </div>
         </div>
+      </div>
+    </>
+  );
+}
+
+/** video 专用的 mode 快捷选择与「mode 被图片覆盖」救援提示。纯展示，动作全经 d。 */
+function UsageVideoModeQuickPick({
+  d,
+  usageTest,
+}: {
+  d: RemoteModelDialogs;
+  usageTest: NonNullable<UsageTestDialogState>;
+}) {
+  return (
+    <>
+      <div className="mb-2">
+        <p className="text-ink/70 mb-1 text-xs font-medium">
+          mode 快捷选择（仍可手改任意值）
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {VIDEO_MODE_PRESETS.map((m) => {
+            const modeValue = usageTest.fields.find(
+              (f) => f.key === "mode",
+            )?.value;
+            const active =
+              modeValue?.trim() === m &&
+              !isModeValueBroken(modeValue ?? "");
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() => d.setVideoMode(m)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                  active
+                    ? "border-[var(--primary,#7c5cff)] bg-[var(--primary,#7c5cff)]/15 text-[var(--primary,#7c5cff)]"
+                    : "border-border text-muted-foreground hover:bg-subtle"
+                }`}
+              >
+                {m}
+              </button>
+            );
+          })}
+        </div>
+        {usageTest.fields.map((f) => {
+          if (f.key !== "mode") return null;
+          const hint = VIDEO_MODE_HINT[f.value.trim()];
+          return hint ? (
+            <p
+              key="mode-hint"
+              className="text-muted-foreground mt-1 text-[11px]"
+            >
+              {hint}
+            </p>
+          ) : null;
+        })}
+        {usageTest.fields.map((f) => {
+          if (f.key !== "mode" || !isModeValueBroken(f.value))
+            return null;
+          const i = usageTest.fields.indexOf(f);
+          return (
+            <div
+              key="mode-broken"
+              className="mt-1 rounded-lg border border-dashed border-amber-400/60 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+            >
+              <p>
+                ⚠ mode 的值被图片/链接覆盖了——这正是「reference
+                选中消失」和 400 invalid mode 的原因。点下方按钮把图搬到
+                images 行，或直接把输入框改回 text / keyframe /
+                reference。
+              </p>
+              {isPreviewableUrl(f.value) && (
+                <button
+                  type="button"
+                  onClick={() => d.rescueMediaFromMode(i, f.value.trim())}
+                  className="mt-1 rounded border border-amber-400/60 px-2 py-0.5 text-[11px] hover:bg-amber-500/10"
+                >
+                  把这张图搬到 images 行，mode 复位为 text
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {videoModeMissingHint(usageTest.fields) && (
+          <p className="mt-1 rounded-lg border border-dashed border-amber-400/60 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+            ⚠ {videoModeMissingHint(usageTest.fields)}
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** 请求体额外字段编辑器：空态提示 + 字段行（上传 / 链接 / 删除）+ 添加按钮。纯展示。 */
+function UsageFieldEditor({
+  d,
+  usageTest,
+}: {
+  d: RemoteModelDialogs;
+  usageTest: NonNullable<UsageTestDialogState>;
+}) {
+  return (
+    <>
+      {usageTest.fields.length === 0 && (
+        <p className="text-muted-foreground border-border mb-2 rounded-lg border border-dashed px-3 py-3 text-center text-[11px]">
+          还没有额外字段。点下方「添加字段」可按需补 seed / duration /
+          first_frame 等。
+        </p>
+      )}
+
+      <div className="mb-2 flex flex-col gap-2">
+        {d.usageFieldsToSend(usageTest).map((f) => {
+          const i = usageTest.fields.indexOf(f);
+          return (
+            <div key={i} className="flex flex-col gap-1.5">
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={f.key}
+                  onChange={(event) =>
+                    d.patchField(i, { key: event.target.value })
+                  }
+                  placeholder="字段名（如 seed / first_frame）"
+                  className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-2/5 min-w-0 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
+                />
+                <input
+                  type="text"
+                  value={f.value}
+                  onChange={(event) =>
+                    d.patchField(i, { value: event.target.value })
+                  }
+                  placeholder={
+                    f.key === "mode"
+                      ? "模式名：text / keyframe / reference（图片请添加 images 行）"
+                      : isPreviewableUrl(f.value)
+                        ? "已设为图片，可粘贴新的图片地址覆盖"
+                        : isMediaArrayField(f.key)
+                          ? "值：一张或多张图片 URL（多张用逗号分隔，如 a,b）"
+                          : "值：文本 / 数字 / 图片地址"
+                  }
+                  className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full min-w-0 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
+                />
+                {f.key === "mode" ? (
+                  <span
+                    className="text-muted-foreground/40 border-border/40 shrink-0 cursor-not-allowed rounded-lg border px-2 py-1.5 text-[11px]"
+                    title="mode 是模式名（text / keyframe / reference），不能填图片；先添加 images / first_frame 行再传图"
+                  >
+                    上传
+                  </span>
+                ) : (
+                  <label
+                    className="text-muted-foreground hover:text-ink border-border hover:bg-subtle flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border px-2 text-[11px] transition-colors"
+                    title="本地上传一张图片作为该字段的值（自动转 data URL）"
+                  >
+                    上传
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(event) =>
+                        void d.pickFieldImage(i, event.target.files?.[0])
+                      }
+                    />
+                  </label>
+                )}
+                {!(usageTest.kind === "video" && isMediaField(f.key)) &&
+                  f.key !== "mode" && (
+                    <button
+                      type="button"
+                      onClick={() => d.patchField(i, { value: "https://" })}
+                      className="text-muted-foreground hover:text-ink border-border hover:bg-subtle shrink-0 rounded-lg border px-2 text-[11px] transition-colors"
+                      title="填入公网图片地址占位，直接改成你的图片 URL 即可"
+                    >
+                      链接
+                    </button>
+                  )}
+                <button
+                  type="button"
+                  onClick={() => d.removeField(i)}
+                  className="text-muted-foreground shrink-0 px-1 text-sm hover:text-red-700 dark:text-red-400"
+                  aria-label="删除该字段"
+                >
+                  ✕
+                </button>
+              </div>
+              {isPreviewableUrl(f.value) && (
+                <FieldImagePreview src={f.value} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => d.addField()}
+        className="text-muted-foreground hover:text-ink border-border mb-3 rounded-lg border border-dashed px-3 py-1.5 text-xs transition-colors"
+      >
+        ＋ 添加字段
+      </button>
+    </>
+  );
+}
+
+/** 调用结果面板：成功与失败、文本 / 图片 / 视频，以及未完成任务的「继续等待」出口。 */
+function UsageTestResultPanel({
+  c,
+  d,
+  usageTest,
+  result,
+}: {
+  c: ReadySettingsPageController;
+  d: RemoteModelDialogs;
+  usageTest: NonNullable<UsageTestDialogState>;
+  /** 非空由调用方保证：仅在有结果且不在调用中时渲染。 */
+  result: NonNullable<UsageTestDialogState["result"]>;
+}) {
+  return (
+    <>
+      <div className="mb-3">
+        {result.ok ? (
+          <>
+            <p className="mb-2 rounded-lg bg-emerald-100 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+              {result.detail}
+              {result.elapsedMs != null &&
+                ` · 耗时 ${(result.elapsedMs / 1000).toFixed(1)}s`}
+            </p>
+            {result.chatText && (
+              <p className="border-border/50 bg-surface-1 max-h-40 overflow-y-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">
+                {result.chatText}
+              </p>
+            )}
+            {result.imageUrl && (
+              <img
+                src={result.imageUrl}
+                alt="生成结果"
+                className="border-border/50 max-h-56 w-full rounded-lg border"
+              />
+            )}
+            {result.videoUrl && (
+              <button
+                type="button"
+                onClick={() =>
+                  void c.openExternalUrl(result.videoUrl ?? "")
+                }
+                className="text-primary hover:text-primary-hover inline-flex items-center gap-1 text-xs font-medium underline-offset-2 hover:underline"
+                title="在系统默认浏览器中打开生成的视频"
+              >
+                打开生成的视频
+              </button>
+            )}
+            {result.savedPath && (
+              <p
+                className="border-border/50 bg-surface-1 text-muted-foreground mt-2 rounded-lg border px-3 py-2 text-[11px] break-all"
+                title="本次产出的内容已在本地 temp 子目录保存一份"
+              >
+                已保存到本地：
+                <span className="font-mono">
+                  {result.savedPath}
+                </span>
+              </p>
+            )}
+            {result.pending &&
+              result.taskId &&
+              !usageTest.querying && (
+                <div className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                  <p className="font-medium">
+                    ⏳ 视频仍在生成中（不是失败），已提交到提供方，
+                    生成通常需数十秒到几分钟。
+                  </p>
+                  <p className="text-muted-foreground mt-1 break-all">
+                    任务 ID：{result.taskId}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void d.continueUsageWait()}
+                    disabled={usageTest.querying}
+                    className="mt-2 inline-flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-60"
+                  >
+                    {usageTest.querying ? (
+                      <>
+                        <Loader2 size={12} className="animate-spin" />
+                        等待中…
+                      </>
+                    ) : (
+                      "继续等待并获取结果"
+                    )}
+                  </button>
+                </div>
+              )}
+          </>
+        ) : (
+          <p className="rounded-lg bg-red-100 px-3 py-2 text-xs break-all text-red-700 dark:bg-red-500/10 dark:text-red-300">
+            {result.detail}
+          </p>
+        )}
       </div>
     </>
   );

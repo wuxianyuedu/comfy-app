@@ -71,6 +71,8 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
     script: string;
     type: string;
     styleSlug?: string | null;
+    /** 成片画幅的**尺寸表达** JSON（`lib/size-presets` 的 `SizeSpec`）。
+     *  老行里是 "1280x720" 字符串 —— 读的一律用 `toSizeSpec` 归一。 */
     size: string;
     fps: number;
     framesPerShot: number;

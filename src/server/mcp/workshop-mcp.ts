@@ -7,9 +7,49 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
+import { sizeSpecFromText, toSizeSpec, type SizeSpec } from "@/lib/size-presets";
 import type { ProjectMeta } from "@/lib/workshop/types";
 import { saveComfySettings } from "@/server/workshop/comfyui";
 import * as orchestrator from "@/server/workshop/orchestrator";
+
+/** 尺寸参数（两种类别任选其一）：
+ *   · 比例 + 分辨率          —— `ratio` + `clarity`（"1k"/"2k"/"4k"）；
+ *   · 比例 + 百万像素 + 倍数  —— `ratio` + `clarity`（"1M"/"2M"/"4M"）+ `multiple`。
+ *  另外保留 `size`（"1024x1024"）作为老口径入参：识别得出比例/像素档就等价换算，
+ *  识别不出（模型需要的怪尺寸）就回退默认档 —— 尺寸只有那两种表达，不再有第三套。 */
+const sizeArgs = {
+  ratio: z
+    .string()
+    .optional()
+    .describe('比例（16:9 / 3:4 / 1:1 …），与 clarity 一起构成尺寸；如 "16:9"'),
+  clarity: z
+    .string()
+    .optional()
+    .describe('像素档：分辨率 "1k"/"2k"/"4k"，或百万像素 "1M"/"2M"/"4M"'),
+  multiple: z
+    .number()
+    .int()
+    .optional()
+    .describe("宽高对齐倍数（8/16/32/64），仅百万像素档使用"),
+  size: z
+    .string()
+    .optional()
+    .describe('老口径尺寸「宽x高」，如 "1024x1024"（能用 ratio + clarity 就别用它）'),
+};
+
+/** 工具入参 → 尺寸表达；一个都没给时返回 undefined（各通道走自己的默认档）。 */
+function sizeSpecOf(args: {
+  ratio?: string;
+  clarity?: string;
+  multiple?: number;
+  size?: string;
+}): SizeSpec | undefined {
+  if (args.ratio || args.clarity || args.multiple !== undefined) {
+    return toSizeSpec({ ratio: args.ratio, clarity: args.clarity, multiple: args.multiple });
+  }
+  if (args.size) return sizeSpecFromText(args.size);
+  return undefined;
+}
 
 const SERVER_INSTRUCTIONS = `工坊（Workshop）创作流水线工具集。标准编排顺序：
 1) workshop_create_session 创建会话（可带 idea 灵感）
@@ -197,20 +237,20 @@ export function buildWorkshopMcpServer(): McpServer {
     "workshop_generate_image",
     {
       title: "生图",
-      description: "为某个镜头或角色生成图片。channel 默认 \"api\"；\"comfyui\" 走本地 ComfyUI（需 ComfyUI 在运行，可选 data/workshop-comfy-settings.json 的 imageWorkflow 模板，默认内置 SDXL txt2img 图）。",
+      description: "为某个镜头或角色生成图片。channel 默认 \"api\"；\"comfyui\" 走本地 ComfyUI（需 ComfyUI 在运行，可选 data/workshop-comfy-settings.json 的 imageWorkflow 模板，默认内置 SDXL txt2img 图）。尺寸用「比例 + 分辨率（1k/2k/4k）」或「比例 + 百万像素（1M/2M/4M）+ 倍数」表达，具体像素按图片场景尺寸表算。",
       inputSchema: {
         sessionId: z.string(),
         shotId: z.string().optional().describe("目标镜头 id（与 characterId 二选一）"),
         characterId: z.string().optional().describe("目标角色 id（与 shotId 二选一）"),
         channel: z.enum(["api", "comfyui"]).optional().describe("生图通道，默认 api"),
-        size: z.string().optional().describe("尺寸，如 1024x1024"),
+        ...sizeArgs,
       },
     },
     async (args) => json(await orchestrator.generateImage(args.sessionId, {
       shotId: args.shotId,
       characterId: args.characterId,
       channel: args.channel,
-      size: args.size,
+      size: sizeSpecOf(args),
     })),
   );
 

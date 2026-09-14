@@ -114,7 +114,7 @@ export class LlmConfigRepository {
         .values({
           id: "singleton",
           provider: input.provider ?? "local",
-          baseUrl: input.baseUrl ?? "http://localhost:11434/v1",
+          baseUrl: input.baseUrl ?? OLLAMA_DEFAULT_BASE_URL,
           model: input.model ?? "",
           extraModels: extraModelsJson,
           apiKey: enc.apiKey ?? null,
@@ -144,6 +144,7 @@ export class LlmConfigRepository {
 }
 
 import { parseRemoteModeAdapters, type RemoteModeAdapter } from "@/lib/workshop/model-mode-contract";
+import { OLLAMA_DEFAULT_BASE_URL } from "@/lib/endpoints";
 
 // ── 远端独立模型仓储（option C：远端模型独立成表，不与本地 ollama 候选混存）──
 export class RemoteModelRepository {

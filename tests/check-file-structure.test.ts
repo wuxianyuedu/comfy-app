@@ -16,9 +16,9 @@
  *     文件被删 / 改回旧名 / 挪离 src 根都阻断
  *   - R12 src/ 源码禁止内嵌控制字符（NUL 等，规范 §12.11）：带 NUL 的文件会被
  *     git / diff / grep / 编辑器判成二进制，改动从此无法 Review
- *   - R5 超 900 行的视图文件进拆分候选（只提醒不阻断）：扫描范围必须同时含
- *     `src/components/` 与 `src/app/`，否则页面的纯展示视图完全不设防
- *     （settings/SettingsPageView.tsx 2498 行，ISSUE #535）
+ *   - R5 超 900 行的文件进拆分候选（只提醒不阻断）：扫描范围是**整个 `src/`**、
+ *     不分层不分文件类型；只扫 `src/components/`（历史口径）会让最大的那个文件
+ *     与逻辑层的大文件都不设防（ISSUE #536）
  *
  * 为什么用子进程跑而不是 import：该脚本被 pre-commit 以 `node scripts/xxx.cjs`
  * 调用，且内部用 process.cwd() 定位扫描根；复用同一调用方式才等价于真实门禁。
@@ -262,60 +262,6 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     });
   });
 
-  // ── R5：超长视图文件的拆分提醒（ISSUE #535）──
-  // 背景：R5 原先只扫 src/components，`src/app` 下的「纯展示视图」完全落在护栏
-  // 之外 —— 仓库里最大的那个视图（settings/SettingsPageView.tsx，2498 行）恰恰
-  // 在这里，于是「最该拆的文件没有任何护栏」。这里把扫描范围钉死，防止被改回去。
-  describe("R5：src/app 下的超长视图也进拆分候选（ISSUE #535）", () => {
-    /** 造一个恰好 `lines` 行的视图文件（行数按脚本自己的 split("\n") 口径算）。 */
-    const writeLines = (rel: string, lines: number) => {
-      const abs = join(workdir, rel);
-      mkdirSync(dirname(abs), { recursive: true });
-      writeFileSync(abs, Array.from({ length: lines }, () => "// x").join("\n"));
-    };
-
-    it("src/app 下超 900 行的视图进入提醒（只提示不阻断）", () => {
-      writeLines("src/app/(main)/settings/SettingsPageView.tsx", 901);
-      const { code, output } = run();
-      expect(code).toBe(0); // 提醒不得升级为阻断
-      expect(output).toContain("拆分候选");
-      expect(output).toContain("src/app/(main)/settings/SettingsPageView.tsx");
-    });
-
-    it("src/components 下的超长文件照旧提醒（不因扩范围而丢）", () => {
-      writeLines("src/components/studio/logs/LogPanel.tsx", 901);
-      const { code, output } = run();
-      expect(code).toBe(0);
-      expect(output).toContain("src/components/studio/logs/LogPanel.tsx");
-    });
-
-    it("刚好 900 行不算超阈值（不多报噪音）", () => {
-      writeLines("src/app/(main)/settings/SettingsPageView.tsx", 900);
-      const { code, output } = run();
-      expect(code).toBe(0);
-      expect(output).not.toContain("拆分候选");
-    });
-
-    it("扫描范围只补目录、不改文件类型：.ts 逻辑模块与本次一致地不在范围（未扩大口径）", () => {
-      // R5 历来只判 .tsx 等会被渲染的视图文件（.ts 逻辑模块的拆法由 §12/§4.1
-      // 另管）。本次只把 src/app 补进「目录」维度，文件类型口径保持原样 ——
-      // 顺手把 .ts 一起纳入会在同一个 PR 里悄悄改变上千个文件的判据。
-      writeLines("src/app/(main)/settings/hooks/use-settings-page.ts", 901);
-      const { code, output } = run();
-      expect(code).toBe(0);
-      expect(output).not.toContain("拆分候选");
-    });
-
-    it("src/lib 不在扫描范围（lib 是逻辑层，拆法由 §12 另管）", () => {
-      // 用 .ts 而非 .tsx：lib 下 .tsx 会被 R4 直接阻断，那样测的就成了 R4，
-      // 盖住了「R5 不扫 lib」这条本身。
-      writeLines("src/lib/film/orchestrator.ts", 901);
-      const { code, output } = run();
-      expect(code).toBe(0);
-      expect(output).not.toContain("拆分候选");
-    });
-  });
-
   // ── R12：src/ 源码里不得内嵌控制字符（规范 §12.11）──
   // 判据来自一次真实事故：`lib/comfyui/markdown.ts` 曾用真的 NUL 字节做占位符
   // 哨兵（`\0CODE<n>\0`），于是整个文件被 git / diff / grep / 编辑器当二进制：
@@ -360,6 +306,58 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       const { code, output } = run();
       expect(code).toBe(0);
       expect(output).not.toContain("R12");
+    });
+  });
+
+  // ── R5：超大文件的拆分候选（提示级，ISSUE #536）──
+  // 历史口径只扫 `src/components/` 且只认 .tsx，于是**全仓库最大的那个文件**
+  //（`settings/SettingsPageView.tsx` 2499 行）与逻辑层的大文件
+  //（`lib/comfyui/lifecycle.ts` 1041 行）都不在任何护栏里。这里把范围钉死：
+  // 整个 `src/`、不分层不分文件类型。只提醒不阻断。
+  //（ISSUE #535 曾只把 `src/app` 补进目录维度；本块是那次评估的收敛版，
+  //  目录维度与文件类型维度一起放开。）
+  describe("R5：拆分候选覆盖整个 src/（ISSUE #536）", () => {
+    /** 造一个恰好 `lines` 行的源文件。 */
+    const writeLines = (rel: string, lines: number) => {
+      const abs = join(workdir, rel);
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, Array.from({ length: lines }, () => "// x").join("\n"));
+    };
+
+    it("src/app 下的超长视图进入提醒（只提示不阻断）", () => {
+      writeLines("src/app/(main)/settings/SettingsPageView.tsx", 901);
+      const { code, output } = run();
+      expect(code).toBe(0); // 提醒不得升级为阻断
+      expect(output).toContain("拆分候选");
+      expect(output).toContain("src/app/(main)/settings/SettingsPageView.tsx");
+    });
+
+    it("src/lib 下的超长逻辑模块同样进入提醒（不再只管 .tsx）", () => {
+      writeLines("src/lib/comfyui/lifecycle.ts", 901);
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).toContain("src/lib/comfyui/lifecycle.ts");
+    });
+
+    it("src/components 下的超长文件照旧提醒（不因扩范围而丢）", () => {
+      writeLines("src/components/studio/logs/LogPanel.tsx", 901);
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).toContain("src/components/studio/logs/LogPanel.tsx");
+    });
+
+    it("刚好 900 行不算超阈值（不多报噪音）", () => {
+      writeLines("src/app/(main)/settings/SettingsPageView.tsx", 900);
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("拆分候选");
+    });
+
+    it("测试文件不进拆分候选（用例体量不是可维护性信号）", () => {
+      writeLines("src/app/(main)/settings/hooks/use-settings-page.test.ts", 901);
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("拆分候选");
     });
   });
 });

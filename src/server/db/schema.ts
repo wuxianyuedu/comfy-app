@@ -28,6 +28,7 @@ import {
 import { relations } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { type InferSelectModel, type InferInsertModel } from "drizzle-orm";
+import { OLLAMA_DEFAULT_BASE_URL } from "@/lib/endpoints";
 
 // ── 自定义 DateTime 列（ISO 字符串，兼容 Prisma 存储）─────────────
 const dateNotNull = customType<{ data: Date; driverData: string }>({
@@ -296,7 +297,7 @@ export const workflowModelTagToWorkflowTemplate = sqliteTable(
 export const llmConfig = sqliteTable("llmConfig", {
   id: text("id").primaryKey(), // "singleton"
   provider: text("provider").notNull().default("local"),
-  baseUrl: text("baseUrl").notNull().default("http://localhost:11434/v1"),
+  baseUrl: text("baseUrl").notNull().default(OLLAMA_DEFAULT_BASE_URL),
   model: text("model").notNull().default(""),
   /** 本地 Ollama 候选模型名（JSON，纯名字字符串数组）：设置页可勾选多个，
    *  供工坊本地组切换使用。本地模型不持有 apiKey；远端独立模型见 remoteModel 表。 */

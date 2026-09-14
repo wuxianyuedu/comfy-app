@@ -81,7 +81,7 @@
 |---|---|---|---|---|
 | `registry.port` | `{{registry.port}}` | shadcn 本地团队 Registry 服务端口 | `tools/scripts/start-registry.ps1` 的 `$Port` | 读 `$Port` 值（`3874`） |
 | `mcp.http.port` | `{{mcp.http.port}}` | Workshop MCP HTTP 服务端口 | `tools/mcp-http.ts` 的 `MCP_HTTP_PORT ?? 4300` | 读 `MCP_HTTP_PORT` 默认值（`4300`）；仅 `docs/workshop-mcp.md` 校验 |
-| `comfyui.port` | `{{comfyui.port}}` | ComfyUI 默认监听端口 | `src/lib/comfyui/client.ts` 的 `settings.comfyuiPort … : 8188` 默认分支 | 读默认分支值（`8188`）；校验范围 = `onlyDocs`（`docs/workshop-mcp.md`）+ `otherDocs`（主规范「开发端口」行） |
+| `comfyui.port` | `{{comfyui.port}}` | ComfyUI 默认监听端口 | `src/lib/app-settings.ts` 的 `COMFYUI_DEFAULT_PORT` 常量 | 读常量的值（`8188`）；校验范围 = `onlyDocs`（`docs/workshop-mcp.md`）+ `otherDocs`（主规范「开发端口」行）。**权威源为何换了**：ISSUE #536 P3 之前这个端口散落在 5 个文件里，`client.ts` 只是其中一处；现在只剩 `app-settings.ts` 一个落点，提取规则指向常量定义才是它该指向的地方 |
 
 ---
 

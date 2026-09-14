@@ -341,15 +341,15 @@ export const DEFAULT_SIZE_SPEC: SizeSpec = {
   multiple: DEFAULT_ALIGN_MULTIPLE,
 };
 
-/** 容错：把任意（老草稿 / 外部 JSON）收窄成合法 `SizeSpec`，缺项与未知 label 回退默认。 */
+/** 容错：把任意（老草稿 / 外部 JSON / 短比例标签）收窄成合法 `SizeSpec`。
+ *
+ *  比例接受预设 label（"16:9 横屏"）与**短标签**（"16:9"）两种写法 —— 外部调用
+ *  方（MCP / 接口）按直觉给的是短标签，落到最接近的预设行即可；缺项与识别不出的
+ *  值回退默认。 */
 export function normalizeSizeSpec(
   raw: { ratio?: unknown; clarity?: unknown; multiple?: unknown } | null | undefined,
 ): SizeSpec {
-  const ratioLabel =
-    typeof raw?.ratio === "string" &&
-    SIZE_RATIO_PRESETS.some((preset) => preset.label === raw.ratio)
-      ? raw.ratio
-      : DEFAULT_SIZE_SPEC.ratio;
+  const ratioLabel = normalizeRatioLabel(raw?.ratio);
   const clarityLabel =
     typeof raw?.clarity === "string" &&
     SIZE_CLARITY_PRESETS.some((preset) => preset.label === raw.clarity)
@@ -358,6 +358,21 @@ export function normalizeSizeSpec(
   const multiple =
     typeof raw?.multiple === "number" ? normalizeAlignMultiple(raw.multiple) : DEFAULT_SIZE_SPEC.multiple;
   return { ratio: ratioLabel, clarity: clarityLabel, multiple };
+}
+
+/** 比例写法 → 预设 label：预设 label 原样、短标签（"16:9"）落到最接近的预设行、
+ *  识别不出回退默认。 */
+export function normalizeRatioLabel(raw: unknown): string {
+  if (typeof raw !== "string" || !raw.trim()) return DEFAULT_SIZE_SPEC.ratio;
+  const text = raw.trim();
+  const exact = SIZE_RATIO_PRESETS.find((preset) => preset.label === text);
+  if (exact) return exact.label;
+  const ratio = parseRatioFromText(text);
+  if (ratio === null) return DEFAULT_SIZE_SPEC.ratio;
+  const preset = nearestRatioPreset(ratio);
+  /* 差得太远（如 "42:1"）不硬掰到标准比例 —— 回退默认，让调用方给个像样的比例；
+   * 邻近的写法（"2.39:1" → 21:9、"1.85:1" → 16:9）则照常吸附。 */
+  return Math.abs(preset.ratio - ratio) / ratio <= 0.25 ? preset.label : DEFAULT_SIZE_SPEC.ratio;
 }
 
 /** 该尺寸表达属于哪个子类。 */
@@ -508,6 +523,19 @@ export function sizeSpecFromText(
   const dims = parseSizeText(raw);
   if (!dims) return { ...DEFAULT_SIZE_SPEC };
   return sizeSpecFromDims(dims.width, dims.height, scene, table);
+}
+
+/** 容错入口：尺寸表达的任意历史写法 → 合法 `SizeSpec`。
+ *
+ *  读**旧数据**一律走这里：localStorage 里的画布节点、数据库文本列存的
+ *  `"1280x720"`、老请求体里的 `size` 字段 —— 新版一律写 `SizeSpec`，识别不出的
+ *  值（含 `undefined` / 脏 JSON）回退默认，不抛错。 */
+export function toSizeSpec(raw: unknown): SizeSpec {
+  if (typeof raw === "string") return sizeSpecFromText(raw);
+  if (raw && typeof raw === "object") {
+    return normalizeSizeSpec(raw);
+  }
+  return { ...DEFAULT_SIZE_SPEC };
 }
 
 /** 宽高 → 某个 `aspect_ratio` 端口该写的候选值（工坊 / 画布派值用）。

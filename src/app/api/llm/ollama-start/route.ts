@@ -6,12 +6,13 @@ import { OLLAMA_RUNTIME_LOG } from "@/lib/log-paths";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { OLLAMA_DEFAULT_PORT } from "@/lib/endpoints";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Ollama 默认端口；Base URL 可配置，但「点一下启动」的场景默认拉起的就是它。 */
-const OLLAMA_PORT = 11434;
+const OLLAMA_PORT = OLLAMA_DEFAULT_PORT;
 
 /** 探测 Ollama 服务超时（毫秒）。 */
 const PROBE_TIMEOUT_MS = 2000;

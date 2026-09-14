@@ -5,8 +5,13 @@
 // txt2img 图；视频(i2v)与自定义图走 data/workshop-comfy-settings.json 模板，
 // 支持 {{prompt}}/{{negative}}/{{image}} 占位替换，从而与任意已安装模型解耦。
 import { randomUUID } from "node:crypto";
+
+import { COMFYUI_DEFAULT_PORT } from "@/lib/app-settings";
+import { comfyUiBaseUrl, LOOPBACK_HOST } from "@/lib/endpoints";
 import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
+
+import { DEFAULT_SIZE_SPEC, sizeSpecDims, type SizeSpec } from "@/lib/size-presets";
 
 const OUTPUT_DIR = path.join(process.cwd(), "data", "workshop-outputs");
 const SETTINGS_FILE = path.join(process.cwd(), "data", "workshop-comfy-settings.json");
@@ -35,13 +40,13 @@ function loadSettings(): ComfySettings {
 /** 解析 ComfyUI base（含端口探测，落 127.0.0.1 避免 localhost→IPv6 解析失败）。 */
 export async function resolveComfyBase(): Promise<string> {
   if (resolvedBase) return resolvedBase;
-  const raw = process.env.COMFYUI_BASE ?? "http://127.0.0.1:8188";
-  let host = "127.0.0.1";
-  let port = 8188;
+  const raw = process.env.COMFYUI_BASE ?? comfyUiBaseUrl(COMFYUI_DEFAULT_PORT);
+  let host = LOOPBACK_HOST;
+  let port = COMFYUI_DEFAULT_PORT;
   try {
     const u = new URL(raw);
-    host = u.hostname === "localhost" ? "127.0.0.1" : u.hostname;
-    port = parseInt(u.port) || 8188;
+    host = u.hostname === "localhost" ? LOOPBACK_HOST : u.hostname;
+    port = parseInt(u.port) || COMFYUI_DEFAULT_PORT;
   } catch {
     resolvedBase = raw;
     return raw;
@@ -63,7 +68,7 @@ export async function resolveComfyBase(): Promise<string> {
 }
 
 function comfyBase(): string {
-  return resolvedBase ?? process.env.COMFYUI_BASE ?? "http://127.0.0.1:8188";
+  return resolvedBase ?? process.env.COMFYUI_BASE ?? comfyUiBaseUrl(COMFYUI_DEFAULT_PORT);
 }
 
 export interface ComfyPromptResult {
@@ -154,26 +159,24 @@ export async function saveComfySettings(patch: Partial<ComfySettings>): Promise<
   return next;
 }
 
-export function parseSize(size?: string): { width: number; height: number } {
-  const m = /(\d+)\s*[xX]\s*(\d+)/.exec(size ?? "");
-  if (m) {
-    const w = Number(m[1]);
-    const h = Number(m[2]);
-    if (w > 0 && h > 0) return { width: w, height: h };
-  }
-  return { width: 1024, height: 1024 };
+/** 尺寸表达 → 内置 SDXL 图的宽高。
+ *
+ *  服务端也吃同一套尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见
+ *  `lib/size-presets`）：缺省按图片场景的默认档（3:4 1k），不写像素字面量。 */
+export function sizeDimsForImage(spec?: SizeSpec): { width: number; height: number } {
+  return sizeSpecDims(spec ?? DEFAULT_SIZE_SPEC, "image");
 }
 
 /** 模型无关的默认 SDXL txt2img 图（SaveImage 输出，供 /api/view 取回）。 */
 export function buildTxt2ImgWorkflow(input: {
   prompt: string;
   negative?: string;
-  size?: string;
+  size?: SizeSpec;
   checkpoint?: string;
   seed?: number;
 }): unknown {
   const ckpt = input.checkpoint ?? loadSettings().checkpoint ?? process.env.WORKSHOP_COMFYUI_CHECKPOINT ?? "sd_xl_base_1.0.safetensors";
-  const { width, height } = parseSize(input.size);
+  const { width, height } = sizeDimsForImage(input.size);
   return {
     "3": {
       class_type: "KSampler",
@@ -266,7 +269,8 @@ export async function runComfyWorkflow(
 export async function generateImageViaComfyUI(input: {
   prompt: string;
   negative?: string;
-  size?: string;
+  /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数）；缺省走图片场景默认档。 */
+  size?: SizeSpec;
   sessionId?: string;
 }): Promise<string> {
   const settings = loadSettings();

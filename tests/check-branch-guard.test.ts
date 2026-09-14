@@ -24,7 +24,12 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/* 这些用例每条都要**真跑 git**（init / add / commit / merge，beforeEach 里还有
+ * 一次 init + 文件拷贝），负载高的机器上 5s 的用例超时与 10s 的钩子超时经常都
+ * 不够（实测单条 7~16s）—— 文件级放宽到 30s，只影响本文件。 */
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 const SCRIPT = join(process.cwd(), "scripts", "check-branch-guard.cjs");
 
