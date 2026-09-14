@@ -17,8 +17,8 @@ import {
 import { exposedParamsForMode } from "~/lib/workflow-exposed-params";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 
-/** 工坊控件形态：尺寸在工坊里是「宽高比 + 百万像素」组合控件。 */
-export type EncapsulationControl = "text" | "size" | "image";
+/** 工坊控件形态：尺寸在工坊里是「宽高比 + 百万像素」组合控件，时长是秒数选择。 */
+export type EncapsulationControl = "text" | "size" | "image" | "duration";
 
 export interface EncapsulationEntryStatus {
   /** 契约内稳定键（prompt / negative / size / first-frame / reference-image…）。 */
@@ -44,6 +44,7 @@ export interface EncapsulationStatus {
 /** 契约口 → 工坊控件形态。 */
 function controlFor(id: string): EncapsulationControl {
   if (id === "size") return "size";
+  if (id === "duration") return "duration";
   if (
     id.startsWith("reference-image") ||
     id === "first-frame" ||
@@ -72,7 +73,7 @@ export function deriveEncapsulationStatus(args: {
   contractEntries?: Array<{
     id: string;
     label: string;
-    control: "text" | "size" | "image";
+    control: EncapsulationControl;
   }>;
 }): EncapsulationStatus {
   const { io, paramMap, mode, contractEntries } = args;
@@ -81,7 +82,11 @@ export function deriveEncapsulationStatus(args: {
   /* 契约口必须显式可见：工作流缺对应端口时 buildParamEntries 会整口省略，
    * 但「未配置」恰恰要在这里现形（否则用户看不到缺了什么、也不知道为什么
    * 工坊驱动不了）。按契约清单补齐缺失口（落点 null）。 */
-  const canonical: Array<{ id: string; label: string; control: "text" | "size" | "image" }> =
+  const canonical: Array<{
+    id: string;
+    label: string;
+    control: EncapsulationControl;
+  }> =
     contractEntries ??
     exposedParamsForMode(mode ?? null).map((d) => ({
       id: d.id,

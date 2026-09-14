@@ -21,9 +21,11 @@ export const WORKSHOP_INPUT_TYPES = [
   { type: "negative", label: "负向提示词" },
   { type: "aspect-ratio", label: "宽高比" },
   { type: "megapixels", label: "百万像素" },
-  { type: "image", label: "图片（参考图 / 输入图）" },
+  { type: "image", label: "图片" },
   { type: "first-frame", label: "首帧图片" },
   { type: "last-frame", label: "尾帧图片" },
+  /** 视频：时长。远端按 field 映射成该接口的字段名（duration / seconds…）。 */
+  { type: "duration", label: "时长" },
   { type: "mask", label: "掩码图" },
   { type: "depth", label: "深度图" },
   { type: "pose", label: "姿态骨架图" },
@@ -68,6 +70,11 @@ export function defaultInputsForMode(mode: string): Array<{
     { type: "aspect-ratio", field: "aspect_ratio" },
     { type: "megapixels", field: "megapixels" },
   ];
+  /** 视频口：时长（秒）。 */
+  const durationRow: { type: WorkshopInputType; field: string } = {
+    type: "duration",
+    field: "duration",
+  };
   const base: Array<{ type: WorkshopInputType; field: string }> = [
     { type: "prompt", field: "prompt" },
   ];
@@ -98,19 +105,20 @@ export function defaultInputsForMode(mode: string): Array<{
   }
   if (isVideoMode(code)) {
     if (/^I2V$/.test(code)) {
-      return [{ type: "image", field: "image" }, ...base];
+      return [{ type: "image", field: "image" }, ...base, durationRow];
     }
     if (/^(FLF2V|FL2V|FMF2V)$/.test(code)) {
       return [
         { type: "first-frame", field: "first_frame" },
         { type: "last-frame", field: "last_frame" },
         ...base,
+        durationRow,
       ];
     }
     if (/^TI2V$/.test(code)) {
-      return [...base, { type: "image", field: "image" }];
+      return [...base, { type: "image", field: "image" }, durationRow];
     }
-    return [...base, ...size];
+    return [...base, ...size, durationRow];
   }
   return base;
 }
@@ -213,7 +221,8 @@ export const MODE_CONTRACT_INPUT_TYPES = [
   { type: "prompt", label: "提示词" },
   { type: "negative", label: "负向提示词" },
   { type: "size", label: "尺寸（宽高比 + 百万像素）" },
-  { type: "reference-image", label: "参考图 / 输入图" },
+  { type: "duration", label: "时长" },
+  { type: "reference-image", label: "参考图" },
   { type: "first-frame", label: "首帧图片" },
   { type: "last-frame", label: "尾帧图片" },
 ] as const;
@@ -257,6 +266,19 @@ export function modeContractInputIdLabel(id: ModeContractInputId): string {
   const slot = referenceImageSlotIndex(id);
   if (slot) return `${EXPOSED_PARAM_LABEL["reference-image"]} ${slot}`;
   return modeContractInputLabel(id as ModeContractInputType);
+}
+
+/** 下一个可追加的参考图口 id —— 参考图不设数量上限，每次追加下一个序号槽
+ *  （`reference-image` → `reference-image-2` → `-3` …）。 */
+export function nextReferenceImageId(
+  inputs: readonly ModeContractInputId[],
+): ModeContractInputId {
+  let max = 0;
+  for (const id of inputs) {
+    const slot = id === "reference-image" ? 1 : referenceImageSlotIndex(id);
+    if (slot > max) max = slot;
+  }
+  return max === 0 ? "reference-image" : `reference-image-${max + 1}`;
 }
 
 export type ModeContractOutput = "image" | "video" | "audio";
@@ -314,7 +336,7 @@ export function parseModeContracts(raw: unknown): ModeContract[] {
 export function contractToStatusEntries(contract: ModeContract): Array<{
   id: string;
   label: string;
-  control: "text" | "size" | "image";
+  control: "text" | "size" | "image" | "duration";
 }> {
   return contract.inputs.map((type) => ({
     id: type,
@@ -323,9 +345,11 @@ export function contractToStatusEntries(contract: ModeContract): Array<{
     control:
       type === "size"
         ? ("size" as const)
-        : type === "prompt" || type === "negative"
-          ? ("text" as const)
-          : ("image" as const),
+        : type === "duration"
+          ? ("duration" as const)
+          : type === "prompt" || type === "negative"
+            ? ("text" as const)
+            : ("image" as const),
   }));
 }
 
@@ -359,6 +383,9 @@ export function adapterInputsFromContract(
         break;
       case "last-frame":
         out.push({ type: "last-frame", field: "last_frame" });
+        break;
+      case "duration":
+        out.push({ type: "duration", field: "duration" });
         break;
     }
   }

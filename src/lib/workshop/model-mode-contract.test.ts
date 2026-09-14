@@ -5,6 +5,7 @@ import {
   builtInModeContract,
   contractToStatusEntries,
   isModeContractInputId,
+  nextReferenceImageId,
   parseModeContracts,
   referenceImageSlotIndex,
   WORKSHOP_INPUT_TYPES,
@@ -32,7 +33,13 @@ describe("模式契约口 id 值域", () => {
   });
 
   it("两套 id 互不接受：适配器侧的细分类型不会混进契约", () => {
-    const bothSides = ["prompt", "negative", "first-frame", "last-frame"];
+    const bothSides = [
+      "prompt",
+      "negative",
+      "first-frame",
+      "last-frame",
+      "duration",
+    ];
     for (const t of WORKSHOP_INPUT_TYPES) {
       if (bothSides.includes(t.type)) continue;
       expect(isModeContractInputId(t.type), t.type).toBe(false);
@@ -44,6 +51,24 @@ describe("模式契约口 id 值域", () => {
     expect(referenceImageSlotIndex("reference-image-2")).toBe(2);
     expect(referenceImageSlotIndex("reference-image")).toBe(0);
     expect(isModeContractInputId("")).toBe(false);
+  });
+
+  it("参考图不设数量上限：下一个槽依次 reference-image / -2 / -3", () => {
+    expect(nextReferenceImageId([])).toBe("reference-image");
+    expect(nextReferenceImageId(["prompt", "size"])).toBe("reference-image");
+    expect(nextReferenceImageId(["prompt", "reference-image", "size"])).toBe(
+      "reference-image-2",
+    );
+    expect(
+      nextReferenceImageId(["reference-image", "reference-image-2"]),
+    ).toBe("reference-image-3");
+  });
+
+  it("时长口：视频模式内置契约带，生图模式不带", () => {
+    expect(isModeContractInputId("duration")).toBe(true);
+    expect(builtInModeContract("I2V").inputs).toContain("duration");
+    expect(builtInModeContract("T2V").inputs).toContain("duration");
+    expect(builtInModeContract("T2I").inputs).not.toContain("duration");
   });
 
   it("契约往返不丢口（含带序号的参考图）", () => {
