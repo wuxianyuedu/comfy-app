@@ -407,7 +407,55 @@ export function measureWires(
   return out;
 }
 
-/** 拖动中的预览线：起点 = 被拖的那颗圆点，终点 = 光标位置。
+/** 预览线路径：起点 = 给定锚点**朝向光标**的那条外缘，终点 = 光标。
+ *
+ *  两个方向共用这一段：卡片圆点起手（卡片 → 行）与行圆点起手（行 → 卡片）。 */
+function pathFromAnchor(
+  container: HTMLElement,
+  anchor: HTMLElement,
+  /** 光标位置，**屏幕坐标**（`clientX/clientY`）；局部坐标换算在本函数内做。 */
+  point: { x: number; y: number },
+): string {
+  const scale = wireScale(container);
+  const box = container.getBoundingClientRect();
+  const a = rectInContainer(anchor, container, scale);
+  /* 光标是**屏幕**坐标，同样要除缩放回到容器坐标系 —— 否则缩小时预览线
+   *  会明显慢于/快于光标，「拖不准」。 */
+  const x2 = (point.x - box.left) / scale;
+  const y2 = (point.y - box.top) / scale;
+  /* 起点取**朝向光标**的那条外缘：右列的输出卡片圆点骑跨卡片左缘，光标在它左边
+   *  时线必须从左侧出线。写死右缘会把起点算到光标的另一侧 —— 用户看到的正是
+   *  「往右拖，线却飘向左侧」（ISSUE #355）。 */
+  const start = edgePointToward(a, x2);
+  const dx = Math.max(Math.abs(x2 - start.x) / 2, 16);
+  return `M ${start.x} ${start.y} C ${start.x + dx} ${start.y} ${x2 - dx} ${y2} ${x2} ${y2}`;
+}
+
+/** 反向拖（行 → 卡片）的可落点：两列对外参数卡片自己的圆点。
+ *
+ *  `outputs` 决定收哪一列 —— 从工作流**输出行**起手只能落到对外**输出**参数卡片
+ *  （那些圆点带 `data-wire-kind="hostToParam"`），从**输入行**起手只能落到对外参数
+ *  卡片；与「拖到行上」时的落点集合互为镜像。命中值就是圆点自己声明的
+ *  `entryId?handleId`（与按下时解析卡片圆点用的是同一套键）。 */
+function collectCardTargets(
+  container: HTMLElement,
+  outputs: boolean,
+): { ioKey: string; rect: DOMRectLike }[] {
+  const scale = wireScale(container);
+  const out: { ioKey: string; rect: DOMRectLike }[] = [];
+  for (const el of container.querySelectorAll<HTMLElement>("[data-wire-anchor]")) {
+    const raw = el.getAttribute("data-wire-anchor");
+    if (!raw) continue;
+    const isOutput = el.getAttribute("data-wire-kind") === "hostToParam";
+    if (isOutput !== outputs) continue;
+    const box = rectInContainer(el, container, scale);
+    if (box.width === 0 && box.height === 0) continue;
+    out.push({ ioKey: raw, rect: toRectLike(box) });
+  }
+  return out;
+}
+
+/** 拖动中的预览线：起点 = 被拖的那颗**卡片圆点**，终点 = 光标位置。
  *
  *  在**事件回调里**算好存进 state（而不是渲染期读 ref）：React 的 refs 规则
  *  禁止渲染期访问 ref，而这里既需要容器（ref 的 parentElement）又需要当前
@@ -426,21 +474,7 @@ export function dragPath(
     wireAnchorValue(entryId, handleId),
   );
   if (!from || !point) return null;
-  const scale = wireScale(container);
-  const box = container.getBoundingClientRect();
-  const a = rectInContainer(from, container, scale);
-  /* 光标是**屏幕**坐标，同样要除缩放回到容器坐标系 —— 否则缩小时预览线
-   *  会明显慢于/快于光标，「拖不准」。 */
-  const x2 = (point.x - box.left) / scale;
-  const y2 = (point.y - box.top) / scale;
-  /* 起点取**朝向光标**的那条外缘：右列的输出卡片圆点骑跨卡片左缘，光标在它左边
-   *  时线必须从左侧出线。写死右缘会把起点算到光标的另一侧 —— 用户看到的正是
-   *  「往右拖，线却飘向左侧」（ISSUE #355）。 */
-  const start = edgePointToward(a, x2);
-  const x1 = start.x;
-  const y1 = start.y;
-  const dx = Math.max(Math.abs(x2 - x1) / 2, 16);
-  return `M ${x1} ${y1} C ${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`;
+  return pathFromAnchor(container, from, point);
 }
 
 export function WorkflowParamWires({
@@ -464,8 +498,12 @@ export function WorkflowParamWires({
     kind: ParamWireKind;
     /** 已算好的预览线路径（量不到圆点时为空，不画）。 */
     path: string | null;
-    /** 当前悬停命中的落点 ioKey（null = 没落在任何行上）。 */
+    /** 当前悬停命中的落点（null = 没落在任何目标上）：卡片起手时是行的 ioKey，
+     *  行起手（反向）时是卡片圆点的 `entryId?handleId`。 */
     hover: string | null;
+    /** **反向拖**（行 → 卡片）起手那一行的 ioKey；卡片起手时为空。
+     *  给了它就表示：起点是这颗行圆点、落点是卡片圆点、上抛时行 ioKey 由它给。 */
+    fromHostIoKey?: string;
   } | null>(null);
   /* 空集合时**不挂线层**：挂载那一刻还没量过，`segments` 是空的，但 svg 必须先
    * 在 DOM 里才量得到锚点（量测的起点是 svg 的 parentElement）。所以「要不要
@@ -527,7 +565,36 @@ export function WorkflowParamWires({
       const target = event.target as HTMLElement | null;
       const anchor = target?.closest<HTMLElement>("[data-wire-anchor]");
       const raw = anchor?.dataset.wireAnchor;
-      if (!raw) return;
+      if (!raw) {
+        /* ── 反向：从工作流某一行**自己的圆点**起手（行 → 卡片）──
+         *  原来只能「卡片圆点 → 工作流行」，从行上起手同样自然（用户盯着那一行
+         *  想「这行喂给哪个对外参数 / 该输出口从哪一行取值」）。行圆点按**自己
+         *  声明的方向**分流：输出行只能连到对外输出参数卡片，输入行只能连到对外
+         *  参数卡片 —— 与拖到行上时的可落点集合互为镜像。 */
+        const dot = target?.closest<HTMLElement>(`[${PORT_DOT_ATTR}]`);
+        const ioKey = dot?.getAttribute(PORT_DOT_ATTR);
+        if (!dot || !ioKey) return;
+        const isOutput = dot.getAttribute(IO_DIRECTION_ATTR) === "output";
+        if (isOutput ? !onConnectOutput : !onConnect) return;
+        event.preventDefault();
+        const hostContainer = ref.current?.parentElement;
+        setDrag({
+          /* 反向拖的 entryId 由落点（卡片圆点）决定，起手先空着；预览线与悬停
+           *  都走 `fromHostIoKey` 那条分支。 */
+          entryId: "",
+          handleId: "",
+          kind: isOutput ? "hostToParam" : "paramToHost",
+          fromHostIoKey: ioKey,
+          hover: null,
+          path: hostContainer
+            ? pathFromAnchor(hostContainer, dot, {
+                x: event.clientX,
+                y: event.clientY,
+              })
+            : null,
+        });
+        return;
+      }
       const separator = raw.indexOf("?");
       if (separator < 0) return;
       const entryId = raw.slice(0, separator);
@@ -575,36 +642,61 @@ export function WorkflowParamWires({
     const outputsOnly = drag.kind === "hostToParam";
     const move = (event: PointerEvent) => {
       const point = localPoint(event);
+      /* 反向拖的落点是卡片圆点，正向拖的落点是工作流行 —— 候选集合按起手处分流。 */
       const hover = container
-        ? resolveDropTarget(point, collectDropTargets(container, outputsOnly))
-        : null;
-      setDrag((prev) =>
-        prev
-          ? {
-              ...prev,
-              hover,
-              path: container
-                ? /* 预览线的终点要传**屏幕坐标**：`dragPath` 自己在内部减容器偏移、
-                   *  除缩放。这里若把已局部化的 `point` 传进去，偏移会被减两次，
-                   *  预览线固定飘到光标**左上方**（拖到哪都拐向左上，看着完全不
-                   *  跟手）；落点判定照旧用局部坐标 `point`，两者口径不同、别混。 */
-                  dragPath(container, prev.entryId, prev.handleId, {
-                    x: event.clientX,
-                    y: event.clientY,
-                  })
-                : null,
-            }
-          : prev,
-      );
-    };
-    const up = (event: PointerEvent) => {
-      const hit = container
         ? resolveDropTarget(
-            localPoint(event),
-            collectDropTargets(container, outputsOnly),
+            point,
+            drag.fromHostIoKey
+              ? collectCardTargets(container, outputsOnly)
+              : collectDropTargets(container, outputsOnly),
           )
         : null;
-      if (hit) {
+      setDrag((prev) => {
+        if (!prev) return prev;
+        /* 预览线的终点要传**屏幕坐标**：`dragPath` / `pathFromAnchor` 自己减容器
+         *  偏移、除缩放。这里若把已局部化的 `point` 传进去，偏移会被减两次，
+         *  预览线固定飘到光标**左上方**（拖到哪都拐向左上，看着完全不跟手）；
+         *  落点判定照旧用局部坐标 `point`，两者口径不同、别混。 */
+        const screen = { x: event.clientX, y: event.clientY };
+        /* 反向拖的起点是**起手那一行的圆点**（不是卡片圆点）：`drag.entryId` 在
+         *  反向拖里是空的（entryId 由落点决定），只能按 `fromHostIoKey` 找回锚点。 */
+        const fromHost = prev.fromHostIoKey
+          ? findAnchor(container ?? document.body, PORT_DOT_ATTR, prev.fromHostIoKey)
+          : null;
+        return {
+          ...prev,
+          hover,
+          path: !container
+            ? null
+            : prev.fromHostIoKey
+              ? fromHost
+                ? pathFromAnchor(container, fromHost, screen)
+                : null
+              : dragPath(container, prev.entryId, prev.handleId, screen),
+        };
+      });
+    };
+    const up = (event: PointerEvent) => {
+      const point = localPoint(event);
+      const hit = container
+        ? resolveDropTarget(
+            point,
+            drag.fromHostIoKey
+              ? collectCardTargets(container, outputsOnly)
+              : collectDropTargets(container, outputsOnly),
+          )
+        : null;
+      if (hit && drag.fromHostIoKey) {
+        /* 反向拖：命中卡片圆点 → 让**起手那一行**成为这张口的落点。圆点自己声明
+         *  `entryId?handleId`，条目 id 就是键（handleId 只用于在卡片上定位圆点）。 */
+        const separator = hit.indexOf("?");
+        const entryId = separator > 0 ? hit.slice(0, separator) : "";
+        if (entryId) {
+          if (drag.kind === "hostToParam")
+            onConnectOutput?.(entryId, drag.fromHostIoKey);
+          else onConnect?.(entryId, drag.fromHostIoKey);
+        }
+      } else if (hit) {
         if (drag.kind === "hostToParam") onConnectOutput?.(drag.entryId, hit);
         else onConnect?.(drag.entryId, hit);
       }
