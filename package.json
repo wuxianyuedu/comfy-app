@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "next build",
+    "build": "next build && node scripts/standalone-private-inputs.mjs",
     "analyze": "node scripts/analyze-bundle.mjs",
     "check": "eslint . && tsc --noEmit",
     "db:generate": "drizzle-kit generate",

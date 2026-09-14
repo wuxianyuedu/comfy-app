@@ -635,6 +635,9 @@ zustand 队列，而不是再加一个模块级单例。
 | **打开全屏视图（设置 / 工作流编辑器 / 脚本编辑器 / 消息中心）后，页签整条消失、切不回其它页签** | **全屏视图仍按 `fixed inset-0` 铺满整个视口，把标题行（页签栏）盖住**（ISSUE #310 回归）：页签搬到窗口标题行之后，「全屏」的坐标系变了——标题行是**应用级 chrome**，任何视图都不该盖它；而应用内那些「全屏视图」的 `inset-0` 是相对**整个视口**定位的，于是页签被自己的视图盖掉，用户只能先关掉当前视图（实测：设置页打开后顶部只剩设置自己的 header，主应用页签不可见也不可点） | 已修：新增 `src/lib/full-screen-layer.ts`（判据）+ `src/components/studio/fullscreen/FullScreenLayer.tsx`（视图层），全屏视图的定位从 `fixed inset-0` 改为 `fixed top-title-bar right-0 bottom-0 left-0`——**让出标题行、铺满其下方的内容区**（`bottom-0` 必须显式，否则靠内容高度撑开、拉伸不到底）。接入点：`SettingsOverlay`（含 loading / error / 未就绪三态）、`WorkflowEditorInner`（loading / error / 主态）、`WorkflowCanvasEditor` 崩溃兜底、`WorkflowLibrary` 动态加载占位、`ScriptMarkdownEditor`、`MessageCenterPanel`、`WorkflowCanvasSettings` / `ProjectCanvasSettings` 抽屉、`ProjectOutputs` 元数据抽屉。**踩坑**：tailwind v4 只有 `--spacing-<name>` 命名空间能生成间距类，自定义名 `--title-bar-height` **产出 0 个类**（全屏视图会静默退回 `top:auto` 继续被盖住）——标题行高度因此定为 `--spacing-title-bar: 2.25rem`，`TitleBarTabs` / `InAppTabStrip` 的 `h-title-bar` 与全屏视图的 `top-title-bar` 同取这一处。回归测试见 `src/lib/full-screen-layer.test.ts` 与 `e2e/critical-flows.spec.ts`（「打开设置后应用页签仍可见可点」，用 `elementFromPoint` 断言顶部命中页签栏） |
 | **打开居中弹窗（应用日志 / 执行日志 / 任务详情 / 模型库…）后，页签与右上角的关闭按钮被挡住** | **同一处回归的第二形态：首轮只改了「全屏视图」，弹窗类浮层仍是 `fixed inset-0`**（ISSUE #310 二次回归）。页签搬到窗口标题行后，任何铺满**整个视口**的浮层都会盖住标题行；而弹窗是全项目最通用的写法（25 个文件），逐个文件手改必然再漏——用户实测：打开「应用日志」后页签与右上角关闭按钮同时不可见、不可点 | 已修（判据与门禁见 12 §12.8）：① 全屏视图与模态弹窗统一经 `overlayClass(kind, extra)` / `fullScreenLayerClass(z, extra)` 取让位定位（顶部 `top-title-bar`），不再手写 `fixed inset-0`；② 接入 21 个浮层（应用日志、执行日志 ×2、任务详情、视频队列、模型库 / 标签、来源、删除工作流、产出预览、调试链路、`ModalDialog`、设置页两个弹窗、工坊 API 渠道 / LLM 上下文、节点设置、右键菜单 / 项目切换 / 种子模式遮罩、工作流库元数据编辑、`ui/dialog` 与 `ui/sheet` 遮罩）；③ **新增硬规则门禁** `scripts/check-title-bar-clearance.cjs`（pre-commit 第 3 步 + CI），`src/components/**`、`src/app/**` 里出现 `fixed inset-0` 即阻断，避免再靠人肉逐个文件翻。豁免仅 3 条（判据模块、注释引用、装饰背景层），见脚本内 `EXEMPT`。回归测试见 `src/lib/full-screen-layer.test.ts`、`tests/check-title-bar-clearance.test.ts`、`e2e/critical-flows.spec.ts`（新增「打开应用日志面板后应用页签仍可见可点」，已反向验证：改回 `inset-0` → 用例失败） |
 
+| **安装包里带着开发机的密钥与数据库**（用户/评审都看不出来：构建不报错、CI 全绿、体积护栏也只挡 GB 级） | **产物卫生靠「剔除目录名」的清单，而这两样是文件**（ISSUE #489）：`next build` 把仓库根的 `.env`（Next standalone 的环境加载是**无条件复制**，`outputFileTracingExcludes` 实测删不掉）与 `db.sqlite`（动态路径 tracing）复制进 `.next/standalone`，`scripts/build-desktop.mjs` 的噪声清单只剔目录名 → 随 static 被编译期内嵌进 exe。**CI 不跑 `build-desktop`（也不该跑）**，而触发条件是「开发机有真实 `.env`」——正是 `run-local.ps1` 自动生成 `.env` 的那些机器 | 已修（§7.3）：`outputFileTracingExcludes` 补 `./db.sqlite*`（实测有效）与 `./.env*`（尽力而为）；新增 `scripts/standalone-private-inputs.mjs` 作剔除清单的单一实现，`pnpm build` 收尾与 `build-desktop` 组装后各剥一次；`scripts/check-standalone-contents.cjs` 的禁忌清单补「开发机私有输入 / 开发库文件」并把范围扩到 `src-tauri/static`；门禁见 `tests/dist-artifact-hygiene.test.ts` |
+| **面板里的错误日志带着密钥原文**（pino 流里明明是 `[Redacted]`，落盘的 `app-runtime.log` 里却是明文） | **ERROR 镜像是一条独立落盘通道，不受 pino `redact` 保护**（ISSUE #489）：`src/server/lib/logger.ts` 的镜像在取不到 `msg`/`err.message` 时用 `JSON.stringify(payload)` 整包兜底；而 `REDACT_PATHS` 的 `*.secret` 只匹配「属性名恰好叫 `secret`」，`BETTER_AUTH_GITHUB_CLIENT_SECRET` 这类 `*_SECRET` 命名一条都不命中——pino 的通配语义也表达不了「名字含 secret」（`*secret`/`*_SECRET`/`*secret*` 实测全无效，`*` 会把整条记录连 `msg` 打成 `[Redacted]`） | 已修（规范 07 §7.18.2.1）：镜像不再整包透传（无可读文案时只输出键名清单），并新增**值形状守卫** `redactSecretShaped()`——在日志写入边界擦掉 PEM 私钥块 / JWT / 高熵串，不问字段名因而覆盖「名字无法穷举」的密钥；`Error` 保形 |
+| **`pnpm test` 在仓库根新建 `log/` 并写入日志**（CI 上从无到有、开发者本机悄悄多几行，其中含用例的密钥标记行） | **用例直连真实日志路径**（ISSUE #489）：`src/server/lib/logger.test.ts` 的镜像用例 import 真实 `APP_RUNTIME_LOG` 用 `slice(before.length)` 读增量，`generate.test.ts` 的业务里程碑日志也落真实文件；镜像/日志是**真实写盘**副作用，不隔离就会写字 | 已修：`createPinoLogger({ mirror })` 支持注入镜像目标，两处用例都落到自己的 mkdtemp 目录；删掉 `log/` 跑 `pnpm test` 不再重建目录 |
 ## 6. 工具链钉死项（改之前必须理解原因）
 
 | 位置                   | 配置                                   | 原因                                                                |
@@ -821,6 +824,64 @@ node -e "const j=require('./.next/server/instrumentation.js.nft.json');   consol
 
 > 清单只锁「关键目录在不在」，不锁白名单全量：全量比对会在每次合理地新增排除项时
 > 无谓变红，反而让人习惯性改测试。产物层那条才是真正的兜底。
+
+### 7.3 分发产物卫生：开发机私有输入不得进包（ISSUE #489）
+
+**症状与判据**（实测复现）：把仓库根的 `.env` 与 `db.sqlite` 留在检出里跑
+`pnpm build`，两者都会出现在 `.next/standalone`：
+
+```
+.next/standalone/.env        1974 B   ← BETTER_AUTH_SECRET / GitHub OAuth 密钥，明文
+.next/standalone/db.sqlite   328 K    ← 开发库，23 张表
+```
+
+而 `scripts/build-desktop.mjs` 的噪声剔除清单**只剔目录名**（`log` / `tests` …），
+文件级不做处理 → 两者随 `src-tauri/static` 组装的产物被**编译期内嵌进 exe**。
+
+**为什么这不是「多带了点文件」**：
+
+1. `.env` 里的 `BETTER_AUTH_SECRET` 与 OAuth client secret 以**明文**随安装包分发，
+   拿到包的人解包即得；
+2. 壳以 `current_dir(res_dir)` 启动 sidecar（`src-tauri/src/lib.rs::spawn_sidecar`），
+   而 `resolveDbPath` 按 `process.cwd()` 解析 `db.sqlite`（`src/server/db.ts`）
+   —— 被带进包的开发库**就是**应用首次启动时读写的那个库，开发者本机的工坊数据 /
+   设置会被当成出厂数据。
+
+**为什么以前没被发现**：CI 不跑 `build-desktop`（也不该跑），而它的触发条件是
+「开发机有真实 `.env`」——正是 Windows 上 `run-local.ps1` 会自动生成 `.env` 的那类机器；
+`pnpm build` 本身也不会因此报错。
+
+**两道防线**（实测口径，别想当然）：
+
+| 手段 | 对 `db.sqlite` | 对 `.env` |
+|---|---|---|
+| `outputFileTracingExcludes`（`./db.sqlite*`、`./.env*`） | ✅ 有效 | ❌ **无效** |
+| 构建后显式删除 | ✅ | ✅ |
+
+`.env` 之所以拦不住：Next standalone 的环境加载是**无条件复制**的，
+`./.env`、`./**` 下的 `.env` 都试过，文件照旧在。因此：
+
+- **源头层**：`next.config.js` 的 `outputFileTracingExcludes` 补 `./db.sqlite*`
+  与 `./.env*`（前者真拦，后者尽力而为）；
+- **产物层**：`scripts/standalone-private-inputs.mjs` 是剔除清单的**单一实现**
+  （`.env` 家族 + `db.sqlite*`，含 SQLite 的 WAL/SHM 边车文件），被两处复用 ——
+  `package.json` 的 `build`（`next build && node scripts/standalone-private-inputs.mjs`，
+  保证 `pnpm build` 自身产出的 standalone 就是干净的，**CI 只跑 build**）与
+  `scripts/build-desktop.mjs`（组装 static 后再剥一次，唯一能覆盖 static 这一层的地方）。
+
+**门禁**（配置层 + 产物层）：
+
+- `scripts/check-standalone-contents.cjs` 的禁忌清单新增「开发机私有输入」与
+  「开发库文件」，并把检查范围从 `.next/standalone` 扩到 `src-tauri/static`
+  （后者更接近用户拿到的东西）。此前它对着含 `.env` 的产物照样报
+  「✓ 产物干净」——**清单还在 ≠ 清单生效**，这次栽在清单本身的漏项上。
+- `tests/dist-artifact-hygiene.test.ts`：锁「清单条目还在」「build-desktop 复用同一
+  实现而不是各写一套」「`pnpm build` 自身收尾就剥离」。
+
+> **新增会被打包的敏感输入时**（另一种 `.env` 变体、证书、token 缓存…）：先按上表
+> 实测 `outputFileTracingExcludes` 是否真拦得住，拦不住就往
+> `scripts/standalone-private-inputs.mjs` 的清单里加一项，并向
+> `check-standalone-contents.cjs` 的禁忌清单补一条形状。**别只加 excludes 就当修好了。**
 
 ---
 

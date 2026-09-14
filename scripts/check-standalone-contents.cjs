@@ -22,12 +22,22 @@ const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
 const STANDALONE = path.join(ROOT, ".next", "standalone");
+/** build-desktop.mjs 的组装结果（最终被编译期内嵌进 exe）。 */
+const STATIC_DIR = path.join(ROOT, "src-tauri", "static");
 
 /** 不该出现在 standalone 里的东西：[标签, 相对路径正则] */
 const FORBIDDEN = [
   ["测试文件", /(^|\/)src\/.*\.test\.tsx?$/],
   ["变更碎片", /(^|\/)changelog\.d\/.*\.md$/],
   ["文档目录", /(^|\/)docs\/.*\.md$/],
+  // 开发机私有输入：`.env` 会被 Next standalone 无条件复制，`db.sqlite` 由动态
+  // 路径 tracing 带入（两者都实测复现）。它们随 static 被编译期内嵌进 exe ——
+  // 密钥明文随包分发，开发库还会成为应用首次启动时读写的那个库（见
+  // scripts/build-desktop.mjs 的「分发卫生」一节）。这里连同 SQLite 的 WAL/SHM
+  // 边车文件一起拦。清单是**欠完备**的：新形态（如 `.env.*.local`）不会自动命中，
+  // 真正的兜底是产物层数文件，不是清单本身。
+  ["开发机私有输入", /(^|\/)\.env(\.[^/]*)?$/],
+  ["开发库文件", /(^|\/)db\.sqlite(-wal|-shm)?$/],
 ];
 
 function listFiles(dir, prefix, out) {
@@ -46,37 +56,60 @@ function listFiles(dir, prefix, out) {
   return out;
 }
 
-function main() {
-  if (!fs.existsSync(STANDALONE)) {
-    console.log(
-      "[standalone] 未找到 .next/standalone，跳过（本检查在 `pnpm build` 之后运行才有意义）",
-    );
-    return 0;
-  }
-  const files = listFiles(STANDALONE, "", []);
+/**
+ * 数一份产物的文件并做同一份禁忌清单检查。
+ * @param {string} dir 产物目录
+ * @param {string} label 输出前缀
+ * @returns {boolean} 是否发现违规
+ */
+function checkDir(dir, label) {
+  const files = listFiles(dir, "", []);
   let failed = false;
-  for (const [label, re] of FORBIDDEN) {
+  for (const [tag, re] of FORBIDDEN) {
     const hits = files.filter((f) => re.test(f));
     if (hits.length > 0) {
       failed = true;
       console.error(
-        `[standalone] ${label}不该进产物，却发现 ${hits.length} 个：\n  ` +
+        `[${label}] ${tag}不该进产物，却发现 ${hits.length} 个：\n  ` +
           hits.slice(0, 8).join("\n  ") +
           (hits.length > 8 ? `\n  …（其余 ${hits.length - 8} 个省略）` : ""),
       );
     }
   }
+  if (!failed) {
+    console.log(
+      `[${label}] ✓ 产物干净（共 ${files.length} 个文件，无测试 / 文档 / 变更碎片 / 开发机私有输入）`,
+    );
+  }
+  return failed;
+}
+
+function main() {
+  let failed = false;
+
+  if (fs.existsSync(STANDALONE)) {
+    failed = checkDir(STANDALONE, "standalone") || failed;
+  } else {
+    console.log(
+      "[standalone] 未找到 .next/standalone，跳过（本检查在 `pnpm build` 之后运行才有意义）",
+    );
+  }
+
+  // src-tauri/static 是 build-desktop.mjs 的组装结果（最终被编译期内嵌进 exe），
+  // 比 .next/standalone 更接近用户拿到的东西；存在就一起查。
+  if (fs.existsSync(STATIC_DIR)) {
+    failed = checkDir(STATIC_DIR, "static") || failed;
+  }
+
   if (failed) {
     console.error(
-      "\n[standalone] 请检查 next.config.js 的 outputFileTracingExcludes " +
-        "（键位必须在顶层，Next 16 已把它从 experimental 升为顶层键；" +
-        "写在旧位置一个字都不会被读）。规范 §7.2。",
+      "\n[standalone] 请检查两处：① next.config.js 的 outputFileTracingExcludes" +
+        "（键位必须在顶层，Next 16 已把它从 experimental 升为顶层键；写在旧位置" +
+        "一个字都不会被读）；② scripts/build-desktop.mjs 的「分发卫生」剔除清单" +
+        "（.env / db.sqlite* 只能靠显式删除，excludes 对 .env 实测无效）。规范 §7.2。",
     );
     return 1;
   }
-  console.log(
-    `[standalone] ✓ 产物干净（共 ${files.length} 个文件，无测试 / 文档 / 变更碎片）`,
-  );
   return 0;
 }
 

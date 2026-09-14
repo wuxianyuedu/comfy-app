@@ -1,7 +1,14 @@
-import { describe, expect, it, afterEach } from "vitest";
-import { readFile } from "node:fs/promises";
+import { describe, expect, it, afterEach, beforeEach } from "vitest";
+import { readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Writable } from "node:stream";
-import { createPinoLogger, REDACT_PATHS } from "~/server/lib/logger";
+import {
+  createPinoLogger,
+  redactSecretShaped,
+  REDACT_PATHS,
+} from "~/server/lib/logger";
+import { createAppRuntimeLogger } from "@/lib/app-runtime-log";
 
 /**
  * 可观测/日志契约测试（Issue #11）：
@@ -123,7 +130,11 @@ describe("pino 脱敏契约（redact 生效）", () => {
 
   it("BETTER_AUTH_SECRET 类全局密钥不进日志", async () => {
     const { dest, lines } = capture();
-    const log = createPinoLogger({ destination: dest });
+    // ERROR 级会触发镜像（真实写盘）→ 给个丢弃型目标，别污染仓库 log/
+    const log = createPinoLogger({
+      destination: dest,
+      mirror: { error: () => undefined },
+    });
     log.error({ BETTER_AUTH_SECRET: "secret-明文" }, "cfg");
     await flush();
 
@@ -183,26 +194,48 @@ describe("日志不落 PII / prompt 原文（§11.5 埋点纪律扩展到日志�
  * 面板只轮询 launcher / dev-launcher / app-runtime；pino 的输出落在 nextjs 文件与
  * stdout，服务端 ERROR 因此在面板里完全不可见——用户遇到「操作失败但日志空的」
  * 时无从排查。这里把镜像契约钉住：ERROR 一定进 app-runtime，INFO 一定不进
- * （否则高频调用把真正的问题挤出视野）。 */
+ * （否则高频调用把真正的问题挤出视野）。
+ *
+ * **落盘目标是临时目录**：镜像是一条真实写盘副作用，早先这组用例直接读真实的
+ * `log/services/app-runtime.log`（`slice(before.length)` 增量断言），于是
+ * `pnpm test` 会在仓库根新建 `log/` 并写入若干行——包括用例里的「密钥原文」标记
+ * 行（开发者本机多几行、CI 上从无到有），既是污染也是环境耦合。现在统一落到
+ * 每个用例自己的 mkdtemp 目录。 */
 describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
-  async function readAppRuntimeLog(): Promise<string> {
-    const { APP_RUNTIME_LOG } = await import("~/lib/log-paths");
+  let tmpDir: string;
+  let mirrorFile: string;
+
+  /** 造一个只写本用例临时文件的镜像 logger（等价于 app-runtime 落盘通道）。 */
+  function makeMirror(): {
+    mirror: { error(msg: string, fields?: Record<string, unknown>): void };
+  } {
+    return { mirror: createAppRuntimeLogger("app", mirrorFile) };
+  }
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "logger-mirror-"));
+    mirrorFile = join(tmpDir, "app-runtime.log");
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function readMirror(): string {
     try {
-      return await readFile(APP_RUNTIME_LOG, "utf8");
+      return readFileSync(mirrorFile, "utf8");
     } catch {
       return "";
     }
   }
 
   it("logger.error 会额外写一条 ERROR 进 app-runtime 日志", async () => {
-    const before = await readAppRuntimeLog();
     const { dest } = capture();
-    const log = createPinoLogger({ destination: dest });
+    const log = createPinoLogger({ destination: dest, ...makeMirror() });
     log.error({ err: new Error("no such table: llmConfig") }, "trpc_error");
     await flush();
 
-    const after = await readAppRuntimeLog();
-    const added = after.slice(before.length);
+    const added = readMirror();
     expect(added).toContain("[ERROR]");
     expect(added).toContain("no such table: llmConfig");
   });
@@ -213,13 +246,12 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
    * 根因是镜像此前只认 `(obj, msg)` 一种调用形态，`logger.error("字符串")`
    * 的正文被整个丢弃——而仓库里多条真实调用正是字符串形态。 */
   it("logger.error(字符串) 的正文进面板，不再是占位文案", async () => {
-    const before = await readAppRuntimeLog();
     const { dest } = capture();
-    const log = createPinoLogger({ destination: dest });
+    const log = createPinoLogger({ destination: dest, ...makeMirror() });
     log.error("[upload] 503 ComfyUI unreachable — http://127.0.0.1:8188");
     await flush();
 
-    const added = (await readAppRuntimeLog()).slice(before.length);
+    const added = readMirror();
     expect(added).toContain("[ERROR]");
     expect(added).toContain("[upload] 503 ComfyUI unreachable");
     // 正文取到了，就不该再出现「信息量为零」的占位句
@@ -227,38 +259,95 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
   });
 
   it("结构化埋点的 event 名同时充当命名空间", async () => {
-    const before = await readAppRuntimeLog();
     const { dest } = capture();
-    const log = createPinoLogger({ destination: dest });
+    const log = createPinoLogger({ destination: dest, ...makeMirror() });
     log.error({ event: "audit_write_failed", err: new Error("disk full") }, "audit");
     await flush();
 
-    const added = (await readAppRuntimeLog()).slice(before.length);
+    const added = readMirror();
     // 命名空间落在行尾的结构化字段里（面板据此显示 [ns] 前缀）
     expect(added).toContain('"ns":"audit_write_failed"');
     expect(added).toContain("disk full");
   });
 
-  it("纯对象、无 msg/err 时仍回落可读文案，不退化成空行", async () => {
-    const before = await readAppRuntimeLog();
+  it("纯对象、无 msg/err 时给出可读文案（键名清单）且不整包倒出字段值", async () => {
     const { dest } = capture();
-    const log = createPinoLogger({ destination: dest });
+    const log = createPinoLogger({ destination: dest, ...makeMirror() });
     log.error({ ns: "comfyui", detail: "启动超时" });
     await flush();
 
-    const added = (await readAppRuntimeLog()).slice(before.length);
+    const added = readMirror();
     expect(added).toContain('"ns":"comfyui"');
-    expect(added).toContain("启动超时");
+    expect(added).toContain("[ERROR]");
+    // 键名清单：说明「有字段但没有正文」，而不是空行
+    expect(added).toContain("detail");
+  });
+
+  /* 镜像**不受 pino redact 保护**（它是另一条落盘通道）：早先这里用
+   * `JSON.stringify(payload)` 整包兜底，于是「名字没被 redact 覆盖的字段」——
+   * 包括密钥——以明文写进面板可见的日志文件。
+   *
+   * 两个标记分别对应两类真实密钥形状：
+   *   · `BETTER_AUTH_SECRET` —— 名字被 REDACT_PATHS 枚举到（pino 流里就擦掉）；
+   *   · `BETTER_AUTH_GITHUB_CLIENT_SECRET` —— **名字没被枚举到**，且值是真密钥
+   *     形态（64 位 hex，`openssl rand -hex 32` 的产物）。pino 的 `*` 通配只支持
+   *     「整段」不支持「部分字符串」（实测 `*secret` / `*_SECRET` 全无效，`*`
+   *     会把整条记录打成 [Redacted]），所以它只能靠**值形状守卫**兜住。 */
+  const HEX_SECRET =
+    "99486355989d06c782d60d892774bbafdf8a157c223fd963b6b8d15dc38f83f6";
+
+  it("镜像文件里也不许出现密钥原文（redact 不覆盖这条通道）", async () => {
+    const { dest, lines } = capture();
+    const log = createPinoLogger({ destination: dest, ...makeMirror() });
+    log.error({ BETTER_AUTH_SECRET: HEX_SECRET }, "cfg");
+    log.error(
+      { BETTER_AUTH_GITHUB_CLIENT_SECRET: HEX_SECRET },
+      "cfg2",
+    );
+    await flush();
+
+    // 镜像文件不得含明文。
+    expect(readMirror()).not.toContain(HEX_SECRET);
+    // pino 流侧：被 REDACT_PATHS 枚举到的名字必擦；`*_SECRET` 这类**没被枚举到**
+    // 的名字 pino 侧擦不掉（这是 pino 通配语义的限制，见 REDACT_PATHS 上方注释），
+    // 其防线是日志写入边界上的值形状守卫——镜像文件那一行就是它的证词。
+    expect(lines().join("")).not.toContain(
+      "BETTER_AUTH_SECRET\":\"99486355989d06c782d60d892774bbafdf8a157c223fd963b6b8d15dc38f83f6",
+    );
+  });
+
+  /* 值形状守卫本身（不问字段名，只问值长啥样）——这是 `*_SECRET` 这类
+   * 「名字无法穷举」的密钥唯一的兜底，因此单独钉住它的判据与边界。 */
+  it("值形状守卫：私钥块 / JWT / 高熵串被擦，普通长句不误伤", () => {
+    const pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIEow…\n-----END RSA PRIVATE KEY-----";
+    const jwt =
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1LTEifQ.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+    expect(redactSecretShaped(pem)).toContain("[Redacted]");
+    expect(redactSecretShaped(jwt)).toContain("[Redacted]");
+    expect(redactSecretShaped(HEX_SECRET)).toBe("[Redacted]");
+    // 嵌套结构里同样生效，且不改结构
+    expect(redactSecretShaped({ a: { b: HEX_SECRET }, list: [HEX_SECRET] })).toEqual({
+      a: { b: "[Redacted]" },
+      list: ["[Redacted]"],
+    });
+    // 普通可读长句（无数字 / 低熵）不误伤
+    const plain = "任务卡在队列超过 Ns，无人重新认领，请检查 ComfyUI 是否在运行";
+    expect(redactSecretShaped(plain)).toBe(plain);
+    // Error 实例保形：message 必须还在（`logger.error({ err })` 是最常见形态）
+    const err = new Error("no such table: task");
+    expect(redactSecretShaped(err)).toBe(err);
+    // 环引用不炸
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(() => redactSecretShaped(cyclic)).not.toThrow();
   });
 
   it("logger.info 不写面板（高频调用不刷屏）", async () => {
-    const before = await readAppRuntimeLog();
     const { dest } = capture();
-    const log = createPinoLogger({ destination: dest });
+    const log = createPinoLogger({ destination: dest, ...makeMirror() });
     log.info({ path: "setting.get" }, "trpc_timing");
     await flush();
 
-    const after = await readAppRuntimeLog();
-    expect(after.slice(before.length)).toBe("");
+    expect(readMirror()).toBe("");
   });
 });
