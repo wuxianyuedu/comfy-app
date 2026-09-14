@@ -38,6 +38,7 @@
 | ComfyUI 生命周期 | `src/lib/comfyui/**`（lifecycle / executor-* / reaper） | §3、§5 |
 | 工坊管线 | `src/components/workshop/**`、`src/lib/workshop/**` | §5 |
 | UI/逻辑分离 | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时 | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)） |
+| 跨平台行为 | 新增按平台分叉的逻辑、或改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、或动 `scripts/app-port.mjs` | §1.1、§3.1、§9（[launch-and-build.md](docs/standards/launch-and-build.md)） |
 | 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |
 
 ## 硬规则（违反 = 提交被拒或必须回滚）
@@ -48,8 +49,11 @@
    - `pnpm-workspace.yaml`：`minimumReleaseAge: 0`、`allowBuilds`（6 个包）、
      `verifyDepsBeforeRun: false`
    - `next.config.js`：`experimental.useTypeScriptCli: false`
-3. **进程清理必须杀整棵树**：`taskkill /PID <pid> /T /F`。禁止 `Process.Kill()`
-   单杀（cmd 外壳死了，node/pnpm 子进程会残留并锁住端口与日志文件）。
+3. **进程清理必须杀整棵树**：Node 侧一律经 `src/lib/kill-process-tree.ts` 的
+   `killProcessTree()`（平台判据收在该模块，禁止在各处自己写 `taskkill` /
+   `process.kill`）：Windows 走 `taskkill /PID <pid> /T /F`，POSIX 向进程组发
+   信号（`kill(-pid)`，拿不到组时单杀兜底）。禁止 `Process.Kill()` / 单杀
+   leader（外壳死了，node/python 子进程会残留成孤儿，锁住端口与日志文件）。
 4. **失败路径必须有日志 + 用户可见出口**；日志按规范 §4 的布局落 `log/`，
    不得引入新的固定名日志文件（残留进程句柄会锁死它，用按次命名 + 轮转）。
 5. **改了 `tauri.conf.json` / `src-tauri/src/**` / `splash-assets/**` 必须
