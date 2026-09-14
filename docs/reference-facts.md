@@ -19,13 +19,27 @@
 >   （可读性最佳），脚本从权威源提取当前值，发现文档值与权威不符即报错。
 > `key` 是语义标识；`placeholder` 是占位符文本（占位符类才有）；`source` 是权威定义文件；`extract` 是脚本读取真实值的方式。
 
-### 1.1 开发端口与地址（直观值核对类，保留 localhost:3100 原文）
+### 1.1 开发端口与地址（直观值核对类，保留 `localhost:<端口>` 原文）
+
+> **端口事实按链路拆成两条**（ISSUE #489 的根因）：应用端口不是单一常量，
+> 两条链路的取值来源不同、也**经常不相等**——把它们压成一条「主端口」事实，
+> 校验就失去意义（用静态值当 oracle 去核对 `pnpm dev` 语境的文档，怎么算都「一致」）。
+>
+> | 链路 | 谁在监听 | 端口来源 | 文档里的正确形态 |
+> |---|---|---|---|
+> | **解析链**：`pnpm dev` / `pnpm start` / `pnpm tauri dev`（beforeDevCommand）/ Playwright | `node scripts/dev.mjs` → `next dev -p` | `.env` 的 `COMFYAPP_PORT` → **按检出路径推导 3200~3999** → 兜底 3100（`scripts/app-port.mjs`） | 路径推导值（本检出固定，换机器会变），或写「解析值」不给数字 |
+> | **静态链**：Windows 双击链路（`start-tauri.exe` / `dev-launcher.ps1` / Rust 壳） | 挂在上面的解析链上，端口由启动器注入 `COMFYAPP_PORT` / `COMFYAPP_DEV_URL` | `src-tauri/tauri.conf.json` 的 `build.devUrl`（**编译期内嵌的兜底值**，正常启动时被注入值覆盖） | `localhost:3100`（兜底值语境） |
+>
+> 所以：**描述 `pnpm dev` 语境的文档必须写解析链端口**（`dev.port.derived`）；
+> `localhost:3100` 只在「启动器 / 壳 / 异常兜底」的上下文里才是正确形态。
+> `checkVerify` 对二者做互斥核对——某篇文档写了该链路的地址，就必须包含对应 oracle 的值。
 
 | key | 文档形态（保留直观值） | meaning（可读语义） | source（权威定义文件） | extract |
 |---|---|---|---|---|
 | `dev.host` | `localhost` / `127.0.0.1` | dev server 监听主机 | `src-tauri/tauri.conf.json` 的 `build.devUrl`；`scripts/dev-launcher.ps1` 的 `-H` 参数 | 从 `devUrl` 的 host 段提取；核对 `dev-launcher.ps1` 用 `127.0.0.1` |
-| `dev.port` | `:3100` | dev server 主端口 | `src-tauri/tauri.conf.json` 的 `build.devUrl`；`scripts/dev-launcher.ps1` 的 `-p 3100` | 从 `devUrl` 的 port 段提取，与 `dev-launcher.ps1` 的 `-p 3100` 交叉核对 |
-| `dev.port.fallback` | `:3101` `:3102` | 端口被占时的回落候选 | `scripts/dev-launcher.ps1` 的端口清理列表 | 读 `dev-launcher.ps1` 中端口清理列表 `3100/3101/3102` |
+| `dev.port` | `:3100` | **静态链**端口：`tauri.conf.json` 的编译期兜底 `devUrl` | `src-tauri/tauri.conf.json` 的 `build.devUrl`；`scripts/dev-launcher.ps1` 的 `-p` 兜底 | 从 `devUrl` 的 port 段提取；`.env.example` 里**未注释**的 `COMFYAPP_PORT` 若存在则交叉核对（注释行是「示例」，不参与） |
+| `dev.port.derived` | `:3311`（某检出上的推导值示例） | **解析链**端口：`pnpm dev` / `pnpm start` / Playwright 实际监听的端口 | `scripts/app-port.mjs`（唯一事实源，另有 PowerShell / Python / Rust 三侧同型实现） | `resolveAppPort(<仓库根>)`——直接复用 Node 侧实现，不在校验脚本里重写算法（第五份实现必然是漂移源） |
+| `dev.port.fallback` | `:3312` `:3313`（= 解析链端口 +1 / +2） | 解析链端口被占时的回落候选 | `scripts/dev-launcher.ps1` 的 `$scanPorts = appPort/+1/+2` | 由解析链端口推导；Windows 启动器按此顺序试听 |
 
 ### 1.2 启动器（launcher）可执行文件
 
@@ -51,7 +65,8 @@
 > 替代裸值（与 `shell.*` 类一致），doc:render 替换成真实值。
 >
 > **MCP 端口约束**：MCP HTTP 服务与 dev server 分属不同用途，端口号必须**避开 dev 回落族**
-> （`[COMFYAPP_PORT, +1, +2]`，默认 `3100/3101/3102`），否则脚本（如 `scripts/sync-lint.ps1` 的
+> （`[COMFYAPP_PORT, +1, +2]`；端口缺省时由检出路径推导，故「默认族」不是固定的 `3100/3101/3102`
+> ——那只是兜底），否则脚本（如 `scripts/sync-lint.ps1` 的
 > 端口监听检测、doc:check 的 dev 端口族核对）会把 MCP 监听误判成 dev server 实例。因此 MCP
 > 默认端口刻意取在 dev 回落族之外，具体值由 `tools/mcp-http.ts` 单一权威定义，可通过环境变量
 > `MCP_HTTP_PORT` 覆盖（默认 `4300`）。
@@ -176,5 +191,8 @@
 3. **占位符要可读**：`placeholder` 用语义化命名（如 `{{dev.port}}`、`{{shell.exe.prebuilt}}`），
    禁止 `{{x1}}` 这类晦涩代号；表内 `meaning` 列给出人类可读解释。
 4. **本表不存值**：禁止在本表硬编码真实值（那是第二事实）。值只在源码，由脚本提取。
+   > 例外的边界：§1.1 表格里出现的 `:3100` / `:3311` 是**文档形态示例**（说明「这类值在文档里
+   > 长什么样」），核对一律由脚本运行时提取；`dev.port.derived` 的示例值取自某个检出上的运行
+   > 结果，换个检出就是别的数字——这正是它必须由脚本提取、不能写死的原因。
 5. **双文档同步**：改了编辑文档或源码真实值后，跑 `pnpm doc:render` 重新生成
    `docs/generated/` 并一并提交，保证读者看到的生成文档是最新原文。

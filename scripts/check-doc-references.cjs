@@ -108,6 +108,22 @@ function checkVerify(text, docPath, f) {
   const kind = f.key;
   try {
     if (kind === "dev.host") return; // host 双形态等价
+    if (kind === "dev.port.derived") {
+      // 解析链（`pnpm dev` / `pnpm start`：.env → 检出路径推导 → 兜底 3100）的端口。
+      // 描述 pnpm dev 语境的文档必须写**本检出真实推导值**，写静态 devUrl 值（兜底
+      // 3100）会让人照着打开一个没人监听的端口 = ERR_CONNECTION_REFUSED（ISSUE #489）。
+      const derivedPort = String(f.extract());
+      const docPorts = extractDocHostPorts(text);
+      if (!docPorts.length) return; // 本文档没写具体地址，跳过
+      if (!docPorts.map(String).includes(derivedPort)) {
+        problems.push(
+          `[${docPath}] 文档 dev 地址端口 ${docPorts.join(" / ")} 未包含本检出按路径推导的端口 ${derivedPort}` +
+            `（pnpm dev / pnpm start 的实际监听端口，见 scripts/app-port.mjs）。` +
+            `照文档地址打开会 ERR_CONNECTION_REFUSED；请改为 ${derivedPort} 或写成「解析值」而非固定数字。`
+        );
+      }
+      return;
+    }
     if (kind === "dev.port" || kind === "dev.port.fallback") {
       const { port } = extractDevHostPort();
       const candidates = extractFallbackPorts().map(Number);

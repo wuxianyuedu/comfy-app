@@ -147,7 +147,10 @@ Comfy-APP-T3/
 - **想要独立桌面窗口**（最接近成品）→ 向开发人员要一份**即开即用桌面包**，解压后双击
   **`tools/start/start-desktop.ps1`** 即可，无需装 Node/Rust；
 - **只有源码、想先在浏览器跑起来** → 双击 **`tools/start/run-local.ps1`** 自动完成初始化后，
-  双击 **`tools/start/start-web.ps1`** 启动，再用浏览器打开 `http://localhost:3100`。
+  双击 **`tools/start/start-web.ps1`** 启动，再用浏览器打开**控制台打印的**
+  `http://localhost:<COMFYAPP_PORT>`（**不是固定的 3100**：缺省时端口由检出路径推导到
+  3200~3999，`3100` 只是异常兜底；照抄 3100 会 `ERR_CONNECTION_REFUSED`。端口契约见
+  [规范 §1.1](docs/standards/launch-and-build.md#11-端口统一配置comfyapp_port)）
 
 两条路都无需安装 Rust、无需手工编译。
 
@@ -211,7 +214,9 @@ pnpm dev
 | 桌面壳（dev，Rust 热重载） | 双击 `tools/start/start-tauri-dev.ps1` | 隐藏窗口启动 tauri dev 模式（等价于 `start-tauri-dev.exe`） |
 | Web 开发（可见日志） | 双击 `tools/start/start-web.ps1` | 控制台打印 dev-launcher 日志 |
 
-> Dev 模式下窗口初始加载 `splash.html` 启动页，随后自动探测 `http://localhost:3100` 就绪并跳转应用。
+> Dev 模式下窗口初始加载 `splash.html` 启动页，随后自动探测 dev server 就绪并跳转应用；
+> 探测地址由启动器按 §1.1 的端口契约注入（`COMFYAPP_DEV_URL`），`tauri.conf.json` 的静态
+> `devUrl`（`localhost:3100`）只是编译期兜底、不参与主导航。
 
 ---
 
