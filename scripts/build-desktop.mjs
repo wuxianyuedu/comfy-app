@@ -29,6 +29,10 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// 开发机私有输入（.env / db.sqlite*）的剔除清单与实现：与 `pnpm build` 的
+// 收尾步骤共用同一份，避免两处清单各写一套后静默漂移。
+import { stripPrivateInputs } from "./standalone-private-inputs.mjs";
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const nextOut = join(root, ".next", "standalone");
@@ -119,6 +123,24 @@ for (const name of STATIC_NOISE) {
   }
 }
 rmSync(join(staticDir, "node_modules", ".cache"), { recursive: true, force: true });
+
+// ── 2.2 分发卫生：剔除开发机私有输入（.env / db.sqlite*）──
+// 清单与实现收在 scripts/standalone-private-inputs.mjs（`pnpm build` 的收尾
+// 步骤已跑过一次；这里是组装后的兜底，也是唯一能覆盖 static 这一层的地方）。
+// 目录级剔除挡不住文件：`next build` 会把仓库根的 `.env` 与 `db.sqlite` 一起
+// 复制进 `.next/standalone`（前者是 Next standalone 的环境加载行为——实测
+// `outputFileTracingExcludes` 写 `./.env` 也删不掉；后者是动态路径 tracing），
+// 于是它们随 static 一起被**编译期内嵌进 exe**。两个后果都不是「多带了个文件」：
+//   1) `.env` 里的 BETTER_AUTH_SECRET / OAuth client secret 以明文随包分发，
+//      解包即得；
+//   2) 壳以 `current_dir(res_dir)` 启动 sidecar，而 `resolveDbPath` 按
+//      `process.cwd()` 解析 db.sqlite（见 src/server/db.ts）——被带进包的开发库
+//      就是应用首次启动时读写的那一个，开发者本机数据会变成出厂数据。
+// 因此这里**显式删除**这两类文件（含 SQLite 的 WAL/SHM 边车文件）：
+// 分发产物必须是「干净安装」，配置文件由用户侧自行提供。
+stripPrivateInputs(staticDir, (name) => {
+  console.log(`[build-desktop]   §分发卫生 已剔除开发机私有输入 static/${name}`);
+});
 cpSync(join(root, ".next", "static"), join(staticDir, ".next", "static"), { recursive: true });
 if (existsSync(join(root, "public"))) {
   cpSync(join(root, "public"), join(staticDir, "public"), { recursive: true });
