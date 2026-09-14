@@ -60,6 +60,28 @@ describe("app-port 端口解析", () => {
     }
   });
 
+  it("规范化与 cwd 无关：绝对路径原样处理，不拼当前工作目录", () => {
+    // 回归锁：历史实现无条件 path.resolve()，而它的语义是「相对 cwd 解析」——
+    // 在 Linux 上 path.resolve("F:\\AI\\...") 会得到 /workspace/f:/ai/...，
+    // 同一检出在不同 cwd / 不同平台推出不同端口，「同一检出恒定同端口」失效。
+    const win = "F:\\AI\\Other\\comfy-app-t3-branch";
+    const cwd = process.cwd();
+    try {
+      process.chdir(os.tmpdir());
+      expect(normalizeRootForPort(win)).toBe("f:/ai/other/comfy-app-t3-branch");
+      expect(derivePortFromPath(win)).toBe(3305);
+    } finally {
+      process.chdir(cwd);
+    }
+    // 回到本仓库 cwd 后仍是同一个值。
+    expect(normalizeRootForPort(win)).toBe("f:/ai/other/comfy-app-t3-branch");
+  });
+
+  it("尾斜杠与分隔符写法不影响端口（POSIX 检出同样稳定）", () => {
+    expect(normalizeRootForPort("/workspace/")).toBe("/workspace");
+    expect(derivePortFromPath("/workspace/")).toBe(derivePortFromPath("/workspace"));
+  });
+
   it(".env 缺失时按路径推导而不是撞默认端口（多检出并行的前提）", () => {
     const missing = path.join(os.tmpdir(), "definitely-not-existing-checkout");
     expect(readEnvPort(missing)).toBeNull();

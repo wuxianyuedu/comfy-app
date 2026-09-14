@@ -404,6 +404,9 @@ describe("getComfyUiStatus — 状态三态组合", () => {
 
 describe("关闭流程 — 进程树回收判据", () => {
   it("Windows 上关闭走 `taskkill /PID <pid> /T /F`，禁止单杀（否则 node/python 子进程残留）", async () => {
+    // 局部 spy：不能全局 spyOn process.kill —— 同一文件里多个用例依赖真实的
+    // kill 语义（探活、进程收敛），全局替换会把它们一起打坏。
+    const processKillSpy = vi.spyOn(process, "kill");
     const { exec } = await import("child_process");
     const { stopComfyUiProcess } = await import("./lifecycle");
     const { findPidForMainPy } = await import("./proc-detect");
@@ -424,11 +427,47 @@ describe("关闭流程 — 进程树回收判据", () => {
         expect.any(Function),
       );
     } else {
-      // 非 Windows 走进程组 / SIGTERM，这里只锁住「不会误报成功」的口径：
-      // 目标仍可达 → ok=false + 可行动提示。
+      // POSIX：经 killProcessTree 发信号。这里锁住「真的发了信号」而不是
+      // 静默跳过 —— 旧实现只 `child.kill()`，无句柄的接管场景会直接漏杀。
+      // 目标仍可达（探测被 mock 成恒可达）→ 收口为 ok=false + 可行动提示。
+      expect(processKillSpy).toHaveBeenCalled();
+      const signals = processKillSpy.mock.calls.map((c) => c[1]);
+      expect(signals).toContain("SIGTERM");
       expect(r.detail).toBeTruthy();
     }
+    processKillSpy.mockRestore();
   });
+
+  it.runIf(process.platform !== "win32")(
+    "POSIX：keepAlive 拉起的实例按进程组回收（拿不到组会静默留孤儿）",
+    async () => {
+      const processKillSpy = vi.spyOn(process, "kill");
+      const { stopComfyUiProcess } = await import("./lifecycle");
+      const { findPidForMainPy } = await import("./proc-detect");
+      const { probeComfyBase } = await import("./client");
+
+      // 本文件各用例共享同一个 mock 模块实例：常驻 mock 会把「恒可达」泄漏给
+      // 后面的用例（探测类断言全部翻转），所以用完必须复位 —— 与本文件其余
+      // 用例的收尾约定一致（见上方「配置端口应答」一例）。
+      vi.mocked(probeComfyBase).mockResolvedValue("http://127.0.0.1:8188");
+      vi.mocked(findPidForMainPy).mockResolvedValue(5566);
+
+      await stopComfyUiProcess();
+
+      // 无句柄（接管场景）时 detached 标记未知 → 走单杀；关键是**必须**发信号，
+      // 且用的是 kill(-pid) 或 kill(pid) 其中之一（不是静默 return）。
+      expect(processKillSpy).toHaveBeenCalled();
+      const first = processKillSpy.mock.calls[0]!;
+      // 负数即进程组（-pid）；正数即单杀兜底。两者都算「发信号了」。
+      expect(typeof first[0]).toBe("number");
+
+      processKillSpy.mockRestore();
+      vi.mocked(probeComfyBase).mockResolvedValue(null);
+      vi.mocked(findPidForMainPy).mockResolvedValue(null);
+      (await import("./client")).resetComfyBase();
+      (await import("./status")).resetComfyRuntimeSnapshot();
+    },
+  );
 
   it("目标已不在运行 → 返回 ok=true 且 detail 明确「未在运行」（不给假失败）", async () => {
     const { stopComfyUiProcess } = await import("./lifecycle");
