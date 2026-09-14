@@ -7,7 +7,7 @@
  * 但映射本身**必须**在画布上看得见、并且可连线（ISSUE #355）：作者要知道
  * 「这个对外口落到工作流的哪一行」，最自然的地方就是画布本身 —— 一张接线卡片
  * 拖一条线到宿主节点的端口。所以这里的约束不是「画布上不许有对外参数」，而是
- * 三条边界：
+ * 四条边界：
  *
  *   ① 图节点只来自工作流自身（`buildInitialNodes` / 图内连线 `buildEdges`）；
  *      对外参数节点只能由 `buildParamNodes` 产出、连线只能由 `buildParamEdges`
@@ -15,7 +15,11 @@
  *   ② 对外参数节点必须与图节点在 id、类型、可拖性上分开：`pio:<条目id>` 前缀、
  *      `wfParam` 类型、`draggable:false`（位置派生自宿主节点）；
  *   ③ 连线只表达映射：目标是宿主节点上真实存在的端口（ioKey），且**不改工作流
- *      图** —— 拉线 / 删线只写 `paramMap`，不写图。
+ *      图** —— 拉线 / 删线只写 `paramMap`，不写图；
+ *   ④ 卡片是**编辑态**工具：只在「编辑 IO」模式下上画布（`ioEditMode` 门控）。
+ *      卡片的 `zIndex` 是 20（压在图节点之上），常态查看工作流时会把图挡掉一片
+ *      —— 用户口径：「工作流编辑器画布中，不应该显示对外暴露的参数节点」。
+ *      落点数据在 `paramMap` 里，与「是否显示」无关，隐藏不丢线。
  *
  * 这条守卫是源码级的：视图层出现第三条「派生画布节点/连线」的来源即被拦下。
  */
@@ -78,6 +82,23 @@ describe("对外参数节点只在画布上表达映射", () => {
      *  的构建入口（buildParamNodes / buildParamEdges），与图一起并排推送。 */
     expect(inner).not.toMatch(/setNodes\(\[\.\.\.[^\]]*param/i);
     expect(inner).not.toMatch(/buildEdges\([^)]*param/i);
+  });
+
+  it("对外参数卡片只在「编辑 IO」模式下上画布：常态查看只剩工作流图", () => {
+    /* 用户口径：「工作流编辑器画布中，不应该显示对外暴露的参数节点」。卡片
+     *  zIndex 20 压在图节点之上，常态查看时会把工作流本身挡掉一片；它们是
+     *  **编辑态**的接线工具，因此由 `ioEditMode` 门控，映射线同批撤掉（卡片不在
+     *  时留线头就是悬空线）。落点数据在 `paramMap` 里，隐藏不影响已连的线。 */
+    const inner = stripComments(
+      readFileSync(path.join(EDITOR_DIR, "WorkflowEditorInner.tsx"), "utf8"),
+    );
+    expect(inner).toContain("showParamWiring = ioEditMode");
+    /* 卡片：非编辑态只推图节点。 */
+    expect(inner).toMatch(/showParamWiring\s*\?[\s\S]{0,120}paramNodes[\s\S]{0,80}: graphNodes/);
+    /* 映射线 / 输出取值线同批门控。 */
+    expect(inner).toContain(
+      "...(showParamWiring ? [...paramEdges, ...outputEdges] : [])",
+    );
   });
 
   it("拉线 / 删线只写映射，不写工作流图", () => {
