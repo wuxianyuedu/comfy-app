@@ -170,7 +170,7 @@ export function AttributeMultiSelect({
             <button
               type="button"
               onClick={() => removeOne(v)}
-              className="text-primary/60 hover:text-red-500"
+              className="text-primary/60 hover:text-red-600 dark:hover:text-red-400"
               aria-label={`移除 ${v}`}
             >
               <X size={11} />

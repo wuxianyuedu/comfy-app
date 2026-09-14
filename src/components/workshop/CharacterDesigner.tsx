@@ -585,7 +585,7 @@ export function CharacterDesigner({
                 <button
                   type="button"
                   onClick={() => remove(character.id)}
-                  className="text-muted-foreground hover:text-red-500"
+                  className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
                   aria-label="删除角色"
                 >
                   <Trash size={16} />

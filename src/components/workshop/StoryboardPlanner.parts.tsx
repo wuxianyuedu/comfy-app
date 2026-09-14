@@ -68,7 +68,7 @@ export function ShotRow({
         <button
           type="button"
           onClick={() => onRemove(shot.id)}
-          className="ml-auto text-muted-foreground hover:text-red-500"
+          className="ml-auto text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
           aria-label="删除镜头"
         >
           <Trash size={15} />

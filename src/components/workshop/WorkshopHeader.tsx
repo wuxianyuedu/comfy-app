@@ -143,7 +143,7 @@ export function WorkshopHeader({
                               onDeleteProject(p.id);
                               setPendingDelete(null);
                             }}
-                            className="rounded bg-red-500/20 px-1.5 py-0.5 text-[11px] text-red-600 hover:bg-red-500/30"
+                            className="rounded bg-red-500/20 px-1.5 py-0.5 text-[11px] text-red-700 hover:bg-red-500/30 dark:text-red-400"
                           >
                             删除
                           </button>
@@ -165,7 +165,7 @@ export function WorkshopHeader({
                             if (e.key === "Escape") setEditingId(null);
                           }}
                           onBlur={() => commitRename(p.id)}
-                          className="w-full rounded border border-(--color-border-strong) bg-black/40 px-2 py-1 text-[13px] text-(--color-ink) outline-none focus:border-violet-400/60"
+                          className="border-border-strong bg-canvas-deep text-ink w-full rounded border px-2 py-1 text-[13px] outline-none focus:border-violet-400/60"
                         />
                       ) : (
                         <>
@@ -206,7 +206,7 @@ export function WorkshopHeader({
                             <button
                               type="button"
                               onClick={() => setPendingDelete(p.id)}
-                              className="shrink-0 rounded px-1 text-[11px] text-(--color-ink-muted) opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+                              className="text-ink-muted shrink-0 rounded px-1 text-[11px] opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-600 dark:hover:text-red-400"
                               title="删除项目"
                             >
                               🗑
@@ -233,7 +233,7 @@ export function WorkshopHeader({
                       }
                     }}
                     placeholder="新项目名称（回车确认）"
-                    className="w-full rounded border border-(--color-border-strong) bg-black/40 px-2 py-1 text-[13px] text-(--color-ink) outline-none placeholder:text-(--color-ink-fainter) focus:border-violet-400/60"
+                    className="border-border-strong bg-canvas-deep text-ink placeholder:text-ink-fainter w-full rounded border px-2 py-1 text-[13px] outline-none focus:border-violet-400/60"
                   />
                 ) : (
                   <button
