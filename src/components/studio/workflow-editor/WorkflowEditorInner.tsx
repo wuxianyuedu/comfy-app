@@ -773,14 +773,14 @@ function WorkflowEditorBody({
           </div>
         )}
         {ioEditMode && (
-          <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-amber-400/40 bg-amber-500/15 px-4 py-1.5 text-[12px] font-medium text-amber-100 shadow-lg backdrop-blur-sm">
+          <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-amber-400/40 bg-amber-500/15 px-4 py-1.5 text-[12px] font-medium text-amber-800 shadow-lg dark:text-amber-100 backdrop-blur-sm">
             📌 IO 编辑模式：勾选节点参数前的复选框，即可将其暴露为工作流的「输入」或「输出」
           </div>
         )}
         {/* 子工作流下钻失败：内联错误提示，父图保持可见（绝不回退到工作流库） */}
         {subgraphError && (
           <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2">
-            <div className="pointer-events-auto flex items-center gap-3 rounded-lg border border-rose-500/40 bg-rose-500/15 px-4 py-2 text-[12px] text-rose-100 shadow-lg backdrop-blur-sm">
+            <div className="pointer-events-auto flex items-center gap-3 rounded-lg border border-rose-500/40 bg-rose-500/15 px-4 py-2 text-[12px] text-rose-700 shadow-lg dark:text-rose-100 backdrop-blur-sm">
               <span>⚠ {subgraphError}</span>
               <button
                 type="button"

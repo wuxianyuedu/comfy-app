@@ -153,7 +153,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                     <React.Fragment key={crumb.uid + i}>
                       <span className="text-ink-fainter text-[14px]">/</span>
                       <span
-                        className={`${baseCls} rounded-md border border-violet-500/40 bg-violet-500/15 px-2 py-0.5 text-violet-100`}
+                        className={`${baseCls} rounded-md border border-violet-500/40 bg-violet-500/15 px-2 py-0.5 text-violet-700 dark:text-violet-200`}
                         style={{ cursor: "default" }}
                         title={crumb.name}
                       >
@@ -198,7 +198,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 <button
                   type="button"
                   onClick={onExitSubgraph}
-                  className="ml-2 inline-flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-200 transition-colors hover:bg-violet-500/20"
+                  className="ml-2 inline-flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-700 transition-colors hover:bg-violet-500/20 dark:text-violet-200"
                   title="返回上一级"
                 >
                   <ArrowLeft size={10} strokeWidth={2.5} />
@@ -213,7 +213,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               <button
                 type="button"
                 onClick={() => forceReloadDetail(viewHostNodeId)}
-                className="ml-1 inline-flex items-center gap-1 rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-200 transition-colors hover:bg-rose-500/20"
+                className="ml-1 inline-flex items-center gap-1 rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-700 transition-colors hover:bg-rose-500/20 dark:text-rose-200"
                 title="强制重载（清 sessionStorage + 跳过 server LRU + 重拉数据）"
               >
                 <RotateCw size={10} strokeWidth={2.5} />
@@ -305,7 +305,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           >
             {ioEditMode ? "✓ 编辑 IO 中" : "📌 编辑 IO"}
             {ioEditMode && Object.keys(workflowIO).length > 0 && (
-              <span className="ml-1 rounded-full bg-amber-300/30 px-1.5 text-[11px] font-bold text-amber-50">
+              <span className="ml-1 rounded-full bg-amber-300/30 px-1.5 text-[11px] font-bold text-amber-800 dark:text-amber-50">
                 {Object.keys(workflowIO).length}
               </span>
             )}
