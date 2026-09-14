@@ -155,6 +155,7 @@
   --sidebar-accent-foreground: #ededf2;
   --sidebar-border: #26262e;
   --sidebar-ring: #7c5cfc;
+  --ring-shadow: rgb(255 255 255 / 0.10); /* 浮层 ring（深色下用中性白） */
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -597,6 +598,7 @@ textarea::-webkit-scrollbar {
   --card-foreground: #1a1a1f;
   --popover: #ffffff;
   --popover-foreground: #1a1a1f;
+  --ring-shadow: rgb(0 0 0 / 0.08); /* 浮层 ring（浅色下用中性灰，不用前景色） */
   --primary: #7c5cfc; /* 品牌紫 */
   --primary-foreground: #ffffff;
   --secondary: #f7f8fa;
