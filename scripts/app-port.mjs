@@ -17,7 +17,14 @@ export const DERIVED_PORT_SPAN = 800;
 
 /** @param {string} root @returns {string} 规范化后的检出路径（小写、正斜杠） */
 export function normalizeRootForPort(root) {
-  return path.resolve(root).replace(/\\/g, "/").toLowerCase();
+  const slashed = root.replace(/\\/g, "/");
+  // Windows 盘符路径（C:/…）不交给 path.resolve：该 API 是平台相关的，在 POSIX 上
+  // 会把 "F:/AI/…" 当成相对路径拼到 cwd 前面（/workspace/f:/ai/…），于是跨平台的
+  // 端口推导对同一输入给出不同端口，四侧同算法的一致性锚点也随之漂移（CI 是 Linux，
+  // 而开发者是 Windows）。盘符路径已带根前缀，这里只做分隔符统一与大小写归一。
+  const isWindowsDrive = /^[a-z]:\//i.test(slashed);
+  const resolved = isWindowsDrive ? slashed : path.resolve(slashed);
+  return resolved.replace(/\\/g, "/").toLowerCase();
 }
 
 /** FNV-1a 32 位哈希，输入按 UTF-8 字节处理（与各语言实现按字节对齐）。

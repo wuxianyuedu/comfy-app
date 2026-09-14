@@ -34,10 +34,20 @@ $ErrorActionPreference = "Continue"
 # Known baseline failures (pre-existing on master, unrelated to this change).
 # Full vitest excludes them by default so one-click gives a trustworthy green.
 # Remove an entry once it is fixed so it is enforced again.
-$KNOWN_FAILED_FILES = @(
-  "src/server/api/routers/task.test.ts",
-  "src/server/api/routers/generate.test.ts"
-)
+#
+# 当前为空：原先登记的两个 router 集成测试（task / generate）已随 enqueue 拆分
+# （mock 边界从 runner 改到 enqueue）恢复通过，按规范 11.12 第 3 条删掉，让它们
+# 回到门禁里被强制拦截——留在这里会永久静默跳过，退化不会再被发现。
+$KNOWN_FAILED_FILES = @()
+
+# ---- vitest 参数拼装（与 tools\start\run-tests.ps1 共用）----
+# 已知基线失败要作为 `vitest run --exclude <file>` 传给 vitest 原生命令；拼装收敛在此，
+# 供本脚本的 test 门禁与 run-tests.ps1 的 -Full 分支共用，避免两处各写一份漂移。
+function Get-VitestKnownFailureArgs {
+  $excludeArgs = @()
+  foreach ($f in $KNOWN_FAILED_FILES) { $excludeArgs += @("--exclude", $f) }
+  return $excludeArgs
+}
 
 # ---- Gate list: append a new gate here ----
 $Blocks = @(
@@ -76,8 +86,11 @@ function Invoke-Check {
   if ($Block.IsTest) {
     foreach ($f in $KNOWN_FAILED_FILES) {
       Write-Host "  skip known failure: $f" -ForegroundColor DarkGray
-      $argsAll += @("--exclude", $f)
     }
+    # 排除项由 Get-VitestKnownFailureArgs 统一拼装：同一份实现也被
+    # tools\start\run-tests.ps1（只跑测试、不跑整套门禁）的 -Full 分支复用，
+    # 避免出现「门禁排除了、单跑没排除」的两套口径。
+    $argsAll += @(Get-VitestKnownFailureArgs)
   }
 
   $printable = ($argsAll | ForEach-Object { "`"$_`"" }) -join " "
