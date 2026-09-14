@@ -132,6 +132,10 @@ import "@/styles/json-viewer.css";
 `src/app/globals.css` 里的 `固定暗色清单（Fixed-dark inventory）` 注释块。
 本节只规定判据与维护方式，条目以 `globals.css` 为准。
 
+> 本应用**没有任何界面是「暗色品牌页」**：登录页、错误页、404 一类的独立
+> 视觉页面同样走 token，不得以「品牌页」为由豁免。整屏或结构性表面（页面
+> 底、卡片、面板、控件、状态栏）一律不进清单。
+
 **准入判据（两条都满足才可进清单）**：
 
 1. 该表面是「**内容视图内的极小面积叠层**」——浮在画布/预览/媒体之上的一
@@ -148,6 +152,7 @@ import "@/styles/json-viewer.css";
 | ReactFlow 缩放/适配/锁定控件 `.react-flow__controls-button` | `--color-node` / `--color-border-strong` / `--color-ink-muted` |
 | MiniMap 非视口遮罩（`maskColor`） | `--color-canvas-minimap-mask` |
 | 原生 `<select>` / `<option>` 与滚动条 | `color-scheme` + `--color-node` / `--color-ink-field` |
+| 登录页整屏底 + 极光 | `--color-bg` + 两态极光 |
 
 > 判据的用意：**控件**是结构性表面（用户要操作它），跟主题走才不会在浅色
 > 下变成「深底深图标」的隐形按钮；**叠加在内容上的说明层**才是例外。
