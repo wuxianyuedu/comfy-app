@@ -34,7 +34,7 @@ export const GROUPED_SIZE_MAX = 8192;
 
 /** 「像素」大类两个子类的说明（弹层里显示，解释这一档宽高从哪来）。 */
 export const CLARITY_HINT: Record<DimClarityPreset["kind"], string> = {
-  pixel: "按场景尺寸表取宽高",
+  resolution: "按场景尺寸表取宽高",
   megapixel: "总像素预算，宽高由倍数对齐",
 };
 

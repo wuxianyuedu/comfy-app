@@ -143,11 +143,14 @@ export async function buildLibraryWorkflowInput(
     : [];
   const mode = detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null;
   const { workflowInputs, unmatched } = buildEncapsulatedInputs(io, mode, values);
+  /* 尺寸**不**再带 `size`（"WxH"）兼容字段：尺寸只以「比例 + 分辨率」或
+   *  「比例 + 百万像素 + 倍数」表达，逐端口落进 `workflowInputs`；
+   *  目标工作流要 width/height 时由封装层按场景尺寸表现算（见
+   *  `buildEncapsulatedInputs`）。历史里那一串 "768x1024" 就是这条兼容字段。 */
   const input: GenerateInput = {
     workflow: workflowId,
     ...(values.prompt !== undefined ? { prompt: values.prompt } : {}),
     ...(values.negativePrompt !== undefined ? { negative: values.negativePrompt } : {}),
-    ...(values.size !== undefined ? { size: values.size } : {}),
     ...(values.firstFrame !== undefined ? { firstFrame: values.firstFrame } : {}),
     ...(values.lastFrame !== undefined ? { lastFrame: values.lastFrame } : {}),
     ...(workflowInputs.length > 0 ? { workflowInputs } : {}),

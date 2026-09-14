@@ -28,7 +28,6 @@ import {
 import { getWorkflowType } from "~/lib/workflow-types";
 import {
   DEFAULT_SHOT_SIZE,
-  shotSizeToParam,
   type ShotSizeState,
 } from "@/components/workshop/shot-size-config";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
@@ -106,7 +105,8 @@ export function WorkshopEncapsulationPanel({
       const { input } = await buildLibraryWorkflowInput(workflowId, {
         prompt,
         ...(negative.trim() ? { negativePrompt: negative.trim() } : {}),
-        size: shotSizeToParam(size),
+        /* 库工作流吃尺寸表达（比例 + 档位 [+ 倍数]），不下发 "WxH" 字符串。 */
+        size,
       });
       const taskId = await startLocalGenerate(input);
       await new Promise<void>((resolve) => {
