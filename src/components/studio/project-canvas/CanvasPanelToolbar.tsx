@@ -42,7 +42,7 @@ export function CanvasPanelToolbar({ active, onSelect, floating = true }: Canvas
 
   return (
     <div
-      className={`flex flex-col items-center gap-1 rounded-2xl border border-white/7.000000000000001 bg-[#0d0b16]/95 p-1.5 shadow-xl shadow-black/50 backdrop-blur-md ${
+      className={`border-border-strong bg-panel/95 flex flex-col items-center gap-1 rounded-2xl border p-1.5 shadow-xl shadow-black/20 backdrop-blur dark:shadow-black/50p-blur-md ${
         floating ? "absolute top-1/2 z-20 -translate-y-1/2 left-3" : "self-center shrink-0"
       }`}
     >
@@ -57,13 +57,13 @@ export function CanvasPanelToolbar({ active, onSelect, floating = true }: Canvas
             className={`group relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 ${
               isActive
                 ? "bg-violet-500/20 text-violet-300 shadow-sm shadow-violet-500/10 ring-1 ring-violet-500/25"
-                : "text-gray-500 hover:bg-white/5 hover:text-gray-300"
+                : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
             }`}
           >
             {item.icon}
             {/* Tooltip — show right of button on hover or when active */}
             <span
-              className={`pointer-events-none absolute left-full ml-2.5 whitespace-nowrap rounded-lg bg-[#16121f]/95 border border-white/6 px-2.5 py-1 text-[11px] font-medium text-gray-300 shadow-xl shadow-black/40 backdrop-blur-sm transition-opacity ${
+              className={`border-border-strong bg-panel/95 pointer-events-none absolute left-full ml-2.5 rounded-lg border px-2.5 py-1 text-[11px] whitespace-nowrap font-medium text-gray-300 shadow-xl shadow-black/40 backdrop-blur-sm transition-opacity ${
                 isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
               }`}
             >
@@ -73,7 +73,7 @@ export function CanvasPanelToolbar({ active, onSelect, floating = true }: Canvas
         );
       })}
       {/* 分隔线 */}
-      <div className="mx-1 my-0.5 h-px w-6 bg-white/6" />
+      <div className="bg-border-strong mx-1 my-0.5 h-px w-6" />
     </div>
   );
 }

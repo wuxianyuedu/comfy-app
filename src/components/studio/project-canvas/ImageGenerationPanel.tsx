@@ -247,7 +247,7 @@ export function ImageGenerationPanel({
             placeholder="选择类型"
           />
         ) : (
-          <div className="text-[11px] text-gray-500">暂无可用工作流类型</div>
+          <div className="text-ink-muted text-[11px]">暂无可用工作流类型</div>
         )}
       </Field>
 
@@ -269,7 +269,7 @@ export function ImageGenerationPanel({
                 placeholder="选择模型"
               />
             ) : (
-              <div className="text-[11px] text-gray-500">
+              <div className="text-ink-muted text-[11px]">
                 {wfListLoading
                   ? "加载中…"
                   : genTag
@@ -290,7 +290,7 @@ export function ImageGenerationPanel({
                 placeholder="选择工作流"
               />
             ) : (
-              <div className="text-[11px] text-gray-500">
+              <div className="text-ink-muted text-[11px]">
                 {wfListLoading
                   ? "加载中…"
                   : genTag

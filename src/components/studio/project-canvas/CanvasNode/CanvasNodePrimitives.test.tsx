@@ -57,7 +57,7 @@ describe("StatusDot", () => {
 
 describe("StatusBadge", () => {
   it.each([
-    ["idle", "待开始", ["bg-white/5", "text-gray-300"]],
+    ["idle", "待开始", ["bg-subtle", "text-ink-soft"]],
     ["running", "生成中…", ["bg-amber-400/10", "text-amber-300"]],
     ["done", "运行后生成", ["bg-emerald-400/10", "text-emerald-300"]],
     ["error", "生成失败", ["bg-rose-400/10", "text-rose-300"]],

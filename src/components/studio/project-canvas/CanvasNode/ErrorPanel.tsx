@@ -262,7 +262,7 @@ export function ErrorPanel({
                 )}
                 {/* 1) 任务上下文：taskId（可点击复制）+ 时间 */}
                 {hasCtx && (
-                  <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border border-rose-400/15 bg-black/30 px-1.5 py-1 text-[10px]">
+                  <div className="border-rose-400/15 bg-canvas-deep grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border px-1.5 py-1 text-[10px]">
                     {taskId && (
                       <>
                         <span className="text-rose-300/60">taskId</span>
@@ -305,7 +305,7 @@ export function ErrorPanel({
                     <summary className="cursor-pointer select-none text-rose-300/70 hover:text-rose-200">
                       请求参数
                     </summary>
-                    <pre className="nodrag nopan mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded border border-rose-400/15 bg-black/50 p-1.5 font-mono text-[10px] leading-tight text-rose-100/85">
+                    <pre className="border-rose-400/15 bg-canvas-deep nodrag nopan mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono text-[10px] whitespace-pre-wrap leading-tight text-rose-100/85">
                       {typeof errorContext.request === "string"
                         ? errorContext.request
                         : (() => {
@@ -329,7 +329,7 @@ export function ErrorPanel({
                   <summary className="cursor-pointer select-none text-rose-300/70 hover:text-rose-200">
                     原始错误
                   </summary>
-                  <pre className="nodrag nopan mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded border border-rose-400/15 bg-black/50 p-1.5 font-mono text-[10px] leading-tight text-rose-100/85">
+                  <pre className="border-rose-400/15 bg-canvas-deep nodrag nopan mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono text-[10px] whitespace-pre-wrap leading-tight text-rose-100/85">
                     {errText}
                   </pre>
                 </details>
