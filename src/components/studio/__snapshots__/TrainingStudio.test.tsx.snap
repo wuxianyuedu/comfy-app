@@ -418,7 +418,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 aria-controls="_r_0_"
                 aria-expanded="false"
                 aria-haspopup="listbox"
-                class="flex w-full items-center justify-between rounded-md border border-(--color-border) bg-(--color-subtle) px-2.5 py-1.5 text-[12px] text-(--color-ink-bright) outline-none transition-colors focus:border-violet-500/40 !bg-(--color-subtle) !border-(--color-border) h-9 text-[13px] text-(--color-ink-field)"
+                class="border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] outline-none transition-colors focus:border-violet-500/40 !bg-(--color-subtle) !border-(--color-border) h-9 text-[13px] text-(--color-ink-field)"
                 role="combobox"
                 type="button"
               >
@@ -428,7 +428,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                   请选择…
                 </span>
                 <svg
-                  class="ml-2 shrink-0 text-(--color-ink-muted) transition-transform "
+                  class="text-ink-muted ml-2 shrink-0 transition-transform "
                   fill="none"
                   height="12"
                   viewBox="0 0 12 12"
@@ -486,7 +486,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 aria-controls="_r_1_"
                 aria-expanded="false"
                 aria-haspopup="listbox"
-                class="flex w-full items-center justify-between rounded-md border border-(--color-border) bg-(--color-subtle) px-2.5 py-1.5 text-[12px] text-(--color-ink-bright) outline-none transition-colors focus:border-violet-500/40 !bg-(--color-subtle) !border-(--color-border) h-9 text-[13px] text-(--color-ink-field)"
+                class="border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] outline-none transition-colors focus:border-violet-500/40 !bg-(--color-subtle) !border-(--color-border) h-9 text-[13px] text-(--color-ink-field)"
                 role="combobox"
                 type="button"
               >
@@ -496,7 +496,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                   512
                 </span>
                 <svg
-                  class="ml-2 shrink-0 text-(--color-ink-muted) transition-transform "
+                  class="text-ink-muted ml-2 shrink-0 transition-transform "
                   fill="none"
                   height="12"
                   viewBox="0 0 12 12"
@@ -615,10 +615,10 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               学习率
             </label>
             <div
-              class="nodrag nopan flex items-center gap-0 rounded-lg border border-(--color-border) bg-(--color-subtle) transition-opacity  "
+              class="nodrag nopan border-border bg-subtle flex items-center gap-0 rounded-lg border transition-opacity  "
             >
               <button
-                class="flex h-[24px] w-[24px] shrink-0 items-center justify-center text-(--color-ink-muted) transition-colors hover:bg-(--color-surface-2) hover:text-(--color-ink-bright) active:text-(--color-ink) disabled:opacity-30"
+                class="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink flex h-[24px] w-[24px] shrink-0 items-center justify-center transition-colors disabled:opacity-30"
                 title="减少 0.0001"
                 type="button"
               >
@@ -641,13 +641,13 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 </svg>
               </button>
               <input
-                class="min-w-[36px] h-[24px] flex-1 bg-transparent py-0 text-center text-xs font-mono text-(--color-ink-bright) outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40"
+                class="text-ink-bright h-[24px] min-w-[36px] flex-1 bg-transparent py-0 text-center font-mono text-xs outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40"
                 inputmode="decimal"
                 type="text"
                 value="0.0001"
               />
               <button
-                class="flex h-[24px] w-[24px] shrink-0 items-center justify-center text-(--color-ink-muted) transition-colors hover:bg-(--color-surface-2) hover:text-(--color-ink-bright) active:text-(--color-ink) disabled:opacity-30"
+                class="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink flex h-[24px] w-[24px] shrink-0 items-center justify-center transition-colors disabled:opacity-30"
                 title="增加 0.0001"
                 type="button"
               >
@@ -690,7 +690,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                   aria-controls="_r_2_"
                   aria-expanded="false"
                   aria-haspopup="listbox"
-                  class="flex w-full items-center justify-between rounded-md border border-(--color-border) bg-(--color-subtle) px-2.5 py-1.5 text-[12px] text-(--color-ink-bright) outline-none transition-colors focus:border-violet-500/40 !bg-(--color-subtle) !border-(--color-border) h-9 text-[13px] text-(--color-ink-field)"
+                  class="border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] outline-none transition-colors focus:border-violet-500/40 !bg-(--color-subtle) !border-(--color-border) h-9 text-[13px] text-(--color-ink-field)"
                   role="combobox"
                   type="button"
                 >
@@ -700,7 +700,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                     AdamW8bit
                   </span>
                   <svg
-                    class="ml-2 shrink-0 text-(--color-ink-muted) transition-transform "
+                    class="text-ink-muted ml-2 shrink-0 transition-transform "
                     fill="none"
                     height="12"
                     viewBox="0 0 12 12"
@@ -730,7 +730,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                   aria-controls="_r_3_"
                   aria-expanded="false"
                   aria-haspopup="listbox"
-                  class="flex w-full items-center justify-between rounded-md border border-(--color-border) bg-(--color-subtle) px-2.5 py-1.5 text-[12px] text-(--color-ink-bright) outline-none transition-colors focus:border-violet-500/40 !bg-(--color-subtle) !border-(--color-border) h-9 text-[13px] text-(--color-ink-field)"
+                  class="border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] outline-none transition-colors focus:border-violet-500/40 !bg-(--color-subtle) !border-(--color-border) h-9 text-[13px] text-(--color-ink-field)"
                   role="combobox"
                   type="button"
                 >
@@ -740,7 +740,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                     cosine
                   </span>
                   <svg
-                    class="ml-2 shrink-0 text-(--color-ink-muted) transition-transform "
+                    class="text-ink-muted ml-2 shrink-0 transition-transform "
                     fill="none"
                     height="12"
                     viewBox="0 0 12 12"
@@ -765,10 +765,10 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               随机种子
             </label>
             <div
-              class="nodrag nopan flex items-center gap-0 rounded-lg border border-(--color-border) bg-(--color-subtle) transition-opacity  "
+              class="nodrag nopan border-border bg-subtle flex items-center gap-0 rounded-lg border transition-opacity  "
             >
               <button
-                class="flex h-[24px] w-[24px] shrink-0 items-center justify-center text-(--color-ink-muted) transition-colors hover:bg-(--color-surface-2) hover:text-(--color-ink-bright) active:text-(--color-ink) disabled:opacity-30"
+                class="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink flex h-[24px] w-[24px] shrink-0 items-center justify-center transition-colors disabled:opacity-30"
                 disabled=""
                 title="减少 1"
                 type="button"
@@ -792,13 +792,13 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 </svg>
               </button>
               <input
-                class="min-w-[36px] h-[24px] flex-1 bg-transparent py-0 text-center text-xs font-mono text-(--color-ink-bright) outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40"
+                class="text-ink-bright h-[24px] min-w-[36px] flex-1 bg-transparent py-0 text-center font-mono text-xs outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40"
                 inputmode="decimal"
                 type="text"
                 value="0"
               />
               <button
-                class="flex h-[24px] w-[24px] shrink-0 items-center justify-center text-(--color-ink-muted) transition-colors hover:bg-(--color-surface-2) hover:text-(--color-ink-bright) active:text-(--color-ink) disabled:opacity-30"
+                class="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink flex h-[24px] w-[24px] shrink-0 items-center justify-center transition-colors disabled:opacity-30"
                 title="增加 1"
                 type="button"
               >
