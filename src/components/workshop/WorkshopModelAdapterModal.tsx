@@ -39,6 +39,17 @@ function modeLabel(mode: string): string {
   return getWorkflowType(mode)?.label ?? mode;
 }
 
+/** 中文展示名 + 机器 id：界面上只写中文时，对不上代码 / 日志 / 配置里的 id
+ *  （并且契约口与适配器口是两套 id，光看中文「尺寸」分不清 size 还是 aspect-ratio）。 */
+function LabelWithId({ label, id }: { label: string; id: string }) {
+  return (
+    <>
+      {label}
+      <span className="text-muted-foreground/60 ml-1 font-mono text-[10px]">{id}</span>
+    </>
+  );
+}
+
 export function WorkshopModelAdapterModal({
   onClose,
 }: {
@@ -242,7 +253,7 @@ export function WorkshopModelAdapterModal({
                                 }}
                                 className="border-border text-muted-foreground hover:border-primary hover:text-primary rounded border px-2 py-0.5 text-[11px]"
                               >
-                                {t.label}
+                                <LabelWithId label={t.label} id={t.code} />
                               </button>
                             ))}
                           </div>
@@ -268,7 +279,9 @@ export function WorkshopModelAdapterModal({
                     </p>
                     <span className="text-muted-foreground text-[10px]">
                       输出：
-                      {getWorkflowType(a.mode)?.category === "video" ? "视频" : "图片"}
+                      {getWorkflowType(a.mode)?.category === "video"
+                        ? "视频（video）"
+                        : "图片（image）"}
                     </span>
                   </div>
                   <label className="text-muted-foreground mb-1 block text-[10px]">
@@ -309,7 +322,7 @@ export function WorkshopModelAdapterModal({
                         >
                           {WORKSHOP_INPUT_TYPES.map((t) => (
                             <option key={t.type} value={t.type}>
-                              {workshopInputLabel(t.type)}
+                              {workshopInputLabel(t.type)}（{t.type}）
                             </option>
                           ))}
                         </select>
@@ -401,7 +414,7 @@ export function WorkshopModelAdapterModal({
                           : "border-border text-muted-foreground hover:bg-(--color-subtle)"
                       }`}
                     >
-                      {t.label}
+                      <LabelWithId label={t.label} id={t.code} />
                       {modeContracts.contracts.some((c) => c.mode === t.code) && (
                         <span className="text-primary/70 ml-1 text-[10px]">已改</span>
                       )}
@@ -416,7 +429,7 @@ export function WorkshopModelAdapterModal({
               {contractDraft && (
                 <div className="border-primary-soft bg-primary-soft/20 space-y-2 rounded-xl border p-3">
                   <p className="text-ink text-xs font-semibold">
-                    {modeLabel(contractDraft.mode)} 的统一对外参数
+                    {modeLabel(contractDraft.mode)}（<span className="text-muted-foreground/60 font-mono text-[10px]">{contractDraft.mode}</span>）的统一对外参数
                   </p>
                   <p className="text-muted-foreground text-[10px]">
                     输入口（按顺序作为工坊对该模式的统一输入；本地工作流在「画布节点」
@@ -429,7 +442,11 @@ export function WorkshopModelAdapterModal({
                         className="border-border bg-surface flex items-center justify-between rounded-lg border px-2.5 py-1.5"
                       >
                         <span className="text-ink text-[11px]">
-                          {i + 1}. {modeContractInputIdLabel(input)}
+                          {i + 1}.{" "}
+                          <LabelWithId
+                            label={modeContractInputIdLabel(input)}
+                            id={input}
+                          />
                         </span>
                         <button
                           type="button"
@@ -463,7 +480,7 @@ export function WorkshopModelAdapterModal({
                         }
                         className="border-primary text-primary hover:bg-primary/10 rounded border border-dashed border-(--color-primary)/40 px-2 py-0.5 text-[11px]"
                       >
-                        ＋ {modeContractInputLabel(t.type)}
+                        ＋ <LabelWithId label={modeContractInputLabel(t.type)} id={t.type} />
                       </button>
                     ))}
                   </div>
@@ -479,9 +496,9 @@ export function WorkshopModelAdapterModal({
                       }
                       className="border-border bg-bg text-ink rounded-lg border px-2 py-1 text-[11px]"
                     >
-                      <option value="image">图片</option>
-                      <option value="video">视频</option>
-                      <option value="audio">音频</option>
+                      <option value="image">图片（image）</option>
+                      <option value="video">视频（video）</option>
+                      <option value="audio">音频（audio）</option>
                     </select>
                   </div>
                   {!contractDraft.inputs.includes("prompt") && (
