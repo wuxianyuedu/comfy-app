@@ -207,7 +207,7 @@ export function ProjectOutputs() {
                 <option
                   key={project.id}
                   value={project.id}
-                  className="bg-(--color-node)"
+                  className="bg-node"
                 >
                   {project.name ?? "未命名项目"}
                 </option>
@@ -272,7 +272,7 @@ export function ProjectOutputs() {
                   key={output.id}
                   type="button"
                   onClick={() => setSelectedId(output.id)}
-                  className={`group relative overflow-hidden rounded-2xl border text-left transition-all hover:shadow-lg hover:shadow-black/30 ${
+                  className={`group relative overflow-hidden rounded-2xl border text-left transition-all hover:shadow-lg hover:shadow-black/6 dark:shadow-black/30 ${
                     active
                       ? "border-violet-400/70 ring-1 ring-violet-400/40"
                       : "border-border-strong hover:border-ink-fainter"
@@ -294,7 +294,7 @@ export function ProjectOutputs() {
                     )}
 
                     {isVideoOut && (
-                      <span className="absolute top-1/2 left-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2 ring-white/90">
+                      <span className="absolute top-1/2 left-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2 ring-border-strong">
                         <svg
                           width="24"
                           height="24"
@@ -348,7 +348,7 @@ export function ProjectOutputs() {
                 <h3 className="font-title text-ink-bright text-sm font-bold">
                   产出 #{selected.id.slice(-4)}
                 </h3>
-                <span className="rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-300">
+                <span className="rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
                   {TYPE_CHIP[selected.type] ?? selected.type}
                 </span>
               </div>

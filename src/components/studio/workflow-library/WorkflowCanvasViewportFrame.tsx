@@ -50,14 +50,14 @@ export function WorkflowCanvasViewportFrame({
   return (
     <div
       ref={frameElRef}
-      className="relative w-full overflow-hidden rounded-xl border border-(--color-border-subtle) bg-(--color-panel-deep)"
+      className="relative w-full overflow-hidden rounded-xl border border-border-subtle bg-panel-deep"
       data-testid="wflib-canvas-viewport"
     >
-      <div className="flex items-center justify-between gap-2 border-b border-(--color-border-subtle) px-3 py-1.5">
-        <span className="text-[10.5px] text-(--color-ink-fainter)">{hint}</span>
+      <div className="flex items-center justify-between gap-2 border-b border-border-subtle px-3 py-1.5">
+        <span className="text-[10.5px] text-ink-fainter">{hint}</span>
         <div className="flex items-center gap-1">
           <span
-            className="rounded px-1.5 py-px font-mono text-[10px] text-(--color-ink-faint)"
+            className="rounded px-1.5 py-px font-mono text-[10px] text-ink-faint"
             data-testid="wflib-canvas-zoom"
           >
             {viewport.zoomText}
@@ -66,7 +66,7 @@ export function WorkflowCanvasViewportFrame({
           <button
             type="button"
             onClick={viewport.fit}
-            className="rounded border border-(--color-border-strong) px-2 py-0.5 text-[10.5px] text-(--color-ink-soft) transition-colors hover:bg-white/8 hover:text-(--color-ink-bright)"
+            className="rounded border border-border-strong px-2 py-0.5 text-[10.5px] text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink-bright"
             data-testid="wflib-canvas-fit"
           >
             适应
@@ -75,10 +75,10 @@ export function WorkflowCanvasViewportFrame({
             type="button"
             onClick={viewport.reset}
             disabled={viewport.isIdentity}
-            className={`rounded border border-(--color-border-strong) px-2 py-0.5 text-[10.5px] transition-colors ${
+            className={`rounded border border-border-strong px-2 py-0.5 text-[10.5px] transition-colors ${
               viewport.isIdentity
-                ? "cursor-default text-(--color-ink-fainter)"
-                : "text-(--color-ink-soft) hover:bg-white/8 hover:text-(--color-ink-bright)"
+                ? "cursor-default text-ink-fainter"
+                : "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
             }`}
             data-testid="wflib-canvas-reset"
             title={viewport.isIdentity ? "已是初始视口" : "回到初始视口"}

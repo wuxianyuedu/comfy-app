@@ -134,7 +134,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             labels={localOptionLabels}
             placeholder="选择本地生图模型"
             disabled={session.busy || session.importing}
-            className="!bg-(--color-subtle) !border-(--color-border) text-[11px]"
+            className="!bg-subtle !border-border text-[11px]"
             popoverMinWidth={240}
           />
         )}
@@ -145,7 +145,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             options={remoteImageModels}
             placeholder="选择远端生图模型"
             disabled={session.busy || session.importing}
-            className="!bg-(--color-subtle) !border-(--color-border) text-[11px]"
+            className="!bg-subtle !border-border text-[11px]"
             popoverMinWidth={220}
           />
         )}
@@ -245,7 +245,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             <p className="text-primary text-[11px]">{session.status}</p>
           )}
           {session.error && (
-            <p className="rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-700">
+            <p className="rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">
               {session.error}
             </p>
           )}
@@ -368,7 +368,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   onClick={() => actions.remove(character.id, candidate.url)}
                   disabled={session.busy || session.importing}
                   aria-label="删除这张定妆照候选"
-                  className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400 absolute -top-1.5 -right-1.5 rounded-full bg-black/70 px-1 text-[10px] disabled:opacity-40"
+                  className="text-muted-foreground hover:text-red-700 dark:text-red-300 dark:hover:text-red-400 absolute -top-1.5 -right-1.5 rounded-full bg-black/70 px-1 text-[10px] disabled:opacity-40"
                 >
                   ✕
                 </button>

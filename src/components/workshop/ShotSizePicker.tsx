@@ -110,7 +110,7 @@ export function ShotSizePicker({
             >
               尺寸表（{SIZE_SCENE_LABELS[scene]}场景）…
             </button>
-            <span className="text-[10px] text-(--color-ink-faint)">
+            <span className="text-[10px] text-ink-faint">
               {clarityKind === "megapixel"
                 ? "总像素预算，宽高按倍数对齐"
                 : "宽高按场景尺寸表取值"}

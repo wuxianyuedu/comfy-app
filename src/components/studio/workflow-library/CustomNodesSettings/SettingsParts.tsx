@@ -194,7 +194,7 @@ export function ParseProgressBanner({
           K/M during hash. `progress.total > 0` only flips true at
           the end of the file walk when the parser announces M, so
           the bar cleanly transitions scan→hash. */}
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2">
         {progress.phase === "hash" && progress.total > 0 ? (
           <div
             className="h-full bg-primary transition-all duration-300 ease-out"
@@ -262,12 +262,12 @@ export function ParseConsole({
             <div
               key={`log-${idx}`}
               data-log-row
-              className={log.level === "error" ? "text-red-400" : "text-emerald-300/90"}
+              className={log.level === "error" ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-300/90"}
             >
               {log.msg}
             </div>
           ))}
-          {parsing && <div className="text-gray-500">…</div>}
+          {parsing && <div className="text-ink-muted">…</div>}
         </div>
       )}
     </div>
@@ -320,13 +320,13 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   {pkg.nodeTypes.slice(0, 24).map((ct) => (
                     <span
                       key={ct}
-                      className="rounded-md bg-white/4 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+                      className="rounded-md bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
                     >
                       {ct}
                     </span>
                   ))}
                   {pkg.nodeTypes.length > 24 && (
-                    <span className="rounded-md bg-white/4 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                    <span className="rounded-md bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
                       +{pkg.nodeTypes.length - 24}
                     </span>
                   )}
@@ -335,7 +335,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
               {pkg.errors?.length > 0 && (
                 <div className="mt-2 space-y-1">
                   {pkg.errors.map((er, j) => (
-                    <div key={j} className="font-mono text-[11px] text-red-400">
+                    <div key={j} className="font-mono text-[11px] text-red-700 dark:text-red-400">
                       ⚠ {er.file}: {er.error}
                     </div>
                   ))}

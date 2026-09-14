@@ -125,7 +125,7 @@ export function MessageCenterPanel() {
             type="button"
             onClick={clear}
             disabled={messages.length === 0}
-            className="text-ink-soft flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] transition-colors hover:bg-rose-500/10 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-rose-300"
+            className="text-ink-soft flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] transition-colors hover:bg-rose-500/10 hover:text-rose-800 dark:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-rose-300"
           >
             <Trash2 size={14} />
             清空

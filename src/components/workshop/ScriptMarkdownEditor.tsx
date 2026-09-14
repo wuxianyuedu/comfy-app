@@ -274,18 +274,18 @@ export function ScriptMarkdownEditor({
   return (
     /* 全屏编辑弹层:底部 padding-bottom 6(24px) 为全局常驻的 BrowserStatusBar
        (fixed bottom-0 z-[100] h-6) 让位,避免底部「取消/保存」按钮被它盖住(ISSUE #35)。 */
-    <FullScreenLayer zClass="z-50" className="flex flex-col bg-(--color-canvas) pb-6">
+    <FullScreenLayer zClass="z-50" className="flex flex-col bg-canvas pb-6">
       {/* Header */}
-      <header className="flex h-14 items-center justify-between border-b border-(--color-border) px-5">
+      <header className="flex h-14 items-center justify-between border-b border-border px-5">
         <div className="flex items-center gap-3">
           <span className="bg-primary/15 text-primary grid h-8 w-8 place-items-center rounded-lg">
             <FileText size={16} />
           </span>
-          <h2 className="text-[15px] font-semibold text-(--color-ink-bright)">{title}</h2>
+          <h2 className="text-[15px] font-semibold text-ink-bright">{title}</h2>
         </div>
         <button
           onClick={onCancel}
-          className="grid h-8 w-8 place-items-center rounded-lg text-(--color-ink-muted) transition-colors hover:bg-(--color-subtle) hover:text-(--color-ink-bright)"
+          className="grid h-8 w-8 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-subtle hover:text-ink-bright"
           aria-label="关闭"
         >
           <X size={18} />
@@ -329,14 +329,14 @@ export function ScriptMarkdownEditor({
       </div>
 
       {/* Footer */}
-      <footer className="flex h-16 items-center justify-end gap-3 border-t border-(--color-border) bg-(--color-panel) px-6">
-        <span className="mr-auto text-xs text-(--color-ink-fainter)">
+      <footer className="flex h-16 items-center justify-end gap-3 border-t border-border bg-panel px-6">
+        <span className="mr-auto text-xs text-ink-fainter">
           {value.split("\n").filter((line) => line.trim()).length} 行 ·{" "}
           {value.trim().length} 字符
         </span>
         <button
           onClick={onCancel}
-          className="rounded-lg border border-(--color-border) bg-transparent px-5 py-2 text-xs font-medium text-(--color-ink-strong) transition-colors hover:bg-(--color-subtle)"
+          className="rounded-lg border border-border bg-transparent px-5 py-2 text-xs font-medium text-ink-strong transition-colors hover:bg-subtle"
         >
           取消
         </button>

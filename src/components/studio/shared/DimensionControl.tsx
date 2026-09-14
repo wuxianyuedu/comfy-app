@@ -343,12 +343,12 @@ function DimensionSizeControl({
       <div
         className={
           narrow
-            ? "w-fit max-w-full rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2"
-            : "rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5"
+            ? "w-fit max-w-full rounded-lg border border-accent/30 bg-accent/4 p-2"
+            : "rounded-lg border border-accent/30 bg-accent/4 p-2.5"
         }
       >
         <div className="flex items-center gap-2">
-          <span className="shrink-0 text-[10px] font-semibold tracking-wider text-(--color-accent) uppercase">
+          <span className="shrink-0 text-[10px] font-semibold tracking-wider text-accent uppercase">
             比例 + 像素
           </span>
           <div className={narrow ? "w-[112px] min-w-0" : "min-w-0 flex-1"}>
@@ -362,7 +362,7 @@ function DimensionSizeControl({
                   scene={scene}
                   onOpen={() => setTableOpen(true)}
                   extra={
-                    <span className="text-[10px] text-(--color-ink-faint)">
+                    <span className="text-[10px] text-ink-faint">
                       {CLARITY_HINT[clarityKind]}
                     </span>
                   }

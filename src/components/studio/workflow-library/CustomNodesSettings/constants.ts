@@ -12,7 +12,7 @@ export const ROW_STATE_PRESET: Record<
     fg: "#10B981",
     label: "✓ 已加载",
     chip: "border-emerald-500/30",
-    btn: "border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10",
+    btn: "border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10",
     btnLabel: "重新解析",
   },
   outdated: {

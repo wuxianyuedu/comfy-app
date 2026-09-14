@@ -27,10 +27,10 @@ export function RequiredSummary({
   }, [io, mode]);
   return (
     <span className="ml-2 inline-flex items-center gap-1.5">
-      <span className="rounded border border-red-400/40 bg-red-500/15 px-1.5 py-px font-mono text-[10px] text-red-300">
+      <span className="rounded border border-red-400/40 bg-red-500/15 px-1.5 py-px font-mono text-[10px] text-red-700 dark:text-red-300">
         必填 {counts.required}
       </span>
-      <span className="rounded border border-white/8 bg-white/4 px-1.5 py-px font-mono text-[10px] text-gray-400">
+      <span className="rounded border border-border-strong bg-subtle px-1.5 py-px font-mono text-[10px] text-ink-soft">
         可选 {counts.optional}
       </span>
     </span>

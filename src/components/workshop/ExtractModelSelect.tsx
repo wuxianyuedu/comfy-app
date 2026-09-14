@@ -131,7 +131,7 @@ export function ExtractModelSelect({
           options={options}
           labels={labels}
           placeholder="选择提取方式"
-          className="!bg-(--color-subtle) !border-(--color-border) text-xs"
+          className="!bg-subtle !border-border text-xs"
           popoverMinWidth={280}
           autoFitFromOptions={false}
         />
