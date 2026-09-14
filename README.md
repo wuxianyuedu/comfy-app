@@ -82,7 +82,8 @@ Comfy-APP-T3/
 | 文件 | 用途 |
 |------|------|
 | `package.json` | 前端依赖与脚本（`dev` / `build` / `tauri` / `test` 等） |
-| `next.config.js` | Next.js 配置，含 `output: 'standalone'`（供桌面壳打包） |
+| `next.config.js` | Next.js 配置，含 `output: 'standalone'`（供桌面壳打包）与产物排除清单 |
+| `scripts/standalone-private-inputs.mjs` | 从产物里剥掉开发机私有输入（`.env` / `db.sqlite*`），由 `pnpm build` 与 `build-desktop.mjs` 共用 |
 | `tsconfig.json` | TypeScript 配置 |
 | `eslint.config.js` `prettier.config.js` | 代码检查与格式化 |
 | `postcss.config.js` | Tailwind CSS v4 接入 |
@@ -94,6 +95,14 @@ Comfy-APP-T3/
 
 > **双击入口都在 `tools/` 下**（启动类 `tools/start/`、构建类 `tools/build/`），
 > 根目录只保留工程配置与文档，见下方「双击入口速查」与 `tools/README.md`。
+
+> **打包前务必确认仓库根没有要随包走的私有输入**：`next build` 会把 `.env` 与
+> `db.sqlite` 复制进 `.next/standalone`，进而被内嵌进桌面包（密钥明文分发 +
+> 开发者本机数据库变成出厂库）。现在 `pnpm build` 会自动剥离这两类文件
+> （`scripts/standalone-private-inputs.mjs`），并有产物层护栏
+> `node scripts/check-standalone-contents.cjs` 兜底；**不要**为了省事把 `.env`
+> 写进 `outputFileTracingExcludes` 就以为解决了——实测对 `.env` 无效，见
+> [规范 §7.3](docs/standards/launch-and-build.md)。
 
 > `tools/start/start-tauri.ps1` 直接启动打包好的 `start-tauri\start-tauri.exe`（prebuilt，秒出窗口）；
 > dev/tauri dev 模式的入口是 `tools/start/start-tauri-dev.ps1`。
