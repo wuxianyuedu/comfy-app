@@ -338,7 +338,7 @@ export function ProjectOutputs() {
         <>
           {/* 遮罩 + 抽屉都从标题行下方起：顶部让出应用页签栏（ISSUE #310） */}
           <div
-            className="top-title-bar fixed right-0 bottom-0 left-0 z-80 bg-black/20 dark:bg-black/50"
+            className="top-title-bar fixed right-0 bottom-0 left-0 z-80 bg-canvas-deep dark:bg-canvas-deep"
             onClick={() => setSelectedId(null)}
           />
           <aside className="top-title-bar bg-node border-border-strong fixed right-0 bottom-0 z-90 flex w-[380px] max-w-[90vw] flex-col overflow-hidden border-l shadow-2xl shadow-black/10 dark:shadow-black/50">

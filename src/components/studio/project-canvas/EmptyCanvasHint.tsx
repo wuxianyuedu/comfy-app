@@ -20,7 +20,7 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
           <Icon
             name="loader"
             size={40}
-            className="animate-spin text-cyan-300/90"
+            className="animate-spin text-cyan-700 dark:text-cyan-300/90"
           />
           <p className="text-ink-soft text-sm">加载中…</p>
         </div>
@@ -69,7 +69,7 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
         <p className="text-ink-muted mt-1 text-[12px] leading-relaxed">
           自定义工作流可下拉选用你上传的 ComfyUI 工作流
         </p>
-        <p className="mt-1 text-[12px] leading-relaxed text-violet-300">
+        <p className="mt-1 text-[12px] leading-relaxed text-violet-700 dark:text-violet-300">
           <Icon
             name="sparkles"
             size={12}

@@ -63,7 +63,7 @@ export function SizePresetTableModal({
     <div
       className={overlayClass(
         "modal",
-        "z-[10060] flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm dark:bg-black/70",
+        "z-[10060] flex items-center justify-center bg-canvas-deep p-4 backdrop-blur-sm dark:bg-black/70",
       )}
       onClick={onClose}
     >

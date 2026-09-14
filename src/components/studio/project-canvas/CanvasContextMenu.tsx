@@ -43,7 +43,7 @@ export function CanvasContextMenu({
           type="button"
           data-canvas-node-kind="workflow-ardot"
           onClick={onPickTest}
-          className="flex w-full items-center gap-2 rounded-lg border border-violet-400/30 bg-linear-to-r from-(--color-primary)/15 to-(--color-accent)/10 px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:from-(--color-primary)/25 hover:to-(--color-accent)/15"
+          className="flex w-full items-center gap-2 rounded-lg border border-violet-400/30 bg-linear-to-r from-(--color-primary)/15 to-(--color-accent)/10 px-2 py-1.5 text-left text-[12px] text-ink-bright transition-colors hover:from-(--color-primary)/25 hover:to-(--color-accent)/15"
         >
           <span
             className="flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold text-white"
@@ -75,7 +75,7 @@ export function CanvasContextMenu({
               onClick={() => onPick(kind)}
               className="text-ink-bright hover:bg-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors"
             >
-              <Icon name={meta.icon} size={15} className="text-violet-300" />
+              <Icon name={meta.icon} size={15} className="text-violet-700 dark:text-violet-300" />
               <span className="flex flex-col">
                 <span className="font-medium">{meta.label}</span>
                 <span className="text-ink-muted text-[10px]">{meta.desc}</span>

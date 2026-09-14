@@ -50,7 +50,7 @@ export function WorkflowPickChip({
         className="nodrag nopan flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-(--color-primary)/35 bg-(--color-node-accent) px-2.5 text-[12px]"
       >
         <span
-          className="min-w-0 flex-1 truncate text-left font-semibold text-(--color-ink-bright)"
+          className="min-w-0 flex-1 truncate text-left font-semibold text-ink-bright"
           style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}
         >
           {loading && !sel ? (

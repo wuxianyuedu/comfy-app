@@ -69,7 +69,7 @@ export function HistoryDetailModal({
 
   return (
     <div
-      className={overlayClass("modal", "z-90 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm sm:p-6 dark:bg-black/80")}
+      className={overlayClass("modal", "z-90 flex items-center justify-center bg-canvas-deep p-4 backdrop-blur-sm sm:p-6 dark:bg-black/80")}
       onClick={onClose}
     >
       <div

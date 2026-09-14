@@ -176,11 +176,11 @@ export function StatusDot({ status }: { status: CanvasNodeData["status"] }) {
 export function StatusBadge({ status }: { status: CanvasNodeData["status"] }) {
   const style =
     status === "running"
-      ? "bg-amber-400/10 text-amber-300 border-amber-400/20"
+      ? "bg-amber-400/10 text-amber-700 dark:text-amber-300 border-amber-400/20"
       : status === "done"
-        ? "bg-emerald-400/10 text-emerald-300 border-emerald-400/20"
+        ? "bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 border-emerald-400/20"
         : status === "error"
-          ? "bg-rose-400/10 text-rose-300 border-rose-400/20"
+          ? "bg-rose-400/10 text-rose-700 dark:text-rose-300 border-rose-400/20"
           : "bg-subtle text-ink-soft border-border-strong";
   return (
     <span

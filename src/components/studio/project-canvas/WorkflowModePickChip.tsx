@@ -95,7 +95,7 @@ export function WorkflowModePickChip({
         {/* 不再显示 +N 徽章 — 弹层只列工作流实际支持的 N 个模式，
          *  trigger 只展示当前默认，没必要再用 +N 暗示"还有几个未展示" */}
         <span
-          className={`shrink-0 text-(--color-ink-muted) transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-ink-muted transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -120,7 +120,7 @@ export function WorkflowModePickChip({
           >
             {/* 仅展示工作流 modes 数组里的 N 个，单选 + 点选即切换 */}
             {items.length === 0 ? (
-              <div className="px-3 py-3 text-center text-[11px] text-(--color-ink-muted)">
+              <div className="px-3 py-3 text-center text-[11px] text-ink-muted">
                 该工作流没有声明可用模式
               </div>
             ) : (

@@ -115,7 +115,7 @@ export function WorkshopModelAdapterModal({
     <div
       className={overlayClass(
         "modal",
-        "z-50 grid place-items-center bg-black/20 p-4 backdrop-blur-sm dark:bg-black/50",
+        "z-50 grid place-items-center bg-canvas-deep p-4 backdrop-blur-sm dark:bg-canvas-deep",
       )}
       onClick={onClose}
     >

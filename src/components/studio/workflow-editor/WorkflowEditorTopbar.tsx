@@ -128,7 +128,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                     void fetchDetail();
                   }
                 }}
-                className="truncate font-title text-[18px] font-bold leading-tight tracking-tight transition-colors hover:text-violet-300"
+                className="truncate font-title text-[18px] font-bold leading-tight tracking-tight transition-colors hover:text-violet-700 dark:text-violet-300"
                 style={{ color: "#F4F4F8", textShadow: "0 1px 0 rgba(0,0,0,0.4)", maxWidth: 280 }}
                 title={
                   subgraphStack.length
@@ -231,13 +231,13 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               {subgraphStack.length > 0 && (
                 <>
                   <span className="text-ink-fainter mx-1.5">·</span>
-                  <span className="text-violet-300">子工作流 #{subgraphStack[subgraphStack.length - 1]!.uid}</span>
+                  <span className="text-violet-700 dark:text-violet-300">子工作流 #{subgraphStack[subgraphStack.length - 1]!.uid}</span>
                 </>
               )}
             </p>
             {detail.sourcePath ? (
               detail.sourceMissing ? (
-                <p className="mt-1 flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/7.000000000000001 px-2 py-1 text-[11px] text-red-300">
+                <p className="mt-1 flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/7.000000000000001 px-2 py-1 text-[11px] text-red-700 dark:text-red-300">
                   <span className="font-semibold">本地文件已丢失：</span>
                   <span className="truncate font-mono">{detail.sourcePath}</span>
                   <span className="ml-1 shrink-0 text-red-700/80 dark:text-red-400/80">
@@ -245,7 +245,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           </span>
                 </p>
               ) : detail.sourceChanged ? (
-                <p className="mt-1 flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/7.000000000000001 px-2 py-1 text-[11px] text-emerald-300">
+                <p className="mt-1 flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/7.000000000000001 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-300">
                   <span className="font-semibold">已从本地文件刷新最新内容</span>
                   <span className="truncate font-mono text-emerald-700/80 dark:text-emerald-400/80">
               {detail.sourcePath}

@@ -54,7 +54,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       <div className="border-border-strong flex items-center gap-2 border-b px-4 py-3">
         <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">历史记录</h2>
         {activeCount > 0 && (
-          <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-300">
+          <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-700 dark:text-violet-300">
             {activeCount} 进行中
           </span>
         )}
@@ -140,7 +140,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       {/* ── Error banner ── */}
       {error && (
         <div className="mx-4 mb-2 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
-          <span className="min-w-0 flex-1 break-words text-[11px] text-red-300">{error}</span>
+          <span className="min-w-0 flex-1 break-words text-[11px] text-red-700 dark:text-red-300">{error}</span>
           <button
             type="button"
             onClick={refresh}

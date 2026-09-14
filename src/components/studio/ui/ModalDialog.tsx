@@ -121,7 +121,7 @@ export function ModalDialog({
       aria-modal="true"
       aria-labelledby={titleId}
       onClick={onClose}
-      className={overlayClass("modal", "z-200 flex items-center justify-center bg-black/20 px-4 backdrop-blur-sm dark:bg-black/65")}
+      className={overlayClass("modal", "z-200 flex items-center justify-center bg-canvas-deep px-4 backdrop-blur-sm dark:bg-black/65")}
     >
       <div
         onClick={stop}

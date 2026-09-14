@@ -156,7 +156,7 @@ export function WorkflowNode({
             W
           </span>
           <span
-            className="truncate text-[14px] font-bold text-(--color-ink-bright)"
+            className="truncate text-[14px] font-bold text-ink-bright"
             style={{ fontFamily: "var(--font-sans)" }}
             title={meta.label}
           >
@@ -280,7 +280,7 @@ export function WorkflowNode({
                  *  labelRow 中线（pt-1.5=6 + h-5/2=10=16px），与 typeChip 上下对齐。 */}
                 <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
                   <span
-                    className="min-w-0 truncate text-[14px] font-semibold text-(--color-ink-bright)"
+                    className="min-w-0 truncate text-[14px] font-semibold text-ink-bright"
                     style={{ fontFamily: "var(--font-sans)" }}
                     title={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}
                   >
