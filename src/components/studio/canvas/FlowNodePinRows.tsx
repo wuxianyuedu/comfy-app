@@ -9,11 +9,7 @@ import { Handle, Position } from "@xyflow/react";
 import { portColor } from "@/lib/comfyui/types";
 import { friendlyInputName } from "@/lib/comfyui/node-titles";
 import { sanitizeComboLabel } from "../workflow-utils";
-import {
-  IoCheckbox,
-  useWiredPinKeysRegistry,
-  type IOEditContextValue,
-} from "./IOEditContext";
+import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";
 import {
   OUTPUT_PORT_HANDLE_PREFIX,
@@ -47,12 +43,6 @@ export function FlowNodePinRows({
    *  （与连线标记同一帧算出），行渲染层只读。 */
   const nodeData = data as unknown as Record<string, unknown>;
   const portFocusActive = nodeData[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
-  /* 纯连接输入行同样是合法落点（对外参数落到 `positive_prompt` 这类口上），
-   *  一并上报给 IOEdit store（见 useWiredPinKeysRegistry）。 */
-  useWiredPinKeysRegistry(
-    data.nodeId,
-    uniqueConnEntries.map(([key]) => key),
-  );
   /* 一行两端的 Handle id 不同（输入名 / `out:<输出名>`），但观感要一致：两端的
    * 级别合成一档 —— focused > related > 「都无关」压暗。 */
   const toneOf = (...handles: (string | undefined)[]): PortRowTone => {

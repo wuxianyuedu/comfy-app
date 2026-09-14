@@ -46,12 +46,6 @@ export interface WorkflowEditorTopBarProps {
   forceReloadDetail: (hostNodeId?: string, silent?: boolean) => void;
   setViewJsonOpen: React.Dispatch<React.SetStateAction<boolean>>;
   resetLayout: () => void;
-  /** 「恢复默认映射」：清掉当前模式下被覆盖过的落点，全部回到自动判定。 */
-  resetParamWiring: () => void;
-  /** 当前模式下是否有落点被覆盖过（没有则按钮禁用）。 */
-  hasParamWiring: boolean;
-  /** 当前模式（无模式时落点覆盖没有归属，按钮禁用并说明原因）。 */
-  wiringMode: string | null;
   /** 当前视图的宿主链（顶层为空串，下钻后 `4` / `4:5`）。 */
   viewHostNodeId: string;
   handleSave: () => void;
@@ -70,9 +64,6 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   forceReloadDetail,
   setViewJsonOpen,
   resetLayout,
-  resetParamWiring,
-  hasParamWiring,
-  wiringMode,
   viewHostNodeId,
   handleSave,
   saving,
@@ -359,21 +350,6 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             title="把所有节点恢复到进入工作流时的原始位置（撤销全部手动拖动）"
           >
             重置布局
-          </button>
-          <button
-            type="button"
-            onClick={resetParamWiring}
-            disabled={!wiringMode || !hasParamWiring}
-            className={topBarButtonClass("outline", "compact", "disabled:opacity-40")}
-            title={
-              !wiringMode
-                ? "该工作流未声明模式，参数落点必须归属一个模式"
-                : hasParamWiring
-                  ? "把「对外参数 → 节点端口」的落点全部恢复成自动判定的默认落点"
-                  : "当前模式下没有改过的落点"
-            }
-          >
-            ↺ 恢复默认映射
           </button>
           <button
             type="button"
