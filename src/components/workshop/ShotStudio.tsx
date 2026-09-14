@@ -19,15 +19,12 @@ import {
 } from "./shot-size-config";
 import { ShotSizePicker } from "./ShotSizePicker";
 import { errorMessage } from "~/lib/error-message";
-
-function strParam(value: unknown, fallback: string): string {
-  return typeof value === "string" && value ? value : fallback;
-}
-
-function numParam(value: unknown, fallback: number): number {
-  const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
-  return Number.isFinite(n) ? n : fallback;
-}
+import {
+  DEFAULT_GEN_PARAMS,
+  paramInt,
+  paramNumber,
+  paramString,
+} from "~/lib/workshop/param-coerce";
 
 interface Props {
   shots: Shot[];
@@ -185,10 +182,10 @@ export function ShotStudio({
               prompt: shot.prompt,
               negative: shot.negativePrompt || undefined,
               checkpoint: checkpoint || undefined,
-              steps: Math.round(numParam(shot.params.steps, 28)),
-              cfg: numParam(shot.params.cfg, 7),
-              sampler: strParam(shot.params.sampler, "euler_ancestral"),
-              scheduler: strParam(shot.params.scheduler, "normal"),
+              steps: paramInt(shot.params.steps, DEFAULT_GEN_PARAMS.steps),
+              cfg: paramNumber(shot.params.cfg, DEFAULT_GEN_PARAMS.cfg),
+              sampler: paramString(shot.params.sampler, DEFAULT_GEN_PARAMS.sampler),
+              scheduler: paramString(shot.params.scheduler, DEFAULT_GEN_PARAMS.scheduler),
               size: shotSizeToParam(sizeSpec),
               count: 1,
             };
@@ -200,7 +197,7 @@ export function ShotStudio({
           prompt: shot.prompt,
           negative: shot.negativePrompt || undefined,
           size: shot.params.size !== undefined && shot.params.size !== ""
-            ? strParam(shot.params.size, shotSizeToParam(shotSize))
+            ? paramString(shot.params.size, shotSizeToParam(shotSize))
             : shotSizeToParam(shotSize),
           mode: "T2I",
           /* 远端通道认「宽高比 + 百万像素」：分辨率档也换算成实际总像素再下发
