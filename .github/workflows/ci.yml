@@ -106,6 +106,13 @@ jobs:
         # 一路合法存在。
         run: node scripts/check-function-length.cjs --strict
 
+      - name: Rust function length ratchet
+        # Rust 壳函数长度（规范 §12.13 / ISSUE #536 P4）：§12.13 的 TS/TSX 门禁
+        # 扫不到 Rust —— 于是 lib.rs 的 run() 里塞了近 300 行的窗口 / 托盘 /
+        # 协议 / sidecar 编排，没有任何机器信号。阈值 120（Rust 是结构化编排，
+        # 自然长度比 TSX 短），按文件记账走棘轮。
+        run: node scripts/check-rust-function-length.cjs --strict
+
       - name: App port cross-language consistency
         # 端口推导四语言一致性（规范 §1.1 / ISSUE #489 缺陷 4）：四侧读同一份
         # 共享向量 tests/fixtures/app-port-vectors.json，Node/Python 真跑，
