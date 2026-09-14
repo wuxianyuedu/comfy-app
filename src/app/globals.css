@@ -50,6 +50,8 @@
   --color-node: #ffffff; /* 节点表面/option (light default) */
   --color-node-accent: #f2eeff; /* 节点强调底 (light default) */
   --color-overlay-accent-surface: #f1edff; /* 浮层（chip/徽标）强调底 (light default) */
+  --color-chip-type-image-bg: #f2eeff; /* 类型 chip 载体底：IMAGE/MASK（紫系，浅色=极浅紫）(light default) */
+  --color-chip-type-video-bg: #fff0f6; /* 类型 chip 载体底：VIDEO/AUDIO（品红系，浅色=极浅粉）(light default) */
   --color-border-strong: #d6d8dd; /* 强边框/分隔线 (light default) */
   --color-ink-bright: #18181b; /* 主文字 (light default) */
   --color-ink-field: #27272a; /* 输入控件文字 (light default) */
@@ -65,6 +67,7 @@
   --color-info: #2563eb; /* 信息/链接强调 (light default) */
   --color-success: #0ea472; /* 成功/薄荷强调 (light default) */
   --color-success-strong: #10b981; /* 成功绿 (light default) */
+  --color-status-online: #047857; /* 「本机/在线」状态点与文字（浅色档，与 emerald-700 同值）(light default) */
   --color-warning: #d97706; /* 警告 (light default) */
   --color-amber: #d97706; /* 琥珀强调（workshop 徽章/按钮）(light default) */
   --color-accent-soft: #ec4899; /* accent (light default) */
@@ -139,6 +142,8 @@
   --color-node: #16161e; /* 节点表面/option */
   --color-node-accent: #1e1a2e; /* 节点强调底 */
   --color-overlay-accent-surface: #241f38; /* 浮层（chip/徽标）强调底 */
+  --color-chip-type-image-bg: #1e1a2e; /* 类型 chip 载体底：IMAGE/MASK（= 原写死值） */
+  --color-chip-type-video-bg: #331a28; /* 类型 chip 载体底：VIDEO/AUDIO（= 原写死值） */
   --color-border-strong: #26262e; /* 强边框/分隔线 */
   --color-ink-bright: #ededf2; /* 主文字 */
   --color-ink-field: #e5e7eb; /* 输入控件文字 */
@@ -154,6 +159,7 @@
   --color-info: #5bc6ff; /* 信息/链接强调 */
   --color-success: #5be3c4; /* 成功/薄荷强调 */
   --color-success-strong: #10b981; /* 成功绿 */
+  --color-status-online: #33d499; /* 「本机/在线」状态点与文字（深色档 — 即原写死值） */
   --color-warning: #f59e0b; /* 警告 */
   --color-amber: #ffb553; /* 琥珀强调 */
   --color-accent-soft: #ff8ac4; /* accent */
@@ -244,6 +250,14 @@
          原值 85% 近白字 + 深色 text-shadow、纯白中点，浅色画布上都消失。
      · 端口内圈高光（flow-focus-endpoints 的 `portDotGlow`）
        → `--color-port-halo-ring|-weak`。25~50% 白在浅色下是白描白。
+     · 类型 chip 的「载体底」（WorkflowNodeArdot 的 PortChip 写死
+       `#1E1A2E` / `#331A28`）
+       → `--color-chip-type-image-bg` / `--color-chip-type-video-bg`。
+         注意区分：chip 的**文字色**是端口类型色（属类型色例外，见下条），
+         但 chip 的**底色**是「一块承载类型色的表面」，浅色下不能还是近黑。
+     · 项目画布浮层工具条底（CanvasToolbar 的 `to-[#16121f]/85`）
+       → `--color-panel/85` + `--color-shadow-strong`。此处还顺带修掉了
+         一个语法坏掉的历史 class（`to-surface-20]/85`，不是合法 Tailwind 类）。
      · 可读性 / 语法着色的硬编码令牌：
        · `JsonViewer` 的 `react18-json-view` 主题（`jv-theme-comfy` +
          `dark` prop）→ 两态 `--json-view-*` token；

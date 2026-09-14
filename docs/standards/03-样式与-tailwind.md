@@ -206,6 +206,10 @@ import "@/styles/json-viewer.css";
 | `JsonViewer` 的 `react18-json-view` 主题（`dark` prop + `jv-theme-comfy` 暗色档） | 两态 `--json-view-*` token（浅色默认 + `.dark` 覆盖）                                           |
 | `CodeBlock` 的 shiki 主题（写死 `one-dark-pro`）                                  | 按 `resolvedTheme` 在 `one-dark-pro` / `github-light` 间切换                                    |
 | `lib/comfyui/markdown.ts` 内联 style（便签 Markdown）                             | `--color-md-*` token                                                                            |
+| 类型 chip 的载体底（`WorkflowNodeArdot` 写死 `#1E1A2E` / `#331A28`）            | `--color-chip-type-image-bg` / `--color-chip-type-video-bg`（chip 文字仍是类型色，底色是表面）  |
+| 项目画布浮层工具条底（`CanvasToolbar` 的 `to-[#16121f]/85`）                    | `--color-panel/85` + `--color-shadow-strong`                                                    |
+| 节点 JSON 浮层的 accent / chip 色（写死 `#7C5CFC`/`#5BC6FF`/`#ec4899` 等）      | `--color-primary` / `--color-info` / `--color-accent-soft` / `--color-ink-faint` / `--color-success-strong` / `--color-warning`（带透明度用 `color-mix()`） |
+| 「本机 / 在线」状态点与文字（写死 `#33D499`）                                    | `--color-status-online`（浅色 = `#047857`，与 `emerald-700` 同值）                              |
 
 > 判据的用意：**控件**是结构性表面（用户要操作它），跟主题走才不会在浅色
 > 下变成「深底深图标」的隐形按钮；**叠加在内容上的说明层**才是例外。
@@ -216,8 +220,9 @@ import "@/styles/json-viewer.css";
 色的常量表**。典型落点：`src/lib/comfyui/types.ts`（32 个 ComfyUI 端口类型
 色）、`config/custom-nodes.ts`、`lib/comfyui/node-registry.ts`、
 `CanvasNodePrimitives.tsx` 的 `PORT_STYLE`、`WorkflowPortHandle.tsx`、
-`lib/project-canvas/canvas-types.ts`、`workflow-param-mapping-ui.ts` 等
-（全库约 320 处，成组出现）。
+`lib/project-canvas/canvas-types.ts`、`workflow-param-mapping-ui.ts`、
+`project-canvas/WorkflowNodeArdot.tsx` 的 `PORT_TYPE_COLORS` / `PORT_DOT_SHADOW`
+等（全库约 320 处，成组出现）。
 
 它们**允许保留写死色值**，理由三条：
 
@@ -235,6 +240,12 @@ import "@/styles/json-viewer.css";
 `bg-[#16161E]` 的节点底、`rgba(255,255,255,0.18)` 的分隔点 —— **不属于**
 本条，必须 token 化。判据一句话：**这行色值是「内容自己的颜色」还是「某个
 表面的颜色」？** 前者可留，后者必改。
+
+> **同一行里的文字色与底色要分开判**：类型 chip 是典型 —— chip 的**文字色**
+> （`#7C5CFC` 等）是端口类型色，属本条可留；chip 的**载体底**（原先写死
+> `#1E1A2E` / `#331A28`）是「一块承载类型色的表面」，浅色下不能还是近黑，
+> 必须 token 化（`--color-chip-type-image-bg` / `--color-chip-type-video-bg`）。
+> 判据按「这一层画的是什么」逐层过，而不是按「这个文件里是不是类型色」整块放行。
 
 **维护**：
 
