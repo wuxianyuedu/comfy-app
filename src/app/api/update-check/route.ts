@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 
+import { tracingIgnoreArgs } from "~/lib/tracing-ignore";
+
 /* ── 运行期「本地更新」检测：需重启才生效的文件 ─────────────────
  * 桌面壳开着时，前端源码 src/ 由 dev server HMR 自动热更、无需打扰；
  * 但有一批「改完当前窗口不生效、得重启」的文件（startup-hotreload.md §2
@@ -34,7 +36,7 @@ type FileFingerprint = string;
 
 function fingerprintOf(abs: string): FileFingerprint | null {
   try {
-    const st = fs.statSync(/*turbopackIgnore: true*/ abs);
+    const st = fs.statSync(...tracingIgnoreArgs(), abs);
     if (!st.isFile()) return null;
     return `${Math.trunc(st.mtimeMs)}:${st.size}`;
   } catch {
@@ -46,7 +48,7 @@ function fingerprintOf(abs: string): FileFingerprint | null {
 function walkFiles(dirAbs: string, out: string[] = []): string[] {
   let entries: fs.Dirent[];
   try {
-    entries = fs.readdirSync(/*turbopackIgnore: true*/ dirAbs, {
+    entries = fs.readdirSync(...tracingIgnoreArgs(), dirAbs, {
       withFileTypes: true,
     });
   } catch {
@@ -67,12 +69,12 @@ function walkFiles(dirAbs: string, out: string[] = []): string[] {
 function collectGroup(roots: string[]): Map<string, FileFingerprint> {
   const map = new Map<string, FileFingerprint>();
   for (const rel of roots) {
-    const abs = path.join(REPO_ROOT, rel);
+    const abs = path.join(...tracingIgnoreArgs(), REPO_ROOT, rel);
     if (!fs.existsSync(abs)) {
       map.set(rel, "missing");
       continue;
     }
-    const st = fs.statSync(/*turbopackIgnore: true*/ abs);
+    const st = fs.statSync(...tracingIgnoreArgs(), abs);
     if (st.isDirectory()) {
       for (const f of walkFiles(abs)) {
         const fp = fingerprintOf(f);
