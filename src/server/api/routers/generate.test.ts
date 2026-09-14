@@ -9,6 +9,27 @@ import type * as LoggerModule from "~/server/lib/logger";
  * buildAndValidate / buildCustomWorkflow / getWorkflow / repository 均走真实实现。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type * as AppRuntimeLogModule from "@/lib/app-runtime-log";
+/* 业务里程碑日志（`generateRuntimeLog`，模块内 `createAppRuntimeLogger("generate")`）
+ * 是**真实写盘**副作用：不隔离就会往开发者/CI 的
+ * `log/services/app-runtime.log` 里写字（实测 `pnpm test` 会在仓库根新建 `log/`
+ * 并多出一行「生成任务已入队 …」）。这里把它整个换成只写临时目录的实例，
+ * 让用例的写盘副作用自包含。 */
+/* `vi.mock` 会被 hoist 到 imports 之上，因此临时目录必须用 `vi.hoisted`
+ * 造（直接引用模块级 const 会踩 TDZ）。 */
+const runtimeLogFile = vi.hoisted(() => {
+  // `vi.hoisted` 块在 imports 之前求值：这里只用 `process` 拼出唯一路径，
+  // 不引入任何模块（目录本身由 `createAppRuntimeLogger` 按需 mkdir）。
+  return `${process.env.TMPDIR ?? "/tmp"}/generate-router-log-${process.pid}-${Date.now()}/app-runtime.log`;
+});
+vi.mock("@/lib/app-runtime-log", async (importOriginal) => {
+  const actual = await importOriginal<typeof AppRuntimeLogModule>();
+  return {
+    ...actual,
+    createAppRuntimeLogger: (ns: string) =>
+      actual.createAppRuntimeLogger(ns, runtimeLogFile),
+  };
+});
 
 const { enqueueMock, listModelsMock } = vi.hoisted(() => ({
   enqueueMock: vi.fn<(job: unknown) => void>(() => undefined),
