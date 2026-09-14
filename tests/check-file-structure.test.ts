@@ -12,6 +12,8 @@
  *     启动类归 tools/start/；根目录只留工程配置
  *   - R10 注释里禁止「历史流水」（日期 / 改动编号 / 任务批次号，ISSUE #46）：
  *     作者与修改日期归 git log，写进注释会随代码搬迁过期失真
+ *   - R11 Next 16 起代理约定名是 src/proxy.ts（`middleware` 已废弃，ISSUE #489）：
+ *     文件被删 / 改回旧名 / 挪离 src 根都阻断
  *
  * 为什么用子进程跑而不是 import：该脚本被 pre-commit 以 `node scripts/xxx.cjs`
  * 调用，且内部用 process.cwd() 定位扫描根；复用同一调用方式才等价于真实门禁。
@@ -25,7 +27,7 @@ import {
   copyFileSync,
 } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi
 } from "vitest";
@@ -65,6 +67,9 @@ beforeEach(() => {
   mkdirSync(join(workdir, "src"));
   mkdirSync(join(workdir, "scripts"));
   mkdirSync(join(workdir, "tools", "build"), { recursive: true });
+  /* R11 的默认前提：Next 16 代理约定文件在 src/ 根。真实仓库里它一直在，
+   * 所以「干净工作区放行」这类基线用例必须带上它，否则测的不是真实形态。 */
+  writeFileSync(join(workdir, "src", "proxy.ts"), "export function proxy() {}\n");
 });
 
 afterEach(() => {
@@ -208,6 +213,47 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       );
       const { code } = run();
       expect(code).toBe(0);
+    });
+  });
+
+  // ── R11：Next 16 起代理约定名是 proxy（`middleware` 已废弃，ISSUE #489）──
+  // 删文件与改回旧名都会「消掉警告」，但代价是代理落点一起消失 / 警告回流，
+  // 所以两条都要在提交阶段拦下，而不是等构建期那条 deprecation 提示。
+  describe("R11：Next 16 代理约定（ISSUE #489）", () => {
+    const writeProxy = (rel: string) => {
+      const abs = join(workdir, rel);
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, "export function proxy() {}\n");
+    };
+
+
+    it("src/proxy.ts 存在时放行（约定名不被 R2 kebab 规则误伤）", () => {
+      writeProxy("src/proxy.ts");
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("R2");
+    });
+
+    it("缺少 src/proxy.ts 时阻断（代理落点被删，构建期不报错）", () => {
+      rmSync(join(workdir, "src", "proxy.ts"));
+      //（外层的 beforeEach 已建好该文件，这里模拟「被删掉」）
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R11");
+    });
+
+    it("改回 src/middleware.ts 时阻断（Next 16 已废弃的约定名）", () => {
+      writeProxy("src/middleware.ts");
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R11");
+    });
+
+    it("约定文件被挪离 src/ 根时阻断（Next 不会加载，静默失效）", () => {
+      writeProxy("src/app/proxy.ts");
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R11");
     });
   });
 });

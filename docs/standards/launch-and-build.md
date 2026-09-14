@@ -578,7 +578,7 @@ zustand 队列，而不是再加一个模块级单例。
 | **失败原因只在弹窗顶部横幅里，日志行/时间线里找不到**（用户按「错误」筛选时一片空白）（ISSUE #378） | 面板把失败原因只渲染成横幅（`run.errorMessage` / `error`），而 SSE 的 `state`/`error` 帧可能不带对应的 `log` 帧（reaper 收口、DB 轮询补发终态、连接中断等），于是筛选视图与回放时间线里都看不到失败原因 | 已修：收口失败时**同时**补一条 error 日志行——工作流库运行记录走 `failWorkflowRun()`（`src/lib/workflow-run-store.ts`），画布面板走 `appendFailureLogLine()`（`GlobalStepLogPanel.tsx`），并做「末行同因」去重避免与服务端已有的 `✗ 生成失败` 重复。回归测试见 `src/lib/workflow-run-store.test.ts` |
 | 打开设置失败，页面只剩一句「配置数据未就绪」（没有原因、没有重试、日志面板里也找不到对应失败） | **判据取错**（ISSUE #304）：设置页有两个查询（`setting.get` / `llm.configGet`），降级视图此前只在「两份数据都没拿到」时才触发。当一份成功、一份失败（如 `llm` 相关表缺失 → `no such table: llmConfig`）时，草稿两份都不齐却又不满足该条件，容器一路落到兜底文案。叠加两个观测缺陷：①补记日志的 `query` 字段写死成 `setting.get`，与实际失败的查询对不上；②只记翻译后的可读文案（`signal is aborted without reason` 被译成「请求被中断，请稍候重试」），服务端原文丢失，用户按提示反复等重启永远修不好 | 已修：`hasError = 任一查询失败 且 草稿未就绪`（一份成功一份失败也落错误视图）；日志按实际失败查询记全名称，并把原始报错（tRPC `code` / 服务端 `message` / `cause` / 堆栈首行）写入 `raw` 字段；`errorMessage` 优先取 `shape.message` 的服务端原文，不让传输层包装文案盖掉根因。见 07 §7.12.1 |
 | 工作流库/项目列表整页空数据，tRPC 查询 500（console 报 no such table / Could not locate bindings） | **Drizzle 迁移三重遗漏**（2026-09-03 定位）：① better-sqlite3@11 无 Node 24 预编译包、本机无 MSVC → 原生绑定缺失，所有 DB 查询崩（升级到 v12，prebuild 下载即可）② `resolveDbPath` 用 `new URL("file:./db.sqlite")` 解析 → Windows 落到盘符根 `F:\db.sqlite` 空库（真实数据在 `prisma/db.sqlite`）③ schema.ts 表名 camelCase 与 Prisma 建的 PascalCase 表不一致 | ① better-sqlite3 钉在 v12（v13 移除预编译包，本机无编译链不能升）② 路径解析统一走 `path.resolve(process.cwd(), …)`（与 drizzle-kit 同锚点）③ 表名已重命名对齐 schema.ts；**换 Node 版本或重装依赖后先跑一次 `pnpm db:studio` 确认表与数据都在** |
-| `pnpm run build` 卡在 Collecting page data 阶段并报 turbopack 全项目追踪告警（提示围绕 src/server/db.ts / api/health、以及 src/lib/comfyui/lifecycle.ts） | 若干动态文件访问点缺 turbopackIgnore 注解，turbopack 无法静态追踪 → 退化为「整个项目全量追踪」（standalone 会塞进全仓库 >8GB）。命中点：db.ts resolveDbPath 里 path.resolve(process.cwd(), raw)、lifecycle.ts 循环里 fs.existsSync(c.main) | 沿用仓库既有惯例给动态访问加 /_turbopackIgnore: true_/（同 envfile.ts / debug/source/route.ts / localWorkflows.ts），让 turbopack 放弃追踪该动态路径 |
+| `pnpm build` 报 **`Dynamic filesystem access causes tracing of the whole project`**（若干条，围绕 `db.ts` / `lifecycle.ts` / `api/dev/build-id` / `api/update-check` 等动态路径访问点） | **动态路径访问让 Turbopack 放弃静态追踪、退化为「整个项目全量追踪」**：`fs.*` / `path.resolve` / `path.join` 的参数只要依赖 `process.cwd()`、`process.env`、目录项或 HTTP 入参，它就无法把路径静态收敛到某个子目录，于是把**整个项目**（含 `public/`）都算作 server code 的依赖。判据是**高亮行正好落在那条「算出路径」的表达式上**（`path.join(...)` / `path.resolve(...)` 那一行），而不是消费它的 `fs.statSync`。后果是 `.next/standalone` 被撑大（本仓库实测 62MB，`standalone/src` 里连 142 个 `*.test.ts` 都进去了） | **已纠正口径（ISSUE #489 实测）**：`/*turbopackIgnore: true*/` 对 `fs.*` **一概无效**——它只作用于动态 `import()` / `require()`（Next 文档里这类注解的语义是 "skip bundling"）。仓库里那些存量注解（`envfile.ts` / `debug/source/route.ts` / `localWorkflows.ts` / `db.ts`）**从未真正生效**，告警一直在；把它们换位置、做常量、写进 `path.join` 参数里都试过，5 条告警一条不少。**真正的防线是 `next.config.js` 的 `outputFileTracingExcludes`**（体积护栏 1.5GB 也靠它）：它按**最终产物路径**排除，不依赖 Turbopack 的静态分析。**不要**用 `turbopack.ignoreIssue` 去「消警」：实测它只关消息、不改行为（配了它，把哨兵目录从 `outputFileTracingExcludes` 里摘掉后，哨兵**照样**回到 `standalone`）——那是把唯一的可见信号关掉而产物照旧被放大（反模式 E9）。详见 §7.2 |
 | **`pnpm build` 在 master / CI / 干净检出上必失败**（`next build` 挂在 `Collecting page data` 阶段，报错 import trace 指向 `/api/logs/history` 一类与库无关的路由） | **模块级副作用在「表还没建好」时读库**：ComfyUI 孤儿任务回收（`src/lib/comfyui/reaper.ts`）是模块级副作用（`enqueue.ts` 用裸 `import "./reaper"` 把它挂上启动路径），build 期 worker 加载模块图时同样会执行它；而干净检出只跑 `pnpm install`、没跑 `pnpm db:push`，于是 `no such table: task` / `no such table: user` 以未捕获异常浮出 worker，被 Next 聚合进 collect-page-data 阶段错误——报错行号落在无关路由上，把人引向错误方向 | 已修：新增 `src/lib/db-schema-ready.ts`（只读探 `sqlite_master` 的哨兵表，三态 ready / missing / unknown，同进程只探一次），reaper 每轮 sweep 先判就绪、未就绪整轮跳过（回收幂等且每 30s 重跑，只推迟一轮）；**不吞真故障**——「表存在但查询失败」仍照原路径暴露。该模块必须保持纯 ASCII，见下一条 |
 | **给构建期模块图上的文件加中文注释后，`next build` 报的不是业务错，而是整个构建被一个 Rust panic 带走**：`thread 'tokio-rt-worker' panicked at crates/next-code-frame/src/highlight.rs:1021:45: end byte index N is not a char boundary` + `Build error occurred [Error: Panic in async function]` | **Next 的 code frame 高亮按字节偏移切串，落在多字节字符中间就 panic**（Next 16.3.2 实测）：`next-code-frame` 渲染错误现场时按**字节**取「该行的第 a..b 字节」，而一个中文字符占 3 字节；只要某个高亮区间的 `end` 落在中文字符内部，Rust 侧切片直接 panic 把 build 打死。触发条件是**组合**而非内容：某模块既在构建期被加载、又成为错误现场被渲染成 code frame，且其注释/字符串含多字节字符、偏移恰好落在字符中间——同一文件删掉中文能过、换成不同长度的中文又能复现，属偏移敏感的脆弱路径 | 规避（本仓库口径）：**会被 `next-code-frame` 渲染到的模块一律保持纯 ASCII 源码**。实践上指「new / 改动了构建期模块图上的模块」（被 `next build` worker 加载、且可能成为报错现场的那个）：注释与字符串写英文；其余文档与业务模块不受影响，中文注释照常。**排查手法**：build 报上面这段 panic 时不要去找业务 bug，先把最近新增/改动、且位于构建期模块图上的文件临时改 ASCII 再跑一次，能过即命中本条；用 `node -e 'const s=require("fs").readFileSync("f.ts","utf8");console.log([...s].filter(c=>c.charCodeAt(0)>127).length)'` 数非 ASCII 字符定位 |
 | drizzle-kit push 非交互环境报 "Interactive prompts require a TTY"，或重建表时 "index xxx already exists" | push 遇到表重命名/重建差异需要交互确认；其重建路径在多次部分执行后有索引名冲突的已知缺陷 | 启动器用 `push --force`（非致命，失败仅 WARN）；手动收敛时按「清理 `__new_*` 残留表与同名索引 → 重试 push」循环；索引可安全 DROP 后由 push/schema 重建 |
@@ -700,6 +700,61 @@ zustand 队列，而不是再加一个模块级单例。
 改动 tauri.conf.json、src-tauri/src/**、splash-assets/** 之后**必须重编壳**
 （`cargo build --release --features custom-protocol`，**feature 不能省**），
 否则运行的是旧二进制（预检只会提醒，不会阻止——界面异常先想到这一条）。
+
+### 7.2 Turbopack「全项目追踪」告警：怎么读、怎么真修（ISSUE #489）
+
+**告警长这样**（构建非阻断，但产物会被放大）：
+
+```
+./src/app/api/dev/build-id/route.ts:32:56
+Warning: Dynamic filesystem access causes tracing of the whole project
+  > 32 |   const st = fs.statSync(path.join(root, rel));
+     |                                         ^^^^^^^^^^^^^
+```
+
+**第一件事：读高亮行，而不是读调用点。** 判据是**那条把路径算出来的表达式**
+（`path.join` / `path.resolve` / 拼接字符串），不是消费它的 `fs.statSync`。
+知道这点才能判断「注释该放哪、为什么放了没用」。
+
+**第二件事：`turbopackIgnore` 在这里帮不上忙（实测口径）。** 它的语义是
+"skip bundling a dynamic import"（只作用于 `import()` / `require()` /
+`require.resolve()` / `new Worker()`）。对 `fs.*` 的动态路径访问，以下四种写法
+**全部无效**（逐条实测，Next 16.3.2 + Turbopack）：
+
+| 写法 | 结果 |
+|---|---|
+| `fs.statSync(path.join(/*turbopackIgnore: true*/ root, rel))` | 告警照旧，高亮整个 `path.join(...)` |
+| `const abs = /* turbopackIgnore: true */ path.join(root, rel)` | 告警挪到 `path.join` 那一行，照旧 |
+| `const abs = path.join(root, rel); // turbopackIgnore` | 同上，照旧 |
+| 注解做成模块级常量再 `path.join(...CONST, root, rel)` | 同上，照旧 |
+
+> 结论：看到别人（或历史提交）说「加个 `/*turbopackIgnore: true*/` 就好了」，
+> 先按上表验一遍——**仓库里现有的这些注解都是无效的**，不能作为「已修」的证据。
+
+**第三件事：真正的防线是 `outputFileTracingExcludes`。** 它工作在**产物路径**层面
+（next.config.js 顶层键，Next 16 起不再挂 `experimental`），不依赖 Turbopack 的静态
+分析，因此对「动态路径访问」这种静态判不准的情况照样有效。本仓库已排除
+`src-tauri/`、`python-venv/`、`tools/`、`docs/`、`e2e/`、`tests/`、`log/` 等
+（体积护栏 1.5GB 也在这一条上）。
+
+**三条禁令**
+
+1. **不要**用 `turbopack.ignoreIssue` 消这条警：它只过滤 CLI 输出与 overlay，
+   **不改行为**——实测「配了 ignoreIssue + 把哨兵目录从 excludes 里摘掉」后哨兵
+   照样回到 `standalone`。用它等于把信号关掉而问题留着（反模式 E9「降级不得静默」）。
+2. **不要**为了消警去改动态路径的写法（拆 `path.join`、加中间变量、换 `resolve`）。
+   高亮位置会跟着移动，告警一条不少，却把代码改得更绕。
+3. **不要**在构建期模块图上给这类改动加无谓的包装（如给每个路径都套一层
+   `map`/展开）。实测这会把 Turbopack 打到 Rust panic：
+   `ModuleGraph::get_traces` / `there must be a path to a root`，整个
+   `next build` 被 `Error: Panic in async function` 带走，`--debug` 也只丢一行
+   `FATAL`、指不到业务原因。构建期模块图上的改动保持「最小、直接」。
+
+**门禁**：`tests/turbopack-tracing-excludes.test.ts` 锁住 excludes 的完整性
+（键位在顶层、关键目录清单不缺、改动不静默失效），并断言 `turbopack.ignoreIssue`
+没有拿来遮这条告警；另有一条探针断言 `standalone` 里不得出现测试/文档/工具目录。
+
+---
 
 ## 8. Windows 入口规范：一律 .ps1，禁用 .bat / .cmd / .vbs
 

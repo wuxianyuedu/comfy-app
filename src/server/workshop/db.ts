@@ -8,12 +8,17 @@
 import path from "node:path";
 
 import Database from "better-sqlite3";
+
+import { tracingIgnoreArgs } from "@/lib/tracing-ignore";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/server/db/schema";
 
+/** 未配置 `DATABASE_URL` 时与 drizzle-kit 同锚点的兜底库文件（相对进程 CWD）。 */
+const DEFAULT_DB_FILE = "./db.sqlite";
+
 function resolveDbPath(url: string): string {
   const raw = url.startsWith("file:") ? url.slice("file:".length) : url;
-  return path.resolve(process.cwd(), raw || "./db.sqlite");
+  return path.resolve(...tracingIgnoreArgs(), process.cwd(), raw || DEFAULT_DB_FILE);
 }
 
 const dbUrl = process.env.DATABASE_URL ?? "file:./db.sqlite";
