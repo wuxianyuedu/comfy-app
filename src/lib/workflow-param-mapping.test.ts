@@ -51,6 +51,13 @@ describe("classifyPin", () => {
     expect(classifyPin(pin("1", "ref_image", { type: "IMAGE" }))).toBe("reference-image");
   });
 
+  it("时长口认 duration / length / frames，但帧率不算时长", () => {
+    expect(classifyPin(pin("1", "duration", { type: "INT" }))).toBe("duration");
+    expect(classifyPin(pin("1", "length", { type: "INT" }))).toBe("duration");
+    expect(classifyPin(pin("1", "num_frames", { type: "INT" }))).toBe("duration");
+    expect(classifyPin(pin("1", "fps", { type: "INT" }))).toBe("other");
+  });
+
   it("尺寸类先于提示词判定（base_width 这类下划线命名也认）", () => {
     expect(classifyPin(pin("1", "base_width", { type: "INT" }))).toBe("size-width");
     expect(classifyPin(pin("1", "height", { type: "INT" }))).toBe("size-height");
@@ -113,7 +120,7 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
     };
     expect(
       buildParamEntries(videoIO, undefined, { mode: "I2V" }).map((entry) => entry.id),
-    ).toEqual(["prompt", "first-frame", "size"]);
+    ).toEqual(["prompt", "first-frame", "size", "duration"]);
     expect(
       buildParamEntries(videoIO, undefined, { mode: "T2I" }).map((entry) => entry.id),
     ).toEqual(["prompt", "size"]);
