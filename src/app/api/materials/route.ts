@@ -3,6 +3,7 @@ import path from "path";
 import { type NextRequest, NextResponse } from "next/server";
 import { requireServerUser } from "@/lib/auth-server";
 import { logger } from "~/server/lib/logger";
+import { errorMessage } from "~/lib/error-message";
 import {
   MATERIAL_FOLDERS,
   SHARED_SCOPE,
@@ -56,16 +57,6 @@ const ALLOWED_MIME = new Set([
   "application/zip",
 ]);
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
-
-/** 提取错误信息,等价原 `e?.message ?? fallback`(catch 变量为 unknown 后的窄化版)。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const msg: unknown = e.message;
-    if (typeof msg === "string") return msg;
-  }
-  return fallback;
-}
 
 /** 鉴权守卫：无有效会话时返回 401（响应对象）。 */
 async function requireUser(): Promise<NextResponse | null> {

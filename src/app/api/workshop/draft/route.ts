@@ -16,6 +16,7 @@ import {
   listDraftsByUser,
   upsertDraft,
 } from "@/server/workshop/draft-repository";
+import { errorMessage } from "~/lib/error-message";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,15 +26,6 @@ const UNAUTHORIZED = () =>
     { error: { code: "auth.required", message: "未登录或会话已失效" } },
     { status: 401 },
   );
-
-function errorMessage(e: unknown, fallback: string): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const msg: unknown = e.message;
-    if (typeof msg === "string") return msg;
-  }
-  return fallback;
-}
 
 function projectIdFrom(q: string | null): string | null {
   const trimmed = q?.trim();
