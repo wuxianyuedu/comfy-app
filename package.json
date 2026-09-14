@@ -16,6 +16,7 @@
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "postinstall": "sh scripts/install-git-hooks.sh || true",
     "preview": "node scripts/start.mjs",
     "start": "node scripts/start.mjs",
     "test": "vitest run",

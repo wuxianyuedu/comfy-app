@@ -22,7 +22,8 @@
   （§4.3「陈旧实例：运行图落后于源码」= 长开窗口 + 拉新代码导致的白屏及其通知；
   改 store 动作、或新增会被已挂载实例调用到的模块时必读；用户侧说明见
   `docs/guide-stale-code.md`）；
-- 提交 / PR / 自查清单 → `docs/standards/13-提交与-code-review.md`（§13.1 自查清单）；
+- 提交 / PR / 自查清单 / 分支策略 → `docs/standards/13-提交与-code-review.md`
+  （§13.1 自查清单、§13.5 门禁、§13.6 分支与合并、§13.6.1 master 提交守卫）；
 - 不确定读哪些 → 先读 `docs/standards/15-附录.md` §15.5「新成员 10 分钟速读路径」建立全局认知。
 
 > 判断标准：改动被「强制先读规范文档的改动范围」表或本清单覆盖但未先读就动手 = 违规，
@@ -58,19 +59,30 @@
    `build.devUrl` 且资源不内嵌——冷启动必现 Edge「无法访问此页面」错误页，
    详见规范 §5）——窗口配置与启动页是编译期内嵌的，只改源码不重编 =
    跑旧二进制（历史黑屏事故来源）。
-6. **提交必须通过 `.githooks/pre-commit`**（结构检查 + tsc + eslint，全部走
-   `pnpm exec`）。钩子失败先修代码，禁止 `--no-verify` 绕过进历史。
-7. **新增含 postinstall 构建脚本的依赖**：同步更新 `pnpm-workspace.yaml`
+6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492 / 规范 §13.6.1）：
+   `master` 只接受「分支开发 → PR → 评审 → 合并」。三层防线 = 平台分支锁（CNB，
+   拦 push）+ `.githooks/pre-commit` 第 1 步 `scripts/check-branch-guard.cjs`
+   （拦本地提交）+ CI `Branch guard` 步骤（拦源分支为 `master` 的 PR）。
+   判据是 **HEAD 父提交数**：`master` 上父提交数 ≤ 1 = 直连主干，阻断；> 1 =
+   PR 合并提交，放行（只查分支名会把合并一起拦掉，见规范 §13.6.1）。
+   提交已在本地 `master` 上时：`git branch feat/<描述>` → `git reset --hard
+   origin/master` → `git checkout feat/<描述>` → 推送开 PR。
+7. **提交必须通过 `.githooks/pre-commit`**（分支守卫 + 结构检查 + tsc + eslint +
+   UI/逻辑分离棘轮 + CHANGELOG 碎片，全部走 `pnpm exec`）。钩子失败先修代码，
+   禁止 `--no-verify` 绕过进历史。钩子由 `pnpm install` 自动接上
+   （`package.json` postinstall → `scripts/install-git-hooks.sh` 写
+   `core.hooksPath=.githooks`）；未生效时手动 `git config core.hooksPath .githooks`。
+8. **新增含 postinstall 构建脚本的依赖**：同步更新 `pnpm-workspace.yaml`
    的 `allowBuilds`，否则非交互模式 `pnpm install` 会 exit 1。
-8. **dev server 运行期间不要执行 `pnpm install`**（better-sqlite3 等原生模块（`.node`）被进程
+9. **dev server 运行期间不要执行 `pnpm install`**（better-sqlite3 等原生模块（`.node`）被进程
    锁定会 EPERM 连锁失败）。
-9. **视图层不得新增 IO**：`src/components/**`、`src/app/**`（除 `api/`）里不允许新写
+10. **视图层不得新增 IO**：`src/components/**`、`src/app/**`（除 `api/`）里不允许新写
    `fetch(`、`vanillaApi.*`、`api.x.y.useQuery/useMutation`——逻辑要进
    `<feature>/hooks/`，网络层一律进 `src/lib/<domain>-client.ts`（守卫只豁免
    `hooks/` 目录，`components/<feature>/*-api.ts` 会被计为违规）。守卫脚本
    `scripts/check-ui-logic-separation.cjs`（棘轮只许降不许升，已接入 pre-commit 与 CI）。
    治理后必须 `node scripts/check-ui-logic-separation.cjs --update` 收紧基线。
-10. **禁用 `.bat` / `.cmd` / `.vbs` 入口，Windows 入口一律 `.ps1`**（ISSUE #23 / 规范 §8）。
+11. **禁用 `.bat` / `.cmd` / `.vbs` 入口，Windows 入口一律 `.ps1`**（ISSUE #23 / 规范 §8）。
     **入口放 `tools/<分类>/`，不放仓库根**（ISSUE #29 / 规范 §8.6）：启动类归
     `tools/start/`，与 `tools/build/`、`tools/registry/`、`tools/studio/` 按用途并列；
     根目录只留工程配置与文档。R9 在 pre-commit 强制拦截，回归测试见
@@ -83,24 +95,27 @@
      按 GBK 解码，与 `.bat` 乱码同源）；
    - R7/R8 由 `scripts/check-file-structure.cjs` 在 pre-commit 强制拦截，
      回归测试见 `tests/check-file-structure.test.ts`。
-11. **注释里禁止「历史流水」**（ISSUE #46 / 规范 §12.4.2 / 反模式表 G4）：
+12. **注释里禁止「历史流水」**（ISSUE #46 / 规范 §12.4.2 / 反模式表 G4）：
     日期（`2026-08-17`）、改动编号（`R-ardot114` / `R83` / `R-Next`）、
     任务批次号（`T12-3`）—— 这些归 `git log`，写进注释会随代码搬迁过期失真。
     由 `scripts/check-file-structure.cjs` 的 **R10** 在 pre-commit 强制拦截，
     回归测试见 `tests/check-file-structure.test.ts`。
-12. **变更日志只写 `changelog.d/` 碎片，不直接改 `CHANGELOG.md`**（ISSUE #408 / 规范 §13.10.5）：
+13. **变更日志只写 `changelog.d/` 碎片，不直接改 `CHANGELOG.md`**（ISSUE #408 / 规范 §13.10.5）：
     `CHANGELOG.md` 的 `[Unreleased]` 是全仓库唯一「人人都改同一处」的文件，并行分支必然冲突。
     条目写 `changelog.d/<issue号>-<slug>.md`（一件变更一个文件，首行标 `## Added` / `## Fixed` 等段落），
     由 `node scripts/merge-changelog-fragments.mjs` 在发版/整理时并入。
     形态由 `scripts/check-changelog-fragments.cjs` 在 pre-commit 与 CI 强制拦截，
     回归测试见 `tests/check-changelog-fragments.test.ts`。
-13. **改动任何文件前必须完成「改动前必读文档」前置阅读**（见本文件对应章节）：
+14. **改动任何文件前必须完成「改动前必读文档」前置阅读**（见本文件对应章节）：
     未读 `README.md` / `docs/README.md` / 本文件全文就动手 = 违规；
     命中「强制先读规范文档的改动范围」表或相关规范章节时，须读完对应章节
     并在提交/实施说明里注明遵循了哪些条目。把「先看文档再改代码」当默认动作，
     不凭项目外部经验或旧记忆猜测本仓库约定。
 
 ## 快速排障
+
+被提交门槛拦下时，先看报错指出的规范章节（分支守卫 → §13.6.1、文件结构/命名 → §12.8、
+CHANGELOG 碎片 → §13.10.5），不要用 `--no-verify` 换一条干净历史。
 
 遇到启动/生成问题，先查规范文档 **§5 症状 → 根因对照表**（本项目全部历史
 事故都在里面），再按 **§4 日志布局** 的顺序看日志（log/ 按子系统分区：
