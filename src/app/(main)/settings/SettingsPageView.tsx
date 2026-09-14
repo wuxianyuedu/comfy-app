@@ -56,6 +56,7 @@ import {
   statusButtonClass,
 } from "./settings-status-row-config";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { OLLAMA_DEFAULT_BASE_URL } from "@/lib/endpoints";
 
 /** 安装形态 → 设置页徽标文案。 */
 const INSTANCE_KIND_LABEL: Record<
@@ -929,7 +930,7 @@ export function SettingsPageView({
             label="Base URL"
             value={c.drafts.llm.baseUrl}
             onChange={(value) => c.patchLlm({ baseUrl: value })}
-            placeholder="http://localhost:11434/v1"
+            placeholder={OLLAMA_DEFAULT_BASE_URL}
           />
 
           {/* Ollama status row */}

@@ -6,6 +6,7 @@ import { decryptSecret } from "@/lib/llm/secrets";
 import type { LLMMessage } from "@/lib/llm/types";
 import { llmConfig } from "@/server/db/schema";
 import { workshopDb } from "./db";
+import { OLLAMA_DEFAULT_BASE_URL } from "@/lib/endpoints";
 
 export interface WorkshopLLMConfig {
   baseUrl: string;
@@ -17,7 +18,7 @@ export interface WorkshopLLMConfig {
 
 function envDefaults(): WorkshopLLMConfig {
   return {
-    baseUrl: process.env.LLM_BASE_URL ?? "http://localhost:11434/v1",
+    baseUrl: process.env.LLM_BASE_URL ?? OLLAMA_DEFAULT_BASE_URL,
     model: process.env.LLM_MODEL ?? "",
     apiKey: process.env.LLM_API_KEY ?? null,
     temperature: Number(process.env.LLM_TEMPERATURE ?? 0.7),

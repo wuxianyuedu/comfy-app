@@ -303,6 +303,56 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       expect(output).not.toContain("R12");
     });
   });
+
+  // ── R5：超大文件的拆分候选（提示级，ISSUE #536）──
+  // 历史口径只扫 `src/components/` 且只认 .tsx，于是**全仓库最大的那个文件**
+  //（`settings/SettingsPageView.tsx` 2499 行）与逻辑层的大文件
+  //（`lib/comfyui/lifecycle.ts` 1041 行）都不在任何护栏里。这里把范围钉死：
+  // 整个 `src/`、不分层不分文件类型。只提醒不阻断。
+  describe("R5：拆分候选覆盖整个 src/（ISSUE #536）", () => {
+    /** 造一个恰好 `lines` 行的源文件。 */
+    const writeLines = (rel: string, lines: number) => {
+      const abs = join(workdir, rel);
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, Array.from({ length: lines }, () => "// x").join("\n"));
+    };
+
+    it("src/app 下的超长视图进入提醒（只提示不阻断）", () => {
+      writeLines("src/app/(main)/settings/SettingsPageView.tsx", 901);
+      const { code, output } = run();
+      expect(code).toBe(0); // 提醒不得升级为阻断
+      expect(output).toContain("拆分候选");
+      expect(output).toContain("src/app/(main)/settings/SettingsPageView.tsx");
+    });
+
+    it("src/lib 下的超长逻辑模块同样进入提醒（不再只管 .tsx）", () => {
+      writeLines("src/lib/comfyui/lifecycle.ts", 901);
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).toContain("src/lib/comfyui/lifecycle.ts");
+    });
+
+    it("src/components 下的超长文件照旧提醒（不因扩范围而丢）", () => {
+      writeLines("src/components/studio/logs/LogPanel.tsx", 901);
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).toContain("src/components/studio/logs/LogPanel.tsx");
+    });
+
+    it("刚好 900 行不算超阈值（不多报噪音）", () => {
+      writeLines("src/app/(main)/settings/SettingsPageView.tsx", 900);
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("拆分候选");
+    });
+
+    it("测试文件不进拆分候选（用例体量不是可维护性信号）", () => {
+      writeLines("src/app/(main)/settings/hooks/use-settings-page.test.ts", 901);
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("拆分候选");
+    });
+  });
 });
 
 describe("Build-Guard.ps1（构建前置守卫）", () => {
