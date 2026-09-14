@@ -1027,7 +1027,7 @@ export function SettingsPageView({
             <div
               ref={ollamaLogBoxRef}
               onScroll={onOllamaLogScroll}
-              className="border-border/50 custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg bg-black/30 px-3 py-2 font-mono text-[11px] leading-relaxed text-gray-300"
+              className="border-border-subtle bg-canvas-deep text-ink-field custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg border px-3 py-2 font-mono text-[11px] leading-relaxed"
             >
               {c.ollamaLogText ? (
                 <span className="break-all whitespace-pre-wrap">
@@ -1083,7 +1083,7 @@ export function SettingsPageView({
                           className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
                             checked
                               ? "border-primary bg-primary/15 text-primary"
-                              : "border-border text-muted-foreground hover:bg-white/5"
+                              : "border-border text-muted-foreground hover:bg-subtle"
                           }`}
                         >
                           {checked ? "✓ " : ""}
@@ -2117,7 +2117,7 @@ export function SettingsPageView({
             <div
               ref={comfyLogBoxRef}
               onScroll={onComfyLogScroll}
-              className="border-border/50 custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg bg-black/30 px-3 py-2 font-mono text-[11px] leading-relaxed text-gray-300"
+              className="border-border-subtle bg-canvas-deep text-ink-field custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg border px-3 py-2 font-mono text-[11px] leading-relaxed"
             >
               {c.comfyLogText ? (
                 <span className="break-all whitespace-pre-wrap">
@@ -2249,7 +2249,7 @@ export function SettingsPageView({
             <div
               ref={dbStudioLogBoxRef}
               onScroll={onDbStudioLogScroll}
-              className="border-border/50 custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg bg-black/30 px-3 py-2 font-mono text-[11px] leading-relaxed text-gray-300"
+              className="border-border-subtle bg-canvas-deep text-ink-field custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg border px-3 py-2 font-mono text-[11px] leading-relaxed"
             >
               {c.dbStudioLogText ? (
                 <span className="break-all whitespace-pre-wrap">
@@ -2359,28 +2359,28 @@ const ANSI_STYLE_CLASS: Record<AnsiStyleKey, string> = {
   dim: "opacity-60",
   italic: "italic",
   underline: "underline",
-  red: "text-red-400",
-  green: "text-green-400",
-  yellow: "text-yellow-300",
-  blue: "text-blue-400",
-  magenta: "text-fuchsia-400",
-  cyan: "text-cyan-300",
-  white: "text-white",
-  gray: "text-gray-500",
-  "red-bright": "text-red-300",
-  "green-bright": "text-green-300",
-  "yellow-bright": "text-yellow-200",
-  "blue-bright": "text-blue-300",
-  "magenta-bright": "text-fuchsia-300",
-  "cyan-bright": "text-cyan-200",
-  "white-bright": "text-white",
-  "red-bg": "bg-red-900/60",
-  "green-bg": "bg-green-900/60",
-  "yellow-bg": "bg-yellow-800/60",
-  "blue-bg": "bg-blue-900/60",
-  "magenta-bg": "bg-fuchsia-900/60",
-  "cyan-bg": "bg-cyan-900/60",
-  "white-bg": "bg-gray-600/60",
+  red: "text-red-600 dark:text-red-400",
+  green: "text-green-600 dark:text-green-400",
+  yellow: "text-yellow-600 dark:text-yellow-300",
+  blue: "text-blue-600 dark:text-blue-400",
+  magenta: "text-fuchsia-600 dark:text-fuchsia-400",
+  cyan: "text-cyan-700 dark:text-cyan-300",
+  white: "text-ink-bright",
+  gray: "text-ink-muted",
+  "red-bright": "text-red-700 dark:text-red-300",
+  "green-bright": "text-green-700 dark:text-green-300",
+  "yellow-bright": "text-yellow-700 dark:text-yellow-200",
+  "blue-bright": "text-blue-700 dark:text-blue-300",
+  "magenta-bright": "text-fuchsia-700 dark:text-fuchsia-300",
+  "cyan-bright": "text-cyan-800 dark:text-cyan-200",
+  "white-bright": "text-ink-bright",
+  "red-bg": "bg-red-500/15 dark:bg-red-900/60",
+  "green-bg": "bg-green-500/15 dark:bg-green-900/60",
+  "yellow-bg": "bg-yellow-500/15 dark:bg-yellow-800/60",
+  "blue-bg": "bg-blue-500/15 dark:bg-blue-900/60",
+  "magenta-bg": "bg-fuchsia-500/15 dark:bg-fuchsia-900/60",
+  "cyan-bg": "bg-cyan-500/15 dark:bg-cyan-900/60",
+  "white-bg": "bg-subtle",
 };
 
 function AnsiLogText({ segments }: { segments: AnsiSegment[] }) {
@@ -2415,7 +2415,7 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-border bg-surface-1 rounded-2xl border p-5 backdrop-blur">
+    <section className="border-border-subtle bg-surface-1 dark:bg-surface-1/60 rounded-2xl border p-5 shadow-sm shadow-black/2 backdrop-blur dark:shadow-none">
       <h2 className="text-ink mb-4 text-base font-semibold">{title}</h2>
       {children}
     </section>
