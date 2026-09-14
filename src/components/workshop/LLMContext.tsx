@@ -5,16 +5,7 @@ import { Icon } from "@/components/ui/icon";
 import type { LLMConfigView } from "@/lib/llm/types";
 import { useLLMConfig, useLLMConfigSave } from "./hooks/use-llm-config";
 import { overlayClass } from "~/lib/full-screen-layer";
-
-/** catch 抛出值（unknown）→ 与旧 `e?.message ?? fallback` 逐值等价的消息提取：
- *  带 string message 的对象取 message（Error 实例即此路径），其余回退。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return fallback;
-}
+import { errorMessage } from "~/lib/error-message";
 
 interface LLMContextValue {
   config: LLMConfigView | null;
