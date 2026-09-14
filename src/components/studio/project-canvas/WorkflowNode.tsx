@@ -164,11 +164,11 @@ export function WorkflowNode({
           </span>
         </div>
         <div
-          className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-node-accent px-2"
+          className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-overlay-accent-surface px-2"
           title={`项目画布节点 Id：${id}`}
         >
           <span
-            className="font-mono text-[10px] font-semibold text-cyan-200"
+            className="font-mono text-[10px] font-semibold text-cyan-700 dark:text-cyan-200"
             style={{ fontFamily: "var(--font-mono)" }}
           >
             {nodeSeq !== null
