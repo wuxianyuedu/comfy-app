@@ -190,6 +190,10 @@
     `scripts/.function-length-baseline.json`，只许降不许升）。R5 管**文件**行数、
     本条管**函数**行数，两条维度不可互相替代。括号配对只认 `()` `{}` `[]`——
     把 `<` `>` 算进去会让 TSX 里的泛型/JSX 标签把深度漂负、函数尾永远找不到（静默漏报）。
+    **Rust 壳同一维度见 §12.13.1**：`scripts/check-rust-function-length.cjs` 扫
+    `src-tauri/src/**`，阈值 **120 行**（结构化编排的自然长度比 TSX 短），棘轮记在
+    `scripts/.rust-function-length-baseline.json`。Rust 特有的 `r#"…"#` 原始字符串与
+    `'` 的两义性（字符字面量 vs 生命周期）已在状态机里处理。
 
 ## 快速排障
 

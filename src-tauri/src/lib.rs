@@ -863,204 +863,25 @@ pub fn run() {
       should_activate_on_launch
     ])
     .setup(|app| {
-      // 按检出单实例：等待二次启动实例发来的「唤起前台」事件（见 run() 早期
-      // 判定与 single_instance 模块注释）。
-      single_instance::spawn_focus_waiter(app.handle().clone());
+      // run() 只做装配，启动编排按职责拆成命名步骤（原先整段塞在 setup 闭包里，
+      // 单函数近 300 行，而 Rust 侧没有函数长度门禁——见 §12.13 / ISSUE #536 P4）。
+      // 顺序是契约：先收二次启动事件并定启动页尺寸，再建隐藏的 main 窗并挂其加载
+      // 完成回调，接着挂「关启动页 = 放弃启动」与看门狗，最后才是生产模式
+      // sidecar 与托盘。
+      setup_splash_window(app);
 
       // ── 方向 B：启动页与「应用」窗口分离 ──
-      // 配置里的 splash 窗口（label="splash"）仅显示启动进度，可见。
-      // 真正的应用窗口（label="main"）在此创建为隐藏窗口，先停在 about:blank，
-      // 由启动页探测后端就绪后调用 navigate_to_app 导航到应用 URL；main 页面真正
-      // 加载完成（on_page_load Finished）时再交换窗口：显示 main、关闭 splash。
-      // 这样启动页会一直显示到应用首屏真正可见，不再出现「启动完成却还要等很久」。
-      // 启动页尺寸收成「刚好装下内容」的一条并居中（见 splash_window_size）：
-      // 启动期只在屏幕中央占一小块，不铺满屏幕留出大片空白（ISSUE #412）。
-      // 展开日志时由页面调 set_splash_compact(false) 放大，仍是内容尺寸。
-      if let Some(splash) = app.get_webview_window("splash") {
-        let (width, height) = splash_window_size(app.handle());
-        let _ = splash.set_size(tauri::LogicalSize::new(width, height));
-        let _ = splash.center();
-      }
+      // 配置里的 splash 窗口仅显示启动进度；「应用」窗口（label="main"）在此创建
+      // 为隐藏窗口，先停在 about:blank，由启动页探测后端就绪后经 navigate_to_app
+      // 导航到应用 URL，加载完成后由 create_main_window 里挂的回调交换窗口。
+      create_main_window(app)?;
 
-      let main_url: tauri::Url = "about:blank"
-        .parse()
-        .unwrap_or_else(|_| tauri::Url::parse(&default_dev_url("127.0.0.1")).unwrap());
-      let app_handle_for_page = app.handle().clone();
-      let _main_win = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(main_url))
-        .title("Comfy APP")
-        .inner_size(1280.0, 800.0)
-        .min_inner_size(1024.0, 700.0)
-        .center()
-        .resizable(true)
-        .fullscreen(false)
-        // 关闭原生装饰：标题行由前端 ShellTabs / TitleBarTabs 接管，页签直接
-        // 显示在标题行（ISSUE #310 / #200），不再额外占用应用内区域。拖拽与
-        // 最小化/最大化/关闭由 window-controls-client 调 Tauri window API 补齐，
-        // 对应权限见 capabilities/{default,remote}.json。
-        .decorations(false)
-        .visible(false)
-        // 首次显示必须「不激活」：tao 对 focused(false) 的窗口在首次 show() 时走
-        // ShowWindow(SW_SHOWNOACTIVATE)（见 tao window_state.rs 的
-        // MARKER_DONT_FOCUS），窗口进任务栏但不向前台要焦点——否则交接瞬间
-        // show() 自带的激活语义会由 Windows 把前台放行给主窗，「不打断用户」
-        // 的策略在启动页关闭那一刻被架空（表现为双击启动完成后窗口弹到最前）。
-        // 显式唤起（托盘 / 二次启动 / 启动器判决给前台）仍走 set_focus()，
-        // 不受本标记影响。
-        .focused(false)
-        .on_page_load(move |_win, payload| {
-          if payload.event() == tauri::webview::PageLoadEvent::Finished {
-            let url = payload.url().as_str();
-            log::info!("[ComfyAPP] main window Finished: {}", url);
-            // 忽略初始 about:blank / 空 URL / 内部错误页，只有在真正导航到应用 URL（http/https）
-            // 后才交换窗口，避免主窗口提前显示在黑屏的 about:blank 上。
-            if url.is_empty()
-              || url.starts_with("about:blank")
-              || url.starts_with("tauri://")
-              || url.starts_with("https://tauri.localhost")
-              || (!url.starts_with("http://") && !url.starts_with("https://"))
-            {
-              log::debug!("[ComfyAPP] ignoring initial/non-app page load");
-              return;
-            }
-            log::info!("[ComfyAPP] app page loaded, swapping windows");
-            // 用户已在启动期关闭启动页（放弃本次启动）：壳正在退出，别再把
-            // 主窗显示出来（否则用户关闭后过一会儿窗口又自己冒出来）。
-            let abandoned = app_handle_for_page
-              .try_state::<AppState>()
-              .map(|s| s.is_abandoned())
-              .unwrap_or(false);
-            if abandoned {
-              log::info!("[ComfyAPP] launch abandoned by user, skip window swap");
-              return;
-            }
-            // 导航失败（连接被拒/服务又挂掉）时 WebView2 也会以 http URL 触发
-            // Finished，页面内容是内嵌的 Edge「无法访问此页面」错误页——历史上
-            // 它曾被当成「应用加载完成」直接顶给用户。交换前用 TCP 可达性做
-            // 二次校验：不可达就不交换，交给重导航循环，保持启动页可见。
-            if !url_reachable(payload.url()) {
-              log::warn!("[ComfyAPP] swap aborted, app url unreachable: {}", url);
-              spawn_renavigate(app_handle_for_page.clone(), payload.url().clone());
-              return;
-            }
-            // 启动期可能已过了几十秒，用户很可能切到了别的窗口：这里只把应用
-            // 显示到任务栏并做闪烁提醒，不把窗口顶到前台（见函数注释）。
-            show_main_window_without_focus(&app_handle_for_page, false);
-            if let Some(s) = app_handle_for_page.get_webview_window("splash") {
-              let _ = s.close();
-            }
-          }
-        })
-        .build()?;
-
-      // ── 启动页关闭 = 放弃本次启动，整个应用直接退出 ──
-      // 主窗在 setup 时就已创建（隐藏待命），如果只关 splash 窗口，壳会带着
-      // 一个看不见的主窗继续活着：任务栏图标挂着、dev server 继续被拉起，
-      // 用户以为已经退出，实际进程还在（还会在服务就绪后把主窗又弹出来）。
-      // 因此：启动页的关闭请求到达而主窗仍未显示时，标记「已放弃」并退出整个
-      // 壳进程——dev-launcher 以壳退出为锚点回收 dev server 进程树，启动器
-      // 监控线程随之收尾，任务栏不再残留。正常交接（壳自己关启动页）发生时
-      // 主窗已经显示，走不到这条退出路径。
-      let handle_for_splash_close = app.handle().clone();
-      if let Some(splash_for_close) = app.get_webview_window("splash") {
-        splash_for_close.on_window_event(move |event| {
-          if let tauri::WindowEvent::CloseRequested { .. } = event {
-            let main_visible = handle_for_splash_close
-              .get_webview_window("main")
-              .map(|m| m.is_visible().unwrap_or(false))
-              .unwrap_or(false);
-            if main_visible {
-              return;
-            }
-            if let Some(state) = handle_for_splash_close.try_state::<AppState>() {
-              state.mark_abandoned();
-            }
-            log::info!(
-              "[ComfyAPP] splash closed while main window hidden, exiting app (launch abandoned)"
-            );
-            handle_for_splash_close.exit(0);
-          }
-        });
-      }
-
-      // ── 启动页看门狗（仅 custom-protocol 构建）──
-      // custom-protocol 关闭时（tauri dev），tauri 的 cfg(dev) 开启，窗口相对
-      // URL 解析到 build.devUrl——启动页由 dev server 提供，那是 dev 模式的预期。
-      // custom-protocol 开启时（正式壳，cargo build --release --features
-      // custom-protocol），启动页加载编译期内嵌资源；页面一旦被任何导航带走
-      // （错误页/其它地址），页内 JS 全部失效，进度/日志界面无法自愈，只能干等
-      // main 加载完成后交换窗口。看门狗每秒检查启动页当前 URL，偏离内嵌资源
-      // 地址就导航回去，保证进度界面必然恢复。
-      #[cfg(feature = "custom-protocol")]
-      {
-        let handle = app.handle().clone();
-        std::thread::spawn(move || {
-          // 等启动页创建并拿到基准 URL（= 配置解析出的内嵌资源地址）
-          let mut base: Option<tauri::Url> = None;
-          for _ in 0..50 {
-            match handle.get_webview_window("splash") {
-              None => return, // 启动页已关闭（秒就绪），无需看门狗
-              Some(s) => {
-                if let Ok(u) = s.url() {
-                  if u.as_str().ends_with("splash.html") {
-                    base = Some(u);
-                    break;
-                  }
-                }
-              }
-            }
-            std::thread::sleep(Duration::from_millis(100));
-          }
-          let Some(splash_url) = base else {
-            log::warn!("[ComfyAPP] splash watchdog: base url not seen in 5s, giving up");
-            return;
-          };
-          log::info!("[ComfyAPP] splash watchdog: base url {}", splash_url);
-          for _ in 0..300 {
-            std::thread::sleep(Duration::from_millis(1000));
-            let Some(s) = handle.get_webview_window("splash") else { return };
-            let drifted = match s.url() {
-              Ok(u) => u != splash_url,
-              Err(_) => false,
-            };
-            if drifted {
-              let cur = s.url().map(|u| u.to_string()).unwrap_or_default();
-              log::warn!("[ComfyAPP] splash watchdog: url drifted to {}, restoring", cur);
-              let _ = s.navigate(splash_url.clone());
-            }
-          }
-        });
-      }
+      install_splash_close_handler(app);
+      spawn_splash_watchdog(app);
 
       #[cfg(not(debug_assertions))]
-      {
-        let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
-        if launch_mode == "standalone" {
-          // 显式 standalone：必须启动内嵌 server（缺失时 spawn_sidecar 会报错）。
-          spawn_sidecar(app.handle())?;
-        } else {
-          // prebuilt / tauri / 未指定：壳直接加载 COMFYAPP_DEV_URL（由
-          // dev-launcher.ps1 起 dev server），不启动 standalone sidecar。
-          log::info!(
-            "[ComfyAPP] launch mode={:?}，跳过 standalone sidecar，使用 dev URL",
-            launch_mode
-          );
-        }
+      setup_standalone_runtime(app)?;
 
-        // 启动页资源缺失兜底（详见 navigate_when_ready 注释）：
-        // 老版本 app.exe 未嵌入 splash.html，窗口会 404 黑屏且无法自动跳转，
-        // 这里检测不到启动页就直接等应用地址就绪后导航，避免永久黑屏。
-        let has_splash = app.asset_resolver().get("splash.html".to_string()).is_some();
-        log::info!("[ComfyAPP] splash.html embedded: {}", has_splash);
-        if !has_splash {
-          if let Some(state) = app.try_state::<AppState>() {
-            let url = state.app_url();
-            if !url.is_empty() {
-              log::warn!("[ComfyAPP] splash.html 未嵌入，启动页不可用，就绪后直接导航到 {}", url);
-              navigate_when_ready(app.handle().clone(), url);
-            }
-          }
-        }
-      }
       // 托盘是「窗口只在任务栏、用户又切走了」时的兜底唤起入口：创建失败
       // （缺图标资源 / 系统限制）只记 WARN，绝不能让整个应用起不来。
       if let Err(e) = build_tray(app.handle()) {
@@ -1071,14 +892,242 @@ pub fn run() {
     .build(tauri::generate_context!())
     .expect("error while building tauri application");
 
-  app.run(|app, event| match event {
+  app.run(handle_run_event);
+}
+
+/// 收二次启动的「唤起前台」事件，并把配置里的 splash 窗口收成「刚好装下内容」
+/// 的一条后居中。
+///
+/// 尺寸为什么要收窄（ISSUE #412）：窗口即内容，启动期只在屏幕中央占一小块，
+/// 不铺满屏幕留出大片空白；展开日志时由页面调 set_splash_compact(false) 放大。
+fn setup_splash_window(app: &mut tauri::App) {
+  // 按检出单实例：等待二次启动实例发来的「唤起前台」事件（见 run() 早期
+  // 判定与 single_instance 模块注释）。
+  single_instance::spawn_focus_waiter(app.handle().clone());
+
+  if let Some(splash) = app.get_webview_window("splash") {
+    let (width, height) = splash_window_size(app.handle());
+    let _ = splash.set_size(tauri::LogicalSize::new(width, height));
+    let _ = splash.center();
+  }
+}
+
+/// 创建隐藏待命的「应用」窗口（label="main"），并挂上「页面加载完成即交换窗口」回调。
+///
+/// main 停在 about:blank，等启动页探测到后端就绪后经 navigate_to_app 导航；真正
+/// 导航到应用 URL 且加载完成（on_page_load Finished）时才显示 main、关闭 splash，
+/// 启动页因而会一直显示到应用首屏真正可见（不再出现「启动完成却还要等很久」）。
+fn create_main_window(app: &mut tauri::App) -> tauri::Result<()> {
+  let main_url: tauri::Url = "about:blank"
+    .parse()
+    .unwrap_or_else(|_| tauri::Url::parse(&default_dev_url("127.0.0.1")).unwrap());
+  let app_handle_for_page = app.handle().clone();
+  let _main_win = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(main_url))
+    .title("Comfy APP")
+    .inner_size(1280.0, 800.0)
+    .min_inner_size(1024.0, 700.0)
+    .center()
+    .resizable(true)
+    .fullscreen(false)
+    // 关闭原生装饰：标题行由前端 ShellTabs / TitleBarTabs 接管，页签直接
+    // 显示在标题行（ISSUE #310 / #200），不再额外占用应用内区域。拖拽与
+    // 最小化/最大化/关闭由 window-controls-client 调 Tauri window API 补齐，
+    // 对应权限见 capabilities/{default,remote}.json。
+    .decorations(false)
+    .visible(false)
+    // 首次显示必须「不激活」：tao 对 focused(false) 的窗口在首次 show() 时走
+    // ShowWindow(SW_SHOWNOACTIVATE)（见 tao window_state.rs 的
+    // MARKER_DONT_FOCUS），窗口进任务栏但不向前台要焦点——否则交接瞬间
+    // show() 自带的激活语义会由 Windows 把前台放行给主窗，「不打断用户」
+    // 的策略在启动页关闭那一刻被架空（表现为双击启动完成后窗口弹到最前）。
+    // 显式唤起（托盘 / 二次启动 / 启动器判决给前台）仍走 set_focus()，
+    // 不受本标记影响。
+    .focused(false)
+    .on_page_load(move |_win, payload| {
+      if payload.event() == tauri::webview::PageLoadEvent::Finished {
+        on_main_page_finished(&app_handle_for_page, payload.url().clone());
+      }
+    })
+    .build()?;
+  Ok(())
+}
+
+/// main 窗口「加载完成」时的交接判定。
+///
+/// 只在页面**真正**是应用 URL（http/https）时才交换：忽略初始 about:blank /
+/// 空 URL / 内部错误页，避免主窗提前显示在黑屏的 about:blank 上。导航失败
+/// （连接被拒 / 服务又挂掉）时 WebView2 也会以 http URL 触发 Finished，页面内容
+/// 是内嵌的 Edge「无法访问此页面」错误页——历史上它曾被当成「应用加载完成」直接
+/// 顶给用户，因此交换前用 TCP 可达性做二次校验：不可达就不交换，交给重导航循环，
+/// 保持启动页可见。
+fn on_main_page_finished(handle: &tauri::AppHandle, url: tauri::Url) {
+  let url_str = url.as_str();
+  log::info!("[ComfyAPP] main window Finished: {}", url_str);
+  if url_str.is_empty()
+    || url_str.starts_with("about:blank")
+    || url_str.starts_with("tauri://")
+    || url_str.starts_with("https://tauri.localhost")
+    || (!url_str.starts_with("http://") && !url_str.starts_with("https://"))
+  {
+    log::debug!("[ComfyAPP] ignoring initial/non-app page load");
+    return;
+  }
+  log::info!("[ComfyAPP] app page loaded, swapping windows");
+  // 用户已在启动期关闭启动页（放弃本次启动）：壳正在退出，别再把主窗显示出来
+  // （否则用户关闭后过一会儿窗口又自己冒出来）。
+  let abandoned = handle
+    .try_state::<AppState>()
+    .map(|s| s.is_abandoned())
+    .unwrap_or(false);
+  if abandoned {
+    log::info!("[ComfyAPP] launch abandoned by user, skip window swap");
+    return;
+  }
+  if !url_reachable(&url) {
+    log::warn!("[ComfyAPP] swap aborted, app url unreachable: {}", url_str);
+    spawn_renavigate(handle.clone(), url);
+    return;
+  }
+  // 启动期可能已过了几十秒，用户很可能切到了别的窗口：这里只把应用显示到
+  // 任务栏并做闪烁提醒，不把窗口顶到前台（见 show_main_window_without_focus）。
+  show_main_window_without_focus(handle, false);
+  if let Some(s) = handle.get_webview_window("splash") {
+    let _ = s.close();
+  }
+}
+
+/// 启动页关闭 = 放弃本次启动，整个应用直接退出。
+///
+/// 主窗在 setup 时就已创建（隐藏待命）：只关 splash 会让壳带着一个看不见的主窗
+/// 继续活着（任务栏图标挂着、dev server 继续被拉起，还会在服务就绪后把主窗又弹
+/// 出来）。因此启动页的关闭请求到达而主窗仍未显示时，标记「已放弃」并退出整个壳
+/// 进程——dev-launcher 以壳退出为锚点回收 dev server 进程树，任务栏不再残留。
+/// 正常交接（壳自己关启动页）时主窗已经显示，走不到这条退出路径。
+fn install_splash_close_handler(app: &mut tauri::App) {
+  let handle_for_splash_close = app.handle().clone();
+  if let Some(splash_for_close) = app.get_webview_window("splash") {
+    splash_for_close.on_window_event(move |event| {
+      if let tauri::WindowEvent::CloseRequested { .. } = event {
+        let main_visible = handle_for_splash_close
+          .get_webview_window("main")
+          .map(|m| m.is_visible().unwrap_or(false))
+          .unwrap_or(false);
+        if main_visible {
+          return;
+        }
+        if let Some(state) = handle_for_splash_close.try_state::<AppState>() {
+          state.mark_abandoned();
+        }
+        log::info!(
+          "[ComfyAPP] splash closed while main window hidden, exiting app (launch abandoned)"
+        );
+        handle_for_splash_close.exit(0);
+      }
+    });
+  }
+}
+
+/// 启动页看门狗（仅 custom-protocol 构建）。
+///
+/// custom-protocol 关闭时（tauri dev），tauri 的 cfg(dev) 开启，窗口相对 URL
+/// 解析到 build.devUrl——启动页由 dev server 提供，那是 dev 模式的预期。
+/// custom-protocol 开启时（正式壳，cargo build --release --features
+/// custom-protocol），启动页加载编译期内嵌资源；页面一旦被任何导航带走
+/// （错误页 / 其它地址），页内 JS 全部失效，进度/日志界面无法自愈，只能干等
+/// main 加载完成后交换窗口。看门狗每秒检查启动页当前 URL，偏离内嵌资源地址就
+/// 导航回去，保证进度界面必然恢复。
+#[cfg(feature = "custom-protocol")]
+fn spawn_splash_watchdog(app: &mut tauri::App) {
+  let handle = app.handle().clone();
+  std::thread::spawn(move || {
+    // 等启动页创建并拿到基准 URL（= 配置解析出的内嵌资源地址）
+    let mut base: Option<tauri::Url> = None;
+    for _ in 0..50 {
+      match handle.get_webview_window("splash") {
+        None => return, // 启动页已关闭（秒就绪），无需看门狗
+        Some(s) => {
+          if let Ok(u) = s.url() {
+            if u.as_str().ends_with("splash.html") {
+              base = Some(u);
+              break;
+            }
+          }
+        }
+      }
+      std::thread::sleep(Duration::from_millis(100));
+    }
+    let Some(splash_url) = base else {
+      log::warn!("[ComfyAPP] splash watchdog: base url not seen in 5s, giving up");
+      return;
+    };
+    log::info!("[ComfyAPP] splash watchdog: base url {}", splash_url);
+    for _ in 0..300 {
+      std::thread::sleep(Duration::from_millis(1000));
+      let Some(s) = handle.get_webview_window("splash") else { return };
+      let drifted = match s.url() {
+        Ok(u) => u != splash_url,
+        Err(_) => false,
+      };
+      if drifted {
+        let cur = s.url().map(|u| u.to_string()).unwrap_or_default();
+        log::warn!("[ComfyAPP] splash watchdog: url drifted to {}, restoring", cur);
+        let _ = s.navigate(splash_url.clone());
+      }
+    }
+  });
+}
+
+/// custom-protocol 关闭时（tauri dev）不需要看门狗：启动页由 dev server 提供，
+/// URL 漂移即预期行为。留同名空实现，使启动编排调用点无需按 feature 分叉。
+#[cfg(not(feature = "custom-protocol"))]
+fn spawn_splash_watchdog(_app: &mut tauri::App) {}
+
+/// 生产模式（release）启动编排：按启动模式决定是否拉起内嵌 standalone server，
+/// 并在启动页资源缺失时走「等应用就绪直接导航」的兜底，避免永久黑屏。
+#[cfg(not(debug_assertions))]
+fn setup_standalone_runtime(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+  let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
+  if launch_mode == "standalone" {
+    // 显式 standalone：必须启动内嵌 server（缺失时 spawn_sidecar 会报错）。
+    spawn_sidecar(app.handle())?;
+  } else {
+    // prebuilt / tauri / 未指定：壳直接加载 COMFYAPP_DEV_URL（由
+    // dev-launcher.ps1 起 dev server），不启动 standalone sidecar。
+    log::info!(
+      "[ComfyAPP] launch mode={:?}，跳过 standalone sidecar，使用 dev URL",
+      launch_mode
+    );
+  }
+
+  // 启动页资源缺失兜底（详见 navigate_when_ready 注释）：
+  // 老版本 app.exe 未嵌入 splash.html，窗口会 404 黑屏且无法自动跳转，
+  // 这里检测不到启动页就直接等应用地址就绪后导航，避免永久黑屏。
+  let has_splash = app.asset_resolver().get("splash.html".to_string()).is_some();
+  log::info!("[ComfyAPP] splash.html embedded: {}", has_splash);
+  if !has_splash {
+    if let Some(state) = app.try_state::<AppState>() {
+      let url = state.app_url();
+      if !url.is_empty() {
+        log::warn!("[ComfyAPP] splash.html 未嵌入，启动页不可用，就绪后直接导航到 {}", url);
+        navigate_when_ready(app.handle().clone(), url);
+      }
+    }
+  }
+  Ok(())
+}
+
+/// 应用运行期事件回调。
+///
+/// 退出时回收 sidecar 进程树；退出请求时对「窗口只显示到任务栏、用户从未点开过」
+/// 的情形补一条日志，便于对照「双击了却没看到界面」的反馈。关窗即退出，不做
+/// 「最小化到托盘」。
+fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
+  match event {
     tauri::RunEvent::Exit => {
       #[cfg(not(debug_assertions))]
       kill_sidecar();
     }
     tauri::RunEvent::ExitRequested { code, .. } => {
-      // 关窗即退出（不做「最小化到托盘」）。用户若在窗口只显示到任务栏、还没点开
-      // 的情况下直接退出，留一条日志，便于对照「双击了却没看到界面」的反馈。
       if code.is_none() {
         if let Some(state) = app.try_state::<AppState>() {
           if state.take_attention() {
@@ -1090,5 +1139,5 @@ pub fn run() {
       }
     }
     _ => {}
-  });
+  }
 }
