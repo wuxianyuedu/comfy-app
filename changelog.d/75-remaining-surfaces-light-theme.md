@@ -1,0 +1,4 @@
+## Fixed
+
+- **剩余全部界面收口为随主题（ISSUE #75 收尾批）**：清单第 8、9、11、12、13 组——共享表单控件（`DimensionControl` / `WidgetInputRow` / `SizePresetTableModal` / `MultiSegmentPopover` / `WorkflowSeedModeButton` / `EditableLabel` 等）、工作流库（列表 / 详情 / 画布预览 / 执行日志 / 自定义节点设置）、模型库与模型卡（含 `src/lib/model-types.ts` 里 35 个目录徽标配色）、以及 `ToastProvider` / `SourceModal` / `ModelTagManager` / `VideoQueueModal` / `DebugChainFooter` / `RequiredSummary` / `StringTextarea` / `WorkflowImagePreview` 等杂项。所有「只有暗色取值」的语义色（`-300`~`-600` 档）补上浅色档；`bg-white/N` / `border-white/N` / `text-gray-*` 暗色叠层改语义 token；浮层投影补两态（浅色浅、深色深）。
+- **内联 `style={{ color }}` 与 `X-(--color-…)` 写法统一为语义类名（ISSUE #75 第 12 组）**：组件里散落的 `text-(--color-ink-muted)` / `bg-(--color-canvas-deep)` 这类「属性前缀 + 内联变量」写法逐个换成语义类名（`text-ink-muted` / `bg-canvas-deep`…）。这不只是风格问题——内联变量在 Tailwind 之外，`hover:` / `dark:` 修饰符对它们无效，所以此前这些位置**改不了主题**；换成类名后才真正能按主题切换。保留在 `style={{}}` 里的只有动态计算值（节点 accent 色、连线 stroke）。

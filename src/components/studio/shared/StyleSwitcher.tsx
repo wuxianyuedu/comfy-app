@@ -41,7 +41,7 @@ export function StyleSwitcher({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="shrink-0 text-[10px] text-gray-500">录入方式</span>
+      <span className="shrink-0 text-[10px] text-ink-muted">录入方式</span>
       <DarkSelect
         value={style}
         options={options.map((option) => option.value)}
@@ -56,7 +56,7 @@ export function StyleSwitcher({
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <span className="text-[10px] text-(--color-ink-muted)">{label}</span>
+      <span className="text-[10px] text-ink-muted">{label}</span>
       {children}
     </div>
   );

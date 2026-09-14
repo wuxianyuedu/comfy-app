@@ -13,7 +13,6 @@ import {
 import type { ApiChannelsView } from "@/lib/workshop/api-channel-shared";
 import {
   parseShotSize,
-  shotSizeToExposed,
   shotSizeToParam,
   shotSizeToRelay,
   type ShotSizeState,
@@ -168,25 +167,25 @@ export function ShotStudio({
     patchShot(shot.id, { status: "running" });
     try {
       if (channel === "local") {
-        const size =
+        /* 镜头存的是尺寸表达（老数据可能是 "832x1216"，回读时归一）——
+         * 尺寸只表达一次，两种目标形状都由它现算。 */
+        const sizeSpec = parseShotSize(
           shot.params.size !== undefined && shot.params.size !== ""
-            ? strParam(shot.params.size, shotSizeToParam(shotSize))
-            : shotSizeToParam(shotSize);
+            ? shot.params.size
+            : shotSize,
+        );
         /* 选定工作流库工作流时，按 ISSUE #145 只暴露 提示词 / 尺寸 / 参考图，
          * 其余参数用工作流默认值；否则用内置 txt2img。
          *
-         * 尺寸对这两条通路表达不同：内置 txt2img 接的是 WxH 字符串；工作流库
-         * 里的工作流多数字段声明的是 `aspect_ratio` / `megapixels`，把 WxH 折成
-         * 字符串再反解回比例只会落在两个预设之间。因此走库时把「比例 + 像素基准」
-         * 原样交给封装层（见 `shotSizeToExposed`）。 */
-        const exposedSize = shotSizeToExposed(shotSize);
+         * 尺寸对这两条通路表达不同：内置 txt2img 接的是 WxH 字符串（由尺寸表达
+         * 折算），工作流库的工作流直接吃「比例 + 分辨率 / 比例 + 百万像素 + 倍数」，
+         * 宽高由封装层按场景尺寸表现算。 */
         const input: GenerateInput = workflowId
           ? (
               await buildLibraryWorkflowInput(workflowId, {
                 prompt: shot.prompt,
                 negativePrompt: shot.negativePrompt || undefined,
-                size,
-                ...exposedSize,
+                size: sizeSpec,
               })
             ).input
           : {
@@ -198,7 +197,7 @@ export function ShotStudio({
               cfg: numParam(shot.params.cfg, 7),
               sampler: strParam(shot.params.sampler, "euler_ancestral"),
               scheduler: strParam(shot.params.scheduler, "normal"),
-              size,
+              size: shotSizeToParam(sizeSpec),
               count: 1,
             };
         const taskId = await startLocalGenerate(input);
@@ -267,7 +266,7 @@ export function ShotStudio({
         <button
           type="button"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-lg bg-(--color-subtle) px-3 py-1.5 text-xs hover:bg-(--color-surface-2)"
+          className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-lg bg-subtle px-3 py-1.5 text-xs hover:bg-surface-2"
         >
           <Icon name="settings" size={12} />
           API 通道设置
@@ -306,7 +305,7 @@ export function ShotStudio({
         <button
           type="button"
           onClick={onNextStage}
-          className="text-ink rounded-lg bg-(--color-subtle) px-3 py-1.5 text-xs font-medium hover:bg-(--color-surface-2)"
+          className="text-ink rounded-lg bg-subtle px-3 py-1.5 text-xs font-medium hover:bg-surface-2"
         >
           下一阶段 →
         </button>
@@ -319,7 +318,7 @@ export function ShotStudio({
         </div>
       )}
       {channel === "api" && !apiReady && (
-        <div className="flex items-center gap-2 rounded-lg bg-(--color-amber)/10 px-3 py-2 text-xs text-(--color-amber)">
+        <div className="flex items-center gap-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
           <Icon name="info" size={12} />
           API 生图通道未配置 — 点击上方「API 通道设置」填写 Base URL 与 API Key 后即可使用。
         </div>
@@ -364,7 +363,7 @@ export function ShotStudio({
                   className="border-border bg-bg text-ink focus:border-primary w-full rounded-md border px-2 py-1.5 text-xs outline-none"
                   placeholder="生图提示词(自动预填自分镜与角色卡,可手动修改)"
                 />
-                {err && <p className="mt-1 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-700">{err}</p>}
+                {err && <p className="mt-1 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">{err}</p>}
 
                 <div className="mt-2 flex items-center gap-3">
                   <button
@@ -405,11 +404,11 @@ export function ShotStudio({
 function StatusBadge({ status }: { status: Shot["status"] }) {
   const map: Record<Shot["status"], { label: string; cls: string }> = {
     idle: { label: "待生成", cls: "bg-subtle text-muted-foreground" },
-    queued: { label: "排队中", cls: "bg-amber-100 text-amber-700" },
-    running: { label: "生成中", cls: "bg-blue-100 text-blue-700" },
-    done: { label: "已完成", cls: "bg-emerald-100 text-emerald-700" },
-    failed: { label: "失败", cls: "bg-red-100 text-red-700" },
-    stale: { label: "待更新", cls: "bg-red-100 text-red-700" },
+    queued: { label: "排队中", cls: "bg-amber-100 text-amber-800 dark:text-amber-300" },
+    running: { label: "生成中", cls: "bg-blue-100 text-blue-800 dark:text-blue-300" },
+    done: { label: "已完成", cls: "bg-emerald-100 text-emerald-800 dark:text-emerald-300" },
+    failed: { label: "失败", cls: "bg-red-100 text-red-800 dark:text-red-300" },
+    stale: { label: "待更新", cls: "bg-red-100 text-red-800 dark:text-red-300" },
   };
   const s = map[status];
   return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.cls}`}>{s.label}</span>;

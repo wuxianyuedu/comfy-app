@@ -28,7 +28,7 @@ import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { Character, CharacterPortrait } from "~/lib/workshop/types";
 import {
   DEFAULT_SHOT_SIZE,
-  shotSizeToParam,
+  shotSizeSummary,
   type ShotSizeState,
 } from "../shot-size-config";
 
@@ -200,7 +200,9 @@ export function useCharacterPortrait(opts: {
         }));
         return;
       }
-      const size = shotSizeToParam(session.size);
+      /* 日志里写「比例 + 档位（+ 倍数）」而不是折算出来的像素 —— 尺寸的表达
+       *  就是这两种，具体像素由目标工作流按它自己的口径算。 */
+      const size = shotSizeSummary(session.size);
       const label = character.name || "该角色";
       const localLabel = (overrides?.localLabel ?? "").trim();
       const modelLabel =
@@ -229,7 +231,8 @@ export function useCharacterPortrait(opts: {
       const req: PortraitRequest = {
         prompt,
         negative: character.negativePrompt || undefined,
-        size,
+        /* 尺寸表达原样带过去：三条通道各自要的形状由网络层现算。 */
+        size: session.size,
       };
       try {
         if (channel === "local") {
@@ -299,7 +302,6 @@ export function useCharacterPortrait(opts: {
               projectId,
               name: `${label}-定妆照-${Date.now()}`,
               ...(remoteModel ? { model: remoteModel } : {}),
-              sizeState: session.size,
             },
           );
           addCandidate(character.id, {

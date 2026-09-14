@@ -23,11 +23,20 @@ const TYPE_CHIP: Record<string, string> = {
 };
 
 const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
-  SUCCEEDED: { label: "已完成", cls: "bg-emerald-500/15 text-emerald-400" },
-  FAILED: { label: "失败", cls: "bg-red-500/15 text-red-400" },
-  CANCELLED: { label: "已取消", cls: "bg-white/10 text-gray-400" },
-  QUEUED: { label: "排队中", cls: "bg-white/10 text-gray-300" },
-  RUNNING: { label: "生成中", cls: "bg-violet-500/20 text-violet-300" },
+  SUCCEEDED: {
+    label: "已完成",
+    cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  },
+  FAILED: {
+    label: "失败",
+    cls: "bg-red-500/15 text-red-700 dark:text-red-400",
+  },
+  CANCELLED: { label: "已取消", cls: "bg-subtle text-ink-muted" },
+  QUEUED: { label: "排队中", cls: "bg-subtle text-ink-soft" },
+  RUNNING: {
+    label: "生成中",
+    cls: "bg-violet-500/20 text-violet-700 dark:text-violet-300",
+  },
 };
 
 /** 参考图路径可能是 ComfyUI input 文件名（如 abc.png）或绝对 url 路径
@@ -162,10 +171,10 @@ export function ProjectOutputs() {
         <AuroraBackground />
         <div className="mx-auto grid min-h-[60vh] max-w-[1100px] place-items-center px-6 text-center">
           <div>
-            <p className="text-lg font-medium text-gray-300">
+            <p className="text-ink-soft text-lg font-medium">
               还没有打开任何画布项目
             </p>
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="text-ink-muted mt-2 text-sm">
               请先在「画布」中创建或打开一个项目，生成结果会自动归档到项目目录并在这里展示。
             </p>
           </div>
@@ -181,10 +190,10 @@ export function ProjectOutputs() {
         {/* ── Header ── */}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <h1 className="font-title text-xl font-bold text-gray-100">
+            <h1 className="font-title text-ink-bright text-xl font-bold">
               {activeProject?.name ?? "未命名项目"}
             </h1>
-            <span className="rounded-full bg-violet-500/15 px-2.5 py-0.5 text-[11px] font-medium text-violet-300">
+            <span className="rounded-full bg-violet-500/15 px-2.5 py-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-300">
               {outputs.length} 个产出
             </span>
           </div>
@@ -192,13 +201,13 @@ export function ProjectOutputs() {
             <select
               value={projectId}
               onChange={(event) => setProjectId(event.target.value)}
-              className="rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-xs text-gray-300 outline-none focus:border-violet-500/40"
+              className="border-border-strong bg-subtle text-ink-soft focus:border-violet-500/40 rounded-lg border px-3 py-2 text-xs outline-none"
             >
               {projects.map((project) => (
                 <option
                   key={project.id}
                   value={project.id}
-                  className="bg-(--color-node)"
+                  className="bg-node"
                 >
                   {project.name ?? "未命名项目"}
                 </option>
@@ -206,7 +215,7 @@ export function ProjectOutputs() {
             </select>
             <button
               onClick={refetchOutputs}
-              className="rounded-lg border border-white/10 px-3 py-2 text-xs text-gray-400 hover:text-gray-200"
+              className="border-border-strong text-ink-muted hover:text-ink rounded-lg border px-3 py-2 text-xs"
             >
               ↻ 刷新
             </button>
@@ -224,7 +233,7 @@ export function ProjectOutputs() {
               loop
             />
           ) : (
-            <div className="grid h-full place-items-center bg-linear-to-br from-violet-500/10 to-fuchsia-500/10 text-sm text-gray-500">
+            <div className="text-ink-muted grid h-full place-items-center bg-linear-to-br from-violet-500/10 to-fuchsia-500/10 text-sm">
               生成结果将作为封面展示在这里
             </div>
           )}
@@ -241,11 +250,11 @@ export function ProjectOutputs() {
 
         {/* ── Output grid ── */}
         {loading ? (
-          <p className="text-sm text-gray-500">加载中…</p>
+          <p className="text-ink-muted text-sm">加载中…</p>
         ) : outputs.length === 0 ? (
-          <div className="grid min-h-[280px] place-items-center rounded-2xl border border-dashed border-white/8 text-gray-500">
+          <div className="border-border-strong text-ink-muted grid min-h-[280px] place-items-center rounded-2xl border border-dashed">
             <div className="text-center">
-              <p className="text-lg font-medium text-gray-300">还没有产出</p>
+              <p className="text-ink-soft text-lg font-medium">还没有产出</p>
               <p className="mt-1 text-sm">
                 在画布里跑一次生成，结果会自动归档到本项目目录。
               </p>
@@ -263,13 +272,13 @@ export function ProjectOutputs() {
                   key={output.id}
                   type="button"
                   onClick={() => setSelectedId(output.id)}
-                  className={`group relative overflow-hidden rounded-2xl border text-left transition-all hover:shadow-lg hover:shadow-black/30 ${
+                  className={`group relative overflow-hidden rounded-2xl border text-left transition-all hover:shadow-lg hover:shadow-black/6 dark:shadow-black/30 ${
                     active
                       ? "border-violet-400/70 ring-1 ring-violet-400/40"
-                      : "hover:border-white/14.000000000000002 border-white/6"
-                  } bg-white/2`}
+                      : "border-border-strong hover:border-ink-fainter"
+                  } bg-subtle`}
                 >
-                  <div className="relative aspect-square w-full bg-[#111118]">
+                  <div className="bg-canvas-deep relative aspect-square w-full">
                     {c ? (
                       <MediaThumb
                         src={c.localPath}
@@ -279,13 +288,13 @@ export function ProjectOutputs() {
                         loop
                       />
                     ) : (
-                      <div className="grid h-full place-items-center text-xs text-gray-600">
+                      <div className="text-ink-fainter grid h-full place-items-center text-xs">
                         {output.status === "FAILED" ? "生成失败" : "无预览"}
                       </div>
                     )}
 
                     {isVideoOut && (
-                      <span className="absolute top-1/2 left-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2 ring-white/90">
+                      <span className="absolute top-1/2 left-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2 ring-border-strong">
                         <svg
                           width="24"
                           height="24"
@@ -309,11 +318,11 @@ export function ProjectOutputs() {
                     </span>
                   </div>
                   <div className="p-3">
-                    <p className="line-clamp-1 text-xs font-medium text-gray-300">
+                    <p className="text-ink-soft line-clamp-1 text-xs font-medium">
                       {TYPE_CHIP[output.type] ?? output.type} ·{" "}
                       {output.seed ?? "—"}
                     </p>
-                    <p className="mt-1 text-[11px] text-gray-600">
+                    <p className="text-ink-fainter mt-1 text-[11px]">
                       {timeAgo(output.createdAt)}
                     </p>
                   </div>
@@ -329,23 +338,23 @@ export function ProjectOutputs() {
         <>
           {/* 遮罩 + 抽屉都从标题行下方起：顶部让出应用页签栏（ISSUE #310） */}
           <div
-            className="top-title-bar fixed right-0 bottom-0 left-0 z-80 bg-black/50"
+            className="top-title-bar fixed right-0 bottom-0 left-0 z-80 bg-canvas-deep dark:bg-canvas-deep"
             onClick={() => setSelectedId(null)}
           />
-          <aside className="top-title-bar fixed right-0 bottom-0 z-90 flex w-[380px] max-w-[90vw] flex-col overflow-hidden border-l border-white/10 bg-(--color-node) shadow-2xl">
+          <aside className="top-title-bar bg-node border-border-strong fixed right-0 bottom-0 z-90 flex w-[380px] max-w-[90vw] flex-col overflow-hidden border-l shadow-2xl shadow-black/10 dark:shadow-black/50">
             {/* head */}
-            <div className="flex items-center justify-between border-b border-white/6 px-5 py-3">
+            <div className="border-border-strong flex items-center justify-between border-b px-5 py-3">
               <div className="flex items-center gap-2">
-                <h3 className="font-title text-sm font-bold text-gray-100">
+                <h3 className="font-title text-ink-bright text-sm font-bold">
                   产出 #{selected.id.slice(-4)}
                 </h3>
-                <span className="rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-300">
+                <span className="rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
                   {TYPE_CHIP[selected.type] ?? selected.type}
                 </span>
               </div>
               <button
                 onClick={() => setSelectedId(null)}
-                className="text-gray-500 hover:text-gray-200"
+                className="text-ink-muted hover:text-ink"
                 aria-label="关闭"
               >
                 <X size={16} />
@@ -355,7 +364,7 @@ export function ProjectOutputs() {
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
               {/* reference images */}
               <section>
-                <p className="mb-2 text-xs font-semibold text-gray-400">
+                <p className="text-ink-soft mb-2 text-xs font-semibold">
                   参考图
                 </p>
                 {selected.referenceImages.length ? (
@@ -363,7 +372,7 @@ export function ProjectOutputs() {
                     {selected.referenceImages.map((image, index) => (
                       <div
                         key={image}
-                        className="aspect-square overflow-hidden rounded-lg border border-white/6 bg-(--color-panel-deep)"
+                        className="border-border-strong bg-panel-deep aspect-square overflow-hidden rounded-lg border"
                       >
                         {}
                         <img
@@ -375,11 +384,11 @@ export function ProjectOutputs() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[11px] text-gray-600">
+                  <p className="text-ink-fainter text-[11px]">
                     本次生成无参考图（纯文生图）。
                   </p>
                 )}
-                <p className="mt-1.5 text-[10.5px] text-gray-600">
+                <p className="text-ink-fainter mt-1.5 text-[10.5px]">
                   参考图随产出一起保存到项目目录，复现时可一键还原。
                 </p>
               </section>
@@ -387,19 +396,19 @@ export function ProjectOutputs() {
               {/* prompts */}
               <section className="space-y-2">
                 <div>
-                  <p className="mb-1 text-xs font-semibold text-gray-400">
+                  <p className="text-ink-soft mb-1 text-xs font-semibold">
                     正向提示词
                   </p>
-                  <div className="max-h-28 overflow-y-auto rounded-lg border border-white/6 bg-white/2 p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap text-gray-300">
+                  <div className="border-border-strong bg-subtle text-ink-soft max-h-28 overflow-y-auto rounded-lg border p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap">
                     {selected.prompt ?? "—"}
                   </div>
                 </div>
                 {selected.negativePrompt && (
                   <div>
-                    <p className="mb-1 text-xs font-semibold text-gray-400">
+                    <p className="text-ink-soft mb-1 text-xs font-semibold">
                       反向提示词
                     </p>
-                    <div className="max-h-24 overflow-y-auto rounded-lg border border-white/6 bg-white/2 p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap text-gray-400">
+                    <div className="border-border-strong bg-subtle text-ink-muted max-h-24 overflow-y-auto rounded-lg border p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap">
                       {selected.negativePrompt}
                     </div>
                   </div>
@@ -408,8 +417,8 @@ export function ProjectOutputs() {
 
               {/* params table */}
               <section>
-                <p className="mb-2 text-xs font-semibold text-gray-400">参数</p>
-                <div className="overflow-hidden rounded-lg border border-white/6">
+                <p className="text-ink-soft mb-2 text-xs font-semibold">参数</p>
+                <div className="border-border-strong overflow-hidden rounded-lg border">
                   {[
                     ["Seed", selected.seed ?? "—"],
                     ["模型", selected.checkpoint ?? "—"],
@@ -425,11 +434,11 @@ export function ProjectOutputs() {
                     <div
                       key={k}
                       className={`flex items-center justify-between px-3 py-2 text-[12px] ${
-                        i % 2 === 0 ? "bg-white/2" : ""
+                        i % 2 === 0 ? "bg-subtle" : ""
                       }`}
                     >
-                      <span className="text-gray-500">{k}</span>
-                      <span className="font-mono text-gray-200">{v}</span>
+                      <span className="text-ink-muted">{k}</span>
+                      <span className="text-ink-bright font-mono">{v}</span>
                     </div>
                   ))}
                 </div>
@@ -437,15 +446,15 @@ export function ProjectOutputs() {
 
               {/* source */}
               <section>
-                <p className="mb-1 text-xs font-semibold text-gray-400">来源</p>
-                <p className="text-[12px] text-gray-300">
+                <p className="text-ink-soft mb-1 text-xs font-semibold">来源</p>
+                <p className="text-ink-soft text-[12px]">
                   工作流：{selected.workflowName ?? "—"}
                 </p>
               </section>
             </div>
 
             {/* footer actions */}
-            <div className="border-t border-white/6 p-4">
+            <div className="border-border-strong border-t p-4">
               <div className="flex gap-2">
                 <button
                   onClick={handleCopy}
@@ -455,14 +464,14 @@ export function ProjectOutputs() {
                 </button>
                 <button
                   onClick={handleExport}
-                  className="flex-1 rounded-lg border border-white/10 px-3 py-2 text-[12px] text-gray-300 transition-colors hover:bg-white/6"
+                  className="border-border-strong text-ink-soft hover:bg-subtle flex-1 rounded-lg border px-3 py-2 text-[12px] transition-colors"
                 >
                   导出 JSON
                 </button>
               </div>
-              <p className="mt-2 text-[10.5px] text-gray-600">
+              <p className="text-ink-fainter mt-2 text-[10.5px]">
                 文件已保存至{" "}
-                <span className="font-mono text-gray-500">
+                <span className="text-ink-muted font-mono">
                   public/generated/projects/{projectId}/{selected.id}/
                 </span>
               </p>

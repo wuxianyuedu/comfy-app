@@ -90,7 +90,7 @@ export function ErrorPanel({
         <Icon
           name="alert"
           size={12}
-          className="mt-px shrink-0 text-rose-300"
+          className="mt-px shrink-0 text-rose-700 dark:text-rose-300"
         />
         <div className="min-w-0 flex-1">
           {/* Header row: status badge + workflow name + actions */}
@@ -103,7 +103,7 @@ export function ErrorPanel({
                   : errorStatus
                     ? "生成失败"
                     : "未捕获异常"}
-              <span className="ml-1 text-rose-300/60">
+              <span className="ml-1 text-rose-700 dark:text-rose-300/60">
                 · {errorStatus ? `task ${errorStatus}` : "client"}
               </span>
             </span>
@@ -262,10 +262,10 @@ export function ErrorPanel({
                 )}
                 {/* 1) 任务上下文：taskId（可点击复制）+ 时间 */}
                 {hasCtx && (
-                  <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border border-rose-400/15 bg-black/30 px-1.5 py-1 text-[10px]">
+                  <div className="border-rose-400/15 bg-canvas-deep grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border px-1.5 py-1 text-[10px]">
                     {taskId && (
                       <>
-                        <span className="text-rose-300/60">taskId</span>
+                        <span className="text-rose-700 dark:text-rose-300/60">taskId</span>
                         <button
                           type="button"
                           onClick={() =>
@@ -282,7 +282,7 @@ export function ErrorPanel({
                     )}
                     {ts && (
                       <>
-                        <span className="text-rose-300/60">时间</span>
+                        <span className="text-rose-700 dark:text-rose-300/60">时间</span>
                         <span className="truncate text-rose-100/80">{ts}</span>
                       </>
                     )}
@@ -292,7 +292,7 @@ export function ErrorPanel({
                 {/* 2) 自动建议 — 正则推断的纠错提示 */}
                 {errorSuggestion && (
                   <div className="rounded border border-amber-400/25 bg-amber-500/8 px-2 py-1 text-[10px] leading-relaxed text-amber-100">
-                    <span className="mr-1 font-semibold text-amber-300">
+                    <span className="mr-1 font-semibold text-amber-700 dark:text-amber-300">
                       建议
                     </span>
                     {errorSuggestion}
@@ -302,10 +302,10 @@ export function ErrorPanel({
                 {/* 3) 请求参数快照 */}
                 {errorContext?.request ? (
                   <details className="text-[10px]" open>
-                    <summary className="cursor-pointer select-none text-rose-300/70 hover:text-rose-200">
+                    <summary className="cursor-pointer select-none text-rose-700 dark:text-rose-300/70 hover:text-rose-200">
                       请求参数
                     </summary>
-                    <pre className="nodrag nopan mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded border border-rose-400/15 bg-black/50 p-1.5 font-mono text-[10px] leading-tight text-rose-100/85">
+                    <pre className="border-rose-400/15 bg-canvas-deep nodrag nopan mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono text-[10px] whitespace-pre-wrap leading-tight text-rose-100/85">
                       {typeof errorContext.request === "string"
                         ? errorContext.request
                         : (() => {
@@ -326,10 +326,10 @@ export function ErrorPanel({
 
                 {/* 4) 原始错误详情（保持旧版的 <pre> 风格） */}
                 <details className="text-[10px]" open>
-                  <summary className="cursor-pointer select-none text-rose-300/70 hover:text-rose-200">
+                  <summary className="cursor-pointer select-none text-rose-700 dark:text-rose-300/70 hover:text-rose-200">
                     原始错误
                   </summary>
-                  <pre className="nodrag nopan mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded border border-rose-400/15 bg-black/50 p-1.5 font-mono text-[10px] leading-tight text-rose-100/85">
+                  <pre className="border-rose-400/15 bg-canvas-deep nodrag nopan mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono text-[10px] whitespace-pre-wrap leading-tight text-rose-100/85">
                     {errText}
                   </pre>
                 </details>

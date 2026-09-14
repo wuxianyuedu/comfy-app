@@ -147,7 +147,10 @@ Comfy-APP-T3/
 - **想要独立桌面窗口**（最接近成品）→ 向开发人员要一份**即开即用桌面包**，解压后双击
   **`tools/start/start-desktop.ps1`** 即可，无需装 Node/Rust；
 - **只有源码、想先在浏览器跑起来** → 双击 **`tools/start/run-local.ps1`** 自动完成初始化后，
-  双击 **`tools/start/start-web.ps1`** 启动，再用浏览器打开 `http://localhost:3100`。
+  双击 **`tools/start/start-web.ps1`** 启动，再用浏览器打开**控制台打印的**
+  `http://localhost:<COMFYAPP_PORT>`（**不是固定的 3100**：缺省时端口由检出路径推导到
+  3200~3999，`3100` 只是异常兜底；照抄 3100 会 `ERR_CONNECTION_REFUSED`。端口契约见
+  [规范 §1.1](docs/standards/launch-and-build.md#11-端口统一配置comfyapp_port)）
 
 两条路都无需安装 Rust、无需手工编译。
 
@@ -181,9 +184,18 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 #    src/env.js 启动时强制校验，留空会报 Invalid environment variables
 
 # 3. 初始化数据库（Drizzle，按 drizzle.config.ts）
+#    经 scripts/db-push.mjs：以 --force 非交互运行，并**复核库里真的建出表**——
+#    drizzle-kit push 在无 TTY 环境（CI / 脚本 / 容器）会「报错 + exit 0 + 留 0 字节库」，
+#    此时首页与 /api/health 都 200，只有真实业务页面 500（见规范 §9.1）
 pnpm db:push
 
-# 4. 注册 comfyapp:// 协议（可选，双击 tools/start/register-comfyapp-protocol.ps1）
+# 4. 启动开发服务器（Linux / macOS / CI 无需任何 .ps1）
+#    端口不是固定 3100：经 scripts/dev.mjs 解析（.env 的 COMFYAPP_PORT →
+#    检出路径推导 3200~3999 → 兜底 3100），启动时打印 `[dev.mjs] COMFYAPP_PORT=<n>`，
+#    在浏览器打开 http://localhost:<n> 即可（见规范 §1.1）
+pnpm dev
+
+# 5. 注册 comfyapp:// 协议（可选，仅 Windows：双击 tools/start/register-comfyapp-protocol.ps1）
 ```
 
 ---
@@ -194,7 +206,7 @@ pnpm db:push
 
 | 方式 | 命令 / 入口 | 说明 |
 |------|------------|------|
-| 纯前端（浏览器） | `pnpm dev` | 启动 Next dev server，访问 http://localhost:3100 |
+| 纯前端（浏览器） | `pnpm dev` | 启动 Next dev server，访问控制台打印的 `http://localhost:<COMFYAPP_PORT>`（缺省按检出路径推导到 3200~3999，不是固定 3100；端口契约见 [规范 §1.1](docs/standards/launch-and-build.md#11-端口统一配置comfyapp_port)） |
 | 桌面壳（预编译秒出 + 前端热重载） | 双击 `start-tauri.exe` | 默认 prebuilt 模式：用已编译的 release 壳秒出窗口，后台连 dev server，改前端即时刷新（Rust 改动需重新 `cargo build`） |
 | 桌面壳（Rust 也热重载） | 双击 `start-tauri-dev.exe` 或 `pnpm tauri dev` | 自动起 dev server + 重新编译 Rust 壳，前端/后端改动即时刷新（首次编译较慢） |
 | 桌面壳（独立运行，不连 dev server） | 双击 `start-tauri-standalone.exe`（需先 `tools\build\build-standalone.ps1`） | standalone 模式：内置 Node sidecar 运行 Next standalone server，双击即独立运行，改动需重新构建才生效 |
@@ -202,7 +214,9 @@ pnpm db:push
 | 桌面壳（dev，Rust 热重载） | 双击 `tools/start/start-tauri-dev.ps1` | 隐藏窗口启动 tauri dev 模式（等价于 `start-tauri-dev.exe`） |
 | Web 开发（可见日志） | 双击 `tools/start/start-web.ps1` | 控制台打印 dev-launcher 日志 |
 
-> Dev 模式下窗口初始加载 `splash.html` 启动页，随后自动探测 `http://localhost:3100` 就绪并跳转应用。
+> Dev 模式下窗口初始加载 `splash.html` 启动页，随后自动探测 dev server 就绪并跳转应用；
+> 探测地址由启动器按 §1.1 的端口契约注入（`COMFYAPP_DEV_URL`），`tauri.conf.json` 的静态
+> `devUrl`（`localhost:3100`）只是编译期兜底、不参与主导航。
 
 ---
 
@@ -311,7 +325,7 @@ pnpm check        # eslint + tsc --noEmit
 pnpm test         # Vitest 单元测试
 pnpm test:e2e     # Playwright e2e
 pnpm docs         # 生成 API 文档到 docs/
-pnpm db:push      # 推送 Prisma schema 到数据库
+pnpm db:push      # 同步 Drizzle schema 到 db.sqlite（非交互、复核建表结果）
 ```
 
 非开发人员无需记上面命令，双击根目录 `tools/start/verify-quality.ps1` 即可一键跑质量门禁

@@ -34,7 +34,7 @@ export const GROUPED_SIZE_MAX = 8192;
 
 /** 「像素」大类两个子类的说明（弹层里显示，解释这一档宽高从哪来）。 */
 export const CLARITY_HINT: Record<DimClarityPreset["kind"], string> = {
-  pixel: "按场景尺寸表取宽高",
+  resolution: "按场景尺寸表取宽高",
   megapixel: "总像素预算，宽高由倍数对齐",
 };
 
@@ -74,11 +74,11 @@ export function RequiredChips({
         return (
           <span
             key={pin.ioKey}
-            className="flex items-center gap-1 rounded border border-white/6 bg-black/20 px-1.5 py-0.5"
+            className="flex items-center gap-1 rounded border border-border-strong bg-canvas-deep px-1.5 py-0.5"
             data-dimension-pin={pin.ioKey}
           >
             <span
-              className="max-w-[80px] truncate text-[10px] text-(--color-ink-soft)"
+              className="max-w-[80px] truncate text-[10px] text-ink-soft"
               title={pin.label ?? pin.name}
             >
               {pin.label ?? pin.name}
@@ -94,8 +94,8 @@ export function RequiredChips({
                 }
                 className={`nodrag nopan rounded px-1.5 py-px text-[10px] font-medium transition-colors ${
                   required
-                    ? "border border-red-400/40 bg-red-500/15 text-red-300 hover:bg-red-500/25"
-                    : "border border-white/8 bg-white/2 text-gray-500 hover:bg-white/6 hover:text-gray-300"
+                    ? "border border-red-400/40 bg-red-500/15 text-red-700 dark:text-red-300 hover:bg-red-500/25"
+                    : "border border-border-strong bg-subtle text-ink-muted hover:bg-subtle hover:text-ink-soft"
                 }`}
               >
                 {required ? "必填" : "可选"}
@@ -113,8 +113,8 @@ export function RequiredChips({
                 onMouseDown={(ev) => ev.stopPropagation()}
                 className={`nodrag nopan rounded p-0.5 transition-colors ${
                   visible
-                    ? "text-gray-300 hover:bg-white/8 hover:text-gray-100"
-                    : "text-gray-600 hover:bg-white/8 hover:text-gray-200"
+                    ? "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
+                    : "text-ink-fainter hover:bg-surface-2 hover:text-ink-bright"
                 }`}
               >
                 {visible ? <Eye size={11} /> : <EyeOff size={11} />}
@@ -142,7 +142,7 @@ export function SizeTableFooter({
       <button
         type="button"
         onClick={onOpen}
-        className="nodrag nopan rounded-md border border-white/12 px-2 py-1 text-[10px] text-(--color-ink-muted) transition-colors hover:bg-white/6 hover:text-(--color-ink-bright)"
+        className="nodrag nopan rounded-md border border-border-strong px-2 py-1 text-[10px] text-ink-muted transition-colors hover:bg-subtle hover:text-ink-bright"
       >
         尺寸表（{SIZE_SCENE_LABELS[scene]}场景）…
       </button>

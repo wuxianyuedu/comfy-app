@@ -49,29 +49,29 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
   } = useHistoryPanel({ projectId });
 
   return (
-    <aside className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l border-white/6 bg-(--color-panel)/98 backdrop-blur-md">
+    <aside className="bg-panel/98 border-border-strong flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l backdrop-blur-md">
       {/* ── Header ── */}
-      <div className="flex items-center gap-2 border-b border-white/6 px-4 py-3">
-        <h2 className="flex-1 text-[15px] font-semibold text-gray-100">历史记录</h2>
+      <div className="border-border-strong flex items-center gap-2 border-b px-4 py-3">
+        <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">历史记录</h2>
         {activeCount > 0 && (
-          <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-300">
+          <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-700 dark:text-violet-300">
             {activeCount} 进行中
           </span>
         )}
         <button
           type="button"
           onClick={refresh}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-300"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-soft flex h-6 w-6 items-center justify-center rounded-md transition-colors"
           title="刷新"
         >
           <RefreshCw size={13} />
         </button>
         {/* 显示密度切换 */}
-        <div className="flex items-center gap-0.5 rounded-lg bg-white/4 p-0.5">
+        <div className="bg-subtle flex items-center gap-0.5 rounded-lg p-0.5">
           <button
             type="button"
             onClick={() => setDisplay("grid")}
-            className={`rounded-md p-1 transition-colors ${display === "grid" ? "bg-white/10 text-gray-200" : "text-gray-500 hover:text-gray-300"}`}
+            className={`rounded-md p-1 transition-colors ${display === "grid" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
             title="网格视图"
           >
             <LayoutGrid size={14} />
@@ -79,7 +79,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           <button
             type="button"
             onClick={() => setDisplay("list")}
-            className={`rounded-md p-1 transition-colors ${display === "list" ? "bg-white/10 text-gray-200" : "text-gray-500 hover:text-gray-300"}`}
+            className={`rounded-md p-1 transition-colors ${display === "list" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
             title="列表视图"
           >
             <List size={14} />
@@ -88,7 +88,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
         <button
           type="button"
           onClick={onClose}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-300"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-soft flex h-6 w-6 items-center justify-center rounded-md transition-colors"
           title="关闭"
         >
           <X size={14} />
@@ -97,7 +97,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
 
       {/* ── 作用域切换（仅在有项目时出现）── */}
       {projectId && (
-        <div className="flex gap-4 border-b border-white/6 px-4 pt-2">
+        <div className="border-border-strong flex gap-4 border-b px-4 pt-2">
           {([
             { id: "project" as HistoryScope, label: "本项目" },
             { id: "all" as HistoryScope, label: "全部" },
@@ -108,8 +108,8 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
               onClick={() => setScope(scopeItem.id)}
               className={`pb-2.5 text-[13px] font-medium transition-colors ${
                 scope === scopeItem.id
-                  ? "border-b-2 border-(--color-accent) text-gray-100"
-                  : "text-gray-500 hover:text-gray-300"
+                  ? "border-accent text-ink-bright border-b-2"
+                  : "text-ink-muted hover:text-ink-soft"
               }`}
             >
               {scopeItem.label}
@@ -128,8 +128,8 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             onClick={() => setFilter(filterTab.id)}
             className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-all ${
               filter === filterTab.id
-                ? "bg-white/12 text-gray-100 ring-1 ring-white/10"
-                : "text-gray-500 hover:bg-white/4 hover:text-gray-300"
+                ? "bg-surface-2 text-ink-bright ring-border-strong ring-1"
+                : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
             }`}
           >
             {filterTab.label}
@@ -140,7 +140,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       {/* ── Error banner ── */}
       {error && (
         <div className="mx-4 mb-2 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
-          <span className="min-w-0 flex-1 break-words text-[11px] text-red-300">{error}</span>
+          <span className="min-w-0 flex-1 break-words text-[11px] text-red-700 dark:text-red-300">{error}</span>
           <button
             type="button"
             onClick={refresh}
@@ -157,24 +157,24 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           <div className="space-y-1 px-2 pt-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={`skeleton-${i}`} className="flex items-center gap-3 py-2">
-                <div className="h-10 w-10 shrink-0 animate-pulse rounded-md bg-white/5" />
+                <div className="bg-subtle h-10 w-10 shrink-0 animate-pulse rounded-md" />
                 <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="h-3 w-3/4 animate-pulse rounded bg-white/5" />
-                  <div className="h-2 w-1/3 animate-pulse rounded bg-white/4" />
+                  <div className="bg-subtle h-3 w-3/4 animate-pulse rounded" />
+                  <div className="bg-subtle h-2 w-1/3 animate-pulse rounded" />
                 </div>
               </div>
             ))}
           </div>
         ) : tasks.length === 0 ? (
           <div className="px-4 py-12 text-center">
-            <p className="text-[12px] text-gray-600">
+            <p className="text-ink-fainter text-[12px]">
               {scope === "project" ? "本项目还没有生成记录" : "暂无历史记录"}
             </p>
             {scope === "project" && globalCount !== null && globalCount > 0 && (
               <button
                 type="button"
                 onClick={() => setScope("all")}
-                className="mt-3 rounded-lg border border-white/8 px-3 py-1.5 text-[11px] text-gray-400 transition-colors hover:bg-white/4 hover:text-gray-200"
+                className="mt-3 border-border-strong text-ink-soft hover:bg-subtle hover:text-ink-bright rounded-lg border px-3 py-1.5 text-[11px] transition-colors"
               >
                 查看全部记录
               </button>
@@ -202,13 +202,13 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                     );
                     event.dataTransfer.effectAllowed = "copy";
                   }}
-                  className={`group relative overflow-hidden rounded-lg border border-white/6 bg-white/2 ${
+                  className={`group relative border-border-strong bg-subtle overflow-hidden rounded-lg border ${
                     isDraggableCover(task)
                       ? "cursor-grab active:cursor-grabbing"
                       : ""
                   }`}
                 >
-                  <div className="flex aspect-square items-center justify-center overflow-hidden bg-black/20">
+                  <div className="bg-canvas-deep flex aspect-square items-center justify-center overflow-hidden">
                     {task.cover ? (
                       <MediaThumbnail src={task.cover} alt={titleOf(task)} className="h-full w-full object-cover" />
                     ) : (
@@ -222,12 +222,12 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       {pill.label}
                     </span>
                   )}
-                  <p className="truncate px-2 py-1.5 text-[11px] text-gray-300">{titleOf(task)}</p>
+                  <p className="text-ink-soft truncate px-2 py-1.5 text-[11px]">{titleOf(task)}</p>
                   {onUse && task.cover && (
                     <button
                       type="button"
                       onClick={() => onUse({ id: task.id, cover: task.cover!, mediaType: task.mediaType })}
-                      className="absolute right-1 top-1 hidden h-6 w-6 items-center justify-center rounded bg-black/60 text-gray-300 backdrop-blur transition-colors hover:text-white group-hover:flex"
+                      className="bg-black/60 text-ink-soft absolute top-1 right-1 hidden h-6 w-6 items-center justify-center rounded backdrop-blur transition-colors group-hover:flex hover:text-white"
                       title="加入画布"
                     >
                       <Plus size={12} strokeWidth={2.5} />
@@ -259,7 +259,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                     );
                     event.dataTransfer.effectAllowed = "copy";
                   }}
-                  className={`group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-white/4 ${
+                  className={`hover:bg-subtle group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors ${
                     isDraggableCover(task)
                       ? "cursor-grab active:cursor-grabbing"
                       : ""
@@ -267,7 +267,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                 >
                   {/* 缩略图 / 类型占位 */}
                   {task.cover ? (
-                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-black/20">
+                    <div className="bg-canvas-deep h-10 w-10 shrink-0 overflow-hidden rounded-md">
                       <MediaThumbnail src={task.cover} alt={titleOf(task)} className="h-full w-full object-cover" />
                     </div>
                   ) : (
@@ -277,16 +277,16 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   )}
 
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] text-gray-200">{titleOf(task)}</p>
+                    <p className="text-ink-bright truncate text-[13px]">{titleOf(task)}</p>
                     <div className="mt-0.5 flex items-center gap-1.5">
-                      <span className="text-[11px] text-gray-600">{timeAgo(task.createdAt)}</span>
+                      <span className="text-ink-fainter text-[11px]">{timeAgo(task.createdAt)}</span>
                       {pill && (
                         <span className={`rounded px-1.5 py-0.5 text-[9px] ${pill.cls}`}>
                           {pill.label}
                         </span>
                       )}
                       {task.status === "FAILED" && task.error && (
-                        <span className="min-w-0 truncate text-[10px] text-red-400/70" title={task.error}>
+                        <span className="min-w-0 truncate text-[10px] text-red-700/80 dark:text-red-400/70" title={task.error}>
                           {task.error}
                         </span>
                       )}
@@ -298,7 +298,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       <button
                         type="button"
                         onClick={() => onUse({ id: task.id, cover: task.cover!, mediaType: task.mediaType })}
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/8 hover:text-gray-200"
+                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex h-7 w-7 items-center justify-center rounded-md transition-colors"
                         title="加入画布"
                       >
                         <Plus size={13} strokeWidth={2.5} />
@@ -309,7 +309,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                         href={task.cover}
                         download
                         draggable={false}
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/8 hover:text-gray-200"
+                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex h-7 w-7 items-center justify-center rounded-md transition-colors"
                         title="下载"
                       >
                         <Download size={13} />

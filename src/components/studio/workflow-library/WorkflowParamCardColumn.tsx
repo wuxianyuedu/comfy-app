@@ -103,7 +103,7 @@ export function WorkflowParamCardColumn({
       aria-label="对外参数"
       data-testid="workflow-param-card-column"
     >
-      <p className="px-0.5 text-[11px] font-medium text-(--color-ink-faint)">
+      <p className="px-0.5 text-[11px] font-medium text-ink-faint">
         {canWire ? "对外参数 · 拖圆点改落点" : "对外参数"}
       </p>
       {entries.map((entry) => {

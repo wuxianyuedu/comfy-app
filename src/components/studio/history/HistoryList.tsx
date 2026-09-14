@@ -76,8 +76,8 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
         {/* ── Header ── */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-title text-xl font-bold text-(--color-ink)">历史记录</h1>
-            <p className="mt-1 text-sm text-(--color-ink-muted)">
+            <h1 className="font-title text-xl font-bold text-ink">历史记录</h1>
+            <p className="mt-1 text-sm text-ink-muted">
               所有生成任务与执行日志，按时间倒序排列。
             </p>
           </div>
@@ -85,19 +85,19 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
             <select
               value={c.sort}
               onChange={(event) => c.setSort(event.target.value as SortKey)}
-              className="rounded-lg border border-(--color-border) bg-(--color-subtle) px-3 py-1.5 text-xs text-(--color-ink-strong) outline-none focus:border-violet-500/40"
+              className="rounded-lg border border-border bg-subtle px-3 py-1.5 text-xs text-ink-strong outline-none focus:border-violet-500/40"
               aria-label="排序"
             >
-              <option value="newest" className="bg-(--color-node)">
+              <option value="newest" className="bg-node">
                 时间倒序
               </option>
-              <option value="oldest" className="bg-(--color-node)">
+              <option value="oldest" className="bg-node">
                 时间正序
               </option>
             </select>
             <button
               onClick={c.refresh}
-              className="rounded-lg border border-(--color-border) px-3 py-1.5 text-xs text-(--color-ink-faint) hover:text-(--color-ink-bright)"
+              className="rounded-lg border border-border px-3 py-1.5 text-xs text-ink-faint hover:text-ink-bright"
             >
               ↻ 刷新
             </button>
@@ -117,7 +117,7 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                   "flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all " +
                   (isActive
                     ? "bg-linear-to-r from-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/20"
-                    : "border border-(--color-border) bg-(--color-card) text-(--color-ink-strong) hover:bg-(--color-surface-2)")
+                    : "border-border border bg-card text-ink-strong hover:bg-surface-2")
                 }
               >
                 {filterOption.dotCls && (
@@ -127,7 +127,9 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                 <span
                   className={
                     "rounded-full px-1.5 py-0.5 text-[10px] font-bold " +
-                    (isActive ? "bg-white/25 text-white" : "bg-(--color-surface-2) text-(--color-ink-faint)")
+                    (isActive
+                      ? "bg-subtle5 text-white"
+                      : "bg-surface-2 text-ink-faint")
                   }
                 >
                   {count}
@@ -138,11 +140,11 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
         </div>
 
         {c.loading ? (
-          <p className="text-sm text-(--color-ink-muted)">加载中…</p>
+          <p className="text-sm text-ink-muted">加载中…</p>
         ) : c.filteredCount === 0 ? (
-          <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-(--color-border) text-(--color-ink-muted)">
+          <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-border text-ink-muted">
             <div className="text-center">
-              <p className="text-lg font-medium text-(--color-ink-strong)">{c.empty.title}</p>
+              <p className="text-lg font-medium text-ink-strong">{c.empty.title}</p>
               <p className="mt-1 text-sm">{c.empty.hint}</p>
             </div>
           </div>
@@ -153,9 +155,9 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                 {/* ── 日期分组标题 ── */}
                 <div className="mb-3 flex items-center gap-3">
                   <div className="h-4 w-1 rounded-full bg-linear-to-b from-violet-500 to-fuchsia-500" />
-                  <h2 className="text-sm font-semibold text-(--color-ink-strong)">{group.key}</h2>
-                  <span className="text-xs text-(--color-ink-fainter)">{group.items.length} 个任务</span>
-                  <div className="h-px flex-1 bg-(--color-subtle)" />
+                  <h2 className="text-sm font-semibold text-ink-strong">{group.key}</h2>
+                  <span className="text-xs text-ink-fainter">{group.items.length} 个任务</span>
+                  <div className="h-px flex-1 bg-subtle" />
                 </div>
 
                 {/* ── 任务列表 ── */}
@@ -172,19 +174,19 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
             ))}
 
             {/* ── 分页 footer ── */}
-            <div className="flex items-center justify-center gap-3 border-t border-(--color-border-subtle) pt-6">
-              <span className="text-xs text-(--color-ink-muted)">
+            <div className="flex items-center justify-center gap-3 border-t border-border-subtle pt-6">
+              <span className="text-xs text-ink-muted">
                 已加载 {c.visibleTotal} / {c.filteredCount} 个任务
               </span>
               {c.canLoadMore ? (
                 <button
                   onClick={c.loadMore}
-                  className="rounded-lg border border-(--color-border) bg-(--color-subtle) px-4 py-1.5 text-xs text-(--color-ink-strong) hover:bg-(--color-surface-2)"
+                  className="rounded-lg border border-border bg-subtle px-4 py-1.5 text-xs text-ink-strong hover:bg-surface-2"
                 >
                   加载更多
                 </button>
               ) : (
-                <span className="text-[11px] text-(--color-ink-fainter)">已全部加载</span>
+                <span className="text-[11px] text-ink-fainter">已全部加载</span>
               )}
             </div>
           </div>

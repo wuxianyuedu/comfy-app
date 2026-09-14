@@ -100,7 +100,7 @@ export function SettingsLoadError({
   return (
     <div className="grid min-h-[60vh] place-items-center overflow-y-auto p-6">
       <div className="w-full max-w-xl text-center">
-        <p className="text-rose-400">加载设置失败，请刷新重试</p>
+        <p className="text-rose-700 dark:text-rose-400">加载设置失败，请刷新重试</p>
         <p className="text-muted-foreground mt-2 truncate text-xs" title={errorText}>
           {errorText}
         </p>

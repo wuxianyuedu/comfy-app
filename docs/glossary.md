@@ -82,7 +82,7 @@
 | **工作流** | 一份 ComfyUI 工作流（graph JSON + 参数/IO 元数据） | `workflowTemplate` 表（`graph` / `paramMap` / `workflowIO` / `rawJson` / `positions`） | 中英混用时可写 `workflow` |
 | **工作流库** | 浏览/搜索/编辑/就地运行工作流的页面 | `src/components/studio/workflow-library/`；导航名「流程」(`NAV_ITEMS` id `workflows`) | ❌「流程库」「workflow 页面」；UI 标题与代码统一叫**工作流库** |
 | **工作流编辑器** | 打开单份工作流进行图编辑的全屏编辑器（承载「工作流编辑器画布」） | `workflow-editor/`（`WorkflowEditorInner.tsx` 等）+ `canvas/WorkflowCanvasEditor.tsx` | 与「工作流编辑器画布」区别：编辑器是**整个界面**，画布是其**图区** |
-| **工作流参数（paramMap）** | 工作流对外暴露的**可填参数**（提示词/尺寸/步数…） | `workflow-param-mapping.ts`、`workflow-param-nodes.ts`；UI 为 `WorkflowParamCard` | ❌「变量」「字段」 |
+| **工作流参数（paramMap）** | 工作流对外暴露的**可填参数**（提示词/尺寸/步数…） | `workflow-param-mapping.ts`；UI 为 `WorkflowParamCard`（卡片列在库详情「画布节点」页签） | ❌「变量」「字段」 |
 | **工作流 IO（workflowIO）** | 工作流的**输入/输出端口映射**（含节点内建 IO） | `src/lib/workflow-io-types.ts`、`io-exposure.ts` | ❌「接口」 |
 | **就地运行** | 在工作流库内直接运行选中工作流（不跳转画布） | `src/lib/workflow-run-store.ts` 注释头；`WorkflowRunLogModal.tsx` | ❌「快速运行」 |
 

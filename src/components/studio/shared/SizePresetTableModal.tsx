@@ -63,7 +63,7 @@ export function SizePresetTableModal({
     <div
       className={overlayClass(
         "modal",
-        "z-[10060] flex items-center justify-center bg-black/70 p-4",
+        "z-[10060] flex items-center justify-center bg-canvas-deep p-4 backdrop-blur-sm dark:bg-black/70",
       )}
       onClick={onClose}
     >
@@ -72,13 +72,13 @@ export function SizePresetTableModal({
         aria-modal="true"
         aria-label={`${title}配置`}
         onClick={(event) => event.stopPropagation()}
-        className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-white/10 bg-[#14141C] shadow-2xl shadow-black/60"
+        className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border-strong bg-panel shadow-2xl shadow-black/12 dark:shadow-black/60"
       >
-        <header className="flex items-center gap-3 border-b border-white/8 px-4 py-3">
-          <h2 className="text-sm font-semibold text-(--color-ink-bright)">
+        <header className="flex items-center gap-3 border-b border-border-strong px-4 py-3">
+          <h2 className="text-sm font-semibold text-ink-bright">
             {title}配置
           </h2>
-          <div className="flex items-center gap-1 rounded-lg border border-white/8 bg-black/20 p-0.5">
+          <div className="flex items-center gap-1 rounded-lg border border-border-strong bg-canvas-deep p-0.5">
             {SCENES.map((item) => (
               <button
                 key={item}
@@ -87,22 +87,22 @@ export function SizePresetTableModal({
                 onClick={() => setScene(item)}
                 className={`rounded-md px-2.5 py-1 text-[11px] transition-colors ${
                   scene === item
-                    ? "bg-(--color-primary)/20 text-(--color-ink-bright) ring-1 ring-(--color-primary)/50"
-                    : "text-(--color-ink-muted) hover:bg-white/6 hover:text-(--color-ink-bright)"
+                    ? "bg-primary/20 text-ink-bright ring-1 ring-primary/50"
+                    : "text-ink-muted hover:bg-subtle hover:text-ink-bright"
                 }`}
               >
                 {SIZE_SCENE_LABELS[item]}
               </button>
             ))}
           </div>
-          <span className="text-[11px] text-(--color-ink-muted)">
+          <span className="text-[11px] text-ink-muted">
             1k / 2k / 4k 在该场景下的宽高（图片与视频两套口径）
           </span>
           <button
             type="button"
             aria-label="关闭"
             onClick={onClose}
-            className="ml-auto rounded-md p-1 text-(--color-ink-muted) transition-colors hover:bg-white/8 hover:text-(--color-ink-bright)"
+            className="ml-auto rounded-md p-1 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink-bright"
           >
             <X size={14} />
           </button>
@@ -111,7 +111,7 @@ export function SizePresetTableModal({
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
           <table className="w-full border-separate border-spacing-y-1 text-[11px]">
             <thead>
-              <tr className="text-left text-(--color-ink-muted)">
+              <tr className="text-left text-ink-muted">
                 <th className="w-[92px] font-medium">比例</th>
                 {RESOLUTION_TIERS.map((tier) => (
                   <th key={tier} className="font-medium">
@@ -123,7 +123,7 @@ export function SizePresetTableModal({
             <tbody>
               {SIZE_RATIO_PRESETS.map((preset) => (
                 <tr key={preset.label} className="align-middle">
-                  <td className="pr-2 text-(--color-ink-bright)">{preset.label}</td>
+                  <td className="pr-2 text-ink-bright">{preset.label}</td>
                   {RESOLUTION_TIERS.map((tier) => {
                     const dims = table[scene]?.[preset.label]?.[tier] ?? {
                       width: 1024,
@@ -145,7 +145,7 @@ export function SizePresetTableModal({
                               })
                             }
                           />
-                          <span className="text-(--color-ink-faint)">×</span>
+                          <span className="text-ink-faint">×</span>
                           <NumberField
                             className="w-[96px]"
                             value={dims.height}
@@ -169,22 +169,22 @@ export function SizePresetTableModal({
           </table>
         </div>
 
-        <footer className="flex items-center gap-3 border-t border-white/8 px-4 py-3">
+        <footer className="flex items-center gap-3 border-t border-border-strong px-4 py-3">
           <button
             type="button"
             onClick={() => resetScene(scene)}
             disabled={!modified}
-            className="rounded-md border border-white/12 px-2.5 py-1 text-[11px] text-(--color-ink-muted) transition-colors hover:bg-white/6 hover:text-(--color-ink-bright) disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-border-strong px-2.5 py-1 text-[11px] text-ink-muted transition-colors hover:bg-subtle hover:text-ink-bright disabled:cursor-not-allowed disabled:opacity-40"
           >
             恢复默认（{SIZE_SCENE_LABELS[scene]}）
           </button>
-          <span className="text-[10px] text-(--color-ink-faint)">
+          <span className="text-[10px] text-ink-faint">
             改动即时生效并记住；选择「百万像素」时宽高由倍数对齐，不查这张表。
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="ml-auto rounded-md border border-(--color-primary)/40 bg-(--color-primary)/15 px-3 py-1 text-[11px] text-(--color-ink-bright) transition-colors hover:bg-(--color-primary)/25"
+            className="ml-auto rounded-md border border-primary/40 bg-primary/15 px-3 py-1 text-[11px] text-ink-bright transition-colors hover:bg-primary/25"
           >
             完成
           </button>

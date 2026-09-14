@@ -2,16 +2,32 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_SIZE_PRESET_TABLE,
+  DEFAULT_SIZE_SPEC,
   alignMultipleOf,
+  aspectLabelForDims,
   megapixelDims,
   megapixelsOf,
   nearestRatioPreset,
   normalizeAlignMultiple,
+  normalizeSizeSpec,
+  parseSizeText,
+  ratioOfLabel,
   resolutionDims,
   resolutionTierOf,
   sceneFromMode,
   sceneIsModified,
+  sizeSpecAspect,
+  sizeSpecDims,
+  sizeSpecFromDims,
+  sizeSpecFromText,
+  sizeSpecKind,
+  sizeSpecLongEdge,
+  sizeSpecMegapixels,
+  sizeSpecMultiple,
+  sizeSpecSummary,
+  sizeSpecToWxH,
   toMegapixelSpec,
+  type SizeSpec,
 } from "./size-presets";
 
 describe("size-presets：分辨率表", () => {
@@ -83,6 +99,86 @@ describe("size-presets：两类尺寸表达之间的换算", () => {
     const spec = toMegapixelSpec("video", 16 / 9, "2k");
     expect(spec.megapixels).toBe(3.686);
     expect(spec.size).toEqual({ width: 2560, height: 1440 });
+  });
+});
+
+describe("size-presets：尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数）", () => {
+  /** 尺寸表达（对齐倍数是候选之一，故收一层构造器，免得字面量被推成 number）。 */
+  const sizeSpec = (over: Partial<SizeSpec> = {}): SizeSpec => ({
+    ratio: "16:9 横屏",
+    clarity: "1k",
+    multiple: 64,
+    ...over,
+  });
+
+  it("分辨率档：宽高查场景表，两种场景不同值", () => {
+    const spec = sizeSpec();
+    expect(sizeSpecDims(spec, "image")).toEqual({ width: 1024, height: 576 });
+    expect(sizeSpecDims(spec, "video")).toEqual({ width: 1280, height: 720 });
+    expect(sizeSpecToWxH(spec, "image")).toBe("1024x576");
+    expect(sizeSpecKind(spec)).toBe("resolution");
+    /* 只给「分辨率 / 长边」端口的工作流仍能拿到长边像素。 */
+    expect(sizeSpecLongEdge(spec, "image")).toBe(1024);
+  });
+
+  it("百万像素档：两边落在倍数网格上，倍数原样透传", () => {
+    const spec = sizeSpec({ clarity: "2M", multiple: 32 });
+    const dims = sizeSpecDims(spec);
+    expect(dims.width % 32).toBe(0);
+    expect(sizeSpecMegapixels(spec)).toBe(2);
+    expect(sizeSpecMultiple(spec)).toBe(32);
+    expect(sizeSpecLongEdge(spec)).toBeUndefined();
+    expect(sizeSpecKind(spec)).toBe("megapixel");
+  });
+
+  it("分辨率档换算成「比例 + 百万像素 + 倍数」：取实际总像素与最大公约倍数", () => {
+    const spec = sizeSpec({ clarity: "2k", multiple: 8 });
+    expect(sizeSpecAspect(spec)).toBe("16:9");
+    expect(sizeSpecMegapixels(spec)).toBe(2.359);
+    /* 分辨率档不读 `multiple`：倍数由该档宽高反推（两侧都能被 64 整除）。 */
+    expect(sizeSpecMultiple(spec)).toBe(64);
+  });
+
+  it("摘要与默认值：分辨率档只说比例 + 档位，百万像素档追加倍数", () => {
+    expect(sizeSpecSummary(DEFAULT_SIZE_SPEC)).toBe("3:4 / 1k");
+    expect(sizeSpecSummary({ ...DEFAULT_SIZE_SPEC, clarity: "2M", multiple: 32 })).toBe(
+      "3:4 / 2M / 32",
+    );
+  });
+
+  it("反解：「WxH」字符串 / 宽高 → 尺寸表达（老数据回读）", () => {
+    expect(parseSizeText("832x1216")).toEqual({ width: 832, height: 1216 });
+    expect(parseSizeText("512×768")).toEqual({ width: 512, height: 768 });
+    expect(parseSizeText("abc")).toBeNull();
+    expect(parseSizeText(undefined)).toBeNull();
+
+    const parsed = sizeSpecFromText("832x1216");
+    expect(ratioOfLabel(parsed.ratio)).toBeCloseTo(832 / 1216, 1);
+    /* 832×1216 ≈ 1.01M → 归入百万像素 1M 档。 */
+    expect(parsed.clarity).toBe("1M");
+
+    expect(sizeSpecFromDims(1280, 720, "video")).toEqual({
+      ratio: "16:9 横屏",
+      clarity: "1k",
+      /* 1280 与 720 都能被 16 整除（32 除数下 720 不整）→ 倍数取 16。 */
+      multiple: 16,
+    });
+    /* 脏值/空值回退默认，不抛错。 */
+    expect(sizeSpecFromText("")).toEqual(DEFAULT_SIZE_SPEC);
+    expect(normalizeSizeSpec({ ratio: "42:1", clarity: "999k" })).toEqual(DEFAULT_SIZE_SPEC);
+  });
+
+  it("宽高 → `aspect_ratio` 端口该写的候选值", () => {
+    /* 端口没声明候选 → 用标准短标签。 */
+    expect(aspectLabelForDims(1280, 720)).toBe("16:9");
+    /* 端口声明了候选、但候选里没有这个比例 → 不猜（返回 null，调用方退回默认值）。 */
+    expect(
+      aspectLabelForDims(1080, 1920, ["1:1 (Square)", "16:9 (Widescreen)"]),
+    ).toBeNull();
+    expect(aspectLabelForDims(1280, 720, ["1:1 (Square)", "16:9 (Widescreen)"])).toBe(
+      "16:9 (Widescreen)",
+    );
+    expect(aspectLabelForDims(0, 0)).toBeNull();
   });
 });
 
