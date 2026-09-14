@@ -1,8 +1,8 @@
 // ── 工作流库 → 工坊「对外参数封装」状态派生（规范 §17.2 第①层）──────────
 // 回答两个问题（与实际生成链路同口径）：
 //   ① 这条工作流在工坊里能不能直接用 —— 契约必备口「提示词」是否已有落点；
-//   ② 工坊会用哪些控件驱动它（提示词 / 尺寸【比例 + 分辨率 · 百万像素 + 倍数】/
-//      参考图…），每个口落到了哪个 IO 端口、哪些还没落（未配置必须显式可见）。
+//   ② 工坊会用哪些控件驱动它（提示词 / 尺寸【比例 + 分辨率 / 比例 + 百万像素 +
+//      倍数】/ 参考图…），每个口落到了哪个 IO 端口、哪些还没落（未配置必须显式可见）。
 //
 // 契约条目来自 workflow-exposed-params（按模式），落点解析来自
 // workflow-param-mapping（自动判定 + 作者落点覆盖）——与
@@ -18,7 +18,7 @@ import { exposedParamsForMode } from "~/lib/workflow-exposed-params";
 import { modeContractInputLabel } from "~/lib/workshop/model-mode-contract";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 
-/** 工坊控件形态：尺寸在工坊里是「比例 + 分辨率 / 百万像素 + 倍数」组合控件。 */
+/** 工坊控件形态：尺寸在工坊里是「比例 + 分辨率 / 比例 + 百万像素 + 倍数」组合控件。 */
 export type EncapsulationControl = "text" | "size" | "image";
 
 export interface EncapsulationEntryStatus {

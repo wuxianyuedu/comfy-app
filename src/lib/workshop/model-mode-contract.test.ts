@@ -71,11 +71,15 @@ describe("模式契约口 id 值域", () => {
 });
 
 describe("模式契约的「尺寸」口与统一尺寸口径一致", () => {
-  it("尺寸口的展示名写明两类表达（比例 + 分辨率 · 百万像素 + 倍数）", () => {
+  it("尺寸口的展示名写明两类表达是「或」的关系（比例 + 分辨率 / (百万像素 + 倍数)）", () => {
     const label = modeContractInputLabel("size");
     expect(label).toContain("分辨率");
     expect(label).toContain("百万像素");
     expect(label).toContain("倍数");
+    /* 斜杠标「或」：分辨率与「百万像素 + 倍数」是两类等价写法，任选其一。
+     * 此前用「·」并列，看起来像要同时给四样（比例 / 分辨率 / 百万像素 / 倍数）。 */
+    expect(label).toContain("分辨率 /");
+    expect(label).not.toContain("·");
   });
 
   it("契约的 size 口在适配器层展开成「比例 + 百万像素 + 倍数」三行", () => {
