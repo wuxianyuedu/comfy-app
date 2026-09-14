@@ -101,6 +101,13 @@ jobs:
         # 分叉的表现是静默连到另一个实例（现象是上传失败 / 端口漂移）。
         run: node scripts/check-comfyui-port-contract.cjs
 
+      - name: Inline style injection
+        # 视图层不得动态注入 <style>（规范 03 §3.5 / 反模式 T5）：写在组件里的
+        # <style>{CSS}</style> 会随每一次渲染重新生成同一个 style 元素，代码分割
+        # 后还可能被多份 chunk 各自注入。本仓库在 WorkflowEditorCanvas 与
+        # studio/ui/CodeBlock 上各犯过一次，形态一模一样 —— 故机器化。
+        run: node scripts/check-inline-style.cjs
+
       - name: Cross-file duplication
         # 跨文件重复块（规范 §12.12 / ISSUE #536）：同一能力的两份实现逐行
         # 重合 ≥75% 即失败。历史上 api-channel 与 test-usage 各有一对孪生，

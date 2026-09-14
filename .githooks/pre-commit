@@ -7,49 +7,49 @@
 # 且 npx 可能触发与 pnpm 布局不一致的隐式安装。
 # master 分支只接受「分支开发 → PR → 合并」的变更(规范 13.6)。
 # 放在最前:分支不对时不必再跑 tsc/lint —— 那些检查的结果最后都会被丢弃。
-echo "[pre-commit] 1/13 master 分支提交守卫"
+echo "[pre-commit] 1/14 master 分支提交守卫"
 node scripts/check-branch-guard.cjs || exit 1
 
-echo "[pre-commit] 2/13 文件结构硬规则（R1-R6/R7-R12）"
+echo "[pre-commit] 2/14 文件结构硬规则（R1-R6/R7-R12）"
 node scripts/check-file-structure.cjs || exit 1
 
-echo "[pre-commit] 3/13 React 函数式 updater 纯净性(ISSUE #141)"
+echo "[pre-commit] 3/14 React 函数式 updater 纯净性(ISSUE #141)"
 node scripts/check-react-updater-purity.cjs || exit 1
 
 # 2026-09-11(ISSUE #310 弹窗类回归): 标题行(页签栏)让位。
 # 页签搬到窗口标题行后，任何 `fixed inset-0` 的顶层浮层都会把页签和右上角
 # 窗口按钮一起盖住；首轮修复只改了全屏视图、弹窗类漏改。这条把判据机器化。
-echo "[pre-commit] 4/13 标题行让位硬规则"
+echo "[pre-commit] 4/14 标题行让位硬规则"
 node scripts/check-title-bar-clearance.cjs || exit 1
 
-echo "[pre-commit] 5/13 tsc --noEmit"
+echo "[pre-commit] 5/14 tsc --noEmit"
 pnpm exec tsc --noEmit || exit 1
 
 # 2026-09-10(ISSUE #322): 与 CI 的 .github/workflows/ci.yml 对齐为**零警告**口径。
 # 此前本地只判「无 error」，CI 判 --max-warnings 0 —— 结果是 warning 能在本地
 # 顺利进历史，直到 CI 才被拦下（复核返工）。规范 11.7 / 13.5 的门禁是零警告，
 # 本地与 CI 必须同一口径。
-echo "[pre-commit] 6/13 eslint（零警告）"
+echo "[pre-commit] 6/14 eslint（零警告）"
 pnpm exec eslint . --max-warnings 0 || exit 1
 
 # 2026-09-04: UI 与逻辑分离棘轮(规范 17)。违规数只许降不许升:
 # 新增 fetch / vanillaApi / tRPC hook 进视图层 → 阻断;
 # 治理后指标下降 → 提示执行 --update 收紧基线(不阻断,避免打断提交)。
-echo "[pre-commit] 7/13 UI/逻辑分离棘轮"
+echo "[pre-commit] 7/14 UI/逻辑分离棘轮"
 node scripts/check-ui-logic-separation.cjs || exit 1
 
 # 2026-09-12(ISSUE #408): CHANGELOG 碎片形态。
 # CHANGELOG.md 的 [Unreleased] 是「人人都改同一处」的文件,并行分支必然冲突;
 # 改为一件变更一个 changelog.d/ 碎片(见规范 13.10.5)后,这里守住碎片的
 # 文件名与段落标题口径——碎片写歪了会在发版并入时才暴露,那时已难追溯。
-echo "[pre-commit] 8/13 CHANGELOG 碎片"
+echo "[pre-commit] 8/14 CHANGELOG 碎片"
 node scripts/check-changelog-fragments.cjs || exit 1
 
 # 2026-09-14(ISSUE #489 缺陷 4): 端口推导的跨语言一致性。
 # 规范 §1.1 承诺「Node / PowerShell / Python / Rust 四侧对同一路径给出同一端口」,
 # 但此前四侧各写各的固定断言,没有任何测试会发现某侧漂移。改为四侧读同一份共享
 # 校验向量(tests/fixtures/app-port-vectors.json),任一侧漂移即在此拦下。
-echo "[pre-commit] 9/13 端口推导跨语言一致性"
+echo "[pre-commit] 9/14 端口推导跨语言一致性"
 node scripts/check-app-port-vectors.cjs || exit 1
 
 # 2026-09-14(ISSUE #75 主题专项): 主题色扫描棘轮。
@@ -57,7 +57,7 @@ node scripts/check-app-port-vectors.cjs || exit 1
 # 没有机器可读的豁免清单,于是同一批类型色(端口类型色/节点类别色/参数分组色)
 # 每轮扫描都被当漏网再报一遍。这条把豁免显式化,未豁免的写死色值走棘轮
 # (只许降不许升),新写的写死色值一律阻断。
-echo "[pre-commit] 10/13 主题色扫描棘轮"
+echo "[pre-commit] 10/14 主题色扫描棘轮"
 node scripts/check-theme-colors.cjs || exit 1
 
 # 2026-09-14(ISSUE #536 P2): 跨文件重复块(规范 12.12)。
@@ -69,16 +69,23 @@ node scripts/check-theme-colors.cjs || exit 1
 # config.ts 的 schema 默认值、错误文案），彼此从未对过。单看每一处都「没毛病」，
 # 只有并排比较才发现是同一件事的不同口径 —— 与跨文件重复块同族，故放在一起。
 # 分叉的表现不是「连不上」，而是静默连到另一个实例（现象是上传失败/端口漂移）。
-echo "[pre-commit] 11/13 ComfyUI 端口口径一致性"
+echo "[pre-commit] 11/14 ComfyUI 端口口径一致性"
 node scripts/check-comfyui-port-contract.cjs || exit 1
 
-echo "[pre-commit] 12/13 跨文件重复块"
+# 2026-09-14(ISSUE #534 P3): 视图层不得动态注入 <style>(规范 03 §3.5 / 反模式 T5)。
+# 本仓库踩过两次、形态一样(组件私有 CSS 字符串 + 渲染时注入):WorkflowEditorCanvas
+# 与 studio/ui/CodeBlock。前者改完只留了注释,后者又犯一遍 —— 「自己修完自己写
+# 注释」挡不住下一个人,故把判据机器化。
+echo "[pre-commit] 12/14 内联样式注入"
+node scripts/check-inline-style.cjs || exit 1
+
+echo "[pre-commit] 13/14 跨文件重复块"
 node scripts/check-code-duplication.cjs || exit 1
 
 # 2026-09-14(ISSUE #536 P4): 函数长度(规范 12.13)。
 # 文件行数由 R5 管,函数没人管 —— 于是 2186 行的单函数一路合法存在。这里按
 # 「每个文件超阈值的函数数」记账,棘轮只许降不许升。
-echo "[pre-commit] 13/13 函数长度棘轮"
+echo "[pre-commit] 14/14 函数长度棘轮"
 node scripts/check-function-length.cjs || exit 1
 
 echo "[pre-commit] 全部通过 ✓"

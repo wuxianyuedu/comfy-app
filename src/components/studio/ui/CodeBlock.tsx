@@ -97,15 +97,6 @@ const MAX_HIGHLIGHT_CHARS = 120_000;
 /** 分片行数：每片高亮完让出主线程（setTimeout 0），保持 UI 响应 */
 const CHUNK_LINES = 400;
 
-/** 组件私有 CSS：行号列 + 代码列 flex 布局。只作用于本组件渲染的元素，
- *  不依赖 shiki 输出结构，行号必然生效。 */
-const CODE_BLOCK_CSS = `
-.cb-code-block { padding: 12px 16px; font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace; font-size: 11.5px; line-height: 1.65; overflow: auto; }
-.cb-line { display: flex; align-items: flex-start; min-height: 1.65em; }
-.cb-ln { flex: none; width: 40px; padding-right: 14px; text-align: right; color: var(--color-ink-fainter); opacity: 0.7; font-variant-numeric: tabular-nums; user-select: none; }
-.cb-code { white-space: pre; color: var(--color-ink-strong); }
-`;
-
 /** token 的 fontStyle 位掩码：1=italic，2=bold（shiki 约定） */
 function tokenInlineStyle(tok: ShikiToken): CSSProperties {
   const style: CSSProperties = {};
@@ -211,24 +202,21 @@ export function CodeBlock({ code, language }: { code: string; language: string }
   }
 
   return (
-    <>
-      <style>{CODE_BLOCK_CSS}</style>
-      <div className="cb-code-block">
-        {tokens.map((line, lineIndex) => (
-          <div key={lineIndex} className="cb-line">
-            <span className="cb-ln">{lineIndex + 1}</span>
-            <span className="cb-code">
-              {line.length === 0
-                ? " "
-                : line.map((tok, tokenIndex) => (
-                    <span key={tokenIndex} style={tokenInlineStyle(tok)}>
-                      {tok.content}
-                    </span>
-                  ))}
-            </span>
-          </div>
-        ))}
-      </div>
-    </>
+    <div className="cb-code-block">
+      {tokens.map((line, lineIndex) => (
+        <div key={lineIndex} className="cb-line">
+          <span className="cb-ln">{lineIndex + 1}</span>
+          <span className="cb-code">
+            {line.length === 0
+              ? " "
+              : line.map((tok, tokenIndex) => (
+                  <span key={tokenIndex} style={tokenInlineStyle(tok)}>
+                    {tok.content}
+                  </span>
+                ))}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
