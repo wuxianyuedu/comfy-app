@@ -16,6 +16,7 @@ import {
   splitWorkflowIO,
   type WorkflowIOMap,
 } from "@/components/studio/shared/workflow-io";
+import { sizeSpecToWxH, toSizeSpec } from "@/lib/size-presets";
 import { type CanvasNodeData, defaultData } from "@/lib/project-canvas/canvas-types";
 import { makeNodeId } from "@/lib/project-canvas/canvas-helpers";
 import {
@@ -303,7 +304,9 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
       payload = {
         prompt: d.prompt,
         negative: d.negative || undefined,
-        size: d.size,
+        /* 节点存的是尺寸表达；内置工作流只认 "WxH"，在这里折算（旧数据里
+         * 存的字符串由 `toSizeSpec` 归一）。 */
+        size: sizeSpecToWxH(toSizeSpec(d.size), d.kind === "video" ? "video" : "image"),
         steps: d.steps,
         cfg: d.cfg,
       };

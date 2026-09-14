@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { uploadBgm } from "~/lib/film/bgm-client";
 import { vanillaApi } from "~/trpc/vanilla";
 
+import { FILM_SIZE } from "../film-studio-config";
 import { useFilmStudio } from "./use-film-studio";
 
 const toast = {
@@ -128,7 +129,8 @@ describe("useFilmStudio", () => {
       await result.current.create();
     });
     expect(vanilla.film.create.mutate).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "未命名成片", size: "1280x720", fps: 16 }),
+      /* 尺寸下发的是尺寸表达（比例 + 分辨率），不再是 "WxH" 字符串。 */
+      expect.objectContaining({ title: "未命名成片", size: FILM_SIZE, fps: 16 }),
     );
     expect(vanilla.film.start.mutate).toHaveBeenCalledWith({ id: "f-1" });
     expect(vanilla.film.detail.query).toHaveBeenCalledWith({ id: "f-1" });

@@ -1,6 +1,16 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { filmRepository } from "@/lib/core/repository";
+import { toSizeSpec } from "@/lib/size-presets";
+import { FILM_COMPOSE_SIZE } from "@/lib/film/film-size";
+
+/** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数）。老口径的 "1280x720"
+ *  字符串仍收 —— 由 `toSizeSpec` 归一，落库一律是尺寸表达。 */
+const sizeSpecSchema = z.object({
+  ratio: z.string(),
+  clarity: z.string(),
+  multiple: z.number().int(),
+});
 
 export const filmRouter = createTRPCRouter({
   /** GET /api/film */
@@ -18,7 +28,7 @@ export const filmRouter = createTRPCRouter({
         script: z.string().min(1),
         type: z.string().min(1),
         styleSlug: z.string().min(1).nullable().optional(),
-        size: z.string().optional(),
+        size: z.union([sizeSpecSchema, z.string()]).optional(),
         fps: z.number().int().positive().optional(),
         framesPerShot: z.number().int().positive().optional(),
         subtitleOn: z.boolean().optional(),
@@ -32,7 +42,8 @@ export const filmRouter = createTRPCRouter({
         script: input.script,
         type: input.type,
         styleSlug: input.styleSlug,
-        size: input.size ?? "1280x720",
+        /* 列是文本：存尺寸表达的 JSON（读的时候由 `toSizeSpec` 兼容老字符串）。 */
+        size: JSON.stringify(toSizeSpec(input.size ?? FILM_COMPOSE_SIZE)),
         fps: input.fps ?? 24,
         framesPerShot: input.framesPerShot ?? 60,
         subtitleOn: input.subtitleOn ?? true,
