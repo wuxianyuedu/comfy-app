@@ -49,7 +49,7 @@ const ERROR_SUGGESTION_RULES: { pattern: RegExp; suggestion: (e: string) => stri
   {
     pattern: /timeout|timed out|connection.*refused|server_busy|503|429/i,
     suggestion: () =>
-      "ComfyUI 端请求超时 / 拒绝连接。请确认本地 8188 端口的 ComfyUI 进程还活着、最近没在初始化大模型。",
+      "ComfyUI 端请求超时 / 拒绝连接。请确认本机 ComfyUI 进程还活着、最近没在初始化大模型（实际端口见 设置 → 创作后端）。",
   },
 ];
 

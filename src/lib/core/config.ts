@@ -31,6 +31,8 @@
  */
 import { z } from "zod";
 
+import { COMFYUI_DEFAULT_PORT, comfyUiBaseUrl } from "../endpoints";
+
 /**
  * 环境标识。开发 / 测试 / 生产三态，控制日志级别、缓存策略等行为。
  */
@@ -99,10 +101,10 @@ const configSchema = z.object({
     .default("development"),
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
   databaseUrl: z.string().min(1).default("file:./dev.db"),
-  comfyuiBaseUrl: z
-    .string()
-    .url()
-    .default("http://127.0.0.1:8188"),
+  /* 默认值走本机端点单一事实源（endpoints.ts 的回环主机 + app-settings 的默认
+   * 端口）：这里再写一遍裸地址，就会出现「配置兜底值与连接侧/拉起侧各自漂移」的
+   * 第四份口径（规范 §12.14）。 */
+  comfyuiBaseUrl: z.string().url().default(comfyUiBaseUrl(COMFYUI_DEFAULT_PORT)),
   port: z.coerce.number().int().positive().max(65535).default(3100),
   reaperEnabled: z.coerce.boolean().default(true),
   debugModeDefault: z.coerce.boolean().default(false),
