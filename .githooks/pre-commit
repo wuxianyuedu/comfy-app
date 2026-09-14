@@ -10,7 +10,7 @@
 echo "[pre-commit] 1/10 master 分支提交守卫"
 node scripts/check-branch-guard.cjs || exit 1
 
-echo "[pre-commit] 2/10 文件结构硬规则"
+echo "[pre-commit] 2/10 文件结构硬规则（R1-R4/R7-R12）"
 node scripts/check-file-structure.cjs || exit 1
 
 echo "[pre-commit] 3/10 React 函数式 updater 纯净性(ISSUE #141)"

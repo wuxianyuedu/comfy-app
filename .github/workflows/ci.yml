@@ -85,6 +85,14 @@ jobs:
         # 顶层浮层（fixed + inset-0）必须让出窗口标题行，否则页签与窗口按钮被盖住
         run: node scripts/check-title-bar-clearance.cjs
 
+      - name: File structure rules
+        # 文件命名/组织硬规则（规范 §12.6/§12.8/§12.11）：R7/R8 Windows 入口 .ps1
+        # 化与 BOM、R9 根目录不放双击入口、R10 注释禁历史流水、R11 Next 16 代理
+        # 约定名、R12 源码禁内嵌控制字符。
+        # 此前这套规则**只在本地 pre-commit 跑**（`--no-verify` 或未启用钩子的检出
+        # 可绕过），CI 侧没有任何复核——与 13.5「本地与 CI 同一口径」相悖。
+        run: node scripts/check-file-structure.cjs
+
       - name: App port cross-language consistency
         # 端口推导四语言一致性（规范 §1.1 / ISSUE #489 缺陷 4）：四侧读同一份
         # 共享向量 tests/fixtures/app-port-vectors.json，Node/Python 真跑，
