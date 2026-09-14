@@ -80,7 +80,7 @@ export function WorkflowModelFilterChip({
               }}
               className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
                 value === "all"
-                  ? "bg-fuchsia-500/20 text-fuchsia-200"
+                  ? "bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-200"
                   : "text-ink-soft hover:bg-subtle"
               }`}
             >
@@ -107,7 +107,7 @@ export function WorkflowModelFilterChip({
                   }}
                   className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
                     sel
-                      ? "bg-fuchsia-500/20 text-fuchsia-200"
+                      ? "bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-200"
                       : "text-ink-soft hover:bg-subtle"
                   }`}
                 >

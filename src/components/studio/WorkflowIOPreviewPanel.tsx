@@ -169,7 +169,7 @@ export function WorkflowIoPreviewPanel({
   const tabClass = (active: boolean) =>
     `shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] transition-colors ${
       active
-        ? "border-sky-400/50 bg-sky-400/15 text-sky-200"
+        ? "border-sky-400/50 bg-sky-400/15 text-sky-700 dark:text-sky-200"
         : "border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
     }`;
 
@@ -249,7 +249,7 @@ export function WorkflowIoPreviewPanel({
               在画布上勾选参数后，这里会同步出现对应的表单行；点击变量名称即可就地重命名。
             </div>
           ) : modes.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-amber-400/30 bg-amber-400/5 px-3 py-4 text-center text-[11px] leading-relaxed text-amber-200/80">
+            <div className="rounded-lg border border-dashed border-amber-400/30 bg-amber-400/5 px-3 py-4 text-center text-[11px] leading-relaxed text-amber-800/80 dark:text-amber-200/80">
               该工作流还没有配置模式 —— 请先在上方「模式」里勾选
               （文生图 / 图生图 / …），之后才能在这里配置参数。
             </div>

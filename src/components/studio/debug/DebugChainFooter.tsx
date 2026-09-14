@@ -230,7 +230,7 @@ export function DebugChainFooter({
                     type="button"
                     onClick={() => source && openInVscode(source.absolutePath)}
                     disabled={!source}
-                    className="rounded-md border border-sky-400/30 bg-sky-400/10 px-2.5 py-1 text-[11px] font-medium text-sky-200 transition-colors hover:bg-sky-400/20 disabled:opacity-40"
+                    className="rounded-md border border-sky-400/30 bg-sky-400/10 px-2.5 py-1 text-[11px] font-medium text-sky-700 transition-colors hover:bg-sky-400/20 dark:text-sky-200 disabled:opacity-40"
                     title="在 Visual Studio Code 中打开该文件（需已安装 VSCode）"
                   >
                     在 VSCode 打开
@@ -247,7 +247,7 @@ export function DebugChainFooter({
                     type="button"
                     onClick={() => source && copyText(source.content)}
                     disabled={!source}
-                    className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-200 transition-colors hover:bg-amber-400/20 disabled:opacity-40"
+                    className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-400/20 dark:text-amber-200 disabled:opacity-40"
                     title="复制全部源码"
                   >
                     复制代码

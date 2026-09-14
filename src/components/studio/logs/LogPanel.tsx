@@ -276,7 +276,7 @@ function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
           parts.push(
             <mark
               key={key++}
-              className="rounded-sm bg-amber-400/30 px-0.5 text-amber-100"
+              className="rounded-sm bg-amber-400/30 px-0.5 text-amber-900 dark:text-amber-100"
             >
               {fragment.text.slice(at, at + needle.length)}
             </mark>,

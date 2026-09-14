@@ -401,7 +401,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                     disabled={cancellingFromPanel}
                     title="取消当前查看的任务"
                     data-testid="log-panel-cancel"
-                    className="rounded-md border border-red-500/30 bg-red-500/8 px-2 py-0.5 text-[10.5px] text-red-200/90 transition-colors hover:bg-red-500/15 disabled:opacity-50"
+                    className="rounded-md border border-red-500/30 bg-red-500/8 px-2 py-0.5 text-[10.5px] text-red-700/90 transition-colors hover:bg-red-500/15 dark:text-red-300/90 disabled:opacity-50"
                   >
                     {cancellingFromPanel ? "× 取消中…" : "× 取消"}
                   </button>
@@ -504,7 +504,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   <div className="mb-1.5 text-[13px] font-semibold text-red-700 dark:text-red-300">
                     ⚠ 工作流验证错误（{valErrs.length}）
                   </div>
-                  <ValidationErrorList errors={valErrs.slice(0, 12)} className="text-red-200/95" />
+                  <ValidationErrorList errors={valErrs.slice(0, 12)} className="text-red-700/95 dark:text-red-300/90" />
                   {valErrs.length > 12 && (
                     <div className="mt-1 text-[12px] text-red-700 dark:text-red-300/70">+{valErrs.length - 12} more…</div>
                   )}
@@ -512,7 +512,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               )}
 
               {!valErrs.length && error && (
-                <div className="mb-2 space-y-1 rounded border border-red-500/30 bg-red-500/6 p-2 text-[13px] text-red-200/90">
+                <div className="mb-2 space-y-1 rounded border border-red-500/30 bg-red-500/6 p-2 text-[13px] text-red-700/90 dark:text-red-300/90">
                   <div className="break-words whitespace-pre-wrap">{error}</div>
                 </div>
               )}

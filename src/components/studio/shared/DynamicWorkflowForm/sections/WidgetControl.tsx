@@ -133,7 +133,7 @@ export function WidgetControl({
           disabled={disabled}
           onClick={() => onValueChange(!value)}
           className={`nodrag nopan ${compact ? "h-[28px] px-2.5" : "mt-1 h-[30px] px-3"} flex w-full items-center justify-between rounded-md bg-canvas-deep text-[12px] transition-colors ${
-            value ? "text-emerald-200" : "text-ink-muted"
+            value ? "text-emerald-700 dark:text-emerald-200" : "text-ink-muted"
           } ${missingRequired ? "ring-1 ring-red-400/50" : ""}`}
         >
           <span>{value ? "开启" : "关闭"}</span>
