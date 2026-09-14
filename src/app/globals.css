@@ -37,6 +37,7 @@
   --color-card: #ffffff; /* 卡片/下拉浮层 (light default) */
   --color-node: #ffffff; /* 节点表面/option (light default) */
   --color-node-accent: #f2eeff; /* 节点强调底 (light default) */
+  --color-overlay-accent-surface: #f1edff; /* 浮层（chip/徽标）强调底 (light default) */
   --color-border-strong: #d6d8dd; /* 强边框/分隔线 (light default) */
   --color-ink-bright: #18181b; /* 主文字 (light default) */
   --color-ink-field: #27272a; /* 输入控件文字 (light default) */
@@ -107,6 +108,7 @@
   --color-card: #16161c; /* 卡片/下拉浮层 */
   --color-node: #16161e; /* 节点表面/option */
   --color-node-accent: #1e1a2e; /* 节点强调底 */
+  --color-overlay-accent-surface: #241f38; /* 浮层（chip/徽标）强调底 */
   --color-border-strong: #26262e; /* 强边框/分隔线 */
   --color-ink-bright: #ededf2; /* 主文字 */
   --color-ink-field: #e5e7eb; /* 输入控件文字 */
@@ -196,8 +198,33 @@
          描边与点糊在一起；且 25% 白那圈高光在浅色下是**白描白**，
          等于没有。两处都改随主题。
 
-   当前条目（共 2 条，逐条给出理由；两条都是同一类：画布上的**极小面积
-   叠层**）：
+   ───────────────────────────────────────────────────────────────────
+   类型色例外（Type-color exemption）—— 本条不是「暗色表面」，而是「色值
+   本身就是内容」：各视图里 `lib/comfyui/types.ts`、`config/custom-nodes.ts`、
+   `lib/comfyui/node-registry.ts`、`CanvasNodePrimitives.tsx`（`PORT_STYLE`）、
+   `WorkflowPortHandle.tsx`、`canvas-types.ts`、`workflow-param-mapping-ui.ts`
+   等处**成组出现**的端口类型色 / 节点类别色 / 参数分组色（约 320 处）。
+
+   理由（为什么不逐个 token 化）：
+     1. 它们**不是「表面」**：底色是实现不出来的——一个 8px 的圆点、一层
+        粉彩渐变、一个 `.react-flow__handle` 的 `borderColor`，本就是**内容
+        自身的颜色**（ComfyUI 端口类型 = 语义 id），不是页面/面板/控件那类
+        结构性表面；判据 1 意义上它们连「叠层」都不是。
+     2. **换了反而更差**：这些点大多叠在图片/视频/画布预览上，浅色档会与
+        浅色内容糊在一起（同判据 2）。
+     3. **token 化会变难维护**：`types.ts` 里 32 个 ComfyUI 端口类型各一个
+        token = 32 个 `--color-*` 只为「一次赋值、成组引用」，还要在每处
+        新类型时同步扩 token 表。成组集中的常量表反而是更好的载体。
+     4. **它们不是「忘了适配」**：值本身没有错，缺的是**说明**。本条的存在
+        就是为了让下一批扫描不再把它们当漏网改一遍。
+
+   边界（防止被滥用）：本条只覆盖**成组集中的类型/类别/端口色常量表**。
+   组件里**写着表面/文字语义**的 `#hex` / `rgba(255,255,255,…)`（如
+   `bg-[#16161E]` 的节点底、`rgba(255,255,255,0.18)` 的分隔点）**不属于**
+   本条，必须 token 化。
+
+   当前条目（共 2 条暗色表面 + 1 条类型色例外；暗色表面两条都是同一类：
+   画布上的**极小面积叠层**），逐条给出理由：
    ───────────────────────────────────────────────────────────────────
    1. 画布底部操作提示气泡（WorkflowEditorInner 内 `bg-black/60`）
       理由：它直接叠在画布网格与节点之上，属于「内容视图内的极小面积
