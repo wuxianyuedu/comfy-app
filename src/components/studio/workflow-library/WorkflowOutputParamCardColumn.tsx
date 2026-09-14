@@ -75,7 +75,7 @@ export function WorkflowOutputParamCardColumn({
       aria-label="对外输出参数"
       data-testid="workflow-output-param-column"
     >
-      <p className="px-0.5 text-[11px] font-medium text-(--color-ink-faint)">
+      <p className="px-0.5 text-[11px] font-medium text-ink-faint">
         {canWire ? "对外输出参数 · 拖圆点改取值行" : "对外输出参数"}
       </p>
       {outputs.map((output) => {

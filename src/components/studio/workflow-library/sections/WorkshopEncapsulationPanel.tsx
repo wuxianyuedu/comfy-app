@@ -44,11 +44,11 @@ interface WorkshopEncapsulationPanelProps {
 /** 契约口 → 徽标配色（与执行日志的 kind 徽标同一观感）。 */
 function entryBadge(entry: EncapsulationEntryStatus): string {
   if (entry.targetIoKey === null) {
-    return "bg-amber-100 text-amber-700";
+    return "bg-amber-100 text-amber-800 dark:text-amber-300";
   }
   return entry.id === "negative"
-    ? "bg-indigo-100 text-indigo-700"
-    : "bg-emerald-100 text-emerald-700";
+    ? "bg-indigo-100 text-indigo-800 dark:text-indigo-300"
+    : "bg-emerald-100 text-emerald-800 dark:text-emerald-300";
 }
 
 export function WorkshopEncapsulationPanel({
@@ -138,16 +138,16 @@ export function WorkshopEncapsulationPanel({
   }, [running, status.ready, workflowId, prompt, negative, size]);
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 rounded-2xl border border-(--color-border) bg-(--color-panel-deep) p-4">
+    <div className="mx-auto max-w-2xl space-y-4 rounded-2xl border border-border bg-panel-deep p-4">
       {/* 封装状态总览 */}
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-ink-strong text-sm font-medium">工坊封装</h3>
         {status.ready ? (
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-700">
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800 dark:text-emerald-300">
             已配置 · 工坊可用
           </span>
         ) : (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700">
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-800 dark:text-amber-300">
             未配置
           </span>
         )}
@@ -162,7 +162,7 @@ export function WorkshopEncapsulationPanel({
         </span>
       </div>
       {!status.ready && (
-        <p className="rounded-lg bg-amber-100 px-3 py-2 text-[11px] text-amber-700">
+        <p className="rounded-lg bg-amber-100 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300">
           提示词口还没落到任何端口 —— 工坊（角色卡定妆照 / 镜头生图）无法驱动这条
           工作流。到「画布节点」页签把「提示词」卡片的圆点拖到工作流里承载提示词的
           那一行参数上（或使用自动判定），再回这里跑流程测试。
@@ -262,7 +262,7 @@ export function WorkshopEncapsulationPanel({
             </div>
           )}
           {testError && (
-            <p className="rounded-lg bg-red-100 px-3 py-2 text-[11px] text-red-700">
+            <p className="rounded-lg bg-red-100 px-3 py-2 text-[11px] text-red-800 dark:text-red-300">
               {testError}
             </p>
           )}
@@ -279,7 +279,7 @@ export function WorkshopEncapsulationPanel({
               <img
                 src={resultUrl}
                 alt="流程测试产物"
-                className="max-h-56 rounded-lg border border-(--color-border)"
+                className="max-h-56 rounded-lg border border-border"
               />
             </div>
           )}

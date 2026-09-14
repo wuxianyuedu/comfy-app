@@ -148,6 +148,21 @@ describe("classifyWorkshopPin", () => {
       "internal",
     ],
     [
+      "时长（按帧）→ duration",
+      { direction: "input", kind: "widget", nodeId: "1", name: "length", type: "INT" },
+      "duration",
+    ],
+    [
+      "时长（按秒）→ duration",
+      { direction: "input", kind: "widget", nodeId: "1", name: "duration", type: "FLOAT" },
+      "duration",
+    ],
+    [
+      "帧率不是时长（fps → internal）",
+      { direction: "input", kind: "widget", nodeId: "1", name: "fps", type: "INT" },
+      "internal",
+    ],
+    [
       "内部参数 cfg → internal",
       { direction: "input", kind: "widget", nodeId: "1", name: "cfg", type: "FLOAT" },
       "internal",
@@ -217,6 +232,63 @@ describe("视频模式判定", () => {
     expect(modeUsesLastFrame("FLF2V")).toBe(true);
     expect(modeUsesLastFrame("FMF2V")).toBe(true);
     expect(modeUsesLastFrame("I2V")).toBe(false);
+  });
+});
+
+/* ── 时长（视频）：按落点端口自己的单位与候选取值 ─────────── */
+
+describe("时长口的取值", () => {
+  const pinOf = (over: Partial<WorkflowIOEntry>): WorkflowIOEntry => ({
+    direction: "input",
+    kind: "widget",
+    nodeId: "12",
+    name: "length",
+    type: "INT",
+    defaultValue: 81,
+    ...over,
+  });
+
+  it("按帧表达的端口吃 frames，按秒表达的端口吃 duration", () => {
+    const byFrames = buildEncapsulatedInputs({ length: pinOf({}) }, "I2V", {
+      frames: 49,
+    });
+    expect(valueOf(byFrames.workflowInputs, "length")).toBe(49);
+
+    const bySeconds = buildEncapsulatedInputs(
+      { secs: pinOf({ nodeId: "13", name: "duration", type: "FLOAT", defaultValue: 5 }) },
+      "I2V",
+      { duration: 8 },
+    );
+    expect(valueOf(bySeconds.workflowInputs, "duration")).toBe(8);
+  });
+
+  it("端口声明了候选（COMBO）时按候选收敛：命不中就取最近档", () => {
+    const combo = {
+      length: pinOf({ defaultValue: 16, options: ["16", "24", "32"] }),
+    };
+    expect(
+      valueOf(
+        buildEncapsulatedInputs(combo, "I2V", { frames: 24 }).workflowInputs,
+        "length",
+      ),
+    ).toBe(24);
+    // 81 帧不在候选里 → 取最近档 32，而不是写 81 让 ComfyUI 静默回落
+    expect(
+      valueOf(
+        buildEncapsulatedInputs(combo, "I2V", { frames: 81 }).workflowInputs,
+        "length",
+      ),
+    ).toBe(32);
+  });
+
+  it("候选不是数字时退回端口默认值（不猜）", () => {
+    const odd = { length: pinOf({ defaultValue: 16, options: ["auto", "long"] }) };
+    expect(
+      valueOf(
+        buildEncapsulatedInputs(odd, "I2V", { frames: 81 }).workflowInputs,
+        "length",
+      ),
+    ).toBe(16);
   });
 });
 

@@ -103,7 +103,7 @@ export function WorkflowParamCardColumn({
       aria-label="对外参数"
       data-testid="workflow-param-card-column"
     >
-      <p className="px-0.5 text-[11px] font-medium text-(--color-ink-faint)">
+      <p className="px-0.5 text-[11px] font-medium text-ink-faint">
         {canWire ? "对外参数 · 拖圆点改落点" : "对外参数"}
       </p>
       {entries.map((entry) => {
@@ -121,6 +121,9 @@ export function WorkflowParamCardColumn({
             entryId={entry.id}
             cls={entry.cls}
             label={entry.label}
+            /* 与「工坊封装」页签同口径：名字后面标出契约口 id（`prompt` /
+               `size` / `reference-image-2`…），配置与日志里认的是 id。 */
+            idLabel={entry.id}
             classLabel={style.label}
             hostNodeId={entry.hostNodeId || entry.nodeId}
             width={CARD_WIDTH}

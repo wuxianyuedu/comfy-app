@@ -45,11 +45,13 @@ export class ErrorBoundary extends React.Component<
       }
       return (
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/5 px-6 py-12 text-center">
-          <p className="text-sm font-semibold text-red-400">组件渲染出错</p>
+          <p className="text-sm font-semibold text-red-600 dark:text-red-400">
+            组件渲染出错
+          </p>
           <button
             type="button"
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="rounded-lg border border-white/10 bg-white/4 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-white/8"
+            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
           >
             重试
           </button>

@@ -50,10 +50,10 @@ export function DeleteWorkflowModal({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-md rounded-2xl border border-red-500/30 bg-(--color-card) p-5 shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
+        className="w-full max-w-md rounded-2xl border border-red-500/30 bg-card p-5 shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
       >
         <div className="mb-3 flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-300">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-700 dark:text-red-300">
             <Trash2 size={18} />
           </div>
           <div className="min-w-0 flex-1">
@@ -63,9 +63,9 @@ export function DeleteWorkflowModal({
             >
               删除工作流
             </h3>
-            <p className="mt-1 text-sm break-words text-gray-400">
+            <p className="mt-1 text-sm break-words text-ink-soft">
               确认删除「
-              <span className="text-gray-200">{pendingDelete.name}</span>
+              <span className="text-ink-bright">{pendingDelete.name}</span>
               」？此操作不可撤销。
             </p>
           </div>
@@ -75,7 +75,7 @@ export function DeleteWorkflowModal({
             type="button"
             onClick={onCancel}
             disabled={deleting}
-            className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-gray-300 hover:bg-white/5 disabled:opacity-50"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-ink-soft hover:bg-subtle disabled:opacity-50"
           >
             取消
           </button>

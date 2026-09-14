@@ -34,6 +34,10 @@ export interface WorkflowParamCardProps {
    *  配色与展示名，不影响卡片结构。 */
   cls: ParamEntry["cls"] | "output";
   label: string;
+  /** 契约口 id（`prompt` / `size` / `reference-image-2`…）。给了就在名字后面
+   *  以弱化等宽字展示 —— 与「工坊封装」页签同一口径：配置 / 日志 / 代码里用的是
+   *  id，而契约口与适配器口是两套 id，只写中文对不上。 */
+  idLabel?: string;
   /** 分类中文名（悬停提示用）。 */
   classLabel: string;
   hostNodeId: string;
@@ -97,6 +101,7 @@ export function WorkflowParamCard({
   entryId,
   cls,
   label,
+  idLabel,
   classLabel,
   hostNodeId,
   width,
@@ -119,7 +124,7 @@ export function WorkflowParamCard({
 
   return (
     <div
-      className="relative flex flex-col rounded-lg border shadow-[0_4px_20px_rgba(0,0,0,0.45)]"
+      className="bg-card relative flex flex-col rounded-lg border shadow-[0_4px_20px_rgba(0,0,0,0.45)]"
       style={{
         width,
         /* 描边配色：选中 → 分类色；**可编辑但当前不可连**（没有模式语境）→ 灰，
@@ -130,7 +135,6 @@ export function WorkflowParamCard({
           : disabled && !readOnly
             ? "rgba(148,163,184,0.28)"
             : `${style.color}66`,
-        background: "var(--color-card, #16161C)",
         isolation: "isolate",
       }}
       data-selected={selected ? "true" : undefined}
@@ -159,10 +163,15 @@ export function WorkflowParamCard({
           }}
         />
         <span
-          className="min-w-0 flex-1 truncate text-[11px] font-semibold text-(--color-ink-bright)"
+          className="min-w-0 flex-1 truncate text-[11px] font-semibold text-ink-bright"
           title={`${classLabel} · ${hostNodeId}`}
         >
           {label}
+          {idLabel && (
+            <span className="ml-1 font-mono text-[10px] font-normal text-ink-faint">
+              {idLabel}
+            </span>
+          )}
         </span>
         {onReset && (
           <button
@@ -171,8 +180,8 @@ export function WorkflowParamCard({
             disabled={!canReset}
             className={`nodrag nopan shrink-0 rounded p-0.5 transition-colors ${
               canReset
-                ? "text-(--color-ink-soft) hover:bg-white/8 hover:text-(--color-ink-bright)"
-                : "cursor-default text-(--color-ink-fainter)"
+                ? "text-ink-soft hover:bg-subtle hover:text-ink-bright"
+                : "cursor-default text-ink-fainter"
             }`}
             data-testid={`param-node-reset-${entryId}`}
             title={
@@ -215,8 +224,8 @@ export function WorkflowParamCard({
             <span
               className={`min-w-0 truncate ${
                 port.connected
-                  ? "text-(--color-ink-soft)"
-                  : "text-(--color-ink-fainter)"
+                  ? "text-ink-soft"
+                  : "text-ink-fainter"
               }`}
             >
               {port.name}
@@ -245,7 +254,7 @@ export function WorkflowParamCard({
       {!readOnly && footNote && (
         <div
           className={`px-2 pb-1.5 text-[9.5px] leading-relaxed ${
-            wired ? "text-(--color-ink-fainter)" : "text-amber-500/80"
+            wired ? "text-ink-fainter" : "text-amber-600/90 dark:text-amber-500/80"
           }`}
           data-testid={`param-node-hint-${entryId}`}
         >

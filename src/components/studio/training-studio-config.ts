@@ -86,11 +86,11 @@ export const STATUS_META: Record<
   TrainJobStatus,
   { label: string; cls: string }
 > = {
-  QUEUED: { label: "等待中", cls: "text-gray-300 bg-white/10" },
-  RUNNING: { label: "训练中", cls: "text-violet-300 bg-violet-500/15" },
-  DONE: { label: "已完成", cls: "text-emerald-300 bg-emerald-500/15" },
-  FAILED: { label: "失败", cls: "text-red-300 bg-red-500/15" },
-  CANCELLED: { label: "已取消", cls: "text-amber-300 bg-amber-500/15" },
+  QUEUED: { label: "等待中", cls: "text-ink-soft bg-surface-2" },
+  RUNNING: { label: "训练中", cls: "text-violet-700 dark:text-violet-300 bg-violet-500/15" },
+  DONE: { label: "已完成", cls: "text-emerald-700 dark:text-emerald-300 bg-emerald-500/15" },
+  FAILED: { label: "失败", cls: "text-red-700 dark:text-red-300 bg-red-500/15" },
+  CANCELLED: { label: "已取消", cls: "text-amber-700 dark:text-amber-300 bg-amber-500/15" },
 };
 
 /** 未知状态（后端新增枚举）一律按「等待中」渲染，不崩、不留空白。 */

@@ -228,7 +228,7 @@ export function SeedModeButton({
         setOpen((value) => !value);
       }}
       onMouseDown={(event) => event.stopPropagation()}
-      className="nodrag nopan flex h-[30px] shrink-0 items-center gap-1 rounded-md border border-(--color-border-strong) bg-(--color-canvas-deep) px-2 text-[11px] font-medium text-(--color-ink-soft) transition-colors hover:border-(--color-primary)/40 hover:text-(--color-ink-bright)"
+      className="nodrag nopan flex h-[30px] shrink-0 items-center gap-1 rounded-md border border-border-strong bg-canvas-deep px-2 text-[11px] font-medium text-ink-soft transition-colors hover:border-primary/40 hover:text-ink-bright"
       title="控件后行为 · CONTROL AFTER GENERATE"
     >
       <span className="truncate">{current}</span>
@@ -269,7 +269,7 @@ export function SeedModeButton({
           />
           <div
             ref={popRef}
-            className="nodrag nopan fixed overflow-hidden rounded-xl border border-(--color-border-strong) bg-(--color-card) p-3 shadow-2xl shadow-black/60"
+            className="nodrag nopan fixed overflow-hidden rounded-xl border border-border-strong bg-card p-3 shadow-2xl shadow-black/12 dark:shadow-black/60"
             style={{
               zIndex: 9999,
               width: POPOVER_WIDTH,
@@ -283,13 +283,13 @@ export function SeedModeButton({
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="space-y-0.5">
-              <h4 className="text-[12px] font-semibold text-(--color-ink-bright)">
+              <h4 className="text-[12px] font-semibold text-ink-bright">
                 控件后行为{" "}
-                <span className="text-(--color-ink-muted)">
+                <span className="text-ink-muted">
                   · CONTROL AFTER GENERATE
                 </span>
               </h4>
-              <p className="text-[10.5px] leading-relaxed text-(--color-ink-muted)">
+              <p className="text-[10.5px] leading-relaxed text-ink-muted">
                 seed / 类似数值 widget 点击数字弹出 4 选 1 切换面板
               </p>
             </div>
@@ -307,36 +307,34 @@ export function SeedModeButton({
                     onMouseDown={(event) => event.stopPropagation()}
                     className={`nodrag nopan flex w-full items-center gap-2.5 rounded-lg border px-2 py-1.5 text-left transition-colors ${
                       selected
-                        ? "border-(--color-primary)/40 bg-(--color-node-accent)"
-                        : "border-transparent hover:bg-white/4"
+                        ? "border-primary/40 bg-node-accent"
+                        : "border-transparent hover:bg-subtle"
                     }`}
                   >
                     <span
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-                        selected ? "bg-[#2A1F4A]" : "bg-(--color-node-accent)"
-                      }`}
+                      className="bg-node-accent flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
                     >
                       <SeedModeIcon value={SEED_MODES.value} />
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span
-                        className={`text-[12px] font-semibold ${selected ? "text-(--color-ink-bright)" : "text-(--color-ink-bright)"}`}
+                        className={`text-[12px] font-semibold ${selected ? "text-ink-bright" : "text-ink-bright"}`}
                       >
                         {SEED_MODES.label}
                       </span>
-                      <span className="truncate text-[10.5px] leading-snug text-(--color-ink-muted)">
+                      <span className="truncate text-[10.5px] leading-snug text-ink-muted">
                         {SEED_MODES.hint}
                       </span>
                     </span>
                     <span
                       className={`h-3.5 w-3.5 shrink-0 rounded-full border-2 transition-colors ${
                         selected
-                          ? "border-(--color-primary) bg-(--color-primary)"
+                          ? "border-primary bg-primary"
                           : "border-[#4D4D59] bg-transparent"
                       }`}
                     >
                       {selected && (
-                        <span className="block h-full w-full rounded-full ring-2 ring-(--color-card)" />
+                        <span className="block h-full w-full rounded-full ring-2 ring-card" />
                       )}
                     </span>
                   </button>

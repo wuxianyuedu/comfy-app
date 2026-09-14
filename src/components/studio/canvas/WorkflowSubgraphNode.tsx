@@ -139,7 +139,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
 
   return (
     <div
-      className="relative flex flex-col rounded-lg border shadow-[0_6px_22px_rgba(0,0,0,0.6)]"
+      className={`relative flex flex-col rounded-lg border shadow-[0_6px_22px_rgba(0,0,0,0.6)] ${
+        nodeMode !== 0 ? "bg-transparent" : "bg-node"
+      }`}
       ref={hoverRef}
       data-node-id={data.nodeId}
       {...hoverHandlers}
@@ -167,10 +169,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
         //  boxes the user explicitly set in ComfyUI).
         borderColor: hexToRgba(accent, 0.55),
         // Tint + real blur for bypass/disabled subgraphs live in <NodeFrost>;
-        //  root is transparent + a stacking context (isolation) so the frost's
-        //  negative z stays contained.  Normal subgraphs keep a solid panel.
+        //  the root keeps `isolation` so the frost's negative z stays contained,
+        //  and stays transparent so the frost shows through.  Normal subgraphs
+        //  take the solid panel from `bg-node` (theme-aware).
         isolation: "isolate",
-        background: nodeMode !== 0 ? "transparent" : "var(--color-node)",
         // ComfyUI draws a bright selection rectangle around the active node.
         outline: selected ? "2px solid rgba(56,189,248,0.9)" : "none",
         outlineOffset: selected ? "2px" : undefined,
@@ -302,7 +304,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
        *  Hidden when the user / config marks the chip collapsed. */}
       {!isCollapsed && pinRows > 0 && (
         <div
-          className="border-b border-white/5 py-0.5"
+          className="border-border-strong border-b py-0.5"
           style={{ background: "rgba(255,255,255,0.015)" }}
         >
             {Array.from({ length: pinRows }).map((_, rowIdx) => {
@@ -335,11 +337,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                         position={Position.Left}
                         id={inName}
                         isConnectable={false}
-                        className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
+                        className="!h-2.5 !w-2.5 !rounded-full !border !border-port-surface"
                         style={{
                           left: 5,
                           background: inCol,
-                          boxShadow: `0 0 6px ${inCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
+                          boxShadow: `0 0 6px ${inCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
                         }}
                         title={`${inLabel} (${inType})`}
                       />
@@ -373,7 +375,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                          *  BOOLEAN widget) wraps onto multiple lines
                          *  instead of being clipped.  Full text stays
                          *  available via the native `title` tooltip. */
-                        className="min-w-0 flex-1 whitespace-normal break-words text-left text-[11px] text-zinc-200"
+                        className="text-ink-bright min-w-0 flex-1 text-left text-[11px] break-words whitespace-normal"
                         title={`${inLabel} (${inType})`}
                       >
                         {inLabel}
@@ -385,7 +387,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                       <span
                         /* same wrap fix as the
                          *  boundary-input branch above. */
-                        className="min-w-0 flex-1 whitespace-normal break-words text-right text-[11px] text-gray-200"
+                        className="text-ink-bright min-w-0 flex-1 text-right text-[11px] break-words whitespace-normal"
                         title={`${outDisplay} (${outType})`}
                       >
                         {outDisplay}
@@ -403,11 +405,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                         position={Position.Right}
                         id={`out:${outName}`}
                         isConnectable={false}
-                        className="!rounded-full !border !border-(--color-canvas)"
+                        className="!rounded-full !border !border-port-surface"
                         style={{
                           right: 5,
                           background: outCol,
-                          boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
+                          boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
                           ...(io?.ioEditMode
                             ? { width: 4, height: 4, opacity: 0.35, right: 0 }
                             : { width: 10, height: 10 }),
@@ -429,7 +431,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
        *  STRING widgets with long values break out into a stacked block.
        *  Hidden when the chip is collapsed. */}
       {!isCollapsed && widgetInputs.length > 0 && (
-        <div className="relative flex min-h-0 flex-1 flex-col py-0.5" style={{ background: "rgba(255,255,255,0.01)" }}>
+        <div className="bg-surface-1 relative flex min-h-0 flex-1 flex-col py-0.5">
           {widgetInputs.map(({ inp, label }, i) => {
             const v: unknown = inp.widgetValue;
             const isConn = inp.isConnection === true || inp.isBoundary === true;
@@ -477,11 +479,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                     position={Position.Left}
                     id={inp.name}
                     isConnectable={false}
-                    className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
+                    className="!h-2.5 !w-2.5 !rounded-full !border !border-port-surface"
                     style={{
                       left: 5,
                       background: typeCol,
-                      boxShadow: `0 0 6px ${typeCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
+                      boxShadow: `0 0 6px ${typeCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
                     }}
                     title={`${label} (${inp.type})`}
                   />
@@ -528,7 +530,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                           {label}
                         </span>
                         {/* Vertical 1px divider between label and value. */}
-                        <span className="h-2 w-px shrink-0 bg-white/5" aria-hidden />
+                        <span className="bg-border-strong h-2 w-px shrink-0" aria-hidden />
                         {/* COMBO widget on the workflow canvas
                          *  renders as a display-only DarkSelect — it shows the
                          *  currently-selected model as a dropdown shell, but
@@ -564,7 +566,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                          *  fade to transparent) instead of a hard bar — reads as
                          *  a column hint rather than a "cut the row in half" line.
                          *  Width still 1px so it doesn't claim row real estate. */}
-                        <span className="h-2 w-px shrink-0 bg-white/5" aria-hidden />
+                        <span className="bg-border-strong h-2 w-px shrink-0" aria-hidden />
                         <span
                           className="min-w-0 truncate text-right text-[10.5px] tabular-nums"
                           style={{
@@ -631,9 +633,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                       >
                         {label}
                       </span>
-                      <span className="h-2 w-px shrink-0 bg-white/5" aria-hidden />
+                      <span className="bg-border-strong h-2 w-px shrink-0" aria-hidden />
                       <span
-                        className="text-right text-[10px] uppercase tracking-wider text-gray-500"
+                        className="text-ink-muted text-right text-[10px] tracking-wider uppercase"
                         title={`STRING · ${stringText.length} chars`}
                       >
                         {stringText.length}c
@@ -643,7 +645,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                       <StringTextarea value={stringText} mono hasSize={hasSize} />
                     ) : (
                       <div
-                        className="flex-1 rounded border border-white/10 bg-black/30 px-2 py-1.5 text-[10.5px] leading-snug text-gray-600"
+                        className="border-border-strong bg-canvas-deep text-ink-fainter flex-1 rounded border px-2 py-1.5 text-[10.5px] leading-snug"
                         style={{ minHeight: 28 }}
                       >
                         （空）

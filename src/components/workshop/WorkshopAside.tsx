@@ -134,7 +134,7 @@ export function WorkshopAside({
       {/* Missing materials */}
       <div className="border-border bg-surface rounded-2xl border p-4">
         <div className="mb-3 flex items-center gap-2">
-          <span className="grid h-[22px] w-[22px] place-items-center rounded-lg bg-(--color-amber)/20 text-[13px] font-bold text-(--color-amber)">
+          <span className="grid h-[22px] w-[22px] place-items-center rounded-lg bg-amber/20 text-[13px] font-bold text-amber">
             !
           </span>
           <span className="text-ink text-[13px] font-semibold">
@@ -159,7 +159,7 @@ export function WorkshopAside({
           type="button"
           onClick={onGoScript}
           variant="ghost"
-          className="mt-3 w-full rounded-lg bg-(--color-amber)/10 py-2.5 text-xs font-semibold text-(--color-amber) hover:bg-(--color-amber)/15"
+          className="mt-3 w-full rounded-lg bg-amber/10 py-2.5 text-xs font-semibold text-amber hover:bg-amber/15"
         >
           补齐缺失素材 →
         </Button>
@@ -219,7 +219,7 @@ export function WorkshopAside({
           type="button"
           variant="ghost"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground mt-3 w-full rounded-lg bg-(--color-subtle) py-2.5 text-xs hover:bg-(--color-surface-2)"
+          className="text-muted-foreground mt-3 w-full rounded-lg bg-subtle py-2.5 text-xs hover:bg-surface-2"
         >
           配置模型适配（远端生图 / 视频）
         </Button>
@@ -237,7 +237,7 @@ export function WorkshopAside({
               <span className="text-ink flex-1 truncate text-[12.5px]">
                 {name}
               </span>
-              <span className="text-faint rounded-md bg-(--color-subtle) px-2 py-1 text-[10.5px]">
+              <span className="text-faint rounded-md bg-subtle px-2 py-1 text-[10.5px]">
                 {tag}
               </span>
             </div>
@@ -246,7 +246,7 @@ export function WorkshopAside({
         <Button
           type="button"
           variant="ghost"
-          className="text-muted-foreground mt-3 w-full rounded-lg bg-(--color-subtle) py-2.5 text-xs hover:bg-(--color-surface-2)"
+          className="text-muted-foreground mt-3 w-full rounded-lg bg-subtle py-2.5 text-xs hover:bg-surface-2"
         >
           + 导入素材
         </Button>

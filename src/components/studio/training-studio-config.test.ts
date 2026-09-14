@@ -97,7 +97,7 @@ describe("statusMeta", () => {
 
   it("未知状态（后端新增枚举）按「等待中」渲染，不崩、不留空白", () => {
     expect(statusMeta("W H A T").label).toBe("等待中");
-    expect(statusMeta("").cls).toBe("text-gray-300 bg-white/10");
+    expect(statusMeta("").cls).toBe("text-ink-soft bg-surface-2");
   });
 });
 

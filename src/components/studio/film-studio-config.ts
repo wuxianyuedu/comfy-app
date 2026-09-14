@@ -150,11 +150,11 @@ export const STATUS_BADGE: Record<
   ShotStatus,
   { bg: string; text: string; label: string }
 > = {
-  IDLE: { bg: "bg-white/6", text: "text-(--color-ink-fainter)", label: "待处理" },
-  QUEUED: { bg: "bg-amber-500/15", text: "text-amber-300", label: "排队中" },
-  RUNNING: { bg: "bg-violet-500/15", text: "text-violet-300", label: "生成中" },
-  SUCCEEDED: { bg: "bg-emerald-500/15", text: "text-emerald-300", label: "完成" },
-  FAILED: { bg: "bg-rose-500/15", text: "text-rose-300", label: "失败" },
+  IDLE: { bg: "bg-subtle", text: "text-ink-fainter", label: "待处理" },
+  QUEUED: { bg: "bg-amber-500/15", text: "text-amber-700 dark:text-amber-300", label: "排队中" },
+  RUNNING: { bg: "bg-violet-500/15", text: "text-violet-700 dark:text-violet-300", label: "生成中" },
+  SUCCEEDED: { bg: "bg-emerald-500/15", text: "text-emerald-700 dark:text-emerald-300", label: "完成" },
+  FAILED: { bg: "bg-rose-500/15", text: "text-rose-700 dark:text-rose-300", label: "失败" },
 };
 
 export const STAGE_LABEL: Record<FilmStatus, string> = {

@@ -102,6 +102,12 @@ export interface WorkflowParamWiresProps {
   onConnectOutput?: (outputIoKey: string, targetIoKey: string) => void;
   /** 输出侧断开（把某个输出口从它当前取值的那一行摘开）。 */
   onDisconnectOutput?: (outputIoKey: string) => void;
+  /** 类型闸门（可选）：这个条目能不能落到这一行上（反向拖时第二个参数是**起手
+   *  那一行**）。缺省 = 不做类型判定（只判几何命中）。
+   *
+   *  判据由上层给（`pinAcceptsEntry` + IO 表 + 契约 entries）：契约与 IO 的知识
+   *  不进这个几何层，这里只保证「落不上的目标不会被画成可落点、也不会被上抛」。 */
+  acceptsDrop?: (entryId: string, ioKey: string) => boolean;
 }
 
 interface Segment {
@@ -407,26 +413,54 @@ export function measureWires(
   return out;
 }
 
-/** 拖动中的预览线：起点 = 被拖的那颗圆点，终点 = 光标位置。
- *
- *  在**事件回调里**算好存进 state（而不是渲染期读 ref）：React 的 refs 规则
- *  禁止渲染期访问 ref，而这里既需要容器（ref 的 parentElement）又需要当前
- *  光标位置 —— 两者都只在事件发生那一刻是真的。 */
-function dragPath(
-  container: HTMLElement,
+/** 类型闸门判定（经 ref 取最新那一份；父层没给就只判几何命中）。 */
+function allowed(
+  ref: React.RefObject<((entryId: string, ioKey: string) => boolean) | undefined>,
   entryId: string,
-  handleId: string,
-  point: { x: number; y: number } | null,
-): string | null {
-  const from = findAnchor(
-    container,
-    "data-wire-anchor",
-    wireAnchorValue(entryId, handleId),
-  );
-  if (!from || !point) return null;
+  ioKey: string,
+): boolean {
+  return ref.current ? ref.current(entryId, ioKey) : true;
+}
+
+/** 卡片圆点声明的 `entryId?handleId` 里取出条目 id（输出口时就是该输出口的 ioKey）。 */
+function entryIdOfAnchor(raw: string): string {
+  const separator = raw.indexOf("?");
+  return separator > 0 ? raw.slice(0, separator) : "";
+}
+
+/** 反向拖的可拖提示：行圆点按方向标十字光标。
+ *
+ *  行是表单层渲染的，这里用**命令式**盖一层装饰（与量测同源：都在本层遍历
+ *  DOM）—— 不必把「可拖」这件事塞进表单层的 props，也不动它们的渲染结构。 */
+function markDraggableDots(
+  container: HTMLElement,
+  input: boolean,
+  output: boolean,
+): void {
+  for (const el of container.querySelectorAll<HTMLElement>(`[${PORT_DOT_ATTR}]`)) {
+    const isOutput = el.getAttribute(IO_DIRECTION_ATTR) === "output";
+    if (isOutput ? output : input) {
+      el.dataset.wireSource = isOutput ? "output" : "input";
+      el.style.cursor = "crosshair";
+    } else if (el.dataset.wireSource) {
+      delete el.dataset.wireSource;
+      el.style.cursor = "";
+    }
+  }
+}
+
+/** 预览线路径：起点 = 给定锚点**朝向光标**的那条外缘，终点 = 光标。
+ *
+ *  两个方向共用这一段：卡片圆点起手（卡片 → 行）与行圆点起手（行 → 卡片）。 */
+function pathFromAnchor(
+  container: HTMLElement,
+  anchor: HTMLElement,
+  /** 光标位置，**屏幕坐标**（`clientX/clientY`）；局部坐标换算在本函数内做。 */
+  point: { x: number; y: number },
+): string {
   const scale = wireScale(container);
   const box = container.getBoundingClientRect();
-  const a = rectInContainer(from, container, scale);
+  const a = rectInContainer(anchor, container, scale);
   /* 光标是**屏幕**坐标，同样要除缩放回到容器坐标系 —— 否则缩小时预览线
    *  会明显慢于/快于光标，「拖不准」。 */
   const x2 = (point.x - box.left) / scale;
@@ -435,10 +469,53 @@ function dragPath(
    *  时线必须从左侧出线。写死右缘会把起点算到光标的另一侧 —— 用户看到的正是
    *  「往右拖，线却飘向左侧」（ISSUE #355）。 */
   const start = edgePointToward(a, x2);
-  const x1 = start.x;
-  const y1 = start.y;
-  const dx = Math.max(Math.abs(x2 - x1) / 2, 16);
-  return `M ${x1} ${y1} C ${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`;
+  const dx = Math.max(Math.abs(x2 - start.x) / 2, 16);
+  return `M ${start.x} ${start.y} C ${start.x + dx} ${start.y} ${x2 - dx} ${y2} ${x2} ${y2}`;
+}
+
+/** 反向拖（行 → 卡片）的可落点：两列对外参数卡片自己的圆点。
+ *
+ *  `outputs` 决定收哪一列 —— 从工作流**输出行**起手只能落到对外**输出**参数卡片
+ *  （那些圆点带 `data-wire-kind="hostToParam"`），从**输入行**起手只能落到对外参数
+ *  卡片；与「拖到行上」时的落点集合互为镜像。命中值就是圆点自己声明的
+ *  `entryId?handleId`（与按下时解析卡片圆点用的是同一套键）。 */
+export function collectCardTargets(
+  container: HTMLElement,
+  outputs: boolean,
+): { ioKey: string; rect: DOMRectLike }[] {
+  const scale = wireScale(container);
+  const out: { ioKey: string; rect: DOMRectLike }[] = [];
+  for (const el of container.querySelectorAll<HTMLElement>("[data-wire-anchor]")) {
+    const raw = el.getAttribute("data-wire-anchor");
+    if (!raw) continue;
+    const isOutput = el.getAttribute("data-wire-kind") === "hostToParam";
+    if (isOutput !== outputs) continue;
+    const box = rectInContainer(el, container, scale);
+    if (box.width === 0 && box.height === 0) continue;
+    out.push({ ioKey: raw, rect: toRectLike(box) });
+  }
+  return out;
+}
+
+/** 拖动中的预览线：起点 = 被拖的那颗**卡片圆点**，终点 = 光标位置。
+ *
+ *  在**事件回调里**算好存进 state（而不是渲染期读 ref）：React 的 refs 规则
+ *  禁止渲染期访问 ref，而这里既需要容器（ref 的 parentElement）又需要当前
+ *  光标位置 —— 两者都只在事件发生那一刻是真的。 */
+export function dragPath(
+  container: HTMLElement,
+  entryId: string,
+  handleId: string,
+  /** 光标位置，**屏幕坐标**（`clientX/clientY`）；局部坐标换算在本函数内做。
+   *  两个调用点都必须传屏幕坐标 —— 传局部坐标会把容器偏移减两次，预览线飘向左上。 */  point: { x: number; y: number } | null,
+): string | null {
+  const from = findAnchor(
+    container,
+    "data-wire-anchor",
+    wireAnchorValue(entryId, handleId),
+  );
+  if (!from || !point) return null;
+  return pathFromAnchor(container, from, point);
 }
 
 export function WorkflowParamWires({
@@ -449,6 +526,7 @@ export function WorkflowParamWires({
   onDisconnect,
   onConnectOutput,
   onDisconnectOutput,
+  acceptsDrop,
 }: WorkflowParamWiresProps) {
   const ref = useRef<SVGSVGElement | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
@@ -462,9 +540,19 @@ export function WorkflowParamWires({
     kind: ParamWireKind;
     /** 已算好的预览线路径（量不到圆点时为空，不画）。 */
     path: string | null;
-    /** 当前悬停命中的落点 ioKey（null = 没落在任何行上）。 */
+    /** 当前悬停命中的落点（null = 没落在任何目标上）：卡片起手时是行的 ioKey，
+     *  行起手（反向）时是卡片圆点的 `entryId?handleId`。 */
     hover: string | null;
+    /** **反向拖**（行 → 卡片）起手那一行的 ioKey；卡片起手时为空。
+     *  给了它就表示：起点是这颗行圆点、落点是卡片圆点、上抛时行 ioKey 由它给。 */
+    fromHostIoKey?: string;
   } | null>(null);
+  /* 类型闸门由父层给（内联箭头，每次渲染都是新函数）：直接进事件 effect 的依赖
+   *  会让监听器在拖动过程中反复解绑重绑，这里用 ref 同步最新那一份。 */
+  const acceptsRef = useRef(acceptsDrop);
+  useEffect(() => {
+    acceptsRef.current = acceptsDrop;
+  }, [acceptsDrop]);
   /* 空集合时**不挂线层**：挂载那一刻还没量过，`segments` 是空的，但 svg 必须先
    * 在 DOM 里才量得到锚点（量测的起点是 svg 的 parentElement）。所以「要不要
    * 渲染 svg」只取决于有没有线要画，而不是「已经量到几条」。 */
@@ -484,6 +572,8 @@ export function WorkflowParamWires({
   useEffect(() => {
     const container = ref.current?.parentElement;
     if (!container) return;
+    /* 反向拖的可拖提示：有回调的方向上，行圆点标十字光标（见 markDraggableDots）。 */
+    markDraggableDots(container, !!onConnect, !!onConnectOutput);
     let frame = 0;
     const remeasure = () => {
       cancelAnimationFrame(frame);
@@ -525,7 +615,36 @@ export function WorkflowParamWires({
       const target = event.target as HTMLElement | null;
       const anchor = target?.closest<HTMLElement>("[data-wire-anchor]");
       const raw = anchor?.dataset.wireAnchor;
-      if (!raw) return;
+      if (!raw) {
+        /* ── 反向：从工作流某一行**自己的圆点**起手（行 → 卡片）──
+         *  原来只能「卡片圆点 → 工作流行」，从行上起手同样自然（用户盯着那一行
+         *  想「这行喂给哪个对外参数 / 该输出口从哪一行取值」）。行圆点按**自己
+         *  声明的方向**分流：输出行只能连到对外输出参数卡片，输入行只能连到对外
+         *  参数卡片 —— 与拖到行上时的可落点集合互为镜像。 */
+        const dot = target?.closest<HTMLElement>(`[${PORT_DOT_ATTR}]`);
+        const ioKey = dot?.getAttribute(PORT_DOT_ATTR);
+        if (!dot || !ioKey) return;
+        const isOutput = dot.getAttribute(IO_DIRECTION_ATTR) === "output";
+        if (isOutput ? !onConnectOutput : !onConnect) return;
+        event.preventDefault();
+        const hostContainer = ref.current?.parentElement;
+        setDrag({
+          /* 反向拖的 entryId 由落点（卡片圆点）决定，起手先空着；预览线与悬停
+           *  都走 `fromHostIoKey` 那条分支。 */
+          entryId: "",
+          handleId: "",
+          kind: isOutput ? "hostToParam" : "paramToHost",
+          fromHostIoKey: ioKey,
+          hover: null,
+          path: hostContainer
+            ? pathFromAnchor(hostContainer, dot, {
+                x: event.clientX,
+                y: event.clientY,
+              })
+            : null,
+        });
+        return;
+      }
       const separator = raw.indexOf("?");
       if (separator < 0) return;
       const entryId = raw.slice(0, separator);
@@ -573,29 +692,67 @@ export function WorkflowParamWires({
     const outputsOnly = drag.kind === "hostToParam";
     const move = (event: PointerEvent) => {
       const point = localPoint(event);
-      const hover = container
-        ? resolveDropTarget(point, collectDropTargets(container, outputsOnly))
-        : null;
-      setDrag((prev) =>
-        prev
-          ? {
-              ...prev,
-              hover,
-              path: container
-                ? dragPath(container, prev.entryId, prev.handleId, point)
-                : null,
-            }
-          : prev,
-      );
+      /* 反向拖的落点是卡片圆点，正向拖的落点是工作流行 —— 候选集合按起手处分流，
+       *  再过一道类型闸门：落不上的目标不参与命中（不会点高亮、预览线也不转实线）。 */
+      const fromHostKey = drag.fromHostIoKey ?? "";
+      const targets = container
+        ? fromHostKey
+          ? collectCardTargets(container, outputsOnly).filter((target) =>
+              allowed(acceptsRef, entryIdOfAnchor(target.ioKey), fromHostKey),
+            )
+          : collectDropTargets(container, outputsOnly).filter((target) =>
+              allowed(acceptsRef, drag.entryId, target.ioKey),
+            )
+        : [];
+      const hover = container ? resolveDropTarget(point, targets) : null;
+      setDrag((prev) => {
+        if (!prev) return prev;
+        /* 预览线的终点要传**屏幕坐标**：`dragPath` / `pathFromAnchor` 自己减容器
+         *  偏移、除缩放。这里若把已局部化的 `point` 传进去，偏移会被减两次，
+         *  预览线固定飘到光标**左上方**（拖到哪都拐向左上，看着完全不跟手）；
+         *  落点判定照旧用局部坐标 `point`，两者口径不同、别混。 */
+        const screen = { x: event.clientX, y: event.clientY };
+        /* 反向拖的起点是**起手那一行的圆点**（不是卡片圆点）：`drag.entryId` 在
+         *  反向拖里是空的（entryId 由落点决定），只能按 `fromHostIoKey` 找回锚点。 */
+        const fromHost = prev.fromHostIoKey
+          ? findAnchor(container ?? document.body, PORT_DOT_ATTR, prev.fromHostIoKey)
+          : null;
+        return {
+          ...prev,
+          hover,
+          path: !container
+            ? null
+            : prev.fromHostIoKey
+              ? fromHost
+                ? pathFromAnchor(container, fromHost, screen)
+                : null
+              : dragPath(container, prev.entryId, prev.handleId, screen),
+        };
+      });
     };
     const up = (event: PointerEvent) => {
-      const hit = container
-        ? resolveDropTarget(
-            localPoint(event),
-            collectDropTargets(container, outputsOnly),
-          )
-        : null;
-      if (hit) {
+      const point = localPoint(event);
+      const fromHostKey = drag.fromHostIoKey ?? "";
+      /* 与 move 同一套候选（含类型闸门）：松手时判不上的目标一律不上抛。 */
+      const targets = container
+        ? fromHostKey
+          ? collectCardTargets(container, outputsOnly).filter((target) =>
+              allowed(acceptsRef, entryIdOfAnchor(target.ioKey), fromHostKey),
+            )
+          : collectDropTargets(container, outputsOnly).filter((target) =>
+              allowed(acceptsRef, drag.entryId, target.ioKey),
+            )
+        : [];
+      const hit = container ? resolveDropTarget(point, targets) : null;
+      if (hit && fromHostKey) {
+        /* 反向拖：命中卡片圆点 → 让**起手那一行**成为这张口的落点。圆点自己声明
+         *  `entryId?handleId`，条目 id 就是键（handleId 只用于在卡片上定位圆点）。 */
+        const entryId = entryIdOfAnchor(hit);
+        if (entryId) {
+          if (drag.kind === "hostToParam") onConnectOutput?.(entryId, fromHostKey);
+          else onConnect?.(entryId, fromHostKey);
+        }
+      } else if (hit) {
         if (drag.kind === "hostToParam") onConnectOutput?.(drag.entryId, hit);
         else onConnect?.(drag.entryId, hit);
       }

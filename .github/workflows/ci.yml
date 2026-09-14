@@ -63,6 +63,14 @@ jobs:
             exit 1
           fi
 
+      - name: Sync database schema (non-interactive)
+        # 门禁此前**从不建库**，于是「跑起来的应用要有库」这条路径没有任何
+        # 自动检查在验（ISSUE #489）：`pnpm build` 只证明「没有库也能构建」，
+        # 而 `db:push` 在无 TTY 上「报错 + exit 0 + 留 0 字节库」的静默失败
+        # 因此长期潜伏。走 scripts/db-push.mjs：它复核库里到底有没有表，
+        # 失败即非零退出——CI 上这条链路必须真的能跑通。
+        run: pnpm run db:push
+
       - name: Typecheck
         run: pnpm run typecheck
 
@@ -97,18 +105,42 @@ jobs:
         run: pnpm run test:coverage
 
       - name: Build
-        # src/env.js 在 build/dev 期校验；CI 无真实密钥，用占位值通过 schema 校验
+        # src/env.js 在 build/dev 期校验；CI 无真实密钥，用占位值通过 schema 校验。
+        # BETTER_AUTH_SECRET 必须一并注入（ISSUE #489）：`SKIP_ENV_VALIDATION=1`
+        # 只绕过 src/env.js 的 schema 校验，绕过**不了** better-auth 自己的
+        # 生产校验 —— `next start`（生产模式）下缺失该值时 better-auth 退回内置
+        # DEFAULT_SECRET 并直接抛「You are using the default secret」，连带
+        # createTRPCContext() 抛错、所有 authedProcedure 全灭（设置页整页读不出来）。
+        # 该值只用于 CI 冒烟，不参与任何真实部署。
         env:
           SKIP_ENV_VALIDATION: "1"
+          BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
         run: pnpm run build
+
+      - name: Standalone contents guard
+        # `.next/standalone` 的产物级护栏（ISSUE #489 / 规范 §7.2）：真去数产物
+        # 里有没有测试文件 / 变更碎片 / 文档。上一轮修的是 `outputFileTracingExcludes`
+        # 的清单与键位，但「清单还在」不等于「清单生效」——必须有一条构建后的检查
+        # 去数文件，否则清单再次静默失效（历史事故：键位挂在 experimental 下，
+        # 一个字都没被读）也没人会发现。脚本在产物缺失时跳过，必须先于它运行 Build。
+        run: node scripts/check-standalone-contents.cjs
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
       - name: E2E (Playwright @critical)
-        # 只跑 @critical 关键流程（规范 11.7）；其余 E2E 不阻断合并
+        # 只跑 @critical 关键流程（规范 11.7）；其余 E2E 不阻断合并。
+        # 注意**不要**设 SKIP_ENV_VALIDATION 以外的捷径：门禁前面的
+        # `db:push` 已建好表，这里跑的用例要能真的读到库（见 e2e/smoke.spec.ts
+        # 的「数据库链路」一组），否则「库没建」这类退化又会从门禁视野里消失。
+        #
+        # BETTER_AUTH_SECRET 同理必须注入（ISSUE #489）：E2E 的 webServer 在 CI 上
+        # 跑的是 `pnpm start`（生产模式），缺该值会让 better-auth 抛「default secret」
+        # —— 实测会让 3 条 @critical 用例（ComfyUI 页签内嵌/不可嵌说明/浏览器打开）
+        # 全部挂在同一个 helper 上，即「设置页整体读不出来」这类退化的守卫失效。
         env:
           SKIP_ENV_VALIDATION: "1"
+          BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
         run: pnpm exec playwright test --grep @critical
 
       - name: Upload Playwright report

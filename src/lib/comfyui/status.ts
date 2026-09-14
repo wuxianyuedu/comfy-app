@@ -37,6 +37,7 @@ import { COMFYUI_DEFAULT_PORT, getSettingsSync } from "../app-settings";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
+import { tracingIgnoreArgs } from "~/lib/tracing-ignore";
 import { probeComfyAtPort } from "./client";
 import { collectComfyPythonCandidates } from "./env-python";
 import { logger } from "~/server/lib/logger";
@@ -150,7 +151,12 @@ export function launcherCommandCandidates(pythonExe: string): string[] {
       ? ["pythonw.exe", "python.exe"]
       : ["pythonw", "python"];
   // 去重：便携版解释器本身就叫 python.exe，枚举结果与候选重复时不必查两遍。
-  return [...new Set([...exts.map((n) => path.join(dir, n)), pythonExe])];
+  return [
+    ...new Set([
+      ...exts.map((name) => path.join(...tracingIgnoreArgs(), dir, name)),
+      pythonExe,
+    ]),
+  ];
 }
 
 /** 读 setup 登记的启动器（ComfyUI 的 `comfy-cli` 会把「怎么起这个实例」写到
@@ -159,7 +165,8 @@ export function launcherCommandCandidates(pythonExe: string): string[] {
 export function readRegisteredLauncher(comfyuiPath: string): string | null {
   if (!comfyuiPath) return null;
   const registry = path.join(
-    /*turbopackIgnore: true*/ comfyuiPath,
+    ...tracingIgnoreArgs(),
+    comfyuiPath,
     ".venv",
     "Lib",
     "site-packages",
@@ -168,11 +175,11 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
   );
   let raw: string;
   try {
-    raw = fs.readFileSync(/*turbopackIgnore: true*/ registry, "utf8");
+    raw = fs.readFileSync(...tracingIgnoreArgs(), registry, "utf8");
   } catch {
     // 兜底：comfyuiPath 本身就是注册表文件（少见，但比「静默不认」好）。
     try {
-      raw = fs.readFileSync(/*turbopackIgnore: true*/ comfyuiPath, "utf8");
+      raw = fs.readFileSync(...tracingIgnoreArgs(), comfyuiPath, "utf8");
     } catch {
       return null;
     }
