@@ -11,6 +11,7 @@ import {
   pollRemoteVideoTask,
   saveMediaToLocalTemp,
 } from "~/lib/llm/video-task-util";
+import { errorMessage } from "~/lib/error-message";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,15 +23,6 @@ const MEDIA_TIMEOUT_MS = 180_000;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
-}
-
-function errorMessage(e: unknown, fallback: string): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const msg: unknown = e.message;
-    if (typeof msg === "string") return msg;
-  }
-  return fallback;
 }
 
 function strField(rec: Record<string, unknown>, key: string): string {
