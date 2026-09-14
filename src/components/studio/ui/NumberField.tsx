@@ -78,7 +78,7 @@ export function NumberField({
 
   return (
     <div
-      className={`nodrag nopan flex items-center gap-0 rounded-lg border border-(--color-border) bg-(--color-subtle) transition-opacity ${
+      className={`nodrag nopan border-border bg-subtle flex items-center gap-0 rounded-lg border transition-opacity ${
         disabled ? "opacity-40 pointer-events-none" : ""
       } ${className ?? ""}`}
     >
@@ -86,7 +86,7 @@ export function NumberField({
         type="button"
         onMouseDown={(event) => { event.preventDefault(); decr(); }}
         disabled={disabled || value <= min}
-        className="flex h-[24px] w-[24px] shrink-0 items-center justify-center text-(--color-ink-muted) transition-colors hover:bg-(--color-surface-2) hover:text-(--color-ink-bright) active:text-(--color-ink) disabled:opacity-30"
+        className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink flex h-[24px] w-[24px] shrink-0 items-center justify-center transition-colors disabled:opacity-30"
         title={`减少 ${step}`}
       >
         <Minus size={12} strokeWidth={2.5} />
@@ -115,13 +115,13 @@ export function NumberField({
           }
         }}
         disabled={disabled}
-        className="min-w-[36px] h-[24px] flex-1 bg-transparent py-0 text-center text-xs font-mono text-(--color-ink-bright) outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40"
+        className="text-ink-bright h-[24px] min-w-[36px] flex-1 bg-transparent py-0 text-center font-mono text-xs outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40"
       />
       <button
         type="button"
         onMouseDown={(event) => { event.preventDefault(); incr(); }}
         disabled={disabled || value >= max}
-        className="flex h-[24px] w-[24px] shrink-0 items-center justify-center text-(--color-ink-muted) transition-colors hover:bg-(--color-surface-2) hover:text-(--color-ink-bright) active:text-(--color-ink) disabled:opacity-30"
+        className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink flex h-[24px] w-[24px] shrink-0 items-center justify-center transition-colors disabled:opacity-30"
         title={`增加 ${step}`}
       >
         <Plus size={12} strokeWidth={2.5} />

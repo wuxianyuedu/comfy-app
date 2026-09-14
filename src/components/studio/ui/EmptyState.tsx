@@ -43,7 +43,7 @@ export function EmptyState({
   return (
     <div
       className={`grid ${minHeightClass} place-items-center rounded-2xl border border-dashed px-4 text-center ${
-        warning ? "border-amber-500/30" : "border-(--color-border)"
+        warning ? "border-amber-500/30" : "border-border"
       } ${className}`}
     >
       <div className="max-w-sm">
@@ -52,19 +52,19 @@ export function EmptyState({
             size={32}
             aria-hidden
             className={`mx-auto mb-2 ${
-              warning ? "text-amber-500/80" : "text-(--color-ink-faint)"
+              warning ? "text-amber-600 dark:text-amber-500/80" : "text-ink-faint"
             }`}
           />
         )}
         <p
           className={`text-sm font-medium ${
-            warning ? "text-amber-600" : "text-(--color-ink-strong)"
+            warning ? "text-amber-700 dark:text-amber-600" : "text-ink-strong"
           }`}
         >
           {title}
         </p>
         {description && (
-          <p className="mt-1 text-xs leading-relaxed text-(--color-ink-muted)">
+          <p className="text-ink-muted mt-1 text-xs leading-relaxed">
             {description}
           </p>
         )}
