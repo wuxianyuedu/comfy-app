@@ -612,6 +612,7 @@ LAUNCH_PHASES = {
     "ready": {"progress": 1.0, "message": "启动完成"},
     "error": {"progress": 1.0, "message": "启动失败"},
     "timeout": {"progress": 1.0, "message": "启动时间较长，但仍在进行中…"},
+    "cancelled": {"progress": 1.0, "message": "已取消本次启动"},
 }
 
 
@@ -651,6 +652,29 @@ def _read_log_tail(path: str, lines: int = 25) -> str:
         return "\n".join(content.splitlines()[-lines:]).strip()
     except Exception:
         return ""
+
+
+def is_launch_cancelled(stderr_tail: str) -> bool:
+    """本次启动是否由用户主动放弃（关掉了启动页）。
+
+    壳在「启动页收到关闭请求、而主窗还没显示」时会落一行
+    ``... exiting app (launch abandoned)``（见 src-tauri/src/lib.rs 的
+    splash CloseRequested 分支），启动器把壳的 stderr 重定向到
+    dev-launcher-stderr.log 且**每次启动前清空**——读到即属本次。
+
+    判据取日志标记而不是退出码：这条路径上壳是 exit(0)，与「正常收尾」无从区分；
+    而用户此刻跑的可能是上一轮编出来的旧壳，新加退出码在旧壳里并不存在，
+    但这一行旧壳同样会写。
+    """
+    return "launch abandoned" in (stderr_tail or "").lower()
+
+
+def _launch_cancelled(project_root: str) -> bool:
+    """读本次启动的壳 stderr 尾巴，判断是否「用户关闭启动页放弃本次启动」。"""
+    tail = _read_log_tail(
+        os.path.join(project_root, "log", "launcher", "dev-launcher-stderr.log"), 200
+    )
+    return is_launch_cancelled(tail)
 
 
 def _build_failure_message(project_root: str, detail: str) -> str:
@@ -2039,10 +2063,22 @@ def _monitor_headless(
                         pass
                 return
 
-            # dev-launcher 提前退出（异常）
+            # dev-launcher 提前退出：先分清「用户自己关掉启动页、放弃本次启动」
+            # 与真正的失败——前者再弹一个红色「启动失败」是误报：用户刚刚亲手按的 ✕，
+            # 弹窗只会让人以为启动坏了（退出码也看不出区别，这条路径壳是 exit(0)）。
             if proc is not None and proc.poll() is not None:
                 exit_code = proc.returncode
                 log(f"dev-launcher process exited early with code {exit_code}")
+                _kill_shell_from_pid_file(project_root)
+                if _launch_cancelled(project_root):
+                    log("launch cancelled by user (splash closed), no failure dialog")
+                    _write_status(
+                        project_root,
+                        "cancelled",
+                        message="已取消本次启动",
+                        elapsed=elapsed(),
+                    )
+                    return 0
                 _write_status(
                     project_root,
                     "error",
@@ -2052,7 +2088,6 @@ def _monitor_headless(
                 )
                 # 失败必须有人类可见的出口：历史版本只写 30 秒后自删的状态
                 # 文件，用户看到的是「双击没反应」。弹窗展示日志尾部。
-                _kill_shell_from_pid_file(project_root)
                 _fatal_box(
                     _build_failure_message(
                         project_root,
