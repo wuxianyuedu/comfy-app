@@ -29,6 +29,7 @@
      from @theme) and are overridden to DARK inside `.dark`. They must be
      kept in sync with the corresponding `.dark { … }` block below. */
   --color-canvas: #f6f7f9; /* 画布/工作区背景 (light default) */
+  --color-port-surface: #ffffff; /* 端口圆点的载体色：节点表面（浅色） */
   --color-canvas-deep: #eef0f4; /* 输入控件/深面板底 (light default) */
   --color-canvas-minimap-mask: rgb(0 0 0 / 0.12); /* 小地图非视口遮罩 (light default) */
   --color-panel: #ffffff; /* 面板/顶栏/浮层 (light default) */
@@ -98,6 +99,7 @@
   --color-primary-soft: #221c3a;
   /* ── immersive / editor surface overrides (see T11 @theme block) ── */
   --color-canvas: #0a0a0f; /* 画布/工作区背景 */
+  --color-port-surface: #0b0b10; /* 端口圆点的载体色：节点内层面板（深色） */
   --color-canvas-deep: #0f0f14; /* 输入控件/深面板底 */
   --color-canvas-minimap-mask: rgb(0 0 0 / 0.78); /* 小地图非视口遮罩 */
   --color-panel: #14141a; /* 面板/顶栏/浮层 */
@@ -187,6 +189,12 @@
        → `color-scheme` + `--color-node` / `--color-ink-field`
      · 登录页整屏底 `bg-[#030014]` + 极光
        → `--color-bg` + 两态极光（浅色 `opacity` 调低且不用 `mix-blend-screen`）
+     · 端口圆点的描边与内圈高光（`border-(--color-canvas)` + `inset 0 0 0
+       1px rgba(255,255,255,0.25)`）
+       → `--color-port-surface`（浅色=节点表面白、深色=节点内层面板近黑）。
+         原写法用的是「画布背景色」当圆点的描边色，浅色下画布是浅灰、
+         描边与点糊在一起；且 25% 白那圈高光在浅色下是**白描白**，
+         等于没有。两处都改随主题。
 
    当前条目（共 2 条，逐条给出理由；两条都是同一类：画布上的**极小面积
    叠层**）：

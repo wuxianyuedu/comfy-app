@@ -43,7 +43,7 @@ export function CanvasContextMenu({
           type="button"
           data-canvas-node-kind="workflow-ardot"
           onClick={onPickTest}
-          className="flex w-full items-center gap-2 rounded-lg border border-violet-400/30 bg-linear-to-r from-(--color-primary)/15 to-(--color-accent)/10 px-2 py-1.5 text-left text-[12px] text-ink-bright transition-colors hover:from-(--color-primary)/25 hover:to-(--color-accent)/15"
+          className="flex w-full items-center gap-2 rounded-lg border border-violet-400/30 bg-linear-to-r from-primary/15 to-accent/10 px-2 py-1.5 text-left text-[12px] text-ink-bright transition-colors hover:from-primary/25 hover:to-accent/15"
         >
           <span
             className="flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold text-white"

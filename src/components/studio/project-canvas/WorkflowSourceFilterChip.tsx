@@ -32,7 +32,7 @@ export function WorkflowSourceFilterChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-(--color-primary)/35 bg-(--color-node-accent) px-2.5 text-[12px]"
+        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/35 bg-node-accent px-2.5 text-[12px]"
       >
         <span
           className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -54,7 +54,7 @@ export function WorkflowSourceFilterChip({
           {label}
         </span>
         <span
-          className={`shrink-0 text-(--color-ink-icon) transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-ink-icon transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾

@@ -84,12 +84,11 @@ export function WidgetValueChip({
     const on = value === true || value === "true" || value === "True";
     return (
       <span
-        className="rounded px-1.5 py-px text-[10px] font-semibold"
-        style={{
-          background: on ? "rgba(16,185,129,0.18)" : "rgba(239,68,68,0.18)",
-          color: on ? "var(--color-success-strong)" : "#EF4444",
-          fontFamily: "var(--font-mono)",
-        }}
+        className={`rounded px-1.5 py-px font-mono text-[10px] font-semibold ${
+          on
+            ? "bg-success-strong/18 text-success-strong"
+            : "bg-red-500/18 text-red-600 dark:text-red-400"
+        }`}
       >
         {on ? "✓" : "✗"}
       </span>
@@ -98,12 +97,7 @@ export function WidgetValueChip({
   if (widget === "select") {
     return (
       <span
-        className="max-w-[100px] truncate rounded px-1.5 py-px text-[10px] font-semibold"
-        style={{
-          background: "rgba(168,85,247,0.18)",
-          color: "#A855F7",
-          fontFamily: "var(--font-mono)",
-        }}
+        className="max-w-[100px] truncate rounded bg-violet-500/18 px-1.5 py-px font-mono text-[10px] font-semibold text-violet-700 dark:text-violet-300"
         title={widgetValueToText(value)}
       >
         {value == null ? "—" : widgetValueToText(value)}
@@ -113,12 +107,7 @@ export function WidgetValueChip({
   if (widget === "number") {
     return (
       <span
-        className="max-w-[100px] truncate rounded px-1.5 py-px text-[10px] font-semibold"
-        style={{
-          background: "rgba(245,158,11,0.18)",
-          color: "var(--color-warning)",
-          fontFamily: "var(--font-mono)",
-        }}
+        className="bg-warning/18 text-warning max-w-[100px] truncate rounded px-1.5 py-px font-mono text-[10px] font-semibold"
         title={widgetValueToText(value)}
       >
         {value == null ? "—" : widgetValueToText(value)}
@@ -128,12 +117,7 @@ export function WidgetValueChip({
   // string / text / image / latent / unknown
   return (
     <span
-      className="max-w-[140px] truncate rounded px-1.5 py-px text-[10px]"
-      style={{
-        background: "rgba(0,0,0,0.4)",
-        color: "#C9C2E8",
-        fontFamily: "var(--font-mono)",
-      }}
+      className="bg-canvas-deep text-ink-soft max-w-[140px] truncate rounded px-1.5 py-px font-mono text-[10px]"
       title={widgetValueToText(value)}
     >
       {value == null ? "—" : widgetValueToText(value)}

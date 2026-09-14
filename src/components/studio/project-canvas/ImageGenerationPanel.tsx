@@ -263,7 +263,7 @@ export function ImageGenerationPanel({
                 onChange={selectModelTag}
                 options={["", ...modelTagOptions.map((modelTagOption) => modelTagOption.name)]}
                 labels={{
-                  "": <span style={{ color: "var(--color-ink-muted)" }}>全部模型</span>,
+                  "": <span className="text-ink-muted">全部模型</span>,
                   ...Object.fromEntries(modelTagOptions.map((modelTagOption) => [modelTagOption.name, modelTagOption.name])),
                 }}
                 placeholder="选择模型"

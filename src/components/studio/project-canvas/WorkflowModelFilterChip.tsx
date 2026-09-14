@@ -32,26 +32,22 @@ export function WorkflowModelFilterChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-(--color-accent)/35 bg-(--color-node-accent) px-2.5 text-[12px]"
+        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-accent/35 bg-node-accent px-2.5 text-[12px]"
         title={value === "all" ? "按模型筛选" : `已筛选模型：${value}`}
       >
         <span
-          className="h-1.5 w-1.5 shrink-0 rounded-full"
-          style={{
-            background:
-              value === "all"
-                ? "var(--color-accent)"
-                : "var(--color-accent-soft)",
-          }}
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+            value === "all" ? "bg-accent" : "bg-accent-soft"
+          }`}
         />
         <span
-          className="max-w-[80px] truncate font-semibold text-(--color-accent-soft)"
+          className="max-w-[80px] truncate font-semibold text-accent-soft"
           style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
         >
           {label}
         </span>
         <span
-          className={`shrink-0 text-(--color-ink-icon) transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-ink-icon transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -88,10 +84,7 @@ export function WorkflowModelFilterChip({
                   : "text-ink-soft hover:bg-subtle"
               }`}
             >
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: "var(--color-accent)" }}
-              />
+              <span className="bg-accent h-1.5 w-1.5 rounded-full" />
               <span className="flex-1">全部模型</span>
               {value === "all" && <span className="text-fuchsia-700 dark:text-fuchsia-300">✓</span>}
             </button>
@@ -118,10 +111,7 @@ export function WorkflowModelFilterChip({
                       : "text-ink-soft hover:bg-subtle"
                   }`}
                 >
-                  <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ background: "var(--color-accent-soft)" }}
-                  />
+                  <span className="bg-accent-soft h-1.5 w-1.5 rounded-full" />
                   <span className="flex-1 truncate">{tag.name}</span>
                   <span className="text-ink-muted text-[9px] tabular-nums">
                     {tag.count}

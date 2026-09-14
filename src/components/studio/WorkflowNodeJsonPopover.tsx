@@ -201,7 +201,7 @@ export function NodeJsonPopover({
               width: 460,
               maxHeight: "60vh",
               borderRadius: 12,
-              background: "var(--color-bg, #0a0a0f)",
+              background: "var(--color-bg)",
               border: `1px solid ${accent}55`,
               boxShadow:
                 "0 20px 48px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04) inset, 0 0 24px " +
@@ -236,7 +236,7 @@ export function NodeJsonPopover({
                     alignItems: "center",
                     gap: 6,
                     fontSize: 11,
-                    color: "var(--color-muted, #9A9AAD)",
+                    color: "var(--color-muted)",
                     textTransform: "uppercase",
                     letterSpacing: 0.6,
                   }}
@@ -258,7 +258,7 @@ export function NodeJsonPopover({
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
-                    color: "var(--color-ink, #EDEDF2)",
+                    color: "var(--color-ink)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -276,7 +276,7 @@ export function NodeJsonPopover({
                   padding: "4px 8px",
                   borderRadius: 6,
                   background: copied ? `${accent}26` : "rgba(255,255,255,0.04)",
-                  color: copied ? accent : "var(--color-ink, #EDEDF2)",
+                  color: copied ? accent : "var(--color-ink)",
                   border: `1px solid ${copied ? accent + "66" : "rgba(255,255,255,0.08)"}`,
                   cursor: "pointer",
                   transition: "all 120ms ease",
@@ -298,7 +298,7 @@ export function NodeJsonPopover({
                   borderRadius: 6,
                   background: "rgba(255,255,255,0.04)",
                   border: "1px solid rgba(255,255,255,0.08)",
-                  color: "var(--color-muted, #9A9AAD)",
+                  color: "var(--color-muted)",
                   cursor: "pointer",
                   fontSize: 14,
                   lineHeight: 1,
@@ -345,8 +345,8 @@ export function NodeJsonPopover({
                         ? `${accent}22`
                         : "rgba(255,255,255,0.02)",
                       color: active
-                        ? "var(--color-ink, #EDEDF2)"
-                        : "var(--color-muted, #9A9AAD)",
+                        ? "var(--color-ink)"
+                        : "var(--color-muted)",
                       cursor: "pointer",
                       transition: "all 120ms ease",
                     }}
@@ -411,7 +411,7 @@ export function NodeJsonPopover({
                 fontFamily: "var(--font-mono)",
                 fontSize: 11.5,
                 lineHeight: 1.55,
-                color: "var(--color-ink, #EDEDF2)",
+                color: "var(--color-ink)",
                 background: "rgba(255,255,255,0.02)",
                 whiteSpace: "pre",
                 userSelect: "text",
@@ -423,7 +423,7 @@ export function NodeJsonPopover({
               style={{
                 padding: "6px 14px 8px",
                 fontSize: 10.5,
-                color: "var(--color-muted, #9A9AAD)",
+                color: "var(--color-muted)",
                 borderTop: "1px solid rgba(255,255,255,0.06)",
                 display: "flex",
                 justifyContent: "space-between",

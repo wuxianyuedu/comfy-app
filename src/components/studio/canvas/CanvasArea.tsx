@@ -125,7 +125,7 @@ export function CanvasArea({
         >
           {contextItems.map((item) =>
             item.divider ? (
-              <div key={item.id} className="my-1 h-px bg-(--color-border-strong)" />
+              <div key={item.id} className="my-1 h-px bg-border-strong" />
             ) : (
               <button
                 key={item.id}
@@ -245,7 +245,7 @@ function ToolbarButton({
       title={title}
       className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition-colors ${
         active
-          ? "bg-(--color-primary)/12 text-ink-bright hover:bg-(--color-primary)/18"
+          ? "bg-primary/12 text-ink-bright hover:bg-primary/18"
           : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
       }`}
     >
@@ -255,7 +255,7 @@ function ToolbarButton({
 }
 
 function ToolbarDivider() {
-  return <div className="mx-0.5 h-4 w-px bg-(--color-border-strong)" />;
+  return <div className="mx-0.5 h-4 w-px bg-border-strong" />;
 }
 
 /* ── Menu Icons ──────────────────────────────────────── */

@@ -3,9 +3,9 @@
 exports[`WorkflowSubgraphNode > 渲染子图标题与 #id 徽标 1`] = `
 <div>
   <div
-    class="relative flex flex-col rounded-lg border shadow-[0_6px_22px_rgba(0,0,0,0.6)]"
+    class="relative flex flex-col rounded-lg border shadow-[0_6px_22px_rgba(0,0,0,0.6)] bg-node"
     data-node-id="10"
-    style="height: auto; min-width: 280px; border-color: rgba(124, 92, 252, 0.55); isolation: isolate; background: var(--color-node); outline: none;"
+    style="height: auto; min-width: 280px; border-color: rgba(124, 92, 252, 0.55); isolation: isolate; outline: none;"
   >
     <div
       class="flex shrink-0 items-center gap-2 rounded-t-lg px-2 text-xs"
@@ -42,8 +42,7 @@ exports[`WorkflowSubgraphNode > 渲染子图标题与 #id 徽标 1`] = `
         S
       </span>
       <span
-        class="min-w-0 flex-1 select-none truncate text-[12px] font-semibold tracking-wide"
-        style="color: rgb(226, 226, 234);"
+        class="text-ink-bright min-w-0 flex-1 select-none truncate text-[12px] font-semibold tracking-wide"
         title="我的子图"
       >
         我的子图
