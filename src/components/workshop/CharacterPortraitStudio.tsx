@@ -205,7 +205,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         </p>
       )}
       {session.channel === "remote" && !remoteReady && (
-        <p className="flex flex-wrap items-center gap-1 text-[11px] text-amber-600">
+        <p className="flex flex-wrap items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400">
           <Icon name="info" size={11} />
           远端 API 生图未配置 —— 在
           <span className="font-medium">设置 → 模型</span>
@@ -272,9 +272,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                     key={`${entry.ts}-${entry.text}`}
                     className={`text-[10.5px] leading-relaxed ${
                       entry.level === "error"
-                        ? "text-red-600"
+                        ? "text-red-700 dark:text-red-400"
                         : entry.level === "success"
-                          ? "text-emerald-600"
+                          ? "text-emerald-700 dark:text-emerald-400"
                           : "text-muted-foreground"
                     }`}
                   >
@@ -303,9 +303,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                           key={`${entry.ts}-${i}`}
                           className={`text-[10.5px] leading-relaxed ${
                             entry.kind === "error"
-                              ? "text-red-600"
+                              ? "text-red-700 dark:text-red-400"
                               : entry.kind === "success"
-                                ? "text-emerald-600"
+                                ? "text-emerald-700 dark:text-emerald-400"
                                 : "text-muted-foreground"
                           }`}
                         >
@@ -368,7 +368,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   onClick={() => actions.remove(character.id, candidate.url)}
                   disabled={session.busy || session.importing}
                   aria-label="删除这张定妆照候选"
-                  className="text-muted-foreground hover:text-red-500 absolute -top-1.5 -right-1.5 rounded-full bg-black/70 px-1 text-[10px] disabled:opacity-40"
+                  className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400 absolute -top-1.5 -right-1.5 rounded-full bg-black/70 px-1 text-[10px] disabled:opacity-40"
                 >
                   ✕
                 </button>

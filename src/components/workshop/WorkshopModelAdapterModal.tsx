@@ -113,7 +113,10 @@ export function WorkshopModelAdapterModal({
 
   return (
     <div
-      className={overlayClass("modal", "z-50 grid place-items-center bg-black/50 p-4")}
+      className={overlayClass(
+        "modal",
+        "z-50 grid place-items-center bg-black/20 p-4 backdrop-blur-sm dark:bg-black/50",
+      )}
       onClick={onClose}
     >
       <div
@@ -223,7 +226,7 @@ export function WorkshopModelAdapterModal({
                         onClick={() =>
                           setDraft((prev) => prev.filter((x) => x.mode !== a.mode))
                         }
-                        className="text-muted-foreground/60 hover:text-red-500"
+                        className="text-muted-foreground/60 hover:text-red-600 dark:hover:text-red-400"
                       >
                         ✕
                       </button>
@@ -356,7 +359,7 @@ export function WorkshopModelAdapterModal({
                               inputs: x.inputs.filter((_, j) => j !== i),
                             }))
                           }
-                          className="text-muted-foreground/60 hover:text-red-500 px-1 text-xs"
+                          className="text-muted-foreground/60 hover:text-red-600 dark:hover:text-red-400 px-1 text-xs"
                         >
                           ✕
                         </button>
@@ -470,7 +473,7 @@ export function WorkshopModelAdapterModal({
                               inputs: contractDraft.inputs.filter((_, j) => j !== i),
                             })
                           }
-                          className="text-muted-foreground/60 hover:text-red-500 px-1 text-xs disabled:opacity-30"
+                          className="text-muted-foreground/60 hover:text-red-600 dark:hover:text-red-400 px-1 text-xs disabled:opacity-30"
                           aria-label={`移除 ${modeContractInputIdLabel(input)}`}
                         >
                           ✕
