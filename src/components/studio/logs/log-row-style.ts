@@ -20,20 +20,20 @@ export interface RowToken {
   style?: AnsiStyleKey;
 }
 
-/** 日志级别的徽标配色（视图与测试共用同一份表）。 */
+/** 日志级别的徽标配色（视图与测试共用同一份表）。两态各自取值。 */
 export const LEVEL_BADGE_STYLES: Record<LogLevel, string> = {
-  debug: "bg-gray-500/15 text-gray-400 border-gray-500/20",
-  info: "bg-cyan-500/15 text-cyan-400 border-cyan-500/20",
-  warn: "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  error: "bg-rose-500/15 text-rose-400 border-rose-500/20",
+  debug: "bg-gray-500/15 text-ink-muted border-gray-500/20",
+  info: "border-cyan-500/20 bg-cyan-500/15 text-cyan-700 dark:text-cyan-400",
+  warn: "border-amber-500/20 bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  error: "border-rose-500/20 bg-rose-500/15 text-rose-700 dark:text-rose-400",
 };
 
-/** 日志级别的正文配色（视图与测试共用同一份表）。 */
+/** 日志级别的正文配色（视图与测试共用同一份表）。两态各自取值。 */
 export const LEVEL_TEXT_STYLES: Record<LogLevel, string> = {
-  debug: "text-gray-400",
-  info: "text-gray-300",
-  warn: "text-amber-300",
-  error: "text-rose-300",
+  debug: "text-ink-soft",
+  info: "text-ink-field",
+  warn: "text-amber-700 dark:text-amber-300",
+  error: "text-rose-700 dark:text-rose-300",
 };
 
 export function hasAnsi(text: string): boolean {
@@ -99,28 +99,28 @@ export const TOKEN_CLASS: Record<AnsiStyleKey, string> = {
   dim: "opacity-60",
   italic: "italic",
   underline: "underline",
-  red: "text-red-400",
-  green: "text-green-400",
-  yellow: "text-amber-400",
-  blue: "text-blue-400",
-  magenta: "text-purple-400",
-  cyan: "text-cyan-400",
-  white: "text-gray-200",
-  gray: "text-gray-500",
-  "red-bright": "text-red-300 font-semibold",
-  "green-bright": "text-green-300 font-semibold",
-  "yellow-bright": "text-amber-300 font-semibold",
-  "blue-bright": "text-blue-300",
-  "magenta-bright": "text-purple-300",
-  "cyan-bright": "text-cyan-300 font-semibold",
-  "white-bright": "text-gray-100",
+  red: "text-red-600 dark:text-red-400",
+  green: "text-green-600 dark:text-green-400",
+  yellow: "text-amber-600 dark:text-amber-400",
+  blue: "text-blue-600 dark:text-blue-400",
+  magenta: "text-purple-600 dark:text-purple-400",
+  cyan: "text-cyan-600 dark:text-cyan-400",
+  white: "text-ink-bright",
+  gray: "text-ink-muted",
+  "red-bright": "text-red-700 font-semibold dark:text-red-300",
+  "green-bright": "text-green-700 font-semibold dark:text-green-300",
+  "yellow-bright": "text-amber-700 font-semibold dark:text-amber-300",
+  "blue-bright": "text-blue-700 dark:text-blue-300",
+  "magenta-bright": "text-purple-700 dark:text-purple-300",
+  "cyan-bright": "text-cyan-700 font-semibold dark:text-cyan-300",
+  "white-bright": "text-ink-bright",
   "red-bg": "bg-red-500/20",
   "green-bg": "bg-green-500/20",
   "yellow-bg": "bg-amber-500/20",
   "blue-bg": "bg-blue-500/20",
   "magenta-bg": "bg-purple-500/20",
   "cyan-bg": "bg-cyan-500/20",
-  "white-bg": "bg-white/10",
+  "white-bg": "bg-subtle",
 };
 
 /* ── 行内文本选区判定（「日志一直在动、选不中想复制的行」的另一半）────── */
