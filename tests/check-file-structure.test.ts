@@ -14,6 +14,11 @@
  *     作者与修改日期归 git log，写进注释会随代码搬迁过期失真
  *   - R11 Next 16 起代理约定名是 src/proxy.ts（`middleware` 已废弃，ISSUE #489）：
  *     文件被删 / 改回旧名 / 挪离 src 根都阻断
+ *   - R12 src/ 源码禁止内嵌控制字符（NUL 等，规范 §12.11）：带 NUL 的文件会被
+ *     git / diff / grep / 编辑器判成二进制，改动从此无法 Review
+ *   - R5 超 900 行的文件进拆分候选（只提醒不阻断）：扫描范围是**整个 `src/`**、
+ *     不分层不分文件类型；只扫 `src/components/`（历史口径）会让最大的那个文件
+ *     与逻辑层的大文件都不设防（ISSUE #536）
  *
  * 为什么用子进程跑而不是 import：该脚本被 pre-commit 以 `node scripts/xxx.cjs`
  * 调用，且内部用 process.cwd() 定位扫描根；复用同一调用方式才等价于真实门禁。
@@ -259,7 +264,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
 
   // ── R12：src/ 源码里不得内嵌控制字符（规范 §12.11）──
   // 判据来自一次真实事故：`lib/comfyui/markdown.ts` 曾用真的 NUL 字节做占位符
-  // 哨兵（` CODE<n> `），于是整个文件被 git / diff / grep / 编辑器当二进制：
+  // 哨兵（`\0CODE<n>\0`），于是整个文件被 git / diff / grep / 编辑器当二进制：
   // `git diff` 只回「Binary files differ」、`git show --stat` 显示 bin、
   // `grep -rn` 静默跳过。哨兵改成可打印形式后，这条规则负责防回潮。
   describe("R12：源码内嵌控制字符被阻断（规范 §12.11）", () => {
@@ -309,6 +314,8 @@ describe("check-file-structure.cjs（提交门槛）", () => {
   //（`settings/SettingsPageView.tsx` 2499 行）与逻辑层的大文件
   //（`lib/comfyui/lifecycle.ts` 1041 行）都不在任何护栏里。这里把范围钉死：
   // 整个 `src/`、不分层不分文件类型。只提醒不阻断。
+  //（ISSUE #535 曾只把 `src/app` 补进目录维度；本块是那次评估的收敛版，
+  //  目录维度与文件类型维度一起放开。）
   describe("R5：拆分候选覆盖整个 src/（ISSUE #536）", () => {
     /** 造一个恰好 `lines` 行的源文件。 */
     const writeLines = (rel: string, lines: number) => {
