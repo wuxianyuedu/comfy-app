@@ -284,14 +284,19 @@ shell 发 SIGTERM 后 3 个子进程全部残留（PPID=1，占端口、锁日�
 | 平台 | 机制 | 说明 |
 |---|---|---|
 | Windows | `taskkill /PID <pid> /T /F` | 硬规则 3 的原始要求；`/F` 走 TerminateProcess，被杀进程没有清理机会（这也是 bound / keepAlive 只能在「拉起时」决定的原因） |
-| POSIX | `process.kill(-pid, SIG)`（进程组） | 前提是子进程 `detached: true` 拉起（`process-launch.ts` 的 keepAlive 与 bound 路径各自处理）；拿不到组（组长已退 / 未 detached / 权限不足）时按 pid 单杀兜底 |
+| POSIX | 读目标 PGID 后 `process.kill(-pgid, SIG)`（进程组） | **组长归属由 OS 回答**（`ps -o pgid= -p <pid>`），不由调用方按 `detached` 布尔值猜——经 `sh -c` / `pnpm exec` 中转后 leader 往往不是组长，`kill(-pid)` 会 ESRCH 静默落回单杀（实测 `pnpm dev` 留下 5 个孤儿）。另设**防自杀判据**：目标 PGID 等于调用者自身 PGID 时（bound 模式子进程与调用者同组）禁止走组路径，只单杀 leader，否则信号会打向应用自己的进程组。拿不到 PGID 时也退化为单杀兜底 |
 
 只用 Node 内建能力：`lsof`、`pstree` 在很多发行版默认不装，依赖它们等于把
 「回收失败」变成静默失败（探测链路另有 `proc-detect.ts` 的同类约束）。
 回收结果由调用方**探测确认**收口（各服务生命周期自己那份），本模块不抛错。
 
-回归测试：`src/lib/kill-process-tree.test.ts`（进程组回收子孙、单杀兜底、
-目标已退出的返回语义；Windows 分支只在 win32 上断言命令构造）。
+回归测试：`src/lib/kill-process-tree.test.ts` —— **真起多进程树、杀完数残留**，
+而不是断言 `via` 字符串（只查命令构造正是让「按 detached 猜组长」漏过去的原因）。
+覆盖：detached 进程组整树 0 残留、与调用者同组时禁走组路径（防自杀）、
+`detached` 标记与实际组不一致、单杀兜底、目标已退出的返回语义；
+Windows 分支只在 win32 上断言命令构造。
+POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tcp` 解析、
+真起监听 socket 的 fd 交集、失败路径返回 null）。
 
 ### 3.2 Windows 启动器（dev-launcher.ps1 / Build-Guard.ps1）
 
@@ -819,7 +824,7 @@ pnpm dev                    # 经 scripts/dev.mjs 解析端口（缺省按检出
 | 入口 | `pnpm dev` → `node scripts/dev.mjs` | 无分支（Node 脚本本身跨平台） |
 | 端口 | `.env` → 路径推导（3200~3999）→ 兜底 3100 | `scripts/app-port.mjs`，规范化只对相对路径 resolve（§1.1） |
 | 进程树回收 | `process.kill(-pid)` 杀进程组 | `src/lib/kill-process-tree.ts`（§3.1） |
-| 进程探测 | `ps -eo pid,args`；端口用**配置端口试探 + 进程表** | `src/lib/comfyui/proc-detect.ts`。**不依赖 `lsof`**（很多发行版默认不装，缺它时探测会静默返回 null） |
+| 进程探测 | `ps -eo pid,args` 查命令行；监听端口用 `/proc/net/tcp{,6}`（LISTEN 的 socket inode）∩ `/proc/<pid>/fd` 的 `socket:[…]` | `src/lib/comfyui/proc-detect.ts`。**不依赖 `lsof` / `ss` / `netstat`**（很多发行版默认不装，缺它时探测会静默返回 null，正是 §9.2 第 3 条禁止的形态） |
 | 解释器发现 | `.venv/bin/python3` / `.venv/bin/python` + `lib/python3.x/site-packages` | `src/lib/comfyui/launch-path.ts` |
 | 打开浏览器 | `xdg-open` | `src/lib/open-in-browser.ts` |
 | Ollama 关闭 | `pkill -TERM -x ollama` | `src/app/api/llm/ollama-stop/route.ts` |
