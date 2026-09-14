@@ -146,11 +146,13 @@ Write-Host "---------- [5/5] 检查项目依赖 ----------" -ForegroundColor Whi
 # 残缺的，但 .modules.yaml 与 next.cmd 都在 → 被当成"已就绪"而跳过安装。
 # 追加"lockfile 漂移"判定：pnpm 会把最近一次成功安装的 lockfile 复制到
 # node_modules\.pnpm\lock.yaml，与仓库根 pnpm-lock.yaml 不一致即说明依赖陈旧，需重装。
-$instLock = Join-Path $root "node_modules\.pnpm\lock.yaml"
-$drifted  = $false
+$instLock    = Join-Path $root "node_modules\.pnpm\lock.yaml"
+$drifted     = $false
+$hasInstLock = $false
 if ((Test-Path (Join-Path $root "node_modules")) -and (Test-Path (Join-Path $root "pnpm-lock.yaml"))) {
     if (-not (Test-Path $instLock)) { $drifted = $true }
     else {
+        $hasInstLock = $true
         $hRoot = (Get-FileHash -LiteralPath (Join-Path $root "pnpm-lock.yaml") -Algorithm SHA256).Hash
         $hInst = (Get-FileHash -LiteralPath $instLock -Algorithm SHA256).Hash
         $drifted = ($hRoot -ne $hInst)
@@ -159,7 +161,24 @@ if ((Test-Path (Join-Path $root "node_modules")) -and (Test-Path (Join-Path $roo
 $needInstall = -not (Test-Path (Join-Path $root "node_modules\.modules.yaml")) -or
                -not (Test-Path (Join-Path $root "node_modules\.bin\next.cmd")) -or
                $drifted
-if ($drifted) { Say-Warn "检测到依赖与 lockfile 不一致（拉取更新后未重装），将补装依赖..." }
+if ($drifted) {
+    Say-Warn "检测到依赖与 lockfile 不一致（拉取更新后未重装），将补装依赖..."
+    # 只报「不一致」用户无从判断是什么变了（ISSUE #550）：把差异逐项打印出来。
+    # 差异定位在 Node 侧 scripts/lockfile/lock-diff.mjs（唯一实现，质量门禁复用），
+    # 这里只负责调用与展示，不再自己实现一遍解析。
+    if ($hasInstLock) {
+        Say-Info "下面列出不一致的具体位置（仓库 pnpm-lock.yaml 对比最近一次安装时的 lockfile）："
+        Push-Location $root
+        try {
+            & node "scripts\lockfile\diff-cli.mjs" --installed $instLock --root $root
+        } finally {
+            Pop-Location
+        }
+        Write-Host ""
+    } else {
+        Say-Info "本次是首次安装（没有可比对的历史 lockfile），跳过差异明细。"
+    }
+}
 if ($needInstall) {
     Say-Warn "依赖尚未完整安装，正在执行 pnpm install（首次较久，请勿关闭窗口）..."
     Write-Host ""
