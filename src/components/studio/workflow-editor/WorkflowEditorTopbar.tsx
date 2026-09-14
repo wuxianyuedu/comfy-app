@@ -94,7 +94,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   const toast = useToast();
 
   return (
-      <header className={TOP_BAR_ROOT_CLASS} style={{ background: "rgba(10,10,15,0.85)" }}>
+      <header className={TOP_BAR_ROOT_CLASS} style={{ background: "color-mix(in srgb, var(--color-panel) 85%, transparent)" }}>
         <div className={TOP_BAR_BREADCRUMB_CLASS}>
           <button
             type="button"
@@ -128,8 +128,8 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                     void fetchDetail();
                   }
                 }}
-                className="truncate font-title text-[18px] font-bold leading-tight tracking-tight transition-colors hover:text-violet-700 dark:text-violet-300"
-                style={{ color: "#F4F4F8", textShadow: "0 1px 0 rgba(0,0,0,0.4)", maxWidth: 280 }}
+                className="text-ink-bright font-title truncate text-[18px] font-bold leading-tight tracking-tight transition-colors hover:text-violet-700 dark:text-violet-300"
+                style={{ maxWidth: 280 }}
                 title={
                   subgraphStack.length
                     ? `${rootWorkflowName || detail.name}（返回顶层工作流）`

@@ -40,7 +40,7 @@ function PortChip({ type }: { type: string }) {
     ? { background: "#1E1A2E", color: "#7C5CFC", border: "1px solid rgba(124,92,252,0.4)" }
     : isVid
       ? { background: "#331A28", color: "#FF5CA8", border: "1px solid rgba(255,92,168,0.4)" }
-      : { background: "#26262E", color: "#9A9AAD", border: "1px solid rgba(255,255,255,0.06)" };
+      : { background: "var(--color-subtle)", color: "var(--color-ink-muted)", border: "1px solid var(--color-border-subtle)" };
   return (
     <span
       className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
@@ -56,7 +56,7 @@ const portColor = (type?: string) => {
   if (t === "IMAGE" || t === "MASK") return "#7C5CFC";
   if (t === "VIDEO" || t.startsWith("VHS") || t === "AUDIO") return "#FF5CA8";
   if (t === "BOOLEAN" || t === "BOOL") return "#67E89D";
-  return "#9A9AAD";
+  return "var(--color-ink-muted)";
 };
 
 /* ── 端点（外层 wrapper 的 absolute 子元素，半圆骑跨 Card 边框）── */
@@ -70,7 +70,7 @@ function PortDot({
   /** 距 wrapper 顶部 px（按 Ardot 实测绝对位置） */
   top: number;
 }) {
-  const stroke = side === "right" ? "#16161C" : "#4D4D59";
+  const stroke = side === "right" ? "var(--color-card)" : "var(--color-border-strong)";
   return (
     <span
       aria-hidden
@@ -192,7 +192,7 @@ export function WorkflowNodeArdot() {
             <span
               aria-label="类型 工作流"
               className="flex h-7 w-7 items-center justify-center rounded-[14px] text-[14px] font-bold text-primary"
-              style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
+              style={{ background: "var(--color-node-accent)", fontFamily: "var(--font-sans)" }}
             >
               W
             </span>
@@ -233,7 +233,7 @@ export function WorkflowNodeArdot() {
               style={{ background: "#33D499" }}
             />
             <span
-              className="text-[#33D499] font-semibold"
+              className="text-emerald-700 font-semibold dark:text-[#33D499]"
               style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
             >
               本机

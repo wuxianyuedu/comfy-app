@@ -37,6 +37,7 @@
   --color-card: #ffffff; /* 卡片/下拉浮层 (light default) */
   --color-node: #ffffff; /* 节点表面/option (light default) */
   --color-node-accent: #f2eeff; /* 节点强调底 (light default) */
+  --color-overlay-accent-surface: #f1edff; /* 浮层（chip/徽标）强调底 (light default) */
   --color-border-strong: #d6d8dd; /* 强边框/分隔线 (light default) */
   --color-ink-bright: #18181b; /* 主文字 (light default) */
   --color-ink-field: #27272a; /* 输入控件文字 (light default) */
@@ -55,6 +56,11 @@
   --color-warning: #d97706; /* 警告 (light default) */
   --color-amber: #d97706; /* 琥珀强调（workshop 徽章/按钮）(light default) */
   --color-accent-soft: #ec4899; /* accent (light default) */
+  /* 画布浮层投影：浅色下不能再用 55% 黑（看着像脏污），改成中性深灰。 */
+  --color-shadow-strong: rgb(0 0 0 / 0.18); /* 浮层重投影 (light default) */
+  /* 便签（Note）身体色的混色基准：用户给的 note 颜色是内容语义色，
+     基准必须跟主题走，否则浅色下便签仍是一块暗色。 */
+  --color-note-tint-base: #ffffff; /* note 混色基准 (light default) */
 
   /* Layout */
   --panel-right-width: 360px;
@@ -107,6 +113,7 @@
   --color-card: #16161c; /* 卡片/下拉浮层 */
   --color-node: #16161e; /* 节点表面/option */
   --color-node-accent: #1e1a2e; /* 节点强调底 */
+  --color-overlay-accent-surface: #241f38; /* 浮层（chip/徽标）强调底 */
   --color-border-strong: #26262e; /* 强边框/分隔线 */
   --color-ink-bright: #ededf2; /* 主文字 */
   --color-ink-field: #e5e7eb; /* 输入控件文字 */
@@ -125,6 +132,8 @@
   --color-warning: #f59e0b; /* 警告 */
   --color-amber: #ffb553; /* 琥珀强调 */
   --color-accent-soft: #ff8ac4; /* accent */
+  --color-shadow-strong: rgb(0 0 0 / 0.55); /* 浮层重投影 */
+  --color-note-tint-base: #22222c; /* note 混色基准 */
   /* ── shadcn 语义 token 映射到项目品牌色板（全面接管主题） ── */
   --background: #0a0a0f;
   --foreground: #ededf2;

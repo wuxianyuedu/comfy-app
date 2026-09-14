@@ -6,7 +6,9 @@
  * anchors so every wire's id ties to its own anchor and edges never detach
  * when toggling. */
 import { Handle, Position } from "@xyflow/react";
+import { useTheme } from "next-themes";
 import { portColor } from "@/lib/comfyui/types";
+import { resolveAnchorCylinder } from "./workflow-node-palette";
 import type { WorkflowNodeData } from "../workflow-types";
 
 interface FlowNodeCollapsedAnchorsProps {
@@ -26,6 +28,9 @@ export function FlowNodeCollapsedAnchors({
   // Cylinder visual height scales with port count, clamped 16px..64px so
   // it never bleeds past the icon/title bar.
   const cylH = (count: number) => Math.min(64, Math.max(16, 12 + count * 4));
+  /* 锚柱（收起时的端口载体）跟主题联动：浅色下白描白会让锚柱整个消失。 */
+  const { resolvedTheme } = useTheme();
+  const anchor = resolveAnchorCylinder(resolvedTheme);
 
   return (
     <>
@@ -43,11 +48,9 @@ export function FlowNodeCollapsedAnchors({
             width: 6,
             height: cylH(connectedInputs.length),
             borderRadius: 999,
-            background:
-              "linear-gradient(180deg, #d4d4d8 0%, #52525b 50%, #18181b 100%)",
-            border: "1px solid rgba(255,255,255,0.45)",
-            boxShadow:
-              "inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.6)",
+            background: anchor.gradient,
+            border: anchor.border,
+            boxShadow: anchor.boxShadow,
             zIndex: 10,
           }}
         />
@@ -65,11 +68,9 @@ export function FlowNodeCollapsedAnchors({
             width: 6,
             height: cylH(outputs.length),
             borderRadius: 999,
-            background:
-              "linear-gradient(180deg, #d4d4d8 0%, #52525b 50%, #18181b 100%)",
-            border: "1px solid rgba(255,255,255,0.45)",
-            boxShadow:
-              "inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.6)",
+            background: anchor.gradient,
+            border: anchor.border,
+            boxShadow: anchor.boxShadow,
             zIndex: 10,
           }}
         />
