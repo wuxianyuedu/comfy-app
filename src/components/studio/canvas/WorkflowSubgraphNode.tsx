@@ -302,7 +302,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
        *  Hidden when the user / config marks the chip collapsed. */}
       {!isCollapsed && pinRows > 0 && (
         <div
-          className="border-b border-white/5 py-0.5"
+          className="border-border-strong border-b py-0.5"
           style={{ background: "rgba(255,255,255,0.015)" }}
         >
             {Array.from({ length: pinRows }).map((_, rowIdx) => {
@@ -373,7 +373,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                          *  BOOLEAN widget) wraps onto multiple lines
                          *  instead of being clipped.  Full text stays
                          *  available via the native `title` tooltip. */
-                        className="min-w-0 flex-1 whitespace-normal break-words text-left text-[11px] text-zinc-200"
+                        className="text-ink-bright min-w-0 flex-1 text-left text-[11px] break-words whitespace-normal"
                         title={`${inLabel} (${inType})`}
                       >
                         {inLabel}
@@ -385,7 +385,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                       <span
                         /* same wrap fix as the
                          *  boundary-input branch above. */
-                        className="min-w-0 flex-1 whitespace-normal break-words text-right text-[11px] text-gray-200"
+                        className="text-ink-bright min-w-0 flex-1 text-right text-[11px] break-words whitespace-normal"
                         title={`${outDisplay} (${outType})`}
                       >
                         {outDisplay}
@@ -528,7 +528,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                           {label}
                         </span>
                         {/* Vertical 1px divider between label and value. */}
-                        <span className="h-2 w-px shrink-0 bg-white/5" aria-hidden />
+                        <span className="bg-border-strong h-2 w-px shrink-0" aria-hidden />
                         {/* COMBO widget on the workflow canvas
                          *  renders as a display-only DarkSelect — it shows the
                          *  currently-selected model as a dropdown shell, but
@@ -564,7 +564,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                          *  fade to transparent) instead of a hard bar — reads as
                          *  a column hint rather than a "cut the row in half" line.
                          *  Width still 1px so it doesn't claim row real estate. */}
-                        <span className="h-2 w-px shrink-0 bg-white/5" aria-hidden />
+                        <span className="bg-border-strong h-2 w-px shrink-0" aria-hidden />
                         <span
                           className="min-w-0 truncate text-right text-[10.5px] tabular-nums"
                           style={{
@@ -631,9 +631,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                       >
                         {label}
                       </span>
-                      <span className="h-2 w-px shrink-0 bg-white/5" aria-hidden />
+                      <span className="bg-border-strong h-2 w-px shrink-0" aria-hidden />
                       <span
-                        className="text-right text-[10px] uppercase tracking-wider text-gray-500"
+                        className="text-ink-muted text-right text-[10px] tracking-wider uppercase"
                         title={`STRING · ${stringText.length} chars`}
                       >
                         {stringText.length}c
@@ -643,7 +643,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                       <StringTextarea value={stringText} mono hasSize={hasSize} />
                     ) : (
                       <div
-                        className="flex-1 rounded border border-white/10 bg-black/30 px-2 py-1.5 text-[10.5px] leading-snug text-gray-600"
+                        className="border-border-strong bg-canvas-deep text-ink-fainter flex-1 rounded border px-2 py-1.5 text-[10.5px] leading-snug"
                         style={{ minHeight: 28 }}
                       >
                         （空）

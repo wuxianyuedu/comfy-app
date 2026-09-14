@@ -16,20 +16,20 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
   if (loading) {
     return (
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-        <div className="flex flex-col items-center gap-3 rounded-3xl border border-white/8 bg-linear-to-br from-[#1a1530]/60 to-[#0f0b1c]/60 px-12 py-10 shadow-2xl shadow-black/40 backdrop-blur-md">
+        <div className="border-border-strong flex flex-col items-center gap-3 rounded-3xl border bg-linear-to-br from-(--color-subtle) to-(--color-canvas-deep) px-12 py-10 shadow-2xl shadow-black/40 backdrop-blur-md">
           <Icon
             name="loader"
             size={40}
             className="animate-spin text-cyan-300/90"
           />
-          <p className="text-sm text-gray-400">加载中…</p>
+          <p className="text-ink-soft text-sm">加载中…</p>
         </div>
       </div>
     );
   }
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-      <div className="rounded-3xl border border-white/8 bg-linear-to-br from-[#1a1530]/60 to-[#0f0b1c]/60 px-12 py-10 shadow-2xl shadow-black/40 backdrop-blur-md">
+      <div className="border-border-strong rounded-3xl border bg-linear-to-br from-(--color-subtle) to-(--color-canvas-deep) px-12 py-10 shadow-2xl shadow-black/10 backdrop-bl dark:shadow-black/40ur-md">
         <div className="mb-3 flex justify-center gap-2">
           <span
             className="inline-block h-10 w-10 rounded-xl shadow-lg"
@@ -60,13 +60,13 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
             }}
           />
         </div>
-        <p className="mt-4 text-[15px] font-semibold text-gray-100">
+        <p className="text-ink-bright mt-4 text-[15px] font-semibold">
           右键画布任意位置，开始创建节点
         </p>
-        <p className="mt-2 text-[12px] leading-relaxed text-gray-400">
+        <p className="text-ink-soft mt-2 text-[12px] leading-relaxed">
           支持：生图 · 生视频 · 生成剧本 · Agent 模式 · 自定义工作流
         </p>
-        <p className="mt-1 text-[12px] leading-relaxed text-gray-500">
+        <p className="text-ink-muted mt-1 text-[12px] leading-relaxed">
           自定义工作流可下拉选用你上传的 ComfyUI 工作流
         </p>
         <p className="mt-1 text-[12px] leading-relaxed text-violet-300">

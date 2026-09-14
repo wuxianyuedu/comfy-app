@@ -66,7 +66,7 @@ export function ContentAssetBody({
       <div className="relative">
         <textarea
           ref={textareaRef}
-          className="h-[260px] w-full resize-none rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 text-[12px] leading-relaxed text-gray-200 outline-none transition-colors focus:border-violet-500/40"
+          className="border-border-strong bg-canvas-deep text-ink-bright h-[260px] w-full resize-none rounded-xl border px-3 py-2.5 text-[12px] leading-relaxed transition-colors outline-none focus:border-violet-500/40"
           value={data.content ?? ""}
           placeholder="输入要喂给下游生成节点的提示词 / 参考文字…"
           onChange={(event) => onPatch({ content: event.target.value })}
@@ -103,7 +103,7 @@ export function ContentAssetBody({
           <img
             src={mediaSrc}
             alt={data.mediaName ?? "参考图"}
-            className="h-[260px] w-full rounded-xl border border-white/8 bg-black/20 object-cover"
+            className="border-border-strong bg-canvas-deep h-[260px] w-full rounded-xl border object-cover"
             onClick={() => { if (imageCount > 1) { gallery.setIndex(0); gallery.setOpen(true); } }}
             style={imageCount > 1 ? { cursor: "pointer" } : undefined}
           />
@@ -111,7 +111,7 @@ export function ContentAssetBody({
           <video
             src={mediaSrc}
             controls
-            className="h-[260px] w-full rounded-xl border border-white/8 bg-black/20 object-cover"
+            className="border-border-strong bg-canvas-deep h-[260px] w-full rounded-xl border object-cover"
           />
         )
       ) : (
@@ -149,10 +149,10 @@ export function ContentAssetBody({
           }}
           onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => event.stopPropagation()}
-          className={`nodrag nopan flex h-[260px] w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed text-gray-400 transition-colors ${
+          className={`nodrag nopan text-ink-soft flex h-[260px] w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed transition-colors ${
             isDropOver
-              ? "border-violet-500/70 bg-violet-500/10 text-gray-200"
-              : "border-white/14.000000000000002 bg-black/15 hover:border-white/30 hover:text-gray-200"
+              ? "bg-violet-500/10 text-ink-bright border-violet-500/70"
+              : "border-ink-fainter bg-canvas-deep hover:text-ink-bright hover:border-ink-soft"
           }`}
         >
           <Icon name={isPic ? "image" : "film"} size={38} className="opacity-60" />
@@ -191,7 +191,10 @@ export function ContentAssetBody({
       {/* ── 画廊覆盖层 ── */}
       {gallery.open && galleryImages.length > 0 && (
         <div
-          className={overlayClass("modal", "z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm")}
+          className={overlayClass(
+            "modal",
+            "z-100 flex items-center justify-center bg-black/40 backdrop-blur-sm dark:bg-black/80",
+          )}
           onClick={() => gallery.setOpen(false)}
           role="dialog"
           aria-modal
@@ -201,7 +204,7 @@ export function ContentAssetBody({
           <button
             type="button"
             onClick={(event) => { event.stopPropagation(); gallery.setOpen(false); }}
-            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white"
+            className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:text-white"
             title="关闭"
           >
             <X size={16} />
@@ -211,7 +214,7 @@ export function ContentAssetBody({
           <img
             src={`/api/images?filename=${encodeURIComponent(galleryImages[gallery.index]?.localPath ?? "")}&type=input`}
             alt={`图片 ${gallery.index + 1}/${galleryImages.length}`}
-            className="max-h-[85vh] max-w-[85vw] rounded-lg border border-white/8 object-contain shadow-2xl"
+            className="border-border-strong max-h-[85vh] max-w-[85vw] rounded-lg border object-contain shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           />
 
@@ -225,7 +228,7 @@ export function ContentAssetBody({
                   gallery.setIndex((index) => (index - 1 + galleryImages.length) % galleryImages.length);
                 }}
                 disabled={galleryImages.length <= 1}
-                className="absolute left-4 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-30"
+                className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 left-4 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors hover:text-white disabled:opacity-30"
                 title="上一张"
               >
                 <ChevronLeft size={18} />
@@ -237,7 +240,7 @@ export function ContentAssetBody({
                   gallery.setIndex((index) => (index + 1) % galleryImages.length);
                 }}
                 disabled={galleryImages.length <= 1}
-                className="absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white disabled:opacity-30"
+                className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 right-4 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors hover:text-white disabled:opacity-30"
                 title="下一张"
               >
                 <ChevronRight size={18} />
@@ -247,7 +250,7 @@ export function ContentAssetBody({
                 <span className="rounded-full bg-black/60 px-3 py-1 text-[11px] font-medium tabular-ns text-white/90 backdrop-blur-sm">
                   {gallery.index + 1} / {galleryImages.length}
                 </span>
-                <div className="flex gap-1.5 overflow-hidden rounded-full bg-white/10 p-1 backdrop-blur-sm">
+                <div className="bg-subtle flex gap-1.5 overflow-hidden rounded-full p-1 backdrop-blur-sm">
                   {galleryImages.map((img, i) => (
                     <button
                       key={img.id}

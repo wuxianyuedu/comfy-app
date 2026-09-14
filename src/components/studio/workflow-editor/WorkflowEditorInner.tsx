@@ -703,7 +703,7 @@ function WorkflowEditorBody({
       >
         <div className="text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
-          <p className="text-sm text-gray-400">加载工作流节点…</p>
+          <p className="text-ink-soft text-sm">加载工作流节点…</p>
         </div>
       </FullScreenLayer>
     );
@@ -716,11 +716,13 @@ function WorkflowEditorBody({
         className="flex items-center justify-center bg-(--color-canvas) pb-6"
       >
         <div className="text-center">
-          <p className="text-red-400">{error ?? "未知错误"}</p>
+          <p className="text-red-700 dark:text-red-400">
+                {error ?? "未知错误"}
+              </p>
           <button
             type="button"
             onClick={onClose}
-            className="mt-3 rounded-lg bg-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/15"
+            className="bg-subtle text-ink-soft hover:bg-surface-2 mt-3 rounded-lg px-4 py-2 text-sm"
           >
             返回
           </button>
@@ -760,10 +762,12 @@ function WorkflowEditorBody({
          *  loading screen, then the subgraph content. */}
         {subgraphLoading && (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/20">
-            <div className="pointer-events-auto rounded-xl border border-white/10 bg-(--color-canvas)/90 px-6 py-4 shadow-2xl backdrop-blur-sm">
+            <div className="bg-canvas/90 border-border-strong pointer-events-auto rounded-xl border px-6 py-4 shadow-2xl shadow-black/10 backdrop-blur-sm dark:shadow-black/50">
               <div className="flex items-center gap-3">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
-                <span className="text-sm font-medium text-gray-200">加载子工作流…</span>
+                <span className="text-ink-bright text-sm font-medium">
+                  加载子工作流…
+                </span>
               </div>
             </div>
           </div>
@@ -781,7 +785,7 @@ function WorkflowEditorBody({
               <button
                 type="button"
                 onClick={() => setSubgraphError("")}
-                className="rounded px-1.5 py-0.5 text-rose-200 transition-colors hover:bg-white/10"
+                className="hover:bg-subtle rounded px-1.5 py-0.5 text-rose-700 transition-colors dark:text-rose-200"
                 aria-label="关闭"
               >
                 ×

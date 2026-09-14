@@ -87,7 +87,7 @@ export function WorkflowModePickChip({
         }`}
       >
         <span
-          className={`font-semibold ${hasModes ? "text-(--color-ink-bright)" : "text-gray-500"}`}
+          className={`font-semibold ${hasModes ? "text-ink-bright" : "text-ink-muted"}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
         >
           {hasModes ? triggerLabel : "未选"}
@@ -116,7 +116,7 @@ export function WorkflowModePickChip({
               width: pos.width,
               zIndex: 50,
             }}
-            className="rounded-xl border border-white/8 bg-(--color-card) py-1 shadow-2xl shadow-violet-500/20"
+            className="border-border-strong bg-card rounded-xl border py-1 shadow-2xl shadow-black/10 dark:shadow-violet-500/20"
           >
             {/* 仅展示工作流 modes 数组里的 N 个，单选 + 点选即切换 */}
             {items.length === 0 ? (
@@ -142,7 +142,7 @@ export function WorkflowModePickChip({
                     className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[12px] transition-colors ${
                       isDef
                         ? "bg-violet-500/14.000000000000002 text-violet-100"
-                        : "text-gray-200 hover:bg-white/4"
+                        : "text-ink-bright hover:bg-subtle"
                     }`}
                   >
                     {/* radio dot — 单选，无 checkbox */}
@@ -150,7 +150,7 @@ export function WorkflowModePickChip({
                       className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${
                         isDef
                           ? "border-violet-400 bg-violet-500/20"
-                          : "border-white/20 bg-white/2"
+                          : "border-border-strong bg-subtle"
                       }`}
                     >
                       {isDef && (
@@ -161,7 +161,7 @@ export function WorkflowModePickChip({
                       {item.label}
                     </span>
                     <span
-                      className="shrink-0 rounded bg-white/6 px-1 py-px text-[9.5px] text-(--color-ink-muted)"
+                      className="bg-subtle text-ink-muted shrink-0 rounded px-1 py-px text-[9.5px]"
                       style={{ fontFamily: "var(--font-sans)" }}
                     >
                       {item.code}
