@@ -25,9 +25,9 @@
  * 时**写入是空操作**，每条覆盖都归属一个模式。
  *
  * 本模块**只产出数据**：条目的落点默认由 `autoMapEntries` 按名字自动判定，
- * 运行期由 `applyParamMapping` 按这张表严格落值。画布上那张接线卡片与它拖出的
- * 线是同一份数据的视图（见文件末尾的画布几何段）—— 连线即编辑，映射没有第二套
- * 界面。
+ * 运行期由 `applyParamMapping` 按这张表严格落值。工作流库「画布节点」页签上的
+ * 卡片列与连线层是同一份数据的视图（`workflow-library-param-cards` /
+ * `WorkflowParamWires`）—— 拖线即编辑落点，映射没有第二套界面。
  */
 
 import {
@@ -81,13 +81,12 @@ export interface ParamEntry {
   /** 该口子落到的端口所属节点（旧聚类路径带；契约路径由候选端口派生，
    *  见 `hostNodeId`）。 */
   nodeId: string;
-  /** 承载这个对外参数的**宿主节点 id** —— 画布卡片的位置、映射线的宿主端、
-   *  以及连线的合法性判定都以它为准。
+  /** 承载这个对外参数的**宿主节点 id** —— 库内映射线的宿主端与连线的合法性判定
+   *  都以它为准。
    *
-   *  契约路径下 `nodeId` 是空串（契约条目与工作流无关），但卡片仍要挂在「这个
-   *  口真正落到的那一行所在的节点」旁边：此前各处一律读 `nodeId`，于是契约路径
-   *  下卡片算不出位置（`placeParamNodes` 查不到宿主坐标 → 一张卡片都不渲染）、
-   *  边指向空节点、连线闸门恒定失败 —— 用户表现为「对外参数端点拉不了线」。
+   *  契约路径下 `nodeId` 是空串（契约条目与工作流无关），但线仍要落在「这个口
+   *  真正落到的那一行所在的节点」上：此前各处一律读 `nodeId`，于是契约路径下
+   *  线指向空节点、连线闸门恒定失败 —— 用户表现为「对外参数端点拉不了线」。
    *  宿主 id 从候选端口派生（落点所在节点优先，其次首个候选），是同一份事实的
    *  最近可用近似。 */
   hostNodeId: string;
@@ -1082,38 +1081,22 @@ export function applyParamMapping(args: {
   return { inputs, unmatched };
 }
 
-/* ── 画布上的「对外参数节点」（纯派生，无 React / 无 IO） ──
+/* ── 对外参数卡片的视觉常量（纯派生，无 React / 无 IO） ──
  *
- * 映射在编辑器画布上表现为一个个**真实节点**：每个对外参数一张卡片，卡片右侧
- * 一个输出端点，作者把它拖到宿主节点的端口上即完成连线 —— 连线就是映射，没有
- * 第二套界面。节点位置按宿主节点的位置在左侧成列排布 —— 位置是**派生**的，不
- * 落库：作者拖不动这些卡片（要挪就挪宿主节点），也就不会出现「换了台机器打开
- * 发现卡片飘到天边」。
+ * 卡片本体 `WorkflowParamCard` 与两侧卡片列（`WorkflowParamCardColumn` /
+ * `WorkflowOutputParamCardColumn`）共用这几个尺寸。谁都不许自己再写一套字面量：
+ * 卡片高度与圆点位置各写一份，线就会连到卡片外面去。
  *
- * 这里只算几何与 id，视图（React Flow 节点）由编辑器组装。
+ * **画布几何（节点 id 前缀 / 卡片坐标 / 卡片高度推算）已随编辑器卡片一起删除**：
+ * 卡片现在只出现在工作流库详情的「画布节点」页签，那一层是普通 DOM 布局
+ * （卡片列 + 独立连线层量测），不需要 React Flow 的节点坐标。
  */
 
-/** 对外参数节点 id 前缀（与 ComfyUI 数字节点 id / note: / grp: 等命名空间隔离）。 */
-export const PARAM_NODE_PREFIX = "pio:";
-
-/** 对外参数节点 id。条目的 nodeId 可能是 "5" 这类纯数字，直接当 React Flow
- *  节点 id 会与宿主节点撞名，必须加前缀。 */
-export function paramNodeId(entryId: string): string {
-  return `${PARAM_NODE_PREFIX}${entryId}`;
-}
-
-/** 从节点 id 反解对外参数条目 id；不是对外参数节点时返回 null。 */
-export function entryIdFromParamNodeId(nodeId: string): string | null {
-  return nodeId.startsWith(PARAM_NODE_PREFIX)
-    ? nodeId.slice(PARAM_NODE_PREFIX.length)
-    : null;
-}
-
-/** 对外参数卡片的几何（宽度与端口行高必须与渲染组件一致，否则连线锚点会歪）。 */
-export const PARAM_NODE_WIDTH = 208;
-/** 卡片头（标题）+ 端口行的行高。 */
+/** 卡片头（标题）行高。 */
 export const PARAM_NODE_HEADER_H = 26;
+/** 端口行行高。 */
 export const PARAM_NODE_ROW_H = 22;
+/** 卡片上下留白。 */
 export const PARAM_NODE_PAD_Y = 8;
 
 /** 输出端口区的行高 —— 与端口行同口径（视觉上就是一行带类型徽标的端口）。 */
@@ -1126,134 +1109,10 @@ export const PARAM_NODE_DOT_SIZE = 12;
  *
  *  输出端口行带 `px-2`（8px）内边距，而行是端点定位的锚 —— 要让圆心正好骑跨
  *  卡片右缘（与项目画布的 PortHandle「半圆在外」一致），偏移必须是
- *  `-(行内边距 + 半颗圆点)`。编辑器画布与工作流库两处都用这个值，圆点不会一边
- *  贴边、一边内缩。 */
+ *  `-(行内边距 + 半颗圆点)`。输入列与输出列都用这个值，圆点不会一边贴边、
+ *  一边内缩。 */
 export const PARAM_NODE_DOT_OFFSET = -(
   PARAM_NODE_PAD_Y +
   PARAM_NODE_DOT_SIZE / 2
 );
 
-/** 卡片高度：头部 + 带类型的输出端口区 + 上下留白。
- *
- *  输出端口条数由 `outputPortCount` 给（视图用 `paramOutputPorts` 现算，见
- *  `WorkflowParamCard`）——几何与渲染必须同口径，否则 `placeParamNodes` 算出的
- *  位置与卡片实际高度对不上，卡片会互相压住。缺省按「至少一条」处理，
- *  与 `paramOutputPorts` 的兜底一致。
- *
- *  卡片体只有输出端口这一段（一行 = 端点 + 参数名 + 类型），不再另列「输入端口
- *  行」——那是同一批端口的重复表达（见 WorkflowParamCard 的说明）。 */
-export function paramNodeHeight(outputPortCount = 1): number {
-  return (
-    PARAM_NODE_HEADER_H +
-    Math.max(1, outputPortCount) * PARAM_NODE_OUTPUT_ROW_H +
-    PARAM_NODE_PAD_Y
-  );
-}
-
-/** 卡片列与宿主节点左缘之间的水平距离（留出走线的空间）。 */
-export const GROUP_OFFSET_X = 260;
-
-/** 卡片列间距（换列时的横向步长）。 */
-export const PARAM_NODE_COLUMN_W = PARAM_NODE_WIDTH + 28;
-
-/** 每张卡片之间的纵向留白。 */
-export const PARAM_NODE_GAP = 10;
-
-/** 同一宿主节点上每列最多堆几张卡片，超出换列（否则纵向无限延伸）。 */
-const PARAM_NODES_PER_COLUMN = 6;
-
-/** 由宿主节点的画布位置 + 条目顺序算出卡片位置。
- *
- *  位置是**派生**的：宿主节点挪到哪，卡片列就跟到哪（作者拖不动卡片本身）。
- *  宿主节点没有位置（`hostPosById` 缺这项）时跳过 —— 交由视图兜底，不产出
- *  NaN 坐标。同一宿主节点上的多张卡片纵向依次排开，超过一列容量换到左边一列。 */
-export function placeParamNodes(
-  entries: readonly ParamEntry[],
-  hostPosById: Record<string, { x: number; y: number } | undefined>,
-): Record<string, { x: number; y: number }> {
-  const out: Record<string, { x: number; y: number }> = {};
-  const cursorByNode: Record<string, number> = {};
-  const columnByNode: Record<string, number> = {};
-  for (const entry of entries) {
-    /* 宿主节点用 `hostNodeId`（契约路径下 `nodeId` 是空串，卡片会一张都排不出来
-     *  —— 用户表现为「画布上找不到对外参数卡片」，见 ParamEntry.hostNodeId）。 */
-    const host = hostPosById[entry.hostNodeId] ?? hostPosById[entry.nodeId];
-    if (!host) continue;
-    const hostKey = hostPosById[entry.hostNodeId]
-      ? entry.hostNodeId
-      : entry.nodeId;
-    const column = columnByNode[hostKey] ?? 0;
-    const rowY = cursorByNode[hostKey] ?? 0;
-    out[paramNodeId(entry.id)] = {
-      x: host.x - GROUP_OFFSET_X - column * PARAM_NODE_COLUMN_W,
-      y: host.y + rowY,
-    };
-    const nextRow = rowY + paramNodeHeight() + PARAM_NODE_GAP;
-    const columnCapacity =
-      PARAM_NODES_PER_COLUMN *
-      (PARAM_NODE_HEADER_H +
-        PARAM_NODE_ROW_H +
-        PARAM_NODE_OUTPUT_ROW_H +
-        PARAM_NODE_GAP);
-    if (nextRow > columnCapacity) {
-      columnByNode[hostKey] = column + 1;
-      cursorByNode[hostKey] = 0;
-    } else {
-      cursorByNode[hostKey] = nextRow;
-    }
-  }
-  return out;
-}
-
-/* ── 画布上「对外输出参数节点」的几何 ──
- *
- * 与输入卡片同一套常量（宽度 / 行高 / 圆点尺寸都共用），只是**排在宿主节点的
- * 右侧**（左列是「对外要什么」，右列是「对外给什么」）。位置同样派生、不落库：
- * 作者拖不动卡片本身，要挪就挪宿主节点。
- */
-
-/** 输出卡片列与宿主节点右缘之间的水平距离（留出走线的空间）。 */
-export const OUTPUT_CARD_OFFSET_X = GROUP_OFFSET_X;
-
-/** 输出卡片的高度：头部 + 一行端口 + 上下留白（与输入卡片同口径）。 */
-export function outputCardHeight(): number {
-  return paramNodeHeight(1);
-}
-
-/** 由宿主节点的画布位置算出输出卡片的位置（宿主卡片右侧一列）。 */
-export function placeOutputNodes(
-  outputs: readonly { ioKey: string; nodeId: string }[],
-  hostPosById: Record<string, { x: number; y: number } | undefined>,
-  hostWidthById?: Record<string, number | undefined>,
-): Record<string, { x: number; y: number }> {
-  const out: Record<string, { x: number; y: number }> = {};
-  const cursorByNode: Record<string, number> = {};
-  for (const output of outputs) {
-    const hostNodeId = nodeIdOfIoKey(output.ioKey) || output.nodeId;
-    const host = hostPosById[hostNodeId];
-    if (!host) continue;
-    const rowY = cursorByNode[hostNodeId] ?? 0;
-    const hostWidth = hostWidthById?.[hostNodeId] ?? 0;
-    out[output.ioKey] = {
-      x: host.x + hostWidth + OUTPUT_CARD_OFFSET_X,
-      y: host.y + rowY,
-    };
-    cursorByNode[hostNodeId] = rowY + outputCardHeight() + PARAM_NODE_GAP;
-  }
-  return out;
-}
-
-/** 画布上「对外输出参数节点」的 id：与输入卡片同一条命名空间，但带独立前缀 ——
- *  一个输出的 ioKey 与某个输入条目 id 可能同名，不加前缀会撞车。 */
-export const OUTPUT_NODE_PREFIX = "pout:";
-
-export function outputNodeId(outputIoKey: string): string {
-  return `${OUTPUT_NODE_PREFIX}${outputIoKey}`;
-}
-
-/** 从节点 id 反解输出口 ioKey；不是输出卡片时返回 null。 */
-export function outputIoKeyFromNodeId(nodeId: string): string | null {
-  return nodeId.startsWith(OUTPUT_NODE_PREFIX)
-    ? nodeId.slice(OUTPUT_NODE_PREFIX.length)
-    : null;
-}

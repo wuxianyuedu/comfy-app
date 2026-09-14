@@ -42,11 +42,9 @@ import { WorkflowIoPreviewPanel } from "../WorkflowIOPreviewPanel";
 import { WorkflowEditorCanvas } from "./WorkflowEditorCanvas";
 import { buildInitialNodes } from "./workflow-editor-build-nodes";
 import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
-import { useParamMapping } from "./hooks/use-param-mapping";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
 import { enrichFromViewNodes, isMachineName, type ExposedAliasBase } from "./io-exposure";
 import { sanitizeComboLabel } from "../workflow-utils";
-import { resolveWorkflowMode } from "@/lib/workflow-types";
 import { ioLabel, type WorkflowIOEntry } from "../shared/workflow-io";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
 import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
@@ -148,13 +146,10 @@ function applyFitViewport(
  * 再经 <WFStoresProvider> 下发。状态判断逻辑与渲染子树都在这之下。 */
 export function WorkflowEditorInner({
   workflowId,
-  /** 打开时落到的模式码（工作流库的画布预览里选的那个）。 */
-  initialMode = null,
   onClose,
   onSave,
 }: {
   workflowId: string;
-  initialMode?: string | null;
   onClose: () => void;
   onSave?: () => void;
 }) {
@@ -176,7 +171,6 @@ export function WorkflowEditorInner({
     <WFStoresProvider stores={stores}>
       <WorkflowEditorBody
         workflowId={workflowId}
-        initialMode={initialMode}
         onClose={onClose}
         onSave={onSave}
       />
@@ -194,12 +188,10 @@ interface WFStoresHelper {
  * store（hook 在 <WFStoresProvider> 之下才合法，故体逻辑用 *Api 访问）。 */
 function WorkflowEditorBody({
   workflowId,
-  initialMode,
   onClose,
   onSave,
 }: {
   workflowId: string;
-  initialMode?: string | null;
   onClose: () => void;
   onSave?: () => void;
 }) {
@@ -569,35 +561,16 @@ function WorkflowEditorBody({
     [detail, scopeDetail, rawMetaById, outSlotNameById, paramMap, onEnterSubgraph, viewHostNodeId]
   );
 
-  /* ── 对外参数映射（只保留数据，不再有画布卡片）──
+  /* ── 对外参数映射：编辑器不碰 ──
    *
    * 勾选 IO 只做一件事：把 pin 暴露成「对外参数」（写 workflowIO 落库）。
-   * 「对外参数 → 节点端口」的**落点映射编辑不在本编辑器**：画布上不再有卡片，
-   * 连线与落点改到工作流库详情的「画布节点」页签（卡片列 + 连线层，见
+   * 「对外参数 → 节点端口」的落点映射**完全不在本编辑器里编辑**：画布上没有卡片，
+   * 连线与落点都在工作流库详情的「画布节点」页签（卡片列 + 连线层，见
    * workflow-library/WorkflowParamCardColumn 与 WorkflowParamWires）。
    *
-   * 编辑器仍持有映射状态，因为它要负责两件事：
-   *   · 顶栏「恢复默认映射」的可用性（`hasManual`）与执行（`resetAll`）；
-   *   · 保存时把映射并进 paramMap（`withMapping`）—— 在库内改过的落点不能因为
-   *     在这里按一次保存就被抹掉。
-   * 这些 hook 必须无条件调用（在下方 loading / error 的提前返回之前）。 */
-  /* 生效模式：defaultMode → modes[0] → taskType（与库详情、项目画布节点同一口径，
-   *  见 resolveWorkflowMode）。此前只认 defaultMode —— 工作流声明了模式但没写
-   *  defaultMode 时这里是 null，卡片于是提示「先选模式才能连线」，而节点上（库里 /
-   *  画布上）明明已经显示着「单图生视频」了，自相矛盾（ISSUE #355 复审）。 */
-  const wiringMode = resolveWorkflowMode({
-    modes: detail?.modes,
-    /* 库详情里选定的模式优先于工作流默认模式：用户从「画布样式预览」点进来时
-     *  看到的连线 / 落点/ 卡片必须还是他刚看的那一套（否则像「线丢了」）。 */
-    defaultMode: initialMode ?? detail?.defaultMode,
-    taskType: detail?.taskType,
-  });
-  const paramMapping = useParamMapping({
-    workflowId,
-    io: workflowIO,
-    mode: wiringMode,
-    paramMap,
-  });
+   * 编辑器也不再提供「恢复默认映射」：那条线归库内那一层管，编辑器只管把当前
+   * `paramMap` **原样**保存回去（保存路径见 useWorkflowPersistence）—— 库内改过的
+   * 落点不会因为在这里按一次保存就被抹掉。 */
 
   /* useNodesState 只接受挂载首帧的初值；后续同步统一走下面的 effect（初始图节点
    * 即为这一帧的初值，detail 就绪后才会补上）。 */
@@ -774,9 +747,6 @@ function WorkflowEditorBody({
           viewHostNodeId={viewHostNodeId}
           setViewJsonOpen={setViewJsonOpen}
           resetLayout={resetLayout}
-          resetParamWiring={() => paramMapping.resetAll()}
-          hasParamWiring={paramMapping.hasManual}
-          wiringMode={wiringMode}
           handleSave={handleSave}
           saving={saving}
           error={error}

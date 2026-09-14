@@ -94,9 +94,9 @@ describe("编辑器画布只画工作流图", () => {
   });
 
   it("编辑器保存原样带上 paramMap：库内改过的落点不被抹掉", () => {
-    /* 在库内改过的落点写在 `paramMap.source`。编辑器不再提供连线手势，但它保存时
-     * 必须把当前 `paramMap` **原样**交上去 —— 否则「进编辑器点一次保存」就会把
-     * 库内改的线抹掉。 */
+    /* 在库内改过的落点写在 `paramMap.source`。编辑器既不提供连线手势、也不提供
+     * 「恢复默认映射」，它保存时必须把当前 `paramMap` **原样**交上去 —— 否则
+     * 「进编辑器点一次保存」就会把库内改的线抹掉。 */
     const persistence = stripComments(
       readFileSync(
         path.join(EDITOR_DIR, "hooks/use-workflow-persistence.ts"),
@@ -104,10 +104,11 @@ describe("编辑器画布只画工作流图", () => {
       ),
     );
     expect(persistence).toMatch(/savePatch\.mutateAsync\(\{[\s\S]{0,120}paramMap/);
-    /* 编辑器仍读映射状态（顶栏「恢复默认映射」的可用性 / 执行）。 */
+    /* 编辑器里也没有映射编排层了：落点归库内那一层管。 */
     const inner = stripComments(readEditor("WorkflowEditorInner.tsx"));
-    expect(inner).toContain("useParamMapping");
-    expect(inner).toContain("resetAll");
+    for (const gone of ["useParamMapping", "resetAll", "resetParamWiring"]) {
+      expect(inner, `${gone} 不该再出现在编辑器`).not.toContain(gone);
+    }
   });
 
   it("编辑器不再有连线手势（连线只发生在库内）", () => {
