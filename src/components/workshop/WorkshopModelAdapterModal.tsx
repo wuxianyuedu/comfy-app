@@ -16,6 +16,7 @@ import {
   builtInModeContract,
   modeContractInputIdLabel,
   modeContractInputLabel,
+  nextReferenceImageId,
   workshopInputLabel,
   type ModeContract,
   type WorkshopInputType,
@@ -102,6 +103,11 @@ export function WorkshopModelAdapterModal({
     );
     void modeContracts.save([...rest, contractDraft]);
   };
+
+  /** 下一个可追加的参考图口（参考图不设数量上限；其余固定口每种最多一个）。 */
+  const nextRefSlotId = contractDraft
+    ? nextReferenceImageId(contractDraft.inputs)
+    : null;
 
   const availableModes = ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative);
 
@@ -473,8 +479,11 @@ export function WorkshopModelAdapterModal({
                     ))}
                   </div>
                   <div className="flex flex-wrap gap-1">
+                    {/* 固定口每种最多加一个（参考图单独处理：可无限追加）。 */}
                     {MODE_CONTRACT_INPUT_TYPES.filter(
-                      (t) => !contractDraft.inputs.includes(t.type),
+                      (t) =>
+                        t.type !== "reference-image" &&
+                        !contractDraft.inputs.includes(t.type),
                     ).map((t) => (
                       <button
                         key={t.type}
@@ -490,6 +499,25 @@ export function WorkshopModelAdapterModal({
                         ＋ <LabelWithId label={modeContractInputLabel(t.type)} id={t.type} />
                       </button>
                     ))}
+                    {nextRefSlotId && (
+                      <button
+                        type="button"
+                        title="参考图不设数量上限，可继续追加"
+                        onClick={() =>
+                          setContractDraft({
+                            ...contractDraft,
+                            inputs: [...contractDraft.inputs, nextRefSlotId],
+                          })
+                        }
+                        className="border-primary text-primary hover:bg-primary/10 rounded border border-dashed border-(--color-primary)/40 px-2 py-0.5 text-[11px]"
+                      >
+                        ＋{" "}
+                        <LabelWithId
+                          label={modeContractInputLabel("reference-image")}
+                          id={nextRefSlotId}
+                        />
+                      </button>
+                    )}
                   </div>
                   <div>
                     <p className="text-muted-foreground mb-1 text-[10px]">输出类别</p>

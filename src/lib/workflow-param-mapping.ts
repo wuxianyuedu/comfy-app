@@ -60,6 +60,7 @@ export type ParamClass =
   | "reference-image"
   | "first-frame"
   | "last-frame"
+  | "duration"
   | "other";
 
 /** 统一「尺寸」在契约里的落点形态 —— 一个对外参数可以落在其中任一类端口上。 */
@@ -121,6 +122,7 @@ const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
   "reference-image": "参考图",
   "first-frame": "首帧",
   "last-frame": "尾帧",
+  duration: "时长",
   other: "参数",
 };
 
@@ -171,6 +173,14 @@ export function classifyPin(e: WorkflowIOEntry): ParamClass {
   }
   if (/aspect_?ratio|宽高比|纵横比|比例/.test(text)) return "size-aspect";
   if (/megapixel|百万像素|\b像素\b/.test(text)) return "size-megapixels";
+  /* 时长 / 帧数：先排掉 fps（帧率不是时长），再认 duration / length / frames
+   * 与中文「时长 / 秒数 / 帧数」。视频模式的「时长」口按此落到这类端口上。 */
+  if (
+    !/fps|frame_?rate|帧率|每秒帧/.test(text) &&
+    /duration|length|num_?frames|frame_?count|frames?|时长|秒数|帧数/.test(text)
+  ) {
+    return "duration";
+  }
   if (/prompt|提示词|描述词|描述/.test(text)) return "prompt";
   /* 无类型但默认值很长（>40 字符）的文本一般是提示词框 —— 与工作流库的控件
    * 推导启发式（workflow-encapsulation / workflow-detail-io）保持一致，
@@ -554,6 +564,11 @@ const AUTO_MAPPABLE: Record<ParamClass, (e: WorkflowIOEntry) => boolean> = {
   "reference-image": (e) => isImagePin(e),
   "first-frame": (e) => isImagePin(e),
   "last-frame": (e) => isImagePin(e),
+  duration: (e) =>
+    !/fps|frame_?rate|帧率|每秒帧/.test(searchText(e)) &&
+    /duration|length|num_?frames|frame_?count|frames?|时长|秒数|帧数/.test(
+      searchText(e),
+    ),
   other: () => true,
 };
 

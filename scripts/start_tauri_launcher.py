@@ -716,8 +716,23 @@ def _derive_app_port(project_root: str) -> int:
     对「绝对路径、反斜杠转正斜杠、转小写」的 UTF-8 字节取 FNV-1a 32 位哈希，
     映射到 3200..3999：port = 3200 + (fnv1a32(path) % 800)。
     """
-    normalized = os.path.abspath(project_root).replace("\\", "/").lower()
+    normalized = _normalize_root_for_port(project_root)
     return 3200 + (_fnv1a32(normalized.encode("utf-8")) % 800)
+
+
+def _normalize_root_for_port(project_root: str) -> str:
+    """规范化检出路径：转正斜杠 + 转小写 + 去尾斜杠（跨四语言约定，§1.1）。
+
+    只对**相对路径**做 abspath。历史实现无条件 `os.path.abspath()`，而它的
+    语义是「相对当前工作目录解析」——同一个检出在不同 cwd 下推出不同端口，
+    与「同一检出恒定同端口」的多检出并行承诺矛盾（Node 侧同病，见
+    scripts/app-port.mjs 的 normalizeRootForPort）。
+    """
+    raw = project_root or ""
+    win_absolute = bool(re.match(r"^[a-zA-Z]:[\\\\/]", raw)) or raw.startswith("\\\\\\\\")
+    absolute = win_absolute or os.path.isabs(raw)
+    resolved = raw if absolute else os.path.abspath(raw)
+    return resolved.replace("\\", "/").lower().rstrip("/")
 
 
 def _read_app_port(project_root: str) -> int:

@@ -20,6 +20,7 @@ export const PARAM_CLASS_LABEL: Record<ParamClass, string> = {
   "reference-image": "参考图",
   "first-frame": "首帧",
   "last-frame": "尾帧",
+  duration: "时长",
   other: "参数",
 };
 
@@ -35,6 +36,7 @@ export const PARAM_CLASS_COLOR: Record<ParamClass, string> = {
   "reference-image": "#22d3ee",
   "first-frame": "#34d399",
   "last-frame": "#fbbf24",
+  duration: "#f472b6",
   other: "#94a3b8",
 };
 

@@ -56,9 +56,14 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 
 1. `.env` 显式 `COMFYAPP_PORT`（每个检出各自的 `.env`；要固定端口、例如与
    其他应用冲突时配置，改一处、重启应用即可）；
-2. **按检出路径稳定推导**——对检出绝对路径（反斜杠转正斜杠、转小写）的
-   UTF-8 字节取 FNV-1a 32 位哈希，映射到 3200~3999 区间内的固定端口；
-   同一检出恒定同端口，多份检出并行开发互不冲突（见 §1.4）；
+2. **按检出路径稳定推导**——对检出绝对路径（反斜杠转正斜杠、转小写、去尾
+   斜杠）的 UTF-8 字节取 FNV-1a 32 位哈希，映射到 3200~3999 区间内的固定
+   端口；同一检出恒定同端口，多份检出并行开发互不冲突（见 §1.4）。
+   **规范化只对相对路径做 resolve**（绝对路径原样处理）：Node 的
+   `path.resolve` / Python 的 `os.path.abspath` 语义都是「相对当前工作目录
+   解析」，无条件调用会把 `F:\AI\...` 在 Linux 上拼成 `/workspace/f:/...`
+   —— 同一检出在不同 cwd / 平台推出不同端口，「恒定同端口」直接失效。
+   四侧实现见下方「推导算法是跨语言约定」；
 3. 兜底 `3100`：仅在路径推导不可用的异常情况，也是 `tauri.conf.json` 静态
    `devUrl` 的编译期兜底值。
 
@@ -70,7 +75,7 @@ pwsh -File scripts\dev-launcher.ps1 -Prebuilt
 | start_tauri_launcher.py | `_read_app_port()`（.env 优先，缺省按检出路径推导），用于 `COMFYAPP_DEV_URL` 与 launch-status 的 `app_url` |
 | Rust 壳（lib.rs）       | `default_dev_url()` 读 `COMFYAPP_PORT` 环境变量；未注入时按 `single_instance::derive_app_port()` 推导 |
 | tauri.conf.json         | `beforeDevCommand: node scripts/dev.mjs`，经 `scripts/app-port.mjs` 解析端口后启动 next dev       |
-| `pnpm dev` / `pnpm start` | 统一经 `scripts/dev.mjs` / `scripts/start.mjs` → `scripts/app-port.mjs` 解析端口，再显式传 `-p` 给 next |
+| `pnpm dev` / `pnpm start` | 统一经 `scripts/dev.mjs` / `scripts/start.mjs` → `scripts/app-port.mjs` 解析端口，再显式传 `-p` 给 next。**`dev` 与 `start` 都必须经脚本**：裸 `next dev` 会落 Next 默认的 3000，与 .env / 路径推导 / Playwright / 启动器找的端口对不上（2026-09-14 修 `dev` 一侧，`start` 此前已修）。`dev.mjs` 的 `-p` / `-H` 供 Windows 启动器显式覆盖，Linux / CI 直接 `pnpm dev` 即走解析值 |
 | Playwright              | `playwright.config.ts` 经 `scripts/app-port.mjs` 解析，与 webServer/baseURL 同源                  |
 | 前端 tRPC               | `process.env.COMFYAPP_PORT ?? process.env.PORT ?? 3100`（服务端运行时 env 由启动链路注入）        |
 
@@ -267,6 +272,28 @@ true`——这类场景的策略反过来，必须给前台。
    WARN（不阻断启动），日志：`log/launcher/drizzle-push-stdout/stderr.log`。
 
 ## 3. 进程树管理规范
+
+### 3.1 跨平台入口：`src/lib/kill-process-tree.ts`（Node 侧唯一收口）
+
+Node 侧**只允许经 `killProcessTree()` / `killProcessTreeSync()` 回收进程树**，
+不要在各服务生命周期里自己写 `taskkill` / `process.kill`——历史实现正是各写一遍，
+且 POSIX 分支只剩 `child.kill("SIGTERM")` 单杀 leader，实测给一个含 3 个子进程的
+shell 发 SIGTERM 后 3 个子进程全部残留（PPID=1，占端口、锁日志文件），
+正是硬规则 3 明令禁止的形态。平台判据收在该模块一处：
+
+| 平台 | 机制 | 说明 |
+|---|---|---|
+| Windows | `taskkill /PID <pid> /T /F` | 硬规则 3 的原始要求；`/F` 走 TerminateProcess，被杀进程没有清理机会（这也是 bound / keepAlive 只能在「拉起时」决定的原因） |
+| POSIX | `process.kill(-pid, SIG)`（进程组） | 前提是子进程 `detached: true` 拉起（`process-launch.ts` 的 keepAlive 与 bound 路径各自处理）；拿不到组（组长已退 / 未 detached / 权限不足）时按 pid 单杀兜底 |
+
+只用 Node 内建能力：`lsof`、`pstree` 在很多发行版默认不装，依赖它们等于把
+「回收失败」变成静默失败（探测链路另有 `proc-detect.ts` 的同类约束）。
+回收结果由调用方**探测确认**收口（各服务生命周期自己那份），本模块不抛错。
+
+回归测试：`src/lib/kill-process-tree.test.ts`（进程组回收子孙、单杀兜底、
+目标已退出的返回语义；Windows 分支只在 win32 上断言命令构造）。
+
+### 3.2 Windows 启动器（dev-launcher.ps1 / Build-Guard.ps1）
 
 - 启动器只允许用 `taskkill /PID <pid> /T /F` 回收进程树。`Process.Kill()`
   只杀 cmd.exe 外壳，node/pnpm 子进程会残留（占端口、锁日志文件）。
@@ -769,3 +796,59 @@ reg delete "HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\comman
 | 双击入口用记事本打开了脚本、没有执行 | 未做文件关联（§8.3 的一次性前置没跑）           | 右键 `scripts/enable-ps1-double-click.ps1` →「使用 PowerShell 运行」                                                                                |
 | 双击闪一下就没了，看不到报错         | 入口已执行并快速退出；`.ps1` 退出后窗口随之关闭 | 入口在双击场景（父进程是 explorer）会自动暂停，见 `Complete-Entry`；若仍闪退说明脚本在收尾前抛异常，改用终端执行 `pwsh -File .\入口.ps1` 看完整输出 |
 | 终端执行提示「禁止运行脚本」         | 机器执行策略为 Restricted                       | `pwsh -ExecutionPolicy Bypass -File .\入口.ps1`（入口内部已自带该参数，直接双击不受影响）                                                           |
+
+## 9. Web-only Linux 模式（`pnpm dev` 零 `.ps1` 依赖）
+
+> 2026-09-14 制定（ISSUE #489）。**适用范围**：只想在 Linux / macOS / CI 上
+> 开发与验证前端与业务逻辑的人。桌面壳（Tauri）、双击启动链路（`.ps1`）、
+> ComfyUI / Ollama 的自动启停**不在本模式范围内**，见 §9.3。
+
+### 9.1 这条链路怎么跑
+
+```bash
+pnpm install
+cp .env.example .env        # 必须：src/env.js 启动时校验，缺了直接报 Invalid environment variables
+pnpm db:push                # Drizzle 同步表结构
+pnpm dev                    # 经 scripts/dev.mjs 解析端口（缺省按检出路径推导）
+```
+
+全链路**不调用任何 `.ps1` / `pwsh` / `taskkill`**：
+
+| 环节 | Linux 上的实现 | 平台判断位置 |
+|---|---|---|
+| 入口 | `pnpm dev` → `node scripts/dev.mjs` | 无分支（Node 脚本本身跨平台） |
+| 端口 | `.env` → 路径推导（3200~3999）→ 兜底 3100 | `scripts/app-port.mjs`，规范化只对相对路径 resolve（§1.1） |
+| 进程树回收 | `process.kill(-pid)` 杀进程组 | `src/lib/kill-process-tree.ts`（§3.1） |
+| 进程探测 | `ps -eo pid,args`；端口用**配置端口试探 + 进程表** | `src/lib/comfyui/proc-detect.ts`。**不依赖 `lsof`**（很多发行版默认不装，缺它时探测会静默返回 null） |
+| 解释器发现 | `.venv/bin/python3` / `.venv/bin/python` + `lib/python3.x/site-packages` | `src/lib/comfyui/launch-path.ts` |
+| 打开浏览器 | `xdg-open` | `src/lib/open-in-browser.ts` |
+| Ollama 关闭 | `pkill -TERM -x ollama` | `src/app/api/llm/ollama-stop/route.ts` |
+
+### 9.2 平台判断的统一约定
+
+新增任何「只在一个平台成立」的依赖时，按下面三条落位，不要散在各处：
+
+1. **判据收在一处**：进程树机制 → `src/lib/kill-process-tree.ts`；
+   解释器可执行名与目录布局 → `src/lib/comfyui/launch-path.ts` 的
+   `INTERPRETER_NAMES` / `venvDirs`。调用方表达意图（「回收这棵树」、
+   「找解释器」），不自己摸 `process.platform`。
+2. **不引入发行版可选的二进制**：`lsof` / `pstree` / `pwsh` 都可能不在。
+   优先用 Node 内建（`process.kill`、`fs`、`os.homedir()`）。
+3. **失败路径要有出口**：平台不支持某项能力时，给可行动的提示
+   （如「请在 ComfyUI 自己的终端里关闭」），不要静默返回 null —— 静默失败
+   比抛错更难排查（§5 多条事故同源）。
+
+### 9.3 这个模式**不**解决的问题（别误当成 Linux 支持）
+
+- **Tauri 壳编译**：`src-tauri/Cargo.toml` 的 `windows` crate 是无条件依赖，
+  `mod single_instance` 也没 `#[cfg(windows)]` 门控；`bundle.externalBin` 与
+  `lib.rs::spawn_sidecar` 写死 `.exe`。要在 Linux 出桌面包 = 另做一套，不在
+  本模式范围。
+- **`.ps1` 启动编排**：`scripts/dev-launcher.ps1`（唯一编排者）、
+  `tools/**/*.ps1` 全部是 Windows 语义（`taskkill`、`Get-CimInstance`、
+  `%APPDATA%`）。装 `powershell` 也没用——脚本里的 Windows 命令在 Linux 上
+  跑不出对应语义。
+- **e2e（Playwright）**：需要浏览器与显示环境；无头容器里需自行准备。
+- **ComfyUI 自动启停**：解释器发现与进程探测已支持 POSIX 布局，但
+  `comfy-cli` 的 venv 由 `scripts/setup-comfy-cli-venv.ps1` 建（Windows 侧），
+  Linux 上需手工准备；「保活」模式的 POSIX 分支语义未在真机回归。

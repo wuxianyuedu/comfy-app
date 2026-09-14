@@ -68,7 +68,7 @@ export const llmRouter = createTRPCRouter({
               .array(
                 z.string().refine(isModeContractInputId, {
                   message:
-                    "契约口必须是 prompt|negative|size|reference-image|first-frame|last-frame（第 2 张起的参考图带序号，如 reference-image-2）",
+                    "契约口必须是 prompt|negative|size|duration|reference-image|first-frame|last-frame（第 2 张起的参考图带序号，如 reference-image-2）",
                 }),
               )
               .min(1),
