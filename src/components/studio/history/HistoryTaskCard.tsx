@@ -76,7 +76,7 @@ export function HistoryTaskCard({
           )}
           {/* 进行中：底部进度条 */}
           {st.showProgress && (
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-black/40">
+            <div className="bg-canvas-deep absolute inset-x-0 bottom-0 h-1">
               <div
                 className="h-full bg-linear-to-r from-violet-500 to-fuchsia-500 transition-all duration-1000 ease-linear"
                 style={{ width: `${progress}%` }}
@@ -96,7 +96,7 @@ export function HistoryTaskCard({
               {st.label}
             </span>
             {st.showProgress && (
-              <span className="text-[10px] tabular-nums text-violet-600">
+              <span className="text-[10px] tabular-nums text-violet-700 dark:text-violet-400">
                 {Math.floor(progress)}%
               </span>
             )}
@@ -108,22 +108,22 @@ export function HistoryTaskCard({
           </p>
           {task.status === "FAILED" && task.error && (
             <div className="mt-2 rounded-md border border-red-500/20 bg-red-500/6 px-2.5 py-1.5">
-              <p className="text-[11px] leading-relaxed text-red-600">
+              <p className="text-[11px] leading-relaxed text-red-700 dark:text-red-400">
                 <span className="font-semibold">错误：</span>
                 {task.error}
               </p>
               {st.failureSuggestion && (
-                <p className="mt-1 text-[11px] leading-relaxed text-amber-600/90">
+                <p className="mt-1 text-[11px] leading-relaxed text-amber-700/90 dark:text-amber-600/90">
                   {st.failureSuggestion(task.error)}
                 </p>
               )}
               {/* 结构化校验错误逐字段列表 */}
               {task.validationErrors && task.validationErrors.length > 0 && (
-                <div className="mt-1.5 rounded border border-red-400/20 bg-black/20 px-2 py-1.5">
-                  <div className="mb-1 text-[10px] font-semibold text-red-600">
+                <div className="border-red-400/20 bg-canvas-deep mt-1.5 rounded border px-2 py-1.5">
+                  <div className="mb-1 text-[10px] font-semibold text-red-700 dark:text-red-400">
                     节点配置校验（{task.validationErrors.length} 项）
                   </div>
-                  <ValidationErrorList errors={task.validationErrors} className="text-red-600/90" />
+                  <ValidationErrorList errors={task.validationErrors} className="text-red-600/90 dark:text-red-400/90" />
                 </div>
               )}
             </div>
