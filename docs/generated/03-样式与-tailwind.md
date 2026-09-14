@@ -39,6 +39,44 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 
 **规则**：透明度一律 `/百分比`（小数合法，如 `/1.5`——tailwindcss 内部正是以 `parseFloat(alpha)*100` 做规范化的）。
 
+#### 3.1.1 语义颜色一律写类名，禁止 `X-(--color-…)` 内联变量
+
+v4 的 `bg-(--color-canvas-deep)` 这种「属性前缀 + 内联变量」写法**能编出 utility**
+（`background-color: var(--color-canvas-deep)`），`hover:` / `dark:` 修饰符也**生效**。
+所以它不是「编译不过」，而是**越过了语义层**：
+
+- **拿不到语义名**：`text-(--color-ink-muted)` 与 `text-ink-muted` 是两份 class，
+  同一处设计改一处漏一处；@theme 里的 token 改名/换值，内联写法**不会**跟着变。
+- **拿不到该 token 的兄弟**：`border-(--color-canvas)` 的真实意图是「端口的载体色」，
+  但 canvas 是**画布背景** token —— 浅色下画布浅灰、描边与端点糊在一起。
+  写成类名时才会被迫问一句「我该用哪个 token」，进而发现缺一个
+  `--color-port-surface`。内联变量把这个设计问题藏起来了。
+- **`typecheck` / lint 看不见**：类名写错会被 Tailwind 的 canonical-class 提示抓到，
+  变量名写错只是一个不生效的声明。
+
+```tsx
+// ❌ 属性前缀 + 内联变量：编得出来，但绕过语义层
+"bg-(--color-node-accent) border-(--color-primary)/35 text-(--color-ink-icon)"
+
+// ✅ 语义类名（@theme 里 --color-* 会自动生成；% 透明度同样适用）
+"bg-node-accent border-primary/35 text-ink-icon"
+```
+
+**允许保留 `var(--color-…)` 的两类场景**（都在 `style={{}}` 里）：
+
+1. **动态计算值**：值由运行时数据决定，Tailwind 静态提取不可能覆盖 ——
+   连线 stroke、节点 accent 色、`boxShadow` 里的色相；
+2. **需要非 Tailwind 属性承载**：React Flow 的 `maskColor`、`Handle` 的
+   `borderColor` 这类组件 props。
+
+这两类**也要给随主题的 token**，不要把「浅色观感」写死成兜底值：
+`var(--color-ink, #EDEDF2)` 的兜底只在变量未定义时生效，看着像浅色安全，
+实际永远取不到；真正需要两态时，就该像 `--color-port-surface` 那样
+**新增一个 token 并两态赋值**，而不是挑一个「深色下大概能看」的兜底。
+
+> 判据很简单：**能不能写成一个类名？** 能，就必须是类名。
+> 只剩「值在运行时才知道」时才落 `style={{}}`。
+
 ### 3.2 避免魔法字符串：提取到主题/Design Token
 
 ```tsx
@@ -135,6 +173,10 @@ import "@/styles/json-viewer.css";
 `src/app/globals.css` 里的 `固定暗色清单（Fixed-dark inventory）` 注释块。
 本节只规定判据与维护方式，条目以 `globals.css` 为准。
 
+> 本应用**没有任何界面是「暗色品牌页」**：登录页、错误页、404 一类的独立
+> 视觉页面同样走 token，不得以「品牌页」为由豁免。整屏或结构性表面（页面
+> 底、卡片、面板、控件、状态栏）一律不进清单。
+
 **准入判据（两条都满足才可进清单）**：
 
 1. 该表面是「**内容视图内的极小面积叠层**」——浮在画布/预览/媒体之上的一
@@ -151,6 +193,8 @@ import "@/styles/json-viewer.css";
 | ReactFlow 缩放/适配/锁定控件 `.react-flow__controls-button` | `--color-node` / `--color-border-strong` / `--color-ink-muted` |
 | MiniMap 非视口遮罩（`maskColor`） | `--color-canvas-minimap-mask` |
 | 原生 `<select>` / `<option>` 与滚动条 | `color-scheme` + `--color-node` / `--color-ink-field` |
+| 登录页整屏底 + 极光 | `--color-bg` + 两态极光 |
+| 端口圆点描边 / 内圈高光（`border-(--color-canvas)` + 25% 白 `inset`） | `--color-port-surface` |
 
 > 判据的用意：**控件**是结构性表面（用户要操作它），跟主题走才不会在浅色
 > 下变成「深底深图标」的隐形按钮；**叠加在内容上的说明层**才是例外。
@@ -182,6 +226,52 @@ import "@/styles/json-viewer.css";
 ```
 
 **规则**：画布/编辑器类页面默认桌面优先（`lg:` 为主）；公开落地页/文档页必须移动优先（`sm:` 起步）。所有 `absolute` 定位的浮层（抽屉、popover、tooltip）需测试在 ≤1280px 视口下不溢出。
+
+#### 3.8.1 一排控件不许被「压扁」——窄了换行或收窄，不许变形
+
+横向工具条（顶栏、按钮排、筛选行）在窄窗口下最常见的事故不是溢出，而是**变形**：
+flex 默认 `flex-shrink: 1`，宽度一紧张就从每个子项身上按比例抠，抠到文字改行、
+按钮变成两三行竖排小字、圆角随之消失（ISSUE #404 的工作流编辑器顶栏）。
+
+```tsx
+// ❌ 会被压扁：默认可收缩 + 文字可换行
+<button className="rounded-lg border px-4 py-2 text-sm">编辑 IO</button>
+
+// ✅ 不换行、不收缩；宽度不够由容器换行、或本例的「先收内边距」承接
+<button className="shrink-0 whitespace-nowrap leading-none px-2.5 py-1.5 text-xs
+                   md:px-4 md:py-2 md:text-sm rounded-lg border">
+  编辑 IO
+</button>
+```
+
+三条硬规则：
+
+1. **`whitespace-nowrap`**：文字是一整块。压不下就换行（`flex-wrap`），不是把
+   「编辑 IO」拆成三行。
+2. **`shrink-0`**：按钮是可点目标，不该被压。要挤，挤可截断的那块（带 `truncate`
+   的长标题）。
+3. **`leading-none`**：图标（emoji / lucide）的行框高于中文字号，默认行高会把
+   按钮顶高、图标不居中。
+
+**收窄的策略**：优先收**内边距**（`px-4 → px-2.5`）与**图标间距**（`gap-1.5 → gap-1`），
+字号最多降一档且必须**在断点处回升**（`text-xs md:text-sm`），不能永久变小。
+
+**兜底顺序**（宽度不足时按此顺序退化，绝不压扁控件）：
+收内边距 → 降一档字号 → 整排换行（根容器 `flex-wrap`）→ 溢出滚动。
+
+> **换行触发的前提**：可缩容的兄弟块必须有**贴着按钮组实测宽度的最小宽度**
+> （如 `min-w-[170px]`）。带 `truncate` 的标题其 min-content 只有一两个字符宽，
+> 没有下限时 flex 会认为它「还能再压」，按钮组永远等不到换行、只能被压到与
+> 标题重叠；下限给太大（相对按钮组天然宽度）则会在明明排得下的时候过早换行。
+
+**同构的成排按钮抽一份判据**：同一个页面里形态相同的按钮排（典型是设置页的
+「状态行」：左侧状态文字 + 右侧一排动作按钮，ComfyUI / Drizzle Studio /
+Ollama 三处同构）不要再各自拼 class——抽成一个纯派生模块（常量 + 拼串函数，
+规范 17 §17.2 第①层），视图只消费返回值。理由是这三条规则漏掉任何一条都不会
+立刻报错，只会**在某个窗口宽度下**才显出「文字折行、按钮变高」的形态（ISSUE
+#423），而散落在 N 个 `<button>` 上的 class 改一处漏一片。可参考的落地：
+`src/app/(main)/settings/settings-status-row-config.ts` 与
+`src/components/studio/workflow-editor/workflow-editor-topbar-config.ts`。
 
 ### 3.9 布局类名顺序约定（可读性）
 
