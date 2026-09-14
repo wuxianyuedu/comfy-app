@@ -137,10 +137,26 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
  * 这条探针在**构建产物存在时**真去数：standalone 里不得出现测试文件、变更
  * 碎片与文档。没有产物（如只跑单测的检出）时整组跳过 —— 它守的是构建结果，
  * 不是单元逻辑。
+ *
+ * ⚠️ 两个细节决定这组用例是「守卫」还是「陷阱」：
+ *
+ * ① **文件顶层不得调用 listFiles**。`describe.skipIf` 的求解发生在收集期，
+ *    而 describe 回调体内的语句**同时也会在收集期执行**——把 `listFiles(...)`
+ *    放在顶层或回调体首行，都会在任何用例运行之前去 scandir 那个可能不存在的
+ *    目录，于是「产物缺失」从「应当跳过」变成「整份文件收集失败」。
+ *    实测形态：CI 的 `pnpm run test` 排在 Build 之前，产物必然不存在，因此
+ *    每次必挂；而本机因为 `.next` 恰好存在而全绿，呈现成「本地绿、CI 红」。
+ * ② **判据先求值、再传入**（`standaloneExists` 常量），不要在 skipIf 里
+ *    现算——收集期与回调体两次求值之间的状态差异会让跳过与否不可预期。
+ *
+ * 反向验证：构造一个不含 `.next/standalone` 的工作目录，本组必须**全跳过且
+ * 0 失败**（而不是 ENOENT）；构造一个含 `src/*.test.ts` 的假产物，必须报出它。
  */
 import { existsSync, readdirSync, statSync } from "node:fs";
 
-const STANDALONE = join(process.cwd(), ".next", "standalone");
+function standaloneDir(): string {
+  return join(process.cwd(), ".next", "standalone");
+}
 
 /** 递归列出目录下所有相对路径（只在目录存在时调用）。 */
 function listFiles(dir: string, prefix = ""): string[] {
@@ -160,10 +176,13 @@ function listFiles(dir: string, prefix = ""): string[] {
   return out;
 }
 
-describe.skipIf(!existsSync(STANDALONE))(
+/** 产物目录是否存在；不存在时整组跳过（守卫守的是构建结果，不是构建本身）。 */
+const standaloneExists = existsSync(standaloneDir());
+
+describe.skipIf(!standaloneExists)(
   ".next/standalone 产物里不得有测试 / 文档 / 变更碎片",
   () => {
-    const files = listFiles(STANDALONE);
+    const files = standaloneExists ? listFiles(standaloneDir()) : [];
 
     it("确实数到了产物文件（探针自身不空跑）", () => {
       expect(files.length).toBeGreaterThan(10);
