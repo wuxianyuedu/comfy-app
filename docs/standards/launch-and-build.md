@@ -660,7 +660,7 @@ zustand 队列，而不是再加一个模块级单例。
 | 场景                                                                                      | 命令                                                                                                         | 说明                                                                                                                                                                |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 只改了 Rust 壳 / 窗口配置 / 启动页                                                        | `cd src-tauri; cargo build --release --features custom-protocol`                                             | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期。注意：裸 `cargo build` 要求 `src-tauri\binaries` 已有 Node sidecar（`tauri.conf.json` 的 externalBin 在编译期被校验，缺失即 panic）——缺失时先跑一次 `tools\build\build-tauri-release.ps1` 自动补齐，见 §5 对应条目 |
-| 生产构建（standalone + 安装包）                                                           | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build`                                                                              |
+| 生产构建（standalone + 安装包）                                                           | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build`；`build-all` 结束时报告各步与总耗时（见 §7.0）                                |
 | 前端/standalone 体积分析                                                                  | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`）                   |
 | `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认 |
 | `next build` 走 Turbopack 不受影响；因此分析时强制 `--webpack`。产物                      |
@@ -669,6 +669,30 @@ zustand 队列，而不是再加一个模块级单例。
 | 可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。    |
 | 重新打包双击启动器                                                                        | `tools\build\build-launcher.ps1`                                                                             | PyInstaller onedir，产物 `start-tauri/`（gitignore）                                                                                                                |
 | 开发者工具箱                                                                              | `tools\build\rebuild-static.ps1` 等 / `dev-tools`                                                            | 见 `tools/README.md`                                                                                                                                                |
+
+### 7.0 构建耗时报告（`tools/scripts/Log-Common.ps1`）
+
+构建是一轮「按分钟到按十分钟计」的等待，构建者（尤其是双击入口的用户）需要在
+结束那一刻看到「这一轮到底花了多久」。耗时口径统一收敛在构建脚本共用的日志库
+`tools/scripts/Log-Common.ps1`：
+
+| 函数                    | 职责                                                     |
+| ----------------------- | -------------------------------------------------------- |
+| `Start-LogStopwatch`    | 起一个计时器（`System.Diagnostics.Stopwatch`）           |
+| `Format-Elapsed`        | 按量级格式化成 `45.6 秒` / `3 分 12.4 秒` / `1 时 02 分 03 秒` |
+| `Log-Elapsed`           | 记一行「<标签> 耗时：<格式化用时>」，控制台与日志同落     |
+
+三层各自报告，不重复计同一笔：
+
+- **入口** `tools\build\build-all.ps1`：收尾前打印整轮总耗时（含子进程启动开销），
+  双击场景里它是关窗口前最后读到的一行；失败时同样打印（判断是否直接重跑）；
+- **编排层** `tools\scripts\build-all.ps1`：汇总里给出「总耗时」，任一步失败中止时
+  也报出已用时间；各步耗时由子脚本自己负责，编排层不重复计；
+- **子步骤** `build-tauri-release.ps1`（第 4/4 步 cargo build）/ `build-launcher.ps1`
+  （第 3/3 步 pyinstaller）：在各自的完成汇总里给出本步耗时。
+
+新增构建/工具脚本时直接复用这三个函数，不要各写一套 `Stopwatch`——格式漂成几种
+就没法横向对比，汇总也对不齐。
 
 ### 7.1 构建前置检查：目标壳不得在运行（`tools/scripts/Build-Guard.ps1`）
 

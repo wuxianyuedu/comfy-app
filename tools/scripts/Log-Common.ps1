@@ -58,3 +58,40 @@ function Invoke-Logged {
 function Open-Log {
     Start-Process -FilePath notepad -ArgumentList $script:LOG
 }
+
+# ── 构建耗时计时 ────────────────────────────────────────────────────────────
+#
+# 为什么收敛在这里：构建者（尤其是双击入口的用户）要在**结束那一刻**看到
+# 「这一轮到底花了多久」，而耗时是每个脚本自己的事——`build-all` 编排两步、
+# 每一步又各自跑几分钟的 cargo / pyinstaller。让各脚本各写一套 Stopwatch
+# 会漂成几种格式（有的只报总秒数、有的不报），汇总时也没法对齐。
+# 这里给三个函数：起表、读表、按「分钟+秒」中文格式打印。
+
+# 起一个计时器。返回 Stopwatch 对象，用 Format-Elapsed 读用时。
+function Start-LogStopwatch {
+    return [System.Diagnostics.Stopwatch]::StartNew()
+}
+
+# 把耗时格式化成「1 分 23.4 秒」/「45.6 秒」/「1 时 02 分 03 秒」（可读优先，
+# 不用 01:23.4 这类需要心算的写法）。
+function Format-Elapsed {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][TimeSpan]$Elapsed)
+
+    if ($Elapsed.TotalHours -ge 1) {
+        return ("{0} 时 {1:D2} 分 {2:D2} 秒" -f [int]$Elapsed.TotalHours, $Elapsed.Minutes, $Elapsed.Seconds)
+    }
+    if ($Elapsed.TotalMinutes -ge 1) {
+        return ("{0} 分 {1:0.0} 秒" -f [int]$Elapsed.TotalMinutes, $Elapsed.Seconds + $Elapsed.Milliseconds / 1000)
+    }
+    return ("{0:0.0} 秒" -f $Elapsed.TotalSeconds)
+}
+
+# 记一行「<标签> 耗时 <格式化用时>」，同时进控制台与 log\tools\*.log。
+function Log-Elapsed {
+    param(
+        [Parameter(Mandatory = $true)]$Stopwatch,
+        [string]$Label = "总"
+    )
+    Log ("{0} 耗时：{1}" -f $Label, (Format-Elapsed -Elapsed $Stopwatch.Elapsed))
+}
