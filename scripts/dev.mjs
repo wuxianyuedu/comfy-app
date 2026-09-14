@@ -17,6 +17,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveAppPort } from "./app-port.mjs";
+import { probeSchemaSync } from "./db-schema-state.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -46,6 +47,16 @@ const port =
 process.stdout.write(
   `[dev.mjs] COMFYAPP_PORT=${port}${hostname ? ` host=${hostname}` : ""}\n`,
 );
+
+// 表没建时**提前讲清楚**，而不是等页面 500：`/` 与 `/api/health` 在空库上
+// 也都能过（详见 scripts/db-push.mjs 的说明），用户很容易误判成「装好了」。
+// 只警告不退出 —— 前端页面本身可跑，退出会让「只想改 UI」的人被挡住。
+if (probeSchemaSync(root) !== "ready") {
+  process.stdout.write(
+    "[dev.mjs] ⚠ 数据库表还没建（db.sqlite 缺失或为空）——真实业务页面会 500。\n" +
+      "[dev.mjs]   先执行：pnpm db:push（见 docs/standards/launch-and-build.md §9.1）\n",
+  );
+}
 
 const nextArgs = ["exec", "next", "dev", "--turbo", "-p", String(port)];
 // 显式指定监听地址时透传：Windows 上不固定 127.0.0.1 会被解析到 ::1（IPv6），

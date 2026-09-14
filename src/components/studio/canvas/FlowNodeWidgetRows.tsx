@@ -7,11 +7,7 @@ import { Handle, Position } from "@xyflow/react";
 import { portColor, inferInputType, inferIsMultiline } from "@/lib/comfyui/types";
 import { friendlyInputName } from "@/lib/comfyui/node-titles";
 import { renderWidgetValue, valueCellColor, withAlpha, sanitizeComboLabel } from "../workflow-utils";
-import {
-  IoCheckbox,
-  useWiredPinKeysRegistry,
-  type IOEditContextValue,
-} from "./IOEditContext";
+import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import { StringTextarea } from "../StringTextarea";
 import {
   PORT_ROW_TONES,
@@ -44,14 +40,6 @@ export function FlowNodeWidgetRows({
    *  `useRelatedEdgesHighlight` 写在本节点 data 上，行渲染层只读。 */
   const nodeData = data as unknown as Record<string, unknown>;
   const portFocusActive = nodeData[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
-  /* 把本节点这一帧真的渲染出来的 widget 行上报给 IOEdit store —— 对外参数卡片
-   *  的候选端点据此收窄到「真的画得出来、连得上」的那几行（见
-   *  useWiredPinKeysRegistry）。行键就是 handle id（input 名），与映射线两端
-   *  同一套键。 */
-  useWiredPinKeysRegistry(
-    data.nodeId,
-    visibleWidgetEntries.map(([key]) => key),
-  );
   return (
     <div className="relative flex min-h-0 flex-1 flex-col py-0.5">
       {visibleWidgetEntries.map(([k, v], idx) => {
@@ -209,8 +197,8 @@ export function FlowNodeWidgetRows({
                   <span
                     className={
                       isConn
-                        ? "h-2 w-px shrink-0 bg-white/5 opacity-50"
-                        : "h-2 w-px shrink-0 bg-white/5"
+                        ? "bg-border-strong h-2 w-px shrink-0 opacity-50"
+                        : "bg-border-strong h-2 w-px shrink-0"
                     }
                     aria-hidden
                   />
@@ -240,7 +228,7 @@ export function FlowNodeWidgetRows({
                   <StringTextarea value={stringText} hasSize={hasSize} />
                 ) : (
                   <div
-                    className="rounded border border-white/10 bg-black/30 px-2 py-1.5 text-[10.5px] leading-snug text-gray-600"
+                    className="border-border-strong bg-canvas-deep text-ink-fainter rounded border px-2 py-1.5 text-[10.5px] leading-snug"
                     style={{ minHeight: 28 }}
                     title={stringText}
                   >

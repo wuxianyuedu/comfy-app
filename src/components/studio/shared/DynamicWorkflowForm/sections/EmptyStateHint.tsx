@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 export function EmptyStateHint({ emptyHint }: { emptyHint?: ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-white/12 bg-white/2 px-3 py-3 text-[11px] leading-relaxed text-gray-400">
+    <div className="rounded-lg border border-dashed border-border-strong bg-subtle px-3 py-3 text-[11px] leading-relaxed text-ink-soft">
       {emptyHint ?? (
         <>
           该工作流尚未标记对外参数。

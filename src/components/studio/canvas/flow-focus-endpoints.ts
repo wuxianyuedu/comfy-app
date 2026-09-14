@@ -128,25 +128,25 @@ export interface PortRowStyle {
 /** 端口行三档 + 提示档的样式表。端点色相由端口类型决定，这里只管「强弱」。 */
 export const PORT_ROW_TONES: Record<PortRowTone, PortRowStyle> = {
   focused: {
-    background: "rgba(255,255,255,0.05)",
-    labelColor: "var(--color-ink-bright, #f4f4f5)",
+    background: "var(--color-surface-2)",
+    labelColor: "var(--color-ink-bright)",
     labelWeight: 500,
     dotSize: 12,
     dotGlowStrong: true,
   },
   related: {
-    labelColor: "rgb(228 228 231)",
+    labelColor: "var(--color-ink-bright)",
     dotSize: 10,
     dotGlowStrong: false,
   },
   plain: {
-    labelColor: "rgb(228 228 231)",
+    labelColor: "var(--color-ink-bright)",
     dotSize: 10,
     dotGlowStrong: false,
   },
   dimmed: {
     opacity: 0.45,
-    labelColor: "var(--color-ink-fainter, #52525b)",
+    labelColor: "var(--color-ink-fainter)",
     dotSize: 10,
     dotGlowStrong: false,
   },

@@ -1,0 +1,5 @@
+## Fixed
+
+- **`X-(--color-…)` 内联变量写法全量换成语义类名（ISSUE #75 补充批）**：代码里残留的 54 处 `text-(--color-ink-icon)` / `bg-(--color-node-accent)` / `border-(--color-canvas)` 这类「属性前缀 + 内联变量」写法，逐个换成语义类名（`text-ink-icon` / `bg-node-accent`…），涉及项目画布、工作流画布与节点编辑器、共享表单控件共 27 个文件。这批写法**能编出 utility**、`hover:` / `dark:` 也**生效**（此处更正此前「修饰符无效」的说法），问题是它**越过了语义层**：与 `text-ink-muted` 是两份 class，token 改名换值不跟着走，且写错时 tsc / lint 都不报。同类静态内联 `style={{ color: var(--color-…) }}` 与写死的 `#E2E2EA` / `rgb(228 228 231)` / `rgba(255,255,255,0.01)` 一并收口；`var(--color-x, <深色兜底>)` 的兜底去掉（只在变量未定义时生效，看着像浅色安全、实际永远取不到）。
+- **新增 `--color-port-surface` token 修端口圆点浅色下糊成一片**：节点端口圆点的描边原本借用 `--color-canvas`（画布背景色），浅色下画布是浅灰、描边与端点糊在一起；内圈那圈 `rgba(255,255,255,0.25)` 高光在浅色下更是白描白、等于没有。两者改为随主题的 `--color-port-surface`（浅色 = 节点表面白，深色 = 节点内层面板近黑）。
+- **`WorkflowParamCard` 底色、`WorkflowSubgraphNode` 节点底与内层叠层改语义 token**：`var(--color-card, #16161C)` 落到 `bg-card`；子工作流节点底从内联 `transparent` / `var(--color-node)` 三元改为 `bg-node` / `bg-transparent` 类名（bypass 态仍靠 `<NodeFrost>` 透出）；1% 白叠层 `rgba(255,255,255,0.01)` 改 `bg-surface-1`。

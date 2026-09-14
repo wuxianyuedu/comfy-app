@@ -9,11 +9,7 @@ import { Handle, Position } from "@xyflow/react";
 import { portColor } from "@/lib/comfyui/types";
 import { friendlyInputName } from "@/lib/comfyui/node-titles";
 import { sanitizeComboLabel } from "../workflow-utils";
-import {
-  IoCheckbox,
-  useWiredPinKeysRegistry,
-  type IOEditContextValue,
-} from "./IOEditContext";
+import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";
 import {
   OUTPUT_PORT_HANDLE_PREFIX,
@@ -47,12 +43,6 @@ export function FlowNodePinRows({
    *  （与连线标记同一帧算出），行渲染层只读。 */
   const nodeData = data as unknown as Record<string, unknown>;
   const portFocusActive = nodeData[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
-  /* 纯连接输入行同样是合法落点（对外参数落到 `positive_prompt` 这类口上），
-   *  一并上报给 IOEdit store（见 useWiredPinKeysRegistry）。 */
-  useWiredPinKeysRegistry(
-    data.nodeId,
-    uniqueConnEntries.map(([key]) => key),
-  );
   /* 一行两端的 Handle id 不同（输入名 / `out:<输出名>`），但观感要一致：两端的
    * 级别合成一档 —— focused > related > 「都无关」压暗。 */
   const toneOf = (...handles: (string | undefined)[]): PortRowTone => {
@@ -65,7 +55,7 @@ export function FlowNodePinRows({
   };
   return (
     <div
-      className="border-b border-white/5 py-0.5"
+      className="border-border-strong border-b py-0.5"
       style={{ background: "rgba(255,255,255,0.015)" }}
     >
       {Array.from({ length: Math.max(uniqueConnEntries.length, outputs.length) }).map(
@@ -121,7 +111,7 @@ export function FlowNodePinRows({
                     /* 可连接：编辑器里「对外参数节点」的线要落到这一行（端口）。
                      * 连上 / 断开都由映射层负责，工作流图本身不因此改动。 */
                     isConnectable
-                    className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
+                    className="!h-2.5 !w-2.5 !rounded-full !border !border-port-surface"
                     style={{
                       left: 5,
                       background: inCol,
@@ -186,11 +176,11 @@ export function FlowNodePinRows({
                     position={Position.Right}
                     id={`out:${outName}`}
                     isConnectable={false}
-                    className="!rounded-full !border !border-(--color-canvas)"
+                    className="!rounded-full !border !border-port-surface"
                     style={{
                       right: 5,
                       background: outCol,
-                      boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
+                      boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
                       ...(io?.ioEditMode
                         ? {
                             /* IO 编辑模式下端点整体缩到几乎不可见（不误导作者去连

@@ -29,6 +29,7 @@
      from @theme) and are overridden to DARK inside `.dark`. They must be
      kept in sync with the corresponding `.dark { … }` block below. */
   --color-canvas: #f6f7f9; /* 画布/工作区背景 (light default) */
+  --color-port-surface: #ffffff; /* 端口圆点的载体色：节点表面（浅色） */
   --color-canvas-deep: #eef0f4; /* 输入控件/深面板底 (light default) */
   --color-canvas-minimap-mask: rgb(0 0 0 / 0.12); /* 小地图非视口遮罩 (light default) */
   --color-panel: #ffffff; /* 面板/顶栏/浮层 (light default) */
@@ -98,6 +99,7 @@
   --color-primary-soft: #221c3a;
   /* ── immersive / editor surface overrides (see T11 @theme block) ── */
   --color-canvas: #0a0a0f; /* 画布/工作区背景 */
+  --color-port-surface: #0b0b10; /* 端口圆点的载体色：节点内层面板（深色） */
   --color-canvas-deep: #0f0f14; /* 输入控件/深面板底 */
   --color-canvas-minimap-mask: rgb(0 0 0 / 0.78); /* 小地图非视口遮罩 */
   --color-panel: #14141a; /* 面板/顶栏/浮层 */
@@ -155,15 +157,21 @@
   --sidebar-accent-foreground: #ededf2;
   --sidebar-border: #26262e;
   --sidebar-ring: #7c5cfc;
+  --ring-shadow: rgb(255 255 255 / 0.10); /* 浮层 ring（深色下用中性白） */
 }
 
 /* ═══════════════════════════════════════════════════════════════════
    固定暗色清单（Fixed-dark inventory）
    ═══════════════════════════════════════════════════════════════════
-   口径：本应用默认是「随主题走」——所有表面都应引用语义 token
+   口径：本应用**没有任何界面是「暗色品牌页」**——所有表面（含登录页、
+   错误页、404、状态栏、日志面板、浮层）都引用语义 token
    （`--color-canvas*` / `--color-node*` / `--color-panel*` / `--color-ink-*`），
    Light / Dark 两态各自取值。下面这份清单是**例外**：这些位置无论主题
    是什么都保持暗色，属于有意设计，不是遗漏。
+
+   注意「例外」的边界很窄：**整屏**或**结构性表面**（页面底、卡片、面板、
+   控件、状态栏）一律不得进清单，哪怕它在暗色下更好看。曾经被当作「暗色
+   品牌页」而豁免的登录页 / 错误页 / 404，现在一律走 token。
 
    新增表面时的判据（两条都满足才可进本清单）：
      1. 该表面是「内容视图内的极小面积叠层」（浮在画布/预览之上的一小块
@@ -179,8 +187,17 @@
        → `--color-canvas-minimap-mask`
      · 原生 `<select>` / `<option>` 与滚动条
        → `color-scheme` + `--color-node` / `--color-ink-field`
+     · 登录页整屏底 `bg-[#030014]` + 极光
+       → `--color-bg` + 两态极光（浅色 `opacity` 调低且不用 `mix-blend-screen`）
+     · 端口圆点的描边与内圈高光（`border-(--color-canvas)` + `inset 0 0 0
+       1px rgba(255,255,255,0.25)`）
+       → `--color-port-surface`（浅色=节点表面白、深色=节点内层面板近黑）。
+         原写法用的是「画布背景色」当圆点的描边色，浅色下画布是浅灰、
+         描边与点糊在一起；且 25% 白那圈高光在浅色下是**白描白**，
+         等于没有。两处都改随主题。
 
-   当前条目（共 2 条，逐条给出理由）：
+   当前条目（共 2 条，逐条给出理由；两条都是同一类：画布上的**极小面积
+   叠层**）：
    ───────────────────────────────────────────────────────────────────
    1. 画布底部操作提示气泡（WorkflowEditorInner 内 `bg-black/60`）
       理由：它直接叠在画布网格与节点之上，属于「内容视图内的极小面积
@@ -597,6 +614,7 @@ textarea::-webkit-scrollbar {
   --card-foreground: #1a1a1f;
   --popover: #ffffff;
   --popover-foreground: #1a1a1f;
+  --ring-shadow: rgb(0 0 0 / 0.08); /* 浮层 ring（浅色下用中性灰，不用前景色） */
   --primary: #7c5cfc; /* 品牌紫 */
   --primary-foreground: #ffffff;
   --secondary: #f7f8fa;

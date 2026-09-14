@@ -12,12 +12,20 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveAppPort } from "./app-port.mjs";
+import { probeSchemaSync } from "./db-schema-state.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // 显式 `-p` + PORT 双写：前者是 next 的权威参数，后者兜住其它读 PORT 的工具。
 const port = process.env.PORT ?? resolveAppPort(root);
 process.stdout.write(`[start.mjs] COMFYAPP_PORT=${port}\n`);
+
+if (probeSchemaSync(root) !== "ready") {
+  process.stdout.write(
+    "[start.mjs] ⚠ 数据库表还没建（db.sqlite 缺失或为空）——真实业务页面会 500。\n" +
+      "[start.mjs]   先执行：pnpm db:push（见 docs/standards/launch-and-build.md §9.1）\n",
+  );
+}
 
 const result = spawnSync(
   process.platform === "win32" ? "pnpm.cmd" : "pnpm",

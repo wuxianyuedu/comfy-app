@@ -53,7 +53,7 @@ export function Field({
             </span>
           </>
         )}
-        <span className="text-[11px] font-medium text-gray-300">{label}</span>
+        <span className="text-ink-soft text-[11px] font-medium">{label}</span>
       </div>
 
       {/* Input area */}
@@ -176,12 +176,12 @@ export function StatusDot({ status }: { status: CanvasNodeData["status"] }) {
 export function StatusBadge({ status }: { status: CanvasNodeData["status"] }) {
   const style =
     status === "running"
-      ? "bg-amber-400/10 text-amber-300 border-amber-400/20"
+      ? "bg-amber-400/10 text-amber-700 dark:text-amber-300 border-amber-400/20"
       : status === "done"
-        ? "bg-emerald-400/10 text-emerald-300 border-emerald-400/20"
+        ? "bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 border-emerald-400/20"
         : status === "error"
-          ? "bg-rose-400/10 text-rose-300 border-rose-400/20"
-          : "bg-white/5 text-gray-300 border-white/8";
+          ? "bg-rose-400/10 text-rose-700 dark:text-rose-300 border-rose-400/20"
+          : "bg-subtle text-ink-soft border-border-strong";
   return (
     <span
       className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${style}`}
@@ -225,7 +225,7 @@ export function NodeChip({
         {meta.typeChar}
       </span>
       <span
-        className={`truncate font-semibold text-gray-100 ${
+        className={`text-ink-bright truncate font-semibold ${
           isSm ? "text-[11px]" : "text-[13px]"
         }`}
       >

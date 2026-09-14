@@ -1,5 +1,5 @@
 import { PageLoading } from "~/components/ui/page-loading";
 
 export default function Loading() {
-  return <PageLoading className="h-screen w-screen bg-(--color-canvas)" />;
+  return <PageLoading className="h-screen w-screen bg-canvas" />;
 }

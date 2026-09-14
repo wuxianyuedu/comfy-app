@@ -87,12 +87,8 @@ export function WidgetInputRow({
    * 悄悄改成 INT/STRING，用户看到的类型与工作流里的定义对不上。 */
   const typeChip = (
     <span
-      className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
-      style={{
-        fontFamily: "var(--font-sans)",
-        background: "var(--color-border-strong)",
-        color: "var(--color-ink-muted)",
-      }}
+      className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
+      style={{ fontFamily: "var(--font-sans)" }}
     >
       {typeDisplay(entry.type, controlTypeFallback(entry.control))}
     </span>
@@ -132,8 +128,8 @@ export function WidgetInputRow({
             onMouseDown={(ev) => ev.stopPropagation()}
             className={`nodrag nopan shrink-0 rounded px-1.5 py-px text-[10px] font-medium transition-colors ${
               entry.required
-                ? "border border-red-400/40 bg-red-500/15 text-red-300 hover:bg-red-500/25"
-                : "border border-white/8 bg-white/2 text-gray-500 hover:bg-white/6 hover:text-gray-300"
+                ? "border border-red-400/40 bg-red-500/15 text-red-700 dark:text-red-300 hover:bg-red-500/25"
+                : "border border-border-strong bg-subtle text-ink-muted hover:bg-subtle hover:text-ink-soft"
             }`}
           >
             {entry.required ? "必填" : "可选"}
@@ -152,8 +148,8 @@ export function WidgetInputRow({
             onMouseDown={(ev) => ev.stopPropagation()}
             className={`nodrag nopan shrink-0 rounded p-0.5 transition-colors ${
               visible === false
-                ? "text-gray-600 hover:text-gray-300"
-                : "text-gray-300 hover:bg-white/8 hover:text-gray-100"
+                ? "text-ink-fainter hover:text-ink-soft"
+                : "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
             }`}
           >
             {visible === false ? <EyeOff size={11} /> : <Eye size={11} />}
@@ -185,7 +181,7 @@ export function WidgetInputRow({
           )}
           <div className="px-[14px] pt-1.5">{labelRow}</div>
           <div className="px-[14px] pt-1 pb-1.5">
-            <span className="text-[11px] text-gray-500">只接受连线</span>
+            <span className="text-[11px] text-ink-muted">只接受连线</span>
           </div>
         </div>
       );
@@ -198,23 +194,19 @@ export function WidgetInputRow({
         {withHandle && (
           <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />
         )}
-        <div className="flex items-center gap-2 rounded-md bg-(--color-canvas-deep) px-2.5 py-1.5 pr-[14px] pl-[14px]">
+        <div className="flex items-center gap-2 rounded-md bg-canvas-deep px-2.5 py-1.5 pr-[14px] pl-[14px]">
           <span
             className="h-2 w-2 shrink-0 rounded-full"
             style={{ background: accent }}
           />
-          <span className="min-w-0 flex-1 truncate text-[11px] text-(--color-ink-soft)">
+          <span className="min-w-0 flex-1 truncate text-[11px] text-ink-soft">
             {label}
           </span>
           {/* link 行同样打印 pin 真实声明的类型：MODEL / CLIP / LATENT /
               IMAGEUPLOAD 等自定义类型一律原样展示，不回退成 "*"。 */}
           <span
-            className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
-            style={{
-              fontFamily: "var(--font-sans)",
-              background: "var(--color-border-strong)",
-              color: "var(--color-ink-muted)",
-            }}
+            className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
+            style={{ fontFamily: "var(--font-sans)" }}
           >
             {typeDisplay(entry.type)}
           </span>

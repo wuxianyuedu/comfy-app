@@ -253,7 +253,7 @@ export function VideoStudio({
         <button
           type="button"
           onClick={onPrevStage}
-          className="text-muted-foreground hover:text-ink rounded-lg bg-(--color-subtle) px-3 py-1.5 text-xs hover:bg-(--color-surface-2)"
+          className="text-muted-foreground hover:text-ink rounded-lg bg-subtle px-3 py-1.5 text-xs hover:bg-surface-2"
         >
           ← 回镜头生图
         </button>

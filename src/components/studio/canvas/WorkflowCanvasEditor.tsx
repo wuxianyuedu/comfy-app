@@ -29,17 +29,19 @@ function EditorCrashFallback({
   return (
     <FullScreenLayer
       zClass="z-60"
-      className="flex items-center justify-center bg-(--color-canvas)"
+      className="flex items-center justify-center bg-canvas"
     >
       <div className="w-[min(560px,90vw)] rounded-2xl border border-red-500/25 bg-red-500/5 p-6">
-        <p className="text-sm font-semibold text-red-400">编辑器渲染出错</p>
-        <p className="mt-2 break-all text-xs leading-relaxed text-gray-400">
+        <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+            编辑器渲染出错
+          </p>
+        <p className="text-ink-soft mt-2 text-xs leading-relaxed break-all">
           {error?.message ?? "未知错误（详见控制台 componentStack）"}
         </p>
         <button
           type="button"
           onClick={onClose}
-          className="mt-4 rounded-lg bg-white/10 px-4 py-2 text-sm text-gray-200 hover:bg-white/15"
+          className="bg-subtle text-ink-bright hover:bg-surface-2 mt-4 rounded-lg px-4 py-2 text-sm"
         >
           返回工作流库
         </button>
@@ -50,14 +52,11 @@ function EditorCrashFallback({
 
 export function WorkflowCanvasEditor({
   workflowId,
-  /** 打开时落到的模式码（工作流库的画布预览里选的那个）。 */
-  initialMode = null,
   open,
   onClose,
   onSave,
 }: {
   workflowId: string;
-  initialMode?: string | null;
   open: boolean;
   onClose: () => void;
   onSave?: () => void;
@@ -74,7 +73,6 @@ export function WorkflowCanvasEditor({
       <ReactFlowProvider>
         <WorkflowEditorInner
           workflowId={workflowId}
-          initialMode={initialMode}
           onClose={onClose}
           onSave={onSave}
         />

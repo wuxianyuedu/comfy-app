@@ -36,8 +36,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
             自定义节点目录
           </label>
           <span
-            className="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
-            style={{ background: "rgba(16,185,129,0.18)", color: "var(--color-success-strong)" }}
+            className="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-success-strong/18 text-success-strong"
             title="解析器只读取这些目录里的 .py、绝不修改其中任何文件"
           >
             🔒 只读
@@ -64,25 +63,23 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
         )}
         <div className="mt-3 flex items-center justify-between text-xs">
           <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-            {saveErr && <span className="text-red-400">⚠ {saveErr}</span>}
+            {saveErr && <span className="text-red-700 dark:text-red-400">⚠ {saveErr}</span>}
             {/* Directory overview chips — show totals + outdated count when any subpackage is detected. */}
             {totalAcrossParents.total > 0 && (
               <>
-                <span className="rounded-full bg-white/6 px-2 py-0.5 text-ink">
+                <span className="rounded-full bg-subtle px-2 py-0.5 text-ink">
                   总览 {totalAcrossParents.total} 个子包
                 </span>
                 {totalAcrossParents.loaded > 0 && (
                   <span
-                    className="rounded-full px-2 py-0.5 font-medium"
-                    style={{ background: "rgba(16,185,129,0.18)", color: "var(--color-success-strong)" }}
+                    className="rounded-full px-2 py-0.5 font-medium bg-success-strong/18 text-success-strong"
                   >
                     ✓ 已加载 {totalAcrossParents.loaded}
                   </span>
                 )}
                 {totalAcrossParents.outdated > 0 && (
                   <span
-                    className="rounded-full px-2 py-0.5 font-medium"
-                    style={{ background: "rgba(245,158,11,0.22)", color: "var(--color-warning)" }}
+                    className="rounded-full px-2 py-0.5 font-medium bg-warning/22 text-warning"
                   >
                     ↻ 有更新 {totalAcrossParents.outdated}
                   </span>
@@ -122,7 +119,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
           <span className="text-sm font-medium text-ink">
             可导入的节点包
             {totalAcrossParents.outdated > 0 && (
-              <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: "rgba(245,158,11,0.18)", color: "var(--color-warning)" }}>
+              <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium bg-warning/18 text-warning">
                 ↻ {totalAcrossParents.outdated} 个有更新
               </span>
             )}
@@ -178,12 +175,12 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                     <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
                       <span>{total} 个子包</span>
                       {cnt.loaded > 0 && (
-                        <span className="rounded-full px-1.5 py-0.5" style={{ background: "rgba(16,185,129,0.18)", color: "var(--color-success-strong)" }}>
+                        <span className="rounded-full px-1.5 py-0.5 bg-success-strong/18 text-success-strong">
                           ✓ {cnt.loaded}
                         </span>
                       )}
                       {cnt.outdated > 0 && (
-                        <span className="rounded-full px-1.5 py-0.5" style={{ background: "rgba(245,158,11,0.20)", color: "var(--color-warning)" }}>
+                        <span className="rounded-full px-1.5 py-0.5 bg-warning/20 text-warning">
                           ↻ {cnt.outdated}
                         </span>
                       )}
@@ -198,7 +195,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                         </span>
                       )}
                       {cnt.missing > 0 && (
-                        <span className="rounded-full px-1.5 py-0.5" style={{ background: "rgba(245,158,11,0.20)", color: "var(--color-warning)" }}>
+                        <span className="rounded-full px-1.5 py-0.5 bg-warning/20 text-warning">
                           ⚠ {cnt.missing} 不存在
                         </span>
                       )}
@@ -287,7 +284,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                         }));
                                       }
                                     }}
-                                    className="cursor-pointer rounded-md px-1.5 py-1 text-right transition-colors hover:bg-white/5"
+                                    className="cursor-pointer rounded-md px-1.5 py-1 text-right transition-colors hover:bg-subtle"
                                     title={
                                       nodeListOpen
                                         ? "收起节点列表"

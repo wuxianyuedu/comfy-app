@@ -2,7 +2,6 @@
 
 // 详情面板主体：画布预览 / 参数配置 / 源文件三个页签的内容。纯展示。
 
-import { useState } from "react";
 import { Maximize2 } from "lucide-react";
 
 import type { SourceModalData } from "~/components/studio/SourceModal";
@@ -22,9 +21,8 @@ interface DetailBodyProps {
   paramMap: Record<string, unknown>;
   sourceData: SourceModalData | null;
   usable: boolean;
-  /** 在编辑器中打开当前工作流；入参是**当前生效模式** —— 用户在库里选了哪个
-   *  模式，编辑器就落在同一个模式上（不再固定打开默认模式）。 */
-  onEdit: (mode?: string | null) => void;
+  /** 在编辑器中打开当前工作流。 */
+  onEdit: () => void;
   /** 多模式工作流的模式切换（画布预览节点的类型 chip 可点选默认模式）。 */
   meta?: {
     modes: string[];
@@ -54,27 +52,20 @@ export function DetailBody({
    * 一遍无参卡片再被真实 IO 顶掉（整块高度改变 → 页面跳一下），参数页签同
    * 理。统一的处理是「还没就绪就不渲染页签内容」——container 用 min-h-0 撑满
    * 父级，切换不会闪出占位文案，也不会出现半渲染的中间态。 */
-  /* 「在编辑器中打开」要带上的模式：默认取工作流默认模式，用户在画布预览里
-   *  切换模式后跟着它走 —— 编辑器打开时落在同一个模式上，连线与落点不会换成
-   *  另一套（不带的话看起来就像「我连的线丢了」）。 */
-  const [editorMode, setEditorMode] = useState<string | null>(
-    meta?.defaultMode ?? null,
-  );
-
   if (isLoading) return null;
 
   return (
     <>
       {activeTab === "canvas" && (
-        <div className="flex h-full min-h-[420px] flex-col rounded-2xl border border-(--color-border) bg-(--color-panel-deep) p-1">
+        <div className="flex h-full min-h-[420px] flex-col rounded-2xl border border-border bg-panel-deep p-1">
           <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-xs font-medium text-(--color-ink-faint)">
+            <span className="text-xs font-medium text-ink-faint">
               画布样式预览（与项目画布节点一致，可直接运行调试）
             </span>
             <button
               type="button"
-              onClick={() => onEdit(editorMode)}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-violet-600 transition-colors hover:bg-violet-500/10"
+              onClick={onEdit}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-violet-700 dark:text-violet-300 transition-colors hover:bg-violet-500/10"
             >
               <Maximize2 className="h-3 w-3" />
               在编辑器中打开
@@ -98,7 +89,6 @@ export function DetailBody({
               modes={meta?.modes}
               defaultMode={meta?.defaultMode}
               onModeChange={(code) => {
-                setEditorMode(code);
                 meta?.onModeChange(code);
               }}
               onSeedModeChange={onSeedModeChange}
@@ -120,13 +110,13 @@ export function DetailBody({
       )}
 
       {activeTab === "source" && (
-        <div className="rounded-2xl border border-(--color-border) bg-(--color-panel-deep) p-1">
+        <div className="rounded-2xl border border-border bg-panel-deep p-1">
           <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-xs font-medium text-(--color-ink-faint)">
+            <span className="text-xs font-medium text-ink-faint">
               {sourceData?.isApiFallback ? "可执行图（无原始文件）" : "原始导入 JSON"}
             </span>
           </div>
-          <div className="max-h-[70vh] overflow-auto rounded-xl bg-black/30">
+          <div className="max-h-[70vh] overflow-auto rounded-xl bg-canvas-deep">
             {sourceData?.source != null ? (
               <JsonViewer
                 data={sourceData.source}
@@ -134,7 +124,7 @@ export function DetailBody({
                 initialCollapsedDepth={2}
               />
             ) : (
-              <p className="px-4 py-10 text-center text-xs text-(--color-ink-fainter)">暂无源文件数据</p>
+              <p className="px-4 py-10 text-center text-xs text-ink-fainter">暂无源文件数据</p>
             )}
           </div>
         </div>

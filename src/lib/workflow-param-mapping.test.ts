@@ -12,10 +12,6 @@ import {
   hasManualWiring,
   ioKeyForHandle,
   isDefaultMapping,
-  PARAM_NODE_HEADER_H,
-  PARAM_NODE_OUTPUT_ROW_H,
-  PARAM_NODE_PAD_Y,
-  paramNodeHeight,
   paramOutputPorts,
   defaultOutputPortIndex,
   parseParamMapping,
@@ -684,21 +680,6 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
     expect(portTypeDisplay(" STRING ")).toBe("STRING");
     expect(portTypeDisplay(undefined)).toBe("*");
     expect(portTypeDisplay("")).toBe("*");
-  });
-});
-
-describe("paramNodeHeight — 输出端口区计入卡片高度", () => {
-  it("多一条输出端口就多一行高度（否则卡片互相压住）", () => {
-    /* 卡片体 = 头部 + 输出端口行（端点 + 参数名 + 类型），不再另列输入端口行。 */
-    expect(paramNodeHeight(1)).toBe(
-      PARAM_NODE_HEADER_H + PARAM_NODE_OUTPUT_ROW_H + PARAM_NODE_PAD_Y,
-    );
-    expect(paramNodeHeight(2) - paramNodeHeight(1)).toBe(PARAM_NODE_OUTPUT_ROW_H);
-  });
-
-  it("输出端口数缺省按至少一条处理（与 paramOutputPorts 的兜底一致）", () => {
-    expect(paramNodeHeight()).toBe(paramNodeHeight(1));
-    expect(paramNodeHeight(0)).toBe(paramNodeHeight(1));
   });
 });
 

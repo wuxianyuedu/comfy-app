@@ -21,11 +21,11 @@ const STATUS_META: Record<
   string,
   { icon: string; label: string; cls: string }
 > = {
-  QUEUED: { icon: "hourglass", label: "排队中", cls: "text-gray-500" },
-  RUNNING: { icon: "zap", label: "生成中", cls: "text-amber-400" },
-  SUCCEEDED: { icon: "check", label: "已完成", cls: "text-emerald-400" },
-  FAILED: { icon: "x", label: "失败", cls: "text-red-400" },
-  CANCELLED: { icon: "ban", label: "已取消", cls: "text-gray-600" },
+  QUEUED: { icon: "hourglass", label: "排队中", cls: "text-ink-muted" },
+  RUNNING: { icon: "zap", label: "生成中", cls: "text-amber-600 dark:text-amber-400" },
+  SUCCEEDED: { icon: "check", label: "已完成", cls: "text-emerald-600 dark:text-emerald-400" },
+  FAILED: { icon: "x", label: "失败", cls: "text-red-600 dark:text-red-400" },
+  CANCELLED: { icon: "ban", label: "已取消", cls: "text-ink-fainter" },
 };
 
 export interface VideoQueueModalProps {
@@ -131,35 +131,35 @@ export function VideoQueueModal({
   ).length;
 
   return (
-    <div className={overlayClass("modal", "z-9998 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm")}>
-      <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-(--color-node) shadow-2xl">
+    <div className={overlayClass("modal", "z-9998 flex items-center justify-center bg-black/25 p-4 backdrop-blur-sm dark:bg-black/60")}>
+      <div className="bg-node border-border-strong flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/20 dark:shadow-black/50">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/6 px-5 py-3.5">
+        <div className="border-border-strong flex items-center justify-between border-b px-5 py-3.5">
           <div className="flex items-center gap-3">
             <h3 className="u-title">视频生成队列</h3>
             {runningCount > 0 && (
-              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-400">
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-400">
                 {runningCount} 个进行中
               </span>
             )}
             <button
               type="button"
               onClick={loadTasks}
-              className="text-[11px] text-gray-500 transition-colors hover:text-violet-300"
+              className="text-ink-muted text-[11px] transition-colors hover:text-violet-800 dark:text-violet-300 dark:hover:text-violet-300"
               title="刷新"
             >
               ↻ 刷新
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex rounded-lg bg-white/4 p-0.5">
+            <div className="bg-subtle flex rounded-lg p-0.5">
               <button
                 type="button"
                 onClick={() => setTab("queue")}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                   tab === "queue"
-                    ? "bg-white/10 text-gray-100"
-                    : "text-gray-500 hover:text-gray-300"
+                    ? "bg-surface-2 text-ink-bright"
+                    : "text-ink-muted hover:text-ink-soft"
                 }`}
               >
                 生成队列
@@ -169,8 +169,8 @@ export function VideoQueueModal({
                 onClick={() => setTab("draft")}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                   tab === "draft"
-                    ? "bg-white/10 text-gray-100"
-                    : "text-gray-500 hover:text-gray-300"
+                    ? "bg-surface-2 text-ink-bright"
+                    : "text-ink-muted hover:text-ink-soft"
                 }`}
               >
                 批量提交（{draft.length}）
@@ -179,7 +179,7 @@ export function VideoQueueModal({
             <button
               type="button"
               onClick={onClose}
-              className="text-gray-500 hover:text-gray-300"
+              className="text-ink-muted hover:text-ink-soft"
               aria-label="关闭"
             >
               <X size={16} />
@@ -192,11 +192,11 @@ export function VideoQueueModal({
           {tab === "queue" ? (
             <div className="space-y-3">
               {loading && tasks.length === 0 ? (
-                <p className="py-10 text-center text-xs text-gray-600">
+                <p className="text-ink-fainter py-10 text-center text-xs">
                   加载中…
                 </p>
               ) : tasks.length === 0 ? (
-                <p className="py-10 text-center text-xs text-gray-600">
+                <p className="text-ink-fainter py-10 text-center text-xs">
                   暂无视频生成任务。切到「批量提交」添加分镜，或在创作台「视频」模式直接生成。
                 </p>
               ) : (
@@ -205,9 +205,9 @@ export function VideoQueueModal({
                   return (
                     <div
                       key={task.id}
-                      className="flex items-center gap-3 rounded-xl border border-white/6 bg-white/2 p-3"
+                      className="border-border-strong bg-subtle flex items-center gap-3 rounded-xl border p-3"
                     >
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black/40">
+                      <div className="bg-canvas-deep flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
                         {task.video ? (
                           <MediaThumbnail
                             src={task.video}
@@ -218,13 +218,13 @@ export function VideoQueueModal({
                           <Icon
                             name="film"
                             size={18}
-                            className="text-gray-500"
+                            className="text-ink-muted"
                           />
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="mb-0.5 flex items-center gap-2">
-                          <span className="font-mono text-xs text-violet-300">
+                          <span className="font-mono text-xs text-violet-700 dark:text-violet-300">
                             V{String(index + 1).padStart(2, "0")}
                           </span>
                           <span
@@ -235,17 +235,17 @@ export function VideoQueueModal({
                           </span>
                         </div>
                         <p
-                          className="truncate text-xs text-gray-400"
+                          className="text-ink-soft truncate text-xs"
                           title={task.prompt}
                         >
                           {task.prompt || "（无提示词）"}
                         </p>
-                        <p className="mt-0.5 truncate font-mono text-[10px] text-gray-600">
+                        <p className="text-ink-fainter mt-0.5 truncate font-mono text-[10px]">
                           {task.workflowName}
                         </p>
                         {task.status === "FAILED" && task.error && (
                           <p
-                            className="mt-0.5 truncate text-[10px] text-red-400"
+                            className="mt-0.5 truncate text-[10px] text-red-700 dark:text-red-400"
                             title={task.error}
                           >
                             {task.error}
@@ -256,7 +256,7 @@ export function VideoQueueModal({
                         <button
                           type="button"
                           onClick={() => onOpenTask?.(task.id)}
-                          className="rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-gray-300 transition-colors hover:bg-white/5"
+                          className="border-border-strong text-ink-soft hover:bg-subtle rounded-md border px-2.5 py-1 text-[11px] transition-colors"
                         >
                           详情
                         </button>
@@ -264,7 +264,7 @@ export function VideoQueueModal({
                           <a
                             href={task.video}
                             download
-                            className="rounded-md bg-violet-500/20 px-2.5 py-1 text-[11px] text-violet-300 transition-colors hover:bg-violet-500/30"
+                            className="rounded-md bg-violet-500/20 px-2.5 py-1 text-[11px] text-violet-700 dark:text-violet-300 transition-colors hover:bg-violet-500/30"
                           >
                             下载
                           </a>
@@ -275,22 +275,24 @@ export function VideoQueueModal({
                 })
               )}
               {error && (
-                <p className="text-center text-xs text-red-400">{error}</p>
+                <p className="text-center text-xs text-red-700 dark:text-red-400">
+            {error}
+          </p>
               )}
             </div>
           ) : (
             <div className="space-y-3">
               {draft.length === 0 ? (
-                <p className="py-8 text-center text-xs text-gray-600">
+                <p className="text-ink-fainter py-8 text-center text-xs">
                   暂无待提交分镜。在下方逐个添加提示词（每行一个），或粘贴工坊分镜批量导入。
                 </p>
               ) : (
                 draft.map((draftItem, index) => (
                   <div
                     key={`draft-${index}`}
-                    className="flex items-start gap-2 rounded-xl border border-white/6 bg-white/2 p-3"
+                    className="border-border-strong bg-subtle flex items-start gap-2 rounded-xl border p-3"
                   >
-                    <span className="mt-1 font-mono text-xs text-violet-300">
+                    <span className="mt-1 font-mono text-xs text-violet-700 dark:text-violet-300">
                       V{String(index + 1).padStart(2, "0")}
                     </span>
                     <textarea
@@ -306,14 +308,14 @@ export function VideoQueueModal({
                       }
                       rows={2}
                       placeholder="分镜提示词，含镜头运动描述…"
-                      className="min-w-0 flex-1 resize-none rounded-lg border border-white/8 bg-white/4 px-3 py-2 text-xs text-gray-200 outline-none placeholder:text-gray-600 focus:border-violet-500/40"
+                      className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-fainter min-w-0 flex-1 resize-none rounded-lg border px-3 py-2 text-xs outline-noneray-600 focus:border-violet-500/40"
                     />
                     <button
                       type="button"
                       onClick={() =>
                         setDraft((arr) => arr.filter((_, j) => j !== index))
                       }
-                      className="mt-1 text-gray-500 transition-colors hover:text-red-400"
+                      className="text-ink-muted mt-1 transition-colors hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
                       aria-label="删除"
                     >
                       <Trash size={14} />
@@ -326,7 +328,7 @@ export function VideoQueueModal({
                 <button
                   type="button"
                   onClick={() => setDraft((arr) => [...arr, { prompt: "" }])}
-                  className="rounded-lg border border-dashed border-white/10 px-3 py-1.5 text-xs text-gray-400 transition-colors hover:border-violet-500/30 hover:text-violet-300"
+                  className="border-border-strong text-ink-soft rounded-lg border border-dashed px-3 py-1.5 text-xs transition-colors hover:border-violet-500/30 hover:text-violet-700 dark:text-violet-300"
                 >
                   ＋ 添加一行
                 </button>
@@ -351,14 +353,16 @@ export function VideoQueueModal({
                 />
                 <label
                   htmlFor="vq-import"
-                  className="cursor-pointer rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-400 transition-colors hover:bg-white/5"
+                  className="border-border-strong text-ink-soft hover:bg-subtle cursor-pointer rounded-lg border px-3 py-1.5 text-xs transition-colors"
                 >
                   导入 txt/csv
                 </label>
               </div>
 
               {error && (
-                <p className="text-center text-xs text-red-400">{error}</p>
+                <p className="text-center text-xs text-red-700 dark:text-red-400">
+            {error}
+          </p>
               )}
             </div>
           )}
@@ -366,8 +370,8 @@ export function VideoQueueModal({
 
         {/* Footer */}
         {tab === "draft" && (
-          <div className="flex items-center justify-between border-t border-white/6 px-5 py-3.5">
-            <span className="text-[11px] text-gray-500">
+          <div className="border-border-strong flex items-center justify-between border-t px-5 py-3.5">
+            <span className="text-ink-muted text-[11px]">
               提交后将进入「生成队列」并实时刷新
             </span>
             <button
