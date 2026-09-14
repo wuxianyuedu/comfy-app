@@ -14,13 +14,14 @@
 //
 // HMR 安全：单飞锁与子进程句柄挂在 globalThis 上（同 comfyui），模块重载不重复拉起。
 
-import { spawn, exec } from "child_process";
+import { spawn } from "child_process";
 import { connect } from "net";
 import fs from "fs";
 import path from "path";
 import { logger } from "~/server/lib/logger";
 import { openUrlInBrowser } from "~/lib/open-in-browser";
 import { DRIZZLE_STUDIO_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log-paths";
+import { killProcessTree } from "~/lib/kill-process-tree";
 
 /** drizzle-kit studio 默认监听端口。 */
 export const DRIZZLE_STUDIO_DEFAULT_PORT = 4983;
@@ -260,8 +261,8 @@ export async function ensureDrizzleStudioUp(
 
 /**
  * 关闭 Drizzle Studio：杀整棵进程树。
- * Windows 必须 taskkill /PID <pid> /T /F（cmd/pnpm 外壳单杀会留下 node 孤儿
- * 锁端口，AGENTS 硬规则 3）；POSIX kill(-pid) 杀进程组。
+ * 平台判据在 `~/lib/kill-process-tree`：Windows taskkill /PID /T /F，
+ * POSIX 杀进程组（AGENTS 硬规则 3，禁止单杀留孤儿）。
  */
 export async function stopDrizzleStudio(
   port = DRIZZLE_STUDIO_DEFAULT_PORT,
@@ -278,21 +279,12 @@ export async function stopDrizzleStudio(
         }
       : { ok: true, detail: "Drizzle Studio 未在运行" };
   }
-  await new Promise<void>((resolve) => {
-    if (process.platform === "win32") {
-      // Windows 必须 taskkill /T /F 杀整树（AGENTS 硬规则 3）：单杀父进程会
-      // 留下 node 子进程锁端口。
-      exec(`taskkill /PID ${pid} /T /F`, () => resolve());
-    } else {
-      // POSIX：drizzle-kit 是单进程，未 detached（与父同组），直接单杀即可。
-      try {
-        child.kill("SIGTERM");
-      } catch {
-        /* already dead */
-      }
-      resolve();
-    }
-  });
+  // 回收整棵进程树（AGENTS 硬规则 3）：Windows taskkill /T /F，POSIX 杀进程组。
+  // 平台判据集中在 kill-process-tree。旧实现的 POSIX 分支直接单杀 —— 虽然
+  // drizzle-kit 多为单进程，但 pnpm/npm 外壳之下仍可能带出 node 子进程，
+  // 单杀会留下锁端口的孤儿。
+  const kill = await killProcessTree({ pid, detached: false });
+  logger.info(`[drizzle-studio] 回收进程树：${kill.via}`);
   st.child = undefined;
   for (let i = 0; i < 8; i++) {
     await new Promise((r) => setTimeout(r, 400));

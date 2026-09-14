@@ -14,7 +14,7 @@
 //
 // HMR 安全：启动单飞锁与子进程句柄挂在 globalThis 上，模块重载不会重复拉起。
 
-import { spawn, exec } from "child_process";
+import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import {
@@ -28,6 +28,7 @@ import { resolveComfyLaunchPlan } from "./launch-path";
 import { resolveEffectiveLaunch } from "./desktop-instance";
 import { findPidForMainPy, findPidListeningPort } from "./proc-detect";
 import { spawnManaged, waitForDetachMediator } from "../process-launch";
+import { killProcessTree } from "../kill-process-tree";
 import {
   getComfyRuntimeSnapshot,
   resetComfyRuntimeSnapshot,
@@ -70,6 +71,11 @@ type EnsureResult = { ok: boolean; base: string | null; detail: string };
 
 type LifecycleGlobal = {
   child?: ReturnType<typeof spawn>;
+  /** 当前 `child` 是否以 detached 方式拉起（= POSIX 下的进程组组长）。
+   *  keepAlive 走 `spawn({detached:true})`，bound 是普通 spawn —— 回收时
+   *  「能不能杀进程组」全看这个标记，判错不报错、只静默留孤儿（见
+   *  kill-process-tree 的实测对照）。 */
+  childDetached?: boolean;
   starting?: Promise<EnsureResult>;
   /** 用户点了「关闭 ComfyUI」：启动等待循环见到它就中止，不再报「秒退」。 */
   stopRequested?: boolean;
@@ -165,8 +171,8 @@ export async function probeComfyUi(_timeoutMs = 2500): Promise<string | null> {
 /**
  * 关闭 ComfyUI：杀整棵进程树。
  * Windows 用 `taskkill /PID <pid> /T /F`（cmd 外壳死了不杀子进程会留下
- * python 孤儿锁住端口与日志文件）；POSIX 杀整个进程组（spawn 时未设
- * detached，子进程与父进程同组，退而求其次单杀 + 兜底探测确认）。
+ * python 孤儿锁住端口与日志文件）；POSIX 由 `killProcessTree` 向进程组
+ * 发信号（拿不到组时单杀兜底），两条路径都收在 `~/lib/kill-process-tree`。
  *
  * 两种来源都能关：
  *   - bound（默认）：本进程持着子进程句柄 st.child，直接以其 PID 杀树；
@@ -236,29 +242,18 @@ export async function stopComfyUiProcess(): Promise<{
 
   const kind = stopDecision.kindLabel;
   appendRuntimeLog(`[stop] 用户要求关闭 ComfyUI，目标：${kind}（pid=${pid}）`);
-  await new Promise<void>((resolve) => {
-    if (process.platform === "win32") {
-      exec(`taskkill /PID ${pid} /T /F`, () => resolve());
-    } else {
-      if (child) {
-        try {
-          child.kill("SIGTERM");
-        } catch {
-          /* already dead */
-        }
-      } else {
-        // 无句柄（keepAlive / 接管场景）：进程已脱离本进程组，只能单杀 PID，
-        // 兜底交给下面的「仍未响应」提示让用户手动确认。
-        try {
-          process.kill(pid, "SIGTERM");
-        } catch {
-          /* already dead */
-        }
-      }
-      resolve();
-    }
-  });
-  if (st.child === child) st.child = undefined;
+  // 回收整棵进程树（AGENTS 硬规则 3）：Windows taskkill /T /F，POSIX 杀进程组。
+  // 平台判据集中在 kill-process-tree，这里不再自己摸 process.platform —— 旧实现
+  // 的 POSIX 分支只单杀 leader，python 子进程会残留成孤儿锁端口（实测复现）。
+  // detached 取实际拉起方式：bound（本进程 spawn）为 false；keepAlive 的 POSIX
+  // 分支是 `spawn({detached:true})`（组长），无句柄的接管场景也按 guard 时的
+  // 标记传 —— 只有传对它才能命中 `kill(-pid)` 的进程组路径。
+  const kill = await killProcessTree({ pid, detached: st.childDetached === true });
+  appendRuntimeLog(`[stop] 回收进程树：${kill.via}`);
+  if (st.child === child) {
+    st.child = undefined;
+    st.childDetached = undefined;
+  }
   // 给进程一点退出时间，再探测确认。每轮结果都收集起来，由纯函数给出结论
   // （«最后一轮是否仍可达» 即「关了没有」），避免把判据散在循环与收尾两处。
   const stopProbes: (string | null)[] = [];
@@ -924,6 +919,8 @@ export async function ensureComfyUiReady(
       return { ok: false, base: null, detail };
     }
     st.child = child;
+    // bound 是普通 spawn（与父同组），POSIX 上拿不到独立进程组 → 单杀兜底。
+    st.childDetached = false;
     st.stopRequested = false;
     clearComfyStopping();
     appendRuntimeLog(

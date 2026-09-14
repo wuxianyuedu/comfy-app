@@ -102,7 +102,15 @@ Comfy-APP-T3/
 
 ## 环境要求
 
+仅开发前端（Windows / Linux / macOS 均可）：
+
 - **Node.js** ≥ 22 与 **pnpm** 10（`corepack enable` 或直接安装 pnpm）
+- 其他都不用装：`pnpm dev` 是一条纯 Node 链路，**不依赖 PowerShell / Rust /
+  WebView2**。Linux / macOS 上按下方「快速上手」跑起来即可（详见
+  [规范 §9 Web-only Linux 模式](docs/standards/launch-and-build.md#9-web-only-linux-模式pnpm-dev-零-ps1-依赖)）。
+
+要打包/运行**桌面壳**时另需（仅 Windows）：
+
 - **Rust 工具链**（cargo / rustc）：用于编译桌面壳，见 https://rustup.rs/
 - **PowerShell 7（pwsh）**：启动器推荐；Windows PowerShell 5.1 亦可回退
 - **WebView2 运行时**：Windows 10/11 通常已内置
@@ -169,6 +177,8 @@ cp .env.example .env
 #    再按需编辑：至少把 BETTER_AUTH_SECRET 换成 64 位随机 hex，
 #    GitHub OAuth 本地调试可保留占位值；DATABASE_URL 保持 file:./db.sqlite 即可
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+#    ⚠️ BETTER_AUTH_GITHUB_CLIENT_ID / _SECRET 必须填非空值（占位即可）：
+#    src/env.js 启动时强制校验，留空会报 Invalid environment variables
 
 # 3. 初始化数据库（Drizzle，按 drizzle.config.ts）
 pnpm db:push

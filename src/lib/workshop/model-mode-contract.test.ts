@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow-types";
 import {
+  adapterInputsFromContract,
   builtInModeContract,
   contractToStatusEntries,
   isModeContractInputId,
   nextReferenceImageId,
+  modeContractInputLabel,
   parseModeContracts,
   referenceImageSlotIndex,
   WORKSHOP_INPUT_TYPES,
@@ -90,5 +92,35 @@ describe("模式契约口 id 值域", () => {
       "image",
     ]);
     expect(entries[3]?.label).toBe("参考图 2");
+  });
+});
+
+describe("模式契约的「尺寸」口与统一尺寸口径一致", () => {
+  it("尺寸口的展示名写明两类表达（比例 + 分辨率 · 百万像素 + 倍数）", () => {
+    const label = modeContractInputLabel("size");
+    expect(label).toContain("分辨率");
+    expect(label).toContain("百万像素");
+    expect(label).toContain("倍数");
+  });
+
+  it("契约的 size 口在适配器层展开成「比例 + 百万像素 + 倍数」三行", () => {
+    /* 用户口径：需要「比例 + 百万像素 + 倍数」的工作流直接收这三个值；
+     *  远端接口的请求体字段名由这三行各自映射。 */
+    const rows = adapterInputsFromContract({
+      mode: "T2I",
+      inputs: ["prompt", "size"],
+      output: "image",
+    });
+    expect(rows).toEqual([
+      { type: "prompt", field: "prompt" },
+      { type: "aspect-ratio", field: "aspect_ratio" },
+      { type: "megapixels", field: "megapixels" },
+      { type: "multiple", field: "multiple" },
+    ]);
+  });
+
+  it("multiple 是适配器侧的细分类型，不混进契约口 id 值域", () => {
+    expect(WORKSHOP_INPUT_TYPES.map((t) => t.type)).toContain("multiple");
+    expect(isModeContractInputId("multiple")).toBe(false);
   });
 });

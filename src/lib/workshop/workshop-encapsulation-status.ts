@@ -1,8 +1,8 @@
 // ── 工作流库 → 工坊「对外参数封装」状态派生（规范 §17.2 第①层）──────────
 // 回答两个问题（与实际生成链路同口径）：
 //   ① 这条工作流在工坊里能不能直接用 —— 契约必备口「提示词」是否已有落点；
-//   ② 工坊会用哪些控件驱动它（提示词 / 尺寸【宽高比 + 百万像素】/ 参考图…），
-//      每个口落到了哪个 IO 端口、哪些还没落（未配置必须显式可见）。
+//   ② 工坊会用哪些控件驱动它（提示词 / 尺寸【比例 + 分辨率 · 百万像素 + 倍数】/
+//      参考图…），每个口落到了哪个 IO 端口、哪些还没落（未配置必须显式可见）。
 //
 // 契约条目来自 workflow-exposed-params（按模式），落点解析来自
 // workflow-param-mapping（自动判定 + 作者落点覆盖）——与
@@ -15,15 +15,17 @@ import {
   resolveMapping,
 } from "~/lib/workflow-param-mapping";
 import { exposedParamsForMode } from "~/lib/workflow-exposed-params";
+import { modeContractInputLabel } from "~/lib/workshop/model-mode-contract";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 
-/** 工坊控件形态：尺寸在工坊里是「宽高比 + 百万像素」组合控件，时长是秒数选择。 */
+/** 工坊控件形态：尺寸在工坊里是「比例 + 分辨率 / 百万像素 + 倍数」组合控件，
+ *  时长是秒数选择。 */
 export type EncapsulationControl = "text" | "size" | "image" | "duration";
 
 export interface EncapsulationEntryStatus {
   /** 契约内稳定键（prompt / negative / size / first-frame / reference-image…）。 */
   id: string;
-  /** 展示名（size 按工坊控件形态显示「尺寸（宽高比 + 百万像素）」）。 */
+  /** 展示名（size 与模式契约编辑器同一份措辞，见 `modeContractInputLabel`）。 */
   label: string;
   control: EncapsulationControl;
   /** 生效落点（IO 端口键）；null = 还没落到任何端口（未配置）。 */
@@ -55,9 +57,11 @@ function controlFor(id: string): EncapsulationControl {
   return "text";
 }
 
-/** 展示名：size 按工坊控件的真实形态说话，其余用契约自带 label。 */
+/** 展示名：size 按工坊控件的真实形态说话（与模式契约编辑器同一份措辞，
+ *  单一出处 = `MODE_CONTRACT_INPUT_TYPES`；两处各写一份字符串必然漂移），
+ *  其余用契约自带 label。 */
 function displayLabel(id: string, label: string): string {
-  if (id === "size") return "尺寸（宽高比 + 百万像素）";
+  if (id === "size") return modeContractInputLabel("size");
   return label;
 }
 

@@ -20,9 +20,23 @@ function Get-Fnv1a32([string]$Text) {
   return $h
 }
 
+# 规范化检出路径：转正斜杠 + 转小写 + 去尾斜杠（跨四语言约定，§1.1）。
+# 只对**相对路径**做 GetFullPath —— 绝对路径原样处理，禁止无条件拼 cwd
+# （Node / Python 侧历史实现都栽在这里：同一检出在不同 cwd 下推出不同端口，
+#  与「同一检出恒定同端口」的多检出并行承诺矛盾，详见 scripts/app-port.mjs）。
+function Get-NormalizedRootForPort([string]$RootPath) {
+  $raw = if ($null -eq $RootPath) { '' } else { [string]$RootPath }
+  # Windows 盘符绝对路径（F:\ 或 F:/）与 UNC（\\）在 POSIX 上
+  # IsPathRooted 认不出，必须显式判据；否则会被当相对路径拼上 cwd。
+  $winAbsolute = ($raw -match '^[a-zA-Z]:[\\/]') -or ($raw.StartsWith('\\'))
+  $absolute = $winAbsolute -or [System.IO.Path]::IsPathRooted($raw)
+  $resolved = if ($absolute) { $raw } else { [System.IO.Path]::GetFullPath($raw) }
+  return $resolved.Replace('\', '/').ToLowerInvariant().TrimEnd('/')
+}
+
 function Get-AppPortFromRoot([string]$RootPath) {
   try {
-    $normalized = ([System.IO.Path]::GetFullPath($RootPath)).Replace('\', '/').ToLowerInvariant()
+    $normalized = Get-NormalizedRootForPort $RootPath
     return [int](3200 + ((Get-Fnv1a32 $normalized) % 800))
   } catch {
     return 3100
