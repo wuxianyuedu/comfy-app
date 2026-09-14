@@ -98,10 +98,10 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
                 comfyuiPort: Math.max(0, Number(value) || 0),
               })
             }
-            placeholder="留空使用默认 8188"
+            placeholder={`留空使用默认 ${c.comfyDefaultPort}`}
           />
           <p className="text-muted-foreground -mt-2 mb-3 text-xs">
-            非 8188 端口会在启动时自动传 --port。这里填的是默认端口：实例已经
+            填了别的端口，启动时会自动传 --port。这里填的是默认端口：实例已经
             由别的方式（Comfy Desktop、你自己的终端）跑起来时，应用会直接按
             实例进程实际监听的端口连——端口不一致也不需要改这里。
           </p>
