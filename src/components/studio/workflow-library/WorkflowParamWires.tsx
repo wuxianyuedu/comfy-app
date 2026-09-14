@@ -22,8 +22,9 @@
  * 宿主表单行的高度也随控件类型变化 —— 只有量出来的才是真的。量不到就拿不到
  * 锚点，那条线不画（不留悬空线头）。
  *
- * 自动判定出来的落点画虚线、作者改过的画实线，与编辑器画布同一套语义（见
- * workflow-editor/workflow-param-edges.ts）。
+ * 自动判定出来的落点画虚线、作者改过的画实线 —— 判据与落点解析同源
+ * （`lib/workflow-param-mapping` 的 `resolveMapping` / `manualTargetForEntry`），
+ * 不在这里另算一份。
  */
 
 import { useEffect, useRef, useState } from "react";

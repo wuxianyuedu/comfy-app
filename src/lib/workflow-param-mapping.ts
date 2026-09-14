@@ -290,8 +290,8 @@ export function paramOutputPorts(
     type: portTypeDisplay(type),
     connected,
     ioKey,
-    /* 库里那层只读连线按「端口名」找圆点锚点（一张卡上一个候选一颗点），所以
-     * handle id 取端口名；画布手势另走 ioKey（见 WorkflowParamNode 的说明）。 */
+    /* 库内连线层按「端口名」找圆点锚点（一张卡上一个候选一颗点），所以 handle id
+     * 取端口名；落点本身仍是 ioKey 键空间（`ioKey` 字段），两者不能混。 */
     handleId: name || fallbackHandleId(entry),
     active,
   });
