@@ -14,7 +14,6 @@ import {
   type EnrichedWidget,
   type WorkflowIOEntry,
 } from "~/components/studio/shared/workflow-io";
-import { WIRE_DIRECTION_ATTR } from "~/lib/workflow-io-types";
 import { ACCENT } from "../constants";
 import { controlTypeFallback } from "../dynamic-workflow-form-config";
 import { WidgetControl } from "./WidgetControl";
@@ -47,11 +46,6 @@ interface WidgetInputRowProps {
    *  节点重复命名很常见），边会接到同名 handle 的第一处 —— 表现就是「线连到了
    *  别的节点上」。缺省仍用 ioKey（画布未富化时它就是唯一键）。 */
   handleId?: string;
-  /** 映射连线的**落点锚点**值（`data-io-pins`）。
-   *
-   *  卡片连线要落到「是哪一行/哪一档控件」上：独立参数行就是它自己的 ioKey，
-   *  组合控件覆盖的端口则写「这块控件覆盖的全部端口」。缺省用 ioKey。 */
-  wirePins?: string;
   /** 行尾附加的只读徽标（工作流库画布节点用它标出该参数连到的「对外参数」）。
    *  缺省不渲染——画布 / 表单等等价场景不受影响。 */
   trailing?: ReactNode;
@@ -75,7 +69,6 @@ export function WidgetInputRow({
   dimmed = false,
   withHandle = false,
   handleId,
-  wirePins,
   trailing,
 }: WidgetInputRowProps) {
   const accent = ACCENT[entry.control];
@@ -167,9 +160,6 @@ export function WidgetInputRow({
         <div
           className={`relative ${dimmed ? "opacity-50" : ""}`}
           data-io-key={entry.ioKey}
-          data-io-pins={wirePins ?? entry.ioKey}
-          /* 方向：这一行是**输入**参数行（拖输出卡片的圆点只能落在输出行上）。 */
-          {...{ [WIRE_DIRECTION_ATTR]: "input" }}
         >
           {withHandle && (
             <PortHandle
@@ -189,7 +179,6 @@ export function WidgetInputRow({
     return (
       <div
         className={`relative ${dimmed ? "opacity-50" : ""}`}
-        data-io-pins={wirePins ?? entry.ioKey}
       >
         {withHandle && (
           <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />
@@ -236,12 +225,9 @@ export function WidgetInputRow({
     return (
       <div
         className={`relative ${dimmed ? "opacity-50" : ""}`}
-        /* 行锚点：库画布的映射连线需要量出这一行的位置（ioKey 即端口名）；
-         * data-io-pins 是「落到这一格」的精确锚点（缺省即本行）。 */
+        /* 行锚点：拖拽重排（`use-dynamic-workflow-form` 从事件目标往上找这一行）
+         *  与 Playwright 都按它认「这一行是哪一格」。 */
         data-io-key={entry.ioKey}
-        data-io-pins={wirePins ?? entry.ioKey}
-        /* 方向：这一行是**输入**参数行（拖输出卡片的圆点只能落在输出行上）。 */
-        {...{ [WIRE_DIRECTION_ATTR]: "input" }}
       >
         {withHandle && (
           /* 圆心锁到标签行中线（pt-1.5 = 6 + h-5 / 2 = 10 = 16px）：默认的
@@ -264,7 +250,6 @@ export function WidgetInputRow({
   return (
     <div
       className={`relative ${dimmed ? "opacity-50" : ""}`}
-      data-io-pins={wirePins ?? entry.ioKey}
     >
       {withHandle && (
         <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />

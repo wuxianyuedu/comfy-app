@@ -13,10 +13,7 @@ import {
   buildParamEntries,
   autoMapEntries,
 } from "~/lib/workflow-param-mapping";
-import {
-  WorkflowParamCardColumn,
-  wireAnchorValue,
-} from "./WorkflowParamCardColumn";
+import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 
 afterEach(cleanup);
@@ -121,39 +118,58 @@ describe("WorkflowParamCardColumn", () => {
     ).toBe("INT");
   });
 
-  it("每张卡片右侧有一颗小圆点端口（可与宿主卡片上的参数相连）", () => {
+  it("每张卡片右侧有一颗小圆点端点（可与宿主卡片上的参数相连）", () => {
     /* ISSUE #355 复审：卡片右侧此前是无属性的圆点甚至没有圆点，作者看不出
      * 「这个口能和节点上的哪一行连」。现在圆点画在它对应的**输出端口行**右沿，
-     * 并带 `data-wire-anchor` 供连线层量出锚点。 */
+     * 且**端点由消费方注入**（ISSUE #529 换成 React Flow 的 <Handle>）——
+     * 卡片列只把槽位让出来。 */
     const { container } = render(
       <WorkflowParamCardColumn
         entries={entries}
         resolved={autoMapEntries(entries, io)}
         io={io}
+        endpoint={(port) => (
+          <span data-testid="probe-endpoint" data-endpoint-handle={port.handleId} />
+        )}
       />,
     );
     const promptCard = entries.find((entry) => entry.cls === "prompt")!;
     const dot = container.querySelector(
-      `[data-wire-anchor="${wireAnchorValue(promptCard.id, "positive_prompt")}"]`,
+      `[data-endpoint-handle="positive_prompt"]`,
     );
     expect(dot).toBeTruthy();
-    /* 圆点必须落在输出端口行内（行是 absolute 的锚），而不是卡片上随便一处。 */
+    /* 端点必须落在输出端口行内（行是 absolute 的锚），而不是卡片上随便一处。 */
     const outputRow = screen.getByTestId(`param-node-out-${promptCard.id}-0`);
     expect(outputRow.contains(dot)).toBe(true);
   });
 
-  it("**每个候选一颗**圆点 —— 尺寸不再只有一个出口（ISSUE #355 复审）", () => {
+  it("**每个候选一颗**端点 —— 尺寸不再只有一个出口（ISSUE #355 复审）", () => {
     /* 未连线时输出端口行逐个列出候选（尺寸 = 宽/高/宽高比/像素量），每一行都是
      * 能接到的那一个候选口，各画一颗点；只给第一行画点会让「尺寸」看着只有一个
      * 出口 —— 那正是用户这轮截图指出的问题。 */
-    const { container } = render(
-      <WorkflowParamCardColumn entries={entries} resolved={{}} io={io} />,
-    );
     const sizeCard = entries.find((entry) => entry.cls === "size-height")!;
-    const dots = container.querySelectorAll(
-      `[data-wire-anchor^="${sizeCard.id}?"]`,
+    const { container } = render(
+      <WorkflowParamCardColumn
+        entries={entries}
+        resolved={{}}
+        io={io}
+        endpoint={(port, index) => (
+          <span
+            data-node-handle={port.handleId}
+            data-node-index={index}
+          />
+        )}
+      />,
     );
-    expect(dots).toHaveLength(sizeCard.pins.length);
+    /* 每个候选一颗端点：卡片上「尺寸」那一项的候选端口都各有一颗。 */
+    const dots = container.querySelectorAll("[data-node-handle]");
+    expect(dots.length).toBeGreaterThan(0);
+    for (const pin of sizeCard.pins) {
+      expect(
+        container.querySelector(`[data-node-handle="${pin.name}"]`),
+        `候选 ${pin.name} 应有自己的端点`,
+      ).toBeTruthy();
+    }
     expect(sizeCard.pins.length).toBeGreaterThan(0);
   });
 

@@ -1,17 +1,22 @@
 // @vitest-environment jsdom
-/* 工作流库画布预览里的**映射编辑** —— ISSUE #355
+/* 工作流库画布预览里的**映射编辑** —— ISSUE #355 / #529
  *
  * 用户两条要求合一：库里要看得见对外参数与它们的线，**而且线要能改**
- * （「连线要能编辑，现在编辑不了」）。这里走完整链路：
+ * （「连线要能编辑，现在编辑不了」）。库里那三列现在是一个 React Flow 画布
+ * （ISSUE #529）：
  *
- *   卡片圆点按下 → 拖到宿主行 → 松开 → `onPatchParamMap` 收到落库载荷
- *   （形状 = `source.mode:<模式> = { <entryId>: ioKey }`，与编辑器逐字一致）
- *   → 重新传入该 paramMap 后，卡片与线读回新的落点。
+ *   · 三列各一个 node（`[data-testid="wflib-canvas-node-params|host|outputs"]`）；
+ *   · 每条映射线是一条 edge（`[data-testid="rf__edge-<edgeId>"]`），
+ *     身份由 `libraryEdgeId` 给出，点选它即可反查出「点的是哪个口」；
+ *   · 端点是真的 `<Handle>`（`[data-handleid]`），拖动由 React Flow 承担。
+ *
+ * 这里断言的是**节点 / 边的 DOM**（第 3 步口径：不再量 path 的 `d`），落库载荷
+ * 仍按 `source.mode:<模式> = { <entryId>: ioKey }` 的形状断言（与编辑器逐字一致）。
  *
  * 运行相关的副作用（生成 / SSE / 日志弹窗）打桩，避免在 jsdom 里真发请求。 */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 
 vi.mock("@/lib/workshop/generation-client", () => ({
   startLocalGenerate: vi.fn().mockResolvedValue("task-1"),
@@ -32,7 +37,10 @@ vi.mock("../WorkflowRunLogModal", () => ({ WorkflowRunLogModal: () => null }));
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { parseParamMapping } from "~/lib/workflow-param-mapping";
+import { applyWireEdit } from "~/lib/workflow-param-wiring";
 import { WorkflowCanvasNodePreview } from "./WorkflowCanvasNodePreview";
+import { deriveLibraryParamCards } from "./workflow-library-param-cards";
+import { deriveLibraryEdges } from "./hooks/use-library-wire-flow";
 
 vi.stubGlobal(
   "ResizeObserver",
@@ -84,18 +92,6 @@ const io: WorkflowIOMap = {
   },
 };
 
-function rect(
-  el: Element,
-  r: { left: number; top: number; width: number; height: number },
-) {
-  (el as HTMLElement).getBoundingClientRect = () =>
-    ({
-      ...r,
-      right: r.left + r.width,
-      bottom: r.top + r.height,
-    }) as DOMRect;
-}
-
 function renderPreview(paramMap: Record<string, unknown>) {
   const onPatch = vi.fn();
   const view = render(
@@ -114,111 +110,58 @@ function renderPreview(paramMap: Record<string, unknown>) {
 }
 
 describe("库内映射编辑", () => {
-  it("从圆点拖到另一个候选行松开 → 该落点被持久化写出", async () => {
-    const { container, onPatch } = renderPreview({});
-    const dot = container.querySelector<HTMLElement>(
-      '[data-wire-anchor="size?megapixels"]',
-    )!;
-    expect(dot, "尺寸卡的像素量出口应有一颗可拖的圆点").toBeTruthy();
-    /* 端点与宿主那一项各钉一个位置（jsdom 不做布局，不钉就量不到，落点判不出来）。
-     *  组合控件覆盖的每个端口**各有一项自己的落点**（比例 / 像素 / 倍数各一行）：
-     *  拖到哪一项就落到哪个端口上，不是笼统地落到整块控件。 */
-    rect(dot, { left: 100, top: 70, width: 12, height: 12 });
-    rect(container.querySelector('[data-io-pins="5::widget::megapixels"]')!, {
-      left: 300,
-      top: 55,
-      width: 240,
-      height: 20,
-    });
-
-    await act(async () => {
-      dot.dispatchEvent(
-        new PointerEvent("pointerdown", {
-          bubbles: true,
-          clientX: 106,
-          clientY: 76,
-        }),
-      );
-    });
-    await act(async () => {
-      document.dispatchEvent(
-        new PointerEvent("pointerup", {
-          bubbles: true,
-          clientX: 306,
-          clientY: 66,
-        }),
-      );
-    });
-
-    expect(onPatch).toHaveBeenCalledTimes(1);
-    const payload = onPatch.mock.calls[0]![0] as Record<string, unknown>;
-    expect(parseParamMapping(payload).manualByMode).toEqual({
-      T2I: { size: "5::widget::megapixels" },
-    });
+  /* 手感（按下 → 拖动 → 落点）现在由 React Flow 承担，落点合法性由
+   * `isValidConnection`（`libraryConnectionAllowed`）判 —— 那一层有独立、可直接
+   * 断言的纯函数用例（`workflow-library-wire-graph.test.ts`）。这里断言的是它
+   * **接到视图上之后**的两件事：
+   *   ① 拖动起点是真的 <Handle>（画布的连线手势认得它）；
+   *   ② 上抛回来的落点被写进 `paramMap.source.mode:<模式>`。
+   */
+  it("卡片圆点是真正的 <Handle>（画布的连线手势认得它）", () => {
+    const { container } = renderPreview({});
+    const dot = container.querySelector(
+      '[data-handleid="megapixels"][data-nodeid="lib:params"]',
+    );
+    expect(dot, "尺寸卡的像素量出口应有一颗可连的 handle").toBeTruthy();
+    /* 它是 source（线从这里出发去宿主卡片），不是装饰圆点。 */
+    expect(
+      container.querySelector('.react-flow__handle.source[data-handleid="megapixels"]'),
+    ).toBeTruthy();
   });
 
-  it("拖到空白处松开 → 不写任何映射（不留悬空线）", async () => {
-    const { container, onPatch } = renderPreview({});
-    const dot = container.querySelector<HTMLElement>(
-      '[data-wire-anchor="size?megapixels"]',
-    )!;
-    rect(dot, { left: 100, top: 70, width: 12, height: 12 });
-    await act(async () => {
-      dot.dispatchEvent(
-        new PointerEvent("pointerdown", {
-          bubbles: true,
-          clientX: 106,
-          clientY: 76,
-        }),
-      );
-    });
-    await act(async () => {
-      document.dispatchEvent(
-        new PointerEvent("pointerup", {
-          bubbles: true,
-          clientX: 900,
-          clientY: 900,
-        }),
-      );
-    });
-    expect(onPatch).not.toHaveBeenCalled();
+  it("落点写入走库内编排：`source.mode:<模式>` 的形状与编辑器逐字一致", () => {
+    /* 落库形状由 `useParamWiring` → `applyWireEdit` 给（纯函数，编辑器同一份）。
+     *  这里不断言手势，只钉住「库内改的落点落成什么形状」—— 形状错了刷新后就
+     *  读不回来（用户口径：「改了落点没生效」）。 */
+    const parsed = parseParamMapping(
+      applyWireEdit({}, { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" }),
+    );
+    expect(parsed.manualByMode).toEqual({ T2I: { size: "5::widget::megapixels" } });
   });
 
-  it("落库后的 paramMap 读回来：卡片页脚说「你改过的线」、恢复默认可用", () => {
-    const { container } = renderPreview({
+  it("落库后的 paramMap 读回来：卡片头「恢复默认」可用", () => {
+    renderPreview({
       source: { "mode:T2I": { size: "5::widget::megapixels" } },
     });
-    /* 卡片头出现「恢复默认」（只有作者真的改过这条线时才渲染/可用）。 */
+    /* 卡片头出现「恢复默认」（只有作者真的改过这条线时才可用）。 */
     const reset = screen.getByTestId("param-node-reset-size");
     expect(reset.hasAttribute("disabled")).toBe(false);
-    /* 圆点的「已连接」判据是**这颗点有没有线**，不是「它是不是生效落点」：库内
-     *  每个候选各画一条线（见 workflow-library-param-cards 的 `wiredDotKeys`），
-     *  带线的候选看着必须是连上的（用户口径：「这里连线断开了是什么原因」，
-     *  ISSUE #355）。这里两颗候选都有线，因此都是实心。 */
-    const active = container.querySelector<HTMLElement>(
-      '[data-wire-anchor="size?megapixels"]',
-    )!;
-    const sibling = container.querySelector<HTMLElement>(
-      '[data-wire-anchor="size?width"]',
-    )!;
-    expect(active.style.opacity).toBe("1");
-    expect(sibling.style.opacity).toBe("1");
   });
 
-  it("有模式而只读时圆点给出「怎么改」的提示，没有模式则连提示都不给", () => {
-    /* 落点覆盖必须归属一个模式 —— 没有模式时写入是无归属的空操作。这里用圆点
-     *  上的 title（「拖到工作流参数行上改…的落点」）当判据：它只在可连线时给。
-     *  圆点本身刻意不是 role=button 的控件：拖拽没有键盘等价操作，谎报成按钮
-     *  只会让读屏用户撞到一个按不动的控件。 */
-    const { container, unmount } = renderPreview({});
-    const withMode = container.querySelector<HTMLElement>(
-      '[data-wire-anchor="size?megapixels"]',
-    )!;
-    expect(withMode.getAttribute("title")).toContain("落点");
-    expect(withMode.getAttribute("role")).toBeNull();
+  it("没改过时「恢复默认」不可用（点了不会有变化）", () => {
+    renderPreview({});
+    const reset = screen.getByTestId("param-node-reset-size");
+    expect(reset.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("有模式 → 卡片可连线；没有模式 → 不可（写入无归属）", () => {
+    /* 落点覆盖必须归属一个模式 —— 没有模式时写入是无归属的空操作，卡片不给拖
+     *  （`canWire=false`）。判据：卡片列的提示文案。 */
+    const { unmount } = renderPreview({});
+    expect(screen.getByText("对外参数 · 拖圆点改落点")).toBeTruthy();
     unmount();
 
-    const { container: noMode } = render(
+    render(
       <WorkflowCanvasNodePreview
         workflowId="wf-2"
         workflowName="无模式工作流"
@@ -229,25 +172,23 @@ describe("库内映射编辑", () => {
         onPatchParamMap={vi.fn()}
       />,
     );
-    const dot = noMode.querySelector<HTMLElement>(
-      '[data-wire-anchor="size?megapixels"]',
-    )!;
-    expect(dot.getAttribute("title")).toBeNull();
+    expect(screen.getByText("对外参数")).toBeTruthy();
   });
 });
 
 describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
-  it("宿主卡片的输出行带端口圆点（红框里的那一行）", () => {
-    /* 用户口径：「红框中的输出端口也要有端口圆点」。项目画布 / 编辑器上的输出
-     *  行一直有这颗点（`PortHandle dir="out"`），库内预览此前漏了 —— 补上，
-     *  并且它正是右列连线的起点。 */
+  it("宿主卡片的输出行带 <Handle>（红框里的那一行）", () => {
+    /* 用户口径：「红框中的输出端口也要有端口圆点」。项目画布上的输出行一直有
+     *  这颗点（`PortHandle dir="out"`），库内预览此前漏了 —— 补上，且它正是
+     *  右列连线的起点。 */
     const { container } = renderPreview({});
+    const host = container.querySelector('[data-testid="wflib-canvas-node-host"]')!;
     expect(
-      container.querySelector('[data-port-dot="5::output::IMAGE"]'),
+      host.querySelector('.react-flow__handle.source[data-handleid="5::output::IMAGE"]'),
     ).toBeTruthy();
   });
 
-  it("节点右侧列出对外输出参数，卡片圆点在卡片左缘", () => {
+  it("节点右侧列出对外输出参数，卡片端点在卡片左缘", () => {
     const { container } = renderPreview({});
     const column = container.querySelector(
       '[data-testid="workflow-output-param-column"]',
@@ -258,20 +199,19 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
       '[data-testid="param-node-5::output::IMAGE"]',
     )!;
     expect(card.textContent).toContain("images");
+    /* 端点在行首（圆点在左）：卡片的左缘才是「线从宿主进来」的那一侧。 */
     const dot = column.querySelector(
-      '[data-wire-anchor="5::output::IMAGE?images"]',
+      '.react-flow__handle.target[data-handleid="images"]',
     )!;
     expect(dot).toBeTruthy();
-    /* 端点槽位在行首（圆点在左）：卡片的左缘才是「线从宿主进来」的那一侧。 */
     expect(
       screen.getByTestId("param-node-out-5::output::IMAGE-0").firstElementChild,
     ).toBe(dot);
   });
 
-  it("右列可拖：圆点带拖拽提示（改这个输出从哪一行取值）", () => {
-    /* ISSUE #355 复审：「右列的对外输出参数目前是只读…需要可拖」。有模式 + 给了
-     *  落库回调时圆点就是起手位；没改过时「恢复默认」不可用（点了不会有变化）。 */
+  it("右列可连线：有模式 + 给了落库回调时端点就是起手位", () => {
     const { container } = renderPreview({ source: { "mode:T2I": {} } });
+    /* 没改过时「恢复默认」不可用（点了不会有变化）。 */
     const card = container.querySelector(
       '[data-testid="param-node-5::output::IMAGE"]',
     )!;
@@ -279,200 +219,91 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
       card.querySelector<HTMLButtonElement>('[data-testid^="param-node-reset"]')!
         .disabled,
     ).toBe(true);
-    const dot = container.querySelector(
-      '[data-wire-anchor="5::output::IMAGE?images"]',
-    )!;
-    expect(dot.getAttribute("data-wire-kind")).toBe("hostToParam");
-    expect(dot.getAttribute("title")).toContain("取值");
+    /* 但端点本身在（可拖）—— 端点由画布的节点注入。 */
+    expect(
+      container.querySelector('.react-flow__handle[data-handleid="images"]'),
+    ).toBeTruthy();
   });
 
-  it("拖输出卡片的圆点到另一行输出上 → 取值行被持久化写出", async () => {
-    const { container, onPatch } = renderPreview({});
-    const dot = container.querySelector<HTMLElement>(
-      '[data-wire-anchor="5::output::IMAGE?images"]',
-    )!;
-    rect(dot, { left: 700, top: 100, width: 12, height: 12 });
-    /* 宿主卡片的输出行（可落点）：库内预览里由 WorkflowNodeOutputsRow 渲染，
-     *  带 `data-io-direction="output"`。 */
-    const row = container.querySelector<HTMLElement>(
-      '[data-io-key="5::output::IMAGE"]',
-    )!;
-    rect(row, { left: 300, top: 80, width: 240, height: 20 });
-
-    await act(async () => {
-      dot.dispatchEvent(
-        new PointerEvent("pointerdown", {
-          bubbles: true,
-          clientX: 706,
-          clientY: 106,
-        }),
-      );
+  it("作者改过取值行后「恢复默认」可用", () => {
+    const { container } = renderPreview({
+      output: { "mode:T2I": { "5::output::IMAGE": "5::output::IMAGE" } },
     });
-    await act(async () => {
-      document.dispatchEvent(
-        new PointerEvent("pointerup", {
-          bubbles: true,
-          clientX: 400,
-          clientY: 90,
-        }),
-      );
-    });
-
-    expect(onPatch).toHaveBeenCalledTimes(1);
-    const payload = onPatch.mock.calls[0]![0] as Record<string, unknown>;
-    /* 落在**它自己那一行**上 = 撤销手工线（不留一条等价覆盖）。 */
-    expect(payload.output).toBeUndefined();
+    const card = container.querySelector(
+      '[data-testid="param-node-5::output::IMAGE"]',
+    )!;
+    expect(
+      card.querySelector<HTMLButtonElement>('[data-testid^="param-node-reset"]')!
+        .disabled,
+    ).toBe(false);
   });
 });
 
 /* ── 画布视口（可拖动 / 缩放）与尺寸三项的候选收窄 —— ISSUE #355 ── */
 
-describe("画布视口", () => {
-  it("拖动空白处平移内容层，位移超过阈值才动画面", async () => {
+describe("画布视口（由 React Flow 承担）", () => {
+  /* 这部分以前是自绘的 `WorkflowCanvasViewportFrame`（量 rect + transform +
+   *  非被动滚轮）。ISSUE #529 把它整块交给 React Flow：`panOnDrag` /
+   *  `zoomOnScroll` / `fitView`。这里断言的是「画布真的挂上了、并且开着这些
+   *  能力」，而不是复述 React Flow 自己的实现细节。 */
+  it("挂载了画布，并开启拖动平移 / 滚轮缩放 / fitView", () => {
     const { container } = renderPreview({});
-    const surface = container.querySelector<HTMLElement>(
-      '[data-testid="wflib-canvas-pan-surface"]',
-    )!;
-    const content = container.querySelector<HTMLElement>(
-      '[data-testid="wflib-canvas-content"]',
-    )!;
-    expect(content.style.transform).toContain("translate3d(0px, 0px, 0)");
-
-    /* 小于阈值（4px）的位移按「点一下」处理：点卡片选中不会被手抖变成位移。 */
-    await act(async () => {
-      surface.dispatchEvent(
-        new PointerEvent("pointerdown", {
-          bubbles: true,
-          clientX: 100,
-          clientY: 100,
-        }),
-      );
-    });
-    await act(async () => {
-      window.dispatchEvent(
-        new PointerEvent("pointermove", {
-          bubbles: true,
-          clientX: 102,
-          clientY: 100,
-        }),
-      );
-    });
-    expect(content.style.transform).toContain("translate3d(0px, 0px, 0)");
-
-    /* 越过阈值之后内容跟着手走。 */
-    await act(async () => {
-      window.dispatchEvent(
-        new PointerEvent("pointermove", {
-          bubbles: true,
-          clientX: 160,
-          clientY: 130,
-        }),
-      );
-    });
-    expect(content.style.transform).toContain("translate3d(60px, 30px, 0)");
-    await act(async () => {
-      window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
-    });
+    expect(screen.getByTestId("wflib-canvas")).toBeTruthy();
+    const flow = screen.getByTestId("wflib-canvas-flow");
+    expect(flow).toBeTruthy();
+    /* 画布自带视口（`.react-flow__viewport`）与平移面（`.react-flow__pane`）。 */
+    expect(container.querySelector(".react-flow__viewport")).toBeTruthy();
+    expect(container.querySelector(".react-flow__pane")).toBeTruthy();
   });
 
-  it("从输入框 / 圆点上按下不启动平移（它们各自的手势优先）", async () => {
+  it("三列各挂在一个节点里（左列 / 宿主 / 右列）", () => {
     const { container } = renderPreview({});
-    const content = container.querySelector<HTMLElement>(
-      '[data-testid="wflib-canvas-content"]',
-    )!;
-    const input = container.querySelector<HTMLElement>("input")!;
-    await act(async () => {
-      input.dispatchEvent(
-        new PointerEvent("pointerdown", {
-          bubbles: true,
-          clientX: 100,
-          clientY: 100,
-        }),
-      );
-    });
-    await act(async () => {
-      window.dispatchEvent(
-        new PointerEvent("pointermove", {
-          bubbles: true,
-          clientX: 200,
-          clientY: 100,
-        }),
-      );
-    });
-    expect(content.style.transform).toContain("translate3d(0px, 0px, 0)");
-    await act(async () => {
-      window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
-    });
+    for (const id of ["lib:params", "lib:host", "lib:outputs"]) {
+      const node = container.querySelector(`.react-flow__node[data-id="${id}"]`);
+      expect(node, `节点 ${id} 应挂载`).toBeTruthy();
+    }
   });
 
-  it("滚轮围绕光标缩放，「复位」回到初始视口", async () => {
+  it("节点可拖（React Flow 靠它打开指针事件），但拖完吸附回布局位置", () => {
+    /* `nodesDraggable={false}` 会让 React Flow 给 `.react-flow__node` 去掉
+     *  `pointer-events: all`，卡片列与宿主卡片整块变成不可交互 —— 表单输入、
+     *  端点、按钮全部点不动。所以节点保持可拖，用「拖完吸附回布局」兜住
+     *  「三列不错位」。 */
     const { container } = renderPreview({});
-    const viewport = container.querySelector<HTMLElement>(
-      '[data-testid="wflib-canvas-viewport"]',
+    const params = container.querySelector<HTMLElement>(
+      '.react-flow__node[data-id="lib:params"]',
     )!;
-    const content = container.querySelector<HTMLElement>(
-      '[data-testid="wflib-canvas-content"]',
-    )!;
-    viewport.getBoundingClientRect = () =>
-      ({
-        left: 0,
-        top: 0,
-        width: 400,
-        height: 300,
-        right: 400,
-        bottom: 300,
-      }) as DOMRect;
-    await act(async () => {
-      viewport.dispatchEvent(
-        new WheelEvent("wheel", {
-          bubbles: true,
-          cancelable: true,
-          deltaY: -100,
-          clientX: 100,
-          clientY: 80,
-        }),
-      );
-    });
-    expect(content.style.transform).not.toContain("scale(1)");
-    expect(screen.getByTestId("wflib-canvas-zoom").textContent).not.toBe(
-      "100%",
-    );
-    await act(async () => {
-      screen.getByTestId("wflib-canvas-reset").click();
-    });
-    expect(content.style.transform).toContain("scale(1)");
-    expect(
-      screen.getByTestId("wflib-canvas-reset").hasAttribute("disabled"),
-    ).toBe(true);
+    expect(params.className).toContain("draggable");
   });
 });
 
 describe("尺寸各项各自可取外部值", () => {
-  it("每项各有一颗圆点，且候选收窄到宿主卡片真的画出来的行", () => {
-    const { container } = renderPreview({});
-    for (const handle of ["aspect_ratio", "megapixels", "width"]) {
-      expect(
-        container.querySelector(`[data-wire-anchor="size?${handle}"]`),
-        `尺寸的 ${handle} 应各有一颗出口圆点`,
-      ).toBeTruthy();
-    }
-  });
-
-  it("每个候选各自连出一条线（宽高比与百万像素都要能连出去）", () => {
-    /* ISSUE #355 复审：截图里「尺寸」卡片有宽高比 / 百万像素两颗圆点，画面上
-     *  却只有一条线通到宿主卡片 —— 用户要的是「这两项都需要能导入到工作流中，
-     *  所以 2 条线都要能连出去」。
-     *
-     *  根因：连线派生只取「当前生效落点」那一个端口（半自动映射的口径），而卡片
-     *  把每个候选都画成了可拖的圆点 —— 有端点、没线，读作「这几项没接上」。
-     *  现在按行逐个产出：有几颗点就有几条线，且各连到对应那一行。 */
+  it("每项各有一颗 handle，且候选收窄到宿主卡片真的画出来的行", () => {
     const { container } = renderPreview({});
     for (const handle of ["aspect_ratio", "megapixels", "width"]) {
       expect(
         container.querySelector(
-          `[data-testid="wflib-param-wire-param:size?${handle}"]`,
+          `.react-flow__handle.source[data-handleid="${handle}"]`,
         ),
-        `尺寸的 ${handle} 应各有一条线`,
+        `尺寸的 ${handle} 应各有一颗出口端点`,
+      ).toBeTruthy();
+    }
+  });
+
+  it("每个候选各派生出一条边（宽高比与百万像素都要能连出去）", () => {
+    /* ISSUE #355 复审：截图里「尺寸」卡片有宽高比 / 百万像素两颗圆点，画面上
+     *  却只有一条线通到宿主卡片 —— 用户要的是「这两项都需要能导入到工作流中，
+     *  所以 2 条线都要能连出去」。
+     *
+     *  ISSUE #529 之后这件事是**纯派生**：几条该画的线就有几条 edge，id 里带
+     *  handle（`libwire:param:<条目>?<handle>`）。这里断言派生结果 —— 边的
+     *  渲染本身由 React Flow 负责，jsdom 量不到 handleBounds。 */
+    const paramCards = deriveLibraryParamCards({ io, paramMap: {}, mode: "T2I" });
+    const edges = deriveLibraryEdges(paramCards.wires, []);
+    for (const handle of ["aspect_ratio", "megapixels", "width"]) {
+      expect(
+        edges.find((edge) => edge.id === `libwire:param:size?${handle}`),
+        `尺寸的 ${handle} 应各有一条边`,
       ).toBeTruthy();
     }
   });
