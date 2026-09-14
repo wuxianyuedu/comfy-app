@@ -166,9 +166,17 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
 
 | 层 | 位置 | 拦什么 | 能绕过吗 |
 |----|------|--------|---------|
-| 平台 | CNB 分支锁（`git create-branch-lock`，仓库设置里可查 `locked`） | `master` 的**写入 / push** | 需管理员解锁（改设置本身就要权限） |
+| 平台 | CNB **分支保护设置**（保护分支 + 禁止直接 push，要求 PR） | `master` 的**直接 push**，**放行 PR 合并** | 需管理员改设置（本身就要权限） |
 | 本地 | `.githooks/pre-commit` 第 1 步跑 `scripts/check-branch-guard.cjs` | `master` 上的**每一次本地提交** | 只能 `--no-verify`（进历史，Review 可见） |
 | 服务端 | `.github/workflows/ci.yml` 的 `Branch guard` 步骤 | **源分支是 `master` 的 PR** | 不能 |
+
+**⚠️ 平台层必须用「分支保护」，不能用「分支锁」**：`git create-branch-lock`
+（仓库设置里 `locked: true`）锁的是**整个分支的写入**——它连 **PR 合并**一起拦掉，
+`master` 一旦被锁，任何 PR 都无法合并（实测：锁上后 PR 的 `mergeable_state` 虽然仍是
+`mergeable`，平台侧合并动作直接失败）。想「禁直接 push、但要能合 PR」只有
+**分支保护设置**这一条路：保护分支 + 禁止直接 push + 需要评审批准。
+`create-branch-lock` 只适合「冻结分支，谁都不许动」的场景（如临时封版），
+**不要**拿它当 PR 流程的守卫。
 
 **判据（为什么不能只看分支名）**：pre-commit 在**合并提交**时 `HEAD` 也是 `master`，
 只看 `git rev-parse --abbrev-ref HEAD` 会把「PR 合并」一起拦掉。可用的事实是
@@ -196,6 +204,10 @@ git push origin HEAD                  # 推送并创建 PR
 > 规则自测：`tests/check-branch-guard.test.ts`（临时仓库跑真脚本：分支提交放行、
 > master 直提阻断并给出搬迁出口、master 合并提交放行、非 git 目录不崩、
 > 钩子里守卫排在第 1 步）。
+>
+> **分级口径**：上面的本地钩子与 CI 步骤才是「判据」所在（拦的是**提交**与**PR 源分支**）；
+> 平台层的分支保护是「防误操作」的兜底（拦的是**直接 push**）。两者判据不同、不可互相替代：
+> 只有平台保护挡不住 `--no-verify` 的本地提交，只有本地钩子挡不住别的检出直推。
 
 ### 13.7 换行符与提交噪声（LF，对齐主规范 §11.2）
 

@@ -60,9 +60,11 @@
    详见规范 §5）——窗口配置与启动页是编译期内嵌的，只改源码不重编 =
    跑旧二进制（历史黑屏事故来源）。
 6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492 / 规范 §13.6.1）：
-   `master` 只接受「分支开发 → PR → 评审 → 合并」。三层防线 = 平台分支锁（CNB，
-   拦 push）+ `.githooks/pre-commit` 第 1 步 `scripts/check-branch-guard.cjs`
-   （拦本地提交）+ CI `Branch guard` 步骤（拦源分支为 `master` 的 PR）。
+   `master` 只接受「分支开发 → PR → 评审 → 合并」。三层防线 = 平台**分支保护设置**
+   （保护分支 + 禁直接 push，拦 push、放行 PR 合并）+ `.githooks/pre-commit` 第 1 步
+   `scripts/check-branch-guard.cjs`（拦本地提交）+ CI `Branch guard` 步骤（拦源分支为
+   `master` 的 PR）。**平台层禁用 `git create-branch-lock`**：它锁的是整分支写入，
+   会把 PR 合并一起拦死（锁上后 master 无法合并任何 PR）。
    判据是 **HEAD 父提交数**：`master` 上父提交数 ≤ 1 = 直连主干，阻断；> 1 =
    PR 合并提交，放行（只查分支名会把合并一起拦掉，见规范 §13.6.1）。
    提交已在本地 `master` 上时：`git branch feat/<描述>` → `git reset --hard
