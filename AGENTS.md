@@ -118,6 +118,19 @@
     并在提交/实施说明里注明遵循了哪些条目。把「先看文档再改代码」当默认动作，
     不凭项目外部经验或旧记忆猜测本仓库约定。
 
+15. **构建期模块图上的模块：模块级副作用不得直接读库，且源码保持纯 ASCII**（ISSUE #489 / 规范 §5）：
+    - **模块级副作用先判就绪**：`pnpm build` 的 collect-page-data / prerender 阶段会为每条路由
+      起 worker 加载模块图，而干净检出（CI / 新克隆）没有 `db.sqlite`。任何「加载即读库」的副作用
+      （现有：`src/lib/comfyui/reaper.ts`，由 `enqueue.ts` 裸副作用导入挂在启动路径）都会在
+      build 期抛 `no such table: …`，把构建打死且报错行号落在无关路由上。新增此类副作用必须先过
+      `src/lib/db-schema-ready.ts` 的 `isSchemaReady()`；跳过是安全的（回收幂等、下轮重跑），
+      但「表在、查询失败」这类真故障不许被吞。
+    - **会被 code frame 渲染到的模块写纯 ASCII**：Next 的 `next-code-frame` 按**字节**切串，
+      高亮区间端点落在多字节字符（中文 3 字节）内部时 Rust 侧直接 panic
+      （`end byte index N is not a char boundary`），整个 `next build` 被 `Error: Panic in async function`
+      带走，且报错完全指不出业务原因。触发偏移敏感 —— 同一文件删掉中文能过、换个长度的中文又能复现。
+      实践口径见规范 §5 对应两条；业务模块与文档不受此限，中文照常。
+
 ## 快速排障
 
 被提交门槛拦下时，先看报错指出的规范章节（分支守卫 → §13.6.1、文件结构/命名 → §12.8、
