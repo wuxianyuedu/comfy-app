@@ -9,6 +9,7 @@
 // Next.js HMR can never create a second interval).  enqueue.ts imports this
 // module as a side effect, so a server that enqueues/subscribes launches the
 
+import { isSchemaReady } from "~/lib/db-schema-ready";
 import { taskRepository } from "../core/repository";
 import { resolveComfyBase } from "./client";
 import { cliProcs } from "./executor-cli";
@@ -419,16 +420,31 @@ export async function reapStaleRunningTasks(): Promise<void> {
   }
 }
 
-function startReaper() {
-  if (reaperState.handle) return; // singleton across HMR reloads
-  // Fire once on module load so a freshly-restarted dev server heals
-  // any tasks abandoned by the previous lifetime *immediately*, not
-  // 30s later.
+/** 单轮回收：表还没建好就整轮跳过，而不是让 sqlite 的错误浮出。 */
+function sweepOnce(): void {
+  if (!isSchemaReady()) return;
   void reapStaleQueuedTasks();
   void reapStaleRunningTasks();
-  reaperState.handle = setInterval(() => {
-    void reapStaleQueuedTasks();
-    void reapStaleRunningTasks();
-  }, REAPER_MS);
+}
+
+function startReaper() {
+  if (reaperState.handle) return; // singleton across HMR reloads
+  /* Fire once on module load so a freshly-restarted dev server heals
+   *  any tasks abandoned by the previous lifetime *immediately*, not
+   *  30s later.
+   *
+   *  Guard: this module is loaded as a *bare side effect* (enqueue.ts), so it
+   *  also runs while the module graph is being loaded outside a usable
+   *  database — most notably during `next build`'s collect-page-data /
+   *  prerender phase, and on a fresh checkout where `pnpm db:push` has not
+   *  run yet.  Reading the DB there throws `no such table: task`, which
+   *  surfaces as a build-stage error and turns the CI `pnpm build` gate red
+   *  for reasons that have nothing to do with the route in the trace.
+   *  Skipping is safe: reaping is idempotent and repeats every REAPER_MS.
+   *
+   *  「库坏了」（表存在但查询失败）**不**在这里被吞掉——那种情况继续走
+   *  各自的 catch 暴露出来，本判断只挡「表还没建」。 */
+  sweepOnce();
+  reaperState.handle = setInterval(sweepOnce, REAPER_MS);
 }
 startReaper();
