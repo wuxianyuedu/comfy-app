@@ -92,7 +92,22 @@ export function WorkflowCanvasViewportFrame({
           外框 `overflow-hidden`：超出边界的内容被裁掉，不再去顶整页的横向滚动。 */}
       <div
         className="min-h-[320px] w-full overflow-hidden p-10"
-        onPointerDown={viewport.onPointerDown}
+        onPointerDown={(event) => {
+          /* 卡片**内部**的按下不属于「拖画布」：表单控件、端口圆点、连线端点、
+           *  参数行上的按下都有自己的手势（填值 / 拖线 / 改落点）。平移面是包住
+           *  所有卡片的那一层，不筛一下就会把手势抢走 —— 表现是「按住节点上任何
+           *  地方都在平移整块内容」，连线时目标行跟着画布跑，根本落不上点。
+           *  空白处（卡片之间、卡片外）仍可起手平移。 */
+          const el = event.target as HTMLElement | null;
+          if (
+            el?.closest(
+              "input, textarea, select, button, a, label, [data-port-dot], [data-wire-anchor], [data-io-key], [data-io-pins], [data-pin-anchor]",
+            )
+          ) {
+            return;
+          }
+          viewport.onPointerDown(event);
+        }}
         data-testid="wflib-canvas-pan-surface"
       >
         <div

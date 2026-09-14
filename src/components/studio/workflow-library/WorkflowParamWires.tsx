@@ -507,8 +507,7 @@ export function dragPath(
   entryId: string,
   handleId: string,
   /** 光标位置，**屏幕坐标**（`clientX/clientY`）；局部坐标换算在本函数内做。
-   *  两个调用点都必须传屏幕坐标 —— 传局部坐标会把容器偏移减两次，预览线飘向左上。 */
-  point: { x: number; y: number } | null,
+   *  两个调用点都必须传屏幕坐标 —— 传局部坐标会把容器偏移减两次，预览线飘向左上。 */  point: { x: number; y: number } | null,
 ): string | null {
   const from = findAnchor(
     container,
