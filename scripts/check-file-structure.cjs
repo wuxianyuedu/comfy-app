@@ -10,9 +10,10 @@
  *        保留名,不能改名;配套 R11 保证它没被放错位置或悄悄消失)
  *   R3  禁止时间戳备份文件(\d{8}_\d{6} 模式)——版本回退用 git,不进 src
  *   R4  src/lib 下禁止 .tsx(12.5:lib 无 React)
- *   R5  (提示)src/components 与 src/app 下超 900 行的文件列入拆分候选,仅提醒
- *       不阻塞(ISSUE #535:只扫 components 会让 src/app 下的巨型视图——如
- *       2498 行的 SettingsPageView.tsx——完全落在护栏之外)
+ *   R5  (提示)src/ 下超 900 行的文件列入拆分候选,仅提醒不阻塞。
+ *       扫描范围是**整个 src/**:页面的纯展示视图在 src/app/(settings/SettingsPageView.tsx
+ *       2499 行),逻辑层的大文件在 src/lib/(lifecycle.ts 1041 行)——
+ *       只扫 components 会让最大的那几个文件完全落在护栏之外(ISSUE #536)。
  *   R7  Windows 双击入口一律 .ps1:仓库内禁止新增 .bat/.cmd/.vbs
  *       (ISSUE #23 / 规范 launch-and-build.md §8:.bat 走 cmd 的 GBK 代码页,
  *        中文必乱码,历史上被迫做成"不含中文不含逻辑"的哑壳)
@@ -37,6 +38,9 @@ const path = require("node:path");
 
 const problems = [];
 const splitHints = [];
+
+/** R5 的文件行数阈值:超过即进「拆分候选」清单(提示级,不阻断)。 */
+const SPLIT_HINT_LINES = 900;
 
 // R7 禁用的 Windows 入口后缀(ISSUE #23 / launch-and-build.md §8)
 const FORBIDDEN_SCRIPT_EXT = /\.(bat|cmd|vbs)$/i;
@@ -108,16 +112,36 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
         if (/^[A-Z]/.test(base) && !R2_EXEMPT.has(rel))
           problems.push("R2 模块文件须 kebab-case:" + rel);
       }
-      const lines = fs.readFileSync(p, "utf8").split("\n").length;
-      /* R5 扫描范围含 src/app:页面的「纯展示视图」也落在那里
-       * (settings/SettingsPageView.tsx),只扫 components 会让最大的那个视图
-       * 反而无护栏。App Router 的保留文件(page/layout/route)同样计入——
-       * 行数与「框架保留名」无关,超了就该拆。 */
-      if ((rel.startsWith("src/components/") || rel.startsWith("src/app/")) && lines > 900)
-        splitHints.push(rel + " (" + lines + " 行,建议拆分)");
     }
   }
 })("src");
+
+// ── R5:超大文件的拆分候选(提示级,不阻断) ──
+// 扫描范围是**整个 src/**,不分层也不分文件类型:
+//   · src/app/       页面的「纯展示视图」(settings/SettingsPageView.tsx 2499 行);
+//   · src/lib/       逻辑层的大文件(comfyui/lifecycle.ts 1041 行);
+//   · src/components/、src/server/  组件与服务端。
+// 只扫 components(历史口径)会让「最大的那个文件」永远不被提醒;把范围缩到
+// .tsx 会让逻辑层的大文件同样漏网。行数超了就该拆,与它是不是组件、落在哪一层
+// 都无关。App Router 的保留文件(page/layout/route)一并计入。
+// 与函数长度门禁(check-function-length.cjs §12.13)的分工:那个管**函数**,
+// 这个管**文件**;两者都只提示,把存量交给排期,把增量交给棘轮。
+(function collectSplitHints() {
+  (function walkHints(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name).split(path.sep).join("/");
+      if (e.isDirectory()) {
+        walkHints(p);
+        continue;
+      }
+      if (!/\.(ts|tsx|mjs|cjs|js)$/.test(e.name)) continue;
+      if (/\.test\.[cm]?[jt]sx?$/.test(e.name) || /\.d\.ts$/.test(e.name)) continue;
+      const lines = fs.readFileSync(p, "utf8").split("\n").length;
+      if (lines > SPLIT_HINT_LINES)
+        splitHints.push(p + " (" + lines + " 行,建议拆分)");
+    }
+  })("src");
+})();
 
 // ── R7/R8:仓库内 Windows 脚本入口扫描 ──
 // 只排除「不可能放仓库入口」的目录:依赖、构建产物、被 gitignore 的打包输出、

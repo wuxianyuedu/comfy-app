@@ -18,6 +18,7 @@ import {
   type ReadySettingsPageController,
 } from "../hooks/use-settings-page";
 import type { TaskType } from "~/lib/llm/types";
+import { OLLAMA_DEFAULT_BASE_URL } from "@/lib/endpoints";
 
 import {
   STATUS_ROW_CLASS,
@@ -61,7 +62,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
         label="Base URL"
         value={c.drafts.llm.baseUrl}
         onChange={(value) => c.patchLlm({ baseUrl: value })}
-        placeholder="http://localhost:11434/v1"
+        placeholder={OLLAMA_DEFAULT_BASE_URL}
       />
 
       {/* Ollama status row */}

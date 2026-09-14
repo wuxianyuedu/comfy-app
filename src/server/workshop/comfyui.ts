@@ -5,6 +5,9 @@
 // txt2img 图；视频(i2v)与自定义图走 data/workshop-comfy-settings.json 模板，
 // 支持 {{prompt}}/{{negative}}/{{image}} 占位替换，从而与任意已安装模型解耦。
 import { randomUUID } from "node:crypto";
+
+import { COMFYUI_DEFAULT_PORT } from "@/lib/app-settings";
+import { comfyUiBaseUrl, LOOPBACK_HOST } from "@/lib/endpoints";
 import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -35,13 +38,13 @@ function loadSettings(): ComfySettings {
 /** 解析 ComfyUI base（含端口探测，落 127.0.0.1 避免 localhost→IPv6 解析失败）。 */
 export async function resolveComfyBase(): Promise<string> {
   if (resolvedBase) return resolvedBase;
-  const raw = process.env.COMFYUI_BASE ?? "http://127.0.0.1:8188";
-  let host = "127.0.0.1";
-  let port = 8188;
+  const raw = process.env.COMFYUI_BASE ?? comfyUiBaseUrl(COMFYUI_DEFAULT_PORT);
+  let host = LOOPBACK_HOST;
+  let port = COMFYUI_DEFAULT_PORT;
   try {
     const u = new URL(raw);
-    host = u.hostname === "localhost" ? "127.0.0.1" : u.hostname;
-    port = parseInt(u.port) || 8188;
+    host = u.hostname === "localhost" ? LOOPBACK_HOST : u.hostname;
+    port = parseInt(u.port) || COMFYUI_DEFAULT_PORT;
   } catch {
     resolvedBase = raw;
     return raw;
@@ -63,7 +66,7 @@ export async function resolveComfyBase(): Promise<string> {
 }
 
 function comfyBase(): string {
-  return resolvedBase ?? process.env.COMFYUI_BASE ?? "http://127.0.0.1:8188";
+  return resolvedBase ?? process.env.COMFYUI_BASE ?? comfyUiBaseUrl(COMFYUI_DEFAULT_PORT);
 }
 
 export interface ComfyPromptResult {
