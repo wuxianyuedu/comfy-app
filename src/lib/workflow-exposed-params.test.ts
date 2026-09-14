@@ -31,8 +31,14 @@ describe("exposedParamsForMode", () => {
     ]);
   });
 
-  it("单图生视频给首帧，不给尾帧", () => {
-    expect(ids("I2V")).toEqual(["prompt", "negative", "first-frame", "size"]);
+  it("单图生视频给首帧，不给尾帧；视频口都带时长", () => {
+    expect(ids("I2V")).toEqual([
+      "prompt",
+      "negative",
+      "first-frame",
+      "size",
+      "duration",
+    ]);
   });
 
   it("首尾帧模式才给尾帧", () => {
@@ -42,11 +48,17 @@ describe("exposedParamsForMode", () => {
       "first-frame",
       "last-frame",
       "size",
+      "duration",
     ]);
   });
 
-  it("文生视频不给首帧（没有图可给）", () => {
-    expect(ids("T2V")).toEqual(["prompt", "negative", "size"]);
+  it("文生视频不给首帧（没有图可给），但有时长", () => {
+    expect(ids("T2V")).toEqual(["prompt", "negative", "size", "duration"]);
+  });
+
+  it("时长是视频专有口：生图模式不带", () => {
+    expect(ids("T2I")).not.toContain("duration");
+    expect(ids("I2I")).not.toContain("duration");
   });
 
   it("没有模式时退到最保守的一套（提示词 + 尺寸）", () => {

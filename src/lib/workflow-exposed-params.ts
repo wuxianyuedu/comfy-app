@@ -30,7 +30,9 @@ export type ExposedParamClass =
   | "size"
   | "reference-image"
   | "first-frame"
-  | "last-frame";
+  | "last-frame"
+  /** 视频：时长（秒）。落在工作流的 duration / length / frames 类端口上。 */
+  | "duration";
 
 export interface ExposedParamDef {
   cls: ExposedParamClass;
@@ -51,10 +53,11 @@ export const EXPOSED_PARAM_LABEL: Record<ExposedParamClass, string> = {
   "reference-image": "参考图",
   "first-frame": "首帧",
   "last-frame": "尾帧",
+  duration: "时长",
 };
 
-/** 「参考图」按出现顺序在契约里的位置（多张参考图槽位）。 */
-const REFERENCE_IMAGE_MAX = 2;
+/** 内置默认给几张参考图槽 —— 只是默认值，契约编辑器里可以继续加，不设上限。 */
+const REFERENCE_IMAGE_DEFAULT_COUNT = 2;
 
 /** 一个模式是否属于「图生图类」——需要一张参考图输入。
  *
@@ -105,13 +108,20 @@ export function exposedParamsForMode(
       });
     }
     out.push({ cls: "size", id: "size", label: EXPOSED_PARAM_LABEL.size });
+    /* 视频还有时长口（秒）。落点由契约映射决定（duration / length / frames 类
+     * 端口都算），值由调用方按该端口的单位折算后落下去。 */
+    out.push({
+      cls: "duration",
+      id: "duration",
+      label: EXPOSED_PARAM_LABEL.duration,
+    });
     return out;
   }
 
   if (isImageEditMode(code)) {
     for (
       let i = 0;
-      i < (allowsReferenceImages(code) ? REFERENCE_IMAGE_MAX : 1);
+      i < (allowsReferenceImages(code) ? REFERENCE_IMAGE_DEFAULT_COUNT : 1);
       i += 1
     ) {
       out.push({
