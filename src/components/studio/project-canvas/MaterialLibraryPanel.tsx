@@ -40,10 +40,10 @@ function formatSize(bytes: number): string {
 
 /** 分类图标底色：图片/视频/音频/文档各一套，和历史记录面板保持同一语言。 */
 const KIND_STYLE: Record<string, string> = {
-  image: "bg-violet-500/10 text-violet-400",
-  video: "bg-blue-500/10 text-blue-400",
-  audio: "bg-emerald-500/10 text-emerald-400",
-  doc: "bg-white/4 text-gray-400",
+  image: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+  video: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  audio: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  doc: "bg-subtle text-ink-soft",
 };
 
 function KindIcon({ kind }: { kind: string }) {
@@ -97,23 +97,23 @@ export function MaterialLibraryPanel({
     refresh,
   } = c;
   return (
-    <aside className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l border-white/6 bg-(--color-panel)/98 backdrop-blur-md">
+    <aside className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden bg-panel/98 border-border-strong border-l backdrop-blur-md">
       {/* ── Header ── */}
-      <div className="flex items-center gap-2 border-b border-white/6 px-4 py-3">
-        <h2 className="flex-1 text-[15px] font-semibold text-gray-100">素材库</h2>
+      <div className="border-border-strong flex items-center gap-2 border-b px-4 py-3">
+        <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">素材库</h2>
         <button
           type="button"
-          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-300"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-soft flex h-6 w-6 items-center justify-center rounded-md transition-colors"
           title="素材保存在 public/generated/materials 下，可直接把文件丢进对应分类目录"
         >
           <CircleHelp size={14} />
         </button>
         {/* 显示密度切换 */}
-        <div className="flex items-center gap-0.5 rounded-lg bg-white/4 p-0.5">
+        <div className="bg-subtle flex items-center gap-0.5 rounded-lg p-0.5">
           <button
             type="button"
             onClick={() => setDisplay("grid")}
-            className={`rounded-md p-1 transition-colors ${display === "grid" ? "bg-white/10 text-gray-200" : "text-gray-500 hover:text-gray-300"}`}
+            className={`rounded-md p-1 transition-colors ${display === "grid" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
             title="网格视图"
           >
             <LayoutGrid size={14} />
@@ -121,7 +121,7 @@ export function MaterialLibraryPanel({
           <button
             type="button"
             onClick={() => setDisplay("list")}
-            className={`rounded-md p-1 transition-colors ${display === "list" ? "bg-white/10 text-gray-200" : "text-gray-500 hover:text-gray-300"}`}
+            className={`rounded-md p-1 transition-colors ${display === "list" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
             title="列表视图"
           >
             <List size={14} />
@@ -130,7 +130,7 @@ export function MaterialLibraryPanel({
         <button
           type="button"
           onClick={onClose}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-300"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-soft flex h-6 w-6 items-center justify-center rounded-md transition-colors"
           title="关闭"
         >
           <X size={14} />
@@ -138,7 +138,7 @@ export function MaterialLibraryPanel({
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex gap-4 border-b border-white/6 px-4 pt-2">
+      <div className="border-border-strong flex gap-4 border-b px-4 pt-2">
         {([
           { id: "project" as MaterialScope, label: "本项目" },
           { id: "cross" as MaterialScope, label: "跨项目" },
@@ -151,8 +151,8 @@ export function MaterialLibraryPanel({
             }}
             className={`pb-2.5 text-[13px] font-medium transition-colors ${
               scope === scopeItem.id
-                ? "border-b-2 border-(--color-accent) text-gray-100"
-                : "text-gray-500 hover:text-gray-300"
+                ? "border-accent text-ink-bright border-b-2"
+                : "text-ink-muted hover:text-ink-soft"
             }`}
           >
             {scopeItem.label}
@@ -162,20 +162,20 @@ export function MaterialLibraryPanel({
 
       {/* ── Search + upload ── */}
       <div className="flex items-center gap-2 px-4 py-3">
-        <div className="flex flex-1 items-center gap-2 rounded-lg border border-white/8 bg-white/3 px-3 py-2">
-          <Search size={14} className="shrink-0 text-gray-500" />
+        <div className="border-border-strong bg-subtle flex flex-1 items-center gap-2 rounded-lg border px-3 py-2">
+          <Search size={14} className="text-ink-muted shrink-0" />
           <input
             type="text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={folder ? "在当前分类搜索" : "搜索全部素材"}
-            className="min-w-0 flex-1 bg-transparent text-[12px] text-gray-200 outline-none placeholder:text-gray-600"
+            className="text-ink-bright placeholder:text-ink-fainter min-w-0 flex-1 bg-transparent text-[12px] outline-none"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch("")}
-              className="shrink-0 text-gray-600 transition-colors hover:text-gray-300"
+              className="text-ink-fainter hover:text-ink-soft shrink-0 transition-colors"
               title="清空"
             >
               <X size={12} strokeWidth={2.5} />
@@ -193,7 +193,7 @@ export function MaterialLibraryPanel({
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-white/6 hover:text-gray-200 disabled:opacity-40"
+          className="text-ink-soft hover:bg-subtle hover:text-ink-bright flex h-8 w-8 items-center justify-center rounded-lg transition-colors disabled:opacity-40"
           title={folder ? `上传到「${folders.find((fld) => fld.id === folder)?.name ?? folder}」` : "上传到「参考素材」"}
         >
           {uploading ? (
@@ -215,13 +215,13 @@ export function MaterialLibraryPanel({
           return (
             <span key={seg.key} className="inline-flex items-center">
               {i > 0 && (
-                <span className="mx-1.5 text-[11px] text-gray-600">/</span>
+                <span className="text-ink-fainter mx-1.5 text-[11px]">/</span>
               )}
               {isLast || searching ? (
                 /* 最后一段 / 搜索结果：纯展示 */
                 <span
                   className={`text-[12px] ${
-                    isCurrent ? "text-gray-200 font-medium" : "text-gray-400"
+                    isCurrent ? "text-ink-bright font-medium" : "text-ink-soft"
                   }`}
                 >
                   {seg.label}
@@ -231,7 +231,7 @@ export function MaterialLibraryPanel({
                 <button
                   type="button"
                   onClick={() => enterFolder(seg.key)}
-                  className="text-[12px] text-gray-500 transition-colors hover:text-violet-300 hover:underline"
+                  className="text-ink-muted text-[12px] transition-colors hover:text-violet-700 hover:underline dark:hover:text-violet-300"
                 >
                   {seg.label}
                 </button>
@@ -244,7 +244,7 @@ export function MaterialLibraryPanel({
           <button
             type="button"
             onClick={() => enterFolder(null)}
-            className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] text-gray-500 transition-colors hover:bg-white/6 hover:text-gray-300"
+            className="text-ink-muted hover:bg-subtle hover:text-ink-soft ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] transition-colors"
           >
             <ChevronLeft size={11} strokeWidth={2.5} />
             返回
@@ -273,8 +273,8 @@ export function MaterialLibraryPanel({
           <div className="space-y-1 px-2 pt-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={`skeleton-${i}`} className="flex items-center gap-3 py-2">
-                <div className="h-9 w-9 shrink-0 animate-pulse rounded-lg bg-white/5" />
-                <div className="h-3 flex-1 animate-pulse rounded bg-white/5" />
+                <div className="bg-subtle h-9 w-9 shrink-0 animate-pulse rounded-lg" />
+                <div className="bg-subtle h-3 flex-1 animate-pulse rounded" />
               </div>
             ))}
           </div>
@@ -283,18 +283,18 @@ export function MaterialLibraryPanel({
             /* 空状态：大图标 + 提示文案 + 操作引导 */
             <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
               {/* 文件夹图标 */}
-              <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl border border-white/8 bg-white/2">
-                <Folder size={40} strokeWidth={1.2} className="text-gray-600" />
+              <div className="border-border-strong bg-subtle mb-5 flex h-20 w-20 items-center justify-center rounded-2xl border">
+                <Folder size={40} strokeWidth={1.2} className="text-ink-fainter" />
               </div>
-              <p className="text-[14px] font-medium text-gray-400">
+              <p className="text-ink-soft text-[14px] font-medium">
                 {searching ? "没有匹配的素材" : "暂无内容"}
               </p>
               {!searching && (
-                <div className="mt-4 space-y-2 text-[12px] text-gray-600">
+                <div className="text-ink-fainter mt-4 space-y-2 text-[12px]">
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    className="flex items-center gap-2 transition-colors hover:text-violet-400"
+                    className="flex items-center gap-2 transition-colors hover:text-violet-700 dark:hover:text-violet-400"
                   >
                     <Plus size={14} />
                     点击 + 或右键菜单创建内容
@@ -320,11 +320,11 @@ export function MaterialLibraryPanel({
                     );
                     event.dataTransfer.effectAllowed = "copy";
                   }}
-                  className={`group relative overflow-hidden rounded-lg border border-white/6 bg-white/2 ${
+                  className={`group relative border-border-strong bg-subtle overflow-hidden rounded-lg border ${
                     item.kind === "image" || item.kind === "video" ? "cursor-grab active:cursor-grabbing" : ""
                   }`}
                 >
-                  <div className="flex aspect-square items-center justify-center overflow-hidden bg-black/20">
+                  <div className="bg-canvas-deep flex aspect-square items-center justify-center overflow-hidden">
                     {item.kind === "image" || item.kind === "video" ? (
                       <MediaThumb
                         src={item.url}
@@ -337,14 +337,14 @@ export function MaterialLibraryPanel({
                       </div>
                     )}
                   </div>
-                  <p className="truncate px-2 py-1.5 text-[11px] text-gray-300">{item.name}</p>
+                  <p className="text-ink-soft truncate px-2 py-1.5 text-[11px]">{item.name}</p>
                   {/* hover 操作 */}
                   <div className="absolute right-1 top-1 hidden gap-1 group-hover:flex">
                     {onUse && (
                       <button
                         type="button"
                         onClick={() => onUse(item)}
-                        className="flex h-6 w-6 items-center justify-center rounded bg-black/60 text-gray-300 backdrop-blur transition-colors hover:text-white"
+                        className="bg-black/60 text-ink-soft flex h-6 w-6 items-center justify-center rounded backdrop-blur transition-colors hover:text-white"
                         title="加入画布"
                       >
                         <Plus size={12} strokeWidth={2.5} />
@@ -353,7 +353,7 @@ export function MaterialLibraryPanel({
                     <button
                       type="button"
                       onClick={() => void remove(item)}
-                      className="flex h-6 w-6 items-center justify-center rounded bg-black/60 text-gray-300 backdrop-blur transition-colors hover:text-red-400"
+                      className="bg-black/60 text-ink-soft flex h-6 w-6 items-center justify-center rounded backdrop-blur transition-colors hover:text-red-600 dark:hover:text-red-400"
                       title="删除"
                     >
                       <Trash2 size={12} />
@@ -376,12 +376,12 @@ export function MaterialLibraryPanel({
                     );
                     event.dataTransfer.effectAllowed = "copy";
                   }}
-                  className={`group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-white/4 ${
+                  className={`hover:bg-subtle group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors ${
                     item.kind === "image" || item.kind === "video" ? "cursor-grab active:cursor-grabbing" : ""
                   }`}
                 >
                   {item.kind === "image" || item.kind === "video" ? (
-                    <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-black/20">
+                    <div className="bg-canvas-deep h-9 w-9 shrink-0 overflow-hidden rounded-lg">
                       <MediaThumb src={item.url} alt={item.name} className="h-full w-full object-cover" />
                     </div>
                   ) : (
@@ -390,8 +390,8 @@ export function MaterialLibraryPanel({
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] text-gray-200">{item.name}</p>
-                    <p className="mt-0.5 text-[11px] text-gray-600">
+                    <p className="text-ink-bright truncate text-[13px]">{item.name}</p>
+                    <p className="text-ink-fainter mt-0.5 text-[11px]">
                       {searching ? `${item.folderName} · ` : ""}
                       {formatSize(item.size)}
                     </p>
@@ -401,7 +401,7 @@ export function MaterialLibraryPanel({
                       <button
                         type="button"
                         onClick={() => onUse(item)}
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/8 hover:text-gray-200"
+                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex h-7 w-7 items-center justify-center rounded-md transition-colors"
                         title="加入画布"
                       >
                         <Plus size={13} strokeWidth={2.5} />
@@ -411,7 +411,7 @@ export function MaterialLibraryPanel({
                       href={item.url}
                       download={item.name}
                       draggable={false}
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/8 hover:text-gray-200"
+                      className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex h-7 w-7 items-center justify-center rounded-md transition-colors"
                       title="下载"
                     >
                       <Download size={13} />
@@ -419,7 +419,7 @@ export function MaterialLibraryPanel({
                     <button
                       type="button"
                       onClick={() => void remove(item)}
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/8 hover:text-red-400"
+                      className="text-ink-muted hover:bg-subtle flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:text-red-600 dark:hover:text-red-400"
                       title="删除"
                     >
                       <Trash2 size={13} />
@@ -439,14 +439,14 @@ export function MaterialLibraryPanel({
                   key={folder.id}
                   type="button"
                   onClick={() => enterFolder(folder.id)}
-                  className="group flex flex-col items-center gap-2 rounded-lg border border-white/6 bg-white/2 py-4 transition-colors hover:bg-white/4 hover:border-white/10"
+                  className="border-border-strong bg-subtle hover:bg-surface-2 hover:border-ink-fainter group flex flex-col items-center gap-2 rounded-lg border py-4 transition-colors"
                 >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-400/80">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-700/90 dark:text-yellow-400/80">
                     <Folder size={22} strokeWidth={1.8} />
                   </div>
-                  <span className="min-w-0 truncate text-center text-[12px] text-gray-300">{folder.name}</span>
+                  <span className="text-ink-soft min-w-0 truncate text-center text-[12px]">{folder.name}</span>
                   {folder.count > 0 && (
-                    <span className="text-[10px] tabular-nums text-gray-600">{folder.count}</span>
+                    <span className="text-ink-fainter text-[10px] tabular-nums">{folder.count}</span>
                   )}
                 </button>
               ))}
@@ -459,16 +459,16 @@ export function MaterialLibraryPanel({
                   key={folder.id}
                   type="button"
                   onClick={() => enterFolder(folder.id)}
-                  className="group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-white/4"
+                  className="hover:bg-subtle group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-400/80">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-700/90 dark:text-yellow-400/80">
                     <Folder size={18} strokeWidth={1.8} />
                   </div>
-                  <span className="min-w-0 flex-1 truncate text-[13px] text-gray-200">{folder.name}</span>
-                  <span className="shrink-0 text-[11px] tabular-nums text-gray-600">
+                  <span className="min-w-0 flex-1 text-ink-bright truncate text-[13px]">{folder.name}</span>
+                  <span className="text-ink-fainter shrink-0 text-[11px] tabular-nums">
                     {folder.count > 0 ? folder.count : ""}
                   </span>
-                  <ChevronRight size={12} strokeWidth={2.5} className="shrink-0 text-gray-700 group-hover:text-gray-500" />
+                  <ChevronRight size={12} strokeWidth={2.5} className="text-ink-fainter group-hover:text-ink-muted shrink-0" />
                 </button>
               ))}
             </div>

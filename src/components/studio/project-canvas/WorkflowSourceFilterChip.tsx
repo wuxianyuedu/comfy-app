@@ -75,7 +75,7 @@ export function WorkflowSourceFilterChip({
               width: pos.width,
               zIndex: 50,
             }}
-            className="rounded-lg border border-white/8 bg-(--color-card) py-1 shadow-2xl shadow-violet-500/20"
+            className="border-border-strong bg-card rounded-lg border py-1 shadow-2xl shadow-black/10 dark:shadow-violet-500/20"
           >
             {(
               [
@@ -98,7 +98,7 @@ export function WorkflowSourceFilterChip({
                   className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
                     sel
                       ? "bg-violet-500/20 text-violet-200"
-                      : "text-gray-300 hover:bg-white/6"
+                      : "text-ink-soft hover:bg-subtle"
                   }`}
                 >
                   <span

@@ -35,7 +35,7 @@ export function CanvasContextMenu({
         }}
       />
       <div
-        className="fixed z-50 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#14121f]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur"
+        className="fixed z-50 border-border-strong bg-panel/95 w-52 overflow-hidden rounded-xl border p-1.5 shadow-2xl shadow-black/20 backdrop-blur dark:shadow-black/60"
         style={{ left: x, top: y }}
       >
         {/* ── 测试节点（纯视觉，对齐 Ardot 稿）── */}
@@ -55,14 +55,14 @@ export function CanvasContextMenu({
           </span>
           <span className="flex flex-col">
             <span className="font-medium">测试自定义工作流</span>
-            <span className="text-[10px] text-gray-500">
+            <span className="text-ink-muted text-[10px]">
               纯视觉 · 对齐 Ardot 稿（无运行时）
             </span>
           </span>
         </button>
 
-        <div className="my-1 h-px bg-white/6" />
-        <div className="px-2 py-1 text-[10px] tracking-wider text-gray-500 uppercase">
+        <div className="bg-border-strong my-1 h-px" />
+        <div className="text-ink-muted px-2 py-1 text-[10px] tracking-wider uppercase">
           创建节点
         </div>
         {(Object.keys(NODE_META) as NodeKind[]).map((kind) => {
@@ -73,12 +73,12 @@ export function CanvasContextMenu({
               type="button"
               data-canvas-node-kind={kind}
               onClick={() => onPick(kind)}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-gray-200 transition-colors hover:bg-white/6"
+              className="text-ink-bright hover:bg-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors"
             >
               <Icon name={meta.icon} size={15} className="text-violet-300" />
               <span className="flex flex-col">
                 <span className="font-medium">{meta.label}</span>
-                <span className="text-[10px] text-gray-500">{meta.desc}</span>
+                <span className="text-ink-muted text-[10px]">{meta.desc}</span>
               </span>
             </button>
           );

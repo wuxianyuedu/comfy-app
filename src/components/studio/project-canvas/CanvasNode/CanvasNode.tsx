@@ -230,7 +230,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
           />
         </div>
         {selected && (
-          <div className="border-t border-white/6 pt-2">
+          <div className="border-border-strong border-t pt-2">
             <ImageGenerationPanel
               kind="picture"
               d={d}
@@ -327,7 +327,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
              * ⌫ 按钮统一承担。*/
             const isAsset = d.kind === "text" || d.kind === "picture" || d.kind === "movie";
             return (
-              <div className="flex items-center justify-between gap-2 border-b border-white/6 px-3.5 py-2.5">
+              <div className="border-border-strong flex items-center justify-between gap-2 border-b px-3.5 py-2.5">
                 <NodeChip kind={d.kind} name={meta.label} />
                 {!isAsset && (
                   <div className="flex shrink-0 items-center gap-1.5">
@@ -336,7 +336,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
                     <button
                       type="button"
                       onClick={deleteSelf}
-                      className="ml-1 text-gray-500 transition-colors hover:text-red-300"
+                      className="text-ink-muted ml-1 transition-colors hover:text-red-600 dark:hover:text-red-300"
                       title="删除节点"
                     >
                       <Icon name="close" size={14} />
@@ -382,7 +382,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
       {/* 主输出端口 + 类型标签 — 改为与 WorkflowNode.outputs
        *  row 同款结构（label + typeChip + PortHandle）。image / video / script 通用。 */}
       {(d.kind === "image" || d.kind === "video" || d.kind === "script") && (
-        <div className="border-t border-white/6">
+        <div className="border-border-strong border-t">
           <OutputRowPort kind={d.kind} wfIO={wfIO ?? null} />
         </div>
       )}

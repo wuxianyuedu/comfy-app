@@ -197,8 +197,8 @@ export function FlowNodeWidgetRows({
                   <span
                     className={
                       isConn
-                        ? "h-2 w-px shrink-0 bg-white/5 opacity-50"
-                        : "h-2 w-px shrink-0 bg-white/5"
+                        ? "bg-border-strong h-2 w-px shrink-0 opacity-50"
+                        : "bg-border-strong h-2 w-px shrink-0"
                     }
                     aria-hidden
                   />
@@ -228,7 +228,7 @@ export function FlowNodeWidgetRows({
                   <StringTextarea value={stringText} hasSize={hasSize} />
                 ) : (
                   <div
-                    className="rounded border border-white/10 bg-black/30 px-2 py-1.5 text-[10.5px] leading-snug text-gray-600"
+                    className="border-border-strong bg-canvas-deep text-ink-fainter rounded border px-2 py-1.5 text-[10.5px] leading-snug"
                     style={{ minHeight: 28 }}
                     title={stringText}
                   >
