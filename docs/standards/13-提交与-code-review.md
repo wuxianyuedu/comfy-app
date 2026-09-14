@@ -133,6 +133,7 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
 ✅ pnpm exec eslint . --max-warnings 0
 ✅ node scripts/check-ui-logic-separation.cjs
 ✅ node scripts/check-changelog-fragments.cjs
+✅ node scripts/check-theme-colors.cjs       # 主题色扫描棘轮（见 03 §3.6.1）
 ```
 
   任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。
