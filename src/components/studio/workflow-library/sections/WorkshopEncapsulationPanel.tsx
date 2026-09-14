@@ -25,6 +25,7 @@ import {
   contractToStatusEntries,
   type ModeContract,
 } from "@/lib/workshop/model-mode-contract";
+import { getWorkflowType } from "~/lib/workflow-types";
 import {
   DEFAULT_SHOT_SIZE,
   shotSizeToParam,
@@ -150,6 +151,12 @@ export function WorkshopEncapsulationPanel({
             未配置
           </span>
         )}
+        {mode && (
+          <span className="text-muted-foreground text-[11px]">
+            {getWorkflowType(mode)?.label ?? mode}
+            <span className="font-mono text-[10px]">（{mode.toUpperCase()}）</span>
+          </span>
+        )}
         <span className="text-muted-foreground text-[11px]">
           {status.resolvedCount}/{status.entries.length} 个对外口已落到端口
         </span>
@@ -177,6 +184,11 @@ export function WorkshopEncapsulationPanel({
               </span>
               <span className="text-ink text-[12px] font-medium">
                 {entry.label}
+                {/* 口 id 与中文字面并列：配置 / 日志 / 代码里用的是 id，
+                    而契约口与适配器口是两套 id，只写中文对不上。 */}
+                <span className="text-muted-foreground/60 ml-1 font-mono text-[10px]">
+                  {entry.id}
+                </span>
               </span>
               <span className="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-[10px]">
                 {entry.targetIoKey ?? "—"}
