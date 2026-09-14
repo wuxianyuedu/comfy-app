@@ -89,3 +89,54 @@ describe("app-port 端口解析", () => {
     expect(FALLBACK_PORT).toBe(3100);
   });
 });
+
+/**
+ * 四语言端口一致性：共享校验向量（ISSUE #489 缺陷 4）。
+ *
+ * 背景：`changelog.d` 与规范 §1.1 都承诺「Node / PowerShell / Python / Rust 四侧
+ * 对同一路径给出同一端口」，但此前四侧各写各的固定断言（且 Node 侧只锁了一个
+ * 路径），没有任何测试会发现某一侧漂移 —— 例如实测发现 Rust 的
+ * `normalize_root_for_port` 完全不做路径解析，Node/Python/PowerShell 对**相对
+ * 路径**会拼 cwd，于是 `rel/p` 四侧端口不同。对绝对路径（真实检出的形态）
+ * 不影响，但「四侧一致」当时只是文档承诺，不是可失败断言。
+ *
+ * 这里把向量集中到 `tests/fixtures/app-port-vectors.json`，四侧测试读**同一份**
+ * 文件：Node（本文件）、PowerShell / Python / Rust 各自断言同一批 input→port。
+ * 任一侧实现漂移 → 对应侧测试失败，而不是等到 Windows 真机上才发现。
+ */
+describe("app-port 四语言共享校验向量", () => {
+  const fixture = JSON.parse(
+    fs.readFileSync(
+      path.join(process.cwd(), "tests", "fixtures", "app-port-vectors.json"),
+      "utf8",
+    ),
+  ) as {
+    vectors: {
+      input: string;
+      normalized: string;
+      fnv1a32: number;
+      port: number;
+    }[];
+  };
+
+  it("向量文件非空（防止误删后测试静默全绿）", () => {
+    expect(fixture.vectors.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("每个向量：Node 侧规范化 / 哈希 / 端口三者一致", () => {
+    for (const v of fixture.vectors) {
+      expect(normalizeRootForPort(v.input)).toBe(v.normalized);
+      expect(fnv1a32(v.normalized)).toBe(v.fnv1a32);
+      expect(derivePortFromPath(v.input)).toBe(v.port);
+    }
+  });
+
+  it("同一检出的书写差异（分隔符 / 大小写 / 尾斜杠）归一到同一端口", () => {
+    // F:\… 与 F:/… 与 F:/…/ 三条向量必须同端口 —— 这正是 §1.1 的承诺。
+    const win = fixture.vectors.filter((v) =>
+      v.normalized === "f:/ai/other/comfy-app-t3-branch",
+    );
+    expect(win.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(win.map((v) => v.port)).size).toBe(1);
+  });
+});
