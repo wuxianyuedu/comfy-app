@@ -64,17 +64,20 @@ Log '      已清理 start-tauri\ 与 build-launcher\'
 Log ""
 
 Log "[3/3] 开始打包（onedir 模式，耗时约 1-3 分钟）..."
+$packWatch = Start-LogStopwatch
 $specPath = Join-Path $TOOLS_DIR "start-tauri.spec"
 Invoke-Logged "pyinstaller --clean --noconfirm --distpath . --workpath build-launcher $specPath"
 if ($LASTEXITCODE -ne 0) {
     Log ""
     Log "[错误] 打包失败，请查看上方输出。"
+    Log-Elapsed -Stopwatch $packWatch -Label "start-tauri.exe 打包"
     exit 1
 }
 
 Log ""
 Log "=========================================================="
 Log "  打包完成"
+Log ("  耗时：{0}" -f (Format-Elapsed -Elapsed $packWatch.Elapsed))
 Log "  产物: $startTauriDir\start-tauri.exe"
 Log "=========================================================="
 Log ""

@@ -559,6 +559,7 @@ zustand 队列，而不是再加一个模块级单例。
 
 | 症状                                                                                                                                   | 根因（历史案例）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 对策                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **「配置了 ComfyUI 端口却像没配」**：设置里 `comfyuiPort` 留空 / 填了一个值，应用却连到了**另一个** ComfyUI 实例上——现象是上传素材失败、任务「未找到生成结果」、端口在日志里漂移，而地址栏/探测看起来一切正常（ISSUE #534 P1） | **同一个事实（默认端口）有多份实现**：连接侧 `resolveComfyBase()` 把 `comfyuiPort: 0` 判为「未配置」并用**硬编码**的 8188 作为探测起点；拉起侧 `resolveEffectiveLaunch()` → `buildSpawnArgs()` 同样把 `0` 当「未配置」，**不传 `--port`**，于是 ComfyUI 以它自己的默认端口启动；`lib/core/config.ts` 的 schema 默认值与错误文案里又各写了一遍 8188。四处都写 8188 看着一致，但**没有任何断言把它们绑在一起** —— 单独改一处不会有测试变红。「连错实例」比「连不上」难查得多：8188 上往往真有个别的实例在应答（Comfy Desktop 常驻），`client.ts` 的兜底探测链最后一项正是窗口地址 :8000 | 已修（门禁 + 收口）：① 默认端口单点定义在 `src/lib/app-settings.ts` 的 `COMFYUI_DEFAULT_PORT`，连接侧与拉起侧一律 import；② `lib/core/config.ts` 的 ComfyUI 兜底地址改由 `endpoints.ts` 的 `comfyUiBaseUrl(COMFYUI_DEFAULT_PORT)` 拼出，不再写裸地址；③ 设置页 placeholder / 说明文案与错误建议里的端口改为运行时取值（不再各写一遍数字）；④ 新增可失败断言 `scripts/check-comfyui-port-contract.cjs`（pre-commit 与 CI）+ `tests/comfyui-port-contract.test.ts`、`tests/check-comfyui-port-contract.test.ts`。口径见 §9.2 第 5 条 |
 | 双击 exe：启动即报「pnpm 工具链不可用 / 无法获取 pnpm 版本」并弹窗                                                                     | corepack 管理的 pnpm 在切换版本时本地缓存损坏：`.tools\pnpm\<ver>\bin` 缺失 → `pnpm -v` 报 `Failed to switch pnpm to pnpm@<ver> ... ENOENT`，命令完全不可用（install/dev 全依赖 pnpm）                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 已由 `Test-ToolchainGate`（弹壳前）拦截并弹 MessageBox 给修复步骤：`corepack enable && corepack prepare pnpm@<版本> --activate`（重建缓存，需联网一次），仍不行则删除损坏缓存后重装 Node/pnpm                                                                                                                                                                                                                                                 |
 | 启动后 splash 停在依赖预检报「关键依赖目录 typescript / @typescript/native / next 为空或缺失」                                         | pnpm 中断安装/拒装留下「目录在但内容空」的残缺（如 typescript 与 @typescript/native 空目录 → tsc 垫片找不到入口），旧版只查 `.modules.yaml` / `.bin/next` 查不出                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 已由 `Test-DevDependencies` 覆盖关键目录非空检测，残缺时自动 `pnpm install` 自愈；install 后仍残缺则明确报错并指向 `log/launcher/pnpm-install-stderr.log`                                                                                                                                                                                                                                                                                     |
 | `pnpm install` 已成功（exit 0）但仍报「node_modules/…为空或缺失」启动失败；同机跑 `sync-lint.ps1`/`run-local.ps1` 却正常               | 假阳性：`Get-BrokenKeyDeps` 用 `Get-ChildItem -LiteralPath` 枚举顶层 junction/symlink 判空，pwsh（7.6.5 实测）对这类 reparse point 的枚举可能返回 0 项 → 健康安装被误判残缺，触发 install 后因 `.modules.yaml`/lockfile 已一致而“Already up to date”无法自愈，二次复查仍误报                                                                                                                                                                                                                                                                                                                                                              | 已修：先 `Resolve-Path` 解析到链接目标真实绝对路径，再用 .NET `Directory.EnumerateFileSystemEntries` 对真实目录判非空（见 §2.2 step 5）。同步/自检脚本（sync-lint/run-local）本就只查 `.modules.yaml`+`.bin`+lockfile，故不受影响                                                                                                                                                                                                             |
@@ -633,6 +634,13 @@ zustand 队列，而不是再加一个模块级单例。
 | **打开全屏视图（设置 / 工作流编辑器 / 脚本编辑器 / 消息中心）后，页签整条消失、切不回其它页签** | **全屏视图仍按 `fixed inset-0` 铺满整个视口，把标题行（页签栏）盖住**（ISSUE #310 回归）：页签搬到窗口标题行之后，「全屏」的坐标系变了——标题行是**应用级 chrome**，任何视图都不该盖它；而应用内那些「全屏视图」的 `inset-0` 是相对**整个视口**定位的，于是页签被自己的视图盖掉，用户只能先关掉当前视图（实测：设置页打开后顶部只剩设置自己的 header，主应用页签不可见也不可点） | 已修：新增 `src/lib/full-screen-layer.ts`（判据）+ `src/components/studio/fullscreen/FullScreenLayer.tsx`（视图层），全屏视图的定位从 `fixed inset-0` 改为 `fixed top-title-bar right-0 bottom-0 left-0`——**让出标题行、铺满其下方的内容区**（`bottom-0` 必须显式，否则靠内容高度撑开、拉伸不到底）。接入点：`SettingsOverlay`（含 loading / error / 未就绪三态）、`WorkflowEditorInner`（loading / error / 主态）、`WorkflowCanvasEditor` 崩溃兜底、`WorkflowLibrary` 动态加载占位、`ScriptMarkdownEditor`、`MessageCenterPanel`、`WorkflowCanvasSettings` / `ProjectCanvasSettings` 抽屉、`ProjectOutputs` 元数据抽屉。**踩坑**：tailwind v4 只有 `--spacing-<name>` 命名空间能生成间距类，自定义名 `--title-bar-height` **产出 0 个类**（全屏视图会静默退回 `top:auto` 继续被盖住）——标题行高度因此定为 `--spacing-title-bar: 2.25rem`，`TitleBarTabs` / `InAppTabStrip` 的 `h-title-bar` 与全屏视图的 `top-title-bar` 同取这一处。回归测试见 `src/lib/full-screen-layer.test.ts` 与 `e2e/critical-flows.spec.ts`（「打开设置后应用页签仍可见可点」，用 `elementFromPoint` 断言顶部命中页签栏） |
 | **打开居中弹窗（应用日志 / 执行日志 / 任务详情 / 模型库…）后，页签与右上角的关闭按钮被挡住** | **同一处回归的第二形态：首轮只改了「全屏视图」，弹窗类浮层仍是 `fixed inset-0`**（ISSUE #310 二次回归）。页签搬到窗口标题行后，任何铺满**整个视口**的浮层都会盖住标题行；而弹窗是全项目最通用的写法（25 个文件），逐个文件手改必然再漏——用户实测：打开「应用日志」后页签与右上角关闭按钮同时不可见、不可点 | 已修（判据与门禁见 12 §12.8）：① 全屏视图与模态弹窗统一经 `overlayClass(kind, extra)` / `fullScreenLayerClass(z, extra)` 取让位定位（顶部 `top-title-bar`），不再手写 `fixed inset-0`；② 接入 21 个浮层（应用日志、执行日志 ×2、任务详情、视频队列、模型库 / 标签、来源、删除工作流、产出预览、调试链路、`ModalDialog`、设置页两个弹窗、工坊 API 渠道 / LLM 上下文、节点设置、右键菜单 / 项目切换 / 种子模式遮罩、工作流库元数据编辑、`ui/dialog` 与 `ui/sheet` 遮罩）；③ **新增硬规则门禁** `scripts/check-title-bar-clearance.cjs`（pre-commit 第 3 步 + CI），`src/components/**`、`src/app/**` 里出现 `fixed inset-0` 即阻断，避免再靠人肉逐个文件翻。豁免仅 3 条（判据模块、注释引用、装饰背景层），见脚本内 `EXEMPT`。回归测试见 `src/lib/full-screen-layer.test.ts`、`tests/check-title-bar-clearance.test.ts`、`e2e/critical-flows.spec.ts`（新增「打开应用日志面板后应用页签仍可见可点」，已反向验证：改回 `inset-0` → 用例失败） |
 
+| **安装包里带着开发机的密钥与数据库**（用户/评审都看不出来：构建不报错、CI 全绿、体积护栏也只挡 GB 级） | **产物卫生靠「剔除目录名」的清单，而这两样是文件**（ISSUE #489）：`next build` 把仓库根的 `.env`（Next standalone 的环境加载是**无条件复制**，`outputFileTracingExcludes` 实测删不掉）与 `db.sqlite`（动态路径 tracing）复制进 `.next/standalone`，`scripts/build-desktop.mjs` 的噪声清单只剔目录名 → 随 static 被编译期内嵌进 exe。**CI 不跑 `build-desktop`（也不该跑）**，而触发条件是「开发机有真实 `.env`」——正是 `run-local.ps1` 自动生成 `.env` 的那些机器 | 已修（§7.3）：`outputFileTracingExcludes` 补 `./db.sqlite*`（实测有效）与 `./.env*`（尽力而为）；新增 `scripts/standalone-private-inputs.mjs` 作剔除清单的单一实现，`pnpm build` 收尾与 `build-desktop` 组装后各剥一次；`scripts/check-standalone-contents.cjs` 的禁忌清单补「开发机私有输入 / 开发库文件」并把范围扩到 `src-tauri/static`；门禁见 `tests/dist-artifact-hygiene.test.ts` |
+| **面板里的错误日志带着密钥原文**（pino 流里明明是 `[Redacted]`，落盘的 `app-runtime.log` 里却是明文） | **ERROR 镜像是一条独立落盘通道，不受 pino `redact` 保护**（ISSUE #489）：`src/server/lib/logger.ts` 的镜像在取不到 `msg`/`err.message` 时用 `JSON.stringify(payload)` 整包兜底；而 `REDACT_PATHS` 的 `*.secret` 只匹配「属性名恰好叫 `secret`」，`BETTER_AUTH_GITHUB_CLIENT_SECRET` 这类 `*_SECRET` 命名一条都不命中——pino 的通配语义也表达不了「名字含 secret」（`*secret`/`*_SECRET`/`*secret*` 实测全无效，`*` 会把整条记录连 `msg` 打成 `[Redacted]`） | 已修（规范 07 §7.18.2.1）：镜像不再整包透传（无可读文案时只输出键名清单），并新增**值形状守卫** `redactSecretShaped()`——在日志写入边界擦掉 PEM 私钥块 / JWT / 高熵串，不问字段名因而覆盖「名字无法穷举」的密钥；`Error` 保形 |
+| **standalone 起得来、页面全 200，但每个 API 路由都 500**（报错是 `Failed to load external module …/app-route-turbo.runtime.prod.js`，看起来像业务/数据库/鉴权问题） | **Turbopack 对动态 `require("next/dist/compiled/next-server/<name>.runtime.prod.js")` 字符串的追踪不完整**（ISSUE #489）：只追到被 middleware 图带上的 `app-page-turbo`，`app-route-turbo`（所有 `route.ts` 都要它）一条 `.nft.json` 都没有 → standalone 的 `next-server/` 只有 3 个文件（仓库里 74 个）。构建期静默、CI 只跑 build，而本仓库 `next start` 与 `output: standalone` 不兼容，**没有任何常规门禁会去启动 standalone** | 已修（§7.4）：`next.config.js` 顶层补 `outputFileTracingIncludes`（`./node_modules/next/dist/compiled/next-server/*runtime.prod.js`，实测 +26 文件 / ≈2.6MB，API 全恢复 200）；`tests/standalone-runtime-completeness.test.ts` 锁配置与产物缺件；`check-standalone-contents.cjs` 加**反向**检查「必须有的」运行时脚本 |
+| **安装包里带着 `AGENTS.md` 内部规范全文与整套 `scripts/` 门禁脚本**（解包即得；产物护栏却报「✓ 产物干净」） | **产物卫生清单的漏项**（ISSUE #489，与上面「密钥进包」同源、同一通道）：护栏 `FORBIDDEN` 只列了 `docs/*.md` / `src/**/*.test.*` / `changelog.d/*.md` / `.env` / `db.sqlite*`，**根级 `.md`、各 `*.config.*` 与整个 `scripts/` 一条都不匹配**；`build-desktop.mjs` 的 `STATIC_NOISE` 又**只剔目录名**——这些是文件，于是随 static 被编译期内嵌进 exe | 已修（§7.3 末节）：`stripDevArtifacts` 走**白名单**（`scripts/` 只留运行时真的会读的 `install-comfyapp-helper.ps1` + `dev-launcher.ps1`，新增脚本默认不进产物），根级文件黑名单逐项点名；产物护栏加 `ALLOWED_SCRIPTS` 同款白名单 + 判据锚 `^` 不误伤 `node_modules` 里的同名 README/tsconfig |
+| **`pnpm test` 随机非零退出**（`Test Files N passed` / `Tests M passed / 0 failed` 全绿，退出码却来自 `Unhandled Errors`；每次点名的文件都不同） | **游离的异步链路在用例结束后才 resolve/reject**（ISSUE #489）。已实测三处同族（都是「与报错点名的文件毫无关系」的失败）：① `use-model-library.ts` 的 `listQ.refetch().finally(() => setLoading(false))` 在 jsdom 环境拆除后才 resolve，触发 React 更新调度去读不存在的 `window`（`ReferenceError: window is not defined` @ `resolveUpdatePriority` / `dispatchSetState`）；② `use-custom-nodes-settings.ts` 的「完成后提示停留 800ms」`setTimeout` 同源；③ `runner-state.ts` 的 `schedulePersistLogs` **防抖定时器不属于任何生命周期**，清空内存 state 后仍在 200ms / 1500ms 后打到已 `vi.mock` 撤销的 repository（`TypeError: taskRepository.replaceLogs is not a function`）。`cleanup()` 只卸载组件、**不会取消已发出的 promise 与已排的 timer** | 已修：① 两处 hook 加卸载标记（先判存活再 setState）；③ 新增公共取消 API `cancelPersistLogs`，用例在 `beforeEach` **与** `afterEach` 两头都掐（只在 `beforeEach` 清，定时器会在「本用例结束后、下个 `beforeEach` 之前」的窗口里触发）。回归：`use-model-library.test.ts` 用「卡住回包 + 放行后记账」把偶发变**必现**（只统计更新调度栈的 `window` 读取，避开 react-query / tRPC 的 ambient 读取噪声），`reaper-decisions.test.ts` 锁「取消后不再有排期」。反向验证：还原任一实现即挂 |
+ **hook 里一条脱离组件生命周期的游离 promise 链**（ISSUE #489）：`src/components/studio/hooks/use-model-library.ts` 的 `listQ.refetch().finally(() => setLoading(false))` 在测试结束（jsdom 环境已拆）之后才 resolve，于是 setLoading 触发 React 更新调度、去读已不存在的 `window` → `ReferenceError: window is not defined`（`resolveUpdatePriority` / `dispatchSetState`）。`cleanup()` 只卸载组件、**不会取消这条已发出的 promise**。谁被点名只取决于谁的 MSW handler 回包慢一拍 → 报错文件每次不同（实测 65 轮里 4 轮，约 6%） | 已修：hook 加 `aliveRef` 卸载标记，`.finally` 先判存活再 `setLoading`；回归 `src/components/studio/hooks/use-model-library.test.ts` 用「卡住回包 + 放行后记账」把偶发变**必现**（只统计更新调度栈的 window 读取，避开 react-query/tRPC 的 ambient 读取噪声）。反向验证：去掉 aliveRef 判定 → 本条挂（0 vs 10） |
+| **`pnpm test` 在仓库根新建 `log/` 并写入日志**（CI 上从无到有、开发者本机悄悄多几行，其中含用例的密钥标记行） | **用例直连真实日志路径**（ISSUE #489）：`src/server/lib/logger.test.ts` 的镜像用例 import 真实 `APP_RUNTIME_LOG` 用 `slice(before.length)` 读增量，`generate.test.ts` 的业务里程碑日志也落真实文件；镜像/日志是**真实写盘**副作用，不隔离就会写字 | 已修：`createPinoLogger({ mirror })` 支持注入镜像目标，两处用例都落到自己的 mkdtemp 目录；删掉 `log/` 跑 `pnpm test` 不再重建目录 |
 ## 6. 工具链钉死项（改之前必须理解原因）
 
 | 位置                   | 配置                                   | 原因                                                                |
@@ -650,7 +658,7 @@ zustand 队列，而不是再加一个模块级单例。
 | 场景                                                                                      | 命令                                                                                                         | 说明                                                                                                                                                                |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 只改了 Rust 壳 / 窗口配置 / 启动页                                                        | `cd src-tauri; cargo build --release --features custom-protocol`                                             | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期。注意：裸 `cargo build` 要求 `src-tauri\binaries` 已有 Node sidecar（`tauri.conf.json` 的 externalBin 在编译期被校验，缺失即 panic）——缺失时先跑一次 `tools\build\build-tauri-release.ps1` 自动补齐，见 §5 对应条目 |
-| 生产构建（standalone + 安装包）                                                           | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build`                                                                              |
+| 生产构建（standalone + 安装包）                                                           | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build`；`build-all` 结束时报告各步与总耗时（见 §7.0）                                |
 | 前端/standalone 体积分析                                                                  | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`）                   |
 | `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认 |
 | `next build` 走 Turbopack 不受影响；因此分析时强制 `--webpack`。产物                      |
@@ -659,6 +667,30 @@ zustand 队列，而不是再加一个模块级单例。
 | 可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。    |
 | 重新打包双击启动器                                                                        | `tools\build\build-launcher.ps1`                                                                             | PyInstaller onedir，产物 `start-tauri/`（gitignore）                                                                                                                |
 | 开发者工具箱                                                                              | `tools\build\rebuild-static.ps1` 等 / `dev-tools`                                                            | 见 `tools/README.md`                                                                                                                                                |
+
+### 7.0 构建耗时报告（`tools/scripts/Log-Common.ps1`）
+
+构建是一轮「按分钟到按十分钟计」的等待，构建者（尤其是双击入口的用户）需要在
+结束那一刻看到「这一轮到底花了多久」。耗时口径统一收敛在构建脚本共用的日志库
+`tools/scripts/Log-Common.ps1`：
+
+| 函数                    | 职责                                                     |
+| ----------------------- | -------------------------------------------------------- |
+| `Start-LogStopwatch`    | 起一个计时器（`System.Diagnostics.Stopwatch`）           |
+| `Format-Elapsed`        | 按量级格式化成 `45.6 秒` / `3 分 12.4 秒` / `1 时 02 分 03 秒` |
+| `Log-Elapsed`           | 记一行「<标签> 耗时：<格式化用时>」，控制台与日志同落     |
+
+三层各自报告，不重复计同一笔：
+
+- **入口** `tools\build\build-all.ps1`：收尾前打印整轮总耗时（含子进程启动开销），
+  双击场景里它是关窗口前最后读到的一行；失败时同样打印（判断是否直接重跑）；
+- **编排层** `tools\scripts\build-all.ps1`：汇总里给出「总耗时」，任一步失败中止时
+  也报出已用时间；各步耗时由子脚本自己负责，编排层不重复计；
+- **子步骤** `build-tauri-release.ps1`（第 4/4 步 cargo build）/ `build-launcher.ps1`
+  （第 3/3 步 pyinstaller）：在各自的完成汇总里给出本步耗时。
+
+新增构建/工具脚本时直接复用这三个函数，不要各写一套 `Stopwatch`——格式漂成几种
+就没法横向对比，汇总也对不齐。
 
 ### 7.1 构建前置检查：目标壳不得在运行（`tools/scripts/Build-Guard.ps1`）
 
@@ -819,6 +851,152 @@ node -e "const j=require('./.next/server/instrumentation.js.nft.json');   consol
 
 > 清单只锁「关键目录在不在」，不锁白名单全量：全量比对会在每次合理地新增排除项时
 > 无谓变红，反而让人习惯性改测试。产物层那条才是真正的兜底。
+
+### 7.3 分发产物卫生：开发机私有输入不得进包（ISSUE #489）
+
+**症状与判据**（实测复现）：把仓库根的 `.env` 与 `db.sqlite` 留在检出里跑
+`pnpm build`，两者都会出现在 `.next/standalone`：
+
+```
+.next/standalone/.env        1974 B   ← BETTER_AUTH_SECRET / GitHub OAuth 密钥，明文
+.next/standalone/db.sqlite   328 K    ← 开发库，23 张表
+```
+
+而 `scripts/build-desktop.mjs` 的噪声剔除清单**只剔目录名**（`log` / `tests` …），
+文件级不做处理 → 两者随 `src-tauri/static` 组装的产物被**编译期内嵌进 exe**。
+
+**为什么这不是「多带了点文件」**：
+
+1. `.env` 里的 `BETTER_AUTH_SECRET` 与 OAuth client secret 以**明文**随安装包分发，
+   拿到包的人解包即得；
+2. 壳以 `current_dir(res_dir)` 启动 sidecar（`src-tauri/src/lib.rs::spawn_sidecar`），
+   而 `resolveDbPath` 按 `process.cwd()` 解析 `db.sqlite`（`src/server/db.ts`）
+   —— 被带进包的开发库**就是**应用首次启动时读写的那个库，开发者本机的工坊数据 /
+   设置会被当成出厂数据。
+
+**为什么以前没被发现**：CI 不跑 `build-desktop`（也不该跑），而它的触发条件是
+「开发机有真实 `.env`」——正是 Windows 上 `run-local.ps1` 会自动生成 `.env` 的那类机器；
+`pnpm build` 本身也不会因此报错。
+
+**两道防线**（实测口径，别想当然）：
+
+| 手段 | 对 `db.sqlite` | 对 `.env` |
+|---|---|---|
+| `outputFileTracingExcludes`（`./db.sqlite*`、`./.env*`） | ✅ 有效 | ❌ **无效** |
+| 构建后显式删除 | ✅ | ✅ |
+
+`.env` 之所以拦不住：Next standalone 的环境加载是**无条件复制**的，
+`./.env`、`./**` 下的 `.env` 都试过，文件照旧在。因此：
+
+- **源头层**：`next.config.js` 的 `outputFileTracingExcludes` 补 `./db.sqlite*`
+  与 `./.env*`（前者真拦，后者尽力而为）；
+- **产物层**：`scripts/standalone-private-inputs.mjs` 是剔除清单的**单一实现**
+  （`.env` 家族 + `db.sqlite*`，含 SQLite 的 WAL/SHM 边车文件），被两处复用 ——
+  `package.json` 的 `build`（`next build && node scripts/standalone-private-inputs.mjs`，
+  保证 `pnpm build` 自身产出的 standalone 就是干净的，**CI 只跑 build**）与
+  `scripts/build-desktop.mjs`（组装 static 后再剥一次，唯一能覆盖 static 这一层的地方）。
+
+**门禁**（配置层 + 产物层）：
+
+- `scripts/check-standalone-contents.cjs` 的禁忌清单新增「开发机私有输入」与
+  「开发库文件」，并把检查范围从 `.next/standalone` 扩到 `src-tauri/static`
+  （后者更接近用户拿到的东西）。此前它对着含 `.env` 的产物照样报
+  「✓ 产物干净」——**清单还在 ≠ 清单生效**，这次栽在清单本身的漏项上。
+- `tests/dist-artifact-hygiene.test.ts`：锁「清单条目还在」「build-desktop 复用同一
+  实现而不是各写一套」「`pnpm build` 自身收尾就剥离」。
+
+> **新增会被打包的敏感输入时**（另一种 `.env` 变体、证书、token 缓存…）：先按上表
+> 实测 `outputFileTracingExcludes` 是否真拦得住，拦不住就往
+> `scripts/standalone-private-inputs.mjs` 的清单里加一项，并向
+> `check-standalone-contents.cjs` 的禁忌清单补一条形状。**别只加 excludes 就当修好了。**
+
+**同族缺陷：开发期文件与整套内部门禁脚本也在产物里**（同一轮实测）。全项目
+tracking 还会带上仓库根的 `AGENTS.md`（内部协作规范全文）、`CHANGELOG.md`、
+`README.md`、各 `*.config.*`（`eslint` / `playwright` / `vitest` / `drizzle` /
+`prettier`）与 **整套 `scripts/`（46 个文件 / 544K，含 16 个 `*.cjs` 门禁脚本）**
+外加 `scripts/__pycache__/`。这些随 static 被编译期内嵌进 exe，**解包即得**。
+判断标准不是体积，而是**它们不可能是任何 server code 的运行时依赖**
+（路由跑的是 `.next/server/**` 的编译产物）。
+
+处理方式与私有输入同一条通道（`stripDevArtifacts`，`pnpm build` 收尾 +
+`build-desktop` 各跑一次），但**清单形态不同**：
+
+| | 形态 | 理由 |
+|---|---|---|
+| 根级文件 | **黑名单**逐项点名 | 根目录是「工程配置清单」，变动低频且显式 |
+| `scripts/` | **白名单**（`RUNTIME_SCRIPTS`） | 脚本会不断新增；黑名单欠完备，漏掉是静默的（`db.sqlite` 就这么漏过一次） |
+
+白名单当前只有两项，判据是「代码里能指到 `process.cwd()` + 路径拼接」：
+
+- `install-comfyapp-helper.ps1` —— `src/app/api/helper/{install,status}/route.ts`
+  把它当下载内容返回（`installerAvailable` 也靠它判）；
+- `dev-launcher.ps1` —— `src-tauri/src/lib.rs::resolve_project_root()` 的项目根判据。
+
+产物层由 `check-standalone-contents.cjs` 的 `ALLOWED_SCRIPTS` 白名单同款守：
+**产物 `scripts/` 下的每个条目都必须是登记过的**（比正则形状更严，新脚本进来即命中）。
+反向验证：把白名单条目从剔除实现里去掉重新 build，产物护栏立刻报出 44 个门禁脚本。
+
+### 7.4 standalone 运行时完整性：Next 自带运行时脚本必须显式包含（ISSUE #489）
+
+**症状**（实测复现）：`.next/standalone/server.js` 起得来、页面（RSC 渲染）与
+middleware 全部正常，**但每一个 API 路由都 500**：
+
+```
+⨯ Error: Failed to load external module
+  next/dist/compiled/next-server/app-route-turbo.runtime.prod.js:
+  Error: Cannot find module '…/app-route-turbo.runtime.prod.js'
+```
+
+「首页 200、接口全 500」这个形态极具误导性：看起来像业务代码 / 数据库 / 鉴权
+问题，实际是**产物缺文件**。
+
+**根因**：Turbopack 对
+
+```js
+t.exports=e.x("next/dist/compiled/next-server/app-route-turbo.runtime.prod.js",
+              ()=>require("next/dist/compiled/next-server/app-route-turbo.runtime.prod.js"))
+```
+
+这类**动态 require 字符串**的追踪是**不完整的**。实测 nft 清单里只有
+`app-page-turbo.runtime.prod.js`（被 middleware 图带上），而
+`.next/server/chunks/[root-of-the-server]__*.js` 里明确 require 了
+`app-route-turbo`，且它**不在任何 `.nft.json` 的 files 里**。于是 standalone 的
+`node_modules/next/dist/compiled/next-server/` 只有 3 个文件，而仓库里是 74 个。
+
+**为什么常规门禁抓不到**：
+
+- 构建期**不报错**（缺口是运行期才暴露的），CI 只跑 `pnpm build`；
+- 本仓库 `next start` 与 `output: standalone` **不兼容**（Next 会打
+  `"next start" does not work with "output: standalone"` 警告），也就是说
+  **没有任何常规门禁会去启动 standalone 服务**；
+- `pnpm dev` 走的是源码，不经过 standalone。
+
+**修法**（`next.config.js` 顶层键）：
+
+```js
+outputFileTracingIncludes: {
+  "/**": ["./node_modules/next/dist/compiled/next-server/*runtime.prod.js"],
+},
+```
+
+补上是 26 个文件（≈ +2.6MB），实测 API 路由从「全 500」恢复为 200。
+
+> **方向性提醒**：这条只能靠 `includes` 补。往 `outputFileTracingExcludes` 里
+> 加东西是**反方向**的（excludes 只做减法，补不回缺失的文件）——
+> `tests/standalone-runtime-completeness.test.ts` 有一条用例专门守这个方向。
+
+**门禁**（配置层 + 产物层）：
+
+- 配置层 `tests/standalone-runtime-completeness.test.ts`：锁
+  `outputFileTracingIncludes` 在顶层、条目还在、且没有被人用 excludes 反着写。
+- 产物层 `scripts/check-standalone-contents.cjs`：**反向检查**「必须有的」——
+  逐个点名 `REQUIRED_RUNTIME_FILES`（`app-route-turbo` / `app-page-turbo` /
+  `pages-turbo`），缺任一份即非零退出。这是该脚本里唯一一条「查缺件」而非
+  「查多余」的规则，因为缺件的表现恰恰是运行期 500、而构建期静默。
+
+> **自查一行**（产物已存在时）：
+> `ls .next/standalone/node_modules/next/dist/compiled/next-server/` ——
+> 只看到 3 个文件就是缺件。
 
 ---
 
@@ -995,6 +1173,17 @@ TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `
    「报错 + exit 0 + 留空库」正是这条的反例（见 §9.1 建库）；判据落在
    `scripts/db-push.mjs`。新增这类封装时，**结果复核不要看退出码**——
    以「目标状态是否真的达成」为准。
+5. **默认端口只定义一次，两侧共用同一常量**（ISSUE #534 P1）：ComfyUI 的默认
+   端口（`COMFYUI_DEFAULT_PORT`，`src/lib/app-settings.ts`）同时被**连接侧**
+   （`client.ts` 的 `resolveComfyBase()`）与**拉起侧**（`lifecycle.ts` →
+   `buildSpawnArgs` 的 `defaultPort`）读取，视图文案也要显示它。此前连接侧硬编码
+   8188、`lib/core/config.ts` 的 schema 默认值又写了一遍裸地址，几处从未对过——
+   单看每一处都「没毛病」，这正是它能潜伏的原因，而分叉的表现是**静默连到另一个
+   实例**（用户读到的是上传失败 / 端口漂移）。门禁
+   `scripts/check-comfyui-port-contract.cjs`（pre-commit 与 CI）把这条变成可失败
+   的断言：常量单点、两侧共用、`buildSpawnArgs` 的 `>0` 口径、源码无裸端口字面量。
+   回归测试见 `tests/comfyui-port-contract.test.ts`（契约）与
+   `tests/check-comfyui-port-contract.test.ts`（门禁自身）。
 
 ### 9.3 这个模式**不**解决的问题（别误当成 Linux 支持）
 

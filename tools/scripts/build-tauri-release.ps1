@@ -94,6 +94,7 @@ if (-not (Test-Path $sidecar)) {
 Log ""
 
 Log "[4/4] 开始构建 release Tauri 壳（首次耗时较长，可能 5-15 分钟）..."
+$buildWatch = Start-LogStopwatch
 Push-Location $TAURI_DIR
 # 必须带 --features custom-protocol（见 docs/standards/launch-and-build.md §5/§7）：
 # 不带则 dev/prebuilt 模式下启动页导航到 devUrl 且资源不内嵌 → 黑屏 / Edge 错误页。
@@ -103,6 +104,7 @@ Pop-Location
 if ($buildErr -ne 0) {
     Log ""
     Log "[错误] 构建失败（exit=$buildErr），已用记事本打开日志：$LOG"
+    Log-Elapsed -Stopwatch $buildWatch -Label "release 壳构建"
     if ((Get-RunningShellProcess -ProjectRoot $PROJECT_ROOT).Count -gt 0) {
         Log ""
         Log "  注意：日志中若出现「failed to remove file ... app.exe / 拒绝访问 (os error 5)」，"
@@ -115,6 +117,7 @@ if ($buildErr -ne 0) {
 Log ""
 Log "=========================================================="
 Log "  构建完成"
+Log ("  耗时：{0}" -f (Format-Elapsed -Elapsed $buildWatch.Elapsed))
 Log "  产物: $TAURI_DIR\target\release\app.exe"
 Log ""
 Log "  之后打包 start-tauri.exe 时，Prebuilt 模式会自动优先使用该壳。"
