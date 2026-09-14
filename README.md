@@ -181,6 +181,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 #    src/env.js 启动时强制校验，留空会报 Invalid environment variables
 
 # 3. 初始化数据库（Drizzle，按 drizzle.config.ts）
+#    经 scripts/db-push.mjs：以 --force 非交互运行，并**复核库里真的建出表**——
+#    drizzle-kit push 在无 TTY 环境（CI / 脚本 / 容器）会「报错 + exit 0 + 留 0 字节库」，
+#    此时首页与 /api/health 都 200，只有真实业务页面 500（见规范 §9.1）
 pnpm db:push
 
 # 4. 注册 comfyapp:// 协议（可选，双击 tools/start/register-comfyapp-protocol.ps1）
@@ -311,7 +314,7 @@ pnpm check        # eslint + tsc --noEmit
 pnpm test         # Vitest 单元测试
 pnpm test:e2e     # Playwright e2e
 pnpm docs         # 生成 API 文档到 docs/
-pnpm db:push      # 推送 Prisma schema 到数据库
+pnpm db:push      # 同步 Drizzle schema 到 db.sqlite（非交互、复核建表结果）
 ```
 
 非开发人员无需记上面命令，双击根目录 `tools/start/verify-quality.ps1` 即可一键跑质量门禁

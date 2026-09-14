@@ -46,3 +46,20 @@ test.describe("首页冒烟", () => {
     ).toBeVisible();
   });
 });
+
+test.describe("数据库链路冒烟", () => {
+  /**
+   * ISSUE #489：CI 门禁此前**从不建库**，且 `db:push` 在无 TTY 上会「报错 +
+   * exit 0 + 留 0 字节库」。这条用例是那档退化的**用户可见出口探针**：
+   * `/api/health` 现在会一并探 schema 就绪度（`SELECT 1` 在空库上照样成功，
+   * 光靠它会把「表没建」漏报成 `db: up`），所以断言 `db: "up"` 等价于
+   * 「表真的建好了」。它依赖 CI 里 `pnpm run db:push` 那一步先跑过。
+   */
+  test("@critical 健康检查确认数据库表已就绪", async ({ request }) => {
+    const res = await request.get("/api/health");
+    expect(res.status()).toBe(200);
+    const body = (await res.json()) as { status: string; db: string };
+    // 表没建时是 503 + db: "empty"（此时应用首页还能 200，正是此前被漏报的形态）
+    expect(body).toEqual(expect.objectContaining({ status: "ok", db: "up" }));
+  });
+});
