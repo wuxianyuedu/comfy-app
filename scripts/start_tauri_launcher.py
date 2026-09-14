@@ -42,6 +42,17 @@ from pathlib import Path
 
 import ctypes
 
+# 端口推导算法抽到 scripts/app_port.py（纯逻辑、跨平台可导入），此处只做薄委托。
+# 抽出的原因（ISSUE #489 缺陷 4）：本模块顶层直接取 ctypes.windll / WINFUNCTYPE，
+# **只能在 Windows 上导入**，导致「四语言端口一致性」无法在 Linux / CI 上验证。
+# 共享校验向量与 Node 侧测试见 scripts/check-app-port-vectors.py。
+from app_port import (
+    derive_app_port as _derive_app_port,
+    fnv1a32 as _fnv1a32,
+    normalize_root_for_port as _normalize_root_for_port,
+    resolve_app_port as _read_app_port,
+)
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  Win32 类型别名
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -697,59 +708,6 @@ def _build_failure_message(project_root: str, detail: str) -> str:
         f"  {os.path.join(project_root, 'log', 'launcher', 'dev-launcher-stderr.log')}"
     )
     return "\n\n".join(parts)
-
-
-def _fnv1a32(data: bytes) -> int:
-    """FNV-1a 32 位哈希（与 scripts/app-port.mjs 等多语言实现按字节对齐）。"""
-    h = 0x811C9DC5
-    for b in data:
-        h ^= b
-        h = (h * 0x01000193) & 0xFFFFFFFF
-    return h
-
-
-def _derive_app_port(project_root: str) -> int:
-    """按检出绝对路径稳定推导端口（多检出并行互不冲突，§1.4）。
-
-    与 scripts/app-port.mjs（Node）、dev-launcher.ps1（PowerShell）、
-    src-tauri/src/lib.rs（Rust）是同一算法的多语言实现，改动必须四处同步：
-    对「绝对路径、反斜杠转正斜杠、转小写」的 UTF-8 字节取 FNV-1a 32 位哈希，
-    映射到 3200..3999：port = 3200 + (fnv1a32(path) % 800)。
-    """
-    normalized = _normalize_root_for_port(project_root)
-    return 3200 + (_fnv1a32(normalized.encode("utf-8")) % 800)
-
-
-def _normalize_root_for_port(project_root: str) -> str:
-    """规范化检出路径：转正斜杠 + 转小写 + 去尾斜杠（跨四语言约定，§1.1）。
-
-    只对**相对路径**做 abspath。历史实现无条件 `os.path.abspath()`，而它的
-    语义是「相对当前工作目录解析」——同一个检出在不同 cwd 下推出不同端口，
-    与「同一检出恒定同端口」的多检出并行承诺矛盾（Node 侧同病，见
-    scripts/app-port.mjs 的 normalizeRootForPort）。
-    """
-    raw = project_root or ""
-    win_absolute = bool(re.match(r"^[a-zA-Z]:[\\\\/]", raw)) or raw.startswith("\\\\\\\\")
-    absolute = win_absolute or os.path.isabs(raw)
-    resolved = raw if absolute else os.path.abspath(raw)
-    return resolved.replace("\\", "/").lower().rstrip("/")
-
-
-def _read_app_port(project_root: str) -> int:
-    """端口取值：.env 显式 COMFYAPP_PORT 优先；缺省按检出路径稳定推导（§1.4）。"""
-    try:
-        env_path = os.path.join(project_root, ".env")
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("COMFYAPP_PORT="):
-                    val = line.split("=", 1)[1].strip().strip("'\"")
-                    port = int(val)
-                    if 1 <= port <= 65535:
-                        return port
-    except (OSError, ValueError):
-        pass
-    return _derive_app_port(project_root)
 
 
 def _write_status(

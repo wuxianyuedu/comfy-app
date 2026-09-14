@@ -169,11 +169,68 @@ pub fn spawn_focus_waiter(app: tauri::AppHandle) {
 
 #[cfg(test)]
 mod tests {
+  // 四语言端口一致性：共享校验向量（ISSUE #489 缺陷 4）。
+  //
+  // 背景：本模块的 `normalize_root_for_port` **不做路径解析**（绝对路径原样
+  // 处理），而 Node / Python / PowerShell 侧对**相对路径**会拼 cwd —— 于是
+  // `rel/p` 四侧端口不同。对绝对路径（真实检出的形态）不影响，但此前没有任何
+  // 测试会发现某一侧漂移：「四侧一致」只是文档承诺，不是可失败断言。
+  //
+  // 这里读 `tests/fixtures/app-port-vectors.json`（与 Node / Python /
+  // PowerShell 侧读同一份），断言同一批 input→port。任一侧漂移 → 本测试失败。
+  use std::path::PathBuf;
+
+  fn vectors_path() -> PathBuf {
+    // CARGO_MANIFEST_DIR = <repo>/src-tauri
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+      .join("..")
+      .join("tests")
+      .join("fixtures")
+      .join("app-port-vectors.json")
+  }
+
   #[test]
-  fn fnv1a32_matches_node_side() {
-    // 与 scripts/app-port.mjs 对同一输入必须逐字节一致（§1.1 多语言约定）。
-    // 期望值由 node -e "fnv1a32('f:/ai/other/comfy-app-t3-branch')" 生成。
-    assert_eq!(super::fnv1a32(b"f:/ai/other/comfy-app-t3-branch"), 0x97ec_b3a9);
+  fn fnv1a32_anchor_matches_node_side() {
+    // 锚点：与 scripts/app-port.mjs 对同一输入必须逐字节一致（§1.1 多语言约定）。
+    assert_eq!(
+      super::fnv1a32(b"f:/ai/other/comfy-app-t3-branch"),
+      0x97ec_b3a9
+    );
+  }
+
+  #[test]
+  fn shared_vectors_agree_across_languages() {
+    let raw = std::fs::read_to_string(vectors_path())
+      .expect("tests/fixtures/app-port-vectors.json 必须存在（四语言共享校验向量）");
+    let json: serde_json::Value = serde_json::from_str(&raw).expect("向量文件必须是合法 JSON");
+    let vectors = json["vectors"]
+      .as_array()
+      .expect("向量文件必须含 vectors 数组");
+    assert!(
+      vectors.len() >= 5,
+      "向量文件至少要有 5 条（防止误删后测试静默全绿）"
+    );
+    for v in vectors {
+      let input = v["input"].as_str().expect("input 必须是字符串");
+      let want_normalized = v["normalized"].as_str().unwrap();
+      let want_fnv = v["fnv1a32"].as_u64().unwrap() as u32;
+      let want_port = v["port"].as_u64().unwrap() as u16;
+      assert_eq!(
+        super::normalize_root_for_port(input),
+        want_normalized,
+        "规范化不一致：{input}"
+      );
+      assert_eq!(
+        super::fnv1a32(want_normalized.as_bytes()),
+        want_fnv,
+        "FNV-1a 不一致：{input}"
+      );
+      assert_eq!(
+        super::derive_app_port_for_root(input),
+        want_port,
+        "端口不一致：{input}"
+      );
+    }
   }
 
   #[test]

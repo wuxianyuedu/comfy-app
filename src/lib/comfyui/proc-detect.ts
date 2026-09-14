@@ -6,8 +6,10 @@
 // 的实例是否真的启动了，需要在 OS 层查进程命令行里的 main.py 路径。
 //
 // Windows 用 PowerShell Get-CimInstance 查命令行，Get-NetTCPConnection 查
-// PID 的监听端口；POSIX 用 ps / lsof。
+// PID 的监听端口；POSIX 用 ps 查命令行、用 /proc/net/tcp + /proc/<pid>/fd 查
+// 监听端口（纯 Node 内建，不依赖任何发行版可选的二进制）。
 import { execFile } from "child_process";
+import { readdirSync, readlinkSync, readFileSync } from "fs";
 
 function execFileP(
   cmd: string,
@@ -127,6 +129,81 @@ export async function findPidForMainPyDetailed(
   }
 }
 
+/** 解析 `/proc/net/tcp{,6}` 里 state=0A（LISTEN）的项。
+ *  返回 inode → 端口 的映射。格式：
+ *  `sl local_address rem_address st ... uid timeout inode`
+ *  端口是 `地址:端口` 里冒号后的 4 位十六进制（大端序的端口号）。 */
+export function parseProcNetTcpListeners(content: string): Map<string, number> {
+  const out = new Map<string, number>();
+  const lines = content.split("\n");
+  // 第 0 行是表头，跳过。
+  for (let i = 1; i < lines.length; i++) {
+    const f = (lines[i] ?? "").trim().split(/\s+/);
+    if (f.length < 10) continue;
+    if (f[3] !== "0A") continue; // 0A = TCP_LISTEN
+    const local = f[1] ?? "";
+    const colon = local.lastIndexOf(":");
+    if (colon < 0) continue;
+    const port = Number.parseInt(local.slice(colon + 1), 16);
+    const inode = f[9] ?? "";
+    if (Number.isInteger(port) && port > 0 && inode) {
+      // 同一 inode 只记一次（tcp / tcp6 可能重复）。
+      out.set(inode, port);
+    }
+  }
+  return out;
+}
+
+/** 收集某 PID 持有的 socket inode（读 /proc/<pid>/fd 的符号链接目标
+ *  `socket:[<inode>]`）。拿不到（进程已退 / 权限不足 / 非 Linux）时返回空集。 */
+export function socketInodesOfPid(pid: number): Set<string> {
+  const set = new Set<string>();
+  let entries: string[];
+  try {
+    entries = readdirSync(`/proc/${pid}/fd`);
+  } catch {
+    return set;
+  }
+  for (const fd of entries) {
+    try {
+      const target = readlinkSync(`/proc/${pid}/fd/${fd}`);
+      const m = /^socket:\[(\d+)\]$/.exec(target);
+      if (m?.[1]) set.add(m[1]);
+    } catch {
+      /* 单个 fd 读不到（如已关闭）不影响其余 */
+    }
+  }
+  return set;
+}
+
+/** POSIX 监听端口探测：/proc/net/tcp{,6} 的 LISTEN inode ∩ 目标 pid 的 socket
+ *  inode。纯 Node 内建，不依赖 lsof / ss / netstat。非 Linux（无 /proc）时
+ *  返回 null —— 调用方按「探测不可用」处理。 */
+export function findListeningPortViaProc(pid: number): number | null {
+  const owned = socketInodesOfPid(pid);
+  if (owned.size === 0) return null;
+  let listeners: Map<string, number>;
+  try {
+    // tcp 与 tcp6 都要读：只监听 IPv6 或双栈的进程只在 tcp6 里有记录。
+    const tcp = readFileSync("/proc/net/tcp", "utf8");
+    const tcp6 = (() => {
+      try {
+        return readFileSync("/proc/net/tcp6", "utf8");
+      } catch {
+        return "";
+      }
+    })();
+    listeners = parseProcNetTcpListeners(tcp + "\n" + tcp6);
+  } catch {
+    return null;
+  }
+  for (const inode of owned) {
+    const port = listeners.get(inode);
+    if (port) return port;
+  }
+  return null;
+}
+
 /** 找到指定 PID 正在监听的 TCP 端口号（取第一个 LISTEN 端口）。 */
 export async function findPidListeningPort(
   pid: number,
@@ -146,24 +223,21 @@ export async function findPidListeningPort(
       const port = parseInt(out.trim().split(/\r?\n/)[0] ?? "", 10);
       return isNaN(port) ? null : port;
     } else {
-      // POSIX：lsof 查指定 PID 的 LISTEN 端口
-      const out = await execFileP("lsof", [
-        "-Pan",
-        "-p",
-        String(pid),
-        "-iTCP",
-        "-sTCP:LISTEN",
-      ]);
-      // 输出示例: node 12345 user 4u IPv4 12345 0t0 TCP *:8188 (LISTEN)
-      for (const line of out.split("\n")) {
-        const re = /TCP.*:(\d+)\b/;
-        const m = re.exec(line);
-        if (m) {
-          const port = parseInt(m[1] ?? "", 10);
-          if (!isNaN(port)) return port;
-        }
-      }
-      return null;
+      // POSIX：纯 Node 内建读取监听端口，**不依赖 lsof**。
+      //
+      // 历史实现是 `lsof -Pan -p <pid> -iTCP -sTCP:LISTEN`，但 lsof 在不少
+      // 发行版（含本项目 CI 用的精简镜像）默认不装；execFileP 会把 ENOENT
+      // 静默吞成空串 → 函数返回 null，正是规范 §9.2 第 3 条禁止的「静默失败」。
+      // 文档 §9.1 也曾声称「不依赖 lsof」，但代码实际就是 lsof —— 文档与实现
+      // 互相打架（本次一并纠正）。
+      //
+      // 改用内核接口（零外部依赖）：
+      //   ① /proc/net/tcp（+ tcp6）里 state=0A 的项 = LISTEN，字段 2 是
+      //      `地址:端口`（端口为 4 位大写十六进制），字段 10 是 socket inode；
+      //   ② /proc/<pid>/fd/* 里指向 `socket:[<inode>]` 的链接 → 该 pid 持有的
+      //      socket inode 集合；
+      //   ③ 两者取交集即「该 pid 正在监听的端口」。
+      return findListeningPortViaProc(pid);
     }
   } catch {
     return null;
