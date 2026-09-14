@@ -145,6 +145,25 @@
       **别往 `REDACT_PATHS` 加 `*secret` 类通配** —— pino 不支持部分字符串匹配，实测无效。
     - 写这类用例时给**自己的临时目录**（镜像/日志是真实写盘副作用），别让
       `pnpm test` 往仓库 `log/` 里写字。
+    - 同一条通道还带**开发期文件与整套内部门禁脚本**（`AGENTS.md` / `CHANGELOG.md` /
+      `README.md` / 各 `*.config.*` / 整个 `scripts/`）。`scripts/` 走**白名单**
+      （`RUNTIME_SCRIPTS`：只有运行时真的会读的那两份留下），根级文件走黑名单；
+      产物层由 `check-standalone-contents.cjs` 的 `ALLOWED_SCRIPTS` 同款守。
+      **新增脚本默认不进产物**，要留下必须登记并说明理由。
+
+17. **standalone 产物必须包含 Next 自带运行时脚本，缺件的表现是「页面正常、接口全 500」**（ISSUE #489 / 规范 §7.4）：
+    - Turbopack 对 `require("next/dist/compiled/next-server/<name>.runtime.prod.js")`
+      这类**动态 require 字符串**的追踪不完整：只追到被 middleware 图带上的
+      `app-page-turbo`，所有 `route.ts` 都要的 `app-route-turbo` 一条 nft 都没有。
+      运行时表现是**每个 API 路由 500**（`Failed to load external module`），
+      而构建期静默、页面全 200 —— 极易被误判成业务/数据库/鉴权问题。
+    - 防线只能靠 `next.config.js` 顶层的 **`outputFileTracingIncludes`**
+      （`./node_modules/next/dist/compiled/next-server/*runtime.prod.js`）。
+      **别往 `outputFileTracingExcludes` 里加**：excludes 只做减法，补不回缺件。
+    - 「没有任何常规门禁会启动 standalone」是这条长期潜伏的原因：CI 只跑 `pnpm build`，
+      而 `next start` 与 `output: standalone` 不兼容。所以门禁是**两层**——
+      `tests/standalone-runtime-completeness.test.ts` 锁配置，
+      `check-standalone-contents.cjs` 真去数产物里的必需文件。
 
 ## 快速排障
 
@@ -157,6 +176,9 @@ CHANGELOG 碎片 → §13.10.5），不要用 `--no-verify` 换一条干净历�
 不参与 `pnpm dev`。文档里写错的表现是致命的静默误导：照文档打开 3100 得到
 `ERR_CONNECTION_REFUSED`，看起来正像「本平台跑不起来」。写法见 README「快速上手」与
 [reference-facts.md](docs/reference-facts.md) §1.1，`pnpm doc:check` 已按语境核对（`dev.port.derived`）。
+
+改完构建 / 产物相关的东西，先跑 `node scripts/check-standalone-contents.cjs`
+（它同时查「不该有的」与「必须有的」）。
 
 遇到启动/生成问题，先查规范文档 **§5 症状 → 根因对照表**（本项目全部历史
 事故都在里面），再按 **§4 日志布局** 的顺序看日志（log/ 按子系统分区：

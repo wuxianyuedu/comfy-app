@@ -38,6 +38,53 @@ const FORBIDDEN = [
   // 真正的兜底是产物层数文件，不是清单本身。
   ["开发机私有输入", /(^|\/)\.env(\.[^/]*)?$/],
   ["开发库文件", /(^|\/)db\.sqlite(-wal|-shm)?$/],
+  // 开发期文件与内部门禁脚本（ISSUE #489）：全项目 tracking 会把仓库根的
+  // AGENTS.md / CHANGELOG.md / 各 *.config.* 与整套 scripts/** 复制进产物，
+  // 进而随 static 被编译期内嵌进 exe —— 解包即得内部规范全文与全部门禁脚本。
+  // 判据不是体积，而是「路由只 import 编译产物，这些不可能是运行时依赖」。
+  // scripts/ 用**白名单**：只有运行时真的会读的那几个允许存在（见下）。
+  // 注意：都锚在**产物根**（`^`），不匹配 node_modules 里的同名文件 —— 第三方包
+  // 自带 README / tsconfig.json / eslint.config.js 是正常且必需的，把它们算违规
+  // 会让这条护栏变成噪声，进而被当成「反正都红」而忽略。
+  ["开发期文件", /^(AGENTS|CHANGELOG|README)\.md$/],
+  ["开发期配置", /^(eslint|playwright|prettier|drizzle|vitest)\.config\.[cm]?[jt]s$/],
+  ["开发期配置", /^(components|tsconfig|typedoc)\.json$/],
+  ["门禁锁文件", /^pnpm-(lock|workspace)\.ya?ml$/],
+  ["TS 增量编译缓存", /^tsconfig\.tsbuildinfo$/],
+  ["Python 字节码缓存", /^__pycache__\//],
+];
+
+/**
+ * scripts/ 下允许出现在产物里的条目（**白名单**）。
+ *
+ * 判据是「运行时真的会读」——目前只有两处，且都在代码里能指到：
+ *   · install-comfyapp-helper.ps1：src/app/api/helper/{install,status}/route.ts
+ *     以 process.cwd() 拼路径把它当下载内容返回（installerAvailable 也靠它判）；
+ *   · dev-launcher.ps1：src-tauri/src/lib.rs::resolve_project_root() 的项目根判据。
+ *
+ * 为什么白名单而不是黑名单：黑名单欠完备，每加一个根级文件/脚本就要记得补一条，
+ * 而漏掉是静默的（上一次 db.sqlite 就是这么漏的）。白名单下新增脚本默认不进产物，
+ * 要留下必须显式登记并写清理由。
+ */
+const ALLOWED_SCRIPTS = new Set([
+  "install-comfyapp-helper.ps1",
+  "dev-launcher.ps1",
+]);
+
+/** Next 自带运行时脚本目录（相对产物根）。 */
+const RUNTIME_DIR = "node_modules/next/dist/compiled/next-server";
+
+/**
+ * 必须出现在产物里的运行时脚本（**逐个点名**，不用通配）。
+ *
+ * 缺任何一份的后果都是运行期 500 而非构建报错，所以只能靠产物层数文件发现
+ * （规范 §7.4）。补法：next.config.js 的 outputFileTracingIncludes —— excludes
+ * 只做减法，补不回缺失的文件。
+ */
+const REQUIRED_RUNTIME_FILES = [
+  "app-route-turbo.runtime.prod.js", // 所有 route.ts
+  "app-page-turbo.runtime.prod.js", // RSC 页面
+  "pages-turbo.runtime.prod.js", // middleware
 ];
 
 function listFiles(dir, prefix, out) {
@@ -65,6 +112,43 @@ function listFiles(dir, prefix, out) {
 function checkDir(dir, label) {
   const files = listFiles(dir, "", []);
   let failed = false;
+  // scripts/ 白名单：产物里的每个条目都必须是登记过的。这条比正则表更严——
+  // 新脚本进来即命中，不需要有人先想到去正则里补形状。
+  const strayScripts = files.filter((f) => {
+    const m = /^scripts\/([^/]+)$/.exec(f);
+    return m && !ALLOWED_SCRIPTS.has(m[1]);
+  });
+  // Next 自带运行时脚本**反向检查**：这里查的不是「不该有的」而是「必须有的」。
+  // Turbopack 对 `require("next/dist/compiled/next-server/<name>.runtime.prod.js")`
+  // 这类动态 require 字符串的追踪不完整（实测只追到被 middleware 命中的
+  // app-page-turbo），缺件的表现是**所有 API 路由 500**
+  // （Failed to load external module），而构建期毫无提示。防线是 next.config.js
+  // 的 outputFileTracingIncludes —— 但「清单还在」不等于「清单生效」（历史事故
+  // 已经吃过一次），所以这里真去数文件。规范 §7.4。
+  if (label === "standalone") {
+    const missingRuntime = REQUIRED_RUNTIME_FILES.filter(
+      (name) => !files.includes(`${RUNTIME_DIR}/${name}`),
+    );
+    if (missingRuntime.length > 0) {
+      failed = true;
+      console.error(
+        `[${label}] Next 运行时脚本缺件 ${missingRuntime.length} 个：\n  ` +
+          missingRuntime.join("\n  ") +
+          "\n  后果是所有 App Route 返回 500（页面正常、接口全挂）。" +
+          "请确认 next.config.js 的 outputFileTracingIncludes 仍在（§7.4）。",
+      );
+    }
+  }
+  if (strayScripts.length > 0) {
+    failed = true;
+    console.error(
+      `[${label}] 内部门禁脚本不该进产物，却发现 ${strayScripts.length} 个：\n  ` +
+        strayScripts.slice(0, 8).join("\n  ") +
+        (strayScripts.length > 8 ? `\n  …（其余 ${strayScripts.length - 8} 个省略）` : "") +
+        "\n  （runtime 真的会读的脚本靠 ALLOWED_SCRIPTS 白名单保留；" +
+        "新增脚本默认应被剔除，要保留请登记并说明理由）",
+    );
+  }
   for (const [tag, re] of FORBIDDEN) {
     const hits = files.filter((f) => re.test(f));
     if (hits.length > 0) {
@@ -78,7 +162,7 @@ function checkDir(dir, label) {
   }
   if (!failed) {
     console.log(
-      `[${label}] ✓ 产物干净（共 ${files.length} 个文件，无测试 / 文档 / 变更碎片 / 开发机私有输入）`,
+      `[${label}] ✓ 产物干净（共 ${files.length} 个文件，无测试 / 文档 / 变更碎片 / 开发机私有输入 / 开发期文件与门禁脚本）`,
     );
   }
   return failed;
@@ -106,7 +190,8 @@ function main() {
       "\n[standalone] 请检查两处：① next.config.js 的 outputFileTracingExcludes" +
         "（键位必须在顶层，Next 16 已把它从 experimental 升为顶层键；写在旧位置" +
         "一个字都不会被读）；② scripts/build-desktop.mjs 的「分发卫生」剔除清单" +
-        "（.env / db.sqlite* 只能靠显式删除，excludes 对 .env 实测无效）。规范 §7.2。",
+        "（.env / db.sqlite* / AGENTS.md / 各 *.config.* / scripts/** 只能靠显式删除，" +
+        "excludes 对 .env 与文件类条目实测无效）。规范 §7.2、§7.3。",
     );
     return 1;
   }

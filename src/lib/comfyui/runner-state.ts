@@ -446,6 +446,32 @@ const persistTimers = new Map<
 
 
 
+/** 取消某个任务的「日志落库」防抖定时器（若存在）。
+ *
+ *  为什么公共 API 需要它：`schedulePersistLogs` 排的是**游离定时器** —— 它不属于
+ *  任何组件生命周期，也不随任务结束自动消失。测试里清空内存 state 之后，
+ *  上一次排的定时器仍会在 200ms / 1500ms 后触发 `persistLogs`，打到
+ *  **已经被 `vi.mock` 换掉或已随用例撤销的 repository** 上
+ *  （实测形态：`TypeError: taskRepository.replaceLogs is not a function`，
+ *  以 Unhandled Rejection 浮出、让 `pnpm test` 随机非零退出，而用例层面全绿，
+ *  报错点名的文件是当时恰好在跑的那个）。ISSUE #489。
+ *
+ *  生产语义同理：任务被丢弃 / 重跑时先把上一次的落库排期掐掉，避免**旧日志
+ *  覆盖新日志**（`persistLogs` 是整包 `replaceLogs`，不是在末尾追加）。 */
+export function cancelPersistLogs(taskId: string): void {
+
+  const pending = persistTimers.get(taskId);
+
+  if (!pending) return;
+
+  clearTimeout(pending.debounce);
+
+  clearTimeout(pending.maxDelay);
+
+  persistTimers.delete(taskId);
+
+}
+
 export function schedulePersistLogs(taskId: string) {
 
   if (!taskId) return;
