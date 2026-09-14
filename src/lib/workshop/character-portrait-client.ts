@@ -14,6 +14,12 @@ import {
 } from "~/components/workshop/shot-size-config";
 import type { SavedOutput } from "./api-channel-shared";
 import {
+  DEFAULT_GEN_PARAMS,
+  paramInt,
+  paramNumber,
+  paramString,
+} from "./param-coerce";
+import {
   apiGenerateImage,
   buildLibraryWorkflowInput,
   startLocalGenerate,
@@ -39,16 +45,6 @@ export interface LocalPortraitHandlers {
   onLog?: (entry: TaskLogEntry) => void;
 }
 
-function strParam(value: unknown, fallback: string): string {
-  return typeof value === "string" && value ? value : fallback;
-}
-
-function numParam(value: unknown, fallback: number): number {
-  const num =
-    typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
-  return Number.isFinite(num) ? num : fallback;
-}
-
 /** 角色卡推荐参数（Skill 默认值）→ 内置 txt2img 输入；缺项用与镜头生图相同的缺省。 */
 function buildLocalPortraitInput(
   req: PortraitRequest,
@@ -60,10 +56,10 @@ function buildLocalPortraitInput(
     prompt: req.prompt,
     negative: req.negative,
     checkpoint: opts.checkpoint || undefined,
-    steps: Math.round(numParam(params.steps, 28)),
-    cfg: numParam(params.cfg, 7),
-    sampler: strParam(params.sampler, "euler_ancestral"),
-    scheduler: strParam(params.scheduler, "normal"),
+    steps: paramInt(params.steps, DEFAULT_GEN_PARAMS.steps),
+    cfg: paramNumber(params.cfg, DEFAULT_GEN_PARAMS.cfg),
+    sampler: paramString(params.sampler, DEFAULT_GEN_PARAMS.sampler),
+    scheduler: paramString(params.scheduler, DEFAULT_GEN_PARAMS.scheduler),
     /* 内置 txt2img 只认 "WxH" —— 唯一还在用字符串表达的通道，由尺寸表达现算。 */
     size: sizeSpecToWxH(req.size),
     count: 1,
