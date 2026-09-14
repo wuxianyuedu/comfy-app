@@ -15,14 +15,17 @@
 
 import { runtimeNodeId } from "~/lib/workflow-param-mapping";
 import {
+  CLARITY_SUBGROUP_LABELS,
   DEFAULT_ALIGN_MULTIPLE,
-  MEGAPIXEL_TIERS,
-  RESOLUTION_TIERS,
+  SIZE_CLARITY_PRESETS,
   SIZE_RATIO_PRESETS,
+  clarityKindOfLabel,
   megapixelDims,
+  megapixelTierOfLabel,
   normalizeAlignMultiple,
   resolutionDims,
-  type ResolutionTier,
+  resolutionTierOfLabel,
+  type ClarityKind,
   type SizePresetTable,
   type SizeScene,
 } from "~/lib/size-presets";
@@ -622,49 +625,34 @@ export type InferredGroup = DimensionGroup | VideoGroup;
 /** 比例预设（与 `SIZE_RATIO_PRESETS` 同源；保留旧名以免全库改 import）。 */
 export const DIM_RATIO_PRESETS: { label: string; ratio: number }[] = SIZE_RATIO_PRESETS;
 
-/** 「像素」大类下的两个子类：分辨率（1k/2k/4k）与百万像素（1M/2M/4M）。 */
+/** 「像素」大类下的两个子类：分辨率（1k/2k/4k）与百万像素（1M/2M/4M）。
+ *
+ *  **档位目录只有一个出处**：`lib/size-presets` 的 `SIZE_CLARITY_PRESETS`。
+ *  这里保留 studio 视图一直在用的形状（`kind` + `label` + `totalPixels`）做一层
+ *  再导出，避免同一份档位表在视图层再抄一遍（抄一份就必然漂移）。 */
 export interface DimClarityPreset {
-  kind: "pixel" | "megapixel";
+  kind: ClarityKind;
   /** Display label as shown in the popover chip (e.g. "1k", "1M"). */
   label: string;
   /** Megapixel kind: total pixel count (width * height). */
   totalPixels?: number;
 }
 
-export const DIM_CLARITY_PRESETS: DimClarityPreset[] = [
-  /* 分辨率档（1k / 2k / 4k）：具体宽高按场景查表，目录里只有档位名。 */
-  ...RESOLUTION_TIERS.map((tier) => ({ kind: "pixel" as const, label: tier })),
-  /* 百万像素档（1M / 2M / 4M）：总像素预算。 */
-  ...MEGAPIXEL_TIERS.map((tier) => ({
-    kind: "megapixel" as const,
-    label: `${tier}M`,
-    totalPixels: tier * 1_000_000,
-  })),
-];
+export const DIM_CLARITY_PRESETS: DimClarityPreset[] = SIZE_CLARITY_PRESETS.map(
+  (preset) => ({
+    kind: preset.kind,
+    label: preset.label,
+    ...(preset.megapixels !== undefined
+      ? { totalPixels: preset.megapixels * 1_000_000 }
+      : {}),
+  })
+);
 
-/** 「像素」大类下两个子类的显示名（视图层分组标题用同一份，避免两处漂移）。 */
-export const CLARITY_SUBGROUP_OF_KIND: Record<DimClarityPreset["kind"], string> = {
-  pixel: "分辨率",
-  megapixel: "百万像素",
-};
+/** 「像素」大类下两个子类的显示名（与 `size-presets` 同一份）。 */
+export const CLARITY_SUBGROUP_OF_KIND: Record<DimClarityPreset["kind"], string> =
+  CLARITY_SUBGROUP_LABELS;
 
-/** 清晰度档 label → 它属于哪个子类（未知档按分辨率处理）。 */
-export function clarityKindOfLabel(label: string): DimClarityPreset["kind"] {
-  return DIM_CLARITY_PRESETS.find((preset) => preset.label === label)?.kind ?? "pixel";
-}
-
-/** 分辨率档 label（"1k"）→ 档位；不是分辨率档返回 null。 */
-export function resolutionTierOfLabel(label: string): ResolutionTier | null {
-  return RESOLUTION_TIERS.find((tier) => tier === label) ?? null;
-}
-
-/** 百万像素档 label（"2M"）→ 档位数值（2）；不是百万像素档返回 null。 */
-export function megapixelTierOfLabel(label: string): number | null {
-  const preset = DIM_CLARITY_PRESETS.find(
-    (item) => item.label === label && item.kind === "megapixel",
-  );
-  return preset?.totalPixels ? preset.totalPixels / 1_000_000 : null;
-}
+export { clarityKindOfLabel, megapixelTierOfLabel, resolutionTierOfLabel };
 
 /* ── ResolutionSelector quick presets ──
  *  Some custom nodes (e.g. ResolutionSelector) don't expose raw
@@ -706,7 +694,7 @@ export function parseRatioFromLabel(value: string): number | null {
 
 /** Given a target ratio + clarity preset + scene, return the concrete {width, height}.
  *
- *  分辨率档（pixel kind）：查「场景 × 比例 × 档位」表 —— 表里的值就是该场景
+ *  分辨率档（resolution kind）：查「场景 × 比例 × 档位」表 —— 表里的值就是该场景
  *    1k/2k/4k 的口径（图片与视频不同），不做网格吸附，也不做区间钳制
  *    （超宽 4k 档的 5120 宽是用户明确要的值）。
  *  百万像素档（megapixel kind）：`totalPixels = w*h` 与 `w/h = ratio` 联立
@@ -733,7 +721,7 @@ export function dimsForRatio(
     };
   }
 
-  if (presetOrBase.kind === "pixel") {
+  if (clarityKindOfLabel(presetOrBase.label) === "resolution") {
     const tier = resolutionTierOfLabel(presetOrBase.label) ?? "1k";
     return resolutionDims(scene, safeRatio, tier, table);
   }

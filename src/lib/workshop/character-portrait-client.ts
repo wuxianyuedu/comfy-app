@@ -6,8 +6,11 @@
 
 import { uploadMaterialItem } from "@/lib/materials-client";
 import {
+  sizeSpecToWxH,
+  type SizeSpec,
+} from "~/lib/size-presets";
+import {
   shotSizeToRelay,
-  type ShotSizeState,
 } from "~/components/workshop/shot-size-config";
 import type { SavedOutput } from "./api-channel-shared";
 import {
@@ -19,12 +22,15 @@ import {
   type TaskLogEntry,
 } from "./generation-client";
 
-/** 定妆照生成请求：提示词直接取角色卡的正 / 负向提示词，模型与尺寸由调用方给。 */
+/** 定妆照生成请求：提示词直接取角色卡的正 / 负向提示词，模型与尺寸由调用方给。
+ *
+ *  尺寸给的是**尺寸表达**（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见
+ *  `lib/size-presets`），不是 "WxH" 字符串：三条通道各自要的形状由本层现算
+ *  （内置 txt2img 要 WxH、远端要「比例 + 百万像素」、库工作流直接吃尺寸表达）。 */
 export interface PortraitRequest {
   prompt: string;
   negative?: string;
-  /** "宽x高"，如 "768x1024" */
-  size: string;
+  size: SizeSpec;
 }
 
 /** 本机链路的进展回调（进度 + 执行日志）。 */
@@ -58,7 +64,8 @@ function buildLocalPortraitInput(
     cfg: numParam(params.cfg, 7),
     sampler: strParam(params.sampler, "euler_ancestral"),
     scheduler: strParam(params.scheduler, "normal"),
-    size: req.size,
+    /* 内置 txt2img 只认 "WxH" —— 唯一还在用字符串表达的通道，由尺寸表达现算。 */
+    size: sizeSpecToWxH(req.size),
     count: 1,
   };
 }
@@ -97,6 +104,8 @@ export async function generateWorkflowPortrait(
   opts: { workflowId: string },
   handlers: LocalPortraitHandlers = {},
 ): Promise<{ taskId: string; url: string }> {
+  /* 库工作流吃尺寸表达（比例 + 档位 [+ 倍数]）：宽高由封装层按场景表现算，
+   *  不再下发 "WxH" 兼容字段。 */
   const { input } = await buildLibraryWorkflowInput(opts.workflowId, {
     prompt: req.prompt,
     ...(req.negative !== undefined ? { negativePrompt: req.negative } : {}),
@@ -157,25 +166,24 @@ async function localizePortraitImage(
 /** 远端 API 通道生成一张定妆照，返回可引用的地址。
  *  opts.model 传设置页「远端模型」（kind=image）的名字：按该条目的连接参数
  *  直连生图，不必再配一份工坊 API 通道；不传则走旧通道设置。
- *  opts.sizeState 带工坊尺寸选择（宽高比 + 百万像素）：远端模型配置了
- *  T2I 模式适配器时，统一输入按适配器字段映射下发。 */
+ *  尺寸按请求里的尺寸表达现算：远端认「比例 + 百万像素 + 倍数」，另外保留
+ *  `size`（"WxH"）给只读字符串的老接口。 */
 export async function generateRemotePortrait(
   req: PortraitRequest,
   opts: {
     projectId: string;
     name: string;
     model?: string;
-    sizeState?: ShotSizeState;
   },
 ): Promise<string> {
   const url = await apiGenerateImage({
     prompt: req.prompt,
     negative: req.negative,
-    size: req.size,
+    size: sizeSpecToWxH(req.size),
     ...(opts.model ? { model: opts.model } : {}),
     mode: "T2I",
     /* 远端通道认「宽高比 + 百万像素」：分辨率档按场景尺寸表换算成实际总像素。 */
-    ...(opts.sizeState ? shotSizeToRelay(opts.sizeState) : {}),
+    ...shotSizeToRelay(req.size),
   });
   return localizePortraitImage(url, opts);
 }

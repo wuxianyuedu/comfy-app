@@ -36,10 +36,8 @@ import {
   type WorkflowIOMap,
 } from "~/lib/workflow-io-types";
 import { exposedParamsForMode } from "~/lib/workflow-exposed-params";
-import {
-  aspectLabelForSize,
-  megapixelsForSize,
-} from "~/lib/workshop/workflow-encapsulation";
+import { megapixelsForSize } from "~/lib/workshop/workflow-encapsulation";
+import { aspectLabelForDims } from "~/lib/size-presets";
 
 /* ── 对外参数分类 ──
  * 与工坊封装的 WorkshopPinClass 子集 + `other`（尺寸/参考图/提示词之外，
@@ -996,7 +994,7 @@ function sizeValueForPin(
     case "size-height":
       return height;
     case "size-aspect": {
-      const label = aspectLabelForSize(width, height, raw.options);
+      const label = aspectLabelForDims(width, height, raw.options);
       return label ?? undefined;
     }
     case "size-megapixels": {
