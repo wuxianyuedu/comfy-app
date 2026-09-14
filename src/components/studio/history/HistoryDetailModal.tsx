@@ -69,7 +69,7 @@ export function HistoryDetailModal({
 
   return (
     <div
-      className={overlayClass("modal", "z-90 flex items-center justify-center bg-black/80 p-4 sm:p-6")}
+      className={overlayClass("modal", "z-90 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm sm:p-6 dark:bg-black/80")}
       onClick={onClose}
     >
       <div
@@ -134,7 +134,7 @@ export function HistoryDetailModal({
                     若浏览器弹出「是否打开外部应用」，点击「打开」即可在资源管理器中打开该目录。
                   </div>
                 )}
-                <code className="block rounded bg-black/40 px-2.5 py-2 text-[11px] leading-relaxed break-all text-emerald-600 select-all">
+                <code className="bg-canvas-deep block rounded px-2.5 py-2 text-[11px] leading-relaxed break-all text-emerald-700 select-all dark:text-emerald-400">
                   {actions.folderPopover.path}
                 </code>
                 <div className="mt-2 flex flex-wrap justify-end gap-2">
@@ -322,7 +322,7 @@ export function HistoryDetailModal({
                   )}
 
                   {topLevelEntries.length > 0 && (
-                    <details className="rounded-lg border border-(--color-border-subtle) bg-black/30">
+                    <details className="border-border-subtle bg-canvas-deep rounded-lg border">
                       <summary className="cursor-pointer px-3 py-1.5 text-[11px] text-(--color-ink-muted) select-none hover:text-(--color-ink-strong)">
                         原始 JSON ·{" "}
                         {topLevelEntries.length + (paramRows.length ? 1 : 0)}{" "}
