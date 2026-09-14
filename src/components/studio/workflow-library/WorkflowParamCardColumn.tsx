@@ -1,18 +1,18 @@
 "use client";
 
-/* 工作流库「画布节点」预览左侧的**对外参数卡片列**（可编辑映射）。
+/* 工作流库「画布节点」预览左侧的**对外参数卡片列**。
  *
  * 每个对外参数一张卡片（视觉本体复用 workflow-editor/WorkflowParamCard）：
  *   · 卡片头是参数名（作者在编辑器里勾选/改名后的那个名字）；
  *   · 卡片体逐行列出它包含的端口名与类型，端口行尾标出该端口落到宿主卡片的
  *     哪一行参数（只有一个端口时标「→ <参数名>」）；
- *   · 卡片右侧有一颗**带类型的小圆点端点**（输出端口），可与宿主卡片上被落到
- *     的那一行参数相连 —— 那是与项目画布同款的端点视觉（ISSUE #355 复审：
- *     「对外参数需要右侧有小圆点的端口，可和工作流节点上的参数相连」）。
+ *   · 卡片右侧有一颗**带类型的小圆点端点**（输出端口）。
  *   · 卡片**可连线**（ISSUE #355：「连线要能编辑，现在编辑不了」）：从圆点按下
- *     并拖到宿主卡片上的某一行即改落点，卡片头的 ↺ 撤销该口的手工线。手势实现
- *     在 `WorkflowParamWires`（指针事件 + 命中测试），卡片只负责把圆点画出来并
- *     标上锚点 —— 卡片列自身仍不碰 React Flow（见 workflow-canvas-io-isolation）。
+ *     并拖到宿主卡片上的某一行即改落点，卡片头的 ↺ 撤销该口的手工线。
+ *
+ * 端点由消费方注入（`endpoint`）：库里那层注入的是 React Flow 的 `<Handle>`
+ * （ISSUE #529）——「能不能连」由画布的 `isValidConnection` 判，卡片列本身
+ * 不碰 React Flow（见 workflow-canvas-io-isolation 的守卫）。
  *
  * 与宿主卡片的**表单行**是同一条事实的两端，不重复表达：
  *   卡片 = 这个对外参数由哪些端口组成（归属）；
@@ -20,46 +20,18 @@
  */
 
 import {
-  PARAM_NODE_DOT_OFFSET,
-  PARAM_NODE_DOT_SIZE,
   paramOutputPorts,
   type ParamEntry,
   type ParamOutputPort,
 } from "~/lib/workflow-param-mapping";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type { ReactNode } from "react";
+
 import { WorkflowParamCard } from "../workflow-editor/WorkflowParamCard";
 import { paramClassStyle } from "./workflow-param-mapping-ui";
 
 /** 卡片宽度：与项目画布节点同宽，两列并排时仍放得下。 */
 const CARD_WIDTH = 220;
-
-/** 只读连线锚点的值：条目 id + 端口的 handle id（两者都可能含 `::`，量测侧
- *  一律按属性整串精确比较，不做选择器转义、也不切分）。
- *
- *  用 `?` 当分隔符：它不与 `::`（ioKey 分隔符）冲突，也不会像 NUL 那样在
- *  HTML 属性里被吞掉 —— 一条锚点对应「卡片上的哪一颗圆点」。 */
-export function wireAnchorValue(entryId: string, handleId: string): string {
-  return `${entryId}?${handleId}`;
-}
-
-/** 端点圆点的描边色 = 卡片底色，形成「半圆在外」的观感（与 PortHandle 的
- *  `dir="out"` 同一口径，见 shared/WorkflowPortHandle）。 */
-const PORT_DOT_STROKE = "#16161C";
-
-/** 端点圆点的颜色：**跟着输出端口的类型走**（与项目画布的 PortHandle 同一套
- *  配色规则，见 shared/WorkflowPortHandle 的 portColorFor）—— 看圆点颜色即可
- *  读出「这个口出去的是 STRING / INT / IMAGE」，不必先读文字徽标。
- *  未连线（`*`）时退回卡片分类色，避免一颗含义不明的中性灰点。 */
-function outputPortColor(port: ParamOutputPort, fallback: string): string {
-  if (!port.connected) return fallback;
-  const t = port.type.toUpperCase();
-  if (t === "IMAGE" || t === "MASK") return "#7C5CFC";
-  if (t === "VIDEO" || t === "AUDIO" || t.startsWith("VHS_")) return "#FF5CA8";
-  if (t === "STRING" || t === "INT" || t === "FLOAT" || t === "NUMBER")
-    return "#9A9AAD";
-  if (t === "BOOLEAN" || t === "BOOL") return "#67E89D";
-  return "#5BC6FF";
-}
 
 export interface WorkflowParamCardColumnProps {
   entries: readonly ParamEntry[];
@@ -77,9 +49,8 @@ export interface WorkflowParamCardColumnProps {
   /** 宿主卡片此刻真的画得出来的端口（ioKey 集合）—— 候选圆点按它收窄：
    *  画不出端点的端口不给拖，拖过去也落不上。缺省 = 不收窄。 */
   reachableKeys?: ReadonlySet<string>;
-  /** **真的画出了线**的圆点（`<条目 id>?<handle id>`）。给定时这些圆点按「已
-   *  连接」上色（实心、不透明度 1），不让「带线的点」看着像断开的。 */
-  wiredDotKeys?: ReadonlySet<string>;
+  /** 端点槽位（每个候选端口一颗）：消费方注入 `<Handle>` 或只读圆点。 */
+  endpoint?: (port: ParamOutputPort, index: number) => ReactNode;
 }
 
 export function WorkflowParamCardColumn({
@@ -92,7 +63,7 @@ export function WorkflowParamCardColumn({
   isManual,
   onReset,
   reachableKeys,
-  wiredDotKeys,
+  endpoint,
 }: WorkflowParamCardColumnProps) {
   if (entries.length === 0) return null;
 
@@ -103,14 +74,11 @@ export function WorkflowParamCardColumn({
       aria-label="对外参数"
       data-testid="workflow-param-card-column"
     >
-      <p className="px-0.5 text-[11px] font-medium text-(--color-ink-faint)">
+      <p className="px-0.5 text-[11px] font-medium text-ink-faint">
         {canWire ? "对外参数 · 拖圆点改落点" : "对外参数"}
       </p>
       {entries.map((entry) => {
         const style = paramClassStyle(entry.cls);
-        /* 这颗候选圆点上有没有线（见 `wiredDotKeys` 的说明）。 */
-        const wired = (port: ParamOutputPort) =>
-          wiredDotKeys?.has(`${entry.id}?${port.handleId}`) ?? false;
         return (
           <WorkflowParamCard
             key={entry.id}
@@ -121,6 +89,9 @@ export function WorkflowParamCardColumn({
             entryId={entry.id}
             cls={entry.cls}
             label={entry.label}
+            /* 与「工坊封装」页签同口径：名字后面标出契约口 id（`prompt` /
+               `size` / `reference-image-2`…），配置与日志里认的是 id。 */
+            idLabel={entry.id}
             classLabel={style.label}
             hostNodeId={entry.hostNodeId || entry.nodeId}
             width={CARD_WIDTH}
@@ -139,58 +110,12 @@ export function WorkflowParamCardColumn({
               resolved[entry.id],
               reachableKeys,
             )}
-            /* 右侧小圆点端点：与项目画布节点上的端口同款视觉，圆点画在输出
-             * 端口那一行的右沿（`data-wire-anchor` 供连线层量出锚点）。只读
-             * 卡片不给它连线能力 —— 画面上的线由 WorkflowParamWires 叠一层。 */
-            endpoint={(port) => (
-              /* **每个候选一颗圆点**（与编辑器画布同口径）：未连线时输出端口行
-               * 逐个列出候选（尺寸 = 宽/高/宽高比/像素量），每一行都是能接到的那
-               * 一个候选口 —— 只给第一行画点会让「尺寸」看着只有一个出口
-               * （ISSUE #355 复审）。
-               *
-               * 可连线时这颗点就是**拖线的起手位**（按下 → 拖到宿主行 → 写入落点），
-               * 指针样式与命中范围由 `WorkflowParamWires` 处理。
-               *
-               * 它刻意**不是**一个 `role="button"` 的控件：拖拽手势没有键盘等价
-               * 操作，谎报成按钮只会让读屏用户撞到一个按不动的控件。落点的查看与
-               * 修改在编辑器画布上都是完整可及的（那里是真正的端点控件），这里只
-               * 呈现当前落点并让鼠标手势更快。 */
-              <span
-                aria-hidden
-                /* 连线锚点按**候选端口**认：一个端口一颗点，连线量到的就是那一颗。
-                 * 值 = 条目 id + 端口的 handle id。量测侧按属性整串精确比较，
-                 * 含 `::` 的端口键不做选择器转义（见 WorkflowParamWires）。 */
-                data-wire-anchor={wireAnchorValue(entry.id, port.handleId)}
-                /* 圆点自己声明属于哪一列：两列共用同一套手势，连线层据此决定
-                 *  可落点集合（输入行 / 输出行）与落库键空间。 */
-                data-wire-kind="paramToHost"
-                title={
-                  canWire
-                    ? `拖到工作流参数行上改「${entry.label}」的落点`
-                    : undefined
-                }
-                className={`absolute top-1/2 shrink-0 rounded-full ${
-                  canWire ? "cursor-crosshair" : ""
-                }`}
-                style={{
-                  right: PARAM_NODE_DOT_OFFSET,
-                  width: PARAM_NODE_DOT_SIZE,
-                  height: PARAM_NODE_DOT_SIZE,
-                  transform: "translateY(-50%)",
-                  background: outputPortColor(port, style.color),
-                  border: `1px solid ${PORT_DOT_STROKE}`,
-                  boxShadow: "0 4px 4px rgba(0,0,0,0.25)",
-                  /* 已连接的圆点实心、未连接的淡一档。
-                   *
-                   *  判据是「**这颗点有没有线**」（`wiredDotKeys`），不是「它是不是
-                   *  当前生效落点」：库内每个候选各画一条线，按后者上色会让带线的
-                   *  候选灰掉、看着反而是断的（用户口径：「这里连线断开了是什么
-                   *  原因」，ISSUE #355）。没有 `wiredDotKeys`（或该点确实没线）时
-                   *  退回「生效落点实心」的旧口径。 */
-                  opacity: wired(port) || port.active ? 1 : 0.55,
-                }}
-              />
-            )}
+            /* 右侧小圆点端点：**每个候选一颗圆点**（与编辑器画布同口径）。
+             *
+             * 端点由消费方注入 —— 库里那层给的是 React Flow 的 `<Handle>`
+             * （ISSUE #529），它自带拖线的起手手势与命中半径；卡片列只把槽位
+             * 让出来，不碰 React Flow。 */
+            endpoint={endpoint}
           />
         );
       })}

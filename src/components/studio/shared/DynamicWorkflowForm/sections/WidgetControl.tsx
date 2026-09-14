@@ -132,14 +132,14 @@ export function WidgetControl({
           type="button"
           disabled={disabled}
           onClick={() => onValueChange(!value)}
-          className={`nodrag nopan ${compact ? "h-[28px] px-2.5" : "mt-1 h-[30px] px-3"} flex w-full items-center justify-between rounded-md bg-(--color-canvas-deep) text-[12px] transition-colors ${
-            value ? "text-emerald-200" : "text-(--color-ink-muted)"
+          className={`nodrag nopan ${compact ? "h-[28px] px-2.5" : "mt-1 h-[30px] px-3"} flex w-full items-center justify-between rounded-md bg-canvas-deep text-[12px] transition-colors ${
+            value ? "text-emerald-700 dark:text-emerald-200" : "text-ink-muted"
           } ${missingRequired ? "ring-1 ring-red-400/50" : ""}`}
         >
           <span>{value ? "开启" : "关闭"}</span>
           <span
             className={`relative h-3.5 w-7 rounded-full transition-colors ${
-              value ? "bg-emerald-400/70" : "bg-white/12"
+              value ? "bg-emerald-400/70" : "bg-surface-2"
             }`}
           >
             <span
@@ -154,7 +154,7 @@ export function WidgetControl({
       return (
         <button
           type="button"
-          className={`nodrag nopan ${compact ? "h-[28px] w-full" : "mt-1 py-1.5"} inline-flex items-center gap-1.5 rounded-md bg-(--color-canvas-deep) px-2.5 text-[11px] text-(--color-ink-soft) transition-colors hover:text-(--color-ink-bright) ${
+          className={`nodrag nopan ${compact ? "h-[28px] w-full" : "mt-1 py-1.5"} inline-flex items-center gap-1.5 rounded-md bg-canvas-deep px-2.5 text-[11px] text-ink-soft transition-colors hover:text-ink-bright ${
             missingRequired ? "ring-1 ring-red-400/50" : ""
           }`}
           disabled={disabled || uploading}

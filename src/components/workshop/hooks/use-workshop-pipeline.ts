@@ -49,6 +49,7 @@ import { parseShotSize, shotSizeToParam } from "~/components/workshop/shot-size-
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
+import { errorMessage } from "~/lib/error-message";
 import {
   useCharacterPortrait,
   type PortraitSession,
@@ -278,15 +279,6 @@ function paramNumber(value: unknown, fallback: number): number {
         ? value
         : NaN;
   return Number.isFinite(num) ? num : fallback;
-}
-
-/** catch 抛出值（unknown）→ 消息提取：带 string message 的对象取 message。 */
-function errorMessage(error: unknown, fallback: string): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === "string" && message) return message;
-  }
-  return fallback;
 }
 
 /** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别）。 */

@@ -19,6 +19,7 @@ import {
 } from "@/lib/app-settings";
 import { readEnvVar } from "@/lib/envfile";
 import { requireServerUser } from "@/lib/auth-server";
+import { errorMessage } from "~/lib/error-message";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,16 +52,6 @@ interface ManifestPackageSummary {
   parsedAt: string | null;
   parsedFileCount: number;
   generatedAt: string | null;
-}
-
-/** 提取错误信息,等价原 `e?.message ?? fallback`。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const msg: unknown = e.message;
-    if (typeof msg === "string") return msg;
-  }
-  return fallback;
 }
 
 /** Resolve the custom-node scan roots.

@@ -14,7 +14,6 @@ import {
   type EnrichedWidget,
   type WorkflowIOEntry,
 } from "~/components/studio/shared/workflow-io";
-import { WIRE_DIRECTION_ATTR } from "~/lib/workflow-io-types";
 import { ACCENT } from "../constants";
 import { controlTypeFallback } from "../dynamic-workflow-form-config";
 import { WidgetControl } from "./WidgetControl";
@@ -47,11 +46,6 @@ interface WidgetInputRowProps {
    *  节点重复命名很常见），边会接到同名 handle 的第一处 —— 表现就是「线连到了
    *  别的节点上」。缺省仍用 ioKey（画布未富化时它就是唯一键）。 */
   handleId?: string;
-  /** 映射连线的**落点锚点**值（`data-io-pins`）。
-   *
-   *  卡片连线要落到「是哪一行/哪一档控件」上：独立参数行就是它自己的 ioKey，
-   *  组合控件覆盖的端口则写「这块控件覆盖的全部端口」。缺省用 ioKey。 */
-  wirePins?: string;
   /** 行尾附加的只读徽标（工作流库画布节点用它标出该参数连到的「对外参数」）。
    *  缺省不渲染——画布 / 表单等等价场景不受影响。 */
   trailing?: ReactNode;
@@ -75,7 +69,6 @@ export function WidgetInputRow({
   dimmed = false,
   withHandle = false,
   handleId,
-  wirePins,
   trailing,
 }: WidgetInputRowProps) {
   const accent = ACCENT[entry.control];
@@ -87,12 +80,8 @@ export function WidgetInputRow({
    * 悄悄改成 INT/STRING，用户看到的类型与工作流里的定义对不上。 */
   const typeChip = (
     <span
-      className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
-      style={{
-        fontFamily: "var(--font-sans)",
-        background: "var(--color-border-strong)",
-        color: "var(--color-ink-muted)",
-      }}
+      className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
+      style={{ fontFamily: "var(--font-sans)" }}
     >
       {typeDisplay(entry.type, controlTypeFallback(entry.control))}
     </span>
@@ -132,8 +121,8 @@ export function WidgetInputRow({
             onMouseDown={(ev) => ev.stopPropagation()}
             className={`nodrag nopan shrink-0 rounded px-1.5 py-px text-[10px] font-medium transition-colors ${
               entry.required
-                ? "border border-red-400/40 bg-red-500/15 text-red-300 hover:bg-red-500/25"
-                : "border border-white/8 bg-white/2 text-gray-500 hover:bg-white/6 hover:text-gray-300"
+                ? "border border-red-400/40 bg-red-500/15 text-red-700 dark:text-red-300 hover:bg-red-500/25"
+                : "border border-border-strong bg-subtle text-ink-muted hover:bg-subtle hover:text-ink-soft"
             }`}
           >
             {entry.required ? "必填" : "可选"}
@@ -152,8 +141,8 @@ export function WidgetInputRow({
             onMouseDown={(ev) => ev.stopPropagation()}
             className={`nodrag nopan shrink-0 rounded p-0.5 transition-colors ${
               visible === false
-                ? "text-gray-600 hover:text-gray-300"
-                : "text-gray-300 hover:bg-white/8 hover:text-gray-100"
+                ? "text-ink-fainter hover:text-ink-soft"
+                : "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
             }`}
           >
             {visible === false ? <EyeOff size={11} /> : <Eye size={11} />}
@@ -171,9 +160,6 @@ export function WidgetInputRow({
         <div
           className={`relative ${dimmed ? "opacity-50" : ""}`}
           data-io-key={entry.ioKey}
-          data-io-pins={wirePins ?? entry.ioKey}
-          /* 方向：这一行是**输入**参数行（拖输出卡片的圆点只能落在输出行上）。 */
-          {...{ [WIRE_DIRECTION_ATTR]: "input" }}
         >
           {withHandle && (
             <PortHandle
@@ -185,7 +171,7 @@ export function WidgetInputRow({
           )}
           <div className="px-[14px] pt-1.5">{labelRow}</div>
           <div className="px-[14px] pt-1 pb-1.5">
-            <span className="text-[11px] text-gray-500">只接受连线</span>
+            <span className="text-[11px] text-ink-muted">只接受连线</span>
           </div>
         </div>
       );
@@ -193,28 +179,23 @@ export function WidgetInputRow({
     return (
       <div
         className={`relative ${dimmed ? "opacity-50" : ""}`}
-        data-io-pins={wirePins ?? entry.ioKey}
       >
         {withHandle && (
           <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />
         )}
-        <div className="flex items-center gap-2 rounded-md bg-(--color-canvas-deep) px-2.5 py-1.5 pr-[14px] pl-[14px]">
+        <div className="flex items-center gap-2 rounded-md bg-canvas-deep px-2.5 py-1.5 pr-[14px] pl-[14px]">
           <span
             className="h-2 w-2 shrink-0 rounded-full"
             style={{ background: accent }}
           />
-          <span className="min-w-0 flex-1 truncate text-[11px] text-(--color-ink-soft)">
+          <span className="min-w-0 flex-1 truncate text-[11px] text-ink-soft">
             {label}
           </span>
           {/* link 行同样打印 pin 真实声明的类型：MODEL / CLIP / LATENT /
               IMAGEUPLOAD 等自定义类型一律原样展示，不回退成 "*"。 */}
           <span
-            className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
-            style={{
-              fontFamily: "var(--font-sans)",
-              background: "var(--color-border-strong)",
-              color: "var(--color-ink-muted)",
-            }}
+            className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
+            style={{ fontFamily: "var(--font-sans)" }}
           >
             {typeDisplay(entry.type)}
           </span>
@@ -244,12 +225,9 @@ export function WidgetInputRow({
     return (
       <div
         className={`relative ${dimmed ? "opacity-50" : ""}`}
-        /* 行锚点：库画布的映射连线需要量出这一行的位置（ioKey 即端口名）；
-         * data-io-pins 是「落到这一格」的精确锚点（缺省即本行）。 */
+        /* 行锚点：拖拽重排（`use-dynamic-workflow-form` 从事件目标往上找这一行）
+         *  与 Playwright 都按它认「这一行是哪一格」。 */
         data-io-key={entry.ioKey}
-        data-io-pins={wirePins ?? entry.ioKey}
-        /* 方向：这一行是**输入**参数行（拖输出卡片的圆点只能落在输出行上）。 */
-        {...{ [WIRE_DIRECTION_ATTR]: "input" }}
       >
         {withHandle && (
           /* 圆心锁到标签行中线（pt-1.5 = 6 + h-5 / 2 = 10 = 16px）：默认的
@@ -272,7 +250,6 @@ export function WidgetInputRow({
   return (
     <div
       className={`relative ${dimmed ? "opacity-50" : ""}`}
-      data-io-pins={wirePins ?? entry.ioKey}
     >
       {withHandle && (
         <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />

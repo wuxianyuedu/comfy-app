@@ -42,15 +42,15 @@ export function WorkflowImportPanel({
   } = state;
 
   return (
-    <div className="mb-6 rounded-2xl border border-white/8 bg-white/2 p-5">
+    <div className="mb-6 rounded-2xl border border-border-strong bg-subtle p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-gray-100">
+        <h2 className="text-sm font-semibold text-ink-bright">
           导入 ComfyUI 工作流
         </h2>
         <button
           type="button"
           onClick={onClose}
-          className="text-gray-500 transition-colors hover:text-gray-300"
+          className="text-ink-muted transition-colors hover:text-ink-soft"
           title="关闭"
         >
           ✕
@@ -60,18 +60,18 @@ export function WorkflowImportPanel({
       {/* Common: name + mode */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_220px]">
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-300">
+          <label className="mb-1 block text-xs font-medium text-ink-soft">
             工作流名称
           </label>
           <input
             value={importName}
             onChange={(event) => setImportName(event.target.value)}
             placeholder="例如：胶片人像 _v2（留空则用文件名）"
-            className="w-full rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-violet-500/40"
+            className="w-full rounded-lg border border-border-strong bg-subtle px-3 py-2 text-sm text-ink-bright outline-none placeholder:text-ink-muted focus:border-violet-500/40"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-300">
+          <label className="mb-1 block text-xs font-medium text-ink-soft">
             模式
           </label>
           <MultiModeSelect
@@ -87,7 +87,7 @@ export function WorkflowImportPanel({
 
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[200px_1fr]">
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-400">
+          <label className="mb-1 block text-xs font-medium text-ink-soft">
             JSON 格式
           </label>
           <DarkSelect
@@ -104,18 +104,18 @@ export function WorkflowImportPanel({
           />
         </div>
         <div className="flex items-end">
-          <span className="group relative inline-flex items-center gap-1.5 text-xs text-gray-500">
+          <span className="group relative inline-flex items-center gap-1.5 text-xs text-ink-muted">
             <button
               type="button"
               onClick={() => setShowHelpTip((value) => !value)}
               aria-label="导入格式说明"
               aria-expanded={showHelpTip}
-              className="flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-white/4 text-[11px] text-gray-400 transition-colors hover:border-violet-400/40 hover:text-violet-200"
+              className="flex h-5 w-5 items-center justify-center rounded-full border border-border-strong bg-subtle text-[11px] text-ink-soft transition-colors hover:border-violet-400/40 hover:text-violet-700 dark:hover:text-violet-200"
             >
               ?
             </button>
             <span
-              className={`absolute bottom-full left-0 mb-2 w-64 rounded-lg border border-white/10 bg-[#1b1b24] p-2.5 text-xs leading-relaxed text-gray-300 shadow-xl transition-opacity ${
+              className={`absolute bottom-full left-0 mb-2 w-64 rounded-lg border border-border-strong bg-panel p-2.5 text-xs leading-relaxed text-ink-soft shadow-xl transition-opacity ${
                 showHelpTip
                   ? "opacity-100"
                   : "pointer-events-none opacity-0 group-hover:opacity-100"
@@ -132,13 +132,13 @@ export function WorkflowImportPanel({
           onChange={(event) => setImportJson(event.target.value)}
           rows={8}
           placeholder='API 格式: { "3": { "class_type": "KSampler", "inputs": {...} } }\n\n工作流格式: { "last_node_id": 11, "nodes": [{ "id": 11, "type": "KSampler", "pos": [400, 300], "widgets_values": [...] }], "links": [...] }'
-          className="w-full resize-none rounded-lg border border-white/10 bg-white/3 px-3 py-2 font-mono text-xs text-gray-100 outline-none placeholder:text-gray-500 focus:border-violet-500/40"
+          className="w-full resize-none rounded-lg border border-border-strong bg-subtle px-3 py-2 font-mono text-xs text-ink-bright outline-none placeholder:text-ink-muted focus:border-violet-500/40"
         />
       </div>
 
-      {importErr && <p className="mt-2 text-xs text-red-400">{importErr}</p>}
+      {importErr && <p className="mt-2 text-xs text-red-700 dark:text-red-400">{importErr}</p>}
       {importWarn.length > 0 && (
-        <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/6 p-2 text-xs text-amber-200">
+        <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/6 p-2 text-xs text-amber-800 dark:text-amber-200">
           <p className="font-medium">导入提示：</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-4">
             {importWarn.map((warning, i) => (
@@ -151,7 +151,7 @@ export function WorkflowImportPanel({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg border border-white/15 px-4 py-2 text-sm text-gray-300 transition-colors hover:bg-white/5"
+          className="rounded-lg border border-border-strong px-4 py-2 text-sm text-ink-soft transition-colors hover:bg-subtle"
         >
           取消
         </button>

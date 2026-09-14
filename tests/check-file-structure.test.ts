@@ -12,6 +12,8 @@
  *     启动类归 tools/start/；根目录只留工程配置
  *   - R10 注释里禁止「历史流水」（日期 / 改动编号 / 任务批次号，ISSUE #46）：
  *     作者与修改日期归 git log，写进注释会随代码搬迁过期失真
+ *   - R11 Next 16 起代理约定名是 src/proxy.ts（`middleware` 已废弃，ISSUE #489）：
+ *     文件被删 / 改回旧名 / 挪离 src 根都阻断
  *
  * 为什么用子进程跑而不是 import：该脚本被 pre-commit 以 `node scripts/xxx.cjs`
  * 调用，且内部用 process.cwd() 定位扫描根；复用同一调用方式才等价于真实门禁。
@@ -25,7 +27,7 @@ import {
   copyFileSync,
 } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi
 } from "vitest";
@@ -65,6 +67,9 @@ beforeEach(() => {
   mkdirSync(join(workdir, "src"));
   mkdirSync(join(workdir, "scripts"));
   mkdirSync(join(workdir, "tools", "build"), { recursive: true });
+  /* R11 的默认前提：Next 16 代理约定文件在 src/ 根。真实仓库里它一直在，
+   * 所以「干净工作区放行」这类基线用例必须带上它，否则测的不是真实形态。 */
+  writeFileSync(join(workdir, "src", "proxy.ts"), "export function proxy() {}\n");
 });
 
 afterEach(() => {
@@ -208,6 +213,94 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       );
       const { code } = run();
       expect(code).toBe(0);
+    });
+  });
+
+  // ── R11：Next 16 起代理约定名是 proxy（`middleware` 已废弃，ISSUE #489）──
+  // 删文件与改回旧名都会「消掉警告」，但代价是代理落点一起消失 / 警告回流，
+  // 所以两条都要在提交阶段拦下，而不是等构建期那条 deprecation 提示。
+  describe("R11：Next 16 代理约定（ISSUE #489）", () => {
+    const writeProxy = (rel: string) => {
+      const abs = join(workdir, rel);
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, "export function proxy() {}\n");
+    };
+
+
+    it("src/proxy.ts 存在时放行（约定名不被 R2 kebab 规则误伤）", () => {
+      writeProxy("src/proxy.ts");
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("R2");
+    });
+
+    it("缺少 src/proxy.ts 时阻断（代理落点被删，构建期不报错）", () => {
+      rmSync(join(workdir, "src", "proxy.ts"));
+      //（外层的 beforeEach 已建好该文件，这里模拟「被删掉」）
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R11");
+    });
+
+    it("改回 src/middleware.ts 时阻断（Next 16 已废弃的约定名）", () => {
+      writeProxy("src/middleware.ts");
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R11");
+    });
+
+    it("约定文件被挪离 src/ 根时阻断（Next 不会加载，静默失效）", () => {
+      writeProxy("src/app/proxy.ts");
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R11");
+    });
+  });
+
+  // ── R12：src/ 源码里不得内嵌控制字符（规范 §12.11）──
+  // 判据来自一次真实事故：`lib/comfyui/markdown.ts` 曾用真的 NUL 字节做占位符
+  // 哨兵（` CODE<n> `），于是整个文件被 git / diff / grep / 编辑器当二进制：
+  // `git diff` 只回「Binary files differ」、`git show --stat` 显示 bin、
+  // `grep -rn` 静默跳过。哨兵改成可打印形式后，这条规则负责防回潮。
+  describe("R12：源码内嵌控制字符被阻断（规范 §12.11）", () => {
+    /* NUL 只能用**转义**写进用例源码——直接嵌一个真字节会把本测试文件自己也
+     * 变成二进制（正是 R12 要拦的形态）。写进临时文件时才还原成真字节。 */
+    const NUL = "\u0000";
+    const writeSrc = (name: string, body: string) => {
+      mkdirSync(join(workdir, "src"), { recursive: true });
+      writeFileSync(join(workdir, "src", name), body);
+    };
+
+    it("内嵌 NUL 字节被阻断", () => {
+      writeSrc("a.ts", 'export const SENTINEL = "' + NUL + 'CODE0' + NUL + '";\n');
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R12");
+      expect(output).toContain("NUL");
+    });
+
+    it("制表符 / 换行 / 回车属于正常排版，放行", () => {
+      writeSrc("b.ts", "export const a = 1;\r\n\tconst b = 2;\n");
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("R12");
+    });
+
+    it("正文里的**转义写法** `\\u0000` 是普通字符，放行", () => {
+      // 关键区分：源码里写的是 6 个可见字符（反斜杠 + u0000），
+      // 不是一个控制字节。要常量本身带 NUL 的场合（如果真有）才需要它，
+      // 而那时文件依然是纯文本，git 与 grep 都读得动。
+      writeSrc("c.ts", 'export const ESCAPED = "\\u0000";\n');
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("R12");
+    });
+
+    it("普通注释里的中文与 emoji 不是控制字符，放行", () => {
+      writeSrc("d.ts", "// 哨兵 → 用可打印形式，别用真的 NUL 字节 ✅\nexport const d = 4;\n");
+      const { code, output } = run();
+      expect(code).toBe(0);
+      expect(output).not.toContain("R12");
     });
   });
 });

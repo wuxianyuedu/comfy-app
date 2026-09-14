@@ -55,7 +55,6 @@ import {
   SizeTableFooter,
   type AspectMegaGroup,
 } from "./DimensionControlParts";
-import { WIRE_PINS_ATTR, WIRE_ROW_ATTR, wirePinsValue } from "~/lib/workflow-io-types";
 
 export function AspectMegapixelControl({
   group,
@@ -329,7 +328,7 @@ export function AspectMegapixelControl({
         scene={scene}
         onOpen={() => setTableOpen(true)}
         extra={
-          <span className="text-[10px] text-(--color-ink-faint)">
+          <span className="text-[10px] text-ink-faint">
             {currentDims
               ? `${currentDims.width}×${currentDims.height}`
               : resolutionHint}
@@ -340,24 +339,12 @@ export function AspectMegapixelControl({
   );
 
   return (
-    <div
-      className="space-y-2.5"
-      /* 同上：比例/像素/倍数由同一控件录入，整块作为可锚定目标。
-       *  倍数（`multiple`）必须一并列进来 —— 漏掉它，落到这个端口上的映射线
-       *  在整块控件上找不到锚点，只能整条不画（用户看到的是「线没连上」）。 */
-      {...{
-        [WIRE_PINS_ATTR]: wirePinsValue([
-          group.aspect?.ioKey,
-          group.megapixels?.ioKey,
-          group.multiple?.ioKey,
-        ]),
-      }}
-    >
+    <div className="space-y-2.5">
       <div
         className={
           narrow
             ? "flex items-start justify-end gap-3"
-            : "rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5"
+            : "rounded-lg border border-accent/30 bg-accent/4 p-2.5"
         }
       >
         {narrow ? (
@@ -365,9 +352,8 @@ export function AspectMegapixelControl({
            *  参数本身 —— 一行一个，端点骑跨卡片左缘，与节点上其他参数行长得一样
            *  （12px 大端点 + 参数名 + 类型徽章），不是控件框里那排「· 小点 + 名字」。
            *
-           *  这三行是真正的落点：映射连线量到的就是它们自己的圆点（`data-io-key`
-           *  与端点 id 同为 ioKey），拖到「百万像素」就连到 `megapixels`，不再只能
-           *  笼统地落到整块控件上。 */
+           *  这三行各自是一个**真正的落点**（端点 id 即 ioKey）：拖到「百万像素」
+           *  就连到 `megapixels`，不是笼统地落到整块控件上。 */
           <>
             <div className="flex min-w-0 flex-1 flex-col gap-0.5 self-center">
               {[aspect, megapixels, multiple]
@@ -381,10 +367,8 @@ export function AspectMegapixelControl({
                      *  圆点右沿（6px）压过文字起点（2px），名字被圆点盖住
                      *  （ISSUE #355：「端口圆点和参数名字之间距离太近」）。 */
                     className="relative flex h-[22px] items-center gap-1.5 pl-[14px]"
-                    {...{
-                      [WIRE_ROW_ATTR]: entry.ioKey,
-                      [WIRE_PINS_ATTR]: entry.ioKey,
-                    }}
+                    /* 行锚点：拖拽重排与 e2e 按它认「这一行是哪一格」。 */
+                    data-io-key={entry.ioKey}
                   >
                     <PortHandle
                       id={entry.ioKey}
@@ -393,18 +377,14 @@ export function AspectMegapixelControl({
                       style={{ top: "50%", transform: "translateY(-50%)" }}
                     />
                     <span
-                      className="min-w-0 truncate text-[12px] font-medium text-(--color-ink-bright)"
+                      className="min-w-0 truncate text-[12px] font-medium text-ink-bright"
                       style={{ fontFamily: "var(--font-sans)" }}
                     >
                       {entry.label ?? entry.name}
                     </span>
                     <span
-                      className="inline-flex shrink-0 items-center rounded-[3px] px-1 py-px text-[10px] font-semibold"
-                      style={{
-                        fontFamily: "var(--font-sans)",
-                        background: "var(--color-border-strong)",
-                        color: "var(--color-ink-muted)",
-                      }}
+                      className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1 py-px text-[10px] font-semibold"
+                      style={{ fontFamily: "var(--font-sans)" }}
                     >
                       {typeDisplay(entry.type)}
                     </span>
@@ -415,9 +395,9 @@ export function AspectMegapixelControl({
                 —— 它们已经以真正的参数行形态摆在框外左侧了。 */}
             <div
               data-grouped-box
-              className="w-fit max-w-full shrink-0 rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2"
+              className="w-fit max-w-full shrink-0 rounded-lg border border-accent/30 bg-accent/4 p-2"
             >
-              <span className="text-[10px] font-semibold tracking-wider text-(--color-accent) uppercase">
+              <span className="text-[10px] font-semibold tracking-wider text-accent uppercase">
                 比例 + 像素{multiple ? " + 倍数" : ""}
               </span>
               <div className="mt-1 w-[168px] min-w-0">
@@ -444,7 +424,7 @@ export function AspectMegapixelControl({
         ) : (
           <div>
             <div className="flex items-center gap-2">
-              <span className="shrink-0 text-[10px] font-semibold tracking-wider text-(--color-accent) uppercase">
+              <span className="shrink-0 text-[10px] font-semibold tracking-wider text-accent uppercase">
                 比例 + 像素{multiple ? " + 倍数" : ""}
               </span>
               <div className="min-w-0 flex-1">

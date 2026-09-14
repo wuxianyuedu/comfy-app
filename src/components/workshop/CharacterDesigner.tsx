@@ -37,6 +37,7 @@ import {
   parseImportedCharacterCards,
 } from "@/lib/workshop/script-parse";
 import type { ParsedCharacterDraft } from "@/lib/workshop/script-parse";
+import { errorMessage } from "~/lib/error-message";
 import { useLLM } from "@/components/workshop/LLMContext";
 import {
   useExtractSession,
@@ -54,16 +55,6 @@ import {
   parseCharacter,
   parseCharacterFull,
 } from "@/lib/llm/prompts";
-
-/** catch 抛出值（unknown）→ 与旧 `e?.message ?? fallback` 逐值等价的消息提取：
- *  带 string message 的对象取 message（Error 实例即此路径），其余回退。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return fallback;
-}
 
 interface Props {
   characters: Character[];
@@ -501,7 +492,7 @@ export function CharacterDesigner({
               <p className="text-primary mt-1 text-xs">{genStatus}</p>
             )}
             {genError && (
-              <p className="mt-1 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
+              <p className="mt-1 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-800 dark:text-red-300">
                 {genError}
               </p>
             )}
@@ -534,7 +525,7 @@ export function CharacterDesigner({
 
       {/* AI 润色失败提示：放在角色列表上方，与一句话生成区错误分离 */}
       {aiError && (
-        <p className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
+        <p className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-800 dark:text-red-300">
           {aiError}
         </p>
       )}
@@ -585,7 +576,7 @@ export function CharacterDesigner({
                 <button
                   type="button"
                   onClick={() => remove(character.id)}
-                  className="text-muted-foreground hover:text-red-500"
+                  className="text-muted-foreground hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
                   aria-label="删除角色"
                 >
                   <Trash size={16} />
@@ -656,7 +647,7 @@ export function CharacterDesigner({
                   艺术风格（Skill）
                 </span>
                 <DarkSelect
-                  className="!border-(--color-border) !bg-(--color-subtle) text-sm"
+                  className="!border-border !bg-subtle text-sm"
                   value={character.skillSlug ?? ""}
                   onChange={(value) =>
                     update(character.id, { skillSlug: value || undefined })

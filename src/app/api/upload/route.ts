@@ -3,18 +3,9 @@ import { requireServerUser } from "@/lib/auth-server";
 import { uploadImage, comfyBase } from "@/lib/comfyui/client";
 import { ensureComfyUiReady } from "@/lib/comfyui/lifecycle";
 import { logger } from "~/server/lib/logger";
+import { errorMessage } from "~/lib/error-message";
 
 export const runtime = "nodejs";
-
-/** 提取错误信息,等价原 `e?.message ?? fallback`(catch 变量为 unknown 后的窄化版)。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const msg: unknown = e.message;
-    if (typeof msg === "string") return msg;
-  }
-  return fallback;
-}
 
 /** ComfyUI 不可达（未运行 / 端口不通）的判据：这些形态才值得触发自动启动。 */
 function isUnreachable(msg: string): boolean {

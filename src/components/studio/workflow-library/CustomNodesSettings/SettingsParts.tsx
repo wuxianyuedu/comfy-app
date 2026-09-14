@@ -43,8 +43,8 @@ export function PortRow({
         {type}
       </span>
       <span
-        className={`min-w-0 truncate text-[10.5px] font-semibold ${
-          isOut ? "text-right text-[#CFE9FF]" : "text-[#E7E2FB]"
+        className={`text-ink-soft min-w-0 truncate text-[10.5px] font-semibold ${
+          isOut ? "text-right" : ""
         }`}
         title={name}
         style={isOut ? { textAlign: "right" } : undefined}
@@ -84,12 +84,11 @@ export function WidgetValueChip({
     const on = value === true || value === "true" || value === "True";
     return (
       <span
-        className="rounded px-1.5 py-px text-[10px] font-semibold"
-        style={{
-          background: on ? "rgba(16,185,129,0.18)" : "rgba(239,68,68,0.18)",
-          color: on ? "var(--color-success-strong)" : "#EF4444",
-          fontFamily: "var(--font-mono)",
-        }}
+        className={`rounded px-1.5 py-px font-mono text-[10px] font-semibold ${
+          on
+            ? "bg-success-strong/18 text-success-strong"
+            : "bg-red-500/18 text-red-600 dark:text-red-400"
+        }`}
       >
         {on ? "✓" : "✗"}
       </span>
@@ -98,12 +97,7 @@ export function WidgetValueChip({
   if (widget === "select") {
     return (
       <span
-        className="max-w-[100px] truncate rounded px-1.5 py-px text-[10px] font-semibold"
-        style={{
-          background: "rgba(168,85,247,0.18)",
-          color: "#A855F7",
-          fontFamily: "var(--font-mono)",
-        }}
+        className="max-w-[100px] truncate rounded bg-violet-500/18 px-1.5 py-px font-mono text-[10px] font-semibold text-violet-700 dark:text-violet-300"
         title={widgetValueToText(value)}
       >
         {value == null ? "—" : widgetValueToText(value)}
@@ -113,12 +107,7 @@ export function WidgetValueChip({
   if (widget === "number") {
     return (
       <span
-        className="max-w-[100px] truncate rounded px-1.5 py-px text-[10px] font-semibold"
-        style={{
-          background: "rgba(245,158,11,0.18)",
-          color: "var(--color-warning)",
-          fontFamily: "var(--font-mono)",
-        }}
+        className="bg-warning/18 text-warning max-w-[100px] truncate rounded px-1.5 py-px font-mono text-[10px] font-semibold"
         title={widgetValueToText(value)}
       >
         {value == null ? "—" : widgetValueToText(value)}
@@ -128,12 +117,7 @@ export function WidgetValueChip({
   // string / text / image / latent / unknown
   return (
     <span
-      className="max-w-[140px] truncate rounded px-1.5 py-px text-[10px]"
-      style={{
-        background: "rgba(0,0,0,0.4)",
-        color: "#C9C2E8",
-        fontFamily: "var(--font-mono)",
-      }}
+      className="bg-canvas-deep text-ink-soft max-w-[140px] truncate rounded px-1.5 py-px font-mono text-[10px]"
       title={widgetValueToText(value)}
     >
       {value == null ? "—" : widgetValueToText(value)}
@@ -194,7 +178,7 @@ export function ParseProgressBanner({
           K/M during hash. `progress.total > 0` only flips true at
           the end of the file walk when the parser announces M, so
           the bar cleanly transitions scan→hash. */}
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2">
         {progress.phase === "hash" && progress.total > 0 ? (
           <div
             className="h-full bg-primary transition-all duration-300 ease-out"
@@ -262,12 +246,12 @@ export function ParseConsole({
             <div
               key={`log-${idx}`}
               data-log-row
-              className={log.level === "error" ? "text-red-400" : "text-emerald-300/90"}
+              className={log.level === "error" ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-300/90"}
             >
               {log.msg}
             </div>
           ))}
-          {parsing && <div className="text-gray-500">…</div>}
+          {parsing && <div className="text-ink-muted">…</div>}
         </div>
       )}
     </div>
@@ -320,13 +304,13 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   {pkg.nodeTypes.slice(0, 24).map((ct) => (
                     <span
                       key={ct}
-                      className="rounded-md bg-white/4 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+                      className="rounded-md bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
                     >
                       {ct}
                     </span>
                   ))}
                   {pkg.nodeTypes.length > 24 && (
-                    <span className="rounded-md bg-white/4 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                    <span className="rounded-md bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
                       +{pkg.nodeTypes.length - 24}
                     </span>
                   )}
@@ -335,7 +319,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
               {pkg.errors?.length > 0 && (
                 <div className="mt-2 space-y-1">
                   {pkg.errors.map((er, j) => (
-                    <div key={j} className="font-mono text-[11px] text-red-400">
+                    <div key={j} className="font-mono text-[11px] text-red-700 dark:text-red-400">
                       ⚠ {er.file}: {er.error}
                     </div>
                   ))}

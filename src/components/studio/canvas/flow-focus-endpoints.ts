@@ -128,25 +128,25 @@ export interface PortRowStyle {
 /** 端口行三档 + 提示档的样式表。端点色相由端口类型决定，这里只管「强弱」。 */
 export const PORT_ROW_TONES: Record<PortRowTone, PortRowStyle> = {
   focused: {
-    background: "rgba(255,255,255,0.05)",
-    labelColor: "var(--color-ink-bright, #f4f4f5)",
+    background: "var(--color-surface-2)",
+    labelColor: "var(--color-ink-bright)",
     labelWeight: 500,
     dotSize: 12,
     dotGlowStrong: true,
   },
   related: {
-    labelColor: "rgb(228 228 231)",
+    labelColor: "var(--color-ink-bright)",
     dotSize: 10,
     dotGlowStrong: false,
   },
   plain: {
-    labelColor: "rgb(228 228 231)",
+    labelColor: "var(--color-ink-bright)",
     dotSize: 10,
     dotGlowStrong: false,
   },
   dimmed: {
     opacity: 0.45,
-    labelColor: "var(--color-ink-fainter, #52525b)",
+    labelColor: "var(--color-ink-fainter)",
     dotSize: 10,
     dotGlowStrong: false,
   },
@@ -166,11 +166,15 @@ export function resolvePortRowTone(args: {
   return args.hasSelection ? "dimmed" : "plain";
 }
 
-/** 端点光晕的两档实色（强 / 常规）。渲染层把端口类型色插进去。 */
+/** 端点光晕的两档实色（强 / 常规）。渲染层把端口类型色插进去。
+ *
+ *  内圈高光用 `--color-port-halo-ring` 而不是写死的白：浅色下
+ *  `rgba(255,255,255,0.5)` 是**白描白**（圆点载体在浅色下是浅色），
+ *  等于没有高光 —— 与 `--color-port-surface` 同一类根因。 */
 export function portDotGlow(portColor: string, strong: boolean): string {
   return strong
-    ? `0 0 10px 2px ${portColor}, inset 0 0 0 1px rgba(255,255,255,0.5)`
-    : `0 0 6px ${portColor}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`;
+    ? `0 0 10px 2px ${portColor}, inset 0 0 0 1px var(--color-port-halo-ring)`
+    : `0 0 6px ${portColor}AA, inset 0 0 0 1px var(--color-port-halo-ring-weak)`;
 }
 
 export interface PortFocusConnection {

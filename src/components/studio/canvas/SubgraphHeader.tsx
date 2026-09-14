@@ -7,6 +7,7 @@
  * titled nodes line up on the grid. */
 import { ExternalLink } from "lucide-react";
 import { mixHex, NODE_TITLE_H } from "../workflow-utils";
+import { useCssColorToken } from "../hooks/use-css-color-token";
 import { IoCheckbox, NodeIdChip, type IOEditContextValue } from "./IOEditContext";
 
 export interface SubgraphHeaderProps {
@@ -32,13 +33,17 @@ export function SubgraphHeader({
   io,
   outputRef,
 }: SubgraphHeaderProps) {
+  /* 标题栏底色 = 节点表面色与子图身份色 accent 的 20% 混色。混色基准此前
+     写死 `#16161E`，Light 下整条标题栏仍是暗色（浅色节点配黑标题）。
+     基准改为跟主题走的 `--color-node-mix-base`（浅色=白、深色=原 #16161e）。 */
+  const mixBase = useCssColorToken("--color-node-mix-base", "#16161e");
   return (
     <div
       className="flex shrink-0 items-center gap-2 rounded-t-lg px-2 text-xs"
       style={{
         height: NODE_TITLE_H,
-        background: mixHex("#16161E", accent, 0.2),
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        background: mixHex(mixBase, accent, 0.2),
+        borderBottom: "1px solid var(--color-border-subtle)",
       }}
     >
       {/* Collapse / expand toggle. Same chevron as
@@ -57,7 +62,7 @@ export function SubgraphHeader({
         }}
         onMouseDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-white/10 hover:text-white active:bg-white/15"
+        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors e/15"
         style={{ pointerEvents: "auto" }}
       >
         <svg
@@ -90,8 +95,7 @@ export function SubgraphHeader({
        *  回车聚焦不再触发进入子工作流（见 WorkflowSubgraphNode 双击移除
        *  同一决策），避免用户误触。标题保持纯文本，禁止选中。 */}
       <span
-        className="min-w-0 flex-1 select-none truncate text-[12px] font-semibold tracking-wide"
-        style={{ color: "#E2E2EA" }}
+        className="text-ink-bright min-w-0 flex-1 select-none truncate text-[12px] font-semibold tracking-wide"
         title={title || "子工作流"}
       >
         {title || "子工作流"}
@@ -131,7 +135,7 @@ export function SubgraphHeader({
            *  in-bar button (vs the 28-32px standalone chip look).
            *  Sits a step above the chevron collapse button's h-5 w-5
            *  to mark drill-in as the *primary* subgraph action. */
-          className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] text-violet-200 transition-colors hover:bg-violet-500/30 hover:text-white"
+          className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] text-violet-700 dark:text-violet-200 transition-colors hover:bg-violet-500/30 hover:text-white"
         >
           <ExternalLink size={12} strokeWidth={2.5} />
         </button>

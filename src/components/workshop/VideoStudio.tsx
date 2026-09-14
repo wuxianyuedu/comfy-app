@@ -13,15 +13,7 @@ import {
 import type { ApiChannelsView } from "@/lib/workshop/api-channel-shared";
 import { ChannelSwitch, ShotCard } from "./VideoStudio.parts";
 import { framesFor, videoPrompt } from "./video-studio-utils";
-
-/** catch 抛出值（unknown）→ 消息提取：带 string message 的对象取 message，其余回退。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m = (e as { message?: unknown }).message;
-    if (typeof m === "string" && m) return m;
-  }
-  return fallback;
-}
+import { errorMessage } from "~/lib/error-message";
 
 interface Props {
   shots: Shot[];
@@ -145,15 +137,20 @@ export function VideoStudio({
         const inputImage = shot.imageUrl
           ? await prepareLocalInputImage(shot.imageUrl)
           : undefined;
-        /* 选定工作流库工作流时，按封装口径只暴露 提示词 / 尺寸 / 首帧，
+        /* 选定工作流库工作流时，按封装口径暴露 提示词 / 尺寸 / 首帧 / 时长，
          * 其余参数用工作流默认值；否则用内置 img2video / txt2video。
-         * 帧数/时长这类「内部参数」由工作流默认值给出，工坊不再逐个填。 */
+         * 时长口按落点端口自己的单位取值：按帧表达的端口给 frames，按秒表达的
+         * 给 duration —— 这里已经按当前 fps 折算好，封装层不再猜 fps。 */
         const input: GenerateInput = workflowId
           ? (
               await buildLibraryWorkflowInput(workflowId, {
                 prompt,
                 negativePrompt: shot.negativePrompt || undefined,
                 ...(inputImage ? { firstFrame: inputImage } : {}),
+                ...(typeof shot.duration === "number" && shot.duration > 0
+                  ? { duration: shot.duration }
+                  : {}),
+                frames,
               })
             ).input
           : {
@@ -248,7 +245,7 @@ export function VideoStudio({
         <button
           type="button"
           onClick={onPrevStage}
-          className="text-muted-foreground hover:text-ink rounded-lg bg-(--color-subtle) px-3 py-1.5 text-xs hover:bg-(--color-surface-2)"
+          className="text-muted-foreground hover:text-ink rounded-lg bg-subtle px-3 py-1.5 text-xs hover:bg-surface-2"
         >
           ← 回镜头生图
         </button>
@@ -256,5 +253,4 @@ export function VideoStudio({
     </div>
   );
 }
-
 

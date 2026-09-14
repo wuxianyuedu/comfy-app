@@ -26,9 +26,9 @@
  *
  * 本模块**只产出数据**：条目的落点默认由 `autoMapEntries` 按名字自动判定，
  * 运行期由 `applyParamMapping` 按这张表严格落值。工作流库「画布节点」页签上的
- * 卡片列与连线层是同一份数据的视图（`workflow-library-param-cards` /
- * `WorkflowParamWires`）—— 拖线即编辑落点，映射没有第二套界面。
- */
+ * 三列 React Flow 节点（卡片列 / 宿主卡片 / 输出卡片列）是同一份数据的视图
+ * （`workflow-library-param-cards` + `WorkflowLibraryCanvas`）—— 拖线即编辑
+ * 落点，映射没有第二套界面。 */
 
 import {
   resolveEntryDefault,
@@ -202,6 +202,23 @@ function contractParamFor(cls: ParamClass): string | null {
 /** 该分类是否属于「尺寸」语义（含契约聚合值 `"size"` 本身）。 */
 function isSizeClass(cls: ParamClass): boolean {
   return cls === "size" || SIZE_CLASSES.includes(cls);
+}
+
+/** 手工拖线的**类型闸门**：该契约口能不能落到这个端口上。
+ *
+ *  判据与自动落点同源 —— 条目**接受的端口分类**（`candidateClasses`：`size`
+ *  对应宽 / 高 / 宽高比 / 像素量，其余各自一类）里必须包含这个端口自己的分类
+ *  （`classifyPin`）。自动落点本来就按这套谓词挑端口，手工拖线若不过这道闸门，
+ *  就会出现「提示词拖到宽高比也连上了」：写进去的映射运行期根本取不到值，用户
+ *  看到的是一条假线（提示词口只有一个 STRING 口，宽高比是 COMBO 尺寸口）。 */
+export function pinAcceptsEntry(
+  cls: ParamClass,
+  ioEntry: WorkflowIOEntry | null | undefined,
+): boolean {
+  if (!ioEntry) return false;
+  const target = classifyPin(ioEntry);
+  if (target === "other") return false;
+  return candidateClasses(cls).includes(target);
 }
 
 /** 某个条目接受哪些端口分类（`"size"` 对应宽/高/宽高比/像素量四种）。 */
@@ -864,8 +881,8 @@ export function entryIdForPin(
  *  ⚠️ 现状：画布渲染侧**直接用 ioKey 当 handle id**（见 WidgetInputRow 的
  *  `handleId`）。`pin 名` 这个旧口径在「两个节点
  *  有同名 pin」时会让边接到同名 handle 的第一处 —— 表现就是「线连到了别的节点
- *  上」。本函数保留给只读呈现（库里那层的连线量测按 pin 名找锚点），画布手势
- *  一律走 ioKey。
+ *  上」。库里那层（`wireHandleIdForIoKey`）按 pin 名给卡片圆点取 handle id，
+ *  画布手势一律走 ioKey。
  *
  *  两个键空间必须分清（ISSUE #374）：
  *   · ioKey（`<nodeId>::<kind>::<name>`）是 workflowIO 的字典键，运行期
@@ -1086,9 +1103,9 @@ export function applyParamMapping(args: {
  * 卡片高度与圆点位置各写一份，线就会连到卡片外面去。
  *
  * **画布几何（节点 id 前缀 / 卡片坐标 / 卡片高度推算）已随编辑器卡片一起删除**：
- * 卡片现在只出现在工作流库详情的「画布节点」页签，那一层是普通 DOM 布局
- * （卡片列 + 独立连线层量测），不需要 React Flow 的节点坐标。
- */
+ * 卡片现在只出现在工作流库详情的「画布节点」页签，位置与三列布局由 React Flow
+ * 的节点坐标（`workflow-library-wire-graph` 的 `layoutLibraryNodes`）承担，
+ * 这里不需要第二套几何。 */
 
 /** 卡片头（标题）行高。 */
 export const PARAM_NODE_HEADER_H = 26;

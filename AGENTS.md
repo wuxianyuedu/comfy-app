@@ -39,7 +39,7 @@
 | ComfyUI 生命周期 | `src/lib/comfyui/**`（lifecycle / executor-* / reaper） | §3、§5 |
 | 工坊管线 | `src/components/workshop/**`、`src/lib/workshop/**` | §5 |
 | UI/逻辑分离 | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时 | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)） |
-| 跨平台行为 | 新增按平台分叉的逻辑、或改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、或动 `scripts/app-port.mjs` | §1.1、§3.1、§9（[launch-and-build.md](docs/standards/launch-and-build.md)） |
+| 跨平台行为 / 端口与文档 | 新增按平台分叉的逻辑、改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs`，或**在文档/README 里写具体端口号** | §1.1、§3.1、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1 |
 | 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |
 
 ## 硬规则（违反 = 提交被拒或必须回滚）
@@ -131,10 +131,43 @@
       带走，且报错完全指不出业务原因。触发偏移敏感 —— 同一文件删掉中文能过、换个长度的中文又能复现。
       实践口径见规范 §5 对应两条；业务模块与文档不受此限，中文照常。
 
+16. **分发产物不得携带开发机私有输入，敏感值不得以明文落日志**（ISSUE #489 / 规范 §7.3、07 §7.18.2.1）：
+    - `next build` 会把仓库根的 `.env` 与 `db.sqlite` 复制进 `.next/standalone`，
+      进而被 `build-desktop` 内嵌进桌面包 —— **密钥明文分发**，且壳以
+      `current_dir(res_dir)` 起 sidecar、db 路径按 `process.cwd()` 解析，被带进包的
+      开发库就是应用首次启动读写的那个。守卫在**产物层**：`pnpm build` 的收尾步骤
+      （`scripts/standalone-private-inputs.mjs`）与 `scripts/build-desktop.mjs` 都会剥离，
+      `scripts/check-standalone-contents.cjs` 真数产物。**`outputFileTracingExcludes`
+      对 `.env` 实测无效**（Next standalone 无条件复制），别只加 excludes 就当修好。
+    - 日志脱敏有**两条落盘通道**：pino 的 `redact` 只管它自己的输出流，ERROR 镜像
+      （`app-runtime.log`）走另一条路径、不受保护。镜像**不许整包 `JSON.stringify`**
+      payload，只能输出文本 / 键名，并经值形状守卫 `redactSecretShaped()`。
+      **别往 `REDACT_PATHS` 加 `*secret` 类通配** —— pino 不支持部分字符串匹配，实测无效。
+    - 写这类用例时给**自己的临时目录**（镜像/日志是真实写盘副作用），别让
+      `pnpm test` 往仓库 `log/` 里写字。
+
+17. **源码里禁止内嵌控制字符（NUL 等），哨兵必须用可打印形式**（规范 §12.11 / 门禁 R12）：
+    源码里带一个真的 NUL 字节，会让**整个文件**被 git / diff / grep / 多数编辑器判成
+    二进制 —— `git diff` 只回「Binary files differ」（评审看不到改动）、`git show --stat`
+    显示 bin、`grep -rn` 静默跳过整个文件，而 CI 全绿（tsc / eslint / vitest 都读得动
+    这个字节）。这类 NUL 几乎都来自「拿 NUL 当占位符哨兵」，本仓库的实例是
+    `src/lib/comfyui/markdown.ts` 的行内代码暂存（`\0CODE<n>\0` → 已改 `<n>`）。
+    要表达 NUL 写转义 `"\u0000"`；选哨兵形状时列清「接下来还要跑的每一组正则」，
+    确认一个都不命中、且用户内容伪造不出同形状。门禁 `scripts/check-file-structure.cjs`
+    的 R12 按码位扫 `src/**` 的 `.ts`/`.tsx`（豁免只有制表符 / 换行 / 回车），
+    pre-commit 第 2 步与 CI `File structure rules` 各跑一次。
+
 ## 快速排障
 
 被提交门槛拦下时，先看报错指出的规范章节（分支守卫 → §13.6.1、文件结构/命名 → §12.8、
-CHANGELOG 碎片 → §13.10.5），不要用 `--no-verify` 换一条干净历史。
+源码控制字符 → §12.11、CHANGELOG 碎片 → §13.10.5），不要用 `--no-verify` 换一条干净历史。
+
+**端口写进文档前先分清两条链路**（ISSUE #489）：`pnpm dev` / `pnpm start` / Playwright 走
+**解析链**（`.env` → 检出路径推导 3200~3999 → 兜底 3100，`scripts/app-port.mjs`），缺省拿到的是
+推导值，**不是 3100**；`tauri.conf.json` 的静态 `devUrl: 3100` 属静态链（启动器 / 壳的编译期兜底），
+不参与 `pnpm dev`。文档里写错的表现是致命的静默误导：照文档打开 3100 得到
+`ERR_CONNECTION_REFUSED`，看起来正像「本平台跑不起来」。写法见 README「快速上手」与
+[reference-facts.md](docs/reference-facts.md) §1.1，`pnpm doc:check` 已按语境核对（`dev.port.derived`）。
 
 遇到启动/生成问题，先查规范文档 **§5 症状 → 根因对照表**（本项目全部历史
 事故都在里面），再按 **§4 日志布局** 的顺序看日志（log/ 按子系统分区：

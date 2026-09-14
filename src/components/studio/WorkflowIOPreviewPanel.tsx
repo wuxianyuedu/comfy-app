@@ -169,18 +169,18 @@ export function WorkflowIoPreviewPanel({
   const tabClass = (active: boolean) =>
     `shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] transition-colors ${
       active
-        ? "border-sky-400/50 bg-sky-400/15 text-sky-200"
-        : "border-white/8 bg-white/4 text-gray-400 hover:bg-white/8 hover:text-gray-200"
+        ? "border-sky-400/50 bg-sky-400/15 text-sky-700 dark:text-sky-200"
+        : "border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
     }`;
 
   return (
     <div className="pointer-events-none absolute right-4 top-4 bottom-4 z-30 flex w-[520px] flex-col">
-      <div className="pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-400/30 bg-[#0a0a14]/92 shadow-2xl backdrop-blur-md">
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/6 px-3 py-2">
+      <div className="pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-400/30 bg-panel/92 shadow-2xl backdrop-blur-md">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-strong px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400" />
-            <span className="truncate text-[12px] font-semibold text-gray-200">IO 预览</span>
-            <span className="rounded-full bg-white/6 px-1.5 py-px text-[10px] font-mono text-gray-400">
+            <span className="truncate text-[12px] font-semibold text-ink-bright">IO 预览</span>
+            <span className="rounded-full bg-subtle px-1.5 py-px text-[10px] font-mono text-ink-soft">
               {Object.keys(workflowIO).length}
             </span>
           </div>
@@ -188,7 +188,7 @@ export function WorkflowIoPreviewPanel({
             <button
               type="button"
               onClick={resetActiveModeOverrides}
-              className="rounded-md border border-white/8 bg-white/4 px-1.5 py-0.5 text-[11px] text-gray-300 transition-colors hover:bg-white/8 hover:text-gray-100"
+              className="rounded-md border border-border-strong bg-subtle px-1.5 py-0.5 text-[11px] text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink-bright"
               title={`把模式「${modeLabel(effectiveMode ?? "")}」的全部参数恢复到通用默认值`}
             >
               恢复默认
@@ -197,7 +197,7 @@ export function WorkflowIoPreviewPanel({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-white/8 bg-white/4 px-1.5 py-0.5 text-[11px] text-gray-400 transition-colors hover:bg-white/8 hover:text-gray-200"
+            className="rounded-md border border-border-strong bg-subtle px-1.5 py-0.5 text-[11px] text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink-bright"
             title="关闭预览"
           >
             ✕
@@ -205,7 +205,7 @@ export function WorkflowIoPreviewPanel({
         </div>
 
         {/* ── 模式页签：来自工作流 modes（与库「类型」同源）＋右侧模式管理 ── */}
-        <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-white/6 px-3 py-1.5">
+        <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border-strong px-3 py-1.5">
           {modes.map((code) => (
             <span key={code} className="flex shrink-0 items-center gap-0.5">
               <button
@@ -223,7 +223,7 @@ export function WorkflowIoPreviewPanel({
                     const next = modes.filter((m) => m !== code);
                     onModesChange(next, next[0] ?? "");
                   }}
-                  className="rounded px-0.5 text-[10px] text-gray-500 transition-colors hover:text-red-300"
+                  className="rounded px-0.5 text-[10px] text-ink-muted transition-colors hover:text-red-700 dark:text-red-300"
                   title={`从工作流模式中移除「${modeLabel(code)}」`}
                 >
                   ×
@@ -241,15 +241,15 @@ export function WorkflowIoPreviewPanel({
           </span>
         </div>
 
-        <div className="nodrag nopan flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3 text-gray-200">
+        <div className="nodrag nopan flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3 text-ink-bright">
           {Object.keys(workflowIO).length === 0 ? (
-            <div className="rounded-lg border border-dashed border-white/10 bg-white/2 px-3 py-4 text-center text-[11px] leading-relaxed text-gray-500">
+            <div className="rounded-lg border border-dashed border-border-strong bg-subtle px-3 py-4 text-center text-[11px] leading-relaxed text-ink-muted">
               尚未勾选任何 IO。
               <br />
               在画布上勾选参数后，这里会同步出现对应的表单行；点击变量名称即可就地重命名。
             </div>
           ) : modes.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-amber-400/30 bg-amber-400/5 px-3 py-4 text-center text-[11px] leading-relaxed text-amber-200/80">
+            <div className="rounded-lg border border-dashed border-amber-400/30 bg-amber-400/5 px-3 py-4 text-center text-[11px] leading-relaxed text-amber-800/80 dark:text-amber-200/80">
               该工作流还没有配置模式 —— 请先在上方「模式」里勾选
               （文生图 / 图生图 / …），之后才能在这里配置参数。
             </div>
@@ -285,7 +285,7 @@ export function WorkflowIoPreviewPanel({
             </div>
           )}
         </div>
-        <div className="shrink-0 border-t border-white/6 px-3 py-1.5 text-[10px] text-gray-500">
+        <div className="shrink-0 border-t border-border-strong px-3 py-1.5 text-[10px] text-ink-muted">
           <span className="opacity-80">点击变量名称即可重命名；👁 按当前模式保留可见性；「必填 / 可选」切换是否在运行时强校验。</span>
           <RequiredSummary io={previewIO} mode={effectiveMode} />
         </div>

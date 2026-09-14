@@ -18,10 +18,6 @@
 import React from "react";
 import { ioLabel, typeDisplay } from "@/components/studio/shared/workflow-io";
 import type { WorkflowIOEntry } from "@/components/studio/shared/workflow-io";
-import {
-  WIRE_DIRECTION_ATTR,
-  WIRE_ROW_ATTR,
-} from "~/lib/workflow-io-types";
 
 /** 卡片外壳：与 CanvasNode 持有的外壳完全一致（无 overflow-hidden，
  *  保护端点骑跨；底部按钮自带 rounded-b-[14px] 贴合圆角）。 */
@@ -34,7 +30,7 @@ export function WorkflowNodeCardShell({
 }) {
   return (
     <div
-      className={`relative w-[380px] rounded-[14px] border border-(--color-border-strong) bg-(--color-card) shadow-xl shadow-black/30 ${className}`}
+      className={`relative w-[380px] rounded-[14px] border border-border-strong bg-card shadow-xl shadow-black/6 dark:shadow-black/30 ${className}`}
     >
       {children}
     </div>
@@ -56,13 +52,13 @@ export function WorkflowNodeHeader({
       <div className="flex min-w-0 items-center gap-2">
         <span
           aria-label="类型 工作流"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold text-(--color-primary)"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold text-primary"
           style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
         >
           W
         </span>
         <span
-          className="truncate text-[14px] font-bold text-(--color-ink-bright)"
+          className="truncate text-[14px] font-bold text-ink-bright"
           style={{ fontFamily: "var(--font-sans)" }}
           title={titleTitle ?? title}
         >
@@ -76,7 +72,7 @@ export function WorkflowNodeHeader({
 
 /** 分隔线 1px --color-border-strong。 */
 export function WorkflowNodeDivider() {
-  return <div className="h-px bg-(--color-border-strong)" />;
+  return <div className="h-px bg-border-strong" />;
 }
 
 /** 右侧胶囊（h-5 r11 bg --color-node-accent px-2），内容由调用方给。 */
@@ -89,7 +85,7 @@ export function WorkflowNodePill({
 }) {
   return (
     <div
-      className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-(--color-node-accent) px-2"
+      className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-node-accent px-2"
       title={title}
     >
       {children}
@@ -111,7 +107,7 @@ export function WorkflowStaticChip({
   return (
     <span
       title={title}
-      className={`flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-(--color-primary)/35 bg-(--color-node-accent) px-2.5 ${className}`}
+      className={`flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/35 bg-node-accent px-2.5 ${className}`}
     >
       {children}
     </span>
@@ -136,7 +132,7 @@ export function WorkflowNodeActionButton({
       disabled={disabled}
       onClick={onClick}
       title={title}
-      className="nodrag nopan flex h-[43px] w-full items-center justify-center gap-2 rounded-b-[14px] bg-linear-to-r from-(--color-primary) to-(--color-accent) text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
+      className="nodrag nopan flex h-[43px] w-full items-center justify-center gap-2 rounded-b-[14px] bg-linear-to-r from-primary to-accent text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
       style={{ fontFamily: "var(--font-sans)" }}
     >
       {label}
@@ -162,33 +158,21 @@ export function WorkflowNodeOutputsRow({
   const oLabel = ioLabel(output, [...inputs, ...outputs]);
   const oType = output.type ?? "*";
   return (
-    <div
-      key={output.nodeId + ":" + output.name}
-      className="relative"
-      /* 落点锚点：库画布里「对外输出参数」卡片的圆点拖到这一行即改该输出的取值
-       * 来源（`WorkflowParamWires` 按这对属性量位置 + 判方向）。方向取行自己的
-       * 语义 —— 这是**输出**行，输入的落点行不会命中它。 */
-      {...{ [WIRE_ROW_ATTR]: output.ioKey }}
-      {...{ [WIRE_DIRECTION_ATTR]: "output" }}
-    >
+    <div key={output.nodeId + ":" + output.name} className="relative">
       {renderHandle && output.ioKey
         ? renderHandle({ id: output.ioKey, dir: "out", type: oType })
         : null}
       <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
         <span
-          className="min-w-0 truncate text-[14px] font-semibold text-(--color-ink-bright)"
+          className="min-w-0 truncate text-[14px] font-semibold text-ink-bright"
           style={{ fontFamily: "var(--font-sans)" }}
           title={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}
         >
           {oLabel}
         </span>
         <span
-          className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
-          style={{
-            fontFamily: "var(--font-sans)",
-            background: "var(--color-border-strong)",
-            color: "var(--color-ink-muted)",
-          }}
+          className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
+          style={{ fontFamily: "var(--font-sans)" }}
         >
           {typeDisplay(oType)}
         </span>

@@ -120,38 +120,36 @@ describe("编辑器画布只画工作流图", () => {
 });
 
 describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
-  it("卡片列只画圆点 + 标锚点，手势与落库在独立层", () => {
+  it("卡片列只让出端点槽位，不碰 React Flow", () => {
+    /* ISSUE #529：库内的三列现在是 React Flow 画布（连线是真 edge、端点是真
+     * `<Handle>`），但**卡片列本身仍与 React Flow 解耦** —— 端点由消费方注入
+     * （`endpoint`），卡片列只负责把槽位让出来。这条边界必须留在源码里：
+     * 卡片列一旦直接用 `<Handle>`，它就不能再被非画布表面复用。 */
     const column = stripComments(
       readFileSync(path.join(LIBRARY_DIR, "WorkflowParamCardColumn.tsx"), "utf8"),
     );
-    /* 圆点带锚点（连线层据此量位置 + 起手拖动）。 */
-    expect(column).toContain("data-wire-anchor");
-    /* 卡片列不是画布节点：不许碰 React Flow。 */
+    expect(column).toContain("endpoint");
     for (const forbidden of ["@xyflow/react", "Handle", "onConnect"]) {
       expect(column).not.toContain(forbidden);
     }
-    /* 连线层独立成文件：量位置 + 画 SVG + 上抛手势结果；不直接动数据。 */
-    const wires = stripComments(
-      readFileSync(path.join(LIBRARY_DIR, "WorkflowParamWires.tsx"), "utf8"),
+    /* 端点注入点在画布节点那一层（那里才是 React Flow 的上下文）。 */
+    const nodes = stripComments(
+      readFileSync(path.join(LIBRARY_DIR, "WorkflowLibraryCanvasNodes.tsx"), "utf8"),
     );
-    expect(wires).toContain("data-wire-anchor");
-    /* 落点两种形状都要认：独立参数行（`data-io-key`）与组合参数控件
-     *  （`data-io-pins`，宽高 / 比例像素由同一控件录入，没有独立行）。属性名
-     *  来自共享契约（workflow-io-types），两边用同一个字符串。 */
-    expect(wires).toContain("WIRE_ROW_ATTR");
-    expect(wires).toContain("WIRE_PINS_ATTR");
-    /* 命中判定与落点解析同一份纯函数（别在这里另算一套）。 */
-    expect(wires).toContain("resolveDropTarget");
-    for (const forbidden of ["@xyflow/react", "savePatch", "mutateAsync"]) {
-      expect(wires).not.toContain(forbidden);
-    }
-    /* 写入编排收在 hooks/ 里（第②层），经回调落库；连线层只上抛。 */
-    const hook = stripComments(
+    expect(nodes).toContain("@xyflow/react");
+    expect(nodes).toContain("PortHandle");
+    /* 写入编排收在 hooks/ 里（第②层），经回调落库；画布只上抛。 */    const hook = stripComments(
       readFileSync(path.join(LIBRARY_DIR, "hooks/use-param-wiring.ts"), "utf8"),
     );
     expect(hook).toContain("applyWireEdit");
     expect(hook).toContain("onPatchParamMap");
-  });
+    /* 画布层不直接落库（写入经 hooks/ 的回调）。 */
+    const canvas = stripComments(
+      readFileSync(path.join(LIBRARY_DIR, "WorkflowLibraryCanvas.tsx"), "utf8"),
+    );
+    for (const forbidden of ["savePatch", "mutateAsync"]) {
+      expect(canvas).not.toContain(forbidden);
+    }  });
 
   it("库内也画对外输出卡片列（左列说「要什么」，右列说「给什么」）", () => {
     const outputColumn = stripComments(
@@ -161,9 +159,8 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
       ),
     );
     expect(outputColumn).toContain('side="left"');
-    expect(outputColumn).toContain("data-wire-anchor");
-    /* 输出侧同样只有圆点 + 锚点，不碰 React Flow。 */
-    for (const forbidden of ["@xyflow/react", "Handle", "onConnect"]) {
+    expect(outputColumn).toContain("endpoint");
+    /* 输出侧同样只让出端点槽位，不碰 React Flow。 */    for (const forbidden of ["@xyflow/react", "Handle", "onConnect"]) {
       expect(outputColumn).not.toContain(forbidden);
     }
   });
@@ -175,8 +172,7 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     }
   });
 
-  it("工作流库不叠「对外参数映射层」（库内是卡片列 + 连线层，不是画布节点）", () => {
-    const preview = readFileSync(
+  it("工作流库不叠「对外参数映射层」（库内是 React Flow 画布，不是自绘连线层）", () => {    const preview = readFileSync(
       path.join(LIBRARY_DIR, "WorkflowCanvasNodePreview.tsx"),
       "utf8",
     );
@@ -184,9 +180,21 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     expect(code).not.toContain("WorkflowParamMapLayer");
     expect(code).not.toContain("deriveLibraryCanvas");
     expect(code).not.toContain("resolveManualEntryIds");
-    expect(code).toContain("WorkflowParamCardColumn");
-    expect(code).toContain("WorkflowOutputParamCardColumn");
+    /* 自绘的量测型连线层与视口外框已随 React Flow 一起退场（ISSUE #529）。 */
+    expect(code).not.toContain("WorkflowParamWires");
+    expect(code).not.toContain("WorkflowCanvasViewportFrame");
+    expect(code).toContain("WorkflowLibraryCanvas");
   });
+
+  it("自绘的量测型连线层不再存在（连线交给 React Flow）", () => {
+    for (const gone of [
+      "WorkflowParamWires.tsx",
+      "WorkflowCanvasViewportFrame.tsx",
+      "workflow-library-canvas-viewport.ts",
+      "hooks/use-library-canvas-viewport.ts",
+    ]) {
+      expect(existsSync(path.join(LIBRARY_DIR, gone)), gone).toBe(false);
+    }  });
 
   it("对外参数清单只来自契约（按模式），不再逐节点列出工作流内部参数", () => {
     /* 「对外参数」是产品对用户承诺的那几个口子（提示词 / 尺寸 / 首帧…），

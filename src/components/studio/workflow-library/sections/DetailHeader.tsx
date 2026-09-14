@@ -61,8 +61,7 @@ export function DetailHeader({
   const modes = workflow.modes ?? [];
 
   return (
-    <div className="border-b border-(--color-border-subtle) px-5 py-4">
-      {/* 标题区与操作按钮组同排。窗口窄 / 详情面板被挤窄时**整组按钮换到第二行**，
+    <div className="border-b border-border-subtle px-5 py-4">      {/* 标题区与操作按钮组同排。窗口窄 / 详情面板被挤窄时**整组按钮换到第二行**，
           而不是被挤出去裁掉：面板根容器是 `overflow-hidden`，按钮组一旦溢出右侧就
           直接消失（此前 `shrink-0` + 无 `flex-wrap` 的形态下，小屏看不到「删除」这
           类最右侧的按钮）。与编辑器顶栏同一套退化顺序（见
@@ -76,7 +75,7 @@ export function DetailHeader({
           <h2
             className={[
               "truncate text-lg font-semibold",
-              isTechnical ? "font-mono text-(--color-ink-strong)" : "text-(--color-ink)",
+              isTechnical ? "font-mono text-ink-strong" : "text-ink",
             ].join(" ")}
             title={workflow.name}
           >
@@ -100,14 +99,14 @@ export function DetailHeader({
                 <TaskTypeChip taskType={workflow.taskType} />
               </button>
               {showAllModes && modes.length > 1 && (
-                <div className="absolute left-0 top-full z-50 mt-1 flex min-w-[140px] flex-col gap-0.5 rounded-lg border border-(--color-border) bg-(--color-panel) p-1.5 shadow-xl">
+                <div className="absolute left-0 top-full z-50 mt-1 flex min-w-[140px] flex-col gap-0.5 rounded-lg border border-border bg-panel p-1.5 shadow-xl">
                   {modes.map((code) => (
                     <span
                       key={code}
                       className={`rounded px-2 py-0.5 text-[11px] ${
                         code === workflow.defaultMode
-                          ? "bg-violet-500/15 text-violet-600"
-                          : "text-(--color-ink-faint)"
+                          ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                          : "text-ink-faint"
                       }`}
                     >
                       {modeLabel(code)}
@@ -121,14 +120,14 @@ export function DetailHeader({
             {(workflow.modelTags ?? []).map((tag) => (
               <span
                 key={tag}
-                className="rounded-full border border-(--color-border) bg-(--color-subtle) px-2 py-0.5 text-[10px] text-(--color-ink-faint)"
+                className="rounded-full border border-border bg-subtle px-2 py-0.5 text-[10px] text-ink-faint"
               >
                 {tag}
               </span>
             ))}
             {/* 缺少可执行图时提前标注，而不是等用户点了「生成」才报错。 */}
             {!usable && (
-              <span className="rounded bg-red-500/12 px-1.5 py-0.5 text-[10px] text-red-600">
+              <span className="rounded bg-red-500/12 px-1.5 py-0.5 text-[10px] text-red-700 dark:text-red-300">
                 不可执行
               </span>
             )}
@@ -137,8 +136,8 @@ export function DetailHeader({
                 className={[
                   "rounded px-1.5 py-0.5 text-[10px]",
                   missing
-                    ? "bg-red-500/12 text-red-600"
-                    : "bg-amber-500/12 text-amber-600",
+                    ? "bg-red-500/12 text-red-700 dark:text-red-300"
+                    : "bg-amber-500/12 text-amber-700 dark:text-amber-300",
                 ].join(" ")}
               >
                 {missing ? "磁盘文件已丢失" : "磁盘文件有更新"}

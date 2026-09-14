@@ -247,7 +247,7 @@ export function ImageGenerationPanel({
             placeholder="选择类型"
           />
         ) : (
-          <div className="text-[11px] text-gray-500">暂无可用工作流类型</div>
+          <div className="text-ink-muted text-[11px]">暂无可用工作流类型</div>
         )}
       </Field>
 
@@ -263,13 +263,13 @@ export function ImageGenerationPanel({
                 onChange={selectModelTag}
                 options={["", ...modelTagOptions.map((modelTagOption) => modelTagOption.name)]}
                 labels={{
-                  "": <span style={{ color: "var(--color-ink-muted)" }}>全部模型</span>,
+                  "": <span className="text-ink-muted">全部模型</span>,
                   ...Object.fromEntries(modelTagOptions.map((modelTagOption) => [modelTagOption.name, modelTagOption.name])),
                 }}
                 placeholder="选择模型"
               />
             ) : (
-              <div className="text-[11px] text-gray-500">
+              <div className="text-ink-muted text-[11px]">
                 {wfListLoading
                   ? "加载中…"
                   : genTag
@@ -290,7 +290,7 @@ export function ImageGenerationPanel({
                 placeholder="选择工作流"
               />
             ) : (
-              <div className="text-[11px] text-gray-500">
+              <div className="text-ink-muted text-[11px]">
                 {wfListLoading
                   ? "加载中…"
                   : genTag
@@ -348,7 +348,7 @@ export function ImageGenerationPanel({
                 onClick={onCancel}
                 disabled={cancelling}
                 title="强制终止当前任务并释放活动槽位"
-                className="rounded border border-red-500/30 bg-red-500/8 px-2.5 py-1 text-[10.5px] text-red-200/90 transition-colors hover:bg-red-500/15 disabled:opacity-50"
+                className="rounded border border-red-500/30 bg-red-500/8 px-2.5 py-1 text-[10.5px] text-red-700/90 transition-colors hover:bg-red-500/15 dark:text-red-300/90 disabled:opacity-50"
               >
                 {cancelling ? "× 取消中…" : "× 强制取消"}
               </button>

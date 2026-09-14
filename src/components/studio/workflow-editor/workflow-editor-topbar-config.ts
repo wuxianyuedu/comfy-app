@@ -126,7 +126,7 @@ export const TOP_BAR_BREADCRUMB_CLASS = `flex ${TOP_BAR_BREADCRUMB_MIN_WIDTH_CLA
  * 保持两行内容各自居中。
  */
 export const TOP_BAR_ROOT_CLASS =
-  "flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/6 px-4 py-3 backdrop-blur-md";
+  "border-border-strong flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3 backdrop-blur-md";
 
 /**
  * 按钮语义态 → 类。
@@ -140,16 +140,16 @@ export type TopBarTone = "outline" | "solid" | "ghost" | "ioOn" | "ioPreviewOn";
 const TOP_BAR_TONE_CLASS: Record<TopBarTone, string> = {
   /* 中性底盘：边框 + 半透明底，hover 提亮。 */
   outline:
-    "rounded-lg border border-white/15 bg-white/5 font-semibold text-gray-200 transition-colors hover:bg-white/10",
+    "border-border-strong bg-subtle text-ink-bright hover:bg-surface-2 rounded-lg border font-semibold transition-colors",
   /* 主按钮（保存）：实心紫底。 */
   solid:
     "rounded-lg bg-violet-500/90 font-semibold text-white transition-colors hover:bg-violet-500",
   /* 无底色的次级入口（调试开关）。 */
   ghost:
-    "rounded-md font-medium text-gray-400 transition-colors hover:text-gray-200",
+    "text-ink-soft hover:text-ink rounded-md font-medium transition-colors",
   /* 「编辑 IO」激活态：琥珀色高亮。 */
-  ioOn: "rounded-lg border border-amber-400/60 bg-amber-400/20 font-semibold text-amber-100 transition-colors hover:bg-amber-400/30",
+  ioOn: "rounded-lg border border-amber-400/60 bg-amber-400/20 font-semibold text-amber-800 transition-colors hover:bg-amber-400/30 dark:text-amber-100",
   /* 「预览 IO」激活态：天蓝色高亮。 */
   ioPreviewOn:
-    "rounded-lg border border-sky-400/60 bg-sky-400/20 font-semibold text-sky-100 transition-colors hover:bg-sky-400/30",
+    "rounded-lg border border-sky-400/60 bg-sky-400/20 font-semibold text-sky-800 transition-colors hover:bg-sky-400/30 dark:text-sky-100",
 };

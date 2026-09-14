@@ -32,16 +32,20 @@ export function RgthreeFastGroupsBypasserBody({
             className="group relative flex h-[22px] items-center gap-1.5 pl-2 pr-2 text-[11px]"
           >
             <span
-              className="min-w-0 shrink truncate text-left text-[11px]"
-              style={{ flex: "0 1 auto", color: bypass ? "#71717a" : "var(--color-ink-subtle)" }}
+              className={`min-w-0 shrink truncate text-left text-[11px] ${
+                bypass ? "text-ink-faint" : "text-ink-subtle"
+              }`}
+              style={{ flex: "0 1 auto" }}
               title={group.title}
             >
               {label}
             </span>
-            <span className="h-2 w-px shrink-0 bg-white/5" aria-hidden />
+            <span className="bg-border-strong h-2 w-px shrink-0" aria-hidden />
             <span
-              className="min-w-0 truncate text-right text-[10.5px] tabular-nums"
-              style={{ flex: "1 1 0", color: bypass ? "#ec4899" : "#a1a1aa" }}
+              className={`min-w-0 truncate text-right text-[10.5px] tabular-nums ${
+                bypass ? "text-accent-soft" : "text-ink-fainter"
+              }`}
+              style={{ flex: "1 1 0" }}
             >
               {bypass ? "yes" : "no"}
             </span>
@@ -76,7 +80,7 @@ export function RgthreeFastGroupsBypasserBody({
                 background: bypass
                   ? "rgba(236, 72, 153, 0.55)"
                   : "rgba(63, 63, 70, 0.55)",
-                border: "1px solid rgba(255,255,255,0.18)",
+                border: "1px solid var(--color-border-strong)",
                 position: "relative",
                 cursor: "pointer",
                 flex: "0 0 auto",
@@ -91,7 +95,9 @@ export function RgthreeFastGroupsBypasserBody({
                   width: 10,
                   height: 10,
                   borderRadius: 5,
-                  background: bypass ? "#fce7f3" : "var(--color-ink-subtle)",
+                  background: bypass
+                    ? "var(--color-accent-soft)"
+                    : "var(--color-ink-subtle)",
                   transition: "left 120ms",
                 }}
               />
@@ -145,8 +151,8 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
       <div
         className="flex items-center justify-between rounded px-1.5 py-[3px] text-[10px] font-medium uppercase"
         style={{
-          background: "rgba(255, 255, 255, 0.04)",
-          color: "rgba(255, 255, 255, 0.55)",
+          background: "var(--color-subtle)",
+          color: "var(--color-ink-soft)",
           letterSpacing: 0.4,
         }}
       >
@@ -165,10 +171,10 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
         </span>
         <span
           className="inline-flex items-center gap-1.5 text-[9px]"
-          style={{ color: "rgba(255, 255, 255, 0.36)", letterSpacing: 0.6 }}
+          style={{ color: "var(--color-ink-muted)", letterSpacing: 0.6 }}
         >
           <span>model</span>
-          <span style={{ color: "rgba(255, 255, 255, 0.18)" }}>•</span>
+          <span style={{ color: "var(--color-ink-faintest)" }}>•</span>
           <span>clip</span>
         </span>
       </div>
@@ -178,9 +184,9 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
         <div
           className="rounded px-1.5 py-3 text-center text-[10px]"
           style={{
-            background: "rgba(0, 0, 0, 0.25)",
-            color: "rgba(255, 255, 255, 0.30)",
-            border: "1px dashed rgba(255, 255, 255, 0.08)",
+            background: "var(--color-subtle)",
+            color: "var(--color-ink-muted)",
+            border: "1px dashed var(--color-border-strong)",
           }}
         >
           暂无 Lora — 点击下方按钮添加
@@ -203,12 +209,12 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
             <div
               key={`pll-r-${index}`}
               className="flex items-center gap-2 rounded px-1.5 py-[3px] text-[11px]"
-              style={{ background: "rgba(0, 0, 0, 0.30)" }}
+              style={{ background: "var(--color-subtle)" }}
             >
               <span
                 className="min-widget-0 flex-1 truncate"
                 style={{
-                  color: name ? "rgba(255, 255, 255, 0.85)" : "rgba(255, 255, 255, 0.30)",
+                  color: name ? "var(--color-ink-bright)" : "var(--color-ink-fainter)",
                 }}
                 title={name}
               >
@@ -217,7 +223,7 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
               {modelStr !== undefined && (
                 <span
                   className="shrink-0 tabular-nums"
-                  style={{ color: "rgba(255, 255, 255, 0.55)", fontSize: 10 }}
+                  style={{ color: "var(--color-ink-soft)", fontSize: 10 }}
                 >
                   {modelStr}
                 </span>
@@ -225,7 +231,7 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
               {clipStr !== undefined && (
                 <span
                   className="shrink-0 tabular-nums"
-                  style={{ color: "rgba(255, 255, 255, 0.40)", fontSize: 10 }}
+                  style={{ color: "var(--color-ink-muted)", fontSize: 10 }}
                 >
                   {clipStr}
                 </span>
@@ -243,7 +249,7 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
         style={{
           background: "rgba(139, 92, 246, 0.10)",
           border: "1px solid rgba(139, 92, 246, 0.45)",
-          color: "rgba(255, 255, 255, 0.78)",
+          color: "var(--color-ink-bright)",
           pointerEvents: "none",
           userSelect: "none",
         }}

@@ -20,11 +20,11 @@ const SHOT_TYPES: ShotType[] = [
 export function StatusBadge({ status }: { status: Shot["status"] }) {
   const map: Record<Shot["status"], { label: string; cls: string }> = {
     idle: { label: "待生成", cls: "bg-subtle text-muted-foreground" },
-    queued: { label: "排队中", cls: "bg-amber-100 text-amber-700" },
-    running: { label: "生成中", cls: "bg-blue-100 text-blue-700" },
-    done: { label: "已完成", cls: "bg-emerald-100 text-emerald-700" },
-    failed: { label: "失败", cls: "bg-red-100 text-red-700" },
-    stale: { label: "待更新", cls: "bg-red-100 text-red-700" },
+    queued: { label: "排队中", cls: "bg-amber-100 text-amber-800 dark:text-amber-300" },
+    running: { label: "生成中", cls: "bg-blue-100 text-blue-800 dark:text-blue-300" },
+    done: { label: "已完成", cls: "bg-emerald-100 text-emerald-800 dark:text-emerald-300" },
+    failed: { label: "失败", cls: "bg-red-100 text-red-800 dark:text-red-300" },
+    stale: { label: "待更新", cls: "bg-red-100 text-red-800 dark:text-red-300" },
   };
   const s = map[status];
   return (
@@ -68,7 +68,7 @@ export function ShotRow({
         <button
           type="button"
           onClick={() => onRemove(shot.id)}
-          className="ml-auto text-muted-foreground hover:text-red-500"
+          className="ml-auto text-muted-foreground hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
           aria-label="删除镜头"
         >
           <Trash size={15} />
@@ -80,7 +80,7 @@ export function ShotRow({
         <label className="block">
           <span className="mb-1 block text-xs text-muted-foreground">景别</span>
           <DarkSelect
-            className="!bg-(--color-subtle) !border-(--color-border) text-xs"
+            className="!bg-subtle !border-border text-xs"
             value={shot.shotType}
             onChange={(value) => onUpdate(shot.id, { shotType: value as ShotType })}
             options={SHOT_TYPES}
@@ -93,7 +93,7 @@ export function ShotRow({
         <label className="block">
           <span className="mb-1 block text-xs text-muted-foreground">风格 Skill</span>
           <DarkSelect
-            className="!bg-(--color-subtle) !border-(--color-border) text-xs"
+            className="!bg-subtle !border-border text-xs"
             value={shot.skillSlug ?? ""}
             onChange={(value) => onUpdate(shot.id, { skillSlug: value || undefined })}
             options={styles.map((style) => style.slug)}

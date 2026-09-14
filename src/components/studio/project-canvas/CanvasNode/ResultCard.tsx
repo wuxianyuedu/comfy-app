@@ -35,32 +35,32 @@ export function ResultCard({
   /* ── Text result ── */
   if (kind === "script" || kind === "agent" || (!src && text)) {
     return (
-      <div className="nodrag nopan relative mt-2 overflow-hidden rounded-xl border border-white/8 bg-white/3">
+      <div className="nodrag nopan border-border-strong bg-subtle relative mt-2 overflow-hidden rounded-xl border">
         {/* Header — top-left: type char + name, top-right: status badge */}
-        <div className="flex items-center justify-between border-b border-white/6 bg-black/15 px-2.5 py-1.5">
+        <div className="border-border-strong bg-canvas-deep flex items-center justify-between border-b px-2.5 py-1.5">
           <NodeChip kind={kind} name={displayName} size="sm" />
           <StatusBadge status={status} />
         </div>
         {/* Edit toolbar */}
-        <div className="flex items-center justify-center gap-1 border-b border-white/6 bg-black/20 px-2 py-1.5">
-          <button type="button" title="字号减小" className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-300 hover:bg-white/6">A-</button>
-          <button type="button" title="字号增大" className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-300 hover:bg-white/6">A+</button>
-          <span className="mx-1 h-3 w-px bg-white/8" />
-          <button type="button" title="编辑" className="rounded-md px-2 py-1 text-[11px] text-gray-300 hover:bg-white/6">
+        <div className="border-border-strong bg-canvas-deep flex items-center justify-center gap-1 border-b px-2 py-1.5">
+          <button type="button" title="字号减小" className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px] font-medium">A-</button>
+          <button type="button" title="字号增大" className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px] font-medium">A+</button>
+          <span className="bg-border-strong mx-1 h-3 w-px" />
+          <button type="button" title="编辑" className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px]">
             <Icon name="pen" size={11} className="mr-1 inline align-[-1px]" />编辑
           </button>
-          <button type="button" title="下载" onClick={() => text && navigator.clipboard?.writeText(text)} className="rounded-md px-2 py-1 text-[11px] text-gray-300 hover:bg-white/6">
+          <button type="button" title="下载" onClick={() => text && navigator.clipboard?.writeText(text)} className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px]">
             <Icon name="download" size={11} className="mr-1 inline align-[-1px]" />下载
           </button>
         </div>
-        <div className="max-h-56 overflow-auto p-3 text-[12px] leading-relaxed text-gray-200">
+        <div className="text-ink-bright max-h-56 overflow-auto p-3 text-[12px] leading-relaxed">
           {
             // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空字符串也视为无输出，需回退占位
-            text || <span className="text-gray-500">尚无文本输出</span>
+            text || <span className="text-ink-muted">尚无文本输出</span>
           }
         </div>
-        <div className="flex items-center justify-center border-t border-white/6 py-2">
-          <button type="button" onClick={onReplace} className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 text-[11px] text-gray-200 ring-1 ring-white/8 transition-colors hover:bg-black/60">
+        <div className="border-border-strong flex items-center justify-center border-t py-2">
+          <button type="button" onClick={onReplace} className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] ring-1 transition-colors">
             <Icon name="refresh" size={11} />替换
           </button>
         </div>
@@ -70,15 +70,19 @@ export function ResultCard({
 
   /* ── Image / video result ── */
   return (
-    <div className="nodrag nopan relative mt-2 overflow-hidden rounded-xl border border-white/8 bg-white/3">
+    <div className="nodrag nopan border-border-strong bg-subtle relative mt-2 overflow-hidden rounded-xl border">
       {/* Header — top-left: type char + name, top-right: status badge */}
-      <div className="flex items-center justify-between border-b border-white/6 bg-black/15 px-2.5 py-1.5">
+      <div className="border-border-strong bg-canvas-deep flex items-center justify-between border-b px-2.5 py-1.5">
         <NodeChip kind={kind} name={displayName} size="sm" />
         <StatusBadge status={status} />
       </div>
-      <div className="relative flex aspect-video items-center justify-center bg-linear-to-br from-[#1a1530]/40 to-[#0f0b1c]/40">
+      <div className="relative flex aspect-video items-center justify-center bg-linear-to-br from-subtle to-canvas-deep">
         {!src ? (
-          <Icon name={isVideo ? "film" : "image"} size={32} className="text-gray-600" />
+          <Icon
+            name={isVideo ? "film" : "image"}
+            size={32}
+            className="text-ink-fainter"
+          />
         ) : isVideo ? (
           <video src={src} controls autoPlay loop muted className="max-h-56 w-full object-contain" />
         ) : (
@@ -86,8 +90,8 @@ export function ResultCard({
           <img src={src} alt="result" className="max-h-56 w-full object-contain" />
         )}
       </div>
-      <div className="flex items-center justify-center border-t border-white/6 py-2">
-        <button type="button" onClick={onReplace} className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 text-[11px] text-gray-200 ring-1 ring-white/8 transition-colors hover:bg-black/60">
+      <div className="border-border-strong flex items-center justify-center border-t py-2">
+        <button type="button" onClick={onReplace} className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] ring-1 transition-colors">
           <Icon name="refresh" size={11} />替换
         </button>
       </div>

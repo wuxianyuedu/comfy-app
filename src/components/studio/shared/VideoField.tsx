@@ -131,7 +131,7 @@ function VideoField({
       <input
         value={str}
         disabled={disabled}
-        className="nodrag nopan w-full rounded-md bg-(--color-canvas-deep) px-2.5 py-2 text-[11px] text-(--color-ink-soft) outline-none focus:ring-1 focus:ring-(--color-primary)/40"
+        className="nodrag nopan w-full rounded-md bg-canvas-deep px-2.5 py-2 text-[11px] text-ink-soft outline-none focus:ring-1 focus:ring-primary/40"
         onChange={(event) => set(entry.ioKey, event.target.value)}
       />
     </Field>

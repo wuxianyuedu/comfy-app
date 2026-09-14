@@ -38,11 +38,11 @@ function ToggleRow({
   return (
     <label
       title={tooltip}
-      className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-white/6 bg-white/2 px-3 py-2.5 transition-colors hover:border-white/14.000000000000002"
+      className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-border-strong bg-subtle px-3 py-2.5 transition-colors hover:border-border-strong"
     >
       <span className="flex min-w-0 flex-col">
-        <span className="text-[12.5px] font-medium text-gray-100">{label}</span>
-        {hint && <span className="mt-0.5 text-[10.5px] text-gray-500">{hint}</span>}
+        <span className="text-[12.5px] font-medium text-ink-bright">{label}</span>
+        {hint && <span className="mt-0.5 text-[10.5px] text-ink-muted">{hint}</span>}
       </span>
       <button
         type="button"
@@ -52,7 +52,7 @@ function ToggleRow({
         className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors ${
           value
             ? "border-violet-400/60 bg-violet-500/80"
-            : "border-white/10 bg-white/6"
+            : "border-border-strong bg-subtle"
         }`}
       >
         <span
@@ -94,18 +94,18 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
         type="button"
         aria-label="关闭项目画布设置"
         onClick={onClose}
-        className="flex-1 cursor-default bg-black/40 backdrop-blur-[1px]"
+        className="flex-1 cursor-default bg-canvas-deep backdrop-blur-[1px]"
       />
       <aside
         role="dialog"
         aria-label="项目画布设置"
-        className="flex h-full w-[340px] flex-col border-l border-white/6 bg-[#0c0c14]/97 text-gray-200 shadow-2xl"
+        className="flex h-full w-[340px] flex-col border-l border-border-strong bg-panel text-ink-bright shadow-2xl"
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/6 px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-strong px-4 py-3">
           <div className="flex min-w-0 items-center gap-2">
             <span aria-hidden className="text-[15px]">⚙</span>
-            <span className="truncate text-[12.5px] font-semibold tracking-wide text-gray-100">
+            <span className="truncate text-[12.5px] font-semibold tracking-wide text-ink-bright">
               项目画布设置
             </span>
           </div>
@@ -113,7 +113,7 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={onClose}
             aria-label="关闭"
-            className="rounded-md border border-white/8 bg-white/4 px-1.5 py-0.5 text-[11px] text-gray-400 transition-colors hover:bg-white/8 hover:text-gray-200"
+            className="rounded-md border border-border-strong bg-subtle px-1.5 py-0.5 text-[11px] text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink-bright"
           >
             ✕
           </button>
@@ -121,10 +121,10 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          <h3 className="px-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+          <h3 className="px-1 text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
             调试
           </h3>
-          <p className="mb-3 px-1 text-[11px] leading-relaxed text-gray-500">
+          <p className="mb-3 px-1 text-[11px] leading-relaxed text-ink-muted">
             「渲染链路标签」在节点卡片上叠加显示对应本项目代码模块的路径，点击可查看源码；
             「日志面板」在画布右上角显示执行日志入口按钮，点击以弹窗形式查看实时执行日志。两者相互独立。
           </p>
@@ -146,7 +146,7 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-white/6 px-4 py-3 text-[11px] text-gray-500">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border-strong px-4 py-3 text-[11px] text-ink-muted">
           <span>设置保存在本浏览器</span>
         </div>
       </aside>
@@ -164,7 +164,7 @@ export function ProjectSettingsButton({ onClick }: { onClick: () => void }) {
       title="项目画布设置"
       aria-label="项目画布设置"
       data-testid="project-canvas-settings-button"
-      className="pointer-events-auto absolute right-3 top-3 z-20 select-none rounded-md border border-white/10 bg-(--color-panel)/90 px-2.5 py-1.5 text-[11.5px] font-medium tracking-tight text-gray-300 shadow-lg backdrop-blur-sm transition-colors hover:border-white/25 hover:text-gray-100"
+      className="pointer-events-auto absolute right-3 top-3 z-20 select-none rounded-md border border-border-strong bg-panel/90 px-2.5 py-1.5 text-[11.5px] font-medium tracking-tight text-ink-soft shadow-lg backdrop-blur-sm transition-colors hover:border-white/25 hover:text-ink-bright"
     >
       <span aria-hidden className="mr-1 align-baseline text-[12.5px]">⚙</span>
       设置

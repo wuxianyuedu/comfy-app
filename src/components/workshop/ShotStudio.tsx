@@ -18,15 +18,7 @@ import {
   type ShotSizeState,
 } from "./shot-size-config";
 import { ShotSizePicker } from "./ShotSizePicker";
-
-/** catch 抛出值（unknown）→ 消息提取：带 string message 的对象取 message，其余回退。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m = (e as { message?: unknown }).message;
-    if (typeof m === "string" && m) return m;
-  }
-  return fallback;
-}
+import { errorMessage } from "~/lib/error-message";
 
 function strParam(value: unknown, fallback: string): string {
   return typeof value === "string" && value ? value : fallback;
@@ -266,7 +258,7 @@ export function ShotStudio({
         <button
           type="button"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-lg bg-(--color-subtle) px-3 py-1.5 text-xs hover:bg-(--color-surface-2)"
+          className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-lg bg-subtle px-3 py-1.5 text-xs hover:bg-surface-2"
         >
           <Icon name="settings" size={12} />
           API 通道设置
@@ -305,7 +297,7 @@ export function ShotStudio({
         <button
           type="button"
           onClick={onNextStage}
-          className="text-ink rounded-lg bg-(--color-subtle) px-3 py-1.5 text-xs font-medium hover:bg-(--color-surface-2)"
+          className="text-ink rounded-lg bg-subtle px-3 py-1.5 text-xs font-medium hover:bg-surface-2"
         >
           下一阶段 →
         </button>
@@ -318,7 +310,7 @@ export function ShotStudio({
         </div>
       )}
       {channel === "api" && !apiReady && (
-        <div className="flex items-center gap-2 rounded-lg bg-(--color-amber)/10 px-3 py-2 text-xs text-(--color-amber)">
+        <div className="flex items-center gap-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
           <Icon name="info" size={12} />
           API 生图通道未配置 — 点击上方「API 通道设置」填写 Base URL 与 API Key 后即可使用。
         </div>
@@ -363,7 +355,7 @@ export function ShotStudio({
                   className="border-border bg-bg text-ink focus:border-primary w-full rounded-md border px-2 py-1.5 text-xs outline-none"
                   placeholder="生图提示词(自动预填自分镜与角色卡,可手动修改)"
                 />
-                {err && <p className="mt-1 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-700">{err}</p>}
+                {err && <p className="mt-1 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">{err}</p>}
 
                 <div className="mt-2 flex items-center gap-3">
                   <button
@@ -404,11 +396,11 @@ export function ShotStudio({
 function StatusBadge({ status }: { status: Shot["status"] }) {
   const map: Record<Shot["status"], { label: string; cls: string }> = {
     idle: { label: "待生成", cls: "bg-subtle text-muted-foreground" },
-    queued: { label: "排队中", cls: "bg-amber-100 text-amber-700" },
-    running: { label: "生成中", cls: "bg-blue-100 text-blue-700" },
-    done: { label: "已完成", cls: "bg-emerald-100 text-emerald-700" },
-    failed: { label: "失败", cls: "bg-red-100 text-red-700" },
-    stale: { label: "待更新", cls: "bg-red-100 text-red-700" },
+    queued: { label: "排队中", cls: "bg-amber-100 text-amber-800 dark:text-amber-300" },
+    running: { label: "生成中", cls: "bg-blue-100 text-blue-800 dark:text-blue-300" },
+    done: { label: "已完成", cls: "bg-emerald-100 text-emerald-800 dark:text-emerald-300" },
+    failed: { label: "失败", cls: "bg-red-100 text-red-800 dark:text-red-300" },
+    stale: { label: "待更新", cls: "bg-red-100 text-red-800 dark:text-red-300" },
   };
   const s = map[status];
   return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.cls}`}>{s.label}</span>;

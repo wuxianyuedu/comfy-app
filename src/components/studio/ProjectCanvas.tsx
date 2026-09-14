@@ -373,7 +373,7 @@ function CanvasInner({
 
   return (
     <div
-      className="relative h-full w-full bg-(--color-canvas)"
+      className="relative h-full w-full bg-canvas"
       onDragOver={onCanvasDragOver}
       onDrop={onCanvasDrop}
     >
@@ -431,30 +431,27 @@ function CanvasInner({
             </linearGradient>
           </defs>
         </svg>
+        {/* 点阵底纹的颜色必须随主题 —— 写死 rgba(255,255,255,0.08) 时
+            Light 下是「白点压白底」，网格整片消失。 */}
         <Background
           variant={BackgroundVariant.Dots}
           gap={22}
           size={1}
-          color="rgba(255,255,255,0.08)"
+          color="var(--color-canvas-grid-dot)"
         />
-        <Controls
-          style={{
-            background: "#0D0818",
-            borderRadius: 10,
-            border: "1px solid rgba(255,255,255,0.08)",
-          }}
-        />
+        {/* Controls / MiniMap 的配色由 globals.css 的 `.react-flow__controls*`
+            / `.react-flow__minimap*` token 规则统一负责（工作流画布与项目
+            画布共用），组件侧不再叠加写死的暗色覆盖 —— 此前这里写死
+            `#0D0818` / `#0B0712`，Light 下两条浮层仍是黑块。 */}
+        <Controls />
         <MiniMap
           pannable
           zoomable
           ariaLabel="小地图：拖动或点击切换主画布焦点"
           nodeColor={miniMapNodeColor}
-          maskColor="rgba(5,5,7,0.78)"
+          maskColor="var(--color-canvas-minimap-mask)"
           onClick={onMiniMapJump}
           style={{
-            background: "#0B0712",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 8,
             width: 200,
             height: 140,
           }}

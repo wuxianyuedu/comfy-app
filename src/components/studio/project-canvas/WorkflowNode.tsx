@@ -150,13 +150,13 @@ export function WorkflowNode({
         <div className="flex min-w-0 items-center gap-2">
           <span
             aria-label="类型 工作流"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold text-(--color-primary)"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold text-primary"
             style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
           >
             W
           </span>
           <span
-            className="truncate text-[14px] font-bold text-(--color-ink-bright)"
+            className="truncate text-[14px] font-bold text-ink-bright"
             style={{ fontFamily: "var(--font-sans)" }}
             title={meta.label}
           >
@@ -164,11 +164,11 @@ export function WorkflowNode({
           </span>
         </div>
         <div
-          className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-(--color-node-accent) px-2"
+          className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-overlay-accent-surface px-2"
           title={`项目画布节点 Id：${id}`}
         >
           <span
-            className="font-mono text-[10px] font-semibold text-cyan-200"
+            className="font-mono text-[10px] font-semibold text-cyan-700 dark:text-cyan-200"
             style={{ fontFamily: "var(--font-mono)" }}
           >
             {nodeSeq !== null
@@ -179,7 +179,7 @@ export function WorkflowNode({
       </div>
 
       {/* 分隔线 340×1 #26262E */}
-      <div className="h-px bg-(--color-border-strong)" />
+      <div className="h-px bg-border-strong" />
 
       {/* 拆双行 — 头部窄节点挤 4 chip，按用户给优先级排。
        *   Row 1 (高优先级，筛选类)  ① SourceFilterChip + ④ ModelFilterChip
@@ -246,7 +246,7 @@ export function WorkflowNode({
        *  不再放 dim 占位控件行——outputs 是只读语义，labelRow 已经说清楚「● images | IMAGE」
        *  这是一个输出端口，多一行业务信息也只会冗余。 */}
       {outputs.length > 0 && (
-        <div className="border-t border-white/6">
+        <div className="border-border-strong border-t">
           {outputs.map((output) => {
             /* conflict-aware — 与 inputs/outputs 同 group 去重。
              *  即使两个 outputs 同 label（如两个 IMAGE 都叫 "image"）也回退 name。 */
@@ -280,19 +280,15 @@ export function WorkflowNode({
                  *  labelRow 中线（pt-1.5=6 + h-5/2=10=16px），与 typeChip 上下对齐。 */}
                 <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
                   <span
-                    className="min-w-0 truncate text-[14px] font-semibold text-(--color-ink-bright)"
+                    className="min-w-0 truncate text-[14px] font-semibold text-ink-bright"
                     style={{ fontFamily: "var(--font-sans)" }}
                     title={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}
                   >
                     {oLabel}
                   </span>
                   <span
-                    className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
-                    style={{
-                      fontFamily: "var(--font-sans)",
-                      background: "var(--color-border-strong)",
-                      color: "var(--color-ink-muted)",
-                    }}
+                    className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
+                    style={{ fontFamily: "var(--font-sans)" }}
                   >
                     {typeDisplay(oType)}
                   </span>
@@ -310,7 +306,7 @@ export function WorkflowNode({
         type="button"
         disabled={d.status === "running"}
         onClick={onGenerate}
-        className="nodrag nopan flex h-[43px] w-full items-center justify-center gap-2 rounded-b-[14px] bg-linear-to-r from-(--color-primary) to-(--color-accent) text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
+        className="nodrag nopan flex h-[43px] w-full items-center justify-center gap-2 rounded-b-[14px] bg-linear-to-r from-primary to-accent text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {d.status === "running" ? "生成中…" : "▶ 用此工作流生成"}

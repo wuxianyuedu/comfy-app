@@ -44,7 +44,6 @@ import {
   type SizeGroup,
 } from "./DimensionControlParts";
 import type { DimensionGroup } from "./workflow-io";
-import { WIRE_PINS_ATTR, wirePinsValue } from "~/lib/workflow-io-types";
 
 /** Entry point: dispatch on which paradigm the workflow exposes.
  *
@@ -325,30 +324,19 @@ function DimensionSizeControl({
   }, [ratio, clarity, clarityKind, alignMultiple, applyPreset, handleAlignChange]);
 
   return (
-    <div
-      className="space-y-2.5"
-      /* 组合参数整体作为一个可锚定的目标：宽/高由同一个控件录入，单个端口没有
-       * 独立行，映射连线只能连到这个控件上（工作流库画布按此量端点）。
-       * 属性名来自共享契约：量测侧与这里必须用同一个字符串。 */
-      {...{
-        [WIRE_PINS_ATTR]: wirePinsValue([
-          group.width.ioKey,
-          group.height.ioKey,
-        ]),
-      }}
-    >
+    <div className="space-y-2.5">
       {/* 比例 + 像素 单段摆在 W/H 上方——既对应「预设 → 推算宽高」的方向，
           又让下方两个 NumberField 紧挨在一起形成紧凑一行。
           窄版（画布节点 / 库内）卡按内容收窄：`w-fit` + 上限，长度跟内容走。 */}
       <div
         className={
           narrow
-            ? "w-fit max-w-full rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2"
-            : "rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5"
+            ? "w-fit max-w-full rounded-lg border border-accent/30 bg-accent/4 p-2"
+            : "rounded-lg border border-accent/30 bg-accent/4 p-2.5"
         }
       >
         <div className="flex items-center gap-2">
-          <span className="shrink-0 text-[10px] font-semibold tracking-wider text-(--color-accent) uppercase">
+          <span className="shrink-0 text-[10px] font-semibold tracking-wider text-accent uppercase">
             比例 + 像素
           </span>
           <div className={narrow ? "w-[112px] min-w-0" : "min-w-0 flex-1"}>
@@ -362,7 +350,7 @@ function DimensionSizeControl({
                   scene={scene}
                   onOpen={() => setTableOpen(true)}
                   extra={
-                    <span className="text-[10px] text-(--color-ink-faint)">
+                    <span className="text-[10px] text-ink-faint">
                       {CLARITY_HINT[clarityKind]}
                     </span>
                   }

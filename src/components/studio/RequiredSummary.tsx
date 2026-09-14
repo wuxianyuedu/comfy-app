@@ -27,10 +27,10 @@ export function RequiredSummary({
   }, [io, mode]);
   return (
     <span className="ml-2 inline-flex items-center gap-1.5">
-      <span className="rounded border border-red-400/40 bg-red-500/15 px-1.5 py-px font-mono text-[10px] text-red-300">
+      <span className="rounded border border-red-400/40 bg-red-500/15 px-1.5 py-px font-mono text-[10px] text-red-700 dark:text-red-300">
         必填 {counts.required}
       </span>
-      <span className="rounded border border-white/8 bg-white/4 px-1.5 py-px font-mono text-[10px] text-gray-400">
+      <span className="rounded border border-border-strong bg-subtle px-1.5 py-px font-mono text-[10px] text-ink-soft">
         可选 {counts.optional}
       </span>
     </span>
@@ -61,6 +61,11 @@ export function RequiredSummary({
  *      route writes `rawJson.groups[i].flags.bypass` and invalidates
  *      the detail cache.
  */
+/** 统计徽标的「中性」取值 —— 一个灰色圆点/文字既可以走写死的 `#a1a1aa`，
+ *  也可以走随主题的弱文字 token。后者在浅色下才读得出来（浅底上的
+ *  `#a1a1aa` 只有 ~2:1）。调用方传这个常量即表示「中性统计」。 */
+export const CHIP_NEUTRAL_COLOR = "var(--color-ink-muted)";
+
 export function Chip({ color, label }: { color: string; label: string }) {
   return (
     <span
@@ -69,8 +74,8 @@ export function Chip({ color, label }: { color: string; label: string }) {
         fontFamily: "var(--font-mono)",
         padding: "2px 7px",
         borderRadius: 999,
-        background: `${color}1f`,
-        border: `1px solid ${color}55`,
+        background: `color-mix(in srgb, ${color} 12%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} 33%, transparent)`,
         color,
         letterSpacing: 0.2,
       }}
@@ -97,9 +102,9 @@ export function FrontendOnlyBadge() {
         lineHeight: 1.2,
         fontFamily: "var(--font-mono)",
         fontStyle: "italic",
-        color: "rgba(255, 255, 255, 0.42)",
+        color: "var(--color-ink-muted)",
         letterSpacing: 0.2,
-        border: "1px solid rgba(255, 255, 255, 0.16)",
+        border: "1px solid var(--color-border-strong)",
         borderRadius: 4,
         pointerEvents: "none",
         userSelect: "none",

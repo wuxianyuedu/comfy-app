@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useState, type CSSProperties } from "react";
+import { useTheme } from "next-themes";
 
 const EXT_TO_LANG: Record<string, string> = {
   ".ts": "typescript",
@@ -70,7 +71,7 @@ function getHighlighter(): Promise<ShikiHighlighter> {
       }) => Promise<ShikiHighlighter>;
     };
     return shiki.createHighlighter({
-      themes: ["one-dark-pro"],
+      themes: ["one-dark-pro", "github-light"],
       langs: [
         "typescript",
         "tsx",
@@ -101,8 +102,8 @@ const CHUNK_LINES = 400;
 const CODE_BLOCK_CSS = `
 .cb-code-block { padding: 12px 16px; font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace; font-size: 11.5px; line-height: 1.65; overflow: auto; }
 .cb-line { display: flex; align-items: flex-start; min-height: 1.65em; }
-.cb-ln { flex: none; width: 40px; padding-right: 14px; text-align: right; color: rgba(171,178,191,0.35); font-variant-numeric: tabular-nums; user-select: none; }
-.cb-code { white-space: pre; color: #abb2bf; }
+.cb-ln { flex: none; width: 40px; padding-right: 14px; text-align: right; color: var(--color-ink-fainter); opacity: 0.7; font-variant-numeric: tabular-nums; user-select: none; }
+.cb-code { white-space: pre; color: var(--color-ink-strong); }
 `;
 
 /** token 的 fontStyle 位掩码：1=italic，2=bold（shiki 约定） */
@@ -135,6 +136,11 @@ function PlainCodeBlock({ code }: { code: string }) {
 export function CodeBlock({ code, language }: { code: string; language: string }) {
   const [tokens, setTokens] = useState<ShikiToken[][] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* 语法高亮主题必须跟应用主题走：只在 `one-dark-pro` 上高亮时，Light 下
+     代码是「暗色主题的 token 色」压在浅底上（关键字/注释对比度极低）。
+     `resolvedTheme` 首帧可能为 undefined —— 按 Dark 起步（默认主题）。 */
+  const { resolvedTheme } = useTheme();
+  const shikiTheme = resolvedTheme === "light" ? "github-light" : "one-dark-pro";
 
   useEffect(() => {
     let cancelled = false;
@@ -162,7 +168,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
           const slice = allLines.slice(start, start + CHUNK_LINES);
           const chunkTokens = hl.codeToTokensBase(slice.join("\n"), {
             lang: language,
-            theme: "one-dark-pro",
+            theme: shikiTheme,
           });
           acc.push(...chunkTokens);
           chunkIndex += 1;
@@ -185,13 +191,13 @@ export function CodeBlock({ code, language }: { code: string; language: string }
     return () => {
       cancelled = true;
     };
-  }, [code, language]);
+  }, [code, language, shikiTheme]);
 
   if (error) {
     return (
       <div className="cb-code-block">
         <div className="cb-line">
-          <span className="cb-code text-[11px] text-rose-600">
+          <span className="cb-code text-[11px] text-rose-700 dark:text-rose-300">
             语法高亮失败：{error}
           </span>
         </div>

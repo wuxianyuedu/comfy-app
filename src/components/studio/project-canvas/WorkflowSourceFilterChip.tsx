@@ -32,7 +32,7 @@ export function WorkflowSourceFilterChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-(--color-primary)/35 bg-(--color-node-accent) px-2.5 text-[12px]"
+        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/35 bg-overlay-accent-surface px-2.5 text-[12px]"
       >
         <span
           className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -44,17 +44,17 @@ export function WorkflowSourceFilterChip({
         <span
           className={`font-semibold ${
             value === "all"
-              ? "text-[#A78BFA]"
+              ? "text-violet-700 dark:text-[#A78BFA]"
               : isLocal
-                ? "text-[#33D499]"
-                : "text-[#A78BFA]"
+                ? "text-emerald-700 dark:text-[#33D499]"
+                : "text-violet-700 dark:text-[#A78BFA]"
           }`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
         >
           {label}
         </span>
         <span
-          className={`shrink-0 text-(--color-ink-icon) transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-ink-icon transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -75,7 +75,7 @@ export function WorkflowSourceFilterChip({
               width: pos.width,
               zIndex: 50,
             }}
-            className="rounded-lg border border-white/8 bg-(--color-card) py-1 shadow-2xl shadow-violet-500/20"
+            className="border-border-strong bg-card rounded-lg border py-1 shadow-2xl shadow-black/10 dark:shadow-violet-500/20"
           >
             {(
               [
@@ -97,8 +97,8 @@ export function WorkflowSourceFilterChip({
                   }}
                   className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
                     sel
-                      ? "bg-violet-500/20 text-violet-200"
-                      : "text-gray-300 hover:bg-white/6"
+                      ? "bg-violet-500/20 text-violet-700 dark:text-violet-200"
+                      : "text-ink-soft hover:bg-subtle"
                   }`}
                 >
                   <span
@@ -106,7 +106,7 @@ export function WorkflowSourceFilterChip({
                     style={{ background: option.dot }}
                   />
                   <span className="flex-1">{option.label}</span>
-                  {sel && <span className="text-violet-300">✓</span>}
+                  {sel && <span className="text-violet-700 dark:text-violet-300">✓</span>}
                 </button>
               );
             })}

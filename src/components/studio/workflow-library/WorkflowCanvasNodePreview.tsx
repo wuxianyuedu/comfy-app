@@ -12,8 +12,9 @@
  * 不再挂在节点下方。运行态/日志由 workflow-run-store 托管：关闭窗口（组件
  * 卸载）再打开，生成中状态与日志依然可见（SSE 重连由服务端回放补齐历史）。
  *
- * 与画布的差异：这里是单节点静态环境（无连线），wire 类输入以表单控件呈现，
- * 值为空时不下发、由 ComfyUI 侧工作流自带默认值兜底。
+ * 与画布的差异：这里是单节点静态环境（无上游接线），wire 类输入以表单控件
+ * 呈现，值为空时不下发、由 ComfyUI 侧工作流自带默认值兜底；**对外参数的落点
+ * 映射**在这里可编辑（三列 React Flow 画布，见 WorkflowLibraryCanvas）。
  */
 
 import {
@@ -37,7 +38,6 @@ import {
   registerWorkflowRun,
   subscribeWorkflowRunStore,
 } from "@/lib/workflow-run-store";
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import { DynamicWorkflowForm } from "../shared/DynamicWorkflowForm";
 import {
   defaultInputValues,
@@ -64,26 +64,15 @@ import {
 import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
 import { resolveWorkflowMode } from "@/lib/workflow-types";
-import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
-import { WorkflowOutputParamCardColumn } from "./WorkflowOutputParamCardColumn";
-import { WorkflowParamWires } from "./WorkflowParamWires";
 import {
   deriveLibraryOutputCards,
   deriveLibraryParamCards,
 } from "./workflow-library-param-cards";
 import { useParamWiring } from "./hooks/use-param-wiring";
-import { WorkflowCanvasViewportFrame } from "./WorkflowCanvasViewportFrame";
+import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
+import { LibraryHostCard } from "./LibraryHostCard";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
-import {
-  WorkflowNodeActionButton,
-  WorkflowNodeCardShell,
-  WorkflowNodeDivider,
-  WorkflowNodeHeader,
-  WorkflowNodeOutputsRow,
-  WorkflowNodePill,
-  WorkflowStaticChip,
-} from "../shared/WorkflowNodeParts";
-import { PortHandle } from "../shared/WorkflowPortHandle";
+import { WorkflowNodeActionButton } from "../shared/WorkflowNodeParts";
 
 type Phase =
   | { kind: "idle" }
@@ -264,10 +253,9 @@ export function WorkflowCanvasNodePreview({
   const { inputs, outputs } = splitWorkflowIO(workflowIO);
 
   /* 组合控件（宽/高、比例/像素/倍数、时长/画质/比例）把这些端口收进同一块控件，
-   *  表单里因此**没有独立的一行**。对外参数卡片据此两件事：
-   *    · 不再重复列这些端口（那块控件本身就是它们的入口）；
-   *    · 被落到这些端口上的线指向那一格控件（`WORKFLOW_PARAM_GROUPED_HANDLE`）。
-   *  判定与表单同一份（`inferGroups`），不另算一遍避免漂移。 */
+   *  表单里因此**没有独立的一行**（窄版的组合控件仍把这几个端口摆成逐行参数，
+   *  各带自己的端点）。对外参数卡片据此不再重复列这些端口 —— 那块控件本身就是
+   *  它们的入口。判定与表单同一份（`inferGroups`），不另算一遍避免漂移。 */
   const groupedKeys = useMemo(
     () => inferGroups(splitWorkflowIO(workflowIO).widgetInputs).groupedKeys,
     [workflowIO],
@@ -275,13 +263,14 @@ export function WorkflowCanvasNodePreview({
 
   /* 宿主卡片此刻**真的画得出来**的端口（ioKey 集合）。
    *
-   *  它是「这个端口现在连得上 / 现在能从外部取到值」的事实源：卡片右侧每个候选
-   *  圆点按它收窄（画不出端点的端口不给拖 —— 拖过去也只会被落点解析拒绝，用户
-   *  看到的就是「点击端点拉线出现禁用标记」），连线量测的终点也取自同一批行。
+   *  它是「这个端口现在连得上」的事实源：卡片上的候选端点按它收窄 —— 画不出
+   *  端点的端口不给拖（拖过去也只会被画布闸门拒绝，用户看到的就是「点击端点
+   *  拉线出现禁用标记」）。
    *
    *  口径与宿主表单**同一份**（不是另算一遍）：`splitWorkflowIO` 拆出输入 →
    *  `filterVisibleInMode` 按当前模式去掉隐藏项 → 组合控件接管的端口也算画得出来
-   *  （它们在控件里各有落点）。纯派生，因此不必等 DOM 测量、也不会在渲染里读 ref。 */
+   *  （窄版控件把它们摆成逐行参数，各有端点）。纯派生：不必等 DOM 测量，也不会在
+   *  渲染里读 ref。 */
   const reachableKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const entry of splitWorkflowIO(workflowIO).inputs) {
@@ -419,23 +408,13 @@ export function WorkflowCanvasNodePreview({
    *
    *  它是「这个端口现在连得上 / 现在能从外部取到值」的事实源：卡片右侧每个候选
    *  圆点按它收窄（画不出端点的端口不给拖，否则拖过去只会被落点解析拒绝 —— 用户
-   *  看到的就是「点击端点拉线出现禁用标记」），连线量测的终点也取自同一批行。
+   *  看到的就是「点击端点拉线出现禁用标记」）。
    *
    *  行集合会随模式切换（可见性）、折叠状态、IO 富化结果变化，故每次宿主表单渲染
    *  后重新收集一次；用 `useSyncExternalStore` 之外的最简办法：渲染后布局稳定时
    *  从 DOM 现收（见下面的 effect）。 */
   const hostRef = useRef<HTMLDivElement | null>(null);
 
-  /* 画布视口（只读平移 / 缩放）。
-   *
-   *  用户口径：「这里需要可以拖动整个画布查看其他超出边框的内容」（ISSUE #355）。
-   *  三列（对外参数卡片列 + 宿主卡片 + 对外输出参数卡片列）合起来常宽过面板，
-   *  超出去的部分此前只能靠整页横向滚动 —— 面板自身是「撑满父级、否则内部滚动」
-   *  的容器，看起来就是「拖不动」。
-   *
-   *  只读：不碰映射、不碰连线（连线量测读的是被平移后的真实 DOM 矩形，拖动
-   *  画布不会让线错位）。 */
-  const [wiresOpen, setWiresOpen] = useState(true);
   /* 映射编辑编排：本地 overlay + 落库。没有 `onPatchParamMap`（只读消费方）时
    * 仍然派生正确的落点，只是拖不动。 */
   const wiring = useParamWiring({
@@ -564,276 +543,104 @@ export function WorkflowCanvasNodePreview({
           三列（对外参数 / 宿主卡片 / 对外输出参数）合起来常宽过面板，超出去的
           部分此前看不到（ISSUE #355：「需要可以拖动整个画布查看其他超出边框的
           内容」）。状态与手势都在这一层，拖动画布不会让预览主体重渲染。 */}
-      <WorkflowCanvasViewportFrame
-        hint="拖动空白处平移画布 · 滚轮缩放"
-        toolbar={
-          outputCards.outputs.length > 0 ? (
-            /* 映射 / 输出连线是量出来的绝对定位 SVG（见 WorkflowParamWires），
-               卡片密集时线会压住内容 —— 给一个一键收起的出口。 */
-            <button
-              type="button"
-              onClick={() => setWiresOpen((prev) => !prev)}
-              aria-pressed={wiresOpen}
-              className="rounded border border-(--color-border-strong) px-2 py-0.5 text-[10.5px] text-(--color-ink-soft) transition-colors hover:bg-white/8 hover:text-(--color-ink-bright)"
-              data-testid="wflib-canvas-toggle-wires"
-              title={
-                wiresOpen
-                  ? "隐藏映射 / 输出连线（只看卡片）"
-                  : "显示映射 / 输出连线"
-              }
-            >
-              {wiresOpen ? "隐藏连线" : "显示连线"}
-            </button>
-          ) : null
+      {/* ── 画布：三列各一个 React Flow 节点（ISSUE #529）──
+          拖动平移 / 滚轮缩放 / 适应 / 复位由 React Flow 承担；连线是真正的
+          edge，端点是真正的 <Handle>，「这一行收不收这个口子」收敛到
+          `isValidConnection`（与编辑器画布同一套语义）。
+          三列（对外参数 / 宿主卡片 / 对外输出参数）合起来常宽过面板，
+          超出边框的部分靠拖动平移看全。 */}
+      <WorkflowLibraryCanvas
+        io={workflowIO}
+        paramCards={paramCards}
+        outputCards={outputCards}
+        entries={buildParamEntries(workflowIO ?? null, undefined, {
+          mode: effectiveMode,
+        })}
+        canWire={!!effectiveMode && !!onPatchParamMap}
+        selectedEntryId={selectedParamId}
+        selectedOutputId={selectedOutputId}
+        onSelectParam={(id) => {
+          setSelectedParamId(id);
+          if (id) setSelectedOutputId(null);
+        }}
+        onSelectOutput={(id) => {
+          setSelectedOutputId(id);
+          if (id) setSelectedParamId(null);
+        }}
+        onResetParam={wiring.resetToAuto}
+        onResetOutput={outputWiring.reset}
+        onConnect={
+          effectiveMode && onPatchParamMap ? wiring.connect : undefined
         }
-      >
-        {/* 对外参数卡片列 + 宿主卡片并排：卡片列在左、宿主运行卡片在右。
-          容器 `relative` 是只读映射连线的量测基准（见 WorkflowParamWires）——
-          卡片右侧的圆点与宿主卡片上被落到的那一行之间画一条线，读者不必对照
-          两处文字也能看出「提示词喂给了 positive_prompt」。
-          两列之间留出走线的横向空间（ISSUE #355 复审：贴太近就看不出哪条线连
-          到哪一行）—— 间距与编辑器画布的卡片列留白同量级。 */}
-        <div className="relative flex w-fit items-start justify-center gap-24">
-          {paramCards.entries.length > 0 && (
-            <WorkflowParamCardColumn
-              entries={paramCards.entries}
-              resolved={paramCards.resolved}
-              io={workflowIO}
-              /* 没有模式时不给连线能力：落点覆盖必须归属一个模式，写入无归属
-               * 等于什么都没发生（与编辑器画布的写入路径同一口径）。 */
-              canWire={!!effectiveMode && !!onPatchParamMap}
-              selectedEntryId={selectedParamId}
-              /* 选中互斥：选了左边就放下右边，⌫ 断的线只有一根。 */
-              onSelect={(id) => {
-                setSelectedParamId(id);
-                if (id) setSelectedOutputId(null);
-              }}
-              isManual={wiring.isManual}
-              onReset={wiring.resetToAuto}
-              reachableKeys={paramCards.reachableKeys}
-              wiredDotKeys={paramCards.wiredDotKeys}
-            />
-          )}
-          {/* ── 画布同款节点卡片：唯一视觉源在 shared/workflow-node-parts ── */}
-          <div className="relative">
-            <div ref={hostRef} className="relative">
-              <WorkflowNodeCardShell>
-                <WorkflowNodeHeader
-                  title={workflowName}
-                  right={
-                    <WorkflowNodePill>
-                      <span
-                        className={[
-                          "h-1.5 w-1.5 rounded-full",
-                          running
-                            ? "animate-pulse bg-amber-300"
-                            : phase.kind === "done"
-                              ? "bg-emerald-400"
-                              : phase.kind === "failed"
-                                ? "bg-rose-400"
-                                : "bg-(--color-primary)",
-                        ].join(" ")}
-                      />
-                      <span
-                        className="text-[10px] font-medium text-(--color-ink-soft)"
-                        style={{ fontFamily: "var(--font-sans)" }}
-                      >
-                        {statusLabel}
-                      </span>
-                    </WorkflowNodePill>
-                  }
-                />
-
-                <WorkflowNodeDivider />
-
-                {/* chips 双行：与画布 WorkflowNode 同构（Row1 来源+模型，Row2 工作流+模式）；
-                 *  库内为只读语境，固定「本机 / 全部模型 / 当前工作流 / 任务类型」。 */}
-                <div className="flex flex-col gap-1 pr-[14px] pb-1.5 pl-[14px]">
-                  <div className="flex h-7 min-w-0 items-center gap-1">
-                    <WorkflowStaticChip>
-                      <span className="h-1.5 w-1.5 rounded-full bg-(--color-success-strong)" />
-                      <span className="text-[11px] font-semibold text-(--color-success-strong)">
-                        本机
-                      </span>
-                    </WorkflowStaticChip>
-                    <WorkflowStaticChip className="min-w-0 flex-1">
-                      <span className="truncate text-[11px] font-semibold text-(--color-ink-bright)">
-                        全部模型
-                      </span>
-                    </WorkflowStaticChip>
-                  </div>
-                  <div className="flex h-7 min-w-0 items-center gap-1">
-                    <WorkflowStaticChip
-                      className="min-w-0 flex-1"
-                      title={workflowName}
-                    >
-                      <span className="truncate text-[11px] font-semibold text-(--color-ink-bright)">
-                        {workflowName}
-                      </span>
-                    </WorkflowStaticChip>
-                    {modes && modes.length > 1 && onModeChange ? (
-                      /* 多模式：类型 chip 变成模式切换下拉（与工作流库「类型」同码表） */
-                      <DarkSelect
-                        value={effectiveMode ?? taskType}
-                        onChange={(code) => onModeChange(code)}
-                        options={modes}
-                        labels={Object.fromEntries(
-                          modes.map((code) => [code, modeLabel(code)]),
-                        )}
-                        popoverMinWidth={150}
-                        autoFitFromOptions={false}
-                        className="shrink-0 !border-(--color-border-strong) !bg-transparent text-[11px]"
-                      />
-                    ) : (
-                      <WorkflowStaticChip>
-                        <span className="text-[11px] font-medium text-(--color-ink-bright)">
-                          {effectiveModeLabel || "—"}
-                        </span>
-                      </WorkflowStaticChip>
-                    )}
-                  </div>
-                </div>
-
-                {/* compact = 与项目画布节点完全同版的密度与结构（无「组合参数 /
-                 *  可编辑参数」等分组标题），库内预览对齐画布观感。端点圆点在
-                 *  非 React Flow 节点内由 PortHandle 降级为装饰。 */}
-                <DynamicWorkflowForm
-                  io={workflowIO ?? undefined}
-                  values={values}
-                  onChange={setValues}
-                  showOutputs={false}
-                  compact
-                  mode={effectiveMode}
-                  seedModes={seedModes}
-                  /* 被某个对外参数落到的那一行，行尾标出它属于谁 —— 与左侧卡片的
-                   * 端口行互为两端，一眼看出「这个参数到底喂给了哪一行」。 */
-                  rowTrailing={(entry) => (
-                    <ParamOwnerTag
-                      label={paramCards.ownersByPin[entry.ioKey]}
-                    />
-                  )}
-                  onSeedModeChange={
-                    onSeedModeChange
-                      ? (ioKey: string, mode: string) =>
-                          onSeedModeChange(ioKey, mode)
-                      : undefined
-                  }
-                  workflowId={workflowId}
-                  onUploadProgress={(message) => setUploadNotice(message)}
-                  onUploadError={(message) => setUploadNotice(message)}
-                />
-
-                {/* outputs 行：与画布 outputs labelRow 同构，**带输出端点圆点**。
-            用户口径是「红框中的输出端口也要有端口圆点，然后工作流节点右侧需要
-            显示对外输出参数」（ISSUE #355）：输出行右侧的圆点与项目画布 /
-            编辑器上同一颗（`PortHandle`，非 React Flow 上下文里退化为几何一致的
-            装饰圆点），右侧那列「对外输出参数」卡片再从这颗圆点连出去。 */}
-                {outputs.length > 0 && (
-                  <div className="border-t border-(--color-border-subtle)">
-                    {outputs.map((output) => (
-                      <WorkflowNodeOutputsRow
-                        key={output.nodeId + ":" + output.name}
-                        output={output}
-                        inputs={inputs}
-                        outputs={outputs}
-                        renderHandle={({ id, dir, type }) => (
-                          <PortHandle
-                            id={id}
-                            dir={dir}
-                            type={type}
-                            style={{
-                              right: -6,
-                              top: 14,
-                              transform: "translateY(-50%)",
-                              boxShadow: "none",
-                            }}
-                          />
-                        )}
-                      />
-                    ))}
-                  </div>
+        onConnectOutput={
+          effectiveMode && onPatchParamMap ? outputWiring.connect : undefined
+        }
+        host={
+          <LibraryHostCard
+            workflowName={workflowName}
+            statusLabel={statusLabel}
+            running={running}
+            phaseKind={phase.kind}
+            modes={modes}
+            effectiveMode={effectiveMode}
+            taskType={taskType}
+            effectiveModeLabel={effectiveModeLabel}
+            onModeChange={onModeChange}
+            hostRef={hostRef}
+            form={
+              <DynamicWorkflowForm
+                io={workflowIO ?? undefined}
+                values={values}
+                onChange={setValues}
+                showOutputs={false}
+                compact
+                mode={effectiveMode}
+                seedModes={seedModes}
+                /* 被某个对外参数落到的那一行，行尾标出它属于谁 —— 与左侧卡片的
+                 * 端口行互为两端，一眼看出「这个参数到底喂给了哪一行」。 */
+                rowTrailing={(entry) => (
+                  <ParamOwnerTag label={paramCards.ownersByPin[entry.ioKey]} />
                 )}
-
-                <WorkflowNodeActionButton
-                  label={running ? `生成中 ${pct}%` : "▶ 用此工作流生成"}
-                  disabled={!canRun}
-                  onClick={run}
-                  title={
-                    missingLabels.length > 0
-                      ? `必填参数未填：${missingLabels.join("、")}`
-                      : undefined
-                  }
-                />
-              </WorkflowNodeCardShell>
-            </div>
-          </div>
-          {/* 对外输出参数卡片列：在宿主卡片**右侧**（与左列的输入卡片对称）。
-            卡片圆点骑跨卡片左缘，线从宿主卡片的输出行圆点连过来。 */}
-          <WorkflowOutputParamCardColumn
-            outputs={outputCards.outputs}
-            resolved={outputCards.resolved}
-            /* 与左列同一道闸门：有模式 + 上层给了落库回调才可拖（没有模式时
-             *  覆盖无归属，写入等于什么都没发生）。 */
-            canWire={!!effectiveMode && !!onPatchParamMap}
-            selectedOutputId={selectedOutputId}
-            onSelect={(id) => {
-              setSelectedOutputId(id);
-              if (id) setSelectedParamId(null);
-            }}
-            isManual={outputWiring.isManual}
-            onReset={outputWiring.reset}
+                onSeedModeChange={
+                  onSeedModeChange
+                    ? (ioKey: string, mode: string) => onSeedModeChange(ioKey, mode)
+                    : undefined
+                }
+                workflowId={workflowId}
+                onUploadProgress={(message) => setUploadNotice(message)}
+                onUploadError={(message) => setUploadNotice(message)}
+              />
+            }
+            outputs={outputs}
+            inputs={inputs}
+            actions={
+              <WorkflowNodeActionButton
+                label={running ? `生成中 ${pct}%` : "▶ 用此工作流生成"}
+                disabled={!canRun}
+                onClick={run}
+                title={
+                  missingLabels.length > 0
+                    ? `必填参数未填：${missingLabels.join("、")}`
+                    : undefined
+                }
+              />
+            }
           />
-          {/* 映射连线：输入侧 = 卡片圆点 → 宿主卡片上被落到的那一行；输出侧 =
-            宿主卡片输出行圆点 → 对外输出参数卡片。量不到锚点（行不在当前渲染
-            里）就整条不画，不留悬空线头。
-            可编辑的只有输入侧：拖圆点即改落点、点线选中后按 ⌫ 断开。 */}
-          {/* 连线层受「显示连线」开关控制：库里的映射线是量出来的绝对定位 SVG，
-            卡片列与宿主卡片之间节点密集时线会压住卡片内容 —— 给一个一键收起的
-            出口（对应编辑器画布那边「拖动卡片本身」的能力）。 */}
-          {wiresOpen && (
-            <WorkflowParamWires
-              /* 两套键空间一起叠：输入侧（paramMap.source）与输出侧
-               *  （paramMap.output）。线的 key 带命名空间前缀，两列的 id 撞车
-               *  也不会串。 */
-              wires={[...paramCards.wires, ...outputCards.wires]}
-              selectedEntryId={selectedParamId ?? selectedOutputId}
-              onSelect={(id) => {
-                setSelectedParamId(id);
-                setSelectedOutputId(id);
-              }}
-              onConnect={
-                effectiveMode && onPatchParamMap ? wiring.connect : undefined
-              }
-              onDisconnect={
-                effectiveMode && onPatchParamMap ? wiring.disconnect : undefined
-              }
-              onConnectOutput={
-                effectiveMode && onPatchParamMap
-                  ? outputWiring.connect
-                  : undefined
-              }
-              onDisconnectOutput={
-                effectiveMode && onPatchParamMap
-                  ? outputWiring.disconnect
-                  : undefined
-              }
-            />
-          )}
-        </div>
-      </WorkflowCanvasViewportFrame>
+        }
+      />
 
       {/* 进度条（running 时） */}
       {phase.kind === "running" && (
         <div className="w-[380px]" aria-live="polite">
-          <div className="mb-1 flex items-center justify-between text-[11px] text-(--color-ink-faint)">
+          <div className="mb-1 flex items-center justify-between text-[11px] text-ink-faint">
             <span>
               {nodeLabel ? `正在执行 ${nodeLabel}` : "正在执行工作流"}
               {phase.node ? `（${phase.node.value}/${phase.node.max}）` : ""}
             </span>
-            <span className="font-medium text-violet-600">{pct}%</span>
+            <span className="font-medium text-violet-700 dark:text-violet-300">{pct}%</span>
           </div>
           <div
-            className="h-1.5 w-full overflow-hidden rounded-full bg-(--color-surface-2)"
+            className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2"
             role="progressbar"
             aria-valuenow={pct}
             aria-valuemin={0}
@@ -850,18 +657,18 @@ export function WorkflowCanvasNodePreview({
       {/* 运行结果图 */}
       {resultUrl && (
         <div className="w-[380px]">
-          <p className="mb-1 text-[11px] text-(--color-ink-faint)">运行结果</p>
+          <p className="mb-1 text-[11px] text-ink-faint">运行结果</p>
           <img
             src={resultUrl}
             alt="运行结果"
-            className="w-full rounded-xl border border-(--color-border)"
+            className="w-full rounded-xl border border-border"
           />
         </div>
       )}
 
       {/* 错误 / 必填提示 */}
       {phase.kind === "failed" && (
-        <div className="w-[380px] rounded-lg border border-red-500/20 bg-red-500/8 px-3 py-2 text-[11px] leading-relaxed text-red-600">
+        <div className="w-[380px] rounded-lg border border-red-500/20 bg-red-500/8 px-3 py-2 text-[11px] leading-relaxed text-red-700 dark:text-red-300">
           {phase.message}
         </div>
       )}
@@ -870,7 +677,7 @@ export function WorkflowCanvasNodePreview({
           并给出去设置页手动启动的路（自动启动失败 / 手动关闭过才有这个必要）。 */}
       {uploadNotice && (
         <div
-          className="w-[380px] rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-700"
+          className="w-[380px] rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300"
           role="status"
           aria-live="polite"
         >
@@ -879,7 +686,7 @@ export function WorkflowCanvasNodePreview({
             <button
               type="button"
               onClick={() => setUploadNotice(null)}
-              className="shrink-0 rounded px-1 text-amber-700/70 transition-colors hover:text-amber-800"
+              className="shrink-0 rounded px-1 text-amber-800 dark:text-amber-300/70 transition-colors hover:text-amber-800"
               aria-label="关闭上传提示"
             >
               ✕
@@ -888,7 +695,7 @@ export function WorkflowCanvasNodePreview({
         </div>
       )}
       {!running && missingLabels.length > 0 && (
-        <p className="w-[380px] text-[11px] text-amber-600/80">
+        <p className="w-[380px] text-[11px] text-amber-700 dark:text-amber-300/80">
           必填参数未填：{missingLabels.join("、")}
         </p>
       )}
@@ -904,16 +711,16 @@ export function WorkflowCanvasNodePreview({
             setLogOpen(true);
           }}
           data-testid="wflib-log-open"
-          className="flex w-[380px] items-center justify-between rounded-xl border border-(--color-border) bg-(--color-panel-deep) px-3 py-2 text-left transition-colors hover:border-(--color-border-strong)"
+          className="flex w-[380px] items-center justify-between rounded-xl border border-border bg-panel-deep px-3 py-2 text-left transition-colors hover:border-border-strong"
           title="打开执行日志"
         >
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-(--color-ink-strong)">
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-ink-strong">
             执行日志
             {running && (
               <span className="ml-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
             )}
           </span>
-          <span className="text-[10.5px] text-(--color-ink-fainter)">
+          <span className="text-[10.5px] text-ink-fainter">
             {activeRun
               ? activeRun.status === "done"
                 ? "上次已完成"

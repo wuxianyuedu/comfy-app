@@ -5,16 +5,7 @@ import { Icon } from "@/components/ui/icon";
 import type { LLMConfigView } from "@/lib/llm/types";
 import { useLLMConfig, useLLMConfigSave } from "./hooks/use-llm-config";
 import { overlayClass } from "~/lib/full-screen-layer";
-
-/** catch 抛出值（unknown）→ 与旧 `e?.message ?? fallback` 逐值等价的消息提取：
- *  带 string message 的对象取 message（Error 实例即此路径），其余回退。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return fallback;
-}
+import { errorMessage } from "~/lib/error-message";
 
 interface LLMContextValue {
   config: LLMConfigView | null;
@@ -92,7 +83,7 @@ export function LLMStatusChip() {
       <button
         type="button"
         onClick={openSettings}
-        className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700"
+        className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-300"
       >
         未配置 LLM
       </button>
@@ -203,7 +194,10 @@ function LLMSettingsModal({
 
   return (
     <div
-      className={overlayClass("modal", "z-50 grid place-items-center bg-black/50 p-4")}
+      className={overlayClass(
+        "modal",
+        "z-50 grid place-items-center bg-canvas-deep p-4 backdrop-blur-sm dark:bg-canvas-deep",
+      )}
       onClick={onClose}
     >
       <div
@@ -276,7 +270,7 @@ function LLMSettingsModal({
               >
                 <span
                   className={`inline-block size-2 shrink-0 rounded-full ${
-                    activeModel === name ? "bg-primary" : "bg-(--color-surface-2)"
+                    activeModel === name ? "bg-primary" : "bg-surface-2"
                   }`}
                 />
                 <span className="flex-1 truncate">{name}</span>
@@ -287,7 +281,7 @@ function LLMSettingsModal({
             ))}
           </div>
         ) : (
-          <p className="text-muted-foreground rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-700">
+          <p className="text-muted-foreground rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
             暂无候选模型 —— 请到「设置」页添加（本地 Ollama 需已拉取模型）。
           </p>
         )}
@@ -296,8 +290,8 @@ function LLMSettingsModal({
           <p
             className={`mt-3 rounded-lg px-3 py-2 text-xs ${
               msg.kind === "ok"
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-red-100 text-red-700"
+                ? "bg-emerald-100 text-emerald-800 dark:text-emerald-300"
+                : "bg-red-100 text-red-800 dark:text-red-300"
             }`}
           >
             {msg.text}

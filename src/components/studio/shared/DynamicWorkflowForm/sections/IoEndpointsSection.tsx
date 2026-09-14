@@ -35,10 +35,10 @@ export function IoEndpointsSection({ wireInputs, inputs, outputs, showOutputs }:
             return (
               <span
                 key={wireInput.ioKey}
-                className="inline-flex items-center gap-1 rounded-md border border-(--color-info)/25 bg-(--color-info)/10 px-1.5 py-0.5 text-[10px] text-(--color-info)"
+                className="inline-flex items-center gap-1 rounded-md border border-info/25 bg-info/10 px-1.5 py-0.5 text-[10px] text-info"
                 title={`${wireInput.nodeTitle ?? ""} · ${wireInput.name} · 仅可通过连线输入`}
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-(--color-info)" />
+                <span className="h-1.5 w-1.5 rounded-full bg-info" />
                 {label}
                 {/* chip 打印 pin 真实类型（含 IMAGEUPLOAD 等自定义类型）。 */}
                 <span className="font-mono text-[9px] opacity-70">
@@ -50,23 +50,23 @@ export function IoEndpointsSection({ wireInputs, inputs, outputs, showOutputs }:
         </div>
       )}
       {wireInputs.length > 0 && outputs.length > 0 && showOutputs && (
-        <div className="h-px shrink-0 border-t border-dashed border-white/6" />
+        <div className="h-px shrink-0 border-t border-dashed border-border-strong" />
       )}
       {showOutputs && outputs.length > 0 && (
         <>
           <div className="flex items-center gap-1.5 pt-1">
-            <span className="text-[10px] font-medium text-gray-500">输出端点</span>
-            <div className="flex-1 border-t border-dashed border-white/4" />
+            <span className="text-[10px] font-medium text-ink-muted">输出端点</span>
+            <div className="flex-1 border-t border-dashed border-border-subtle" />
           </div>
           <div className="flex flex-wrap gap-1.5">
             {outputs.map((output) =>
 (
               <span
                 key={output.ioKey}
-                className="inline-flex items-center gap-1 rounded-md border border-(--color-success)/25 bg-(--color-success)/10 px-1.5 py-0.5 text-[10px] text-(--color-success)"
+                className="inline-flex items-center gap-1 rounded-md border border-success/25 bg-success/10 px-1.5 py-0.5 text-[10px] text-success"
                 title={`${output.nodeTitle ?? ""} · ${output.name}`}
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-(--color-success)" />
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />
                 {/* conflict-aware：同上，撞名时回退到原始 name。 */}
                 {ioLabel(output, [...inputs, ...outputs])}
                 <span className="font-mono text-[9px] opacity-70">{typeDisplay(output.type)}</span>

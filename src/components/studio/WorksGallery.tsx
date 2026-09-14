@@ -87,15 +87,15 @@ export function WorksGallery({
       <div className="mx-auto max-w-[1200px] px-4 sm:px-8 py-8 sm:py-10">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-title text-xl font-bold text-(--color-ink)">所有项目</h1>
-            <p className="mt-1 text-sm text-(--color-ink-muted)">
+            <h1 className="font-title text-xl font-bold text-ink">所有项目</h1>
+            <p className="mt-1 text-sm text-ink-muted">
               本地画布项目，按时间倒序排列。生成作品请查看「历史记录」。
             </p>
           </div>
           <div className="flex gap-2">
             <button
               onClick={refreshCanvasProjects}
-              className="rounded-lg border border-(--color-border) px-3 py-2 text-xs text-(--color-ink-faint) hover:text-(--color-ink-bright)"
+              className="rounded-lg border border-border px-3 py-2 text-xs text-ink-faint hover:text-ink-bright"
             >
               ↻ 刷新
             </button>
@@ -113,13 +113,13 @@ export function WorksGallery({
         {canvasProjects.length > 0 ? (
           <section className="mb-10">
             <div className="mb-4 flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold text-(--color-ink-strong)">
+              <h2 className="text-sm font-semibold text-ink-strong">
                 画布项目{" "}
-                <span className="ml-1 text-xs font-normal text-(--color-ink-fainter)">
+                <span className="ml-1 text-xs font-normal text-ink-fainter">
                   ({canvasProjects.length})
                 </span>
               </h2>
-              <span className="text-[11px] text-(--color-ink-fainter)">本地 · 可继续编辑</span>
+              <span className="text-[11px] text-ink-fainter">本地 · 可继续编辑</span>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {canvasProjects.map((canvasProject) =>
@@ -129,14 +129,14 @@ export function WorksGallery({
                 return (
                   <div
                     key={canvasProject.id}
-                    className="group relative rounded-2xl border border-(--color-border-subtle) bg-(--color-card) transition-all hover:border-cyan-400/25 hover:bg-cyan-400/4"
+                    className="group relative rounded-2xl border border-border-subtle bg-card transition-all hover:border-cyan-400/25 hover:bg-cyan-400/4"
                   >
                     <button
                       type="button"
                       onClick={() => onOpenCanvasProject?.(canvasProject.id)}
                       className="flex w-full items-start gap-3 rounded-2xl canvasProject-3.5 text-left"
                     >
-                      <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-400/12 text-cyan-400">
+                      <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-400/12 text-cyan-700 dark:text-cyan-400">
                         <svg
                           width="16"
                           height="16"
@@ -153,15 +153,15 @@ export function WorksGallery({
                         </svg>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-(--color-ink-bright) group-hover:text-(--color-ink)">
+                        <p className="truncate text-sm font-medium text-ink-bright group-hover:text-ink">
                           {canvasProject.name || "未命名项目"}
                         </p>
-                        <p className="mt-1 truncate text-[11px] text-(--color-ink-muted)">
+                        <p className="mt-1 truncate text-[11px] text-ink-muted">
                           {nodeCount > 0
                             ? `${nodeCount} 节点 · ${edgeCount} 连线`
                             : "空画布"}
                         </p>
-                        <p className="mt-0.5 text-[11px] text-(--color-ink-fainter)">
+                        <p className="mt-0.5 text-[11px] text-ink-fainter">
                           {projectTimeAgo(canvasProject.updatedAt)}
                         </p>
                       </div>
@@ -176,7 +176,7 @@ export function WorksGallery({
                         event.stopPropagation();
                         setConfirmDeleteId(canvasProject.id);
                       }}
-                      className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-(--color-ink-muted) opacity-0 transition-opacity hover:bg-red-500/15 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+                      className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-ink-muted opacity-0 transition-opacity hover:bg-red-500/15 hover:text-red-700 dark:text-red-300 focus-visible:opacity-100 group-hover:opacity-100"
                     >
                       <Trash2 size={12} />
                       <span>删除</span>
@@ -188,9 +188,9 @@ export function WorksGallery({
           </section>
         ) : (
           <section>
-            <div className="grid min-h-[360px] place-items-center rounded-2xl border border-dashed border-(--color-border)">
+            <div className="grid min-h-[360px] place-items-center rounded-2xl border border-dashed border-border">
               <div className="text-center">
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/12 text-cyan-400">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/12 text-cyan-700 dark:text-cyan-400">
                   <svg
                     width="22"
                     height="22"
@@ -206,8 +206,8 @@ export function WorksGallery({
                     <circle cx="15" cy="15" r="2" />
                   </svg>
                 </div>
-                <p className="text-lg font-medium text-(--color-ink-strong)">还没有画布项目</p>
-                <p className="mt-1 text-sm text-(--color-ink-muted)">
+                <p className="text-lg font-medium text-ink-strong">还没有画布项目</p>
+                <p className="mt-1 text-sm text-ink-muted">
                   点击右上角「新建创作」开始你的第一个工作流，或者在工作流库载入模板。
                 </p>
               </div>

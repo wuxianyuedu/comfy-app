@@ -11,6 +11,7 @@ import { FlowNode } from "../canvas/WorkflowNode";
 import { WorkflowSubgraphNode } from "../canvas/WorkflowSubgraphNode";
 import type { WorkflowGroupData, WorkflowIoPortData, WorkflowNoteData } from "../workflow-types";
 import { NODE_TITLE_H, lightenHex, hexToRgba, mixHex } from "../workflow-utils";
+import { useCssColorToken } from "../hooks/use-css-color-token";
 
 export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({ data }: { data: WorkflowGroupData }) {
   /* title is now a "tab" inside the top-left corner of the
@@ -21,7 +22,7 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({ data }:
    *  remain the visual focus.
    *
    *  user feedback — 0.12 alpha was too washed out
-   *  against the `#0a0a0f` canvas, "Step2 · Image size" tab barely
+   *  against the canvas, "Step2 · Image size" tab barely
    *  contrasted with the surrounding wireframe and looked almost
    *  transparent.  Bumped tab to 0.30 — clearly readable while still
    *  feeling like a light "tab chip" attached to the frame edge (vs
@@ -103,7 +104,7 @@ export const GROUP_TITLE_BAR = 24;
 export const GROUP_PAD_Y_BOTTOM = 10;
 /** Border + title-chip colour for the INPUTS / OUTPUTS wfGroups wrapping
  *  the boundary pins (late). A muted purple so the group
- *  frames read clearly against the dark `#0a0a0f` canvas while still
+ *  frames read clearly against the canvas while still
  *  staying distinct from the inner FlowNode / WorkflowSubgraphNode cards. */
 export const GROUP_RAIL_COLOR = "#a855f7";
 
@@ -113,7 +114,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
   /* The handle dot colour tracks the port type, matching the row dot
    * convention used in the rest of the canvas.  Fall back to a neutral
    * white-ish dot when type is missing. */
-  const dotColor = data.type ? portColor(data.type) : "#9ca3af";
+  const dotColor = data.type ? portColor(data.type) : "var(--color-ink-faint)";
   const rawValue = data.value;
   let valueStr: string | null = null;
   if (
@@ -143,7 +144,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
        *  absolutely via the `Position` prop, so changing flex `justify-…`
        *  only moves the visible label/value — the dot stays anchored to
        *  its side of the wfGroup. */
-      className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} gap-1 px-1.5 py-[1px] text-[10.5px] leading-[1.4] text-white/90`}
+      className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} gap-1 px-1.5 py-[1px] text-[10.5px] leading-[1.4] text-ink-bright/90`}
       style={{
         width: IO_PORT_WIDTH,
         background: "transparent",
@@ -189,7 +190,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
         {data.title}
       </span>
       {valueStr ? (
-        <span className="text-amber-300/90 font-mono text-[10px] tabular-nums shrink-0">
+        <span className="text-amber-700 dark:text-amber-300/90 font-mono text-[10px] tabular-nums shrink-0">
           {valueStr}
         </span>
       ) : null}
@@ -217,14 +218,15 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
  * without blocking the underlying graph where the note doesn't cover it. */
 export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: { data: WorkflowNoteData }) {
   /* Note background is fully OPAQUE — a baked tint of `data.color` into the
-   *  dark canvas.  The base colour matters: the canvas itself is `#0a0a0f`
-   *  (rgb 10,10,15).  Using the same base for the note body produced a
-   *  computed bg of ~rgb(22,18,19) for a dark note colour like `#432` —
-   *  only ~12 RGB units above the canvas, so the note visually dissolved
-   *  into the background and only the React Flow selection ring was
-   *  visible.  Bumping the base to `#22222c` (rgb 34,34,44) guarantees a
-   *  ~25-unit contrast against the canvas for ANY note colour, so even
-   *  the darkest note (`#432`) is now clearly outlined.
+   *  canvas.  The base colour matters: with the canvas and the note sharing a
+   *  base, a dark note colour like `#432` produced a computed bg only ~12 RGB
+   *  units above the canvas — the note visually dissolved into the background
+   *  and only the React Flow selection ring was visible.  Using a base a step
+   *  off the canvas guarantees ~25 units of contrast for ANY note colour, so
+   *  even the darkest note (`#432`) stays clearly outlined.  That base is the
+   *  `--color-note-tint-base` token (white in Light, `#22222c` in Dark) — the
+   *  contrast argument holds in both modes, and Light no longer gets a dark
+   *  note.
    *
    *  Visibility at low zoom: for wide workflows like the DaSiWa Wan 2.2
    *  template (130 nodes, viewport fitView lands at scale ~0.15), the
@@ -234,9 +236,13 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: {
    *  by their colour rings even when the text is illegible, plus a high
    *  z-index so notes float above ordinary nodes and aren't hidden
    *  behind groups. */
-  const bg = mixHex("#22222c", data.color, 0.20);
-  const border = mixHex("#22222c", data.color, 0.65);
-  const titleBg = mixHex("#22222c", data.color, 0.65);
+  /* 混色基准跟主题走（`--color-note-tint-base`：浅色 = 白、深色 = #22222c）。
+   *  `data.color` 是用户给的**内容色**（note 自身的颜色），不用改；要改的是
+   *  「这个内容色叠在什么表面上」——基准写死深色的话，浅色下便签仍是一块暗色。 */
+  const noteTintBase = useCssColorToken("--color-note-tint-base", "#22222c");
+  const bg = mixHex(noteTintBase, data.color, 0.20);
+  const border = mixHex(noteTintBase, data.color, 0.65);
+  const titleBg = mixHex(noteTintBase, data.color, 0.65);
   const titleText = lightenHex(data.color, 0.7);
   /* Render the body markdown once per render.  The renderer is XSS-safe
    * (input is HTML-escaped, hrefs go through a URL allow-list). */
@@ -250,7 +256,7 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: {
         boxShadow:
           `0 0 0 4px ${border}55, ` +       /* 33 % alpha outer ring */
           `0 0 14px 2px ${border}33, ` +     /* soft colour glow */
-          `0 8px 18px rgba(0,0,0,0.55)`,     /* drop shadow */
+          `0 8px 18px var(--color-shadow-strong)`, /* drop shadow */
       }}
     >
       {data.title && (
@@ -280,7 +286,7 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: {
       )}
       <div
         className="wf-markdown min-h-0 flex-1 overflow-auto p-2 text-[11px]"
-        style={{ color: "#e6e6ea", lineHeight: 1.5 }}
+        style={{ color: "var(--color-ink-bright)", lineHeight: 1.5 }}
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>

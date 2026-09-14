@@ -44,9 +44,10 @@ const PILL_STYLE: CSSProperties = {
   lineHeight: 1,
   padding: "2px 6px",
   borderRadius: 999,
-  border: "1px solid rgba(251,191,36,0.35)",
-  background: "rgba(251,191,36,0.08)",
-  color: "#FBBF24",
+  /* 琥珀状态色两态可读：浅色下深琥珀字 + 浅琥珀底，深色下保持原亮琥珀。 */
+  border: "1px solid rgba(251,191,36,0.45)",
+  background: "rgba(251,191,36,0.12)",
+  color: "var(--color-warning)",
   whiteSpace: "nowrap",
 };
 
@@ -148,8 +149,8 @@ export function DebugChainFooter({
             lineHeight: 1,
             padding: "2px 5px",
             borderRadius: 4,
-            background: "rgba(255,255,255,0.06)",
-            color: "#8b8b9e",
+            background: "var(--color-border-subtle)",
+            color: "var(--color-ink-fainter)",
             fontFamily: "var(--font-mono)",
             whiteSpace: "nowrap",
           }}
@@ -178,8 +179,8 @@ export function DebugChainFooter({
           flexDirection: "column",
           gap: 3,
           padding: "4px 8px 6px",
-          borderTop: "1px solid rgba(255,255,255,0.06)",
-          background: "rgba(0,0,0,0.18)",
+          borderTop: "1px solid var(--color-border-subtle)",
+          background: "var(--color-canvas-deep)",
         }}
         onPointerDown={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
@@ -202,24 +203,24 @@ export function DebugChainFooter({
               type="button"
               aria-label="关闭源码查看"
               onClick={closeModal}
-              className="absolute inset-0 cursor-default bg-black/60 backdrop-blur-[2px]"
+              className="absolute inset-0 cursor-default bg-black/25 backdrop-blur-[2px] dark:bg-black/60"
             />
             {/* 弹窗主体 */}
             <div
               role="dialog"
               aria-label="源码查看"
-              className="relative flex max-h-[78vh] w-[min(860px,92vw)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0c0c14] shadow-2xl"
+              className="relative flex max-h-[78vh] w-[min(860px,92vw)] flex-col overflow-hidden rounded-2xl border border-border-strong bg-panel shadow-2xl"
               onClick={(event) => event.stopPropagation()}
               onDoubleClick={(event) => event.stopPropagation()}
             >
               {/* 头部：路径 + 操作按钮 */}
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/6 px-4 py-3">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border-strong px-4 py-3">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span aria-hidden className="text-[14px] text-amber-300/90">
+                  <span aria-hidden className="text-[14px] text-amber-700 dark:text-amber-300/90">
                     ◈
                   </span>
                   <code
-                    className="truncate font-mono text-[12px] text-gray-200"
+                    className="truncate font-mono text-[12px] text-ink-bright"
                     title={openFile}
                   >
                     {openFile}
@@ -230,7 +231,7 @@ export function DebugChainFooter({
                     type="button"
                     onClick={() => source && openInVscode(source.absolutePath)}
                     disabled={!source}
-                    className="rounded-md border border-sky-400/30 bg-sky-400/10 px-2.5 py-1 text-[11px] font-medium text-sky-200 transition-colors hover:bg-sky-400/20 disabled:opacity-40"
+                    className="rounded-md border border-sky-400/30 bg-sky-400/10 px-2.5 py-1 text-[11px] font-medium text-sky-700 transition-colors hover:bg-sky-400/20 dark:text-sky-200 disabled:opacity-40"
                     title="在 Visual Studio Code 中打开该文件（需已安装 VSCode）"
                   >
                     在 VSCode 打开
@@ -238,7 +239,7 @@ export function DebugChainFooter({
                   <button
                     type="button"
                     onClick={() => copyText(openFile)}
-                    className="rounded-md border border-white/10 bg-white/4 px-2.5 py-1 text-[11px] font-medium text-gray-300 transition-colors hover:bg-white/8 hover:text-gray-100"
+                    className="rounded-md border border-border-strong bg-subtle px-2.5 py-1 text-[11px] font-medium text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink-bright"
                     title="复制完整相对路径"
                   >
                     复制路径
@@ -247,7 +248,7 @@ export function DebugChainFooter({
                     type="button"
                     onClick={() => source && copyText(source.content)}
                     disabled={!source}
-                    className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-200 transition-colors hover:bg-amber-400/20 disabled:opacity-40"
+                    className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-400/20 dark:text-amber-200 disabled:opacity-40"
                     title="复制全部源码"
                   >
                     复制代码
@@ -256,28 +257,28 @@ export function DebugChainFooter({
                     type="button"
                     onClick={closeModal}
                     aria-label="关闭"
-                    className="rounded-md border border-white/10 bg-white/4 px-2 py-1 text-[11px] text-gray-400 transition-colors hover:bg-white/8 hover:text-gray-200"
+                    className="rounded-md border border-border-strong bg-subtle px-2 py-1 text-[11px] text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink-bright"
                   >
                     ✕
                   </button>
                 </div>
               </div>
               {/* 内容区 */}
-              <div className="min-h-0 flex-1 overflow-auto bg-black/40 p-0">
+              <div className="min-h-0 flex-1 overflow-auto bg-canvas-deep p-0">
                 {loading && (
-                  <div className="flex items-center justify-center gap-2 py-10 text-[12px] text-gray-400">
+                  <div className="flex items-center justify-center gap-2 py-10 text-[12px] text-ink-soft">
                     <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-amber-400/40 border-t-amber-300" />
                     正在读取源码…
                   </div>
                 )}
                 {!loading && loadError && (
-                  <div className="px-4 py-6 text-[12px] text-rose-300">
+                  <div className="px-4 py-6 text-[12px] text-rose-700 dark:text-rose-300">
                     读取失败：{loadError}
                   </div>
                 )}
                 {!loading && source && (
                   <div className="flex flex-col">
-                    <div className="flex shrink-0 items-center justify-between border-b border-white/4 bg-white/2 px-4 py-1.5 font-mono text-[10.5px] text-gray-500">
+                    <div className="flex shrink-0 items-center justify-between border-border-subtle bg-subtle border-b px-4 py-1.5 font-mono text-[10.5px] text-ink-muted">
                       <span>{source.size.toLocaleString()} 字符</span>
                       <span>{source.modifiedAt}</span>
                     </div>

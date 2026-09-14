@@ -16,29 +16,18 @@
  * `~/lib/workflow-output-binding`），与输入侧的 `paramMap.source.mode:<模式>`
  * 同构、**不同键空间**。
  *
- * 手感与输入侧逐条对齐（同一个手势不该在两个列上一个受理、一个拒绝）：
- *   · 拖动中预览线跟随光标；落在宿主输出行上松开才写入，落在空白处什么都不做；
- *   · 已经取值于自身那一行、又没被改过时，↺ 不可用（点了不会有变化）。
- *
- * 手势本身不在本层：卡片只画圆点并标 `data-wire-anchor` 锚点，按下 / 移动 / 松开
- * 由 `WorkflowParamWires` 承担（库里没有 React Flow 上下文）。
+ * 端点由消费方注入（`endpoint`）：库里那层注入 React Flow 的 `<Handle>`
+ * （ISSUE #529）—— 手势与命中半径都由画布承担，卡片列本身不碰 React Flow。
  */
 
-import {
-  PARAM_NODE_DOT_OFFSET,
-  PARAM_NODE_DOT_SIZE,
-} from "~/lib/workflow-param-mapping";
 import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
+import type { ReactNode } from "react";
+
 import { WorkflowParamCard } from "../workflow-editor/WorkflowParamCard";
-import { paramClassStyle } from "./workflow-param-mapping-ui";
-import { wireAnchorValue } from "./WorkflowParamCardColumn";
 import { outputWireDotId } from "./workflow-library-param-cards";
 
 /** 卡片宽度：与左侧输入卡片同宽，两列夹着宿主卡片时仍放得下。 */
 const CARD_WIDTH = 200;
-
-/** 端点圆点的描边色（卡片底色）—— 与输入卡片同口径。 */
-const PORT_DOT_STROKE = "#16161C";
 
 export interface WorkflowOutputParamCardColumnProps {
   /** 工作流对外暴露的输出（`workflowIO` 里 `direction: "output"` 的那些）。 */
@@ -54,6 +43,8 @@ export interface WorkflowOutputParamCardColumnProps {
   /** 该输出口在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
   isManual?: (ioKey: string) => boolean;
   onReset?: (ioKey: string) => void;
+  /** 端点槽位：消费方注入 `<Handle>`（库里那层）或只读圆点。 */
+  endpoint?: (port: { name: string; type: string; handleId: string }) => ReactNode;
 }
 
 export function WorkflowOutputParamCardColumn({
@@ -64,9 +55,9 @@ export function WorkflowOutputParamCardColumn({
   onSelect,
   isManual,
   onReset,
+  endpoint,
 }: WorkflowOutputParamCardColumnProps) {
   if (outputs.length === 0) return null;
-  const style = paramClassStyle("output");
 
   return (
     <aside
@@ -75,7 +66,7 @@ export function WorkflowOutputParamCardColumn({
       aria-label="对外输出参数"
       data-testid="workflow-output-param-column"
     >
-      <p className="px-0.5 text-[11px] font-medium text-(--color-ink-faint)">
+      <p className="px-0.5 text-[11px] font-medium text-ink-faint">
         {canWire ? "对外输出参数 · 拖圆点改取值行" : "对外输出参数"}
       </p>
       {outputs.map((output) => {
@@ -108,7 +99,6 @@ export function WorkflowOutputParamCardColumn({
             selected={selectedOutputId === output.ioKey}
             onSelect={onSelect ? () => onSelect(output.ioKey) : undefined}
             /* 端点槽位在**左侧**：圆点骑跨卡片左缘，线从宿主输出行进来。
-             *  `data-wire-anchor` 供连线层量出锚点（与输入卡片同一套属性契约），
              *  `resolved[ioKey]` 只用来决定这颗点的观感（改过 = 实心提亮）。 */
             side="left"
             outputPorts={[
@@ -117,38 +107,19 @@ export function WorkflowOutputParamCardColumn({
                 type,
                 connected: true,
                 ioKey: output.ioKey,
-                /* 库里那层连线按**端口名**找卡片上的圆点锚点（与输入卡片刻度
-                 *  一致，见 `wireAnchorValue` 的用法）。 */
+                /* 库里那层边的卡片端按**端口名**取 handle id（与输入卡片刻度
+                 *  一致，见 `outputWireDotId`）。 */
                 handleId: portName,
                 active: manual || resolved?.[output.ioKey] === undefined,
               },
             ]}
-            endpoint={() => (
-              <span
-                aria-hidden
-                data-wire-anchor={wireAnchorValue(output.ioKey, portName)}
-                /* 声明这是「输出取值行」的起手位：连线层据此只认输**出**行的
-                 *  落点，并把结果上抛给 `onConnectOutput`。 */
-                data-wire-kind="hostToParam"
-                title={
-                  canWire
-                    ? `拖到工作流输出行上改「${title}」从哪一行取值`
-                    : undefined
-                }
-                className={`absolute top-1/2 shrink-0 rounded-full ${
-                  canWire ? "cursor-crosshair" : ""
-                }`}
-                style={{
-                  left: PARAM_NODE_DOT_OFFSET,
-                  width: PARAM_NODE_DOT_SIZE,
-                  height: PARAM_NODE_DOT_SIZE,
-                  transform: "translateY(-50%)",
-                  background: style.color,
-                  border: `1px solid ${PORT_DOT_STROKE}`,
-                  boxShadow: "0 4px 4px rgba(0,0,0,0.25)",
-                }}
-              />
-            )}
+            endpoint={() =>
+              endpoint?.({
+                name: portName,
+                type,
+                handleId: portName,
+              })
+            }
           />
         );
       })}

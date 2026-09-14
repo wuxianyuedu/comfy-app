@@ -31,7 +31,6 @@ import {
 } from "react";
 import JsonView from "react18-json-view";
 import "react18-json-view/src/style.css";
-import "react18-json-view/src/dark.css";
 import { Icon } from "@/components/ui/icon";
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
@@ -112,9 +111,14 @@ function ensureHighlightCss() {
 /* string value 内的 substring mark */
 .json-view mark.jv-hit-sub {
   background-color: rgba(251, 191, 36, 0.32);
-  color: rgb(254, 243, 199);
+  /* 命中子串文字色跟主题：写死 rgb(254,243,199)（近白）时，Light 下是
+     近白字压浅琥珀底，看不到。浅色用深琥珀，深色保留原近白。 */
+  color: var(--json-view-hit-sub-ink, rgb(120, 53, 15));
   border-radius: 2px;
   padding: 0 1px;
+}
+.dark .json-view mark.jv-hit-sub {
+  --json-view-hit-sub-ink: rgb(254, 243, 199);
 }
 .json-view mark.jv-hit-sub[data-jv-active-hit="true"] {
   background-color: rgb(251, 191, 36);
@@ -353,15 +357,15 @@ export function JsonViewer({
   const collapseThreshold = initialCollapsedDepth >= 1 ? 30 + initialCollapsedDepth * 40 : 1e9;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-(--color-panel-deep)">
+    <div className="bg-panel-deep flex h-full min-h-0 flex-col">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b border-(--color-border) bg-(--color-panel) px-3 py-1.5 text-xs">
-        <span className="font-medium text-(--color-ink-bright)">{title}</span>
+      <div className="border-border bg-panel flex items-center gap-2 border-b px-3 py-1.5 text-xs">
+        <span className="text-ink-bright font-medium">{title}</span>
         <span className="flex-1" />
         <button
           type="button"
           onClick={copy}
-          className="rounded border border-(--color-border) px-2 py-0.5 text-(--color-ink-muted) hover:bg-(--color-subtle) hover:text-(--color-ink-bright)"
+          className="border-border text-ink-muted hover:bg-subtle hover:text-ink-bright rounded border px-2 py-0.5"
           title="把当前 JSON 复制到剪贴板"
         >
           {copied ? "已复制" : "复制"}
@@ -369,8 +373,8 @@ export function JsonViewer({
       </div>
 
       {/* 搜索条 */}
-      <div className="flex items-center gap-2 border-b border-(--color-border-subtle) px-3 py-1.5 text-xs">
-        <Icon name="search" size={14} className="shrink-0 text-(--color-ink-fainter)" />
+      <div className="border-border-subtle flex items-center gap-2 border-b px-3 py-1.5 text-xs">
+        <Icon name="search" size={14} className="text-ink-fainter shrink-0" />
         <input
           ref={searchRef}
           type="text"
@@ -378,10 +382,10 @@ export function JsonViewer({
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={onSearchKey}
           placeholder="搜索 key / string / number / bool / null…（⌘F / Ctrl+F）"
-          className="flex-1 rounded border border-(--color-border) bg-black/30 px-2 py-0.5 font-mono text-(--color-ink-bright) outline-none placeholder:text-(--color-ink-faintest) focus:border-violet-400/60"
+          className="border-border bg-canvas-deep text-ink-bright placeholder:text-ink-faintest flex-1 rounded border px-2 py-0.5 font-mono outline-none focus:border-violet-400/60"
         />
         {query && (
-          <span className="font-mono text-(--color-ink-muted)">
+          <span className="text-ink-muted font-mono">
             {hits.length === 0 ? "0 / 0" : `${hitIndex + 1} / ${hits.length}`}
           </span>
         )}
@@ -391,27 +395,27 @@ export function JsonViewer({
               type="button"
               onClick={() => nextHit(-1)}
               disabled={hits.length === 0}
-              className="rounded border border-(--color-border) px-2 py-0.5 text-(--color-ink-muted) hover:bg-(--color-subtle) disabled:opacity-30"
+              className="border-border text-ink-muted hover:bg-subtle rounded border px-2 py-0.5 disabled:opacity-30"
               title="上一个 (Shift+Enter)"
             >
-              <Icon name="chevronup" size={14} className="text-(--color-ink-muted)" />
+              <Icon name="chevronup" size={14} className="text-ink-muted" />
             </button>
             <button
               type="button"
               onClick={() => nextHit(1)}
               disabled={hits.length === 0}
-              className="rounded border border-(--color-border) px-2 py-0.5 text-(--color-ink-muted) hover:bg-(--color-subtle) disabled:opacity-30"
+              className="border-border text-ink-muted hover:bg-subtle rounded border px-2 py-0.5 disabled:opacity-30"
               title="下一个 (Enter)"
             >
-              <Icon name="chevrondown" size={14} className="text-(--color-ink-muted)" />
+              <Icon name="chevrondown" size={14} className="text-ink-muted" />
             </button>
             <button
               type="button"
               onClick={() => setQuery("")}
-              className="rounded border border-(--color-border) px-2 py-0.5 text-(--color-ink-muted) hover:bg-(--color-subtle)"
+              className="border-border text-ink-muted hover:bg-subtle rounded border px-2 py-0.5"
               title="清空 (Esc)"
             >
-              <Icon name="close" size={14} className="text-(--color-ink-muted)" />
+              <Icon name="close" size={14} className="text-ink-muted" />
             </button>
           </>
         )}
@@ -424,11 +428,12 @@ export function JsonViewer({
         data-testid="json-viewer-body"
       >
         {data === undefined ? (
-          <span className="text-(--color-ink-fainter)">(empty)</span>
+          <span className="text-ink-fainter">(empty)</span>
         ) : (
           <JsonView
             src={data}
-            dark
+            /* 不再传 `dark`（它会挂上写死的 dark.css），语法着色统一由
+               `.jv-theme-comfy` 的两态 token 负责（见 globals.css）。 */
             theme="default"
             // collapsed={false} 让初始全部展开, dense 场景靠 collapseObjectsAfterLength 自然折叠
             collapsed={false}
@@ -447,21 +452,5 @@ export function JsonViewer({
   );
 }
 
-// ─── 主题 token — 与 globals.css 暗色对齐 ────────────────────────────────
-/** 在 layout 注入一次: 把 react18-json-view 的 6 类节点颜色对齐到
- *  globals.css dark token (violet/emerald/orange/amber/zinc 系) */
-export const JSON_VIEWER_THEME_CSS = `
-.json-view.jv-theme-comfy { color: #d4d4d8; font-size: 11px; line-height: 1.6; }
-.json-view.jv-theme-comfy .json-view--property,
-.json-view.jv-theme-comfy .json-view--index { color: #c4b5fd; }   /* violet-300 */
-.json-view.jv-theme-comfy .json-view--string    { color: #6ee7b7; } /* emerald-300 */
-.json-view.jv-theme-comfy .json-view--number    { color: #fdba74; } /* orange-300 */
-.json-view.jv-theme-comfy .json-view--boolean   { color: #fcd34d; } /* amber-300 */
-.json-view.jv-theme-comfy .json-view--null      { color: #71717a; font-style: italic; }
-.json-view.jv-theme-comfy .json-view--pair:hover { background-color: rgba(255,255,255,0.04); }
-.json-view.jv-theme-comfy .json-view--object,
-.json-view.jv-theme-comfy .json-view--array  { color: #a1a1aa; }   /* zinc-400 */
-.json-view.jv-theme-comfy .json-view--brace,
-.json-view.jv-theme-comfy .json-view--colon { color: #71717a; }   /* zinc-500 */
-.json-view.jv-theme-comfy .jv-chevron path  { fill: #71717a; }
-`;
+/* 本组件的语法着色不再内联注入：`.jv-theme-comfy` 的两态 token 定义在
+   globals.css（浅色默认 + `.dark` 覆盖），避免组件里再养一份与主题脱钩的副本。 */

@@ -12,7 +12,7 @@ interface StageHintProps {
 
 export function StageHint({ text, onGo }: StageHintProps) {
   return (
-    <div className="mt-4 flex items-center gap-2 rounded-xl bg-(--color-amber)/10 px-4 py-2.5 text-xs text-(--color-amber)">
+    <div className="mt-4 flex items-center gap-2 rounded-xl bg-amber/10 px-4 py-2.5 text-xs text-amber">
       <Icon name="info" size={13} className="shrink-0" />
       <span className="flex-1">{text}</span>
       <Button
@@ -20,7 +20,7 @@ export function StageHint({ text, onGo }: StageHintProps) {
         onClick={onGo}
         variant="ghost"
         size="xs"
-        className="bg-(--color-amber)/15 font-medium text-(--color-amber) hover:bg-(--color-amber)/25"
+        className="bg-amber/15 font-medium text-amber hover:bg-amber/25"
       >
         去完成 →
       </Button>

@@ -82,12 +82,12 @@ export function WorkflowModePickChip({
         type="button"
         onClick={() => setOpen((value) => !value)}
         disabled={disabled}
-        className={`nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-(--color-primary)/55.00000000000001 bg-(--color-node-accent) px-2.5 text-[12px] ${
+        className={`nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/55 bg-node-accent px-2.5 text-[12px] ${
           disabled ? "opacity-50" : ""
         }`}
       >
         <span
-          className={`font-semibold ${hasModes ? "text-(--color-ink-bright)" : "text-gray-500"}`}
+          className={`font-semibold ${hasModes ? "text-ink-bright" : "text-ink-muted"}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
         >
           {hasModes ? triggerLabel : "未选"}
@@ -95,7 +95,7 @@ export function WorkflowModePickChip({
         {/* 不再显示 +N 徽章 — 弹层只列工作流实际支持的 N 个模式，
          *  trigger 只展示当前默认，没必要再用 +N 暗示"还有几个未展示" */}
         <span
-          className={`shrink-0 text-(--color-ink-muted) transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-ink-muted transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -116,11 +116,11 @@ export function WorkflowModePickChip({
               width: pos.width,
               zIndex: 50,
             }}
-            className="rounded-xl border border-white/8 bg-(--color-card) py-1 shadow-2xl shadow-violet-500/20"
+            className="border-border-strong bg-card rounded-xl border py-1 shadow-2xl shadow-black/10 dark:shadow-violet-500/20"
           >
             {/* 仅展示工作流 modes 数组里的 N 个，单选 + 点选即切换 */}
             {items.length === 0 ? (
-              <div className="px-3 py-3 text-center text-[11px] text-(--color-ink-muted)">
+              <div className="px-3 py-3 text-center text-[11px] text-ink-muted">
                 该工作流没有声明可用模式
               </div>
             ) : (
@@ -141,8 +141,8 @@ export function WorkflowModePickChip({
                     }}
                     className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[12px] transition-colors ${
                       isDef
-                        ? "bg-violet-500/14.000000000000002 text-violet-100"
-                        : "text-gray-200 hover:bg-white/4"
+                        ? "bg-violet-500/14 text-violet-700 dark:text-violet-100"
+                        : "text-ink-bright hover:bg-subtle"
                     }`}
                   >
                     {/* radio dot — 单选，无 checkbox */}
@@ -150,7 +150,7 @@ export function WorkflowModePickChip({
                       className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${
                         isDef
                           ? "border-violet-400 bg-violet-500/20"
-                          : "border-white/20 bg-white/2"
+                          : "border-border-strong bg-subtle"
                       }`}
                     >
                       {isDef && (
@@ -161,7 +161,7 @@ export function WorkflowModePickChip({
                       {item.label}
                     </span>
                     <span
-                      className="shrink-0 rounded bg-white/6 px-1 py-px text-[9.5px] text-(--color-ink-muted)"
+                      className="bg-subtle text-ink-muted shrink-0 rounded px-1 py-px text-[9.5px]"
                       style={{ fontFamily: "var(--font-sans)" }}
                     >
                       {item.code}
