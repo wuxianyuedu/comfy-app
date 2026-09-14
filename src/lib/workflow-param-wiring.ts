@@ -127,7 +127,12 @@ export interface DOMRectLike {
  *  `candidates` 由调用方给（本轮渲染真的画出来的落点行/控件）。命中时取**最小的
  *  那个矩形**：端点圆点（`data-port-dot`，12px）比整行、比组合控件都小，于是
  *  「精确落在圆点上」永远胜过「大致落在行里」。都没命中（拖到空白处）返回 `null`，
- *  调用方据此不改动任何映射，不留悬空线。 */
+ *  调用方据此不改动任何映射，不留悬空线。
+ *
+ *  `point` 与 `candidates[].rect` **必须在同一个坐标系**里：库内画布是可缩放
+ *  视口，调用方要么两边都取屏幕坐标，要么两边都换算回容器局部坐标 —— 一边屏幕
+ *  一边局部，缩放不是 100% 时命中判定会整片偏移（拖到圆点上却落不上，或落在
+ *  隔壁行上）。容差随坐标系由调用方按需缩放，这里不做二次换算。 */
 export function resolveDropTarget(
   point: { x: number; y: number },
   candidates: readonly { ioKey: string; rect: DOMRectLike }[],

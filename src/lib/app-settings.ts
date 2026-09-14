@@ -96,6 +96,34 @@ export function deriveComfyuiSubdir(
   return null;
 }
 
+/** ComfyUI「用户工作流」目录的候选相对路径，按优先级排列。
+ *  现代 ComfyUI（桌面版 / 1.x）把用户工作流放在 `user/default/workflows`，
+ *  只有旧源码布局才是 `<root>/workflows`：只认后者时，明明配好了 ComfyUI 路径
+ *  却一个本地工作流都扫不到，而扫描器把「根不存在」当「没有工作流」，界面上
+ *  完全看不出原因。 */
+const COMFYUI_WORKFLOW_SUBDIRS: readonly (readonly string[])[] = [
+  ["user", "default", "workflows"],
+  ["workflows"],
+];
+
+/** 推导本地工作流根目录：`<comfyuiPath>[/ComfyUI]/user/default/workflows` 优先，
+ *  回退旧的 `<comfyuiPath>[/ComfyUI]/workflows`。找不到返回 null（调用方自行降级）。 */
+export function deriveComfyuiWorkflowsDir(comfyuiPath: string): string | null {
+  const root = (comfyuiPath ?? "").trim();
+  if (!root) return null;
+  for (const base of [root, path.join(root, "ComfyUI")]) {
+    for (const sub of COMFYUI_WORKFLOW_SUBDIRS) {
+      const dir = path.join(base, ...sub);
+      try {
+        if (existsSync(dir) && statSync(dir).isDirectory()) return dir;
+      } catch {
+        /* 该候选不可访问 → 试下一个 */
+      }
+    }
+  }
+  return null;
+}
+
 const DEFAULTS: AppSettings = {
   trainerUrl: process.env.LORA_TRAINER_URL ?? "",
   defaultVideoWorkflow: "auto",
