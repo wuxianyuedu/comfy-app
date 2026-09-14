@@ -7,6 +7,7 @@
  * titled nodes line up on the grid. */
 import { ExternalLink } from "lucide-react";
 import { mixHex, NODE_TITLE_H } from "../workflow-utils";
+import { useCssColorToken } from "../hooks/use-css-color-token";
 import { IoCheckbox, NodeIdChip, type IOEditContextValue } from "./IOEditContext";
 
 export interface SubgraphHeaderProps {
@@ -32,13 +33,17 @@ export function SubgraphHeader({
   io,
   outputRef,
 }: SubgraphHeaderProps) {
+  /* 标题栏底色 = 节点表面色与子图身份色 accent 的 20% 混色。混色基准此前
+     写死 `#16161E`，Light 下整条标题栏仍是暗色（浅色节点配黑标题）。
+     基准改为跟主题走的 `--color-node-mix-base`（浅色=白、深色=原 #16161e）。 */
+  const mixBase = useCssColorToken("--color-node-mix-base", "#16161e");
   return (
     <div
       className="flex shrink-0 items-center gap-2 rounded-t-lg px-2 text-xs"
       style={{
         height: NODE_TITLE_H,
-        background: mixHex("#16161E", accent, 0.2),
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        background: mixHex(mixBase, accent, 0.2),
+        borderBottom: "1px solid var(--color-border-subtle)",
       }}
     >
       {/* Collapse / expand toggle. Same chevron as

@@ -151,7 +151,7 @@ export function WorkflowParamCard({
         className="flex shrink-0 items-center gap-1.5 px-2"
         style={{
           height: PARAM_NODE_HEADER_H,
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          borderBottom: "1px solid var(--color-border-subtle)",
           background: `${style.color}14`,
         }}
       >

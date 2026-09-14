@@ -185,7 +185,11 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
         cx={labelX}
         cy={labelY}
         r={focused ? 5 : 4}
-        fill={focused ? "#ffffff" : "rgba(255,255,255,0.85)"}
+        /* 中点圆点两态都必须可见：原写死 `#ffffff` / `rgba(255,255,255,0.85)`
+           （focused 纯白）在浅色画布上与背景几乎同色，标记整条消失。
+           改随主题 token（浅色 = 深中性点、深色 = 白点）。focus/dim 的
+           强弱区分仍由 `r` 与 `opacity` 承担，不靠填充色的明暗。 */
+        fill="var(--color-edge-hub-dot)"
         stroke={focused ? focusStroke : "rgba(167,139,250,0.9)"}
         strokeWidth={focused ? 2 : 1}
         opacity={focused ? 1 : dimmed ? 0.5 : 1}

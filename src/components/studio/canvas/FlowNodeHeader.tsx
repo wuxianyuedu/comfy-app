@@ -41,7 +41,7 @@ export function FlowNodeHeader({
       style={{
         height: NODE_TITLE_H,
         background: palette.headerBg,
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        borderBottom: "1px solid var(--color-border-subtle)",
       }}
     >
       {/* Collapse / expand toggle.  type="button" so future <form> submits
