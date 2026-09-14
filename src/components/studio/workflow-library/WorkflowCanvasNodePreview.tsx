@@ -574,7 +574,7 @@ export function WorkflowCanvasNodePreview({
               type="button"
               onClick={() => setWiresOpen((prev) => !prev)}
               aria-pressed={wiresOpen}
-              className="rounded border border-(--color-border-strong) px-2 py-0.5 text-[10.5px] text-(--color-ink-soft) transition-colors hover:bg-white/8 hover:text-(--color-ink-bright)"
+              className="rounded border border-border-strong px-2 py-0.5 text-[10.5px] text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink-bright"
               data-testid="wflib-canvas-toggle-wires"
               title={
                 wiresOpen
@@ -631,11 +631,11 @@ export function WorkflowCanvasNodePreview({
                               ? "bg-emerald-400"
                               : phase.kind === "failed"
                                 ? "bg-rose-400"
-                                : "bg-(--color-primary)",
+                                : "bg-primary",
                         ].join(" ")}
                       />
                       <span
-                        className="text-[10px] font-medium text-(--color-ink-soft)"
+                        className="text-[10px] font-medium text-ink-soft"
                         style={{ fontFamily: "var(--font-sans)" }}
                       >
                         {statusLabel}
@@ -651,13 +651,13 @@ export function WorkflowCanvasNodePreview({
                 <div className="flex flex-col gap-1 pr-[14px] pb-1.5 pl-[14px]">
                   <div className="flex h-7 min-w-0 items-center gap-1">
                     <WorkflowStaticChip>
-                      <span className="h-1.5 w-1.5 rounded-full bg-(--color-success-strong)" />
-                      <span className="text-[11px] font-semibold text-(--color-success-strong)">
+                      <span className="h-1.5 w-1.5 rounded-full bg-success-strong" />
+                      <span className="text-[11px] font-semibold text-success-strong">
                         本机
                       </span>
                     </WorkflowStaticChip>
                     <WorkflowStaticChip className="min-w-0 flex-1">
-                      <span className="truncate text-[11px] font-semibold text-(--color-ink-bright)">
+                      <span className="truncate text-[11px] font-semibold text-ink-bright">
                         全部模型
                       </span>
                     </WorkflowStaticChip>
@@ -667,7 +667,7 @@ export function WorkflowCanvasNodePreview({
                       className="min-w-0 flex-1"
                       title={workflowName}
                     >
-                      <span className="truncate text-[11px] font-semibold text-(--color-ink-bright)">
+                      <span className="truncate text-[11px] font-semibold text-ink-bright">
                         {workflowName}
                       </span>
                     </WorkflowStaticChip>
@@ -682,11 +682,11 @@ export function WorkflowCanvasNodePreview({
                         )}
                         popoverMinWidth={150}
                         autoFitFromOptions={false}
-                        className="shrink-0 !border-(--color-border-strong) !bg-transparent text-[11px]"
+                        className="shrink-0 !border-border-strong !bg-transparent text-[11px]"
                       />
                     ) : (
                       <WorkflowStaticChip>
-                        <span className="text-[11px] font-medium text-(--color-ink-bright)">
+                        <span className="text-[11px] font-medium text-ink-bright">
                           {effectiveModeLabel || "—"}
                         </span>
                       </WorkflowStaticChip>
@@ -729,7 +729,7 @@ export function WorkflowCanvasNodePreview({
             编辑器上同一颗（`PortHandle`，非 React Flow 上下文里退化为几何一致的
             装饰圆点），右侧那列「对外输出参数」卡片再从这颗圆点连出去。 */}
                 {outputs.length > 0 && (
-                  <div className="border-t border-(--color-border-subtle)">
+                  <div className="border-t border-border-subtle">
                     {outputs.map((output) => (
                       <WorkflowNodeOutputsRow
                         key={output.nodeId + ":" + output.name}
@@ -825,15 +825,15 @@ export function WorkflowCanvasNodePreview({
       {/* 进度条（running 时） */}
       {phase.kind === "running" && (
         <div className="w-[380px]" aria-live="polite">
-          <div className="mb-1 flex items-center justify-between text-[11px] text-(--color-ink-faint)">
+          <div className="mb-1 flex items-center justify-between text-[11px] text-ink-faint">
             <span>
               {nodeLabel ? `正在执行 ${nodeLabel}` : "正在执行工作流"}
               {phase.node ? `（${phase.node.value}/${phase.node.max}）` : ""}
             </span>
-            <span className="font-medium text-violet-600">{pct}%</span>
+            <span className="font-medium text-violet-700 dark:text-violet-300">{pct}%</span>
           </div>
           <div
-            className="h-1.5 w-full overflow-hidden rounded-full bg-(--color-surface-2)"
+            className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2"
             role="progressbar"
             aria-valuenow={pct}
             aria-valuemin={0}
@@ -850,18 +850,18 @@ export function WorkflowCanvasNodePreview({
       {/* 运行结果图 */}
       {resultUrl && (
         <div className="w-[380px]">
-          <p className="mb-1 text-[11px] text-(--color-ink-faint)">运行结果</p>
+          <p className="mb-1 text-[11px] text-ink-faint">运行结果</p>
           <img
             src={resultUrl}
             alt="运行结果"
-            className="w-full rounded-xl border border-(--color-border)"
+            className="w-full rounded-xl border border-border"
           />
         </div>
       )}
 
       {/* 错误 / 必填提示 */}
       {phase.kind === "failed" && (
-        <div className="w-[380px] rounded-lg border border-red-500/20 bg-red-500/8 px-3 py-2 text-[11px] leading-relaxed text-red-600">
+        <div className="w-[380px] rounded-lg border border-red-500/20 bg-red-500/8 px-3 py-2 text-[11px] leading-relaxed text-red-700 dark:text-red-300">
           {phase.message}
         </div>
       )}
@@ -870,7 +870,7 @@ export function WorkflowCanvasNodePreview({
           并给出去设置页手动启动的路（自动启动失败 / 手动关闭过才有这个必要）。 */}
       {uploadNotice && (
         <div
-          className="w-[380px] rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-700"
+          className="w-[380px] rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300"
           role="status"
           aria-live="polite"
         >
@@ -879,7 +879,7 @@ export function WorkflowCanvasNodePreview({
             <button
               type="button"
               onClick={() => setUploadNotice(null)}
-              className="shrink-0 rounded px-1 text-amber-700/70 transition-colors hover:text-amber-800"
+              className="shrink-0 rounded px-1 text-amber-800 dark:text-amber-300/70 transition-colors hover:text-amber-800"
               aria-label="关闭上传提示"
             >
               ✕
@@ -888,7 +888,7 @@ export function WorkflowCanvasNodePreview({
         </div>
       )}
       {!running && missingLabels.length > 0 && (
-        <p className="w-[380px] text-[11px] text-amber-600/80">
+        <p className="w-[380px] text-[11px] text-amber-700 dark:text-amber-300/80">
           必填参数未填：{missingLabels.join("、")}
         </p>
       )}
@@ -904,16 +904,16 @@ export function WorkflowCanvasNodePreview({
             setLogOpen(true);
           }}
           data-testid="wflib-log-open"
-          className="flex w-[380px] items-center justify-between rounded-xl border border-(--color-border) bg-(--color-panel-deep) px-3 py-2 text-left transition-colors hover:border-(--color-border-strong)"
+          className="flex w-[380px] items-center justify-between rounded-xl border border-border bg-panel-deep px-3 py-2 text-left transition-colors hover:border-border-strong"
           title="打开执行日志"
         >
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-(--color-ink-strong)">
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-ink-strong">
             执行日志
             {running && (
               <span className="ml-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
             )}
           </span>
-          <span className="text-[10.5px] text-(--color-ink-fainter)">
+          <span className="text-[10.5px] text-ink-fainter">
             {activeRun
               ? activeRun.status === "done"
                 ? "上次已完成"

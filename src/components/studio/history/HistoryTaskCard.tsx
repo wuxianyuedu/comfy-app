@@ -31,7 +31,7 @@ export function HistoryTaskCard({
     <div
       key={task.id}
       className={
-        "group relative overflow-hidden rounded-2xl border bg-(--color-card) pl-5 pr-3 py-3 transition-all hover:bg-(--color-subtle) border-l-4 " +
+        "group relative overflow-hidden rounded-2xl border bg-card pl-5 pr-3 py-3 transition-all hover:bg-subtle border-l-4 " +
         st.accentCls +
         " " +
         st.cardBorderCls
@@ -58,7 +58,7 @@ export function HistoryTaskCard({
         {/* ── 缩略图 ── */}
         <button
           onClick={() => onOpenDetail(task.id)}
-          className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-(--color-panel-deep)"
+          className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-panel-deep"
           aria-label="查看任务详情"
         >
           {task.cover ? (
@@ -70,7 +70,7 @@ export function HistoryTaskCard({
               loop
             />
           ) : (
-            <span className="text-xs text-(--color-ink-fainter)">
+            <span className="text-xs text-ink-fainter">
               {task.status === "FAILED" ? "失败" : "无图"}
             </span>
           )}
@@ -100,10 +100,10 @@ export function HistoryTaskCard({
                 {Math.floor(progress)}%
               </span>
             )}
-            <span className="truncate text-xs text-(--color-ink-muted)">{task.workflowName}</span>
-            <span className="shrink-0 text-xs text-(--color-ink-fainter)">· {timeAgo(task.createdAt)}</span>
+            <span className="truncate text-xs text-ink-muted">{task.workflowName}</span>
+            <span className="shrink-0 text-xs text-ink-fainter">· {timeAgo(task.createdAt)}</span>
           </div>
-          <p className="mt-1 line-clamp-1 text-sm text-(--color-ink-strong)">
+          <p className="mt-1 line-clamp-1 text-sm text-ink-strong">
             {task.prompt || "（无提示词）"}
           </p>
           {task.status === "FAILED" && task.error && (
@@ -136,7 +136,7 @@ export function HistoryTaskCard({
             {st.isActive && (
               <button
                 onClick={() => onCancel(task.id)}
-                className="rounded-lg border border-amber-500/30 px-2.5 py-1 text-xs text-amber-600 hover:bg-amber-500/10"
+                className="rounded-lg border border-amber-500/30 px-2.5 py-1 text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
               >
                 取消
               </button>
@@ -145,14 +145,14 @@ export function HistoryTaskCard({
               <button
                 onClick={() => onRetry(task)}
                 disabled={retrying}
-                className="rounded-lg border border-violet-500/40 bg-violet-500/10 px-2.5 py-1 text-xs text-violet-600 hover:bg-violet-500/20 disabled:opacity-50"
+                className="rounded-lg border border-violet-500/40 bg-violet-500/10 px-2.5 py-1 text-xs text-violet-700 dark:text-violet-300 hover:bg-violet-500/20 disabled:opacity-50"
               >
                 {retrying ? "提交中…" : "↻ 重试"}
               </button>
             )}
             <button
               onClick={() => onRemove(task.id)}
-              className="rounded-lg border border-red-500/30 px-2.5 py-1 text-xs text-red-600 hover:bg-red-500/10"
+              className="rounded-lg border border-red-500/30 px-2.5 py-1 text-xs text-red-700 dark:text-red-300 hover:bg-red-500/10"
             >
               删除
             </button>

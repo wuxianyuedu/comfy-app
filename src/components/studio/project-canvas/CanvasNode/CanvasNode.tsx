@@ -263,7 +263,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
  *  (stepper capped at max-w-[180px]) the layout is
        *  now:  [label flex-1] ……… [type chip] / [stepper ≤180]   on
        *  each workflow widget row. */
-      className="relative w-[380px] rounded-[14px] border border-(--color-border-strong) bg-(--color-card) transition-[outline,box-shadow] duration-150"
+      className="relative w-[380px] rounded-[14px] border border-border-strong bg-card transition-[outline,box-shadow] duration-150"
       style={
         selected
           ? {
@@ -336,7 +336,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
                     <button
                       type="button"
                       onClick={deleteSelf}
-                      className="text-ink-muted ml-1 transition-colors hover:text-red-600 dark:hover:text-red-300"
+                      className="text-ink-muted ml-1 transition-colors hover:text-red-700 dark:text-red-600 dark:hover:text-red-300"
                       title="删除节点"
                     >
                       <Icon name="close" size={14} />

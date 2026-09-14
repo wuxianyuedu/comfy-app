@@ -19,15 +19,15 @@ function logBadge(kind: ExtractLogEntry["kind"]): string {
     case "init":
       return "bg-primary-soft text-primary";
     case "request":
-      return "bg-indigo-100 text-indigo-700";
+      return "bg-indigo-100 text-indigo-800 dark:text-indigo-300";
     case "output":
-      return "bg-emerald-100 text-emerald-700";
+      return "bg-emerald-100 text-emerald-800 dark:text-emerald-300";
     case "result":
-      return "bg-emerald-100 text-emerald-700";
+      return "bg-emerald-100 text-emerald-800 dark:text-emerald-300";
     case "skipped":
-      return "bg-amber-100 text-amber-700";
+      return "bg-amber-100 text-amber-800 dark:text-amber-300";
     case "error":
-      return "bg-red-100 text-red-700";
+      return "bg-red-100 text-red-800 dark:text-red-300";
   }
 }
 
@@ -163,7 +163,7 @@ export function ExtractToolbar({
         <p className="text-primary mt-2 text-xs">{statusText}</p>
       )}
       {errorText && (
-        <p className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
+        <p className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-800 dark:text-red-300">
           {errorText}
         </p>
       )}

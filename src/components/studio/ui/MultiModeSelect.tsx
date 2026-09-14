@@ -43,9 +43,9 @@ const CATEGORY_PILL: Record<WorkflowCategory, string> = {
   audio: "bg-amber-500/15 ring-1 ring-inset ring-amber-500/25",
 };
 const CATEGORY_TEXT: Record<WorkflowCategory, string> = {
-  image: "text-violet-600",
-  video: "text-sky-600",
-  audio: "text-amber-600",
+  image: "text-violet-700 dark:text-violet-300",
+  video: "text-sky-700 dark:text-sky-300",
+  audio: "text-amber-700 dark:text-amber-300",
 };
 const CATEGORY_LABEL: Record<WorkflowCategory, string> = {
   image: "图像",
@@ -286,7 +286,7 @@ export function MultiModeSelect({
             if (!disabled) setOpen(true);
           }}
           title={`还有 ${plusN} 种其他模式，点击管理`}
-          className="text-ink-faint inline-flex items-center rounded-md bg-violet-500/8 px-1.5 py-0.5 text-[11px] font-medium transition-colors hover:bg-violet-500/18 hover:text-violet-700 dark:hover:text-violet-300"
+          className="text-ink-faint inline-flex items-center rounded-md bg-violet-500/8 px-1.5 py-0.5 text-[11px] font-medium transition-colors hover:bg-violet-500/18 hover:text-violet-800 dark:text-violet-300 dark:hover:text-violet-300"
         >
           +{plusN}
         </button>
@@ -306,7 +306,7 @@ export function MultiModeSelect({
               width: pos.width,
               zIndex: 9999,
             }}
-            className="border-border-strong bg-card rounded-xl border shadow-2xl shadow-black/5 dark:shadow-violet-500/20"
+            className="border-border-strong bg-card rounded-xl border shadow-2xl shadow-black/5 dark:shadow-black/5 dark:shadow-violet-500/20"
           >
             {/* search */}
             <div className="border-border-subtle border-b p-2">

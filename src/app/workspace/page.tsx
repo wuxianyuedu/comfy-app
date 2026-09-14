@@ -338,7 +338,7 @@ export default function WorkspacePage() {
           </>
         ) : (
           <>
-            <div className="flex h-full w-full overflow-hidden bg-(--color-canvas) text-(--color-ink)" style={{ fontFamily: "var(--font-sans)" }}>
+            <div className="flex h-full w-full overflow-hidden bg-canvas text-ink" style={{ fontFamily: "var(--font-sans)" }}>
               {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
               <AuroraBackground />
 

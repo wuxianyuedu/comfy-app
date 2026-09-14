@@ -660,7 +660,7 @@ export function SettingsPageView({
                       type="button"
                       title="移除该模型（即时保存）"
                       onClick={() => void c.removeRemoteModel(entry.name)}
-                      className="text-muted-foreground shrink-0 hover:text-rose-500"
+                      className="text-muted-foreground shrink-0 hover:text-rose-700 dark:text-rose-500"
                     >
                       ✕
                     </button>
@@ -1247,7 +1247,7 @@ export function SettingsPageView({
                   服务端模型清单供点选。 */}
           {dialog && (
             <div
-              className={overlayClass("modal", "z-50 grid place-items-center bg-black/50 p-4")}
+              className={overlayClass("modal", "z-50 grid place-items-center bg-canvas-deep p-4")}
               onClick={() => setDialog(null)}
             >
               <div
@@ -1455,7 +1455,7 @@ export function SettingsPageView({
                   路径 / 提示词 / 尺寸 / 额外参数均可自定义输入。 */}
           {usageTest && (
             <div
-              className={overlayClass("modal", "z-50 grid place-items-center bg-black/50 p-4")}
+              className={overlayClass("modal", "z-50 grid place-items-center bg-canvas-deep p-4")}
               onClick={() => setUsageTest(null)}
             >
               <div
@@ -1710,7 +1710,7 @@ export function SettingsPageView({
                           <button
                             type="button"
                             onClick={() => removeField(i)}
-                            className="text-muted-foreground shrink-0 px-1 text-sm hover:text-red-400"
+                            className="text-muted-foreground shrink-0 px-1 text-sm hover:text-red-700 dark:text-red-400"
                             aria-label="删除该字段"
                           >
                             ✕
@@ -2415,7 +2415,7 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-border-subtle bg-surface-1 dark:bg-surface-1/60 rounded-2xl border p-5 shadow-sm shadow-black/2 backdrop-blur dark:shadow-none">
+    <section className="border-border-subtle bg-surface-1 dark:bg-surface-1/60 rounded-2xl border p-5 shadow-sm shadow-black/5 dark:shadow-black/2 backdrop-blur dark:shadow-none">
       <h2 className="text-ink mb-4 text-base font-semibold">{title}</h2>
       {children}
     </section>

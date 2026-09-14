@@ -43,10 +43,14 @@ export function useToast(): ToastContextValue {
 }
 
 const KIND_STYLE: Record<ToastKind, { ring: string; icon: string; iconColor: string }> = {
-  success: { ring: "border-emerald-500/30", icon: "check", iconColor: "text-emerald-400" },
-  error: { ring: "border-red-500/30", icon: "close", iconColor: "text-red-400" },
-  info: { ring: "border-violet-500/30", icon: "info", iconColor: "text-violet-400" },
-  loading: { ring: "border-white/15", icon: "loader", iconColor: "text-gray-300 animate-spin" },
+  success: { ring: "border-emerald-500/30", icon: "check", iconColor: "text-emerald-700 dark:text-emerald-400" },
+  error: { ring: "border-red-500/30", icon: "close", iconColor: "text-red-700 dark:text-red-400" },
+  info: { ring: "border-violet-500/30", icon: "info", iconColor: "text-violet-700 dark:text-violet-400" },
+  loading: {
+      ring: "border-border-strong",
+      icon: "loader",
+      iconColor: "text-ink-soft animate-spin",
+    },
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -121,21 +125,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           return (
             <div
               key={item.id}
-              className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-(--color-panel)/95 p-3.5 shadow-xl shadow-black/40 backdrop-blur-md transition-all`}
+              className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-panel/95 p-3.5 shadow-xl shadow-black/8 dark:shadow-black/40 backdrop-blur-md transition-all`}
             >
               <div className={`mt-0.5 ${st.iconColor}`}>
                 <Icon name={st.icon} size={16} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-gray-100">{item.title}</p>
+                <p className="text-sm font-semibold text-ink-bright">{item.title}</p>
                 {item.description && (
-                  <p className="mt-0.5 break-words text-xs text-gray-400">{item.description}</p>
+                  <p className="mt-0.5 break-words text-xs text-ink-soft">{item.description}</p>
                 )}
               </div>
               <button
                 type="button"
                 onClick={() => dismiss(item.id)}
-                className="text-gray-500 transition-colors hover:text-gray-200"
+                className="text-ink-muted transition-colors hover:text-ink-bright"
                 aria-label="关闭"
               >
                 <X size={14} />

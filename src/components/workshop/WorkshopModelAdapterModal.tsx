@@ -115,7 +115,7 @@ export function WorkshopModelAdapterModal({
     <div
       className={overlayClass(
         "modal",
-        "z-50 grid place-items-center bg-black/20 p-4 backdrop-blur-sm dark:bg-black/50",
+        "z-50 grid place-items-center bg-canvas-deep p-4 backdrop-blur-sm dark:bg-canvas-deep",
       )}
       onClick={onClose}
     >
@@ -154,8 +154,8 @@ export function WorkshopModelAdapterModal({
               onClick={() => setTab(item.key)}
               className={`rounded-full px-3 py-1 text-xs transition-colors ${
                 tab === item.key
-                  ? "bg-primary/10 text-primary border border-(--color-primary)/30"
-                  : "border-border text-muted-foreground border hover:bg-(--color-subtle)"
+                  ? "bg-primary/10 text-primary border border-primary/30"
+                  : "border-border text-muted-foreground border hover:bg-subtle"
               }`}
             >
               {item.label}
@@ -179,7 +179,7 @@ export function WorkshopModelAdapterModal({
             {loading ? (
               <p className="text-muted-foreground text-xs">加载中…</p>
             ) : candidates.length === 0 ? (
-              <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-700">
+              <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
                 还没有远端模型 —— 到「设置 → 模型」添加 kind=图片 / 视频 的远端条目后，
                 回来为它配置各模式的输入输出。
               </p>
@@ -193,7 +193,7 @@ export function WorkshopModelAdapterModal({
                     className={`rounded-full border px-3 py-1 text-xs transition-colors ${
                       selectedModel === c.name
                         ? "border-primary bg-primary/10 text-primary"
-                        : "border-border text-muted-foreground hover:bg-(--color-subtle)"
+                        : "border-border text-muted-foreground hover:bg-subtle"
                     }`}
                   >
                     {c.name}
@@ -226,7 +226,7 @@ export function WorkshopModelAdapterModal({
                         onClick={() =>
                           setDraft((prev) => prev.filter((x) => x.mode !== a.mode))
                         }
-                        className="text-muted-foreground/60 hover:text-red-600 dark:hover:text-red-400"
+                        className="text-muted-foreground/60 hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
                       >
                         ✕
                       </button>
@@ -359,7 +359,7 @@ export function WorkshopModelAdapterModal({
                               inputs: x.inputs.filter((_, j) => j !== i),
                             }))
                           }
-                          className="text-muted-foreground/60 hover:text-red-600 dark:hover:text-red-400 px-1 text-xs"
+                          className="text-muted-foreground/60 hover:text-red-700 dark:text-red-300 dark:hover:text-red-400 px-1 text-xs"
                         >
                           ✕
                         </button>
@@ -379,7 +379,7 @@ export function WorkshopModelAdapterModal({
                           };
                         })
                       }
-                      className="text-primary hover:bg-primary/10 rounded border border-dashed border-(--color-primary)/40 px-2 py-0.5 text-[11px]"
+                      className="text-primary hover:bg-primary/10 rounded border border-dashed border-primary/40 px-2 py-0.5 text-[11px]"
                     >
                       ＋ 添加输入映射
                     </button>
@@ -421,7 +421,7 @@ export function WorkshopModelAdapterModal({
                       className={`rounded-full border px-3 py-1 text-xs transition-colors ${
                         contractMode === t.code
                           ? "border-primary bg-primary/10 text-primary"
-                          : "border-border text-muted-foreground hover:bg-(--color-subtle)"
+                          : "border-border text-muted-foreground hover:bg-subtle"
                       }`}
                     >
                       <LabelWithId label={t.label} id={t.code} />
@@ -473,7 +473,7 @@ export function WorkshopModelAdapterModal({
                               inputs: contractDraft.inputs.filter((_, j) => j !== i),
                             })
                           }
-                          className="text-muted-foreground/60 hover:text-red-600 dark:hover:text-red-400 px-1 text-xs disabled:opacity-30"
+                          className="text-muted-foreground/60 hover:text-red-700 dark:text-red-300 dark:hover:text-red-400 px-1 text-xs disabled:opacity-30"
                           aria-label={`移除 ${modeContractInputIdLabel(input)}`}
                         >
                           ✕
@@ -497,7 +497,7 @@ export function WorkshopModelAdapterModal({
                             inputs: [...contractDraft.inputs, t.type],
                           })
                         }
-                        className="border-primary text-primary hover:bg-primary/10 rounded border border-dashed border-(--color-primary)/40 px-2 py-0.5 text-[11px]"
+                        className="border-primary text-primary hover:bg-primary/10 rounded border border-dashed border-primary/40 px-2 py-0.5 text-[11px]"
                       >
                         ＋ <LabelWithId label={modeContractInputLabel(t.type)} id={t.type} />
                       </button>
@@ -512,7 +512,7 @@ export function WorkshopModelAdapterModal({
                             inputs: [...contractDraft.inputs, nextRefSlotId],
                           })
                         }
-                        className="border-primary text-primary hover:bg-primary/10 rounded border border-dashed border-(--color-primary)/40 px-2 py-0.5 text-[11px]"
+                        className="border-primary text-primary hover:bg-primary/10 rounded border border-dashed border-primary/40 px-2 py-0.5 text-[11px]"
                       >
                         ＋{" "}
                         <LabelWithId
@@ -540,7 +540,7 @@ export function WorkshopModelAdapterModal({
                     </select>
                   </div>
                   {!contractDraft.inputs.includes("prompt") && (
-                    <p className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] text-amber-700">
+                    <p className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-300">
                       契约里没有「提示词」口 —— 工坊生成的提示词将无处可落，
                       保存后该模式无法被工坊驱动。
                     </p>
@@ -562,8 +562,8 @@ export function WorkshopModelAdapterModal({
             <p
               className={`rounded-lg px-3 py-2 text-xs ${
                 message.kind === "ok"
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-red-100 text-red-700"
+                  ? "bg-emerald-100 text-emerald-800 dark:text-emerald-300"
+                  : "bg-red-100 text-red-800 dark:text-red-300"
               }`}
             >
               {message.text}
@@ -575,7 +575,7 @@ export function WorkshopModelAdapterModal({
           <button
             type="button"
             onClick={onClose}
-            className="border-border text-muted-foreground hover:bg-(--color-subtle) rounded-lg border px-4 py-1.5 text-xs"
+            className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-4 py-1.5 text-xs"
           >
             关闭
           </button>

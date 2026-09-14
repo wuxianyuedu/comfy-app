@@ -16,7 +16,7 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
   if (!ref) {
     return (
       <div className="flex flex-col gap-1">
-        <div className="truncate text-[11px] text-zinc-300" title={label}>
+        <div className="truncate text-[11px] text-ink-soft" title={label}>
           {label}
         </div>
         <div className="border-border-strong bg-canvas-deep text-ink-soft flex h-[110px] items-center justify-center rounded-md border border-dashed text-[11px]">
@@ -30,7 +30,7 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
   )}&type=${encodeURIComponent(ref.type)}`;
   return (
     <div className="flex flex-col gap-1">
-      <div className="truncate text-[11px] text-zinc-300" title={label}>
+      <div className="truncate text-[11px] text-ink-soft" title={label}>
         {label}
       </div>
       <div className="border-border-strong bg-canvas-deep overflow-hidden rounded-md border">

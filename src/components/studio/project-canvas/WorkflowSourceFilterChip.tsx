@@ -106,7 +106,7 @@ export function WorkflowSourceFilterChip({
                     style={{ background: option.dot }}
                   />
                   <span className="flex-1">{option.label}</span>
-                  {sel && <span className="text-violet-300">✓</span>}
+                  {sel && <span className="text-violet-700 dark:text-violet-300">✓</span>}
                 </button>
               );
             })}

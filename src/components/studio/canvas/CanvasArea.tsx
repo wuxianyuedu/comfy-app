@@ -111,7 +111,7 @@ export function CanvasArea({
   return (
     <div
       ref={containerRef}
-      className={`relative flex h-full w-full overflow-hidden bg-(--color-canvas) ${className}`}
+      className={`relative flex h-full w-full overflow-hidden bg-canvas ${className}`}
       onContextMenu={handleContextMenu}
     >
       {/* Canvas content */}
@@ -120,7 +120,7 @@ export function CanvasArea({
       {/* ── Context Menu ── */}
       {menu && (
         <div
-          className="fixed z-9999 min-w-[200px] rounded-xl border border-(--color-border-strong) bg-(--color-panel) py-1.5 shadow-2xl shadow-black/20 backdrop-blur-md"
+          className="fixed z-9999 min-w-[200px] rounded-xl border border-border-strong bg-panel py-1.5 shadow-2xl shadow-black/20 backdrop-blur-md"
           style={{ left: menu.x, top: menu.y }}
         >
           {contextItems.map((item) =>
@@ -134,13 +134,13 @@ export function CanvasArea({
                 onClick={() => handleAction(item.id)}
                 className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors ${
                   item.disabled
-                    ? "cursor-not-allowed text-(--color-ink-fainter)"
+                    ? "cursor-not-allowed text-ink-fainter"
                     : item.danger
                     ? "text-red-700 hover:bg-red-500/10 dark:text-red-400"
-                    : "text-(--color-ink-strong) hover:bg-(--color-subtle)"
+                    : "text-ink-strong hover:bg-subtle"
                 }`}
               >
-                <span className="shrink-0 text-(--color-ink-fainter)">{item.icon}</span>
+                <span className="shrink-0 text-ink-fainter">{item.icon}</span>
                 {item.label}
               </button>
             )
@@ -150,7 +150,7 @@ export function CanvasArea({
 
       {/* ── Bottom Toolbar ── */}
       <div className="absolute bottom-3 left-1/2 z-50 -translate-x-1/2">
-        <div className="flex items-center gap-0.5 rounded-xl border border-(--color-border-strong) bg-(--color-panel)/95 px-1.5 py-1 shadow-lg shadow-black/10 backdrop-blur-md">
+        <div className="flex items-center gap-0.5 rounded-xl border border-border-strong bg-panel/95 px-1.5 py-1 shadow-lg shadow-black/10 backdrop-blur-md">
           {/* Send / Run button */}
           <ToolbarButton
             title="执行"
@@ -168,7 +168,7 @@ export function CanvasArea({
           </ToolbarButton>
 
           {/* Zoom level */}
-          <span className="min-w-[48px] text-center text-xs text-(--color-ink-muted) tabular-nums">
+          <span className="min-w-[48px] text-center text-xs text-ink-muted tabular-nums">
             {zoom}%
           </span>
 
@@ -213,8 +213,8 @@ export function CanvasArea({
           onClick={() => onMinimapToggle?.(!minimapVisible)}
           className={`absolute bottom-3 left-3 z-40 flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs transition-colors ${
             minimapVisible
-              ? "border-violet-500/30 bg-violet-500/10 text-(--color-ink-strong)"
-              : "border-(--color-border-strong) bg-(--color-panel)/85 text-(--color-ink-fainter) hover:text-(--color-ink-strong)"
+              ? "border-violet-500/30 bg-violet-500/10 text-ink-strong"
+              : "border-border-strong bg-panel/85 text-ink-fainter hover:text-ink-strong"
           } backdrop-blur-sm`}
         >
           <LayoutGrid size={12} />
@@ -245,8 +245,8 @@ function ToolbarButton({
       title={title}
       className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition-colors ${
         active
-          ? "bg-(--color-primary)/12 text-(--color-ink-bright) hover:bg-(--color-primary)/18"
-          : "text-(--color-ink-muted) hover:bg-(--color-subtle) hover:text-(--color-ink-strong)"
+          ? "bg-(--color-primary)/12 text-ink-bright hover:bg-(--color-primary)/18"
+          : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
       }`}
     >
       {children}

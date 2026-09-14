@@ -224,7 +224,7 @@ export function CanvasSettingsPanel({
         type="button"
         aria-label="关闭画布设置"
         onClick={onClose}
-        className="flex-1 cursor-default bg-black/25 backdrop-blur-[1px] dark:bg-black/40"
+        className="flex-1 cursor-default bg-black/25 backdrop-blur-[1px] dark:bg-canvas-deep"
       />
       <aside
         role="dialog"

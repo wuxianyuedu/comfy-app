@@ -42,7 +42,7 @@ export function AgentOverlay({
     : messages;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex h-[560px] w-[440px] flex-col overflow-hidden rounded-2xl border border-border bg-(--color-panel-deep)/95 shadow-2xl backdrop-blur-xl">
+    <div className="fixed bottom-6 right-6 z-50 flex h-[560px] w-[440px] flex-col overflow-hidden rounded-2xl border border-border bg-panel-deep/95 shadow-2xl backdrop-blur-xl">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white">

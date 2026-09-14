@@ -61,17 +61,17 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
 
   return (
     <div
-      className={overlayClass("modal", "z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm")}
+      className={overlayClass("modal", "z-50 flex items-center justify-center bg-black/25 p-4 backdrop-blur-sm dark:bg-black/60")}
       onClick={onClose}
     >
       <div
-        className="flex h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#12101c] shadow-2xl shadow-black/60"
+        className="flex h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border-strong bg-panel shadow-2xl shadow-black/12 dark:shadow-black/60"
         onClick={(event) => event.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-white/8 px-5 py-3">
+        <div className="flex items-start justify-between border-b border-border-strong px-5 py-3">
           <div>
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-100">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-bright">
               查看源文件 · {data?.name ?? "—"}
               <span
                 title={
@@ -81,14 +81,14 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
                 }
                 className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide ring-1 ${
                   data?.isApiFallback
-                    ? "bg-amber-500/20 text-amber-300 ring-amber-500/40"
-                    : "bg-cyan-500/20 text-cyan-300 ring-cyan-500/40"
+                    ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 ring-amber-500/40"
+                    : "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 ring-cyan-500/40"
                 }`}
               >
                 {data?.isApiFallback ? "API 兜底" : "源文件内容"}
               </span>
             </h2>
-            <p className="mt-0.5 text-xs text-gray-500">
+            <p className="mt-0.5 text-xs text-ink-muted">
               {data?.isSubgraph
                 ? "当前为子工作流的源文件内容"
                 : data?.isApiFallback
@@ -99,7 +99,7 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 transition-colors hover:text-gray-300"
+            className="text-ink-muted transition-colors hover:text-ink-soft"
             title="关闭"
           >
             ✕
@@ -107,13 +107,13 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-3 border-b border-white/8 px-5 py-2">
+        <div className="flex items-center gap-3 border-b border-border-strong px-5 py-2">
           <span className="flex-1" />
           <button
             type="button"
             onClick={downloadCurrent}
             disabled={!activeText}
-            className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/5 disabled:opacity-40"
+            className="rounded-md border border-border-strong px-3 py-1.5 text-xs text-ink-soft transition-colors hover:bg-subtle disabled:opacity-40"
           >
             下载当前
           </button>
@@ -122,11 +122,11 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
         {/* Body — JsonViewer 自带语法着色 / 折叠 / 搜索 / 滚动。 */}
         <div className="min-h-0 flex-1 overflow-hidden">
           {loading ? (
-            <p className="px-5 py-3 text-sm text-gray-500">加载中…</p>
+            <p className="px-5 py-3 text-sm text-ink-muted">加载中…</p>
           ) : error ? (
-            <p className="px-5 py-3 text-sm text-red-400">{error}</p>
+            <p className="px-5 py-3 text-sm text-red-700 dark:text-red-400">{error}</p>
           ) : data?.source == null ? (
-            <p className="px-5 py-3 text-sm text-gray-500">没有可显示的数据</p>
+            <p className="px-5 py-3 text-sm text-ink-muted">没有可显示的数据</p>
           ) : (
             <JsonViewer
               key="source"
@@ -138,8 +138,8 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
         </div>
 
         {/* Footer */}
-        <div className="border-t border-white/8 px-5 py-2.5">
-          <p className="text-xs text-gray-500">
+        <div className="border-t border-border-strong px-5 py-2.5">
+          <p className="text-xs text-ink-muted">
             下载 = 导出当前 JSON · ⌘/Ctrl+F 在视图内搜索 · 点击 chevron 折叠/展开
           </p>
         </div>

@@ -109,7 +109,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
           <label className="block">
             <span className="mb-1 block text-xs text-muted-foreground">类型</span>
             <DarkSelect
-              className="!bg-(--color-subtle) !border-(--color-border) text-sm"
+              className="!bg-subtle !border-border text-sm"
               value={meta.type}
               onChange={(value) => onMetaChange({ ...meta, type: value as ProjectType })}
               options={PROJECT_TYPES}
@@ -183,7 +183,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             </pre>
           )}
           {aiError && (
-            <p className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700">
+            <p className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-800 dark:text-red-300">
               {aiError}
             </p>
           )}

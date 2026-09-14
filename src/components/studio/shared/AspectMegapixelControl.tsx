@@ -329,7 +329,7 @@ export function AspectMegapixelControl({
         scene={scene}
         onOpen={() => setTableOpen(true)}
         extra={
-          <span className="text-[10px] text-(--color-ink-faint)">
+          <span className="text-[10px] text-ink-faint">
             {currentDims
               ? `${currentDims.width}×${currentDims.height}`
               : resolutionHint}
@@ -357,7 +357,7 @@ export function AspectMegapixelControl({
         className={
           narrow
             ? "flex items-start justify-end gap-3"
-            : "rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2.5"
+            : "rounded-lg border border-accent/30 bg-accent/4 p-2.5"
         }
       >
         {narrow ? (
@@ -393,7 +393,7 @@ export function AspectMegapixelControl({
                       style={{ top: "50%", transform: "translateY(-50%)" }}
                     />
                     <span
-                      className="min-w-0 truncate text-[12px] font-medium text-(--color-ink-bright)"
+                      className="min-w-0 truncate text-[12px] font-medium text-ink-bright"
                       style={{ fontFamily: "var(--font-sans)" }}
                     >
                       {entry.label ?? entry.name}
@@ -415,9 +415,9 @@ export function AspectMegapixelControl({
                 —— 它们已经以真正的参数行形态摆在框外左侧了。 */}
             <div
               data-grouped-box
-              className="w-fit max-w-full shrink-0 rounded-lg border border-(--color-accent)/30 bg-(--color-accent)/4 p-2"
+              className="w-fit max-w-full shrink-0 rounded-lg border border-accent/30 bg-accent/4 p-2"
             >
-              <span className="text-[10px] font-semibold tracking-wider text-(--color-accent) uppercase">
+              <span className="text-[10px] font-semibold tracking-wider text-accent uppercase">
                 比例 + 像素{multiple ? " + 倍数" : ""}
               </span>
               <div className="mt-1 w-[168px] min-w-0">
@@ -444,7 +444,7 @@ export function AspectMegapixelControl({
         ) : (
           <div>
             <div className="flex items-center gap-2">
-              <span className="shrink-0 text-[10px] font-semibold tracking-wider text-(--color-accent) uppercase">
+              <span className="shrink-0 text-[10px] font-semibold tracking-wider text-accent uppercase">
                 比例 + 像素{multiple ? " + 倍数" : ""}
               </span>
               <div className="min-w-0 flex-1">
