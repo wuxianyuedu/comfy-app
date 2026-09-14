@@ -60,44 +60,50 @@ function displayLabel(id: string, label: string): string {
   return label;
 }
 
-/** 派生一条工作流在工坊视角下的封装状态。 */
+/** 派生一条工作流在工坊视角下的封装状态。
+ *
+ *  contractEntries：模式契约注册表里该模式的口子清单（可配置）。传了就用它
+ *  作为契约口径（自定义口对 buildParamEntries 不可见时，落点取作者手工覆盖
+ *  manualByMode），未传回落内置契约（exposedParamsForMode）。 */
 export function deriveEncapsulationStatus(args: {
   io: WorkflowIOMap | null | undefined;
   paramMap: Record<string, unknown> | null | undefined;
   mode: string | null | undefined;
+  contractEntries?: Array<{
+    id: string;
+    label: string;
+    control: "text" | "size" | "image";
+  }>;
 }): EncapsulationStatus {
-  const { io, paramMap, mode } = args;
+  const { io, paramMap, mode, contractEntries } = args;
   const entries = buildParamEntries(io, undefined, { mode: mode ?? null });
   const resolved = resolveMapping(entries, io, paramMap, mode ?? null);
-  const mapped = new Map<string, EncapsulationEntryStatus>();
-  for (const entry of entries) {
-    const manual = manualTargetFor(paramMap, entry.id, mode ?? null);
-    mapped.set(entry.id, {
-      id: entry.id,
-      label: displayLabel(entry.id, entry.label),
-      control: controlFor(entry.id),
-      targetIoKey: resolved[entry.id] ?? null,
-      manual: manual !== undefined && manual !== null,
-    });
-  }
   /* 契约口必须显式可见：工作流缺对应端口时 buildParamEntries 会整口省略，
    * 但「未配置」恰恰要在这里现形（否则用户看不到缺了什么、也不知道为什么
    * 工坊驱动不了）。按契约清单补齐缺失口（落点 null）。 */
-  for (const def of exposedParamsForMode(mode ?? null)) {
-    if (!mapped.has(def.id)) {
-      mapped.set(def.id, {
-        id: def.id,
-        label: displayLabel(def.id, def.label),
-        control: controlFor(def.id),
-        targetIoKey: null,
-        manual: false,
-      });
-    }
-  }
-  const ordered = Array.from(mapped.values());
+  const canonical: Array<{ id: string; label: string; control: "text" | "size" | "image" }> =
+    contractEntries ??
+    exposedParamsForMode(mode ?? null).map((d) => ({
+      id: d.id,
+      label: d.label,
+      control: controlFor(d.id),
+    }));
+  const mapped: EncapsulationEntryStatus[] = canonical.map((slot) => {
+    const manual = manualTargetFor(paramMap, slot.id, mode ?? null);
+    const target = resolved[slot.id] ?? (manual !== undefined ? manual : null);
+    return {
+      id: slot.id,
+      label: displayLabel(slot.id, slot.label),
+      control: slot.control,
+      targetIoKey: target,
+      manual: manual !== undefined && manual !== null,
+    };
+  });
+  const ordered = Array.from(
+    new Map(mapped.map((e) => [e.id, e])).values(),
+  );
   const resolvedCount = ordered.filter((e) => e.targetIoKey !== null).length;
-  const prompt = mapped.get("prompt");
-  return {
+  const prompt = mapped.find((e) => e.id === "prompt");  return {
     entries: ordered,
     ready: (prompt?.targetIoKey ?? null) !== null,
     resolvedCount,

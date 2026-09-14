@@ -108,3 +108,27 @@ describe("deriveEncapsulationStatus", () => {
     expect(status.resolvedCount).toBe(0);
   });
 });
+
+describe("deriveEncapsulationStatus：契约注册表覆盖", () => {
+  it("传入已配置契约时按它显式列口（含内置契约没有的自定义口）", () => {
+    const status = deriveEncapsulationStatus({
+      io: IO,
+      paramMap: null,
+      mode: "t2i",
+      contractEntries: [
+        { id: "prompt", label: "提示词", control: "text" },
+        { id: "size", label: "尺寸（宽高比 + 百万像素）", control: "size" },
+        { id: "reference-image", label: "参考图 / 输入图", control: "image" },
+      ],
+    });
+    expect(status.entries.map((e) => e.id)).toEqual([
+      "prompt",
+      "size",
+      "reference-image",
+    ]);
+    // 契约里新增的口（IO 中没有能自动落上的）→ 未配置显式可见
+    const ref = status.entries.find((e) => e.id === "reference-image");
+    expect(ref?.targetIoKey).toBeNull();
+    expect(status.ready).toBe(true);
+  });
+});
