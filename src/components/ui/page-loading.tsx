@@ -16,7 +16,7 @@ export function PageLoading({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-4 text-gray-400",
+        "text-ink-muted flex flex-col items-center justify-center gap-4",
         className,
       )}
     >

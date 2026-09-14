@@ -412,10 +412,12 @@ export function measureWires(
  *  在**事件回调里**算好存进 state（而不是渲染期读 ref）：React 的 refs 规则
  *  禁止渲染期访问 ref，而这里既需要容器（ref 的 parentElement）又需要当前
  *  光标位置 —— 两者都只在事件发生那一刻是真的。 */
-function dragPath(
+export function dragPath(
   container: HTMLElement,
   entryId: string,
   handleId: string,
+  /** 光标位置，**屏幕坐标**（`clientX/clientY`）；局部坐标换算在本函数内做。
+   *  两个调用点都必须传屏幕坐标 —— 传局部坐标会把容器偏移减两次，预览线飘向左上。 */
   point: { x: number; y: number } | null,
 ): string | null {
   const from = findAnchor(
@@ -582,7 +584,14 @@ export function WorkflowParamWires({
               ...prev,
               hover,
               path: container
-                ? dragPath(container, prev.entryId, prev.handleId, point)
+                ? /* 预览线的终点要传**屏幕坐标**：`dragPath` 自己在内部减容器偏移、
+                   *  除缩放。这里若把已局部化的 `point` 传进去，偏移会被减两次，
+                   *  预览线固定飘到光标**左上方**（拖到哪都拐向左上，看着完全不
+                   *  跟手）；落点判定照旧用局部坐标 `point`，两者口径不同、别混。 */
+                  dragPath(container, prev.entryId, prev.handleId, {
+                    x: event.clientX,
+                    y: event.clientY,
+                  })
                 : null,
             }
           : prev,

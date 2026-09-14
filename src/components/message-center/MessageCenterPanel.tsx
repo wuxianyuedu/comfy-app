@@ -27,18 +27,18 @@ const KIND_META: Record<
 > = {
   update: {
     icon: RefreshCw,
-    tint: "text-violet-300 bg-violet-500/15",
-    ring: "border-violet-500/20",
+    tint: "text-violet-700 bg-violet-500/15 dark:text-violet-300",
+    ring: "border-violet-500/25",
   },
   restart: {
     icon: RotateCcw,
-    tint: "text-amber-300 bg-amber-500/15",
-    ring: "border-amber-500/20",
+    tint: "text-amber-700 bg-amber-500/15 dark:text-amber-300",
+    ring: "border-amber-500/25",
   },
   info: {
     icon: Bell,
-    tint: "text-cyan-300 bg-cyan-500/15",
-    ring: "border-cyan-500/20",
+    tint: "text-cyan-700 bg-cyan-500/15 dark:text-cyan-300",
+    ring: "border-cyan-500/25",
   },
 };
 
@@ -84,24 +84,29 @@ export function MessageCenterPanel() {
   return (
     <FullScreenLayer
       zClass="z-[10020]"
-      className="flex flex-col bg-[#0a0a0f]/92 backdrop-blur-md"
+      className="bg-bg/92 flex flex-col backdrop-blur-md"
       role="dialog"
       aria-modal="true"
       aria-label="消息中心"
     >
       {/* 顶栏 */}
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-white/6 px-4">
+      <header className="border-border-strong flex h-12 shrink-0 items-center gap-3 border-b px-4">
         <div className="flex items-center gap-2">
           <span className="relative">
-            <BellRing size={16} className="text-violet-300" />
+            <BellRing
+              size={16}
+              className="text-violet-700 dark:text-violet-300"
+            />
             {unread > 0 && (
               <span className="absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-violet-500 px-0.5 text-[9px] font-bold text-white">
                 {unread > 99 ? "99+" : unread}
               </span>
             )}
           </span>
-          <span className="text-[15px] font-semibold text-gray-100">消息中心</span>
-          <span className="text-[12px] text-gray-500">
+          <span className="text-ink-bright text-[15px] font-semibold">
+            消息中心
+          </span>
+          <span className="text-ink-muted text-[12px]">
             {messages.length ? `${messages.length} 条 · ${unread} 条未读` : "暂无消息"}
           </span>
         </div>
@@ -111,7 +116,7 @@ export function MessageCenterPanel() {
             type="button"
             onClick={markAllRead}
             disabled={unread === 0}
-            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+            className="text-ink-soft hover:bg-subtle hover:text-ink flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-40"
           >
             <CheckCheck size={14} />
             全部已读
@@ -120,7 +125,7 @@ export function MessageCenterPanel() {
             type="button"
             onClick={clear}
             disabled={messages.length === 0}
-            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] text-gray-400 transition-colors hover:bg-rose-500/10 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40"
+            className="text-ink-soft flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] transition-colors hover:bg-rose-500/10 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-rose-300"
           >
             <Trash2 size={14} />
             清空
@@ -128,7 +133,7 @@ export function MessageCenterPanel() {
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="ml-1 rounded-md p-2 text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-200"
+            className="text-ink-soft hover:bg-subtle hover:text-ink ml-1 rounded-md p-2 transition-colors"
             aria-label="关闭消息中心"
           >
             <X size={16} />
@@ -139,7 +144,7 @@ export function MessageCenterPanel() {
       {/* 消息列表 */}
       <div className="custom-scrollbar flex-1 overflow-y-auto">
         {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-gray-600">
+          <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-3">
             <Inbox size={44} strokeWidth={1.2} className="opacity-30" />
             <p className="text-[13px]">暂无系统消息</p>
           </div>
@@ -152,8 +157,8 @@ export function MessageCenterPanel() {
                 <li
                   key={m.id}
                   onClick={() => markRead(m.id)}
-                  className={`cursor-pointer rounded-xl border bg-white/2 p-3.5 transition-colors hover:bg-white/5 ${
-                    m.read ? "border-white/5 opacity-70" : `${meta.ring} border`
+                  className={`bg-subtle/60 hover:bg-subtle cursor-pointer rounded-xl border p-3.5 transition-colors ${
+                    m.read ? "border-border-subtle opacity-70" : `${meta.ring} border`
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -164,19 +169,19 @@ export function MessageCenterPanel() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2">
-                        <h3 className="text-[13px] font-semibold text-gray-100">
+                        <h3 className="text-ink-bright text-[13px] font-semibold">
                           {m.title}
                         </h3>
                         {!m.read && (
-                          <span className="rounded-full bg-violet-500/20 px-1.5 text-[10px] font-medium text-violet-300">
+                          <span className="rounded-full bg-violet-500/20 px-1.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
                             新
                           </span>
                         )}
-                        <time className="ml-auto shrink-0 text-[11px] text-gray-500 tabular-nums">
+                        <time className="text-ink-muted ml-auto shrink-0 text-[11px] tabular-nums">
                           {fmtTime(m.time)}
                         </time>
                       </div>
-                      <p className="mt-1 whitespace-pre-wrap break-words text-[12.5px] leading-relaxed text-gray-300">
+                      <p className="text-ink-soft mt-1 text-[12.5px] leading-relaxed break-words whitespace-pre-wrap">
                         {m.body}
                       </p>
                     </div>
@@ -186,7 +191,7 @@ export function MessageCenterPanel() {
                         e.stopPropagation();
                         remove(m.id);
                       }}
-                      className="shrink-0 rounded p-1 text-gray-600 transition-colors hover:bg-white/5 hover:text-gray-300"
+                      className="text-ink-fainter hover:bg-subtle hover:text-ink-soft shrink-0 rounded p-1 transition-colors"
                       aria-label="删除该消息"
                     >
                       <Trash2 size={13} />
@@ -199,12 +204,12 @@ export function MessageCenterPanel() {
         )}
       </div>
 
-      <footer className="flex h-9 shrink-0 items-center justify-between border-t border-white/6 px-4 text-[11px] text-gray-500">
+      <footer className="border-border-strong text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[11px]">
         <span>底部状态栏铃铛实时汇总未读消息，点此可全屏查看。</span>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="rounded bg-white/5 px-2 py-0.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-gray-200"
+          className="bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink rounded px-2 py-0.5 transition-colors"
         >
           关闭 (Esc)
         </button>

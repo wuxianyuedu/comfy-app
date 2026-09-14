@@ -15,6 +15,18 @@
  *
  * 本用例用临时目录里的真实 sqlite 文件驱动，不 mock fs —— 探测逻辑本身
  * 就是「路径 + sqlite_master」，mock 掉等于什么都没验。
+ *
+ * 两条**确定性**约束（缺了就会在 CI / 干净检出上假红，ISSUE #489）：
+ *   - `process.cwd` 的 mock 必须**按用例生效**，不能放进文件级 `beforeEach`：
+ *     文件级钩子对该文件里所有 `describe` 都生效，而下面「reaper 模块级副作用」
+ *     那组要 `import` 真实的 `~/server/db` → `~/env`，`env.js` 会拿
+ *     `<cwd>/../.env` 探测配置文件。cwd 被留在临时目录时该探测必然落空 →
+ *     抛 `MissingEnvFileError`，用例与「表就绪守卫」毫无关系地失败（本机有
+ *     `.env` 时又是绿的，于是一条只在 CI 红的假回归）。故 cwd 的替身只在本
+ *     `describe` 内建立、退出即还原。
+ *   - 该组必须自己把环境「造齐」（`SKIP_ENV_VALIDATION` + 隔离的
+ *     `DATABASE_URL`），不去读开发者本机的 `.env`：用例的可通过性只能取决于
+ *     用例自己造的东西，不能取决于「本机碰巧有没有 `.env`」。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
@@ -40,20 +52,30 @@ function createSchema(file: string): void {
   );
 }
 
-beforeEach(async () => {
+/** 建临时目录并把 `process.cwd()` 指向它 —— 只在本 `describe` 内生效。
+ *  返回的还原函数必须在 `afterEach` 里调用：cwd 替身一旦泄漏到后面的
+ *  `describe`，就会把 `~/env` 的 `.env` 探测带偏（见文件头「两条确定性约束」）。 */
+function useTempCwd(): { restore: () => void } {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "db-schema-ready-"));
   dbFile = path.join(tmp, "db.sqlite");
-  const mod = await import("./db-schema-ready");
-  mod.resetSchemaReadinessCache();
-  vi.spyOn(process, "cwd").mockReturnValue(tmp);
-});
+  const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(tmp);
+  return { restore: () => cwdSpy.mockRestore() };
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
-  fs.rmSync(tmp, { recursive: true, force: true });
+  if (tmp) fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 describe("probeSchemaSync", () => {
+  let cwd: { restore: () => void };
+  beforeEach(async () => {
+    cwd = useTempCwd();
+    const mod = await import("./db-schema-ready");
+    mod.resetSchemaReadinessCache();
+  });
+  afterEach(() => cwd.restore());
+
   it("库文件不存在（干净检出、还没 db:push）时返回 unknown，而不是抛异常", async () => {
     const { probeSchemaSync } = await import("./db-schema-ready");
     expect(fs.existsSync(dbFile)).toBe(false);
@@ -81,6 +103,14 @@ describe("probeSchemaSync", () => {
 });
 
 describe("isSchemaReady 缓存", () => {
+  let cwd: { restore: () => void };
+  beforeEach(async () => {
+    cwd = useTempCwd();
+    const mod = await import("./db-schema-ready");
+    mod.resetSchemaReadinessCache();
+  });
+  afterEach(() => cwd.restore());
+
   it("同进程内只探一次：建表后缓存仍为 false（调用方每轮自行重探的语义由 sweep 决定）", async () => {
     const { isSchemaReady, resetSchemaReadinessCache } = await import("./db-schema-ready");
     expect(isSchemaReady()).toBe(false);
@@ -94,9 +124,32 @@ describe("isSchemaReady 缓存", () => {
 });
 
 describe("reaper 模块级副作用", () => {
+  /** 这一组要真正加载 `~/server/db` → `~/env`，所以得自己把环境造齐：
+   *  `SKIP_ENV_VALIDATION` 让 `env.js` 不再要求 `.env` 文件存在（本机有没有
+   *  `.env` 都不影响结果），`DATABASE_URL` 指向本用例自己的临时库。
+   *  `vi.stubEnv` 在 afterEach 的 `vi.unstubAllEnvs()` 里自动还原。 */
+  let cwd: { restore: () => void };
+
+  beforeEach(async () => {
+    cwd = useTempCwd();
+    vi.stubEnv("SKIP_ENV_VALIDATION", "1");
+    const mod = await import("./db-schema-ready");
+    mod.resetSchemaReadinessCache();
+  });
+
+  afterEach(() => {
+    cwd.restore();
+    vi.unstubAllEnvs();
+  });
+
   it("表未就绪时加载 reaper 不读库（旧实现在此处抛 no such table）", async () => {
     vi.resetModules();
-    process.env.DATABASE_URL = `file:${dbFile}`;
+    // `env.js` 由 `vi.stubEnv` 的 SKIP_ENV_VALIDATION 放行后，仍会校验必填项；
+    // 两处密钥按「占位值」给出，等价于 CI 里 `pnpm test` 的真实条件。
+    vi.stubEnv("BETTER_AUTH_GITHUB_CLIENT_ID", "test-client-id");
+    vi.stubEnv("BETTER_AUTH_GITHUB_CLIENT_SECRET", "test-client-secret");
+    vi.stubEnv("DATABASE_URL", `file:${dbFile}`);
+
     const repository = await import("./core/repository");
     const listStaleQueued = vi.spyOn(repository.taskRepository, "listStaleQueued");
 
@@ -106,6 +159,5 @@ describe("reaper 模块级副作用", () => {
 
     expect(listStaleQueued).not.toHaveBeenCalled();
     listStaleQueued.mockRestore();
-    delete process.env.DATABASE_URL;
   });
 });

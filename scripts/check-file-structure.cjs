@@ -6,6 +6,8 @@
  *       目录索引 index.tsx;src/components/ui/ 采用 shadcn 官方 kebab-case 约定
  *       (硬强制 kebab,禁止 PascalCase——§12.6/§12.8)
  *   R2  src 下 .ts 文件名禁止 PascalCase(非组件模块一律 kebab-case)
+ *       (src/ 根下的 Next 约定文件 proxy.ts 由 R2_EXEMPT 豁免——它是框架
+ *        保留名,不能改名;配套 R11 保证它没被放错位置或悄悄消失)
  *   R3  禁止时间戳备份文件(\d{8}_\d{6} 模式)——版本回退用 git,不进 src
  *   R4  src/lib 下禁止 .tsx(12.5:lib 无 React)
  *   R5  (提示)src/components 下超 900 行的文件列入拆分候选,仅提醒不阻塞
@@ -40,6 +42,12 @@ const HISTORY_TAG =
   /\bR(?:[-_][A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*|\d{1,4}(?:[-_][A-Za-z]?[A-Za-z0-9]*)?)(?:\s*\/\s*(?:\d{1,4}|[A-Za-z][A-Za-z0-9]*))*/;
 const HISTORY_TASK = /\bT\d{1,3}(?:-\d{1,3})?\b/;
 
+/* R2 豁免:src/ 根下的 Next 约定文件。proxy.ts(Next 16 起取代 middleware.ts)
+ * 是**框架保留名**——名字由 Next 决定,改成 kebab-case 就不再被加载,只能豁免;
+ * 但豁免必须配 R11(位置 + 载荷判据),否则「豁免」会变成「改名/挪走后静默失效」
+ * 的缺口(文件不在 src/ 根,警告与代理一起消失,构建期不报任何错)。 */
+const R2_EXEMPT = new Set(["src/proxy.ts"]);
+
 // Next.js App Router 保留文件名(框架强制小写,不可改名)——src/app 下豁免
 const NEXT_RESERVED = new Set([
   "page", "layout", "error", "global-error", "loading", "not-found",
@@ -60,6 +68,13 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
     const isUiDir = rel.startsWith("src/components/ui/");
     const base = e.name.replace(/\.(tsx?|mjs|cjs|js)$/, "").replace(/\.test$/, "");
     if (/\d{8}_\d{6}/.test(e.name)) problems.push("R3 时间戳备份文件:" + rel);
+    /* R11 的位置判据:Next 约定文件只允许出现在 src/ 根。放进 app/ 或更深
+     * 的目录 Next 不会加载 —— 文件在、代理不在,构建期毫无提示。 */
+    if (base === "proxy" || base === "middleware") {
+      const canonical = "src/" + base + ".ts";
+      if (rel !== canonical)
+        problems.push("R11 Next 约定文件位置错:" + rel + "(须在 " + canonical + ")");
+    }
     if (/^\/\* eslint-disable @typescript-eslint\/no-explicit-any/.test(
       fs.readFileSync(p, "utf8").split("\n")[0] || "",
     ))
@@ -82,7 +97,8 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
         if (rel.startsWith("src/lib/")) problems.push("R4 lib 下禁止 .tsx:" + rel);
       } else if (e.name.endsWith(".ts") && !e.name.endsWith(".d.ts")) {
         // ui/ 下 .ts 模块同样须 kebab-case(shadcn 约定)
-        if (/^[A-Z]/.test(base)) problems.push("R2 模块文件须 kebab-case:" + rel);
+        if (/^[A-Z]/.test(base) && !R2_EXEMPT.has(rel))
+          problems.push("R2 模块文件须 kebab-case:" + rel);
       }
       const lines = fs.readFileSync(p, "utf8").split("\n").length;
       if (rel.startsWith("src/components/") && lines > 900)
@@ -175,6 +191,24 @@ const SCAN_EXCLUDED = [
         );
       }
     });
+  }
+})();
+
+// ── R11:Next 16 起 middleware 必须叫 proxy,且不得静默丢失(ISSUE #489) ──
+// 两条判据合起来才拦得住:
+//   ① 存在性——约定文件被删 = 代理凭空消失,构建期不报错,要等到真拦请求时
+//      才发现「根本没跑」;本仓库唯一用途是挂 config.matcher 给后来人留落点,
+//      删掉它等于把落点一起删了;
+//   ② 片段存在性——文件在、但改名回 middleware = 重新吃 Next 16 的 deprecation
+//      警告(改名是「消警告」而不是「消掉需求」的典型误修)。
+(function checkProxyConvention() {
+  const proxyPath = "src/proxy.ts";
+  const legacyPath = "src/middleware.ts";
+  if (!fs.existsSync(proxyPath)) {
+    problems.push("R11 缺少 Next 16 代理约定文件:" + proxyPath + "(middleware 已废弃,勿删除本文件)");
+  }
+  if (fs.existsSync(legacyPath)) {
+    problems.push("R11 middleware 约定名已废弃(Next 16):" + legacyPath + " → 改名为 src/proxy.ts");
   }
 })();
 

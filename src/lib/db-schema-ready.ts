@@ -50,6 +50,8 @@ import "server-only";
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 
+import { tracingIgnoreArgs } from "~/lib/tracing-ignore";
+
 /** Table readiness state. */
 export type SchemaReadiness = "ready" | "missing" | "unknown";
 
@@ -73,7 +75,7 @@ const SENTINEL_TABLE = "task";
 export function resolveSqlitePath(databaseUrl?: string): string {
   const url = databaseUrl ?? process.env.DATABASE_URL ?? "file:./db.sqlite";
   const raw = url.startsWith("file:") ? url.slice("file:".length) : url;
-  return path.resolve(process.cwd(), raw);
+  return path.resolve(...tracingIgnoreArgs(), process.cwd(), raw);
 }
 
 /**
