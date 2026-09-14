@@ -9,6 +9,7 @@
  *   - FlowNodeWidgetRows.tsx        (widget/knob rows)
  * Originally inside WorkflowCanvasEditor.tsx. */
 import React, { useState } from "react";
+import { useTheme } from "next-themes";
 import { Handle, Position } from "@xyflow/react";
 import { friendlyNodeTitle } from "@/lib/comfyui/node-titles";
 import { PackageFooter } from "./PackageFooter";
@@ -23,7 +24,7 @@ import { WorkflowImagePreview } from "../WorkflowImagePreview";
 import { useIOEditContext } from "./IOEditContext";
 import { useHoverElevation } from "../workflow-editor/HoverElevation";
 import { useFlowNodeEntries } from "./workflow-node-entries";
-import { computeNodePalette } from "./workflow-node-palette";
+import { computeNodePalette, DARK_PALETTE_BASE, LIGHT_PALETTE_BASE } from "./workflow-node-palette";
 import { FlowNodeHeader } from "./FlowNodeHeader";
 import { FlowNodeCollapsedAnchors } from "./FlowNodeCollapsedAnchors";
 import { FlowNodePinRows } from "./FlowNodePinRows";
@@ -68,7 +69,16 @@ export const FlowNode = React.memo(function FlowNode({
   /* Input/output row bucketing + palette live in sibling modules so the
    *  renderer below only orchestrates layout. */
   const entries = useFlowNodeEntries(data);
-  const palette = computeNodePalette(data, role);
+  /* 节点卡片表面色（body / header / border / title / dot）与主题联动 ——
+   *  与画布其它表面的口径一致，浅色下是一张浅卡，深色下取回原深色。
+   *  resolvedTheme 在首帧可能还是 undefined（挂载前），此时按 Dark 起步，
+   *  与 ThemeProvider 的 defaultTheme 一致，避免闪一帧浅卡。 */
+  const { resolvedTheme } = useTheme();
+  const palette = computeNodePalette(
+    data,
+    role,
+    resolvedTheme === "light" ? LIGHT_PALETTE_BASE : DARK_PALETTE_BASE
+  );
 
   /* Collapsed state (ComfyUI LiteGraph flag `flags.collapsed`).  The
    *  imported config's flag seeds the INITIAL value; the user toggle owns
