@@ -442,6 +442,12 @@ export function WorkshopModelAdapterModal({
                     输入口（按顺序作为工坊对该模式的统一输入；本地工作流在「画布节点」
                     为每个口配落点，远端模型在「模型适配」里为每个口配请求字段）
                   </p>
+                  <p className="text-muted-foreground/80 text-[10px]">
+                    「尺寸」是两类等价的写法，在尺寸选择器里任选其一：比例 +
+                    分辨率（1k / 2k / 4k），或 比例 + 百万像素 + 倍数（8 / 16 / 32 /
+                    64）。选「分辨率」时工坊按场景尺寸表换算成「百万像素 + 倍数」
+                    再下发，两种写法落到工作流 / 远端接口上的效果一致。
+                  </p>
                   <div className="space-y-1.5">
                     {contractDraft.inputs.map((input, i) => (
                       <div

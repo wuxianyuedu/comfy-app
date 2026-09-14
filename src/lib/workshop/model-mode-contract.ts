@@ -231,7 +231,7 @@ export function readFieldPath(payload: unknown, path: string): unknown {
 export const MODE_CONTRACT_INPUT_TYPES = [
   { type: "prompt", label: "提示词" },
   { type: "negative", label: "负向提示词" },
-  { type: "size", label: "尺寸（比例 + 分辨率 · 百万像素 + 倍数）" },
+  { type: "size", label: "尺寸（比例 + 分辨率 / (百万像素 + 倍数)）" },
   { type: "duration", label: "时长" },
   { type: "reference-image", label: "参考图" },
   { type: "first-frame", label: "首帧图片" },
