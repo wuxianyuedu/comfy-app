@@ -191,7 +191,7 @@ export function WorkflowNodeArdot() {
           <div className="flex items-center gap-2.5">
             <span
               aria-label="类型 工作流"
-              className="flex h-7 w-7 items-center justify-center rounded-[14px] text-[14px] font-bold text-(--color-primary)"
+              className="flex h-7 w-7 items-center justify-center rounded-[14px] text-[14px] font-bold text-primary"
               style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
             >
               W
@@ -204,9 +204,9 @@ export function WorkflowNodeArdot() {
             </span>
           </div>
           <div
-            className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-(--color-node-accent) px-2"
+            className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-node-accent px-2"
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-(--color-primary)" />
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
             <span
               className="text-[10px] font-medium text-ink-soft"
               style={{ fontFamily: "var(--font-sans)" }}
@@ -217,7 +217,7 @@ export function WorkflowNodeArdot() {
         </div>
 
         {/* ── Divider 340×1 ── */}
-        <div className="h-px bg-(--color-border-strong)" />
+        <div className="h-px bg-border-strong" />
 
         {/* ── WorkflowChipRow 340×44（chip 24h 居中）── */}
         {/* 顺序：本机（位置）→ image_z_image_int8（名称）→ T2I（类型，最右） */}
@@ -225,7 +225,7 @@ export function WorkflowNodeArdot() {
           {/* Chip 1：本机（位置）· 绿点+本机+▾ */}
           <button
             type="button"
-            className="flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-(--color-primary)/35 bg-(--color-node-accent) px-2.5 text-[12px]"
+            className="flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/35 bg-node-accent px-2.5 text-[12px]"
           >
             <span
               aria-hidden
@@ -238,12 +238,12 @@ export function WorkflowNodeArdot() {
             >
               本机
             </span>
-            <span aria-hidden className="shrink-0 text-(--color-ink-icon)" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
+            <span aria-hidden className="shrink-0 text-ink-icon" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
           </button>
           {/* Chip 2：image_z_image_int8（具体工作流名）· flex-1 撑满中间 */}
           <button
             type="button"
-            className="flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-(--color-primary)/35 bg-(--color-node-accent) px-2.5 text-[12px]"
+            className="flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-primary/35 bg-node-accent px-2.5 text-[12px]"
           >
             <span
               className="min-w-0 flex-1 truncate text-left font-semibold text-ink-bright"
@@ -251,12 +251,12 @@ export function WorkflowNodeArdot() {
             >
               image_z_image_int8
             </span>
-            <span aria-hidden className="shrink-0 text-(--color-ink-icon)" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
+            <span aria-hidden className="shrink-0 text-ink-icon" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
           </button>
           {/* Chip 3：T2I（类型，单独下拉，最右）· 紫描边加深强调可切换 */}
           <button
             type="button"
-            className="flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-(--color-primary)/55.00000000000001 bg-(--color-node-accent) px-2.5 text-[12px]"
+            className="flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/55 bg-node-accent px-2.5 text-[12px]"
           >
             <span
               className="font-medium text-ink-bright"
@@ -291,7 +291,7 @@ export function WorkflowNodeArdot() {
         {/* ── ActionBtn 340×43（紧贴端口行下沿，0 间距） ── */}
         <button
           type="button"
-          className="flex h-[43px] w-full items-center justify-center gap-2 bg-linear-to-r from-(--color-primary) to-(--color-accent) text-[13px] font-bold text-white"
+          className="flex h-[43px] w-full items-center justify-center gap-2 bg-linear-to-r from-primary to-accent text-[13px] font-bold text-white"
           style={{
             fontFamily: "var(--font-sans)",
             boxShadow: "0 4px 12px rgba(124,92,252,0.35)",

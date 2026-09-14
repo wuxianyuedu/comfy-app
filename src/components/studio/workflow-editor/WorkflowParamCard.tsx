@@ -124,7 +124,7 @@ export function WorkflowParamCard({
 
   return (
     <div
-      className="relative flex flex-col rounded-lg border shadow-[0_4px_20px_rgba(0,0,0,0.45)]"
+      className="bg-card relative flex flex-col rounded-lg border shadow-[0_4px_20px_rgba(0,0,0,0.45)]"
       style={{
         width,
         /* 描边配色：选中 → 分类色；**可编辑但当前不可连**（没有模式语境）→ 灰，
@@ -135,7 +135,6 @@ export function WorkflowParamCard({
           : disabled && !readOnly
             ? "rgba(148,163,184,0.28)"
             : `${style.color}66`,
-        background: "var(--color-card, #16161C)",
         isolation: "isolate",
       }}
       data-selected={selected ? "true" : undefined}

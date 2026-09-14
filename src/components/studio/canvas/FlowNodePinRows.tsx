@@ -111,7 +111,7 @@ export function FlowNodePinRows({
                     /* 可连接：编辑器里「对外参数节点」的线要落到这一行（端口）。
                      * 连上 / 断开都由映射层负责，工作流图本身不因此改动。 */
                     isConnectable
-                    className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
+                    className="!h-2.5 !w-2.5 !rounded-full !border !border-port-surface"
                     style={{
                       left: 5,
                       background: inCol,
@@ -176,11 +176,11 @@ export function FlowNodePinRows({
                     position={Position.Right}
                     id={`out:${outName}`}
                     isConnectable={false}
-                    className="!rounded-full !border !border-(--color-canvas)"
+                    className="!rounded-full !border !border-port-surface"
                     style={{
                       right: 5,
                       background: outCol,
-                      boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
+                      boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
                       ...(io?.ioEditMode
                         ? {
                             /* IO 编辑模式下端点整体缩到几乎不可见（不误导作者去连

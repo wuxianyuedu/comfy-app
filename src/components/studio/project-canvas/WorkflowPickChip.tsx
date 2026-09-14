@@ -47,7 +47,7 @@ export function WorkflowPickChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="nodrag nopan flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-(--color-primary)/35 bg-(--color-node-accent) px-2.5 text-[12px]"
+        className="nodrag nopan flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-primary/35 bg-node-accent px-2.5 text-[12px]"
       >
         <span
           className="min-w-0 flex-1 truncate text-left font-semibold text-ink-bright"
@@ -62,7 +62,7 @@ export function WorkflowPickChip({
           )}
         </span>
         <span
-          className={`shrink-0 text-(--color-ink-icon) transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-ink-icon transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾

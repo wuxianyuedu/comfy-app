@@ -139,7 +139,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
 
   return (
     <div
-      className="relative flex flex-col rounded-lg border shadow-[0_6px_22px_rgba(0,0,0,0.6)]"
+      className={`relative flex flex-col rounded-lg border shadow-[0_6px_22px_rgba(0,0,0,0.6)] ${
+        nodeMode !== 0 ? "bg-transparent" : "bg-node"
+      }`}
       ref={hoverRef}
       data-node-id={data.nodeId}
       {...hoverHandlers}
@@ -167,10 +169,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
         //  boxes the user explicitly set in ComfyUI).
         borderColor: hexToRgba(accent, 0.55),
         // Tint + real blur for bypass/disabled subgraphs live in <NodeFrost>;
-        //  root is transparent + a stacking context (isolation) so the frost's
-        //  negative z stays contained.  Normal subgraphs keep a solid panel.
+        //  the root keeps `isolation` so the frost's negative z stays contained,
+        //  and stays transparent so the frost shows through.  Normal subgraphs
+        //  take the solid panel from `bg-node` (theme-aware).
         isolation: "isolate",
-        background: nodeMode !== 0 ? "transparent" : "var(--color-node)",
         // ComfyUI draws a bright selection rectangle around the active node.
         outline: selected ? "2px solid rgba(56,189,248,0.9)" : "none",
         outlineOffset: selected ? "2px" : undefined,
@@ -335,11 +337,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                         position={Position.Left}
                         id={inName}
                         isConnectable={false}
-                        className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
+                        className="!h-2.5 !w-2.5 !rounded-full !border !border-port-surface"
                         style={{
                           left: 5,
                           background: inCol,
-                          boxShadow: `0 0 6px ${inCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
+                          boxShadow: `0 0 6px ${inCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
                         }}
                         title={`${inLabel} (${inType})`}
                       />
@@ -403,11 +405,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                         position={Position.Right}
                         id={`out:${outName}`}
                         isConnectable={false}
-                        className="!rounded-full !border !border-(--color-canvas)"
+                        className="!rounded-full !border !border-port-surface"
                         style={{
                           right: 5,
                           background: outCol,
-                          boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
+                          boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
                           ...(io?.ioEditMode
                             ? { width: 4, height: 4, opacity: 0.35, right: 0 }
                             : { width: 10, height: 10 }),
@@ -429,7 +431,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
        *  STRING widgets with long values break out into a stacked block.
        *  Hidden when the chip is collapsed. */}
       {!isCollapsed && widgetInputs.length > 0 && (
-        <div className="relative flex min-h-0 flex-1 flex-col py-0.5" style={{ background: "rgba(255,255,255,0.01)" }}>
+        <div className="bg-surface-1 relative flex min-h-0 flex-1 flex-col py-0.5">
           {widgetInputs.map(({ inp, label }, i) => {
             const v: unknown = inp.widgetValue;
             const isConn = inp.isConnection === true || inp.isBoundary === true;
@@ -477,11 +479,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                     position={Position.Left}
                     id={inp.name}
                     isConnectable={false}
-                    className="!h-2.5 !w-2.5 !rounded-full !border !border-(--color-canvas)"
+                    className="!h-2.5 !w-2.5 !rounded-full !border !border-port-surface"
                     style={{
                       left: 5,
                       background: typeCol,
-                      boxShadow: `0 0 6px ${typeCol}AA, inset 0 0 0 1px rgba(255,255,255,0.25)`,
+                      boxShadow: `0 0 6px ${typeCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
                     }}
                     title={`${label} (${inp.type})`}
                   />

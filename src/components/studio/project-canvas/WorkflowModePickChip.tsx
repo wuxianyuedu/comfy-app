@@ -82,7 +82,7 @@ export function WorkflowModePickChip({
         type="button"
         onClick={() => setOpen((value) => !value)}
         disabled={disabled}
-        className={`nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-(--color-primary)/55.00000000000001 bg-(--color-node-accent) px-2.5 text-[12px] ${
+        className={`nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/55 bg-node-accent px-2.5 text-[12px] ${
           disabled ? "opacity-50" : ""
         }`}
       >

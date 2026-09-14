@@ -76,7 +76,7 @@ export function ResultCard({
         <NodeChip kind={kind} name={displayName} size="sm" />
         <StatusBadge status={status} />
       </div>
-      <div className="relative flex aspect-video items-center justify-center bg-linear-to-br from-(--color-subtle) to-(--color-canvas-deep)">
+      <div className="relative flex aspect-video items-center justify-center bg-linear-to-br from-subtle to-canvas-deep">
         {!src ? (
           <Icon
             name={isVideo ? "film" : "image"}

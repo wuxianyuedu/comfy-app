@@ -87,12 +87,8 @@ export function WidgetInputRow({
    * 悄悄改成 INT/STRING，用户看到的类型与工作流里的定义对不上。 */
   const typeChip = (
     <span
-      className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
-      style={{
-        fontFamily: "var(--font-sans)",
-        background: "var(--color-border-strong)",
-        color: "var(--color-ink-muted)",
-      }}
+      className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
+      style={{ fontFamily: "var(--font-sans)" }}
     >
       {typeDisplay(entry.type, controlTypeFallback(entry.control))}
     </span>
@@ -209,12 +205,8 @@ export function WidgetInputRow({
           {/* link 行同样打印 pin 真实声明的类型：MODEL / CLIP / LATENT /
               IMAGEUPLOAD 等自定义类型一律原样展示，不回退成 "*"。 */}
           <span
-            className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
-            style={{
-              fontFamily: "var(--font-sans)",
-              background: "var(--color-border-strong)",
-              color: "var(--color-ink-muted)",
-            }}
+            className="bg-border-strong text-ink-muted inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
+            style={{ fontFamily: "var(--font-sans)" }}
           >
             {typeDisplay(entry.type)}
           </span>

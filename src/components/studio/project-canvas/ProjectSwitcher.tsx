@@ -45,7 +45,7 @@ export function ProjectSwitcher({
   return (
     <div className="relative">
       <button
-        className="flex items-center gap-2 border-border-strong rounded-full border bg-linear-to-br from-(--color-subtle) to-(--color-surface-2) px-3.5 py-1.5 text-[12px] font-medium text-ink-bright shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-violet-400/40 hover:shadow-violet-500/15"
+        className="flex items-center gap-2 border-border-strong rounded-full border bg-linear-to-br from-subtle to-surface-2 px-3.5 py-1.5 text-[12px] font-medium text-ink-bright shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-violet-400/40 hover:shadow-violet-500/15"
         onClick={onToggleMenu}
         title="项目列表"
       >

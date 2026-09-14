@@ -36,6 +36,44 @@ v4 支持任意透明度百分比直接写在斜杠后；方括号 alpha 是 v3 
 
 **规则**：透明度一律 `/百分比`（小数合法，如 `/1.5`——tailwindcss 内部正是以 `parseFloat(alpha)*100` 做规范化的）。
 
+#### 3.1.1 语义颜色一律写类名，禁止 `X-(--color-…)` 内联变量
+
+v4 的 `bg-(--color-canvas-deep)` 这种「属性前缀 + 内联变量」写法**能编出 utility**
+（`background-color: var(--color-canvas-deep)`），`hover:` / `dark:` 修饰符也**生效**。
+所以它不是「编译不过」，而是**越过了语义层**：
+
+- **拿不到语义名**：`text-(--color-ink-muted)` 与 `text-ink-muted` 是两份 class，
+  同一处设计改一处漏一处；@theme 里的 token 改名/换值，内联写法**不会**跟着变。
+- **拿不到该 token 的兄弟**：`border-(--color-canvas)` 的真实意图是「端口的载体色」，
+  但 canvas 是**画布背景** token —— 浅色下画布浅灰、描边与端点糊在一起。
+  写成类名时才会被迫问一句「我该用哪个 token」，进而发现缺一个
+  `--color-port-surface`。内联变量把这个设计问题藏起来了。
+- **`typecheck` / lint 看不见**：类名写错会被 Tailwind 的 canonical-class 提示抓到，
+  变量名写错只是一个不生效的声明。
+
+```tsx
+// ❌ 属性前缀 + 内联变量：编得出来，但绕过语义层
+"bg-(--color-node-accent) border-(--color-primary)/35 text-(--color-ink-icon)"
+
+// ✅ 语义类名（@theme 里 --color-* 会自动生成；% 透明度同样适用）
+"bg-node-accent border-primary/35 text-ink-icon"
+```
+
+**允许保留 `var(--color-…)` 的两类场景**（都在 `style={{}}` 里）：
+
+1. **动态计算值**：值由运行时数据决定，Tailwind 静态提取不可能覆盖 ——
+   连线 stroke、节点 accent 色、`boxShadow` 里的色相；
+2. **需要非 Tailwind 属性承载**：React Flow 的 `maskColor`、`Handle` 的
+   `borderColor` 这类组件 props。
+
+这两类**也要给随主题的 token**，不要把「浅色观感」写死成兜底值：
+`var(--color-ink, #EDEDF2)` 的兜底只在变量未定义时生效，看着像浅色安全，
+实际永远取不到；真正需要两态时，就该像 `--color-port-surface` 那样
+**新增一个 token 并两态赋值**，而不是挑一个「深色下大概能看」的兜底。
+
+> 判据很简单：**能不能写成一个类名？** 能，就必须是类名。
+> 只剩「值在运行时才知道」时才落 `style={{}}`。
+
 ### 3.2 避免魔法字符串：提取到主题/Design Token
 
 ```tsx
@@ -153,6 +191,7 @@ import "@/styles/json-viewer.css";
 | MiniMap 非视口遮罩（`maskColor`） | `--color-canvas-minimap-mask` |
 | 原生 `<select>` / `<option>` 与滚动条 | `color-scheme` + `--color-node` / `--color-ink-field` |
 | 登录页整屏底 + 极光 | `--color-bg` + 两态极光 |
+| 端口圆点描边 / 内圈高光（`border-(--color-canvas)` + 25% 白 `inset`） | `--color-port-surface` |
 
 > 判据的用意：**控件**是结构性表面（用户要操作它），跟主题走才不会在浅色
 > 下变成「深底深图标」的隐形按钮；**叠加在内容上的说明层**才是例外。
