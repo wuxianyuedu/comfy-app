@@ -11,18 +11,10 @@ import { handleAgentChat } from "@/lib/agent/server";
 import { parseDraftDto } from "@/lib/workshop/draft-sync-shared";
 import { isRecord } from "@/lib/workshop/api-channel-shared";
 import type { AgentChatRequest } from "@/lib/agent/shared";
+import { errorMessage } from "~/lib/error-message";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function errorMessage(e: unknown, fallback: string): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const msg: unknown = (e as { message?: unknown }).message;
-    if (typeof msg === "string") return msg;
-  }
-  return fallback;
-}
 
 export async function POST(req: NextRequest) {
   const user = await requireServerUser();

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getLLMConfig, completeLLM, completeLLMTools, streamLLM } from "@/lib/llm/server";
 import { requireServerUser } from "@/lib/auth-server";
+import { errorMessage } from "~/lib/error-message";
 import { TASK_TYPES, type LLMMessage, type LLMRequestOptions, type LLMProviderType, type TaskType } from "@/lib/llm/types";
 
 export const runtime = "nodejs";
@@ -8,16 +9,6 @@ export const dynamic = "force-dynamic";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
-}
-
-/** 提取错误信息,等价原 `e?.message ?? fallback`(catch 变量为 unknown 后的窄化版)。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const msg: unknown = e.message;
-    if (typeof msg === "string") return msg;
-  }
-  return fallback;
 }
 
 const BodySchema = {

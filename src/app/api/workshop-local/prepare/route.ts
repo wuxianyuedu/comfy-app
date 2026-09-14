@@ -9,18 +9,10 @@ import { requireServerUser } from "@/lib/auth-server";
 import { uploadImage } from "@/lib/comfyui/client";
 import { isRecord } from "@/lib/workshop/api-channel-shared";
 import { resolveMediaBytes, strField } from "@/lib/workshop/media-source.server";
+import { errorMessage } from "~/lib/error-message";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function errorMessage(e: unknown, fallback: string): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const msg: unknown = e.message;
-    if (typeof msg === "string") return msg;
-  }
-  return fallback;
-}
 
 function extForMime(mime: string): string {
   const map: Record<string, string> = {

@@ -41,16 +41,7 @@ import {
   makeExtractLog,
 } from "@/lib/workshop/extraction-log";
 import { buildStoryboardMessages, parseStoryboard } from "@/lib/llm/prompts";
-
-/** catch 抛出值（unknown）→ 与旧 `e?.message ?? fallback` 逐值等价的消息提取：
- *  带 string message 的对象取 message（Error 实例即此路径），其余回退。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m = (e as { message?: unknown }).message;
-    if (typeof m === "string") return m;
-  }
-  return fallback;
-}
+import { errorMessage } from "~/lib/error-message";
 
 /** 判断导入内容是否为 JSON(分镜/角色卡 JSON 走结构化解析,其余按剧本 markdown 解析) */
 function looksLikeJson(text: string): boolean {

@@ -18,15 +18,7 @@ import {
   type ShotSizeState,
 } from "./shot-size-config";
 import { ShotSizePicker } from "./ShotSizePicker";
-
-/** catch 抛出值（unknown）→ 消息提取：带 string message 的对象取 message，其余回退。 */
-function errorMessage(e: unknown, fallback: string): string {
-  if (typeof e === "object" && e !== null && "message" in e) {
-    const m = (e as { message?: unknown }).message;
-    if (typeof m === "string" && m) return m;
-  }
-  return fallback;
-}
+import { errorMessage } from "~/lib/error-message";
 
 function strParam(value: unknown, fallback: string): string {
   return typeof value === "string" && value ? value : fallback;
