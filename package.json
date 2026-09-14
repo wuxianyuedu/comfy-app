@@ -9,7 +9,7 @@
     "check": "eslint . && tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
+    "db:push": "node scripts/db-push.mjs",
     "db:studio": "drizzle-kit studio",
     "dev": "node scripts/dev.mjs",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",

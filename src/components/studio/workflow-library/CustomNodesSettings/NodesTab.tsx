@@ -64,11 +64,11 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
         )}
         <div className="mt-3 flex items-center justify-between text-xs">
           <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-            {saveErr && <span className="text-red-400">⚠ {saveErr}</span>}
+            {saveErr && <span className="text-red-700 dark:text-red-400">⚠ {saveErr}</span>}
             {/* Directory overview chips — show totals + outdated count when any subpackage is detected. */}
             {totalAcrossParents.total > 0 && (
               <>
-                <span className="rounded-full bg-white/6 px-2 py-0.5 text-ink">
+                <span className="rounded-full bg-subtle px-2 py-0.5 text-ink">
                   总览 {totalAcrossParents.total} 个子包
                 </span>
                 {totalAcrossParents.loaded > 0 && (
@@ -287,7 +287,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                         }));
                                       }
                                     }}
-                                    className="cursor-pointer rounded-md px-1.5 py-1 text-right transition-colors hover:bg-white/5"
+                                    className="cursor-pointer rounded-md px-1.5 py-1 text-right transition-colors hover:bg-subtle"
                                     title={
                                       nodeListOpen
                                         ? "收起节点列表"

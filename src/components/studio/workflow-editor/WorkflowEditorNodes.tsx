@@ -9,8 +9,6 @@ import { renderMarkdown } from "@/lib/comfyui/markdown";
 import { WorkflowEdge } from "@/components/studio/canvas/WorkflowEdge";
 import { FlowNode } from "../canvas/WorkflowNode";
 import { WorkflowSubgraphNode } from "../canvas/WorkflowSubgraphNode";
-import { WorkflowParamNode } from "./WorkflowParamNode";
-import { WorkflowOutputParamNode } from "./WorkflowOutputParamNode";
 import type { WorkflowGroupData, WorkflowIoPortData, WorkflowNoteData } from "../workflow-types";
 import { NODE_TITLE_H, lightenHex, hexToRgba, mixHex } from "../workflow-utils";
 
@@ -145,7 +143,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
        *  absolutely via the `Position` prop, so changing flex `justify-…`
        *  only moves the visible label/value — the dot stays anchored to
        *  its side of the wfGroup. */
-      className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} gap-1 px-1.5 py-[1px] text-[10.5px] leading-[1.4] text-white/90`}
+      className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} gap-1 px-1.5 py-[1px] text-[10.5px] leading-[1.4] text-ink-bright/90`}
       style={{
         width: IO_PORT_WIDTH,
         background: "transparent",
@@ -191,7 +189,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
         {data.title}
       </span>
       {valueStr ? (
-        <span className="text-amber-300/90 font-mono text-[10px] tabular-nums shrink-0">
+        <span className="text-amber-700 dark:text-amber-300/90 font-mono text-[10px] tabular-nums shrink-0">
           {valueStr}
         </span>
       ) : null}
@@ -296,14 +294,13 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: {
  * (e.g. "正面提示词") and a widget name (English, e.g. "text").  This
  * component renders them as a compact form-like node so the user can see
  * what's inside without expanding the subgraph. */
-/* 节点类型注册表只含**工作流自身的图**：普通节点 / 备注 / 分组 / 子图封装 /
- *  子图边界口。对外参数不再是画布节点（勾选只写 workflowIO，见
- *  WorkflowEditorInner 的「对外参数映射」段）。 */
-/* 节点类型注册表 = 工作流自身的图（普通节点 / 备注 / 分组 / 子图封装 / 子图边界口）
- *  + 「对外参数节点」。后者是**接线面板**：它不来自图上任何一个节点，而是作者
- *  勾选暴露出来的对外口，端点拖到宿主节点端口上即完成「这个参数落到哪一行」的
- *  连线（映射就是这条线，见 workflow-param-edges）。 */
-export const workflowNodeTypes = { wfNode: FlowNode, wfNote: WorkflowNoteNode, wfGroup: WorkflowGroupNode, wfSubgraph: WorkflowSubgraphNode, wfIoPort: WorkflowIoPortNode, wfParam: WorkflowParamNode, wfOutput: WorkflowOutputParamNode };
+/* 节点类型注册表 = **工作流自身的图**：普通节点 / 备注 / 分组 / 子图封装 /
+ *  子图边界口。这里**没有**「对外参数卡片」这一类：卡片会浮在图节点之上（`zIndex`
+ *  比图节点高、贴着宿主节点左右各排一列）把工作流本身挡掉一片，且落点映射编辑
+ *  已收敛到工作流库详情的「画布节点」页签（卡片列 + 连线层，见
+ *  workflow-library/WorkflowParamCardColumn 与 WorkflowParamWires）。勾选 IO
+ *  只写 workflowIO / paramMap，不再产生任何画布节点。 */
+export const workflowNodeTypes = { wfNode: FlowNode, wfNote: WorkflowNoteNode, wfGroup: WorkflowGroupNode, wfSubgraph: WorkflowSubgraphNode, wfIoPort: WorkflowIoPortNode };
 // Custom edge renderer — rounder bezier (curvature 0.85) + ComfyUI-style
 // white hub dot at the curve midpoint.  Defined at module scope so React
 // Flow doesn't re-register edgeTypes on every render.

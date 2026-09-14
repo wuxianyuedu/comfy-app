@@ -26,7 +26,7 @@ export function ValidationErrorList({
         >
           <span className="font-mono font-semibold">节点 {error.nodeId}</span>
           {error.classType ? (
-            <span className="rounded bg-black/30 px-1 font-mono text-[9.5px] opacity-80">
+            <span className="rounded bg-canvas-deep px-1 font-mono text-[9.5px] opacity-80">
               {error.classType}
             </span>
           ) : null}

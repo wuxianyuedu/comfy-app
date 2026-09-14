@@ -57,7 +57,7 @@ export function WorkshopStageNav({
                 {stage.label}
               </div>
               <div
-                className={`text-[11px] ${ratio >= 1 ? "text-emerald-400" : "text-muted-foreground"}`}
+                className={`text-[11px] ${ratio >= 1 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
               >
                 {stageSubtitle(stage.id, tab, stageRatios, viewContext)}
               </div>

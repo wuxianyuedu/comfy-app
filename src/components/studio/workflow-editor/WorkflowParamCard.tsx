@@ -2,11 +2,12 @@
 
 /* 对外参数卡片的**视觉本体**（无 React Flow 依赖）。
  *
- * 卡片有两个消费场景：
- *   · 编辑器画布 —— 由 WorkflowParamNode 包一层 <Handle>，端点可拖线（编辑）；
- *   · 工作流库画布 —— 只读展示，端点画成装饰圆点。
- * 两处的头部 / 带类型的输出端口 / 「恢复默认」必须完全一致，故把视觉收敛到这里，
- * 消费方只负责在输出端口行右侧挂「端点」。
+ * 消费方只有一个：工作流库详情的「画布节点」页签（`WorkflowParamCardColumn` /
+ * `WorkflowOutputParamCardColumn` 卡片列，端点由连线层注入）。编辑器画布不再画
+ * 卡片 —— 落点映射编辑已收敛到库内这一处。
+ *
+ * 卡片保持与 React Flow 解耦：端点由消费方在输出端口行右侧挂上去（库里是装饰
+ * 圆点 + 独立连线层），本文件不许 import `@xyflow/react`。
  *
  * 卡片体就是**一行一个端口：端点 + 参数名 + 类型**（`outputPorts`）。
  *
@@ -163,12 +164,12 @@ export function WorkflowParamCard({
           }}
         />
         <span
-          className="min-w-0 flex-1 truncate text-[11px] font-semibold text-(--color-ink-bright)"
+          className="min-w-0 flex-1 truncate text-[11px] font-semibold text-ink-bright"
           title={`${classLabel} · ${hostNodeId}`}
         >
           {label}
           {idLabel && (
-            <span className="ml-1 font-mono text-[10px] font-normal text-(--color-ink-faint)">
+            <span className="ml-1 font-mono text-[10px] font-normal text-ink-faint">
               {idLabel}
             </span>
           )}
@@ -180,8 +181,8 @@ export function WorkflowParamCard({
             disabled={!canReset}
             className={`nodrag nopan shrink-0 rounded p-0.5 transition-colors ${
               canReset
-                ? "text-(--color-ink-soft) hover:bg-white/8 hover:text-(--color-ink-bright)"
-                : "cursor-default text-(--color-ink-fainter)"
+                ? "text-ink-soft hover:bg-subtle hover:text-ink-bright"
+                : "cursor-default text-ink-fainter"
             }`}
             data-testid={`param-node-reset-${entryId}`}
             title={
@@ -224,8 +225,8 @@ export function WorkflowParamCard({
             <span
               className={`min-w-0 truncate ${
                 port.connected
-                  ? "text-(--color-ink-soft)"
-                  : "text-(--color-ink-fainter)"
+                  ? "text-ink-soft"
+                  : "text-ink-fainter"
               }`}
             >
               {port.name}
@@ -254,7 +255,7 @@ export function WorkflowParamCard({
       {!readOnly && footNote && (
         <div
           className={`px-2 pb-1.5 text-[9.5px] leading-relaxed ${
-            wired ? "text-(--color-ink-fainter)" : "text-amber-500/80"
+            wired ? "text-ink-fainter" : "text-amber-600/90 dark:text-amber-500/80"
           }`}
           data-testid={`param-node-hint-${entryId}`}
         >

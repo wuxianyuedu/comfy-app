@@ -26,11 +26,11 @@ const WorkflowCanvasEditor = dynamic(
     loading: () => (
       <FullScreenLayer
         zClass="z-50"
-        className="flex items-center justify-center bg-(--color-bg)"
+        className="flex items-center justify-center bg-bg"
       >
         <div className="text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
-          <p className="text-sm text-(--color-ink-faint)">加载工作流编辑器…</p>
+          <p className="text-sm text-ink-faint">加载工作流编辑器…</p>
         </div>
       </FullScreenLayer>
     ),
@@ -93,13 +93,13 @@ export function WorkflowLibrary({
       {/* 动作失败提示：只有用户点「重试」才消失（§17.5.4），
        *  否则防抖期内的后台拉取一成功就会把它吞掉。 */}
       {c.actionError && (
-        <div className="flex items-start gap-2 border-b border-red-500/25 bg-red-500/8 px-5 py-2.5 text-[12px] text-red-600">
+        <div className="flex items-start gap-2 border-b border-red-500/25 bg-red-500/8 px-5 py-2.5 text-[12px] text-red-700 dark:text-red-300">
           <span className="font-semibold">⚠</span>
           <span className="min-w-0 flex-1">{c.actionError}</span>
           <button
             type="button"
             onClick={c.refresh}
-            className="shrink-0 rounded-md border border-red-400/30 px-2 py-0.5 text-[11px] text-red-600 transition-colors hover:bg-red-500/15"
+            className="shrink-0 rounded-md border border-red-400/30 px-2 py-0.5 text-[11px] text-red-700 dark:text-red-300 transition-colors hover:bg-red-500/15"
           >
             重试
           </button>
@@ -107,7 +107,7 @@ export function WorkflowLibrary({
       )}
 
       {c.loadError && !c.actionError && (
-        <div className="flex items-start gap-2 border-b border-amber-500/25 bg-amber-500/8 px-5 py-2.5 text-[12px] text-amber-600">
+        <div className="flex items-start gap-2 border-b border-amber-500/25 bg-amber-500/8 px-5 py-2.5 text-[12px] text-amber-700 dark:text-amber-300">
           <span className="font-semibold">⚠</span>
           <span className="min-w-0 flex-1">{c.loadError}</span>
         </div>
@@ -129,7 +129,13 @@ export function WorkflowLibrary({
           onRefresh={c.refresh}
           localRootsHint={c.localRootsHint}
         />
-        <div className="flex-1">
+        {/* `min-w-0` 必须有：详情面板是弹性项，默认 `min-width: auto` 会让它**不
+            肯窄于内容的最小宽度**（面板里的画布预览、卡片列都不小），于是整行宽度
+            超过窗口、右半部分连同头部按钮一起被根容器的 `overflow-hidden` 裁掉
+            ——用户在小屏上「看不到最右侧的内容」就是这个成因。列表是固定宽侧栏，
+            因此让它 `shrink-0`，宽度压力全部由详情面板承担（面板内部自带滚动 /
+            画布平移缩放）。 */}
+        <div className="min-w-0 flex-1 overflow-hidden">
           <WorkflowLibraryDetail
             workflow={c.selectedRow}
             allModelTags={c.modelTags}
@@ -154,9 +160,6 @@ export function WorkflowLibrary({
 
       <WorkflowCanvasEditor
         workflowId={c.editingId ?? ""}
-        /* 库详情里选定的生效模式一并带进编辑器：两处显示、连线、落点落在同一个
-         *  模式上（不带的话编辑器按工作流默认模式打开，看起来像「线丢了」）。 */
-        initialMode={c.editingMode}
         open={!!c.editingId}
         onClose={c.handleEditorClose}
         onSave={c.load}

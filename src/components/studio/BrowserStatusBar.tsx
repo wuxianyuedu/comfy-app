@@ -45,17 +45,17 @@ function fmtClock(t: number | null): string {
 }
 
 const fpsTextColor: Record<string, string> = {
-  ok: "text-emerald-300",
-  warn: "text-amber-300",
-  bad: "text-rose-300",
-  unknown: "text-gray-500",
+  ok: "text-emerald-600 dark:text-emerald-300",
+  warn: "text-amber-600 dark:text-amber-300",
+  bad: "text-rose-600 dark:text-rose-300",
+  unknown: "text-ink-muted",
 };
 
 const fpsDotColor: Record<string, string> = {
   ok: "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]",
   warn: "bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]",
   bad: "bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.8)]",
-  unknown: "bg-gray-500",
+  unknown: "bg-ink-fainter",
 };
 
 export function BrowserStatusBar() {
@@ -88,14 +88,14 @@ export function BrowserStatusBar() {
 
   return (
     <div
-      className="fixed right-0 bottom-0 left-0 z-[10000] flex h-6 items-center justify-between gap-3 border-t border-white/6 bg-[#0c0c12]/95 px-3 text-[11px] text-gray-500 backdrop-blur-sm"
+      className="border-border bg-panel/95 text-ink-muted fixed right-0 bottom-0 left-0 z-[10000] flex h-6 items-center justify-between gap-3 border-t px-3 text-[11px] backdrop-blur-sm"
       aria-label="底部状态栏"
     >
       <div className="flex min-w-0 items-center gap-1.5">
-        <Lock size={11} className="shrink-0 text-emerald-400" />
-        <span className="shrink-0 text-gray-600">安全</span>
+        <Lock size={11} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <span className="text-ink-fainter shrink-0">安全</span>
         <span
-          className="truncate text-gray-400"
+          className="text-ink-soft truncate"
           title={host ? `${host}${pathname}` : pathname}
         >
           {host ? `${host}${pathname}` : pathname}
@@ -116,7 +116,7 @@ export function BrowserStatusBar() {
           <span className={`tabular-nums ${fpsTextColor[tone]}`}>
             {fps ?? "—"}
           </span>
-          <span className="text-gray-400">FPS</span>
+          <span className="text-ink-soft">FPS</span>
         </span>
 
         {/* 显存（nvidia-smi 物理专用显存口径，对齐任务管理器「专用 GPU 内存」）。
@@ -124,14 +124,14 @@ export function BrowserStatusBar() {
             非 NVIDIA 卡 / nvidia-smi 查询失败 → smiVram 为 null，整项隐藏（不留空项）。 */}
         {smiVram && (
           <span
-            className="hidden items-center gap-1 text-gray-400 tabular-nums sm:flex"
+            className="text-ink-soft hidden items-center gap-1 tabular-nums sm:flex"
             title="nvidia-smi 物理专用显存（与任务管理器「专用 GPU 内存」同口径）"
           >
-            <span className="text-gray-500">显存</span>
-            <span className="text-gray-200">
+            <span className="text-ink-muted">显存</span>
+            <span className="text-ink-bright">
               {fmtBytes(smiVram.used) ?? "—"}/{fmtBytes(smiVram.total) ?? "—"}
             </span>
-            <span className="text-gray-600">({smiVram.pct}%)</span>
+            <span className="text-ink-fainter">({smiVram.pct}%)</span>
           </span>
         )}
 
@@ -139,28 +139,28 @@ export function BrowserStatusBar() {
             已用 = 总量 − 剩用，与内存侧推导一致。非 NVIDIA 卡上这是唯一口径。 */}
         {cudaVram && (
           <span
-            className="hidden items-center gap-1 text-gray-400 tabular-nums sm:flex"
+            className="text-ink-soft hidden items-center gap-1 tabular-nums sm:flex"
             title="ComfyUI 上报的 CUDA 口径（显存剩余可用/总量，已用 = 总量 − 剩用）"
           >
-            <span className="text-gray-500">显存·ComfyUI</span>
-            <span className="text-gray-200">
+            <span className="text-ink-muted">显存·ComfyUI</span>
+            <span className="text-ink-bright">
               {fmtBytes(cudaVram.used) ?? "—"}/{fmtBytes(cudaVram.total) ?? "—"}
             </span>
-            <span className="text-gray-600">({cudaVram.pct}%)</span>
+            <span className="text-ink-fainter">({cudaVram.pct}%)</span>
           </span>
         )}
 
         {/* 内存占用：具体数值 + 百分比 */}
         {ram && (
           <span
-            className="hidden items-center gap-1 text-gray-400 tabular-nums sm:flex"
+            className="text-ink-soft hidden items-center gap-1 tabular-nums sm:flex"
             title="系统内存占用"
           >
-            <span className="text-gray-500">内存</span>
-            <span className="text-gray-200">
+            <span className="text-ink-muted">内存</span>
+            <span className="text-ink-bright">
               {fmtBytes(ram.used) ?? "—"}/{fmtBytes(ram.total) ?? "—"}
             </span>
-            <span className="text-gray-600">({ram.pct}%)</span>
+            <span className="text-ink-fainter">({ram.pct}%)</span>
           </span>
         )}
 
@@ -168,7 +168,7 @@ export function BrowserStatusBar() {
             说明「看不到数据」的原因，而不是让两项静默消失。 */}
         {degradedNote && (
           <span
-            className="hidden items-center gap-1 text-amber-300/80 sm:flex"
+            className="hidden items-center gap-1 text-amber-600/90 sm:flex dark:text-amber-300/80"
             title={degradedNote}
           >
             {degradedNote}
@@ -184,13 +184,13 @@ export function BrowserStatusBar() {
           title={`日志面板 (${isOpen ? "开" : "关"}) — Ctrl+Shift+L`}
           className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors ${
             isOpen
-              ? "bg-violet-500/20 text-violet-300"
-              : "text-gray-500 hover:bg-white/5 hover:text-gray-300"
+              ? "bg-violet-500/20 text-violet-700 dark:text-violet-300"
+              : "text-ink-muted hover:bg-subtle hover:text-ink"
           }`}
         >
           <FileText size={12} />
           {counts.error > 0 && (
-            <span className="rounded-full bg-rose-500/20 px-1 text-[10px] text-rose-300">
+            <span className="rounded-full bg-rose-500/20 px-1 text-[10px] text-rose-600 dark:text-rose-300">
               {counts.error}
             </span>
           )}
@@ -203,10 +203,10 @@ export function BrowserStatusBar() {
         <span
           className={`flex items-center gap-1 ${
             devServer.state === "online"
-              ? "text-emerald-300"
+              ? "text-emerald-600 dark:text-emerald-300"
               : devServer.state === "starting"
-                ? "text-gray-400"
-                : "text-rose-300"
+                ? "text-ink-soft"
+                : "text-rose-600 dark:text-rose-300"
           }`}
           title={devServer.title}
           aria-label={devServer.label}
@@ -217,13 +217,13 @@ export function BrowserStatusBar() {
               devServer.state === "online"
                 ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
                 : devServer.state === "starting"
-                  ? "animate-pulse bg-gray-400"
+                  ? "bg-ink-fainter animate-pulse"
                   : "bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.8)]"
             }`}
           />
           <span className="hidden sm:inline">{devServer.label}</span>
           {devServer.lastRestartAt !== null && devServer.state === "online" && (
-            <span className="hidden text-gray-500 lg:inline">
+            <span className="text-ink-muted hidden lg:inline">
               · {fmtClock(devServer.lastRestartAt)}
             </span>
           )}

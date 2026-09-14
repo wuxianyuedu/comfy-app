@@ -101,7 +101,7 @@ function PortRowString({
     <div className="flex h-[86px] flex-col gap-[6px] py-[6px]">
       <div className="flex h-4 items-center justify-between gap-2.5 pl-[14px] pr-[14px]">
         <span
-          className="text-[12px] font-medium text-(--color-ink-bright)"
+          className="text-[12px] font-medium text-ink-bright"
           style={{ fontFamily: "var(--font-sans)" }}
         >
           {label}
@@ -112,7 +112,7 @@ function PortRowString({
         readOnly
         rows={2}
         defaultValue={value}
-        className="mx-[14px] h-[52px] resize-none rounded-md border border-white/4 bg-(--color-canvas-deep) px-2.5 py-2 text-[11px] leading-relaxed text-(--color-ink-soft) outline-none"
+        className="bg-canvas-deep text-ink-soft mx-[14px] h-[52px] resize-none rounded-md border border-border-subtle px-2.5 py-2 text-[11px] leading-relaxed text-ink-soft outline-none"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </div>
@@ -132,7 +132,7 @@ function PortRowInt({
   return (
     <div className="flex h-[33px] items-center gap-2.5 pl-[14px] pr-[14px]">
       <span
-        className="text-[12px] font-medium text-(--color-ink-bright)"
+        className="text-[12px] font-medium text-ink-bright"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}
@@ -141,7 +141,7 @@ function PortRowInt({
       <input
         readOnly
         defaultValue={value}
-        className="h-[21px] w-[140px] rounded border border-(--color-border-strong) bg-(--color-canvas-deep) px-2 text-right text-[12px] tabular-nums text-(--color-ink-bright) outline-none"
+        className="h-[21px] w-[140px] rounded border border-border-strong bg-canvas-deep px-2 text-right text-[12px] tabular-nums text-ink-bright outline-none"
         style={{ fontFamily: "var(--font-sans)" }}
       />
       <PortChip type={type} />
@@ -161,7 +161,7 @@ function PortRowOutput({
     <div className="flex h-7 items-center gap-2.5 pl-[14px] pr-[14px]">
       <div className="flex-1" />
       <span
-        className="text-[12px] font-medium text-(--color-ink-bright)"
+        className="text-[12px] font-medium text-ink-bright"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}
@@ -185,7 +185,7 @@ export function WorkflowNodeArdot() {
   return (
     <div className="relative w-[340px]">
       {/* ── Card 自身（overflow-hidden 保护底部 ActionBtn 圆角）── */}
-      <div className="relative rounded-[14px] border border-(--color-border-strong) bg-(--color-card) overflow-hidden">
+      <div className="relative rounded-[14px] border border-border-strong bg-card overflow-hidden">
         {/* ── CardHeader 340×32 ── */}
         <div className="flex h-8 items-center justify-between gap-2.5 pl-[14px] pr-[14px]">
           <div className="flex items-center gap-2.5">
@@ -197,7 +197,7 @@ export function WorkflowNodeArdot() {
               W
             </span>
             <span
-              className="text-[14px] font-bold text-(--color-ink-bright)"
+              className="text-[14px] font-bold text-ink-bright"
               style={{ fontFamily: "var(--font-sans)" }}
             >
               自定义工作流
@@ -208,7 +208,7 @@ export function WorkflowNodeArdot() {
           >
             <span className="h-1.5 w-1.5 rounded-full bg-(--color-primary)" />
             <span
-              className="text-[10px] font-medium text-(--color-ink-soft)"
+              className="text-[10px] font-medium text-ink-soft"
               style={{ fontFamily: "var(--font-sans)" }}
             >
               待开始
@@ -246,7 +246,7 @@ export function WorkflowNodeArdot() {
             className="flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-(--color-primary)/35 bg-(--color-node-accent) px-2.5 text-[12px]"
           >
             <span
-              className="min-w-0 flex-1 truncate text-left font-semibold text-(--color-ink-bright)"
+              className="min-w-0 flex-1 truncate text-left font-semibold text-ink-bright"
               style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}
             >
               image_z_image_int8
@@ -259,12 +259,12 @@ export function WorkflowNodeArdot() {
             className="flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-(--color-primary)/55.00000000000001 bg-(--color-node-accent) px-2.5 text-[12px]"
           >
             <span
-              className="font-medium text-(--color-ink-bright)"
+              className="font-medium text-ink-bright"
               style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
             >
               T2I
             </span>
-            <span aria-hidden className="shrink-0 text-(--color-ink-muted)" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
+            <span aria-hidden className="shrink-0 text-ink-muted" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
           </button>
         </div>
 

@@ -578,8 +578,11 @@ zustand 队列，而不是再加一个模块级单例。
 | **失败原因只在弹窗顶部横幅里，日志行/时间线里找不到**（用户按「错误」筛选时一片空白）（ISSUE #378） | 面板把失败原因只渲染成横幅（`run.errorMessage` / `error`），而 SSE 的 `state`/`error` 帧可能不带对应的 `log` 帧（reaper 收口、DB 轮询补发终态、连接中断等），于是筛选视图与回放时间线里都看不到失败原因 | 已修：收口失败时**同时**补一条 error 日志行——工作流库运行记录走 `failWorkflowRun()`（`src/lib/workflow-run-store.ts`），画布面板走 `appendFailureLogLine()`（`GlobalStepLogPanel.tsx`），并做「末行同因」去重避免与服务端已有的 `✗ 生成失败` 重复。回归测试见 `src/lib/workflow-run-store.test.ts` |
 | 打开设置失败，页面只剩一句「配置数据未就绪」（没有原因、没有重试、日志面板里也找不到对应失败） | **判据取错**（ISSUE #304）：设置页有两个查询（`setting.get` / `llm.configGet`），降级视图此前只在「两份数据都没拿到」时才触发。当一份成功、一份失败（如 `llm` 相关表缺失 → `no such table: llmConfig`）时，草稿两份都不齐却又不满足该条件，容器一路落到兜底文案。叠加两个观测缺陷：①补记日志的 `query` 字段写死成 `setting.get`，与实际失败的查询对不上；②只记翻译后的可读文案（`signal is aborted without reason` 被译成「请求被中断，请稍候重试」），服务端原文丢失，用户按提示反复等重启永远修不好 | 已修：`hasError = 任一查询失败 且 草稿未就绪`（一份成功一份失败也落错误视图）；日志按实际失败查询记全名称，并把原始报错（tRPC `code` / 服务端 `message` / `cause` / 堆栈首行）写入 `raw` 字段；`errorMessage` 优先取 `shape.message` 的服务端原文，不让传输层包装文案盖掉根因。见 07 §7.12.1 |
 | 工作流库/项目列表整页空数据，tRPC 查询 500（console 报 no such table / Could not locate bindings） | **Drizzle 迁移三重遗漏**（2026-09-03 定位）：① better-sqlite3@11 无 Node 24 预编译包、本机无 MSVC → 原生绑定缺失，所有 DB 查询崩（升级到 v12，prebuild 下载即可）② `resolveDbPath` 用 `new URL("file:./db.sqlite")` 解析 → Windows 落到盘符根 `F:\db.sqlite` 空库（真实数据在 `prisma/db.sqlite`）③ schema.ts 表名 camelCase 与 Prisma 建的 PascalCase 表不一致 | ① better-sqlite3 钉在 v12（v13 移除预编译包，本机无编译链不能升）② 路径解析统一走 `path.resolve(process.cwd(), …)`（与 drizzle-kit 同锚点）③ 表名已重命名对齐 schema.ts；**换 Node 版本或重装依赖后先跑一次 `pnpm db:studio` 确认表与数据都在** |
-| `pnpm build` 报 **`Dynamic filesystem access causes tracing of the whole project`**（若干条，围绕 `db.ts` / `lifecycle.ts` / `api/dev/build-id` / `api/update-check` 等动态路径访问点） | **动态路径访问让 Turbopack 放弃静态追踪、退化为「整个项目全量追踪」**：`fs.*` / `path.resolve` / `path.join` 的参数只要依赖 `process.cwd()`、`process.env`、目录项或 HTTP 入参，它就无法把路径静态收敛到某个子目录，于是把**整个项目**（含 `public/`）都算作 server code 的依赖。判据是**高亮行正好落在那条「算出路径」的表达式上**（`path.join(...)` / `path.resolve(...)` 那一行），而不是消费它的 `fs.statSync`。后果是 `.next/standalone` 被撑大（本仓库实测 62MB，`standalone/src` 里连 142 个 `*.test.ts` 都进去了） | **已纠正口径（ISSUE #489 实测）**：`/*turbopackIgnore: true*/` 对 `fs.*` **一概无效**——它只作用于动态 `import()` / `require()`（Next 文档里这类注解的语义是 "skip bundling"）。仓库里那些存量注解（`envfile.ts` / `debug/source/route.ts` / `localWorkflows.ts` / `db.ts`）**从未真正生效**，告警一直在；把它们换位置、做常量、写进 `path.join` 参数里都试过，5 条告警一条不少。**真正的防线是 `next.config.js` 的 `outputFileTracingExcludes`**（体积护栏 1.5GB 也靠它）：它按**最终产物路径**排除，不依赖 Turbopack 的静态分析。**不要**用 `turbopack.ignoreIssue` 去「消警」：实测它只关消息、不改行为（配了它，把哨兵目录从 `outputFileTracingExcludes` 里摘掉后，哨兵**照样**回到 `standalone`）——那是把唯一的可见信号关掉而产物照旧被放大（反模式 E9）。详见 §7.2 |
+| `pnpm build` 报 **`Dynamic filesystem access causes tracing of the whole project`**（若干条，围绕 `db.ts` / `lifecycle.ts` / `api/dev/build-id` / `api/update-check` 等动态路径访问点） | **动态路径访问让 Turbopack 放弃静态追踪、退化为「整个项目全量追踪」**：`fs.*` / `path.resolve` / `path.join` 的参数只要依赖 `process.cwd()`、`process.env`、目录项或 HTTP 入参，它就无法把路径静态收敛到某个子目录，于是把**整个项目**（含 `public/`）都算作 server code 的依赖。判据是**高亮行正好落在那条「算出路径」的表达式上**（`path.join(...)` / `path.resolve(...)` 那一行），而不是消费它的 `fs.statSync`。后果是 `.next/standalone` 被撑大（本仓库实测修复前 62MB、`standalone/src` 里 143 个 `*.test.ts` 与 89 份 `changelog.d/*.md` 都在里面；补上 exclude 后产物干净、测试文件归零） | **已纠正口径（ISSUE #489 实测）**：`/*turbopackIgnore: true*/` 对 `fs.*` **一概无效**——它只作用于动态 `import()` / `require()`（Next 文档里这类注解的语义是 "skip bundling"）。仓库里那些存量注解（`envfile.ts` / `debug/source/route.ts` / `localWorkflows.ts` / `db.ts`）**从未真正生效**，告警一直在；把它们换位置、做常量、写进 `path.join` 参数里都试过，5 条告警一条不少。**真正的防线是 `next.config.js` 的 `outputFileTracingExcludes`**（体积护栏 1.5GB 也靠它）：它按**最终产物路径**排除，不依赖 Turbopack 的静态分析。**不要**用 `turbopack.ignoreIssue` 去「消警」：实测它只关消息、不改行为（配了它，把哨兵目录从 `outputFileTracingExcludes` 里摘掉后，哨兵**照样**回到 `standalone`）——那是把唯一的可见信号关掉而产物照旧被放大（反模式 E9）。详见 §7.2 |
 | **`pnpm build` 在 master / CI / 干净检出上必失败**（`next build` 挂在 `Collecting page data` 阶段，报错 import trace 指向 `/api/logs/history` 一类与库无关的路由） | **模块级副作用在「表还没建好」时读库**：ComfyUI 孤儿任务回收（`src/lib/comfyui/reaper.ts`）是模块级副作用（`enqueue.ts` 用裸 `import "./reaper"` 把它挂上启动路径），build 期 worker 加载模块图时同样会执行它；而干净检出只跑 `pnpm install`、没跑 `pnpm db:push`，于是 `no such table: task` / `no such table: user` 以未捕获异常浮出 worker，被 Next 聚合进 collect-page-data 阶段错误——报错行号落在无关路由上，把人引向错误方向 | 已修：新增 `src/lib/db-schema-ready.ts`（只读探 `sqlite_master` 的哨兵表，三态 ready / missing / unknown，同进程只探一次），reaper 每轮 sweep 先判就绪、未就绪整轮跳过（回收幂等且每 30s 重跑，只推迟一轮）；**不吞真故障**——「表存在但查询失败」仍照原路径暴露。该模块必须保持纯 ASCII，见下一条 |
+| **CI 的 `Test` 步骤在 master 上一直红**（`pnpm test` 报 `MissingEnvFileError: 缺少 .env 环境配置文件`；本机有 `.env` 的人跑同一个用例是绿的） | **用例的 `process.cwd` 替身泄漏到了别的 `describe`，把 `src/env.js` 的 `.env` 探测带偏**（ISSUE #489）：`src/lib/db-schema-ready.test.ts` 的文件级 `beforeEach` 对文件内**所有** `describe` 都生效，而末尾「reaper 模块级副作用」那组要 `import` 真实的 `~/server/db` → `~/env`，`env.js` 拿 `<cwd>/../.env` 探测配置文件；cwd 被留在临时目录时探测必然落空。**注意只设 `BETTER_AUTH_GITHUB_CLIENT_ID` 两个变量是不够的**（实测仍然红）——校验有两层：`.env` 文件存在性 + 必填项，两层都要满足。CI 的 `Test` 是裸 `pnpm run test`（不注入 `SKIP_ENV_VALIDATION`），所以每次必挂；而 `test:coverage` 走另一条链路能过，于是呈现成「Coverage 绿、Test 红」这种最容易被忽略的形态 | 已修：cwd 替身改为**按 `describe` 建立、退出即还原**（`useTempCwd()` + 各自 `afterEach`），不再放进文件级钩子；该组自己 `vi.stubEnv` 补齐 `SKIP_ENV_VALIDATION` 与两处占位密钥，**不去读开发者本机的 `.env`**——用例的可通过性只能取决于用例自己造的东西 |
+| **`pnpm build` 在 CI 上必挂**，`Collecting page data` 阶段报 `TypeError: Cannot read properties of undefined (reading 'startsWith')`（行号落在 `src/server/db.ts::resolveDbPath`，但触发路由是 `/api/debug/source`、`/api/logs/history` 一类无关路由） | **`SKIP_ENV_VALIDATION=1` 放行了校验，却没给 `DATABASE_URL` 兜底**（ISSUE #489）：CI 的 Build 步骤只设 `SKIP_ENV_VALIDATION`、不注入 `DATABASE_URL`，于是 `env.DATABASE_URL` 是 `undefined`，`db.ts` 里直接 `url.startsWith("file:")` 抛错；`db.ts` 被每条路由的模块图拉到，异常浮出 worker 后聚合进 collect-page-data 阶段。与上一行「模块级副作用读库」**同族但不同档**：那条是「表还没建」，这条是「连库路径都没有」 | 已修：`resolveDbPath` 先兜 `url || "./db.sqlite"`（`src/server/workshop/db.ts` 一直是这么写的，`src/server/db.ts` 漏了），缺值时退到与 drizzle-kit 同一锚点的默认库文件，「表可能还没建」交给运行期的可读出口（`/api/health` 的 503 + `db: empty`）而不是构建期崩溃。**`src/server/db.ts` 顺带转为纯 ASCII**（它在构建期模块图上且实测会被 code frame 渲染，见下一行的 panic 风险） |
+| **`pnpm db:push` 在无 TTY 环境「成功」了，但应用起来只有真实业务页面 500**（`/`、`/api/health`、`/settings` 都 200，`/api/logs/list` 报 `SqliteError: no such table: user`） | **交互提示被静默吞掉**（ISSUE #489）：`drizzle-kit push` 需要交互确认时报 `Interactive prompts require a TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。管道输入、脚本、CI、远程会话、容器都是这个条件；文档 §9.1 的第一步就把它写成了 `pnpm db:push`。「只探首页会误判成 Linux 完全通了」是它最难查的地方——`SELECT 1` 在空库上也成功，所以 `/api/health` 照样回 `db: up` | 已修（§9.1「建库」）：`pnpm db:push` 改走 `scripts/db-push.mjs`——以 `--force` 运行（无交互、幂等），**复核库里到底有没有表**（不看退出码：无 TTY 上正是「报错但 exit 0」），复核失败即非零退出 + 可行动提示。另加两道出口：`dev.mjs` / `start.mjs` 启动即探哨兵表并警告（只警告不退出），`GET /api/health` 一并探 schema 就绪度（空库 → 503 + `db: "empty"`） |
 | **给构建期模块图上的文件加中文注释后，`next build` 报的不是业务错，而是整个构建被一个 Rust panic 带走**：`thread 'tokio-rt-worker' panicked at crates/next-code-frame/src/highlight.rs:1021:45: end byte index N is not a char boundary` + `Build error occurred [Error: Panic in async function]` | **Next 的 code frame 高亮按字节偏移切串，落在多字节字符中间就 panic**（Next 16.3.2 实测）：`next-code-frame` 渲染错误现场时按**字节**取「该行的第 a..b 字节」，而一个中文字符占 3 字节；只要某个高亮区间的 `end` 落在中文字符内部，Rust 侧切片直接 panic 把 build 打死。触发条件是**组合**而非内容：某模块既在构建期被加载、又成为错误现场被渲染成 code frame，且其注释/字符串含多字节字符、偏移恰好落在字符中间——同一文件删掉中文能过、换成不同长度的中文又能复现，属偏移敏感的脆弱路径 | 规避（本仓库口径）：**会被 `next-code-frame` 渲染到的模块一律保持纯 ASCII 源码**。实践上指「new / 改动了构建期模块图上的模块」（被 `next build` worker 加载、且可能成为报错现场的那个）：注释与字符串写英文；其余文档与业务模块不受影响，中文注释照常。**排查手法**：build 报上面这段 panic 时不要去找业务 bug，先把最近新增/改动、且位于构建期模块图上的文件临时改 ASCII 再跑一次，能过即命中本条；用 `node -e 'const s=require("fs").readFileSync("f.ts","utf8");console.log([...s].filter(c=>c.charCodeAt(0)>127).length)'` 数非 ASCII 字符定位 |
 | drizzle-kit push 非交互环境报 "Interactive prompts require a TTY"，或重建表时 "index xxx already exists" | push 遇到表重命名/重建差异需要交互确认；其重建路径在多次部分执行后有索引名冲突的已知缺陷 | 启动器用 `push --force`（非致命，失败仅 WARN）；手动收敛时按「清理 `__new_*` 残留表与同名索引 → 重试 push」循环；索引可安全 DROP 后由 push/schema 重建 |
 | **应用服务（dev server）没起来 / 起来了但页面拿不到数据，日志面板同时是空的**——用户无从判断是「真的没日志」还是「观测链路断了」（ISSUE #360） | **失败落在面板的轮询通道之外**：面板只读 launcher / dev / app-runtime 三路，而 Next dev server 的首屏编译错误、`FATAL: An unexpected Turbopack error`、未捕获的服务端异常、pino 的 ERROR 行都落在 `log/nextjs/nextjs-stdout|stderr-*.log`（不在三路里）；面板拉不到日志时的 `catch` 又是静默的（「静默忽略」在启动阶段成立、运行阶段就是藏问题）；服务端重启前后也没有任何标识能把两个进程的输出分开 | 已修（规范 07 §7.18）：① 进程启动时把 stdout/stderr **额外**转录到 `log/nextjs/nextjs-panel-<boot>.log`，面板新增第 4 路来源「应用服务」（`capture-streams.server.ts` + `source=app`）；② pino 的 ERROR 镜像进 app-runtime（面板可见），INFO 不镜像；③ 面板拉不到日志时给一条**只说一次**的 warn（应用服务不可达 + 常见原因），恢复时补一条 info；④ 每个响应带 `bootId`，进程变化即清空时间线并重读（避免重启前后混成一条线），页脚常驻「服务 <标识>」徽标 |
@@ -737,6 +740,45 @@ Warning: Dynamic filesystem access causes tracing of the whole project
 `src-tauri/`、`python-venv/`、`tools/`、`docs/`、`e2e/`、`tests/`、`log/` 等
 （体积护栏 1.5GB 也在这一条上）。
 
+**第四件事：告警能不能「真减量」——取决于路径能不能静态收敛（实测判据）。**
+Turbopack 的判据不是「有没有动态分量」，而是**路径表达式的最末一段是不是动态值**。
+在 Next 16.3.2 上逐条实测（探针路由，只改一处、其余不动）：
+
+| 路径写法（`cwd = process.cwd()`） | 告警 |
+|---|---|
+| `path.join(cwd, rel)`（动态段直接挂在锚点上） | **报** |
+| `path.resolve(cwd, raw)`（同上，`raw` 来自环境变量） | **报** |
+| `` `${cwd}/${rel}` ``（模板串拼路径） | **报** |
+| `path.join(cwd, "src", rel)`（字面量子目录 + 动态叶子） | 不报 |
+| `path.join(cwd, rel, "package.json")`（动态中间段 + 字面量叶子） | 不报 |
+| `path.join(cwd, "package.json")`（全字面量） | 不报 |
+
+> 也就是说：**这条告警只可能靠「让路径落到一个可命名的子目录」来消**，而本仓库
+> 那 5 处（`api/dev/build-id` / `api/update-check` / `lib/comfyui/status` /
+> `lib/db-schema-ready` / `server/workshop/db`）的动态段都来自**运行期事实**
+> ——`process.cwd()`、`DATABASE_URL`、用户配置的 ComfyUI 解释器路径、HTTP 入参。
+> 想让它们静态收敛，等价于**改路径契约**（例如把 `db.sqlite` 从仓库根挪进
+> `db/` 子目录、把被观测源码清单改成固定常量）。那是产品/存储布局决策，不是
+> Lint 级别的清理，**因此本仓库的处置是「不消警、以 `outputFileTracingExcludes`
+> 兜住产物」**——告警的数量本身不构成缺陷，产物里有没有不该有的东西才是。
+
+**第五件事：`outputFileTracingExcludes` 有一个已知盲区——`instrumentation` 不被应用。**
+Next 的 include/exclude 是在 `collect-build-traces` 里**按 route entry 逐个**应用的
+（`entryNameFilesMap` 的每一项），而 `instrumentation.js` 的 nft 追踪**不在这个表里**。
+后果：本仓库 `src/log-paths.ts` 顶层用 `path.join(process.cwd(), "log")` 解析日志目录，
+`src/instrumentation.ts` 在 import 期就把它拉到图上，于是 `log/**` 会被写进
+`.next/server/instrumentation.js.nft.json`——**即使 `./log/**` 已在 excludes 清单里**。
+判据与自查：
+
+```bash
+node -e "const j=require('./.next/server/instrumentation.js.nft.json');   console.log(j.files.filter(f=>/\/log\//.test(f)))"
+```
+
+命中即说明产物会带上这几份运行期日志（本仓库实测 6 个文件、几十 KB，量不大但
+属于「运行期产物混进构建输出」）。这类泄漏只能靠**构建后的产物级检查**发现，
+所以处置办法不是加注解，而是 `scripts/check-standalone-contents.cjs` 那条真数文件的
+护栏（见下方「门禁」）。
+
 **三条禁令**
 
 1. **不要**用 `turbopack.ignoreIssue` 消这条警：它只过滤 CLI 输出与 overlay，
@@ -750,9 +792,19 @@ Warning: Dynamic filesystem access causes tracing of the whole project
    `next build` 被 `Error: Panic in async function` 带走，`--debug` 也只丢一行
    `FATAL`、指不到业务原因。构建期模块图上的改动保持「最小、直接」。
 
-**门禁**：`tests/turbopack-tracing-excludes.test.ts` 锁住 excludes 的完整性
-（键位在顶层、关键目录清单不缺、改动不静默失效），并断言 `turbopack.ignoreIssue`
-没有拿来遮这条告警；另有一条探针断言 `standalone` 里不得出现测试/文档/工具目录。
+**门禁**（两层：配置层 + 产物层）：
+
+- **配置层** `tests/turbopack-tracing-excludes.test.ts`：锁 excludes 的完整性
+  ——键位在顶层、关键目录清单不缺（含 `changelog.d/` 与 `src/**/*.test.ts`）、
+  改动不静默失效，并断言 `turbopack.ignoreIssue` 没有拿来遮这条告警。
+- **产物层** `scripts/check-standalone-contents.cjs`（CI 在 `pnpm build` 之后调用）：
+  真去数 `.next/standalone` 里有没有测试文件 / 变更碎片 / 文档，命中即非零退出。
+  为什么必须有这一层：「清单还在」不等于「清单生效」（历史事故：键位挂在
+  `experimental` 下一个字都没被读），且上面第五件事那种 `instrumentation` 盲区
+  只有数产物才看得见。产物不存在时该脚本跳过——它守的是构建结果，不是构建本身。
+
+> 清单只锁「关键目录在不在」，不锁白名单全量：全量比对会在每次合理地新增排除项时
+> 无谓变红，反而让人习惯性改测试。产物层那条才是真正的兜底。
 
 ---
 
@@ -870,9 +922,34 @@ reg delete "HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\comman
 ```bash
 pnpm install
 cp .env.example .env        # 必须：src/env.js 启动时校验，缺了直接报 Invalid environment variables
-pnpm db:push                # Drizzle 同步表结构
+pnpm db:push                # Drizzle 同步表结构（经 scripts/db-push.mjs，见下方「建库」）
 pnpm dev                    # 经 scripts/dev.mjs 解析端口（缺省按检出路径推导）
 ```
+
+**建库（`pnpm db:push`）为什么不能直接写 `drizzle-kit push`**：它在需要交互确认
+时会在无 TTY 环境（CI、脚本、远程会话、容器）报 `Interactive prompts require a
+TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `/`、
+`/api/health` 都 200，只有真实业务路由 500（`no such table`）——**看起来通了**
+比直接失败更难查（§9.2 第 3 条禁止的静默失败形态，历史上 `db:push` 就这么潜伏过）。
+现在 `pnpm db:push` 走 `scripts/db-push.mjs`：
+
+- 以 `--force` 运行（无交互、幂等；已有 schema 时输出 `No changes detected`）；
+- **复核库里到底有没有表**——不看 drizzle-kit 的退出码（它在无 TTY 上正是
+  「报错但 exit 0」，退出码在这条链路上不是事实来源）；
+- 复核失败即**非零退出**并打印可行动提示，绝不把「留了个空库」当成功。
+
+> `--force` 的语义是「自动批准会丢数据的语句」（drop column / 重建表等）。
+> 首次建表与增量加表都没有丢数据的语句，无风险；但**当 schema 变更需要丢弃
+> 既有数据时它会直接执行而不询问**——那时请先备份，或改用 `pnpm db:generate`
+> + `pnpm db:migrate` 审阅 SQL 后再应用。
+
+**三道防线一起看**（ISSUE #489 实测）：
+
+| 时点 | 探针 | 空库时的表现 |
+|---|---|---|
+| 建库 | `scripts/db-push.mjs` 数用户表 | 非零退出 + 可行动提示 |
+| 启动 | `scripts/dev.mjs` / `scripts/start.mjs` 探哨兵表 | 打印「表还没建 → 先跑 `pnpm db:push`」的 ⚠（**只警告不退出**：改纯前端的页面不该被挡住） |
+| 运行 | `GET /api/health` 一并探 schema 就绪度 | 503 + `db: "empty"`（此前只探 `SELECT 1`，空库照样回 `db: up`，探针因此漏报整档） |
 
 全链路**不调用任何 `.ps1` / `pwsh` / `taskkill`**：
 
@@ -899,6 +976,11 @@ pnpm dev                    # 经 scripts/dev.mjs 解析端口（缺省按检出
 3. **失败路径要有出口**：平台不支持某项能力时，给可行动的提示
    （如「请在 ComfyUI 自己的终端里关闭」），不要静默返回 null —— 静默失败
    比抛错更难排查（§5 多条事故同源）。
+4. **不依赖 TTY**：任何会被 CI / 脚本 / 容器调用的命令，都要在
+   `stdin`/`stdout` 不是终端时也能给出确定结果。`drizzle-kit push` 无 TTY 时
+   「报错 + exit 0 + 留空库」正是这条的反例（见 §9.1 建库）；判据落在
+   `scripts/db-push.mjs`。新增这类封装时，**结果复核不要看退出码**——
+   以「目标状态是否真的达成」为准。
 
 ### 9.3 这个模式**不**解决的问题（别误当成 Linux 支持）
 

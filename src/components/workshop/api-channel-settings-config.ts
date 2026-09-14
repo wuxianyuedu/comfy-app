@@ -43,6 +43,6 @@ export const API_CHANNEL_SAVE_FAIL = "保存失败";
 
 /** 结果提示条配色：成功绿 / 失败红。 */
 export const API_CHANNEL_MSG_STYLE: Record<"ok" | "err", string> = {
-  ok: "bg-emerald-100 text-emerald-700",
-  err: "bg-red-100 text-red-700",
+  ok: "bg-emerald-100 text-emerald-800 dark:text-emerald-300",
+  err: "bg-red-100 text-red-800 dark:text-red-300",
 };

@@ -42,7 +42,7 @@ export function AgentOverlay({
     : messages;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex h-[560px] w-[440px] flex-col overflow-hidden rounded-2xl border border-border bg-(--color-panel-deep)/95 shadow-2xl backdrop-blur-xl">
+    <div className="fixed bottom-6 right-6 z-50 flex h-[560px] w-[440px] flex-col overflow-hidden rounded-2xl border border-border bg-panel-deep/95 shadow-2xl backdrop-blur-xl">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white">
@@ -117,7 +117,7 @@ export function AgentOverlay({
           // assistant
           return (
             <div key={msg.id} className="flex justify-start">
-              <div className="bg-white/6 max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed text-(--color-ink)">
+              <div className="bg-subtle text-ink max-w-[85%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap">
                 {msg.content}
               </div>
             </div>
@@ -126,7 +126,7 @@ export function AgentOverlay({
 
         {busy && (
           <div className="flex justify-start">
-            <div className="bg-white/6 rounded-2xl px-3 py-2.5">
+            <div className="bg-subtle rounded-2xl px-3 py-2.5">
               <span className="inline-flex gap-1">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground" />
                 <span
@@ -144,7 +144,7 @@ export function AgentOverlay({
       </div>
 
       {error && (
-        <p className="border-border bg-red-100/10 border-t px-4 py-1.5 text-[11px] text-red-400">
+        <p className="border-border border-t bg-red-500/10 px-4 py-1.5 text-[11px] text-red-700 dark:text-red-400">
           {error}
         </p>
       )}
@@ -167,7 +167,7 @@ export function AgentOverlay({
           }}
           rows={1}
           placeholder="描述你的创作想法… (Enter 发送)"
-          className="min-w-0 flex-1 resize-none rounded-xl border border-border bg-white/5 px-3 py-2 text-[13px] text-ink outline-none placeholder:text-muted-foreground/50 focus:border-violet-500/40"
+          className="border-border bg-subtle text-ink placeholder:text-muted-foreground/50 min-w-0 flex-1 resize-none rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-violet-500/40"
         />
         <button
           type="button"

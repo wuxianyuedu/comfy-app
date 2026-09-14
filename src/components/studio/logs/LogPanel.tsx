@@ -67,13 +67,13 @@ import {
  * 按钮再等分也读不齐。这里给它一个显式的 `w-[4ch]`——「文字 + 四位数字」是
  * 这一格的固定预算，所以**文本长度不再随内容变化**。
  *
- * 数字本身不再按级别染色（`text-gray-600` 固定）：级别色已由同一行左侧的
+ * 数字本身不再按级别染色（`text-ink-fainter` 固定）：级别色已由同一行左侧的
  * **标签文字**承担（「警告」黄、「错误」红），同一个含义不必写两遍，
  * 也避免两个色块挤在一个按钮里互相稀释。
  */
 function CountChip({ value }: { value: number }) {
   return (
-    <span className="w-[4ch] shrink-0 text-right text-[11px] text-gray-600 tabular-nums">
+    <span className="text-ink-fainter w-[4ch] shrink-0 text-right text-[11px] tabular-nums">
       {value}
     </span>
   );
@@ -126,12 +126,12 @@ function CountColumn({
 }) {
   const color =
     value === 0
-      ? "text-gray-600"
+      ? "text-ink-fainter"
       : tone === "warn"
-        ? "text-amber-300"
+        ? "text-amber-600 dark:text-amber-300"
         : tone === "error"
-          ? "text-rose-300"
-          : "text-gray-300";
+          ? "text-rose-600 dark:text-rose-300"
+          : "text-ink-soft";
   return (
     <span className={`w-14 shrink-0 text-right tabular-nums ${color}`}>
       {value > 0 ? value : "—"}
@@ -177,11 +177,11 @@ const ORIGIN_COLUMNS: {
  * 「有没有问题」由数字回答（`0` 与「切过去是空的」互相印证）。
  */
 const LEVEL_LABEL_STYLES: Record<LogFilter, string> = {
-  all: "text-gray-100",
-  debug: "text-gray-500 hover:text-gray-300",
-  info: "text-cyan-300 hover:text-cyan-200",
-  warn: "text-amber-300 hover:text-amber-200",
-  error: "text-rose-300 hover:text-rose-200",
+  all: "text-ink-bright",
+  debug: "text-ink-muted hover:text-ink",
+  info: "text-cyan-700 hover:text-cyan-800 dark:text-cyan-300 dark:hover:text-cyan-200",
+  warn: "text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200",
+  error: "text-rose-600 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200",
 };
 
 const FILTER_LABELS: { label: string; value: LogFilter }[] = [
@@ -360,14 +360,14 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
        * 显形（`focus-visible`），不然纯键盘用户点不到它。 */
       className={`shrink-0 self-center rounded p-1 transition-opacity ${
         state === "idle"
-          ? "opacity-0 group-hover:opacity-100 hover:bg-white/8 hover:text-gray-200 focus-visible:opacity-100"
+          ? "hover:bg-subtle hover:text-ink focus-visible:opacity-100 opacity-0 group-hover:opacity-100"
           : "opacity-100"
       } ${
         state === "done"
-          ? "text-emerald-300"
+          ? "text-emerald-600 dark:text-emerald-300"
           : state === "failed"
-            ? "text-rose-300"
-            : "text-gray-500"
+            ? "text-rose-600 dark:text-rose-300"
+            : "text-ink-muted"
       }`}
     >
       {state === "idle" ? (
@@ -391,10 +391,10 @@ const LogRow = memo(function LogRow({
   keyword: string;
 }) {
   return (
-    <div className="group flex items-start gap-2.5 border-b border-white/3 px-4 py-1 font-mono text-[13px] leading-snug hover:bg-white/2">
+    <div className="border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 border-b px-4 py-1 font-mono text-[13px] leading-snug">
       <time
         dateTime={new Date(entry.time).toISOString()}
-        className="shrink-0 text-gray-500 tabular-nums"
+        className="text-ink-muted shrink-0 tabular-nums"
       >
         {formatTime(entry.time)}
       </time>
@@ -422,19 +422,19 @@ const LogRow = memo(function LogRow({
               .writeText(entry.location!)
               .catch(() => undefined)
           }
-          className="max-w-[28%] shrink-0 cursor-pointer truncate text-right text-[11px] text-gray-600 hover:text-gray-400"
+          className="text-ink-fainter hover:text-ink-soft max-w-[28%] shrink-0 cursor-pointer truncate text-right text-[11px]"
           title={`${entry.location}（点击复制）`}
         >
           {entry.location}
         </button>
       )}
       {entry.origin ? (
-        <span className="shrink-0 text-[11px] text-gray-600">
+        <span className="text-ink-fainter shrink-0 text-[11px]">
           {entry.origin}
         </span>
       ) : (
         entry.source !== "console" && (
-          <span className="shrink-0 text-[11px] text-gray-600">
+          <span className="text-ink-fainter shrink-0 text-[11px]">
             {entry.source}
           </span>
         )
@@ -492,7 +492,7 @@ function OriginSelect({
         size="sm"
         aria-label="按来源筛选"
         title="按来源筛选：展开后每项都标出该类别的条数与本机上的信息 / 警告 / 错误"
-        className="h-8 rounded-lg border-white/6 bg-[#13131a] text-[12px] text-gray-300"
+        className="border-border-strong bg-canvas-deep text-ink-field h-8 rounded-lg text-[12px]"
       >
         {/* 只写来源名：具体多少条、多少警告在左侧级别按钮与标题徽标上，
             这里再报一遍既不增加信息量，又把本就不宽的行头再挤掉一块。 */}
@@ -525,12 +525,12 @@ function OriginSelect({
          * 于是弹层顶边恒等于扳机底边（sideOffset 4px），与窗口位置无关。 */
         alignItemWithTrigger={false}
         collisionAvoidance={{ side: "none" }}
-        className="w-auto min-w-max rounded-lg border border-white/8 bg-[#15141f] p-0 text-gray-300"
+        className="border-border-strong bg-card text-ink-field w-auto min-w-max rounded-lg border p-0"
       >
         {/* 列标题：把「数字是什么」写在一次，行内就不必每格重复「信息 / 警告」 */}
         <div
           aria-hidden
-          className="flex items-center gap-3 border-b border-white/6 px-2.5 py-1 text-[11px] text-gray-500"
+          className="border-border-strong text-ink-muted flex items-center gap-3 border-b px-2.5 py-1 text-[11px]"
         >
           <span className="w-16 shrink-0">来源</span>
           {ORIGIN_COLUMNS.map((column) => (
@@ -549,7 +549,7 @@ function OriginSelect({
                 className="gap-0 py-1 pr-7 pl-1.5 text-[12px]"
               >
                 <span className="flex items-center gap-3">
-                  <span className="w-16 shrink-0 text-gray-200">
+                  <span className="text-ink-bright w-16 shrink-0">
                     {ORIGIN_TEXT[origin]}
                   </span>
                   {ORIGIN_COLUMNS.map((column) => (
@@ -788,7 +788,7 @@ export function LogPanel() {
       )}
     >
       <div
-        className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-6xl"} flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#12101c] shadow-2xl shadow-black/60`}
+        className={`border-border-strong bg-panel flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-6xl"} flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60`}
       >
         {/* Header */}
         {/* 行头：宽窗口下是一行（标题 / 筛选器 / 空白 / 搜索 / 来源 / 操作），
@@ -799,12 +799,12 @@ export function LogPanel() {
             的总宽在 700px 上下就超过可用宽度；此前只有「一起硬挤」一条路，挤到
             最后标题换行、搜索框缩成图标、筛选器只剩下一列竖字。折行是这类
             「控件数量固定、宽度不定」行头的标准解法。 */}
-        <div className="flex min-h-14 shrink-0 flex-wrap items-center gap-y-1.5 border-b border-white/8 bg-white/2 px-4 py-2">
+        <div className="border-border-strong bg-surface-1 flex min-h-14 shrink-0 flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
           <div className="flex shrink-0 items-center gap-2">
-            <FileText size={16} className="shrink-0 text-violet-400" />
+            <FileText size={16} className="shrink-0 text-violet-700 dark:text-violet-400" />
             {/* 标题不可换行：换行会把行头撑高、把下面的筛选器挤成竖排单字
                 （窄窗口下实测就是这样）。宽度不够时宁可让别的元素让它。 */}
-            <span className="text-[15px] font-semibold whitespace-nowrap text-gray-100">
+            <span className="text-ink-bright text-[15px] font-semibold whitespace-nowrap">
               应用日志
             </span>
             {/* 这里**不再**复述任何计数（ISSUE #262 五审）。
@@ -850,7 +850,9 @@ export function LogPanel() {
                  * 留着它等于给省略号留后门。横向溢出由行头的 `flex-wrap`
                  * （容器 `min-w-56` 是折行判据）接住。 */
                 className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] leading-none transition-colors ${
-                  filter === option.value ? "bg-white/10" : "hover:bg-white/4"
+                  filter === option.value
+                    ? "bg-subtle"
+                    : "hover:bg-subtle/70"
                 } ${LEVEL_LABEL_STYLES[option.value]}`}
                 title={`当前来源的${option.label}：${originCounts[option.value]} 条（该来源共 ${originCounts.all} 条 · 警告 ${originCounts.warn} · 错误 ${originCounts.error}）`}
               >
@@ -871,20 +873,20 @@ export function LogPanel() {
           <div className="relative flex w-56 min-w-24 shrink items-center">
             <Search
               size={14}
-              className="pointer-events-none absolute left-2.5 text-gray-600"
+              className="text-ink-fainter pointer-events-none absolute left-2.5"
             />
             <input
               type="text"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="搜索日志（支持命中高亮）..."
-              className="h-8 w-full rounded-lg border border-white/6 bg-[#13131a] pr-7 pl-8 text-[13px] text-gray-200 outline-none placeholder:text-gray-600 focus:border-violet-500/40"
+              className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter focus:border-violet-500/40 h-8 w-full rounded-lg border pr-7 pl-8 text-[13px] outline-none"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch("")}
-                className="absolute right-2 text-gray-500 hover:text-gray-300"
+                className="text-ink-muted hover:text-ink absolute right-2"
               >
                 ×
               </button>
@@ -909,8 +911,8 @@ export function LogPanel() {
               title={wrap ? "折叠超长行" : "自动换行显示"}
               className={`rounded-md p-2 transition-colors ${
                 wrap
-                  ? "bg-white/8 text-gray-200"
-                  : "text-gray-500 hover:bg-white/5 hover:text-gray-300"
+                  ? "bg-subtle text-ink-bright"
+                  : "text-ink-muted hover:bg-subtle hover:text-ink"
               }`}
             >
               <Type size={16} />
@@ -919,7 +921,7 @@ export function LogPanel() {
               type="button"
               onClick={copyAll}
               title="复制全部日志"
-              className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
+              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md p-2 transition-colors"
             >
               <Copy size={16} />
             </button>
@@ -927,7 +929,7 @@ export function LogPanel() {
               type="button"
               onClick={download}
               title="下载为文本文件"
-              className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
+              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md p-2 transition-colors"
             >
               <Download size={16} />
             </button>
@@ -935,7 +937,7 @@ export function LogPanel() {
               type="button"
               onClick={clear}
               title="清空面板"
-              className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
+              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md p-2 transition-colors"
             >
               <Trash2 size={16} />
             </button>
@@ -943,7 +945,7 @@ export function LogPanel() {
               type="button"
               onClick={() => setWide((w) => !w)}
               title={wide ? "收缩" : "加宽"}
-              className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
+              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md p-2 transition-colors"
             >
               {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
@@ -951,7 +953,7 @@ export function LogPanel() {
               type="button"
               onClick={() => setIsOpen(false)}
               title="关闭 (Ctrl+Shift+L)"
-              className="rounded-md p-2 text-gray-500 transition-colors hover:bg-white/5 hover:text-gray-300"
+              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md p-2 transition-colors"
             >
               <X size={16} />
             </button>
@@ -962,10 +964,10 @@ export function LogPanel() {
         <div
           ref={bodyRef}
           onScroll={onScroll}
-          className="custom-scrollbar flex-1 overflow-y-auto bg-[#0d0d14]/60"
+          className="custom-scrollbar bg-canvas-deep/60 flex-1 overflow-y-auto"
         >
           {pageLogs.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-gray-600">
+            <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
               <FileText size={32} strokeWidth={1.5} className="opacity-30" />
               {total === 0 ? "暂无匹配的日志" : "本页无内容"}
             </div>
@@ -985,7 +987,7 @@ export function LogPanel() {
         {/* Footer：分页 + 「回到最新」出口。
             时间线不设总数上限（能往前翻完整段历史），**同时显示**多少条由
             每页 ≤ LOG_PAGE_SIZE 兜住，用户不会再被「两千条封顶」挡住视线。 */}
-        <div className="flex h-9 shrink-0 items-center justify-between border-t border-white/8 bg-white/2 px-4 text-[12px] text-gray-500">
+        <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
           <span className="flex items-center gap-2">
             <span>
               {pageSummary(
@@ -1001,7 +1003,7 @@ export function LogPanel() {
                 也让面板在服务真重启后能自证（时间线已重置）。 */}
             {bootId && (
               <span
-                className="shrink-0 rounded border border-white/8 px-1.5 py-px text-[11px] text-gray-500"
+                className="border-border-strong text-ink-muted shrink-0 rounded border px-1.5 py-px text-[11px]"
                 title={`应用服务进程标识：${bootId}（重启后会变化，面板据此重置时间线）`}
               >
                 服务 {bootId.split(":").slice(-2).join(":")}
@@ -1027,14 +1029,14 @@ export function LogPanel() {
                 onClick={() => setPage(safePage + 1)}
                 disabled={safePage >= totalPages}
                 title="更早的一页"
-                className="rounded-md p-1 text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
+                className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <ChevronLeft size={14} />
               </button>
               {/* 当前正看的是哪一段（来源 / 级别 / 搜索词），点任意一项即去掉
                   那一层筛选。此处用按钮而不是纯文本：页脚是「说出来我在看什么」
                   的位置，回滚动作本来就该在这儿，不必让用户跑回顶部找。 */}
-              <span className="flex items-center gap-1 text-gray-400">
+              <span className="text-ink-soft flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setOrigin("all")}
@@ -1042,7 +1044,7 @@ export function LogPanel() {
                   title={
                     origin && origin !== "all" ? "去掉来源筛选" : undefined
                   }
-                  className="rounded-md px-1.5 py-0.5 tabular-nums enabled:hover:bg-white/5 enabled:hover:text-gray-200 disabled:cursor-default"
+                  className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md px-1.5 py-0.5 tabular-nums disabled:cursor-default"
                 >
                   {ORIGIN_TEXT[origin ?? "all"]}
                 </button>
@@ -1051,7 +1053,7 @@ export function LogPanel() {
                   onClick={() => setFilter("all")}
                   disabled={filter === "all"}
                   title={filter !== "all" ? "去掉级别筛选" : undefined}
-                  className="rounded-md px-1.5 py-0.5 enabled:hover:bg-white/5 enabled:hover:text-gray-200 disabled:cursor-default"
+                  className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md px-1.5 py-0.5 disabled:cursor-default"
                 >
                   {FILTER_LABELS.find((item) => item.value === filter)?.label}
                 </button>
@@ -1060,7 +1062,7 @@ export function LogPanel() {
                     type="button"
                     onClick={() => setSearch("")}
                     title="清空搜索"
-                    className="max-w-40 truncate rounded-md px-1.5 py-0.5 hover:bg-white/5 hover:text-gray-200"
+                    className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md px-1.5 py-0.5"
                   >
                     {`搜索「${search.trim()}」`}
                   </button>
@@ -1071,7 +1073,7 @@ export function LogPanel() {
                 onClick={() => setPage(safePage - 1)}
                 disabled={safePage <= 1}
                 title="更新的一页"
-                className="rounded-md p-1 text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-30"
+                className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <ChevronRight size={14} />
               </button>

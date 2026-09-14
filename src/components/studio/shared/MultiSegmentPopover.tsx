@@ -160,8 +160,8 @@ function MultiSegmentPopoverInner({
         aria-expanded={open}
         disabled={disabled}
         onClick={handleToggle}
-        className={`nodrag nopan flex w-full items-center gap-2 rounded-lg border border-(--color-primary)/35 bg-(--color-canvas-deep) px-3 py-2 text-left text-[12px] text-(--color-ink-bright) outline-none transition-colors focus:border-(--color-primary)/70 ${
-          disabled ? "cursor-not-allowed opacity-50" : "hover:border-(--color-primary)/70"
+        className={`nodrag nopan flex w-full items-center gap-2 rounded-lg border border-primary/35 bg-canvas-deep px-3 py-2 text-left text-[12px] text-ink-bright outline-none transition-colors focus:border-primary/70 ${
+          disabled ? "cursor-not-allowed opacity-50" : "hover:border-primary/70"
         }`}
       >
         <span className="flex-1 truncate">{triggerContent}</span>
@@ -169,7 +169,7 @@ function MultiSegmentPopoverInner({
           width="10"
           height="10"
           viewBox="0 0 10 10"
-          className={`shrink-0 text-(--color-ink-muted) transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-ink-muted transition-transform ${open ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           strokeWidth="1.6"
@@ -192,13 +192,13 @@ function MultiSegmentPopoverInner({
               overflowY: "auto",
               zIndex: 9999,
             }}
-            className="rounded-xl bg-[#14141C]/95 p-3 shadow-2xl shadow-black/50 ring-1 ring-white/8 backdrop-blur-md"
+            className="bg-panel/95 rounded-xl p-3 shadow-2xl shadow-black/10 dark:shadow-black/50 ring-1 ring-border-strong backdrop-blur-md"
             onMouseDown={(event) => event.stopPropagation()}
           >
             {sections.map((section, i) => (
               <Section key={section.label + ":" + (section.value ?? "")} section={section} first={i === 0} />
             ))}
-            {footer ? <div className="mt-3 border-t border-white/6 pt-3">{footer}</div> : null}
+            {footer ? <div className="mt-3 border-t border-border-strong pt-3">{footer}</div> : null}
           </div>,
           document.body,
         )}
@@ -243,13 +243,13 @@ const Section = React.memo(function Section({
 
   return (
     <div className={first ? "" : "mt-3"}>
-      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-(--color-ink-muted)">
+      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
         {section.label}
       </div>
       {grouped.map((group, gi) => (
         <div key={group.key} className={gi > 0 ? "mt-2" : ""}>
           {group.label && (
-            <div className="mb-1 text-[9px] uppercase tracking-wider text-(--color-ink-icon)">
+            <div className="mb-1 text-[9px] uppercase tracking-wider text-ink-icon">
               {group.label}
             </div>
           )}
@@ -265,8 +265,8 @@ const Section = React.memo(function Section({
                   onClick={() => onPick(opt.value)}
                   className={`nodrag nopan flex min-w-[52px] flex-col items-center gap-1 rounded-md px-1.5 py-1.5 text-[11px] transition-colors ${
                     selected
-                      ? "bg-(--color-primary)/20 text-(--color-ink-bright) ring-1 ring-(--color-primary)/55"
-                      : "text-(--color-ink-muted) hover:bg-white/6 hover:text-(--color-ink-bright)"
+                      ? "bg-primary/20 text-ink-bright ring-1 ring-primary/55"
+                      : "text-ink-muted hover:bg-subtle hover:text-ink-bright"
                   }`}
                 >
                   {opt.render}

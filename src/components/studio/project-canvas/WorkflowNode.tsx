@@ -156,7 +156,7 @@ export function WorkflowNode({
             W
           </span>
           <span
-            className="truncate text-[14px] font-bold text-(--color-ink-bright)"
+            className="truncate text-[14px] font-bold text-ink-bright"
             style={{ fontFamily: "var(--font-sans)" }}
             title={meta.label}
           >
@@ -246,7 +246,7 @@ export function WorkflowNode({
        *  不再放 dim 占位控件行——outputs 是只读语义，labelRow 已经说清楚「● images | IMAGE」
        *  这是一个输出端口，多一行业务信息也只会冗余。 */}
       {outputs.length > 0 && (
-        <div className="border-t border-white/6">
+        <div className="border-border-strong border-t">
           {outputs.map((output) => {
             /* conflict-aware — 与 inputs/outputs 同 group 去重。
              *  即使两个 outputs 同 label（如两个 IMAGE 都叫 "image"）也回退 name。 */
@@ -280,7 +280,7 @@ export function WorkflowNode({
                  *  labelRow 中线（pt-1.5=6 + h-5/2=10=16px），与 typeChip 上下对齐。 */}
                 <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
                   <span
-                    className="min-w-0 truncate text-[14px] font-semibold text-(--color-ink-bright)"
+                    className="min-w-0 truncate text-[14px] font-semibold text-ink-bright"
                     style={{ fontFamily: "var(--font-sans)" }}
                     title={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}
                   >

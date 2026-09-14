@@ -30,7 +30,7 @@ export function CustomNodesSettings() {
 
       {ctrl.open && (
         <div
-          className={overlayClass("modal", "z-50 grid place-items-center bg-black/50 p-4")}
+          className={overlayClass("modal", "z-50 grid place-items-center bg-canvas-deep p-4")}
           onClick={() => ctrl.setOpen(false)}
         >
           <div
