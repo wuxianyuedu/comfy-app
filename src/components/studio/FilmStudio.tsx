@@ -143,7 +143,7 @@ export function FilmStudio() {
           type="button"
           onClick={() => void c.create()}
           disabled={c.loading}
-          className="flex items-center gap-1.5 rounded-lg border border-violet-500/35 bg-(--color-subtle) px-3.5 py-1.5 text-xs font-semibold text-violet-500 transition-all hover:border-violet-500/55 hover:bg-violet-500/8 disabled:opacity-50"
+          className="bg-subtle flex items-center gap-1.5 rounded-lg border border-violet-500/35 px-3.5 py-1.5 text-xs font-semibold text-violet-700 transition-all hover:border-violet-500/55 hover:bg-violet-500/8 disabled:opacity-50 dark:text-violet-400"
         >
           {c.loading ? "启动中…" : "导出成片"}
         </button>
@@ -173,7 +173,7 @@ export function FilmStudio() {
             <button
               type="button"
               onClick={handleAddShot}
-              className="flex h-6 w-6 items-center justify-center rounded-md border border-violet-500/30 bg-violet-500/12 text-sm text-violet-400 transition-colors hover:border-violet-500/50 hover:bg-violet-500/20"
+              className="flex h-6 w-6 items-center justify-center rounded-md border border-violet-500/30 bg-violet-500/12 text-sm text-violet-700 transition-colors hover:border-violet-500/50 hover:bg-violet-500/20 dark:text-violet-400"
               title="新增镜头"
             >
               +
@@ -198,7 +198,9 @@ export function FilmStudio() {
                 >
                   {/* Thumbnail placeholder */}
                   <div className={`flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] ${
-                    isSelected ? "bg-violet-500/10 text-violet-400" : "bg-(--color-subtle) text-(--color-ink-faintest)"
+                    isSelected
+                      ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
+                      : "bg-subtle text-ink-faintest"
                   }`}>
                     镜头缩略图
                   </div>
@@ -230,7 +232,7 @@ export function FilmStudio() {
           {/* Preview Canvas */}
           <div className="relative mb-3 flex min-h-[320px] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-(--color-border-subtle) bg-(--color-canvas-deep)">
             {/* Resolution hint */}
-            <span className="absolute left-3 top-2.5 rounded bg-black/50 px-2 py-0.5 text-[10px] font-mono text-(--color-ink-faintest) backdrop-blur-sm">
+            <span className="text-ink-faintest absolute top-2.5 left-3 rounded bg-black/50 px-2 py-0.5 font-mono text-[10px] backdrop-blur-sm">
               {c.size} · {c.fps}fps
             </span>
 
@@ -238,7 +240,7 @@ export function FilmStudio() {
             <button
               type="button"
               onClick={handleTogglePlay}
-              className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 border border-(--color-border-strong) shadow-lg shadow-black/30 transition-all hover:scale-105 hover:bg-black/55 active:scale-95"
+              className="border-border-strong flex h-16 w-16 items-center justify-center rounded-full border bg-black/45 shadow-lg shadow-black/30 transition-all hover:scale-105 hover:bg-black/55 active:scale-95"
               title={isPlaying ? "暂停" : "播放"}
             >
               {isPlaying ? (
@@ -314,7 +316,7 @@ export function FilmStudio() {
               <div className="flex h-9 items-center gap-2 rounded-md px-2">
                 <span className="w-12 shrink-0 text-[10px] text-(--color-ink-fainter)">字幕轨</span>
                 <div className="flex h-6 flex-1 items-center rounded bg-emerald-400/15 px-2.5 ring-1 ring-inset ring-emerald-400/25" style={{ width: "280px" }}>
-                  <span className="truncate text-[9px] text-cyan-600">「城市在晨光中苏醒，镜头缓缓推进…」</span>
+                  <span className="truncate text-[9px] text-cyan-700 dark:text-cyan-400">「城市在晨光中苏醒，镜头缓缓推进…」</span>
                 </div>
               </div>
 
@@ -325,7 +327,7 @@ export function FilmStudio() {
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5 shrink-0">
                     <path d="M9 18V5l12-2v13M9 18a3 3 0 01-3-3H3a3 3 0 006 3z" />
                   </svg>
-                  <span className="truncate text-[9px] text-violet-500">{c.bgmName ?? "背景音乐 · 氛围感配乐"}</span>
+                  <span className="truncate text-[9px] text-violet-700 dark:text-violet-400">{c.bgmName ?? "背景音乐 · 氛围感配乐"}</span>
                 </div>
               </div>
             </div>
@@ -424,14 +426,18 @@ export function FilmStudio() {
                 type="file"
                 accept="audio/*"
                 onChange={(event) => { const f = event.target.files?.[0]; if (f) void c.uploadBgmFile(f); }}
-                className="w-full text-[11px] text-(--color-ink-fainter) file:mr-2 file:rounded-lg file:border-0 file:bg-violet-500/20 file:px-3 file:py-1.5 file:text-[11px] file:text-violet-600"
+                className="text-ink-fainter w-full text-[11px] file:mr-2 file:rounded-lg file:border-0 file:bg-violet-500/20 file:px-3 file:py-1.5 file:text-[11px] file:text-violet-700 dark:file:text-violet-300"
               />
-              {c.bgmName && <p className="mt-1 truncate text-[11px] text-violet-600">已选：{c.bgmName}</p>}
+              {c.bgmName && (
+                <p className="mt-1 truncate text-[11px] text-violet-700 dark:text-violet-400">
+                  已选：{c.bgmName}
+                </p>
+              )}
             </div>
 
             {/* Error display */}
             {c.film?.error && (
-              <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] leading-relaxed text-rose-600">
+              <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] leading-relaxed text-rose-700 dark:text-rose-400">
                 {c.film.error}
                 {c.film.status === "FAILED" && c.film.shots.some((shot) => shot.status === "SUCCEEDED") && (
                   <button onClick={() => void c.recompose()} className="ml-2 underline hover:no-underline">
@@ -443,7 +449,7 @@ export function FilmStudio() {
 
             {/* FFmpeg warning */}
             {!c.ffmpegAvailable && (
-              <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-600">
+              <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
                 未检测到 ffmpeg，逐镜视频仍可生成，但无法自动拼接成片。
               </p>
             )}

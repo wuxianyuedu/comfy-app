@@ -7,7 +7,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useNodesState, useEdgesState, useReactFlow,
-  type Connection as ReactFlowConnection, type Node, type Edge,
+  type Node, type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "@/config/custom-nodes";
@@ -31,7 +31,6 @@ import {
   selectIoEditMode,
   selectWorkflowIO,
   selectIoPreviewOpen,
-  selectWiredPinKeys,
   createIOEditStore,
   createRgthreeGroupsStore,
   createNodeJsonViewerStore,
@@ -43,31 +42,10 @@ import { WorkflowIoPreviewPanel } from "../WorkflowIOPreviewPanel";
 import { WorkflowEditorCanvas } from "./WorkflowEditorCanvas";
 import { buildInitialNodes } from "./workflow-editor-build-nodes";
 import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
-import { useParamMapping } from "./hooks/use-param-mapping";
-import { entryIdFromParamNodeId } from "~/lib/workflow-param-mapping";
-import {
-  buildParamEdges,
-  isValidOutputConnection,
-  isValidParamConnection,
-} from "./workflow-param-edges";
-import { buildParamNodes } from "./workflow-param-nodes";
-import { buildOutputWiring } from "./workflow-output-nodes";
-import { outputIoKeyFromNodeId } from "~/lib/workflow-param-mapping";
-import {
-  applyOutputBindingEdit,
-  canApplyOutputBindingEdit,
-  clearOutputBindingEdit,
-} from "~/lib/workflow-output-binding";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
 import { enrichFromViewNodes, isMachineName, type ExposedAliasBase } from "./io-exposure";
 import { sanitizeComboLabel } from "../workflow-utils";
-import { resolveWorkflowMode } from "@/lib/workflow-types";
-import {
-  inferGroups,
-  ioLabel,
-  splitWorkflowIO,
-  type WorkflowIOEntry,
-} from "../shared/workflow-io";
+import { ioLabel, type WorkflowIOEntry } from "../shared/workflow-io";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
 import { useWorkflowSaveMutation } from "./hooks/use-workflow-save";
 import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
@@ -168,13 +146,10 @@ function applyFitViewport(
  * 再经 <WFStoresProvider> 下发。状态判断逻辑与渲染子树都在这之下。 */
 export function WorkflowEditorInner({
   workflowId,
-  /** 打开时落到的模式码（工作流库的画布预览里选的那个）。 */
-  initialMode = null,
   onClose,
   onSave,
 }: {
   workflowId: string;
-  initialMode?: string | null;
   onClose: () => void;
   onSave?: () => void;
 }) {
@@ -196,7 +171,6 @@ export function WorkflowEditorInner({
     <WFStoresProvider stores={stores}>
       <WorkflowEditorBody
         workflowId={workflowId}
-        initialMode={initialMode}
         onClose={onClose}
         onSave={onSave}
       />
@@ -214,12 +188,10 @@ interface WFStoresHelper {
  * store（hook 在 <WFStoresProvider> 之下才合法，故体逻辑用 *Api 访问）。 */
 function WorkflowEditorBody({
   workflowId,
-  initialMode,
   onClose,
   onSave,
 }: {
   workflowId: string;
-  initialMode?: string | null;
   onClose: () => void;
   onSave?: () => void;
 }) {
@@ -234,7 +206,6 @@ function WorkflowEditorBody({
    * 这里用 selector 订阅成响应式局部变量，让下方既有合并/预览/保存逻辑零改动。 */
   const workflowIO = useIOEditStore(selectWorkflowIO);
   const ioEditMode = useIOEditStore(selectIoEditMode);
-  const wiredPinKeys = useIOEditStore(selectWiredPinKeys);
   const ioPreviewOpen = useIOEditStore(selectIoPreviewOpen);
   const savePatch = useWorkflowSaveMutation();
   /* Side-panel toggle for the IO preview.  Default closed — the canvas already
@@ -590,320 +561,39 @@ function WorkflowEditorBody({
     [detail, scopeDetail, rawMetaById, outSlotNameById, paramMap, onEnterSubgraph, viewHostNodeId]
   );
 
-  /* ── 对外参数映射：画布上的节点与连线 ──
+  /* ── 对外参数映射：编辑器不碰 ──
    *
-   * 勾选 IO 只做一件事：把 pin 暴露成「对外参数」（写 workflowIO 落库）。这些
-   * 对外口在画布上是**一列接线卡片**（`wfParam` 节点）：卡片说「这个对外参数由
-   * 哪些端口组成」，右侧端点拖到宿主节点的某一行即完成映射 —— 连线本身就是
-   * 映射，与 `paramMap.source.mode:<模式>` 同一份事实源，没有第二套界面。
+   * 勾选 IO 只做一件事：把 pin 暴露成「对外参数」（写 workflowIO 落库）。
+   * 「对外参数 → 节点端口」的落点映射**完全不在本编辑器里编辑**：画布上没有卡片，
+   * 连线与落点都在工作流库详情的「画布节点」页签（卡片列 + 连线层，见
+   * workflow-library/WorkflowParamCardColumn 与 WorkflowParamWires）。
    *
-   * 模式取工作流的 defaultMode：落点覆盖必须归属一个模式，没有模式时卡片不渲染
-   * 端点、拖不出线（写入也是空操作）。卡片位置由宿主节点坐标派生、不可拖动。
-   * 这些 hook 必须无条件调用（在下方 loading / error 的提前返回之前）。 */
-  /* 生效模式：defaultMode → modes[0] → taskType（与库详情、项目画布节点同一口径，
-   *  见 resolveWorkflowMode）。此前只认 defaultMode —— 工作流声明了模式但没写
-   *  defaultMode 时这里是 null，卡片于是提示「先选模式才能连线」，而节点上（库里 /
-   *  画布上）明明已经显示着「单图生视频」了，自相矛盾（ISSUE #355 复审）。 */
-  const wiringMode = resolveWorkflowMode({
-    modes: detail?.modes,
-    /* 库详情里选定的模式优先于工作流默认模式：用户从「画布样式预览」点进来时
-     *  看到的连线 / 落点/ 卡片必须还是他刚看的那一套（否则像「线丢了」）。 */
-    defaultMode: initialMode ?? detail?.defaultMode,
-    taskType: detail?.taskType,
-  });
-  const paramMapping = useParamMapping({
-    workflowId,
-    io: workflowIO,
-    mode: wiringMode,
-    paramMap,
-  });
-
-  /* 工作流的输出行（左列卡片是「对外要什么」，右键卡片是「对外给什么」）——
-   *  顺序与宿主卡片上的输出行同源（`splitWorkflowIO` 按 displayOrder 排过）。 */
-  const outputRows = useMemo(
-    () => splitWorkflowIO(workflowIO).outputs,
-    [workflowIO],
-  );
-
-  /* 卡片位置派生自宿主节点当前的画布坐标 —— 作者拖动宿主节点，卡片列跟着走。 */
-  const hostPosById = useMemo(() => {
-    const out: Record<string, { x: number; y: number }> = {};
-    for (const node of graphNodes) out[node.id] = node.position;
-    return out;
-  }, [graphNodes]);
-
-  /* 卡片与连线只在**内容真的变了**时才重建。
-   *
-   * `isManual` / `onReset` 这类回调进入 memo 依赖表会让 memo 形同虚设（外层每次
-   * 渲染都可能给出新身份），而 `initialNodes` 每次渲染换新数组时，React Flow 的
-   * 同步 effect 会跟着每一帧重跑 —— 渲染回路，浏览器里表现为卡死、测试里表现为
-   * 堆爆。这里把「条目标识 + 当前模式 + 解析结果 + 作者连过的线」压成一个签名，
-   * 签名不变就复用上一批对象，签名一变立即重建（回调闭包因此总是新鲜的）。 */
-  /* 组合控件覆盖到的端口（宽高 / 比例·像素·倍数由同一块控件录入）——
-   *  「尺寸」这类对外参数默认是**一对多**的：这几个端口各接一条线，只画自动判定
-   *  挑中的那一条会让「尺寸」看着只有一个出口（ISSUE #355：「尺寸现在有三个参数，
-   *  就应该可以连三条线出来」）。判定与画布表单同一份（`inferGroups`），不另算
-   *  一遍避免漂移。 */
-  const groupedKeys = useMemo(
-    () => inferGroups(splitWorkflowIO(workflowIO).widgetInputs).groupedKeys,
-    [workflowIO]
-  );
-
-  const paramSignature = useMemo(
-    () =>
-      JSON.stringify({
-        mode: wiringMode,
-        entries: paramMapping.entries.map((entry) => entry.id),
-        resolved: paramMapping.resolved,
-        manual: paramMapping.mapping.manualByMode?.[wiringMode ?? ""] ?? {},
-        /* 可行落点集合同样进签名：行渲染出来 / 收起来时卡片候选要跟着变。 */
-        reachable: [...wiredPinKeys].sort(),
-        grouped: [...groupedKeys].sort(),
-      }),
-    [
-      paramMapping.entries,
-      paramMapping.resolved,
-      paramMapping.mapping,
-      wiringMode,
-      wiredPinKeys,
-      groupedKeys,
-    ]
-  );
-  const paramWiring = useMemo(() => {
-    const paramNodes = buildParamNodes({
-      entries: paramMapping.entries,
-      hostPosById,
-      mode: wiringMode,
-      /* 卡片上带类型的输出端口：类型取自当前落点，故把 resolved 与 io 一起给。 */
-      resolved: paramMapping.resolved,
-      io: workflowIO,
-      /* 可行落点 = 画布此刻真的渲染出来的行（组合控件折叠成逐行参数后露出来的
-       * 就是全部可连行）。候选取它做交，免得画出连不上的端点。 */
-      reachableKeys: wiredPinKeys,
-      isManual: paramMapping.isManual,
-      onReset: (entryId: string) => paramMapping.resetToAuto(entryId),
-    });
-    /* 卡片集合即「哪些对外参数在当前视图里真的有宿主」—— 连线用它当闸门，
-     * 否则子图内部节点的 nodeId 在顶层画布上不存在时会画出一条悬空线（视觉上
-     * 就是图上多出一个没来历的节点）。 */
-    const renderedCardIds = new Set(paramNodes.map((node) => node.id));
-    return {
-      nodes: paramNodes,
-      edges: buildParamEdges({
-        entries: paramMapping.entries,
-        resolved: paramMapping.resolved,
-        isManual: paramMapping.isManual,
-        groupedKeys,
-        reachableKeys: wiredPinKeys,
-        renderedCardIds,
-      }),
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 上面的签名即全部内容
-  }, [paramSignature]);
-  const paramNodes = paramWiring.nodes;
-  const paramEdges = paramWiring.edges;
-
-  /* ── 对外**输出**参数卡片（宿主节点右侧一列）──
-   *
-   * 与左列对称：左说「对外要什么、喂给哪一行」，右说「对外给什么、从哪一行读」。
-   * 输出的取值行覆盖写在 `paramMap.output.mode:<模式>`（与输入的 `source` 不是
-   * 同一张表）；卡片同样不可拖动（位置派生自宿主节点），但端点可连线。
-   *
-   * 写入口是 `setParamMap`：编辑器不在每条线后落库，落库统一走保存
-   * （`useWorkflowPersistence` 把当前 `paramMap` 整列 PATCH 上去）——
-   * 与输入侧「连线累积在 paramMap 里、保存时一起写」完全同一条路径。 */
-  const writeOutputBinding = useCallback(
-    (outputIoKey: string, target: string | null) => {
-      if (!wiringMode) return;
-      setParamMap((prev) =>
-        applyOutputBindingEdit(prev, {
-          outputIoKey,
-          ioKey: target,
-          mode: wiringMode,
-        }),
-      );
-    },
-    [wiringMode],
-  );
-
-  const resetOutputBinding = useCallback(
-    (outputIoKey: string) => {
-      if (!wiringMode) return;
-      setParamMap((prev) =>
-        clearOutputBindingEdit(prev, outputIoKey, wiringMode),
-      );
-    },
-    [wiringMode],
-  );
-
-  const outputSignature = useMemo(
-    () =>
-      JSON.stringify({
-        mode: wiringMode,
-        outputs: outputRows.map((output) => output.ioKey),
-        /* 只有被改过的输出口进签名：没改过的取值行就是它自己那一行，不会变。 */
-        overrides: Object.entries(paramMap.output ?? {}).filter(
-          ([key]) => key === `mode:${wiringMode ?? ""}`,
-        ),
-        reachable: [...wiredPinKeys].sort(),
-      }),
-    [wiringMode, outputRows, paramMap, wiredPinKeys],
-  );
-  const outputWiring = useMemo(
-    () =>
-      buildOutputWiring({
-        io: workflowIO,
-        outputs: outputRows,
-        paramMap,
-        mode: wiringMode,
-        hostPosById,
-        reachableKeys: wiredPinKeys,
-        onReset: resetOutputBinding,
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 上面的签名即全部内容
-    [outputSignature, hostPosById, resetOutputBinding],
-  );
-  const outputNodes = outputWiring.nodes;
-  const outputEdges = outputWiring.edges;
-
-  /* 删除一条映射线 = 该对外参数「在这个模式下断开」。React Flow 的删除手势会先
-   * 把它从本地 edges 拿掉，我们必须同步把状态写回 paramMap，否则下一帧同步
-   * effect 又把它画回来（看起来像删不掉）。 */
-  const onEdgesDelete = useCallback(
-    (deleted: Edge[]) => {
-      for (const edge of deleted) {
-        /* 输入映射线：源是 `pio:` 卡片 → 该对外参数在这个模式下断开。 */
-        const entryId = entryIdFromParamNodeId(edge.source);
-        if (entryId) {
-          paramMapping.connect(entryId, null);
-          continue;
-        }
-        /* 输出取值线：目标是 `pout:` 卡片 → 该输出在这个模式下摘掉取值行
-         *  （悬空即「已断开」，不会被默认取值行复活）。 */
-        const outputIoKey = outputIoKeyFromNodeId(edge.target);
-        if (outputIoKey) {
-          writeOutputBinding(outputIoKey, null);
-          continue;
-        }
-      }
-    },
-    [paramMapping, writeOutputBinding]
-  );
-
-  /* 连线合法性闸门：判断这条连接表不表达一条映射（两端方向 + 落点是否真实存在）。
-   *
-   *  为什么**不在这里锁模式**：闸门会被 React Flow 在连线过程中反复调用（预判
-   *  悬停处能不能落线），锁模式等于「手势在连线画出来之前就被判非法」，指针旁
-   *  直接出现禁用标记 —— 用户看到的就是「对外参数卡片连不了线」（ISSUE #355）。
-   *  模式只决定这条线**归属哪个命名空间**（写入路径见 useParamMapping.connect）。 */
-  const isValidConnection = useCallback(
-    (connection: ReactFlowConnection | Edge) =>
-      /* 两条通道共用同一道闸门：输入映射线（对外参数 → 宿主参数行）与输出取值线
-       *  （宿主输出行 → 对外输出卡片）。判据按「卡片端是哪一列的 id」分流 ——
-       *  同名 id 在两列各有一张卡时，这是唯一能分清的一条依据。 */
-      isValidOutputConnection(connection, workflowIO) ||
-      isValidParamConnection(connection, paramMapping.entries, workflowIO),
-    [paramMapping.entries, workflowIO]
-  );
-
-  /* 在画布上拉一条线：源必须是某张对外参数卡片，目标必须落在宿主节点的某个
-   * 端口上（`targetHandle` 就是 ioKey）。别的连线一律拒绝 —— 画布上的图连线
-   * 由工作流本身决定，作者的手工连线只表达「映射」。 */
-  const onConnect = useCallback(
-    (connection: ReactFlowConnection) => {
-      if (!isValidConnection(connection)) return;
-      /* 先分流：输出取值线（卡片带 `pout:` 前缀）走输出通道 —— 同名的输入条目
-       *  在两列各有一张卡，先判输入会把这条线写到错误的表里。 */
-      const outputIoKey =
-        outputIoKeyFromNodeId(connection.source ?? "") ??
-        outputIoKeyFromNodeId(connection.target ?? "");
-      if (outputIoKey) {
-        const rowHandle =
-          outputIoKeyFromNodeId(connection.source ?? "") !== null
-            ? connection.sourceHandle
-            : connection.targetHandle;
-        if (!rowHandle) return;
-        if (
-          !canApplyOutputBindingEdit(
-            { ioKey: rowHandle, mode: wiringMode },
-            workflowIO
-          )
-        )
-          return;
-        /* 拖回它**默认**取值的那一行 = 撤销这条手工线（而不是留一条等价覆盖）
-         *  ——「恢复默认」与「拖回来」不该是两种并存的状态。 */
-        if (rowHandle === outputIoKey) resetOutputBinding(outputIoKey);
-        else writeOutputBinding(outputIoKey, rowHandle);
-        return;
-      }
-      /* 卡片端点是 source（输出）、宿主行是 target（输入）是常态；反向拖时两个
-       *  键互换，落点要取另一端的那一个。 */
-      const forward = entryIdFromParamNodeId(connection.source ?? "");
-      const entryId = forward ?? entryIdFromParamNodeId(connection.target ?? "");
-      const targetHandle = forward
-        ? connection.targetHandle
-        : connection.sourceHandle;
-      if (!entryId || !targetHandle) return;
-      paramMapping.connect(entryId, targetHandle);
-    },
-    [
-      paramMapping,
-      isValidConnection,
-      resetOutputBinding,
-      wiringMode,
-      workflowIO,
-      writeOutputBinding,
-    ]
-  );
-
-  /* ── 对外参数卡片 / 映射线只在「编辑 IO」模式下上画布 ──
-   *
-   * 卡片（左列 = 「对外要什么、落到哪一行」，右列 = 「对外给什么、从哪一行读」）
-   * 表达的是**映射**这一层关系，属于编辑态的工具：只在编辑 IO 时画出来。
-   * 常态查看工作流时它们浮在图节点之上（宿主节点左右各一列、`zIndex: 20`），
-   * 会把工作流本身挡掉一片（用户口径：「工作流编辑器画布中，不应该显示对外暴露
-   * 的参数节点」）。
-   *
-   * 退出编辑模式 → 卡片与映射线一并撤掉，画布只剩工作流图；重新进入编辑模式
-   * 即原样回来 —— 落点数据在 `paramMap` 里，与「是否显示」无关，不因隐藏而丢。 */
-  const showParamWiring = ioEditMode;
+   * 编辑器也不再提供「恢复默认映射」：那条线归库内那一层管，编辑器只管把当前
+   * `paramMap` **原样**保存回去（保存路径见 useWorkflowPersistence）—— 库内改过的
+   * 落点不会因为在这里按一次保存就被抹掉。 */
 
   /* useNodesState 只接受挂载首帧的初值；后续同步统一走下面的 effect（初始图节点
-   * 即为这一帧的初值，对外参数卡片等 detail 就绪后才会补上）。 */
+   * 即为这一帧的初值，detail 就绪后才会补上）。 */
   const [nodes, setNodes, onNodesChange] = useNodesState(graphNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  const initialNodes: Node[] = useMemo(
-    () =>
-      showParamWiring
-        ? [...graphNodes, ...paramNodes, ...outputNodes]
-        : graphNodes,
-    [showParamWiring, graphNodes, paramNodes, outputNodes]
-  );
+  /* 画布上只有**工作流图**本身：图节点与图连线都来自工作流自身
+   * （`buildInitialNodes` / `buildEdges`）。对外参数卡片与其映射线已从编辑器移除
+   * —— 它们会浮在图节点之上挡掉一片，且落点编辑已收敛到工作流库的「画布节点」
+   * 页签（用户口径：「彻底不显示」）。 */
+  const initialNodes: Node[] = graphNodes;
 
   /* Sync nodes/edges when the graph or the mapping changes.  useNodesState only
    * takes its initial value on mount, so when the workflow detail arrives async
    * (or the author edits a wire) we have to push the freshly derived nodes into
-   * the flow state ourselves.
-   *
-   * 图节点与对外参数卡片一起替换：卡片的位置由宿主节点坐标派生、`data` 里的
-   * 回调每次现算，所以整批换掉即可 —— 位置没变的卡片在 React Flow 眼里仍是
-   * 同一个节点，不会重挂 DOM。 */
+   * the flow state ourselves. */
   useEffect(() => {
     setNodes(initialNodes);
-    setEdges([
-      /* 图连线（工作流自身）→ 映射连线（对外参数喂给哪一行）→ 输出取值线
-       *（对外产出从哪一行读）。三者各自有独立的构建入口，互不掺和。
-       * 后两者只在编辑 IO 模式下画（卡片不在时留线头就是悬空线）。 */
-      ...buildEdges(scopeDetail, graphNodes, outSlotNameById),
-      ...(showParamWiring ? [...paramEdges, ...outputEdges] : []),
-    ]);
+    /* 连线只有一种来源：工作流图自身的 `buildEdges`。 */
+    setEdges(buildEdges(scopeDetail, graphNodes, outSlotNameById));
   }, [
     initialNodes,
     graphNodes,
-    paramEdges,
-    outputEdges,
-    showParamWiring,
     scopeDetail,
     outSlotNameById,
     setNodes,
@@ -1057,9 +747,6 @@ function WorkflowEditorBody({
           viewHostNodeId={viewHostNodeId}
           setViewJsonOpen={setViewJsonOpen}
           resetLayout={resetLayout}
-          resetParamWiring={() => paramMapping.resetAll()}
-          hasParamWiring={paramMapping.hasManual}
-          wiringMode={wiringMode}
           handleSave={handleSave}
           saving={saving}
           error={error}
@@ -1171,9 +858,6 @@ function WorkflowEditorBody({
           onOpenSettings={() => setCanvasSettingsOpen(true)}
           onRecenter={recenterCanvas}
           onEdgeClick={onEdgeClick}
-          onConnect={onConnect}
-          isValidConnection={isValidConnection}
-          onEdgesDelete={onEdgesDelete}
           /* 选中节点后由画布把「相关连线」与「相关端口行」标记分别写回 edges /
            * 节点 data（连线加粗提亮，落到的端口行同步提亮）。 */
           setEdges={setEdges}

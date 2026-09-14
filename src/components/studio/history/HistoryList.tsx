@@ -127,7 +127,9 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                 <span
                   className={
                     "rounded-full px-1.5 py-0.5 text-[10px] font-bold " +
-                    (isActive ? "bg-white/25 text-white" : "bg-(--color-surface-2) text-(--color-ink-faint)")
+                    (isActive
+                      ? "bg-white/25 text-white"
+                      : "bg-surface-2 text-ink-faint")
                   }
                 >
                   {count}

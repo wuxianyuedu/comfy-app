@@ -19,7 +19,7 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
         <div className="truncate text-[11px] text-zinc-300" title={label}>
           {label}
         </div>
-        <div className="flex h-[110px] items-center justify-center rounded-md border border-dashed border-white/15 bg-black/40 text-[11px] text-gray-400">
+        <div className="border-border-strong bg-canvas-deep text-ink-soft flex h-[110px] items-center justify-center rounded-md border border-dashed text-[11px]">
           需要上传图片
         </div>
       </div>
@@ -33,9 +33,11 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
       <div className="truncate text-[11px] text-zinc-300" title={label}>
         {label}
       </div>
-      <div className="overflow-hidden rounded-md border border-white/10 bg-black/40">
+      <div className="border-border-strong bg-canvas-deep overflow-hidden rounded-md border">
         {failed ? (
-          <div className="flex h-[110px] items-center justify-center text-[10px] text-gray-500">图片不可用</div>
+          <div className="text-ink-muted flex h-[110px] items-center justify-center text-[10px]">
+            图片不可用
+          </div>
         ) : (
            
           <img
@@ -54,7 +56,7 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
         )}
       </div>
       {size && (
-        <div className="text-right text-[10px] tabular-nums text-gray-400">
+        <div className="text-ink-soft text-right text-[10px] tabular-nums">
           {size.w} × {size.h}
         </div>
       )}

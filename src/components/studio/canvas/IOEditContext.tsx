@@ -70,32 +70,6 @@ export function useIOEditContext() {
 export type IOEditContextValue = ReturnType<typeof useIOEditContext>;
 
 /* ────────────────────────────────────────────────────────────────────────
- * useWiredPinKeysRegistry — 把「这个节点现在画出了哪些可连的落点行」上报给
- * IOEdit store。对外参数卡片的候选端点据此收窄（见 IOEditState.wiredPinKeys）。
- *
- * 规则只有一条：**这份行名单与真实渲染同一帧产出**。所以调用方传进来的是
- * 「本节点这一帧渲染用到的行键数组」，本 hook 只做上报与卸载撤回 —— 任何
- * 「另算一份」的做法都会与渲染漂移，那正是「端点画在一颗落不上去的句柄上、
- * 拖过去出现禁用标记」的成因。
- * ──────────────────────────────────────────────────────────────────────── */
-export function useWiredPinKeysRegistry(
-  nodeId: string | undefined,
-  wireKeys: readonly string[],
-): void {
-  const report = useIOEditStore((state) => state.reportNodeWiredPins);
-  /* 内容签名：数组每次渲染都是新引用，直接进依赖表会每帧上报（每次 set 都
-   * 产生新 Set → 卡片节点整批重建 → 画布卡死）。 */
-  const signature = wireKeys.join("\u0000");
-  React.useEffect(() => {
-    if (!nodeId) return;
-    const keys = signature.length > 0 ? signature.split("\u0000") : [];
-    report(nodeId, keys);
-    /* 卸载时撤回本节点那一份：节点没了，行也就没了，卡片不该再画端点。 */
-    return () => report(nodeId, []);
-  }, [nodeId, signature, report]);
-}
-
-/* ────────────────────────────────────────────────────────────────────────
  *  NodeIdChip — 节点头部 `#id` 章，点击弹出 JSON 查看器。
  *  原实现 `useContext(NodeJsonViewerContext)`；现改用 store hook `useNodeJsonViewer`。
  * ──────────────────────────────────────────────────────────────────────── */

@@ -27,7 +27,7 @@ import {
 } from "./WorkflowStores";
 import type { WorkflowNodeData } from "../workflow-types";
 
-/* 真画布要自己量尺寸，jsdom 没有 ResizeObserver（同 WorkflowParamNode.test）。 */
+/* 真画布要自己量尺寸，jsdom 没有 ResizeObserver。 */
 vi.stubGlobal(
   "ResizeObserver",
   class {

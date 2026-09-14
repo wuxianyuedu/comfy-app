@@ -119,7 +119,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
         时间轴缩放
       </span>
       <button
-        class="flex items-center gap-1.5 rounded-lg border border-violet-500/35 bg-(--color-subtle) px-3.5 py-1.5 text-xs font-semibold text-violet-500 transition-all hover:border-violet-500/55 hover:bg-violet-500/8 disabled:opacity-50"
+        class="bg-subtle flex items-center gap-1.5 rounded-lg border border-violet-500/35 px-3.5 py-1.5 text-xs font-semibold text-violet-700 transition-all hover:border-violet-500/55 hover:bg-violet-500/8 disabled:opacity-50 dark:text-violet-400"
         type="button"
       >
         导出成片
@@ -150,7 +150,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </span>
           </div>
           <button
-            class="flex h-6 w-6 items-center justify-center rounded-md border border-violet-500/30 bg-violet-500/12 text-sm text-violet-400 transition-colors hover:border-violet-500/50 hover:bg-violet-500/20"
+            class="flex h-6 w-6 items-center justify-center rounded-md border border-violet-500/30 bg-violet-500/12 text-sm text-violet-700 transition-colors hover:border-violet-500/50 hover:bg-violet-500/20 dark:text-violet-400"
             title="新增镜头"
             type="button"
           >
@@ -165,7 +165,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             type="button"
           >
             <div
-              class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-violet-500/10 text-violet-400"
+              class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-400"
             >
               镜头缩略图
             </div>
@@ -208,7 +208,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             type="button"
           >
             <div
-              class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-(--color-subtle) text-(--color-ink-faintest)"
+              class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-subtle text-ink-faintest"
             >
               镜头缩略图
             </div>
@@ -251,7 +251,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             type="button"
           >
             <div
-              class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-(--color-subtle) text-(--color-ink-faintest)"
+              class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-subtle text-ink-faintest"
             >
               镜头缩略图
             </div>
@@ -298,7 +298,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
           class="relative mb-3 flex min-h-[320px] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-(--color-border-subtle) bg-(--color-canvas-deep)"
         >
           <span
-            class="absolute left-3 top-2.5 rounded bg-black/50 px-2 py-0.5 text-[10px] font-mono text-(--color-ink-faintest) backdrop-blur-sm"
+            class="text-ink-faintest absolute top-2.5 left-3 rounded bg-black/50 px-2 py-0.5 font-mono text-[10px] backdrop-blur-sm"
           >
             1280x720
              · 
@@ -306,7 +306,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             fps
           </span>
           <button
-            class="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 border border-(--color-border-strong) shadow-lg shadow-black/30 transition-all hover:scale-105 hover:bg-black/55 active:scale-95"
+            class="border-border-strong flex h-16 w-16 items-center justify-center rounded-full border bg-black/45 shadow-lg shadow-black/30 transition-all hover:scale-105 hover:bg-black/55 active:scale-95"
             title="播放"
             type="button"
           >
@@ -401,7 +401,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                 style="width: 280px;"
               >
                 <span
-                  class="truncate text-[9px] text-cyan-600"
+                  class="truncate text-[9px] text-cyan-700 dark:text-cyan-400"
                 >
                   「城市在晨光中苏醒，镜头缓缓推进…」
                 </span>
@@ -435,7 +435,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                   />
                 </svg>
                 <span
-                  class="truncate text-[9px] text-violet-500"
+                  class="truncate text-[9px] text-violet-700 dark:text-violet-400"
                 >
                   背景音乐 · 氛围感配乐
                 </span>
@@ -573,12 +573,12 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </span>
             <input
               accept="audio/*"
-              class="w-full text-[11px] text-(--color-ink-fainter) file:mr-2 file:rounded-lg file:border-0 file:bg-violet-500/20 file:px-3 file:py-1.5 file:text-[11px] file:text-violet-600"
+              class="text-ink-fainter w-full text-[11px] file:mr-2 file:rounded-lg file:border-0 file:bg-violet-500/20 file:px-3 file:py-1.5 file:text-[11px] file:text-violet-700 dark:file:text-violet-300"
               type="file"
             />
           </div>
           <p
-            class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-600"
+            class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400"
           >
             未检测到 ffmpeg，逐镜视频仍可生成，但无法自动拼接成片。
           </p>
