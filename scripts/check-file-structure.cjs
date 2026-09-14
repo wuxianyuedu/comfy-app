@@ -10,7 +10,9 @@
  *        保留名,不能改名;配套 R11 保证它没被放错位置或悄悄消失)
  *   R3  禁止时间戳备份文件(\d{8}_\d{6} 模式)——版本回退用 git,不进 src
  *   R4  src/lib 下禁止 .tsx(12.5:lib 无 React)
- *   R5  (提示)src/components 下超 900 行的文件列入拆分候选,仅提醒不阻塞
+ *   R5  (提示)src/components 与 src/app 下超 900 行的文件列入拆分候选,仅提醒
+ *       不阻塞(ISSUE #535:只扫 components 会让 src/app 下的巨型视图——如
+ *       2498 行的 SettingsPageView.tsx——完全落在护栏之外)
  *   R7  Windows 双击入口一律 .ps1:仓库内禁止新增 .bat/.cmd/.vbs
  *       (ISSUE #23 / 规范 launch-and-build.md §8:.bat 走 cmd 的 GBK 代码页,
  *        中文必乱码,历史上被迫做成"不含中文不含逻辑"的哑壳)
@@ -107,7 +109,11 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
           problems.push("R2 模块文件须 kebab-case:" + rel);
       }
       const lines = fs.readFileSync(p, "utf8").split("\n").length;
-      if (rel.startsWith("src/components/") && lines > 900)
+      /* R5 扫描范围含 src/app:页面的「纯展示视图」也落在那里
+       * (settings/SettingsPageView.tsx),只扫 components 会让最大的那个视图
+       * 反而无护栏。App Router 的保留文件(page/layout/route)同样计入——
+       * 行数与「框架保留名」无关,超了就该拆。 */
+      if ((rel.startsWith("src/components/") || rel.startsWith("src/app/")) && lines > 900)
         splitHints.push(rel + " (" + lines + " 行,建议拆分)");
     }
   }
