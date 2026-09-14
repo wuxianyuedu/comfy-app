@@ -520,7 +520,9 @@ export function useSettingsPage(): SettingsPageController {
       apiKey: llmConfig.apiKey ?? null,
       /* 本地候选（字符串）与远端独立模型（对象）从同一下发清单里拆开存，互不混写 */
       localCandidates: split.localNames.filter((n) => n !== llmConfig.model),
-      extraModels: split.remoteEntries.filter((e) => e.name !== llmConfig.model),
+      extraModels: split.remoteEntries.filter(
+        (e) => e.name !== llmConfig.model,
+      ),
       temperatureByTask: llmConfig.temperatureByTask ?? undefined,
     });
   }
@@ -785,18 +787,21 @@ export function useSettingsPage(): SettingsPageController {
 
   /** 用系统默认浏览器打开生成的远程资源（视频 / 公网图片等）。
    *  桌面壳内 target=_blank 外链打不开，统一走服务端 openExternal。 */
-  const openExternalUrl = useCallback(async (url: string) => {
-    if (!url) {
-      showFlash("err", "没有可打开的资源地址");
-      return;
-    }
-    try {
-      const result = await openExternalM.mutateAsync({ url });
-      showFlash(result.ok ? "ok" : "err", result.detail);
-    } catch (error) {
-      showFlash("err", errorMessage(error, "打开资源失败"));
-    }
-  }, [openExternalM, showFlash]);
+  const openExternalUrl = useCallback(
+    async (url: string) => {
+      if (!url) {
+        showFlash("err", "没有可打开的资源地址");
+        return;
+      }
+      try {
+        const result = await openExternalM.mutateAsync({ url });
+        showFlash(result.ok ? "ok" : "err", result.detail);
+      } catch (error) {
+        showFlash("err", errorMessage(error, "打开资源失败"));
+      }
+    },
+    [openExternalM, showFlash],
+  );
 
   /* ── 应用自更新（Tauri updater + process）──────────────── */
   const checkAppUpdate = useCallback(async () => {
@@ -1115,8 +1120,7 @@ export function useSettingsPage(): SettingsPageController {
       apiKey?: string;
       kind?: RemoteModelKind;
     }): Promise<{ ok: boolean; error?: string }> => {
-      if (!llmDraft)
-        return { ok: false, error: "配置未就绪，请稍后重试" };
+      if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
       const name = entry.name.trim();
       if (!name) return { ok: false, error: "请填写模型名称" };
       if (llmDraft.extraModels.some((e) => e.name === name)) {
@@ -1140,8 +1144,7 @@ export function useSettingsPage(): SettingsPageController {
 
   const removeRemoteModel = useCallback(
     async (name: string): Promise<{ ok: boolean; error?: string }> => {
-      if (!llmDraft)
-        return { ok: false, error: "配置未就绪，请稍后重试" };
+      if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
       const next = llmDraft.extraModels.filter((e) => e.name !== name);
       if (next.length === llmDraft.extraModels.length) return { ok: true };
       const nextDraft = { ...llmDraft, extraModels: next };
@@ -1164,8 +1167,7 @@ export function useSettingsPage(): SettingsPageController {
         kind?: RemoteModelKind | null;
       },
     ): Promise<{ ok: boolean; error?: string }> => {
-      if (!llmDraft)
-        return { ok: false, error: "配置未就绪，请稍后重试" };
+      if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
       const nextName = (patch.name ?? name).trim();
       if (!nextName) return { ok: false, error: "请填写模型名称" };
       const existing = llmDraft.extraModels.find((e) => e.name === name);
@@ -1270,9 +1272,7 @@ export function useSettingsPage(): SettingsPageController {
     (settingsQ.isError ? settingsQ.error : undefined) ??
     (llmQ.isError ? llmQ.error : undefined);
 
-  const errorText = queryFailed
-    ? errorMessage(failedError, "未知错误")
-    : "";
+  const errorText = queryFailed ? errorMessage(failedError, "未知错误") : "";
 
   /* 失败涉及的查询名（给面板日志的字段用；两个都失败时都记上）。 */
   const failedQueries = [
@@ -1433,3 +1433,9 @@ export const TEMPERATURE_TASKS = Object.entries(TASK_TYPES) as [
   TaskType,
   (typeof TASK_TYPES)[TaskType],
 ][];
+
+/** `drafts` 非空由容器保证（`if (!c.drafts)` 早退），用交集类型表达，
+ *  消费方（含子视图）内不必逐处判空。 */
+export type ReadySettingsPageController = SettingsPageController & {
+  drafts: SettingsPageDrafts;
+};
