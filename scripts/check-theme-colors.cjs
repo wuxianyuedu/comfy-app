@@ -239,6 +239,12 @@ const EXEMPT_TABLES = [
     reason: "空画布提示的节点类别配色示意（与 NODE_META 同源）",
   },
   {
+    file: "src/components/studio/project-canvas/WorkflowNodeArdot.tsx",
+    exports: ["PORT_TYPE_COLORS", "PORT_DOT_SHADOW"],
+    reason:
+      "设计稿参考件的端口类型色常表（仅 IMAGE/VIDEO/BOOLEAN 三档，与 PORT_COLORS 同源），色值即类型语义",
+  },
+  {
     file: "src/components/workshop/stage-config.ts",
     /* 这 3 处在 `buildMissingSummary` 的返回数组里，不是顶层常量表，故按**行号**
      * 逐条豁免（比整函数豁免更精确）：缺失素材清单的每条强调色，与阶段/类别色同源。 */

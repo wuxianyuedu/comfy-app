@@ -31,16 +31,57 @@
  */
 import React from "react";
 
+/* ── 端口类型色常量表（类型色例外：色值即类型语义，不随主题） ──
+ * 与 `lib/comfyui/types.ts` 的 PORT_COLORS 同源；本文件只用到三档前缀，
+ * 集中在这里而不是散在 JSX 里 —— 「成组集中的常量表」才是规范 §3.6.1
+ * 「类型色例外」的合法载体，也便于扫描器显式豁免。 */
+const PORT_TYPE_COLORS = {
+  image: "#7C5CFC",
+  video: "#FF5CA8",
+  boolean: "#67E89D",
+} as const;
+
+/** 端点圆点的投影 —— Ardot 稿 DROP_SHADOW rgba(0,0,0,0.25) y4 blur4，
+ *  与 `WorkflowPortHandle` / 参数卡端点同源，属端点视觉常量。 */
+const PORT_DOT_SHADOW = "0 4px 4px rgba(0,0,0,0.25)";
+
+/** 端口类型 → 该类型的强调色（端点圆点 / chip 文字）。 */
+const portColor = (type?: string) => {
+  const t = (type ?? "").toUpperCase();
+  if (t === "IMAGE" || t === "MASK") return PORT_TYPE_COLORS.image;
+  if (t === "VIDEO" || t.startsWith("VHS") || t === "AUDIO")
+    return PORT_TYPE_COLORS.video;
+  if (t === "BOOLEAN" || t === "BOOL") return PORT_TYPE_COLORS.boolean;
+  return "var(--color-ink-muted)";
+};
+
+/** 类型 chip 的描边/文字同样取自类型色，只加透明度。 */
+function portChipBorder(color: string) {
+  return `1px solid color-mix(in srgb, ${color} 40%, transparent)`;
+}
+
 /* ── 类型 chip ── */
 function PortChip({ type }: { type: string }) {
   const t = type.toUpperCase();
   const isImg = t === "IMAGE" || t === "MASK";
   const isVid = t === "VIDEO" || t.startsWith("VHS") || t === "AUDIO";
   const style = isImg
-    ? { background: "#1E1A2E", color: "#7C5CFC", border: "1px solid rgba(124,92,252,0.4)" }
+    ? {
+        background: "var(--color-chip-type-image-bg)",
+        color: PORT_TYPE_COLORS.image,
+        border: portChipBorder(PORT_TYPE_COLORS.image),
+      }
     : isVid
-      ? { background: "#331A28", color: "#FF5CA8", border: "1px solid rgba(255,92,168,0.4)" }
-      : { background: "var(--color-subtle)", color: "var(--color-ink-muted)", border: "1px solid var(--color-border-subtle)" };
+      ? {
+          background: "var(--color-chip-type-video-bg)",
+          color: PORT_TYPE_COLORS.video,
+          border: portChipBorder(PORT_TYPE_COLORS.video),
+        }
+      : {
+          background: "var(--color-subtle)",
+          color: "var(--color-ink-muted)",
+          border: "1px solid var(--color-border-subtle)",
+        };
   return (
     <span
       className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold"
@@ -50,14 +91,6 @@ function PortChip({ type }: { type: string }) {
     </span>
   );
 }
-
-const portColor = (type?: string) => {
-  const t = (type ?? "").toUpperCase();
-  if (t === "IMAGE" || t === "MASK") return "#7C5CFC";
-  if (t === "VIDEO" || t.startsWith("VHS") || t === "AUDIO") return "#FF5CA8";
-  if (t === "BOOLEAN" || t === "BOOL") return "#67E89D";
-  return "var(--color-ink-muted)";
-};
 
 /* ── 端点（外层 wrapper 的 absolute 子元素，半圆骑跨 Card 边框）── */
 function PortDot({
@@ -78,7 +111,7 @@ function PortDot({
       style={{
         background: color,
         border: `1px solid ${stroke}`,
-        boxShadow: "0 4px 4px rgba(0,0,0,0.25)",
+        boxShadow: PORT_DOT_SHADOW,
         top,
         transform: "translateY(-50%)",
         ...(side === "left" ? { left: -6 } : { right: -6 }),
@@ -229,11 +262,10 @@ export function WorkflowNodeArdot() {
           >
             <span
               aria-hidden
-              className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-              style={{ background: "#33D499" }}
+              className="bg-status-online inline-block h-1.5 w-1.5 shrink-0 rounded-full"
             />
             <span
-              className="text-emerald-700 font-semibold dark:text-[#33D499]"
+              className="text-status-online font-semibold"
               style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
             >
               本机
@@ -294,7 +326,7 @@ export function WorkflowNodeArdot() {
           className="flex h-[43px] w-full items-center justify-center gap-2 bg-linear-to-r from-primary to-accent text-[13px] font-bold text-white"
           style={{
             fontFamily: "var(--font-sans)",
-            boxShadow: "0 4px 12px rgba(124,92,252,0.35)",
+            boxShadow: "0 4px 12px color-mix(in srgb, var(--color-primary) 35%, transparent)",
           }}
         >
           ▶ 用此工作流生成
