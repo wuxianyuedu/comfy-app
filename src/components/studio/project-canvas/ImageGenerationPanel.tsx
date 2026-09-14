@@ -348,7 +348,7 @@ export function ImageGenerationPanel({
                 onClick={onCancel}
                 disabled={cancelling}
                 title="强制终止当前任务并释放活动槽位"
-                className="rounded border border-red-500/30 bg-red-500/8 px-2.5 py-1 text-[10.5px] text-red-200/90 transition-colors hover:bg-red-500/15 disabled:opacity-50"
+                className="rounded border border-red-500/30 bg-red-500/8 px-2.5 py-1 text-[10.5px] text-red-700/90 transition-colors hover:bg-red-500/15 dark:text-red-300/90 disabled:opacity-50"
               >
                 {cancelling ? "× 取消中…" : "× 强制取消"}
               </button>

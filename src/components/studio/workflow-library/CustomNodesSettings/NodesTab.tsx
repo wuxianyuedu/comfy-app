@@ -185,12 +185,12 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                         </span>
                       )}
                       {cnt.unimported > 0 && (
-                        <span className="rounded-full px-1.5 py-0.5" style={{ background: "rgba(107,114,128,0.20)", color: "#9CA3AF" }}>
+                        <span className="rounded-full px-1.5 py-0.5 bg-gray-500/20 text-gray-700 dark:text-gray-300">
                           {cnt.unimported} 未导入
                         </span>
                       )}
                       {cnt.error > 0 && (
-                        <span className="rounded-full px-1.5 py-0.5" style={{ background: "rgba(239,68,68,0.18)", color: "#EF4444" }}>
+                        <span className="rounded-full px-1.5 py-0.5 bg-red-500/18 text-red-700 dark:text-red-300">
                           ⚠ {cnt.error}
                         </span>
                       )}

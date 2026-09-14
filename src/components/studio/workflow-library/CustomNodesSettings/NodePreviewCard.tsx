@@ -48,8 +48,10 @@ export function NodePreviewCard({
     <div
       className="overflow-hidden rounded-lg font-sans"
       style={{
-        background: "rgba(15, 10, 30, 0.95)",
-        border: `1px solid ${expanded ? color : "rgba(255,255,255,0.18)"}`,
+        /* 卡片表面是**结构性表面**（列表里的卡片，不是浮在内容上的极小叠层），
+           必须随主题。此前写死 rgba(15,10,30,0.95)，Light 下仍是一块近黑卡片。 */
+        background: "var(--color-card)",
+        border: `1px solid ${expanded ? color : "var(--color-border-strong)"}`,
       }}
     >
       {/* Header — clickable to expand. Solid colour band, category-derived. */}
@@ -102,15 +104,15 @@ export function NodePreviewCard({
           清单中未找到该节点（可能解析后未重导入此包）
         </div>
       ) : !expanded ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5 text-[10px] text-white/55">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5 text-[10px] text-ink-muted">
           <span>
-            <span className="font-mono text-white/85">{typed.length}</span> typed
+            <span className="font-mono text-ink-bright">{typed.length}</span> typed
           </span>
           <span>
-            <span className="font-mono text-white/85">{widgets.length}</span> widget
+            <span className="font-mono text-ink-bright">{widgets.length}</span> widget
           </span>
           <span>
-            <span className="font-mono text-white/85">{outputs.length}</span> output
+            <span className="font-mono text-ink-bright">{outputs.length}</span> output
           </span>
         </div>
       ) : (
@@ -135,7 +137,7 @@ export function NodePreviewCard({
           {widgets.length > 0 && (
             <div
               className="flex flex-col gap-[2px] border-t pt-1.5"
-              style={{ borderColor: "rgba(255,255,255,0.07)" }}
+              style={{ borderColor: "var(--color-border-subtle)" }}
             >
               {widgets.slice(0, 32).map((widget, idx) => (
                 <div key={`w-${idx}`} className="flex items-center gap-1.5 text-[10.5px]">
@@ -144,7 +146,7 @@ export function NodePreviewCard({
                     style={{ width: 6, height: 6, background: color, opacity: 0.7 }}
                   />
                   <span
-                    className="min-w-0 flex-1 truncate text-[#CFC9E5]"
+                    className="min-w-0 flex-1 truncate text-ink-soft"
                     title={widget.name}
                   >
                     {widget.name}

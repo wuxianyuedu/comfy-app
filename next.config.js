@@ -34,6 +34,20 @@ const config = {
     "/**": [
       "./src-tauri/**",
       "./python-venv/**",
+      // 开发机私有输入不得进产物：`db.sqlite` 是运行期数据库（动态路径 tracing
+      // 会把它带进来），`.env` 是密钥文件。两者随 static 被编译期内嵌进 exe ——
+      // 密钥明文随包分发，开发库还会成为应用首次启动时读写的那个库
+      // （壳以 current_dir(res_dir) 起 sidecar，db 路径按 process.cwd() 解析）。
+      // 注意 `.env` 这一项只是尽力而为：Next standalone 的环境加载是**无条件
+      // 复制**的（实测写 `./.env` / `./**/.env` 都删不掉），所以真正的兜底是
+      // `scripts/build-desktop.mjs` 的「分发卫生」显式删除 +
+      // `scripts/check-standalone-contents.cjs` 的产物层检查。
+      "./db.sqlite",
+      "./db.sqlite-wal",
+      "./db.sqlite-shm",
+      "./.env",
+      "./.env.local",
+      "./.env.production",
       "./node_modules/.cache/**",
       "./.git/**",
       "./.workbuddy/**",

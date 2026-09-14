@@ -32,7 +32,7 @@ export function WorkflowSourceFilterChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/35 bg-node-accent px-2.5 text-[12px]"
+        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/35 bg-overlay-accent-surface px-2.5 text-[12px]"
       >
         <span
           className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -44,10 +44,10 @@ export function WorkflowSourceFilterChip({
         <span
           className={`font-semibold ${
             value === "all"
-              ? "text-[#A78BFA]"
+              ? "text-violet-700 dark:text-[#A78BFA]"
               : isLocal
-                ? "text-[#33D499]"
-                : "text-[#A78BFA]"
+                ? "text-emerald-700 dark:text-[#33D499]"
+                : "text-violet-700 dark:text-[#A78BFA]"
           }`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
         >
@@ -97,7 +97,7 @@ export function WorkflowSourceFilterChip({
                   }}
                   className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
                     sel
-                      ? "bg-violet-500/20 text-violet-200"
+                      ? "bg-violet-500/20 text-violet-700 dark:text-violet-200"
                       : "text-ink-soft hover:bg-subtle"
                   }`}
                 >

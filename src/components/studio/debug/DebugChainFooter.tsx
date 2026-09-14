@@ -44,9 +44,10 @@ const PILL_STYLE: CSSProperties = {
   lineHeight: 1,
   padding: "2px 6px",
   borderRadius: 999,
-  border: "1px solid rgba(251,191,36,0.35)",
-  background: "rgba(251,191,36,0.08)",
-  color: "#FBBF24",
+  /* 琥珀状态色两态可读：浅色下深琥珀字 + 浅琥珀底，深色下保持原亮琥珀。 */
+  border: "1px solid rgba(251,191,36,0.45)",
+  background: "rgba(251,191,36,0.12)",
+  color: "var(--color-warning)",
   whiteSpace: "nowrap",
 };
 
@@ -148,8 +149,8 @@ export function DebugChainFooter({
             lineHeight: 1,
             padding: "2px 5px",
             borderRadius: 4,
-            background: "rgba(255,255,255,0.06)",
-            color: "#8b8b9e",
+            background: "var(--color-border-subtle)",
+            color: "var(--color-ink-fainter)",
             fontFamily: "var(--font-mono)",
             whiteSpace: "nowrap",
           }}
@@ -178,8 +179,8 @@ export function DebugChainFooter({
           flexDirection: "column",
           gap: 3,
           padding: "4px 8px 6px",
-          borderTop: "1px solid rgba(255,255,255,0.06)",
-          background: "rgba(0,0,0,0.18)",
+          borderTop: "1px solid var(--color-border-subtle)",
+          background: "var(--color-canvas-deep)",
         }}
         onPointerDown={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
@@ -230,7 +231,7 @@ export function DebugChainFooter({
                     type="button"
                     onClick={() => source && openInVscode(source.absolutePath)}
                     disabled={!source}
-                    className="rounded-md border border-sky-400/30 bg-sky-400/10 px-2.5 py-1 text-[11px] font-medium text-sky-200 transition-colors hover:bg-sky-400/20 disabled:opacity-40"
+                    className="rounded-md border border-sky-400/30 bg-sky-400/10 px-2.5 py-1 text-[11px] font-medium text-sky-700 transition-colors hover:bg-sky-400/20 dark:text-sky-200 disabled:opacity-40"
                     title="在 Visual Studio Code 中打开该文件（需已安装 VSCode）"
                   >
                     在 VSCode 打开
@@ -247,7 +248,7 @@ export function DebugChainFooter({
                     type="button"
                     onClick={() => source && copyText(source.content)}
                     disabled={!source}
-                    className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-200 transition-colors hover:bg-amber-400/20 disabled:opacity-40"
+                    className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-400/20 dark:text-amber-200 disabled:opacity-40"
                     title="复制全部源码"
                   >
                     复制代码

@@ -3,13 +3,13 @@
 exports[`WorkflowSubgraphNode > 渲染子图标题与 #id 徽标 1`] = `
 <div>
   <div
-    class="relative flex flex-col rounded-lg border shadow-[0_6px_22px_rgba(0,0,0,0.6)] bg-node"
+    class="relative flex flex-col rounded-lg border shadow-[0_6px_22px_var(--color-shadow-strong)] bg-node"
     data-node-id="10"
     style="height: auto; min-width: 280px; border-color: rgba(124, 92, 252, 0.55); isolation: isolate; outline: none;"
   >
     <div
       class="flex shrink-0 items-center gap-2 rounded-t-lg px-2 text-xs"
-      style="height: 30px; background: rgb(42, 36, 74); border-bottom: 1px solid rgba(255, 255, 255, 0.06);"
+      style="height: 30px; background: rgb(42, 36, 74); border-bottom: 1px solid var(--color-border-subtle);"
     >
       <button
         aria-label="折叠子图"
@@ -49,7 +49,7 @@ exports[`WorkflowSubgraphNode > 渲染子图标题与 #id 徽标 1`] = `
       </span>
       <button
         aria-label="查看节点 #10 的原始 JSON 数据"
-        class="nodrag nopan group inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded border border-violet-400/40 bg-violet-500/10 px-1 font-mono text-[9.5px] font-semibold uppercase tracking-wider text-violet-200 transition-colors hover:border-violet-300/70 hover:bg-violet-500/25 hover:text-violet-50 focus:outline-none focus:ring-1 focus:ring-violet-400/40"
+        class="nodrag nopan group inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded border border-violet-400/40 bg-violet-500/10 px-1 font-mono text-[9.5px] font-semibold uppercase tracking-wider text-violet-700 transition-colors hover:border-violet-300/70 hover:bg-violet-500/25 hover:text-violet-900 dark:text-violet-200 dark:hover:text-violet-50 focus:outline-none focus:ring-1 focus:ring-violet-400/40"
         data-node-id-chip="10"
         data-variant="subgraph"
         title="查看节点 10 在工作流 JSON 中的原始数据"

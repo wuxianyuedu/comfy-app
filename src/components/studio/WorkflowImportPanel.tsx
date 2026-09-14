@@ -110,7 +110,7 @@ export function WorkflowImportPanel({
               onClick={() => setShowHelpTip((value) => !value)}
               aria-label="导入格式说明"
               aria-expanded={showHelpTip}
-              className="flex h-5 w-5 items-center justify-center rounded-full border border-border-strong bg-subtle text-[11px] text-ink-soft transition-colors hover:border-violet-400/40 hover:text-violet-200"
+              className="flex h-5 w-5 items-center justify-center rounded-full border border-border-strong bg-subtle text-[11px] text-ink-soft transition-colors hover:border-violet-400/40 hover:text-violet-700 dark:hover:text-violet-200"
             >
               ?
             </button>
@@ -138,7 +138,7 @@ export function WorkflowImportPanel({
 
       {importErr && <p className="mt-2 text-xs text-red-700 dark:text-red-400">{importErr}</p>}
       {importWarn.length > 0 && (
-        <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/6 p-2 text-xs text-amber-200">
+        <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/6 p-2 text-xs text-amber-800 dark:text-amber-200">
           <p className="font-medium">导入提示：</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-4">
             {importWarn.map((warning, i) => (

@@ -131,6 +131,21 @@
       带走，且报错完全指不出业务原因。触发偏移敏感 —— 同一文件删掉中文能过、换个长度的中文又能复现。
       实践口径见规范 §5 对应两条；业务模块与文档不受此限，中文照常。
 
+16. **分发产物不得携带开发机私有输入，敏感值不得以明文落日志**（ISSUE #489 / 规范 §7.3、07 §7.18.2.1）：
+    - `next build` 会把仓库根的 `.env` 与 `db.sqlite` 复制进 `.next/standalone`，
+      进而被 `build-desktop` 内嵌进桌面包 —— **密钥明文分发**，且壳以
+      `current_dir(res_dir)` 起 sidecar、db 路径按 `process.cwd()` 解析，被带进包的
+      开发库就是应用首次启动读写的那个。守卫在**产物层**：`pnpm build` 的收尾步骤
+      （`scripts/standalone-private-inputs.mjs`）与 `scripts/build-desktop.mjs` 都会剥离，
+      `scripts/check-standalone-contents.cjs` 真数产物。**`outputFileTracingExcludes`
+      对 `.env` 实测无效**（Next standalone 无条件复制），别只加 excludes 就当修好。
+    - 日志脱敏有**两条落盘通道**：pino 的 `redact` 只管它自己的输出流，ERROR 镜像
+      （`app-runtime.log`）走另一条路径、不受保护。镜像**不许整包 `JSON.stringify`**
+      payload，只能输出文本 / 键名，并经值形状守卫 `redactSecretShaped()`。
+      **别往 `REDACT_PATHS` 加 `*secret` 类通配** —— pino 不支持部分字符串匹配，实测无效。
+    - 写这类用例时给**自己的临时目录**（镜像/日志是真实写盘副作用），别让
+      `pnpm test` 往仓库 `log/` 里写字。
+
 ## 快速排障
 
 被提交门槛拦下时，先看报错指出的规范章节（分支守卫 → §13.6.1、文件结构/命名 → §12.8、

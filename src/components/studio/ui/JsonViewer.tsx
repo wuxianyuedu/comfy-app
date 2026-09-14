@@ -31,7 +31,6 @@ import {
 } from "react";
 import JsonView from "react18-json-view";
 import "react18-json-view/src/style.css";
-import "react18-json-view/src/dark.css";
 import { Icon } from "@/components/ui/icon";
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
@@ -112,9 +111,14 @@ function ensureHighlightCss() {
 /* string value 内的 substring mark */
 .json-view mark.jv-hit-sub {
   background-color: rgba(251, 191, 36, 0.32);
-  color: rgb(254, 243, 199);
+  /* 命中子串文字色跟主题：写死 rgb(254,243,199)（近白）时，Light 下是
+     近白字压浅琥珀底，看不到。浅色用深琥珀，深色保留原近白。 */
+  color: var(--json-view-hit-sub-ink, rgb(120, 53, 15));
   border-radius: 2px;
   padding: 0 1px;
+}
+.dark .json-view mark.jv-hit-sub {
+  --json-view-hit-sub-ink: rgb(254, 243, 199);
 }
 .json-view mark.jv-hit-sub[data-jv-active-hit="true"] {
   background-color: rgb(251, 191, 36);
@@ -428,7 +432,8 @@ export function JsonViewer({
         ) : (
           <JsonView
             src={data}
-            dark
+            /* 不再传 `dark`（它会挂上写死的 dark.css），语法着色统一由
+               `.jv-theme-comfy` 的两态 token 负责（见 globals.css）。 */
             theme="default"
             // collapsed={false} 让初始全部展开, dense 场景靠 collapseObjectsAfterLength 自然折叠
             collapsed={false}
@@ -447,21 +452,5 @@ export function JsonViewer({
   );
 }
 
-// ─── 主题 token — 与 globals.css 暗色对齐 ────────────────────────────────
-/** 在 layout 注入一次: 把 react18-json-view 的 6 类节点颜色对齐到
- *  globals.css dark token (violet/emerald/orange/amber/zinc 系) */
-export const JSON_VIEWER_THEME_CSS = `
-.json-view.jv-theme-comfy { color: #d4d4d8; font-size: 11px; line-height: 1.6; }
-.json-view.jv-theme-comfy .json-view--property,
-.json-view.jv-theme-comfy .json-view--index { color: #c4b5fd; }   /* violet-300 */
-.json-view.jv-theme-comfy .json-view--string    { color: #6ee7b7; } /* emerald-300 */
-.json-view.jv-theme-comfy .json-view--number    { color: #fdba74; } /* orange-300 */
-.json-view.jv-theme-comfy .json-view--boolean   { color: #fcd34d; } /* amber-300 */
-.json-view.jv-theme-comfy .json-view--null      { color: #71717a; font-style: italic; }
-.json-view.jv-theme-comfy .json-view--pair:hover { background-color: rgba(255,255,255,0.04); }
-.json-view.jv-theme-comfy .json-view--object,
-.json-view.jv-theme-comfy .json-view--array  { color: #a1a1aa; }   /* zinc-400 */
-.json-view.jv-theme-comfy .json-view--brace,
-.json-view.jv-theme-comfy .json-view--colon { color: #71717a; }   /* zinc-500 */
-.json-view.jv-theme-comfy .jv-chevron path  { fill: #71717a; }
-`;
+/* 本组件的语法着色不再内联注入：`.jv-theme-comfy` 的两态 token 定义在
+   globals.css（浅色默认 + `.dark` 覆盖），避免组件里再养一份与主题脱钩的副本。 */

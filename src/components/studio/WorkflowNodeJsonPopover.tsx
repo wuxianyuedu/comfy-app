@@ -10,7 +10,7 @@ import { useMemo, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { NodeJsonViewerRequest, RawOutputMeta } from "./workflow-types";
 import { computePos } from "./workflow-utils";
-import { Chip } from "./RequiredSummary";
+import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
 
 /* The popover itself.  Three blocks stacked vertically:
  *   ┌────────────────────────────────────────────────┐
@@ -158,7 +158,11 @@ export function NodeJsonPopover({
       }
     );
   };
-  const accent = request.kind === "subgraph" ? "#7C5CFC" : "#5BC6FF";
+  const accent =
+    request.kind === "subgraph" ? "var(--color-primary)" : "var(--color-info)";
+  /** 带透明度的 accent —— `var()` 不能拼 hex alpha，走 color-mix。 */
+  const accentAlpha = (percent: number) =>
+    `color-mix(in srgb, ${accent} ${percent}%, transparent)`;
   const nodeClass = (json?.class_type ?? "?");
   const nodeMode = (
     typeof nodeView?.raw?.mode === "number"
@@ -172,7 +176,11 @@ export function NodeJsonPopover({
   const modeLabel =
     nodeMode === 4 ? "Bypass" : nodeMode === 2 ? "Disabled" : "Normal";
   const modeColor =
-    nodeMode === 4 ? "#ec4899" : nodeMode === 2 ? "#6b7280" : "#10B981";
+    nodeMode === 4
+      ? "var(--color-accent-soft)"
+      : nodeMode === 2
+        ? "var(--color-ink-faint)"
+        : "var(--color-success-strong)";
 
   return typeof document === "undefined"
     ? null
@@ -184,7 +192,7 @@ export function NodeJsonPopover({
             style={{
               position: "fixed",
               inset: 0,
-              background: "rgba(0,0,0,0.20)",
+              background: "var(--color-canvas-minimap-mask)",
               zIndex: 9000,
             }}
           />
@@ -202,11 +210,10 @@ export function NodeJsonPopover({
               maxHeight: "60vh",
               borderRadius: 12,
               background: "var(--color-bg)",
-              border: `1px solid ${accent}55`,
+              border: `1px solid ${accentAlpha(33)}`,
               boxShadow:
-                "0 20px 48px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04) inset, 0 0 24px " +
-                accent +
-                "33",
+                "0 20px 48px var(--color-shadow-strong), 0 0 0 1px var(--color-border-subtle) inset, 0 0 24px " +
+                accentAlpha(20),
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
@@ -217,7 +224,7 @@ export function NodeJsonPopover({
               aria-hidden
               style={{
                 height: 2,
-                background: `linear-gradient(90deg, ${accent} 0%, ${accent}55 60%, transparent 100%)`,
+                background: `linear-gradient(90deg, ${accent} 0%, ${accentAlpha(33)} 60%, transparent 100%)`,
               }}
             />
             <div
@@ -226,7 +233,7 @@ export function NodeJsonPopover({
                 alignItems: "center",
                 gap: 8,
                 padding: "10px 12px 8px 14px",
-                borderBottom: "1px solid rgba(255,255,255,0.06)",
+                borderBottom: "1px solid var(--color-border-subtle)",
               }}
             >
               <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
@@ -243,7 +250,7 @@ export function NodeJsonPopover({
                 >
                   <span style={{ fontSize: 11 }}>📋</span>
                   <span>节点 JSON</span>
-                  <span style={{ color: "rgba(255,255,255,0.18)" }}>·</span>
+                  <span style={{ color: "var(--color-ink-faintest)" }}>·</span>
                   <span
                     style={{
                       fontFamily: "var(--font-mono)",
@@ -275,9 +282,9 @@ export function NodeJsonPopover({
                   fontSize: 11,
                   padding: "4px 8px",
                   borderRadius: 6,
-                  background: copied ? `${accent}26` : "rgba(255,255,255,0.04)",
+                  background: copied ? accentAlpha(15) : "var(--color-subtle)",
                   color: copied ? accent : "var(--color-ink)",
-                  border: `1px solid ${copied ? accent + "66" : "rgba(255,255,255,0.08)"}`,
+                  border: `1px solid ${copied ? accentAlpha(40) : "var(--color-border-strong)"}`,
                   cursor: "pointer",
                   transition: "all 120ms ease",
                 }}
@@ -296,8 +303,8 @@ export function NodeJsonPopover({
                   alignItems: "center",
                   justifyContent: "center",
                   borderRadius: 6,
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "var(--color-subtle)",
+                  border: "1px solid var(--color-border-strong)",
                   color: "var(--color-muted)",
                   cursor: "pointer",
                   fontSize: 14,
@@ -314,8 +321,8 @@ export function NodeJsonPopover({
                 display: "flex",
                 gap: 4,
                 padding: "6px 10px 0 14px",
-                background: "rgba(255,255,255,0.01)",
-                borderBottom: "1px solid rgba(255,255,255,0.06)",
+                background: "var(--color-subtle)",
+                borderBottom: "1px solid var(--color-border-subtle)",
               }}
             >
               {(["view", "saved"] as const).map((tab) => {
@@ -337,13 +344,13 @@ export function NodeJsonPopover({
                       fontSize: 11,
                       padding: "5px 10px",
                       borderRadius: "6px 6px 0 0",
-                      border: `1px solid ${active ? accent + "55" : "rgba(255,255,255,0.04)"}`,
+                      border: `1px solid ${active ? accentAlpha(33) : "var(--color-border-subtle)"}`,
                       borderBottom: active
-                        ? `1px solid ${accent}33`
-                        : "1px solid rgba(255,255,255,0.04)",
+                        ? `1px solid ${accentAlpha(20)}`
+                        : "1px solid var(--color-border-subtle)",
                       background: active
-                        ? `${accent}22`
-                        : "rgba(255,255,255,0.02)",
+                        ? accentAlpha(13)
+                        : "var(--color-subtle)",
                       color: active
                         ? "var(--color-ink)"
                         : "var(--color-muted)",
@@ -362,42 +369,42 @@ export function NodeJsonPopover({
                 flexWrap: "wrap",
                 gap: 6,
                 padding: "8px 14px",
-                background: `${accent}11`,
-                borderBottom: "1px solid rgba(255,255,255,0.06)",
+                background: accentAlpha(7),
+                borderBottom: "1px solid var(--color-border-subtle)",
               }}
             >
               <Chip color={modeColor} label={`mode ${nodeMode} · ${modeLabel}`} />
               {tab === "saved" ? (
                 <>
                   {json && "widgets_values" in json && (
-                    <Chip color="#a1a1aa" label={`widgets: ${json.widgets_values?.length ?? 0} 项`} />
+                    <Chip color={CHIP_NEUTRAL_COLOR} label={`widgets: ${json.widgets_values?.length ?? 0} 项`} />
                   )}
                   {json && "inputs" in json && (
-                    <Chip color="#a1a1aa" label={`inputs: ${Object.keys(json.inputs ?? {}).length} 个`} />
+                    <Chip color={CHIP_NEUTRAL_COLOR} label={`inputs: ${Object.keys(json.inputs ?? {}).length} 个`} />
                   )}
                   {json && "outputs" in json && (
-                    <Chip color="#a1a1aa" label={`outputs: ${json.outputs?.length ?? 0} 个`} />
+                    <Chip color={CHIP_NEUTRAL_COLOR} label={`outputs: ${json.outputs?.length ?? 0} 个`} />
                   )}
-                  {!json && <Chip color="#f59e0b" label="节点未在 graph 中" />}
+                  {!json && <Chip color="var(--color-warning)" label="节点未在 graph 中" />}
                 </>
               ) : (
                 <>
                   {viewObj?.inputs && (
-                    <Chip color="#a1a1aa" label={`inputs: ${Object.keys(viewObj.inputs ?? {}).length} 个`} />
+                    <Chip color={CHIP_NEUTRAL_COLOR} label={`inputs: ${Object.keys(viewObj.inputs ?? {}).length} 个`} />
                   )}
                   {viewObj?.outputs && Array.isArray(viewObj.outputs) && (
-                    <Chip color="#a1a1aa" label={`outputs: ${(viewObj.outputs).length} 个`} />
+                    <Chip color={CHIP_NEUTRAL_COLOR} label={`outputs: ${(viewObj.outputs).length} 个`} />
                   )}
                   {viewObj?.widgets_values && Array.isArray(viewObj.widgets_values) && (
-                    <Chip color="#a1a1aa" label={`widgets: ${(viewObj.widgets_values).length} 项`} />
+                    <Chip color={CHIP_NEUTRAL_COLOR} label={`widgets: ${(viewObj.widgets_values).length} 项`} />
                   )}
                   {viewObj?.properties && (
-                    <Chip color="#a1a1aa" label={`properties: ${Object.keys(viewObj.properties ?? {}).length} 项`} />
+                    <Chip color={CHIP_NEUTRAL_COLOR} label={`properties: ${Object.keys(viewObj.properties ?? {}).length} 项`} />
                   )}
                   {viewObj?.pos && Array.isArray(viewObj.pos) && (
-                    <Chip color="#a1a1aa" label={`pos: ${viewObj.pos.map((num) => Math.round(num)).join(", ")}`} />
+                    <Chip color={CHIP_NEUTRAL_COLOR} label={`pos: ${viewObj.pos.map((num) => Math.round(num)).join(", ")}`} />
                   )}
-                  {!viewObj && <Chip color="#f59e0b" label="无画布态数据 — 纯 API 工作流" />}
+                  {!viewObj && <Chip color="var(--color-warning)" label="无画布态数据 — 纯 API 工作流" />}
                 </>
               )}
             </div>
@@ -412,7 +419,7 @@ export function NodeJsonPopover({
                 fontSize: 11.5,
                 lineHeight: 1.55,
                 color: "var(--color-ink)",
-                background: "rgba(255,255,255,0.02)",
+                background: "var(--color-subtle)",
                 whiteSpace: "pre",
                 userSelect: "text",
               }}
@@ -424,7 +431,7 @@ export function NodeJsonPopover({
                 padding: "6px 14px 8px",
                 fontSize: 10.5,
                 color: "var(--color-muted)",
-                borderTop: "1px solid rgba(255,255,255,0.06)",
+                borderTop: "1px solid var(--color-border-subtle)",
                 display: "flex",
                 justifyContent: "space-between",
               }}

@@ -96,6 +96,12 @@ jobs:
         # 文件名与段落标题不合规即失败，避免发版并入时才发现写歪
         run: node scripts/check-changelog-fragments.cjs
 
+      - name: Theme color scan ratchet
+        # 主题色扫描（规范 03 §3.6.1 / ISSUE #75）：「类型色例外」与「固定暗色
+        # 清单」在此脚本里**显式豁免**，不再每轮重报；未豁免的写死色值走棘轮，
+        # 只许降不许升 —— 新增表面/文字语义的 #hex / rgba(...) 即失败。
+        run: node scripts/check-theme-colors.cjs --strict
+
       - name: UI/Logic separation ratchet
         # 棘轮只许降不许升（规范 17）：新增违规失败；治理后未收紧基线也失败
         run: node scripts/check-ui-logic-separation.cjs --strict
