@@ -18,10 +18,6 @@
 import React from "react";
 import { ioLabel, typeDisplay } from "@/components/studio/shared/workflow-io";
 import type { WorkflowIOEntry } from "@/components/studio/shared/workflow-io";
-import {
-  WIRE_DIRECTION_ATTR,
-  WIRE_ROW_ATTR,
-} from "~/lib/workflow-io-types";
 
 /** 卡片外壳：与 CanvasNode 持有的外壳完全一致（无 overflow-hidden，
  *  保护端点骑跨；底部按钮自带 rounded-b-[14px] 贴合圆角）。 */
@@ -162,15 +158,7 @@ export function WorkflowNodeOutputsRow({
   const oLabel = ioLabel(output, [...inputs, ...outputs]);
   const oType = output.type ?? "*";
   return (
-    <div
-      key={output.nodeId + ":" + output.name}
-      className="relative"
-      /* 落点锚点：库画布里「对外输出参数」卡片的圆点拖到这一行即改该输出的取值
-       * 来源（`WorkflowParamWires` 按这对属性量位置 + 判方向）。方向取行自己的
-       * 语义 —— 这是**输出**行，输入的落点行不会命中它。 */
-      {...{ [WIRE_ROW_ATTR]: output.ioKey }}
-      {...{ [WIRE_DIRECTION_ATTR]: "output" }}
-    >
+    <div key={output.nodeId + ":" + output.name} className="relative">
       {renderHandle && output.ioKey
         ? renderHandle({ id: output.ioKey, dir: "out", type: oType })
         : null}

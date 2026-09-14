@@ -221,8 +221,16 @@ import "@/styles/json-viewer.css";
 色）、`config/custom-nodes.ts`、`lib/comfyui/node-registry.ts`、
 `CanvasNodePrimitives.tsx` 的 `PORT_STYLE`、`WorkflowPortHandle.tsx`、
 `lib/project-canvas/canvas-types.ts`、`workflow-param-mapping-ui.ts`、
-`project-canvas/WorkflowNodeArdot.tsx` 的 `PORT_TYPE_COLORS` / `PORT_DOT_SHADOW`
+`project-canvas/WorkflowNodeArdot.tsx` 的 `PORT_TYPE_COLORS` / `PORT_DOT_SHADOW`、
+`workflow-library/workflow-library-wire-graph.ts` 的连线状态色常量
+（`AUTO_STROKE` / `MANUAL_STROKE` / `DRAG_STROKE` / `SELECTED_STROKE`）
 等（全库约 320 处，成组出现）。
+
+> **连线状态色按「类型色」判**：一条边的描边色表达的是「这条线是什么状态」
+> （自动判定 / 作者改过 / 拖动预览 / 选中），与端口类型色同属「内容自身的
+> 颜色」——它画的是线，不是承载线的表面。`WorkflowParamWires` → React Flow
+> 的改造（ISSUE #529）把这份常量表从 `WorkflowParamWires.tsx` 搬到
+> `workflow-library-wire-graph.ts`，判定口径不变。
 
 它们**允许保留写死色值**，理由三条：
 

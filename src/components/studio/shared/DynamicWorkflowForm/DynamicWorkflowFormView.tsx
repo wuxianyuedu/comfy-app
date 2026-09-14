@@ -138,9 +138,8 @@ export function DynamicWorkflowFormView({
       withHandle={withHandle}
       /* 画布上 handle id 必须唯一：同一个 pin 名可能同时出现在两个节点上（自定义
        * 节点重名很常见），用 ioKey 当 handle id 才会接到「那一行」而不是「同名的
-       * 另一行」。落点锚点（data-io-pins）与之同源，连线量到的就是这一格。 */
+       * 另一行」。 */
       handleId={entry.ioKey}
-      wirePins={entry.ioKey}
       trailing={rowTrailing?.(entry)}
     />
     );

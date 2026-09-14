@@ -250,9 +250,13 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     expect(tags.map((tag) => tag.textContent)).toEqual(["尺寸"]);
   });
 
-  it("每张卡片右侧有圆点端口，宿主行是它的连线锚点（ISSUE #355 复审）", () => {
+  it("每张卡片右侧有端点，宿主行是它另一端（ISSUE #355 复审 / #529）", () => {
     /* 「对外参数需要右侧有小圆点的端口，可和工作流节点上的参数相连」——
-     * 圆点画在卡片的输出端口行上，宿主表单行则是线另一端（`data-io-key`）。 */
+     * 端点画在卡片的输出端口行上；宿主表单行则是另一端。
+     *
+     * ISSUE #529：端点从自绘的 `data-wire-anchor` 圆点换成 React Flow 的
+     * `<Handle>`（`data-handleid`），连线也从量 rect 的 SVG 换成 edge ——
+     * 断言对象随之变成「节点 / handle / edge」的 DOM。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
         workflowId="wf-1"
@@ -264,22 +268,22 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         defaultMode="T2I"
       />,
     );
-    /* 锚点 = 「条目 id + 该候选端口的 handle id」：一个候选一颗圆点。 */
+    /* 一个候选一颗 handle：左列卡片的 handle id 就是该候选端口的名字。 */
     expect(
-      container.querySelector(
-        `[data-wire-anchor="prompt?positive_prompt"]`,
-      ),
+      container.querySelector('[data-handleid="positive_prompt"]'),
     ).toBeTruthy();
     expect(
-      container.querySelector(`[data-wire-anchor="size?aspect_ratio"]`),
+      container.querySelector('[data-handleid="aspect_ratio"]'),
     ).toBeTruthy();
-    /* 宿主卡片的两端都在（连线另一端量得到）：提示词是普通参数行，
+    /* 宿主卡片的两端都在（连线的另一端）：提示词是普通参数行，
      *  宽高比则落在组合控件那一格上（比例/像素由同一块控件录入）。 */
+    const host = container.querySelector('[data-testid="wflib-canvas-node-host"]')!;
+    expect(host).toBeTruthy();
     expect(
-      container.querySelector('[data-io-key="9::widget::positive_prompt"]'),
+      host.querySelector('[data-handleid="9::widget::positive_prompt"]'),
     ).toBeTruthy();
     expect(
-      container.querySelector('[data-io-pins="5::widget::aspect_ratio"]'),
+      host.querySelector('[data-handleid="5::widget::aspect_ratio"]'),
     ).toBeTruthy();
   });
 
@@ -319,7 +323,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         defaultMode="T2I"
       />,
     );
-    /* 控件在（带下拉触发器），且带覆盖这两个端口的落点锚点。 */
+    /* 控件在（带下拉触发器）。 */
     expect(
       container.querySelector('[aria-label="选择比例与像素"]'),
     ).toBeTruthy();
@@ -337,17 +341,20 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
       expect((dot as HTMLElement).style.width).toBe("12px");
       expect(box.querySelector(`[data-io-key="${ioKey}"]`)).toBeNull();
     }
-    /* 仍留一层整块锚点兜底（拖到框的空白处）。 */
-    expect(
-      container.querySelector(
-        '[data-io-pins="5::widget::aspect_ratio,5::widget::megapixels"]',
-      ),
-    ).toBeTruthy();
+    /* 两个端口各自是一个真正的落点（端点 id 即 ioKey）—— 拖到「百万像素」
+     *  就连到 `megapixels`，不是笼统地落到整块控件上。 */
+    for (const ioKey of ["5::widget::aspect_ratio", "5::widget::megapixels"]) {
+      expect(
+        container.querySelector(`[data-handleid="${ioKey}"]`),
+        `${ioKey} 应有自己的端点`,
+      ).toBeTruthy();
+    }
   });
 
-  it("卡片列与宿主卡片之间留出走线空间（不再贴在一起）—— ISSUE #355 复审", () => {
+  it("三列依次排开、之间留出走线空间 —— ISSUE #355 复审 / #529", () => {
     /* 「对外参数和工作流节点太近了，看不清哪里连接哪里」：两列之间必须留出走线
-     *  的横向空间，否则线短得看不出两端。 */
+     *  的横向空间，否则线短得看不出两端。换 React Flow 后这件事由**布局**承担
+     *  （`layoutLibraryNodes` 的 `columnGap` 是节点坐标的一部分）。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
         workflowId="wf-1"
@@ -359,15 +366,21 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         defaultMode="T2I"
       />,
     );
-    const column = container.querySelector('[data-testid="workflow-param-card-column"]')!;
-    /* 卡片列与宿主卡片同在一个 flex 容器里，靠 gap 拉开 —— 断言两端之间确实有
-     *  间距类，而不是贴边。 */
-    const row = column.parentElement!;
-    expect(row.className).toContain("gap-24");
+    const nodes = [...container.querySelectorAll<HTMLElement>(".react-flow__node")];
+    const xOf = (id: string) => {
+      const el = nodes.find((node) => node.dataset.id === id)!;
+      expect(el, `节点 ${id} 应挂载`).toBeTruthy();
+      return Number(/translate\(([-\d.]+)px/.exec(el.style.transform)?.[1]);
+    };
+    expect(xOf("lib:params")).toBeLessThan(xOf("lib:host"));
+    expect(xOf("lib:host")).toBeLessThan(xOf("lib:outputs"));
+    /* 列间留白 = 布局里的 columnGap（走线的空间）。 */
+    expect(xOf("lib:host") - xOf("lib:params")).toBeGreaterThan(220);
   });
 
   it("组合控件的端口未被任何映射落到时，控件照旧画出来并可被连", () => {
-    /* 落点为空也一样是这块控件：它覆盖的端口共用一个落点锚点，拖线时落得上。 */
+    /* 落点为空也一样是这块控件，且它覆盖的每个端口都画出了自己的端点 ——
+     *  拖线时有得可落。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
         workflowId="wf-1"
@@ -399,12 +412,13 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
       />,
     );
     expect(container.querySelector('[aria-label="选择比例与像素"]')).toBeTruthy();
-    /* 两个端口共用一个落点锚点（同一块控件录入）。 */
-    expect(
-      container.querySelector(
-        '[data-io-pins="5::widget::aspect_ratio,5::widget::megapixels"]',
-      ),
-    ).toBeTruthy();
+    /* 两个端口各有自己的端点（同一块控件录入，但落点分开）。 */
+    for (const ioKey of ["5::widget::aspect_ratio", "5::widget::megapixels"]) {
+      expect(
+        container.querySelector(`[data-handleid="${ioKey}"]`),
+        `${ioKey} 应有自己的端点`,
+      ).toBeTruthy();
+    }
   });
 
   it("没有对外参数时不渲染卡片列（空 IO）", () => {

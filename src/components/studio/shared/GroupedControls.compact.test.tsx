@@ -23,7 +23,6 @@ import { cleanup, render } from "@testing-library/react";
 
 import type { EnrichedWidget, WorkflowIOMap } from "./workflow-io";
 import { inferGroups } from "./workflow-io";
-import { WIRE_PINS_ATTR } from "~/lib/workflow-io-types";
 import { GroupedControls } from "./GroupedControls";
 
 afterEach(cleanup);
@@ -82,21 +81,12 @@ function renderCompact() {
 }
 
 describe("画布 / 库内的组合参数控件", () => {
-  it("组合控件照旧画出来（带下拉菜单），并带落点锚点", () => {
+  it("组合控件照旧画出来（带下拉菜单）", () => {
     /* 用户口径：「改回之前的样式」「改成之前带有下拉菜单的样式」—— 控件本体
      *  必须还在，且是那块带下拉的控件（触发器 + 下拉面板）。 */
     const column = renderCompact();
     expect(column.querySelector('[aria-label="选择比例、像素与倍数"]')).toBeTruthy();
     expect(column.querySelector('[aria-haspopup="listbox"]')).toBeTruthy();
-    expect(column.querySelector(`[${WIRE_PINS_ATTR}]`)).toBeTruthy();
-  });
-
-  it("落点锚点覆盖该控件录入的全部端口（线量得到这一格）", () => {
-    const column = renderCompact();
-    const anchor = column.querySelector(`[${WIRE_PINS_ATTR}]`)!;
-    expect(anchor.getAttribute(WIRE_PINS_ATTR)).toBe(
-      "5::widget::aspect_ratio,5::widget::megapixels,5::widget::multiple",
-    );
   });
 
   it("三个参数摆在组合框**外**，各自成行且带大端点", () => {

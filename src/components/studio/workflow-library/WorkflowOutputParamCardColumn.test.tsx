@@ -8,15 +8,14 @@
  *   ③ **可拖**（ISSUE #355 复审：「需要可拖」）—— 有模式 + 给了落库回调时圆点
  *      带拖拽提示与「恢复默认」；只读消费方（没给回调）时两样都不出现。
  *
- * 像素级几何（圆点是否真的骑跨边缘）在 WorkflowParamWires 的几何用例里量，
- * 这里只断言「有哪些元素、锚点是什么」。 */
+ * 端点几何由 `PortHandle`（消费方注入）负责，这里只断言「有哪些元素、
+ * 端点槽位挂在哪一行、handle id 是什么」。 */
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
 import { WorkflowOutputParamCardColumn } from "./WorkflowOutputParamCardColumn";
-import { wireAnchorValue } from "./WorkflowParamCardColumn";
 import { outputWireDotId } from "./workflow-library-param-cards";
 
 /* vitest globals: false 下 RTL 不会自动 cleanup，需手动注册。 */
@@ -71,19 +70,20 @@ describe("WorkflowOutputParamCardColumn", () => {
     expect(screen.getByText("生成图")).toBeTruthy();
   });
 
-  it("圆点在卡片**左**缘（线从宿主输出行进来），并带连线锚点", () => {
+  it("端点在卡片**左**缘（线从宿主输出行进来），handle id 是端口名", () => {
     const { container } = render(
-      <WorkflowOutputParamCardColumn outputs={outputs} />,
+      <WorkflowOutputParamCardColumn
+        outputs={outputs}
+        endpoint={(port) => (
+          <span data-testid="probe-endpoint" data-endpoint-handle={port.handleId} />
+        )}
+      />,
     );
-    const dot = container.querySelector(
-      `[data-wire-anchor="${wireAnchorValue("9::output::IMAGE", "images")}"]`,
-    )!;
+    const dot = container.querySelector('[data-endpoint-handle="images"]')!;
     expect(dot).toBeTruthy();
     /* 端点槽位在名字与类型**之前**（DOM 顺序 = 视觉顺序，圆点在左）。 */
     const row = screen.getByTestId("param-node-out-9::output::IMAGE-0");
     expect(row.firstElementChild).toBe(dot);
-    /* 左侧定位：不是输入卡片的 `right`。 */
-    expect(dot.getAttribute("style")).toContain("left:");
   });
 
   it("只读消费（没给落库回调）：不渲染「恢复默认」，也不给拖拽提示", () => {
@@ -93,25 +93,20 @@ describe("WorkflowOutputParamCardColumn", () => {
     expect(
       screen.queryByTestId("param-node-reset-9::output::IMAGE"),
     ).toBeNull();
-    const dot = container.querySelector("[data-wire-anchor]")!;
-    expect(dot.getAttribute("title")).toBeNull();
+    expect(container.querySelector("[data-testid=\"probe-endpoint\"]")).toBeNull();
   });
 
-  it("可拖：圆点声明「输出取值行」的起手位，改过之后「恢复默认」可用", () => {
-    const { container } = render(
+  it("可拖 + 作者改过：端点槽位在，「恢复默认」可用", () => {
+    render(
       <WorkflowOutputParamCardColumn
         outputs={outputs}
         resolved={{ "9::output::IMAGE": "9::output::IMAGE" }}
         canWire
         isManual={() => true}
         onReset={() => undefined}
+        endpoint={(port) => <span data-endpoint-handle={port.handleId} />}
       />,
     );
-    const dot = container.querySelector("[data-wire-anchor]")!;
-    /* 连线层据此只认输**出**行的落点，并把结果上抛给输出侧回调。 */
-    expect(dot.getAttribute("data-wire-kind")).toBe("hostToParam");
-    expect(dot.getAttribute("class")).toContain("cursor-crosshair");
-    expect(dot.getAttribute("title")).toContain("取值");
     expect(
       screen
         .getByTestId("param-node-reset-9::output::IMAGE")
@@ -142,30 +137,37 @@ describe("WorkflowOutputParamCardColumn", () => {
     expect(container.firstElementChild).toBeNull();
   });
 
-  it("圆点声明自己是**输出侧**起手位，且不带只读标记（可拖）", () => {
-    /* 连线层按 `data-wire-kind` 分流：输出侧只认宿主**输出行**当落点，落点结果
-     *  上抛给 `onConnectOutput`。此前它不带任何方向声明、又被当只读圆点排除在
-     *  拖拽起手之外，用户读作「右列的对外输出参数拖不动」（ISSUE #355）。 */
+  it("可拖：上层给了注入端点时槽位就在（方向由 handle 自己声明）", () => {
+    /* 方向的合法性不再由自绘手势层的 `data-wire-kind` 表达，而是 handle 自身的
+     *  source / target 类型 —— 由 `WorkflowLibraryCanvasNodes` 注入（ISSUE #529）。 */
     const { container } = render(
-      <WorkflowOutputParamCardColumn outputs={outputs} canWire />,
+      <WorkflowOutputParamCardColumn
+        outputs={outputs}
+        canWire
+        endpoint={(port) => (
+          <span data-endpoint-handle={port.handleId} />
+        )}
+      />,
     );
-    const dot = container.querySelector("[data-wire-anchor]")!;
-    expect(dot.getAttribute("data-wire-kind")).toBe("hostToParam");
-    expect(dot.hasAttribute("data-wire-readonly")).toBe(false);
+    expect(container.querySelector("[data-endpoint-handle=\"images\"]")).toBeTruthy();
   });
 
-  it("端口名为空 / 带空白时锚点退回「输出」—— 与连线派生的 handle 同口径", () => {
-    /* 锚点值与导线两端各算一遍：任何一处漏了 trim / 兜底，线就量不到锚点、整条
-     *  不画（用户口径：「images 和对外输出参数之间无法连线」，ISSUE #355）。 */
+  it("端口名为空 / 带空白时 handle id 退回「输出」—— 与连线派生同一份算式", () => {
+    /* handle id 与边的两端各算一遍：任何一处漏了 trim / 兜底，边就量不到
+     *  handleBounds、整条不画（用户口径：「images 和对外输出参数之间无法连线」，
+     *  ISSUE #355）。 */
     const nameless = [
       { ...outputs[0]!, name: "   ", ioKey: "9::output::EMPTY" },
     ];
     const { container } = render(
-      <WorkflowOutputParamCardColumn outputs={nameless} />,
+      <WorkflowOutputParamCardColumn
+        outputs={nameless}
+        endpoint={(port) => <span data-endpoint-handle={port.handleId} />}
+      />,
     );
-    const dot = container.querySelector("[data-wire-anchor]")!;
-    expect(dot.getAttribute("data-wire-anchor")).toBe(
-      wireAnchorValue("9::output::EMPTY", outputWireDotId(nameless[0]!)),
+    const dot = container.querySelector("[data-endpoint-handle]")!;
+    expect(dot.getAttribute("data-endpoint-handle")).toBe(
+      outputWireDotId(nameless[0]!),
     );
     expect(outputWireDotId(nameless[0]!)).toBe("输出");
   });

@@ -41,6 +41,10 @@ import {
 export interface LibraryParamCards {
   /** 对外参数条目（稳定顺序）。 */
   entries: ParamEntry[];
+  /** 派生用的 IO 表（卡片列渲染端口类型读它）。 */
+  io: WorkflowIOMap | null;
+  /** 该对外参数在当前模式下是否被作者改过（决定卡片头 ↺ 的可用性）。 */
+  isManual: (entryId: string) => boolean;
   /** 当前模式下「条目 → 目标 ioKey」的生效落点（作者改过的优先于自动判定）。 */
   resolved: Record<string, string | null>;
   /** 每个被落到的一行（ioKey）→ 落到它的对外参数名，按条目顺序取第一个。
@@ -175,7 +179,17 @@ export function deriveLibraryParamCards(args: {
     wires.map((item) => `${item.entryId}?${item.handleId}`),
   );
 
-  return { entries, resolved, ownersByPin, wires, wiredDotKeys, reachableKeys };
+  return {
+    entries,
+    io: io ?? null,
+    isManual: (entryId: string) =>
+      manualTargetFor(parsed, entryId, mode ?? null) !== undefined,
+    resolved,
+    ownersByPin,
+    wires,
+    wiredDotKeys,
+    reachableKeys,
+  };
 }
 
 /** 对外**输出**参数卡片与它们的连线（纯派生）。
@@ -193,11 +207,8 @@ export function deriveLibraryParamCards(args: {
  *
  *  线恒为**自动**口径（`manual` 恒 false）之外的区分靠实线/虚线表达「这一行是
  *  不是作者改过的取值来源」。 */
-export function deriveLibraryOutputCards(args: {
-  io: WorkflowIOMap | null | undefined;
-  paramMap?: Record<string, unknown> | null;
-  mode?: string | null;
-}): {
+/** 对外**输出**参数卡片列与它的连线（`deriveLibraryOutputCards` 的产物）。 */
+export interface LibraryOutputCards {
   outputs: (WorkflowIOEntry & { ioKey: string })[];
   wires: ParamCardWire[];
   /** 输出口 ioKey → 当前取值的那一行 ioKey（`null` = 悬空 / 断开）。 */
@@ -206,7 +217,13 @@ export function deriveLibraryOutputCards(args: {
   isManual: (ioKey: string) => boolean;
   /** 某个输出口是否存在任何取值来源（宿主那一行真的画得出来）。 */
   wired: boolean;
-} {
+}
+
+export function deriveLibraryOutputCards(args: {
+  io: WorkflowIOMap | null | undefined;
+  paramMap?: Record<string, unknown> | null;
+  mode?: string | null;
+}): LibraryOutputCards {
   const { io, paramMap, mode } = args;
   /* 顺序与宿主卡片上的输出行**同一份**（`splitWorkflowIO` 里按作者拖出的
    *  `displayOrder` 排过）：右列卡的先后与节点上那几行一一对应，读者不必自己

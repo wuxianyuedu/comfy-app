@@ -26,8 +26,9 @@
  *
  * 本模块**只产出数据**：条目的落点默认由 `autoMapEntries` 按名字自动判定，
  * 运行期由 `applyParamMapping` 按这张表严格落值。工作流库「画布节点」页签上的
- * 卡片列与连线层是同一份数据的视图（`workflow-library-param-cards` /
- * `WorkflowParamWires`）—— 拖线即编辑落点，映射没有第二套界面。
+ * 三列 React Flow 节点（卡片列 / 宿主卡片 / 输出卡片列）是同一份数据的视图
+ * （`workflow-library-param-cards` + `WorkflowLibraryCanvas`）—— 拖线即编辑
+ * 落点，映射没有第二套界面。
  */
 
 import {
@@ -881,8 +882,8 @@ export function entryIdForPin(
  *  ⚠️ 现状：画布渲染侧**直接用 ioKey 当 handle id**（见 WidgetInputRow 的
  *  `handleId`）。`pin 名` 这个旧口径在「两个节点
  *  有同名 pin」时会让边接到同名 handle 的第一处 —— 表现就是「线连到了别的节点
- *  上」。本函数保留给只读呈现（库里那层的连线量测按 pin 名找锚点），画布手势
- *  一律走 ioKey。
+ *  上」。库里那层（`wireHandleIdForIoKey`）按 pin 名给卡片圆点取 handle id，
+ *  画布手势一律走 ioKey。
  *
  *  两个键空间必须分清（ISSUE #374）：
  *   · ioKey（`<nodeId>::<kind>::<name>`）是 workflowIO 的字典键，运行期
@@ -1103,8 +1104,9 @@ export function applyParamMapping(args: {
  * 卡片高度与圆点位置各写一份，线就会连到卡片外面去。
  *
  * **画布几何（节点 id 前缀 / 卡片坐标 / 卡片高度推算）已随编辑器卡片一起删除**：
- * 卡片现在只出现在工作流库详情的「画布节点」页签，那一层是普通 DOM 布局
- * （卡片列 + 独立连线层量测），不需要 React Flow 的节点坐标。
+ * 卡片现在只出现在工作流库详情的「画布节点」页签，位置与三列布局由 React Flow
+ * 的节点坐标（`workflow-library-wire-graph` 的 `layoutLibraryNodes`）承担，
+ * 这里不需要第二套几何。
  */
 
 /** 卡片头（标题）行高。 */

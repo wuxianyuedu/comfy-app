@@ -146,36 +146,3 @@ export function collectModeCodes(
   }
   return [...seen];
 }
-
-/** ── 映射连线的锚点契约（宿主卡片那一端的 data 属性） ──
- *
- * 工作流库的只读映射连线（`WorkflowParamWires`）要量出「卡片圆点 → 宿主卡片上
- *  被落到的那一行」，靠的就是行上的锚点属性。端口键（ioKey）里**可能含 `::`**
- *  （端口名本身带分隔符），所以量测一律走 `getAttribute` 精确比较，不做选择器
- *  转义 —— 两边必须用同一套属性名，故收在这里，禁止各处手写字符串。
- *
- *  两种落点形状：
- *   · 独立参数行（`WidgetInputRow` / 端口行）：整行一个锚点；
- *   · 组合参数（`DimensionControl` / `VideoControl`）：宽高、比例/像素由同一个
- *     控件录入，没有独立的一行可以连 —— 锚点挂在整块控件上，线指向的就是那一格。
- */
-
-/** 独立参数行上的落点锚点（值 = 该行的 ioKey）。 */
-export const WIRE_ROW_ATTR = "data-io-key";
-
-/** 组合参数控件上的落点锚点（值 = 该控件覆盖的 ioKeys，逗号分隔）。 */
-export const WIRE_PINS_ATTR = "data-io-pins";
-
-/** 组合参数锚点的值（覆盖到的 ioKeys）。 */
-export function wirePinsValue(ioKeys: readonly (string | undefined)[]): string {
-  return ioKeys.filter((key): key is string => Boolean(key)).join(",");
-}
-
-/** 落点锚点自己声明的 IO 方向（值 = `"input"` / `"output"`）。
- *
- *  连线层要判「这个落点能不能接这一端」：输入的落点是参数行（`input`），输出的
- *  落点是工作流的输出行（`output`）—— 拖输出卡片的圆点只能落在输出行上。判据取
- *  行自带的属性，与 IO 表同源，连线层不必持有 workflowIO。
- *
- *  缺省（老视图没写）按输入处理：库里两列中只有输出行会写这个属性。 */
-export const WIRE_DIRECTION_ATTR = "data-io-direction";
