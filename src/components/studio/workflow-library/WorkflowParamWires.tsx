@@ -102,6 +102,12 @@ export interface WorkflowParamWiresProps {
   onConnectOutput?: (outputIoKey: string, targetIoKey: string) => void;
   /** 输出侧断开（把某个输出口从它当前取值的那一行摘开）。 */
   onDisconnectOutput?: (outputIoKey: string) => void;
+  /** 类型闸门（可选）：这个条目能不能落到这一行上（反向拖时第二个参数是**起手
+   *  那一行**）。缺省 = 不做类型判定（只判几何命中）。
+   *
+   *  判据由上层给（`pinAcceptsEntry` + IO 表 + 契约 entries）：契约与 IO 的知识
+   *  不进这个几何层，这里只保证「落不上的目标不会被画成可落点、也不会被上抛」。 */
+  acceptsDrop?: (entryId: string, ioKey: string) => boolean;
 }
 
 interface Segment {
@@ -407,6 +413,42 @@ export function measureWires(
   return out;
 }
 
+/** 类型闸门判定（经 ref 取最新那一份；父层没给就只判几何命中）。 */
+function allowed(
+  ref: React.RefObject<((entryId: string, ioKey: string) => boolean) | undefined>,
+  entryId: string,
+  ioKey: string,
+): boolean {
+  return ref.current ? ref.current(entryId, ioKey) : true;
+}
+
+/** 卡片圆点声明的 `entryId?handleId` 里取出条目 id（输出口时就是该输出口的 ioKey）。 */
+function entryIdOfAnchor(raw: string): string {
+  const separator = raw.indexOf("?");
+  return separator > 0 ? raw.slice(0, separator) : "";
+}
+
+/** 反向拖的可拖提示：行圆点按方向标十字光标。
+ *
+ *  行是表单层渲染的，这里用**命令式**盖一层装饰（与量测同源：都在本层遍历
+ *  DOM）—— 不必把「可拖」这件事塞进表单层的 props，也不动它们的渲染结构。 */
+function markDraggableDots(
+  container: HTMLElement,
+  input: boolean,
+  output: boolean,
+): void {
+  for (const el of container.querySelectorAll<HTMLElement>(`[${PORT_DOT_ATTR}]`)) {
+    const isOutput = el.getAttribute(IO_DIRECTION_ATTR) === "output";
+    if (isOutput ? output : input) {
+      el.dataset.wireSource = isOutput ? "output" : "input";
+      el.style.cursor = "crosshair";
+    } else if (el.dataset.wireSource) {
+      delete el.dataset.wireSource;
+      el.style.cursor = "";
+    }
+  }
+}
+
 /** 预览线路径：起点 = 给定锚点**朝向光标**的那条外缘，终点 = 光标。
  *
  *  两个方向共用这一段：卡片圆点起手（卡片 → 行）与行圆点起手（行 → 卡片）。 */
@@ -437,7 +479,7 @@ function pathFromAnchor(
  *  （那些圆点带 `data-wire-kind="hostToParam"`），从**输入行**起手只能落到对外参数
  *  卡片；与「拖到行上」时的落点集合互为镜像。命中值就是圆点自己声明的
  *  `entryId?handleId`（与按下时解析卡片圆点用的是同一套键）。 */
-function collectCardTargets(
+export function collectCardTargets(
   container: HTMLElement,
   outputs: boolean,
 ): { ioKey: string; rect: DOMRectLike }[] {
@@ -485,6 +527,7 @@ export function WorkflowParamWires({
   onDisconnect,
   onConnectOutput,
   onDisconnectOutput,
+  acceptsDrop,
 }: WorkflowParamWiresProps) {
   const ref = useRef<SVGSVGElement | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
@@ -505,6 +548,12 @@ export function WorkflowParamWires({
      *  给了它就表示：起点是这颗行圆点、落点是卡片圆点、上抛时行 ioKey 由它给。 */
     fromHostIoKey?: string;
   } | null>(null);
+  /* 类型闸门由父层给（内联箭头，每次渲染都是新函数）：直接进事件 effect 的依赖
+   *  会让监听器在拖动过程中反复解绑重绑，这里用 ref 同步最新那一份。 */
+  const acceptsRef = useRef(acceptsDrop);
+  useEffect(() => {
+    acceptsRef.current = acceptsDrop;
+  }, [acceptsDrop]);
   /* 空集合时**不挂线层**：挂载那一刻还没量过，`segments` 是空的，但 svg 必须先
    * 在 DOM 里才量得到锚点（量测的起点是 svg 的 parentElement）。所以「要不要
    * 渲染 svg」只取决于有没有线要画，而不是「已经量到几条」。 */
@@ -524,6 +573,8 @@ export function WorkflowParamWires({
   useEffect(() => {
     const container = ref.current?.parentElement;
     if (!container) return;
+    /* 反向拖的可拖提示：有回调的方向上，行圆点标十字光标（见 markDraggableDots）。 */
+    markDraggableDots(container, !!onConnect, !!onConnectOutput);
     let frame = 0;
     const remeasure = () => {
       cancelAnimationFrame(frame);
@@ -642,15 +693,19 @@ export function WorkflowParamWires({
     const outputsOnly = drag.kind === "hostToParam";
     const move = (event: PointerEvent) => {
       const point = localPoint(event);
-      /* 反向拖的落点是卡片圆点，正向拖的落点是工作流行 —— 候选集合按起手处分流。 */
-      const hover = container
-        ? resolveDropTarget(
-            point,
-            drag.fromHostIoKey
-              ? collectCardTargets(container, outputsOnly)
-              : collectDropTargets(container, outputsOnly),
-          )
-        : null;
+      /* 反向拖的落点是卡片圆点，正向拖的落点是工作流行 —— 候选集合按起手处分流，
+       *  再过一道类型闸门：落不上的目标不参与命中（不会点高亮、预览线也不转实线）。 */
+      const fromHostKey = drag.fromHostIoKey ?? "";
+      const targets = container
+        ? fromHostKey
+          ? collectCardTargets(container, outputsOnly).filter((target) =>
+              allowed(acceptsRef, entryIdOfAnchor(target.ioKey), fromHostKey),
+            )
+          : collectDropTargets(container, outputsOnly).filter((target) =>
+              allowed(acceptsRef, drag.entryId, target.ioKey),
+            )
+        : [];
+      const hover = container ? resolveDropTarget(point, targets) : null;
       setDrag((prev) => {
         if (!prev) return prev;
         /* 预览线的终点要传**屏幕坐标**：`dragPath` / `pathFromAnchor` 自己减容器
@@ -678,23 +733,25 @@ export function WorkflowParamWires({
     };
     const up = (event: PointerEvent) => {
       const point = localPoint(event);
-      const hit = container
-        ? resolveDropTarget(
-            point,
-            drag.fromHostIoKey
-              ? collectCardTargets(container, outputsOnly)
-              : collectDropTargets(container, outputsOnly),
-          )
-        : null;
-      if (hit && drag.fromHostIoKey) {
+      const fromHostKey = drag.fromHostIoKey ?? "";
+      /* 与 move 同一套候选（含类型闸门）：松手时判不上的目标一律不上抛。 */
+      const targets = container
+        ? fromHostKey
+          ? collectCardTargets(container, outputsOnly).filter((target) =>
+              allowed(acceptsRef, entryIdOfAnchor(target.ioKey), fromHostKey),
+            )
+          : collectDropTargets(container, outputsOnly).filter((target) =>
+              allowed(acceptsRef, drag.entryId, target.ioKey),
+            )
+        : [];
+      const hit = container ? resolveDropTarget(point, targets) : null;
+      if (hit && fromHostKey) {
         /* 反向拖：命中卡片圆点 → 让**起手那一行**成为这张口的落点。圆点自己声明
          *  `entryId?handleId`，条目 id 就是键（handleId 只用于在卡片上定位圆点）。 */
-        const separator = hit.indexOf("?");
-        const entryId = separator > 0 ? hit.slice(0, separator) : "";
+        const entryId = entryIdOfAnchor(hit);
         if (entryId) {
-          if (drag.kind === "hostToParam")
-            onConnectOutput?.(entryId, drag.fromHostIoKey);
-          else onConnect?.(entryId, drag.fromHostIoKey);
+          if (drag.kind === "hostToParam") onConnectOutput?.(entryId, fromHostKey);
+          else onConnect?.(entryId, fromHostKey);
         }
       } else if (hit) {
         if (drag.kind === "hostToParam") onConnectOutput?.(drag.entryId, hit);

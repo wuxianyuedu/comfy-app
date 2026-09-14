@@ -18,7 +18,7 @@ import {
   WorkflowParamCardColumn,
   wireAnchorValue,
 } from "./WorkflowParamCardColumn";
-import { WorkflowParamWires } from "./WorkflowParamWires";
+import { WorkflowParamWires, collectCardTargets } from "./WorkflowParamWires";
 
 vi.stubGlobal(
   "ResizeObserver",
@@ -57,6 +57,27 @@ function stubRect(
       bottom: rect.top + rect.height,
     }) as DOMRect;
 }
+
+describe("反向拖的可落点（collectCardTargets）", () => {
+  it("按列收：输出行起手只收输出卡片锚点，输入行起手只收输入卡片锚点", () => {
+    const container = document.createElement("div");
+    const inputAnchor = document.createElement("span");
+    inputAnchor.setAttribute("data-wire-anchor", "prompt?positive_prompt");
+    const outputAnchor = document.createElement("span");
+    outputAnchor.setAttribute("data-wire-anchor", "9::output::IMAGE?IMAGE");
+    outputAnchor.setAttribute("data-wire-kind", "hostToParam");
+    container.append(inputAnchor, outputAnchor);
+    stubRect(inputAnchor, { left: 0, top: 0, width: 12, height: 12 });
+    stubRect(outputAnchor, { left: 40, top: 0, width: 12, height: 12 });
+
+    expect(collectCardTargets(container, false).map((t) => t.ioKey)).toEqual([
+      "prompt?positive_prompt",
+    ]);
+    expect(collectCardTargets(container, true).map((t) => t.ioKey)).toEqual([
+      "9::output::IMAGE?IMAGE",
+    ]);
+  });
+});
 
 describe("映射连线的两端锚点", () => {
   it("点与宿主行都量得到时，画出一条从圆点外缘到该行的线", async () => {
