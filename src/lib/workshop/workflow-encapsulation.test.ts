@@ -6,10 +6,18 @@ import {
   isVideoMode,
   modeUsesFirstFrame,
   modeUsesLastFrame,
-  parseSizeParam,
   type WorkshopPinClass,
 } from "./workflow-encapsulation";
 import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow-io-types";
+import type { SizeSpec } from "~/lib/size-presets";
+
+/** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数）—— 工坊下发的唯一尺寸口径。 */
+const sizeSpec = (over: Partial<SizeSpec> = {}): SizeSpec => ({
+  ratio: "3:4",
+  clarity: "1k",
+  multiple: 64,
+  ...over,
+});
 
 /* ── 测试夹具 ─────────────────────────────────────────────── */
 
@@ -319,22 +327,6 @@ describe("classifyVideoPin", () => {
   });
 });
 
-/* ── parseSizeParam ──────────────────────────────────────── */
-
-describe("parseSizeParam", () => {
-  it("解析 832x1216", () => {
-    expect(parseSizeParam("832x1216")).toEqual({ width: 832, height: 1216 });
-  });
-  it("支持 × 分隔", () => {
-    expect(parseSizeParam("512×768")).toEqual({ width: 512, height: 768 });
-  });
-  it("非法输入返回 null", () => {
-    expect(parseSizeParam("abc")).toBeNull();
-    expect(parseSizeParam("0x100")).toBeNull();
-    expect(parseSizeParam(undefined)).toBeNull();
-  });
-});
-
 /* ── buildEncapsulatedInputs ─────────────────────────────── */
 
 describe("buildEncapsulatedInputs", () => {
@@ -342,7 +334,8 @@ describe("buildEncapsulatedInputs", () => {
     const res = buildEncapsulatedInputs(IO, null, {
       prompt: "a dog",
       negativePrompt: "lowres",
-      size: "1024x1024",
+      /* 比例 + 分辨率：宽高由场景尺寸表现算（1:1 1k = 1024×1024）。 */
+      size: sizeSpec({ ratio: "1:1 正方" }),
     });
     expect(valueOf(res.workflowInputs, "text")).toBe("a dog");
     // negative pin 的 name 也是 text → 用 nodeId 区分
@@ -399,7 +392,7 @@ describe("buildEncapsulatedInputs", () => {
     const res = buildEncapsulatedInputs(io, null, {
       prompt: "x",
       negativePrompt: "y",
-      size: "512x512",
+      size: sizeSpec({ ratio: "1:1 正方" }),
       referenceImages: ["r.png"],
     });
     expect(res.unmatched).toEqual(
@@ -408,7 +401,7 @@ describe("buildEncapsulatedInputs", () => {
     expect(res.workflowInputs).toEqual([{ nodeId: "3", name: "steps", value: 28 }]);
   });
 
-  it("aspect/megapixels pin 接住工坊给的「比例 + 像素基准」", () => {
+  it("aspect/megapixels/multiple pin 接住「比例 + 百万像素 + 倍数」", () => {
     const io: WorkflowIOMap = {
       ar: {
         direction: "input",
@@ -420,17 +413,22 @@ describe("buildEncapsulatedInputs", () => {
         options: ["1:1 (Square)", "16:9 (Widescreen)", "9:16 (Portrait)"],
       },
       mp: { direction: "input", kind: "widget", nodeId: "1", name: "megapixels", type: "FLOAT", defaultValue: 1 },
+      mul: { direction: "input", kind: "widget", nodeId: "1", name: "multiple", type: "INT", defaultValue: 8 },
     };
-    const res = buildEncapsulatedInputs(io, null, { aspect: "9:16", megapixels: 2 });
+    const res = buildEncapsulatedInputs(io, null, {
+      size: sizeSpec({ ratio: "9:16 竖屏", clarity: "2M", multiple: 32 }),
+    });
     expect(res.exposed.ar).toBe("size-aspect");
     expect(res.exposed.mp).toBe("size-megapixels");
+    expect(res.exposed.mul).toBe("size-multiple");
     /* 比例必须写端口自己声明的候选值（COMBO 逐字命中），不是工坊的短标签。 */
     expect(valueOf(res.workflowInputs, "aspect_ratio")).toBe("9:16 (Portrait)");
     expect(valueOf(res.workflowInputs, "megapixels")).toBe(2);
+    expect(valueOf(res.workflowInputs, "multiple")).toBe(32);
     expect(res.unmatched).toEqual([]);
   });
 
-  it("比例不在端口候选里 → 退回默认值而不是写非法选项", () => {
+  it("端口候选里认不出比例 → 退回端口默认值而不是写非法选项", () => {
     const io: WorkflowIOMap = {
       ar: {
         direction: "input",
@@ -438,56 +436,52 @@ describe("buildEncapsulatedInputs", () => {
         nodeId: "1",
         name: "aspect_ratio",
         type: "COMBO",
-        defaultValue: "16:9 (Widescreen)",
-        options: ["1:1 (Square)", "16:9 (Widescreen)"],
+        defaultValue: "Widescreen",
+        options: ["Widescreen", "Portrait"],
       },
     };
-    const res = buildEncapsulatedInputs(io, null, { aspect: "32:9" });
-    /* 候选里最接近的仍是 16:9 —— 比写一个不在候选里的值让 ComfyUI 静默回落好。 */
-    expect(valueOf(res.workflowInputs, "aspect_ratio")).toBe("16:9 (Widescreen)");
+    const res = buildEncapsulatedInputs(io, null, {
+      size: sizeSpec({ ratio: "16:9 横屏" }),
+    });
+    /* 候选里一个比例都解不出来 → 不猜，退回端口默认值（写非法值只会被
+     *  ComfyUI 静默回落到第一个选项，看起来像「改了没生效」）。 */
+    expect(valueOf(res.workflowInputs, "aspect_ratio")).toBe("Widescreen");
   });
 
-  it("像素档（1k/2k/4k）给 megapixels 端口时按长边折总像素", () => {
+  it("分辨率档给只声明 megapixels 的工作流：按该档宽高的实际总像素落值", () => {
     const io: WorkflowIOMap = {
       mp: { direction: "input", kind: "widget", nodeId: "1", name: "megapixels", type: "FLOAT" },
     };
-    const res = buildEncapsulatedInputs(io, null, { pixelLongEdge: 2048 });
-    expect(valueOf(res.workflowInputs, "megapixels")).toBe(4);
+    /* 图片场景 16:9 2k = 2048×1152 → 2.359M（不是幂次近似的 4）。 */
+    const res = buildEncapsulatedInputs(io, null, {
+      size: sizeSpec({ ratio: "16:9 横屏", clarity: "2k" }),
+    });
+    expect(valueOf(res.workflowInputs, "megapixels")).toBe(2.359);
   });
 
-  it("工坊同时给 WxH 与「比例 + 像素」：只吃其中一路的口径不误报 unmatched", () => {
-    /* 工坊两条通路都往下发（内置工作流吃 WxH，工作流库的工作流吃比例 + 像素）。
-     *  工作流只声明了 width/height 时，比例 / 像素那两路没落点**不是问题**。 */
+  it("只有宽 / 高的工作流：宽高按场景尺寸表现算，不报 unmatched", () => {
     const wh: WorkflowIOMap = {
       w: { direction: "input", kind: "widget", nodeId: "1", name: "width", type: "INT" },
       h: { direction: "input", kind: "widget", nodeId: "1", name: "height", type: "INT" },
     };
-    const res = buildEncapsulatedInputs(wh, null, {
-      size: "768x1024",
-      aspect: "3:4",
-      megapixels: 1,
-    });
-    expect(res.unmatched).toEqual([]);
+    const res = buildEncapsulatedInputs(wh, null, { size: sizeSpec() });
     expect(valueOf(res.workflowInputs, "width")).toBe(768);
     expect(valueOf(res.workflowInputs, "height")).toBe(1024);
+    expect(res.unmatched).toEqual([]);
+
+    /* 同一档位在视频场景是另一组值（1k 长边 1280）—— 场景由模式码推。 */
+    const video = buildEncapsulatedInputs(wh, "I2V", {
+      size: sizeSpec({ ratio: "16:9 横屏" }),
+    });
+    expect(valueOf(video.workflowInputs, "width")).toBe(1280);
+    expect(valueOf(video.workflowInputs, "height")).toBe(720);
 
     /* 一个尺寸端口都没有 → 报一次 size（如实，不沉默丢弃）。 */
     const none: WorkflowIOMap = {
       s: { direction: "input", kind: "widget", nodeId: "1", name: "steps", type: "INT" },
     };
-    const empty = buildEncapsulatedInputs(none, null, { size: "768x1024", aspect: "3:4" });
+    const empty = buildEncapsulatedInputs(none, null, { size: sizeSpec() });
     expect(empty.unmatched).toContain("size");
-  });
-
-  it("只有宽 / 高的工作流：工坊给 WxH 时仍按 W/H 落，不报 unmatched", () => {
-    const io: WorkflowIOMap = {
-      w: { direction: "input", kind: "widget", nodeId: "1", name: "width", type: "INT" },
-      h: { direction: "input", kind: "widget", nodeId: "1", name: "height", type: "INT" },
-    };
-    const res = buildEncapsulatedInputs(io, null, { size: "1024x1024" });
-    expect(valueOf(res.workflowInputs, "width")).toBe(1024);
-    expect(valueOf(res.workflowInputs, "height")).toBe(1024);
-    expect(res.unmatched).toEqual([]);
   });
 
   it("空 IO 表安全返回空结果", () => {

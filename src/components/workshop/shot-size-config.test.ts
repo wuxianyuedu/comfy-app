@@ -1,13 +1,12 @@
 import { describe, it, expect } from "vitest";
 
+import { ratioOfLabel } from "~/lib/size-presets";
 import {
   clarityPresetOf,
   parseShotSize,
-  ratioValueOf,
   shotClarityKind,
   shotSizeSummary,
   shotSizeToDims,
-  shotSizeToExposed,
   shotSizeToParam,
   shotSizeToRelay,
   type ShotSizeState,
@@ -48,9 +47,9 @@ describe("shot-size-config", () => {
     expect(fine).not.toEqual(coarse);
   });
 
-  it("parseShotSize 反解历史 WxH 字符串", () => {
+  it("parseShotSize 反解历史 WxH 字符串（老草稿里的「832x1216」这类写法）", () => {
     const parsed = parseShotSize("832x1216");
-    expect(ratioValueOf(parsed.ratio)).toBeCloseTo(832 / 1216, 1);
+    expect(ratioOfLabel(parsed.ratio)).toBeCloseTo(832 / 1216, 1);
     /* 832x1216 ≈ 1.01M 总像素 → 归入百万像素 1M 档；两侧都能被 64 整除。 */
     expect(clarityPresetOf(parsed.clarity).label).toBe("1M");
     expect(parsed.multiple).toBe(64);
@@ -64,31 +63,10 @@ describe("shot-size-config", () => {
     expect(parseShotSize("0x0").ratio).toBe("3:4");
   });
 
-  it("分辨率档换算成「比例 + 百万像素 + 倍数」下发", () => {
-    /* 用户口径：界面选的是「比例 + 分辨率」，工作流要「比例 + 百万像素 + 倍数」
-     * 时按尺寸表换算 —— 百万像素取该档宽高的实际总像素，倍数取能整除两侧的最大候选。 */
-    const exposed = shotSizeToExposed(state({ ratio: "16:9 横屏", clarity: "2k" }));
-    expect(exposed.aspect).toBe("16:9");
-    /* 图片场景 16:9 2k = 2048×1152 → 2.359M，两侧都能被 64 整除。 */
-    expect(exposed.megapixels).toBe(2.359);
-    expect(exposed.multiple).toBe(64);
-    /* 只暴露单个「分辨率」端口的工作流仍能拿到长边像素。 */
-    expect(exposed.pixelLongEdge).toBe(2048);
-  });
-
-  it("百万像素档原样透传「比例 + 百万像素 + 倍数」", () => {
-    const exposed = shotSizeToExposed(
-      state({ ratio: "16:9 横屏", clarity: "2M", multiple: 32 }),
-    );
-    expect(exposed.aspect).toBe("16:9");
-    expect(exposed.megapixels).toBe(2);
-    expect(exposed.multiple).toBe(32);
-    expect(exposed.pixelLongEdge).toBeUndefined();
-  });
-
   it("远端通道拿到的是「比例 + 百万像素 + 倍数」（分辨率档也要换算）", () => {
     const relay = shotSizeToRelay(state({ ratio: "16:9 横屏", clarity: "1k" }));
     expect(relay.aspectRatio).toBe("16:9");
+    /* 图片场景 16:9 1k = 1024×576 → 0.59M。 */
     expect(relay.megapixels).toBe("0.59");
     /* 与「模型适配」里契约 size 口的三行同口径。 */
     expect(relay.multiple).toBe(64);
@@ -106,7 +84,7 @@ describe("shot-size-config", () => {
   });
 
   it("子类判定区分分辨率与百万像素", () => {
-    expect(shotClarityKind(state({ clarity: "4k" }))).toBe("pixel");
+    expect(shotClarityKind(state({ clarity: "4k" }))).toBe("resolution");
     expect(shotClarityKind(state({ clarity: "4M" }))).toBe("megapixel");
   });
 });

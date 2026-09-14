@@ -8,10 +8,19 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 
+import { DEFAULT_SIZE_SPEC, sizeSpecToWxH, type SizeSpec } from "@/lib/size-presets";
 import type { Shot } from "@/lib/workshop/types";
 
 const COMPOSE_DIR = path.join(process.cwd(), "data", "workshop-compositions");
 const execFileP = promisify(execFile);
+
+/** 成片画幅：视频场景的 16:9 1k（= 1280×720）。
+ *
+ *  尺寸只在 `lib/size-presets` 里定义，这里不写像素字面量 —— 用户在「尺寸表配置」
+ *  里改过视频场景的 16:9 1k，合成出来的片子跟着改。 */
+const COMPOSE_SIZE: SizeSpec = { ...DEFAULT_SIZE_SPEC, ratio: "16:9 横屏" };
+/** ffmpeg 的 `scale` 过滤器用 `W:H` 写法（不是 WxH）。 */
+const COMPOSE_SCALE = sizeSpecToWxH(COMPOSE_SIZE, "video").replace("x", ":");
 
 export interface CompositionSegment {
   order: number;
@@ -82,7 +91,7 @@ function localPathOf(ref: string | null): string | null {
 
 /**
  * 用 ffmpeg 把本地片段合成为成片 mp4（最佳努力）：
- *  - 视频片段 → 按 duration 截断、缩放为 1280x720
+ *  - 视频片段 → 按 duration 截断、缩放到成片画幅
  *  - 仅图片的镜头 → 按 duration 以静帧占位
  * 任一片段不可用则跳过；无可用本地片段则仅返回清单。
  */
@@ -105,9 +114,10 @@ export async function renderComposition(plan: CompositionPlan, outputName: strin
     const src = clip ?? img;
     if (!src) continue;
     const tmp = path.join(tmpDir, `seg-${s.order}.mp4`);
+    const scale = `scale=${COMPOSE_SCALE}`;
     const args = clip
-      ? ["-i", src, "-t", String(s.durationSec), "-vf", "scale=1280:720", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", tmp]
-      : ["-loop", "1", "-i", src, "-t", String(s.durationSec), "-r", "25", "-vf", "scale=1280:720", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", tmp];
+      ? ["-i", src, "-t", String(s.durationSec), "-vf", scale, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", tmp]
+      : ["-loop", "1", "-i", src, "-t", String(s.durationSec), "-r", "25", "-vf", scale, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", tmp];
     try {
       await execFileP(ff, args, { timeout: 120_000 });
       segs.push(tmp);

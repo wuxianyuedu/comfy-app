@@ -13,7 +13,6 @@ import {
 import type { ApiChannelsView } from "@/lib/workshop/api-channel-shared";
 import {
   parseShotSize,
-  shotSizeToExposed,
   shotSizeToParam,
   shotSizeToRelay,
   type ShotSizeState,
@@ -168,25 +167,25 @@ export function ShotStudio({
     patchShot(shot.id, { status: "running" });
     try {
       if (channel === "local") {
-        const size =
+        /* 镜头存的是尺寸表达（老数据可能是 "832x1216"，回读时归一）——
+         * 尺寸只表达一次，两种目标形状都由它现算。 */
+        const sizeSpec = parseShotSize(
           shot.params.size !== undefined && shot.params.size !== ""
-            ? strParam(shot.params.size, shotSizeToParam(shotSize))
-            : shotSizeToParam(shotSize);
+            ? shot.params.size
+            : shotSize,
+        );
         /* 选定工作流库工作流时，按 ISSUE #145 只暴露 提示词 / 尺寸 / 参考图，
          * 其余参数用工作流默认值；否则用内置 txt2img。
          *
-         * 尺寸对这两条通路表达不同：内置 txt2img 接的是 WxH 字符串；工作流库
-         * 里的工作流多数字段声明的是 `aspect_ratio` / `megapixels`，把 WxH 折成
-         * 字符串再反解回比例只会落在两个预设之间。因此走库时把「比例 + 像素基准」
-         * 原样交给封装层（见 `shotSizeToExposed`）。 */
-        const exposedSize = shotSizeToExposed(shotSize);
+         * 尺寸对这两条通路表达不同：内置 txt2img 接的是 WxH 字符串（由尺寸表达
+         * 折算），工作流库的工作流直接吃「比例 + 分辨率 / 比例 + 百万像素 + 倍数」，
+         * 宽高由封装层按场景尺寸表现算。 */
         const input: GenerateInput = workflowId
           ? (
               await buildLibraryWorkflowInput(workflowId, {
                 prompt: shot.prompt,
                 negativePrompt: shot.negativePrompt || undefined,
-                size,
-                ...exposedSize,
+                size: sizeSpec,
               })
             ).input
           : {
@@ -198,7 +197,7 @@ export function ShotStudio({
               cfg: numParam(shot.params.cfg, 7),
               sampler: strParam(shot.params.sampler, "euler_ancestral"),
               scheduler: strParam(shot.params.scheduler, "normal"),
-              size,
+              size: shotSizeToParam(sizeSpec),
               count: 1,
             };
         const taskId = await startLocalGenerate(input);

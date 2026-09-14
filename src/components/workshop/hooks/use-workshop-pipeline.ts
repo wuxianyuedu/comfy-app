@@ -45,7 +45,7 @@ import {
   type Tab,
 } from "~/components/workshop/stage-config";
 
-import { parseShotSize, shotSizeToExposed } from "~/components/workshop/shot-size-config";
+import { parseShotSize, shotSizeToParam } from "~/components/workshop/shot-size-config";
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
@@ -858,19 +858,20 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
    * 结果回写 Shot.imageUrl / status,镜头生图阶段自动继承。
    */
   /** 单镜生成请求的封装：选了工作流库工作流时按 ISSUE #145 只暴露
-   *  提示词 / 尺寸 / 参考图（其余走工作流默认值），否则用内置 txt2img。 */
+   *  提示词 / 尺寸 / 参考图（其余走工作流默认值），否则用内置 txt2img。
+   *
+   *  尺寸只表达一次（比例 + 分辨率 或 比例 + 百万像素 + 倍数）：走库时把它整块
+   *  交给封装层（宽高由 size-presets 按场景现算），只有内置 txt2img 才需要折算
+   *  成 "WxH" 字符串。 */
   const buildShotInput = React.useCallback(
     async (shot: Shot): Promise<GenerateInput> => {
-      const size = paramString(shot.params.size, "832x1216");
+      /* 草稿里存的是尺寸表达（老数据可能是 "832x1216" 字符串，回读时归一）。 */
+      const sizeSpec = parseShotSize(shot.params.size);
       if (workflowId) {
-        /* 工作流库里的工作流多数字段声明的是 `aspect_ratio` / `megapixels`，
-         * 把 WxH 折成字符串再反解回比例只会落在两个预设之间 —— 走库时按
-         * 「比例 + 像素基准」逐端口派值（见 `shotSizeToExposed`）。 */
         const { input } = await buildLibraryWorkflowInput(workflowId, {
           prompt: shot.prompt,
           negativePrompt: shot.negativePrompt || undefined,
-          size,
-          ...shotSizeToExposed(parseShotSize(size)),
+          size: sizeSpec,
         });
         return input;
       }
@@ -883,7 +884,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         cfg: paramNumber(shot.params.cfg, 7),
         sampler: paramString(shot.params.sampler, "euler_ancestral"),
         scheduler: paramString(shot.params.scheduler, "normal"),
-        size,
+        size: shotSizeToParam(sizeSpec),
         count: 1,
       };
     },

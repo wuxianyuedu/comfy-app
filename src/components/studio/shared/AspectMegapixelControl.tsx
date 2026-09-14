@@ -174,7 +174,7 @@ export function AspectMegapixelControl({
       const size = resolutionDims(scene, activeRatio, tier, table);
       rows.push({
         label: tier,
-        subgroup: CLARITY_SUBGROUP_OF_KIND.pixel,
+        subgroup: CLARITY_SUBGROUP_OF_KIND.resolution,
         megapixels: megapixelsOf(size),
         multiple: alignMultipleOf(size),
       });

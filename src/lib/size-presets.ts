@@ -260,6 +260,296 @@ export function toMegapixelSpec(
   };
 }
 
+/* ══ 清晰度档目录 ══════════════════════════════════════════════════════
+ *
+ * 「像素」大类下的两个子类：分辨率（1k / 2k / 4k，查场景表）与百万像素
+ * （1M / 2M / 4M，总像素预算）。两边的**档位表**都在本模块，界面（studio 的
+ * 选择器 / 工坊的尺寸选择器）只读这份目录，不许各自再写一份字面量。 */
+
+export type ClarityKind = "resolution" | "megapixel";
+
+export interface SizeClarityPreset {
+  kind: ClarityKind;
+  /** 显示名（"1k" / "2M"），也是 `SizeSpec.clarity` 的取值。 */
+  label: string;
+  /** 分辨率档：档位名。 */
+  tier?: ResolutionTier;
+  /** 百万像素档：总像素档位（1 = 1M）。 */
+  megapixels?: number;
+}
+
+export const SIZE_CLARITY_PRESETS: SizeClarityPreset[] = [
+  ...RESOLUTION_TIERS.map((tier) => ({ kind: "resolution" as const, label: tier, tier })),
+  ...MEGAPIXEL_TIERS.map((tier) => ({
+    kind: "megapixel" as const,
+    label: `${tier}M`,
+    megapixels: tier,
+  })),
+];
+
+/** 两个子类在界面上的显示名（分组标题用同一份，避免两处漂移）。 */
+export const CLARITY_SUBGROUP_LABELS: Record<ClarityKind, string> = {
+  resolution: "分辨率",
+  megapixel: "百万像素",
+};
+
+/** 清晰度档 label → 预设；未知 label 回退第一档（1k）。 */
+export function clarityPresetOfLabel(label: string): SizeClarityPreset {
+  return SIZE_CLARITY_PRESETS.find((preset) => preset.label === label) ?? SIZE_CLARITY_PRESETS[0]!;
+}
+
+/** 清晰度档 label 属于哪个子类（未知按分辨率处理）。 */
+export function clarityKindOfLabel(label: string): ClarityKind {
+  return clarityPresetOfLabel(label).kind;
+}
+
+/** 分辨率档 label（"1k"）→ 档位；不是分辨率档返回 null。 */
+export function resolutionTierOfLabel(label: string): ResolutionTier | null {
+  const preset = SIZE_CLARITY_PRESETS.find((item) => item.label === label);
+  return preset?.tier ?? null;
+}
+
+/** 百万像素档 label（"2M"）→ 档位数值（2）；不是百万像素档返回 null。 */
+export function megapixelTierOfLabel(label: string): number | null {
+  const preset = SIZE_CLARITY_PRESETS.find((item) => item.label === label);
+  return preset?.megapixels ?? null;
+}
+
+/* ══ 尺寸表达（全项目唯一口径）═════════════════════════════════════════
+ *
+ * 尺寸只用这两种等价形式表达，别处不许再发明第三种（尤其不许再传 "WxH"
+ * 字符串当**输入** —— 那串东西反解回比例会落在两个预设之间，用户表现为
+ * 「选了 1k 却算出个怪尺寸」）：
+ *   · 比例 + 分辨率          —— `clarity` 给 1k / 2k / 4k，宽高查场景表；
+ *   · 比例 + 百万像素 + 倍数  —— `clarity` 给 1M / 2M / 4M，`multiple` 给倍数。
+ * 目标要是「宽 + 高」时，用 `sizeSpecDims` 由上面任一种**算**出来（派生值，
+ * 不是第二种表达）。 */
+
+export interface SizeSpec {
+  /** 比例预设 label（`SIZE_RATIO_PRESETS[].label`，如 "16:9 横屏" / "3:4"）。 */
+  ratio: string;
+  /** 清晰度档 label（`SIZE_CLARITY_PRESETS[].label`，如 "1k" / "2M"）。 */
+  clarity: string;
+  /** 百万像素档的宽高对齐倍数；分辨率档不读它（宽高由场景表给定）。 */
+  multiple: AlignMultiple;
+}
+
+/** 默认尺寸：竖屏 1k（3:4，图片场景表 → 768×1024）。 */
+export const DEFAULT_SIZE_SPEC: SizeSpec = {
+  ratio: "3:4",
+  clarity: "1k",
+  multiple: DEFAULT_ALIGN_MULTIPLE,
+};
+
+/** 容错：把任意（老草稿 / 外部 JSON）收窄成合法 `SizeSpec`，缺项与未知 label 回退默认。 */
+export function normalizeSizeSpec(
+  raw: { ratio?: unknown; clarity?: unknown; multiple?: unknown } | null | undefined,
+): SizeSpec {
+  const ratioLabel =
+    typeof raw?.ratio === "string" &&
+    SIZE_RATIO_PRESETS.some((preset) => preset.label === raw.ratio)
+      ? raw.ratio
+      : DEFAULT_SIZE_SPEC.ratio;
+  const clarityLabel =
+    typeof raw?.clarity === "string" &&
+    SIZE_CLARITY_PRESETS.some((preset) => preset.label === raw.clarity)
+      ? raw.clarity
+      : DEFAULT_SIZE_SPEC.clarity;
+  const multiple =
+    typeof raw?.multiple === "number" ? normalizeAlignMultiple(raw.multiple) : DEFAULT_SIZE_SPEC.multiple;
+  return { ratio: ratioLabel, clarity: clarityLabel, multiple };
+}
+
+/** 该尺寸表达属于哪个子类。 */
+export function sizeSpecKind(spec: SizeSpec): ClarityKind {
+  return clarityKindOfLabel(spec.clarity);
+}
+
+/** 比例 label → 比值。 */
+export function sizeSpecRatio(spec: SizeSpec): number {
+  return ratioOfLabel(spec.ratio);
+}
+
+/** 比例短标签（"16:9 横屏" → "16:9"）—— 与工作流 `aspect_ratio` 的候选值同形。 */
+export function sizeSpecAspect(spec: SizeSpec): string {
+  return shortRatio(spec.ratio);
+}
+
+/** 尺寸表达 → 宽高（两种类别都收敛到这里算）。 */
+export function sizeSpecDims(
+  spec: SizeSpec,
+  scene: SizeScene = "image",
+  table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): SizeDims {
+  const ratio = sizeSpecRatio(spec);
+  const tier = resolutionTierOfLabel(spec.clarity);
+  if (tier) return resolutionDims(scene, ratio, tier, table);
+  return megapixelDims(
+    ratio,
+    megapixelTierOfLabel(spec.clarity) ?? 1,
+    normalizeAlignMultiple(spec.multiple),
+  );
+}
+
+/** 尺寸表达 → "宽x高"。**只**给内置工作流（txt2img / img2video）与只认 WxH 的
+ *  远端接口用；工作流库的工作流不吃字符串。 */
+export function sizeSpecToWxH(
+  spec: SizeSpec,
+  scene: SizeScene = "image",
+  table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): string {
+  const { width, height } = sizeSpecDims(spec, scene, table);
+  return `${width}x${height}`;
+}
+
+/** 尺寸表达 → 总像素量（单位：百万像素）。
+ *
+ *  分辨率档按**该档宽高的实际总像素**给（不是幂次近似）—— 目标工作流要的是
+ *  「比例 + 百万像素 + 倍数」时，只有实际值才能让它算出同一组宽高。 */
+export function sizeSpecMegapixels(
+  spec: SizeSpec,
+  scene: SizeScene = "image",
+  table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): number {
+  const preset = clarityPresetOfLabel(spec.clarity);
+  if (preset.kind === "resolution") return megapixelsOf(sizeSpecDims(spec, scene, table));
+  return preset.megapixels ?? 1;
+}
+
+/** 尺寸表达 → 宽高对齐倍数（分辨率档取能整除该档两侧的最大候选）。 */
+export function sizeSpecMultiple(
+  spec: SizeSpec,
+  scene: SizeScene = "image",
+  table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): AlignMultiple {
+  if (sizeSpecKind(spec) === "resolution") {
+    return alignMultipleOf(sizeSpecDims(spec, scene, table));
+  }
+  return normalizeAlignMultiple(spec.multiple);
+}
+
+/** 分辨率档的长边像素；百万像素档没有这个概念，返回 undefined。 */
+export function sizeSpecLongEdge(
+  spec: SizeSpec,
+  scene: SizeScene = "image",
+  table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): number | undefined {
+  if (sizeSpecKind(spec) !== "resolution") return undefined;
+  return longEdgeOf(sizeSpecDims(spec, scene, table));
+}
+
+/** 生成按钮旁的紧凑摘要（"3:4 / 1k"，百万像素档追加倍数 "16:9 / 2M / 64"）。
+ *  刻意不带折算出来的 WxH：那是个会误导的近似值，也让两处显示不一致。 */
+export function sizeSpecSummary(spec: SizeSpec): string {
+  const base = `${sizeSpecAspect(spec)} / ${spec.clarity}`;
+  return sizeSpecKind(spec) === "megapixel"
+    ? `${base} / ${normalizeAlignMultiple(spec.multiple)}`
+    : base;
+}
+
+/** 宽高 → 最接近的清晰度档 label（反解：历史数据 / 旧字段回读时用）。 */
+export function clarityLabelOfDims(
+  width: number,
+  height: number,
+  scene: SizeScene = "image",
+  table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): string {
+  if (!(width > 0) || !(height > 0)) return DEFAULT_SIZE_SPEC.clarity;
+  const ratio = width / height;
+  let best = SIZE_CLARITY_PRESETS[0]!;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const preset of SIZE_CLARITY_PRESETS) {
+    const dims = preset.tier
+      ? resolutionDims(scene, ratio, preset.tier, table)
+      : megapixelDims(ratio, preset.megapixels ?? 1, DEFAULT_ALIGN_MULTIPLE);
+    const dist = Math.abs(dims.width - width) + Math.abs(dims.height - height);
+    if (dist < bestDist) {
+      best = preset;
+      bestDist = dist;
+    }
+  }
+  return best.label;
+}
+
+/** 宽高 → 尺寸表达（比例取最接近的预设行，倍数取能整除两侧的最大候选）。 */
+export function sizeSpecFromDims(
+  width: number,
+  height: number,
+  scene: SizeScene = "image",
+  table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): SizeSpec {
+  if (!(width > 0) || !(height > 0)) return { ...DEFAULT_SIZE_SPEC };
+  return {
+    ratio: nearestRatioPreset(width / height).label,
+    clarity: clarityLabelOfDims(width, height, scene, table),
+    multiple: alignMultipleOf({ width, height }),
+  };
+}
+
+/** 解析 "832x1216" → 宽高；无法识别返回 null。 */
+export function parseSizeText(text: unknown): SizeDims | null {
+  if (typeof text !== "string" || !text.trim()) return null;
+  const match = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(text.trim());
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+  return { width, height };
+}
+
+/** 旧数据（"832x1216" 这类 WxH 字符串 / 草稿 JSON）→ 尺寸表达；识别不出回退默认。
+ *
+ *  只服务**读旧值**：尺寸的新写法就是 `SizeSpec`，不再有字符串表达。 */
+export function sizeSpecFromText(
+  raw: unknown,
+  scene: SizeScene = "image",
+  table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
+): SizeSpec {
+  const dims = parseSizeText(raw);
+  if (!dims) return { ...DEFAULT_SIZE_SPEC };
+  return sizeSpecFromDims(dims.width, dims.height, scene, table);
+}
+
+/** 宽高 → 某个 `aspect_ratio` 端口该写的候选值（工坊 / 画布派值用）。
+ *
+ *  这类端口是 COMBO，写进去的值必须逐字命中它的 `options`（如 `"16:9 (Widescreen)"`），
+ *  否则 ComfyUI 静默回落到第一个选项。因此：`options` 里有同比例的项就用它；
+ *  没有 `options`（IO 未富化）时按本模块的标准短标签给；相对差超过 2% 的面积
+ *  不算命中（如 1000x999 不该被写成 "16:9"）。 */
+export function aspectLabelForDims(
+  width: number,
+  height: number,
+  options?: readonly string[],
+): string | null {
+  if (!(width > 0) || !(height > 0)) return null;
+  const target = width / height;
+  const ranked = [...SIZE_RATIO_PRESETS].sort(
+    (a, b) => Math.abs(a.ratio - target) - Math.abs(b.ratio - target),
+  );
+  for (const preset of ranked) {
+    if (Math.abs(preset.ratio - target) / target > 0.02) continue;
+    const label = shortRatio(preset.label);
+    if (!options || options.length === 0) return label;
+    const hit = options.find((option) => {
+      if (option === label) return true;
+      const optionRatio = parseRatioFromText(option);
+      return optionRatio !== null && Math.abs(optionRatio - preset.ratio) / preset.ratio < 0.02;
+    });
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** 从自由文本里解出宽高比（`"16:9 (Widescreen)"` → 16/9）；解不出返回 null。 */
+export function parseRatioFromText(text: string): number | null {
+  const match = /(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)/.exec(text);
+  if (!match) return null;
+  const w = Number(match[1]);
+  const h = Number(match[2]);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  return w / h;
+}
+
 /** 某场景的表相对默认值是否被改过（配置界面据此显示「已改」与恢复入口）。 */
 export function sceneIsModified(scene: SizeScene, table: SizePresetTable): boolean {
   const current = table[scene];
