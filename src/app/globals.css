@@ -30,8 +30,20 @@
      kept in sync with the corresponding `.dark { … }` block below. */
   --color-canvas: #f6f7f9; /* 画布/工作区背景 (light default) */
   --color-port-surface: #ffffff; /* 端口圆点的载体色：节点表面（浅色） */
+  --color-edge-hub-dot: #52525b; /* 连线中点圆点（浅色画布上的深点） (light default) */
+  --color-port-halo-ring: rgb(0 0 0 / 0.45); /* 端口内圈高光（强档） (light default) */
+  --color-port-halo-ring-weak: rgb(0 0 0 / 0.22); /* 端口内圈高光（常规档） (light default) */
+  /* 便签节点内 Markdown 渲染色（markdown.ts 内联 style 直接引用） */
+  --color-md-code-bg: rgb(0 0 0 / 0.05); /* 代码块底 (light default) */
+  --color-md-inline-code-bg: rgb(0 0 0 / 0.04); /* 行内代码底 (light default) */
+  --color-md-border: rgb(0 0 0 / 0.12); /* 分隔线/表格边框 (light default) */
+  --color-md-quote-border: rgb(0 0 0 / 0.20); /* 引用左边线 (light default) */
+  --color-md-link: #1d4ed8; /* 链接 (light default) */
+  --color-canvas-ruler-ink: rgb(51 65 85 / 0.9); /* 画布标尺文字 (light default) */
+  --color-canvas-ruler-shadow: 0 0 3px rgb(255 255 255 / 0.9), 0 0 1px rgb(255 255 255 / 0.9); /* 标尺文字描边 (light default) */
   --color-canvas-deep: #eef0f4; /* 输入控件/深面板底 (light default) */
   --color-canvas-minimap-mask: rgb(0 0 0 / 0.12); /* 小地图非视口遮罩 (light default) */
+  --color-canvas-grid-dot: rgb(0 0 0 / 0.22); /* 画布点阵底纹 (light default) */
   --color-panel: #ffffff; /* 面板/顶栏/浮层 (light default) */
   --color-panel-deep: #f0f1f5; /* 侧栏/页脚 (light default) */
   --color-card: #ffffff; /* 卡片/下拉浮层 (light default) */
@@ -61,6 +73,7 @@
   /* 便签（Note）身体色的混色基准：用户给的 note 颜色是内容语义色，
      基准必须跟主题走，否则浅色下便签仍是一块暗色。 */
   --color-note-tint-base: #ffffff; /* note 混色基准 (light default) */
+  --color-node-mix-base: #ffffff; /* 子图标题栏混色基准 (light default) */
 
   /* Layout */
   --panel-right-width: 360px;
@@ -106,8 +119,20 @@
   /* ── immersive / editor surface overrides (see T11 @theme block) ── */
   --color-canvas: #0a0a0f; /* 画布/工作区背景 */
   --color-port-surface: #0b0b10; /* 端口圆点的载体色：节点内层面板（深色） */
+  --color-edge-hub-dot: #ffffff; /* 连线中点圆点 */
+  --color-port-halo-ring: rgb(255 255 255 / 0.5); /* 端口内圈高光（强档） */
+  --color-port-halo-ring-weak: rgb(255 255 255 / 0.25); /* 端口内圈高光（常规档） */
+  /* 便签节点内 Markdown 渲染色（markdown.ts 内联 style 直接引用） */
+  --color-md-code-bg: rgb(0 0 0 / 0.20); /* 代码块底 */
+  --color-md-inline-code-bg: rgb(255 255 255 / 0.05); /* 行内代码底 */
+  --color-md-border: rgb(255 255 255 / 0.08); /* 分隔线/表格边框 */
+  --color-md-quote-border: rgb(255 255 255 / 0.18); /* 引用左边线 */
+  --color-md-link: #7aa2ff; /* 链接 */
+  --color-canvas-ruler-ink: rgb(203 213 225 / 0.85); /* 画布标尺文字 */
+  --color-canvas-ruler-shadow: 0 0 3px rgb(10 10 15 / 0.95), 0 0 1px rgb(10 10 15 / 0.95); /* 标尺文字描边 */
   --color-canvas-deep: #0f0f14; /* 输入控件/深面板底 */
   --color-canvas-minimap-mask: rgb(0 0 0 / 0.78); /* 小地图非视口遮罩 */
+  --color-canvas-grid-dot: rgb(255 255 255 / 0.22); /* 画布点阵底纹 */
   --color-panel: #14141a; /* 面板/顶栏/浮层 */
   --color-panel-deep: #0f0f16; /* 侧栏/页脚 */
   --color-card: #16161c; /* 卡片/下拉浮层 */
@@ -134,6 +159,7 @@
   --color-accent-soft: #ff8ac4; /* accent */
   --color-shadow-strong: rgb(0 0 0 / 0.55); /* 浮层重投影 */
   --color-note-tint-base: #22222c; /* note 混色基准 */
+  --color-node-mix-base: #16161e; /* 子图标题栏混色基准 */
   /* ── shadcn 语义 token 映射到项目品牌色板（全面接管主题） ── */
   --background: #0a0a0f;
   --foreground: #ededf2;
@@ -204,6 +230,26 @@
          原写法用的是「画布背景色」当圆点的描边色，浅色下画布是浅灰、
          描边与点糊在一起；且 25% 白那圈高光在浅色下是**白描白**，
          等于没有。两处都改随主题。
+     · 项目画布（ProjectCanvas）的 MiniMap / Background / Controls
+       → `--color-canvas-minimap-mask` / `--color-canvas-grid-dot` +
+         `globals.css` 已有的 `.react-flow__controls*` token 规则。
+         此处和工作流画布是同一件事的两个实现，曾只剩项目画布这一份写死
+         暗色（`#0D0818` / `#0B0712` / 25% 白点阵），Light 下浮层是黑块。
+     · 工作流画布底色 `CANVAS_BG`（WorkflowCanvasDecorations）
+       → `var(--color-canvas)`。写死 `#0a0a0f` 时 Light 下整块画布仍黑。
+     · 子图标题栏混色基准（SubgraphHeader）
+       → `--color-node-mix-base`。基准写死 `#16161E` 时浅色节点配黑标题栏。
+     · 画布标尺文字 / 连线中点圆点（WorkflowCanvasDecorations / WorkflowEdge）
+       → `--color-canvas-ruler-ink|-shadow` / `--color-edge-hub-dot`。
+         原值 85% 近白字 + 深色 text-shadow、纯白中点，浅色画布上都消失。
+     · 端口内圈高光（flow-focus-endpoints 的 `portDotGlow`）
+       → `--color-port-halo-ring|-weak`。25~50% 白在浅色下是白描白。
+     · 可读性 / 语法着色的硬编码令牌：
+       · `JsonViewer` 的 `react18-json-view` 主题（`jv-theme-comfy` +
+         `dark` prop）→ 两态 `--json-view-*` token；
+       · `CodeBlock` 的 shiki 主题（写死 `one-dark-pro`）→ 按 `resolvedTheme`
+         在 `one-dark-pro` / `github-light` 间切换；
+       · `lib/comfyui/markdown.ts` 内联 style → `--color-md-*` token。
 
    ───────────────────────────────────────────────────────────────────
    类型色例外（Type-color exemption）—— 本条不是「暗色表面」，而是「色值
@@ -549,43 +595,67 @@ textarea::-webkit-scrollbar {
   animation: wf-wave 6s linear infinite;
 }
 
-/* 2026-08-11 R44: react18-json-view 主题 — 与 globals.css 暗色 token 对齐
-   (violet/emerald/orange/amber/zinc 系)。挂在 `.json-view.jv-theme-comfy` 上避免污染其它地方。 */
+/* react18-json-view 主题 — 与 globals.css token 对齐 (violet/emerald/orange/
+   amber/zinc 系)。挂在 `.json-view.jv-theme-comfy` 上避免污染其它地方。
+
+   两态化：此前的取值全是「暗色主题的 token 色」（-300 档亮色 + 4% 白 hover），
+   在 Light 下是「亮色语法色压浅底」，对比度普遍低于 AA。这里给出浅色默认 +
+   `.dark` 覆盖原值 —— 深色观感不变，浅色得到深色档语法色。 */
+:root {
+  --json-view-property: #6d28d9; /* violet-700 */
+  --json-view-string: #047857; /* emerald-700 */
+  --json-view-number: #c2410c; /* orange-700 */
+  --json-view-boolean: #b45309; /* amber-700 */
+  --json-view-null: var(--color-ink-fainter);
+  --json-view-container: var(--color-ink-soft);
+  --json-view-brace: var(--color-ink-faint);
+  --json-view-hover: rgb(0 0 0 / 0.05);
+}
+.dark {
+  --json-view-property: #c4b5fd; /* violet-300 */
+  --json-view-string: #6ee7b7; /* emerald-300 */
+  --json-view-number: #fdba74; /* orange-300 */
+  --json-view-boolean: #fcd34d; /* amber-300 */
+  --json-view-null: #71717a;
+  --json-view-container: #a1a1aa;
+  --json-view-brace: #71717a;
+  --json-view-hover: rgb(255 255 255 / 0.04);
+}
 .json-view.jv-theme-comfy {
-  color: var(--color-ink, #d4d4d8);
+  color: var(--color-ink);
   font-size: 11px;
   line-height: 1.6;
 }
 .json-view.jv-theme-comfy .json-view--property,
 .json-view.jv-theme-comfy .json-view--index {
-  color: #c4b5fd;
+  color: var(--json-view-property);
 }
 .json-view.jv-theme-comfy .json-view--string {
-  color: #6ee7b7;
+  color: var(--json-view-string);
 }
 .json-view.jv-theme-comfy .json-view--number {
-  color: #fdba74;
+  color: var(--json-view-number);
 }
 .json-view.jv-theme-comfy .json-view--boolean {
-  color: #fcd34d;
+  color: var(--json-view-boolean);
 }
 .json-view.jv-theme-comfy .json-view--null {
-  color: #71717a;
+  color: var(--json-view-null);
   font-style: italic;
 }
 .json-view.jv-theme-comfy .json-view--pair:hover {
-  background-color: rgba(255, 255, 255, 0.04);
+  background-color: var(--json-view-hover);
 }
 .json-view.jv-theme-comfy .json-view--object,
 .json-view.jv-theme-comfy .json-view--array {
-  color: #a1a1aa;
+  color: var(--json-view-container);
 }
 .json-view.jv-theme-comfy .json-view--brace,
 .json-view.jv-theme-comfy .json-view--colon {
-  color: #71717a;
+  color: var(--json-view-brace);
 }
 .json-view.jv-theme-comfy .jv-chevron path {
-  fill: #71717a;
+  fill: var(--json-view-brace);
 }
 
 /* Custom dark scrollbar for log panel / overflow containers */

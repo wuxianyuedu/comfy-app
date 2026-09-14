@@ -37,8 +37,13 @@ import { outputWireDotId } from "./workflow-library-param-cards";
 /** 卡片宽度：与左侧输入卡片同宽，两列夹着宿主卡片时仍放得下。 */
 const CARD_WIDTH = 200;
 
-/** 端点圆点的描边色（卡片底色）—— 与输入卡片同口径。 */
-const PORT_DOT_STROKE = "#16161C";
+/** 端点圆点的描边色（端口载体色）—— 与输入卡片同口径。
+ *  写死 `#16161C` 时，Light 下圆点描边是深色、与浅色卡片表面糊在一起；
+ *  改用 `--color-port-surface`（浅色 = 卡片表面白、深色 = 近黑），
+ *  与画布端口圆点的口径一致。
+ *  （此处是 CSS 变量参与 `border` 内联样式，不是 Tailwind 类，属
+ *   规范 03 §3.1.1 允许保留 `var()` 的第 ② 类：非 Tailwind 属性。） */
+const PORT_DOT_STROKE = "var(--color-port-surface)";
 
 export interface WorkflowOutputParamCardColumnProps {
   /** 工作流对外暴露的输出（`workflowIO` 里 `direction: "output"` 的那些）。 */
