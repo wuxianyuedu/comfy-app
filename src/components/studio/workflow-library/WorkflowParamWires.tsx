@@ -470,7 +470,13 @@ function pathFromAnchor(
    *  「往右拖，线却飘向左侧」（ISSUE #355）。 */
   const start = edgePointToward(a, x2);
   const dx = Math.max(Math.abs(x2 - start.x) / 2, 16);
-  return `M ${start.x} ${start.y} C ${start.x + dx} ${start.y} ${x2 - dx} ${y2} ${x2} ${y2}`;
+  /* 控制点要**跟着方向走**：从左往右画时两个控制点分别向右/向左撑开（S 形），
+   *  从右往左（反向拖：起点在右边的卡片圆点上，光标在左）必须镜像过来 ——
+   *  否则控制点反向撑，线会鼓向错误的一侧（看着「轨迹怪」）。 */
+  const back = x2 < start.x;
+  const c1x = back ? start.x - dx : start.x + dx;
+  const c2x = back ? x2 + dx : x2 - dx;
+  return `M ${start.x} ${start.y} C ${c1x} ${start.y} ${c2x} ${y2} ${x2} ${y2}`;
 }
 
 /** 反向拖（行 → 卡片）的可落点：两列对外参数卡片自己的圆点。
@@ -507,7 +513,8 @@ export function dragPath(
   entryId: string,
   handleId: string,
   /** 光标位置，**屏幕坐标**（`clientX/clientY`）；局部坐标换算在本函数内做。
-   *  两个调用点都必须传屏幕坐标 —— 传局部坐标会把容器偏移减两次，预览线飘向左上。 */  point: { x: number; y: number } | null,
+   *  两个调用点都必须传屏幕坐标 —— 传局部坐标会把容器偏移减两次，预览线飘向左上。 */
+  point: { x: number; y: number } | null,
 ): string | null {
   const from = findAnchor(
     container,
