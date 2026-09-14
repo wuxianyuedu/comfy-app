@@ -186,26 +186,27 @@ export function markdownToHtml(text: string): string {
  *  here we only recognise escaped markers of markdown / safe HTML that we
  *  know how to convert. */
 function renderInline(escapedText: string): string {
-  // 1) Inline code: `…` — stash the whole replacement under a NUL-padded
-  //   placeholder so the passes below (safe HTML / links / bold / italic /
-  //   underline) cannot reach into the still-escaped code body.  This is
-  //   what makes ` `<br>` ` render as a literal "<br>" instead of a real
-  //   <br>.  The NUL bytes survive because no other regex below looks at
-  //   them, and the body never contains a literal `<` / `>` / `&` (those
-  //   were escaped upstream).
+  // 1) Inline code: `…` — 先整段替换掉，正文暂存进 `codeStash`，字面量里只留
+  //   一个「数字 id」。这里的**关键前提是：本条替换是 `renderInline` 的第一步**，
+  //   下面的安全 HTML / 链接 / 粗体 / 斜体 / 下划线都跑在它之后，因此它们那几组
+  //   正则面对的是一份**已经没有反引号**的文本 —— 正文自己带的 `*` `_` `[` `&lt;`
+  //   不会再被二次解释，这正是「` `<br>` ` 渲染成字面量 `<br>` 而不是真的换行」
+  //   的成因。判据一句话：**「接下来跑的正则能不能看到代码正文」**。
+  //
+  //   历史上这里用 NUL（`\0`）把 id 包成 `\0CODE<n>\0`，理由是「没有别的正则
+  //   会碰 NUL」。这理由站不住、代价却很大：源码里嵌一个真的 NUL 字节会让整个
+  //   文件被 git / diff / grep / 大多数编辑器判成**二进制文件** —— `git diff`
+  //   只回一句「Binary files differ」，评审看不到改动，`grep -rn` 直接跳过不搜。
+  //   按「规则要机器可判」的口径，`<数字 id>` 与 NUL 是**同构**的：id 串里既没有
+  //   反引号、也没有 `*` `_` `[` `&lt;`，上面那几组正则一个都命中不了。
+  //   论证与门禁见 docs/standards/12-代码组织与文件结构.md §12.11。
   const codeStash: string[] = [];
   let text = escapedText.replace(/`([^`]+?)`/g, (_, c) => {
-
     const idx = codeStash.length;
-
     codeStash.push(
-
       `<code style="background:var(--color-md-inline-code-bg);border:1px solid var(--color-md-border);padding:0 3px;border-radius:3px;font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${c}</code>`
-
     );
-
-    return ` CODE${idx} `;
-
+    return `<${idx}>`;
   });
 
   // 2) Whitelisted inline HTML — runs only against the non-code text, so
@@ -225,7 +226,7 @@ function renderInline(escapedText: string): string {
   // 6) Underline __…__
   text = text.replace(/__([^_]+?)__/g, "<u>$1</u>");
   // 7) Restore the stashed code spans.
-  text = text.replace(/ CODE(\d+) /g, (_, idx) => codeStash[Number(idx)]!);
+  text = text.replace(/<(\d+)>/g, (_, idx) => codeStash[Number(idx)]!);
   return text;
 }
 

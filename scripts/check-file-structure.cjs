@@ -24,7 +24,13 @@
  *   R10 注释里禁止「历史流水」:日期(2026-08-17)、改动编号(R-ardot114 / R83 /
  *       R-Next)、任务批次号(T12-3)。这些归 git log,写进注释会随代码搬迁过期
  *       失真(ISSUE #46 / 规范 12.4.2 / 反模式表 G4)
- * 违反 R1-R4、R7-R10 以退出码 1 阻断提交。
+ *   R12 src/ 源码禁止内嵌控制字符(NUL 及其它 C0/C1 控制符,制表/换行除外)。
+ *       源码里带一个真的 NUL 字节 = git / diff / grep / 多数编辑器一律当
+ *       **二进制文件**处理:`git diff` 只回「Binary files differ」(评审看不到
+ *       改动)、`git show --stat` 显示为 bin、`grep -rn` 静默跳过整个文件。
+ *       曾经用来做「占位符」的 NUL 哨兵(规范 12.11)是它的来源,现已改为
+ *       可打印形式;本条防回潮。
+ * 违反 R1-R4、R7-R12 以退出码 1 阻断提交。
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -218,12 +224,57 @@ const SCAN_EXCLUDED = [
   }
 })();
 
+// ── R12:src/ 源码禁止内嵌控制字符(规范 12.11) ──
+// 判据是「这个字节在源码里是不是一个字符」,而不是「文件里有没有某个字符串」:
+// 带 NUL 的文件被 git / diff / grep / 多数编辑器一律当二进制处理,评审与检索
+// 从此对它失效——这正是历史上 markdown.ts 用 NUL 做占位符哨兵留下的坑。
+// 详情与替代写法见 docs/standards/12-代码组织与文件结构.md §12.11。
+(function checkControlCharacters() {
+  /** 允许的控制字符:制表符、换行、回车(源码里的正常排版)。 */
+  const ALLOWED = new Set([0x09, 0x0a, 0x0d]);
+  /** C0(0x00-0x1f,除上列)、DEL(0x7f)、C1(0x80-0x9f / U+0080-U+009F)。 */
+  function isForbidden(code) {
+    if (code <= 0x1f) return !ALLOWED.has(code);
+    if (code === 0x7f) return true;
+    return code >= 0x80 && code <= 0x9f;
+  }
+  function describe(code) {
+    const hex = "U+00" + code.toString(16).toUpperCase().padStart(2, "0");
+    return code === 0 ? hex + " (NUL)" : hex;
+  }
+  const files = [];
+  (function walkControl(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name).split(path.sep).join("/");
+      if (e.isDirectory()) { walkControl(p); continue; }
+      if (/\.(ts|tsx)$/.test(e.name)) files.push(p);
+    }
+  })("src");
+  for (const rel of files) {
+    const text = fs.readFileSync(rel, "utf8");
+    const lines = text.split("\n");
+    lines.forEach((line, i) => {
+      const hits = new Set();
+      for (const char of line) {
+        const code = char.codePointAt(0);
+        if (isForbidden(code)) hits.add(describe(code));
+      }
+      for (const hit of hits) {
+        problems.push(
+          "R12 源码禁止内嵌控制字符(" + rel + ":" + (i + 1) + " → " + hit +
+          ")。改可打印哨兵,见规范 §12.11;若确需 NUL 请显式写成转义 `\\u0000`",
+        );
+      }
+    });
+  }
+})();
+
 if (splitHints.length) {
   console.log("[structure] 拆分候选(仅提醒):\n  " + splitHints.join("\n  "));
 }
 if (problems.length) {
   console.error("[structure] 违规(阻断提交):\n  " + problems.join("\n  "));
-  console.error("规范见 docs/standards/12-代码组织与文件结构.md §12.6/§12.8");
+  console.error("规范见 docs/standards/12-代码组织与文件结构.md §12.6/§12.8/§12.11");
   console.error("      以及 docs/standards/launch-and-build.md §8(Windows 入口 .ps1 化)");
   process.exit(1);
 }

@@ -146,10 +146,21 @@
     - 写这类用例时给**自己的临时目录**（镜像/日志是真实写盘副作用），别让
       `pnpm test` 往仓库 `log/` 里写字。
 
+17. **源码里禁止内嵌控制字符（NUL 等），哨兵必须用可打印形式**（规范 §12.11 / 门禁 R12）：
+    源码里带一个真的 NUL 字节，会让**整个文件**被 git / diff / grep / 多数编辑器判成
+    二进制 —— `git diff` 只回「Binary files differ」（评审看不到改动）、`git show --stat`
+    显示 bin、`grep -rn` 静默跳过整个文件，而 CI 全绿（tsc / eslint / vitest 都读得动
+    这个字节）。这类 NUL 几乎都来自「拿 NUL 当占位符哨兵」，本仓库的实例是
+    `src/lib/comfyui/markdown.ts` 的行内代码暂存（`\0CODE<n>\0` → 已改 `<n>`）。
+    要表达 NUL 写转义 `"\u0000"`；选哨兵形状时列清「接下来还要跑的每一组正则」，
+    确认一个都不命中、且用户内容伪造不出同形状。门禁 `scripts/check-file-structure.cjs`
+    的 R12 按码位扫 `src/**` 的 `.ts`/`.tsx`（豁免只有制表符 / 换行 / 回车），
+    pre-commit 第 2 步与 CI `File structure rules` 各跑一次。
+
 ## 快速排障
 
 被提交门槛拦下时，先看报错指出的规范章节（分支守卫 → §13.6.1、文件结构/命名 → §12.8、
-CHANGELOG 碎片 → §13.10.5），不要用 `--no-verify` 换一条干净历史。
+源码控制字符 → §12.11、CHANGELOG 碎片 → §13.10.5），不要用 `--no-verify` 换一条干净历史。
 
 **端口写进文档前先分清两条链路**（ISSUE #489）：`pnpm dev` / `pnpm start` / Playwright 走
 **解析链**（`.env` → 检出路径推导 3200~3999 → 兜底 3100，`scripts/app-port.mjs`），缺省拿到的是
