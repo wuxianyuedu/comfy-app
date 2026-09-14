@@ -150,6 +150,8 @@ export async function buildLibraryWorkflowInput(
     ...(values.size !== undefined ? { size: values.size } : {}),
     ...(values.firstFrame !== undefined ? { firstFrame: values.firstFrame } : {}),
     ...(values.lastFrame !== undefined ? { lastFrame: values.lastFrame } : {}),
+    // 视频时长：帧数走内置字段，秒数由 workflowInputs 里的时长口落下去。
+    ...(values.frames !== undefined ? { frames: values.frames } : {}),
     ...(workflowInputs.length > 0 ? { workflowInputs } : {}),
   };
   return {
