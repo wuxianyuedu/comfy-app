@@ -10,10 +10,14 @@
  *        保留名,不能改名;配套 R11 保证它没被放错位置或悄悄消失)
  *   R3  禁止时间戳备份文件(\d{8}_\d{6} 模式)——版本回退用 git,不进 src
  *   R4  src/lib 下禁止 .tsx(12.5:lib 无 React)
- *   R5  (提示)src/ 下超 900 行的文件列入拆分候选,仅提醒不阻塞。
+ *   R5  src/ 下超 900 行的文件列入拆分候选。**默认只提醒不阻塞**;
+ *       `--strict`(CI)下按棘轮 `scripts/.file-size-baseline.json` 判:**新增**
+ *       超限文件即阻断(存量的只许降不许升)。
  *       扫描范围是**整个 src/**:页面的纯展示视图在 src/app/(settings/SettingsPageView.tsx
  *       2499 行),逻辑层的大文件在 src/lib/(lifecycle.ts 1041 行)——
  *       只扫 components 会让最大的那几个文件完全落在护栏之外(ISSUE #536)。
+ *       棘轮的理由(ISSUE #575 第 8 项):「只提醒」挡不住新增长文件 ——
+ *       提醒出现在一屏输出里,没有人会因为一行提示去拆文件,于是文件只增不减。
  *   R7  Windows 双击入口一律 .ps1:仓库内禁止新增 .bat/.cmd/.vbs
  *       (ISSUE #23 / 规范 launch-and-build.md §8:.bat 走 cmd 的 GBK 代码页,
  *        中文必乱码,历史上被迫做成"不含中文不含逻辑"的哑壳)
@@ -38,9 +42,19 @@ const path = require("node:path");
 
 const problems = [];
 const splitHints = [];
+/** R5 棘轮用:超限文件 → 行数(路径为仓库相对路径,与基线同一口径)。 */
+const oversizedFiles = {};
 
-/** R5 的文件行数阈值:超过即进「拆分候选」清单(提示级,不阻断)。 */
+/** R5 的文件行数阈值:超过即进「拆分候选」清单。 */
 const SPLIT_HINT_LINES = 900;
+
+/* ── R5 棘轮(ISSUE #575):超限文件路径 → 行数 ──
+ * 默认(非 strict)只提醒;`--strict`(CI)下「基线里没有的超限文件」即阻断,
+ * 「基线里已有但变大了」一并阻断 —— 只许降不许升。 */
+const FILE_SIZE_BASELINE = path.join(__dirname, ".file-size-baseline.json");
+const ARGS = new Set(process.argv.slice(2));
+const UPDATE = ARGS.has("--update");
+const STRICT = ARGS.has("--strict");
 
 // R7 禁用的 Windows 入口后缀(ISSUE #23 / launch-and-build.md §8)
 const FORBIDDEN_SCRIPT_EXT = /\.(bat|cmd|vbs)$/i;
@@ -137,8 +151,10 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
       if (!/\.(ts|tsx|mjs|cjs|js)$/.test(e.name)) continue;
       if (/\.test\.[cm]?[jt]sx?$/.test(e.name) || /\.d\.ts$/.test(e.name)) continue;
       const lines = fs.readFileSync(p, "utf8").split("\n").length;
-      if (lines > SPLIT_HINT_LINES)
+      if (lines > SPLIT_HINT_LINES) {
         splitHints.push(p + " (" + lines + " 行,建议拆分)");
+        oversizedFiles[p] = lines;
+      }
     }
   })("src");
 })();
@@ -293,8 +309,79 @@ const SCAN_EXCLUDED = [
   }
 })();
 
+// ── R5 棘轮(ISSUE #575 第 8 项) ──
+// 默认只提醒;`--strict`(CI)下按 `scripts/.file-size-baseline.json` 判定:
+//   ① 基线里没有的超限文件 = 新增 → 阻断;
+//   ② 基线里已有但行数变大 → 阻断(文件还在长);
+//   ③ 基线里已有但已降到阈值内/行数变小 → 提示收紧基线(不阻断,避免打断提交)。
+// 反模式:只在输出里打一行「建议拆分」。提醒与阻断的区别就是「有没有人为它返工」——
+// 900 行以上的文件在本仓库只增不减(11 个存量),正是「只提醒」的直接结果。
+(function checkFileSizeRatchet() {
+  const names = Object.keys(oversizedFiles).sort();
+  const prev = fs.existsSync(FILE_SIZE_BASELINE)
+    ? JSON.parse(fs.readFileSync(FILE_SIZE_BASELINE, "utf8"))
+    : null;
+  const prevFiles = prev?.files ?? null;
+
+  if (UPDATE) {
+    fs.writeFileSync(
+      FILE_SIZE_BASELINE,
+      JSON.stringify(
+        {
+          generatedAt: new Date().toISOString().slice(0, 10),
+          note:
+            "超 " + SPLIT_HINT_LINES + " 行的文件(规范 §12.6 R5 / ISSUE #575)。" +
+            "棘轮只许下降:新增超限文件须先拆分,再收紧基线。",
+          threshold: SPLIT_HINT_LINES,
+          total: names.length,
+          files: Object.fromEntries(names.map((f) => [f, oversizedFiles[f]])),
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    console.log(
+      "[structure] R5 基线已更新:" + names.length + " 个超限文件(scripts/.file-size-baseline.json)",
+    );
+    return;
+  }
+
+  if (!STRICT) return; // 非 strict:只提醒,不判失败(pre-commit 与本地快跑口径)
+
+  if (!prevFiles) {
+    problems.push(
+      "R5 基线文件缺失:先执行 node scripts/check-file-structure.cjs --update",
+    );
+    return;
+  }
+  for (const f of names) {
+    const base = prevFiles[f];
+    if (base === undefined) {
+      problems.push(
+        "R5 新增超限文件(" + f + " → " + oversizedFiles[f] + " 行,阈值 " +
+        SPLIT_HINT_LINES + ")。先拆分,再收紧基线(规范 §12.6 R5)",
+      );
+    } else if (oversizedFiles[f] > base) {
+      problems.push(
+        "R5 超限文件继续变大(" + f + " → " + base + " → " + oversizedFiles[f] +
+        " 行)。拆分或收紧基线(规范 §12.6 R5)",
+      );
+    }
+  }
+  const shrunk = names.filter((f) => prevFiles[f] !== undefined && oversizedFiles[f] < prevFiles[f]);
+  const removed = Object.keys(prevFiles).filter((f) => !(f in oversizedFiles));
+  if (shrunk.length || removed.length) {
+    console.log(
+      "[structure] R5 基线可收紧(执行 --update):" +
+      [...shrunk, ...removed].map((f) => "\n  · " + f).join(""),
+    );
+  }
+})();
+
 if (splitHints.length) {
-  console.log("[structure] 拆分候选(仅提醒):\n  " + splitHints.join("\n  "));
+  console.log(
+    "[structure] 拆分候选" + (STRICT ? "" : "(仅提醒)") + ":\n  " + splitHints.join("\n  "),
+  );
 }
 if (problems.length) {
   console.error("[structure] 违规(阻断提交):\n  " + problems.join("\n  "));

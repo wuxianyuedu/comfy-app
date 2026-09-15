@@ -6,12 +6,10 @@
 
 import { uploadMaterialItem } from "@/lib/materials-client";
 import {
+  sizeSpecToRelay,
   sizeSpecToWxH,
   type SizeSpec,
 } from "~/lib/size-presets";
-import {
-  shotSizeToRelay,
-} from "~/components/workshop/shot-size-config";
 import type { SavedOutput } from "./api-channel-shared";
 import {
   DEFAULT_GEN_PARAMS,
@@ -179,7 +177,7 @@ export async function generateRemotePortrait(
     ...(opts.model ? { model: opts.model } : {}),
     mode: "T2I",
     /* 远端通道认「宽高比 + 百万像素」：分辨率档按场景尺寸表换算成实际总像素。 */
-    ...shotSizeToRelay(req.size),
+    ...sizeSpecToRelay(req.size),
   });
   return localizePortraitImage(url, opts);
 }
