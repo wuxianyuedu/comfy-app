@@ -723,6 +723,9 @@ export async function run(argv = process.argv.slice(2)) {
       shell,
       heartbeat,
       staleShell,
+      // 本次运行**自己起的**日志文件，不按名字重找（见函数注释）。
+      stdoutFile: nextOut,
+      stderrFile: nextErr,
     });
   }
   if (!ready) {
@@ -783,12 +786,21 @@ export function spawnDevServer(port, host, outFile, errFile) {
 
 /** dev server 提前退出时定性并给出用户可见出口（失败即抛出可行动的报错）。 */
 /**
+ * `stdoutFile` / `stderrFile` 必须是**本次运行**起 dev server 时用的那两份
+ * （`nextOut` / `nextErr`）—— 曾经这里是按文件名重找「最近一份」（`lastNextLog`），
+ * 而它按**字典序**取最新：`nextjs-stdout-<ISO-T>` 与历史遗留的
+ * `nextjs-stdout-<下划线>` 命名混在一个目录里时，`_`（0x5F）排在 `T`（0x54）之后，
+ * 于是「最新」永远落到旧命名的**上一次运行**的日志上 —— 用户照着报错里的路径去看，
+ * 看到的是别的失败现场，「日志里什么都查不出来」正是这么来的（ISSUE #576）。
+ * 本次的路径本来就是已知量，没有任何理由再按名字猜一次。
+ *
  * @param {{ dev: import("node:child_process").ChildProcess,
  *           shell: import("node:child_process").ChildProcess | null,
- *           heartbeat: NodeJS.Timeout, staleShell: string | null }} ctx
+ *           heartbeat: NodeJS.Timeout, staleShell: string | null,
+ *           stdoutFile: string, stderrFile: string }} ctx
  * @returns {Promise<number>}
  */
-async function concludeDownstreamExit({ dev, shell, heartbeat, staleShell }) {
+async function concludeDownstreamExit({ dev, shell, heartbeat, staleShell, stdoutFile, stderrFile }) {
   clearInterval(heartbeat);
   const markers = readShellMarkers(ROOT);
   const shellExited = shell ? shell.exitCode !== null || shell.signalCode !== null : false;
@@ -801,8 +813,8 @@ async function concludeDownstreamExit({ dev, shell, heartbeat, staleShell }) {
     devCode: dev.exitCode,
     shellCode: shell?.exitCode ?? null,
     shellPid: shell?.pid,
-    stderrFile: lastNextLog("nextjs-stderr-"),
-    stdoutFile: lastNextLog("nextjs-stdout-"),
+    stderrFile,
+    stdoutFile,
   });
   if (kind === "abandoned") {
     log(detail, "INFO");
@@ -814,23 +826,6 @@ async function concludeDownstreamExit({ dev, shell, heartbeat, staleShell }) {
   writeLaunchStatus(ROOT, { phase: "error", progress: 1, message: "启动失败，见 log/", error: true, staleShell });
   await shutdown(1);
   return 1;
-}
-
-/** 最近一份按次命名的 dev server 日志（壳侧报错要用它给出「现场」）。 */
-/** @param {string} prefix @returns {string} */
-function lastNextLog(prefix) {
-  const dir = path.join(ROOT, "log", "nextjs");
-  try {
-    const names = fs
-      .readdirSync(dir)
-      .filter((name) => name.startsWith(prefix))
-      .sort()
-      .reverse();
-    if (names[0]) return path.join(dir, names[0]);
-  } catch {
-    /* 目录不存在时退回到约定路径 */
-  }
-  return path.join(dir, `${prefix}${runTimestamp}.log`);
 }
 
 /** 心跳定时器的引用遮蔽（避免被 tree-shaking 式的误读当成未使用）。 */

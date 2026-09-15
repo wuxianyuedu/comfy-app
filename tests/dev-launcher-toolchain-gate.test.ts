@@ -30,6 +30,7 @@ import {
   commandInvocation,
   executableExts,
   executableKind,
+  pnpmInvocation,
   usableCommand,
   whichCommand,
 } from "../scripts/launcher-core/shell.mjs";
@@ -523,5 +524,92 @@ describe("pnpm check:toolchain：打印探测身份，版本漂移可自解释",
     });
     expect(r.status, r.stderr).toBe(0);
     expect(`${r.stdout ?? ""}${r.stderr ?? ""}`).toContain("选中的 pnpm：");
+  });
+});
+
+/**
+ * 回归护栏：**任何**由 Node 去 spawn pnpm 的地方都走同一条形态判据（ISSUE #576）。
+ *
+ * 现场：双击 `start-tauri.exe`，启动页报「应用启动失败：启动进程 dev-launcher.mjs
+ * 提前退出（exit=1）」，日志里 `dev server 已启动（PID …）` 之后**两秒**就
+ * `dev server 自身退出（exit=0）`，`最近 stdout` 只有一行 `[dev.mjs] COMFYAPP_PORT=…`，
+ * stderr 全空 —— 用户「看不出哪里有问题」。
+ *
+ * 根因在**内层**：`scripts/dev.mjs` 写死 `spawnSync("pnpm.cmd", …)`。Windows 上
+ * 批处理只有 cmd.exe 会解释，Node 起它会失败（EINVAL/EACCES），于是
+ * `result.status === null`，而旧代码 `process.exit(result.status ?? 0)` 把它读成
+ * **成功退出 0** —— dev server 静默消失、Next 一行输出都没有。
+ * 这正是 `whichCommand()` / `commandInvocation()` 早已解决的同一坑
+ * （见 §2.1.1），只是「起服务的那一层」没复用同一个判据。
+ *
+ * 契约（反向验证：把 `pnpmInvocation` 换回写死 `pnpm.cmd`，对应用例必失败）：
+ *   · 形态判据只有一个出口（`shell.mjs` 的 `pnpmInvocation`），内层脚本不许自己拼；
+ *   · 「命令没起来」必须与非零退出分开报，绝不塌成 `?? 0`。
+ */
+describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）", () => {
+  it("pnpmInvocation 与 whichCommand + commandInvocation 结果一致", () => {
+    // 用户现场形态：`.tools\pnpm\<ver>\bin` 里 `.CMD` + `.ps1` 并排，
+    // 宿主在同机 PATH 上（判据只认二进制形态的 pwsh/powershell）。
+    const dir = makeInstalledPnpmDir();
+    const hostDir = makePowerShellHost(path.join(tmp, "host"));
+    const env = { PATH: `${dir}${path.delimiter}${hostDir}`, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
+    const args = ["exec", "next", "dev", "--turbo", "-p", "3734"];
+    const inv = pnpmInvocation(args, { env, platform: "win32" });
+    expect(inv, "PATH 上有可用形态时必须给出调用方式").not.toBeNull();
+    // 选中的是 .CMD 旁的 .ps1（批处理 Node 起不了，直接走同胞回退）
+    expect(inv!.candidate).toBe(path.join(dir, "pnpm.CMD"));
+    expect(inv!.viaHost).toBe(true);
+    expect(inv!.args.slice(-args.length)).toEqual(args);
+    // 与既有判据同源：命令形态必须等于 commandInvocation 的结论
+    const reference = commandInvocation(path.join(dir, "pnpm.CMD"), ["-v"], {
+      env,
+      platform: "win32",
+    });
+    expect(inv!.command).toBe(reference.command);
+    expect(inv!.command).toBe(path.join(hostDir, "pwsh.EXE"));
+  });
+
+  it("PATH 上没有可用 pnpm 时返回 null（调用方必须给可见出口，不许静默 0）", () => {
+    const dir = makeWindowsPnpmDir({});
+    expect(
+      pnpmInvocation([], { env: WIN_ENV(dir), platform: "win32" }),
+      "一个可跑形态都没有时必须显式 null",
+    ).toBeNull();
+  });
+
+  it("POSIX 上不退化为 pnpm.cmd（判据不按平台分叉）", () => {
+    const dir = makeWindowsPnpmDir({ shim: "working" });
+    const inv = pnpmInvocation(["dev"], { env: { PATH: dir }, platform: "linux" });
+    expect(inv).not.toBeNull();
+    expect(inv!.command).toBe(path.join(dir, "pnpm"));
+  });
+
+  it("dev.mjs / start.mjs / analyze-bundle.mjs 不再各自拼 pnpm 可执行名", () => {
+    for (const rel of ["scripts/dev.mjs", "scripts/start.mjs", "scripts/analyze-bundle.mjs"]) {
+      const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+      expect(src, `${rel}: 必须复用 pnpmInvocation`).toContain("pnpmInvocation");
+      // 写死平台后缀的旧写法必须消失（它是这条缺陷的形态本身）
+      expect(src, `${rel}: 不得再写死 pnpm.cmd`).not.toContain('"pnpm.cmd"');
+      expect(src, `${rel}: 不得再按平台三元表达式拼可执行名`).not.toMatch(
+        /win32"\s*\?\s*"pnpm/,
+      );
+    }
+  });
+
+  it("dev.mjs：spawn 失败（命令起不来）必须非零退出，且把 error.code 与真实命令打出来", () => {
+    const raw = fs.readFileSync(path.join(ROOT, "scripts", "dev.mjs"), "utf8");
+    // 注释里会**引用**旧写法作反面说明，判据只看代码：先剥掉行注释。
+    const code = raw
+      .split("\n")
+      .map((line) => line.replace(/\/\/.*$/, ""))
+      .join("\n");
+    expect(code).toContain("result.error");
+    expect(code).toContain("result.error.code");
+    expect(code).toContain("实际命令：");
+    // 旧写法 `process.exit(result.status ?? 0)` 把「没起来」读成成功 —— 必须分开判。
+    expect(code, "不得再出现 ?? 0 吞掉「没起来」").not.toMatch(
+      /exit\(result\.status\s*\?\?\s*0\)/,
+    );
+    expect(code, "status 为 null 必须与非零退出分开").toContain("result.status === null");
   });
 });

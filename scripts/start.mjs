@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { resolveAppPort } from "./app-port.mjs";
 import { probeSchemaSync } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
+import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -33,9 +34,27 @@ if (probeSchemaSync(root) !== "ready") {
   );
 }
 
-const result = spawnSync(
-  process.platform === "win32" ? "pnpm.cmd" : "pnpm",
-  ["exec", "next", "start", "-p", String(port)],
-  { stdio: "inherit", env: { ...process.env, PORT: String(port) } },
-);
-process.exit(result.status ?? 0);
+// 与 dev.mjs 同一口径：pnpm 的可执行形态由 shell.mjs 判定（规范 §2.1.1）。
+// 写死 `pnpm.cmd` 在 Windows 上会选中 Node 起不来的批处理，`status` 为 null
+// 会被 `?? 0` 读成成功退出，服务静默消失（ISSUE #576）。
+const invocation = pnpmInvocation(["exec", "next", "start", "-p", String(port)]);
+if (!invocation) {
+  process.stderr.write(
+    "[start.mjs] ✗ PATH 上找不到可用的 pnpm，无法启动 Next.js server。\n" +
+      "[start.mjs]   先跑 `pnpm check:toolchain` 看选中的命令与探测结果。\n",
+  );
+  process.exit(1);
+}
+
+const result = spawnSync(invocation.command, invocation.args, {
+  stdio: "inherit",
+  env: { ...process.env, PORT: String(port) },
+});
+if (result.error) {
+  process.stderr.write(
+    `[start.mjs] ✗ 起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}\n` +
+      `[start.mjs]   实际命令：${invocation.command} ${invocation.args.join(" ")}\n`,
+  );
+  process.exit(1);
+}
+process.exit(result.status ?? 1);

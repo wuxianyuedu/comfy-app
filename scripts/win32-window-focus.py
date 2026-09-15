@@ -333,7 +333,56 @@ def run_watch(hwnd_handle=None, window_process: str = "app.exe", timeout_s: floa
     return 0
 
 
+def should_front_splash(*, window_visible: bool) -> bool:
+    """启动页窗口出现时该不该把它带到前台。
+
+    与 `decide_handoff` 是**两套判据**，别合并：那条回答「应用窗口交接过来的这
+    一刻，前台归属该给谁」（默认 `leave`，因为启动要几十秒，用户可能早已切走）；
+    本条回答「启动页刚出现，要不要把它带到前面」。
+
+    启动页是用户**刚刚**双击 / 点击启动的直接反馈，出现的那一刻他就在等它——
+    不给前台的结果是启动页被文件资源管理器之类的窗口压住，用户看到的是
+    「双击了没反应」（ISSUE #576）。这里没有「几十秒后才冒出来」的问题：
+    判定发生在窗口**首次可见**的当下。
+
+    窗口不可见时返回 False（还没建好，等下一轮）。
+    """
+    return bool(window_visible)
+
+
+def run_bring_splash(hwnd_handle=None, window_process: str = "app.exe", timeout_s: float = 20.0) -> int:
+    """等启动页窗口可见，把它带到前台一次，然后退出。
+
+    由启动器在**壳启动的同时**以独立进程拉起（``python scripts/win32-window-focus.py
+    --splash HWND:... app.exe``）。独立进程的理由与 `run_watch` 相同：前台相关动作
+    （AttachThreadInput / SendInput / SetForegroundWindow）绑定调用线程的输入状态。
+
+    只抢**第一次**可见那一下：用户随后切走就是他的选择，再抢回来才是打断。
+    """
+    if not _IS_WINDOWS:
+        _log("splash-front: not windows, nothing to do")
+        return 0
+    _log(f"splash-front: start hwnd={hwnd_handle} process={window_process}")
+    hwnd = wait_for_main_window(hwnd_handle, timeout_s)
+    if not hwnd:
+        _log("splash-front: no visible splash window before timeout, nothing to do")
+        return 0
+    if not should_front_splash(window_visible=bool(_user32.IsWindowVisible(_to_hwnd(hwnd)))):
+        _log("splash-front: window not visible, nothing to do")
+        return 0
+    # 窗口刚可见时首帧还在渲染：稍等一下再抢，避免与系统自己的首次显示抢那一下。
+    time.sleep(0.3)
+    focused = focus_window(hwnd)
+    _log(f"splash-front: front requested -> focused={focused}")
+    return 0
+
+
 if __name__ == "__main__":  # pragma: no cover - 由启动器以独立进程拉起
-    _hwnd_arg = sys.argv[1] if len(sys.argv) > 1 else ""
-    _proc_arg = sys.argv[2] if len(sys.argv) > 2 else "app.exe"
+    _args = sys.argv[1:]
+    if _args and _args[0] == "--splash":
+        _hwnd_arg = _args[1] if len(_args) > 1 else ""
+        _proc_arg = _args[2] if len(_args) > 2 else "app.exe"
+        sys.exit(run_bring_splash(_hwnd_arg, _proc_arg))
+    _hwnd_arg = _args[0] if len(_args) > 0 else ""
+    _proc_arg = _args[1] if len(_args) > 1 else "app.exe"
     sys.exit(run_watch(_hwnd_arg, _proc_arg))

@@ -229,6 +229,15 @@ describe("dev/start 在起 Next 之前预检", () => {
     for (const name of ["dev.mjs", "env-preflight.mjs", "app-port.mjs", "db-schema-state.mjs"]) {
       fs.copyFileSync(path.join(ROOT, "scripts", name), path.join(scriptsDir, name));
     }
+    // `dev.mjs` 依赖 `launcher-core/shell.mjs`（pnpm 可执行形态的单一判据，
+    // 见规范 §2.1.1），副本里也要有它，否则 import 就失败、测的就不是预检了。
+    for (const name of ["shell.mjs"]) {
+      fs.mkdirSync(path.join(scriptsDir, "launcher-core"), { recursive: true });
+      fs.copyFileSync(
+        path.join(ROOT, "scripts", "launcher-core", name),
+        path.join(scriptsDir, "launcher-core", name),
+      );
+    }
     const r = spawnSync(process.execPath, [path.join(scriptsDir, "dev.mjs")], {
       encoding: "utf8",
       cwd: tmp,

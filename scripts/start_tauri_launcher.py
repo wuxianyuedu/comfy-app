@@ -710,11 +710,39 @@ def _launch_cancelled(project_root: str) -> bool:
     return is_launch_cancelled(tail)
 
 
+def _newest_nextjs_log(project_root: str, prefix: str) -> str:
+    """`log/nextjs/` 下**最新**的某类按次命名日志（按 mtime，不按文件名）。
+
+    为什么不按文件名排序：这里的历史命名混过两套格式（`…T<time>.log` 与
+    `…_<time>.log`），字典序会把旧命名排到 `T` 之后 —— 「最新」于是恒定指向
+    上一次运行的文件，用户照着弹窗里的路径去看，看到的是别的现场（ISSUE #576）。
+    文件时间戳才是「哪一份更新」的事实。
+    """
+    directory = os.path.join(project_root, "log", "nextjs")
+    try:
+        candidates = [
+            os.path.join(directory, name)
+            for name in os.listdir(directory)
+            if name.startswith(prefix)
+        ]
+    except OSError:
+        return ""
+    if not candidates:
+        return ""
+    return max(candidates, key=lambda p: os.path.getmtime(p))
+
+
 def _build_failure_message(project_root: str, detail: str) -> str:
     """组装启动失败的 MessageBox 文案：结论 + 日志尾部 + 日志位置。
 
     历史教训：dev-launcher 提前退出时若只把错误写进 30 秒后自删的状态文件，
     对用户完全静默（表现为「双击没反应」）。失败必须有人类可见的出口。
+
+    「详细」的标准是**用户不需要再去翻别处**：启动失败最关键的现场是 dev server
+    自己的输出（Next 编译错、端口被占、pnpm 起不来都落在那里），而它此前完全不在
+    弹窗里 —— 用户照着「详细日志」那两行去翻，翻到的还是启动器日志（ISSUE #576：
+    「启动失败，还是看不出哪有问题，日志需要详细」）。现在把 nextjs 的 stderr 尾部
+    一并贴上来，并列出它的绝对路径。
     """
     dev_log = _resolve_dev_log_path(project_root)
     tail_dev = _read_log_tail(dev_log, 20)
@@ -724,10 +752,24 @@ def _build_failure_message(project_root: str, detail: str) -> str:
         parts.append("— 启动器错误输出（dev-launcher-stderr.log）—\n" + tail_err)
     if tail_dev:
         parts.append("— 启动器日志尾部（dev-launcher.log）—\n" + tail_dev)
+    # dev server 自身的输出：失败最常见的落点，必须直接给出来（否则用户只能看到
+    # 「dev server 退出了」这句结论，仍不知道为什么）。
+    next_err = _newest_nextjs_log(project_root, "nextjs-stderr-")
+    next_out = _newest_nextjs_log(project_root, "nextjs-stdout-")
+    tail_next_err = _read_log_tail(next_err, 25) if next_err else ""
+    tail_next_out = _read_log_tail(next_out, 15) if next_out else ""
+    if tail_next_err:
+        parts.append("— dev server 错误输出（nextjs-stderr.log）—\n" + tail_next_err)
+    elif tail_next_out:
+        parts.append("— dev server 输出尾部（nextjs-stdout.log）—\n" + tail_next_out)
+    logs = [dev_log, os.path.join(project_root, "log", "launcher", "dev-launcher-stderr.log")]
+    for path in (next_err, next_out):
+        if path:
+            logs.append(path)
+    parts.append("详细日志：\n" + "\n".join(f"  {p}" for p in logs))
     parts.append(
-        "详细日志：\n"
-        f"  {dev_log}\n"
-        f"  {os.path.join(project_root, 'log', 'launcher', 'dev-launcher-stderr.log')}"
+        "下一步：先看上面 dev server 的错误输出；确认工具链可用的自查入口是\n"
+        "  pnpm check:toolchain（打印选中的 pnpm 与探测结果）"
     )
     return "\n\n".join(parts)
 
@@ -1732,6 +1774,46 @@ def spawn_foreground_watch(project_root: str) -> None:
         log(f"foreground watch spawn failed: {exc}")
 
 
+def spawn_splash_front(project_root: str) -> None:
+    """壳一启动就把**启动页窗口**带到前台（独立进程，见 win32-window-focus.py）。
+
+    为什么必须有人做这件事：启动页是用户双击启动的直接反馈，而 Windows 在
+    「GUI 进程由另一个进程拉起」时并不保证新窗口进前台——尤其双击入口在文件
+    资源管理器里时，启动页会被压在它后面，用户看到的是「双击了没反应」
+    （ISSUE #576）。壳侧那次 `set_focus()` 在前台锁定下常常拿不到前台，
+    所以交给本仓库已验证可靠的这条路径（Alt + AttachThreadInput，见
+    win32-window-focus.py 的 focus_window）。
+
+    只抢「首次可见」那一下：用户随后切走是他的选择（这正是启动页与「应用窗口」
+    两套策略的分界，见 decide_foreground / decide_handoff）。
+    """
+    hwnd = _find_app_window()
+    if not hwnd:
+        log("splash front: no app shell window found, skip")
+        return
+    focus_script = os.path.join(project_root, "scripts", "win32-window-focus.py")
+    if not os.path.isfile(focus_script):
+        log(f"splash front: script missing: {focus_script}")
+        return
+    try:
+        log_dir = _ensure_log_dir(project_root)
+        out = open(os.path.join(log_dir, "foreground-watch.log"), "a", encoding="utf-8", buffering=1)
+        subprocess.Popen(
+            [sys.executable, focus_script, "--splash", "HWND:%d" % int(hwnd), app_window_process_name()],
+            cwd=project_root,
+            env=os.environ.copy(),
+            stdin=subprocess.DEVNULL,
+            stdout=out,
+            stderr=out,
+            close_fds=True,
+            creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
+            | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+        )
+        log(f"splash front spawned (hwnd={int(hwnd)})")
+    except Exception as exc:
+        log(f"splash front spawn failed: {exc}")
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  comfy-cli 虚拟环境准备（后台触发，不阻塞启动）
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2026,9 +2108,19 @@ def _monitor_headless(
 
     _write_status(project_root, current_phase, message=current_message, elapsed=elapsed())
 
+    # 启动页「首次可见」时抢一次前台（见 spawn_splash_front）：one-shot，
+    # 只做一次，之后用户切走就不该再拉回来。
+    splash_front_done = False
+
     try:
         last_write = 0.0
         while time.time() < deadline:
+            # 启动页窗口先于主窗口出现：它一可见就把前台拿到手（双击启动的反馈）。
+            # 放在这里而不是启动前，是因为此刻窗口刚建好、系统已完成首次显示，
+            # 抢前台不会与「窗口还没建」抢跑。
+            if not splash_front_done and find_tauri_window():
+                splash_front_done = True
+                spawn_splash_front(project_root)
             try:
                 # 如果编排器切换了当前日志文件，跟随 sentinel
                 resolved = _resolve_dev_log_path(project_root)

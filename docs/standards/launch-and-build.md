@@ -376,6 +376,44 @@ true`——这类场景的策略反过来，必须给前台。
 > 跑的是同目录的 `pnpm.ps1`」；要改「用哪个 pnpm」，改的是 **PATH 顺序**
 > （把想用的形态目录排到前面），而不是改仓库里的任何文件。
 
+#### 2.1.6 内层 spawn pnpm 也必须走同一个形态判据（ISSUE #576 第五轮）
+
+第五轮现场（用户第二次双击 `{{shell.exe.prebuilt}}`）：启动页报
+`应用启动失败：启动进程 dev-launcher.mjs 提前退出（exit=1）`，而 `dev-launcher.log`
+里 `dev server 已启动（PID …）` 之后**两秒**就出现 `dev server 自身退出（exit=0）`，
+`最近 stdout` 只有一行 `[dev.mjs] COMFYAPP_PORT=3734 host=127.0.0.1`，stderr 全空。
+用户的反馈是「还是看不出那有问题，日志需要详细」。
+
+根因在**编排器之下**：`scripts/dev.mjs`（`pnpm dev` 的入口，由启动器 spawn）当时写死
+`spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", …)`。Windows 上批处理
+只有 cmd.exe 会解释，**Node 起它会失败**（实测 `EINVAL`，正是 §2.1.1 已记录的那条判据），
+于是 `result.status === null`，而旧代码 `process.exit(result.status ?? 0)` 把它读成
+**成功退出 0** —— dev server 静默消失，Next 一行输出都没有。
+
+| 缺陷 | 形态 | 修法 |
+|---|---|---|
+| 内层起服务自己拼可执行名 | `dev.mjs` / `start.mjs` / `analyze-bundle.mjs` 各自写 `win32 ? "pnpm.cmd" : "pnpm"` | 一律经 `shell.mjs` 的 **`pnpmInvocation()`**（它内部就是 `whichCommand()` + `commandInvocation()`，见 §2.1.1），拿 `{ command, args }` 直接 spawn |
+| 「命令没起来」被读成成功 | `process.exit(result.status ?? 0)` | 先判 `result.error`（带 `error.code` + 实际命令），再判 `status === null`，两者都以非零退出并打印**真实命令** |
+| PATH 上没有任何可用 pnpm | 静默 —（`status` 也是 null） | `pnpmInvocation()` 返回 `null`，调用方打印可行动作（`pnpm check:toolchain`）并非零退出 |
+
+> `pnpmInvocation()` 是**唯一出口**：任何「Node 去 spawn pnpm」的地方都从这里拿命令，
+> 不许自己拼可执行名、更不许按平台写后缀 —— 那正是本条缺陷的形态本身。
+> 回归护栏：`tests/dev-launcher-toolchain-gate.test.ts` 的
+> 「内层 spawn pnpm 复用同一形态判据」一组（含「不得再出现 `?? 0`」的源码级断言）。
+
+**失败出口的日志必须落在「本次运行」的文件上**：同一次现场里，
+`concludeDownstreamExit()` 还按文件名重找「最近一份」nextjs 日志
+（`lastNextLog()` → `readdirSync().sort().reverse()` 的**字典序**）。目录里同时存在
+历史命名（`…<date>_<time>.log`）与现命名（`…<date>T<time>.log`）时，
+`_`（0x5F）排在 `T`（0x54）之后，「最新」恒定指向**上一次运行**那份 ——
+用户照着弹窗给的路径去翻，看到的是别的失败现场。现在把本次起的
+`nextOut` / `nextErr` **直接传进**收尾函数，不再按名字猜（`lastNextLog` 已删除）。
+
+失败弹窗（`_build_failure_message`）同时补齐最关键的现场：除了启动器两侧，
+还贴出 **dev server 自己的输出尾部**（`log/nextjs/nextjs-stderr-*.log`，取
+**mtime 最新**的一份 —— 不按文件名字典序，理由同上）与「下一步」（`pnpm check:toolchain`），
+让用户不必再去翻别处。
+
 ### 2.2 完整依赖预检（壳窗口出现后）
 
 按顺序执行，任一失败立即终止并展示日志尾部：
@@ -830,6 +868,8 @@ zustand 队列，而不是再加一个模块级单例。
 | 应用启动完成瞬间把窗口弹到最前面，打断用户正在看的别的内容（启动期间切出去干别的了）                                                   | **窗口交换只做 `show()` + `set_focus()`**：启动耗时期间用户可能已切走，加载完成照样抢前台（ISSUE #359）。判据缺失——「用户刚点的启动」与「用户早就切走了」在旧实现里没被区分                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 已修：启动完成默认只 `show()`（窗口进任务栏）并 `request_user_attention` 请求任务栏闪烁提醒；是否给前台由启动器 `decide_foreground()` 判决并经 `COMFYAPP_FOREGROUND` 注入（见 §1.3），只有「前台本来就是本应用 / 显式冷启动 / 唤起已有实例」才给（双击启动同样不给，见下一行）。改的是 `src-tauri/src/**`、`Cargo.toml`（`tray-icon`）与 capabilities，**必须重编壳**：`cd src-tauri; cargo build --release --features custom-protocol`                    |
 | 上面这条修完、重编壳后**启动仍然抢前台**（ISSUE #359 回归）                                                                            | **交接瞬间 Windows 自己把前台放行给了主窗**，壳里那条「不抢前台」根本管不到：①启动页窗口是 `WS_EX_TOOLWINDOW`，不产生任务栏按钮；主窗 `show()` 时任务栏按钮首次创建，Windows 按「新窗口 + 用户刚启动」放行前台（实测日志就是 `show_main_window_without_focus` 里 `is_focused()` 一开始就为 true）；②旧实现「无条件调一次 `set_focus()` 再看结果」——窗口已被系统放行，这次调用必然「成功」，反而把「不抢前台」演成了「一定给前台」；③启动期的 `decide_foreground()` 只判一次，用户切去干别的几分钟后「双击入口还在前台」这条早已失真                                                                                                       | 已修（两段）：①壳侧只在 `request_focus` / `COMFYAPP_FOREGROUND=1` 时才调 `set_focus()`，不再无条件试探；②新增交接复核进程（`scripts/win32-window-focus.py`，由 `spawn_foreground_watch()` 在主窗口可见时拉起）：不该给就给前台**还回去**（`SendInput` 无副作用 Alt + `SetForegroundWindow`），该给就拿到手（含键盘焦点）。判决表与结论见 §1.3，回归测试见 `tests/check-file-structure.test.ts`。诊断入口：`log/launcher/foreground-watch.log` |
 | **双击启动完成后主窗弹到最前；点回别处遮盖它，马上又被强拉到最前（同一此启动被打断两次）** | **启动期判决把「前台是双击入口」放行了**：`decide_foreground()` 曾把「前台是 explorer / 启动器自身」判为允许（理由是「用户刚点过启动」），双击启动因此恒得 `COMFYAPP_FOREGROUND=1`——壳在交换窗口时 `set_focus()` 弹到最前（第一次）；用户点回别处后，交接复核进程按「启动期判决允许 = 用户就在等」执行 `give` 又把前台强拉回来（第二次）。而「双击之后切去干别的」正是常态：等几十秒后正式窗口冒出来时，「双击入口还在前台」这条判据早已失真 | 已修：①判决表删去「双击入口」分支——双击启动一律 `COMFYAPP_FOREGROUND=0`，窗口进任务栏 + 闪烁提醒；显式给前台只剩 `--foreground` / `--cold-start` / 唤起已有实例；②主窗 builder 加 `focused(false)`：tao 据此把首次 `show()` 走 `SW_SHOWNOACTIVATE`，从源头掐掉「`show()` 自带激活语义被 Windows 当新窗口放行前台」的路径（无激活就无需复核进程去「还」）。改了启动器（`scripts/start_tauri_launcher.py`）与壳（`src-tauri/src/**`）：前者必须重打包（`tools\build\build-launcher.ps1`）才对双击 exe 生效，后者必须重编壳；回归测试见 `tests/check-file-structure.test.ts` 的「启动链路『不抢前台』判据」用例组 |
+| **双击 `{{shell.exe.prebuilt}}` 后启动页被文件资源管理器等窗口压在后面**（用户看得到启动页露出的一个角，但不在最前面）；用户反馈「这不正常，应该显示在前面才对」（ISSUE #576） | **把「应用窗口」的「不抢前台」策略套在了启动页上**：启动期判决（`decide_foreground`）为防打断用户，双击启动一律 `COMFYAPP_FOREGROUND=0`，壳侧 `show_main_window_without_focus()` 于是只 `show()` + 任务栏闪烁。这条对**几十秒后才冒出来**的应用窗口是对的（用户可能早已切走），但启动页是用户**刚刚双击下去**的直接反馈——不给前台的结果就是启动页出现在 Explorer 后面 | 已修（启动页单独一套判据，与主窗那套**不合并**）：① 启动器在启动页**首次可见**时拉一次独立复核进程（`spawn_splash_front()` → `win32-window-focus.py --splash`），复用已验证可靠的 `focus_window()`（Alt + `AttachThreadInput`）；判定收在纯函数 `should_front_splash()`——只抢**首次可见**那一下，one-shot；② 壳侧 `bring_splash_to_front()` 另做一次本地 `set_focus()` 兜底（冷启动时壳本就是前台进程，无须等复核进程）。改的是 `scripts/start_tauri_launcher.py`、`scripts/win32-window-focus.py` 与 `src-tauri/src/**`：前者必须重打包（`tools\build\build-launcher.ps1`），后者必须重编壳；回归测试见 `tests/check-file-structure.test.ts` 的「启动页首次可见时被带到前台」用例 |
+| **启动失败但「看不出哪有问题」**：启动页弹「启动进程 dev-launcher.mjs 提前退出（exit=1）」，`dev-launcher.log` 里 `dev server 已启动（PID …）` 后**两秒**就是 `dev server 自身退出（exit=0）`，`最近 stdout` 只有一行 `[dev.mjs] COMFYAPP_PORT=…`、stderr 全空（ISSUE #576 第五轮） | **两个缺陷叠加**：① `scripts/dev.mjs` 写死 `spawnSync("pnpm.cmd", …)`，Windows 上批处理只有 cmd.exe 会解释、Node 起它必失败（`EINVAL`），于是 `result.status === null`，旧代码 `process.exit(result.status ?? 0)` 把它读成**成功退出 0** —— dev server 静默消失，Next 一行输出都没有（判据见 §2.1.1，只是「起服务那一层」没复用）；② 收尾函数还按文件名字典序重找「最近一份」nextjs 日志（历史 `_` 命名排在现 `T` 命名之后），弹窗给的路径恒定指向**上一次运行**的文件，用户照过去看自然是别的现场 | 已修：① 内层 spawn 一律经 `shell.mjs` 的 `pnpmInvocation()`（形态判据唯一出口），并把「命令没起来」（`result.error`）与「跑完非零退出」分开报、打印真实命令；② 本次运行的 `nextOut` / `nextErr` **直接传入**收尾函数（`lastNextLog` 删除），失败弹窗再补一段 **dev server 自己的输出尾部**（取 `log/nextjs/nextjs-stderr-*.log` 里 **mtime 最新**的一份）与自查入口 `pnpm check:toolchain`。见 §2.1.6；回归测试见 `tests/dev-launcher-toolchain-gate.test.ts` 与 `tests/dev-launcher-downstream-exit.test.ts` |
 | **启动页一出现就自己最小化进任务栏**（用户没点任何按钮，只能从任务栏还原回来看进度） | **把「探测」写成了「执行」**：splash 页脚本加载即调 `probeWindowCommands()`，用 `invoke('win_minimize')` 探壳兜底命令是否就位——但 IPC 命令没有 dry-run，`invoke` 就是**真的执行**，启动页刚显示就把自己最小化了 | 已修：删除启动期探测（对有副作用的命令无法无损探测）；「壳过期」的判定改由用户真正点最小化/关闭按钮时的三条互补路径承担（窗口 API / 内联 onclick / 壳命令 `win_minimize`·`win_close`，全失败时消息区给可见提示，见 07 §7.18.7）。改的是 `splash-assets/**`（编译期内嵌），**必须重编壳**：`cd src-tauri; cargo build --release --features custom-protocol` |
 
 | 关掉应用、马上重新双击 {{shell.exe.prebuilt}}，再进工作流库看到「未找到匹配的工作流 / 共 0 个工作流」——像是工作流被清空了（ISSUE #369） | **「还没加载出来」与「真的没有」在界面上长得一样**：`workflow.list` 是服务端较慢的一跳，而服务启动期要经过依赖预检（可能触发一次 `pnpm install`）→ next dev 首屏编译 → Drizzle `push` 同步表结构，这段时间里查询一直没 resolve；列表组件只有「有数据 / 无数据」两种呈现，于是空态文案（「未找到匹配的工作流」）被当成结论显示出来。这与「数据库真的空 / 目录里真的没有工作流」逐字相同，用户无从区分 | 已修：列表三态明确分开——`loading`（正在加载）/ `loadStalled`（超过 8s 未返回 → 可重试 + 引导打开日志面板看原因）/ 真为空（区分「搜索无结果」与「还没有工作流」，给导入或配置本地目录的引导）。判据在 `use-workflow-library.ts` 的 controller，形态在 `workflow-library-config` 与 `WorkflowLibraryList`。**注意**：这类「慢一跳」的界面不能只在快路径上测；新增列表/详情页时默认要有加载态，否则同一症状会在别处再现 |
