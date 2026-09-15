@@ -25,7 +25,7 @@ Extend / maintain - how to add a new gate:
     entry and it is enforced again.
 #>
 param(
-  [ValidateSet("typecheck", "lint", "test", "all")]
+  [ValidateSet("typecheck", "lint", "format", "test", "all")]
   [string]$Mode = "all"
 )
 
@@ -73,6 +73,8 @@ $Blocks = @(
      Args = @("typecheck"); Run = $true }
   @{ Name = "lint";      Label = "ESLint zero error / zero warning";
      Cmd = "pnpm"; Args = @("exec","eslint",".","--max-warnings","0"); Run = $true }
+  @{ Name = "format";    Label = "Prettier format ratchet (scripts/check-format.cjs)";
+     Cmd = "node"; Args = @("scripts\check-format.cjs"); Run = $true }
   @{ Name = "test";      Label = "Vitest full run (excluding known baseline failures)";
      Cmd = "pnpm"; Args = @("exec","vitest","run"); Run = $true; IsTest = $true }
 )
@@ -94,7 +96,7 @@ function Invoke-Check {
   Write-Host ""
   Write-Host "==> $($Block.Label)" -ForegroundColor Cyan
 
-  # On Windows append .cmd so PowerShell can locate the shim
+  # On Windows append .cmd so PowerShell can locate the shim.
   $exe = $Block.Cmd
   if ($env:OS -and $env:OS -like "Windows*") {
     if ($Block.Cmd -match "^(pnpm|npm|node)$") { $exe = "$($Block.Cmd).cmd" }

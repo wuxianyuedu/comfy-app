@@ -21,7 +21,7 @@ verify-quality.ps1 — 一键质量门禁（原 verify-quality.bat）
 #>
 [CmdletBinding()]
 param(
-  [ValidateSet("typecheck", "lint", "test", "all")]
+  [ValidateSet("typecheck", "lint", "format", "test", "all")]
   [string]$Mode = "all"
 )
 

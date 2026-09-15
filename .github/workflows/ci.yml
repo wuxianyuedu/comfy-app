@@ -46,10 +46,6 @@ jobs:
       # 说明：ORM 已由 Prisma 迁到 Drizzle（better-sqlite3），`prisma generate`
       # 步骤已删除——它在本仓库既不存在也必然失败。
 
-      # 说明：format:check（prettier）仍未纳入门禁——全库 361 个文件未过 prettier，
-      # 一次性格式化是与本次门禁对齐无关的大面积噪声 diff（且会与 §13.7 的
-      # 「禁止无关全文件变更」冲突）。待基线整改后单独接入。
-
       - name: Branch guard (PR 必须来自分支,不来自 master)
         # master 只接受「分支开发 → PR → 合并」(规范 13.6 / ISSUE #492)。
         # 本地门槛在 .githooks/pre-commit,但 --no-verify 或未启用钩子的检出可以绕过;
@@ -182,6 +178,23 @@ jobs:
         # 宿主（kill-process-tree / llm-secrets，它们的入口是一句 throw，加上去
         # scripts/*.mjs 的启动编排直接崩）。
         run: pnpm exec vitest run tests/lib-node-only-declarations.test.ts
+
+      - name: Prettier format ratchet
+        # 格式门禁（规范 §13.5 / ISSUE #575 第 9 项）：`format:check` 长期是唯一
+        # 没进门禁的既有质量命令 —— 全库 576 个文件未过 prettier，一次性 --write
+        # 会产生与本次改动无关的全文件 diff（违反 §13.7）。判据改为**基线 +
+        # 只许下降**：新增脏文件即失败；存量修掉后必须 --update 收紧（CI 用
+        # --strict，未收紧也失败）——否则「等基线整改完再接入」永远不会发生。
+        run: node scripts/check-format.cjs --strict
+
+      - name: Reformat-only commit guard
+        # 格式化提交与行为改动分离（规范 §13.5 / ISSUE #575 第 9 项）。
+        # 格式棘轮只判「文件干不干净」，管不住「顺手全库 format:write」——那会把
+        # 一次真实改动埋在几百个文件的重排里，`git blame` 当场失效。这条判**提交
+        # 形态**：改动若「过一遍 prettier 就变成另一种写法」即视为纯格式化，
+        # 一次提交里这种文件 ≥ 10 个即失败。squash 合并后 master 上只剩一个提交，
+        # 所以本地不拆就再没机会补 —— CI 必须复核一次。
+        run: node scripts/check-reformat-only.cjs
 
       - name: Core spine single source
         # core 骨架三处「唯一事实源」（ISSUE #568）：日志只有一条通道
