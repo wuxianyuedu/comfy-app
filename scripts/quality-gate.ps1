@@ -123,10 +123,31 @@ function Test-DepDrift {
   return ($h1 -ne $h2)
 }
 
+# 差异明细：只报「不一致」等于把定位成本全推给人（ISSUE #550），
+# 逐项列出哪些依赖/条目变了。解析与对比都在 Node 侧 scripts/lockfile/lock-diff.mjs，
+# 与 tools\start\run-local.ps1 复用同一份实现（避免两处各写一套后口径漂移）。
+function Write-DepDriftDetail {
+  $root = Split-Path -Parent $PSScriptRoot
+  $instLock = Join-Path $root "node_modules\.pnpm\lock.yaml"
+  if (-not (Test-Path -LiteralPath $instLock)) {
+    Write-Host "  [INFO] 没有可比对的历史 lockfile（首次安装或 install 被中断），跳过差异明细。" -ForegroundColor Cyan
+    return
+  }
+  Write-Host "  差异明细（仓库 pnpm-lock.yaml 对比最近一次安装时的 lockfile）：" -ForegroundColor Cyan
+  Push-Location $root
+  try {
+    & node "scripts\lockfile\diff-cli.mjs" --installed $instLock --root $root
+  } finally {
+    Pop-Location
+  }
+  Write-Host ""
+}
+
 if (Test-DepDrift) {
   Write-Host ""
   Write-Host "==> 依赖一致性预检" -ForegroundColor Cyan
   Write-Host "  [FAIL] 依赖与 pnpm-lock.yaml 不一致（拉取更新后未重装，或上次 install 被中断）。" -ForegroundColor Red
+  Write-DepDriftDetail
   Write-Host "        请先关闭所有正在运行的本项目窗口（dev server 会锁住原生模块），" -ForegroundColor Yellow
   Write-Host "        然后在项目根目录执行：pnpm install" -ForegroundColor Yellow
   Write-Host "        或重新双击 tools\start\run-local.ps1 让它自动补装依赖。" -ForegroundColor Yellow
