@@ -4,6 +4,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireServerUser } from "@/lib/auth-server";
 import { logger } from "~/server/lib/logger";
 import { errorMessage } from "~/lib/error-message";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 import {
   MATERIAL_FOLDERS,
   SHARED_SCOPE,
@@ -62,10 +63,7 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 async function requireUser(): Promise<NextResponse | null> {
   const user = await requireServerUser();
   if (!user) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 }
-    );
+    return unauthorizedResponse();
   }
   return null;
 }

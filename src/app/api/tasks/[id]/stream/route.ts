@@ -4,6 +4,7 @@ import { taskRepository } from "@/lib/core/repository";
 import { getLogs, subscribe } from "@/lib/comfyui/enqueue";
 import type { TaskEvent } from "@/lib/comfyui/runner-state";
 import { parseValidationErrors } from "@/lib/comfyui/validation";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 
@@ -18,10 +19,7 @@ export async function GET(
   // wrapper.  Auth contract is kept identical (401 structured envelope).
   const user = await getServerUser();
   if (!user?.id) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 }
-    );
+    return unauthorizedResponse();
   }
 
   const encoder = new TextEncoder();

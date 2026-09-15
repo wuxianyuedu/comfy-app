@@ -18,6 +18,7 @@ import { NextResponse } from "next/server";
 import { requireServerUser } from "@/lib/auth-server";
 import { probeComfyUi, ensureComfyUiReady, COMFYUI_AUTOSTART_TIMEOUT_MS } from "@/lib/comfyui/lifecycle";
 import { logger } from "~/server/lib/logger";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,10 +31,7 @@ const ENSURE_WAIT_MS = 8_000;
 export async function POST() {
   const user = await requireServerUser();
   if (!user) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 },
-    );
+    return unauthorizedResponse();
   }
 
   const up = await probeComfyUi(1_500);

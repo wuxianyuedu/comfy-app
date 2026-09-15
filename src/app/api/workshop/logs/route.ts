@@ -6,6 +6,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { requireServerUser } from "@/lib/auth-server";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 import {
   GENERATION_LOG_STAGE_LABELS,
   parseGenerationLogStage,
@@ -21,10 +22,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   const user = await requireServerUser();
   if (!user) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 },
-    );
+    return unauthorizedResponse();
   }
   let body: unknown;
   try {
@@ -48,10 +46,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const user = await requireServerUser();
   if (!user) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 },
-    );
+    return unauthorizedResponse();
   }
   const stage = parseGenerationLogStage(req.nextUrl.searchParams.get("stage"));
   if (!stage) {
