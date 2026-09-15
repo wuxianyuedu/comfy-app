@@ -176,21 +176,20 @@ Comfy-APP-T3/
 > `DATABASE_URL` / `BETTER_AUTH_*`，缺 `.env`（或值留空）会直接报
 > `Invalid environment variables`，看不出是「缺文件」。CI / Playwright 因设了
 > `SKIP_ENV_VALIDATION` 绕开校验，所以「CI 全绿、本地起不来」的差异不会自动暴露。
-> `.env` 已被 gitignore（凭据零写入，见规范 §8），从未入库，需本地自行生成。
+> `.env` 已被 gitignore（凭据零写入，见规范 §8），从未入库，需本地自行生成 ——
+> 跑 `pnpm env:init` 即可（跨平台；只 `cp .env.example .env` 会因三项留空而仍然起不来）。
 
 ```bash
 # 1. 安装依赖
 pnpm install
 
-# 2. 生成本地配置 .env（读取 .env.example，自动生成 BETTER_AUTH_SECRET，
-#    GitHub OAuth 用占位值；已存在则跳过，不会覆盖你的配置）
+# 2. 生成本地配置 .env（跨平台，三平台走同一条命令）
+#    读取 .env.example，自动生成 BETTER_AUTH_SECRET（64 位随机 hex）并把
+#    GitHub OAuth 两项填成本地占位值；已存在则跳过，不会覆盖你的配置。
 #    —— Windows 用户也可直接双击 tools/start/run-local.ps1，它顺带做自检+装依赖
-cp .env.example .env
-#    再按需编辑：至少把 BETTER_AUTH_SECRET 换成 64 位随机 hex，
-#    GitHub OAuth 本地调试可保留占位值；DATABASE_URL 保持 file:./db.sqlite 即可
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-#    ⚠️ BETTER_AUTH_GITHUB_CLIENT_ID / _SECRET 必须填非空值（占位即可）：
-#    src/env.js 启动时强制校验，留空会报 Invalid environment variables
+pnpm env:init
+#    ⚠️ 只 `cp .env.example .env` 是**不够**的：.env.example 里那三项就是空串，
+#    而校验把空串当「没给」，会直接报 Invalid environment variables。
 
 # 3. 初始化数据库（Drizzle，按 drizzle.config.ts）
 #    经 scripts/db-push.mjs：以 --force 非交互运行，并**复核库里真的建出表**——
@@ -335,6 +334,7 @@ pnpm test         # Vitest 单元测试
 pnpm test:e2e     # Playwright e2e
 pnpm docs         # 生成 API 文档到 docs/
 pnpm db:push      # 同步 Drizzle schema 到 db.sqlite（非交互、复核建表结果）
+pnpm env:init     # 生成/补齐本地 .env（随机密钥 + 本地 OAuth 占位值）
 ```
 
 非开发人员无需记上面命令，双击根目录 `tools/start/verify-quality.ps1` 即可一键跑质量门禁

@@ -18,6 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveAppPort } from "./app-port.mjs";
 import { probeSchemaSync } from "./db-schema-state.mjs";
+import { exitIfEnvNotReady } from "./env-preflight.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -47,6 +48,11 @@ const port =
 process.stdout.write(
   `[dev.mjs] COMFYAPP_PORT=${port}${hostname ? ` host=${hostname}` : ""}\n`,
 );
+
+// 环境配置预检：失败就**在起 Next 之前**退出并给出可行动作。
+// 放在这里的理由见 env-preflight.mjs —— 否则 Next 会先打印「✓ Ready」，
+// 用户看到的是「起来了但报错」，而事实是端口无人监听。
+exitIfEnvNotReady(root);
 
 // 表没建时**提前讲清楚**，而不是等页面 500：`/` 与 `/api/health` 在空库上
 // 也都能过（详见 scripts/db-push.mjs 的说明），用户很容易误判成「装好了」。
