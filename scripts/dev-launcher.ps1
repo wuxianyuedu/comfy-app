@@ -186,6 +186,44 @@ function Get-OutputTail {
   return ""
 }
 
+# ── 判定「壳在 dev server 之前退出，且原因是用户关掉启动页放弃本次启动」──
+# 背景：Prebuilt 链路的收尾路径是「壳退出 → 连带 taskkill 回收 dev server 整棵树」，
+# 被 taskkill /F 收走的进程没有收尾机会，dev server 落到这里是 exit=0 且几乎无输出。
+# 对真正的失败（编译错、端口占用）该提示准确；对用户主动放弃就是误报——明明是用户
+# 自己按的关闭，却弹红色「启动失败：Next.js dev server 提前退出（exit=0）」。
+# 判据取壳 stderr 的标记行（src-tauri/src/lib.rs 的 splash CloseRequested 分支写
+# `... exiting app (launch abandoned)`），理由与 python 启动器同源（见 changelog.d/
+# 0-launcher-cancel-is-not-failure.md）：这条路径上退出码与「正常收尾」无从区分，
+# 而标记行旧壳同样会写。python 启动器在启动前已清空该文件，读到即属本次。
+function Test-ShellLaunchAbandoned {
+  param([string]$Path)
+  try {
+    if ($Path -and (Test-Path -LiteralPath $Path)) {
+      $text = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop
+      if ($text -and $text.ToLowerInvariant().Contains("launch abandoned")) { return $true }
+    }
+  } catch { }
+  return $false
+}
+
+# ── Prebuilt 模式的下游进程退出分类（失败提示的单一判据点）──
+# 症状「Next.js dev server 提前退出（exit=0）」有三种成因，用户看到的文案必须能
+# 分辨——历史事故里三种都被写成同一句 exit=0，看日志的人无从下手：
+#   1. 壳已被回收（$ShellExited）且壳 stderr 有 `launch abandoned` → 用户关掉启动页
+#      放弃本次启动（设计内，非失败）；
+#   2. 壳已被回收但无该标记 → 壳被外部终止（另一次启动顶掉 / 任务管理器 / 崩溃），
+#      dev server 是陪葬——真失败，但根因在壳不在 dev server；
+#   3. 壳还活着 → dev server 自己退出（编译失败、端口被占、pnpm 坏），看 stderr。
+function Get-DownstreamExitKind {
+  param(
+    [bool]$ShellExited,
+    [bool]$Abandoned
+  )
+  if (-not $ShellExited) { return "dev-server" }
+  if ($Abandoned) { return "abandoned" }
+  return "shell-terminated"
+}
+
 # ── 启动状态文件（run/launch-status.json，供 Tauri 内嵌启动页读取）──
 # 由 dev-launcher 直接写入（python 启动器还有一套 tail dev-launcher.log 的旧方案，
 # 但冻结在 start-tauri.exe 里的旧版会把「启动页窗口一出现」误判为就绪而提前退出，
@@ -883,6 +921,10 @@ $tauriProc = $null
 $devProc = $null
 $p = $null
 
+# 「用户放弃本次启动」标记：壳退出后由就绪等待循环里的判据置位。置位后不再按启动
+# 失败收尾——退出码 0、无失败弹窗（与 python 启动器的 cancelled 语义一致）。
+$script:LaunchAbandonedByUser = $false
+
 try {
   # ── 启动进程 ──
   $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -1014,11 +1056,35 @@ try {
     Write-Log "等待本地服务就绪（http://127.0.0.1:$($script:appPort)）..." -Level STEP
     $ready = $false
     for ($i = 0; $i -lt 180; $i++) {
-      # 若进程已提前退出，直接报失败并输出其 stderr/stdout 尾部，避免空等 180 秒
+      # 若进程已提前退出，直接报失败并输出其 stderr/stdout 尾部，避免空等 180 秒。
+      # dev server 先退出时，壳往往也已被回收（正常收尾路径就是「壳退 → taskkill 连带
+      # 回收 dev server」），所以这里必须带上壳侧证据一起判定，否则「用户关掉启动页」
+      # 这种设计内的收尾会被报成红色「启动失败」（见 Get-DownstreamExitKind 注释）。
       if ($devProc.HasExited) {
         $errTail = Get-OutputTail -Path $nextErr
         $outTail = Get-OutputTail -Path $nextOut
-        throw "Next.js dev server 提前退出（exit=$($devProc.ExitCode)）。最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $nextOut 与 $nextErr）"
+        $shellAbandoned = Test-ShellLaunchAbandoned -Path (Join-Path $launcherLogDir "dev-launcher-stderr.log")
+        $kind = Get-DownstreamExitKind -ShellExited $tauriProc.HasExited -Abandoned $shellAbandoned
+        if ($kind -eq "abandoned") {
+          # 用户关闭启动页 = 放弃本次启动（壳已按约定 exit(0)、进程树正被本脚本回收）。
+          # 这不是失败：写一条 info 说明收尾原因，调用方按 0 正常退出。
+          Write-Log "检测到启动页被关闭（壳日志含 launch abandoned 标记）：用户放弃本次启动，按正常收尾处理" -Level INFO
+          Write-Log "（提示：要启动桌面应用请重新双击启动入口，启动页出现后请等它自动切换到主界面）" -Level INFO
+          $script:LaunchAbandonedByUser = $true
+          break
+        }
+        if ($kind -eq "shell-terminated" -and $shellAbandoned) {
+          # 壳已退出但启动页并未被关闭 = 壳是被外部终止的（另一次启动顶掉 / 任务管理器
+          # 结束任务 / 壳崩溃），dev server 只是陪葬。根因在壳侧，必须把用户往壳日志引，
+          # 否则照「dev server 报错」的方向排查永远查不出东西。
+          throw "本地服务随桌面壳一起退出：壳（PID $($tauriProc.Id)）在服务就绪前已退出（exit=$($tauriProc.ExitCode)），dev server 属于连带回收而不是自身报错（exit=$($devProc.ExitCode)）。常见原因：另一次启动把它顶掉 / 任务管理器结束了任务 / 壳崩溃。请看壳日志 log\shell\shell.log 与 log\launcher\dev-launcher-stderr.log。最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $nextOut 与 $nextErr）"
+        }
+        $shellNote = if ($tauriProc.HasExited) {
+          "壳（PID $($tauriProc.Id)）也已退出（exit=$($tauriProc.ExitCode)）——本次 dev server 退出发生在壳收尾之后，而不是自身编译失败。壳若并非你手动关闭，请看 log\shell\shell.log。"
+        } else {
+          "壳（PID $($tauriProc.Id)）仍在运行，属 dev server 自身退出（编译失败 / 端口被占 / pnpm 异常）。"
+        }
+        throw "Next.js dev server 提前退出（exit=$($devProc.ExitCode)）。$shellNote 最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $nextOut 与 $nextErr）"
       }
       try {
         $r = Invoke-WebRequest -Uri "http://127.0.0.1:$($script:appPort)" -TimeoutSec 1 -UseBasicParsing -ErrorAction SilentlyContinue
@@ -1030,14 +1096,19 @@ try {
         -Message ("正在等待本地服务就绪（http://127.0.0.1:$($script:appPort)，第 {0}s）…" -f $i)
       Start-Sleep -Seconds 1
     }
-    if (-not $ready) {
+    if (-not $ready -and -not $script:LaunchAbandonedByUser) {
       $errTail = Get-OutputTail -Path $nextErr
       $outTail = Get-OutputTail -Path $nextOut
       throw "180 秒内未检测到 http://127.0.0.1:$($script:appPort) 服务就绪。Next.js 最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $nextOut 与 $nextErr）"
     }
-    Write-Log "服务器已就绪，桌面壳正在加载应用…" -Level OK
-    Write-LaunchStatus -Phase "dev-server-ready" -Progress 0.85 -Message "本地服务已就绪，桌面壳正在加载应用…"
-    $p = $tauriProc  # 后续 WaitForExit 以 Tauri 窗口生命周期为锚点
+    if ($script:LaunchAbandonedByUser) {
+      # 用户已放弃本次启动：不进就绪分支，直接走公共收尾（回收进程树 + 正常退出码）
+      Write-Log "跳过「服务就绪」判定：本次启动已取消" -Level INFO
+    } else {
+      Write-Log "服务器已就绪，桌面壳正在加载应用…" -Level OK
+      Write-LaunchStatus -Phase "dev-server-ready" -Progress 0.85 -Message "本地服务已就绪，桌面壳正在加载应用…"
+      $p = $tauriProc  # 后续 WaitForExit 以 Tauri 窗口生命周期为锚点
+    }
   } else {
     Reset-DevPorts
     Sync-NextCache
@@ -1177,6 +1248,9 @@ try {
     Write-Log "开发服务器已退出，正在释放 Job Object..." -Level STEP
   }
   $null = [WJ]::CloseHandle($h)
+  if ($script:LaunchAbandonedByUser) {
+    Write-Log "本次启动已由用户取消（关闭启动页），启动器正常收尾" -Level OK
+  }
   Write-Log "全部子进程已清理，启动器正常退出" -Level OK
 }
 catch {
