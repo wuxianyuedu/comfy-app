@@ -14,7 +14,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-vi.mock("../app-settings", () => ({
+vi.mock("../app-settings/app-settings.server", () => ({
   COMFYUI_DEFAULT_PORT: 8188,
   getSettingsSync: vi.fn(),
 }));
@@ -51,7 +51,7 @@ import {
   COMFY_SNAPSHOT_TTL_MS,
   COMFY_UNBOUND_PORT_TTL_MS,
 } from "./status";
-import { getSettingsSync } from "../app-settings";
+import { getSettingsSync } from "../app-settings/app-settings.server";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";

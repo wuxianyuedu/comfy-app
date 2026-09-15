@@ -11,11 +11,13 @@
  * {@link LaunchHost} 注入，而不是回引 `lifecycle.ts` —— 后者会成环（§12.7）。
  */
 
+import "server-only";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
-import { COMFYUI_DEFAULT_PORT, getExitPolicy } from "../app-settings";
-import type { getSettingsSync } from "../app-settings";
+import { getExitPolicy } from "../app-settings/app-settings.server";
+import { COMFYUI_DEFAULT_PORT } from "../endpoints";
+import type { getSettingsSync } from "../app-settings/app-settings.server";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { resolveEffectiveLaunch } from "./desktop-instance";
 import { findPidForMainPy, findPidListeningPort } from "./proc-detect";

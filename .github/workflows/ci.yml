@@ -173,6 +173,16 @@ jobs:
         # 棘轮只许降不许升（规范 17）：新增违规失败；治理后未收紧基线也失败
         run: node scripts/check-ui-logic-separation.cjs --strict
 
+      - name: lib Node-only declarations
+        # `src/lib` 的 Node-only 声明与可达性（规范 §18.4 / ISSUE #572 第 1 项）。
+        # 三套写法（.server.ts / server-only / 都没有）并存了很久，而「都没有」
+        # 那一类真的出过整页 500：log-session-scope 顶层 node:fs 被客户端组件
+        # 引到，Turbopack 报 does not support external modules（ISSUE #317）。
+        # 判据走依赖图，不用「扫到 fs 就要求 server-only」——后者会误伤纯 Node
+        # 宿主（kill-process-tree / llm-secrets，它们的入口是一句 throw，加上去
+        # scripts/*.mjs 的启动编排直接崩）。
+        run: pnpm exec vitest run tests/lib-node-only-declarations.test.ts
+
       - name: Core spine single source
         # core 骨架三处「唯一事实源」（ISSUE #568）：日志只有一条通道
         # （core/logger 是 pino 薄封装、服务端库代码禁直接 console.*）、

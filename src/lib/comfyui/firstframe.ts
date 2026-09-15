@@ -3,6 +3,7 @@
 // ComfyUI's input dir so the WAN image-to-video graph can consume it. No cloud,
 // no authorization — fully local.
 
+import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import { taskRepository } from "@/lib/core/repository";

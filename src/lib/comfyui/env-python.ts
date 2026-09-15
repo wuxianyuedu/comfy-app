@@ -17,6 +17,7 @@
 // 纯函数 + 注入 exists/readdir：不 spawn、不碰网络，可独立单测。真实调用方
 // 注入默认的 fs 实现（见 collectComfyPythonCandidates 的默认参数）。
 
+import "server-only";
 import fs from "fs";
 import os from "os";
 import path from "path";

@@ -9,6 +9,7 @@
  * buildVideoPollUrls，可单测。
  */
 
+import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import { extractMediaUrl } from "~/lib/workshop/api-channel-shared";

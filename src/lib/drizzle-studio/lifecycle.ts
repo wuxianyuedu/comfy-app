@@ -14,6 +14,7 @@
 //
 // HMR 安全：单飞锁与子进程句柄挂在 globalThis 上（同 comfyui），模块重载不重复拉起。
 
+import "server-only";
 import { spawn } from "child_process";
 import { connect } from "net";
 import fs from "fs";

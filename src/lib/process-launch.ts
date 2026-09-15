@@ -18,6 +18,7 @@
 // exit 事件。PowerShell 重定向写出的 stdout 是 UTF-16LE，直接按 utf-8 读会
 // 变乱码，这里提供 decodePowerShellOutput() 收尾。
 
+import "server-only";
 import { spawn, type ChildProcess } from "child_process";
 import { closeSync, openSync } from "fs";
 

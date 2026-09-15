@@ -24,7 +24,7 @@ describe("errorResponse", () => {
     const res = errorResponse(new NotFoundError("任务不存在"));
     expect(res.status).toBe(404);
     await expect(res.json()).resolves.toEqual({
-      error: { code: "not.found", message: "任务不存在" },
+      error: { code: "not_found", message: "任务不存在" },
     });
   });
 

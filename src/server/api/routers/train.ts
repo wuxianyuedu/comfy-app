@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { loraTrainingJobRepository } from "@/lib/core/repository";
 import { enqueueTraining, isTrainerConfigured } from "@/lib/comfyui/trainer";
-import { getSettingsSync } from "@/lib/app-settings";
+import { getSettingsSync } from "@/lib/app-settings/app-settings.server";
 
 export const trainRouter = createTRPCRouter({
   /** GET /api/train */

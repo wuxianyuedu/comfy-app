@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { migrateExitDefaults, type AppSettings } from "./app-settings";
+import { migrateExitDefaults, type AppSettings } from "./app-settings.server";
 
 function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
   return {

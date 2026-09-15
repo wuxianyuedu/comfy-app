@@ -21,6 +21,7 @@
  * so a renamed file can be matched by content even when the original
  * `sourcePath` no longer exists.
  */
+import "server-only";
 import fs from "node:fs";
 import {
   createHash,

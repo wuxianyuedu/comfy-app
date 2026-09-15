@@ -11,6 +11,7 @@
 // fields" pipeline so both the POST (first import) and GET (live re-import)
 // paths share identical logic.
 
+import "server-only";
 import { promises as fs } from "fs";
 import { createHash } from "crypto";
 import { logger } from "~/server/lib/logger";

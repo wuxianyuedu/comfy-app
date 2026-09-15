@@ -11,7 +11,7 @@ import {
 } from "@/lib/core/repository";
 import { reimportFromSource, importFromLocalPath } from "@/lib/comfyui/importSource";
 import { readEnvVar } from "@/lib/envfile";
-import { deriveComfyuiWorkflowsDir, getSettingsSync } from "@/lib/app-settings";
+import { deriveComfyuiWorkflowsDir, getSettingsSync } from "@/lib/app-settings/app-settings.server";
 import {
   scanLocalWorkflowRoots,
   scanLocalWorkflowChecksums,

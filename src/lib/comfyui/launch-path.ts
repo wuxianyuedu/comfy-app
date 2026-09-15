@@ -1,6 +1,7 @@
 // ComfyUI 启动路径解析：从 comfyuiPath 推导「源码根 + Python 解释器」。
 // 与 lifecycle.ts 解耦，保持纯函数（无 spawn / logger 等副作用），可独立单测。
 
+import "server-only";
 import fs from "fs";
 import path from "path";
 

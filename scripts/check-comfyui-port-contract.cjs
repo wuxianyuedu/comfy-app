@@ -48,7 +48,11 @@ const CLIENT = "src/lib/comfyui/client.ts";
 const LIFECYCLE = "src/lib/comfyui/lifecycle-launch.ts";
 const DERIVE = "src/lib/comfyui/lifecycle-derive.ts";
 const DESKTOP = "src/lib/comfyui/desktop-instance.ts";
-const SETTINGS = "src/lib/app-settings.ts";
+/* 设置的**纯部分**（类型 / 默认值 / 派生）。自 ISSUE #569 第 5 项起原
+ * `src/lib/app-settings.ts` 拆成目录：纯部分在 `app-settings/index.ts`，
+ * fs 部分在 `app-settings/app-settings.server.ts`。 */
+const SETTINGS_PURE = "src/lib/app-settings/index.ts";
+const SETTINGS_IO = "src/lib/app-settings/app-settings.server.ts";
 const ENDPOINTS = "src/lib/endpoints.ts";
 
 /* ── ① 默认端口的单一事实源 ───────────────────────────────────────────── */
@@ -69,17 +73,31 @@ if (!decl) {
 }
 const defaultPort = decl ? Number(decl[1]) : null;
 
-const settingsSrc = read(SETTINGS);
-if (settingsSrc == null) {
-  fail(`找不到 ${SETTINGS}`);
-} else if (
-  /export\s+const\s+COMFYUI_DEFAULT_PORT\s*=/.test(settingsSrc) ||
-  !/export\s*\{\s*COMFYUI_DEFAULT_PORT\s*\}\s*from\s*"\.\/endpoints"/.test(settingsSrc)
-) {
-  fail(
-    `${SETTINGS} 必须**再导出** \`COMFYUI_DEFAULT_PORT\`（\`export { … } from "./endpoints"\`），` +
-      `不得自己再定义一遍（两处定义 = 两份口径，正是本条门禁要防的形态）`,
-  );
+/* app-settings 目录**不得再转手**默认端口（转手正是历史事故的诱因：视图层为了
+ * 一个常量而 import 到一个顶层带 fs 的文件，浏览器图整页 500）。
+ * 需要默认端口的地方直接引 `@/lib/endpoints`；这里改成「反向」断言。 */
+const settingsPureSrc = read(SETTINGS_PURE);
+const settingsIoSrc = read(SETTINGS_IO);
+if (settingsPureSrc == null) {
+  fail(`找不到 ${SETTINGS_PURE}`);
+}
+if (settingsIoSrc == null) {
+  fail(`找不到 ${SETTINGS_IO}`);
+}
+for (const [file, src] of [
+  [SETTINGS_PURE, settingsPureSrc],
+  [SETTINGS_IO, settingsIoSrc],
+]) {
+  if (src == null) continue;
+  if (
+    /export\s+const\s+COMFYUI_DEFAULT_PORT\s*=/.test(src) ||
+    /export\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from/.test(src)
+  ) {
+    fail(
+      `${file} 不得定义或再导出 \`COMFYUI_DEFAULT_PORT\` —— 默认端口的唯一出口是 ` +
+        `${ENDPOINTS}（零依赖常量层）。转手会让「只想要一个常量」的视图层拖进 fs`,
+    );
+  }
 }
 
 /* ── ② 拉起侧：spawn 参数对端口的口径 ───────────────────────────────────── */
@@ -119,17 +137,23 @@ else if (!/buildSpawnArgs\(\{[\s\S]{0,400}?defaultPort:\s*COMFYUI_DEFAULT_PORT/.
       `注入别的值（或各自写死）会让「拉起端口」与「连接端口」各有一套默认值`,
   );
 }
-if (lifecycleSrc && !/import\s*\{[\s\S]*?COMFYUI_DEFAULT_PORT[\s\S]*?\}\s*from\s*"\.\.\/app-settings"/.test(lifecycleSrc)) {
-  fail(`${LIFECYCLE} 不再从 ../app-settings 导入 COMFYUI_DEFAULT_PORT —— 默认端口必须共用同一常量`);
+/* 模块路径自 ISSUE #569 第 5 项起是 `../app-settings/app-settings.server`（原
+ * 单文件拆成目录后 IO 部分带 `.server.ts` 后缀）；断言的是「从应用设置那一侧取」，
+ * 不把具体的中间路径写死 —— 写死会让一次目录调整变成门禁的红灯。 */
+if (lifecycleSrc && !/import\s*\{[\s\S]*?COMFYUI_DEFAULT_PORT[\s\S]*?\}\s*from\s*"\.\.\/endpoints"/.test(lifecycleSrc)) {
+  fail(`${LIFECYCLE} 不再从 ../endpoints 导入 COMFYUI_DEFAULT_PORT —— 默认端口必须共用同一常量`);
 }
 
 /* ── ③ 拉起侧与连接侧对「未配置端口」给同一个默认值 ─────────────────────── */
 
 const clientSrc = read(CLIENT);
 if (clientSrc == null) fail(`找不到 ${CLIENT}`);
-else if (!/import\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from\s*"\.\.\/app-settings"/.test(clientSrc)) {
+/* 连接侧与拉起侧自 ISSUE #569 第 5 项起都**直接从零依赖常量层**取默认端口
+ * （app-settings 拆成目录后不再转手它：转手会让「只想要一个常量」的视图层
+ * 拖进 fs）。断言的是「两侧取的是同一个常量」这件事本身，路径跟着唯一出口走。 */
+else if (!/import\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from\s*"\.\.\/endpoints"/.test(clientSrc)) {
   fail(
-    `${CLIENT} 不再从 ../app-settings 导入 COMFYUI_DEFAULT_PORT —— ` +
+    `${CLIENT} 不再从 ../endpoints 导入 COMFYUI_DEFAULT_PORT —— ` +
       `连接侧的「未配置端口」兜底值必须与拉起侧同一个常量（曾经硬编码 8188，两处从未对过）`,
   );
 }
