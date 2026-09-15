@@ -85,3 +85,32 @@ describe("判据用到的壳标记在壳侧真实存在", () => {
     expect(py).toContain('"launch abandoned" in (stderr_tail or "").lower()');
   });
 });
+
+describe("「用户放弃」的结论只认正标记，不得由「壳也退出了」推断", () => {
+  /** 取承载失败文案的两段：分类点与 shell-terminated 提示。 */
+  function exitLoop(): string {
+    const loopStart = launcher.indexOf("if ($devProc.HasExited) {", launcher.indexOf("等服务 Ready"));
+    return launcher.slice(loopStart, launcher.indexOf("if (-not $ready", loopStart));
+  }
+
+  it("壳被外部终止的分支标注只由 $shellAbandoned 决定，退出码不参与定性", () => {
+    const loop = exitLoop();
+    const branch = loop.slice(loop.indexOf('$kind -eq "shell-terminated"'));
+    // 判据仍是「壳已退出 + 该标记为假」；这里必须同时看 $shellAbandoned，
+    // 否则「用户放弃」会被降级成「很可能」这种与标记脱钩的措辞。
+    expect(loop).toContain("Test-ShellLaunchAbandoned");
+    expect(branch).toContain("$shellAbandoned");
+    // 定性依据是标记，不是「壳也退了」这个共同现象（三种成因退出码完全一样）
+    // 提示里可以带退出码作为上下文，但不能拿它当定性依据
+    expect(branch).not.toMatch(/exit=\S+ \S*属?于?\s*用户/);
+  });
+
+  it("shell-terminated 分支给出「不是关启动页」的排他结论，且指向壳日志现场", () => {
+    const loop = exitLoop();
+    const branch = loop.slice(loop.indexOf('$kind -eq "shell-terminated"'));
+    expect(branch).toContain("log\\shell\\shell.log");
+    expect(branch).toContain("dev-launcher-stderr.log");
+    // 用户实际拿到的现场：四行 INFO + 「壳已退出」这一共同现象——它们都不足以定性
+    expect(branch).not.toMatch(/很可能|大概率|大概/);
+  });
+});
