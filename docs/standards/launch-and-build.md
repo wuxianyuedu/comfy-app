@@ -1603,6 +1603,7 @@ sidecar」两种不同形态的失败。
 | 生成 / 补齐 `.env` | `scripts/prepare-local-run.ps1`（第 4 步） | `scripts/env-init.mjs`（`pnpm env:init`） |
 | 建库（Drizzle 表结构同步） | `scripts/prepare-local-run.ps1`（前置）/ 启动器预检 8 | `scripts/db-push.mjs`（`pnpm db:push`） |
 | `pnpm` 可用性自检与修复（工具链门禁的独立入口） | `scripts/prepare-local-run.ps1`（第 2/3 步） | `scripts/check-pnpm-available.mjs`（`pnpm check:toolchain`） |
+| `src/lib` 的 Node-only 声明与可达性（规范 §18.4） | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行） | `scripts/lib-node-only-scan.mjs`（`node scripts/lib-node-only-scan.mjs`，契约测试 `tests/lib-node-only-declarations.test.ts`） |
 
 **为什么 `.mjs` 里不写中文**：门禁/构建期模块会经 Next 的 `next-code-frame` 渲染，
 而它按**字节**切串——高亮区间端点落在多字节字符内部时 Rust 侧直接 panic、整个

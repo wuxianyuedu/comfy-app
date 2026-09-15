@@ -13,6 +13,7 @@
  *
  * @module comfyui/executor-cli
  */
+import "server-only";
 import { spawn } from "child_process";
 import type { ChildProcess } from "child_process";
 import { promises as fs } from "fs";
@@ -29,7 +30,7 @@ import {
 } from "./executor-cli-stream";
 import { applyRawOverrides, type JsonRecord } from "./raw-overrides";
 import { trace } from "./trace";
-import { COMFYUI_DEFAULT_PORT } from "../app-settings";
+import { COMFYUI_DEFAULT_PORT } from "../endpoints";
 
 // 保持 executor.ts barrel 的 `applyRawOverrides` 导出不变
 //（纯逻辑已抽到 ./raw-overrides，这里仅透传）。

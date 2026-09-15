@@ -83,14 +83,44 @@
 > 解析到空模块），加上它会让**启动编排直接崩**。这类模块的守卫是它自己的宿主边界，
 > 不是 `server-only`。
 
-**已有的机器守卫**（无需新增脚本）：`tests/client-bundle-node-builtins.test.ts`
-从 `"use client"` 入口做可达性 DFS，命中即失败并打出完整引用链。它比「每个 import
-Node 内建的模块都必须有 `server-only`」**更强也更准** —— 后者会误伤 18.4 第三类
-（纯 Node 宿主），而前者只判「真的会被打进浏览器图」这一件事。
+**机器判据（ISSUE #572 第 1 项落地）**：`scripts/lib-node-only-scan.mjs`
+（跨平台入口 `node scripts/lib-node-only-scan.mjs`，契约测试
+`tests/lib-node-only-declarations.test.ts`，接入 pre-commit 与 CI）。它判三件事：
 
-> **判定反模式**：给「顶层 import Node 内建的 `src/lib` 模块」再写一份「检查有没有
-> `server-only`」的脚本，会与这个测试形成两份会各自漂移的判据（AGENTS 硬规则：会静默
-> 失效的清单只许定义一次）。**新增守卫前先查是否已有更强的那一条。**
+| 判据 | 形态 | 为什么必须走依赖图 |
+| --- | --- | --- |
+| **声明缺失** | `src/lib/**` 顶层 import Node 内建却没有声明 | 纯文本可判，但缺了下面两条就只是形式 |
+| **假声明** | 声明为服务端物，却仍被 `"use client"` 可达的纯模块引到 | 声明**没生效**，出事时没人会怀疑它（`log-session-scope` 的形态） |
+| **真进浏览器图** | 纯模块被 `"use client"` 入口引到且顶层有 Node 内建 | Turbopack 报 `does not support external modules`，**整页 500** |
+
+扫到就要求 `server-only` 的纯文本判据**行不通**：`eslint-plugin-boundaries` 的 import
+图对服务端源码**完全不采样**（实测：给 `src/lib/log-paths.ts` 加
+`import "server-only"` 后 `pnpm lint` 仍绿），而第三类（纯 Node 宿主）本来就不该带
+`server-only` —— 它的入口是一句 `throw`，加上去 `scripts/*.mjs` 的启动编排直接崩。
+
+> **判定反模式（保留）**：别给「顶层 import Node 内建的 `src/lib` 模块」再写一份
+> 「检查有没有 `server-only`」的**纯文本**脚本 —— 它既会误伤第三类，又会与
+> `tests/client-bundle-node-builtins.test.ts` 形成两份各自漂移的判据。
+> 新增守卫前**先查是否已有更强的那一条**，要补就补在同一个扫描器里。
+>
+> **扫描范围刻意只到 `src/lib/**`**：`src/app/api/**` 与 `src/server/**` 本来就
+> 是服务端物，顶层 `import fs` 是这个位置的定义。给它们逐个补 `server-only` 会把
+> 「本来就是」写成仪式文字，而**仪式化的声明会稀释真的那个** —— 当每个文件都带这行时，
+> 真正漏掉的那次没人看得出来。
+
+## 18.4.1 三分类落地后的现状（ISSUE #572）
+
+按 §18.4 的规则对齐后，`src/lib/**` 内的 58 个「顶层 import Node 内建」模块分布如下：
+
+| 形态 | 数量 | 例 |
+| --- | --- | --- |
+| `import "server-only"` | 53 | `comfyui/**` 执行链、`film/orchestrator.ts`、`drizzle-studio/lifecycle.ts`、`log-paths.ts`、`envfile.ts`、`materials.ts` |
+| `.server.ts` 后缀 | 5 | `log-session-scope.server.ts`、`capture-streams.server.ts`、`app-settings/app-settings.server.ts`、`workshop/{api-channel,generation-log,media-source,mode-contract}.server.ts` |
+| 两者都不加（纯 Node 宿主，**显式登记**） | 2 | `kill-process-tree.ts`（`scripts/*.mjs` 动态加载）、`llm/secrets.ts`（MCP 宿主与 Next 共用同一份密文实现） |
+
+第三类的登记**不是豁免清单**：`tests/lib-node-only-declarations.test.ts` 会反向核对
+「登记项现在仍然没有声明」——某天它补上了 `server-only`，登记项必须跟着删掉，
+否则清单里会躺着一条已失效的条目（这类清单只许定义一次，见 §18.4 的判定反模式）。
 
 ## 18.5 文件与函数长度棘轮（R5 + §12.13）
 
@@ -115,9 +145,19 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 
 ## 18.6 覆盖率（按目录设门槛，只升不降）
 
-`vitest.config.ts` 的 `thresholds` 目前只给 `src/lib/comfyui` 的 4 个文件与
-`src/server/api/middleware` 设了门槛。`src/lib` 的其余子域（`film` 7.5%、
-`core` 28.8%、`llm` 31.2%、`agent` 18.9%）**零门槛**。
+`vitest.config.ts` 的 `thresholds` 此前只给 `src/lib/comfyui` 的 4 个文件与
+`src/server/api/middleware` 设了门槛，`src/lib` 其余**零门槛**。现已按下表补齐
+（ISSUE #572 第 5 项落地；数值 = 实测值向下取整到 5 的倍数）：
+
+| 目录 | lines | functions | statements | branches | 实测 trend |
+| --- | --- | --- | --- | --- | --- |
+| `src/lib/agent/**` | 20 | 20 | 15 | 10 | 18.9 / 21.7 / 12.9 |
+| `src/lib/core/**` | 35 | 30 | 35 | 30 | 35.4 / 31.8 / 30.4 |
+| `src/lib/drizzle-studio/**` | 0 | 0 | 0 | 0 | 全 0（尚无测试，见 §18.7 登记） |
+| `src/lib/film/**` | 5 | 10 | 5 | 5 | 7.5 / 11.4 / 7.8 |
+| `src/lib/llm/**` | 30 | 30 | 30 | 25 | 31.2 / 32.4 / 28.8 |
+| `src/lib/project-canvas/**` | 70 | 70 | 65 | 50 | 69.0 / 70.8 / 53.8 |
+| `src/lib/workshop/**` | 65 | 70 | 65 | 55 | 65.8 / 70.3 / 59.3 |
 
 落地口径（与 §11.7 的覆盖率棘轮一致）：
 
@@ -139,6 +179,9 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | 零调用导出无判据              | #573         | 现存「导出但零外部引用」566 个，**绝大多数是同文件内使用的 props 类型** —— 需要先定「什么算死代码」的判据（不是导出即算） |
 | ~~`IIFE` / 回调体不计函数长度~~ | #570 第 7–8 项 | **已落地**：判据纳入无名字块体 + 跨行签名（12 §12.13.2），基线按「判据版本」一次性重记（20 → 22，新增的 2 条为存量登记） |
 | ~~`lib` 巨型函数未拆（`ensureComfyUiReady` / `executeViaComfyCli` / `cacheJson` 闭包 / drizzle IIFE）~~ | #570 第 1–6 项 | **已落地**：等待循环与事件回调抽成 `comfyui/lifecycle-wait.ts`（策略注入 + 具名纯函数）、comfy-cli 流解析收在 `comfyui/executor-cli-stream.ts`、`cacheJson` 闭包提为 `buildWorkflowDetailJson`、drizzle IIFE 复用同一套等待原语；基线随之收紧（22 → 20，见 12 §12.13） |
+| ~~`lib` 的 Node-only 声明与可达性无判据~~ | #572 第 1 项 | **已落地**：`scripts/lib-node-only-scan.mjs` + `tests/lib-node-only-declarations.test.ts`（声明缺失 / 假声明 / 真进浏览器图 三条判据），`src/lib` 内 58 个 Node 内建 import 全部声明完毕 |
+| ~~`lib` 子域覆盖率零门槛~~ | #572 第 5 项 | **已落地**：`vitest.config.ts` 增加 `src/lib/{agent,core,drizzle-studio,film,llm,project-canvas,workshop}/**` 七条门槛，取实测值向下取整到 5 的倍数、只升不降（§18.6） |
+| ~~`app-settings.ts` 混装「纯派生 + fs IO + 默认端口再导出」~~ | #569 第 5 项 | **已落地**：拆成 `app-settings/index.ts`（纯）+ `app-settings/app-settings.server.ts`（IO），默认端口的唯一出口回到 `@/lib/endpoints`；端口门禁改为**反向**断言「app-settings 不得再转手该常量」 |
 | prettier 未接入门禁           | #575 第 9 项 | 一次性格式化 600+ 文件是巨型噪声 diff，与 §13.7「禁止无关全文件变更」冲突，须单独立项分路径接入                           |
 | `lib` 直读 `process.env` 收口 | #568         | **已裁决**：不收口，改为删掉 `config.ts` 的误导性承诺（见 18.8）|
 
@@ -224,7 +267,7 @@ import `server`」这条顺手漏了** —— 于是 `lib/comfyui/**` 与
 > 登记清单里的 `lib/auth-server.ts` → `~/server/better-auth/server` 属另一种情形
 > （Next 请求上下文，无法下沉），留待专项裁决。
 
-## 18.9 速查
+## 18.11 速查
 
 - 改 `src/lib/**` 前：先读本章 → 确认没碰 18.2 的禁止项 → 跑 18.5 的两条棘轮。
 - 要取仓储：**直接 import**（`@/lib/core/repository`），别再找容器 —— 它已按 18.8 移除。
@@ -232,7 +275,9 @@ import `server`」这条顺手漏了** —— 于是 `lib/comfyui/**` 与
   `@/server/lib/logger`；新增 lib → server 依赖会被 `tests/lib-server-imports.test.ts`
   拦下（见 18.10）。**不要直接 `console.*`**（会绕开脱敏与面板镜像）。
 - `lib` 要共享类型给视图：**下沉类型模块到 `src/lib`**，不要在 lib 里 import components。
-- 拆出 Node-only 模块：按 18.4 的表选声明形态，别三个都试。
+- 拆出 Node-only 模块：按 18.4 的表选声明形态，别三个都试；自查
+  `node scripts/lib-node-only-scan.mjs`（声明缺失 / 假声明 / 真进浏览器图 一次看完）。
+- 新增 `src/lib` 子域目录：同步在 `vitest.config.ts` 的 `thresholds` 里按**实测值**设门槛（18.6）。
 - 需要新增守卫：**先查既有更强的那一条**（18.4 的判定反模式）。
 - 改 `src/lib/**` 的 import 前：想清楚依赖方向（§12.7）。要下沉叶子、还是回调注入？
   同目录内 `x → y` 与 `y → x` 同时存在就是环，`node scripts/check-circular-deps.cjs --report` 立即可见。

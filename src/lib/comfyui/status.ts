@@ -31,9 +31,11 @@
 //      目录下的解释器（Comfy Desktop 由 uv 起、解释器常不在实例根，
 //      见 env-python.ts）。
 
+import "server-only";
 import fs from "fs";
 import path from "path";
-import { COMFYUI_DEFAULT_PORT, getSettingsSync } from "../app-settings";
+import { getSettingsSync } from "../app-settings/app-settings.server";
+import { COMFYUI_DEFAULT_PORT } from "../endpoints";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";

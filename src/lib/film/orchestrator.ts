@@ -7,6 +7,7 @@
 // Reuses buildAndValidate + enqueue so each shot goes through the exact same
 // pipeline as the manual "video" tab.
 
+import "server-only";
 import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
@@ -20,7 +21,7 @@ import { buildAndValidate } from "@/lib/comfyui/workflow";
 import { getWorkflow } from "@/lib/comfyui/_meta";
 import { enqueue, cancelTask } from "@/lib/comfyui/enqueue";
 import { synthesizeFirstFrame } from "@/lib/comfyui/firstframe";
-import { getSettingsSync } from "@/lib/app-settings";
+import { getSettingsSync } from "@/lib/app-settings/app-settings.server";
 import { parseIdeaToScenes } from "@/lib/workshop/script-parser";
 import { sizeSpecDims, sizeSpecToWxH, toSizeSpec } from "@/lib/size-presets";
 import { FILM_COMPOSE_SIZE, NATIVE_SHOT_VIDEO_SIZE } from "@/lib/film/film-size";

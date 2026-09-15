@@ -28,6 +28,7 @@
  *     避免一个巨大 payload 把文件写成几 MB。
  *   - **路径来自 `log-paths`**（唯一事实来源），不在本文件手拼 `log/` 目录。
  */
+import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 

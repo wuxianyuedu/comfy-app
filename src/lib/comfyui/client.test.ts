@@ -15,7 +15,7 @@
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../app-settings", () => ({
+vi.mock("../app-settings/app-settings.server", () => ({
   COMFYUI_DEFAULT_PORT: 8188,
   getSettingsSync: vi.fn(),
 }));
@@ -35,7 +35,7 @@ import {
   resetProbeMissLog,
   COMFY_PROBE_LOG_REPEAT_MS,
 } from "./client";
-import { getSettingsSync } from "../app-settings";
+import { getSettingsSync } from "../app-settings/app-settings.server";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { logger } from "~/server/lib/logger";

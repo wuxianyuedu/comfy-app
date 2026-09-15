@@ -23,7 +23,8 @@
 // 进程列表确认「该路径的实例进程是否真的在运行」，再通过 PID→监听端口
 // 定位实际端口。端口上有别的 ComfyUI 响应 ≠ 配置路径的实例在运行。
 
-import { COMFYUI_DEFAULT_PORT, getSettingsSync } from "../app-settings";
+import { getSettingsSync } from "../app-settings/app-settings.server";
+import { COMFYUI_DEFAULT_PORT } from "../endpoints";
 import { comfyUiBaseUrl, LOOPBACK_HOST } from "../endpoints";
 import { baseForLocalPort, queryInstanceByPath } from "./instance-port";
 import { probeBaseOnce, probeComfyAtPort } from "./probe";

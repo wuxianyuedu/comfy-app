@@ -14,9 +14,10 @@
 //
 // HMR 安全：启动单飞锁与子进程句柄挂在 globalThis 上，模块重载不会重复拉起。
 
+import "server-only";
 import type { spawn } from "child_process";
 import fs from "fs";
-import { getSettingsSync } from "../app-settings";
+import { getSettingsSync } from "../app-settings/app-settings.server";
 import { probeComfyBase, probeComfyAtPort } from "./client";
 import { logger } from "~/server/lib/logger";
 import { killProcessTree } from "../kill-process-tree";

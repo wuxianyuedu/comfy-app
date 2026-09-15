@@ -23,10 +23,11 @@
 //   On "done", `outputName` is the .safetensors filename already placed in the
 //   ComfyUI loras directory.
 
+import "server-only";
 import { loraTrainingJobRepository, modelRepository } from "../core/repository";
 import { promises as fs } from "fs";
 import path from "path";
-import { getSettingsSync } from "../app-settings";
+import { getSettingsSync } from "../app-settings/app-settings.server";
 
 function trainerUrl(): string {
 

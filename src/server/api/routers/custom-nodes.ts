@@ -1,5 +1,5 @@
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { getSettingsSync } from "@/lib/app-settings";
+import { getSettingsSync } from "@/lib/app-settings/app-settings.server";
 
 export const customNodeRouter = createTRPCRouter({
   /** GET /api/custom-nodes — list custom node manifest */

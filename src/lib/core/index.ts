@@ -10,11 +10,20 @@
  * | `logger`      | `createLogger` 结构化日志（pino 薄封装） | 横切关注点           |
  * | `repository`  | `Repository` 接口 + `PrismaRepository`  | Repository 模式     |
  * | `config`      | `config` 集中类型化配置                 | Config 模式         |
- * | `events`      | `eventBus` 类型化领域事件总线           | Observer / Pub-Sub  |
  *
  * 约定：所有 server 端模块统一 `import { ... } from "@/lib/core"`；
  * 仓储一律**直接 import 具体单例**（`@/lib/core/repository`）——本仓库不再有
  * 服务容器（见下）。
+ *
+ * 为什么没有 eventBus
+ * ------------------
+ * 这里曾有一个类型化领域事件总线（`events.ts`，Observer / Pub-Sub），注释里
+ * 写着「执行层在关键节点 emit，SSE / 缓存失效 / 审计日志作为 listener 订阅」。
+ * 实测**全库零 `publish` / 零 `subscribe`**：`runner-state` 的进度走 SSE 直推、
+ * 任务状态变化走各自的调用点，没有任何一处经过这条总线。所以它连同
+ * `DomainEventMap` 一起删除（ISSUE #573）——**留着一条「将来会有人用」的通道，
+ * 只会让后来者以为事件已经被广播出去了**（排查「为什么缓存没失效」时会先看它）。
+ * 需要事件解耦时再引入，并同时给出第一个真实订阅方。
  *
  * 为什么没有 container
  * --------------------
@@ -31,4 +40,3 @@ export * from "./errors";
 export * from "./logger";
 export * from "./repository";
 export * from "./config";
-export * from "./events";

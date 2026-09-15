@@ -1,3 +1,4 @@
+import "server-only";
 import path from "path";
 
 /* ── log/ 目录布局的唯一事实来源 ────────────────────────────────────────

@@ -1,6 +1,6 @@
 import type * as LoggerModule from "~/server/lib/logger";
 import type * as EnvfileModule from "@/lib/envfile";
-import type * as AppSettingsModule from "@/lib/app-settings";
+import type * as AppSettingsModule from "@/lib/app-settings/app-settings.server";
 import type * as ImportSourceModule from "@/lib/comfyui/importSource";
 import type * as RawModule from "@/lib/comfyui/raw";
 /**
@@ -41,7 +41,7 @@ vi.mock("@/lib/envfile", async (importOriginal) => ({
  * 每台机器各一份：不抹掉这层，判据就随开发机的真实安装目录而变（本机装了
  * ComfyUI 时 localRoots 非空，空库用例会假失败）。这里保留其余字段的真实取值，
  * 只把 comfyuiPath 清空。 */
-vi.mock("@/lib/app-settings", async (importOriginal) => {
+vi.mock("@/lib/app-settings/app-settings.server", async (importOriginal) => {
   const mod = await importOriginal<typeof AppSettingsModule>();
   return {
     ...mod,
