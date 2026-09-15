@@ -343,12 +343,38 @@ true`——这类场景的策略反过来，必须给前台。
 | pnpm 不可用 | 门禁终止 + 给修复提示 | 同样非零退出 + 同一份 `buildTip()` 文案 |
 | 版本与 `packageManager` 不一致 | `reconcilePnpmVersion()`：`preparePnpm()` 对齐后用**同一条探测复核**，仍不一致才 WARN（不阻断） | **先试同一条对齐**：复核通过 → `[OK] 已对齐（10.34.5 → 12.4.1）`；复核仍不一致才 `[WARN] 自动对齐未生效` + 手动命令 |
 | `node_modules` 未装 | 完整依赖预检（§2.2 第 5 步）终止 | 点出这一道门禁与 `pnpm install`，不让「`[OK] pnpm 可用`」被读成「可以启动了」 |
+| 探到的是「哪个 pnpm」 | 日志里记选中的可执行文件（`commandInvocation()`） | 另打印「选中的 pnpm：<文件>」与「经宿主执行：<宿主> → <文件>」两行（§2.1.5） |
 
 > 反例（已修）：自检此前只对版本不一致打一句 `[WARN]`、什么也不做，还以 0 退出；
 > 而启动器在同一情形下会自己 corepack 对齐。用户看到的是「排查完了、没办法」，
 > 只能手动跑 corepack —— **自检与真启动两套说法**，正是 §9.5「一份逻辑两端复用」
 > 要消灭的形态。判据（`probePnpm` / `preparePnpm`）与动作（对齐 + 复核）现在都在
 > `corepack.mjs`，自检与 `reconcilePnpmVersion()` 各调用一次，不各写一份。
+
+#### 2.1.5 「版本对不上终端」先看探测身份：选中的是哪个文件（ISSUE #576 第四轮）
+
+用户现场（Windows，`F:\AI\Other\Comfy-APP-T3`）：同一个窗口里
+`pnpm --version` → `12.4.1`，而 `pnpm check:toolchain` →
+`[OK] pnpm 可用：10.34.5（C:\Program Files\PowerShell\7\pwsh.EXE）`。
+
+两句都不假，因为它们说的**不是同一个文件**：终端敲的 `pnpm` 由 shell 的 PATHEXT 解析
+（会走 `.cmd` 交 cmd.exe）；Node 侧由 `whichCommand()` 解析，只看节点**真的能起**的形态
+（`.cmd` / `.bat` 被跳过，见 §2.1.1），选中 `.ps1` 时命令名就变成宿主 `pwsh.EXE`。
+再叠上「PATH 上并存多个 pnpm」（独立安装 / 另一份 corepack 副本 / 另一个检出）时，
+被选中的那个完全可能是另一个版本 —— 旧文案只给「版本号 + 命令名」，现场于是无解。
+
+因此自检必须打印**探测身份**（`scripts/check-pnpm-available.mjs`）：
+
+- `[INFO] 选中的 pnpm：<文件>` —— PATH 上真正命中并被 spawn 的那个；
+- `[INFO] 经宿主执行：<宿主> <参数> → <文件>` —— 仅当形态需要宿主时打印；
+- 版本漂移的提示把方向指向「选中的 pnpm」，而不是项目里的 `package.json`。
+
+判据仍在 `shell.mjs` 的 `commandInvocation()`（形态 + 宿主前缀只有一处定义），
+自检只是把它返回的 `{ command, prefixArgs }` 印出来，不自己拼可执行名。
+
+> **排障口径**：看到 `（…\pwsh.EXE）` 不是异常，含义是「本次探测经 PowerShell 宿主
+> 跑的是同目录的 `pnpm.ps1`」；要改「用哪个 pnpm」，改的是 **PATH 顺序**
+> （把想用的形态目录排到前面），而不是改仓库里的任何文件。
 
 ### 2.2 完整依赖预检（壳窗口出现后）
 
@@ -776,6 +802,7 @@ zustand 队列，而不是再加一个模块级单例。
 | **POSIX 上编排器退出后 `pnpm` / `next-server` 仍在跑、端口不释放** | 回收是 `taskkill /T /F`（POSIX 上等于不执行）；或虽有 POSIX 分支但 `spawn` 未 `detached`，子进程与编排器**同组** → 命中 §3.1 的防自杀判据，退化成单杀 leader，其下三层（`pnpm` / `next` / `turbopack worker`）全部残留 | 已修：`scripts/dev-launcher.mjs` 用 `spawnInGroup`（`detached: true` 自建进程组）+ 整组回收；编排器被 SIGKILL 时留下的孤儿由 `run/launcher-session.json` + 心跳在下次启动回收。见 §3.3 |
 | **双击 exe：启动即报「pnpm 工具链不可用（exit=?）：未知错误」，`dev-launcher-stderr` 空、stdout 里也没有 pnpm 自己的报错**（ISSUE #576，用户现场 `F:\AI\Other\Comfy-APP-T3`） | **PATH 上选中了一个「存在但跑不起来」的 pnpm 形态**：corepack 的 shim 在 Windows 上看起来是三个文件（无扩展名的 `pnpm`、`pnpm.cmd`、`pnpm.ps1`），其中**只有 `.ps1`（经 PowerShell 宿主）与「已关联 node 的无扩展名 shim」能跑**，`.cmd` 只有 cmd.exe；而 `whichCommand` 只按 `PATH × PATHEXT` 找**存在的文件**、PATHEXT 又把 `.CMD` 排在最前 → 选中必然 EACCES 的那个。三个观测点彼此吻合却被误读：① `spawnSync` 起不来 ⇒ `probe.error.code = EACCES`、`probe.status = null`、**stdout+stderr 都是空串** ⇒ `detail` 落到 `未知错误`；② `exit=?` 与「stderr 空」看着像「corepack 缓存损坏」（那条真故障会在 stderr 打印 `Failed to switch pnpm to ...`），于是提示把人引向「删缓存 / 重装 Node」；③ 修复文案里的版本号是 `<项目版本>` 占位符，没人会去翻 `package.json` | 已修（§2.1.1 / §2.1.2 / §2.1.3）：① `whichCommand` 改为**选第一个真的能跑的候选**（`executableExts()` 定顺序：无扩展名 / `.EXE` → `.PS1` → `.CMD`/`.BAT` 垫底；`usableCommand()` 用 `accessSync(X_OK)` + 对 shebang 形态**真起一次**确认，起不来则回退同目录 `<name>.ps1`）；② 探测结果结构化（`not-found` / `spawn-error` / `exit-nonzero` / `no-version`），把 `error.code` 与输出头几行一起带出来，**不再把「疑似缓存损坏」写成结论**；③ 提示中的版本号取自 `package.json` 的 `packageManager`，多行提示经 `stale_shell` 横幅进启动页（`white-space: pre-wrap`）；④ `spawn-error` 一类**自动 `corepack prepare` 重建并用同一条探测复核**，复核仍失败才落回提示；⑤ `spawnDevServer()` 复用同一个命令形态（`commandInvocation`），避免「探测过了、起服务又失败一次」。自查入口 `pnpm check:toolchain`。回归测试 `tests/dev-launcher-toolchain-gate.test.ts` |
 | **`pnpm check:toolchain` 只报 `[WARN] 版本与 package.json 要求不一致（本机 10.34.5，要求 12.4.1）` 就结束，而真启动时启动器自己会对齐**（ISSUE #576 第三轮，同一用户同一现场） | **自检与启动器两套口径**：版本对齐动作只写在启动器（`reconcilePnpmVersion()` → `preparePnpm()` + 复核）与 `prepare-local-run.ps1` 第 3 步里，自查入口当时只打印一行 WARN、什么也不做，还以 0 退出 —— 用户于是以为「只能手动跑 corepack」，或者以为已经可以启动了（其实下一关还有 node_modules 门禁） | 已修（§2.1.4）：自查入口**复用同一条对齐动作**（`preparePnpm()` + 同一条探测复核），复核通过报 `[OK] 已对齐（旧版本 → 新版本）`，仍不一致才 WARN + 手动命令；并补上 `node_modules` 检查（点出下一道门禁与 `pnpm install`）。判定「一致」的判据与启动器共用 `sameVersion` 语义。回归 3 例见 `tests/dev-launcher-toolchain-gate.test.ts` |
+| **同一窗口里 `pnpm --version` 是 12.4.1，`pnpm check:toolchain` 却报「pnpm 可用：10.34.5（…\pwsh.EXE）」，像是检测到了别的机器的版本**（ISSUE #576 第四轮，同一用户同一现场） | **探测身份没打印出来，两句话各自为真却看着矛盾**：① 终端敲的 `pnpm` 由 shell 的 PATHEXT 解析（走 `.cmd` 交 cmd.exe），而 Node 侧 `whichCommand()` 只看「真的起得来」的形态，`.ps1` 经宿主执行 ⇒ 命令名变成 `pwsh.EXE`；② PATH 上并存多个 pnpm（独立安装 / 另一份 corepack 副本 / 另一个检出）时，被选中的那个就是另一个版本 —— 旧文案只给「版本号 + 命令名」，用户无从知道它指的是哪个文件，于是「本机版本为什么是 10.34.5」无解 | 已修（§2.1.5）：自检另打印**探测身份** —— `[INFO] 选中的 pnpm：<文件>`（PATH 上真正命中的那个）与经宿主时的 `[INFO] 经宿主执行：<宿主> … → <文件>`；版本漂移提示改为把方向指向「选中的 pnpm」（PATH 顺序问题），不再让人去翻项目文件。判据仍只在 `shell.mjs::commandInvocation()` 一处。回归 2 例见 `tests/dev-launcher-toolchain-gate.test.ts` |
 | **`pnpm check:toolchain` 报「命令起不来（可执行形态/权限不对） —— EINVAL（未发现可回退形态）」，命令是 `...\.tools\pnpm\<ver>\bin\pnpm.CMD`**（ISSUE #576 第二轮，同一用户同一现场） | **选中了批处理，而 Node 起不了批处理**：corepack 装到 `.tools\pnpm\<ver>\bin` 的 pnpm 是 `.CMD` + `.ps1` 并排（旁边并没有可用的无扩展名 shim）。此时两个缺陷叠加：① `executableKind()` 把 `.cmd` / `.bat` 与 `.ps1` **同判为通用 `script`**，`usableCommand()` 又对「非 shebang」直接 `ok: true`（没真起一次）—— 于是 `.CMD` 一路通过候选确认被选中；② 真跑起来是 `EINVAL`（批处理既不是 PE 镜像、也没有 Node 认的 shebang），而 `shebangFallback()` **只服务 shebang**，`.CMD` 走到这里没有回退，提示于是说「未发现可回退形态」—— 而 `pnpm.ps1` 就摆在同一个目录里。表现是探测失败、命令完全不可用 | 已修（§2.1.1）：① `executableKind()` 把**批处理单列一类 `batch`**（`@echo` / `@setlocal` 起头判形态，不看扩展名），不再与 `.ps1` 混；② `usableCommand()` 对 **Windows 上的 `batch` 直接走回退、不真起**（真起必 `EINVAL`，白搭一次进程创建），`shebangFallback()` 改名 `siblingFallback()` 并为**所有**「Node 起不来」的形态服务；③ 回退同胞名按**「去掉自身扩展名再拼 `.ps1`」**求（`pnpm.CMD` → `pnpm.ps1`，不是 `pnpm.CMD.ps1`）；④ `commandInvocation()` / `usableCommand()` / `probeCommand()` / `preparePnpm()` 统一接受可注入的 `{ env, platform }`，让「模拟另一平台」的被测路径与真实路径同一条。shebang **不按形态一刀切**（机器上真配好文件关联时仍可用），POSIX 不受批处理短路影响。回归 5 例见 `tests/dev-launcher-toolchain-gate.test.ts`（还原修复后 4 例立即失败） |
 | 双击 exe：启动即报「pnpm 工具链不可用 / 无法获取 pnpm 版本」并弹窗                                                                     | corepack 管理的 pnpm 在切换版本时本地缓存损坏：`.tools\pnpm\<ver>\bin` 缺失 → `pnpm -v` 报 `Failed to switch pnpm to pnpm@<ver> ... ENOENT`，命令完全不可用（install/dev 全依赖 pnpm）                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 已由 `Test-ToolchainGate`（弹壳前）拦截并弹 MessageBox 给修复步骤：`corepack enable && corepack prepare pnpm@<版本> --activate`（重建缓存，需联网一次），仍不行则删除损坏缓存后重装 Node/pnpm                                                                                                                                                                                                                                                 |
 | 启动后 splash 停在依赖预检报「关键依赖目录 typescript / @typescript/native / next 为空或缺失」                                         | pnpm 中断安装/拒装留下「目录在但内容空」的残缺（如 typescript 与 @typescript/native 空目录 → tsc 垫片找不到入口），旧版只查 `.modules.yaml` / `.bin/next` 查不出                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 已由 `Test-DevDependencies` 覆盖关键目录非空检测，残缺时自动 `pnpm install` 自愈；install 后仍残缺则明确报错并指向 `log/launcher/pnpm-install-stderr.log`                                                                                                                                                                                                                                                                                     |

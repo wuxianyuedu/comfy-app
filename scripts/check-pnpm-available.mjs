@@ -26,6 +26,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { orchestratePnpm, preparePnpm, probePnpm } from "./launcher-core/corepack.mjs";
+import { commandInvocation } from "./launcher-core/shell.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -75,6 +76,19 @@ if (!result.probe.ok) {
 }
 
 say("[OK]  ", `pnpm 可用：${result.probe.version}（${result.probe.command}）`);
+// 「探到的是哪个 pnpm」要能一眼看清：PATH 上并存多个形态（corepack 的无扩展名
+// shim / .cmd / .ps1 / 独立安装）时，选中的文件与**真正被 spawn 的命令**常常不是
+// 同一个 —— `.ps1` 形态经 PowerShell 宿主执行，命令名打印出来就是 pwsh.EXE，于是
+// 「本机版本为什么是 10.34.5」成了无解的问题（ISSUE #576 第四轮）。两件事分开列：
+// 选中的文件 = PATH 上命中的那个；实际命令 = 探测时它究竟怎么被起起来。
+if (result.probe.command) {
+  const invocation = commandInvocation(result.probe.command, ["-v"]);
+  const viaHost = invocation.command !== result.probe.command;
+  say("[INFO]", `选中的 pnpm：${result.probe.command}`);
+  if (viaHost) {
+    say("[INFO]", `经宿主执行：${invocation.command} ${invocation.prefixArgs.join(" ")} → ${result.probe.command}`);
+  }
+}
 if (result.repaired || result.tip) say("[INFO]", result.tip);
 
 // 版本一致性：先按启动器的口径**试一次自动对齐**，复核通过才算「一致」。
@@ -87,6 +101,8 @@ if (result.expected && !sameVersion(result.probe.version, result.expected)) {
     say("[OK]  ", `已对齐：pnpm ${before} → ${after.version}（${prepare.description}）。`);
   } else {
     say("[WARN]", `自动对齐未生效（${prepare.description}，当前 ${after.ok ? after.version : "不可用"}）。`);
+    say("[INFO]", "版本漂移先查上面「选中的 pnpm」：PATH 上并存了另一个 pnpm" +
+      "（独立安装 / 另一个 corepack 副本）时，用到的就是它，与本目录的 package.json 无关。");
     say("[INFO]", "启动器对此只 WARN、不阻断启动；要手动对齐：");
     process.stdout.write(`         corepack enable && corepack prepare pnpm@${result.expected} --activate\n`);
   }
