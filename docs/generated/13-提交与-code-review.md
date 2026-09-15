@@ -117,6 +117,7 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
 ✅ pnpm run typecheck             # tsc --noEmit
 ✅ pnpm exec eslint . --max-warnings 0
 ✅ pnpm run test                  # vitest run
+✅ node scripts/check-file-structure.cjs  # 命名/组织硬规则 R1-R4/R7-R12（§12.8/§12.11）
 ✅ pnpm run test:coverage         # 覆盖率棘轮（vitest.config.ts 的目录阈值）
 ✅ pnpm run build                 # SKIP_ENV_VALIDATION=1（CI 无真实密钥）
 ✅ pnpm exec playwright test --grep @critical   # 只跑 @critical 关键流程
@@ -129,13 +130,20 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
 
 ```
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
-✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则（见 §12.8、12 §12.6）
+✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则 R1-R4/R7-R12（见 §12.6/§12.8/§12.11）
 ✅ node scripts/check-react-updater-purity.cjs
 ✅ node scripts/check-title-bar-clearance.cjs
 ✅ pnpm exec tsc --noEmit
 ✅ pnpm exec eslint . --max-warnings 0
 ✅ node scripts/check-ui-logic-separation.cjs
 ✅ node scripts/check-changelog-fragments.cjs
+✅ node scripts/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
+✅ node scripts/check-theme-colors.cjs       # 主题色扫描棘轮（见 03 §3.6.1）
+✅ node scripts/check-comfyui-port-contract.cjs # ComfyUI 端口口径一致性（见 launch-and-build §5）
+✅ node scripts/check-inline-style.cjs       # 视图层不得动态注入 <style>（见 03 §3.5）
+✅ node scripts/check-code-duplication.cjs   # 跨文件重复块棘轮（见 12 §12.12）
+✅ node scripts/check-function-length.cjs    # 函数长度棘轮 TS/TSX（见 12 §12.13）
+✅ node scripts/check-rust-function-length.cjs # 函数长度棘轮 Rust 壳（见 12 §12.13.1）
 ```
 
   任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。
