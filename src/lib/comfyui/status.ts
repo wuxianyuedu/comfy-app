@@ -60,12 +60,13 @@ export type ComfyRuntimeSnapshot = {
    *  时既不失败也一条都问不到，两者都是「false + unverified=false」——上层
    *  据此把「没启动」坐实成「未运行」，于是启动等待期里的瞬时结论被照单全收，
    *  状态行在「启动中」与「未运行」之间来回跳（ISSUE #442）。
-   *  取值同上：命中任一候选（含 bound 子进程）即算查过。 */
+   *  取值同上：命中任一候选（含 bound 子进程 / 配置端口上的实例）即算查过——
+   *  「端口有人应答」是比进程表更强的证据，不必再枚举一遍进程。 */
   didQueryProcTable: boolean;
-  /** 事实来源：bound=本进程持有的子进程；process=配置路径进程表命中；
-   *  launcher=setup 登记启动器；any=按环境反查（pyvenv.cfg / uv 托管解释器）
-   *  出来的解释器进程。 */
-  source: "bound" | "process" | "launcher" | "any" | null;
+  /** 事实来源：bound=本进程持有的子进程；port=配置端口上已有人应答；
+   *  process=配置路径进程表命中；launcher=setup 登记启动器；any=按环境反查
+   *  （pyvenv.cfg / uv 托管解释器）出来的解释器进程。 */
+  source: "bound" | "port" | "process" | "launcher" | "any" | null;
 };
 
 /** 快照缓存时长：探针自身很快（见探针设计），缓存只为吸收「连点刷新 /
@@ -268,6 +269,30 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
 
   const comfyuiPath = settings.comfyuiPath?.trim() ?? "";
   if (!comfyuiPath) return emptySnapshot();
+
+  // 1.5) 配置端口已经有人应答 → 直接认「在跑」，跳过其余三次进程表查询。
+  //
+  // 为什么这条要插在进程表判据之前：一个只认 localhost 的实例如果**真的**在运行，
+  // 它监听的端口已经把这个事实答出来了——再去枚举 Win32_Process 与 uv 托管目录，
+  // 换来的是同一句「在跑」，代价却是冷启动高负载下的秒级等待。而「是不是**我们要的
+  // 那个**实例」这个问题本来就不由本快照回答（判据链第 4 级按环境反查本来就是
+  // 「任意解释器起的 ComfyUI」），所以这里不改变结论的语义，只把已有的最后一级
+  // 判据在本机最常见的形态（实例就在默认/配置端口上）上做成了死路。
+  //
+  // 端口上**没有人应答**才继续往下走：这才是「没在跑」的主场景（进程表查询与端口
+  // 扫描此时仍必须全跑一遍，否则外部实例的端口偏移会被漏掉）。
+  const configuredPort = configuredPortOf(settings);
+  if (await probeComfyAtPort(configuredPort)) {
+    return {
+      running: true,
+      pid: null,
+      port: configuredPort,
+      via: "配置端口上的实例",
+      unverified: false,
+      didQueryProcTable: true,
+      source: "port",
+    };
+  }
 
   // 查询失败≠没在跑（高负载 / 冷启动时 PowerShell 常超时）：如实记下来，
   // 最终没命中任何判据时标 unverified，绝不在这里下「未运行」的结论。

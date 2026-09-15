@@ -29,11 +29,31 @@ function downstreamKindBody(): string {
   return launcher.slice(start, end);
 }
 
+/** 取承载失败文案的那一段：就绪循环里的「进程已退出」判定块。 */
+function exitLoop(): string {
+  const loopStart = launcher.indexOf(
+    "if ($devProc.HasExited) {",
+    launcher.indexOf("等服务 Ready"),
+  );
+  expect(loopStart).toBeGreaterThan(-1);
+  return launcher.slice(loopStart, launcher.indexOf("if (-not $ready", loopStart));
+}
+
+/** 取某个 $kind 分支的整段（到下一个 $kind 分支或退出块结束为止）。 */
+function branchOf(loop: string, kind: string): string {
+  const start = loop.indexOf(`$kind -eq "${kind}") {`);
+  expect(start).toBeGreaterThan(-1);
+  const rest = loop.slice(start + 1);
+  const next = rest.indexOf('$kind -eq "');
+  return next === -1 ? rest : rest.slice(0, next + 1);
+}
+
 describe("dev-launcher.ps1 下游退出判据", () => {
-  it("三种成因各有分支：壳未退 / 用户放弃 / 壳被外部终止", () => {
+  it("四种成因各有分支：壳未退 / 用户放弃 / 壳自身非零退出 / 壳被强行收走", () => {
     const body = downstreamKindBody();
     expect(body).toContain('if (-not $ShellExited) { return "dev-server" }');
     expect(body).toContain('if ($Abandoned) { return "abandoned" }');
+    expect(body).toContain('if ($ShellCrashed) { return "shell-self-exited" }');
     expect(body).toContain('return "shell-terminated"');
   });
 
@@ -44,7 +64,7 @@ describe("dev-launcher.ps1 下游退出判据", () => {
     // 命中 abandoned 分支时先写日志再置位，且不 throw
     expect(loop).toContain('$kind -eq "abandoned"');
     expect(loop).toContain("$script:LaunchAbandonedByUser = $true");
-    const abandonedBranch = loop.slice(loop.indexOf('$kind -eq "abandoned"'), loop.indexOf('$kind -eq "shell-terminated"'));
+    const abandonedBranch = branchOf(loop, "abandoned");
     expect(abandonedBranch).not.toContain("throw");
 
     // 置位后不再因「未就绪」抛错，也不进「服务已就绪」分支
@@ -80,6 +100,19 @@ describe("判据用到的壳标记在壳侧真实存在", () => {
     expect(lib).toContain("launch abandoned");
   });
 
+  it('src-tauri 在异常退出码时写下 "exiting with non-zero code"（launcher 的判据②）', () => {
+    const lib = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
+    expect(lib).toContain("exiting with non-zero code");
+    // 判据必须挂在 RunEvent::ExitRequested 的 code 上（hook 的退出码）
+    const exitRequested = lib.slice(lib.indexOf("RunEvent::ExitRequested"));
+    expect(exitRequested).toContain("Some(c) if c != 0");
+  });
+
+  it("单实例退出也留下可判据的一行（否则 stderr 里只有启动期 INFO）", () => {
+    const lib = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
+    expect(lib).toContain("another instance of this checkout is running");
+  });
+
   it("python 启动器同判据（两侧读同一个标记，避免语义漂移）", () => {
     const py = readFileSync(join(process.cwd(), "scripts", "start_tauri_launcher.py"), "utf8");
     expect(py).toContain('"launch abandoned" in (stderr_tail or "").lower()');
@@ -87,30 +120,38 @@ describe("判据用到的壳标记在壳侧真实存在", () => {
 });
 
 describe("「用户放弃」的结论只认正标记，不得由「壳也退出了」推断", () => {
-  /** 取承载失败文案的两段：分类点与 shell-terminated 提示。 */
-  function exitLoop(): string {
-    const loopStart = launcher.indexOf("if ($devProc.HasExited) {", launcher.indexOf("等服务 Ready"));
-    return launcher.slice(loopStart, launcher.indexOf("if (-not $ready", loopStart));
-  }
 
-  it("壳被外部终止的分支标注只由 $shellAbandoned 决定，退出码不参与定性", () => {
+
+  it("壳被外部终止的分支标注只由壳侧正标记决定，退出码不参与定性", () => {
     const loop = exitLoop();
-    const branch = loop.slice(loop.indexOf('$kind -eq "shell-terminated"'));
-    // 判据仍是「壳已退出 + 该标记为假」；这里必须同时看 $shellAbandoned，
-    // 否则「用户放弃」会被降级成「很可能」这种与标记脱钩的措辞。
+    const branch = branchOf(loop, "shell-terminated");
+    // 判据是「两条正标记都为假」（等价于「壳一个字都没写」），而不是「壳也退了」
+    // 这个共同现象 —— 后者会把真故障说成设计内行为。
     expect(loop).toContain("Test-ShellLaunchAbandoned");
-    expect(branch).toContain("$shellAbandoned");
-    // 定性依据是标记，不是「壳也退了」这个共同现象（三种成因退出码完全一样）
+    expect(loop).toContain("Test-ShellNonZeroExit");
+    expect(branch).not.toContain("$shellAbandoned");
+    expect(branch).not.toContain("$shellCrashed");
     // 提示里可以带退出码作为上下文，但不能拿它当定性依据
     expect(branch).not.toMatch(/exit=\S+ \S*属?于?\s*用户/);
   });
 
   it("shell-terminated 分支给出「不是关启动页」的排他结论，且指向壳日志现场", () => {
     const loop = exitLoop();
-    const branch = loop.slice(loop.indexOf('$kind -eq "shell-terminated"'));
+    const branch = branchOf(loop, "shell-terminated");
     expect(branch).toContain("log\\shell\\shell.log");
     expect(branch).toContain("dev-launcher-stderr.log");
     // 用户实际拿到的现场：四行 INFO + 「壳已退出」这一共同现象——它们都不足以定性
+    expect(branch).not.toMatch(/很可能|大概率|大概/);
+  });
+
+  it("壳侧写了非零退出码时分到 shell-self-exited，并点明「已被唤前台」这条设计内路径", () => {
+    const loop = exitLoop();
+    const branch = branchOf(loop, "shell-self-exited");
+    // 这一条是真失败路径：必须抛出（红色失败框），但文案要能自己解释成因
+    expect(branch).toContain("throw");
+    expect(branch).toContain("exiting with non-zero code");
+    expect(branch).toContain("another instance of this checkout is running");
+    // 「本次双击没有启动新进程」是判据允许的结论，但不得升级成「不是故障」
     expect(branch).not.toMatch(/很可能|大概率|大概/);
   });
 });
