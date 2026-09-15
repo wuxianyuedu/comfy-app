@@ -23,11 +23,11 @@ Usage:
   想复现那两个历史失败文件、或想用 vitest 自己的参数（-t / -u / --reporter）
   时，它都不合适——本脚本补这一条路径。
 
--Full 的语义（与 quality-gate.ps1 共用同一份 KNOWN_FAILED_FILES 清单）:
+-Full 的语义（与 quality-gate.ps1 / quality-gate.mjs 共用同一份 KNOWN_FAILED_FILES 清单）:
   默认排除已知基线失败文件（task / generate 两个 router 测试），保证单跑时的
   红/绿能直接归因到本次改动；-Full 反其道而行，保留这些文件，用来复现基线失败。
-  清单的唯一来源在 scripts\quality-gate.ps1，本脚本解析它而不是抄一份，避免
-  「修好了却只在一处解禁」的漂移。
+  清单的唯一来源在 scripts\quality-gate-shared.mjs（Node 侧 scripts/quality-gate.mjs
+  也读它），本脚本解析它而不是抄一份，避免「修好了却只在一处解禁」的漂移。
 #>
 [CmdletBinding()]
 param(
@@ -69,18 +69,24 @@ if (-not (Test-Path -LiteralPath (Join-Path $root "node_modules\.bin"))) {
 $passthrough = @()
 if ($Remaining) { $passthrough = @($Remaining | Where-Object { $_ -ne "--" }) }
 
-# ── 2) 已知基线失败清单：从 quality-gate.ps1 解析，不另抄一份 ──
-# 该文件里是一段静态数组字面量（$KNOWN_FAILED_FILES = @( "a", "b" )），
-# 解析失败只影响排除项，不影响主流程，因此失败时降级为「不排除」并提示。
+# ── 2) 已知基线失败清单：读 scripts/quality-gate-shared.mjs，不另抄一份 ──
+# 清单的唯一来源是那个纯数据模块（Node 侧 scripts/quality-gate.mjs 也 import 它）。
+# 此前清单写在本仓库的 quality-gate.ps1 里、由本文件用正则解析 .ps1 源码——那等于
+# 把另一门语言的文件当数据源，改一次写法就会静默返回空数组。解析失败时显式
+# WARN 并降级为「不排除」，不再让「清单读不到」看起来像「本来就没有基线失败」。
 function Get-KnownFailedFiles {
-  $gate = Join-Path $root "scripts\quality-gate.ps1"
-  if (-not (Test-Path -LiteralPath $gate)) { return @() }
-  $text = Get-Content -LiteralPath $gate -Raw
-  $m = [regex]::Match($text, '(?s)\$KNOWN_FAILED_FILES\s*=\s*@\((.*?)\)')
-  if (-not $m.Success) { return @() }
-  $quote = [string][char]34
-  $filePattern = $quote + "([^" + $quote + "]+)" + $quote
-  return @([regex]::Matches($m.Groups[1].Value, $filePattern) | ForEach-Object { $_.Groups[1].Value })
+  $shared = Join-Path $root "scripts\quality-gate-shared.mjs"
+  if (-not (Test-Path -LiteralPath $shared)) {
+    Say-Err "未找到 scripts\quality-gate-shared.mjs（已知基线失败清单的唯一来源）；本次不排除任何文件。"
+    return @()
+  }
+  $text = Get-Content -LiteralPath $shared -Raw -Encoding UTF8
+  $m = [regex]::Match($text, '(?s)KNOWN_FAILED_FILES\s*=\s*\[(.*?)\]')
+  if (-not $m.Success) {
+    Say-Err "无法从 scripts\quality-gate-shared.mjs 解析 KNOWN_FAILED_FILES；本次不排除任何文件。"
+    return @()
+  }
+  return @([regex]::Matches($m.Groups[1].Value, "['""]([^'""]+)['""]") | ForEach-Object { $_.Groups[1].Value })
 }
 
 # ── 3) 组装 vitest 参数 ─────────────────────────────────────

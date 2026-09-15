@@ -16,8 +16,8 @@ dev-launcher.ps1 — Windows 侧的**调用入口**（编排逻辑不在这里�
   · 进程机制（Windows 走 taskkill）→ src/lib/kill-process-tree.ts
   · 入口形态（双击 .ps1 / 启动器 exe）→ 本文件与 scripts/entry-common.ps1
 
-历史实现（1324 行、19 处 Windows 专属调用）保留在 scripts/dev-launcher.legacy.ps1，
-只作对照，**不要**再拿它当主路径。
+历史实现（1324 行、19 处 Windows 专属调用）已整体删除：它只作对照用，却会被
+当成「另一条可走的路径」——留着就是邀请下一个人去改它。需要回溯用 git 历史。
 
 参数（与 dev-launcher.mjs 同一套，直接透传）：
   -Prebuilt / -Tauri / -ColdStart / -NoOpen / -Port <n> / -Host <addr> /

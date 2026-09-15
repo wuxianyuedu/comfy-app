@@ -24,6 +24,28 @@
 >
 > **一次性前置**：Windows 默认双击 `.ps1` 是「用记事本打开」而非执行。首次使用前需右键
 > `scripts/enable-ps1-double-click.ps1` →「使用 PowerShell 运行」完成关联（用户级，免管理员）。
+>
+> **`.ps1` 不是逻辑层，也不等于「这个仓库只能在 Windows 用」**：本目录下的入口只解决
+> 「Windows 上怎么被双击 / 被 exe 拉起」。同一件事在 Linux / macOS / CI 上的入口是等价
+> 的 `pnpm` 脚本（例如 `pnpm check:all` = `verify-quality.ps1`、`pnpm test:file` =
+> `run-tests.ps1`、`pnpm doc:gen` = `generate-docs.ps1`），逐条对照见
+> [launch-and-build.md §9.5](../docs/standards/launch-and-build.md) 的
+> **跨平台动作对照表**，由 `scripts/check-ps1-consistency.mjs` 在 pre-commit 与 CI 守着
+> —— 新增动作却只写了一侧会在提交时被拦下，而不是等用户在另一个平台上踩空。
+>
+> **各分类目录另有 README**（该目录「有哪些入口、各自什么时候用」）：
+> [start/](start/README.md) · [build/](build/README.md) · [docs/](docs/README.md) ·
+> [registry/](registry/README.md) · [studio/](studio/README.md) · [scripts/](scripts/README.md)
+> 。本文件保留**全目录视图**与深度说明（打包 / 启动流程 / 排障），不重复各目录的清单。
+
+## 新增入口前先读
+
+1. **放对目录**：`tools/<分类>/xxx.ps1`（分类按用途，不按人名或临时用途新建目录）；
+2. **入口只做三件事**：定位项目根 → 调用逻辑脚本 → 收尾，逻辑下沉到 `scripts/`
+   或 `tools/scripts/`，公共能力复用 `scripts/entry-common.ps1`；
+3. **UTF-8 with BOM** 保存（含中文的 `.ps1` 无 BOM 会被 PowerShell 5.1 按 GBK 解码）；
+4. **同时想清楚跨平台那侧**：这个动作在 Linux / macOS 上怎么跑？有 `.mjs` 逻辑就
+   在 `package.json` 里挂一条脚本，并登记进规范 §9.5 的对照表（门禁会核对）。
 
 ## 目录内容
 
@@ -34,8 +56,8 @@
 | `start/start-tauri-dev.ps1` | start/ | 启动 | 隐藏窗口启动 Tauri 桌面壳（dev / tauri dev 模式，Rust 热重载） |
 | `start/start-desktop.ps1` | start/ | 启动 | 桌面版一键自检 + 启动（给拿到「即开即用桌面包」的普通用户） |
 | `start/run-local.ps1` | start/ | 初始化 | 非开发人员一键初始化：自检 node/pnpm、生成 `.env`、补齐依赖 |
-| `start/verify-quality.ps1` | start/ | 质量门禁 | 双击即跑 typecheck / lint / vitest（见规范 11.12） |
-| `start/run-tests.ps1` | start/ | 质量门禁 | 只跑 vitest（可指定文件 / `-Full` 复现基线失败 / 透传 vitest 参数），补 verify-quality「三项串联」之外的日常红绿循环（见规范 11.12） |
+| `start/verify-quality.ps1` | start/ | 质量门禁 | 双击即跑 typecheck / lint / vitest（跨平台等价：`pnpm check:all`，见规范 11.12） |
+| `start/run-tests.ps1` | start/ | 质量门禁 | 只跑 vitest（可指定文件 / `-Full` 复现基线失败 / 透传 vitest 参数），补 verify-quality「三项串联」之外的日常红绿循环（跨平台等价：`pnpm test:file` / `pnpm test:full`，见规范 11.12） |
 | `start/sync-lint.ps1` | start/ | 质量检查 | 同步依赖 + `pnpm lint`（install && lint，拉取更新/改完代码后日常自检用，见规范 §8） |
 | `start/register-comfyapp-protocol.ps1` | start/ | 一次性配置 | 注册 `comfyapp://` 协议（HKCU，免管理员） |
 | `build/build-launcher.ps1` | build/ | 启动器（通用） | 打包 `start-tauri/start-tauri.exe`（prebuilt 默认入口，秒出窗口 + dev server） |
@@ -45,7 +67,7 @@
 | `build/build-standalone.ps1` | build/ | 壳（standalone 用） | 完整生产构建独立壳：`pnpm tauri build --no-bundle`，产出不连 dev server 的可分发壳 |
 | `build/build-all.ps1` | build/ | 一键编排 | 构建 release 壳 + 打包 `start-tauri.exe` |
 | `build/rebuild-static.ps1` | build/ | 资源 | 清理并重建 `src-tauri/static`（standalone / 嵌入资源来源） |
-| `docs/generate-docs.ps1` | docs/ | 文档 | 一键生成原文文档：`pnpm doc:check` 校验一致性 + `pnpm doc:render` 生成 `docs/generated/`（逻辑在 `scripts/generate-docs.ps1`） |
+| `docs/generate-docs.ps1` | docs/ | 文档 | 一键生成原文文档：`pnpm doc:check` 校验一致性 + `pnpm doc:render` 生成 `docs/generated/`（跨平台等价：`pnpm doc:gen`；逻辑在 `scripts/generate-docs.ps1` / `scripts/generate-docs.mjs`） |
 | `registry/start-registry.ps1` | registry/ | 团队 Registry | 启动本地 shadcn Registry HTTP 服务（`D:/dev/Comfy-APP-T3/registry`，供 `shadcn add @comfy-app-t3/*`） |
 | `start-tauri.spec` | (根) | 打包配置 | PyInstaller（onedir）；入口名由环境变量 `LAUNCHER_NAME` 决定，一份 spec 服务三个入口 |
 | `README.md` | (根) | 文档 | 本文件 |
