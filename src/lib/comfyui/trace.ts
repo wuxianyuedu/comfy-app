@@ -31,6 +31,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { redactSecretShaped } from "@/lib/core/redact-secret";
 import { COMFYUI_TRACE_LOG } from "@/lib/log-paths";
 
 /** trace 子组件：同一 trace 文件中用来区分消息来自哪条通道。 */
@@ -94,10 +95,13 @@ export function trace(
     if (!fs.existsSync(/*turbopackIgnore: true*/ dir)) {
       fs.mkdirSync(/*turbopackIgnore: true*/ dir, { recursive: true });
     }
-    const text = clampLine(traceStringify(message));
+    // 唯一脱敏实现（规范 07 §7.18.2.1）：本通道直写文件、不经 pino，
+    // 因此必须在写入边界自己过一次值形状守卫，否则原始回执里的密钥（路径上的
+    // Authorization / token、工作流里的 apiKey 参数）会明文落盘。
+    const text = clampLine(traceStringify(redactSecretShaped(message)));
     const metaText =
       meta && Object.keys(meta).length
-        ? ` ${clampLine(JSON.stringify(meta))}`
+        ? ` ${clampLine(JSON.stringify(redactSecretShaped(meta)))}`
         : "";
     const line = `[${localTimestamp()}] [INFO] [trace] ${channel} [${taskId ?? "-"}] ${text}${metaText}\n`;
     fs.appendFileSync(

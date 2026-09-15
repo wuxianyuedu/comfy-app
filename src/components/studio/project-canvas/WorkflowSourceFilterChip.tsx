@@ -6,7 +6,9 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePopoverDismiss, usePopoverPosition } from "./workflow-node-popover";
-import type { WorkflowSourceFilter } from "./WorkflowNode";
+/* 类型来自叶子模块而不是宿主：经宿主会形成
+ * `WorkflowNode → chip → WorkflowNode` 的循环（规范 12.7）。 */
+import type { WorkflowSourceFilter } from "./workflow-node-types";
 
 interface WorkflowSourceFilterChipProps {
   value: WorkflowSourceFilter;

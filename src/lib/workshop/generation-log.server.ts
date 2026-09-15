@@ -10,6 +10,7 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 
+import { createLogger } from "@/lib/core/logger";
 import { WORKSHOP_LOG_DIR } from "@/lib/log-paths";
 import {
   generationLogFileName,
@@ -17,6 +18,8 @@ import {
   type GenerationLogEntry,
   type GenerationLogStage,
 } from "./generation-log";
+
+const log = createLogger("workshop:logs");
 
 /** 追加一批执行日志（调用方已按环节分组）；失败仅 warn，不抛出。 */
 export async function appendGenerationLogs(
@@ -35,9 +38,10 @@ export async function appendGenerationLogs(
     await fs.appendFile(file, `${lines.join("\n")}\n`, "utf8");
     return lines.length;
   } catch (e) {
-    console.warn(
-      `[workshop-logs] 执行日志落盘失败（不影响生成）：${e instanceof Error ? e.message : String(e)}`,
-    );
+    // 走唯一日志通道（pino）：脱敏 + ERROR/WARN 镜像进面板可见的 app-runtime。
+    log.warn("[workshop-logs] 执行日志落盘失败（不影响生成）", {
+      err: e instanceof Error ? e.message : String(e),
+    });
     return 0;
   }
 }
