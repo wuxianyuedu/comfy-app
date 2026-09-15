@@ -11,6 +11,7 @@
 
 import { AgentFab, AgentOverlay } from "~/components/workshop/AgentOverlay";
 import { useWorkshopAgent } from "~/components/workshop/hooks/use-workshop-agent";
+import { ModeContractDialog } from "~/components/workshop/mode-contract/ModeContractDialog";
 import { WorkshopModelAdapterModal } from "~/components/workshop/WorkshopModelAdapterModal";
 import { LLMProvider } from "~/components/workshop/LLMContext";
 import { useWorkshopPipeline } from "~/components/workshop/hooks/use-workshop-pipeline";
@@ -54,6 +55,7 @@ export function WorkshopPipeline() {
           pendingCategories={controller.pendingCategories}
           apiChannels={controller.apiChannels}
           onOpenApiSettings={controller.openApiSettings}
+          onOpenModeContract={controller.openModeContract}
           projects={controller.projects}
           activeProjectId={controller.activeProjectId}
           onSwitchProject={controller.switchProject}
@@ -93,6 +95,11 @@ export function WorkshopPipeline() {
         {/* 模型适配：为远端模型配置工坊各模式下的输入 / 输出映射 */}
         {controller.apiSettingsOpen && (
           <WorkshopModelAdapterModal onClose={controller.closeApiSettings} />
+        )}
+
+        {/* 模式契约：每种模式对外有哪些统一输入 / 输出（独立入口、独立界面） */}
+        {controller.modeContractOpen && (
+          <ModeContractDialog onClose={controller.closeModeContract} />
         )}
       </div>
 

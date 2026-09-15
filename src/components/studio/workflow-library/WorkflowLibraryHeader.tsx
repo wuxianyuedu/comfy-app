@@ -1,8 +1,9 @@
 "use client";
 
-// 页头：标题 + 筛选下拉（来源 / 类型 / 模型）+ 导入按钮 + 自定义节点设置。
+// 页头：标题 + 筛选下拉（来源 / 类型 / 模型）+ 导入按钮 + 模式契约 + 自定义节点设置。
 // 筛选由原来的三行页签压缩为标题右侧的三个下拉（减少垂直空间占用）。
 
+import { ModeContractSettings } from "./ModeContractSettings";
 import { CustomNodesSettings } from "./CustomNodesSettings";
 import { WorkflowLibraryFilters } from "./WorkflowLibraryFilters";
 import type {
@@ -64,6 +65,7 @@ export function WorkflowLibraryHeader({
         >
           ＋ 导入工作流
         </button>
+        <ModeContractSettings />
         <CustomNodesSettings />
       </div>
     </div>

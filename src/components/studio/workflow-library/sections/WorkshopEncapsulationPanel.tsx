@@ -19,7 +19,7 @@ import {
   deriveEncapsulationStatus,
   type EncapsulationEntryStatus,
 } from "@/lib/workshop/workshop-encapsulation-status";
-import { useModeContracts } from "@/components/workshop/hooks/use-mode-contracts";
+import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
 import { modeContractEntries } from "@/lib/workshop/model-mode-contract";
 import { getWorkflowType } from "~/lib/workflow-types";
 import {

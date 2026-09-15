@@ -68,7 +68,7 @@ import {
   deriveLibraryOutputCards,
   deriveLibraryParamCards,
 } from "./workflow-library-param-cards";
-import { useModeContracts } from "@/components/workshop/hooks/use-mode-contracts";
+import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
 import { modeContractEntries } from "@/lib/workshop/model-mode-contract";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
