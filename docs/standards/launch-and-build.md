@@ -247,8 +247,77 @@ true`——这类场景的策略反过来，必须给前台。
 
 ### 2.1 工具链门禁（弹壳前，只读快检，任一失败立即终止并弹窗）
 
-1. **pnpm 命令可用性**：corepack shim 存在但切换版本缓存损坏（如 `.tools\pnpm\<ver>\bin` 缺失）时 `pnpm -v` 报 `Failed to switch pnpm to ... ENOENT`，命令完全不可用。此为致命损坏——install/dev 全依赖 pnpm，弹壳也起不来服务，直接报错给修复指引，不弹黑窗口。
-2. **node_modules 是否完全未装**：`.modules.yaml` 缺失 = 依赖从未正确安装，引导先跑 `tools\start\run-local.ps1`。
+1. **pnpm 命令可用性**：install / dev 全依赖 pnpm，命令不可用即致命损坏 ——
+   直接给修复指引，不弹黑窗口。判据与文案收在
+   `scripts/launcher-core/corepack.mjs`（`orchestratePnpm()`），编排器只接线
+   （`runToolchainGate()`）。三条口径见下。
+2. **node_modules 是否完全未装**：`.modules.yaml` 缺失 = 依赖从未正确安装，引导先跑
+   `tools\start\run-local.ps1`（Windows 双击）/ `pnpm install`（三平台通用）。
+
+#### 2.1.1 「pnpm 可用」的判据：**选中的可执行形态真的起得来**（ISSUE #576）
+
+`whichCommand()` 只保证「PATH × PATHEXT 上存在同名文件」，**不等于能跑**：
+
+- Node 的 `spawnSync` 在 Windows 上**不解析 shebang**（libuv 直接 `CreateProcess`
+  传文件路径），所以 corepack 那只无扩展名 shim（`#!/usr/bin/env node`）被 spawn 时
+  一律 `EACCES` / `ENOEXEC`；
+- 而 PATHEXT 的常见顺序把 `.CMD` 排在最前，`.CMD` 只有 cmd.exe 会解释 ——
+  同一目录里「能跑的 `pnpm.ps1` / 能跑的 `pnpm`」会被**跳过**，选中的偏偏是跑不起来的那个。
+
+表现是 `pnpm -v` 探测失败、**stdout / stderr 全空**，用户只看到
+`pnpm 工具链不可用（exit=?）：未知错误` —— 看起来完全像 corepack 缓存损坏，
+而真正的修法是「别选中那个 shim」。因此判据分两层：
+
+| 层 | 位置 | 做什么 |
+|---|---|---|
+| 候选**顺序** | `executableExts()` | 无扩展名 / `.EXE`（CreateProcess 能直接起）→ `.PS1`（经 PowerShell 宿主）→ `.CMD` / `.BAT`（Node 起不了，只能垫底）→ PATHEXT 其余项 |
+| 候选**确认** | `usableCommand()` | `fs.accessSync(X_OK)` + 对 shebang 形态**真起一次**（`stdio: "ignore"`）；起不来时同目录回退 `<name>.ps1`（`powershell -NoProfile -ExecutionPolicy Bypass -File`）。**选第一个真的能跑的**，全都不能跑才返回「没找到」 |
+
+> 为什么是「真起一次」而不是「看扩展名」：扩展名只说明「谁解释它」，不说明
+> 「这台机器上现在能不能跑」。探针的退出码无关紧要（`--version` 报错也算起得来），
+> 只有 `probe.error.code`（EACCES / ENOENT / ENOEXEC）才算不可用。
+> POSIX 上只有一种形态（无扩展名），整条判据退化为原来的行为。
+
+**同一个形态必须一路走到起服务**：`spawnDevServer()` 经 `commandInvocation()`
+拿 `{ command, prefixArgs }`，不再自己拼可执行名 —— 否则会出现「门禁探测通过了，
+起 dev server 时换一种方式又失败一次」。
+
+#### 2.1.2 探测结果要区分成因，并且**不把猜测写成结论**
+
+`probePnpm()` 返回结构化结论（`ok` / `reason` / `reasonText` / `detail` / `exitCode`）：
+
+| reason | 现场 | 提示口径 |
+|---|---|---|
+| `not-found` | PATH 上没有任何可用形态 | 给 `corepack enable`，并点明「检查 PATH 上是否同时存在多个 pnpm 形态」 |
+| `spawn-error` | 命令**起不来**（EACCES / ENOENT / ENOEXEC） | 附 `error.code` 与回退结果；**自动 corepack 重建 + 复核**（见 §2.1.3） |
+| `exit-nonzero` | 命令能起，自己报错退出 | 原样带出 stderr 头几行（不再塌成「未知错误」） |
+| `no-version` | 能起、退出 0，但没打印版本号 | 同上，带出实际输出 |
+
+文案里「你看到的是现象」与「可能的成因」分两句写：此前把
+`疑似 corepack 切换版本时本地缓存损坏` 直接当结论（`疑似` 又写成陈述句），
+用户会照着错的方向删缓存 / 重装 Node，而真正该做的是**先看命令起没起来**。
+
+修复提示里的版本号**取自 `package.json` 的 `packageManager`**
+（`packageManagerVersion()`），不再出现 `corepack prepare pnpm@<项目版本>`
+这种没人会去填的占位符。提示是多行文本，经 launch-status 的 `stale_shell`
+横幅落到启动页（启动页的横幅用 `white-space: pre-wrap` 渲染，
+修复动作不会被压成一行挤没）。
+
+#### 2.1.3 能自愈的先自愈，**修完必须复核**
+
+`spawn-error` / `not-found` 一类看起来就是「缓存或可执行形态坏了」，正是 corepack
+的修法能治的；`no-version` / `exit-nonzero` 则往往是 pnpm 自己在报业务错误
+（工作区配置、磁盘权限），重建既治不好又白等几分钟下载 —— 所以自动重建只对前者触发
+（`shouldRepair()`）。重建后**必须用同一条探测再验一次**（`repairPnpm()`）：
+`corepack prepare` 的退出码只说明「下载/激活动作完成」，而「shim 仍不可执行」
+这类现场里正好是 prepare 成功、`pnpm -v` 依旧起不来 —— 只报 prepare 成功
+等于把「修好了」当结论，用户下一次启动会原封不动再撞一次。
+
+**独立自查入口**（`pnpm check:toolchain` → `scripts/check-pnpm-available.mjs`，
+登记在 §9.5 对照表）：启动被门禁拦下之后，用户需要的是「只跑一次自查、看清结论与
+动作」，而不是反复双击入口撞同一堵墙。它是**薄壳**，判据全部复用上面这些函数；
+且与 `dev-launcher.mjs` 一样**不需要任何 `.ps1` 副本**（Windows 双击侧由
+`prepare-local-run.ps1` 的第 2/3 步覆盖同一件事）。
 
 ### 2.2 完整依赖预检（壳窗口出现后）
 
@@ -261,12 +330,14 @@ true`——这类场景的策略反过来，必须给前台。
    被挤到 +1 后浏览器连着旧代码）。
 3. **缓存指纹**：next.config/tsconfig/package.json/lockfile 指纹变化才清 .next。
 4. **pnpm 版本一致性检查**：比对 `package.json` 的 `packageManager` 声明版本与
-   `pnpm -v` 实际版本。一致则跳过；不一致且 corepack 可用时自动
-   `corepack prepare pnpm@<期望版本> --activate` 对齐（需联网一次），成功 OK；
-   自动对齐失败仅 WARN 并透出到启动页（复用 stale_shell 字段，不阻断启动）。
-   手动对齐指引：`corepack enable && corepack prepare pnpm@<期望版本> --activate`。
-   > 此步也会兜底识别 pnpm 命令**完全不可用**（探测拿不到版本号，见 §5 新增行），
-   > 但若已先经过 §2.1 门禁，此处通常到不了该分支。
+   `probePnpm()` 报告的实际版本。一致则跳过；不一致时按同一版本号
+   `corepack prepare pnpm@<期望版本> --activate` 对齐（需联网一次），**并用同一条
+   探测复核**（不看 prepare 的退出码，见 §2.1.3），成功 OK；不一致仍持续时只 WARN
+   并透出到启动页（复用 stale_shell 字段，不阻断启动），提示里的版本号取自
+   `package.json`（不再有 `<期望版本>` 占位符）。
+   > 本步与 §2.1 门禁共用 `corepack.mjs` 的探测与重建（规范 §9.5「一份逻辑两端复用」）：
+   > 探测失败**不在这里二次解释** —— 门禁已给过「不可用 + 怎么修」，这里不再叠一句。
+   > 若已先经过 §2.1 门禁，此处通常到不了该分支。
 5. **node_modules 健康检查**：`.modules.yaml` 与 `.bin/next` 缺失，或关键依赖目录
    （`typescript`、`@typescript/native`、`next`）**存在但为空**（pnpm 策略拒装/中断安装的典型残留——空目录会让 tsc 垫片找不到入口），即视为残缺。显式跑一次 `pnpm install`（CI 模式），失败立刻报错带日志尾部；install 后仍残缺也明确报错而非静默通过。日志：`log/launcher/pnpm-install-stdout/stderr.log`。
    > 判空注意：顶层关键依赖在 pnpm 下是指向 `.pnpm` store 的 **junction/symlink**。
@@ -672,6 +743,7 @@ zustand 队列，而不是再加一个模块级单例。
 | **`cargo build` 报 ``resource path `binaries/node-x86_64-unknown-linux-gnu` doesn't exist``** | `bundle.externalBin` 声明的是「无后缀 basename」，打包器按目标三元组找 `node-<triple>[.exe]`，而 `build-desktop.mjs` 只产出 `.exe`（历史实现按 Windows 单一平台写的） | 已修：`scripts/build-desktop.mjs` 的 `sidecarFileName()` 与 Rust 侧 `sidecar_binary_name()` 同一平台判据（非 Windows 无后缀 + 补可执行位）。见 §9.3 |
 | **启动页一直转圈、`log/shell/` 为空** | `resolve_project_root()` 的判据绑在 Windows 专属文件（历史上的 `scripts/dev-launcher.ps1`）上 → POSIX 上恒返回空串。表现完全不像「路径判据错了」，像「启动页坏了」或「日志没写」 | 已修：改判 `package.json` + **编排器的唯一实现** `scripts/dev-launcher.mjs`（`looks_like_project_root`）。见 §9.3 |
 | **POSIX 上编排器退出后 `pnpm` / `next-server` 仍在跑、端口不释放** | 回收是 `taskkill /T /F`（POSIX 上等于不执行）；或虽有 POSIX 分支但 `spawn` 未 `detached`，子进程与编排器**同组** → 命中 §3.1 的防自杀判据，退化成单杀 leader，其下三层（`pnpm` / `next` / `turbopack worker`）全部残留 | 已修：`scripts/dev-launcher.mjs` 用 `spawnInGroup`（`detached: true` 自建进程组）+ 整组回收；编排器被 SIGKILL 时留下的孤儿由 `run/launcher-session.json` + 心跳在下次启动回收。见 §3.3 |
+| **双击 exe：启动即报「pnpm 工具链不可用（exit=?）：未知错误」，`dev-launcher-stderr` 空、stdout 里也没有 pnpm 自己的报错**（ISSUE #576，用户现场 `F:\AI\Other\Comfy-APP-T3`） | **PATH 上选中了一个「存在但跑不起来」的 pnpm 形态**：corepack 的 shim 在 Windows 上看起来是三个文件（无扩展名的 `pnpm`、`pnpm.cmd`、`pnpm.ps1`），其中**只有 `.ps1`（经 PowerShell 宿主）与「已关联 node 的无扩展名 shim」能跑**，`.cmd` 只有 cmd.exe；而 `whichCommand` 只按 `PATH × PATHEXT` 找**存在的文件**、PATHEXT 又把 `.CMD` 排在最前 → 选中必然 EACCES 的那个。三个观测点彼此吻合却被误读：① `spawnSync` 起不来 ⇒ `probe.error.code = EACCES`、`probe.status = null`、**stdout+stderr 都是空串** ⇒ `detail` 落到 `未知错误`；② `exit=?` 与「stderr 空」看着像「corepack 缓存损坏」（那条真故障会在 stderr 打印 `Failed to switch pnpm to ...`），于是提示把人引向「删缓存 / 重装 Node」；③ 修复文案里的版本号是 `<项目版本>` 占位符，没人会去翻 `package.json` | 已修（§2.1.1 / §2.1.2 / §2.1.3）：① `whichCommand` 改为**选第一个真的能跑的候选**（`executableExts()` 定顺序：无扩展名 / `.EXE` → `.PS1` → `.CMD`/`.BAT` 垫底；`usableCommand()` 用 `accessSync(X_OK)` + 对 shebang 形态**真起一次**确认，起不来则回退同目录 `<name>.ps1`）；② 探测结果结构化（`not-found` / `spawn-error` / `exit-nonzero` / `no-version`），把 `error.code` 与输出头几行一起带出来，**不再把「疑似缓存损坏」写成结论**；③ 提示中的版本号取自 `package.json` 的 `packageManager`，多行提示经 `stale_shell` 横幅进启动页（`white-space: pre-wrap`）；④ `spawn-error` 一类**自动 `corepack prepare` 重建并用同一条探测复核**，复核仍失败才落回提示；⑤ `spawnDevServer()` 复用同一个命令形态（`commandInvocation`），避免「探测过了、起服务又失败一次」。自查入口 `pnpm check:toolchain`。回归测试 `tests/dev-launcher-toolchain-gate.test.ts` |
 | 双击 exe：启动即报「pnpm 工具链不可用 / 无法获取 pnpm 版本」并弹窗                                                                     | corepack 管理的 pnpm 在切换版本时本地缓存损坏：`.tools\pnpm\<ver>\bin` 缺失 → `pnpm -v` 报 `Failed to switch pnpm to pnpm@<ver> ... ENOENT`，命令完全不可用（install/dev 全依赖 pnpm）                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 已由 `Test-ToolchainGate`（弹壳前）拦截并弹 MessageBox 给修复步骤：`corepack enable && corepack prepare pnpm@<版本> --activate`（重建缓存，需联网一次），仍不行则删除损坏缓存后重装 Node/pnpm                                                                                                                                                                                                                                                 |
 | 启动后 splash 停在依赖预检报「关键依赖目录 typescript / @typescript/native / next 为空或缺失」                                         | pnpm 中断安装/拒装留下「目录在但内容空」的残缺（如 typescript 与 @typescript/native 空目录 → tsc 垫片找不到入口），旧版只查 `.modules.yaml` / `.bin/next` 查不出                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 已由 `Test-DevDependencies` 覆盖关键目录非空检测，残缺时自动 `pnpm install` 自愈；install 后仍残缺则明确报错并指向 `log/launcher/pnpm-install-stderr.log`                                                                                                                                                                                                                                                                                     |
 | `pnpm install` 已成功（exit 0）但仍报「node_modules/…为空或缺失」启动失败；同机跑 `sync-lint.ps1`/`run-local.ps1` 却正常               | 假阳性：`Get-BrokenKeyDeps` 用 `Get-ChildItem -LiteralPath` 枚举顶层 junction/symlink 判空，pwsh（7.6.5 实测）对这类 reparse point 的枚举可能返回 0 项 → 健康安装被误判残缺，触发 install 后因 `.modules.yaml`/lockfile 已一致而“Already up to date”无法自愈，二次复查仍误报                                                                                                                                                                                                                                                                                                                                                              | 已修：先 `Resolve-Path` 解析到链接目标真实绝对路径，再用 .NET `Directory.EnumerateFileSystemEntries` 对真实目录判非空（见 §2.2 step 5）。同步/自检脚本（sync-lint/run-local）本就只查 `.modules.yaml`+`.bin`+lockfile，故不受影响                                                                                                                                                                                                             |
@@ -1430,6 +1502,7 @@ sidecar」两种不同形态的失败。
 | 端口推导跨语言自检 | `scripts/check-app-port-vectors.ps1` | `scripts/check-app-port-vectors.cjs` |
 | 生成 / 补齐 `.env` | `scripts/prepare-local-run.ps1`（第 4 步） | `scripts/env-init.mjs`（`pnpm env:init`） |
 | 建库（Drizzle 表结构同步） | `scripts/prepare-local-run.ps1`（前置）/ 启动器预检 8 | `scripts/db-push.mjs`（`pnpm db:push`） |
+| `pnpm` 可用性自检与修复（工具链门禁的独立入口） | `scripts/prepare-local-run.ps1`（第 2/3 步） | `scripts/check-pnpm-available.mjs`（`pnpm check:toolchain`） |
 
 **为什么 `.mjs` 里不写中文**：门禁/构建期模块会经 Next 的 `next-code-frame` 渲染，
 而它按**字节**切串——高亮区间端点落在多字节字符内部时 Rust 侧直接 panic、整个
