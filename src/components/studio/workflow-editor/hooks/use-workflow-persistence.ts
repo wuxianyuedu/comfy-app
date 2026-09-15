@@ -9,11 +9,30 @@ import { MODE_KEY_PREFIX, runtimeNodeId } from "@/lib/workflow-param-mapping";
 import { useToast } from "../../ToastProvider";
 import type { WorkflowSaver } from "./use-workflow-save";
 
+/**
+ * Cards with a title bar (wfNode / wfSubgraph) paint a 30px bar ABOVE their
+ * body, so React Flow's node position is the card (title-bar) top while the
+ * on-disk ComfyUI convention keeps the body top. We add this offset when
+ * persisting a drag so the stored coordinate matches other tools.
+ */
+const NODE_TITLE_ANCHOR: Record<string, number> = {
+  wfNode: NODE_TITLE_H,
+  wfSubgraph: NODE_TITLE_H,
+};
+
+/**
+ * Run `cb` after the browser has painted, so the optimistic `setDetail` from
+ * resetLayout has committed and React Flow has laid out the canvas before we
+ * fit the view. Two frames: one for the React commit, one for the layout pass.
+ */
+function afterNextPaint(cb: () => void): void {
+  requestAnimationFrame(() => requestAnimationFrame(cb));
+}
+
 export interface WorkflowPersistenceArgs {
   workflowId: string;
   detail: WorkflowDetail | null;
   setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
-  scopeDetail: WorkflowDetail | null;
   setNodes: Dispatch<SetStateAction<Node[]>>;
   paramMap: Record<string, unknown>;
   workflowIO: Record<string, WorkflowIOParam>;
@@ -38,13 +57,12 @@ export interface WorkflowPersistenceArgs {
 
 /**
  * Layout snapshot / reset / save / drag-persist logic for the workflow
- * editor.  Extracted from wf-editor-inner.tsx (P4 split).
+ * editor.  Extracted from wf-editor-inner.tsx to isolate persistence concerns.
  */
 export function useWorkflowPersistence({
   workflowId,
   detail,
   setDetail,
-  scopeDetail,
   setNodes,
   paramMap,
   workflowIO,
@@ -85,7 +103,6 @@ export function useWorkflowPersistence({
    *  「重置位置」）。语义 = 清除本视图所有被改动过的坐标，见下方实现说明。 */
   const resetLayout = useCallback(() => {
     if (!detail) return;
-    if (!scopeDetail) return;
     /* 「重置布局」= 清除本视图所有被改动过的位置，回到工作流自带的原始布局。
      *
      * 不能靠「把进入时的快照写回去」：客户端拿到的 `detail.positions` 是
@@ -121,13 +138,12 @@ export function useWorkflowPersistence({
     if (reloadView) {
       reloadView();
     } else {
-      requestAnimationFrame(() => requestAnimationFrame(() => fitToContent()));
+      afterNextPaint(fitToContent);
     }
   }, [
     detail,
     setDetail,
     workflowId,
-    scopeDetail,
     fitToContent,
     savePatch,
     hostNodeId,
@@ -139,7 +155,6 @@ export function useWorkflowPersistence({
    *  跳过 `mode:` 前缀的按模式连线表 —— 它的值不是节点 id，命中会把整张模式
    *  表当成某个节点的角色名。 */
   useEffect(() => {
-    if (!detail) return;
     setNodes((nds) =>
       nds.map((node) => ({
         ...node,
@@ -152,7 +167,7 @@ export function useWorkflowPersistence({
         },
       }))
     );
-  }, [paramMap, detail, setNodes]);
+  }, [paramMap, setNodes]);
 
   /* Save paramMap + workflowIO (exposed inputs/outputs) */
   const handleSave = useCallback(async () => {
@@ -180,7 +195,7 @@ export function useWorkflowPersistence({
    *    so the canvas stays consistent (no snap-back on the next render).
    *  - Real graph nodes → write into the `positions` column via the
    *    `positions` PATCH field, likewise mirrored into local `detail`.
-   *  - Boundary-pin GROUPS (`grp:bpin:inputs|outputs`, late)
+   *  - Boundary-pin GROUPS (`grp:bpin:inputs|outputs`)
    *    → write the group rect into `positions` so the rail stays where the
    *    user dropped it after reload.  The children carry parentId +
    *    extent:"parent" and move automatically with the group, so we don't
@@ -191,8 +206,16 @@ export function useWorkflowPersistence({
    *    way as a real graph node.
    *  The write is fire-and-forget: it must NOT trigger a detail re-fetch, so
    *  the canvas never re-mounts or flashes. */
+    const reportPositionSaveFailure = useCallback(
+      (err: unknown) => {
+        console.error("[workflow-persistence] failed to persist node position", err);
+        toast.error("位置保存失败", err instanceof Error ? err.message : "请重试");
+      },
+      [toast]
+    );
+
     const onNodeDragStop = useCallback(
-      (_e: unknown, node: { id: string; type?: string; position: { x: number; y: number } }) => {
+      (_event: unknown, node: Node) => {
         /* `detail` may be null during the loading → ready transition
          * (e.g. user closes the editor mid-load); if so we have nowhere
          * to persist the new position.  Bail silently — the canvas
@@ -207,11 +230,7 @@ export function useWorkflowPersistence({
          *  ADD NODE_TITLE_H before persisting: bodyTop = cardTop + 30.
          *  Untitled notes, wfGroup and wfIoPort don't carry a title bar,
          *  so their `position` already equals the ComfyUI top-left. */
-        const ANCHOR_BACK: Record<string, number> = {
-          wfNode: NODE_TITLE_H,
-          wfSubgraph: NODE_TITLE_H,
-        };
-        const back = node.type ? ANCHOR_BACK[node.type] ?? 0 : 0;
+        const back = node.type ? NODE_TITLE_ANCHOR[node.type] ?? 0 : 0;
         const y = Math.round(node.position.y + back);
         if (node.id.startsWith("note:")) {
           const noteId = node.id.replace(/^note:/, "");
@@ -229,12 +248,15 @@ export function useWorkflowPersistence({
               ? { ...prev, notes: (prev.notes ?? []).map((note) => (note.id === noteId ? { ...note, pos: [x, noteY] } : note)) }
               : prev
           );
-          savePatch.mutate({
-            id: workflowId,
-            notes: [{ id: noteId, pos: [x, noteY] }],
-          });
+          savePatch.mutate(
+            {
+              id: workflowId,
+              notes: [{ id: noteId, pos: [x, noteY] }],
+            },
+            { onError: reportPositionSaveFailure }
+          );
         } else {
-          /* 单一格式（不再区分 RAW / API 视图），图节点拖拽统一
+          /* 图节点拖拽统一
            *  写回 detail.positions（覆盖 ComfyUI 原始布局）。
            *
            *  子图视图下的节点 id 是**裸内部 id**，而 `positions` 列存的是
@@ -249,14 +271,17 @@ export function useWorkflowPersistence({
           /* 一律走 `merge: true` 的单键合并：`positions` 是一张混装多套
            *  id 命名空间（顶层裸 id / 子图拼接键 / `grp:bpin:*` 导轨）的平表，
            *  顶层默认的 REPLACE 会把其它命名空间的坐标整片清掉。 */
-          savePatch.mutate({
-            id: workflowId,
-            positions: { [nodeId]: [x, y] },
-            mergePositions: true,
-          });
+          savePatch.mutate(
+            {
+              id: workflowId,
+              positions: { [nodeId]: [x, y] },
+              mergePositions: true,
+            },
+            { onError: reportPositionSaveFailure }
+          );
         }
       },
-      [detail, setDetail, workflowId, savePatch, hostNodeId]
+      [detail, setDetail, workflowId, savePatch, hostNodeId, reportPositionSaveFailure]
     );
 
   return { resetLayout, handleSave, onNodeDragStop };

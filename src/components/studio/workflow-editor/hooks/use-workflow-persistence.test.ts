@@ -43,7 +43,6 @@ function nodesOf(ids: string[]): WorkflowDetail["nodes"] {
 
 function renderReset(args: {
   detail: WorkflowDetail;
-  scopeDetail: WorkflowDetail;
   fitToContent?: () => void;
   hostNodeId?: string;
   reloadView?: () => void;
@@ -52,12 +51,11 @@ function renderReset(args: {
   const mutate = vi.fn();
   const fitToContent = args.fitToContent ?? vi.fn();
   const { result, rerender } = renderHook(
-    (props: { detail: WorkflowDetail; scopeDetail: WorkflowDetail }) =>
+    (props: { detail: WorkflowDetail }) =>
       useWorkflowPersistence({
         workflowId: "wf-1",
         detail: props.detail,
         setDetail,
-        scopeDetail: props.scopeDetail,
         setNodes: vi.fn(),
         paramMap: {},
         workflowIO: {},
@@ -70,7 +68,7 @@ function renderReset(args: {
         hostNodeId: args.hostNodeId,
       }),
     {
-      initialProps: { detail: args.detail, scopeDetail: args.scopeDetail },
+      initialProps: { detail: args.detail },
       // useWorkflowPersistence 内部要 useToast（保存成功提示），必须包在
       // provider 里；少了它整个 hook 直接抛错。用 createElement 而不是 JSX：
       // 本文件的伴生测试与 hook 同走 kebab-case 命名。
@@ -78,7 +76,7 @@ function renderReset(args: {
         createElement(ToastProvider, null, children),
     },
   );
-  rerender({ detail: args.detail, scopeDetail: args.scopeDetail });
+  rerender({ detail: args.detail });
   return { result, setDetail, mutate, fitToContent };
 }
 
@@ -98,8 +96,7 @@ describe("resetLayout", () => {
       "1002": [30, 40] as [number, number],
     };
     const detail = makeDetail({ positions });
-    const scopeDetail = makeDetail({ nodes: nodesOf(["1001", "1002"]), positions });
-    const { result, setDetail, mutate } = renderReset({ detail, scopeDetail });
+    const { result, setDetail, mutate } = renderReset({ detail });
 
     act(() => result.current.resetLayout());
 
@@ -120,7 +117,6 @@ describe("resetLayout", () => {
     const reloadView = vi.fn();
     const { result, fitToContent } = renderReset({
       detail,
-      scopeDetail: makeDetail({ nodes: nodesOf(["1001"]), positions: detail.positions }),
       reloadView,
     });
 
@@ -143,7 +139,6 @@ describe("resetLayout", () => {
     });
     const { result, setDetail, mutate } = renderReset({
       detail,
-      scopeDetail: detail,
     });
 
     act(() => result.current.resetLayout());
@@ -157,8 +152,7 @@ describe("resetLayout", () => {
 
   it("没有坐标覆盖时重置是空操作（不发请求、不产生多余状态）", () => {
     const detail = makeDetail({ positions: null });
-    const scopeDetail = makeDetail({ nodes: nodesOf(["1001"]), positions: null });
-    const { result, setDetail } = renderReset({ detail, scopeDetail });
+    const { result, setDetail } = renderReset({ detail });
 
     act(() => result.current.resetLayout());
 
@@ -182,14 +176,13 @@ describe("resetLayout · 子图 id 命名空间", () => {
     });
     const { result, mutate } = renderReset({
       detail,
-      scopeDetail: detail,
       hostNodeId: "4",
     });
 
     act(() =>
       result.current.onNodeDragStop(
         {},
-        { id: "1001", type: "wfNode", position: { x: 30, y: 0 } }
+        { id: "1001", type: "wfNode", position: { x: 30, y: 0 }, data: {} }
       )
     );
 
@@ -208,14 +201,13 @@ describe("resetLayout · 子图 id 命名空间", () => {
     });
     const { result, mutate } = renderReset({
       detail,
-      scopeDetail: detail,
       hostNodeId: "4:5",
     });
 
     act(() =>
       result.current.onNodeDragStop(
         {},
-        { id: "1670", type: "wfNode", position: { x: 10, y: 20 } }
+        { id: "1670", type: "wfNode", position: { x: 10, y: 20 }, data: {} }
       )
     );
 
@@ -242,7 +234,6 @@ describe("resetLayout · 子图 id 命名空间", () => {
     });
     const { result, setDetail, mutate } = renderReset({
       detail,
-      scopeDetail: detail,
       hostNodeId: "4",
     });
 
@@ -271,7 +262,6 @@ describe("resetLayout · 子图 id 命名空间", () => {
     });
     const { result, setDetail, mutate } = renderReset({
       detail,
-      scopeDetail: detail,
       hostNodeId: "4:5",
     });
 
@@ -296,7 +286,6 @@ describe("resetLayout · 子图 id 命名空间", () => {
     const reloadView = vi.fn();
     const { result } = renderReset({
       detail,
-      scopeDetail: detail,
       hostNodeId: "4",
       reloadView,
     });
