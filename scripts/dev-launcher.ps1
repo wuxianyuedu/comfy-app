@@ -209,11 +209,19 @@ function Test-ShellLaunchAbandoned {
 # ── Prebuilt 模式的下游进程退出分类（失败提示的单一判据点）──
 # 症状「Next.js dev server 提前退出（exit=0）」有三种成因，用户看到的文案必须能
 # 分辨——历史事故里三种都被写成同一句 exit=0，看日志的人无从下手：
-#   1. 壳已被回收（$ShellExited）且壳 stderr 有 `launch abandoned` → 用户关掉启动页
-#      放弃本次启动（设计内，非失败）；
-#   2. 壳已被回收但无该标记 → 壳被外部终止（另一次启动顶掉 / 任务管理器 / 崩溃），
-#      dev server 是陪葬——真失败，但根因在壳不在 dev server；
+#   1. 壳已被回收（$ShellExited）且壳 stderr 有 `launch abandoned` 标记 → 用户
+#      关掉启动页放弃本次启动（设计内，非失败）；
+#   2. 壳已被回收但**没有该标记** → 这次收尾不是「关启动页」，壳是被外部终止的
+#      （另一次启动顶掉 / 任务管理器 / 崩溃），dev server 是陪葬——真失败，但根因
+#      在壳不在 dev server；
 #   3. 壳还活着 → dev server 自己退出（编译失败、端口被占、pnpm 坏），看 stderr。
+#
+# 判据只认「正标记」（缩进敏感）：$Abandoned 反映的是 dev-launcher-stderr.log 里
+# 有没有那行壳自己写下的 `exiting app (launch abandoned)`。第 2 类的标注**必须**
+# 与标记取值绑定 —— 把「没有标记」也报成「很可能就是你关掉了启动页，不算失败」，
+# 就等于把「壳被外部顶掉」这条真故障吞掉，而那条路径恰恰是唯一能解释
+# `dev-launcher-stderr.log` 里只有四行 INFO、其余一个字都没有的成因（壳活到了
+# 托盘/watchdog 就绪，随后被 TerminateProcess 收走，什么都没来得及写）。
 function Get-DownstreamExitKind {
   param(
     [bool]$ShellExited,
@@ -1073,10 +1081,13 @@ try {
           $script:LaunchAbandonedByUser = $true
           break
         }
-        if ($kind -eq "shell-terminated" -and $shellAbandoned) {
-          # 壳已退出但启动页并未被关闭 = 壳是被外部终止的（另一次启动顶掉 / 任务管理器
-          # 结束任务 / 壳崩溃），dev server 只是陪葬。根因在壳侧，必须把用户往壳日志引，
-          # 否则照「dev server 报错」的方向排查永远查不出东西。
+        if ($kind -eq "shell-terminated") {
+          # 壳已退出、且壳 stderr 里**没有** `launch abandoned` = 收尾不是「关启动页」，
+          # 而是壳被外部终止的（另一次启动顶掉 / 任务管理器结束任务 / 壳崩溃），
+          # dev server 只是陪葬。根因在壳侧，必须把用户往壳日志引，否则照
+          # 「dev server 报错」的方向排查永远查不出东西。
+          # 判据与标注一一对应：$shellAbandoned 为真时上面那条分支已拦下并定性为
+          # 「用户放弃」，走到这里即等价于「没有标记」。
           throw "本地服务随桌面壳一起退出：壳（PID $($tauriProc.Id)）在服务就绪前已退出（exit=$($tauriProc.ExitCode)），dev server 属于连带回收而不是自身报错（exit=$($devProc.ExitCode)）。常见原因：另一次启动把它顶掉 / 任务管理器结束了任务 / 壳崩溃。请看壳日志 log\shell\shell.log 与 log\launcher\dev-launcher-stderr.log。最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $nextOut 与 $nextErr）"
         }
         $shellNote = if ($tauriProc.HasExited) {
