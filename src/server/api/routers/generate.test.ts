@@ -1,9 +1,9 @@
-import type * as LoggerModule from "~/server/lib/logger";
+import type * as LoggerModule from "~/lib/core/logger";
 /**
  * generate.router 集成测试。
  *
  * mock 边界：~/server/db（内存 Prisma 替身）、~/server/better-auth、
- * ~/server/lib/logger（静音）、@/lib/comfyui/enqueue（enqueue 整体 mock——
+ * ~/lib/core/logger（静音）、@/lib/comfyui/enqueue（enqueue 整体 mock——
  * 真模块 import 时会启动 reaper 定时器并连 ComfyUI WS）、
  * @/lib/comfyui/client（listModels 需访问 ComfyUI /api/models）。
  * buildAndValidate / buildCustomWorkflow / getWorkflow / repository 均走真实实现。
@@ -43,7 +43,7 @@ vi.mock("~/server/db", async () => {
 vi.mock("~/server/better-auth", () => ({
   auth: { api: { getSession: vi.fn(async () => null) } },
 }));
-vi.mock("~/server/lib/logger", async (importOriginal) => ({
+vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof LoggerModule>()),
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));

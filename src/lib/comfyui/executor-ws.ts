@@ -13,7 +13,7 @@
  */
 import WebSocket from "ws";
 import { taskRepository } from "../core/repository";
-import { logger } from "~/server/lib/logger";
+import { logger } from "~/lib/core/logger";
 import {
   probeComfyBase,
   resolveComfyBase,

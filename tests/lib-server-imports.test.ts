@@ -88,27 +88,21 @@ function stripComments(src: string): string {
 /** 目标侧：真正的「服务端领域」文件（`lib/core`、`lib/db` 是数据层成员，见头注 ①）。 */
 const SERVER_OWNED_RE = /^src\/server\/(?!db\/schema\.ts|db\.ts)/;
 
-/** 登记项：`lib` 侧文件 → `server` 侧目标。只许变短（见头注）。 */
+/**
+ * 登记项：`lib` 侧文件 → `server` 侧目标。**只许变短**（见头注）。
+ *
+ * 这一批登记项曾含 11 个文件 → `src/server/lib/logger.ts`（`lib/comfyui/**` 与
+ * `lib/drizzle-studio/lifecycle.ts`，外加 7 个测试文件的 `vi.mock` 说明符）。
+ * 它们已全部消除：日志**实现**合并到 `src/lib/core/logger.ts`（`lib` 侧的中立出口
+ * 本就存在），服务端侧 `src/server/lib/logger.ts` 降为转发层，`lib` 侧统一
+ * `import { logger } from "~/lib/core/logger"` —— 方向由 `lib → server` 变回
+ * `lib → lib`，不再是越界。
+ *
+ * 剩下这一条属另一种情形：better-auth 的会话读取需要 **Next 请求上下文**
+ * （`headers()` / cookies），无法下沉到 `lib`，留待专项裁决。
+ */
 const REGISTERED: Record<string, string> = {
   "src/lib/auth-server.ts": "src/server/better-auth/server.ts",
-  "src/lib/comfyui/cli-procs-singleton.test.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/client.test.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/executor-scheduler.test.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/lifecycle.test.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/reaper-decisions.test.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/reaper.test.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/status.test.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/client.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/executor-continuation.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/executor-scheduler.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/executor-ws.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/importSource.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/lifecycle.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/reaper.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/status.ts": "src/server/lib/logger.ts",
-  "src/lib/comfyui/workflow-subgraph-parse.ts": "src/server/lib/logger.ts",
-  "src/lib/core/logger.ts": "src/server/lib/logger.ts",
-  "src/lib/drizzle-studio/lifecycle.ts": "src/server/lib/logger.ts",
 };
 
 type Edge = { from: string; to: string };
@@ -168,7 +162,11 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
     // 这条用例是回归护栏本身：判定曾写成 `!(e.from in REGISTERED)`，于是
     // 「进过一次清单的文件」此后新增任意 lib → server 依赖都被放行。
     // 用纯数据复现那个谓词，锁住「新边必须算未登记」。
-    const registered = new Map(Object.entries(REGISTERED));
+    // 合成一张登记表（与 REGISTERED 现状解耦：这条守的是**判定谓词**，
+    // 不是清单内容），只用于复现「同一文件上新增的依赖必须算未登记」。
+    const registered = new Map([
+      ["src/lib/comfyui/client.ts", "src/server/lib/logger.ts"],
+    ]);
     const registeredEdges = new Set(
       [...registered].map(([from, to]) => key({ from, to })),
     );
@@ -187,7 +185,9 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
   it("扫描器本身有效：能识别登记项里的真实依赖边（反向验证）", () => {
     const live = new Set(collectEdges().map(key));
     // 取一条必然存在的既有边，确认解析逻辑不是「永远返回空」
-    expect(live.has("src/lib/comfyui/client.ts -> src/server/lib/logger.ts")).toBe(true);
+    expect(live.has("src/lib/auth-server.ts -> src/server/better-auth/server.ts")).toBe(true);
+    // 日志方向已归位：`lib` 侧不再依赖 server 的日志实现（实现合并到 lib 侧）
+    expect(live.has("src/lib/comfyui/client.ts -> src/server/lib/logger.ts")).toBe(false);
     // 数据层（`lib/core` / `lib/db`）取 Drizzle 表定义属同层引用，不入本清单
     expect(live.has("src/lib/core/repository-task.ts -> src/server/db/schema.ts")).toBe(false);
   });

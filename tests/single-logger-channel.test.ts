@@ -7,8 +7,9 @@
  * 使用面都不小（core 由 `repository-base` / `events` / `container` 用，pino 由
  * 31 个文件用），后果是**同一件事两种口径**、且脱敏契约在其中一条上不成立。
  *
- * 现在 `core/logger` 只是 pino 的薄封装（接口给核心层、实现只有一份）。
- * 本用例把「不许再长出第二条实现」机器化：**除薄封装外，无人可以直接调
+ * 现在 `core/logger` 承载**唯一实现**（pino 工厂 / redact / 镜像 / pretty 全在
+ * 那里），`src/server/lib/logger.ts` 只是一层兼容转发。
+ * 本用例把「不许再长出第二条实现」机器化：**除日志门面外，无人可以直接调
  * `console.*` 输出日志**。
  *
  * 为什么不用「检查 `core/logger` 里有没有 console」这一条就够：
@@ -16,8 +17,8 @@
  * 而那正是最初长出第二套实现的方式。判据落在**全 `src/`** 上才有意义。
  *
  * 豁免（都写了理由，且用**正向断言**锁住豁免文件本身没被改坏）：
- *   - `src/lib/core/logger.ts`     —— 薄封装本身（当前实现里已无 console 调用）
- *   - `src/server/lib/logger.ts`   —— pino 的镜像渲染（不直接调 console）
+ *   - `src/lib/core/logger.ts`     —— 实现本身（当前实现里已无 console 调用）
+ *   - `src/server/lib/logger.ts`   —— 兼容转发（不直接调 console）
  *   - `src/lib/comfyui/trace.ts` 等诊断通道 —— 由各自的落盘契约约束，不走 console
  *   - `scripts/**`                 —— 纯 Node 宿主脚本，不走应用日志契约
  *
@@ -81,28 +82,46 @@ describe("日志实现只有一处（ISSUE #568）", () => {
     }
     expect(
       offenders,
-      "以下文件直接写 console —— 服务端日志必须走 pino 那一条通道\n" +
-        "（`src/server/lib/logger.ts`，或核心层的薄封装 `src/lib/core/logger.ts`）：\n" +
+      "以下文件直接写 console —— 服务端日志必须走那一条通道\n" +
+        "（实现只有一份：`src/lib/core/logger.ts`；服务端可取 `src/server/lib/logger.ts` 的中转）：\n" +
         "直接 console 的后果是**绕开 redact 脱敏与 ERROR 镜像**（规范 07 §7.18.2.1）。",
     ).toEqual([]);
   });
 
-  it("core/logger 是薄封装：委派给 pino，自己不再拼行", () => {
+  it("core/logger 是唯一实现：日志配置全在这里，且不再自研拼行", () => {
     const src = readFileSync(join(SRC, "lib", "core", "logger.ts"), "utf8");
-    // 正向：确实 import 了服务端 pino 工厂（唯一实现处）
-    expect(src).toMatch(/from\s+["']@\/server\/lib\/logger["']/);
+    // 正向：实现（pino 工厂 + 脱敏路径 + 镜像）确实在本文件里
     expect(src).toContain("createPinoLogger");
+    expect(src).toContain("REDACT_PATHS");
+    expect(src).toMatch(/from\s+["']pino["']/);
     // 反向：不再自带实现（旧实现的两个特征）
     expect(stripComments(src)).not.toMatch(/console\s*\./);
     expect(stripComments(src)).not.toMatch(/JSON\.stringify\(fields\)/);
   });
 
-  it("脱敏契约在 core/logger 这条通道上也成立（不是只有 pino 自己那条）", () => {
-    // 判据：core 门面必须由服务端 pino 工厂构造——脱敏/镜像的配置只在那边一份。
-    const src = readFileSync(join(SRC, "lib", "core", "logger.ts"), "utf8");
-    expect(src).not.toMatch(/process\.env\.LOG_LEVEL/);
-    // 级别过滤也不许自己实现一遍（旧实现的特征）
-    expect(src).not.toMatch(/LEVEL_ORDER/);
+  it("服务端出口是转发层，不再自带第二份实现", () => {
+    const src = readFileSync(join(SRC, "server", "lib", "logger.ts"), "utf8");
+    // 正向：确实从地基侧取实现
+    expect(src).toMatch(/from\s+["']@\/lib\/core\/logger["']/);
+    // 反向：pino 的构造与脱敏路径不许在本文件里再来一份
+    expect(src).not.toMatch(/from\s+["']pino["']/);
+    expect(src).not.toMatch(/createPinoLogger\s*\(/);
+    expect(src).not.toContain("REDACT_PATHS =");
+    expect(stripComments(src)).not.toMatch(/console\s*\./);
+  });
+
+  it("日志实现只有一处：pino 工厂与 ERROR 镜像不许在别处重建", () => {
+    // 判据落在「实现特征」上，而不是文件清单：谁在 import pino / 谁在定义 redact 路径，
+    // 谁就是实现处。两份实现只要出现，这条立刻红。
+    const implementors = walk(join(SRC, "lib"))
+      .concat(walk(join(SRC, "server")))
+      .filter((f) => !/\.test\.(ts|tsx)$/.test(f))
+      .filter((f) => /from\s+["']pino["']/.test(readFileSync(f, "utf8")))
+      .map((f) => relative(ROOT, f).split("\\").join("/"));
+    expect(
+      implementors,
+      "日志实现只允许在 src/lib/core/logger.ts 一份 —— 另一处 import pino 就是第二条通道。",
+    ).toEqual(["src/lib/core/logger.ts"]);
   });
   it("trace 直写通道也过值形状守卫（唯一脱敏实现的第二个消费者）", () => {
     // 判据：`comfyui/trace.ts` 直写文件、不经 pino —— 它必须自己调用共享守卫，

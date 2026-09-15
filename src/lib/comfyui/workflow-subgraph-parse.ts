@@ -17,7 +17,7 @@ import {
   type RawSubgraphDef,
 } from "@/lib/comfyui/raw";
 import { inferIsMultiline } from "@/lib/comfyui/types";
-import { logger } from "~/server/lib/logger";
+import { logger } from "~/lib/core/logger";
 import {
   type DetailNodeView,
   type RawInputEntry,

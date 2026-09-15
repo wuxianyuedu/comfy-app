@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { PassThrough } from "node:stream";
 
-import { createLogger, logger } from "~/lib/core/logger";
+import { createLogger, coreLogger } from "~/lib/core/logger";
 
 const streams: PassThrough[] = [];
 
@@ -32,7 +32,7 @@ function makeLogger(ns: string) {
   return { log, lines };
 }
 
-describe("core/logger — 委派给 pino，不再自带实现", () => {
+describe("core/logger — 核心层门面（实现只有一份，就是本模块）", () => {
   it("级别过滤走 pino：实例级别 debug 时四档全出", () => {
     const { log, lines } = makeLogger("t");
     log.debug("d");
@@ -95,7 +95,7 @@ describe("core/logger — 委派给 pino，不再自带实现", () => {
   });
 
   it("默认实例暴露标准方法", () => {
-    expect(typeof logger.info).toBe("function");
-    expect(typeof logger.child).toBe("function");
+    expect(typeof coreLogger.info).toBe("function");
+    expect(typeof coreLogger.child).toBe("function");
   });
 });

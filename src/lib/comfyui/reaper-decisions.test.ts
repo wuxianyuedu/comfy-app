@@ -27,7 +27,7 @@ vi.mock("./client", () => ({
   resolveComfyBase: vi.fn().mockResolvedValue("http://127.0.0.1:8188"),
 }));
 vi.mock("./executor-cli", () => ({ cliProcs: new Map() }));
-vi.mock("~/server/lib/logger", () => ({
+vi.mock("~/lib/core/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 

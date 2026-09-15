@@ -1,4 +1,4 @@
-import type * as LoggerModule from "~/server/lib/logger";
+import type * as LoggerModule from "~/lib/core/logger";
 import type * as EnvfileModule from "@/lib/envfile";
 import type * as AppSettingsModule from "@/lib/app-settings/app-settings.server";
 import type * as ImportSourceModule from "@/lib/comfyui/importSource";
@@ -7,7 +7,7 @@ import type * as RawModule from "@/lib/comfyui/raw";
  * workflow.router 集成测试。
  *
  * mock 边界：~/server/db（内存 Prisma 替身，见 tests/helpers/test-db.ts）、
- * ~/server/better-auth（getSession）、~/server/lib/logger（静音）、
+ * ~/server/better-auth（getSession）、~/lib/core/logger（静音）、
  * @/lib/envfile（屏蔽真实 .env 的 LOCAL_WORKFLOWS_PATH）、
  * @/lib/comfyui/importSource（本地文件导入/重导入，避免真实磁盘依赖）、
  * @/lib/comfyui/raw（convertRawToApi 需要访问 ComfyUI /object_info， mock 后走
@@ -29,7 +29,7 @@ vi.mock("~/server/db", async () => {
 vi.mock("~/server/better-auth", () => ({
   auth: { api: { getSession: getSessionMock } },
 }));
-vi.mock("~/server/lib/logger", async (importOriginal) => ({
+vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof LoggerModule>()),
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));

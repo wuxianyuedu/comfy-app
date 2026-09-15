@@ -2,17 +2,17 @@
  * `redact-secret.ts` — 密钥形状守卫（值形状判据，唯一实现）
  * ===========================================================================
  *
- * 本模块原在 `src/server/lib/logger.ts` 内。抽出来的**唯一理由**是「必须被两条
- * 落盘通道共用，而 `lib` 不得 import `server`」（规范 18 的分层：`server` 是最上
- * 层，`lib` 是被共用的地基）。两条通道是：
+ * 本模块原在服务端日志实现文件内（该实现现已合并到 `src/lib/core/logger.ts`）。
+ * 抽成独立模块的**唯一理由**是「两条落盘通道都要用它，而其中一条在 `lib` 侧」。
+ * 两条通道是：
  *
- *   1. pino 的 ERROR 镜像（`src/server/lib/logger.ts`）——镜像走 `appRuntimeLog`
+ *   1. pino 的 ERROR 镜像（`src/lib/core/logger.ts`）——镜像走 `appRuntimeLog`
  *      另一条写入路径，**不受 pino `redact` 保护**（规范 07 §7.18.2.1）；
  *   2. ComfyUI 原始回执 trace（`src/lib/comfyui/trace.ts`）——直写文件，同样不经 pino。
  *
  * 若各写一份，两份判据必然漂移（规范 12.12 孪生对）。本模块**零框架依赖**
- * （不 import pino、不 import `server-only`），因此两条通道都能用，`server` 侧
- * 按原样 re-export 保住既有导入路径。
+ * （不 import pino、不 import `server-only`），因此两条通道都能用；
+ * `src/lib/core/logger.ts` 与服务端转发层各按原样 re-export 保住既有导入路径。
  *
  * @module core/redact-secret
  */

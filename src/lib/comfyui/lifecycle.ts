@@ -19,7 +19,7 @@ import type { spawn } from "child_process";
 import fs from "fs";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { probeComfyBase, probeComfyAtPort } from "./client";
-import { logger } from "~/server/lib/logger";
+import { logger } from "~/lib/core/logger";
 import { killProcessTree } from "../kill-process-tree";
 import { runEnsureLaunch } from "./lifecycle-launch";
 import { resolveComfyLaunchPlan } from "./launch-path";
