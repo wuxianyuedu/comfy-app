@@ -210,6 +210,13 @@
 改完构建 / 产物相关的东西，先跑 `node scripts/check-standalone-contents.cjs`
 （它同时查「不该有的」与「必须有的」）。
 
+**起不来时先分清是「没起来」还是「起来后报错」**（ISSUE #489）：`.env` / 数据库没就绪
+时**不应该**先看到 Next 的 `✓ Ready`。`pnpm dev` / `pnpm start` 现在都在起 Next 之前
+做预检（`.env` 三项非空 → `scripts/env-preflight.mjs`；哨兵表 → `db-schema-state.mjs`），
+未就绪即打印可行动作。若你看到「`✓ Ready` 紧跟一屏栈」，说明预检被绕过或缺失，
+先按 §9.1 / §9.2 第 6 条核对。补 `.env` 用 `pnpm env:init`（跨平台；只 `cp .env.example .env`
+会因三项留空而仍然起不来）。
+
 遇到启动/生成问题，先查规范文档 **§5 症状 → 根因对照表**（本项目全部历史
 事故都在里面），再按 **§4 日志布局** 的顺序看日志（log/ 按子系统分区：
 `launcher/`、`nextjs/`、`services/`、`tools/`、`archive/`）：
