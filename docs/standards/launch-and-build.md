@@ -650,6 +650,7 @@ zustand 队列，而不是再加一个模块级单例。
 
 | **安装包里带着开发机的密钥与数据库**（用户/评审都看不出来：构建不报错、CI 全绿、体积护栏也只挡 GB 级） | **产物卫生靠「剔除目录名」的清单，而这两样是文件**（ISSUE #489）：`next build` 把仓库根的 `.env`（Next standalone 的环境加载是**无条件复制**，`outputFileTracingExcludes` 实测删不掉）与 `db.sqlite`（动态路径 tracing）复制进 `.next/standalone`，`scripts/build-desktop.mjs` 的噪声清单只剔目录名 → 随 static 被编译期内嵌进 exe。**CI 不跑 `build-desktop`（也不该跑）**，而触发条件是「开发机有真实 `.env`」——正是 `run-local.ps1` 自动生成 `.env` 的那些机器 | 已修（§7.3）：`outputFileTracingExcludes` 补 `./db.sqlite*`（实测有效）与 `./.env*`（尽力而为）；新增 `scripts/standalone-private-inputs.mjs` 作剔除清单的单一实现，`pnpm build` 收尾与 `build-desktop` 组装后各剥一次；`scripts/check-standalone-contents.cjs` 的禁忌清单补「开发机私有输入 / 开发库文件」并把范围扩到 `src-tauri/static`；门禁见 `tests/dist-artifact-hygiene.test.ts` |
 | **面板里的错误日志带着密钥原文**（pino 流里明明是 `[Redacted]`，落盘的 `app-runtime.log` 里却是明文） | **ERROR 镜像是一条独立落盘通道，不受 pino `redact` 保护**（ISSUE #489）：`src/server/lib/logger.ts` 的镜像在取不到 `msg`/`err.message` 时用 `JSON.stringify(payload)` 整包兜底；而 `REDACT_PATHS` 的 `*.secret` 只匹配「属性名恰好叫 `secret`」，`BETTER_AUTH_GITHUB_CLIENT_SECRET` 这类 `*_SECRET` 命名一条都不命中——pino 的通配语义也表达不了「名字含 secret」（`*secret`/`*_SECRET`/`*secret*` 实测全无效，`*` 会把整条记录连 `msg` 打成 `[Redacted]`） | 已修（规范 07 §7.18.2.1）：镜像不再整包透传（无可读文案时只输出键名清单），并新增**值形状守卫** `redactSecretShaped()`——在日志写入边界擦掉 PEM 私钥块 / JWT / 高熵串，不问字段名因而覆盖「名字无法穷举」的密钥；`Error` 保形 |
+| **照文档 `cp .env.example .env` 走完，`pnpm dev` / `pnpm start` 仍然起不来** —— 输出里先出现 `- Local: http://localhost:<port>` 与 `✓ Ready in 77ms`，**之后**才抛 `Failed to load next.config.js` + `Invalid environment variables`（或 `MissingEnvFileError`）；提示里的小贴士还让去「双击 `tools/start/run-local.ps1`」（Linux / macOS 上不存在） | **两层叠加，且失败时机误导**（ISSUE #489）：① `.env.example` 里 `BETTER_AUTH_SECRET` 与两个 `BETTER_AUTH_GITHUB_*` 就是**空串**，而 createEnv 配了 `emptyStringAsUndefined: true` —— 空串等价于「没给」，于是照文档 cp 出来仍是 `Invalid environment variables`，看不出是「值留空」；Windows 侧一直有 `prepare-local-run.ps1` 第 4 步自动补齐，**Linux / macOS 没有任何等价物**。② `src/env.js` 的校验发生在 Next 加载 `next.config.js` 的阶段，而 Next 会**先**打印 Local 地址与 `✓ Ready` —— 用户读到的是「起来了但报错」，真相是端口无人监听。**只探首页会误判**：同族形态里「服务其实没起」比「起来后 500」更难分辨 | 已修（§9.1 / §9.2 第 6 条）：新增 `scripts/env-init.mjs`（`pnpm env:init`，与 `.ps1` 同口径生成随机密钥 + OAuth 占位值，幂等、不覆盖既有配置）与 `scripts/env-preflight.mjs`（`dev.mjs` / `start.mjs` 共用，**在起 Next 之前**判「文件在 + 三项非空」，失败即打印可行动作并非零退出 —— 不再出现「先 ✓ Ready 再崩」）；缺文件提示里不再夹带任何 `.ps1` 入口。回归测试见 `tests/linux-env-bootstrap.test.ts`（真跑两个脚本；反向验证：还原旧入口 / 去掉预检，对应用例必失败） |
 | **standalone 起得来、页面全 200，但每个 API 路由都 500**（报错是 `Failed to load external module …/app-route-turbo.runtime.prod.js`，看起来像业务/数据库/鉴权问题） | **Turbopack 对动态 `require("next/dist/compiled/next-server/<name>.runtime.prod.js")` 字符串的追踪不完整**（ISSUE #489）：只追到被 middleware 图带上的 `app-page-turbo`，`app-route-turbo`（所有 `route.ts` 都要它）一条 `.nft.json` 都没有 → standalone 的 `next-server/` 只有 3 个文件（仓库里 74 个）。构建期静默、CI 只跑 build，而本仓库 `next start` 与 `output: standalone` 不兼容，**没有任何常规门禁会去启动 standalone** | 已修（§7.4）：`next.config.js` 顶层补 `outputFileTracingIncludes`（`./node_modules/next/dist/compiled/next-server/*runtime.prod.js`，实测 +26 文件 / ≈2.6MB，API 全恢复 200）；`tests/standalone-runtime-completeness.test.ts` 锁配置与产物缺件；`check-standalone-contents.cjs` 加**反向**检查「必须有的」运行时脚本 |
 | **安装包里带着 `AGENTS.md` 内部规范全文与整套 `scripts/` 门禁脚本**（解包即得；产物护栏却报「✓ 产物干净」） | **产物卫生清单的漏项**（ISSUE #489，与上面「密钥进包」同源、同一通道）：护栏 `FORBIDDEN` 只列了 `docs/*.md` / `src/**/*.test.*` / `changelog.d/*.md` / `.env` / `db.sqlite*`，**根级 `.md`、各 `*.config.*` 与整个 `scripts/` 一条都不匹配**；`build-desktop.mjs` 的 `STATIC_NOISE` 又**只剔目录名**——这些是文件，于是随 static 被编译期内嵌进 exe | 已修（§7.3 末节）：`stripDevArtifacts` 走**白名单**（`scripts/` 只留运行时真的会读的 `install-comfyapp-helper.ps1` + `dev-launcher.ps1`，新增脚本默认不进产物），根级文件黑名单逐项点名；产物护栏加 `ALLOWED_SCRIPTS` 同款白名单 + 判据锚 `^` 不误伤 `node_modules` 里的同名 README/tsconfig |
 | **`pnpm test` 随机非零退出**（`Test Files N passed` / `Tests M passed / 0 failed` 全绿，退出码却来自 `Unhandled Errors`；每次点名的文件都不同） | **游离的异步链路在用例结束后才 resolve/reject**（ISSUE #489）。已实测三处同族（都是「与报错点名的文件毫无关系」的失败）：① `use-model-library.ts` 的 `listQ.refetch().finally(() => setLoading(false))` 在 jsdom 环境拆除后才 resolve，触发 React 更新调度去读不存在的 `window`（`ReferenceError: window is not defined` @ `resolveUpdatePriority` / `dispatchSetState`）；② `use-custom-nodes-settings.ts` 的「完成后提示停留 800ms」`setTimeout` 同源；③ `runner-state.ts` 的 `schedulePersistLogs` **防抖定时器不属于任何生命周期**，清空内存 state 后仍在 200ms / 1500ms 后打到已 `vi.mock` 撤销的 repository（`TypeError: taskRepository.replaceLogs is not a function`）。`cleanup()` 只卸载组件、**不会取消已发出的 promise 与已排的 timer** | 已修：① 两处 hook 加卸载标记（先判存活再 setState）；③ 新增公共取消 API `cancelPersistLogs`，用例在 `beforeEach` **与** `afterEach` 两头都掐（只在 `beforeEach` 清，定时器会在「本用例结束后、下个 `beforeEach` 之前」的窗口里触发）。回归：`use-model-library.test.ts` 用「卡住回包 + 放行后记账」把偶发变**必现**（只统计更新调度栈的 `window` 读取，避开 react-query / tRPC 的 ambient 读取噪声），`reaper-decisions.test.ts` 锁「取消后不再有排期」。反向验证：还原任一实现即挂 |
@@ -1127,10 +1128,27 @@ reg delete "HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\comman
 
 ```bash
 pnpm install
-cp .env.example .env        # 必须：src/env.js 启动时校验，缺了直接报 Invalid environment variables
+pnpm env:init               # 必须：生成/补齐 .env（随机密钥 + 本地 OAuth 占位值）
 pnpm db:push                # Drizzle 同步表结构（经 scripts/db-push.mjs，见下方「建库」）
 pnpm dev                    # 经 scripts/dev.mjs 解析端口（缺省按检出路径推导）
 ```
+
+**`.env` 引导（`pnpm env:init`）为什么不能只写 `cp .env.example .env`**：
+`src/env.js` 的 createEnv 配了 `emptyStringAsUndefined: true`，而
+`.env.example` 里 `BETTER_AUTH_SECRET` 与两个 `BETTER_AUTH_GITHUB_*` 正是
+**空串** —— 空串等价于「没给」，于是照文档 cp 出来的人拿到的是
+`Invalid environment variables`，看不出是「值留空」。Windows 侧一直有
+`scripts/prepare-local-run.ps1` 的第 4 步自动补齐（随机密钥 + 占位值），
+**Linux / macOS 此前没有任何等价物**。`scripts/env-init.mjs` 就是那份能力
+（与 .ps1 同款口径：`BETTER_AUTH_SECRET` 用 64 位随机 hex、OAuth 两项填
+本地占位值，其余行原样保留），幂等、不覆盖已有配置。详见 §9.2 第 6 条。
+
+`dev.mjs` / `start.mjs` 在**起 Next 之前**做同一份预检（`scripts/env-preflight.mjs`）：
+未就绪即打印可行动作并非零退出。这条是必需的——否则 Next 会先打印
+`- Local: http://localhost:<port>` 与 `✓ Ready in 77ms`，**之后**才抛
+`Failed to load next.config.js`：用户读到的是「起来了但报错」，而真相是端口
+无人监听；且旧提示里的小贴士指向 `tools/start/run-local.ps1`（Windows 专属，
+与本模式的零 `.ps1` 依赖相悖）。
 
 **建库（`pnpm db:push`）为什么不能直接写 `drizzle-kit push`**：它在需要交互确认
 时会在无 TTY 环境（CI、脚本、远程会话、容器）报 `Interactive prompts require a
@@ -1198,6 +1216,19 @@ TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `
    的断言：常量单点、两侧共用、`buildSpawnArgs` 的 `>0` 口径、源码无裸端口字面量。
    回归测试见 `tests/comfyui-port-contract.test.ts`（契约）与
    `tests/check-comfyui-port-contract.test.ts`（门禁自身）。
+6. **`.env` 的生成与预检走跨平台入口，不依赖 `.ps1`**（ISSUE #489）：
+   生成/补齐用 `scripts/env-init.mjs`（`pnpm env:init`，与 Windows 的
+   `prepare-local-run.ps1` 第 4 步同口径），预检用 `scripts/env-preflight.mjs`
+   （`dev.mjs` / `start.mjs` 共用）。三条判据缺一不可：
+   - **空串等于没给**：`src/env.js` 配了 `emptyStringAsUndefined: true`，
+     所以 `.env.example` 的 `KEY=""` 不能算「已配置」——判据必须查「非空」，
+     只看「文件在不在」会让 `cp .env.example .env` 被误判为就绪；
+   - **预检必须在起 Next 之前**：否则 Next 先打印 `✓ Ready` 再抛错，用户读到的是
+     「起来了但报错」，而端口其实无人监听（同族形态见 §5「先 ✓ Ready 再崩」）；
+   - **提示里不得出现 Windows 专属入口**：旧实现在缺文件时提示「双击
+     `tools/start/run-local.ps1`」，与本模式的零 `.ps1` 依赖直接矛盾。
+   回归测试见 `tests/linux-env-bootstrap.test.ts`（含真跑 `env-init.mjs` 与
+   `dev.mjs`，反向验证：还原旧入口/去掉预检，对应用例必失败）。
 
 ### 9.3 这个模式**不**解决的问题（别误当成 Linux 支持）
 

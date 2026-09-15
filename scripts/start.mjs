@@ -13,12 +13,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveAppPort } from "./app-port.mjs";
 import { probeSchemaSync } from "./db-schema-state.mjs";
+import { exitIfEnvNotReady } from "./env-preflight.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // 显式 `-p` + PORT 双写：前者是 next 的权威参数，后者兜住其它读 PORT 的工具。
 const port = process.env.PORT ?? resolveAppPort(root);
 process.stdout.write(`[start.mjs] COMFYAPP_PORT=${port}\n`);
+
+// 环境配置预检：失败就**在起 Next 之前**退出并给出可行动作。
+// 放在这里的理由见 env-preflight.mjs —— 否则 Next 会先打印「✓ Ready」，
+// 用户看到的是「起来了但报错」，而事实是端口无人监听。
+exitIfEnvNotReady(root);
 
 if (probeSchemaSync(root) !== "ready") {
   process.stdout.write(

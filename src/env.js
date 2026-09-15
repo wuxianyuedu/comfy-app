@@ -16,15 +16,20 @@ if (process.env.NEXT_RUNTIME !== "edge") {
     ".env",
   );
   if (!process.env.SKIP_ENV_VALIDATION && !existsSync(envFilePath)) {
+    // 提示必须跨平台（ISSUE #489）：这里原本指着「双击 tools/start/run-local.ps1」，
+    // 而那是 Windows 专属入口 —— Linux / macOS / CI 上并不存在（规范 §9 的
+    // Web-only 模式明确不依赖任何 .ps1）。`pnpm env:init` 三平台同一条命令。
     const err = new Error(
       [
         "缺少 .env 环境配置文件，应用无法启动。",
         "",
-        "请把项目根目录下的 .env.example 复制一份并命名为 .env，再重新启动：",
-        "  · Windows：        copy .env.example .env",
-        "  · macOS / Linux：  cp .env.example .env",
+        "生成它（三平台同一条命令，跨平台、无需任何 .ps1）：",
+        "  pnpm env:init",
         "",
-        "小贴士：直接双击 tools/start/run-local.ps1 可自动生成 .env，无需手动处理。",
+        "手工方式：把 .env.example 复制为 .env，并至少填上",
+        "  BETTER_AUTH_SECRET=<64 位随机 hex>",
+        "  BETTER_AUTH_GITHUB_CLIENT_ID / _SECRET=<非空占位值即可>",
+        "（留空等于没给：校验把空串当「未配置」。）",
       ].join("\n"),
     );
     err.name = "MissingEnvFileError";
