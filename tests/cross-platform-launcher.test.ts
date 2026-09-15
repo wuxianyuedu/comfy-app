@@ -79,11 +79,11 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   it(`进程组回收真跑：spawnInGroup 起的进程树被杀完不留孤儿`, async () => {
     // 目标：一条带两个子进程的 shell —— 单杀 leader 会留下这两个子进程。
     const marker = `comfyapp-tree-${Date.now()}`;
-    const child = spawnInGroup(
-      "sh",
-      ["-c", `sh -c 'sleep 60 # ${marker}' & sh -c 'sleep 60 # ${marker}' & wait`],
-      { cwd: process.cwd() },
-    );
+    const child = spawnInGroup({
+      command: "sh",
+      args: ["-c", `sh -c 'sleep 60 # ${marker}' & sh -c 'sleep 60 # ${marker}' & wait`],
+      cwd: process.cwd(),
+    });
     expect(await waitUntil(() => countMarkedProcesses(marker) >= 3, 8000)).toBe(true);
 
     const result = await killProcessTree({ pid: child.pid!, detached: true });
@@ -204,8 +204,56 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     );
     // 旧判据只认 scripts/dev-launcher.ps1 → Linux/macOS 上 resolve_project_root()
     // 恒返回空串：启动页读不到 launch-status、壳日志落不了盘，表现为「一直转圈」。
+    // 现在认的是**编排器的唯一实现**（.ps1 只是它的 Windows 调用入口）——
+    // 判据绑在入口形态上，换入口时就会再静默失效一次。
     expect(lib).toContain("fn looks_like_project_root");
-    expect(lib).toContain("dev-launcher.mjs");
+    expect(lib).toContain('join("dev-launcher.mjs")');
+    expect(lib).not.toMatch(/looks_like_project_root[\s\S]{0,400}dev-launcher\.ps1/);
+  });
+
+  it("统一编排：Windows 走同一份 .mjs，.ps1 只剩调用入口", () => {
+    const root = process.cwd();
+    const ps1 = fs.readFileSync(path.join(root, "scripts", "dev-launcher.ps1"), "utf8");
+    // 入口只做「定位 + 转交 + 透传退出码」：不再有 Windows 专属的编排调用
+    // （taskkill / Get-CimInstance / Job Object / cmd.exe）。
+    expect(ps1).toContain("dev-launcher.mjs");
+    // 判据是「不再调用」而不是「不再提及」：注释里说清「以前用过什么、现在为什么
+    // 不用」是有价值的，拦掉会让注释被迫撒谎。
+    for (const forbidden of [
+      /taskkill\s+\//,
+      /Get-CimInstance\s+-Filter/,
+      /Add-Type\s+-TypeDefinition/,
+      /cmd\.exe"?\s*\/c/,
+    ]) {
+      expect(ps1).not.toMatch(forbidden);
+    }
+    // 「.ps1 只是入口」有机器可查的体积判据：1324 行的旧实现不该再长回来
+    expect(ps1.split("\n").length).toBeLessThan(120);
+  });
+
+  it("编排器不再自己摸 process.platform（平台判据收在 launcher-core 与 kill-process-tree）", () => {
+    const root = process.cwd();
+    const launcher = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "dev-launcher.mjs"),
+      "utf8",
+    );
+    // 唯一允许出现平台判据的地方是它 import 的两个模块：
+    //   · launcher-core/shell.mjs 的 isWindows()（进程组 / 可执行名后缀）
+    //   · launch-core/procs.mjs 的 isWindows()（进程与端口探测机制）
+    expect(launcher).not.toMatch(/process\.platform === "win32"/);
+    for (const rel of ["shell.mjs", "procs.mjs", "orchestrator.mjs", "log.mjs", "worktree.mjs"]) {
+      expect(fs.existsSync(path.join(root, "scripts", "launcher-core", rel))).toBe(true);
+    }
+  });
+
+  it("壳退出时的统一回收走 reap-process.mjs（不在 Rust 里重写平台分支）", () => {
+    const root = process.cwd();
+    const lib = fs.readFileSync(path.join(root, "src-tauri", "src", "lib.rs"), "utf8");
+    // kill_sidecar 除了插件的 kill()，还要补一刀统一回收：Node 之下的
+    // next-server / turbopack worker 才是真正会残留成孤儿的那几层。
+    expect(lib).toMatch(/fn kill_sidecar\(project_root: &str\)/);
+    expect(lib).toContain("reap-process.mjs");
+    expect(lib).not.toMatch(/Command::new\("taskkill"\)/);
   });
 
   it("sidecar 命名按平台判据收口（不再是写死的 node.exe）", () => {

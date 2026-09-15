@@ -1,13 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
 import fs from "node:fs";
 import path from "node:path";
 import { OLLAMA_RUNTIME_LOG } from "@/lib/log-paths";
 import { OLLAMA_DEFAULT_PORT } from "@/lib/endpoints";
-
-const execAsync = promisify(exec);
+import { killProcessTreeByImage } from "@/lib/kill-process-tree";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +14,9 @@ export const dynamic = "force-dynamic";
  *  llmConfig 的入库默认值与 MCP 侧 LLM 兜底读取，本地再写一个字面量就又是一处
  *  「改漏就静默分叉」的落点。 */
 const OLLAMA_PORT = OLLAMA_DEFAULT_PORT;
+
+/** Ollama 的可执行文件名（按映像名回收时的目标）。 */
+const OLLAMA_IMAGE = process.platform === "win32" ? "ollama.exe" : "ollama";
 
 /** 本地时间戳（YYYY-MM-DD HH:mm:ss）：runtime 日志是给本机用户看的。 */
 function localTimestamp(): string {
@@ -66,9 +66,13 @@ async function ollamaUp(): Promise<boolean> {
 /**
  * POST /api/llm/ollama-stop
  *
- * 关闭 Ollama：优先用 `ollama stop`（官方 CLI，会优雅终止 serve 实例）。
- * CLI 不可用或不支持时回退到 taskkill / kill 进程树 —— 杀整棵树，
- * 避免 cmd 外壳死了留下 serve 孤儿继续锁 11434 端口。
+ * 关闭 Ollama：官方 CLI 没有「退出 serve」的命令（`ollama stop <model>` 只停
+ * 模型加载），所以进程级终止是唯一可靠的关闭方式。
+ *
+ * 终止**按映像名杀整棵树**，判据收在 `~/lib/kill-process-tree`（`mode: "image"`）：
+ * Windows 映射到 `taskkill /IM ollama.exe /T /F`，POSIX 映射到 `pkill -x ollama`。
+ * 本模块不再自己拼命令、也不自己摸 `process.platform` —— 按映像名杀同样是
+ * 「杀整棵树」的一种，散在路由里就又是一处平台判据。
  */
 export async function POST(_req: NextRequest) {
   await getServerUser();
@@ -77,25 +81,13 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ ok: true, detail: "Ollama 未在运行" });
   }
 
-  // 1) 优雅路径：ollama stop <model> 只停模型加载，不退 serve ——
-  //    官方 CLI 没有「退出 serve」的命令，所以进程级终止是唯一可靠的关闭方式。
-  // 2) 进程树终止：
-  //    Windows: taskkill /IM ollama.exe /T /F（按映像名杀整棵树）
-  //    POSIX:   pkill -TERM ollama（按进程名）
-  try {
-    appendOllamaLog(`[action] 关闭 Ollama（${process.platform === "win32" ? "taskkill /IM ollama.exe /T /F" : "pkill -TERM -x ollama"}）`);
-    if (process.platform === "win32") {
-      await execAsync("taskkill /IM ollama.exe /T /F");
-    } else {
-      await execAsync("pkill -TERM -x ollama || true");
-    }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    appendOllamaLog(`[err] 关闭失败：${msg}`);
-    return NextResponse.json(
-      { ok: false, detail: `关闭 Ollama 失败：${msg}` },
-      { status: 500 },
-    );
+  // 按映像名杀整棵进程树（平台机制由 kill-process-tree 选）。
+  const killed = await killProcessTreeByImage(OLLAMA_IMAGE);
+  appendOllamaLog(`[action] 关闭 Ollama：${killed.via}`);
+  if (!killed.ok) {
+    const msg = `关闭 Ollama 失败：${killed.via}`;
+    appendOllamaLog(`[err] ${msg}`);
+    return NextResponse.json({ ok: false, detail: msg }, { status: 500 });
   }
   // 等端口真正释放（最多 5s），给界面状态行一个确定的结果
   for (let i = 0; i < 10; i++) {

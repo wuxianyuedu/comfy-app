@@ -43,7 +43,9 @@ Comfy-APP-T3/
 │  ├─ icons/                # 应用图标
 │  └─ binaries/             # Node 运行时 sidecar（Windows: node-<triple>.exe；其它: node-<triple>）
 ├─ scripts/                 # 启动与构建脚本（被壳/工具调用）
-│  ├─ dev-launcher.ps1      # 启动器：起 dev server / Tauri 壳 / 探测端口
+│  ├─ dev-launcher.mjs      # 启动编排（全平台同一份：预检 / 端口 / 拉起 / 回收）
+│  ├─ dev-launcher.ps1      # Windows 调用入口（只负责转交给上面那份）
+│  ├─ launcher-core/        # 编排的平台机制层（进程与端口探测 / 进程组 / 日志）
 │  ├─ entry-common.ps1      # 双击入口公共库（定位项目根 / 解析 pwsh / 透传退出码）
 │  ├─ build-desktop.mjs     # 组装 src-tauri/static（standalone + splash + sidecar）
 │  └─ install-comfyapp-helper.ps1  # 注册 comfyapp:// 协议
@@ -127,12 +129,17 @@ Comfy-APP-T3/
 - （可选）**Python**：仅 Windows 双击入口（`start-tauri*.exe` 的启动画面）与
   comfy-cli venv 用到
 
-启动编排按平台分两条等价链路，**改一侧必须同步另一侧**（规范 §3.3）：
+启动编排**只有一份实现**：`scripts/dev-launcher.mjs`（Windows 也走它）。
+Windows 侧多一层「怎么被拉起」的入口（双击 / `start-tauri*.exe`），平台差异如下
+（规范 §3.2 / §3.3）：
 
-| 平台 | 编排器 | 回收机制 |
+| 平台 | 入口 | 平台机制（回收 / 探测） |
 |---|---|---|
-| Windows | `scripts/dev-launcher.ps1`（双击入口走 `start-tauri*.exe`） | `taskkill /T /F` + Job Object |
-| Linux / macOS | `scripts/dev-launcher.mjs`（`node scripts/dev-launcher.mjs`） | 进程组（`detached` 建组 + 整组信号） |
+| Windows | `scripts/dev-launcher.ps1`、`tools/start/*.ps1`（双击）、`start-tauri*.exe` | `taskkill /PID <pid> /T /F`（收在 `src/lib/kill-process-tree.ts`） |
+| Linux / macOS | `pnpm dev`、`node scripts/dev-launcher.mjs` | POSIX 进程组（`detached` 建组 + 整组信号） |
+
+平台判据只有两处出处（`scripts/launcher-core/**` 与 `kill-process-tree`）：入口与
+编排都不再自己摸 `process.platform`，因此没有「改一侧忘了另一侧」这件事。
 
 ---
 
@@ -277,7 +284,8 @@ pnpm tauri build
 它依次执行：
 1. `tools\build\build-tauri-release.ps1` → 编译 `src-tauri/target/release/app.exe`
    - 若 `src-tauri/static` 不存在，会自动跑 `node scripts/build-desktop.mjs` 完整组装；
-   - 已存在则仅增量同步 `splash.html` / `dev-launcher.ps1` / `index.html`。
+   - 已存在则仅增量同步 `splash.html` / 启动编排器（`dev-launcher.mjs` 与其
+     `launcher-core/*` 运行期依赖） / `index.html`。
 2. `tools\build\build-launcher.ps1` → 打包 `start-tauri\start-tauri.exe`
 
 最终双击 `start-tauri\start-tauri.exe` 即可启动（自动优先使用 release 壳）。

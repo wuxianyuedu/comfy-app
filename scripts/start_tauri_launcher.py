@@ -7,12 +7,17 @@ start_tauri_launcher.py — Comfy-APP 桌面壳启动器（纯 Win32 启动画�
 点击后立刻弹出一个暗色启动画面，
 明确告知「正在启动」，避免「点了像没反应」的困惑。
 
-职责：
+职责（分层：本文件是**入口**，编排在 scripts/dev-launcher.mjs）：
   1. 弹出 Win32 自绘启动画面（暗色极光风格，与 app 一致）。
-  2. 在隐藏窗口中调用 scripts/dev-launcher.ps1 -Tauri 启动 Tauri 桌面壳。
+  2. 在隐藏窗口中调用 `node scripts/dev-launcher.mjs --mode ...` 启动编排。
   3. 轮询 Win32 窗口，直到 Tauri 主窗口（标题 "Comfy APP"）出现后关闭画面。
   4. 兜底：超过 240s 仍未检测到窗口则关闭画面（不杀启动进程）；
      若启动进程提前异常退出则画面提示失败。
+
+**为什么是 node 而不是 PowerShell**：编排的唯一实现是跨平台的
+`scripts/dev-launcher.mjs`（规范 §3），`scripts/dev-launcher.ps1` 只是它的
+Windows 调用入口。启动器直接调 mjs 可以少一层宿主进程，也让「Linux/macOS 上
+没有 pwsh 也能走同一条编排」这件事在架构上不成立都不行——不存在的分支不会漂移。
 
 依赖：仅 Python 标准库 + ctypes（无需 tkinter，避免 PyInstaller 打包缺库）。
 
@@ -237,8 +242,13 @@ def close_logging() -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 #  工具函数
 # ═══════════════════════════════════════════════════════════════════════════════
+def _launcher_entry(project_root: str) -> str:
+    """启动编排器的入口（跨平台唯一实现）。"""
+    return os.path.join(project_root, "scripts", "dev-launcher.mjs")
+
+
 def _is_project_root(path: str) -> bool:
-    return os.path.isfile(os.path.join(path, "scripts", "dev-launcher.ps1"))
+    return os.path.isfile(_launcher_entry(path))
 
 
 def get_project_root() -> str:
@@ -326,7 +336,10 @@ def _is_app_shell_window(hwnd: HWND, title: str, exact: bool = False) -> bool:
     if not title:
         return False
     matched = title.strip() == APP_WINDOW_TITLE if exact else APP_WINDOW_TITLE in title
-    if not matched or _window_process_name(hwnd) != "app.exe":
+    # exe 名按平台判据取：Windows 是 app.exe，Linux/macOS 是无后缀的 app。
+    # 写死 "app.exe" 会让「同一条启动链在 POSIX 上永远找不到窗口」——而这条
+    # 判据的失败形态很安静（只是找不到，不报错）。
+    if not matched or _window_process_name(hwnd) != app_window_process_name():
         return False
     # 多检出并行：exe 路径必须落在本检出内（前缀未初始化时退回旧行为）
     if _SHELL_OWN_PREFIX and not _window_process_path(hwnd).startswith(_SHELL_OWN_PREFIX):
@@ -555,14 +568,14 @@ def _safe_remove(path: str) -> None:
 
 
 def _shell_pid_file(project_root: str) -> str:
-    """记录本次启动器拉起的桌面壳 PID（由 dev-launcher.ps1 写入）。
+    """记录本次启动器拉起的桌面壳 PID（由编排器 dev-launcher.mjs 写入）。
 
-    dev-launcher.ps1 只负责在壳退出时回收它；而「启动器 / 监控线程先退出、壳还活着」
+    编排器只在壳退出时回收它；而「启动器 / 监控线程先退出、壳还活着」
     这条路径没人善后——最典型的是用户直接关掉启动器窗口后，app.exe 变成无主的常驻
     进程：桌面窗口没了，进程还在，下次编译还会锁住 target\release\app.exe。
 
     **上一轮留下的 PID 文件必须先删掉**：这个文件是「上一次 run 的残留」，而
-    dev-launcher.ps1 是被本次启动器另起的进程，等它走到写 PID 那一步之前，文件里
+    编排器是被本次启动器另起的进程，等它走到写 PID 那一步之前，文件里
     还留着上一轮的旧 PID。旧 PID 很可能已被系统回收给别的无关进程（Windows 会复用
     PID），一旦兜底回收路径读到它就会去杀一个不相干的进程。先删 = 窗口期内读不到
     文件（_kill_shell_from_pid_file 直接返回），语义安全。
@@ -571,16 +584,21 @@ def _shell_pid_file(project_root: str) -> str:
 
 
 def _reset_shell_pid_file(project_root: str) -> None:
-    """清掉上一轮的桌面壳 PID 文件（在拉起 dev-launcher.ps1 之前调用）。"""
+    """清掉上一轮的桌面壳 PID 文件（在拉起编排器之前调用）。"""
     _safe_remove(_shell_pid_file(project_root))
 
 
 def _kill_shell_from_pid_file(project_root: str) -> None:
     """回收本次启动器拉起的桌面壳（整棵进程树）。
 
-    只在 dev-launcher.ps1 已退出、壳仍在运行的兜底路径调用：此时脚本自身的
-    WaitForExit + taskkill 兜底都没机会跑，必须由启动器补刀。PID 取不到 /
-    不是数字 / 进程已退出都直接返回，不做任何猜测性击杀。
+    只在编排器已退出、壳仍在运行的兜底路径调用：此时编排器自己的回收路径没机会
+    跑，必须由启动器补刀。PID 取不到 / 不是数字 / 进程已退出都直接返回，不做任何
+    猜测性击杀。
+
+    **回收动作本身也不在这里拼命令**：转交 `scripts/launcher-core/shell.mjs` 的
+    平台实现（Windows `taskkill /PID /T /F`，POSIX 进程组信号）—— 启动器是
+    Windows 专属入口，但「怎么杀整棵树」这条判据必须与编排侧同源，否则又是一处
+    会静默分叉的平台分支。
     """
     path = _shell_pid_file(project_root)
     try:
@@ -592,15 +610,19 @@ def _kill_shell_from_pid_file(project_root: str) -> None:
         _safe_remove(path)
     if not _is_pid_alive(pid):
         return
-    log(f"shell process {pid} still alive after dev-launcher exit, killing process tree")
+    log(f"shell process {pid} still alive after launcher exit, reaping process tree")
     try:
-        subprocess.run(
-            ["taskkill", "/PID", str(pid), "/T", "/F"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=10,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
+        node = _node_exe()
+        reaper = os.path.join(project_root, "scripts", "reap-process.mjs")
+        if node and os.path.isfile(reaper):
+            subprocess.run(
+                [node, reaper, str(pid)],
+                cwd=project_root,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=20,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
     except Exception as exc:
         log(f"kill shell process failed: {exc}")
 
@@ -632,7 +654,7 @@ def _status_file_path(project_root: str) -> str:
 
 
 def _resolve_dev_log_path(project_root: str) -> str:
-    """dev-launcher.ps1 可能因 dev-launcher.log 被占用而回退到其它文件名，
+    """编排器可能因 dev-launcher.log 被占用而回退到其它文件名，
 
     通过 sentinel 文件定位本次运行的真实日志路径。
     """
@@ -1184,7 +1206,7 @@ class SplashWindow:
             nonlocal last_size, log_path
             while not self._stop_tailer.is_set():
                 try:
-                    # dev-launcher.ps1 可能因文件被占用回退到 dev-launcher-<pid>.log，
+                    # 编排器可能因文件被占用回退到 dev-launcher-<pid>.log，
                     # 通过 sentinel 文件 dev-launcher-current.txt 定位本次运行的真实日志。
                     resolved = _resolve_dev_log_path(project_root)
                     if resolved != log_path:
@@ -1632,8 +1654,13 @@ class SplashWindow:
 #  启动完成后的前台归属复核（窗口交接那一刻，独立进程）
 # ═══════════════════════════════════════════════════════════════════════════════
 def app_window_process_name() -> str:
-    """应用壳窗口所属进程的 exe 文件名（小写）。"""
-    return os.path.basename(sys.executable).lower() if os.name == "nt" else "app.exe"
+    """应用壳窗口所属进程的 exe 文件名（小写）。
+
+    Windows 下壳是 `app.exe`；Linux / macOS 下无后缀（`app`，macOS 为 .app 包内
+    的同名可执行文件）。判据一处定义、两个调用点复用 —— 写死后缀会让 POSIX 侧
+    「找不到窗口」而不报错，是最难查的那类静默失败。
+    """
+    return "app.exe" if os.name == "nt" else "app"
 
 
 def _find_app_window() -> HWND:
@@ -1761,7 +1788,8 @@ def ensure_comfy_cli_venv(project_root: str) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  启动 dev-launcher.ps1
+# ═══════════════════════════════════════════════════════════════════════════════
+#  启动编排器（node scripts/dev-launcher.mjs）
 # ═══════════════════════════════════════════════════════════════════════════════
 def _warn_if_stale_shell(project_root: str) -> str:
     """壳二进制比壳源码旧时记一条可定位的警告，返回警告文本（空串表示没问题）。
@@ -1773,7 +1801,7 @@ def _warn_if_stale_shell(project_root: str) -> str:
     确切结论，但它能把「先重编壳」这一步提到用户面前——这比让人对着一个没反应的
     按钮猜要省事得多。
 
-    与 `dev-launcher.ps1` 的壳时效检查（stale_shell）同源、同判据。
+    与编排器 `shellStaleWarning()` 的壳时效检查（stale_shell）同源、同判据。
     """
     try:
         shell_sources = [
@@ -1802,54 +1830,74 @@ def _warn_if_stale_shell(project_root: str) -> str:
             os.path.join(project_root, "src-tauri", "target", "debug", "app.exe"),
         ):
             try:
-                if os.path.getmtime(exe) >= newest:
-                    return ""
-                break
+                if os.path.getmtime(exe) < newest:
+                    return (
+                        "正在运行旧版桌面壳（app.exe 比壳源码/配置旧），界面可能不是最新逻辑；"
+                        "建议重编：cd src-tauri && cargo build --release --features custom-protocol"
+                    )
             except OSError:
                 continue
-
-        warn = (
-            "桌面壳早于壳源码 / 启动页，可能是旧壳（窗口按钮依赖新壳命令）。"
-            "请重编壳：cd src-tauri && cargo build --release "
-            "--features custom-protocol"
-        )
-        log("STALE SHELL: " + warn)
-        return warn
+        return ""
     except Exception as exc:
-        log(f"stale shell check error: {exc}")
+        log(f"stale shell check failed: {exc}")
         return ""
 
 
+def _node_exe() -> str:
+    """解析 node 可执行文件（不硬编码安装路径）。"""
+    for name in ("node", "node.exe"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return ""
+
+
+def _shell_exe(project_root: str) -> str:
+    """预编译壳的可执行文件（按平台后缀解析：Windows app.exe，POSIX 无后缀）。
+
+    与编排器的 `defaultShellExe()` 同判据、同候选顺序；这里显式传进去是为了让
+    「启动器看到的壳」与「编排器拉起的壳」一定是同一个文件。
+    """
+    names = ("app.exe",) if os.name == "nt" else ("app",)
+    for profile in ("release", "debug"):
+        for name in names:
+            candidate = os.path.join(project_root, "src-tauri", "target", profile, name)
+            if os.path.isfile(candidate):
+                return candidate
+    return ""
+
+
 def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.Popen[str] | None":
-    ps1 = os.path.join(project_root, "scripts", "dev-launcher.ps1")
-    if not os.path.isfile(ps1):
-        log(f"dev-launcher.ps1 not found: {ps1}")
+    """拉起跨平台启动编排器（scripts/dev-launcher.mjs）。
+
+    参数按编排器的 CLI 约定传：`--mode tauri` / `--mode prebuilt`。返回 Popen
+    句柄：调用方（启动画面 / headless 监控）靠它判「编排器是否提前退出」，并用
+    PID 文件对仍存活的壳做兜底回收。
+    """
+    entry = _launcher_entry(project_root)
+    if not os.path.isfile(entry):
+        log(f"launcher entry not found: {entry}")
         return None
 
-    pwsh = shutil.which("pwsh") or shutil.which("pwsh.exe")
-    shell_name = "PowerShell 7"
-    if not pwsh:
-        pwsh = shutil.which("powershell") or shutil.which("powershell.exe")
-        shell_name = "Windows PowerShell"
-    if not pwsh:
-        log("neither pwsh nor powershell found in PATH")
+    node = _node_exe()
+    if not node:
+        log("node not found in PATH (dev-launcher.mjs needs it)")
         return None
+    log(f"using node: {node}")
 
-    log(f"using shell: {shell_name} ({pwsh})")
+    node_args = [entry, "--mode", "tauri" if mode == "tauri" else "prebuilt"]
+    if mode != "tauri":
+        shell = _shell_exe(project_root)
+        if shell:
+            node_args += ["--shell-exe", shell]
+            log(f"prebuilt shell: {shell}")
 
-    if mode == "tauri":
-        ps_args = ["-Tauri"]
-        log(f"launching {ps1} -Tauri")
-    else:
-        ps_args = ["-Prebuilt"]
-        log(f"launching {ps1} -Prebuilt")
-
-    # 拉起 dev-launcher.ps1 之前先清掉上一轮留下的壳 PID 文件：窗口期内读到的
-    # 只会是「上一轮的旧 PID」，而那号可能已被无关进程占用（见 _shell_pid_file）。
+    # 拉起编排器之前先清掉上一轮留下的壳 PID 文件：窗口期内读到的只会是
+    # 「上一轮的旧 PID」，而那号可能已被无关进程占用（见 _shell_pid_file）。
     _reset_shell_pid_file(project_root)
 
-    # 启动 PowerShell 隐藏窗口；stdin 也关闭避免句柄泄漏
-    # stdout/stderr 重定向到文件，方便排查「提前退出但无日志」的问题。
+    # 隐藏窗口起 node；stdin 关闭避免句柄泄漏。stdout/stderr 重定向到文件，
+    # 方便排查「提前退出但无日志」的问题。
     try:
         out_path = os.path.join(project_root, "log", "launcher", "dev-launcher-stdout.log")
         err_path = os.path.join(project_root, "log", "launcher", "dev-launcher-stderr.log")
@@ -1862,8 +1910,7 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
         out = open(out_path, "a", encoding="utf-8", buffering=1)
         err = open(err_path, "a", encoding="utf-8", buffering=1)
         return subprocess.Popen(
-            [pwsh, "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
-             "-File", ps1] + ps_args,
+            [node] + node_args,
             cwd=project_root,
             stdin=subprocess.DEVNULL,
             stdout=out,
@@ -1873,13 +1920,14 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
             # 对 onedir 模式同样有益：子进程不会误持 launcher 目录下的文件句柄。
             close_fds=True,
             # Windows 上无 POSIX 进程组概念（start_new_session 仅 POSIX 有效）。
-            # 启动器与子进程的隔离由 dev-launcher.ps1 负责：其内部用
-            # taskkill /T /F + Job Object 兜底回收整棵进程树。
-            creationflags=subprocess.CREATE_NO_WINDOW,
+            # 进程树的隔离与回收由编排器负责：它走 src/lib/kill-process-tree.ts
+            # （Windows taskkill /T /F，POSIX 进程组信号）。
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except Exception as exc:
         log(f"subprocess.Popen failed: {exc}")
         return None
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1982,7 +2030,7 @@ def _monitor_headless(
         last_write = 0.0
         while time.time() < deadline:
             try:
-                # 如果 dev-launcher.ps1 切换了当前日志文件，跟随 sentinel
+                # 如果编排器切换了当前日志文件，跟随 sentinel
                 resolved = _resolve_dev_log_path(project_root)
                 if resolved != log_path:
                     log_path = resolved
@@ -2064,7 +2112,7 @@ def _monitor_headless(
                 _fatal_box(
                     _build_failure_message(
                         project_root,
-                        f"启动进程 dev-launcher.ps1 提前退出（exit={exit_code}）。",
+                        f"启动进程 dev-launcher.mjs 提前退出（exit={exit_code}）。",
                     )
                 )
                 return 1
@@ -2278,16 +2326,16 @@ def main(argv: list[str] | None = None) -> int:
     mode = _resolve_mode(args)
     # 把启动模式透传给 Rust 壳，让 dev/standalone 不再依赖 resource_dir 探测：
     #   standalone -> 壳必须走内嵌 server.js（缺失即报错，不回退 dev）
-    #   其它        -> 壳直接加载 COMFYAPP_DEV_URL（由 dev-launcher.ps1 起 dev server）
+    #   其它        -> 壳直接加载 COMFYAPP_DEV_URL（由编排器起 dev server）
     os.environ["COMFYAPP_LAUNCH_MODE"] = mode
     if mode != "standalone":
-        ps1_path = os.path.join(project_root, "scripts", "dev-launcher.ps1")
-        if not os.path.isfile(ps1_path):
+        entry_path = _launcher_entry(project_root)
+        if not os.path.isfile(entry_path):
             return _fatal_box(
-                f"找不到启动脚本：{ps1_path}\n请把 start-tauri.exe 放在项目根目录。"
+                f"找不到启动编排器：{entry_path}\n请把 start-tauri.exe 放在项目根目录。"
             )
     else:
-        ps1_path = None
+        entry_path = None
 
     # 单实例保护 + 陈旧锁自愈
     # 互斥量按检出隔离（§1.4）：名字带上检出路径哈希，另一份检出的启动器
@@ -2368,7 +2416,7 @@ def main(argv: list[str] | None = None) -> int:
                 kernel32.CloseHandle(mutex)
             _cleanup_status(project_root)
             close_logging()
-            return _fatal_box("无法启动 dev-launcher.ps1，请检查 PowerShell 是否可用。")
+            return _fatal_box("无法启动 scripts/dev-launcher.mjs，请检查 Node.js 是否可用。")
         _write_status(project_root, "initial")
         monitor_code = 0
         try:

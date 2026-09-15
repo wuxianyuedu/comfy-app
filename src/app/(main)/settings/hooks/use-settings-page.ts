@@ -420,7 +420,7 @@ export function useSettingsPage(): SettingsPageController {
    * 「checking」+ 静默写结果，但 baseUrl 等其它 effect 仍可能并发探测）。 */
   const ollamaStartingRef = useRef(false);
   /* 「关闭中」持锁标记：stopOllama 进行中禁止探测覆盖状态。Ollama 的关闭
-   * 动作（taskkill + 等端口释放）最长可挂 5s，期间 useEffect 触发的探测
+   * 动作（终止进程树 + 等端口释放）最长可挂 5s，期间 useEffect 触发的探测
    * 会把状态行抢回「未运行」并重开「关闭 Ollama」按钮（同 #103 的
    * 「操作后状态被覆盖」族问题）。 */
   const ollamaStoppingRef = useRef(false);

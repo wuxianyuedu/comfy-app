@@ -36,7 +36,7 @@
 // 依赖它们等于把「回收失败」变成静默失败。POSIX 进程组用 `ps`（POSIX 必备）
 // 读 PGID，其余走 `process.kill`。
 
-import { exec, execFile, execFileSync } from "child_process";
+import { execFile, execFileSync, spawn } from "child_process";
 
 /** 回收目标的描述。pid <= 0 一律视为「没有可回收目标」，直接返回 ok。 */
 export interface KillProcessTreeOptions {
@@ -48,7 +48,14 @@ export interface KillProcessTreeOptions {
   detached?: boolean;
   /** 是否忽略信号、直接强杀（Windows 映射到 /F，POSIX 映射到 SIGKILL）。 */
   force?: boolean;
+  /** 回收模式：`tree`（默认）按 PID 杀整棵树；`image` 按**映像名**杀
+   *  （Windows `/IM <name>`、POSIX `pkill -x <name>`）。`image` 用于目标不是
+   *  本进程的直接子进程、只拿得到名字的场景（如外部拉起的 Ollama serve）。 */
+  mode?: KillProcessTreeMode;
 }
+
+/** 回收模式（见 `KillProcessTreeOptions.mode`）。 */
+export type KillProcessTreeMode = "tree" | "image";
 
 export interface KillProcessTreeResult {
   ok: boolean;
@@ -164,6 +171,96 @@ async function killPosix(
   }
 }
 
+
+/**
+ * 用官方 shell 插件托管的 sidecar 句柄回收整棵进程树（可从 Rust 壳调用）。
+ *
+ * 「跨平台机制由插件选」这条不该只属于 Rust 一侧：sidecar 的句柄在壳里，
+ * 而**回调到本模块**才能让 Windows 与 POSIX 走同一份判据与日志（`via`）。
+ * 壳主线程把句柄以原始整数转交过来（`CommandChild` 非 Send，不能跨线程移动）。
+ */
+export interface KillHostedChildOptions {
+  /** 供 shell 插件按 id 寻址的任意整数（壳侧通常传 `CommandChild::pid()`）。 */
+  handle: number;
+  /** 句柄的真实形态由宿主注入：不同 tauri 版本里 `CommandChild::kill` 的
+   *  调用形态不同（`self` / `&mut self`），因此变换由壳侧提供、本模块只负责
+   *  调用与记账。 */
+  kill: () => void;
+}
+
+
+/** 按**映像名**回收整棵树（目标不是本进程直接子进程、只拿得到名字时用）。
+ *
+ *  Windows：`taskkill /IM <name> /T /F`；POSIX：`pkill -x <name>`（精确匹配
+ *  进程名，避免误伤 `ollama-something`）。
+ *
+ *  与 `killProcessTree` 同属硬规则 3 的执行面：散在业务路由里各写一遍平台判据
+ *  与命令，才是历史「单杀留孤儿」反复出现的原因。
+ */
+export async function killProcessTreeByImage(image: string): Promise<KillProcessTreeResult> {
+  if (!image.trim()) return { ok: false, via: "无映像名（跳过）" };
+  if (isWindowsPlatform()) {
+    return { ok: true, via: spawnTaskkill(windowsKillArgs(image, "image")) };
+  }
+  return await new Promise<KillProcessTreeResult>((resolve) => {
+    const child = spawn("pkill", ["-x", image], { stdio: "ignore" });
+    // pkill 的退出码 1 = 「没有匹配的进程」，对回收语义来说是成功（目标已经不在）。
+    child.on("error", (error) =>
+      resolve({ ok: false, via: `pkill -x ${image} 失败（${error.message}）` }),
+    );
+    child.on("close", (code) =>
+      resolve({ ok: code === 0 || code === 1, via: `pkill -x ${image}（exit=${code}）` }),
+    );
+  });
+}
+
+/** Windows 的 taskkill 可执行路径（**唯一出处**，AGENTS 硬规则 3）。
+ *
+ *  为什么允许覆盖：Windows 上 `taskkill` 是系统自带命令，但启动链路要能被
+ *  **自动化测试**驱动（真起进程树、真回收、数残留），而测试不能去动本机无关
+ *  进程。`COMFYAPP_TASKKILL` 因此是一个显式的注入口，只在测试里用。
+ *
+ *  回收失败的后果是孤儿进程继续占端口与日志文件，而调用方以为已经回收，
+ *  因此命令原文一律写进 `via`，让运行日志能给出可复现线索。 */
+export function windowsTaskkillPath(): string {
+  // 空白串等于没给（否则会 spawn 一个空命令名，报错形态与「命令不存在」完全不同）。
+  const override = process.env.COMFYAPP_TASKKILL?.trim() ?? "";
+  return override.length > 0 ? override : "taskkill";
+}
+
+/** 构造 Windows 的回收命令参数（tree = `/PID <pid> /T /F`，image = `/IM <name> /T /F`）。 */
+export function windowsKillArgs(target: string, mode: KillProcessTreeMode): string[] {
+  return mode === "image" ? ["/IM", target, "/T", "/F"] : ["/PID", target, "/T", "/F"];
+}
+
+/** 发起一次 taskkill（异步派发，不阻塞；调用方随后自行探测确认）。 */
+export function spawnTaskkill(args: string[], onDone?: (ok: boolean) => void): string {
+  const exe = windowsTaskkillPath();
+  const child = spawn(exe, args, { stdio: "ignore", windowsHide: true });
+  child.on("error", () => onDone?.(false));
+  child.on("close", (code) => onDone?.(code === 0));
+  return `${exe} ${args.join(" ")}`;
+}
+
+/** 回收 sidecar 的整棵进程树（跨平台）。
+ *
+ *  实现取向：**先**让插件自己的机制回收（Windows 走 Job/任务终止、POSIX 走
+ *  进程组信号），**再**用本模块的判据补一刀按 pid 的整树回收 —— 插件负责
+ *  「快、跟随平台」，本模块负责「不漏」。两步都失败才算失败，且返回 `via`
+ *  让壳日志能说明到底走了哪条路。 */
+export function killHostedChild(opts: KillHostedChildOptions): KillProcessTreeResult {
+  const attempts: string[] = [];
+  try {
+    opts.kill();
+    attempts.push("shell-plugin");
+  } catch (error) {
+    attempts.push(`shell-plugin 失败（${error instanceof Error ? error.message : String(error)}）`);
+  }
+  const direct = killProcessTreeSync({ pid: opts.handle, force: true });
+  attempts.push(direct.via);
+  return { ok: direct.ok || attempts[0] === "shell-plugin", via: attempts.join(" → ") };
+}
+
 /**
  * 回收一棵进程树。
  *
@@ -176,15 +273,31 @@ async function killPosix(
 export async function killProcessTree(
   opts: KillProcessTreeOptions,
 ): Promise<KillProcessTreeResult> {
-  const { pid, detached = false, force = false } = opts;
+  return killProcessTreeWith(opts, { windows: isWindowsPlatform() });
+}
+
+/** `killProcessTree` 的可注入版本：平台由调用方给出（默认就是运行时平台）。
+ *
+ *  为什么要这个入口：Windows 分支在 Linux CI 上不可执行，于是长期只能靠
+ *  「断言命令字符串」——而这条判据连「命令真的发出去了吗」都答不了。把平台
+ *  变成**显式参数**之后，测试可以注入一个同名的假 taskkill，把 Windows 分支
+ *  在本机完整跑一遍（见 kill-process-tree.windows.test.ts）。
+ *
+ *  `image` 只在 `mode: "image"` 时使用：按映像名回收时目标不是 pid（Windows
+ *  看 `/IM <name>`，POSIX 走 `pkill -x <name>`）。
+ */
+export async function killProcessTreeWith(
+  opts: KillProcessTreeOptions,
+  { windows = isWindowsPlatform(), image = "" }: { windows?: boolean; image?: string },
+): Promise<KillProcessTreeResult> {
+  const { pid, detached = false, force = false, mode = "tree" } = opts;
   if (!pid || pid <= 0) return { ok: false, via: "无有效 PID（跳过）" };
 
-  if (isWindowsPlatform()) {
-    const cmd = `taskkill /PID ${pid} /T /F`;
-    await new Promise<void>((resolve) => {
-      exec(cmd, () => resolve());
-    });
-    return { ok: true, via: cmd };
+  if (windows) {
+    // taskkill 是异步派发：这里不等它退出，调用方随后用「探测确认」收尾
+    // （与同步入口同一语义）。命令原文写进 via，便于运行日志给出可复现线索。
+    const target = mode === "image" ? image : String(pid);
+    return { ok: true, via: spawnTaskkill(windowsKillArgs(target, mode)) };
   }
 
   return killPosix(pid, detached, force, await readOwnPgid());
@@ -197,17 +310,13 @@ export async function killProcessTree(
 export function killProcessTreeSync(
   opts: KillProcessTreeOptions,
 ): KillProcessTreeResult {
-  const { pid, detached = false, force = false } = opts;
+  const { pid, detached = false, force = false, mode = "tree" } = opts;
   if (!pid || pid <= 0) return { ok: false, via: "无有效 PID（跳过）" };
 
   if (isWindowsPlatform()) {
     // 同步路径不阻塞等 taskkill 退出：Windows 侧命令本身是异步派发的，
     // 调用方后续都会自行探测确认。
-    const cmd = `taskkill /PID ${pid} /T /F`;
-    exec(cmd, () => {
-      /* 结果由调用方的探测确认兜底 */
-    });
-    return { ok: true, via: cmd };
+    return { ok: true, via: spawnTaskkill(windowsKillArgs(String(pid), mode)) };
   }
 
   const sig = force ? "SIGKILL" : "SIGTERM";
