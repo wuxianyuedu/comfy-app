@@ -1,7 +1,8 @@
-/** Detect whether a media source URL is a playable video (vs an image/GIF). */
-export function isVideo(src?: string | null): boolean {
-  if (!src) return false;
-  // NOTE: .gif is NOT a video — it must render as <img> (animated image),
-  // a <video> element cannot decode GIF files and would show black/blank.
-  return /\.(mp4|webm|ogg|m4v|mov)$/i.test(src);
-}
+/* ── 媒体源的 `<video>` / `<audio>` 渲染判据 ─────────────────────────
+ *
+ * 判据本身（扩展名集合）已收敛到 `media-kind.ts`（ISSUE #571）；本模块只保留
+ * 对外的兼容出口，避免一次性改动所有调用方的 import 路径。
+ *
+ * 新代码请直接 `import { isVideo, isAudio, kindOf } from "@/lib/media-kind"`。
+ */
+export { kindOf, isAudio, isVideo, type MediaKind } from "./media-kind";
