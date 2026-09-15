@@ -11,17 +11,20 @@
 任何改动动手前，先按序完成下列前置阅读（缺一视为违规）：
 
 1. `README.md` — 项目是什么、技术栈、目录结构、常用命令与入口。
-2. `docs/README.md` — 文档中心统一索引：主规范与 standards 文档集（01~17 章）、
+2. `docs/README.md` — 文档中心统一索引：主规范与 standards 文档集（01~18 章）、
    各指南、冲突裁决链与「改动前先看对应章节」的定位方法。
 3. 本文件（`AGENTS.md`）全文——尤其下方「硬规则」与「强制先读规范文档的改动范围」表。
 
 按改动范围快速定位规范章节：
 - 前端业务 / 组件 / 状态 / 性能 / 类型 / 样式 / 测试 → `docs/standards/README.md`
-  总览，按主题进入 `docs/standards/01~17` 对应章节；
+  总览，按主题进入 `docs/standards/01~18` 对应章节；
 - 启动链路 / Tauri 壳 / 构建打包 / ComfyUI 生命周期 → `docs/standards/launch-and-build.md`
   （§4.3「陈旧实例：运行图落后于源码」= 长开窗口 + 拉新代码导致的白屏及其通知；
   改 store 动作、或新增会被已挂载实例调用到的模块时必读；用户侧说明见
   `docs/guide-stale-code.md`）；
+- 改 `src/lib/**` → `docs/standards/18-lib层规范.md`（**它曾是四类门禁的盲区**：
+  分层 element / Node-only 声明规则 / 文件与函数长度棘轮 / 覆盖率门槛；
+  尤其 §18.4「`.server.ts` / `server-only` / 纯 Node 宿主」三选一的唯一口径）；
 - 提交 / PR / 自查清单 / 分支策略 → `docs/standards/13-提交与-code-review.md`
   （§13.1 自查清单、§13.5 门禁、§13.6 分支与合并、§13.6.1 master 提交守卫）；
 - 不确定读哪些 → 先读 `docs/standards/15-附录.md` §15.5「新成员 10 分钟速读路径」建立全局认知。
@@ -39,6 +42,8 @@
 | ComfyUI 生命周期 | `src/lib/comfyui/**`（lifecycle / executor-* / reaper） | §3、§5 |
 | 工坊管线 | `src/components/workshop/**`、`src/lib/workshop/**` | §5 |
 | UI/逻辑分离 | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时 | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)） |
+| lib 层边界与门禁 | `src/lib/**`（新增/移动模块、拆 `.server.ts`、共享类型给视图层） | §18（[18-lib层规范.md](docs/standards/18-lib层规范.md)）；分层由 `eslint.config.js` 的 `boundaries` 强制，文件长度棘轮 `check-file-structure.cjs --strict` |
+| 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs` | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/check-ps1-consistency.mjs` |
 | 跨平台行为 / 端口与文档 | 新增按平台分叉的逻辑、改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1 |
 | 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |
 | 复用/去重与常量收口 | 抽共享模块、加/改默认地址与端口、写新的质量门禁 | §12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口） |
@@ -110,8 +115,15 @@
     `tools/start/`，与 `tools/build/`、`tools/registry/`、`tools/studio/` 按用途并列；
     根目录只留工程配置与文档。R9 在 pre-commit 强制拦截，回归测试见
     `tests/check-file-structure.test.ts`。
-   理由：cmd.exe 走系统 ANSI（GBK）代码页，中文提示与子进程 UTF-8 输出必然乱码，
-   历史上被迫把入口做成「不含中文、不含逻辑」的哑壳。新增入口规则：
+    **`.ps1` 不是逻辑层，也不代表「这个仓库只能在 Windows 用」**：它只解决
+    「Windows 上怎么被双击 / 被 exe 拉起」。同一件事在 Linux / macOS 上的入口是
+    `pnpm` 脚本（`pnpm check:all` / `pnpm test:file` / `pnpm doc:gen` …），逐条登记在
+    规范 §9.5 的**跨平台动作对照表**，由 `scripts/check-ps1-consistency.mjs` 在
+    pre-commit 与 CI 核对。**新增动作 = 写 `.mjs` 逻辑 + 挂 `package.json` 脚本 +
+    登记 §9.5**；只写一侧、或在 `.ps1` 里又抄一份「会静默失效的清单」
+    （如 `KNOWN_FAILED_FILES`）都会被拦下。
+    理由：cmd.exe 走系统 ANSI（GBK）代码页，中文提示与子进程 UTF-8 输出必然乱码，
+    历史上被迫把入口做成「不含中文、不含逻辑」的哑壳。新增入口规则：
    - 入口只做「定位项目根 → 调用逻辑脚本 → 收尾」，逻辑下沉到 `scripts/` 或
      `tools/scripts/`，公共能力复用 `scripts/entry-common.ps1`；
    - 含中文的 `.ps1` 必须 **UTF-8 with BOM** 保存（无 BOM 会被 PowerShell 5.1
@@ -211,10 +223,34 @@
     `scripts/.rust-function-length-baseline.json`。Rust 特有的 `r#"…"#` 原始字符串与
     `'` 的两义性（字符字面量 vs 生命周期）已在状态机里处理。
 
+20. **`src/lib` 是门禁的一等公民，不是盲区**（ISSUE #575 / 规范 §18）：
+    - **`lib` 不得 import 视图层**（`src/components/**`、`src/app/**`）——`lib` 是被
+      `components` / `app` / `server` 共同依赖的**地基**，地基回头引视图会让「谁在最底层」
+      成环，也让 lib 模块无法脱离 React 树单测。需要共享的类型**下沉到 `src/lib` 下的
+      类型模块**（实例：`src/lib/workflow-io-types.ts`）。由 `eslint.config.js` 的
+      `boundaries` 强制：`src/lib/**` 已声明为 element `lib`，**元素顺序是语义** ——
+      `src/lib/core/**`、`src/lib/db/**` 必须排在 `src/lib/**` 之前，否则数据层被重新
+      归类成 `lib`、`server → components` 的既有约束会静默失效（回归测试守着）。
+    - **Node-only 三选一，不许「都没有」**（§18.4）：全部出口都只能服务端用 → `import
+      "server-only"`；同领域的**服务端拆件**（把 IO 从纯逻辑里切出去）→ `.server.ts`
+      后缀；**纯 Node 宿主**（由 `scripts/*.mjs` 动态加载）→ 两者都不加。
+      `src/lib/kill-process-tree.ts` 属第三类 —— 给它加 `server-only` 会让**启动编排
+      直接崩**（`server-only` 的入口就是一句 `throw`，只有 Next 的 `react-server`
+      条件才解析到空模块）。
+    - **新增守卫前先查是否已有更强的那一条**：客户端打包安全已由
+      `tests/client-bundle-node-builtins.test.ts`（从 `"use client"` 入口做可达性 DFS，
+      带完整引用链）守住，它比「每个 import Node 内建的模块都必须有 `server-only`」
+      更强也更准。再写一份「检查有没有 `server-only`」的脚本 = 两份会各自漂移的判据
+      （会静默失效的清单只许定义一次）。
+    - **R5 超 900 行的文件走棘轮**（`scripts/.file-size-baseline.json`，`--strict` 下
+      新增/变大即阻断）：此前 R5 只打一行「建议拆分」，而**没有人会因为一行提示去拆文件**
+      —— 900 行以上的文件长期停在 10 个，只增不减。「只提醒」等于没有判据。
+
 ## 快速排障
 
 被提交门槛拦下时，先看报错指出的规范章节（分支守卫 → §13.6.1、文件结构/命名 → §12.8、
-源码控制字符 → §12.11、CHANGELOG 碎片 → §13.10.5），不要用 `--no-verify` 换一条干净历史。
+源码控制字符 → §12.11、跨平台动作对照 → §9.5、CHANGELOG 碎片 → §13.10.5），
+不要用 `--no-verify` 换一条干净历史。
 
 **端口写进文档前先分清两条链路**（ISSUE #489）：`pnpm dev` / `pnpm start` / Playwright 走
 **解析链**（`.env` → 检出路径推导 3200~3999 → 兜底 3100，`scripts/app-port.mjs`），缺省拿到的是
@@ -232,6 +268,15 @@
 未就绪即打印可行动作。若你看到「`✓ Ready` 紧跟一屏栈」，说明预检被绕过或缺失，
 先按 §9.1 / §9.2 第 6 条核对。补 `.env` 用 `pnpm env:init`（跨平台；只 `cp .env.example .env`
 会因三项留空而仍然起不来）。
+
+**别把「pnpm 探测失败」直接读成「corepack 缓存损坏」**（ISSUE #576 / 规范 §2.1.1–2.1.3）：
+`pnpm 工具链不可用（exit=?）：未知错误` 且 stdout/stderr 全空的现场，多半是
+**PATH 上选中了一个存在但跑不起来的形态**（Windows 上 corepack 有 `pnpm` / `pnpm.cmd` /
+`pnpm.ps1` 三个文件，只有后两个经宿主能跑，`.cmd` 走 cmd.exe、无扩展名 shim 走 shebang，
+Node 一个都起不来）。「pnpm 可用」的判据是**真的能跑**：`whichCommand()` 选第一个
+`usableCommand()` 认下的候选（顺序见 `executableExts()`），探测与「坏了怎么修」收在
+`scripts/launcher-core/corepack.mjs`。自查入口 `pnpm check:toolchain`（跨平台，
+登记在规范 §9.5 对照表；不需要任何 `.ps1` 副本）。
 
 遇到启动/生成问题，先查规范文档 **§5 症状 → 根因对照表**（本项目全部历史
 事故都在里面），再按 **§4 日志布局** 的顺序看日志（log/ 按子系统分区：

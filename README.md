@@ -162,6 +162,25 @@ Windows 侧多一层「怎么被拉起」的入口（双击 / `start-tauri*.exe`
 | 注册 `comfyapp://` 协议（任务历史「打开文件夹」） | `tools/start/register-comfyapp-protocol.ps1` |
 | 构建发行包 / 重新打包启动器 | `tools/build/*.ps1`（见 `tools/README.md`） |
 
+### 同一件事在 Linux / macOS / CI 上怎么写
+
+`.ps1` 只解决「Windows 上怎么被双击」；**逻辑是跨平台的，入口不是**。常用动作逐条对照
+（完整表与它对应的门禁见 [launch-and-build.md §9.5](docs/standards/launch-and-build.md)）：
+
+| 我想… | Linux / macOS / CI | 对应 Windows 双击 |
+|---|---|---|
+| 启动开发环境 | `pnpm dev` | `tools/start/start-web.ps1` |
+| 跑质量门禁（typecheck / lint / vitest） | `pnpm check:all` | `tools/start/verify-quality.ps1` |
+| 只跑测试 | `pnpm test:file [文件]` | `tools/start/run-tests.ps1` |
+| 连已知基线失败一起跑 | `pnpm test:full` | `tools/start/run-tests.ps1 -Full` |
+| 同步依赖 + lint | `pnpm install && pnpm lint` | `tools/start/sync-lint.ps1` |
+| 生成 `.env` | `pnpm env:init` | `tools/start/run-local.ps1` |
+| 建库 | `pnpm db:push` | （双击启动链路会自动做） |
+| 生成原文文档 | `pnpm doc:gen` | `tools/docs/generate-docs.ps1` |
+
+> 这张表不是「文档承诺」：`scripts/check-ps1-consistency.mjs` 在 pre-commit 与 CI 核对
+> 每个动作两侧的脚本都真实存在 —— **新增动作却只写了一侧会提交失败**。
+
 ---
 
 ## 非开发人员快速运行

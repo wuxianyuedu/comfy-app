@@ -24,9 +24,8 @@ import {
   sizeSpecDims,
   sizeSpecFromText,
   sizeSpecKind,
-  sizeSpecMegapixels,
-  sizeSpecMultiple,
   sizeSpecSummary,
+  sizeSpecToRelay,
   sizeSpecToWxH,
   type AlignMultiple,
   type SizeClarityPreset,
@@ -80,11 +79,7 @@ export function shotSizeToRelay(
   state: ShotSizeState,
   scene: SizeScene = "image",
 ): { aspectRatio: string; megapixels: string; multiple: AlignMultiple } {
-  return {
-    aspectRatio: sizeSpecAspect(state),
-    megapixels: String(sizeSpecMegapixels(state, scene)),
-    multiple: sizeSpecMultiple(state, scene),
-  };
+  return sizeSpecToRelay(state, scene);
 }
 
 /** 生成按钮旁的紧凑摘要（如 "3:4 / 1k"，百万像素档追加倍数 "16:9 / 2M / 64"）。
