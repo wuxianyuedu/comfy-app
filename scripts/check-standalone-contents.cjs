@@ -60,7 +60,9 @@ const FORBIDDEN = [
  * 判据是「运行时真的会读」——目前只有两处，且都在代码里能指到：
  *   · install-comfyapp-helper.ps1：src/app/api/helper/{install,status}/route.ts
  *     以 process.cwd() 拼路径把它当下载内容返回（installerAvailable 也靠它判）；
- *   · dev-launcher.ps1：src-tauri/src/lib.rs::resolve_project_root() 的项目根判据。
+ *   · dev-launcher.ps1 / dev-launcher.mjs（+ 其 import 的 session / app-port）：
+ *     src-tauri/src/lib.rs::resolve_project_root() 的项目根判据，也是壳侧启动编排。
+ *     跨平台版本必须一起放行：只留 .ps1 时 Linux/macOS 的壳找不到项目根。
  *
  * 为什么白名单而不是黑名单：黑名单欠完备，每加一个根级文件/脚本就要记得补一条，
  * 而漏掉是静默的（上一次 db.sqlite 就是这么漏的）。白名单下新增脚本默认不进产物，
@@ -69,6 +71,9 @@ const FORBIDDEN = [
 const ALLOWED_SCRIPTS = new Set([
   "install-comfyapp-helper.ps1",
   "dev-launcher.ps1",
+  "dev-launcher.mjs",
+  "dev-launcher-session.mjs",
+  "app-port.mjs",
 ]);
 
 /** Next 自带运行时脚本目录（相对产物根）。 */

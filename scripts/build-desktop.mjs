@@ -9,13 +9,14 @@
  *        - .next/static/*            → static/.next/static（前端静态资源，standalone 不自动带）
  *        - public/*                  → static/public
  *        - 生成 index.html（sidecar 就绪前的过渡加载页）
- *   3) 复制当前 Node 运行时为 Tauri sidecar：src-tauri/binaries/node-<target-triple>.exe
- *      （bundle.externalBin = ["binaries/node"]，打包后资源中名为 node.exe）
+ *   3) 复制当前 Node 运行时为 Tauri sidecar：src-tauri/binaries/node-<target-triple>[.exe]
+ *      （bundle.externalBin = ["binaries/node"]，打包后资源中按平台名为 node / node.exe）
  *
  * 产物被 src-tauri/.gitignore 忽略，不入库。
  */
 import { execSync } from "node:child_process";
 import {
+  chmodSync,
   copyFileSync,
   cpSync,
   existsSync,
@@ -50,6 +51,21 @@ function targetTriple() {
     return process.arch === "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin";
   }
   return process.arch === "arm64" ? "aarch64-unknown-linux-gnu" : "x86_64-unknown-linux-gnu";
+}
+
+/**
+ * sidecar 文件名（**平台判据的单点**，Rust 侧 `sidecar_binary_name()` 与之同源）。
+ *
+ * Tauri 的 `bundle.externalBin` 声明的是「无后缀 basename」：打包器按目标三元组
+ * 去 `src-tauri/binaries/` 找 `node-<triple>[.exe]`，打进资源后按平台补
+ * `node.exe` / `node`。这里若只产出 `.exe`（历史实现），Linux/macOS 上
+ * `build.rs` 会在编译期直接 panic：
+ *   `resource path binaries/node-x86_64-unknown-linux-gnu doesn't exist`
+ * 而壳侧再写死 `node.exe`，即使编过也找不到 sidecar。两处必须同一个判据。
+ * @param {string} triple @param {NodeJS.Platform} [platform]
+ */
+export function sidecarFileName(triple, platform = process.platform) {
+  return platform === "win32" ? `node-${triple}.exe` : `node-${triple}`;
 }
 
 function fail(msg) {
@@ -98,12 +114,13 @@ mkdirSync(staticDir, { recursive: true });
 // dev-launcher.ps1 是手工维护的主脚本（scripts/dev-launcher.ps1）在
 // Tauri 打包内的同步副本。原本靠人工维护，这里改为构建时自动覆盖，
 // 保证 §10.2「改主脚本须同步副本」由构建流程保证，不再依赖手动同步。
-const launcherSrc = join(root, "scripts", "dev-launcher.ps1");
-if (existsSync(launcherSrc)) {
-  const launcherDestDir = join(staticDir, "scripts");
+const launcherDestDir = join(staticDir, "scripts");
+for (const launcherFile of ["dev-launcher.ps1", "dev-launcher.mjs"]) {
+  const launcherSrc = join(root, "scripts", launcherFile);
+  if (!existsSync(launcherSrc)) continue;
   mkdirSync(launcherDestDir, { recursive: true });
-  copyFileSync(launcherSrc, join(launcherDestDir, "dev-launcher.ps1"));
-  console.log("[build-desktop]   §10.2 已自动同步 scripts/dev-launcher.ps1 → static/scripts/dev-launcher.ps1");
+  copyFileSync(launcherSrc, join(launcherDestDir, launcherFile));
+  console.log(`[build-desktop]   §10.2 已自动同步 scripts/${launcherFile} → static/scripts/${launcherFile}`);
 }
 
 cpSync(nextOut, staticDir, { recursive: true, dereference: true }); // server.js + 裁剪 node_modules（解引用 symlink，避免 Windows 无开发者权限时 EPERM）
@@ -206,8 +223,13 @@ console.log(`[build-desktop]   static 体积 ${totalMB.toFixed(1)}MB（护栏阈
 // ── 3/4 Node 运行时 sidecar ────────────────────────────────
 console.log("[build-desktop] 3/4 复制 Node 运行时为 sidecar ...");
 mkdirSync(binDir, { recursive: true });
-const sidecar = join(binDir, `node-${targetTriple()}.exe`);
+const sidecar = join(binDir, sidecarFileName(targetTriple()));
 copyFileSync(process.execPath, sidecar);
+// 非 Windows 上 sidecar 必须可执行：Tauri 把它作为独立可执行文件按路径调用，
+// 少了执行位就是「服务起来后立刻退出、却没有任何报错」。
+if (process.platform !== "win32") {
+  chmodSync(sidecar, 0o755);
+}
 console.log(`[build-desktop]   sidecar: ${sidecar} (${(statSync(sidecar).size / 1024 / 1024).toFixed(1)} MB)`);
 
 // ── 4/4 完成 ───────────────────────────────────────────────

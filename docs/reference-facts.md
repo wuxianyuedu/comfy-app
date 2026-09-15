@@ -97,7 +97,9 @@
 |---|---|---|---|
 | `path.tauri.conf` | Tauri 配置 | `src-tauri/tauri.conf.json` | 窗口与构建配置 |
 | `path.lib.rs` | Rust 壳入口 | `src-tauri/src/lib.rs` | 窗口逻辑 / 端口协调 |
-| `path.dev-launcher` | 启动编排脚本 | `scripts/dev-launcher.ps1` | 唯一进程编排者 |
+| `path.dev-launcher` | 启动编排脚本（Windows） | `scripts/dev-launcher.ps1` | Windows 侧进程编排者（taskkill / Job Object） |
+| `path.dev-launcher.mjs` | 启动编排脚本（跨平台） | `scripts/dev-launcher.mjs` | Linux / macOS 侧进程编排者（进程组 / 会话锚点），与 .ps1 同契约同产物（规范 §3.3） |
+| `path.dev-launcher-session` | 启动会话锚点 | `scripts/dev-launcher-session.mjs` | PID + 心跳落盘，崩溃后仍可回收孤儿 |
 | `path.start-launcher-py` | Python 启动器 | `scripts/start_tauri_launcher.py` | PyInstaller 打包来源 |
 | `path.spec` | PyInstaller spec | `tools/start-tauri.spec` | 三个 exe 共用的打包定义 |
 | `path.build-launcher` | 打包预编译 exe 脚本 | `tools/scripts/build-launcher.ps1` | prebuilt 入口 |
