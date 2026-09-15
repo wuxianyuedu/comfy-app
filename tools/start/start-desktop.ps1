@@ -51,10 +51,12 @@ Write-Host ""
 
 $fail = 0
 
-# 1) 是否处于项目根目录（以 dev-launcher.ps1 作为目录结构标记）
+# 1) 是否处于项目根目录（以 scripts\dev-launcher.mjs 作为目录结构标记）
+# 判据刻意**不认 .ps1 入口**：编排的唯一实现是 .mjs，绑在入口形态上会在
+# 换入口时静默失效一次（本仓库已栽过一回，见 launch-and-build.md §9.3）。
 Say-Info "检查目录结构..."
-if (-not (Test-Path -LiteralPath (Join-Path $root "scripts\dev-launcher.ps1"))) {
-    Say-Err "未找到 scripts\dev-launcher.ps1 —— 本入口须放在项目根目录，"
+if (-not (Test-Path -LiteralPath (Join-Path $root "scripts\dev-launcher.mjs"))) {
+    Say-Err "未找到 scripts\dev-launcher.mjs —— 本入口须放在项目根目录，"
     Write-Host "         且桌面包紧邻其下的 start-tauri*\ 文件夹才能工作。" -ForegroundColor Red
     Write-Host "         请把整个「即开即用桌面包」解压到不含中文/空格的目录后，再双击本入口。" -ForegroundColor Red
     $fail = 1

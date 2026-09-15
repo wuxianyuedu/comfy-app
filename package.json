@@ -21,9 +21,13 @@
     "preview": "node scripts/start.mjs",
     "start": "node scripts/start.mjs",
     "test": "vitest run",
+    "test:file": "node scripts/run-tests.mjs",
+    "test:full": "node scripts/run-tests.mjs --full",
     "test:e2e": "playwright test",
     "docs": "typedoc",
     "typecheck": "tsc --noEmit",
+    "check:all": "node scripts/quality-gate.mjs",
+    "check:all:lint": "node scripts/quality-gate.mjs --mode lint",
     "test:coverage": "vitest run --coverage",
     "mcp:stdio": "tsx tools/mcp-stdio.ts",
     "mcp:http": "tsx tools/mcp-http.ts",
@@ -31,7 +35,8 @@
     "doc:check": "node scripts/check-doc-references.cjs",
     "theme:scan": "node scripts/check-theme-colors.cjs --report",
     "theme:check": "node scripts/check-theme-colors.cjs",
-    "doc:render": "node scripts/render-doc-placeholders.cjs"
+    "doc:render": "node scripts/render-doc-placeholders.cjs",
+    "doc:gen": "node scripts/generate-docs.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

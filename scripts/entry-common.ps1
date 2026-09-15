@@ -16,7 +16,7 @@ entry-common.ps1 — 双击入口公共库（供根入口与 tools/<分类>/ 下
 用法（入口脚本里）：
 
     . (Join-Path $PSScriptRoot "scripts\entry-common.ps1")
-    $code = Invoke-Entry -ScriptPath "scripts\dev-launcher.ps1"
+    $code = Invoke-Entry -ScriptPath "scripts\dev-launcher.ps1"   # 薄入口，编排在 .mjs
     exit (Complete-Entry -ExitCode $code)
 
 约定：

@@ -35,10 +35,28 @@ $ErrorActionPreference = "Continue"
 # Full vitest excludes them by default so one-click gives a trustworthy green.
 # Remove an entry once it is fixed so it is enforced again.
 #
-# 当前为空：原先登记的两个 router 集成测试（task / generate）已随 enqueue 拆分
-# （mock 边界从 runner 改到 enqueue）恢复通过，按规范 11.12 第 3 条删掉，让它们
-# 回到门禁里被强制拦截——留在这里会永久静默跳过，退化不会再被发现。
-$KNOWN_FAILED_FILES = @()
+# **清单的唯一来源是 scripts/quality-gate-shared.mjs**（Node 侧同一门禁
+# scripts/quality-gate.mjs 也要读它）。此前它写在本文件里、由
+# scripts/run-tests.ps1 用正则解析——那等于把另一门语言的源码当数据源，
+# 改一次写法就会让解析静默返回空数组（排除项悄悄失效，红/绿不再可归因）。
+# 解析失败时**降级为不排除**并显式 WARN，不再假装清单为空是正常情况。
+function Get-KnownFailedFilesFromShared {
+  $shared = Join-Path $PSScriptRoot "quality-gate-shared.mjs"
+  if (-not (Test-Path -LiteralPath $shared)) {
+    Write-Host "  [WARN] 未找到 $shared，已知基线失败清单按「空」处理（不排除任何文件）。" -ForegroundColor Yellow
+    return @()
+  }
+  $text = Get-Content -LiteralPath $shared -Raw -Encoding UTF8
+  $m = [regex]::Match($text, '(?s)KNOWN_FAILED_FILES\s*=\s*\[(.*?)\]')
+  if (-not $m.Success) {
+    Write-Host "  [WARN] 无法从 $shared 解析 KNOWN_FAILED_FILES，按「空」处理。" -ForegroundColor Yellow
+    return @()
+  }
+  # 单双引号都要认：Node 侧同一个模块里两种写法都合法。
+  return @([regex]::Matches($m.Groups[1].Value, "['\"]([^'\"]+)['\"]") | ForEach-Object { $_.Groups[1].Value })
+}
+
+$KNOWN_FAILED_FILES = @(Get-KnownFailedFilesFromShared)
 
 # ---- vitest 参数拼装（与 tools\start\run-tests.ps1 共用）----
 # 已知基线失败要作为 `vitest run --exclude <file>` 传给 vitest 原生命令；拼装收敛在此，
@@ -150,7 +168,7 @@ if (Test-DepDrift) {
   Write-DepDriftDetail
   Write-Host "        请先关闭所有正在运行的本项目窗口（dev server 会锁住原生模块），" -ForegroundColor Yellow
   Write-Host "        然后在项目根目录执行：pnpm install" -ForegroundColor Yellow
-  Write-Host "        或重新双击 tools\start\run-local.ps1 让它自动补装依赖。" -ForegroundColor Yellow
+  Write-Host "        或重新双击 tools\start\run-local.ps1 让它自动补装依赖（Linux / macOS 执行 pnpm install）。" -ForegroundColor Yellow
   Write-Host "        详见 docs\guides\sync-after-pull.md" -ForegroundColor Yellow
   Write-Host ""
   exit 1

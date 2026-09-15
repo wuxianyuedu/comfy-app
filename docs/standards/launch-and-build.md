@@ -1379,11 +1379,61 @@ sidecar」两种不同形态的失败。
   「POSIX 上跑 `.ps1`」既无必要也无意义：Linux / macOS 直接 `pnpm dev` 或
   `node scripts/dev-launcher.mjs`。仍有 Windows 专属语义的是**双击交互模型**
   （资源管理器双击、启动器 exe 的 Win32 启动画面）。
+  **但「跑不了 `.ps1`」不等于「这个动作在 POSIX 上没有」**：日常动作（质量门禁 /
+  只跑测试 / 生成文档 / 端口自检 / `.env` 引导 / 建库）都有 `.mjs` 等价实现与
+  `pnpm` 脚本，见 §9.5 的对照表 —— 那张表由
+  `scripts/check-ps1-consistency.mjs` 守着，缺一侧会在提交时被拦下。
+  真正仍无 POSIX 等价的只有下面几条（**它们是入口形态问题，不是逻辑问题**）。
 - **comfy-cli 的 venv**：由 `scripts/setup-comfy-cli-venv.ps1` 建
   （Windows 侧），Linux / macOS 上需手工准备；解释器发现与进程探测本身
-  已支持 POSIX 布局（§9.1）。
+  已支持 POSIX 布局（§9.1）。这是**仍待补的缺口**（该脚本尚未跨平台化），
+  不是「设计上不需要」。
+- **打包类入口**（`tools/build/**`）与 **本机固定目录的 Registry**
+  （`tools/registry/start-registry.ps1`）：前者靠 Rust / PyInstaller 工具链且面向
+  Windows 分发，POSIX 上按 §7 的等价 `pnpm tauri build` 等命令直接跑；后者指向
+  开发机上一个固定路径，没有可移植的语义。
 - **「保活」模式的 POSIX 语义**：`src/lib/process-launch.ts` 的 keepAlive
   分支在 POSIX 上未经真机回归（Windows 侧走 `powershell Start-Process` 中介）。
 - **e2e（Playwright）**：需要浏览器与显示环境；无头容器里需自行准备。
 - **双击入口**：POSIX 没有「双击 `.ps1`」这种交互模型，Linux / macOS 侧的入口
   是 `pnpm` 脚本与 `scripts/dev-launcher.mjs`（README「快速上手」已按平台分列）。
+
+### 9.5 跨平台动作对照表（`.ps1` 与 `.mjs` 不许分叉，机器强制）
+
+§9.4 说明了 `.ps1` 入口「在 POSIX 上跑」既无必要也无意义——但这件事有个必须
+堵住的副作用：**同一个动作在两侧各有一份实现**，而「记得同步另一侧」全靠自觉。
+启动编排已经栽过一次（Windows 一条 `.ps1` 链、POSIX 一条 `.mjs` 链，各自演进，
+最终 Windows 侧的端口口径、端口占用回收、就绪等待与收尾命名四项都与 POSIX 侧
+不同，见 §3.3）。因此其余动作一律**照着同一个形态办**：跨平台逻辑只有一份 `.mjs`，
+`.ps1` 是它的 Windows 调用入口；有 `.ps1` 而无 `.mjs` 的动作则改写为「`.ps1` 调
+`.mjs`」，`.ps1` 只留「定位 → 转交 → 透传退出码 / 收尾」。
+
+**对照表**（新增动作两处都要加：这里 + `package.json` 的一条脚本）
+
+<!-- cross-platform-pairs -->
+| 目的 | Windows 双击入口 | 跨平台入口（Linux / macOS / CI） |
+|---|---|---|
+| 启动开发环境（完整编排） | `scripts/dev-launcher.ps1` | `scripts/dev-launcher.mjs`（`pnpm dev`） |
+| 质量门禁（typecheck / lint / test） | `scripts/quality-gate.ps1` | `scripts/quality-gate.mjs`（`pnpm check:all`） |
+| 只跑测试（排除基线失败 / `-Full`） | `scripts/run-tests.ps1` | `scripts/run-tests.mjs`（`pnpm test:file` / `pnpm test:full`） |
+| 生成原文文档（doc:check + doc:render） | `scripts/generate-docs.ps1` | `scripts/generate-docs.mjs`（`pnpm doc:gen`） |
+| 端口推导跨语言自检 | `scripts/check-app-port-vectors.ps1` | `scripts/check-app-port-vectors.cjs` |
+| 生成 / 补齐 `.env` | `scripts/prepare-local-run.ps1`（第 4 步） | `scripts/env-init.mjs`（`pnpm env:init`） |
+| 建库（Drizzle 表结构同步） | `scripts/prepare-local-run.ps1`（前置）/ 启动器预检 8 | `scripts/db-push.mjs`（`pnpm db:push`） |
+
+**为什么 `.mjs` 里不写中文**：门禁/构建期模块会经 Next 的 `next-code-frame` 渲染，
+而它按**字节**切串——高亮区间端点落在多字节字符内部时 Rust 侧直接 panic、整个
+`next build` 被带走（AGENTS 硬规则 15 / §5）。因此 `scripts/*.mjs` 的错误文案用
+`[ERROR] …` 的英文短句，中文提示放在 `.ps1` 入口与文档里。
+
+**门禁**：`scripts/check-ps1-consistency.mjs`（pre-commit 与 CI，规范 §12.8 的
+提交防线）核两件事：
+
+1. 本表登记的每个脚本**真实存在**（表被删空、或登记了不存在的路径 → 失败）；
+2. **会「静默失效」的清单不许各写一份**：`KNOWN_FAILED_FILES`（已知基线失败）
+   只能定义在 `scripts/quality-gate-shared.mjs`，两侧的 `.ps1` 只能是**读取**它。
+   此前它定义在 `quality-gate.ps1` 里、由 `run-tests.ps1` 正则解析 `.ps1` 源码
+   —— 那等于把另一门语言的源码当数据源，改一次写法就静默返回空数组，而
+   「排除项悄悄为空」看起来就像「本来就没有基线失败」（红/绿不再可归因）。
+
+回归测试见 `tests/ps1-consistency.test.ts`。
