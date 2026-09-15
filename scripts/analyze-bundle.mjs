@@ -13,14 +13,32 @@
  *   http://127.0.0.1:8888 提供可视化报告。
  */
 import { spawn } from "node:child_process";
+import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
 process.env.ANALYZE = "true";
 
-// 走 pnpm exec 以复用仓库内本地 next 二进制（与 CI/启动器一致，不依赖全局 next）
-const child = spawn(
-  process.platform === "win32" ? "pnpm.cmd" : "pnpm",
-  ["exec", "next", "build", "--webpack"],
-  { stdio: "inherit", cwd: process.cwd() },
-);
+// 走 pnpm exec 以复用仓库内本地 next 二进制（与 CI/启动器一致，不依赖全局 next）。
+// pnpm 的可执行形态由 shell.mjs 判定（规范 §2.1.1）：Windows 上写死 `pnpm.cmd`
+// 选中的批处理 Node 起不来，`spawn` 直接 error，构建会「什么都没跑就结束」。
+const invocation = pnpmInvocation(["exec", "next", "build", "--webpack"]);
+if (!invocation) {
+  process.stderr.write(
+    "[analyze] ✗ PATH 上找不到可用的 pnpm。先跑 `pnpm check:toolchain` 自查。\n",
+  );
+  process.exit(1);
+}
+const child = spawn(invocation.command, invocation.args, {
+  stdio: "inherit",
+  cwd: process.cwd(),
+});
+
+// 命令没起来（spawn error）时 `exit` 不会触发，只挂 exit 会让脚本挂住/静默成功。
+child.on("error", (error) => {
+  process.stderr.write(
+    `[analyze] ✗ 起 pnpm 失败（${error.code ?? "UNKNOWN"}）：${error.message}\n` +
+      `[analyze]   实际命令：${invocation.command} ${invocation.args.join(" ")}\n`,
+  );
+  process.exit(1);
+});
 
 child.on("exit", (code) => process.exit(code ?? 1));

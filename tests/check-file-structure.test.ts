@@ -1083,6 +1083,41 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     ).toBeGreaterThanOrEqual(4);
     expect(launcher).toContain("foreground-watch.log");
   });
+
+  it("启动页首次可见时被带到前台（双击启动的反馈，不是「别打断」那一档）", () => {
+    // 现场（ISSUE #576）：双击 `start-tauri.exe`，启动页被文件资源管理器压住，
+    // 用户看到的是「双击了没反应」。根因是**同一套「不抢前台」策略被套在了启动页上**
+    // ——那套策略针对的是几十秒后才冒出来的**应用窗口**（用户可能早已切走）。
+    // 启动页是用户刚刚点下去的直接反馈，必须出现在前面。
+    const launcher = readFileSync(
+      join(process.cwd(), "scripts", "start_tauri_launcher.py"),
+      "utf8",
+    );
+    const focus = readFileSync(FOCUS_SCRIPT, "utf8");
+    // ① 启动器：启动页一可见就拉一次（one-shot，只做一次）
+    expect(launcher).toContain("def spawn_splash_front(");
+    expect(launcher).toMatch(/if not splash_front_done and find_tauri_window\(\):/);
+    expect(launcher).toContain("splash_front_done = True");
+    // ② 判据在复核脚本里，复用已验证可靠的前台手段（Alt + AttachThreadInput）
+    expect(focus).toContain("def should_front_splash(");
+    expect(focus).toContain("def run_bring_splash(");
+    expect(focus).toContain("focus_window(hwnd)");
+    // ③ 启动页与主窗是两套判据，不许合并成一条
+    expect(focus.indexOf("def should_front_splash(")).toBeGreaterThan(-1);
+    expect(focus).toContain("两套判据");
+  });
+
+  it("壳侧启动页也显式置前一次（本地冷启动时无须等复核进程）", () => {
+    const rust = readFileSync(
+      join(process.cwd(), "src-tauri", "src", "lib.rs"),
+      "utf8",
+    );
+    expect(rust).toContain("fn bring_splash_to_front(");
+    // 只 `show()` 不给前台的写法不够：启动页要真的到前面
+    expect(rust).toContain("splash.set_focus()");
+    // 用了「不抢前台」那套的话会只闪任务栏 —— 那正是被压住的原因
+    expect(rust).toContain("bring_splash_to_front(&splash)");
+  });
 });
 
 describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自绘标题行）", () => {

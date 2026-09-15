@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import { resolveAppPort } from "./app-port.mjs";
 import { probeSchemaSync } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
+import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -69,9 +70,45 @@ const nextArgs = ["exec", "next", "dev", "--turbo", "-p", String(port)];
 // 导致按 127.0.0.1 做的健康检查失败（启动器传 -H 127.0.0.1 即为此）。
 if (hostname) nextArgs.push("-H", hostname);
 
+// pnpm 的可执行形态由 shell.mjs 一处判定（规范 §2.1.1 / §9.5）：Windows 上
+// 写死 `pnpm.cmd` 会选中 Node 起不来的批处理，spawnSync 于是「命令没起来」，
+// `status` 为 null —— 旧写法 `process.exit(result.status ?? 0)` 把它读成
+// 成功退出 0，dev server 静默消失，用户只看到「已启动」之后就没了（ISSUE #576）。
+const invocation = pnpmInvocation(nextArgs);
+if (!invocation) {
+  process.stderr.write(
+    "[dev.mjs] ✗ PATH 上找不到可用的 pnpm，无法启动 Next.js dev server。\n" +
+      "[dev.mjs]   先跑 `pnpm check:toolchain` 看选中的命令与探测结果；\n" +
+      "[dev.mjs]   若 PATH 上并存多个 pnpm 形态，让可执行的那个排在前面。\n",
+  );
+  process.exit(1);
+}
+if (invocation.viaHost) {
+  // 「探测过了、起服务又换一种方式」是同一类缺陷的两半：这里明确写出实际命令形态，
+  // 排查时不必再猜「到底跑的是哪个 pnpm」。
+  process.stdout.write(
+    `[dev.mjs] pnpm 形态：${invocation.candidate} 经宿主 ${invocation.command}\n`,
+  );
+}
+
 // Next.js dev 读取 PORT 环境变量；显式透传给 next dev 子进程
-const result = spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", nextArgs, {
+const result = spawnSync(invocation.command, invocation.args, {
   stdio: "inherit",
   env: { ...process.env, PORT: String(port) },
 });
-process.exit(result.status ?? 0);
+// 命令**没起来**（EACCES / EINVAL / ENOENT）时 status 为 null，必须与「跑完但
+// 非零退出」分开报：前者 stderr 通常是空的，只给退出码等于没说原因。
+if (result.error) {
+  process.stderr.write(
+    `[dev.mjs] ✗ 起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}\n` +
+      `[dev.mjs]   实际命令：${invocation.command} ${invocation.args.join(" ")}\n`,
+  );
+  process.exit(1);
+}
+if (result.status === null) {
+  process.stderr.write(
+    "[dev.mjs] ✗ pnpm 进程未正常结束（可能被信号终止），无退出码可报。\n",
+  );
+  process.exit(1);
+}
+process.exit(result.status);
