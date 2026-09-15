@@ -2,6 +2,7 @@
 
 import { Icon } from "@/components/ui/icon";
 import { NODE_META, type CanvasNodeData, type NodeKind } from "@/lib/project-canvas/canvas-types";
+import { isVideo as isVideoSource } from "@/lib/media-kind";
 import { NodeChip, StatusBadge } from "./CanvasNodePrimitives";
 
 /* ── Result preview card ──
@@ -26,7 +27,9 @@ export function ResultCard({
   text?: string;
   onReplace: () => void;
 }) {
-  const isVideo = kind === "video" || mediaType === "video" || (path && /\.(mp4|webm|ogg)$/i.test(path));
+  /* 业务事实（节点类型 / 产出元数据）与文件事实（扩展名）分层判断：扩展名那份
+   * 判据收敛在 `media-kind.ts`（ISSUE #571），视图层不再自带第四份正则。 */
+  const isVideo = kind === "video" || mediaType === "video" || isVideoSource(path);
   const src = path?.startsWith("/") ? path : path ? `/${path}` : undefined;
   const meta = NODE_META[kind];
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空字符串名视为无输出，需用 || 回退到 meta.label
