@@ -18,8 +18,13 @@ export type WorkflowSaveInput = RouterInputs["workflow"]["update"];
 
 /** useWorkflowPersistence 需要的保存能力（比 tRPC mutation 对象窄得多）。 */
 export interface WorkflowSaver {
-  /** 触发即忘：布局重置 / 拖拽落盘这类不需要等结果的写。 */
-  mutate: (input: WorkflowSaveInput) => void;
+  /** 触发即忘：布局重置 / 拖拽落盘这类不需要等结果的写。
+   *  `options.onError` 可选，用于把「拖拽落盘失败」这类静默写暴露给用户
+   *  （见规则 #4：失败路径必须有日志 + 用户可见出口）。 */
+  mutate: (
+    input: WorkflowSaveInput,
+    options?: { onError?: (error: unknown) => void }
+  ) => void;
   /** 需要知道成败的写（点「保存」后要关弹窗或报错）。 */
   mutateAsync: (input: WorkflowSaveInput) => Promise<unknown>;
 }
@@ -28,7 +33,8 @@ export function useWorkflowSaveMutation(): WorkflowSaver {
   const mutation = api.workflow.update.useMutation();
   return useMemo(
     () => ({
-      mutate: (input: WorkflowSaveInput) => mutation.mutate(input),
+      mutate: (input: WorkflowSaveInput, options?: { onError?: (error: unknown) => void }) =>
+        mutation.mutate(input, options),
       mutateAsync: (input: WorkflowSaveInput) => mutation.mutateAsync(input),
     }),
     [mutation]

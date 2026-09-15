@@ -70,10 +70,7 @@ export interface WorkflowEditorCanvasProps {
   edges: Edge[];
   onNodesChange: OnNodesChange<Node>;
   onEdgesChange: OnEdgesChange<Edge>;
-  onNodeDragStop: (
-    e: unknown,
-    node: { id: string; type?: string; position: { x: number; y: number } }
-  ) => void;
+  onNodeDragStop: (e: unknown, node: Node) => void;
   canvasSettings: CanvasSettings;
   canvasSettingsHydrated: boolean;
   onMiniMapJump: (event: React.MouseEvent, position: { x: number; y: number }) => void;

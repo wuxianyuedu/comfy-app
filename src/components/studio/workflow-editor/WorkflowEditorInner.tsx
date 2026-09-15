@@ -675,7 +675,6 @@ function WorkflowEditorBody({
     workflowId,
     detail,
     setDetail,
-    scopeDetail,
     setNodes,
     paramMap,
     workflowIO,
