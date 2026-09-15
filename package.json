@@ -11,6 +11,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "node scripts/db-push.mjs",
     "env:init": "node scripts/env-init.mjs",
+    "check:toolchain": "node scripts/check-pnpm-available.mjs",
     "db:studio": "drizzle-kit studio",
     "dev": "node scripts/dev.mjs",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",

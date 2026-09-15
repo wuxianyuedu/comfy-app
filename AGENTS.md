@@ -242,6 +242,15 @@
 先按 §9.1 / §9.2 第 6 条核对。补 `.env` 用 `pnpm env:init`（跨平台；只 `cp .env.example .env`
 会因三项留空而仍然起不来）。
 
+**别把「pnpm 探测失败」直接读成「corepack 缓存损坏」**（ISSUE #576 / 规范 §2.1.1–2.1.3）：
+`pnpm 工具链不可用（exit=?）：未知错误` 且 stdout/stderr 全空的现场，多半是
+**PATH 上选中了一个存在但跑不起来的形态**（Windows 上 corepack 有 `pnpm` / `pnpm.cmd` /
+`pnpm.ps1` 三个文件，只有后两个经宿主能跑，`.cmd` 走 cmd.exe、无扩展名 shim 走 shebang，
+Node 一个都起不来）。「pnpm 可用」的判据是**真的能跑**：`whichCommand()` 选第一个
+`usableCommand()` 认下的候选（顺序见 `executableExts()`），探测与「坏了怎么修」收在
+`scripts/launcher-core/corepack.mjs`。自查入口 `pnpm check:toolchain`（跨平台，
+登记在规范 §9.5 对照表；不需要任何 `.ps1` 副本）。
+
 遇到启动/生成问题，先查规范文档 **§5 症状 → 根因对照表**（本项目全部历史
 事故都在里面），再按 **§4 日志布局** 的顺序看日志（log/ 按子系统分区：
 `launcher/`、`nextjs/`、`services/`、`tools/`、`archive/`）：
