@@ -60,9 +60,10 @@ const FORBIDDEN = [
  * 判据是「运行时真的会读」——目前只有两处，且都在代码里能指到：
  *   · install-comfyapp-helper.ps1：src/app/api/helper/{install,status}/route.ts
  *     以 process.cwd() 拼路径把它当下载内容返回（installerAvailable 也靠它判）；
- *   · dev-launcher.ps1 / dev-launcher.mjs（+ 其 import 的 session / app-port）：
- *     src-tauri/src/lib.rs::resolve_project_root() 的项目根判据，也是壳侧启动编排。
- *     跨平台版本必须一起放行：只留 .ps1 时 Linux/macOS 的壳找不到项目根。
+ *   · dev-launcher.mjs（+ 其 import 的 session / app-port / reap-process）：
+ *     启动编排的唯一实现，也是 src-tauri/src/lib.rs::looks_like_project_root()
+ *     的项目根判据；dev-launcher.ps1 只是它的 Windows 调用入口。
+ *     清单必须与 scripts/standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS 同源。
  *
  * 为什么白名单而不是黑名单：黑名单欠完备，每加一个根级文件/脚本就要记得补一条，
  * 而漏掉是静默的（上一次 db.sqlite 就是这么漏的）。白名单下新增脚本默认不进产物，
@@ -74,6 +75,13 @@ const ALLOWED_SCRIPTS = new Set([
   "dev-launcher.mjs",
   "dev-launcher-session.mjs",
   "app-port.mjs",
+  "reap-process.mjs",
+  // 编排器的内部分件（与 scripts/standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS 同源）
+  "launcher-core/procs.mjs",
+  "launcher-core/shell.mjs",
+  "launcher-core/log.mjs",
+  "launcher-core/worktree.mjs",
+  "launcher-core/orchestrator.mjs",
 ]);
 
 /** Next 自带运行时脚本目录（相对产物根）。 */
@@ -117,10 +125,11 @@ function listFiles(dir, prefix, out) {
 function checkDir(dir, label) {
   const files = listFiles(dir, "", []);
   let failed = false;
-  // scripts/ 白名单：产物里的每个条目都必须是登记过的。这条比正则表更严——
-  // 新脚本进来即命中，不需要有人先想到去正则里补形状。
+  // scripts/ 白名单：产物里的每个文件都必须是登记过的（支持嵌套路径，
+  // 逐项登记而不是放行整个目录 —— 目录级放行会让以后新增的脚本自动进产物）。
+  // 这条比正则表更严：新脚本进来即命中，不需要有人先想到去正则里补形状。
   const strayScripts = files.filter((f) => {
-    const m = /^scripts\/([^/]+)$/.exec(f);
+    const m = /^scripts\/(.+)$/.exec(f);
     return m && !ALLOWED_SCRIPTS.has(m[1]);
   });
   // Next 自带运行时脚本**反向检查**：这里查的不是「不该有的」而是「必须有的」。

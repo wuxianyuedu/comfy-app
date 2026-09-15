@@ -1,50 +1,70 @@
 #!/usr/bin/env node
-// 跨平台启动编排器（Linux / macOS 主路径；Windows 仍以 scripts/dev-launcher.ps1
-// 为主路径，见 §3.2/§9.4）。把「启动一个能用的桌面/Web 开发环境」这件事里
-// 与平台无关的部分收在一处，与 .ps1 版**同契约、同产物、同日志布局**。
+// 启动编排器 —— **全平台唯一实现**（`pnpm dev` / 双击链路 / `pnpm tauri dev`
+// 都走这里，见 docs/standards/launch-and-build.md §3）。
 //
-// 为什么需要它（ISSUE #489）：全项目 11 个 scripts/*.ps1 + 29 个 tools/**/*.ps1，
-// 唯一的编排者 dev-launcher.ps1（1324 行 / 19 处 Windows 专属调用：taskkill、
-// Get-CimInstance、Job Object、cmd.exe）在 Linux / macOS 上不可用，而仓库里
-// **没有任何 .sh 启动脚本** —— 即「跨平台」这一侧此前根本没有实现，不是漏了几个
-// 平台判断。
+// 为什么是唯一实现：
+//   · 同一件「启动一个能用的开发环境」此前有两套编排（Windows 的 .ps1 与
+//     POSIX 的 .mjs）。两套各自演进 → 平台间行为不一致，且只能靠「记得同步
+//     另一侧」维持，而漏同步是静默的（`dev` 一侧长期没走端口契约就是这么来的）。
+//   · 编排的 90% 是平台无关的（预检 / 端口 / 缓存 / 就绪 / 日志 / 会话锚点），
+//     Windows 特有的只有**进程机制**（回收走 taskkill）与**入口形态**
+//     （双击 .ps1 / 启动器 exe）。前者收在 src/lib/kill-process-tree.ts，
+//     后者收在平台判据模块（scripts/launcher-core/*），本文件不再摸平台。
 //
-// 与 .ps1 的职责分工：
-//   · 端口解析 → scripts/app-port.mjs（同一事实源，禁止各写一遍）
-//   · 进程树回收 → 进程组（`detached: true` 建组 + 组信号），而不是 taskkill
-//   · 会话锚点 → scripts/dev-launcher-session.mjs（PID/心跳落盘，崩溃后可回收）
-//   · 进度快照 → run/launch-status.json（与 .ps1 / python 启动器同一契约）
-//   · 日志布局 → log/launcher/ 与 log/nextjs/（与 §4 一致，不新增固定名日志）
+// 职责（与 .ps1 版逐项对齐，两侧同契约同产物）：
+//   预检（.env / 工具链 / node_modules / pnpm 版本）→ 端口（app-port.mjs 单一
+//   事实源）→ .next 缓存指纹 → 拉起 dev server（自建进程组）→ 可选拉起桌面壳
+//   → 等就绪 → 进度快照 run/launch-status.json → 任一子进程退出即整树回收。
 //
 // 用法：
 //   node scripts/dev-launcher.mjs [--mode web|tauri|prebuilt] [--no-open]
-//   直跑等价于 `dev` 模式（前台：Ctrl-C 收尾并回收整棵进程树）。
+//   node scripts/dev-launcher.mjs --shell-exe <app.exe>   # 由启动器指定的壳
+//   直跑等价于 web 模式（前台：Ctrl-C 收尾并回收整棵进程树）。
+//
+// 环境变量开关（与 .ps1 版同名同义）：SKIP_CLEAN / FORCE_CLEAN / NO_OPEN /
+// COMFYAPP_FOREGROUND / COMFYAPP_PREBUILT_SHELL。
 
 import { spawn, spawnSync } from "node:child_process";
-import crypto from "node:crypto";
 import fs from "node:fs";
-import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveAppPort } from "./app-port.mjs";
 import { probeSchemaSync } from "./db-schema-state.mjs";
 import { checkEnvFile } from "./env-preflight.mjs";
+import { archiveRunLog, createLogSink, runStamp } from "./launcher-core/log.mjs";
+import {
+  PORT_OWNERSHIP,
+  fileHasMarker,
+  inspectPort,
+  readTail,
+  waitForReady,
+  writeLaunchStatus,
+} from "./launcher-core/orchestrator.mjs";
+import { listeningPidsOnPort, pidBelongsToRoot } from "./launcher-core/procs.mjs";
+import { isWindows, spawnInGroup, whichCommand } from "./launcher-core/shell.mjs";
+import {
+  checkNodeModules,
+  pruneTimestampedLogs,
+  syncNextCache,
+} from "./launcher-core/worktree.mjs";
 import {
   clearSession,
   isSessionOwnerAlive,
   readSession,
-  statusFilePath,
   touchHeartbeat,
   writeSession,
 } from "./dev-launcher-session.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Next 缓存指纹只覆盖「构建配置与依赖」：源码改动由 Turbopack 增量编译 +
- *  HMR 处理，把 src/ 纳入指纹会导致「改一行 API 就清空 .next 全量重编译」
- *  （与 .ps1 版同一口径，见 §7 缓存策略）。 */
-const FINGERPRINT_TARGETS = ["next.config.js", "tsconfig.json", "package.json", "pnpm-lock.yaml"];
+// 下面这些是「编排用的纯函数」的实现去处（launcher-core/*）：这里**再导出**，
+// 既让测试与其它调用方有一个稳定的门面（编排器就是这套能力的入口），也避免
+// 调用方各自去 import 内部模块造成路径散布。
+export { spawnInGroup, whichCommand } from "./launcher-core/shell.mjs";
+export { configFingerprint, syncNextCache, checkNodeModules } from "./launcher-core/worktree.mjs";
+export { waitForReady, readTail, fileHasMarker, writeLaunchStatus } from "./launcher-core/orchestrator.mjs";
+export { listeningPidsOnPort, pidBelongsToRoot, processCwd } from "./launcher-core/procs.mjs";
 
 /** 心跳间隔：必须明显小于 dev-launcher-session 的孤儿判定阈值（30s），
  *  否则正常运行的 launcher 会被下一次启动误判成已死。 */
@@ -53,342 +73,247 @@ const HEARTBEAT_INTERVAL_MS = 5_000;
 /** 等服务就绪的上限（与 .ps1 的 180 次 × 1s 同口径）。 */
 const READY_TIMEOUT_MS = 180_000;
 
+/** 壳侧写下的收尾正标记（判据只认它们，见 orchestrator.fileHasMarker）。
+ *
+ *  「用户放弃本次启动」= 关闭启动页；壳会写 `launch abandoned` 并以 0 退出。
+ *  这不是失败：用户刚刚亲手按的 ✕，再报一次红色「启动失败」是误报。 */
+const ABANDONED_MARKER = "launch abandoned";
+const NONZERO_EXIT_MARKER = "exiting with non-zero code";
+
 // ── 日志：log/launcher/dev-launcher.log（当前运行，实时读）+ 历史归档 ──
-const logRoot = path.join(ROOT, "log");
-const launcherLogDir = path.join(logRoot, "launcher");
-const nextjsLogDir = path.join(logRoot, "nextjs");
-const archiveDir = path.join(logRoot, "archive", new Date().toISOString().slice(0, 7));
-for (const dir of [launcherLogDir, nextjsLogDir, archiveDir]) {
-  fs.mkdirSync(dir, { recursive: true });
-}
-const runStamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+const launcherLogDir = path.join(ROOT, "log", "launcher");
+const nextjsLogDir = path.join(ROOT, "log", "nextjs");
+fs.mkdirSync(launcherLogDir, { recursive: true });
+fs.mkdirSync(nextjsLogDir, { recursive: true });
 const currentLog = path.join(launcherLogDir, "dev-launcher.log");
-const archiveLog = path.join(archiveDir, `dev-launcher-${runStamp}.log`);
-fs.writeFileSync(currentLog, "", "utf8");
+const logSink = createLogSink(ROOT, { file: currentLog });
 // 供壳侧 get_launch_log 的 sentinel 机制定位本次运行日志（与 .ps1 版同文件）。
-fs.writeFileSync(
-  path.join(launcherLogDir, "dev-launcher-current.txt"),
-  currentLog,
-  "utf8",
-);
+try {
+  fs.writeFileSync(
+    path.join(launcherLogDir, "dev-launcher-current.txt"),
+    currentLog,
+    "utf8",
+  );
+} catch {
+  /* 见 log 模块注释 */
+}
+const runTimestamp = runStamp();
 
-const LEVELS = { STEP: "STEP ", OK: "OK   ", WARN: "WARN ", ERROR: "ERROR", INFO: "INFO " };
-/** @typedef {"STEP" | "OK" | "WARN" | "ERROR" | "INFO"} LogLevel */
+/** 写一行日志（stdout + 本次运行日志双写）。 */
 /**
- * 进度快照的写入参数。
- * @typedef {object} LaunchStatusOptions
- * @property {boolean} [ready]
- * @property {boolean} [error]
- * @property {number | null} [appPort]
- * @property {string | null} [staleShell]
- * @property {string | null} [pnpmMismatch]
- * @property {number} [startedAt]
+ * @param {string} message
+ * @param {"STEP" | "OK" | "WARN" | "ERROR" | "INFO"} [level]
  */
-
-/** 写一行日志：stdout（终端可见）与 dev-launcher.log（壳内日志面板可读）双写。
- *  `.ps1` 版用 ANSI 着色 + 双写绕开 Start-Transcript 缓冲，这里只用纯文本：
- *  非 TTY（CI / 重定向）时 ANSI 反而污染日志。
- *  @param {string} message @param {LogLevel} [level] */
 export function log(message, level = "INFO") {
-  const ts = new Date().toTimeString().slice(0, 8);
-  const line = `[${ts}] [${LEVELS[level] ?? LEVELS.INFO}] ${message}`;
-  process.stdout.write(`${line}\n`);
-  try {
-    fs.appendFileSync(currentLog, `${line}\n`, "utf8");
-  } catch {
-    /* 日志落盘失败不影响启动本身 */
-  }
+  logSink.write(message, level);
 }
 
-/** 进度快照（与 .ps1 / python 启动器同一契约字段，壳内启动页据此显示）。
- *  `stale_shell` / `pnpm_mismatch` 保留在字段表里：启动页读它们做可见提醒，
- *  缺字段与空值等价（splash.html 判的是真值）。 */
-/** 写进度快照（见 LaunchStatusOptions）。
- * @param {string} phase @param {number} progress @param {string} message
- * @param {LaunchStatusOptions} [options] */
-export function writeLaunchStatus(
-  phase,
-  progress,
-  message,
-  {
-    ready = false,
-    error = false,
-    appPort,
-    staleShell = null,
-    pnpmMismatch = null,
-    startedAt,
-  } = {},
-) {
-  const elapsed = startedAt ? Math.round((Date.now() - startedAt) / 100) / 10 : 0;
-  const payload = {
-    phase,
-    progress: Math.round(progress * 1000) / 1000,
-    message,
-    elapsed,
-    ready,
-    error,
-    app_url: `http://127.0.0.1:${appPort ?? 3100}/workspace`,
-    stale_shell: staleShell,
-    pnpm_mismatch: pnpmMismatch,
-    updated_at: new Date().toISOString(),
-  };
-  try {
-    fs.writeFileSync(statusFilePath(ROOT), JSON.stringify(payload), "utf8");
-  } catch {
-    /* 见 log 注释 */
-  }
-}
+/** 本次会话拉起的子进程（收尾时全部回收）。 */
+/** @type {import("node:child_process").ChildProcess[]} */
+const spawned = [];
 
 // ── 预检 ────────────────────────────────────────────────────────────────────
-/** 工具链门禁：pnpm 可用 + node_modules 已装。与 .ps1 的 Test-ToolchainGate
- *  同判据（只做致命快检，不做 install 自愈——那是窗口出现之后的事）。 */
-/** @param {string} [root] @returns {string | null} 失败原因（null = 通过） */
+
+/** 工具链门禁：node 可用 + pnpm 可用 + node_modules 已装。
+ *
+ *  双击链路里这一步尤其重要：**在弹壳之前**拦下致命损坏，用户才能看到一句
+ *  「pnpm 坏了，怎么修」，而不是先弹出黑窗口再在启动页里慢慢报错。
+ *  @param {string} [root] @returns {string | null} 失败原因（null = 通过） */
 export function runToolchainGate(root = ROOT) {
-  const pnpm = spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["-v"], {
+  const pnpm = whichCommand("pnpm");
+  if (!pnpm) {
+    return "未找到 pnpm 命令（需 corepack enable）。\n修复：corepack enable && corepack prepare pnpm@<项目版本> --activate，再重启应用。";
+  }
+  const probe = spawnSync(pnpm, ["-v"], {
     cwd: root,
     encoding: "utf8",
     timeout: 30_000,
+    windowsHide: true,
   });
-  if (pnpm.status !== 0 || !/\d+\.\d+/.test(pnpm.stdout ?? "")) {
-    const detail = `${pnpm.stderr ?? ""}${pnpm.stdout ?? ""}`.trim().split("\n").slice(0, 3).join(" ");
-    return `pnpm 工具链不可用（exit=${pnpm.status ?? "?"}）：${detail || "未知错误"}\n修复：corepack enable && corepack prepare pnpm@<项目版本> --activate`;
+  const output = `${probe.stdout ?? ""}${probe.stderr ?? ""}`;
+  if (probe.status !== 0 || !/\d+\.\d+/.test(output)) {
+    const detail = output
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 3)
+      .join(" ");
+    return (
+      `pnpm 工具链不可用（exit=${probe.status ?? "?"}）：${detail || "未知错误"}\n` +
+      "疑似 corepack 切换版本时本地缓存损坏。\n修复：corepack enable && corepack prepare pnpm@<项目版本> --activate，再重启应用。"
+    );
   }
-  if (!fs.existsSync(path.join(root, "node_modules", ".modules.yaml"))) {
-    return "node_modules 缺失或不完整（找不到 node_modules/.modules.yaml）。\n修复：pnpm install（或 pnpm env:init 之后重跑）";
+  const modules = checkNodeModules(root);
+  if (!modules.healthy) {
+    return (
+      `node_modules 缺失或不完整（${modules.reasons.join("；")}）。\n` +
+      "修复：pnpm install（或先跑 tools/start/run-local.ps1 完成本地初始化）"
+    );
   }
   return null;
 }
 
+/** pnpm 版本一致性：不一致时尝试 corepack 对齐；失败只提示（不阻断启动）。 */
+/**
+ * @param {string} [root] @returns {{ version: string, expected: string, tip: string | null } | null}
+ */
+export function reconcilePnpmVersion(root = ROOT) {
+  let expected = "";
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+    const match = /^pnpm@(\S+)$/.exec(String(pkg.packageManager ?? ""));
+    if (match) expected = match[1] ?? "";
+  } catch {
+    return null;
+  }
+  if (!expected) return null;
+  const pnpm = whichCommand("pnpm");
+  if (!pnpm) return null;
+  const probe = spawnSync(pnpm, ["-v"], { cwd: root, encoding: "utf8", timeout: 30_000, windowsHide: true });
+  const actual = String(probe.stdout ?? "").trim().split("\n")[0]?.trim() || "";
+  if (!actual) return null;
+  if (actual.replace(/^v/, "") === expected.replace(/^v/, "")) {
+    log(`pnpm 版本匹配：${actual}（packageManager: pnpm@${expected}）`, "OK");
+    return { version: actual, expected, tip: null };
+  }
+  log(`pnpm 版本不匹配：本机 ${actual}，package.json 要求 ${expected}`, "WARN");
+  const corepack = whichCommand("corepack");
+  if (corepack) {
+    log("检测到 corepack，尝试自动切换到要求的 pnpm 版本…", "STEP");
+    const prepare = spawnSync(corepack, ["prepare", `pnpm@${expected}`, "--activate"], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 600_000,
+      windowsHide: true,
+    });
+    const after = spawnSync(pnpm, ["-v"], { cwd: root, encoding: "utf8", timeout: 30_000, windowsHide: true });
+    const now = String(after.stdout ?? "").trim().split("\n")[0]?.trim() ?? "";
+    if (prepare.status === 0 && now.replace(/^v/, "") === expected.replace(/^v/, "")) {
+      log(`corepack 已自动切换 pnpm 至 ${now}`, "OK");
+      return { version: now, expected, tip: null };
+    }
+    log(`corepack prepare 未生效（exit=${prepare.status ?? "?"}，当前 ${now || "未知"}）`, "WARN");
+  }
+  const tip =
+    `pnpm 版本不匹配（本机 ${actual}，项目要求 ${expected}）；` +
+    `请执行 corepack enable && corepack prepare pnpm@${expected} --activate 后重启应用`;
+  return { version: actual, expected, tip };
+}
+
+/** 旧版桌面壳提醒（判据与 .ps1 的 Test-ShellFreshness 同源：比时间戳）。 */
+/** @param {string} shellExe @param {string} [root] @returns {string | null} */
+export function shellStaleWarning(shellExe, root = ROOT) {
+  let exeTime = 0;
+  try {
+    exeTime = fs.statSync(shellExe).mtimeMs;
+  } catch {
+    return null;
+  }
+  const targets = [
+    path.join(root, "src-tauri", "tauri.conf.json"),
+    path.join(root, "src-tauri", "build.rs"),
+    path.join(root, "src-tauri", "src"),
+    path.join(root, "src-tauri", "splash-assets"),
+  ];
+  let newest = 0;
+  for (const target of targets) {
+    let stat = null;
+    try {
+      stat = fs.statSync(target);
+    } catch {
+      continue;
+    }
+    if (stat.isDirectory()) {
+      for (const file of walkFiles(target)) {
+        try {
+          newest = Math.max(newest, fs.statSync(file).mtimeMs);
+        } catch {
+          /* 忽略读不到的条目 */
+        }
+      }
+    } else {
+      newest = Math.max(newest, stat.mtimeMs);
+    }
+  }
+  if (newest <= exeTime) return null;
+  return (
+    `正在运行旧版桌面壳（编译于 ${new Date(exeTime).toISOString().slice(5, 16).replace("T", " ")}，源码此后有改动），` +
+    "界面可能不是最新逻辑；建议重编：cd src-tauri && cargo build --release --features custom-protocol"
+  );
+}
+
+/** 递归列出目录下的文件（用于壳时效判据）。 */
+/** @param {string} dir @returns {string[]} */
+function walkFiles(dir) {
+  /** @type {string[]} */
+  const out = [];
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walkFiles(full));
+    else out.push(full);
+  }
+  return out;
+}
+
+/** 把壳/pnpm 提醒补录进应用日志面板可见的 app-runtime 通道。
+ *  （此刻 dev server 尚未启动，无法走写入端点，按面板可解析的行格式直接追加。） */
+/** @param {string} message @param {string} [root] */
+function appendRuntimeWarning(message, root = ROOT) {
+  try {
+    const dir = path.join(root, "log", "services");
+    fs.mkdirSync(dir, { recursive: true });
+    const ts = new Date().toISOString().replace("T", " ").slice(0, 23);
+    fs.appendFileSync(
+      path.join(dir, "app-runtime.log"),
+      `[${ts}] [WARN] [launcher] ${message}\n`,
+      "utf8",
+    );
+  } catch {
+    /* 提醒落不进面板不影响启动 */
+  }
+}
+
+// ── 端口 / 回收 ────────────────────────────────────────────────────────────
+
 /** 端口占用扫描范围：本端口与 +1/+2（Next 在端口被占时会静默顺延，导致
- *  「服务起来了但连着旧实例」——§1.1 的端口契约因此必须连同邻位一起清）。 */
+ *  「服务起来了但连着旧实例」——§1.1 的端口契约因此必须连同邻位一起看）。 */
 /** @param {number} port @returns {number[]} */
 export function scanPorts(port) {
   return [port, port + 1, port + 2];
 }
 
-/** 该端口上是否已有本检出的实例在监听（只回收自己的，不动别人的实例——
- *  多检出并行保护，§1.4）。 */
-/** @param {number} port @param {string} [host] @returns {Promise<boolean>} */
-export async function isPortInUse(port, host = "127.0.0.1") {
-  return new Promise((resolve) => {
-    const socket = net.connect({ port, host });
-    /** @param {boolean} value */
-    const done = (value) => {
-      socket.destroy();
-      resolve(value);
-    };
-    socket.setTimeout(500);
-    socket.once("connect", () => done(true));
-    socket.once("timeout", () => done(false));
-    socket.once("error", () => done(false));
-  });
-}
-
-// ── .next 缓存指纹 ─────────────────────────────────────────────────────────
 /**
- * 关键配置指纹（内容 hash）。与 .ps1 的 Get-ConfigFingerprint 同口径：
- * 逐文件 sha256 + 组合 hash，并保留逐文件明细以便回答「到底哪个文件变了」。
- * @param {string} [root]
- * @param {string} [root] @returns {{ hash: string, files: Record<string, string> }}
- */
-export function configFingerprint(root = ROOT) {
-  const combined = crypto.createHash("sha256");
-  /** @type {Record<string, string>} */
-  const files = {};
-  for (const rel of FINGERPRINT_TARGETS) {
-    const full = path.join(root, rel);
-    if (!fs.existsSync(full)) continue;
-    const digest = crypto.createHash("sha256").update(fs.readFileSync(full)).digest("hex");
-    files[rel] = digest;
-    combined.update(`${rel}\0${digest}\0`);
-  }
-  return { hash: combined.digest("hex"), files };
-}
-
-/**
- * 按指纹决定是否清空 .next（FORCE_CLEAN=1 强制清、SKIP_CLEAN=1 强制留）。
- * 返回是否执行了清理，供日志与测试断言（**不猜**：调用方据返回值写结论）。
- */
-/**
- * @param {string} [root]
- * @param {Record<string, string | undefined>} [env]
- * @param {{ hash: string, files: Record<string, string> }} [fingerprint]
- * @returns {{ cleaned: boolean, reason: string }} */
-export function syncNextCache(
-  root = ROOT,
-  env = /** @type {Record<string, string | undefined>} */ (process.env),
-  fingerprint = configFingerprint(root),
-) {
-  const nextDir = path.join(root, ".next");
-  const hashFile = path.join(nextDir, "config-fingerprint");
-  const filesFile = path.join(nextDir, "config-fingerprint-files.json");
-  const writeMarks = () => {
-    try {
-      fs.writeFileSync(hashFile, fingerprint.hash, "utf8");
-      fs.writeFileSync(filesFile, JSON.stringify(fingerprint.files), "utf8");
-    } catch {
-      /* 缓存标记写不进去最多导致下次全量重编译，不阻断启动 */
-    }
-  };
-  /** @param {string} reason @returns {string} */
-  const wipe = (reason) => {
-    fs.rmSync(nextDir, { recursive: true, force: true });
-    fs.mkdirSync(nextDir, { recursive: true });
-    writeMarks();
-    return reason;
-  };
-
-  if (env.FORCE_CLEAN === "1") {
-    return { cleaned: fs.existsSync(nextDir), reason: wipe("FORCE_CLEAN=1") };
-  }
-  if (env.SKIP_CLEAN === "1") {
-    return { cleaned: false, reason: "SKIP_CLEAN=1" };
-  }
-  if (!fs.existsSync(nextDir)) {
-    fs.mkdirSync(nextDir, { recursive: true });
-    writeMarks();
-    return { cleaned: false, reason: "首次启动：写入初始指纹，执行全量编译" };
-  }
-  const saved = fs.existsSync(hashFile) ? fs.readFileSync(hashFile, "utf8").trim() : "";
-  if (saved === fingerprint.hash) {
-    return { cleaned: false, reason: "配置指纹未变，保留缓存" };
-  }
-  return { cleaned: true, reason: wipe(`指纹变化 ${saved.slice(0, 12) || "(无)"} → ${fingerprint.hash.slice(0, 12)}`) };
-}
-
-// ── 进程编排 ───────────────────────────────────────────────────────────────
-
-/**
- * 回收一棵进程树的**跨平台入口**。
+ * 回收一棵进程树的**跨平台入口**（实现见 src/lib/kill-process-tree.ts，唯一出处）。
  *
- * 为什么不直接 import `src/lib/kill-process-tree.ts`：那是 TS 模块，而本脚本与
- * sidecar 一起跑在**纯 Node**（无 TS loader）下 —— `import "….ts"` 在运行时会
- * ENOENT，在 tsc 下又需要 allowImportingTsExtensions。因此这里改为在需要时
- * **动态 import**：优先用仓库内那份唯一实现（Node ≥ 22.6 可加载 .ts），失败
- * 则退回到本函数内的最小等价实现（判据与 src/lib/kill-process-tree.ts 对齐：
- * POSIX 读 PGID 后按组发信号、与自身同组则禁走组路径）。
- *
- * 也就是说平台判据只有一份语义、两条加载路径，而不是两处各写一套判据。
+ * 为什么不直接 `import "….ts"`：那是 TS 模块，在纯 Node 下需要运行时类型剥离
+ * （Node ≥ 22.6 默认开启）。用动态 import 而非静态 import，是为了在旧 Node 上
+ * 仍能给出可行动的报错，而不是让整个编排在加载阶段就崩。
  * @param {{ pid: number, detached?: boolean, force?: boolean }} options
  * @returns {Promise<{ ok: boolean, via: string }>}
  */
 export async function reapProcessTree(options) {
-  try {
-    // 路径用变量拼接：tsc 对字符串字面量的 .ts 扩展名会报 TS5097
-    //（allowImportingTsExtensions 未开），而运行时需要的就是它。
-    const specifier = `../src/lib/kill-process-tree.ts`;
-    const mod = await import(/* @vite-ignore */ specifier);
-    return await mod.killProcessTree(options);
-  } catch {
-    return reapProcessTreeFallback(options);
-  }
+  const specifier = ["..", "src", "lib", "kill-process-tree.ts"].join("/");
+  const mod = await import(specifier);
+  return mod.killProcessTree(options);
 }
 
-/**
- * 动态加载失败时的等价实现（纯 Node，语义与 src/lib/kill-process-tree.ts 一致）。
- * @param {{ pid: number, detached?: boolean, force?: boolean }} options
- * @returns {{ ok: boolean, via: string }}
- */
-function reapProcessTreeFallback({ pid, detached = false, force = false }) {
-  if (!pid || pid <= 0) return { ok: false, via: "无有效 PID（跳过）" };
-  if (process.platform === "win32") {
-    const cmd = `taskkill /PID ${pid} /T /F`;
-    spawnSync(cmd, { shell: true, stdio: "ignore" });
-    return { ok: true, via: cmd };
-  }
-  const sig = force ? "SIGKILL" : "SIGTERM";
-  /** @param {number} target @returns {number | null} */
-  const pgidOf = (target) => {
-    try {
-      const out = spawnSync("ps", ["-o", "pgid=", "-p", String(target)], {
-        encoding: "utf8",
-        timeout: 2000,
-      });
-      const value = Number.parseInt(String(out.stdout ?? "").trim(), 10);
-      return Number.isInteger(value) && value > 0 ? value : null;
-    } catch {
-      return null;
-    }
-  };
-  const pgid = pgidOf(pid);
-  const own = pgidOf(process.pid);
-  // 与调用者同组时禁走组路径：bound 模式子进程与调用者同组，
-  // kill(-pgid) 会连带把编排器自己杀掉（src/lib/kill-process-tree.ts 同款判据）。
-  if (pgid !== null && pgid !== own) {
-    try {
-      process.kill(-pgid, sig);
-      return { ok: true, via: `kill -${sig} -${pgid}（进程组）` };
-    } catch {
-      /* 落到单杀 */
-    }
-  }
-  if (pgid === null && detached && pgid !== own) {
-    try {
-      process.kill(-pid, sig);
-      return { ok: true, via: `kill -${sig} -${pid}（进程组·未探测）` };
-    } catch {
-      /* 落到单杀 */
-    }
-  }
-  try {
-    process.kill(pid, sig);
-    return { ok: true, via: `kill -${sig} ${pid}（单进程兜底）` };
-  } catch {
-    return { ok: false, via: `kill -${sig} ${pid} 失败（目标可能已退出）` };
-  }
-}
-/** 本次会话拉起的子进程（收尾时全部回收）。
- *  @type {import("node:child_process").ChildProcess[]} */
-const spawned = [];
-
-/**
- * 起一个子进程并**单独建进程组**（POSIX）。这是跨平台回收的地基：
- * 不显式建组时子进程与 launcher 同组，回收只能单杀 leader，其下的
- * node/pnpm/next 会残留成孤儿（AGENTS 硬规则 3 明令禁止的形态）。
- * @returns {import("node:child_process").ChildProcess}
- */
-/**
- * @param {string} command
- * @param {string[]} args
- * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, redirectTo?: { out: string, err: string } | null }} [options]
- * @returns {import("node:child_process").ChildProcess}
- */
-export function spawnInGroup(
-  command,
-  args,
-  { cwd = ROOT, env = process.env, redirectTo = null } = {},
-) {
-  /** @type {import("node:child_process").StdioOptions} */
-  const stdio = redirectTo
-    ? ["ignore", fs.openSync(redirectTo.out, "a"), fs.openSync(redirectTo.err, "a")]
-    : ["ignore", "inherit", "inherit"];
-  const child = spawn(command, args, {
-    cwd,
-    env,
-    stdio,
-    // POSIX：自建进程组（setsid 语义），收尾时可整组回收；
-    // Windows：detached 会另开控制台窗口且无组语义，回收走 taskkill /T。
-    detached: process.platform !== "win32",
-    shell: false,
-  });
-  spawned.push(child);
-  return child;
-}
-
-/**
- * 收尾：回收本次会话拉起的**整棵进程树**，并清理会话锚点。
- * 平台分支收在 src/lib/kill-process-tree.ts（AGENTS 硬规则 3），这里只表达
- * 「回收这些树」的意图，不自己摸 process.platform。
- */
+/** 收尾：回收本次会话拉起的**整棵进程树**，并清理会话锚点。 */
 export async function reapAll() {
   for (const child of spawned) {
     if (child.exitCode !== null || child.signalCode !== null) continue;
     try {
       if (child.pid) {
-        await reapProcessTree({ pid: child.pid, detached: process.platform !== "win32" });
+        const via = await reapProcessTree({ pid: child.pid, detached: !isWindows(), force: true });
+        log(`回收子进程树 PID ${child.pid}：${via.via}`, "STEP");
       }
-    } catch {
-      /* killProcessTree 本身不抛，这里只是防御 */
+    } catch (error) {
+      log(`回收子进程树失败：${error instanceof Error ? error.message : String(error)}`, "WARN");
     }
   }
   clearSession(ROOT);
@@ -396,8 +321,8 @@ export async function reapAll() {
 
 /** 回收上一次运行遗留的进程树（崩溃 / 被 SIGKILL 时留下的孤儿）。
  *  判据是**心跳 + PID**两条（见 dev-launcher-session）：只判 PID 会被 PID 复用
- *  骗过，只判心跳会把卡死的实例当成死的。 */
-/** @param {string} [root] @returns {Promise<number[] | null>} 被回收的 PID */
+ *  骗过，只判心跳会把卡死的实例当成死的。
+ *  @param {string} [root] @returns {Promise<number[] | null>} 被回收的 PID */
 export async function reapStaleSession(root = ROOT) {
   if (isSessionOwnerAlive(root)) return null;
   const session = readSession(root);
@@ -408,62 +333,269 @@ export async function reapStaleSession(root = ROOT) {
     return null;
   }
   for (const pid of pids) {
-    await reapProcessTree({ pid, detached: process.platform !== "win32" });
+    await reapProcessTree({ pid, detached: !isWindows(), force: true });
   }
   clearSession(root);
   return pids;
 }
 
-/** 有界重试的 HTTP 就绪探测（不需要 lsof/ss：直接问服务本身）。 */
-/**
- * @param {number} port
- * @param {{ timeoutMs?: number, host?: string, onTick?: ((secondsLeft: number) => void) | null }} [options]
- * @returns {Promise<boolean>} */
-export async function waitForReady(
-  port,
-  { timeoutMs = READY_TIMEOUT_MS, host = "127.0.0.1", onTick = null } = {},
-) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(`http://${host}:${port}/api/health`, { cache: "no-store" });
-      if (res.ok) return true;
-    } catch {
-      /* 还没起来：继续等 */
+/** 端口检查：空闲 / 自己的残留（回收）/ 别人的（只提示，绝不擅自杀）。
+ *
+ *  「只回收自己的」是多检出并行的保护线（§1.4），因此这里必须**问得出归属**
+ *  才动手。Windows 与 POSIX 的判据都由 launch-core/procs 提供，本函数不分平台。
+ *  @param {number} port @param {string} [root] @returns {Promise<string>} 结论摘要 */
+export async function reconcilePort(port, root = ROOT) {
+  const summary = [];
+  for (const p of scanPorts(port)) {
+    const verdict = await inspectPort(p, {
+      listenPids: listeningPidsOnPort,
+      belongsToRoot: pidBelongsToRoot,
+      root,
+    });
+    if (verdict.ownership === PORT_OWNERSHIP.free) {
+      summary.push(`${p} 空闲`);
+      continue;
     }
-    if (onTick) onTick(Math.round((deadline - Date.now()) / 1000));
-    await new Promise((r) => setTimeout(r, 1000));
+    if (verdict.ownership === PORT_OWNERSHIP.own) {
+      log(`端口 ${p} 被本检出上一次启动的进程占用（PID ${verdict.ownPids.join(", ")}），正在回收…`, "WARN");
+      for (const pid of verdict.ownPids) {
+        const via = await reapProcessTree({ pid, detached: !isWindows(), force: true });
+        log(`  回收 PID ${pid}：${via.via}`, "INFO");
+      }
+      summary.push(`${p} 已回收自己的残留`);
+      continue;
+    }
+    summary.push(`${p} 被其它进程占用（PID ${verdict.foreignPids.join(", ")}）`);
+    log(
+      `端口 ${p} 被非本检出的进程占用（PID ${verdict.foreignPids.join(", ")}）——多检出并行保护，不清理。` +
+        `若与本检出冲突，请改 .env 的 COMFYAPP_PORT。`,
+      "WARN",
+    );
   }
-  return false;
+  return summary.join("；");
 }
 
-/** @param {string[]} argv @returns {{ mode: string, open: boolean, host: string, port: string | null }} */
-function parseArgs(argv) {
-  /** @type {{ mode: string, open: boolean, host: string, port: string | null }} */
-  const args = { mode: "web", open: true, host: "127.0.0.1", port: null };
+// ── 桌面壳 ──────────────────────────────────────────────────────────────────
+
+/** 解析预编译壳的可执行文件（Windows `app.exe`、POSIX 无后缀）。 */
+/** @param {string} [root] @returns {string | null} */
+export function defaultShellExe(root = ROOT) {
+  const candidates = isWindows()
+    ? ["src-tauri/target/release/app.exe", "src-tauri/target/debug/app.exe"]
+    : ["src-tauri/target/release/app", "src-tauri/target/debug/app"];
+  for (const rel of candidates) {
+    const full = path.join(root, rel);
+    if (fs.existsSync(full)) return full;
+  }
+  return null;
+}
+
+/** 确保 Tauri 启动页资源就位（frontendDist 编译期嵌入，运行时同步保证下次编对）。 */
+/** @param {string} [root] */
+export function ensureSplashResource(root = ROOT) {
+  const src = path.join(root, "public", "splash.html");
+  const destDir = path.join(root, "src-tauri", "splash-assets");
+  if (!fs.existsSync(src)) {
+    log("未找到 public/splash.html，Tauri 启动页可能无法显示", "WARN");
+    return;
+  }
+  try {
+    fs.mkdirSync(destDir, { recursive: true });
+    fs.copyFileSync(src, path.join(destDir, "splash.html"));
+    log("已同步 splash.html → src-tauri/splash-assets/splash.html（frontendDist，编译期嵌入）", "INFO");
+  } catch (error) {
+    log(`同步 splash.html 失败：${error instanceof Error ? error.message : String(error)}`, "WARN");
+  }
+}
+
+/** 拉起预编译壳，并把 PID 落盘（启动器先退出时的兜底回收锚点）。 */
+/** @param {string} shellExe @param {number} port @param {{ root?: string, foreground?: string | null }} options */
+export function spawnShell(shellExe, port, { root = ROOT, foreground = null } = {}) {
+  const child = spawnInGroup({
+    command: shellExe,
+    args: [],
+    cwd: root,
+    env: {
+      ...process.env,
+      COMFYAPP_PROJECT_ROOT: root,
+      COMFYAPP_DEV_URL: `http://127.0.0.1:${port}/workspace`,
+      COMFYAPP_PORT: String(port),
+      COMFYAPP_FOREGROUND: foreground ?? process.env.COMFYAPP_FOREGROUND ?? "0",
+    },
+  });
+  spawned.push(child);
+  try {
+    fs.writeFileSync(path.join(launcherLogDir, "tauri-shell.pid"), String(child.pid ?? ""), "ascii");
+  } catch {
+    /* 兜底锚点写不进去不影响本次启动 */
+  }
+  return child;
+}
+
+/** 清掉上一轮留下的壳 PID 文件（在拉起之前调用）。
+ *
+ *  文件是「上一次 run 的残留」，而本编排器是被启动器另起的进程 —— 在写到新 PID
+ *  之前，文件里还是旧 PID。系统会复用 PID，旧号很可能已归某个无关进程，兜底
+ *  回收路径读到它就会去杀不相干的东西。先删 = 窗口期内读不到，语义安全。 */
+export function resetShellPidFile(root = ROOT) {
+  try {
+    fs.rmSync(path.join(root, "log", "launcher", "tauri-shell.pid"), { force: true });
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** 回收本次拉起的壳（整棵进程树）；PID 取不到/不是数字/已退出都直接返回。 */
+/** @param {string} [root] @returns {Promise<boolean>} */
+export async function killShellFromPidFile(root = ROOT) {
+  const file = path.join(root, "log", "launcher", "tauri-shell.pid");
+  let pid = Number.NaN;
+  try {
+    pid = Number.parseInt(fs.readFileSync(file, "utf8").trim(), 10);
+  } catch {
+    return false;
+  } finally {
+    try {
+      fs.rmSync(file, { force: true });
+    } catch {
+      /* 忽略 */
+    }
+  }
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  const via = await reapProcessTree({ pid, detached: !isWindows(), force: true });
+  log(`兜底回收桌面壳（PID ${pid}）：${via.via}`, "STEP");
+  return true;
+}
+
+// ── 收尾定性 ────────────────────────────────────────────────────────────────
+
+/** dev server 先退出时的成因分类（判据 = 壳侧写下的**正标记** + 壳是否已退）。
+ *
+ *  为什么不拿退出码定性：「壳也退出了」是共同现象，用户放弃 / 壳崩溃 / 被任务
+ *  管理器结束都会命中它；由现象反推成因会把真故障说成设计内行为（历史事故）。
+ *  @param {{ shellExited: boolean, abandoned: boolean, shellCrashed: boolean }} input
+ *  @returns {"dev-server" | "abandoned" | "shell-self-exited" | "shell-terminated"} */
+export function downstreamExitKind({ shellExited, abandoned, shellCrashed }) {
+  if (!shellExited) return "dev-server";
+  if (abandoned) return "abandoned";
+  if (shellCrashed) return "shell-self-exited";
+  return "shell-terminated";
+}
+
+/** 取壳侧 stderr 的两个正标记（大小写不敏感）。 */
+/** @param {string} [root] @returns {{ abandoned: boolean, crashed: boolean, file: string }} */
+export function readShellMarkers(root = ROOT) {
+  const file = path.join(root, "log", "launcher", "dev-launcher-stderr.log");
+  return {
+    abandoned: fileHasMarker(file, ABANDONED_MARKER),
+    crashed: fileHasMarker(file, NONZERO_EXIT_MARKER),
+    file,
+  };
+}
+
+/** 把 dev server 提前退出翻译成可行动的报错（抛出的消息即用户可见的失败出口）。 */
+/**
+ * @param {string} kind
+ * @param {{ devCode: number | null, shellCode: number | null, shellPid?: number | undefined,
+ *           stderrFile: string, stdoutFile: string }} ctx
+ * @returns {string}
+ */
+export function describeDownstreamExit(kind, ctx) {
+  const errTail = readTail(ctx.stderrFile, 20) || "(无输出)";
+  const outTail = readTail(ctx.stdoutFile, 20) || "(无输出)";
+  const tail = `最近 stderr：\n${errTail}\n最近 stdout：\n${outTail}\n（完整输出见 ${ctx.stdoutFile} 与 ${ctx.stderrFile}）`;
+  if (kind === "abandoned") {
+    return "检测到启动页被关闭（壳日志含 launch abandoned 标记）：用户放弃本次启动，按正常收尾处理";
+  }
+  if (kind === "shell-self-exited") {
+    return (
+      `本地服务随桌面壳一起退出（壳自身以非零码结束，exit=${ctx.shellCode ?? "?"}）。` +
+      "壳侧判据：log/launcher/dev-launcher-stderr.log 里的 `exiting with non-zero code`；" +
+      "若附近还有 `another instance of this checkout is running`，说明这次启动只是把已在运行的窗口唤到前台" +
+      "——本次双击没有启动新进程，属于设计内行为。\n" +
+      tail
+    );
+  }
+  if (kind === "shell-terminated") {
+    return (
+      `本地服务随桌面壳一起退出（exit=${ctx.shellCode ?? "?"}），且 log/launcher/dev-launcher-stderr.log 里` +
+      "**没有**壳写下的任何收尾标记——说明壳是被强行收走的（另一次启动把它顶掉 / 任务管理器结束了任务 / 壳崩溃）。" +
+      "这次双击等于**从未启动**：请只双击一次启动入口并等启动页自己切到主界面。" +
+      "另请对照 log/shell/shell.log 与 dev-launcher-stderr.log。\n" +
+      tail
+    );
+  }
+  return (
+    `Next.js dev server 提前退出（exit=${ctx.devCode ?? "?"}）。` +
+    "壳仍在运行，属 dev server 自身退出（编译失败 / 端口被占 / pnpm 异常）。\n" +
+    tail
+  );
+}
+
+/** 打开浏览器：三平台各有入口，失败只提示不阻断（§9.2 第 3 条）。 */
+/** @param {string} url */
+export function openBrowser(url) {
+  const command = isWindows() ? "cmd" : process.platform === "darwin" ? "open" : "xdg-open";
+  const args = isWindows() ? ["/c", "start", "", url] : [url];
+  const child = spawn(command, args, { stdio: "ignore", detached: true, windowsHide: true });
+  // 打开浏览器是体验降级，绝不能成为启动失败：xdg-open 缺失时给一条 WARN 即可。
+  child.on("error", () => log(`未能自动打开浏览器，请手动访问 ${url}`, "WARN"));
+  child.unref();
+  log(`已尝试打开浏览器：${url}`, "INFO");
+}
+
+/** 优雅中断（Ctrl-C / SIGTERM / SIGHUP）：回收整棵进程树后退出。 */
+/** @param {number} code */
+export async function shutdown(code) {
+  log("正在回收整棵进程树…", "STEP");
+  await reapAll();
+  try {
+    archiveRunLog(ROOT, currentLog);
+  } catch {
+    /* 归档失败不影响退出 */
+  }
+  process.exit(code);
+}
+
+// ── 主流程 ──────────────────────────────────────────────────────────────────
+
+/** 解析命令行参数（与 .ps1 的开关语义逐项对齐）。 */
+/** @param {string[]} argv */
+export function parseArgs(argv) {
+  /** @type {{ mode: string, open: boolean, host: string, port: string | null,
+   *           shellExe: string | null, coldStart: boolean }} */
+  const args = { mode: "web", open: true, host: "127.0.0.1", port: null, shellExe: null, coldStart: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i] ?? "";
     if (a === "--mode") args.mode = argv[++i] ?? args.mode;
     else if (a.startsWith("--mode=")) args.mode = a.slice("--mode=".length);
+    else if (a === "--tauri") args.mode = "tauri";
+    else if (a === "--prebuilt" || a === "-Prebuilt") args.mode = "prebuilt";
     else if (a === "--no-open") args.open = false;
+    else if (a === "--cold-start" || a === "-ColdStart") args.coldStart = true;
     else if (a === "--host") args.host = argv[++i] ?? args.host;
     else if (a === "-p" || a === "--port") args.port = argv[++i] ?? null;
+    else if (a === "--shell-exe") args.shellExe = argv[++i] ?? null;
   }
   return args;
 }
 
 /**
- * 主流程：预检 → 端口 → 缓存 → 起服务 → 等就绪 → 常驻（心跳）。
- * @returns {Promise<number>} 退出码（0 正常，非 0 已打印可行动作）
+ * 主流程：回收孤儿 → 预检 → 端口 → 缓存 → 起服务 →（可选）起壳 → 等就绪 → 常驻。
+ * @param {string[]} [argv] @returns {Promise<number>} 退出码（0 正常，非 0 已打印可行动作）
  */
-/** @param {string[]} [argv] @returns {Promise<number>} */
 export async function run(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const startedAt = Date.now();
-  // 预检失败时也要能写出「本来打算用哪个端口」——此时还没解析端口，
-  // 用显式参数（合法时）否则 null，让快照里不出现伪造的端口号。
   const explicitPort = Number.parseInt(args.port ?? "", 10);
   const portOrNull = Number.isInteger(explicitPort) && explicitPort > 0 ? explicitPort : null;
+  /** 进度快照 + 提醒字段（一次运行内共享）。 */
+  /** @param {string} phase @param {number} progress @param {string} message
+   *  @param {Partial<import("./launcher-core/orchestrator.mjs").LaunchStatusPayload>} [extra] */
+  const status = (phase, progress, message, extra = {}) =>
+    writeLaunchStatus(ROOT, { phase, progress, message, appPort: portOrNull ?? currentPort, startedAt, ...extra });
+  let currentPort = portOrNull;
+
   log(`project_root=${ROOT}`, "INFO");
   log(`平台=${process.platform}，模式=${args.mode}`, "INFO");
 
@@ -476,164 +608,235 @@ export async function run(argv = process.argv.slice(2)) {
   if (envProblem) {
     log("环境配置未就绪，**不会**启动服务。", "ERROR");
     log(envProblem.message, "ERROR");
-    writeLaunchStatus("error", 1, "环境配置未就绪：先执行 pnpm env:init", {
-      error: true,
-      appPort: portOrNull,
-      startedAt,
-    });
+    status("error", 1, "环境配置未就绪：先执行 pnpm env:init", { error: true });
     return 1;
   }
   const gateProblem = runToolchainGate(ROOT);
   if (gateProblem) {
     log(gateProblem, "ERROR");
-    writeLaunchStatus("error", 1, gateProblem.split("\n")[0] ?? "工具链不可用", {
-      error: true,
-      appPort: portOrNull,
-      startedAt,
-    });
+    status("error", 1, gateProblem.split("\n")[0] ?? "工具链不可用", { error: true });
     return 1;
   }
   log("工具链门禁：pnpm 可用、node_modules 已安装", "OK");
 
   // 2) 端口（单一事实源：app-port.mjs，绝不在这里重算）
   const port = portOrNull ?? resolveAppPort(ROOT);
+  currentPort = port;
   log(`使用端口 ${port}（.env 显式值优先，否则按检出路径推导，见 §1.1）`, "INFO");
-  writeLaunchStatus("port-check", 0.05, "正在检查端口占用…", { appPort: port, startedAt });
+  status("port-check", 0.05, "正在检查端口占用…");
 
-  const busy = [];
-  for (const p of scanPorts(port)) {
-    if (await isPortInUse(p, args.host)) busy.push(p);
+  // 3) 桌面壳（prebuilt 模式最先拉起：用户双击后第一件事是看见窗口）
+  let shell = /** @type {import("node:child_process").ChildProcess | null} */ (null);
+  let staleShell = null;
+  if (args.mode === "prebuilt") {
+    const shellExe = args.shellExe ?? process.env.COMFYAPP_PREBUILT_SHELL ?? defaultShellExe(ROOT);
+    if (!shellExe || !fs.existsSync(shellExe)) {
+      const message =
+        "找不到预编译 Tauri 壳（src-tauri/target/{release,debug}/app[.exe]）。" +
+        "请先执行 cargo build --release --features custom-protocol 或 pnpm tauri build。";
+      log(message, "ERROR");
+      status("error", 1, message, { error: true });
+      return 1;
+    }
+    staleShell = shellStaleWarning(shellExe, ROOT);
+    if (staleShell) {
+      log(staleShell, "WARN");
+      appendRuntimeWarning(staleShell);
+    }
+    resetShellPidFile(ROOT);
+    ensureSplashResource(ROOT);
+    shell = spawnShell(shellExe, port, { root: ROOT, foreground: args.coldStart ? "1" : null });
+    log(`预编译 Tauri 壳已启动（PID ${shell.pid}）：${shellExe}`, "OK");
+    log("Tauri 桌面壳已启动，正在启动本地服务…", "STEP");
+    status("port-check", 0.05, "桌面壳已启动，正在检查端口占用…", { staleShell });
   }
-  if (busy.length > 0) {
-    // 只提示不擅自杀：端口可能属于另一份检出的实例（§1.4 多检出并行保护），
-    // 也可能是用户自己的服务 —— 「猜着杀」比「清楚地说」危险得多。
-    log(
-      `端口 ${busy.join("/")} 已被占用。若属另一份检出或其它应用，请改 .env 的 COMFYAPP_PORT；` +
-        `若是本检出上一次启动残留，先关闭它或删除 run/launcher-session.json 后重试。`,
-      "WARN",
-    );
-  } else {
-    log(`端口 ${scanPorts(port).join("/")} 空闲`, "OK");
-  }
-  writeLaunchStatus("port-ready", 0.12, "端口已就绪，处理编译缓存…", { appPort: port, startedAt });
 
-  // 3) .next 缓存策略（与 .ps1 同一指纹口径）
-  const cache = syncNextCache(ROOT);
+  // 4) 端口归属：只回收自己的残留（§1.4）
+  const portSummary = await reconcilePort(port, ROOT);
+  log(`端口检查：${portSummary}`, "OK");
+  status("port-ready", 0.12, "端口已就绪，处理编译缓存…", { staleShell });
+
+  // 5) .next 缓存策略（与 .ps1 同一指纹口径）
+  const cache = syncNextCache(ROOT, process.env);
   log(cache.cleaned ? `清空 .next 全量重编译（${cache.reason}）` : `保留 .next 缓存（${cache.reason}）`, cache.cleaned ? "STEP" : "OK");
-  writeLaunchStatus("cache", 0.2, "正在启动本地服务（Next.js dev server）…", { appPort: port, startedAt });
+  const pnpm = reconcilePnpmVersion(ROOT);
+  if (pnpm?.tip) {
+    appendRuntimeWarning(pnpm.tip);
+    staleShell = staleShell ? `${staleShell}；${pnpm.tip}` : pnpm.tip;
+  }
+  status("cache", 0.2, "正在启动本地服务（Next.js dev server）…", { staleShell });
 
-  // 4) 起 dev server（重定向到 log/nextjs/，与 .ps1 同布局）
-  const nextOut = path.join(nextjsLogDir, `nextjs-stdout-${runStamp}.log`);
-  const nextErr = path.join(nextjsLogDir, `nextjs-stderr-${runStamp}.log`);
-  log(`启动 Next.js dev server（127.0.0.1:${port}）…`, "STEP");
-  const dev = spawnInGroup(
-    "pnpm",
-    ["dev", "-p", String(port), "-H", args.host],
-    {
-      cwd: ROOT,
-      env: { ...process.env, COMFYAPP_PORT: String(port), PORT: String(port) },
-      redirectTo: { out: nextOut, err: nextErr },
-    },
-  );
+  // 6) 起 dev server（输出重定向到 log/nextjs/，按次命名后轮转保留 5 份）
+  const nextDir = path.join(ROOT, "log", "nextjs");
+  pruneTimestampedLogs(nextDir, ["nextjs-stdout-", "nextjs-stderr-"], 5);
+  const nextOut = path.join(nextDir, `nextjs-stdout-${runTimestamp}.log`);
+  const nextErr = path.join(nextDir, `nextjs-stderr-${runTimestamp}.log`);
+  log(`启动 Next.js dev server（${args.host}:${port}）…`, "STEP");
+  const dev = spawnDevServer(port, args.host, nextOut, nextErr);
   log(`dev server 已启动（PID ${dev.pid}，输出见 ${nextOut}）`, "OK");
 
-  // 5) 会话锚点：把 PID 与心跳落盘，让「进程被杀后仍能回收」成立
+  // 7) 会话锚点：把 PID 与心跳落盘，让「进程被杀后仍能回收」成立
   writeSession(ROOT, {
     launcher_pid: process.pid,
-    child_pids: spawned
-      .map((c) => c.pid)
-      .filter((pid) => typeof pid === "number"),
+    child_pids: spawned.map((c) => c.pid).filter((pid) => typeof pid === "number"),
     app_port: port,
     mode: args.mode,
     started_at: new Date(startedAt).toISOString(),
   });
   const heartbeat = setInterval(() => touchHeartbeat(ROOT), HEARTBEAT_INTERVAL_MS);
   touchHeartbeat(ROOT);
+  clearIntervalGuard(heartbeat);
 
-  // 6) DB schema 就绪提示（只警告不退出：改纯前端页面不该被空库挡住，§9.1）
+  // 8) DB schema 就绪提示（只警告不退出：改纯前端页面不该被空库挡住，§9.1）
   if (probeSchemaSync(ROOT) !== "ready") {
     log("数据库表还没建（db.sqlite 缺失或为空）——真实业务页面会 500。先执行：pnpm db:push", "WARN");
   }
 
-  // 7) 等就绪
+  // 9) 等就绪（dev server 先退出则立刻定性，不空等 180s）
   log(`等待服务就绪（http://${args.host}:${port}）…`, "STEP");
-  writeLaunchStatus("dev-server-starting", 0.3, "本地服务已启动，等待就绪…", { appPort: port, startedAt });
-  const ready = await waitForReady(port, {
+  status("dev-server-starting", 0.3, "本地服务已启动，等待就绪…", { staleShell });
+  const devExited = () => dev.exitCode !== null || dev.signalCode !== null;
+  const ready = await waitForReady({
+    port,
     host: args.host,
+    timeoutMs: READY_TIMEOUT_MS,
+    isAlive: () => !devExited(),
     onTick: (left) => {
-      const progress = 0.3 + Math.min(0.6, (READY_TIMEOUT_MS - left * 1000) / READY_TIMEOUT_MS * 0.6);
-      writeLaunchStatus("dev-server-starting", progress, `正在等待本地服务就绪（还剩 ${left}s）…`, { appPort: port, startedAt });
+      const progress = 0.3 + Math.min(0.6, ((READY_TIMEOUT_MS - left * 1000) / READY_TIMEOUT_MS) * 0.6);
+      status("dev-server-starting", progress, `正在等待本地服务就绪（还剩 ${left}s）…`, { staleShell });
     },
   });
+
+  if (devExited()) {
+    return await concludeDownstreamExit({
+      dev,
+      shell,
+      heartbeat,
+      staleShell,
+    });
+  }
   if (!ready) {
-    const tail = readTail(nextErr, 20);
+    const tail = readTail(nextErr, 20) || "(无输出)";
     log(`服务未在 ${READY_TIMEOUT_MS / 1000}s 内就绪。最近输出：\n${tail}`, "ERROR");
-    writeLaunchStatus("error", 1, "服务未在超时内就绪，见 log/nextjs/", { error: true, appPort: port, startedAt });
-    clearInterval(heartbeat);
-    await reapAll();
-    return 1;
+    status("error", 1, "服务未在超时内就绪，见 log/nextjs/", { error: true, staleShell });
+    await shutdown(1);
   }
   log(`服务已就绪：http://${args.host}:${port}`, "OK");
-  writeLaunchStatus("dev-server-ready", 0.9, "本地服务已就绪", { ready: true, appPort: port, startedAt });
+  status("dev-server-ready", 0.9, "本地服务已就绪", { ready: true, staleShell });
 
-  // 8) 打开浏览器（纯 Web 模式；桌面模式由壳自取）
+  // 10) 打开浏览器（仅纯 Web 模式；桌面模式界面就是壳窗口）
   if (args.open && process.env.NO_OPEN !== "1" && args.mode === "web") {
     openBrowser(`http://localhost:${port}`);
   }
 
-  // 9) 常驻：任一子进程退出即收尾（与 .ps1 的「等任一退出」同语义）
+  // 11) 常驻：任一子进程退出即收尾（与 .ps1 的「等任一退出」同语义）
   const exitCode = await new Promise((resolve) => {
-    dev.once("exit", (code) => resolve(code ?? 0));
-    const onSignal = () => resolve(0);
-    process.once("SIGINT", onSignal);
-    process.once("SIGTERM", onSignal);
+    for (const child of [dev, shell]) {
+      child?.once("exit", (code) => resolve(code ?? 0));
+    }
+    process.once("SIGINT", () => resolve(0));
+    process.once("SIGTERM", () => resolve(0));
   });
   clearInterval(heartbeat);
-  log("检到子进程退出，正在回收整棵进程树…", "STEP");
-  await reapAll();
-  log("全部子进程已回收，启动器退出", "OK");
-  archiveCurrentLog();
+  if (args.mode === "prebuilt") {
+    log("桌面壳或 dev server 已退出，正在回收整棵进程树…", "STEP");
+  } else {
+    log("检到子进程退出，正在回收整棵进程树…", "STEP");
+  }
+  await shutdown(exitCode);
   return exitCode;
 }
 
-/** 读文件尾部（失败诊断用）。 */
-/** @param {string} file @param {number} [lines] @returns {string} */
-export function readTail(file, lines = 20) {
-  try {
-    const text = fs.readFileSync(file, "utf8");
-    return text.split("\n").slice(-lines).join("\n").trim();
-  } catch {
-    return "(无输出)";
-  }
-}
-
-/** 打开浏览器：三平台各有入口，失败只提示不阻断（§9.2 第 3 条）。 */
-/** @param {string} url */
-export function openBrowser(url) {
-  const cmd =
-    process.platform === "win32" ? "cmd" : process.platform === "darwin" ? "open" : "xdg-open";
-  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
-  const child = spawn(cmd, args, { stdio: "ignore", detached: true });
-  child.on("error", () => {
-    log(`未能自动打开浏览器，请手动访问 ${url}`, "WARN");
+/** 起 dev server：`pnpm dev -p <port> -H <host>`（端口由 app-port.mjs 解析后显式传入，
+ *  不靠环境变量兜底 —— 裸 `next dev` 会落 Next 默认 3000，与 .env / 壳 / e2e 对不上）。 */
+/** @param {number} port @param {string} host @param {string} outFile @param {string} errFile */
+export function spawnDevServer(port, host, outFile, errFile) {
+  const pnpm = whichCommand("pnpm");
+  if (!pnpm) throw new Error("pnpm 不在 PATH 上，无法启动 dev server");
+  const child = spawnInGroup({
+    command: pnpm,
+    args: ["dev", "-p", String(port), "-H", host],
+    cwd: ROOT,
+    env: { ...process.env, COMFYAPP_PORT: String(port), PORT: String(port) },
+    stdoutFile: outFile,
+    stderrFile: errFile,
   });
-  child.unref();
-  log(`已尝试打开浏览器：${url}`, "INFO");
+  spawned.push(child);
+  return child;
 }
 
-/** 归档本次运行日志（与 .ps1 的 archive 目录约定一致）。 */
-export function archiveCurrentLog() {
-  try {
-    fs.appendFileSync(archiveLog, fs.readFileSync(currentLog, "utf8"), "utf8");
-  } catch {
-    /* 归档失败不影响退出 */
+/** dev server 提前退出时定性并给出用户可见出口（失败即抛出可行动的报错）。 */
+/**
+ * @param {{ dev: import("node:child_process").ChildProcess,
+ *           shell: import("node:child_process").ChildProcess | null,
+ *           heartbeat: NodeJS.Timeout, staleShell: string | null }} ctx
+ * @returns {Promise<number>}
+ */
+async function concludeDownstreamExit({ dev, shell, heartbeat, staleShell }) {
+  clearInterval(heartbeat);
+  const markers = readShellMarkers(ROOT);
+  const shellExited = shell ? shell.exitCode !== null || shell.signalCode !== null : false;
+  const kind = downstreamExitKind({
+    shellExited,
+    abandoned: markers.abandoned,
+    shellCrashed: markers.crashed,
+  });
+  const detail = describeDownstreamExit(kind, {
+    devCode: dev.exitCode,
+    shellCode: shell?.exitCode ?? null,
+    shellPid: shell?.pid,
+    stderrFile: lastNextLog("nextjs-stderr-"),
+    stdoutFile: lastNextLog("nextjs-stdout-"),
+  });
+  if (kind === "abandoned") {
+    log(detail, "INFO");
+    log("（提示：要启动桌面应用请重新双击启动入口，启动页出现后请等它自动切换到主界面）", "INFO");
+    await shutdown(0);
+    return 0;
   }
+  log(detail, "ERROR");
+  writeLaunchStatus(ROOT, { phase: "error", progress: 1, message: "启动失败，见 log/", error: true, staleShell });
+  await shutdown(1);
+  return 1;
 }
 
-// 直跑（被 import 时不执行）：供 tests 复用上面这些纯函数。
+/** 最近一份按次命名的 dev server 日志（壳侧报错要用它给出「现场」）。 */
+/** @param {string} prefix @returns {string} */
+function lastNextLog(prefix) {
+  const dir = path.join(ROOT, "log", "nextjs");
+  try {
+    const names = fs
+      .readdirSync(dir)
+      .filter((name) => name.startsWith(prefix))
+      .sort()
+      .reverse();
+    if (names[0]) return path.join(dir, names[0]);
+  } catch {
+    /* 目录不存在时退回到约定路径 */
+  }
+  return path.join(dir, `${prefix}${runTimestamp}.log`);
+}
+
+/** 心跳定时器的引用遮蔽（避免被 tree-shaking 式的误读当成未使用）。 */
+/** @param {NodeJS.Timeout} timer */
+function clearIntervalGuard(timer) {
+  if (process.env.COMFYAPP_LAUNCHER_NO_HEARTBEAT === "1") clearInterval(timer);
+}
+
+// 信号处理：任何中断都要先回收整棵进程树再退出（硬规则 3）。
+let shuttingDown = false;
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.on(signal, () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    log(`收到 ${signal}：回收子进程树后退出`, "WARN");
+    void shutdown(signal === "SIGINT" ? 130 : 143);
+  });
+}
+
+// 直跑（被 import 时不执行）：供测试复用上面这些纯函数。
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const isMain = process.env.COMFYAPP_LAUNCHER_DRY_RUN !== "1";
-  if (!isMain) {
+  if (process.env.COMFYAPP_LAUNCHER_DRY_RUN === "1") {
     process.stdout.write("dry-run：未启动任何进程\n");
   } else {
     run()

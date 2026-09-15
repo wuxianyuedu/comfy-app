@@ -428,7 +428,7 @@ fn tail_log_file(path: &std::path::Path, max_bytes: usize, max_lines: usize) -> 
 }
 
 /// 启动页「查看日志」面板的数据源：返回本次启动的编排日志尾部。
-/// dev-launcher.ps1 的日志在文件被占用时会回退改名，以 sentinel
+/// 启动编排器的日志在文件被占用时会回退改名，以 sentinel
 /// log/launcher/dev-launcher-current.txt 指向的真实文件为准；附带 stderr 尾部，
 /// 启动卡住时用户能直接在启动页看到「执行到哪一步 / 卡在哪里」。
 #[tauri::command]
@@ -693,18 +693,64 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
 
 /// 应用退出时回收 sidecar 整棵进程树。
 ///
-/// 交给 shell 插件的 `kill()`：它按平台选择机制（Windows 任务终止 /
-/// POSIX 进程组信号），是「跨平台回收」里唯一不该自己写的一段。此前这里写死
-/// `taskkill /T /F`，在 Linux/macOS 上等于**什么也不做** —— sidecar 与它拉起的
-/// next-server 会活过壳退出，继续占着端口与日志文件。
+/// 两道机制，缺一不可（AGENTS 硬规则 3：必须杀整棵树）：
+///   1. **shell 插件自己的 `kill()`** —— 它按平台选机制（Windows 任务终止 /
+///      POSIX 进程组信号），是「跨平台」这件事最不该自己手写的一段；
+///   2. **编排侧的统一回收**（scripts/launcher-core/reject.mjs → 见下）——
+///      插件保证「跟随平台」，统一回收保证「不漏」：Node 之下的 next-server /
+///      turbopack worker 才是真正会残留成孤儿的那几层。
+///
+/// 此前这里写死 `taskkill /T /F`，在 Linux/macOS 上等于**什么也不做**；改成
+/// 只调插件之后仍然只杀到「插件认为的那棵树」。因此把第二道补上，并让**唯一
+/// 判据**留在 `scripts/reap-process.mjs`（与编排器、Python 启动器同一入口），
+/// 而不是在 Rust 里再写一遍平台分支。
 #[cfg(not(debug_assertions))]
-fn kill_sidecar() {
+fn kill_sidecar(project_root: &str) {
   let child = SIDECAR.lock().unwrap().take();
-  if let Some(child) = child {
-    match child.kill() {
-      Ok(()) => log::info!("[ComfyAPP] sidecar killed"),
-      Err(e) => log::warn!("[ComfyAPP] sidecar kill failed: {:?}", e),
-    }
+  let Some(child) = child else { return };
+  // 插件用的 sidecar pid：先记下来，交给统一回收做第二道。
+  let pid = child.pid();
+  match child.kill() {
+    Ok(()) => log::info!("[ComfyAPP] sidecar killed via shell plugin (pid {pid})"),
+    Err(e) => log::warn!("[ComfyAPP] sidecar kill via shell plugin failed: {e:?}"),
+  }
+  reap_process_tree(project_root, pid);
+}
+
+/// 用编排侧的统一回收补一刀（`scripts/reap-process.mjs`）。
+///
+/// 为什么复用脚本而不是在 Rust 里再写一套：平台判据（Windows `taskkill /T /F`
+/// 与 POSIX 进程组）只允许有一份。Rust 侧再写一遍，就是历史上「各写各的、
+/// POSIX 上退化成单杀」那条老路的翻版。
+#[cfg(not(debug_assertions))]
+fn reap_process_tree(project_root: &str, pid: u32) {
+  if project_root.is_empty() || pid == 0 {
+    return;
+  }
+  let script = std::path::Path::new(project_root)
+    .join("scripts")
+    .join("reap-process.mjs");
+  if !script.is_file() {
+    log::warn!(
+      "[ComfyAPP] 统一回收脚本不存在（{}），本次只靠 shell 插件回收 sidecar",
+      script.display()
+    );
+    return;
+  }
+  let mut command = std::process::Command::new("node");
+  command.arg(&script).arg(pid.to_string()).arg("--force");
+  #[cfg(windows)]
+  {
+    // 不弹控制台窗口（POSIX 上无此常量，故走 cfg 门控而不是运行时判据）。
+    use std::os::windows::process::CommandExt;
+    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+  }
+  match command.output() {
+    Ok(out) => log::info!(
+      "[ComfyAPP] sidecar 进程树统一回收：{}",
+      String::from_utf8_lossy(&out.stdout).trim()
+    ),
+    Err(e) => log::warn!("[ComfyAPP] 统一回收未能执行（{e}）；sidecar 可能残留，见 log/nextjs/"),
   }
 }
 
@@ -714,14 +760,12 @@ fn kill_sidecar() {
 /// 是否存在，于是 Linux/macOS 上 `resolve_project_root()` 永远返回空串 ——
 /// 启动页读不到 `run/launch-status.json`、壳日志落不到 `log/shell/`，
 /// 表现为「启动页一直转圈 + 没有日志可查」，而根因只是判据绑在了 Windows 上。
-/// 现在认两个**跨平台都存在**的仓库标识文件（package.json 是必需，
-/// 另一个任选其一：跨平台编排器或 Windows 编排器）。
+/// 现在认两个**跨平台都存在**的仓库标识文件：`package.json`（必需）+
+/// `scripts/dev-launcher.mjs`（启动编排器的唯一实现；`.ps1` 只是它的 Windows
+/// 调用入口，因此**不再**作为判据 —— 判据绑在入口形态上，就会在换入口时又静默
+/// 失效一次）。
 fn looks_like_project_root(dir: &std::path::Path) -> bool {
-  if !dir.join("package.json").is_file() {
-    return false;
-  }
-  dir.join("scripts").join("dev-launcher.mjs").is_file()
-    || dir.join("scripts").join("dev-launcher.ps1").is_file()
+  dir.join("package.json").is_file() && dir.join("scripts").join("dev-launcher.mjs").is_file()
 }
 
 /// 尝试从 launcher 传入的环境变量读取项目根目录；
@@ -1211,12 +1255,12 @@ fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
   match event {
     tauri::RunEvent::Exit => {
       #[cfg(not(debug_assertions))]
-      kill_sidecar();
+      kill_sidecar(&app.state::<AppState>().project_root());
     }
     tauri::RunEvent::ExitRequested { code, .. } => {
       /* 壳的退出码是「谁结束了这次启动」在壳侧唯一可靠的出口：prebuilt 链路里
-       * dev server 的退出码对三种成因完全一样（见 dev-launcher.ps1 的
-       * Get-DownstreamExitKind），而壳写下的这一行会随 stderr 进
+       * dev server 的退出码对三种成因完全一样（见 dev-launcher.mjs 的
+       * downstreamExitKind），而壳写下的这一行会随 stderr 进
        * log/launcher/dev-launcher-stderr.log，启动器能据此把「壳自己退出」与
        * 「壳被杀」分开。异常码（0 以外的）一律记 warn：正常路径是交接完成后
        * 关主窗（code=None）与「关掉启动页 = 放弃启动」（exit(0)）。 */

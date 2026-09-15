@@ -15,8 +15,8 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
   return (
     <Card title="退出与后台服务">
       <p className="text-muted-foreground mb-4 text-sm">
-        桌面壳退出时会对应用进程树执行整树强制关闭 （taskkill /T
-        /F，被强杀的进程没有清理机会），因此这些开关是
+        桌面壳退出时会对应用进程树执行整树强制关闭（被强杀的进程没有清理机会），
+        因此这些开关是
         「拉起时」决定后台服务是否脱离进程树，不是退出那一刻再选。 改动后
         <strong className="text-ink/80">下一次拉起才生效</strong>。
       </p>
