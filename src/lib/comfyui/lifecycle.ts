@@ -36,6 +36,7 @@ import {
 } from "./status";
 import { openUrlInBrowser } from "~/lib/open-in-browser";
 import { COMFYUI_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log-paths";
+import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import {
   buildEarlyExitDetail,
   buildSpawnArgs,
@@ -573,34 +574,18 @@ function appendRuntimeLog(line: string): void {
  * 在 comfyui-runtime.log 写一条会话边界横幅。
  * comfyui-runtime.log 是追加不轮转的，多次启动的日志会一直累积——新一次
  * 启动的 `[spawn]`/`[out]` 行接在上次启动结尾后面，日志面板里难以分辨
- * 会话边界。此函数用 box 字符 + ANSI 亮色（面板解析后渲染成高亮）划出
- * 清晰的会话分隔线。
+ * 会话边界。横幅用 box 字符 + ANSI 亮色（面板解析后渲染成高亮）划出清晰的
+ * 分隔线，**两侧各留一个空行**，因此直接看文件的用户也能一眼分出「本次从哪
+ * 开始」（唯一实现见 `src/lib/session-banner.server.ts`）。
  *
- * 横幅正文**不再自带时刻**：此前标题里再写一遍时间（形如
- * `▶ ComfyUI 启动会话  <日期 时刻>`），与紧随其后的行首时刻只差 1 秒，
- * 用户把两条相似时刻读成一个，于是「ComfyUI 明明起来并写了新行，看着却像
- * 没有新增」（ISSUE #346 的同源困惑）。时刻只留在每条行首
- * （`appendRuntimeLog` 的统一口径），横幅只负责划边界。
+ * 横幅正文**不带时刻**：时刻只留在每条行首（`appendRuntimeLog` 的统一口径），
+ * 横幅里再写一遍会与紧随其后的行首时刻只差 1 秒，用户把两条读成一个，于是
+ * 「ComfyUI 明明起来并写了新行，看着却像没有新增」（ISSUE #346 的同源困惑）。
  * @param kind start（绿）= 新会话开始；end（黄）= 会话结束
  * @param title 横幅中间的信息行（会话说明 / exit code 等，不含时刻）
  */
 function appendSessionBanner(kind: "start" | "end", title: string): void {
-  try {
-    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
-    const bar = "─".repeat(72);
-    const color = kind === "start" ? "\x1b[1;32m" : "\x1b[1;33m"; // 亮绿 / 亮黄
-    const reset = "\x1b[0m";
-    const banner = [
-      "",
-      `${color}${bar}${reset}`,
-      `${color}  ${title}${reset}`,
-      `${color}${bar}${reset}`,
-      "",
-    ].join("\n");
-    fs.appendFileSync(COMFYUI_RUNTIME_LOG, banner + "\n", "utf-8");
-  } catch {
-    /* 日志失败不影响主流程 */
-  }
+  appendSessionBannerToFile(COMFYUI_RUNTIME_LOG, kind, title);
 }
 
 /**

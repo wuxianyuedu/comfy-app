@@ -3,6 +3,7 @@ import { getServerUser } from "@/lib/auth-server";
 import { getExitPolicy } from "@/lib/app-settings";
 import { spawnManaged, waitForDetachMediator } from "@/lib/process-launch";
 import { OLLAMA_RUNTIME_LOG } from "@/lib/log-paths";
+import { appendSessionBanner as appendSessionBannerToFile } from "@/lib/session-banner.server";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -48,24 +49,10 @@ function appendOllamaLog(line: string): void {
   }
 }
 
-/** 会话边界横幅（与 comfyui/drizzle-studio 同模式）：区分多次启动累积日志。 */
+/** 会话边界横幅（唯一实现见 `src/lib/session-banner.server.ts`）：区分多次启动累积的
+ * ollama-runtime.log（两侧各留空行，直接看文件也能看出本次从哪开始）。 */
 function appendOllamaBanner(kind: "start" | "end", title: string): void {
-  try {
-    fs.mkdirSync(path.dirname(OLLAMA_RUNTIME_LOG), { recursive: true });
-    const bar = "─".repeat(72);
-    const color = kind === "start" ? "\x1b[1;32m" : "\x1b[1;33m";
-    const reset = "\x1b[0m";
-    const banner = [
-      "",
-      `${color}${bar}${reset}`,
-      `${color}  ${title}${reset}`,
-      `${color}${bar}${reset}`,
-      "",
-    ].join("\n");
-    fs.appendFileSync(OLLAMA_RUNTIME_LOG, banner + "\n", "utf-8");
-  } catch {
-    /* 日志失败不影响主流程 */
-  }
+  appendSessionBannerToFile(OLLAMA_RUNTIME_LOG, kind, title);
 }
 
 /** 探测 Ollama 是否已就绪（HTTP 200 = 服务在监听）。 */
