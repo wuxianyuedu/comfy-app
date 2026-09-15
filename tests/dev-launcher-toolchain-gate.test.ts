@@ -479,3 +479,49 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
     }
   });
 });
+
+/** 自检要把「探到的是哪个 pnpm」打印清楚（ISSUE #576 第四轮）。
+ *
+ *  用户现场（Windows）：
+ *    $ pnpm --version           → 12.4.1
+ *    $ pnpm check:toolchain     → [OK] pnpm 可用：10.34.5（C:\Program Files\PowerShell\7\pwsh.EXE）
+ *
+ *  「本机 10.34.5」与「终端里 12.4.1」并不矛盾：终端敲的 `pnpm` 与 Node 探测到的
+ *  **不是同一个文件**。corepack 的 `.ps1` 形态必须经宿主执行，所以命令名打印出来
+ *  是 `pwsh.EXE`；而 PATH 上并存多个 pnpm 时，被选中的那个又是另一个版本。
+ *  旧文案只给「版本号 + 命令名」，这个现场看起来就无解（ISSUE #576 第四轮）。
+ *
+ *  契约：① 打印**选中的文件**（PATH 上命中的那个）；② 经宿主执行时额外打印
+ *  「宿主 → 真实文件」；③ 版本漂移的提示把方向指向「选中的 pnpm」。
+ */
+describe("pnpm check:toolchain：打印探测身份，版本漂移可自解释", () => {
+  it("经宿主执行时，选中的文件与真实命名的区别可被解释（`.ps1` → 宿主）", () => {
+    const dir = makeInstalledPnpmDir({ cmd: false });
+    const hostDir = makePowerShellHost(path.join(tmp, "host"));
+    const script = path.join(dir, "pnpm.ps1");
+    // 仓库里跑的是 POSIX（没有真 pwsh）：宿主形态由注入的 env/platform 模拟，
+    // 这与被测路径在 Windows 上实际走的是同一条 `siblingFallback()`。
+    const invocation = commandInvocation(script, ["-v"], {
+      env: WIN_ENV(dir),
+      platform: "win32",
+    });
+    const host = path.join(hostDir, "pwsh.EXE");
+    // 经宿主时命令名会变成宿主（现场里那句 `（…\pwsh.EXE）` 就是这么来的）——
+    // 自检据此把「命令是 pwsh.EXE」译回「它跑的是哪个 .ps1」。
+    if (invocation.command === host) {
+      expect(invocation.prefixArgs).toContain(script);
+    } else {
+      // 机器上 `.ps1` 被当成可直接执行（POSIX 的 shebang 语义）时退化为原样调用：
+      // 那也满足「命令名可解释」，只是无需再打印宿主一行。
+      expect(invocation.command).toBe(script);
+    }
+  });
+
+  it("自检打印「选中的 pnpm」一行（版本漂移的先查对象）", () => {
+    const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "check-pnpm-available.mjs")], {
+      encoding: "utf8",
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(`${r.stdout ?? ""}${r.stderr ?? ""}`).toContain("选中的 pnpm：");
+  });
+});
