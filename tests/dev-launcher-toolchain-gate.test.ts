@@ -397,3 +397,85 @@ describe("pnpm check:toolchain 真跑", () => {
     expect(out).not.toContain("<项目版本>");
   });
 });
+
+/** 版本不一致时，自查入口必须与启动器同一条口径：**先对齐、复核通过才算一致**。
+ *
+ *  用户现场（ISSUE #576 第三轮）：`pnpm check:toolchain` 只报一句
+ *  `[WARN] 版本与 package.json 要求不一致（本机 10.34.5，要求 12.4.1）`
+ *  就结束了 —— 而真启动时启动器**自己就会 corepack 对齐**（`reconcilePnpmVersion()`
+ *  → `preparePnpm()` + 复核），`prepare-local-run.ps1` 第 3 步也早已这么做。
+ *  于是自检看起来像「排查完了、没办法」，用户只能手动跑 corepack；更糟的是
+ *  脚本还以 0 退出、不提示其实还有一道「node_modules 未装」的门禁在等着。
+ */
+describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口径", () => {
+  /** 造一个能跑的 POSIX pnpm + corepack：corepack prepare 会把「激活状态」落盘，
+   *  pnpm 据此报告不同版本（对齐成功 / 失败的两种现场都靠它模拟）。 */
+  function makeAlignableToolchain(options: { aligns: boolean }) {
+    const bin = path.join(tmp, "bin");
+    fs.mkdirSync(bin, { recursive: true });
+    const marker = path.join(tmp, "activated");
+    const pnpmScript = path.join(bin, "pnpm");
+    fs.writeFileSync(
+      pnpmScript,
+      [
+        "#!/bin/sh",
+        `if [ "$1" = "-v" ]; then`,
+        `  if [ -f "${marker}" ]; then printf 12.4.1; else printf 10.34.5; fi`,
+        "  exit 0",
+        "fi",
+        "",
+      ].join("\n"),
+    );
+    fs.chmodSync(pnpmScript, 0o755);
+    const corepackScript = path.join(bin, "corepack");
+    fs.writeFileSync(
+      corepackScript,
+      [
+        "#!/bin/sh",
+        `if [ "$1" = "--version" ]; then echo 0.34.0; exit 0; fi`,
+        options.aligns ? `: > "${marker}"` : `echo "prepare failed" >&2; exit 1`,
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+    fs.chmodSync(corepackScript, 0o755);
+    return bin;
+  }
+
+  function runSelfCheck(bin: string) {
+    const r = spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      { encoding: "utf8", env: { ...process.env, PATH: bin, PATHEXT: "" } },
+    );
+    return { status: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
+  }
+
+  it("对齐成功：报已对齐（带前后版本号），不留下「你只能自己修」的 WARN", () => {
+    const { status, out } = runSelfCheck(makeAlignableToolchain({ aligns: true }));
+    expect(status).toBe(0);
+    expect(out).toContain("已对齐");
+    expect(out).toContain("10.34.5");
+    expect(out).toContain(packageManagerVersion(ROOT)!);
+    expect(out).not.toContain("自动对齐未生效");
+  });
+
+  it("对齐失败：复核后才 WARN，并给出手动命令（版本号取自 package.json）", () => {
+    const { status, out } = runSelfCheck(makeAlignableToolchain({ aligns: false }));
+    expect(status).toBe(0); // 与启动器一致：版本不一致不阻断
+    expect(out).toContain("自动对齐未生效");
+    expect(out).toContain(`corepack prepare pnpm@${packageManagerVersion(ROOT)} --activate`);
+  });
+
+  it("node_modules 未装时点出下一道门禁，不让「[OK] pnpm 可用」被读成「可以启动了」", () => {
+    const { status, out } = runSelfCheck(makeAlignableToolchain({ aligns: true }));
+    expect(status).toBe(0);
+    // 本仓库测试环境两态都可能（CI 装了 / 干净检出没装），只钉「不存在假装没事」：
+    // 未装时必须出现 node_modules 的 WARN 与修复动作。
+    const marker = path.join(ROOT, "node_modules", ".modules.yaml");
+    if (!fs.existsSync(marker)) {
+      expect(out).toContain("node_modules");
+      expect(out).toContain("pnpm install");
+    }
+  });
+});
