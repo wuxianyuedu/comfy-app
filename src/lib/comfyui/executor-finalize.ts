@@ -14,6 +14,7 @@
  *
  * @module comfyui/executor-finalize
  */
+import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import { taskRepository } from "../core/repository";

@@ -15,6 +15,7 @@
 // （读 %APPDATA% 文件）收敛在 resolveDesktopLaunchMeta()，文件缺失/异常一律
 // 静默降级返回 null，由 lifecycle 回落到默认端口 + 用户配置。
 
+import "server-only";
 import fs from "fs";
 import os from "os";
 import path from "path";

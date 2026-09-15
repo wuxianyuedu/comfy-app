@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { getSettings, getSettingsSync, saveSettings } from "@/lib/app-settings";
+import { getSettings, getSettingsSync, saveSettings } from "@/lib/app-settings/app-settings.server";
 import {
   clearComfyAutoStartFailure,
   clearComfyManualStop,

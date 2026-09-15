@@ -10,6 +10,7 @@
 // Windows：`start` 是 cmd 内建命令，须以 `cmd /c start "" <url>` 调用；
 // 空标题参数 "" 用于防止 URL 里的 & 被当成 start 的窗口标题。
 
+import "server-only";
 import { spawn } from "child_process";
 
 export async function openUrlInBrowser(

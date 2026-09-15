@@ -22,14 +22,17 @@ const tempDirs: string[] = [];
 const BASELINE_FILES: Record<string, string> = {
   "src/lib/endpoints.ts":
     'export const COMFYUI_DEFAULT_PORT = 8188;\nexport function comfyUiBaseUrl(port: number = COMFYUI_DEFAULT_PORT): string {\n  return `http://127.0.0.1:${port}`;\n}\n',
-  "src/lib/app-settings.ts":
-    'export { COMFYUI_DEFAULT_PORT } from "./endpoints";\n',
-  "src/lib/comfyui/client.ts": `import { COMFYUI_DEFAULT_PORT } from "../app-settings";
+  "src/lib/app-settings/index.ts":
+    'export type AppSettings = { comfyuiPort: number };\n',
+  "src/lib/app-settings/app-settings.server.ts": `import fs from "node:fs";
+export function getSettingsSync() { return fs; }
+`,
+  "src/lib/comfyui/client.ts": `import { COMFYUI_DEFAULT_PORT } from "../endpoints";
 export function resolveComfyBase() {
   return COMFYUI_DEFAULT_PORT;
 }
 `,
-  "src/lib/comfyui/lifecycle-launch.ts": `import { COMFYUI_DEFAULT_PORT } from "../app-settings";
+  "src/lib/comfyui/lifecycle-launch.ts": `import { COMFYUI_DEFAULT_PORT } from "../endpoints";
 import { buildSpawnArgs } from "./lifecycle-derive";
 export function launch() {
   return buildSpawnArgs({ baseArgs: [], effectivePort: 0, defaultPort: COMFYUI_DEFAULT_PORT, extraArgs: [] });
@@ -102,7 +105,7 @@ describe("check-comfyui-port-contract", () => {
 
   it("拉起侧注入别的默认端口即阻断", () => {
     const { run } = scanner({
-      "src/lib/comfyui/lifecycle-launch.ts": `import { COMFYUI_DEFAULT_PORT } from "../app-settings";
+      "src/lib/comfyui/lifecycle-launch.ts": `import { COMFYUI_DEFAULT_PORT } from "../endpoints";
 import { buildSpawnArgs } from "./lifecycle-derive";
 export function launch() {
   return buildSpawnArgs({ baseArgs: [], effectivePort: 0, defaultPort: 9000, extraArgs: [] });
@@ -142,14 +145,22 @@ export function launch() {
     expect(run().ok).toBe(true);
   });
 
-  it("常量改在 app-settings.ts 里自己定义（而不是再导出）即阻断", () => {
+  it("app-settings 里再定义/再导出默认端口即阻断（转手会让视图层拖进 fs）", () => {
     const { run } = scanner({
-      "src/lib/app-settings.ts":
+      "src/lib/app-settings/index.ts":
         'export const COMFYUI_DEFAULT_PORT = 8188;\n',
     });
     const r = run();
     expect(r.ok).toBe(false);
-    expect(r.output).toContain("再导出");
+    expect(r.output).toContain("不得定义或再导出");
+  });
+
+  it("app-settings 的 IO 文件里再导出默认端口同样阻断", () => {
+    const { run } = scanner({
+      "src/lib/app-settings/app-settings.server.ts":
+        'export { COMFYUI_DEFAULT_PORT } from "../endpoints";\n',
+    });
+    expect(run().ok).toBe(false);
   });
 
   it("零依赖常量层缺定义即阻断（浏览器图会因 import fs 整页 500）", () => {

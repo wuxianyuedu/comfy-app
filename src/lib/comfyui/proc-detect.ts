@@ -8,6 +8,7 @@
 // Windows 用 PowerShell Get-CimInstance 查命令行，Get-NetTCPConnection 查
 // PID 的监听端口；POSIX 用 ps 查命令行、用 /proc/net/tcp + /proc/<pid>/fd 查
 // 监听端口（纯 Node 内建，不依赖任何发行版可选的二进制）。
+import "server-only";
 import { execFile } from "child_process";
 import { readdirSync, readlinkSync, readFileSync } from "fs";
 

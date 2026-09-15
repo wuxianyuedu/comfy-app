@@ -24,7 +24,9 @@
   `docs/guide-stale-code.md`）；
 - 改 `src/lib/**` → `docs/standards/18-lib层规范.md`（**它曾是四类门禁的盲区**：
   分层 element / Node-only 声明规则 / 文件与函数长度棘轮 / 覆盖率门槛；
-  尤其 §18.4「`.server.ts` / `server-only` / 纯 Node 宿主」三选一的唯一口径）；
+  尤其 §18.4「`.server.ts` / `server-only` / 纯 Node 宿主」三选一的唯一口径，
+  自查 `node scripts/lib-node-only-scan.mjs`；新增 `lib` 子域目录时按 §18.6 在
+  `vitest.config.ts` 设实测门槛）；
 - 提交 / PR / 自查清单 / 分支策略 → `docs/standards/13-提交与-code-review.md`
   （§13.1 自查清单、§13.5 门禁、§13.6 分支与合并、§13.6.1 master 提交守卫）；
 - 不确定读哪些 → 先读 `docs/standards/15-附录.md` §15.5「新成员 10 分钟速读路径」建立全局认知。
@@ -42,7 +44,7 @@
 | ComfyUI 生命周期 | `src/lib/comfyui/**`（lifecycle / executor-* / reaper） | §3、§5 |
 | 工坊管线 | `src/components/workshop/**`、`src/lib/workshop/**` | §5 |
 | UI/逻辑分离 | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时 | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)） |
-| lib 层边界与门禁 | `src/lib/**`（新增/移动模块、拆 `.server.ts`、共享类型给视图层） | §18（[18-lib层规范.md](docs/standards/18-lib层规范.md)）；分层由 `eslint.config.js` 的 `boundaries` 强制，文件长度棘轮 `check-file-structure.cjs --strict` |
+| lib 层边界与门禁 | `src/lib/**`（新增/移动模块、拆 `.server.ts`、共享类型给视图层） | §18（[18-lib层规范.md](docs/standards/18-lib层规范.md)）；分层由 `eslint.config.js` 的 `boundaries` 强制，Node-only 声明由 `scripts/lib-node-only-scan.mjs` + `tests/lib-node-only-declarations.test.ts` 强制（§18.4），文件长度棘轮 `check-file-structure.cjs --strict` |
 | 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs` | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/check-ps1-consistency.mjs` |
 | 跨平台行为 / 端口与文档 | 新增按平台分叉的逻辑、改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1 |
 | 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |

@@ -9,6 +9,7 @@
  * - Writing only touches the line `KEY=...` (or appends it), preserving every
  *   other line, comments, and ordering. Never rewrites the whole file.
  */
+import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 

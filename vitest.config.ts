@@ -59,6 +59,62 @@ export default defineConfig({
           statements: 70,
           branches: 50,
         },
+        /* ── `src/lib` 的子域门槛（ISSUE #572 第 5 项 / 规范 §18.6）──────────
+         *
+         * 门槛此前只有上面那几个**文件**：`src/lib` 其余 180 个文件**零门槛**，
+         * 于是「覆盖率」这件事对它们既不报警也不记账 —— 而 `film`（7.5%）、
+         * `llm`（31%）、`core`（35%）恰恰是本项目的关键路径（编排 / 解密 / 仓储）。
+         *
+         * 三条口径（与 §11.7 的覆盖率棘轮一致）：
+         *   1. 门槛取**实测值向下取整到 5 的倍数**，不设理想值 —— 设高了会让
+         *      无关提交变红，设低了等于没设；
+         *   2. 之后**只升不降**（补了测试就上调，改动导致下降要在这里说清楚）；
+         *   3. 实测为 0 的目录（`drizzle-studio`）**现在先设 0**：给它设一个
+         *      非零门槛会让主线立刻红，而它需要的是先有测试（见 §18.7 登记）。
+         *
+         * 统计口径与表格里的 `lib/<domain>` 行一致（v8 按目录聚合）。 */
+        "src/lib/agent/**": {
+          lines: 20,
+          functions: 20,
+          statements: 15,
+          branches: 10,
+        },
+        "src/lib/core/**": {
+          lines: 35,
+          functions: 30,
+          statements: 35,
+          branches: 30,
+        },
+        "src/lib/drizzle-studio/**": {
+          lines: 0,
+          functions: 0,
+          statements: 0,
+          branches: 0,
+        },
+        "src/lib/film/**": {
+          lines: 5,
+          functions: 10,
+          statements: 5,
+          branches: 5,
+        },
+        "src/lib/llm/**": {
+          lines: 30,
+          functions: 30,
+          statements: 30,
+          branches: 25,
+        },
+        "src/lib/project-canvas/**": {
+          lines: 70,
+          functions: 70,
+          statements: 65,
+          branches: 50,
+        },
+        "src/lib/workshop/**": {
+          lines: 65,
+          functions: 70,
+          statements: 65,
+          branches: 55,
+        },
       },
     },
   },

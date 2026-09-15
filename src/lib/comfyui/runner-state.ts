@@ -14,6 +14,7 @@
 
 
 
+import "server-only";
 import { EventEmitter } from "events";
 
 import type WebSocket from "ws";

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
-import { getExitPolicy } from "@/lib/app-settings";
+import { getExitPolicy } from "@/lib/app-settings/app-settings.server";
 import { spawnManaged, waitForDetachMediator } from "@/lib/process-launch";
 import { OLLAMA_RUNTIME_LOG } from "@/lib/log-paths";
 import { appendSessionBanner as appendSessionBannerToFile } from "@/lib/session-banner.server";

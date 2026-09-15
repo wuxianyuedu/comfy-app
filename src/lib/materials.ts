@@ -14,6 +14,7 @@
  *   经 /api/generated/[...path] 提供读取，浏览器可直接引用。
  */
 
+import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 
