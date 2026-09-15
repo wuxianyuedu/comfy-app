@@ -754,6 +754,8 @@ zustand 队列，而不是再加一个模块级单例。
 | **`pnpm test` 随机非零退出**（`Test Files N passed` / `Tests M passed / 0 failed` 全绿，退出码却来自 `Unhandled Errors`；每次点名的文件都不同） | **游离的异步链路在用例结束后才 resolve/reject**（ISSUE #489）。已实测三处同族（都是「与报错点名的文件毫无关系」的失败）：① `use-model-library.ts` 的 `listQ.refetch().finally(() => setLoading(false))` 在 jsdom 环境拆除后才 resolve，触发 React 更新调度去读不存在的 `window`（`ReferenceError: window is not defined` @ `resolveUpdatePriority` / `dispatchSetState`）；② `use-custom-nodes-settings.ts` 的「完成后提示停留 800ms」`setTimeout` 同源；③ `runner-state.ts` 的 `schedulePersistLogs` **防抖定时器不属于任何生命周期**，清空内存 state 后仍在 200ms / 1500ms 后打到已 `vi.mock` 撤销的 repository（`TypeError: taskRepository.replaceLogs is not a function`）。`cleanup()` 只卸载组件、**不会取消已发出的 promise 与已排的 timer** | 已修：① 两处 hook 加卸载标记（先判存活再 setState）；③ 新增公共取消 API `cancelPersistLogs`，用例在 `beforeEach` **与** `afterEach` 两头都掐（只在 `beforeEach` 清，定时器会在「本用例结束后、下个 `beforeEach` 之前」的窗口里触发）。回归：`use-model-library.test.ts` 用「卡住回包 + 放行后记账」把偶发变**必现**（只统计更新调度栈的 `window` 读取，避开 react-query / tRPC 的 ambient 读取噪声），`reaper-decisions.test.ts` 锁「取消后不再有排期」。反向验证：还原任一实现即挂 |
  **hook 里一条脱离组件生命周期的游离 promise 链**（ISSUE #489）：`src/components/studio/hooks/use-model-library.ts` 的 `listQ.refetch().finally(() => setLoading(false))` 在测试结束（jsdom 环境已拆）之后才 resolve，于是 setLoading 触发 React 更新调度、去读已不存在的 `window` → `ReferenceError: window is not defined`（`resolveUpdatePriority` / `dispatchSetState`）。`cleanup()` 只卸载组件、**不会取消这条已发出的 promise**。谁被点名只取决于谁的 MSW handler 回包慢一拍 → 报错文件每次不同（实测 65 轮里 4 轮，约 6%） | 已修：hook 加 `aliveRef` 卸载标记，`.finally` 先判存活再 `setLoading`；回归 `src/components/studio/hooks/use-model-library.test.ts` 用「卡住回包 + 放行后记账」把偶发变**必现**（只统计更新调度栈的 window 读取，避开 react-query/tRPC 的 ambient 读取噪声）。反向验证：去掉 aliveRef 判定 → 本条挂（0 vs 10） |
 | **`pnpm test` 在仓库根新建 `log/` 并写入日志**（CI 上从无到有、开发者本机悄悄多几行，其中含用例的密钥标记行） | **用例直连真实日志路径**（ISSUE #489）：`src/server/lib/logger.test.ts` 的镜像用例 import 真实 `APP_RUNTIME_LOG` 用 `slice(before.length)` 读增量，`generate.test.ts` 的业务里程碑日志也落真实文件；镜像/日志是**真实写盘**副作用，不隔离就会写字 | 已修：`createPinoLogger({ mirror })` 支持注入镜像目标，两处用例都落到自己的 mkdtemp 目录；删掉 `log/` 跑 `pnpm test` 不再重建目录 |
+| **双击 `run-local.ps1`（及其它任何走 `Invoke-Entry` 的入口）在打开逻辑脚本之前就报** `Invoke-Entry: …\tools\start\run-local.ps1:32` + `无法检索变量 '$NodeScript'，因为尚未设置该变量。`（ISSUE #564） | **入口公共库引用了一个从未声明的变量**（ISSUE #562 的跨平台重构留的坑）：`scripts/entry-common.ps1` 的 `Invoke-Entry` 里有一处 `if ($NodeScript) { … }`，而 `$NodeScript` 只是注释里的一个 `.PARAMETER` 说明——**从未进过 `param()` 参数表，也从未被任何入口传过**。本库顶部是 `Set-StrictMode -Version Latest`，这一档会把「引用不存在的变量」从 `$null` 升级成**终止性错误**；而这条判断在主路径上（不是 else 分支），于是 `run-local.ps1` / `verify-quality.ps1` / `run-tests.ps1` / `generate-docs.ps1` / `sync-lint.ps1` / `register-comfyapp-protocol.ps1` 等**每一个**走 `Invoke-Entry` 的双击入口都在调起逻辑脚本之前炸掉（报错还是英文函数名 + 内部变量名，用户完全看不出该做什么）。它躲过了所有门禁：`.ps1` 引用未声明变量**在解析期不报错**，只在实际执行到那一行才炸，而 `pnpm lint` / `tsc` / 结构门禁 R7-R8 都读不到它 | 已修：删掉这条从未接线的 分支与配套的 `Invoke-NodeEntry`——本库只认 PowerShell 逻辑脚本，要调 `.mjs`（如启动编排器 `scripts/dev-launcher.mjs`）的入口各自做薄壳（`scripts/dev-launcher.ps1` 是参考形态），在 `param()` 之外新增一个没人传的开关只会再养出一个同类地雷。库头注释补上「为什么不在这里支持 `.mjs`」。回归测试 `tests/entry-common-strict-mode.test.ts`：静态核 `param()` 声明的变量覆盖函数体引用的每一个变量（反向验证：还原旧文件即失败），并在有 PowerShell 的环境里**真跑**一次 `Invoke-Entry`，断言它走到自己的「未找到逻辑脚本」出口而不是被 StrictMode 终止 |
+
 ## 6. 工具链钉死项（改之前必须理解原因）
 
 | 位置                   | 配置                                   | 原因                                                                |
@@ -1193,6 +1195,13 @@ reg delete "HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\comman
 4. **放 `tools/<分类>/`，不放仓库根**（R9，见 §8.2 与 12 章 §12.8）。新增入口前先
    看 `tools/` 下是否已有同分类目录，没有再新建——分类目录按用途划分（start /
    build / registry / studio），不要按人名或临时用途建目录。
+5. **碰 `scripts/entry-common.ps1` 时遵守 StrictMode**（ISSUE #564）。本库顶部是
+   `Set-StrictMode -Version Latest`：引用一个**没有声明**的变量（哪怕只是漏进了
+   `param()` 之外的某处判断）**不是返回 `$null`，而是当场终止整个入口**。它躲得过
+   所有门禁——`.ps1` 的解析期不报错，`pnpm lint` / `tsc` / 结构门禁都读不到——所以
+   规则是：**只在 `param()` 里声明、只在函数体里用**，别在公共库留「以后可能会用到」
+   的可选开关（历史上正是这么一个没人传的 `$NodeScript`，让全部走 `Invoke-Entry`
+   的双击入口同时不可用）。回归测试 `tests/entry-common-strict-mode.test.ts`。
 
 ### 8.6 tools/ 目录分类（新增入口放哪）
 
@@ -1215,6 +1224,7 @@ reg delete "HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\comman
 | 双击入口用记事本打开了脚本、没有执行 | 未做文件关联（§8.3 的一次性前置没跑）           | 右键 `scripts/enable-ps1-double-click.ps1` →「使用 PowerShell 运行」                                                                                |
 | 双击闪一下就没了，看不到报错         | 入口已执行并快速退出；`.ps1` 退出后窗口随之关闭 | 入口在双击场景（父进程是 explorer）会自动暂停，见 `Complete-Entry`；若仍闪退说明脚本在收尾前抛异常，改用终端执行 `pwsh -File .\入口.ps1` 看完整输出 |
 | 终端执行提示「禁止运行脚本」         | 机器执行策略为 Restricted                       | `pwsh -ExecutionPolicy Bypass -File .\入口.ps1`（入口内部已自带该参数，直接双击不受影响）                                                           |
+| 报 `无法检索变量 '$xxx'，因为尚未设置该变量` | 入口公共库在 `Set-StrictMode -Version Latest` 下引用了未声明的变量（ISSUE #564） | 把该变量补进 `param()`，或删掉这条没人传的分支——**不要**降级 StrictMode（它挡的是本来会静默取 `$null` 的错）。见 §8.4 第 5 条 |
 
 ## 9. 跨平台模式（Linux / macOS，零 `.ps1` 依赖）
 
