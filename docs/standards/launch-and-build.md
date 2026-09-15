@@ -261,22 +261,36 @@ true`——这类场景的策略反过来，必须给前台。
 - Node 的 `spawnSync` 在 Windows 上**不解析 shebang**（libuv 直接 `CreateProcess`
   传文件路径），所以 corepack 那只无扩展名 shim（`#!/usr/bin/env node`）被 spawn 时
   一律 `EACCES` / `ENOEXEC`；
-- 而 PATHEXT 的常见顺序把 `.CMD` 排在最前，`.CMD` 只有 cmd.exe 会解释 ——
-  同一目录里「能跑的 `pnpm.ps1` / 能跑的 `pnpm`」会被**跳过**，选中的偏偏是跑不起来的那个。
+- 而 PATHEXT 的常见顺序把 `.CMD` 排在最前，`.CMD` **只有 cmd.exe 会解释** ——
+  同一目录里「能跑的 `pnpm.ps1` / 能跑的 `pnpm`」会被**跳过**，选中的偏偏是跑不起来的那个；
+- **`.CMD` 被选中时 Node 一定会失败**（实测 `EINVAL`，不是 `EACCES`）：它既不是
+  能做 `CreateProcess` 的 PE 镜像，也没有 Node 认的 shebang。所以「批处理」必须是
+  一个**独立形态**，不能被塞进通用的「文本脚本」里当成可执行 —— 那会让它一路通过
+  候选确认，直到真跑起来才炸。
 
 表现是 `pnpm -v` 探测失败、**stdout / stderr 全空**，用户只看到
-`pnpm 工具链不可用（exit=?）：未知错误` —— 看起来完全像 corepack 缓存损坏，
-而真正的修法是「别选中那个 shim」。因此判据分两层：
+`pnpm 工具链不可用（exit=?）：未知错误`（选中的若正是 `.CMD`，则是
+`EINVAL（未发现可回退形态）`）—— 看起来完全像 corepack 缓存损坏，
+而真正的修法是「别选中那个文件，改用它旁边的 `.ps1`」。因此判据分两层：
 
 | 层 | 位置 | 做什么 |
 |---|---|---|
 | 候选**顺序** | `executableExts()` | 无扩展名 / `.EXE`（CreateProcess 能直接起）→ `.PS1`（经 PowerShell 宿主）→ `.CMD` / `.BAT`（Node 起不了，只能垫底）→ PATHEXT 其余项 |
-| 候选**确认** | `usableCommand()` | `fs.accessSync(X_OK)` + 对 shebang 形态**真起一次**（`stdio: "ignore"`）；起不来时同目录回退 `<name>.ps1`（`powershell -NoProfile -ExecutionPolicy Bypass -File`）。**选第一个真的能跑的**，全都不能跑才返回「没找到」 |
+| 候选**形态** | `executableKind()` | `shebang`（`#!` 起头）/ **`batch`**（`@echo` / `@setlocal` 起头，即 `.cmd` / `.bat`）/ `script` / `binary` / `unknown`。**批处理单列一类**，不与 `.ps1` 混 |
+| 候选**确认** | `usableCommand()` | `fs.accessSync(X_OK)`；**Windows 上的 `batch` 直接走回退、不真起**（真起必 `EINVAL`）；其余形态**真起一次**（`stdio: "ignore"`）。起不来 / 属 `batch` 时在**同目录**取 `<去掉自身扩展名>.ps1`（`powershell -NoProfile -ExecutionPolicy Bypass -File`）。**选第一个真的能跑的**，全都不能跑才返回「没找到」 |
 
 > 为什么是「真起一次」而不是「看扩展名」：扩展名只说明「谁解释它」，不说明
 > 「这台机器上现在能不能跑」。探针的退出码无关紧要（`--version` 报错也算起得来），
 > 只有 `probe.error.code`（EACCES / ENOENT / ENOEXEC）才算不可用。
-> POSIX 上只有一种形态（无扩展名），整条判据退化为原来的行为。
+> shebang **不按形态一刀切**：libuv 在 Windows 上确实不解析它，但机器上真配好了
+> 文件关联时它仍可用，所以留给「真起一次」去发现；起不来自然落到回退。
+> POSIX 上只有一种形态（无扩展名），且内核自己解析 shebang，整条判据退化为原来的行为
+> ——「批处理专属」的短路**只在 Windows 生效**。
+
+> **回退同胞名按「去掉自身扩展名再拼 `.ps1`」求**：无扩展名 shim 是 `pnpm` → `pnpm.ps1`，
+> 批处理是 `pnpm.CMD` → `pnpm.ps1`（**不是** `pnpm.CMD.ps1`）。只做字符串拼接会让
+> `.CMD` 一侧的回退永远找不到，等于没修 —— 这正是第二轮现场里提示说
+> 「未发现可回退形态」而 `pnpm.ps1` 明明就在旁边的原因。
 
 **同一个形态必须一路走到起服务**：`spawnDevServer()` 经 `commandInvocation()`
 拿 `{ command, prefixArgs }`，不再自己拼可执行名 —— 否则会出现「门禁探测通过了，
@@ -744,6 +758,7 @@ zustand 队列，而不是再加一个模块级单例。
 | **启动页一直转圈、`log/shell/` 为空** | `resolve_project_root()` 的判据绑在 Windows 专属文件（历史上的 `scripts/dev-launcher.ps1`）上 → POSIX 上恒返回空串。表现完全不像「路径判据错了」，像「启动页坏了」或「日志没写」 | 已修：改判 `package.json` + **编排器的唯一实现** `scripts/dev-launcher.mjs`（`looks_like_project_root`）。见 §9.3 |
 | **POSIX 上编排器退出后 `pnpm` / `next-server` 仍在跑、端口不释放** | 回收是 `taskkill /T /F`（POSIX 上等于不执行）；或虽有 POSIX 分支但 `spawn` 未 `detached`，子进程与编排器**同组** → 命中 §3.1 的防自杀判据，退化成单杀 leader，其下三层（`pnpm` / `next` / `turbopack worker`）全部残留 | 已修：`scripts/dev-launcher.mjs` 用 `spawnInGroup`（`detached: true` 自建进程组）+ 整组回收；编排器被 SIGKILL 时留下的孤儿由 `run/launcher-session.json` + 心跳在下次启动回收。见 §3.3 |
 | **双击 exe：启动即报「pnpm 工具链不可用（exit=?）：未知错误」，`dev-launcher-stderr` 空、stdout 里也没有 pnpm 自己的报错**（ISSUE #576，用户现场 `F:\AI\Other\Comfy-APP-T3`） | **PATH 上选中了一个「存在但跑不起来」的 pnpm 形态**：corepack 的 shim 在 Windows 上看起来是三个文件（无扩展名的 `pnpm`、`pnpm.cmd`、`pnpm.ps1`），其中**只有 `.ps1`（经 PowerShell 宿主）与「已关联 node 的无扩展名 shim」能跑**，`.cmd` 只有 cmd.exe；而 `whichCommand` 只按 `PATH × PATHEXT` 找**存在的文件**、PATHEXT 又把 `.CMD` 排在最前 → 选中必然 EACCES 的那个。三个观测点彼此吻合却被误读：① `spawnSync` 起不来 ⇒ `probe.error.code = EACCES`、`probe.status = null`、**stdout+stderr 都是空串** ⇒ `detail` 落到 `未知错误`；② `exit=?` 与「stderr 空」看着像「corepack 缓存损坏」（那条真故障会在 stderr 打印 `Failed to switch pnpm to ...`），于是提示把人引向「删缓存 / 重装 Node」；③ 修复文案里的版本号是 `<项目版本>` 占位符，没人会去翻 `package.json` | 已修（§2.1.1 / §2.1.2 / §2.1.3）：① `whichCommand` 改为**选第一个真的能跑的候选**（`executableExts()` 定顺序：无扩展名 / `.EXE` → `.PS1` → `.CMD`/`.BAT` 垫底；`usableCommand()` 用 `accessSync(X_OK)` + 对 shebang 形态**真起一次**确认，起不来则回退同目录 `<name>.ps1`）；② 探测结果结构化（`not-found` / `spawn-error` / `exit-nonzero` / `no-version`），把 `error.code` 与输出头几行一起带出来，**不再把「疑似缓存损坏」写成结论**；③ 提示中的版本号取自 `package.json` 的 `packageManager`，多行提示经 `stale_shell` 横幅进启动页（`white-space: pre-wrap`）；④ `spawn-error` 一类**自动 `corepack prepare` 重建并用同一条探测复核**，复核仍失败才落回提示；⑤ `spawnDevServer()` 复用同一个命令形态（`commandInvocation`），避免「探测过了、起服务又失败一次」。自查入口 `pnpm check:toolchain`。回归测试 `tests/dev-launcher-toolchain-gate.test.ts` |
+| **`pnpm check:toolchain` 报「命令起不来（可执行形态/权限不对） —— EINVAL（未发现可回退形态）」，命令是 `...\.tools\pnpm\<ver>\bin\pnpm.CMD`**（ISSUE #576 第二轮，同一用户同一现场） | **选中了批处理，而 Node 起不了批处理**：corepack 装到 `.tools\pnpm\<ver>\bin` 的 pnpm 是 `.CMD` + `.ps1` 并排（旁边并没有可用的无扩展名 shim）。此时两个缺陷叠加：① `executableKind()` 把 `.cmd` / `.bat` 与 `.ps1` **同判为通用 `script`**，`usableCommand()` 又对「非 shebang」直接 `ok: true`（没真起一次）—— 于是 `.CMD` 一路通过候选确认被选中；② 真跑起来是 `EINVAL`（批处理既不是 PE 镜像、也没有 Node 认的 shebang），而 `shebangFallback()` **只服务 shebang**，`.CMD` 走到这里没有回退，提示于是说「未发现可回退形态」—— 而 `pnpm.ps1` 就摆在同一个目录里。表现是探测失败、命令完全不可用 | 已修（§2.1.1）：① `executableKind()` 把**批处理单列一类 `batch`**（`@echo` / `@setlocal` 起头判形态，不看扩展名），不再与 `.ps1` 混；② `usableCommand()` 对 **Windows 上的 `batch` 直接走回退、不真起**（真起必 `EINVAL`，白搭一次进程创建），`shebangFallback()` 改名 `siblingFallback()` 并为**所有**「Node 起不来」的形态服务；③ 回退同胞名按**「去掉自身扩展名再拼 `.ps1`」**求（`pnpm.CMD` → `pnpm.ps1`，不是 `pnpm.CMD.ps1`）；④ `commandInvocation()` / `usableCommand()` / `probeCommand()` / `preparePnpm()` 统一接受可注入的 `{ env, platform }`，让「模拟另一平台」的被测路径与真实路径同一条。shebang **不按形态一刀切**（机器上真配好文件关联时仍可用），POSIX 不受批处理短路影响。回归 5 例见 `tests/dev-launcher-toolchain-gate.test.ts`（还原修复后 4 例立即失败） |
 | 双击 exe：启动即报「pnpm 工具链不可用 / 无法获取 pnpm 版本」并弹窗                                                                     | corepack 管理的 pnpm 在切换版本时本地缓存损坏：`.tools\pnpm\<ver>\bin` 缺失 → `pnpm -v` 报 `Failed to switch pnpm to pnpm@<ver> ... ENOENT`，命令完全不可用（install/dev 全依赖 pnpm）                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 已由 `Test-ToolchainGate`（弹壳前）拦截并弹 MessageBox 给修复步骤：`corepack enable && corepack prepare pnpm@<版本> --activate`（重建缓存，需联网一次），仍不行则删除损坏缓存后重装 Node/pnpm                                                                                                                                                                                                                                                 |
 | 启动后 splash 停在依赖预检报「关键依赖目录 typescript / @typescript/native / next 为空或缺失」                                         | pnpm 中断安装/拒装留下「目录在但内容空」的残缺（如 typescript 与 @typescript/native 空目录 → tsc 垫片找不到入口），旧版只查 `.modules.yaml` / `.bin/next` 查不出                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 已由 `Test-DevDependencies` 覆盖关键目录非空检测，残缺时自动 `pnpm install` 自愈；install 后仍残缺则明确报错并指向 `log/launcher/pnpm-install-stderr.log`                                                                                                                                                                                                                                                                                     |
 | `pnpm install` 已成功（exit 0）但仍报「node_modules/…为空或缺失」启动失败；同机跑 `sync-lint.ps1`/`run-local.ps1` 却正常               | 假阳性：`Get-BrokenKeyDeps` 用 `Get-ChildItem -LiteralPath` 枚举顶层 junction/symlink 判空，pwsh（7.6.5 实测）对这类 reparse point 的枚举可能返回 0 项 → 健康安装被误判残缺，触发 install 后因 `.modules.yaml`/lockfile 已一致而“Already up to date”无法自愈，二次复查仍误报                                                                                                                                                                                                                                                                                                                                                              | 已修：先 `Resolve-Path` 解析到链接目标真实绝对路径，再用 .NET `Directory.EnumerateFileSystemEntries` 对真实目录判非空（见 §2.2 step 5）。同步/自检脚本（sync-lint/run-local）本就只查 `.modules.yaml`+`.bin`+lockfile，故不受影响                                                                                                                                                                                                             |

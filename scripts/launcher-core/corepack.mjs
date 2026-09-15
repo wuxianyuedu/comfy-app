@@ -110,12 +110,12 @@ export function probePnpm({ root = process.cwd(), env = process.env, platform = 
  * @param {ProbeOptions & { args?: string[] }} [options]
  * @returns {ProbeResult}
  */
-export function probeCommand(candidate, { root = process.cwd(), env = process.env, args = ["-v"] } = {}) {
+export function probeCommand(candidate, { root = process.cwd(), env = process.env, platform = process.platform, args = ["-v"] } = {}) {
   /** 注入的 env 可能是更宽的 Record（测试里常只给 PATH），这里统一成 spawn 认的形状。 */
   const spawnEnv = /** @type {NodeJS.ProcessEnv} */ (env);
   // 形态与回退由 usableCommand 决定（shebang shim 会换成 `powershell -File <name>.ps1`），
   // 本模块不自己判断平台后缀 —— 那是 shell.mjs 的单一判据。
-  const { command, prefixArgs } = commandInvocation(candidate, args);
+  const { command, prefixArgs } = commandInvocation(candidate, args, { env, platform });
   const probe = spawnSync(command, [...prefixArgs, ...args], {
     cwd: root,
     env: spawnEnv,
@@ -126,7 +126,7 @@ export function probeCommand(candidate, { root = process.cwd(), env = process.en
   /** `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。 */
   const error = /** @type {NodeJS.ErrnoException | undefined} */ (probe.error);
   if (error?.code) {
-    return failed(command, "spawn-error", `${error.code}（${usableReason(candidate, args)}）`, null);
+    return failed(command, "spawn-error", `${error.code}（${usableReason(candidate, args, { env, platform })}）`, null);
   }
   const output = `${probe.stdout ?? ""}${probe.stderr ?? ""}`;
   const version = /(\d+\.\d+[\w.-]*)/.exec(output)?.[1] ?? null;
@@ -147,10 +147,16 @@ export function probeCommand(candidate, { root = process.cwd(), env = process.en
   };
 }
 
-/** `usableCommand` 给出的「为什么这个候选起不来」，附在 spawn-error 后面。 */
-/** @param {string} candidate @param {string[]} args @returns {string} */
-function usableReason(candidate, args) {
-  const usable = commandInvocation(candidate, args);
+/** `usableCommand` 给出的「为什么这个候选起不来」，附在 spawn-error 后面。
+ *
+ *  这里说的「回退」是 `usableCommand` **真的认下的**形态：命令能起来却仍被
+ *  `probeCommand` 报 spawn-error 时（例如宿主要求的参数不对），把它的名字写出来
+ *  比一句「未发现可回退形态」有用 —— ISSUE #576 第一轮现场就是这句把回退目标
+ *  （旁边的 `pnpm.ps1`）掩盖了。 */
+/** @param {string} candidate @param {string[]} args
+ *  @param {{ env?: NodeJS.ProcessEnv | Record<string, string | undefined>, platform?: NodeJS.Platform }} [options] */
+function usableReason(candidate, args, { env = process.env, platform = process.platform } = {}) {
+  const usable = commandInvocation(candidate, args, { env, platform });
   return usable.command === candidate ? "未发现可回退形态" : `已回退到 ${path.basename(usable.command)}`;
 }
 
@@ -192,7 +198,9 @@ export function preparePnpm({ root = process.cwd(), expected = null, env = proce
   if (!candidate) {
     return { ran: false, ok: false, description: "PATH 上找不到 corepack，无法自动重建 pnpm" };
   }
-  const { command, prefixArgs } = commandInvocation(candidate, ["--version"]);
+  // 注入 `{ env, platform }`：corepack 在 Windows 上也可能是 `.cmd` 形态，回退到
+  // 旁边的 `.ps1` 时要用**同一个**平台判据（否则模拟平台与真实平台不一致）。
+  const { command, prefixArgs } = commandInvocation(candidate, ["--version"], { env, platform });
   const result = spawnSync(command, [...prefixArgs, "prepare", `pnpm@${version}`, "--activate"], {
     cwd: root,
     env: spawnEnv,
