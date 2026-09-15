@@ -21,6 +21,7 @@ import path from "path";
 import { logger } from "~/server/lib/logger";
 import { openUrlInBrowser } from "~/lib/open-in-browser";
 import { DRIZZLE_STUDIO_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log-paths";
+import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import { killProcessTree } from "~/lib/kill-process-tree";
 
 /** drizzle-kit studio 默认监听端口。 */
@@ -116,29 +117,11 @@ function appendRuntimeLog(line: string): void {
   }
 }
 
-/** 会话边界横幅（与 comfyui/lifecycle.ts 同模式）：多次启动累积的
- *  drizzle-studio-runtime.log 靠它分清会话边界。 */
+/** 会话边界横幅（唯一实现见 `src/lib/session-banner.server.ts`）：多次启动累积的
+ * drizzle-studio-runtime.log 靠它分清会话边界（两侧各留空行，直接看文件也
+ * 能看出本次从哪开始）。 */
 function appendSessionBanner(kind: "start" | "end", title: string): void {
-  try {
-    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
-    const bar = "─".repeat(72);
-    const color = kind === "start" ? "\x1b[1;32m" : "\x1b[1;33m";
-    const reset = "\x1b[0m";
-    const banner = [
-      "",
-      `${color}${bar}${reset}`,
-      `${color}  ${title}${reset}`,
-      `${color}${bar}${reset}`,
-      "",
-    ].join("\n");
-    fs.appendFileSync(
-      DRIZZLE_STUDIO_RUNTIME_LOG,
-      banner + "\n",
-      "utf-8",
-    );
-  } catch {
-    /* 日志失败不影响主流程 */
-  }
+  appendSessionBannerToFile(DRIZZLE_STUDIO_RUNTIME_LOG, kind, title);
 }
 
 /** 确保 studio 本地端口就绪：可达则直接返回；否则按解析出的 drizzle-kit 拉起。 */
