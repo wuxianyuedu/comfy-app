@@ -11,6 +11,9 @@ echo "[pre-commit] 1/16 master 分支提交守卫"
 node scripts/check-branch-guard.cjs || exit 1
 
 echo "[pre-commit] 2/16 文件结构硬规则（R1-R6/R7-R12）"
+# R5 的棘轮（超 900 行文件）只在 CI 以 --strict 判定:本地这一步保持「只提醒」,
+# 与其余棘轮（重复块 / 函数长度 / 主题色）的本地口径一致 —— 被拦下的动作
+# 要求拆分文件,不适合在本地每次提交都挡一次。
 node scripts/check-file-structure.cjs || exit 1
 
 # 2026-09-15(ISSUE #562): 跨平台动作对照表（规范 §9.5）。

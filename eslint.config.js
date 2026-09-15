@@ -95,6 +95,12 @@ export default tseslint.config(
   // ── 分层边界（2026-09-02）：用 eslint-plugin-boundaries 强制 前端/数据/逻辑 分层 ──
   // server     = 数据层(src/server、仓储 src/lib/core、db 实例 src/lib/db)
   // components = UI 层       features = 逻辑层(当前仓库暂无该目录,规则预留)
+  // lib        = 跨端逻辑层(src/lib 的其余部分,ISSUE #575):此前 src/lib/comfyui、
+  //              workshop、film、llm 等**不属于任何 element**,靠 `default: allow`
+  //              放行 —— 于是「lib 不得 import components(H1 依赖倒置)」这条只写在
+  //              注释与规范里,没有任何机器判据。实测确有两处倒置悄悄存在。
+  // 顺序:更具体的 src/lib/core、src/lib/db 必须排在 src/lib/** 之前,
+  //      否则它们会被按 lib 归类,数据层的既有约束(server→components 禁止)随之失效。
   // 说明:src/lib/comfyui、src/lib/film、src/lib/llm 含 client-safe 的 types/helpers,
   //       不整体划入 server,避免误伤组件对它们的合法 import。
   // Drizzle schema 位于 src/server/db/schema(已属 server),故 UI import schema/仓储即被
@@ -107,6 +113,7 @@ export default tseslint.config(
         { type: "server", pattern: "src/server/**" },
         { type: "server", pattern: "src/lib/core/**" },
         { type: "server", pattern: "src/lib/db/**" },
+        { type: "lib", pattern: "src/lib/**" },
         { type: "components", pattern: "src/components/**" },
         { type: "features", pattern: "src/features/**" },
       ],
@@ -131,6 +138,14 @@ export default tseslint.config(
             {
               from: { element: { type: "features" } },
               disallow: { to: { element: { type: "server" } } },
+            },
+            // 逻辑层不得 import 视图层(规范 §12.2 / ISSUE #575 的 H1 依赖倒置)。
+            // lib 是被 components/app/server 共同依赖的地基,它反过来 import
+            // components 会让「谁在最底层」变成循环,也让 lib 模块无法脱离
+            // React 树单测。类型需要共享时下沉到 src/lib 下的类型模块。
+            {
+              from: { element: { type: "lib" } },
+              disallow: { to: { element: { type: "components" } } },
             },
           ],
         },
