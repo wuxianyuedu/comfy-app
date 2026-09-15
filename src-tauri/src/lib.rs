@@ -818,7 +818,10 @@ pub fn run() {
   // 按检出单实例（§1.4）：同一检出的壳已在跑时，向其发送「唤起前台」事件后
   // 退出；不同检出的壳互不可见、各自独立运行。必须在建窗口之前判定。
   if single_instance::another_instance_running() {
-    log::info!("[ComfyAPP] another instance of this checkout is running, focus requested and exiting");
+    log::info!(
+      "[ComfyAPP] another instance of this checkout is running, focus requested and exiting \
+       (this launch did not start a window; the running instance was brought to front)"
+    );
     return;
   }
   let project_root = resolve_project_root();
@@ -1128,14 +1131,26 @@ fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
       kill_sidecar();
     }
     tauri::RunEvent::ExitRequested { code, .. } => {
-      if code.is_none() {
-        if let Some(state) = app.try_state::<AppState>() {
-          if state.take_attention() {
-            log::info!(
-              "[ComfyAPP] exiting while the window was only shown in the taskbar (never opened by the user)"
-            );
+      /* 壳的退出码是「谁结束了这次启动」在壳侧唯一可靠的出口：prebuilt 链路里
+       * dev server 的退出码对三种成因完全一样（见 dev-launcher.ps1 的
+       * Get-DownstreamExitKind），而壳写下的这一行会随 stderr 进
+       * log/launcher/dev-launcher-stderr.log，启动器能据此把「壳自己退出」与
+       * 「壳被杀」分开。异常码（0 以外的）一律记 warn：正常路径是交接完成后
+       * 关主窗（code=None）与「关掉启动页 = 放弃启动」（exit(0)）。 */
+      match code {
+        Some(c) if c != 0 => log::warn!(
+          "[ComfyAPP] exiting with non-zero code {c} (kernel/user forced termination or startup failure)"
+        ),
+        None => {
+          if let Some(state) = app.try_state::<AppState>() {
+            if state.take_attention() {
+              log::info!(
+                "[ComfyAPP] exiting while the window was only shown in the taskbar (never opened by the user)"
+              );
+            }
           }
         }
+        _ => {}
       }
     }
     _ => {}
