@@ -16,7 +16,7 @@
 | -------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 分层边界       | `eslint-plugin-boundaries`                  | **盲区**：`elements` 只声明了 `src/server`、`src/lib/core`、`src/lib/db`、`src/components`、`src/features`；`src/lib/comfyui`、`workshop`、`film`、`llm` 不属于任何 element，靠 `default: allow` 放行 |
 | 复杂度（文件） | `check-file-structure.cjs` R5               | **只提醒不阻断**（>900 行打一行「建议拆分」），于是文件只增不减                                                                                                                                       |
-| 复杂度（函数） | `check-function-length.cjs`                 | 覆盖「**已声明**的函数」，`IIFE` 与回调体不计                                                                                                                                                         |
+| 复杂度（函数） | `check-function-length.cjs`                 | 覆盖**已声明的函数 + 无名字的块体**（IIFE / 回调 / 闭包，见 12 §12.13.2）；跨行签名（`React.memo(function …)`）也在射程内                                                                                                                                  |
 | 视图/逻辑分离  | `check-ui-logic-separation.cjs`             | **不覆盖**：只扫 `src/components/**` 与 `src/app/**`                                                                                                                                                  |
 | 客户端安全     | `tests/client-bundle-node-builtins.test.ts` | **覆盖**（从 `"use client"` 入口做可达性 DFS）—— 这条是既有且有效的                                                                                                                                   |
 | 覆盖率         | `vitest.config.ts` `thresholds`             | `src/lib/**` 已纳入 `include`，但**只给 5 个文件**设了门槛                                                                                                                                            |
@@ -102,7 +102,7 @@ Node 内建的模块都必须有 `server-only`」**更强也更准** —— 后�
 | 维度     | 门禁                          | 阈值   | 基线                                     |
 | -------- | ----------------------------- | ------ | ---------------------------------------- |
 | 文件行数 | `check-file-structure.cjs` R5 | 900 行 | `scripts/.file-size-baseline.json`       |
-| 函数行数 | `check-function-length.cjs`   | 400 行 | `scripts/.function-length-baseline.json` |
+| 函数行数 | `check-function-length.cjs`   | 400 行（含无名字块体，见 12 §12.13.2） | `scripts/.function-length-baseline.json` |
 
 R5 的用法（与其它棘轮同构）：
 
@@ -140,7 +140,7 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | ~~`lib` 内循环依赖无判据~~    | #574         | **已落地**：`scripts/check-circular-deps.cjs` + 棘轮基线（见 §12.7），`src/lib` 实到 2 组环已消除 |
 | ~~`lib` → `server` 越界无判据~~ | #569 第 6 项 | **已落地**：依赖逐个登记 + 「登记清单不许失效」双向判定（见 18.10） |
 | 零调用导出无判据              | #573         | 现存「导出但零外部引用」566 个，**绝大多数是同文件内使用的 props 类型** —— 需要先定「什么算死代码」的判据（不是导出即算） |
-| `IIFE` / 回调体不计函数长度   | #570         | 改判据会同时改变 §12.13 的既有基线数字，须与拆分同批                                                                      |
+| ~~`IIFE` / 回调体不计函数长度~~ | #570 第 7–8 项 | **已落地**：判据纳入无名字块体 + 跨行签名（12 §12.13.2），基线按「判据版本」一次性重记（20 → 22，新增的 2 条为存量登记） |
 | prettier 未接入门禁           | #575 第 9 项 | 一次性格式化 600+ 文件是巨型噪声 diff，与 §13.7「禁止无关全文件变更」冲突，须单独立项分路径接入                           |
 | `lib` 直读 `process.env` 收口 | #568         | **已裁决**：不收口，改为删掉 `config.ts` 的误导性承诺（见 18.8）|
 
@@ -202,6 +202,13 @@ import `server`」这条顺手漏了** —— 于是 `lib/comfyui/**` 与
 | **数据层同层引用**（`lib/core/**`、`lib/db/**` 在 18.3 里就是 element `server`） | `lib/core/repository-task.ts` → `~/server/db/schema`（Drizzle 表定义） | 合法，不入清单 |
 | **测试里与源码串一致的 mock** | `vi.mock("~/server/lib/logger")` | 跟着源码一起改，不单独设判据 |
 | **越界依赖** | `lib/comfyui/client.ts` → `~/server/lib/logger` | **逐个登记，清单只许变短** |
+
+**登记的粒度是「边」，不是「源文件」**（`from → to` 这一对）：键只记源文件的话，
+一个文件因为**任何**理由进过一次清单，它此后新增的**任意** lib → server 依赖都会被
+放行，而两条断言都不会红 —— 新增边被当成「已登记」，`REGISTERED` 的值也没人比对。
+实测确认过这条逃避（在 `lib/comfyui/client.ts` 追加一个指向 `~/server/lib/…` 新模块
+的 import，三条用例全绿），因此判据比对 `from → to`，登记才真正等价于「这条边被裁决过」；
+`tests/lib-server-imports.test.ts` 另有一条纯数据回归护栏钉住这一点。
 
 **为什么必须登记而不是「列个 Issue 就完了」**：这类依赖的代价是**可数的** ——
 `lib/comfyui/**` 里 30+ 个测试只能靠 `vi.mock("~/server/lib/logger")` 才跑得起来

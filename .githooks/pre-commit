@@ -97,6 +97,8 @@ node scripts/check-code-duplication.cjs || exit 1
 # 2026-09-14(ISSUE #536 P4): 函数长度(规范 12.13)。
 # 文件行数由 R5 管,函数没人管 —— 于是 2186 行的单函数一路合法存在。这里按
 # 「每个文件超阈值的函数数」记账,棘轮只许降不许升。
+# 2026-09-15(ISSUE #570 第 7 项): 无名字的块体(IIFE / 回调 / 闭包)与跨行签名
+# 同受约束(规范 12 §12.13.2)—— 此前「把 300 行塞进 IIFE 里」能整条绕过本门禁。
 echo "[pre-commit] 15/18 函数长度棘轮"
 node scripts/check-function-length.cjs || exit 1
 
