@@ -12,7 +12,7 @@
  *
  * 端点由消费方注入（`endpoint`）：库里那层注入的是 React Flow 的 `<Handle>`
  * （ISSUE #529）——「能不能连」由画布的 `isValidConnection` 判，卡片列本身
- * 不碰 React Flow（见 workflow-canvas-io-isolation 的守卫）。
+ * 不碰 React Flow（见 workflow-canvas-io-isolation-guard 的守卫）。
  *
  * 与宿主卡片的**表单行**是同一条事实的两端，不重复表达：
  *   卡片 = 这个对外参数由哪些端口组成（归属）；
