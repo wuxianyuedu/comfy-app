@@ -35,14 +35,14 @@ export const MATERIAL_FOLDERS = [
 
 export type MaterialFolderId = (typeof MATERIAL_FOLDERS)[number]["id"];
 
-const FOLDER_IDS = new Set<string>(MATERIAL_FOLDERS.map((MATERIAL_FOLDERS) => MATERIAL_FOLDERS.id));
+const FOLDER_IDS = new Set<string>(MATERIAL_FOLDERS.map((folder) => folder.id));
 
 export function isValidFolder(id: string | null | undefined): id is MaterialFolderId {
   return !!id && FOLDER_IDS.has(id);
 }
 
 export function folderName(id: string): string {
-  return MATERIAL_FOLDERS.find((MATERIAL_FOLDERS) => MATERIAL_FOLDERS.id === id)?.name ?? id;
+  return MATERIAL_FOLDERS.find((folder) => folder.id === id)?.name ?? id;
 }
 
 /* ── 媒体种类推导 ── */

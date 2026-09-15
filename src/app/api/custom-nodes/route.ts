@@ -19,7 +19,9 @@ import {
 } from "@/lib/app-settings";
 import { readEnvVar } from "@/lib/envfile";
 import { requireServerUser } from "@/lib/auth-server";
+import { AppError } from "@/lib/core/errors";
 import { errorMessage } from "~/lib/error-message";
+import { errorResponse, unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -417,10 +419,7 @@ function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
 export async function GET() {
   const user = await requireServerUser();
   if (!user) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 }
-    );
+    return unauthorizedResponse();
   }
 
   /* 整个只读探测包进 try/catch：此前任何一处抛错（如目录状态读取失败）会让
@@ -430,9 +429,8 @@ export async function GET() {
   try {
     return await buildGetResponse();
   } catch (e) {
-    return NextResponse.json(
-      { error: { code: "custom_nodes.read_failed", message: errorMessage(e, "读取配置失败") } },
-      { status: 500 }
+    return errorResponse(
+      new AppError(errorMessage(e, "读取配置失败"), "custom_nodes.read_failed", 500)
     );
   }
 }
@@ -520,10 +518,7 @@ async function buildGetResponse(): Promise<Response> {
 export async function POST(req: NextRequest) {
   const user = await requireServerUser();
   if (!user) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 }
-    );
+    return unauthorizedResponse();
   }
 
   const body: unknown = await req.json().catch(() => ({}));

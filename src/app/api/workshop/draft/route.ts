@@ -17,15 +17,13 @@ import {
   upsertDraft,
 } from "@/server/workshop/draft-repository";
 import { errorMessage } from "~/lib/error-message";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const UNAUTHORIZED = () =>
-  NextResponse.json(
-    { error: { code: "auth.required", message: "未登录或会话已失效" } },
-    { status: 401 },
-  );
+  unauthorizedResponse();
 
 function projectIdFrom(q: string | null): string | null {
   const trimmed = q?.trim();

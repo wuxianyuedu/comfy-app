@@ -4,7 +4,7 @@
  *
  * 为什么需要统一错误类型
  * --------------------
- * 散落的 `throw new Error("xxx")` 无法被 {@link ./api} 可靠地区分「用户输入错误」
+ * 散落的 `throw new Error("xxx")` 无法可靠地区分「用户输入错误」
  * 与「服务器内部错误」，导致：前端拿不到稳定的错误码、监控无法按类型聚合、
  * 安全细节（堆栈）可能泄露给客户端。本文件定义一棵**可扩展的错误类树**，
  * 每个错误自带 `code`（稳定字符串，给前端/日志用）与 `httpStatus`。
@@ -23,8 +23,10 @@
  * | `IntegrationError`    | 502  | 依赖的外部服务（ComfyUI 等）不可用      |
  * | `AppError`(基类)      | 500  | 未分类的内部错误（兜底）                |
  *
- * 配合 {@link ./api} 的 `toErrorEnvelope()`：错误被序列化为
+ * 配合 {@link toErrorEnvelope}：错误被序列化为
  * `{ error: { code, message, details? } }`，**绝不**把堆栈下发到客户端。
+ * REST Route Handler 用 {@link errorResponse} 一步产出该信封（含 HTTP 状态），
+ * 不要各自手写 `{ error: { code, message } }` 字面量。
  *
  * @module core/errors
  */
