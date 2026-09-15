@@ -15,7 +15,7 @@ import { resolveComfyBase } from "./client";
 import { cliProcs } from "./executor-cli";
 import { isComfyStarting } from "./lifecycle";
 import { state, log, persistLogs, claimFinalize, type RunnerState } from "./runner-state";
-import { logger } from "~/server/lib/logger";
+import { logger } from "~/lib/core/logger";
 
 /* ── DB-side QUEUED reaper ─────────────────────────
  * Symptom: after a dev-server cold restart, tasks in

@@ -17,7 +17,7 @@ vi.mock("../core/repository", () => ({
     markRunning: vi.fn().mockResolvedValue(undefined),
   },
 }));
-vi.mock("~/server/lib/logger", () => ({
+vi.mock("~/lib/core/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 vi.mock("./client", () => ({ postPrompt: vi.fn(), resolveComfyBase: vi.fn() }));

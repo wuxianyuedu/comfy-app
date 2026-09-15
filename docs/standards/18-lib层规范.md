@@ -152,9 +152,9 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | 目录 | lines | functions | statements | branches | 实测 trend |
 | --- | --- | --- | --- | --- | --- |
 | `src/lib/agent/**` | 20 | 20 | 15 | 10 | 18.9 / 21.7 / 12.9 |
-| `src/lib/core/**` | 35 | 30 | 35 | 30 | 35.4 / 31.8 / 30.4 |
-| `src/lib/drizzle-studio/**` | 0 | 0 | 0 | 0 | 全 0（尚无测试，见 §18.7 登记） |
-| `src/lib/film/**` | 5 | 10 | 5 | 5 | 7.5 / 11.4 / 7.8 |
+| `src/lib/core/**` | 40 | 35 | 40 | 35 | 40.9 / 38.5 / 42.7（含日志实现合并后的新计数） |
+| `src/lib/drizzle-studio/**` | 40 | 35 | 35 | 35 | 41.1 / 37.2 / 39.1 |
+| `src/lib/film/**` | 40 | 55 | 40 | 30 | 40.4 / 33.2 / 40.9（编排判决面进用例后从 7.5 抬起） |
 | `src/lib/llm/**` | 30 | 30 | 30 | 25 | 31.2 / 32.4 / 28.8 |
 | `src/lib/project-canvas/**` | 70 | 70 | 65 | 50 | 69.0 / 70.8 / 53.8 |
 | `src/lib/workshop/**` | 65 | 70 | 65 | 55 | 65.8 / 70.3 / 59.3 |
@@ -167,6 +167,11 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 
 > 本条的落地与测试补充绑定（见 ISSUE #575 的登记项）：门槛值必须来自真实测试覆盖，
 > 不能先写数字再补测试。
+>
+> **「先设 0」不是终点**：`drizzle-studio` 起初实测全 0，只能先设 0（设非零会让主线
+> 立刻红），但补上测试的那一次提交**必须同批把它抬到实测值** —— 补了测试却不抬门槛，
+> 等于下一轮改动悄悄把它降回去也没人知道。本轮 `drizzle-studio` 0 → 40、`film`
+> 5/10/5/5 → 40/55/40/30、`core` 35/30/35/30 → 40/35/40/35。
 
 ## 18.7 登记项：本章尚未机器化的部分
 
@@ -175,7 +180,7 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | 缺口                          | Issue        | 为什么不在本章落地                                                                                                        |
 | ----------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------- |
 | ~~`lib` 内循环依赖无判据~~    | #574         | **已落地**：`scripts/check-circular-deps.cjs` + 棘轮基线（见 §12.7），`src/lib` 实到 2 组环已消除 |
-| ~~`lib` → `server` 越界无判据~~ | #569 第 6 项 | **已落地**：依赖逐个登记 + 「登记清单不许失效」双向判定（见 18.10） |
+| ~~`lib` → `server` 越界无判据~~ | #569 第 6 项 | **已落地**：依赖逐个登记 + 「登记清单不许失效」双向判定（见 18.10）；日志那一批 10 条边已**归零**（见 18.10.1） |
 | 零调用导出无判据              | #573         | 现存「导出但零外部引用」566 个，**绝大多数是同文件内使用的 props 类型** —— 需要先定「什么算死代码」的判据（不是导出即算） |
 | ~~`IIFE` / 回调体不计函数长度~~ | #570 第 7–8 项 | **已落地**：判据纳入无名字块体 + 跨行签名（12 §12.13.2），基线按「判据版本」一次性重记（20 → 22，新增的 2 条为存量登记） |
 | ~~`lib` 巨型函数未拆（`ensureComfyUiReady` / `executeViaComfyCli` / `cacheJson` 闭包 / drizzle IIFE）~~ | #570 第 1–6 项 | **已落地**：等待循环与事件回调抽成 `comfyui/lifecycle-wait.ts`（策略注入 + 具名纯函数）、comfy-cli 流解析收在 `comfyui/executor-cli-stream.ts`、`cacheJson` 闭包提为 `buildWorkflowDetailJson`、drizzle IIFE 复用同一套等待原语；基线随之收紧（22 → 20，见 12 §12.13） |
@@ -184,6 +189,8 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | ~~`app-settings.ts` 混装「纯派生 + fs IO + 默认端口再导出」~~ | #569 第 5 项 | **已落地**：拆成 `app-settings/index.ts`（纯）+ `app-settings/app-settings.server.ts`（IO），默认端口的唯一出口回到 `@/lib/endpoints`；端口门禁改为**反向**断言「app-settings 不得再转手该常量」 |
 | prettier 未接入门禁           | #575 第 9 项 | 一次性格式化 600+ 文件是巨型噪声 diff，与 §13.7「禁止无关全文件变更」冲突，须单独立项分路径接入                           |
 | `lib` 直读 `process.env` 收口 | #568         | **已裁决**：不收口，改为删掉 `config.ts` 的误导性承诺（见 18.8）|
+| ~~`drizzle-studio/**` 覆盖率 0~~ | #572 第 5 项 | **已落地**：`lifecycle` 的探测 / 定位 / 启停判决进用例，目录 0% → 41%，门槛随之从 0 抬到 40（见 18.6）|
+| ~~`film/**` 只有两个纯函数文件被覆盖~~ | #572 第 5 项 | **已落地**：编排判决面（取消撤任务 / 合成前置条件 / 镜头参数与画幅折算）进用例，7.5% → 40%，门槛从 5 抬到 40（见 18.6）|
 
 ## 18.8 core 骨架的取用口径（ISSUE #568）
 
@@ -257,23 +264,51 @@ import `server`」这条顺手漏了** —— 于是 `lib/comfyui/**` 与
 永远无法脱离 Next 服务端上下文单测。没有判据时，新模块再引一次 `server/lib/logger`
 不会有任何提示。
 
-**消除这批依赖时不需要新抽象**：`lib/core/logger.ts` 已经是 `server/lib/logger` 的
-**薄封装**（接口 `debug/info/warn/error/child` 逐字一致、调用方零改动），且它按
-18.4 第三类**不带** `server-only`（核心层被纯 Node 宿主与 Next 同时加载）。因此
-`lib` 侧的统一出口就是 `@/lib/core/logger`；实现在 `core/logger` 与
-`server/lib/logger` 两个**同层**模块之间的合并/下沉，新增已无事可做 —— 它剩下的
-价值只是「同一个文件里两套写法」。
+**这批日志边怎么消除的**：`lib` 侧的统一出口是 `@/lib/core/logger`（接口
+`debug/info/warn/error/child` 逐字一致、调用方零改动，按 18.4 第三类**不带**
+`server-only`，因为它被纯 Node 宿主与 Next 同时加载）。但只改 import 是把同一条边
+换个写法 —— 当时 `core/logger` 自身仍 import `server/lib/logger`。真正的消除要动
+**实现的归属**，见 18.10.1。
 
 > 登记清单里的 `lib/auth-server.ts` → `~/server/better-auth/server` 属另一种情形
 > （Next 请求上下文，无法下沉），留待专项裁决。
+
+### 18.10.1 日志那一批登记边已归零：实现合并到地基侧
+
+18.10 里的 11 条 `lib → server/lib/logger` 边**已全部消除**，做法不是「逐条改
+import」—— 那只是把同一条边换个写法（`core/logger` 当时仍是 `server/lib/logger` 的
+薄封装，两处实现、一份转发）。真正消除它要动的是**实现的归属**：
+
+| 项 | 之前 | 现在 |
+| --- | --- | --- |
+| 实现处 | `src/server/lib/logger.ts`（pino 工厂 / `REDACT_PATHS` / ERROR 镜像 / pretty 输出） | `src/lib/core/logger.ts` |
+| `src/server/lib/logger.ts` | 实现本身 | **转发层**（re-export，既有导入路径与用法逐字不变） |
+| `lib` 侧取用 | `import { logger } from "~/server/lib/logger"`（10 个模块） | `import { logger } from "~/lib/core/logger"`（`lib → lib`） |
+| `lib-server-imports` 登记清单 | 11 条（10 源码 + 7 处测试 mock 说明符合并计数） | **1 条**（`auth-server.ts`，Next 请求上下文，无法下沉） |
+
+**为什么实现落在 `lib/` 而不是 `server/`**：`lib` 是被 `server` / `components` /
+`app` 共同依赖的地基，而日志是横切关注点。放在 `server/` 会让地基反向依赖上层，
+`lib` 侧每一处要写日志的模块都只能越界（这正是那 11 条边存在的原因）；实现落在
+`lib/core` 后方向天然正确。
+
+**为什么 `core/logger.ts` 不带 `server-only`**：它被 Next 服务端与纯 Node 宿主同时
+加载，而 `server-only` 的入口就是一句 `throw` —— 加上去 `scripts/*.mjs` 的启动编排
+直接崩（18.4 第三类，`tests/lib-node-only-declarations.test.ts` 会核）。
+
+**防回潮**：`tests/single-logger-channel.test.ts` 的判据从「core/logger 是不是薄封装」
+改成**实现特征**——全 `src/**` 里 `import pino` 的文件只允许一个
+（`src/lib/core/logger.ts`）。谁再建第二条通道，那条断言立刻红；「谁是实现处」不再
+依赖文件名或注释，而是靠「谁在 import pino」这个事实。
 
 ## 18.11 速查
 
 - 改 `src/lib/**` 前：先读本章 → 确认没碰 18.2 的禁止项 → 跑 18.5 的两条棘轮。
 - 要取仓储：**直接 import**（`@/lib/core/repository`），别再找容器 —— 它已按 18.8 移除。
-- 要写日志：**lib 侧走 `@/lib/core/logger`**（中立出口、不带 `server-only`），服务端走
-  `@/server/lib/logger`；新增 lib → server 依赖会被 `tests/lib-server-imports.test.ts`
-  拦下（见 18.10）。**不要直接 `console.*`**（会绕开脱敏与面板镜像）。
+- 要写日志：**实现只有一处**（`@/lib/core/logger`，不带 `server-only` 因它被纯 Node
+  宿主共用）；`@/server/lib/logger` 是转发层，服务端既有导入照旧可用。**不要直接
+  `console.*`**（会绕开脱敏与面板镜像），也**不要新建第二条通道**（`import pino`
+  的文件只允许一个，见 18.10.1）。新增 lib → server 依赖仍会被
+  `tests/lib-server-imports.test.ts` 拦下（见 18.10）。
 - `lib` 要共享类型给视图：**下沉类型模块到 `src/lib`**，不要在 lib 里 import components。
 - 拆出 Node-only 模块：按 18.4 的表选声明形态，别三个都试；自查
   `node scripts/lib-node-only-scan.mjs`（声明缺失 / 假声明 / 真进浏览器图 一次看完）。

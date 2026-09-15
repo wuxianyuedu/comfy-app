@@ -34,7 +34,7 @@
  *
  * @module comfyui/executor-continuation
  */
-import { logger } from "~/server/lib/logger";
+import { logger } from "~/lib/core/logger";
 
 type KickQueue = () => void | Promise<void>;
 

@@ -17,7 +17,7 @@ vi.mock("../core/repository", () => ({
 vi.mock("./lifecycle", () => ({ isComfyStarting: vi.fn().mockReturnValue(false) }));
 vi.mock("./client", () => ({ resolveComfyBase: vi.fn().mockResolvedValue("http://127.0.0.1:8188") }));
 vi.mock("./executor-cli", () => ({ cliProcs: new Map() }));
-vi.mock("~/server/lib/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
+vi.mock("~/lib/core/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 
 import { isTaskClaimedInProcess } from "./reaper";
 

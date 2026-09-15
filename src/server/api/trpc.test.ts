@@ -7,7 +7,7 @@
  * - rateLimitedProcedure 超窗返回 TOO_MANY_REQUESTS、不同 key 相互独立。
  *
  * mock 边界：~/server/db（内存测试库）、~/server/better-auth（可控 getSession）、
- * ~/server/lib/logger（静音）。鉴权/限流中间件均走真实实现。
+ * ~/lib/core/logger（静音）。鉴权/限流中间件均走真实实现。
  *
  * 说明：tRPC `timingMiddleware` 在非生产为 dev 而加 100–500ms 人工延迟，故超窗测试
  * 先用同一模块的 `checkRateLimit` 预填桶（二者共享限流桶），把真实 tRPC 调用压到最少。
@@ -27,11 +27,10 @@ vi.mock("~/server/better-auth", () => ({
 }));
 /* 静音服务端日志。
  *
- * 用 `importOriginal` 部分 mock：`lib/core/logger` 是 `server/lib/logger` 的
- * **薄封装**（它 import `createPinoLogger`），整模块 mock 掉会让 core 那条
- * 通道在 import 期就炸（ISSUE #568 的收口把两条通道并成一条后，这里必须
- * 保留真实导出，只替换 `logger` 实例）。 */
-vi.mock("~/server/lib/logger", async (importOriginal) => {
+ * 用 `importOriginal` 部分 mock：日志实现只有一份（`lib/core/logger`），
+ * 整模块 mock 掉会让 ERROR 镜像等真实导出在 import 期就炸，因此这里必须
+ * 保留真实导出，只替换 `logger` 实例。 */
+vi.mock("~/lib/core/logger", async (importOriginal) => {
   const actual: Record<string, unknown> = await importOriginal();
   return {
     ...actual,
