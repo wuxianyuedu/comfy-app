@@ -25,9 +25,19 @@ vi.mock("~/server/db", async () => {
 vi.mock("~/server/better-auth", () => ({
   auth: { api: { getSession: getSessionMock } },
 }));
-vi.mock("~/server/lib/logger", () => ({
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
+/* 静音服务端日志。
+ *
+ * 用 `importOriginal` 部分 mock：`lib/core/logger` 是 `server/lib/logger` 的
+ * **薄封装**（它 import `createPinoLogger`），整模块 mock 掉会让 core 那条
+ * 通道在 import 期就炸（ISSUE #568 的收口把两条通道并成一条后，这里必须
+ * 保留真实导出，只替换 `logger` 实例）。 */
+vi.mock("~/server/lib/logger", async (importOriginal) => {
+  const actual: Record<string, unknown> = await importOriginal();
+  return {
+    ...actual,
+    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  };
+});
 
 import {
   createCallerFactory,
@@ -80,7 +90,9 @@ describe("createTRPCContext 会话注入边界", () => {
     const ctx = await createTRPCContext({ headers: new Headers() });
     expect(ctx.user?.id).toBe("u-exist");
     expect(ctx.user?.email).toBe("has@test.dev");
-    expect(tdb.$tables.users.filter((u: Row) => u.email === "has@test.dev")).toHaveLength(1);
+    expect(
+      tdb.$tables.users.filter((u: Row) => u.email === "has@test.dev"),
+    ).toHaveLength(1);
   });
 
   it("会话邮箱不存在 → 自动建号并注入 ctx.user", async () => {
@@ -89,7 +101,9 @@ describe("createTRPCContext 会话注入边界", () => {
     });
     const ctx = await createTRPCContext({ headers: new Headers() });
     expect(ctx.user?.email).toBe("new@test.dev");
-    expect(tdb.$tables.users.find((u: Row) => u.email === "new@test.dev")).toBeDefined();
+    expect(
+      tdb.$tables.users.find((u: Row) => u.email === "new@test.dev"),
+    ).toBeDefined();
   });
 });
 
@@ -117,7 +131,9 @@ describe("rateLimitedProcedure 限流分支", () => {
     // 与 rateLimitedProcedure 共享同一限流桶：直接预填满默认窗口（max 20）。
     for (let i = 0; i < 20; i++) expect(checkRateLimit("rl-u")).toBe(true);
     // 第 21 次经真实中间件 → 被拒
-    const caller = createCaller(makeCtx({ user: { id: "rl-u", email: "rl@test.dev", name: "R" } }));
+    const caller = createCaller(
+      makeCtx({ user: { id: "rl-u", email: "rl@test.dev", name: "R" } }),
+    );
     await expect(caller.sensitive()).rejects.toMatchObject({
       code: "TOO_MANY_REQUESTS",
     });
@@ -126,8 +142,12 @@ describe("rateLimitedProcedure 限流分支", () => {
   it("窗口未超时放行；不同 userId 独立计数互不影响", async () => {
     // 给 key rl-a 灌满，rl-b 保持干净
     for (let i = 0; i < 20; i++) checkRateLimit("rl-a");
-    const callerA = createCaller(makeCtx({ user: { id: "rl-a", email: "a@t.dev", name: "A" } }));
-    const callerB = createCaller(makeCtx({ user: { id: "rl-b", email: "b@t.dev", name: "B" } }));
+    const callerA = createCaller(
+      makeCtx({ user: { id: "rl-a", email: "a@t.dev", name: "A" } }),
+    );
+    const callerB = createCaller(
+      makeCtx({ user: { id: "rl-b", email: "b@t.dev", name: "B" } }),
+    );
     await expect(callerA.sensitive()).rejects.toMatchObject({
       code: "TOO_MANY_REQUESTS",
     });
@@ -143,10 +163,17 @@ describe("recordSlowQuery：同一路径在一个窗口内只写首条 + 一条�
   });
 
   it("同窗口内重复的慢查询只返回首条，其余不写行（不刷屏）", () => {
-    const first = recordSlowQuery("setting.comfyStatus", 10_457, "query", 1_000);
+    const first = recordSlowQuery(
+      "setting.comfyStatus",
+      10_457,
+      "query",
+      1_000,
+    );
     expect(first).toBe("setting.comfyStatus 10457ms");
     for (let i = 0; i < 9; i++) {
-      expect(recordSlowQuery("setting.comfyStatus", 10_500, "query", 1_000 + i)).toBe(null);
+      expect(
+        recordSlowQuery("setting.comfyStatus", 10_500, "query", 1_000 + i),
+      ).toBe(null);
     }
   });
 
@@ -154,7 +181,12 @@ describe("recordSlowQuery：同一路径在一个窗口内只写首条 + 一条�
     recordSlowQuery("setting.comfyStatus", 10_457, "query", 1_000);
     recordSlowQuery("setting.comfyStatus", 10_457, "query", 2_000);
     recordSlowQuery("setting.comfyStatus", 10_457, "query", 3_000);
-    const summary = recordSlowQuery("setting.comfyStatus", 11_000, "query", 200_000);
+    const summary = recordSlowQuery(
+      "setting.comfyStatus",
+      11_000,
+      "query",
+      200_000,
+    );
     expect(summary).toBe("setting.comfyStatus 11000ms（近 60s 内共 3 次）");
   });
 

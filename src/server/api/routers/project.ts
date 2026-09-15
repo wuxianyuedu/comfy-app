@@ -1,12 +1,10 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { container } from "@/lib/core";
-import { taskRepository } from "@/lib/core/repository";
+import { projectRepository, taskRepository } from "@/lib/core/repository";
 
 export const projectRouter = createTRPCRouter({
   /** GET /api/projects */
   list: authedProcedure.query(async ({ ctx }) => {
-    const projectRepository = container.resolve("projectRepository");
     return projectRepository.listByUser(ctx.user.id);
   }),
 
@@ -19,10 +17,9 @@ export const projectRouter = createTRPCRouter({
         // React Flow 节点/边 JSON,形状由前端持有;仓储层入参即 unknown,收口校验由调用方保证。
         nodes: z.unknown().optional(),
         edges: z.unknown().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
-      const projectRepository = container.resolve("projectRepository");
       return projectRepository.upsertForUser(ctx.user.id, {
         id: input.id,
         name: input.name,
@@ -35,7 +32,6 @@ export const projectRouter = createTRPCRouter({
   get: authedProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const projectRepository = container.resolve("projectRepository");
       const project = await projectRepository.findById(input.projectId);
       if (project?.userId !== ctx.user.id) {
         throw new Error("Project not found");
@@ -51,10 +47,9 @@ export const projectRouter = createTRPCRouter({
         name: z.string().optional(),
         nodes: z.unknown().optional(),
         edges: z.unknown().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
-      const projectRepository = container.resolve("projectRepository");
       const existing = await projectRepository.findById(input.projectId);
       if (existing?.userId !== ctx.user.id) {
         throw new Error("Project not found");
@@ -70,7 +65,6 @@ export const projectRouter = createTRPCRouter({
   delete: authedProcedure
     .input(z.object({ projectId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const projectRepository = container.resolve("projectRepository");
       await projectRepository.deleteForUser(ctx.user.id, input.projectId);
       return { ok: true };
     }),
@@ -79,9 +73,10 @@ export const projectRouter = createTRPCRouter({
   outputs: authedProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ input }) => {
-      const tasks = await taskRepository.findByProjectIdWithImages(input.projectId);
-      const outputs = tasks.map((task) =>
-{
+      const tasks = await taskRepository.findByProjectIdWithImages(
+        input.projectId,
+      );
+      const outputs = tasks.map((task) => {
         // params 是 Prisma Json 列:非对象(标量)时所有属性读取均为 undefined,与原
         // `(task.params ?? {}) as Record<string, any>` 的读取结果一致。
         const rawParams: unknown = task.params ?? {};
